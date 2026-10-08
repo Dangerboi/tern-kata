@@ -118,3 +118,33 @@ func TestScrollIsOnlyRequestedOfColumnsOnScreen(t *testing.T) {
 		}
 	})
 }
+
+// Shows is what keeps Reveal and Scroll away from a node the view does not draw.
+func TestShowsOnlyTheDrawnColumns(t *testing.T) {
+	list, detail := model.ColumnList, model.ColumnDetail
+	for _, tt := range []struct {
+		name   string
+		cols   int
+		focus  model.Column
+		err    error
+		column model.Column
+		want   bool
+	}{
+		{"below 80 draws no list", 79, list, nil, list, false},
+		{"below 80 draws no detail", 79, detail, nil, detail, false},
+		{"one column draws the focused list", 100, list, nil, list, true},
+		{"one column draws no detail behind the list", 100, list, nil, detail, false},
+		{"one column draws the focused detail", 100, detail, nil, detail, true},
+		{"one column draws no list behind the detail", 100, detail, nil, list, false},
+		{"side by side draws both", 160, list, nil, detail, true},
+		{"a daemon failure fills the Pane", 160, list, errors.New("down"), list, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m := pickerStart(tt.cols, true)
+			m.Focus, m.Err = tt.focus, tt.err
+			if got := m.Shows(tt.column); got != tt.want {
+				t.Fatalf("Shows(%v) = %v, want %v", tt.column, got, tt.want)
+			}
+		})
+	}
+}

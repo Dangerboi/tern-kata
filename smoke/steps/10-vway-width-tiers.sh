@@ -25,7 +25,8 @@ for name in first second third; do
   kata --workspace "$width_dir" create "Width $name" --body "Width $name body" --json >/dev/null
 done
 quit_app
-printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$width_dir" "$KATA_HOME" "$tmp" >"$tmp/width-launch.ctl"
+rm -f "$tmp/width-frames.jsonl"
+printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP TERN_TSP_RECORD=%s KATA_HOME=%s %s/tern-kata)"\n' "$width_dir" "$tmp/width-frames.jsonl" "$KATA_HOME" "$tmp" >"$tmp/width-launch.ctl"
 ctl --file "$tmp/width-launch.ctl"
 
 # Open the second Issue's detail in a wide Pane; it is what every resize must bring back.
@@ -61,10 +62,27 @@ ctl key k
 ctl key enter
 expect_tree "[data-id='main.columns.detail.title']" ".nodes[0].text == $title_json"
 
+# j and tab in the detail column move its selection and reveal a section node.
+ctl key j
+ctl key tab
+expect_alive "j and tab in the detail-only tier"
+
 # Below 80 columns one centred notice replaces everything, down to a sliver.
 expect_width 620 0 0 1
 (( $(width_cols) < 80 ))
 expect_tree "[data-id='main.notice.text']" '.nodes[0].text | contains("80 columns")'
+# Neither the Issue rows nor the sections exist now, so no reveal or scroll may
+# name one: j and tab with detail focus, then j with list focus.
+width_mark=$(wc -l <"$tmp/width-frames.jsonl")
+ctl key j
+ctl key tab
+ctl key esc
+ctl key j
+ctl key k
+ctl key enter
+expect_alive "j and tab below 80 columns"
+tail -n "+$((width_mark + 1))" "$tmp/width-frames.jsonl" | jq -c 'select(.dir == "out" and .verb == "f") | .body.ops[] | select(.[0] == "reveal" or .[0] == "scroll")' >"$tmp/width-undrawn-ops.json"
+[[ ! -s $tmp/width-undrawn-ops.json ]] || { printf 'Reveal or scroll below 80 columns: %s\n' "$(<"$tmp/width-undrawn-ops.json")" >&2; return 1; }
 expect_tree "[data-id='dock.hints']" '.ok and .count == 0'
 for width in 300 120 40 8; do
   expect_width "$width" 0 0 1

@@ -85,12 +85,12 @@ eventLoop:
 			}
 			inputFocus = target
 		}
-		if !rowClick(msg) && m.Err == nil && !m.Loading && m.Focus == model.ColumnList && m.SelectedUID != "" && m.SelectedUID != previousSelection {
+		if !rowClick(msg) && !m.Loading && m.Focus == model.ColumnList && m.Shows(model.ColumnList) && m.SelectedUID != "" && m.SelectedUID != previousSelection {
 			if err := surface.Reveal(view.IssueID(m.SelectedUID), "nearest"); err != nil {
 				return err
 			}
 		}
-		if m.Err == nil && !m.Loading && !m.DetailHidden && m.Focus == model.ColumnDetail && m.Detail != nil && m.Detail.Issue != nil && !m.DetailLoading &&
+		if !m.Loading && !m.DetailHidden && m.Focus == model.ColumnDetail && m.Shows(model.ColumnDetail) && m.Detail != nil && m.Detail.Issue != nil && !m.DetailLoading &&
 			(previousFocus != m.Focus || previousSection != m.DetailSection || previousIndex != m.DetailIndex || m.DetailIssueUID() != previousDetailIssue) {
 			if err := surface.Reveal(view.DetailSectionID(m.DetailSection), "nearest"); err != nil {
 				return err
