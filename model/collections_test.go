@@ -39,3 +39,16 @@ func TestCollectionIgnoresSupersededSnapshot(t *testing.T) {
  if m.Collection!=inbox || !m.Loading || len(m.Issues)!=0 {t.Fatalf("stale response replaced Collection: %+v",m)}
 }
 
+func TestCollectionKeyboardSwitching(t *testing.T) {
+ for _,tt:=range []struct{name string;keys []string;view string}{
+  {"Inbox",[]string{"esc","g","enter"},"inbox"},
+  {"Today",[]string{"esc","g","j","enter"},"today"},
+  {"Logbook",[]string{"esc","g","j","j","j","j","j","enter"},"logbook"},
+ } {t.Run(tt.name,func(t *testing.T){
+  m,_:=model.Update(model.Model{},model.ProjectLoaded{Project:model.Project{UID:"p",Name:"Work"},Snapshot:g.UISnapshotResponseBody{Catalog:[]g.UIProject{{Project:model.Project{UID:"p",Name:"Work"}}}}})
+  var cmds []model.Cmd
+  for _,chord:=range tt.keys {m,cmds=model.Update(m,model.KeyMsg{Chord:chord})}
+  if m.Collection.View!=tt.view || !m.Loading || len(cmds)!=1 {t.Fatalf("keyboard Collection switch: %+v %#v",m,cmds)}
+ })}
+}
+
