@@ -36,7 +36,8 @@ func Render(m model.Model) tern.View {
 				columns = append(columns, detail(m))
 			}
 		}
-		main = ui.Nodes(ui.Row{Common: ui.Common{Key: "columns"}, Gap: ui.GapMD, Children: columns})
+		// A Row centres its children by default: a parent's detail (a Link per child) is far taller than the Pane and would carry the shorter list column out of view with it.
+		main = ui.Nodes(ui.Row{Common: ui.Common{Key: "columns"}, Gap: ui.GapMD, Align: ui.AlignStart, Children: columns})
 	}
 	if m.Stale && m.Err == nil && !m.FirstLoad() {
 		main = append(main, staleNotice(m))
