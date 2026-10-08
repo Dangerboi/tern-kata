@@ -9,6 +9,9 @@ import (
 )
 
 func detailAction(input *tern.Action) model.Msg {
+	if input.Act == string(model.SelectIssueAction) {
+		return model.ActionMsg{Action: model.SelectIssueAction, Value: input.Value}
+	}
 	switch input.Act {
 	case "key":
 		return model.KeyMsg{Chord: input.Value}

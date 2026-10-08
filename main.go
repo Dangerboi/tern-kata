@@ -23,6 +23,10 @@ func main() {
 }
 
 func run() error {
+	issueRef, fallbackArgs, err := launchArgs(os.Args[1:])
+	if err != nil {
+		return err
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	session, err := tern.Connect(ctx, tern.Options{App: "tern-kata", Version: "dev"})
@@ -31,13 +35,16 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		return syscall.Exec(kata, append([]string{"kata", "tui"}, os.Args[1:]...), os.Environ())
+		return syscall.Exec(kata, append([]string{"kata", "tui"}, fallbackArgs...), os.Environ())
 	}
 	if err != nil {
 		return err
 	}
 	defer session.Close()
-	surface, err := session.Open(tern.SurfaceOptions{ID: "kata", Mode: tern.Screen, Title: "kata", Discard: true})
+	if _, err := fmt.Fprint(os.Stdout, "\x1b]0;tern-kata\x07"); err != nil {
+		return err
+	}
+	surface, err := session.Open(tern.SurfaceOptions{ID: "kata", Mode: tern.Screen, Title: "tern-kata", Discard: true})
 	if err != nil {
 		return err
 	}
@@ -89,7 +96,7 @@ func run() error {
 	m := model.Model{Cols: session.Caps().Cols}
 	runner := commandRunner{}
 	defer runner.close()
-	msg := model.Msg(model.Start{Workspace: workspace})
+	msg := model.Msg(model.Start{Workspace: workspace, IssueRef: issueRef})
 	for {
 		previousSelection := m.SelectedUID
 		previousFocus, previousSection, previousIndex := m.Focus, m.DetailSection, m.DetailIndex
@@ -125,4 +132,34 @@ func run() error {
 			return err
 		}
 	}
+}
+
+func launchArgs(args []string) (string, []string, error) {
+	ref := ""
+	issueSet := false
+	fallback := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--issue" {
+			issueSet = true
+			i++
+			if i == len(args) {
+				return "", nil, fmt.Errorf("--issue requires <project>/<short_id>")
+			}
+			ref = args[i]
+		} else if value, ok := strings.CutPrefix(arg, "--issue="); ok {
+			issueSet = true
+			ref = value
+		} else {
+			fallback = append(fallback, arg)
+		}
+	}
+	if issueSet {
+		project, shortID, err := model.ParseIssueRef(ref)
+		if err != nil {
+			return "", nil, err
+		}
+		fallback = append(fallback, "--project", project, project+"#"+shortID)
+	}
+	return ref, fallback, nil
 }

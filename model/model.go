@@ -8,6 +8,8 @@ type Project = g.ProjectOut
 type Model struct {
 	LiveState
 	Workspace           string
+	OpenIssueRef         string
+	OpenedIssueUID      string
 	Project             Project
 	Snapshot            g.UISnapshotResponseBody
 	Issues              []Issue
@@ -46,13 +48,19 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	switch msg := msg.(type) {
 	case Start:
 		m.Workspace = msg.Workspace
+		m.OpenIssueRef = msg.IssueRef
 		m.Loading = true
 		m.Err = nil
 		return m, []Cmd{LoadProject{Workspace: msg.Workspace}}
 	case ProjectLoaded:
 		m, _ = updateProject(m, msg)
 		m.Cursor = msg.Snapshot.Cursor
-		return startStream(m, 0)
+		m, cmds := startStream(m, 0)
+		if m.OpenIssueRef != "" {
+			m, openCmds := openIssue(m, m.OpenIssueRef)
+			return m, append(cmds, openCmds...)
+		}
+		return m, cmds
 	case DetailLoaded:
 		if msg.UID == m.SelectedUID && msg.UID == m.DetailUID {
 			m.Detail = msg.Selected
@@ -104,6 +112,29 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case Failed:
 		m.Loading = false
 		m.Err = msg.Err
+	case ActionMsg:
+		if msg.Action == SelectIssueAction {
+			return openIssue(m, msg.Value)
+		}
+	case IssueOpened:
+		if msg.Ref == m.OpenIssueRef && msg.Selected != nil && msg.Selected.Issue != nil {
+			m.OpenIssueRef = ""
+			m.SelectedUID = msg.Selected.Issue.UID
+			m.OpenedIssueUID = m.SelectedUID
+			m.DetailUID = m.SelectedUID
+			m.Detail = msg.Selected
+			m.DetailLoading = false
+			m.DetailErr = nil
+			m.DetailHidden = false
+			m.DetailBack = nil
+			m.DetailSection, m.DetailIndex = SectionBody, 0
+			m.Focus = ColumnDetail
+		}
+	case IssueOpenFailed:
+		if msg.Ref == m.OpenIssueRef {
+			m.OpenIssueRef = ""
+			m.Err = msg.Err
+		}
 	case KeyMsg:
 		if binding, ok := LookupBindingForMode(msg.Chord, m.CurrentMode()); ok {
 			if binding.Action == ToggleHelp {

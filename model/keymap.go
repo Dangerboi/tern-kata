@@ -21,6 +21,7 @@ const (
 	ToggleAllExpansion Action = "toggle-all-expansion"
 	ToggleIssueView Action = "toggle-issue-view"
 	RetryAction Action = "retry"
+	SelectIssueAction Action = "select-issue"
 )
 
 type Binding struct {
