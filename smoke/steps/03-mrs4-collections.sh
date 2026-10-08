@@ -8,5 +8,5 @@ expect_tree "[data-id='main.columns.list.topbar.heading']" '.ok and .nodes[0].te
 expect_tree "[data-id='main.columns.list.issues']" '.ok and ([.nodes[] | .. | objects | .text? // empty] | join(" ") | contains("Smoke first Issue") | not)'
 ctl key esc
 ctl key enter
-expect_tree "[data-id='main.columns.list.topbar.heading']" '.ok and .nodes[0].text == "smoke"'
+expect_tree "[data-id='main.columns.list.topbar.heading']" '.ok and .nodes[0].text == "Project: smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
