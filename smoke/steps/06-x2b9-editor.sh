@@ -1,3 +1,7 @@
+# Previous slices may relaunch with their own environment; restore the editor fixture.
+ctl key q
+expect_tree ".sf-list" '.ok and .count == 0'
+ctl --file "$tmp/launch.ctl"
 kata --workspace "$tmp/workspace" create "Smoke editor Issue" --body "Editor seeded body" --priority 0 --json >"$tmp/editor-issue.json"
 editor_uid=$(jq -r '.issue.uid' "$tmp/editor-issue.json")
 expect_tree "[data-id='main.columns.list.issues.$editor_uid']" '.ok and .count == 1'

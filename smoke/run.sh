@@ -9,7 +9,6 @@ export KATA_HOME="$tmp/kata"
 export TERN_CONFIG_DIR="$tmp/config"
 export TERN_DAEMON_SOCKET="$tmp/tern-daemon.sock"
 export STENCIL_LOG_DIR="$tmp/logs"
-export EDITOR="sh \"$repo/smoke/editor.sh\""
 unset KATA_SERVER KATA_AUTH_TOKEN KATA_AUTHOR TMUX STY ZELLIJ TERN_TSP
 
 cleanup() {
@@ -54,7 +53,7 @@ for ((attempt = 0; attempt < 200; attempt++)); do
 done
 [[ -S "$tmp/control.sock" ]]
 
-printf 'ready\nrun "env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata"\n' "$KATA_HOME" "$tmp" >"$tmp/launch.ctl"
+printf 'ready\nrun "env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP EDITOR=%s/smoke/editor.sh KATA_HOME=%s %s/tern-kata"\n' "$repo" "$KATA_HOME" "$tmp" >"$tmp/launch.ctl"
 tern ctl --control "$tmp/control.sock" --file "$tmp/launch.ctl"
 
 ctl() { tern ctl --control "$tmp/control.sock" "$@"; }
