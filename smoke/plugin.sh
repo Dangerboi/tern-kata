@@ -63,6 +63,9 @@ for ((attempt=0; attempt<200; attempt++)); do
 done
 [[ -S "$tmp/control.sock" ]]
 ctl ready
+# Each split Pane gets half the window and kata lays out from 80 columns.
+read -r window_height < <(ctl stats | jq -r '.viewport[1]')
+ctl resize 1600 "$window_height"
 ctl plugins fixtures
 printf 'palette "Open kata"\nkey Enter\n' >"$tmp/palette.ctl"
 ctl --file "$tmp/palette.ctl"

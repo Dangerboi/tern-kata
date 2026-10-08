@@ -1,5 +1,7 @@
 package model
 
+import "slices"
+
 type Scroll struct {
 	Column Column
 	Down   bool
@@ -7,6 +9,18 @@ type Scroll struct {
 }
 
 func (Scroll) cmd() {}
+
+// onScreen drops the Scrolls aimed at a column the view does not draw: Tern
+// answers a scroll of an unknown node with an error event, which ends the app.
+// The view draws no column while the first load or a daemon failure fills the
+// Pane, under MinCols, or for the columns the width folds away. A column drawn
+// again later starts at its top, so nothing is lost.
+func onScreen(m Model, cmds []Cmd) []Cmd {
+	return slices.DeleteFunc(cmds, func(cmd Cmd) bool {
+		scroll, ok := cmd.(Scroll)
+		return ok && (m.Err != nil || m.FirstLoad() || !slices.Contains(m.VisibleColumns(), scroll.Column))
+	})
+}
 
 func updateNavigation(m Model, action Action) (Model, []Cmd) {
 	switch action {

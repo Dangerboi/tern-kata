@@ -6,10 +6,11 @@ width_cols() { ctl state | jq -r '.panes[0].cols'; }
 expect_alive() {
   ctl state | jq -e '.focused.running != null' >/dev/null || { printf 'tern-kata exited at %s\n' "$1" >&2; return 1; }
 }
-# Resizes to $1 pixels, then expects $2 list, $3 detail and $4 notice nodes.
+# Resizes to $1 pixels, then expects $2 list and $3 detail nodes, and the notice
+# when $4 is 1 (a sliver of a Pane keeps only part of its nodes) or none when 0.
 expect_width() {
   ctl resize "$1" "$width_height"
-  expect_tree "[data-id='main.notice']" ".ok and .count == $4"
+  expect_tree "[data-id^='main.notice']" ".ok and (.count > 0) == ($4 == 1)"
   expect_tree "[data-id='main.columns.list']" ".ok and .count == $2"
   expect_tree "[data-id='main.columns.detail']" ".ok and .count == $3"
   expect_alive "$1 pixels"
@@ -21,7 +22,7 @@ expect_tree "[data-id='main.columns.list.issues']" '.ok and .count == 1 and (.no
 ctl key g
 ctl key j
 ctl key enter
-expect_tree "[data-id='main.columns.detail.title']" '.ok and .count == 1'
+expect_tree "[data-id='main.columns.detail.title']" '.ok and .count == 1 and (.nodes[0].text | contains("loading") | not)'
 width_title=$(ctl tree "[data-id='main.columns.detail.title']" | jq -r '.nodes[0].text')
 [[ -n $width_title ]]
 expect_width 1200 1 1 0
@@ -32,6 +33,22 @@ expect_width 1000 0 1 0
 (( $(width_cols) >= 80 && $(width_cols) < 140 ))
 expect_width 700 0 1 0
 expect_tree "[data-id='dock.hints']" '.ok and .count == 1'
+
+# Moving through the list in that column loads each detail behind it; the
+# detail column is not drawn, so nothing may be asked of it.
+title_json=$(jq -Rn --arg t "$width_title" '$t')
+ctl key esc
+expect_tree "[data-id='main.columns.list']" '.ok and .count == 1'
+ctl key j
+expect_tree "[data-id='dock.hints.position']" '.nodes[0].text | startswith("3 /")'
+ctl key PageDown
+ctl key PageUp
+ctl key enter
+expect_tree "[data-id='main.columns.detail.title']" ".ok and .count == 1 and (.nodes[0].text != $title_json) and (.nodes[0].text | contains(\"loading\") | not)"
+ctl key esc
+ctl key k
+ctl key enter
+expect_tree "[data-id='main.columns.detail.title']" ".nodes[0].text == $title_json"
 
 # Below 80 columns one centred notice replaces everything, down to a sliver.
 expect_width 620 0 0 1
@@ -53,7 +70,7 @@ expect_width 1200 1 1 0
 expect_tree "[data-id^='layer.']" '.ok and .count > 0'
 ctl key esc
 expect_tree "[data-id^='layer.']" '.ok and .count == 0'
-expect_tree "[data-id='main.columns.detail.title']" ".nodes[0].text == $(jq -Rn --arg t "$width_title" '$t')"
+expect_tree "[data-id='main.columns.detail.title']" ".nodes[0].text == $title_json"
 expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("esc back"))'
 
 # q still quits below 80 columns.

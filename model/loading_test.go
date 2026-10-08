@@ -16,7 +16,7 @@ func projectOf(uids ...string) model.Model {
 	for i, uid := range uids {
 		issues[i] = model.Issue{UID: uid, Status: "open"}
 	}
-	m, _ := model.Update(model.Model{Workspace: "/repo"}, model.ProjectLoaded{
+	m, _ := model.Update(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{
 		Project:  model.Project{UID: "project", Name: "work"},
 		Snapshot: g.UISnapshotResponseBody{Collection: issues},
 	})

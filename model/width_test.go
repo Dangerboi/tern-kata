@@ -1,6 +1,7 @@
 package model_test
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 
@@ -74,4 +75,46 @@ func TestQuitStillWorksBelowMinimumWidth(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The app sends every Scroll to Tern, which ends the Pane's program when the
+// column is not drawn (a Pane under 80 columns, or one column of two, the first
+// load, a daemon failure). The model asks only for columns on screen.
+func TestScrollIsOnlyRequestedOfColumnsOnScreen(t *testing.T) {
+	list, detail := model.ColumnList, model.ColumnDetail
+	one := func(column model.Column, down bool) []model.Cmd {
+		return []model.Cmd{model.Scroll{Column: column, Down: down}}
+	}
+	for _, tt := range []struct {
+		name  string
+		cols  int
+		focus model.Column
+		setup []model.Msg
+		msg   model.Msg
+		want  []model.Cmd
+	}{
+		{"page below 80 columns from the list", 79, list, nil, model.KeyMsg{Chord: "page_down"}, nil},
+		{"page below 80 columns from the detail", 79, detail, nil, model.KeyMsg{Chord: "page_up"}, nil},
+		{"page in the one column shown", 100, detail, nil, model.KeyMsg{Chord: "page_down"}, one(detail, true)},
+		{"another detail arrives behind the single list", 100, list, []model.Msg{model.DetailLoaded{UID: "a", Selected: authority("a")}, model.SelectMsg{UID: "b"}}, model.DetailLoaded{UID: "b", Selected: authority("b")}, nil},
+		{"another detail arrives beside the list", 160, list, []model.Msg{model.DetailLoaded{UID: "a", Selected: authority("a")}, model.SelectMsg{UID: "b"}}, model.DetailLoaded{UID: "b", Selected: authority("b")}, []model.Cmd{model.Scroll{Column: detail, Start: true}}},
+		{"page during the daemon failure", 160, list, []model.Msg{model.Failed{Err: errors.New("kata server not responding")}}, model.KeyMsg{Chord: "page_down"}, nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m := projectOf("a", "b")
+			m.Cols, m.Focus = tt.cols, tt.focus
+			for _, msg := range tt.setup {
+				m, _ = model.Update(m, msg)
+			}
+			if _, cmds := model.Update(m, tt.msg); len(cmds) != len(tt.want) || (len(tt.want) > 0 && !reflect.DeepEqual(cmds, tt.want)) {
+				t.Fatalf("commands = %#v, want %#v", cmds, tt.want)
+			}
+		})
+	}
+	t.Run("page during the first load", func(t *testing.T) {
+		m, _ := model.Update(model.Model{Cols: 160}, model.Start{Workspace: "/repo"})
+		if _, cmds := model.Update(m, model.KeyMsg{Chord: "page_down"}); len(cmds) != 0 {
+			t.Fatalf("commands = %#v", cmds)
+		}
+	})
 }

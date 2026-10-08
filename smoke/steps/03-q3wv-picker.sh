@@ -79,7 +79,7 @@ expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 
 # A narrow Pane still folds to the focused column, and the picker opens over it.
 read -r picker_width picker_height < <(ctl stats | jq -r '.viewport[0:2] | @tsv')
-ctl resize 640 "$picker_height"
+ctl resize 800 "$picker_height"
 expect_tree "[data-id='main.columns.detail']" '.ok and .count == 0'
 expect_tree "[data-id='main.columns.list']" '.ok and .count == 1'
 expect_tree "[data-id='main.columns.collections']" '.ok and .count == 0'
