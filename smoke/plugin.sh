@@ -30,13 +30,18 @@ cleanup() {
 }
 trap cleanup EXIT
 ctl() { tern ctl --control "$tmp/control.sock" "$@"; }
-mkdir -p "$tmp/workspace" "$tmp/bin" "$tmp/app" "$tmp/crates/tern/goldens" "$tmp/crates/plugins/fixtures"
+mkdir -p "$tmp/workspace" "$tmp/bin" "$tmp/pane-bin" "$tmp/app" "$tmp/crates/tern/goldens" "$tmp/crates/plugins/fixtures"
 if [[ $# -gt 0 ]]; then cp "$1" "$tmp/app/tern-kata"; else (cd "$repo" && go build -o "$tmp/app/tern-kata" .); fi
-printf '#!/bin/sh\nexec env KATA_HOME=%q %q "$@"\n' "$KATA_HOME" "$tmp/app/tern-kata" >"$tmp/bin/tern-kata"
-chmod +x "$tmp/bin/tern-kata"
+printf '#!/bin/sh\nexec env KATA_HOME=%q %q "$@"\n' "$KATA_HOME" "$tmp/app/tern-kata" >"$tmp/pane-bin/tern-kata"
+chmod +x "$tmp/pane-bin/tern-kata"
 ln -s "$repo" "$tmp/crates/plugins/fixtures/tern-kata"
 ln -s "$(command -v kata)" "$tmp/bin/kata"
 ln -s "$(command -v tern)" "$tmp/bin/tern"
+ORIGINAL_SHELL="${SHELL:-/bin/sh}"
+printf '#!/bin/sh\nexport PATH="%s:$PATH"\nexec %q "$@"\n' "$tmp/pane-bin" "$ORIGINAL_SHELL" >"$tmp/bin/pane-shell"
+chmod +x "$tmp/bin/pane-shell"
+export SHELL="$tmp/bin/pane-shell"
+export ZDOTDIR="$tmp"
 export PATH="$tmp/bin:/usr/bin:/bin"
 kata daemon start
 kata --workspace "$tmp/workspace" init --project smoke --json
@@ -93,13 +98,8 @@ ctl state >"$tmp/link-focus.json"
 jq -e --argjson id "$kata_pane" '.tabs[0].panes == 2 and .focused.id == $id' "$tmp/link-focus.json" >/dev/null
 ctl key q
 ctl ready
-rm "$tmp/bin/tern-kata"
+rm "$tmp/pane-bin/tern-kata"
 ctl plugins run plugin.tern-kata.open
-for ((attempt=0; attempt<100; attempt++)); do
-  ctl tree '.toast' >"$tmp/toast.json"
-  if jq -e '.. | objects | select((.text? // "") | contains("go install github.com/Dangerboi/tern-kata@latest"))' "$tmp/toast.json" >/dev/null; then break; fi
-  sleep 0.1
-done
-jq -e '.. | objects | select((.text? // "") | contains("go install github.com/Dangerboi/tern-kata@latest"))' "$tmp/toast.json" >/dev/null
+ctl expect '"go install github.com/Dangerboi/tern-kata@latest"'
 jq -Rse 'contains("plugin window halves loaded count=1") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
-printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus, missing-binary toast\n'
+printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus, in-Pane install hint\n'
