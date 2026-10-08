@@ -29,3 +29,13 @@ func TestCollectionSwitching(t *testing.T) {
  }
 }
 
+func TestCollectionIgnoresSupersededSnapshot(t *testing.T) {
+ m,_:=model.Update(model.Model{},model.ProjectLoaded{Snapshot:g.UISnapshotResponseBody{}})
+ inbox,today:=m.Collections[0],m.Collections[1]
+ m,_=model.Update(m,model.CollectionSelected{Collection:today})
+ m,cmds:=model.Update(m,model.CollectionSelected{Collection:inbox})
+ if !reflect.DeepEqual(cmds,[]model.Cmd{model.LoadCollection{Collection:inbox}}){t.Fatalf("wrong intent validator: %#v",cmds)}
+ m,_=model.Update(m,model.CollectionLoaded{Collection:today,Snapshot:g.UISnapshotResponseBody{Collection:[]model.Issue{{UID:"stale"}}}})
+ if m.Collection!=inbox || !m.Loading || len(m.Issues)!=0 {t.Fatalf("stale response replaced Collection: %+v",m)}
+}
+
