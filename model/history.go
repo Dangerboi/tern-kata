@@ -1,0 +1,292 @@
+package model
+
+import (
+	"encoding/json"
+	"fmt"
+	"slices"
+	"strings"
+
+	g "go.kenn.io/kata/pkg/client/generated"
+)
+
+// VerbTone marks the history verbs that are worth a colour. The view maps it
+// to a Tern tone; the empty value is neutral.
+type VerbTone string
+
+const (
+	VerbAccent  VerbTone = "accent"
+	VerbSuccess VerbTone = "success"
+	VerbWarning VerbTone = "warning"
+)
+
+const (
+	historyTimeLayout = "2006-01-02 15:04"
+	maxDetailRunes    = 80
+)
+
+// historyRow phrases one event as "<actor> <verb> <object>" plus an optional
+// short detail line (Body). Types kata adds later fall back to their sorted
+// payload pairs.
+func historyRow(event g.Event) DetailRow {
+	payload := decodePayload(event.Payload)
+	verb, object, detail, tone := "", "", "", VerbTone("")
+	switch event.Type {
+	case "issue.created":
+		verb, object, tone = "created", "this Issue", VerbAccent
+	case "issue.commented":
+		verb, detail = "commented", oneLine(payload.text("body"))
+	case "issue.comment_edited":
+		verb, object, detail = "edited", "a comment", oneLine(payload.text("body"))
+	case "issue.assigned":
+		verb, object = "assigned", "to "+payload.text("owner")
+	case "issue.unassigned":
+		verb = "unassigned"
+	case "issue.closed":
+		verb, object, detail, tone = "closed:", payload.text("reason"), closeDetail(payload), VerbSuccess
+	case "issue.reopened":
+		verb, tone = "reopened", VerbWarning
+	case "issue.labeled":
+		verb, object = "added label", "`"+payload.text("label")+"`"
+	case "issue.unlabeled":
+		verb, object = "removed label", "`"+payload.text("label")+"`"
+	case "issue.priority_set":
+		verb, object = "set priority to", payload.text("priority")
+	case "issue.priority_cleared":
+		verb = "cleared priority"
+	case "issue.updated":
+		verb, object = "edited", editedFields(payload)
+		if _, ok := payload["title"]; ok {
+			detail = oneLine(payload.text("title"))
+		}
+	case "issue.linked", "issue.unlinked":
+		verb = strings.TrimPrefix(event.Type, "issue.")
+		object = linkObject(event, payload)
+	case "issue.links_changed":
+		verb, object = linksChanged(payload)
+	case "issue.metadata_updated":
+		verb, object = metadataChanged(payload)
+	case "issue.moved":
+		verb, object = "moved", movedTo(event, payload)
+	case "issue.soft_deleted":
+		verb = "deleted"
+	case "issue.restored":
+		verb = "restored"
+	default:
+		verb = strings.NewReplacer(".", " ", "_", " ").Replace(strings.TrimPrefix(event.Type, "issue."))
+		detail = payload.pairs()
+	}
+	row := DetailRow{
+		Key: event.UID, Actor: event.Actor, Verb: verb, Object: object, Body: detail, VerbTone: tone,
+		When: event.CreatedAt.Local().Format(historyTimeLayout),
+	}
+	row.Title = row.Actor + " " + row.Verb
+	if object != "" {
+		row.Title += " " + object
+	}
+	if event.RelatedIssueUID != nil {
+		row.ReferenceUID = *event.RelatedIssueUID
+	}
+	return row
+}
+
+// payloadMap is a decoded event payload; numbers keep their JSON spelling.
+type payloadMap map[string]any
+
+func decodePayload(raw string) payloadMap {
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	decoder.UseNumber()
+	var payload payloadMap
+	if decoder.Decode(&payload) != nil {
+		return payloadMap{"": raw}
+	}
+	return payload
+}
+
+// text is the value at key, empty when absent or null.
+func (p payloadMap) text(key string) string {
+	if p[key] == nil {
+		return ""
+	}
+	return plain(p[key])
+}
+
+// pairs is the "key: value" list of an event this build has no phrasing for.
+func (p payloadMap) pairs() string {
+	if raw, ok := p[""]; ok && len(p) == 1 {
+		return oneLine(plain(raw))
+	}
+	keys := make([]string, 0, len(p))
+	for key := range p {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	parts := make([]string, len(keys))
+	for i, key := range keys {
+		parts[i] = key + ": " + oneLine(plain(p[key]))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// plain is a value as people would write it: no quotes, braces or brackets.
+func plain(v any) string {
+	switch v := v.(type) {
+	case nil:
+		return "none"
+	case string:
+		return v
+	case json.Number:
+		return v.String()
+	case []any:
+		parts := make([]string, len(v))
+		for i, item := range v {
+			parts[i] = plain(item)
+		}
+		return strings.Join(parts, ", ")
+	case map[string]any:
+		return payloadMap(v).pairs()
+	}
+	return fmt.Sprint(v)
+}
+
+// oneLine collapses s to a single line cut to maxDetailRunes.
+func oneLine(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if runes := []rune(s); len(runes) > maxDetailRunes {
+		return string(runes[:maxDetailRunes]) + "…"
+	}
+	return s
+}
+
+func closeDetail(p payloadMap) string {
+	var evidence []string
+	items, _ := p["evidence"].([]any)
+	for _, item := range items {
+		fields, _ := item.(map[string]any)
+		parts := []string{plain(fields["type"])}
+		for _, key := range []string{"sha", "url", "command", "paths", "account", "rationale", "issue_ref"} {
+			if value, ok := fields[key]; ok {
+				if key == "sha" {
+					value = truncate(plain(value), 7)
+				}
+				parts = append(parts, plain(value))
+				break
+			}
+		}
+		evidence = append(evidence, oneLine(strings.Join(parts, " ")))
+	}
+	message, list := oneLine(p.text("message")), strings.Join(evidence, ", ")
+	switch {
+	case message == "":
+		return list
+	case list == "":
+		return message
+	}
+	return message + " (" + list + ")"
+}
+
+func truncate(s string, n int) string {
+	if len(s) > n {
+		return s[:n]
+	}
+	return s
+}
+
+func editedFields(p payloadMap) string {
+	var fields []string
+	for _, field := range []string{"title", "body", "owner"} {
+		if _, ok := p[field]; ok {
+			fields = append(fields, field)
+		}
+	}
+	return strings.Join(fields, " and ")
+}
+
+var inverseRelation = map[string]string{"parent": "child", "child": "parent", "blocks": "blocked_by", "blocked_by": "blocks"}
+
+func relationName(relation string) string { return strings.ReplaceAll(relation, "_", " ") }
+
+func linkObject(event g.Event, p payloadMap) string {
+	relation, peer := p.text("type"), p.text("to_short_id")
+	if event.RelatedIssueShortID != nil {
+		peer = *event.RelatedIssueShortID
+	}
+	if incoming, _ := p["incoming"].(bool); incoming && inverseRelation[relation] != "" {
+		relation = inverseRelation[relation]
+	}
+	return relationName(relation) + " " + peer
+}
+
+var (
+	linkAdds    = [][2]string{{"parent_set", "parent"}, {"blocks_added", "blocks"}, {"blocked_by_added", "blocked by"}, {"related_added", "related"}}
+	linkRemoves = [][2]string{{"parent_removed", "parent"}, {"blocks_removed", "blocks"}, {"blocked_by_removed", "blocked by"}, {"related_removed", "related"}}
+)
+
+// linksChanged phrases the aggregated event an Issue edit records for any mix
+// of added and removed links.
+func linksChanged(p payloadMap) (verb, object string) {
+	collect := func(specs [][2]string, prefix string) (parts []string) {
+		for _, spec := range specs {
+			value, ok := p[spec[0]]
+			if !ok {
+				continue
+			}
+			refs, _ := value.([]any)
+			if single, isString := value.(string); isString {
+				refs = []any{single}
+			}
+			for _, ref := range refs {
+				parts = append(parts, prefix+spec[1]+" "+plain(ref))
+			}
+		}
+		return parts
+	}
+	added, removed := collect(linkAdds, ""), collect(linkRemoves, "")
+	switch {
+	case len(removed) == 0:
+		return "linked", strings.Join(added, ", ")
+	case len(added) == 0:
+		return "unlinked", strings.Join(removed, ", ")
+	}
+	return "changed links:", strings.Join(append(collect(linkAdds, "+"), collect(linkRemoves, "-")...), ", ")
+}
+
+// metadataChanged phrases schedule and deadline changes, and names the keys
+// of any other metadata diff.
+func metadataChanged(p payloadMap) (verb, object string) {
+	diff, _ := p["diff"].(map[string]any)
+	if len(diff) == 1 {
+		for key, change := range diff {
+			to := ""
+			if fields, ok := change.(map[string]any); ok && fields["to"] != nil {
+				to = plain(fields["to"])
+			}
+			switch {
+			case key == "scheduled_on" && to != "":
+				return "scheduled for", oneLine(to)
+			case key == "scheduled_on":
+				return "cleared schedule", ""
+			case key == "deadline_on" && to != "":
+				return "set deadline to", oneLine(to)
+			case key == "deadline_on":
+				return "cleared deadline", ""
+			}
+		}
+	}
+	keys := make([]string, 0, len(diff))
+	for key := range diff {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	return "updated metadata:", strings.Join(keys, ", ")
+}
+
+func movedTo(event g.Event, p payloadMap) string {
+	var parts []string
+	if event.ProjectName != "" {
+		parts = append(parts, "to "+event.ProjectName)
+	}
+	if id := p.text("to_short_id"); id != "" {
+		parts = append(parts, "as "+id)
+	}
+	return strings.Join(parts, " ")
+}

@@ -112,13 +112,13 @@ func detailRows(m model.Model, section model.DetailSection) tern.Nodes {
 		if m.Focus == model.ColumnDetail && m.DetailSection == section && m.DetailIndex == i {
 			mark = ui.MarkPick
 		}
-		parts := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading", Actions: &ui.Actions{Click: action}}, Text: row.Title})
+		heading, body := tern.Element(ui.Text{Common: ui.Common{Key: "heading", Actions: &ui.Actions{Click: action}}, Text: row.Title}), tern.Element(ui.Md{Common: ui.Common{Key: "body"}, Text: row.Body})
+		if section == model.SectionHistory {
+			heading, body = historyHeading(row, action), historyDetail(row)
+		}
+		parts := ui.Nodes(heading)
 		if row.Body != "" {
-			body := row.Body
-			if section == model.SectionHistory {
-				body = "```json\n" + body + "\n```"
-			}
-			parts = append(parts, ui.Md{Common: ui.Common{Key: "body"}, Text: body})
+			parts = append(parts, body)
 		}
 		if row.ReferenceUID != "" {
 			parts = append(parts, el.Button{Common: ui.Common{Key: "jump", Actions: &ui.Actions{Click: "jump=" + row.ReferenceUID}}, Text: "Open referenced Issue"})
