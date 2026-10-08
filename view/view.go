@@ -46,6 +46,10 @@ func Render(m model.Model) tern.View {
 		}
 		// A Row centres its children by default: a parent's detail (a Link per child) is far taller than the Pane and would carry the shorter list column out of view with it.
 		main = ui.Nodes(ui.Row{Common: ui.Common{Key: "columns"}, Gap: ui.GapMD, Align: ui.AlignStart, Children: columns})
+		// The top bar heads the whole Pane, so it sits above the columns and outside their borders.
+		if slices.Contains(m.VisibleColumns(), model.ColumnList) {
+			main = append(ui.Nodes(topBar(m)), main...)
+		}
 	}
 	if m.Stale && m.Err == nil && !m.FirstLoad() {
 		main = append(main, staleNotice(m))
@@ -102,24 +106,7 @@ func issues(m model.Model) tern.Element {
 	if m.SelectedUID != "" {
 		selected = IssueID(m.SelectedUID)
 	}
-	tone, style := ui.ToneNeutral, "strong"
-	if m.Focus == model.ColumnList {
-		tone, style = ui.ToneAccent, "accent strong"
-	}
-	title := m.ListHeader()
-	if m.Collection.View == "project" {
-		title = "Project: " + title
-	}
-	heading := []ui.Span{{T: title, S: style}}
-	if m.Loading {
-		heading = append(heading, loadingMarker)
-	}
-	topBar := ui.Col{Common: ui.Common{Key: "topbar"}, Children: ui.Nodes(
-		ui.Text{Common: ui.Common{Key: "heading", Tone: tone, Title: "Collections picker (p)", Actions: &ui.Actions{Click: "key=p"}}, Spans: heading},
-		ui.Text{Common: ui.Common{Key: "daemon", Tone: ui.ToneMuted}, Text: m.DaemonLine()},
-		ui.Text{Common: ui.Common{Key: "counts", Tone: ui.ToneMuted}, Text: m.CountsLine()},
-	)}
-	children := ui.Nodes(topBar, headerRow(ownerShown))
+	children := ui.Nodes(headerRow(ownerShown))
 	if m.Search.Open {
 		placeholder := "Search Issues in " + m.Collection.Title
 		children = append(children, ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Mode: "insert", Placeholder: placeholder, Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}})
@@ -135,7 +122,40 @@ func issues(m model.Model) tern.Element {
 	// to its content and the Pane scrolls the top bar away with it.
 	// ponytail: a fraction of the window, not of the free space; below ~25 rows the Pane may scroll again.
 	children = append(children, ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "issues"}, Max: ui.MaxFrac(0.7), Selected: selected, Empty: ui.T(empty), Children: items})
-	return ui.Col{Common: ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.4)}, Children: children}
+	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.4)}, "", children)
+}
+
+// topBar is the pinned block above the columns: Collection title with its
+// markers, daemon line and counts. Clicking the title opens the picker.
+func topBar(m model.Model) tern.Element {
+	tone, style := ui.ToneNeutral, "strong"
+	if m.Focus == model.ColumnList {
+		tone, style = ui.ToneAccent, "accent strong"
+	}
+	title := m.ListHeader()
+	if m.Collection.View == "project" {
+		title = "Project: " + title
+	}
+	heading := []ui.Span{{T: title, S: style}}
+	if m.Loading {
+		heading = append(heading, loadingMarker)
+	}
+	return ui.Col{Common: ui.Common{Key: "topbar"}, Children: ui.Nodes(
+		ui.Text{Common: ui.Common{Key: "heading", Tone: tone, Title: "Collections picker (p)", Actions: &ui.Actions{Click: "key=p"}}, Spans: heading},
+		ui.Text{Common: ui.Common{Key: "daemon", Tone: ui.ToneMuted}, Text: m.DaemonLine()},
+		ui.Text{Common: ui.Common{Key: "counts", Tone: ui.ToneMuted}, Text: m.CountsLine()},
+	)}
+}
+
+// panel is a column's container. From model.SideBySideCols it is a bordered
+// Card, its ring accent when the column is focused and muted otherwise (Tern
+// draws the ring from Selected; a Card's Tone shows nothing); narrower Panes
+// show one column and no border.
+func panel(m model.Model, column model.Column, common ui.Common, gap ui.Gap, children []tern.Element) tern.Element {
+	if m.Cols < model.SideBySideCols {
+		return ui.Col{Common: common, Gap: gap, Children: children}
+	}
+	return ui.Card{Common: common, Selected: m.Focus == column, Children: children}
 }
 
 func issueRow(row model.IssueRow, selected, ownerShown bool) tern.Element {

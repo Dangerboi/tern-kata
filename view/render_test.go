@@ -129,7 +129,7 @@ func TestSwitchingCollectionKeepsListOnScreen(t *testing.T) {
 		t.Fatal("full-Pane loading message replaced the columns")
 	}
 	sameIDs(t, "main.columns", idle, loading)
-	if heading := text(loading["main.columns.list.topbar.heading"]); !strings.HasPrefix(heading, allOpen.Title) || heading == allOpen.Title {
+	if heading := text(loading["main.topbar.heading"]); !strings.HasPrefix(heading, allOpen.Title) || heading == allOpen.Title {
 		t.Errorf("list heading shows no loading marker: %q", heading)
 	}
 
@@ -138,7 +138,7 @@ func TestSwitchingCollectionKeepsListOnScreen(t *testing.T) {
 	if _, ok := loaded[view.IssueID(alpha.UID)]; !ok {
 		t.Errorf("alpha's row changed id across loading: %v", loaded.under(view.IssueListID))
 	}
-	if heading := text(loaded["main.columns.list.topbar.heading"]); heading != allOpen.Title {
+	if heading := text(loaded["main.topbar.heading"]); heading != allOpen.Title {
 		t.Errorf("list heading keeps the loading marker: %q", heading)
 	}
 }
@@ -189,7 +189,7 @@ func TestTopBarLinesInOrder(t *testing.T) {
 	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Daemon: model.Daemon{Version: "v0.18.0"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, beta}}})
 	nodes := render(t, m)
 	var got []string
-	for _, line := range nodes["main.columns.list.topbar"].C {
+	for _, line := range nodes["main.topbar"].C {
 		got = append(got, text(line))
 	}
 	want := []string{"Project: work", "Daemon: local · kata v0.18.0", "open: 2 · closed: 0 · all: 2"}

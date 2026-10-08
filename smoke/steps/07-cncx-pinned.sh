@@ -11,12 +11,12 @@ ctl --file "$tmp/pinned-launch.ctl"
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count >= 40'
 ctl key Home
 expect_tree "[data-id^='main.columns.list.issues.01']" '.nodes[0]["aria-selected"] == "true"'
-ctl tree "[data-id='main.columns.list.topbar'],[data-id='main.columns.list.header']" | jq -c '[.nodes[].rect]' >"$tmp/pinned-rects-before.json"
+ctl tree "[data-id='main.topbar'],[data-id='main.columns.list.header']" | jq -c '[.nodes[].rect]' >"$tmp/pinned-rects-before.json"
 mark=$(wc -l <"$tmp/pinned-frames.jsonl")
 
 for i in $(seq 45); do ctl key j; done
 expect_tree "[data-id^='main.columns.list.issues.01']" '.nodes[-1]["aria-selected"] == "true"'
-ctl tree "[data-id='main.columns.list.topbar'],[data-id='main.columns.list.header']" | jq -c '[.nodes[].rect]' >"$tmp/pinned-rects-after.json"
+ctl tree "[data-id='main.topbar'],[data-id='main.columns.list.header']" | jq -c '[.nodes[].rect]' >"$tmp/pinned-rects-after.json"
 # At the end the selected row is on screen, above the footer: the list scrolled, not the Pane.
 ctl tree "[data-id='dock.hints']" | jq '.nodes[0].rect[1]' >"$tmp/pinned-dock-top.txt"
 ctl tree "[data-id^='main.columns.list.issues.01'][aria-selected='true']" >"$tmp/pinned-selected.json"

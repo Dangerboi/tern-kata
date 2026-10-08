@@ -144,7 +144,7 @@ func TestRenderPickerOnlyWhenOpenAndFocusesItsFilter(t *testing.T) {
 }
 
 func TestRenderListHeadingOpensPicker(t *testing.T) {
-	heading := pickerNodes(t, pickerLoaded(true))["main.columns.list.topbar.heading"]
+	heading := pickerNodes(t, pickerLoaded(true))["main.topbar.heading"]
 	actions, _ := heading.P["actions"].(map[string]any)
 	if actions["click"] != "key=p" {
 		t.Fatalf("heading actions = %v", heading.P["actions"])

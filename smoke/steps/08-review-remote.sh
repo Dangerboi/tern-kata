@@ -24,7 +24,7 @@ done
 remote_proxy=$(<"$tmp/proxy.url")
 printf 'ready\nrun "(cd %s && env -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s KATA_SERVER=%s %s/tern-kata)"\n' "$remote_workspace/nested" "$KATA_HOME" "$remote_proxy" "$tmp" >"$tmp/remote-launch.ctl"
 ctl --file "$tmp/remote-launch.ctl"
-expect_tree "[data-id='main.columns.list.topbar.heading']" '.ok and .count == 1 and .nodes[0].text == "Project: remote-renamed"'
+expect_tree "[data-id='main.topbar.heading']" '.ok and .count == 1 and .nodes[0].text == "Project: remote-renamed"'
 expect_tree "[data-id='main.columns.collections']" '.ok and .count == 0'
 expect_tree "[data-id='main.columns.list.issues.$remote_issue_uid']" '.ok and .count == 1 and (.nodes[0].text | contains("Remote local-binding Issue"))'
 jq -se 'length > 0 and all(.[]; (has("start_path") | not)) and any(.[]; .name == "remote-smoke" and .alias.identity == "github.com/tern-kata/review-remote" and .alias.kind == "git")' "$tmp/remote-resolve.jsonl" >/dev/null

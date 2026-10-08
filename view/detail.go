@@ -58,7 +58,7 @@ func detail(m model.Model) tern.Element {
 			children = append(children, ui.Col{Common: ui.Common{Key: "section" + strconv.Itoa(int(section))}, Gap: ui.GapSM, Children: content})
 		}
 	}
-	return ui.Col{Common: ui.Common{Key: "detail", Grow: 1, Basis: ui.BasisFrac(0.5)}, Gap: ui.GapMD, Children: children}
+	return panel(m, model.ColumnDetail, ui.Common{Key: "detail", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapMD, children)
 }
 
 func sectionHeading(m model.Model, section model.DetailSection) tern.Element {
