@@ -34,5 +34,7 @@ func editorLayer(m model.Model) tern.Element {
 
 func InputFocusID(m model.Model) string {
  if m.EditorMode()==model.ModeEditor { return DraftEditorID }
+ if m.FieldForm.Open && !m.FieldForm.Saving { return FieldInputID }
+ if id:=CloseInputFocusID(m); id!="" { return id }
  return ""
 }

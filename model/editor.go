@@ -17,7 +17,7 @@ type Draft struct {
  Err error
 }
 
-type SaveDraft struct { Workspace, UID, Text string; ProjectID, BaseRevision int64; Comment bool }
+type SaveDraft struct { Workspace, UID, Text, Actor string; ProjectID, BaseRevision int64; Comment bool }
 func (SaveDraft) cmd() {}
 type OpenDraftEditor struct { UID, Text string }
 func (OpenDraftEditor) cmd() {}
@@ -65,7 +65,7 @@ func saveDraft(m Model,draft Draft) (Model,[]Cmd) {
  if m.Stale { draft.Err=errDraftReadOnly; return putDraft(m,m.EditorUID,draft),nil }
  draft.Saving=true; draft.Err=nil
  m=putDraft(m,m.EditorUID,draft)
- return m,[]Cmd{SaveDraft{Workspace:m.Workspace, UID:m.EditorUID, ProjectID:draft.ProjectID, BaseRevision:draft.BaseRevision, Text:draft.Editor.Text, Comment:draft.Comment}}
+ return m,[]Cmd{SaveDraft{Workspace:m.Workspace, UID:m.EditorUID, ProjectID:draft.ProjectID, BaseRevision:draft.BaseRevision, Text:draft.Editor.Text, Comment:draft.Comment, Actor:m.Actor}}
 }
 
 func updateEditor(m Model,msg Msg) (Model,[]Cmd,bool) {

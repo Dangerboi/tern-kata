@@ -69,7 +69,9 @@ expect_tree() {
   return 1
 }
 
-for step in "$repo"/smoke/steps/*; do
+steps=("$repo"/smoke/steps/*)
+if (( $# )); then steps=("$@"); fi
+for step in "${steps[@]}"; do
   printf '\nRunning %s\n' "$(basename "$step")"
   case "$step" in
     *.ctl) ctl --file "$step" ;;

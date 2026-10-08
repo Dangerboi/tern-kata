@@ -1,6 +1,7 @@
 package model_test
 
 import (
+ "fmt"
  "reflect"
  "testing"
 
@@ -37,6 +38,7 @@ func TestDraftSequences(t *testing.T) {
   command model.Cmd
  }{
   {"typed undo",[]model.Msg{key("e"),typed,key("ctrl+z")},"a😀b",model.ModeEditor,true,nil},
+  {"global printable keys become text",[]model.Msg{key("e"),model.KeyMsg{Chord:"q",Text:"q"},model.KeyMsg{Chord:"shift+?",Text:"?"}},"a😀bq?",model.ModeEditor,true,nil},
   {"native undo",[]model.Msg{key("e"),model.EditMsg{ID:"layer.editor.body",From:1,To:3,Text:"x",Cursor:2,Len:4},model.UndoMsg{ID:"layer.editor.body"}},"a😀b",model.ModeEditor,true,nil},
   {"stale edit",[]model.Msg{key("e"),model.EditMsg{ID:"layer.editor.body",From:0,To:1,Text:"x",Cursor:1,Len:99}},"a😀b",model.ModeEditor,true,nil},
   {"surrogate split",[]model.Msg{key("e"),model.EditMsg{ID:"layer.editor.body",From:2,To:3,Text:"x",Cursor:3,Len:4}},"a😀b",model.ModeEditor,true,nil},
@@ -66,4 +68,26 @@ func TestDraftSequences(t *testing.T) {
    if tt.name=="conflict discard" && m.Detail.Issue.Body!="Remote body" { t.Fatal("discard did not retain remote version") }
   })
  }
+}
+
+func TestDraftSurvivesLiveSnapshotAndSaveFailure(t *testing.T) {
+ m:=editorModel()
+ m.Collection=model.Collection{View:"project"}
+ m.Actor="writer"
+ m,_=model.Update(m,model.KeyMsg{Chord:"e"})
+ previous:=m
+ m,_=model.Update(m,model.KeyMsg{Chord:"paste",Text:"local"})
+ if previous.Drafts["a"].Editor.Text!="a😀b" { t.Fatal("Update mutated the previous Draft") }
+ m.Refreshing=true; m.RefreshRequest=3
+ latest:=model.Issue{UID:"a",ProjectID:2,Body:"Remote body",Revision:8}
+ snapshot:=g.UISnapshotResponseBody{Cursor:9,Collection:[]g.UIIssue{latest},Selected:&g.UISelectedAuthority{Issue:&latest}}
+ m,_=model.Update(m,model.SnapshotRefreshed{Request:3,Query:m.SnapshotQuery(),Snapshot:snapshot})
+ if m.Drafts["a"].Editor.Text!="a😀blocal" || m.Drafts["a"].BaseRevision!=7 { t.Fatal("snapshot destroyed/rebased Draft") }
+ m,cmds:=model.Update(m,model.KeyMsg{Chord:"ctrl+o"})
+ if len(cmds)!=1 || cmds[0].(model.SaveDraft).BaseRevision!=7 || cmds[0].(model.SaveDraft).Actor!="writer" { t.Fatalf("save: %#v",cmds) }
+ m,_=model.Update(m,model.DraftFailed{UID:"a",Err:fmt.Errorf("write failed")})
+ if m.Drafts["a"].Editor.Text!="a😀blocal" || m.Drafts["a"].Saving || m.Drafts["a"].Err==nil { t.Fatal("save failure lost Draft") }
+ m.Stale=true
+ m,cmds=model.Update(m,model.KeyMsg{Chord:"ctrl+o"})
+ if len(cmds)!=0 || m.Drafts["a"].Err==nil { t.Fatal("disconnected Draft wrote") }
 }

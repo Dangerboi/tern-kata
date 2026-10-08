@@ -4,20 +4,11 @@ import (
  "context"
  "fmt"
  "net/http"
- "os"
- "os/exec"
- "strings"
 
  "github.com/Dangerboi/tern-kata/model"
  g "go.kenn.io/kata/pkg/client/generated"
 )
 
-func draftActor(workspace string) string {
- for _,name:=range []string{"KATA_AUTHOR","USER"} { if value:=os.Getenv(name); value!="" { return value } }
- cmd:=exec.Command("git","config","user.name"); cmd.Dir=workspace
- if value,err:=cmd.Output(); err==nil && strings.TrimSpace(string(value))!="" { return strings.TrimSpace(string(value)) }
- return "anonymous"
-}
 
 func (c *Client) SaveDraft(ctx context.Context,cmd model.SaveDraft) model.Msg {
  failed:=func(err error) model.Msg { return model.DraftFailed{UID:cmd.UID,Err:err} }
@@ -31,7 +22,7 @@ func (c *Client) SaveDraft(ctx context.Context,cmd model.SaveDraft) model.Msg {
   return model.DraftConflict{UID:cmd.UID,Issue:*detail.Selected.Issue}
  }
  if current.JSON200.Issue.Revision!=cmd.BaseRevision { return conflict() }
- actor:=draftActor(cmd.Workspace)
+ actor:=cmd.Actor
  if cmd.Comment {
   response,err:=c.CreateCommentWithResponse(ctx,&g.CreateCommentRequestOptions{PathParams:&g.CreateCommentPath{ProjectID:fmt.Sprint(cmd.ProjectID),Ref:cmd.UID},Body:&g.CreateCommentBody{Body:cmd.Text,Actor:&actor}})
   if response!=nil && response.StatusCode==http.StatusPreconditionFailed { return conflict() }

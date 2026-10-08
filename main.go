@@ -22,6 +22,8 @@ func main() {
 }
 
 func run() error {
+	override, fallbackArgs, err := actorArgs(os.Args[1:])
+	if err != nil { return err }
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	session, err := tern.Connect(ctx, editorOptions())
@@ -30,7 +32,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		return syscall.Exec(kata, append([]string{"kata", "tui"}, os.Args[1:]...), os.Environ())
+		return syscall.Exec(kata, append([]string{"kata", "tui"}, fallbackArgs...), actorEnvironment(override))
 	}
 	if err != nil {
 		return err
@@ -49,10 +51,11 @@ func run() error {
 	inputErrors := make(chan error, 1)
 	stopInput := startInputReader(ctx, session, messages, inputErrors)
 	defer func() { stopInput() }()
-	m := model.Model{Cols: session.Caps().Cols}
+	m := model.Model{Cols: session.Caps().Cols, Actor: resolveActor(override)}
 	runner := commandRunner{}
 	defer runner.close()
 	msg := model.Msg(model.Start{Workspace: workspace})
+	inputFocus := ""
 	eventLoop:
 	for {
 		previousSelection := m.SelectedUID
@@ -66,7 +69,10 @@ func run() error {
 		if err := surface.Render(view.Render(m)); err != nil {
 			return err
 		}
-		if err := surface.Focus(view.InputFocusID(m)); err != nil { return err }
+		if target := view.InputFocusID(m); target != inputFocus {
+			if err := surface.Focus(target); err != nil { return err }
+			inputFocus = target
+		}
 		if m.Focus == model.ColumnList && m.SelectedUID != "" && m.SelectedUID != previousSelection {
 			if err := surface.Reveal(view.IssueID(m.SelectedUID), "nearest"); err != nil {
 				return err
@@ -84,10 +90,12 @@ func run() error {
 				surface.Close()
 				session.Close()
 				msg = editExternally(external)
-				session, err = tern.Connect(ctx, editorOptions())
-				if err != nil { return err }
-				surface, err = session.Open(editorSurfaceOptions())
-				if err != nil { return err }
+				nextSession, connectErr := tern.Connect(ctx, editorOptions())
+				if connectErr != nil { return connectErr }
+				nextSurface, openErr := nextSession.Open(editorSurfaceOptions())
+				if openErr != nil { nextSession.Close(); return openErr }
+				session, surface = nextSession, nextSurface
+				inputFocus = ""
 				stopInput = startInputReader(ctx, session, messages, inputErrors)
 				continue eventLoop
 			}

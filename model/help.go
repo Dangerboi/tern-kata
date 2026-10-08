@@ -4,9 +4,11 @@ import "iter"
 
 func (m Model) CurrentMode() Mode {
 	if mode := m.EditorMode(); mode != "" { return mode }
+	if m.FieldForm.Open { return ModeFieldForm }
 	if m.HelpOpen {
 		return ModeHelp
 	}
+	if m.CloseForm.Open { return ModeCloseForm }
 	if m.Err != nil {
 		return ModeError
 	}
@@ -25,6 +27,7 @@ func LookupBindingForMode(chord string, mode Mode) (Binding, bool) {
 			return binding, true
 		}
 	}
+	if mode == ModeEditor || mode == ModeDiscard || mode == ModeConflict { return Binding{}, false }
 	for _, binding := range Keymap {
 		if binding.Chord == chord && binding.Mode == "" {
 			return binding, true
