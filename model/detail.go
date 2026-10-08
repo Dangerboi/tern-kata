@@ -10,9 +10,9 @@ import (
 type DetailSection uint8
 
 const (
-	SectionBody DetailSection = iota
-	SectionProperties
+	SectionProperties DetailSection = iota
 	SectionLabels
+	SectionBody
 	SectionLinks
 	SectionComments
 	SectionHistory
@@ -56,7 +56,7 @@ type DetailItemMsg struct {
 func (DetailItemMsg) msg() {}
 
 func (s DetailSection) String() string {
-	return [...]string{"Body", "Properties", "Labels", "Links", "Comments", "Change history"}[s]
+	return [...]string{"Properties", "Labels", "Body", "Links", "Comments", "Change history"}[s]
 }
 
 // DetailRow is one row of a detail section. History rows also carry their
@@ -153,7 +153,7 @@ func EnsureDetail(m Model) (Model, []Cmd) {
 		if m.SelectedUID == "" || m.DetailIssueUID() == "" {
 			m.Detail = nil
 		}
-		m.DetailSection = SectionBody
+		m.DetailSection = SectionProperties
 		m.DetailIndex = 0
 	}
 	m.DetailErr = nil
