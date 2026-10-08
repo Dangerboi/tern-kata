@@ -7,6 +7,17 @@ import (
 	"github.com/Dangerboi/tern-kata/model"
 )
 
+// saveProject runs a Project write against the daemon that serves workspace.
+func saveProject(ctx context.Context, workspace string, save func(*data.Client) (model.Project, error)) model.ProjectSaved {
+	client, err := data.Discover(ctx, workspace)
+	if err != nil {
+		return model.ProjectSaved{Err: err}
+	}
+	defer client.CloseIdleConnections()
+	project, err := save(client)
+	return model.ProjectSaved{Project: project, Err: err}
+}
+
 func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 	var msg model.Msg
 	switch cmd := cmd.(type) {
@@ -70,21 +81,9 @@ func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 		result.UID, result.Err = cmd.UID, err
 		msg = result
 	case model.CreateProject:
-		client, err := data.Discover(ctx, cmd.Workspace)
-		var project model.Project
-		if err == nil {
-			defer client.CloseIdleConnections()
-			project, err = client.CreateProject(ctx, cmd)
-		}
-		msg = model.ProjectSaved{Project: project, Err: err}
+		msg = saveProject(ctx, cmd.Workspace, func(c *data.Client) (model.Project, error) { return c.CreateProject(ctx, cmd) })
 	case model.BindProject:
-		client, err := data.Discover(ctx, cmd.Workspace)
-		var project model.Project
-		if err == nil {
-			defer client.CloseIdleConnections()
-			project, err = client.BindProject(ctx, cmd)
-		}
-		msg = model.ProjectSaved{Project: project, Err: err}
+		msg = saveProject(ctx, cmd.Workspace, func(c *data.Client) (model.Project, error) { return c.BindProject(ctx, cmd) })
 	case model.LoadProject:
 		client, err := data.Discover(ctx, cmd.Workspace)
 		if err != nil {

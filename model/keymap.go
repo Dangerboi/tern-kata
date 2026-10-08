@@ -170,6 +170,7 @@ var Keymap = []Binding{
 	{Chord: "shift+g", Key: "G", Action: MoveLast, Help: "last Collection", Mode: ModeCollections},
 	{Chord: "end", Key: "end", Action: MoveLast, Help: "last Collection", Mode: ModeCollections},
 	{Chord: "enter", Key: "enter", Action: DrillIn, Help: "open Collection", Mode: ModeCollections, ShowInFooter: true},
+	{Chord: "p", Key: "p", Action: OpenPicker, Help: "Collections picker", Mode: ModeCollections},
 	{Chord: "q", Key: "q", Action: QuitAction, Help: "quit", ShowInFooter: true},
 	{Chord: "enter", Key: "enter", Action: DrillIn, Help: "open", Mode: ModeList, ShowInFooter: true},
 	{Chord: "shift+l", Key: "L", Action: ToggleDetail, Help: "toggle detail", Mode: ModeList, ShowInFooter: true},

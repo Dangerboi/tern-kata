@@ -66,9 +66,9 @@ func (m Model) PickerEntries() []PickerEntry {
 	return entries
 }
 
-// openPicker opens the picker over the list or detail; other layers keep the keys.
+// openPicker opens the picker over the columns; other layers keep the keys.
 func openPicker(m Model) Model {
-	if mode := m.CurrentMode(); mode == ModeList || mode == ModeDetail {
+	if mode := m.CurrentMode(); mode == ModeList || mode == ModeDetail || mode == ModeCollections {
 		m.Picker = PickerState{Open: true}
 	}
 	return m
@@ -136,14 +136,7 @@ func updatePicker(m Model, msg KeyMsg) (Model, []Cmd) {
 }
 
 func typePickerFilter(m Model, msg KeyMsg) Model {
-	text := msg.Text
-	if text == "" && utf8.RuneCountInString(msg.Chord) == 1 {
-		text = msg.Chord
-	}
-	if msg.Chord == "space" {
-		text = " "
-	}
-	if text = strings.NewReplacer("\r", " ", "\n", " ").Replace(text); text != "" {
+	if text := typedText(msg); text != "" {
 		m.Picker.Filter += text
 		m.Picker.Cursor = 0
 	}

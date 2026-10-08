@@ -361,3 +361,15 @@ func TestPickerKeysAreAdvertisedFromTheKeymap(t *testing.T) {
 		}
 	}
 }
+
+func TestListHeadingClickOpensThePickerFromTheSidebar(t *testing.T) {
+	m := pickerStart(120, false)
+	m, _ = pickerKeys(m, "escape")
+	if m.Focus != model.ColumnCollections {
+		t.Fatalf("fixture: focus %v", m.Focus)
+	}
+	m, _ = model.Update(m, model.ActionMsg{Action: "key", Value: "p"})
+	if !m.Picker.Open {
+		t.Fatal("clicking the list heading did not open the picker")
+	}
+}

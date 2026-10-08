@@ -9,11 +9,12 @@ import (
 // historyHeading shows an event as its sentence, with the verb toned and the
 // local time muted after it.
 func historyHeading(row model.DetailRow, action string) tern.Element {
-	spans := []ui.Span{{T: row.Actor, S: "strong"}, {T: " "}, {T: row.Verb, S: string(row.VerbTone)}}
-	if row.Object != "" {
-		spans = append(spans, ui.Span{T: " " + row.Object})
+	sentence := row.History
+	spans := []ui.Span{{T: sentence.Actor, S: "strong"}, {T: " "}, {T: sentence.Verb, S: string(sentence.Tone)}}
+	if sentence.Object != "" {
+		spans = append(spans, ui.Span{T: " " + sentence.Object})
 	}
-	spans = append(spans, ui.Span{T: "  " + row.When, S: "muted"})
+	spans = append(spans, ui.Span{T: "  " + sentence.When, S: "muted"})
 	return ui.Text{Common: ui.Common{Key: "heading", Actions: &ui.Actions{Click: action}}, Spans: spans}
 }
 

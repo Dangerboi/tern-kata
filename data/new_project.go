@@ -15,10 +15,15 @@ import (
 	g "go.kenn.io/kata/pkg/client/generated"
 )
 
-// CreateProject is `kata projects create`: the daemon creates the Project, or
-// returns the active one of that name, and no workspace file changes.
+// CreateProject is `kata projects create`: the daemon creates the Project and
+// no workspace file changes. A name already taken is an error, so the form can
+// keep the input, where BindProject welcomes the existing Project.
 func (c *Client) CreateProject(ctx context.Context, cmd model.CreateProject) (model.Project, error) {
-	return c.initProject(ctx, g.InitProjectBody{Name: &cmd.Name, Actor: &cmd.Actor})
+	project, created, err := c.initProject(ctx, g.InitProjectBody{Name: &cmd.Name, Actor: &cmd.Actor})
+	if err == nil && !created {
+		return model.Project{}, fmt.Errorf("project %q already exists", cmd.Name)
+	}
+	return project, err
 }
 
 // BindProject is `kata init --project`: the daemon creates the Project, or
@@ -53,7 +58,7 @@ func (c *Client) BindProject(ctx context.Context, cmd model.BindProject) (model.
 	if err != nil {
 		return model.Project{}, err
 	}
-	project, err := c.initProject(ctx, g.InitProjectBody{Name: &cmd.Name, Actor: &cmd.Actor, Alias: alias})
+	project, _, err := c.initProject(ctx, g.InitProjectBody{Name: &cmd.Name, Actor: &cmd.Actor, Alias: alias})
 	if err != nil {
 		return model.Project{}, err
 	}
@@ -69,18 +74,18 @@ func (c *Client) BindProject(ctx context.Context, cmd model.BindProject) (model.
 	return project, nil
 }
 
-func (c *Client) initProject(ctx context.Context, body g.InitProjectBody) (model.Project, error) {
+func (c *Client) initProject(ctx context.Context, body g.InitProjectBody) (model.Project, bool, error) {
 	response, err := c.InitProjectWithResponse(ctx, &g.InitProjectRequestOptions{Body: &body})
 	if err != nil {
 		if response != nil {
 			err = ReadError(response.Body, err)
 		}
-		return model.Project{}, err
+		return model.Project{}, false, err
 	}
 	if response.JSON200 == nil {
-		return model.Project{}, errors.New("kata daemon returned no Project")
+		return model.Project{}, false, errors.New("kata daemon returned no Project")
 	}
-	return response.JSON200.Project, nil
+	return response.JSON200.Project, response.JSON200.Created, nil
 }
 
 // ignoreLocalConfig lists .kata.local.toml, a developer's per-machine overrides,

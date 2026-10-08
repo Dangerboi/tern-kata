@@ -55,7 +55,12 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 	if action, ok := msg.(ActionMsg); ok && action.Action == "key" {
 		msg = KeyMsg{Chord: action.Value}
 	}
+	shown := m.DetailIssueUID()
 	m, cmds := update(m, msg)
+	if now := m.DetailIssueUID(); shown != "" && now != "" && now != shown {
+		// The detail column keeps its scroll offset across Issues; a different Issue starts at the top.
+		cmds = append(cmds, Scroll{Column: ColumnDetail, Start: true})
+	}
 	if m.Focus != ColumnDetail {
 		// Jump history belongs to the detail column, so every path out of it, key or click, ends it.
 		m.DetailBack = nil
@@ -184,11 +189,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return collectionLoaded(m, msg)
 	case CollectionPointerSelected:
 		for _, collection := range m.Collections {
-			key := collection.View
-			if key == "project" {
-				key += "." + collection.ProjectUID
-			}
-			if msg.ID == "main.columns.collections."+key {
+			if msg.Key == collection.Key() {
 				m.Focus = ColumnList
 				return updateCollection(m, CollectionSelected{Collection: collection})
 			}

@@ -20,7 +20,7 @@ type CollectionSelected struct{ Collection Collection }
 
 func (CollectionSelected) msg() {}
 
-type CollectionPointerSelected struct{ ID string }
+type CollectionPointerSelected struct{ Key string }
 
 func (CollectionPointerSelected) msg() {}
 

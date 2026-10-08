@@ -3,6 +3,7 @@ package model
 type Scroll struct {
 	Column Column
 	Down   bool
+	Start  bool // to the top of the column, instead of a page
 }
 
 func (Scroll) cmd() {}

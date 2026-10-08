@@ -57,6 +57,7 @@ func TestSwitchingCollectionKeepsPreviousIssues(t *testing.T) {
 // whose detail is shown after them ("" for none).
 func TestDetailStaysOnScreenUntilTheSelectedIssueArrives(t *testing.T) {
 	failure := errors.New("kata server not responding")
+	detailTop := model.Scroll{Column: model.ColumnDetail, Start: true}
 	for _, tt := range []struct {
 		name     string
 		msgs     []model.Msg
@@ -66,9 +67,9 @@ func TestDetailStaysOnScreenUntilTheSelectedIssueArrives(t *testing.T) {
 		wantCmds []model.Cmd // requested by the last Msg
 	}{
 		{"selecting b", []model.Msg{model.SelectMsg{UID: "b"}}, "a", true, nil, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "b"}}},
-		{"b arrives", []model.Msg{model.SelectMsg{UID: "b"}, model.DetailLoaded{UID: "b", Selected: authority("b")}}, "b", false, nil, nil},
+		{"b arrives", []model.Msg{model.SelectMsg{UID: "b"}, model.DetailLoaded{UID: "b", Selected: authority("b")}}, "b", false, nil, []model.Cmd{detailTop}},
 		{"c replaces b, b arrives late", []model.Msg{model.SelectMsg{UID: "b"}, model.SelectMsg{UID: "c"}, model.DetailLoaded{UID: "b", Selected: authority("b")}}, "a", true, nil, nil},
-		{"c arrives after b", []model.Msg{model.SelectMsg{UID: "b"}, model.SelectMsg{UID: "c"}, model.DetailLoaded{UID: "b", Selected: authority("b")}, model.DetailLoaded{UID: "c", Selected: authority("c")}}, "c", false, nil, nil},
+		{"c arrives after b", []model.Msg{model.SelectMsg{UID: "b"}, model.SelectMsg{UID: "c"}, model.DetailLoaded{UID: "b", Selected: authority("b")}, model.DetailLoaded{UID: "c", Selected: authority("c")}}, "c", false, nil, []model.Cmd{detailTop}},
 		{"b fails", []model.Msg{model.SelectMsg{UID: "b"}, model.DetailFailed{UID: "b", Err: failure}}, "", false, failure, nil},
 		{"a reloads after saving a Draft", []model.Msg{model.DraftSaved{UID: "a"}}, "a", true, nil, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "a"}}},
 		{"empty Collection", []model.Msg{model.CollectionLoaded{Collection: model.Collection{View: "project", ProjectUID: "project", Title: "work"}, Snapshot: g.UISnapshotResponseBody{}}}, "", false, nil, nil},
@@ -116,5 +117,27 @@ func TestPreviousDetailLinksStayRelativeToTheirOwnIssue(t *testing.T) {
 	row, ok := m.DetailRow(model.SectionLinks, 0)
 	if !ok || row.Title != "child work#child" || row.ReferenceUID != "child" {
 		t.Fatalf("link row while another Issue loads: %+v", row)
+	}
+}
+
+// The detail column keeps its scroll offset from one Issue to the next, so the
+// model asks for the top when another Issue's detail replaces the shown one,
+// whatever column has the keys, and never when the same Issue refreshes.
+func TestDetailScrollsToTopOnlyWhenADifferentIssueReplacesIt(t *testing.T) {
+	top := []model.Cmd{model.Scroll{Column: model.ColumnDetail, Start: true}}
+	m, _ := model.Update(projectOf("a", "b"), model.DetailLoaded{UID: "a", Selected: authority("a")})
+
+	m, cmds := model.Update(m, model.DetailLoaded{UID: "a", Selected: authority("a")})
+	if len(cmds) != 0 {
+		t.Fatalf("refreshing the same Issue scrolled: %#v", cmds)
+	}
+
+	m, _ = model.Update(m, model.SelectMsg{UID: "b"})
+	if m.Focus != model.ColumnList {
+		t.Fatalf("fixture: focus %v", m.Focus)
+	}
+	_, cmds = model.Update(m, model.DetailLoaded{UID: "b", Selected: authority("b")})
+	if !reflect.DeepEqual(cmds, top) {
+		t.Fatalf("different Issue arriving with the keys in the list: cmds %#v, want %#v", cmds, top)
 	}
 }

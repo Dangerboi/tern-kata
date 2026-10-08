@@ -59,12 +59,17 @@ func (s DetailSection) String() string {
 	return [...]string{"Properties", "Labels", "Body", "Links", "Comments", "Change history"}[s]
 }
 
-// DetailRow is one row of a detail section. History rows also carry their
-// sentence in parts (Actor, Verb, Object), a local When and the Verb's tone.
+// DetailRow is one row of a detail section. A history row also carries its
+// sentence in parts.
 type DetailRow struct {
 	Key, Title, Body, ReferenceUID string
-	Actor, Verb, Object, When      string
-	VerbTone                       VerbTone
+	History                        *HistorySentence
+}
+
+// HistorySentence is "<Actor> <Verb> <Object>" with a local When and the Verb's tone.
+type HistorySentence struct {
+	Actor, Verb, Object, When string
+	Tone                      VerbTone
 }
 
 func (m Model) DetailRowCount(section DetailSection) int {

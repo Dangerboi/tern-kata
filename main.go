@@ -109,6 +109,9 @@ eventLoop:
 				if scroll.Down {
 					by = "page-down"
 				}
+				if scroll.Start {
+					by = "start"
+				}
 				if err := surface.Scroll(target, by); err != nil {
 					return err
 				}

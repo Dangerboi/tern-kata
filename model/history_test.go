@@ -70,8 +70,8 @@ func TestHistoryReadsAsOneSentencePerEvent(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			row := historyRow(t, tt.event)
-			if row.Title != tt.title || row.VerbTone != tt.tone {
-				t.Errorf("title = %q tone = %q, want %q %q", row.Title, row.VerbTone, tt.title, tt.tone)
+			if row.Title != tt.title || row.History.Tone != tt.tone {
+				t.Errorf("title = %q tone = %q, want %q %q", row.Title, row.History.Tone, tt.title, tt.tone)
 			}
 			if tt.contain && (!strings.HasPrefix(row.Body, tt.detail) || strings.Contains(row.Body, "\n") || len([]rune(row.Body)) > 120) {
 				t.Errorf("detail not cut to one short line: %q", row.Body)
@@ -90,8 +90,8 @@ func TestHistoryTimestampsAreLocalAndShort(t *testing.T) {
 	time.Local = time.FixedZone("test", 2*3600)
 	t.Cleanup(func() { time.Local = saved })
 	row := historyRow(t, g.Event{Type: "issue.reopened", Payload: "{}"})
-	if row.When != "2026-10-08 20:05" {
-		t.Fatalf("when = %q", row.When)
+	if row.History.When != "2026-10-08 20:05" {
+		t.Fatalf("when = %q", row.History.When)
 	}
 }
 

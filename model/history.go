@@ -28,7 +28,7 @@ const (
 // short detail line (Body). Types kata adds later fall back to their sorted
 // payload pairs.
 func historyRow(event g.Event) DetailRow {
-	payload := decodePayload(event.Payload)
+	payload, decodeErr := decodePayload(event.Payload)
 	verb, object, detail, tone := "", "", "", VerbTone("")
 	switch event.Type {
 	case "issue.created":
@@ -73,13 +73,15 @@ func historyRow(event g.Event) DetailRow {
 		verb = "restored"
 	default:
 		verb = strings.NewReplacer(".", " ", "_", " ").Replace(strings.TrimPrefix(event.Type, "issue."))
-		detail = payload.pairs()
+		if detail = payload.pairs(); decodeErr != nil {
+			detail = oneLine(event.Payload) // not a JSON object: show it as written
+		}
 	}
 	row := DetailRow{
-		Key: event.UID, Actor: event.Actor, Verb: verb, Object: object, Body: detail, VerbTone: tone,
-		When: event.CreatedAt.Local().Format(historyTimeLayout),
+		Key: event.UID, Body: detail,
+		History: &HistorySentence{Actor: event.Actor, Verb: verb, Object: object, Tone: tone, When: event.CreatedAt.Local().Format(historyTimeLayout)},
 	}
-	row.Title = row.Actor + " " + row.Verb
+	row.Title = event.Actor + " " + verb
 	if object != "" {
 		row.Title += " " + object
 	}
@@ -92,14 +94,13 @@ func historyRow(event g.Event) DetailRow {
 // payloadMap is a decoded event payload; numbers keep their JSON spelling.
 type payloadMap map[string]any
 
-func decodePayload(raw string) payloadMap {
+// decodePayload fails for a payload that is not a JSON object, and then returns no fields.
+func decodePayload(raw string) (payloadMap, error) {
 	decoder := json.NewDecoder(strings.NewReader(raw))
 	decoder.UseNumber()
 	var payload payloadMap
-	if decoder.Decode(&payload) != nil {
-		return payloadMap{"": raw}
-	}
-	return payload
+	err := decoder.Decode(&payload)
+	return payload, err
 }
 
 // text is the value at key, empty when absent or null.
@@ -112,9 +113,6 @@ func (p payloadMap) text(key string) string {
 
 // pairs is the "key: value" list of an event this build has no phrasing for.
 func (p payloadMap) pairs() string {
-	if raw, ok := p[""]; ok && len(p) == 1 {
-		return oneLine(plain(raw))
-	}
 	keys := make([]string, 0, len(p))
 	for key := range p {
 		keys = append(keys, key)
@@ -216,17 +214,20 @@ func linkObject(event g.Event, p payloadMap) string {
 	return relationName(relation) + " " + peer
 }
 
+// linkField is a links_changed payload field and the relation it names.
+type linkField struct{ field, relation string }
+
 var (
-	linkAdds    = [][2]string{{"parent_set", "parent"}, {"blocks_added", "blocks"}, {"blocked_by_added", "blocked by"}, {"related_added", "related"}}
-	linkRemoves = [][2]string{{"parent_removed", "parent"}, {"blocks_removed", "blocks"}, {"blocked_by_removed", "blocked by"}, {"related_removed", "related"}}
+	linkAdds    = []linkField{{"parent_set", "parent"}, {"blocks_added", "blocks"}, {"blocked_by_added", "blocked by"}, {"related_added", "related"}}
+	linkRemoves = []linkField{{"parent_removed", "parent"}, {"blocks_removed", "blocks"}, {"blocked_by_removed", "blocked by"}, {"related_removed", "related"}}
 )
 
 // linksChanged phrases the aggregated event an Issue edit records for any mix
 // of added and removed links.
 func linksChanged(p payloadMap) (verb, object string) {
-	collect := func(specs [][2]string, prefix string) (parts []string) {
+	collect := func(specs []linkField, prefix string) (parts []string) {
 		for _, spec := range specs {
-			value, ok := p[spec[0]]
+			value, ok := p[spec.field]
 			if !ok {
 				continue
 			}
@@ -235,7 +236,7 @@ func linksChanged(p payloadMap) (verb, object string) {
 				refs = []any{single}
 			}
 			for _, ref := range refs {
-				parts = append(parts, prefix+spec[1]+" "+plain(ref))
+				parts = append(parts, prefix+spec.relation+" "+plain(ref))
 			}
 		}
 		return parts

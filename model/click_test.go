@@ -95,7 +95,7 @@ func clickKeys(chords ...string) func(model.Model) (model.Model, []model.Cmd) {
 }
 
 func TestEveryClickTargetEndsWhereItsKeysEnd(t *testing.T) {
-	today := "main.columns.collections.today"
+	today := "today"
 	for _, tt := range []struct {
 		name     string
 		from     model.Column
@@ -122,9 +122,9 @@ func TestEveryClickTargetEndsWhereItsKeysEnd(t *testing.T) {
 		{"detail row", model.ColumnDetail, nil, model.DetailItemMsg{Section: model.SectionLinks, Key: "1"}, model.ColumnDetail, clickDetailPath(model.SectionLinks)},
 		{"referenced Issue from detail", model.ColumnDetail, nil, model.JumpIssueMsg{UID: "other"}, model.ColumnDetail, clickDetailPath(model.SectionLinks, "enter")},
 		{"referenced Issue from list", model.ColumnList, nil, model.JumpIssueMsg{UID: "other"}, model.ColumnList, clickDetailPath(model.SectionLinks, "enter")},
-		{"Collection from Collections", model.ColumnCollections, nil, model.CollectionPointerSelected{ID: today}, model.ColumnCollections, clickKeys("j", "enter")},
-		{"Collection from list", model.ColumnList, nil, model.CollectionPointerSelected{ID: today}, model.ColumnList, clickKeys("escape", "j", "enter")},
-		{"Collection from detail", model.ColumnDetail, nil, model.CollectionPointerSelected{ID: today}, model.ColumnDetail, clickKeys("escape", "escape", "j", "enter")},
+		{"Collection from Collections", model.ColumnCollections, nil, model.CollectionPointerSelected{Key: today}, model.ColumnCollections, clickKeys("j", "enter")},
+		{"Collection from list", model.ColumnList, nil, model.CollectionPointerSelected{Key: today}, model.ColumnList, clickKeys("escape", "j", "enter")},
+		{"Collection from detail", model.ColumnDetail, nil, model.CollectionPointerSelected{Key: today}, model.ColumnDetail, clickKeys("escape", "escape", "j", "enter")},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			pointer, pointerCmds := model.Update(clickAt(tt.from, tt.listKeys...), tt.click)
@@ -208,8 +208,8 @@ func TestEscAfterClickBacksOut(t *testing.T) {
 		{"second esc leaves detail", model.ColumnDetail, []model.Msg{model.JumpIssueMsg{UID: "other"}, model.KeyMsg{Chord: "escape"}, model.KeyMsg{Chord: "escape"}}, model.ColumnList, "parent", nil},
 		{"clicked detail heading", model.ColumnList, []model.Msg{model.DetailSectionMsg{Section: model.SectionLinks}, model.KeyMsg{Chord: "escape"}}, model.ColumnList, "parent", nil},
 		{"clicked detail row", model.ColumnList, []model.Msg{model.DetailItemMsg{Section: model.SectionLinks, Key: "1"}, model.KeyMsg{Chord: "escape"}}, model.ColumnList, "parent", nil},
-		{"clicked Collection", model.ColumnList, []model.Msg{model.CollectionPointerSelected{ID: "main.columns.collections.today"}, model.KeyMsg{Chord: "escape"}}, model.ColumnCollections, "parent", nil},
-		{"Collection after a jump ends the jump", model.ColumnDetail, []model.Msg{model.JumpIssueMsg{UID: "other"}, model.CollectionPointerSelected{ID: "main.columns.collections.today"}, model.KeyMsg{Chord: "enter"}, model.KeyMsg{Chord: "escape"}}, model.ColumnList, "other", nil},
+		{"clicked Collection", model.ColumnList, []model.Msg{model.CollectionPointerSelected{Key: "today"}, model.KeyMsg{Chord: "escape"}}, model.ColumnCollections, "parent", nil},
+		{"Collection after a jump ends the jump", model.ColumnDetail, []model.Msg{model.JumpIssueMsg{UID: "other"}, model.CollectionPointerSelected{Key: "today"}, model.KeyMsg{Chord: "enter"}, model.KeyMsg{Chord: "escape"}}, model.ColumnList, "other", nil},
 		{"Hide detail button after a jump ends the jump", model.ColumnDetail, []model.Msg{model.JumpIssueMsg{UID: "other"}, model.ActionMsg{Action: "key", Value: "shift+l"}, model.ActionMsg{Action: "key", Value: "shift+l"}, model.KeyMsg{Chord: "enter"}, model.KeyMsg{Chord: "escape"}}, model.ColumnList, "other", nil},
 		{"Back button unwinds one jump", model.ColumnDetail, []model.Msg{model.JumpIssueMsg{UID: "other"}, model.ActionMsg{Action: "key", Value: "escape"}}, model.ColumnDetail, "parent", nil},
 		{"row after a jump ends the jump", model.ColumnDetail, []model.Msg{model.JumpIssueMsg{UID: "other"}, model.SelectMsg{UID: "leaf"}, model.KeyMsg{Chord: "enter"}, model.KeyMsg{Chord: "escape"}}, model.ColumnList, "leaf", nil},

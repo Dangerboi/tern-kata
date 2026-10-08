@@ -47,7 +47,7 @@ func startInputReader(ctx context.Context, session *tern.Session, messages chan<
 					msg = model.SelectMsg{UID: strings.TrimPrefix(input.Item, view.IssueListID+".")}
 				}
 				if input.ID == view.CollectionsID {
-					msg = model.CollectionPointerSelected{ID: input.Item}
+					msg = model.CollectionPointerSelected{Key: strings.TrimPrefix(input.Item, view.CollectionsID+".")}
 				}
 				if input.ID == view.PickerListID {
 					msg = model.PickerSelected{Key: strings.TrimPrefix(input.Item, view.PickerListID+".")}

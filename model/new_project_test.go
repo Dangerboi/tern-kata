@@ -269,7 +269,7 @@ func TestPickerNewProjectOnlyCreates(t *testing.T) {
 func TestNewProjectPointerEqualsKeyboard(t *testing.T) {
 	unbound := newProjectStart(false)
 	wantSidebar, wantCmds := pickerKeys(unbound, "escape", "end", "enter")
-	gotSidebar, gotCmds := model.Update(unbound, model.CollectionPointerSelected{ID: "main.columns.collections.new-project"})
+	gotSidebar, gotCmds := model.Update(unbound, model.CollectionPointerSelected{Key: "new-project"})
 	if !wantSidebar.ProjectForm.Open || !reflect.DeepEqual(gotSidebar, wantSidebar) || !reflect.DeepEqual(gotCmds, wantCmds) {
 		t.Fatalf("sidebar click differs from the keyboard: %+v vs %+v", gotSidebar.ProjectForm, wantSidebar.ProjectForm)
 	}

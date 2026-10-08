@@ -8,12 +8,10 @@ import (
 
 const CollectionsID = "main.columns.collections"
 
-func CollectionKey(c model.Collection) string { return c.Key() }
-
 func Collections(m model.Model) tern.Element {
 	items := make([]tern.Element, 0, len(m.Collections)+1)
 	for _, collection := range m.Collections {
-		items = append(items, ui.Item{Common: ui.Common{Key: CollectionKey(collection)}, Label: ui.T(collection.Title)})
+		items = append(items, ui.Item{Common: ui.Common{Key: collection.Key()}, Label: ui.T(collection.Title)})
 	}
 	selected := ""
 	if len(m.Collections) > 0 {
@@ -21,7 +19,7 @@ func Collections(m model.Model) tern.Element {
 		items = append(items, ui.Item{Common: ui.Common{Key: model.NewProjectKey}, Label: ui.T(model.NewProjectTitle)})
 		selected = CollectionsID + "." + model.NewProjectKey
 		if m.CollectionCursor < len(m.Collections) {
-			selected = CollectionsID + "." + CollectionKey(m.Collections[m.CollectionCursor])
+			selected = CollectionsID + "." + m.Collections[m.CollectionCursor].Key()
 		}
 	}
 	return ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "collections"}, Selected: selected, Empty: ui.T("Loading Collections…"), Children: items}
