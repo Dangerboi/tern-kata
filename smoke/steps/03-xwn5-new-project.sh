@@ -3,7 +3,7 @@
 # reserved, which gives the form a rejection to show.
 kata projects create workspace-archived --json >/dev/null
 kata projects remove workspace-archived --force --json >/dev/null
-np_heading="[data-id='main.columns.list.heading']"
+np_heading="[data-id='main.columns.list.topbar.heading']"
 np_form="[data-id='layer.project']"
 np_input="[data-id='layer.project.name']"
 np_error="[data-id='layer.project.error']"

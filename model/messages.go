@@ -14,6 +14,7 @@ type ProjectLoaded struct {
 	Snapshot            g.UISnapshotResponseBody
 	ETag                string
 	LocalDate, TimeZone string
+	Daemon              Daemon
 }
 
 func (ProjectLoaded) msg() {}

@@ -95,11 +95,20 @@ func issues(m model.Model) tern.Element {
 	if m.Focus == model.ColumnList {
 		tone, style = ui.ToneAccent, "accent strong"
 	}
-	heading := []ui.Span{{T: m.ListHeader(), S: style}}
+	title := m.ListHeader()
+	if m.Collection.View == "project" {
+		title = "Project: " + title
+	}
+	heading := []ui.Span{{T: title, S: style}}
 	if m.Loading {
 		heading = append(heading, loadingMarker)
 	}
-	children := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading", Tone: tone, Title: "Collections picker (p)", Actions: &ui.Actions{Click: "key=p"}}, Spans: heading})
+	topBar := ui.Col{Common: ui.Common{Key: "topbar"}, Children: ui.Nodes(
+		ui.Text{Common: ui.Common{Key: "heading", Tone: tone, Title: "Collections picker (p)", Actions: &ui.Actions{Click: "key=p"}}, Spans: heading},
+		ui.Text{Common: ui.Common{Key: "daemon", Tone: ui.ToneMuted}, Text: m.DaemonLine()},
+		ui.Text{Common: ui.Common{Key: "counts", Tone: ui.ToneMuted}, Text: m.CountsLine()},
+	)}
+	children := ui.Nodes(topBar)
 	if m.Search.Open {
 		placeholder := "Search Issues in " + m.Collection.Title
 		children = append(children, ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Mode: "insert", Placeholder: placeholder, Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}})

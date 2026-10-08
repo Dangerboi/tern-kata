@@ -93,12 +93,12 @@ func TestSelectedRowIsAccent(t *testing.T) {
 
 func TestFocusedListHeadingIsAccent(t *testing.T) {
 	m := browsing()
-	heading := render(t, m)["main.columns.list.heading"]
+	heading := render(t, m)["main.columns.list.topbar.heading"]
 	if heading.P["tone"] != "accent" || style(t, heading, m.Collection.Title) != "accent strong" {
 		t.Errorf("focused heading: tone=%v spans=%v", heading.P["tone"], styled(heading))
 	}
 	m = apply(m, model.KeyMsg{Chord: "enter"})
-	heading = render(t, m)["main.columns.list.heading"]
+	heading = render(t, m)["main.columns.list.topbar.heading"]
 	if heading.P["tone"] == "accent" || style(t, heading, m.Collection.Title) != "strong" {
 		t.Errorf("unfocused heading: tone=%v spans=%v", heading.P["tone"], styled(heading))
 	}

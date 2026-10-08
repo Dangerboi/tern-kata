@@ -54,7 +54,7 @@ func (c *Client) ReadProject(ctx context.Context, workspace string) (model.Proje
 	if err != nil {
 		return model.ProjectLoaded{}, err
 	}
-	return model.ProjectLoaded{Project: project, Snapshot: snapshot.Snapshot, ETag: snapshot.ETag, LocalDate: snapshot.LocalDate, TimeZone: snapshot.TimeZone}, nil
+	return model.ProjectLoaded{Project: project, Snapshot: snapshot.Snapshot, ETag: snapshot.ETag, LocalDate: snapshot.LocalDate, TimeZone: snapshot.TimeZone, Daemon: model.Daemon{Remote: c.remote, Version: c.version}}, nil
 }
 
 func (c *Client) projectRequest(ctx context.Context, workspace string) (*g.ResolveProjectBody, error) {

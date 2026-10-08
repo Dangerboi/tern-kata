@@ -31,9 +31,9 @@ expect_tree "[data-id='main.columns.collections.inbox']" '.ok and .nodes[0]["ari
 mark=$(wc -l <"$tmp/stable-frames.jsonl")
 ctl click "[data-id='main.columns.collections.all-open']"
 expect_tree "[data-id='main.columns.list.issues.$stable_second']" '.ok and .count == 1'
-expect_tree "[data-id='main.columns.list.heading']" '.nodes[0].text == "All Open"'
+expect_tree "[data-id='main.columns.list.topbar.heading']" '.nodes[0].text == "All Open"'
 expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$stable_columns"
-expect_ops "$tmp/stable-frames.jsonl" "$mark" '.[0] == "set" and .[1] == "main.columns.list.heading"'
+expect_ops "$tmp/stable-frames.jsonl" "$mark" '.[0] == "set" and .[1] == "main.columns.list.topbar.heading"'
 
 # Clicking another Issue replaces the detail in place and leaves the list where it is.
 ctl click "[data-id='main.columns.list.issues.$stable_first']"
@@ -67,7 +67,7 @@ expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$stable_detail"
 # Leaving a populated list for an empty Collection keeps the columns too.
 mark=$(wc -l <"$tmp/stable-frames.jsonl")
 ctl click "[data-id='main.columns.collections.today']"
-expect_tree "[data-id='main.columns.list.heading']" '.nodes[0].text == "Today"'
+expect_tree "[data-id='main.columns.list.topbar.heading']" '.nodes[0].text == "Today"'
 expect_tree "[data-id='main.columns.list.issues.$stable_second']" '.ok and .count == 0'
 expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$stable_columns"
 

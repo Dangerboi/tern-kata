@@ -19,6 +19,7 @@ type Client struct {
 	*client.Client
 	transport *http.Transport
 	remote    bool
+	version   string
 }
 
 func Discover(ctx context.Context, workspace string) (result *Client, err error) {
@@ -76,7 +77,7 @@ func Discover(ctx context.Context, workspace string) (result *Client, err error)
 	if semver.Compare(normalized, "v0.18.0") < 0 {
 		return nil, fmt.Errorf("kata daemon %s is too old; tern-kata requires v0.18.0 or newer; upgrade kata", version)
 	}
-	return &Client{Client: c, transport: transport, remote: target.Kind == "remote"}, nil
+	return &Client{Client: c, transport: transport, remote: target.Kind == "remote", version: normalized}, nil
 }
 
 // CloseIdleConnections releases the owned Unix transport after a command or stream finishes.

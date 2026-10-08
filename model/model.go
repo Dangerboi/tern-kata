@@ -16,6 +16,7 @@ type Model struct {
 	OpenIssueRef        string
 	OpenedIssueUID      string
 	Project             Project
+	Daemon              Daemon
 	Snapshot            g.UISnapshotResponseBody
 	Issues              []Issue
 	ETag                string
