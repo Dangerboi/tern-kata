@@ -79,4 +79,5 @@ for step in "${steps[@]}"; do
 done
 tern ctl --control "$tmp/control.sock" key q
 tern ctl --control "$tmp/control.sock" ready
+"$repo/smoke/plugin.sh" "$tmp/tern-kata"
 printf '\nSmoke passed\n'

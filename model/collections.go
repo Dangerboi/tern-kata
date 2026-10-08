@@ -115,6 +115,9 @@ func (m Model) ApplySnapshot(snapshot g.UISnapshotResponseBody, etag string) Mod
 		}
 		if m.PendingCreatedUID != "" { return m }
 	}
+	if m.Focus == ColumnDetail && m.OpenedIssueUID != "" && m.SelectedUID == m.OpenedIssueUID {
+		return m
+	}
 	return m.WithVisibleSelection()
 }
 

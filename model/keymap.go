@@ -21,6 +21,7 @@ const (
 	ToggleAllExpansion Action = "toggle-all-expansion"
 	ToggleIssueView Action = "toggle-issue-view"
 	RetryAction Action = "retry"
+	SelectIssueAction Action = "select-issue"
 	SearchIssues Action = "search"
 	SearchEnter Action = "search-enter"
 	SearchBack Action = "search-back"

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 
 	"github.com/Dangerboi/tern-kata/model"
@@ -22,7 +23,9 @@ func main() {
 }
 
 func run() error {
-	override, fallbackArgs, err := actorArgs(os.Args[1:])
+	override, args, err := actorArgs(os.Args[1:])
+	if err != nil { return err }
+	issueRef, fallbackArgs, err := launchArgs(args)
 	if err != nil { return err }
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -38,6 +41,9 @@ func run() error {
 		return err
 	}
 	defer func() { session.Close() }()
+	if _, err := fmt.Fprint(os.Stdout, "\x1b]0;tern-kata\x07"); err != nil {
+		return err
+	}
 	surface, err := session.Open(editorSurfaceOptions())
 	if err != nil {
 		return err
@@ -54,9 +60,9 @@ func run() error {
 	m := model.Model{Cols: session.Caps().Cols, Actor: resolveActor(override)}
 	runner := commandRunner{}
 	defer runner.close()
-	msg := model.Msg(model.Start{Workspace: workspace})
+	msg := model.Msg(model.Start{Workspace: workspace, IssueRef: issueRef})
 	inputFocus := ""
-	eventLoop:
+eventLoop:
 	for {
 		previousSelection := m.SelectedUID
 		previousFocus, previousSection, previousIndex := m.Focus, m.DetailSection, m.DetailIndex
@@ -110,4 +116,34 @@ func run() error {
 			return err
 		}
 	}
+}
+
+func launchArgs(args []string) (string, []string, error) {
+	ref := ""
+	issueSet := false
+	fallback := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--issue" {
+			issueSet = true
+			i++
+			if i == len(args) {
+				return "", nil, fmt.Errorf("--issue requires <project>/<short_id>")
+			}
+			ref = args[i]
+		} else if value, ok := strings.CutPrefix(arg, "--issue="); ok {
+			issueSet = true
+			ref = value
+		} else {
+			fallback = append(fallback, arg)
+		}
+	}
+	if issueSet {
+		project, shortID, err := model.ParseIssueRef(ref)
+		if err != nil {
+			return "", nil, err
+		}
+		fallback = append(fallback, "--project", project, project+"#"+shortID)
+	}
+	return ref, fallback, nil
 }

@@ -5,7 +5,7 @@ import g "go.kenn.io/kata/pkg/client/generated"
 type Msg interface{ msg() }
 type Cmd interface{ cmd() }
 
-type Start struct{ Workspace string }
+type Start struct{ Workspace, IssueRef string }
 
 func (Start) msg() {}
 

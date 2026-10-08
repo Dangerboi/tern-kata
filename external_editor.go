@@ -13,7 +13,7 @@ func editorOptions() tern.Options {
  return tern.Options{App:"tern-kata",Version:"dev",Features:[]string{tern.FeatureEdit,tern.FeatureUndo}}
 }
 func editorSurfaceOptions() tern.SurfaceOptions {
- return tern.SurfaceOptions{ID:"kata",Mode:tern.Screen,Title:"kata",Discard:true}
+ return tern.SurfaceOptions{ID:"kata",Mode:tern.Screen,Title:"tern-kata",Discard:true}
 }
 
 func editExternally(cmd model.OpenDraftEditor) model.DraftEditorClosed {

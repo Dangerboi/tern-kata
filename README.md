@@ -1,6 +1,6 @@
 # tern-kata
 
-Native kata Issues in a Tern Pane. Requires Go 1.27+, kata v0.18.0+ on `PATH`, and Tern with Surface Protocol support. Without Tern support, compatible arguments pass to `kata tui`; `--as` becomes `KATA_AUTHOR` because kata's TUI ignores the flag.
+Native kata Issues in a Tern Pane. Requires Go 1.27+, kata v0.18.0+ on `PATH`, and Tern with Surface Protocol support. Without Tern support, compatible arguments pass to `kata tui`; `--as` becomes `KATA_AUTHOR` because kata's TUI ignores the flag, and `--issue <project>/<short_id>` becomes kata's equivalent qualified Issue argument.
 
 ```sh
 CGO_ENABLED=0 go build -o tern-kata .
@@ -10,6 +10,12 @@ CGO_ENABLED=0 go test ./...
 ```
 
 Run `tern-kata` inside Tern in a directory bound with `kata init`. Use `j`/`k`, `g`/`G`, and `q`/`ctrl+c`. Press `?` for all bindings with their modes; `?` or `esc` closes help without moving the selected Issue. The dock shows only current-mode hints, and the help layer lists every binding, both from `model/keymap.go`.
+
+Link the window plugin with `tern plugin link .`. **Open kata** in the palette, or `F9`, opens a right split in the focused Pane's directory. A literal `kata://<project>/<short_id>` link focuses a running kata Pane and selects the Issue without restarting it, or opens a split with `tern-kata --issue <project>/<short_id>`. Links may select closed or other-Project Issues in detail without changing the current Collection. Percent-encoded segments, query strings and fragments are declined. Missing `tern-kata` on the window's `PATH` shows `go install github.com/Dangerboi/tern-kata@latest`. OS scheme registration is separate; the plugin handles links delivered inside Tern.
+
+The plugin sends a TSP `action` to `main.columns.list.issues` with `act: "select-issue"` and `value: "<project>/<short_id>"`. The binary uses the same model message path for startup selection and this action; its terminal title `tern-kata` lets a reloaded window plugin discover an existing Pane.
+
+Tern 0.6.2 headless can disable the native split callback even though the split opens: `WARN stencil_plugins: plugin hook exceeded its budget; disabled until reload plugin="tern-kata" hook="timer"`, followed by `WARN stencil_tern: plugin handler failed plugin="tern-kata" hook="timer" error=runtime error: tern: timer exceeded 50 ms`. PATH lookup runs asynchronously and the callback only prepares the shell command; a zero-delay timer gets a fresh context and performs the native split. Moving the split out of the process callback and warming native splits did not avoid this host budget overrun. Reload the plugin before another launch if it occurs; smoke reloads fixtures between independent launches. Real OSC-8 `kata://` links are exercised with a command-click in the terminal grid, both opening and selecting in an existing Pane.
 
 Selecting an Issue loads its Markdown body, properties, labels, links, comments and change history beside the list. `enter` opens detail, `esc` returns to the list (then Collections), `tab`/`shift+tab` cycle detail sections, and `enter` follows the selected referenced Issue; `esc` unwinds those jumps. `L` hides or restores detail. Panes narrower than 100 columns show only the focused column.
 
@@ -29,6 +35,7 @@ The Collections sidebar loads Inbox, Today, Upcoming, Deadlines, All Open, Logbo
 Press `x` in the Issue list or detail to open the close form. Use `tab`/`shift+tab` to select a field, `ctrl+u` to clear it, `ctrl+o` to submit, or `esc` to cancel. Commit SHA, PR URL and test command evidence are optional fields, but normal `done` requires at least one; duplicate/superseded and audit reasons have dedicated reference/rationale fields. **Quick done** (`ctrl+d`) sends the owner-local interactive exemption, not fabricated evidence. The daemon still enforces parent-close and throttle guards. Close uses the loaded revision and `close-v1`; conflict, guard and throttle messages remain readable in the form. Press `r` to reopen.
 
 The smoke runner needs `kata`, `tern` and `jq` on `PATH`. It isolates both instances, seeds three open Issues in Project `smoke`, and runs `smoke/steps/*` in filename order: `.ctl` scenarios or sourced `.sh` assertions using `ctl` and `expect_tree`. Add a step file for each feature; leave the app in the Issue list for the next step. Use `plugins expect` for native text, but `expect_tree` for list labels (Tern's text search excludes them). Failed runs retain their temporary artifacts and exit non-zero.
+The suite then runs `smoke/plugin.sh` against the built binary for the palette, key binding, real OSC-8 links and missing-binary toast.
 To run only the editor slice: `./smoke/run.sh smoke/steps/01-spyn-tree.sh smoke/steps/06-x2b9-editor.sh`. Its interactive shell-editor fixture reads stdin and appends to the temporary Draft, exercising tty ownership and reconnection rather than an unattended file rewrite.
 
 Launch commands in smoke steps through a `.ctl` file containing `run "<command>"`; passing an unquoted command argument directly to `tern ctl run` loses the headless runner's required script quoting.
