@@ -103,7 +103,7 @@ func TestDetailReturnsToFirstSectionOnlyForADifferentIssue(t *testing.T) {
 
 	// Another Issue starts at the top, while the previous detail stays until it arrives.
 	m, _ = model.Update(m, model.SelectMsg{UID: "b"})
-	if m.DetailIssueUID() != "a" || m.DetailSection != model.SectionBody || m.DetailIndex != 0 {
+	if m.DetailIssueUID() != "a" || m.DetailSection != model.SectionProperties || m.DetailIndex != 0 {
 		t.Fatalf("selecting b: issue=%q section=%v index=%d", m.DetailIssueUID(), m.DetailSection, m.DetailIndex)
 	}
 }

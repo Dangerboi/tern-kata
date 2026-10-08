@@ -82,20 +82,20 @@ func issues(m model.Model) tern.Element {
 	for _, row := range rows {
 		group := groups[row.UID]
 		if row.Depth == 0 && group.Heading && !shownGroups[group.ID] {
-			items = append(items, ui.Text{Common: ui.Common{Key: "group." + group.ID}, Text: group.Title})
+			items = append(items, ui.Text{Common: ui.Common{Key: "group." + group.ID}, Spans: []ui.Span{{T: group.Title, S: "strong"}}})
 			shownGroups[group.ID] = true
 		}
-		items = append(items, issueRow(row))
+		items = append(items, issueRow(row, row.UID == m.SelectedUID))
 	}
 	selected := ""
 	if m.SelectedUID != "" {
 		selected = IssueID(m.SelectedUID)
 	}
-	tone := ui.ToneNeutral
+	tone, style := ui.ToneNeutral, "strong"
 	if m.Focus == model.ColumnList {
-		tone = ui.ToneAccent
+		tone, style = ui.ToneAccent, "accent strong"
 	}
-	heading := []ui.Span{{T: m.ListHeader()}}
+	heading := []ui.Span{{T: m.ListHeader(), S: style}}
 	if m.Loading {
 		heading = append(heading, loadingMarker)
 	}
@@ -115,7 +115,7 @@ func issues(m model.Model) tern.Element {
 	return ui.Col{Common: ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.4)}, Children: children}
 }
 
-func issueRow(row model.IssueRow) tern.Element {
+func issueRow(row model.IssueRow, selected bool) tern.Element {
 	disclosure := ""
 	if row.HasChildren {
 		disclosure = "▸ "
@@ -124,10 +124,13 @@ func issueRow(row model.IssueRow) tern.Element {
 		}
 	}
 	tone := ui.ToneNeutral
-	statusStyle := "info"
+	statusStyle := "accent"
 	if row.Status == "closed" {
 		tone = ui.ToneMuted
 		statusStyle = "muted"
+	}
+	if selected {
+		tone = ui.ToneAccent
 	}
 	spans := []ui.Span{
 		{T: strings.Repeat("│\u00a0\u00a0", row.Depth) + disclosure + row.ShortID + "  " + row.Title},
@@ -148,8 +151,8 @@ func issueRow(row model.IssueRow) tern.Element {
 	if row.Owner != nil && *row.Owner != "" {
 		spans = append(spans, ui.Span{T: "  " + *row.Owner, S: "muted"})
 	}
-	if len(row.Labels) > 0 {
-		spans = append(spans, ui.Span{T: "  " + strings.Join(row.Labels, ", "), S: "muted"})
+	for _, label := range row.Labels {
+		spans = append(spans, ui.Span{T: "  " + label, S: "mark"})
 	}
 	var actions *ui.Actions
 	if row.HasChildren {

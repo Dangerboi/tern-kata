@@ -10,9 +10,9 @@ import (
 type DetailSection uint8
 
 const (
-	SectionBody DetailSection = iota
-	SectionProperties
+	SectionProperties DetailSection = iota
 	SectionLabels
+	SectionBody
 	SectionLinks
 	SectionComments
 	SectionHistory
@@ -56,10 +56,16 @@ type DetailItemMsg struct {
 func (DetailItemMsg) msg() {}
 
 func (s DetailSection) String() string {
-	return [...]string{"Body", "Properties", "Labels", "Links", "Comments", "Change history"}[s]
+	return [...]string{"Properties", "Labels", "Body", "Links", "Comments", "Change history"}[s]
 }
 
-type DetailRow struct{ Key, Title, Body, ReferenceUID string }
+// DetailRow is one row of a detail section. History rows also carry their
+// sentence in parts (Actor, Verb, Object), a local When and the Verb's tone.
+type DetailRow struct {
+	Key, Title, Body, ReferenceUID string
+	Actor, Verb, Object, When      string
+	VerbTone                       VerbTone
+}
 
 func (m Model) DetailRowCount(section DetailSection) int {
 	if m.Detail == nil {
@@ -103,15 +109,7 @@ func (m Model) DetailRow(section DetailSection, index int) (DetailRow, bool) {
 		comment := m.Detail.Comments[index]
 		return DetailRow{Key: comment.UID, Title: comment.Author + " / " + comment.CreatedAt.Format(time.RFC3339), Body: comment.Body}, true
 	case SectionHistory:
-		event := m.Detail.History[index]
-		row := DetailRow{Key: event.UID, Title: event.Actor + " / " + event.CreatedAt.Format(time.RFC3339) + " / " + event.Type, Body: event.Payload}
-		if event.RelatedIssueUID != nil {
-			row.ReferenceUID = *event.RelatedIssueUID
-			if event.RelatedIssueShortID != nil {
-				row.Title += " / " + *event.RelatedIssueShortID
-			}
-		}
-		return row, true
+		return historyRow(m.Detail.History[index]), true
 	}
 	return DetailRow{}, false
 }
@@ -155,7 +153,7 @@ func EnsureDetail(m Model) (Model, []Cmd) {
 		if m.SelectedUID == "" || m.DetailIssueUID() == "" {
 			m.Detail = nil
 		}
-		m.DetailSection = SectionBody
+		m.DetailSection = SectionProperties
 		m.DetailIndex = 0
 	}
 	m.DetailErr = nil

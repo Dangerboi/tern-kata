@@ -52,25 +52,14 @@ type Model struct {
 }
 
 func Update(m Model, msg Msg) (Model, []Cmd) {
-	if action, ok := msg.(ActionMsg); ok {
-		if action.Action == "key" {
-			msg = KeyMsg{Chord: action.Value}
-		} else if action.Action == ToggleExpansion && m.CurrentMode() == ModeList {
-			for _, row := range m.VisibleRows() {
-				if row.UID == action.Value && row.HasChildren {
-					m, _ = update(m, SelectMsg{UID: row.UID})
-					for binding := range BindingsForMode(m.CurrentMode(), false) {
-						if binding.Action == action.Action {
-							msg = KeyMsg{Chord: binding.Chord}
-							break
-						}
-					}
-					break
-				}
-			}
-		}
+	if action, ok := msg.(ActionMsg); ok && action.Action == "key" {
+		msg = KeyMsg{Chord: action.Value}
 	}
 	m, cmds := update(m, msg)
+	if m.Focus != ColumnDetail {
+		// Jump history belongs to the detail column, so every path out of it, key or click, ends it.
+		m.DetailBack = nil
+	}
 	m, detailCmds := EnsureDetail(m)
 	return m, append(cmds, detailCmds...)
 }
@@ -208,8 +197,11 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m.Loading = false
 		m.Err = msg.Err
 	case ActionMsg:
-		if msg.Action == SelectIssueAction {
+		switch msg.Action {
+		case SelectIssueAction:
 			return openIssue(m, msg.Value)
+		case ToggleExpansion:
+			return toggleRow(m, msg.Value)
 		}
 	case IssueOpened:
 		if msg.Ref == m.OpenIssueRef && msg.Selected != nil && msg.Selected.Issue != nil {
@@ -222,7 +214,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			m.DetailErr = nil
 			m.DetailHidden = false
 			m.DetailBack = nil
-			m.DetailSection, m.DetailIndex = SectionBody, 0
+			m.DetailSection, m.DetailIndex = SectionProperties, 0
 			m.Focus = ColumnDetail
 		}
 	case IssueOpenFailed:
@@ -278,15 +270,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			return updateNavigation(m, binding.Action)
 		}
 	case SelectMsg:
-		for _, issue := range m.VisibleRows() {
-			if issue.UID == msg.UID {
-				m.PendingCreatedUID = ""
-				m.SelectedUID = msg.UID
-				m.Focus = ColumnList
-				m.DetailBack = nil
-				break
-			}
-		}
+		return selectRow(m, msg.UID), nil
 	case ResizeMsg:
 		m.Cols = msg.Cols
 	default:
