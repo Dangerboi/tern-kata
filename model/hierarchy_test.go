@@ -11,10 +11,10 @@ import (
 func hierarchySnapshot() g.UISnapshotResponseBody {
 	return g.UISnapshotResponseBody{
 		Collection: []model.Issue{
-			{UID: "parent", ShortID: "same", ProjectID: 1, Title: "Parent"},
-			{UID: "child", ShortID: "same", ProjectID: 2, Title: "Child"},
-			{UID: "grandchild", Title: "Grandchild"},
-			{UID: "root", Title: "Outside parent"},
+			{UID: "parent", ShortID: "same", ProjectID: 1, Title: "Parent", Priority: new(int64(0))},
+			{UID: "child", ShortID: "same", ProjectID: 2, Title: "Child", Priority: new(int64(1))},
+			{UID: "grandchild", Title: "Grandchild", Priority: new(int64(2))},
+			{UID: "root", Title: "Outside parent", Priority: new(int64(3))},
 		},
 		CollectionLinks: []g.UILink{
 			{Type: "parent", FromIssueUID: "child", ToIssueUID: "parent"},
@@ -86,6 +86,7 @@ func TestHierarchyExpansion(t *testing.T) {
 func TestHierarchyViewAndRefresh(t *testing.T) {
 	refresh := hierarchySnapshot()
 	refresh.Collection[0].ShortID = "renamed"
+	refresh.Collection[3].Priority = new(int64(-1))
 	refresh.Collection[0], refresh.Collection[3] = refresh.Collection[3], refresh.Collection[0]
 	for _, tt := range []struct {
 		name string

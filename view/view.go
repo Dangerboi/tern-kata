@@ -14,16 +14,28 @@ const IssueListID = "main.issues"
 func IssueID(uid string) string { return IssueListID + "." + uid }
 
 func Render(m model.Model) tern.View {
-	main := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading"}, Text: m.Project.Name + " / Open Issues"})
+	main := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading"}, Text: m.Collection.Title})
 	switch {
 	case m.Err != nil:
 		main = failureView(m)
 	case m.Loading:
-		main = ui.Nodes(ui.Text{Common: ui.Common{Key: "loading", Tone: ui.TonePending}, Text: "Loading Project's open Issues…"})
+		main = ui.Nodes(ui.Text{Common: ui.Common{Key: "loading", Tone: ui.TonePending}, Text: "Loading " + m.Collection.Title + " Issues…"})
 	default:
 		rows := m.VisibleRows()
-		items := make([]tern.Element, 0, len(rows))
+		items := make([]tern.Element, 0, len(rows)+len(m.Groups))
+		groups := make(map[string]model.IssueGroup, len(m.Issues))
+		for _, group := range m.Groups {
+			for _, issue := range group.Issues {
+				groups[issue.UID] = group
+			}
+		}
+		shownGroups := make(map[string]bool, len(m.Groups))
 		for _, row := range rows {
+			group := groups[row.UID]
+			if row.Depth == 0 && m.Collection.View != "project" && !shownGroups[group.ID] {
+				items = append(items, ui.Text{Common: ui.Common{Key: "group." + group.ID}, Text: group.Title})
+				shownGroups[group.ID] = true
+			}
 			items = append(items, issueRow(row))
 		}
 		selected := ""
@@ -33,10 +45,11 @@ func Render(m model.Model) tern.View {
 		main = append(main, ui.List{
 			CommonWithoutMax: ui.CommonWithoutMax{Key: "issues"},
 			Selected:         selected,
-			Empty:            ui.T("No open Issues in this Project. Create one with kata create."),
+			Empty:            ui.T("No Issues in this Collection. Select another Collection or create one with kata create."),
 			Children:         items,
 		})
 	}
+	main = append(ui.Nodes(ui.Col{Common: ui.Common{Key: "columns"}, Children: ui.Nodes(Collections(m))}), main...)
 	if m.Stale && m.Err == nil && !m.Loading {
 		main = append(main, staleNotice(m))
 	}

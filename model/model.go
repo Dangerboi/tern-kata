@@ -7,19 +7,25 @@ type Project = g.ProjectOut
 
 type Model struct {
 	LiveState
-	Workspace   string
-	Project     Project
-	Snapshot    g.UISnapshotResponseBody
-	Issues      []Issue
-	ETag        string
-	SelectedUID string
-	Flat        bool
+	Workspace           string
+	Project             Project
+	Snapshot            g.UISnapshotResponseBody
+	Issues              []Issue
+	ETag                string
+	SelectedUID         string
+	Loading             bool
+	Err                 error
+	Cols                int
+	Quitting            bool
+	Collection          Collection
+	Collections         []Collection
+	CollectionCursor    int
+	Focus               Column
+	Groups              []IssueGroup
+	LocalDate, TimeZone string
+	HelpOpen            bool
+	Flat bool
 	ExpandedUIDs map[string]bool
-	Loading     bool
-	Err         error
-	Cols        int
-	Quitting    bool
-	HelpOpen    bool
 }
 
 func Update(m Model, msg Msg) (Model, []Cmd) {
@@ -33,6 +39,21 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 		m, _ = updateProject(m, msg)
 		m.Cursor = msg.Snapshot.Cursor
 		return startStream(m, 0)
+	case CollectionSelected:
+		return updateCollection(m, msg)
+	case CollectionLoaded:
+		return collectionLoaded(m, msg)
+	case CollectionPointerSelected:
+		for _, collection := range m.Collections {
+			key := collection.View
+			if key == "project" {
+				key += "." + collection.ProjectUID
+			}
+			if msg.ID == "main.columns.collections."+key {
+				m.Focus = ColumnList
+				return updateCollection(m, CollectionSelected{Collection: collection})
+			}
+		}
 	case Failed:
 		m.Loading = false
 		m.Err = msg.Err
@@ -45,6 +66,16 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 			if binding.Action == CloseHelp {
 				m.HelpOpen = false
 				return m, nil
+			}
+			if binding.Action == QuitAction {
+				return updateNavigation(m, binding.Action)
+			}
+			if binding.Action == DrillOut {
+				m.Focus = ColumnCollections
+				return m, nil
+			}
+			if m.Focus == ColumnCollections {
+				return updateCollectionNavigation(m, binding.Action)
 			}
 			return updateNavigation(m, binding.Action)
 		}

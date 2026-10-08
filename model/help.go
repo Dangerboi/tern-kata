@@ -9,6 +9,9 @@ func (m Model) CurrentMode() Mode {
 	if m.Err != nil {
 		return ModeError
 	}
+	if m.Focus == ColumnCollections {
+		return ModeCollections
+	}
 	return ModeList
 }
 

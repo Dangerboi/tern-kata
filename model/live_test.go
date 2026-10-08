@@ -3,6 +3,7 @@ package model_test
 import (
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -27,7 +28,8 @@ func TestLiveMergePreservesIssueSelection(t *testing.T) {
 		Request: refresh.Request, Query: refresh.Query,
 		Snapshot: g.UISnapshotResponseBody{Cursor: 11, Collection: []model.Issue{{UID: "new"}, {UID: "b", Title: "After"}, {UID: "a"}}},
 	})
-	if m.SelectedUID != "b" || m.Issues[1].Title != "After" || m.Cursor != 11 {
+	selected := slices.IndexFunc(m.Issues, func(issue model.Issue) bool { return issue.UID == "b" })
+	if m.SelectedUID != "b" || selected < 0 || m.Issues[selected].Title != "After" || m.Cursor != 11 {
 		t.Fatalf("live Issue merge: %+v", m)
 	}
 }

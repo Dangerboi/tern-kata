@@ -79,8 +79,7 @@ type Retry struct{}
 func (Retry) msg() {}
 
 func liveQuery(m Model) g.ReadUISnapshotQuery {
-	view := "project"
-	return g.ReadUISnapshotQuery{View: &view, ProjectUID: &m.Project.UID, Status: []string{"open"}, SelectedIssueUID: &m.SelectedUID, IncludeHistory: new(true)}
+	return m.SnapshotQuery()
 }
 
 func startStream(m Model, delay time.Duration) (Model, []Cmd) {
@@ -147,7 +146,7 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 			return refreshLive(m)
 		}
 		if !msg.NotModified {
-			m, _ = updateProject(m, ProjectLoaded{Project: m.Project, Snapshot: msg.Snapshot, ETag: msg.ETag})
+			m = m.ApplySnapshot(msg.Snapshot, msg.ETag)
 			m.Cursor = msg.Snapshot.Cursor
 		}
 		if m.Resetting {
