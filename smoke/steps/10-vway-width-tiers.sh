@@ -1,7 +1,7 @@
 # Width tiers: list and detail side by side from 140 columns, one column from 80,
 # one notice below, and the plugin lives at every width. `ctl resize` takes
 # pixels; the headless Pane is about 8 pixels per column, so the pixel widths
-# below are checked against the columns Tern reports. Uses the seeded Issues.
+# below are checked against the columns Tern reports. It makes its own Project.
 width_cols() { ctl state | jq -r '.panes[0].cols'; }
 expect_alive() {
   ctl state | jq -e '.focused.running != null' >/dev/null || { printf 'tern-kata exited at %s\n' "$1" >&2; return 1; }
@@ -17,12 +17,23 @@ expect_width() {
 }
 read -r width_full width_height < <(ctl stats | jq -r '.viewport[0:2] | @tsv')
 
+# Its own Project and Issues, so no earlier step's fixtures or selection matter.
+width_dir="$tmp/width-workspace"
+mkdir -p "$width_dir"
+kata --workspace "$width_dir" init --project width-tiers --json >/dev/null
+for name in first second third; do
+  kata --workspace "$width_dir" create "Width $name" --body "Width $name body" --json >/dev/null
+done
+quit_app
+printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$width_dir" "$KATA_HOME" "$tmp" >"$tmp/width-launch.ctl"
+ctl --file "$tmp/width-launch.ctl"
+
 # Open the second Issue's detail in a wide Pane; it is what every resize must bring back.
-expect_tree "[data-id='main.columns.list.issues']" '.ok and .count == 1 and (.nodes[0].text | contains("Smoke second Issue"))'
+expect_tree "[data-id='main.columns.list.issues']" '.ok and .count == 1 and (.nodes[0].text | contains("Width third"))'
 ctl key g
 ctl key j
 ctl key enter
-expect_tree "[data-id='main.columns.detail.title']" '.ok and .count == 1 and (.nodes[0].text | contains("loading") | not)'
+expect_tree "[data-id='main.columns.detail.title']" '.ok and .count == 1 and (.nodes[0].text | contains("Width second") and (contains("loading") | not))'
 width_title=$(ctl tree "[data-id='main.columns.detail.title']" | jq -r '.nodes[0].text')
 [[ -n $width_title ]]
 expect_width 1200 1 1 0
@@ -76,6 +87,7 @@ expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("esc ba
 # q still quits below 80 columns.
 expect_width 300 0 0 1
 quit_app
+kata projects remove width-tiers --force --json >/dev/null
 ctl resize "$width_full" "$width_height"
 ctl --file "$tmp/launch.ctl"
 ctl plugins expect smoke
