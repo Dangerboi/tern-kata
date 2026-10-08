@@ -7,23 +7,23 @@ type Project = g.ProjectOut
 
 type Model struct {
 	LiveState
-	Workspace   string
-	Project     Project
-	Snapshot    g.UISnapshotResponseBody
-	Issues      []Issue
-	ETag        string
-	SelectedUID string
-	Loading     bool
-	Err         error
-	Cols        int
-	Quitting    bool
-	Collection Collection
-	Collections []Collection
-	CollectionCursor int
-	Focus Column
-	Groups []IssueGroup
+	Workspace           string
+	Project             Project
+	Snapshot            g.UISnapshotResponseBody
+	Issues              []Issue
+	ETag                string
+	SelectedUID         string
+	Loading             bool
+	Err                 error
+	Cols                int
+	Quitting            bool
+	Collection          Collection
+	Collections         []Collection
+	CollectionCursor    int
+	Focus               Column
+	Groups              []IssueGroup
 	LocalDate, TimeZone string
-	HelpOpen    bool
+	HelpOpen            bool
 }
 
 func Update(m Model, msg Msg) (Model, []Cmd) {
@@ -44,8 +44,10 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 	case CollectionPointerSelected:
 		for _, collection := range m.Collections {
 			key := collection.View
-			if key == "project" { key += "." + collection.ProjectUID }
-			if msg.ID == "main.columns.collections." + key {
+			if key == "project" {
+				key += "." + collection.ProjectUID
+			}
+			if msg.ID == "main.columns.collections."+key {
 				m.Focus = ColumnList
 				return updateCollection(m, CollectionSelected{Collection: collection})
 			}

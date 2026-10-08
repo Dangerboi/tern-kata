@@ -3,15 +3,15 @@ package model
 type Action string
 
 const (
-	MoveDown   Action = "down"
-	MoveUp     Action = "up"
-	MoveFirst  Action = "first"
-	MoveLast   Action = "last"
-	QuitAction Action = "quit"
-	ToggleHelp Action = "help"
-	CloseHelp  Action = "close-help"
-	DrillIn Action = "drill-in"
-	DrillOut Action = "drill-out"
+	MoveDown    Action = "down"
+	MoveUp      Action = "up"
+	MoveFirst   Action = "first"
+	MoveLast    Action = "last"
+	QuitAction  Action = "quit"
+	ToggleHelp  Action = "help"
+	CloseHelp   Action = "close-help"
+	DrillIn     Action = "drill-in"
+	DrillOut    Action = "drill-out"
 	RetryAction Action = "retry"
 )
 
@@ -27,10 +27,10 @@ type Binding struct {
 type Mode string
 
 const (
-	ModeList Mode = "list"
-	ModeHelp Mode = "help"
+	ModeList        Mode = "list"
+	ModeHelp        Mode = "help"
 	ModeCollections Mode = "collections"
-	ModeError Mode = "error"
+	ModeError       Mode = "error"
 )
 
 // Chord dispatches Action; Key and Help label it. Empty Mode is global;

@@ -26,10 +26,10 @@ func Render(m model.Model) tern.View {
 				items = append(items, ui.Text{Common: ui.Common{Key: "group." + group.ID}, Text: group.Title})
 			}
 			for _, issue := range group.Issues {
-			items = append(items, ui.Item{
-				Common: ui.Common{Key: issue.UID},
-				Label:  ui.T(issue.ShortID + "  " + issue.Title),
-			})
+				items = append(items, ui.Item{
+					Common: ui.Common{Key: issue.UID},
+					Label:  ui.T(issue.ShortID + "  " + issue.Title),
+				})
 			}
 		}
 		selected := ""
