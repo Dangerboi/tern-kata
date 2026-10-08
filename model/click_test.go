@@ -113,8 +113,10 @@ func TestEveryClickTargetEndsWhereItsKeysEnd(t *testing.T) {
 		{"parent row from detail", model.ColumnDetail, nil, model.ActionMsg{Action: model.ToggleExpansion, Value: "parent"}, model.ColumnDetail, clickKeys("escape", "space")},
 		{"parent row from Collections", model.ColumnCollections, nil, model.ActionMsg{Action: model.ToggleExpansion, Value: "parent"}, model.ColumnList, clickKeys("space")},
 		{"parent row collapses an expanded parent", model.ColumnCollections, []string{"space"}, model.ActionMsg{Action: model.ToggleExpansion, Value: "parent"}, model.ColumnList, clickKeys("space")},
-		{"list heading from detail", model.ColumnDetail, nil, model.FocusColumnMsg{Column: model.ColumnList}, model.ColumnDetail, clickKeys("escape")},
-		{"list heading from Collections", model.ColumnCollections, nil, model.FocusColumnMsg{Column: model.ColumnList}, model.ColumnList, clickKeys()},
+		{"list heading from list", model.ColumnList, nil, model.ActionMsg{Action: "key", Value: "p"}, model.ColumnList, clickKeys("p")},
+		{"list heading from detail", model.ColumnDetail, nil, model.ActionMsg{Action: "key", Value: "p"}, model.ColumnDetail, clickKeys("p")},
+		{"Back button", model.ColumnDetail, nil, model.ActionMsg{Action: "key", Value: "escape"}, model.ColumnDetail, clickKeys("escape")},
+		{"Hide detail button", model.ColumnDetail, nil, model.ActionMsg{Action: "key", Value: "shift+l"}, model.ColumnDetail, clickKeys("shift+l")},
 		{"detail title from list", model.ColumnList, nil, model.FocusColumnMsg{Column: model.ColumnDetail}, model.ColumnList, clickKeys("enter")},
 		{"section heading", model.ColumnList, nil, model.DetailSectionMsg{Section: model.SectionLinks}, model.ColumnList, clickDetailPath(model.SectionLinks)},
 		{"detail row", model.ColumnDetail, nil, model.DetailItemMsg{Section: model.SectionLinks, Key: "1"}, model.ColumnDetail, clickDetailPath(model.SectionLinks)},
@@ -208,7 +210,8 @@ func TestEscAfterClickBacksOut(t *testing.T) {
 		{"clicked detail row", model.ColumnList, []model.Msg{model.DetailItemMsg{Section: model.SectionLinks, Key: "1"}, model.KeyMsg{Chord: "escape"}}, model.ColumnList, "parent", nil},
 		{"clicked Collection", model.ColumnList, []model.Msg{model.CollectionPointerSelected{ID: "main.columns.collections.today"}, model.KeyMsg{Chord: "escape"}}, model.ColumnCollections, "parent", nil},
 		{"Collection after a jump ends the jump", model.ColumnDetail, []model.Msg{model.JumpIssueMsg{UID: "other"}, model.CollectionPointerSelected{ID: "main.columns.collections.today"}, model.KeyMsg{Chord: "enter"}, model.KeyMsg{Chord: "escape"}}, model.ColumnList, "other", nil},
-		{"list heading after a jump ends the jump", model.ColumnDetail, []model.Msg{model.JumpIssueMsg{UID: "other"}, model.FocusColumnMsg{Column: model.ColumnList}, model.KeyMsg{Chord: "enter"}, model.KeyMsg{Chord: "escape"}}, model.ColumnList, "other", nil},
+		{"Hide detail button after a jump ends the jump", model.ColumnDetail, []model.Msg{model.JumpIssueMsg{UID: "other"}, model.ActionMsg{Action: "key", Value: "shift+l"}, model.ActionMsg{Action: "key", Value: "shift+l"}, model.KeyMsg{Chord: "enter"}, model.KeyMsg{Chord: "escape"}}, model.ColumnList, "other", nil},
+		{"Back button unwinds one jump", model.ColumnDetail, []model.Msg{model.JumpIssueMsg{UID: "other"}, model.ActionMsg{Action: "key", Value: "escape"}}, model.ColumnDetail, "parent", nil},
 		{"row after a jump ends the jump", model.ColumnDetail, []model.Msg{model.JumpIssueMsg{UID: "other"}, model.SelectMsg{UID: "leaf"}, model.KeyMsg{Chord: "enter"}, model.KeyMsg{Chord: "escape"}}, model.ColumnList, "leaf", nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
