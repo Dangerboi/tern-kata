@@ -146,7 +146,18 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 			return refreshLive(m)
 		}
 		if !msg.NotModified {
+			selected := m.SelectedUID
 			m = m.ApplySnapshot(msg.Snapshot, msg.ETag)
+			if m.Focus == ColumnDetail && len(m.DetailBack) > 0 { m.SelectedUID = selected }
+			if msg.Snapshot.Selected != nil && msg.Snapshot.Selected.Issue != nil && msg.Snapshot.Selected.Issue.UID == m.SelectedUID {
+				m.Detail = msg.Snapshot.Selected
+				m.DetailUID = m.SelectedUID
+				m.DetailLoading = false
+				m.DetailErr = nil
+				m.DetailIndex = min(m.DetailIndex, max(m.DetailRowCount(m.DetailSection)-1, 0))
+			} else if m.DetailUID == m.SelectedUID {
+				m.DetailUID = ""
+			}
 			m.Cursor = msg.Snapshot.Cursor
 		}
 		if m.Resetting {

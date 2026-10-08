@@ -8,6 +8,9 @@ func updateNavigation(m Model, action Action) (Model, []Cmd) {
 		m.Quitting = true
 		return m, []Cmd{Quit{}}
 	}
+	if action == DrillIn || action == DrillOut || action == ToggleDetail || action == NextDetailSection || action == PreviousDetailSection || m.Focus != ColumnList {
+		return updateDetailNavigation(m, action)
+	}
 	switch action {
 	case ToggleExpansion, ExpandIssue, CollapseIssue, ToggleAllExpansion, ToggleIssueView:
 		return updateHierarchy(m, action), nil

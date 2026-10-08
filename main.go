@@ -67,6 +67,7 @@ func run() error {
 					msg = model.CollectionPointerSelected{ID: input.Item}
 				}
 			case *tern.Action:
+				msg = detailAction(input)
 				if input.ID == view.RetryID && input.Act == string(model.RetryAction) {
 					msg = model.Retry{}
 				}
@@ -91,6 +92,8 @@ func run() error {
 	msg := model.Msg(model.Start{Workspace: workspace})
 	for {
 		previousSelection := m.SelectedUID
+		previousFocus, previousSection, previousIndex := m.Focus, m.DetailSection, m.DetailIndex
+		previousDetailLoading := m.DetailLoading
 		var cmds []model.Cmd
 		m, cmds = model.Update(m, msg)
 		if m.Quitting {
@@ -99,8 +102,14 @@ func run() error {
 		if err := surface.Render(view.Render(m)); err != nil {
 			return err
 		}
-		if m.SelectedUID != "" && m.SelectedUID != previousSelection {
+		if m.Focus == model.ColumnList && m.SelectedUID != "" && m.SelectedUID != previousSelection {
 			if err := surface.Reveal(view.IssueID(m.SelectedUID), "nearest"); err != nil {
+				return err
+			}
+		}
+		if m.Focus == model.ColumnDetail && m.Detail != nil && m.Detail.Issue != nil && !m.DetailLoading &&
+			(previousFocus != m.Focus || previousSection != m.DetailSection || previousIndex != m.DetailIndex || previousDetailLoading) {
+			if err := surface.Reveal(view.DetailSectionID(m.DetailSection), "nearest"); err != nil {
 				return err
 			}
 		}

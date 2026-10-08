@@ -31,7 +31,7 @@ func TestHierarchyRows(t *testing.T) {
 	for _, row := range rows {
 		uids = append(uids, row.UID)
 	}
-	if !reflect.DeepEqual(uids, []string{"parent", "root"}) || m.SelectedUID != "parent" || len(cmds) != 1 {
+	if !reflect.DeepEqual(uids, []string{"parent", "root"}) || m.SelectedUID != "parent" || !reflect.DeepEqual(cmds, []model.Cmd{model.Subscribe{Generation: 1}, model.LoadDetail{UID: "parent"}}) {
 		t.Fatalf("collapsed rows=%v selected=%q commands=%#v", uids, m.SelectedUID, cmds)
 	}
 	if _, ok := cmds[0].(model.Subscribe); !ok {
@@ -65,9 +65,12 @@ func TestHierarchyExpansion(t *testing.T) {
 			m, _ := model.Update(model.Model{}, model.ProjectLoaded{Snapshot: hierarchySnapshot()})
 			for _, chord := range tt.keys {
 				var cmds []model.Cmd
+				previousSelection := m.SelectedUID
 				m, cmds = model.Update(m, model.KeyMsg{Chord: chord})
-				if len(cmds) != 0 {
-					t.Fatalf("%s requested commands %#v", chord, cmds)
+				var want []model.Cmd
+				if m.SelectedUID != previousSelection { want = []model.Cmd{model.LoadDetail{UID: m.SelectedUID}} }
+				if !reflect.DeepEqual(cmds, want) {
+					t.Fatalf("%s requested commands %#v, want %#v", chord, cmds, want)
 				}
 			}
 			var uids []string
@@ -106,6 +109,7 @@ func TestHierarchyViewAndRefresh(t *testing.T) {
 			m, _ := model.Update(model.Model{}, model.ProjectLoaded{Snapshot: hierarchySnapshot()})
 			for _, msg := range tt.msgs {
 				var cmds []model.Cmd
+				previousSelection := m.SelectedUID
 				m, cmds = model.Update(m, msg)
 				if _, loading := msg.(model.ProjectLoaded); loading {
 					if len(cmds) != 1 {
@@ -114,8 +118,10 @@ func TestHierarchyViewAndRefresh(t *testing.T) {
 					if _, ok := cmds[0].(model.Subscribe); !ok {
 						t.Fatalf("refresh commands=%#v", cmds)
 					}
-				} else if len(cmds) != 0 {
-					t.Fatalf("%#v requested commands %#v", msg, cmds)
+				} else {
+					var want []model.Cmd
+					if m.SelectedUID != previousSelection { want = []model.Cmd{model.LoadDetail{UID: m.SelectedUID}} }
+					if !reflect.DeepEqual(cmds, want) { t.Fatalf("%#v requested commands %#v, want %#v", msg, cmds, want) }
 				}
 			}
 			var uids []string
@@ -196,7 +202,7 @@ func TestHierarchyLiveRefreshSelectsVisibleAncestor(t *testing.T) {
 	snapshot.Collection = append(snapshot.Collection[:2], snapshot.Collection[3:]...)
 	snapshot.Cursor = 1
 	m, cmds = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot})
-	if m.SelectedUID != "parent" || !m.ExpandedUIDs["parent"] || !m.ExpandedUIDs["child"] || len(cmds) != 0 {
+	if m.SelectedUID != "parent" || !m.ExpandedUIDs["parent"] || !m.ExpandedUIDs["child"] || !reflect.DeepEqual(cmds, []model.Cmd{model.LoadDetail{UID: "parent"}}) {
 		t.Fatalf("refreshed selection=%q expansions=%v commands=%#v", m.SelectedUID, m.ExpandedUIDs, cmds)
 	}
 }

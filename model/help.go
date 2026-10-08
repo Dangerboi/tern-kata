@@ -18,7 +18,10 @@ func (m Model) CurrentMode() Mode {
 	if m.Err != nil {
 		return ModeError
 	}
-	if m.Focus == ColumnCollections {
+	switch m.Focus {
+	case ColumnDetail:
+		return ModeDetail
+	case ColumnCollections:
 		return ModeCollections
 	}
 	return ModeList

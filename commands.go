@@ -22,6 +22,18 @@ func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 				msg = result
 			}
 		}
+	case model.LoadDetail:
+		client, err := data.Discover(ctx, cmd.Workspace)
+		if err != nil {
+			msg = model.DetailFailed{UID: cmd.UID, Err: err}
+		} else {
+			result, err := client.ReadDetail(ctx, cmd.UID)
+			if err != nil {
+				msg = model.DetailFailed{UID: cmd.UID, Err: err}
+			} else {
+				msg = result
+			}
+		}
 	case model.LoadCollection:
 		client, err := data.Discover(ctx, cmd.Workspace)
 		if err != nil {

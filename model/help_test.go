@@ -18,7 +18,7 @@ func TestHelpKeys(t *testing.T) {
 		{"navigation blocked", []string{"?", "j"}, true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			m := model.Model{Issues: []model.Issue{{UID: "a"}, {UID: "b"}}, SelectedUID: "a"}
+			m := model.Model{Issues: []model.Issue{{UID: "a"}, {UID: "b"}}, SelectedUID: "a", DetailUID: "a"}
 			for _, key := range tt.keys {
 				var cmds []model.Cmd
 				m, cmds = model.Update(m, model.KeyMsg{Chord: key})

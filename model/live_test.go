@@ -16,7 +16,7 @@ func TestLiveMergePreservesIssueSelection(t *testing.T) {
 		Project:  model.Project{UID: "project"},
 		Snapshot: g.UISnapshotResponseBody{Cursor: 10, Collection: []model.Issue{{UID: "a"}, {UID: "b", Title: "Before"}}},
 	})
-	if len(cmds) != 1 || !reflect.DeepEqual(cmds[0], model.Subscribe{Workspace: "/repo", AfterID: 10, Generation: 1}) {
+	if !reflect.DeepEqual(cmds, []model.Cmd{model.Subscribe{Workspace: "/repo", AfterID: 10, Generation: 1}, model.LoadDetail{Workspace: "/repo", UID: "b"}}) {
 		t.Fatalf("initial subscription: %#v", cmds)
 	}
 	m, cmds = model.Update(m, model.StreamEvent{Generation: 1, ID: 11, Type: "issue.updated"})
@@ -90,7 +90,7 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 				m, cmds = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query,
 					Snapshot: g.UISnapshotResponseBody{Cursor: 30, Collection: []model.Issue{{UID: "b", Title: "Survivor"}}},
 				})
-				if m.Resetting || len(m.Issues) != 1 || m.SelectedUID != "b" || !reflect.DeepEqual(cmds, []model.Cmd{model.Subscribe{Workspace: "/repo", AfterID: 30, Generation: 2}}) {
+				if m.Resetting || len(m.Issues) != 1 || m.SelectedUID != "b" || !reflect.DeepEqual(cmds, []model.Cmd{model.Subscribe{Workspace: "/repo", AfterID: 30, Generation: 2}, model.LoadDetail{Workspace: "/repo", UID: "b"}}) {
 					t.Fatalf("reset replaced purged Issues and resumed: %+v, %#v", m, cmds)
 				}
 			},
