@@ -1,0 +1,79 @@
+package view_test
+
+import (
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/Dangerboi/tern-kata/model"
+	"github.com/Dangerboi/tern-kata/view"
+	g "go.kenn.io/kata/pkg/client/generated"
+)
+
+// columnsFixture is a parent with one open and one closed child, plus a leaf
+// with no owner, listed on a Project at 160 columns.
+func columnsFixture(t testing.TB) model.Model {
+	t.Helper()
+	noon := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
+	view.SetClock(func() time.Time { return noon })
+	parent := model.Issue{UID: "parent", ShortID: "pppp", Title: "Parent", Status: "open", ProjectName: "work", Owner: ptr("dana"), UpdatedAt: noon.Add(-2 * time.Hour)}
+	open := model.Issue{UID: "open", ShortID: "oooo", Title: "Open child", Status: "open", ProjectName: "work", UpdatedAt: noon}
+	done := model.Issue{UID: "done", ShortID: "dddd", Title: "Done child", Status: "closed", ProjectName: "work", UpdatedAt: noon}
+	leaf := model.Issue{UID: "leaf", ShortID: "llll", Title: "Leaf", Status: "open", ProjectName: "work", UpdatedAt: noon.Add(-3 * 24 * time.Hour)}
+	links := []g.UILink{
+		{Type: "parent", FromIssueUID: "open", ToIssueUID: "parent"},
+		{Type: "parent", FromIssueUID: "done", ToIssueUID: "parent"},
+	}
+	return apply(model.Model{},
+		model.Start{Workspace: "/repo"},
+		model.ResizeMsg{Cols: 160},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{parent, open, done, leaf}, CollectionLinks: links}},
+	)
+}
+
+func labels(n [][2]string) []string {
+	var out []string
+	for _, span := range n {
+		out = append(out, strings.TrimSpace(span[0]))
+	}
+	return out
+}
+
+func TestHeaderRowLabelsTheColumns(t *testing.T) {
+	m := columnsFixture(t)
+	side := render(t, m)["main.columns.list.header"]
+	if got, want := labels(styled(side)), []string{"#", "prio", "status", "title", "kids", "updated"}; !slices.Equal(got, want) {
+		t.Errorf("side by side header %q, want %q", got, want)
+	}
+	m.DetailHidden = true
+	full := render(t, m)["main.columns.list.header"]
+	if got, want := labels(styled(full)), []string{"#", "prio", "status", "title", "kids", "owner", "updated"}; !slices.Equal(got, want) {
+		t.Errorf("full width header %q, want %q", got, want)
+	}
+}
+
+func TestRowShowsKidsOwnerAndUpdated(t *testing.T) {
+	m := columnsFixture(t)
+	m.DetailHidden = true
+	nodes := render(t, m)
+	parent, leaf := text(nodes[view.IssueID("parent")]), text(nodes[view.IssueID("leaf")])
+	for _, want := range []string{"pppp", "Parent", "1/2", "dana", "2h ago"} {
+		if !strings.Contains(parent, want) {
+			t.Errorf("parent row %q lacks %q", parent, want)
+		}
+	}
+	if strings.Contains(leaf, "/") || !strings.Contains(leaf, "3d ago") {
+		t.Errorf("leaf row %q: want no kids and 3d ago", leaf)
+	}
+	if got := style(t, nodes[view.IssueID("parent")], "dana"); got != "muted" {
+		t.Errorf("owner style = %q, want muted", got)
+	}
+}
+
+func TestOwnerDroppedWhenSharingThePaneWithDetail(t *testing.T) {
+	m := columnsFixture(t)
+	if row := text(render(t, m)[view.IssueID("parent")]); strings.Contains(row, "dana") || !strings.Contains(row, "1/2") || !strings.Contains(row, "2h ago") {
+		t.Errorf("side by side parent row %q: want kids and updated, no owner", row)
+	}
+}

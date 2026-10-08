@@ -2,12 +2,17 @@ package view
 
 import (
 	"fmt"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
+
+// now is the clock relative times are measured from; tests replace it.
+var now = time.Now
 
 const IssueListID = "main.columns.list.issues"
 
@@ -39,7 +44,8 @@ func Render(m model.Model) tern.View {
 				columns = append(columns, detail(m))
 			}
 		}
-		main = ui.Nodes(ui.Row{Common: ui.Common{Key: "columns"}, Gap: ui.GapMD, Children: columns})
+		// A Row centres its children by default: a parent's detail (a Link per child) is far taller than the Pane and would carry the shorter list column out of view with it.
+		main = ui.Nodes(ui.Row{Common: ui.Common{Key: "columns"}, Gap: ui.GapMD, Align: ui.AlignStart, Children: columns})
 	}
 	if m.Stale && m.Err == nil && !m.FirstLoad() {
 		main = append(main, staleNotice(m))
@@ -73,6 +79,8 @@ func Render(m model.Model) tern.View {
 }
 
 func issues(m model.Model) tern.Element {
+	columns := m.VisibleColumns()
+	ownerShown := !(slices.Contains(columns, model.ColumnList) && slices.Contains(columns, model.ColumnDetail))
 	rows := m.VisibleRows()
 	items := make([]tern.Element, 0, len(rows)+len(m.Groups))
 	groups := make(map[string]model.IssueGroup, len(m.Issues))
@@ -88,7 +96,7 @@ func issues(m model.Model) tern.Element {
 			items = append(items, ui.Text{Common: ui.Common{Key: "group." + group.ID}, Spans: []ui.Span{{T: group.Title, S: "strong"}}})
 			shownGroups[group.ID] = true
 		}
-		items = append(items, issueRow(row, row.UID == m.SelectedUID))
+		items = append(items, issueRow(row, row.UID == m.SelectedUID, ownerShown))
 	}
 	selected := ""
 	if m.SelectedUID != "" {
@@ -111,7 +119,7 @@ func issues(m model.Model) tern.Element {
 		ui.Text{Common: ui.Common{Key: "daemon", Tone: ui.ToneMuted}, Text: m.DaemonLine()},
 		ui.Text{Common: ui.Common{Key: "counts", Tone: ui.ToneMuted}, Text: m.CountsLine()},
 	)}
-	children := ui.Nodes(topBar)
+	children := ui.Nodes(topBar, headerRow(ownerShown))
 	if m.Search.Open {
 		placeholder := "Search Issues in " + m.Collection.Title
 		children = append(children, ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Mode: "insert", Placeholder: placeholder, Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}})
@@ -127,7 +135,7 @@ func issues(m model.Model) tern.Element {
 	return ui.Col{Common: ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.4)}, Children: children}
 }
 
-func issueRow(row model.IssueRow, selected bool) tern.Element {
+func issueRow(row model.IssueRow, selected, ownerShown bool) tern.Element {
 	disclosure := ""
 	if row.HasChildren {
 		disclosure = "▸ "
@@ -144,10 +152,7 @@ func issueRow(row model.IssueRow, selected bool) tern.Element {
 	if selected {
 		tone = ui.ToneAccent
 	}
-	spans := []ui.Span{
-		{T: strings.Repeat("│\u00a0\u00a0", row.Depth) + disclosure + row.ShortID + "  " + row.Title},
-		{T: "  " + row.Status, S: statusStyle},
-	}
+	spans := []ui.Span{{T: strings.Repeat("│\u00a0\u00a0", row.Depth) + disclosure + row.ShortID}}
 	if row.Priority != nil {
 		style := "muted"
 		switch *row.Priority {
@@ -160,9 +165,14 @@ func issueRow(row model.IssueRow, selected bool) tern.Element {
 		}
 		spans = append(spans, ui.Span{T: fmt.Sprintf("  P%d", *row.Priority), S: style})
 	}
-	if row.Owner != nil && *row.Owner != "" {
+	spans = append(spans, ui.Span{T: "  " + row.Status, S: statusStyle}, ui.Span{T: "  " + row.Title})
+	if row.TotalKids > 0 {
+		spans = append(spans, ui.Span{T: fmt.Sprintf("  %d/%d", row.OpenKids, row.TotalKids), S: "muted"})
+	}
+	if ownerShown && row.Owner != nil && *row.Owner != "" {
 		spans = append(spans, ui.Span{T: "  " + *row.Owner, S: "muted"})
 	}
+	spans = append(spans, ui.Span{T: "  " + relativeTime(row.UpdatedAt), S: "muted"})
 	for _, label := range row.Labels {
 		spans = append(spans, ui.Span{T: "  " + label, S: "mark"})
 	}
@@ -188,4 +198,38 @@ func footer(m model.Model) tern.Element {
 	}
 	segments = append(segments, ui.Seg{Common: ui.Common{Key: "position"}, Side: ui.SideRight, Text: fmt.Sprintf("%d / %d", selected, len(rows))})
 	return ui.Nodes(ui.Status{Common: ui.Common{Key: "hints"}, Children: segments})
+}
+
+// headerRow labels the Issue rows. It is a node of its own so a later change
+// can pin it outside the scrolling list.
+func headerRow(ownerShown bool) tern.Element {
+	labels := []string{"#", "prio", "status", "title", "kids", "owner", "updated"}
+	if !ownerShown {
+		labels = slices.DeleteFunc(labels, func(l string) bool { return l == "owner" })
+	}
+	spans := make([]ui.Span, len(labels))
+	for i, label := range labels {
+		spans[i] = ui.Span{T: label + "  ", S: "muted"}
+	}
+	return ui.Text{Common: ui.Common{Key: "header", Tone: ui.ToneMuted}, Spans: spans}
+}
+
+// relativeTime is kata's TUI "updated" cell: "2h ago", "3d ago", "-" when unset.
+func relativeTime(t time.Time) string {
+	if t.IsZero() {
+		return "-"
+	}
+	d := now().Sub(t)
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds ago", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	case d < 7*24*time.Hour:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	default:
+		return fmt.Sprintf("%dw ago", int(d.Hours()/(24*7)))
+	}
 }

@@ -10,7 +10,10 @@ expect_tree .sf-list '.count == 0'
 ctl --file "$tmp/launch.ctl"
 expect_tree "[data-id$='.$hierarchy_parent']" '.count == 1'
 expect_tree "[data-id$='.$hierarchy_child']" '.count == 0'
-expect_tree "[data-id$='.$hierarchy_parent']" "([.nodes[0] | .. | objects | .text? // empty] | join(\" \")) as \$text | (\$text | contains(\"$hierarchy_short\") and contains(\"Smoke hierarchy parent\") and contains(\"open\") and contains(\"P0\") and contains(\"smoke-owner\") and contains(\"smoke-label\"))"
+expect_tree "[data-id$='.$hierarchy_parent']" "([.nodes[0] | .. | objects | .text? // empty] | join(\" \")) as \$text | (\$text | contains(\"$hierarchy_short\") and contains(\"Smoke hierarchy parent\") and contains(\"open\") and contains(\"P0\") and contains(\"1/1\") and (contains(\"smoke-owner\") | not) and contains(\"smoke-label\"))"
+ctl key L
+expect_tree "[data-id$='.$hierarchy_parent']" '.count == 1 and (.nodes[0].text | contains("smoke-owner"))'
+ctl key L
 ctl click "[data-id$='.$hierarchy_parent']"
 ctl key Right
 expect_tree "[data-id$='.$hierarchy_child']" '.count == 1 and (.nodes[0].text | startswith("│"))'
