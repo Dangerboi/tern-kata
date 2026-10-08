@@ -10,6 +10,9 @@ import (
 func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 	var msg model.Msg
 	switch cmd := cmd.(type) {
+	case model.CreateIssueCmd:
+		client, err := data.Discover(ctx, cmd.Workspace)
+		if err != nil { msg = model.IssueCreated{Err:err} } else { msg = client.CreateIssue(ctx, cmd) }
 	case model.SaveDraft:
 		client, err := data.Discover(ctx, cmd.Workspace)
 		if err != nil { msg = model.DraftFailed{UID: cmd.UID, Err: err} } else { msg = client.SaveDraft(ctx, cmd) }

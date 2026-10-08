@@ -3,6 +3,7 @@ package model
 import "iter"
 
 func (m Model) CurrentMode() Mode {
+	if m.Create.Open { if m.Create.DiscardConfirm { return ModeDiscard }; return ModeCreate }
 	if mode := m.EditorMode(); mode != "" { return mode }
 	if m.FieldForm.Open { return ModeFieldForm }
 	if m.HelpOpen {
@@ -37,6 +38,7 @@ func LookupBindingForMode(chord string, mode Mode) (Binding, bool) {
 		}
 	}
 	if mode == ModeEditor || mode == ModeDiscard || mode == ModeConflict { return Binding{}, false }
+	if mode == ModeCreate { return Binding{}, false }
 	if inputMode(mode) {
 		return Binding{}, false
 	}

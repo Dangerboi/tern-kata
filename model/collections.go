@@ -1,6 +1,7 @@
 package model
 
 import (
+	"maps"
 	"strings"
 
 	g "go.kenn.io/kata/pkg/client/generated"
@@ -99,6 +100,20 @@ func (m Model) ApplySnapshot(snapshot g.UISnapshotResponseBody, etag string) Mod
 			m.CollectionCursor = i
 			break
 		}
+	}
+	if m.PendingCreatedUID != "" {
+		m.SelectedUID = m.PendingCreatedUID
+		for _, issue := range m.Issues {
+			if issue.UID == m.PendingCreatedUID {
+				m.ExpandedUIDs = maps.Clone(m.ExpandedUIDs)
+				if m.ExpandedUIDs == nil { m.ExpandedUIDs = map[string]bool{} }
+				parents, _ := m.issueHierarchy()
+				for uid := parents[issue.UID]; uid != ""; uid = parents[uid] { m.ExpandedUIDs[uid] = true }
+				m.PendingCreatedUID = ""
+				break
+			}
+		}
+		if m.PendingCreatedUID != "" { return m }
 	}
 	return m.WithVisibleSelection()
 }

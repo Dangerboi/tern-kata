@@ -65,6 +65,16 @@ const (
 // Chord dispatches Action; Key and Help label it. Empty Mode is global;
 // otherwise the binding is active only in that mode. ShowInFooter selects hints.
 var Keymap = []Binding{
+	{Chord:"n", Key:"n", Action:NewIssue, Help:"new Issue", Mode:ModeList, ShowInFooter:true},
+	{Chord:"shift+n", Key:"N", Action:NewChild, Help:"new child", Mode:ModeList, ShowInFooter:true},
+	{Chord:"n", Key:"n", Action:NewIssue, Help:"new Issue", Mode:ModeDetail, ShowInFooter:true},
+	{Chord:"shift+n", Key:"N", Action:NewChild, Help:"new child", Mode:ModeDetail, ShowInFooter:true},
+	{Chord:"tab", Key:"tab", Action:CreateNext, Help:"next field", Mode:ModeCreate, ShowInFooter:true},
+	{Chord:"shift+tab", Key:"shift+tab", Action:CreatePrevious, Help:"previous field", Mode:ModeCreate},
+	{Chord:"ctrl+o", Key:"ctrl+o", Action:SaveDraftAction, Help:"create Issue", Mode:ModeCreate, ShowInFooter:true},
+	{Chord:"meta+o", Key:"meta+o", Action:SaveDraftAction, Help:"create Issue (Tern headless)", Mode:ModeCreate},
+	{Chord:"escape", Key:"esc", Action:CancelDraft, Help:"discard?", Mode:ModeCreate, ShowInFooter:true},
+	{Chord:"ctrl+space", Key:"ctrl+space", Action:CreateComplete, Help:"complete label", Mode:ModeCreate, ShowInFooter:true},
 	{Chord: "j", Key: "j", Action: MoveDown, Help: "next Issue", Mode: ModeList, ShowInFooter: true},
 	{Chord: "k", Key: "k", Action: MoveUp, Help: "previous Issue", Mode: ModeList, ShowInFooter: true},
 	{Chord: "g", Key: "g", Action: MoveFirst, Help: "first Issue", Mode: ModeList},

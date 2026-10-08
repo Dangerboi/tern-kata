@@ -27,6 +27,7 @@ func startInputReader(ctx context.Context,session *tern.Session,messages chan<- 
    case *tern.Undo: msg=model.UndoMsg{ID:input.ID}
    case *tern.Focus:
     if field,ok:=view.FilterFieldIndex(input.ID); ok { msg=model.FilterFieldMsg{Field:field} }
+	   if field,ok:=view.CreateFieldIndex(input.ID); ok { msg=model.CreateFieldMsg{Field:field} }
    case *tern.Select:
     if input.ID==view.IssueListID { msg=model.SelectMsg{UID:strings.TrimPrefix(input.Item,view.IssueListID+".")} }
     if input.ID==view.CollectionsID { msg=model.CollectionPointerSelected{ID:input.Item} }

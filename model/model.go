@@ -7,6 +7,8 @@ type Project = g.ProjectOut
 
 type Model struct {
 	LiveState
+	Create CreateState
+	PendingCreatedUID string
 	CloseForm CloseFormState
 	Actor string
 	FieldForm FieldFormState
@@ -51,6 +53,7 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 }
 
 func update(m Model, msg Msg) (Model, []Cmd) {
+	if next, cmds, handled := updateCreate(m, msg); handled { return next, cmds }
 	if next, cmds, handled := updateEditor(m, msg); handled { return next, cmds }
 	switch msg.(type) {
 	case CloseFieldMsg, CloseSubmitMsg, CloseResultMsg:

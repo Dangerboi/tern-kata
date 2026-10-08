@@ -18,6 +18,10 @@ func FilterFieldIndex(id string) (int, bool) {
 }
 
 func InputFocusID(m model.Model) string {
+	if m.Create.Open {
+		if m.Create.Saving || m.Create.DiscardConfirm { return "" }
+		return "layer.create." + createKeys[m.Create.Field]
+	}
 	if _, active := m.ActiveDraft(); active {
 		if m.EditorMode() == model.ModeEditor { return DraftEditorID }
 		return ""
@@ -41,6 +45,7 @@ func InputFocusID(m model.Model) string {
 }
 
 func IsTransientTarget(id string) bool {
+	if _, ok := CreateFieldIndex(id); ok { return true }
 	if id == FieldInputID || id == SearchID || id == DraftEditorID { return true }
 	if _, ok := FilterFieldIndex(id); ok { return true }
 	if field, ok := strings.CutPrefix(id, "layer.close.field"); ok {
