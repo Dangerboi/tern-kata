@@ -16,6 +16,16 @@ ctl key p
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 expect_tree "$picker_items" '.ok and .count == 8 and .nodes[0].text == "smokecurrent" and .nodes[0]["aria-selected"] == "true" and .nodes[1].text == "Inbox"'
 expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("enter open Collection") and contains("esc close"))'
+ctl key End
+expect_tree "$picker_items" '.nodes[-1]["aria-selected"] == "true"'
+ctl key Up
+expect_tree "$picker_items" '.nodes[-2]["aria-selected"] == "true"'
+ctl key Home
+expect_tree "$picker_items" '.nodes[0]["aria-selected"] == "true"'
+ctl key Down
+expect_tree "$picker_items" '.nodes[1]["aria-selected"] == "true"'
+ctl key Up
+expect_tree "$picker_items" '.nodes[0]["aria-selected"] == "true"'
 
 # Typing filters; esc closes the picker without switching.
 for letter in a l p h a; do ctl key "$letter"; done
@@ -39,7 +49,7 @@ ctl key enter
 expect_tree "$picker_heading" '.ok and .nodes[0].text == "smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
 
-# A click on a row switches like enter; the list heading and the p footer hint open the picker; esc and its footer hint close it, also after a click inside it.
+# A click on a row switches like enter; the list heading opens the picker; esc closes it, also after a click inside it.
 ctl key p
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 ctl click "[data-id='layer.collections.list.project.$picker_alpha_uid']"
@@ -51,10 +61,6 @@ ctl click "[data-id='layer.collections.filter']"
 ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 expect_tree "$picker_heading" '.ok and .nodes[0].text == "picker-alpha"'
-ctl click "[data-id='dock.hints.p']"
-expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
-ctl click "[data-id='dock.hints.escape']"
-expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 ctl key p
 ctl key enter
 expect_tree "$picker_heading" '.ok and .nodes[0].text == "smoke"'

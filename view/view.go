@@ -88,7 +88,7 @@ func issues(m model.Model) tern.Element {
 	if m.Focus == model.ColumnList {
 		tone = ui.ToneAccent
 	}
-	children := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading", Tone: tone, Actions: &ui.Actions{Click: "key=p"}}, Text: m.ListHeader()})
+	children := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading", Tone: tone, Title: "Collections picker (p)", Actions: &ui.Actions{Click: "key=p"}}, Text: m.ListHeader()})
 	if m.Search.Open {
 		placeholder := "Search Issues in " + m.Collection.Title
 		children = append(children, ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Mode: "insert", Placeholder: placeholder, Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}})
