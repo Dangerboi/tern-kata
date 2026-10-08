@@ -26,41 +26,34 @@ func newProjectStart(bound bool) model.Model {
 }
 
 func TestSidebarEndsWithNewProject(t *testing.T) {
-	smoke := model.Collection{View: "project", ProjectUID: "smoke-uid", Title: "smoke"}
-	for _, tt := range []struct {
-		name       string
-		keys       []string
-		form       bool
-		collection model.Collection
-	}{
-		{"the last row opens the form", []string{"escape", "end", "enter"}, true, model.Collection{View: "inbox", Title: "Inbox"}},
-		{"down from the last Project reaches it", []string{"escape", "end", "up", "down", "enter"}, true, model.Collection{View: "inbox", Title: "Inbox"}},
-		{"it is the end of the list", []string{"escape", "end", "down", "down", "enter"}, true, model.Collection{View: "inbox", Title: "Inbox"}},
-		{"the Project above it still switches", []string{"escape", "end", "up", "enter"}, false, smoke},
+	for name, keys := range map[string][]string{
+		"the last row":                          {"escape", "end", "enter"},
+		"down reaches it from the last Project": {"escape", "end", "up", "down", "enter"},
+		"it ends the list":                      {"escape", "end", "down", "down", "enter"},
 	} {
-		t.Run(tt.name, func(t *testing.T) {
-			m, cmds := pickerKeys(newProjectStart(false), tt.keys...)
-			if m.ProjectForm.Open != tt.form || (m.CurrentMode() == model.ModeProjectForm) != tt.form {
-				t.Fatalf("form open = %v, mode %s", m.ProjectForm.Open, m.CurrentMode())
-			}
-			if tt.form {
-				if len(cmds) != 0 {
-					t.Fatalf("opening the form requested %#v", cmds)
-				}
-			} else if !reflect.DeepEqual(cmds, []model.Cmd{model.LoadCollection{Workspace: newProjectWorkspace, Collection: tt.collection}}) {
-				t.Fatalf("switch requested %#v", cmds)
-			}
-			if m.Collection != tt.collection && tt.form {
-				t.Fatalf("opening the form switched the Collection to %+v", m.Collection)
+		t.Run(name, func(t *testing.T) {
+			m, cmds := pickerKeys(newProjectStart(false), keys...)
+			if !m.ProjectForm.Open || m.CurrentMode() != model.ModeProjectForm || len(cmds) != 0 || m.Collection.View != "inbox" {
+				t.Fatalf("form open=%v mode=%s cmds=%#v collection=%+v", m.ProjectForm.Open, m.CurrentMode(), cmds, m.Collection)
 			}
 		})
 	}
 }
 
+func TestSidebarProjectAboveNewProjectStillSwitches(t *testing.T) {
+	smoke := model.Collection{View: "project", ProjectUID: "smoke-uid", Title: "smoke"}
+	m, cmds := pickerKeys(newProjectStart(false), "escape", "end", "up", "enter")
+	if m.ProjectForm.Open || m.Collection != smoke || !reflect.DeepEqual(cmds, []model.Cmd{model.LoadCollection{Workspace: newProjectWorkspace, Collection: smoke}}) {
+		t.Fatalf("form open=%v collection=%+v cmds=%#v", m.ProjectForm.Open, m.Collection, cmds)
+	}
+}
+
 func TestNewProjectFormStartsWithTheDirectoryName(t *testing.T) {
-	m, _ := pickerKeys(newProjectStart(false), "escape", "end", "enter")
-	if m.ProjectForm.Name != "my-repo" || m.ProjectForm.Saving || m.ProjectForm.Err != nil {
-		t.Fatalf("form = %+v", m.ProjectForm)
+	for _, bound := range []bool{false, true} {
+		m := newProjectOpened(bound)
+		if m.ProjectForm.Name != "my-repo" || m.ProjectForm.Saving || m.ProjectForm.Err != nil || m.ProjectForm.Bind == bound {
+			t.Fatalf("bound=%v: form = %+v", bound, m.ProjectForm)
+		}
 	}
 }
 
