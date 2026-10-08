@@ -16,7 +16,7 @@ expect_no_ops() {
 }
 # Fails unless ops $3 were sent after line $2 of recording $1.
 expect_ops() { [[ -n $(stable_ops "$1" "$2" "$3") ]] || { printf 'Missing TSP ops %s\n' "$3" >&2; return 1; }; }
-stable_columns='(.[0] == "add" or .[0] == "del") and (.[1] | test("^main\\.(loading|columns(\\.(collections|list(\\.(heading|issues))?|detail))?)$"))'
+stable_columns='(.[0] == "add" or .[0] == "del") and (.[1] | test("^main\\.(loading|columns(\\.(collections|list(\\.(topbar(\\.(heading|daemon|counts))?|issues))?|detail))?)$"))'
 stable_detail='(.[0] == "add" or .[0] == "del") and (.[1] | test("^main\\.columns\\.detail\\.(title|section[0-5])$"))'
 detail_reveal='.[0] == "reveal" and (.[1] | test("^main\\.columns\\.detail\\.section[0-5]$"))'
 

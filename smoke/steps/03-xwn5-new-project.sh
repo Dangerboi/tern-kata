@@ -19,7 +19,7 @@ np_projects() { kata projects list --json | jq -r '[.projects[].name] | join(","
 # Bound directory: the picker ends with New Project, whose form opens over it with the directory's name.
 quit_app
 ctl --file "$tmp/launch.ctl"
-expect_tree "$np_heading" '.ok and .nodes[0].text == "smoke"'
+expect_tree "$np_heading" '.ok and .nodes[0].text == "Project: smoke"'
 ctl key p
 ctl key End
 expect_tree "$np_picker_rows" '.ok and .nodes[-1].text == "New Project" and .nodes[-1]["aria-selected"] == "true"'
@@ -51,13 +51,13 @@ ctl type '"-extra"'
 ctl key enter
 expect_tree "$np_form" '.ok and .count == 0'
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
-expect_tree "$np_heading" '.ok and .nodes[0].text == "workspace-extra"'
+expect_tree "$np_heading" '.ok and .nodes[0].text == "Project: workspace-extra"'
 [[ $(np_projects) == *workspace-extra* ]]
 grep -qx 'name = "smoke"' "$tmp/workspace/.kata.toml"
 ctl key p
 expect_tree "$np_picker_rows" '.ok and .nodes[0].text == "smoke" and ([.nodes[] | select(.text == "workspace-extracurrent")] | length == 1)'
 ctl key enter
-expect_tree "$np_heading" '.ok and .nodes[0].text == "smoke"'
+expect_tree "$np_heading" '.ok and .nodes[0].text == "Project: smoke"'
 
 # Unbound directory: the sidebar ends with New Project; the click opens the form and esc closes it, leaving the cursor on the row.
 quit_app
@@ -75,7 +75,7 @@ expect_tree "$np_sidebar_rows" '.ok and .nodes[-1]["aria-selected"] == "true"'
 # enter on the row, then enter on the directory's name: kata creates the Project, the directory is bound to it, and the sidebar goes.
 ctl key enter
 ctl key enter
-expect_tree "$np_heading" '.ok and .nodes[0].text == "np-unbound"'
+expect_tree "$np_heading" '.ok and .nodes[0].text == "Project: np-unbound"'
 expect_tree "[data-id='main.columns.collections']" '.ok and .count == 0'
 expect_tree "$np_form" '.ok and .count == 0'
 grep -qx 'name = "np-unbound"' "$tmp/np-unbound/.kata.toml"
@@ -86,7 +86,7 @@ expect_tree "$np_issue_rows" '.ok and .count == 1 and (.nodes[0].text | contains
 # The binding is what kata finds next time: it opens project-first.
 quit_app
 np_launch "$tmp/np-unbound"
-expect_tree "$np_heading" '.ok and .nodes[0].text == "np-unbound"'
+expect_tree "$np_heading" '.ok and .nodes[0].text == "Project: np-unbound"'
 expect_tree "[data-id='main.columns.collections']" '.ok and .count == 0'
 expect_tree "$np_issue_rows" '.ok and .count == 1'
 
@@ -107,7 +107,7 @@ expect_tree "$np_error" '.ok and .count == 1 and (.nodes[0].text | contains("bin
 [[ $(np_projects) != *np-stale* ]]
 ctl type '"-bound"'
 ctl key enter
-expect_tree "$np_heading" '.ok and .nodes[0].text == "np-stale-bound"'
+expect_tree "$np_heading" '.ok and .nodes[0].text == "Project: np-stale-bound"'
 grep -qx 'name = "np-stale-bound"' "$tmp/np-stale/.kata.toml"
 grep -qx 'node_modules' "$tmp/np-stale/.gitignore"
 grep -qx '.kata.local.toml' "$tmp/np-stale/.gitignore"

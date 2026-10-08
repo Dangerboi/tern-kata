@@ -30,7 +30,7 @@ ctl plugins expect status=closed
 expect_tree "[data-id='main.columns.list.issues']" '.nodes[0].text | contains("No Issues match these filters")'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.count == 0'
 ctl key s
-expect_tree "[data-id='main.columns.list.heading']" '.nodes[0].text | contains("status=") | not'
+expect_tree "[data-id='main.columns.list.topbar.heading']" '.nodes[0].text | contains("status=") | not'
 expect_tree "[data-id$='.$search_alpha']" '.count == 1'
 
 ctl key f
@@ -57,7 +57,7 @@ expect_tree "[data-id$='.$search_delta']" '.count == 1'
 expect_tree "[data-id='main.columns.list.topbar.heading']" '.nodes[0].text | contains("owner=x449-owner") and contains("label=x449-label") and contains("relationship=parent") and contains("search=Search target")'
 
 ctl key c
-expect_tree "[data-id='main.columns.list.topbar.heading']" '.nodes[0].text == "smoke"'
+expect_tree "[data-id='main.columns.list.topbar.heading']" '.nodes[0].text == "Project: smoke"'
 expect_tree "[data-id$='.$hierarchy_parent']" '.count == 1'
 ctl key f
 expect_tree "[data-id='layer.filters']" '.count == 1 and (.nodes[0].text | contains("Filter smoke"))'

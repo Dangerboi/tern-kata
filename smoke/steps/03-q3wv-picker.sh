@@ -6,7 +6,7 @@ picker_items="[data-id^='layer.collections.list.']"
 picker_heading="[data-id='main.columns.list.topbar.heading']"
 
 # A bound directory opens on its Project with no Collections sidebar.
-expect_tree "$picker_heading" '.ok and .count == 1 and .nodes[0].text == "smoke"'
+expect_tree "$picker_heading" '.ok and .count == 1 and .nodes[0].text == "Project: smoke"'
 expect_tree "[data-id='main.columns.collections']" '.ok and .count == 0'
 expect_tree "[data-id='main.columns.detail']" '.ok and .count == 1'
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
@@ -32,7 +32,7 @@ for letter in a l p h a; do ctl key "$letter"; done
 expect_tree "$picker_items" '.ok and .count == 1 and .nodes[0].text == "picker-alpha"'
 ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
-expect_tree "$picker_heading" '.ok and .nodes[0].text == "smoke"'
+expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
 
 # enter switches to the filtered Collection; reopening shows it as current while the bound Project stays first.
@@ -40,13 +40,13 @@ ctl key p
 for letter in a l p h a; do ctl key "$letter"; done
 ctl key enter
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
-expect_tree "$picker_heading" '.ok and .nodes[0].text == "picker-alpha"'
+expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: picker-alpha"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 1 and (.nodes[0].text | contains("Picker alpha Issue"))'
 ctl key p
 expect_tree "$picker_items" '.ok and .nodes[0].text == "smoke" and .nodes[0]["aria-selected"] == "true"'
 expect_tree "[data-id='layer.collections.list.project.$picker_alpha_uid']" '.ok and .count == 1 and .nodes[0].text == "picker-alphacurrent"'
 ctl key enter
-expect_tree "$picker_heading" '.ok and .nodes[0].text == "smoke"'
+expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
 
 # A click on a row switches like enter; the list heading opens the picker; esc closes it, also after a click inside it.
@@ -54,16 +54,16 @@ ctl key p
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 ctl click "[data-id='layer.collections.list.project.$picker_alpha_uid']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
-expect_tree "$picker_heading" '.ok and .nodes[0].text == "picker-alpha"'
+expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: picker-alpha"'
 ctl click "$picker_heading"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 ctl click "[data-id='layer.collections.filter']"
 ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
-expect_tree "$picker_heading" '.ok and .nodes[0].text == "picker-alpha"'
+expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: picker-alpha"'
 ctl key p
 ctl key enter
-expect_tree "$picker_heading" '.ok and .nodes[0].text == "smoke"'
+expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
 
 # esc backs out detail, then the list, into the picker, then closes it.
