@@ -13,10 +13,10 @@ const IssueListID = "main.columns.list.issues"
 func IssueID(uid string) string { return IssueListID + "." + uid }
 
 func Render(m model.Model) tern.View {
-	var main tern.Element
+	var main tern.Nodes
 	switch {
 	case m.Err != nil:
-		main = ui.Nodes(ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.Err.Error()})
+		main = failureView(m)
 	case m.Loading:
 		main = ui.Nodes(ui.Text{Common: ui.Common{Key: "loading", Tone: ui.TonePending}, Text: "Loading Project's open Issues…"})
 	default:
@@ -33,7 +33,10 @@ func Render(m model.Model) tern.View {
 		}
 		main = ui.Nodes(ui.Row{Common: ui.Common{Key: "columns"}, Gap: ui.GapMD, Children: columns})
 	}
-	return tern.View{Main: main, Dock: footer(m)}
+	if m.Stale && m.Err == nil && !m.Loading {
+		main = append(main, staleNotice(m))
+	}
+	return tern.View{Main: main, Dock: footer(m), Layer: help(m)}
 }
 
 func issues(m model.Model) tern.Element {
@@ -66,7 +69,7 @@ func issues(m model.Model) tern.Element {
 
 func footer(m model.Model) tern.Element {
 	segments := make([]tern.Element, 0, len(model.Keymap)+1)
-	for _, binding := range model.Keymap {
+	for binding := range model.BindingsForMode(m.CurrentMode(), true) {
 		segments = append(segments, ui.Seg{Common: ui.Common{Key: binding.Chord}, Text: binding.Key + " " + binding.Help})
 	}
 	selected := 0

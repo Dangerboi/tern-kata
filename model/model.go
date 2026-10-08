@@ -6,6 +6,7 @@ type Issue = g.UIIssue
 type Project = g.ProjectOut
 
 type Model struct {
+	LiveState
 	Workspace   string
 	Project     Project
 	Snapshot    g.UISnapshotResponseBody
@@ -25,6 +26,7 @@ type Model struct {
 	DetailSection DetailSection
 	DetailIndex   int
 	DetailBack    []string
+	HelpOpen    bool
 }
 
 func Update(m Model, msg Msg) (Model, []Cmd) {
@@ -41,7 +43,9 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m.Err = nil
 		return m, []Cmd{LoadProject{Workspace: msg.Workspace}}
 	case ProjectLoaded:
-		return updateProject(m, msg)
+		m, _ = updateProject(m, msg)
+		m.Cursor = msg.Snapshot.Cursor
+		return startStream(m, 0)
 	case DetailLoaded:
 		if msg.UID == m.SelectedUID && msg.UID == m.DetailUID {
 			m.Detail = msg.Selected
@@ -79,7 +83,15 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m.Loading = false
 		m.Err = msg.Err
 	case KeyMsg:
-		if binding, ok := LookupBinding(msg.Chord); ok {
+		if binding, ok := LookupBindingForMode(msg.Chord, m.CurrentMode()); ok {
+			if binding.Action == ToggleHelp {
+				m.HelpOpen = !m.HelpOpen
+				return m, nil
+			}
+			if binding.Action == CloseHelp {
+				m.HelpOpen = false
+				return m, nil
+			}
 			return updateNavigation(m, binding.Action)
 		}
 	case SelectMsg:
@@ -93,6 +105,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		}
 	case ResizeMsg:
 		m.Cols = msg.Cols
+	default:
+		return updateLive(m, msg)
 	}
 	return m, nil
 }

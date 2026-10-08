@@ -83,3 +83,35 @@ func TestDetailSectionsAndReferenceJump(t *testing.T) {
 		})
 	}
 }
+
+func TestLiveDetailAuthority(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		selected string
+		back []string
+		authority string
+		wantSelected string
+		wantBody string
+		wantCmds []model.Cmd
+	}{
+		{"current authority", "a", nil, "a", "a", "Live body", nil},
+		{"old selection authority", "b", nil, "a", "b", "", []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "b"}}},
+		{"referenced Issue outside list", "closed", []string{"a"}, "closed", "closed", "Live body", nil},
+		{"removed selection", "removed", nil, "removed", "a", "", []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "a"}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m := model.Model{Workspace: "/repo", Project: model.Project{UID: "project"}, SelectedUID: tt.selected, DetailUID: tt.selected, Focus: model.ColumnDetail, DetailBack: tt.back}
+			m, cmds := model.Update(m, model.StreamEvent{ID: 1, Type: "issue.updated"})
+			refresh := cmds[0].(model.RefreshSnapshot)
+			m, cmds = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: g.UISnapshotResponseBody{
+				Cursor: 1, Collection: []model.Issue{{UID: "a"}, {UID: "b"}},
+				Selected: &g.UISelectedAuthority{Issue: &model.Issue{UID: tt.authority, Body: "Live body"}},
+			}})
+			body := ""
+			if m.Detail != nil && m.Detail.Issue != nil { body = m.Detail.Issue.Body }
+			if m.SelectedUID != tt.wantSelected || body != tt.wantBody || !reflect.DeepEqual(cmds, tt.wantCmds) {
+				t.Fatalf("selection=%s body=%q commands=%#v", m.SelectedUID, body, cmds)
+			}
+		})
+	}
+}

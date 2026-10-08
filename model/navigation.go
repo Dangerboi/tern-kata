@@ -1,6 +1,9 @@
 package model
 
 func updateNavigation(m Model, action Action) (Model, []Cmd) {
+	if action == RetryAction {
+		return updateLive(m, Retry{})
+	}
 	if action == QuitAction {
 		m.Quitting = true
 		return m, []Cmd{Quit{}}
