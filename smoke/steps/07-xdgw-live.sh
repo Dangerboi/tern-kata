@@ -12,7 +12,8 @@ kata daemon stop
 kata daemon start --listen 127.0.0.1:0
 stream_target=$(kata daemon locate --json | jq -r .address)
 kata daemon stop
-ctl run "env -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=$KATA_HOME KATA_SERVER=http://$stream_target $tmp/tern-kata"
+printf 'run "env -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s KATA_SERVER=http://%s %s/tern-kata"\n' "$KATA_HOME" "$stream_target" "$tmp" >"$tmp/live-launch.ctl"
+ctl --file "$tmp/live-launch.ctl"
 expect_tree "[data-id='main.error']" '[.nodes[] | .. | objects | .text? // empty] | any(contains("kata server not responding:"))'
 expect_tree "[data-id='main.retry']" '.ok and .count == 1'
 kata daemon start --listen "$stream_target"
