@@ -10,6 +10,8 @@ const (
 	QuitAction Action = "quit"
 	ToggleHelp Action = "help"
 	CloseHelp  Action = "close-help"
+	DrillIn Action = "drill-in"
+	DrillOut Action = "drill-out"
 )
 
 type Binding struct {
@@ -26,6 +28,7 @@ type Mode string
 const (
 	ModeList Mode = "list"
 	ModeHelp Mode = "help"
+	ModeCollections Mode = "collections"
 )
 
 // Chord dispatches Action; Key and Help label it. Empty Mode is global;
@@ -35,6 +38,12 @@ var Keymap = []Binding{
 	{Chord: "k", Key: "k", Action: MoveUp, Help: "previous Issue", Mode: ModeList, ShowInFooter: true},
 	{Chord: "g", Key: "g", Action: MoveFirst, Help: "first Issue", Mode: ModeList},
 	{Chord: "shift+g", Key: "G", Action: MoveLast, Help: "last Issue", Mode: ModeList},
+	{Chord: "escape", Key: "esc", Action: DrillOut, Help: "Collections", Mode: ModeList, ShowInFooter: true},
+	{Chord: "j", Key: "j", Action: MoveDown, Help: "next Collection", Mode: ModeCollections, ShowInFooter: true},
+	{Chord: "k", Key: "k", Action: MoveUp, Help: "previous Collection", Mode: ModeCollections, ShowInFooter: true},
+	{Chord: "g", Key: "g", Action: MoveFirst, Help: "first Collection", Mode: ModeCollections},
+	{Chord: "shift+g", Key: "G", Action: MoveLast, Help: "last Collection", Mode: ModeCollections},
+	{Chord: "enter", Key: "enter", Action: DrillIn, Help: "open Collection", Mode: ModeCollections, ShowInFooter: true},
 	{Chord: "q", Key: "q", Action: QuitAction, Help: "quit", ShowInFooter: true},
 	{Chord: "ctrl+c", Key: "ctrl+c", Action: QuitAction, Help: "quit"},
 	{Chord: "?", Key: "?", Action: ToggleHelp, Help: "help", ShowInFooter: true},

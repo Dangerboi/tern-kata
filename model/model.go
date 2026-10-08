@@ -19,6 +19,7 @@ type Model struct {
 	Collection Collection
 	Collections []Collection
 	CollectionCursor int
+	Focus Column
 	Groups []IssueGroup
 	LocalDate, TimeZone string
 	HelpOpen    bool
@@ -57,6 +58,16 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 			if binding.Action == CloseHelp {
 				m.HelpOpen = false
 				return m, nil
+			}
+			if binding.Action == QuitAction {
+				return updateNavigation(m, binding.Action)
+			}
+			if binding.Action == DrillOut {
+				m.Focus = ColumnCollections
+				return m, nil
+			}
+			if m.Focus == ColumnCollections {
+				return updateCollectionNavigation(m, binding.Action)
 			}
 			return updateNavigation(m, binding.Action)
 		}

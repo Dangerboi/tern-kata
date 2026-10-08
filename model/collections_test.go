@@ -41,14 +41,14 @@ func TestCollectionIgnoresSupersededSnapshot(t *testing.T) {
 
 func TestCollectionKeyboardSwitching(t *testing.T) {
  for _,tt:=range []struct{name string;keys []string;view string}{
-  {"Inbox",[]string{"esc","g","enter"},"inbox"},
-  {"Today",[]string{"esc","g","j","enter"},"today"},
-  {"Logbook",[]string{"esc","g","j","j","j","j","j","enter"},"logbook"},
+  {"Inbox",[]string{"escape","g","enter"},"inbox"},
+  {"Today",[]string{"escape","g","j","enter"},"today"},
+  {"Logbook",[]string{"escape","g","j","j","j","j","j","enter"},"logbook"},
  } {t.Run(tt.name,func(t *testing.T){
   m,_:=model.Update(model.Model{},model.ProjectLoaded{Project:model.Project{UID:"p",Name:"Work"},Snapshot:g.UISnapshotResponseBody{Catalog:[]g.UIProject{{Project:model.Project{UID:"p",Name:"Work"}}}}})
   var cmds []model.Cmd
   for _,chord:=range tt.keys {m,cmds=model.Update(m,model.KeyMsg{Chord:chord})}
-  if m.Collection.View!=tt.view || !m.Loading || len(cmds)!=1 {t.Fatalf("keyboard Collection switch: %+v %#v",m,cmds)}
+  if m.Collection.View!=tt.view || !m.Loading || m.Focus!=model.ColumnList || !reflect.DeepEqual(cmds,[]model.Cmd{model.LoadCollection{Collection:m.Collection}}) {t.Fatalf("keyboard Collection switch: %+v %#v",m,cmds)}
  })}
 }
 

@@ -13,19 +13,24 @@ const IssueListID = "main.issues"
 func IssueID(uid string) string { return IssueListID + "." + uid }
 
 func Render(m model.Model) tern.View {
-	main := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading"}, Text: m.Project.Name + " / Open Issues"})
+	main := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading"}, Text: m.Collection.Title})
 	switch {
 	case m.Err != nil:
 		main = ui.Nodes(ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.Err.Error()})
 	case m.Loading:
-		main = ui.Nodes(ui.Text{Common: ui.Common{Key: "loading", Tone: ui.TonePending}, Text: "Loading Project's open Issues…"})
+		main = ui.Nodes(ui.Text{Common: ui.Common{Key: "loading", Tone: ui.TonePending}, Text: "Loading " + m.Collection.Title + " Issues…"})
 	default:
 		items := make([]tern.Element, 0, len(m.Issues))
-		for _, issue := range m.Issues {
+		for _, group := range m.Groups {
+			if m.Collection.View != "project" {
+				items = append(items, ui.Text{Common: ui.Common{Key: "group." + group.ID}, Text: group.Title})
+			}
+			for _, issue := range group.Issues {
 			items = append(items, ui.Item{
 				Common: ui.Common{Key: issue.UID},
 				Label:  ui.T(issue.ShortID + "  " + issue.Title),
 			})
+			}
 		}
 		selected := ""
 		if m.SelectedUID != "" {
@@ -34,10 +39,11 @@ func Render(m model.Model) tern.View {
 		main = append(main, ui.List{
 			CommonWithoutMax: ui.CommonWithoutMax{Key: "issues"},
 			Selected:         selected,
-			Empty:            ui.T("No open Issues in this Project. Create one with kata create."),
+			Empty:            ui.T("No Issues in this Collection. Select another Collection or create one with kata create."),
 			Children:         items,
 		})
 	}
+	main = append(ui.Nodes(ui.Col{Common: ui.Common{Key: "columns"}, Children: ui.Nodes(Collections(m))}), main...)
 	return tern.View{Main: main, Dock: footer(m), Layer: help(m)}
 }
 
