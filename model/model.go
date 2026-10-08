@@ -210,7 +210,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			m.DetailErr = nil
 			m.DetailHidden = false
 			m.DetailBack = nil
-			m.DetailSection, m.DetailIndex = SectionBody, 0
+			m.DetailSection, m.DetailIndex = SectionProperties, 0
 			m.Focus = ColumnDetail
 		}
 	case IssueOpenFailed:

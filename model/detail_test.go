@@ -70,13 +70,13 @@ func TestDetailSectionsAndReferenceJump(t *testing.T) {
 		focus    model.Column
 		wantCmds []model.Cmd
 	}{
-		{"next section", []model.Msg{model.KeyMsg{Chord: "tab"}}, model.SectionProperties, "a", model.ColumnDetail, nil},
+		{"next section", []model.Msg{model.KeyMsg{Chord: "tab"}}, model.SectionLabels, "a", model.ColumnDetail, nil},
 		{"previous wraps", []model.Msg{model.KeyMsg{Chord: "shift+tab"}}, model.SectionHistory, "a", model.ColumnDetail, nil},
-		{"next wraps", []model.Msg{model.KeyMsg{Chord: "shift+tab"}, model.KeyMsg{Chord: "tab"}}, model.SectionBody, "a", model.ColumnDetail, nil},
-		{"reference outside list", []model.Msg{model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "enter"}}, model.SectionBody, "closed-b", model.ColumnDetail, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "closed-b"}}},
-		{"history reference", []model.Msg{model.KeyMsg{Chord: "shift+tab"}, model.KeyMsg{Chord: "enter"}}, model.SectionBody, "closed-b", model.ColumnDetail, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "closed-b"}}},
-		{"reference back stays in detail", []model.Msg{model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "enter"}, model.KeyMsg{Chord: "escape"}}, model.SectionBody, "a", model.ColumnDetail, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "a"}}},
-		{"pointer reference jump", []model.Msg{model.JumpIssueMsg{UID: "closed-b"}}, model.SectionBody, "closed-b", model.ColumnDetail, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "closed-b"}}},
+		{"next wraps", []model.Msg{model.KeyMsg{Chord: "shift+tab"}, model.KeyMsg{Chord: "tab"}}, model.SectionProperties, "a", model.ColumnDetail, nil},
+		{"reference outside list", []model.Msg{model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "enter"}}, model.SectionProperties, "closed-b", model.ColumnDetail, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "closed-b"}}},
+		{"history reference", []model.Msg{model.KeyMsg{Chord: "shift+tab"}, model.KeyMsg{Chord: "enter"}}, model.SectionProperties, "closed-b", model.ColumnDetail, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "closed-b"}}},
+		{"reference back stays in detail", []model.Msg{model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "enter"}, model.KeyMsg{Chord: "escape"}}, model.SectionProperties, "a", model.ColumnDetail, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "a"}}},
+		{"pointer reference jump", []model.Msg{model.JumpIssueMsg{UID: "closed-b"}}, model.SectionProperties, "closed-b", model.ColumnDetail, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "closed-b"}}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			peer := "closed-b"
