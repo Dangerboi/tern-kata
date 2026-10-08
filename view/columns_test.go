@@ -8,6 +8,7 @@ import (
 
 	"github.com/Dangerboi/tern-kata/model"
 	"github.com/Dangerboi/tern-kata/view"
+	"github.com/stencil-hq/tern-sdk/go/tern"
 	g "go.kenn.io/kata/pkg/client/generated"
 )
 
@@ -75,5 +76,33 @@ func TestOwnerDroppedWhenSharingThePaneWithDetail(t *testing.T) {
 	m := columnsFixture(t)
 	if row := text(render(t, m)[view.IssueID("parent")]); strings.Contains(row, "dana") || !strings.Contains(row, "1/2") || !strings.Contains(row, "2h ago") {
 		t.Errorf("side by side parent row %q: want kids and updated, no owner", row)
+	}
+}
+
+// Only the Issue rows scroll: the list node is height-capped (Tern scrolls a
+// capped list, and an uncapped one grows until the whole Pane scrolls), and
+// the top bar and header are its siblings, not inside it.
+func TestTopBarAndHeaderStayOutsideTheScrollingList(t *testing.T) {
+	nodes := render(t, columnsFixture(t))
+	list := nodes["main.columns.list.issues"]
+	if list.P["max"] == nil {
+		t.Errorf("Issue list has no max height, so it never scrolls on its own: %v", list.P)
+	}
+	inside := map[string]bool{}
+	var walk func(n tern.WireNode)
+	walk = func(n tern.WireNode) {
+		inside[n.ID] = true
+		for _, c := range n.C {
+			walk(c)
+		}
+	}
+	walk(list)
+	for _, id := range []string{"main.columns.list.topbar", "main.columns.list.topbar.heading", "main.columns.list.header"} {
+		if _, ok := nodes[id]; !ok || inside[id] {
+			t.Errorf("%s present=%v inside the scrolling list=%v, want outside", id, ok, inside[id])
+		}
+	}
+	if !inside[view.IssueID("leaf")] {
+		t.Error("Issue rows are not inside the scrolling list")
 	}
 }

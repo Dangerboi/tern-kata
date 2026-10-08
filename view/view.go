@@ -131,7 +131,10 @@ func issues(m model.Model) tern.Element {
 	if m.Loading {
 		empty = "Loading Issues…"
 	}
-	children = append(children, ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "issues"}, Selected: selected, Empty: ui.T(empty), Children: items})
+	// Only the rows scroll: a capped list scrolls itself, an uncapped one grows
+	// to its content and the Pane scrolls the top bar away with it.
+	// ponytail: a fraction of the window, not of the free space; below ~25 rows the Pane may scroll again.
+	children = append(children, ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "issues"}, Max: ui.MaxFrac(0.7), Selected: selected, Empty: ui.T(empty), Children: items})
 	return ui.Col{Common: ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.4)}, Children: children}
 }
 
@@ -201,7 +204,7 @@ func footer(m model.Model) tern.Element {
 }
 
 // headerRow labels the Issue rows. It is a node of its own so a later change
-// can pin it outside the scrolling list.
+// sits outside the scrolling list.
 func headerRow(ownerShown bool) tern.Element {
 	labels := []string{"#", "prio", "status", "title", "kids", "owner", "updated"}
 	if !ownerShown {
