@@ -47,6 +47,14 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 
 func update(m Model, msg Msg) (Model, []Cmd) {
 	switch msg := msg.(type) {
+	case FilterFormActionMsg:
+		if m.FilterForm.Open && (msg.Action == ApplyFilters || msg.Action == CancelFilters) {
+			return updateFilterForm(m, msg.Action)
+		}
+	case FilterFieldMsg:
+		if m.FilterForm.Open && msg.Field >= 0 && msg.Field < 5 {
+			m.FilterForm.Field = msg.Field
+		}
 	case Start:
 		m.Workspace = msg.Workspace
 		m.Loading = true

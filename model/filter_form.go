@@ -8,6 +8,12 @@ type FilterFormState struct {
 	Values Filters
 }
 
+type FilterFieldMsg struct { Field int }
+func (FilterFieldMsg) msg() {}
+
+type FilterFormActionMsg struct { Action Action }
+func (FilterFormActionMsg) msg() {}
+
 func filterTextField(form *FilterFormState) *string {
 	switch form.Field {
 	case 2: return &form.Values.Owner
@@ -18,6 +24,11 @@ func filterTextField(form *FilterFormState) *string {
 
 func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 	switch action {
+	case InputSpace:
+		if filterTextField(&m.FilterForm) != nil {
+			return updateFilterText(m, KeyMsg{Text: " "})
+		}
+		return updateFilterForm(m, NextFilterChoice)
 	case ApplyFilters:
 		m.Filters = m.FilterForm.Values
 		m.Filters.Owner = strings.TrimSpace(m.Filters.Owner)
@@ -56,11 +67,10 @@ func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 				}
 			}
 		case 1:
-			field, choices = &m.FilterForm.Values.Status, []string{"", "open", "closed"}
+			field, choices = &m.FilterForm.Values.Status, []string{"all", "open", "closed"}
 		case 4:
 			field, choices = &m.FilterForm.Values.Relationship, []string{"", "parent", "child", "blocks", "blocked_by", "related"}
 		default:
-			if action == NextFilterChoice { return updateFilterText(m, KeyMsg{Text: " "}) }
 			return m, nil
 		}
 		index := 0

@@ -30,8 +30,12 @@ func TestLiveSearch(t *testing.T) {
 			for _, chord := range tt.keys {
 				var cmds []model.Cmd
 				m, cmds = model.Update(m, model.KeyMsg{Chord: chord})
-				if len(cmds) != 0 {
-					refresh, ok := cmds[0].(model.RefreshSnapshot)
+				for _, cmd := range cmds {
+					if detail, ok := cmd.(model.LoadDetail); ok {
+						if detail.UID != m.SelectedUID { t.Fatalf("wrong result detail: %+v", detail) }
+						continue
+					}
+					refresh, ok := cmd.(model.RefreshSnapshot)
 					if !ok || !reflect.DeepEqual(refresh.Query, m.SnapshotQuery()) || refresh.ETag != "" {
 						t.Fatalf("search command: %#v", cmds)
 					}
@@ -52,7 +56,7 @@ func TestStatusFilterCycle(t *testing.T) {
 	}{
 		{"open", "All Open · status=open"},
 		{"closed", "All Open · status=closed"},
-		{"", "All Open"},
+		{"all", "All Open · status=all"},
 		{"open", "All Open · status=open"},
 	} {
 		var cmds []model.Cmd
@@ -148,4 +152,36 @@ func TestCollectionSwitchKeepsFilterIntent(t *testing.T) {
 	if m.Filters != filters || m.SelectedUID != "a" || m.Loading { t.Fatalf("Collection load loses filters: %+v", m) }
 	m, _ = model.Update(m, model.CollectionLoaded{Collection: collection, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "stale"}}}})
 	if m.SelectedUID != "a" { t.Fatal("superseded unfiltered Collection load applied") }
+}
+
+func TestFilterFormInputAndChoices(t *testing.T) {
+	for _, tt := range []struct { name string; field int; keys []string; owner, label, relationship string; endField int }{
+		{"space is text, arrows do not insert", 2, []string{"q", "space", "x", "right", "left"}, "q x", "", "", 2},
+		{"unicode backspace and paste", 3, []string{"λ", "backspace"}, "", "", "", 3},
+		{"relationship choices wrap backwards", 4, []string{"left"}, "", "", "related", 4},
+		{"tab wraps", 4, []string{"tab"}, "", "", "", 0},
+		{"backtab wraps", 0, []string{"shift+tab"}, "", "", "", 4},
+		{"reset does not apply", 2, []string{"q", "ctrl+r"}, "", "", "", 2},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m := model.Model{}
+			m, _ = model.Update(m, model.KeyMsg{Chord: "f"})
+			m, _ = model.Update(m, model.FilterFieldMsg{Field: tt.field})
+			for _, key := range tt.keys { m, _ = model.Update(m, model.KeyMsg{Chord: key}) }
+			form := m.FilterForm
+			if form.Field != tt.endField || form.Values.Owner != tt.owner || form.Values.Label != tt.label || form.Values.Relationship != tt.relationship || m.Filters != (model.Filters{}) {
+				t.Fatalf("form field input: %+v", form)
+			}
+		})
+	}
+}
+
+func TestFilterFormActionsAndProjectScope(t *testing.T) {
+	m := model.Model{Collection: model.Collection{View: "project", ProjectUID: "other", Title: "Other"}, Filters: model.Filters{ProjectUID: "p"}}
+	m, _ = model.Update(m, model.KeyMsg{Chord: "f"})
+	m, cmds := model.Update(m, model.FilterFormActionMsg{Action: model.ApplyFilters})
+	if m.FilterForm.Open || len(cmds) != 1 || *cmds[0].(model.RefreshSnapshot).Query.ProjectUID != "other" { t.Fatalf("filter form apply action: %+v %#v", m, cmds) }
+	refresh := cmds[0].(model.RefreshSnapshot)
+	m, _ = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "a", Status: "open", ProjectUID: new("other")}}}})
+	if len(m.VisibleRows()) != 0 { t.Fatal("Project filter widened current Project Collection") }
 }

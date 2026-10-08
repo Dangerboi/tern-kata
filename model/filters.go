@@ -31,9 +31,9 @@ func updateFilterAction(m Model, action Action) (Model, []Cmd) {
 		m.FilterForm = FilterFormState{Open: true, Values: m.Filters}
 	case CycleStatus:
 		switch m.Filters.Status {
-		case "": m.Filters.Status = "open"
 		case "open": m.Filters.Status = "closed"
-		default: m.Filters.Status = ""
+		case "closed": m.Filters.Status = "all"
+		default: m.Filters.Status = "open"
 		}
 		m.SelectedUID = ""
 		return refreshFilters(m)

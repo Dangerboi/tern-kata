@@ -82,7 +82,12 @@ func (m Model) ApplySnapshot(snapshot g.UISnapshotResponseBody, etag string) Mod
 	if m.Filters != (Filters{}) {
 		groupCollection = Collection{View: "results", Title: "Results"}
 	}
-	m.Groups = GroupIssues(groupCollection, snapshot.Collection, m.LocalDate)
+	issues := snapshot.Collection
+	// Snapshot accepts one Project UID; incompatible Project scopes intersect to empty.
+	if m.Collection.ProjectUID != "" && m.Filters.ProjectUID != "" && m.Collection.ProjectUID != m.Filters.ProjectUID {
+		issues = nil
+	}
+	m.Groups = GroupIssues(groupCollection, issues, m.LocalDate)
 	m.Issues = nil
 	for _, group := range m.Groups {
 		m.Issues = append(m.Issues, group.Issues...)

@@ -58,7 +58,15 @@ func run() error {
 			var msg model.Msg
 			switch input := input.(type) {
 			case tern.Key:
-				msg = model.KeyMsg{Chord: input.String()}
+				text := ""
+				if !input.Ctrl && !input.Alt && !input.Meta {
+					text = input.Text
+				}
+				msg = model.KeyMsg{Chord: input.String(), Text: text}
+			case *tern.Focus:
+				if field, ok := view.FilterFieldIndex(input.ID); ok {
+					msg = model.FilterFieldMsg{Field: field}
+				}
 			case *tern.Select:
 				if input.ID == view.IssueListID {
 					msg = model.SelectMsg{UID: strings.TrimPrefix(input.Item, view.IssueListID+".")}
@@ -70,6 +78,9 @@ func run() error {
 				msg = detailAction(input)
 				if input.ID == view.RetryID && input.Act == string(model.RetryAction) {
 					msg = model.Retry{}
+				}
+				if strings.HasPrefix(input.ID, "layer.filters.actions.") {
+					msg = model.FilterFormActionMsg{Action: model.Action(input.Act)}
 				}
 			case *tern.Resize:
 				msg = model.ResizeMsg{Cols: input.Cols}
@@ -92,6 +103,7 @@ func run() error {
 	msg := model.Msg(model.Start{Workspace: workspace})
 	for {
 		previousSelection := m.SelectedUID
+		previousInputFocus := view.InputFocusID(m)
 		previousFocus, previousSection, previousIndex := m.Focus, m.DetailSection, m.DetailIndex
 		previousDetailLoading := m.DetailLoading
 		var cmds []model.Cmd
@@ -101,6 +113,9 @@ func run() error {
 		}
 		if err := surface.Render(view.Render(m)); err != nil {
 			return err
+		}
+		if focus := view.InputFocusID(m); focus != previousInputFocus {
+			if err := surface.Focus(focus); err != nil { return err }
 		}
 		if m.Focus == model.ColumnList && m.SelectedUID != "" && m.SelectedUID != previousSelection {
 			if err := surface.Reveal(view.IssueID(m.SelectedUID), "nearest"); err != nil {

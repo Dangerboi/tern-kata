@@ -37,6 +37,7 @@ const (
 	PreviousFilterChoice Action = "previous-filter-choice"
 	ResetFilterForm Action = "reset-filter-form"
 	ClearFilters Action = "clear-filters"
+	InputSpace Action = "input-space"
 )
 
 type Binding struct {
@@ -73,7 +74,7 @@ var Keymap = []Binding{
 	{Chord: "enter", Key: "enter", Action: NextFilterField, Help: "next field", Mode: ModeFilterForm},
 	{Chord: "shift+tab", Key: "shift+tab", Action: PreviousFilterField, Help: "previous field", Mode: ModeFilterForm},
 	{Chord: "right", Key: "right", Action: NextFilterChoice, Help: "next choice", Mode: ModeFilterForm, ShowInFooter: true},
-	{Chord: "space", Key: "space", Action: NextFilterChoice, Help: "next choice", Mode: ModeFilterForm},
+	{Chord: "space", Key: "space", Action: InputSpace, Help: "next choice / space", Mode: ModeFilterForm},
 	{Chord: "left", Key: "left", Action: PreviousFilterChoice, Help: "previous choice", Mode: ModeFilterForm},
 	{Chord: "backspace", Key: "backspace", Action: DeleteInput, Help: "delete", Mode: ModeFilterForm},
 	{Chord: "ctrl+u", Key: "ctrl+u", Action: ClearInput, Help: "clear field", Mode: ModeFilterForm},
