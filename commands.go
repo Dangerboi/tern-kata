@@ -22,6 +22,9 @@ func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 				msg = result
 			}
 		}
+	case model.SaveDraft:
+		client, err := data.Discover(ctx, cmd.Workspace)
+		if err != nil { msg = model.DraftFailed{UID: cmd.UID, Err: err} } else { msg = client.SaveDraft(ctx, cmd) }
 	case model.CloseIssueCmd:
 		client, err := data.Discover(ctx, cmd.Workspace)
 		if err == nil { err = client.Close(ctx, cmd) }

@@ -53,7 +53,7 @@ for ((attempt = 0; attempt < 200; attempt++)); do
 done
 [[ -S "$tmp/control.sock" ]]
 
-printf 'ready\nrun "env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata"\n' "$KATA_HOME" "$tmp" >"$tmp/launch.ctl"
+printf 'ready\nrun "env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP EDITOR=%s/smoke/editor.sh KATA_HOME=%s %s/tern-kata"\n' "$repo" "$KATA_HOME" "$tmp" >"$tmp/launch.ctl"
 tern ctl --control "$tmp/control.sock" --file "$tmp/launch.ctl"
 
 ctl() { tern ctl --control "$tmp/control.sock" "$@"; }
@@ -68,7 +68,9 @@ expect_tree() {
   return 1
 }
 
-for step in "$repo"/smoke/steps/*; do
+steps=("$repo"/smoke/steps/*)
+if (( $# )); then steps=("$@"); fi
+for step in "${steps[@]}"; do
   printf '\nRunning %s\n' "$(basename "$step")"
   case "$step" in
     *.ctl) ctl --file "$step" ;;

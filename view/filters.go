@@ -18,6 +18,10 @@ func FilterFieldIndex(id string) (int, bool) {
 }
 
 func InputFocusID(m model.Model) string {
+	if _, active := m.ActiveDraft(); active {
+		if m.EditorMode() == model.ModeEditor { return DraftEditorID }
+		return ""
+	}
 	if m.FieldForm.Open {
 		if !m.FieldForm.Saving { return FieldInputID }
 		return ""
@@ -37,7 +41,7 @@ func InputFocusID(m model.Model) string {
 }
 
 func IsTransientTarget(id string) bool {
-	if id == FieldInputID || id == SearchID { return true }
+	if id == FieldInputID || id == SearchID || id == DraftEditorID { return true }
 	if _, ok := FilterFieldIndex(id); ok { return true }
 	if field, ok := strings.CutPrefix(id, "layer.close.field"); ok {
 		return len(field) == 1 && field[0] >= '0' && field[0] <= '6'

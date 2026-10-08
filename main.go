@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"strings"
 	"syscall"
 
 	"github.com/Dangerboi/tern-kata/model"
@@ -29,7 +28,7 @@ func run() error {
 	if err != nil { return err }
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	session, err := tern.Connect(ctx, tern.Options{App: "tern-kata", Version: "dev"})
+	session, err := tern.Connect(ctx, editorOptions())
 	if errors.Is(err, tern.ErrUnsupported) {
 		kata, err := exec.LookPath("kata")
 		if err != nil {
@@ -40,88 +39,31 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer session.Close()
+	defer func() { session.Close() }()
 	if _, err := fmt.Fprint(os.Stdout, "\x1b]0;tern-kata\x07"); err != nil {
 		return err
 	}
-	surface, err := session.Open(tern.SurfaceOptions{ID: "kata", Mode: tern.Screen, Title: "tern-kata", Discard: true})
+	surface, err := session.Open(editorSurfaceOptions())
 	if err != nil {
 		return err
 	}
-	defer surface.Close()
+	defer func() { surface.Close() }()
 	workspace, err := os.Getwd()
 	if err != nil {
 		return err
 	}
 	messages := make(chan model.Msg)
 	inputErrors := make(chan error, 1)
-	go func() {
-		for {
-			input, err := session.Next(ctx)
-			if err != nil {
-				inputErrors <- err
-				return
-			}
-			var msg model.Msg
-			switch input := input.(type) {
-			case tern.Key:
-				text := ""
-				if !input.Ctrl && !input.Alt && !input.Meta {
-					text = input.Text
-				}
-				msg = model.KeyMsg{Chord: input.String(), Text: text}
-			case *tern.Focus:
-				if field, ok := view.FilterFieldIndex(input.ID); ok {
-					msg = model.FilterFieldMsg{Field: field}
-				}
-			case *tern.Select:
-				if input.ID == view.IssueListID {
-					msg = model.SelectMsg{UID: strings.TrimPrefix(input.Item, view.IssueListID+".")}
-				}
-				if input.ID == view.CollectionsID {
-					msg = model.CollectionPointerSelected{ID: input.Item}
-				}
-			case *tern.Action:
-				msg = detailAction(input)
-				if strings.HasPrefix(input.ID, "layer.close.") {
-					switch input.Act {
-					case "close-save": msg = model.CloseSubmitMsg{}
-					case "close-quick": msg = model.CloseSubmitMsg{Quick:true}
-					case "close-cancel": msg = model.KeyMsg{Chord:"escape"}
-					}
-				}
-				if input.ID == view.RetryID && input.Act == string(model.RetryAction) {
-					msg = model.Retry{}
-				}
-				if strings.HasPrefix(input.ID, "layer.filters.actions.") {
-					msg = model.FilterFormActionMsg{Action: model.Action(input.Act)}
-				}
-			case *tern.Resize:
-				msg = model.ResizeMsg{Cols: input.Cols}
-			case *tern.ErrorEvent:
-				// SDK queues raw focus/reveal ops even when a later Render replaces their nodes.
-				if id, ok := strings.CutPrefix(input.Msg, "unknown id "); ok && view.IsTransientTarget(id) {
-					continue
-				}
-				inputErrors <- fmt.Errorf("Tern surface: %s", input.Msg)
-				return
-			}
-			if msg != nil {
-				select {
-				case messages <- msg:
-				case <-ctx.Done():
-					return
-				}
-			}
-		}
-	}()
+	stopInput := startInputReader(ctx, session, messages, inputErrors)
+	defer func() { stopInput() }()
 	m := model.Model{Cols: session.Caps().Cols, Actor: resolveActor(override)}
 	runner := commandRunner{}
 	defer runner.close()
 	msg := model.Msg(model.Start{Workspace: workspace, IssueRef: issueRef})
+	inputFocus := ""
+eventLoop:
 	for {
 		previousSelection := m.SelectedUID
-		previousInputFocus := view.InputFocusID(m)
 		previousFocus, previousSection, previousIndex := m.Focus, m.DetailSection, m.DetailIndex
 		previousDetailLoading := m.DetailLoading
 		var cmds []model.Cmd
@@ -132,8 +74,9 @@ func run() error {
 		if err := surface.Render(view.Render(m)); err != nil {
 			return err
 		}
-		if focus := view.InputFocusID(m); focus != previousInputFocus {
-			if err := surface.Focus(focus); err != nil { return err }
+		if target := view.InputFocusID(m); target != inputFocus {
+			if err := surface.Focus(target); err != nil { return err }
+			inputFocus = target
 		}
 		if m.Err == nil && !m.Loading && m.Focus == model.ColumnList && m.SelectedUID != "" && m.SelectedUID != previousSelection {
 			if err := surface.Reveal(view.IssueID(m.SelectedUID), "nearest"); err != nil {
@@ -147,6 +90,20 @@ func run() error {
 			}
 		}
 		for _, cmd := range cmds {
+			if external, ok := cmd.(model.OpenDraftEditor); ok {
+				stopInput()
+				surface.Close()
+				session.Close()
+				msg = editExternally(external)
+				nextSession, connectErr := tern.Connect(ctx, editorOptions())
+				if connectErr != nil { return connectErr }
+				nextSurface, openErr := nextSession.Open(editorSurfaceOptions())
+				if openErr != nil { nextSession.Close(); return openErr }
+				session, surface = nextSession, nextSurface
+				inputFocus = ""
+				stopInput = startInputReader(ctx, session, messages, inputErrors)
+				continue eventLoop
+			}
 			runner.launch(ctx, cmd, messages)
 		}
 		select {
