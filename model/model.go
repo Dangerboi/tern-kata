@@ -12,6 +12,8 @@ type Model struct {
 	Issues      []Issue
 	ETag        string
 	SelectedUID string
+	Flat        bool
+	ExpandedUIDs map[string]bool
 	Loading     bool
 	Err         error
 	Cols        int
@@ -35,7 +37,7 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 			return updateNavigation(m, binding.Action)
 		}
 	case SelectMsg:
-		for _, issue := range m.Issues {
+		for _, issue := range m.VisibleRows() {
 			if issue.UID == msg.UID {
 				m.SelectedUID = msg.UID
 				break

@@ -5,11 +5,16 @@ func updateNavigation(m Model, action Action) (Model, []Cmd) {
 		m.Quitting = true
 		return m, []Cmd{Quit{}}
 	}
-	if len(m.Issues) == 0 {
+	switch action {
+	case ToggleExpansion, ExpandIssue, CollapseIssue, ToggleAllExpansion, ToggleIssueView:
+		return updateHierarchy(m, action), nil
+	}
+	rows := m.VisibleRows()
+	if len(rows) == 0 {
 		return m, nil
 	}
 	index := 0
-	for i, issue := range m.Issues {
+	for i, issue := range rows {
 		if issue.UID == m.SelectedUID {
 			index = i
 			break
@@ -17,14 +22,14 @@ func updateNavigation(m Model, action Action) (Model, []Cmd) {
 	}
 	switch action {
 	case MoveDown:
-		index = min(index+1, len(m.Issues)-1)
+		index = min(index+1, len(rows)-1)
 	case MoveUp:
 		index = max(index-1, 0)
 	case MoveFirst:
 		index = 0
 	case MoveLast:
-		index = len(m.Issues) - 1
+		index = len(rows) - 1
 	}
-	m.SelectedUID = m.Issues[index].UID
+	m.SelectedUID = rows[index].UID
 	return m, nil
 }
