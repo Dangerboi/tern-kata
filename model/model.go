@@ -144,6 +144,9 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		if msg.UID == m.SelectedUID && msg.UID == m.DetailUID {
 			m.DetailLoading = false
 			m.DetailErr = msg.Err
+			if m.DetailIssueUID() != msg.UID {
+				m.Detail = nil // the error replaces the previous Issue's detail on screen
+			}
 		}
 	case JumpIssueMsg:
 		return jumpIssue(m, msg.UID), nil

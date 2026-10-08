@@ -13,12 +13,16 @@ const IssueListID = "main.columns.list.issues"
 
 func IssueID(uid string) string { return IssueListID + "." + uid }
 
+// loadingMarker sits in a column heading while that column's content is
+// replaced; the previous content stays on screen until it arrives.
+var loadingMarker = ui.Span{T: "  loading…", S: "muted"}
+
 func Render(m model.Model) tern.View {
 	var main tern.Nodes
 	switch {
 	case m.Err != nil:
 		main = failureView(m)
-	case m.Loading:
+	case m.FirstLoad():
 		main = ui.Nodes(ui.Text{Common: ui.Common{Key: "loading", Tone: ui.TonePending}, Text: "Loading " + m.Collection.Title + " Issues…"})
 	default:
 		columns := make([]tern.Element, 0, 3)
@@ -34,7 +38,7 @@ func Render(m model.Model) tern.View {
 		}
 		main = ui.Nodes(ui.Row{Common: ui.Common{Key: "columns"}, Gap: ui.GapMD, Children: columns})
 	}
-	if m.Stale && m.Err == nil && !m.Loading {
+	if m.Stale && m.Err == nil && !m.FirstLoad() {
 		main = append(main, staleNotice(m))
 	}
 	layer := help(m)
@@ -71,7 +75,7 @@ func issues(m model.Model) tern.Element {
 	shownGroups := make(map[string]bool, len(m.Groups))
 	for _, row := range rows {
 		group := groups[row.UID]
-		if row.Depth == 0 && m.Collection.View != "project" && !shownGroups[group.ID] {
+		if row.Depth == 0 && group.Heading && !shownGroups[group.ID] {
 			items = append(items, ui.Text{Common: ui.Common{Key: "group." + group.ID}, Text: group.Title})
 			shownGroups[group.ID] = true
 		}
@@ -85,7 +89,11 @@ func issues(m model.Model) tern.Element {
 	if m.Focus == model.ColumnList {
 		tone = ui.ToneAccent
 	}
-	children := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading", Tone: tone, Actions: &ui.Actions{Click: "focus-list"}}, Text: m.ListHeader()})
+	heading := []ui.Span{{T: m.ListHeader()}}
+	if m.Loading {
+		heading = append(heading, loadingMarker)
+	}
+	children := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading", Tone: tone, Actions: &ui.Actions{Click: "focus-list"}}, Spans: heading})
 	if m.Search.Open {
 		placeholder := "Search Issues in " + m.Collection.Title
 		children = append(children, ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Mode: "insert", Placeholder: placeholder, Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}})
@@ -93,6 +101,9 @@ func issues(m model.Model) tern.Element {
 	empty := "No Issues in this Collection. Select another Collection or create one with kata create."
 	if m.Filters != (model.Filters{}) {
 		empty = "No Issues match these filters. Press c to clear filters."
+	}
+	if m.Loading {
+		empty = "Loading Issues…"
 	}
 	children = append(children, ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "issues"}, Selected: selected, Empty: ui.T(empty), Children: items})
 	return ui.Col{Common: ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.4)}, Children: children}

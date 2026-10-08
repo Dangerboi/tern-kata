@@ -85,7 +85,7 @@ func (m Model) DetailRow(section DetailSection, index int) (DetailRow, bool) {
 		link := m.Detail.Links[index]
 		uid, ref := link.ToIssueUID, link.ToQualifiedID
 		relation := link.Type
-		if uid == m.SelectedUID {
+		if uid == m.DetailIssueUID() {
 			uid, ref = link.FromIssueUID, link.FromQualifiedID
 			switch relation {
 			case "parent":
@@ -144,7 +144,11 @@ func EnsureDetail(m Model) (Model, []Cmd) {
 	}
 	m.DetailUID = m.SelectedUID
 	if m.Detail == nil || m.Detail.Issue == nil || m.Detail.Issue.UID != m.SelectedUID {
-		m.Detail = nil
+		// A different Issue starts at its first section. The previous detail
+		// stays on screen until the new one arrives, unless nothing is selected.
+		if m.SelectedUID == "" || m.DetailIssueUID() == "" {
+			m.Detail = nil
+		}
 		m.DetailSection = SectionBody
 		m.DetailIndex = 0
 	}

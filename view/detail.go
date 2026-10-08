@@ -26,7 +26,7 @@ func detail(m model.Model) tern.Element {
 	switch {
 	case m.SelectedUID == "":
 		children = append(children, ui.Text{Common: ui.Common{Key: "empty"}, Text: "Select an Issue to read its detail."})
-	case m.DetailLoading:
+	case m.DetailLoading && m.Detail == nil:
 		children = append(children, ui.Text{Common: ui.Common{Key: "loading", Tone: ui.TonePending}, Text: "Loading Issue detail…"})
 	case m.DetailErr != nil:
 		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.DetailErr.Error()})
@@ -34,7 +34,11 @@ func detail(m model.Model) tern.Element {
 		children = append(children, ui.Text{Common: ui.Common{Key: "unavailable"}, Text: "This Issue is unavailable or no longer visible."})
 	default:
 		issue := m.Detail.Issue
-		children = append(children, ui.Text{Common: ui.Common{Key: "title", Actions: &ui.Actions{Click: "focus-detail"}}, Spans: []ui.Span{{T: issue.ShortID + " / " + issue.Title, S: "strong"}}})
+		heading := []ui.Span{{T: issue.ShortID + " / " + issue.Title, S: "strong"}}
+		if m.DetailLoading {
+			heading = append(heading, loadingMarker)
+		}
+		children = append(children, ui.Text{Common: ui.Common{Key: "title", Actions: &ui.Actions{Click: "focus-detail"}}, Spans: heading})
 		for section := model.SectionBody; section <= model.SectionHistory; section++ {
 			content := ui.Nodes(sectionHeading(m, section))
 			switch section {

@@ -50,7 +50,7 @@ func InputFocusID(m model.Model) string {
 		}
 		return ""
 	}
-	if !m.HelpOpen && m.Search.Open && !m.Search.Results && m.Err == nil && !m.Loading && m.Focus == model.ColumnList {
+	if !m.HelpOpen && m.Search.Open && !m.Search.Results && m.Err == nil && !m.FirstLoad() && m.Focus == model.ColumnList {
 		return SearchID
 	}
 	return ""
