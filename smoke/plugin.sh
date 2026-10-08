@@ -20,7 +20,10 @@ cleanup() {
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
   fi
-  tern plugin unlink tern-kata --json >/dev/null 2>&1 || true
+  if [[ -f "$TERN_CONFIG_DIR/plugins/tern-kata.path" ]]; then
+    tern plugin unlink tern-kata --json || status=1
+    [[ ! -f "$TERN_CONFIG_DIR/plugins/tern-kata.path" ]] || status=1
+  fi
   kata daemon stop >/dev/null 2>&1 || true
   if [[ $status -eq 0 ]]; then rm -rf "$tmp"; else printf 'Plugin smoke artifacts: %s\n' "$tmp" >&2; fi
   exit "$status"
