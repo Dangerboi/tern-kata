@@ -5,6 +5,8 @@ type IssueRow struct {
 	Depth       int
 	HasChildren bool
 	Expanded    bool
+	OpenKids    int
+	TotalKids   int
 }
 
 func (m Model) issueHierarchy() (map[string]string, map[string][]Issue) {
@@ -49,17 +51,26 @@ func (m Model) issueHierarchy() (map[string]string, map[string][]Issue) {
 
 func (m Model) VisibleRows() []IssueRow {
 	rows := make([]IssueRow, 0, len(m.Issues))
+	parents, children := m.issueHierarchy()
+	kids := func(row IssueRow) IssueRow {
+		row.TotalKids = len(children[row.UID])
+		for _, child := range children[row.UID] {
+			if child.Status != "closed" {
+				row.OpenKids++
+			}
+		}
+		return row
+	}
 	if m.Flat {
 		for _, issue := range m.Issues {
-			rows = append(rows, IssueRow{Issue: issue})
+			rows = append(rows, kids(IssueRow{Issue: issue}))
 		}
 		return rows
 	}
-	parents, children := m.issueHierarchy()
 	var appendIssue func(Issue, int)
 	appendIssue = func(issue Issue, depth int) {
 		expanded := m.ExpandedUIDs[issue.UID]
-		rows = append(rows, IssueRow{Issue: issue, Depth: depth, HasChildren: len(children[issue.UID]) > 0, Expanded: expanded})
+		rows = append(rows, kids(IssueRow{Issue: issue, Depth: depth, HasChildren: len(children[issue.UID]) > 0, Expanded: expanded}))
 		if expanded {
 			for _, child := range children[issue.UID] {
 				appendIssue(child, depth+1)
