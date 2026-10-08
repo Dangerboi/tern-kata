@@ -7,7 +7,6 @@ import (
 	g "go.kenn.io/kata/pkg/client/generated"
 )
 
-
 type DetailSection uint8
 
 const (
@@ -19,50 +18,75 @@ const (
 	SectionHistory
 )
 
-type LoadDetail struct { Workspace, UID string }
+type LoadDetail struct{ Workspace, UID string }
+
 func (LoadDetail) cmd() {}
 
-type DetailLoaded struct { UID string; Selected *g.UISelectedAuthority }
+type DetailLoaded struct {
+	UID      string
+	Selected *g.UISelectedAuthority
+}
+
 func (DetailLoaded) msg() {}
 
-type DetailFailed struct { UID string; Err error }
+type DetailFailed struct {
+	UID string
+	Err error
+}
+
 func (DetailFailed) msg() {}
 
-type JumpIssueMsg struct { UID string }
+type JumpIssueMsg struct{ UID string }
+
 func (JumpIssueMsg) msg() {}
 
-type FocusColumnMsg struct { Column Column }
+type FocusColumnMsg struct{ Column Column }
+
 func (FocusColumnMsg) msg() {}
 
-type DetailSectionMsg struct { Section DetailSection }
+type DetailSectionMsg struct{ Section DetailSection }
+
 func (DetailSectionMsg) msg() {}
 
-type DetailItemMsg struct { Section DetailSection; Key string }
+type DetailItemMsg struct {
+	Section DetailSection
+	Key     string
+}
+
 func (DetailItemMsg) msg() {}
 
 func (s DetailSection) String() string {
 	return [...]string{"Body", "Properties", "Labels", "Links", "Comments", "Change history"}[s]
 }
 
-type DetailRow struct { Key, Title, Body, ReferenceUID string }
+type DetailRow struct{ Key, Title, Body, ReferenceUID string }
 
 func (m Model) DetailRowCount(section DetailSection) int {
-	if m.Detail == nil { return 0 }
+	if m.Detail == nil {
+		return 0
+	}
 	switch section {
-	case SectionLinks: return len(m.Detail.Links)
-	case SectionComments: return len(m.Detail.Comments)
-	case SectionHistory: return len(m.Detail.History)
+	case SectionLinks:
+		return len(m.Detail.Links)
+	case SectionComments:
+		return len(m.Detail.Comments)
+	case SectionHistory:
+		return len(m.Detail.History)
 	}
 	return 0
 }
 
 func (m Model) DetailRow(section DetailSection, index int) (DetailRow, bool) {
-	if index < 0 || index >= m.DetailRowCount(section) { return DetailRow{}, false }
+	if index < 0 || index >= m.DetailRowCount(section) {
+		return DetailRow{}, false
+	}
 	switch section {
 	case SectionLinks:
 		link := m.Detail.Links[index]
 		uid, ref := link.ToIssueUID, link.ToQualifiedID
-		if uid == m.SelectedUID { uid, ref = link.FromIssueUID, link.FromQualifiedID }
+		if uid == m.SelectedUID {
+			uid, ref = link.FromIssueUID, link.FromQualifiedID
+		}
 		return DetailRow{Key: fmt.Sprint(link.ID), Title: link.Type + " " + ref, ReferenceUID: uid}, true
 	case SectionComments:
 		comment := m.Detail.Comments[index]
@@ -72,7 +96,9 @@ func (m Model) DetailRow(section DetailSection, index int) (DetailRow, bool) {
 		row := DetailRow{Key: event.UID, Title: event.Actor + " / " + event.CreatedAt.Format(time.RFC3339) + " / " + event.Type, Body: event.Payload}
 		if event.RelatedIssueUID != nil {
 			row.ReferenceUID = *event.RelatedIssueUID
-			if event.RelatedIssueShortID != nil { row.Title += " / " + *event.RelatedIssueShortID }
+			if event.RelatedIssueShortID != nil {
+				row.Title += " / " + *event.RelatedIssueShortID
+			}
 		}
 		return row, true
 	}
@@ -80,7 +106,9 @@ func (m Model) DetailRow(section DetailSection, index int) (DetailRow, bool) {
 }
 
 func jumpIssue(m Model, uid string) Model {
-	if uid == "" || uid == m.SelectedUID { return m }
+	if uid == "" || uid == m.SelectedUID {
+		return m
+	}
 	m.DetailBack = append(m.DetailBack[:len(m.DetailBack):len(m.DetailBack)], m.SelectedUID)
 	m.SelectedUID = uid
 	m.Focus = ColumnDetail
@@ -155,12 +183,18 @@ func updateDetailNavigation(m Model, action Action) (Model, []Cmd) {
 	case MoveDown, MoveUp, MoveFirst, MoveLast:
 		if m.Focus == ColumnDetail {
 			count := m.DetailRowCount(m.DetailSection)
-			if count == 0 { return m, nil }
+			if count == 0 {
+				return m, nil
+			}
 			switch action {
-			case MoveDown: m.DetailIndex = min(m.DetailIndex+1, count-1)
-			case MoveUp: m.DetailIndex = max(m.DetailIndex-1, 0)
-			case MoveFirst: m.DetailIndex = 0
-			case MoveLast: m.DetailIndex = count-1
+			case MoveDown:
+				m.DetailIndex = min(m.DetailIndex+1, count-1)
+			case MoveUp:
+				m.DetailIndex = max(m.DetailIndex-1, 0)
+			case MoveFirst:
+				m.DetailIndex = 0
+			case MoveLast:
+				m.DetailIndex = count - 1
 			}
 		}
 	}

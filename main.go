@@ -24,9 +24,13 @@ func main() {
 
 func run() error {
 	override, args, err := actorArgs(os.Args[1:])
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	issueRef, fallbackArgs, err := launchArgs(args)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	session, err := tern.Connect(ctx, editorOptions())
@@ -76,7 +80,9 @@ eventLoop:
 			return err
 		}
 		if target := view.InputFocusID(m); target != inputFocus {
-			if err := surface.Focus(target); err != nil { return err }
+			if err := surface.Focus(target); err != nil {
+				return err
+			}
 			inputFocus = target
 		}
 		if m.Err == nil && !m.Loading && m.Focus == model.ColumnList && m.SelectedUID != "" && m.SelectedUID != previousSelection {
@@ -97,9 +103,14 @@ eventLoop:
 				session.Close()
 				msg = editExternally(external)
 				nextSession, connectErr := tern.Connect(ctx, editorOptions())
-				if connectErr != nil { return connectErr }
+				if connectErr != nil {
+					return connectErr
+				}
 				nextSurface, openErr := nextSession.Open(editorSurfaceOptions())
-				if openErr != nil { nextSession.Close(); return openErr }
+				if openErr != nil {
+					nextSession.Close()
+					return openErr
+				}
 				session, surface = nextSession, nextSurface
 				inputFocus = ""
 				stopInput = startInputReader(ctx, session, messages, inputErrors)

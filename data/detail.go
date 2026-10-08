@@ -14,7 +14,9 @@ func (c *Client) ReadDetail(ctx context.Context, uid string) (model.DetailLoaded
 		Query: &g.ReadUISnapshotQuery{View: &view, SelectedIssueUID: &uid, IncludeHistory: &history},
 	})
 	if err != nil {
-		if response != nil { return model.DetailLoaded{}, ReadError(response.Body, err) }
+		if response != nil {
+			return model.DetailLoaded{}, ReadError(response.Body, err)
+		}
 		return model.DetailLoaded{}, err
 	}
 	if response.JSON200 == nil || response.JSON200.Selected == nil {

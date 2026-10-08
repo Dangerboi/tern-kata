@@ -10,7 +10,7 @@ type Filters struct {
 }
 
 type SearchState struct {
-	Open, Results bool
+	Open, Results           bool
 	InitialText, InitialUID string
 }
 
@@ -31,9 +31,12 @@ func updateFilterAction(m Model, action Action) (Model, []Cmd) {
 		m.FilterForm = FilterFormState{Open: true, Values: m.Filters}
 	case CycleStatus:
 		switch m.Filters.Status {
-		case "open": m.Filters.Status = "closed"
-		case "closed": m.Filters.Status = "all"
-		default: m.Filters.Status = "open"
+		case "open":
+			m.Filters.Status = "closed"
+		case "closed":
+			m.Filters.Status = "all"
+		default:
+			m.Filters.Status = "open"
 		}
 		m.SelectedUID = ""
 		return refreshFilters(m)
@@ -115,9 +118,15 @@ func (m Model) ListHeader() string {
 	if m.Filters.Status != "" {
 		header += " · status=" + m.Filters.Status
 	}
-	if m.Filters.Owner != "" { header += " · owner=" + m.Filters.Owner }
-	if m.Filters.Label != "" { header += " · label=" + m.Filters.Label }
-	if m.Filters.Relationship != "" { header += " · relationship=" + m.Filters.Relationship }
+	if m.Filters.Owner != "" {
+		header += " · owner=" + m.Filters.Owner
+	}
+	if m.Filters.Label != "" {
+		header += " · label=" + m.Filters.Label
+	}
+	if m.Filters.Relationship != "" {
+		header += " · relationship=" + m.Filters.Relationship
+	}
 	if m.Filters.Search != "" {
 		header += " · search=" + m.Filters.Search
 	}
@@ -126,8 +135,12 @@ func (m Model) ListHeader() string {
 
 func (m Model) ProjectFilterName(uid string) string {
 	for _, project := range m.Snapshot.Catalog {
-		if project.Project.UID == uid { return project.Project.Name }
+		if project.Project.UID == uid {
+			return project.Project.Name
+		}
 	}
-	if m.Collection.ProjectUID == uid { return m.Collection.Title }
+	if m.Collection.ProjectUID == uid {
+		return m.Collection.Title
+	}
 	return uid
 }

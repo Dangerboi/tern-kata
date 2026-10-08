@@ -44,10 +44,10 @@ func TestHierarchyRows(t *testing.T) {
 
 func TestHierarchyExpansion(t *testing.T) {
 	for _, tt := range []struct {
-		name string
-		keys []string
-		uids []string
-		depths []int
+		name     string
+		keys     []string
+		uids     []string
+		depths   []int
 		selected string
 	}{
 		{"space expands", []string{"space"}, []string{"parent", "child", "root"}, []int{0, 1, 0}, "parent"},
@@ -68,7 +68,9 @@ func TestHierarchyExpansion(t *testing.T) {
 				previousSelection := m.SelectedUID
 				m, cmds = model.Update(m, model.KeyMsg{Chord: chord})
 				var want []model.Cmd
-				if m.SelectedUID != previousSelection { want = []model.Cmd{model.LoadDetail{UID: m.SelectedUID}} }
+				if m.SelectedUID != previousSelection {
+					want = []model.Cmd{model.LoadDetail{UID: m.SelectedUID}}
+				}
 				if !reflect.DeepEqual(cmds, want) {
 					t.Fatalf("%s requested commands %#v, want %#v", chord, cmds, want)
 				}
@@ -92,11 +94,11 @@ func TestHierarchyViewAndRefresh(t *testing.T) {
 	refresh.Collection[3].Priority = new(int64(-1))
 	refresh.Collection[0], refresh.Collection[3] = refresh.Collection[3], refresh.Collection[0]
 	for _, tt := range []struct {
-		name string
-		msgs []model.Msg
-		uids []string
+		name     string
+		msgs     []model.Msg
+		uids     []string
 		selected string
-		flat bool
+		flat     bool
 	}{
 		{"flat shows all", []model.Msg{model.KeyMsg{Chord: "v"}}, []string{"parent", "child", "grandchild", "root"}, "parent", true},
 		{"flat expansion no-op", []model.Msg{model.KeyMsg{Chord: "v"}, model.KeyMsg{Chord: "space"}, model.KeyMsg{Chord: "right"}, model.KeyMsg{Chord: "left"}, model.KeyMsg{Chord: "shift+e"}}, []string{"parent", "child", "grandchild", "root"}, "parent", true},
@@ -120,8 +122,12 @@ func TestHierarchyViewAndRefresh(t *testing.T) {
 					}
 				} else {
 					var want []model.Cmd
-					if m.SelectedUID != previousSelection { want = []model.Cmd{model.LoadDetail{UID: m.SelectedUID}} }
-					if !reflect.DeepEqual(cmds, want) { t.Fatalf("%#v requested commands %#v, want %#v", msg, cmds, want) }
+					if m.SelectedUID != previousSelection {
+						want = []model.Cmd{model.LoadDetail{UID: m.SelectedUID}}
+					}
+					if !reflect.DeepEqual(cmds, want) {
+						t.Fatalf("%#v requested commands %#v, want %#v", msg, cmds, want)
+					}
 				}
 			}
 			var uids []string
@@ -140,9 +146,9 @@ func TestHierarchyViewAndRefresh(t *testing.T) {
 
 func TestHierarchyCyclesAndEmptyLists(t *testing.T) {
 	for _, tt := range []struct {
-		name string
+		name     string
 		snapshot g.UISnapshotResponseBody
-		want []string
+		want     []string
 	}{
 		{"empty", g.UISnapshotResponseBody{}, nil},
 		{"cycle", g.UISnapshotResponseBody{
@@ -153,7 +159,7 @@ func TestHierarchyCyclesAndEmptyLists(t *testing.T) {
 			},
 		}, []string{"a", "b"}},
 		{"unrelated links do not nest", g.UISnapshotResponseBody{
-			Collection: []model.Issue{{UID: "a"}, {UID: "b"}},
+			Collection:      []model.Issue{{UID: "a"}, {UID: "b"}},
 			CollectionLinks: []g.UILink{{Type: "blocks", FromIssueUID: "a", ToIssueUID: "b"}},
 		}, []string{"a", "b"}},
 	} {

@@ -10,7 +10,9 @@ const (
 
 func updateCollectionNavigation(m Model, action Action) (Model, []Cmd) {
 	if len(m.Collections) == 0 {
-		if action == DrillIn { m.Focus = ColumnList }
+		if action == DrillIn {
+			m.Focus = ColumnList
+		}
 		return m, nil
 	}
 	switch action {

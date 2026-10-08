@@ -3,21 +3,25 @@ package model
 import "strings"
 
 type FilterFormState struct {
-	Open bool
-	Field int
+	Open   bool
+	Field  int
 	Values Filters
 }
 
-type FilterFieldMsg struct { Field int }
+type FilterFieldMsg struct{ Field int }
+
 func (FilterFieldMsg) msg() {}
 
-type FilterFormActionMsg struct { Action Action }
+type FilterFormActionMsg struct{ Action Action }
+
 func (FilterFormActionMsg) msg() {}
 
 func filterTextField(form *FilterFormState) *string {
 	switch form.Field {
-	case 2: return &form.Values.Owner
-	case 3: return &form.Values.Label
+	case 2:
+		return &form.Values.Owner
+	case 3:
+		return &form.Values.Label
 	}
 	return nil
 }
@@ -39,19 +43,26 @@ func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 	case CancelFilters:
 		m.FilterForm = FilterFormState{}
 	case NextFilterField:
-		m.FilterForm.Field = (m.FilterForm.Field+1)%5
+		m.FilterForm.Field = (m.FilterForm.Field + 1) % 5
 	case PreviousFilterField:
-		m.FilterForm.Field = (m.FilterForm.Field+4)%5
+		m.FilterForm.Field = (m.FilterForm.Field + 4) % 5
 	case ResetFilterForm:
 		m.FilterForm.Values = Filters{}
 	case DeleteInput, ClearInput:
 		if field := filterTextField(&m.FilterForm); field != nil {
-			if action == DeleteInput { *field = deleteLastRune(*field) } else { *field = "" }
+			if action == DeleteInput {
+				*field = deleteLastRune(*field)
+			} else {
+				*field = ""
+			}
 		} else {
 			switch m.FilterForm.Field {
-			case 0: m.FilterForm.Values.ProjectUID = ""
-			case 1: m.FilterForm.Values.Status = ""
-			case 4: m.FilterForm.Values.Relationship = ""
+			case 0:
+				m.FilterForm.Values.ProjectUID = ""
+			case 1:
+				m.FilterForm.Values.Status = ""
+			case 4:
+				m.FilterForm.Values.Relationship = ""
 			}
 		}
 	case NextFilterChoice, PreviousFilterChoice:
@@ -74,9 +85,16 @@ func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 			return m, nil
 		}
 		index := 0
-		for i, value := range choices { if value == *field { index = i; break } }
+		for i, value := range choices {
+			if value == *field {
+				index = i
+				break
+			}
+		}
 		step := 1
-		if action == PreviousFilterChoice { step = len(choices)-1 }
+		if action == PreviousFilterChoice {
+			step = len(choices) - 1
+		}
 		*field = choices[(index+step)%len(choices)]
 	}
 	return m, nil

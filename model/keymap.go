@@ -3,42 +3,42 @@ package model
 type Action string
 
 const (
-	MoveDown   Action = "down"
-	MoveUp     Action = "up"
-	MoveFirst  Action = "first"
-	MoveLast   Action = "last"
-	QuitAction Action = "quit"
-	DrillIn      Action = "drill-in"
-	DrillOut     Action = "drill-out"
-	ToggleDetail Action = "toggle-detail"
-	NextDetailSection Action = "next-detail-section"
+	MoveDown              Action = "down"
+	MoveUp                Action = "up"
+	MoveFirst             Action = "first"
+	MoveLast              Action = "last"
+	QuitAction            Action = "quit"
+	DrillIn               Action = "drill-in"
+	DrillOut              Action = "drill-out"
+	ToggleDetail          Action = "toggle-detail"
+	NextDetailSection     Action = "next-detail-section"
 	PreviousDetailSection Action = "previous-detail-section"
-	ToggleHelp Action = "help"
-	CloseHelp Action = "close-help"
-	ToggleExpansion Action = "toggle-expansion"
-	ExpandIssue Action = "expand"
-	CollapseIssue Action = "collapse"
-	ToggleAllExpansion Action = "toggle-all-expansion"
-	ToggleIssueView Action = "toggle-issue-view"
-	RetryAction Action = "retry"
-	SelectIssueAction Action = "select-issue"
-	SearchIssues Action = "search"
-	SearchEnter Action = "search-enter"
-	SearchBack Action = "search-back"
-	SearchQuery Action = "search-query"
-	DeleteInput Action = "delete-input"
-	ClearInput Action = "clear-input"
-	CycleStatus Action = "cycle-status"
-	OpenFilterForm Action = "filter-form"
-	ApplyFilters Action = "apply-filters"
-	CancelFilters Action = "cancel-filters"
-	NextFilterField Action = "next-filter-field"
-	PreviousFilterField Action = "previous-filter-field"
-	NextFilterChoice Action = "next-filter-choice"
-	PreviousFilterChoice Action = "previous-filter-choice"
-	ResetFilterForm Action = "reset-filter-form"
-	ClearFilters Action = "clear-filters"
-	InputSpace Action = "input-space"
+	ToggleHelp            Action = "help"
+	CloseHelp             Action = "close-help"
+	ToggleExpansion       Action = "toggle-expansion"
+	ExpandIssue           Action = "expand"
+	CollapseIssue         Action = "collapse"
+	ToggleAllExpansion    Action = "toggle-all-expansion"
+	ToggleIssueView       Action = "toggle-issue-view"
+	RetryAction           Action = "retry"
+	SelectIssueAction     Action = "select-issue"
+	SearchIssues          Action = "search"
+	SearchEnter           Action = "search-enter"
+	SearchBack            Action = "search-back"
+	SearchQuery           Action = "search-query"
+	DeleteInput           Action = "delete-input"
+	ClearInput            Action = "clear-input"
+	CycleStatus           Action = "cycle-status"
+	OpenFilterForm        Action = "filter-form"
+	ApplyFilters          Action = "apply-filters"
+	CancelFilters         Action = "cancel-filters"
+	NextFilterField       Action = "next-filter-field"
+	PreviousFilterField   Action = "previous-filter-field"
+	NextFilterChoice      Action = "next-filter-choice"
+	PreviousFilterChoice  Action = "previous-filter-choice"
+	ResetFilterForm       Action = "reset-filter-form"
+	ClearFilters          Action = "clear-filters"
+	InputSpace            Action = "input-space"
 )
 
 type Binding struct {
@@ -53,29 +53,29 @@ type Binding struct {
 type Mode string
 
 const (
-	ModeList Mode = "list"
-	ModeHelp Mode = "help"
-	ModeError Mode = "error"
-	ModeDetail Mode = "detail"
-	ModeCollections Mode = "collections"
-	ModeSearch Mode = "search"
+	ModeList          Mode = "list"
+	ModeHelp          Mode = "help"
+	ModeError         Mode = "error"
+	ModeDetail        Mode = "detail"
+	ModeCollections   Mode = "collections"
+	ModeSearch        Mode = "search"
 	ModeSearchResults Mode = "search-results"
-	ModeFilterForm Mode = "filter-form"
+	ModeFilterForm    Mode = "filter-form"
 )
 
 // Chord dispatches Action; Key and Help label it. Empty Mode is global;
 // otherwise the binding is active only in that mode. ShowInFooter selects hints.
 var Keymap = []Binding{
-	{Chord:"n", Key:"n", Action:NewIssue, Help:"new Issue", Mode:ModeList, ShowInFooter:true},
-	{Chord:"shift+n", Key:"N", Action:NewChild, Help:"new child", Mode:ModeList, ShowInFooter:true},
-	{Chord:"n", Key:"n", Action:NewIssue, Help:"new Issue", Mode:ModeDetail, ShowInFooter:true},
-	{Chord:"shift+n", Key:"N", Action:NewChild, Help:"new child", Mode:ModeDetail, ShowInFooter:true},
-	{Chord:"tab", Key:"tab", Action:CreateNext, Help:"next field", Mode:ModeCreate, ShowInFooter:true},
-	{Chord:"shift+tab", Key:"shift+tab", Action:CreatePrevious, Help:"previous field", Mode:ModeCreate},
-	{Chord:"ctrl+o", Key:"ctrl+o", Action:SaveDraftAction, Help:"create Issue", Mode:ModeCreate, ShowInFooter:true},
-	{Chord:"meta+o", Key:"meta+o", Action:SaveDraftAction, Help:"create Issue (Tern headless)", Mode:ModeCreate},
-	{Chord:"escape", Key:"esc", Action:CancelDraft, Help:"discard?", Mode:ModeCreate, ShowInFooter:true},
-	{Chord:"ctrl+space", Key:"ctrl+space", Action:CreateComplete, Help:"complete label", Mode:ModeCreate, ShowInFooter:true},
+	{Chord: "n", Key: "n", Action: NewIssue, Help: "new Issue", Mode: ModeList, ShowInFooter: true},
+	{Chord: "shift+n", Key: "N", Action: NewChild, Help: "new child", Mode: ModeList, ShowInFooter: true},
+	{Chord: "n", Key: "n", Action: NewIssue, Help: "new Issue", Mode: ModeDetail, ShowInFooter: true},
+	{Chord: "shift+n", Key: "N", Action: NewChild, Help: "new child", Mode: ModeDetail, ShowInFooter: true},
+	{Chord: "tab", Key: "tab", Action: CreateNext, Help: "next field", Mode: ModeCreate, ShowInFooter: true},
+	{Chord: "shift+tab", Key: "shift+tab", Action: CreatePrevious, Help: "previous field", Mode: ModeCreate},
+	{Chord: "ctrl+o", Key: "ctrl+o", Action: SaveDraftAction, Help: "create Issue", Mode: ModeCreate, ShowInFooter: true},
+	{Chord: "meta+o", Key: "meta+o", Action: SaveDraftAction, Help: "create Issue (Tern headless)", Mode: ModeCreate},
+	{Chord: "escape", Key: "esc", Action: CancelDraft, Help: "discard?", Mode: ModeCreate, ShowInFooter: true},
+	{Chord: "ctrl+space", Key: "ctrl+space", Action: CreateComplete, Help: "complete label", Mode: ModeCreate, ShowInFooter: true},
 	{Chord: "j", Key: "j", Action: MoveDown, Help: "next Issue", Mode: ModeList, ShowInFooter: true},
 	{Chord: "k", Key: "k", Action: MoveUp, Help: "previous Issue", Mode: ModeList, ShowInFooter: true},
 	{Chord: "g", Key: "g", Action: MoveFirst, Help: "first Issue", Mode: ModeList},
@@ -167,35 +167,35 @@ var Keymap = []Binding{
 	{Chord: "?", Key: "?", Action: ToggleHelp, Help: "help", ShowInFooter: true},
 	{Chord: "shift+?", Key: "?", Action: ToggleHelp, Help: "help"},
 	{Chord: "escape", Key: "esc", Action: CloseHelp, Help: "close help", Mode: ModeHelp, ShowInFooter: true},
-	{Chord:"x", Key:"x", Action:OpenClose, Help:"close Issue", Mode:ModeList, ShowInFooter:true},
-	{Chord:"x", Key:"x", Action:OpenClose, Help:"close Issue", Mode:ModeDetail, ShowInFooter:true},
-	{Chord:"r", Key:"r", Action:ReopenAction, Help:"reopen Issue", Mode:ModeList, ShowInFooter:true},
-	{Chord:"r", Key:"r", Action:ReopenAction, Help:"reopen Issue", Mode:ModeDetail, ShowInFooter:true},
-	{Chord:"tab", Key:"tab", Action:CloseNext, Help:"next field", Mode:ModeCloseForm, ShowInFooter:true},
-	{Chord:"shift+tab", Key:"shift+tab", Action:ClosePrevious, Help:"previous field", Mode:ModeCloseForm},
-	{Chord:"ctrl+o", Key:"ctrl+o", Action:CloseSave, Help:"close", Mode:ModeCloseForm, ShowInFooter:true},
-	{Chord:"ctrl+d", Key:"ctrl+d", Action:CloseQuick, Help:"quick done", Mode:ModeCloseForm, ShowInFooter:true},
-	{Chord:"escape", Key:"esc", Action:CloseCancel, Help:"cancel", Mode:ModeCloseForm, ShowInFooter:true},
-	{Chord:"backspace", Key:"backspace", Action:CloseErase, Help:"erase", Mode:ModeCloseForm},
-	{Chord:"ctrl+u", Key:"ctrl+u", Action:CloseClear, Help:"clear field", Mode:ModeCloseForm},
-	{Chord:"q", Key:"q", Action:"close-text", Help:"", Mode:ModeCloseForm},
-	{Chord:"+", Key:"+", Action:AddLabelAction, Help:"add label", Mode:ModeList},
-	{Chord:"-", Key:"-", Action:RemoveLabelAction, Help:"remove label", Mode:ModeList},
-	{Chord:"a", Key:"a", Action:AssignOwnerAction, Help:"assign owner", Mode:ModeList},
-	{Chord:"shift+a", Key:"A", Action:ClearOwnerAction, Help:"clear owner", Mode:ModeList},
-	{Chord:"!", Key:"!", Action:PriorityAction, Help:"priority", Mode:ModeList},
-	{Chord:"+", Key:"+", Action:AddLabelAction, Help:"add label", Mode:ModeDetail},
-	{Chord:"-", Key:"-", Action:RemoveLabelAction, Help:"remove label", Mode:ModeDetail},
-	{Chord:"a", Key:"a", Action:AssignOwnerAction, Help:"assign owner", Mode:ModeDetail},
-	{Chord:"shift+a", Key:"A", Action:ClearOwnerAction, Help:"clear owner", Mode:ModeDetail},
-	{Chord:"!", Key:"!", Action:PriorityAction, Help:"priority", Mode:ModeDetail},
-	{Chord:"enter", Key:"enter", Action:FieldSubmit, Help:"save", Mode:ModeFieldForm, ShowInFooter:true},
-	{Chord:"ctrl+o", Key:"ctrl+o", Action:FieldSubmit, Help:"save", Mode:ModeFieldForm},
-	{Chord:"ctrl+s", Key:"ctrl+s", Action:FieldSubmit, Help:"save", Mode:ModeFieldForm},
-	{Chord:"escape", Key:"esc", Action:FieldCancel, Help:"cancel", Mode:ModeFieldForm, ShowInFooter:true},
-	{Chord:"tab", Key:"tab", Action:FieldComplete, Help:"complete label", Mode:ModeFieldForm, ShowInFooter:true},
-	{Chord:"down", Key:"down", Action:FieldNext, Help:"next completion", Mode:ModeFieldForm},
-	{Chord:"up", Key:"up", Action:FieldPrevious, Help:"previous completion", Mode:ModeFieldForm},
-	{Chord:"backspace", Key:"backspace", Action:FieldErase, Help:"erase", Mode:ModeFieldForm},
-	{Chord:"ctrl+u", Key:"ctrl+u", Action:FieldReset, Help:"clear input", Mode:ModeFieldForm},
+	{Chord: "x", Key: "x", Action: OpenClose, Help: "close Issue", Mode: ModeList, ShowInFooter: true},
+	{Chord: "x", Key: "x", Action: OpenClose, Help: "close Issue", Mode: ModeDetail, ShowInFooter: true},
+	{Chord: "r", Key: "r", Action: ReopenAction, Help: "reopen Issue", Mode: ModeList, ShowInFooter: true},
+	{Chord: "r", Key: "r", Action: ReopenAction, Help: "reopen Issue", Mode: ModeDetail, ShowInFooter: true},
+	{Chord: "tab", Key: "tab", Action: CloseNext, Help: "next field", Mode: ModeCloseForm, ShowInFooter: true},
+	{Chord: "shift+tab", Key: "shift+tab", Action: ClosePrevious, Help: "previous field", Mode: ModeCloseForm},
+	{Chord: "ctrl+o", Key: "ctrl+o", Action: CloseSave, Help: "close", Mode: ModeCloseForm, ShowInFooter: true},
+	{Chord: "ctrl+d", Key: "ctrl+d", Action: CloseQuick, Help: "quick done", Mode: ModeCloseForm, ShowInFooter: true},
+	{Chord: "escape", Key: "esc", Action: CloseCancel, Help: "cancel", Mode: ModeCloseForm, ShowInFooter: true},
+	{Chord: "backspace", Key: "backspace", Action: CloseErase, Help: "erase", Mode: ModeCloseForm},
+	{Chord: "ctrl+u", Key: "ctrl+u", Action: CloseClear, Help: "clear field", Mode: ModeCloseForm},
+	{Chord: "q", Key: "q", Action: "close-text", Help: "", Mode: ModeCloseForm},
+	{Chord: "+", Key: "+", Action: AddLabelAction, Help: "add label", Mode: ModeList},
+	{Chord: "-", Key: "-", Action: RemoveLabelAction, Help: "remove label", Mode: ModeList},
+	{Chord: "a", Key: "a", Action: AssignOwnerAction, Help: "assign owner", Mode: ModeList},
+	{Chord: "shift+a", Key: "A", Action: ClearOwnerAction, Help: "clear owner", Mode: ModeList},
+	{Chord: "!", Key: "!", Action: PriorityAction, Help: "priority", Mode: ModeList},
+	{Chord: "+", Key: "+", Action: AddLabelAction, Help: "add label", Mode: ModeDetail},
+	{Chord: "-", Key: "-", Action: RemoveLabelAction, Help: "remove label", Mode: ModeDetail},
+	{Chord: "a", Key: "a", Action: AssignOwnerAction, Help: "assign owner", Mode: ModeDetail},
+	{Chord: "shift+a", Key: "A", Action: ClearOwnerAction, Help: "clear owner", Mode: ModeDetail},
+	{Chord: "!", Key: "!", Action: PriorityAction, Help: "priority", Mode: ModeDetail},
+	{Chord: "enter", Key: "enter", Action: FieldSubmit, Help: "save", Mode: ModeFieldForm, ShowInFooter: true},
+	{Chord: "ctrl+o", Key: "ctrl+o", Action: FieldSubmit, Help: "save", Mode: ModeFieldForm},
+	{Chord: "ctrl+s", Key: "ctrl+s", Action: FieldSubmit, Help: "save", Mode: ModeFieldForm},
+	{Chord: "escape", Key: "esc", Action: FieldCancel, Help: "cancel", Mode: ModeFieldForm, ShowInFooter: true},
+	{Chord: "tab", Key: "tab", Action: FieldComplete, Help: "complete label", Mode: ModeFieldForm, ShowInFooter: true},
+	{Chord: "down", Key: "down", Action: FieldNext, Help: "next completion", Mode: ModeFieldForm},
+	{Chord: "up", Key: "up", Action: FieldPrevious, Help: "previous completion", Mode: ModeFieldForm},
+	{Chord: "backspace", Key: "backspace", Action: FieldErase, Help: "erase", Mode: ModeFieldForm},
+	{Chord: "ctrl+u", Key: "ctrl+u", Action: FieldReset, Help: "clear input", Mode: ModeFieldForm},
 }

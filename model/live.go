@@ -148,7 +148,9 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 		if !msg.NotModified {
 			selected := m.SelectedUID
 			m = m.ApplySnapshot(msg.Snapshot, msg.ETag)
-			if m.Focus == ColumnDetail && len(m.DetailBack) > 0 { m.SelectedUID = selected }
+			if m.Focus == ColumnDetail && len(m.DetailBack) > 0 {
+				m.SelectedUID = selected
+			}
 			if msg.Snapshot.Selected != nil && msg.Snapshot.Selected.Issue != nil && msg.Snapshot.Selected.Issue.UID == m.SelectedUID {
 				m.Detail = msg.Snapshot.Selected
 				m.DetailUID = m.SelectedUID

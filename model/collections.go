@@ -25,7 +25,7 @@ type CollectionLoaded struct {
 	Snapshot                  g.UISnapshotResponseBody
 	ETag, LocalDate, TimeZone string
 	NotModified               bool
-	Filters Filters
+	Filters                   Filters
 }
 
 func (CollectionLoaded) msg() {}
@@ -34,7 +34,7 @@ type LoadCollection struct {
 	Workspace  string
 	Collection Collection
 	ETag       string
-	Filters Filters
+	Filters    Filters
 }
 
 func (LoadCollection) cmd() {}
@@ -106,14 +106,20 @@ func (m Model) ApplySnapshot(snapshot g.UISnapshotResponseBody, etag string) Mod
 		for _, issue := range m.Issues {
 			if issue.UID == m.PendingCreatedUID {
 				m.ExpandedUIDs = maps.Clone(m.ExpandedUIDs)
-				if m.ExpandedUIDs == nil { m.ExpandedUIDs = map[string]bool{} }
+				if m.ExpandedUIDs == nil {
+					m.ExpandedUIDs = map[string]bool{}
+				}
 				parents, _ := m.issueHierarchy()
-				for uid := parents[issue.UID]; uid != ""; uid = parents[uid] { m.ExpandedUIDs[uid] = true }
+				for uid := parents[issue.UID]; uid != ""; uid = parents[uid] {
+					m.ExpandedUIDs[uid] = true
+				}
 				m.PendingCreatedUID = ""
 				break
 			}
 		}
-		if m.PendingCreatedUID != "" { return m }
+		if m.PendingCreatedUID != "" {
+			return m
+		}
 	}
 	if m.Focus == ColumnDetail && m.OpenedIssueUID != "" && m.SelectedUID == m.OpenedIssueUID {
 		return m

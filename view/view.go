@@ -38,15 +38,25 @@ func Render(m model.Model) tern.View {
 		main = append(main, staleNotice(m))
 	}
 	layer := help(m)
-	if m.FilterForm.Open { layer = filterLayer(m) }
-	if m.CloseForm.Open { layer = closeLayer(m) }
-	if m.FieldForm.Open { layer = fieldLayer(m) }
-	if _, ok := m.ActiveDraft(); ok { layer = editorLayer(m) }
-	if m.Create.Open { layer = createLayer(m) }
-	if m.CloseForm.Err != nil && !m.CloseForm.Open {
-		main = append(main, ui.Text{Common:ui.Common{Key:"close-error", Tone:ui.ToneError}, Text:m.CloseForm.Err.Error()})
+	if m.FilterForm.Open {
+		layer = filterLayer(m)
 	}
-	return tern.View{Main: main, Dock: footer(m), Layer:layer}
+	if m.CloseForm.Open {
+		layer = closeLayer(m)
+	}
+	if m.FieldForm.Open {
+		layer = fieldLayer(m)
+	}
+	if _, ok := m.ActiveDraft(); ok {
+		layer = editorLayer(m)
+	}
+	if m.Create.Open {
+		layer = createLayer(m)
+	}
+	if m.CloseForm.Err != nil && !m.CloseForm.Open {
+		main = append(main, ui.Text{Common: ui.Common{Key: "close-error", Tone: ui.ToneError}, Text: m.CloseForm.Err.Error()})
+	}
+	return tern.View{Main: main, Dock: footer(m), Layer: layer}
 }
 
 func issues(m model.Model) tern.Element {
@@ -72,14 +82,18 @@ func issues(m model.Model) tern.Element {
 		selected = IssueID(m.SelectedUID)
 	}
 	tone := ui.ToneNeutral
-	if m.Focus == model.ColumnList { tone = ui.ToneAccent }
+	if m.Focus == model.ColumnList {
+		tone = ui.ToneAccent
+	}
 	children := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading", Tone: tone, Actions: &ui.Actions{Click: "focus-list"}}, Text: m.ListHeader()})
 	if m.Search.Open {
 		placeholder := "Search Issues in " + m.Collection.Title
 		children = append(children, ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Mode: "insert", Placeholder: placeholder, Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}})
 	}
 	empty := "No Issues in this Collection. Select another Collection or create one with kata create."
-	if m.Filters != (model.Filters{}) { empty = "No Issues match these filters. Press c to clear filters." }
+	if m.Filters != (model.Filters{}) {
+		empty = "No Issues match these filters. Press c to clear filters."
+	}
 	children = append(children, ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "issues"}, Selected: selected, Empty: ui.T(empty), Children: items})
 	return ui.Col{Common: ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.4)}, Children: children}
 }

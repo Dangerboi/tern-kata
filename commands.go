@@ -12,7 +12,11 @@ func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 	switch cmd := cmd.(type) {
 	case model.CreateIssueCmd:
 		client, err := data.Discover(ctx, cmd.Workspace)
-		if err != nil { msg = model.IssueCreated{Err:err} } else { msg = client.CreateIssue(ctx, cmd) }
+		if err != nil {
+			msg = model.IssueCreated{Err: err}
+		} else {
+			msg = client.CreateIssue(ctx, cmd)
+		}
 	case model.OpenIssue:
 		client, err := data.Discover(ctx, cmd.Workspace)
 		if err != nil {
@@ -27,23 +31,35 @@ func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 		}
 	case model.SaveDraft:
 		client, err := data.Discover(ctx, cmd.Workspace)
-		if err != nil { msg = model.DraftFailed{UID: cmd.UID, Err: err} } else { msg = client.SaveDraft(ctx, cmd) }
+		if err != nil {
+			msg = model.DraftFailed{UID: cmd.UID, Err: err}
+		} else {
+			msg = client.SaveDraft(ctx, cmd)
+		}
 	case model.CloseIssueCmd:
 		client, err := data.Discover(ctx, cmd.Workspace)
-		if err == nil { err = client.Close(ctx, cmd) }
-		msg = model.CloseResultMsg{UID:cmd.UID, Err:err}
+		if err == nil {
+			err = client.Close(ctx, cmd)
+		}
+		msg = model.CloseResultMsg{UID: cmd.UID, Err: err}
 	case model.ReopenIssueCmd:
 		client, err := data.Discover(ctx, cmd.Workspace)
-		if err == nil { err = client.Reopen(ctx, cmd) }
-		msg = model.CloseResultMsg{UID:cmd.UID, Err:err}
+		if err == nil {
+			err = client.Reopen(ctx, cmd)
+		}
+		msg = model.CloseResultMsg{UID: cmd.UID, Err: err}
 	case model.WriteField:
 		client, err := data.Discover(ctx, cmd.Workspace)
-		if err == nil { err = client.WriteField(ctx, cmd) }
+		if err == nil {
+			err = client.WriteField(ctx, cmd)
+		}
 		msg = model.FieldWritten{UID: cmd.UID, Err: err}
 	case model.LoadFieldLabels:
 		client, err := data.Discover(ctx, cmd.Workspace)
 		result := model.FieldLabelsLoaded{UID: cmd.UID}
-		if err == nil { result, err = client.FieldLabels(ctx, cmd) }
+		if err == nil {
+			result, err = client.FieldLabels(ctx, cmd)
+		}
 		result.UID, result.Err = cmd.UID, err
 		msg = result
 	case model.LoadProject:
