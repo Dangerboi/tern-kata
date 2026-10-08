@@ -16,7 +16,7 @@ func Render(m model.Model) tern.View {
 	main := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading"}, Text: m.Project.Name + " / Open Issues"})
 	switch {
 	case m.Err != nil:
-		main = ui.Nodes(ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.Err.Error()})
+		main = failureView(m)
 	case m.Loading:
 		main = ui.Nodes(ui.Text{Common: ui.Common{Key: "loading", Tone: ui.TonePending}, Text: "Loading Project's open Issues…"})
 	default:
@@ -38,12 +38,18 @@ func Render(m model.Model) tern.View {
 			Children:         items,
 		})
 	}
+	if m.Stale && m.Err == nil && !m.Loading {
+		main = append(main, staleNotice(m))
+	}
 	return tern.View{Main: main, Dock: footer(m)}
 }
 
 func footer(m model.Model) tern.Element {
 	segments := make([]tern.Element, 0, len(model.Keymap)+1)
 	for _, binding := range model.Keymap {
+		if binding.Action == model.RetryAction && m.Err == nil {
+			continue
+		}
 		segments = append(segments, ui.Seg{Common: ui.Common{Key: binding.Chord}, Text: binding.Key + " " + binding.Help})
 	}
 	selected := 0

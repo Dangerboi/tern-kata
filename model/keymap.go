@@ -8,6 +8,7 @@ const (
 	MoveFirst  Action = "first"
 	MoveLast   Action = "last"
 	QuitAction Action = "quit"
+	RetryAction Action = "retry"
 )
 
 type Binding struct {
@@ -24,6 +25,7 @@ var Keymap = []Binding{
 	{Chord: "shift+g", Key: "G", Action: MoveLast, Help: "last Issue"},
 	{Chord: "q", Key: "q", Action: QuitAction, Help: "quit"},
 	{Chord: "ctrl+c", Key: "ctrl+c", Action: QuitAction, Help: "quit"},
+	{Chord: "ctrl+r", Key: "ctrl+r", Action: RetryAction, Help: "retry daemon"},
 }
 
 func LookupBinding(chord string) (Binding, bool) {
