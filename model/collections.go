@@ -47,7 +47,6 @@ func (m Model) SnapshotQuery() g.ReadUISnapshotQuery {
 	q := g.ReadUISnapshotQuery{View: new(m.Collection.View)}
 	if m.Collection.ProjectUID != "" {
 		q.ProjectUID = new(m.Collection.ProjectUID)
-		q.Status = []string{"open"}
 	} else if m.Filters.ProjectUID != "" {
 		q.ProjectUID = new(m.Filters.ProjectUID)
 	}

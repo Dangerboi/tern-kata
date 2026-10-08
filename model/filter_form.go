@@ -78,7 +78,7 @@ func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 				}
 			}
 		case 1:
-			field, choices = &m.FilterForm.Values.Status, []string{"all", "open", "closed"}
+			field, choices = &m.FilterForm.Values.Status, []string{"", "open", "closed"}
 		case 4:
 			field, choices = &m.FilterForm.Values.Relationship, []string{"", "parent", "child", "blocks", "blocked_by", "related"}
 		default:

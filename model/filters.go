@@ -35,7 +35,7 @@ func updateFilterAction(m Model, action Action) (Model, []Cmd) {
 		case "open":
 			m.Filters.Status = "closed"
 		case "closed":
-			m.Filters.Status = "all"
+			m.Filters.Status = ""
 		default:
 			m.Filters.Status = "open"
 		}
