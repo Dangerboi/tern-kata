@@ -20,14 +20,14 @@ func help(m model.Model) tern.Element {
 		}
 		rows = append(rows, ui.Text{
 			Common: ui.Common{Key: "binding-" + strconv.Itoa(i)},
-			Text: binding.Key + "  " + binding.Help + " (" + mode + ")",
+			Text:   binding.Key + "  " + binding.Help + " (" + mode + ")",
 		})
 	}
 	return ui.Nodes(ui.Overlay{
-		Common: ui.Common{Key: "help"},
-		Modal: true,
-		Head: ui.T("Keyboard help"),
-		Size: ui.SizeLG,
+		Common:   ui.Common{Key: "help"},
+		Modal:    true,
+		Head:     ui.T("Keyboard help"),
+		Size:     ui.SizeLG,
 		Children: rows,
 	})
 }

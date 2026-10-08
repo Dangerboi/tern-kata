@@ -9,15 +9,15 @@ const (
 	MoveLast   Action = "last"
 	QuitAction Action = "quit"
 	ToggleHelp Action = "help"
-	CloseHelp Action = "close-help"
+	CloseHelp  Action = "close-help"
 )
 
 type Binding struct {
-	Chord  string
-	Key    string
-	Action Action
-	Help   string
-	Mode Mode
+	Chord        string
+	Key          string
+	Action       Action
+	Help         string
+	Mode         Mode
 	ShowInFooter bool
 }
 
