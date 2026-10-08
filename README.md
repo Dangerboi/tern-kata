@@ -9,7 +9,7 @@ CGO_ENABLED=0 go test ./...
 ./smoke/run.sh
 ```
 
-Run `tern-kata` inside Tern in a directory bound with `kata init`. Use `j`/`k`, `g`/`G`, and `q`/`ctrl+c`; the footer comes from `model/keymap.go`.
+Run `tern-kata` inside Tern in a directory bound with `kata init`. Use `j`/`k`, `g`/`G`, and `q`/`ctrl+c`. Press `?` for all bindings with their modes; `?` or `esc` closes help without moving the selected Issue. The dock shows only current-mode hints, and the help layer lists every binding, both from `model/keymap.go`.
 
 The Collections sidebar loads Inbox, Today, Upcoming, Deadlines, All Open, Logbook and Projects from the daemon UI snapshot. Unbound directories open Inbox. Press `esc` from the Issue list to focus Collections, navigate with `j`/`k` or `g`/`G`, and press `enter` to switch; sidebar items are also clickable. Date headings match kata's web UI: literal calendar dates for Upcoming and Logbook, Overdue/Today for due work, with today's evening Issues merged into Today. Snapshot requests include the local calendar date and IANA time zone and reuse ETags only for the same Collection intent.
 

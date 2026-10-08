@@ -8,29 +8,36 @@ const (
 	MoveFirst  Action = "first"
 	MoveLast   Action = "last"
 	QuitAction Action = "quit"
+	ToggleHelp Action = "help"
+	CloseHelp  Action = "close-help"
 )
 
 type Binding struct {
-	Chord  string
-	Key    string
-	Action Action
-	Help   string
+	Chord        string
+	Key          string
+	Action       Action
+	Help         string
+	Mode         Mode
+	ShowInFooter bool
 }
 
+type Mode string
+
+const (
+	ModeList Mode = "list"
+	ModeHelp Mode = "help"
+)
+
+// Chord dispatches Action; Key and Help label it. Empty Mode is global;
+// otherwise the binding is active only in that mode. ShowInFooter selects hints.
 var Keymap = []Binding{
-	{Chord: "j", Key: "j", Action: MoveDown, Help: "next Issue"},
-	{Chord: "k", Key: "k", Action: MoveUp, Help: "previous Issue"},
-	{Chord: "g", Key: "g", Action: MoveFirst, Help: "first Issue"},
-	{Chord: "shift+g", Key: "G", Action: MoveLast, Help: "last Issue"},
-	{Chord: "q", Key: "q", Action: QuitAction, Help: "quit"},
+	{Chord: "j", Key: "j", Action: MoveDown, Help: "next Issue", Mode: ModeList, ShowInFooter: true},
+	{Chord: "k", Key: "k", Action: MoveUp, Help: "previous Issue", Mode: ModeList, ShowInFooter: true},
+	{Chord: "g", Key: "g", Action: MoveFirst, Help: "first Issue", Mode: ModeList},
+	{Chord: "shift+g", Key: "G", Action: MoveLast, Help: "last Issue", Mode: ModeList},
+	{Chord: "q", Key: "q", Action: QuitAction, Help: "quit", ShowInFooter: true},
 	{Chord: "ctrl+c", Key: "ctrl+c", Action: QuitAction, Help: "quit"},
-}
-
-func LookupBinding(chord string) (Binding, bool) {
-	for _, binding := range Keymap {
-		if binding.Chord == chord {
-			return binding, true
-		}
-	}
-	return Binding{}, false
+	{Chord: "?", Key: "?", Action: ToggleHelp, Help: "help", ShowInFooter: true},
+	{Chord: "shift+?", Key: "?", Action: ToggleHelp, Help: "help"},
+	{Chord: "escape", Key: "esc", Action: CloseHelp, Help: "close help", Mode: ModeHelp, ShowInFooter: true},
 }
