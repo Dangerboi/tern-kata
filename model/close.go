@@ -38,7 +38,7 @@ type CloseResultMsg struct { UID string; Err error }
 func (CloseResultMsg) msg() {}
 type CloseIssueCmd struct { Workspace, UID string; ProjectID, Revision int64; Body g.CloseIssueBody }
 func (CloseIssueCmd) cmd() {}
-type ReopenIssueCmd struct { Workspace, UID string; ProjectID int64 }
+type ReopenIssueCmd struct { Workspace, UID, Actor string; ProjectID int64 }
 func (ReopenIssueCmd) cmd() {}
 
 func closeIssue(m Model) *Issue {
@@ -62,7 +62,7 @@ func submitClose(m Model, quick bool) (Model, []Cmd) {
  if m.Stale { f.Err = errors.New("Daemon disconnected; reconnect before closing."); return m, nil }
  reason := g.CloseActionRequestBodyReason(strings.TrimSpace(f.Values[0]))
  protocol := g.CloseActionRequestBodyRetryProtocol("close-v1")
- body := g.CloseIssueBody{Reason:&reason, RetryProtocol:&protocol}
+ body := g.CloseIssueBody{Actor:&m.Actor, Reason:&reason, RetryProtocol:&protocol}
  if quick { reason = "done"; source := g.CloseActionRequestBodySource("tui"); body.Source = &source } else {
   message := strings.TrimSpace(f.Values[1]); body.Message = &message
   if sha := strings.TrimSpace(f.Values[2]); sha != "" { body.Evidence = append(body.Evidence, g.Evidence{Type:"commit", Sha:&sha}) }

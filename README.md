@@ -1,6 +1,6 @@
 # tern-kata
 
-Native kata Issues in a Tern Pane. Requires Go 1.27+, kata v0.18.0+ on `PATH`, and Tern with Surface Protocol support. Without Tern support, arguments pass unchanged to `kata tui`.
+Native kata Issues in a Tern Pane. Requires Go 1.27+, kata v0.18.0+ on `PATH`, and Tern with Surface Protocol support. Without Tern support, compatible arguments pass to `kata tui`; `--as` becomes `KATA_AUTHOR` because kata's TUI ignores the flag.
 
 ```sh
 CGO_ENABLED=0 go build -o tern-kata .
@@ -12,6 +12,8 @@ CGO_ENABLED=0 go test ./...
 Run `tern-kata` inside Tern in a directory bound with `kata init`. Use `j`/`k`, `g`/`G`, and `q`/`ctrl+c`. Press `?` for all bindings with their modes; `?` or `esc` closes help without moving the selected Issue. The dock shows only current-mode hints, and the help layer lists every binding, both from `model/keymap.go`.
 
 Selecting an Issue loads its Markdown body, properties, labels, links, comments and change history beside the list. `enter` opens detail, `esc` returns to the list (then Collections), `tab`/`shift+tab` cycle detail sections, and `enter` follows the selected referenced Issue; `esc` unwinds those jumps. `L` hides or restores detail. Panes narrower than 100 columns show only the focused column.
+
+In the list or detail, `+` adds a label, `-` removes one, `a` assigns an owner, `A` clears the owner, and `!` sets priority. Prompts save with `enter` (or `ctrl+o`/`ctrl+s`) and cancel with `esc`; priority accepts 0-4 or `-` to clear. Labels complete with up/down and tab using project labels for addition and attached labels for removal. Rejected writes keep the prompt and kata's error visible. Writes use `--as <actor>`, then `KATA_AUTHOR`, `USER`, git user.name, or anonymous, in that order; authenticated kata identities retain authority over the requested actor.
 Issue rows show short id, title, status, priority, owner and labels. Nested lists start collapsed: `space` toggles the selected parent's children, right/left expands/collapses, `E` toggles every parent, and `v` switches flat/nested (returning to nested collapses all). Expansion follows Issue UIDs across refreshes; collapsing moves a hidden selection to its nearest visible ancestor. Priority 0 uses the host's error tone, and closed Issues use its muted tone.
 The Collections sidebar loads Inbox, Today, Upcoming, Deadlines, All Open, Logbook and Projects from the daemon UI snapshot. Unbound directories open Inbox. Press `esc` from the Issue list to focus Collections, navigate with `j`/`k` or `g`/`G`, and press `enter` to switch; sidebar items are also clickable. Date headings match kata's web UI: literal calendar dates for Upcoming and Logbook, Overdue/Today for due work, with today's evening Issues merged into Today. Snapshot requests include the local calendar date and IANA time zone and reuse ETags only for the same Collection intent.
 
