@@ -65,6 +65,10 @@ const (
 // Chord dispatches Action; Key and Help label it. Empty Mode is global;
 // otherwise the binding is active only in that mode. ShowInFooter selects hints.
 var Keymap = []Binding{
+	{Chord: "j", Key: "j", Action: MoveDown, Help: "next Issue", Mode: ModeList, ShowInFooter: true},
+	{Chord: "k", Key: "k", Action: MoveUp, Help: "previous Issue", Mode: ModeList, ShowInFooter: true},
+	{Chord: "g", Key: "g", Action: MoveFirst, Help: "first Issue", Mode: ModeList},
+	{Chord: "shift+g", Key: "G", Action: MoveLast, Help: "last Issue", Mode: ModeList},
 	{Chord: "c", Key: "c", Action: ClearFilters, Help: "clear filters", Mode: ModeList, ShowInFooter: true},
 	{Chord: "f", Key: "f", Action: OpenFilterForm, Help: "filters", Mode: ModeList, ShowInFooter: true},
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: ApplyFilters, Help: "apply filters", Mode: ModeFilterForm, ShowInFooter: true},
@@ -92,10 +96,6 @@ var Keymap = []Binding{
 	{Chord: "enter", Key: "enter", Action: SearchEnter, Help: "commit search", Mode: ModeSearchResults, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: SearchBack, Help: "edit query", Mode: ModeSearchResults, ShowInFooter: true},
 	{Chord: "/", Key: "/", Action: SearchQuery, Help: "edit query", Mode: ModeSearchResults},
-	{Chord: "j", Key: "j", Action: MoveDown, Help: "next Issue", Mode: ModeList, ShowInFooter: true},
-	{Chord: "k", Key: "k", Action: MoveUp, Help: "previous Issue", Mode: ModeList, ShowInFooter: true},
-	{Chord: "g", Key: "g", Action: MoveFirst, Help: "first Issue", Mode: ModeList},
-	{Chord: "shift+g", Key: "G", Action: MoveLast, Help: "last Issue", Mode: ModeList},
 	{Chord: "space", Key: "space", Action: ToggleExpansion, Help: "expand/collapse", Mode: ModeList, ShowInFooter: true},
 	{Chord: "right", Key: "right", Action: ExpandIssue, Help: "expand", Mode: ModeList},
 	{Chord: "left", Key: "left", Action: CollapseIssue, Help: "collapse", Mode: ModeList},
