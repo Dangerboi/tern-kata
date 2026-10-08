@@ -31,24 +31,18 @@ local function open(cx, ref)
             return
         end
     end
-    tern.process.run({"sh", "-c", "command -v tern-kata"}, {timeout_ms = 2000}, function(result, live)
-        if not live then return end
-        local executable = result.stdout:match("^([^\r\n]+)")
-        if result.status ~= 0 or not executable then
-            live:toast("error", "tern-kata is not on PATH", "go install github.com/Dangerboi/tern-kata@latest")
-            return
-        end
-        -- Launch.command captures the login environment synchronously inside the hook.
-        local command = "exec " .. quote(executable)
-        if ref then command ..= " --issue " .. quote(ref) end
-        local target = live.session:focused()
-        if target then
-            kataPane = live.layout:split(target, "right")
-        else
-            kataPane = live.layout:new_tab()
-        end
-        if kataPane then live:run(kataPane, command .. "\r") end
-    end)
+    local target = cx.session:focused()
+    if target then
+        kataPane = cx.layout:split(target, "right")
+    else
+        kataPane = cx.layout:new_tab()
+    end
+    if not kataPane then return end
+    local launch = "exec tern-kata"
+    if ref then launch ..= " --issue " .. quote(ref) end
+    local command = "if command -v tern-kata >/dev/null 2>&1; then " .. launch
+        .. "; else echo " .. quote("go install github.com/Dangerboi/tern-kata@latest") .. "; fi"
+    cx:run(kataPane, "\r" .. command .. "\r")
 end
 
 tern.command({
