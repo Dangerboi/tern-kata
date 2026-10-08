@@ -53,12 +53,8 @@ func (m Model) VisibleRows() []IssueRow {
 	rows := make([]IssueRow, 0, len(m.Issues))
 	parents, children := m.issueHierarchy()
 	kids := func(row IssueRow) IssueRow {
-		row.TotalKids = len(children[row.UID])
-		for _, child := range children[row.UID] {
-			if child.Status != "closed" {
-				row.OpenKids++
-			}
-		}
+		counts := m.ChildCounts[row.UID]
+		row.OpenKids, row.TotalKids = int(counts.Open), int(counts.Total)
 		return row
 	}
 	if m.Flat {

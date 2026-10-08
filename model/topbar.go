@@ -21,21 +21,22 @@ func (m Model) DaemonLine() string {
 	return line
 }
 
-// CountsLine is the top bar's counts line: the Project's catalog stats when
-// the Collection is a bound Project, otherwise counts over the listed Issues.
+// CountsLine is the top bar's counts line. A Project Collection (bound or picked)
+// shows the Project's catalog stats, which no filter narrows. Any other
+// Collection counts the Issues it lists, which the status, search, owner and
+// label filters have already narrowed: the snapshot carries stats for Projects
+// only, so there is no cheap unfiltered count for a named view.
 func (m Model) CountsLine() string {
 	var open, closed int
 	counted := false
-	if m.Collection.View == "project" {
-		for _, entry := range m.Snapshot.Catalog {
-			if entry.Project.UID == m.Collection.ProjectUID && entry.Stats != nil {
-				open, closed, counted = int(entry.Stats.Open), int(entry.Stats.Closed), true
-			}
+	if m.Collection.IsProject() {
+		if entry, ok := CatalogEntry(m.Snapshot, m.Collection.ProjectUID); ok && entry.Stats != nil {
+			open, closed, counted = int(entry.Stats.Open), int(entry.Stats.Closed), true
 		}
 	}
 	if !counted {
 		for _, issue := range m.Issues {
-			if issue.Status == "closed" {
+			if IsClosed(issue) {
 				closed++
 			} else {
 				open++

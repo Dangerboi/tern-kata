@@ -65,5 +65,6 @@ func (c *Client) ReadCollection(ctx context.Context, cmd model.LoadCollection) (
 	if snapshot.Headers200 != nil {
 		result.ETag = snapshot.Headers200.ETag
 	}
-	return result, nil
+	result.ChildCounts, err = c.readChildCounts(ctx, result.Snapshot, query.ProjectUID)
+	return result, err
 }

@@ -8,6 +8,20 @@ import (
 )
 
 type Collection struct{ View, ProjectUID, Title string }
+
+// IsProject says the Collection is one Project's Issues, not a named view.
+func (c Collection) IsProject() bool { return c.View == "project" }
+
+// CatalogEntry is the snapshot's catalog entry for the Project with uid.
+func CatalogEntry(snapshot g.UISnapshotResponseBody, uid string) (g.UIProject, bool) {
+	for _, entry := range snapshot.Catalog {
+		if entry.Project.UID == uid {
+			return entry, true
+		}
+	}
+	return g.UIProject{}, false
+}
+
 type IssueGroup struct {
 	ID, Title string
 	Issues    []Issue
@@ -27,6 +41,7 @@ func (CollectionPointerSelected) msg() {}
 type CollectionLoaded struct {
 	Collection                Collection
 	Snapshot                  g.UISnapshotResponseBody
+	ChildCounts               map[string]g.ChildCounts
 	ETag, LocalDate, TimeZone string
 	NotModified               bool
 	Filters                   Filters
@@ -74,8 +89,9 @@ func (m Model) SnapshotQuery() g.ReadUISnapshotQuery {
 	return q
 }
 
-func (m Model) ApplySnapshot(snapshot g.UISnapshotResponseBody, etag string) Model {
+func (m Model) ApplySnapshot(snapshot g.UISnapshotResponseBody, childCounts map[string]g.ChildCounts, etag string) Model {
 	m.Snapshot = snapshot
+	m.ChildCounts = childCounts
 	m.Cursor = snapshot.Cursor
 	m.ETag = etag
 	m.Collections = []Collection{{View: "inbox", Title: "Inbox"}, {View: "today", Title: "Today"}, {View: "upcoming", Title: "Upcoming"}, {View: "deadlines", Title: "Deadlines"}, {View: "all-open", Title: "All Open"}, {View: "logbook", Title: "Logbook"}}
@@ -93,7 +109,7 @@ func (m Model) ApplySnapshot(snapshot g.UISnapshotResponseBody, etag string) Mod
 	}
 	m.Groups = GroupIssues(groupCollection, issues, m.LocalDate)
 	for i := range m.Groups {
-		m.Groups[i].Heading = m.Collection.View != "project"
+		m.Groups[i].Heading = !m.Collection.IsProject()
 	}
 	m.Issues = nil
 	for _, group := range m.Groups {
@@ -164,5 +180,5 @@ func collectionLoaded(m Model, msg CollectionLoaded) (Model, []Cmd) {
 	}
 	m.LocalDate = msg.LocalDate
 	m.TimeZone = msg.TimeZone
-	return m.ApplySnapshot(msg.Snapshot, msg.ETag), nil
+	return m.ApplySnapshot(msg.Snapshot, msg.ChildCounts, msg.ETag), nil
 }

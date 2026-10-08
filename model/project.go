@@ -9,5 +9,5 @@ func updateProject(m Model, msg ProjectLoaded) (Model, []Cmd) {
 	}
 	m.LocalDate, m.TimeZone = msg.LocalDate, msg.TimeZone
 	m.Daemon = msg.Daemon
-	return m.ApplySnapshot(msg.Snapshot, msg.ETag), nil
+	return m.ApplySnapshot(msg.Snapshot, msg.ChildCounts, msg.ETag), nil
 }

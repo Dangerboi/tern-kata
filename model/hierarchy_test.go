@@ -212,3 +212,35 @@ func TestHierarchyLiveRefreshSelectsVisibleAncestor(t *testing.T) {
 		t.Fatalf("refreshed selection=%q expansions=%v commands=%#v", m.SelectedUID, m.ExpandedUIDs, cmds)
 	}
 }
+
+// The kids cell is the daemon's count of direct children, not a count over the
+// Issues the filters left in the list.
+func TestKidsAreTheDaemonsCountsWhateverTheFilters(t *testing.T) {
+	snapshot := g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "parent", Status: "open"}, {UID: "leaf", Status: "open"}}}
+	counts := map[string]g.ChildCounts{"parent": {Open: 2, Total: 6}}
+	kids := func(m model.Model) [2]int {
+		var got [2]int
+		for _, row := range m.VisibleRows() {
+			if row.HasChildren || (row.UID == "leaf" && row.TotalKids != 0) {
+				t.Fatalf("row %+v: no child is loaded, so nothing expands", row)
+			}
+			if row.UID == "parent" {
+				got = [2]int{row.OpenKids, row.TotalKids}
+			}
+		}
+		return got
+	}
+	m, _ := model.Update(model.Model{}, model.ProjectLoaded{Snapshot: snapshot, ChildCounts: counts})
+	if got := kids(m); got != [2]int{2, 6} {
+		t.Fatalf("project load: kids %v, want 2/6", got)
+	}
+	m.Collection = model.Collection{View: "all-open", Title: "All Open"}
+	m, _ = model.Update(m, model.CollectionLoaded{Collection: m.Collection, Snapshot: snapshot, ChildCounts: map[string]g.ChildCounts{"parent": {Open: 1, Total: 6}}})
+	if got := kids(m); got != [2]int{1, 6} {
+		t.Fatalf("collection load: kids %v, want 1/6", got)
+	}
+	m, _ = model.Update(m, model.CollectionLoaded{Collection: m.Collection, Snapshot: snapshot})
+	if got := kids(m); got != [2]int{0, 0} {
+		t.Fatalf("a load carries its own counts: kids %v", got)
+	}
+}

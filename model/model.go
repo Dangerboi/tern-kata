@@ -3,21 +3,28 @@ package model
 import g "go.kenn.io/kata/pkg/client/generated"
 
 type Issue = g.UIIssue
+
+// IsClosed says the Issue is closed; any other status counts as open.
+func IsClosed(issue Issue) bool { return issue.Status == "closed" }
+
 type Project = g.ProjectOut
 
 type Model struct {
 	LiveState
-	Create              CreateState
-	PendingCreatedUID   string
-	CloseForm           CloseFormState
-	Actor               string
-	FieldForm           FieldFormState
-	Workspace           string
-	OpenIssueRef        string
-	OpenedIssueUID      string
-	Project             Project
-	Daemon              Daemon
-	Snapshot            g.UISnapshotResponseBody
+	Create            CreateState
+	PendingCreatedUID string
+	CloseForm         CloseFormState
+	Actor             string
+	FieldForm         FieldFormState
+	Workspace         string
+	OpenIssueRef      string
+	OpenedIssueUID    string
+	Project           Project
+	Daemon            Daemon
+	Snapshot          g.UISnapshotResponseBody
+	// ChildCounts are the daemon's direct-child counts by Issue UID, whatever the
+	// filters; kata leaves out an Issue with no children.
+	ChildCounts         map[string]g.ChildCounts
 	Issues              []Issue
 	ETag                string
 	SelectedUID         string

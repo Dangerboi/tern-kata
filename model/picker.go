@@ -27,7 +27,7 @@ func (PickerSelected) msg() {}
 
 // Key names a Collection in rendered rows, matching Tern's node ids.
 func (c Collection) Key() string {
-	if c.View == "project" {
+	if c.IsProject() {
 		return "project." + c.ProjectUID
 	}
 	return c.View
@@ -52,7 +52,7 @@ func (e PickerEntry) Key() string {
 func (m Model) PickerEntries() []PickerEntry {
 	filter := strings.ToLower(m.Picker.Filter)
 	entries := make([]PickerEntry, 0, len(m.Collections)+1)
-	pinned := func(c Collection) bool { return m.Bound && c.View == "project" && c.ProjectUID == m.Project.UID }
+	pinned := func(c Collection) bool { return m.Bound && c.IsProject() && c.ProjectUID == m.Project.UID }
 	for _, wantPinned := range []bool{true, false} {
 		for _, c := range m.Collections {
 			if pinned(c) == wantPinned && strings.Contains(strings.ToLower(c.Title), filter) {

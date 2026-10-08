@@ -59,6 +59,7 @@ func (RefreshSnapshot) cmd() {}
 
 type SnapshotRefreshed struct {
 	Snapshot    g.UISnapshotResponseBody
+	ChildCounts map[string]g.ChildCounts
 	Query       g.ReadUISnapshotQuery
 	ETag        string
 	NotModified bool
@@ -153,7 +154,7 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 		}
 		if !msg.NotModified {
 			selected := m.SelectedUID
-			m = m.ApplySnapshot(msg.Snapshot, msg.ETag)
+			m = m.ApplySnapshot(msg.Snapshot, msg.ChildCounts, msg.ETag)
 			if m.Focus == ColumnDetail && len(m.DetailBack) > 0 {
 				m.SelectedUID = selected
 			}

@@ -14,6 +14,7 @@ expect_tree "[data-id$='.$hierarchy_parent']" "([.nodes[0] | .. | objects | .tex
 ctl key L
 expect_tree "[data-id$='.$hierarchy_parent']" '.count == 1 and (.nodes[0].text | contains("smoke-owner"))'
 ctl key L
+expect_tree "[data-id$='.$hierarchy_parent']" '.count == 1 and (.nodes[0].text | contains("smoke-owner") | not)'
 ctl click "[data-id$='.$hierarchy_parent']"
 ctl key Right
 expect_tree "[data-id$='.$hierarchy_child']" '.count == 1 and (.nodes[0].text | startswith("│"))'

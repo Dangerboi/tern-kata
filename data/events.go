@@ -38,7 +38,8 @@ func (c *Client) ReadRefresh(ctx context.Context, cmd model.RefreshSnapshot) (mo
 	if response.Headers200 != nil {
 		result.ETag = response.Headers200.ETag
 	}
-	return result, nil
+	result.ChildCounts, err = c.readChildCounts(ctx, result.Snapshot, cmd.Query.ProjectUID)
+	return result, err
 }
 
 func (c *Client) ReadEvents(ctx context.Context, cmd model.Subscribe, send func(model.Msg) bool) error {

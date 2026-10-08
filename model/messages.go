@@ -12,6 +12,7 @@ func (Start) msg() {}
 type ProjectLoaded struct {
 	Project             Project
 	Snapshot            g.UISnapshotResponseBody
+	ChildCounts         map[string]g.ChildCounts
 	ETag                string
 	LocalDate, TimeZone string
 	Daemon              Daemon

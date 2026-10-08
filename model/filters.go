@@ -135,10 +135,8 @@ func (m Model) ListHeader() string {
 }
 
 func (m Model) ProjectFilterName(uid string) string {
-	for _, project := range m.Snapshot.Catalog {
-		if project.Project.UID == uid {
-			return project.Project.Name
-		}
+	if entry, ok := CatalogEntry(m.Snapshot, uid); ok {
+		return entry.Project.Name
 	}
 	if m.Collection.ProjectUID == uid {
 		return m.Collection.Title

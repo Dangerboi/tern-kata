@@ -40,3 +40,23 @@ func TestTopBarDaemonAndCounts(t *testing.T) {
 		t.Fatalf("counted from Issues %q", got)
 	}
 }
+
+// A Project Collection shows the Project's catalog stats whether or not the
+// Pane is bound to it; any other Collection counts the Issues it lists.
+func TestCountsLineForAnUnboundProjectCollection(t *testing.T) {
+	project := model.Project{UID: "p", Name: "work"}
+	snapshot := g.UISnapshotResponseBody{
+		Catalog:    []g.UIProject{{Project: project, Stats: &g.ProjectStats{Open: 5, Closed: 7}}},
+		Collection: []model.Issue{{UID: "a", Status: "open"}},
+	}
+	m, _ := model.Update(model.Model{Workspace: "/repo"}, model.ProjectLoaded{Snapshot: snapshot})
+	if m.Bound || m.CountsLine() != "open: 1 · closed: 0 · all: 1" {
+		t.Fatalf("Inbox: bound %v, counts %q", m.Bound, m.CountsLine())
+	}
+	picked := model.Collection{View: "project", ProjectUID: "p", Title: "work"}
+	m, _ = model.Update(m, model.CollectionSelected{Collection: picked})
+	m, _ = model.Update(m, model.CollectionLoaded{Collection: picked, Snapshot: snapshot})
+	if got := m.CountsLine(); got != "open: 5 · closed: 7 · all: 12" {
+		t.Fatalf("picked Project Collection counts %q", got)
+	}
+}

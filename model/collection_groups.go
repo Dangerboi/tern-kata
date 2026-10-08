@@ -32,7 +32,7 @@ func GroupIssues(collection Collection, issues []Issue, today string) []IssueGro
 			}
 			id, title = schedule, schedule
 		case "logbook":
-			if issue.Status != "closed" || issue.ClosedAt == nil {
+			if !IsClosed(issue) || issue.ClosedAt == nil {
 				continue
 			}
 			id = issue.ClosedAt.Format("2006-01-02")

@@ -49,12 +49,8 @@ func openCreate(m Model, child bool) (Model, []Cmd) {
 		return m, nil
 	}
 	projectID := m.Project.ID
-	if m.Collection.View == "project" {
-		for _, entry := range m.Snapshot.Catalog {
-			if entry.Project.UID == m.Collection.ProjectUID {
-				projectID = entry.Project.ID
-			}
-		}
+	if entry, ok := CatalogEntry(m.Snapshot, m.Collection.ProjectUID); ok {
+		projectID = entry.Project.ID
 	}
 	issue := closeIssue(m)
 	parent := ""
@@ -64,7 +60,7 @@ func openCreate(m Model, child bool) (Model, []Cmd) {
 		}
 		projectID = issue.ProjectID
 		parent = issue.UID
-	} else if m.Collection.View != "project" && issue != nil {
+	} else if !m.Collection.IsProject() && issue != nil {
 		projectID = issue.ProjectID
 	}
 	m.Create = CreateState{Open: true, Draft: Draft{ProjectID: projectID, Editor: NewTextEditor("")}, ParentUID: parent}
