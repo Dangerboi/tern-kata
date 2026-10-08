@@ -23,10 +23,10 @@ func main() {
 }
 
 func run() error {
-	issueRef, fallbackArgs, err := launchArgs(os.Args[1:])
-	if err != nil {
-		return err
-	}
+	override, args, err := actorArgs(os.Args[1:])
+	if err != nil { return err }
+	issueRef, fallbackArgs, err := launchArgs(args)
+	if err != nil { return err }
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	session, err := tern.Connect(ctx, tern.Options{App: "tern-kata", Version: "dev"})
@@ -35,7 +35,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		return syscall.Exec(kata, append([]string{"kata", "tui"}, fallbackArgs...), os.Environ())
+		return syscall.Exec(kata, append([]string{"kata", "tui"}, fallbackArgs...), actorEnvironment(override))
 	}
 	if err != nil {
 		return err
@@ -65,7 +65,15 @@ func run() error {
 			var msg model.Msg
 			switch input := input.(type) {
 			case tern.Key:
-				msg = model.KeyMsg{Chord: input.String()}
+				text := ""
+				if !input.Ctrl && !input.Alt && !input.Meta {
+					text = input.Text
+				}
+				msg = model.KeyMsg{Chord: input.String(), Text: text}
+			case *tern.Focus:
+				if field, ok := view.FilterFieldIndex(input.ID); ok {
+					msg = model.FilterFieldMsg{Field: field}
+				}
 			case *tern.Select:
 				if input.ID == view.IssueListID {
 					msg = model.SelectMsg{UID: strings.TrimPrefix(input.Item, view.IssueListID+".")}
@@ -75,12 +83,26 @@ func run() error {
 				}
 			case *tern.Action:
 				msg = detailAction(input)
+				if strings.HasPrefix(input.ID, "layer.close.") {
+					switch input.Act {
+					case "close-save": msg = model.CloseSubmitMsg{}
+					case "close-quick": msg = model.CloseSubmitMsg{Quick:true}
+					case "close-cancel": msg = model.KeyMsg{Chord:"escape"}
+					}
+				}
 				if input.ID == view.RetryID && input.Act == string(model.RetryAction) {
 					msg = model.Retry{}
+				}
+				if strings.HasPrefix(input.ID, "layer.filters.actions.") {
+					msg = model.FilterFormActionMsg{Action: model.Action(input.Act)}
 				}
 			case *tern.Resize:
 				msg = model.ResizeMsg{Cols: input.Cols}
 			case *tern.ErrorEvent:
+				// SDK queues raw focus/reveal ops even when a later Render replaces their nodes.
+				if id, ok := strings.CutPrefix(input.Msg, "unknown id "); ok && view.IsTransientTarget(id) {
+					continue
+				}
 				inputErrors <- fmt.Errorf("Tern surface: %s", input.Msg)
 				return
 			}
@@ -93,12 +115,13 @@ func run() error {
 			}
 		}
 	}()
-	m := model.Model{Cols: session.Caps().Cols}
+	m := model.Model{Cols: session.Caps().Cols, Actor: resolveActor(override)}
 	runner := commandRunner{}
 	defer runner.close()
 	msg := model.Msg(model.Start{Workspace: workspace, IssueRef: issueRef})
 	for {
 		previousSelection := m.SelectedUID
+		previousInputFocus := view.InputFocusID(m)
 		previousFocus, previousSection, previousIndex := m.Focus, m.DetailSection, m.DetailIndex
 		previousDetailLoading := m.DetailLoading
 		var cmds []model.Cmd
@@ -109,12 +132,15 @@ func run() error {
 		if err := surface.Render(view.Render(m)); err != nil {
 			return err
 		}
-		if m.Focus == model.ColumnList && m.SelectedUID != "" && m.SelectedUID != previousSelection {
+		if focus := view.InputFocusID(m); focus != previousInputFocus {
+			if err := surface.Focus(focus); err != nil { return err }
+		}
+		if m.Err == nil && !m.Loading && m.Focus == model.ColumnList && m.SelectedUID != "" && m.SelectedUID != previousSelection {
 			if err := surface.Reveal(view.IssueID(m.SelectedUID), "nearest"); err != nil {
 				return err
 			}
 		}
-		if m.Focus == model.ColumnDetail && m.Detail != nil && m.Detail.Issue != nil && !m.DetailLoading &&
+		if m.Err == nil && !m.Loading && !m.DetailHidden && m.Focus == model.ColumnDetail && m.Detail != nil && m.Detail.Issue != nil && !m.DetailLoading &&
 			(previousFocus != m.Focus || previousSection != m.DetailSection || previousIndex != m.DetailIndex || previousDetailLoading) {
 			if err := surface.Reveal(view.DetailSectionID(m.DetailSection), "nearest"); err != nil {
 				return err

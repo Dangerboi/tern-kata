@@ -57,7 +57,7 @@ end
 tern.command({
     id = "open",
     title = "Open kata",
-    keys = {"ctrl+alt+shift+k"},
+    keys = {"f9"},
     run = function(cx) open(cx, nil) end,
 })
 

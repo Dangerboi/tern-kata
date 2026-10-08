@@ -6,6 +6,7 @@ pid=
 export CGO_ENABLED=0 KATA_HOME="$tmp/kata" TERN_CONFIG_DIR="$tmp/config"
 export TERN_DAEMON_SOCKET="$tmp/daemon.sock" STENCIL_LOG_DIR="$tmp/logs"
 export STENCIL_FIXTURE_ROOT="$tmp/crates/tern"
+export STENCIL_LOG=warn,stencil_plugins=debug,stencil_tern=debug
 unset KATA_SERVER KATA_AUTH_TOKEN KATA_AUTHOR TMUX STY ZELLIJ TERN_TSP
 cleanup() {
   status=$?
@@ -61,8 +62,9 @@ ctl state >"$tmp/palette-state.json"
 jq -e --arg cwd "$tmp/workspace" '.tabs[0].panes == 2 and .focused.cwd == $cwd' "$tmp/palette-state.json" >/dev/null
 ctl key q
 ctl ready
+ctl focus left
 ctl plugins fixtures
-ctl key Ctrl+Alt+Shift+K
+ctl key F9
 ctl plugins expect smoke
 ctl state >"$tmp/key-state.json"
 jq -e --arg cwd "$tmp/workspace" '.tabs[0].panes == 2 and .focused.cwd == $cwd' "$tmp/key-state.json" >/dev/null
@@ -100,4 +102,5 @@ for ((attempt=0; attempt<100; attempt++)); do
   sleep 0.1
 done
 jq -e '.. | objects | select((.text? // "") | contains("go install github.com/Dangerboi/tern-kata@latest"))' "$tmp/toast.json" >/dev/null
+jq -Rse 'contains("plugin window halves loaded count=1") and (contains("plugin bind left out") | not)' "$tmp/tern.log" >/dev/null
 printf 'Plugin smoke passed: palette and key split, real link open/focus, missing-binary toast\n'

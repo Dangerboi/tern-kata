@@ -3,8 +3,19 @@ package model
 import "iter"
 
 func (m Model) CurrentMode() Mode {
+	if m.FieldForm.Open { return ModeFieldForm }
 	if m.HelpOpen {
 		return ModeHelp
+	}
+	if m.CloseForm.Open { return ModeCloseForm }
+	if m.FilterForm.Open {
+		return ModeFilterForm
+	}
+	if m.Search.Open {
+		if m.Search.Results {
+			return ModeSearchResults
+		}
+		return ModeSearch
 	}
 	if m.Err != nil {
 		return ModeError
@@ -24,6 +35,9 @@ func LookupBindingForMode(chord string, mode Mode) (Binding, bool) {
 			return binding, true
 		}
 	}
+	if inputMode(mode) {
+		return Binding{}, false
+	}
 	for _, binding := range Keymap {
 		if binding.Chord == chord && binding.Mode == "" {
 			return binding, true
@@ -41,8 +55,8 @@ func BindingsForMode(mode Mode, footerOnly bool) iter.Seq[Binding] {
 			if footerOnly && !binding.ShowInFooter {
 				continue
 			}
-			active, _ := LookupBindingForMode(binding.Chord, mode)
-			if active != binding {
+			active, ok := LookupBindingForMode(binding.Chord, mode)
+			if !ok || active != binding {
 				continue
 			}
 			if !yield(binding) {

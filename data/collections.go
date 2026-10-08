@@ -40,14 +40,14 @@ func (c *Client) ReadCollection(ctx context.Context, cmd model.LoadCollection) (
 	if err != nil {
 		return model.CollectionLoaded{}, err
 	}
-	intent := model.Model{Collection: cmd.Collection, LocalDate: date, TimeZone: zone}
+	intent := model.Model{Collection: cmd.Collection, Filters: cmd.Filters, LocalDate: date, TimeZone: zone}
 	query := intent.SnapshotQuery()
 	options := &g.ReadUISnapshotRequestOptions{Query: &query}
 	if cmd.ETag != "" {
 		options.Header = &g.ReadUISnapshotHeaders{IfNoneMatch: new(cmd.ETag)}
 	}
 	snapshot, err := c.ReadUISnapshotWithResponse(ctx, options)
-	result := model.CollectionLoaded{Collection: cmd.Collection, LocalDate: date, TimeZone: zone}
+	result := model.CollectionLoaded{Collection: cmd.Collection, Filters: cmd.Filters, LocalDate: date, TimeZone: zone}
 	if snapshot != nil && snapshot.StatusCode == http.StatusNotModified {
 		result.NotModified = true
 		return result, nil
