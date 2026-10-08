@@ -54,7 +54,6 @@ expect_tree "[data-id='main.columns.list']" '.ok and .count == 1'
 ctl key j
 expect_tree "[data-id='dock.hints.position']" '.nodes[0].text | startswith("3 /")'
 ctl key PageDown
-ctl key PageUp
 ctl key enter
 expect_tree "[data-id='main.columns.detail.title']" ".ok and .count == 1 and (.nodes[0].text != $title_json) and (.nodes[0].text | contains(\"loading\") | not)"
 ctl key esc

@@ -14,6 +14,15 @@ expect_tree "[data-id^='main.columns.list.issues.01']" '.nodes[0]["aria-selected
 ctl tree "[data-id='main.topbar'],[data-id='main.columns.list.header']" | jq -c '[.nodes[].rect]' >"$tmp/pinned-rects-before.json"
 mark=$(wc -l <"$tmp/pinned-frames.jsonl")
 
+# Page Down moves the selection by a page of rows (the nearest reveal keeps it on screen) and the bar stays put.
+ctl key PageDown
+ctl key PageDown
+expect_tree "[data-id^='main.columns.list.issues.01']" '(.nodes | map(.["aria-selected"] == "true") | index(true)) == 20'
+ctl tree "[data-id='main.topbar'],[data-id='main.columns.list.header']" | jq -c '[.nodes[].rect]' | cmp - "$tmp/pinned-rects-before.json" || { printf 'Top bar or header moved on Page Down\n' >&2; return 1; }
+ctl key PageUp
+ctl key PageUp
+expect_tree "[data-id^='main.columns.list.issues.01']" '.nodes[0]["aria-selected"] == "true"'
+
 for i in $(seq 45); do ctl key j; done
 expect_tree "[data-id^='main.columns.list.issues.01']" '.nodes[-1]["aria-selected"] == "true"'
 ctl tree "[data-id='main.topbar'],[data-id='main.columns.list.header']" | jq -c '[.nodes[].rect]' >"$tmp/pinned-rects-after.json"

@@ -82,9 +82,6 @@ func TestQuitStillWorksBelowMinimumWidth(t *testing.T) {
 // load, a daemon failure). The model asks only for columns on screen.
 func TestScrollIsOnlyRequestedOfColumnsOnScreen(t *testing.T) {
 	list, detail := model.ColumnList, model.ColumnDetail
-	one := func(column model.Column, down bool) []model.Cmd {
-		return []model.Cmd{model.Scroll{Column: column, Down: down}}
-	}
 	for _, tt := range []struct {
 		name  string
 		cols  int
@@ -93,9 +90,9 @@ func TestScrollIsOnlyRequestedOfColumnsOnScreen(t *testing.T) {
 		msg   model.Msg
 		want  []model.Cmd
 	}{
-		{"page below 80 columns from the list", 79, list, nil, model.KeyMsg{Chord: "page_down"}, nil},
+		{"page below 80 columns from the list", 79, list, nil, model.KeyMsg{Chord: "page_down"}, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "b"}}},
 		{"page below 80 columns from the detail", 79, detail, nil, model.KeyMsg{Chord: "page_up"}, nil},
-		{"page in the one column shown", 100, detail, nil, model.KeyMsg{Chord: "page_down"}, one(detail, true)},
+		{"page in the one column shown asks Tern nothing", 100, detail, nil, model.KeyMsg{Chord: "page_down"}, nil},
 		{"another detail arrives behind the single list", 100, list, []model.Msg{model.DetailLoaded{UID: "a", Selected: authority("a")}, model.SelectMsg{UID: "b"}}, model.DetailLoaded{UID: "b", Selected: authority("b")}, nil},
 		{"another detail arrives beside the list", 160, list, []model.Msg{model.DetailLoaded{UID: "a", Selected: authority("a")}, model.SelectMsg{UID: "b"}}, model.DetailLoaded{UID: "b", Selected: authority("b")}, []model.Cmd{model.Scroll{Column: detail, Start: true}}},
 		{"page during the daemon failure", 160, list, []model.Msg{model.Failed{Err: errors.New("kata server not responding")}}, model.KeyMsg{Chord: "page_down"}, nil},

@@ -32,7 +32,7 @@ func updateNavigation(m Model, action Action) (Model, []Cmd) {
 	case MoveDown, MoveUp, MoveFirst, MoveLast, PageUp, PageDown, DrillIn, DrillOut:
 		m.PendingCreatedUID = ""
 	}
-	if action == PageUp || action == PageDown {
+	if (action == PageUp || action == PageDown) && m.Focus == ColumnCollections {
 		return m, []Cmd{Scroll{Column: m.Focus, Down: action == PageDown}}
 	}
 	if action == RetryAction {
@@ -69,7 +69,17 @@ func updateNavigation(m Model, action Action) (Model, []Cmd) {
 		index = 0
 	case MoveLast:
 		index = len(rows) - 1
+	case PageDown:
+		index = min(index+pageRows, len(rows)-1)
+	case PageUp:
+		index = max(index-pageRows, 0)
 	}
 	m.SelectedUID = rows[index].UID
 	return m, nil
 }
+
+// pageRows is how far Page Up/Page Down move the list selection or the detail
+// cursor; the 'nearest' reveal then keeps it in view. Tern's scroll op does not
+// drive a list's own scroller and the Pane's rows are unknown here.
+// ponytail: a fixed step, not a measured page; if ResizeMsg ever carries rows, use rows minus the chrome.
+const pageRows = 10

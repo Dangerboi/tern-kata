@@ -222,7 +222,7 @@ func updateDetailNavigation(m Model, action Action) (Model, []Cmd) {
 			}
 			m.DetailIndex = 0
 		}
-	case MoveDown, MoveUp, MoveFirst, MoveLast:
+	case MoveDown, MoveUp, MoveFirst, MoveLast, PageDown, PageUp:
 		if m.Focus == ColumnDetail {
 			count := m.DetailRowCount(m.DetailSection)
 			if count == 0 {
@@ -237,6 +237,10 @@ func updateDetailNavigation(m Model, action Action) (Model, []Cmd) {
 				m.DetailIndex = 0
 			case MoveLast:
 				m.DetailIndex = count - 1
+			case PageDown:
+				m.DetailIndex = min(m.DetailIndex+pageRows, count-1)
+			case PageUp:
+				m.DetailIndex = max(m.DetailIndex-pageRows, 0)
 			}
 		}
 	}
