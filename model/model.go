@@ -6,6 +6,7 @@ type Issue = g.UIIssue
 type Project = g.ProjectOut
 
 type Model struct {
+	LiveState
 	Workspace   string
 	Project     Project
 	Snapshot    g.UISnapshotResponseBody
@@ -33,7 +34,9 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 		m.Err = nil
 		return m, []Cmd{LoadProject{Workspace: msg.Workspace}}
 	case ProjectLoaded:
-		return updateProject(m, msg)
+		m, _ = updateProject(m, msg)
+		m.Cursor = msg.Snapshot.Cursor
+		return startStream(m, 0)
 	case CollectionSelected:
 		return updateCollection(m, msg)
 	case CollectionLoaded:
@@ -43,6 +46,7 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 			key := collection.View
 			if key == "project" { key += "." + collection.ProjectUID }
 			if msg.ID == "main.columns.collections." + key {
+				m.Focus = ColumnList
 				return updateCollection(m, CollectionSelected{Collection: collection})
 			}
 		}
@@ -80,6 +84,8 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 		}
 	case ResizeMsg:
 		m.Cols = msg.Cols
+	default:
+		return updateLive(m, msg)
 	}
 	return m, nil
 }

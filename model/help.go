@@ -6,6 +6,9 @@ func (m Model) CurrentMode() Mode {
 	if m.HelpOpen {
 		return ModeHelp
 	}
+	if m.Err != nil {
+		return ModeError
+	}
 	if m.Focus == ColumnCollections {
 		return ModeCollections
 	}

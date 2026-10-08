@@ -27,6 +27,7 @@ func (m Model) SnapshotQuery() g.ReadUISnapshotQuery {
 
 func (m Model) ApplySnapshot(snapshot g.UISnapshotResponseBody, etag string) Model {
  m.Snapshot=snapshot
+ m.Cursor=snapshot.Cursor
  m.ETag=etag
  m.Collections=[]Collection{{View:"inbox",Title:"Inbox"},{View:"today",Title:"Today"},{View:"upcoming",Title:"Upcoming"},{View:"deadlines",Title:"Deadlines"},{View:"all-open",Title:"All Open"},{View:"logbook",Title:"Logbook"}}
  for _, p:=range snapshot.Catalog {m.Collections=append(m.Collections,Collection{View:"project",ProjectUID:p.Project.UID,Title:p.Project.Name})}

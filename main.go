@@ -66,6 +66,10 @@ func run() error {
 				if input.ID == view.CollectionsID {
 					msg = model.CollectionPointerSelected{ID: input.Item}
 				}
+			case *tern.Action:
+				if input.ID == view.RetryID && input.Act == string(model.RetryAction) {
+					msg = model.Retry{}
+				}
 			case *tern.Resize:
 				msg = model.ResizeMsg{Cols: input.Cols}
 			case *tern.ErrorEvent:
@@ -82,6 +86,8 @@ func run() error {
 		}
 	}()
 	m := model.Model{Cols: session.Caps().Cols}
+	runner := commandRunner{}
+	defer runner.close()
 	msg := model.Msg(model.Start{Workspace: workspace})
 	for {
 		previousSelection := m.SelectedUID
@@ -99,7 +105,7 @@ func run() error {
 			}
 		}
 		for _, cmd := range cmds {
-			go execute(ctx, cmd, messages)
+			runner.launch(ctx, cmd, messages)
 		}
 		select {
 		case msg = <-messages:

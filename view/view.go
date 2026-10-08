@@ -16,7 +16,7 @@ func Render(m model.Model) tern.View {
 	main := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading"}, Text: m.Collection.Title})
 	switch {
 	case m.Err != nil:
-		main = ui.Nodes(ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.Err.Error()})
+		main = failureView(m)
 	case m.Loading:
 		main = ui.Nodes(ui.Text{Common: ui.Common{Key: "loading", Tone: ui.TonePending}, Text: "Loading " + m.Collection.Title + " Issues…"})
 	default:
@@ -44,6 +44,9 @@ func Render(m model.Model) tern.View {
 		})
 	}
 	main = append(ui.Nodes(ui.Col{Common: ui.Common{Key: "columns"}, Children: ui.Nodes(Collections(m))}), main...)
+	if m.Stale && m.Err == nil && !m.Loading {
+		main = append(main, staleNotice(m))
+	}
 	return tern.View{Main: main, Dock: footer(m), Layer: help(m)}
 }
 
