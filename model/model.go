@@ -32,6 +32,8 @@ type Model struct {
 	DetailSection DetailSection
 	DetailIndex int
 	DetailBack []string
+	Flat bool
+	ExpandedUIDs map[string]bool
 }
 
 func Update(m Model, msg Msg) (Model, []Cmd) {
@@ -121,7 +123,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			return updateNavigation(m, binding.Action)
 		}
 	case SelectMsg:
-		for _, issue := range m.Issues {
+		for _, issue := range m.VisibleRows() {
 			if issue.UID == msg.UID {
 				m.SelectedUID = msg.UID
 				m.Focus = ColumnList

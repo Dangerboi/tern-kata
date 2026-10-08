@@ -1,0 +1,146 @@
+package model
+
+type IssueRow struct {
+	Issue
+	Depth       int
+	HasChildren bool
+	Expanded    bool
+}
+
+func (m Model) issueHierarchy() (map[string]string, map[string][]Issue) {
+	loaded := make(map[string]bool, len(m.Issues))
+	for _, issue := range m.Issues {
+		loaded[issue.UID] = true
+	}
+	parents := make(map[string]string)
+	for _, link := range m.Snapshot.CollectionLinks {
+		if link.Type == "parent" && loaded[link.FromIssueUID] && loaded[link.ToIssueUID] && link.FromIssueUID != link.ToIssueUID {
+			parents[link.FromIssueUID] = link.ToIssueUID
+		}
+	}
+	// Break cyclic parent paths so every loaded Issue still has a reachable root.
+	state := make(map[string]int, len(m.Issues))
+	var visit func(string)
+	visit = func(uid string) {
+		if state[uid] == 2 {
+			return
+		}
+		if state[uid] == 1 {
+			delete(parents, uid)
+			return
+		}
+		state[uid] = 1
+		if parent := parents[uid]; parent != "" {
+			visit(parent)
+		}
+		state[uid] = 2
+	}
+	for _, issue := range m.Issues {
+		visit(issue.UID)
+	}
+	children := make(map[string][]Issue)
+	for _, issue := range m.Issues {
+		if parent := parents[issue.UID]; parent != "" {
+			children[parent] = append(children[parent], issue)
+		}
+	}
+	return parents, children
+}
+
+func (m Model) VisibleRows() []IssueRow {
+	rows := make([]IssueRow, 0, len(m.Issues))
+	if m.Flat {
+		for _, issue := range m.Issues {
+			rows = append(rows, IssueRow{Issue: issue})
+		}
+		return rows
+	}
+	parents, children := m.issueHierarchy()
+	var appendIssue func(Issue, int)
+	appendIssue = func(issue Issue, depth int) {
+		expanded := m.ExpandedUIDs[issue.UID]
+		rows = append(rows, IssueRow{Issue: issue, Depth: depth, HasChildren: len(children[issue.UID]) > 0, Expanded: expanded})
+		if expanded {
+			for _, child := range children[issue.UID] {
+				appendIssue(child, depth+1)
+			}
+		}
+	}
+	for _, issue := range m.Issues {
+		if parents[issue.UID] == "" {
+			appendIssue(issue, 0)
+		}
+	}
+	return rows
+}
+
+func (m Model) WithVisibleSelection() Model {
+	rows := m.VisibleRows()
+	visible := make(map[string]bool, len(rows))
+	for _, row := range rows {
+		visible[row.UID] = true
+	}
+	parents, _ := m.issueHierarchy()
+	uid := m.SelectedUID
+	for uid != "" {
+		if visible[uid] {
+			m.SelectedUID = uid
+			return m
+		}
+		uid = parents[uid]
+	}
+	m.SelectedUID = ""
+	if len(rows) > 0 {
+		m.SelectedUID = rows[0].UID
+	}
+	return m
+}
+
+func updateHierarchy(m Model, action Action) Model {
+	if action == ToggleIssueView {
+		m.Flat = !m.Flat
+		if !m.Flat {
+			m.ExpandedUIDs = nil
+		}
+		return m.WithVisibleSelection()
+	}
+	if m.Flat {
+		return m
+	}
+	_, children := m.issueHierarchy()
+	if action == ToggleAllExpansion {
+		allExpanded := len(children) > 0
+		for uid := range children {
+			allExpanded = allExpanded && m.ExpandedUIDs[uid]
+		}
+		m.ExpandedUIDs = make(map[string]bool, len(children))
+		if !allExpanded {
+			for uid := range children {
+				m.ExpandedUIDs[uid] = true
+			}
+		}
+		return m.WithVisibleSelection()
+	}
+	if len(children[m.SelectedUID]) == 0 {
+		return m
+	}
+	expanded := m.ExpandedUIDs[m.SelectedUID]
+	switch action {
+	case ToggleExpansion:
+		expanded = !expanded
+	case ExpandIssue:
+		expanded = true
+	case CollapseIssue:
+		expanded = false
+	}
+	if expanded == m.ExpandedUIDs[m.SelectedUID] {
+		return m
+	}
+	expansions := make(map[string]bool, len(m.ExpandedUIDs)+1)
+	for uid, open := range m.ExpandedUIDs {
+		expansions[uid] = open
+	}
+	expansions[m.SelectedUID] = expanded
+	m.ExpandedUIDs = expansions
+	return m.WithVisibleSelection()
+}

@@ -66,16 +66,7 @@ func (m Model) ApplySnapshot(snapshot g.UISnapshotResponseBody, etag string) Mod
 			break
 		}
 	}
-	for _, issue := range m.Issues {
-		if issue.UID == m.SelectedUID {
-			return m
-		}
-	}
-	m.SelectedUID = ""
-	if len(m.Issues) > 0 {
-		m.SelectedUID = m.Issues[0].UID
-	}
-	return m
+	return m.WithVisibleSelection()
 }
 
 func updateCollection(m Model, msg CollectionSelected) (Model, []Cmd) {

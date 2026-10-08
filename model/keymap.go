@@ -15,6 +15,11 @@ const (
 	PreviousDetailSection Action = "previous-detail-section"
 	ToggleHelp Action = "help"
 	CloseHelp Action = "close-help"
+	ToggleExpansion Action = "toggle-expansion"
+	ExpandIssue Action = "expand"
+	CollapseIssue Action = "collapse"
+	ToggleAllExpansion Action = "toggle-all-expansion"
+	ToggleIssueView Action = "toggle-issue-view"
 	RetryAction Action = "retry"
 )
 
@@ -44,6 +49,11 @@ var Keymap = []Binding{
 	{Chord: "k", Key: "k", Action: MoveUp, Help: "previous Issue", Mode: ModeList, ShowInFooter: true},
 	{Chord: "g", Key: "g", Action: MoveFirst, Help: "first Issue", Mode: ModeList},
 	{Chord: "shift+g", Key: "G", Action: MoveLast, Help: "last Issue", Mode: ModeList},
+	{Chord: "space", Key: "space", Action: ToggleExpansion, Help: "expand/collapse", Mode: ModeList, ShowInFooter: true},
+	{Chord: "right", Key: "right", Action: ExpandIssue, Help: "expand", Mode: ModeList},
+	{Chord: "left", Key: "left", Action: CollapseIssue, Help: "collapse", Mode: ModeList},
+	{Chord: "shift+e", Key: "E", Action: ToggleAllExpansion, Help: "expand/collapse all", Mode: ModeList},
+	{Chord: "v", Key: "v", Action: ToggleIssueView, Help: "flat/nested", Mode: ModeList, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: DrillOut, Help: "Collections", Mode: ModeList, ShowInFooter: true},
 	{Chord: "j", Key: "j", Action: MoveDown, Help: "next Collection", Mode: ModeCollections, ShowInFooter: true},
 	{Chord: "k", Key: "k", Action: MoveUp, Help: "previous Collection", Mode: ModeCollections, ShowInFooter: true},
