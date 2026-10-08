@@ -22,3 +22,11 @@ expect_tree "[data-id^='main.columns.list.issues.']" '[.nodes[] | .. | objects |
 kata --workspace "$tmp/workspace" create "Smoke create refresh trigger" --json
 expect_tree "[data-id^='main.columns.list.issues.']" '[.nodes[] | .. | objects | .text? // empty] | any(contains("Smoke create refresh trigger"))'
 expect_tree "[data-id^='main.columns.list.issues.']" '[.nodes[] | select(.["aria-selected"] == "true") | .. | objects | .text? // empty] | any(contains("Smoke key-created child"))'
+
+# Remove only this step's fixtures so later native lists stay within the viewport.
+kata --workspace "$tmp/workspace" list --json >"$tmp/create-fixtures.json"
+for title in "Smoke key-created child" "Smoke key-created parent" "Smoke create refresh trigger"; do
+  uid=$(jq -er --arg title "$title" '.issues[] | select(.title == $title) | .uid' "$tmp/create-fixtures.json")
+  short=$(jq -er --arg title "$title" '.issues[] | select(.title == $title) | .short_id' "$tmp/create-fixtures.json")
+  kata --workspace "$tmp/workspace" delete "$uid" --force --confirm "DELETE smoke#$short" --json
+done
