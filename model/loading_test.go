@@ -23,6 +23,10 @@ func projectOf(uids ...string) model.Model {
 	return m
 }
 
+func authority(uid string) *g.UISelectedAuthority {
+	return &g.UISelectedAuthority{Issue: &model.Issue{UID: uid}}
+}
+
 func TestFirstLoadIsTheOnlyFullPaneLoad(t *testing.T) {
 	m, _ := model.Update(model.Model{}, model.Start{Workspace: "/repo"})
 	if !m.FirstLoad() {
@@ -49,23 +53,36 @@ func TestSwitchingCollectionKeepsPreviousIssues(t *testing.T) {
 	}
 }
 
-func TestSelectingAnotherIssueKeepsPreviousDetailUntilItArrives(t *testing.T) {
-	a := &g.UISelectedAuthority{Issue: &model.Issue{UID: "a", Title: "Alpha"}}
-	b := &g.UISelectedAuthority{Issue: &model.Issue{UID: "b", Title: "Beta"}}
-	m, _ := model.Update(projectOf("a", "b"), model.DetailLoaded{UID: "a", Selected: a})
-
-	m, cmds := model.Update(m, model.SelectMsg{UID: "b"})
-	if m.Detail != a || m.DetailIssueUID() != "a" || !m.DetailLoading || !reflect.DeepEqual(cmds, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "b"}}) {
-		t.Fatalf("selecting b: detail=%q loading=%v cmds=%#v", m.DetailIssueUID(), m.DetailLoading, cmds)
-	}
-	m, cmds = model.Update(m, model.DetailLoaded{UID: "b", Selected: b})
-	if m.Detail != b || m.DetailIssueUID() != "b" || m.DetailLoading || len(cmds) != 0 {
-		t.Fatalf("b arrived: detail=%q loading=%v cmds=%#v", m.DetailIssueUID(), m.DetailLoading, cmds)
-	}
-
-	m, _ = model.Update(m, model.CollectionLoaded{Collection: m.Collection, Snapshot: g.UISnapshotResponseBody{}})
-	if m.SelectedUID != "" || m.Detail != nil {
-		t.Fatalf("an empty list left a detail on screen: selected=%q detail=%q", m.SelectedUID, m.DetailIssueUID())
+// The detail of Issue a is on screen; msgs follow, and onScreen is the Issue
+// whose detail is shown after them ("" for none).
+func TestDetailStaysOnScreenUntilTheSelectedIssueArrives(t *testing.T) {
+	failure := errors.New("kata server not responding")
+	for _, tt := range []struct {
+		name     string
+		msgs     []model.Msg
+		onScreen string
+		loading  bool
+		err      error
+		wantCmds []model.Cmd // requested by the last Msg
+	}{
+		{"selecting b", []model.Msg{model.SelectMsg{UID: "b"}}, "a", true, nil, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "b"}}},
+		{"b arrives", []model.Msg{model.SelectMsg{UID: "b"}, model.DetailLoaded{UID: "b", Selected: authority("b")}}, "b", false, nil, nil},
+		{"c replaces b, b arrives late", []model.Msg{model.SelectMsg{UID: "b"}, model.SelectMsg{UID: "c"}, model.DetailLoaded{UID: "b", Selected: authority("b")}}, "a", true, nil, nil},
+		{"c arrives after b", []model.Msg{model.SelectMsg{UID: "b"}, model.SelectMsg{UID: "c"}, model.DetailLoaded{UID: "b", Selected: authority("b")}, model.DetailLoaded{UID: "c", Selected: authority("c")}}, "c", false, nil, nil},
+		{"b fails", []model.Msg{model.SelectMsg{UID: "b"}, model.DetailFailed{UID: "b", Err: failure}}, "", false, failure, nil},
+		{"a reloads after saving a Draft", []model.Msg{model.DraftSaved{UID: "a"}}, "a", true, nil, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "a"}}},
+		{"empty Collection", []model.Msg{model.CollectionLoaded{Collection: model.Collection{View: "project", ProjectUID: "project", Title: "work"}, Snapshot: g.UISnapshotResponseBody{}}}, "", false, nil, nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m, _ := model.Update(projectOf("a", "b", "c"), model.DetailLoaded{UID: "a", Selected: authority("a")})
+			var cmds []model.Cmd
+			for _, msg := range tt.msgs {
+				m, cmds = model.Update(m, msg)
+			}
+			if m.DetailIssueUID() != tt.onScreen || m.DetailLoading != tt.loading || m.DetailErr != tt.err || !reflect.DeepEqual(cmds, tt.wantCmds) {
+				t.Fatalf("detail=%q loading=%v err=%v cmds=%#v", m.DetailIssueUID(), m.DetailLoading, m.DetailErr, cmds)
+			}
+		})
 	}
 }
 
@@ -78,10 +95,7 @@ func TestDetailReturnsToFirstSectionOnlyForADifferentIssue(t *testing.T) {
 	}
 
 	// The same Issue reloads (after saving a Draft) where the reader was.
-	m, cmds := model.Update(m, model.DraftSaved{UID: "a"})
-	if !reflect.DeepEqual(cmds, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "a"}}) {
-		t.Fatalf("saved Draft: %#v", cmds)
-	}
+	m, _ = model.Update(m, model.DraftSaved{UID: "a"})
 	m, _ = model.Update(m, model.DetailLoaded{UID: "a", Selected: a})
 	if m.DetailIssueUID() != "a" || m.DetailSection != model.SectionComments || m.DetailIndex != 1 {
 		t.Fatalf("reload moved the reader: issue=%q section=%v index=%d", m.DetailIssueUID(), m.DetailSection, m.DetailIndex)
@@ -102,15 +116,5 @@ func TestPreviousDetailLinksStayRelativeToTheirOwnIssue(t *testing.T) {
 	row, ok := m.DetailRow(model.SectionLinks, 0)
 	if !ok || row.Title != "child work#child" || row.ReferenceUID != "child" {
 		t.Fatalf("link row while another Issue loads: %+v", row)
-	}
-}
-
-func TestFailedDetailLoadDoesNotKeepThePreviousIssue(t *testing.T) {
-	failure := errors.New("kata server not responding")
-	m, _ := model.Update(projectOf("a", "b"), model.DetailLoaded{UID: "a", Selected: &g.UISelectedAuthority{Issue: &model.Issue{UID: "a"}}})
-	m, _ = model.Update(m, model.SelectMsg{UID: "b"})
-	m, _ = model.Update(m, model.DetailFailed{UID: "b", Err: failure})
-	if m.DetailLoading || m.DetailErr != failure || m.Detail != nil {
-		t.Fatalf("b failed: loading=%v err=%v detail=%q", m.DetailLoading, m.DetailErr, m.DetailIssueUID())
 	}
 }
