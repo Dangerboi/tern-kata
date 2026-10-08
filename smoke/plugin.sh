@@ -38,10 +38,14 @@ ln -s "$repo" "$tmp/crates/plugins/fixtures/tern-kata"
 ln -s "$(command -v kata)" "$tmp/bin/kata"
 ln -s "$(command -v tern)" "$tmp/bin/tern"
 
+if command -v zsh >/dev/null 2>&1; then
+  export SHELL="$(command -v zsh)"
+fi
 # Window process PATH lacks tern-kata; Pane shells resolve it via their shell rc.
 export ZDOTDIR="$tmp" BASH_ENV="$tmp/.bashrc" ENV="$tmp/.bashrc"
 printf 'export PATH=%q:%q:"$PATH"\n' "$tmp/pane-bin" "$tmp/bin" >"$tmp/.zshenv"
 printf 'export PATH=%q:%q:"$PATH"\n' "$tmp/pane-bin" "$tmp/bin" >"$tmp/.bashrc"
+export PATH="$tmp/bin:/usr/bin:/bin"
 kata daemon start
 kata --workspace "$tmp/workspace" init --project smoke --json
 kata --workspace "$tmp/workspace" create 'Plugin first Issue' --body 'Plugin first body' --json >"$tmp/first.json"
@@ -49,6 +53,7 @@ kata --workspace "$tmp/workspace" create 'Plugin second Issue' --body 'Plugin se
 first=$(jq -r '.issue.short_id' "$tmp/first.json")
 second=$(jq -r '.issue.short_id' "$tmp/second.json")
 (cd "$repo" && tern plugin link . --json)
+! command -v tern-kata >/dev/null 2>&1 || { echo "tern-kata must not be on window PATH" >&2; exit 1; }
 tern serve --control "$tmp/control.sock" --out "$tmp/shots" --dir "$tmp/workspace" >"$tmp/tern.log" 2>&1 &
 pid=$!
 for ((attempt=0; attempt<200; attempt++)); do
