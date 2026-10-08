@@ -132,3 +132,31 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 		})
 	}
 }
+
+func TestLiveRefreshPreservesDetailPosition(t *testing.T) {
+	for _, authority := range []bool{true, false} {
+		t.Run(map[bool]string{true: "snapshot authority", false: "detail refetch"}[authority], func(t *testing.T) {
+			m := model.Model{SelectedUID: "issue", DetailUID: "issue", Focus: model.ColumnDetail, DetailSection: model.SectionComments, DetailIndex: 1,
+				Detail: &g.UISelectedAuthority{Issue: &model.Issue{UID: "issue"}, Comments: []g.Comment{{UID: "one"}, {UID: "two"}}}}
+			m, cmds := model.Update(m, model.StreamEvent{ID: 1, Type: "issue.updated"})
+			refresh := cmds[0].(model.RefreshSnapshot)
+			if refresh.Query.SelectedIssueUID == nil || *refresh.Query.SelectedIssueUID != "issue" || refresh.Query.IncludeHistory == nil || !*refresh.Query.IncludeHistory {
+				t.Fatalf("refresh omitted selected authority/history: %+v", refresh.Query)
+			}
+			snapshot := g.UISnapshotResponseBody{Cursor: 1, Collection: []model.Issue{{UID: "issue"}}}
+			if authority {
+				snapshot.Selected = m.Detail
+			}
+			m, cmds = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot})
+			if !authority {
+				if len(cmds) != 1 {
+					t.Fatalf("missing detail refetch: %#v", cmds)
+				}
+				m, _ = model.Update(m, model.DetailLoaded{UID: "issue", Selected: &g.UISelectedAuthority{Issue: &model.Issue{UID: "issue"}, Comments: []g.Comment{{UID: "one"}, {UID: "two"}}}})
+			}
+			if m.DetailSection != model.SectionComments || m.DetailIndex != 1 || m.SelectedUID != "issue" {
+				t.Fatalf("refresh reset reading position: section=%v index=%d selected=%q", m.DetailSection, m.DetailIndex, m.SelectedUID)
+			}
+		})
+	}
+}

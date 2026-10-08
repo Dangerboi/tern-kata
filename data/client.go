@@ -15,9 +15,13 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-type Client struct{ *client.Client }
+type Client struct {
+	*client.Client
+	transport *http.Transport
+	remote    bool
+}
 
-func Discover(ctx context.Context, workspace string) (*Client, error) {
+func Discover(ctx context.Context, workspace string) (result *Client, err error) {
 	raw, err := exec.CommandContext(ctx, "kata", "--workspace", workspace, "daemon", "locate", "--json").Output()
 	if err != nil {
 		var exit *exec.ExitError
@@ -27,6 +31,7 @@ func Discover(ctx context.Context, workspace string) (*Client, error) {
 		return nil, fmt.Errorf("kata daemon locate: %w", err)
 	}
 	var target struct {
+		Kind           string `json:"kind"`
 		Network        string `json:"network"`
 		Address        string `json:"address"`
 		RequestBaseURL string `json:"request_base_url"`
@@ -35,9 +40,15 @@ func Discover(ctx context.Context, workspace string) (*Client, error) {
 		return nil, fmt.Errorf("kata daemon locate response: %w", err)
 	}
 	var c *client.Client
+	var transport *http.Transport
+	defer func() {
+		if result == nil && transport != nil {
+			transport.CloseIdleConnections()
+		}
+	}()
 	if target.Network == "unix" {
 		socket := strings.TrimPrefix(target.Address, "unix://")
-		transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		transport = &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			return (&net.Dialer{}).DialContext(ctx, "unix", socket)
 		}}
 		c, err = client.NewWithHTTPClient("http://kata.invalid", &http.Client{Transport: transport})
@@ -65,7 +76,14 @@ func Discover(ctx context.Context, workspace string) (*Client, error) {
 	if semver.Compare(normalized, "v0.18.0") < 0 {
 		return nil, fmt.Errorf("kata daemon %s is too old; tern-kata requires v0.18.0 or newer; upgrade kata", version)
 	}
-	return &Client{Client: c}, nil
+	return &Client{Client: c, transport: transport, remote: target.Kind == "remote"}, nil
+}
+
+// CloseIdleConnections releases the owned Unix transport after a command or stream finishes.
+func (c *Client) CloseIdleConnections() {
+	if c.transport != nil {
+		c.transport.CloseIdleConnections()
+	}
 }
 
 func ReadError(body []byte, fallback error) error {

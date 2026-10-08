@@ -49,6 +49,24 @@ type Model struct {
 }
 
 func Update(m Model, msg Msg) (Model, []Cmd) {
+	if action, ok := msg.(ActionMsg); ok {
+		if action.Action == "key" {
+			msg = KeyMsg{Chord: action.Value}
+		} else if action.Action == ToggleExpansion && m.CurrentMode() == ModeList {
+			for _, row := range m.VisibleRows() {
+				if row.UID == action.Value && row.HasChildren {
+					m, _ = update(m, SelectMsg{UID: row.UID})
+					for binding := range BindingsForMode(m.CurrentMode(), false) {
+						if binding.Action == action.Action {
+							msg = KeyMsg{Chord: binding.Chord}
+							break
+						}
+					}
+					break
+				}
+			}
+		}
+	}
 	m, cmds := update(m, msg)
 	m, detailCmds := EnsureDetail(m)
 	return m, append(cmds, detailCmds...)
@@ -242,6 +260,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case SelectMsg:
 		for _, issue := range m.VisibleRows() {
 			if issue.UID == msg.UID {
+				m.PendingCreatedUID = ""
 				m.SelectedUID = msg.UID
 				m.Focus = ColumnList
 				m.DetailBack = nil

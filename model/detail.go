@@ -84,10 +84,21 @@ func (m Model) DetailRow(section DetailSection, index int) (DetailRow, bool) {
 	case SectionLinks:
 		link := m.Detail.Links[index]
 		uid, ref := link.ToIssueUID, link.ToQualifiedID
+		relation := link.Type
 		if uid == m.SelectedUID {
 			uid, ref = link.FromIssueUID, link.FromQualifiedID
+			switch relation {
+			case "parent":
+				relation = "child"
+			case "child":
+				relation = "parent"
+			case "blocks":
+				relation = "blocked_by"
+			case "blocked_by":
+				relation = "blocks"
+			}
 		}
-		return DetailRow{Key: fmt.Sprint(link.ID), Title: link.Type + " " + ref, ReferenceUID: uid}, true
+		return DetailRow{Key: fmt.Sprint(link.ID), Title: relation + " " + ref, ReferenceUID: uid}, true
 	case SectionComments:
 		comment := m.Detail.Comments[index]
 		return DetailRow{Key: comment.UID, Title: comment.Author + " / " + comment.CreatedAt.Format(time.RFC3339), Body: comment.Body}, true
@@ -109,6 +120,7 @@ func jumpIssue(m Model, uid string) Model {
 	if uid == "" || uid == m.SelectedUID {
 		return m
 	}
+	m.PendingCreatedUID = ""
 	m.DetailBack = append(m.DetailBack[:len(m.DetailBack):len(m.DetailBack)], m.SelectedUID)
 	m.SelectedUID = uid
 	m.Focus = ColumnDetail
@@ -131,10 +143,12 @@ func EnsureDetail(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	m.DetailUID = m.SelectedUID
-	m.Detail = nil
+	if m.Detail == nil || m.Detail.Issue == nil || m.Detail.Issue.UID != m.SelectedUID {
+		m.Detail = nil
+		m.DetailSection = SectionBody
+		m.DetailIndex = 0
+	}
 	m.DetailErr = nil
-	m.DetailSection = SectionBody
-	m.DetailIndex = 0
 	m.DetailLoading = m.SelectedUID != ""
 	if !m.DetailLoading {
 		return m, nil

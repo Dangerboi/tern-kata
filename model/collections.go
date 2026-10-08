@@ -132,6 +132,7 @@ func updateCollection(m Model, msg CollectionSelected) (Model, []Cmd) {
 		if collection != msg.Collection {
 			continue
 		}
+		m.PendingCreatedUID = ""
 		etag := ""
 		if collection == m.Collection {
 			etag = m.ETag

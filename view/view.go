@@ -134,13 +134,17 @@ func issueRow(row model.IssueRow) tern.Element {
 	if len(row.Labels) > 0 {
 		spans = append(spans, ui.Span{T: "  " + strings.Join(row.Labels, ", "), S: "muted"})
 	}
-	return ui.Item{Common: ui.Common{Key: row.UID, Tone: tone}, Label: ui.Spans(spans...)}
+	var actions *ui.Actions
+	if row.HasChildren {
+		actions = &ui.Actions{Click: string(model.ToggleExpansion) + "=" + row.UID}
+	}
+	return ui.Item{Common: ui.Common{Key: row.UID, Tone: tone, Actions: actions}, Label: ui.Spans(spans...)}
 }
 
 func footer(m model.Model) tern.Element {
 	segments := make([]tern.Element, 0, len(model.Keymap)+1)
 	for binding := range model.BindingsForMode(m.CurrentMode(), true) {
-		segments = append(segments, ui.Seg{Common: ui.Common{Key: binding.Chord}, Text: binding.Key + " " + binding.Help})
+		segments = append(segments, ui.Seg{Common: ui.Common{Key: binding.Chord, Actions: &ui.Actions{Click: "key=" + binding.Chord}}, Text: binding.Key + " " + binding.Help})
 	}
 	selected := 0
 	rows := m.VisibleRows()

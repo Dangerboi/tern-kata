@@ -54,6 +54,7 @@ func executeSubscription(ctx context.Context, cmd model.Subscribe, messages chan
 	}
 	client, err := data.Discover(ctx, cmd.Workspace)
 	if err == nil {
+		defer client.CloseIdleConnections()
 		err = client.ReadEvents(ctx, cmd, send)
 	}
 	if err != nil && ctx.Err() == nil {

@@ -4,7 +4,6 @@ import (
 	"github.com/Dangerboi/tern-kata/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
-	"strings"
 )
 
 const CollectionsID = "main.columns.collections"
@@ -14,15 +13,6 @@ func CollectionKey(c model.Collection) string {
 		return "project." + c.ProjectUID
 	}
 	return c.View
-}
-func CollectionFromID(m model.Model, id string) (model.Collection, bool) {
-	key := strings.TrimPrefix(id, CollectionsID+".")
-	for _, collection := range m.Collections {
-		if CollectionKey(collection) == key {
-			return collection, true
-		}
-	}
-	return model.Collection{}, false
 }
 func Collections(m model.Model) tern.Element {
 	items := make([]tern.Element, 0, len(m.Collections))

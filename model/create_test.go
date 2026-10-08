@@ -5,6 +5,7 @@ import (
 	"github.com/Dangerboi/tern-kata/model"
 	g "go.kenn.io/kata/pkg/client/generated"
 	"testing"
+	"time"
 )
 
 func TestCreateProjectRule(t *testing.T) {
@@ -75,15 +76,15 @@ func TestCreateDraft(t *testing.T) {
 	if m.Create.Open || m.SelectedUID != "created" || !m.ExpandedUIDs["parent"] {
 		t.Fatal("new Issue not selected")
 	}
-	m = m.ApplySnapshot(g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "parent", ProjectID: 7}}}, "before")
+	m, _ = model.Update(m, model.SnapshotRefreshed{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "parent", ProjectID: 7}}}, ETag: "before"})
 	if m.SelectedUID != "created" {
 		t.Fatal("early refresh lost created selection")
 	}
-	m = m.ApplySnapshot(g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "parent", ProjectID: 7}, {UID: "created", ProjectID: 7}}}, "after")
+	m, _ = model.Update(m, model.SnapshotRefreshed{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "parent", ProjectID: 7}, {UID: "created", ProjectID: 7}}}, ETag: "after"})
 	if m.SelectedUID != "created" || m.PendingCreatedUID != "" {
 		t.Fatal("arrival lost created selection")
 	}
-	m = m.ApplySnapshot(g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "parent", ProjectID: 7}, {UID: "created", ProjectID: 7}}}, "later")
+	m, _ = model.Update(m, model.SnapshotRefreshed{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "parent", ProjectID: 7}, {UID: "created", ProjectID: 7}}}, ETag: "later"})
 	if m.SelectedUID != "created" {
 		t.Fatal("later refresh lost created selection")
 	}
@@ -126,5 +127,36 @@ func TestCreateDiscardAndValidation(t *testing.T) {
 				t.Fatal("invalid priority wrote")
 			}
 		}
+	}
+}
+
+func TestNavigationReleasesExcludedCreatedIssue(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		msg  model.Msg
+	}{
+		{"keyboard Issue", model.KeyMsg{Chord: "j"}},
+		{"pointer Issue", model.SelectMsg{UID: "second"}},
+		{"pointer Collection", model.CollectionSelected{Collection: model.Collection{View: "all-open", Title: "All Open"}}},
+		{"reference jump", model.JumpIssueMsg{UID: "second"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			closed := new(time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC))
+			m := model.Model{Project: model.Project{ID: 7}, Collection: model.Collection{View: "logbook", Title: "Logbook"}, SelectedUID: "first", DetailUID: "first"}
+			m, _ = model.Update(m, model.CollectionLoaded{Collection: m.Collection, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "first", Status: "closed", ClosedAt: closed}, {UID: "second", Status: "closed", ClosedAt: closed}}}})
+			m, _ = model.Update(m, model.KeyMsg{Chord: "n"})
+			m, _ = model.Update(m, model.KeyMsg{Text: "Created outside Logbook"})
+			m, _ = model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
+			m, _ = model.Update(m, model.IssueCreated{UID: "created"})
+			m, _ = model.Update(m, tt.msg)
+			if m.PendingCreatedUID != "" {
+				t.Fatalf("explicit navigation retained pending selection: %q", m.PendingCreatedUID)
+			}
+			selected := m.SelectedUID
+			m, _ = model.Update(m, model.SnapshotRefreshed{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "first", Status: "closed", ClosedAt: closed}, {UID: "second", Status: "closed", ClosedAt: closed}}}})
+			if m.SelectedUID == "created" || (selected == "second" && m.SelectedUID != "second") {
+				t.Fatalf("live refresh overrode explicit selection: %q -> %q", selected, m.SelectedUID)
+			}
+		})
 	}
 }

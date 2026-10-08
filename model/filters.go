@@ -22,6 +22,7 @@ func updateFilterAction(m Model, action Action) (Model, []Cmd) {
 	if m.FilterForm.Open {
 		return updateFilterForm(m, action)
 	}
+	m.PendingCreatedUID = ""
 	switch action {
 	case ClearFilters:
 		m.Filters = Filters{}
@@ -42,7 +43,7 @@ func updateFilterAction(m Model, action Action) (Model, []Cmd) {
 		return refreshFilters(m)
 	case SearchIssues:
 		m.Search = SearchState{Open: true, InitialText: m.Filters.Search, InitialUID: m.SelectedUID}
-	case MoveDown, MoveUp:
+	case MoveDown, MoveUp, PageUp, PageDown:
 		m.Search.Results = true
 		return updateNavigation(m, action)
 	case SearchEnter:

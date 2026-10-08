@@ -15,6 +15,7 @@ func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 		if err != nil {
 			msg = model.IssueCreated{Err: err}
 		} else {
+			defer client.CloseIdleConnections()
 			msg = client.CreateIssue(ctx, cmd)
 		}
 	case model.OpenIssue:
@@ -22,6 +23,7 @@ func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 		if err != nil {
 			msg = model.IssueOpenFailed{Ref: cmd.Ref, Err: err}
 		} else {
+			defer client.CloseIdleConnections()
 			result, err := client.OpenIssue(ctx, cmd)
 			if err != nil {
 				msg = model.IssueOpenFailed{Ref: cmd.Ref, Err: err}
@@ -34,23 +36,27 @@ func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 		if err != nil {
 			msg = model.DraftFailed{UID: cmd.UID, Err: err}
 		} else {
+			defer client.CloseIdleConnections()
 			msg = client.SaveDraft(ctx, cmd)
 		}
 	case model.CloseIssueCmd:
 		client, err := data.Discover(ctx, cmd.Workspace)
 		if err == nil {
+			defer client.CloseIdleConnections()
 			err = client.Close(ctx, cmd)
 		}
 		msg = model.CloseResultMsg{UID: cmd.UID, Err: err}
 	case model.ReopenIssueCmd:
 		client, err := data.Discover(ctx, cmd.Workspace)
 		if err == nil {
+			defer client.CloseIdleConnections()
 			err = client.Reopen(ctx, cmd)
 		}
 		msg = model.CloseResultMsg{UID: cmd.UID, Err: err}
 	case model.WriteField:
 		client, err := data.Discover(ctx, cmd.Workspace)
 		if err == nil {
+			defer client.CloseIdleConnections()
 			err = client.WriteField(ctx, cmd)
 		}
 		msg = model.FieldWritten{UID: cmd.UID, Err: err}
@@ -58,6 +64,7 @@ func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 		client, err := data.Discover(ctx, cmd.Workspace)
 		result := model.FieldLabelsLoaded{UID: cmd.UID}
 		if err == nil {
+			defer client.CloseIdleConnections()
 			result, err = client.FieldLabels(ctx, cmd)
 		}
 		result.UID, result.Err = cmd.UID, err
@@ -67,6 +74,7 @@ func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 		if err != nil {
 			msg = model.Failed{Err: err}
 		} else {
+			defer client.CloseIdleConnections()
 			result, err := client.ReadProject(ctx, cmd.Workspace)
 			if err != nil {
 				msg = model.Failed{Err: err}
@@ -79,6 +87,7 @@ func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 		if err != nil {
 			msg = model.DetailFailed{UID: cmd.UID, Err: err}
 		} else {
+			defer client.CloseIdleConnections()
 			result, err := client.ReadDetail(ctx, cmd.UID)
 			if err != nil {
 				msg = model.DetailFailed{UID: cmd.UID, Err: err}
@@ -91,6 +100,7 @@ func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 		if err != nil {
 			msg = model.Failed{Err: err}
 		} else {
+			defer client.CloseIdleConnections()
 			result, err := client.ReadCollection(ctx, cmd)
 			if err != nil {
 				msg = model.Failed{Err: err}
@@ -103,6 +113,7 @@ func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 		if err != nil {
 			msg = model.SnapshotFailed{Request: cmd.Request, Err: err}
 		} else {
+			defer client.CloseIdleConnections()
 			result, err := client.ReadRefresh(ctx, cmd)
 			if err != nil {
 				msg = model.SnapshotFailed{Request: cmd.Request, Err: err}

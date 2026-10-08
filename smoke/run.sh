@@ -4,6 +4,7 @@ set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
 tmp=$(mktemp -d)
 server_pid=
+proxy_pid=
 export CGO_ENABLED=0
 export KATA_HOME="$tmp/kata"
 export TERN_CONFIG_DIR="$tmp/config"
@@ -14,6 +15,10 @@ unset KATA_SERVER KATA_AUTH_TOKEN KATA_AUTHOR TMUX STY ZELLIJ TERN_TSP
 cleanup() {
   status=$?
   trap - EXIT
+  if [[ -n "$proxy_pid" ]]; then
+    kill "$proxy_pid" 2>/dev/null || true
+    wait "$proxy_pid" 2>/dev/null || true
+  fi
   if [[ -n "$server_pid" ]]; then
     if [[ $status -ne 0 ]]; then
       tern ctl --control "$tmp/control.sock" tree >"$tmp/tree.json" 2>/dev/null || true
@@ -67,6 +72,30 @@ expect_tree() {
   printf 'Native tree assertion failed: %s\n' "$2" >&2
   return 1
 }
+quit_app() {
+  ctl key q
+  expect_tree "[data-id^='main.']" '.ok and .count == 0'
+  for ((attempt = 0; attempt < 200; attempt++)); do
+    ctl state >"$tmp/state.json" 2>/dev/null || true
+    if jq -e '.focused.prompt == true and .focused.running == null and .focused.busy == false' "$tmp/state.json" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.05
+  done
+  printf 'Timed out waiting for shell to become idle after quitting app\n' >&2
+  return 1
+}
+
+
+stop_live_daemon() {
+  kata daemon stop
+  for ((attempt = 0; attempt < 100; attempt++)); do
+    if kata daemon status --json | jq -e '.daemons | length == 0' >/dev/null; then return; fi
+    sleep 0.1
+  done
+  printf 'Daemon did not finish stopping within 10 seconds\n' >&2
+  return 1
+}
 
 steps=("$repo"/smoke/steps/*)
 if (( $# )); then steps=("$@"); fi
@@ -77,7 +106,6 @@ for step in "${steps[@]}"; do
     *.sh) source "$step" ;;
   esac
 done
-tern ctl --control "$tmp/control.sock" key q
-tern ctl --control "$tmp/control.sock" ready
+quit_app
 "$repo/smoke/plugin.sh" "$tmp/tern-kata"
 printf '\nSmoke passed\n'

@@ -67,3 +67,23 @@ func TestHintsFollowCurrentModeAndKeymap(t *testing.T) {
 		}
 	}
 }
+
+func TestFormsOnlyAdvertiseHandledBindings(t *testing.T) {
+	for _, key := range []string{"+", "x"} {
+		t.Run(key, func(t *testing.T) {
+			m := model.Model{SelectedUID: "issue", DetailUID: "issue", Issues: []model.Issue{{UID: "issue", Status: "open"}}}
+			m, _ = model.Update(m, model.KeyMsg{Chord: key})
+			for _, chord := range []string{"q", "?"} {
+				m, _ = model.Update(m, model.KeyMsg{Chord: chord, Text: chord})
+			}
+			if m.HelpOpen || m.Quitting {
+				t.Fatal("form input dispatched a global action")
+			}
+			for binding := range model.BindingsForMode(m.CurrentMode(), true) {
+				if binding.Mode == "" {
+					t.Fatalf("form advertises inactive global binding: %+v", binding)
+				}
+			}
+		})
+	}
+}

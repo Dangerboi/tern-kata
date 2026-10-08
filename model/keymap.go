@@ -7,6 +7,8 @@ const (
 	MoveUp                Action = "up"
 	MoveFirst             Action = "first"
 	MoveLast              Action = "last"
+	PageUp                Action = "page-up"
+	PageDown              Action = "page-down"
 	QuitAction            Action = "quit"
 	DrillIn               Action = "drill-in"
 	DrillOut              Action = "drill-out"
@@ -66,6 +68,16 @@ const (
 // Chord dispatches Action; Key and Help label it. Empty Mode is global;
 // otherwise the binding is active only in that mode. ShowInFooter selects hints.
 var Keymap = []Binding{
+	{Chord: "page_up", Key: "pgup", Action: PageUp, Help: "page up", Mode: ModeList},
+	{Chord: "page_down", Key: "pgdn", Action: PageDown, Help: "page down", Mode: ModeList},
+	{Chord: "page_up", Key: "pgup", Action: PageUp, Help: "page up", Mode: ModeCollections},
+	{Chord: "page_down", Key: "pgdn", Action: PageDown, Help: "page down", Mode: ModeCollections},
+	{Chord: "page_up", Key: "pgup", Action: PageUp, Help: "page up", Mode: ModeDetail},
+	{Chord: "page_down", Key: "pgdn", Action: PageDown, Help: "page down", Mode: ModeDetail},
+	{Chord: "page_up", Key: "pgup", Action: PageUp, Help: "page up", Mode: ModeSearch},
+	{Chord: "page_down", Key: "pgdn", Action: PageDown, Help: "page down", Mode: ModeSearch},
+	{Chord: "page_up", Key: "pgup", Action: PageUp, Help: "page up", Mode: ModeSearchResults},
+	{Chord: "page_down", Key: "pgdn", Action: PageDown, Help: "page down", Mode: ModeSearchResults},
 	{Chord: "n", Key: "n", Action: NewIssue, Help: "new Issue", Mode: ModeList, ShowInFooter: true},
 	{Chord: "shift+n", Key: "N", Action: NewChild, Help: "new child", Mode: ModeList, ShowInFooter: true},
 	{Chord: "n", Key: "n", Action: NewIssue, Help: "new Issue", Mode: ModeDetail, ShowInFooter: true},
@@ -178,7 +190,7 @@ var Keymap = []Binding{
 	{Chord: "escape", Key: "esc", Action: CloseCancel, Help: "cancel", Mode: ModeCloseForm, ShowInFooter: true},
 	{Chord: "backspace", Key: "backspace", Action: CloseErase, Help: "erase", Mode: ModeCloseForm},
 	{Chord: "ctrl+u", Key: "ctrl+u", Action: CloseClear, Help: "clear field", Mode: ModeCloseForm},
-	{Chord: "q", Key: "q", Action: "close-text", Help: "", Mode: ModeCloseForm},
+	{Chord: "ctrl+c", Key: "ctrl+c", Action: QuitAction, Help: "quit", Mode: ModeCloseForm},
 	{Chord: "+", Key: "+", Action: AddLabelAction, Help: "add label", Mode: ModeList},
 	{Chord: "-", Key: "-", Action: RemoveLabelAction, Help: "remove label", Mode: ModeList},
 	{Chord: "a", Key: "a", Action: AssignOwnerAction, Help: "assign owner", Mode: ModeList},

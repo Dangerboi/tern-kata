@@ -26,7 +26,7 @@ func TestLiveSearch(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m := model.Model{Collection: model.Collection{View: "project", ProjectUID: "p", Title: "Work"}, SelectedUID: "b"}
-			m = m.ApplySnapshot(g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "a", Title: "Alpha", Status: "open"}, {UID: "b", Title: "Beta", Status: "open"}}}, "original")
+			m, _ = model.Update(m, model.CollectionLoaded{Collection: m.Collection, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "a", Title: "Alpha", Status: "open"}, {UID: "b", Title: "Beta", Status: "open"}}}, ETag: "original"})
 			for _, chord := range tt.keys {
 				var cmds []model.Cmd
 				m, cmds = model.Update(m, model.KeyMsg{Chord: chord})
@@ -38,7 +38,9 @@ func TestLiveSearch(t *testing.T) {
 						continue
 					}
 					refresh, ok := cmd.(model.RefreshSnapshot)
-					if !ok || !reflect.DeepEqual(refresh.Query, m.SnapshotQuery()) || refresh.ETag != "" {
+					query := refresh.Query
+					query.SelectedIssueUID, query.IncludeHistory = nil, nil
+					if !ok || !reflect.DeepEqual(query, m.SnapshotQuery()) || refresh.ETag != "" {
 						t.Fatalf("search command: %#v", cmds)
 					}
 					m, _ = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "a", Title: "Alpha", Status: "open"}, {UID: "b", Title: "Beta", Status: "open"}}}})
@@ -126,7 +128,9 @@ func TestFiltersSurviveRefreshAndClear(t *testing.T) {
 	m := model.Model{Collection: collection, Filters: filters, SelectedUID: "a"}
 	m, cmds := model.Update(m, model.StreamEvent{ID: 1, Type: "issue.updated"})
 	refresh := cmds[0].(model.RefreshSnapshot)
-	if !reflect.DeepEqual(refresh.Query, m.SnapshotQuery()) || *refresh.Query.ProjectUID != "p" || *refresh.Query.Text != "fix" {
+	query := refresh.Query
+	query.SelectedIssueUID, query.IncludeHistory = nil, nil
+	if !reflect.DeepEqual(query, m.SnapshotQuery()) || *refresh.Query.ProjectUID != "p" || *refresh.Query.Text != "fix" {
 		t.Fatalf("live refresh loses filter intent: %+v", refresh.Query)
 	}
 	m, _ = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: g.UISnapshotResponseBody{Cursor: 1, Collection: []model.Issue{{UID: "a", Status: "closed"}}}})

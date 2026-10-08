@@ -54,28 +54,24 @@ for ((attempt=0; attempt<200; attempt++)); do
 done
 [[ -S "$tmp/control.sock" ]]
 ctl ready
-ctl split right
-ctl ready
-ctl close
 ctl plugins fixtures
 printf 'palette "Open kata"\nkey Enter\n' >"$tmp/palette.ctl"
 ctl --file "$tmp/palette.ctl"
 ctl plugins expect smoke
 ctl state >"$tmp/palette-state.json"
 jq -e --arg cwd "$tmp/workspace" '.tabs[0].panes == 2 and .focused.cwd == $cwd' "$tmp/palette-state.json" >/dev/null
+palette_pane=$(jq -r '.focused.id' "$tmp/palette-state.json")
 ctl key q
 ctl ready
 ctl focus left
-ctl plugins fixtures
 ctl key F9
 ctl plugins expect smoke
 ctl state >"$tmp/key-state.json"
-jq -e --arg cwd "$tmp/workspace" '.tabs[0].panes == 2 and .focused.cwd == $cwd' "$tmp/key-state.json" >/dev/null
+jq -e --arg cwd "$tmp/workspace" --argjson previous "$palette_pane" '.tabs[0].panes == 2 and .focused.cwd == $cwd and .focused.id != $previous' "$tmp/key-state.json" >/dev/null
 ctl key q
 ctl ready
 ctl focus left
 # A real OSC-8 terminal link exercises route.link, not a plugin-origin cx:open.
-ctl plugins fixtures
 click_issue_link() {
   command="printf '\\033[2J\\033[H\\033]8;;kata://smoke/$1\\007Plugin link\\033]8;;\\007\\n'"
   printf 'run %s\n' "$(jq -rRn --arg command "$command" '$command | @json')" >"$tmp/link.ctl"
@@ -105,5 +101,5 @@ for ((attempt=0; attempt<100; attempt++)); do
   sleep 0.1
 done
 jq -e '.. | objects | select((.text? // "") | contains("go install github.com/Dangerboi/tern-kata@latest"))' "$tmp/toast.json" >/dev/null
-jq -Rse 'contains("plugin window halves loaded count=1") and (contains("plugin bind left out") | not)' "$tmp/tern.log" >/dev/null
-printf 'Plugin smoke passed: palette and key split, real link open/focus, missing-binary toast\n'
+jq -Rse 'contains("plugin window halves loaded count=1") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
+printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus, missing-binary toast\n'

@@ -1,6 +1,20 @@
 package model
 
+type Scroll struct {
+	Column Column
+	Down   bool
+}
+
+func (Scroll) cmd() {}
+
 func updateNavigation(m Model, action Action) (Model, []Cmd) {
+	switch action {
+	case MoveDown, MoveUp, MoveFirst, MoveLast, PageUp, PageDown, DrillIn, DrillOut:
+		m.PendingCreatedUID = ""
+	}
+	if action == PageUp || action == PageDown {
+		return m, []Cmd{Scroll{Column: m.Focus, Down: action == PageDown}}
+	}
 	if action == RetryAction {
 		return updateLive(m, Retry{})
 	}

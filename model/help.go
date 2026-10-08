@@ -51,7 +51,7 @@ func LookupBindingForMode(chord string, mode Mode) (Binding, bool) {
 	if mode == ModeEditor || mode == ModeDiscard || mode == ModeConflict {
 		return Binding{}, false
 	}
-	if mode == ModeCreate {
+	if mode == ModeCreate || mode == ModeFieldForm || mode == ModeCloseForm {
 		return Binding{}, false
 	}
 	if inputMode(mode) {

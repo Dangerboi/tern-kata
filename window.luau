@@ -38,19 +38,16 @@ local function open(cx, ref)
             live:toast("error", "tern-kata is not on PATH", "go install github.com/Dangerboi/tern-kata@latest")
             return
         end
-        -- Launch.command is shell text, including the executable returned by PATH lookup.
-        local command = quote(executable)
+        -- Launch.command captures the login environment synchronously inside the hook.
+        local command = "exec " .. quote(executable)
         if ref then command ..= " --issue " .. quote(ref) end
-        tern.timer(0, function(nextCx)
-            if not nextCx then return end
-            local target = nextCx.session:focused()
-            if target then
-                local info = nextCx.session:pane(target)
-                kataPane = nextCx.layout:split(target, "right", {cwd = info.cwd, command = command})
-            else
-                kataPane = nextCx.layout:new_tab({command = command})
-            end
-        end)
+        local target = live.session:focused()
+        if target then
+            kataPane = live.layout:split(target, "right")
+        else
+            kataPane = live.layout:new_tab()
+        end
+        if kataPane then live:run(kataPane, command .. "\r") end
     end)
 end
 

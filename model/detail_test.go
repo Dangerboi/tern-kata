@@ -129,3 +129,25 @@ func TestLiveDetailAuthority(t *testing.T) {
 		})
 	}
 }
+
+func TestLinkRelationsRelativeToSelectedIssue(t *testing.T) {
+	for _, tt := range []struct{ relation, selected, title, peer string }{
+		{"parent", "child", "parent project#parent", "parent"},
+		{"parent", "parent", "child project#child", "child"},
+		{"blocks", "child", "blocks project#parent", "parent"},
+		{"blocks", "parent", "blocked_by project#child", "child"},
+		{"related", "parent", "related project#child", "child"},
+	} {
+		t.Run(tt.relation+"/"+tt.selected, func(t *testing.T) {
+			m, _ := model.Update(model.Model{SelectedUID: tt.selected, DetailUID: tt.selected}, model.DetailLoaded{
+				UID: tt.selected, Selected: &g.UISelectedAuthority{Issue: &model.Issue{UID: tt.selected}, Links: []g.UILink{{
+					ID: 1, Type: tt.relation, FromIssueUID: "child", ToIssueUID: "parent", FromQualifiedID: "project#child", ToQualifiedID: "project#parent",
+				}}},
+			})
+			row, ok := m.DetailRow(model.SectionLinks, 0)
+			if !ok || row.Title != tt.title || row.ReferenceUID != tt.peer {
+				t.Fatalf("relation: %+v, want %q -> %q", row, tt.title, tt.peer)
+			}
+		})
+	}
+}

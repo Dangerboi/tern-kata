@@ -70,7 +70,7 @@ eventLoop:
 	for {
 		previousSelection := m.SelectedUID
 		previousFocus, previousSection, previousIndex := m.Focus, m.DetailSection, m.DetailIndex
-		previousDetailLoading := m.DetailLoading
+		previousDetailAvailable := m.Detail != nil && m.Detail.Issue != nil
 		var cmds []model.Cmd
 		m, cmds = model.Update(m, msg)
 		if m.Quitting {
@@ -91,12 +91,29 @@ eventLoop:
 			}
 		}
 		if m.Err == nil && !m.Loading && !m.DetailHidden && m.Focus == model.ColumnDetail && m.Detail != nil && m.Detail.Issue != nil && !m.DetailLoading &&
-			(previousFocus != m.Focus || previousSection != m.DetailSection || previousIndex != m.DetailIndex || previousDetailLoading) {
+			(previousFocus != m.Focus || previousSection != m.DetailSection || previousIndex != m.DetailIndex || !previousDetailAvailable) {
 			if err := surface.Reveal(view.DetailSectionID(m.DetailSection), "nearest"); err != nil {
 				return err
 			}
 		}
 		for _, cmd := range cmds {
+			if scroll, ok := cmd.(model.Scroll); ok {
+				target := view.IssueListID
+				switch scroll.Column {
+				case model.ColumnCollections:
+					target = view.CollectionsID
+				case model.ColumnDetail:
+					target = view.DetailID
+				}
+				by := "page-up"
+				if scroll.Down {
+					by = "page-down"
+				}
+				if err := surface.Scroll(target, by); err != nil {
+					return err
+				}
+				continue
+			}
 			if external, ok := cmd.(model.OpenDraftEditor); ok {
 				stopInput()
 				surface.Close()

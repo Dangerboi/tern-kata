@@ -85,7 +85,9 @@ func TestLiveRefreshKeepsCollection(t *testing.T) {
 	m := model.Model{Collection: collection, LocalDate: "2026-12-31", TimeZone: "UTC", SelectedUID: "future"}
 	m, cmds := model.Update(m, model.StreamEvent{Generation: 0, ID: 1, Type: "issue.updated"})
 	refresh := cmds[0].(model.RefreshSnapshot)
-	if !reflect.DeepEqual(refresh.Query, m.SnapshotQuery()) {
+	query := refresh.Query
+	query.SelectedIssueUID, query.IncludeHistory = nil, nil
+	if !reflect.DeepEqual(query, m.SnapshotQuery()) || refresh.Query.SelectedIssueUID == nil || *refresh.Query.SelectedIssueUID != "future" {
 		t.Fatalf("wrong Collection query: %+v", refresh.Query)
 	}
 	m, _ = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: g.UISnapshotResponseBody{Cursor: 1, Collection: []model.Issue{{UID: "future", Status: "open", ScheduledOnDate: new("2027-01-01")}}}})

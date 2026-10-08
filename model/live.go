@@ -79,7 +79,12 @@ type Retry struct{}
 func (Retry) msg() {}
 
 func liveQuery(m Model) g.ReadUISnapshotQuery {
-	return m.SnapshotQuery()
+	q := m.SnapshotQuery()
+	if m.SelectedUID != "" && !m.DetailHidden {
+		q.SelectedIssueUID = new(m.SelectedUID)
+		q.IncludeHistory = new(true)
+	}
+	return q
 }
 
 func startStream(m Model, delay time.Duration) (Model, []Cmd) {
@@ -142,6 +147,7 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 		m.Refreshing = false
 		current, received := liveQuery(m), msg.Query
 		current.SelectedIssueUID, received.SelectedIssueUID = nil, nil
+		current.IncludeHistory, received.IncludeHistory = nil, nil
 		if !reflect.DeepEqual(current, received) {
 			return refreshLive(m)
 		}

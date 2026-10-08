@@ -11,7 +11,7 @@ expect_tree "[data-id='main.columns.list.issues.$close_guard_parent']" '.ok and 
 ctl key x
 expect_tree "[data-id='layer.close.quick']" '.ok and .count == 1'
 ctl click "[data-id='layer.close.quick']"
-expect_tree "[data-id='layer.close.error']" '[.nodes[] | .. | objects | .text? // empty] | any(contains("open children"))'
+expect_tree "[data-id='layer.close.error']" '([.nodes[] | .. | objects | .text? // empty] | join(" ")) | contains("open children") and contains("Smoke close guard child") and contains("Close children first, or scope this issue differently") and (contains("unexpected status code") | not)'
 ctl click "[data-id='layer.close.cancel']"
 expect_tree "[data-id='layer.close']" '.ok and .count == 0'
 kata --workspace "$tmp/workspace" create "Smoke close target" --json >"$tmp/close-target.json"
