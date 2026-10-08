@@ -38,10 +38,8 @@ local function open(cx, ref)
         kataPane = cx.layout:new_tab()
     end
     if not kataPane then return end
-    local launch = "exec tern-kata"
-    if ref then launch ..= " --issue " .. quote(ref) end
-    local command = "if command -v tern-kata >/dev/null 2>&1; then " .. launch
-        .. "; else echo " .. quote("go install github.com/Dangerboi/tern-kata@latest") .. "; fi"
+    local command = 'exec sh -c \'command -v tern-kata >/dev/null 2>&1 && exec tern-kata "$@"; printf "%s %s\\n" "go install" "github.com/Dangerboi/tern-kata@latest"; exec "${SHELL:-sh}"\' sh'
+    if ref then command ..= " --issue " .. quote(ref) end
     cx:run(kataPane, "\r" .. command .. "\r")
 end
 
