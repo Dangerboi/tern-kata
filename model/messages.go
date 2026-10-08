@@ -13,6 +13,7 @@ type ProjectLoaded struct {
 	Project  Project
 	Snapshot g.UISnapshotResponseBody
 	ETag     string
+	LocalDate, TimeZone string
 }
 
 func (ProjectLoaded) msg() {}

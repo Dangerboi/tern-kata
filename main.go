@@ -63,6 +63,9 @@ func run() error {
 				if input.ID == view.IssueListID {
 					msg = model.SelectMsg{UID: strings.TrimPrefix(input.Item, view.IssueListID+".")}
 				}
+				if input.ID == view.CollectionsID {
+					msg = model.CollectionPointerSelected{ID: input.Item}
+				}
 			case *tern.Resize:
 				msg = model.ResizeMsg{Cols: input.Cols}
 			case *tern.ErrorEvent:

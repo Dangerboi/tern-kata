@@ -16,6 +16,11 @@ type Model struct {
 	Err         error
 	Cols        int
 	Quitting    bool
+	Collection Collection
+	Collections []Collection
+	CollectionCursor int
+	Groups []IssueGroup
+	LocalDate, TimeZone string
 }
 
 func Update(m Model, msg Msg) (Model, []Cmd) {
@@ -27,6 +32,18 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 		return m, []Cmd{LoadProject{Workspace: msg.Workspace}}
 	case ProjectLoaded:
 		return updateProject(m, msg)
+	case CollectionSelected:
+		return updateCollection(m, msg)
+	case CollectionLoaded:
+		return collectionLoaded(m, msg)
+	case CollectionPointerSelected:
+		for _, collection := range m.Collections {
+			key := collection.View
+			if key == "project" { key += "." + collection.ProjectUID }
+			if msg.ID == "main.columns.collections." + key {
+				return updateCollection(m, CollectionSelected{Collection: collection})
+			}
+		}
 	case Failed:
 		m.Loading = false
 		m.Err = msg.Err

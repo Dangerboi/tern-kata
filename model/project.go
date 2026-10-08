@@ -2,19 +2,10 @@ package model
 
 func updateProject(m Model, msg ProjectLoaded) (Model, []Cmd) {
 	m.Project = msg.Project
-	m.Snapshot = msg.Snapshot
-	m.Issues = msg.Snapshot.Collection
-	m.ETag = msg.ETag
-	m.Loading = false
-	m.Err = nil
-	for _, issue := range m.Issues {
-		if issue.UID == m.SelectedUID {
-			return m, nil
-		}
+	m.Collection = Collection{View: "inbox", Title: "Inbox"}
+	if msg.Project.UID != "" {
+		m.Collection = Collection{View: "project", ProjectUID: msg.Project.UID, Title: msg.Project.Name}
 	}
-	m.SelectedUID = ""
-	if len(m.Issues) > 0 {
-		m.SelectedUID = m.Issues[0].UID
-	}
-	return m, nil
+	m.LocalDate, m.TimeZone = msg.LocalDate, msg.TimeZone
+	return m.ApplySnapshot(msg.Snapshot, msg.ETag), nil
 }
