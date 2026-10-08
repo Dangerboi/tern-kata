@@ -39,7 +39,7 @@ ctl key enter
 expect_tree "$picker_heading" '.ok and .nodes[0].text == "smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
 
-# A click on a row switches like enter; clicking the list heading opens the picker; esc closes it after clicks inside it.
+# A click on a row switches like enter; the list heading and the p footer hint open the picker; esc and its footer hint close it, also after a click inside it.
 ctl key p
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 ctl click "[data-id='layer.collections.list.project.$picker_alpha_uid']"
@@ -51,6 +51,10 @@ ctl click "[data-id='layer.collections.filter']"
 ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 expect_tree "$picker_heading" '.ok and .nodes[0].text == "picker-alpha"'
+ctl click "[data-id='dock.hints.p']"
+expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
+ctl click "[data-id='dock.hints.escape']"
+expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 ctl key p
 ctl key enter
 expect_tree "$picker_heading" '.ok and .nodes[0].text == "smoke"'

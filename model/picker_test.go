@@ -336,3 +336,27 @@ func TestPickerHeadingClickIsThePKey(t *testing.T) {
 		t.Fatalf("heading click: open=%v differs from p", got.Picker.Open)
 	}
 }
+
+func TestPickerKeysAreAdvertisedFromTheKeymap(t *testing.T) {
+	advertised := func(mode model.Mode) map[string]model.Action {
+		bindings := map[string]model.Action{}
+		for binding := range model.BindingsForMode(mode, true) {
+			if mode == model.ModePicker && binding.Mode != model.ModePicker {
+				t.Fatalf("picker advertises an inactive global binding: %+v", binding)
+			}
+			bindings[binding.Chord] = binding.Action
+		}
+		return bindings
+	}
+	for _, mode := range []model.Mode{model.ModeList, model.ModeDetail} {
+		if advertised(mode)["p"] != model.OpenPicker {
+			t.Fatalf("%s hints omit p", mode)
+		}
+	}
+	picker := advertised(model.ModePicker)
+	for chord, action := range map[string]model.Action{"down": model.MoveDown, "up": model.MoveUp, "enter": model.PickCollection, "escape": model.ClosePicker} {
+		if picker[chord] != action {
+			t.Fatalf("picker hints: %s = %q, want %q", chord, picker[chord], action)
+		}
+	}
+}
