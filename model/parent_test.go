@@ -13,18 +13,18 @@ const manyChildren = 40
 
 // parentBase is a Project list of a leaf, a parent with manyChildren children
 // and another leaf, collapsed, with the first leaf selected and its detail
-// loaded. Rows sort by title: "A leaf", "B parent", then "C child NN" under it,
+// loaded. Rows sort by update time: "A leaf", "B parent", then "C child NN" under it,
 // then "Z leaf".
 func parentBase() model.Model {
 	issues := []model.Issue{
-		{UID: "first", ShortID: "fir1", Title: "A leaf", Status: "open"},
-		{UID: "parent", ShortID: "par1", Title: "B parent", Status: "open"},
-		{UID: "last", ShortID: "las1", Title: "Z leaf", Status: "open"},
+		{UID: "first", ShortID: "fir1", Title: "A leaf", Status: "open", UpdatedAt: ago(1)},
+		{UID: "parent", ShortID: "par1", Title: "B parent", Status: "open", UpdatedAt: ago(2)},
+		{UID: "last", ShortID: "las1", Title: "Z leaf", Status: "open", UpdatedAt: ago(3)},
 	}
 	var links []g.UILink
 	for i := range manyChildren {
 		uid := fmt.Sprintf("child%02d", i)
-		issues = append(issues, model.Issue{UID: uid, ShortID: uid, Title: "C " + uid, Status: "open"})
+		issues = append(issues, model.Issue{UID: uid, ShortID: uid, Title: "C " + uid, Status: "open", UpdatedAt: ago(4)})
 		links = append(links, g.UILink{ID: int64(i + 1), Type: "parent", FromIssueUID: uid, ToIssueUID: "parent", FromQualifiedID: "work#" + uid})
 	}
 	m, _ := model.Update(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: links}})

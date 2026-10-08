@@ -75,18 +75,7 @@ func GroupIssues(collection Collection, issues []Issue, today string) []IssueGro
 					return c
 				}
 			}
-			if a.Priority != nil && b.Priority == nil {
-				return -1
-			}
-			if a.Priority == nil && b.Priority != nil {
-				return 1
-			}
-			if a.Priority != nil && b.Priority != nil {
-				if c := cmp.Compare(*a.Priority, *b.Priority); c != 0 {
-					return c
-				}
-			}
-			if c := cmp.Compare(a.Title, b.Title); c != 0 {
+			if c := b.UpdatedAt.Compare(a.UpdatedAt); c != 0 {
 				return c
 			}
 			return cmp.Compare(a.UID, b.UID)
