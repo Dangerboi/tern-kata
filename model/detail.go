@@ -131,10 +131,22 @@ func jumpIssue(m Model, uid string) Model {
 	return m
 }
 
-// VisibleColumns folds to the focused column on narrow Panes. A bound Project
-// opens without the Collections column; the picker replaces it.
+// Width tiers, in Pane columns, matching kata's own TUI.
+const (
+	// MinCols is the narrowest Pane that lays out; below it nothing shows but a notice.
+	MinCols = 80
+	// SideBySideCols is the narrowest Pane that shows the list and detail together.
+	SideBySideCols = 140
+)
+
+// VisibleColumns is every column from SideBySideCols, only the focused column
+// from MinCols, and none below. A bound Project opens without the Collections
+// column; the picker replaces it.
 func (m Model) VisibleColumns() []Column {
-	if m.Cols < 100 {
+	if m.Cols < MinCols {
+		return nil
+	}
+	if m.Cols < SideBySideCols {
 		return []Column{m.Focus}
 	}
 	columns := []Column{ColumnList}

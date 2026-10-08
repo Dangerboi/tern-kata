@@ -15,12 +15,12 @@ func arrowModes(t *testing.T) map[string]model.Model {
 	t.Helper()
 	peer := "peer"
 	// Unbound: a bound Project has no sidebar, so escape would open the Collections picker.
-	list, _ := model.Update(model.Model{Cols: 120}, model.ProjectLoaded{
+	list, _ := model.Update(model.Model{Cols: 160}, model.ProjectLoaded{
 		Project:  model.Project{Name: "Work"},
 		Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "a"}, {UID: "b"}, {UID: "c"}}},
 	})
 	collections, _ := model.Update(list, model.KeyMsg{Chord: "escape"})
-	detail := model.Model{Cols: 120, Focus: model.ColumnDetail, SelectedUID: "a", DetailUID: "a", Issues: []model.Issue{{UID: "a"}}, Detail: &g.UISelectedAuthority{
+	detail := model.Model{Cols: 160, Focus: model.ColumnDetail, SelectedUID: "a", DetailUID: "a", Issues: []model.Issue{{UID: "a"}}, Detail: &g.UISelectedAuthority{
 		Issue: &model.Issue{UID: "a"},
 		Links: []g.UILink{
 			{ID: 1, FromIssueUID: "a", ToIssueUID: peer, ToQualifiedID: "other#bbbb", Type: "related"},

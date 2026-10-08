@@ -21,7 +21,7 @@ func newProjectStart(bound bool) model.Model {
 	if bound {
 		loaded.Project = model.Project{ID: 7, UID: "smoke-uid", Name: "smoke"}
 	}
-	m, _ := model.Update(model.Model{Cols: 120, Workspace: newProjectWorkspace, Actor: "alice"}, loaded)
+	m, _ := model.Update(model.Model{Cols: 160, Workspace: newProjectWorkspace, Actor: "alice"}, loaded)
 	return m
 }
 

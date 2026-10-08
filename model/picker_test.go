@@ -36,12 +36,12 @@ func TestStartupColumnsFollowBinding(t *testing.T) {
 		collection    string
 		want          []model.Column
 	}{
-		{"bound opens the Project without the sidebar", true, false, 120, "project", []model.Column{model.ColumnList, model.ColumnDetail}},
-		{"bound with detail hidden", true, true, 120, "project", []model.Column{model.ColumnList}},
-		{"unbound keeps three columns on Inbox", false, false, 120, "inbox", []model.Column{model.ColumnCollections, model.ColumnList, model.ColumnDetail}},
-		{"unbound with detail hidden", false, true, 120, "inbox", []model.Column{model.ColumnCollections, model.ColumnList}},
-		{"bound narrow folds to the focused column", true, false, 80, "project", []model.Column{model.ColumnList}},
-		{"unbound narrow folds to the focused column", false, false, 80, "inbox", []model.Column{model.ColumnList}},
+		{"bound opens the Project without the sidebar", true, false, 160, "project", []model.Column{model.ColumnList, model.ColumnDetail}},
+		{"bound with detail hidden", true, true, 160, "project", []model.Column{model.ColumnList}},
+		{"unbound keeps three columns on Inbox", false, false, 160, "inbox", []model.Column{model.ColumnCollections, model.ColumnList, model.ColumnDetail}},
+		{"unbound with detail hidden", false, true, 160, "inbox", []model.Column{model.ColumnCollections, model.ColumnList}},
+		{"bound narrow folds to the focused column", true, false, 100, "project", []model.Column{model.ColumnList}},
+		{"unbound narrow folds to the focused column", false, false, 100, "inbox", []model.Column{model.ColumnList}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m := pickerStart(tt.cols, tt.bound)

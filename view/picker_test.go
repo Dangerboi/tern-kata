@@ -52,7 +52,7 @@ func pickerLoaded(bound bool) model.Model {
 	if bound {
 		loaded.Project = model.Project{UID: "smoke-uid", Name: "smoke"}
 	}
-	m, _ := model.Update(model.Model{Cols: 120}, loaded)
+	m, _ := model.Update(model.Model{Cols: 160}, loaded)
 	return m
 }
 

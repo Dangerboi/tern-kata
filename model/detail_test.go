@@ -24,13 +24,13 @@ func TestColumnDrillAndFolding(t *testing.T) {
 		{"hide detail", []model.Msg{model.KeyMsg{Chord: "enter"}, model.KeyMsg{Chord: "shift+l"}}, model.ColumnList, []model.Column{model.ColumnCollections, model.ColumnList}, true},
 		{"restore detail", []model.Msg{model.KeyMsg{Chord: "shift+l"}, model.KeyMsg{Chord: "shift+l"}}, model.ColumnList, []model.Column{model.ColumnCollections, model.ColumnList, model.ColumnDetail}, false},
 		{"open hidden detail", []model.Msg{model.KeyMsg{Chord: "shift+l"}, model.KeyMsg{Chord: "enter"}}, model.ColumnDetail, []model.Column{model.ColumnCollections, model.ColumnList, model.ColumnDetail}, false},
-		{"narrow list", []model.Msg{model.ResizeMsg{Cols: 60}}, model.ColumnList, []model.Column{model.ColumnList}, false},
-		{"narrow detail", []model.Msg{model.ResizeMsg{Cols: 60}, model.KeyMsg{Chord: "enter"}}, model.ColumnDetail, []model.Column{model.ColumnDetail}, false},
-		{"narrow sidebar", []model.Msg{model.ResizeMsg{Cols: 60}, model.KeyMsg{Chord: "escape"}}, model.ColumnCollections, []model.Column{model.ColumnCollections}, false},
-		{"resize preserves focus", []model.Msg{model.KeyMsg{Chord: "enter"}, model.ResizeMsg{Cols: 60}, model.ResizeMsg{Cols: 120}}, model.ColumnDetail, []model.Column{model.ColumnCollections, model.ColumnList, model.ColumnDetail}, false},
+		{"single column list", []model.Msg{model.ResizeMsg{Cols: 100}}, model.ColumnList, []model.Column{model.ColumnList}, false},
+		{"single column detail", []model.Msg{model.ResizeMsg{Cols: 100}, model.KeyMsg{Chord: "enter"}}, model.ColumnDetail, []model.Column{model.ColumnDetail}, false},
+		{"single column sidebar", []model.Msg{model.ResizeMsg{Cols: 100}, model.KeyMsg{Chord: "escape"}}, model.ColumnCollections, []model.Column{model.ColumnCollections}, false},
+		{"resize preserves focus", []model.Msg{model.KeyMsg{Chord: "enter"}, model.ResizeMsg{Cols: 60}, model.ResizeMsg{Cols: 160}}, model.ColumnDetail, []model.Column{model.ColumnCollections, model.ColumnList, model.ColumnDetail}, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			m := model.Model{Cols: 120, SelectedUID: "a", Issues: []model.Issue{{UID: "a"}}, DetailUID: "a"}
+			m := model.Model{Cols: 160, SelectedUID: "a", Issues: []model.Issue{{UID: "a"}}, DetailUID: "a"}
 			for _, msg := range tt.msgs {
 				m, _ = model.Update(m, msg)
 			}

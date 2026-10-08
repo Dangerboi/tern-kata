@@ -18,6 +18,9 @@ func IssueID(uid string) string { return IssueListID + "." + uid }
 var loadingMarker = ui.Span{T: "  loading…", S: "muted"}
 
 func Render(m model.Model) tern.View {
+	if m.Cols < model.MinCols {
+		return narrowView()
+	}
 	var main tern.Nodes
 	switch {
 	case m.Err != nil:

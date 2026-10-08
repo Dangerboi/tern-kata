@@ -112,7 +112,7 @@ func browsing() model.Model {
 }
 
 func TestFirstLoadShowsFullPaneMessage(t *testing.T) {
-	nodes := render(t, apply(model.Model{}, model.Start{Workspace: "/repo"}))
+	nodes := render(t, apply(model.Model{}, model.Start{Workspace: "/repo"}, model.ResizeMsg{Cols: 160}))
 	if _, ok := nodes["main.loading"]; !ok || len(nodes.under("main.columns")) != 0 {
 		t.Fatalf("first load: %v", nodes.under("main"))
 	}
