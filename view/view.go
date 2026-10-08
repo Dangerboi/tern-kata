@@ -37,7 +37,7 @@ func Render(m model.Model) tern.View {
 	if m.Stale && m.Err == nil && !m.Loading {
 		main = append(main, staleNotice(m))
 	}
-	return tern.View{Main: main, Dock: footer(m), Layer: help(m)}
+	return tern.View{Main: main, Dock: footer(m), Layer: editorLayer(m)}
 }
 
 func issues(m model.Model) tern.Element {

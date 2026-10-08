@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"strings"
 	"syscall"
 
 	"github.com/Dangerboi/tern-kata/model"
@@ -25,7 +24,7 @@ func main() {
 func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	session, err := tern.Connect(ctx, tern.Options{App: "tern-kata", Version: "dev"})
+	session, err := tern.Connect(ctx, editorOptions())
 	if errors.Is(err, tern.ErrUnsupported) {
 		kata, err := exec.LookPath("kata")
 		if err != nil {
@@ -36,60 +35,25 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer session.Close()
-	surface, err := session.Open(tern.SurfaceOptions{ID: "kata", Mode: tern.Screen, Title: "kata", Discard: true})
+	defer func() { session.Close() }()
+	surface, err := session.Open(editorSurfaceOptions())
 	if err != nil {
 		return err
 	}
-	defer surface.Close()
+	defer func() { surface.Close() }()
 	workspace, err := os.Getwd()
 	if err != nil {
 		return err
 	}
 	messages := make(chan model.Msg)
 	inputErrors := make(chan error, 1)
-	go func() {
-		for {
-			input, err := session.Next(ctx)
-			if err != nil {
-				inputErrors <- err
-				return
-			}
-			var msg model.Msg
-			switch input := input.(type) {
-			case tern.Key:
-				msg = model.KeyMsg{Chord: input.String()}
-			case *tern.Select:
-				if input.ID == view.IssueListID {
-					msg = model.SelectMsg{UID: strings.TrimPrefix(input.Item, view.IssueListID+".")}
-				}
-				if input.ID == view.CollectionsID {
-					msg = model.CollectionPointerSelected{ID: input.Item}
-				}
-			case *tern.Action:
-				msg = detailAction(input)
-				if input.ID == view.RetryID && input.Act == string(model.RetryAction) {
-					msg = model.Retry{}
-				}
-			case *tern.Resize:
-				msg = model.ResizeMsg{Cols: input.Cols}
-			case *tern.ErrorEvent:
-				inputErrors <- fmt.Errorf("Tern surface: %s", input.Msg)
-				return
-			}
-			if msg != nil {
-				select {
-				case messages <- msg:
-				case <-ctx.Done():
-					return
-				}
-			}
-		}
-	}()
+	stopInput := startInputReader(ctx, session, messages, inputErrors)
+	defer func() { stopInput() }()
 	m := model.Model{Cols: session.Caps().Cols}
 	runner := commandRunner{}
 	defer runner.close()
 	msg := model.Msg(model.Start{Workspace: workspace})
+	eventLoop:
 	for {
 		previousSelection := m.SelectedUID
 		previousFocus, previousSection, previousIndex := m.Focus, m.DetailSection, m.DetailIndex
@@ -102,6 +66,7 @@ func run() error {
 		if err := surface.Render(view.Render(m)); err != nil {
 			return err
 		}
+		if err := surface.Focus(view.InputFocusID(m)); err != nil { return err }
 		if m.Focus == model.ColumnList && m.SelectedUID != "" && m.SelectedUID != previousSelection {
 			if err := surface.Reveal(view.IssueID(m.SelectedUID), "nearest"); err != nil {
 				return err
@@ -114,6 +79,18 @@ func run() error {
 			}
 		}
 		for _, cmd := range cmds {
+			if external, ok := cmd.(model.OpenDraftEditor); ok {
+				stopInput()
+				surface.Close()
+				session.Close()
+				msg = editExternally(external)
+				session, err = tern.Connect(ctx, editorOptions())
+				if err != nil { return err }
+				surface, err = session.Open(editorSurfaceOptions())
+				if err != nil { return err }
+				stopInput = startInputReader(ctx, session, messages, inputErrors)
+				continue eventLoop
+			}
 			runner.launch(ctx, cmd, messages)
 		}
 		select {

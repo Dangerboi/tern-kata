@@ -9,6 +9,7 @@ export KATA_HOME="$tmp/kata"
 export TERN_CONFIG_DIR="$tmp/config"
 export TERN_DAEMON_SOCKET="$tmp/tern-daemon.sock"
 export STENCIL_LOG_DIR="$tmp/logs"
+export EDITOR="sh \"$repo/smoke/editor.sh\""
 unset KATA_SERVER KATA_AUTH_TOKEN KATA_AUTHOR TMUX STY ZELLIJ TERN_TSP
 
 cleanup() {

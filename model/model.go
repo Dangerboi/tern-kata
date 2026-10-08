@@ -34,6 +34,8 @@ type Model struct {
 	DetailBack []string
 	Flat bool
 	ExpandedUIDs map[string]bool
+	Drafts map[string]Draft
+	EditorUID string
 }
 
 func Update(m Model, msg Msg) (Model, []Cmd) {
@@ -43,6 +45,7 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 }
 
 func update(m Model, msg Msg) (Model, []Cmd) {
+	if next, cmds, handled := updateEditor(m, msg); handled { return next, cmds }
 	switch msg := msg.(type) {
 	case Start:
 		m.Workspace = msg.Workspace

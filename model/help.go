@@ -3,6 +3,7 @@ package model
 import "iter"
 
 func (m Model) CurrentMode() Mode {
+	if mode := m.EditorMode(); mode != "" { return mode }
 	if m.HelpOpen {
 		return ModeHelp
 	}
