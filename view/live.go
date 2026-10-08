@@ -18,6 +18,8 @@ func failureView(m model.Model) tern.Nodes {
 
 func staleNotice(m model.Model) tern.Element {
 	text := "Read-only: reconnecting to kata; showing stale Issues."
-	if m.StreamErr != nil { text += "\n" + m.StreamErr.Error() }
+	if m.StreamErr != nil {
+		text += "\n" + m.StreamErr.Error()
+	}
 	return ui.Text{Common: ui.Common{Key: "stale", Tone: ui.TonePending}, Text: text}
 }

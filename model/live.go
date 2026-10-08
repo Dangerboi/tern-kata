@@ -8,66 +8,74 @@ import (
 )
 
 type LiveState struct {
-	Cursor int64
+	Cursor           int64
 	StreamGeneration int64
-	StreamConnected bool
-	Stale bool
-	StreamErr error
+	StreamConnected  bool
+	Stale            bool
+	StreamErr        error
 	ReconnectAttempt int
-	Refreshing bool
-	RefreshRequest int64
-	PendingCursor int64
-	Resetting bool
+	Refreshing       bool
+	RefreshRequest   int64
+	PendingCursor    int64
+	Resetting        bool
 }
 
 type Subscribe struct {
-	Workspace string
-	AfterID int64
+	Workspace  string
+	AfterID    int64
 	Generation int64
-	Delay time.Duration
+	Delay      time.Duration
 }
+
 func (Subscribe) cmd() {}
 
-type StreamOpened struct { Generation int64 }
+type StreamOpened struct{ Generation int64 }
+
 func (StreamOpened) msg() {}
 
 type StreamEvent struct {
 	Generation int64
-	ID int64
-	Type string
+	ID         int64
+	Type       string
 }
+
 func (StreamEvent) msg() {}
 
 type StreamDropped struct {
 	Generation int64
-	Err error
+	Err        error
 }
+
 func (StreamDropped) msg() {}
 
 type RefreshSnapshot struct {
 	Workspace string
-	Query g.ReadUISnapshotQuery
-	ETag string
-	Request int64
+	Query     g.ReadUISnapshotQuery
+	ETag      string
+	Request   int64
 }
+
 func (RefreshSnapshot) cmd() {}
 
 type SnapshotRefreshed struct {
-	Snapshot g.UISnapshotResponseBody
-	Query g.ReadUISnapshotQuery
-	ETag string
+	Snapshot    g.UISnapshotResponseBody
+	Query       g.ReadUISnapshotQuery
+	ETag        string
 	NotModified bool
-	Request int64
+	Request     int64
 }
+
 func (SnapshotRefreshed) msg() {}
 
 type SnapshotFailed struct {
 	Request int64
-	Err error
+	Err     error
 }
+
 func (SnapshotFailed) msg() {}
 
 type Retry struct{}
+
 func (Retry) msg() {}
 
 func liveQuery(m Model) g.ReadUISnapshotQuery {
@@ -82,22 +90,32 @@ func startStream(m Model, delay time.Duration) (Model, []Cmd) {
 }
 
 func refreshLive(m Model) (Model, []Cmd) {
-	if m.Refreshing { return m, nil }
+	if m.Refreshing {
+		return m, nil
+	}
 	m.Refreshing = true
 	m.RefreshRequest++
 	etag := m.ETag
-	if m.Resetting { etag = "" }
+	if m.Resetting {
+		etag = ""
+	}
 	return m, []Cmd{RefreshSnapshot{Workspace: m.Workspace, Query: liveQuery(m), ETag: etag, Request: m.RefreshRequest}}
 }
 
 func updateLive(m Model, msg Msg) (Model, []Cmd) {
 	switch msg := msg.(type) {
 	case StreamOpened:
-		if msg.Generation != m.StreamGeneration { return m, nil }
+		if msg.Generation != m.StreamGeneration {
+			return m, nil
+		}
 		m.StreamConnected = true
-		if m.Stale { return refreshLive(m) }
+		if m.Stale {
+			return refreshLive(m)
+		}
 	case StreamEvent:
-		if msg.Generation != m.StreamGeneration { return m, nil }
+		if msg.Generation != m.StreamGeneration {
+			return m, nil
+		}
 		if msg.Type == "sync.reset_required" {
 			m.Stale = true
 			m.Resetting = true
@@ -105,21 +123,29 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 			m.Refreshing = false
 			return refreshLive(m)
 		}
-		if msg.ID <= m.Cursor { return m, nil }
+		if msg.ID <= m.Cursor {
+			return m, nil
+		}
 		m.PendingCursor = max(m.PendingCursor, msg.ID)
 		return refreshLive(m)
 	case StreamDropped:
-		if msg.Generation != m.StreamGeneration { return m, nil }
+		if msg.Generation != m.StreamGeneration {
+			return m, nil
+		}
 		m.Stale = true
 		m.StreamErr = msg.Err
 		m.ReconnectAttempt++
-		return startStream(m, time.Second << min(m.ReconnectAttempt-1, 5))
+		return startStream(m, time.Second<<min(m.ReconnectAttempt-1, 5))
 	case SnapshotRefreshed:
-		if msg.Request != m.RefreshRequest { return m, nil }
+		if msg.Request != m.RefreshRequest {
+			return m, nil
+		}
 		m.Refreshing = false
 		current, received := liveQuery(m), msg.Query
 		current.SelectedIssueUID, received.SelectedIssueUID = nil, nil
-		if !reflect.DeepEqual(current, received) { return refreshLive(m) }
+		if !reflect.DeepEqual(current, received) {
+			return refreshLive(m)
+		}
 		if !msg.NotModified {
 			m, _ = updateProject(m, ProjectLoaded{Project: m.Project, Snapshot: msg.Snapshot, ETag: msg.ETag})
 			m.Cursor = msg.Snapshot.Cursor
@@ -134,14 +160,18 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 			m.StreamErr = nil
 			m.ReconnectAttempt = 0
 		}
-		if m.PendingCursor > m.Cursor { return refreshLive(m) }
+		if m.PendingCursor > m.Cursor {
+			return refreshLive(m)
+		}
 	case SnapshotFailed:
-		if msg.Request != m.RefreshRequest { return m, nil }
+		if msg.Request != m.RefreshRequest {
+			return m, nil
+		}
 		m.Refreshing = false
 		m.Stale = true
 		m.StreamErr = msg.Err
 		m.ReconnectAttempt++
-		return startStream(m, time.Second << min(m.ReconnectAttempt-1, 5))
+		return startStream(m, time.Second<<min(m.ReconnectAttempt-1, 5))
 	case Retry:
 		if m.Err != nil && !m.Loading {
 			m.Err = nil

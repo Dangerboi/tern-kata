@@ -3,14 +3,14 @@ package model
 type Action string
 
 const (
-	MoveDown   Action = "down"
-	MoveUp     Action = "up"
-	MoveFirst  Action = "first"
-	MoveLast   Action = "last"
-	QuitAction Action = "quit"
+	MoveDown    Action = "down"
+	MoveUp      Action = "up"
+	MoveFirst   Action = "first"
+	MoveLast    Action = "last"
+	QuitAction  Action = "quit"
 	RetryAction Action = "retry"
-	ToggleHelp Action = "help"
-	CloseHelp  Action = "close-help"
+	ToggleHelp  Action = "help"
+	CloseHelp   Action = "close-help"
 )
 
 type Binding struct {
@@ -25,8 +25,8 @@ type Binding struct {
 type Mode string
 
 const (
-	ModeList Mode = "list"
-	ModeHelp Mode = "help"
+	ModeList  Mode = "list"
+	ModeHelp  Mode = "help"
 	ModeError Mode = "error"
 )
 
