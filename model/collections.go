@@ -1,6 +1,10 @@
 package model
 
-import g "go.kenn.io/kata/pkg/client/generated"
+import (
+	"strings"
+
+	g "go.kenn.io/kata/pkg/client/generated"
+)
 
 type Collection struct{ View, ProjectUID, Title string }
 type IssueGroup struct {
@@ -20,6 +24,7 @@ type CollectionLoaded struct {
 	Snapshot                  g.UISnapshotResponseBody
 	ETag, LocalDate, TimeZone string
 	NotModified               bool
+	Filters Filters
 }
 
 func (CollectionLoaded) msg() {}
@@ -28,6 +33,7 @@ type LoadCollection struct {
 	Workspace  string
 	Collection Collection
 	ETag       string
+	Filters Filters
 }
 
 func (LoadCollection) cmd() {}
@@ -37,10 +43,29 @@ func (m Model) SnapshotQuery() g.ReadUISnapshotQuery {
 	if m.Collection.ProjectUID != "" {
 		q.ProjectUID = new(m.Collection.ProjectUID)
 		q.Status = []string{"open"}
+	} else if m.Filters.ProjectUID != "" {
+		q.ProjectUID = new(m.Filters.ProjectUID)
 	}
 	if m.Collection.View == "today" || m.Collection.View == "upcoming" || m.Collection.View == "deadlines" {
 		q.LocalDate = new(m.LocalDate)
 		q.TimeZone = new(m.TimeZone)
+	}
+	if m.Filters.Status != "" {
+		q.Status = []string{m.Filters.Status}
+	}
+	if m.Filters.Search != "" {
+		q.Text = new(m.Filters.Search)
+	}
+	if m.Filters.Owner != "" {
+		q.Owner = []string{m.Filters.Owner}
+	}
+	for _, label := range strings.Split(m.Filters.Label, ",") {
+		if label = strings.TrimSpace(label); label != "" {
+			q.Label = append(q.Label, label)
+		}
+	}
+	if m.Filters.Relationship != "" {
+		q.Relationship = []g.ReadUISnapshotQueryRelationship{g.ReadUISnapshotQueryRelationship(m.Filters.Relationship)}
 	}
 	return q
 }
@@ -53,7 +78,11 @@ func (m Model) ApplySnapshot(snapshot g.UISnapshotResponseBody, etag string) Mod
 	for _, p := range snapshot.Catalog {
 		m.Collections = append(m.Collections, Collection{View: "project", ProjectUID: p.Project.UID, Title: p.Project.Name})
 	}
-	m.Groups = GroupIssues(m.Collection, snapshot.Collection, m.LocalDate)
+	groupCollection := m.Collection
+	if m.Filters != (Filters{}) {
+		groupCollection = Collection{View: "results", Title: "Results"}
+	}
+	m.Groups = GroupIssues(groupCollection, snapshot.Collection, m.LocalDate)
 	m.Issues = nil
 	for _, group := range m.Groups {
 		m.Issues = append(m.Issues, group.Issues...)
@@ -83,13 +112,13 @@ func updateCollection(m Model, msg CollectionSelected) (Model, []Cmd) {
 		m.CollectionCursor = i
 		m.Loading = true
 		m.Err = nil
-		return m, []Cmd{LoadCollection{Workspace: m.Workspace, Collection: collection, ETag: etag}}
+		return m, []Cmd{LoadCollection{Workspace: m.Workspace, Collection: collection, ETag: etag, Filters: m.Filters}}
 	}
 	return m, nil
 }
 
 func collectionLoaded(m Model, msg CollectionLoaded) (Model, []Cmd) {
-	if msg.Collection != m.Collection {
+	if msg.Collection != m.Collection || msg.Filters != m.Filters {
 		return m, nil
 	}
 	m.Loading = false

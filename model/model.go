@@ -26,6 +26,9 @@ type Model struct {
 	HelpOpen            bool
 	Flat bool
 	ExpandedUIDs map[string]bool
+	Filters Filters
+	Search SearchState
+	FilterForm FilterFormState
 }
 
 func Update(m Model, msg Msg) (Model, []Cmd) {
@@ -58,7 +61,16 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 		m.Loading = false
 		m.Err = msg.Err
 	case KeyMsg:
+		if inputMode(m.CurrentMode()) {
+			if binding, ok := LookupBindingForMode(msg.Chord, m.CurrentMode()); ok {
+				return updateFilterAction(m, binding.Action)
+			}
+			return updateFilterText(m, msg)
+		}
 		if binding, ok := LookupBindingForMode(msg.Chord, m.CurrentMode()); ok {
+			if binding.Action == SearchIssues || binding.Action == CycleStatus || binding.Action == OpenFilterForm || binding.Action == ClearFilters {
+				return updateFilterAction(m, binding.Action)
+			}
 			if binding.Action == ToggleHelp {
 				m.HelpOpen = !m.HelpOpen
 				return m, nil
