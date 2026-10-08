@@ -27,6 +27,7 @@ type Model struct {
 	Collection          Collection
 	Collections         []Collection
 	CollectionCursor    int
+	// Bound: the startup workspace resolved to a Project, so the Collections picker replaces the sidebar.
 	Bound               bool
 	Picker              PickerState
 	Focus               Column
