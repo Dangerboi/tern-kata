@@ -9,7 +9,7 @@ CGO_ENABLED=0 go test ./...
 ./smoke/run.sh
 ```
 
-Run `tern-kata` inside Tern in a directory bound with `kata init`. Use `j`/`k`, `g`/`G`, and `q`/`ctrl+c`; the footer comes from `model/keymap.go`.
+Run `tern-kata` inside Tern in a directory bound with `kata init`. Use `j`/`k`, `g`/`G`, and `q`/`ctrl+c`. Press `?` for all bindings with their modes; `?` or `esc` closes help without moving the selected Issue. The dock shows only current-mode hints, and the help layer lists every binding, both from `model/keymap.go`.
 
 The smoke runner needs `kata`, `tern` and `jq` on `PATH`. It isolates both instances, seeds three open Issues in Project `smoke`, and runs `smoke/steps/*` in filename order: `.ctl` scenarios or sourced `.sh` assertions using `ctl` and `expect_tree`. Add a step file for each feature; leave the app in the Issue list for the next step. Use `plugins expect` for native text, but `expect_tree` for list labels (Tern's text search excludes them). Failed runs retain their temporary artifacts and exit non-zero.
 
