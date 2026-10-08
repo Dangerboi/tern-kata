@@ -10,9 +10,10 @@ type Start struct{ Workspace string }
 func (Start) msg() {}
 
 type ProjectLoaded struct {
-	Project  Project
-	Snapshot g.UISnapshotResponseBody
-	ETag     string
+	Project             Project
+	Snapshot            g.UISnapshotResponseBody
+	ETag                string
+	LocalDate, TimeZone string
 }
 
 func (ProjectLoaded) msg() {}

@@ -9,13 +9,15 @@ import (
 )
 
 type commandRunner struct {
-	streamCancel context.CancelFunc
+	streamCancel     context.CancelFunc
 	streamGeneration int64
 }
 
 func (r *commandRunner) launch(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 	if subscription, ok := cmd.(model.Subscribe); ok {
-		if subscription.Generation <= r.streamGeneration { return }
+		if subscription.Generation <= r.streamGeneration {
+			return
+		}
 		r.close()
 		r.streamGeneration = subscription.Generation
 		streamCtx, cancel := context.WithCancel(ctx)
@@ -27,14 +29,18 @@ func (r *commandRunner) launch(ctx context.Context, cmd model.Cmd, messages chan
 }
 
 func (r *commandRunner) close() {
-	if r.streamCancel != nil { r.streamCancel() }
+	if r.streamCancel != nil {
+		r.streamCancel()
+	}
 }
 
 func executeSubscription(ctx context.Context, cmd model.Subscribe, messages chan<- model.Msg) {
 	send := func(msg model.Msg) bool {
 		select {
-		case messages <- msg: return true
-		case <-ctx.Done(): return false
+		case messages <- msg:
+			return true
+		case <-ctx.Done():
+			return false
 		}
 	}
 	if cmd.Delay > 0 {
@@ -42,10 +48,15 @@ func executeSubscription(ctx context.Context, cmd model.Subscribe, messages chan
 		defer timer.Stop()
 		select {
 		case <-timer.C:
-		case <-ctx.Done(): return
+		case <-ctx.Done():
+			return
 		}
 	}
 	client, err := data.Discover(ctx, cmd.Workspace)
-	if err == nil { err = client.ReadEvents(ctx, cmd, send) }
-	if err != nil && ctx.Err() == nil { send(model.StreamDropped{Generation: cmd.Generation, Err: err}) }
+	if err == nil {
+		err = client.ReadEvents(ctx, cmd, send)
+	}
+	if err != nil && ctx.Err() == nil {
+		send(model.StreamDropped{Generation: cmd.Generation, Err: err})
+	}
 }

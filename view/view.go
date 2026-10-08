@@ -18,7 +18,7 @@ func Render(m model.Model) tern.View {
 	case m.Err != nil:
 		main = failureView(m)
 	case m.Loading:
-		main = ui.Nodes(ui.Text{Common: ui.Common{Key: "loading", Tone: ui.TonePending}, Text: "Loading Project's open Issues…"})
+		main = ui.Nodes(ui.Text{Common: ui.Common{Key: "loading", Tone: ui.TonePending}, Text: "Loading " + m.Collection.Title + " Issues…"})
 	default:
 		columns := make([]tern.Element, 0, 3)
 		for _, column := range m.VisibleColumns() {
@@ -41,11 +41,13 @@ func Render(m model.Model) tern.View {
 
 func issues(m model.Model) tern.Element {
 	items := make([]tern.Element, 0, len(m.Issues))
-	for _, issue := range m.Issues {
-		items = append(items, ui.Item{
-			Common: ui.Common{Key: issue.UID},
-			Label: ui.T(issue.ShortID + "  " + issue.Title),
-		})
+	for _, group := range m.Groups {
+		if m.Collection.View != "project" {
+			items = append(items, ui.Text{Common: ui.Common{Key: "group." + group.ID}, Text: group.Title})
+		}
+		for _, issue := range group.Issues {
+			items = append(items, ui.Item{Common: ui.Common{Key: issue.UID}, Label: ui.T(issue.ShortID + "  " + issue.Title)})
+		}
 	}
 	selected := ""
 	if m.SelectedUID != "" {
@@ -56,11 +58,11 @@ func issues(m model.Model) tern.Element {
 	return ui.Col{
 		Common: ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.4)},
 		Children: ui.Nodes(
-			ui.Text{Common: ui.Common{Key: "heading", Tone: tone, Actions: &ui.Actions{Click: "focus-list"}}, Text: m.Project.Name + " / Open Issues"},
+			ui.Text{Common: ui.Common{Key: "heading", Tone: tone, Actions: &ui.Actions{Click: "focus-list"}}, Text: m.Collection.Title},
 			ui.List{
 				CommonWithoutMax: ui.CommonWithoutMax{Key: "issues"},
 				Selected: selected,
-				Empty: ui.T("No open Issues in this Project. Create one with kata create."),
+				Empty: ui.T("No Issues in this Collection. Select another Collection or create one with kata create."),
 				Children: items,
 			},
 		),

@@ -34,6 +34,18 @@ func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 				msg = result
 			}
 		}
+	case model.LoadCollection:
+		client, err := data.Discover(ctx, cmd.Workspace)
+		if err != nil {
+			msg = model.Failed{Err: err}
+		} else {
+			result, err := client.ReadCollection(ctx, cmd)
+			if err != nil {
+				msg = model.Failed{Err: err}
+			} else {
+				msg = result
+			}
+		}
 	case model.RefreshSnapshot:
 		client, err := data.Discover(ctx, cmd.Workspace)
 		if err != nil {

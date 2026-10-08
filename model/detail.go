@@ -7,13 +7,6 @@ import (
 	g "go.kenn.io/kata/pkg/client/generated"
 )
 
-type Column uint8
-
-const (
-	ColumnList Column = iota
-	ColumnCollections
-	ColumnDetail
-)
 
 type DetailSection uint8
 

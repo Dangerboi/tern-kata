@@ -3,6 +3,7 @@ package model_test
 import (
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 
 func TestLiveMergePreservesIssueSelection(t *testing.T) {
 	m, cmds := model.Update(model.Model{Workspace: "/repo", SelectedUID: "b"}, model.ProjectLoaded{
-		Project: model.Project{UID: "project"},
+		Project:  model.Project{UID: "project"},
 		Snapshot: g.UISnapshotResponseBody{Cursor: 10, Collection: []model.Issue{{UID: "a"}, {UID: "b", Title: "Before"}}},
 	})
 	if !reflect.DeepEqual(cmds, []model.Cmd{model.Subscribe{Workspace: "/repo", AfterID: 10, Generation: 1}, model.LoadDetail{Workspace: "/repo", UID: "b"}}) {
@@ -27,7 +28,8 @@ func TestLiveMergePreservesIssueSelection(t *testing.T) {
 		Request: refresh.Request, Query: refresh.Query,
 		Snapshot: g.UISnapshotResponseBody{Cursor: 11, Collection: []model.Issue{{UID: "new"}, {UID: "b", Title: "After"}, {UID: "a"}}},
 	})
-	if m.SelectedUID != "b" || m.Issues[1].Title != "After" || m.Cursor != 11 {
+	selected := slices.IndexFunc(m.Issues, func(issue model.Issue) bool { return issue.UID == "b" })
+	if m.SelectedUID != "b" || selected < 0 || m.Issues[selected].Title != "After" || m.Cursor != 11 {
 		t.Fatalf("live Issue merge: %+v", m)
 	}
 }
@@ -35,12 +37,12 @@ func TestLiveMergePreservesIssueSelection(t *testing.T) {
 func TestLiveFailureAndRecovery(t *testing.T) {
 	failure := errors.New("kata server not responding: http://127.0.0.1:1 (KATA_SERVER)")
 	for _, tt := range []struct {
-		name string
+		name     string
 		messages []model.Msg
-		check func(*testing.T, model.Model, []model.Cmd)
+		check    func(*testing.T, model.Model, []model.Cmd)
 	}{
 		{
-			name: "unreachable preserves kata error and exposes retry mode",
+			name:     "unreachable preserves kata error and exposes retry mode",
 			messages: []model.Msg{model.Failed{Err: failure}},
 			check: func(t *testing.T, m model.Model, cmds []model.Cmd) {
 				binding, ok := model.LookupBindingForMode("ctrl+r", m.CurrentMode())
@@ -50,7 +52,7 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 			},
 		},
 		{
-			name: "keyboard retry reloads unreachable daemon",
+			name:     "keyboard retry reloads unreachable daemon",
 			messages: []model.Msg{model.Failed{Err: failure}, model.KeyMsg{Chord: "ctrl+r"}},
 			check: func(t *testing.T, m model.Model, cmds []model.Cmd) {
 				if m.Err != nil || !m.Loading || !reflect.DeepEqual(cmds, []model.Cmd{model.LoadProject{Workspace: "/repo"}}) {
@@ -59,7 +61,7 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 			},
 		},
 		{
-			name: "unreachable and retry",
+			name:     "unreachable and retry",
 			messages: []model.Msg{model.Failed{Err: failure}, model.Retry{}},
 			check: func(t *testing.T, m model.Model, cmds []model.Cmd) {
 				if m.Err != nil || !m.Loading || !reflect.DeepEqual(cmds, []model.Cmd{model.LoadProject{Workspace: "/repo"}}) {
@@ -68,7 +70,7 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 			},
 		},
 		{
-			name: "stream drop keeps Issues read-only and resumes cursor",
+			name:     "stream drop keeps Issues read-only and resumes cursor",
 			messages: []model.Msg{model.StreamDropped{Generation: 1, Err: failure}},
 			check: func(t *testing.T, m model.Model, cmds []model.Cmd) {
 				want := model.Subscribe{Workspace: "/repo", AfterID: 10, Generation: 2, Delay: time.Second}
@@ -78,7 +80,7 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 			},
 		},
 		{
-			name: "reset requests unconditional full refetch",
+			name:     "reset requests unconditional full refetch",
 			messages: []model.Msg{model.StreamEvent{Generation: 1, ID: 25, Type: "sync.reset_required"}},
 			check: func(t *testing.T, m model.Model, cmds []model.Cmd) {
 				refresh := cmds[0].(model.RefreshSnapshot)
@@ -94,10 +96,12 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 			},
 		},
 		{
-			name: "reconnect refreshes before allowing writes",
+			name:     "reconnect refreshes before allowing writes",
 			messages: []model.Msg{model.StreamDropped{Generation: 1, Err: failure}, model.StreamOpened{Generation: 2}},
 			check: func(t *testing.T, m model.Model, cmds []model.Cmd) {
-				if !m.Stale || !m.StreamConnected { t.Fatalf("reconnect before refresh: %+v", m) }
+				if !m.Stale || !m.StreamConnected {
+					t.Fatalf("reconnect before refresh: %+v", m)
+				}
 				refresh := cmds[0].(model.RefreshSnapshot)
 				m, _ = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, NotModified: true})
 				if m.Stale || m.StreamErr != nil || m.ReconnectAttempt != 0 || m.SelectedUID != "b" {
@@ -106,10 +110,12 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 			},
 		},
 		{
-			name: "superseded stream cannot stale current data",
+			name:     "superseded stream cannot stale current data",
 			messages: []model.Msg{model.StreamDropped{Generation: 0, Err: failure}},
 			check: func(t *testing.T, m model.Model, cmds []model.Cmd) {
-				if m.Stale || len(cmds) != 0 { t.Fatalf("late stream response: %+v, %#v", m, cmds) }
+				if m.Stale || len(cmds) != 0 {
+					t.Fatalf("late stream response: %+v, %#v", m, cmds)
+				}
 			},
 		},
 	} {
@@ -119,7 +125,9 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 				Snapshot: g.UISnapshotResponseBody{Cursor: 10, Collection: []model.Issue{{UID: "a"}, {UID: "b"}}},
 			})
 			var cmds []model.Cmd
-			for _, msg := range tt.messages { m, cmds = model.Update(m, msg) }
+			for _, msg := range tt.messages {
+				m, cmds = model.Update(m, msg)
+			}
 			tt.check(t, m, cmds)
 		})
 	}

@@ -13,9 +13,9 @@ const (
 	ToggleDetail Action = "toggle-detail"
 	NextDetailSection Action = "next-detail-section"
 	PreviousDetailSection Action = "previous-detail-section"
-	RetryAction Action = "retry"
 	ToggleHelp Action = "help"
-	CloseHelp  Action = "close-help"
+	CloseHelp Action = "close-help"
+	RetryAction Action = "retry"
 )
 
 type Binding struct {
@@ -44,10 +44,14 @@ var Keymap = []Binding{
 	{Chord: "k", Key: "k", Action: MoveUp, Help: "previous Issue", Mode: ModeList, ShowInFooter: true},
 	{Chord: "g", Key: "g", Action: MoveFirst, Help: "first Issue", Mode: ModeList},
 	{Chord: "shift+g", Key: "G", Action: MoveLast, Help: "last Issue", Mode: ModeList},
+	{Chord: "escape", Key: "esc", Action: DrillOut, Help: "Collections", Mode: ModeList, ShowInFooter: true},
+	{Chord: "j", Key: "j", Action: MoveDown, Help: "next Collection", Mode: ModeCollections, ShowInFooter: true},
+	{Chord: "k", Key: "k", Action: MoveUp, Help: "previous Collection", Mode: ModeCollections, ShowInFooter: true},
+	{Chord: "g", Key: "g", Action: MoveFirst, Help: "first Collection", Mode: ModeCollections},
+	{Chord: "shift+g", Key: "G", Action: MoveLast, Help: "last Collection", Mode: ModeCollections},
+	{Chord: "enter", Key: "enter", Action: DrillIn, Help: "open Collection", Mode: ModeCollections, ShowInFooter: true},
 	{Chord: "q", Key: "q", Action: QuitAction, Help: "quit", ShowInFooter: true},
 	{Chord: "enter", Key: "enter", Action: DrillIn, Help: "open", Mode: ModeList, ShowInFooter: true},
-	{Chord: "escape", Key: "esc", Action: DrillOut, Help: "Collections", Mode: ModeList, ShowInFooter: true},
-	{Chord: "enter", Key: "enter", Action: DrillIn, Help: "Issue list", Mode: ModeCollections, ShowInFooter: true},
 	{Chord: "shift+l", Key: "L", Action: ToggleDetail, Help: "toggle detail", Mode: ModeList, ShowInFooter: true},
 	{Chord: "shift+l", Key: "L", Action: ToggleDetail, Help: "toggle detail", Mode: ModeDetail, ShowInFooter: true},
 	{Chord: "j", Key: "j", Action: MoveDown, Help: "next reference", Mode: ModeDetail, ShowInFooter: true},

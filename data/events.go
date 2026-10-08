@@ -16,7 +16,9 @@ import (
 
 func (c *Client) ReadRefresh(ctx context.Context, cmd model.RefreshSnapshot) (model.SnapshotRefreshed, error) {
 	options := &g.ReadUISnapshotRequestOptions{Query: &cmd.Query}
-	if cmd.ETag != "" { options.Header = &g.ReadUISnapshotHeaders{IfNoneMatch: &cmd.ETag} }
+	if cmd.ETag != "" {
+		options.Header = &g.ReadUISnapshotHeaders{IfNoneMatch: &cmd.ETag}
+	}
 	response, err := c.ReadUISnapshotWithResponse(ctx, options)
 	result := model.SnapshotRefreshed{Request: cmd.Request, Query: cmd.Query}
 	if response != nil && response.StatusCode == http.StatusNotModified {
@@ -24,56 +26,86 @@ func (c *Client) ReadRefresh(ctx context.Context, cmd model.RefreshSnapshot) (mo
 		return result, nil
 	}
 	if err != nil {
-		if response != nil { return result, ReadError(response.Body, err) }
+		if response != nil {
+			return result, ReadError(response.Body, err)
+		}
 		return result, err
 	}
-	if response.JSON200 == nil { return result, fmt.Errorf("kata daemon returned no Issue collection") }
+	if response.JSON200 == nil {
+		return result, fmt.Errorf("kata daemon returned no Issue collection")
+	}
 	result.Snapshot = *response.JSON200
-	if response.Headers200 != nil { result.ETag = response.Headers200.ETag }
+	if response.Headers200 != nil {
+		result.ETag = response.Headers200.ETag
+	}
 	return result, nil
 }
 
 func (c *Client) ReadEvents(ctx context.Context, cmd model.Subscribe, send func(model.Msg) bool) error {
 	response, err := c.StreamEventsRaw(ctx, &g.StreamEventsRequestOptions{Query: &g.StreamEventsQuery{AfterID: &cmd.AfterID}})
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(response.Body)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		return ReadError(body, fmt.Errorf("kata event stream: HTTP %d", response.StatusCode))
 	}
-	if !send(model.StreamOpened{Generation: cmd.Generation}) { return ctx.Err() }
+	if !send(model.StreamOpened{Generation: cmd.Generation}) {
+		return ctx.Err()
+	}
 	reader := bufio.NewReader(response.Body)
 	var id, eventType string
 	var data strings.Builder
 	for {
 		line, err := reader.ReadString('\n')
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		line = strings.TrimSuffix(strings.TrimSuffix(line, "\n"), "\r")
 		if line == "" {
 			if data.Len() > 0 {
 				var envelope g.EventEnvelope
-				if err := json.Unmarshal([]byte(data.String()), &envelope); err != nil { return fmt.Errorf("kata event stream data: %w", err) }
+				if err := json.Unmarshal([]byte(data.String()), &envelope); err != nil {
+					return fmt.Errorf("kata event stream data: %w", err)
+				}
 				cursor := envelope.EventID
 				if id != "" {
 					cursor, err = strconv.ParseInt(id, 10, 64)
-					if err != nil { return fmt.Errorf("kata event stream cursor: %w", err) }
+					if err != nil {
+						return fmt.Errorf("kata event stream cursor: %w", err)
+					}
 				}
-				if eventType == "" { eventType = envelope.Type }
-				if !send(model.StreamEvent{Generation: cmd.Generation, ID: cursor, Type: eventType}) { return ctx.Err() }
-				if eventType == "sync.reset_required" { return nil }
+				if eventType == "" {
+					eventType = envelope.Type
+				}
+				if !send(model.StreamEvent{Generation: cmd.Generation, ID: cursor, Type: eventType}) {
+					return ctx.Err()
+				}
+				if eventType == "sync.reset_required" {
+					return nil
+				}
 			}
 			id, eventType = "", ""
 			data.Reset()
 			continue
 		}
-		if strings.HasPrefix(line, ":") { continue }
+		if strings.HasPrefix(line, ":") {
+			continue
+		}
 		field, value, _ := strings.Cut(line, ":")
 		value = strings.TrimPrefix(value, " ")
 		switch field {
-		case "id": id = value
-		case "event": eventType = value
-		case "data": data.WriteString(value); data.WriteByte('\n')
+		case "id":
+			id = value
+		case "event":
+			eventType = value
+		case "data":
+			data.WriteString(value)
+			data.WriteByte('\n')
 		}
 	}
 }
