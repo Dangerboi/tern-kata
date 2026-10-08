@@ -223,6 +223,19 @@ func TestEscAfterClickBacksOut(t *testing.T) {
 	}
 }
 
+// Jump history belongs to the detail column: hiding detail with the keys ends
+// it as clicking away does, so a later esc never replays an earlier jump.
+func TestJumpHistoryEndsWhenKeysLeaveDetail(t *testing.T) {
+	m, _ := clickDetailPath(model.SectionLinks, "enter")(clickAt(model.ColumnDetail))
+	if m.SelectedUID != "other" || len(m.DetailBack) != 1 {
+		t.Fatalf("jump did not record history: selected=%q back=%v", m.SelectedUID, m.DetailBack)
+	}
+	m, _ = clickPress(m, "shift+l", "shift+l", "enter", "escape")
+	if m.Focus != model.ColumnList || m.SelectedUID != "other" || len(m.DetailBack) != 0 {
+		t.Fatalf("esc replayed a jump: focus=%v selected=%q back=%v", m.Focus, m.SelectedUID, m.DetailBack)
+	}
+}
+
 func TestEscClosesLayerAfterClickInsideIt(t *testing.T) {
 	for _, tt := range []struct {
 		name  string
