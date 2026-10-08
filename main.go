@@ -63,6 +63,8 @@ func run() error {
 				if input.ID == view.IssueListID {
 					msg = model.SelectMsg{UID: strings.TrimPrefix(input.Item, view.IssueListID+".")}
 				}
+			case *tern.Action:
+				msg = detailAction(input)
 			case *tern.Resize:
 				msg = model.ResizeMsg{Cols: input.Cols}
 			case *tern.ErrorEvent:
@@ -82,6 +84,8 @@ func run() error {
 	msg := model.Msg(model.Start{Workspace: workspace})
 	for {
 		previousSelection := m.SelectedUID
+		previousFocus, previousSection, previousIndex := m.Focus, m.DetailSection, m.DetailIndex
+		previousDetailLoading := m.DetailLoading
 		var cmds []model.Cmd
 		m, cmds = model.Update(m, msg)
 		if m.Quitting {
@@ -90,8 +94,14 @@ func run() error {
 		if err := surface.Render(view.Render(m)); err != nil {
 			return err
 		}
-		if m.SelectedUID != "" && m.SelectedUID != previousSelection {
+		if m.Focus == model.ColumnList && m.SelectedUID != "" && m.SelectedUID != previousSelection {
 			if err := surface.Reveal(view.IssueID(m.SelectedUID), "nearest"); err != nil {
+				return err
+			}
+		}
+		if m.Focus == model.ColumnDetail && m.Detail != nil && m.Detail.Issue != nil && !m.DetailLoading &&
+			(previousFocus != m.Focus || previousSection != m.DetailSection || previousIndex != m.DetailIndex || previousDetailLoading) {
+			if err := surface.Reveal(view.DetailSectionID(m.DetailSection), "nearest"); err != nil {
 				return err
 			}
 		}

@@ -5,6 +5,9 @@ func updateNavigation(m Model, action Action) (Model, []Cmd) {
 		m.Quitting = true
 		return m, []Cmd{Quit{}}
 	}
+	if action == DrillIn || action == DrillOut || action == ToggleDetail || action == NextDetailSection || action == PreviousDetailSection || m.Focus != ColumnList {
+		return updateDetailNavigation(m, action)
+	}
 	if len(m.Issues) == 0 {
 		return m, nil
 	}

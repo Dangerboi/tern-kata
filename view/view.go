@@ -8,37 +8,60 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-const IssueListID = "main.issues"
+const IssueListID = "main.columns.list.issues"
 
 func IssueID(uid string) string { return IssueListID + "." + uid }
 
 func Render(m model.Model) tern.View {
-	main := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading"}, Text: m.Project.Name + " / Open Issues"})
+	var main tern.Element
 	switch {
 	case m.Err != nil:
 		main = ui.Nodes(ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.Err.Error()})
 	case m.Loading:
 		main = ui.Nodes(ui.Text{Common: ui.Common{Key: "loading", Tone: ui.TonePending}, Text: "Loading Project's open Issues…"})
 	default:
-		items := make([]tern.Element, 0, len(m.Issues))
-		for _, issue := range m.Issues {
-			items = append(items, ui.Item{
-				Common: ui.Common{Key: issue.UID},
-				Label:  ui.T(issue.ShortID + "  " + issue.Title),
-			})
+		columns := make([]tern.Element, 0, 3)
+		for _, column := range m.VisibleColumns() {
+			switch column {
+			case model.ColumnCollections:
+				columns = append(columns, Collections(m))
+			case model.ColumnList:
+				columns = append(columns, issues(m))
+			case model.ColumnDetail:
+				columns = append(columns, detail(m))
+			}
 		}
-		selected := ""
-		if m.SelectedUID != "" {
-			selected = IssueID(m.SelectedUID)
-		}
-		main = append(main, ui.List{
-			CommonWithoutMax: ui.CommonWithoutMax{Key: "issues"},
-			Selected:         selected,
-			Empty:            ui.T("No open Issues in this Project. Create one with kata create."),
-			Children:         items,
-		})
+		main = ui.Nodes(ui.Row{Common: ui.Common{Key: "columns"}, Gap: ui.GapMD, Children: columns})
 	}
 	return tern.View{Main: main, Dock: footer(m)}
+}
+
+func issues(m model.Model) tern.Element {
+	items := make([]tern.Element, 0, len(m.Issues))
+	for _, issue := range m.Issues {
+		items = append(items, ui.Item{
+			Common: ui.Common{Key: issue.UID},
+			Label: ui.T(issue.ShortID + "  " + issue.Title),
+		})
+	}
+	selected := ""
+	if m.SelectedUID != "" {
+		selected = IssueID(m.SelectedUID)
+	}
+	tone := ui.ToneNeutral
+	if m.Focus == model.ColumnList { tone = ui.ToneAccent }
+	return ui.Col{
+		Common: ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.4)},
+		Children: ui.Nodes(
+			ui.Text{Common: ui.Common{Key: "heading", Tone: tone, Actions: &ui.Actions{Click: "focus-list"}}, Text: m.Project.Name + " / Open Issues"},
+			ui.List{
+				CommonWithoutMax: ui.CommonWithoutMax{Key: "issues"},
+				Selected: selected,
+				Empty: ui.T("No open Issues in this Project. Create one with kata create."),
+				Children: items,
+			},
+		),
+	}
 }
 
 func footer(m model.Model) tern.Element {
