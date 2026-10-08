@@ -93,7 +93,7 @@ func filterLayer(m model.Model) tern.Element {
 	if values.ProjectUID != "" {
 		project = m.ProjectFilterName(values.ProjectUID)
 	}
-	status := "Collection default"
+	status := "all"
 	if values.Status != "" {
 		status = values.Status
 	}

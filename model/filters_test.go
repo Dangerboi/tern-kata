@@ -60,7 +60,7 @@ func TestStatusFilterCycle(t *testing.T) {
 	}{
 		{"open", "All Open · status=open"},
 		{"closed", "All Open · status=closed"},
-		{"all", "All Open · status=all"},
+		{"", "All Open"},
 		{"open", "All Open · status=open"},
 	} {
 		var cmds []model.Cmd
@@ -225,5 +225,21 @@ func TestFilterFormActionsAndProjectScope(t *testing.T) {
 	m, _ = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "a", Status: "open", ProjectUID: new("other")}}}})
 	if len(m.VisibleRows()) != 0 {
 		t.Fatal("Project filter widened current Project Collection")
+	}
+}
+
+func TestStatusDefaultsToAll(t *testing.T) {
+	for _, c := range []model.Collection{{View: "all-open", Title: "All Open"}, {View: "project", ProjectUID: "p", Title: "Work"}} {
+		m := model.Model{Collection: c}
+		if q := m.SnapshotQuery(); q.Status != nil || m.ListHeader() != c.Title {
+			t.Fatalf("%s: status query %v header %q", c.View, q.Status, m.ListHeader())
+		}
+		m, _ = model.Update(m, model.KeyMsg{Chord: "f"})
+		m, _ = model.Update(m, model.KeyMsg{Chord: "tab"})
+		m, _ = model.Update(m, model.KeyMsg{Chord: "right"})
+		m, cmds := model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
+		if m.Filters.Status != "open" || len(cmds) != 1 {
+			t.Fatalf("%s: form did not start on all: %+v", c.View, m.Filters)
+		}
 	}
 }
