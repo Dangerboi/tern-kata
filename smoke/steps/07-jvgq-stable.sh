@@ -16,9 +16,9 @@ expect_no_ops() {
 }
 # Fails unless ops $3 were sent after line $2 of recording $1.
 expect_ops() { [[ -n $(stable_ops "$1" "$2" "$3") ]] || { printf 'Missing TSP ops %s\n' "$3" >&2; return 1; }; }
-stable_columns='(.[0] == "add" or .[0] == "del") and (.[1] | test("^main\\.(loading|columns(\\.(collections|list(\\.(topbar(\\.(heading|daemon|counts))?|issues))?|detail))?)$"))'
-stable_detail='(.[0] == "add" or .[0] == "del") and (.[1] | test("^main\\.columns\\.detail\\.(title|section[0-5])$"))'
-detail_reveal='.[0] == "reveal" and (.[1] | test("^main\\.columns\\.detail\\.section[0-5]$"))'
+stable_columns='(.[0] == "add" or .[0] == "del") and (.[1] | test("^main\\.(loading|columns(\\.(collections|list(\\.issues)?|detail))?|topbar(\\.(heading|daemon|counts))?)$"))'
+stable_detail='(.[0] == "add" or .[0] == "del") and (.[1] | test("^main\\.columns\\.detail\\.(title|sections(\\.(section[0-5]|gap[1-5]))?)$"))'
+detail_reveal='.[0] == "reveal" and (.[1] | test("^main\\.columns\\.detail\\.sections\\.section[0-5](\\.[^.]+)?$"))'
 
 # An unbound directory keeps the Collections sidebar, starting on Inbox.
 mkdir -p "$tmp/stable-unbound"
@@ -42,7 +42,7 @@ mark=$(wc -l <"$tmp/stable-frames.jsonl")
 ctl click "[data-id='main.columns.list.issues.$stable_second']"
 expect_tree "[data-id='main.columns.list.issues.$stable_second']" '.nodes[0]["aria-selected"] == "true"'
 expect_tree "[data-id='main.columns.detail.title']" '.nodes[0].text | contains("Smoke stable second") and (contains("loading") | not)'
-expect_tree "[data-id='main.columns.detail.section2.body']" '[.nodes[] | .. | objects | .text? // empty] | join(" ") | contains("Stable second body")'
+expect_tree "[data-id='main.columns.detail.sections.section2.body']" '[.nodes[] | .. | objects | .text? // empty] | join(" ") | contains("Stable second body")'
 expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$stable_columns"
 expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$stable_detail"
 expect_no_ops "$tmp/stable-frames.jsonl" "$mark" '.[0] == "reveal"'
@@ -53,10 +53,10 @@ expect_ops "$tmp/stable-frames.jsonl" "$mark" '.[1] == "main.columns.detail.titl
 ctl click "[data-id='main.columns.list.issues.$stable_first']"
 expect_tree "[data-id='main.columns.detail.title']" '.nodes[0].text | contains("Smoke stable first") and (contains("loading") | not)'
 ctl key enter
-ctl click "[data-id='main.columns.detail.section3.heading']"
+ctl click "[data-id='main.columns.detail.sections.section3.heading']"
 mark=$(wc -l <"$tmp/stable-frames.jsonl")
 kata --workspace "$tmp/workspace" comment "$stable_first" --body "Stable refresh comment" --json
-expect_tree "[data-id='main.columns.detail.section4']" '[.nodes[] | .. | objects | .text? // empty] | join(" ") | contains("Stable refresh comment")'
+expect_tree "[data-id='main.columns.detail.sections.section4']" '[.nodes[] | .. | objects | .text? // empty] | join(" ") | contains("Stable refresh comment")'
 expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$detail_reveal"
 mark=$(wc -l <"$tmp/stable-frames.jsonl")
 ctl key enter

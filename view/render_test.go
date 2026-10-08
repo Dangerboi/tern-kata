@@ -5,12 +5,16 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/model"
 	"github.com/Dangerboi/tern-kata/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	g "go.kenn.io/kata/pkg/client/generated"
 )
+
+// testNow is the time relative "updated" cells are measured from.
+var testNow = time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
 
 // shown is every node of a rendered view by the id Tern derives from keys.
 // Each WireNode keeps its props (P) and ordered children (C).
@@ -20,7 +24,7 @@ type shown map[string]tern.WireNode
 // are the ones Tern sees and a duplicate sibling key fails the test.
 func render(t testing.TB, m model.Model) shown {
 	t.Helper()
-	ops, err := tern.NewReconciler("test").Diff(view.Render(m))
+	ops, err := tern.NewReconciler("test").Diff(view.Render(m, testNow))
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -69,19 +73,18 @@ func sameIDs(t testing.TB, root string, want, got shown) {
 
 // text is what a node shows: its text, or its label or spans joined.
 func text(n tern.WireNode) string {
-	for _, prop := range []string{"text", "label", "spans"} {
+	var b strings.Builder
+	for _, prop := range []string{"text", "label", "spans", "value"} {
 		switch v := n.P[prop].(type) {
 		case string:
-			return v
+			b.WriteString(v)
 		case []any:
-			var b strings.Builder
 			for _, span := range v {
 				b.WriteString(span.(map[string]any)["t"].(string))
 			}
-			return b.String()
 		}
 	}
-	return ""
+	return b.String()
 }
 
 // apply feeds msgs through model.Update, the way the app does.
@@ -130,7 +133,7 @@ func TestSwitchingCollectionKeepsListOnScreen(t *testing.T) {
 	}
 	sameIDs(t, "main.columns", idle, loading)
 	if heading := text(loading["main.topbar.heading"]); !strings.HasPrefix(heading, allOpen.Title) || heading == allOpen.Title {
-		t.Errorf("list heading shows no loading marker: %q", heading)
+		t.Errorf("top bar title shows no loading marker: %q", heading)
 	}
 
 	m = apply(m, model.CollectionLoaded{Collection: allOpen, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha}}})
@@ -139,7 +142,7 @@ func TestSwitchingCollectionKeepsListOnScreen(t *testing.T) {
 		t.Errorf("alpha's row changed id across loading: %v", loaded.under(view.IssueListID))
 	}
 	if heading := text(loaded["main.topbar.heading"]); heading != allOpen.Title {
-		t.Errorf("list heading keeps the loading marker: %q", heading)
+		t.Errorf("top bar title keeps the loading marker: %q", heading)
 	}
 }
 

@@ -370,6 +370,6 @@ func TestListHeadingClickOpensThePickerFromTheSidebar(t *testing.T) {
 	}
 	m, _ = model.Update(m, model.ActionMsg{Action: "key", Value: "p"})
 	if !m.Picker.Open {
-		t.Fatal("clicking the list heading did not open the picker")
+		t.Fatal("clicking the top bar title did not open the picker")
 	}
 }

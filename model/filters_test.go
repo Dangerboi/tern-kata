@@ -65,8 +65,8 @@ func TestStatusFilterCycle(t *testing.T) {
 	} {
 		var cmds []model.Cmd
 		m, cmds = model.Update(m, model.KeyMsg{Chord: "s"})
-		if len(cmds) != 1 || m.Filters.Status != tt.status || m.ListHeader() != tt.header {
-			t.Fatalf("status cycle: %+v, header %q, commands %#v", m.Filters, m.ListHeader(), cmds)
+		if len(cmds) != 1 || m.Filters.Status != tt.status || m.TopBarTitle() != tt.header {
+			t.Fatalf("status cycle: %+v, header %q, commands %#v", m.Filters, m.TopBarTitle(), cmds)
 		}
 		refresh := cmds[0].(model.RefreshSnapshot)
 		want := []string(nil)
@@ -110,8 +110,8 @@ func TestFilterForm(t *testing.T) {
 				return
 			}
 			want := model.Filters{ProjectUID: "p", Status: "open", Owner: "q", Label: "bug,ux", Relationship: "parent", Search: "existing"}
-			if m.Filters != want || len(cmds) != 1 || m.ListHeader() != "Today · project=Work · status=open · owner=q · label=bug,ux · relationship=parent · search=existing" {
-				t.Fatalf("form apply: %+v %q %#v", m.Filters, m.ListHeader(), cmds)
+			if m.Filters != want || len(cmds) != 1 || m.TopBarTitle() != "Today · project=Work · status=open · owner=q · label=bug,ux · relationship=parent · search=existing" {
+				t.Fatalf("form apply: %+v %q %#v", m.Filters, m.TopBarTitle(), cmds)
 			}
 			refresh := cmds[0].(model.RefreshSnapshot)
 			q := refresh.Query
@@ -138,7 +138,7 @@ func TestFiltersSurviveRefreshAndClear(t *testing.T) {
 		t.Fatalf("live refresh loses filters/results: %+v", m)
 	}
 	m, cmds = model.Update(m, model.KeyMsg{Chord: "c"})
-	if m.Filters != (model.Filters{}) || m.ListHeader() != "All Open" || len(cmds) != 1 {
+	if m.Filters != (model.Filters{}) || m.TopBarTitle() != "All Open" || len(cmds) != 1 {
 		t.Fatalf("clear: %+v %#v", m.Filters, cmds)
 	}
 	refresh = cmds[0].(model.RefreshSnapshot)
@@ -231,8 +231,8 @@ func TestFilterFormActionsAndProjectScope(t *testing.T) {
 func TestStatusDefaultsToAll(t *testing.T) {
 	for _, c := range []model.Collection{{View: "all-open", Title: "All Open"}, {View: "project", ProjectUID: "p", Title: "Work"}} {
 		m := model.Model{Collection: c}
-		if q := m.SnapshotQuery(); q.Status != nil || m.ListHeader() != c.Title {
-			t.Fatalf("%s: status query %v header %q", c.View, q.Status, m.ListHeader())
+		if q := m.SnapshotQuery(); q.Status != nil || m.TopBarTitle() != c.Title {
+			t.Fatalf("%s: status query %v header %q", c.View, q.Status, m.TopBarTitle())
 		}
 		m, _ = model.Update(m, model.KeyMsg{Chord: "f"})
 		m, _ = model.Update(m, model.KeyMsg{Chord: "tab"})

@@ -25,7 +25,7 @@ for i in $(seq 45); do ctl key k; done
 expect_tree "[data-id^='main.columns.list.issues.01']" '.nodes[0]["aria-selected"] == "true"'
 
 pinned_ops() { tail -n "+$(($mark + 1))" "$tmp/pinned-frames.jsonl" | jq -c "select(.dir == \"out\" and .verb == \"f\") | .body.ops[] | select($1)"; }
-[[ -z $(pinned_ops '(.[1] | test("^main\\.columns\\.list\\.(topbar|header)"))') ]] || { printf 'Top bar or header node changed while browsing\n' >&2; return 1; }
+[[ -z $(pinned_ops '(.[1] | test("^main\\.topbar(\\.(heading|daemon|counts))?$|^main\\.columns\\.list\\.header"))') ]] || { printf 'Top bar or header node changed while browsing\n' >&2; return 1; }
 [[ -n $(pinned_ops '.[0] == "reveal"') ]] || { printf 'No reveal sent while browsing\n' >&2; return 1; }
 [[ -z $(pinned_ops '.[0] == "reveal" and (.[1] | test("^main\\.columns\\.list\\.issues\\.0")) == false') ]] || { printf 'Reveal on a node other than an Issue row\n' >&2; return 1; }
 [[ -z $(pinned_ops '.[0] == "reveal" and .[2] != "nearest"') ]] || { printf 'Reveal other than nearest\n' >&2; return 1; }

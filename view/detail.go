@@ -14,8 +14,20 @@ import (
 
 const DetailID = "main.columns.detail"
 
+// DetailScrollID is the list that scrolls the sections: the title stays above it.
+const DetailScrollID = DetailID + ".sections"
+
 func DetailSectionID(section model.DetailSection) string {
-	return DetailID + ".section" + strconv.Itoa(int(section))
+	return DetailScrollID + ".section" + strconv.Itoa(int(section))
+}
+
+// DetailRevealID is what to scroll into view for the detail's selection: its
+// row, or its section when it has no rows.
+func DetailRevealID(m model.Model) string {
+	if row, ok := m.DetailRow(m.DetailSection, m.DetailIndex); ok {
+		return DetailSectionID(m.DetailSection) + "." + row.Key
+	}
+	return DetailSectionID(m.DetailSection)
 }
 
 func detail(m model.Model) tern.Element {
@@ -39,6 +51,7 @@ func detail(m model.Model) tern.Element {
 			heading = append(heading, loadingMarker)
 		}
 		children = append(children, ui.Text{Common: ui.Common{Key: "title", Actions: &ui.Actions{Click: "focus-detail"}}, Spans: heading})
+		sections := make([]tern.Element, 0, 2*int(model.SectionHistory)+1)
 		for section := model.SectionProperties; section <= model.SectionHistory; section++ {
 			content := ui.Nodes(sectionHeading(m, section))
 			switch section {
@@ -55,8 +68,12 @@ func detail(m model.Model) tern.Element {
 			default:
 				content = append(content, detailRows(m, section)...)
 			}
-			children = append(children, ui.Col{Common: ui.Common{Key: "section" + strconv.Itoa(int(section))}, Gap: ui.GapSM, Children: content})
+			if section > model.SectionProperties {
+				sections = append(sections, ui.Spacer{Common: ui.Common{Key: "gap" + strconv.Itoa(int(section))}, Size: ui.GapMD})
+			}
+			sections = append(sections, ui.Col{Common: ui.Common{Key: "section" + strconv.Itoa(int(section))}, Gap: ui.GapSM, Children: content})
 		}
+		children = append(children, ui.List{CommonWithoutMax: scrollerCommon("sections"), Max: scrollMax(m), Children: sections})
 	}
 	return panel(m, model.ColumnDetail, ui.Common{Key: "detail", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapMD, children)
 }

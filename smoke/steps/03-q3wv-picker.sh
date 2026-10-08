@@ -49,7 +49,7 @@ ctl key enter
 expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
 
-# A click on a row switches like enter; the list heading opens the picker; esc closes it, also after a click inside it.
+# A click on a row switches like enter; the top bar title opens the picker; esc closes it, also after a click inside it.
 ctl key p
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 ctl click "[data-id='layer.collections.list.project.$picker_alpha_uid']"

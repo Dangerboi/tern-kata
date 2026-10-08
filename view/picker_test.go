@@ -13,7 +13,7 @@ import (
 // pickerNodes renders m and indexes every node by the id Tern gives it.
 func pickerNodes(t *testing.T, m model.Model) map[string]tern.WireNode {
 	t.Helper()
-	ops, err := tern.NewReconciler("picker").Diff(view.Render(m))
+	ops, err := tern.NewReconciler("picker").Diff(view.Render(m, testNow))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestRenderPickerOnlyWhenOpenAndFocusesItsFilter(t *testing.T) {
 	}
 }
 
-func TestRenderListHeadingOpensPicker(t *testing.T) {
+func TestRenderTopBarTitleOpensPicker(t *testing.T) {
 	heading := pickerNodes(t, pickerLoaded(true))["main.topbar.heading"]
 	actions, _ := heading.P["actions"].(map[string]any)
 	if actions["click"] != "key=p" {

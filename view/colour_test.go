@@ -13,7 +13,7 @@ import (
 // styled is a node's spans as text -> style, in order, for a row or heading.
 func styled(n tern.WireNode) [][2]string {
 	var out [][2]string
-	for _, prop := range []string{"label", "spans"} {
+	for _, prop := range []string{"label", "spans", "value"} {
 		if spans, ok := n.P[prop].([]any); ok {
 			for _, span := range spans {
 				s := span.(map[string]any)
@@ -91,7 +91,7 @@ func TestSelectedRowIsAccent(t *testing.T) {
 	}
 }
 
-func TestFocusedListHeadingIsAccent(t *testing.T) {
+func TestFocusedTopBarTitleIsAccent(t *testing.T) {
 	m := browsing()
 	heading := render(t, m)["main.topbar.heading"]
 	if heading.P["tone"] != "accent" || style(t, heading, m.Collection.Title) != "accent strong" {

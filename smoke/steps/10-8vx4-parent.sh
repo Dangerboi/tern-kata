@@ -25,7 +25,7 @@ parent_height=$(ctl stats | jq -r '.viewport[1]')
 parent_expect_drawn() {
   expect_tree "[data-id\$='.$parent_uid']" ".ok and .count == 1 and .nodes[0][\"aria-selected\"] == \"true\" and .nodes[0].rect[1] >= 0 and (.nodes[0].rect[1] + .nodes[0].rect[3]) <= $parent_height"
   expect_tree "[data-id='main.columns.detail.title']" '.ok and (.nodes[0].text | contains("Smoke parent spec") and (contains("loading") | not))'
-  expect_tree "[data-id^='main.columns.detail.section3.'][data-id\$='.jump']" '.ok and .count == 40'
+  expect_tree "[data-id^='main.columns.detail.sections.section3.'][data-id\$='.jump']" '.ok and .count == 40'
 }
 
 # j/k onto the collapsed parent: from row 1 down to it, or up from row 2 when it is the first.
@@ -60,7 +60,7 @@ parent_expect_drawn
 # The plugin never met a surface error, and the Pane is still its Pane.
 expect_tree "[data-id^='main.']" '.ok and .count > 0'
 parent_errors=$(jq -c 'select(.dir == "in" and .verb == "e" and .body.ev == "error")' "$tmp/parent-frames.jsonl")
-[[ -z $parent_errors ]] || { printf 'Tern sent surface errors:\n%s\n' "$parent_errors" >&2; exit 1; }
+[[ -z $parent_errors ]] || { printf 'Tern sent surface errors:\n%s\n' "$parent_errors" >&2; return 1; }
 
 quit_app
 parent_uids=("$parent_uid" "${parent_children[@]}")

@@ -111,7 +111,8 @@ func updateFilterText(m Model, msg KeyMsg) (Model, []Cmd) {
 	return refreshFilters(m)
 }
 
-func (m Model) ListHeader() string {
+// TopBarTitle is the top bar's title line: the Collection with the filters on it.
+func (m Model) TopBarTitle() string {
 	header := m.Collection.Title
 	if m.Filters.ProjectUID != "" {
 		header += " · project=" + m.ProjectFilterName(m.Filters.ProjectUID)

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/model"
 	"github.com/Dangerboi/tern-kata/view"
@@ -76,7 +77,7 @@ eventLoop:
 		if m.Quitting {
 			return nil
 		}
-		if err := surface.Render(view.Render(m)); err != nil {
+		if err := surface.Render(view.Render(m, time.Now())); err != nil {
 			return err
 		}
 		if target := view.InputFocusID(m); target != inputFocus {
@@ -92,7 +93,7 @@ eventLoop:
 		}
 		if !m.Loading && !m.DetailHidden && m.Focus == model.ColumnDetail && m.Shows(model.ColumnDetail) && m.Detail != nil && m.Detail.Issue != nil && !m.DetailLoading &&
 			(previousFocus != m.Focus || previousSection != m.DetailSection || previousIndex != m.DetailIndex || m.DetailIssueUID() != previousDetailIssue) {
-			if err := surface.Reveal(view.DetailSectionID(m.DetailSection), "nearest"); err != nil {
+			if err := surface.Reveal(view.DetailRevealID(m), "nearest"); err != nil {
 				return err
 			}
 		}

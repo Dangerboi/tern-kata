@@ -199,8 +199,8 @@ func TestNewProjectBindOpensTheProjectFirst(t *testing.T) {
 	if want := []model.Column{model.ColumnList, model.ColumnDetail}; !reflect.DeepEqual(got.VisibleColumns(), want) {
 		t.Fatalf("columns = %v: the sidebar should be gone", got.VisibleColumns())
 	}
-	if got.ListHeader() != "my-repo" || !got.Loading {
-		t.Fatalf("heading %q loading=%v", got.ListHeader(), got.Loading)
+	if got.TopBarTitle() != "my-repo" || !got.Loading {
+		t.Fatalf("heading %q loading=%v", got.TopBarTitle(), got.Loading)
 	}
 
 	// The snapshot that arrives lists the Project, which is now the pinned entry.
@@ -255,8 +255,8 @@ func TestPickerNewProjectOnlyCreates(t *testing.T) {
 	if want := []model.Cmd{model.LoadCollection{Workspace: newProjectWorkspace, Collection: collection}}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("after create requested %#v, want %#v", cmds, want)
 	}
-	if got.ListHeader() != "extra" || pickerTitles(got)[0] != "smoke" {
-		t.Fatalf("heading %q, picker pins %q", got.ListHeader(), pickerTitles(got)[0])
+	if got.TopBarTitle() != "extra" || pickerTitles(got)[0] != "smoke" {
+		t.Fatalf("heading %q, picker pins %q", got.TopBarTitle(), pickerTitles(got)[0])
 	}
 
 	// An Issue created before the snapshot arrives belongs to the new Project.

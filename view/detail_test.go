@@ -31,11 +31,11 @@ func TestDetailSectionsRenderInOrder(t *testing.T) {
 	if !slices.Equal(headings, want) {
 		t.Fatalf("headings %v, want %v", headings, want)
 	}
-	root := nodes[view.DetailID]
+	root := nodes[view.DetailScrollID]
 	var order []string
 	for _, c := range root.C {
-		if strings.Contains(c.ID, ".section") {
-			order = append(order, strings.TrimPrefix(c.ID, view.DetailID+"."))
+		if id := strings.TrimPrefix(c.ID, view.DetailScrollID+"."); strings.HasPrefix(id, "section") {
+			order = append(order, id)
 		}
 	}
 	if !slices.IsSorted(order) || len(order) != 6 || order[0] != "section0" {

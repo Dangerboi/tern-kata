@@ -16,8 +16,7 @@ import (
 // with no owner, listed on a Project at 160 columns.
 func columnsFixture(t testing.TB) model.Model {
 	t.Helper()
-	noon := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
-	view.SetClock(func() time.Time { return noon })
+	noon := testNow
 	parent := model.Issue{UID: "parent", ShortID: "pppp", Title: "Parent", Status: "open", ProjectName: "work", Owner: ptr("dana"), UpdatedAt: noon.Add(-2 * time.Hour)}
 	open := model.Issue{UID: "open", ShortID: "oooo", Title: "Open child", Status: "open", ProjectName: "work", UpdatedAt: noon}
 	done := model.Issue{UID: "done", ShortID: "dddd", Title: "Done child", Status: "closed", ProjectName: "work", UpdatedAt: noon}

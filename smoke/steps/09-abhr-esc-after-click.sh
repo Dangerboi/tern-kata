@@ -55,7 +55,7 @@ ctl click "[data-id$='.$esc_target']"
 esc_expect_mode list
 ctl key enter
 esc_expect_mode detail
-ctl click "[data-id^='main.columns.detail.section'][data-id\$='.jump']"
+ctl click "[data-id^='main.columns.detail.sections.section'][data-id\$='.jump']"
 expect_tree "[data-id='main.columns.detail.title']" '.ok and (.nodes[0].text | contains("Esc blocker"))'
 esc_expect_mode detail
 ctl key esc
@@ -69,7 +69,7 @@ esc_expect_mode collections
 # A Collection clicked mid-jump ends the jump: enter then esc leaves detail instead of replaying it.
 ctl click "[data-id$='.$esc_target']"
 ctl key enter
-ctl click "[data-id^='main.columns.detail.section'][data-id\$='.jump']"
+ctl click "[data-id^='main.columns.detail.sections.section'][data-id\$='.jump']"
 expect_tree "[data-id='main.columns.detail.title']" '.ok and (.nodes[0].text | contains("Esc blocker"))'
 ctl click "[data-id='main.columns.collections.project.$esc_project']"
 esc_expect_mode list
@@ -81,7 +81,7 @@ esc_expect_mode list
 expect_tree "[data-id='main.columns.detail.title']" '.ok and (.nodes[0].text | contains("Esc blocker"))'
 
 # A detail heading clicked gives detail the keys, and esc leaves it.
-ctl click "[data-id^='main.columns.detail.section'][data-id\$='.heading']"
+ctl click "[data-id^='main.columns.detail.sections.section'][data-id\$='.heading']"
 esc_expect_mode detail
 ctl key esc
 esc_expect_mode list
