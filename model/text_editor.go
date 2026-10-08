@@ -8,8 +8,14 @@ import (
 type TextSelection struct { Text string; Cursor, Anchor int }
 type TextEditor struct { TextSelection; History []TextSelection }
 
+func len16(text string) int {
+ length:=0
+ for _,r:=range text { length++; if r>=0x10000 { length++ } }
+ return length
+}
+
 func NewTextEditor(text string) TextEditor {
- end := len(utf16.Encode([]rune(text)))
+ end := len16(text)
  return TextEditor{TextSelection:TextSelection{Text:text, Cursor:end, Anchor:end}}
 }
 
@@ -21,6 +27,11 @@ func boundary(text []uint16, offset int) bool {
 func (e TextEditor) ApplyEdit(from, to int, text string, cursor, length int) TextEditor {
  units := utf16.Encode([]rune(e.Text))
  if length != len(units) || from > to || !boundary(units,from) || !boundary(units,to) { return e }
+ if from==to && text=="" {
+  if !boundary(units,cursor) { return e }
+  e.Cursor=cursor; e.Anchor=cursor
+  return e
+ }
  inserted := utf16.Encode([]rune(text))
  next := make([]uint16,0,len(units)-(to-from)+len(inserted))
  next = append(next,units[:from]...)
@@ -42,22 +53,24 @@ func (e TextEditor) Undo() TextEditor {
 
 func (e TextEditor) Insert(text string) TextEditor {
  from,to := min(e.Cursor,e.Anchor),max(e.Cursor,e.Anchor)
- return e.ApplyEdit(from,to,text,from+len(utf16.Encode([]rune(text))),len(utf16.Encode([]rune(e.Text))))
+ return e.ApplyEdit(from,to,text,from+len16(text),len16(e.Text))
 }
 
 func (e TextEditor) Key(action Action, selectText bool) TextEditor {
+ switch action {
+ case EditorUndo: return e.Undo()
+ case EditorNewline: return e.Insert("\n")
+ case EditorSelectAll: e.Anchor=0; e.Cursor=len16(e.Text); return e
+ }
  units := utf16.Encode([]rune(e.Text))
  pos := e.Cursor
  previous := func(p int) int { p=max(0,p-1); if !boundary(units,p) { p-- }; return p }
  next := func(p int) int { p=min(len(units),p+1); if !boundary(units,p) { p++ }; return p }
  switch action {
- case EditorUndo: return e.Undo()
- case EditorNewline: return e.Insert("\n")
  case EditorBackspace, EditorDelete:
   from,to := min(e.Cursor,e.Anchor),max(e.Cursor,e.Anchor)
   if from == to { if action == EditorBackspace { from=previous(from) } else { to=next(to) } }
   return e.ApplyEdit(from,to,"",from,len(units))
- case EditorSelectAll: e.Anchor=0; e.Cursor=len(units); return e
  case EditorLeft:
   if !selectText && e.Anchor != pos { pos=min(pos,e.Anchor) } else { pos=previous(pos) }
  case EditorRight:

@@ -28,6 +28,7 @@ expect_tree "[data-id='layer.editor.body']" '.ok and .count == 1'
 ctl key Ctrl+e
 ctl expect '"Draft editor ready"'
 ctl type '" + external Draft"'
+ctl expect '" + external Draft"'
 ctl key Enter
 expect_tree "[data-id='layer.editor.body']" '.ok and .count == 1'
 expect_tree "[data-id='layer.editor.body']" '[.nodes[] | .. | objects | .text? // empty] | any(contains("external Draft"))'

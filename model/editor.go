@@ -3,11 +3,9 @@ package model
 import (
  "errors"
  "maps"
- "unicode/utf16"
 )
 
 var errDraftReadOnly = errors.New("Read-only: reconnecting to kata; Draft kept")
-func len16(text string) int { return len(utf16.Encode([]rune(text))) }
 
 type Draft struct {
  Editor TextEditor
@@ -109,9 +107,15 @@ func updateEditor(m Model,msg Msg) (Model,[]Cmd,bool) {
   } else if msg.Text!="" { draft.Editor=draft.Editor.Insert(msg.Text) }
   return putDraft(m,m.EditorUID,draft),nil,true
  case EditMsg:
-  draft,active:=m.ActiveDraft(); if active && m.EditorMode()==ModeEditor && !draft.Saving && msg.ID=="layer.editor.body" { draft.Editor=draft.Editor.ApplyEdit(msg.From,msg.To,msg.Text,msg.Cursor,msg.Len); m=putDraft(m,m.EditorUID,draft) }; return m,nil,true
+  draft,active:=m.ActiveDraft()
+  if !active || msg.ID!="layer.editor.body" { return m,nil,false }
+  if m.EditorMode()==ModeEditor && !draft.Saving { draft.Editor=draft.Editor.ApplyEdit(msg.From,msg.To,msg.Text,msg.Cursor,msg.Len); m=putDraft(m,m.EditorUID,draft) }
+  return m,nil,true
  case UndoMsg:
-  draft,active:=m.ActiveDraft(); if active && m.EditorMode()==ModeEditor && !draft.Saving && msg.ID=="layer.editor.body" { draft.Editor=draft.Editor.Undo(); m=putDraft(m,m.EditorUID,draft) }; return m,nil,true
+  draft,active:=m.ActiveDraft()
+  if !active || msg.ID!="layer.editor.body" { return m,nil,false }
+  if m.EditorMode()==ModeEditor && !draft.Saving { draft.Editor=draft.Editor.Undo(); m=putDraft(m,m.EditorUID,draft) }
+  return m,nil,true
  }
  return m,nil,false
 }
