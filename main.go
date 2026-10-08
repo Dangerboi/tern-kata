@@ -69,6 +69,7 @@ func run() error {
 eventLoop:
 	for {
 		previousSelection := m.SelectedUID
+		previousPicker := m.Picker
 		previousFocus, previousSection, previousIndex := m.Focus, m.DetailSection, m.DetailIndex
 		previousDetailAvailable := m.Detail != nil && m.Detail.Issue != nil
 		var cmds []model.Cmd
@@ -93,6 +94,11 @@ eventLoop:
 		if m.Err == nil && !m.Loading && !m.DetailHidden && m.Focus == model.ColumnDetail && m.Detail != nil && m.Detail.Issue != nil && !m.DetailLoading &&
 			(previousFocus != m.Focus || previousSection != m.DetailSection || previousIndex != m.DetailIndex || !previousDetailAvailable) {
 			if err := surface.Reveal(view.DetailSectionID(m.DetailSection), "nearest"); err != nil {
+				return err
+			}
+		}
+		if id := view.PickerCursorID(m); id != "" && m.Picker != previousPicker {
+			if err := surface.Reveal(id, "nearest"); err != nil {
 				return err
 			}
 		}

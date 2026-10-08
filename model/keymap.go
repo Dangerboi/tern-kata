@@ -210,4 +210,18 @@ var Keymap = []Binding{
 	{Chord: "up", Key: "up", Action: FieldPrevious, Help: "previous completion", Mode: ModeFieldForm},
 	{Chord: "backspace", Key: "backspace", Action: FieldErase, Help: "erase", Mode: ModeFieldForm},
 	{Chord: "ctrl+u", Key: "ctrl+u", Action: FieldReset, Help: "clear input", Mode: ModeFieldForm},
+	// Collections picker. It has a type-to-filter box, so single-character bindings (j, k) move only while the filter is empty.
+	{Chord: "p", Key: "p", Action: OpenPicker, Help: "Collections picker", Mode: ModeList, ShowInFooter: true},
+	{Chord: "p", Key: "p", Action: OpenPicker, Help: "Collections picker", Mode: ModeDetail, ShowInFooter: true},
+	{Chord: "down", Key: "down", Action: MoveDown, Help: "next Collection", Mode: ModePicker, ShowInFooter: true},
+	{Chord: "up", Key: "up", Action: MoveUp, Help: "previous Collection", Mode: ModePicker, ShowInFooter: true},
+	{Chord: "j", Key: "j", Action: MoveDown, Help: "next Collection (empty filter)", Mode: ModePicker},
+	{Chord: "k", Key: "k", Action: MoveUp, Help: "previous Collection (empty filter)", Mode: ModePicker},
+	{Chord: "home", Key: "home", Action: MoveFirst, Help: "first Collection", Mode: ModePicker},
+	{Chord: "end", Key: "end", Action: MoveLast, Help: "last Collection", Mode: ModePicker},
+	{Chord: "enter", Key: "enter", Action: PickCollection, Help: "open Collection", Mode: ModePicker, ShowInFooter: true},
+	{Chord: "escape", Key: "esc", Action: ClosePicker, Help: "close", Mode: ModePicker, ShowInFooter: true},
+	{Chord: "backspace", Key: "backspace", Action: DeleteInput, Help: "delete", Mode: ModePicker},
+	{Chord: "ctrl+u", Key: "ctrl+u", Action: ClearInput, Help: "clear filter", Mode: ModePicker},
+	{Chord: "ctrl+c", Key: "ctrl+c", Action: QuitAction, Help: "quit", Mode: ModePicker},
 }

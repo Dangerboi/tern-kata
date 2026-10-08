@@ -50,6 +50,9 @@ func InputFocusID(m model.Model) string {
 		}
 		return ""
 	}
+	if m.Picker.Open {
+		return PickerFilterID
+	}
 	if !m.HelpOpen && m.Search.Open && !m.Search.Results && m.Err == nil && !m.Loading && m.Focus == model.ColumnList {
 		return SearchID
 	}
@@ -60,7 +63,7 @@ func IsTransientTarget(id string) bool {
 	if _, ok := CreateFieldIndex(id); ok {
 		return true
 	}
-	if id == FieldInputID || id == SearchID || id == DraftEditorID {
+	if id == FieldInputID || id == SearchID || id == DraftEditorID || id == PickerFilterID {
 		return true
 	}
 	if _, ok := FilterFieldIndex(id); ok {
@@ -72,7 +75,7 @@ func IsTransientTarget(id string) bool {
 	if section, ok := strings.CutPrefix(id, "main.columns.detail.section"); ok {
 		return len(section) == 1 && section[0] >= '0' && section[0] <= '5'
 	}
-	return strings.HasPrefix(id, IssueListID+".")
+	return strings.HasPrefix(id, IssueListID+".") || strings.HasPrefix(id, PickerListID+".")
 }
 
 func filterLayer(m model.Model) tern.Element {

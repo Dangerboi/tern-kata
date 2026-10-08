@@ -49,6 +49,9 @@ func startInputReader(ctx context.Context, session *tern.Session, messages chan<
 				if input.ID == view.CollectionsID {
 					msg = model.CollectionPointerSelected{ID: input.Item}
 				}
+				if input.ID == view.PickerListID {
+					msg = model.PickerSelected{Key: strings.TrimPrefix(input.Item, view.PickerListID+".")}
+				}
 			case *tern.Action:
 				msg = detailAction(input)
 				if strings.HasPrefix(input.ID, "layer.close.") {
