@@ -7,6 +7,9 @@ type Project = g.ProjectOut
 
 type Model struct {
 	LiveState
+	CloseForm CloseFormState
+	Actor string
+	FieldForm FieldFormState
 	Workspace           string
 	Project             Project
 	Snapshot            g.UISnapshotResponseBody
@@ -46,6 +49,11 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 }
 
 func update(m Model, msg Msg) (Model, []Cmd) {
+	switch msg.(type) {
+	case CloseFieldMsg, CloseSubmitMsg, CloseResultMsg:
+		return updateClose(m, msg)
+	}
+	if _, ok := msg.(KeyMsg); ok && m.CloseForm.Open { return updateClose(m, msg) }
 	switch msg := msg.(type) {
 	case FilterFormActionMsg:
 		if m.FilterForm.Open && (msg.Action == ApplyFilters || msg.Action == CancelFilters) {
@@ -55,6 +63,17 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		if m.FilterForm.Open && msg.Field >= 0 && msg.Field < 5 {
 			m.FilterForm.Field = msg.Field
 		}
+	case FieldValueMsg:
+		if m.FieldForm.Open && !m.FieldForm.Saving { m.FieldForm.Value = msg.Value; m.FieldForm.Err = nil; m.FieldForm.Suggestion = 0 }
+	case FieldLabelsLoaded:
+		if m.FieldForm.Open && m.FieldForm.UID == msg.UID { m.FieldForm.Labels = msg.Labels; m.FieldForm.Err = msg.Err }
+	case FieldWritten:
+		if m.FieldForm.UID != msg.UID { return m, nil }
+		m.FieldForm.Saving = false
+		if msg.Err != nil { m.FieldForm.Open = true; m.FieldForm.Err = msg.Err; return m, nil }
+		m.FieldForm = FieldFormState{}
+		m.DetailUID = ""
+		return refreshLive(m)
 	case Start:
 		m.Workspace = msg.Workspace
 		m.Loading = true
@@ -116,6 +135,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m.Loading = false
 		m.Err = msg.Err
 	case KeyMsg:
+		if m.FieldForm.Open { return updateFieldKey(m, msg) }
 		if inputMode(m.CurrentMode()) {
 			if binding, ok := LookupBindingForMode(msg.Chord, m.CurrentMode()); ok {
 				return updateFilterAction(m, binding.Action)
@@ -126,6 +146,16 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			if binding.Action == SearchIssues || binding.Action == CycleStatus || binding.Action == OpenFilterForm || binding.Action == ClearFilters {
 				return updateFilterAction(m, binding.Action)
 			}
+			if binding.Action == OpenClose { return openClose(m), nil }
+			if binding.Action == ReopenAction {
+				issue := closeIssue(m)
+				if issue != nil && !m.Stale && !m.CloseForm.Pending {
+					m.CloseForm = CloseFormState{UID:issue.UID, Pending:true}
+					return m, []Cmd{ReopenIssueCmd{Workspace:m.Workspace, UID:issue.UID, ProjectID:issue.ProjectID, Actor:m.Actor}}
+				}
+				return m, nil
+			}
+			if fieldAction(binding.Action) { return openField(m, binding.Action) }
 			if binding.Action == ToggleHelp {
 				m.HelpOpen = !m.HelpOpen
 				return m, nil

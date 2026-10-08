@@ -39,7 +39,12 @@ func Render(m model.Model) tern.View {
 	}
 	layer := help(m)
 	if m.FilterForm.Open { layer = filterLayer(m) }
-	return tern.View{Main: main, Dock: footer(m), Layer: layer}
+	if m.CloseForm.Open { layer = closeLayer(m) }
+	if m.FieldForm.Open { layer = fieldLayer(m) }
+	if m.CloseForm.Err != nil && !m.CloseForm.Open {
+		main = append(main, ui.Text{Common:ui.Common{Key:"close-error", Tone:ui.ToneError}, Text:m.CloseForm.Err.Error()})
+	}
+	return tern.View{Main: main, Dock: footer(m), Layer:layer}
 }
 
 func issues(m model.Model) tern.Element {

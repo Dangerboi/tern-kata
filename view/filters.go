@@ -1,6 +1,7 @@
 package view
 
 import (
+	"strings"
 	"github.com/Dangerboi/tern-kata/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
@@ -17,14 +18,34 @@ func FilterFieldIndex(id string) (int, bool) {
 }
 
 func InputFocusID(m model.Model) string {
-	if m.CurrentMode() == model.ModeSearch { return SearchID }
-	if m.CurrentMode() == model.ModeFilterForm {
+	if m.FieldForm.Open {
+		if !m.FieldForm.Saving { return FieldInputID }
+		return ""
+	}
+	if m.CloseForm.Open { return CloseInputFocusID(m) }
+	if m.FilterForm.Open {
 		switch m.FilterForm.Field {
 		case 2: return "layer.filters.owner"
 		case 3: return "layer.filters.label"
 		}
+		return ""
+	}
+	if !m.HelpOpen && m.Search.Open && !m.Search.Results && m.Err == nil && !m.Loading && m.Focus == model.ColumnList {
+		return SearchID
 	}
 	return ""
+}
+
+func IsTransientTarget(id string) bool {
+	if id == FieldInputID || id == SearchID { return true }
+	if _, ok := FilterFieldIndex(id); ok { return true }
+	if field, ok := strings.CutPrefix(id, "layer.close.field"); ok {
+		return len(field) == 1 && field[0] >= '0' && field[0] <= '6'
+	}
+	if section, ok := strings.CutPrefix(id, "main.columns.detail.section"); ok {
+		return len(section) == 1 && section[0] >= '0' && section[0] <= '5'
+	}
+	return strings.HasPrefix(id, IssueListID+".")
 }
 
 func filterLayer(m model.Model) tern.Element {

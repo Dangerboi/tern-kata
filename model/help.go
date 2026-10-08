@@ -3,9 +3,11 @@ package model
 import "iter"
 
 func (m Model) CurrentMode() Mode {
+	if m.FieldForm.Open { return ModeFieldForm }
 	if m.HelpOpen {
 		return ModeHelp
 	}
+	if m.CloseForm.Open { return ModeCloseForm }
 	if m.FilterForm.Open {
 		return ModeFilterForm
 	}

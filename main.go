@@ -23,6 +23,8 @@ func main() {
 }
 
 func run() error {
+	override, fallbackArgs, err := actorArgs(os.Args[1:])
+	if err != nil { return err }
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	session, err := tern.Connect(ctx, tern.Options{App: "tern-kata", Version: "dev"})
@@ -31,7 +33,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		return syscall.Exec(kata, append([]string{"kata", "tui"}, os.Args[1:]...), os.Environ())
+		return syscall.Exec(kata, append([]string{"kata", "tui"}, fallbackArgs...), actorEnvironment(override))
 	}
 	if err != nil {
 		return err
@@ -76,6 +78,13 @@ func run() error {
 				}
 			case *tern.Action:
 				msg = detailAction(input)
+				if strings.HasPrefix(input.ID, "layer.close.") {
+					switch input.Act {
+					case "close-save": msg = model.CloseSubmitMsg{}
+					case "close-quick": msg = model.CloseSubmitMsg{Quick:true}
+					case "close-cancel": msg = model.KeyMsg{Chord:"escape"}
+					}
+				}
 				if input.ID == view.RetryID && input.Act == string(model.RetryAction) {
 					msg = model.Retry{}
 				}
@@ -85,6 +94,10 @@ func run() error {
 			case *tern.Resize:
 				msg = model.ResizeMsg{Cols: input.Cols}
 			case *tern.ErrorEvent:
+				// SDK queues raw focus/reveal ops even when a later Render replaces their nodes.
+				if id, ok := strings.CutPrefix(input.Msg, "unknown id "); ok && view.IsTransientTarget(id) {
+					continue
+				}
 				inputErrors <- fmt.Errorf("Tern surface: %s", input.Msg)
 				return
 			}
@@ -97,7 +110,7 @@ func run() error {
 			}
 		}
 	}()
-	m := model.Model{Cols: session.Caps().Cols}
+	m := model.Model{Cols: session.Caps().Cols, Actor: resolveActor(override)}
 	runner := commandRunner{}
 	defer runner.close()
 	msg := model.Msg(model.Start{Workspace: workspace})
@@ -117,12 +130,12 @@ func run() error {
 		if focus := view.InputFocusID(m); focus != previousInputFocus {
 			if err := surface.Focus(focus); err != nil { return err }
 		}
-		if m.Focus == model.ColumnList && m.SelectedUID != "" && m.SelectedUID != previousSelection {
+		if m.Err == nil && !m.Loading && m.Focus == model.ColumnList && m.SelectedUID != "" && m.SelectedUID != previousSelection {
 			if err := surface.Reveal(view.IssueID(m.SelectedUID), "nearest"); err != nil {
 				return err
 			}
 		}
-		if m.Focus == model.ColumnDetail && m.Detail != nil && m.Detail.Issue != nil && !m.DetailLoading &&
+		if m.Err == nil && !m.Loading && !m.DetailHidden && m.Focus == model.ColumnDetail && m.Detail != nil && m.Detail.Issue != nil && !m.DetailLoading &&
 			(previousFocus != m.Focus || previousSection != m.DetailSection || previousIndex != m.DetailIndex || previousDetailLoading) {
 			if err := surface.Reveal(view.DetailSectionID(m.DetailSection), "nearest"); err != nil {
 				return err
