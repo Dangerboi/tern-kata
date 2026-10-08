@@ -24,6 +24,9 @@ func (m Model) CurrentMode() Mode {
 	if m.FilterForm.Open {
 		return ModeFilterForm
 	}
+	if m.Picker.Open {
+		return ModePicker
+	}
 	if m.Search.Open {
 		if m.Search.Results {
 			return ModeSearchResults

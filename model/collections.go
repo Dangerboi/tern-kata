@@ -11,6 +11,10 @@ type Collection struct{ View, ProjectUID, Title string }
 type IssueGroup struct {
 	ID, Title string
 	Issues    []Issue
+	// Heading says the list titles the group; a Project list is already
+	// titled by its own heading. Fixed per snapshot, so rows loaded for one
+	// Collection keep their shape while another Collection loads.
+	Heading bool
 }
 type CollectionSelected struct{ Collection Collection }
 
@@ -89,6 +93,9 @@ func (m Model) ApplySnapshot(snapshot g.UISnapshotResponseBody, etag string) Mod
 		issues = nil
 	}
 	m.Groups = GroupIssues(groupCollection, issues, m.LocalDate)
+	for i := range m.Groups {
+		m.Groups[i].Heading = m.Collection.View != "project"
+	}
 	m.Issues = nil
 	for _, group := range m.Groups {
 		m.Issues = append(m.Issues, group.Issues...)

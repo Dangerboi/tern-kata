@@ -57,6 +57,7 @@ func TestCollectionIgnoresSupersededSnapshot(t *testing.T) {
 	}
 }
 
+// The sidebar is the Collection switcher of an unbound directory; bound ones use the picker.
 func TestCollectionKeyboardSwitching(t *testing.T) {
 	for _, tt := range []struct {
 		name string
@@ -68,7 +69,7 @@ func TestCollectionKeyboardSwitching(t *testing.T) {
 		{"Logbook", []string{"escape", "g", "j", "j", "j", "j", "j", "enter"}, "logbook"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			m, _ := model.Update(model.Model{}, model.ProjectLoaded{Project: model.Project{UID: "p", Name: "Work"}, Snapshot: g.UISnapshotResponseBody{Catalog: []g.UIProject{{Project: model.Project{UID: "p", Name: "Work"}}}}})
+			m, _ := model.Update(model.Model{}, model.ProjectLoaded{Snapshot: g.UISnapshotResponseBody{Catalog: []g.UIProject{{Project: model.Project{UID: "p", Name: "Work"}}}}})
 			var cmds []model.Cmd
 			for _, chord := range tt.keys {
 				m, cmds = model.Update(m, model.KeyMsg{Chord: chord})

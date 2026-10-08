@@ -15,7 +15,7 @@ type SearchState struct {
 }
 
 func inputMode(mode Mode) bool {
-	return mode == ModeSearch || mode == ModeSearchResults || mode == ModeFilterForm
+	return mode == ModeSearch || mode == ModeSearchResults || mode == ModeFilterForm || mode == ModePicker
 }
 
 func updateFilterAction(m Model, action Action) (Model, []Cmd) {

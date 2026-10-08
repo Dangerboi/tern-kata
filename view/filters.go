@@ -50,7 +50,10 @@ func InputFocusID(m model.Model) string {
 		}
 		return ""
 	}
-	if !m.HelpOpen && m.Search.Open && !m.Search.Results && m.Err == nil && !m.Loading && m.Focus == model.ColumnList {
+	if m.Picker.Open {
+		return PickerFilterID
+	}
+	if !m.HelpOpen && m.Search.Open && !m.Search.Results && m.Err == nil && !m.FirstLoad() && m.Focus == model.ColumnList {
 		return SearchID
 	}
 	return ""
@@ -60,7 +63,7 @@ func IsTransientTarget(id string) bool {
 	if _, ok := CreateFieldIndex(id); ok {
 		return true
 	}
-	if id == FieldInputID || id == SearchID || id == DraftEditorID {
+	if id == FieldInputID || id == SearchID || id == DraftEditorID || id == PickerFilterID {
 		return true
 	}
 	if _, ok := FilterFieldIndex(id); ok {

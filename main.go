@@ -70,7 +70,7 @@ eventLoop:
 	for {
 		previousSelection := m.SelectedUID
 		previousFocus, previousSection, previousIndex := m.Focus, m.DetailSection, m.DetailIndex
-		previousDetailAvailable := m.Detail != nil && m.Detail.Issue != nil
+		previousDetailIssue := m.DetailIssueUID()
 		var cmds []model.Cmd
 		m, cmds = model.Update(m, msg)
 		if m.Quitting {
@@ -85,13 +85,13 @@ eventLoop:
 			}
 			inputFocus = target
 		}
-		if m.Err == nil && !m.Loading && m.Focus == model.ColumnList && m.SelectedUID != "" && m.SelectedUID != previousSelection {
+		if !rowClick(msg) && m.Err == nil && !m.Loading && m.Focus == model.ColumnList && m.SelectedUID != "" && m.SelectedUID != previousSelection {
 			if err := surface.Reveal(view.IssueID(m.SelectedUID), "nearest"); err != nil {
 				return err
 			}
 		}
 		if m.Err == nil && !m.Loading && !m.DetailHidden && m.Focus == model.ColumnDetail && m.Detail != nil && m.Detail.Issue != nil && !m.DetailLoading &&
-			(previousFocus != m.Focus || previousSection != m.DetailSection || previousIndex != m.DetailIndex || !previousDetailAvailable) {
+			(previousFocus != m.Focus || previousSection != m.DetailSection || previousIndex != m.DetailIndex || m.DetailIssueUID() != previousDetailIssue) {
 			if err := surface.Reveal(view.DetailSectionID(m.DetailSection), "nearest"); err != nil {
 				return err
 			}
@@ -144,6 +144,18 @@ eventLoop:
 			return err
 		}
 	}
+}
+
+// rowClick reports a click on an Issue row. Tern has already put that row under
+// the pointer, so revealing it again would scroll the list from under it.
+func rowClick(msg model.Msg) bool {
+	switch msg := msg.(type) {
+	case model.SelectMsg:
+		return true
+	case model.ActionMsg:
+		return msg.Action == model.ToggleExpansion
+	}
+	return false
 }
 
 func launchArgs(args []string) (string, []string, error) {

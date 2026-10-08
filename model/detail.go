@@ -85,7 +85,7 @@ func (m Model) DetailRow(section DetailSection, index int) (DetailRow, bool) {
 		link := m.Detail.Links[index]
 		uid, ref := link.ToIssueUID, link.ToQualifiedID
 		relation := link.Type
-		if uid == m.SelectedUID {
+		if uid == m.DetailIssueUID() {
 			uid, ref = link.FromIssueUID, link.FromQualifiedID
 			switch relation {
 			case "parent":
@@ -128,14 +128,20 @@ func jumpIssue(m Model, uid string) Model {
 	return m
 }
 
+// VisibleColumns folds to the focused column on narrow Panes. A bound Project
+// opens without the Collections column; the picker replaces it.
 func (m Model) VisibleColumns() []Column {
 	if m.Cols < 100 {
 		return []Column{m.Focus}
 	}
-	if m.DetailHidden {
-		return []Column{ColumnCollections, ColumnList}
+	columns := []Column{ColumnList}
+	if !m.DetailHidden {
+		columns = append(columns, ColumnDetail)
 	}
-	return []Column{ColumnCollections, ColumnList, ColumnDetail}
+	if !m.Bound {
+		columns = append([]Column{ColumnCollections}, columns...)
+	}
+	return columns
 }
 
 func EnsureDetail(m Model) (Model, []Cmd) {
@@ -144,7 +150,11 @@ func EnsureDetail(m Model) (Model, []Cmd) {
 	}
 	m.DetailUID = m.SelectedUID
 	if m.Detail == nil || m.Detail.Issue == nil || m.Detail.Issue.UID != m.SelectedUID {
-		m.Detail = nil
+		// A different Issue starts at its first section. The previous detail
+		// stays on screen until the new one arrives, unless nothing is selected.
+		if m.SelectedUID == "" || m.DetailIssueUID() == "" {
+			m.Detail = nil
+		}
 		m.DetailSection = SectionBody
 		m.DetailIndex = 0
 	}
@@ -178,6 +188,9 @@ func updateDetailNavigation(m Model, action Action) (Model, []Cmd) {
 			}
 			m.Focus = ColumnList
 		} else if m.Focus == ColumnList {
+			if m.Bound {
+				return openPicker(m), nil
+			}
 			m.Focus = ColumnCollections
 		}
 	case ToggleDetail:

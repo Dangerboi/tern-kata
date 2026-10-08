@@ -27,6 +27,8 @@ type Model struct {
 	Collection          Collection
 	Collections         []Collection
 	CollectionCursor    int
+	Bound               bool
+	Picker              PickerState
 	Focus               Column
 	Groups              []IssueGroup
 	LocalDate, TimeZone string
@@ -74,6 +76,14 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	}
 	if _, ok := msg.(KeyMsg); ok && m.CloseForm.Open {
 		return updateClose(m, msg)
+	}
+	switch msg := msg.(type) {
+	case KeyMsg:
+		if m.CurrentMode() == ModePicker {
+			return updatePicker(m, msg)
+		}
+	case PickerSelected:
+		return pickCollectionKey(m, msg.Key)
 	}
 	switch msg := msg.(type) {
 	case FilterFormActionMsg:
@@ -133,6 +143,9 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		if msg.UID == m.SelectedUID && msg.UID == m.DetailUID {
 			m.DetailLoading = false
 			m.DetailErr = msg.Err
+			if m.DetailIssueUID() != msg.UID {
+				m.Detail = nil // the error replaces the previous Issue's detail on screen
+			}
 		}
 	case JumpIssueMsg:
 		return jumpIssue(m, msg.UID), nil
@@ -221,6 +234,9 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			}
 			if binding.Action == OpenClose {
 				return openClose(m), nil
+			}
+			if binding.Action == OpenPicker {
+				return openPicker(m), nil
 			}
 			if binding.Action == ReopenAction {
 				issue := closeIssue(m)
