@@ -22,6 +22,18 @@ func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 				msg = result
 			}
 		}
+	case model.RefreshSnapshot:
+		client, err := data.Discover(ctx, cmd.Workspace)
+		if err != nil {
+			msg = model.SnapshotFailed{Request: cmd.Request, Err: err}
+		} else {
+			result, err := client.ReadRefresh(ctx, cmd)
+			if err != nil {
+				msg = model.SnapshotFailed{Request: cmd.Request, Err: err}
+			} else {
+				msg = result
+			}
+		}
 	}
 	if msg != nil {
 		select {

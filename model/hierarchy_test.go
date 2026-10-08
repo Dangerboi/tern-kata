@@ -31,8 +31,11 @@ func TestHierarchyRows(t *testing.T) {
 	for _, row := range rows {
 		uids = append(uids, row.UID)
 	}
-	if !reflect.DeepEqual(uids, []string{"parent", "root"}) || m.SelectedUID != "parent" || len(cmds) != 0 {
+	if !reflect.DeepEqual(uids, []string{"parent", "root"}) || m.SelectedUID != "parent" || len(cmds) != 1 {
 		t.Fatalf("collapsed rows=%v selected=%q commands=%#v", uids, m.SelectedUID, cmds)
+	}
+	if _, ok := cmds[0].(model.Subscribe); !ok {
+		t.Fatalf("load commands=%#v", cmds)
 	}
 	if rows[0].Depth != 0 || !rows[0].HasChildren || rows[0].Expanded || rows[1].HasChildren {
 		t.Fatalf("row hierarchy: %+v", rows)
@@ -103,7 +106,14 @@ func TestHierarchyViewAndRefresh(t *testing.T) {
 			for _, msg := range tt.msgs {
 				var cmds []model.Cmd
 				m, cmds = model.Update(m, msg)
-				if len(cmds) != 0 {
+				if _, loading := msg.(model.ProjectLoaded); loading {
+					if len(cmds) != 1 {
+						t.Fatalf("refresh commands=%#v", cmds)
+					}
+					if _, ok := cmds[0].(model.Subscribe); !ok {
+						t.Fatalf("refresh commands=%#v", cmds)
+					}
+				} else if len(cmds) != 0 {
 					t.Fatalf("%#v requested commands %#v", msg, cmds)
 				}
 			}
@@ -142,7 +152,7 @@ func TestHierarchyCyclesAndEmptyLists(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m, _ := model.Update(model.Model{}, model.ProjectLoaded{Snapshot: tt.snapshot})
-			for _, chord := range []string{"space", "left", "right", "shift+e"} {
+			for _, chord := range []string{"space", "left", "right", "shift+e", "shift+e"} {
 				var cmds []model.Cmd
 				m, cmds = model.Update(m, model.KeyMsg{Chord: chord})
 				if len(cmds) != 0 {
@@ -166,5 +176,26 @@ func TestHierarchyUpdatePreservesInput(t *testing.T) {
 	collapsed, _ := model.Update(m, model.KeyMsg{Chord: "left"})
 	if !m.ExpandedUIDs["parent"] || collapsed.ExpandedUIDs["parent"] {
 		t.Fatalf("Update mutated previous expansion state: previous=%v next=%v", m.ExpandedUIDs, collapsed.ExpandedUIDs)
+	}
+}
+
+func TestHierarchyLiveRefreshSelectsVisibleAncestor(t *testing.T) {
+	m, _ := model.Update(model.Model{}, model.ProjectLoaded{Snapshot: hierarchySnapshot()})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "shift+e"})
+	m, _ = model.Update(m, model.SelectMsg{UID: "grandchild"})
+	m, cmds := model.Update(m, model.StreamEvent{Generation: m.StreamGeneration, ID: 1})
+	if len(cmds) != 1 {
+		t.Fatalf("event commands=%#v", cmds)
+	}
+	refresh, ok := cmds[0].(model.RefreshSnapshot)
+	if !ok {
+		t.Fatalf("event command=%#v", cmds[0])
+	}
+	snapshot := hierarchySnapshot()
+	snapshot.Collection = append(snapshot.Collection[:2], snapshot.Collection[3:]...)
+	snapshot.Cursor = 1
+	m, cmds = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot})
+	if m.SelectedUID != "parent" || !m.ExpandedUIDs["parent"] || !m.ExpandedUIDs["child"] || len(cmds) != 0 {
+		t.Fatalf("refreshed selection=%q expansions=%v commands=%#v", m.SelectedUID, m.ExpandedUIDs, cmds)
 	}
 }

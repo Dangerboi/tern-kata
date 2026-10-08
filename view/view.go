@@ -17,7 +17,7 @@ func Render(m model.Model) tern.View {
 	main := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading"}, Text: m.Project.Name + " / Open Issues"})
 	switch {
 	case m.Err != nil:
-		main = ui.Nodes(ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.Err.Error()})
+		main = failureView(m)
 	case m.Loading:
 		main = ui.Nodes(ui.Text{Common: ui.Common{Key: "loading", Tone: ui.TonePending}, Text: "Loading Project's open Issues…"})
 	default:
@@ -37,6 +37,9 @@ func Render(m model.Model) tern.View {
 			Children:         items,
 		})
 	}
+	if m.Stale && m.Err == nil && !m.Loading {
+		main = append(main, staleNotice(m))
+	}
 	return tern.View{Main: main, Dock: footer(m), Layer: help(m)}
 }
 
@@ -55,7 +58,7 @@ func issueRow(row model.IssueRow) tern.Element {
 		statusStyle = "muted"
 	}
 	spans := []ui.Span{
-		{T: strings.Repeat("\u00a0\u00a0", row.Depth) + disclosure + row.ShortID + "  " + row.Title},
+		{T: strings.Repeat("│\u00a0\u00a0", row.Depth) + disclosure + row.ShortID + "  " + row.Title},
 		{T: "  " + row.Status, S: statusStyle},
 	}
 	if row.Priority != nil {

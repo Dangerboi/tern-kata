@@ -6,6 +6,7 @@ type Issue = g.UIIssue
 type Project = g.ProjectOut
 
 type Model struct {
+	LiveState
 	Workspace   string
 	Project     Project
 	Snapshot    g.UISnapshotResponseBody
@@ -29,7 +30,9 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 		m.Err = nil
 		return m, []Cmd{LoadProject{Workspace: msg.Workspace}}
 	case ProjectLoaded:
-		return updateProject(m, msg)
+		m, _ = updateProject(m, msg)
+		m.Cursor = msg.Snapshot.Cursor
+		return startStream(m, 0)
 	case Failed:
 		m.Loading = false
 		m.Err = msg.Err
@@ -43,10 +46,6 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 				m.HelpOpen = false
 				return m, nil
 			}
-			switch binding.Action {
-			case ToggleExpansion, ExpandIssue, CollapseIssue, ToggleAllExpansion, ToggleIssueView:
-				return updateHierarchy(m, binding.Action), nil
-			}
 			return updateNavigation(m, binding.Action)
 		}
 	case SelectMsg:
@@ -58,6 +57,8 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 		}
 	case ResizeMsg:
 		m.Cols = msg.Cols
+	default:
+		return updateLive(m, msg)
 	}
 	return m, nil
 }

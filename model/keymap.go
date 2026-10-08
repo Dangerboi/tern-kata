@@ -15,6 +15,7 @@ const (
 	ToggleIssueView Action = "toggle-issue-view"
 	ToggleHelp Action = "help"
 	CloseHelp  Action = "close-help"
+	RetryAction Action = "retry"
 )
 
 type Binding struct {
@@ -29,8 +30,9 @@ type Binding struct {
 type Mode string
 
 const (
-	ModeList Mode = "list"
-	ModeHelp Mode = "help"
+	ModeList  Mode = "list"
+	ModeHelp  Mode = "help"
+	ModeError Mode = "error"
 )
 
 // Chord dispatches Action; Key and Help label it. Empty Mode is global;
@@ -47,6 +49,7 @@ var Keymap = []Binding{
 	{Chord: "v", Key: "v", Action: ToggleIssueView, Help: "flat/nested", Mode: ModeList, ShowInFooter: true},
 	{Chord: "q", Key: "q", Action: QuitAction, Help: "quit", ShowInFooter: true},
 	{Chord: "ctrl+c", Key: "ctrl+c", Action: QuitAction, Help: "quit"},
+	{Chord: "ctrl+r", Key: "ctrl+r", Action: RetryAction, Help: "retry daemon", Mode: ModeError, ShowInFooter: true},
 	{Chord: "?", Key: "?", Action: ToggleHelp, Help: "help", ShowInFooter: true},
 	{Chord: "shift+?", Key: "?", Action: ToggleHelp, Help: "help"},
 	{Chord: "escape", Key: "esc", Action: CloseHelp, Help: "close help", Mode: ModeHelp, ShowInFooter: true},

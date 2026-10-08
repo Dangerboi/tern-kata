@@ -13,13 +13,13 @@ expect_tree "[data-id$='.$hierarchy_child']" '.count == 0'
 expect_tree "[data-id$='.$hierarchy_parent']" "([.nodes[0] | .. | objects | .text? // empty] | join(\" \")) as \$text | (\$text | contains(\"$hierarchy_short\") and contains(\"Smoke hierarchy parent\") and contains(\"open\") and contains(\"P0\") and contains(\"smoke-owner\") and contains(\"smoke-label\"))"
 ctl click "[data-id$='.$hierarchy_parent']"
 ctl key Right
-expect_tree "[data-id$='.$hierarchy_child']" '([.nodes[0] | .. | objects | .text? // empty] | join("")) | startswith("  ")'
+expect_tree "[data-id$='.$hierarchy_child']" '.count == 1 and (.nodes[0].text | startswith("│"))'
 expect_tree "[data-id$='.$hierarchy_grandchild']" '.count == 0'
 ctl key E
-expect_tree "[data-id$='.$hierarchy_grandchild']" '([.nodes[0] | .. | objects | .text? // empty] | join("")) | startswith("    ")'
+expect_tree "[data-id$='.$hierarchy_grandchild']" '.count == 1 and (.nodes[0].text | test("^│\\s*│"))'
 ctl key E
 expect_tree "[data-id$='.$hierarchy_child']" '.count == 0'
 ctl key v
-expect_tree "[data-id$='.$hierarchy_grandchild']" '([.nodes[0] | .. | objects | .text? // empty] | join("")) | startswith(" ") | not'
+expect_tree "[data-id$='.$hierarchy_grandchild']" '.count == 1 and (.nodes[0].text | startswith("│") | not)'
 ctl key v
 expect_tree "[data-id$='.$hierarchy_child']" '.count == 0'
