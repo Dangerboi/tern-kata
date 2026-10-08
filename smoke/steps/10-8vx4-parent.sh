@@ -57,6 +57,22 @@ ctl click "[data-id\$='.$parent_uid']"
 expect_tree "[data-id\$='.${parent_children[0]}']" '.ok and .count == 1'
 parent_expect_drawn
 
+# The top bar stays put with the tall detail focused, at the window's height and a short one:
+# only the detail's sections list scrolls, never the Pane.
+parent_bar() { ctl tree "[data-id='main.topbar']" | jq -c '.nodes[0].rect'; }
+ctl key enter
+for parent_pane_height in "$parent_height" 420; do
+  ctl resize 1200 "$parent_pane_height"
+  expect_tree "[data-id='main.topbar']" '.ok and .count == 1'
+  parent_bar_before=$(parent_bar)
+  for _ in $(seq 8); do ctl key tab; done
+  for _ in $(seq 45); do ctl key j; done
+  sleep 0.5
+  [[ $(parent_bar) == "$parent_bar_before" ]] || { printf 'Top bar moved with the detail focused at height %s: %s -> %s\n' "$parent_pane_height" "$parent_bar_before" "$(parent_bar)" >&2; return 1; }
+done
+ctl resize 1200 "$parent_height"
+ctl key esc
+
 # The plugin never met a surface error, and the Pane is still its Pane.
 expect_tree "[data-id^='main.']" '.ok and .count > 0'
 parent_errors=$(jq -c 'select(.dir == "in" and .verb == "e" and .body.ev == "error")' "$tmp/parent-frames.jsonl")
