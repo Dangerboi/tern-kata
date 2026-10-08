@@ -25,6 +25,8 @@ func startInputReader(ctx context.Context,session *tern.Session,messages chan<- 
     msg=model.KeyMsg{Chord:input.String(),Text:text}
    case *tern.Edit: msg=model.EditMsg{ID:input.ID,From:input.From,To:input.To,Text:input.Text,Cursor:input.Cursor,Len:input.Len}
    case *tern.Undo: msg=model.UndoMsg{ID:input.ID}
+   case *tern.Focus:
+    if field,ok:=view.FilterFieldIndex(input.ID); ok { msg=model.FilterFieldMsg{Field:field} }
    case *tern.Select:
     if input.ID==view.IssueListID { msg=model.SelectMsg{UID:strings.TrimPrefix(input.Item,view.IssueListID+".")} }
     if input.ID==view.CollectionsID { msg=model.CollectionPointerSelected{ID:input.Item} }
@@ -38,8 +40,12 @@ func startInputReader(ctx context.Context,session *tern.Session,messages chan<- 
      }
     }
     if input.ID==view.RetryID && input.Act==string(model.RetryAction) { msg=model.Retry{} }
+    if strings.HasPrefix(input.ID,"layer.filters.actions.") { msg=model.FilterFormActionMsg{Action:model.Action(input.Act)} }
    case *tern.Resize: msg=model.ResizeMsg{Cols:input.Cols}
-   case *tern.ErrorEvent: inputErrors<-fmt.Errorf("Tern surface: %s",input.Msg); return
+   case *tern.ErrorEvent:
+    // SDK queues raw focus/reveal ops even when a later Render replaces their nodes.
+    if id,ok:=strings.CutPrefix(input.Msg,"unknown id "); ok && view.IsTransientTarget(id) { continue }
+    inputErrors<-fmt.Errorf("Tern surface: %s",input.Msg); return
    }
    if msg!=nil { select { case messages<-msg: case <-ctx.Done(): return } }
   }

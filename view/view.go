@@ -38,6 +38,7 @@ func Render(m model.Model) tern.View {
 		main = append(main, staleNotice(m))
 	}
 	layer := help(m)
+	if m.FilterForm.Open { layer = filterLayer(m) }
 	if m.CloseForm.Open { layer = closeLayer(m) }
 	if m.FieldForm.Open { layer = fieldLayer(m) }
 	if _, ok := m.ActiveDraft(); ok { layer = editorLayer(m) }
@@ -71,18 +72,15 @@ func issues(m model.Model) tern.Element {
 	}
 	tone := ui.ToneNeutral
 	if m.Focus == model.ColumnList { tone = ui.ToneAccent }
-	return ui.Col{
-		Common: ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.4)},
-		Children: ui.Nodes(
-			ui.Text{Common: ui.Common{Key: "heading", Tone: tone, Actions: &ui.Actions{Click: "focus-list"}}, Text: m.Collection.Title},
-			ui.List{
-				CommonWithoutMax: ui.CommonWithoutMax{Key: "issues"},
-				Selected: selected,
-				Empty: ui.T("No Issues in this Collection. Select another Collection or create one with kata create."),
-				Children: items,
-			},
-		),
+	children := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading", Tone: tone, Actions: &ui.Actions{Click: "focus-list"}}, Text: m.ListHeader()})
+	if m.Search.Open {
+		placeholder := "Search Issues in " + m.Collection.Title
+		children = append(children, ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Mode: "insert", Placeholder: placeholder, Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}})
 	}
+	empty := "No Issues in this Collection. Select another Collection or create one with kata create."
+	if m.Filters != (model.Filters{}) { empty = "No Issues match these filters. Press c to clear filters." }
+	children = append(children, ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "issues"}, Selected: selected, Empty: ui.T(empty), Children: items})
+	return ui.Col{Common: ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.4)}, Children: children}
 }
 
 func issueRow(row model.IssueRow) tern.Element {

@@ -32,9 +32,3 @@ func editorLayer(m model.Model) tern.Element {
  return ui.Nodes(ui.Overlay{Common:ui.Common{Key:"editor"},Modal:true,Size:ui.SizeLG,Head:ui.T(title),Children:children})
 }
 
-func InputFocusID(m model.Model) string {
- if m.EditorMode()==model.ModeEditor { return DraftEditorID }
- if m.FieldForm.Open && !m.FieldForm.Saving { return FieldInputID }
- if id:=CloseInputFocusID(m); id!="" { return id }
- return ""
-}
