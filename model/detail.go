@@ -128,14 +128,20 @@ func jumpIssue(m Model, uid string) Model {
 	return m
 }
 
+// VisibleColumns folds to the focused column on narrow Panes. A bound Project
+// opens without the Collections column; the picker replaces it.
 func (m Model) VisibleColumns() []Column {
 	if m.Cols < 100 {
 		return []Column{m.Focus}
 	}
-	if m.DetailHidden {
-		return []Column{ColumnCollections, ColumnList}
+	columns := []Column{ColumnList}
+	if !m.DetailHidden {
+		columns = append(columns, ColumnDetail)
 	}
-	return []Column{ColumnCollections, ColumnList, ColumnDetail}
+	if !m.Bound {
+		columns = append([]Column{ColumnCollections}, columns...)
+	}
+	return columns
 }
 
 func EnsureDetail(m Model) (Model, []Cmd) {
@@ -182,6 +188,9 @@ func updateDetailNavigation(m Model, action Action) (Model, []Cmd) {
 			}
 			m.Focus = ColumnList
 		} else if m.Focus == ColumnList {
+			if m.Bound {
+				return openPicker(m), nil
+			}
 			m.Focus = ColumnCollections
 		}
 	case ToggleDetail:

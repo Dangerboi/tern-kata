@@ -17,8 +17,6 @@ func detailAction(input *tern.Action) model.Msg {
 		return model.ActionMsg{Action: "key", Value: input.Value}
 	case string(model.ToggleExpansion):
 		return model.ActionMsg{Action: model.ToggleExpansion, Value: input.Value}
-	case "focus-list":
-		return model.FocusColumnMsg{Column: model.ColumnList}
 	case "focus-detail":
 		return model.FocusColumnMsg{Column: model.ColumnDetail}
 	case "section":

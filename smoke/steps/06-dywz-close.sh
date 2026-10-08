@@ -23,14 +23,15 @@ ctl key x
 expect_tree "[data-id='layer.close.quick']" '.ok and .count == 1'
 ctl click "[data-id='layer.close.quick']"
 expect_tree "[data-id='layer.close']" '.ok and .count == 0'
-ctl click "[data-id='main.columns.collections.logbook']"
+ctl key p
+expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
+ctl click "[data-id='layer.collections.list.logbook']"
 expect_tree "[data-id$='.$close_uid']" '.ok and .count == 1 and (.nodes[0].text | contains("closed"))'
 ctl click "[data-id$='.$close_uid']"
 expect_tree "[data-id$='.$close_uid']" '.ok and .nodes[0]["aria-selected"] == "true"'
 ctl key r
 expect_tree "[data-id$='.$close_uid']" '.ok and .count == 0'
-ctl key esc
-ctl key G
+ctl key p
 ctl key enter
 expect_tree "[data-id$='.$close_uid']" '.ok and .count == 1 and (.nodes[0].text | contains("open"))'
 

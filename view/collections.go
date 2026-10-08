@@ -8,12 +8,8 @@ import (
 
 const CollectionsID = "main.columns.collections"
 
-func CollectionKey(c model.Collection) string {
-	if c.View == "project" {
-		return "project." + c.ProjectUID
-	}
-	return c.View
-}
+func CollectionKey(c model.Collection) string { return c.Key() }
+
 func Collections(m model.Model) tern.Element {
 	items := make([]tern.Element, 0, len(m.Collections))
 	for _, collection := range m.Collections {

@@ -18,7 +18,13 @@ expect_tree "[data-id^='main.columns.list.issues.01']" '.nodes[-2]["aria-selecte
 ctl key Home
 expect_tree "[data-id^='main.columns.list.issues.01']" '.nodes[0]["aria-selected"] == "true"'
 
-# Collections sidebar: Escape focuses it on the bound Project.
+# Collections sidebar: an unbound directory keeps it, and Escape focuses it.
+ctl key q
+expect_tree .sf-list '.count == 0'
+mkdir -p "$tmp/arrows-unbound"
+printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$tmp/arrows-unbound" "$KATA_HOME" "$tmp" >"$tmp/arrows-unbound.ctl"
+ctl --file "$tmp/arrows-unbound.ctl"
+expect_tree "[data-id^='main.columns.collections.']" '.ok and .count >= 7'
 ctl key Escape
 ctl key Home
 expect_tree "[data-id^='main.columns.collections.']" '.nodes[0]["aria-selected"] == "true"'
@@ -30,7 +36,11 @@ ctl key Up
 expect_tree "[data-id^='main.columns.collections.']" '.nodes[-2]["aria-selected"] == "true"'
 ctl key End
 ctl key Enter
-ctl plugins expect smoke
+expect_tree "[data-id='main.columns.list.heading']" '.ok and .nodes[0].text == "smoke"'
+expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count >= 4'
+ctl key q
+expect_tree .sf-list '.count == 0'
+ctl --file "$tmp/launch.ctl"
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count >= 4'
 
 # Detail: arrows move between references, Left backs out like Escape.
