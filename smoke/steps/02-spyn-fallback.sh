@@ -1,7 +1,7 @@
 mkdir -p "$tmp/fallback-bin"
 cat >"$tmp/fallback-bin/kata" <<'SH'
 #!/bin/sh
-printf '%s\n' "$$" "$@" >"$FALLBACK_RESULT"
+printf '%s\n' "$$" "$KATA_AUTHOR" "$@" >"$FALLBACK_RESULT"
 SH
 chmod +x "$tmp/fallback-bin/kata"
 for mode in plain disabled tmux screen zellij; do
@@ -15,6 +15,6 @@ for mode in plain disabled tmux screen zellij; do
   env -u TERN_TSP -u TMUX -u STY -u ZELLIJ "${overrides[@]}" PATH="$tmp/fallback-bin:$PATH" FALLBACK_RESULT="$tmp/fallback-result" "$tmp/tern-kata" --as "smoke actor" --project smoke &
   child=$!
   wait "$child"
-  expected=$(printf '%s\n' "$child" tui --as "smoke actor" --project smoke)
+  expected=$(printf '%s\n' "$child" "smoke actor" tui --project smoke)
   [[ $(cat "$tmp/fallback-result") == "$expected" ]]
 done

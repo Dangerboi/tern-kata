@@ -23,6 +23,8 @@ func main() {
 }
 
 func run() error {
+	override, fallbackArgs, err := actorArgs(os.Args[1:])
+	if err != nil { return err }
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	session, err := tern.Connect(ctx, tern.Options{App: "tern-kata", Version: "dev"})
@@ -31,7 +33,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		return syscall.Exec(kata, append([]string{"kata", "tui"}, os.Args[1:]...), os.Environ())
+		return syscall.Exec(kata, append([]string{"kata", "tui"}, fallbackArgs...), actorEnvironment(override))
 	}
 	if err != nil {
 		return err
@@ -58,7 +60,7 @@ func run() error {
 			var msg model.Msg
 			switch input := input.(type) {
 			case tern.Key:
-				msg = model.KeyMsg{Chord: input.String()}
+				msg = model.KeyMsg{Chord: input.String(), Text: input.Text}
 			case *tern.Select:
 				if input.ID == view.IssueListID {
 					msg = model.SelectMsg{UID: strings.TrimPrefix(input.Item, view.IssueListID+".")}
@@ -86,7 +88,7 @@ func run() error {
 			}
 		}
 	}()
-	m := model.Model{Cols: session.Caps().Cols}
+	m := model.Model{Cols: session.Caps().Cols, Actor: resolveActor(override)}
 	runner := commandRunner{}
 	defer runner.close()
 	msg := model.Msg(model.Start{Workspace: workspace})
@@ -101,6 +103,9 @@ func run() error {
 		}
 		if err := surface.Render(view.Render(m)); err != nil {
 			return err
+		}
+		if m.FieldForm.Open {
+			if err := surface.Focus(view.FieldInputID); err != nil { return err }
 		}
 		if m.Focus == model.ColumnList && m.SelectedUID != "" && m.SelectedUID != previousSelection {
 			if err := surface.Reveal(view.IssueID(m.SelectedUID), "nearest"); err != nil {

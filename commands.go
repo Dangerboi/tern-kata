@@ -10,6 +10,16 @@ import (
 func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 	var msg model.Msg
 	switch cmd := cmd.(type) {
+	case model.WriteField:
+		client, err := data.Discover(ctx, cmd.Workspace)
+		if err == nil { err = client.WriteField(ctx, cmd) }
+		msg = model.FieldWritten{UID: cmd.UID, Err: err}
+	case model.LoadFieldLabels:
+		client, err := data.Discover(ctx, cmd.Workspace)
+		result := model.FieldLabelsLoaded{UID: cmd.UID}
+		if err == nil { result, err = client.FieldLabels(ctx, cmd) }
+		result.UID, result.Err = cmd.UID, err
+		msg = result
 	case model.LoadProject:
 		client, err := data.Discover(ctx, cmd.Workspace)
 		if err != nil {

@@ -7,6 +7,8 @@ type Project = g.ProjectOut
 
 type Model struct {
 	LiveState
+	Actor string
+	FieldForm FieldFormState
 	Workspace           string
 	Project             Project
 	Snapshot            g.UISnapshotResponseBody
@@ -44,6 +46,17 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 
 func update(m Model, msg Msg) (Model, []Cmd) {
 	switch msg := msg.(type) {
+	case FieldValueMsg:
+		if m.FieldForm.Open && !m.FieldForm.Saving { m.FieldForm.Value = msg.Value; m.FieldForm.Err = nil; m.FieldForm.Suggestion = 0 }
+	case FieldLabelsLoaded:
+		if m.FieldForm.Open && m.FieldForm.UID == msg.UID { m.FieldForm.Labels = msg.Labels; m.FieldForm.Err = msg.Err }
+	case FieldWritten:
+		if m.FieldForm.UID != msg.UID { return m, nil }
+		m.FieldForm.Saving = false
+		if msg.Err != nil { m.FieldForm.Open = true; m.FieldForm.Err = msg.Err; return m, nil }
+		m.FieldForm = FieldFormState{}
+		m.DetailUID = ""
+		return refreshLive(m)
 	case Start:
 		m.Workspace = msg.Workspace
 		m.Loading = true
@@ -105,7 +118,9 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m.Loading = false
 		m.Err = msg.Err
 	case KeyMsg:
+		if m.FieldForm.Open { return updateFieldKey(m, msg) }
 		if binding, ok := LookupBindingForMode(msg.Chord, m.CurrentMode()); ok {
+			if fieldAction(binding.Action) { return openField(m, binding.Action) }
 			if binding.Action == ToggleHelp {
 				m.HelpOpen = !m.HelpOpen
 				return m, nil
