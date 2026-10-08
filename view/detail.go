@@ -39,7 +39,7 @@ func detail(m model.Model) tern.Element {
 			heading = append(heading, loadingMarker)
 		}
 		children = append(children, ui.Text{Common: ui.Common{Key: "title", Actions: &ui.Actions{Click: "focus-detail"}}, Spans: heading})
-		for section := model.SectionBody; section <= model.SectionHistory; section++ {
+		for section := model.SectionProperties; section <= model.SectionHistory; section++ {
 			content := ui.Nodes(sectionHeading(m, section))
 			switch section {
 			case model.SectionBody:
@@ -49,39 +49,9 @@ func detail(m model.Model) tern.Element {
 				}
 				content = append(content, ui.Md{Common: ui.Common{Key: "body"}, Text: body})
 			case model.SectionProperties:
-				owner, priority := "Unassigned", "None"
-				if issue.Owner != nil && *issue.Owner != "" {
-					owner = *issue.Owner
-				}
-				if issue.Priority != nil {
-					priority = fmt.Sprint(*issue.Priority)
-				}
-				pairs := []ui.Pair{
-					{K: ui.T("Project"), V: ui.T(issue.ProjectName)},
-					{K: ui.T("Status"), V: ui.T(issue.Status)},
-					{K: ui.T("Priority"), V: ui.T(priority)},
-					{K: ui.T("Owner"), V: ui.T(owner)},
-					{K: ui.T("Author"), V: ui.T(issue.Author)},
-					{K: ui.T("Revision"), V: ui.T(fmt.Sprint(issue.Revision))},
-					{K: ui.T("Created"), V: ui.T(issue.CreatedAt.Format(time.RFC3339))},
-					{K: ui.T("Updated"), V: ui.T(issue.UpdatedAt.Format(time.RFC3339))},
-				}
-				if issue.ScheduledOnDate != nil {
-					pairs = append(pairs, ui.Pair{K: ui.T("Scheduled"), V: ui.T(*issue.ScheduledOnDate)})
-				}
-				if issue.DeadlineOnDate != nil {
-					pairs = append(pairs, ui.Pair{K: ui.T("Deadline"), V: ui.T(*issue.DeadlineOnDate)})
-				}
-				if issue.ClosedReason != nil {
-					pairs = append(pairs, ui.Pair{K: ui.T("Closed reason"), V: ui.T(*issue.ClosedReason)})
-				}
-				content = append(content, ui.KV{Common: ui.Common{Key: "properties"}, Layout: ui.KVGrid, Items: pairs})
+				content = append(content, properties(issue))
 			case model.SectionLabels:
-				labels := strings.Join(issue.Labels, ", ")
-				if labels == "" {
-					labels = "No labels."
-				}
-				content = append(content, ui.Text{Common: ui.Common{Key: "labels"}, Text: labels})
+				content = append(content, labels(issue.Labels))
 			default:
 				content = append(content, detailRows(m, section)...)
 			}
@@ -126,4 +96,73 @@ func detailRows(m model.Model, section model.DetailSection) tern.Nodes {
 		rows = append(rows, ui.Col{Common: ui.Common{Key: row.Key, Mark: mark}, Children: parts})
 	}
 	return rows
+}
+
+func statusTone(status string) ui.Tone {
+	if status == "open" {
+		return ui.ToneAccent
+	}
+	return ui.ToneMuted
+}
+
+func priorityTone(priority int64) ui.Tone {
+	switch priority {
+	case 0:
+		return ui.ToneError
+	case 1:
+		return ui.ToneWarning
+	case 2:
+		return ui.ToneInfo
+	}
+	return ui.ToneMuted
+}
+
+// properties is the compact block: badges, the primary fields, then the
+// de-emphasised author, revision and timestamps.
+func properties(issue *model.Issue) tern.Element {
+	badges := ui.Nodes(ui.Badge{Common: ui.Common{Key: "status", Tone: statusTone(issue.Status)}, Text: issue.Status})
+	if issue.Priority != nil {
+		badges = append(badges, ui.Badge{Common: ui.Common{Key: "priority", Tone: priorityTone(*issue.Priority)}, Text: fmt.Sprintf("P%d", *issue.Priority)})
+	}
+	owner := "Unassigned"
+	if issue.Owner != nil && *issue.Owner != "" {
+		owner = *issue.Owner
+	}
+	primary := []ui.Pair{
+		{K: ui.T("Owner"), V: ui.T(owner)},
+		{K: ui.T("Project"), V: ui.T(issue.ProjectName)},
+	}
+	for _, f := range []struct {
+		name string
+		v    *string
+	}{{"Scheduled", issue.ScheduledOnDate}, {"Deadline", issue.DeadlineOnDate}, {"Closed reason", issue.ClosedReason}} {
+		if f.v != nil {
+			primary = append(primary, ui.Pair{K: ui.T(f.name), V: ui.T(*f.v)})
+		}
+	}
+	muted := func(k, v string) ui.Pair {
+		return ui.Pair{K: ui.Spans(ui.Span{T: k, S: "muted"}), V: ui.Spans(ui.Span{T: v, S: "muted"})}
+	}
+	secondary := []ui.Pair{
+		muted("Author", issue.Author),
+		muted("Revision", fmt.Sprint(issue.Revision)),
+		muted("Created", issue.CreatedAt.Format(time.RFC3339)),
+		muted("Updated", issue.UpdatedAt.Format(time.RFC3339)),
+	}
+	return ui.Col{Common: ui.Common{Key: "properties"}, Gap: ui.GapSM, Children: ui.Nodes(
+		ui.Row{Common: ui.Common{Key: "badges"}, Gap: ui.GapSM, Children: badges},
+		ui.KV{Common: ui.Common{Key: "primary"}, Layout: ui.KVGrid, Items: primary},
+		ui.KV{Common: ui.Common{Key: "secondary"}, Layout: ui.KVGrid, Items: secondary},
+	)}
+}
+
+func labels(names []string) tern.Element {
+	if len(names) == 0 {
+		return ui.Text{Common: ui.Common{Key: "labels"}, Text: "No labels."}
+	}
+	chips := make(tern.Nodes, len(names))
+	for i, name := range names {
+		chips[i] = ui.Badge{Common: ui.Common{Key: "label-" + name, Tone: ui.ToneNeutral}, Text: name}
+	}
+	return ui.Row{Common: ui.Common{Key: "labels"}, Gap: ui.GapSM, Wrap: true, Children: chips}
 }

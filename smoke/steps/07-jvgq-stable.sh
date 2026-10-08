@@ -42,7 +42,7 @@ mark=$(wc -l <"$tmp/stable-frames.jsonl")
 ctl click "[data-id='main.columns.list.issues.$stable_second']"
 expect_tree "[data-id='main.columns.list.issues.$stable_second']" '.nodes[0]["aria-selected"] == "true"'
 expect_tree "[data-id='main.columns.detail.title']" '.nodes[0].text | contains("Smoke stable second") and (contains("loading") | not)'
-expect_tree "[data-id='main.columns.detail.section0.body']" '[.nodes[] | .. | objects | .text? // empty] | join(" ") | contains("Stable second body")'
+expect_tree "[data-id='main.columns.detail.section2.body']" '[.nodes[] | .. | objects | .text? // empty] | join(" ") | contains("Stable second body")'
 expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$stable_columns"
 expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$stable_detail"
 expect_no_ops "$tmp/stable-frames.jsonl" "$mark" '.[0] == "reveal"'
