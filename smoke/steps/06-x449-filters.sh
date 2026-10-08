@@ -28,12 +28,13 @@ ctl plugins expect status=open
 ctl key s
 ctl plugins expect status=closed
 expect_tree "[data-id='main.columns.list.issues']" '.nodes[0].text | contains("No Issues match these filters")'
+expect_tree "[data-id^='main.columns.list.issues.01']" '.count == 0'
 ctl key s
 ctl plugins expect status=all
 expect_tree "[data-id$='.$search_alpha']" '.count == 1'
 
 ctl key f
-ctl plugins expect "Filter smoke"
+expect_tree "[data-id='layer.filters']" '.count == 1 and (.nodes[0].text | contains("Filter smoke"))'
 ctl key Right
 ctl key tab
 ctl key Right
@@ -57,8 +58,17 @@ expect_tree "[data-id='main.columns.list.heading']" '.nodes[0].text | contains("
 
 ctl key c
 expect_tree "[data-id='main.columns.list.heading']" '.nodes[0].text == "smoke"'
-expect_tree "[data-id='main.columns.list.issues']" '.nodes[0].text | contains("Smoke first Issue")'
+expect_tree "[data-id$='.$hierarchy_parent']" '.count == 1'
 ctl key f
-ctl plugins expect "Filter smoke"
+expect_tree "[data-id='layer.filters']" '.count == 1 and (.nodes[0].text | contains("Filter smoke"))'
 ctl click "[data-id='layer.filters.actions.cancel']"
 expect_tree "[data-id='layer.filters']" '.count == 0'
+
+# Keep later slices within the native list viewport, without retaining search fixtures.
+for fixture in gamma delta beta alpha; do
+  uid=$(jq -r '.issue.uid' "$tmp/search-$fixture.json")
+  short=$(jq -r '.issue.short_id' "$tmp/search-$fixture.json")
+  kata --workspace "$tmp/workspace" delete "$uid" --force --confirm "DELETE smoke#$short" --json
+done
+ctl key g
+expect_tree "[data-id='main.columns.list.issues']" '.nodes[0].text | contains("Smoke first Issue")'
