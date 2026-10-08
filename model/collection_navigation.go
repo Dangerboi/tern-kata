@@ -22,16 +22,21 @@ func updateCollectionNavigation(m Model, action Action) (Model, []Cmd) {
 		}
 		return m, nil
 	}
+	// The New Project row follows the Collections, so the cursor may rest one past them.
+	newProjectRow := len(m.Collections)
 	switch action {
 	case MoveDown:
-		m.CollectionCursor = min(m.CollectionCursor+1, len(m.Collections)-1)
+		m.CollectionCursor = min(m.CollectionCursor+1, newProjectRow)
 	case MoveUp:
 		m.CollectionCursor = max(0, m.CollectionCursor-1)
 	case MoveFirst:
 		m.CollectionCursor = 0
 	case MoveLast:
-		m.CollectionCursor = len(m.Collections) - 1
+		m.CollectionCursor = newProjectRow
 	case DrillIn:
+		if m.CollectionCursor >= newProjectRow {
+			return openProjectForm(m), nil
+		}
 		m.Focus = ColumnList
 		return updateCollection(m, CollectionSelected{Collection: m.Collections[m.CollectionCursor]})
 	}

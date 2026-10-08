@@ -237,4 +237,12 @@ var Keymap = []Binding{
 	{Chord: "backspace", Key: "backspace", Action: DeleteInput, Help: "delete", Mode: ModePicker},
 	{Chord: "ctrl+u", Key: "ctrl+u", Action: ClearInput, Help: "clear filter", Mode: ModePicker},
 	{Chord: "ctrl+c", Key: "ctrl+c", Action: QuitAction, Help: "quit", Mode: ModePicker},
+	// New Project form: one name field, so every other key is typed.
+	{Chord: "enter", Key: "enter", Action: ProjectSubmit, Help: "create Project", Mode: ModeProjectForm, ShowInFooter: true},
+	{Chord: "ctrl+o", Key: "ctrl+o", Action: ProjectSubmit, Help: "create Project", Mode: ModeProjectForm},
+	{Chord: "ctrl+s", Key: "ctrl+s", Action: ProjectSubmit, Help: "create Project", Mode: ModeProjectForm},
+	{Chord: "escape", Key: "esc", Action: ProjectCancel, Help: "cancel", Mode: ModeProjectForm, ShowInFooter: true},
+	{Chord: "backspace", Key: "backspace", Action: DeleteInput, Help: "delete", Mode: ModeProjectForm},
+	{Chord: "ctrl+u", Key: "ctrl+u", Action: ClearInput, Help: "clear name", Mode: ModeProjectForm},
+	{Chord: "ctrl+c", Key: "ctrl+c", Action: QuitAction, Help: "quit", Mode: ModeProjectForm},
 }

@@ -70,31 +70,9 @@ func (c *Client) projectRequest(ctx context.Context, workspace string) (*g.Resol
 	}
 	request := &g.ResolveProjectBody{}
 	if workspaceRoot != "" {
-		path := filepath.Join(workspaceRoot, ".kata.toml")
-		var cfg struct {
-			Version int `toml:"version"`
-			Project struct {
-				Name     string `toml:"name"`
-				Identity string `toml:"identity"`
-			} `toml:"project"`
-		}
-		if _, err := toml.DecodeFile(path, &cfg); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", path, err)
-		}
-		if cfg.Version != 1 {
-			return nil, fmt.Errorf("unsupported .kata.toml version %d (expected 1)", cfg.Version)
-		}
-		name := strings.TrimSpace(cfg.Project.Name)
-		if identity := strings.TrimSpace(cfg.Project.Identity); name == "" && identity != "" {
-			name = identity[strings.LastIndexAny(identity, "/:")+1:]
-		}
-		if name == "" {
-			return nil, fmt.Errorf("project.name in %s must be non-empty", path)
-		}
-		for _, r := range name {
-			if unicode.IsControl(r) || !unicode.IsPrint(r) {
-				return nil, fmt.Errorf("project.name in %s contains non-printable character %U", path, r)
-			}
+		name, err := readBinding(workspaceRoot)
+		if err != nil {
+			return nil, err
 		}
 		request.Name = &name
 	}
@@ -107,6 +85,37 @@ func (c *Client) projectRequest(ctx context.Context, workspace string) (*g.Resol
 		request.Alias = alias
 	}
 	return request, nil
+}
+
+// readBinding is the Project name the .kata.toml at workspaceRoot binds to.
+func readBinding(workspaceRoot string) (string, error) {
+	path := filepath.Join(workspaceRoot, ".kata.toml")
+	var cfg struct {
+		Version int `toml:"version"`
+		Project struct {
+			Name     string `toml:"name"`
+			Identity string `toml:"identity"`
+		} `toml:"project"`
+	}
+	if _, err := toml.DecodeFile(path, &cfg); err != nil {
+		return "", fmt.Errorf("parse %s: %w", path, err)
+	}
+	if cfg.Version != 1 {
+		return "", fmt.Errorf("unsupported .kata.toml version %d (expected 1)", cfg.Version)
+	}
+	name := strings.TrimSpace(cfg.Project.Name)
+	if identity := strings.TrimSpace(cfg.Project.Identity); name == "" && identity != "" {
+		name = identity[strings.LastIndexAny(identity, "/:")+1:]
+	}
+	if name == "" {
+		return "", fmt.Errorf("project.name in %s must be non-empty", path)
+	}
+	for _, r := range name {
+		if unicode.IsControl(r) || !unicode.IsPrint(r) {
+			return "", fmt.Errorf("project.name in %s contains non-printable character %U", path, r)
+		}
+	}
+	return name, nil
 }
 
 // Kata keeps config discovery internal; match its Git boundary and symlink rules on the client.

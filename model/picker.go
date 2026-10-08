@@ -33,18 +33,35 @@ func (c Collection) Key() string {
 	return c.View
 }
 
+// PickerEntry is a row of the Collections picker: a Collection, or New Project.
+type PickerEntry struct {
+	Collection
+	NewProject bool
+}
+
+// Key names the row, as Collection.Key names a Collection's.
+func (e PickerEntry) Key() string {
+	if e.NewProject {
+		return NewProjectKey
+	}
+	return e.Collection.Key()
+}
+
 // PickerEntries are the sidebar's Collections with the bound Project pinned
-// first, narrowed to titles containing the filter (any case).
-func (m Model) PickerEntries() []Collection {
+// first and New Project last, narrowed to titles containing the filter (any case).
+func (m Model) PickerEntries() []PickerEntry {
 	filter := strings.ToLower(m.Picker.Filter)
-	entries := make([]Collection, 0, len(m.Collections))
+	entries := make([]PickerEntry, 0, len(m.Collections)+1)
 	pinned := func(c Collection) bool { return m.Bound && c.View == "project" && c.ProjectUID == m.Project.UID }
 	for _, wantPinned := range []bool{true, false} {
 		for _, c := range m.Collections {
 			if pinned(c) == wantPinned && strings.Contains(strings.ToLower(c.Title), filter) {
-				entries = append(entries, c)
+				entries = append(entries, PickerEntry{Collection: c})
 			}
 		}
+	}
+	if strings.Contains(strings.ToLower(NewProjectTitle), filter) {
+		entries = append(entries, PickerEntry{Collection: Collection{Title: NewProjectTitle}, NewProject: true})
 	}
 	return entries
 }
@@ -57,22 +74,26 @@ func openPicker(m Model) Model {
 	return m
 }
 
-// pickCollection switches to the entry under the cursor, as enter does in the sidebar.
+// pickCollection switches to the entry under the cursor, as enter does in the
+// sidebar; New Project opens its form instead, leaving the picker behind it.
 func pickCollection(m Model) (Model, []Cmd) {
 	entries := m.PickerEntries()
 	if len(entries) == 0 {
 		return m, nil
 	}
-	collection := entries[min(m.Picker.Cursor, len(entries)-1)]
+	entry := entries[min(m.Picker.Cursor, len(entries)-1)]
+	if entry.NewProject {
+		return openProjectForm(m), nil
+	}
 	m.Picker = PickerState{}
 	m.Focus = ColumnList
-	return updateCollection(m, CollectionSelected{Collection: collection})
+	return updateCollection(m, CollectionSelected{Collection: entry.Collection})
 }
 
 func pickCollectionKey(m Model, key string) (Model, []Cmd) {
 	if m.Picker.Open {
-		for i, collection := range m.PickerEntries() {
-			if collection.Key() == key {
+		for i, entry := range m.PickerEntries() {
+			if entry.Key() == key {
 				m.Picker.Cursor = i
 				return pickCollection(m)
 			}

@@ -48,6 +48,9 @@ func Render(m model.Model) tern.View {
 	if m.FilterForm.Open {
 		layer = filterLayer(m)
 	}
+	if m.ProjectForm.Open {
+		layer = projectLayer(m)
+	}
 	if m.CloseForm.Open {
 		layer = closeLayer(m)
 	}

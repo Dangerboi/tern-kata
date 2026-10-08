@@ -35,6 +35,7 @@ expect_tree "[data-id^='main.columns.collections.']" '.nodes[-1]["aria-selected"
 ctl key Up
 expect_tree "[data-id^='main.columns.collections.']" '.nodes[-2]["aria-selected"] == "true"'
 ctl key End
+ctl key Up
 ctl key Enter
 expect_tree "[data-id='main.columns.list.heading']" '.ok and .nodes[0].text == "smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count >= 4'

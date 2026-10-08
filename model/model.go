@@ -29,6 +29,7 @@ type Model struct {
 	CollectionCursor    int
 	Bound               bool
 	Picker              PickerState
+	ProjectForm         ProjectFormState
 	Focus               Column
 	Groups              []IssueGroup
 	LocalDate, TimeZone string
@@ -79,6 +80,9 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return next, cmds
 	}
 	if next, cmds, handled := updateEditor(m, msg); handled {
+		return next, cmds
+	}
+	if next, cmds, handled := updateProjectForm(m, msg); handled {
 		return next, cmds
 	}
 	switch msg.(type) {

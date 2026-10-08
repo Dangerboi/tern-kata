@@ -50,6 +50,12 @@ func InputFocusID(m model.Model) string {
 		}
 		return ""
 	}
+	if m.ProjectForm.Open {
+		if !m.ProjectForm.Saving {
+			return ProjectInputID
+		}
+		return ""
+	}
 	if m.Picker.Open {
 		return PickerFilterID
 	}
@@ -63,7 +69,7 @@ func IsTransientTarget(id string) bool {
 	if _, ok := CreateFieldIndex(id); ok {
 		return true
 	}
-	if id == FieldInputID || id == SearchID || id == DraftEditorID || id == PickerFilterID {
+	if id == FieldInputID || id == SearchID || id == DraftEditorID || id == PickerFilterID || id == ProjectInputID {
 		return true
 	}
 	if _, ok := FilterFieldIndex(id); ok {

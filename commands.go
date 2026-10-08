@@ -69,6 +69,22 @@ func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 		}
 		result.UID, result.Err = cmd.UID, err
 		msg = result
+	case model.CreateProject:
+		client, err := data.Discover(ctx, cmd.Workspace)
+		var project model.Project
+		if err == nil {
+			defer client.CloseIdleConnections()
+			project, err = client.CreateProject(ctx, cmd)
+		}
+		msg = model.ProjectSaved{Project: project, Err: err}
+	case model.BindProject:
+		client, err := data.Discover(ctx, cmd.Workspace)
+		var project model.Project
+		if err == nil {
+			defer client.CloseIdleConnections()
+			project, err = client.BindProject(ctx, cmd)
+		}
+		msg = model.ProjectSaved{Project: project, Err: err}
 	case model.LoadProject:
 		client, err := data.Discover(ctx, cmd.Workspace)
 		if err != nil {

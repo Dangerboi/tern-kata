@@ -24,6 +24,9 @@ func (m Model) CurrentMode() Mode {
 	if m.FilterForm.Open {
 		return ModeFilterForm
 	}
+	if m.ProjectForm.Open {
+		return ModeProjectForm
+	}
 	if m.Picker.Open {
 		return ModePicker
 	}
@@ -54,7 +57,7 @@ func LookupBindingForMode(chord string, mode Mode) (Binding, bool) {
 	if mode == ModeEditor || mode == ModeDiscard || mode == ModeConflict {
 		return Binding{}, false
 	}
-	if mode == ModeCreate || mode == ModeFieldForm || mode == ModeCloseForm {
+	if mode == ModeCreate || mode == ModeFieldForm || mode == ModeCloseForm || mode == ModeProjectForm {
 		return Binding{}, false
 	}
 	if inputMode(mode) {

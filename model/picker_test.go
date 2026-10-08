@@ -134,10 +134,11 @@ func TestPickerEntries(t *testing.T) {
 		filter string
 		want   []string
 	}{
-		{"bound Project is pinned first", true, "", []string{"smoke", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "alpha"}},
-		{"unbound keeps the sidebar order", false, "", []string{"Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "alpha", "smoke"}},
+		{"bound Project is pinned first", true, "", []string{"smoke", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "alpha", "New Project"}},
+		{"unbound keeps the sidebar order", false, "", []string{"Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "alpha", "smoke", "New Project"}},
 		{"filter matches any case and keeps the order", true, "AL", []string{"All Open", "alpha"}},
 		{"filter can drop the pinned Project", true, "alp", []string{"alpha"}},
+		{"filter finds New Project by its title", true, "PROJ", []string{"New Project"}},
 		{"filter without a match lists nothing", true, "zzz", []string{}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -162,9 +163,9 @@ func TestPickerCursorMoves(t *testing.T) {
 		{"up from the top stays", []string{"up"}, 0},
 		{"k from the top stays", []string{"k"}, 0},
 		{"down then up", []string{"down", "down", "up"}, 1},
-		{"end", []string{"end"}, 7},
+		{"end", []string{"end"}, 8},
 		{"home", []string{"end", "home"}, 0},
-		{"down stops at the last entry", []string{"end", "down", "j"}, 7},
+		{"down stops at the last entry", []string{"end", "down", "j"}, 8},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m, cmds := pickerKeys(pickerStart(120, true), append([]string{"p"}, tt.keys...)...)
@@ -227,7 +228,7 @@ func TestPickerEscapeChangesNothing(t *testing.T) {
 }
 
 func TestPickerTypingFiltersEntries(t *testing.T) {
-	all := []string{"smoke", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "alpha"}
+	all := []string{"smoke", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "alpha", "New Project"}
 	for _, tt := range []struct {
 		name   string
 		keys   []string
@@ -295,7 +296,7 @@ func TestPickerPointerEqualsKeyboard(t *testing.T) {
 		keys []string
 	}{
 		{"Inbox", "inbox", []string{"down", "enter"}},
-		{"another Project", "project.alpha-uid", []string{"end", "enter"}},
+		{"another Project", "project.alpha-uid", []string{"end", "up", "enter"}},
 		{"the pinned bound Project", "project.smoke-uid", []string{"enter"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

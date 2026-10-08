@@ -14,7 +14,7 @@ expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 # p opens the picker: the bound Project first and marked current, with picker hints only.
 ctl key p
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
-expect_tree "$picker_items" '.ok and .count == 8 and .nodes[0].text == "smokecurrent" and .nodes[0]["aria-selected"] == "true" and .nodes[1].text == "Inbox"'
+expect_tree "$picker_items" '.ok and .count == 9 and .nodes[0].text == "smokecurrent" and .nodes[0]["aria-selected"] == "true" and .nodes[1].text == "Inbox" and .nodes[-1].text == "New Project"'
 expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("enter open Collection") and contains("esc close"))'
 ctl key End
 expect_tree "$picker_items" '.nodes[-1]["aria-selected"] == "true"'
