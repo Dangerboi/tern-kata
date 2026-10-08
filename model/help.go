@@ -6,6 +6,7 @@ func (m Model) CurrentMode() Mode {
 	if m.HelpOpen {
 		return ModeHelp
 	}
+	if m.CloseForm.Open { return ModeCloseForm }
 	if m.Err != nil {
 		return ModeError
 	}

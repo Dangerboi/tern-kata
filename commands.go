@@ -10,6 +10,14 @@ import (
 func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 	var msg model.Msg
 	switch cmd := cmd.(type) {
+	case model.CloseIssueCmd:
+		client, err := data.Discover(ctx, cmd.Workspace)
+		if err == nil { err = client.Close(ctx, cmd) }
+		msg = model.CloseResultMsg{UID:cmd.UID, Err:err}
+	case model.ReopenIssueCmd:
+		client, err := data.Discover(ctx, cmd.Workspace)
+		if err == nil { err = client.Reopen(ctx, cmd) }
+		msg = model.CloseResultMsg{UID:cmd.UID, Err:err}
 	case model.LoadProject:
 		client, err := data.Discover(ctx, cmd.Workspace)
 		if err != nil {

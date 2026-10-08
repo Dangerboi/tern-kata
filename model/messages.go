@@ -22,7 +22,7 @@ type Failed struct{ Err error }
 
 func (Failed) msg() {}
 
-type KeyMsg struct{ Chord string }
+type KeyMsg struct{ Chord, Text string }
 
 func (KeyMsg) msg() {}
 

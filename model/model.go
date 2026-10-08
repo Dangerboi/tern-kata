@@ -7,6 +7,7 @@ type Project = g.ProjectOut
 
 type Model struct {
 	LiveState
+	CloseForm CloseFormState
 	Workspace           string
 	Project             Project
 	Snapshot            g.UISnapshotResponseBody
@@ -43,6 +44,11 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 }
 
 func update(m Model, msg Msg) (Model, []Cmd) {
+	switch msg.(type) {
+	case CloseFieldMsg, CloseSubmitMsg, CloseResultMsg:
+		return updateClose(m, msg)
+	}
+	if _, ok := msg.(KeyMsg); ok && m.CloseForm.Open { return updateClose(m, msg) }
 	switch msg := msg.(type) {
 	case Start:
 		m.Workspace = msg.Workspace
@@ -106,6 +112,15 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m.Err = msg.Err
 	case KeyMsg:
 		if binding, ok := LookupBindingForMode(msg.Chord, m.CurrentMode()); ok {
+			if binding.Action == OpenClose { return openClose(m), nil }
+			if binding.Action == ReopenAction {
+				issue := closeIssue(m)
+				if issue != nil && !m.Stale && !m.CloseForm.Pending {
+					m.CloseForm = CloseFormState{UID:issue.UID, Pending:true}
+					return m, []Cmd{ReopenIssueCmd{Workspace:m.Workspace, UID:issue.UID, ProjectID:issue.ProjectID}}
+				}
+				return m, nil
+			}
 			if binding.Action == ToggleHelp {
 				m.HelpOpen = !m.HelpOpen
 				return m, nil

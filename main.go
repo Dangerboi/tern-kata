@@ -58,7 +58,7 @@ func run() error {
 			var msg model.Msg
 			switch input := input.(type) {
 			case tern.Key:
-				msg = model.KeyMsg{Chord: input.String()}
+				msg = model.KeyMsg{Chord: input.String(), Text:input.Text}
 			case *tern.Select:
 				if input.ID == view.IssueListID {
 					msg = model.SelectMsg{UID: strings.TrimPrefix(input.Item, view.IssueListID+".")}
@@ -68,6 +68,13 @@ func run() error {
 				}
 			case *tern.Action:
 				msg = detailAction(input)
+				if strings.HasPrefix(input.ID, "layer.close.") {
+					switch input.Act {
+					case "close-save": msg = model.CloseSubmitMsg{}
+					case "close-quick": msg = model.CloseSubmitMsg{Quick:true}
+					case "close-cancel": msg = model.KeyMsg{Chord:"escape"}
+					}
+				}
 				if input.ID == view.RetryID && input.Act == string(model.RetryAction) {
 					msg = model.Retry{}
 				}
@@ -101,6 +108,9 @@ func run() error {
 		}
 		if err := surface.Render(view.Render(m)); err != nil {
 			return err
+		}
+		if id := view.CloseInputFocusID(m); id != "" {
+			if err := surface.Focus(id); err != nil { return err }
 		}
 		if m.Focus == model.ColumnList && m.SelectedUID != "" && m.SelectedUID != previousSelection {
 			if err := surface.Reveal(view.IssueID(m.SelectedUID), "nearest"); err != nil {
