@@ -40,6 +40,25 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 		check func(*testing.T, model.Model, []model.Cmd)
 	}{
 		{
+			name: "unreachable preserves kata error and exposes retry mode",
+			messages: []model.Msg{model.Failed{Err: failure}},
+			check: func(t *testing.T, m model.Model, cmds []model.Cmd) {
+				binding, ok := model.LookupBindingForMode("ctrl+r", m.CurrentMode())
+				if m.Err != failure || m.Loading || m.CurrentMode() != model.ModeError || !ok || binding.Action != model.RetryAction || !binding.ShowInFooter || len(cmds) != 0 {
+					t.Fatalf("daemon error: %+v, %#v", m, cmds)
+				}
+			},
+		},
+		{
+			name: "keyboard retry reloads unreachable daemon",
+			messages: []model.Msg{model.Failed{Err: failure}, model.KeyMsg{Chord: "ctrl+r"}},
+			check: func(t *testing.T, m model.Model, cmds []model.Cmd) {
+				if m.Err != nil || !m.Loading || !reflect.DeepEqual(cmds, []model.Cmd{model.LoadProject{Workspace: "/repo"}}) {
+					t.Fatalf("keyboard retry: %+v, %#v", m, cmds)
+				}
+			},
+		},
+		{
 			name: "unreachable and retry",
 			messages: []model.Msg{model.Failed{Err: failure}, model.Retry{}},
 			check: func(t *testing.T, m model.Model, cmds []model.Cmd) {
