@@ -7,27 +7,26 @@ type Project = g.ProjectOut
 
 type Model struct {
 	LiveState
-	Create            CreateState
-	PendingCreatedUID string
-	CloseForm         CloseFormState
-	Actor             string
-	FieldForm         FieldFormState
-	Workspace         string
-	OpenIssueRef      string
-	OpenedIssueUID    string
-	Project           Project
-	Snapshot          g.UISnapshotResponseBody
-	Issues            []Issue
-	ETag              string
-	SelectedUID       string
-	Loading           bool
-	Err               error
-	Cols              int
-	Quitting          bool
-	Collection        Collection
-	Collections       []Collection
-	CollectionCursor  int
-	// Bound: the startup workspace resolved to a Project, so the Collections picker replaces the sidebar.
+	Create              CreateState
+	PendingCreatedUID   string
+	CloseForm           CloseFormState
+	Actor               string
+	FieldForm           FieldFormState
+	Workspace           string
+	OpenIssueRef        string
+	OpenedIssueUID      string
+	Project             Project
+	Snapshot            g.UISnapshotResponseBody
+	Issues              []Issue
+	ETag                string
+	SelectedUID         string
+	Loading             bool
+	Err                 error
+	Cols                int
+	Quitting            bool
+	Collection          Collection
+	Collections         []Collection
+	CollectionCursor    int
 	Bound               bool
 	Picker              PickerState
 	Focus               Column
