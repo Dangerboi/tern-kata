@@ -17,6 +17,7 @@ type Model struct {
 	Err         error
 	Cols        int
 	Quitting    bool
+	HelpOpen    bool
 }
 
 func Update(m Model, msg Msg) (Model, []Cmd) {
@@ -34,7 +35,15 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 		m.Loading = false
 		m.Err = msg.Err
 	case KeyMsg:
-		if binding, ok := LookupBinding(msg.Chord); ok {
+		if binding, ok := LookupBindingForMode(msg.Chord, m.CurrentMode()); ok {
+			if binding.Action == ToggleHelp {
+				m.HelpOpen = !m.HelpOpen
+				return m, nil
+			}
+			if binding.Action == CloseHelp {
+				m.HelpOpen = false
+				return m, nil
+			}
 			return updateNavigation(m, binding.Action)
 		}
 	case SelectMsg:

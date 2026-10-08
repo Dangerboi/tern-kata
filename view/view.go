@@ -41,15 +41,12 @@ func Render(m model.Model) tern.View {
 	if m.Stale && m.Err == nil && !m.Loading {
 		main = append(main, staleNotice(m))
 	}
-	return tern.View{Main: main, Dock: footer(m)}
+	return tern.View{Main: main, Dock: footer(m), Layer: help(m)}
 }
 
 func footer(m model.Model) tern.Element {
 	segments := make([]tern.Element, 0, len(model.Keymap)+1)
-	for _, binding := range model.Keymap {
-		if binding.Action == model.RetryAction && m.Err == nil {
-			continue
-		}
+	for binding := range model.BindingsForMode(m.CurrentMode(), true) {
 		segments = append(segments, ui.Seg{Common: ui.Common{Key: binding.Chord}, Text: binding.Key + " " + binding.Help})
 	}
 	selected := 0
