@@ -15,7 +15,7 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-type Client struct { *client.Client }
+type Client struct{ *client.Client }
 
 func Discover(ctx context.Context, workspace string) (*Client, error) {
 	raw, err := exec.CommandContext(ctx, "kata", "--workspace", workspace, "daemon", "locate", "--json").Output()
@@ -27,8 +27,8 @@ func Discover(ctx context.Context, workspace string) (*Client, error) {
 		return nil, fmt.Errorf("kata daemon locate: %w", err)
 	}
 	var target struct {
-		Network string `json:"network"`
-		Address string `json:"address"`
+		Network        string `json:"network"`
+		Address        string `json:"address"`
 		RequestBaseURL string `json:"request_base_url"`
 	}
 	if err := json.Unmarshal(raw, &target); err != nil {
@@ -44,13 +44,19 @@ func Discover(ctx context.Context, workspace string) (*Client, error) {
 	} else {
 		c, err = client.NewWithGlobalAuth(ctx, target.RequestBaseURL)
 	}
-	if err != nil { return nil, err }
-	ping, err := c.PingWithResponse(ctx)
 	if err != nil {
-		if ping != nil { return nil, ReadError(ping.Body, err) }
 		return nil, err
 	}
-	if ping.JSON200 == nil { return nil, fmt.Errorf("kata daemon returned no version") }
+	ping, err := c.PingWithResponse(ctx)
+	if err != nil {
+		if ping != nil {
+			return nil, ReadError(ping.Body, err)
+		}
+		return nil, err
+	}
+	if ping.JSON200 == nil {
+		return nil, fmt.Errorf("kata daemon returned no version")
+	}
 	version := ping.JSON200.Version
 	normalized := "v" + strings.TrimPrefix(version, "v")
 	if !semver.IsValid(normalized) {
@@ -66,9 +72,13 @@ func ReadError(body []byte, fallback error) error {
 	var envelope g.ErrorEnvelope
 	if json.Unmarshal(body, &envelope) == nil && envelope.ErrorData.Message != "" {
 		message := envelope.ErrorData.Message
-		if envelope.ErrorData.Hint != nil { message += "\n" + *envelope.ErrorData.Hint }
+		if envelope.ErrorData.Hint != nil {
+			message += "\n" + *envelope.ErrorData.Hint
+		}
 		return errors.New(message)
 	}
-	if len(body) > 0 { return errors.New(strings.TrimSpace(string(body))) }
+	if len(body) > 0 {
+		return errors.New(strings.TrimSpace(string(body)))
+	}
 	return fallback
 }

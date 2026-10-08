@@ -6,16 +6,16 @@ type Issue = g.UIIssue
 type Project = g.ProjectOut
 
 type Model struct {
-	Workspace string
-	Project Project
-	Snapshot g.UISnapshotResponseBody
-	Issues []Issue
-	ETag string
+	Workspace   string
+	Project     Project
+	Snapshot    g.UISnapshotResponseBody
+	Issues      []Issue
+	ETag        string
 	SelectedUID string
-	Loading bool
-	Err error
-	Cols int
-	Quitting bool
+	Loading     bool
+	Err         error
+	Cols        int
+	Quitting    bool
 }
 
 func Update(m Model, msg Msg) (Model, []Cmd) {

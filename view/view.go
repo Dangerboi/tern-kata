@@ -24,29 +24,34 @@ func Render(m model.Model) tern.View {
 		for _, issue := range m.Issues {
 			items = append(items, ui.Item{
 				Common: ui.Common{Key: issue.UID},
-				Label: ui.T(issue.ShortID + "  " + issue.Title),
+				Label:  ui.T(issue.ShortID + "  " + issue.Title),
 			})
 		}
 		selected := ""
-		if m.SelectedUID != "" { selected = IssueID(m.SelectedUID) }
+		if m.SelectedUID != "" {
+			selected = IssueID(m.SelectedUID)
+		}
 		main = append(main, ui.List{
 			CommonWithoutMax: ui.CommonWithoutMax{Key: "issues"},
-			Selected: selected,
-			Empty: ui.T("No open Issues in this Project. Create one with kata create."),
-			Children: items,
+			Selected:         selected,
+			Empty:            ui.T("No open Issues in this Project. Create one with kata create."),
+			Children:         items,
 		})
 	}
 	return tern.View{Main: main, Dock: footer(m)}
 }
 
 func footer(m model.Model) tern.Element {
-	segments := make([]tern.Element, 0, len(model.Keymap) + 1)
+	segments := make([]tern.Element, 0, len(model.Keymap)+1)
 	for _, binding := range model.Keymap {
 		segments = append(segments, ui.Seg{Common: ui.Common{Key: binding.Chord}, Text: binding.Key + " " + binding.Help})
 	}
 	selected := 0
 	for i, issue := range m.Issues {
-		if issue.UID == m.SelectedUID { selected = i + 1; break }
+		if issue.UID == m.SelectedUID {
+			selected = i + 1
+			break
+		}
 	}
 	segments = append(segments, ui.Seg{Common: ui.Common{Key: "position"}, Side: ui.SideRight, Text: fmt.Sprintf("%d / %d", selected, len(m.Issues))})
 	return ui.Nodes(ui.Status{Common: ui.Common{Key: "hints"}, Children: segments})

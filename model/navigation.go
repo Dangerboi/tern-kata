@@ -17,9 +17,9 @@ func updateNavigation(m Model, action Action) (Model, []Cmd) {
 	}
 	switch action {
 	case MoveDown:
-		index = min(index + 1, len(m.Issues) - 1)
+		index = min(index+1, len(m.Issues)-1)
 	case MoveUp:
-		index = max(index - 1, 0)
+		index = max(index-1, 0)
 	case MoveFirst:
 		index = 0
 	case MoveLast:

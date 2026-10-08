@@ -16,10 +16,17 @@ func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 			msg = model.Failed{Err: err}
 		} else {
 			result, err := client.ReadProject(ctx, cmd.Workspace)
-			if err != nil { msg = model.Failed{Err: err} } else { msg = result }
+			if err != nil {
+				msg = model.Failed{Err: err}
+			} else {
+				msg = result
+			}
 		}
 	}
 	if msg != nil {
-		select { case messages <- msg: case <-ctx.Done(): }
+		select {
+		case messages <- msg:
+		case <-ctx.Done():
+		}
 	}
 }

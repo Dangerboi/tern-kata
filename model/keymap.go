@@ -3,18 +3,18 @@ package model
 type Action string
 
 const (
-	MoveDown Action = "down"
-	MoveUp Action = "up"
-	MoveFirst Action = "first"
-	MoveLast Action = "last"
+	MoveDown   Action = "down"
+	MoveUp     Action = "up"
+	MoveFirst  Action = "first"
+	MoveLast   Action = "last"
 	QuitAction Action = "quit"
 )
 
 type Binding struct {
-	Chord string
-	Key string
+	Chord  string
+	Key    string
 	Action Action
-	Help string
+	Help   string
 }
 
 var Keymap = []Binding{

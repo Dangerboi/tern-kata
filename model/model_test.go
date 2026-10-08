@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	g "go.kenn.io/kata/pkg/client/generated"
 	"github.com/Dangerboi/tern-kata/model"
+	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 func TestOpeningBoundProject(t *testing.T) {
@@ -18,7 +18,6 @@ func TestOpeningBoundProject(t *testing.T) {
 		t.Fatalf("requested commands: %#v", cmds)
 	}
 }
-
 
 func TestIssueNavigation(t *testing.T) {
 	for _, tt := range []struct {
@@ -75,13 +74,19 @@ func TestEmptyProjectNavigation(t *testing.T) {
 func TestPointerSelection(t *testing.T) {
 	m := model.Model{Issues: []model.Issue{{UID: "a"}, {UID: "b"}}, SelectedUID: "a"}
 	m, _ = model.Update(m, model.SelectMsg{UID: "b"})
-	if m.SelectedUID != "b" { t.Fatalf("clicked Issue selected: %q", m.SelectedUID) }
+	if m.SelectedUID != "b" {
+		t.Fatalf("clicked Issue selected: %q", m.SelectedUID)
+	}
 	m, _ = model.Update(m, model.SelectMsg{UID: "missing"})
-	if m.SelectedUID != "b" { t.Fatalf("unknown Issue changed selection: %q", m.SelectedUID) }
+	if m.SelectedUID != "b" {
+		t.Fatalf("unknown Issue changed selection: %q", m.SelectedUID)
+	}
 }
 
 func TestDaemonFailureEndsLoading(t *testing.T) {
 	want := errors.New("kata daemon v0.17.0 is too old; requires v0.18.0")
 	m, _ := model.Update(model.Model{Loading: true}, model.Failed{Err: want})
-	if m.Loading || m.Err != want { t.Fatalf("daemon error state: %+v", m) }
+	if m.Loading || m.Err != want {
+		t.Fatalf("daemon error state: %+v", m)
+	}
 }
