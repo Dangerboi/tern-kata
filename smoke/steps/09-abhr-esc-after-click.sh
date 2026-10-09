@@ -56,6 +56,7 @@ esc_expect_mode list
 ctl key enter
 esc_expect_mode detail
 ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']"
+expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']" '.ok and .count == 1'
 ctl click "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Esc blocker"))'
 esc_expect_mode detail
@@ -71,6 +72,7 @@ esc_expect_mode collections
 ctl click "[data-id$='.$esc_target']"
 ctl key enter
 ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']"
+expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']" '.ok and .count == 1'
 ctl click "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Esc blocker"))'
 ctl click "[data-id='main.columns.collections.project.$esc_project']"

@@ -46,9 +46,8 @@ expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count >= 4'
 
 # Detail: j/k move between references (the arrows scroll the detail), Left backs out like Escape.
 jump() {
-  ctl key Tab
-  ctl key Tab
-  ctl key Tab
+  expect_tree "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']" '.ok and .count == 1'
+  ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']"
   for key in "$@"; do ctl key "$key"; done
   ctl key Enter
 }
