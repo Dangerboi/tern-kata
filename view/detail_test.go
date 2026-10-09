@@ -129,8 +129,8 @@ func TestDetailBadgesAndChipsAreToned(t *testing.T) {
 
 func TestDetailHeaderIsTheTitleAndStatusWithoutButtonsOrBodyHeading(t *testing.T) {
 	nodes := detailNodes(t, alpha)
-	if got := text(nodes[view.DetailContentID+".heading.title"]); got != "aaaa - Alpha" {
-		t.Errorf("title %q, want %q", got, "aaaa - Alpha")
+	if got := text(nodes[view.DetailContentID+".heading.title"]); got != "#aaaa - Alpha" {
+		t.Errorf("title %q, want %q", got, "#aaaa - Alpha")
 	}
 	if badge := nodes[view.DetailContentID+".heading.status"]; text(badge) != "open" || badge.P["tone"] != "accent" {
 		t.Errorf("status badge after the title: %v", badge)
@@ -166,5 +166,14 @@ func TestDetailIsOneScrollContainerWithOneChild(t *testing.T) {
 		if _, ok := nodes[id]; !ok {
 			t.Errorf("%s is not in the scroll container", id)
 		}
+	}
+}
+
+func TestDetailTitleShowsIDInAccentThenTitleStrong(t *testing.T) {
+	nodes := detailNodes(t, alpha)
+	title := nodes[view.DetailID+".viewport.content.heading.title"]
+	want := [][2]string{{"#" + alpha.ShortID, "accent"}, {" - " + alpha.Title, "strong"}}
+	if got := styled(title); !slices.Equal(got, want) {
+		t.Errorf("title spans = %v, want %v", got, want)
 	}
 }
