@@ -18,7 +18,7 @@ quit_app
 printf 'ready\nrun "env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP TERN_TSP_RECORD=%s KATA_HOME=%s %s/tern-kata"\n' "$tmp/parent-frames.jsonl" "$KATA_HOME" "$tmp" >"$tmp/parent-launch.ctl"
 ctl --file "$tmp/parent-launch.ctl"
 expect_tree "[data-id\$='.$parent_uid']" '.ok and .count == 1'
-expect_tree "[data-id\$='.${parent_children[0]}']" '.ok and .count == 0'
+expect_tree "[data-id\$='.${parent_children[-1]}']" '.ok and .count == 0'
 
 parent_height=$(ctl stats | jq -r '.viewport[1]')
 # The parent's row is the selected one, inside the Pane, and its detail is drawn.
@@ -41,20 +41,20 @@ parent_expect_drawn
 
 # → expands it, j moves to its first child, k goes back up to the expanded parent.
 ctl key Right
-expect_tree "[data-id\$='.${parent_children[0]}']" '.ok and .count == 1'
+expect_tree "[data-id\$='.${parent_children[-1]}']" '.ok and .count == 1'
 parent_expect_drawn
 ctl key j
-expect_tree "[data-id='main.columns.detail.heading.title']" '.ok and (.nodes[0].text | contains("Smoke parent child 1") and (contains("loading") | not))'
-expect_tree "[data-id\$='.${parent_children[0]}']" '.ok and .nodes[0]["aria-selected"] == "true" and .nodes[0].rect[1] >= 0 and (.nodes[0].rect[1] + .nodes[0].rect[3]) <= '"$parent_height"
+expect_tree "[data-id='main.columns.detail.heading.title']" '.ok and (.nodes[0].text | contains("Smoke parent child 40") and (contains("loading") | not))'
+expect_tree "[data-id\$='.${parent_children[-1]}']" '.ok and .nodes[0]["aria-selected"] == "true" and .nodes[0].rect[1] >= 0 and (.nodes[0].rect[1] + .nodes[0].rect[3]) <= '"$parent_height"
 ctl key k
 parent_expect_drawn
 
 # A click on the parent's row gives the same screen: it folds the children away and keeps the parent drawn.
 ctl click "[data-id\$='.$parent_uid']"
-expect_tree "[data-id\$='.${parent_children[0]}']" '.ok and .count == 0'
+expect_tree "[data-id\$='.${parent_children[-1]}']" '.ok and .count == 0'
 parent_expect_drawn
 ctl click "[data-id\$='.$parent_uid']"
-expect_tree "[data-id\$='.${parent_children[0]}']" '.ok and .count == 1'
+expect_tree "[data-id\$='.${parent_children[-1]}']" '.ok and .count == 1'
 parent_expect_drawn
 
 # The top bar stays put with the tall detail focused, at the window's height and a short one:

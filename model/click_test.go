@@ -11,16 +11,16 @@ import (
 	g "go.kenn.io/kata/pkg/client/generated"
 )
 
-// clickBase is an unbound workspace in the Issue list. Rows sort by title:
+// clickBase is an unbound workspace in the Issue list. Rows sort by update time, newest first:
 // a parent (collapsed, with one child), two leaves, and a detail whose Links
 // name "other".
 func clickBase() model.Model {
 	m, _ := model.Update(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{Snapshot: g.UISnapshotResponseBody{
 		Collection: []model.Issue{
-			{UID: "parent", ShortID: "par1", Title: "A parent", Status: "open"},
-			{UID: "child", ShortID: "chi1", Title: "B child", Status: "open"},
-			{UID: "leaf", ShortID: "lea1", Title: "C leaf", Status: "open"},
-			{UID: "other", ShortID: "oth1", Title: "D other", Status: "open"},
+			{UID: "parent", ShortID: "par1", Title: "A parent", Status: "open", UpdatedAt: ago(1)},
+			{UID: "child", ShortID: "chi1", Title: "B child", Status: "open", UpdatedAt: ago(2)},
+			{UID: "leaf", ShortID: "lea1", Title: "C leaf", Status: "open", UpdatedAt: ago(3)},
+			{UID: "other", ShortID: "oth1", Title: "D other", Status: "open", UpdatedAt: ago(4)},
 		},
 		CollectionLinks: []g.UILink{{Type: "parent", FromIssueUID: "child", ToIssueUID: "parent"}},
 	}})
