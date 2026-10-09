@@ -125,7 +125,7 @@ func (m Model) DetailRow(tab ActivityTab, index int) (DetailRow, bool) {
 		return row, true
 	case TabComments:
 		comment := m.Detail.Comments[index]
-		return DetailRow{Key: comment.UID, Title: comment.Author + " / " + comment.CreatedAt.Format(time.RFC3339), Body: comment.Body}, true
+		return DetailRow{Key: comment.UID, Title: comment.Author + " / " + DetailTime(comment.CreatedAt), Body: comment.Body}, true
 	case TabEvents:
 		return historyRow(m.Detail.History[index]), true
 	}

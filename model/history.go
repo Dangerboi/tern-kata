@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	g "go.kenn.io/kata/pkg/client/generated"
 )
@@ -19,7 +20,9 @@ const (
 	VerbWarning VerbTone = "warning"
 )
 
-const historyTimeLayout = "2006-01-02 15:04"
+// DetailTime is the one time rule of the detail: Events, comments and the Created/Updated properties read
+// like 2026-10-09 22:42, in the local zone.
+func DetailTime(t time.Time) string { return t.Local().Format("2006-01-02 15:04") }
 
 // historyRow phrases one event as "<actor> <verb> <object>" plus an optional
 // detail (Body: the whole message, evidence or comment). Types kata adds later fall back to their sorted
@@ -76,7 +79,7 @@ func historyRow(event g.Event) DetailRow {
 	}
 	row := DetailRow{
 		Key: event.UID, Body: detail,
-		History: &HistorySentence{Actor: event.Actor, Verb: verb, Object: object, Tone: tone, When: event.CreatedAt.Local().Format(historyTimeLayout)},
+		History: &HistorySentence{Actor: event.Actor, Verb: verb, Object: object, Tone: tone, When: DetailTime(event.CreatedAt)},
 	}
 	row.Title = event.Actor + " " + verb
 	if object != "" {

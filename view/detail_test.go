@@ -168,3 +168,11 @@ func TestDetailIsOneScrollContainerWithOneChild(t *testing.T) {
 		}
 	}
 }
+
+func TestCommentHeadingShowsTheAuthorAndTheTimeInTheEventsFormat(t *testing.T) {
+	nodes := render(t, detailWithActivity(model.TabComments))
+	want := "dana / " + time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC).In(time.Local).Format("2006-01-02 15:04")
+	if got := text(nodes[view.DetailActivityID+".c1.heading"]); got != want {
+		t.Errorf("comment heading %q, want %q", got, want)
+	}
+}
