@@ -137,7 +137,7 @@ func (m Model) DetailRow(tab ActivityTab, index int) (DetailRow, bool) {
 type ChildRow struct {
 	Key, UID, Ref, Title, Status string
 	UpdatedAt                    time.Time
-	Loaded                       bool
+	Loaded, Closed               bool
 }
 
 // DetailChildren are the detail Issue's children: the loaded ones in the list's order, then
@@ -154,7 +154,7 @@ func (m Model) DetailChildren() []ChildRow {
 	rows := make([]ChildRow, 0, len(uids))
 	for _, issue := range m.Issues {
 		if link, ok := links[issue.UID]; ok {
-			rows = append(rows, ChildRow{Key: link.Key, UID: issue.UID, Ref: link.Ref, Title: issue.Title, Status: issue.Status, UpdatedAt: issue.UpdatedAt, Loaded: true})
+			rows = append(rows, ChildRow{Key: link.Key, UID: issue.UID, Ref: link.Ref, Title: issue.Title, Status: issue.Status, UpdatedAt: issue.UpdatedAt, Loaded: true, Closed: IsClosed(issue)})
 			delete(links, issue.UID)
 		}
 	}
@@ -165,6 +165,14 @@ func (m Model) DetailChildren() []ChildRow {
 		}
 	}
 	return rows
+}
+
+// cursorChildUID is the child under the detail cursor, or "" when the cursor is on an Activity row.
+func (m Model) cursorChildUID() string {
+	if children := m.DetailChildren(); m.Focus == ColumnDetail && m.DetailIndex < len(children) {
+		return children[m.DetailIndex].UID
+	}
+	return ""
 }
 
 // DetailCursorCount is the rows the detail's j/k cursor walks: the children, then the active tab's rows.
@@ -284,7 +292,9 @@ func updateDetailNavigation(m Model, action Action) (Model, []Cmd) {
 			}
 			switch action {
 			case MoveDown:
-				m.DetailIndex = min(m.DetailIndex+1, count-1)
+				if m.DetailIndex < count-1 {
+					m.DetailIndex++
+				}
 			case MoveUp:
 				m.DetailIndex = max(m.DetailIndex-1, 0)
 			case MoveFirst:

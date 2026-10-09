@@ -23,7 +23,7 @@ func openSurface(session *tern.Session) (*tern.Surface, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := surface.Stylesheet("tern-kata", view.StripeCSS+"\n"+view.SelectedCSS); err != nil {
+	if err := surface.Stylesheet("tern-kata", view.CSS); err != nil {
 		surface.Close()
 		return nil, err
 	}
