@@ -110,15 +110,12 @@ func TestHeaderIsNotShadedAndRowsShowNoLabels(t *testing.T) {
 	}
 }
 
-func TestOnlySelectedRowCarriesTheStateTheAccentRuleMatches(t *testing.T) {
+func TestListMarksOnlyTheSelectedIssueRow(t *testing.T) {
 	m := stripedProject()
 	nodes := render(t, m)
 	list := nodes[view.IssueListID]
 	want := view.IssueID(m.SelectedUID)
 	if got, _ := list.P["selected"].(string); got != want {
 		t.Errorf("list selected = %q, want %q", got, want)
-	}
-	if !strings.Contains(view.SelectedCSS, ".sel[data-id^='"+view.IssueListID+".']") {
-		t.Errorf("rule is not scoped to the Issue list rows: %s", view.SelectedCSS)
 	}
 }

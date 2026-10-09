@@ -72,6 +72,8 @@ func TestJKWalkTheChildRowsBeforeTheActivityRows(t *testing.T) {
 		index int
 	}{
 		{"j", 1}, {"j", 2}, {"j", 3}, {"j", 4}, {"j", 4}, {"k", 3}, {"k", 2}, {"k", 1}, {"k", 0}, {"k", 0}, {"shift+g", 4}, {"g", 0},
+		// Events is empty: the cursor rests below the children and j leaves it there.
+		{"tab", 3}, {"j", 3},
 	} {
 		m, _ = model.Update(m, model.KeyMsg{Chord: step.chord})
 		if m.DetailIndex != step.index {

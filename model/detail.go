@@ -284,7 +284,9 @@ func updateDetailNavigation(m Model, action Action) (Model, []Cmd) {
 			}
 			switch action {
 			case MoveDown:
-				m.DetailIndex = min(m.DetailIndex+1, count-1)
+				if m.DetailIndex < count-1 {
+					m.DetailIndex++
+				}
 			case MoveUp:
 				m.DetailIndex = max(m.DetailIndex-1, 0)
 			case MoveFirst:

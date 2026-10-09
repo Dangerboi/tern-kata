@@ -12,6 +12,7 @@ const StripeCSS = `.sf-item[data-role='` + StripeRole + `']:not(.sel):not(:hover
 // SelectedCSS paints the selected Issue row (Tern marks it .sel from the list's
 // Selected) with the theme's accent fill and white text, the pairing Tern's own
 // examples use. Every child is forced to that text so muted (closed) and accent
-// spans stay readable. !important beats the hover; scoped to the Issue list.
+// spans stay readable.
+// shortcut: white assumes a dark accent fill (a light theme accent gives white on light); switch to a Tern on-accent text variable if one appears. !important beats the hover; scoped to the Issue list.
 const SelectedCSS = `.sf-item.sel[data-id^='` + IssueListID + `.'] { background-color: var(--accent-fill) !important; color: #fff !important; }
 .sf-item.sel[data-id^='` + IssueListID + `.'] * { color: #fff !important; }`
