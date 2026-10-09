@@ -39,8 +39,8 @@ func style(t testing.TB, n tern.WireNode, want string) string {
 
 func ptr[T any](v T) *T { return &v }
 
-func TestRowsToneStatusPriorityAndLabels(t *testing.T) {
-	urgent := model.Issue{UID: "urgent", ShortID: "uuuu", Title: "Urgent", Status: "open", Priority: ptr(int64(0)), Labels: []string{"bug", "ui"}, ProjectName: "work"}
+func TestRowsToneStatusAndPriority(t *testing.T) {
+	urgent := model.Issue{UID: "urgent", ShortID: "uuuu", Title: "Urgent", Status: "open", Priority: ptr(int64(0)), Labels: []string{"bug-label", "ui-label"}, ProjectName: "work"}
 	high := model.Issue{UID: "high", ShortID: "hhhh", Title: "High", Status: "open", Priority: ptr(int64(1)), ProjectName: "work"}
 	normal := model.Issue{UID: "normal", ShortID: "nnnn", Title: "Normal", Status: "open", Priority: ptr(int64(2)), ProjectName: "work"}
 	low := model.Issue{UID: "low", ShortID: "llll", Title: "Low", Status: "closed", Priority: ptr(int64(3)), ProjectName: "work"}
@@ -70,14 +70,8 @@ func TestRowsToneStatusPriorityAndLabels(t *testing.T) {
 		}
 	}
 
-	bug, ui := style(t, row(urgent), "bug"), style(t, row(urgent), "ui")
-	if bug == "" || bug != ui {
-		t.Errorf("labels are not styled as chips of one tone: bug=%q ui=%q", bug, ui)
-	}
-	for _, span := range styled(row(urgent)) {
-		if strings.Contains(span[0], "bug") && strings.Contains(span[0], "ui") {
-			t.Errorf("labels share one span, not a chip each: %q", span[0])
-		}
+	if got := text(row(urgent)); strings.Contains(got, "-label") {
+		t.Errorf("row shows labels: %q", got)
 	}
 }
 

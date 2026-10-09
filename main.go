@@ -49,7 +49,7 @@ func run() error {
 	if _, err := fmt.Fprint(os.Stdout, "\x1b]0;tern-kata\x07"); err != nil {
 		return err
 	}
-	surface, err := session.Open(editorSurfaceOptions())
+	surface, err := openSurface(session)
 	if err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ eventLoop:
 				if connectErr != nil {
 					return connectErr
 				}
-				nextSurface, openErr := nextSession.Open(editorSurfaceOptions())
+				nextSurface, openErr := openSurface(nextSession)
 				if openErr != nil {
 					nextSession.Close()
 					return openErr

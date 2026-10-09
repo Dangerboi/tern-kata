@@ -6,6 +6,7 @@ import (
 	"os/exec"
 
 	"github.com/Dangerboi/tern-kata/model"
+	"github.com/Dangerboi/tern-kata/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
@@ -14,6 +15,19 @@ func editorOptions() tern.Options {
 }
 func editorSurfaceOptions() tern.SurfaceOptions {
 	return tern.SurfaceOptions{ID: "kata", Mode: tern.Screen, Title: "tern-kata", Discard: true}
+}
+
+// openSurface opens the window's surface and installs the plugin's style sheet on it.
+func openSurface(session *tern.Session) (*tern.Surface, error) {
+	surface, err := session.Open(editorSurfaceOptions())
+	if err != nil {
+		return nil, err
+	}
+	if err := surface.Stylesheet("tern-kata", view.StripeCSS); err != nil {
+		surface.Close()
+		return nil, err
+	}
+	return surface, nil
 }
 
 func editExternally(cmd model.OpenDraftEditor) model.DraftEditorClosed {

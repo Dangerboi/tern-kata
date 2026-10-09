@@ -15,14 +15,18 @@ func referenceRow(uid string, lead tern.Element, ref string, trail ...tern.Eleme
 	return ui.Row{Common: ui.Common{Key: "row"}, Gap: ui.GapXS, Wrap: true, Children: append(ui.Nodes(lead, jump), trail...)}
 }
 
-// linkRow is a Link row heading: the relation muted, the reference as a link,
-// then the peer's title when it is loaded. click is the relation's click, if any.
+// linkRow is a Link row heading: `relation | ref - title`, the relation and
+// separator muted, the reference a link, the title only when the peer is loaded.
+// click is the relation's click, if any; the dash and title jump like the reference.
 func linkRow(row model.DetailRow, click *ui.Actions) tern.Element {
-	var trail []tern.Element
+	follow := &ui.Actions{Click: "jump=" + row.ReferenceUID}
+	jump := ui.Text{Common: ui.Common{Key: "jump", Actions: follow}, Spans: []ui.Span{{T: row.Ref, S: "accent link"}}}
+	lead := ui.Text{Common: ui.Common{Key: "heading", Actions: click}, Spans: []ui.Span{{T: row.Relation + " | ", S: "muted"}}}
+	nodes := ui.Nodes(lead, jump)
 	if row.RefTitle != "" {
-		trail = append(trail, ui.Text{Common: ui.Common{Key: "title", Actions: click}, Text: row.RefTitle})
+		nodes = append(nodes, ui.Text{Common: ui.Common{Key: "dash", Actions: follow}, Text: " - "}, ui.Text{Common: ui.Common{Key: "title", Actions: follow}, Text: row.RefTitle})
 	}
-	return referenceRow(row.ReferenceUID, ui.Text{Common: ui.Common{Key: "heading", Actions: click}, Spans: []ui.Span{{T: row.Relation, S: "muted"}}}, row.Ref, trail...)
+	return ui.Row{Common: ui.Common{Key: "row"}, Gap: ui.GapNone, Wrap: true, Children: nodes}
 }
 
 // historyHeading shows an event as its sentence, with the verb toned and the

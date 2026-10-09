@@ -64,8 +64,8 @@ func assertReference(t *testing.T, nodes shown, id, short, uid string) {
 func TestLinksReferenceIsStyledAsALinkAndRelationIsMuted(t *testing.T) {
 	m, _ := referencing(model.TabLinks)
 	nodes := render(t, m)
-	assertReference(t, nodes, view.DetailActivityID+".1.row.jump", "work#peer", "peer")
-	if style := spanStyles(t, nodes[view.DetailActivityID+".1.row.heading"].P)["blocks"]; style != "muted" {
+	assertReference(t, nodes, view.DetailActivityID+".1.row.jump", "#peer", "peer")
+	if style := spanStyles(t, nodes[view.DetailActivityID+".1.row.heading"].P)["blocks | "]; style != "muted" {
 		t.Errorf("relation style = %q", style)
 	}
 	for id, n := range nodes {
@@ -113,12 +113,12 @@ func TestPropertiesShowParentAndChildrenAsReferences(t *testing.T) {
 	m := apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &alpha, Links: links}})
 	nodes := render(t, m)
 	relatives := view.DetailContentID + ".properties.relatives"
-	assertReference(t, nodes, relatives+".1.row.jump", "work#up", "up")
-	assertReference(t, nodes, relatives+".2.row.jump", "work#kid", "kid")
-	if got := text(nodes[relatives+".1.row.heading"]); got != "parent" {
+	assertReference(t, nodes, relatives+".1.row.jump", "#up", "up")
+	assertReference(t, nodes, relatives+".2.row.jump", "#kid", "kid")
+	if got := text(nodes[relatives+".1.row.heading"]); got != "parent | " {
 		t.Errorf("parent label %q", got)
 	}
-	if got := text(nodes[relatives+".2.row.heading"]); got != "child" {
+	if got := text(nodes[relatives+".2.row.heading"]); got != "child | " {
 		t.Errorf("child label %q", got)
 	}
 	if ids := nodes.under(relatives + ".3"); len(ids) != 0 {
@@ -146,8 +146,38 @@ func TestLinksRowShowsThePeersTitleWhenLoaded(t *testing.T) {
 	ghost := g.UILink{ID: 2, Type: "related", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "ghost", ToQualifiedID: "work#ghost"}
 	main := model.Issue{UID: "main", ShortID: "main", Title: "Main", Status: "open", ProjectName: "work"}
 	nodes = render(t, apply(m, model.DetailLoaded{UID: "main", Selected: &g.UISelectedAuthority{Issue: &main, Links: []g.UILink{ghost}}}))
-	assertReference(t, nodes, view.DetailActivityID+".2.row.jump", "work#ghost", "ghost")
+	assertReference(t, nodes, view.DetailActivityID+".2.row.jump", "#ghost", "ghost")
 	if _, ok := nodes[view.DetailActivityID+".2.row.title"]; ok {
 		t.Error("a peer that is not loaded has a title")
+	}
+}
+
+func TestLinkRowReadsRelationReferenceDashTitle(t *testing.T) {
+	m, _ := referencing(model.TabLinks)
+	nodes := render(t, m)
+	row := view.DetailActivityID + ".1.row"
+	if got := text(nodes[row+".heading"]) + text(nodes[row+".jump"]) + text(nodes[row+".dash"]) + text(nodes[row+".title"]); got != "blocks | #peer - Peer" {
+		t.Errorf("same-Project row = %q", got)
+	}
+	for _, id := range []string{row + ".dash", row + ".title"} {
+		if click := nodes[id].P["actions"].(map[string]any)["click"]; click != "jump=peer" {
+			t.Errorf("%s click = %v", id, click)
+		}
+	}
+
+	other := g.UILink{ID: 2, Type: "related", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "peer", ToQualifiedID: "elsewhere#peer"}
+	main := model.Issue{UID: "main", ShortID: "main", Title: "Main", Status: "open", ProjectName: "work"}
+	nodes = render(t, apply(m, model.DetailLoaded{UID: "main", Selected: &g.UISelectedAuthority{Issue: &main, Links: []g.UILink{other}}}))
+	assertReference(t, nodes, view.DetailActivityID+".2.row.jump", "elsewhere#peer", "peer")
+}
+
+func TestPropertiesTitleJumpsToTheReferencedIssue(t *testing.T) {
+	links := []g.UILink{{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#up"}}
+	up := model.Issue{UID: "up", ShortID: "up", Title: "Up", ProjectName: "work"}
+	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, up}}}, model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &alpha, Links: links}})
+	nodes := render(t, m)
+	title := nodes[view.DetailContentID+".properties.relatives.1.row.title"]
+	if text(title) != "Up" || title.P["actions"].(map[string]any)["click"] != "jump=up" {
+		t.Errorf("title = %v", title)
 	}
 }
