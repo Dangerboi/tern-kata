@@ -154,12 +154,7 @@ func properties(m model.Model, issue *model.Issue) tern.Element {
 	add("Owner", text(owner))
 	for i := range m.DetailRowCount(model.TabLinks) {
 		if link, _ := m.DetailRow(model.TabLinks, i); link.Relation == "parent" {
-			follow := &ui.Actions{Click: "jump=" + link.ReferenceUID}
-			nodes := ui.Nodes(jumpLink(link.ReferenceUID, link.Ref))
-			if link.RefTitle != "" {
-				nodes = append(nodes, ui.Text{Common: ui.Common{Key: "dash", Actions: follow}, Text: "\u00a0-\u00a0"}, ui.Text{Common: ui.Common{Key: "title", Actions: follow}, Text: link.RefTitle})
-			}
-			add("Parent", ui.Row{Common: ui.Common{Key: "v"}, Gap: ui.GapNone, Wrap: true, Children: nodes})
+			add("Parent", ui.Row{Common: ui.Common{Key: "v"}, Gap: ui.GapNone, Wrap: true, Children: referenceTail(link.ReferenceUID, link.Ref, link.RefTitle)})
 			break
 		}
 	}

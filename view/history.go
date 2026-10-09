@@ -19,19 +19,24 @@ func jumpLink(uid, ref string) ui.Text {
 	return ui.Text{Common: ui.Common{Key: "jump", Actions: &ui.Actions{Click: "jump=" + uid}}, Spans: []ui.Span{{T: ref, S: "accent link"}}}
 }
 
-// linkRow is a Link row heading: `relation | ref - title`, the relation and
-// separator muted, the reference a link, the title only when the peer is loaded.
-// Tern collapses each text node's edge spaces in layout, so the spaces between
-// the pieces are no-break spaces. click is the relation's click, if any; the
-// dash and title jump like the reference.
-func linkRow(row model.DetailRow, click *ui.Actions) tern.Element {
-	follow := &ui.Actions{Click: "jump=" + row.ReferenceUID}
-	lead := ui.Text{Common: ui.Common{Key: "heading", Actions: click}, Spans: []ui.Span{{T: row.Relation + " |\u00a0", S: "muted"}}}
-	nodes := ui.Nodes(lead, jumpLink(row.ReferenceUID, row.Ref))
-	if row.RefTitle != "" {
-		nodes = append(nodes, ui.Text{Common: ui.Common{Key: "dash", Actions: follow}, Text: "\u00a0-\u00a0"}, ui.Text{Common: ui.Common{Key: "title", Actions: follow}, Text: row.RefTitle})
+// referenceTail is the reference as a link followed, only when the peer is
+// loaded, by ` - ` and its title; the dash and title jump like the reference.
+// Tern collapses each text node's edge spaces in layout, so the spaces around
+// the dash are no-break spaces.
+func referenceTail(uid, ref, title string) tern.Nodes {
+	nodes := ui.Nodes(jumpLink(uid, ref))
+	if title != "" {
+		follow := &ui.Actions{Click: "jump=" + uid}
+		nodes = append(nodes, ui.Text{Common: ui.Common{Key: "dash", Actions: follow}, Text: "\u00a0-\u00a0"}, ui.Text{Common: ui.Common{Key: "title", Actions: follow}, Text: title})
 	}
-	return ui.Row{Common: ui.Common{Key: "row"}, Gap: ui.GapNone, Wrap: true, Children: nodes}
+	return nodes
+}
+
+// linkRow is a Link row heading: `relation | ref - title`, the relation and
+// separator muted, then the referenceTail. click is the relation's click, if any.
+func linkRow(row model.DetailRow, click *ui.Actions) tern.Element {
+	lead := ui.Text{Common: ui.Common{Key: "heading", Actions: click}, Spans: []ui.Span{{T: row.Relation + " |\u00a0", S: "muted"}}}
+	return ui.Row{Common: ui.Common{Key: "row"}, Gap: ui.GapNone, Wrap: true, Children: append(ui.Nodes(lead), referenceTail(row.ReferenceUID, row.Ref, row.RefTitle)...)}
 }
 
 // historyHeading shows an event as its sentence, with the verb toned and the

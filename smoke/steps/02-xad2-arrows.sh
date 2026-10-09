@@ -52,20 +52,22 @@ jump() {
   for key in "$@"; do ctl key "$key"; done
   ctl key Enter
 }
+# The title names the shown Issue. The card's own text is capped at 200 characters by Tern's tree, and the parent's first
+# child row now falls inside that window, so it cannot tell a parent from a child; a child's detail also names its
+# parent, and the tab click below needs the parent's own detail loaded to know its child rows.
+detail_title="[data-id='main.columns.detail.viewport.content.heading.title']"
 expect_detail() {
-  expect_tree "[data-id='main.columns.detail']" "[.nodes[] | .. | objects | .text? // empty] | join(\" \") | contains(\"Smoke arrows $1 child\") and (contains(\"Smoke arrows $2 child\") | not)"
+  expect_tree "$detail_title" ".ok and (.nodes[0].text | contains(\"Smoke arrows $1 child\") and (contains(\"Smoke arrows $2 child\") | not))"
 }
 back_to_parent() {
   ctl key Left
-  # The title, not the text: a child's detail also names its parent, and the tab click below needs the parent's own detail loaded to know its child rows.
-  expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Smoke arrows parent"))'
+  expect_tree "$detail_title" '.ok and (.nodes[0].text | contains("Smoke arrows parent"))'
 }
 ctl click "[data-id$='.$arrows_parent']"
 ctl key Enter
 jump
-expect_tree "[data-id='main.columns.detail']" '[.nodes[] | .. | objects | .text? // empty] | join(" ") | contains(" child")'
-ctl tree "[data-id='main.columns.detail']" >"$tmp/arrows-detail.json"
-if jq -e '[.nodes[] | .. | objects | .text? // empty] | join(" ") | contains("Smoke arrows first child")' "$tmp/arrows-detail.json" >/dev/null; then
+expect_tree "$detail_title" '.ok and (.nodes[0].text | contains(" child"))'
+if jq -e '.nodes[0].text | contains("Smoke arrows first child")' "$tmp/assert-tree.json" >/dev/null; then
   ref_a=first ref_b=second
 else
   ref_a=second ref_b=first

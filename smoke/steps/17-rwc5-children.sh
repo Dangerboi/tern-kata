@@ -37,15 +37,16 @@ expect_tree "[data-id^='$ch_content.children.'][data-id\$='.jump']" '.ok and .co
 expect_tree "[data-id^='$ch_content.children.'][data-id\$='.status']" '.ok and .count == 3'
 expect_tree "[data-id^='$ch_content.children.'][data-id\$='.title']" '.ok and .count == 3'
 expect_tree "[data-id^='$ch_content.children.'][data-id\$='.updated']" '.ok and .count == 3 and ([.nodes[].text | select(test(" ago$"))] | length == 3)'
-ch_y() { ctl tree "[data-id='$1']" | jq -r '.nodes[0].rect[1]'; }
+ch_y() { ctl tree "[data-id='$1']" | jq -r ".nodes[0].rect[${2:-1}]"; }
 ch_body=$(ch_y "$ch_content.body")
 ch_table=$(ch_y "$ch_content.children")
 ch_activity=$(ch_y "$ch_content.activity")
 awk -v b="$ch_body" -v t="$ch_table" -v a="$ch_activity" 'BEGIN { exit !(b < t && t < a) }' || { printf 'Children table is not between the body and Activity: body y=%s table y=%s activity y=%s\n' "$ch_body" "$ch_table" "$ch_activity" >&2; return 1; }
 # The cells line up: every row's status cell starts at the same x.
 expect_tree "[data-id^='$ch_content.children.'][data-id\$='.status']" '.ok and ([.nodes[].rect[0]] | unique | length == 1)'
-# The reference and status cells are one line high at this width, and the columns line up.
-expect_tree "[data-id^='$ch_content.children.'][data-id\$='.jump'], [data-id^='$ch_content.children.'][data-id\$='.status']" '.ok and .count == 6 and ([.nodes[].rect[3]] | unique | length == 1)'
+# The reference and status cells are one line high at this width: as high as the one-line Children heading.
+ch_line=$(ch_y "$ch_content.children.heading" 3)
+expect_tree "[data-id^='$ch_content.children.'][data-id\$='.jump'], [data-id^='$ch_content.children.'][data-id\$='.status']" ".ok and .count == 6 and ([.nodes[].rect[3]] | all(. == $ch_line))"
 expect_tree "[data-id^='$ch_content.children.'][data-id\$='.jump']" '.ok and ([.nodes[].rect[0]] | unique | length == 1) and ([.nodes[].rect[2]] | unique | length == 1)'
 expect_tree "[data-id^='$ch_content.children.'][data-id\$='.updated']" '.ok and ([.nodes[].rect[0]] | unique | length == 1) and ([.nodes[].rect[2]] | unique | length == 1)'
 # The closed child's status and title are muted, the open child's are not.

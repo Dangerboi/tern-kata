@@ -191,13 +191,16 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
 	issue := model.Issue{UID: "alpha", ShortID: "aaaa", Title: "A", Status: "closed", ProjectName: "work", Author: "ann", Revision: 4,
 		CreatedAt: at, UpdatedAt: at, Priority: &p1, Owner: &owner, ClosedReason: &reason, ScheduledOnDate: &day, DeadlineOnDate: &day, Labels: []string{"bug"}}
-	nodes := render(t, apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &issue}}))
+	links := []g.UILink{{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#up"}}
+	counts := map[string]g.ChildCounts{"alpha": {Open: 1, Total: 2}}
+	nodes := render(t, apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, ChildCounts: counts, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: links}},
+		model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &issue, Links: links}}))
 	props := nodes[view.DetailContentID+".properties"]
 	var keys []string
 	for _, row := range props.C {
 		keys = append(keys, strings.TrimRight(text(nodes[row.ID+".k"]), "\u00a0"))
 	}
-	want := []string{"Author:", "Created:", "Updated:", "Scheduled:", "Deadline:", "Owner:", "Priority:", "Labels:", "Closed:"}
+	want := []string{"Author:", "Created:", "Updated:", "Scheduled:", "Deadline:", "Owner:", "Parent:", "Priority:", "Labels:", "Children:", "Closed:"}
 	if !slices.Equal(keys, want) {
 		t.Errorf("keys %v, want %v", keys, want)
 	}
