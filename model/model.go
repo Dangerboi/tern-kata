@@ -56,6 +56,7 @@ type Model struct {
 	EditorUID           string
 	Filters             Filters
 	Search              SearchState
+	IDSearch            IDSearch
 	FilterForm          FilterFormState
 }
 

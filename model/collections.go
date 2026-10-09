@@ -2,6 +2,7 @@ package model
 
 import (
 	"maps"
+	"slices"
 	"strings"
 
 	g "go.kenn.io/kata/pkg/client/generated"
@@ -72,7 +73,7 @@ func (m Model) SnapshotQuery() g.ReadUISnapshotQuery {
 	if m.Filters.Status != "" {
 		q.Status = []string{m.Filters.Status}
 	}
-	if m.Filters.Search != "" {
+	if m.Filters.Search != "" && m.idMatch() == "" {
 		q.Text = new(m.Filters.Search)
 	}
 	if m.Filters.Owner != "" {
@@ -103,6 +104,9 @@ func (m Model) ApplySnapshot(snapshot g.UISnapshotResponseBody, childCounts map[
 		groupCollection = Collection{View: "results", Title: "Results"}
 	}
 	issues := snapshot.Collection
+	if uid := m.idMatch(); uid != "" {
+		issues = slices.DeleteFunc(slices.Clone(issues), func(issue Issue) bool { return issue.UID != uid })
+	}
 	// Snapshot accepts one Project UID; incompatible Project scopes intersect to empty.
 	if m.Collection.ProjectUID != "" && m.Filters.ProjectUID != "" && m.Collection.ProjectUID != m.Filters.ProjectUID {
 		issues = nil
@@ -155,6 +159,7 @@ func updateCollection(m Model, msg CollectionSelected) (Model, []Cmd) {
 			continue
 		}
 		m.PendingCreatedUID = ""
+		m.IDSearch = IDSearch{}
 		etag := ""
 		if collection == m.Collection {
 			etag = m.ETag
@@ -180,5 +185,10 @@ func collectionLoaded(m Model, msg CollectionLoaded) (Model, []Cmd) {
 	}
 	m.LocalDate = msg.LocalDate
 	m.TimeZone = msg.TimeZone
-	return m.ApplySnapshot(msg.Snapshot, msg.ChildCounts, msg.ETag), nil
+	m = m.ApplySnapshot(msg.Snapshot, msg.ChildCounts, msg.ETag)
+	if _, ok := m.idLookup(); ok {
+		// The committed search is a short id: this Collection's full-text results are not yet its answer.
+		return refreshLive(m)
+	}
+	return m, nil
 }

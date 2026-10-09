@@ -2,6 +2,7 @@ package model
 
 import (
 	"reflect"
+	"slices"
 	"time"
 
 	g "go.kenn.io/kata/pkg/client/generated"
@@ -95,11 +96,18 @@ func startStream(m Model, delay time.Duration) (Model, []Cmd) {
 }
 
 func refreshLive(m Model) (Model, []Cmd) {
+	if _, ok := searchShortID(m.Filters.Search); !ok {
+		m.IDSearch = IDSearch{} // an answer is kept only while the query stays an id, so retyping the id asks again
+	}
 	if m.Refreshing {
 		return m, nil
 	}
 	m.Refreshing = true
 	m.RefreshRequest++
+	if lookup, ok := m.idLookup(); ok {
+		lookup.Request = m.RefreshRequest
+		return m, []Cmd{lookup}
+	}
 	etag := m.ETag
 	if m.Resetting {
 		etag = ""
@@ -133,6 +141,13 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 		}
 		m.PendingCursor = max(m.PendingCursor, msg.ID)
 		return refreshLive(m)
+	case SearchIDLooked:
+		if msg.Request != m.RefreshRequest {
+			return m, nil
+		}
+		m.Refreshing = false
+		m.IDSearch = IDSearch{ShortID: msg.ShortID, UID: msg.UID}
+		return refreshLive(m)
 	case StreamDropped:
 		if msg.Generation != m.StreamGeneration {
 			return m, nil
@@ -150,6 +165,11 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 		current.SelectedIssueUID, received.SelectedIssueUID = nil, nil
 		current.IncludeHistory, received.IncludeHistory = nil, nil
 		if !reflect.DeepEqual(current, received) {
+			return refreshLive(m)
+		}
+		if uid := m.idMatch(); uid != "" && !msg.NotModified && !slices.ContainsFunc(msg.Snapshot.Collection, func(issue Issue) bool { return issue.UID == uid }) {
+			// The Collection does not list the Issue the id names, so the id does not count.
+			m.IDSearch.UID = ""
 			return refreshLive(m)
 		}
 		if !msg.NotModified {

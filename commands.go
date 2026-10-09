@@ -42,6 +42,14 @@ func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 				msg = result
 			}
 		}
+	case model.LookupSearchID:
+		// shortcut: any failure counts as no Issue until the query changes (retrying would loop while the daemon is down); the full-text query that follows reports it.
+		result := model.SearchIDLooked{Request: cmd.Request, ShortID: cmd.ShortID}
+		if client, err := data.Discover(ctx, cmd.Workspace); err == nil {
+			defer client.CloseIdleConnections()
+			result.UID, _ = client.ResolveIssue(ctx, cmd.ProjectID, cmd.ShortID)
+		}
+		msg = result
 	case model.SaveDraft:
 		client, err := data.Discover(ctx, cmd.Workspace)
 		if err != nil {
