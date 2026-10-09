@@ -132,35 +132,36 @@ func (m Model) DetailRow(tab ActivityTab, index int) (DetailRow, bool) {
 	return DetailRow{}, false
 }
 
-// ChildRow is one row of the Children table. A child that is not loaded has only its UID and Ref.
+// ChildRow is one row of the Children table. Key is the Link's, which is daemon-wide unique, so a
+// row's id never ends in the child's UID as the list row's does. A child that is not loaded has only its UID, Key and Ref.
 type ChildRow struct {
-	UID, Ref, Title, Status string
-	UpdatedAt               time.Time
-	Loaded                  bool
+	Key, UID, Ref, Title, Status string
+	UpdatedAt                    time.Time
+	Loaded                       bool
 }
 
 // DetailChildren are the detail Issue's children: the loaded ones in the list's order, then
 // the ones not loaded in the Link order. Titles, statuses and times come from the loaded Issues.
 func (m Model) DetailChildren() []ChildRow {
-	refs := make(map[string]string)
+	links := make(map[string]DetailRow)
 	var uids []string
 	for i := range m.DetailRowCount(TabLinks) {
 		if link, _ := m.DetailRow(TabLinks, i); link.Relation == "child" {
-			refs[link.ReferenceUID] = link.Ref
+			links[link.ReferenceUID] = link
 			uids = append(uids, link.ReferenceUID)
 		}
 	}
 	rows := make([]ChildRow, 0, len(uids))
 	for _, issue := range m.Issues {
-		if ref, ok := refs[issue.UID]; ok {
-			rows = append(rows, ChildRow{UID: issue.UID, Ref: ref, Title: issue.Title, Status: issue.Status, UpdatedAt: issue.UpdatedAt, Loaded: true})
-			delete(refs, issue.UID)
+		if link, ok := links[issue.UID]; ok {
+			rows = append(rows, ChildRow{Key: link.Key, UID: issue.UID, Ref: link.Ref, Title: issue.Title, Status: issue.Status, UpdatedAt: issue.UpdatedAt, Loaded: true})
+			delete(links, issue.UID)
 		}
 	}
 	for _, uid := range uids {
-		if ref, ok := refs[uid]; ok {
-			rows = append(rows, ChildRow{UID: uid, Ref: ref})
-			delete(refs, uid)
+		if link, ok := links[uid]; ok {
+			rows = append(rows, ChildRow{Key: link.Key, UID: uid, Ref: link.Ref})
+			delete(links, uid)
 		}
 	}
 	return rows

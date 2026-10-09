@@ -14,6 +14,13 @@ import (
 
 const childrenID = view.DetailContentID + ".children"
 
+// A child row's id ends in its Link's id, never in the child's UID (that is the list row's suffix).
+const (
+	kidRow   = childrenID + ".3"
+	doneRow  = childrenID + ".2"
+	ghostRow = childrenID + ".1"
+)
+
 // parenting is a wide Pane on a parent "alpha" with three children: "kid" (open,
 // updated 38 minutes before testNow), "done" (closed, 3 hours before) and "ghost",
 // which is not in the Collection. The daemon counts 1 open of 3.
@@ -69,17 +76,16 @@ func TestChildRowsShowReferenceStatusTitleAndUpdatedInTheListsOrder(t *testing.T
 			rows = append(rows, c.ID)
 		}
 	}
-	if want := []string{childrenID + ".kid", childrenID + ".done", childrenID + ".ghost"}; !slices.Equal(rows, want) {
+	if want := []string{kidRow, doneRow, ghostRow}; !slices.Equal(rows, want) {
 		t.Fatalf("rows = %v, want %v", rows, want)
 	}
-	for uid, want := range map[string][4]string{
-		"kid":  {"#kid", "open", "Open kid", "38m ago"},
-		"done": {"#done", "closed", "Closed kid", "3h ago"},
+	for row, want := range map[string][4]string{
+		kidRow:  {"#kid", "open", "Open kid", "38m ago"},
+		doneRow: {"#done", "closed", "Closed kid", "3h ago"},
 	} {
-		row := childrenID + "." + uid
 		for i, cell := range []string{"jump", "status", "title", "updated"} {
 			if got := text(nodes[row+"."+cell]); got != want[i] {
-				t.Errorf("%s %s = %q, want %q", uid, cell, got, want[i])
+				t.Errorf("%s %s = %q, want %q", row, cell, got, want[i])
 			}
 		}
 	}
@@ -88,37 +94,36 @@ func TestChildRowsShowReferenceStatusTitleAndUpdatedInTheListsOrder(t *testing.T
 func TestEveryChildCellJumpsToTheChild(t *testing.T) {
 	nodes := render(t, parenting(model.TabComments))
 	for _, cell := range []string{"jump", "status", "title", "updated"} {
-		n := nodes[childrenID+".kid."+cell]
+		n := nodes[kidRow+"."+cell]
 		if click := n.P["actions"].(map[string]any)["click"]; click != "jump=kid" {
 			t.Errorf("%s click = %v", cell, click)
 		}
 	}
-	assertReference(t, nodes, childrenID+".kid.jump", "#kid", "kid")
+	assertReference(t, nodes, kidRow+".jump", "#kid", "kid")
 }
 
 func TestClosedChildIsMutedAndOpenChildIsNot(t *testing.T) {
 	nodes := render(t, parenting(model.TabComments))
 	for _, tt := range []struct {
-		uid, cell, want string
+		row, cell, want string
 	}{
-		{"done", "status", "muted"}, {"done", "title", "muted"}, {"done", "updated", "muted"},
-		{"kid", "status", "accent"}, {"kid", "title", ""}, {"kid", "updated", "muted"},
+		{doneRow, "status", "muted"}, {doneRow, "title", "muted"}, {doneRow, "updated", "muted"},
+		{kidRow, "status", "accent"}, {kidRow, "title", ""}, {kidRow, "updated", "muted"},
 	} {
 		got := ""
-		for _, style := range spanStyles(t, nodes[childrenID+"."+tt.uid+"."+tt.cell].P) {
+		for _, style := range spanStyles(t, nodes[tt.row+"."+tt.cell].P) {
 			got = style
 		}
 		if got != tt.want {
-			t.Errorf("%s %s style = %q, want %q", tt.uid, tt.cell, got, tt.want)
+			t.Errorf("%s %s style = %q, want %q", tt.row, tt.cell, got, tt.want)
 		}
 	}
 }
 
 func TestUnloadedChildShowsItsReferenceOnly(t *testing.T) {
 	nodes := render(t, parenting(model.TabComments))
-	row := childrenID + ".ghost"
-	assertReference(t, nodes, row+".jump", "#ghost", "ghost")
-	if ids := nodes.under(row); len(ids) != 2 { // the row and its reference
+	assertReference(t, nodes, ghostRow+".jump", "#ghost", "ghost")
+	if ids := nodes.under(ghostRow); len(ids) != 2 { // the row and its reference
 		t.Errorf("unloaded child shows %v", ids)
 	}
 }
@@ -136,8 +141,8 @@ func TestChildRowUnderTheCursorIsMarkedAndTheActivityRowIsNotWhileItIsOnAChild(t
 	mark := func(n tern.WireNode) any { return n.P["mark"] }
 	m := apply(parenting(model.TabComments), model.KeyMsg{Chord: "k"}, model.KeyMsg{Chord: "k"}) // from the comment up to the 2nd child; focus is the detail
 	nodes := render(t, m)
-	if mark(nodes[childrenID+".done"]) != "pick" || mark(nodes[childrenID+".kid"]) != nil || mark(nodes[view.DetailActivityID+".c1"]) != nil {
-		t.Errorf("marks: kid=%v done=%v comment=%v", mark(nodes[childrenID+".kid"]), mark(nodes[childrenID+".done"]), mark(nodes[view.DetailActivityID+".c1"]))
+	if mark(nodes[doneRow]) != "pick" || mark(nodes[kidRow]) != nil || mark(nodes[view.DetailActivityID+".c1"]) != nil {
+		t.Errorf("marks: kid=%v done=%v comment=%v", mark(nodes[kidRow]), mark(nodes[doneRow]), mark(nodes[view.DetailActivityID+".c1"]))
 	}
 	m = apply(m, model.KeyMsg{Chord: "j"}, model.KeyMsg{Chord: "j"}) // down past the 3 children: the comment
 	nodes = render(t, m)

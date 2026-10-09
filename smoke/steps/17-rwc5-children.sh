@@ -7,12 +7,13 @@ kata --workspace "$ch_dir" init --project children --json >/dev/null
 ch_project=$(kata --workspace "$ch_dir" projects list --json | jq -er '.projects[] | select(.name == "children") | .uid')
 kata --workspace "$ch_dir" create "Children parent" --body "Children parent body" --json >"$tmp/children-parent.json"
 ch_parent=$(jq -r '.issue.uid' "$tmp/children-parent.json")
-ch_uids=()
+# A row of the table is keyed by its Link's id, so the ids below are the Links' (found through each child's own Link).
 ch_shorts=()
+ch_links=()
 for n in 1 2 3; do
   kata --workspace "$ch_dir" create "Children kid $n" --force-new --parent "$ch_parent" --json >"$tmp/children-kid.json"
-  ch_uids+=("$(jq -r '.issue.uid' "$tmp/children-kid.json")")
   ch_shorts+=("$(jq -r '.issue.short_id' "$tmp/children-kid.json")")
+  ch_links+=("$(kata --workspace "$ch_dir" show "${ch_shorts[-1]}" --json | jq -r '.links[] | select(.type == "parent") | .id')")
 done
 kata --workspace "$ch_dir" close "${ch_shorts[0]}" --done --message "Closed by the children smoke step so one row is muted" --commit abc1234def56 --json >/dev/null
 
@@ -44,11 +45,11 @@ awk -v b="$ch_body" -v t="$ch_table" -v a="$ch_activity" 'BEGIN { exit !(b < t &
 # The cells line up: every row's status cell starts at the same x.
 expect_tree "[data-id^='$ch_content.children.'][data-id\$='.status']" '.ok and ([.nodes[].rect[0]] | unique | length == 1)'
 # The closed child's status and title are muted, the open child's are not.
-expect_tree "[data-id='$ch_content.children.${ch_uids[0]}'] *" '.ok and ([.nodes[] | select(.class | contains("sf-t-muted")) | .text] | index("closed") != null and index("Children kid 1") != null)'
-expect_tree "[data-id='$ch_content.children.${ch_uids[1]}'] *" '.ok and ([.nodes[] | select(.class | contains("sf-t-muted")) | .text] | index("open") == null and index("Children kid 2") == null)'
+expect_tree "[data-id='$ch_content.children.${ch_links[0]}'] *" '.ok and ([.nodes[] | select(.class | contains("sf-t-muted")) | .text] | index("closed") != null and index("Children kid 1") != null)'
+expect_tree "[data-id='$ch_content.children.${ch_links[1]}'] *" '.ok and ([.nodes[] | select(.class | contains("sf-t-muted")) | .text] | index("open") == null and index("Children kid 2") == null)'
 
 # A click on a child row opens it; esc comes back to the parent.
-ctl click "[data-id='$ch_content.children.${ch_uids[1]}.title']"
+ctl click "[data-id='$ch_content.children.${ch_links[1]}.title']"
 expect_tree "[data-id='$ch_content.heading.title']" '.ok and (.nodes[0].text | contains("Children kid 2"))'
 ctl key esc
 expect_tree "[data-id='$ch_content.heading.title']" '.ok and (.nodes[0].text | contains("Children parent"))'
