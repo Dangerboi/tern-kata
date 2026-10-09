@@ -47,7 +47,7 @@ type Model struct {
 	DetailUID           string
 	DetailLoading       bool
 	DetailErr           error
-	ActivityTab       ActivityTab
+	ActivityTab         ActivityTab
 	DetailIndex         int
 	DetailBack          []string
 	Flat                bool

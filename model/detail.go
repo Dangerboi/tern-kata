@@ -48,7 +48,7 @@ func (ActivityTabMsg) msg() {}
 
 type DetailItemMsg struct {
 	Tab ActivityTab
-	Key     string
+	Key string
 }
 
 func (DetailItemMsg) msg() {}
