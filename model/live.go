@@ -154,6 +154,7 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 		}
 		if !msg.NotModified {
 			selected := m.SelectedUID
+			cursorChild := m.cursorChildUID()
 			m = m.ApplySnapshot(msg.Snapshot, msg.ChildCounts, msg.ETag)
 			if m.Focus == ColumnDetail && len(m.DetailBack) > 0 {
 				m.SelectedUID = selected
@@ -164,6 +165,11 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 				m.DetailLoading = false
 				m.DetailErr = nil
 				m.DetailIndex = min(m.DetailIndex, max(m.DetailCursorCount()-1, 0))
+				for i, child := range m.DetailChildren() {
+					if cursorChild != "" && child.UID == cursorChild {
+						m.DetailIndex = i
+					}
+				}
 			} else if m.DetailUID == m.SelectedUID {
 				m.DetailUID = ""
 			}

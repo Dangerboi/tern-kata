@@ -3,6 +3,9 @@ package view
 // StripeRole is the role of every other drawn Issue row; StripeCSS shades it.
 const StripeRole = "tern-kata.stripe"
 
+// CSS is the plugin's whole style sheet: StripeCSS then SelectedCSS.
+const CSS = StripeCSS + "\n" + SelectedCSS
+
 // StripeCSS is the plugin's style sheet, installed once on the surface (Tern
 // confines it to the surface). The shade mixes the theme's text colour into the
 // row, so it is a light tint on a dark theme and a dark one on a light theme.

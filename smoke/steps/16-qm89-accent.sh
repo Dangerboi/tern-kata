@@ -41,3 +41,20 @@ accent_expect same "$first" >/dev/null
 ctl hover ".sf-item.sel[data-id^='main.columns.list.issues.']" >/dev/null
 accent_expect same "$first" >/dev/null
 ctl hover "[data-id='main.topbar']" >/dev/null
+
+# A closed Issue's row keeps its muted spans readable on the highlight: every descendant of the selected row is white.
+kata --workspace "$tmp/workspace" create "Smoke accent closed" --json >"$tmp/accent-closed.json"
+accent_uid=$(jq -r '.issue.uid' "$tmp/accent-closed.json")
+accent_short=$(jq -r '.issue.short_id' "$tmp/accent-closed.json")
+kata --workspace "$tmp/workspace" close "$accent_short" --done --message "Closed by the accent smoke step so a row is muted" --commit abc1234def56 --json >/dev/null
+expect_tree "[data-id\$='.$accent_uid']" '.ok and .count == 1'
+ctl click "[data-id^='main.columns.list.issues.'][data-id\$='.$accent_uid']"
+accent_expect >/dev/null
+for ((attempt = 0; attempt < 200; attempt++)); do
+  ctl dump ".sf-item.sel[data-id\$='.$accent_uid'] *" >"$tmp/accent-closed-dump.json"
+  if jq -e '(.elements | length) > 0 and all(.elements[]; .color == "rgb(255, 255, 255)")' "$tmp/accent-closed-dump.json" >/dev/null; then break; fi
+  sleep 0.1
+done
+jq -e '(.elements | length) > 0 and all(.elements[]; .color == "rgb(255, 255, 255)")' "$tmp/accent-closed-dump.json" >/dev/null
+kata --workspace "$tmp/workspace" delete "$accent_uid" --force --confirm "DELETE smoke#$accent_short" --json >/dev/null
+expect_tree "[data-id\$='.$accent_uid']" '.ok and .count == 0'

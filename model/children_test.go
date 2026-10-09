@@ -35,32 +35,25 @@ func parentDetail(links ...g.UILink) model.Model {
 	}
 }
 
-func childUIDs(m model.Model) []string {
-	var uids []string
-	for _, child := range m.DetailChildren() {
-		uids = append(uids, child.UID)
-	}
-	return uids
+// enterOpens is the Issue enter opens with the cursor on detail row index.
+func enterOpens(m model.Model, index int) string {
+	m.DetailIndex = index
+	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
+	return m.SelectedUID
 }
 
-func TestChildrenAreTheLinkedChildrenInTheListsOrderUnloadedLast(t *testing.T) {
-	m := parentDetail()
-	if got, want := childUIDs(m), []string{"new", "old", "gone"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("children = %v, want %v", got, want)
-	}
-	children := m.DetailChildren()
-	if c := children[1]; !c.Loaded || c.Ref != "#old" || c.Title != "Older" || c.Status != "closed" || !c.UpdatedAt.Equal(ago(5)) {
-		t.Errorf("loaded child = %+v", c)
-	}
-	if c := children[2]; c.Loaded || c.Ref != "#gone" || c.Title != "" || c.Status != "" {
-		t.Errorf("unloaded child = %+v", c)
+func TestEnterOnChildRowsOpensTheLinkedChildrenInTheListsOrderUnloadedLast(t *testing.T) {
+	for index, want := range []string{"new", "old", "gone"} {
+		if got := enterOpens(parentDetail(), index); got != want {
+			t.Errorf("enter on child row %d opened %q, want %q", index, got, want)
+		}
 	}
 }
 
 func TestNoChildrenWithoutChildLinks(t *testing.T) {
 	m := parentDetail(g.UILink{ID: 1, Type: "related", FromIssueUID: "parent", ToIssueUID: "new", ToQualifiedID: "work#new1"})
-	if got := m.DetailChildren(); len(got) != 0 {
-		t.Fatalf("children of an Issue with only a related Link: %+v", got)
+	if got := enterOpens(m, 0); got != "parent" {
+		t.Fatalf("enter with no child rows opened %q", got)
 	}
 }
 
@@ -152,13 +145,33 @@ func TestChildRowsFollowLiveRefreshes(t *testing.T) {
 	}
 	m.DetailIndex = 4 // on the last of the 2 comments, past all 3 children
 	m, _ = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot})
-	if got, want := childUIDs(m), []string{"fresh", "new"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("children after refresh = %v, want %v", got, want)
-	}
-	if title := m.DetailChildren()[1].Title; title != "Renamed" {
-		t.Errorf("child title = %q", title)
+	for index, want := range []string{"fresh", "new"} {
+		if got := enterOpens(m, index); got != want {
+			t.Errorf("enter on child row %d opened %q, want %q", index, got, want)
+		}
 	}
 	if m.DetailIndex != 3 { // 2 children + 2 comments: the last row is 3
 		t.Errorf("cursor not clamped to the rows left: %d", m.DetailIndex)
+	}
+}
+
+func TestCursorStaysOnItsChildWhenARefreshReordersTheChildren(t *testing.T) {
+	m := parentDetail()
+	m, cmds := model.Update(m, model.StreamEvent{ID: 1, Type: "issue.updated"})
+	refresh := cmds[0].(model.RefreshSnapshot)
+	parent := model.Issue{UID: "parent", ProjectName: "work"}
+	// "old", under the cursor, was edited and moves above "new".
+	snapshot := g.UISnapshotResponseBody{Cursor: 1,
+		Collection: []model.Issue{
+			parent,
+			{UID: "old", ShortID: "old1", Title: "Older", Status: "closed", ProjectName: "work", UpdatedAt: ago(0)},
+			{UID: "new", ShortID: "new1", Title: "Newer", Status: "open", ProjectName: "work", UpdatedAt: ago(1)},
+		},
+		Selected: &g.UISelectedAuthority{Issue: &parent, Links: []g.UILink{childLink(1, "gone"), childLink(2, "old"), childLink(3, "new")}},
+	}
+	m.DetailIndex = 1 // "old"
+	m, _ = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot})
+	if got := enterOpens(m, m.DetailIndex); got != "old" {
+		t.Fatalf("enter after the refresh opened %q, want old", got)
 	}
 }

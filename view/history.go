@@ -22,8 +22,8 @@ func jumpLink(uid, ref string) ui.Text {
 // linkRow is a Link row heading: `relation | ref - title`, the relation and
 // separator muted, the reference a link, the title only when the peer is loaded.
 // Tern collapses each text node's edge spaces in layout, so the spaces between
-// the pieces are no-break spaces.
-// click is the relation's click, if any; the dash and title jump like the reference.
+// the pieces are no-break spaces. click is the relation's click, if any; the
+// dash and title jump like the reference.
 func linkRow(row model.DetailRow, click *ui.Actions) tern.Element {
 	follow := &ui.Actions{Click: "jump=" + row.ReferenceUID}
 	lead := ui.Text{Common: ui.Common{Key: "heading", Actions: click}, Spans: []ui.Span{{T: row.Relation + " |\u00a0", S: "muted"}}}

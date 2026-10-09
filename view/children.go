@@ -29,7 +29,7 @@ func childrenTable(m model.Model, children []model.ChildRow, now time.Time) tern
 				return ui.Text{Common: ui.Common{Key: key, Actions: follow}, Spans: []ui.Span{{T: text, S: style}}}
 			}
 			statusStyle, titleStyle := "accent", ""
-			if model.IsClosed(model.Issue{Status: child.Status}) {
+			if child.Closed {
 				statusStyle, titleStyle = "muted", "muted"
 			}
 			status := cell("status", child.Status, statusStyle)
