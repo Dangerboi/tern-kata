@@ -48,8 +48,8 @@ expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$stable_detail"
 expect_no_ops "$tmp/stable-frames.jsonl" "$mark" '.[0] == "reveal"'
 expect_ops "$tmp/stable-frames.jsonl" "$mark" '.[1] == "main.columns.detail.heading.title"'
 
-# The detail goes back to its top only for a different Issue: a live refresh of
-# the one being read reveals nothing, following its link to another Issue does.
+# Neither a live refresh of the Issue being read nor following its link to another
+# Issue reveals anything in the detail: a reveal pins Tern's list and stops the wheel (ef39).
 ctl click "[data-id='main.columns.list.issues.$stable_first']"
 expect_tree "[data-id='main.columns.detail.heading.title']" '.nodes[0].text | contains("Smoke stable first") and (contains("loading") | not)'
 ctl key enter
@@ -61,7 +61,7 @@ expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$detail_reveal"
 mark=$(wc -l <"$tmp/stable-frames.jsonl")
 ctl key enter
 expect_tree "[data-id='main.columns.detail.heading.title']" '.nodes[0].text | contains("Smoke stable second") and (contains("loading") | not)'
-expect_ops "$tmp/stable-frames.jsonl" "$mark" "$detail_reveal"
+expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$detail_reveal"
 expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$stable_detail"
 
 # Leaving a populated list for an empty Collection keeps the columns too.
