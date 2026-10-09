@@ -49,7 +49,7 @@ func TestParentIssueWithManyChildrenRendersItsWholeTree(t *testing.T) {
 			if _, ok := nodes[view.IssueID("parent")]; !ok {
 				t.Errorf("the parent's row is missing from the list: %v", nodes.under(view.IssueListID))
 			}
-			if title := text(nodes[view.DetailID+".heading.title"]); !strings.Contains(title, "Parent") {
+			if title := text(nodes[view.DetailContentID+".heading.title"]); !strings.Contains(title, "Parent") {
 				t.Errorf("detail does not show the parent: %q", title)
 			}
 			links, history := view.DetailSectionID(model.SectionLinks), view.DetailSectionID(model.SectionHistory)

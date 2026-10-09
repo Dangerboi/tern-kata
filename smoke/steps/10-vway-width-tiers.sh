@@ -34,8 +34,8 @@ expect_tree "[data-id='main.columns.list.issues']" '.ok and .count == 1 and (.no
 ctl key g
 ctl key j
 ctl key enter
-expect_tree "[data-id='main.columns.detail.heading.title']" '.ok and .count == 1 and (.nodes[0].text | contains("Width second") and (contains("loading") | not))'
-width_title=$(ctl tree "[data-id='main.columns.detail.heading.title']" | jq -r '.nodes[0].text')
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and .count == 1 and (.nodes[0].text | contains("Width second") and (contains("loading") | not))'
+width_title=$(ctl tree "[data-id='main.columns.detail.viewport.content.heading.title']" | jq -r '.nodes[0].text')
 [[ -n $width_title ]]
 expect_width 1200 1 1 0
 (( $(width_cols) >= 140 ))
@@ -55,11 +55,11 @@ ctl key j
 expect_tree "[data-id='dock.hints.position']" '.nodes[0].text | startswith("3 /")'
 ctl key PageDown
 ctl key enter
-expect_tree "[data-id='main.columns.detail.heading.title']" ".ok and .count == 1 and (.nodes[0].text != $title_json) and (.nodes[0].text | contains(\"loading\") | not)"
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" ".ok and .count == 1 and (.nodes[0].text != $title_json) and (.nodes[0].text | contains(\"loading\") | not)"
 ctl key esc
 ctl key k
 ctl key enter
-expect_tree "[data-id='main.columns.detail.heading.title']" ".nodes[0].text == $title_json"
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" ".nodes[0].text == $title_json"
 
 # j and tab in the detail column move its selection and reveal a section node.
 ctl key j
@@ -98,7 +98,7 @@ expect_width 1200 1 1 0
 expect_tree "[data-id^='layer.']" '.ok and .count > 0'
 ctl key esc
 expect_tree "[data-id^='layer.']" '.ok and .count == 0'
-expect_tree "[data-id='main.columns.detail.heading.title']" ".nodes[0].text == $title_json"
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" ".nodes[0].text == $title_json"
 expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("esc back"))'
 
 # q still quits below 80 columns.

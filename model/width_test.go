@@ -92,7 +92,7 @@ func TestScrollIsOnlyRequestedOfColumnsOnScreen(t *testing.T) {
 	}{
 		{"page below 80 columns from the list", 79, list, nil, model.KeyMsg{Chord: "page_down"}, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "b"}}},
 		{"page below 80 columns from the detail", 79, detail, nil, model.KeyMsg{Chord: "page_up"}, nil},
-		{"page in the one column shown asks Tern nothing", 100, detail, nil, model.KeyMsg{Chord: "page_down"}, nil},
+		{"page in the one column shown scrolls it", 100, detail, nil, model.KeyMsg{Chord: "page_down"}, []model.Cmd{model.Scroll{Column: detail, Down: true}}},
 		{"another detail arrives behind the single list", 100, list, []model.Msg{model.DetailLoaded{UID: "a", Selected: authority("a")}, model.SelectMsg{UID: "b"}}, model.DetailLoaded{UID: "b", Selected: authority("b")}, nil},
 		{"another detail arrives beside the list", 160, list, []model.Msg{model.DetailLoaded{UID: "a", Selected: authority("a")}, model.SelectMsg{UID: "b"}}, model.DetailLoaded{UID: "b", Selected: authority("b")}, []model.Cmd{model.Scroll{Column: detail, Start: true}}},
 		{"page during the daemon failure", 160, list, []model.Msg{model.Failed{Err: errors.New("kata server not responding")}}, model.KeyMsg{Chord: "page_down"}, nil},

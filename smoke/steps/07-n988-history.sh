@@ -12,8 +12,8 @@ kata --as dana --workspace "$tmp/workspace" reopen "$history_short" --json
 ctl --file "$tmp/launch.ctl"
 expect_tree "[data-id='main.columns.list.issues.$history_uid']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.list.issues.$history_uid']"
-expect_tree "[data-id='main.columns.detail.heading.title']" '.nodes[0].text | contains("Smoke history Issue") and (contains("loading") | not)'
-history_rows="[data-id^='main.columns.detail.sections.section5.']"
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.nodes[0].text | contains("Smoke history Issue") and (contains("loading") | not)'
+history_rows="[data-id^='main.columns.detail.viewport.content.section5.']"
 history_text() { printf '[.nodes[] | .text? // empty] | join(" | ") | %s' "$1"; }
 expect_tree "$history_rows" "$(history_text 'contains("dana assigned to alice") and contains("dana closed: done") and contains("dana reopened") and contains("dana set priority to 1") and contains("dana added label `history`")')"
 expect_tree "$history_rows" "$(history_text 'contains("Finished the history fixture") and contains("commit abc1234") and (contains("```") | not) and (contains("{\"") | not) and (contains("old_priority") | not)')"

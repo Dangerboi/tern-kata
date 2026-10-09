@@ -9,6 +9,8 @@ const (
 	MoveLast              Action = "last"
 	PageUp                Action = "page-up"
 	PageDown              Action = "page-down"
+	ScrollUp              Action = "scroll-up"
+	ScrollDown            Action = "scroll-down"
 	QuitAction            Action = "quit"
 	DrillIn               Action = "drill-in"
 	DrillOut              Action = "drill-out"
@@ -72,8 +74,8 @@ var Keymap = []Binding{
 	{Chord: "page_down", Key: "pgdn", Action: PageDown, Help: "page down", Mode: ModeList},
 	{Chord: "page_up", Key: "pgup", Action: PageUp, Help: "page up", Mode: ModeCollections},
 	{Chord: "page_down", Key: "pgdn", Action: PageDown, Help: "page down", Mode: ModeCollections},
-	{Chord: "page_up", Key: "pgup", Action: PageUp, Help: "page up", Mode: ModeDetail},
-	{Chord: "page_down", Key: "pgdn", Action: PageDown, Help: "page down", Mode: ModeDetail},
+	{Chord: "page_up", Key: "pgup", Action: PageUp, Help: "scroll page up", Mode: ModeDetail},
+	{Chord: "page_down", Key: "pgdn", Action: PageDown, Help: "scroll page down", Mode: ModeDetail},
 	{Chord: "page_up", Key: "pgup", Action: PageUp, Help: "page up", Mode: ModeSearch},
 	{Chord: "page_down", Key: "pgdn", Action: PageDown, Help: "page down", Mode: ModeSearch},
 	{Chord: "page_up", Key: "pgup", Action: PageUp, Help: "page up", Mode: ModeSearchResults},
@@ -175,10 +177,10 @@ var Keymap = []Binding{
 	{Chord: "enter", Key: "enter", Action: DrillIn, Help: "open", Mode: ModeList, ShowInFooter: true},
 	{Chord: "shift+l", Key: "L", Action: ToggleDetail, Help: "toggle detail", Mode: ModeList, ShowInFooter: true},
 	{Chord: "shift+l", Key: "L", Action: ToggleDetail, Help: "toggle detail", Mode: ModeDetail, ShowInFooter: true},
-	{Chord: "j", Key: "j/↓", Action: MoveDown, Help: "next reference", Mode: ModeDetail, ShowInFooter: true},
-	{Chord: "down", Key: "↓", Action: MoveDown, Help: "next reference", Mode: ModeDetail},
-	{Chord: "k", Key: "k/↑", Action: MoveUp, Help: "previous reference", Mode: ModeDetail, ShowInFooter: true},
-	{Chord: "up", Key: "↑", Action: MoveUp, Help: "previous reference", Mode: ModeDetail},
+	{Chord: "j", Key: "j", Action: MoveDown, Help: "next reference", Mode: ModeDetail, ShowInFooter: true},
+	{Chord: "k", Key: "k", Action: MoveUp, Help: "previous reference", Mode: ModeDetail, ShowInFooter: true},
+	{Chord: "down", Key: "↓", Action: ScrollDown, Help: "scroll down", Mode: ModeDetail, ShowInFooter: true},
+	{Chord: "up", Key: "↑", Action: ScrollUp, Help: "scroll up", Mode: ModeDetail, ShowInFooter: true},
 	{Chord: "g", Key: "g", Action: MoveFirst, Help: "first reference", Mode: ModeDetail},
 	{Chord: "home", Key: "home", Action: MoveFirst, Help: "first reference", Mode: ModeDetail},
 	{Chord: "shift+g", Key: "G", Action: MoveLast, Help: "last reference", Mode: ModeDetail},

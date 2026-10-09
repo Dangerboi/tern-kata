@@ -70,7 +70,6 @@ func run() error {
 eventLoop:
 	for {
 		previousSelection := m.SelectedUID
-		previous := m
 		var cmds []model.Cmd
 		m, cmds = model.Update(m, msg)
 		if m.Quitting {
@@ -90,11 +89,6 @@ eventLoop:
 				return err
 			}
 		}
-		if model.RevealsDetail(previous, m, msg) {
-			if err := surface.Reveal(view.DetailRevealID(m), "nearest"); err != nil {
-				return err
-			}
-		}
 		for _, cmd := range cmds {
 			if scroll, ok := cmd.(model.Scroll); ok {
 				target := view.IssueListID
@@ -102,10 +96,15 @@ eventLoop:
 				case model.ColumnCollections:
 					target = view.CollectionsID
 				case model.ColumnDetail:
-					target = view.DetailID
+					target = view.DetailContentID
 				}
 				by := "page-up"
-				if scroll.Down {
+				switch {
+				case scroll.Line && scroll.Down:
+					by = "line-down"
+				case scroll.Line:
+					by = "line-up"
+				case scroll.Down:
 					by = "page-down"
 				}
 				if scroll.Start {

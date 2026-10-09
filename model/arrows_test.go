@@ -45,6 +45,9 @@ func TestArrowKeysMatchLetterKeys(t *testing.T) {
 		for _, pair := range []struct{ arrow, letter string }{
 			{"down", "j"}, {"up", "k"}, {"end", "shift+g"}, {"home", "g"},
 		} {
+			if name == "detail" && (pair.arrow == "down" || pair.arrow == "up") {
+				continue // they scroll the detail viewport; see TestArrowAndPageKeysScrollTheDetailViewport
+			}
 			t.Run(name+"/"+pair.arrow, func(t *testing.T) {
 				// Move first so that up/home have somewhere to go.
 				for _, setup := range [][]string{nil, {"shift+g"}, {"j"}} {
