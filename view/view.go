@@ -108,13 +108,13 @@ func issues(m model.Model, now time.Time) tern.Element {
 		}
 	}
 	shownGroups := make(map[string]bool, len(m.Groups))
-	for _, row := range rows {
+	for i, row := range rows {
 		group := groups[row.UID]
 		if row.Depth == 0 && group.Heading && !shownGroups[group.ID] {
 			items = append(items, ui.Text{Common: ui.Common{Key: "group." + group.ID}, Spans: []ui.Span{{T: group.Title, S: "strong"}}})
 			shownGroups[group.ID] = true
 		}
-		items = append(items, issueRow(row, row.UID == m.SelectedUID, ownerShown, idWidth, now))
+		items = append(items, issueRow(row, row.UID == m.SelectedUID, i%2 == 1, ownerShown, idWidth, now))
 	}
 	selected := ""
 	if m.SelectedUID != "" {
@@ -230,7 +230,7 @@ func cell(text string, width int) string {
 // issueRow is one Issue: the id, prio, status and title on the left, the
 // title being the cell that gives way, and kids, owner and updated pinned to
 // the right so each column lines up with the header. A blank cell keeps its width.
-func issueRow(row model.IssueRow, selected, ownerShown bool, idWidth int, now time.Time) tern.Element {
+func issueRow(row model.IssueRow, selected, striped, ownerShown bool, idWidth int, now time.Time) tern.Element {
 	tone := ui.ToneNeutral
 	statusStyle := "accent"
 	if model.IsClosed(row.Issue) {
@@ -262,18 +262,19 @@ func issueRow(row model.IssueRow, selected, ownerShown bool, idWidth int, now ti
 		{T: cellGap + cell(row.Status, statusWidth), S: statusStyle},
 		{T: cellGap + row.Title},
 	}
-	for _, label := range row.Labels {
-		left = append(left, ui.Span{T: cellGap + label, S: "mark"})
-	}
 	owner := ""
 	if row.Owner != nil {
 		owner = *row.Owner
+	}
+	role := ""
+	if striped {
+		role = StripeRole
 	}
 	var actions *ui.Actions
 	if row.HasChildren {
 		actions = &ui.Actions{Click: string(model.ToggleExpansion) + "=" + row.UID}
 	}
-	return ui.Item{Common: ui.Common{Key: row.UID, Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells(kids, owner, relativeTime(row.UpdatedAt, now), ownerShown, "muted")...)}
+	return ui.Item{Common: ui.Common{Key: row.UID, Role: role, Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells(kids, owner, relativeTime(row.UpdatedAt, now), ownerShown, "muted")...)}
 }
 
 // rightCells are the kids, owner and updated cells, the owner only when shown.
