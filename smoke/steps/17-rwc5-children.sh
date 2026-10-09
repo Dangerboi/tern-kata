@@ -44,6 +44,10 @@ ch_activity=$(ch_y "$ch_content.activity")
 awk -v b="$ch_body" -v t="$ch_table" -v a="$ch_activity" 'BEGIN { exit !(b < t && t < a) }' || { printf 'Children table is not between the body and Activity: body y=%s table y=%s activity y=%s\n' "$ch_body" "$ch_table" "$ch_activity" >&2; return 1; }
 # The cells line up: every row's status cell starts at the same x.
 expect_tree "[data-id^='$ch_content.children.'][data-id\$='.status']" '.ok and ([.nodes[].rect[0]] | unique | length == 1)'
+# The reference and status cells are one line high at this width, and the columns line up.
+expect_tree "[data-id^='$ch_content.children.'][data-id\$='.jump'], [data-id^='$ch_content.children.'][data-id\$='.status']" '.ok and .count == 6 and ([.nodes[].rect[3]] | unique | length == 1)'
+expect_tree "[data-id^='$ch_content.children.'][data-id\$='.jump']" '.ok and ([.nodes[].rect[0]] | unique | length == 1) and ([.nodes[].rect[2]] | unique | length == 1)'
+expect_tree "[data-id^='$ch_content.children.'][data-id\$='.updated']" '.ok and ([.nodes[].rect[0]] | unique | length == 1) and ([.nodes[].rect[2]] | unique | length == 1)'
 # The closed child's status and title are muted, the open child's are not.
 expect_tree "[data-id='$ch_content.children.${ch_links[0]}'] *" '.ok and ([.nodes[] | select(.class | contains("sf-t-muted")) | .text] | index("closed") != null and index("Children kid 1") != null)'
 expect_tree "[data-id='$ch_content.children.${ch_links[1]}'] *" '.ok and ([.nodes[] | select(.class | contains("sf-t-muted")) | .text] | index("open") == null and index("Children kid 2") == null)'
