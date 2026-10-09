@@ -111,28 +111,28 @@ func updateFilterText(m Model, msg KeyMsg) (Model, []Cmd) {
 	return refreshFilters(m)
 }
 
-// TopBarTitle is the top bar's title line: the Collection with the filters on it.
-func (m Model) TopBarTitle() string {
-	header := m.Collection.Title
+// FilterSummary is the top bar's filter line: the active filters, empty when none is on.
+func (m Model) FilterSummary() string {
+	var parts []string
 	if m.Filters.ProjectUID != "" {
-		header += " · project=" + m.ProjectFilterName(m.Filters.ProjectUID)
+		parts = append(parts, "project="+m.ProjectFilterName(m.Filters.ProjectUID))
 	}
 	if m.Filters.Status != "" {
-		header += " · status=" + m.Filters.Status
+		parts = append(parts, "status="+m.Filters.Status)
 	}
 	if m.Filters.Owner != "" {
-		header += " · owner=" + m.Filters.Owner
+		parts = append(parts, "owner="+m.Filters.Owner)
 	}
 	if m.Filters.Label != "" {
-		header += " · label=" + m.Filters.Label
+		parts = append(parts, "label="+m.Filters.Label)
 	}
 	if m.Filters.Relationship != "" {
-		header += " · relationship=" + m.Filters.Relationship
+		parts = append(parts, "relationship="+m.Filters.Relationship)
 	}
 	if m.Filters.Search != "" {
-		header += " · search=" + m.Filters.Search
+		parts = append(parts, "search="+m.Filters.Search)
 	}
-	return header
+	return strings.Join(parts, " · ")
 }
 
 func (m Model) ProjectFilterName(uid string) string {

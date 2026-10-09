@@ -31,10 +31,7 @@ func DetailRevealID(m model.Model) string {
 }
 
 func detail(m model.Model) tern.Element {
-	children := ui.Nodes(ui.Row{Common: ui.Common{Key: "navigation"}, Gap: ui.GapSM, Children: ui.Nodes(
-		el.Button{Common: ui.Common{Key: "back", Actions: &ui.Actions{Click: "key=escape"}}, Text: "Back"},
-		el.Button{Common: ui.Common{Key: "toggle", Actions: &ui.Actions{Click: "key=shift+l"}}, Text: "Hide detail"},
-	)})
+	var children tern.Nodes
 	switch {
 	case m.SelectedUID == "":
 		children = append(children, ui.Text{Common: ui.Common{Key: "empty"}, Text: "Select an Issue to read its detail."})
@@ -46,14 +43,20 @@ func detail(m model.Model) tern.Element {
 		children = append(children, ui.Text{Common: ui.Common{Key: "unavailable"}, Text: "This Issue is unavailable or no longer visible."})
 	default:
 		issue := m.Detail.Issue
-		heading := []ui.Span{{T: issue.ShortID + " / " + issue.Title, S: "strong"}}
+		title := []ui.Span{{T: issue.ShortID + " - " + issue.Title, S: "strong"}}
 		if m.DetailLoading {
-			heading = append(heading, loadingMarker)
+			title = append(title, loadingMarker)
 		}
-		children = append(children, ui.Text{Common: ui.Common{Key: "title", Actions: &ui.Actions{Click: "focus-detail"}}, Spans: heading})
+		children = append(children, ui.Row{Common: ui.Common{Key: "heading"}, Gap: ui.GapSM, Children: ui.Nodes(
+			ui.Text{Common: ui.Common{Key: "title", Actions: &ui.Actions{Click: "focus-detail"}}, Spans: title},
+			ui.Badge{Common: ui.Common{Key: "status", Tone: statusTone(issue.Status)}, Text: issue.Status},
+		)})
 		sections := make([]tern.Element, 0, 2*int(model.SectionHistory)+1)
 		for section := model.SectionProperties; section <= model.SectionHistory; section++ {
-			content := ui.Nodes(sectionHeading(m, section))
+			var content tern.Nodes
+			if section != model.SectionBody {
+				content = ui.Nodes(sectionHeading(m, section))
+			}
 			switch section {
 			case model.SectionBody:
 				body := issue.Body

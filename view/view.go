@@ -58,7 +58,8 @@ func Render(m model.Model, now time.Time) tern.View {
 		// The top bar heads the whole Pane at every width, above the columns and outside their borders.
 		// The columns fill what is left of the Pane under it and stretch to equal height: a Row centres its children by default, and a parent's detail (a Link per child) is far taller than the Pane.
 		// Min H 0 lets the row shrink to the Pane instead of growing to the tallest column, so the Pane has nothing to scroll and the bar stays put.
-		main = ui.Nodes(topBar(m), ui.Row{Common: ui.Common{Key: "columns", Grow: 1, Min: &ui.Bounds{H: ui.Lines(0)}}, Gap: ui.GapMD, Align: ui.AlignStretch, Children: columns})
+		main = append(ui.Nodes(topBar(m)), filterLine(m)...)
+		main = append(main, ui.Row{Common: ui.Common{Key: "columns", Grow: 1, Min: &ui.Bounds{H: ui.Lines(0)}}, Gap: ui.GapMD, Align: ui.AlignStretch, Children: columns})
 	}
 	if m.Stale && m.Err == nil && !m.FirstLoad() {
 		main = append(main, staleNotice(m))
@@ -152,14 +153,16 @@ func scrollMax(m model.Model) ui.ListMax {
 	return ui.MaxFrac(0.6)
 }
 
-// topBar is the pinned block above the columns: Collection title with its
-// markers, daemon line and counts. Clicking the title opens the picker.
+// topBar is the pinned row above the columns: the Collection title with its
+// markers on the left, the counts, and the Daemon at the right. Clicking the
+// title opens the picker. When the row is too narrow Tern's flex shrinks and
+// truncates the cells, the Daemon first, then the counts, then the title.
 func topBar(m model.Model) tern.Element {
 	tone, style := ui.ToneNeutral, "strong"
 	if m.Focus == model.ColumnList {
 		tone, style = ui.ToneAccent, "accent strong"
 	}
-	title := m.TopBarTitle()
+	title := m.Collection.Title
 	if m.Collection.IsProject() {
 		title = "Project: " + title
 	}
@@ -167,11 +170,25 @@ func topBar(m model.Model) tern.Element {
 	if m.Loading {
 		heading = append(heading, loadingMarker)
 	}
-	return ui.Col{Common: ui.Common{Key: "topbar"}, Children: ui.Nodes(
-		ui.Text{Common: ui.Common{Key: "heading", Tone: tone, Title: "Collections picker (p)", Actions: &ui.Actions{Click: "key=p"}}, Spans: heading},
-		ui.Text{Common: ui.Common{Key: "daemon", Tone: ui.ToneMuted}, Text: m.DaemonLine()},
-		ui.Text{Common: ui.Common{Key: "counts", Tone: ui.ToneMuted}, Text: m.CountsLine()},
+	flexCell := func(key string, tone ui.Tone, shrink float64) ui.Common {
+		return ui.Common{Key: key, Tone: tone, Shrink: &shrink}
+	}
+	headingCell := flexCell("heading", tone, 0.01)
+	headingCell.Title, headingCell.Actions = "Collections picker (p)", &ui.Actions{Click: "key=p"}
+	return ui.Row{Common: ui.Common{Key: "topbar"}, Gap: ui.GapMD, Justify: ui.JustifyBetween, Children: ui.Nodes(
+		ui.Text{Common: headingCell, Spans: heading, Wrap: ui.WrapNone},
+		ui.Text{Common: flexCell("counts", ui.ToneMuted, 1), Text: m.CountsLine(), Wrap: ui.WrapNone},
+		ui.Text{Common: flexCell("daemon", ui.ToneMuted, 100), Text: m.DaemonLine(), Wrap: ui.WrapNone},
 	)}
+}
+
+// filterLine lists the active filters under the top bar; nil when none is on.
+func filterLine(m model.Model) []tern.Element {
+	summary := m.FilterSummary()
+	if summary == "" {
+		return nil
+	}
+	return []tern.Element{ui.Text{Common: ui.Common{Key: "filters", Tone: ui.ToneMuted}, Text: summary, Wrap: ui.WrapNone}}
 }
 
 // panel is a column's container. With more than one column showing it is a

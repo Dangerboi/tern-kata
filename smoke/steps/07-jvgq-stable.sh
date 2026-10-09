@@ -37,21 +37,21 @@ expect_ops "$tmp/stable-frames.jsonl" "$mark" '.[0] == "set" and .[1] == "main.t
 
 # Clicking another Issue replaces the detail in place and leaves the list where it is.
 ctl click "[data-id='main.columns.list.issues.$stable_first']"
-expect_tree "[data-id='main.columns.detail.title']" '.nodes[0].text | contains("Smoke stable first") and (contains("loading") | not)'
+expect_tree "[data-id='main.columns.detail.heading.title']" '.nodes[0].text | contains("Smoke stable first") and (contains("loading") | not)'
 mark=$(wc -l <"$tmp/stable-frames.jsonl")
 ctl click "[data-id='main.columns.list.issues.$stable_second']"
 expect_tree "[data-id='main.columns.list.issues.$stable_second']" '.nodes[0]["aria-selected"] == "true"'
-expect_tree "[data-id='main.columns.detail.title']" '.nodes[0].text | contains("Smoke stable second") and (contains("loading") | not)'
+expect_tree "[data-id='main.columns.detail.heading.title']" '.nodes[0].text | contains("Smoke stable second") and (contains("loading") | not)'
 expect_tree "[data-id='main.columns.detail.sections.section2.body']" '[.nodes[] | .. | objects | .text? // empty] | join(" ") | contains("Stable second body")'
 expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$stable_columns"
 expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$stable_detail"
 expect_no_ops "$tmp/stable-frames.jsonl" "$mark" '.[0] == "reveal"'
-expect_ops "$tmp/stable-frames.jsonl" "$mark" '.[1] == "main.columns.detail.title"'
+expect_ops "$tmp/stable-frames.jsonl" "$mark" '.[1] == "main.columns.detail.heading.title"'
 
 # The detail goes back to its top only for a different Issue: a live refresh of
 # the one being read reveals nothing, following its link to another Issue does.
 ctl click "[data-id='main.columns.list.issues.$stable_first']"
-expect_tree "[data-id='main.columns.detail.title']" '.nodes[0].text | contains("Smoke stable first") and (contains("loading") | not)'
+expect_tree "[data-id='main.columns.detail.heading.title']" '.nodes[0].text | contains("Smoke stable first") and (contains("loading") | not)'
 ctl key enter
 ctl click "[data-id='main.columns.detail.sections.section3.heading']"
 mark=$(wc -l <"$tmp/stable-frames.jsonl")
@@ -60,7 +60,7 @@ expect_tree "[data-id='main.columns.detail.sections.section4']" '[.nodes[] | .. 
 expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$detail_reveal"
 mark=$(wc -l <"$tmp/stable-frames.jsonl")
 ctl key enter
-expect_tree "[data-id='main.columns.detail.title']" '.nodes[0].text | contains("Smoke stable second") and (contains("loading") | not)'
+expect_tree "[data-id='main.columns.detail.heading.title']" '.nodes[0].text | contains("Smoke stable second") and (contains("loading") | not)'
 expect_ops "$tmp/stable-frames.jsonl" "$mark" "$detail_reveal"
 expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$stable_detail"
 
