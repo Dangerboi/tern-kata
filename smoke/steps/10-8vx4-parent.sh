@@ -64,7 +64,7 @@ expect_tree "[data-id\$='.${parent_children[-1]}']" '.ok and .count == 1'
 parent_expect_drawn
 
 # The top bar stays put with the tall detail focused, at the window's height and a short one:
-# only the detail's sections list scrolls, never the Pane.
+# only the detail's scroller scrolls, never the Pane.
 parent_bar() { ctl tree "[data-id='main.topbar']" | jq -c '.nodes[0].rect'; }
 ctl key enter
 for parent_pane_height in "$parent_height" 420; do

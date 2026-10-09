@@ -61,7 +61,7 @@ ctl key k
 ctl key enter
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" ".nodes[0].text == $title_json"
 
-# j and tab in the detail column move its selection and reveal a section node.
+# j and tab in the detail column move its row cursor and reveal nothing.
 ctl key j
 ctl key tab
 expect_alive "j and tab in the detail-only tier"
@@ -70,7 +70,7 @@ expect_alive "j and tab in the detail-only tier"
 expect_width 620 0 0 1
 (( $(width_cols) < 80 ))
 expect_tree "[data-id='main.notice.text']" '.nodes[0].text | contains("80 columns")'
-# Neither the Issue rows nor the sections exist now, so no reveal or scroll may
+# Neither the Issue rows nor the detail exist now, so no reveal or scroll may
 # name one: j and tab with detail focus, then j with list focus.
 width_mark=$(wc -l <"$tmp/width-frames.jsonl")
 ctl key j

@@ -98,19 +98,7 @@ eventLoop:
 				case model.ColumnDetail:
 					target = view.DetailContentID
 				}
-				by := "page-up"
-				switch {
-				case scroll.Line && scroll.Down:
-					by = "line-down"
-				case scroll.Line:
-					by = "line-up"
-				case scroll.Down:
-					by = "page-down"
-				}
-				if scroll.Start {
-					by = "start"
-				}
-				if err := surface.Scroll(target, by); err != nil {
+				if err := surface.Scroll(target, string(scroll.By)); err != nil {
 					return err
 				}
 				continue

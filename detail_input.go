@@ -20,15 +20,15 @@ func detailAction(input *tern.Action) model.Msg {
 	case "focus-detail":
 		return model.FocusColumnMsg{Column: model.ColumnDetail}
 	case "activity-tab":
-		section, err := strconv.Atoi(input.Value)
-		if err == nil && section >= 0 && section <= int(model.TabLinks) {
-			return model.ActivityTabMsg{Tab: model.ActivityTab(section)}
+		tab, err := strconv.Atoi(input.Value)
+		if err == nil && tab >= 0 && tab < int(model.TabCount) {
+			return model.ActivityTabMsg{Tab: model.ActivityTab(tab)}
 		}
 	case "detail-item":
-		sectionText, key, ok := strings.Cut(input.Value, ":")
-		section, err := strconv.Atoi(sectionText)
-		if ok && err == nil && section >= 0 && section <= int(model.TabLinks) {
-			return model.DetailItemMsg{Tab: model.ActivityTab(section), Key: key}
+		tabText, key, ok := strings.Cut(input.Value, ":")
+		tab, err := strconv.Atoi(tabText)
+		if ok && err == nil && tab >= 0 && tab < int(model.TabCount) {
+			return model.DetailItemMsg{Tab: model.ActivityTab(tab), Key: key}
 		}
 	case "jump":
 		return model.JumpIssueMsg{UID: input.Value}

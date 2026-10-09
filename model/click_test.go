@@ -66,9 +66,9 @@ func clickAt(focus model.Column, listKeys ...string) model.Model {
 }
 
 // clickTabTo cycles Activity tabs with tab, so tests follow the on-screen order.
-func clickTabTo(m model.Model, section model.ActivityTab) model.Model {
-	for range 3 {
-		if m.ActivityTab == section {
+func clickTabTo(m model.Model, tab model.ActivityTab) model.Model {
+	for range model.TabCount {
+		if m.ActivityTab == tab {
 			break
 		}
 		m, _ = clickPress(m, "tab")
@@ -78,13 +78,13 @@ func clickTabTo(m model.Model, section model.ActivityTab) model.Model {
 
 // clickDetailPath is the keyboard route to an Activity tab: enter the detail when
 // the keys are elsewhere, tab to the tab, then press after.
-func clickDetailPath(section model.ActivityTab, after ...string) func(model.Model) (model.Model, []model.Cmd) {
+func clickDetailPath(tab model.ActivityTab, after ...string) func(model.Model) (model.Model, []model.Cmd) {
 	return func(m model.Model) (model.Model, []model.Cmd) {
 		var cmds []model.Cmd
 		if m.Focus != model.ColumnDetail {
 			m, cmds = clickPress(m, "enter")
 		}
-		m = clickTabTo(m, section)
+		m = clickTabTo(m, tab)
 		m, more := clickPress(m, after...)
 		return m, append(cmds, more...)
 	}
@@ -94,7 +94,7 @@ func clickDetailPath(section model.ActivityTab, after ...string) func(model.Mode
 // first, so the pointer side starts there too and the tab is put back for the comparison.
 func clickJumpPath(m model.Model) (model.Model, []model.Cmd) {
 	m, cmds := clickDetailPath(model.TabLinks, "enter")(m)
-	m.ActivityTab = model.TabComments
+	m, _ = model.Update(m, model.ActivityTabMsg{Tab: model.TabComments})
 	return m, cmds
 }
 
@@ -124,7 +124,7 @@ func TestEveryClickTargetEndsWhereItsKeysEnd(t *testing.T) {
 		{"top bar title from list", model.ColumnList, nil, model.ActionMsg{Action: "key", Value: "p"}, model.ColumnList, clickKeys("p")},
 		{"top bar title from detail", model.ColumnDetail, nil, model.ActionMsg{Action: "key", Value: "p"}, model.ColumnDetail, clickKeys("p")},
 		{"detail title from list", model.ColumnList, nil, model.FocusColumnMsg{Column: model.ColumnDetail}, model.ColumnList, clickKeys("enter")},
-		{"section heading", model.ColumnList, nil, model.ActivityTabMsg{Tab: model.TabLinks}, model.ColumnList, clickDetailPath(model.TabLinks)},
+		{"Activity tab", model.ColumnList, nil, model.ActivityTabMsg{Tab: model.TabLinks}, model.ColumnList, clickDetailPath(model.TabLinks)},
 		{"detail row", model.ColumnDetail, nil, model.DetailItemMsg{Tab: model.TabLinks, Key: "1"}, model.ColumnDetail, clickDetailPath(model.TabLinks)},
 		{"referenced Issue from detail", model.ColumnDetail, nil, model.JumpIssueMsg{UID: "other"}, model.ColumnDetail, clickJumpPath},
 		{"referenced Issue from list", model.ColumnList, nil, model.JumpIssueMsg{UID: "other"}, model.ColumnList, clickJumpPath},
@@ -212,7 +212,7 @@ func TestEscAfterClickBacksOut(t *testing.T) {
 		{"clicked referenced Issue", model.ColumnDetail, []model.Msg{model.JumpIssueMsg{UID: "other"}}, model.ColumnDetail, "other", []string{"parent"}},
 		{"esc returns to the Issue it came from", model.ColumnDetail, []model.Msg{model.JumpIssueMsg{UID: "other"}, model.KeyMsg{Chord: "escape"}}, model.ColumnDetail, "parent", nil},
 		{"second esc leaves detail", model.ColumnDetail, []model.Msg{model.JumpIssueMsg{UID: "other"}, model.KeyMsg{Chord: "escape"}, model.KeyMsg{Chord: "escape"}}, model.ColumnList, "parent", nil},
-		{"clicked detail heading", model.ColumnList, []model.Msg{model.ActivityTabMsg{Tab: model.TabLinks}, model.KeyMsg{Chord: "escape"}}, model.ColumnList, "parent", nil},
+		{"clicked Activity tab", model.ColumnList, []model.Msg{model.ActivityTabMsg{Tab: model.TabLinks}, model.KeyMsg{Chord: "escape"}}, model.ColumnList, "parent", nil},
 		{"clicked detail row", model.ColumnList, []model.Msg{model.DetailItemMsg{Tab: model.TabLinks, Key: "1"}, model.KeyMsg{Chord: "escape"}}, model.ColumnList, "parent", nil},
 		{"clicked Collection", model.ColumnList, []model.Msg{model.CollectionPointerSelected{Key: "today"}, model.KeyMsg{Chord: "escape"}}, model.ColumnCollections, "parent", nil},
 		{"Collection after a jump ends the jump", model.ColumnDetail, []model.Msg{model.JumpIssueMsg{UID: "other"}, model.CollectionPointerSelected{Key: "today"}, model.KeyMsg{Chord: "enter"}, model.KeyMsg{Chord: "escape"}}, model.ColumnList, "other", nil},

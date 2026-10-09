@@ -67,7 +67,7 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 	m, cmds := update(m, msg)
 	if now := m.DetailIssueUID(); shown != "" && now != "" && now != shown {
 		// The detail scroller keeps its offset across Issues; a different Issue starts at the top.
-		cmds = append(cmds, Scroll{Column: ColumnDetail, Start: true})
+		cmds = append(cmds, Scroll{Column: ColumnDetail, By: ScrollToStart})
 	}
 	if m.Focus != ColumnDetail {
 		// Jump history belongs to the detail column, so every path out of it, key or click, ends it.
@@ -174,13 +174,13 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			}
 		}
 	case ActivityTabMsg:
-		if msg.Tab <= TabLinks {
+		if msg.Tab < TabCount {
 			m.Focus = ColumnDetail
 			m.ActivityTab = msg.Tab
 			m.DetailIndex = 0
 		}
 	case DetailItemMsg:
-		if msg.Tab <= TabLinks {
+		if msg.Tab < TabCount {
 			m.Focus = ColumnDetail
 			m.ActivityTab = msg.Tab
 			for i := range m.DetailRowCount(msg.Tab) {

@@ -32,10 +32,10 @@ func TestHistoryRendersSentencesWithTonedVerbs(t *testing.T) {
 	}
 	m := apply(browsing(), model.DetailLoaded{UID: alpha.UID, Selected: &g.UISelectedAuthority{Issue: &alpha, History: events}}, model.ActivityTabMsg{Tab: model.TabEvents})
 	nodes := render(t, m)
-	section := view.DetailActivityID
+	activity := view.DetailActivityID
 
 	for id, n := range nodes {
-		if strings.HasPrefix(id, section+".") && strings.Contains(text(n), "```") {
+		if strings.HasPrefix(id, activity+".") && strings.Contains(text(n), "```") {
 			t.Errorf("%s shows a code block: %q", id, text(n))
 		}
 	}
@@ -48,7 +48,7 @@ func TestHistoryRendersSentencesWithTonedVerbs(t *testing.T) {
 		{"e3", "dana reopened", "reopened", "warning"},
 		{"e4", "dana assigned to alice", "assigned", ""},
 	} {
-		heading := nodes[section+"."+tt.event+".heading"]
+		heading := nodes[activity+"."+tt.event+".heading"]
 		if !strings.HasPrefix(text(heading), tt.sentence) {
 			t.Errorf("%s reads %q, want it to start with %q", tt.event, text(heading), tt.sentence)
 		}
@@ -63,7 +63,7 @@ func TestHistoryRendersSentencesWithTonedVerbs(t *testing.T) {
 			t.Errorf("%s verb %q has style %q (found %v), want %q", tt.event, tt.verb, got, found, tt.style)
 		}
 	}
-	if detail := text(nodes[section+".e2.body"]); detail != "shipped" {
+	if detail := text(nodes[activity+".e2.body"]); detail != "shipped" {
 		t.Errorf("close detail line = %q", detail)
 	}
 }

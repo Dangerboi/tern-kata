@@ -39,11 +39,11 @@ stuck_dir="$tmp/stuck-workspace"
 mkdir -p "$stuck_dir" "$tmp/stuck-unbound"
 kata --workspace "$stuck_dir" init --project stuck-detail --json >/dev/null
 stuck_project=$(kata --workspace "$stuck_dir" projects list --json | jq -er '.projects[] | select(.name == "stuck-detail") | .uid')
-kata --workspace "$stuck_dir" create "Stuck blocker" --json >"$tmp/stuck-blocker.json"
+kata --workspace "$stuck_dir" create "Stuck peer" --json >"$tmp/stuck-peer.json"
 stuck_body=$(for line in $(seq 40); do printf 'Body line %s\n\n' "$line"; done)
-kata --workspace "$stuck_dir" create "Stuck long" --body "$stuck_body" --blocked-by "$(jq -r '.issue.short_id' "$tmp/stuck-blocker.json")" --json >"$tmp/stuck-long.json"
+kata --workspace "$stuck_dir" create "Stuck long" --body "$stuck_body" --blocked-by "$(jq -r '.issue.short_id' "$tmp/stuck-peer.json")" --json >"$tmp/stuck-long.json"
 stuck_long=$(jq -r '.issue.uid' "$tmp/stuck-long.json")
-stuck_blocker=$(jq -r '.issue.uid' "$tmp/stuck-blocker.json")
+stuck_peer=$(jq -r '.issue.uid' "$tmp/stuck-peer.json")
 kata --workspace "$stuck_dir" comment "$(jq -r '.issue.short_id' "$tmp/stuck-long.json")" --body "Stuck comment" --json >/dev/null
 
 quit_app
@@ -75,7 +75,7 @@ stuck_bring_into_view "[data-id='main.columns.detail.viewport.content.activity.t
 ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']"
 stuck_bring_into_view "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']"
 ctl click "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']"
-expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Stuck blocker"))'
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Stuck peer"))'
 ctl key esc
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Stuck long"))'
 stuck_scrolls "a link jump and esc"
@@ -102,8 +102,8 @@ stuck_scrolls "a resize between tiers"
 # The window loses its focus and gets it back with a click.
 ctl window-focus off
 ctl window-focus on
-ctl click "[data-id$='.$stuck_blocker']"
-expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Stuck blocker"))'
+ctl click "[data-id$='.$stuck_peer']"
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Stuck peer"))'
 ctl click "[data-id$='.$stuck_long']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Stuck long"))'
 stuck_scrolls "the window regaining focus"

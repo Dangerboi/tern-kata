@@ -6,7 +6,6 @@ at_rects() { ctl tree "[data-id='main.columns.detail.viewport'],[data-id='main.c
 # How far the content is scrolled and how much is left below the viewport's bottom edge, in px.
 at_above() { at_rects | jq -r '.[1][1] - .[0][1] | -floor'; }
 at_below() { at_rects | jq -r '(.[1][1] + .[1][3]) - (.[0][1] + .[0][3]) | floor'; }
-at_bar() { ctl tree "[data-id='main.topbar']" | jq -c '.nodes[0].rect'; }
 at_wait() { # <label> <jq test on above/below as $a/$b>
   local a b
   for ((attempt = 0; attempt < 40; attempt++)); do
@@ -25,11 +24,11 @@ at_dir="$tmp/tabs-workspace"
 mkdir -p "$at_dir" "$tmp/tabs-unbound"
 kata --workspace "$at_dir" init --project tabs-detail --json >/dev/null
 at_project=$(kata --workspace "$at_dir" projects list --json | jq -er '.projects[] | select(.name == "tabs-detail") | .uid')
-kata --workspace "$at_dir" create "Tabs blocker" --json >"$tmp/tabs-blocker.json"
+kata --workspace "$at_dir" create "Tabs peer" --json >"$tmp/tabs-peer.json"
 at_body=$(for line in $(seq 40); do printf 'Body line %s\n\n' "$line"; done)
-kata --workspace "$at_dir" create "Tabs main" --body "$at_body" --blocked-by "$(jq -r '.issue.short_id' "$tmp/tabs-blocker.json")" --json >"$tmp/tabs-main.json"
+kata --workspace "$at_dir" create "Tabs main" --body "$at_body" --blocked-by "$(jq -r '.issue.short_id' "$tmp/tabs-peer.json")" --json >"$tmp/tabs-main.json"
 at_main=$(jq -r '.issue.uid' "$tmp/tabs-main.json")
-at_blocker=$(jq -r '.issue.uid' "$tmp/tabs-blocker.json")
+at_peer=$(jq -r '.issue.uid' "$tmp/tabs-peer.json")
 for n in 1 2; do kata --workspace "$at_dir" comment "$(jq -r '.issue.short_id' "$tmp/tabs-main.json")" --body "Tabs comment $n" --json >/dev/null; done
 
 quit_app
@@ -83,8 +82,8 @@ at_wheel 300 12
 at_wait "the tabs are in view" '$b <= 1'
 ctl click "[data-id='${at_tab}1']"
 at_label 1 'startswith("[ Events (")'
-ctl click "[data-id\$='.$at_blocker']"
-expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Tabs blocker"))'
+ctl click "[data-id\$='.$at_peer']"
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Tabs peer"))'
 at_label 1 'startswith("[ Events (")'
 at_label 0 'startswith("Comments (0)")'
 
