@@ -23,11 +23,14 @@ func TestDetailSectionsRenderInOrder(t *testing.T) {
 	for section := model.SectionProperties; section <= model.SectionHistory; section++ {
 		id := view.DetailSectionID(section) + ".heading"
 		if _, ok := nodes[id]; !ok {
+			if section == model.SectionBody {
+				continue
+			}
 			t.Fatalf("no heading for %v", section)
 		}
 		headings = append(headings, text(nodes[id]))
 	}
-	want := []string{"Properties", "Labels", "Body", "Links", "Comments", "Change history"}
+	want := []string{"Properties", "Labels", "Links", "Comments", "Change history"}
 	if !slices.Equal(headings, want) {
 		t.Fatalf("headings %v, want %v", headings, want)
 	}
@@ -73,5 +76,28 @@ func TestDetailBadgesAndChipsAreToned(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDetailHeaderIsTheTitleAndStatusWithoutButtonsOrBodyHeading(t *testing.T) {
+	nodes := detailNodes(t, alpha)
+	if got := text(nodes[view.DetailID+".heading.title"]); got != "aaaa - Alpha" {
+		t.Errorf("title %q, want %q", got, "aaaa - Alpha")
+	}
+	if badge := nodes[view.DetailID+".heading.status"]; text(badge) != "open" || badge.P["tone"] != "accent" {
+		t.Errorf("status badge after the title: %v", badge)
+	}
+	if ids := nodes.under(view.DetailID); slices.ContainsFunc(ids, func(id string) bool {
+		return strings.HasSuffix(id, ".navigation") || strings.Contains(id, ".navigation.") || strings.HasSuffix(id, ".back") || strings.HasSuffix(id, ".toggle")
+	}) {
+		t.Errorf("Back or Hide detail buttons are still drawn: %v", ids)
+	}
+	for _, id := range nodes.under(view.DetailID) {
+		if text(nodes[id]) == "Body" || text(nodes[id]) == "Back" || text(nodes[id]) == "Hide detail" {
+			t.Errorf("%s shows %q", id, text(nodes[id]))
+		}
+	}
+	if _, ok := nodes[view.DetailSectionID(model.SectionBody)+".body"]; !ok {
+		t.Error("the body itself is gone")
 	}
 }

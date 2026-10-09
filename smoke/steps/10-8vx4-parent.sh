@@ -24,7 +24,7 @@ parent_height=$(ctl stats | jq -r '.viewport[1]')
 # The parent's row is the selected one, inside the Pane, and its detail is drawn.
 parent_expect_drawn() {
   expect_tree "[data-id\$='.$parent_uid']" ".ok and .count == 1 and .nodes[0][\"aria-selected\"] == \"true\" and .nodes[0].rect[1] >= 0 and (.nodes[0].rect[1] + .nodes[0].rect[3]) <= $parent_height"
-  expect_tree "[data-id='main.columns.detail.title']" '.ok and (.nodes[0].text | contains("Smoke parent spec") and (contains("loading") | not))'
+  expect_tree "[data-id='main.columns.detail.heading.title']" '.ok and (.nodes[0].text | contains("Smoke parent spec") and (contains("loading") | not))'
   expect_tree "[data-id^='main.columns.detail.sections.section3.'][data-id\$='.jump']" '.ok and .count == 40'
 }
 
@@ -44,7 +44,7 @@ ctl key Right
 expect_tree "[data-id\$='.${parent_children[-1]}']" '.ok and .count == 1'
 parent_expect_drawn
 ctl key j
-expect_tree "[data-id='main.columns.detail.title']" '.ok and (.nodes[0].text | contains("Smoke parent child 40") and (contains("loading") | not))'
+expect_tree "[data-id='main.columns.detail.heading.title']" '.ok and (.nodes[0].text | contains("Smoke parent child 40") and (contains("loading") | not))'
 expect_tree "[data-id\$='.${parent_children[-1]}']" '.ok and .nodes[0]["aria-selected"] == "true" and .nodes[0].rect[1] >= 0 and (.nodes[0].rect[1] + .nodes[0].rect[3]) <= '"$parent_height"
 ctl key k
 parent_expect_drawn

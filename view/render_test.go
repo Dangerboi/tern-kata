@@ -2,6 +2,7 @@ package view_test
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -153,15 +154,15 @@ func TestSwitchingIssueReplacesDetailInPlace(t *testing.T) {
 	m = apply(m, model.SelectMsg{UID: beta.UID})
 	loading := render(t, m)
 	sameIDs(t, view.DetailID, idle, loading)
-	title := text(loading[view.DetailID+".title"])
-	if !strings.Contains(title, alpha.Title) || title == text(idle[view.DetailID+".title"]) {
+	title := text(loading[view.DetailID+".heading.title"])
+	if !strings.Contains(title, alpha.Title) || title == text(idle[view.DetailID+".heading.title"]) {
 		t.Errorf("detail heading keeps the previous Issue with a loading marker: %q", title)
 	}
 
 	m = apply(m, detailOf(beta))
 	loaded := render(t, m)
 	sameIDs(t, view.DetailID, idle, loaded)
-	if title := text(loaded[view.DetailID+".title"]); !strings.Contains(title, beta.Title) || strings.Contains(title, alpha.Title) {
+	if title := text(loaded[view.DetailID+".heading.title"]); !strings.Contains(title, beta.Title) || strings.Contains(title, alpha.Title) {
 		t.Errorf("detail did not switch to the new Issue: %q", title)
 	}
 }
@@ -188,15 +189,53 @@ func TestStaleNoticeStaysWhileACollectionLoads(t *testing.T) {
 	sameIDs(t, "main", idle, loading)
 }
 
-func TestTopBarLinesInOrder(t *testing.T) {
+func TestTopBarIsOneRowWithTheDaemonRightAligned(t *testing.T) {
 	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Daemon: model.Daemon{Version: "v0.18.0"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, beta}}})
 	nodes := render(t, m)
 	var got []string
-	for _, line := range nodes["main.topbar"].C {
-		got = append(got, text(line))
+	for _, cell := range nodes["main.topbar"].C {
+		got = append(got, text(cell))
 	}
-	want := []string{"Project: work", "Daemon: local · kata v0.18.0", "open: 2 · closed: 0 · all: 2"}
+	want := []string{"Project: work", "open: 2 · closed: 0 · all: 2", "Daemon: local · kata v0.18.0"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("top bar %q, want %q", got, want)
+	}
+	if nodes["main.topbar"].K != "row" || nodes["main.topbar"].P["justify"] != "between" {
+		t.Errorf("top bar is %q justified %v, want a row spread between its cells", nodes["main.topbar"].K, nodes["main.topbar"].P["justify"])
+	}
+	if _, ok := nodes["main.filters"]; ok {
+		t.Error("filter line shown with no filter on")
+	}
+}
+
+func TestTopBarShrinksTheDaemonThenTheCountsBeforeTheTitle(t *testing.T) {
+	nodes := render(t, browsing())
+	shrink := func(id string) float64 {
+		var v float64
+		if _, err := fmt.Sscan(fmt.Sprint(nodes["main.topbar."+id].P["shrink"]), &v); err != nil {
+			t.Fatalf("%s has no shrink: %v", id, nodes["main.topbar."+id].P)
+		}
+		return v
+	}
+	if !(shrink("daemon") > shrink("counts") && shrink("counts") > shrink("heading")) {
+		t.Errorf("shrink daemon %v, counts %v, heading %v: want the daemon to give way first, then the counts", shrink("daemon"), shrink("counts"), shrink("heading"))
+	}
+}
+
+func TestFilterLineAppearsOnlyWhenFiltered(t *testing.T) {
+	m := browsing()
+	if _, ok := render(t, m)["main.filters"]; ok {
+		t.Fatal("filter line shown with no filter on")
+	}
+	m = apply(m, model.KeyMsg{Chord: "s"})
+	nodes := render(t, m)
+	if got := text(nodes["main.filters"]); got != "status=open" {
+		t.Errorf("filter line %q, want status=open", got)
+	}
+	if got := text(nodes["main.topbar.heading"]); strings.Contains(got, "status=") {
+		t.Errorf("title carries the filters: %q", got)
+	}
+	if _, ok := nodes["main.topbar.filters"]; ok {
+		t.Error("filter line is inside the one-row top bar")
 	}
 }
