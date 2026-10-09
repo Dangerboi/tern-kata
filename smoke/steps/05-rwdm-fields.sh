@@ -13,7 +13,7 @@ ctl key a
 ctl key g
 ctl key e
 ctl key enter
-expect_tree "[data-id='main.columns.list.issues']" '.ok and ([.nodes[] | .. | objects | .text? // empty] | join(" ") | contains("triage"))'
+expect_tree "[data-id='main.columns.detail.viewport.content.labels.label-triage']" '.ok and .count == 1'
 kata --workspace "$tmp/workspace" show "$hierarchy_parent" --json >"$tmp/fields-written.json"
 jq -e '.labels[] | select(.label == "triage") | .author == "smoke-reviewer"' "$tmp/fields-written.json"
 ctl key '!'
