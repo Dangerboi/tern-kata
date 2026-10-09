@@ -7,8 +7,8 @@ accent_expect() {
     | def lin: . / 255 | if . <= 0.03928 then . / 12.92 else pow((. + 0.055) / 1.055; 2.4) end;
       def lum: 0.2126 * (.[0] | lin) + 0.7152 * (.[1] | lin) + 0.0722 * (.[2] | lin);
       ($r | map(select(.sel))) as $s
-    | ($s | length) == 1 and $s[0].bg[3] > 0.98 and $s[0].fg == [255, 255, 255]
-      and (($r | map(select(.sel | not) | .bg[3]) | all(. < 0.1)))
+    | ($s | length) == 1 and ($s[0].bg[3] // 1) > 0.98 and $s[0].fg == [255, 255, 255]
+      and (($r | map(select(.sel | not) | (.bg[3] // 1)) | all(. < 0.1)))
       and ((1.05 / (($s[0].bg | lum) + 0.05)) >= 4.5)'
   for ((attempt = 0; attempt < 200; attempt++)); do
     ctl dump "[data-id^='main.columns.list.issues.']" >"$tmp/accent-dump.json"
