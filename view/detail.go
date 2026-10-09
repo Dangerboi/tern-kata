@@ -185,8 +185,7 @@ func properties(m model.Model, issue *model.Issue) tern.Element {
 	}
 	children := make(tern.Nodes, len(rows))
 	for i, r := range rows {
-		key := ui.Text{Common: ui.Common{Key: "k"}, Text: r.name + ":"}
-		key.Min, key.Max = fixedWidth(keyWidth)
+		key := ui.Text{Common: ui.Common{Key: "k"}, Text: pad(r.name+":", keyWidth-len(r.name)-1)}
 		children[i] = ui.Row{Common: ui.Common{Key: strings.ToLower(r.name)}, Gap: ui.GapSM, Children: ui.Nodes(key, r.value)}
 	}
 	return ui.Col{Common: ui.Common{Key: "properties"}, Gap: ui.GapNone, Children: children}

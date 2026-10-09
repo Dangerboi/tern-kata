@@ -124,7 +124,7 @@ func TestPropertiesShowTheParentAsAReferenceAndNoChildLines(t *testing.T) {
 	if got := drawn(nodes[parent+".v"]); got != "#up" {
 		t.Errorf("parent value draws %q", got)
 	}
-	if got := text(nodes[parent+".k"]); got != "Parent:" {
+	if got := strings.TrimRight(text(nodes[parent+".k"]), "\u00a0"); got != "Parent:" {
 		t.Errorf("parent key %q", got)
 	}
 	for _, other := range []string{"kid", "other", "blocks", "children"} {

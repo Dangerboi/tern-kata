@@ -195,7 +195,7 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	props := nodes[view.DetailContentID+".properties"]
 	var keys []string
 	for _, row := range props.C {
-		keys = append(keys, text(nodes[row.ID+".k"]))
+		keys = append(keys, strings.TrimRight(text(nodes[row.ID+".k"]), "\u00a0"))
 	}
 	want := []string{"Author:", "Created:", "Updated:", "Scheduled:", "Deadline:", "Owner:", "Priority:", "Labels:", "Closed:"}
 	if !slices.Equal(keys, want) {
@@ -211,7 +211,7 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	bare := render(t, apply(browsing(), detailOf(model.Issue{UID: "alpha", ShortID: "aaaa", Title: "A", Status: "open", ProjectName: "work", Revision: 2})))
 	keys = nil
 	for _, row := range bare[view.DetailContentID+".properties"].C {
-		keys = append(keys, text(bare[row.ID+".k"]))
+		keys = append(keys, strings.TrimRight(text(bare[row.ID+".k"]), "\u00a0"))
 	}
 	if want := []string{"Created:", "Updated:", "Owner:"}; !slices.Equal(keys, want) {
 		t.Errorf("bare keys %v, want %v", keys, want)
