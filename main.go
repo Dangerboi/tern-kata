@@ -70,8 +70,7 @@ func run() error {
 eventLoop:
 	for {
 		previousSelection := m.SelectedUID
-		previousFocus, previousSection, previousIndex := m.Focus, m.DetailSection, m.DetailIndex
-		previousDetailIssue := m.DetailIssueUID()
+		previous := m
 		var cmds []model.Cmd
 		m, cmds = model.Update(m, msg)
 		if m.Quitting {
@@ -91,8 +90,7 @@ eventLoop:
 				return err
 			}
 		}
-		if !m.Loading && !m.DetailHidden && m.Focus == model.ColumnDetail && m.Shows(model.ColumnDetail) && m.Detail != nil && m.Detail.Issue != nil && !m.DetailLoading &&
-			(previousFocus != m.Focus || previousSection != m.DetailSection || previousIndex != m.DetailIndex || m.DetailIssueUID() != previousDetailIssue) {
+		if model.RevealsDetail(previous, m, msg) {
 			if err := surface.Reveal(view.DetailRevealID(m), "nearest"); err != nil {
 				return err
 			}
