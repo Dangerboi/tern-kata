@@ -14,7 +14,7 @@ import (
 const DetailID = "main.columns.detail"
 
 // DetailScrollID is the one scroll container of the detail column: title,
-// properties, body and sections all live inside it, in DetailContentID.
+// properties, body and Activity all live inside it, in DetailContentID.
 const DetailScrollID = DetailID + ".viewport"
 
 // DetailContentID is the container's only child. Tern's scroll op names a node
@@ -41,7 +41,7 @@ func detail(m model.Model) tern.Element {
 		if m.DetailLoading {
 			title = append(title, loadingMarker)
 		}
-		sections := []tern.Element{ui.Row{Common: ui.Common{Key: "heading"}, Gap: ui.GapSM, Children: ui.Nodes(
+		parts := []tern.Element{ui.Row{Common: ui.Common{Key: "heading"}, Gap: ui.GapSM, Children: ui.Nodes(
 			ui.Text{Common: ui.Common{Key: "title", Actions: &ui.Actions{Click: "focus-detail"}}, Spans: title},
 			ui.Badge{Common: ui.Common{Key: "status", Tone: statusTone(issue.Status)}, Text: issue.Status},
 		)}, ui.Spacer{Common: ui.Common{Key: "gap"}, Size: ui.GapMD}}
@@ -49,12 +49,12 @@ func detail(m model.Model) tern.Element {
 		if body == "" {
 			body = "No body yet."
 		}
-		sections = append(sections,
-			properties(issue), labels(issue.Labels),
+		parts = append(parts,
+			properties(m, issue), labels(issue.Labels),
 			ui.Md{Common: ui.Common{Key: "body"}, Text: body},
 			ui.Spacer{Common: ui.Common{Key: "gap-activity"}, Size: ui.GapMD},
 			ui.Col{Common: ui.Common{Key: "activity"}, Gap: ui.GapSM, Children: append(ui.Nodes(activityTabs(m)), detailRows(m, m.ActivityTab)...)})
-		children = append(children, ui.List{CommonWithoutMax: scrollerCommon("viewport"), Max: scrollMax(m), Children: ui.Nodes(ui.Col{Common: ui.Common{Key: "content"}, Gap: ui.GapSM, Children: sections})})
+		children = append(children, ui.List{CommonWithoutMax: scrollerCommon("viewport"), Max: scrollMax(m), Children: ui.Nodes(ui.Col{Common: ui.Common{Key: "content"}, Gap: ui.GapSM, Children: parts})})
 	}
 	return panel(m, model.ColumnDetail, ui.Common{Key: "detail", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapMD, children)
 }
@@ -63,7 +63,7 @@ func detail(m model.Model) tern.Element {
 // the active one is accent and bracketed, as in kata's TUI.
 func activityTabs(m model.Model) tern.Element {
 	tabs := ui.Nodes(ui.Text{Common: ui.Common{Key: "name"}, Spans: []ui.Span{{T: "Activity", S: "strong"}}})
-	for tab := model.TabComments; tab <= model.TabLinks; tab++ {
+	for tab := model.TabComments; tab < model.TabCount; tab++ {
 		name, style := fmt.Sprintf("%s (%d)", tab, m.DetailRowCount(tab)), ""
 		if tab == m.ActivityTab {
 			name, style = "[ "+name+" ]", "accent strong"
@@ -91,7 +91,7 @@ func detailRows(m model.Model, tab model.ActivityTab) tern.Nodes {
 		case tab == model.TabEvents:
 			heading = historyHeading(row, action)
 		case row.Ref != "":
-			heading = referenceRow(row.ReferenceUID, ui.Text{Common: ui.Common{Key: "heading", Actions: &ui.Actions{Click: action}}, Spans: []ui.Span{{T: strings.TrimSuffix(row.Title, " "+row.Ref), S: "muted"}}}, row.Ref)
+			heading = linkRow(row, &ui.Actions{Click: action})
 		default:
 			heading = ui.Text{Common: ui.Common{Key: "heading", Actions: &ui.Actions{Click: action}}, Text: row.Title}
 		}
@@ -123,13 +123,10 @@ func priorityTone(priority int64) ui.Tone {
 	return ui.ToneMuted
 }
 
-// properties is the compact block: badges, the primary fields, then the
-// de-emphasised author, revision and timestamps.
-func properties(issue *model.Issue) tern.Element {
-	badges := ui.Nodes(ui.Badge{Common: ui.Common{Key: "status", Tone: statusTone(issue.Status)}, Text: issue.Status})
-	if issue.Priority != nil {
-		badges = append(badges, ui.Badge{Common: ui.Common{Key: "priority", Tone: priorityTone(*issue.Priority)}, Text: fmt.Sprintf("P%d", *issue.Priority)})
-	}
+// properties is the compact block: the priority badge, the primary fields, the
+// parent and children as references, then the de-emphasised author, revision
+// and timestamps. The status badge is in the heading.
+func properties(m model.Model, issue *model.Issue) tern.Element {
 	owner := "Unassigned"
 	if issue.Owner != nil && *issue.Owner != "" {
 		owner = *issue.Owner
@@ -155,11 +152,24 @@ func properties(issue *model.Issue) tern.Element {
 		muted("Created", issue.CreatedAt.Format(time.RFC3339)),
 		muted("Updated", issue.UpdatedAt.Format(time.RFC3339)),
 	}
-	return ui.Col{Common: ui.Common{Key: "properties"}, Gap: ui.GapSM, Children: ui.Nodes(
-		ui.Row{Common: ui.Common{Key: "badges"}, Gap: ui.GapSM, Children: badges},
-		ui.KV{Common: ui.Common{Key: "primary"}, Layout: ui.KVGrid, Items: primary},
-		ui.KV{Common: ui.Common{Key: "secondary"}, Layout: ui.KVGrid, Items: secondary},
-	)}
+	var children tern.Nodes
+	if issue.Priority != nil {
+		children = append(children, ui.Row{Common: ui.Common{Key: "badges"}, Gap: ui.GapSM, Children: ui.Nodes(
+			ui.Badge{Common: ui.Common{Key: "priority", Tone: priorityTone(*issue.Priority)}, Text: fmt.Sprintf("P%d", *issue.Priority)},
+		)})
+	}
+	children = append(children, ui.KV{Common: ui.Common{Key: "primary"}, Layout: ui.KVGrid, Items: primary})
+	var relatives tern.Nodes
+	for i := range m.DetailRowCount(model.TabLinks) {
+		if row, _ := m.DetailRow(model.TabLinks, i); row.Relation == "parent" || row.Relation == "child" {
+			relatives = append(relatives, ui.Col{Common: ui.Common{Key: row.Key}, Children: ui.Nodes(linkRow(row, nil))})
+		}
+	}
+	if len(relatives) > 0 {
+		children = append(children, ui.Col{Common: ui.Common{Key: "relatives"}, Gap: ui.GapSM, Children: relatives})
+	}
+	children = append(children, ui.KV{Common: ui.Common{Key: "secondary"}, Layout: ui.KVGrid, Items: secondary})
+	return ui.Col{Common: ui.Common{Key: "properties"}, Gap: ui.GapSM, Children: children}
 }
 
 func labels(names []string) tern.Element {

@@ -12,10 +12,10 @@ import (
 func TestArrowAndPageKeysScrollTheDetailViewport(t *testing.T) {
 	detail := arrowModes(t)["detail"]
 	for chord, want := range map[string]model.Scroll{
-		"down":      {Column: model.ColumnDetail, Down: true, Line: true},
-		"up":        {Column: model.ColumnDetail, Line: true},
-		"page_down": {Column: model.ColumnDetail, Down: true},
-		"page_up":   {Column: model.ColumnDetail},
+		"down":      {Column: model.ColumnDetail, By: model.ScrollLineDown},
+		"up":        {Column: model.ColumnDetail, By: model.ScrollLineUp},
+		"page_down": {Column: model.ColumnDetail, By: model.ScrollPageDown},
+		"page_up":   {Column: model.ColumnDetail, By: model.ScrollPageUp},
 	} {
 		got, cmds := model.Update(detail, model.KeyMsg{Chord: chord})
 		if !reflect.DeepEqual(cmds, []model.Cmd{want}) {

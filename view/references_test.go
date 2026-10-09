@@ -103,3 +103,51 @@ func TestLongCloseMessageAndEvidenceRenderWhole(t *testing.T) {
 		t.Errorf("close detail = %q, want %q", body, want)
 	}
 }
+
+func TestPropertiesShowParentAndChildrenAsReferences(t *testing.T) {
+	links := []g.UILink{
+		{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#up"},
+		{ID: 2, Type: "parent", FromIssueUID: "kid", FromQualifiedID: "work#kid", ToIssueUID: "alpha", ToQualifiedID: "work#aaaa"},
+		{ID: 3, Type: "blocks", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "other", ToQualifiedID: "work#other"},
+	}
+	m := apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &alpha, Links: links}})
+	nodes := render(t, m)
+	relatives := view.DetailContentID + ".properties.relatives"
+	assertReference(t, nodes, relatives+".1.row.jump", "work#up", "up")
+	assertReference(t, nodes, relatives+".2.row.jump", "work#kid", "kid")
+	if got := text(nodes[relatives+".1.row.heading"]); got != "parent" {
+		t.Errorf("parent label %q", got)
+	}
+	if got := text(nodes[relatives+".2.row.heading"]); got != "child" {
+		t.Errorf("child label %q", got)
+	}
+	if ids := nodes.under(relatives + ".3"); len(ids) != 0 {
+		t.Errorf("a blocking link is in properties: %v", ids)
+	}
+}
+
+func TestStatusBadgeIsShownOnceAfterTheTitle(t *testing.T) {
+	nodes := render(t, apply(browsing(), detailOf(alpha)))
+	if _, ok := nodes[view.DetailContentID+".properties.badges.status"]; ok {
+		t.Error("properties repeat the status badge")
+	}
+	if _, ok := nodes[view.DetailContentID+".heading.status"]; !ok {
+		t.Error("no status badge after the title")
+	}
+}
+
+func TestLinksRowShowsThePeersTitleWhenLoaded(t *testing.T) {
+	m, _ := referencing(model.TabLinks)
+	nodes := render(t, m)
+	if got := text(nodes[view.DetailActivityID+".1.row.title"]); got != "Peer" {
+		t.Errorf("title after the reference = %q, want Peer", got)
+	}
+
+	ghost := g.UILink{ID: 2, Type: "related", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "ghost", ToQualifiedID: "work#ghost"}
+	main := model.Issue{UID: "main", ShortID: "main", Title: "Main", Status: "open", ProjectName: "work"}
+	nodes = render(t, apply(m, model.DetailLoaded{UID: "main", Selected: &g.UISelectedAuthority{Issue: &main, Links: []g.UILink{ghost}}}))
+	assertReference(t, nodes, view.DetailActivityID+".2.row.jump", "work#ghost", "ghost")
+	if _, ok := nodes[view.DetailActivityID+".2.row.title"]; ok {
+		t.Error("a peer that is not loaded has a title")
+	}
+}

@@ -57,9 +57,6 @@ ctl key enter
 esc_expect_mode detail
 ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']"
 expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']" '.ok and .count == 1'
-# The reference is the styled span itself (no separate button): its text is the peer's id, and a click opens it.
-esc_blocker_short=$(jq -r '.issue.short_id' "$tmp/esc-blocker.json")
-expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']" ".ok and (.nodes[0].text | endswith(\"#$esc_blocker_short\"))"
 # The reference is the styled span itself, no separate button: its text ends in the peer's short id, and a click opens it.
 esc_blocker_short=$(jq -r '.issue.short_id' "$tmp/esc-blocker.json")
 expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']" ".ok and (.nodes[0].text | endswith(\"#$esc_blocker_short\"))"
@@ -90,7 +87,7 @@ ctl key esc
 esc_expect_mode list
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Esc blocker"))'
 
-# A detail heading clicked gives detail the keys, and esc leaves it.
+# An Activity tab clicked gives detail the keys, and esc leaves it.
 ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab0']"
 esc_expect_mode detail
 ctl key esc

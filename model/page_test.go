@@ -40,7 +40,7 @@ func TestPageKeysMoveTheListSelectionByAPageAndClamp(t *testing.T) {
 func TestPageKeysStillScrollTheCollectionsSidebar(t *testing.T) {
 	m := model.Model{Cols: 160, Focus: model.ColumnCollections}
 	_, cmds := model.Update(m, model.KeyMsg{Chord: "page_down"})
-	if want := []model.Cmd{model.Scroll{Column: model.ColumnCollections, Down: true}}; !reflect.DeepEqual(cmds, want) {
+	if want := []model.Cmd{model.Scroll{Column: model.ColumnCollections, By: model.ScrollPageDown}}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("commands %#v", cmds)
 	}
 }

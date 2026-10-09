@@ -85,8 +85,10 @@ func historyRow(event g.Event) DetailRow {
 	if event.RelatedIssueUID != nil {
 		row.ReferenceUID = *event.RelatedIssueUID
 	}
-	if event.RelatedIssueShortID != nil {
-		row.History.Ref = *event.RelatedIssueShortID
+	if event.RelatedIssueShortID != nil && row.ReferenceUID != "" {
+		if head, ok := strings.CutSuffix(object, *event.RelatedIssueShortID); ok && *event.RelatedIssueShortID != "" {
+			row.Ref, row.History.Object = *event.RelatedIssueShortID, strings.TrimRight(head, " ")
+		}
 	}
 	return row
 }

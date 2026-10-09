@@ -57,7 +57,7 @@ func TestSwitchingCollectionKeepsPreviousIssues(t *testing.T) {
 // whose detail is shown after them ("" for none).
 func TestDetailStaysOnScreenUntilTheSelectedIssueArrives(t *testing.T) {
 	failure := errors.New("kata server not responding")
-	detailTop := model.Scroll{Column: model.ColumnDetail, Start: true}
+	detailTop := model.Scroll{Column: model.ColumnDetail, By: model.ScrollToStart}
 	for _, tt := range []struct {
 		name     string
 		msgs     []model.Msg
@@ -92,20 +92,20 @@ func TestDetailReturnsToFirstRowOnlyForADifferentIssueAndKeepsItsTab(t *testing.
 	m, _ := model.Update(projectOf("a", "b"), model.DetailLoaded{UID: "a", Selected: a})
 	m, _ = model.Update(m, model.DetailItemMsg{Tab: model.TabComments, Key: "two"})
 	if m.ActivityTab != model.TabComments || m.DetailIndex != 1 {
-		t.Fatalf("fixture: section=%v index=%d", m.ActivityTab, m.DetailIndex)
+		t.Fatalf("fixture: tab=%v index=%d", m.ActivityTab, m.DetailIndex)
 	}
 
 	// The same Issue reloads (after saving a Draft) where the reader was.
 	m, _ = model.Update(m, model.DraftSaved{UID: "a"})
 	m, _ = model.Update(m, model.DetailLoaded{UID: "a", Selected: a})
 	if m.DetailIssueUID() != "a" || m.ActivityTab != model.TabComments || m.DetailIndex != 1 {
-		t.Fatalf("reload moved the reader: issue=%q section=%v index=%d", m.DetailIssueUID(), m.ActivityTab, m.DetailIndex)
+		t.Fatalf("reload moved the reader: issue=%q tab=%v index=%d", m.DetailIssueUID(), m.ActivityTab, m.DetailIndex)
 	}
 
 	// Another Issue starts at its first row on the same tab, while the previous detail stays until it arrives.
 	m, _ = model.Update(m, model.SelectMsg{UID: "b"})
 	if m.DetailIssueUID() != "a" || m.ActivityTab != model.TabComments || m.DetailIndex != 0 {
-		t.Fatalf("selecting b: issue=%q section=%v index=%d", m.DetailIssueUID(), m.ActivityTab, m.DetailIndex)
+		t.Fatalf("selecting b: issue=%q tab=%v index=%d", m.DetailIssueUID(), m.ActivityTab, m.DetailIndex)
 	}
 }
 
@@ -115,7 +115,7 @@ func TestPreviousDetailLinksStayRelativeToTheirOwnIssue(t *testing.T) {
 	m, _ = model.Update(m, model.SelectMsg{UID: "b"})
 
 	row, ok := m.DetailRow(model.TabLinks, 0)
-	if !ok || row.Title != "child work#child" || row.ReferenceUID != "child" {
+	if !ok || row.Relation != "child" || row.Ref != "work#child" || row.ReferenceUID != "child" {
 		t.Fatalf("link row while another Issue loads: %+v", row)
 	}
 }
@@ -124,7 +124,7 @@ func TestPreviousDetailLinksStayRelativeToTheirOwnIssue(t *testing.T) {
 // model asks for the top when another Issue's detail replaces the shown one,
 // whatever column has the keys, and never when the same Issue refreshes.
 func TestDetailScrollsToTopOnlyWhenADifferentIssueReplacesIt(t *testing.T) {
-	top := []model.Cmd{model.Scroll{Column: model.ColumnDetail, Start: true}}
+	top := []model.Cmd{model.Scroll{Column: model.ColumnDetail, By: model.ScrollToStart}}
 	m, _ := model.Update(projectOf("a", "b"), model.DetailLoaded{UID: "a", Selected: authority("a")})
 
 	m, cmds := model.Update(m, model.DetailLoaded{UID: "a", Selected: authority("a")})

@@ -15,18 +15,24 @@ func referenceRow(uid string, lead tern.Element, ref string, trail ...tern.Eleme
 	return ui.Row{Common: ui.Common{Key: "row"}, Gap: ui.GapXS, Wrap: true, Children: append(ui.Nodes(lead, jump), trail...)}
 }
 
+// linkRow is a Link row heading: the relation muted, the reference as a link,
+// then the peer's title when it is loaded. click is the relation's click, if any.
+func linkRow(row model.DetailRow, click *ui.Actions) tern.Element {
+	var trail []tern.Element
+	if row.RefTitle != "" {
+		trail = append(trail, ui.Text{Common: ui.Common{Key: "title", Actions: click}, Text: row.RefTitle})
+	}
+	return referenceRow(row.ReferenceUID, ui.Text{Common: ui.Common{Key: "heading", Actions: click}, Spans: []ui.Span{{T: row.Relation, S: "muted"}}}, row.Ref, trail...)
+}
+
 // historyHeading shows an event as its sentence, with the verb toned and the
-// local time muted after it. An event whose sentence ends in the short id of
-// the Issue it references makes that id a link and the actor muted.
+// local time muted after it. An event with a Ref makes it a link and the actor muted.
 func historyHeading(row model.DetailRow, action string) tern.Element {
 	sentence := row.History
 	actor := ui.Span{T: sentence.Actor, S: "strong"}
-	object, linked := strings.CutSuffix(sentence.Object, sentence.Ref)
-	linked = linked && sentence.Ref != "" && row.ReferenceUID != ""
+	object, linked := sentence.Object, row.Ref != ""
 	if linked {
 		actor.S = "muted"
-	} else {
-		object = sentence.Object
 	}
 	spans := []ui.Span{actor, {T: " "}, {T: sentence.Verb, S: string(sentence.Tone)}}
 	if object != "" {
@@ -37,5 +43,5 @@ func historyHeading(row model.DetailRow, action string) tern.Element {
 	if !linked {
 		return ui.Text{Common: ui.Common{Key: "heading", Actions: click}, Spans: append(spans, when)}
 	}
-	return referenceRow(row.ReferenceUID, ui.Text{Common: ui.Common{Key: "heading", Actions: click}, Spans: spans}, sentence.Ref, ui.Text{Common: ui.Common{Key: "when", Actions: click}, Spans: []ui.Span{when}})
+	return referenceRow(row.ReferenceUID, ui.Text{Common: ui.Common{Key: "heading", Actions: click}, Spans: spans}, row.Ref, ui.Text{Common: ui.Common{Key: "when", Actions: click}, Spans: []ui.Span{when}})
 }

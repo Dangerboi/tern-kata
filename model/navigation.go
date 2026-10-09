@@ -2,11 +2,20 @@ package model
 
 import "slices"
 
+// ScrollBy is one scroll move, spelled as Tern's scroll op names it.
+type ScrollBy string
+
+const (
+	ScrollPageUp   ScrollBy = "page-up"
+	ScrollPageDown ScrollBy = "page-down"
+	ScrollLineUp   ScrollBy = "line-up"
+	ScrollLineDown ScrollBy = "line-down"
+	ScrollToStart  ScrollBy = "start"
+)
+
 type Scroll struct {
 	Column Column
-	Down   bool
-	Line   bool // by a line, instead of a page
-	Start  bool // to the top of the column, instead of a page
+	By     ScrollBy
 }
 
 func (Scroll) cmd() {}
@@ -28,16 +37,30 @@ func onScreen(m Model, cmds []Cmd) []Cmd {
 	})
 }
 
+// scrollFor is the scroll an action asks of the focused column: the page keys in
+// the Collections sidebar, and the arrows and page keys in the detail.
+func scrollFor(focus Column, action Action) (ScrollBy, bool) {
+	paged := focus == ColumnCollections || focus == ColumnDetail
+	switch action {
+	case PageUp:
+		return ScrollPageUp, paged
+	case PageDown:
+		return ScrollPageDown, paged
+	case ScrollUp:
+		return ScrollLineUp, focus == ColumnDetail
+	case ScrollDown:
+		return ScrollLineDown, focus == ColumnDetail
+	}
+	return "", false
+}
+
 func updateNavigation(m Model, action Action) (Model, []Cmd) {
 	switch action {
 	case MoveDown, MoveUp, MoveFirst, MoveLast, PageUp, PageDown, DrillIn, DrillOut:
 		m.PendingCreatedUID = ""
 	}
-	if (action == PageUp || action == PageDown) && m.Focus == ColumnCollections {
-		return m, []Cmd{Scroll{Column: m.Focus, Down: action == PageDown}}
-	}
-	if m.Focus == ColumnDetail && (action == ScrollDown || action == ScrollUp || action == PageUp || action == PageDown) {
-		return m, []Cmd{Scroll{Column: ColumnDetail, Down: action == ScrollDown || action == PageDown, Line: action == ScrollDown || action == ScrollUp}}
+	if by, ok := scrollFor(m.Focus, action); ok {
+		return m, []Cmd{Scroll{Column: m.Focus, By: by}}
 	}
 	if action == RetryAction {
 		return updateLive(m, Retry{})

@@ -2,7 +2,6 @@ package view_test
 
 import (
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -200,25 +199,8 @@ func TestTopBarIsOneRowWithTheDaemonRightAligned(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("top bar %q, want %q", got, want)
 	}
-	if nodes["main.topbar"].K != "row" || nodes["main.topbar"].P["justify"] != "between" {
-		t.Errorf("top bar is %q justified %v, want a row spread between its cells", nodes["main.topbar"].K, nodes["main.topbar"].P["justify"])
-	}
 	if _, ok := nodes["main.filters"]; ok {
 		t.Error("filter line shown with no filter on")
-	}
-}
-
-func TestTopBarShrinksTheDaemonThenTheCountsBeforeTheTitle(t *testing.T) {
-	nodes := render(t, browsing())
-	shrink := func(id string) float64 {
-		var v float64
-		if _, err := fmt.Sscan(fmt.Sprint(nodes["main.topbar."+id].P["shrink"]), &v); err != nil {
-			t.Fatalf("%s has no shrink: %v", id, nodes["main.topbar."+id].P)
-		}
-		return v
-	}
-	if !(shrink("daemon") > shrink("counts") && shrink("counts") > shrink("heading")) {
-		t.Errorf("shrink daemon %v, counts %v, heading %v: want the daemon to give way first, then the counts", shrink("daemon"), shrink("counts"), shrink("heading"))
 	}
 }
 

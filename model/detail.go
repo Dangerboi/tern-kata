@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	g "go.kenn.io/kata/pkg/client/generated"
@@ -14,6 +15,8 @@ const (
 	TabComments ActivityTab = iota
 	TabEvents
 	TabLinks
+	// TabCount is the number of tabs.
+	TabCount
 )
 
 type LoadDetail struct{ Workspace, UID string }
@@ -57,21 +60,21 @@ func (s ActivityTab) String() string {
 	return [...]string{"Comments", "Events", "Links"}[s]
 }
 
-// DetailRow is one row of an Activity tab. A history row also carries its
-// sentence in parts.
+// DetailRow is one row of an Activity tab. A Link row has Relation and Ref
+// instead of a Title; a history row also carries its sentence in parts.
 type DetailRow struct {
 	Key, Title, Body, ReferenceUID string
-	// Ref is a Link row's reference as shown, the tail of Title.
-	Ref     string
-	History *HistorySentence
+	// Ref is the referenced Issue's id as shown, and Relation how it relates to the
+	// detail's Issue. RefTitle is that Issue's title when it is loaded.
+	Relation, Ref, RefTitle string
+	History                 *HistorySentence
 }
 
-// HistorySentence is "<Actor> <Verb> <Object>" with a local When and the Verb's tone.
+// HistorySentence is "<Actor> <Verb> <Object>" with a local When and the Verb's
+// tone. Object stops before the row's Ref when the sentence names the referenced Issue.
 type HistorySentence struct {
 	Actor, Verb, Object, When string
-	// Ref is the short id of the Issue the event references; it ends Object when the sentence names it.
-	Ref  string
-	Tone VerbTone
+	Tone                      VerbTone
 }
 
 func (m Model) DetailRowCount(tab ActivityTab) int {
@@ -111,7 +114,11 @@ func (m Model) DetailRow(tab ActivityTab, index int) (DetailRow, bool) {
 				relation = "blocks"
 			}
 		}
-		return DetailRow{Key: fmt.Sprint(link.ID), Title: relation + " " + ref, Ref: ref, ReferenceUID: uid}, true
+		row := DetailRow{Key: fmt.Sprint(link.ID), Relation: relation, Ref: ref, ReferenceUID: uid}
+		if i := slices.IndexFunc(m.Issues, func(issue Issue) bool { return issue.UID == uid }); i >= 0 {
+			row.RefTitle = m.Issues[i].Title
+		}
+		return row, true
 	case TabComments:
 		comment := m.Detail.Comments[index]
 		return DetailRow{Key: comment.UID, Title: comment.Author + " / " + comment.CreatedAt.Format(time.RFC3339), Body: comment.Body}, true
@@ -217,13 +224,13 @@ func updateDetailNavigation(m Model, action Action) (Model, []Cmd) {
 	case NextActivityTab, PreviousActivityTab:
 		if m.Focus == ColumnDetail {
 			if action == NextActivityTab {
-				m.ActivityTab = (m.ActivityTab + 1) % 3
+				m.ActivityTab = (m.ActivityTab + 1) % TabCount
 			} else {
-				m.ActivityTab = (m.ActivityTab + 2) % 3
+				m.ActivityTab = (m.ActivityTab + TabCount - 1) % TabCount
 			}
 			m.DetailIndex = 0
 		}
-	case MoveDown, MoveUp, MoveFirst, MoveLast, PageDown, PageUp:
+	case MoveDown, MoveUp, MoveFirst, MoveLast:
 		if m.Focus == ColumnDetail {
 			count := m.DetailRowCount(m.ActivityTab)
 			if count == 0 {
@@ -238,10 +245,6 @@ func updateDetailNavigation(m Model, action Action) (Model, []Cmd) {
 				m.DetailIndex = 0
 			case MoveLast:
 				m.DetailIndex = count - 1
-			case PageDown:
-				m.DetailIndex = min(m.DetailIndex+pageRows, count-1)
-			case PageUp:
-				m.DetailIndex = max(m.DetailIndex-pageRows, 0)
 			}
 		}
 	}

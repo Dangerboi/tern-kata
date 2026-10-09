@@ -155,7 +155,7 @@ func TestLiveRefreshPreservesDetailPosition(t *testing.T) {
 				m, _ = model.Update(m, model.DetailLoaded{UID: "issue", Selected: &g.UISelectedAuthority{Issue: &model.Issue{UID: "issue"}, Comments: []g.Comment{{UID: "one"}, {UID: "two"}}}})
 			}
 			if m.ActivityTab != model.TabComments || m.DetailIndex != 1 || m.SelectedUID != "issue" {
-				t.Fatalf("refresh reset reading position: section=%v index=%d selected=%q", m.ActivityTab, m.DetailIndex, m.SelectedUID)
+				t.Fatalf("refresh reset reading position: tab=%v index=%d selected=%q", m.ActivityTab, m.DetailIndex, m.SelectedUID)
 			}
 		})
 	}

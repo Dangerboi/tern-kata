@@ -111,7 +111,7 @@ func TestDetailBadgesAndChipsAreToned(t *testing.T) {
 			m := apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &tt.issue}})
 			nodes := render(t, m)
 			props := view.DetailContentID + ".properties"
-			if n := nodes[props+".badges.status"]; n.P["tone"] != tt.status || text(n) != tt.issue.Status {
+			if n := nodes[view.DetailContentID+".heading.status"]; n.P["tone"] != tt.status || text(n) != tt.issue.Status {
 				t.Errorf("status badge: %v", n)
 			}
 			if n := nodes[props+".badges.priority"]; n.P["tone"] != tt.priority || !strings.HasPrefix(text(n), "P") {

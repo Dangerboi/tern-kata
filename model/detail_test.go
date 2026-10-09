@@ -65,7 +65,7 @@ func TestActivityTabsAndReferenceJump(t *testing.T) {
 	for _, tt := range []struct {
 		name     string
 		msgs     []model.Msg
-		section  model.ActivityTab
+		tab      model.ActivityTab
 		selected string
 		focus    model.Column
 		wantCmds []model.Cmd
@@ -90,8 +90,8 @@ func TestActivityTabsAndReferenceJump(t *testing.T) {
 			for _, msg := range tt.msgs {
 				m, cmds = model.Update(m, msg)
 			}
-			if m.Focus != tt.focus || m.SelectedUID != tt.selected || m.ActivityTab != tt.section || !reflect.DeepEqual(cmds, tt.wantCmds) {
-				t.Fatalf("focus=%v selected=%s section=%v commands=%#v", m.Focus, m.SelectedUID, m.ActivityTab, cmds)
+			if m.Focus != tt.focus || m.SelectedUID != tt.selected || m.ActivityTab != tt.tab || !reflect.DeepEqual(cmds, tt.wantCmds) {
+				t.Fatalf("focus=%v selected=%s tab=%v commands=%#v", m.Focus, m.SelectedUID, m.ActivityTab, cmds)
 			}
 		})
 	}
@@ -132,12 +132,12 @@ func TestLiveDetailAuthority(t *testing.T) {
 }
 
 func TestLinkRelationsRelativeToSelectedIssue(t *testing.T) {
-	for _, tt := range []struct{ relation, selected, title, peer string }{
-		{"parent", "child", "parent project#parent", "parent"},
-		{"parent", "parent", "child project#child", "child"},
-		{"blocks", "child", "blocks project#parent", "parent"},
-		{"blocks", "parent", "blocked_by project#child", "child"},
-		{"related", "parent", "related project#child", "child"},
+	for _, tt := range []struct{ relation, selected, shown, ref, peer string }{
+		{"parent", "child", "parent", "project#parent", "parent"},
+		{"parent", "parent", "child", "project#child", "child"},
+		{"blocks", "child", "blocks", "project#parent", "parent"},
+		{"blocks", "parent", "blocked_by", "project#child", "child"},
+		{"related", "parent", "related", "project#child", "child"},
 	} {
 		t.Run(tt.relation+"/"+tt.selected, func(t *testing.T) {
 			m, _ := model.Update(model.Model{SelectedUID: tt.selected, DetailUID: tt.selected}, model.DetailLoaded{
@@ -146,8 +146,8 @@ func TestLinkRelationsRelativeToSelectedIssue(t *testing.T) {
 				}}},
 			})
 			row, ok := m.DetailRow(model.TabLinks, 0)
-			if !ok || row.Title != tt.title || row.ReferenceUID != tt.peer {
-				t.Fatalf("relation: %+v, want %q -> %q", row, tt.title, tt.peer)
+			if !ok || row.Relation != tt.shown || row.Ref != tt.ref || row.ReferenceUID != tt.peer {
+				t.Fatalf("relation: %+v, want %q %q -> %q", row, tt.shown, tt.ref, tt.peer)
 			}
 		})
 	}
