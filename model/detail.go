@@ -132,6 +132,45 @@ func (m Model) DetailRow(tab ActivityTab, index int) (DetailRow, bool) {
 	return DetailRow{}, false
 }
 
+// ChildRow is one row of the Children table. A child that is not loaded has only its UID and Ref.
+type ChildRow struct {
+	UID, Ref, Title, Status string
+	UpdatedAt               time.Time
+	Loaded                  bool
+}
+
+// DetailChildren are the detail Issue's children: the loaded ones in the list's order, then
+// the ones not loaded in the Link order. Titles, statuses and times come from the loaded Issues.
+func (m Model) DetailChildren() []ChildRow {
+	refs := make(map[string]string)
+	var uids []string
+	for i := range m.DetailRowCount(TabLinks) {
+		if link, _ := m.DetailRow(TabLinks, i); link.Relation == "child" {
+			refs[link.ReferenceUID] = link.Ref
+			uids = append(uids, link.ReferenceUID)
+		}
+	}
+	rows := make([]ChildRow, 0, len(uids))
+	for _, issue := range m.Issues {
+		if ref, ok := refs[issue.UID]; ok {
+			rows = append(rows, ChildRow{UID: issue.UID, Ref: ref, Title: issue.Title, Status: issue.Status, UpdatedAt: issue.UpdatedAt, Loaded: true})
+			delete(refs, issue.UID)
+		}
+	}
+	for _, uid := range uids {
+		if ref, ok := refs[uid]; ok {
+			rows = append(rows, ChildRow{UID: uid, Ref: ref})
+			delete(refs, uid)
+		}
+	}
+	return rows
+}
+
+// DetailCursorCount is the rows the detail's j/k cursor walks: the children, then the active tab's rows.
+func (m Model) DetailCursorCount() int {
+	return len(m.DetailChildren()) + m.DetailRowCount(m.ActivityTab)
+}
+
 func jumpIssue(m Model, uid string) Model {
 	if uid == "" || uid == m.SelectedUID {
 		return m
@@ -202,7 +241,9 @@ func updateDetailNavigation(m Model, action Action) (Model, []Cmd) {
 			m.Focus = ColumnDetail
 			m.DetailHidden = false
 		} else if m.Focus == ColumnDetail {
-			if row, ok := m.DetailRow(m.ActivityTab, m.DetailIndex); ok {
+			if children := m.DetailChildren(); m.DetailIndex < len(children) {
+				m = jumpIssue(m, children[m.DetailIndex].UID)
+			} else if row, ok := m.DetailRow(m.ActivityTab, m.DetailIndex-len(children)); ok {
 				m = jumpIssue(m, row.ReferenceUID)
 			}
 		}
@@ -232,11 +273,11 @@ func updateDetailNavigation(m Model, action Action) (Model, []Cmd) {
 			} else {
 				m.ActivityTab = (m.ActivityTab + TabCount - 1) % TabCount
 			}
-			m.DetailIndex = 0
+			m.DetailIndex = len(m.DetailChildren())
 		}
 	case MoveDown, MoveUp, MoveFirst, MoveLast:
 		if m.Focus == ColumnDetail {
-			count := m.DetailRowCount(m.ActivityTab)
+			count := m.DetailCursorCount()
 			if count == 0 {
 				return m, nil
 			}

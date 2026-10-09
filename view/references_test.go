@@ -111,7 +111,7 @@ func TestLongCloseMessageAndEvidenceRenderWhole(t *testing.T) {
 	}
 }
 
-func TestPropertiesShowParentAndChildrenAsReferences(t *testing.T) {
+func TestPropertiesShowTheParentAsAReferenceAndNoChildLines(t *testing.T) {
 	links := []g.UILink{
 		{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#up"},
 		{ID: 2, Type: "parent", FromIssueUID: "kid", FromQualifiedID: "work#kid", ToIssueUID: "alpha", ToQualifiedID: "work#aaaa"},
@@ -121,14 +121,13 @@ func TestPropertiesShowParentAndChildrenAsReferences(t *testing.T) {
 	nodes := render(t, m)
 	relatives := view.DetailContentID + ".properties.relatives"
 	assertReference(t, nodes, relatives+".1.row.jump", "#up", "up")
-	assertReference(t, nodes, relatives+".2.row.jump", "#kid", "kid")
-	for id, want := range map[string]string{relatives + ".1.row": "parent | #up", relatives + ".2.row": "child | #kid"} {
-		if got := drawn(nodes[id]); got != want {
-			t.Errorf("%s draws %q, want %q", id, got, want)
-		}
+	if got := drawn(nodes[relatives+".1.row"]); got != "parent | #up" {
+		t.Errorf("parent line draws %q", got)
 	}
-	if ids := nodes.under(relatives + ".3"); len(ids) != 0 {
-		t.Errorf("a blocking link is in properties: %v", ids)
+	for _, link := range []string{"2", "3"} {
+		if ids := nodes.under(relatives + "." + link); len(ids) != 0 {
+			t.Errorf("link %s is in properties: %v", link, ids)
+		}
 	}
 }
 
