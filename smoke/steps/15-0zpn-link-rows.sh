@@ -19,17 +19,16 @@ ctl click "[data-id\$='.$lr_main']"
 ctl key enter
 ctl key Tab
 ctl key Tab
-lr_row="main.columns.detail.viewport.content.activity.1.row"
-expect_tree "[data-id='$lr_row.heading']" '.ok and (.nodes[0].text == "blocked_by |")'
-expect_tree "[data-id='$lr_row.jump']" ".ok and (.nodes[0].text == \"#$lr_short\")"
-expect_tree "[data-id='$lr_row.title']" '.ok and (.nodes[0].text == "Linkrows peer")'
+expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.row.heading']" '.ok and (.nodes[0].text == "blocked_by |")'
+expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.row.jump']" ".ok and (.nodes[0].text == \"#$lr_short\")"
+expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.row.title']" '.ok and (.nodes[0].text == "Linkrows peer")'
 
-# A click on the reference opens the peer; so does a click on the title, after esc backs out.
-ctl click "[data-id='$lr_row.jump']"
+# Link ids are daemon-wide, so the row is found by suffix. A click on the reference opens the peer; so does a click on the title, after esc backs out.
+ctl click "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.row.jump']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Linkrows peer"))'
 ctl key esc
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Linkrows main"))'
-ctl click "[data-id='$lr_row.title']"
+ctl click "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.row.title']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Linkrows peer"))'
 
 quit_app
