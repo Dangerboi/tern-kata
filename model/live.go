@@ -163,7 +163,7 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 				m.DetailUID = m.SelectedUID
 				m.DetailLoading = false
 				m.DetailErr = nil
-				m.DetailIndex = min(m.DetailIndex, max(m.DetailRowCount(m.ActivityTab)-1, 0))
+				m.DetailIndex = min(m.DetailIndex, max(m.DetailCursorCount()-1, 0))
 			} else if m.DetailUID == m.SelectedUID {
 				m.DetailUID = ""
 			}

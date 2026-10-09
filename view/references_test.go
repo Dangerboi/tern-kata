@@ -7,6 +7,7 @@ import (
 
 	"github.com/Dangerboi/tern-kata/model"
 	"github.com/Dangerboi/tern-kata/view"
+	"github.com/stencil-hq/tern-sdk/go/tern"
 	g "go.kenn.io/kata/pkg/client/generated"
 )
 
@@ -110,7 +111,7 @@ func TestLongCloseMessageAndEvidenceRenderWhole(t *testing.T) {
 	}
 }
 
-func TestPropertiesShowParentAndChildrenAsReferences(t *testing.T) {
+func TestPropertiesShowTheParentAsAReferenceAndNoChildLines(t *testing.T) {
 	links := []g.UILink{
 		{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#up"},
 		{ID: 2, Type: "parent", FromIssueUID: "kid", FromQualifiedID: "work#kid", ToIssueUID: "alpha", ToQualifiedID: "work#aaaa"},
@@ -120,15 +121,13 @@ func TestPropertiesShowParentAndChildrenAsReferences(t *testing.T) {
 	nodes := render(t, m)
 	relatives := view.DetailContentID + ".properties.relatives"
 	assertReference(t, nodes, relatives+".1.row.jump", "#up", "up")
-	assertReference(t, nodes, relatives+".2.row.jump", "#kid", "kid")
-	if got := text(nodes[relatives+".1.row.heading"]); got != "parent | " {
-		t.Errorf("parent label %q", got)
+	if got := drawn(nodes[relatives+".1.row"]); got != "parent | #up" {
+		t.Errorf("parent line draws %q", got)
 	}
-	if got := text(nodes[relatives+".2.row.heading"]); got != "child | " {
-		t.Errorf("child label %q", got)
-	}
-	if ids := nodes.under(relatives + ".3"); len(ids) != 0 {
-		t.Errorf("a blocking link is in properties: %v", ids)
+	for _, link := range []string{"2", "3"} {
+		if ids := nodes.under(relatives + "." + link); len(ids) != 0 {
+			t.Errorf("link %s is in properties: %v", link, ids)
+		}
 	}
 }
 
@@ -161,12 +160,22 @@ func TestLinksRowShowsThePeersTitleWhenLoaded(t *testing.T) {
 	}
 }
 
+// drawn is a row's text after Tern's layout: each child loses its edge spaces and tabs (a no-break space survives),
+// and the children join without a gap.
+func drawn(row tern.WireNode) string {
+	var b strings.Builder
+	for _, child := range row.C {
+		b.WriteString(strings.Trim(text(child), " \t\n"))
+	}
+	return strings.ReplaceAll(b.String(), "\u00a0", " ")
+}
+
 func TestLinkRowReadsRelationReferenceDashTitle(t *testing.T) {
 	m, _ := referencing(model.TabLinks)
 	nodes := render(t, m)
 	row := view.DetailActivityID + ".1.row"
-	if got := text(nodes[row+".heading"]) + text(nodes[row+".jump"]) + text(nodes[row+".dash"]) + text(nodes[row+".title"]); got != "blocks | #peer - Peer" {
-		t.Errorf("same-Project row = %q", got)
+	if got := drawn(nodes[row]); got != "blocks | #peer - Peer" {
+		t.Errorf("same-Project row draws %q", got)
 	}
 	for _, id := range []string{row + ".dash", row + ".title"} {
 		if click := nodes[id].P["actions"].(map[string]any)["click"]; click != "jump=peer" {
@@ -174,10 +183,19 @@ func TestLinkRowReadsRelationReferenceDashTitle(t *testing.T) {
 		}
 	}
 
-	other := g.UILink{ID: 2, Type: "related", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "peer", ToQualifiedID: "elsewhere#peer"}
 	main := model.Issue{UID: "main", ShortID: "main", Title: "Main", Status: "open", ProjectName: "work"}
+	other := g.UILink{ID: 2, Type: "related", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "peer", ToQualifiedID: "elsewhere#peer"}
 	nodes = render(t, apply(m, model.DetailLoaded{UID: "main", Selected: &g.UISelectedAuthority{Issue: &main, Links: []g.UILink{other}}}))
 	assertReference(t, nodes, view.DetailActivityID+".2.row.jump", "elsewhere#peer", "peer")
+	if got := drawn(nodes[view.DetailActivityID+".2.row"]); got != "related | elsewhere#peer - Peer" {
+		t.Errorf("cross-Project row draws %q", got)
+	}
+
+	ghost := g.UILink{ID: 3, Type: "related", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "ghost", ToQualifiedID: "work#ghost"}
+	nodes = render(t, apply(m, model.DetailLoaded{UID: "main", Selected: &g.UISelectedAuthority{Issue: &main, Links: []g.UILink{ghost}}}))
+	if got := drawn(nodes[view.DetailActivityID+".3.row"]); got != "related | #ghost" {
+		t.Errorf("row without a title draws %q", got)
+	}
 }
 
 func TestPropertiesTitleJumpsToTheReferencedIssue(t *testing.T) {
