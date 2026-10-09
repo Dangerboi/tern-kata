@@ -17,17 +17,14 @@ func referenceRow(uid string, lead tern.Element, ref string, trail ...tern.Eleme
 
 // linkRow is a Link row heading: `relation | ref - title`, the relation and
 // separator muted, the reference a link, the title only when the peer is loaded.
-// click is the relation's and title's click; without one the title jumps like the reference.
+// click is the relation's click, if any; the dash and title jump like the reference.
 func linkRow(row model.DetailRow, click *ui.Actions) tern.Element {
 	follow := &ui.Actions{Click: "jump=" + row.ReferenceUID}
 	jump := ui.Text{Common: ui.Common{Key: "jump", Actions: follow}, Spans: []ui.Span{{T: row.Ref, S: "accent link"}}}
 	lead := ui.Text{Common: ui.Common{Key: "heading", Actions: click}, Spans: []ui.Span{{T: row.Relation + " | ", S: "muted"}}}
 	nodes := ui.Nodes(lead, jump)
-	if click == nil {
-		click = follow
-	}
 	if row.RefTitle != "" {
-		nodes = append(nodes, ui.Text{Common: ui.Common{Key: "dash", Actions: click}, Text: " - "}, ui.Text{Common: ui.Common{Key: "title", Actions: click}, Text: row.RefTitle})
+		nodes = append(nodes, ui.Text{Common: ui.Common{Key: "dash", Actions: follow}, Text: " - "}, ui.Text{Common: ui.Common{Key: "title", Actions: follow}, Text: row.RefTitle})
 	}
 	return ui.Row{Common: ui.Common{Key: "row"}, Gap: ui.GapNone, Wrap: true, Children: nodes}
 }

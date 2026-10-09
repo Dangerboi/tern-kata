@@ -160,7 +160,7 @@ func TestLinkRowReadsRelationReferenceDashTitle(t *testing.T) {
 		t.Errorf("same-Project row = %q", got)
 	}
 	for _, id := range []string{row + ".dash", row + ".title"} {
-		if click := nodes[id].P["actions"].(map[string]any)["click"]; click != "detail-item=2:1" {
+		if click := nodes[id].P["actions"].(map[string]any)["click"]; click != "jump=peer" {
 			t.Errorf("%s click = %v", id, click)
 		}
 	}

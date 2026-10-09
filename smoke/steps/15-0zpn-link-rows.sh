@@ -1,5 +1,5 @@
 # A Links row reads `relation | #id - title`: relation and separator muted, the reference and the title
-# reference jumps on a click. Own Project and Issues; it cleans up.
+# reference and the title both jump on a click. Own Project and Issues; it cleans up.
 lr_dir="$tmp/linkrows-workspace"
 mkdir -p "$lr_dir" "$tmp/linkrows-unbound"
 kata --workspace "$lr_dir" init --project linkrows --json >/dev/null
@@ -24,8 +24,12 @@ expect_tree "[data-id='$lr_row.heading']" '.ok and (.nodes[0].text == "blocked_b
 expect_tree "[data-id='$lr_row.jump']" ".ok and (.nodes[0].text == \"#$lr_short\")"
 expect_tree "[data-id='$lr_row.title']" '.ok and (.nodes[0].text == "Linkrows peer")'
 
-# A click on the reference opens the peer.
+# A click on the reference opens the peer; so does a click on the title, after esc backs out.
 ctl click "[data-id='$lr_row.jump']"
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Linkrows peer"))'
+ctl key esc
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Linkrows main"))'
+ctl click "[data-id='$lr_row.title']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Linkrows peer"))'
 
 quit_app
