@@ -48,7 +48,7 @@ ctl key enter
 at_label 0 'startswith("[ Comments (2) ]")'
 at_label 1 'test("^Events \\([0-9]+\\)$")'
 at_label 2 'startswith("Links (1)")'
-expect_tree "$at_rows" '.ok and .count == 2 and ([.nodes[].text] | all(contains("dangerboi")))'
+expect_tree "$at_rows" '.ok and .count == 2 and ([.nodes[].text] | all(test("^dangerboi / [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$")))'
 
 # tab and shift+tab cycle Comments -> Events -> Links -> Comments.
 ctl key Tab

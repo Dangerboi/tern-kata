@@ -6,13 +6,13 @@ ctl --file "$tmp/launch.ctl"
 expect_tree "[data-id$='.$layout_uid']" '.count == 1'
 ctl click "[data-id$='.$layout_uid']"
 ctl key enter
-props="main.columns.detail.viewport.content.properties.badges"
+props="main.columns.detail.viewport.content.properties.priority.v"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.status']" '.ok and .count == 1'
-expect_tree "[data-id='$props.priority']" '.ok and .count == 1 and .nodes[0].text == "P1"'
-expect_tree "[data-id='main.columns.detail.viewport.content.labels.label-layout-label']" '.ok and .count == 1'
+expect_tree "[data-id='$props']" '.ok and .count == 1 and .nodes[0].text == "P1"'
+expect_tree "[data-id='main.columns.detail.viewport.content.properties.labels.v.label-layout-label']" '.ok and .count == 1'
 expect_tree "[data-id='main.columns.detail.viewport.content.body']" '.ok and .count == 1'
 ctl key '!'
 ctl key 0
 ctl key enter
-expect_tree "[data-id='$props.priority']" '.ok and .count == 1 and .nodes[0].text == "P0"'
+expect_tree "[data-id='$props']" '.ok and .count == 1 and .nodes[0].text == "P0"'
 ctl key escape

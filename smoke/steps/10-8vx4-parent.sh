@@ -33,8 +33,8 @@ parent_expect_drawn() {
   expect_tree "[data-id\$='.$parent_uid']" ".ok and .count == 1 and .nodes[0][\"aria-selected\"] == \"true\" and .nodes[0].rect[1] >= 0 and (.nodes[0].rect[1] + .nodes[0].rect[3]) <= $parent_height"
   expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Smoke parent spec") and (contains("loading") | not))'
   expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']" '.ok and .count == 40'
-  expect_tree "[data-id='main.columns.detail.viewport.content.properties.children']" '.ok and .count == 1 and (.nodes[0].text == "Children: 40 open / 40 total")'
-  expect_tree "[data-id^='main.columns.detail.viewport.content.properties.relatives.']" '.ok and .count == 0'
+  expect_tree "[data-id='main.columns.detail.viewport.content.properties.children.v']" '.ok and .count == 1 and (.nodes[0].text == "40 open / 40 total")'
+  expect_tree "[data-id^='main.columns.detail.viewport.content.properties.parent']" '.ok and .count == 0'
   expect_tree "[data-id^='main.columns.detail.viewport.content.children.'][data-id\$='.jump']" '.ok and .count == 40'
 }
 

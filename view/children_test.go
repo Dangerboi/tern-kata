@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Dangerboi/tern-kata/model"
 	"github.com/Dangerboi/tern-kata/view"
@@ -45,10 +46,10 @@ func parenting(tab model.ActivityTab) model.Model {
 
 func TestPropertiesShowTheDaemonsChildCountsAndNoChildLines(t *testing.T) {
 	nodes := render(t, parenting(model.TabLinks))
-	if got := text(nodes[view.DetailContentID+".properties.children"]); got != "Children: 1 open / 3 total" {
+	if got := text(nodes[view.DetailContentID+".properties.children.v"]); got != "1 open / 3 total" {
 		t.Errorf("counts line = %q", got)
 	}
-	if ids := nodes.under(view.DetailContentID + ".properties.relatives"); len(ids) != 0 {
+	if ids := nodes.under(view.DetailContentID + ".properties.parent"); len(ids) != 0 {
 		t.Errorf("properties still list relatives with no parent: %v", ids)
 	}
 }
@@ -80,13 +81,26 @@ func TestChildRowsShowReferenceStatusTitleAndUpdatedInTheListsOrder(t *testing.T
 		t.Fatalf("rows = %v, want %v", rows, want)
 	}
 	for row, want := range map[string][4]string{
-		kidRow:  {"#kid", "open", "Open kid", "38m ago"},
-		doneRow: {"#done", "closed", "Closed kid", "3h ago"},
+		kidRow:  {"#kid\u00a0\u00a0", "open\u00a0\u00a0", "Open kid", "38m ago"},
+		doneRow: {"#done\u00a0", "closed", "Closed kid", "3h ago\u00a0"},
 	} {
 		for i, cell := range []string{"jump", "status", "title", "updated"} {
 			if got := text(nodes[row+"."+cell]); got != want[i] {
 				t.Errorf("%s %s = %q, want %q", row, cell, got, want[i])
 			}
+		}
+	}
+}
+
+func TestChildCellsArePaddedToTheWidestRowAndNeverWrap(t *testing.T) {
+	nodes := render(t, parenting(model.TabComments))
+	for _, cell := range []string{"jump", "status", "updated"} {
+		a, b := text(nodes[kidRow+"."+cell]), text(nodes[doneRow+"."+cell])
+		if utf8.RuneCountInString(a) != utf8.RuneCountInString(b) {
+			t.Errorf("%s widths differ: %q vs %q", cell, a, b)
+		}
+		if nodes[kidRow+"."+cell].P["wrap"] != "none" {
+			t.Errorf("%s wraps: %v", cell, nodes[kidRow+"."+cell].P["wrap"])
 		}
 	}
 }

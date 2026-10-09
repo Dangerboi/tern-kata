@@ -114,10 +114,10 @@ func TestDetailBadgesAndChipsAreToned(t *testing.T) {
 			if n := nodes[view.DetailContentID+".heading.status"]; n.P["tone"] != tt.status || text(n) != tt.issue.Status {
 				t.Errorf("status badge: %v", n)
 			}
-			if n := nodes[props+".badges.priority"]; n.P["tone"] != tt.priority || !strings.HasPrefix(text(n), "P") {
+			if n := nodes[props+".priority.v"]; n.P["tone"] != tt.priority || !strings.HasPrefix(text(n), "P") {
 				t.Errorf("priority badge: %v", n)
 			}
-			labels := view.DetailContentID + ".labels"
+			labels := props + ".labels.v"
 			for _, l := range tt.issue.Labels {
 				if n, ok := nodes[labels+".label-"+l]; !ok || text(n) != l {
 					t.Errorf("label chip %s: %v", l, n)
@@ -129,8 +129,8 @@ func TestDetailBadgesAndChipsAreToned(t *testing.T) {
 
 func TestDetailHeaderIsTheTitleAndStatusWithoutButtonsOrBodyHeading(t *testing.T) {
 	nodes := detailNodes(t, alpha)
-	if got := text(nodes[view.DetailContentID+".heading.title"]); got != "aaaa - Alpha" {
-		t.Errorf("title %q, want %q", got, "aaaa - Alpha")
+	if got := text(nodes[view.DetailContentID+".heading.title"]); got != "#aaaa - Alpha" {
+		t.Errorf("title %q, want %q", got, "#aaaa - Alpha")
 	}
 	if badge := nodes[view.DetailContentID+".heading.status"]; text(badge) != "open" || badge.P["tone"] != "accent" {
 		t.Errorf("status badge after the title: %v", badge)
@@ -166,5 +166,54 @@ func TestDetailIsOneScrollContainerWithOneChild(t *testing.T) {
 		if _, ok := nodes[id]; !ok {
 			t.Errorf("%s is not in the scroll container", id)
 		}
+	}
+}
+
+func TestDetailTitleShowsIDInAccentThenTitleStrong(t *testing.T) {
+	nodes := detailNodes(t, alpha)
+	title := nodes[view.DetailID+".viewport.content.heading.title"]
+	want := [][2]string{{"#" + alpha.ShortID, "accent"}, {" - " + alpha.Title, "strong"}}
+	if got := styled(title); !slices.Equal(got, want) {
+		t.Errorf("title spans = %v, want %v", got, want)
+	}
+}
+
+func TestCommentHeadingShowsTheAuthorAndTheTimeInTheEventsFormat(t *testing.T) {
+	nodes := render(t, detailWithActivity(model.TabComments))
+	want := "dana / " + time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC).In(time.Local).Format("2006-01-02 15:04")
+	if got := text(nodes[view.DetailActivityID+".c1.heading"]); got != want {
+		t.Errorf("comment heading %q, want %q", got, want)
+	}
+}
+
+func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
+	p1, owner, reason, day := int64(1), "dana", "done", "2026-11-01"
+	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
+	issue := model.Issue{UID: "alpha", ShortID: "aaaa", Title: "A", Status: "closed", ProjectName: "work", Author: "ann", Revision: 4,
+		CreatedAt: at, UpdatedAt: at, Priority: &p1, Owner: &owner, ClosedReason: &reason, ScheduledOnDate: &day, DeadlineOnDate: &day, Labels: []string{"bug"}}
+	nodes := render(t, apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &issue}}))
+	props := nodes[view.DetailContentID+".properties"]
+	var keys []string
+	for _, row := range props.C {
+		keys = append(keys, strings.TrimRight(text(nodes[row.ID+".k"]), "\u00a0"))
+	}
+	want := []string{"Author:", "Created:", "Updated:", "Scheduled:", "Deadline:", "Owner:", "Priority:", "Labels:", "Closed:"}
+	if !slices.Equal(keys, want) {
+		t.Errorf("keys %v, want %v", keys, want)
+	}
+	when := at.In(time.Local).Format("2006-01-02 15:04")
+	if got := text(nodes[props.ID+".created.v"]); got != when {
+		t.Errorf("Created %q, want %q", got, when)
+	}
+	if n := nodes[props.ID+".priority.v"]; n.P["tone"] != "warning" || text(n) != "P1" {
+		t.Errorf("priority %v", n)
+	}
+	bare := render(t, apply(browsing(), detailOf(model.Issue{UID: "alpha", ShortID: "aaaa", Title: "A", Status: "open", ProjectName: "work", Revision: 2})))
+	keys = nil
+	for _, row := range bare[view.DetailContentID+".properties"].C {
+		keys = append(keys, strings.TrimRight(text(bare[row.ID+".k"]), "\u00a0"))
+	}
+	if want := []string{"Created:", "Updated:", "Owner:"}; !slices.Equal(keys, want) {
+		t.Errorf("bare keys %v, want %v", keys, want)
 	}
 }
