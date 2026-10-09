@@ -34,10 +34,10 @@ func TestDetailSectionsRenderInOrder(t *testing.T) {
 	if !slices.Equal(headings, want) {
 		t.Fatalf("headings %v, want %v", headings, want)
 	}
-	root := nodes[view.DetailScrollID]
+	root := nodes[view.DetailContentID]
 	var order []string
 	for _, c := range root.C {
-		if id := strings.TrimPrefix(c.ID, view.DetailScrollID+"."); strings.HasPrefix(id, "section") {
+		if id := strings.TrimPrefix(c.ID, view.DetailContentID+"."); strings.HasPrefix(id, "section") {
 			order = append(order, id)
 		}
 	}
@@ -81,10 +81,10 @@ func TestDetailBadgesAndChipsAreToned(t *testing.T) {
 
 func TestDetailHeaderIsTheTitleAndStatusWithoutButtonsOrBodyHeading(t *testing.T) {
 	nodes := detailNodes(t, alpha)
-	if got := text(nodes[view.DetailID+".heading.title"]); got != "aaaa - Alpha" {
+	if got := text(nodes[view.DetailContentID+".heading.title"]); got != "aaaa - Alpha" {
 		t.Errorf("title %q, want %q", got, "aaaa - Alpha")
 	}
-	if badge := nodes[view.DetailID+".heading.status"]; text(badge) != "open" || badge.P["tone"] != "accent" {
+	if badge := nodes[view.DetailContentID+".heading.status"]; text(badge) != "open" || badge.P["tone"] != "accent" {
 		t.Errorf("status badge after the title: %v", badge)
 	}
 	if ids := nodes.under(view.DetailID); slices.ContainsFunc(ids, func(id string) bool {
@@ -99,5 +99,24 @@ func TestDetailHeaderIsTheTitleAndStatusWithoutButtonsOrBodyHeading(t *testing.T
 	}
 	if _, ok := nodes[view.DetailSectionID(model.SectionBody)+".body"]; !ok {
 		t.Error("the body itself is gone")
+	}
+}
+
+// Tern's scroll op reaches a List's scroller only through a node inside it, so the detail is one List
+// whose single child holds everything: nothing of the detail sits outside the scroll container.
+func TestDetailIsOneScrollContainerWithOneChild(t *testing.T) {
+	nodes := detailNodes(t, alpha)
+	if root := nodes[view.DetailScrollID]; root.K != "list" || len(root.C) != 1 || root.C[0].ID != view.DetailContentID {
+		t.Fatalf("the detail scroller is %q with children %v, want one list child %s", root.K, root.C, view.DetailContentID)
+	}
+	for _, id := range nodes.under(view.DetailID) {
+		if id != view.DetailID && id != view.DetailScrollID && !strings.HasPrefix(id, view.DetailScrollID+".") {
+			t.Errorf("%s is outside the scroll container", id)
+		}
+	}
+	for _, id := range []string{view.DetailContentID + ".heading.title", view.DetailSectionID(model.SectionProperties), view.DetailSectionID(model.SectionBody), view.DetailSectionID(model.SectionHistory)} {
+		if _, ok := nodes[id]; !ok {
+			t.Errorf("%s is not in the scroll container", id)
+		}
 	}
 }

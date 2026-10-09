@@ -154,15 +154,15 @@ func TestSwitchingIssueReplacesDetailInPlace(t *testing.T) {
 	m = apply(m, model.SelectMsg{UID: beta.UID})
 	loading := render(t, m)
 	sameIDs(t, view.DetailID, idle, loading)
-	title := text(loading[view.DetailID+".heading.title"])
-	if !strings.Contains(title, alpha.Title) || title == text(idle[view.DetailID+".heading.title"]) {
+	title := text(loading[view.DetailContentID+".heading.title"])
+	if !strings.Contains(title, alpha.Title) || title == text(idle[view.DetailContentID+".heading.title"]) {
 		t.Errorf("detail heading keeps the previous Issue with a loading marker: %q", title)
 	}
 
 	m = apply(m, detailOf(beta))
 	loaded := render(t, m)
 	sameIDs(t, view.DetailID, idle, loaded)
-	if title := text(loaded[view.DetailID+".heading.title"]); !strings.Contains(title, beta.Title) || strings.Contains(title, alpha.Title) {
+	if title := text(loaded[view.DetailContentID+".heading.title"]); !strings.Contains(title, beta.Title) || strings.Contains(title, alpha.Title) {
 		t.Errorf("detail did not switch to the new Issue: %q", title)
 	}
 }

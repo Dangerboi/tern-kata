@@ -38,7 +38,7 @@ pinned_ops() { tail -n "+$(($mark + 1))" "$tmp/pinned-frames.jsonl" | jq -c "sel
 [[ -n $(pinned_ops '.[0] == "reveal"') ]] || { printf 'No reveal sent while browsing\n' >&2; return 1; }
 [[ -z $(pinned_ops '.[0] == "reveal" and (.[1] | test("^main\\.columns\\.list\\.issues\\.0")) == false') ]] || { printf 'Reveal on a node other than an Issue row\n' >&2; return 1; }
 [[ -z $(pinned_ops '.[0] == "reveal" and .[2] != "nearest"') ]] || { printf 'Reveal other than nearest\n' >&2; return 1; }
-[[ -z $(pinned_ops '.[0] == "scroll" and .[1] != "main.columns.detail"') ]] || { printf 'Scroll op on a node other than the detail\n' >&2; return 1; }
+[[ -z $(pinned_ops '.[0] == "scroll" and .[1] != "main.columns.detail.viewport.content"') ]] || { printf 'Scroll op on a node other than the detail\n' >&2; return 1; }
 cmp "$tmp/pinned-rects-before.json" "$tmp/pinned-rects-after.json" || { printf 'Top bar or header moved while browsing\n' >&2; return 1; }
 
 quit_app

@@ -23,7 +23,7 @@ ctl type '"Smoke native comment"'
 expect_tree "[data-id='layer.editor.body']" '[.nodes[] | .. | objects | .text? // empty] | any(contains("Smoke native comment"))'
 ctl key Ctrl+o
 expect_tree "[data-id='layer.editor']" '.ok and .count == 0'
-ctl click "[data-id='main.columns.detail.sections.section4.heading']"
+ctl click "[data-id='main.columns.detail.viewport.content.section4.heading']"
 ctl plugins expect '"Smoke native comment"'
 
 # A real subprocess requires ownership of the tty, not just a suspended surface.

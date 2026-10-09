@@ -66,7 +66,7 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 	shown := m.DetailIssueUID()
 	m, cmds := update(m, msg)
 	if now := m.DetailIssueUID(); shown != "" && now != "" && now != shown {
-		// The detail column keeps its scroll offset across Issues; a different Issue starts at the top.
+		// The detail scroller keeps its offset across Issues; a different Issue starts at the top.
 		cmds = append(cmds, Scroll{Column: ColumnDetail, Start: true})
 	}
 	if m.Focus != ColumnDetail {

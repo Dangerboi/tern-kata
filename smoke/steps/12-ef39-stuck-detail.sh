@@ -4,12 +4,12 @@
 # wheel past it, so one reveal the app sent for a click (title, heading, row) froze the detail until the
 # column was removed and drawn again. After every click the wheel must still move the detail, and the
 # recorded TSP ops must hold no reveal inside the detail. Own Project and Issues; it cleans up.
-stuck_y() { ctl tree "[data-id='main.columns.detail.sections.section0']" | jq -r '.nodes[0].rect[1] // empty | floor'; }
+stuck_y() { ctl tree "[data-id='main.columns.detail.viewport.content.section0']" | jq -r '.nodes[0].rect[1] // empty | floor'; }
 stuck_wheel() { for _ in $(seq "$2"); do ctl wheel 0 "$1" >/dev/null; done; }
 # The wheel moves the detail down from its top and back up, whatever was clicked before.
 stuck_scrolls() {
   local top y
-  ctl hover "[data-id='main.columns.detail.sections']" >/dev/null
+  ctl hover "[data-id='main.columns.detail.viewport']" >/dev/null
   stuck_wheel -300 8
   sleep 0.5
   top=$(stuck_y)
@@ -25,9 +25,9 @@ stuck_scrolls() {
 }
 # Wheels down until sel is inside the detail's list, so a click on it lands on it.
 stuck_bring_into_view() {
-  ctl hover "[data-id='main.columns.detail.sections']" >/dev/null
+  ctl hover "[data-id='main.columns.detail.viewport']" >/dev/null
   for ((attempt = 0; attempt < 20; attempt++)); do
-    ctl tree "[data-id='main.columns.detail.sections'],$1" | jq -e '.nodes as $n | ($n | length) == 2 and ($n[1].rect[1] > $n[0].rect[1]) and ($n[1].rect[1] + $n[1].rect[3] < $n[0].rect[1] + $n[0].rect[3])' >/dev/null && return 0
+    ctl tree "[data-id='main.columns.detail.viewport'],$1" | jq -e '.nodes as $n | ($n | length) == 2 and ($n[1].rect[1] > $n[0].rect[1]) and ($n[1].rect[1] + $n[1].rect[3] < $n[0].rect[1] + $n[0].rect[3])' >/dev/null && return 0
     ctl wheel 0 300 >/dev/null
     sleep 0.2
   done
@@ -57,22 +57,22 @@ expect_tree "[data-id$='.$stuck_long']" '.ok and .count == 1'
 
 # Rows, the detail title and a section heading.
 ctl click "[data-id$='.$stuck_long']"
-expect_tree "[data-id='main.columns.detail.heading.title']" '.ok and (.nodes[0].text | contains("Stuck long"))'
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Stuck long"))'
 stuck_scrolls "a click on an Issue row"
-ctl click "[data-id='main.columns.detail.heading.title']"
+ctl click "[data-id='main.columns.detail.viewport.content.heading.title']"
 stuck_scrolls "a click on the detail title"
-ctl click "[data-id='main.columns.detail.sections.section1.heading']"
+ctl click "[data-id='main.columns.detail.viewport.content.section1.heading']"
 stuck_scrolls "a click on a section heading"
 
 # A comment row and a link jump, then esc unwinds the jump.
-stuck_bring_into_view "[data-id^='main.columns.detail.sections.section4.0'][data-id\$='.heading']"
-ctl click "[data-id^='main.columns.detail.sections.section4.0'][data-id\$='.heading']"
+stuck_bring_into_view "[data-id^='main.columns.detail.viewport.content.section4.0'][data-id\$='.heading']"
+ctl click "[data-id^='main.columns.detail.viewport.content.section4.0'][data-id\$='.heading']"
 stuck_scrolls "a click on a comment row"
-stuck_bring_into_view "[data-id^='main.columns.detail.sections.section3.'][data-id\$='.jump']"
-ctl click "[data-id^='main.columns.detail.sections.section3.'][data-id\$='.jump']"
-expect_tree "[data-id='main.columns.detail.heading.title']" '.ok and (.nodes[0].text | contains("Stuck blocker"))'
+stuck_bring_into_view "[data-id^='main.columns.detail.viewport.content.section3.'][data-id\$='.jump']"
+ctl click "[data-id^='main.columns.detail.viewport.content.section3.'][data-id\$='.jump']"
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Stuck blocker"))'
 ctl key esc
-expect_tree "[data-id='main.columns.detail.heading.title']" '.ok and (.nodes[0].text | contains("Stuck long"))'
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Stuck long"))'
 stuck_scrolls "a link jump and esc"
 ctl key esc
 ctl key esc
@@ -83,11 +83,11 @@ expect_tree "[data-id='main.columns.collections.all-open']" '.ok and .count == 1
 ctl click "[data-id='main.columns.collections.project.$stuck_project']"
 expect_tree "[data-id$='.$stuck_long']" '.ok and .count == 1'
 ctl click "[data-id$='.$stuck_long']"
-expect_tree "[data-id='main.columns.detail.heading.title']" '.ok and (.nodes[0].text | contains("Stuck long"))'
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Stuck long"))'
 stuck_scrolls "a Collection switch"
 
 # A resize between tiers: detail only, then side by side again.
-ctl click "[data-id='main.columns.detail.heading.title']"
+ctl click "[data-id='main.columns.detail.viewport.content.heading.title']"
 ctl resize 1000 "$stuck_height"
 expect_tree "[data-id='main.columns.list']" '.ok and .count == 0'
 ctl resize "$stuck_width" "$stuck_height"
@@ -98,9 +98,9 @@ stuck_scrolls "a resize between tiers"
 ctl window-focus off
 ctl window-focus on
 ctl click "[data-id$='.$stuck_blocker']"
-expect_tree "[data-id='main.columns.detail.heading.title']" '.ok and (.nodes[0].text | contains("Stuck blocker"))'
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Stuck blocker"))'
 ctl click "[data-id$='.$stuck_long']"
-expect_tree "[data-id='main.columns.detail.heading.title']" '.ok and (.nodes[0].text | contains("Stuck long"))'
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Stuck long"))'
 stuck_scrolls "the window regaining focus"
 
 # No click made the app reveal anything inside the detail.

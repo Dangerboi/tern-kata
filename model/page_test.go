@@ -37,38 +37,6 @@ func TestPageKeysMoveTheListSelectionByAPageAndClamp(t *testing.T) {
 	}
 }
 
-func TestPageKeysMoveTheDetailCursorByAPage(t *testing.T) {
-	links := make([]g.UILink, 25)
-	for i := range links {
-		links[i] = g.UILink{ID: int64(i + 1), Type: "child", FromIssueUID: "a", ToIssueUID: fmt.Sprintf("c%d", i)}
-	}
-	m := pagedList(1)
-	m, _ = model.Update(m, model.DetailLoaded{UID: m.SelectedUID, Selected: &g.UISelectedAuthority{Issue: &model.Issue{UID: m.SelectedUID}, Links: links}})
-	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
-	for m.DetailSection != model.SectionLinks {
-		m, _ = model.Update(m, model.KeyMsg{Chord: "tab"})
-	}
-	count := m.DetailRowCount(model.SectionLinks)
-	if count < 20 {
-		t.Fatalf("fixture: %d Link rows", count)
-	}
-	m, _ = model.Update(m, model.KeyMsg{Chord: "page_down"})
-	if m.DetailSection != model.SectionLinks || m.DetailIndex != 10 {
-		t.Fatalf("page down: section %v index %d, want Links 10", m.DetailSection, m.DetailIndex)
-	}
-	m, _ = model.Update(m, model.KeyMsg{Chord: "page_up"})
-	m, _ = model.Update(m, model.KeyMsg{Chord: "page_up"})
-	if m.DetailSection != model.SectionLinks || m.DetailIndex != 0 {
-		t.Fatalf("page up clamps at the section's first row: section %v index %d", m.DetailSection, m.DetailIndex)
-	}
-	for range 5 {
-		m, _ = model.Update(m, model.KeyMsg{Chord: "page_down"})
-	}
-	if m.DetailSection != model.SectionLinks && m.DetailIndex < 0 {
-		t.Fatalf("section %v index %d", m.DetailSection, m.DetailIndex)
-	}
-}
-
 func TestPageKeysStillScrollTheCollectionsSidebar(t *testing.T) {
 	m := model.Model{Cols: 160, Focus: model.ColumnCollections}
 	_, cmds := model.Update(m, model.KeyMsg{Chord: "page_down"})

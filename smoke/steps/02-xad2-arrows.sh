@@ -44,7 +44,7 @@ expect_tree .sf-list '.count == 0'
 ctl --file "$tmp/launch.ctl"
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count >= 4'
 
-# Detail: arrows move between references, Left backs out like Escape.
+# Detail: j/k move between references (the arrows scroll the detail), Left backs out like Escape.
 jump() {
   ctl key Tab
   ctl key Tab
@@ -71,10 +71,10 @@ else
 fi
 expect_detail "$ref_a" "$ref_b"
 back_to_parent
-jump Down
+jump j
 expect_detail "$ref_b" "$ref_a"
 back_to_parent
-jump Up
+jump k
 expect_detail "$ref_a" "$ref_b"
 back_to_parent
 jump End

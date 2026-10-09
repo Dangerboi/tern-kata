@@ -5,6 +5,7 @@ import "slices"
 type Scroll struct {
 	Column Column
 	Down   bool
+	Line   bool // by a line, instead of a page
 	Start  bool // to the top of the column, instead of a page
 }
 
@@ -34,6 +35,9 @@ func updateNavigation(m Model, action Action) (Model, []Cmd) {
 	}
 	if (action == PageUp || action == PageDown) && m.Focus == ColumnCollections {
 		return m, []Cmd{Scroll{Column: m.Focus, Down: action == PageDown}}
+	}
+	if m.Focus == ColumnDetail && (action == ScrollDown || action == ScrollUp || action == PageUp || action == PageDown) {
+		return m, []Cmd{Scroll{Column: ColumnDetail, Down: action == ScrollDown || action == PageDown, Line: action == ScrollDown || action == ScrollUp}}
 	}
 	if action == RetryAction {
 		return updateLive(m, Retry{})
@@ -78,8 +82,8 @@ func updateNavigation(m Model, action Action) (Model, []Cmd) {
 	return m, nil
 }
 
-// pageRows is how far Page Up/Page Down move the list selection or the detail
-// cursor; the 'nearest' reveal then keeps it in view. Tern's scroll op does not
-// drive a list's own scroller and the Pane's rows are unknown here.
+// pageRows is how far Page Up/Page Down move the Issue list selection; the
+// 'nearest' reveal then keeps it in view. Tern's scroll op does not drive that
+// list's own scroller and the Pane's rows are unknown here.
 // ponytail: a fixed step, not a measured page; if ResizeMsg ever carries rows, use rows minus the chrome.
 const pageRows = 10
