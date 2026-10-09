@@ -119,14 +119,17 @@ func TestPropertiesShowTheParentAsAReferenceAndNoChildLines(t *testing.T) {
 	}
 	m := apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &alpha, Links: links}})
 	nodes := render(t, m)
-	relatives := view.DetailContentID + ".properties.relatives"
-	assertReference(t, nodes, relatives+".1.row.jump", "#up", "up")
-	if got := drawn(nodes[relatives+".1.row"]); got != "parent | #up" {
-		t.Errorf("parent line draws %q", got)
+	parent := view.DetailContentID + ".properties.parent"
+	assertReference(t, nodes, parent+".v.jump", "#up", "up")
+	if got := drawn(nodes[parent+".v"]); got != "#up" {
+		t.Errorf("parent value draws %q", got)
 	}
-	for _, link := range []string{"2", "3"} {
-		if ids := nodes.under(relatives + "." + link); len(ids) != 0 {
-			t.Errorf("link %s is in properties: %v", link, ids)
+	if got := text(nodes[parent+".k"]); got != "Parent:" {
+		t.Errorf("parent key %q", got)
+	}
+	for _, other := range []string{"kid", "other", "blocks", "children"} {
+		if _, ok := nodes[view.DetailContentID+".properties."+other]; ok {
+			t.Errorf("properties has a %s row", other)
 		}
 	}
 }
@@ -203,7 +206,7 @@ func TestPropertiesTitleJumpsToTheReferencedIssue(t *testing.T) {
 	up := model.Issue{UID: "up", ShortID: "up", Title: "Up", ProjectName: "work"}
 	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, up}}}, model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &alpha, Links: links}})
 	nodes := render(t, m)
-	title := nodes[view.DetailContentID+".properties.relatives.1.row.title"]
+	title := nodes[view.DetailContentID+".properties.parent.v.title"]
 	if text(title) != "Up" || title.P["actions"].(map[string]any)["click"] != "jump=up" {
 		t.Errorf("title = %v", title)
 	}

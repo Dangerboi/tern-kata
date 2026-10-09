@@ -1,4 +1,4 @@
-# A parent's detail shows `Children: N open / M total` in its properties and its children as a table below the
+# A parent's detail shows `Children: N open / M total` row in its properties and its children as a table below the
 # body, above Activity: reference, status, title and updated, the closed child muted. A child opens by click, and
 # by j/enter from the keys in the detail; esc comes back. Own Project and Issues; it cleans up.
 ch_dir="$tmp/children-workspace"
@@ -28,8 +28,8 @@ ch_content="main.columns.detail.viewport.content"
 expect_tree "[data-id='$ch_content.heading.title']" '.ok and (.nodes[0].text | contains("Children parent") and (contains("loading") | not))'
 
 # The properties block counts the children in one line and lists none of them.
-expect_tree "[data-id='$ch_content.properties.children']" '.ok and .count == 1 and (.nodes[0].text == "Children: 2 open / 3 total")'
-expect_tree "[data-id^='$ch_content.properties.relatives.']" '.ok and .count == 0'
+expect_tree "[data-id='$ch_content.properties.children.v']" '.ok and .count == 1 and (.nodes[0].text == "2 open / 3 total")'
+expect_tree "[data-id^='$ch_content.properties.parent']" '.ok and .count == 0'
 
 # The table sits below the body and above Activity, one row per child with its four cells.
 expect_tree "[data-id='$ch_content.children.heading']" '.ok and .count == 1 and (.nodes[0].text == "Children")'

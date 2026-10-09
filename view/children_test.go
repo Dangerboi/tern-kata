@@ -45,10 +45,10 @@ func parenting(tab model.ActivityTab) model.Model {
 
 func TestPropertiesShowTheDaemonsChildCountsAndNoChildLines(t *testing.T) {
 	nodes := render(t, parenting(model.TabLinks))
-	if got := text(nodes[view.DetailContentID+".properties.children"]); got != "Children: 1 open / 3 total" {
+	if got := text(nodes[view.DetailContentID+".properties.children.v"]); got != "1 open / 3 total" {
 		t.Errorf("counts line = %q", got)
 	}
-	if ids := nodes.under(view.DetailContentID + ".properties.relatives"); len(ids) != 0 {
+	if ids := nodes.under(view.DetailContentID + ".properties.parent"); len(ids) != 0 {
 		t.Errorf("properties still list relatives with no parent: %v", ids)
 	}
 }

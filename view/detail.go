@@ -49,7 +49,7 @@ func detail(m model.Model, now time.Time) tern.Element {
 		if body == "" {
 			body = "No body yet."
 		}
-		parts = append(parts, properties(m, issue), labels(issue.Labels), ui.Md{Common: ui.Common{Key: "body"}, Text: body})
+		parts = append(parts, properties(m, issue), ui.Md{Common: ui.Common{Key: "body"}, Text: body})
 		kids := m.DetailChildren()
 		if len(kids) > 0 {
 			parts = append(parts, ui.Spacer{Common: ui.Common{Key: "gap-children"}, Size: ui.GapMD}, childrenTable(m, kids, now))
@@ -126,65 +126,68 @@ func priorityTone(priority int64) ui.Tone {
 	return ui.ToneMuted
 }
 
-// properties is the compact block: the priority badge, the primary fields, the
-// parent as a reference and the daemon's child counts, then the de-emphasised author, revision
-// and timestamps. The status badge is in the heading.
+// properties is one Name: value grid: every row's key sits in a column as wide as the longest key, so the
+// values line up. A row with nothing to show is left out. The status badge is in the heading.
 func properties(m model.Model, issue *model.Issue) tern.Element {
+	type row struct {
+		name  string
+		value tern.Element
+	}
+	text := func(s string) tern.Element { return ui.Text{Common: ui.Common{Key: "v"}, Text: s} }
+	var rows []row
+	add := func(name string, value tern.Element) { rows = append(rows, row{name, value}) }
+	if issue.Author != "" {
+		add("Author", text(issue.Author))
+	}
+	add("Created", text(model.DetailTime(issue.CreatedAt)))
+	add("Updated", text(model.DetailTime(issue.UpdatedAt)))
+	if issue.ScheduledOnDate != nil {
+		add("Scheduled", text(*issue.ScheduledOnDate))
+	}
+	if issue.DeadlineOnDate != nil {
+		add("Deadline", text(*issue.DeadlineOnDate))
+	}
 	owner := "Unassigned"
 	if issue.Owner != nil && *issue.Owner != "" {
 		owner = *issue.Owner
 	}
-	primary := []ui.Pair{
-		{K: ui.T("Owner"), V: ui.T(owner)},
-		{K: ui.T("Project"), V: ui.T(issue.ProjectName)},
-	}
-	for _, f := range []struct {
-		name string
-		v    *string
-	}{{"Scheduled", issue.ScheduledOnDate}, {"Deadline", issue.DeadlineOnDate}, {"Closed reason", issue.ClosedReason}} {
-		if f.v != nil {
-			primary = append(primary, ui.Pair{K: ui.T(f.name), V: ui.T(*f.v)})
-		}
-	}
-	muted := func(k, v string) ui.Pair {
-		return ui.Pair{K: ui.Spans(ui.Span{T: k, S: "muted"}), V: ui.Spans(ui.Span{T: v, S: "muted"})}
-	}
-	secondary := []ui.Pair{
-		muted("Author", issue.Author),
-		muted("Revision", fmt.Sprint(issue.Revision)),
-		muted("Created", issue.CreatedAt.Format(time.RFC3339)),
-		muted("Updated", issue.UpdatedAt.Format(time.RFC3339)),
-	}
-	var children tern.Nodes
-	if issue.Priority != nil {
-		children = append(children, ui.Row{Common: ui.Common{Key: "badges"}, Gap: ui.GapSM, Children: ui.Nodes(
-			ui.Badge{Common: ui.Common{Key: "priority", Tone: priorityTone(*issue.Priority)}, Text: fmt.Sprintf("P%d", *issue.Priority)},
-		)})
-	}
-	children = append(children, ui.KV{Common: ui.Common{Key: "primary"}, Layout: ui.KVGrid, Items: primary})
-	var relatives tern.Nodes
+	add("Owner", text(owner))
 	for i := range m.DetailRowCount(model.TabLinks) {
-		if row, _ := m.DetailRow(model.TabLinks, i); row.Relation == "parent" {
-			relatives = append(relatives, ui.Col{Common: ui.Common{Key: row.Key}, Children: ui.Nodes(linkRow(row, nil))})
+		if link, _ := m.DetailRow(model.TabLinks, i); link.Relation == "parent" {
+			follow := &ui.Actions{Click: "jump=" + link.ReferenceUID}
+			nodes := ui.Nodes(jumpLink(link.ReferenceUID, link.Ref))
+			if link.RefTitle != "" {
+				nodes = append(nodes, ui.Text{Common: ui.Common{Key: "dash", Actions: follow}, Text: "\u00a0-\u00a0"}, ui.Text{Common: ui.Common{Key: "title", Actions: follow}, Text: link.RefTitle})
+			}
+			add("Parent", ui.Row{Common: ui.Common{Key: "v"}, Gap: ui.GapNone, Wrap: true, Children: nodes})
+			break
 		}
 	}
-	if len(relatives) > 0 {
-		children = append(children, ui.Col{Common: ui.Common{Key: "relatives"}, Gap: ui.GapSM, Children: relatives})
+	if issue.Priority != nil {
+		add("Priority", ui.Badge{Common: ui.Common{Key: "v", Tone: priorityTone(*issue.Priority)}, Text: fmt.Sprintf("P%d", *issue.Priority)})
+	}
+	if len(issue.Labels) > 0 {
+		chips := make(tern.Nodes, len(issue.Labels))
+		for i, name := range issue.Labels {
+			chips[i] = ui.Badge{Common: ui.Common{Key: "label-" + name, Tone: ui.ToneNeutral}, Text: name}
+		}
+		add("Labels", ui.Row{Common: ui.Common{Key: "v"}, Gap: ui.GapSM, Wrap: true, Children: chips})
 	}
 	if counts := m.ChildCounts[issue.UID]; counts.Total > 0 {
-		children = append(children, ui.Text{Common: ui.Common{Key: "children"}, Text: fmt.Sprintf("Children: %d open / %d total", counts.Open, counts.Total)})
+		add("Children", text(fmt.Sprintf("%d open / %d total", counts.Open, counts.Total)))
 	}
-	children = append(children, ui.KV{Common: ui.Common{Key: "secondary"}, Layout: ui.KVGrid, Items: secondary})
-	return ui.Col{Common: ui.Common{Key: "properties"}, Gap: ui.GapSM, Children: children}
-}
-
-func labels(names []string) tern.Element {
-	if len(names) == 0 {
-		return ui.Text{Common: ui.Common{Key: "labels"}, Text: "No labels."}
+	if issue.ClosedReason != nil && *issue.ClosedReason != "" {
+		add("Closed", text(*issue.ClosedReason))
 	}
-	chips := make(tern.Nodes, len(names))
-	for i, name := range names {
-		chips[i] = ui.Badge{Common: ui.Common{Key: "label-" + name, Tone: ui.ToneNeutral}, Text: name}
+	keyWidth := 0
+	for _, r := range rows {
+		keyWidth = max(keyWidth, len(r.name)+1)
 	}
-	return ui.Row{Common: ui.Common{Key: "labels"}, Gap: ui.GapSM, Wrap: true, Children: chips}
+	children := make(tern.Nodes, len(rows))
+	for i, r := range rows {
+		key := ui.Text{Common: ui.Common{Key: "k"}, Text: r.name + ":"}
+		key.Min, key.Max = fixedWidth(keyWidth)
+		children[i] = ui.Row{Common: ui.Common{Key: strings.ToLower(r.name)}, Gap: ui.GapSM, Children: ui.Nodes(key, r.value)}
+	}
+	return ui.Col{Common: ui.Common{Key: "properties"}, Gap: ui.GapNone, Children: children}
 }
