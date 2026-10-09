@@ -182,3 +182,17 @@ func TestJKMoveTheRowCursorInsideTheActiveTab(t *testing.T) {
 		}
 	}
 }
+
+func TestLinkRefIsShortInTheShownIssuesProject(t *testing.T) {
+	link := func(id int64, peer string) g.UILink {
+		return g.UILink{ID: id, Type: "related", FromIssueUID: "a", FromQualifiedID: "work#a", ToIssueUID: peer, ToQualifiedID: peer + "#x"}
+	}
+	m, _ := model.Update(model.Model{SelectedUID: "a", DetailUID: "a"}, model.DetailLoaded{UID: "a", Selected: &g.UISelectedAuthority{
+		Issue: &model.Issue{UID: "a", ProjectName: "work"}, Links: []g.UILink{link(1, "work"), link(2, "other")},
+	}})
+	for i, want := range []string{"#x", "other#x"} {
+		if row, _ := m.DetailRow(model.TabLinks, i); row.Ref != want {
+			t.Errorf("row %d ref = %q, want %q", i, row.Ref, want)
+		}
+	}
+}

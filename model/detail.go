@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	g "go.kenn.io/kata/pkg/client/generated"
@@ -64,7 +65,7 @@ func (s ActivityTab) String() string {
 // instead of a Title; a history row also carries its sentence in parts.
 type DetailRow struct {
 	Key, Title, Body, ReferenceUID string
-	// Ref is the referenced Issue's id as shown, and Relation how it relates to the
+	// Ref is the referenced Issue's id as shown (#<short_id> in the detail Issue's Project), and Relation how it relates to the
 	// detail's Issue. RefTitle is that Issue's title when it is loaded.
 	Relation, Ref, RefTitle string
 	History                 *HistorySentence
@@ -113,6 +114,9 @@ func (m Model) DetailRow(tab ActivityTab, index int) (DetailRow, bool) {
 			case "blocked_by":
 				relation = "blocks"
 			}
+		}
+		if project, short, ok := strings.Cut(ref, "#"); ok && project == m.Detail.Issue.ProjectName {
+			ref = "#" + short
 		}
 		row := DetailRow{Key: fmt.Sprint(link.ID), Relation: relation, Ref: ref, ReferenceUID: uid}
 		if i := slices.IndexFunc(m.Issues, func(issue Issue) bool { return issue.UID == uid }); i >= 0 {
