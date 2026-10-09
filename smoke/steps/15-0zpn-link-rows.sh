@@ -1,5 +1,5 @@
-# A Links row reads `relation | #id - title`: relation and separator muted, the reference and the title
-# reference and the title both jump on a click. Own Project and Issues; it cleans up.
+# A Links row reads `relation | #id - title`: relation and separator muted; the reference and the title
+# both jump on a click. Own Project and Issues; it cleans up.
 lr_dir="$tmp/linkrows-workspace"
 mkdir -p "$lr_dir" "$tmp/linkrows-unbound"
 kata --workspace "$lr_dir" init --project linkrows --json >/dev/null
@@ -22,6 +22,9 @@ ctl key Tab
 expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.row.heading']" '.ok and (.nodes[0].text == "blocked_by |")'
 expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.row.jump']" ".ok and (.nodes[0].text == \"#$lr_short\")"
 expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.row.title']" '.ok and (.nodes[0].text == "Linkrows peer")'
+# The composed row reads `relation | #id - title`: Tern trims each piece, so the texts are joined by a space,
+# and the relation's span carries the muted class.
+expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.row'] *" ".ok and ([.nodes[] | select(.class | startswith(\"sf sf-text\")) | .text | gsub(\"^ +| +\$\"; \"\")] | join(\" \")) == \"blocked_by | #$lr_short - Linkrows peer\" and ([.nodes[] | select(.text == \"blocked_by |\" and .class == \"sf-t-muted\")] | length == 1)"
 
 # Link ids are daemon-wide, so the row is found by suffix. A click on the reference opens the peer; so does a click on the title, after esc backs out.
 ctl click "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.row.jump']"

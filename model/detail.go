@@ -115,7 +115,7 @@ func (m Model) DetailRow(tab ActivityTab, index int) (DetailRow, bool) {
 				relation = "blocks"
 			}
 		}
-		if project, short, ok := strings.Cut(ref, "#"); ok && project == m.Detail.Issue.ProjectName {
+		if project, short, ok := strings.Cut(ref, "#"); ok && m.Detail.Issue != nil && project == m.Detail.Issue.ProjectName {
 			ref = "#" + short
 		}
 		row := DetailRow{Key: fmt.Sprint(link.ID), Relation: relation, Ref: ref, ReferenceUID: uid}

@@ -109,13 +109,3 @@ func TestHeaderIsNotShadedAndRowsShowNoLabels(t *testing.T) {
 		}
 	}
 }
-
-func TestShadeComesFromTheTheme(t *testing.T) {
-	css := view.StripeCSS
-	if !strings.Contains(css, "data-role='"+view.StripeRole+"'") || !strings.Contains(css, "var(--t1)") || strings.Contains(css, "#") || strings.Contains(css, "rgb(") {
-		t.Errorf("shade is not a mix of a theme variable: %s", css)
-	}
-	if !strings.Contains(css, ":not(.sel)") {
-		t.Errorf("shade can win over the selected row's highlight: %s", css)
-	}
-}

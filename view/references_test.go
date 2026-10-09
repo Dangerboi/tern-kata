@@ -65,8 +65,14 @@ func TestLinksReferenceIsStyledAsALinkAndRelationIsMuted(t *testing.T) {
 	m, _ := referencing(model.TabLinks)
 	nodes := render(t, m)
 	assertReference(t, nodes, view.DetailActivityID+".1.row.jump", "#peer", "peer")
-	if style := spanStyles(t, nodes[view.DetailActivityID+".1.row.heading"].P)["blocks | "]; style != "muted" {
-		t.Errorf("relation style = %q", style)
+	styles := spanStyles(t, nodes[view.DetailActivityID+".1.row.heading"].P)
+	if len(styles) != 1 {
+		t.Fatalf("relation spans = %v, want one", styles)
+	}
+	for _, style := range styles {
+		if style != "muted" {
+			t.Errorf("relation style = %q", style)
+		}
 	}
 	for id, n := range nodes {
 		if strings.Contains(text(n), "Open referenced Issue") {
@@ -149,6 +155,9 @@ func TestLinksRowShowsThePeersTitleWhenLoaded(t *testing.T) {
 	assertReference(t, nodes, view.DetailActivityID+".2.row.jump", "#ghost", "ghost")
 	if _, ok := nodes[view.DetailActivityID+".2.row.title"]; ok {
 		t.Error("a peer that is not loaded has a title")
+	}
+	if _, ok := nodes[view.DetailActivityID+".2.row.dash"]; ok {
+		t.Error("a peer that is not loaded leaves a dangling dash")
 	}
 }
 

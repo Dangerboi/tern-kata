@@ -39,6 +39,7 @@ expect_tree "[data-id^='main.columns.list.issues.']" '.ok and ([.nodes[].text | 
 expect_tree "[data-id='main.columns.list.issues.$stripe_parent']" '.ok and .count == 1'
 
 # Moving the selection onto a shaded position keeps the highlight, not the shade: the rows stay alternating.
+ctl key g
 ctl key j
 stripe_expect "$stripe_rows"
 ctl key k

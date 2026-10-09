@@ -3,17 +3,6 @@
 # ends where it began) and a nested child, and esc backs out as after enter. A single click keeps its meaning.
 # Tern sends a double click as two single clicks then the row's dblclick action, checked from the
 # TERN_TSP_RECORD trace. Own Project and Issues; it cleans up.
-dbl_mode() {
-  ctl tree "[data-id='dock.hints']" | jq -r '.nodes[0].text | if contains("open Collection") then "collections" elif contains("j/k row") then "detail" elif contains("next Issue") then "list" else "other" end'
-}
-dbl_expect_mode() {
-  for ((attempt = 0; attempt < 100; attempt++)); do
-    [[ $(dbl_mode) != "$1" ]] || return 0
-    sleep 0.1
-  done
-  printf 'Expected keys in %s, found %s\n' "$1" "$(dbl_mode)" >&2
-  return 1
-}
 dbl_title() { expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" ".ok and (.nodes[0].text | contains(\"$1\"))"; }
 dbl_selected() { expect_tree "[data-id\$='.$1']" '.ok and .nodes[0]["aria-selected"] == "true"'; }
 # The input events since the line count in $1, as Tern delivered them.
@@ -54,60 +43,60 @@ expect_tree "[data-id\$='.$dbl_parent']" '.ok and .count == 1'
 expect_tree "[data-id\$='.$dbl_child']" '.ok and .count == 0'
 expect_tree "[data-id='main.columns.detail']" '.ok and .count == 1'
 (( $(ctl state | jq -r '.panes[0].cols') >= 140 ))
-dbl_expect_mode list
+hint_expect_mode list
 
 # A single click keeps its meaning: it selects the leaf and the keys stay in the list.
 ctl click "[data-id\$='.$dbl_leaf']"
 dbl_selected "$dbl_leaf"
 dbl_title "Dbl leaf"
-dbl_expect_mode list
+hint_expect_mode list
 
 # Side by side, a double click on the collapsed parent opens it and leaves it collapsed. Tern's two single
 # clicks fold and unfold it first, so the children are never left shown.
 dbl_double_click "$dbl_parent" "toggle-expansion toggle-expansion open-row"
-dbl_expect_mode detail
+hint_expect_mode detail
 dbl_selected "$dbl_parent"
 dbl_title "Dbl parent"
 expect_tree "[data-id\$='.$dbl_child']" '.ok and .count == 0'
 ctl key esc
-dbl_expect_mode list
+hint_expect_mode list
 dbl_selected "$dbl_parent"
 
 # A leaf opens the same way: its two single clicks select, then the keys move to the detail.
 dbl_double_click "$dbl_leaf" "select select open-row"
-dbl_expect_mode detail
+hint_expect_mode detail
 dbl_selected "$dbl_leaf"
 dbl_title "Dbl leaf"
 ctl key esc
-dbl_expect_mode list
+hint_expect_mode list
 dbl_selected "$dbl_leaf"
 
 # A single click on the parent still folds it, and a double click on the expanded parent leaves it expanded.
 ctl click "[data-id\$='.$dbl_parent']"
 expect_tree "[data-id\$='.$dbl_child']" '.ok and .count == 1'
-dbl_expect_mode list
+hint_expect_mode list
 dbl_double_click "$dbl_child" "select select open-row"
-dbl_expect_mode detail
+hint_expect_mode detail
 dbl_selected "$dbl_child"
 dbl_title "Dbl child"
 ctl key esc
-dbl_expect_mode list
+hint_expect_mode list
 dbl_double_click "$dbl_parent" "toggle-expansion toggle-expansion open-row"
-dbl_expect_mode detail
+hint_expect_mode detail
 dbl_title "Dbl parent"
 expect_tree "[data-id\$='.$dbl_child']" '.ok and .count == 1'
 ctl key esc
-dbl_expect_mode list
+hint_expect_mode list
 
 # Double click from the detail: the keys were in the detail on another Issue and move to the double clicked one.
 ctl key enter
-dbl_expect_mode detail
+hint_expect_mode detail
 dbl_double_click "$dbl_leaf" "select select open-row"
-dbl_expect_mode detail
+hint_expect_mode detail
 dbl_selected "$dbl_leaf"
 dbl_title "Dbl leaf"
 ctl key esc
-dbl_expect_mode list
+hint_expect_mode list
 
 # In the single-column tier the double click selects the row and the detail replaces the list.
 ctl resize 1000 "$dbl_height"
@@ -118,7 +107,7 @@ dbl_double_click "$dbl_parent" "toggle-expansion toggle-expansion open-row"
 expect_tree "[data-id='main.columns.list']" '.ok and .count == 0'
 expect_tree "[data-id='main.columns.detail']" '.ok and .count == 1'
 dbl_title "Dbl parent"
-dbl_expect_mode detail
+hint_expect_mode detail
 ctl key esc
 expect_tree "[data-id='main.columns.list']" '.ok and .count == 1'
 expect_tree "[data-id='main.columns.detail']" '.ok and .count == 0'
