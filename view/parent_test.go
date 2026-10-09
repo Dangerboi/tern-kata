@@ -56,12 +56,12 @@ func TestParentIssueWithManyChildrenRendersItsWholeTree(t *testing.T) {
 			events := render(t, apply(m, model.ActivityTabMsg{Tab: model.TabEvents}))
 			for i := range manyChildren {
 				uid := fmt.Sprintf("child%02d", i)
-				jump, ok := links[fmt.Sprintf("%s.%d.jump", view.DetailActivityID, i+1)]
+				jump, ok := links[fmt.Sprintf("%s.%d.row.jump", view.DetailActivityID, i+1)]
 				if !ok {
 					t.Fatalf("no Link row for %s: %v", uid, links.under(view.DetailActivityID))
 				}
 				if click := jump.P["actions"].(map[string]any)["click"]; click != "jump="+uid {
-					t.Errorf("%s's jump button does %v", uid, click)
+					t.Errorf("%s's reference does %v", uid, click)
 				}
 				if _, ok := events[view.DetailActivityID+".event-"+uid]; !ok {
 					t.Errorf("no history row for %s", uid)
