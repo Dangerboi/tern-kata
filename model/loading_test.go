@@ -87,25 +87,25 @@ func TestDetailStaysOnScreenUntilTheSelectedIssueArrives(t *testing.T) {
 	}
 }
 
-func TestDetailReturnsToFirstSectionOnlyForADifferentIssue(t *testing.T) {
+func TestDetailReturnsToFirstRowOnlyForADifferentIssueAndKeepsItsTab(t *testing.T) {
 	a := &g.UISelectedAuthority{Issue: &model.Issue{UID: "a"}, Comments: []g.Comment{{UID: "one"}, {UID: "two"}}}
 	m, _ := model.Update(projectOf("a", "b"), model.DetailLoaded{UID: "a", Selected: a})
-	m, _ = model.Update(m, model.DetailItemMsg{Section: model.SectionComments, Key: "two"})
-	if m.DetailSection != model.SectionComments || m.DetailIndex != 1 {
-		t.Fatalf("fixture: section=%v index=%d", m.DetailSection, m.DetailIndex)
+	m, _ = model.Update(m, model.DetailItemMsg{Tab: model.TabComments, Key: "two"})
+	if m.ActivityTab != model.TabComments || m.DetailIndex != 1 {
+		t.Fatalf("fixture: section=%v index=%d", m.ActivityTab, m.DetailIndex)
 	}
 
 	// The same Issue reloads (after saving a Draft) where the reader was.
 	m, _ = model.Update(m, model.DraftSaved{UID: "a"})
 	m, _ = model.Update(m, model.DetailLoaded{UID: "a", Selected: a})
-	if m.DetailIssueUID() != "a" || m.DetailSection != model.SectionComments || m.DetailIndex != 1 {
-		t.Fatalf("reload moved the reader: issue=%q section=%v index=%d", m.DetailIssueUID(), m.DetailSection, m.DetailIndex)
+	if m.DetailIssueUID() != "a" || m.ActivityTab != model.TabComments || m.DetailIndex != 1 {
+		t.Fatalf("reload moved the reader: issue=%q section=%v index=%d", m.DetailIssueUID(), m.ActivityTab, m.DetailIndex)
 	}
 
-	// Another Issue starts at the top, while the previous detail stays until it arrives.
+	// Another Issue starts at its first row on the same tab, while the previous detail stays until it arrives.
 	m, _ = model.Update(m, model.SelectMsg{UID: "b"})
-	if m.DetailIssueUID() != "a" || m.DetailSection != model.SectionProperties || m.DetailIndex != 0 {
-		t.Fatalf("selecting b: issue=%q section=%v index=%d", m.DetailIssueUID(), m.DetailSection, m.DetailIndex)
+	if m.DetailIssueUID() != "a" || m.ActivityTab != model.TabComments || m.DetailIndex != 0 {
+		t.Fatalf("selecting b: issue=%q section=%v index=%d", m.DetailIssueUID(), m.ActivityTab, m.DetailIndex)
 	}
 }
 
@@ -114,7 +114,7 @@ func TestPreviousDetailLinksStayRelativeToTheirOwnIssue(t *testing.T) {
 	m, _ := model.Update(projectOf("a", "b"), model.DetailLoaded{UID: "a", Selected: &g.UISelectedAuthority{Issue: &model.Issue{UID: "a"}, Links: []g.UILink{link}}})
 	m, _ = model.Update(m, model.SelectMsg{UID: "b"})
 
-	row, ok := m.DetailRow(model.SectionLinks, 0)
+	row, ok := m.DetailRow(model.TabLinks, 0)
 	if !ok || row.Title != "child work#child" || row.ReferenceUID != "child" {
 		t.Fatalf("link row while another Issue loads: %+v", row)
 	}

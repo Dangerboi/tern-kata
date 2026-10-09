@@ -21,8 +21,8 @@ func TestArrowAndPageKeysScrollTheDetailViewport(t *testing.T) {
 		if !reflect.DeepEqual(cmds, []model.Cmd{want}) {
 			t.Errorf("%s: commands %#v, want %#v", chord, cmds, want)
 		}
-		if got.DetailSection != detail.DetailSection || got.DetailIndex != detail.DetailIndex {
-			t.Errorf("%s moved the row cursor to %v/%d", chord, got.DetailSection, got.DetailIndex)
+		if got.ActivityTab != detail.ActivityTab || got.DetailIndex != detail.DetailIndex {
+			t.Errorf("%s moved the row cursor to %v/%d", chord, got.ActivityTab, got.DetailIndex)
 		}
 	}
 }

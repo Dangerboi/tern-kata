@@ -47,7 +47,7 @@ type Model struct {
 	DetailUID           string
 	DetailLoading       bool
 	DetailErr           error
-	DetailSection       DetailSection
+	ActivityTab       ActivityTab
 	DetailIndex         int
 	DetailBack          []string
 	Flat                bool
@@ -173,18 +173,18 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 				m.DetailHidden = false
 			}
 		}
-	case DetailSectionMsg:
-		if msg.Section <= SectionHistory {
+	case ActivityTabMsg:
+		if msg.Tab <= TabLinks {
 			m.Focus = ColumnDetail
-			m.DetailSection = msg.Section
+			m.ActivityTab = msg.Tab
 			m.DetailIndex = 0
 		}
 	case DetailItemMsg:
-		if msg.Section <= SectionHistory {
+		if msg.Tab <= TabLinks {
 			m.Focus = ColumnDetail
-			m.DetailSection = msg.Section
-			for i := range m.DetailRowCount(msg.Section) {
-				row, _ := m.DetailRow(msg.Section, i)
+			m.ActivityTab = msg.Tab
+			for i := range m.DetailRowCount(msg.Tab) {
+				row, _ := m.DetailRow(msg.Tab, i)
 				if row.Key == msg.Key {
 					m.DetailIndex = i
 					break
@@ -223,7 +223,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			m.DetailErr = nil
 			m.DetailHidden = false
 			m.DetailBack = nil
-			m.DetailSection, m.DetailIndex = SectionProperties, 0
+			m.DetailIndex = 0
 			m.Focus = ColumnDetail
 		}
 	case IssueOpenFailed:

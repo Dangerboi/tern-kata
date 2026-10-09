@@ -21,11 +21,17 @@ expect_tree "[data-id\$='.$parent_uid']" '.ok and .count == 1'
 expect_tree "[data-id\$='.${parent_children[-1]}']" '.ok and .count == 0'
 
 parent_height=$(ctl stats | jq -r '.viewport[1]')
+# The Links tab holds the children; the tab sticks across Issues, so pick it once.
+expect_tree "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']" '.ok and .count == 1'
+ctl key enter
+ctl key tab
+ctl key tab
+ctl key esc
 # The parent's row is the selected one, inside the Pane, and its detail is drawn.
 parent_expect_drawn() {
   expect_tree "[data-id\$='.$parent_uid']" ".ok and .count == 1 and .nodes[0][\"aria-selected\"] == \"true\" and .nodes[0].rect[1] >= 0 and (.nodes[0].rect[1] + .nodes[0].rect[3]) <= $parent_height"
   expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Smoke parent spec") and (contains("loading") | not))'
-  expect_tree "[data-id^='main.columns.detail.viewport.content.section3.'][data-id\$='.jump']" '.ok and .count == 40'
+  expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']" '.ok and .count == 40'
 }
 
 # j/k onto the collapsed parent: from row 1 down to it, or up from row 2 when it is the first.

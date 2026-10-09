@@ -15,8 +15,8 @@ const (
 	DrillIn               Action = "drill-in"
 	DrillOut              Action = "drill-out"
 	ToggleDetail          Action = "toggle-detail"
-	NextDetailSection     Action = "next-detail-section"
-	PreviousDetailSection Action = "previous-detail-section"
+	NextActivityTab     Action = "next-activity-tab"
+	PreviousActivityTab Action = "previous-activity-tab"
 	ToggleHelp            Action = "help"
 	CloseHelp             Action = "close-help"
 	ToggleExpansion       Action = "toggle-expansion"
@@ -177,19 +177,19 @@ var Keymap = []Binding{
 	{Chord: "enter", Key: "enter", Action: DrillIn, Help: "open", Mode: ModeList, ShowInFooter: true},
 	{Chord: "shift+l", Key: "L", Action: ToggleDetail, Help: "toggle detail", Mode: ModeList, ShowInFooter: true},
 	{Chord: "shift+l", Key: "L", Action: ToggleDetail, Help: "toggle detail", Mode: ModeDetail, ShowInFooter: true},
-	{Chord: "j", Key: "j", Action: MoveDown, Help: "next reference", Mode: ModeDetail, ShowInFooter: true},
-	{Chord: "k", Key: "k", Action: MoveUp, Help: "previous reference", Mode: ModeDetail, ShowInFooter: true},
+	{Chord: "j", Key: "j/k", Action: MoveDown, Help: "row", Mode: ModeDetail, ShowInFooter: true},
+	{Chord: "k", Key: "k", Action: MoveUp, Help: "previous row", Mode: ModeDetail},
 	{Chord: "down", Key: "↓", Action: ScrollDown, Help: "scroll down", Mode: ModeDetail, ShowInFooter: true},
 	{Chord: "up", Key: "↑", Action: ScrollUp, Help: "scroll up", Mode: ModeDetail, ShowInFooter: true},
-	{Chord: "g", Key: "g", Action: MoveFirst, Help: "first reference", Mode: ModeDetail},
-	{Chord: "home", Key: "home", Action: MoveFirst, Help: "first reference", Mode: ModeDetail},
-	{Chord: "shift+g", Key: "G", Action: MoveLast, Help: "last reference", Mode: ModeDetail},
-	{Chord: "end", Key: "end", Action: MoveLast, Help: "last reference", Mode: ModeDetail},
-	{Chord: "enter", Key: "enter", Action: DrillIn, Help: "open reference", Mode: ModeDetail, ShowInFooter: true},
+	{Chord: "g", Key: "g", Action: MoveFirst, Help: "first row", Mode: ModeDetail},
+	{Chord: "home", Key: "home", Action: MoveFirst, Help: "first row", Mode: ModeDetail},
+	{Chord: "shift+g", Key: "G", Action: MoveLast, Help: "last row", Mode: ModeDetail},
+	{Chord: "end", Key: "end", Action: MoveLast, Help: "last row", Mode: ModeDetail},
+	{Chord: "enter", Key: "↵", Action: DrillIn, Help: "open", Mode: ModeDetail, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: DrillOut, Help: "back", Mode: ModeDetail, ShowInFooter: true},
 	{Chord: "left", Key: "←", Action: DrillOut, Help: "back", Mode: ModeDetail},
-	{Chord: "tab", Key: "tab", Action: NextDetailSection, Help: "next section", Mode: ModeDetail, ShowInFooter: true},
-	{Chord: "shift+tab", Key: "shift+tab", Action: PreviousDetailSection, Help: "previous section", Mode: ModeDetail},
+	{Chord: "tab", Key: "↹", Action: NextActivityTab, Help: "tab", Mode: ModeDetail, ShowInFooter: true},
+	{Chord: "shift+tab", Key: "shift+tab", Action: PreviousActivityTab, Help: "previous tab", Mode: ModeDetail},
 	{Chord: "ctrl+c", Key: "ctrl+c", Action: QuitAction, Help: "quit"},
 	{Chord: "ctrl+r", Key: "ctrl+r", Action: RetryAction, Help: "retry daemon", Mode: ModeError, ShowInFooter: true},
 	{Chord: "?", Key: "?", Action: ToggleHelp, Help: "help", ShowInFooter: true},

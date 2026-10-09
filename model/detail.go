@@ -7,15 +7,13 @@ import (
 	g "go.kenn.io/kata/pkg/client/generated"
 )
 
-type DetailSection uint8
+type ActivityTab uint8
 
+// The Activity tabs under the fixed header; the active one is Model.ActivityTab.
 const (
-	SectionProperties DetailSection = iota
-	SectionLabels
-	SectionBody
-	SectionLinks
-	SectionComments
-	SectionHistory
+	TabComments ActivityTab = iota
+	TabEvents
+	TabLinks
 )
 
 type LoadDetail struct{ Workspace, UID string }
@@ -44,22 +42,22 @@ type FocusColumnMsg struct{ Column Column }
 
 func (FocusColumnMsg) msg() {}
 
-type DetailSectionMsg struct{ Section DetailSection }
+type ActivityTabMsg struct{ Tab ActivityTab }
 
-func (DetailSectionMsg) msg() {}
+func (ActivityTabMsg) msg() {}
 
 type DetailItemMsg struct {
-	Section DetailSection
+	Tab ActivityTab
 	Key     string
 }
 
 func (DetailItemMsg) msg() {}
 
-func (s DetailSection) String() string {
-	return [...]string{"Properties", "Labels", "Body", "Links", "Comments", "Change history"}[s]
+func (s ActivityTab) String() string {
+	return [...]string{"Comments", "Events", "Links"}[s]
 }
 
-// DetailRow is one row of a detail section. A history row also carries its
+// DetailRow is one row of an Activity tab. A history row also carries its
 // sentence in parts.
 type DetailRow struct {
 	Key, Title, Body, ReferenceUID string
@@ -72,27 +70,27 @@ type HistorySentence struct {
 	Tone                      VerbTone
 }
 
-func (m Model) DetailRowCount(section DetailSection) int {
+func (m Model) DetailRowCount(tab ActivityTab) int {
 	if m.Detail == nil {
 		return 0
 	}
-	switch section {
-	case SectionLinks:
+	switch tab {
+	case TabLinks:
 		return len(m.Detail.Links)
-	case SectionComments:
+	case TabComments:
 		return len(m.Detail.Comments)
-	case SectionHistory:
+	case TabEvents:
 		return len(m.Detail.History)
 	}
 	return 0
 }
 
-func (m Model) DetailRow(section DetailSection, index int) (DetailRow, bool) {
-	if index < 0 || index >= m.DetailRowCount(section) {
+func (m Model) DetailRow(tab ActivityTab, index int) (DetailRow, bool) {
+	if index < 0 || index >= m.DetailRowCount(tab) {
 		return DetailRow{}, false
 	}
-	switch section {
-	case SectionLinks:
+	switch tab {
+	case TabLinks:
 		link := m.Detail.Links[index]
 		uid, ref := link.ToIssueUID, link.ToQualifiedID
 		relation := link.Type
@@ -110,10 +108,10 @@ func (m Model) DetailRow(section DetailSection, index int) (DetailRow, bool) {
 			}
 		}
 		return DetailRow{Key: fmt.Sprint(link.ID), Title: relation + " " + ref, ReferenceUID: uid}, true
-	case SectionComments:
+	case TabComments:
 		comment := m.Detail.Comments[index]
 		return DetailRow{Key: comment.UID, Title: comment.Author + " / " + comment.CreatedAt.Format(time.RFC3339), Body: comment.Body}, true
-	case SectionHistory:
+	case TabEvents:
 		return historyRow(m.Detail.History[index]), true
 	}
 	return DetailRow{}, false
@@ -165,12 +163,11 @@ func EnsureDetail(m Model) (Model, []Cmd) {
 	}
 	m.DetailUID = m.SelectedUID
 	if m.Detail == nil || m.Detail.Issue == nil || m.Detail.Issue.UID != m.SelectedUID {
-		// A different Issue starts at its first section. The previous detail
+		// A different Issue starts at its first row; the Activity tab stays. The previous detail
 		// stays on screen until the new one arrives, unless nothing is selected.
 		if m.SelectedUID == "" || m.DetailIssueUID() == "" {
 			m.Detail = nil
 		}
-		m.DetailSection = SectionProperties
 		m.DetailIndex = 0
 	}
 	m.DetailErr = nil
@@ -190,7 +187,7 @@ func updateDetailNavigation(m Model, action Action) (Model, []Cmd) {
 			m.Focus = ColumnDetail
 			m.DetailHidden = false
 		} else if m.Focus == ColumnDetail {
-			if row, ok := m.DetailRow(m.DetailSection, m.DetailIndex); ok {
+			if row, ok := m.DetailRow(m.ActivityTab, m.DetailIndex); ok {
 				m = jumpIssue(m, row.ReferenceUID)
 			}
 		}
@@ -213,18 +210,18 @@ func updateDetailNavigation(m Model, action Action) (Model, []Cmd) {
 		if m.DetailHidden && m.Focus == ColumnDetail {
 			m.Focus = ColumnList
 		}
-	case NextDetailSection, PreviousDetailSection:
+	case NextActivityTab, PreviousActivityTab:
 		if m.Focus == ColumnDetail {
-			if action == NextDetailSection {
-				m.DetailSection = (m.DetailSection + 1) % 6
+			if action == NextActivityTab {
+				m.ActivityTab = (m.ActivityTab + 1) % 3
 			} else {
-				m.DetailSection = (m.DetailSection + 5) % 6
+				m.ActivityTab = (m.ActivityTab + 2) % 3
 			}
 			m.DetailIndex = 0
 		}
 	case MoveDown, MoveUp, MoveFirst, MoveLast, PageDown, PageUp:
 		if m.Focus == ColumnDetail {
-			count := m.DetailRowCount(m.DetailSection)
+			count := m.DetailRowCount(m.ActivityTab)
 			if count == 0 {
 				return m, nil
 			}
