@@ -1,16 +1,4 @@
 # esc backs out after any click exactly as it does after the same keys. Fixtures are this step's own.
-esc_mode() {
-  ctl tree "[data-id='dock.hints']" | jq -r '.nodes[0].text | if contains("open Collection") then "collections" elif contains("j/k row") then "detail" elif contains("next Issue") then "list" else "other" end'
-}
-esc_expect_mode() {
-  for ((attempt = 0; attempt < 100; attempt++)); do
-    [[ $(esc_mode) != "$1" ]] || return 0
-    sleep 0.1
-  done
-  printf 'Expected keys in %s, found %s\n' "$1" "$(esc_mode)" >&2
-  return 1
-}
-
 kata --workspace "$tmp/workspace" create "Esc parent" --json >"$tmp/esc-parent.json"
 esc_parent=$(jq -r '.issue.uid' "$tmp/esc-parent.json")
 kata --workspace "$tmp/workspace" create "Esc child" --parent "$esc_parent" --json >"$tmp/esc-child.json"
@@ -34,27 +22,27 @@ expect_tree "[data-id$='.$esc_child']" '.ok and .count == 0'
 
 # A parent row clicked while the keys are in the sidebar takes them to the list, selects, expands.
 ctl key esc
-esc_expect_mode collections
+hint_expect_mode collections
 ctl click "[data-id$='.$esc_parent']"
-esc_expect_mode list
+hint_expect_mode list
 expect_tree "[data-id$='.$esc_parent']" '.ok and .nodes[0]["aria-selected"] == "true"'
 expect_tree "[data-id$='.$esc_child']" '.ok and .count == 1'
 ctl key esc
-esc_expect_mode collections
+hint_expect_mode collections
 
 # A nested child clicked from the sidebar behaves the same, and esc goes back out.
 ctl click "[data-id$='.$esc_child']"
-esc_expect_mode list
+hint_expect_mode list
 expect_tree "[data-id$='.$esc_child']" '.ok and .nodes[0]["aria-selected"] == "true"'
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Esc child"))'
 ctl key esc
-esc_expect_mode collections
+hint_expect_mode collections
 
 # A referenced Issue opened by click unwinds one jump per esc, then leaves detail, then the list.
 ctl click "[data-id$='.$esc_target']"
-esc_expect_mode list
+hint_expect_mode list
 ctl key enter
-esc_expect_mode detail
+hint_expect_mode detail
 ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']"
 expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']" '.ok and .count == 1'
 # The reference is the styled span itself, no separate button: its text ends in the peer's short id, and a click opens it.
@@ -62,14 +50,14 @@ esc_blocker_short=$(jq -r '.issue.short_id' "$tmp/esc-blocker.json")
 expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']" ".ok and (.nodes[0].text | endswith(\"#$esc_blocker_short\"))"
 ctl click "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Esc blocker"))'
-esc_expect_mode detail
+hint_expect_mode detail
 ctl key esc
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Esc target"))'
-esc_expect_mode detail
+hint_expect_mode detail
 ctl key esc
-esc_expect_mode list
+hint_expect_mode list
 ctl key esc
-esc_expect_mode collections
+hint_expect_mode collections
 
 # A Collection clicked mid-jump ends the jump: enter then esc leaves detail instead of replaying it.
 ctl click "[data-id$='.$esc_target']"
@@ -79,19 +67,19 @@ expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id
 ctl click "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Esc blocker"))'
 ctl click "[data-id='main.columns.collections.project.$esc_project']"
-esc_expect_mode list
+hint_expect_mode list
 expect_tree "[data-id$='.$esc_blocker']" '.ok and .count == 1'
 ctl key enter
-esc_expect_mode detail
+hint_expect_mode detail
 ctl key esc
-esc_expect_mode list
+hint_expect_mode list
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Esc blocker"))'
 
 # An Activity tab clicked gives detail the keys, and esc leaves it.
 ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab0']"
-esc_expect_mode detail
+hint_expect_mode detail
 ctl key esc
-esc_expect_mode list
+hint_expect_mode list
 
 # Layers are closed by esc after a click inside them.
 ctl key f
@@ -99,37 +87,37 @@ expect_tree "[data-id='layer.filters']" '.ok and .count == 1'
 ctl click "[data-id='layer.filters.owner']"
 ctl key esc
 expect_tree "[data-id='layer.filters']" '.ok and .count == 0'
-esc_expect_mode list
+hint_expect_mode list
 ctl key n
 expect_tree "[data-id='layer.create']" '.ok and .count == 1'
 ctl click "[data-id='layer.create.labels']"
 ctl key esc
 expect_tree "[data-id='layer.create']" '.ok and .count == 0'
-esc_expect_mode list
+hint_expect_mode list
 ctl key x
 expect_tree "[data-id='layer.close']" '.ok and .count == 1'
 ctl click "[data-id='layer.close.field2']"
 ctl key esc
 expect_tree "[data-id='layer.close']" '.ok and .count == 0'
-esc_expect_mode list
+hint_expect_mode list
 ctl key +
 expect_tree "[data-id='layer.fields']" '.ok and .count == 1'
 ctl click "[data-id='layer.fields.value']"
 ctl key esc
 expect_tree "[data-id='layer.fields']" '.ok and .count == 0'
-esc_expect_mode list
+hint_expect_mode list
 ctl key '?'
 expect_tree "[data-id='layer.help']" '.ok and .count == 1'
 ctl click "[data-id='layer.help']"
 ctl key esc
 expect_tree "[data-id='layer.help']" '.ok and .count == 0'
-esc_expect_mode list
+hint_expect_mode list
 ctl key /
 expect_tree "[data-id='main.columns.list.search']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.list.search']"
 ctl key esc
 expect_tree "[data-id='main.columns.list.search']" '.ok and .count == 0'
-esc_expect_mode list
+hint_expect_mode list
 
 for fixture in esc-target esc-blocker esc-child esc-parent; do
   uid=$(jq -r '.issue.uid' "$tmp/$fixture.json")

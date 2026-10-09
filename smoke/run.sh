@@ -72,6 +72,18 @@ expect_tree() {
   printf 'Native tree assertion failed: %s\n' "$2" >&2
   return 1
 }
+# The mode the footer hints show the keys are in: collections, detail, list or other.
+hint_mode() {
+  ctl tree "[data-id='dock.hints']" | jq -r '.nodes[0].text | if contains("open Collection") then "collections" elif contains("j/k row") then "detail" elif contains("next Issue") then "list" else "other" end'
+}
+hint_expect_mode() {
+  for ((attempt = 0; attempt < 100; attempt++)); do
+    [[ $(hint_mode) != "$1" ]] || return 0
+    sleep 0.1
+  done
+  printf 'Expected keys in %s, found %s\n' "$1" "$(hint_mode)" >&2
+  return 1
+}
 quit_app() {
   ctl key q
   expect_tree "[data-id^='main.']" '.ok and .count == 0'

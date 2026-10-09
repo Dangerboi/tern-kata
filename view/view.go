@@ -114,7 +114,7 @@ func issues(m model.Model, now time.Time) tern.Element {
 			items = append(items, ui.Text{Common: ui.Common{Key: "group." + group.ID}, Spans: []ui.Span{{T: group.Title, S: "strong"}}})
 			shownGroups[group.ID] = true
 		}
-		items = append(items, issueRow(row, row.UID == m.SelectedUID, i%2 == 1, ownerShown, idWidth, now))
+		items = append(items, issueRow(row, row.UID == m.SelectedUID, stripeRole(i), ownerShown, idWidth, now))
 	}
 	selected := ""
 	if m.SelectedUID != "" {
@@ -227,10 +227,18 @@ func cell(text string, width int) string {
 	return text + strings.Repeat(" ", width-n)
 }
 
+// stripeRole is the role of the drawn row at index i: every other row is shaded.
+func stripeRole(i int) string {
+	if i%2 == 1 {
+		return StripeRole
+	}
+	return ""
+}
+
 // issueRow is one Issue: the id, prio, status and title on the left, the
 // title being the cell that gives way, and kids, owner and updated pinned to
 // the right so each column lines up with the header. A blank cell keeps its width.
-func issueRow(row model.IssueRow, selected, striped, ownerShown bool, idWidth int, now time.Time) tern.Element {
+func issueRow(row model.IssueRow, selected bool, role string, ownerShown bool, idWidth int, now time.Time) tern.Element {
 	tone := ui.ToneNeutral
 	statusStyle := "accent"
 	if model.IsClosed(row.Issue) {
@@ -265,10 +273,6 @@ func issueRow(row model.IssueRow, selected, striped, ownerShown bool, idWidth in
 	owner := ""
 	if row.Owner != nil {
 		owner = *row.Owner
-	}
-	role := ""
-	if striped {
-		role = StripeRole
 	}
 	// A parent's click folds it; a double click on any row opens it. Tern sends the two clicks first, so a parent's fold ends where it began.
 	actions := &ui.Actions{DblClick: string(model.OpenRow) + "=" + row.UID}

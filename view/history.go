@@ -11,8 +11,12 @@ import (
 // referenceRow is a row heading that names another Issue: lead, then ref as
 // an accent underlined link carrying the jump click, then trail.
 func referenceRow(uid string, lead tern.Element, ref string, trail ...tern.Element) tern.Element {
-	jump := ui.Text{Common: ui.Common{Key: "jump", Actions: &ui.Actions{Click: "jump=" + uid}}, Spans: []ui.Span{{T: ref, S: "accent link"}}}
-	return ui.Row{Common: ui.Common{Key: "row"}, Gap: ui.GapXS, Wrap: true, Children: append(ui.Nodes(lead, jump), trail...)}
+	return ui.Row{Common: ui.Common{Key: "row"}, Gap: ui.GapXS, Wrap: true, Children: append(ui.Nodes(lead, jumpLink(uid, ref)), trail...)}
+}
+
+// jumpLink is the accent underlined reference whose click jumps to the Issue uid.
+func jumpLink(uid, ref string) ui.Text {
+	return ui.Text{Common: ui.Common{Key: "jump", Actions: &ui.Actions{Click: "jump=" + uid}}, Spans: []ui.Span{{T: ref, S: "accent link"}}}
 }
 
 // linkRow is a Link row heading: `relation | ref - title`, the relation and
@@ -20,9 +24,8 @@ func referenceRow(uid string, lead tern.Element, ref string, trail ...tern.Eleme
 // click is the relation's click, if any; the dash and title jump like the reference.
 func linkRow(row model.DetailRow, click *ui.Actions) tern.Element {
 	follow := &ui.Actions{Click: "jump=" + row.ReferenceUID}
-	jump := ui.Text{Common: ui.Common{Key: "jump", Actions: follow}, Spans: []ui.Span{{T: row.Ref, S: "accent link"}}}
 	lead := ui.Text{Common: ui.Common{Key: "heading", Actions: click}, Spans: []ui.Span{{T: row.Relation + " | ", S: "muted"}}}
-	nodes := ui.Nodes(lead, jump)
+	nodes := ui.Nodes(lead, jumpLink(row.ReferenceUID, row.Ref))
 	if row.RefTitle != "" {
 		nodes = append(nodes, ui.Text{Common: ui.Common{Key: "dash", Actions: follow}, Text: " - "}, ui.Text{Common: ui.Common{Key: "title", Actions: follow}, Text: row.RefTitle})
 	}
