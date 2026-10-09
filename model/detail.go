@@ -61,12 +61,16 @@ func (s ActivityTab) String() string {
 // sentence in parts.
 type DetailRow struct {
 	Key, Title, Body, ReferenceUID string
-	History                        *HistorySentence
+	// Ref is a Link row's reference as shown, the tail of Title.
+	Ref     string
+	History *HistorySentence
 }
 
 // HistorySentence is "<Actor> <Verb> <Object>" with a local When and the Verb's tone.
 type HistorySentence struct {
 	Actor, Verb, Object, When string
+	// Ref is the short id of the Issue the event references; it ends Object when the sentence names it.
+	Ref string
 	Tone                      VerbTone
 }
 
@@ -107,7 +111,7 @@ func (m Model) DetailRow(tab ActivityTab, index int) (DetailRow, bool) {
 				relation = "blocks"
 			}
 		}
-		return DetailRow{Key: fmt.Sprint(link.ID), Title: relation + " " + ref, ReferenceUID: uid}, true
+		return DetailRow{Key: fmt.Sprint(link.ID), Title: relation + " " + ref, Ref: ref, ReferenceUID: uid}, true
 	case TabComments:
 		comment := m.Detail.Comments[index]
 		return DetailRow{Key: comment.UID, Title: comment.Author + " / " + comment.CreatedAt.Format(time.RFC3339), Body: comment.Body}, true

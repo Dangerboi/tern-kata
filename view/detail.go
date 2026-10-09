@@ -8,7 +8,6 @@ import (
 
 	"github.com/Dangerboi/tern-kata/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
-	"github.com/stencil-hq/tern-sdk/go/tern/el"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
@@ -87,16 +86,18 @@ func detailRows(m model.Model, tab model.ActivityTab) tern.Nodes {
 		if m.Focus == model.ColumnDetail && m.DetailIndex == i {
 			mark = ui.MarkPick
 		}
-		heading, body := tern.Element(ui.Text{Common: ui.Common{Key: "heading", Actions: &ui.Actions{Click: action}}, Text: row.Title}), tern.Element(ui.Md{Common: ui.Common{Key: "body"}, Text: row.Body})
-		if tab == model.TabEvents {
-			heading, body = historyHeading(row, action), historyDetail(row)
+		var heading tern.Element
+		switch {
+		case tab == model.TabEvents:
+			heading = historyHeading(row, action)
+		case row.Ref != "":
+			heading = referenceRow(row.ReferenceUID, ui.Text{Common: ui.Common{Key: "heading", Actions: &ui.Actions{Click: action}}, Spans: []ui.Span{{T: strings.TrimSuffix(row.Title, " "+row.Ref), S: "muted"}}}, row.Ref)
+		default:
+			heading = ui.Text{Common: ui.Common{Key: "heading", Actions: &ui.Actions{Click: action}}, Text: row.Title}
 		}
 		parts := ui.Nodes(heading)
 		if row.Body != "" {
-			parts = append(parts, body)
-		}
-		if row.ReferenceUID != "" {
-			parts = append(parts, el.Button{Common: ui.Common{Key: "jump", Actions: &ui.Actions{Click: "jump=" + row.ReferenceUID}}, Text: "Open referenced Issue"})
+			parts = append(parts, ui.Md{Common: ui.Common{Key: "body"}, Text: row.Body})
 		}
 		rows = append(rows, ui.Col{Common: ui.Common{Key: row.Key, Mark: mark}, Children: parts})
 	}

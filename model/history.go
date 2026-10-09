@@ -19,13 +19,10 @@ const (
 	VerbWarning VerbTone = "warning"
 )
 
-const (
-	historyTimeLayout = "2006-01-02 15:04"
-	maxDetailRunes    = 80
-)
+const historyTimeLayout = "2006-01-02 15:04"
 
 // historyRow phrases one event as "<actor> <verb> <object>" plus an optional
-// short detail line (Body). Types kata adds later fall back to their sorted
+// detail (Body: the whole message, evidence or comment). Types kata adds later fall back to their sorted
 // payload pairs.
 func historyRow(event g.Event) DetailRow {
 	payload, decodeErr := decodePayload(event.Payload)
@@ -34,9 +31,9 @@ func historyRow(event g.Event) DetailRow {
 	case "issue.created":
 		verb, object, tone = "created", "this Issue", VerbAccent
 	case "issue.commented":
-		verb, detail = "commented", oneLine(payload.text("body"))
+		verb, detail = "commented", strings.TrimSpace(payload.text("body"))
 	case "issue.comment_edited":
-		verb, object, detail = "edited", "a comment", oneLine(payload.text("body"))
+		verb, object, detail = "edited", "a comment", strings.TrimSpace(payload.text("body"))
 	case "issue.assigned":
 		verb, object = "assigned", "to "+payload.text("owner")
 	case "issue.unassigned":
@@ -87,6 +84,9 @@ func historyRow(event g.Event) DetailRow {
 	}
 	if event.RelatedIssueUID != nil {
 		row.ReferenceUID = *event.RelatedIssueUID
+	}
+	if event.RelatedIssueShortID != nil {
+		row.History.Ref = *event.RelatedIssueShortID
 	}
 	return row
 }
@@ -146,14 +146,8 @@ func plain(v any) string {
 	return fmt.Sprint(v)
 }
 
-// oneLine collapses s to a single line cut to maxDetailRunes.
-func oneLine(s string) string {
-	s = strings.Join(strings.Fields(s), " ")
-	if runes := []rune(s); len(runes) > maxDetailRunes {
-		return string(runes[:maxDetailRunes]) + "…"
-	}
-	return s
-}
+// oneLine collapses s to a single line.
+func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 func closeDetail(p payloadMap) string {
 	var evidence []string
@@ -170,9 +164,9 @@ func closeDetail(p payloadMap) string {
 				break
 			}
 		}
-		evidence = append(evidence, oneLine(strings.Join(parts, " ")))
+		evidence = append(evidence, strings.Join(parts, " "))
 	}
-	message, list := oneLine(p.text("message")), strings.Join(evidence, ", ")
+	message, list := strings.TrimSpace(p.text("message")), strings.Join(evidence, ", ")
 	switch {
 	case message == "":
 		return list
