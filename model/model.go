@@ -211,6 +211,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			return openIssue(m, msg.Value)
 		case ToggleExpansion:
 			return toggleRow(m, msg.Value)
+		case OpenRow:
+			return openRow(m, msg.Value)
 		}
 	case IssueOpened:
 		if msg.Ref == m.OpenIssueRef && msg.Selected != nil && msg.Selected.Issue != nil {

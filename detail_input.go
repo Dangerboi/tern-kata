@@ -15,8 +15,8 @@ func detailAction(input *tern.Action) model.Msg {
 	switch input.Act {
 	case "key":
 		return model.ActionMsg{Action: "key", Value: input.Value}
-	case string(model.ToggleExpansion):
-		return model.ActionMsg{Action: model.ToggleExpansion, Value: input.Value}
+	case string(model.ToggleExpansion), string(model.OpenRow):
+		return model.ActionMsg{Action: model.Action(input.Act), Value: input.Value}
 	case "focus-detail":
 		return model.FocusColumnMsg{Column: model.ColumnDetail}
 	case "activity-tab":
