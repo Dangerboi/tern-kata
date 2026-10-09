@@ -17,7 +17,7 @@ func historyRow(t *testing.T, event g.Event) model.DetailRow {
 		event.CreatedAt = time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
 	}
 	m := model.Model{Detail: &g.UISelectedAuthority{History: []g.Event{event}}}
-	row, ok := m.DetailRow(model.SectionHistory, 0)
+	row, ok := m.DetailRow(model.TabEvents, 0)
 	if !ok {
 		t.Fatal("no history row")
 	}

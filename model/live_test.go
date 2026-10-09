@@ -136,7 +136,7 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 func TestLiveRefreshPreservesDetailPosition(t *testing.T) {
 	for _, authority := range []bool{true, false} {
 		t.Run(map[bool]string{true: "snapshot authority", false: "detail refetch"}[authority], func(t *testing.T) {
-			m := model.Model{SelectedUID: "issue", DetailUID: "issue", Focus: model.ColumnDetail, DetailSection: model.SectionComments, DetailIndex: 1,
+			m := model.Model{SelectedUID: "issue", DetailUID: "issue", Focus: model.ColumnDetail, ActivityTab: model.TabComments, DetailIndex: 1,
 				Detail: &g.UISelectedAuthority{Issue: &model.Issue{UID: "issue"}, Comments: []g.Comment{{UID: "one"}, {UID: "two"}}}}
 			m, cmds := model.Update(m, model.StreamEvent{ID: 1, Type: "issue.updated"})
 			refresh := cmds[0].(model.RefreshSnapshot)
@@ -154,8 +154,8 @@ func TestLiveRefreshPreservesDetailPosition(t *testing.T) {
 				}
 				m, _ = model.Update(m, model.DetailLoaded{UID: "issue", Selected: &g.UISelectedAuthority{Issue: &model.Issue{UID: "issue"}, Comments: []g.Comment{{UID: "one"}, {UID: "two"}}}})
 			}
-			if m.DetailSection != model.SectionComments || m.DetailIndex != 1 || m.SelectedUID != "issue" {
-				t.Fatalf("refresh reset reading position: section=%v index=%d selected=%q", m.DetailSection, m.DetailIndex, m.SelectedUID)
+			if m.ActivityTab != model.TabComments || m.DetailIndex != 1 || m.SelectedUID != "issue" {
+				t.Fatalf("refresh reset reading position: section=%v index=%d selected=%q", m.ActivityTab, m.DetailIndex, m.SelectedUID)
 			}
 		})
 	}

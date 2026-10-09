@@ -1,6 +1,6 @@
 # esc backs out after any click exactly as it does after the same keys. Fixtures are this step's own.
 esc_mode() {
-  ctl tree "[data-id='dock.hints']" | jq -r '.nodes[0].text | if contains("open Collection") then "collections" elif contains("next reference") then "detail" elif contains("next Issue") then "list" else "other" end'
+  ctl tree "[data-id='dock.hints']" | jq -r '.nodes[0].text | if contains("open Collection") then "collections" elif contains("j/k row") then "detail" elif contains("next Issue") then "list" else "other" end'
 }
 esc_expect_mode() {
   for ((attempt = 0; attempt < 100; attempt++)); do
@@ -55,7 +55,8 @@ ctl click "[data-id$='.$esc_target']"
 esc_expect_mode list
 ctl key enter
 esc_expect_mode detail
-ctl click "[data-id^='main.columns.detail.viewport.content.section'][data-id\$='.jump']"
+ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']"
+ctl click "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Esc blocker"))'
 esc_expect_mode detail
 ctl key esc
@@ -69,7 +70,8 @@ esc_expect_mode collections
 # A Collection clicked mid-jump ends the jump: enter then esc leaves detail instead of replaying it.
 ctl click "[data-id$='.$esc_target']"
 ctl key enter
-ctl click "[data-id^='main.columns.detail.viewport.content.section'][data-id\$='.jump']"
+ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']"
+ctl click "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Esc blocker"))'
 ctl click "[data-id='main.columns.collections.project.$esc_project']"
 esc_expect_mode list
@@ -81,7 +83,7 @@ esc_expect_mode list
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Esc blocker"))'
 
 # A detail heading clicked gives detail the keys, and esc leaves it.
-ctl click "[data-id^='main.columns.detail.viewport.content.section'][data-id\$='.heading']"
+ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab0']"
 esc_expect_mode detail
 ctl key esc
 esc_expect_mode list

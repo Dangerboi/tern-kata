@@ -30,9 +30,9 @@ func TestHistoryRendersSentencesWithTonedVerbs(t *testing.T) {
 		{UID: "e3", Actor: "dana", Type: "issue.reopened", Payload: `{}`, CreatedAt: at},
 		{UID: "e4", Actor: "dana", Type: "issue.assigned", Payload: `{"owner":"alice"}`, CreatedAt: at},
 	}
-	m := apply(browsing(), model.DetailLoaded{UID: alpha.UID, Selected: &g.UISelectedAuthority{Issue: &alpha, History: events}})
+	m := apply(browsing(), model.DetailLoaded{UID: alpha.UID, Selected: &g.UISelectedAuthority{Issue: &alpha, History: events}}, model.ActivityTabMsg{Tab: model.TabEvents})
 	nodes := render(t, m)
-	section := view.DetailSectionID(model.SectionHistory)
+	section := view.DetailActivityID
 
 	for id, n := range nodes {
 		if strings.HasPrefix(id, section+".") && strings.Contains(text(n), "```") {

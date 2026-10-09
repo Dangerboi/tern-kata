@@ -22,9 +22,8 @@ const DetailScrollID = DetailID + ".viewport"
 // inside the scroller, not the scroller itself.
 const DetailContentID = DetailScrollID + ".content"
 
-func DetailSectionID(section model.DetailSection) string {
-	return DetailContentID + ".section" + strconv.Itoa(int(section))
-}
+// DetailActivityID holds the Activity heading, its tab names and the active tab's rows.
+const DetailActivityID = DetailContentID + ".activity"
 
 func detail(m model.Model) tern.Element {
 	var children tern.Nodes
@@ -47,58 +46,49 @@ func detail(m model.Model) tern.Element {
 			ui.Text{Common: ui.Common{Key: "title", Actions: &ui.Actions{Click: "focus-detail"}}, Spans: title},
 			ui.Badge{Common: ui.Common{Key: "status", Tone: statusTone(issue.Status)}, Text: issue.Status},
 		)}, ui.Spacer{Common: ui.Common{Key: "gap"}, Size: ui.GapMD}}
-		for section := model.SectionProperties; section <= model.SectionHistory; section++ {
-			var content tern.Nodes
-			if section != model.SectionBody {
-				content = ui.Nodes(sectionHeading(m, section))
-			}
-			switch section {
-			case model.SectionBody:
-				body := issue.Body
-				if body == "" {
-					body = "No body yet."
-				}
-				content = append(content, ui.Md{Common: ui.Common{Key: "body"}, Text: body})
-			case model.SectionProperties:
-				content = append(content, properties(issue))
-			case model.SectionLabels:
-				content = append(content, labels(issue.Labels))
-			default:
-				content = append(content, detailRows(m, section)...)
-			}
-			if section > model.SectionProperties {
-				sections = append(sections, ui.Spacer{Common: ui.Common{Key: "gap" + strconv.Itoa(int(section))}, Size: ui.GapMD})
-			}
-			sections = append(sections, ui.Col{Common: ui.Common{Key: "section" + strconv.Itoa(int(section))}, Gap: ui.GapSM, Children: content})
+		body := issue.Body
+		if body == "" {
+			body = "No body yet."
 		}
-		children = append(children, ui.List{CommonWithoutMax: scrollerCommon("viewport"), Max: scrollMax(m), Children: ui.Nodes(ui.Col{Common: ui.Common{Key: "content"}, Children: sections})})
+		sections = append(sections,
+			properties(issue), labels(issue.Labels),
+			ui.Md{Common: ui.Common{Key: "body"}, Text: body},
+			ui.Spacer{Common: ui.Common{Key: "gap-activity"}, Size: ui.GapMD},
+			ui.Col{Common: ui.Common{Key: "activity"}, Gap: ui.GapSM, Children: append(ui.Nodes(activityTabs(m)), detailRows(m, m.ActivityTab)...)})
+		children = append(children, ui.List{CommonWithoutMax: scrollerCommon("viewport"), Max: scrollMax(m), Children: ui.Nodes(ui.Col{Common: ui.Common{Key: "content"}, Gap: ui.GapSM, Children: sections})})
 	}
 	return panel(m, model.ColumnDetail, ui.Common{Key: "detail", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapMD, children)
 }
 
-func sectionHeading(m model.Model, section model.DetailSection) tern.Element {
-	style := "strong"
-	if m.Focus == model.ColumnDetail && m.DetailSection == section {
-		style = "accent strong"
+// activityTabs is the Activity heading with a clickable name and count per tab;
+// the active one is accent and bracketed, as in kata's TUI.
+func activityTabs(m model.Model) tern.Element {
+	tabs := ui.Nodes(ui.Text{Common: ui.Common{Key: "name"}, Spans: []ui.Span{{T: "Activity", S: "strong"}}})
+	for tab := model.TabComments; tab <= model.TabLinks; tab++ {
+		name, style := fmt.Sprintf("%s (%d)", tab, m.DetailRowCount(tab)), ""
+		if tab == m.ActivityTab {
+			name, style = "[ "+name+" ]", "accent strong"
+		}
+		tabs = append(tabs, ui.Text{Common: ui.Common{Key: "tab" + strconv.Itoa(int(tab)), Actions: &ui.Actions{Click: "activity-tab=" + strconv.Itoa(int(tab))}}, Spans: []ui.Span{{T: name, S: style}}})
 	}
-	return ui.Text{Common: ui.Common{Key: "heading", Actions: &ui.Actions{Click: "section=" + strconv.Itoa(int(section))}}, Spans: []ui.Span{{T: section.String(), S: style}}}
+	return ui.Row{Common: ui.Common{Key: "tabs"}, Gap: ui.GapMD, Children: tabs}
 }
 
-func detailRows(m model.Model, section model.DetailSection) tern.Nodes {
-	count := m.DetailRowCount(section)
+func detailRows(m model.Model, tab model.ActivityTab) tern.Nodes {
+	count := m.DetailRowCount(tab)
 	if count == 0 {
-		return ui.Nodes(ui.Text{Common: ui.Common{Key: "empty"}, Text: "No " + strings.ToLower(section.String()) + "."})
+		return ui.Nodes(ui.Text{Common: ui.Common{Key: "empty"}, Text: "No " + strings.ToLower(tab.String()) + "."})
 	}
 	rows := make(tern.Nodes, 0, count)
 	for i := range count {
-		row, _ := m.DetailRow(section, i)
-		action := "detail-item=" + strconv.Itoa(int(section)) + ":" + row.Key
+		row, _ := m.DetailRow(tab, i)
+		action := "detail-item=" + strconv.Itoa(int(tab)) + ":" + row.Key
 		mark := ui.Mark("")
-		if m.Focus == model.ColumnDetail && m.DetailSection == section && m.DetailIndex == i {
+		if m.Focus == model.ColumnDetail && m.DetailIndex == i {
 			mark = ui.MarkPick
 		}
 		heading, body := tern.Element(ui.Text{Common: ui.Common{Key: "heading", Actions: &ui.Actions{Click: action}}, Text: row.Title}), tern.Element(ui.Md{Common: ui.Common{Key: "body"}, Text: row.Body})
-		if section == model.SectionHistory {
+		if tab == model.TabEvents {
 			heading, body = historyHeading(row, action), historyDetail(row)
 		}
 		parts := ui.Nodes(heading)

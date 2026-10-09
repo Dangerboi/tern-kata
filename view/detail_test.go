@@ -2,8 +2,10 @@ package view_test
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/model"
 	"github.com/Dangerboi/tern-kata/view"
@@ -16,36 +18,82 @@ func detailNodes(t *testing.T, issue model.Issue) shown {
 	return render(t, m)
 }
 
-func TestDetailSectionsRenderInOrder(t *testing.T) {
-	nodes := detailNodes(t, alpha)
-	ids := nodes.under(view.DetailID)
-	var headings []string
-	for section := model.SectionProperties; section <= model.SectionHistory; section++ {
-		id := view.DetailSectionID(section) + ".heading"
-		if _, ok := nodes[id]; !ok {
-			if section == model.SectionBody {
-				continue
+func tabLabels(nodes shown) []string {
+	var labels []string
+	for tab := model.TabComments; tab <= model.TabLinks; tab++ {
+		labels = append(labels, text(nodes[view.DetailActivityID+".tabs.tab"+strconv.Itoa(int(tab))]))
+	}
+	return labels
+}
+
+// detailWithActivity is alpha with 2 comments, 3 events and 1 Link.
+func detailWithActivity(tab model.ActivityTab) model.Model {
+	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
+	selected := &g.UISelectedAuthority{Issue: &alpha,
+		Comments: []g.Comment{{UID: "c1", Author: "dana", CreatedAt: at, Body: "first"}, {UID: "c2", Author: "dana", CreatedAt: at, Body: "second"}},
+		History:  []g.Event{{UID: "e1", Actor: "dana", Type: "issue.created", Payload: `{}`, CreatedAt: at}, {UID: "e2", Actor: "dana", Type: "issue.reopened", Payload: `{}`, CreatedAt: at}, {UID: "e3", Actor: "dana", Type: "issue.reopened", Payload: `{}`, CreatedAt: at}},
+		Links:    []g.UILink{{ID: 7, FromIssueUID: "alpha", ToIssueUID: "beta", ToQualifiedID: "work#bbbb", Type: "related"}},
+	}
+	return apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: selected}, model.ActivityTabMsg{Tab: tab})
+}
+
+func TestActivityTabsShowCountsAndMarkTheActiveOne(t *testing.T) {
+	for _, tt := range []struct {
+		tab  model.ActivityTab
+		want []string
+	}{
+		{model.TabComments, []string{"[ Comments (2) ]", "Events (3)", "Links (1)"}},
+		{model.TabEvents, []string{"Comments (2)", "[ Events (3) ]", "Links (1)"}},
+		{model.TabLinks, []string{"Comments (2)", "Events (3)", "[ Links (1) ]"}},
+	} {
+		nodes := render(t, detailWithActivity(tt.tab))
+		if got := tabLabels(nodes); !slices.Equal(got, tt.want) {
+			t.Errorf("tab %v: labels %v, want %v", tt.tab, got, tt.want)
+		}
+		if text(nodes[view.DetailActivityID+".tabs.name"]) != "Activity" {
+			t.Error("no Activity heading")
+		}
+		for tab := model.TabComments; tab <= model.TabLinks; tab++ {
+			n := nodes[view.DetailActivityID+".tabs.tab"+strconv.Itoa(int(tab))]
+			style := spansOf(n.P)[0][1]
+			if (tab == tt.tab) != strings.Contains(style, "accent") {
+				t.Errorf("tab %v active=%v is styled %q", tab, tab == tt.tab, style)
 			}
-			t.Fatalf("no heading for %v", section)
-		}
-		headings = append(headings, text(nodes[id]))
-	}
-	want := []string{"Properties", "Labels", "Links", "Comments", "Change history"}
-	if !slices.Equal(headings, want) {
-		t.Fatalf("headings %v, want %v", headings, want)
-	}
-	root := nodes[view.DetailContentID]
-	var order []string
-	for _, c := range root.C {
-		if id := strings.TrimPrefix(c.ID, view.DetailContentID+"."); strings.HasPrefix(id, "section") {
-			order = append(order, id)
+			if click := n.P["actions"].(map[string]any)["click"]; click != "activity-tab="+strconv.Itoa(int(tab)) {
+				t.Errorf("tab %v click %v", tab, click)
+			}
 		}
 	}
-	if !slices.IsSorted(order) || len(order) != 6 || order[0] != "section0" {
-		t.Fatalf("on-screen order %v of %v", order, ids)
+}
+
+func TestOnlyTheActiveTabsRowsRender(t *testing.T) {
+	for _, tt := range []struct {
+		tab  model.ActivityTab
+		rows []string
+	}{
+		{model.TabComments, []string{"c1", "c2"}},
+		{model.TabEvents, []string{"e1", "e2", "e3"}},
+		{model.TabLinks, []string{"7"}},
+	} {
+		nodes := render(t, detailWithActivity(tt.tab))
+		var got []string
+		for _, c := range nodes[view.DetailActivityID].C {
+			if id := strings.TrimPrefix(c.ID, view.DetailActivityID+"."); id != "tabs" {
+				got = append(got, id)
+			}
+		}
+		if !slices.Equal(got, tt.rows) {
+			t.Errorf("tab %v renders %v, want %v", tt.tab, got, tt.rows)
+		}
 	}
-	if text(nodes[view.DetailSectionID(model.SectionProperties)+".heading"]) != "Properties" {
-		t.Fatal("properties is not first")
+}
+
+func TestEmptyActivityTabsSaySo(t *testing.T) {
+	for tab, want := range map[model.ActivityTab]string{model.TabComments: "No comments.", model.TabEvents: "No events.", model.TabLinks: "No links."} {
+		nodes := render(t, apply(browsing(), model.ActivityTabMsg{Tab: tab}))
+		if got := text(nodes[view.DetailActivityID+".empty"]); got != want {
+			t.Errorf("tab %v says %q, want %q", tab, got, want)
+		}
 	}
 }
 
@@ -62,14 +110,14 @@ func TestDetailBadgesAndChipsAreToned(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &tt.issue}})
 			nodes := render(t, m)
-			props := view.DetailSectionID(model.SectionProperties) + ".properties"
+			props := view.DetailContentID + ".properties"
 			if n := nodes[props+".badges.status"]; n.P["tone"] != tt.status || text(n) != tt.issue.Status {
 				t.Errorf("status badge: %v", n)
 			}
 			if n := nodes[props+".badges.priority"]; n.P["tone"] != tt.priority || !strings.HasPrefix(text(n), "P") {
 				t.Errorf("priority badge: %v", n)
 			}
-			labels := view.DetailSectionID(model.SectionLabels) + ".labels"
+			labels := view.DetailContentID + ".labels"
 			for _, l := range tt.issue.Labels {
 				if n, ok := nodes[labels+".label-"+l]; !ok || text(n) != l {
 					t.Errorf("label chip %s: %v", l, n)
@@ -97,7 +145,7 @@ func TestDetailHeaderIsTheTitleAndStatusWithoutButtonsOrBodyHeading(t *testing.T
 			t.Errorf("%s shows %q", id, text(nodes[id]))
 		}
 	}
-	if _, ok := nodes[view.DetailSectionID(model.SectionBody)+".body"]; !ok {
+	if _, ok := nodes[view.DetailContentID+".body"]; !ok {
 		t.Error("the body itself is gone")
 	}
 }
@@ -114,7 +162,7 @@ func TestDetailIsOneScrollContainerWithOneChild(t *testing.T) {
 			t.Errorf("%s is outside the scroll container", id)
 		}
 	}
-	for _, id := range []string{view.DetailContentID + ".heading.title", view.DetailSectionID(model.SectionProperties), view.DetailSectionID(model.SectionBody), view.DetailSectionID(model.SectionHistory)} {
+	for _, id := range []string{view.DetailContentID + ".heading.title", view.DetailContentID + ".properties", view.DetailContentID + ".body", view.DetailActivityID} {
 		if _, ok := nodes[id]; !ok {
 			t.Errorf("%s is not in the scroll container", id)
 		}

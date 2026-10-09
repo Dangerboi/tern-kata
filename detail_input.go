@@ -19,16 +19,16 @@ func detailAction(input *tern.Action) model.Msg {
 		return model.ActionMsg{Action: model.ToggleExpansion, Value: input.Value}
 	case "focus-detail":
 		return model.FocusColumnMsg{Column: model.ColumnDetail}
-	case "section":
+	case "activity-tab":
 		section, err := strconv.Atoi(input.Value)
-		if err == nil && section >= 0 && section <= int(model.SectionHistory) {
-			return model.DetailSectionMsg{Section: model.DetailSection(section)}
+		if err == nil && section >= 0 && section <= int(model.TabLinks) {
+			return model.ActivityTabMsg{Tab: model.ActivityTab(section)}
 		}
 	case "detail-item":
 		sectionText, key, ok := strings.Cut(input.Value, ":")
 		section, err := strconv.Atoi(sectionText)
-		if ok && err == nil && section >= 0 && section <= int(model.SectionHistory) {
-			return model.DetailItemMsg{Section: model.DetailSection(section), Key: key}
+		if ok && err == nil && section >= 0 && section <= int(model.TabLinks) {
+			return model.DetailItemMsg{Tab: model.ActivityTab(section), Key: key}
 		}
 	case "jump":
 		return model.JumpIssueMsg{UID: input.Value}

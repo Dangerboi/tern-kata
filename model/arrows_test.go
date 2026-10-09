@@ -30,7 +30,6 @@ func arrowModes(t *testing.T) map[string]model.Model {
 	}}
 	detail, _ = model.Update(detail, model.KeyMsg{Chord: "tab"})
 	detail, _ = model.Update(detail, model.KeyMsg{Chord: "tab"})
-	detail, _ = model.Update(detail, model.KeyMsg{Chord: "tab"})
 	modes := map[string]model.Model{"list": list, "collections": collections, "detail": detail}
 	for name, want := range map[string]model.Mode{"list": model.ModeList, "collections": model.ModeCollections, "detail": model.ModeDetail} {
 		if got := modes[name].CurrentMode(); got != want {

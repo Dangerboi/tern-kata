@@ -1,10 +1,10 @@
-# The detail keeps scrolling whatever is clicked, in any order: rows, a section heading, a comment row,
+# The detail keeps scrolling whatever is clicked, in any order: rows, an Activity tab, a comment row,
 # a link jump and esc, Collection switches, a resize between tiers, and the Pane losing the window's
 # focus and getting it back with a click. Tern keeps the node of the last reveal in view and ignores the
 # wheel past it, so one reveal the app sent for a click (title, heading, row) froze the detail until the
 # column was removed and drawn again. After every click the wheel must still move the detail, and the
 # recorded TSP ops must hold no reveal inside the detail. Own Project and Issues; it cleans up.
-stuck_y() { ctl tree "[data-id='main.columns.detail.viewport.content.section0']" | jq -r '.nodes[0].rect[1] // empty | floor'; }
+stuck_y() { ctl tree "[data-id='main.columns.detail.viewport.content.heading']" | jq -r '.nodes[0].rect[1] // empty | floor'; }
 stuck_wheel() { for _ in $(seq "$2"); do ctl wheel 0 "$1" >/dev/null; done; }
 # The wheel moves the detail down from its top and back up, whatever was clicked before.
 stuck_scrolls() {
@@ -27,7 +27,7 @@ stuck_scrolls() {
 stuck_bring_into_view() {
   ctl hover "[data-id='main.columns.detail.viewport']" >/dev/null
   for ((attempt = 0; attempt < 20; attempt++)); do
-    ctl tree "[data-id='main.columns.detail.viewport'],$1" | jq -e '.nodes as $n | ($n | length) == 2 and ($n[1].rect[1] > $n[0].rect[1]) and ($n[1].rect[1] + $n[1].rect[3] < $n[0].rect[1] + $n[0].rect[3])' >/dev/null && return 0
+    ctl tree "[data-id='main.columns.detail.viewport'],$1" | jq -e '.nodes as $n | ($n | length) == 2 and ($n[1].rect[1] > $n[0].rect[1]) and ($n[1].rect[1] + $n[1].rect[3] <= $n[0].rect[1] + $n[0].rect[3])' >/dev/null && return 0
     ctl wheel 0 300 >/dev/null
     sleep 0.2
   done
@@ -55,21 +55,26 @@ expect_tree "[data-id='main.columns.collections.project.$stuck_project']" '.ok a
 ctl click "[data-id='main.columns.collections.project.$stuck_project']"
 expect_tree "[data-id$='.$stuck_long']" '.ok and .count == 1'
 
-# Rows, the detail title and a section heading.
+# Rows, the detail title and an Activity tab.
 ctl click "[data-id$='.$stuck_long']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Stuck long"))'
 stuck_scrolls "a click on an Issue row"
 ctl click "[data-id='main.columns.detail.viewport.content.heading.title']"
 stuck_scrolls "a click on the detail title"
-ctl click "[data-id='main.columns.detail.viewport.content.section1.heading']"
-stuck_scrolls "a click on a section heading"
+stuck_bring_into_view "[data-id='main.columns.detail.viewport.content.activity.tabs.tab1']"
+ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab1']"
+stuck_scrolls "a click on an Activity tab"
 
 # A comment row and a link jump, then esc unwinds the jump.
-stuck_bring_into_view "[data-id^='main.columns.detail.viewport.content.section4.0'][data-id\$='.heading']"
-ctl click "[data-id^='main.columns.detail.viewport.content.section4.0'][data-id\$='.heading']"
+stuck_bring_into_view "[data-id='main.columns.detail.viewport.content.activity.tabs.tab0']"
+ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab0']"
+stuck_bring_into_view "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.heading']"
+ctl click "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.heading']"
 stuck_scrolls "a click on a comment row"
-stuck_bring_into_view "[data-id^='main.columns.detail.viewport.content.section3.'][data-id\$='.jump']"
-ctl click "[data-id^='main.columns.detail.viewport.content.section3.'][data-id\$='.jump']"
+stuck_bring_into_view "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']"
+ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']"
+stuck_bring_into_view "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']"
+ctl click "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Stuck blocker"))'
 ctl key esc
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Stuck long"))'

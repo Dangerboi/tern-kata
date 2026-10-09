@@ -6,11 +6,11 @@ ctl --file "$tmp/launch.ctl"
 expect_tree "[data-id$='.$layout_uid']" '.count == 1'
 ctl click "[data-id$='.$layout_uid']"
 ctl key enter
-props="main.columns.detail.viewport.content.section0.properties.badges"
+props="main.columns.detail.viewport.content.properties.badges"
 expect_tree "[data-id='$props.status']" '.ok and .count == 1'
 expect_tree "[data-id='$props.priority']" '.ok and .count == 1 and .nodes[0].text == "P1"'
-expect_tree "[data-id='main.columns.detail.viewport.content.section1.labels.label-layout-label']" '.ok and .count == 1'
-expect_tree "[data-id='main.columns.detail.viewport.content.section2.body']" '.ok and .count == 1'
+expect_tree "[data-id='main.columns.detail.viewport.content.labels.label-layout-label']" '.ok and .count == 1'
+expect_tree "[data-id='main.columns.detail.viewport.content.body']" '.ok and .count == 1'
 ctl key '!'
 ctl key 0
 ctl key enter
