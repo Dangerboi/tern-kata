@@ -27,11 +27,11 @@ func historyRow(t *testing.T, event g.Event) model.DetailRow {
 func TestHistoryReadsAsOneSentencePerEvent(t *testing.T) {
 	long := strings.TrimSpace(strings.Repeat("word ", 40))
 	for _, tt := range []struct {
-		name    string
-		event   g.Event
-		title   string
-		detail  string
-		tone    model.VerbTone
+		name   string
+		event  g.Event
+		title  string
+		detail string
+		tone   model.VerbTone
 	}{
 		{"created", g.Event{Type: "issue.created", Payload: `{"title":"Fix it","labels":["bug"]}`}, "dana created this Issue", "", model.VerbAccent},
 		{"commented", g.Event{Type: "issue.commented", Payload: `{"body":"first line\nsecond line"}`}, "dana commented", "first line\nsecond line", ""},

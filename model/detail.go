@@ -70,8 +70,8 @@ type DetailRow struct {
 type HistorySentence struct {
 	Actor, Verb, Object, When string
 	// Ref is the short id of the Issue the event references; it ends Object when the sentence names it.
-	Ref string
-	Tone                      VerbTone
+	Ref  string
+	Tone VerbTone
 }
 
 func (m Model) DetailRowCount(tab ActivityTab) int {
