@@ -20,6 +20,7 @@ const (
 	ToggleHelp           Action = "help"
 	CloseHelp            Action = "close-help"
 	ToggleExpansion      Action = "toggle-expansion"
+	OpenRow              Action = "open-row"
 	ExpandIssue          Action = "expand"
 	CollapseIssue        Action = "collapse"
 	ToggleAllExpansion   Action = "toggle-all-expansion"

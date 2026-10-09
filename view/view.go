@@ -270,9 +270,10 @@ func issueRow(row model.IssueRow, selected, striped, ownerShown bool, idWidth in
 	if striped {
 		role = StripeRole
 	}
-	var actions *ui.Actions
+	// A parent's click folds it; a double click on any row opens it. Tern sends the two clicks first, so a parent's fold ends where it began.
+	actions := &ui.Actions{DblClick: string(model.OpenRow) + "=" + row.UID}
 	if row.HasChildren {
-		actions = &ui.Actions{Click: string(model.ToggleExpansion) + "=" + row.UID}
+		actions.Click = string(model.ToggleExpansion) + "=" + row.UID
 	}
 	return ui.Item{Common: ui.Common{Key: row.UID, Role: role, Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells(kids, owner, relativeTime(row.UpdatedAt, now), ownerShown, "muted")...)}
 }
