@@ -58,6 +58,11 @@ for ((attempt = 0; attempt < 200; attempt++)); do
 done
 [[ -S "$tmp/control.sock" ]]
 
+# Tern 0.7 lays out only the part of a long scroller near the screen, and `ctl tree` lists only laid-out nodes, so
+# steps could not find rows or tabs below the fold. This sheet lays everything out, as Tern 0.6 did.
+printf '* { content-visibility: visible !important; }\n' >"$tmp/visible.css"
+tern ctl --control "$tmp/control.sock" css smoke-visible "$tmp/visible.css"
+
 printf 'ready\nrun "env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP EDITOR=%s/smoke/editor.sh KATA_HOME=%s %s/tern-kata"\n' "$repo" "$KATA_HOME" "$tmp" >"$tmp/launch.ctl"
 tern ctl --control "$tmp/control.sock" --file "$tmp/launch.ctl"
 
