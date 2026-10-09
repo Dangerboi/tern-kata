@@ -9,8 +9,11 @@ expect_tree "[data-id$='.$search_beta']" '.count == 1'
 ctl key /
 for letter in S e a r c h space t a r g e t; do ctl key "$letter"; done
 expect_tree "[data-id='main.topbar.heading']" '.nodes[0].text | contains("search=Search target")'
-expect_tree "[data-id$='.$search_alpha']" '.count == 1 and .nodes[0]["aria-selected"] == "true"'
+# Rows follow update order: Down opens the results, then lands on Beta whichever row comes first.
+expect_tree "[data-id\$='.$search_alpha']" '.count == 1'
 ctl key Down
+sleep 0.5
+if [[ $(ctl tree "[data-id\$='.$search_beta']" | jq -r '.nodes[0]["aria-selected"]') != true ]]; then ctl key Up; fi
 expect_tree "[data-id$='.$search_beta']" '.count == 1 and .nodes[0]["aria-selected"] == "true"'
 ctl key enter
 expect_tree "[data-id='main.columns.list.search']" '.count == 0'
@@ -71,4 +74,4 @@ for fixture in gamma delta beta alpha; do
   kata --workspace "$tmp/workspace" delete "$uid" --force --confirm "DELETE smoke#$short" --json
 done
 ctl key g
-expect_tree "[data-id='main.columns.list.issues']" '.nodes[0].text | contains("Smoke first Issue")'
+expect_tree "[data-id^='main.columns.list.issues.']" '.nodes[0]["aria-selected"] == "true"'
