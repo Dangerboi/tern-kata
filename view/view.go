@@ -52,7 +52,7 @@ func Render(m model.Model, now time.Time) tern.View {
 			case model.ColumnList:
 				columns = append(columns, issues(m, now))
 			case model.ColumnDetail:
-				columns = append(columns, detail(m))
+				columns = append(columns, detail(m, now))
 			}
 		}
 		// The top bar heads the whole Pane at every width, above the columns and outside their borders.

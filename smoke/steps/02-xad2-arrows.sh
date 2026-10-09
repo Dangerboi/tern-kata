@@ -44,7 +44,8 @@ expect_tree .sf-list '.count == 0'
 ctl --file "$tmp/launch.ctl"
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count >= 4'
 
-# Detail: j/k move between references (the arrows scroll the detail), Left backs out like Escape.
+# Detail: j/k move between the child rows and then the Links rows (the arrows scroll the detail), Left backs out like Escape.
+# A tab click puts the cursor on the tab's first row, so k from there climbs into the Children table's last row and Home reaches its first.
 jump() {
   expect_tree "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']" '.ok and .count == 1'
   ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']"
@@ -56,7 +57,8 @@ expect_detail() {
 }
 back_to_parent() {
   ctl key Left
-  expect_tree "[data-id='main.columns.detail']" '[.nodes[] | .. | objects | .text? // empty] | join(" ") | contains("Smoke arrows parent")'
+  # The title, not the text: a child's detail also names its parent, and the tab click below needs the parent's own detail loaded to know its child rows.
+  expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Smoke arrows parent"))'
 }
 ctl click "[data-id$='.$arrows_parent']"
 ctl key Enter
@@ -70,17 +72,24 @@ else
 fi
 expect_detail "$ref_a" "$ref_b"
 back_to_parent
+expect_tree "[data-id^='main.columns.detail.viewport.content.children.'][data-id\$='.title']" '.ok and .count == 2'
+cp "$tmp/assert-tree.json" "$tmp/arrows-children.json"
+if jq -e '.nodes[0].text | contains("first child")' "$tmp/arrows-children.json" >/dev/null; then
+  table_first=first table_last=second
+else
+  table_first=second table_last=first
+fi
 jump j
 expect_detail "$ref_b" "$ref_a"
 back_to_parent
 jump k
-expect_detail "$ref_a" "$ref_b"
+expect_detail "$table_last" "$table_first"
 back_to_parent
 jump End
 expect_detail "$ref_b" "$ref_a"
 back_to_parent
 jump Home
-expect_detail "$ref_a" "$ref_b"
+expect_detail "$table_first" "$table_last"
 back_to_parent
 ctl key Left
 ctl key Down

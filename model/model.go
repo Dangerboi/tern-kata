@@ -177,7 +177,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		if msg.Tab < TabCount {
 			m.Focus = ColumnDetail
 			m.ActivityTab = msg.Tab
-			m.DetailIndex = 0
+			m.DetailIndex = len(m.DetailChildren())
 		}
 	case DetailItemMsg:
 		if msg.Tab < TabCount {
@@ -186,7 +186,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			for i := range m.DetailRowCount(msg.Tab) {
 				row, _ := m.DetailRow(msg.Tab, i)
 				if row.Key == msg.Key {
-					m.DetailIndex = i
+					m.DetailIndex = len(m.DetailChildren()) + i
 					break
 				}
 			}
