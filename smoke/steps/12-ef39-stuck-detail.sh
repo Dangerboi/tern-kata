@@ -114,7 +114,7 @@ expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.o
 stuck_scrolls "the window regaining focus"
 
 # No click but a tab name made the app reveal anything inside the detail.
-jq -sc '[.[] | select(.dir == "out" and .verb == "f") | .body.ops[] | select(.[0] == "reveal" and (.[1] | startswith("main.columns.detail")))] as $r | range(0; $r | length) as $i | select(([$r[$i][1], ($r[$i + 1][1] // "")] | any(endswith(".activity.tabs"))) | not) | $r[$i]' "$tmp/stuck-frames.jsonl" >"$tmp/stuck-detail-reveals.json"
+stray_detail_reveals "$tmp/stuck-frames.jsonl" >"$tmp/stuck-detail-reveals.json"
 [[ ! -s $tmp/stuck-detail-reveals.json ]] || { printf 'Reveal inside the detail for a click: %s\n' "$(<"$tmp/stuck-detail-reveals.json")" >&2; return 1; }
 
 quit_app

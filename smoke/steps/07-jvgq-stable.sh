@@ -53,10 +53,15 @@ expect_ops "$tmp/stable-frames.jsonl" "$mark" '.[1] == "main.columns.detail.view
 ctl click "[data-id='main.columns.list.issues.$stable_first']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.nodes[0].text | contains("Smoke stable first") and (contains("loading") | not)'
 ctl key enter
+mark=$(wc -l <"$tmp/stable-frames.jsonl")
 ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']"
-# The click's own tab reveals (19-yd2n) follow its render, so wait for the tab before marking.
 expect_tree "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']" '.ok and (.nodes[0].text | startswith("[ Links"))'
-sleep 0.5
+# The click's own tab reveals (19-yd2n) follow its render; the tab names are the pair's second reveal, which only the recording shows.
+for ((attempt = 0; attempt < 100; attempt++)); do
+  [[ -z $(stable_ops "$tmp/stable-frames.jsonl" "$mark" '.[0] == "reveal" and (.[1] | endswith(".activity.tabs"))') ]] || break
+  sleep 0.1
+done
+expect_ops "$tmp/stable-frames.jsonl" "$mark" '.[0] == "reveal" and (.[1] | endswith(".activity.tabs"))'
 mark=$(wc -l <"$tmp/stable-frames.jsonl")
 kata --workspace "$tmp/workspace" comment "$stable_first" --body "Stable refresh comment" --json
 expect_tree "[data-id='main.columns.detail.viewport.content.activity.tabs.tab0']" '.ok and (.nodes[0].text | startswith("Comments (1)"))'

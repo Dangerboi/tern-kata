@@ -73,7 +73,7 @@ vp_wheel 300 12
 vp_wait "the wheel after tab and j" '$b <= 1'
 vp_wheel -300 12
 vp_wait "the wheel back up after tab and j" '$a == 0'
-jq -sc '[.[] | select(.dir == "out" and .verb == "f") | .body.ops[] | select(.[0] == "reveal" and (.[1] | startswith("main.columns.detail")))] as $r | range(0; $r | length) as $i | select(([$r[$i][1], ($r[$i + 1][1] // "")] | any(endswith(".activity.tabs"))) | not) | $r[$i]' "$tmp/viewport-frames.jsonl" >"$tmp/viewport-reveals.json"
+stray_detail_reveals "$tmp/viewport-frames.jsonl" >"$tmp/viewport-reveals.json"
 [[ ! -s $tmp/viewport-reveals.json ]] || { printf 'Reveal inside the detail for a key: %s\n' "$(<"$tmp/viewport-reveals.json")" >&2; return 1; }
 
 # A different Issue opens at its top.

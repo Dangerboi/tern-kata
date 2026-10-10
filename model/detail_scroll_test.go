@@ -81,3 +81,14 @@ func TestActivityTabRevealIsSentOnlyWhileTheTabsAreDrawn(t *testing.T) {
 		}
 	}
 }
+
+// The help sheet only hides the columns: Tern keeps them mounted and accepts a scroll or reveal on a hidden node,
+// so a change under the sheet keeps its commands and the offsets are right when the sheet closes.
+func TestDetailCommandsSurviveWhileHelpIsOpen(t *testing.T) {
+	detail := arrowModes(t)["detail"]
+	detail.HelpOpen = true
+	_, cmds := model.Update(detail, model.ActivityTabMsg{Tab: (detail.ActivityTab + 1) % model.TabCount})
+	if want := []model.Cmd{model.RevealActivityTab{}}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("commands %#v, want %#v", cmds, want)
+	}
+}

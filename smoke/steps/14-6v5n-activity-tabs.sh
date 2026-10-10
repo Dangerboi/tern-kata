@@ -76,7 +76,7 @@ at_keys Down 3
 at_wait "↓ scrolls after j/k" '$a > 0'
 at_keys PageUp 12
 at_wait "pgup returns to the top after j/k" '$a == 0'
-jq -sc '[.[] | select(.dir == "out" and .verb == "f") | .body.ops[] | select(.[0] == "reveal" and (.[1] | startswith("main.columns.detail")))] as $r | range(0; $r | length) as $i | select(([$r[$i][1], ($r[$i + 1][1] // "")] | any(endswith(".activity.tabs"))) | not) | $r[$i]' "$tmp/tabs-frames.jsonl" >"$tmp/tabs-reveals.json"
+stray_detail_reveals "$tmp/tabs-frames.jsonl" >"$tmp/tabs-reveals.json"
 [[ ! -s $tmp/tabs-reveals.json ]] || { printf 'Reveal inside the detail for a key: %s\n' "$(<"$tmp/tabs-reveals.json")" >&2; return 1; }
 
 # A click on a tab name selects it, and the tab stays when another Issue opens.
