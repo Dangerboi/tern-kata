@@ -161,11 +161,11 @@ func TestJKMoveTheRowCursorInsideTheActiveTab(t *testing.T) {
 		Links:    []g.UILink{{ID: 1, FromIssueUID: "a", ToIssueUID: "b", ToQualifiedID: "w#b", Type: "related"}},
 	}}
 	for _, step := range []struct {
-		chord     string
-		tab       model.ActivityTab
-		index     int
-		selected  string
-		wantCmds  int
+		chord    string
+		tab      model.ActivityTab
+		index    int
+		selected string
+		wantCmds int
 	}{
 		{"j", model.TabComments, 1, "a", 0},
 		{"j", model.TabComments, 2, "a", 0},
