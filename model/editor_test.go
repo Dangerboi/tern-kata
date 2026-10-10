@@ -120,3 +120,13 @@ func TestDraftSurvivesLiveSnapshotAndSaveFailure(t *testing.T) {
 		t.Fatal("disconnected Draft wrote")
 	}
 }
+
+func TestDraftOpensTheFullStoredBodyIncludingParentSection(t *testing.T) {
+	m := editorModel()
+	body := "## Parent\n\nup1\n\n## What\n\nbuild"
+	m.Detail.Issue.Body = body
+	m, _ = model.Update(m, model.KeyMsg{Chord: "e"})
+	if got := m.Drafts["a"].Editor.Text; got != body {
+		t.Errorf("draft text %q, want %q", got, body)
+	}
+}
