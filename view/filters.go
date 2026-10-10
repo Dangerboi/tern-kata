@@ -77,7 +77,12 @@ func IsTransientTarget(id string) bool {
 	if field, ok := strings.CutPrefix(id, "layer.close.field"); ok {
 		return len(field) == 1 && field[0] >= '0' && field[0] <= '6'
 	}
-	return strings.HasPrefix(id, IssueListID+".") || strings.HasPrefix(id, DetailActivityID+".")
+	if strings.HasPrefix(id, IssueListID+".") {
+		return true
+	}
+	// The active tab's rows and its empty line go when the tab switches; the tab names and the activity container stay.
+	row, ok := strings.CutPrefix(id, DetailActivityID+".")
+	return ok && row != "tabs" && !strings.Contains(row, ".")
 }
 
 func filterLayer(m model.Model) tern.Element {

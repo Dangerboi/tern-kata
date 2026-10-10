@@ -36,6 +36,7 @@ func (m Model) DetailDrawn() bool {
 // load or a daemon failure fills the Pane, under MinCols, or for the columns the
 // width folds away. Tern answers an op on an unknown node (scroll, reveal) with
 // an error event, which ends the app, so no op may name a column that is not shown.
+// The help sheet only hides the columns (they stay mounted) and Tern accepts scroll and reveal on a hidden node, so HelpOpen does not matter here.
 func (m Model) Shows(c Column) bool {
 	return m.Err == nil && !m.FirstLoad() && slices.Contains(m.VisibleColumns(), c)
 }

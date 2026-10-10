@@ -89,6 +89,15 @@ hint_expect_mode() {
   printf 'Expected keys in %s, found %s\n' "$1" "$(hint_mode)" >&2
   return 1
 }
+# Prints the reveals inside the detail in recording $1 that are not half of the pair a tab switch sends
+# (19-yd2n): the new tab's last row or empty line, then the tab names, one right after the other.
+stray_detail_reveals() {
+  jq -sc '[.[] | select(.dir == "out" and .verb == "f") | .body.ops[] | select(.[0] == "reveal" and (.[1] | startswith("main.columns.detail"))) | .[1]] as $r
+    | ($r | map(test("\\.content\\.activity\\.[^.]+$") and (endswith(".activity.tabs") | not))) as $row | ($r | map(endswith(".activity.tabs"))) as $tabs
+    | range(0; $r | length) as $i
+    | select((($row[$i] and ($tabs[$i + 1] // false)) or ($tabs[$i] and ($row[$i - 1] // false) and $i > 0)) | not)
+    | $r[$i]' "$1"
+}
 quit_app() {
   ctl key q
   expect_tree "[data-id^='main.']" '.ok and .count == 0'

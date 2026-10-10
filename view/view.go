@@ -39,7 +39,7 @@ func Render(m model.Model, now time.Time) tern.View {
 	}
 	var main tern.Nodes
 	switch {
-	case m.HelpOpen:
+	case m.HelpOpen && (m.Err != nil || m.FirstLoad()):
 		main = help(m)
 	case m.Err != nil:
 		main = failureView(m)
@@ -61,7 +61,11 @@ func Render(m model.Model, now time.Time) tern.View {
 		// The columns fill what is left of the Pane under it and stretch to equal height: a Row centres its children by default, and a parent's detail (a Link per child) is far taller than the Pane.
 		// Min H 0 lets the row shrink to the Pane instead of growing to the tallest column, so the Pane has nothing to scroll and the bar stays put.
 		main = append(ui.Nodes(topBar(m)), filterLine(m)...)
-		main = append(main, ui.Row{Common: ui.Common{Key: "columns", Grow: 1, Min: &ui.Bounds{H: ui.Lines(0)}}, Gap: ui.GapMD, Align: ui.AlignStretch, Children: columns})
+		main = append(main, ui.Row{Common: ui.Common{Key: "columns", Hidden: m.HelpOpen, Grow: 1, Min: &ui.Bounds{H: ui.Lines(0)}}, Gap: ui.GapMD, Align: ui.AlignStretch, Children: columns})
+		if m.HelpOpen {
+			// The top bar, filters and columns stay mounted but hidden, so Tern keeps their scroll offsets for when the sheet closes.
+			main = append(main, help(m)...)
+		}
 	}
 	if m.Stale && m.Err == nil && !m.FirstLoad() && !m.HelpOpen {
 		main = append(main, staleNotice(m))
@@ -181,7 +185,7 @@ func topBar(m model.Model) tern.Element {
 	headingCell := flexCell("heading", tone, 0)
 	headingCell.Title, headingCell.Actions = "Menu (p)", &ui.Actions{Click: "key=p"}
 	rightCell := flexCell("right", ui.ToneNeutral, 100)
-	return ui.Row{Common: ui.Common{Key: "topbar"}, Gap: ui.GapMD, Justify: ui.JustifyBetween, Children: ui.Nodes(
+	return ui.Row{Common: ui.Common{Key: "topbar", Hidden: m.HelpOpen}, Gap: ui.GapMD, Justify: ui.JustifyBetween, Children: ui.Nodes(
 		ui.Row{Common: flexCell("left", ui.ToneNeutral, 0), Gap: ui.GapSM, Children: ui.Nodes(
 			ui.Text{Common: headingCell, Spans: heading, Wrap: ui.WrapNone},
 		)},
@@ -199,7 +203,7 @@ func filterLine(m model.Model) []tern.Element {
 	if summary == "" {
 		return nil
 	}
-	return []tern.Element{ui.Text{Common: ui.Common{Key: "filters", Tone: ui.ToneMuted}, Text: summary, Wrap: ui.WrapNone}}
+	return []tern.Element{ui.Text{Common: ui.Common{Key: "filters", Hidden: m.HelpOpen, Tone: ui.ToneMuted}, Text: summary, Wrap: ui.WrapNone}}
 }
 
 // panel is a column's container. With more than one column showing it is a

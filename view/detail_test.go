@@ -307,12 +307,6 @@ func TestActivityRevealTargetsAreTheLastRowAndTheTabNames(t *testing.T) {
 			t.Errorf("tab %v: reveal %v, want %v", tab, got, want)
 		}
 	}
-	// A queued reveal can outlive its row when the next tab switch redraws first; that rejection must not end the Pane.
-	for _, id := range view.ActivityRevealIDs(detailWithActivity(model.TabComments)) {
-		if !view.IsTransientTarget(id) {
-			t.Errorf("a queued reveal of %s would end the Pane when the next tab switch redraws first", id)
-		}
-	}
 	empty := apply(browsing(), model.ActivityTabMsg{Tab: model.TabEvents})
 	rows := render(t, empty)[view.DetailActivityID].C
 	if got := view.ActivityRevealIDs(empty); got[0] != rows[len(rows)-1].ID {

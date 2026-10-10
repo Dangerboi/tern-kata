@@ -61,8 +61,14 @@ func TestHelpIsAFullPaneSheet(t *testing.T) {
 		if strings.HasPrefix(id, "main.help") {
 			continue
 		}
-		if n.K == "table" || strings.HasPrefix(id, "dock") || strings.HasPrefix(id, "layer") || strings.HasPrefix(id, "main.columns") || strings.HasPrefix(id, "main.top") {
+		if n.K == "table" || strings.HasPrefix(id, "dock") || strings.HasPrefix(id, "layer") {
 			t.Errorf("%s drawn beside the help sheet", id)
+		}
+	}
+	// The top bar and the columns stay mounted, hidden, so Tern keeps the scroll offsets for when the sheet closes.
+	for _, id := range []string{"main.topbar", "main.columns"} {
+		if nodes[id].P["hidden"] != true {
+			t.Errorf("%s is not hidden beside the help sheet", id)
 		}
 	}
 }
