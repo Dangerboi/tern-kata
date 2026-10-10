@@ -11,7 +11,7 @@ func TestCloseFormOpensAndQuickDone(t *testing.T) {
 	if !m.CloseForm.Open {
 		t.Fatal("close form did not open")
 	}
-	m, cmds := model.Update(m, model.CloseSubmitMsg{Quick: true})
+	m, cmds := model.Update(m, model.ActionMsg{Action: "key", Value: "ctrl+d"})
 	var close model.CloseIssueCmd
 	for _, cmd := range cmds {
 		if c, ok := cmd.(model.CloseIssueCmd); ok {

@@ -37,10 +37,6 @@ type CloseFieldMsg struct {
 
 func (CloseFieldMsg) msg() {}
 
-type CloseSubmitMsg struct{ Quick bool }
-
-func (CloseSubmitMsg) msg() {}
-
 type CloseResultMsg struct {
 	UID string
 	Err error
@@ -197,8 +193,6 @@ func updateClose(m Model, msg Msg) (Model, []Cmd) {
 			m.CloseForm.Values[msg.Field] = msg.Value
 			m.CloseForm.Err = nil
 		}
-	case CloseSubmitMsg:
-		return submitClose(m, msg.Quick)
 	case CloseResultMsg:
 		if m.CloseForm.UID != msg.UID {
 			return m, nil

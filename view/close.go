@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/Dangerboi/tern-kata/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
-	"github.com/stencil-hq/tern-sdk/go/tern/el"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
@@ -30,9 +29,9 @@ func closeLayer(m model.Model) tern.Element {
 		children = append(children, ui.Text{Common: ui.Common{Key: "pending", Tone: ui.TonePending}, Text: "Closing Issue…"})
 	} else {
 		children = append(children,
-			el.Button{Common: ui.Common{Key: "save", Actions: &ui.Actions{Click: "close-save"}}, Text: "Close Issue (ctrl+o)"},
-			el.Button{Common: ui.Common{Key: "quick", Actions: &ui.Actions{Click: "close-quick"}}, Text: "Quick done (ctrl+d)"},
-			el.Button{Common: ui.Common{Key: "cancel", Actions: &ui.Actions{Click: "close-cancel"}}, Text: "Cancel (esc)"},
+			keyButton("save", "Close Issue (ctrl+o)", "ctrl+o", true),
+			keyButton("quick", "Quick done (ctrl+d)", "ctrl+d", false),
+			keyButton("cancel", "Cancel (esc)", "escape", false),
 			ui.Text{Common: ui.Common{Key: "exemption", Tone: ui.ToneMuted}, Text: "Quick done skips message/evidence only on the owner-local daemon. Parent and throttle guards still apply."})
 	}
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "close"}, Modal: true, Size: ui.SizeLG, Head: ui.T("Close Issue"), Children: children})

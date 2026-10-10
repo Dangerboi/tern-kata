@@ -12,10 +12,6 @@ type FilterFieldMsg struct{ Field int }
 
 func (FilterFieldMsg) msg() {}
 
-type FilterFormActionMsg struct{ Action Action }
-
-func (FilterFormActionMsg) msg() {}
-
 func filterTextField(form *FilterFormState) *string {
 	switch form.Field {
 	case 2:

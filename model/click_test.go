@@ -169,12 +169,8 @@ func TestLayerClicksEndWhereTheirKeysEnd(t *testing.T) {
 		click model.Msg
 		keys  []string
 	}{
-		{"filters Apply button", "f", model.FilterFormActionMsg{Action: model.ApplyFilters}, []string{"ctrl+o"}},
-		{"filters Cancel button", "f", model.FilterFormActionMsg{Action: model.CancelFilters}, []string{"escape"}},
 		{"filters field", "f", model.FilterFieldMsg{Field: 2}, []string{"tab", "tab"}},
 		{"create field", "n", model.CreateFieldMsg{Field: 3}, []string{"tab", "tab", "tab"}},
-		{"close Close button", "x", model.CloseSubmitMsg{}, []string{"ctrl+o"}},
-		{"close Quick done button", "x", model.CloseSubmitMsg{Quick: true}, []string{"ctrl+d"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			open, _ := clickPress(clickAt(model.ColumnList), tt.open)

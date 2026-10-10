@@ -31,8 +31,11 @@ func editorLayer(m model.Model) tern.Element {
 	if draft.Err != nil {
 		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: draft.Err.Error()})
 	}
-	if draft.DiscardConfirm {
-		children = append(children, ui.Text{Common: ui.Common{Key: "discard", Tone: ui.ToneWarning}, Text: "Discard this Draft? y discards; n or esc keeps editing."})
+	switch {
+	case draft.DiscardConfirm:
+		children = append(children, ui.Text{Common: ui.Common{Key: "discard", Tone: ui.ToneWarning}, Text: "Discard this Draft? y discards; n or esc keeps editing."}, discardButtons())
+	case !draft.Saving && draft.Conflict == nil:
+		children = append(children, buttonRow(keyButton("save", "Save (ctrl+o)", "ctrl+o", true), keyButton("editor", "$EDITOR (ctrl+e)", "ctrl+e", false), keyButton("discard", "Discard (esc)", "escape", false)))
 	}
 	if draft.Conflict != nil {
 		title = "Issue changed: Draft kept"

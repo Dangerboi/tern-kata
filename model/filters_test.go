@@ -217,7 +217,7 @@ func TestFilterFormInputAndChoices(t *testing.T) {
 func TestFilterFormActionsAndProjectScope(t *testing.T) {
 	m := model.Model{Collection: model.Collection{View: "project", ProjectUID: "other", Title: "Other"}, Filters: model.Filters{ProjectUID: "p"}}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "f"})
-	m, cmds := model.Update(m, model.FilterFormActionMsg{Action: model.ApplyFilters})
+	m, cmds := model.Update(m, model.ActionMsg{Action: "key", Value: "ctrl+o"})
 	if m.FilterForm.Open || len(cmds) != 1 || *cmds[0].(model.RefreshSnapshot).Query.ProjectUID != "other" {
 		t.Fatalf("filter form apply action: %+v %#v", m, cmds)
 	}

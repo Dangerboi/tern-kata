@@ -28,6 +28,8 @@ func fieldLayer(m model.Model) tern.Nodes {
 	}
 	if m.FieldForm.Saving {
 		children = append(children, ui.Text{Common: ui.Common{Key: "saving", Tone: ui.TonePending}, Text: "Saving…"})
+	} else {
+		children = append(children, buttonRow(keyButton("save", "Save (enter)", "enter", true), keyButton("cancel", "Cancel (esc)", "escape", false)))
 	}
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "fields"}, Modal: true, Head: ui.T(title), Children: children})
 }

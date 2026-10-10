@@ -3,7 +3,6 @@ package view
 import (
 	"github.com/Dangerboi/tern-kata/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
-	"github.com/stencil-hq/tern-sdk/go/tern/el"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 	"strings"
 )
@@ -130,9 +129,6 @@ func filterLayer(m model.Model) tern.Element {
 			Field:  ui.Field{Text: field.text, Mode: "insert", Readonly: field.readonly, Prompt: []ui.Span{{T: prompt}}, Placeholder: "Any"},
 		})
 	}
-	children = append(children, ui.Row{Common: ui.Common{Key: "actions"}, Gap: ui.GapMD, Children: ui.Nodes(
-		el.Button{Common: ui.Common{Key: "apply", Actions: &ui.Actions{Click: string(model.ApplyFilters)}}, Text: "Apply filters"},
-		el.Button{Common: ui.Common{Key: "cancel", Actions: &ui.Actions{Click: string(model.CancelFilters)}}, Text: "Cancel"},
-	)})
+	children = append(children, buttonRow(keyButton("apply", "Apply filters", "ctrl+o", true), keyButton("cancel", "Cancel", "escape", false)))
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "filters"}, Head: ui.T("Filter " + m.Collection.Title), Modal: true, Size: ui.SizeMD, Children: children})
 }

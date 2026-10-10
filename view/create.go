@@ -45,11 +45,13 @@ func createLayer(m model.Model) tern.Element {
 	if f.Err != nil {
 		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: f.Err.Error()})
 	}
-	if f.Saving {
+	switch {
+	case f.Saving:
 		children = append(children, ui.Text{Common: ui.Common{Key: "saving", Tone: ui.TonePending}, Text: "Creating Issue…"})
-	}
-	if f.DiscardConfirm {
-		children = append(children, ui.Text{Common: ui.Common{Key: "discard", Tone: ui.ToneWarning}, Text: "Discard this Draft? y discards; n or esc keeps editing."})
+	case f.DiscardConfirm:
+		children = append(children, ui.Text{Common: ui.Common{Key: "discard", Tone: ui.ToneWarning}, Text: "Discard this Draft? y discards; n or esc keeps editing."}, discardButtons())
+	default:
+		children = append(children, buttonRow(keyButton("save", title+" (ctrl+o)", "ctrl+o", true), keyButton("cancel", "Cancel (esc)", "escape", false)))
 	}
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "create"}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
 }

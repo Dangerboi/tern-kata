@@ -89,7 +89,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return next, cmds
 	}
 	switch msg.(type) {
-	case CloseFieldMsg, CloseSubmitMsg, CloseResultMsg:
+	case CloseFieldMsg, CloseResultMsg:
 		return updateClose(m, msg)
 	}
 	if _, ok := msg.(KeyMsg); ok && m.CloseForm.Open {
@@ -104,10 +104,6 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return pickCollectionKey(m, msg.Key)
 	}
 	switch msg := msg.(type) {
-	case FilterFormActionMsg:
-		if m.FilterForm.Open && (msg.Action == ApplyFilters || msg.Action == CancelFilters) {
-			return updateFilterForm(m, msg.Action)
-		}
 	case FilterFieldMsg:
 		if m.FilterForm.Open && msg.Field >= 0 && msg.Field < 5 {
 			m.FilterForm.Field = msg.Field

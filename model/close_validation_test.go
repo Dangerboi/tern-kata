@@ -7,6 +7,9 @@ import (
 	"testing"
 )
 
+// closeSave is a click on the Close Issue button, which presses ctrl+o.
+var closeSave = model.ActionMsg{Action: "key", Value: "ctrl+o"}
+
 func TestCloseSequences(t *testing.T) {
 	for _, tt := range []struct {
 		name           string
@@ -14,11 +17,11 @@ func TestCloseSequences(t *testing.T) {
 		wantError      string
 		submit, reopen bool
 	}{
-		{name: "missing message", msgs: []model.Msg{model.KeyMsg{Chord: "x"}, model.CloseSubmitMsg{}}, wantError: "at least 40"},
-		{name: "missing evidence", msgs: []model.Msg{model.KeyMsg{Chord: "x"}, model.CloseFieldMsg{Field: 1, Value: "Implemented the requested change and verified the result."}, model.CloseSubmitMsg{}}, wantError: "requires commit"},
-		{name: "bad sha", msgs: []model.Msg{model.KeyMsg{Chord: "x"}, model.CloseFieldMsg{Field: 1, Value: "Implemented the requested change and verified the result."}, model.CloseFieldMsg{Field: 2, Value: "invalid"}, model.CloseSubmitMsg{}}, wantError: "hexadecimal"},
-		{name: "valid close", msgs: []model.Msg{model.KeyMsg{Chord: "x"}, model.CloseFieldMsg{Field: 1, Value: "Implemented the requested change and verified the result."}, model.CloseFieldMsg{Field: 4, Value: "go test ./model"}, model.CloseSubmitMsg{}}, submit: true},
-		{name: "invalid reason", msgs: []model.Msg{model.KeyMsg{Chord: "x"}, model.CloseFieldMsg{Field: 0, Value: "other"}, model.CloseSubmitMsg{}}, wantError: "Reason must"},
+		{name: "missing message", msgs: []model.Msg{model.KeyMsg{Chord: "x"}, closeSave}, wantError: "at least 40"},
+		{name: "missing evidence", msgs: []model.Msg{model.KeyMsg{Chord: "x"}, model.CloseFieldMsg{Field: 1, Value: "Implemented the requested change and verified the result."}, closeSave}, wantError: "requires commit"},
+		{name: "bad sha", msgs: []model.Msg{model.KeyMsg{Chord: "x"}, model.CloseFieldMsg{Field: 1, Value: "Implemented the requested change and verified the result."}, model.CloseFieldMsg{Field: 2, Value: "invalid"}, closeSave}, wantError: "hexadecimal"},
+		{name: "valid close", msgs: []model.Msg{model.KeyMsg{Chord: "x"}, model.CloseFieldMsg{Field: 1, Value: "Implemented the requested change and verified the result."}, model.CloseFieldMsg{Field: 4, Value: "go test ./model"}, closeSave}, submit: true},
+		{name: "invalid reason", msgs: []model.Msg{model.KeyMsg{Chord: "x"}, model.CloseFieldMsg{Field: 0, Value: "other"}, closeSave}, wantError: "Reason must"},
 		{name: "reopen", msgs: []model.Msg{model.KeyMsg{Chord: "r"}}, reopen: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

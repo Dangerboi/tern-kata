@@ -54,21 +54,8 @@ func startInputReader(ctx context.Context, session *tern.Session, messages chan<
 				}
 			case *tern.Action:
 				msg = detailAction(input)
-				if strings.HasPrefix(input.ID, "layer.close.") {
-					switch input.Act {
-					case "close-save":
-						msg = model.CloseSubmitMsg{}
-					case "close-quick":
-						msg = model.CloseSubmitMsg{Quick: true}
-					case "close-cancel":
-						msg = model.KeyMsg{Chord: "escape"}
-					}
-				}
 				if input.ID == view.RetryID && input.Act == string(model.RetryAction) {
 					msg = model.Retry{}
-				}
-				if strings.HasPrefix(input.ID, "layer.filters.actions.") {
-					msg = model.FilterFormActionMsg{Action: model.Action(input.Act)}
 				}
 			case *tern.Resize:
 				msg = model.ResizeMsg{Cols: input.Cols}
