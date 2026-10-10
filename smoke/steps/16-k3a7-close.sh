@@ -89,9 +89,9 @@ printf 'Close prompt: kata tui %s ms, tern-kata with its stream open %s ms\n' "$
 ctl dialog cancel >/dev/null
 [[ $(ctl system | jq '.dialogs | length') == 0 ]]
 ctl key '?'
-expect_tree '[data-id="layer.help"]' '.ok and .count == 1'
+expect_tree '[data-id="main.help"]' '.ok and .count == 1'
 ctl key Escape
-expect_tree '[data-id="layer.help"]' '.ok and .count == 0'
+expect_tree '[data-id="main.help"]' '.ok and .count == 0'
 kata --workspace "$tmp/workspace" create "Smoke close second live Issue" --json >"$tmp/pc-live2.json"
 pc_live2=$(jq -r '.issue.uid' "$tmp/pc-live2.json")
 expect_tree "[data-id\$='.$pc_live2']" '.ok and .count == 1'
