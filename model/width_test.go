@@ -49,7 +49,7 @@ func TestResizeBelowMinimumKeepsEverythingElse(t *testing.T) {
 		{"list selection", true, []string{"j"}},
 		{"open detail", true, []string{"j", "enter"}},
 		{"help layer", true, []string{"j", "?"}},
-		{"Collections picker", true, []string{"p"}},
+		{"Menu", true, []string{"p"}},
 		{"unbound sidebar focus", false, []string{"escape"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
