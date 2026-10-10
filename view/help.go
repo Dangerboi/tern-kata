@@ -29,7 +29,7 @@ var helpTable = []helpGroup{
 	{"Global", []helpEntry{
 		{"help", "", []model.Action{model.ToggleHelp}},
 		{"quit", "", []model.Action{model.QuitAction}},
-		{"projects", model.ModeList, []model.Action{model.OpenPicker}},
+		{"menu/projects", model.ModeList, []model.Action{model.OpenPicker}},
 		{"toggle layout", model.ModeList, []model.Action{model.ToggleDetail}},
 	}},
 	{"Graph", []helpEntry{
