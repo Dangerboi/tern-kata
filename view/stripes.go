@@ -3,8 +3,17 @@ package view
 // StripeRole is the role of every other drawn Issue row; StripeCSS shades it.
 const StripeRole = "tern-kata.stripe"
 
-// CSS is the plugin's whole style sheet: StripeCSS then SelectedCSS.
-const CSS = StripeCSS + "\n" + SelectedCSS
+// CSS is the plugin's whole style sheet: StripeCSS, SelectedCSS, ModeChipCSS, then OrderedListCSS.
+const CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS
+
+// ModeChipCSS hides the mode label Tern draws at the end of an input. Every
+// single-line input sets a mode so Tern's native editing stays off (the model
+// handles the keys), and the label means nothing to the user.
+const ModeChipCSS = `.sf-ed-mode { display: none !important; }`
+
+// OrderedListCSS gives ordered lists in markdown room for a three-character
+// marker ("10."); Tern's default start padding clips two-digit numbers.
+const OrderedListCSS = `.md ol { padding-left: 40px !important; }`
 
 // StripeCSS is the plugin's style sheet, installed once on the surface (Tern
 // confines it to the surface). The shade mixes the theme's text colour into the
