@@ -70,17 +70,23 @@ func TestHistoryReadsAsOneSentencePerEvent(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			row := historyRow(t, tt.event)
-			if row.Title != tt.title || row.History.Tone != tt.tone {
-				t.Errorf("title = %q tone = %q, want %q %q", row.Title, row.History.Tone, tt.title, tt.tone)
+			title := sentence(row)
+			if title != tt.title || row.History.Tone != tt.tone {
+				t.Errorf("title = %q tone = %q, want %q %q", title, row.History.Tone, tt.title, tt.tone)
 			}
 			if row.Body != tt.detail {
 				t.Errorf("detail = %q, want %q", row.Body, tt.detail)
 			}
-			if strings.Contains(row.Title+row.Body, `{"`) {
-				t.Errorf("row shows JSON: %q / %q", row.Title, row.Body)
+			if strings.Contains(title+row.Body, `{"`) {
+				t.Errorf("row shows JSON: %q / %q", title, row.Body)
 			}
 		})
 	}
+}
+
+// sentence is the event as one line, author first, the way a reader takes it in.
+func sentence(row model.DetailRow) string {
+	return strings.TrimSpace(strings.Join([]string{row.Author, row.History.Verb, row.History.Object, row.Ref}, " "))
 }
 
 func TestHistoryTimestampsAreLocalAndShort(t *testing.T) {
@@ -88,8 +94,8 @@ func TestHistoryTimestampsAreLocalAndShort(t *testing.T) {
 	time.Local = time.FixedZone("test", 2*3600)
 	t.Cleanup(func() { time.Local = saved })
 	row := historyRow(t, g.Event{Type: "issue.reopened", Payload: "{}"})
-	if row.History.When != "2026-10-08 20:05" {
-		t.Fatalf("when = %q", row.History.When)
+	if row.Time != "2026-10-08 20:05" {
+		t.Fatalf("time = %q", row.Time)
 	}
 }
 

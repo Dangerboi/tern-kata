@@ -8,7 +8,7 @@
 
 **Collection**: A named set of issues the user browses: Inbox, Today, Upcoming, Deadlines, All Open, Logbook, or one project.
 
-**Collections picker**: The popup inside the Pane that switches the current Collection: a type-to-filter list with the current Collection marked and the bound Project pinned first. It stands in for the Collections sidebar, which only an unbound directory shows, and only while a fixed Collection is current. _Avoid_: palette (Tern's own command palette).
+**Menu**: The popup inside the Pane that switches the current Collection: a type-to-filter list with the current Collection marked and the bound Project pinned first. It stands in for the Menu sidebar, which only an unbound directory shows, and only while a fixed Collection is current. _Avoid_: palette (Tern's own command palette).
 
 **Blocking link**: kata's `blocks` / `blocked_by` relationship between two issues. _Avoid_: block, blocker.
 

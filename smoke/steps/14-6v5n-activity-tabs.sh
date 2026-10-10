@@ -40,7 +40,7 @@ ctl click "[data-id='main.columns.collections.project.$at_project']"
 expect_tree "[data-id\$='.$at_main']" '.ok and .count == 1'
 ctl click "[data-id\$='.$at_main']"
 at_tab="main.columns.detail.viewport.content.activity.tabs.tab"
-at_rows="[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.heading']"
+at_cards="[data-id^='main.columns.detail.viewport.content.activity.'].sf-card"
 at_label() { expect_tree "[data-id='$at_tab$1']" ".ok and (.nodes[0].text | $2)"; }
 ctl key enter
 
@@ -48,7 +48,8 @@ ctl key enter
 at_label 0 'startswith("[ Comments (2) ]")'
 at_label 1 'test("^Events \\([0-9]+\\)$")'
 at_label 2 'startswith("Links (1)")'
-expect_tree "$at_rows" '.ok and .count == 2 and ([.nodes[].text] | all(test("^dangerboi / [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$")))'
+expect_tree "$at_cards .sf-t-strong" '.ok and .count == 2 and ([.nodes[].text] | all(. == "dangerboi"))'
+expect_tree "$at_cards .sf-t-muted" '.ok and .count == 2 and ([.nodes[].text] | all(test("^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$")))'
 
 # tab and shift+tab cycle Comments -> Events -> Links -> Comments.
 ctl key Tab
