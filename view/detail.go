@@ -54,9 +54,9 @@ func detail(m model.Model, now time.Time) tern.Element {
 		if m.DetailLoading {
 			title = append(title, loadingMarker)
 		}
-		parts := []tern.Element{ui.Row{Common: ui.Common{Key: "heading"}, Gap: ui.GapSM, Children: ui.Nodes(
+		parts := []tern.Element{ui.Col{Common: ui.Common{Key: "heading"}, Children: ui.Nodes(
 			ui.Text{Common: ui.Common{Key: "title", Actions: &ui.Actions{Click: "focus-detail"}}, Spans: title},
-			ui.Badge{Common: ui.Common{Key: "status", Tone: statusTone(issue.Status)}, Text: issue.Status},
+			ui.Badge{Common: ui.Common{Key: "status", Tone: statusTone(issue.Status)}, Text: statusText(issue)},
 		)}, ui.Spacer{Common: ui.Common{Key: "gap"}, Size: ui.GapMD}}
 		body := issue.Body
 		if parent, ok := parentLink(m); ok {
@@ -76,6 +76,14 @@ func detail(m model.Model, now time.Time) tern.Element {
 		children = append(children, ui.List{CommonWithoutMax: scrollerCommon("viewport"), Max: scrollMax(m), Children: ui.Nodes(ui.Col{Common: ui.Common{Key: "content"}, Gap: ui.GapSM, Children: parts})})
 	}
 	return panel(m, model.ColumnDetail, ui.Common{Key: "detail", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapMD, children)
+}
+
+// statusText is the status badge text: the status, plus the close reason of a closed Issue.
+func statusText(issue *model.Issue) string {
+	if issue.ClosedReason != nil && *issue.ClosedReason != "" && issue.Status == "closed" {
+		return issue.Status + " · " + *issue.ClosedReason
+	}
+	return issue.Status
 }
 
 // activityTabs is the Activity heading with a clickable name and count per tab;
@@ -228,9 +236,6 @@ func properties(m model.Model, issue *model.Issue) tern.Element {
 	}
 	if counts := m.ChildCounts[issue.UID]; counts.Total > 0 {
 		add("Children", text(fmt.Sprintf("%d open / %d total", counts.Open, counts.Total)))
-	}
-	if issue.ClosedReason != nil && *issue.ClosedReason != "" {
-		add("Closed", text(*issue.ClosedReason))
 	}
 	keyWidth := 0
 	for _, r := range rows {

@@ -133,7 +133,11 @@ func TestDetailHeaderIsTheTitleAndStatusWithoutButtonsOrBodyHeading(t *testing.T
 		t.Errorf("title %q, want %q", got, "#aaaa - Alpha")
 	}
 	if badge := nodes[view.DetailContentID+".heading.status"]; text(badge) != "open" || badge.P["tone"] != "accent" {
-		t.Errorf("status badge after the title: %v", badge)
+		t.Errorf("status badge under the title: %v", badge)
+	}
+	heading := nodes[view.DetailContentID+".heading"]
+	if len(heading.C) != 2 || text(heading.C[0]) != "#aaaa - Alpha" || text(heading.C[1]) != "open" {
+		t.Errorf("heading is not the title then the badge: %v", heading.C)
 	}
 	if ids := nodes.under(view.DetailID); slices.ContainsFunc(ids, func(id string) bool {
 		return strings.HasSuffix(id, ".navigation") || strings.Contains(id, ".navigation.") || strings.HasSuffix(id, ".back") || strings.HasSuffix(id, ".toggle")
@@ -201,6 +205,18 @@ func TestCommentsAndEventsAreCardsWithTheAuthorAndTheTimeApart(t *testing.T) {
 	}
 }
 
+func TestClosedIssueBadgeCarriesTheCloseReason(t *testing.T) {
+	reason := "done"
+	issue := model.Issue{UID: "alpha", ShortID: "aaaa", Title: "A", Status: "closed", ProjectName: "work", ClosedReason: &reason}
+	nodes := render(t, apply(browsing(), detailOf(issue)))
+	if badge := nodes[view.DetailContentID+".heading.status"]; text(badge) != "closed · done" || badge.P["tone"] != "muted" {
+		t.Errorf("closed badge: %v", badge)
+	}
+	if _, ok := nodes[view.DetailContentID+".properties.closed"]; ok {
+		t.Error("properties still have a Closed row")
+	}
+}
+
 func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	p1, owner, reason, day := int64(1), "dana", "done", "2026-11-01"
 	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
@@ -215,7 +231,7 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	for _, row := range props.C {
 		keys = append(keys, strings.TrimRight(text(nodes[row.ID+".k"]), "\u00a0"))
 	}
-	want := []string{"Author:", "Created:", "Updated:", "Scheduled:", "Deadline:", "Owner:", "Priority:", "Labels:", "Parent:", "Children:", "Closed:"}
+	want := []string{"Author:", "Created:", "Updated:", "Scheduled:", "Deadline:", "Owner:", "Priority:", "Labels:", "Parent:", "Children:"}
 	if !slices.Equal(keys, want) {
 		t.Errorf("keys %v, want %v", keys, want)
 	}
