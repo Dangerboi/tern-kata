@@ -195,7 +195,7 @@ func TestTopBarIsOneRowWithTheDaemonRightAligned(t *testing.T) {
 	for _, cell := range nodes["main.topbar"].C {
 		got = append(got, text(cell))
 	}
-	want := []string{"Project: work", "open: 2 · closed: 0 · all: 2", "Daemon: local · kata v0.18.0"}
+	want := []string{"Menu (p)", "Project: work", "open: 2 · closed: 0 · all: 2", "Daemon: local · kata v0.18.0"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("top bar %q, want %q", got, want)
 	}

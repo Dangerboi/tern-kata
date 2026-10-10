@@ -15,6 +15,7 @@ const (
 	DrillIn              Action = "drill-in"
 	DrillOut             Action = "drill-out"
 	ToggleDetail         Action = "toggle-detail"
+	FocusDetail          Action = "focus-detail"
 	NextActivityTab      Action = "next-activity-tab"
 	PreviousActivityTab  Action = "previous-activity-tab"
 	ToggleHelp           Action = "help"
@@ -163,7 +164,7 @@ var Keymap = []Binding{
 	{Chord: "left", Key: "left", Action: CollapseIssue, Help: "collapse", Mode: ModeList},
 	{Chord: "shift+e", Key: "E", Action: ToggleAllExpansion, Help: "expand/collapse all", Mode: ModeList},
 	{Chord: "v", Key: "v", Action: ToggleIssueView, Help: "flat/nested", Mode: ModeList, ShowInFooter: true},
-	{Chord: "escape", Key: "esc", Action: DrillOut, Help: "Collections", Mode: ModeList, ShowInFooter: true},
+	{Chord: "escape", Key: "esc", Action: DrillOut, Help: "Menu", Mode: ModeList, ShowInFooter: true},
 	{Chord: "j", Key: "j/↓", Action: MoveDown, Help: "next Collection", Mode: ModeCollections, ShowInFooter: true},
 	{Chord: "down", Key: "↓", Action: MoveDown, Help: "next Collection", Mode: ModeCollections},
 	{Chord: "k", Key: "k/↑", Action: MoveUp, Help: "previous Collection", Mode: ModeCollections, ShowInFooter: true},
@@ -173,9 +174,10 @@ var Keymap = []Binding{
 	{Chord: "shift+g", Key: "G", Action: MoveLast, Help: "last Collection", Mode: ModeCollections},
 	{Chord: "end", Key: "end", Action: MoveLast, Help: "last Collection", Mode: ModeCollections},
 	{Chord: "enter", Key: "enter", Action: DrillIn, Help: "open Collection", Mode: ModeCollections, ShowInFooter: true},
-	{Chord: "p", Key: "p", Action: OpenPicker, Help: "Collections picker", Mode: ModeCollections},
+	{Chord: "p", Key: "p", Action: OpenPicker, Help: "Menu", Mode: ModeCollections},
 	{Chord: "q", Key: "q", Action: QuitAction, Help: "quit", ShowInFooter: true},
 	{Chord: "enter", Key: "enter", Action: DrillIn, Help: "open", Mode: ModeList, ShowInFooter: true},
+	{Chord: "tab", Key: "tab", Action: FocusDetail, Help: "detail", Mode: ModeList, ShowInFooter: true},
 	{Chord: "shift+l", Key: "L", Action: ToggleDetail, Help: "toggle detail", Mode: ModeList, ShowInFooter: true},
 	{Chord: "shift+l", Key: "L", Action: ToggleDetail, Help: "toggle detail", Mode: ModeDetail, ShowInFooter: true},
 	{Chord: "j", Key: "j/k", Action: MoveDown, Help: "row", Mode: ModeDetail, ShowInFooter: true},
@@ -227,9 +229,9 @@ var Keymap = []Binding{
 	{Chord: "up", Key: "up", Action: FieldPrevious, Help: "previous completion", Mode: ModeFieldForm},
 	{Chord: "backspace", Key: "backspace", Action: FieldErase, Help: "erase", Mode: ModeFieldForm},
 	{Chord: "ctrl+u", Key: "ctrl+u", Action: FieldReset, Help: "clear input", Mode: ModeFieldForm},
-	// Collections picker. It has a type-to-filter box, so single-character bindings (j, k) move only while the filter is empty.
-	{Chord: "p", Key: "p", Action: OpenPicker, Help: "Collections picker", Mode: ModeList, ShowInFooter: true},
-	{Chord: "p", Key: "p", Action: OpenPicker, Help: "Collections picker", Mode: ModeDetail, ShowInFooter: true},
+	// Menu. It has a type-to-filter box, so single-character bindings (j, k) move only while the filter is empty.
+	{Chord: "p", Key: "p", Action: OpenPicker, Help: "Menu", Mode: ModeList, ShowInFooter: true},
+	{Chord: "p", Key: "p", Action: OpenPicker, Help: "Menu", Mode: ModeDetail, ShowInFooter: true},
 	{Chord: "down", Key: "↓", Action: MoveDown, Help: "next Collection", Mode: ModePicker, ShowInFooter: true},
 	{Chord: "up", Key: "↑", Action: MoveUp, Help: "previous Collection", Mode: ModePicker, ShowInFooter: true},
 	{Chord: "j", Key: "j", Action: MoveDown, Help: "next Collection (empty filter)", Mode: ModePicker},

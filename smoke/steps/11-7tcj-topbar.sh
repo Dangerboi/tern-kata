@@ -20,13 +20,13 @@ expect_tree "$bar_cells" '.ok and .count == 4 and ([.nodes[].rect[1]] | unique |
   and (.nodes[3].text | startswith("Daemon: local"))'
 expect_tree "[data-id='main.filters']" '.ok and .count == 0'
 
-# One column (80-139): the Daemon gives way first, then the counts, the title stays whole.
+# One column (80-139): the Daemon gives way first, then the counts, the title is cut last.
 ctl resize 900 "$bar_height"
 expect_tree "[data-id='main.topbar.daemon']" '.ok and .count == 1 and (.nodes[0].text | endswith("…"))'
-expect_tree "[data-id='main.topbar.counts']" '.nodes[0].text == "open: 1 · closed: 0 · all: 1"'
+expect_tree "[data-id='main.topbar.counts']" '.nodes[0].text | startswith("open: 1")'
 ctl resize 680 "$bar_height"
 expect_tree "[data-id='main.topbar.counts']" '.nodes[0].text | endswith("…")'
-expect_tree "[data-id='main.topbar.heading']" ".nodes[0].text == \"Project: $bar_name\""
+expect_tree "[data-id='main.topbar.heading']" ".nodes[0].text | startswith(\"Project: topbar\")"
 ctl resize "$bar_full" "$bar_height"
 
 # A filter adds its line; clearing it takes the line away. The title never carries filters.
@@ -37,10 +37,18 @@ ctl key s
 ctl key s
 expect_tree "[data-id='main.filters']" '.ok and .count == 0'
 
-# The title still opens the Collections picker.
+# The title still opens the Menu.
 ctl click "[data-id='main.topbar.heading']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 ctl key esc
+expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
+
+# The Menu (p) button sits at the bar's left at the default width; a click opens the Menu, Close (esc) closes it.
+expect_tree "[data-id='main.topbar.menu']" '.ok and .count == 1 and .nodes[0].text == "Menu (p)"'
+expect_tree "[data-id='main.topbar.menu'],[data-id='main.topbar.heading']" '.nodes[0].rect[0] < .nodes[1].rect[0]'
+ctl click "[data-id='main.topbar.menu']"
+expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
+ctl click "[data-id='layer.collections.close']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 
 quit_app

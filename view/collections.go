@@ -22,5 +22,5 @@ func Collections(m model.Model) tern.Element {
 			selected = CollectionsID + "." + m.Collections[m.CollectionCursor].Key()
 		}
 	}
-	return ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "collections"}, Selected: selected, Empty: ui.T("Loading Collections…"), Children: items}
+	return ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "collections"}, Selected: selected, Empty: ui.T("Loading Menu…"), Children: items}
 }
