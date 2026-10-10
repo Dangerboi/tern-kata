@@ -77,7 +77,7 @@ func IsTransientTarget(id string) bool {
 	if field, ok := strings.CutPrefix(id, "layer.close.field"); ok {
 		return len(field) == 1 && field[0] >= '0' && field[0] <= '6'
 	}
-	return strings.HasPrefix(id, IssueListID+".")
+	return strings.HasPrefix(id, IssueListID+".") || strings.HasPrefix(id, DetailActivityID+".")
 }
 
 func filterLayer(m model.Model) tern.Element {

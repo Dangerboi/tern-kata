@@ -1,7 +1,7 @@
 # The Activity tabs: Comments, Events and Links with their counts, one tab's rows at a time. tab and
 # shift+tab cycle them, a click on a tab name selects it, the tab stays when another Issue opens, and j/k
-# move the row cursor without making the detail reveal anything (Tern pins a reveal's target and kills the
-# wheel), so the wheel and the keys still scroll the detail afterwards. Own Project and Issues; it cleans up.
+# move the row cursor without making the detail reveal anything (Tern pins a reveal's target and could kill the
+# wheel; only a tab switch reveals, the pair of 19-yd2n), so the wheel and the keys still scroll the detail afterwards. Own Project and Issues; it cleans up.
 at_rects() { ctl tree "[data-id='main.columns.detail.viewport'],[data-id='main.columns.detail.viewport.content']" | jq -c '[.nodes[].rect]'; }
 # How far the content is scrolled and how much is left below the viewport's bottom edge, in px.
 at_above() { at_rects | jq -r '.[1][1] - .[0][1] | -floor'; }
@@ -76,7 +76,7 @@ at_keys Down 3
 at_wait "↓ scrolls after j/k" '$a > 0'
 at_keys PageUp 12
 at_wait "pgup returns to the top after j/k" '$a == 0'
-jq -c 'select(.dir == "out" and .verb == "f") | .body.ops[] | select(.[0] == "reveal" and (.[1] | startswith("main.columns.detail")))' "$tmp/tabs-frames.jsonl" >"$tmp/tabs-reveals.json"
+jq -sc '[.[] | select(.dir == "out" and .verb == "f") | .body.ops[] | select(.[0] == "reveal" and (.[1] | startswith("main.columns.detail")))] as $r | range(0; $r | length) as $i | select(([$r[$i][1], ($r[$i + 1][1] // "")] | any(endswith(".activity.tabs"))) | not) | $r[$i]' "$tmp/tabs-frames.jsonl" >"$tmp/tabs-reveals.json"
 [[ ! -s $tmp/tabs-reveals.json ]] || { printf 'Reveal inside the detail for a key: %s\n' "$(<"$tmp/tabs-reveals.json")" >&2; return 1; }
 
 # A click on a tab name selects it, and the tab stays when another Issue opens.

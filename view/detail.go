@@ -26,6 +26,17 @@ const DetailContentID = DetailScrollID + ".content"
 // DetailActivityID holds the Activity heading, its tab names and the active tab's rows.
 const DetailActivityID = DetailContentID + ".activity"
 
+// ActivityRevealIDs are the nodes to reveal, in this order, to bring the active Activity tab into view:
+// the last node of its rows (or its empty line), then the tab names.
+func ActivityRevealIDs(m model.Model) []string {
+	last := DetailActivityID + ".empty"
+	if count := m.DetailRowCount(m.ActivityTab); count > 0 {
+		row, _ := m.DetailRow(m.ActivityTab, count-1)
+		last = DetailActivityID + "." + row.Key
+	}
+	return []string{last, DetailActivityID + ".tabs"}
+}
+
 func detail(m model.Model, now time.Time) tern.Element {
 	var children tern.Nodes
 	switch {

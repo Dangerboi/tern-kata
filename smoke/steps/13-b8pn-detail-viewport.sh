@@ -1,6 +1,6 @@
 # The detail is one scroll container: with the detail focused the wheel, ↓ and pgdn reach the end of a
 # long body, ↑ and pgup come back, the top bar never moves, a key move in the detail leaves the wheel
-# working (Tern pins a reveal's target, so the detail never reveals), and a different Issue opens at its
+# working (Tern pins a reveal's target, so the detail reveals only for a tab switch, 19-yd2n), and a different Issue opens at its
 # top. Own Project and Issues; it cleans up.
 vp_rects() { ctl tree "[data-id='main.columns.detail.viewport'],[data-id='main.columns.detail.viewport.content']" | jq -c '[.nodes[].rect]'; }
 # How far the content is scrolled and how much is left below the viewport's bottom edge, in px.
@@ -65,7 +65,7 @@ vp_wait "↑ scrolls up by a line" '$b > 20'
 vp_keys PageUp 12
 vp_wait "pgup returns to the top" '$a == 0'
 
-# Key moves in the detail (tab, j) leave the wheel working: they used to reveal, and Tern pins the target.
+# Key moves in the detail (tab, j) leave the wheel working: only a tab switch reveals (the new tab, see 19-yd2n), and the wheel works after it.
 vp_keys Tab 3
 vp_keys j 2
 vp_keys Tab 3
@@ -73,7 +73,7 @@ vp_wheel 300 12
 vp_wait "the wheel after tab and j" '$b <= 1'
 vp_wheel -300 12
 vp_wait "the wheel back up after tab and j" '$a == 0'
-jq -c 'select(.dir == "out" and .verb == "f") | .body.ops[] | select(.[0] == "reveal" and (.[1] | startswith("main.columns.detail")))' "$tmp/viewport-frames.jsonl" >"$tmp/viewport-reveals.json"
+jq -sc '[.[] | select(.dir == "out" and .verb == "f") | .body.ops[] | select(.[0] == "reveal" and (.[1] | startswith("main.columns.detail")))] as $r | range(0; $r | length) as $i | select(([$r[$i][1], ($r[$i + 1][1] // "")] | any(endswith(".activity.tabs"))) | not) | $r[$i]' "$tmp/viewport-frames.jsonl" >"$tmp/viewport-reveals.json"
 [[ ! -s $tmp/viewport-reveals.json ]] || { printf 'Reveal inside the detail for a key: %s\n' "$(<"$tmp/viewport-reveals.json")" >&2; return 1; }
 
 # A different Issue opens at its top.

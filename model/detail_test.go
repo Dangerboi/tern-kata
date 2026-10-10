@@ -62,6 +62,7 @@ func TestSelectedIssueRequestsDetail(t *testing.T) {
 }
 
 func TestActivityTabsAndReferenceJump(t *testing.T) {
+	reveal := []model.Cmd{model.RevealActivityTab{}}
 	for _, tt := range []struct {
 		name     string
 		msgs     []model.Msg
@@ -70,10 +71,10 @@ func TestActivityTabsAndReferenceJump(t *testing.T) {
 		focus    model.Column
 		wantCmds []model.Cmd
 	}{
-		{"next tab", []model.Msg{model.KeyMsg{Chord: "tab"}}, model.TabEvents, "a", model.ColumnDetail, nil},
-		{"previous wraps", []model.Msg{model.KeyMsg{Chord: "shift+tab"}}, model.TabLinks, "a", model.ColumnDetail, nil},
-		{"next wraps", []model.Msg{model.KeyMsg{Chord: "shift+tab"}, model.KeyMsg{Chord: "tab"}}, model.TabComments, "a", model.ColumnDetail, nil},
-		{"click selects a tab", []model.Msg{model.ActivityTabMsg{Tab: model.TabLinks}}, model.TabLinks, "a", model.ColumnDetail, nil},
+		{"next tab", []model.Msg{model.KeyMsg{Chord: "tab"}}, model.TabEvents, "a", model.ColumnDetail, reveal},
+		{"previous wraps", []model.Msg{model.KeyMsg{Chord: "shift+tab"}}, model.TabLinks, "a", model.ColumnDetail, reveal},
+		{"next wraps", []model.Msg{model.KeyMsg{Chord: "shift+tab"}, model.KeyMsg{Chord: "tab"}}, model.TabComments, "a", model.ColumnDetail, reveal},
+		{"click selects a tab", []model.Msg{model.ActivityTabMsg{Tab: model.TabLinks}}, model.TabLinks, "a", model.ColumnDetail, reveal},
 		{"link reference, tab kept across Issues", []model.Msg{model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "enter"}}, model.TabLinks, "closed-b", model.ColumnDetail, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "closed-b"}}},
 		{"event reference", []model.Msg{model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "enter"}}, model.TabEvents, "closed-b", model.ColumnDetail, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "closed-b"}}},
 		{"reference back stays in detail", []model.Msg{model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "enter"}, model.KeyMsg{Chord: "escape"}}, model.TabLinks, "a", model.ColumnDetail, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "a"}}},
@@ -81,7 +82,7 @@ func TestActivityTabsAndReferenceJump(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			peer := "closed-b"
-			m := model.Model{Workspace: "/repo", Focus: model.ColumnDetail, SelectedUID: "a", DetailUID: "a", Issues: []model.Issue{{UID: "a"}}, Detail: &g.UISelectedAuthority{
+			m := model.Model{Workspace: "/repo", Cols: 160, Focus: model.ColumnDetail, SelectedUID: "a", DetailUID: "a", Issues: []model.Issue{{UID: "a"}}, Detail: &g.UISelectedAuthority{
 				Issue:   &model.Issue{UID: "a"},
 				Links:   []g.UILink{{ID: 1, FromIssueUID: "a", ToIssueUID: peer, ToQualifiedID: "other#bbbb", Type: "related"}},
 				History: []g.Event{{UID: "event-1", RelatedIssueUID: &peer}},
@@ -154,7 +155,7 @@ func TestLinkRelationsRelativeToSelectedIssue(t *testing.T) {
 }
 
 func TestJKMoveTheRowCursorInsideTheActiveTab(t *testing.T) {
-	m := model.Model{Workspace: "/repo", Focus: model.ColumnDetail, SelectedUID: "a", DetailUID: "a", Issues: []model.Issue{{UID: "a"}}, Detail: &g.UISelectedAuthority{
+	m := model.Model{Workspace: "/repo", Cols: 160, Focus: model.ColumnDetail, SelectedUID: "a", DetailUID: "a", Issues: []model.Issue{{UID: "a"}}, Detail: &g.UISelectedAuthority{
 		Issue:    &model.Issue{UID: "a"},
 		Comments: []g.Comment{{UID: "c1"}, {UID: "c2"}, {UID: "c3"}},
 		Links:    []g.UILink{{ID: 1, FromIssueUID: "a", ToIssueUID: "b", ToQualifiedID: "w#b", Type: "related"}},
@@ -164,20 +165,20 @@ func TestJKMoveTheRowCursorInsideTheActiveTab(t *testing.T) {
 		tab       model.ActivityTab
 		index     int
 		selected  string
-		wantLoads int
+		wantCmds  int
 	}{
 		{"j", model.TabComments, 1, "a", 0},
 		{"j", model.TabComments, 2, "a", 0},
 		{"j", model.TabComments, 2, "a", 0}, // stops at the last row
 		{"k", model.TabComments, 1, "a", 0},
 		{"enter", model.TabComments, 1, "a", 0}, // a comment has no reference
-		{"tab", model.TabEvents, 0, "a", 0},     // a new tab starts at its first row
-		{"tab", model.TabLinks, 0, "a", 0},
+		{"tab", model.TabEvents, 0, "a", 1},     // a new tab starts at its first row; the reveal is the one command
+		{"tab", model.TabLinks, 0, "a", 1},
 		{"enter", model.TabLinks, 0, "b", 1},
 	} {
 		var cmds []model.Cmd
 		m, cmds = model.Update(m, model.KeyMsg{Chord: step.chord})
-		if m.ActivityTab != step.tab || m.DetailIndex != step.index || m.SelectedUID != step.selected || len(cmds) != step.wantLoads {
+		if m.ActivityTab != step.tab || m.DetailIndex != step.index || m.SelectedUID != step.selected || len(cmds) != step.wantCmds {
 			t.Fatalf("after %s: tab=%v index=%d selected=%s cmds=%#v", step.chord, m.ActivityTab, m.DetailIndex, m.SelectedUID, cmds)
 		}
 	}

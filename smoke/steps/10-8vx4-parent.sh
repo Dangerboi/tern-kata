@@ -83,9 +83,10 @@ done
 ctl resize 1200 "$parent_height"
 ctl key esc
 
-# The plugin never met a surface error, and the Pane is still its Pane.
+# The plugin met no surface error but the rejected reveals of rows a faster tab key had already replaced (the
+# plugin drops those, input.go), and the Pane is still its Pane.
 expect_tree "[data-id^='main.']" '.ok and .count > 0'
-parent_errors=$(jq -c 'select(.dir == "in" and .verb == "e" and .body.ev == "error")' "$tmp/parent-frames.jsonl")
+parent_errors=$(jq -c 'select(.dir == "in" and .verb == "e" and .body.ev == "error" and (.body.msg | startswith("unknown id main.columns.detail.viewport.content.activity.") | not))' "$tmp/parent-frames.jsonl")
 [[ -z $parent_errors ]] || { printf 'Tern sent surface errors:\n%s\n' "$parent_errors" >&2; return 1; }
 
 quit_app

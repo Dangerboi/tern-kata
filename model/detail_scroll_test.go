@@ -48,3 +48,36 @@ func TestLetterKeysStillMoveTheDetailCursor(t *testing.T) {
 		t.Fatalf("j: index %d, commands %#v", got.DetailIndex, cmds)
 	}
 }
+
+// Switching Activity tab, by key or click, asks the app to bring the new tab into view; keeping the tab changes nothing.
+func TestSwitchingActivityTabRevealsIt(t *testing.T) {
+	reveal := []model.Cmd{model.RevealActivityTab{}}
+	detail := arrowModes(t)["detail"]
+	for name, msg := range map[string]model.Msg{
+		"tab":       model.KeyMsg{Chord: "tab"},
+		"shift+tab": model.KeyMsg{Chord: "shift+tab"},
+		"click":     model.ActivityTabMsg{Tab: (detail.ActivityTab + 1) % model.TabCount},
+	} {
+		if _, cmds := model.Update(detail, msg); !reflect.DeepEqual(cmds, reveal) {
+			t.Errorf("%s: commands %#v, want %#v", name, cmds, reveal)
+		}
+	}
+	if _, cmds := model.Update(detail, model.ActivityTabMsg{Tab: detail.ActivityTab}); len(cmds) != 0 {
+		t.Errorf("re-clicking the active tab: %#v", cmds)
+	}
+}
+
+// Tern ends the program on a reveal aimed at a node it does not draw: the detail folded away, or not yet loaded.
+func TestActivityTabRevealIsSentOnlyWhileTheTabsAreDrawn(t *testing.T) {
+	folded := arrowModes(t)["detail"]
+	folded.Cols = 60
+	unloaded := arrowModes(t)["detail"]
+	unloaded.Detail = nil
+	for name, m := range map[string]model.Model{"folded": folded, "unloaded": unloaded} {
+		for _, msg := range []model.Msg{model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "shift+tab"}, model.ActivityTabMsg{Tab: model.TabComments}} {
+			if _, cmds := model.Update(m, msg); len(cmds) != 0 {
+				t.Errorf("%s, %T: %#v", name, msg, cmds)
+			}
+		}
+	}
+}
