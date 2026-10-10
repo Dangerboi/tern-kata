@@ -86,9 +86,6 @@ func TestEventsReferenceIsStyledAndPlainEventsAreNot(t *testing.T) {
 	m, _ := referencing(model.TabEvents)
 	nodes := render(t, m)
 	assertReference(t, nodes, view.DetailActivityID+".linked.row.jump", "peer", "peer")
-	if style := spanStyles(t, nodes[view.DetailActivityID+".linked.row.heading"].P)["dana"]; style != "muted" {
-		t.Errorf("actor style = %q", style)
-	}
 	if _, ok := nodes[view.DetailActivityID+".closed.heading"]; !ok {
 		t.Fatalf("no plain heading: %v", nodes.under(view.DetailActivityID))
 	}

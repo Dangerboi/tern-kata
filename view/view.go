@@ -9,6 +9,7 @@ import (
 
 	"github.com/Dangerboi/tern-kata/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
+	"github.com/stencil-hq/tern-sdk/go/tern/el"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
@@ -155,7 +156,7 @@ func scrollMax(m model.Model) ui.ListMax {
 
 // topBar is the pinned row above the columns: the Collection title with its
 // markers on the left, the counts, and the Daemon at the right. Clicking the
-// title opens the picker. When the row is too narrow Tern's flex shrinks and
+// title and the Menu (p) button at its left open the Menu. When the row is too narrow Tern's flex shrinks and
 // truncates the cells, the Daemon first, then the counts, then the title.
 func topBar(m model.Model) tern.Element {
 	tone, style := ui.ToneNeutral, "strong"
@@ -174,8 +175,9 @@ func topBar(m model.Model) tern.Element {
 		return ui.Common{Key: key, Tone: tone, Shrink: &shrink}
 	}
 	headingCell := flexCell("heading", tone, 0.01)
-	headingCell.Title, headingCell.Actions = "Collections picker (p)", &ui.Actions{Click: "key=p"}
+	headingCell.Title, headingCell.Actions = "Menu (p)", &ui.Actions{Click: "key=p"}
 	return ui.Row{Common: ui.Common{Key: "topbar"}, Gap: ui.GapMD, Justify: ui.JustifyBetween, Children: ui.Nodes(
+		el.Button{Common: ui.Common{Key: "menu", Actions: &ui.Actions{Click: "key=p"}}, Text: "Menu (p)"},
 		ui.Text{Common: headingCell, Spans: heading, Wrap: ui.WrapNone},
 		ui.Text{Common: flexCell("counts", ui.ToneMuted, 1), Text: m.CountsLine(), Wrap: ui.WrapNone},
 		ui.Text{Common: flexCell("daemon", ui.ToneMuted, 100), Text: m.DaemonLine(), Wrap: ui.WrapNone},
@@ -294,6 +296,9 @@ func rightCells(kids, owner, updated string, ownerShown bool, style string) []ui
 func footer(m model.Model) tern.Element {
 	segments := make([]tern.Element, 0, len(model.Keymap)+1)
 	for binding := range model.BindingsForMode(m.CurrentMode(), true) {
+		if binding.Action == model.FocusDetail && !m.CanFocusDetail() {
+			continue
+		}
 		segments = append(segments, ui.Seg{Common: ui.Common{Key: binding.Chord, Actions: &ui.Actions{Click: "key=" + binding.Chord}}, Text: binding.Key + " " + binding.Help})
 	}
 	selected := 0

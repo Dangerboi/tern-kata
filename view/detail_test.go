@@ -178,11 +178,26 @@ func TestDetailTitleShowsIDInAccentThenTitleStrong(t *testing.T) {
 	}
 }
 
-func TestCommentHeadingShowsTheAuthorAndTheTimeInTheEventsFormat(t *testing.T) {
-	nodes := render(t, detailWithActivity(model.TabComments))
-	want := "dana / " + time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC).In(time.Local).Format("2006-01-02 15:04")
-	if got := text(nodes[view.DetailActivityID+".c1.heading"]); got != want {
-		t.Errorf("comment heading %q, want %q", got, want)
+func TestCommentsAndEventsAreCardsWithTheAuthorAndTheTimeApart(t *testing.T) {
+	when := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC).In(time.Local).Format("2006-01-02 15:04")
+	for _, tt := range []struct {
+		tab model.ActivityTab
+		key string
+	}{{model.TabComments, "c1"}, {model.TabEvents, "e1"}} {
+		card := render(t, detailWithActivity(tt.tab))[view.DetailActivityID+"."+tt.key]
+		if card.K != "card" || card.P["variant"] != "bare" {
+			t.Fatalf("%s is %s %v, want a bare card", tt.key, card.K, card.P["variant"])
+		}
+		want := [][2]string{{"dana", "strong"}, {"  ", ""}, {when, "muted"}}
+		var got [][2]string
+		for _, span := range card.P["head"].([]any) {
+			f := span.(map[string]any)
+			style, _ := f["s"].(string)
+			got = append(got, [2]string{f["t"].(string), style})
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("%s head = %v, want %v", tt.key, got, want)
+		}
 	}
 }
 
@@ -200,7 +215,7 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	for _, row := range props.C {
 		keys = append(keys, strings.TrimRight(text(nodes[row.ID+".k"]), "\u00a0"))
 	}
-	want := []string{"Author:", "Created:", "Updated:", "Scheduled:", "Deadline:", "Owner:", "Parent:", "Priority:", "Labels:", "Children:", "Closed:"}
+	want := []string{"Author:", "Created:", "Updated:", "Scheduled:", "Deadline:", "Owner:", "Priority:", "Labels:", "Parent:", "Children:", "Closed:"}
 	if !slices.Equal(keys, want) {
 		t.Errorf("keys %v, want %v", keys, want)
 	}
@@ -218,5 +233,28 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	}
 	if want := []string{"Created:", "Updated:", "Owner:"}; !slices.Equal(keys, want) {
 		t.Errorf("bare keys %v, want %v", keys, want)
+	}
+}
+
+func TestLeadingParentSectionIsHiddenOnlyWhenItNamesTheParent(t *testing.T) {
+	links := []g.UILink{{ID: 1, Type: "parent", FromIssueUID: "kid", FromQualifiedID: "work#kidd", ToIssueUID: "up", ToQualifiedID: "work#upup"}}
+	bodyText := func(issue model.Issue, links []g.UILink) string {
+		nodes := render(t, apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: links}},
+			model.DetailLoaded{UID: "kid", Selected: &g.UISelectedAuthority{Issue: &issue, Links: links}}))
+		return text(nodes[view.DetailContentID+".body"])
+	}
+	kid := func(body string) model.Issue {
+		return model.Issue{UID: "kid", ShortID: "kidd", Title: "K", Status: "open", ProjectName: "work", Revision: 1, Body: body}
+	}
+	if got := bodyText(kid("## Parent\n\nupup\n\n## What\n\nbuild it"), links); got != "## What\n\nbuild it" {
+		t.Errorf("section naming the parent: body %q", got)
+	}
+	other := "## Parent\n\nsomething else\n\n## What\n\nbuild it"
+	if got := bodyText(kid(other), links); got != other {
+		t.Errorf("section naming another Issue: body %q", got)
+	}
+	named := "## Parent\n\nupup\n\n## What\n\nbuild it"
+	if got := bodyText(kid(named), nil); got != named {
+		t.Errorf("no parent: body %q", got)
 	}
 }

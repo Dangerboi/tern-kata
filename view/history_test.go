@@ -43,10 +43,10 @@ func TestHistoryRendersSentencesWithTonedVerbs(t *testing.T) {
 		event, sentence string
 		verb, style     string
 	}{
-		{"e1", "dana created this Issue", "created", "accent"},
-		{"e2", "dana closed: done", "closed:", "success"},
-		{"e3", "dana reopened", "reopened", "warning"},
-		{"e4", "dana assigned to alice", "assigned", ""},
+		{"e1", "created this Issue", "created", "accent"},
+		{"e2", "closed: done", "closed:", "success"},
+		{"e3", "reopened", "reopened", "warning"},
+		{"e4", "assigned to alice", "assigned", ""},
 	} {
 		heading := nodes[activity+"."+tt.event+".heading"]
 		if !strings.HasPrefix(text(heading), tt.sentence) {
