@@ -14,6 +14,7 @@ const (
 	QuitAction           Action = "quit"
 	DrillIn              Action = "drill-in"
 	DrillOut             Action = "drill-out"
+	MenuBack             Action = "menu-back"
 	ToggleDetail         Action = "toggle-detail"
 	FocusDetail          Action = "focus-detail"
 	NextActivityTab      Action = "next-activity-tab"
@@ -174,6 +175,7 @@ var Keymap = []Binding{
 	{Chord: "shift+g", Key: "G", Action: MoveLast, Help: "last Collection", Mode: ModeCollections},
 	{Chord: "end", Key: "end", Action: MoveLast, Help: "last Collection", Mode: ModeCollections},
 	{Chord: "enter", Key: "enter", Action: DrillIn, Help: "open Collection", Mode: ModeCollections, ShowInFooter: true},
+	{Chord: "escape", Key: "esc", Action: MenuBack, Help: "back", Mode: ModeCollections, ShowInFooter: true},
 	{Chord: "p", Key: "p", Action: OpenPicker, Help: "Menu", Mode: ModeCollections},
 	{Chord: "q", Key: "q", Action: QuitAction, Help: "quit", ShowInFooter: true},
 	{Chord: "enter", Key: "enter", Action: DrillIn, Help: "open", Mode: ModeList, ShowInFooter: true},

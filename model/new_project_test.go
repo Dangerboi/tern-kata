@@ -12,7 +12,7 @@ import (
 const newProjectWorkspace = "/home/dev/my-repo"
 
 // newProjectStart is a loaded Pane in newProjectWorkspace: bound to Project
-// smoke, or unbound on Inbox with the Collections sidebar.
+// smoke, or unbound on Inbox with the Menu sidebar.
 func newProjectStart(bound bool) model.Model {
 	loaded := model.ProjectLoaded{Snapshot: g.UISnapshotResponseBody{
 		Catalog:    pickerCatalog(),
@@ -42,7 +42,7 @@ func TestSidebarEndsWithNewProject(t *testing.T) {
 
 func TestSidebarProjectAboveNewProjectStillSwitches(t *testing.T) {
 	smoke := model.Collection{View: "project", ProjectUID: "smoke-uid", Title: "smoke"}
-	m, cmds := pickerKeys(newProjectStart(false), "escape", "end", "up", "enter")
+	m, cmds := pickerKeys(newProjectStart(false), "escape", "end", "up", "enter", "down", "down", "enter")
 	if m.ProjectForm.Open || m.Collection != smoke || !reflect.DeepEqual(cmds, []model.Cmd{model.LoadCollection{Workspace: newProjectWorkspace, Collection: smoke}}) {
 		t.Fatalf("form open=%v collection=%+v cmds=%#v", m.ProjectForm.Open, m.Collection, cmds)
 	}

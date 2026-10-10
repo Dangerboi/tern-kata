@@ -12,6 +12,7 @@ lr_main=$(jq -r '.issue.uid' "$tmp/linkrows-main.json")
 quit_app
 printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$tmp/linkrows-unbound" "$KATA_HOME" "$tmp" >"$tmp/linkrows-launch.ctl"
 ctl --file "$tmp/linkrows-launch.ctl"
+ctl click "[data-id='main.columns.collections.projects']"
 expect_tree "[data-id='main.columns.collections.project.$lr_project']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.project.$lr_project']"
 expect_tree "[data-id\$='.$lr_main']" '.ok and .count == 1'

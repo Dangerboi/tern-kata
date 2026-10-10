@@ -299,7 +299,14 @@ func footer(m model.Model) tern.Element {
 		if binding.Action == model.FocusDetail && !m.CanFocusDetail() {
 			continue
 		}
-		segments = append(segments, ui.Seg{Common: ui.Common{Key: binding.Chord, Actions: &ui.Actions{Click: "key=" + binding.Chord}}, Text: binding.Key + " " + binding.Help})
+		if binding.Action == model.MenuBack && !m.SidebarProjects {
+			continue
+		}
+		help := binding.Help
+		if binding.Action == model.ClosePicker && m.Picker.Projects && m.Picker.Filter == "" {
+			help = "back"
+		}
+		segments = append(segments, ui.Seg{Common: ui.Common{Key: binding.Chord, Actions: &ui.Actions{Click: "key=" + binding.Chord}}, Text: binding.Key + " " + help})
 	}
 	selected := 0
 	rows := m.VisibleRows()

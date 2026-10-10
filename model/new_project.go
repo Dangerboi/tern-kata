@@ -87,7 +87,7 @@ func updateProjectForm(m Model, msg Msg) (Model, []Cmd, bool) {
 	case CollectionPointerSelected:
 		// A click on the sidebar's New Project row is enter on it.
 		if msg.Key == NewProjectKey && !m.ProjectForm.Open {
-			m.Focus, m.CollectionCursor = ColumnCollections, len(m.Collections)
+			m.Focus, m.CollectionCursor = ColumnCollections, entryIndex(m.SidebarEntries(), NewProjectKey)
 			return openProjectForm(m), nil, true
 		}
 	case ProjectSaved:

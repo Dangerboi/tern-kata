@@ -51,6 +51,7 @@ rm -f "$tmp/stuck-frames.jsonl"
 printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP TERN_TSP_RECORD=%s KATA_HOME=%s %s/tern-kata)"\n' "$tmp/stuck-unbound" "$tmp/stuck-frames.jsonl" "$KATA_HOME" "$tmp" >"$tmp/stuck-launch.ctl"
 ctl --file "$tmp/stuck-launch.ctl"
 read -r stuck_width stuck_height < <(ctl stats | jq -r '.viewport[0:2] | @tsv')
+ctl click "[data-id='main.columns.collections.projects']"
 expect_tree "[data-id='main.columns.collections.project.$stuck_project']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.project.$stuck_project']"
 expect_tree "[data-id$='.$stuck_long']" '.ok and .count == 1'
@@ -85,6 +86,7 @@ ctl key esc
 # Collection switches.
 ctl click "[data-id='main.columns.collections.all-open']"
 expect_tree "[data-id='main.columns.collections.all-open']" '.ok and .count == 1'
+ctl click "[data-id='main.columns.collections.projects']"
 ctl click "[data-id='main.columns.collections.project.$stuck_project']"
 expect_tree "[data-id$='.$stuck_long']" '.ok and .count == 1'
 ctl click "[data-id$='.$stuck_long']"

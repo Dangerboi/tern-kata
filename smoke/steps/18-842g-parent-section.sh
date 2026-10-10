@@ -13,6 +13,7 @@ ps_kid=$(jq -r '.issue.uid' "$tmp/parentsec-kid.json")
 quit_app
 printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$tmp/parentsec-unbound" "$KATA_HOME" "$tmp" >"$tmp/parentsec-launch.ctl"
 ctl --file "$tmp/parentsec-launch.ctl"
+ctl click "[data-id='main.columns.collections.projects']"
 expect_tree "[data-id='main.columns.collections.project.$ps_project']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.project.$ps_project']"
 expect_tree "[data-id^='main.columns.list.'][data-id\$='.$ps_parent']" '.ok and .count == 1'
