@@ -154,7 +154,7 @@ func TestRenderTopBarTitleOpensPicker(t *testing.T) {
 func TestRenderMenuTextsAndButtons(t *testing.T) {
 	m, _ := model.Update(pickerLoaded(true), model.KeyMsg{Chord: "p", Text: "p"})
 	nodes := pickerNodes(t, m)
-	if got := nodes["main.topbar.left.menu"]; got.P["text"] != "Menu (p)" || got.P["actions"].(map[string]any)["click"] != "key=p" {
+	if got := nodes["main.topbar.right.menu"]; got.P["text"] != "Menu (p)" || got.P["actions"].(map[string]any)["click"] != "key=p" {
 		t.Fatalf("top bar button = %v", got)
 	}
 	if got := nodes["layer.collections.close"]; got.P["text"] != "Close (esc)" || got.P["actions"].(map[string]any)["click"] != "key=escape" {
