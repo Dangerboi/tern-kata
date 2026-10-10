@@ -39,23 +39,17 @@ func linkRow(row model.DetailRow, click *ui.Actions) tern.Element {
 	return ui.Row{Common: ui.Common{Key: "row"}, Gap: ui.GapNone, Wrap: true, Children: append(ui.Nodes(lead), referenceTail(row.ReferenceUID, row.Ref, row.RefTitle)...)}
 }
 
-// historyHeading shows an event as its sentence, with the verb toned and the
-// local time muted after it. An event with a Ref makes it a link and the actor muted.
-func historyHeading(row model.DetailRow, action string) tern.Element {
+// historySentence is what an event did, verb toned, the object after it. An event with a Ref makes the
+// reference a link after the sentence. The author and the time are the card's head.
+func historySentence(row model.DetailRow, action string) tern.Element {
 	sentence := row.History
-	actor := ui.Span{T: sentence.Actor, S: "strong"}
-	object, linked := sentence.Object, row.Ref != ""
-	if linked {
-		actor.S = "muted"
+	spans := []ui.Span{{T: sentence.Verb, S: string(sentence.Tone)}}
+	if object := strings.TrimRight(sentence.Object, " "); object != "" {
+		spans = append(spans, ui.Span{T: " " + object})
 	}
-	spans := []ui.Span{actor, {T: " "}, {T: sentence.Verb, S: string(sentence.Tone)}}
-	if object != "" {
-		spans = append(spans, ui.Span{T: " " + strings.TrimRight(object, " ")})
+	text := ui.Text{Common: ui.Common{Key: "heading", Actions: &ui.Actions{Click: action}}, Spans: spans}
+	if row.Ref == "" {
+		return text
 	}
-	when := ui.Span{T: "  " + sentence.When, S: "muted"}
-	click := &ui.Actions{Click: action}
-	if !linked {
-		return ui.Text{Common: ui.Common{Key: "heading", Actions: click}, Spans: append(spans, when)}
-	}
-	return referenceRow(row.ReferenceUID, ui.Text{Common: ui.Common{Key: "heading", Actions: click}, Spans: spans}, row.Ref, ui.Text{Common: ui.Common{Key: "when", Actions: click}, Spans: []ui.Span{when}})
+	return referenceRow(row.ReferenceUID, text, row.Ref)
 }

@@ -92,20 +92,19 @@ func detailRows(m model.Model, tab model.ActivityTab, cursorOffset int) tern.Nod
 		if m.Focus == model.ColumnDetail && m.DetailIndex == cursorOffset+i {
 			mark = ui.MarkPick
 		}
-		var heading tern.Element
-		switch {
-		case tab == model.TabEvents:
-			heading = historyHeading(row, action)
-		case row.Ref != "":
-			heading = linkRow(row, &ui.Actions{Click: action})
-		default:
-			heading = ui.Text{Common: ui.Common{Key: "heading", Actions: &ui.Actions{Click: action}}, Text: row.Title}
+		if tab == model.TabLinks {
+			rows = append(rows, ui.Col{Common: ui.Common{Key: row.Key, Mark: mark}, Children: ui.Nodes(linkRow(row, &ui.Actions{Click: action}))})
+			continue
 		}
-		parts := ui.Nodes(heading)
+		var parts tern.Nodes
+		if tab == model.TabEvents {
+			parts = ui.Nodes(historySentence(row, action))
+		}
 		if row.Body != "" {
 			parts = append(parts, ui.Md{Common: ui.Common{Key: "body"}, Text: row.Body})
 		}
-		rows = append(rows, ui.Col{Common: ui.Common{Key: row.Key, Mark: mark}, Children: parts})
+		head := ui.Spans(ui.Span{T: row.Author, S: "strong"}, ui.Span{T: "  "}, ui.Span{T: row.Time, S: "muted"})
+		rows = append(rows, ui.Card{Common: ui.Common{Key: row.Key, Mark: mark, Actions: &ui.Actions{Click: action}}, Variant: ui.CardBare, Head: head, Children: parts})
 	}
 	return rows
 }

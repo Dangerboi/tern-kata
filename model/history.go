@@ -78,12 +78,8 @@ func historyRow(event g.Event) DetailRow {
 		}
 	}
 	row := DetailRow{
-		Key: event.UID, Body: detail,
-		History: &HistorySentence{Actor: event.Actor, Verb: verb, Object: object, Tone: tone, When: DetailTime(event.CreatedAt)},
-	}
-	row.Title = event.Actor + " " + verb
-	if object != "" {
-		row.Title += " " + object
+		Key: event.UID, Author: event.Actor, Time: DetailTime(event.CreatedAt), Body: detail,
+		History: &HistorySentence{Verb: verb, Object: object, Tone: tone},
 	}
 	if event.RelatedIssueUID != nil {
 		row.ReferenceUID = *event.RelatedIssueUID

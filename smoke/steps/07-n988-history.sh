@@ -1,4 +1,4 @@
-# Events read as one sentence per event, never as JSON. The events all
+# Events read as one card per event, the author and time in its head and one sentence in its body, never as JSON. The events all
 # exist before the Pane starts, so no live refresh reflows the list under the click.
 quit_app
 kata --as dana --workspace "$tmp/workspace" create "Smoke history Issue" --body "History body" --json >"$tmp/history.json"
@@ -16,7 +16,7 @@ expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.n
 ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab1']"
 history_rows="[data-id^='main.columns.detail.viewport.content.activity.']"
 history_text() { printf '[.nodes[] | .text? // empty] | join(" | ") | %s' "$1"; }
-expect_tree "$history_rows" "$(history_text 'contains("dana assigned to alice") and contains("dana closed: done") and contains("dana reopened") and contains("dana set priority to 1") and contains("dana added label `history`")')"
+expect_tree "$history_rows" "$(history_text 'contains("assigned to alice") and contains("closed: done") and contains("reopened") and contains("set priority to 1") and contains("added label `history`") and contains("dana")')"
 expect_tree "$history_rows" "$(history_text 'contains("Finished the history fixture") and contains("commit abc1234") and (contains("```") | not) and (contains("{\"") | not) and (contains("old_priority") | not)')"
 
 quit_app
