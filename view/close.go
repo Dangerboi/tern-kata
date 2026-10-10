@@ -12,14 +12,16 @@ func closeLayer(m model.Model) tern.Element {
 	if !m.CloseForm.Open {
 		return nil
 	}
-	labels := [...]string{"Reason (done / wontfix / duplicate / superseded / audit-no-change)", "Message", "Commit SHA (optional)", "PR URL (optional)", "Test command (optional)", "Duplicate/superseded Issue reference", "No-change audit rationale"}
+	labels := [...]string{"Reason (done / wontfix / duplicate / superseded / audit-no-change)", "Message", "Commit SHA (optional)", "PR URL (optional)", "Test command (optional)", "Issue reference (duplicate / superseded)", "Rationale (audit-no-change)"}
 	children := make([]tern.Element, 0, 12)
 	for i, label := range labels {
 		tone := ui.ToneNeutral
 		if m.CloseForm.Field == i {
 			tone = ui.ToneAccent
 		}
-		children = append(children, ui.Input{Common: ui.Common{Key: fmt.Sprintf("field%d", i), Tone: tone, Aria: label}, Field: ui.Field{Text: m.CloseForm.Values[i], Placeholder: label, Mode: "insert", Readonly: m.CloseForm.Pending}})
+		children = append(children,
+			ui.Text{Common: ui.Common{Key: fmt.Sprintf("%d-label", i), Tone: tone}, Text: label},
+			ui.Input{Common: ui.Common{Key: fmt.Sprintf("field%d", i), Tone: tone, Aria: label}, Field: ui.Field{Text: m.CloseForm.Values[i], Mode: "insert", Readonly: m.CloseForm.Pending}})
 	}
 	if m.CloseForm.Err != nil {
 		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.CloseForm.Err.Error()})

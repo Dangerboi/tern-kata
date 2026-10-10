@@ -24,7 +24,7 @@ func createLayer(m model.Model) tern.Element {
 		title = "Create child Issue"
 	}
 	values := [...]string{f.Title, f.Editor.Text, f.Labels, f.Owner, f.Priority}
-	names := [...]string{"Title (required)", "Body", "Labels (comma-separated)", "Owner", "Priority (0-4, optional)"}
+	names := [...]string{"Title", "Body (optional)", "Labels (optional, comma-separated)", "Owner (optional)", "Priority (optional, 0-4)"}
 	children := []tern.Element{}
 	for i, key := range createKeys {
 		tone := ui.ToneNeutral

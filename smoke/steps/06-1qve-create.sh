@@ -5,6 +5,7 @@ ctl --file "$tmp/launch.ctl"
 ctl plugins expect '"Smoke first Issue"'
 ctl key n
 expect_tree "[data-id='layer.create.title']" '.count == 1'
+expect_tree "[data-id='layer.create']" '.nodes[0].text | contains("Body (optional)") and contains("Labels (optional, comma-separated)") and contains("Owner (optional)") and contains("Priority (optional, 0-4)") and (contains("required") | not)'
 ctl type '"Smoke key-created parent"'
 ctl key Tab
 expect_tree "[data-id='layer.create.body']" '.nodes[0].class | contains("focused")'
