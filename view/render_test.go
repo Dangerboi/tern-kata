@@ -192,10 +192,10 @@ func TestTopBarIsOneRowWithTheDaemonRightAligned(t *testing.T) {
 	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Daemon: model.Daemon{Version: "v0.18.0"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, beta}}})
 	nodes := render(t, m)
 	var got []string
-	for _, id := range []string{"main.topbar.left.menu", "main.topbar.left.heading", "main.topbar.counts", "main.topbar.daemon"} {
+	for _, id := range []string{"main.topbar.left.heading", "main.topbar.counts", "main.topbar.right.menu", "main.topbar.right.daemon"} {
 		got = append(got, text(nodes[id]))
 	}
-	want := []string{"Menu (p)", "Project: work", "open: 2 · closed: 0 · all: 2", "Daemon: local · kata v0.18.0"}
+	want := []string{"Project: work", "open: 2 · closed: 0 · all: 2", "Menu (p)", "Daemon: local · kata v0.18.0"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("top bar %q, want %q", got, want)
 	}
