@@ -34,28 +34,23 @@ func TestHelpIsAFullPaneSheet(t *testing.T) {
 		t.Fatalf("sheet = %q", lines)
 	}
 	at := 0
-	for _, want := range []string{"Everywhere", "Issue list", "Menu sidebar", "Issue detail", "Search", "Search results", "Create Issue", "Draft editor", "Discard prompt", "Draft conflict", "Filters", "Error", "Help", "Close Issue", "Label / owner / priority", "Menu", "New Project"} {
+	for _, want := range []string{"Global", "Graph", "Detail", "Children", "Forms", "Filters"} {
 		i := slices.Index(lines[at:], want)
 		if i < 0 {
 			t.Fatalf("heading %q missing or out of order in %q", want, lines)
 		}
 		at += i + 1
 	}
-	padded := false
-	for _, l := range lines {
-		if strings.HasPrefix(l, "j/↓") && strings.HasSuffix(l, "  next Issue") {
-			padded = true
+	joined := strings.Join(lines, "\n")
+	for _, want := range []string{"?         help", "q/ctrl+c  quit", "j/↓     down", "expand/collapse all", "toggle flat/nested view", "jump to referenced issue", "new child", "reset filter form"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("row %q missing in %q", want, lines)
 		}
 	}
-	if !padded {
-		t.Errorf("no padded `key  action` line for next Issue in %q", lines)
-	}
-	joined := strings.Join(lines, "\n")
-	if strings.Contains(joined, "Tern headless") || strings.Contains(joined, "Close (esc)") {
-		t.Error("headless chords or the Close button listed")
-	}
-	if strings.Count(joined, "next Issue") != 1 {
-		t.Errorf("next Issue rows not merged: %d", strings.Count(joined, "next Issue"))
+	for _, gone := range []string{"federation", "credentials", "daemons", "set parent", "Tern headless", "Everywhere", "Issue list", "Menu sidebar"} {
+		if strings.Contains(joined, gone) {
+			t.Errorf("%q listed although tern-kata has no such binding", gone)
+		}
 	}
 	for id, n := range nodes {
 		if strings.HasPrefix(id, "main.help") {

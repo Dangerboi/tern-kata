@@ -11,50 +11,117 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// helpTitles name each group's card; the empty mode is global.
-var helpTitles = map[model.Mode]string{
-	"":                      "Everywhere",
-	model.ModeList:          "Issue list",
-	model.ModeDetail:        "Issue detail",
-	model.ModeCollections:   "Menu sidebar",
-	model.ModePicker:        "Menu",
-	model.ModeSearch:        "Search",
-	model.ModeSearchResults: "Search results",
-	model.ModeFilterForm:    "Filters",
-	model.ModeCloseForm:     "Close Issue",
-	model.ModeCreate:        "Create Issue",
-	model.ModeEditor:        "Draft editor",
-	model.ModeConflict:      "Draft conflict",
-	model.ModeDiscard:       "Discard prompt",
-	model.ModeFieldForm:     "Label / owner / priority",
-	model.ModeProjectForm:   "New Project",
-	model.ModeHelp:          "Help",
-	model.ModeError:         "Error",
+// helpEntry is one line of kata's own help: its wording, and the Keymap bindings (mode + actions)
+// that supply the keys. An entry with no binding in the Keymap is not shown.
+type helpEntry struct {
+	text    string
+	mode    model.Mode
+	actions []model.Action
 }
 
 type helpGroup struct {
-	mode model.Mode
-	rows []ui.TableRow
+	title   string
+	entries []helpEntry
 }
 
-// help is the keybinding sheet that fills the Pane while help is open: the groups side by side in a
+// helpTable mirrors the groups, order and wording of kata's TUI help.
+var helpTable = []helpGroup{
+	{"Global", []helpEntry{
+		{"help", "", []model.Action{model.ToggleHelp}},
+		{"quit", "", []model.Action{model.QuitAction}},
+		{"projects", model.ModeList, []model.Action{model.OpenPicker}},
+		{"toggle layout", model.ModeList, []model.Action{model.ToggleDetail}},
+	}},
+	{"Graph", []helpEntry{
+		{"up", model.ModeList, []model.Action{model.MoveUp}},
+		{"down", model.ModeList, []model.Action{model.MoveDown}},
+		{"page up", model.ModeList, []model.Action{model.PageUp}},
+		{"page down", model.ModeList, []model.Action{model.PageDown}},
+		{"first", model.ModeList, []model.Action{model.MoveFirst}},
+		{"last", model.ModeList, []model.Action{model.MoveLast}},
+		{"open detail", model.ModeList, []model.Action{model.DrillIn}},
+		{"expand/collapse", model.ModeList, []model.Action{model.ToggleExpansion}},
+		{"expand", model.ModeList, []model.Action{model.ExpandIssue}},
+		{"collapse", model.ModeList, []model.Action{model.CollapseIssue}},
+		{"expand/collapse all", model.ModeList, []model.Action{model.ToggleAllExpansion}},
+		{"new issue (form)", model.ModeList, []model.Action{model.NewIssue}},
+		{"toggle flat/nested view", model.ModeList, []model.Action{model.ToggleIssueView}},
+		{"close", model.ModeList, []model.Action{model.OpenClose}},
+		{"reopen", model.ModeList, []model.Action{model.ReopenAction}},
+	}},
+	{"Detail", []helpEntry{
+		{"next tab", model.ModeDetail, []model.Action{model.NextActivityTab}},
+		{"prev tab", model.ModeDetail, []model.Action{model.PreviousActivityTab}},
+		{"jump to referenced issue", model.ModeDetail, []model.Action{model.DrillIn}},
+		{"back", model.ModeDetail, []model.Action{model.DrillOut}},
+		{"edit body", model.ModeDetail, []model.Action{model.EditBody}},
+		{"new comment", model.ModeDetail, []model.Action{model.AddComment}},
+		{"add label", model.ModeDetail, []model.Action{model.AddLabelAction}},
+		{"remove label", model.ModeDetail, []model.Action{model.RemoveLabelAction}},
+		{"assign owner", model.ModeDetail, []model.Action{model.AssignOwnerAction}},
+		{"clear owner", model.ModeDetail, []model.Action{model.ClearOwnerAction}},
+		{"set priority", model.ModeDetail, []model.Action{model.PriorityAction}},
+	}},
+	{"Children", []helpEntry{
+		{"new child", model.ModeDetail, []model.Action{model.NewChild}},
+		{"move child cursor", model.ModeDetail, []model.Action{model.MoveDown, model.MoveUp}},
+		{"scroll detail viewport", model.ModeDetail, []model.Action{model.ScrollUp, model.ScrollDown}},
+		{"open child", model.ModeDetail, []model.Action{model.DrillIn}},
+	}},
+	{"Forms", []helpEntry{
+		{"save or apply", model.ModeCreate, []model.Action{model.SaveDraftAction}},
+		{"cancel", model.ModeCreate, []model.Action{model.CancelDraft}},
+		{"change field", model.ModeCreate, []model.Action{model.CreateNext, model.CreatePrevious}},
+		{"open editor", model.ModeEditor, []model.Action{model.ExternalEditorAction}},
+	}},
+	{"Filters", []helpEntry{
+		{"search", model.ModeList, []model.Action{model.SearchIssues}},
+		{"cycle status filter", model.ModeList, []model.Action{model.CycleStatus}},
+		{"filter (form)", model.ModeList, []model.Action{model.OpenFilterForm}},
+		{"clear filters", model.ModeList, []model.Action{model.ClearFilters}},
+		{"reset filter form", model.ModeFilterForm, []model.Action{model.ResetFilterForm}},
+	}},
+}
+
+// keys is the entry's keys from the Keymap, in action order, "" when nothing is bound.
+// Tern-headless-only chords are left out.
+func (e helpEntry) keys() string {
+	var keys []string
+	for _, action := range e.actions {
+		for _, b := range model.Keymap {
+			if b.Mode != e.mode || b.Action != action || strings.Contains(b.Help, "Tern headless") {
+				continue
+			}
+			for _, k := range strings.Split(b.Key, "/") {
+				if !slices.Contains(keys, k) {
+					keys = append(keys, k)
+				}
+			}
+		}
+	}
+	return strings.Join(keys, "/")
+}
+
+// help is the keybinding sheet that fills the Pane while help is open: kata's groups side by side in a
 // wrapping row, each a title over `key  action` lines with keys padded to the group's longest key.
 func help(m model.Model) tern.Nodes {
-	columns := make([]tern.Element, 0, len(model.Keymap))
-	for gi, group := range helpGroups() {
-		name := helpTitles[group.mode]
-		if name == "" {
-			name = string(group.mode)
-		}
+	columns := make([]tern.Element, 0, len(helpTable))
+	for gi, group := range helpTable {
+		var keys, rows []string
 		width := 0
-		for _, row := range group.rows {
-			width = max(width, utf8.RuneCountInString(row.Cells["key"].(ui.Rich).String()))
+		for _, e := range group.entries {
+			if k := e.keys(); k != "" {
+				keys, rows = append(keys, k), append(rows, e.text)
+				width = max(width, utf8.RuneCountInString(k))
+			}
 		}
-		lines := ui.Nodes(ui.Text{Common: ui.Common{Key: "title", Tone: ui.ToneAccent}, Text: name})
-		for _, row := range group.rows {
-			key := row.Cells["key"].(ui.Rich).String()
-			line := key + strings.Repeat(" ", width-utf8.RuneCountInString(key)) + "  " + row.Cells["action"].(ui.Rich).String()
-			lines = append(lines, ui.Text{Common: ui.Common{Key: "row-" + row.ID}, Text: line, Wrap: ui.WrapNone})
+		if len(rows) == 0 {
+			continue
+		}
+		lines := ui.Nodes(ui.Text{Common: ui.Common{Key: "title", Tone: ui.ToneAccent}, Text: group.title})
+		for i, text := range rows {
+			line := keys[i] + strings.Repeat(" ", width-utf8.RuneCountInString(keys[i])) + "  " + text
+			lines = append(lines, ui.Text{Common: ui.Common{Key: "row-" + strconv.Itoa(i)}, Text: line, Wrap: ui.WrapNone})
 		}
 		columns = append(columns, ui.Col{Common: ui.Common{Key: "group-" + strconv.Itoa(gi)}, Children: lines})
 	}
@@ -67,46 +134,4 @@ func help(m model.Model) tern.Nodes {
 			ui.Text{Common: ui.Common{Key: "return", Tone: ui.ToneMuted}, Text: "press ? to return"},
 		),
 	})})
-}
-
-// helpGroups groups the Keymap by mode, global first, merging bindings that
-// share an action and help into one row; Tern-headless-only chords are left out.
-func helpGroups() []helpGroup {
-	var groups []helpGroup
-	index := map[model.Mode]int{}
-	rowOf := map[string]int{}
-	add := func(mode model.Mode) int {
-		if i, ok := index[mode]; ok {
-			return i
-		}
-		groups = append(groups, helpGroup{mode: mode})
-		index[mode] = len(groups) - 1
-		return len(groups) - 1
-	}
-	add("")
-	for _, binding := range model.Keymap {
-		if strings.Contains(binding.Help, "Tern headless") {
-			continue
-		}
-		gi := add(binding.Mode)
-		id := string(binding.Action) + "|" + binding.Help
-		rid := strconv.Itoa(gi) + "|" + id
-		if ri, ok := rowOf[rid]; ok {
-			row := groups[gi].rows[ri]
-			keys := strings.Split(row.Cells["key"].(ui.Rich).String(), "/")
-			for _, k := range strings.Split(binding.Key, "/") {
-				if !slices.Contains(keys, k) {
-					keys = append(keys, k)
-				}
-			}
-			row.Cells["key"] = ui.T(strings.Join(keys, "/"))
-			continue
-		}
-		rowOf[rid] = len(groups[gi].rows)
-		groups[gi].rows = append(groups[gi].rows, ui.TableRow{
-			ID:    strconv.Itoa(len(groups[gi].rows)),
-			Cells: map[string]ui.Cell{"key": ui.T(binding.Key), "action": ui.T(binding.Help)},
-		})
-	}
-	return groups
 }
