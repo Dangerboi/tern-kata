@@ -109,10 +109,10 @@ ctl key esc
 expect_tree "[data-id='layer.fields']" '.ok and .count == 0'
 hint_expect_mode list
 ctl key '?'
-expect_tree "[data-id='layer.help']" '.ok and .count == 1'
-ctl click "[data-id='layer.help']"
+expect_tree "[data-id='main.help']" '.ok and .count == 1'
+ctl click "[data-id='main.help']"
 ctl key esc
-expect_tree "[data-id='layer.help']" '.ok and .count == 0'
+expect_tree "[data-id='main.help']" '.ok and .count == 0'
 hint_expect_mode list
 ctl key /
 expect_tree "[data-id='main.columns.list.search']" '.ok and .count == 1'
