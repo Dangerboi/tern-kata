@@ -163,7 +163,7 @@ func scrollMax(m model.Model) ui.ListMax {
 }
 
 // topBar is the pinned row above the columns: the Collection title with its
-// markers on the left, the counts in the middle, and the Menu (p) button then the Daemon at the right. Clicking the title or the
+// markers on the left, the counts in the middle, and the Daemon then the Menu button at the right. Clicking the title or the
 // button opens the Menu. When the row is too narrow Tern's flex shrinks and truncates the Daemon first,
 // then the counts; the left cell and the button never shrink.
 func topBar(m model.Model) tern.Element {
@@ -190,9 +190,10 @@ func topBar(m model.Model) tern.Element {
 			ui.Text{Common: headingCell, Spans: heading, Wrap: ui.WrapNone},
 		)},
 		ui.Text{Common: flexCell("counts", ui.ToneMuted, 1), Text: m.CountsLine(), Wrap: ui.WrapNone},
-		ui.Row{Common: rightCell, Gap: ui.GapSM, Children: ui.Nodes(
-			keyButton("menu", "Menu (p)", "p", false),
+		ui.Row{Common: rightCell, Gap: ui.GapNone, Children: ui.Nodes(
 			ui.Text{Common: flexCell("daemon", ui.ToneMuted, 100), Text: m.DaemonLine(), Wrap: ui.WrapNone},
+			ui.Text{Common: flexCell("sep", ui.ToneMuted, 0), Text: model.DaemonSeparator, Wrap: ui.WrapNone},
+			keyButton("menu", "Menu", "p", true),
 		)},
 	)}
 }

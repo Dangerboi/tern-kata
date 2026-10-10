@@ -8,6 +8,9 @@ type Daemon struct {
 	Version string
 }
 
+// DaemonSeparator divides the top bar's daemon line and its Menu button.
+const DaemonSeparator = " · "
+
 // DaemonLine is the top bar's daemon line.
 func (m Model) DaemonLine() string {
 	kind := "local"
@@ -16,7 +19,7 @@ func (m Model) DaemonLine() string {
 	}
 	line := "Daemon: " + kind
 	if m.Daemon.Version != "" {
-		line += " · kata " + m.Daemon.Version
+		line += DaemonSeparator + "kata " + m.Daemon.Version
 	}
 	return line
 }

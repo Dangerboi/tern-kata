@@ -192,12 +192,15 @@ func TestTopBarIsOneRowWithTheDaemonRightAligned(t *testing.T) {
 	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Daemon: model.Daemon{Version: "v0.18.0"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, beta}}})
 	nodes := render(t, m)
 	var got []string
-	for _, id := range []string{"main.topbar.left.heading", "main.topbar.counts", "main.topbar.right.menu", "main.topbar.right.daemon"} {
+	for _, id := range []string{"main.topbar.left.heading", "main.topbar.counts", "main.topbar.right.daemon", "main.topbar.right.sep", "main.topbar.right.menu"} {
 		got = append(got, text(nodes[id]))
 	}
-	want := []string{"Project: work", "open: 2 · closed: 0 · all: 2", "Menu (p)", "Daemon: local · kata v0.18.0"}
+	want := []string{"Project: work", "open: 2 · closed: 0 · all: 2", "Daemon: local · kata v0.18.0", " · ", "Menu"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("top bar %q, want %q", got, want)
+	}
+	if tone := nodes["main.topbar.right.menu"].P["tone"]; tone != "accent" {
+		t.Errorf("Menu button tone %v, want accent", tone)
 	}
 	if _, ok := nodes["main.filters"]; ok {
 		t.Error("filter line shown with no filter on")
