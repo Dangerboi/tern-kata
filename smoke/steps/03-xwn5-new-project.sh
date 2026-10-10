@@ -55,7 +55,11 @@ expect_tree "$np_heading" '.ok and .nodes[0].text == "Project: workspace-extra"'
 [[ $(np_projects) == *workspace-extra* ]]
 grep -qx 'name = "smoke"' "$tmp/workspace/.kata.toml"
 ctl key p
-expect_tree "$np_picker_rows" '.ok and .nodes[0].text == "smoke" and ([.nodes[] | select(.text == "workspace-extracurrent")] | length == 1)'
+expect_tree "$np_picker_rows" '.ok and .nodes[0].text == "smoke"'
+ctl click "[data-id='layer.collections.list.projects']"
+expect_tree "$np_picker_rows" '.ok and ([.nodes[] | select(.text == "workspace-extracurrent")] | length == 1)'
+ctl key esc
+ctl key Home
 ctl key enter
 expect_tree "$np_heading" '.ok and .nodes[0].text == "Project: smoke"'
 

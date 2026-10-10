@@ -88,6 +88,7 @@ expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 ctl click "[data-id='layer.collections.list.all-open']"
 expect_tree "[data-id='main.columns.collections.all-open']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.projects']"
+expect_tree "[data-id='main.columns.collections.project.$stuck_project']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.project.$stuck_project']"
 expect_tree "[data-id$='.$stuck_long']" '.ok and .count == 1'
 ctl click "[data-id$='.$stuck_long']"
