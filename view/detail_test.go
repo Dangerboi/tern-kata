@@ -178,11 +178,26 @@ func TestDetailTitleShowsIDInAccentThenTitleStrong(t *testing.T) {
 	}
 }
 
-func TestCommentHeadingShowsTheAuthorAndTheTimeInTheEventsFormat(t *testing.T) {
-	nodes := render(t, detailWithActivity(model.TabComments))
-	want := "dana / " + time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC).In(time.Local).Format("2006-01-02 15:04")
-	if got := text(nodes[view.DetailActivityID+".c1.heading"]); got != want {
-		t.Errorf("comment heading %q, want %q", got, want)
+func TestCommentsAndEventsAreCardsWithTheAuthorAndTheTimeApart(t *testing.T) {
+	when := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC).In(time.Local).Format("2006-01-02 15:04")
+	for _, tt := range []struct {
+		tab model.ActivityTab
+		key string
+	}{{model.TabComments, "c1"}, {model.TabEvents, "e1"}} {
+		card := render(t, detailWithActivity(tt.tab))[view.DetailActivityID+"."+tt.key]
+		if card.K != "card" || card.P["variant"] != "bare" {
+			t.Fatalf("%s is %s %v, want a bare card", tt.key, card.K, card.P["variant"])
+		}
+		want := [][2]string{{"dana", "strong"}, {"  ", ""}, {when, "muted"}}
+		var got [][2]string
+		for _, span := range card.P["head"].([]any) {
+			f := span.(map[string]any)
+			style, _ := f["s"].(string)
+			got = append(got, [2]string{f["t"].(string), style})
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("%s head = %v, want %v", tt.key, got, want)
+		}
 	}
 }
 

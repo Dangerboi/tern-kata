@@ -61,21 +61,21 @@ func (s ActivityTab) String() string {
 	return [...]string{"Comments", "Events", "Links"}[s]
 }
 
-// DetailRow is one row of an Activity tab. A Link row has Relation and Ref
-// instead of a Title; a history row also carries its sentence in parts.
+// DetailRow is one row of an Activity tab. A Comment or Event row has its Author and Time (DetailTime); a Link row has Relation and Ref
+// instead; a history row also carries its sentence in parts.
 type DetailRow struct {
-	Key, Title, Body, ReferenceUID string
+	Key, Author, Time, Body, ReferenceUID string
 	// Ref is the referenced Issue's id as shown (#<short_id> in the detail Issue's Project), and Relation how it relates to the
 	// detail's Issue. RefTitle is that Issue's title when it is loaded.
 	Relation, Ref, RefTitle string
 	History                 *HistorySentence
 }
 
-// HistorySentence is "<Actor> <Verb> <Object>" with a local When and the Verb's
+// HistorySentence is "<Verb> <Object>" (the row's Author did it) with the Verb's
 // tone. Object stops before the row's Ref when the sentence names the referenced Issue.
 type HistorySentence struct {
-	Actor, Verb, Object, When string
-	Tone                      VerbTone
+	Verb, Object string
+	Tone         VerbTone
 }
 
 func (m Model) DetailRowCount(tab ActivityTab) int {
@@ -125,7 +125,7 @@ func (m Model) DetailRow(tab ActivityTab, index int) (DetailRow, bool) {
 		return row, true
 	case TabComments:
 		comment := m.Detail.Comments[index]
-		return DetailRow{Key: comment.UID, Title: comment.Author + " / " + DetailTime(comment.CreatedAt), Body: comment.Body}, true
+		return DetailRow{Key: comment.UID, Author: comment.Author, Time: DetailTime(comment.CreatedAt), Body: comment.Body}, true
 	case TabEvents:
 		return historyRow(m.Detail.History[index]), true
 	}
