@@ -121,12 +121,7 @@ func (m Model) ApplySnapshot(snapshot g.UISnapshotResponseBody, childCounts map[
 	}
 	m.Loading = false
 	m.Err = nil
-	for i, collection := range m.Collections {
-		if collection == m.Collection {
-			m.CollectionCursor = i
-			break
-		}
-	}
+	m = m.syncSidebarCursor()
 	if m.PendingCreatedUID != "" {
 		m.SelectedUID = m.PendingCreatedUID
 		for _, issue := range m.Issues {
@@ -154,7 +149,7 @@ func (m Model) ApplySnapshot(snapshot g.UISnapshotResponseBody, childCounts map[
 }
 
 func updateCollection(m Model, msg CollectionSelected) (Model, []Cmd) {
-	for i, collection := range m.Collections {
+	for _, collection := range m.Collections {
 		if collection != msg.Collection {
 			continue
 		}
@@ -166,7 +161,7 @@ func updateCollection(m Model, msg CollectionSelected) (Model, []Cmd) {
 		}
 		m.ETag = etag
 		m.Collection = collection
-		m.CollectionCursor = i
+		m = m.syncSidebarCursor()
 		m.Loading = true
 		m.Err = nil
 		return m, []Cmd{LoadCollection{Workspace: m.Workspace, Collection: collection, ETag: etag, Filters: m.Filters}}

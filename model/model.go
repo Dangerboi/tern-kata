@@ -35,6 +35,7 @@ type Model struct {
 	Collection          Collection
 	Collections         []Collection
 	CollectionCursor    int
+	SidebarProjects     bool
 	Bound               bool
 	Picker              PickerState
 	ProjectForm         ProjectFormState
@@ -193,10 +194,12 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case CollectionLoaded:
 		return collectionLoaded(m, msg)
 	case CollectionPointerSelected:
-		for _, collection := range m.Collections {
-			if msg.Key == collection.Key() {
-				m.Focus = ColumnList
-				return updateCollection(m, CollectionSelected{Collection: collection})
+		for _, entry := range m.SidebarEntries() {
+			if msg.Key == entry.Key() {
+				if entry.Projects || entry.Back {
+					m.Focus = ColumnCollections
+				}
+				return openEntry(m, entry, false)
 			}
 		}
 	case Failed:

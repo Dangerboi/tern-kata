@@ -5,16 +5,19 @@ kata --workspace "$tmp/workspace" create "Picker alpha Issue" --project picker-a
 picker_items="[data-id^='layer.collections.list.']"
 picker_heading="[data-id='main.topbar.heading']"
 
-# A bound directory opens on its Project with no Collections sidebar.
+# A bound directory opens on its Project with no Menu sidebar.
 expect_tree "$picker_heading" '.ok and .count == 1 and .nodes[0].text == "Project: smoke"'
 expect_tree "[data-id='main.columns.collections']" '.ok and .count == 0'
 expect_tree "[data-id='main.columns.detail']" '.ok and .count == 1'
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 
-# p opens the picker: the bound Project first and marked current, with picker hints only.
+# p opens the Menu at its top level: the bound Project first and marked current, the fixed Collections, then Projects and New Project. No other Project is listed inline.
+picker_projects_entry="[data-id='layer.collections.list.projects']"
 ctl key p
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 expect_tree "$picker_items" '.ok and .count == 9 and .nodes[0].text == "smokecurrent" and .nodes[0]["aria-selected"] == "true" and .nodes[1].text == "Inbox" and .nodes[-1].text == "New Project"'
+expect_tree "$picker_items" '.nodes[-2].text == "Projects"'
+expect_tree "[data-id^='layer.collections.list.project.']" '.ok and .count == 1'
 expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("enter open Collection") and contains("esc close"))'
 ctl key End
 expect_tree "$picker_items" '.nodes[-1]["aria-selected"] == "true"'
@@ -44,7 +47,19 @@ expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: picker-alpha"
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 1 and (.nodes[0].text | contains("Picker alpha Issue"))'
 ctl key p
 expect_tree "$picker_items" '.ok and .nodes[0].text == "smoke" and .nodes[0]["aria-selected"] == "true"'
-expect_tree "[data-id='layer.collections.list.project.$picker_alpha_uid']" '.ok and .count == 1 and .nodes[0].text == "picker-alphacurrent"'
+expect_tree "[data-id='layer.collections.list.project.$picker_alpha_uid']" '.ok and .count == 0'
+# enter on Projects lists every Project with the current one marked and the cursor on it; esc returns to the top level, still open.
+ctl key End
+ctl key Up
+expect_tree "$picker_projects_entry" '.ok and .nodes[0]["aria-selected"] == "true"'
+ctl key enter
+expect_tree "$picker_items" '.ok and .nodes[0].text == "Back" and (.nodes | map(.text) | index("picker-alphacurrent") != null)'
+expect_tree "[data-id='layer.collections.list.project.$picker_alpha_uid']" '.ok and .nodes[0]["aria-selected"] == "true"'
+expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("esc back"))'
+ctl key esc
+expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
+expect_tree "$picker_projects_entry" '.ok and .nodes[0]["aria-selected"] == "true"'
+ctl key Home
 ctl key enter
 expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
@@ -52,6 +67,8 @@ expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
 # A click on a row switches like enter; the top bar title opens the picker; esc closes it, also after a click inside it.
 ctl key p
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
+ctl click "$picker_projects_entry"
+expect_tree "[data-id='layer.collections.list.project.$picker_alpha_uid']" '.ok and .count == 1'
 ctl click "[data-id='layer.collections.list.project.$picker_alpha_uid']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: picker-alpha"'
@@ -70,7 +87,7 @@ expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
 ctl key enter
 expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("esc back"))'
 ctl key esc
-expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("esc Collections"))'
+expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("esc Menu"))'
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'

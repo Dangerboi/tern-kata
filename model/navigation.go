@@ -38,7 +38,7 @@ func onScreen(m Model, cmds []Cmd) []Cmd {
 }
 
 // scrollFor is the scroll an action asks of the focused column: the page keys in
-// the Collections sidebar, and the arrows and page keys in the detail.
+// the Menu sidebar, and the arrows and page keys in the detail.
 func scrollFor(focus Column, action Action) (ScrollBy, bool) {
 	paged := focus == ColumnCollections || focus == ColumnDetail
 	switch action {

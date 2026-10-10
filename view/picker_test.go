@@ -89,7 +89,7 @@ func TestRenderPickerListsPinnedProjectFirstAndMarksCurrent(t *testing.T) {
 		t.Fatal("picker list not rendered")
 	}
 	prefix := "layer.collections.list."
-	want := []string{"project.smoke-uid", "inbox", "today", "upcoming", "deadlines", "all-open", "logbook", "project.alpha-uid", "new-project"}
+	want := []string{"project.smoke-uid", "inbox", "today", "upcoming", "deadlines", "all-open", "logbook", "projects", "new-project"}
 	var got []string
 	for _, id := range pickerChildIDs(list) {
 		got = append(got, strings.TrimPrefix(id, prefix))
@@ -165,5 +165,43 @@ func TestRenderMenuTextsAndButtons(t *testing.T) {
 	}
 	if got := nodes["layer.collections.filter"].P["placeholder"]; got != "Filter Menu" {
 		t.Fatalf("filter placeholder = %v", got)
+	}
+}
+
+func TestRenderMenuProjectsLevelListsProjectsAndMarksCurrent(t *testing.T) {
+	m := pickerLoaded(true)
+	for _, key := range []string{"p", "end", "up", "enter"} {
+		m, _ = model.Update(m, model.KeyMsg{Chord: key, Text: key})
+	}
+	nodes := pickerNodes(t, m)
+	list := nodes["layer.collections.list"]
+	var got []string
+	for _, id := range pickerChildIDs(list) {
+		got = append(got, strings.TrimPrefix(id, "layer.collections.list."))
+	}
+	if strings.Join(got, ",") != "back,project.alpha-uid,project.smoke-uid" {
+		t.Fatalf("Projects level rows = %v", got)
+	}
+	if nodes["layer.collections.list.project.smoke-uid"].P["value"] != "current" || nodes["layer.collections.list.project.alpha-uid"].P["value"] == "current" {
+		t.Fatal("the current Project is not the one marked")
+	}
+}
+
+func TestRenderSidebarListsProjectsOnlyAtItsProjectsLevel(t *testing.T) {
+	m := pickerLoaded(false)
+	m, _ = model.Update(m, model.KeyMsg{Chord: "escape"})
+	ids := func(m model.Model) string {
+		var rows []string
+		for _, id := range pickerChildIDs(pickerNodes(t, m)[view.CollectionsID]) {
+			rows = append(rows, strings.TrimPrefix(id, view.CollectionsID+"."))
+		}
+		return strings.Join(rows, ",")
+	}
+	if got := ids(m); got != "inbox,today,upcoming,deadlines,all-open,logbook,projects,new-project" {
+		t.Fatalf("sidebar top level = %s", got)
+	}
+	m, _ = model.Update(m, model.CollectionPointerSelected{Key: "projects"})
+	if got := ids(m); got != "back,project.alpha-uid,project.smoke-uid" {
+		t.Fatalf("sidebar Projects level = %s", got)
 	}
 }

@@ -66,6 +66,8 @@ ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']"
 expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']" '.ok and .count == 1'
 ctl click "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Esc blocker"))'
+ctl click "[data-id='main.columns.collections.projects']"
+expect_tree "[data-id='main.columns.collections.project.$esc_project']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.project.$esc_project']"
 hint_expect_mode list
 expect_tree "[data-id$='.$esc_blocker']" '.ok and .count == 1'

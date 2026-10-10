@@ -20,6 +20,7 @@ kata --workspace "$ch_dir" close "${ch_shorts[0]}" --done --message "Closed by t
 quit_app
 printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$tmp/children-unbound" "$KATA_HOME" "$tmp" >"$tmp/children-launch.ctl"
 ctl --file "$tmp/children-launch.ctl"
+ctl click "[data-id='main.columns.collections.projects']"
 expect_tree "[data-id='main.columns.collections.project.$ch_project']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.project.$ch_project']"
 expect_tree "[data-id^='main.columns.list.'][data-id\$='.$ch_parent']" '.ok and .count == 1'

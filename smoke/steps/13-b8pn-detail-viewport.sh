@@ -35,6 +35,7 @@ quit_app
 rm -f "$tmp/viewport-frames.jsonl"
 printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP TERN_TSP_RECORD=%s KATA_HOME=%s %s/tern-kata)"\n' "$tmp/viewport-unbound" "$tmp/viewport-frames.jsonl" "$KATA_HOME" "$tmp" >"$tmp/viewport-launch.ctl"
 ctl --file "$tmp/viewport-launch.ctl"
+ctl click "[data-id='main.columns.collections.projects']"
 expect_tree "[data-id='main.columns.collections.project.$vp_project']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.project.$vp_project']"
 expect_tree "[data-id\$='.$vp_long']" '.ok and .count == 1'
