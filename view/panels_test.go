@@ -45,7 +45,7 @@ func TestSideBySidePanelsAreBordered(t *testing.T) {
 
 func TestTopBarSitsOutsideBothBorders(t *testing.T) {
 	nodes := render(t, browsing())
-	for _, id := range []string{"main.topbar", "main.topbar.heading"} {
+	for _, id := range []string{"main.topbar", "main.topbar.left.heading"} {
 		if _, ok := nodes[id]; !ok {
 			t.Errorf("%s is missing", id)
 		}

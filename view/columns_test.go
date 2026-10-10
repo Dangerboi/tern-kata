@@ -96,7 +96,7 @@ func TestTopBarAndHeaderStayOutsideTheScrollingList(t *testing.T) {
 		}
 	}
 	walk(list)
-	for _, id := range []string{"main.topbar", "main.topbar.heading", "main.columns.list.header"} {
+	for _, id := range []string{"main.topbar", "main.topbar.left.heading", "main.columns.list.header"} {
 		if _, ok := nodes[id]; !ok || inside[id] {
 			t.Errorf("%s present=%v inside the scrolling list=%v, want outside", id, ok, inside[id])
 		}

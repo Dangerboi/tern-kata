@@ -63,7 +63,7 @@ func TestCreateCardEndsInButtons(t *testing.T) {
 	}
 	m := press(selectedFirst(), "n", "t")
 	m = press(m, "escape")
-	cardButtons(t, m, "layer.create.actions", []button{{"discard", "Discard (y)", "y"}, {"keep", "Keep editing (n)", "n"}}, "discard")
+	cardButtons(t, m, "layer.create.actions", []button{{"discard", "Discard (y)", "y"}, {"keep", "Keep editing (n / esc)", "n"}}, "keep")
 	noButtons(t, m, "layer.create", "actions.save", "actions.cancel")
 	m = model.Model{Cols: 160, Project: model.Project{ID: 7}}
 	m = press(m, "n", "t", "ctrl+o")
@@ -91,7 +91,7 @@ func TestDraftEditorEndsInButtons(t *testing.T) {
 	cardButtons(t, m, "layer.editor.actions", []button{{"save", "Save (ctrl+o)", "ctrl+o"}, {"editor", "$EDITOR (ctrl+e)", "ctrl+e"}, {"discard", "Discard (esc)", "escape"}}, "save")
 	m, _ = model.Update(m, model.KeyMsg{Chord: "paste", Text: "more"})
 	asking := press(m, "escape")
-	cardButtons(t, asking, "layer.editor.actions", []button{{"discard", "Discard (y)", "y"}, {"keep", "Keep editing (n)", "n"}}, "discard")
+	cardButtons(t, asking, "layer.editor.actions", []button{{"discard", "Discard (y)", "y"}, {"keep", "Keep editing (n / esc)", "n"}}, "keep")
 	noButtons(t, asking, "layer.editor", "actions.save", "actions.editor")
 	saving := press(m, "ctrl+o")
 	noButtons(t, saving, "layer.editor", "actions", "actions.save", "actions.editor", "actions.discard")
@@ -100,18 +100,28 @@ func TestDraftEditorEndsInButtons(t *testing.T) {
 func TestCloseAndFiltersButtonsClickKeys(t *testing.T) {
 	m := press(selectedFirst(), "x")
 	nodes := pickerNodes(t, m)
-	for id, want := range map[string]string{"layer.close.save": "key=ctrl+o", "layer.close.quick": "key=ctrl+d", "layer.close.cancel": "key=escape"} {
+	for id, want := range map[string]string{"layer.close.actions.save": "key=ctrl+o", "layer.close.actions.quick": "key=ctrl+d", "layer.close.actions.cancel": "key=escape"} {
 		actions, _ := nodes[id].P["actions"].(map[string]any)
 		if actions["click"] != want {
 			t.Errorf("%s click = %v, want %s", id, actions["click"], want)
 		}
 	}
-	if nodes["layer.close.save"].P["tone"] != "accent" {
+	if nodes["layer.close.actions.save"].P["tone"] != "accent" {
 		t.Error("Close Issue button is not the primary")
 	}
 	pending := press(m, "ctrl+d")
-	noButtons(t, pending, "layer.close", "save", "quick", "cancel")
+	noButtons(t, pending, "layer.close", "actions", "actions.save", "actions.quick", "actions.cancel")
 
 	m = press(selectedFirst(), "f")
 	cardButtons(t, m, "layer.filters.actions", []button{{"apply", "Apply filters", "ctrl+o"}, {"cancel", "Cancel", "escape"}}, "apply")
+}
+
+func TestDraftConflictEndsInButtons(t *testing.T) {
+	issue := model.Issue{UID: "a", ProjectID: 2, Body: "body", Revision: 1}
+	m, _ := model.Update(selectedFirst(), model.DetailLoaded{UID: "a", Selected: &g.UISelectedAuthority{Issue: &issue}})
+	m = press(m, "e", "ctrl+o")
+	latest := issue
+	latest.Revision, latest.Body = 2, "Remote body"
+	m, _ = model.Update(m, model.DraftConflict{UID: "a", Issue: latest})
+	cardButtons(t, m, "layer.editor.actions", []button{{"overwrite", "Overwrite (o)", "o"}, {"discard", "Discard Draft (d)", "d"}}, "overwrite")
 }

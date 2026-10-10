@@ -2,6 +2,8 @@ package view
 
 import (
 	"fmt"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -46,11 +48,11 @@ func detail(m model.Model, now time.Time) tern.Element {
 			ui.Badge{Common: ui.Common{Key: "status", Tone: statusTone(issue.Status)}, Text: issue.Status},
 		)}, ui.Spacer{Common: ui.Common{Key: "gap"}, Size: ui.GapMD}}
 		body := issue.Body
-		if body == "" {
-			body = "No body yet."
-		}
 		if parent, ok := parentLink(m); ok {
 			body = withoutParentSection(body, parent.Ref)
+		}
+		if strings.TrimSpace(body) == "" {
+			body = "No body yet."
 		}
 		parts = append(parts, properties(m, issue), ui.Md{Common: ui.Common{Key: "body"}, Text: body})
 		kids := m.DetailChildren()
@@ -118,17 +120,22 @@ func parentLink(m model.Model) (model.DetailRow, bool) {
 	return model.DetailRow{}, false
 }
 
+var (
+	atxHeading   = regexp.MustCompile(`^#{1,6}(\s|$)`)
+	parentHeader = regexp.MustCompile(`^##\s+Parent\s*$`)
+)
+
 // withoutParentSection drops a leading `## Parent` section (up to the next heading) that names the parent
-// by ref (#short or project#short); display only, the stored body is untouched.
+// by ref (#short or project#short) as a whole word; display only, the stored body is untouched.
 func withoutParentSection(body, ref string) string {
 	trimmed := strings.TrimLeft(body, "\r\n")
 	first, rest, _ := strings.Cut(trimmed, "\n")
-	if !strings.HasPrefix(first, "## Parent") {
+	if !parentHeader.MatchString(first) {
 		return body
 	}
 	section, after := rest, ""
 	for off, line := 0, rest; ; {
-		if strings.HasPrefix(line, "#") {
+		if atxHeading.MatchString(line) {
 			section, after = rest[:off], rest[off:]
 			break
 		}
@@ -139,7 +146,12 @@ func withoutParentSection(body, ref string) string {
 		off += nl + 1
 		line = rest[off:]
 	}
-	if !strings.Contains(section, ref[strings.LastIndex(ref, "#")+1:]) {
+	short := ref[strings.LastIndex(ref, "#")+1:]
+	named := slices.ContainsFunc(strings.Fields(section), func(word string) bool {
+		word = strings.Trim(word, ".,;:()[]<>\"'`*_")
+		return word == short || strings.HasSuffix(word, "#"+short)
+	})
+	if !named {
 		return body
 	}
 	return strings.TrimLeft(after, "\r\n")

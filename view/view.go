@@ -9,7 +9,6 @@ import (
 
 	"github.com/Dangerboi/tern-kata/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
-	"github.com/stencil-hq/tern-sdk/go/tern/el"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
@@ -154,10 +153,10 @@ func scrollMax(m model.Model) ui.ListMax {
 	return ui.MaxFrac(0.6)
 }
 
-// topBar is the pinned row above the columns: the Collection title with its
-// markers on the left, the counts, and the Daemon at the right. Clicking the
-// title and the Menu (p) button at its left open the Menu. When the row is too narrow Tern's flex shrinks and
-// truncates the cells, the Daemon first, then the counts, then the title.
+// topBar is the pinned row above the columns: the Menu (p) button and the Collection title with its
+// markers on the left, the counts in the middle, and the Daemon at the right. Clicking the title or the
+// button opens the Menu. When the row is too narrow Tern's flex shrinks and truncates the Daemon first,
+// then the counts; the left cell never shrinks.
 func topBar(m model.Model) tern.Element {
 	tone, style := ui.ToneNeutral, "strong"
 	if m.Focus == model.ColumnList {
@@ -174,11 +173,13 @@ func topBar(m model.Model) tern.Element {
 	flexCell := func(key string, tone ui.Tone, shrink float64) ui.Common {
 		return ui.Common{Key: key, Tone: tone, Shrink: &shrink}
 	}
-	headingCell := flexCell("heading", tone, 0.01)
+	headingCell := flexCell("heading", tone, 0)
 	headingCell.Title, headingCell.Actions = "Menu (p)", &ui.Actions{Click: "key=p"}
 	return ui.Row{Common: ui.Common{Key: "topbar"}, Gap: ui.GapMD, Justify: ui.JustifyBetween, Children: ui.Nodes(
-		el.Button{Common: ui.Common{Key: "menu", Actions: &ui.Actions{Click: "key=p"}}, Text: "Menu (p)"},
-		ui.Text{Common: headingCell, Spans: heading, Wrap: ui.WrapNone},
+		ui.Row{Common: flexCell("left", ui.ToneNeutral, 0), Gap: ui.GapSM, Children: ui.Nodes(
+			keyButton("menu", "Menu (p)", "p", false),
+			ui.Text{Common: headingCell, Spans: heading, Wrap: ui.WrapNone},
+		)},
 		ui.Text{Common: flexCell("counts", ui.ToneMuted, 1), Text: m.CountsLine(), Wrap: ui.WrapNone},
 		ui.Text{Common: flexCell("daemon", ui.ToneMuted, 100), Text: m.DaemonLine(), Wrap: ui.WrapNone},
 	)}

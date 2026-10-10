@@ -258,3 +258,24 @@ func TestLeadingParentSectionIsHiddenOnlyWhenItNamesTheParent(t *testing.T) {
 		t.Errorf("no parent: body %q", got)
 	}
 }
+
+func TestParentSectionMatchingAndEmptyBody(t *testing.T) {
+	links := []g.UILink{{ID: 1, Type: "parent", FromIssueUID: "kid", FromQualifiedID: "work#kidd", ToIssueUID: "up", ToQualifiedID: "work#upup"}}
+	bodyText := func(body string) string {
+		issue := model.Issue{UID: "kid", ShortID: "kidd", Title: "K", Status: "open", ProjectName: "work", Revision: 1, Body: body}
+		nodes := render(t, apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: links}},
+			model.DetailLoaded{UID: "kid", Selected: &g.UISelectedAuthority{Issue: &issue, Links: links}}))
+		return text(nodes[view.DetailContentID+".body"])
+	}
+	for body, want := range map[string]string{
+		"## Parent\n\nupup":                    "No body yet.",
+		"## Parent\n\n#upup\n\n## What\n\nx":   "## What\n\nx",
+		"## Parent\n\nwork#upup\n\n## What":    "## What",
+		"## Parent\n\nupupxyz\n\n## What\n\nx": "## Parent\n\nupupxyz\n\n## What\n\nx",
+		"## Parental notes\n\nupup":            "## Parental notes\n\nupup",
+	} {
+		if got := bodyText(body); got != want {
+			t.Errorf("body %q: got %q, want %q", body, got, want)
+		}
+	}
+}

@@ -1,4 +1,4 @@
-# Top bar: one row with the title left, the counts in the middle and the Daemon right-aligned;
+# Top bar: one row with the Menu (p) button and the title left, the counts in the middle and the Daemon right-aligned;
 # from 80 to 139 columns Tern shrinks the Daemon, then the counts, before the title; a second
 # line lists filters only while one is on. Its own Project, with a long name to force the squeeze.
 read -r bar_full bar_height < <(ctl stats | jq -r '.viewport[0:2] | @tsv')
@@ -10,8 +10,8 @@ kata --workspace "$bar_dir" create "Top bar Issue" --json >/dev/null
 quit_app
 printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$bar_dir" "$KATA_HOME" "$tmp" >"$tmp/topbar-launch.ctl"
 ctl --file "$tmp/topbar-launch.ctl"
-expect_tree "[data-id='main.topbar.heading']" ".ok and .count == 1 and .nodes[0].text == \"Project: $bar_name\""
-bar_cells="[data-id='main.topbar'],[data-id='main.topbar.heading'],[data-id='main.topbar.counts'],[data-id='main.topbar.daemon']"
+expect_tree "[data-id='main.topbar.left.heading']" ".ok and .count == 1 and .nodes[0].text == \"Project: $bar_name\""
+bar_cells="[data-id='main.topbar'],[data-id='main.topbar.left'],[data-id='main.topbar.counts'],[data-id='main.topbar.daemon']"
 
 # Wide: the three cells share one line, the Daemon ends where the bar does, the counts sit between.
 expect_tree "$bar_cells" '.ok and .count == 4 and ([.nodes[].rect[1]] | unique | length) == 1
@@ -23,30 +23,30 @@ expect_tree "[data-id='main.filters']" '.ok and .count == 0'
 # One column (80-139): the Daemon gives way first, then the counts, the title is cut last.
 ctl resize 900 "$bar_height"
 expect_tree "[data-id='main.topbar.daemon']" '.ok and .count == 1 and (.nodes[0].text | endswith("…"))'
-expect_tree "[data-id='main.topbar.counts']" '.nodes[0].text | startswith("open: 1")'
+expect_tree "[data-id='main.topbar.left.heading']" ".nodes[0].text == \"Project: $bar_name\""
 ctl resize 680 "$bar_height"
 expect_tree "[data-id='main.topbar.counts']" '.nodes[0].text | endswith("…")'
-expect_tree "[data-id='main.topbar.heading']" ".nodes[0].text | startswith(\"Project: topbar\")"
+expect_tree "[data-id='main.topbar.left.heading']" ".nodes[0].text == \"Project: $bar_name\""
 ctl resize "$bar_full" "$bar_height"
 
 # A filter adds its line; clearing it takes the line away. The title never carries filters.
 ctl key s
 expect_tree "[data-id='main.filters']" '.ok and .count == 1 and .nodes[0].text == "status=open"'
-expect_tree "[data-id='main.topbar.heading']" ".nodes[0].text == \"Project: $bar_name\""
+expect_tree "[data-id='main.topbar.left.heading']" ".nodes[0].text == \"Project: $bar_name\""
 ctl key s
 ctl key s
 expect_tree "[data-id='main.filters']" '.ok and .count == 0'
 
 # The title still opens the Menu.
-ctl click "[data-id='main.topbar.heading']"
+ctl click "[data-id='main.topbar.left.heading']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 
 # The Menu (p) button sits at the bar's left at the default width; a click opens the Menu, Close (esc) closes it.
-expect_tree "[data-id='main.topbar.menu']" '.ok and .count == 1 and .nodes[0].text == "Menu (p)"'
-expect_tree "[data-id='main.topbar.menu'],[data-id='main.topbar.heading']" '.nodes[0].rect[0] < .nodes[1].rect[0]'
-ctl click "[data-id='main.topbar.menu']"
+expect_tree "[data-id='main.topbar.left.menu']" '.ok and .count == 1 and .nodes[0].text == "Menu (p)"'
+expect_tree "[data-id='main.topbar.left.menu'],[data-id='main.topbar.left.heading']" '.nodes[0].rect[0] < .nodes[1].rect[0]'
+ctl click "[data-id='main.topbar.left.menu']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 ctl click "[data-id='layer.collections.close']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'

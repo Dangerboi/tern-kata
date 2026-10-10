@@ -1,6 +1,6 @@
 # An unbound directory shows the sidebar on a fixed Collection and drops it once a Project is entered; esc then opens the popup, and a fixed Collection brings the sidebar back.
 us_sidebar="[data-id='main.columns.collections']"
-us_heading="[data-id='main.topbar.heading']"
+us_heading="[data-id='main.topbar.left.heading']"
 us_smoke_uid=$(kata projects list --json | jq -er '.projects[] | select(.name == "smoke") | .uid')
 quit_app
 mkdir -p "$tmp/sidebar-unbound"

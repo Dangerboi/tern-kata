@@ -22,5 +22,5 @@ func buttonRow(buttons ...tern.Element) tern.Element {
 
 // discardButtons answer the discard prompt of a Draft.
 func discardButtons() tern.Element {
-	return buttonRow(keyButton("discard", "Discard (y)", "y", true), keyButton("keep", "Keep editing (n)", "n", false))
+	return buttonRow(keyButton("discard", "Discard (y)", "y", false), keyButton("keep", "Keep editing (n / esc)", "n", true))
 }

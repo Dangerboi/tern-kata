@@ -3,7 +3,7 @@ kata projects create picker-alpha --json >"$tmp/picker-alpha.json"
 picker_alpha_uid=$(jq -er '.project.uid' "$tmp/picker-alpha.json")
 kata --workspace "$tmp/workspace" create "Picker alpha Issue" --project picker-alpha --json >"$tmp/picker-alpha-issue.json"
 picker_items="[data-id^='layer.collections.list.']"
-picker_heading="[data-id='main.topbar.heading']"
+picker_heading="[data-id='main.topbar.left.heading']"
 
 # A bound directory opens on its Project with no Menu sidebar.
 expect_tree "$picker_heading" '.ok and .count == 1 and .nodes[0].text == "Project: smoke"'

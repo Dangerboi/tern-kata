@@ -29,10 +29,11 @@ func closeLayer(m model.Model) tern.Element {
 		children = append(children, ui.Text{Common: ui.Common{Key: "pending", Tone: ui.TonePending}, Text: "Closing Issue…"})
 	} else {
 		children = append(children,
-			keyButton("save", "Close Issue (ctrl+o)", "ctrl+o", true),
-			keyButton("quick", "Quick done (ctrl+d)", "ctrl+d", false),
-			keyButton("cancel", "Cancel (esc)", "escape", false),
-			ui.Text{Common: ui.Common{Key: "exemption", Tone: ui.ToneMuted}, Text: "Quick done skips message/evidence only on the owner-local daemon. Parent and throttle guards still apply."})
+			ui.Text{Common: ui.Common{Key: "exemption", Tone: ui.ToneMuted}, Text: "Quick done skips message/evidence only on the owner-local daemon. Parent and throttle guards still apply."},
+			buttonRow(
+				keyButton("save", "Close Issue (ctrl+o)", "ctrl+o", true),
+				keyButton("quick", "Quick done (ctrl+d)", "ctrl+d", false),
+				keyButton("cancel", "Cancel (esc)", "escape", false)))
 	}
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "close"}, Modal: true, Size: ui.SizeLG, Head: ui.T("Close Issue"), Children: children})
 }

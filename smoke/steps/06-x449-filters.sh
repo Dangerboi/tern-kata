@@ -60,7 +60,7 @@ expect_tree "[data-id$='.$search_delta']" '.count == 1'
 expect_tree "[data-id='main.filters']" '.nodes[0].text | contains("owner=x449-owner") and contains("label=x449-label") and contains("relationship=parent") and contains("search=Search target")'
 
 ctl key c
-expect_tree "[data-id='main.topbar.heading']" '.nodes[0].text == "Project: smoke"'
+expect_tree "[data-id='main.topbar.left.heading']" '.nodes[0].text == "Project: smoke"'
 expect_tree "[data-id='main.filters']" '.ok and .count == 0'
 expect_tree "[data-id$='.$hierarchy_parent']" '.count == 1'
 ctl key f

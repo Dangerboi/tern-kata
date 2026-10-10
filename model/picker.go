@@ -163,7 +163,7 @@ func openEntry(m Model, entry PickerEntry, popup bool) (Model, []Cmd) {
 		return setMenuLevel(m, popup, false), nil
 	}
 	m.Picker, m.Focus = PickerState{}, ColumnList
-	if !popup && m.SidebarProjects {
+	if m.SidebarProjects {
 		m = setMenuLevel(m, false, false)
 	}
 	return updateCollection(m, CollectionSelected{Collection: entry.Collection})

@@ -132,7 +132,7 @@ func TestSwitchingCollectionKeepsListOnScreen(t *testing.T) {
 		t.Fatal("full-Pane loading message replaced the columns")
 	}
 	sameIDs(t, "main.columns", idle, loading)
-	if heading := text(loading["main.topbar.heading"]); !strings.HasPrefix(heading, allOpen.Title) || heading == allOpen.Title {
+	if heading := text(loading["main.topbar.left.heading"]); !strings.HasPrefix(heading, allOpen.Title) || heading == allOpen.Title {
 		t.Errorf("top bar title shows no loading marker: %q", heading)
 	}
 
@@ -141,7 +141,7 @@ func TestSwitchingCollectionKeepsListOnScreen(t *testing.T) {
 	if _, ok := loaded[view.IssueID(alpha.UID)]; !ok {
 		t.Errorf("alpha's row changed id across loading: %v", loaded.under(view.IssueListID))
 	}
-	if heading := text(loaded["main.topbar.heading"]); heading != allOpen.Title {
+	if heading := text(loaded["main.topbar.left.heading"]); heading != allOpen.Title {
 		t.Errorf("top bar title keeps the loading marker: %q", heading)
 	}
 }
@@ -192,8 +192,8 @@ func TestTopBarIsOneRowWithTheDaemonRightAligned(t *testing.T) {
 	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Daemon: model.Daemon{Version: "v0.18.0"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, beta}}})
 	nodes := render(t, m)
 	var got []string
-	for _, cell := range nodes["main.topbar"].C {
-		got = append(got, text(cell))
+	for _, id := range []string{"main.topbar.left.menu", "main.topbar.left.heading", "main.topbar.counts", "main.topbar.daemon"} {
+		got = append(got, text(nodes[id]))
 	}
 	want := []string{"Menu (p)", "Project: work", "open: 2 · closed: 0 · all: 2", "Daemon: local · kata v0.18.0"}
 	if !slices.Equal(got, want) {
@@ -214,7 +214,7 @@ func TestFilterLineAppearsOnlyWhenFiltered(t *testing.T) {
 	if got := text(nodes["main.filters"]); got != "status=open" {
 		t.Errorf("filter line %q, want status=open", got)
 	}
-	if got := text(nodes["main.topbar.heading"]); strings.Contains(got, "status=") {
+	if got := text(nodes["main.topbar.left.heading"]); strings.Contains(got, "status=") {
 		t.Errorf("title carries the filters: %q", got)
 	}
 	if _, ok := nodes["main.topbar.filters"]; ok {

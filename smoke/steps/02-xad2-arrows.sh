@@ -39,7 +39,7 @@ ctl key Up
 ctl key Enter
 ctl key End
 ctl key Enter
-expect_tree "[data-id='main.topbar.heading']" '.ok and .nodes[0].text == "Project: smoke"'
+expect_tree "[data-id='main.topbar.left.heading']" '.ok and .nodes[0].text == "Project: smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count >= 4'
 ctl key q
 expect_tree .sf-list '.count == 0'

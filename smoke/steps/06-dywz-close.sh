@@ -9,10 +9,10 @@ expect_tree "[data-id='main.columns.list.issues.$close_guard_parent']" '.ok and 
 ctl click "[data-id='main.columns.list.issues.$close_guard_parent']"
 expect_tree "[data-id='main.columns.list.issues.$close_guard_parent']" '.ok and .nodes[0]["aria-selected"] == "true"'
 ctl key x
-expect_tree "[data-id='layer.close.quick']" '.ok and .count == 1'
-ctl click "[data-id='layer.close.quick']"
+expect_tree "[data-id='layer.close.actions.quick']" '.ok and .count == 1'
+ctl click "[data-id='layer.close.actions.quick']"
 expect_tree "[data-id='layer.close.error']" '([.nodes[] | .. | objects | .text? // empty] | join(" ")) | contains("open children") and contains("Smoke close guard child") and contains("Close children first, or scope this issue differently") and (contains("unexpected status code") | not)'
-ctl click "[data-id='layer.close.cancel']"
+ctl click "[data-id='layer.close.actions.cancel']"
 expect_tree "[data-id='layer.close']" '.ok and .count == 0'
 kata --workspace "$tmp/workspace" create "Smoke close target" --json >"$tmp/close-target.json"
 close_uid=$(jq -r '.issue.uid' "$tmp/close-target.json")
@@ -20,8 +20,8 @@ expect_tree "[data-id$='.$close_uid']" '.ok and .count == 1'
 ctl click "[data-id$='.$close_uid']"
 expect_tree "[data-id$='.$close_uid']" '.ok and .nodes[0]["aria-selected"] == "true"'
 ctl key x
-expect_tree "[data-id='layer.close.quick']" '.ok and .count == 1'
-ctl click "[data-id='layer.close.quick']"
+expect_tree "[data-id='layer.close.actions.quick']" '.ok and .count == 1'
+ctl click "[data-id='layer.close.actions.quick']"
 expect_tree "[data-id='layer.close']" '.ok and .count == 0'
 ctl key p
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'

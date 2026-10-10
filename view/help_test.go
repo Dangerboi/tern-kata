@@ -26,7 +26,7 @@ func TestHelpIsGroupedKeyActionTables(t *testing.T) {
 	if tables < 3 {
 		t.Errorf("want a table per group, got %d", tables)
 	}
-	for _, want := range []string{`"Everywhere"`, `"list"`, `"detail"`, `"key"`, `"action"`, `"j/↓"`, `"next Issue"`} {
+	for _, want := range []string{`"Everywhere"`, `"Issue list"`, `"Issue detail"`, `"Menu sidebar"`, `"Menu"`, `"key"`, `"action"`, `"j/↓"`, `"next Issue"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("help lacks %s", want)
 		}

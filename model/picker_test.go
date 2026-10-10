@@ -485,3 +485,11 @@ func TestSidebarProjectsLevel(t *testing.T) {
 		t.Fatalf("click on a Project: %+v focus=%v", clicked.Collection, clicked.Focus)
 	}
 }
+
+func TestPopupPickResetsTheSidebarLevel(t *testing.T) {
+	m, _ := pickerKeys(pickerStart(120, false), "escape", "end", "up", "enter", "down", "enter")
+	m, _ = pickerKeys(m, "p", "end", "up", "enter")
+	if m.SidebarProjects {
+		t.Fatal("sidebar kept its Projects level after a pick in the popup")
+	}
+}

@@ -7,7 +7,7 @@ colour_row="[data-id='main.columns.list.issues.$colour_uid']"
 expect_tree "$colour_row" '.ok and .count == 1 and (.nodes[0].text | contains("P0 open"))'
 expect_tree "$colour_row *" '[.nodes[] | select(.text == "open" or .text == "P0") | {(.text): .class}] | add == {"open": "sf-t-accent", "P0": "sf-t-error"}'
 expect_tree "$colour_row" '(.nodes[0].text | contains("colour-chip") | not)'
-expect_tree "[data-id='main.topbar.heading'] *" '.nodes[0].class == "sf-t-accent sf-t-strong"'
+expect_tree "[data-id='main.topbar.left.heading'] *" '.nodes[0].class == "sf-t-accent sf-t-strong"'
 
 kata --workspace "$tmp/workspace" delete "$colour_uid" --force --confirm "DELETE smoke#$colour_short" --json
 expect_tree "$colour_row" '.ok and .count == 0'
