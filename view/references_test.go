@@ -131,7 +131,7 @@ func TestPropertiesShowTheParentAsAReferenceAndNoChildLines(t *testing.T) {
 	}
 }
 
-func TestStatusBadgeIsShownOnceAfterTheTitle(t *testing.T) {
+func TestStatusBadgeIsShownOnceUnderTheTitle(t *testing.T) {
 	nodes := render(t, apply(browsing(), detailOf(alpha)))
 	if _, ok := nodes[view.DetailContentID+".properties.badges.status"]; ok {
 		t.Error("properties repeat the status badge")
