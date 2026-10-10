@@ -9,6 +9,8 @@ ctl --file "$tmp/sidebar-unbound.ctl"
 expect_tree "$us_sidebar" '.ok and .count == 1'
 expect_tree "$us_heading" '.ok and .nodes[0].text == "Inbox"'
 
+ctl click "[data-id='main.columns.collections.projects']"
+expect_tree "[data-id='main.columns.collections.project.$us_smoke_uid']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.project.$us_smoke_uid']"
 expect_tree "$us_heading" '.ok and .nodes[0].text == "Project: smoke"'
 expect_tree "$us_sidebar" '.ok and .count == 0'
