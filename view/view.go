@@ -153,10 +153,10 @@ func scrollMax(m model.Model) ui.ListMax {
 	return ui.MaxFrac(0.6)
 }
 
-// topBar is the pinned row above the columns: the Menu (p) button and the Collection title with its
-// markers on the left, the counts in the middle, and the Daemon at the right. Clicking the title or the
+// topBar is the pinned row above the columns: the Collection title with its
+// markers on the left, the counts in the middle, and the Menu (p) button then the Daemon at the right. Clicking the title or the
 // button opens the Menu. When the row is too narrow Tern's flex shrinks and truncates the Daemon first,
-// then the counts; the left cell never shrinks.
+// then the counts; the left cell and the button never shrink.
 func topBar(m model.Model) tern.Element {
 	tone, style := ui.ToneNeutral, "strong"
 	if m.Focus == model.ColumnList {
@@ -175,13 +175,16 @@ func topBar(m model.Model) tern.Element {
 	}
 	headingCell := flexCell("heading", tone, 0)
 	headingCell.Title, headingCell.Actions = "Menu (p)", &ui.Actions{Click: "key=p"}
+	rightCell := flexCell("right", ui.ToneNeutral, 100)
 	return ui.Row{Common: ui.Common{Key: "topbar"}, Gap: ui.GapMD, Justify: ui.JustifyBetween, Children: ui.Nodes(
 		ui.Row{Common: flexCell("left", ui.ToneNeutral, 0), Gap: ui.GapSM, Children: ui.Nodes(
-			keyButton("menu", "Menu (p)", "p", false),
 			ui.Text{Common: headingCell, Spans: heading, Wrap: ui.WrapNone},
 		)},
 		ui.Text{Common: flexCell("counts", ui.ToneMuted, 1), Text: m.CountsLine(), Wrap: ui.WrapNone},
-		ui.Text{Common: flexCell("daemon", ui.ToneMuted, 100), Text: m.DaemonLine(), Wrap: ui.WrapNone},
+		ui.Row{Common: rightCell, Gap: ui.GapSM, Children: ui.Nodes(
+			keyButton("menu", "Menu (p)", "p", false),
+			ui.Text{Common: flexCell("daemon", ui.ToneMuted, 100), Text: m.DaemonLine(), Wrap: ui.WrapNone},
+		)},
 	)}
 }
 
