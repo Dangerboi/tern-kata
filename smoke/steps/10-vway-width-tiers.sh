@@ -88,16 +88,18 @@ for width in 300 120 40 8; do
 done
 
 # The keys still act on the hidden screen without hurting the Pane: paging and a
-# help layer opened blind both come back when it widens.
+# help sheet opened blind both come back when it widens.
 ctl key PageDown
 ctl key PageUp
 ctl key '?'
 expect_alive "keys below 80 columns"
-expect_tree "[data-id^='layer.']" '.ok and .count == 0'
-expect_width 1200 1 1 0
-expect_tree "[data-id^='layer.']" '.ok and .count > 0'
+expect_tree "[data-id='main.help']" '.ok and .count == 0'
+ctl resize "$width_full" "$width_height"
+expect_tree "[data-id='main.help']" '.ok and .count == 1'
+expect_tree "[data-id='main.columns']" '.ok and .count == 0'
 ctl key esc
-expect_tree "[data-id^='layer.']" '.ok and .count == 0'
+expect_tree "[data-id='main.help']" '.ok and .count == 0'
+expect_width 1200 1 1 0
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" ".nodes[0].text == $title_json"
 expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("esc back"))'
 

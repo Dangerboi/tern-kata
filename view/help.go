@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Dangerboi/tern-kata/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
@@ -36,32 +37,36 @@ type helpGroup struct {
 	rows []ui.TableRow
 }
 
-func help(m model.Model) tern.Element {
-	if !m.HelpOpen {
-		return nil
-	}
-	children := make([]tern.Element, 0, 2*len(model.Keymap)+1)
+// help is the keybinding sheet that fills the Pane while help is open: the groups side by side in a
+// wrapping row, each a title over `key  action` lines with keys padded to the group's longest key.
+func help(m model.Model) tern.Nodes {
+	columns := make([]tern.Element, 0, len(model.Keymap))
 	for gi, group := range helpGroups() {
 		name := helpTitles[group.mode]
 		if name == "" {
 			name = string(group.mode)
 		}
-		children = append(children,
-			ui.Text{Common: ui.Common{Key: "group-" + strconv.Itoa(gi), Tone: ui.ToneAccent}, Text: name},
-			ui.Table{
-				Common: ui.Common{Key: "table-" + strconv.Itoa(gi)},
-				Cols:   []ui.Column{{ID: "key", Head: ui.T("key")}, {ID: "action", Head: ui.T("action"), Grow: 1}},
-				Rows:   group.rows,
-			})
+		width := 0
+		for _, row := range group.rows {
+			width = max(width, utf8.RuneCountInString(row.Cells["key"].(ui.Rich).String()))
+		}
+		lines := ui.Nodes(ui.Text{Common: ui.Common{Key: "title", Tone: ui.ToneAccent}, Text: name})
+		for _, row := range group.rows {
+			key := row.Cells["key"].(ui.Rich).String()
+			line := key + strings.Repeat(" ", width-utf8.RuneCountInString(key)) + "  " + row.Cells["action"].(ui.Rich).String()
+			lines = append(lines, ui.Text{Common: ui.Common{Key: "row-" + row.ID}, Text: line, Wrap: ui.WrapNone})
+		}
+		columns = append(columns, ui.Col{Common: ui.Common{Key: "group-" + strconv.Itoa(gi)}, Children: lines})
 	}
-	children = append(children, keyButton("close", "Close (esc)", "escape", false))
-	return ui.Nodes(ui.Overlay{
-		Common:   ui.Common{Key: "help"},
-		Modal:    true,
-		Head:     ui.T("Keyboard help"),
-		Size:     ui.SizeLG,
-		Children: children,
-	})
+	return ui.Nodes(ui.List{CommonWithoutMax: scrollerCommon("help"), Max: ui.MaxFrac(1), Children: ui.Nodes(ui.Col{
+		Common: ui.Common{Key: "sheet"},
+		Gap:    ui.GapMD,
+		Children: ui.Nodes(
+			ui.Text{Common: ui.Common{Key: "title"}, Text: "tern-kata — keybindings"},
+			ui.Row{Common: ui.Common{Key: "groups"}, Gap: ui.GapLG, Align: ui.AlignStart, Wrap: true, Children: columns},
+			ui.Text{Common: ui.Common{Key: "return", Tone: ui.ToneMuted}, Text: "press ? to return"},
+		),
+	})})
 }
 
 // helpGroups groups the Keymap by mode, global first, merging bindings that

@@ -18,7 +18,7 @@ func TextEditor(key string, editor model.TextEditor, readonly bool) tern.Element
 func editorLayer(m model.Model) tern.Element {
 	draft, ok := m.ActiveDraft()
 	if !ok {
-		return help(m)
+		return nil
 	}
 	title := "Edit Issue body"
 	if draft.Comment {

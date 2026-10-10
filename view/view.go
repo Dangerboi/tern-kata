@@ -39,6 +39,8 @@ func Render(m model.Model, now time.Time) tern.View {
 	}
 	var main tern.Nodes
 	switch {
+	case m.HelpOpen:
+		main = help(m)
 	case m.Err != nil:
 		main = failureView(m)
 	case m.FirstLoad():
@@ -61,10 +63,10 @@ func Render(m model.Model, now time.Time) tern.View {
 		main = append(ui.Nodes(topBar(m)), filterLine(m)...)
 		main = append(main, ui.Row{Common: ui.Common{Key: "columns", Grow: 1, Min: &ui.Bounds{H: ui.Lines(0)}}, Gap: ui.GapMD, Align: ui.AlignStretch, Children: columns})
 	}
-	if m.Stale && m.Err == nil && !m.FirstLoad() {
+	if m.Stale && m.Err == nil && !m.FirstLoad() && !m.HelpOpen {
 		main = append(main, staleNotice(m))
 	}
-	layer := help(m)
+	var layer tern.Element
 	if m.Picker.Open {
 		layer = pickerLayer(m)
 	}
@@ -88,6 +90,9 @@ func Render(m model.Model, now time.Time) tern.View {
 	}
 	if m.CloseForm.Err != nil && !m.CloseForm.Open {
 		main = append(main, ui.Text{Common: ui.Common{Key: "close-error", Tone: ui.ToneError}, Text: m.CloseForm.Err.Error()})
+	}
+	if m.HelpOpen {
+		return tern.View{Main: main}
 	}
 	return tern.View{Main: main, Dock: footer(m), Layer: layer}
 }
