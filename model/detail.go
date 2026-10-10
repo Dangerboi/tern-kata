@@ -200,9 +200,15 @@ const (
 	SideBySideCols = 140
 )
 
+// SidebarShown reports whether the Collections sidebar is a column: an unbound
+// directory shows it while a fixed Collection is current and drops it once a Project
+// is entered. Everywhere else the picker replaces it.
+func (m Model) SidebarShown() bool {
+	return !m.Bound && !m.Collection.IsProject()
+}
+
 // VisibleColumns is every column from SideBySideCols, only the focused column
-// from MinCols, and none below. A bound Project opens without the Collections
-// column; the picker replaces it.
+// from MinCols, and none below. See SidebarShown for the Collections column.
 func (m Model) VisibleColumns() []Column {
 	if m.Cols < MinCols {
 		return nil
@@ -214,7 +220,7 @@ func (m Model) VisibleColumns() []Column {
 	if !m.DetailHidden {
 		columns = append(columns, ColumnDetail)
 	}
-	if !m.Bound {
+	if m.SidebarShown() {
 		columns = append([]Column{ColumnCollections}, columns...)
 	}
 	return columns
@@ -265,7 +271,7 @@ func updateDetailNavigation(m Model, action Action) (Model, []Cmd) {
 			}
 			m.Focus = ColumnList
 		} else if m.Focus == ColumnList {
-			if m.Bound {
+			if !m.SidebarShown() {
 				return openPicker(m), nil
 			}
 			m.Focus = ColumnCollections

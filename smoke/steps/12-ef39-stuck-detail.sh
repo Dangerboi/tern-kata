@@ -82,8 +82,9 @@ stuck_scrolls "a link jump and esc"
 ctl key esc
 ctl key esc
 
-# Collection switches.
-ctl click "[data-id='main.columns.collections.all-open']"
+# Collection switches. Inside a Project the sidebar is gone and esc opens the popup; a fixed Collection picked there brings the sidebar back.
+expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
+ctl click "[data-id='layer.collections.list.all-open']"
 expect_tree "[data-id='main.columns.collections.all-open']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.project.$stuck_project']"
 expect_tree "[data-id$='.$stuck_long']" '.ok and .count == 1'
