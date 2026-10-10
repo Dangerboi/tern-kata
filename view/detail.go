@@ -49,6 +49,9 @@ func detail(m model.Model, now time.Time) tern.Element {
 		if body == "" {
 			body = "No body yet."
 		}
+		if parent, ok := parentLink(m); ok {
+			body = withoutParentSection(body, parent.Ref)
+		}
 		parts = append(parts, properties(m, issue), ui.Md{Common: ui.Common{Key: "body"}, Text: body})
 		kids := m.DetailChildren()
 		if len(kids) > 0 {
@@ -106,6 +109,42 @@ func detailRows(m model.Model, tab model.ActivityTab, cursorOffset int) tern.Nod
 	return rows
 }
 
+func parentLink(m model.Model) (model.DetailRow, bool) {
+	for i := range m.DetailRowCount(model.TabLinks) {
+		if link, _ := m.DetailRow(model.TabLinks, i); link.Relation == "parent" {
+			return link, true
+		}
+	}
+	return model.DetailRow{}, false
+}
+
+// withoutParentSection drops a leading `## Parent` section (up to the next heading) that names the parent
+// by ref (#short or project#short); display only, the stored body is untouched.
+func withoutParentSection(body, ref string) string {
+	trimmed := strings.TrimLeft(body, "\r\n")
+	first, rest, _ := strings.Cut(trimmed, "\n")
+	if !strings.HasPrefix(first, "## Parent") {
+		return body
+	}
+	section, after := rest, ""
+	for off, line := 0, rest; ; {
+		if strings.HasPrefix(line, "#") {
+			section, after = rest[:off], rest[off:]
+			break
+		}
+		nl := strings.IndexByte(line, '\n')
+		if nl < 0 {
+			break
+		}
+		off += nl + 1
+		line = rest[off:]
+	}
+	if !strings.Contains(section, ref[strings.LastIndex(ref, "#")+1:]) {
+		return body
+	}
+	return strings.TrimLeft(after, "\r\n")
+}
+
 func statusTone(status string) ui.Tone {
 	if status == "open" {
 		return ui.ToneAccent
@@ -151,12 +190,6 @@ func properties(m model.Model, issue *model.Issue) tern.Element {
 		owner = *issue.Owner
 	}
 	add("Owner", text(owner))
-	for i := range m.DetailRowCount(model.TabLinks) {
-		if link, _ := m.DetailRow(model.TabLinks, i); link.Relation == "parent" {
-			add("Parent", ui.Row{Common: ui.Common{Key: "v"}, Gap: ui.GapNone, Wrap: true, Children: referenceTail(link.ReferenceUID, link.Ref, link.RefTitle)})
-			break
-		}
-	}
 	if issue.Priority != nil {
 		add("Priority", ui.Badge{Common: ui.Common{Key: "v", Tone: priorityTone(*issue.Priority)}, Text: fmt.Sprintf("P%d", *issue.Priority)})
 	}
@@ -166,6 +199,9 @@ func properties(m model.Model, issue *model.Issue) tern.Element {
 			chips[i] = ui.Badge{Common: ui.Common{Key: "label-" + name, Tone: ui.ToneNeutral}, Text: name}
 		}
 		add("Labels", ui.Row{Common: ui.Common{Key: "v"}, Gap: ui.GapSM, Wrap: true, Children: chips})
+	}
+	if link, ok := parentLink(m); ok {
+		add("Parent", ui.Row{Common: ui.Common{Key: "v"}, Gap: ui.GapNone, Wrap: true, Children: referenceTail(link.ReferenceUID, link.Ref, link.RefTitle)})
 	}
 	if counts := m.ChildCounts[issue.UID]; counts.Total > 0 {
 		add("Children", text(fmt.Sprintf("%d open / %d total", counts.Open, counts.Total)))
