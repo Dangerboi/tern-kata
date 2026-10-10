@@ -20,6 +20,18 @@ type Scroll struct {
 
 func (Scroll) cmd() {}
 
+// RevealActivityTab asks the app to bring the active Activity tab into view in
+// the detail scroller: its last row, then the tab names.
+type RevealActivityTab struct{}
+
+func (RevealActivityTab) cmd() {}
+
+// DetailDrawn reports whether the view draws the Activity tabs: the detail column
+// is on screen and holds a loaded Issue, not a placeholder or an error line.
+func (m Model) DetailDrawn() bool {
+	return m.Shows(ColumnDetail) && m.SelectedUID != "" && m.DetailErr == nil && m.Detail != nil && m.Detail.Issue != nil
+}
+
 // Shows reports whether the view draws column c. It draws none while the first
 // load or a daemon failure fills the Pane, under MinCols, or for the columns the
 // width folds away. Tern answers an op on an unknown node (scroll, reveal) with
@@ -28,12 +40,18 @@ func (m Model) Shows(c Column) bool {
 	return m.Err == nil && !m.FirstLoad() && slices.Contains(m.VisibleColumns(), c)
 }
 
-// onScreen drops the Scrolls aimed at a column the view does not draw. A column
-// drawn again later starts at its top, so nothing is lost.
+// onScreen drops the Scrolls aimed at a column the view does not draw, and the
+// tab reveals while the tabs are not drawn. A column drawn again later starts
+// at its top, so nothing is lost.
 func onScreen(m Model, cmds []Cmd) []Cmd {
 	return slices.DeleteFunc(cmds, func(cmd Cmd) bool {
-		scroll, ok := cmd.(Scroll)
-		return ok && !m.Shows(scroll.Column)
+		switch cmd := cmd.(type) {
+		case Scroll:
+			return !m.Shows(cmd.Column)
+		case RevealActivityTab:
+			return !m.DetailDrawn()
+		}
+		return false
 	})
 }
 

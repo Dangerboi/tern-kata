@@ -54,6 +54,9 @@ ctl click "[data-id='main.columns.list.issues.$stable_first']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.nodes[0].text | contains("Smoke stable first") and (contains("loading") | not)'
 ctl key enter
 ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']"
+# The click's own tab reveals (19-yd2n) follow its render, so wait for the tab before marking.
+expect_tree "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']" '.ok and (.nodes[0].text | startswith("[ Links"))'
+sleep 0.5
 mark=$(wc -l <"$tmp/stable-frames.jsonl")
 kata --workspace "$tmp/workspace" comment "$stable_first" --body "Stable refresh comment" --json
 expect_tree "[data-id='main.columns.detail.viewport.content.activity.tabs.tab0']" '.ok and (.nodes[0].text | startswith("Comments (1)"))'

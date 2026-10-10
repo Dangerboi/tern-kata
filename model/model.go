@@ -65,8 +65,11 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 	if action, ok := msg.(ActionMsg); ok && action.Action == "key" {
 		msg = KeyMsg{Chord: action.Value}
 	}
-	shown := m.DetailIssueUID()
+	shown, tab := m.DetailIssueUID(), m.ActivityTab
 	m, cmds := update(m, msg)
+	if m.ActivityTab != tab {
+		cmds = append(cmds, RevealActivityTab{})
+	}
 	if now := m.DetailIssueUID(); shown != "" && now != "" && now != shown {
 		// The detail scroller keeps its offset across Issues; a different Issue starts at the top.
 		cmds = append(cmds, Scroll{Column: ColumnDetail, By: ScrollToStart})

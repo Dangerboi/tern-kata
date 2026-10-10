@@ -66,14 +66,16 @@ func clickAt(focus model.Column, listKeys ...string) model.Model {
 }
 
 // clickTabTo cycles Activity tabs with tab, so tests follow the on-screen order.
-func clickTabTo(m model.Model, tab model.ActivityTab) model.Model {
+// It returns the commands of the last switch, the one a click on the tab name also makes.
+func clickTabTo(m model.Model, tab model.ActivityTab) (model.Model, []model.Cmd) {
+	var cmds []model.Cmd
 	for range model.TabCount {
 		if m.ActivityTab == tab {
 			break
 		}
-		m, _ = clickPress(m, "tab")
+		m, cmds = clickPress(m, "tab")
 	}
-	return m
+	return m, cmds
 }
 
 // clickDetailPath is the keyboard route to an Activity tab: enter the detail when
@@ -84,7 +86,10 @@ func clickDetailPath(tab model.ActivityTab, after ...string) func(model.Model) (
 		if m.Focus != model.ColumnDetail {
 			m, cmds = clickPress(m, "enter")
 		}
-		m = clickTabTo(m, tab)
+		m, switched := clickTabTo(m, tab)
+		if len(after) == 0 {
+			cmds = append(cmds, switched...)
+		}
 		m, more := clickPress(m, after...)
 		return m, append(cmds, more...)
 	}

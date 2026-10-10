@@ -3,7 +3,8 @@
 # focus and getting it back with a click. Tern keeps the node of the last reveal in view and ignores the
 # wheel past it, so one reveal the app sent for a click (title, heading, row) froze the detail until the
 # column was removed and drawn again. After every click the wheel must still move the detail, and the
-# recorded TSP ops must hold no reveal inside the detail. Own Project and Issues; it cleans up.
+# recorded TSP ops must hold no reveal inside the detail but the pair a tab-name click sends (the new tab's
+# last row, then the tab names, see 19-yd2n). Own Project and Issues; it cleans up.
 stuck_y() { ctl tree "[data-id='main.columns.detail.viewport.content.heading']" | jq -r '.nodes[0].rect[1] // empty | floor'; }
 stuck_wheel() { for _ in $(seq "$2"); do ctl wheel 0 "$1" >/dev/null; done; }
 # The wheel moves the detail down from its top and back up, whatever was clicked before.
@@ -112,8 +113,8 @@ ctl click "[data-id$='.$stuck_long']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Stuck long"))'
 stuck_scrolls "the window regaining focus"
 
-# No click made the app reveal anything inside the detail.
-jq -c 'select(.dir == "out" and .verb == "f") | .body.ops[] | select(.[0] == "reveal" and (.[1] | startswith("main.columns.detail")))' "$tmp/stuck-frames.jsonl" >"$tmp/stuck-detail-reveals.json"
+# No click but a tab name made the app reveal anything inside the detail.
+jq -sc '[.[] | select(.dir == "out" and .verb == "f") | .body.ops[] | select(.[0] == "reveal" and (.[1] | startswith("main.columns.detail")))] as $r | range(0; $r | length) as $i | select(([$r[$i][1], ($r[$i + 1][1] // "")] | any(endswith(".activity.tabs"))) | not) | $r[$i]' "$tmp/stuck-frames.jsonl" >"$tmp/stuck-detail-reveals.json"
 [[ ! -s $tmp/stuck-detail-reveals.json ]] || { printf 'Reveal inside the detail for a click: %s\n' "$(<"$tmp/stuck-detail-reveals.json")" >&2; return 1; }
 
 quit_app

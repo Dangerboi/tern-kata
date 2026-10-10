@@ -103,6 +103,14 @@ eventLoop:
 				}
 				continue
 			}
+			if _, ok := cmd.(model.RevealActivityTab); ok {
+				for _, id := range view.ActivityRevealIDs(m) {
+					if err := surface.Reveal(id, "nearest"); err != nil {
+						return err
+					}
+				}
+				continue
+			}
 			if external, ok := cmd.(model.OpenDraftEditor); ok {
 				stopInput()
 				surface.Close()
