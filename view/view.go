@@ -294,6 +294,9 @@ func rightCells(kids, owner, updated string, ownerShown bool, style string) []ui
 func footer(m model.Model) tern.Element {
 	segments := make([]tern.Element, 0, len(model.Keymap)+1)
 	for binding := range model.BindingsForMode(m.CurrentMode(), true) {
+		if binding.Action == model.FocusDetail && !m.CanFocusDetail() {
+			continue
+		}
 		segments = append(segments, ui.Seg{Common: ui.Common{Key: binding.Chord, Actions: &ui.Actions{Click: "key=" + binding.Chord}}, Text: binding.Key + " " + binding.Help})
 	}
 	selected := 0

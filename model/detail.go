@@ -220,6 +220,12 @@ func (m Model) VisibleColumns() []Column {
 	return columns
 }
 
+// CanFocusDetail is whether list-mode tab moves to the detail: the list and detail
+// are both visible and an Issue is selected.
+func (m Model) CanFocusDetail() bool {
+	return m.SelectedUID != "" && slices.Contains(m.VisibleColumns(), ColumnList) && slices.Contains(m.VisibleColumns(), ColumnDetail)
+}
+
 func EnsureDetail(m Model) (Model, []Cmd) {
 	if m.Quitting || m.DetailHidden || m.SelectedUID == m.DetailUID {
 		return m, nil
@@ -269,6 +275,10 @@ func updateDetailNavigation(m Model, action Action) (Model, []Cmd) {
 				return openPicker(m), nil
 			}
 			m.Focus = ColumnCollections
+		}
+	case FocusDetail:
+		if m.CanFocusDetail() {
+			m.Focus = ColumnDetail
 		}
 	case ToggleDetail:
 		m.DetailHidden = !m.DetailHidden
