@@ -200,7 +200,7 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	for _, row := range props.C {
 		keys = append(keys, strings.TrimRight(text(nodes[row.ID+".k"]), "\u00a0"))
 	}
-	want := []string{"Author:", "Created:", "Updated:", "Scheduled:", "Deadline:", "Owner:", "Parent:", "Priority:", "Labels:", "Children:", "Closed:"}
+	want := []string{"Author:", "Created:", "Updated:", "Scheduled:", "Deadline:", "Owner:", "Priority:", "Labels:", "Parent:", "Children:", "Closed:"}
 	if !slices.Equal(keys, want) {
 		t.Errorf("keys %v, want %v", keys, want)
 	}
@@ -218,5 +218,28 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	}
 	if want := []string{"Created:", "Updated:", "Owner:"}; !slices.Equal(keys, want) {
 		t.Errorf("bare keys %v, want %v", keys, want)
+	}
+}
+
+func TestLeadingParentSectionIsHiddenOnlyWhenItNamesTheParent(t *testing.T) {
+	links := []g.UILink{{ID: 1, Type: "parent", FromIssueUID: "kid", FromQualifiedID: "work#kidd", ToIssueUID: "up", ToQualifiedID: "work#upup"}}
+	bodyText := func(issue model.Issue, links []g.UILink) string {
+		nodes := render(t, apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: links}},
+			model.DetailLoaded{UID: "kid", Selected: &g.UISelectedAuthority{Issue: &issue, Links: links}}))
+		return text(nodes[view.DetailContentID+".body"])
+	}
+	kid := func(body string) model.Issue {
+		return model.Issue{UID: "kid", ShortID: "kidd", Title: "K", Status: "open", ProjectName: "work", Revision: 1, Body: body}
+	}
+	if got := bodyText(kid("## Parent\n\nupup\n\n## What\n\nbuild it"), links); got != "## What\n\nbuild it" {
+		t.Errorf("section naming the parent: body %q", got)
+	}
+	other := "## Parent\n\nsomething else\n\n## What\n\nbuild it"
+	if got := bodyText(kid(other), links); got != other {
+		t.Errorf("section naming another Issue: body %q", got)
+	}
+	named := "## Parent\n\nupup\n\n## What\n\nbuild it"
+	if got := bodyText(kid(named), nil); got != named {
+		t.Errorf("no parent: body %q", got)
 	}
 }
