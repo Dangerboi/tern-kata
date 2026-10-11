@@ -16,7 +16,7 @@ func referenceRow(uid string, lead tern.Element, ref string, trail ...tern.Eleme
 
 // jumpLink is the accent underlined reference whose click jumps to the Issue uid.
 func jumpLink(uid, ref string) ui.Text {
-	return ui.Text{Common: ui.Common{Key: "jump", Actions: &ui.Actions{Click: "jump=" + uid}}, Spans: []ui.Span{{T: ref, S: "accent link"}}}
+	return ui.Text{Common: ui.Common{Key: "jump", Actions: &ui.Actions{Click: JumpClick(uid)}}, Spans: []ui.Span{{T: ref, S: "accent link"}}}
 }
 
 // referenceTail is the reference as a link followed, only when the peer is
@@ -26,7 +26,7 @@ func jumpLink(uid, ref string) ui.Text {
 func referenceTail(uid, ref, title string) tern.Nodes {
 	nodes := ui.Nodes(jumpLink(uid, ref))
 	if title != "" {
-		follow := &ui.Actions{Click: "jump=" + uid}
+		follow := &ui.Actions{Click: JumpClick(uid)}
 		nodes = append(nodes, ui.Text{Common: ui.Common{Key: "dash", Actions: follow}, Text: "\u00a0-\u00a0"}, ui.Text{Common: ui.Common{Key: "title", Actions: follow}, Text: title})
 	}
 	return nodes

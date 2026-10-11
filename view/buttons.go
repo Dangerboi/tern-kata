@@ -8,7 +8,7 @@ import (
 
 // keyButton is a button whose click is the key press chord, so a click and the key never disagree.
 func keyButton(key, text, chord string, primary bool) el.Button {
-	button := el.Button{Common: ui.Common{Key: key, Actions: &ui.Actions{Click: "key=" + chord}}, Text: text}
+	button := el.Button{Common: ui.Common{Key: key, Actions: &ui.Actions{Click: KeyClick(chord)}}, Text: text}
 	if primary {
 		button.Tone = ui.ToneAccent
 	}

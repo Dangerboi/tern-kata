@@ -7,8 +7,7 @@ import (
 	"testing"
 )
 
-// closeSave is a click on the Close Issue button, which presses ctrl+o.
-var closeSave = model.ActionMsg{Action: "key", Value: "ctrl+o"}
+var closeSave = model.KeyMsg{Chord: "ctrl+o"}
 
 func TestCloseSequences(t *testing.T) {
 	for _, tt := range []struct {

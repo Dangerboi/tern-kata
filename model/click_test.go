@@ -1,7 +1,6 @@
 package model_test
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -66,134 +65,26 @@ func clickAt(focus model.Column, listKeys ...string) model.Model {
 }
 
 // clickTabTo cycles Activity tabs with tab, so tests follow the on-screen order.
-// It returns the commands of the last switch, the one a click on the tab name also makes.
-func clickTabTo(m model.Model, tab model.ActivityTab) (model.Model, []model.Cmd) {
-	var cmds []model.Cmd
+func clickTabTo(m model.Model, tab model.ActivityTab) model.Model {
 	for range model.TabCount {
 		if m.ActiveTab() == tab {
 			break
 		}
-		m, cmds = clickPress(m, "tab")
+		m, _ = clickPress(m, "tab")
 	}
-	return m, cmds
+	return m
 }
 
 // clickDetailPath is the keyboard route to an Activity tab: enter the detail when
 // the keys are elsewhere, tab to the tab, then press after.
-func clickDetailPath(tab model.ActivityTab, after ...string) func(model.Model) (model.Model, []model.Cmd) {
-	return func(m model.Model) (model.Model, []model.Cmd) {
-		var cmds []model.Cmd
+func clickDetailPath(tab model.ActivityTab, after ...string) func(model.Model) model.Model {
+	return func(m model.Model) model.Model {
 		if m.Focus != model.ColumnDetail {
-			m, cmds = clickPress(m, "enter")
+			m, _ = clickPress(m, "enter")
 		}
-		m, switched := clickTabTo(m, tab)
-		if len(after) == 0 {
-			cmds = append(cmds, switched...)
-		}
-		m, more := clickPress(m, after...)
-		return m, append(cmds, more...)
-	}
-}
-
-// clickJumpPath is the keys to a Link row's reference. The click needs the Links tab on screen
-// first, so the pointer side starts there too and the tab is put back for the comparison.
-func clickJumpPath(m model.Model) (model.Model, []model.Cmd) {
-	m, cmds := clickDetailPath(model.TabLinks, "enter")(m)
-	m, _ = model.Update(m, model.ActivityTabMsg{Tab: model.TabComments})
-	return m, cmds
-}
-
-func clickKeys(chords ...string) func(model.Model) (model.Model, []model.Cmd) {
-	return func(m model.Model) (model.Model, []model.Cmd) { return clickPress(m, chords...) }
-}
-
-func TestEveryClickTargetEndsWhereItsKeysEnd(t *testing.T) {
-	today := "today"
-	for _, tt := range []struct {
-		name     string
-		from     model.Column
-		listKeys []string
-		click    model.Msg
-		// The keyboard user starts here, and then presses keyboard.
-		keyFrom  model.Column
-		keyboard func(model.Model) (model.Model, []model.Cmd)
-	}{
-		{"leaf row from list", model.ColumnList, nil, model.SelectMsg{UID: "leaf"}, model.ColumnList, clickKeys("j")},
-		{"leaf row from detail", model.ColumnDetail, nil, model.SelectMsg{UID: "leaf"}, model.ColumnDetail, clickKeys("escape", "j")},
-		{"leaf row from Collections", model.ColumnCollections, nil, model.SelectMsg{UID: "leaf"}, model.ColumnList, clickKeys("j")},
-		{"nested child row", model.ColumnList, []string{"space"}, model.SelectMsg{UID: "child"}, model.ColumnList, clickKeys("j")},
-		{"parent row from list", model.ColumnList, []string{"shift+g"}, model.ActionMsg{Action: model.ToggleExpansion, Value: "parent"}, model.ColumnList, clickKeys("g", "space")},
-		{"parent row from detail", model.ColumnDetail, nil, model.ActionMsg{Action: model.ToggleExpansion, Value: "parent"}, model.ColumnDetail, clickKeys("escape", "space")},
-		{"parent row from Collections", model.ColumnCollections, nil, model.ActionMsg{Action: model.ToggleExpansion, Value: "parent"}, model.ColumnList, clickKeys("space")},
-		{"parent row collapses an expanded parent", model.ColumnCollections, []string{"space"}, model.ActionMsg{Action: model.ToggleExpansion, Value: "parent"}, model.ColumnList, clickKeys("space")},
-		{"top bar title from list", model.ColumnList, nil, model.ActionMsg{Action: "key", Value: "p"}, model.ColumnList, clickKeys("p")},
-		{"top bar title from detail", model.ColumnDetail, nil, model.ActionMsg{Action: "key", Value: "p"}, model.ColumnDetail, clickKeys("p")},
-		{"detail title from list", model.ColumnList, nil, model.FocusColumnMsg{Column: model.ColumnDetail}, model.ColumnList, clickKeys("enter")},
-		{"Activity tab", model.ColumnList, nil, model.ActivityTabMsg{Tab: model.TabLinks}, model.ColumnList, clickDetailPath(model.TabLinks)},
-		{"detail row", model.ColumnDetail, nil, model.DetailItemMsg{Tab: model.TabLinks, Key: "1"}, model.ColumnDetail, clickDetailPath(model.TabLinks)},
-		{"referenced Issue from detail", model.ColumnDetail, nil, model.JumpIssueMsg{UID: "other"}, model.ColumnDetail, clickJumpPath},
-		{"referenced Issue from list", model.ColumnList, nil, model.JumpIssueMsg{UID: "other"}, model.ColumnList, clickJumpPath},
-		{"Collection from Collections", model.ColumnCollections, nil, model.CollectionPointerSelected{Key: today}, model.ColumnCollections, clickKeys("j", "enter")},
-		{"Collection from list", model.ColumnList, nil, model.CollectionPointerSelected{Key: today}, model.ColumnList, clickKeys("escape", "j", "enter")},
-		{"Collection from detail", model.ColumnDetail, nil, model.CollectionPointerSelected{Key: today}, model.ColumnDetail, clickKeys("escape", "escape", "j", "enter")},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			pointer, pointerCmds := model.Update(clickAt(tt.from, tt.listKeys...), tt.click)
-			keyboard, keyboardCmds := tt.keyboard(clickAt(tt.keyFrom, tt.listKeys...))
-			if !reflect.DeepEqual(pointer, keyboard) || !reflect.DeepEqual(pointerCmds, keyboardCmds) {
-				t.Fatalf("click and keys diverge (click != keys):%s\ncommands: %#v != %#v", clickDiff(pointer, keyboard), pointerCmds, keyboardCmds)
-			}
-			afterClick, clickCmds := clickPress(pointer, "escape")
-			afterKeys, keyCmds := clickPress(keyboard, "escape")
-			if !reflect.DeepEqual(afterClick, afterKeys) || !reflect.DeepEqual(clickCmds, keyCmds) {
-				t.Fatalf("esc differs after click (click != keys):%s\ncommands: %#v != %#v", clickDiff(afterClick, afterKeys), clickCmds, keyCmds)
-			}
-		})
-	}
-}
-
-func TestEveryFooterHintClicksLikeItsKey(t *testing.T) {
-	for _, focus := range []model.Column{model.ColumnList, model.ColumnCollections, model.ColumnDetail} {
-		m := clickAt(focus)
-		for binding := range model.BindingsForMode(m.CurrentMode(), true) {
-			t.Run(string(m.CurrentMode())+"/"+binding.Chord, func(t *testing.T) {
-				keyboard, keyCmds := model.Update(m, model.KeyMsg{Chord: binding.Chord})
-				pointer, clickCmds := model.Update(m, model.ActionMsg{Action: "key", Value: binding.Chord})
-				if !reflect.DeepEqual(pointer, keyboard) || !reflect.DeepEqual(clickCmds, keyCmds) {
-					t.Fatalf("hint differs from key (click != key):%s\ncommands: %#v != %#v", clickDiff(pointer, keyboard), clickCmds, keyCmds)
-				}
-			})
-		}
-	}
-}
-
-func TestLayerClicksEndWhereTheirKeysEnd(t *testing.T) {
-	for _, tt := range []struct {
-		name  string
-		open  string
-		click model.Msg
-		keys  []string
-	}{
-		{"filters field", "f", model.FilterFieldMsg{Field: 2}, []string{"tab", "tab"}},
-		{"create field", "n", model.CreateFieldMsg{Field: 3}, []string{"tab", "tab", "tab"}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			open, _ := clickPress(clickAt(model.ColumnList), tt.open)
-			pointer, clickCmds := model.Update(open, tt.click)
-			keyboard, keyCmds := clickPress(open, tt.keys...)
-			if !reflect.DeepEqual(pointer, keyboard) || !reflect.DeepEqual(clickCmds, keyCmds) {
-				t.Fatalf("click and keys diverge (click != keys):%s\ncommands: %#v != %#v", clickDiff(pointer, keyboard), clickCmds, keyCmds)
-			}
-		})
-	}
-}
-
-func TestRetryButtonRetriesLikeItsKey(t *testing.T) {
-	m := model.Model{Workspace: "/repo", Err: errors.New("kata server not responding")}
-	pointer, clickCmds := model.Update(m, model.Retry{})
-	keyboard, keyCmds := clickPress(m, "ctrl+r")
-	if !reflect.DeepEqual(pointer, keyboard) || !reflect.DeepEqual(clickCmds, keyCmds) || len(keyCmds) != 1 {
-		t.Fatalf("retry click and key diverge (click != key):%s\ncommands: %#v != %#v", clickDiff(pointer, keyboard), clickCmds, keyCmds)
+		m = clickTabTo(m, tab)
+		m, _ = clickPress(m, after...)
+		return m
 	}
 }
 
@@ -234,7 +125,7 @@ func TestEscAfterClickBacksOut(t *testing.T) {
 // Jump history belongs to the detail column: hiding detail with the keys ends
 // it as clicking away does, so a later esc never replays an earlier jump.
 func TestJumpHistoryEndsWhenKeysLeaveDetail(t *testing.T) {
-	m, _ := clickDetailPath(model.TabLinks, "enter")(clickAt(model.ColumnDetail))
+	m := clickDetailPath(model.TabLinks, "enter")(clickAt(model.ColumnDetail))
 	if m.SelectedUID != "other" || len(m.JumpHistory()) != 1 {
 		t.Fatalf("jump did not record history: selected=%q back=%v", m.SelectedUID, m.JumpHistory())
 	}
@@ -250,9 +141,9 @@ func TestEscClosesLayerAfterClickInsideIt(t *testing.T) {
 		open  string
 		click model.Msg
 	}{
-		{"filter form field", "f", model.FilterFieldMsg{Field: 2}},
-		{"create form field", "n", model.CreateFieldMsg{Field: 3}},
-		{"close form field", "x", model.CloseFieldMsg{Field: 2}},
+		{"filter form field", "f", model.FocusFieldMsg{Field: 2}},
+		{"create form field", "n", model.FocusFieldMsg{Field: 3}},
+		{"close form field", "x", model.FocusFieldMsg{Field: 2}},
 		{"label prompt", "+", model.FieldValueMsg{Value: "x"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

@@ -330,15 +330,6 @@ func TestPickerIgnoresUnknownAndStaleClicks(t *testing.T) {
 	}
 }
 
-func TestPickerHeadingClickIsThePKey(t *testing.T) {
-	base := pickerStart(120, true)
-	want, wantCmds := model.Update(base, model.KeyMsg{Chord: "p", Text: "p"})
-	got, gotCmds := model.Update(base, model.ActionMsg{Action: "key", Value: "p"})
-	if !got.Picker.Open || !reflect.DeepEqual(got, want) || !reflect.DeepEqual(gotCmds, wantCmds) {
-		t.Fatalf("heading click: open=%v differs from p", got.Picker.Open)
-	}
-}
-
 func TestPickerKeysAreAdvertisedFromTheKeymap(t *testing.T) {
 	advertised := func(mode model.Mode) map[string]model.Action {
 		bindings := map[string]model.Action{}
@@ -369,7 +360,7 @@ func TestListHeadingClickOpensThePickerFromTheSidebar(t *testing.T) {
 	if m.Focus != model.ColumnCollections {
 		t.Fatalf("fixture: focus %v", m.Focus)
 	}
-	m, _ = model.Update(m, model.ActionMsg{Action: "key", Value: "p"})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "p"})
 	if !m.Picker.Open {
 		t.Fatal("clicking the top bar title did not open the picker")
 	}

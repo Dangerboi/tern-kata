@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/model"
+	"github.com/Dangerboi/tern-kata/view"
 	g "go.kenn.io/kata/pkg/client/generated"
 )
 
@@ -23,8 +24,8 @@ func cardButtons(t *testing.T, m model.Model, card string, want []button, primar
 			t.Errorf("%s.%s text = %q, want %q", card, b.id, text(node), b.text)
 		}
 		actions, _ := node.P["actions"].(map[string]any)
-		if actions["click"] != "key="+b.click {
-			t.Errorf("%s.%s click = %v, want key=%s", card, b.id, actions["click"], b.click)
+		if actions["click"] != view.KeyClick(b.click) {
+			t.Errorf("%s.%s click = %v, want %s", card, b.id, actions["click"], view.KeyClick(b.click))
 		}
 		if (node.P["tone"] == "accent") != (b.id == primary) {
 			t.Errorf("%s.%s tone = %v, primary is %s", card, b.id, node.P["tone"], primary)
@@ -100,7 +101,7 @@ func TestDraftEditorEndsInButtons(t *testing.T) {
 func TestCloseAndFiltersButtonsClickKeys(t *testing.T) {
 	m := press(selectedFirst(), "x")
 	nodes := pickerNodes(t, m)
-	for id, want := range map[string]string{"layer.close.actions.save": "key=ctrl+o", "layer.close.actions.quick": "key=ctrl+d", "layer.close.actions.cancel": "key=escape"} {
+	for id, want := range map[string]string{"layer.close.actions.save": view.KeyClick("ctrl+o"), "layer.close.actions.quick": view.KeyClick("ctrl+d"), "layer.close.actions.cancel": view.KeyClick("escape")} {
 		actions, _ := nodes[id].P["actions"].(map[string]any)
 		if actions["click"] != want {
 			t.Errorf("%s click = %v, want %s", id, actions["click"], want)

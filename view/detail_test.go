@@ -59,7 +59,7 @@ func TestActivityTabsShowCountsAndMarkTheActiveOne(t *testing.T) {
 			if (tab == tt.tab) != strings.Contains(style, "accent") {
 				t.Errorf("tab %v active=%v is styled %q", tab, tab == tt.tab, style)
 			}
-			if click := n.P["actions"].(map[string]any)["click"]; click != "activity-tab="+strconv.Itoa(int(tab)) {
+			if click := n.P["actions"].(map[string]any)["click"]; click != view.ActivityTabClick(tab) {
 				t.Errorf("tab %v click %v", tab, click)
 			}
 		}

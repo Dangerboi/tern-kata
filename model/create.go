@@ -40,10 +40,6 @@ type IssueCreated struct {
 
 func (IssueCreated) msg() {}
 
-type CreateFieldMsg struct{ Field int }
-
-func (CreateFieldMsg) msg() {}
-
 func openCreate(m Model, child bool) (Model, []Cmd) {
 	if m.Stale {
 		return m, nil
@@ -155,11 +151,6 @@ func updateCreate(m Model, msg Msg) (Model, []Cmd, bool) {
 			m.Create.Err = msg.Err
 			return m, nil, true
 		}
-	case CreateFieldMsg:
-		if m.Create.Open && !m.Create.Saving && !m.Create.DiscardConfirm && msg.Field >= 0 && msg.Field < 5 {
-			m.Create.Field = msg.Field
-		}
-		return m, nil, true
 	case EditMsg:
 		if m.Create.Open && msg.ID == "layer.create.body" {
 			if !m.Create.Saving && !m.Create.DiscardConfirm {
