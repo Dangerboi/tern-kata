@@ -52,6 +52,8 @@ tern.command({
 
 tern.route.link(function(link, cx)
     local project, shortID = link.url:match("^kata://([^/]+)/([^/?#]+)$")
+    -- Tern's chat markdown links https but not custom schemes; .invalid never resolves, so only this route opens it.
+    if not project then project, shortID = link.url:match("^https://kata%.invalid/([^/]+)/([^/?#]+)$") end
     -- References are literal URL segments: encoded or ambiguous separators are declined.
     if not project or project:find("[?#%%\\]") or shortID:find("[%%\\]")
         or (project .. shortID):find("[%z\r\n]") then return nil end

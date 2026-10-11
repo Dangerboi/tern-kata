@@ -85,7 +85,7 @@ ctl ready
 ctl focus left
 # A real OSC-8 terminal link exercises route.link, not a plugin-origin cx:open.
 click_issue_link() {
-  command="printf '\\033[2J\\033[H\\033]8;;kata://smoke/$1\\007Plugin link\\033]8;;\\007\\n'"
+  command="printf '\\033[2J\\033[H\\033]8;;$1\\007Plugin link\\033]8;;\\007\\n'"
   printf 'run %s\n' "$(jq -rRn --arg command "$command" '$command | @json')" >"$tmp/link.ctl"
   ctl --file "$tmp/link.ctl"
   ctl expect Plugin
@@ -93,13 +93,13 @@ click_issue_link() {
   read -r x y < <(jq -r '.nodes[0].rect | "\(.[0]+4) \(.[1]+8)"' "$tmp/link-tree.json")
   ctl click "$x" "$y" cmd
 }
-click_issue_link "$first"
+click_issue_link "kata://smoke/$first"
 ctl plugins expect first
 ctl state >"$tmp/link-open.json"
 kata_pane=$(jq -r '.focused.id' "$tmp/link-open.json")
 jq -e '.tabs[0].panes == 2' "$tmp/link-open.json" >/dev/null
 ctl focus left
-click_issue_link "$second"
+click_issue_link "https://kata.invalid/smoke/$second"
 ctl plugins expect second
 ctl state >"$tmp/link-focus.json"
 jq -e --argjson id "$kata_pane" '.tabs[0].panes == 2 and .focused.id == $id' "$tmp/link-focus.json" >/dev/null
