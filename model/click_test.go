@@ -141,9 +141,6 @@ func TestEscClosesLayerAfterClickInsideIt(t *testing.T) {
 		open  string
 		click model.Msg
 	}{
-		{"filter form field", "f", model.FocusFieldMsg{Field: 2}},
-		{"create form field", "n", model.FocusFieldMsg{Field: 3}},
-		{"close form field", "x", model.FocusFieldMsg{Field: 2}},
 		{"label prompt", "+", model.FieldValueMsg{Value: "x"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

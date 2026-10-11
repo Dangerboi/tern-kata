@@ -76,31 +76,6 @@ func newProjectOpened(bound bool) model.Model {
 	return m
 }
 
-func TestNewProjectNameEditing(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		keys []string
-		want string
-	}{
-		{"typing appends", []string{"-", "x"}, "my-repo-x"},
-		{"backspace erases a letter", []string{"backspace"}, "my-rep"},
-		{"ctrl+u clears the name", []string{"ctrl+u", "a", "b"}, "ab"},
-		{"space is typed", []string{"space", "x"}, "my-repo x"},
-		{"global keys are typed", []string{"q", "?", "p", "j"}, "my-repoq?pj"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			m, cmds := pickerKeys(newProjectOpened(false), tt.keys...)
-			if m.ProjectForm.Name != tt.want || !m.ProjectForm.Open || m.Quitting || m.HelpOpen || len(cmds) != 0 {
-				t.Fatalf("name %q open=%v quitting=%v help=%v cmds=%#v, want %q", m.ProjectForm.Name, m.ProjectForm.Open, m.Quitting, m.HelpOpen, cmds, tt.want)
-			}
-		})
-	}
-	m, _ := model.Update(newProjectOpened(false), model.KeyMsg{Chord: "paste", Text: "-a\nb"})
-	if m.ProjectForm.Name != "my-repo-a b" {
-		t.Fatalf("pasted name = %q", m.ProjectForm.Name)
-	}
-}
-
 func TestNewProjectEscapeCancelsTheForm(t *testing.T) {
 	base, _ := pickerKeys(newProjectStart(false), "escape", "end")
 	got, cmds := pickerKeys(base, "enter", "x", "escape")

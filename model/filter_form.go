@@ -2,6 +2,9 @@ package model
 
 import "strings"
 
+// filterFieldCount is the Filter form's fields: project, status, owner, label and relationship.
+const filterFieldCount = 5
+
 type FilterFormState struct {
 	Open   bool
 	Field  int
@@ -35,18 +38,14 @@ func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 	case CancelFilters:
 		m.FilterForm = FilterFormState{}
 	case NextFilterField:
-		m.FilterForm.Field = (m.FilterForm.Field + 1) % 5
+		cycleField(&m, 1)
 	case PreviousFilterField:
-		m.FilterForm.Field = (m.FilterForm.Field + 4) % 5
+		cycleField(&m, -1)
 	case ResetFilterForm:
 		m.FilterForm.Values = Filters{}
 	case DeleteInput, ClearInput:
 		if field := filterTextField(&m.FilterForm); field != nil {
-			if action == DeleteInput {
-				*field = deleteLastRune(*field)
-			} else {
-				*field = ""
-			}
+			*field, _ = editText(*field, Binding{Action: action}, true, KeyMsg{})
 		} else {
 			switch m.FilterForm.Field {
 			case 0:

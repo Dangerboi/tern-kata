@@ -21,12 +21,12 @@ func closeLayer(m model.Model) tern.Element {
 		}
 		children = append(children,
 			ui.Text{Common: ui.Common{Key: fmt.Sprintf("%d-label", i), Tone: tone}, Text: label},
-			ui.Input{Common: ui.Common{Key: fmt.Sprintf("field%d", i), Tone: tone, Aria: label}, Field: ui.Field{Text: m.CloseForm.Values[i], Mode: "insert", Readonly: m.CloseForm.Pending}})
+			ui.Input{Common: ui.Common{Key: fmt.Sprintf("field%d", i), Tone: tone, Aria: label}, Field: ui.Field{Text: m.CloseForm.Values[i], Mode: "insert", Readonly: m.CloseForm.Saving}})
 	}
 	if m.CloseForm.Err != nil {
 		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.CloseForm.Err.Error()})
 	}
-	if m.CloseForm.Pending {
+	if m.CloseForm.Saving {
 		children = append(children, ui.Text{Common: ui.Common{Key: "pending", Tone: ui.TonePending}, Text: "Closing Issue…"})
 	} else {
 		children = append(children,

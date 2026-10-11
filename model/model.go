@@ -194,8 +194,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			}
 			if binding.Action == ReopenAction {
 				issue := closeIssue(m)
-				if issue != nil && !m.Stale && !m.CloseForm.Pending {
-					m.CloseForm = CloseFormState{UID: issue.UID, Pending: true}
+				if issue != nil && !m.Stale && !m.CloseForm.Saving {
+					m.CloseForm = CloseFormState{UID: issue.UID, Saving: true}
 					return m, []Cmd{ReopenIssueCmd{Workspace: m.Workspace, UID: issue.UID, ProjectID: issue.ProjectID, Actor: m.Actor}}
 				}
 				return m, nil

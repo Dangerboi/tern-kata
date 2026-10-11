@@ -63,9 +63,9 @@ func TestCloseRefusalsPreserveReadableMessage(t *testing.T) {
 	} {
 		t.Run(tt.code, func(t *testing.T) {
 			refusal := errors.New(tt.message + "\nReview and retry")
-			m := model.Model{CloseForm: model.CloseFormState{Open: true, Pending: true, UID: "issue"}}
+			m := model.Model{CloseForm: model.CloseFormState{Open: true, Saving: true, UID: "issue"}}
 			m, _ = model.Update(m, model.CloseResultMsg{UID: "issue", Err: refusal})
-			if !m.CloseForm.Open || m.CloseForm.Pending || m.CloseForm.Err.Error() != tt.message+"\nReview and retry" {
+			if !m.CloseForm.Open || m.CloseForm.Saving || m.CloseForm.Err.Error() != tt.message+"\nReview and retry" {
 				t.Fatalf("refusal: %+v", m.CloseForm)
 			}
 		})

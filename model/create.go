@@ -73,6 +73,10 @@ func (m Model) CreateSuggestions() []string {
 	m.FieldForm = f
 	return m.FieldSuggestions()
 }
+
+// createFieldCount is the Create card's fields: title, body, labels, owner and priority.
+const createFieldCount = 5
+
 func createValue(f *CreateState) *string {
 	switch f.Field {
 	case 0:
@@ -204,10 +208,10 @@ func updateCreate(m Model, msg Msg) (Model, []Cmd, bool) {
 				}
 				return m, nil, true
 			case CreateNext:
-				m.Create.Field = (m.Create.Field + 1) % 5
+				cycleField(&m, 1)
 				return m, nil, true
 			case CreatePrevious:
-				m.Create.Field = (m.Create.Field + 4) % 5
+				cycleField(&m, -1)
 				return m, nil, true
 			case CreateComplete:
 				if m.Create.Field == 2 {
@@ -230,23 +234,12 @@ func updateCreate(m Model, msg Msg) (Model, []Cmd, bool) {
 			}
 		} else if value := createValue(&m.Create); value != nil {
 			b, ok = LookupBindingForMode(msg.Chord, ModeFieldForm)
-			if ok && b.Action == FieldErase {
-				r := []rune(*value)
-				if len(r) > 0 {
-					*value = string(r[:len(r)-1])
-				}
-			} else if ok && b.Action == FieldReset {
-				*value = ""
-			} else if ok && b.Action == FieldNext {
+			if ok && b.Action == FieldNext {
 				m.Create.Completion.Suggestion++
 			} else if ok && b.Action == FieldPrevious {
 				m.Create.Completion.Suggestion = max(0, m.Create.Completion.Suggestion-1)
-			} else if msg.Text != "" {
-				*value += msg.Text
-			} else if len([]rune(msg.Chord)) == 1 {
-				*value += msg.Chord
-			} else if msg.Chord == "space" {
-				*value += " "
+			} else {
+				*value, _ = editText(*value, b, ok, msg)
 			}
 		}
 		m.Create.Err = nil

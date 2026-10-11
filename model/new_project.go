@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"unicode/utf8"
 
 	g "go.kenn.io/kata/pkg/client/generated"
 )
@@ -129,34 +128,15 @@ func updateProjectFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		return updateNavigation(m, QuitAction)
 	case form.Saving:
 		return m, nil
-	case !bound:
-		if text := typedText(msg); text != "" {
-			form.Name, form.Err = form.Name+text, nil
-		}
-		return m, nil
-	}
-	switch binding.Action {
-	case ProjectSubmit:
+	case bound && binding.Action == ProjectSubmit:
 		return submitProject(m)
-	case ProjectCancel:
+	case bound && binding.Action == ProjectCancel:
 		m.ProjectForm = ProjectFormState{}
-	case DeleteInput:
-		form.Name, form.Err = deleteLastRune(form.Name), nil
-	case ClearInput:
-		form.Name, form.Err = "", nil
+	default:
+		var edited bool
+		if form.Name, edited = editText(form.Name, binding, bound, msg); edited {
+			form.Err = nil
+		}
 	}
 	return m, nil
-}
-
-// typedText is what a key adds to a text field: a bare character, a space, or
-// pasted text with its line breaks flattened.
-func typedText(msg KeyMsg) string {
-	text := msg.Text
-	switch {
-	case msg.Chord == "space":
-		text = " "
-	case text == "" && utf8.RuneCountInString(msg.Chord) == 1:
-		text = msg.Chord
-	}
-	return strings.NewReplacer("\r", " ", "\n", " ").Replace(text)
 }

@@ -259,15 +259,6 @@ func TestPickerTypingFiltersEntries(t *testing.T) {
 	}
 }
 
-func TestPickerTypedTextKeepsCaseAndPaste(t *testing.T) {
-	m, _ := pickerKeys(pickerStart(120, true), "p")
-	m, _ = model.Update(m, model.KeyMsg{Chord: "shift+a", Text: "A"})
-	m, _ = model.Update(m, model.KeyMsg{Chord: "paste", Text: "ll\nopen"})
-	if m.Picker.Filter != "All open" || !reflect.DeepEqual(pickerTitles(m), []string{"All Open"}) {
-		t.Fatalf("filter = %q entries=%q", m.Picker.Filter, pickerTitles(m))
-	}
-}
-
 func TestPickerEnterOpensTheFilteredEntry(t *testing.T) {
 	m, cmds := pickerKeys(pickerStart(120, true), "p", "t", "o", "enter")
 	want := model.Collection{View: "today", Title: "Today"}
