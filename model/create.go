@@ -144,7 +144,6 @@ func updateCreate(m Model, msg Msg) (Model, []Cmd, bool) {
 		}
 		m.Create = CreateState{}
 		m.Focus = ColumnList
-		m.DetailBack = nil
 		next, cmds := refreshLive(m)
 		return next, cmds, true
 	case FieldLabelsLoaded:

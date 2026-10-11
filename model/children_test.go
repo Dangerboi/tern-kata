@@ -20,25 +20,23 @@ func parentDetail(links ...g.UILink) model.Model {
 	if links == nil {
 		links = []g.UILink{childLink(1, "gone"), childLink(2, "old"), childLink(3, "new")}
 	}
-	return model.Model{
-		Workspace: "/repo", Cols: 160, Focus: model.ColumnDetail, SelectedUID: "parent", DetailUID: "parent",
+	return withDetail(model.Model{
+		Workspace: "/repo", Cols: 160, Focus: model.ColumnDetail, SelectedUID: "parent",
 		Issues: []model.Issue{
 			{UID: "parent", ShortID: "par1", Title: "Parent", Status: "open", ProjectName: "work"},
 			{UID: "new", ShortID: "new1", Title: "Newer", Status: "open", ProjectName: "work", UpdatedAt: ago(1)},
 			{UID: "old", ShortID: "old1", Title: "Older", Status: "closed", ProjectName: "work", UpdatedAt: ago(5)},
 		},
-		Detail: &g.UISelectedAuthority{
-			Issue:    &model.Issue{UID: "parent", ProjectName: "work"},
-			Links:    links,
-			Comments: []g.Comment{{UID: "c1"}, {UID: "c2"}},
-		},
-	}
+	}, &g.UISelectedAuthority{
+		Issue:    &model.Issue{UID: "parent", ProjectName: "work"},
+		Links:    links,
+		Comments: []g.Comment{{UID: "c1"}, {UID: "c2"}},
+	})
 }
 
 // enterOpens is the Issue enter opens with the cursor on detail row index.
 func enterOpens(m model.Model, index int) string {
-	m.DetailIndex = index
-	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
+	m, _ = model.Update(cursorAt(m, index), model.KeyMsg{Chord: "enter"})
 	return m.SelectedUID
 }
 
@@ -69,8 +67,8 @@ func TestJKWalkTheChildRowsBeforeTheActivityRows(t *testing.T) {
 		{"tab", 3}, {"j", 3},
 	} {
 		m, _ = model.Update(m, model.KeyMsg{Chord: step.chord})
-		if m.DetailIndex != step.index {
-			t.Fatalf("after %s: index %d, want %d", step.chord, m.DetailIndex, step.index)
+		if m.DetailIndex() != step.index {
+			t.Fatalf("after %s: index %d, want %d", step.chord, m.DetailIndex(), step.index)
 		}
 	}
 }
@@ -97,8 +95,8 @@ func TestEnterOnAnUnloadedChildStillJumps(t *testing.T) {
 
 func TestEnterOnAnActivityRowBelowTheChildrenDoesNotJump(t *testing.T) {
 	m, cmds := clickPress(parentDetail(), "j", "j", "j", "enter")
-	if m.SelectedUID != "parent" || m.DetailIndex != 3 || len(cmds) != 0 {
-		t.Fatalf("selected=%s index=%d commands=%#v", m.SelectedUID, m.DetailIndex, cmds)
+	if m.SelectedUID != "parent" || m.DetailIndex() != 3 || len(cmds) != 0 {
+		t.Fatalf("selected=%s index=%d commands=%#v", m.SelectedUID, m.DetailIndex(), cmds)
 	}
 }
 
@@ -116,16 +114,16 @@ func TestClickOnAChildJumpsAndEscComesBack(t *testing.T) {
 func TestTabSwitchLandsOnTheFirstActivityRow(t *testing.T) {
 	for _, msg := range []model.Msg{model.KeyMsg{Chord: "tab"}, model.ActivityTabMsg{Tab: model.TabLinks}} {
 		m, _ := model.Update(parentDetail(), msg)
-		if m.DetailIndex != 3 {
-			t.Fatalf("%T: index %d, want 3 (after the 3 children)", msg, m.DetailIndex)
+		if m.DetailIndex() != 3 {
+			t.Fatalf("%T: index %d, want 3 (after the 3 children)", msg, m.DetailIndex())
 		}
 	}
 }
 
 func TestClickOnAnActivityRowCursorsPastTheChildren(t *testing.T) {
 	m, _ := model.Update(parentDetail(), model.DetailItemMsg{Tab: model.TabComments, Key: "c2"})
-	if m.DetailIndex != 4 {
-		t.Fatalf("index %d, want 4", m.DetailIndex)
+	if m.DetailIndex() != 4 {
+		t.Fatalf("index %d, want 4", m.DetailIndex())
 	}
 }
 
@@ -143,15 +141,15 @@ func TestChildRowsFollowLiveRefreshes(t *testing.T) {
 		},
 		Selected: &g.UISelectedAuthority{Issue: &parent, Links: []g.UILink{childLink(2, "fresh"), childLink(3, "new")}, Comments: []g.Comment{{UID: "c1"}, {UID: "c2"}}},
 	}
-	m.DetailIndex = 4 // on the last of the 2 comments, past all 3 children
+	m = cursorAt(m, 4) // on the last of the 2 comments, past all 3 children
 	m, _ = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot})
 	for index, want := range []string{"fresh", "new"} {
 		if got := enterOpens(m, index); got != want {
 			t.Errorf("enter on child row %d opened %q, want %q", index, got, want)
 		}
 	}
-	if m.DetailIndex != 3 { // 2 children + 2 comments: the last row is 3
-		t.Errorf("cursor not clamped to the rows left: %d", m.DetailIndex)
+	if m.DetailIndex() != 3 { // 2 children + 2 comments: the last row is 3
+		t.Errorf("cursor not clamped to the rows left: %d", m.DetailIndex())
 	}
 }
 
@@ -169,9 +167,9 @@ func TestCursorStaysOnItsChildWhenARefreshReordersTheChildren(t *testing.T) {
 		},
 		Selected: &g.UISelectedAuthority{Issue: &parent, Links: []g.UILink{childLink(1, "gone"), childLink(2, "old"), childLink(3, "new")}},
 	}
-	m.DetailIndex = 1 // "old"
+	m = cursorAt(m, 1) // "old"
 	m, _ = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot})
-	if got := enterOpens(m, m.DetailIndex); got != "old" {
+	if got := enterOpens(m, m.DetailIndex()); got != "old" {
 		t.Fatalf("enter after the refresh opened %q, want old", got)
 	}
 }

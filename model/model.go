@@ -11,14 +11,13 @@ type Project = g.ProjectOut
 
 type Model struct {
 	LiveState
+	IssueDetail
 	Create            CreateState
 	PendingCreatedUID string
 	CloseForm         CloseFormState
 	Actor             string
 	FieldForm         FieldFormState
 	Workspace         string
-	OpenIssueRef      string
-	OpenedIssueUID    string
 	Project           Project
 	Daemon            Daemon
 	Snapshot          g.UISnapshotResponseBody
@@ -43,14 +42,6 @@ type Model struct {
 	Groups              []IssueGroup
 	LocalDate, TimeZone string
 	HelpOpen            bool
-	DetailHidden        bool
-	Detail              *g.UISelectedAuthority
-	DetailUID           string
-	DetailLoading       bool
-	DetailErr           error
-	ActivityTab         ActivityTab
-	DetailIndex         int
-	DetailBack          []string
 	Flat                bool
 	ExpandedUIDs        map[string]bool
 	Drafts              map[string]Draft
@@ -62,21 +53,7 @@ type Model struct {
 }
 
 func Update(m Model, msg Msg) (Model, []Cmd) {
-	shown, tab := m.DetailIssueUID(), m.ActivityTab
-	m, cmds := update(m, msg)
-	if m.ActivityTab != tab {
-		cmds = append(cmds, RevealActivityTab{})
-	}
-	if now := m.DetailIssueUID(); shown != "" && now != "" && now != shown {
-		// The detail scroller keeps its offset across Issues; a different Issue starts at the top.
-		cmds = append(cmds, Scroll{Column: ColumnDetail, By: ScrollToStart})
-	}
-	if m.Focus != ColumnDetail {
-		// Jump history belongs to the detail column, so every path out of it, key or click, ends it.
-		m.DetailBack = nil
-	}
-	m, detailCmds := EnsureDetail(m)
-	return m, append(cmds, detailCmds...)
+	return updateWithDetail(m, msg)
 }
 
 func update(m Model, msg Msg) (Model, []Cmd) {
@@ -130,11 +107,11 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			return m, nil
 		}
 		m.FieldForm = FieldFormState{}
-		m.DetailUID = ""
+		m = m.issueWritten(msg.UID)
 		return refreshLive(m)
 	case Start:
 		m.Workspace = msg.Workspace
-		m.OpenIssueRef = msg.IssueRef
+		m = m.openRequested(msg.IssueRef)
 		m.Loading = true
 		m.Err = nil
 		return m, []Cmd{LoadProject{Workspace: msg.Workspace}}
@@ -142,51 +119,31 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m, _ = updateProject(m, msg)
 		m.Cursor = msg.Snapshot.Cursor
 		m, cmds := startStream(m, 0)
-		if m.OpenIssueRef != "" {
-			m, openCmds := openIssue(m, m.OpenIssueRef)
+		if m.OpenIssueRef() != "" {
+			m, openCmds := openIssue(m, m.OpenIssueRef())
 			return m, append(cmds, openCmds...)
 		}
 		return m, cmds
 	case DetailLoaded:
-		if msg.UID == m.SelectedUID && msg.UID == m.DetailUID {
-			m.Detail = msg.Selected
-			m.DetailLoading = false
-			m.DetailErr = nil
-		}
+		m = m.detailLoaded(msg)
 	case DetailFailed:
-		if msg.UID == m.SelectedUID && msg.UID == m.DetailUID {
-			m.DetailLoading = false
-			m.DetailErr = msg.Err
-			if m.DetailIssueUID() != msg.UID {
-				m.Detail = nil // the error replaces the previous Issue's detail on screen
-			}
-		}
+		m = m.detailFailed(msg)
 	case JumpIssueMsg:
-		return jumpIssue(m, msg.UID), nil
+		return m.jumpTo(msg.UID), nil
 	case FocusColumnMsg:
 		if msg.Column <= ColumnDetail {
 			m.Focus = msg.Column
 			if m.Focus == ColumnDetail {
-				m.DetailHidden = false
+				m = m.focusDetail()
 			}
 		}
 	case ActivityTabMsg:
 		if msg.Tab < TabCount {
-			m.Focus = ColumnDetail
-			m.ActivityTab = msg.Tab
-			m.DetailIndex = len(m.DetailChildren())
+			m = m.chooseTab(msg.Tab)
 		}
 	case DetailItemMsg:
 		if msg.Tab < TabCount {
-			m.Focus = ColumnDetail
-			m.ActivityTab = msg.Tab
-			for i := range m.DetailRowCount(msg.Tab) {
-				row, _ := m.DetailRow(msg.Tab, i)
-				if row.Key == msg.Key {
-					m.DetailIndex = len(m.DetailChildren()) + i
-					break
-				}
-			}
+			m = m.chooseRow(msg.Tab, msg.Key)
 		}
 	case CollectionSelected:
 		return updateCollection(m, msg)
@@ -214,22 +171,10 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			return openRow(m, msg.Value)
 		}
 	case IssueOpened:
-		if msg.Ref == m.OpenIssueRef && msg.Selected != nil && msg.Selected.Issue != nil {
-			m.OpenIssueRef = ""
-			m.SelectedUID = msg.Selected.Issue.UID
-			m.OpenedIssueUID = m.SelectedUID
-			m.DetailUID = m.SelectedUID
-			m.Detail = msg.Selected
-			m.DetailLoading = false
-			m.DetailErr = nil
-			m.DetailHidden = false
-			m.DetailBack = nil
-			m.DetailIndex = 0
-			m.Focus = ColumnDetail
-		}
+		m = m.openByReference(msg.Ref, msg.Selected)
 	case IssueOpenFailed:
-		if msg.Ref == m.OpenIssueRef {
-			m.OpenIssueRef = ""
+		if msg.Ref == m.OpenIssueRef() {
+			m = m.openFailed(msg.Ref)
 			m.Err = msg.Err
 		}
 	case KeyMsg:

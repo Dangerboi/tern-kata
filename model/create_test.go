@@ -142,7 +142,8 @@ func TestNavigationReleasesExcludedCreatedIssue(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			closed := new(time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC))
-			m := model.Model{Project: model.Project{ID: 7}, Collection: model.Collection{View: "logbook", Title: "Logbook"}, SelectedUID: "first", DetailUID: "first"}
+			m := model.Model{Project: model.Project{ID: 7}, Collection: model.Collection{View: "logbook", Title: "Logbook"}, SelectedUID: "first"}
+			m = withDetail(m, nil)
 			m, _ = model.Update(m, model.CollectionLoaded{Collection: m.Collection, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "first", Status: "closed", ClosedAt: closed}, {UID: "second", Status: "closed", ClosedAt: closed}}}})
 			m, _ = model.Update(m, model.KeyMsg{Chord: "n"})
 			m, _ = model.Update(m, model.KeyMsg{Text: "Created outside Logbook"})

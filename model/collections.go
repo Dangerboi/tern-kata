@@ -142,7 +142,7 @@ func (m Model) ApplySnapshot(snapshot g.UISnapshotResponseBody, childCounts map[
 			return m
 		}
 	}
-	if m.Focus == ColumnDetail && m.OpenedIssueUID != "" && m.SelectedUID == m.OpenedIssueUID {
+	if m.Focus == ColumnDetail && m.OpenedIssueUID() != "" && m.SelectedUID == m.OpenedIssueUID() {
 		return m
 	}
 	return m.WithVisibleSelection()

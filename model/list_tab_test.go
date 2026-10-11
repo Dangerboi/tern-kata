@@ -20,8 +20,8 @@ func TestListTabFocusesDetailSideBySide(t *testing.T) {
 func TestListTabDoesNothingSingleColumn(t *testing.T) {
 	m, _ := model.Update(clickBase(), model.ResizeMsg{Cols: 100})
 	got, _ := clickPress(m, "tab")
-	if got.Focus != model.ColumnList || got.DetailHidden {
-		t.Fatalf("single column: focus=%v hidden=%v", got.Focus, got.DetailHidden)
+	if got.Focus != model.ColumnList || got.DetailHidden() {
+		t.Fatalf("single column: focus=%v hidden=%v", got.Focus, got.DetailHidden())
 	}
 }
 
@@ -39,13 +39,13 @@ func TestListTabDoesNothingWithoutDetail(t *testing.T) {
 
 func TestDetailTabStillCyclesActivityTabs(t *testing.T) {
 	m := clickAt(model.ColumnDetail)
-	before := m.ActivityTab
+	before := m.ActiveTab()
 	m, _ = clickPress(m, "tab")
-	if m.Focus != model.ColumnDetail || m.ActivityTab == before {
-		t.Fatalf("detail tab: focus=%v tab=%v (was %v)", m.Focus, m.ActivityTab, before)
+	if m.Focus != model.ColumnDetail || m.ActiveTab() == before {
+		t.Fatalf("detail tab: focus=%v tab=%v (was %v)", m.Focus, m.ActiveTab(), before)
 	}
 	m, _ = clickPress(m, "shift+tab")
-	if m.ActivityTab != before {
-		t.Fatalf("shift+tab: tab=%v, want %v", m.ActivityTab, before)
+	if m.ActiveTab() != before {
+		t.Fatalf("shift+tab: tab=%v, want %v", m.ActiveTab(), before)
 	}
 }

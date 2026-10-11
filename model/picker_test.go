@@ -45,7 +45,9 @@ func TestStartupColumnsFollowBinding(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m := pickerStart(tt.cols, tt.bound)
-			m.DetailHidden = tt.hidden
+			if tt.hidden {
+				m, _ = model.Update(m, model.KeyMsg{Chord: "shift+l"})
+			}
 			if m.Collection.View != tt.collection || m.Focus != model.ColumnList {
 				t.Fatalf("startup Collection %+v focus %v", m.Collection, m.Focus)
 			}

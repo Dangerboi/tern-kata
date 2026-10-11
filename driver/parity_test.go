@@ -120,7 +120,7 @@ func tabTo(tab model.ActivityTab) path {
 	return func(s driver.State) (driver.State, []model.Cmd) {
 		var cmds []model.Cmd
 		for range model.TabCount {
-			if s.Model.ActivityTab == tab {
+			if s.Model.ActiveTab() == tab {
 				break
 			}
 			s, cmds = keys("tab")(s)
@@ -212,7 +212,7 @@ func TestEveryFooterHintClicksLikeItsKey(t *testing.T) {
 func TestPointerHintsUseKeyboardDispatch(t *testing.T) {
 	for _, c := range []string{"n", "x", "/", "?", "page_down", "p"} {
 		t.Run(c, func(t *testing.T) {
-			s := driver.State{Model: model.Model{Project: model.Project{ID: 7}, SelectedUID: "issue", DetailUID: "issue", Issues: []model.Issue{{UID: "issue", Status: "open", ProjectID: 7}}}}
+			s := driver.State{Model: withDetail(model.Model{Project: model.Project{ID: 7}, SelectedUID: "issue", Issues: []model.Issue{{UID: "issue", Status: "open", ProjectID: 7}}}, nil)}
 			keyboard, keyCmds := keys(c)(s)
 			pointer, clickCmds := clicked(s, click("", view.KeyClick(c)))
 			sameAs(t, "pointer differs from keyboard", pointer, clickCmds, keyboard, keyCmds)
@@ -269,9 +269,8 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 	creating := driver.State{Model: model.Model{Project: model.Project{ID: 7}}}
 	titled, _ := inputs(chord("n"), tern.Key{Text: "title"})(creating)
 	asking := pressed(titled, "escape")
-	draftModel := model.Model{Workspace: "/repo", SelectedUID: "a", DetailUID: "a", Focus: model.ColumnDetail,
-		Detail: &g.UISelectedAuthority{Issue: &model.Issue{UID: "a", ProjectID: 2, Body: "a😀b", Revision: 7}}}
-	draft := pressed(driver.State{Model: draftModel}, "e")
+	draftModel := withDetail(model.Model{Workspace: "/repo", SelectedUID: "a"}, &g.UISelectedAuthority{Issue: &model.Issue{UID: "a", ProjectID: 2, Body: "a😀b", Revision: 7}})
+	draft := pressed(driver.State{Model: draftModel}, "enter", "e")
 	typed, _ := inputs(tern.Key{Name: "paste", Text: "more"})(draft)
 	asked := pressed(typed, "escape")
 	for _, tt := range []struct {
@@ -309,4 +308,11 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 			})
 		}
 	}
+}
+
+// withDetail is m with the detail of its selected Issue loaded.
+func withDetail(m model.Model, authority *g.UISelectedAuthority) model.Model {
+	m, _ = model.Update(m, model.ResizeMsg{Cols: m.Cols})
+	m, _ = model.Update(m, model.DetailLoaded{UID: m.SelectedUID, Selected: authority})
+	return m
 }

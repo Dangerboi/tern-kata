@@ -1,0 +1,285 @@
+package model
+
+import (
+	g "go.kenn.io/kata/pkg/client/generated"
+)
+
+// IssueDetail owns what the detail column shows: the Issue it was asked for, that Issue's loaded authority, loading and error
+// state, the Activity tab, the row cursor, the jump history, the hidden flag and the Issue opened by reference. Only this file
+// writes these fields; every other caller reports what happened (an Issue was written, a snapshot arrived, a tab was chosen).
+type IssueDetail struct {
+	hidden    bool
+	authority *g.UISelectedAuthority
+	// uid is the Issue the detail was last asked to show; it differs from the selection until the next step reloads.
+	uid string
+	// stale asks for a reload of uid even though the selection did not change.
+	stale   bool
+	loading bool
+	err     error
+	tab     ActivityTab
+	cursor  int
+	back    []string
+	// openRef is a reference being opened; openedUID is the Issue it opened, which may be outside the Collection.
+	openRef, openedUID string
+}
+
+func (d IssueDetail) DetailAuthority() *g.UISelectedAuthority { return d.authority }
+func (d IssueDetail) DetailLoading() bool                     { return d.loading }
+func (d IssueDetail) DetailErr() error                        { return d.err }
+func (d IssueDetail) DetailIndex() int                        { return d.cursor }
+func (d IssueDetail) DetailHidden() bool                      { return d.hidden }
+func (d IssueDetail) ActiveTab() ActivityTab                  { return d.tab }
+func (d IssueDetail) JumpHistory() []string                   { return d.back }
+func (d IssueDetail) OpenedIssueUID() string                  { return d.openedUID }
+func (d IssueDetail) OpenIssueRef() string                    { return d.openRef }
+
+// updateWithDetail runs one Model step and then settles the detail: tab and Issue changes become intents, the jump history ends
+// whenever focus is not on the detail, and a changed selection or a stale detail loads.
+func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
+	shown, tab := m.DetailIssueUID(), m.tab
+	m, cmds := update(m, msg)
+	if m.tab != tab {
+		cmds = append(cmds, RevealActivityTab{})
+	}
+	if now := m.DetailIssueUID(); shown != "" && now != "" && now != shown {
+		// The detail scroller keeps its offset across Issues; a different Issue starts at the top.
+		cmds = append(cmds, Scroll{Column: ColumnDetail, By: ScrollToStart})
+	}
+	if m.Focus != ColumnDetail {
+		m = m.endJumpHistory()
+	}
+	m, load := m.loadDetail()
+	return m, append(cmds, load...)
+}
+
+// shownIssue is the loaded Issue of the detail when it is the selected one, else nil.
+func (m Model) shownIssue() *Issue {
+	if m.authority != nil && m.authority.Issue != nil && m.authority.Issue.UID == m.SelectedUID {
+		return m.authority.Issue
+	}
+	return nil
+}
+
+// endJumpHistory is the one way the jump history ends.
+func (m Model) endJumpHistory() Model {
+	m.back = nil
+	return m
+}
+
+// loadDetail loads the selected Issue's detail when the selection changed or the detail went stale.
+func (m Model) loadDetail() (Model, []Cmd) {
+	if m.Quitting || m.hidden || (m.SelectedUID == m.uid && !m.stale) {
+		return m, nil
+	}
+	m.uid = m.SelectedUID
+	m.stale = false
+	if m.authority == nil || m.authority.Issue == nil || m.authority.Issue.UID != m.SelectedUID {
+		// A different Issue starts at its first row; the Activity tab stays. The previous detail
+		// stays on screen until the new one arrives, unless nothing is selected.
+		if m.SelectedUID == "" || m.DetailIssueUID() == "" {
+			m.authority = nil
+		}
+		m.cursor = 0
+	}
+	m.err = nil
+	m.loading = m.SelectedUID != ""
+	if !m.loading {
+		return m, nil
+	}
+	return m, []Cmd{LoadDetail{Workspace: m.Workspace, UID: m.SelectedUID}}
+}
+
+// focusDetail gives the detail the keys and shows it.
+func (m Model) focusDetail() Model {
+	m.Focus = ColumnDetail
+	m.hidden = false
+	return m
+}
+
+// toggleDetail hides or shows the column; hiding it takes focus back to the list.
+func (m Model) toggleDetail() Model {
+	m.hidden = !m.hidden
+	if m.hidden && m.Focus == ColumnDetail {
+		m.Focus = ColumnList
+	}
+	return m
+}
+
+// issueWritten says the Issue was changed in kata (a Draft saved, closed, reopened, a field written); the shown detail reloads.
+func (m Model) issueWritten(uid string) Model {
+	if uid == m.uid {
+		m.stale = true
+	}
+	return m
+}
+
+// conflictResolved shows the stored Issue a Draft conflicted with.
+func (m Model) conflictResolved(uid string, stored *Issue) Model {
+	if uid == m.uid && m.authority != nil {
+		detail := *m.authority
+		detail.Issue = stored
+		m.authority = &detail
+	}
+	return m
+}
+
+// detailLoaded and detailFailed apply the result of a LoadDetail; one for an Issue no longer asked for is dropped.
+func (m Model) detailLoaded(msg DetailLoaded) Model {
+	if msg.UID == m.SelectedUID && msg.UID == m.uid {
+		m.authority = msg.Selected
+		m.loading = false
+		m.err = nil
+	}
+	return m
+}
+
+func (m Model) detailFailed(msg DetailFailed) Model {
+	if msg.UID == m.SelectedUID && msg.UID == m.uid {
+		m.loading = false
+		m.err = msg.Err
+		if m.DetailIssueUID() != msg.UID {
+			m.authority = nil // the error replaces the previous Issue's detail on screen
+		}
+	}
+	return m
+}
+
+// snapshotArrived refreshes the shown Issue in place from a snapshot's selected authority, keeping the tab and the cursor where
+// its rows still exist. selected and cursorChild are the selection and the child under the cursor before the snapshot applied.
+func (m Model) snapshotArrived(authority *g.UISelectedAuthority, selected, cursorChild string) Model {
+	if m.Focus == ColumnDetail && len(m.back) > 0 {
+		m.SelectedUID = selected // the Issue jumped to stays shown
+	}
+	if authority != nil && authority.Issue != nil && authority.Issue.UID == m.SelectedUID {
+		m.authority = authority
+		m.uid = m.SelectedUID
+		m.stale = false
+		m.loading = false
+		m.err = nil
+		m.cursor = min(m.cursor, max(m.DetailCursorCount()-1, 0))
+		for i, child := range m.DetailChildren() {
+			if cursorChild != "" && child.UID == cursorChild {
+				m.cursor = i
+			}
+		}
+	} else if m.uid == m.SelectedUID {
+		m.stale = true
+	}
+	return m
+}
+
+// openByReference says the Issue named by the reference being opened arrived; the detail shows it even when the Collection
+// does not list it.
+func (m Model) openByReference(ref string, authority *g.UISelectedAuthority) Model {
+	if ref != m.openRef || authority == nil || authority.Issue == nil {
+		return m
+	}
+	m.openRef = ""
+	m.SelectedUID = authority.Issue.UID
+	m.openedUID = m.SelectedUID
+	m.uid = m.SelectedUID
+	m.stale = false
+	m.authority = authority
+	m.loading = false
+	m.err = nil
+	m.hidden = false
+	m.back = nil
+	m.cursor = 0
+	m.Focus = ColumnDetail
+	return m
+}
+
+// openRequested records a reference to open; openFailed drops it.
+func (m Model) openRequested(ref string) Model {
+	m.openRef = ref
+	return m
+}
+
+func (m Model) openFailed(ref string) Model {
+	if ref == m.openRef {
+		m.openRef = ""
+		return m
+	}
+	return m
+}
+
+// jumpTo shows another Issue and remembers where it came from.
+func (m Model) jumpTo(uid string) Model {
+	if uid == "" || uid == m.SelectedUID {
+		return m
+	}
+	m.PendingCreatedUID = ""
+	m.back = append(m.back[:len(m.back):len(m.back)], m.SelectedUID)
+	m.SelectedUID = uid
+	return m.focusDetail()
+}
+
+// jumpBack returns to the Issue the last jump came from.
+func (m Model) jumpBack() (Model, bool) {
+	if len(m.back) == 0 {
+		return m, false
+	}
+	m.SelectedUID = m.back[len(m.back)-1]
+	m.back = m.back[:len(m.back)-1]
+	return m, true
+}
+
+// chooseTab shows an Activity tab with the cursor on its first row.
+func (m Model) chooseTab(tab ActivityTab) Model {
+	m.Focus = ColumnDetail
+	m.tab = tab
+	m.cursor = len(m.DetailChildren())
+	return m
+}
+
+// cycleTab moves to the next or previous Activity tab.
+func (m Model) cycleTab(next bool) Model {
+	if next {
+		return m.chooseTab((m.tab + 1) % TabCount)
+	}
+	return m.chooseTab((m.tab + TabCount - 1) % TabCount)
+}
+
+// chooseRow puts the cursor on the row with the key in a tab; an unknown key leaves it where it was.
+func (m Model) chooseRow(tab ActivityTab, key string) Model {
+	m.Focus = ColumnDetail
+	m.tab = tab
+	for i := range m.DetailRowCount(tab) {
+		if row, _ := m.DetailRow(tab, i); row.Key == key {
+			m.cursor = len(m.DetailChildren()) + i
+			break
+		}
+	}
+	return m
+}
+
+// openCursorRow follows the row under the cursor: a child or a referenced Issue.
+func (m Model) openCursorRow() Model {
+	if children := m.DetailChildren(); m.cursor < len(children) {
+		return m.jumpTo(children[m.cursor].UID)
+	} else if row, ok := m.DetailRow(m.tab, m.cursor-len(children)); ok {
+		return m.jumpTo(row.ReferenceUID)
+	}
+	return m
+}
+
+// moveCursor walks the cursor over the children and the active tab's rows.
+func (m Model) moveCursor(action Action) Model {
+	count := m.DetailCursorCount()
+	if count == 0 {
+		return m
+	}
+	switch action {
+	case MoveDown:
+		if m.cursor < count-1 {
+			m.cursor++
+		}
+	case MoveUp:
+		m.cursor = max(m.cursor-1, 0)
+	case MoveFirst:
+		m.cursor = 0
+	case MoveLast:
+		m.cursor = count - 1
+	}
+	return m
+}

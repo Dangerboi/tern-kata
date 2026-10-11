@@ -136,8 +136,9 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 func TestLiveRefreshPreservesDetailPosition(t *testing.T) {
 	for _, authority := range []bool{true, false} {
 		t.Run(map[bool]string{true: "snapshot authority", false: "detail refetch"}[authority], func(t *testing.T) {
-			m := model.Model{SelectedUID: "issue", DetailUID: "issue", Focus: model.ColumnDetail, ActivityTab: model.TabComments, DetailIndex: 1,
-				Detail: &g.UISelectedAuthority{Issue: &model.Issue{UID: "issue"}, Comments: []g.Comment{{UID: "one"}, {UID: "two"}}}}
+			m := withDetail(model.Model{SelectedUID: "issue", Focus: model.ColumnDetail},
+				&g.UISelectedAuthority{Issue: &model.Issue{UID: "issue"}, Comments: []g.Comment{{UID: "one"}, {UID: "two"}}})
+			m = cursorAt(m, 1)
 			m, cmds := model.Update(m, model.StreamEvent{ID: 1, Type: "issue.updated"})
 			refresh := cmds[0].(model.RefreshSnapshot)
 			if refresh.Query.SelectedIssueUID == nil || *refresh.Query.SelectedIssueUID != "issue" || refresh.Query.IncludeHistory == nil || !*refresh.Query.IncludeHistory {
@@ -145,7 +146,7 @@ func TestLiveRefreshPreservesDetailPosition(t *testing.T) {
 			}
 			snapshot := g.UISnapshotResponseBody{Cursor: 1, Collection: []model.Issue{{UID: "issue"}}}
 			if authority {
-				snapshot.Selected = m.Detail
+				snapshot.Selected = m.DetailAuthority()
 			}
 			m, cmds = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot})
 			if !authority {
@@ -154,8 +155,8 @@ func TestLiveRefreshPreservesDetailPosition(t *testing.T) {
 				}
 				m, _ = model.Update(m, model.DetailLoaded{UID: "issue", Selected: &g.UISelectedAuthority{Issue: &model.Issue{UID: "issue"}, Comments: []g.Comment{{UID: "one"}, {UID: "two"}}}})
 			}
-			if m.ActivityTab != model.TabComments || m.DetailIndex != 1 || m.SelectedUID != "issue" {
-				t.Fatalf("refresh reset reading position: tab=%v index=%d selected=%q", m.ActivityTab, m.DetailIndex, m.SelectedUID)
+			if m.ActiveTab() != model.TabComments || m.DetailIndex() != 1 || m.SelectedUID != "issue" {
+				t.Fatalf("refresh reset reading position: tab=%v index=%d selected=%q", m.ActiveTab(), m.DetailIndex(), m.SelectedUID)
 			}
 		})
 	}

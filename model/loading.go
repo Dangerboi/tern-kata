@@ -9,8 +9,8 @@ func (m Model) FirstLoad() bool {
 // DetailIssueUID is the Issue whose detail is on screen: while another
 // Issue's detail loads, still the previous one.
 func (m Model) DetailIssueUID() string {
-	if m.Detail == nil || m.Detail.Issue == nil {
+	if m.authority == nil || m.authority.Issue == nil {
 		return ""
 	}
-	return m.Detail.Issue.UID
+	return m.authority.Issue.UID
 }
