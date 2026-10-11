@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/Dangerboi/tern-kata/data"
@@ -41,7 +40,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		return syscall.Exec(kata, append([]string{"kata", "tui"}, fallbackArgs...), actorEnvironment(override))
+		return execKata(kata, fallbackArgs, actorEnvironment(override))
 	}
 	if err != nil {
 		return err

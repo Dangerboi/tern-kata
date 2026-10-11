@@ -48,6 +48,7 @@ kata --workspace "$tmp/workspace" create "Smoke first Issue" --body "First seede
 kata --workspace "$tmp/workspace" create "Smoke second Issue" --body "Second seeded body" --json
 kata --workspace "$tmp/workspace" create "Smoke third Issue" --body "Third seeded body" --json
 (cd "$repo" && go build -o "$tmp/tern-kata" .)
+(cd "$repo" && GOOS=windows go vet ./...)
 
 tern serve --control "$tmp/control.sock" --out "$tmp/shots" --dir "$tmp/workspace" >"$tmp/tern.log" 2>&1 &
 server_pid=$!
