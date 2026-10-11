@@ -14,14 +14,14 @@ const newProjectWorkspace = "/home/dev/my-repo"
 // newProjectStart is a loaded Pane in newProjectWorkspace: bound to Project
 // smoke, or unbound on Inbox with the Menu sidebar.
 func newProjectStart(bound bool) model.Model {
-	loaded := model.ProjectLoaded{Snapshot: g.UISnapshotResponseBody{
+	loaded, snapshot := model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
 		Catalog:    pickerCatalog(),
 		Collection: []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}},
 	}}
 	if bound {
 		loaded.Project = model.Project{ID: 7, UID: "smoke-uid", Name: "smoke"}
 	}
-	m, _ := model.Update(model.Model{Cols: 160, Workspace: newProjectWorkspace, Actor: "alice"}, loaded)
+	m, _ := loadFirst(model.Model{Cols: 160, Workspace: newProjectWorkspace, Actor: "alice"}, loaded, snapshot)
 	return m
 }
 
@@ -43,7 +43,7 @@ func TestSidebarEndsWithNewProject(t *testing.T) {
 func TestSidebarProjectAboveNewProjectStillSwitches(t *testing.T) {
 	smoke := model.Collection{View: "project", ProjectUID: "smoke-uid", Title: "smoke"}
 	m, cmds := pickerKeys(newProjectStart(false), "escape", "end", "up", "enter", "down", "down", "enter")
-	if m.ProjectForm.Open || m.Collection != smoke || !reflect.DeepEqual(cmds, []model.Cmd{model.LoadCollection{Workspace: newProjectWorkspace, Collection: smoke}}) {
+	if m.ProjectForm.Open || m.Collection != smoke || !readsCollection(cmds, m, "") {
 		t.Fatalf("form open=%v collection=%+v cmds=%#v", m.ProjectForm.Open, m.Collection, cmds)
 	}
 }
@@ -193,8 +193,8 @@ func TestNewProjectBindOpensTheProjectFirst(t *testing.T) {
 	if got.ProjectForm.Open || !got.Bound || got.Project.UID != "repo-uid" || got.Collection != collection || got.Focus != model.ColumnList {
 		t.Fatalf("after bind: form=%+v bound=%v project=%q collection=%+v focus=%v", got.ProjectForm, got.Bound, got.Project.UID, got.Collection, got.Focus)
 	}
-	if want := []model.Cmd{model.LoadCollection{Workspace: newProjectWorkspace, Collection: collection}}; !reflect.DeepEqual(cmds, want) {
-		t.Fatalf("after bind requested %#v, want %#v", cmds, want)
+	if !readsCollection(cmds, got, "") {
+		t.Fatalf("after bind requested %#v, want a read of %+v", cmds, collection)
 	}
 	if want := []model.Column{model.ColumnList, model.ColumnDetail}; !reflect.DeepEqual(got.VisibleColumns(), want) {
 		t.Fatalf("columns = %v: the sidebar should be gone", got.VisibleColumns())
@@ -205,7 +205,7 @@ func TestNewProjectBindOpensTheProjectFirst(t *testing.T) {
 
 	// The snapshot that arrives lists the Project, which is now the pinned entry.
 	snapshot := g.UISnapshotResponseBody{Catalog: append(pickerCatalog(), g.UIProject{Project: created})}
-	loaded, _ := model.Update(got, model.CollectionLoaded{Collection: collection, Snapshot: snapshot})
+	loaded, _ := model.Update(got, model.SnapshotLoaded{Request: got.RefreshRequest, Query: got.SnapshotQuery(), Snapshot: snapshot})
 	if loaded.Loading || !reflect.DeepEqual(pickerTitles(loaded)[:2], []string{"my-repo", "Inbox"}) {
 		t.Fatalf("loaded: loading=%v entries=%q", loaded.Loading, pickerTitles(loaded))
 	}
@@ -252,8 +252,8 @@ func TestPickerNewProjectOnlyCreates(t *testing.T) {
 	if !got.Bound || got.Project.UID != "smoke-uid" || got.Collection != collection {
 		t.Fatalf("after create: bound=%v project=%q collection=%+v; the directory should stay bound to smoke", got.Bound, got.Project.UID, got.Collection)
 	}
-	if want := []model.Cmd{model.LoadCollection{Workspace: newProjectWorkspace, Collection: collection}}; !reflect.DeepEqual(cmds, want) {
-		t.Fatalf("after create requested %#v, want %#v", cmds, want)
+	if !readsCollection(cmds, got, "") {
+		t.Fatalf("after create requested %#v, want a read of %+v", cmds, collection)
 	}
 	if got.Collection.Title != "extra" || pickerTitles(got)[0] != "smoke" {
 		t.Fatalf("heading %q, picker pins %q", got.Collection.Title, pickerTitles(got)[0])

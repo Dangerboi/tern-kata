@@ -14,34 +14,6 @@ import (
 	g "go.kenn.io/kata/pkg/client/generated"
 )
 
-func (c *Client) ReadRefresh(ctx context.Context, cmd model.RefreshSnapshot) (model.SnapshotRefreshed, error) {
-	options := &g.ReadUISnapshotRequestOptions{Query: &cmd.Query}
-	if cmd.ETag != "" {
-		options.Header = &g.ReadUISnapshotHeaders{IfNoneMatch: &cmd.ETag}
-	}
-	response, err := c.ReadUISnapshotWithResponse(ctx, options)
-	result := model.SnapshotRefreshed{Request: cmd.Request, Query: cmd.Query}
-	if response != nil && response.StatusCode == http.StatusNotModified {
-		result.NotModified = true
-		return result, nil
-	}
-	if err != nil {
-		if response != nil {
-			return result, ReadError(response.Body, err)
-		}
-		return result, err
-	}
-	if response.JSON200 == nil {
-		return result, fmt.Errorf("kata daemon returned no Issue collection")
-	}
-	result.Snapshot = *response.JSON200
-	if response.Headers200 != nil {
-		result.ETag = response.Headers200.ETag
-	}
-	result.ChildCounts, err = c.readChildCounts(ctx, result.Snapshot, cmd.Query.ProjectUID)
-	return result, err
-}
-
 func (c *Client) ReadEvents(ctx context.Context, cmd model.Subscribe, send func(model.Msg) bool) error {
 	response, err := c.StreamEventsRaw(ctx, &g.StreamEventsRequestOptions{Query: &g.StreamEventsQuery{AfterID: &cmd.AfterID}})
 	if err != nil {

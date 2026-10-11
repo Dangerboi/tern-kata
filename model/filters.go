@@ -22,12 +22,11 @@ func updateFilterAction(m Model, action Action) (Model, []Cmd) {
 	if m.FilterForm.Open {
 		return updateFilterForm(m, action)
 	}
-	m.PendingCreatedUID = ""
 	switch action {
 	case ClearFilters:
 		m.Filters = Filters{}
 		m.SelectedUID = ""
-		return refreshFilters(m)
+		return snapshotChanged(m)
 	case OpenFilterForm:
 		m.FilterForm = FilterFormState{Open: true, Values: m.Filters}
 	case CycleStatus:
@@ -40,7 +39,7 @@ func updateFilterAction(m Model, action Action) (Model, []Cmd) {
 			m.Filters.Status = "open"
 		}
 		m.SelectedUID = ""
-		return refreshFilters(m)
+		return snapshotChanged(m)
 	case SearchIssues:
 		m.Search = SearchState{Open: true, InitialText: m.Filters.Search, InitialUID: m.SelectedUID}
 	case MoveDown, MoveUp, PageUp, PageDown:
@@ -59,25 +58,20 @@ func updateFilterAction(m Model, action Action) (Model, []Cmd) {
 			m.Filters.Search = m.Search.InitialText
 			m.SelectedUID = m.Search.InitialUID
 			m.Search = SearchState{}
-			return refreshFilters(m)
+			return snapshotChanged(m)
 		}
 	case SearchQuery:
 		m.Search.Results = false
 	case DeleteInput:
 		m.Filters.Search = deleteLastRune(m.Filters.Search)
 		m.SelectedUID = ""
-		return refreshFilters(m)
+		return snapshotChanged(m)
 	case ClearInput:
 		m.Filters.Search = ""
 		m.SelectedUID = ""
-		return refreshFilters(m)
+		return snapshotChanged(m)
 	}
 	return m, nil
-}
-
-func refreshFilters(m Model) (Model, []Cmd) {
-	m.ETag = ""
-	return refreshLive(m)
 }
 
 func deleteLastRune(text string) string {
@@ -108,7 +102,7 @@ func updateFilterText(m Model, msg KeyMsg) (Model, []Cmd) {
 	}
 	m.Filters.Search += text
 	m.SelectedUID = ""
-	return refreshFilters(m)
+	return snapshotChanged(m)
 }
 
 // FilterSummary is the top bar's filter line: the active filters, empty when none is on.

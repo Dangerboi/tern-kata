@@ -95,10 +95,19 @@ func feed(t *testing.T, s driver.State, inputs ...any) driver.Output {
 // browsing is a Pane of the given width on a Project of alpha and beta, alpha's detail loaded.
 func browsing(t *testing.T, cols int) driver.State {
 	t.Helper()
-	return feed(t, driver.State{},
+	out := feed(t, driver.State{},
 		model.Start{Workspace: "/repo"},
 		resize(cols),
-		model.ProjectLoaded{Project: model.Project{ID: 7, UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, beta}}},
+		model.ProjectLoaded{Project: model.Project{ID: 7, UID: "p", Name: "work"}},
+	)
+	var read model.ReadSnapshot
+	for _, cmd := range out.Cmds {
+		if r, ok := cmd.(model.ReadSnapshot); ok {
+			read = r
+		}
+	}
+	return feed(t, out.State,
+		model.SnapshotLoaded{Request: read.Request, Query: read.Query, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, beta}}},
 		alphaLoaded(),
 	).State
 }

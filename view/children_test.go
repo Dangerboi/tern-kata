@@ -37,8 +37,7 @@ func parenting(tab model.ActivityTab) model.Model {
 	return apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, ChildCounts: map[string]g.ChildCounts{"alpha": {Open: 1, Total: 3}},
-			Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{parent, kid, done}, CollectionLinks: links}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{ChildCounts: map[string]g.ChildCounts{"alpha": {Open: 1, Total: 3}}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{parent, kid, done}, CollectionLinks: links}}},
 		model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &parent, Links: links, Comments: []g.Comment{{UID: "c1", Body: "hi"}}}},
 		model.ActivityTabMsg{Tab: tab},
 	)

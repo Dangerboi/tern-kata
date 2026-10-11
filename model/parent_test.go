@@ -27,7 +27,7 @@ func parentBase() model.Model {
 		issues = append(issues, model.Issue{UID: uid, ShortID: uid, Title: "C " + uid, Status: "open", UpdatedAt: ago(4)})
 		links = append(links, g.UILink{ID: int64(i + 1), Type: "parent", FromIssueUID: uid, ToIssueUID: "parent", FromQualifiedID: "work#" + uid})
 	}
-	m, _ := model.Update(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: links}})
+	m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: links}})
 	m, _ = model.Update(m, model.DetailLoaded{UID: "first", Selected: &g.UISelectedAuthority{Issue: &issues[0]}})
 	return m
 }

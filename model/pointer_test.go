@@ -22,7 +22,7 @@ func TestPointerHintsUseKeyboardDispatch(t *testing.T) {
 
 func TestParentPointerSelectsAndTogglesExpansion(t *testing.T) {
 	parent := "parent"
-	m, _ := model.Update(withDetail(model.Model{SelectedUID: "root"}, nil), model.ProjectLoaded{Snapshot: hierarchySnapshot()})
+	m, _ := loadFirst(withDetail(model.Model{SelectedUID: "root"}, nil), model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: hierarchySnapshot()})
 	m, _ = model.Update(m, model.ActionMsg{Action: model.ToggleExpansion, Value: parent})
 	if m.SelectedUID != parent || !m.ExpandedUIDs[parent] || len(m.VisibleRows()) != 3 {
 		t.Fatalf("pointer did not expand parent: selected=%q expanded=%v rows=%v", m.SelectedUID, m.ExpandedUIDs, m.VisibleRows())

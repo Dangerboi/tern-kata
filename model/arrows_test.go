@@ -15,10 +15,7 @@ func arrowModes(t *testing.T) map[string]model.Model {
 	t.Helper()
 	peer := "peer"
 	// Unbound: a bound Project has no sidebar, so escape would open the Menu.
-	list, _ := model.Update(model.Model{Cols: 160}, model.ProjectLoaded{
-		Project:  model.Project{Name: "Work"},
-		Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "a"}, {UID: "b"}, {UID: "c"}}},
-	})
+	list, _ := loadFirst(model.Model{Cols: 160}, model.ProjectLoaded{Project: model.Project{Name: "Work"}}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "a"}, {UID: "b"}, {UID: "c"}}}})
 	collections, _ := model.Update(list, model.KeyMsg{Chord: "escape"})
 	detail := withDetail(model.Model{Cols: 160, Focus: model.ColumnDetail, SelectedUID: "a", Issues: []model.Issue{{UID: "a"}}}, &g.UISelectedAuthority{
 		Issue: &model.Issue{UID: "a"},

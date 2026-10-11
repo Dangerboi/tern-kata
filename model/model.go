@@ -12,20 +12,23 @@ type Project = g.ProjectOut
 type Model struct {
 	LiveState
 	IssueDetail
-	Create            CreateState
-	PendingCreatedUID string
-	CloseForm         CloseFormState
-	Actor             string
-	FieldForm         FieldFormState
-	Workspace         string
-	Project           Project
-	Daemon            Daemon
-	Snapshot          g.UISnapshotResponseBody
+	Create CreateState
+	// pending is the Issue Create just made, selected as soon as a snapshot lists it.
+	pending string
+	// etag answers etagQuery: the snapshot on screen.
+	etag      string
+	etagQuery g.ReadUISnapshotQuery
+	CloseForm CloseFormState
+	Actor     string
+	FieldForm FieldFormState
+	Workspace string
+	Project   Project
+	Daemon    Daemon
+	Snapshot  g.UISnapshotResponseBody
 	// ChildCounts are the daemon's direct-child counts by Issue UID, whatever the
 	// filters; kata leaves out an Issue with no children.
 	ChildCounts         map[string]g.ChildCounts
 	Issues              []Issue
-	ETag                string
 	SelectedUID         string
 	Loading             bool
 	Err                 error
@@ -56,7 +59,8 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 	if action, ok := msg.(ActionMsg); ok && action.Action == "key" {
 		msg = KeyMsg{Chord: action.Value}
 	}
-	return updateWithDetail(m, msg)
+	next, cmds := updateWithDetail(m, msg)
+	return next.cancelPending(m, msg), cmds
 }
 
 func update(m Model, msg Msg) (Model, []Cmd) {
@@ -112,7 +116,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		}
 		m.FieldForm = FieldFormState{}
 		m = m.issueWritten(msg.UID)
-		return refreshLive(m)
+		return snapshotChanged(m)
 	case Start:
 		m.Workspace = msg.Workspace
 		m = m.openRequested(msg.IssueRef)
@@ -120,14 +124,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m.Err = nil
 		return m, []Cmd{LoadProject{Workspace: msg.Workspace}}
 	case ProjectLoaded:
-		m, _ = updateProject(m, msg)
-		m.Cursor = msg.Snapshot.Cursor
-		m, cmds := startStream(m, 0)
-		if m.OpenIssueRef() != "" {
-			m, openCmds := openIssue(m, m.OpenIssueRef())
-			return m, append(cmds, openCmds...)
-		}
-		return m, cmds
+		return updateProject(m, msg)
 	case DetailLoaded:
 		m = m.detailLoaded(msg)
 	case DetailFailed:
@@ -151,8 +148,6 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		}
 	case CollectionSelected:
 		return updateCollection(m, msg)
-	case CollectionLoaded:
-		return collectionLoaded(m, msg)
 	case CollectionPointerSelected:
 		for _, entry := range m.SidebarEntries() {
 			if msg.Key == entry.Key() {

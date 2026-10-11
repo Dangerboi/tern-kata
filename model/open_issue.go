@@ -49,7 +49,6 @@ func openIssue(m Model, ref string) (Model, []Cmd) {
 		m.Err = err
 		return m, nil
 	}
-	m.PendingCreatedUID = ""
 	m = m.openRequested(ref)
 	if m.Loading && m.Snapshot.Catalog == nil {
 		return m, nil

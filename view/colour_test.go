@@ -47,7 +47,7 @@ func TestRowsToneStatusAndPriority(t *testing.T) {
 	m := apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{urgent, high, normal, low}}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{urgent, high, normal, low}}}},
 	)
 	nodes := render(t, m)
 	row := func(issue model.Issue) tern.WireNode { return nodes[view.IssueID(issue.UID)] }
@@ -101,7 +101,7 @@ func TestFocusedTopBarTitleIsAccent(t *testing.T) {
 func TestGroupHeadingsAreStrong(t *testing.T) {
 	m := browsing()
 	allOpen := m.Collections[4]
-	m = apply(m, model.CollectionSelected{Collection: allOpen}, model.CollectionLoaded{Collection: allOpen, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, beta}}})
+	m = apply(m, model.CollectionSelected{Collection: allOpen}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, beta}}}})
 	heading, ok := render(t, m)[view.IssueListID+".group.work"]
 	if !ok {
 		t.Fatal("no group heading for the work Project")

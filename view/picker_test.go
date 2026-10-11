@@ -42,7 +42,7 @@ func pickerChildIDs(node tern.WireNode) []string {
 }
 
 func pickerLoaded(bound bool) model.Model {
-	loaded := model.ProjectLoaded{Snapshot: g.UISnapshotResponseBody{
+	loaded, snapshot := model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
 		Catalog: []g.UIProject{
 			{Project: model.Project{UID: "alpha-uid", Name: "alpha"}},
 			{Project: model.Project{UID: "smoke-uid", Name: "smoke"}},
@@ -52,7 +52,7 @@ func pickerLoaded(bound bool) model.Model {
 	if bound {
 		loaded.Project = model.Project{UID: "smoke-uid", Name: "smoke"}
 	}
-	m, _ := model.Update(model.Model{Cols: 160}, loaded)
+	m, _ := loadFirst(model.Model{Cols: 160}, loaded, snapshot)
 	return m
 }
 

@@ -7,7 +7,8 @@ func updateProject(m Model, msg ProjectLoaded) (Model, []Cmd) {
 	if msg.Project.UID != "" {
 		m.Collection = Collection{View: "project", ProjectUID: msg.Project.UID, Title: msg.Project.Name}
 	}
-	m.LocalDate, m.TimeZone = msg.LocalDate, msg.TimeZone
 	m.Daemon = msg.Daemon
-	return m.ApplySnapshot(msg.Snapshot, msg.ChildCounts, msg.ETag), nil
+	m.Loading = true
+	m.Err = nil
+	return snapshotChanged(m)
 }

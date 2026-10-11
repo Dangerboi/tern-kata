@@ -9,10 +9,6 @@ const (
 )
 
 func updateCollectionNavigation(m Model, action Action) (Model, []Cmd) {
-	switch action {
-	case MoveDown, MoveUp, MoveFirst, MoveLast, DrillIn:
-		m.PendingCreatedUID = ""
-	}
 	if action == PageUp || action == PageDown {
 		return updateNavigation(m, action)
 	}

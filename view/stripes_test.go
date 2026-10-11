@@ -61,7 +61,7 @@ func stripedProject() model.Model {
 	return apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: links}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: links}}},
 	)
 }
 
@@ -82,14 +82,14 @@ func TestEveryOtherDrawnRowIsShadedAndStaysSoAfterFoldAndFilter(t *testing.T) {
 	alternates(t, unfolded, len(rows)+2)
 
 	m, cmds := model.Update(m, model.KeyMsg{Chord: "s"}) // status=open: the closed Issue goes
-	refresh := cmds[0].(model.RefreshSnapshot)
+	refresh := cmds[0].(model.ReadSnapshot)
 	var open []model.Issue
 	for _, issue := range m.Issues {
 		if issue.Status == "open" {
 			open = append(open, issue)
 		}
 	}
-	m = apply(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: g.UISnapshotResponseBody{Collection: open, CollectionLinks: m.Snapshot.CollectionLinks}})
+	m = apply(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: g.UISnapshotResponseBody{Collection: open, CollectionLinks: m.Snapshot.CollectionLinks}})
 	filtered := render(t, m)
 	if got := len(drawnRows(filtered)); got != len(rows)+1 {
 		t.Fatalf("fixture: the filter left %d rows, want %d", got, len(rows)+1)

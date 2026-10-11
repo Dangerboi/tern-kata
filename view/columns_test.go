@@ -28,7 +28,7 @@ func columnsFixture(t testing.TB) model.Model {
 	return apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{parent, open, done, leaf}, CollectionLinks: links}, ChildCounts: map[string]g.ChildCounts{"parent": {Open: 1, Total: 2}}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{parent, open, done, leaf}, CollectionLinks: links}, ChildCounts: map[string]g.ChildCounts{"parent": {Open: 1, Total: 2}}}},
 	)
 }
 

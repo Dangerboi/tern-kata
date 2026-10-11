@@ -76,7 +76,7 @@ func TestJumpHistoryEndsOnEveryWayOutOfTheDetail(t *testing.T) {
 func TestIssueOpenedByReferenceShowsOutsideTheCollection(t *testing.T) {
 	m := model.Model{Workspace: "/repo", Cols: 160, Issues: []model.Issue{{UID: "a"}}, SelectedUID: "a"}
 	m, _ = model.Update(m, model.Start{Workspace: "/repo", IssueRef: "other/bbbb"})
-	m, _ = model.Update(m, model.ProjectLoaded{Snapshot: g.UISnapshotResponseBody{
+	m, _ = loadFirst(m, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
 		Catalog:    []g.UIProject{{Project: model.Project{ID: 7, Name: "other"}}},
 		Collection: []model.Issue{{UID: "a"}},
 	}})

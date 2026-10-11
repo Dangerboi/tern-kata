@@ -5,7 +5,6 @@ package model
 func selectRow(m Model, uid string) Model {
 	for _, row := range m.VisibleRows() {
 		if row.UID == uid {
-			m.PendingCreatedUID = ""
 			m.SelectedUID = uid
 			m.Focus = ColumnList
 			break

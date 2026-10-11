@@ -202,7 +202,7 @@ func updateClose(m Model, msg Msg) (Model, []Cmd) {
 		if msg.Err == nil {
 			m.CloseForm.Open = false
 			m = m.issueWritten(msg.UID)
-			return refreshLive(m)
+			return snapshotChanged(m)
 		}
 	case KeyMsg:
 		if binding, ok := LookupBindingForMode(msg.Chord, ModeCloseForm); ok {

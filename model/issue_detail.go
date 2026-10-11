@@ -208,7 +208,6 @@ func (m Model) jumpTo(uid string) Model {
 	if uid == "" || uid == m.SelectedUID {
 		return m
 	}
-	m.PendingCreatedUID = ""
 	m.back = append(m.back[:len(m.back):len(m.back)], m.SelectedUID)
 	m.SelectedUID = uid
 	return m.focusDetail()

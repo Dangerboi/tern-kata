@@ -24,23 +24,20 @@ func uidsOf(m model.Model) []string {
 
 func TestProjectListIsOrderedByUpdatedDescendingWithUIDTies(t *testing.T) {
 	priority := new(int64(0))
-	m, _ := model.Update(model.Model{}, model.ProjectLoaded{
-		Project: model.Project{UID: "p", Name: "Work"},
-		Snapshot: g.UISnapshotResponseBody{
-			Collection: []model.Issue{
-				{UID: "old", Title: "A", Priority: priority, UpdatedAt: ago(5)},
-				{UID: "tie-b", Title: "B", UpdatedAt: ago(1)},
-				{UID: "parent", Title: "C", UpdatedAt: ago(3)},
-				{UID: "tie-a", Title: "Z", UpdatedAt: ago(1)},
-				{UID: "kid-old", Title: "A", UpdatedAt: ago(4)},
-				{UID: "kid-new", Title: "Z", UpdatedAt: ago(2)},
-			},
-			CollectionLinks: []g.UILink{
-				{Type: "parent", FromIssueUID: "kid-old", ToIssueUID: "parent"},
-				{Type: "parent", FromIssueUID: "kid-new", ToIssueUID: "parent"},
-			},
+	m, _ := loadFirst(model.Model{}, model.ProjectLoaded{Project: model.Project{UID: "p", Name: "Work"}}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
+		Collection: []model.Issue{
+			{UID: "old", Title: "A", Priority: priority, UpdatedAt: ago(5)},
+			{UID: "tie-b", Title: "B", UpdatedAt: ago(1)},
+			{UID: "parent", Title: "C", UpdatedAt: ago(3)},
+			{UID: "tie-a", Title: "Z", UpdatedAt: ago(1)},
+			{UID: "kid-old", Title: "A", UpdatedAt: ago(4)},
+			{UID: "kid-new", Title: "Z", UpdatedAt: ago(2)},
 		},
-	})
+		CollectionLinks: []g.UILink{
+			{Type: "parent", FromIssueUID: "kid-old", ToIssueUID: "parent"},
+			{Type: "parent", FromIssueUID: "kid-new", ToIssueUID: "parent"},
+		},
+	}})
 	if got, want := uidsOf(m), []string{"tie-a", "tie-b", "parent", "old"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("roots: %v, want %v", got, want)
 	}
@@ -79,7 +76,7 @@ func TestCollectionGroupsAreOrderedByUpdatedDescending(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			c := model.Collection{View: tt.view, Title: tt.view}
-			m, _ := model.Update(model.Model{Collection: c}, model.CollectionLoaded{Collection: c, Snapshot: g.UISnapshotResponseBody{Collection: tt.issues}, LocalDate: today})
+			m, _ := step(model.Model{Collection: c}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: tt.issues}, LocalDate: today}})
 			if got := uidsOf(m); !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("%v, want %v", got, tt.want)
 			}
@@ -88,13 +85,10 @@ func TestCollectionGroupsAreOrderedByUpdatedDescending(t *testing.T) {
 }
 
 func TestSelectionFollowsUIDAcrossLiveReorder(t *testing.T) {
-	m, _ := model.Update(model.Model{Workspace: "/repo", SelectedUID: "old"}, model.ProjectLoaded{
-		Project:  model.Project{UID: "p"},
-		Snapshot: g.UISnapshotResponseBody{Cursor: 1, Collection: []model.Issue{{UID: "new", UpdatedAt: ago(1)}, {UID: "old", UpdatedAt: ago(2)}}},
-	})
+	m, _ := loadFirst(model.Model{Workspace: "/repo", SelectedUID: "old"}, model.ProjectLoaded{Project: model.Project{UID: "p"}}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Cursor: 1, Collection: []model.Issue{{UID: "new", UpdatedAt: ago(1)}, {UID: "old", UpdatedAt: ago(2)}}}})
 	m, cmds := model.Update(m, model.StreamEvent{Generation: 1, ID: 2, Type: "issue.updated"})
-	refresh := cmds[0].(model.RefreshSnapshot)
-	m, _ = model.Update(m, model.SnapshotRefreshed{
+	refresh := cmds[0].(model.ReadSnapshot)
+	m, _ = model.Update(m, model.SnapshotLoaded{
 		Request: refresh.Request, Query: refresh.Query,
 		Snapshot: g.UISnapshotResponseBody{Cursor: 2, Collection: []model.Issue{{UID: "new", UpdatedAt: ago(1)}, {UID: "old", UpdatedAt: ago(0)}}},
 	})

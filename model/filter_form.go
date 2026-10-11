@@ -35,7 +35,7 @@ func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 		m.Filters.Label = strings.TrimSpace(m.Filters.Label)
 		m.FilterForm = FilterFormState{}
 		m.SelectedUID = ""
-		return refreshFilters(m)
+		return snapshotChanged(m)
 	case CancelFilters:
 		m.FilterForm = FilterFormState{}
 	case NextFilterField:

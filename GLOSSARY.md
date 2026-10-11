@@ -21,3 +21,5 @@
 **Pane driver**: The step that turns one Tern input or daemon result into the next state, the view to draw, the Tern ops to send and the daemon commands to run.
 
 **Daemon gateway**: The module that runs one command against the kata daemon and returns exactly one result message.
+
+**Collection snapshot**: What the daemon says the shown Collection holds for the current Collection and filters. One path loads it for the first load, a Collection switch, a filter change, an id search and a live refresh; a result is applied only if it answers the current query.

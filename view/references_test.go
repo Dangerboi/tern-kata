@@ -27,7 +27,7 @@ func referencing(tab model.ActivityTab) (model.Model, string) {
 	m := apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{main, peer}, CollectionLinks: links}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{main, peer}, CollectionLinks: links}}},
 		model.DetailLoaded{UID: "main", Selected: &g.UISelectedAuthority{Issue: &main, Links: links, History: events}},
 		model.ActivityTabMsg{Tab: tab},
 	)
@@ -201,7 +201,7 @@ func TestLinkRowReadsRelationReferenceDashTitle(t *testing.T) {
 func TestPropertiesTitleJumpsToTheReferencedIssue(t *testing.T) {
 	links := []g.UILink{{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#up"}}
 	up := model.Issue{UID: "up", ShortID: "up", Title: "Up", ProjectName: "work"}
-	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, up}}}, model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &alpha, Links: links}})
+	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, up}}}}, model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &alpha, Links: links}})
 	nodes := render(t, m)
 	title := nodes[view.DetailContentID+".properties.parent.v.title"]
 	if text(title) != "Up" || title.P["actions"].(map[string]any)["click"] != "jump=up" {

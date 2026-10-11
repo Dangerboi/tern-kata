@@ -20,7 +20,7 @@ func TestEveryIssueRowCarriesTheDoubleClickAction(t *testing.T) {
 	m := apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: links}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: links}}},
 		model.KeyMsg{Chord: "shift+e"},
 	)
 	nodes := render(t, m)
