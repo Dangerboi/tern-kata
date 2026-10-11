@@ -57,17 +57,11 @@ func activity(t *testing.T, tab model.ActivityTab) driver.State {
 			{ID: 2, FromIssueUID: "kid", FromQualifiedID: "work#kidd", ToIssueUID: "alpha", ToQualifiedID: "work#aaaa", Type: "parent"},
 		},
 	}
-	return feed(t, driver.State{},
-		model.Start{Workspace: "/repo"},
-		resize(160),
-		model.ProjectLoaded{Project: model.Project{ID: 7, UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{
-			Catalog:         []g.UIProject{{Project: model.Project{UID: "p", Name: "work"}}},
-			Collection:      []model.Issue{alpha, beta, kid},
-			CollectionLinks: []g.UILink{{Type: "parent", FromIssueUID: "kid", ToIssueUID: "alpha"}},
-		}},
-		model.DetailLoaded{UID: "alpha", Selected: selected},
-		model.ActivityTabMsg{Tab: tab},
-	).State
+	return loadedWith(t, 160, model.Project{ID: 7, UID: "p", Name: "work"}, g.UISnapshotResponseBody{
+		Catalog:         []g.UIProject{{Project: model.Project{UID: "p", Name: "work"}}},
+		Collection:      []model.Issue{alpha, beta, kid},
+		CollectionLinks: []g.UILink{{Type: "parent", FromIssueUID: "kid", ToIssueUID: "alpha"}},
+	}, model.DetailLoaded{UID: "alpha", Selected: selected}, model.ActivityTabMsg{Tab: tab})
 }
 
 // Every click action the view draws is one the driver can decode: a node the view makes clickable
@@ -121,8 +115,7 @@ func TestSelectInputsDecodeForTheListAndBothMenus(t *testing.T) {
 	if got := driver.Step(s, &tern.Select{ID: view.IssueListID, Item: view.IssueID("beta")}, now).State.Model.SelectedUID; got != "beta" {
 		t.Errorf("Issue row select picked %q", got)
 	}
-	unbound := feed(t, driver.State{}, model.Start{Workspace: "/repo"}, resize(160),
-		model.ProjectLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha}}}).State
+	unbound := loadedWith(t, 160, model.Project{}, g.UISnapshotResponseBody{Collection: []model.Issue{alpha}})
 	if out := driver.Step(unbound, &tern.Select{ID: view.CollectionsID, Item: view.CollectionItemID("today")}, now); len(out.Cmds) != 1 {
 		t.Errorf("sidebar select commands = %#v", out.Cmds)
 	}

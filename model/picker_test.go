@@ -17,14 +17,14 @@ func pickerCatalog() []g.UIProject {
 }
 
 func pickerStart(cols int, bound bool) model.Model {
-	loaded := model.ProjectLoaded{Snapshot: g.UISnapshotResponseBody{
+	loaded, snapshot := model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
 		Catalog:    pickerCatalog(),
 		Collection: []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}, {UID: "b", ShortID: "bbbb", Title: "Second"}},
 	}}
 	if bound {
 		loaded.Project = model.Project{UID: "smoke-uid", Name: "smoke"}
 	}
-	m, _ := model.Update(model.Model{Cols: cols}, loaded)
+	m, _ := loadFirst(model.Model{Cols: cols}, loaded, snapshot)
 	return m
 }
 
@@ -206,7 +206,7 @@ func TestPickerReturnsToBoundProject(t *testing.T) {
 	}
 	m, cmds := pickerKeys(m, "p", "enter")
 	want := model.Collection{View: "project", ProjectUID: "smoke-uid", Title: "smoke"}
-	if m.Collection != want || !reflect.DeepEqual(cmds, []model.Cmd{model.LoadCollection{Collection: want}}) {
+	if m.Collection != want || !readsCollection(cmds, m, "") {
 		t.Fatalf("pinned entry did not return to the bound Project: %+v %#v", m.Collection, cmds)
 	}
 }
@@ -262,7 +262,7 @@ func TestPickerTypingFiltersEntries(t *testing.T) {
 func TestPickerEnterOpensTheFilteredEntry(t *testing.T) {
 	m, cmds := pickerKeys(pickerStart(120, true), "p", "t", "o", "enter")
 	want := model.Collection{View: "today", Title: "Today"}
-	if m.Picker.Open || m.Collection != want || m.Focus != model.ColumnList || !reflect.DeepEqual(cmds, []model.Cmd{model.LoadCollection{Collection: want}}) {
+	if m.Picker.Open || m.Collection != want || m.Focus != model.ColumnList || !readsCollection(cmds, m, "") {
 		t.Fatalf("filtered pick: open=%v collection=%+v cmds=%#v", m.Picker.Open, m.Collection, cmds)
 	}
 }
@@ -376,7 +376,7 @@ func TestPickerProjectsEntryListsEveryProject(t *testing.T) {
 func TestPickerPicksAProjectFromTheProjectsLevel(t *testing.T) {
 	alpha := model.Collection{View: "project", ProjectUID: "alpha-uid", Title: "alpha"}
 	m, cmds := pickerKeys(projectsLevel(t, true), "up", "enter")
-	if m.Picker.Open || m.Collection != alpha || m.Focus != model.ColumnList || !reflect.DeepEqual(cmds, []model.Cmd{model.LoadCollection{Collection: alpha}}) {
+	if m.Picker.Open || m.Collection != alpha || m.Focus != model.ColumnList || !readsCollection(cmds, m, "") {
 		t.Fatalf("pick: open=%v collection=%+v cmds=%#v", m.Picker.Open, m.Collection, cmds)
 	}
 	if reopened, _ := pickerKeys(m, "p"); reopened.Picker.Projects {
@@ -457,7 +457,7 @@ func TestSidebarProjectsLevel(t *testing.T) {
 		t.Fatal("enter on Back stayed on the Projects level")
 	}
 	m, cmds = pickerKeys(m, "down", "enter")
-	if m.SidebarProjects || m.Collection != alpha || m.Focus != model.ColumnList || !reflect.DeepEqual(cmds, []model.Cmd{model.LoadCollection{Collection: alpha}}) {
+	if m.SidebarProjects || m.Collection != alpha || m.Focus != model.ColumnList || !readsCollection(cmds, m, "") {
 		t.Fatalf("pick: level=%v collection=%+v cmds=%#v", m.SidebarProjects, m.Collection, cmds)
 	}
 	clicked, _ := model.Update(top, model.CollectionPointerSelected{Key: "projects"})

@@ -87,7 +87,7 @@ func clickBase() driver.State {
 	hours := func(n int) time.Time {
 		return time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC).Add(-time.Duration(n) * time.Hour)
 	}
-	m, _ := model.Update(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{Snapshot: g.UISnapshotResponseBody{
+	m := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
 		Collection: []model.Issue{
 			{UID: "parent", ShortID: "par1", Title: "A parent", Status: "open", UpdatedAt: hours(1)},
 			{UID: "child", ShortID: "chi1", Title: "B child", Status: "open", UpdatedAt: hours(2)},
@@ -256,7 +256,7 @@ func pickerCatalog() []g.UIProject {
 
 // newProject is an unbound directory with the New Project card open from the sidebar.
 func newProject() driver.State {
-	m, _ := model.Update(model.Model{Cols: 160, Workspace: "/home/dev/my-repo", Actor: "alice"}, model.ProjectLoaded{Snapshot: g.UISnapshotResponseBody{
+	m := loadFirst(model.Model{Cols: 160, Workspace: "/home/dev/my-repo", Actor: "alice"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
 		Catalog:    pickerCatalog(),
 		Collection: []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}},
 	}})

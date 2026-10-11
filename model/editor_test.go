@@ -102,7 +102,7 @@ func TestDraftSurvivesLiveSnapshotAndSaveFailure(t *testing.T) {
 	m.RefreshRequest = 3
 	latest := model.Issue{UID: "a", ProjectID: 2, Body: "Remote body", Revision: 8}
 	snapshot := g.UISnapshotResponseBody{Cursor: 9, Collection: []g.UIIssue{latest}, Selected: &g.UISelectedAuthority{Issue: &latest}}
-	m, _ = model.Update(m, model.SnapshotRefreshed{Request: 3, Query: m.SnapshotQuery(), Snapshot: snapshot})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: 3, Query: m.SnapshotQuery(), Snapshot: snapshot})
 	if m.Drafts["a"].Editor.Text != "a😀blocal" || m.Drafts["a"].BaseRevision != 7 {
 		t.Fatal("snapshot destroyed/rebased Draft")
 	}

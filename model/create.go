@@ -137,8 +137,7 @@ func updateCreate(m Model, msg Msg) (Model, []Cmd, bool) {
 		if msg.Err != nil {
 			return m, nil, true
 		}
-		m.PendingCreatedUID = msg.UID
-		m.SelectedUID = msg.UID
+		m = m.selectAfterCreate(msg.UID)
 		m.ExpandedUIDs = maps.Clone(m.ExpandedUIDs)
 		if m.ExpandedUIDs == nil {
 			m.ExpandedUIDs = map[string]bool{}
@@ -148,7 +147,7 @@ func updateCreate(m Model, msg Msg) (Model, []Cmd, bool) {
 		}
 		m.Create = CreateState{}
 		m.Focus = ColumnList
-		next, cmds := refreshLive(m)
+		next, cmds := snapshotChanged(m)
 		return next, cmds, true
 	case FieldLabelsLoaded:
 		if msg.UID == CreateDraftUID && m.Create.Open {

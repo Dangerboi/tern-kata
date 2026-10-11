@@ -38,14 +38,11 @@ func TestIssueNavigation(t *testing.T) {
 		{"interrupt", []string{"ctrl+c"}, "uid-a", true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			m, _ := model.Update(model.Model{Loading: true}, model.ProjectLoaded{
-				Project: model.Project{UID: "project", Name: "test"},
-				Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{
-					{UID: "uid-a", ShortID: "aaaa", Title: "First"},
-					{UID: "uid-b", ShortID: "bbbb", Title: "Second"},
-					{UID: "uid-c", ShortID: "cccc", Title: "Third"},
-				}},
-			})
+			m, _ := loadFirst(model.Model{Loading: true}, model.ProjectLoaded{Project: model.Project{UID: "project", Name: "test"}}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{
+				{UID: "uid-a", ShortID: "aaaa", Title: "First"},
+				{UID: "uid-b", ShortID: "bbbb", Title: "Second"},
+				{UID: "uid-c", ShortID: "cccc", Title: "Third"},
+			}}})
 			for _, key := range tt.keys {
 				m, _ = model.Update(m, model.KeyMsg{Chord: key})
 			}

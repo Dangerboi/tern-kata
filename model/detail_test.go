@@ -118,13 +118,13 @@ func TestLiveDetailAuthority(t *testing.T) {
 			if len(tt.back) > 0 {
 				start = tt.back[0]
 			}
-			m := withDetail(model.Model{Workspace: "/repo", Project: model.Project{UID: "project"}, SelectedUID: start, Focus: model.ColumnDetail}, nil)
+			m := withDetail(model.Model{LiveState: model.LiveState{StreamGeneration: 1}, Workspace: "/repo", Project: model.Project{UID: "project"}, SelectedUID: start, Focus: model.ColumnDetail}, nil)
 			if len(tt.back) > 0 {
 				m, _ = model.Update(m, model.JumpIssueMsg{UID: tt.selected})
 			}
-			m, cmds := model.Update(m, model.StreamEvent{ID: 1, Type: "issue.updated"})
-			refresh := cmds[0].(model.RefreshSnapshot)
-			m, cmds = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: g.UISnapshotResponseBody{
+			m, cmds := model.Update(m, model.StreamEvent{Generation: 1, ID: 1, Type: "issue.updated"})
+			refresh := cmds[0].(model.ReadSnapshot)
+			m, cmds = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: g.UISnapshotResponseBody{
 				Cursor: 1, Collection: []model.Issue{{UID: "a"}, {UID: "b"}},
 				Selected: &g.UISelectedAuthority{Issue: &model.Issue{UID: tt.authority, Body: "Live body"}},
 			}})

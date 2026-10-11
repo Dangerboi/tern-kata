@@ -60,10 +60,6 @@ func scrollFor(focus Column, action Action) (ScrollBy, bool) {
 }
 
 func updateNavigation(m Model, action Action) (Model, []Cmd) {
-	switch action {
-	case MoveDown, MoveUp, MoveFirst, MoveLast, PageUp, PageDown, DrillIn, DrillOut:
-		m.PendingCreatedUID = ""
-	}
 	if by, ok := scrollFor(m.Focus, action); ok {
 		return m, []Cmd{Scroll{Column: m.Focus, By: by}}
 	}

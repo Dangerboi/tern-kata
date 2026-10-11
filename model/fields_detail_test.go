@@ -29,7 +29,7 @@ func TestFieldsInDetailAndRefresh(t *testing.T) {
 		}
 		found := false
 		for _, c := range cmds {
-			if _, ok := c.(model.RefreshSnapshot); ok {
+			if _, ok := c.(model.ReadSnapshot); ok {
 				found = true
 			}
 		}

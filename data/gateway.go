@@ -139,13 +139,9 @@ func plan(cmd model.Cmd) (request, bool) {
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ReadDetail(ctx, cmd.UID)) },
 			func(err error) model.Msg { return model.DetailFailed{UID: cmd.UID, Err: err} }}, true
-	case model.LoadCollection:
+	case model.ReadSnapshot:
 		return request{cmd.Workspace,
-			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ReadCollection(ctx, cmd)) },
-			func(err error) model.Msg { return model.Failed{Err: err} }}, true
-	case model.RefreshSnapshot:
-		return request{cmd.Workspace,
-			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ReadRefresh(ctx, cmd)) },
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ReadSnapshot(ctx, cmd)) },
 			func(err error) model.Msg { return model.SnapshotFailed{Request: cmd.Request, Err: err} }}, true
 	}
 	return request{}, false

@@ -186,17 +186,17 @@ func TestGatewayReadsAndWritesIssues(t *testing.T) {
 	}
 
 	collection := model.Collection{View: "project", ProjectUID: demo.UID, Title: demo.Name}
-	loaded := as[model.CollectionLoaded](t, run(t, gateway, model.LoadCollection{Workspace: workspace, Collection: collection}))
-	if loaded.ETag == "" || len(loaded.Snapshot.Collection) != 1 || loaded.Snapshot.Collection[0].UID != uid {
+	query := model.CollectionQuery(collection, model.Filters{})
+	loaded := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, Request: 3}))
+	if loaded.ETag == "" || loaded.Request != 3 || loaded.LocalDate == "" || len(loaded.Snapshot.Collection) != 1 || loaded.Snapshot.Collection[0].UID != uid {
 		t.Fatalf("collection %+v", loaded)
 	}
-	query := model.Model{Collection: collection, LocalDate: loaded.LocalDate, TimeZone: loaded.TimeZone}.SnapshotQuery()
-	unchanged := as[model.SnapshotRefreshed](t, run(t, gateway, model.RefreshSnapshot{Workspace: workspace, Query: query, ETag: loaded.ETag, Request: 4}))
+	unchanged := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ETag: loaded.ETag, Request: 4}))
 	if !unchanged.NotModified || unchanged.Request != 4 || len(unchanged.Snapshot.Collection) != 0 {
 		t.Fatalf("refresh with the current ETag %+v, want a 304", unchanged)
 	}
 	createIssue(t, gateway, workspace, demo, "Zebra migration")
-	changed := as[model.SnapshotRefreshed](t, run(t, gateway, model.RefreshSnapshot{Workspace: workspace, Query: query, ETag: loaded.ETag, Request: 5}))
+	changed := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ETag: loaded.ETag, Request: 5}))
 	if changed.NotModified || len(changed.Snapshot.Collection) != 2 || changed.ETag == "" || changed.ETag == loaded.ETag {
 		t.Fatalf("refresh after a write %+v, want the new snapshot and ETag", changed)
 	}
@@ -358,8 +358,7 @@ func TestGatewayFailureShapePerCommand(t *testing.T) {
 		{model.BindProject{}, model.ProjectSaved{Err: boom}},
 		{model.LoadProject{}, model.Failed{Err: boom}},
 		{model.LoadDetail{UID: "u"}, model.DetailFailed{UID: "u", Err: boom}},
-		{model.LoadCollection{}, model.Failed{Err: boom}},
-		{model.RefreshSnapshot{Request: 9}, model.SnapshotFailed{Request: 9, Err: boom}},
+		{model.ReadSnapshot{Request: 9}, model.SnapshotFailed{Request: 9, Err: boom}},
 	} {
 		if got := run(t, gateway, tt.cmd); !reflect.DeepEqual(got, tt.want) {
 			t.Errorf("%T: got %#v, want %#v", tt.cmd, got, tt.want)
@@ -374,7 +373,7 @@ func TestGatewayLocatorFailureIsRetriedOnTheNextCommand(t *testing.T) {
 	l.err.Store(&boom)
 	gateway := newGateway(t, l)
 
-	if got := as[model.Failed](t, run(t, gateway, model.LoadCollection{})); got.Err != boom {
+	if got := as[model.SnapshotFailed](t, run(t, gateway, model.ReadSnapshot{Request: 1})); got.Err != boom {
 		t.Fatalf("got %v, want the locator's error", got.Err)
 	}
 	l.err.Store(nil)
@@ -466,7 +465,7 @@ func TestGatewayReportsAnUnreachableDaemonAfterLocatingAgain(t *testing.T) {
 	workspace, _ := project(t, gateway, "demo")
 	first.Close()
 
-	got := as[model.Failed](t, run(t, gateway, model.LoadCollection{Workspace: workspace, Collection: model.Collection{View: "inbox", Title: "Inbox"}}))
+	got := as[model.SnapshotFailed](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: model.CollectionQuery(model.Collection{View: "inbox", Title: "Inbox"}, model.Filters{})}))
 	if got.Err == nil {
 		t.Fatal("want an error for a daemon that is gone")
 	}
@@ -615,4 +614,29 @@ func TestGatewayStreamDropReportsAnUnreachableDaemon(t *testing.T) {
 		t.Fatalf("dropped %+v", dropped)
 	}
 	<-done
+}
+
+func TestGatewaySnapshotCountsChildrenOnEveryRead(t *testing.T) {
+	kata := startKata(t, "0.18.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	parent := createIssue(t, gateway, workspace, demo, "Parent")
+	query := model.CollectionQuery(model.Collection{View: "project", ProjectUID: demo.UID, Title: demo.Name}, model.Filters{})
+
+	before := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query}))
+	if len(before.ChildCounts) != 0 {
+		t.Fatalf("child counts %+v before any child", before.ChildCounts)
+	}
+	child := as[model.IssueCreated](t, run(t, gateway, model.CreateIssueCmd{Workspace: workspace, Actor: "tester", ProjectID: demo.ID, Title: "Child", ParentUID: parent}))
+	if child.Err != nil {
+		t.Fatal(child.Err)
+	}
+	after := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ETag: before.ETag}))
+	if counts := after.ChildCounts[parent]; after.NotModified || counts.Total != 1 || counts.Open != 1 {
+		t.Fatalf("after a child: %+v, want the parent to count its one open child", after)
+	}
+	unchanged := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ETag: after.ETag}))
+	if !unchanged.NotModified {
+		t.Fatalf("current ETag: %+v, want not modified", unchanged)
+	}
 }

@@ -1,7 +1,5 @@
 package model
 
-import g "go.kenn.io/kata/pkg/client/generated"
-
 type Msg interface{ msg() }
 type Cmd interface{ cmd() }
 
@@ -9,13 +7,10 @@ type Start struct{ Workspace, IssueRef string }
 
 func (Start) msg() {}
 
+// ProjectLoaded is the Project the workspace resolves to; its first Collection snapshot is read next.
 type ProjectLoaded struct {
-	Project             Project
-	Snapshot            g.UISnapshotResponseBody
-	ChildCounts         map[string]g.ChildCounts
-	ETag                string
-	LocalDate, TimeZone string
-	Daemon              Daemon
+	Project Project
+	Daemon  Daemon
 }
 
 func (ProjectLoaded) msg() {}

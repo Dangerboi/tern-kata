@@ -82,12 +82,15 @@ func feed(t *testing.T, s driver.State, inputs ...any) driver.Output {
 // browsing is a Pane of the given width on a Project of alpha and beta, alpha's detail loaded.
 func browsing(t *testing.T, cols int) driver.State {
 	t.Helper()
-	return feed(t, driver.State{},
-		model.Start{Workspace: "/repo"},
-		resize(cols),
-		model.ProjectLoaded{Project: model.Project{ID: 7, UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, beta}}},
-		alphaLoaded(),
-	).State
+	return loadedWith(t, cols, model.Project{ID: 7, UID: "p", Name: "work"}, g.UISnapshotResponseBody{Collection: []model.Issue{alpha, beta}}, alphaLoaded())
+}
+
+// loadedWith is a Pane of the given width after its first load of the Project and snapshot, then the given messages.
+func loadedWith(t *testing.T, cols int, project model.Project, snapshot g.UISnapshotResponseBody, then ...any) driver.State {
+	t.Helper()
+	s := feed(t, driver.State{}, model.Start{Workspace: "/repo"}, resize(cols)).State
+	s.Model = loadFirst(s.Model, model.ProjectLoaded{Project: project}, model.SnapshotLoaded{Snapshot: snapshot})
+	return feed(t, s, then...).State
 }
 
 func wantOps(t *testing.T, out driver.Output, want ...tern.Op) {

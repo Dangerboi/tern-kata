@@ -90,7 +90,7 @@ func text(n tern.WireNode) string {
 // apply feeds msgs through model.Update, the way the app does.
 func apply(m model.Model, msgs ...model.Msg) model.Model {
 	for _, msg := range msgs {
-		m, _ = model.Update(m, msg)
+		m, _ = step(m, msg)
 	}
 	return m
 }
@@ -109,7 +109,7 @@ func browsing() model.Model {
 	return apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, beta}}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, beta}}}},
 		detailOf(alpha),
 	)
 }
@@ -136,7 +136,7 @@ func TestSwitchingCollectionKeepsListOnScreen(t *testing.T) {
 		t.Errorf("top bar title shows no loading marker: %q", heading)
 	}
 
-	m = apply(m, model.CollectionLoaded{Collection: allOpen, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha}}})
+	m = apply(m, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha}}}})
 	loaded := render(t, m)
 	if _, ok := loaded[view.IssueID(alpha.UID)]; !ok {
 		t.Errorf("alpha's row changed id across loading: %v", loaded.under(view.IssueListID))
@@ -178,7 +178,7 @@ func TestStaleNoticeStaysWhileACollectionLoads(t *testing.T) {
 }
 
 func TestTopBarIsOneRowWithTheDaemonRightAligned(t *testing.T) {
-	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Daemon: model.Daemon{Version: "v0.18.0"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, beta}}})
+	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Daemon: model.Daemon{Version: "v0.18.0"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, beta}}}})
 	nodes := render(t, m)
 	var got []string
 	for _, id := range []string{"main.topbar.left.heading", "main.topbar.counts", "main.topbar.right.daemon", "main.topbar.right.sep", "main.topbar.right.menu"} {

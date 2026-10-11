@@ -32,7 +32,7 @@ func parentBrowsing() model.Model {
 	return apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: links}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: links}}},
 		model.DetailLoaded{UID: parent.UID, Selected: &g.UISelectedAuthority{Issue: &parent, Links: links, History: events}},
 	)
 }

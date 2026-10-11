@@ -11,14 +11,10 @@ func TestTopBarDaemonAndCounts(t *testing.T) {
 	project := model.Project{UID: "p", Name: "work"}
 	issues := []model.Issue{{UID: "a", Status: "open"}, {UID: "b", Status: "closed"}}
 	load := func(m model.Model, stats *g.ProjectStats) model.Model {
-		m, _ = model.Update(m, model.ProjectLoaded{
-			Project: project,
-			Daemon:  model.Daemon{Remote: true, Version: "v0.18.0"},
-			Snapshot: g.UISnapshotResponseBody{
-				Catalog:    []g.UIProject{{Project: project, Stats: stats}},
-				Collection: issues,
-			},
-		})
+		m, _ = loadFirst(m, model.ProjectLoaded{Project: project, Daemon: model.Daemon{Remote: true, Version: "v0.18.0"}}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
+			Catalog:    []g.UIProject{{Project: project, Stats: stats}},
+			Collection: issues,
+		}})
 		return m
 	}
 	m := load(model.Model{Workspace: "/repo"}, &g.ProjectStats{Open: 5, Closed: 7})
@@ -28,7 +24,7 @@ func TestTopBarDaemonAndCounts(t *testing.T) {
 	if got := m.CountsLine(); got != "open: 5 · closed: 7 · all: 12" {
 		t.Fatalf("catalog counts %q", got)
 	}
-	m, _ = model.Update(m, model.CollectionLoaded{Collection: m.Collection, Snapshot: g.UISnapshotResponseBody{
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: g.UISnapshotResponseBody{
 		Catalog:    []g.UIProject{{Project: project, Stats: &g.ProjectStats{Open: 6, Closed: 7}}},
 		Collection: issues,
 	}})
@@ -49,13 +45,13 @@ func TestCountsLineForAnUnboundProjectCollection(t *testing.T) {
 		Catalog:    []g.UIProject{{Project: project, Stats: &g.ProjectStats{Open: 5, Closed: 7}}},
 		Collection: []model.Issue{{UID: "a", Status: "open"}},
 	}
-	m, _ := model.Update(model.Model{Workspace: "/repo"}, model.ProjectLoaded{Snapshot: snapshot})
+	m, _ := loadFirst(model.Model{Workspace: "/repo"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: snapshot})
 	if m.Bound || m.CountsLine() != "open: 1 · closed: 0 · all: 1" {
 		t.Fatalf("Inbox: bound %v, counts %q", m.Bound, m.CountsLine())
 	}
 	picked := model.Collection{View: "project", ProjectUID: "p", Title: "work"}
 	m, _ = model.Update(m, model.CollectionSelected{Collection: picked})
-	m, _ = model.Update(m, model.CollectionLoaded{Collection: picked, Snapshot: snapshot})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: snapshot})
 	if got := m.CountsLine(); got != "open: 5 · closed: 7 · all: 12" {
 		t.Fatalf("picked Project Collection counts %q", got)
 	}

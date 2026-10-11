@@ -130,7 +130,7 @@ func TestClickOnAnActivityRowCursorsPastTheChildren(t *testing.T) {
 func TestChildRowsFollowLiveRefreshes(t *testing.T) {
 	m := parentDetail()
 	m, cmds := model.Update(m, model.StreamEvent{ID: 1, Type: "issue.updated"})
-	refresh := cmds[0].(model.RefreshSnapshot)
+	refresh := cmds[0].(model.ReadSnapshot)
 	// "gone" is removed, "fresh" is added and "new" changed its title.
 	parent := model.Issue{UID: "parent", ProjectName: "work"}
 	snapshot := g.UISnapshotResponseBody{Cursor: 1,
@@ -142,7 +142,7 @@ func TestChildRowsFollowLiveRefreshes(t *testing.T) {
 		Selected: &g.UISelectedAuthority{Issue: &parent, Links: []g.UILink{childLink(2, "fresh"), childLink(3, "new")}, Comments: []g.Comment{{UID: "c1"}, {UID: "c2"}}},
 	}
 	m = cursorAt(m, 4) // on the last of the 2 comments, past all 3 children
-	m, _ = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot})
 	for index, want := range []string{"fresh", "new"} {
 		if got := enterOpens(m, index); got != want {
 			t.Errorf("enter on child row %d opened %q, want %q", index, got, want)
@@ -156,7 +156,7 @@ func TestChildRowsFollowLiveRefreshes(t *testing.T) {
 func TestCursorStaysOnItsChildWhenARefreshReordersTheChildren(t *testing.T) {
 	m := parentDetail()
 	m, cmds := model.Update(m, model.StreamEvent{ID: 1, Type: "issue.updated"})
-	refresh := cmds[0].(model.RefreshSnapshot)
+	refresh := cmds[0].(model.ReadSnapshot)
 	parent := model.Issue{UID: "parent", ProjectName: "work"}
 	// "old", under the cursor, was edited and moves above "new".
 	snapshot := g.UISnapshotResponseBody{Cursor: 1,
@@ -168,7 +168,7 @@ func TestCursorStaysOnItsChildWhenARefreshReordersTheChildren(t *testing.T) {
 		Selected: &g.UISelectedAuthority{Issue: &parent, Links: []g.UILink{childLink(1, "gone"), childLink(2, "old"), childLink(3, "new")}},
 	}
 	m = cursorAt(m, 1) // "old"
-	m, _ = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot})
 	if got := enterOpens(m, m.DetailIndex()); got != "old" {
 		t.Fatalf("enter after the refresh opened %q, want old", got)
 	}
