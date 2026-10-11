@@ -17,9 +17,17 @@ func decode(input tern.Input) model.Msg {
 		}
 		return model.KeyMsg{Chord: input.String(), Text: text}
 	case *tern.Edit:
-		return model.EditMsg{ID: input.ID, From: input.From, To: input.To, Text: input.Text, Cursor: input.Cursor, Len: input.Len}
+		target := view.BodyTarget(input.ID)
+		if target == model.NoEditTarget {
+			return nil
+		}
+		return model.EditMsg{Target: target, From: input.From, To: input.To, Text: input.Text, Cursor: input.Cursor, Len: input.Len}
 	case *tern.Undo:
-		return model.UndoMsg{ID: input.ID}
+		target := view.BodyTarget(input.ID)
+		if target == model.NoEditTarget {
+			return nil
+		}
+		return model.UndoMsg{Target: target}
 	case *tern.Focus:
 		return view.DecodeFocus(input.ID)
 	case *tern.Select:

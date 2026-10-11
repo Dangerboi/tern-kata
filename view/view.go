@@ -69,26 +69,21 @@ func Render(m model.Model, now time.Time) tern.View {
 		main = append(main, staleNotice(m))
 	}
 	var layer tern.Element
-	if m.Picker.Open {
-		layer = pickerLayer(m)
-	}
-	if m.FilterForm.Open {
-		layer = filterLayer(m)
-	}
-	if m.ProjectForm.Open {
-		layer = projectLayer(m)
-	}
-	if m.CloseForm.Open {
-		layer = closeLayer(m)
-	}
-	if m.FieldForm.Open {
-		layer = fieldLayer(m)
-	}
-	if _, ok := m.ActiveDraft(); ok {
-		layer = editorLayer(m)
-	}
-	if m.Create.Open {
+	switch m.TopCard() {
+	case model.CardCreate:
 		layer = createLayer(m)
+	case model.CardDraft:
+		layer = editorLayer(m)
+	case model.CardField:
+		layer = fieldLayer(m)
+	case model.CardClose:
+		layer = closeLayer(m)
+	case model.CardProject:
+		layer = projectLayer(m)
+	case model.CardFilter:
+		layer = filterLayer(m)
+	case model.CardPicker:
+		layer = pickerLayer(m)
 	}
 	if m.CloseForm.Err != nil && !m.CloseForm.Open {
 		main = append(main, ui.Text{Common: ui.Common{Key: "close-error", Tone: ui.ToneError}, Text: m.CloseForm.Err.Error()})

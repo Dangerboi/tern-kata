@@ -21,6 +21,14 @@ func filterTextField(form *FilterFormState) *string {
 	return nil
 }
 
+// filterFormKey is one key for the Filter form on top: a bound chord acts, any other types.
+func filterFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
+	if binding, ok := LookupBindingForMode(msg.Chord, ModeFilterForm); ok {
+		return updateFilterForm(m, binding.Action)
+	}
+	return updateFilterText(m, msg)
+}
+
 func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 	switch action {
 	case InputSpace:

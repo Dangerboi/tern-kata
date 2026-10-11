@@ -9,48 +9,39 @@ import (
 
 // textFocusID is the node that should hold Tern's caret, "" for none.
 func textFocusID(m model.Model) string {
-	if m.Create.Open {
+	switch m.TopCard() {
+	case model.CardCreate:
 		if m.Create.Saving || m.Create.DiscardConfirm {
 			return ""
 		}
 		return view.CreateFieldID(m.Create.Field)
-	}
-	if _, active := m.ActiveDraft(); active {
+	case model.CardDraft:
 		if m.EditorMode() == model.ModeEditor {
 			return view.DraftEditorID
 		}
-		return ""
-	}
-	if m.FieldForm.Open {
+	case model.CardField:
 		if !m.FieldForm.Saving {
 			return view.FieldInputID
 		}
-		return ""
-	}
-	if m.CloseForm.Open {
-		if m.CloseForm.Saving {
-			return ""
+	case model.CardClose:
+		if !m.CloseForm.Saving {
+			return view.CloseFieldID(m.CloseForm.Field)
 		}
-		return view.CloseFieldID(m.CloseForm.Field)
-	}
-	if m.FilterForm.Open {
+	case model.CardProject:
+		if !m.ProjectForm.Saving {
+			return view.ProjectInputID
+		}
+	case model.CardFilter:
 		switch m.FilterForm.Field {
 		case 2, 3:
 			return view.FilterFieldID(m.FilterForm.Field)
 		}
-		return ""
-	}
-	if m.ProjectForm.Open {
-		if !m.ProjectForm.Saving {
-			return view.ProjectInputID
-		}
-		return ""
-	}
-	if m.Picker.Open {
+	case model.CardPicker:
 		return view.PickerFilterID
-	}
-	if !m.HelpOpen && m.Search.Open && !m.Search.Results && m.Err == nil && !m.FirstLoad() && m.Focus == model.ColumnList {
-		return view.SearchID
+	default:
+		if m.Search.Open && !m.Search.Results && m.Err == nil && !m.FirstLoad() && m.Focus == model.ColumnList {
+			return view.SearchID
+		}
 	}
 	return ""
 }

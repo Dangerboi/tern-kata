@@ -78,11 +78,6 @@ func submitProject(m Model) (Model, []Cmd) {
 
 func updateProjectForm(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
-	case KeyMsg:
-		if m.ProjectForm.Open {
-			next, cmds := updateProjectFormKey(m, msg)
-			return next, cmds, true
-		}
 	case CollectionPointerSelected:
 		// A click on the sidebar's New Project row is enter on it.
 		if msg.Key == NewProjectKey && !m.ProjectForm.Open {

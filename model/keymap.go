@@ -211,7 +211,6 @@ var Keymap = []Binding{
 	{Chord: "escape", Key: "esc", Action: CloseCancel, Help: "cancel", Mode: ModeCloseForm, ShowInFooter: true},
 	{Chord: "backspace", Key: "backspace", Action: DeleteInput, Help: "erase", Mode: ModeCloseForm},
 	{Chord: "ctrl+u", Key: "ctrl+u", Action: ClearInput, Help: "clear field", Mode: ModeCloseForm},
-	{Chord: "ctrl+c", Key: "ctrl+c", Action: QuitAction, Help: "quit", Mode: ModeCloseForm},
 	{Chord: "+", Key: "+", Action: AddLabelAction, Help: "add label", Mode: ModeList},
 	{Chord: "-", Key: "-", Action: RemoveLabelAction, Help: "remove label", Mode: ModeList},
 	{Chord: "a", Key: "a", Action: AssignOwnerAction, Help: "assign owner", Mode: ModeList},
@@ -244,7 +243,6 @@ var Keymap = []Binding{
 	{Chord: "escape", Key: "esc", Action: ClosePicker, Help: "close", Mode: ModePicker, ShowInFooter: true},
 	{Chord: "backspace", Key: "backspace", Action: DeleteInput, Help: "delete", Mode: ModePicker},
 	{Chord: "ctrl+u", Key: "ctrl+u", Action: ClearInput, Help: "clear filter", Mode: ModePicker},
-	{Chord: "ctrl+c", Key: "ctrl+c", Action: QuitAction, Help: "quit", Mode: ModePicker},
 	// New Project form: one name field, so every other key is typed.
 	{Chord: "enter", Key: "enter", Action: ProjectSubmit, Help: "create Project", Mode: ModeProjectForm, ShowInFooter: true},
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: ProjectSubmit, Help: "create Project", Mode: ModeProjectForm},
@@ -252,5 +250,4 @@ var Keymap = []Binding{
 	{Chord: "escape", Key: "esc", Action: ProjectCancel, Help: "cancel", Mode: ModeProjectForm, ShowInFooter: true},
 	{Chord: "backspace", Key: "backspace", Action: DeleteInput, Help: "delete", Mode: ModeProjectForm},
 	{Chord: "ctrl+u", Key: "ctrl+u", Action: ClearInput, Help: "clear name", Mode: ModeProjectForm},
-	{Chord: "ctrl+c", Key: "ctrl+c", Action: QuitAction, Help: "quit", Mode: ModeProjectForm},
 }

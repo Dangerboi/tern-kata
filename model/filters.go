@@ -13,14 +13,12 @@ type SearchState struct {
 	InitialText, InitialUID string
 }
 
+// inputMode is a mode whose keys type into Search. The popup cards own theirs: see cardGlobalChords.
 func inputMode(mode Mode) bool {
-	return mode == ModeSearch || mode == ModeSearchResults || mode == ModeFilterForm || mode == ModePicker
+	return mode == ModeSearch || mode == ModeSearchResults
 }
 
 func updateFilterAction(m Model, action Action) (Model, []Cmd) {
-	if m.FilterForm.Open {
-		return updateFilterForm(m, action)
-	}
 	switch action {
 	case ClearFilters:
 		m.Filters = Filters{}

@@ -10,6 +10,17 @@ import (
 
 const DraftEditorID = "layer.editor.body"
 
+// BodyTarget is the body a Tern editor node edits: the Draft editor's or the Create card's, none for any other node.
+func BodyTarget(id string) model.EditTarget {
+	switch id {
+	case DraftEditorID:
+		return model.EditDraftBody
+	case CreateFieldID(1):
+		return model.EditCreateBody
+	}
+	return model.NoEditTarget
+}
+
 // TextEditor presents the reusable buffer; the model owns text, selection and undo.
 func TextEditor(key string, editor model.TextEditor, readonly bool) tern.Element {
 	return ui.Editor{Common: ui.Common{Key: key, Tone: ui.ToneAccent}, Field: ui.Field{Text: editor.Text, Cursor: &editor.Cursor, Anchor: &editor.Anchor, Readonly: readonly}, MaxLines: 24}

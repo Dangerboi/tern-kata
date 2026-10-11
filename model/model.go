@@ -61,8 +61,23 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 }
 
 func update(m Model, msg Msg) (Model, []Cmd) {
-	if msg, ok := msg.(FocusFieldMsg); ok {
+	switch msg := msg.(type) {
+	case FocusFieldMsg:
 		return focusField(m, msg.Field), nil
+	case KeyMsg:
+		if next, cmds, handled := updateTopCardKey(m, msg); handled {
+			return next, cmds
+		}
+	case EditMsg:
+		if next, handled := editBody(m, msg.Target, func(e TextEditor) TextEditor {
+			return e.ApplyEdit(msg.From, msg.To, msg.Text, msg.Cursor, msg.Len)
+		}); handled {
+			return next, nil
+		}
+	case UndoMsg:
+		if next, handled := editBody(m, msg.Target, TextEditor.Undo); handled {
+			return next, nil
+		}
 	}
 	if next, cmds, handled := updateCreate(m, msg); handled {
 		return next, cmds
@@ -77,15 +92,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case CloseFieldMsg, CloseResultMsg:
 		return updateClose(m, msg)
 	}
-	if _, ok := msg.(KeyMsg); ok && m.CloseForm.Open {
-		return updateClose(m, msg)
-	}
-	switch msg := msg.(type) {
-	case KeyMsg:
-		if m.CurrentMode() == ModePicker {
-			return updatePicker(m, msg)
-		}
-	case PickerSelected:
+	if msg, ok := msg.(PickerSelected); ok {
 		return pickCollectionKey(m, msg.Key)
 	}
 	switch msg := msg.(type) {
@@ -173,9 +180,6 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			m.Err = msg.Err
 		}
 	case KeyMsg:
-		if m.FieldForm.Open {
-			return updateFieldKey(m, msg)
-		}
 		if inputMode(m.CurrentMode()) {
 			if binding, ok := LookupBindingForMode(msg.Chord, m.CurrentMode()); ok {
 				return updateFilterAction(m, binding.Action)

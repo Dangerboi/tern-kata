@@ -14,7 +14,7 @@
 
 **Draft**: An unsaved edit to an issue's text or fields, kept until the user saves or discards it, even if the issue changes underneath.
 
-**Popup card**: A card drawn over the columns that takes the keyboard until closed: Create, Close, the Draft editor, the single-field form, New Project, the Menu and the Filter form. _Avoid_: layer, modal, overlay (Tern's element name).
+**Popup card**: A card drawn over the columns that takes the keyboard until closed: Create, Close, the Draft editor, the single-field form, New Project, the Menu and the Filter form. When several are open, one order (`TopCard`) decides which takes the keys, is drawn and holds the text caret; the help sheet covers them all. Each card declares which global chords it lets through (only `ctrl+c`, from the Menu, Close and New Project). _Avoid_: layer, modal, overlay (Tern's element name).
 
 **Issue detail**: The column showing one Issue: its properties, Children and Activity tabs, with its own row cursor and jump history.
 

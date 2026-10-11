@@ -202,29 +202,33 @@ func updateClose(m Model, msg Msg) (Model, []Cmd) {
 			m = m.issueWritten(msg.UID)
 			return snapshotChanged(m)
 		}
-	case KeyMsg:
-		f := &m.CloseForm
-		binding, bound := LookupBindingForMode(msg.Chord, ModeCloseForm)
-		switch {
-		case bound && binding.Action == CloseCancel:
-			if !f.Saving {
-				f.Open = false
-			}
-		case bound && binding.Action == CloseNext:
-			cycleField(&m, 1)
-		case bound && binding.Action == ClosePrevious:
-			cycleField(&m, -1)
-		case bound && binding.Action == CloseSave:
-			return submitClose(m, false)
-		case bound && binding.Action == CloseQuick:
-			return submitClose(m, true)
-		case bound && binding.Action == QuitAction:
-			return updateNavigation(m, QuitAction)
-		case !f.Saving:
-			var edited bool
-			if f.Values[f.Field], edited = editText(f.Values[f.Field], binding, bound, msg); edited {
-				f.Err = nil
-			}
+	}
+	return m, nil
+}
+
+// closeKey is one key for the Close card on top.
+func closeKey(m Model, msg KeyMsg) (Model, []Cmd) {
+	f := &m.CloseForm
+	binding, bound := LookupBindingForMode(msg.Chord, ModeCloseForm)
+	switch {
+	case bound && binding.Action == CloseCancel:
+		if !f.Saving {
+			f.Open = false
+		}
+	case bound && binding.Action == CloseNext:
+		cycleField(&m, 1)
+	case bound && binding.Action == ClosePrevious:
+		cycleField(&m, -1)
+	case bound && binding.Action == CloseSave:
+		return submitClose(m, false)
+	case bound && binding.Action == CloseQuick:
+		return submitClose(m, true)
+	case bound && binding.Action == QuitAction:
+		return updateNavigation(m, QuitAction)
+	case !f.Saving:
+		var edited bool
+		if f.Values[f.Field], edited = editText(f.Values[f.Field], binding, bound, msg); edited {
+			f.Err = nil
 		}
 	}
 	return m, nil
