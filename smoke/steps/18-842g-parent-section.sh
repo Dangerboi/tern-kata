@@ -4,7 +4,8 @@ ps_dir="$tmp/parentsec-workspace"
 mkdir -p "$ps_dir" "$tmp/parentsec-unbound"
 kata --workspace "$ps_dir" init --project parentsec --json >/dev/null
 ps_project=$(kata --workspace "$ps_dir" projects list --json | jq -er '.projects[] | select(.name == "parentsec") | .uid')
-kata --workspace "$ps_dir" create "Parentsec parent" --body "Parent body" --json >"$tmp/parentsec-parent.json"
+# A long parent title wraps under itself while the Parent: key keeps its place beside it.
+kata --workspace "$ps_dir" create "Parentsec parent with a title long enough to wrap the Parent property value across several lines of the detail card at the smoke width" --body "Parent body" --json >"$tmp/parentsec-parent.json"
 ps_parent=$(jq -r '.issue.uid' "$tmp/parentsec-parent.json")
 ps_short=$(jq -r '.issue.short_id' "$tmp/parentsec-parent.json")
 kata --workspace "$ps_dir" create "Parentsec kid" --force-new --parent "$ps_parent" --label bug --body "$(printf '## Parent\n\n%s\n\n## What to build\n\nthe kid body' "$ps_short")" --json >"$tmp/parentsec-kid.json"
@@ -29,6 +30,10 @@ expect_tree "[data-id='$ps_content.properties.parent']" '.ok and .count == 1'
 ps_labels=$(ctl tree "[data-id='$ps_content.properties.labels']" | jq -r '.nodes[0].rect[1]')
 ps_parent_y=$(ctl tree "[data-id='$ps_content.properties.parent']" | jq -r '.nodes[0].rect[1]')
 awk -v a="$ps_labels" -v b="$ps_parent_y" 'BEGIN { exit !(a < b) }' || { printf 'Parent: is not below Labels: (%s, %s)\n' "$ps_labels" "$ps_parent_y" >&2; return 1; }
+# Every key sits at one left edge and width, and the wrapped Parent value starts on the key's line.
+expect_tree "[data-id^='$ps_content.properties.'][data-id\$='.k']" '.ok and .count > 3 and ([.nodes[].rect[0]] | unique | length == 1) and ([.nodes[].rect[2]] | unique | length == 1)'
+ps_key_y=$(ctl tree "[data-id='$ps_content.properties.parent.k']" | jq -r '.nodes[0].rect[1]')
+expect_tree "[data-id='$ps_content.properties.parent.v']" ".ok and .nodes[0].rect[1] == $ps_key_y and (.nodes[0].text | startswith(\"#$ps_short - Parentsec parent\"))"
 
 quit_app
 kata projects remove parentsec --force --json >/dev/null

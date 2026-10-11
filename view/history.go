@@ -19,24 +19,22 @@ func jumpLink(uid, ref string) ui.Text {
 	return ui.Text{Common: ui.Common{Key: "jump", Actions: &ui.Actions{Click: JumpClick(uid)}}, Spans: []ui.Span{{T: ref, S: "accent link"}}}
 }
 
-// referenceTail is the reference as a link followed, only when the peer is
-// loaded, by ` - ` and its title; the dash and title jump like the reference.
-// Tern collapses each text node's edge spaces in layout, so the spaces around
-// the dash are no-break spaces.
-func referenceTail(uid, ref, title string) tern.Nodes {
-	nodes := ui.Nodes(jumpLink(uid, ref))
+// referenceText is the reference as an accent link followed, only when the peer is loaded, by
+// ` - ` and its title, as one text so it wraps word by word; a click anywhere jumps to the peer.
+func referenceText(key, uid, ref, title string) ui.Text {
+	spans := []ui.Span{{T: ref, S: "accent link"}}
 	if title != "" {
-		follow := &ui.Actions{Click: JumpClick(uid)}
-		nodes = append(nodes, ui.Text{Common: ui.Common{Key: "dash", Actions: follow}, Text: "\u00a0-\u00a0"}, ui.Text{Common: ui.Common{Key: "title", Actions: follow}, Text: title})
+		spans = append(spans, ui.Span{T: " - " + title})
 	}
-	return nodes
+	return ui.Text{Common: ui.Common{Key: key, Actions: &ui.Actions{Click: JumpClick(uid)}}, Spans: spans}
 }
 
-// linkRow is a Link row heading: `relation | ref - title`, the relation and
-// separator muted, then the referenceTail. click is the relation's click, if any.
+// linkRow is a Link row heading: `relation | ref - title`, the relation and separator muted and
+// pinned at the left, the referenceText wrapping beside it. click is the relation's click, if any.
 func linkRow(row model.DetailRow, click *ui.Actions) tern.Element {
-	lead := ui.Text{Common: ui.Common{Key: "heading", Actions: click}, Spans: []ui.Span{{T: row.Relation + " |\u00a0", S: "muted"}}}
-	return ui.Row{Common: ui.Common{Key: "row"}, Gap: ui.GapNone, Wrap: true, Children: append(ui.Nodes(lead), referenceTail(row.ReferenceUID, row.Ref, row.RefTitle)...)}
+	noShrink := 0.0
+	lead := ui.Text{Common: ui.Common{Key: "heading", Actions: click, Shrink: &noShrink}, Spans: []ui.Span{{T: row.Relation + " |\u00a0", S: "muted"}}, Wrap: ui.WrapNone}
+	return ui.Row{Common: ui.Common{Key: "row"}, Gap: ui.GapNone, Align: ui.AlignStart, Children: ui.Nodes(lead, referenceText("jump", row.ReferenceUID, row.Ref, row.RefTitle))}
 }
 
 // historySentence is what an event did, verb toned, the object after it. An event with a Ref makes the

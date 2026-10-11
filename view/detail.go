@@ -54,7 +54,7 @@ func detail(m model.Model, now time.Time) tern.Element {
 		if m.DetailLoading() {
 			title = append(title, loadingMarker)
 		}
-		parts := []tern.Element{ui.Col{Common: ui.Common{Key: "heading"}, Children: ui.Nodes(
+		parts := []tern.Element{ui.Col{Common: ui.Common{Key: "heading"}, Align: ui.AlignStart, Children: ui.Nodes(
 			ui.Text{Common: ui.Common{Key: "title", Actions: &ui.Actions{Click: FocusDetailClick}}, Spans: title},
 			ui.Badge{Common: ui.Common{Key: "status", Tone: statusTone(issue.Status)}, Text: statusText(issue)},
 		)}, ui.Spacer{Common: ui.Common{Key: "gap"}, Size: ui.GapMD}}
@@ -210,11 +210,11 @@ func properties(m model.Model, issue *model.Issue) tern.Element {
 	}
 	add("Created", text(model.DetailTime(issue.CreatedAt)))
 	add("Updated", text(model.DetailTime(issue.UpdatedAt)))
-	if issue.ScheduledOnDate != nil {
-		add("Scheduled", text(*issue.ScheduledOnDate))
+	if day := model.IssueDate(issue.ScheduledOnDate, issue.Metadata, "scheduled_on"); day != "" {
+		add("Scheduled", text(day))
 	}
-	if issue.DeadlineOnDate != nil {
-		add("Deadline", text(*issue.DeadlineOnDate))
+	if day := model.IssueDate(issue.DeadlineOnDate, issue.Metadata, "deadline_on"); day != "" {
+		add("Deadline", text(day))
 	}
 	owner := "Unassigned"
 	if issue.Owner != nil && *issue.Owner != "" {
@@ -232,7 +232,7 @@ func properties(m model.Model, issue *model.Issue) tern.Element {
 		add("Labels", ui.Row{Common: ui.Common{Key: "v"}, Gap: ui.GapSM, Wrap: true, Children: chips})
 	}
 	if link, ok := parentLink(m); ok {
-		add("Parent", ui.Row{Common: ui.Common{Key: "v"}, Gap: ui.GapNone, Wrap: true, Children: referenceTail(link.ReferenceUID, link.Ref, link.RefTitle)})
+		add("Parent", referenceText("v", link.ReferenceUID, link.Ref, link.RefTitle))
 	}
 	if counts := m.ChildCounts[issue.UID]; counts.Total > 0 {
 		add("Children", text(fmt.Sprintf("%d open / %d total", counts.Open, counts.Total)))
@@ -241,10 +241,11 @@ func properties(m model.Model, issue *model.Issue) tern.Element {
 	for _, r := range rows {
 		keyWidth = max(keyWidth, len(r.name)+1)
 	}
+	noShrink := 0.0
 	children := make(tern.Nodes, len(rows))
 	for i, r := range rows {
-		key := ui.Text{Common: ui.Common{Key: "k"}, Text: pad(r.name+":", keyWidth-len(r.name)-1)}
-		children[i] = ui.Row{Common: ui.Common{Key: strings.ToLower(r.name)}, Gap: ui.GapSM, Children: ui.Nodes(key, r.value)}
+		key := ui.Text{Common: ui.Common{Key: "k", Shrink: &noShrink}, Text: pad(r.name+":", keyWidth-len(r.name)-1), Wrap: ui.WrapNone}
+		children[i] = ui.Row{Common: ui.Common{Key: strings.ToLower(r.name)}, Gap: ui.GapSM, Align: ui.AlignStart, Children: ui.Nodes(key, r.value)}
 	}
 	return ui.Col{Common: ui.Common{Key: "properties"}, Gap: ui.GapNone, Children: children}
 }

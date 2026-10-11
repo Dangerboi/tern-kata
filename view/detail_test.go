@@ -221,7 +221,7 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	p1, owner, reason, day := int64(1), "dana", "done", "2026-11-01"
 	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
 	issue := model.Issue{UID: "alpha", ShortID: "aaaa", Title: "A", Status: "closed", ProjectName: "work", Author: "ann", Revision: 4,
-		CreatedAt: at, UpdatedAt: at, Priority: &p1, Owner: &owner, ClosedReason: &reason, ScheduledOnDate: &day, DeadlineOnDate: &day, Labels: []string{"bug"}}
+		CreatedAt: at, UpdatedAt: at, Priority: &p1, Owner: &owner, ClosedReason: &reason, ScheduledOnDate: &day, Metadata: map[string]any{"deadline_on": day}, Labels: []string{"bug"}}
 	links := []g.UILink{{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#up"}}
 	counts := map[string]g.ChildCounts{"alpha": {Open: 1, Total: 2}}
 	nodes := render(t, apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{ChildCounts: counts, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: links}}},
@@ -238,6 +238,9 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	when := at.In(time.Local).Format("2006-01-02 15:04")
 	if got := text(nodes[props.ID+".created.v"]); got != when {
 		t.Errorf("Created %q, want %q", got, when)
+	}
+	if got := text(nodes[props.ID+".deadline.v"]); got != day {
+		t.Errorf("metadata-only Deadline %q, want %q", got, day)
 	}
 	if n := nodes[props.ID+".priority.v"]; n.P["tone"] != "warning" || text(n) != "P1" {
 		t.Errorf("priority %v", n)

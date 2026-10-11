@@ -117,8 +117,8 @@ func TestPropertiesShowTheParentAsAReferenceAndNoChildLines(t *testing.T) {
 	m := apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &alpha, Links: links}})
 	nodes := render(t, m)
 	parent := view.DetailContentID + ".properties.parent"
-	assertReference(t, nodes, parent+".v.jump", "#up", "up")
-	if got := drawn(nodes[parent+".v"]); got != "#up" {
+	assertReference(t, nodes, parent+".v", "#up", "up")
+	if got := text(nodes[parent+".v"]); got != "#up" {
 		t.Errorf("parent value draws %q", got)
 	}
 	if got := strings.TrimRight(text(nodes[parent+".k"]), "\u00a0"); got != "Parent:" {
@@ -144,19 +144,16 @@ func TestStatusBadgeIsShownOnceUnderTheTitle(t *testing.T) {
 func TestLinksRowShowsThePeersTitleWhenLoaded(t *testing.T) {
 	m, _ := referencing(model.TabLinks)
 	nodes := render(t, m)
-	if got := text(nodes[view.DetailActivityID+".1.row.title"]); got != "Peer" {
-		t.Errorf("title after the reference = %q, want Peer", got)
+	if got := text(nodes[view.DetailActivityID+".1.row.jump"]); got != "#peer - Peer" {
+		t.Errorf("reference and title = %q, want %q", got, "#peer - Peer")
 	}
 
 	ghost := g.UILink{ID: 2, Type: "related", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "ghost", ToQualifiedID: "work#ghost"}
 	main := model.Issue{UID: "main", ShortID: "main", Title: "Main", Status: "open", ProjectName: "work"}
 	nodes = render(t, apply(m, model.DetailLoaded{UID: "main", Selected: &g.UISelectedAuthority{Issue: &main, Links: []g.UILink{ghost}}}))
 	assertReference(t, nodes, view.DetailActivityID+".2.row.jump", "#ghost", "ghost")
-	if _, ok := nodes[view.DetailActivityID+".2.row.title"]; ok {
-		t.Error("a peer that is not loaded has a title")
-	}
-	if _, ok := nodes[view.DetailActivityID+".2.row.dash"]; ok {
-		t.Error("a peer that is not loaded leaves a dangling dash")
+	if got := text(nodes[view.DetailActivityID+".2.row.jump"]); got != "#ghost" {
+		t.Errorf("a peer that is not loaded draws %q", got)
 	}
 }
 
@@ -176,11 +173,6 @@ func TestLinkRowReadsRelationReferenceDashTitle(t *testing.T) {
 	row := view.DetailActivityID + ".1.row"
 	if got := drawn(nodes[row]); got != "blocks | #peer - Peer" {
 		t.Errorf("same-Project row draws %q", got)
-	}
-	for _, id := range []string{row + ".dash", row + ".title"} {
-		if click := nodes[id].P["actions"].(map[string]any)["click"]; click != view.JumpClick("peer") {
-			t.Errorf("%s click = %v", id, click)
-		}
 	}
 
 	main := model.Issue{UID: "main", ShortID: "main", Title: "Main", Status: "open", ProjectName: "work"}
@@ -203,8 +195,8 @@ func TestPropertiesTitleJumpsToTheReferencedIssue(t *testing.T) {
 	up := model.Issue{UID: "up", ShortID: "up", Title: "Up", ProjectName: "work"}
 	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, up}}}}, model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &alpha, Links: links}})
 	nodes := render(t, m)
-	title := nodes[view.DetailContentID+".properties.parent.v.title"]
-	if text(title) != "Up" || title.P["actions"].(map[string]any)["click"] != view.JumpClick("up") {
-		t.Errorf("title = %v", title)
+	value := nodes[view.DetailContentID+".properties.parent.v"]
+	if text(value) != "#up - Up" || value.P["actions"].(map[string]any)["click"] != view.JumpClick("up") {
+		t.Errorf("parent value = %v", value)
 	}
 }

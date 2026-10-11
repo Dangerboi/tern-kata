@@ -5,7 +5,7 @@ import (
 	"slices"
 )
 
-func issueDate(projected *string, metadata map[string]any, key string) string {
+func IssueDate(projected *string, metadata map[string]any, key string) string {
 	if projected != nil {
 		return *projected
 	}
@@ -23,8 +23,8 @@ func GroupIssues(collection Collection, issues []Issue, today string) []IssueGro
 	for _, issue := range issues {
 		id := collection.View
 		title := collection.Title
-		schedule := issueDate(issue.ScheduledOnDate, issue.Metadata, "scheduled_on")
-		deadline := issueDate(issue.DeadlineOnDate, issue.Metadata, "deadline_on")
+		schedule := IssueDate(issue.ScheduledOnDate, issue.Metadata, "scheduled_on")
+		deadline := IssueDate(issue.DeadlineOnDate, issue.Metadata, "deadline_on")
 		switch collection.View {
 		case "upcoming":
 			if issue.Status != "open" || schedule == "" || schedule <= today {
@@ -71,7 +71,7 @@ func GroupIssues(collection Collection, issues []Issue, today string) []IssueGro
 	for id, items := range groups {
 		slices.SortStableFunc(items, func(a, b Issue) int {
 			if collection.View == "deadlines" && (id == "0-overdue" || id == "1-today") {
-				if c := cmp.Compare(issueDate(a.DeadlineOnDate, a.Metadata, "deadline_on"), issueDate(b.DeadlineOnDate, b.Metadata, "deadline_on")); c != 0 {
+				if c := cmp.Compare(IssueDate(a.DeadlineOnDate, a.Metadata, "deadline_on"), IssueDate(b.DeadlineOnDate, b.Metadata, "deadline_on")); c != 0 {
 					return c
 				}
 			}
