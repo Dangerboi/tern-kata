@@ -101,6 +101,14 @@ func TestNewProjectSendsTheTrimmedNameAndKeepsWhatWasTyped(t *testing.T) {
 	}
 }
 
+// Printable keys that are bindings elsewhere (quit, help, Menu, next row) are typed into the name.
+func TestNewProjectTypesPrintableGlobalKeys(t *testing.T) {
+	m, cmds := pickerKeys(newProjectOpened(false), "q", "?", "p", "j")
+	if m.ProjectForm.Name != "my-repoq?pj" || !m.ProjectForm.Open || m.Quitting || m.HelpOpen || len(cmds) != 0 {
+		t.Fatalf("name %q open=%v quitting=%v help=%v cmds=%#v", m.ProjectForm.Name, m.ProjectForm.Open, m.Quitting, m.HelpOpen, cmds)
+	}
+}
+
 func TestNewProjectFormIgnoresKeysWhileSaving(t *testing.T) {
 	saving, _ := pickerKeys(newProjectOpened(false), "enter")
 	got, cmds := pickerKeys(saving, "x", "backspace", "ctrl+u", "escape", "enter")

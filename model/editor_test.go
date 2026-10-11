@@ -16,7 +16,7 @@ func editorModel() model.Model {
 
 func TestDraftNativeEditAndSave(t *testing.T) {
 	m := editorModel()
-	for _, msg := range []model.Msg{model.KeyMsg{Chord: "e"}, model.EditMsg{ID: "layer.editor.body", From: 1, To: 3, Text: "new", Cursor: 4, Len: 4}} {
+	for _, msg := range []model.Msg{model.KeyMsg{Chord: "e"}, model.EditMsg{Target: model.EditDraftBody, From: 1, To: 3, Text: "new", Cursor: 4, Len: 4}} {
 		m, _ = model.Update(m, msg)
 	}
 	m, cmds := model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
@@ -41,9 +41,9 @@ func TestDraftSequences(t *testing.T) {
 	}{
 		{"typed undo", []model.Msg{key("e"), typed, key("ctrl+z")}, "a😀b", model.ModeEditor, true, nil},
 		{"global printable keys become text", []model.Msg{key("e"), model.KeyMsg{Chord: "q", Text: "q"}, model.KeyMsg{Chord: "shift+?", Text: "?"}}, "a😀bq?", model.ModeEditor, true, nil},
-		{"native undo", []model.Msg{key("e"), model.EditMsg{ID: "layer.editor.body", From: 1, To: 3, Text: "x", Cursor: 2, Len: 4}, model.UndoMsg{ID: "layer.editor.body"}}, "a😀b", model.ModeEditor, true, nil},
-		{"stale edit", []model.Msg{key("e"), model.EditMsg{ID: "layer.editor.body", From: 0, To: 1, Text: "x", Cursor: 1, Len: 99}}, "a😀b", model.ModeEditor, true, nil},
-		{"surrogate split", []model.Msg{key("e"), model.EditMsg{ID: "layer.editor.body", From: 2, To: 3, Text: "x", Cursor: 3, Len: 4}}, "a😀b", model.ModeEditor, true, nil},
+		{"native undo", []model.Msg{key("e"), model.EditMsg{Target: model.EditDraftBody, From: 1, To: 3, Text: "x", Cursor: 2, Len: 4}, model.UndoMsg{Target: model.EditDraftBody}}, "a😀b", model.ModeEditor, true, nil},
+		{"stale edit", []model.Msg{key("e"), model.EditMsg{Target: model.EditDraftBody, From: 0, To: 1, Text: "x", Cursor: 1, Len: 99}}, "a😀b", model.ModeEditor, true, nil},
+		{"surrogate split", []model.Msg{key("e"), model.EditMsg{Target: model.EditDraftBody, From: 2, To: 3, Text: "x", Cursor: 3, Len: 4}}, "a😀b", model.ModeEditor, true, nil},
 		{"ordinary backspace", []model.Msg{key("e"), key("left"), key("backspace")}, "ab", model.ModeEditor, true, nil},
 		{"selection replacement", []model.Msg{key("e"), key("shift+left"), typed}, "a😀local", model.ModeEditor, true, nil},
 		{"discard asks", []model.Msg{key("e"), key("escape")}, "a😀b", model.ModeDiscard, true, nil},

@@ -30,6 +30,12 @@ func opened(keys ...string) func() model.Model {
 	}
 }
 
+// openedCreate opens Create on a bound Project, so a card with a title can be saved.
+func openedCreate() model.Model {
+	m, _ := model.Update(model.Model{Project: model.Project{ID: 7}}, model.KeyMsg{Chord: "n"})
+	return m
+}
+
 func popupCards() []popupCard {
 	return []popupCard{
 		{
@@ -79,9 +85,11 @@ func popupCards() []popupCard {
 			text:  func(m model.Model, _ int) string { return m.Filters.Search },
 		},
 		{
-			name: "Create", open: opened("n"), fields: 5, textField: 3, cleared: true,
-			field: func(m model.Model) int { return m.Create.Field },
-			text:  func(m model.Model, f int) string { return m.Create.Owner },
+			name: "Create", open: openedCreate, fields: 5, textField: 0, cleared: true,
+			field:  func(m model.Model) int { return m.Create.Field },
+			text:   func(m model.Model, _ int) string { return m.Create.Title },
+			save:   []string{"ctrl+o"},
+			result: func(_ model.Model, err error) model.Msg { return model.IssueCreated{Err: err} },
 		},
 	}
 }
@@ -165,7 +173,10 @@ func TestPopupCardSharedBehaviour(t *testing.T) {
 			t.Run(c.name+"/save error keeps the input", func(t *testing.T) {
 				m := typeKeys(focused(), model.KeyMsg{Text: "keep"})
 				mode := m.CurrentMode()
-				m, _ = clickPress(m, c.save...)
+				m, cmds := clickPress(m, c.save...)
+				if len(cmds) == 0 {
+					t.Fatalf("saving asked the daemon for nothing: %+v", m)
+				}
 				m, _ = model.Update(m, c.result(m, errors.New("daemon said no")))
 				if m.CurrentMode() != mode || c.text(m, c.textField) != "keep" {
 					t.Fatalf("after a save error: mode %s text %q", m.CurrentMode(), c.text(m, c.textField))
