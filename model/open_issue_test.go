@@ -10,7 +10,7 @@ import (
 func TestOpenAtIssueAndSelectAction(t *testing.T) {
 	for _, startup := range []bool{true, false} {
 		t.Run(map[bool]string{true: "open argument", false: "TSP select action"}[startup], func(t *testing.T) {
-			m := model.Model{Workspace: "/repo", SelectedUID: "previous", DetailHidden: true}
+			m, _ := model.Update(model.Model{Workspace: "/repo", SelectedUID: "previous", Focus: model.ColumnList}, model.KeyMsg{Chord: "shift+l"})
 			if startup {
 				m, _ = model.Update(m, model.Start{Workspace: "/repo", IssueRef: "other/bbbb"})
 			}
@@ -31,7 +31,7 @@ func TestOpenAtIssueAndSelectAction(t *testing.T) {
 			}
 			selected := &g.UISelectedAuthority{Issue: &model.Issue{UID: "target", ShortID: "bbbb", Title: "Target"}}
 			m, _ = model.Update(m, model.IssueOpened{Ref: "other/bbbb", Selected: selected})
-			if m.SelectedUID != "target" || m.Detail != selected || m.Focus != model.ColumnDetail || m.DetailHidden || m.DetailLoading {
+			if m.SelectedUID != "target" || m.DetailAuthority() != selected || m.Focus != model.ColumnDetail || m.DetailHidden() || m.DetailLoading() {
 				t.Fatalf("Issue not selected in detail: %+v", m)
 			}
 			m, _ = model.Update(m, model.SnapshotRefreshed{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: snapshot, ETag: "next"})

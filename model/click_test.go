@@ -70,7 +70,7 @@ func clickAt(focus model.Column, listKeys ...string) model.Model {
 func clickTabTo(m model.Model, tab model.ActivityTab) (model.Model, []model.Cmd) {
 	var cmds []model.Cmd
 	for range model.TabCount {
-		if m.ActivityTab == tab {
+		if m.ActiveTab() == tab {
 			break
 		}
 		m, cmds = clickPress(m, "tab")
@@ -224,8 +224,8 @@ func TestEscAfterClickBacksOut(t *testing.T) {
 			for _, msg := range tt.msgs {
 				m, _ = model.Update(m, msg)
 			}
-			if m.Focus != tt.focus || m.SelectedUID != tt.uid || !slices.Equal(m.DetailBack, tt.back) {
-				t.Fatalf("focus=%v selected=%q back=%v, want focus=%v selected=%q back=%v", m.Focus, m.SelectedUID, m.DetailBack, tt.focus, tt.uid, tt.back)
+			if m.Focus != tt.focus || m.SelectedUID != tt.uid || !slices.Equal(m.JumpHistory(), tt.back) {
+				t.Fatalf("focus=%v selected=%q back=%v, want focus=%v selected=%q back=%v", m.Focus, m.SelectedUID, m.JumpHistory(), tt.focus, tt.uid, tt.back)
 			}
 		})
 	}
@@ -235,12 +235,12 @@ func TestEscAfterClickBacksOut(t *testing.T) {
 // it as clicking away does, so a later esc never replays an earlier jump.
 func TestJumpHistoryEndsWhenKeysLeaveDetail(t *testing.T) {
 	m, _ := clickDetailPath(model.TabLinks, "enter")(clickAt(model.ColumnDetail))
-	if m.SelectedUID != "other" || len(m.DetailBack) != 1 {
-		t.Fatalf("jump did not record history: selected=%q back=%v", m.SelectedUID, m.DetailBack)
+	if m.SelectedUID != "other" || len(m.JumpHistory()) != 1 {
+		t.Fatalf("jump did not record history: selected=%q back=%v", m.SelectedUID, m.JumpHistory())
 	}
 	m, _ = clickPress(m, "shift+l", "shift+l", "enter", "escape")
-	if m.Focus != model.ColumnList || m.SelectedUID != "other" || len(m.DetailBack) != 0 {
-		t.Fatalf("esc replayed a jump: focus=%v selected=%q back=%v", m.Focus, m.SelectedUID, m.DetailBack)
+	if m.Focus != model.ColumnList || m.SelectedUID != "other" || len(m.JumpHistory()) != 0 {
+		t.Fatalf("esc replayed a jump: focus=%v selected=%q back=%v", m.Focus, m.SelectedUID, m.JumpHistory())
 	}
 }
 

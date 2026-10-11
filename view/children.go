@@ -46,7 +46,7 @@ func childrenTable(m model.Model, children []model.ChildRow, now time.Time) tern
 			cells = append(cells, status, title, updated)
 		}
 		mark := ui.Mark("")
-		if m.Focus == model.ColumnDetail && m.DetailIndex == i {
+		if m.Focus == model.ColumnDetail && m.DetailIndex() == i {
 			mark = ui.MarkPick
 		}
 		nodes = append(nodes, ui.Row{Common: ui.Common{Key: child.Key, Mark: mark}, Gap: ui.GapSM, Children: cells})

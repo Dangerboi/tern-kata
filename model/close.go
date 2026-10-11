@@ -60,8 +60,8 @@ type ReopenIssueCmd struct {
 func (ReopenIssueCmd) cmd() {}
 
 func closeIssue(m Model) *Issue {
-	if m.Detail != nil && m.Detail.Issue != nil && m.Detail.Issue.UID == m.SelectedUID {
-		return m.Detail.Issue
+	if issue := m.shownIssue(); issue != nil {
+		return issue
 	}
 	for i := range m.Issues {
 		if m.Issues[i].UID == m.SelectedUID {
@@ -201,7 +201,7 @@ func updateClose(m Model, msg Msg) (Model, []Cmd) {
 		m.CloseForm.Err = msg.Err
 		if msg.Err == nil {
 			m.CloseForm.Open = false
-			m.DetailUID = ""
+			m = m.issueWritten(msg.UID)
 			return refreshLive(m)
 		}
 	case KeyMsg:

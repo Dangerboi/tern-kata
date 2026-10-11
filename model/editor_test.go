@@ -11,7 +11,7 @@ import (
 
 func editorModel() model.Model {
 	issue := model.Issue{UID: "a", ProjectID: 2, Body: "a😀b", Revision: 7}
-	return model.Model{Workspace: "/repo", SelectedUID: "a", DetailUID: "a", Detail: &g.UISelectedAuthority{Issue: &issue}, Focus: model.ColumnDetail}
+	return withDetail(model.Model{Workspace: "/repo", SelectedUID: "a", Focus: model.ColumnDetail}, &g.UISelectedAuthority{Issue: &issue})
 }
 
 func TestDraftNativeEditAndSave(t *testing.T) {
@@ -81,7 +81,7 @@ func TestDraftSequences(t *testing.T) {
 			if present && draft.BaseRevision != 7 && tt.name != "conflict overwrite" {
 				t.Fatal("live update rebased Draft")
 			}
-			if tt.name == "conflict discard" && m.Detail.Issue.Body != "Remote body" {
+			if tt.name == "conflict discard" && m.DetailAuthority().Issue.Body != "Remote body" {
 				t.Fatal("discard did not retain remote version")
 			}
 		})
@@ -124,7 +124,7 @@ func TestDraftSurvivesLiveSnapshotAndSaveFailure(t *testing.T) {
 func TestDraftOpensTheFullStoredBodyIncludingParentSection(t *testing.T) {
 	m := editorModel()
 	body := "## Parent\n\nup1\n\n## What\n\nbuild"
-	m.Detail.Issue.Body = body
+	m.DetailAuthority().Issue.Body = body
 	m, _ = model.Update(m, model.KeyMsg{Chord: "e"})
 	if got := m.Drafts["a"].Editor.Text; got != body {
 		t.Errorf("draft text %q, want %q", got, body)

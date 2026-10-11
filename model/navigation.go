@@ -30,7 +30,7 @@ func (RevealActivityTab) cmd() {}
 // DetailDrawn reports whether the view draws the Activity tabs: the detail column
 // is on screen and holds a loaded Issue, not a placeholder or an error line.
 func (m Model) DetailDrawn() bool {
-	return m.Shows(ColumnDetail) && m.SelectedUID != "" && m.DetailErr == nil && m.Detail != nil && m.Detail.Issue != nil
+	return m.Shows(ColumnDetail) && m.SelectedUID != "" && m.err == nil && m.authority != nil && m.authority.Issue != nil
 }
 
 // Shows reports whether the view draws column c. It draws none while the first

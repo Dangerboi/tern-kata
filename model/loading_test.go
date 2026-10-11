@@ -80,8 +80,8 @@ func TestDetailStaysOnScreenUntilTheSelectedIssueArrives(t *testing.T) {
 			for _, msg := range tt.msgs {
 				m, cmds = model.Update(m, msg)
 			}
-			if m.DetailIssueUID() != tt.onScreen || m.DetailLoading != tt.loading || m.DetailErr != tt.err || !reflect.DeepEqual(cmds, tt.wantCmds) {
-				t.Fatalf("detail=%q loading=%v err=%v cmds=%#v", m.DetailIssueUID(), m.DetailLoading, m.DetailErr, cmds)
+			if m.DetailIssueUID() != tt.onScreen || m.DetailLoading() != tt.loading || m.DetailErr() != tt.err || !reflect.DeepEqual(cmds, tt.wantCmds) {
+				t.Fatalf("detail=%q loading=%v err=%v cmds=%#v", m.DetailIssueUID(), m.DetailLoading(), m.DetailErr(), cmds)
 			}
 		})
 	}
@@ -91,21 +91,21 @@ func TestDetailReturnsToFirstRowOnlyForADifferentIssueAndKeepsItsTab(t *testing.
 	a := &g.UISelectedAuthority{Issue: &model.Issue{UID: "a"}, Comments: []g.Comment{{UID: "one"}, {UID: "two"}}}
 	m, _ := model.Update(projectOf("a", "b"), model.DetailLoaded{UID: "a", Selected: a})
 	m, _ = model.Update(m, model.DetailItemMsg{Tab: model.TabComments, Key: "two"})
-	if m.ActivityTab != model.TabComments || m.DetailIndex != 1 {
-		t.Fatalf("fixture: tab=%v index=%d", m.ActivityTab, m.DetailIndex)
+	if m.ActiveTab() != model.TabComments || m.DetailIndex() != 1 {
+		t.Fatalf("fixture: tab=%v index=%d", m.ActiveTab(), m.DetailIndex())
 	}
 
 	// The same Issue reloads (after saving a Draft) where the reader was.
 	m, _ = model.Update(m, model.DraftSaved{UID: "a"})
 	m, _ = model.Update(m, model.DetailLoaded{UID: "a", Selected: a})
-	if m.DetailIssueUID() != "a" || m.ActivityTab != model.TabComments || m.DetailIndex != 1 {
-		t.Fatalf("reload moved the reader: issue=%q tab=%v index=%d", m.DetailIssueUID(), m.ActivityTab, m.DetailIndex)
+	if m.DetailIssueUID() != "a" || m.ActiveTab() != model.TabComments || m.DetailIndex() != 1 {
+		t.Fatalf("reload moved the reader: issue=%q tab=%v index=%d", m.DetailIssueUID(), m.ActiveTab(), m.DetailIndex())
 	}
 
 	// Another Issue starts at its first row on the same tab, while the previous detail stays until it arrives.
 	m, _ = model.Update(m, model.SelectMsg{UID: "b"})
-	if m.DetailIssueUID() != "a" || m.ActivityTab != model.TabComments || m.DetailIndex != 0 {
-		t.Fatalf("selecting b: issue=%q tab=%v index=%d", m.DetailIssueUID(), m.ActivityTab, m.DetailIndex)
+	if m.DetailIssueUID() != "a" || m.ActiveTab() != model.TabComments || m.DetailIndex() != 0 {
+		t.Fatalf("selecting b: issue=%q tab=%v index=%d", m.DetailIssueUID(), m.ActiveTab(), m.DetailIndex())
 	}
 }
 

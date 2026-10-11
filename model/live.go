@@ -82,7 +82,7 @@ func (Retry) msg() {}
 
 func liveQuery(m Model) g.ReadUISnapshotQuery {
 	q := m.SnapshotQuery()
-	if m.SelectedUID != "" && !m.DetailHidden {
+	if m.SelectedUID != "" && !m.DetailHidden() {
 		q.SelectedIssueUID = new(m.SelectedUID)
 		q.IncludeHistory = new(true)
 	}
@@ -173,26 +173,8 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 			return refreshLive(m)
 		}
 		if !msg.NotModified {
-			selected := m.SelectedUID
-			cursorChild := m.cursorChildUID()
-			m = m.ApplySnapshot(msg.Snapshot, msg.ChildCounts, msg.ETag)
-			if m.Focus == ColumnDetail && len(m.DetailBack) > 0 {
-				m.SelectedUID = selected
-			}
-			if msg.Snapshot.Selected != nil && msg.Snapshot.Selected.Issue != nil && msg.Snapshot.Selected.Issue.UID == m.SelectedUID {
-				m.Detail = msg.Snapshot.Selected
-				m.DetailUID = m.SelectedUID
-				m.DetailLoading = false
-				m.DetailErr = nil
-				m.DetailIndex = min(m.DetailIndex, max(m.DetailCursorCount()-1, 0))
-				for i, child := range m.DetailChildren() {
-					if cursorChild != "" && child.UID == cursorChild {
-						m.DetailIndex = i
-					}
-				}
-			} else if m.DetailUID == m.SelectedUID {
-				m.DetailUID = ""
-			}
+			selected, cursorChild := m.SelectedUID, m.cursorChildUID()
+			m = m.ApplySnapshot(msg.Snapshot, msg.ChildCounts, msg.ETag).snapshotArrived(msg.Snapshot.Selected, selected, cursorChild)
 			m.Cursor = msg.Snapshot.Cursor
 		}
 		if m.Resetting {

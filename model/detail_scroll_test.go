@@ -21,8 +21,8 @@ func TestArrowAndPageKeysScrollTheDetailViewport(t *testing.T) {
 		if !reflect.DeepEqual(cmds, []model.Cmd{want}) {
 			t.Errorf("%s: commands %#v, want %#v", chord, cmds, want)
 		}
-		if got.ActivityTab != detail.ActivityTab || got.DetailIndex != detail.DetailIndex {
-			t.Errorf("%s moved the row cursor to %v/%d", chord, got.ActivityTab, got.DetailIndex)
+		if got.ActiveTab() != detail.ActiveTab() || got.DetailIndex() != detail.DetailIndex() {
+			t.Errorf("%s moved the row cursor to %v/%d", chord, got.ActiveTab(), got.DetailIndex())
 		}
 	}
 }
@@ -45,8 +45,8 @@ func TestDetailScrollIntentsDoNotDependOnTheWidth(t *testing.T) {
 func TestLetterKeysStillMoveTheDetailCursor(t *testing.T) {
 	detail := arrowModes(t)["detail"]
 	got, cmds := model.Update(detail, model.KeyMsg{Chord: "j"})
-	if got.DetailIndex != detail.DetailIndex+1 || len(cmds) != 0 {
-		t.Fatalf("j: index %d, commands %#v", got.DetailIndex, cmds)
+	if got.DetailIndex() != detail.DetailIndex()+1 || len(cmds) != 0 {
+		t.Fatalf("j: index %d, commands %#v", got.DetailIndex(), cmds)
 	}
 }
 
@@ -57,13 +57,13 @@ func TestSwitchingActivityTabRevealsIt(t *testing.T) {
 	for name, msg := range map[string]model.Msg{
 		"tab":       model.KeyMsg{Chord: "tab"},
 		"shift+tab": model.KeyMsg{Chord: "shift+tab"},
-		"click":     model.ActivityTabMsg{Tab: (detail.ActivityTab + 1) % model.TabCount},
+		"click":     model.ActivityTabMsg{Tab: (detail.ActiveTab() + 1) % model.TabCount},
 	} {
 		if _, cmds := model.Update(detail, msg); !reflect.DeepEqual(cmds, reveal) {
 			t.Errorf("%s: commands %#v, want %#v", name, cmds, reveal)
 		}
 	}
-	if _, cmds := model.Update(detail, model.ActivityTabMsg{Tab: detail.ActivityTab}); len(cmds) != 0 {
+	if _, cmds := model.Update(detail, model.ActivityTabMsg{Tab: detail.ActiveTab()}); len(cmds) != 0 {
 		t.Errorf("re-clicking the active tab: %#v", cmds)
 	}
 }
@@ -72,8 +72,7 @@ func TestSwitchingActivityTabRevealsIt(t *testing.T) {
 func TestActivityTabRevealIntentDoesNotDependOnTheTabsBeingDrawn(t *testing.T) {
 	folded := arrowModes(t)["detail"]
 	folded.Cols = 60
-	unloaded := arrowModes(t)["detail"]
-	unloaded.Detail = nil
+	unloaded := withDetail(arrowModes(t)["detail"], nil)
 	reveal := []model.Cmd{model.RevealActivityTab{}}
 	for name, m := range map[string]model.Model{"folded": folded, "unloaded": unloaded} {
 		for _, msg := range []model.Msg{model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "shift+tab"}, model.ActivityTabMsg{Tab: model.TabComments}} {
@@ -89,7 +88,7 @@ func TestActivityTabRevealIntentDoesNotDependOnTheTabsBeingDrawn(t *testing.T) {
 func TestDetailCommandsSurviveWhileHelpIsOpen(t *testing.T) {
 	detail := arrowModes(t)["detail"]
 	detail.HelpOpen = true
-	_, cmds := model.Update(detail, model.ActivityTabMsg{Tab: (detail.ActivityTab + 1) % model.TabCount})
+	_, cmds := model.Update(detail, model.ActivityTabMsg{Tab: (detail.ActiveTab() + 1) % model.TabCount})
 	if want := []model.Cmd{model.RevealActivityTab{}}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("commands %#v, want %#v", cmds, want)
 	}

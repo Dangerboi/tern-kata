@@ -91,10 +91,8 @@ func putDraft(m Model, uid string, draft Draft) Model {
 	return m
 }
 func dropDraft(m Model, uid string) Model {
-	if draft, ok := m.Drafts[uid]; ok && draft.Conflict != nil && uid == m.DetailUID && m.Detail != nil {
-		detail := *m.Detail
-		detail.Issue = draft.Conflict
-		m.Detail = &detail
+	if draft, ok := m.Drafts[uid]; ok && draft.Conflict != nil {
+		m = m.conflictResolved(uid, draft.Conflict)
 	}
 	m.Drafts = maps.Clone(m.Drafts)
 	delete(m.Drafts, uid)
@@ -104,12 +102,12 @@ func dropDraft(m Model, uid string) Model {
 	return m
 }
 func startDraft(m Model, comment bool) Model {
-	if m.Detail == nil || m.Detail.Issue == nil || m.Detail.Issue.UID != m.SelectedUID {
+	if m.shownIssue() == nil {
 		return m
 	}
 	uid := m.SelectedUID
 	if _, ok := m.Drafts[uid]; !ok {
-		issue := m.Detail.Issue
+		issue := m.shownIssue()
 		text := issue.Body
 		if comment {
 			text = ""
@@ -117,9 +115,7 @@ func startDraft(m Model, comment bool) Model {
 		m = putDraft(m, uid, Draft{Editor: NewTextEditor(text), ProjectID: issue.ProjectID, BaseRevision: issue.Revision, Comment: comment})
 	}
 	m.EditorUID = uid
-	m.Focus = ColumnDetail
-	m.DetailHidden = false
-	return m
+	return m.focusDetail()
 }
 func saveDraft(m Model, draft Draft) (Model, []Cmd) {
 	if draft.Saving {
@@ -139,11 +135,7 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
 	case DraftSaved:
 		m = dropDraft(m, msg.UID)
-		if msg.UID == m.DetailUID {
-			m.DetailLoading = true
-			return m, []Cmd{LoadDetail{Workspace: m.Workspace, UID: msg.UID}}, true
-		}
-		return m, nil, true
+		return m.issueWritten(msg.UID), nil, true
 	case DraftFailed:
 		if draft, ok := m.Drafts[msg.UID]; ok {
 			draft.Saving = false

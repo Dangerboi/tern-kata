@@ -84,10 +84,7 @@ func openField(m Model, action Action) (Model, []Cmd) {
 	if m.Stale || m.FieldForm.Saving {
 		return m, nil
 	}
-	var issue *Issue
-	if m.Detail != nil && m.Detail.Issue != nil && m.Detail.Issue.UID == m.SelectedUID {
-		issue = m.Detail.Issue
-	}
+	issue := m.shownIssue()
 	if issue == nil {
 		for i := range m.Issues {
 			if m.Issues[i].UID == m.SelectedUID {

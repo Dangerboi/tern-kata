@@ -18,7 +18,7 @@ func TestHelpKeys(t *testing.T) {
 		{"navigation blocked", []string{"?", "j"}, true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			m := model.Model{Issues: []model.Issue{{UID: "a"}, {UID: "b"}}, SelectedUID: "a", DetailUID: "a"}
+			m := withDetail(model.Model{Issues: []model.Issue{{UID: "a"}, {UID: "b"}}, SelectedUID: "a"}, nil)
 			for _, key := range tt.keys {
 				var cmds []model.Cmd
 				m, cmds = model.Update(m, model.KeyMsg{Chord: key})
@@ -71,7 +71,7 @@ func TestHintsFollowCurrentModeAndKeymap(t *testing.T) {
 func TestFormsOnlyAdvertiseHandledBindings(t *testing.T) {
 	for _, key := range []string{"+", "x"} {
 		t.Run(key, func(t *testing.T) {
-			m := model.Model{SelectedUID: "issue", DetailUID: "issue", Issues: []model.Issue{{UID: "issue", Status: "open"}}}
+			m := withDetail(model.Model{SelectedUID: "issue", Issues: []model.Issue{{UID: "issue", Status: "open"}}}, nil)
 			m, _ = model.Update(m, model.KeyMsg{Chord: key})
 			for _, chord := range []string{"q", "?"} {
 				m, _ = model.Update(m, model.KeyMsg{Chord: chord, Text: chord})
