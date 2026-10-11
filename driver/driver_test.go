@@ -127,6 +127,9 @@ func TestTextFocusIsClearedWhileSavingOrConfirming(t *testing.T) {
 
 	confirming := step(t, open.State, key("escape"))
 	wantOps(t, confirming, tern.OpFocus(""))
+
+	draft := feed(t, browsing(t, 160), key("e"))
+	wantOps(t, step(t, draft.State, key("ctrl+o")), tern.OpFocus(""))
 }
 
 func TestOpeningACardFocusesItsField(t *testing.T) {

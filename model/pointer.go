@@ -26,12 +26,11 @@ func toggleRow(m Model, uid string) (Model, []Cmd) {
 
 // openRow is a double click on an Issue row from any column or mode: select it
 // like a click, then make the state change enter makes in the list. Rows folded
-// away are ignored. The click leaves the detail, which ends its jump history.
+// away are ignored.
 func openRow(m Model, uid string) (Model, []Cmd) {
 	selected := selectRow(m, uid)
 	if selected.SelectedUID != uid {
 		return m, nil
 	}
-	selected = selected.endJumpHistory()
 	return updateNavigation(selected, DrillIn)
 }

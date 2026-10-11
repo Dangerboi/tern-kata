@@ -7,13 +7,11 @@ import (
 	"strings"
 )
 
-var createKeys = [...]string{"title", "body", "labels", "owner", "priority"}
-
 // CreateFieldID is the id of the Create card's field index.
-func CreateFieldID(index int) string { return "layer.create." + createKeys[index] }
+func CreateFieldID(index int) string { return "layer.create." + model.CreateFields[index].Key }
 
 func CreateFieldIndex(id string) (int, bool) {
-	for i := range createKeys {
+	for i := range model.CreateFields {
 		if id == CreateFieldID(i) {
 			return i, true
 		}
@@ -30,7 +28,8 @@ func createLayer(m model.Model) tern.Element {
 	values := [...]string{f.Title, f.Editor.Text, f.Labels, f.Owner, f.Priority}
 	names := [...]string{"Title", "Body (optional)", "Labels (optional, comma-separated)", "Owner (optional)", "Priority (optional, 0-4)"}
 	children := []tern.Element{}
-	for i, key := range createKeys {
+	for i, field := range model.CreateFields {
+		key := field.Key
 		tone := ui.ToneNeutral
 		if i == f.Field {
 			tone = ui.ToneAccent

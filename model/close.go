@@ -223,8 +223,6 @@ func closeKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		return submitClose(m, false)
 	case bound && binding.Action == CloseQuick:
 		return submitClose(m, true)
-	case bound && binding.Action == QuitAction:
-		return updateNavigation(m, QuitAction)
 	case !f.Saving:
 		var edited bool
 		if f.Values[f.Field], edited = editText(f.Values[f.Field], binding, bound, msg); edited {

@@ -56,18 +56,17 @@ func TestJumpHistoryEndsOnEveryWayOutOfTheDetail(t *testing.T) {
 		{"hide the detail", model.KeyMsg{Chord: "shift+l"}},
 		{"click a list row", model.SelectMsg{UID: "b"}},
 		{"click the list column", model.FocusColumnMsg{Column: model.ColumnList}},
-		{"double click a row", model.ActionMsg{Action: model.OpenRow, Value: "b"}},
+		{"double click a row", model.ActionMsg{Action: model.OpenRow, Value: "c"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m := shownIssueA()
-			m.Issues = []model.Issue{{UID: "a"}, {UID: "b"}}
+			m.Issues = []model.Issue{{UID: "a"}, {UID: "b"}, {UID: "c"}}
 			m, _ = model.Update(m, model.JumpIssueMsg{UID: "b"})
-			if len(m.JumpHistory()) != 1 {
-				t.Fatalf("jump did not record history: %v", m.JumpHistory())
-			}
 			m, _ = model.Update(m, tt.msg)
-			if len(m.JumpHistory()) != 0 {
-				t.Fatalf("history survived %s: focus=%v back=%v", tt.name, m.Focus, m.JumpHistory())
+			m, _ = model.Update(m, model.FocusColumnMsg{Column: model.ColumnDetail})
+			m, _ = model.Update(m, model.KeyMsg{Chord: "escape"})
+			if m.SelectedUID == "a" {
+				t.Fatalf("back replayed the jump after %s", tt.name)
 			}
 		})
 	}

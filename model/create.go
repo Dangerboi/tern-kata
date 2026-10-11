@@ -74,8 +74,8 @@ func (m Model) CreateSuggestions() []string {
 	return m.FieldSuggestions()
 }
 
-// createFieldCount is the Create card's fields: title, body, labels, owner and priority.
-const createFieldCount = 5
+// CreateFields is the Create card's field list, in tab order; the body is the multi-line editor.
+var CreateFields = [...]FieldSpec{{"title", true}, {"body", false}, {"labels", true}, {"owner", true}, {"priority", true}}
 
 func createValue(f *CreateState) *string {
 	switch f.Field {

@@ -8,13 +8,11 @@ import (
 
 const SearchID = "main.columns.list.search"
 
-var filterKeys = [...]string{"project", "status", "owner", "label", "relationship"}
-
 // FilterFieldID is the id of the Filter form's field index.
-func FilterFieldID(index int) string { return "layer.filters." + filterKeys[index] }
+func FilterFieldID(index int) string { return "layer.filters." + model.FilterFields[index].Key }
 
 func FilterFieldIndex(id string) (int, bool) {
-	for index := range filterKeys {
+	for index := range model.FilterFields {
 		if id == FilterFieldID(index) {
 			return index, true
 		}

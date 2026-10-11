@@ -127,7 +127,15 @@ func snapshotChanged(m Model) (Model, []Cmd) {
 	return m, []Cmd{ReadSnapshot{Workspace: m.Workspace, Query: query, ETag: etag, Request: m.RefreshRequest}}
 }
 
-// snapshotLoaded applies a result only if it answers the current query.
+// collectionSwitched is a Collection switch: deliberate, so it neither waits for the read of the Collection left behind (that
+// answer is dropped by its Request) nor keeps an id answer for it.
+func collectionSwitched(m Model) (Model, []Cmd) {
+	m.Refreshing = false
+	m.IDSearch = IDSearch{}
+	return snapshotChanged(m)
+}
+
+// snapshotLoaded applies a result only if it answers the latest read (Request, the in-flight supersede guard) and the current query.
 func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 	if msg.Request != m.RefreshRequest {
 		return m, nil

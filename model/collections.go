@@ -40,13 +40,11 @@ func updateCollection(m Model, msg CollectionSelected) (Model, []Cmd) {
 		if collection != msg.Collection {
 			continue
 		}
-		m.IDSearch = IDSearch{}
 		m.Collection = collection
 		m = m.syncSidebarCursor()
 		m.Loading = true
 		m.Err = nil
-		m.Refreshing = false // a switch is deliberate: it does not wait for the read of the Collection left behind
-		return snapshotChanged(m)
+		return collectionSwitched(m)
 	}
 	return m, nil
 }

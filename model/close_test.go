@@ -22,3 +22,18 @@ func TestCloseFormOpensAndQuickDone(t *testing.T) {
 		t.Fatalf("quick done: %+v %+v", close, m.CloseForm)
 	}
 }
+
+func TestCloseCardKeepsItsFieldWhileSaving(t *testing.T) {
+	m := model.Model{SelectedUID: "issue", Issues: []model.Issue{{UID: "issue", ProjectID: 2, Revision: 7}}}
+	m, _ = model.Update(m, model.KeyMsg{Chord: "x"})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "ctrl+d"})
+	if !m.CloseForm.Saving {
+		t.Fatal("close did not start saving")
+	}
+	field := m.CloseForm.Field
+	for _, chord := range []string{"tab", "shift+tab"} {
+		if m, _ = model.Update(m, model.KeyMsg{Chord: chord}); m.CloseForm.Field != field {
+			t.Fatalf("%s moved the Close card's field from %d to %d while saving", chord, field, m.CloseForm.Field)
+		}
+	}
+}

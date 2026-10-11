@@ -16,7 +16,7 @@ func textFocusID(m model.Model) string {
 		}
 		return view.CreateFieldID(m.Create.Field)
 	case model.CardDraft:
-		if m.EditorMode() == model.ModeEditor {
+		if draft, _ := m.ActiveDraft(); m.EditorMode() == model.ModeEditor && !draft.Saving {
 			return view.DraftEditorID
 		}
 	case model.CardField:
@@ -32,8 +32,7 @@ func textFocusID(m model.Model) string {
 			return view.ProjectInputID
 		}
 	case model.CardFilter:
-		switch m.FilterForm.Field {
-		case 2, 3:
+		if m.FilterTextFieldFocused() {
 			return view.FilterFieldID(m.FilterForm.Field)
 		}
 	case model.CardPicker:

@@ -98,15 +98,18 @@ func TestDraftSurvivesLiveSnapshotAndSaveFailure(t *testing.T) {
 	if previous.Drafts["a"].Editor.Text != "a😀b" {
 		t.Fatal("Update mutated the previous Draft")
 	}
-	m.Refreshing = true
-	m.RefreshRequest = 3
+	m, cmds := model.Update(m, model.StreamEvent{ID: 9})
+	read, ok := cmds[0].(model.ReadSnapshot)
+	if !ok {
+		t.Fatalf("a daemon event asked for %#v, want a snapshot read", cmds)
+	}
 	latest := model.Issue{UID: "a", ProjectID: 2, Body: "Remote body", Revision: 8}
 	snapshot := g.UISnapshotResponseBody{Cursor: 9, Collection: []g.UIIssue{latest}, Selected: &g.UISelectedAuthority{Issue: &latest}}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: 3, Query: m.SnapshotQuery(), Snapshot: snapshot})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: read.Request, Query: read.Query, Snapshot: snapshot})
 	if m.Drafts["a"].Editor.Text != "a😀blocal" || m.Drafts["a"].BaseRevision != 7 {
 		t.Fatal("snapshot destroyed/rebased Draft")
 	}
-	m, cmds := model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
+	m, cmds = model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
 	if len(cmds) != 1 || cmds[0].(model.SaveDraft).BaseRevision != 7 || cmds[0].(model.SaveDraft).Actor != "writer" {
 		t.Fatalf("save: %#v", cmds)
 	}
@@ -122,9 +125,9 @@ func TestDraftSurvivesLiveSnapshotAndSaveFailure(t *testing.T) {
 }
 
 func TestDraftOpensTheFullStoredBodyIncludingParentSection(t *testing.T) {
-	m := editorModel()
 	body := "## Parent\n\nup1\n\n## What\n\nbuild"
-	m.DetailAuthority().Issue.Body = body
+	issue := model.Issue{UID: "a", ProjectID: 2, Body: body, Revision: 7}
+	m := withDetail(model.Model{Workspace: "/repo", SelectedUID: "a", Focus: model.ColumnDetail}, &g.UISelectedAuthority{Issue: &issue})
 	m, _ = model.Update(m, model.KeyMsg{Chord: "e"})
 	if got := m.Drafts["a"].Editor.Text; got != body {
 		t.Errorf("draft text %q, want %q", got, body)

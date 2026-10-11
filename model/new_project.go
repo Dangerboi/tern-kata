@@ -119,8 +119,6 @@ func updateProjectFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	form := &m.ProjectForm
 	binding, bound := LookupBindingForMode(msg.Chord, ModeProjectForm)
 	switch {
-	case bound && binding.Action == QuitAction:
-		return updateNavigation(m, QuitAction)
 	case form.Saving:
 		return m, nil
 	case bound && binding.Action == ProjectSubmit:

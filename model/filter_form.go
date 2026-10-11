@@ -2,8 +2,17 @@ package model
 
 import "strings"
 
-// filterFieldCount is the Filter form's fields: project, status, owner, label and relationship.
-const filterFieldCount = 5
+// FieldSpec is one field of a popup card: Key names its node and Text says it takes typed text.
+type FieldSpec struct {
+	Key  string
+	Text bool
+}
+
+// FilterFields is the Filter form's field list, in tab order.
+var FilterFields = [...]FieldSpec{{"project", false}, {"status", false}, {"owner", true}, {"label", true}, {"relationship", false}}
+
+// FilterTextFieldFocused reports whether the Filter form's focused field takes typed text.
+func (m Model) FilterTextFieldFocused() bool { return FilterFields[m.FilterForm.Field].Text }
 
 type FilterFormState struct {
 	Open   bool

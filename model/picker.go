@@ -222,8 +222,6 @@ func updatePicker(m Model, msg KeyMsg) (Model, []Cmd) {
 	case DeleteInput, ClearInput:
 		m.Picker.Filter, _ = editText(m.Picker.Filter, binding, true, msg)
 		m.Picker.Cursor = 0
-	case QuitAction:
-		return updateNavigation(m, QuitAction)
 	}
 	return m, nil
 }

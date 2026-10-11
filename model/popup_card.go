@@ -1,6 +1,7 @@
 package model
 
 import (
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -92,6 +93,9 @@ var cardGlobalChords = map[Mode][]string{
 
 // updateTopCardKey gives a key to the card on top; it reports false when no card is open.
 func updateTopCardKey(m Model, msg KeyMsg) (Model, []Cmd, bool) {
+	if slices.Contains(cardGlobalChords[m.cardMode()], msg.Chord) {
+		return m, nil, false
+	}
 	var cmds []Cmd
 	switch m.TopCard() {
 	case CardCreate:
@@ -181,11 +185,11 @@ type cardFields struct {
 func openCardFields(m *Model) (cardFields, bool) {
 	switch m.TopCard() {
 	case CardCreate:
-		return cardFields{&m.Create.Field, createFieldCount, m.Create.Saving || m.Create.DiscardConfirm}, true
+		return cardFields{&m.Create.Field, len(CreateFields), m.Create.Saving || m.Create.DiscardConfirm}, true
 	case CardClose:
 		return cardFields{&m.CloseForm.Field, len(m.CloseForm.Values), m.CloseForm.Saving}, true
 	case CardFilter:
-		return cardFields{Field: &m.FilterForm.Field, Count: filterFieldCount}, true
+		return cardFields{Field: &m.FilterForm.Field, Count: len(FilterFields)}, true
 	}
 	return cardFields{}, false
 }
@@ -200,7 +204,7 @@ func focusField(m Model, field int) Model {
 
 // cycleField moves focus step fields on, wrapping around the open card's field list.
 func cycleField(m *Model, step int) {
-	if fields, ok := openCardFields(m); ok {
+	if fields, ok := openCardFields(m); ok && !fields.Locked {
 		*fields.Field = ((*fields.Field+step)%fields.Count + fields.Count) % fields.Count
 	}
 }

@@ -19,6 +19,8 @@ type IssueDetail struct {
 	tab     ActivityTab
 	cursor  int
 	back    []string
+	// landedOn is the Issue the last jump landed on; the history ends once the detail shows another one.
+	landedOn string
 	// openRef is a reference being opened; openedUID is the Issue it opened, which may be outside the Collection.
 	openRef, openedUID string
 }
@@ -29,12 +31,11 @@ func (d IssueDetail) DetailErr() error                        { return d.err }
 func (d IssueDetail) DetailIndex() int                        { return d.cursor }
 func (d IssueDetail) DetailHidden() bool                      { return d.hidden }
 func (d IssueDetail) ActiveTab() ActivityTab                  { return d.tab }
-func (d IssueDetail) JumpHistory() []string                   { return d.back }
 func (d IssueDetail) OpenedIssueUID() string                  { return d.openedUID }
 func (d IssueDetail) OpenIssueRef() string                    { return d.openRef }
 
 // updateWithDetail runs one Model step and then settles the detail: tab and Issue changes become intents, the jump history ends
-// whenever focus is not on the detail, and a changed selection or a stale detail loads.
+// whenever focus is not on the detail or it shows an Issue no jump landed on, and a changed selection or a stale detail loads.
 func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 	shown, tab := m.DetailIssueUID(), m.tab
 	m, cmds := update(m, msg)
@@ -45,7 +46,7 @@ func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 		// The detail scroller keeps its offset across Issues; a different Issue starts at the top.
 		cmds = append(cmds, Scroll{Column: ColumnDetail, By: ScrollToStart})
 	}
-	if m.Focus != ColumnDetail {
+	if m.Focus != ColumnDetail || m.SelectedUID != m.landedOn {
 		m = m.endJumpHistory()
 	}
 	m, load := m.loadDetail()
@@ -183,7 +184,6 @@ func (m Model) openByReference(ref string, authority *g.UISelectedAuthority) Mod
 	m.loading = false
 	m.err = nil
 	m.hidden = false
-	m.back = nil
 	m.cursor = 0
 	m.Focus = ColumnDetail
 	return m
@@ -209,7 +209,7 @@ func (m Model) jumpTo(uid string) Model {
 		return m
 	}
 	m.back = append(m.back[:len(m.back):len(m.back)], m.SelectedUID)
-	m.SelectedUID = uid
+	m.SelectedUID, m.landedOn = uid, uid
 	return m.focusDetail()
 }
 
@@ -220,6 +220,7 @@ func (m Model) jumpBack() (Model, bool) {
 	}
 	m.SelectedUID = m.back[len(m.back)-1]
 	m.back = m.back[:len(m.back)-1]
+	m.landedOn = m.SelectedUID
 	return m, true
 }
 

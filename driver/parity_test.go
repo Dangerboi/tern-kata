@@ -63,6 +63,9 @@ func differ(a, b model.Model) string {
 	var out string
 	av, bv := reflect.ValueOf(a), reflect.ValueOf(b)
 	for i := range av.NumField() {
+		if !av.Type().Field(i).IsExported() {
+			continue
+		}
 		if !reflect.DeepEqual(av.Field(i).Interface(), bv.Field(i).Interface()) {
 			out += fmt.Sprintf("\n  %s: %+v != %+v", av.Type().Field(i).Name, av.Field(i).Interface(), bv.Field(i).Interface())
 		}
