@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/data"
 	"github.com/Dangerboi/tern-kata/model"
 	"github.com/Dangerboi/tern-kata/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
@@ -63,8 +64,8 @@ func run() error {
 	stopInput := startInputReader(ctx, session, messages, inputErrors)
 	defer func() { stopInput() }()
 	m := model.Model{Cols: session.Caps().Cols, Actor: resolveActor(override)}
-	runner := commandRunner{}
-	defer runner.close()
+	gateway := data.NewGateway(data.LocateWithKata)
+	defer gateway.Close()
 	msg := model.Msg(model.Start{Workspace: workspace, IssueRef: issueRef})
 	inputFocus := ""
 eventLoop:
@@ -130,7 +131,7 @@ eventLoop:
 				stopInput = startInputReader(ctx, session, messages, inputErrors)
 				continue eventLoop
 			}
-			runner.launch(ctx, cmd, messages)
+			go gateway.Run(ctx, cmd, messages)
 		}
 		select {
 		case msg = <-messages:
