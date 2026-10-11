@@ -15,6 +15,13 @@ func keyButton(key, text, chord string, primary bool) el.Button {
 	return button
 }
 
+// menuButton is the top bar's Menu button, its label in the accent colour of the Project heading.
+func menuButton() el.Button {
+	button := keyButton("menu", "", "p", true)
+	button.Children = []tern.Element{ui.Text{Common: ui.Common{Key: "label"}, Spans: []ui.Span{{T: "Menu", S: "accent strong"}}, Wrap: ui.WrapNone}}
+	return button
+}
+
 // buttonRow is the row of buttons that ends a card.
 func buttonRow(buttons ...tern.Element) tern.Element {
 	return ui.Row{Common: ui.Common{Key: "actions"}, Gap: ui.GapMD, Wrap: true, Children: buttons}

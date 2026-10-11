@@ -186,7 +186,7 @@ func topBar(m model.Model) tern.Element {
 		ui.Row{Common: rightCell, Gap: ui.GapNone, Children: ui.Nodes(
 			ui.Text{Common: flexCell("daemon", ui.ToneMuted, 100), Text: m.DaemonLine(), Wrap: ui.WrapNone},
 			ui.Text{Common: flexCell("sep", ui.ToneMuted, 0), Text: model.DaemonSeparator, Wrap: ui.WrapNone},
-			keyButton("menu", "Menu", "p", true),
+			menuButton(),
 		)},
 	)}
 }
