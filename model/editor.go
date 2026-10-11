@@ -28,7 +28,7 @@ type OpenDraftEditor struct{ UID, Text string }
 func (OpenDraftEditor) cmd() {}
 
 type EditMsg struct {
-	ID          string
+	Target      EditTarget
 	From, To    int
 	Text        string
 	Cursor, Len int
@@ -36,7 +36,7 @@ type EditMsg struct {
 
 func (EditMsg) msg() {}
 
-type UndoMsg struct{ ID string }
+type UndoMsg struct{ Target EditTarget }
 
 func (UndoMsg) msg() {}
 
@@ -91,10 +91,8 @@ func putDraft(m Model, uid string, draft Draft) Model {
 	return m
 }
 func dropDraft(m Model, uid string) Model {
-	if draft, ok := m.Drafts[uid]; ok && draft.Conflict != nil && uid == m.DetailUID && m.Detail != nil {
-		detail := *m.Detail
-		detail.Issue = draft.Conflict
-		m.Detail = &detail
+	if draft, ok := m.Drafts[uid]; ok && draft.Conflict != nil {
+		m = m.conflictResolved(uid, draft.Conflict)
 	}
 	m.Drafts = maps.Clone(m.Drafts)
 	delete(m.Drafts, uid)
@@ -104,12 +102,12 @@ func dropDraft(m Model, uid string) Model {
 	return m
 }
 func startDraft(m Model, comment bool) Model {
-	if m.Detail == nil || m.Detail.Issue == nil || m.Detail.Issue.UID != m.SelectedUID {
+	if m.shownIssue() == nil {
 		return m
 	}
 	uid := m.SelectedUID
 	if _, ok := m.Drafts[uid]; !ok {
-		issue := m.Detail.Issue
+		issue := m.shownIssue()
 		text := issue.Body
 		if comment {
 			text = ""
@@ -117,9 +115,7 @@ func startDraft(m Model, comment bool) Model {
 		m = putDraft(m, uid, Draft{Editor: NewTextEditor(text), ProjectID: issue.ProjectID, BaseRevision: issue.Revision, Comment: comment})
 	}
 	m.EditorUID = uid
-	m.Focus = ColumnDetail
-	m.DetailHidden = false
-	return m
+	return m.focusDetail()
 }
 func saveDraft(m Model, draft Draft) (Model, []Cmd) {
 	if draft.Saving {
@@ -139,11 +135,7 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
 	case DraftSaved:
 		m = dropDraft(m, msg.UID)
-		if msg.UID == m.DetailUID {
-			m.DetailLoading = true
-			return m, []Cmd{LoadDetail{Workspace: m.Workspace, UID: msg.UID}}, true
-		}
-		return m, nil, true
+		return m.issueWritten(msg.UID), nil, true
 	case DraftFailed:
 		if draft, ok := m.Drafts[msg.UID]; ok {
 			draft.Saving = false
@@ -169,78 +161,55 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 		}
 		return m, nil, true
 	case KeyMsg:
-		draft, active := m.ActiveDraft()
-		binding, ok := LookupBindingForMode(msg.Chord, m.CurrentMode())
-		if !active {
-			if ok && (binding.Action == EditBody || binding.Action == AddComment) {
-				return startDraft(m, binding.Action == AddComment), nil, true
-			}
-			return m, nil, false
+		if binding, ok := LookupBindingForMode(msg.Chord, m.CurrentMode()); ok && (binding.Action == EditBody || binding.Action == AddComment) {
+			return startDraft(m, binding.Action == AddComment), nil, true
 		}
-		if draft.Saving {
-			return m, nil, true
-		}
-		if draft.Conflict != nil {
-			if ok && binding.Action == OverwriteDraft {
-				draft.BaseRevision = draft.Conflict.Revision
-				draft.Conflict = nil
-				next, cmds := saveDraft(m, draft)
-				return next, cmds, true
-			}
-			if ok && binding.Action == DiscardDraft {
-				return dropDraft(m, m.EditorUID), nil, true
-			}
-			return m, nil, true
-		}
-		if draft.DiscardConfirm {
-			if ok && binding.Action == DiscardDraft {
-				return dropDraft(m, m.EditorUID), nil, true
-			}
-			if ok && binding.Action == KeepDraft {
-				draft.DiscardConfirm = false
-				return putDraft(m, m.EditorUID, draft), nil, true
-			}
-			return m, nil, true
-		}
-		if ok {
-			switch binding.Action {
-			case SaveDraftAction:
-				next, cmds := saveDraft(m, draft)
-				return next, cmds, true
-			case CancelDraft:
-				if draft.Editor.Text == "" {
-					return dropDraft(m, m.EditorUID), nil, true
-				}
-				draft.DiscardConfirm = true
-			case ExternalEditorAction:
-				return m, []Cmd{OpenDraftEditor{UID: m.EditorUID, Text: draft.Editor.Text}}, true
-			default:
-				draft.Editor = draft.Editor.Key(binding.Action, editorSelectionChord(msg.Chord))
-			}
-		} else if msg.Text != "" {
-			draft.Editor = draft.Editor.Insert(msg.Text)
-		}
-		return putDraft(m, m.EditorUID, draft), nil, true
-	case EditMsg:
-		draft, active := m.ActiveDraft()
-		if !active || msg.ID != "layer.editor.body" {
-			return m, nil, false
-		}
-		if m.EditorMode() == ModeEditor && !draft.Saving {
-			draft.Editor = draft.Editor.ApplyEdit(msg.From, msg.To, msg.Text, msg.Cursor, msg.Len)
-			m = putDraft(m, m.EditorUID, draft)
-		}
-		return m, nil, true
-	case UndoMsg:
-		draft, active := m.ActiveDraft()
-		if !active || msg.ID != "layer.editor.body" {
-			return m, nil, false
-		}
-		if m.EditorMode() == ModeEditor && !draft.Saving {
-			draft.Editor = draft.Editor.Undo()
-			m = putDraft(m, m.EditorUID, draft)
-		}
-		return m, nil, true
 	}
 	return m, nil, false
+}
+
+// draftKey is one key for the Draft editor on top.
+func draftKey(m Model, msg KeyMsg) (Model, []Cmd) {
+	draft, _ := m.ActiveDraft()
+	binding, ok := LookupBindingForMode(msg.Chord, m.CurrentMode())
+	if draft.Saving {
+		return m, nil
+	}
+	if draft.Conflict != nil {
+		if ok && binding.Action == OverwriteDraft {
+			draft.BaseRevision = draft.Conflict.Revision
+			draft.Conflict = nil
+			return saveDraft(m, draft)
+		}
+		if ok && binding.Action == DiscardDraft {
+			return dropDraft(m, m.EditorUID), nil
+		}
+		return m, nil
+	}
+	if draft.DiscardConfirm {
+		draft, gone := answerDiscard(draft, binding, ok)
+		if gone {
+			return dropDraft(m, m.EditorUID), nil
+		}
+		return putDraft(m, m.EditorUID, draft), nil
+	}
+	if ok {
+		switch binding.Action {
+		case SaveDraftAction:
+			return saveDraft(m, draft)
+		case CancelDraft:
+			draft, gone := leaveDraft(draft, draft.Editor.Text == "")
+			if gone {
+				return dropDraft(m, m.EditorUID), nil
+			}
+			return putDraft(m, m.EditorUID, draft), nil
+		case ExternalEditorAction:
+			return m, []Cmd{OpenDraftEditor{UID: m.EditorUID, Text: draft.Editor.Text}}
+		default:
+			draft.Editor = draft.Editor.Key(binding.Action, editorSelectionChord(msg.Chord))
+		}
+	} else if msg.Text != "" {
+		draft.Editor = draft.Editor.Insert(msg.Text)
+	}
+	return putDraft(m, m.EditorUID, draft), nil
 }

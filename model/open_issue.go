@@ -49,8 +49,7 @@ func openIssue(m Model, ref string) (Model, []Cmd) {
 		m.Err = err
 		return m, nil
 	}
-	m.PendingCreatedUID = ""
-	m.OpenIssueRef = ref
+	m = m.openRequested(ref)
 	if m.Loading && m.Snapshot.Catalog == nil {
 		return m, nil
 	}
@@ -60,7 +59,7 @@ func openIssue(m Model, ref string) (Model, []Cmd) {
 			return m, []Cmd{OpenIssue{Workspace: m.Workspace, Ref: ref, ProjectID: entry.Project.ID}}
 		}
 	}
-	m.OpenIssueRef = ""
+	m = m.openFailed(ref)
 	m.Err = fmt.Errorf("kata Project %q not found", project)
 	return m, nil
 }

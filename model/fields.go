@@ -18,8 +18,6 @@ const (
 	FieldComplete     Action = "field-complete"
 	FieldNext         Action = "field-next"
 	FieldPrevious     Action = "field-previous"
-	FieldErase        Action = "field-erase"
-	FieldReset        Action = "field-reset"
 	ModeFieldForm     Mode   = "field-form"
 )
 
@@ -84,10 +82,7 @@ func openField(m Model, action Action) (Model, []Cmd) {
 	if m.Stale || m.FieldForm.Saving {
 		return m, nil
 	}
-	var issue *Issue
-	if m.Detail != nil && m.Detail.Issue != nil && m.Detail.Issue.UID == m.SelectedUID {
-		issue = m.Detail.Issue
-	}
+	issue := m.shownIssue()
 	if issue == nil {
 		for i := range m.Issues {
 			if m.Issues[i].UID == m.SelectedUID {
@@ -144,13 +139,8 @@ func updateFieldKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		case FieldCancel:
 			m.FieldForm = FieldFormState{}
 			return m, nil
-		case FieldReset:
-			m.FieldForm.Value = ""
-		case FieldErase:
-			r := []rune(m.FieldForm.Value)
-			if len(r) > 0 {
-				m.FieldForm.Value = string(r[:len(r)-1])
-			}
+		case DeleteInput, ClearInput:
+			m.FieldForm.Value, _ = editText(m.FieldForm.Value, binding, true, msg)
 		case FieldNext:
 			m.FieldForm.Suggestion++
 		case FieldPrevious:
@@ -161,12 +151,8 @@ func updateFieldKey(m Model, msg KeyMsg) (Model, []Cmd) {
 				m.FieldForm.Value = s[m.FieldForm.Suggestion%len(s)]
 			}
 		}
-	} else if msg.Text != "" {
-		m.FieldForm.Value += msg.Text
-	} else if len([]rune(msg.Chord)) == 1 {
-		m.FieldForm.Value += msg.Chord
-	} else if msg.Chord == "space" {
-		m.FieldForm.Value += " "
+	} else {
+		m.FieldForm.Value, _ = editText(m.FieldForm.Value, binding, false, msg)
 	}
 	m.FieldForm.Err = nil
 	return m, nil

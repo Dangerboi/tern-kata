@@ -10,13 +10,13 @@ import (
 func TestOpenAtIssueAndSelectAction(t *testing.T) {
 	for _, startup := range []bool{true, false} {
 		t.Run(map[bool]string{true: "open argument", false: "TSP select action"}[startup], func(t *testing.T) {
-			m := model.Model{Workspace: "/repo", SelectedUID: "previous", DetailHidden: true}
+			m, _ := model.Update(model.Model{Workspace: "/repo", SelectedUID: "previous", Focus: model.ColumnList}, model.KeyMsg{Chord: "shift+l"})
 			if startup {
 				m, _ = model.Update(m, model.Start{Workspace: "/repo", IssueRef: "other/bbbb"})
 			}
 			snapshot := g.UISnapshotResponseBody{Catalog: []g.UIProject{{Project: model.Project{ID: 7, UID: "other-project", Name: "other"}}}, Collection: []model.Issue{{UID: "previous"}}}
 			var cmds []model.Cmd
-			m, cmds = model.Update(m, model.ProjectLoaded{Snapshot: snapshot})
+			m, cmds = loadFirst(m, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: snapshot})
 			if !startup {
 				m, cmds = model.Update(m, model.ActionMsg{Action: model.SelectIssueAction, Value: "other/bbbb"})
 			}
@@ -31,10 +31,10 @@ func TestOpenAtIssueAndSelectAction(t *testing.T) {
 			}
 			selected := &g.UISelectedAuthority{Issue: &model.Issue{UID: "target", ShortID: "bbbb", Title: "Target"}}
 			m, _ = model.Update(m, model.IssueOpened{Ref: "other/bbbb", Selected: selected})
-			if m.SelectedUID != "target" || m.Detail != selected || m.Focus != model.ColumnDetail || m.DetailHidden || m.DetailLoading {
+			if m.SelectedUID != "target" || m.DetailAuthority() != selected || m.Focus != model.ColumnDetail || m.DetailHidden() || m.DetailLoading() {
 				t.Fatalf("Issue not selected in detail: %+v", m)
 			}
-			m, _ = model.Update(m, model.SnapshotRefreshed{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: snapshot, ETag: "next"})
+			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: snapshot, ETag: "next"})
 			if m.SelectedUID != "target" {
 				t.Fatalf("refresh lost external Issue: %q", m.SelectedUID)
 			}

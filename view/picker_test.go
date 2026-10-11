@@ -42,7 +42,7 @@ func pickerChildIDs(node tern.WireNode) []string {
 }
 
 func pickerLoaded(bound bool) model.Model {
-	loaded := model.ProjectLoaded{Snapshot: g.UISnapshotResponseBody{
+	loaded, snapshot := model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
 		Catalog: []g.UIProject{
 			{Project: model.Project{UID: "alpha-uid", Name: "alpha"}},
 			{Project: model.Project{UID: "smoke-uid", Name: "smoke"}},
@@ -52,7 +52,7 @@ func pickerLoaded(bound bool) model.Model {
 	if bound {
 		loaded.Project = model.Project{UID: "smoke-uid", Name: "smoke"}
 	}
-	m, _ := model.Update(model.Model{Cols: 160}, loaded)
+	m, _ := loadFirst(model.Model{Cols: 160}, loaded, snapshot)
 	return m
 }
 
@@ -128,14 +128,14 @@ func TestRenderPickerFollowsFilterAndShowsEmptyState(t *testing.T) {
 	}
 }
 
-func TestRenderPickerOnlyWhenOpenAndFocusesItsFilter(t *testing.T) {
+func TestRenderPickerOnlyWhenOpen(t *testing.T) {
 	m := pickerLoaded(true)
-	if _, ok := pickerNodes(t, m)["layer.collections"]; ok || view.InputFocusID(m) != "" {
-		t.Fatal("closed picker rendered or focused")
+	if _, ok := pickerNodes(t, m)["layer.collections"]; ok {
+		t.Fatal("closed picker rendered")
 	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "p", Text: "p"})
-	if _, ok := pickerNodes(t, m)["layer.collections"]; !ok || view.InputFocusID(m) != view.PickerFilterID || view.PickerFilterID != "layer.collections.filter" {
-		t.Fatalf("open picker: focus=%q", view.InputFocusID(m))
+	if _, ok := pickerNodes(t, m)["layer.collections"]; !ok || view.PickerFilterID != "layer.collections.filter" {
+		t.Fatalf("open picker: filter id %q", view.PickerFilterID)
 	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "escape"})
 	if _, ok := pickerNodes(t, m)["layer.collections"]; ok {
@@ -146,7 +146,7 @@ func TestRenderPickerOnlyWhenOpenAndFocusesItsFilter(t *testing.T) {
 func TestRenderTopBarTitleOpensPicker(t *testing.T) {
 	heading := pickerNodes(t, pickerLoaded(true))["main.topbar.left.heading"]
 	actions, _ := heading.P["actions"].(map[string]any)
-	if actions["click"] != "key=p" {
+	if actions["click"] != view.KeyClick("p") {
 		t.Fatalf("heading actions = %v", heading.P["actions"])
 	}
 }
@@ -154,10 +154,10 @@ func TestRenderTopBarTitleOpensPicker(t *testing.T) {
 func TestRenderMenuTextsAndButtons(t *testing.T) {
 	m, _ := model.Update(pickerLoaded(true), model.KeyMsg{Chord: "p", Text: "p"})
 	nodes := pickerNodes(t, m)
-	if got := nodes["main.topbar.right.menu"]; got.P["text"] != "Menu" || got.P["actions"].(map[string]any)["click"] != "key=p" {
+	if got := nodes["main.topbar.right.menu"]; got.P["text"] != "Menu" || got.P["actions"].(map[string]any)["click"] != view.KeyClick("p") {
 		t.Fatalf("top bar button = %v", got)
 	}
-	if got := nodes["layer.collections.close"]; got.P["text"] != "Close (esc)" || got.P["actions"].(map[string]any)["click"] != "key=escape" {
+	if got := nodes["layer.collections.close"]; got.P["text"] != "Close (esc)" || got.P["actions"].(map[string]any)["click"] != view.KeyClick("escape") {
 		t.Fatalf("close button = %v", got)
 	}
 	if got := nodes["main.topbar.left.heading"].P["title"]; got != "Menu (p)" {

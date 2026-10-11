@@ -18,40 +18,44 @@ func TestCollectionSwitching(t *testing.T) {
 		{"bound opens Project", model.Project{UID: "p", Name: "Work"}, "project"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			m, _ := model.Update(model.Model{}, model.ProjectLoaded{Project: tt.project, Snapshot: g.UISnapshotResponseBody{Catalog: []g.UIProject{{Project: model.Project{UID: "p", Name: "Work"}}}}, ETag: "original"})
+			m, _ := loadFirst(model.Model{}, model.ProjectLoaded{Project: tt.project}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Catalog: []g.UIProject{{Project: model.Project{UID: "p", Name: "Work"}}}}, ETag: "original"})
 			if m.Collection.View != tt.view || len(m.Collections) != 7 {
 				t.Fatalf("sidebar: %+v", m)
 			}
 			today := m.Collections[1]
 			m, cmds := model.Update(m, model.CollectionSelected{Collection: today})
-			if !m.Loading || m.Collection != today || !reflect.DeepEqual(cmds, []model.Cmd{model.LoadCollection{Workspace: m.Workspace, Collection: today}}) {
+			if !m.Loading || m.Collection != today || !readsCollection(cmds, m, "") {
 				t.Fatalf("switch: %+v %#v", m, cmds)
 			}
-			m, _ = model.Update(m, model.CollectionLoaded{Collection: today, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "a", Status: "open", Title: "Today", ScheduledOnDate: new("2026-05-15")}}}, ETag: "today", LocalDate: "2026-05-15", TimeZone: "America/Los_Angeles"})
+			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "a", Status: "open", Title: "Today", ScheduledOnDate: new("2026-05-15")}}}, ETag: "today", LocalDate: "2026-05-15", TimeZone: "America/Los_Angeles"})
 			if m.Loading || m.SelectedUID != "a" || len(m.Groups) != 1 || m.Groups[0].Title != "Today" {
 				t.Fatalf("loaded: %+v", m)
 			}
 			m, cmds = model.Update(m, model.CollectionSelected{Collection: today})
-			if !reflect.DeepEqual(cmds, []model.Cmd{model.LoadCollection{Workspace: m.Workspace, Collection: today, ETag: "today"}}) {
+			if !readsCollection(cmds, m, "today") {
 				t.Fatalf("validator: %#v", cmds)
 			}
-			m, _ = model.Update(m, model.CollectionLoaded{Collection: today, NotModified: true})
-			if m.Loading || m.SelectedUID != "a" || m.ETag != "today" {
+			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), NotModified: true})
+			if m.Loading || m.SelectedUID != "a" {
 				t.Fatalf("304 loses state: %+v", m)
+			}
+			if again, cmds := model.Update(m, model.CollectionSelected{Collection: today}); !readsCollection(cmds, again, "today") {
+				t.Fatalf("304 lost the validator: %#v", cmds)
 			}
 		})
 	}
 }
 
 func TestCollectionIgnoresSupersededSnapshot(t *testing.T) {
-	m, _ := model.Update(model.Model{}, model.ProjectLoaded{Snapshot: g.UISnapshotResponseBody{}})
+	m, _ := loadFirst(model.Model{}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{}})
 	inbox, today := m.Collections[0], m.Collections[1]
-	m, _ = model.Update(m, model.CollectionSelected{Collection: today})
-	m, cmds := model.Update(m, model.CollectionSelected{Collection: inbox})
-	if !reflect.DeepEqual(cmds, []model.Cmd{model.LoadCollection{Collection: inbox}}) {
+	m, cmds := model.Update(m, model.CollectionSelected{Collection: today})
+	toToday := cmds[0].(model.ReadSnapshot)
+	m, cmds = model.Update(m, model.CollectionSelected{Collection: inbox})
+	if !readsCollection(cmds, m, "") {
 		t.Fatalf("wrong intent validator: %#v", cmds)
 	}
-	m, _ = model.Update(m, model.CollectionLoaded{Collection: today, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "stale"}}}})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: toToday.Request, Query: toToday.Query, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "stale"}}}})
 	if m.Collection != inbox || !m.Loading || len(m.Issues) != 0 {
 		t.Fatalf("stale response replaced Collection: %+v", m)
 	}
@@ -69,12 +73,12 @@ func TestCollectionKeyboardSwitching(t *testing.T) {
 		{"Logbook", []string{"escape", "g", "j", "j", "j", "j", "j", "enter"}, "logbook"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			m, _ := model.Update(model.Model{}, model.ProjectLoaded{Snapshot: g.UISnapshotResponseBody{Catalog: []g.UIProject{{Project: model.Project{UID: "p", Name: "Work"}}}}})
+			m, _ := loadFirst(model.Model{}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Catalog: []g.UIProject{{Project: model.Project{UID: "p", Name: "Work"}}}}})
 			var cmds []model.Cmd
 			for _, chord := range tt.keys {
 				m, cmds = model.Update(m, model.KeyMsg{Chord: chord})
 			}
-			if m.Collection.View != tt.view || !m.Loading || m.Focus != model.ColumnList || !reflect.DeepEqual(cmds, []model.Cmd{model.LoadCollection{Collection: m.Collection}}) {
+			if m.Collection.View != tt.view || !m.Loading || m.Focus != model.ColumnList || !readsCollection(cmds, m, "") {
 				t.Fatalf("keyboard Collection switch: %+v %#v", m, cmds)
 			}
 		})
@@ -85,13 +89,13 @@ func TestLiveRefreshKeepsCollection(t *testing.T) {
 	collection := model.Collection{View: "upcoming", Title: "Upcoming"}
 	m := model.Model{Collection: collection, LocalDate: "2026-12-31", TimeZone: "UTC", SelectedUID: "future"}
 	m, cmds := model.Update(m, model.StreamEvent{Generation: 0, ID: 1, Type: "issue.updated"})
-	refresh := cmds[0].(model.RefreshSnapshot)
+	refresh := cmds[0].(model.ReadSnapshot)
 	query := refresh.Query
 	query.SelectedIssueUID, query.IncludeHistory = nil, nil
 	if !reflect.DeepEqual(query, m.SnapshotQuery()) || refresh.Query.SelectedIssueUID == nil || *refresh.Query.SelectedIssueUID != "future" {
 		t.Fatalf("wrong Collection query: %+v", refresh.Query)
 	}
-	m, _ = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: g.UISnapshotResponseBody{Cursor: 1, Collection: []model.Issue{{UID: "future", Status: "open", ScheduledOnDate: new("2027-01-01")}}}})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: g.UISnapshotResponseBody{Cursor: 1, Collection: []model.Issue{{UID: "future", Status: "open", ScheduledOnDate: new("2027-01-01")}}}})
 	if m.Collection != collection || m.SelectedUID != "future" || m.LocalDate != "2026-12-31" || len(m.Groups) != 1 || m.Groups[0].Title != "2027-01-01" {
 		t.Fatalf("live refresh lost Collection: %+v", m)
 	}

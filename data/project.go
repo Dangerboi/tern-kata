@@ -46,15 +46,7 @@ func (c *Client) ReadProject(ctx context.Context, workspace string) (model.Proje
 			project = response.JSON200.Project
 		}
 	}
-	collection := model.Collection{View: "inbox", Title: "Inbox"}
-	if project.UID != "" {
-		collection = model.Collection{View: "project", ProjectUID: project.UID, Title: project.Name}
-	}
-	snapshot, err := c.ReadCollection(ctx, model.LoadCollection{Collection: collection})
-	if err != nil {
-		return model.ProjectLoaded{}, err
-	}
-	return model.ProjectLoaded{Project: project, Snapshot: snapshot.Snapshot, ChildCounts: snapshot.ChildCounts, ETag: snapshot.ETag, LocalDate: snapshot.LocalDate, TimeZone: snapshot.TimeZone, Daemon: model.Daemon{Remote: c.remote, Version: c.version}}, nil
+	return model.ProjectLoaded{Project: project, Daemon: model.Daemon{Remote: c.remote, Version: c.version}}, nil
 }
 
 func (c *Client) projectRequest(ctx context.Context, workspace string) (*g.ResolveProjectBody, error) {

@@ -1,34 +1,16 @@
 package model
 
-import "iter"
+import (
+	"iter"
+	"slices"
+)
 
 func (m Model) CurrentMode() Mode {
-	if m.Create.Open {
-		if m.Create.DiscardConfirm {
-			return ModeDiscard
-		}
-		return ModeCreate
-	}
-	if mode := m.EditorMode(); mode != "" {
+	if mode := m.cardMode(); mode != "" {
 		return mode
-	}
-	if m.FieldForm.Open {
-		return ModeFieldForm
 	}
 	if m.HelpOpen {
 		return ModeHelp
-	}
-	if m.CloseForm.Open {
-		return ModeCloseForm
-	}
-	if m.FilterForm.Open {
-		return ModeFilterForm
-	}
-	if m.ProjectForm.Open {
-		return ModeProjectForm
-	}
-	if m.Picker.Open {
-		return ModePicker
 	}
 	if m.Search.Open {
 		if m.Search.Results {
@@ -54,10 +36,7 @@ func LookupBindingForMode(chord string, mode Mode) (Binding, bool) {
 			return binding, true
 		}
 	}
-	if mode == ModeEditor || mode == ModeDiscard || mode == ModeConflict {
-		return Binding{}, false
-	}
-	if mode == ModeCreate || mode == ModeFieldForm || mode == ModeCloseForm || mode == ModeProjectForm {
+	if through, isCard := cardGlobalChords[mode]; isCard && !slices.Contains(through, chord) {
 		return Binding{}, false
 	}
 	if inputMode(mode) {

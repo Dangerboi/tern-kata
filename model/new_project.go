@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"unicode/utf8"
 
 	g "go.kenn.io/kata/pkg/client/generated"
 )
@@ -79,11 +78,6 @@ func submitProject(m Model) (Model, []Cmd) {
 
 func updateProjectForm(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
-	case KeyMsg:
-		if m.ProjectForm.Open {
-			next, cmds := updateProjectFormKey(m, msg)
-			return next, cmds, true
-		}
 	case CollectionPointerSelected:
 		// A click on the sidebar's New Project row is enter on it.
 		if msg.Key == NewProjectKey && !m.ProjectForm.Open {
@@ -125,38 +119,17 @@ func updateProjectFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	form := &m.ProjectForm
 	binding, bound := LookupBindingForMode(msg.Chord, ModeProjectForm)
 	switch {
-	case bound && binding.Action == QuitAction:
-		return updateNavigation(m, QuitAction)
 	case form.Saving:
 		return m, nil
-	case !bound:
-		if text := typedText(msg); text != "" {
-			form.Name, form.Err = form.Name+text, nil
-		}
-		return m, nil
-	}
-	switch binding.Action {
-	case ProjectSubmit:
+	case bound && binding.Action == ProjectSubmit:
 		return submitProject(m)
-	case ProjectCancel:
+	case bound && binding.Action == ProjectCancel:
 		m.ProjectForm = ProjectFormState{}
-	case DeleteInput:
-		form.Name, form.Err = deleteLastRune(form.Name), nil
-	case ClearInput:
-		form.Name, form.Err = "", nil
+	default:
+		var edited bool
+		if form.Name, edited = editText(form.Name, binding, bound, msg); edited {
+			form.Err = nil
+		}
 	}
 	return m, nil
-}
-
-// typedText is what a key adds to a text field: a bare character, a space, or
-// pasted text with its line breaks flattened.
-func typedText(msg KeyMsg) string {
-	text := msg.Text
-	switch {
-	case msg.Chord == "space":
-		text = " "
-	case text == "" && utf8.RuneCountInString(msg.Chord) == 1:
-		text = msg.Chord
-	}
-	return strings.NewReplacer("\r", " ", "\n", " ").Replace(text)
 }

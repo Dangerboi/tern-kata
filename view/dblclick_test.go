@@ -20,7 +20,7 @@ func TestEveryIssueRowCarriesTheDoubleClickAction(t *testing.T) {
 	m := apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: links}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: links}}},
 		model.KeyMsg{Chord: "shift+e"},
 	)
 	nodes := render(t, m)
@@ -30,12 +30,12 @@ func TestEveryIssueRowCarriesTheDoubleClickAction(t *testing.T) {
 			t.Fatalf("no row for %s: %v", issue.UID, nodes.under(view.IssueListID))
 		}
 		actions, _ := row.P["actions"].(map[string]any)
-		if got, want := actions["dblclick"], "open-row="+issue.UID; got != want {
+		if got, want := actions["dblclick"], view.OpenRowClick(issue.UID); got != want {
 			t.Errorf("%s: double click does %v, want %v", issue.UID, got, want)
 		}
 		wantClick := any(nil)
 		if issue.UID == "parent" {
-			wantClick = "toggle-expansion=parent"
+			wantClick = view.ToggleClick("parent")
 		}
 		if actions["click"] != wantClick {
 			t.Errorf("%s: click does %v, want %v", issue.UID, actions["click"], wantClick)

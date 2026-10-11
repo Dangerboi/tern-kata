@@ -197,7 +197,10 @@ func updatePicker(m Model, msg KeyMsg) (Model, []Cmd) {
 		ok = false
 	}
 	if !ok {
-		return typePickerFilter(m, msg), nil
+		if text, edited := editText(m.Picker.Filter, binding, false, msg); edited {
+			m.Picker.Filter, m.Picker.Cursor = text, 0
+		}
+		return m, nil
 	}
 	last := len(m.PickerEntries()) - 1
 	switch binding.Action {
@@ -216,20 +219,9 @@ func updatePicker(m Model, msg KeyMsg) (Model, []Cmd) {
 		m.Picker.Cursor = 0
 	case MoveLast:
 		m.Picker.Cursor = max(0, last)
-	case DeleteInput:
-		m.Picker.Filter, m.Picker.Cursor = deleteLastRune(m.Picker.Filter), 0
-	case ClearInput:
-		m.Picker.Filter, m.Picker.Cursor = "", 0
-	case QuitAction:
-		return updateNavigation(m, QuitAction)
-	}
-	return m, nil
-}
-
-func typePickerFilter(m Model, msg KeyMsg) Model {
-	if text := typedText(msg); text != "" {
-		m.Picker.Filter += text
+	case DeleteInput, ClearInput:
+		m.Picker.Filter, _ = editText(m.Picker.Filter, binding, true, msg)
 		m.Picker.Cursor = 0
 	}
-	return m
+	return m, nil
 }

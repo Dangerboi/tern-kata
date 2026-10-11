@@ -18,12 +18,10 @@ const (
 	CloseSave     Action = "close-save"
 	CloseQuick    Action = "close-quick"
 	CloseCancel   Action = "close-cancel"
-	CloseErase    Action = "close-erase"
-	CloseClear    Action = "close-clear"
 )
 
 type CloseFormState struct {
-	Open, Pending       bool
+	Open, Saving        bool
 	Field               int
 	UID                 string
 	ProjectID, Revision int64
@@ -60,8 +58,8 @@ type ReopenIssueCmd struct {
 func (ReopenIssueCmd) cmd() {}
 
 func closeIssue(m Model) *Issue {
-	if m.Detail != nil && m.Detail.Issue != nil && m.Detail.Issue.UID == m.SelectedUID {
-		return m.Detail.Issue
+	if issue := m.shownIssue(); issue != nil {
+		return issue
 	}
 	for i := range m.Issues {
 		if m.Issues[i].UID == m.SelectedUID {
@@ -86,7 +84,7 @@ func openClose(m Model) Model {
 
 func submitClose(m Model, quick bool) (Model, []Cmd) {
 	f := &m.CloseForm
-	if !f.Open || f.Pending {
+	if !f.Open || f.Saving {
 		return m, nil
 	}
 	if m.Stale {
@@ -127,7 +125,7 @@ func submitClose(m Model, quick bool) (Model, []Cmd) {
 			return m, nil
 		}
 	}
-	f.Pending, f.Err = true, nil
+	f.Saving, f.Err = true, nil
 	return m, []Cmd{CloseIssueCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Revision: f.Revision, Body: body}}
 }
 
@@ -189,7 +187,7 @@ func validateClose(body g.CloseIssueBody) error {
 func updateClose(m Model, msg Msg) (Model, []Cmd) {
 	switch msg := msg.(type) {
 	case CloseFieldMsg:
-		if m.CloseForm.Open && !m.CloseForm.Pending && msg.Field >= 0 && msg.Field < len(m.CloseForm.Values) {
+		if m.CloseForm.Open && !m.CloseForm.Saving && msg.Field >= 0 && msg.Field < len(m.CloseForm.Values) {
 			m.CloseForm.Values[msg.Field] = msg.Value
 			m.CloseForm.Err = nil
 		}
@@ -197,47 +195,38 @@ func updateClose(m Model, msg Msg) (Model, []Cmd) {
 		if m.CloseForm.UID != msg.UID {
 			return m, nil
 		}
-		m.CloseForm.Pending = false
+		m.CloseForm.Saving = false
 		m.CloseForm.Err = msg.Err
 		if msg.Err == nil {
 			m.CloseForm.Open = false
-			m.DetailUID = ""
-			return refreshLive(m)
+			m = m.issueWritten(msg.UID)
+			return snapshotChanged(m)
 		}
-	case KeyMsg:
-		if binding, ok := LookupBindingForMode(msg.Chord, ModeCloseForm); ok {
-			switch binding.Action {
-			case CloseCancel:
-				if !m.CloseForm.Pending {
-					m.CloseForm.Open = false
-				}
-			case CloseNext:
-				m.CloseForm.Field = (m.CloseForm.Field + 1) % 7
-			case ClosePrevious:
-				m.CloseForm.Field = (m.CloseForm.Field + 6) % 7
-			case CloseSave:
-				return submitClose(m, false)
-			case CloseQuick:
-				return submitClose(m, true)
-			case CloseClear:
-				if !m.CloseForm.Pending {
-					m.CloseForm.Values[m.CloseForm.Field] = ""
-				}
-			case CloseErase:
-				if !m.CloseForm.Pending {
-					s := m.CloseForm.Values[m.CloseForm.Field]
-					_, n := utf8.DecodeLastRuneInString(s)
-					m.CloseForm.Values[m.CloseForm.Field] = s[:len(s)-n]
-				}
-			case QuitAction:
-				return updateNavigation(m, QuitAction)
-			default:
-				if !m.CloseForm.Pending {
-					m.CloseForm.Values[m.CloseForm.Field] += msg.Text
-				}
-			}
-		} else if !m.CloseForm.Pending && msg.Text != "" {
-			m.CloseForm.Values[m.CloseForm.Field] += strings.ReplaceAll(strings.ReplaceAll(msg.Text, "\n", " "), "\r", " ")
+	}
+	return m, nil
+}
+
+// closeKey is one key for the Close card on top.
+func closeKey(m Model, msg KeyMsg) (Model, []Cmd) {
+	f := &m.CloseForm
+	binding, bound := LookupBindingForMode(msg.Chord, ModeCloseForm)
+	switch {
+	case bound && binding.Action == CloseCancel:
+		if !f.Saving {
+			f.Open = false
+		}
+	case bound && binding.Action == CloseNext:
+		cycleField(&m, 1)
+	case bound && binding.Action == ClosePrevious:
+		cycleField(&m, -1)
+	case bound && binding.Action == CloseSave:
+		return submitClose(m, false)
+	case bound && binding.Action == CloseQuick:
+		return submitClose(m, true)
+	case !f.Saving:
+		var edited bool
+		if f.Values[f.Field], edited = editText(f.Values[f.Field], binding, bound, msg); edited {
+			f.Err = nil
 		}
 	}
 	return m, nil

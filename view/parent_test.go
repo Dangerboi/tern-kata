@@ -32,7 +32,7 @@ func parentBrowsing() model.Model {
 	return apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: links}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: links}}},
 		model.DetailLoaded{UID: parent.UID, Selected: &g.UISelectedAuthority{Issue: &parent, Links: links, History: events}},
 	)
 }
@@ -60,7 +60,7 @@ func TestParentIssueWithManyChildrenRendersItsWholeTree(t *testing.T) {
 				if !ok {
 					t.Fatalf("no Link row for %s: %v", uid, links.under(view.DetailActivityID))
 				}
-				if click := jump.P["actions"].(map[string]any)["click"]; click != "jump="+uid {
+				if click := jump.P["actions"].(map[string]any)["click"]; click != view.JumpClick(uid) {
 					t.Errorf("%s's reference does %v", uid, click)
 				}
 				if _, ok := events[view.DetailActivityID+".event-"+uid]; !ok {

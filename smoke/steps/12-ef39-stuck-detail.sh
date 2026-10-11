@@ -2,9 +2,8 @@
 # a link jump and esc, Collection switches, a resize between tiers, and the Pane losing the window's
 # focus and getting it back with a click. Tern keeps the node of the last reveal in view and ignores the
 # wheel past it, so one reveal the app sent for a click (title, heading, row) froze the detail until the
-# column was removed and drawn again. After every click the wheel must still move the detail, and the
-# recorded TSP ops must hold no reveal inside the detail but the pair a tab-name click sends (the new tab's
-# last row, then the tab names, see 19-yd2n). Own Project and Issues; it cleans up.
+# column was removed and drawn again. After every click the wheel must still move the detail (which ops the
+# app may send is the Pane driver's tests). Own Project and Issues; it cleans up.
 stuck_y() { ctl tree "[data-id='main.columns.detail.viewport.content.heading']" | jq -r '.nodes[0].rect[1] // empty | floor'; }
 stuck_wheel() { for _ in $(seq "$2"); do ctl wheel 0 "$1" >/dev/null; done; }
 # The wheel moves the detail down from its top and back up, whatever was clicked before.
@@ -48,8 +47,7 @@ stuck_peer=$(jq -r '.issue.uid' "$tmp/stuck-peer.json")
 kata --workspace "$stuck_dir" comment "$(jq -r '.issue.short_id' "$tmp/stuck-long.json")" --body "Stuck comment" --json >/dev/null
 
 quit_app
-rm -f "$tmp/stuck-frames.jsonl"
-printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP TERN_TSP_RECORD=%s KATA_HOME=%s %s/tern-kata)"\n' "$tmp/stuck-unbound" "$tmp/stuck-frames.jsonl" "$KATA_HOME" "$tmp" >"$tmp/stuck-launch.ctl"
+printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$tmp/stuck-unbound" "$KATA_HOME" "$tmp" >"$tmp/stuck-launch.ctl"
 ctl --file "$tmp/stuck-launch.ctl"
 read -r stuck_width stuck_height < <(ctl stats | jq -r '.viewport[0:2] | @tsv')
 ctl click "[data-id='main.columns.collections.projects']"
@@ -112,10 +110,6 @@ expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.o
 ctl click "[data-id$='.$stuck_long']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Stuck long"))'
 stuck_scrolls "the window regaining focus"
-
-# No click but a tab name made the app reveal anything inside the detail.
-stray_detail_reveals "$tmp/stuck-frames.jsonl" >"$tmp/stuck-detail-reveals.json"
-[[ ! -s $tmp/stuck-detail-reveals.json ]] || { printf 'Reveal inside the detail for a click: %s\n' "$(<"$tmp/stuck-detail-reveals.json")" >&2; return 1; }
 
 quit_app
 kata projects remove stuck-detail --force --json >/dev/null

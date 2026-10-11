@@ -7,25 +7,26 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
+var closeLabels = [...]string{"Reason (done / wontfix / duplicate / superseded / audit-no-change)", "Message", "Commit SHA (optional)", "PR URL (optional)", "Test command (optional)", "Issue reference (duplicate / superseded)", "Rationale (audit-no-change)"}
+
 func closeLayer(m model.Model) tern.Element {
 	if !m.CloseForm.Open {
 		return nil
 	}
-	labels := [...]string{"Reason (done / wontfix / duplicate / superseded / audit-no-change)", "Message", "Commit SHA (optional)", "PR URL (optional)", "Test command (optional)", "Issue reference (duplicate / superseded)", "Rationale (audit-no-change)"}
 	children := make([]tern.Element, 0, 12)
-	for i, label := range labels {
+	for i, label := range closeLabels {
 		tone := ui.ToneNeutral
 		if m.CloseForm.Field == i {
 			tone = ui.ToneAccent
 		}
 		children = append(children,
 			ui.Text{Common: ui.Common{Key: fmt.Sprintf("%d-label", i), Tone: tone}, Text: label},
-			ui.Input{Common: ui.Common{Key: fmt.Sprintf("field%d", i), Tone: tone, Aria: label}, Field: ui.Field{Text: m.CloseForm.Values[i], Mode: "insert", Readonly: m.CloseForm.Pending}})
+			ui.Input{Common: ui.Common{Key: fmt.Sprintf("field%d", i), Tone: tone, Aria: label}, Field: ui.Field{Text: m.CloseForm.Values[i], Mode: "insert", Readonly: m.CloseForm.Saving}})
 	}
 	if m.CloseForm.Err != nil {
 		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.CloseForm.Err.Error()})
 	}
-	if m.CloseForm.Pending {
+	if m.CloseForm.Saving {
 		children = append(children, ui.Text{Common: ui.Common{Key: "pending", Tone: ui.TonePending}, Text: "Closing Issue…"})
 	} else {
 		children = append(children,
@@ -38,9 +39,14 @@ func closeLayer(m model.Model) tern.Element {
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "close"}, Modal: true, Size: ui.SizeLG, Head: ui.T("Close Issue"), Children: children})
 }
 
-func CloseInputFocusID(m model.Model) string {
-	if m.CloseForm.Open && !m.CloseForm.Pending {
-		return fmt.Sprintf("layer.close.field%d", m.CloseForm.Field)
+// CloseFieldID is the id of the Close card's field index.
+func CloseFieldID(index int) string { return fmt.Sprintf("layer.close.field%d", index) }
+
+func CloseFieldIndex(id string) (int, bool) {
+	for index := range closeLabels {
+		if id == CloseFieldID(index) {
+			return index, true
+		}
 	}
-	return ""
+	return 0, false
 }

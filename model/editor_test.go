@@ -11,12 +11,12 @@ import (
 
 func editorModel() model.Model {
 	issue := model.Issue{UID: "a", ProjectID: 2, Body: "a😀b", Revision: 7}
-	return model.Model{Workspace: "/repo", SelectedUID: "a", DetailUID: "a", Detail: &g.UISelectedAuthority{Issue: &issue}, Focus: model.ColumnDetail}
+	return withDetail(model.Model{Workspace: "/repo", SelectedUID: "a", Focus: model.ColumnDetail}, &g.UISelectedAuthority{Issue: &issue})
 }
 
 func TestDraftNativeEditAndSave(t *testing.T) {
 	m := editorModel()
-	for _, msg := range []model.Msg{model.KeyMsg{Chord: "e"}, model.EditMsg{ID: "layer.editor.body", From: 1, To: 3, Text: "new", Cursor: 4, Len: 4}} {
+	for _, msg := range []model.Msg{model.KeyMsg{Chord: "e"}, model.EditMsg{Target: model.EditDraftBody, From: 1, To: 3, Text: "new", Cursor: 4, Len: 4}} {
 		m, _ = model.Update(m, msg)
 	}
 	m, cmds := model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
@@ -41,9 +41,9 @@ func TestDraftSequences(t *testing.T) {
 	}{
 		{"typed undo", []model.Msg{key("e"), typed, key("ctrl+z")}, "a😀b", model.ModeEditor, true, nil},
 		{"global printable keys become text", []model.Msg{key("e"), model.KeyMsg{Chord: "q", Text: "q"}, model.KeyMsg{Chord: "shift+?", Text: "?"}}, "a😀bq?", model.ModeEditor, true, nil},
-		{"native undo", []model.Msg{key("e"), model.EditMsg{ID: "layer.editor.body", From: 1, To: 3, Text: "x", Cursor: 2, Len: 4}, model.UndoMsg{ID: "layer.editor.body"}}, "a😀b", model.ModeEditor, true, nil},
-		{"stale edit", []model.Msg{key("e"), model.EditMsg{ID: "layer.editor.body", From: 0, To: 1, Text: "x", Cursor: 1, Len: 99}}, "a😀b", model.ModeEditor, true, nil},
-		{"surrogate split", []model.Msg{key("e"), model.EditMsg{ID: "layer.editor.body", From: 2, To: 3, Text: "x", Cursor: 3, Len: 4}}, "a😀b", model.ModeEditor, true, nil},
+		{"native undo", []model.Msg{key("e"), model.EditMsg{Target: model.EditDraftBody, From: 1, To: 3, Text: "x", Cursor: 2, Len: 4}, model.UndoMsg{Target: model.EditDraftBody}}, "a😀b", model.ModeEditor, true, nil},
+		{"stale edit", []model.Msg{key("e"), model.EditMsg{Target: model.EditDraftBody, From: 0, To: 1, Text: "x", Cursor: 1, Len: 99}}, "a😀b", model.ModeEditor, true, nil},
+		{"surrogate split", []model.Msg{key("e"), model.EditMsg{Target: model.EditDraftBody, From: 2, To: 3, Text: "x", Cursor: 3, Len: 4}}, "a😀b", model.ModeEditor, true, nil},
 		{"ordinary backspace", []model.Msg{key("e"), key("left"), key("backspace")}, "ab", model.ModeEditor, true, nil},
 		{"selection replacement", []model.Msg{key("e"), key("shift+left"), typed}, "a😀local", model.ModeEditor, true, nil},
 		{"discard asks", []model.Msg{key("e"), key("escape")}, "a😀b", model.ModeDiscard, true, nil},
@@ -81,7 +81,7 @@ func TestDraftSequences(t *testing.T) {
 			if present && draft.BaseRevision != 7 && tt.name != "conflict overwrite" {
 				t.Fatal("live update rebased Draft")
 			}
-			if tt.name == "conflict discard" && m.Detail.Issue.Body != "Remote body" {
+			if tt.name == "conflict discard" && m.DetailAuthority().Issue.Body != "Remote body" {
 				t.Fatal("discard did not retain remote version")
 			}
 		})
@@ -98,15 +98,18 @@ func TestDraftSurvivesLiveSnapshotAndSaveFailure(t *testing.T) {
 	if previous.Drafts["a"].Editor.Text != "a😀b" {
 		t.Fatal("Update mutated the previous Draft")
 	}
-	m.Refreshing = true
-	m.RefreshRequest = 3
+	m, cmds := model.Update(m, model.StreamEvent{ID: 9})
+	read, ok := cmds[0].(model.ReadSnapshot)
+	if !ok {
+		t.Fatalf("a daemon event asked for %#v, want a snapshot read", cmds)
+	}
 	latest := model.Issue{UID: "a", ProjectID: 2, Body: "Remote body", Revision: 8}
 	snapshot := g.UISnapshotResponseBody{Cursor: 9, Collection: []g.UIIssue{latest}, Selected: &g.UISelectedAuthority{Issue: &latest}}
-	m, _ = model.Update(m, model.SnapshotRefreshed{Request: 3, Query: m.SnapshotQuery(), Snapshot: snapshot})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: read.Request, Query: read.Query, Snapshot: snapshot})
 	if m.Drafts["a"].Editor.Text != "a😀blocal" || m.Drafts["a"].BaseRevision != 7 {
 		t.Fatal("snapshot destroyed/rebased Draft")
 	}
-	m, cmds := model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
+	m, cmds = model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
 	if len(cmds) != 1 || cmds[0].(model.SaveDraft).BaseRevision != 7 || cmds[0].(model.SaveDraft).Actor != "writer" {
 		t.Fatalf("save: %#v", cmds)
 	}
@@ -122,9 +125,9 @@ func TestDraftSurvivesLiveSnapshotAndSaveFailure(t *testing.T) {
 }
 
 func TestDraftOpensTheFullStoredBodyIncludingParentSection(t *testing.T) {
-	m := editorModel()
 	body := "## Parent\n\nup1\n\n## What\n\nbuild"
-	m.Detail.Issue.Body = body
+	issue := model.Issue{UID: "a", ProjectID: 2, Body: body, Revision: 7}
+	m := withDetail(model.Model{Workspace: "/repo", SelectedUID: "a", Focus: model.ColumnDetail}, &g.UISelectedAuthority{Issue: &issue})
 	m, _ = model.Update(m, model.KeyMsg{Chord: "e"})
 	if got := m.Drafts["a"].Editor.Text; got != body {
 		t.Errorf("draft text %q, want %q", got, body)

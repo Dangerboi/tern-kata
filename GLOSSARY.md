@@ -14,10 +14,12 @@
 
 **Draft**: An unsaved edit to an issue's text or fields, kept until the user saves or discards it, even if the issue changes underneath.
 
-**Popup card**: A card drawn over the columns that takes the keyboard until closed: Create, Close, the Draft editor, the single-field form, New Project, the Menu and the Filter form. _Avoid_: layer, modal, overlay (Tern's element name).
+**Popup card**: A card drawn over the columns that takes the keyboard until closed: Create, Close, the Draft editor, the single-field form, New Project, the Menu and the Filter form. When several are open, one order (`TopCard`) decides which takes the keys, is drawn and holds the text caret; the help sheet covers them all. Each card declares which global chords it lets through (only `ctrl+c`, from the Menu, Close and New Project). _Avoid_: layer, modal, overlay (Tern's element name).
 
 **Issue detail**: The column showing one Issue: its properties, Children and Activity tabs, with its own row cursor and jump history.
 
 **Pane driver**: The step that turns one Tern input or daemon result into the next state, the view to draw, the Tern ops to send and the daemon commands to run.
 
 **Daemon gateway**: The module that runs one command against the kata daemon and returns exactly one result message.
+
+**Collection snapshot**: What the daemon says the shown Collection holds for the current Collection and filters. One path loads it for the first load, a Collection switch, a filter change, an id search and a live refresh; a result is applied only if it answers the current query.

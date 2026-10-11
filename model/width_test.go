@@ -77,10 +77,10 @@ func TestQuitStillWorksBelowMinimumWidth(t *testing.T) {
 	}
 }
 
-// The app sends every Scroll to Tern, which ends the Pane's program when the
-// column is not drawn (a Pane under 80 columns, or one column of two, the first
-// load, a daemon failure). The model asks only for columns on screen.
-func TestScrollIsOnlyRequestedOfColumnsOnScreen(t *testing.T) {
+// The model asks for a scroll whatever is drawn (a Pane under 80 columns, one
+// column of two, the first load, a daemon failure); the Pane driver drops the
+// ones Tern would reject.
+func TestScrollIntentsDoNotDependOnWhatIsDrawn(t *testing.T) {
 	list, detail := model.ColumnList, model.ColumnDetail
 	for _, tt := range []struct {
 		name  string
@@ -91,9 +91,9 @@ func TestScrollIsOnlyRequestedOfColumnsOnScreen(t *testing.T) {
 		want  []model.Cmd
 	}{
 		{"page below 80 columns from the list", 79, list, nil, model.KeyMsg{Chord: "page_down"}, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "b"}}},
-		{"page below 80 columns from the detail", 79, detail, nil, model.KeyMsg{Chord: "page_up"}, nil},
+		{"page below 80 columns from the detail", 79, detail, nil, model.KeyMsg{Chord: "page_up"}, []model.Cmd{model.Scroll{Column: detail, By: model.ScrollPageUp}}},
 		{"page in the one column shown scrolls it", 100, detail, nil, model.KeyMsg{Chord: "page_down"}, []model.Cmd{model.Scroll{Column: detail, By: model.ScrollPageDown}}},
-		{"another detail arrives behind the single list", 100, list, []model.Msg{model.DetailLoaded{UID: "a", Selected: authority("a")}, model.SelectMsg{UID: "b"}}, model.DetailLoaded{UID: "b", Selected: authority("b")}, nil},
+		{"another detail arrives behind the single list", 100, list, []model.Msg{model.DetailLoaded{UID: "a", Selected: authority("a")}, model.SelectMsg{UID: "b"}}, model.DetailLoaded{UID: "b", Selected: authority("b")}, []model.Cmd{model.Scroll{Column: detail, By: model.ScrollToStart}}},
 		{"another detail arrives beside the list", 160, list, []model.Msg{model.DetailLoaded{UID: "a", Selected: authority("a")}, model.SelectMsg{UID: "b"}}, model.DetailLoaded{UID: "b", Selected: authority("b")}, []model.Cmd{model.Scroll{Column: detail, By: model.ScrollToStart}}},
 		{"page during the daemon failure", 160, list, []model.Msg{model.Failed{Err: errors.New("kata server not responding")}}, model.KeyMsg{Chord: "page_down"}, nil},
 	} {

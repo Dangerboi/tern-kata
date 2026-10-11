@@ -28,7 +28,7 @@ func columnsFixture(t testing.TB) model.Model {
 	return apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{parent, open, done, leaf}, CollectionLinks: links}, ChildCounts: map[string]g.ChildCounts{"parent": {Open: 1, Total: 2}}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{parent, open, done, leaf}, CollectionLinks: links}, ChildCounts: map[string]g.ChildCounts{"parent": {Open: 1, Total: 2}}}},
 	)
 }
 
@@ -46,7 +46,7 @@ func TestHeaderRowLabelsTheColumns(t *testing.T) {
 	if got, want := labels(styled(side)), []string{"#", "prio", "status", "title", "kids", "updated"}; !slices.Equal(got, want) {
 		t.Errorf("side by side header %q, want %q", got, want)
 	}
-	m.DetailHidden = true
+	m, _ = model.Update(m, model.KeyMsg{Chord: "shift+l"})
 	full := render(t, m)["main.columns.list.header"]
 	if got, want := labels(styled(full)), []string{"#", "prio", "status", "title", "kids", "owner", "updated"}; !slices.Equal(got, want) {
 		t.Errorf("full width header %q, want %q", got, want)
@@ -55,7 +55,7 @@ func TestHeaderRowLabelsTheColumns(t *testing.T) {
 
 func TestRowShowsKidsOwnerAndUpdated(t *testing.T) {
 	m := columnsFixture(t)
-	m.DetailHidden = true
+	m, _ = model.Update(m, model.KeyMsg{Chord: "shift+l"})
 	nodes := render(t, m)
 	parent, leaf := text(nodes[view.IssueID("parent")]), text(nodes[view.IssueID("leaf")])
 	for _, want := range []string{"pppp", "Parent", "1/2", "dana", "2h ago"} {

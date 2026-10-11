@@ -11,22 +11,24 @@ type Project = g.ProjectOut
 
 type Model struct {
 	LiveState
-	Create            CreateState
-	PendingCreatedUID string
-	CloseForm         CloseFormState
-	Actor             string
-	FieldForm         FieldFormState
-	Workspace         string
-	OpenIssueRef      string
-	OpenedIssueUID    string
-	Project           Project
-	Daemon            Daemon
-	Snapshot          g.UISnapshotResponseBody
+	IssueDetail
+	Create CreateState
+	// pending is the Issue Create just made, selected as soon as a snapshot lists it.
+	pending string
+	// etag answers etagQuery: the snapshot on screen.
+	etag      string
+	etagQuery g.ReadUISnapshotQuery
+	CloseForm CloseFormState
+	Actor     string
+	FieldForm FieldFormState
+	Workspace string
+	Project   Project
+	Daemon    Daemon
+	Snapshot  g.UISnapshotResponseBody
 	// ChildCounts are the daemon's direct-child counts by Issue UID, whatever the
 	// filters; kata leaves out an Issue with no children.
 	ChildCounts         map[string]g.ChildCounts
 	Issues              []Issue
-	ETag                string
 	SelectedUID         string
 	Loading             bool
 	Err                 error
@@ -43,14 +45,6 @@ type Model struct {
 	Groups              []IssueGroup
 	LocalDate, TimeZone string
 	HelpOpen            bool
-	DetailHidden        bool
-	Detail              *g.UISelectedAuthority
-	DetailUID           string
-	DetailLoading       bool
-	DetailErr           error
-	ActivityTab         ActivityTab
-	DetailIndex         int
-	DetailBack          []string
 	Flat                bool
 	ExpandedUIDs        map[string]bool
 	Drafts              map[string]Draft
@@ -62,27 +56,29 @@ type Model struct {
 }
 
 func Update(m Model, msg Msg) (Model, []Cmd) {
-	if action, ok := msg.(ActionMsg); ok && action.Action == "key" {
-		msg = KeyMsg{Chord: action.Value}
-	}
-	shown, tab := m.DetailIssueUID(), m.ActivityTab
-	m, cmds := update(m, msg)
-	if m.ActivityTab != tab {
-		cmds = append(cmds, RevealActivityTab{})
-	}
-	if now := m.DetailIssueUID(); shown != "" && now != "" && now != shown {
-		// The detail scroller keeps its offset across Issues; a different Issue starts at the top.
-		cmds = append(cmds, Scroll{Column: ColumnDetail, By: ScrollToStart})
-	}
-	if m.Focus != ColumnDetail {
-		// Jump history belongs to the detail column, so every path out of it, key or click, ends it.
-		m.DetailBack = nil
-	}
-	m, detailCmds := EnsureDetail(m)
-	return m, onScreen(m, append(cmds, detailCmds...))
+	next, cmds := updateWithDetail(m, msg)
+	return next.cancelPending(m, msg), cmds
 }
 
 func update(m Model, msg Msg) (Model, []Cmd) {
+	switch msg := msg.(type) {
+	case FocusFieldMsg:
+		return focusField(m, msg.Field), nil
+	case KeyMsg:
+		if next, cmds, handled := updateTopCardKey(m, msg); handled {
+			return next, cmds
+		}
+	case EditMsg:
+		if next, handled := editBody(m, msg.Target, func(e TextEditor) TextEditor {
+			return e.ApplyEdit(msg.From, msg.To, msg.Text, msg.Cursor, msg.Len)
+		}); handled {
+			return next, nil
+		}
+	case UndoMsg:
+		if next, handled := editBody(m, msg.Target, TextEditor.Undo); handled {
+			return next, nil
+		}
+	}
 	if next, cmds, handled := updateCreate(m, msg); handled {
 		return next, cmds
 	}
@@ -96,22 +92,10 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case CloseFieldMsg, CloseResultMsg:
 		return updateClose(m, msg)
 	}
-	if _, ok := msg.(KeyMsg); ok && m.CloseForm.Open {
-		return updateClose(m, msg)
-	}
-	switch msg := msg.(type) {
-	case KeyMsg:
-		if m.CurrentMode() == ModePicker {
-			return updatePicker(m, msg)
-		}
-	case PickerSelected:
+	if msg, ok := msg.(PickerSelected); ok {
 		return pickCollectionKey(m, msg.Key)
 	}
 	switch msg := msg.(type) {
-	case FilterFieldMsg:
-		if m.FilterForm.Open && msg.Field >= 0 && msg.Field < 5 {
-			m.FilterForm.Field = msg.Field
-		}
 	case FieldValueMsg:
 		if m.FieldForm.Open && !m.FieldForm.Saving {
 			m.FieldForm.Value = msg.Value
@@ -134,68 +118,39 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			return m, nil
 		}
 		m.FieldForm = FieldFormState{}
-		m.DetailUID = ""
-		return refreshLive(m)
+		m = m.issueWritten(msg.UID)
+		return snapshotChanged(m)
 	case Start:
 		m.Workspace = msg.Workspace
-		m.OpenIssueRef = msg.IssueRef
+		m = m.openRequested(msg.IssueRef)
 		m.Loading = true
 		m.Err = nil
 		return m, []Cmd{LoadProject{Workspace: msg.Workspace}}
 	case ProjectLoaded:
-		m, _ = updateProject(m, msg)
-		m.Cursor = msg.Snapshot.Cursor
-		m, cmds := startStream(m, 0)
-		if m.OpenIssueRef != "" {
-			m, openCmds := openIssue(m, m.OpenIssueRef)
-			return m, append(cmds, openCmds...)
-		}
-		return m, cmds
+		return updateProject(m, msg)
 	case DetailLoaded:
-		if msg.UID == m.SelectedUID && msg.UID == m.DetailUID {
-			m.Detail = msg.Selected
-			m.DetailLoading = false
-			m.DetailErr = nil
-		}
+		m = m.detailLoaded(msg)
 	case DetailFailed:
-		if msg.UID == m.SelectedUID && msg.UID == m.DetailUID {
-			m.DetailLoading = false
-			m.DetailErr = msg.Err
-			if m.DetailIssueUID() != msg.UID {
-				m.Detail = nil // the error replaces the previous Issue's detail on screen
-			}
-		}
+		m = m.detailFailed(msg)
 	case JumpIssueMsg:
-		return jumpIssue(m, msg.UID), nil
+		return m.jumpTo(msg.UID), nil
 	case FocusColumnMsg:
 		if msg.Column <= ColumnDetail {
 			m.Focus = msg.Column
 			if m.Focus == ColumnDetail {
-				m.DetailHidden = false
+				m = m.focusDetail()
 			}
 		}
 	case ActivityTabMsg:
 		if msg.Tab < TabCount {
-			m.Focus = ColumnDetail
-			m.ActivityTab = msg.Tab
-			m.DetailIndex = len(m.DetailChildren())
+			m = m.chooseTab(msg.Tab)
 		}
 	case DetailItemMsg:
 		if msg.Tab < TabCount {
-			m.Focus = ColumnDetail
-			m.ActivityTab = msg.Tab
-			for i := range m.DetailRowCount(msg.Tab) {
-				row, _ := m.DetailRow(msg.Tab, i)
-				if row.Key == msg.Key {
-					m.DetailIndex = len(m.DetailChildren()) + i
-					break
-				}
-			}
+			m = m.chooseRow(msg.Tab, msg.Key)
 		}
 	case CollectionSelected:
 		return updateCollection(m, msg)
-	case CollectionLoaded:
-		return collectionLoaded(m, msg)
 	case CollectionPointerSelected:
 		for _, entry := range m.SidebarEntries() {
 			if msg.Key == entry.Key() {
@@ -218,28 +173,13 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			return openRow(m, msg.Value)
 		}
 	case IssueOpened:
-		if msg.Ref == m.OpenIssueRef && msg.Selected != nil && msg.Selected.Issue != nil {
-			m.OpenIssueRef = ""
-			m.SelectedUID = msg.Selected.Issue.UID
-			m.OpenedIssueUID = m.SelectedUID
-			m.DetailUID = m.SelectedUID
-			m.Detail = msg.Selected
-			m.DetailLoading = false
-			m.DetailErr = nil
-			m.DetailHidden = false
-			m.DetailBack = nil
-			m.DetailIndex = 0
-			m.Focus = ColumnDetail
-		}
+		m = m.openByReference(msg.Ref, msg.Selected)
 	case IssueOpenFailed:
-		if msg.Ref == m.OpenIssueRef {
-			m.OpenIssueRef = ""
+		if msg.Ref == m.OpenIssueRef() {
+			m = m.openFailed(msg.Ref)
 			m.Err = msg.Err
 		}
 	case KeyMsg:
-		if m.FieldForm.Open {
-			return updateFieldKey(m, msg)
-		}
 		if inputMode(m.CurrentMode()) {
 			if binding, ok := LookupBindingForMode(msg.Chord, m.CurrentMode()); ok {
 				return updateFilterAction(m, binding.Action)
@@ -258,8 +198,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			}
 			if binding.Action == ReopenAction {
 				issue := closeIssue(m)
-				if issue != nil && !m.Stale && !m.CloseForm.Pending {
-					m.CloseForm = CloseFormState{UID: issue.UID, Pending: true}
+				if issue != nil && !m.Stale && !m.CloseForm.Saving {
+					m.CloseForm = CloseFormState{UID: issue.UID, Saving: true}
 					return m, []Cmd{ReopenIssueCmd{Workspace: m.Workspace, UID: issue.UID, ProjectID: issue.ProjectID, Actor: m.Actor}}
 				}
 				return m, nil

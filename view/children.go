@@ -30,7 +30,7 @@ func childrenTable(m model.Model, children []model.ChildRow, now time.Time) tern
 		ref.Wrap, ref.Shrink = ui.WrapNone, &fixedShrink
 		cells := ui.Nodes(ref)
 		if child.Loaded {
-			follow := &ui.Actions{Click: "jump=" + child.UID}
+			follow := &ui.Actions{Click: JumpClick(child.UID)}
 			cell := func(key, text, style string, width int) ui.Text {
 				return ui.Text{Common: ui.Common{Key: key, Actions: follow}, Spans: []ui.Span{{T: pad(text, width-utf8.RuneCountInString(text)), S: style}}, Wrap: ui.WrapNone}
 			}
@@ -46,7 +46,7 @@ func childrenTable(m model.Model, children []model.ChildRow, now time.Time) tern
 			cells = append(cells, status, title, updated)
 		}
 		mark := ui.Mark("")
-		if m.Focus == model.ColumnDetail && m.DetailIndex == i {
+		if m.Focus == model.ColumnDetail && m.DetailIndex() == i {
 			mark = ui.MarkPick
 		}
 		nodes = append(nodes, ui.Row{Common: ui.Common{Key: child.Key, Mark: mark}, Gap: ui.GapSM, Children: cells})

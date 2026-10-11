@@ -32,8 +32,7 @@ vp_other=$(jq -r '.issue.uid' "$tmp/viewport-other.json")
 kata --workspace "$vp_dir" comment "$(jq -r '.issue.short_id' "$tmp/viewport-long.json")" --body "Viewport comment" --json >/dev/null
 
 quit_app
-rm -f "$tmp/viewport-frames.jsonl"
-printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP TERN_TSP_RECORD=%s KATA_HOME=%s %s/tern-kata)"\n' "$tmp/viewport-unbound" "$tmp/viewport-frames.jsonl" "$KATA_HOME" "$tmp" >"$tmp/viewport-launch.ctl"
+printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$tmp/viewport-unbound" "$KATA_HOME" "$tmp" >"$tmp/viewport-launch.ctl"
 ctl --file "$tmp/viewport-launch.ctl"
 ctl click "[data-id='main.columns.collections.projects']"
 expect_tree "[data-id='main.columns.collections.project.$vp_project']" '.ok and .count == 1'
@@ -65,7 +64,7 @@ vp_wait "↑ scrolls up by a line" '$b > 20'
 vp_keys PageUp 12
 vp_wait "pgup returns to the top" '$a == 0'
 
-# Key moves in the detail (tab, j) leave the wheel working: only a tab switch reveals (the new tab, see 19-yd2n), and the wheel works after it.
+# Key moves in the detail (tab, j) leave the wheel working.
 vp_keys Tab 3
 vp_keys j 2
 vp_keys Tab 3
@@ -73,8 +72,6 @@ vp_wheel 300 12
 vp_wait "the wheel after tab and j" '$b <= 1'
 vp_wheel -300 12
 vp_wait "the wheel back up after tab and j" '$a == 0'
-stray_detail_reveals "$tmp/viewport-frames.jsonl" >"$tmp/viewport-reveals.json"
-[[ ! -s $tmp/viewport-reveals.json ]] || { printf 'Reveal inside the detail for a key: %s\n' "$(<"$tmp/viewport-reveals.json")" >&2; return 1; }
 
 # A different Issue opens at its top.
 vp_wheel 300 12

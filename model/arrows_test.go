@@ -15,19 +15,16 @@ func arrowModes(t *testing.T) map[string]model.Model {
 	t.Helper()
 	peer := "peer"
 	// Unbound: a bound Project has no sidebar, so escape would open the Menu.
-	list, _ := model.Update(model.Model{Cols: 160}, model.ProjectLoaded{
-		Project:  model.Project{Name: "Work"},
-		Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "a"}, {UID: "b"}, {UID: "c"}}},
-	})
+	list, _ := loadFirst(model.Model{Cols: 160}, model.ProjectLoaded{Project: model.Project{Name: "Work"}}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "a"}, {UID: "b"}, {UID: "c"}}}})
 	collections, _ := model.Update(list, model.KeyMsg{Chord: "escape"})
-	detail := model.Model{Cols: 160, Focus: model.ColumnDetail, SelectedUID: "a", DetailUID: "a", Issues: []model.Issue{{UID: "a"}}, Detail: &g.UISelectedAuthority{
+	detail := withDetail(model.Model{Cols: 160, Focus: model.ColumnDetail, SelectedUID: "a", Issues: []model.Issue{{UID: "a"}}}, &g.UISelectedAuthority{
 		Issue: &model.Issue{UID: "a"},
 		Links: []g.UILink{
 			{ID: 1, FromIssueUID: "a", ToIssueUID: peer, ToQualifiedID: "other#bbbb", Type: "related"},
 			{ID: 2, FromIssueUID: "a", ToIssueUID: "peer2", ToQualifiedID: "other#cccc", Type: "related"},
 		},
 		History: []g.Event{{UID: "event-1", RelatedIssueUID: &peer}},
-	}}
+	})
 	detail, _ = model.Update(detail, model.KeyMsg{Chord: "tab"})
 	detail, _ = model.Update(detail, model.KeyMsg{Chord: "tab"})
 	modes := map[string]model.Model{"list": list, "collections": collections, "detail": detail}

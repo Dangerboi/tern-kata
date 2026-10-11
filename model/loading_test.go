@@ -16,10 +16,7 @@ func projectOf(uids ...string) model.Model {
 	for i, uid := range uids {
 		issues[i] = model.Issue{UID: uid, Status: "open"}
 	}
-	m, _ := model.Update(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{
-		Project:  model.Project{UID: "project", Name: "work"},
-		Snapshot: g.UISnapshotResponseBody{Collection: issues},
-	})
+	m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{Project: model.Project{UID: "project", Name: "work"}}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues}})
 	return m
 }
 
@@ -44,10 +41,10 @@ func TestSwitchingCollectionKeepsPreviousIssues(t *testing.T) {
 	m, _ = model.Update(m, model.SelectMsg{UID: "b"})
 	allOpen := m.Collections[4]
 	m, cmds := model.Update(m, model.CollectionSelected{Collection: allOpen})
-	if !m.Loading || len(m.Issues) != 2 || m.SelectedUID != "b" || !reflect.DeepEqual(cmds, []model.Cmd{model.LoadCollection{Workspace: "/repo", Collection: allOpen}}) {
+	if !m.Loading || len(m.Issues) != 2 || m.SelectedUID != "b" || !readsCollection(cmds, m, "") {
 		t.Fatalf("switching Collection: loading=%v issues=%d selected=%q cmds=%#v", m.Loading, len(m.Issues), m.SelectedUID, cmds)
 	}
-	m, _ = model.Update(m, model.CollectionLoaded{Collection: allOpen, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "c", Status: "open"}}}})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "c", Status: "open"}}}})
 	if m.Loading || len(m.Issues) != 1 || m.Issues[0].UID != "c" {
 		t.Fatalf("new Collection did not replace the Issues: loading=%v issues=%+v", m.Loading, m.Issues)
 	}
@@ -72,16 +69,16 @@ func TestDetailStaysOnScreenUntilTheSelectedIssueArrives(t *testing.T) {
 		{"c arrives after b", []model.Msg{model.SelectMsg{UID: "b"}, model.SelectMsg{UID: "c"}, model.DetailLoaded{UID: "b", Selected: authority("b")}, model.DetailLoaded{UID: "c", Selected: authority("c")}}, "c", false, nil, []model.Cmd{detailTop}},
 		{"b fails", []model.Msg{model.SelectMsg{UID: "b"}, model.DetailFailed{UID: "b", Err: failure}}, "", false, failure, nil},
 		{"a reloads after saving a Draft", []model.Msg{model.DraftSaved{UID: "a"}}, "a", true, nil, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "a"}}},
-		{"empty Collection", []model.Msg{model.CollectionLoaded{Collection: model.Collection{View: "project", ProjectUID: "project", Title: "work"}, Snapshot: g.UISnapshotResponseBody{}}}, "", false, nil, nil},
+		{"empty Collection", []model.Msg{snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{}}}}, "", false, nil, nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m, _ := model.Update(projectOf("a", "b", "c"), model.DetailLoaded{UID: "a", Selected: authority("a")})
 			var cmds []model.Cmd
 			for _, msg := range tt.msgs {
-				m, cmds = model.Update(m, msg)
+				m, cmds = step(m, msg)
 			}
-			if m.DetailIssueUID() != tt.onScreen || m.DetailLoading != tt.loading || m.DetailErr != tt.err || !reflect.DeepEqual(cmds, tt.wantCmds) {
-				t.Fatalf("detail=%q loading=%v err=%v cmds=%#v", m.DetailIssueUID(), m.DetailLoading, m.DetailErr, cmds)
+			if m.DetailIssueUID() != tt.onScreen || m.DetailLoading() != tt.loading || m.DetailErr() != tt.err || !reflect.DeepEqual(cmds, tt.wantCmds) {
+				t.Fatalf("detail=%q loading=%v err=%v cmds=%#v", m.DetailIssueUID(), m.DetailLoading(), m.DetailErr(), cmds)
 			}
 		})
 	}
@@ -91,21 +88,21 @@ func TestDetailReturnsToFirstRowOnlyForADifferentIssueAndKeepsItsTab(t *testing.
 	a := &g.UISelectedAuthority{Issue: &model.Issue{UID: "a"}, Comments: []g.Comment{{UID: "one"}, {UID: "two"}}}
 	m, _ := model.Update(projectOf("a", "b"), model.DetailLoaded{UID: "a", Selected: a})
 	m, _ = model.Update(m, model.DetailItemMsg{Tab: model.TabComments, Key: "two"})
-	if m.ActivityTab != model.TabComments || m.DetailIndex != 1 {
-		t.Fatalf("fixture: tab=%v index=%d", m.ActivityTab, m.DetailIndex)
+	if m.ActiveTab() != model.TabComments || m.DetailIndex() != 1 {
+		t.Fatalf("fixture: tab=%v index=%d", m.ActiveTab(), m.DetailIndex())
 	}
 
 	// The same Issue reloads (after saving a Draft) where the reader was.
 	m, _ = model.Update(m, model.DraftSaved{UID: "a"})
 	m, _ = model.Update(m, model.DetailLoaded{UID: "a", Selected: a})
-	if m.DetailIssueUID() != "a" || m.ActivityTab != model.TabComments || m.DetailIndex != 1 {
-		t.Fatalf("reload moved the reader: issue=%q tab=%v index=%d", m.DetailIssueUID(), m.ActivityTab, m.DetailIndex)
+	if m.DetailIssueUID() != "a" || m.ActiveTab() != model.TabComments || m.DetailIndex() != 1 {
+		t.Fatalf("reload moved the reader: issue=%q tab=%v index=%d", m.DetailIssueUID(), m.ActiveTab(), m.DetailIndex())
 	}
 
 	// Another Issue starts at its first row on the same tab, while the previous detail stays until it arrives.
 	m, _ = model.Update(m, model.SelectMsg{UID: "b"})
-	if m.DetailIssueUID() != "a" || m.ActivityTab != model.TabComments || m.DetailIndex != 0 {
-		t.Fatalf("selecting b: issue=%q tab=%v index=%d", m.DetailIssueUID(), m.ActivityTab, m.DetailIndex)
+	if m.DetailIssueUID() != "a" || m.ActiveTab() != model.TabComments || m.DetailIndex() != 0 {
+		t.Fatalf("selecting b: issue=%q tab=%v index=%d", m.DetailIssueUID(), m.ActiveTab(), m.DetailIndex())
 	}
 }
 

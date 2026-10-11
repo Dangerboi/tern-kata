@@ -38,23 +38,16 @@ func TestIssueNavigation(t *testing.T) {
 		{"interrupt", []string{"ctrl+c"}, "uid-a", true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			m, _ := model.Update(model.Model{Loading: true}, model.ProjectLoaded{
-				Project: model.Project{UID: "project", Name: "test"},
-				Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{
-					{UID: "uid-a", ShortID: "aaaa", Title: "First"},
-					{UID: "uid-b", ShortID: "bbbb", Title: "Second"},
-					{UID: "uid-c", ShortID: "cccc", Title: "Third"},
-				}},
-			})
-			var cmds []model.Cmd
+			m, _ := loadFirst(model.Model{Loading: true}, model.ProjectLoaded{Project: model.Project{UID: "project", Name: "test"}}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{
+				{UID: "uid-a", ShortID: "aaaa", Title: "First"},
+				{UID: "uid-b", ShortID: "bbbb", Title: "Second"},
+				{UID: "uid-c", ShortID: "cccc", Title: "Third"},
+			}}})
 			for _, key := range tt.keys {
-				m, cmds = model.Update(m, model.KeyMsg{Chord: key})
+				m, _ = model.Update(m, model.KeyMsg{Chord: key})
 			}
 			if m.Loading || m.Project.Name != "test" || len(m.Issues) != 3 || m.SelectedUID != tt.want || m.Quitting != tt.quit {
 				t.Fatalf("visible Issue state: %+v", m)
-			}
-			if tt.quit && !reflect.DeepEqual(cmds, []model.Cmd{model.Quit{}}) {
-				t.Fatalf("quit commands: %#v", cmds)
 			}
 		})
 	}

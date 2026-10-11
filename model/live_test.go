@@ -12,10 +12,7 @@ import (
 )
 
 func TestLiveMergePreservesIssueSelection(t *testing.T) {
-	m, cmds := model.Update(model.Model{Workspace: "/repo", SelectedUID: "b"}, model.ProjectLoaded{
-		Project:  model.Project{UID: "project"},
-		Snapshot: g.UISnapshotResponseBody{Cursor: 10, Collection: []model.Issue{{UID: "a"}, {UID: "b", Title: "Before"}}},
-	})
+	m, cmds := loadFirst(model.Model{Workspace: "/repo", SelectedUID: "b"}, model.ProjectLoaded{Project: model.Project{UID: "project"}}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Cursor: 10, Collection: []model.Issue{{UID: "a"}, {UID: "b", Title: "Before"}}}})
 	if !reflect.DeepEqual(cmds, []model.Cmd{model.Subscribe{Workspace: "/repo", AfterID: 10, Generation: 1}, model.LoadDetail{Workspace: "/repo", UID: "b"}}) {
 		t.Fatalf("initial subscription: %#v", cmds)
 	}
@@ -23,8 +20,8 @@ func TestLiveMergePreservesIssueSelection(t *testing.T) {
 	if len(cmds) != 1 {
 		t.Fatalf("live refresh: %#v", cmds)
 	}
-	refresh := cmds[0].(model.RefreshSnapshot)
-	m, _ = model.Update(m, model.SnapshotRefreshed{
+	refresh := cmds[0].(model.ReadSnapshot)
+	m, _ = model.Update(m, model.SnapshotLoaded{
 		Request: refresh.Request, Query: refresh.Query,
 		Snapshot: g.UISnapshotResponseBody{Cursor: 11, Collection: []model.Issue{{UID: "new"}, {UID: "b", Title: "After"}, {UID: "a"}}},
 	})
@@ -83,11 +80,11 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 			name:     "reset requests unconditional full refetch",
 			messages: []model.Msg{model.StreamEvent{Generation: 1, ID: 25, Type: "sync.reset_required"}},
 			check: func(t *testing.T, m model.Model, cmds []model.Cmd) {
-				refresh := cmds[0].(model.RefreshSnapshot)
+				refresh := cmds[0].(model.ReadSnapshot)
 				if !m.Resetting || !m.Stale || refresh.ETag != "" || m.Cursor != 10 {
 					t.Fatalf("history reset: %+v, %#v", m, cmds)
 				}
-				m, cmds = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query,
+				m, cmds = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query,
 					Snapshot: g.UISnapshotResponseBody{Cursor: 30, Collection: []model.Issue{{UID: "b", Title: "Survivor"}}},
 				})
 				if m.Resetting || len(m.Issues) != 1 || m.SelectedUID != "b" || !reflect.DeepEqual(cmds, []model.Cmd{model.Subscribe{Workspace: "/repo", AfterID: 30, Generation: 2}, model.LoadDetail{Workspace: "/repo", UID: "b"}}) {
@@ -102,8 +99,8 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 				if !m.Stale || !m.StreamConnected {
 					t.Fatalf("reconnect before refresh: %+v", m)
 				}
-				refresh := cmds[0].(model.RefreshSnapshot)
-				m, _ = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, NotModified: true})
+				refresh := cmds[0].(model.ReadSnapshot)
+				m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, NotModified: true})
 				if m.Stale || m.StreamErr != nil || m.ReconnectAttempt != 0 || m.SelectedUID != "b" {
 					t.Fatalf("reconnected: %+v", m)
 				}
@@ -120,10 +117,7 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			m, _ := model.Update(model.Model{Workspace: "/repo", SelectedUID: "b"}, model.ProjectLoaded{
-				Project: model.Project{UID: "project"}, ETag: "\"old\"",
-				Snapshot: g.UISnapshotResponseBody{Cursor: 10, Collection: []model.Issue{{UID: "a"}, {UID: "b"}}},
-			})
+			m, _ := loadFirst(model.Model{Workspace: "/repo", SelectedUID: "b"}, model.ProjectLoaded{Project: model.Project{UID: "project"}}, model.SnapshotLoaded{ETag: "\"old\"", Snapshot: g.UISnapshotResponseBody{Cursor: 10, Collection: []model.Issue{{UID: "a"}, {UID: "b"}}}})
 			var cmds []model.Cmd
 			for _, msg := range tt.messages {
 				m, cmds = model.Update(m, msg)
@@ -136,26 +130,27 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 func TestLiveRefreshPreservesDetailPosition(t *testing.T) {
 	for _, authority := range []bool{true, false} {
 		t.Run(map[bool]string{true: "snapshot authority", false: "detail refetch"}[authority], func(t *testing.T) {
-			m := model.Model{SelectedUID: "issue", DetailUID: "issue", Focus: model.ColumnDetail, ActivityTab: model.TabComments, DetailIndex: 1,
-				Detail: &g.UISelectedAuthority{Issue: &model.Issue{UID: "issue"}, Comments: []g.Comment{{UID: "one"}, {UID: "two"}}}}
-			m, cmds := model.Update(m, model.StreamEvent{ID: 1, Type: "issue.updated"})
-			refresh := cmds[0].(model.RefreshSnapshot)
+			m := withDetail(model.Model{LiveState: model.LiveState{StreamGeneration: 1}, SelectedUID: "issue", Focus: model.ColumnDetail},
+				&g.UISelectedAuthority{Issue: &model.Issue{UID: "issue"}, Comments: []g.Comment{{UID: "one"}, {UID: "two"}}})
+			m = cursorAt(m, 1)
+			m, cmds := model.Update(m, model.StreamEvent{Generation: 1, ID: 1, Type: "issue.updated"})
+			refresh := cmds[0].(model.ReadSnapshot)
 			if refresh.Query.SelectedIssueUID == nil || *refresh.Query.SelectedIssueUID != "issue" || refresh.Query.IncludeHistory == nil || !*refresh.Query.IncludeHistory {
 				t.Fatalf("refresh omitted selected authority/history: %+v", refresh.Query)
 			}
 			snapshot := g.UISnapshotResponseBody{Cursor: 1, Collection: []model.Issue{{UID: "issue"}}}
 			if authority {
-				snapshot.Selected = m.Detail
+				snapshot.Selected = m.DetailAuthority()
 			}
-			m, cmds = model.Update(m, model.SnapshotRefreshed{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot})
+			m, cmds = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot})
 			if !authority {
 				if len(cmds) != 1 {
 					t.Fatalf("missing detail refetch: %#v", cmds)
 				}
 				m, _ = model.Update(m, model.DetailLoaded{UID: "issue", Selected: &g.UISelectedAuthority{Issue: &model.Issue{UID: "issue"}, Comments: []g.Comment{{UID: "one"}, {UID: "two"}}}})
 			}
-			if m.ActivityTab != model.TabComments || m.DetailIndex != 1 || m.SelectedUID != "issue" {
-				t.Fatalf("refresh reset reading position: tab=%v index=%d selected=%q", m.ActivityTab, m.DetailIndex, m.SelectedUID)
+			if m.ActiveTab() != model.TabComments || m.DetailIndex() != 1 || m.SelectedUID != "issue" {
+				t.Fatalf("refresh reset reading position: tab=%v index=%d selected=%q", m.ActiveTab(), m.DetailIndex(), m.SelectedUID)
 			}
 		})
 	}

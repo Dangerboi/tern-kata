@@ -27,7 +27,7 @@ func pickerLayer(m model.Model) tern.Element {
 	}
 	selected := ""
 	if len(entries) > 0 {
-		selected = PickerListID + "." + entries[min(m.Picker.Cursor, len(entries)-1)].Key()
+		selected = PickerItemID(entries[min(m.Picker.Cursor, len(entries)-1)].Key())
 	}
 	// esc goes Back on the Projects level, so the button says so, as the footer does.
 	closeLabel := "Close (esc)"

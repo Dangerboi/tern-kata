@@ -2,15 +2,23 @@ package model
 
 import "strings"
 
+// FieldSpec is one field of a popup card: Key names its node and Text says it takes typed text.
+type FieldSpec struct {
+	Key  string
+	Text bool
+}
+
+// FilterFields is the Filter form's field list, in tab order.
+var FilterFields = [...]FieldSpec{{"project", false}, {"status", false}, {"owner", true}, {"label", true}, {"relationship", false}}
+
+// FilterTextFieldFocused reports whether the Filter form's focused field takes typed text.
+func (m Model) FilterTextFieldFocused() bool { return FilterFields[m.FilterForm.Field].Text }
+
 type FilterFormState struct {
 	Open   bool
 	Field  int
 	Values Filters
 }
-
-type FilterFieldMsg struct{ Field int }
-
-func (FilterFieldMsg) msg() {}
 
 func filterTextField(form *FilterFormState) *string {
 	switch form.Field {
@@ -20,6 +28,14 @@ func filterTextField(form *FilterFormState) *string {
 		return &form.Values.Label
 	}
 	return nil
+}
+
+// filterFormKey is one key for the Filter form on top: a bound chord acts, any other types.
+func filterFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
+	if binding, ok := LookupBindingForMode(msg.Chord, ModeFilterForm); ok {
+		return updateFilterForm(m, binding.Action)
+	}
+	return updateFilterText(m, msg)
 }
 
 func updateFilterForm(m Model, action Action) (Model, []Cmd) {
@@ -35,22 +51,18 @@ func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 		m.Filters.Label = strings.TrimSpace(m.Filters.Label)
 		m.FilterForm = FilterFormState{}
 		m.SelectedUID = ""
-		return refreshFilters(m)
+		return snapshotChanged(m)
 	case CancelFilters:
 		m.FilterForm = FilterFormState{}
 	case NextFilterField:
-		m.FilterForm.Field = (m.FilterForm.Field + 1) % 5
+		cycleField(&m, 1)
 	case PreviousFilterField:
-		m.FilterForm.Field = (m.FilterForm.Field + 4) % 5
+		cycleField(&m, -1)
 	case ResetFilterForm:
 		m.FilterForm.Values = Filters{}
 	case DeleteInput, ClearInput:
 		if field := filterTextField(&m.FilterForm); field != nil {
-			if action == DeleteInput {
-				*field = deleteLastRune(*field)
-			} else {
-				*field = ""
-			}
+			*field, _ = editText(*field, Binding{Action: action}, true, KeyMsg{})
 		} else {
 			switch m.FilterForm.Field {
 			case 0:

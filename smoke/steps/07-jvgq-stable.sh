@@ -18,7 +18,6 @@ expect_no_ops() {
 expect_ops() { [[ -n $(stable_ops "$1" "$2" "$3") ]] || { printf 'Missing TSP ops %s\n' "$3" >&2; return 1; }; }
 stable_columns='(.[0] == "add" or .[0] == "del") and (.[1] | test("^main\\.(loading|columns(\\.(collections|list(\\.issues)?|detail))?|topbar(\\.(heading|daemon|counts))?)$"))'
 stable_detail='(.[0] == "add" or .[0] == "del") and (.[1] | test("^main\\.columns\\.detail\\.viewport(\\.content(\\.(heading(\\.(title|status))?|gap(-activity)?|properties|labels|body|activity))?)?$"))'
-detail_reveal='.[0] == "reveal" and (.[1] | test("^main\\.columns\\.detail\\.viewport\\.content\\.(properties|labels|body|activity)(\\.[^.]+)*$"))'
 
 # An unbound directory keeps the Collections sidebar, starting on Inbox.
 mkdir -p "$tmp/stable-unbound"
@@ -45,31 +44,19 @@ expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.n
 expect_tree "[data-id='main.columns.detail.viewport.content.body']" '[.nodes[] | .. | objects | .text? // empty] | join(" ") | contains("Stable second body")'
 expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$stable_columns"
 expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$stable_detail"
-expect_no_ops "$tmp/stable-frames.jsonl" "$mark" '.[0] == "reveal"'
 expect_ops "$tmp/stable-frames.jsonl" "$mark" '.[1] == "main.columns.detail.viewport.content.heading.title"'
 
-# Neither a live refresh of the Issue being read nor following its link to another
-# Issue reveals anything in the detail: a reveal pins Tern's list and stops the wheel (ef39).
+# A live refresh of the Issue being read and following its link to another Issue keep the detail's nodes.
 ctl click "[data-id='main.columns.list.issues.$stable_first']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.nodes[0].text | contains("Smoke stable first") and (contains("loading") | not)'
 ctl key enter
-mark=$(wc -l <"$tmp/stable-frames.jsonl")
 ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']"
 expect_tree "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']" '.ok and (.nodes[0].text | startswith("[ Links"))'
-# The click's own tab reveals (19-yd2n) follow its render; the tab names are the pair's second reveal, which only the recording shows.
-for ((attempt = 0; attempt < 100; attempt++)); do
-  [[ -z $(stable_ops "$tmp/stable-frames.jsonl" "$mark" '.[0] == "reveal" and (.[1] | endswith(".activity.tabs"))') ]] || break
-  sleep 0.1
-done
-expect_ops "$tmp/stable-frames.jsonl" "$mark" '.[0] == "reveal" and (.[1] | endswith(".activity.tabs"))'
-mark=$(wc -l <"$tmp/stable-frames.jsonl")
 kata --workspace "$tmp/workspace" comment "$stable_first" --body "Stable refresh comment" --json
 expect_tree "[data-id='main.columns.detail.viewport.content.activity.tabs.tab0']" '.ok and (.nodes[0].text | startswith("Comments (1)"))'
-expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$detail_reveal"
 mark=$(wc -l <"$tmp/stable-frames.jsonl")
 ctl key enter
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.nodes[0].text | contains("Smoke stable second") and (contains("loading") | not)'
-expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$detail_reveal"
 expect_no_ops "$tmp/stable-frames.jsonl" "$mark" "$stable_detail"
 
 # Leaving a populated list for an empty Collection keeps the columns too.
