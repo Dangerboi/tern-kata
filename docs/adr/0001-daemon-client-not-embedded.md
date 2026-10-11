@@ -9,3 +9,4 @@ Embedding constructs a `kata.Service` that owns its own storage handle. Running 
 - A daemon must be running or startable. We find it with `kata daemon locate --json` until a kata release ships `client.Discover`.
 - Live updates come from the daemon's durable event stream, not in-process callbacks.
 - Upstreaming into kata later swaps only the data layer; model and view stay unchanged.
+- Tests may run kata's service in process (`kata.New` served by its `Handler()` behind `httptest`) with a temporary database per test. The two-writers problem does not arise for a database only the test owns. The shipped program never does this.
