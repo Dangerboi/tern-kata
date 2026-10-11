@@ -8,7 +8,7 @@ import (
 	"strconv"
 )
 
-func (c *Client) CreateIssue(ctx context.Context, cmd model.CreateIssueCmd) model.IssueCreated {
+func (c *Client) CreateIssue(ctx context.Context, cmd model.CreateIssueCmd) (model.IssueCreated, error) {
 	body := g.CreateIssueBody{Title: cmd.Title, Body: &cmd.Body, Actor: &cmd.Actor, Labels: cmd.Labels, Priority: cmd.Priority}
 	if cmd.Owner != "" {
 		body.Owner = &cmd.Owner
@@ -21,10 +21,10 @@ func (c *Client) CreateIssue(ctx context.Context, cmd model.CreateIssueCmd) mode
 		if response != nil {
 			err = ReadError(response.Body, err)
 		}
-		return model.IssueCreated{Err: err}
+		return model.IssueCreated{}, err
 	}
 	if response == nil || response.JSON200 == nil {
-		return model.IssueCreated{Err: errors.New("kata returned no created Issue")}
+		return model.IssueCreated{}, errors.New("kata returned no created Issue")
 	}
-	return model.IssueCreated{UID: response.JSON200.Issue.UID}
+	return model.IssueCreated{UID: response.JSON200.Issue.UID}, nil
 }

@@ -9,27 +9,27 @@ import (
 	g "go.kenn.io/kata/pkg/client/generated"
 )
 
-func (c *Client) SaveDraft(ctx context.Context, cmd model.SaveDraft) model.Msg {
-	failed := func(err error) model.Msg { return model.DraftFailed{UID: cmd.UID, Err: err} }
+// SaveDraft reports a revision conflict as a DraftConflict, not an error.
+func (c *Client) SaveDraft(ctx context.Context, cmd model.SaveDraft) (model.Msg, error) {
 	current, err := c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: cmd.ProjectID, Ref: cmd.UID}})
 	if err != nil {
 		if current != nil {
 			err = ReadError(current.Body, err)
 		}
-		return failed(err)
+		return nil, err
 	}
 	if current.JSON200 == nil {
-		return failed(fmt.Errorf("kata returned no Issue before saving Draft"))
+		return nil, fmt.Errorf("kata returned no Issue before saving Draft")
 	}
-	conflict := func() model.Msg {
+	conflict := func() (model.Msg, error) {
 		detail, err := c.ReadDetail(ctx, cmd.UID)
 		if err != nil {
-			return failed(err)
+			return nil, err
 		}
 		if detail.Selected.Issue == nil {
-			return failed(fmt.Errorf("kata returned no current Issue for conflict"))
+			return nil, fmt.Errorf("kata returned no current Issue for conflict")
 		}
-		return model.DraftConflict{UID: cmd.UID, Issue: *detail.Selected.Issue}
+		return model.DraftConflict{UID: cmd.UID, Issue: *detail.Selected.Issue}, nil
 	}
 	if current.JSON200.Issue.Revision != cmd.BaseRevision {
 		return conflict()
@@ -44,7 +44,7 @@ func (c *Client) SaveDraft(ctx context.Context, cmd model.SaveDraft) model.Msg {
 			if response != nil {
 				err = ReadError(response.Body, err)
 			}
-			return failed(err)
+			return nil, err
 		}
 	} else {
 		// ponytail: check-then-write races; use atomic If-Match once kata enforces it on edits.
@@ -59,8 +59,8 @@ func (c *Client) SaveDraft(ctx context.Context, cmd model.SaveDraft) model.Msg {
 			if response != nil {
 				err = ReadError(response.Body, err)
 			}
-			return failed(err)
+			return nil, err
 		}
 	}
-	return model.DraftSaved{UID: cmd.UID}
+	return model.DraftSaved{UID: cmd.UID}, nil
 }

@@ -22,24 +22,36 @@ type Client struct {
 	version   string
 }
 
-func Discover(ctx context.Context, workspace string) (result *Client, err error) {
+// Target is where a located daemon listens, as `kata daemon locate --json` reports it.
+type Target struct {
+	Kind           string `json:"kind"`
+	Network        string `json:"network"`
+	Address        string `json:"address"`
+	RequestBaseURL string `json:"request_base_url"`
+}
+
+// Locator finds the daemon that serves workspace.
+type Locator func(ctx context.Context, workspace string) (Target, error)
+
+// LocateWithKata is the production Locator: it asks the kata CLI.
+func LocateWithKata(ctx context.Context, workspace string) (Target, error) {
 	raw, err := exec.CommandContext(ctx, "kata", "--workspace", workspace, "daemon", "locate", "--json").Output()
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && len(exit.Stderr) > 0 {
-			return nil, ReadError(exit.Stderr, err)
+			return Target{}, ReadError(exit.Stderr, err)
 		}
-		return nil, fmt.Errorf("kata daemon locate: %w", err)
+		return Target{}, fmt.Errorf("kata daemon locate: %w", err)
 	}
-	var target struct {
-		Kind           string `json:"kind"`
-		Network        string `json:"network"`
-		Address        string `json:"address"`
-		RequestBaseURL string `json:"request_base_url"`
-	}
+	var target Target
 	if err := json.Unmarshal(raw, &target); err != nil {
-		return nil, fmt.Errorf("kata daemon locate response: %w", err)
+		return Target{}, fmt.Errorf("kata daemon locate response: %w", err)
 	}
+	return target, nil
+}
+
+// connect builds a client for target and applies the version gate.
+func connect(ctx context.Context, target Target) (result *Client, err error) {
 	var c *client.Client
 	var transport *http.Transport
 	defer func() {
@@ -80,7 +92,7 @@ func Discover(ctx context.Context, workspace string) (result *Client, err error)
 	return &Client{Client: c, transport: transport, remote: target.Kind == "remote", version: normalized}, nil
 }
 
-// CloseIdleConnections releases the owned Unix transport after a command or stream finishes.
+// CloseIdleConnections releases the owned Unix transport when the client is dropped.
 func (c *Client) CloseIdleConnections() {
 	if c.transport != nil {
 		c.transport.CloseIdleConnections()
