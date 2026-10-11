@@ -292,7 +292,7 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 		{"Draft Discard", typed, []string{"escape"}, func(m model.Model) bool { return m.Drafts["a"].DiscardConfirm }},
 		{"Draft discard prompt", asked, []string{"y", "n"}, func(model.Model) bool { return true }},
 		{"Close Issue with no message", pressed(issue, "x"), []string{"ctrl+o"}, func(m model.Model) bool { return m.CloseForm.Err != nil }},
-		{"Close Quick done", pressed(issue, "x"), []string{"ctrl+d"}, func(m model.Model) bool { return m.CloseForm.Pending }},
+		{"Close Quick done", pressed(issue, "x"), []string{"ctrl+d"}, func(m model.Model) bool { return m.CloseForm.Saving }},
 		{"Close Cancel", pressed(issue, "x"), []string{"escape"}, func(m model.Model) bool { return !m.CloseForm.Open }},
 		{"Filters Apply", pressed(issue, "f"), []string{"ctrl+o"}, func(m model.Model) bool { return !m.FilterForm.Open }},
 		{"Filters Cancel", pressed(issue, "f"), []string{"escape"}, func(m model.Model) bool { return !m.FilterForm.Open }},

@@ -28,7 +28,7 @@ func textFocusID(m model.Model) string {
 		return ""
 	}
 	if m.CloseForm.Open {
-		if m.CloseForm.Pending {
+		if m.CloseForm.Saving {
 			return ""
 		}
 		return view.CloseFieldID(m.CloseForm.Field)

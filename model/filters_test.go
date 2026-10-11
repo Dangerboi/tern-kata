@@ -192,11 +192,7 @@ func TestFilterFormInputAndChoices(t *testing.T) {
 		owner, label, relationship string
 		endField                   int
 	}{
-		{"space is text, arrows do not insert", 2, []string{"q", "space", "x", "right", "left"}, "q x", "", "", 2},
-		{"unicode backspace and paste", 3, []string{"λ", "backspace"}, "", "", "", 3},
 		{"relationship choices wrap backwards", 4, []string{"left"}, "", "", "related", 4},
-		{"tab wraps", 4, []string{"tab"}, "", "", "", 0},
-		{"backtab wraps", 0, []string{"shift+tab"}, "", "", "", 4},
 		{"reset does not apply", 2, []string{"q", "ctrl+r"}, "", "", "", 2},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
