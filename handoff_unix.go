@@ -15,4 +15,3 @@ func execKata(kata string, args, env []string) error {
 func editorCommand(editor, file string) *exec.Cmd {
 	return exec.Command("sh", "-c", editor+" \"$1\"", "tern-kata-editor", file)
 }
-
