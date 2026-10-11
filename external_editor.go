@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
 
 	"github.com/Dangerboi/tern-kata/model"
 	"github.com/Dangerboi/tern-kata/view"
@@ -53,7 +52,7 @@ func editExternally(cmd model.OpenDraftEditor) model.DraftEditorClosed {
 		return result
 	}
 	// The Session must be closed first: Suspend leaves its stdin pump and raw mode active.
-	process := exec.Command("sh", "-c", editor+" \"$1\"", "tern-kata-editor", file.Name())
+	process := editorCommand(editor, file.Name())
 	process.Stdin = os.Stdin
 	process.Stdout = os.Stdout
 	process.Stderr = os.Stderr
