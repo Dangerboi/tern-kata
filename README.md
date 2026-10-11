@@ -19,6 +19,12 @@ Install `kata` and `tern-kata` on the session host, the machine whose shells run
 
 **Open kata** in the palette, or `F9`, opens a right split in the focused Pane's directory. A literal `kata://<project>/<short_id>` link focuses a running kata Pane and selects the Issue without restarting it, or opens a split with `tern-kata --issue <project>/<short_id>`. `https://kata.invalid/<project>/<short_id>` does the same: Tern's chat Markdown (`md` nodes, as OMP sends) links `https` hrefs but draws `kata://` as plain text, and `.invalid` never resolves, so without the plugin the link opens a dead page. Links may select closed or other-Project Issues in detail without changing the current Collection. Percent-encoded segments, query strings and fragments are declined. Missing `tern-kata` on the Pane's `PATH` prints `go install github.com/Dangerboi/tern-kata@latest` in the Pane. OS scheme registration is separate; the plugin handles links delivered inside Tern.
 
+Optional: to have agents write clickable ticket references in every kata-tracked repo, add this to OMP's user-level rules, `~/.omp/agent/RULES.md` (or a repo's `AGENTS.md` for one repo):
+
+```markdown
+In a repo with a `.kata.toml`, write kata ticket references as `[<id>](https://kata.invalid/<project>/<id>)`, with `<project>` the name in `.kata.toml`. The tern-kata window plugin opens them in tern-kata; Tern draws `kata://` links in chat as plain text.
+```
+
 The plugin sends a TSP `action` to `main.columns.list.issues` with `act: "select-issue"` and `value: "<project>/<short_id>"`. The binary uses the same model message path for startup selection and this action; its terminal title `tern-kata` lets a reloaded window plugin discover an existing Pane.
 
 Tern 0.6.2 (`4b3ed42`) performs synchronous login-environment capture when a plugin uses `Launch.command`. A minimal hook containing only `cx.layout:split(cx.session:focused(), "right", {command = "exec /bin/sh"})` reproduced a 57.95 ms capture, the warning `plugin="bare-split" hook="command open" error=runtime error: tern: command open exceeded 50 ms`, and a skipped second launch: the Pane count stayed at two. The shipped Launch fields and runtime preferences expose no per-launch capture switch.
