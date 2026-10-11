@@ -30,6 +30,28 @@ cleanup() {
 }
 trap cleanup EXIT
 ctl() { tern ctl --control "$tmp/control.sock" "$@"; }
+# Waits (real time) until the active tab has $1 Panes: a quit closes the launch-command Pane.
+expect_panes() {
+  for ((attempt=0; attempt<100; attempt++)); do
+    ctl ready
+    [[ $(ctl state | jq -r '.tabs[0].panes') == "$1" ]] && return 0
+    sleep 0.1
+  done
+  echo "expected $1 Panes, state: $(ctl state | jq -c '.tabs[0]')" >&2
+  return 1
+}
+# Toasts are not terminal text: poll the rendered tree for one. Headless Tern runs plugin timers only on frames, and
+# a Pane that already exited produces none, so each attempt runs a command in the original Pane.
+toast_shown() { ctl tree | jq -e --arg text "$1" 'tostring | contains($text)' >/dev/null; }
+expect_toast() {
+  printf 'run "true"\n' >"$tmp/pump.ctl"
+  for ((attempt=0; attempt<20; attempt++)); do
+    toast_shown "$1" && return 0
+    ctl --file "$tmp/pump.ctl"
+  done
+  echo "toast not shown: $1" >&2
+  return 1
+}
 mkdir -p "$tmp/workspace" "$tmp/bin" "$tmp/pane-bin" "$tmp/app" "$tmp/crates/tern/goldens" "$tmp/crates/plugins/fixtures"
 if [[ $# -gt 0 ]]; then cp "$1" "$tmp/app/tern-kata"; else (cd "$repo" && go build -o "$tmp/app/tern-kata" .); fi
 printf '#!/bin/sh\nexec env KATA_HOME=%q %q "$@"\n' "$KATA_HOME" "$tmp/app/tern-kata" >"$tmp/pane-bin/tern-kata"
@@ -73,16 +95,17 @@ ctl plugins expect smoke
 ctl state >"$tmp/palette-state.json"
 jq -e --arg cwd "$tmp/workspace" '.tabs[0].panes == 2 and .focused.cwd == $cwd' "$tmp/palette-state.json" >/dev/null
 palette_pane=$(jq -r '.focused.id' "$tmp/palette-state.json")
+# A normal quit after the 2 s window is not an install failure.
+sleep 2.5
 ctl key q
-ctl ready
-ctl focus left
+expect_panes 1
+! toast_shown 'tern-kata exited right away'
 ctl key F9
 ctl plugins expect smoke
 ctl state >"$tmp/key-state.json"
 jq -e --arg cwd "$tmp/workspace" --argjson previous "$palette_pane" '.tabs[0].panes == 2 and .focused.cwd == $cwd and .focused.id != $previous' "$tmp/key-state.json" >/dev/null
 ctl key q
-ctl ready
-ctl focus left
+expect_panes 1
 # A real OSC-8 terminal link exercises route.link, not a plugin-origin cx:open.
 click_issue_link() {
   command="printf '\\033[2J\\033[H\\033]8;;$1\\007Plugin link\\033]8;;\\007\\n'"
@@ -104,9 +127,18 @@ ctl plugins expect second
 ctl state >"$tmp/link-focus.json"
 jq -e --argjson id "$kata_pane" '.tabs[0].panes == 2 and .focused.id == $id' "$tmp/link-focus.json" >/dev/null
 ctl key q
+expect_panes 1
+# Characters a shell would treat specially are declined: no kata Pane opens.
+click_issue_link "kata://smoke/$first;x"
+click_issue_link "kata://smoke\$x/$first"
 ctl ready
+sleep 1
+expect_panes 1
 rm "$tmp/pane-bin/tern-kata"
 ctl plugins run plugin.tern-kata.open
-ctl expect '"go install github.com/Dangerboi/tern-kata@latest"'
+ctl focus left
+expect_toast 'tern-kata exited right away'
+expect_toast 'Is it installed on the session host? go install github.com/Dangerboi/tern-kata@latest'
+expect_panes 1
 jq -Rse 'contains("plugin window halves loaded count=1") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
-printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus, missing-binary in-Pane hint\n'
+printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus, bad-charset links declined, quit closes the Pane, missing-binary toast\n'

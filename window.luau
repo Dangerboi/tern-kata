@@ -1,8 +1,5 @@
 local kataPane = nil
-
-local function quote(value)
-    return "'" .. value:gsub("'", "'\\''") .. "'"
-end
+local fresh = {}
 
 local function isKata(info)
     return info and info.exited == nil
@@ -22,6 +19,28 @@ local function existingPane(cx)
     return nil
 end
 
+local function exitedRightAway(cx, pane)
+    fresh[pane] = nil
+    cx:toast("error", "tern-kata exited right away",
+        "Is it installed on the session host? go install github.com/Dangerboi/tern-kata@latest")
+end
+
+-- A kata Pane gone or exited within the first 2 s (20 ticks of 100 ms) means the binary is missing or failed at
+-- startup. Tern closes the Pane on a clean exit but keeps it, marked exited, on a failing one, so close it here.
+local function watch(pane, ticks)
+    fresh[pane] = true
+    tern.timer(100, function(cx)
+        if not cx or not fresh[pane] then return end
+        local info = cx.session:pane(pane)
+        if not info then return exitedRightAway(cx, pane) end
+        if info.exited ~= nil then
+            cx.layout:close(pane)
+            return exitedRightAway(cx, pane)
+        end
+        if ticks > 1 then watch(pane, ticks - 1) else fresh[pane] = nil end
+    end)
+end
+
 local function open(cx, ref)
     if ref then
         local pane = existingPane(cx)
@@ -31,17 +50,24 @@ local function open(cx, ref)
             return
         end
     end
+    -- The command is unquoted launch text: callers pass only [A-Za-z0-9._-] references.
+    local command = ref and "tern-kata --issue " .. ref or "tern-kata"
     local target = cx.session:focused()
+    local pane
     if target then
-        kataPane = cx.layout:split(target, "right")
+        pane = cx.layout:split(target, "right", {command = command})
     else
-        kataPane = cx.layout:new_tab()
+        pane = cx.layout:new_tab({command = command})
     end
-    if not kataPane then return end
-    local command = 'exec sh -c \'command -v tern-kata >/dev/null 2>&1 && exec tern-kata "$@"; printf "%s %s\\n" "go install" "github.com/Dangerboi/tern-kata@latest"; exec "${SHELL:-sh}"\' sh'
-    if ref then command ..= " --issue " .. quote(ref) end
-    cx:run(kataPane, "\r" .. command .. "\r")
+    if not pane then return end
+    kataPane = pane
+    watch(pane, 20)
 end
+
+tern.on("pane_closed", function(ev, cx)
+    if kataPane == ev.pane then kataPane = nil end
+    if fresh[ev.pane] then exitedRightAway(cx, ev.pane) end
+end)
 
 tern.command({
     id = "open",
@@ -54,9 +80,8 @@ tern.route.link(function(link, cx)
     local project, shortID = link.url:match("^kata://([^/]+)/([^/?#]+)$")
     -- Tern's chat markdown links https but not custom schemes; .invalid never resolves, so only this route opens it.
     if not project then project, shortID = link.url:match("^https://kata%.invalid/([^/]+)/([^/?#]+)$") end
-    -- References are literal URL segments: encoded or ambiguous separators are declined.
-    if not project or project:find("[?#%%\\]") or shortID:find("[%%\\]")
-        or (project .. shortID):find("[%z\r\n]") then return nil end
+    -- The reference goes into an unquoted launch command, so only shell-inert characters pass.
+    if not project or project:find("[^A-Za-z0-9._-]") or shortID:find("[^A-Za-z0-9._-]") then return nil end
     open(cx, project .. "/" .. shortID)
     return {handled = true}
 end)
