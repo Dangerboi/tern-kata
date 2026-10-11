@@ -139,7 +139,7 @@ func TestNewProjectInterruptQuits(t *testing.T) {
 	saving, _ := pickerKeys(idle, "enter")
 	for name, m := range map[string]model.Model{"idle": idle, "saving": saving} {
 		got, cmds := pickerKeys(m, "ctrl+c")
-		if !got.Quitting || !reflect.DeepEqual(cmds, []model.Cmd{model.Quit{}}) {
+		if !got.Quitting || len(cmds) != 0 {
 			t.Fatalf("%s ctrl+c: quitting=%v cmds=%#v", name, got.Quitting, cmds)
 		}
 	}

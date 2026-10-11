@@ -166,17 +166,6 @@ func TestSwitchingIssueReplacesDetailInPlace(t *testing.T) {
 	}
 }
 
-func TestSearchKeepsItsCaretWhileACollectionLoads(t *testing.T) {
-	m := apply(browsing(), model.KeyMsg{Chord: "/"})
-	if view.InputFocusID(m) != view.SearchID {
-		t.Fatalf("fixture: search is not focused: %q", view.InputFocusID(m))
-	}
-	m = apply(m, model.CollectionSelected{Collection: m.Collections[4]})
-	if !m.Loading || view.InputFocusID(m) != view.SearchID {
-		t.Errorf("caret left the search box while loading: loading=%v focus=%q", m.Loading, view.InputFocusID(m))
-	}
-}
-
 func TestStaleNoticeStaysWhileACollectionLoads(t *testing.T) {
 	m := browsing()
 	m = apply(m, model.StreamDropped{Generation: m.StreamGeneration, Err: errors.New("kata server not responding")})

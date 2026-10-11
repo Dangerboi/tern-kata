@@ -18,7 +18,7 @@ func saveProject(ctx context.Context, workspace string, save func(*data.Client) 
 	return model.ProjectSaved{Project: project, Err: err}
 }
 
-func execute(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
+func execute(ctx context.Context, cmd model.Cmd, messages chan<- any) {
 	var msg model.Msg
 	switch cmd := cmd.(type) {
 	case model.CreateIssueCmd:

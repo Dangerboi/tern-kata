@@ -61,8 +61,8 @@ func TestRenderPickerRowForNewProject(t *testing.T) {
 
 func TestRenderNewProjectFormFollowsTheModel(t *testing.T) {
 	closed := newProjectModel(false, "escape", "end")
-	if _, ok := pickerNodes(t, closed)[newProjectIDPrefix]; ok || view.InputFocusID(closed) != "" {
-		t.Fatal("a closed form rendered or took the caret")
+	if _, ok := pickerNodes(t, closed)[newProjectIDPrefix]; ok {
+		t.Fatal("a closed form rendered")
 	}
 
 	m := newProjectModel(false, "escape", "end", "enter")
@@ -70,14 +70,11 @@ func TestRenderNewProjectFormFollowsTheModel(t *testing.T) {
 	if _, ok := nodes[newProjectIDPrefix]; !ok {
 		t.Fatal("form not rendered")
 	}
-	if view.ProjectInputID != newProjectIDPrefix+".name" || view.InputFocusID(m) != view.ProjectInputID {
-		t.Fatalf("caret target %q", view.InputFocusID(m))
+	if view.ProjectInputID != newProjectIDPrefix+".name" {
+		t.Fatalf("name input id %q", view.ProjectInputID)
 	}
 	if nodes[view.ProjectInputID].P["text"] != "my-repo" {
 		t.Fatalf("name input = %v", nodes[view.ProjectInputID].P)
-	}
-	if !view.IsTransientTarget(view.ProjectInputID) {
-		t.Fatal("a queued focus on the form's input would end the Pane when the form closes first")
 	}
 
 	// A rejection shows kata's message and keeps the input.
@@ -88,11 +85,11 @@ func TestRenderNewProjectFormFollowsTheModel(t *testing.T) {
 		t.Fatalf("rejected form: error=%v input=%v", nodes[newProjectIDPrefix+".error"].P, nodes[view.ProjectInputID].P)
 	}
 
-	// While the daemon works the input is read-only and gives up the caret.
+	// While the daemon works the input is read-only.
 	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
 	nodes = pickerNodes(t, m)
-	if nodes[view.ProjectInputID].P["readonly"] != true || view.InputFocusID(m) != "" {
-		t.Fatalf("saving form: input=%v focus=%q", nodes[view.ProjectInputID].P, view.InputFocusID(m))
+	if nodes[view.ProjectInputID].P["readonly"] != true {
+		t.Fatalf("saving form: input=%v", nodes[view.ProjectInputID].P)
 	}
 	if _, ok := nodes[newProjectIDPrefix+".saving"]; !ok {
 		t.Fatal("no saving marker")

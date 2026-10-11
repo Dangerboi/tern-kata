@@ -79,7 +79,7 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 		m.DetailBack = nil
 	}
 	m, detailCmds := EnsureDetail(m)
-	return m, onScreen(m, append(cmds, detailCmds...))
+	return m, append(cmds, detailCmds...)
 }
 
 func update(m Model, msg Msg) (Model, []Cmd) {

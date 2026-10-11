@@ -27,16 +27,17 @@ func TestArrowAndPageKeysScrollTheDetailViewport(t *testing.T) {
 	}
 }
 
-// Tern answers a scroll aimed at a node it does not draw with an error that ends the Pane's program.
-func TestDetailScrollsAreSentOnlyWhileTheDetailIsOnScreen(t *testing.T) {
+// Whether a column is drawn is the Pane driver's call: the model asks for the scroll whatever the width.
+func TestDetailScrollIntentsDoNotDependOnTheWidth(t *testing.T) {
 	detail := arrowModes(t)["detail"]
 	detail.Cols = 60
 	if detail.Shows(model.ColumnDetail) {
 		t.Fatal("fixture: the detail is on screen")
 	}
-	for _, chord := range []string{"down", "up", "page_down", "page_up"} {
-		if _, cmds := model.Update(detail, model.KeyMsg{Chord: chord}); len(cmds) != 0 {
-			t.Errorf("%s with the detail off screen: %#v", chord, cmds)
+	for chord, want := range map[string]model.ScrollBy{"down": model.ScrollLineDown, "up": model.ScrollLineUp, "page_down": model.ScrollPageDown, "page_up": model.ScrollPageUp} {
+		_, cmds := model.Update(detail, model.KeyMsg{Chord: chord})
+		if wantCmds := []model.Cmd{model.Scroll{Column: model.ColumnDetail, By: want}}; !reflect.DeepEqual(cmds, wantCmds) {
+			t.Errorf("%s with the detail off screen: %#v, want %#v", chord, cmds, wantCmds)
 		}
 	}
 }
@@ -67,16 +68,17 @@ func TestSwitchingActivityTabRevealsIt(t *testing.T) {
 	}
 }
 
-// Tern ends the program on a reveal aimed at a node it does not draw: the detail folded away, or not yet loaded.
-func TestActivityTabRevealIsSentOnlyWhileTheTabsAreDrawn(t *testing.T) {
+// Whether the tabs are drawn is the Pane driver's call: the model asks for the reveal even for a folded or unloaded detail.
+func TestActivityTabRevealIntentDoesNotDependOnTheTabsBeingDrawn(t *testing.T) {
 	folded := arrowModes(t)["detail"]
 	folded.Cols = 60
 	unloaded := arrowModes(t)["detail"]
 	unloaded.Detail = nil
+	reveal := []model.Cmd{model.RevealActivityTab{}}
 	for name, m := range map[string]model.Model{"folded": folded, "unloaded": unloaded} {
 		for _, msg := range []model.Msg{model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "shift+tab"}, model.ActivityTabMsg{Tab: model.TabComments}} {
-			if _, cmds := model.Update(m, msg); len(cmds) != 0 {
-				t.Errorf("%s, %T: %#v", name, msg, cmds)
+			if _, cmds := model.Update(m, msg); !reflect.DeepEqual(cmds, reveal) {
+				t.Errorf("%s, %T: %#v, want %#v", name, msg, cmds, reveal)
 			}
 		}
 	}

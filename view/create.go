@@ -9,14 +9,18 @@ import (
 
 var createKeys = [...]string{"title", "body", "labels", "owner", "priority"}
 
+// CreateFieldID is the id of the Create card's field index.
+func CreateFieldID(index int) string { return "layer.create." + createKeys[index] }
+
 func CreateFieldIndex(id string) (int, bool) {
-	for i, key := range createKeys {
-		if id == "layer.create."+key {
+	for i := range createKeys {
+		if id == CreateFieldID(i) {
 			return i, true
 		}
 	}
 	return 0, false
 }
+
 func createLayer(m model.Model) tern.Element {
 	f := m.Create
 	title := "Create Issue"

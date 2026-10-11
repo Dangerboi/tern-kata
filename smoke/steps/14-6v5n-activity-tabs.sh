@@ -1,7 +1,6 @@
 # The Activity tabs: Comments, Events and Links with their counts, one tab's rows at a time. tab and
 # shift+tab cycle them, a click on a tab name selects it, the tab stays when another Issue opens, and j/k
-# move the row cursor without making the detail reveal anything (Tern pins a reveal's target and could kill the
-# wheel; only a tab switch reveals, the pair of 19-yd2n), so the wheel and the keys still scroll the detail afterwards. Own Project and Issues; it cleans up.
+# move the row cursor, so the wheel and the keys still scroll the detail afterwards. Own Project and Issues; it cleans up.
 at_rects() { ctl tree "[data-id='main.columns.detail.viewport'],[data-id='main.columns.detail.viewport.content']" | jq -c '[.nodes[].rect]'; }
 # How far the content is scrolled and how much is left below the viewport's bottom edge, in px.
 at_above() { at_rects | jq -r '.[1][1] - .[0][1] | -floor'; }
@@ -32,8 +31,7 @@ at_peer=$(jq -r '.issue.uid' "$tmp/tabs-peer.json")
 for n in 1 2; do kata --workspace "$at_dir" comment "$(jq -r '.issue.short_id' "$tmp/tabs-main.json")" --body "Tabs comment $n" --json >/dev/null; done
 
 quit_app
-rm -f "$tmp/tabs-frames.jsonl"
-printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP TERN_TSP_RECORD=%s KATA_HOME=%s %s/tern-kata)"\n' "$tmp/tabs-unbound" "$tmp/tabs-frames.jsonl" "$KATA_HOME" "$tmp" >"$tmp/tabs-launch.ctl"
+printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$tmp/tabs-unbound" "$KATA_HOME" "$tmp" >"$tmp/tabs-launch.ctl"
 ctl --file "$tmp/tabs-launch.ctl"
 ctl click "[data-id='main.columns.collections.projects']"
 expect_tree "[data-id='main.columns.collections.project.$at_project']" '.ok and .count == 1'
@@ -76,8 +74,6 @@ at_keys Down 3
 at_wait "↓ scrolls after j/k" '$a > 0'
 at_keys PageUp 12
 at_wait "pgup returns to the top after j/k" '$a == 0'
-stray_detail_reveals "$tmp/tabs-frames.jsonl" >"$tmp/tabs-reveals.json"
-[[ ! -s $tmp/tabs-reveals.json ]] || { printf 'Reveal inside the detail for a key: %s\n' "$(<"$tmp/tabs-reveals.json")" >&2; return 1; }
 
 # A click on a tab name selects it, and the tab stays when another Issue opens.
 at_wheel 300 12

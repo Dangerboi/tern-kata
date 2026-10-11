@@ -39,7 +39,3 @@ func (ResizeMsg) msg() {}
 type LoadProject struct{ Workspace string }
 
 func (LoadProject) cmd() {}
-
-type Quit struct{}
-
-func (Quit) cmd() {}

@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/driver"
 	"github.com/Dangerboi/tern-kata/model"
-	"github.com/Dangerboi/tern-kata/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
@@ -58,64 +58,40 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	messages := make(chan model.Msg)
+	inputs := make(chan any)
 	inputErrors := make(chan error, 1)
-	stopInput := startInputReader(ctx, session, messages, inputErrors)
+	stopInput := startInputReader(ctx, session, inputs, inputErrors)
 	defer func() { stopInput() }()
-	m := model.Model{Cols: session.Caps().Cols, Actor: resolveActor(override)}
+	state := driver.State{Model: model.Model{Cols: session.Caps().Cols, Actor: resolveActor(override)}}
 	runner := commandRunner{}
 	defer runner.close()
-	msg := model.Msg(model.Start{Workspace: workspace, IssueRef: issueRef})
-	inputFocus := ""
+	input := any(model.Start{Workspace: workspace, IssueRef: issueRef})
 eventLoop:
 	for {
-		previousSelection := m.SelectedUID
-		var cmds []model.Cmd
-		m, cmds = model.Update(m, msg)
-		if m.Quitting {
+		out := driver.Step(state, input, time.Now())
+		state = out.State
+		if out.Err != nil {
+			return out.Err
+		}
+		if out.Quit {
 			return nil
 		}
-		if err := surface.Render(view.Render(m, time.Now())); err != nil {
-			return err
-		}
-		if target := view.InputFocusID(m); target != inputFocus {
-			if err := surface.Focus(target); err != nil {
-				return err
-			}
-			inputFocus = target
-		}
-		if !rowClick(msg) && !m.Loading && m.Focus == model.ColumnList && m.Shows(model.ColumnList) && m.SelectedUID != "" && m.SelectedUID != previousSelection {
-			if err := surface.Reveal(view.IssueID(m.SelectedUID), "nearest"); err != nil {
+		if out.View != nil {
+			if err := surface.Render(*out.View); err != nil {
 				return err
 			}
 		}
-		for _, cmd := range cmds {
-			if scroll, ok := cmd.(model.Scroll); ok {
-				target := view.IssueListID
-				switch scroll.Column {
-				case model.ColumnCollections:
-					target = view.CollectionsID
-				case model.ColumnDetail:
-					target = view.DetailContentID
-				}
-				if err := surface.Scroll(target, string(scroll.By)); err != nil {
-					return err
-				}
-				continue
+		if len(out.Ops) > 0 {
+			if err := surface.Send(out.Ops...); err != nil {
+				return err
 			}
-			if _, ok := cmd.(model.RevealActivityTab); ok {
-				for _, id := range view.ActivityRevealIDs(m) {
-					if err := surface.Reveal(id, "nearest"); err != nil {
-						return err
-					}
-				}
-				continue
-			}
+		}
+		for _, cmd := range out.Cmds {
 			if external, ok := cmd.(model.OpenDraftEditor); ok {
 				stopInput()
 				surface.Close()
 				session.Close()
-				msg = editExternally(external)
+				input = editExternally(external)
 				nextSession, connectErr := tern.Connect(ctx, editorOptions())
 				if connectErr != nil {
 					return connectErr
@@ -126,14 +102,14 @@ eventLoop:
 					return openErr
 				}
 				session, surface = nextSession, nextSurface
-				inputFocus = ""
-				stopInput = startInputReader(ctx, session, messages, inputErrors)
+				state = state.Fresh()
+				stopInput = startInputReader(ctx, session, inputs, inputErrors)
 				continue eventLoop
 			}
-			runner.launch(ctx, cmd, messages)
+			runner.launch(ctx, cmd, inputs)
 		}
 		select {
-		case msg = <-messages:
+		case input = <-inputs:
 		case err := <-inputErrors:
 			if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
 				return nil
@@ -141,18 +117,6 @@ eventLoop:
 			return err
 		}
 	}
-}
-
-// rowClick reports a click on an Issue row. Tern has already put that row under
-// the pointer, so revealing it again would scroll the list from under it.
-func rowClick(msg model.Msg) bool {
-	switch msg := msg.(type) {
-	case model.SelectMsg:
-		return true
-	case model.ActionMsg:
-		return msg.Action == model.ToggleExpansion
-	}
-	return false
 }
 
 func launchArgs(args []string) (string, []string, error) {

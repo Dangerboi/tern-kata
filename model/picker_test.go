@@ -284,7 +284,7 @@ func TestPickerEnterWithoutMatchKeepsPickerOpen(t *testing.T) {
 
 func TestPickerInterruptQuits(t *testing.T) {
 	m, cmds := pickerKeys(pickerStart(120, true), "p", "ctrl+c")
-	if !m.Quitting || !reflect.DeepEqual(cmds, []model.Cmd{model.Quit{}}) {
+	if !m.Quitting || len(cmds) != 0 {
 		t.Fatalf("ctrl+c in picker: quitting=%v cmds=%#v", m.Quitting, cmds)
 	}
 }

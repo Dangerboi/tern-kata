@@ -15,7 +15,7 @@ hs_long=$(jq -r '.issue.uid' "$tmp/help-long.json")
 hs_row="[data-id='main.columns.list.issues.$hs_long']"
 
 quit_app
-printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP TERN_TSP_RECORD=%s KATA_HOME=%s %s/tern-kata)"\n' "$tmp/help-unbound" "$tmp/help-frames.jsonl" "$KATA_HOME" "$tmp" >"$tmp/help-launch.ctl"
+printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$tmp/help-unbound" "$KATA_HOME" "$tmp" >"$tmp/help-launch.ctl"
 ctl --file "$tmp/help-launch.ctl"
 ctl click "[data-id='main.columns.collections.projects']"
 expect_tree "[data-id='main.columns.collections.project.$hs_project']" '.ok and .count == 1'

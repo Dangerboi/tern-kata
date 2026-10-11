@@ -20,8 +20,9 @@ type Scroll struct {
 
 func (Scroll) cmd() {}
 
-// RevealActivityTab asks the app to bring the active Activity tab into view in
-// the detail scroller: its last row, then the tab names.
+// RevealActivityTab asks for the active Activity tab to be brought into view in
+// the detail scroller: its last row, then the tab names. The Pane driver sends
+// it only while the tabs are drawn.
 type RevealActivityTab struct{}
 
 func (RevealActivityTab) cmd() {}
@@ -35,25 +36,10 @@ func (m Model) DetailDrawn() bool {
 // Shows reports whether the view draws column c. It draws none while the first
 // load or a daemon failure fills the Pane, under MinCols, or for the columns the
 // width folds away. Tern answers an op on an unknown node (scroll, reveal) with
-// an error event, which ends the app, so no op may name a column that is not shown.
+// an error event, which ends the app, so the Pane driver sends no op naming a column that is not shown.
 // The help sheet only hides the columns (they stay mounted) and Tern accepts scroll and reveal on a hidden node, so HelpOpen does not matter here.
 func (m Model) Shows(c Column) bool {
 	return m.Err == nil && !m.FirstLoad() && slices.Contains(m.VisibleColumns(), c)
-}
-
-// onScreen drops the Scrolls aimed at a column the view does not draw, and the
-// tab reveals while the tabs are not drawn. A column drawn again later starts
-// at its top, so nothing is lost.
-func onScreen(m Model, cmds []Cmd) []Cmd {
-	return slices.DeleteFunc(cmds, func(cmd Cmd) bool {
-		switch cmd := cmd.(type) {
-		case Scroll:
-			return !m.Shows(cmd.Column)
-		case RevealActivityTab:
-			return !m.DetailDrawn()
-		}
-		return false
-	})
 }
 
 // scrollFor is the scroll an action asks of the focused column: the page keys in
@@ -86,7 +72,7 @@ func updateNavigation(m Model, action Action) (Model, []Cmd) {
 	}
 	if action == QuitAction {
 		m.Quitting = true
-		return m, []Cmd{Quit{}}
+		return m, nil
 	}
 	if action == DrillIn || action == DrillOut || action == ToggleDetail || action == FocusDetail || action == NextActivityTab || action == PreviousActivityTab || m.Focus != ColumnList {
 		return updateDetailNavigation(m, action)

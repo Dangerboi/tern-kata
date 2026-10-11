@@ -128,14 +128,14 @@ func TestRenderPickerFollowsFilterAndShowsEmptyState(t *testing.T) {
 	}
 }
 
-func TestRenderPickerOnlyWhenOpenAndFocusesItsFilter(t *testing.T) {
+func TestRenderPickerOnlyWhenOpen(t *testing.T) {
 	m := pickerLoaded(true)
-	if _, ok := pickerNodes(t, m)["layer.collections"]; ok || view.InputFocusID(m) != "" {
-		t.Fatal("closed picker rendered or focused")
+	if _, ok := pickerNodes(t, m)["layer.collections"]; ok {
+		t.Fatal("closed picker rendered")
 	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "p", Text: "p"})
-	if _, ok := pickerNodes(t, m)["layer.collections"]; !ok || view.InputFocusID(m) != view.PickerFilterID || view.PickerFilterID != "layer.collections.filter" {
-		t.Fatalf("open picker: focus=%q", view.InputFocusID(m))
+	if _, ok := pickerNodes(t, m)["layer.collections"]; !ok || view.PickerFilterID != "layer.collections.filter" {
+		t.Fatalf("open picker: filter id %q", view.PickerFilterID)
 	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "escape"})
 	if _, ok := pickerNodes(t, m)["layer.collections"]; ok {

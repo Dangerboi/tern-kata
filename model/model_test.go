@@ -46,15 +46,11 @@ func TestIssueNavigation(t *testing.T) {
 					{UID: "uid-c", ShortID: "cccc", Title: "Third"},
 				}},
 			})
-			var cmds []model.Cmd
 			for _, key := range tt.keys {
-				m, cmds = model.Update(m, model.KeyMsg{Chord: key})
+				m, _ = model.Update(m, model.KeyMsg{Chord: key})
 			}
 			if m.Loading || m.Project.Name != "test" || len(m.Issues) != 3 || m.SelectedUID != tt.want || m.Quitting != tt.quit {
 				t.Fatalf("visible Issue state: %+v", m)
-			}
-			if tt.quit && !reflect.DeepEqual(cmds, []model.Cmd{model.Quit{}}) {
-				t.Fatalf("quit commands: %#v", cmds)
 			}
 		})
 	}

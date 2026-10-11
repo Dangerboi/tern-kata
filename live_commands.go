@@ -13,7 +13,7 @@ type commandRunner struct {
 	streamGeneration int64
 }
 
-func (r *commandRunner) launch(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
+func (r *commandRunner) launch(ctx context.Context, cmd model.Cmd, messages chan<- any) {
 	if subscription, ok := cmd.(model.Subscribe); ok {
 		if subscription.Generation <= r.streamGeneration {
 			return
@@ -34,7 +34,7 @@ func (r *commandRunner) close() {
 	}
 }
 
-func executeSubscription(ctx context.Context, cmd model.Subscribe, messages chan<- model.Msg) {
+func executeSubscription(ctx context.Context, cmd model.Subscribe, messages chan<- any) {
 	send := func(msg model.Msg) bool {
 		select {
 		case messages <- msg:
