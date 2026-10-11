@@ -43,6 +43,10 @@ expect_panes() {
 # Toasts are not terminal text: poll the rendered tree for one. Headless Tern runs plugin timers only on frames, and
 # a Pane that already exited produces none, so each attempt runs a command in the original Pane.
 toast_shown() { ctl tree | jq -e --arg text "$1" 'tostring | contains($text)' >/dev/null; }
+# `! f` under set -e never fails the script, so the negated checks go through this.
+expect_no_toast() {
+  if toast_shown "$1"; then echo "unexpected toast: $1" >&2; return 1; fi
+}
 expect_toast() {
   printf 'run "true"\n' >"$tmp/pump.ctl"
   for ((attempt=0; attempt<20; attempt++)); do
@@ -96,10 +100,16 @@ ctl state >"$tmp/palette-state.json"
 jq -e --arg cwd "$tmp/workspace" '.tabs[0].panes == 2 and .focused.cwd == $cwd' "$tmp/palette-state.json" >/dev/null
 palette_pane=$(jq -r '.focused.id' "$tmp/palette-state.json")
 # A normal quit after the 2 s window is not an install failure.
-sleep 2.5
+# Timers run only on frames, so pump the original Pane for the 2.5 s to let the 2 s window really end.
+ctl focus left
+printf 'run "true"\n' >"$tmp/pump.ctl"
+for ((attempt=0; attempt<25; attempt++)); do ctl --file "$tmp/pump.ctl"; sleep 0.1; done
+ctl focus right
 ctl key q
 expect_panes 1
-! toast_shown 'tern-kata exited right away'
+ctl focus left
+ctl --file "$tmp/pump.ctl"
+expect_no_toast 'tern-kata exited right away'
 ctl key F9
 ctl plugins expect smoke
 ctl state >"$tmp/key-state.json"
@@ -134,6 +144,26 @@ click_issue_link "kata://smoke\$x/$first"
 ctl ready
 sleep 1
 expect_panes 1
+# Earlier quits must not leave this toast behind, or the missing-binary check below passes on it.
+for ((attempt=0; attempt<100; attempt++)); do
+  toast_shown 'tern-kata exited right away' || break
+  sleep 0.2
+done
+expect_no_toast 'tern-kata exited right away'
+# A tern-kata that fails after the 2 s window still closes its Pane, with no install toast. The stub prints while it
+# runs so frames (and the 2 s window) advance, and ctl can focus the original Pane before the stub exits.
+printf '#!/bin/sh\ni=0\nwhile [ $i -lt 30 ]; do echo tick; sleep 0.2; i=$((i+1)); done\nexit 1\n' >"$tmp/pane-bin/tern-kata"
+ctl plugins run plugin.tern-kata.open
+seen=0
+for ((attempt=0; attempt<100; attempt++)); do
+  panes=$(ctl state | jq -r '[.tabs[].panes] | add')
+  if [[ $panes == 2 && $seen == 0 ]]; then seen=1; ctl focus left; fi
+  [[ $seen == 1 && $panes == 1 ]] && break
+  ctl --file "$tmp/pump.ctl"
+  sleep 0.1
+done
+[[ $seen == 1 && $panes == 1 ]] || { echo "failing tern-kata Pane did not close (seen=$seen panes=$panes)" >&2; exit 1; }
+expect_no_toast 'tern-kata exited right away'
 rm "$tmp/pane-bin/tern-kata"
 ctl plugins run plugin.tern-kata.open
 ctl focus left

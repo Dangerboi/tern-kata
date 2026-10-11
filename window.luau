@@ -25,6 +25,17 @@ local function exitedRightAway(cx, pane)
         "Is it installed on the session host? go install github.com/Dangerboi/tern-kata@latest")
 end
 
+-- After the window, a failing exit still closes the Pane (spec), silently: poll once a second until it is gone or replaced.
+local function reap(pane)
+    tern.timer(1000, function(cx)
+        if not cx or kataPane ~= pane then return end
+        local info = cx.session:pane(pane)
+        if not info then return end
+        if info.exited ~= nil then return cx.layout:close(pane) end
+        reap(pane)
+    end)
+end
+
 -- A kata Pane gone or exited within the first 2 s (20 ticks of 100 ms) means the binary is missing or failed at
 -- startup. Tern closes the Pane on a clean exit but keeps it, marked exited, on a failing one, so close it here.
 local function watch(pane, ticks)
@@ -34,10 +45,10 @@ local function watch(pane, ticks)
         local info = cx.session:pane(pane)
         if not info then return exitedRightAway(cx, pane) end
         if info.exited ~= nil then
-            cx.layout:close(pane)
-            return exitedRightAway(cx, pane)
+            exitedRightAway(cx, pane)
+            return cx.layout:close(pane)
         end
-        if ticks > 1 then watch(pane, ticks - 1) else fresh[pane] = nil end
+        if ticks > 1 then watch(pane, ticks - 1) else fresh[pane] = nil; reap(pane) end
     end)
 end
 

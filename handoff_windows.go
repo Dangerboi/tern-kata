@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"os/signal"
 	"syscall"
 )
 
@@ -14,6 +15,8 @@ func execKata(kata string, args, env []string) error {
 	cmd := exec.Command(kata, append([]string{"tui"}, args...)...)
 	cmd.Env = env
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	// Keep the parent alive on Ctrl+C/Break so it still exits with the child's status.
+	signal.Notify(make(chan os.Signal, 1), os.Interrupt)
 	err := cmd.Run()
 	var exit *exec.ExitError
 	if errors.As(err, &exit) {
