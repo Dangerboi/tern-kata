@@ -1,5 +1,7 @@
 local kataPane = nil
 local fresh = {}
+-- Issue reference per new kata Pane, sent over TSP once its surface is live, so it never passes through a shell.
+local pending = {}
 
 local function isKata(info)
     return info and info.exited == nil
@@ -19,6 +21,18 @@ local function existingPane(cx)
     return nil
 end
 
+local function selectIssue(cx, pane, ref)
+    cx.session:event(pane, {ev = "action", id = "main.columns.list.issues", act = "select-issue", value = ref})
+end
+
+local function deliver(cx, pane)
+    local ref = pending[pane]
+    if ref and cx.session:surface(pane) then
+        pending[pane] = nil
+        selectIssue(cx, pane, ref)
+    end
+end
+
 local function exitedRightAway(cx, pane)
     fresh[pane] = nil
     cx:toast("error", "tern-kata exited right away",
@@ -32,6 +46,7 @@ local function reap(pane)
         local info = cx.session:pane(pane)
         if not info then return end
         if info.exited ~= nil then return cx.layout:close(pane) end
+        deliver(cx, pane)
         reap(pane)
     end)
 end
@@ -48,6 +63,7 @@ local function watch(pane, ticks)
             exitedRightAway(cx, pane)
             return cx.layout:close(pane)
         end
+        deliver(cx, pane)
         if ticks > 1 then watch(pane, ticks - 1) else fresh[pane] = nil; reap(pane) end
     end)
 end
@@ -57,26 +73,26 @@ local function open(cx, ref)
         local pane = existingPane(cx)
         if pane then
             cx.layout:focus(pane)
-            cx.session:event(pane, {ev = "action", id = "main.columns.list.issues", act = "select-issue", value = ref})
+            selectIssue(cx, pane, ref)
             return
         end
     end
-    -- The command is unquoted launch text: callers pass only [A-Za-z0-9._-] references.
-    local command = ref and "tern-kata --issue " .. ref or "tern-kata"
     local target = cx.session:focused()
     local pane
     if target then
-        pane = cx.layout:split(target, "right", {command = command})
+        pane = cx.layout:split(target, "right", {command = "tern-kata"})
     else
-        pane = cx.layout:new_tab({command = command})
+        pane = cx.layout:new_tab({command = "tern-kata"})
     end
     if not pane then return end
     kataPane = pane
+    pending[pane] = ref
     watch(pane, 20)
 end
 
 tern.on("pane_closed", function(ev, cx)
     if kataPane == ev.pane then kataPane = nil end
+    pending[ev.pane] = nil
     if fresh[ev.pane] then exitedRightAway(cx, ev.pane) end
 end)
 
@@ -91,8 +107,9 @@ tern.route.link(function(link, cx)
     local project, shortID = link.url:match("^kata://([^/]+)/([^/?#]+)$")
     -- Tern's chat markdown links https but not custom schemes; .invalid never resolves, so only this route opens it.
     if not project then project, shortID = link.url:match("^https://kata%.invalid/([^/]+)/([^/?#]+)$") end
-    -- The reference goes into an unquoted launch command, so only shell-inert characters pass.
-    if not project or project:find("[^A-Za-z0-9._-]") or shortID:find("[^A-Za-z0-9._-]") then return nil end
+    -- References are literal URL segments: encoded or ambiguous separators are declined.
+    if not project or project:find("[?#%%\\]") or shortID:find("[%%\\]")
+        or (project .. shortID):find("[%z\r\n]") then return nil end
     open(cx, project .. "/" .. shortID)
     return {handled = true}
 end)

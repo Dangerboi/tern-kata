@@ -78,6 +78,12 @@ kata --workspace "$tmp/workspace" create 'Plugin first Issue' --body 'Plugin fir
 kata --workspace "$tmp/workspace" create 'Plugin second Issue' --body 'Plugin second body' --json >"$tmp/second.json"
 first=$(jq -r '.issue.short_id' "$tmp/first.json")
 second=$(jq -r '.issue.short_id' "$tmp/second.json")
+# A Project name full of shell syntax: its links must still open, since the reference never reaches a shell.
+odd_project='odd;$x&y'
+mkdir -p "$tmp/odd"
+kata --workspace "$tmp/odd" init --project "$odd_project" --json
+kata --workspace "$tmp/odd" create 'Plugin odd Issue' --body 'Plugin odd body' --json >"$tmp/odd.json"
+odd=$(jq -r '.issue.short_id' "$tmp/odd.json")
 (cd "$repo" && tern plugin link . --json)
 ! command -v tern-kata >/dev/null 2>&1 || { echo "tern-kata must not be on window PATH" >&2; exit 1; }
 tern serve --control "$tmp/control.sock" --out "$tmp/shots" --dir "$tmp/workspace" >"$tmp/tern.log" 2>&1 &
@@ -127,26 +133,28 @@ click_issue_link() {
   ctl click "$x" "$y" cmd
 }
 click_issue_link "kata://smoke/$first"
-ctl plugins expect first
+ctl plugins expect '"Plugin first body"'
 ctl state >"$tmp/link-open.json"
 kata_pane=$(jq -r '.focused.id' "$tmp/link-open.json")
 jq -e '.tabs[0].panes == 2' "$tmp/link-open.json" >/dev/null
 ctl focus left
 click_issue_link "https://kata.invalid/smoke/$second"
-ctl plugins expect second
+ctl plugins expect '"Plugin second body"'
 ctl state >"$tmp/link-focus.json"
 jq -e --argjson id "$kata_pane" '.tabs[0].panes == 2 and .focused.id == $id' "$tmp/link-focus.json" >/dev/null
 ctl key q
 expect_panes 1
-# Characters a shell would treat specially are declined: no kata Pane opens.
-click_issue_link "kata://smoke/$first;x"
-click_issue_link "kata://smoke\$x/$first"
-ctl ready
-sleep 1
+# Shell syntax in a reference is passed to kata as data: the odd Project's Issue opens in a new kata Pane.
+click_issue_link "kata://$odd_project/$odd"
+ctl plugins expect '"Plugin odd body"'
+expect_panes 2
+ctl key q
 expect_panes 1
-# Earlier quits must not leave this toast behind, or the missing-binary check below passes on it.
+# Earlier quits must not leave this toast behind, or the missing-binary check below passes on it. Toasts expire on
+# frames, so each attempt pumps the remaining Pane.
 for ((attempt=0; attempt<100; attempt++)); do
   toast_shown 'tern-kata exited right away' || break
+  ctl --file "$tmp/pump.ctl"
   sleep 0.2
 done
 expect_no_toast 'tern-kata exited right away'
@@ -171,4 +179,4 @@ expect_toast 'tern-kata exited right away'
 expect_toast 'Is it installed on the session host? go install github.com/Dangerboi/tern-kata@latest'
 expect_panes 1
 jq -Rse 'contains("plugin window halves loaded count=1") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
-printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus, bad-charset links declined, quit closes the Pane, missing-binary toast\n'
+printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, shell-syntax Project link, quit closes the Pane, missing-binary toast\n'
