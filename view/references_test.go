@@ -57,7 +57,7 @@ func assertReference(t *testing.T, nodes shown, id, short, uid string) {
 	if !strings.Contains(style, "accent") || !strings.Contains(style, "link") {
 		t.Errorf("reference %q style = %q, want accent and underlined link", short, style)
 	}
-	if click := jump.P["actions"].(map[string]any)["click"]; click != "jump="+uid {
+	if click := jump.P["actions"].(map[string]any)["click"]; click != view.JumpClick(uid) {
 		t.Errorf("reference click = %v", click)
 	}
 }
@@ -94,7 +94,7 @@ func TestEventsReferenceIsStyledAndPlainEventsAreNot(t *testing.T) {
 			t.Errorf("event without a reference has %s", id)
 		}
 	}
-	if click := nodes[view.DetailActivityID+".closed.heading"].P["actions"].(map[string]any)["click"]; strings.HasPrefix(click.(string), "jump=") {
+	if click := nodes[view.DetailActivityID+".closed.heading"].P["actions"].(map[string]any)["click"]; strings.HasPrefix(click.(string), view.JumpClick("")) {
 		t.Errorf("plain row jumps: %v", click)
 	}
 }
@@ -178,7 +178,7 @@ func TestLinkRowReadsRelationReferenceDashTitle(t *testing.T) {
 		t.Errorf("same-Project row draws %q", got)
 	}
 	for _, id := range []string{row + ".dash", row + ".title"} {
-		if click := nodes[id].P["actions"].(map[string]any)["click"]; click != "jump=peer" {
+		if click := nodes[id].P["actions"].(map[string]any)["click"]; click != view.JumpClick("peer") {
 			t.Errorf("%s click = %v", id, click)
 		}
 	}
@@ -204,7 +204,7 @@ func TestPropertiesTitleJumpsToTheReferencedIssue(t *testing.T) {
 	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, up}}}, model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &alpha, Links: links}})
 	nodes := render(t, m)
 	title := nodes[view.DetailContentID+".properties.parent.v.title"]
-	if text(title) != "Up" || title.P["actions"].(map[string]any)["click"] != "jump=up" {
+	if text(title) != "Up" || title.P["actions"].(map[string]any)["click"] != view.JumpClick("up") {
 		t.Errorf("title = %v", title)
 	}
 }

@@ -71,7 +71,7 @@ func transientTarget(id string) bool {
 	if _, ok := view.CloseFieldIndex(id); ok {
 		return true
 	}
-	if strings.HasPrefix(id, view.IssueListID+".") {
+	if view.IsIssueID(id) {
 		return true
 	}
 	// The active tab's rows and its empty line go when the tab switches; the tab names and the activity container stay.

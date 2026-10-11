@@ -26,8 +26,6 @@ const (
 
 const IssueListID = "main.columns.list.issues"
 
-func IssueID(uid string) string { return IssueListID + "." + uid }
-
 // loadingMarker sits in a column heading while that column's content is
 // replaced; the previous content stays on screen until it arrives.
 var loadingMarker = ui.Span{T: "  loading…", S: "muted"}
@@ -183,7 +181,7 @@ func topBar(m model.Model) tern.Element {
 		return ui.Common{Key: key, Tone: tone, Shrink: &shrink}
 	}
 	headingCell := flexCell("heading", tone, 0)
-	headingCell.Title, headingCell.Actions = "Menu (p)", &ui.Actions{Click: "key=p"}
+	headingCell.Title, headingCell.Actions = "Menu (p)", &ui.Actions{Click: KeyClick("p")}
 	rightCell := flexCell("right", ui.ToneNeutral, 100)
 	return ui.Row{Common: ui.Common{Key: "topbar", Hidden: m.HelpOpen}, Gap: ui.GapMD, Justify: ui.JustifyBetween, Children: ui.Nodes(
 		ui.Row{Common: flexCell("left", ui.ToneNeutral, 0), Gap: ui.GapSM, Children: ui.Nodes(
@@ -291,9 +289,9 @@ func issueRow(row model.IssueRow, selected bool, role string, ownerShown bool, i
 		owner = *row.Owner
 	}
 	// A parent's click folds it; a double click on any row opens it. Tern sends the two clicks first, so a parent's fold ends where it began.
-	actions := &ui.Actions{DblClick: string(model.OpenRow) + "=" + row.UID}
+	actions := &ui.Actions{DblClick: OpenRowClick(row.UID)}
 	if row.HasChildren {
-		actions.Click = string(model.ToggleExpansion) + "=" + row.UID
+		actions.Click = ToggleClick(row.UID)
 	}
 	return ui.Item{Common: ui.Common{Key: row.UID, Role: role, Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells(kids, owner, relativeTime(row.UpdatedAt, now), ownerShown, "muted")...)}
 }
@@ -320,7 +318,7 @@ func footer(m model.Model) tern.Element {
 		if binding.Action == model.ClosePicker && m.Picker.Projects && m.Picker.Filter == "" {
 			help = "back"
 		}
-		segments = append(segments, ui.Seg{Common: ui.Common{Key: binding.Chord, Actions: &ui.Actions{Click: "key=" + binding.Chord}}, Text: binding.Key + " " + help})
+		segments = append(segments, ui.Seg{Common: ui.Common{Key: binding.Chord, Actions: &ui.Actions{Click: KeyClick(binding.Chord)}}, Text: binding.Key + " " + help})
 	}
 	selected := 0
 	rows := m.VisibleRows()

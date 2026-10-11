@@ -62,9 +62,6 @@ type Model struct {
 }
 
 func Update(m Model, msg Msg) (Model, []Cmd) {
-	if action, ok := msg.(ActionMsg); ok && action.Action == "key" {
-		msg = KeyMsg{Chord: action.Value}
-	}
 	shown, tab := m.DetailIssueUID(), m.ActivityTab
 	m, cmds := update(m, msg)
 	if m.ActivityTab != tab {
@@ -83,6 +80,9 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 }
 
 func update(m Model, msg Msg) (Model, []Cmd) {
+	if msg, ok := msg.(FocusFieldMsg); ok {
+		return focusField(m, msg.Field), nil
+	}
 	if next, cmds, handled := updateCreate(m, msg); handled {
 		return next, cmds
 	}
@@ -108,10 +108,6 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return pickCollectionKey(m, msg.Key)
 	}
 	switch msg := msg.(type) {
-	case FilterFieldMsg:
-		if m.FilterForm.Open && msg.Field >= 0 && msg.Field < 5 {
-			m.FilterForm.Field = msg.Field
-		}
 	case FieldValueMsg:
 		if m.FieldForm.Open && !m.FieldForm.Saving {
 			m.FieldForm.Value = msg.Value

@@ -55,7 +55,7 @@ func detail(m model.Model, now time.Time) tern.Element {
 			title = append(title, loadingMarker)
 		}
 		parts := []tern.Element{ui.Col{Common: ui.Common{Key: "heading"}, Children: ui.Nodes(
-			ui.Text{Common: ui.Common{Key: "title", Actions: &ui.Actions{Click: "focus-detail"}}, Spans: title},
+			ui.Text{Common: ui.Common{Key: "title", Actions: &ui.Actions{Click: FocusDetailClick}}, Spans: title},
 			ui.Badge{Common: ui.Common{Key: "status", Tone: statusTone(issue.Status)}, Text: statusText(issue)},
 		)}, ui.Spacer{Common: ui.Common{Key: "gap"}, Size: ui.GapMD}}
 		body := issue.Body
@@ -95,7 +95,7 @@ func activityTabs(m model.Model) tern.Element {
 		if tab == m.ActivityTab {
 			name, style = "[ "+name+" ]", "accent strong"
 		}
-		tabs = append(tabs, ui.Text{Common: ui.Common{Key: "tab" + strconv.Itoa(int(tab)), Actions: &ui.Actions{Click: "activity-tab=" + strconv.Itoa(int(tab))}}, Spans: []ui.Span{{T: name, S: style}}})
+		tabs = append(tabs, ui.Text{Common: ui.Common{Key: "tab" + strconv.Itoa(int(tab)), Actions: &ui.Actions{Click: ActivityTabClick(tab)}}, Spans: []ui.Span{{T: name, S: style}}})
 	}
 	return ui.Row{Common: ui.Common{Key: "tabs"}, Gap: ui.GapMD, Children: tabs}
 }
@@ -108,7 +108,7 @@ func detailRows(m model.Model, tab model.ActivityTab, cursorOffset int) tern.Nod
 	rows := make(tern.Nodes, 0, count)
 	for i := range count {
 		row, _ := m.DetailRow(tab, i)
-		action := "detail-item=" + strconv.Itoa(int(tab)) + ":" + row.Key
+		action := DetailItemClick(tab, row.Key)
 		mark := ui.Mark("")
 		if m.Focus == model.ColumnDetail && m.DetailIndex == cursorOffset+i {
 			mark = ui.MarkPick

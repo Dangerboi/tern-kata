@@ -109,7 +109,7 @@ func TestEveryChildCellJumpsToTheChild(t *testing.T) {
 	nodes := render(t, parenting(model.TabComments))
 	for _, cell := range []string{"jump", "status", "title", "updated"} {
 		n := nodes[kidRow+"."+cell]
-		if click := n.P["actions"].(map[string]any)["click"]; click != "jump=kid" {
+		if click := n.P["actions"].(map[string]any)["click"]; click != view.JumpClick("kid") {
 			t.Errorf("%s click = %v", cell, click)
 		}
 	}

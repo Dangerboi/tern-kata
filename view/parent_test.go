@@ -60,7 +60,7 @@ func TestParentIssueWithManyChildrenRendersItsWholeTree(t *testing.T) {
 				if !ok {
 					t.Fatalf("no Link row for %s: %v", uid, links.under(view.DetailActivityID))
 				}
-				if click := jump.P["actions"].(map[string]any)["click"]; click != "jump="+uid {
+				if click := jump.P["actions"].(map[string]any)["click"]; click != view.JumpClick(uid) {
 					t.Errorf("%s's reference does %v", uid, click)
 				}
 				if _, ok := events[view.DetailActivityID+".event-"+uid]; !ok {

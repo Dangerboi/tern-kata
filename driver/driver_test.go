@@ -37,25 +37,12 @@ func alphaLoaded() model.Msg {
 	return model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &alpha}}
 }
 
-// drawnIDs is every node id Tern would hold after out.View is rendered.
-func drawnIDs(t *testing.T, view tern.View) map[string]bool {
+// drawnIDs is every node id Tern would hold after v is rendered.
+func drawnIDs(t *testing.T, v tern.View) map[string]bool {
 	t.Helper()
-	ops, err := tern.NewReconciler("test").Diff(view)
-	if err != nil {
-		t.Fatalf("render: %v", err)
-	}
 	ids := map[string]bool{}
-	var add func(tern.WireNode)
-	add = func(n tern.WireNode) {
-		ids[n.ID] = true
-		for _, child := range n.C {
-			add(child)
-		}
-	}
-	for _, op := range ops {
-		if op[0] == "add" {
-			add(op[4].(tern.WireNode))
-		}
+	for _, node := range wireNodes(t, v) {
+		ids[node.ID] = true
 	}
 	return ids
 }
@@ -160,13 +147,13 @@ func TestRowIsRevealedOnKeyMovesButNotOnRowClicks(t *testing.T) {
 	}
 	wantOps(t, out)
 
-	out = step(t, s, &tern.Action{ID: view.IssueID("beta"), Act: string(model.ToggleExpansion), Value: "beta"})
+	out = step(t, s, click(view.IssueID("beta"), view.ToggleClick("beta")))
 	wantOps(t, out)
 }
 
 func TestRowIsNotRevealedUnlessTheListIsFocusedAndDrawn(t *testing.T) {
 	s := browsing(t, 160)
-	out := step(t, s, &tern.Action{Act: "focus-detail"})
+	out := step(t, s, click("", view.FocusDetailClick))
 	if out.State.Model.Focus != model.ColumnDetail {
 		t.Fatalf("fixture: focus %v", out.State.Model.Focus)
 	}
@@ -178,14 +165,14 @@ func TestRowIsNotRevealedUnlessTheListIsFocusedAndDrawn(t *testing.T) {
 func TestNoOpNamesAColumnTheViewDoesNotDraw(t *testing.T) {
 	inputs := []any{
 		key("j"), key("k"), key("page_down"), key("page_up"), key("down"), key("up"), key("tab"), key("shift+tab"), key("enter"), key("escape"),
-		&tern.Action{Act: "activity-tab", Value: "1"}, &tern.Action{Act: "focus-detail"},
+		click("", view.ActivityTabClick(model.TabEvents)), click("", view.FocusDetailClick),
 		&tern.Select{ID: view.IssueListID, Item: view.IssueID("beta")},
 	}
 	for _, cols := range []int{60, 79, 80, 100, 139, 140, 160} {
 		for _, detailFocused := range []bool{false, true} {
 			base := browsing(t, cols)
 			if detailFocused {
-				base = step(t, base, &tern.Action{Act: "focus-detail"}).State
+				base = step(t, base, click("", view.FocusDetailClick)).State
 			}
 			for _, in := range inputs {
 				step(t, base, in)
@@ -196,10 +183,10 @@ func TestNoOpNamesAColumnTheViewDoesNotDraw(t *testing.T) {
 
 func TestScrollsAndRevealsAreDroppedWhenNothingIsDrawn(t *testing.T) {
 	detailFocused := func(cols int) driver.State {
-		return feed(t, browsing(t, 160), &tern.Action{Act: "focus-detail"}, resize(cols)).State
+		return feed(t, browsing(t, 160), click("", view.FocusDetailClick), resize(cols)).State
 	}
 	firstLoad := feed(t, driver.State{}, model.Start{Workspace: "/repo"}, resize(160)).State
-	failed := feed(t, browsing(t, 160), &tern.Action{Act: "focus-detail"}, model.Failed{Err: errors.New("kata server not responding")}).State
+	failed := feed(t, browsing(t, 160), click("", view.FocusDetailClick), model.Failed{Err: errors.New("kata server not responding")}).State
 	for name, s := range map[string]driver.State{"below 80 columns": detailFocused(79), "first load": firstLoad, "daemon failure": failed} {
 		for _, chord := range []string{"page_down", "page_up", "down", "up", "tab", "shift+tab", "j"} {
 			for _, op := range step(t, s, key(chord)).Ops {
@@ -212,39 +199,39 @@ func TestScrollsAndRevealsAreDroppedWhenNothingIsDrawn(t *testing.T) {
 }
 
 func TestScrollAndRevealAreSentForDrawnColumns(t *testing.T) {
-	s := feed(t, browsing(t, 160), &tern.Action{Act: "focus-detail"}).State
+	s := feed(t, browsing(t, 160), click("", view.FocusDetailClick)).State
 	wantOps(t, step(t, s, key("page_down")), tern.OpScroll(view.DetailContentID, "page-down"))
 	wantOps(t, step(t, s, key("down")), tern.OpScroll(view.DetailContentID, "line-down"))
 
 	// The only column drawn is the detail below 140 columns.
-	narrow := feed(t, browsing(t, 100), &tern.Action{Act: "focus-detail"}).State
+	narrow := feed(t, browsing(t, 100), click("", view.FocusDetailClick)).State
 	wantOps(t, step(t, narrow, key("page_up")), tern.OpScroll(view.DetailContentID, "page-up"))
 }
 
 func TestActivityTabRevealGoesOutInOrder(t *testing.T) {
-	s := feed(t, browsing(t, 160), &tern.Action{Act: "focus-detail"}).State
+	s := feed(t, browsing(t, 160), click("", view.FocusDetailClick)).State
 	want := []tern.Op{tern.OpReveal(view.DetailActivityID+".empty", "nearest"), tern.OpReveal(view.DetailActivityID+".tabs", "nearest")}
-	for name, in := range map[string]any{"tab": key("tab"), "shift+tab": key("shift+tab"), "click": &tern.Action{Act: "activity-tab", Value: "1"}} {
+	for name, in := range map[string]any{"tab": key("tab"), "shift+tab": key("shift+tab"), "click": click("", view.ActivityTabClick(model.TabEvents))} {
 		t.Run(name, func(t *testing.T) { wantOps(t, step(t, s, in), want...) })
 	}
-	wantOps(t, step(t, s, &tern.Action{Act: "activity-tab", Value: "0"}))
+	wantOps(t, step(t, s, click("", view.ActivityTabClick(model.TabComments))))
 }
 
 func TestActivityTabRevealIsDroppedWhileTheTabsAreNotDrawn(t *testing.T) {
-	loaded := feed(t, browsing(t, 160), &tern.Action{Act: "focus-detail"}).State
+	loaded := feed(t, browsing(t, 160), click("", view.FocusDetailClick)).State
 	folded := feed(t, loaded, resize(60)).State
 	wantOps(t, step(t, folded, key("tab")))
 
-	failed := feed(t, browsing(t, 160), model.DetailFailed{UID: "alpha", Err: errors.New("down")}, &tern.Action{Act: "focus-detail"}).State
+	failed := feed(t, browsing(t, 160), model.DetailFailed{UID: "alpha", Err: errors.New("down")}, click("", view.FocusDetailClick)).State
 	wantOps(t, step(t, failed, key("tab")))
 }
 
 func TestColumnsStayMountedWhileHelpIsOpen(t *testing.T) {
-	s := feed(t, browsing(t, 160), &tern.Action{Act: "focus-detail"}, key("?")).State
+	s := feed(t, browsing(t, 160), click("", view.FocusDetailClick), key("?")).State
 	if !s.Model.HelpOpen {
 		t.Fatal("fixture: help is closed")
 	}
-	out := step(t, s, &tern.Action{Act: "activity-tab", Value: "1"})
+	out := step(t, s, click("", view.ActivityTabClick(model.TabEvents)))
 	wantOps(t, out, tern.OpReveal(view.DetailActivityID+".empty", "nearest"), tern.OpReveal(view.DetailActivityID+".tabs", "nearest"))
 	closed := step(t, out.State, key("escape"))
 	if closed.State.Model.HelpOpen {
@@ -355,11 +342,11 @@ func TestSearchKeepsItsCaretWhileACollectionLoads(t *testing.T) {
 func TestOnlyATabSwitchRevealsInsideTheDetail(t *testing.T) {
 	peer := "peer"
 	withLink := &g.UISelectedAuthority{Issue: &alpha, Links: []g.UILink{{ID: 1, FromIssueUID: "alpha", ToIssueUID: peer, ToQualifiedID: "work#peer", Type: "related"}}}
-	s := feed(t, browsing(t, 160), model.DetailLoaded{UID: "alpha", Selected: withLink}, &tern.Action{Act: "focus-detail"}).State
+	s := feed(t, browsing(t, 160), model.DetailLoaded{UID: "alpha", Selected: withLink}, click("", view.FocusDetailClick)).State
 	for name, in := range map[string]any{
-		"title click":     &tern.Action{Act: "focus-detail"},
-		"row click":       &tern.Action{Act: "detail-item", Value: "0:" + "x"},
-		"jump":            &tern.Action{Act: "jump", Value: peer},
+		"title click":     click("", view.FocusDetailClick),
+		"row click":       click("", view.DetailItemClick(model.TabComments, "x")),
+		"jump":            click("", view.JumpClick(peer)),
 		"j":               key("j"),
 		"k":               key("k"),
 		"enter":           key("enter"),

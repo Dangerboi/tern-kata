@@ -12,7 +12,7 @@ const RetryID = "main.retry"
 func failureView(m model.Model) tern.Nodes {
 	return ui.Nodes(
 		ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.Err.Error()},
-		el.Button{Common: ui.Common{Key: "retry", Actions: &ui.Actions{Click: string(model.RetryAction)}}, Text: "Retry daemon"},
+		el.Button{Common: ui.Common{Key: "retry", Actions: &ui.Actions{Click: RetryClick}}, Text: "Retry daemon"},
 	)
 }
 

@@ -116,7 +116,7 @@ func TestCreateDiscardAndValidation(t *testing.T) {
 		m := model.Model{Project: model.Project{ID: 7}}
 		m, _ = model.Update(m, model.KeyMsg{Chord: "n"})
 		m, _ = model.Update(m, model.KeyMsg{Text: "title"})
-		m, _ = model.Update(m, model.CreateFieldMsg{Field: 4})
+		m, _ = model.Update(m, model.FocusFieldMsg{Field: 4})
 		m, _ = model.Update(m, model.KeyMsg{Text: priority})
 		m, cmds := model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
 		if m.Create.Err == nil {
