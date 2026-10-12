@@ -95,7 +95,10 @@ func init() {
 			mode:   Model.EditorMode,
 			key:    draftCard.key,
 			fields: []FieldSpec{},
-			caret:  func(m Model) (Field, bool) { draft, _ := m.ActiveDraft(); return "", m.EditorMode() == ModeEditor && !draft.Saving },
+			caret: func(m Model) (Field, bool) {
+				draft, _ := m.ActiveDraft()
+				return "", m.EditorMode() == ModeEditor && !draft.Saving
+			},
 			target: EditDraftBody,
 			edit: func(m Model, apply func(TextEditor) TextEditor) Model {
 				if draft, _ := m.ActiveDraft(); draft.editable() {
@@ -125,7 +128,7 @@ func init() {
 			modes: []Mode{ModeProjectForm}, mode: func(Model) Mode { return ModeProjectForm },
 			chords: []string{"ctrl+c"},
 			key:    updateProjectFormKey, fields: []FieldSpec{},
-			caret:  func(m Model) (Field, bool) { return "", !m.ProjectForm.Saving },
+			caret: func(m Model) (Field, bool) { return "", !m.ProjectForm.Saving },
 		},
 		{
 			card: CardFilter, open: func(m Model) bool { return m.FilterForm.Open },
@@ -140,7 +143,7 @@ func init() {
 			modes: []Mode{ModePicker}, mode: func(Model) Mode { return ModePicker },
 			chords: []string{"ctrl+c"},
 			key:    updatePicker, fields: []FieldSpec{},
-			caret:  func(Model) (Field, bool) { return "", true },
+			caret: func(Model) (Field, bool) { return "", true },
 		},
 	}
 }
