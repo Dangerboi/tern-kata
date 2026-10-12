@@ -53,6 +53,9 @@ type cardEntry struct {
 	fields []FieldSpec
 	focus  func(*Model) *Field
 	locked func(Model) bool
+	// caret finds the field holding the text caret, false when the card holds none; a card without
+	// fields has one input and names it "".
+	caret func(Model) (Field, bool)
 	// target names the card's multi-line body for native edits, and edit applies one to it; both
 	// are zero for a card without a body.
 	target EditTarget
@@ -77,6 +80,7 @@ func init() {
 			key:    createKey,
 			fields: CreateFields, focus: func(m *Model) *Field { return &m.Create.Field },
 			locked: func(m Model) bool { return m.Create.Saving || m.Create.DiscardConfirm },
+			caret:  func(m Model) (Field, bool) { return m.Create.Field, !(m.Create.Saving || m.Create.DiscardConfirm) },
 			target: EditCreateBody,
 			edit: func(m Model, apply func(TextEditor) TextEditor) Model {
 				if m.Create.Draft.editable() {
@@ -91,6 +95,7 @@ func init() {
 			mode:   Model.EditorMode,
 			key:    draftKey,
 			fields: []FieldSpec{},
+			caret:  func(m Model) (Field, bool) { draft, _ := m.ActiveDraft(); return "", m.EditorMode() == ModeEditor && !draft.Saving },
 			target: EditDraftBody,
 			edit: func(m Model, apply func(TextEditor) TextEditor) Model {
 				if draft, _ := m.ActiveDraft(); draft.editable() {
@@ -104,6 +109,7 @@ func init() {
 			card: CardField, open: func(m Model) bool { return m.FieldForm.Open },
 			modes: []Mode{ModeFieldForm}, mode: func(Model) Mode { return ModeFieldForm },
 			key: updateFieldKey, fields: []FieldSpec{},
+			caret: func(m Model) (Field, bool) { return "", !m.FieldForm.Saving },
 		},
 		{
 			card: CardClose, open: func(m Model) bool { return m.CloseForm.Open },
@@ -112,12 +118,14 @@ func init() {
 			key:    closeKey,
 			fields: CloseFields, focus: func(m *Model) *Field { return &m.CloseForm.Field },
 			locked: func(m Model) bool { return m.CloseForm.Saving },
+			caret:  func(m Model) (Field, bool) { return m.CloseForm.Field, !m.CloseForm.Saving },
 		},
 		{
 			card: CardProject, open: func(m Model) bool { return m.ProjectForm.Open },
 			modes: []Mode{ModeProjectForm}, mode: func(Model) Mode { return ModeProjectForm },
 			chords: []string{"ctrl+c"},
 			key:    updateProjectFormKey, fields: []FieldSpec{},
+			caret:  func(m Model) (Field, bool) { return "", !m.ProjectForm.Saving },
 		},
 		{
 			card: CardFilter, open: func(m Model) bool { return m.FilterForm.Open },
@@ -125,12 +133,14 @@ func init() {
 			key:    filterFormKey,
 			fields: FilterFields, focus: func(m *Model) *Field { return &m.FilterForm.Field },
 			locked: func(Model) bool { return false },
+			caret:  func(m Model) (Field, bool) { return m.FilterForm.Field, takesText(FilterFields, m.FilterForm.Field) },
 		},
 		{
 			card: CardPicker, open: func(m Model) bool { return m.Picker.Open },
 			modes: []Mode{ModePicker}, mode: func(Model) Mode { return ModePicker },
 			chords: []string{"ctrl+c"},
 			key:    updatePicker, fields: []FieldSpec{},
+			caret:  func(Model) (Field, bool) { return "", true },
 		},
 	}
 }
@@ -174,6 +184,17 @@ func (m Model) topEntry() (cardEntry, bool) {
 func (m Model) TopCard() Card {
 	entry, _ := m.topEntry()
 	return entry.card
+}
+
+// TextCaret is the popup card on top and the field of it that holds the text caret; ok is false when
+// no card is on top or the card holds no caret, as while it saves.
+func (m Model) TextCaret() (card Card, field Field, ok bool) {
+	entry, open := m.topEntry()
+	if !open {
+		return NoCard, "", false
+	}
+	field, ok = entry.caret(m)
+	return entry.card, field, ok
 }
 
 // cardMode is the keymap mode of the card on top, "" when there is none.

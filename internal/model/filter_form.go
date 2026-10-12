@@ -33,11 +33,6 @@ func FilterChoiceLabel(choices []FilterChoice, value string) string {
 	return choices[0].Label
 }
 
-// FilterTextFieldFocused reports whether the Filter form's focused field takes typed text.
-func (m Model) FilterTextFieldFocused() bool {
-	return takesText(FilterFields, m.FilterForm.Field)
-}
-
 type FilterFormState struct {
 	Open   bool
 	Field  Field
