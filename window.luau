@@ -33,10 +33,13 @@ local function deliver(cx, pane)
     end
 end
 
-local function exitedRightAway(cx, pane)
+local function exitedRightAway(cx, pane, status)
     fresh[pane] = nil
-    cx:toast("error", "tern-kata exited right away",
-        "Is it installed on the session host? go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest")
+    if status == 127 then -- the shell's "command not found"
+        cx:toast("error", "tern-kata is not installed", "go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest")
+    else
+        cx:toast("error", "tern-kata exited with status " .. tostring(status), "Run tern-kata in a shell to see why")
+    end
 end
 
 -- After the window, a failing exit still closes the Pane (spec), silently: poll once a second until it is gone or replaced.
@@ -51,16 +54,17 @@ local function reap(pane)
     end)
 end
 
--- A kata Pane gone or exited within the first 2 s (20 ticks of 100 ms) means the binary is missing or failed at
--- startup. Tern closes the Pane on a clean exit but keeps it, marked exited, on a failing one, so close it here.
+-- A kata Pane exited with a failure within the first 2 s (20 ticks of 100 ms) means the binary is missing or failed at
+-- startup. Tern closes the Pane on a clean exit (a quick quit is fine) but keeps it, marked exited, on a failing one,
+-- so close it here.
 local function watch(pane, ticks)
     fresh[pane] = true
     tern.timer(100, function(cx)
         if not cx or not fresh[pane] then return end
         local info = cx.session:pane(pane)
-        if not info then return exitedRightAway(cx, pane) end
+        if not info then fresh[pane] = nil; return end
         if info.exited ~= nil then
-            exitedRightAway(cx, pane)
+            exitedRightAway(cx, pane, info.exited)
             return cx.layout:close(pane)
         end
         deliver(cx, pane)
@@ -93,7 +97,6 @@ end
 tern.on("pane_closed", function(ev, cx)
     if kataPane == ev.pane then kataPane = nil end
     pending[ev.pane] = nil
-    if fresh[ev.pane] then exitedRightAway(cx, ev.pane) end
 end)
 
 tern.command({

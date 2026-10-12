@@ -47,6 +47,10 @@ toast_shown() { ctl tree | jq -e --arg text "$1" 'tostring | contains($text)' >/
 expect_no_toast() {
   if toast_shown "$1"; then echo "unexpected toast: $1" >&2; return 1; fi
 }
+expect_no_kata_toast() {
+  expect_no_toast 'tern-kata is not installed'
+  expect_no_toast 'tern-kata exited with status'
+}
 expect_toast() {
   printf 'run "true"\n' >"$tmp/pump.ctl"
   for ((attempt=0; attempt<20; attempt++)); do
@@ -115,13 +119,15 @@ ctl key q
 expect_panes 1
 ctl focus left
 ctl --file "$tmp/pump.ctl"
-expect_no_toast 'tern-kata exited right away'
+expect_no_kata_toast
 ctl key F9
 ctl plugins expect smoke
 ctl state >"$tmp/key-state.json"
 jq -e --arg cwd "$tmp/workspace" --argjson previous "$palette_pane" '.tabs[0].panes == 2 and .focused.cwd == $cwd and .focused.id != $previous' "$tmp/key-state.json" >/dev/null
 ctl key q
 expect_panes 1
+# A quit inside the 2 s window is a clean exit too, not a startup failure.
+expect_no_kata_toast
 # A real OSC-8 terminal link exercises route.link, not a plugin-origin cx:open.
 click_issue_link() {
   command="printf '\\033[2J\\033[H\\033]8;;$1\\007Plugin link\\033]8;;\\007\\n'"
@@ -150,14 +156,7 @@ ctl plugins expect '"Plugin odd body"'
 expect_panes 2
 ctl key q
 expect_panes 1
-# Earlier quits must not leave this toast behind, or the missing-binary check below passes on it. Toasts expire on
-# frames, so each attempt pumps the remaining Pane.
-for ((attempt=0; attempt<100; attempt++)); do
-  toast_shown 'tern-kata exited right away' || break
-  ctl --file "$tmp/pump.ctl"
-  sleep 0.2
-done
-expect_no_toast 'tern-kata exited right away'
+expect_no_kata_toast
 # A tern-kata that fails after the 2 s window still closes its Pane, with no install toast. The stub prints while it
 # runs so frames (and the 2 s window) advance, and ctl can focus the original Pane before the stub exits.
 printf '#!/bin/sh\ni=0\nwhile [ $i -lt 30 ]; do echo tick; sleep 0.2; i=$((i+1)); done\nexit 1\n' >"$tmp/pane-bin/tern-kata"
@@ -171,12 +170,18 @@ for ((attempt=0; attempt<100; attempt++)); do
   sleep 0.1
 done
 [[ $seen == 1 && $panes == 1 ]] || { echo "failing tern-kata Pane did not close (seen=$seen panes=$panes)" >&2; exit 1; }
-expect_no_toast 'tern-kata exited right away'
+expect_no_kata_toast
+# A tern-kata failing inside the 2 s window closes its Pane and toasts its status.
+printf '#!/bin/sh\nexit 3\n' >"$tmp/pane-bin/tern-kata"
+ctl plugins run plugin.tern-kata.open
+ctl focus left
+expect_toast 'tern-kata exited with status 3'
+expect_panes 1
 rm "$tmp/pane-bin/tern-kata"
 ctl plugins run plugin.tern-kata.open
 ctl focus left
-expect_toast 'tern-kata exited right away'
-expect_toast 'Is it installed on the session host? go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest'
+expect_toast 'tern-kata is not installed'
+expect_toast 'go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest'
 expect_panes 1
 jq -Rse 'contains("plugin window halves loaded count=1") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
-printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, shell-syntax Project link, quit closes the Pane, missing-binary toast\n'
+printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, shell-syntax Project link, quick quit without toast, startup-failure and missing-binary toasts\n'
