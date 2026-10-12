@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"runtime/debug"
 	"slices"
 	"strings"
@@ -28,12 +29,15 @@ type LaunchPlan struct {
 // version is the release build's version, set with -ldflags "-X main.version=...".
 var version string
 
-// resolveVersion picks the linker value, else the main module version from build info unless empty or "(devel)", else "dev".
+// pseudoVersion matches the VCS-stamped versions Go gives untagged builds, with optional +dirty/+incompatible.
+var pseudoVersion = regexp.MustCompile(`[-.][0-9]{14}-[0-9a-f]{12}(\+.*)?$`)
+
+// resolveVersion picks the linker value, else the main module version from build info unless empty, "(devel)" or a pseudo-version, else "dev".
 func resolveVersion(linker string, buildInfo func() (*debug.BuildInfo, bool)) string {
 	if linker != "" {
 		return linker
 	}
-	if info, ok := buildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+	if info, ok := buildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" && !pseudoVersion.MatchString(info.Main.Version) {
 		return info.Main.Version
 	}
 	return "dev"

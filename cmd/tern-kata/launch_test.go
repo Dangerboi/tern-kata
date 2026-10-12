@@ -129,6 +129,12 @@ func TestResolveVersion(t *testing.T) {
 		{"build info", "", info("v2.0.0", true), "v2.0.0"},
 		{"devel", "", info("(devel)", true), "dev"},
 		{"empty build info version", "", info("", true), "dev"},
+		{"tagged", "", info("v1.2.3", true), "v1.2.3"},
+		{"tagged dirty", "", info("v1.2.3+dirty", true), "v1.2.3+dirty"},
+		{"pseudo from zero", "", info("v0.0.0-20261012164748-6b737607699e", true), "dev"},
+		{"pseudo after prerelease", "", info("v1.2.3-pre.0.20261012164748-6b737607699e", true), "dev"},
+		{"pseudo after tag", "", info("v1.2.4-0.20261012164748-6b737607699e+dirty", true), "dev"},
+		{"pseudo incompatible", "", info("v2.0.0-20261012164748-6b737607699e+incompatible", true), "dev"},
 		{"no build info", "", info("v2.0.0", false), "dev"},
 	}
 	for _, tt := range tests {
