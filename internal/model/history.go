@@ -23,8 +23,8 @@ const (
 // DetailTime is the one time rule of the detail: Events, comments and the Created/Updated properties read
 // like 2026-10-09 22:42, in the zone of the Collection snapshot (UTC before the first one).
 func (m Model) DetailTime(t time.Time) string {
-	loc, err := time.LoadLocation(m.TimeZone) // the empty name is UTC
-	if err != nil {
+	loc := m.zone
+	if loc == nil {
 		loc = time.UTC
 	}
 	return t.In(loc).Format("2006-01-02 15:04")

@@ -91,10 +91,10 @@ func sentence(row model.DetailRow) string {
 
 func TestHistoryTimestampsUseTheSnapshotZoneAndAreShort(t *testing.T) {
 	saved := time.Local
-	time.Local = time.UTC
+	time.Local = time.FixedZone("x", 2*3600) // the process zone must be ignored
 	t.Cleanup(func() { time.Local = saved })
 	for _, tt := range []struct{ zone, want string }{{"", "2026-10-08 18:05"}, {"Asia/Tokyo", "2026-10-09 03:05"}} {
-		m := withDetail(model.Model{TimeZone: tt.zone}, &g.UISelectedAuthority{History: []g.Event{{UID: "event", Type: "issue.reopened", Payload: "{}", CreatedAt: time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)}}})
+		m := withDetail(inZone(tt.zone), &g.UISelectedAuthority{History: []g.Event{{UID: "event", Type: "issue.reopened", Payload: "{}", CreatedAt: time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)}}})
 		if row, _ := m.DetailRow(model.TabEvents, 0); row.Time != tt.want {
 			t.Errorf("zone %q: time = %q, want %q", tt.zone, row.Time, tt.want)
 		}
@@ -107,4 +107,11 @@ func TestHistoryEventsKeepTheirIssueReference(t *testing.T) {
 	if row.ReferenceUID != peer {
 		t.Fatalf("reference = %q", row.ReferenceUID)
 	}
+}
+
+// inZone delivers a snapshot in zone, the way the app sets the model zone.
+func inZone(zone string) model.Model {
+	m := model.Model{}
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), LocalDate: "2026-10-08", TimeZone: zone})
+	return m
 }

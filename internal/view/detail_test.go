@@ -34,7 +34,7 @@ func detailWithActivity(tab model.ActivityTab) model.Model {
 		History:  []g.Event{{UID: "e1", Actor: "dana", Type: "issue.created", Payload: `{}`, CreatedAt: at}, {UID: "e2", Actor: "dana", Type: "issue.reopened", Payload: `{}`, CreatedAt: at}, {UID: "e3", Actor: "dana", Type: "issue.reopened", Payload: `{}`, CreatedAt: at}},
 		Links:    []g.UILink{{ID: 7, FromIssueUID: "alpha", ToIssueUID: "beta", ToQualifiedID: "work#bbbb", Type: "related"}},
 	}
-	return apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: selected}, model.ActivityTabMsg{Tab: tab})
+	return apply(withZone(browsing()), model.DetailLoaded{UID: "alpha", Selected: selected}, model.ActivityTabMsg{Tab: tab})
 }
 
 func TestActivityTabsShowCountsAndMarkTheActiveOne(t *testing.T) {
@@ -183,13 +183,13 @@ func TestDetailTitleShowsIDInAccentThenTitleStrong(t *testing.T) {
 }
 
 func TestCommentsAndEventsAreCardsWithTheAuthorAndTheTimeApart(t *testing.T) {
-	time.Local = time.UTC
+	processZoneIsUTC(t)
 	when := "2026-10-09 03:05" // the model zone, not the process zone
 	for _, tt := range []struct {
 		tab model.ActivityTab
 		key string
 	}{{model.TabComments, "c1"}, {model.TabEvents, "e1"}} {
-		card := render(t, withZone(detailWithActivity(tt.tab)))[view.DetailActivityID+"."+tt.key]
+		card := render(t, detailWithActivity(tt.tab))[view.DetailActivityID+"."+tt.key]
 		if card.K != "card" || card.P["variant"] != "bare" {
 			t.Fatalf("%s is %s %v, want a bare card", tt.key, card.K, card.P["variant"])
 		}
@@ -219,15 +219,15 @@ func TestClosedIssueBadgeCarriesTheCloseReason(t *testing.T) {
 }
 
 func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
-	time.Local = time.UTC
+	processZoneIsUTC(t)
 	p1, owner, reason, day := int64(1), "dana", "done", "2026-11-01"
 	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
 	issue := model.Issue{UID: "alpha", ShortID: "aaaa", Title: "A", Status: "closed", ProjectName: "work", Author: "ann", Revision: 4,
 		CreatedAt: at, UpdatedAt: at, Priority: &p1, Owner: &owner, ClosedReason: &reason, ScheduledOnDate: &day, Metadata: map[string]any{"deadline_on": day}, Labels: []string{"bug"}}
 	links := []g.UILink{{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#up"}}
 	counts := map[string]g.ChildCounts{"alpha": {Open: 1, Total: 2}}
-	nodes := render(t, withZone(apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{ChildCounts: counts, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: links}}},
-		model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &issue, Links: links}})))
+	nodes := render(t, apply(withZone(browsing()), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{ChildCounts: counts, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: links}}},
+		model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &issue, Links: links}}))
 	props := nodes[view.DetailContentID+".properties"]
 	var keys []string
 	for _, row := range props.C {
@@ -321,8 +321,15 @@ func TestActivityRevealTargetsAreTheLastRowAndTheTabNames(t *testing.T) {
 
 var tokyo = time.FixedZone("JST", 9*3600)
 
-// withZone gives the model Tokyo's zone while the process zone is UTC.
+// processZoneIsUTC sets the process zone to UTC for the test, so a model zone that leaks shows.
+func processZoneIsUTC(t *testing.T) {
+	t.Helper()
+	saved := time.Local
+	time.Local = time.UTC
+	t.Cleanup(func() { time.Local = saved })
+}
+
+// withZone gives the model Tokyo's zone through a snapshot, the way the app sets it.
 func withZone(m model.Model) model.Model {
-	m.TimeZone = "Asia/Tokyo"
-	return m
+	return apply(m, snap{model.SnapshotLoaded{LocalDate: "2026-10-12", TimeZone: "Asia/Tokyo", Snapshot: m.Snapshot}})
 }
