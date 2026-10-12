@@ -183,12 +183,13 @@ func TestDetailTitleShowsIDInAccentThenTitleStrong(t *testing.T) {
 }
 
 func TestCommentsAndEventsAreCardsWithTheAuthorAndTheTimeApart(t *testing.T) {
-	when := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC).In(time.Local).Format("2006-01-02 15:04")
+	time.Local = time.UTC
+	when := "2026-10-09 03:05" // the model zone, not the process zone
 	for _, tt := range []struct {
 		tab model.ActivityTab
 		key string
 	}{{model.TabComments, "c1"}, {model.TabEvents, "e1"}} {
-		card := render(t, detailWithActivity(tt.tab))[view.DetailActivityID+"."+tt.key]
+		card := render(t, withZone(detailWithActivity(tt.tab)))[view.DetailActivityID+"."+tt.key]
 		if card.K != "card" || card.P["variant"] != "bare" {
 			t.Fatalf("%s is %s %v, want a bare card", tt.key, card.K, card.P["variant"])
 		}
@@ -218,14 +219,15 @@ func TestClosedIssueBadgeCarriesTheCloseReason(t *testing.T) {
 }
 
 func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
+	time.Local = time.UTC
 	p1, owner, reason, day := int64(1), "dana", "done", "2026-11-01"
 	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
 	issue := model.Issue{UID: "alpha", ShortID: "aaaa", Title: "A", Status: "closed", ProjectName: "work", Author: "ann", Revision: 4,
 		CreatedAt: at, UpdatedAt: at, Priority: &p1, Owner: &owner, ClosedReason: &reason, ScheduledOnDate: &day, Metadata: map[string]any{"deadline_on": day}, Labels: []string{"bug"}}
 	links := []g.UILink{{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#up"}}
 	counts := map[string]g.ChildCounts{"alpha": {Open: 1, Total: 2}}
-	nodes := render(t, apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{ChildCounts: counts, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: links}}},
-		model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &issue, Links: links}}))
+	nodes := render(t, withZone(apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{ChildCounts: counts, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: links}}},
+		model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &issue, Links: links}})))
 	props := nodes[view.DetailContentID+".properties"]
 	var keys []string
 	for _, row := range props.C {
@@ -235,7 +237,7 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	if !slices.Equal(keys, want) {
 		t.Errorf("keys %v, want %v", keys, want)
 	}
-	when := at.In(time.Local).Format("2006-01-02 15:04")
+	when := at.In(tokyo).Format("2006-01-02 15:04")
 	if got := text(nodes[props.ID+".created.v"]); got != when {
 		t.Errorf("Created %q, want %q", got, when)
 	}
@@ -315,4 +317,12 @@ func TestActivityRevealTargetsAreTheLastRowAndTheTabNames(t *testing.T) {
 	if got := view.ActivityRevealIDs(empty); got[0] != rows[len(rows)-1].ID {
 		t.Errorf("empty tab: reveal %v, want %s first", got, rows[len(rows)-1].ID)
 	}
+}
+
+var tokyo = time.FixedZone("JST", 9*3600)
+
+// withZone gives the model Tokyo's zone while the process zone is UTC.
+func withZone(m model.Model) model.Model {
+	m.TimeZone = "Asia/Tokyo"
+	return m
 }

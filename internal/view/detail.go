@@ -208,8 +208,8 @@ func properties(m model.Model, issue *model.Issue) tern.Element {
 	if issue.Author != "" {
 		add("Author", text(issue.Author))
 	}
-	add("Created", text(model.DetailTime(issue.CreatedAt)))
-	add("Updated", text(model.DetailTime(issue.UpdatedAt)))
+	add("Created", text(m.DetailTime(issue.CreatedAt)))
+	add("Updated", text(m.DetailTime(issue.UpdatedAt)))
 	if day := model.IssueDate(issue.ScheduledOnDate, issue.Metadata, "scheduled_on"); day != "" {
 		add("Scheduled", text(day))
 	}

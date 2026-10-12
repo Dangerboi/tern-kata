@@ -89,13 +89,15 @@ func sentence(row model.DetailRow) string {
 	return strings.TrimSpace(strings.Join([]string{row.Author, row.History.Verb, row.History.Object, row.Ref}, " "))
 }
 
-func TestHistoryTimestampsAreLocalAndShort(t *testing.T) {
+func TestHistoryTimestampsUseTheSnapshotZoneAndAreShort(t *testing.T) {
 	saved := time.Local
-	time.Local = time.FixedZone("test", 2*3600)
+	time.Local = time.UTC
 	t.Cleanup(func() { time.Local = saved })
-	row := historyRow(t, g.Event{Type: "issue.reopened", Payload: "{}"})
-	if row.Time != "2026-10-08 20:05" {
-		t.Fatalf("time = %q", row.Time)
+	for _, tt := range []struct{ zone, want string }{{"", "2026-10-08 18:05"}, {"Asia/Tokyo", "2026-10-09 03:05"}} {
+		m := withDetail(model.Model{TimeZone: tt.zone}, &g.UISelectedAuthority{History: []g.Event{{UID: "event", Type: "issue.reopened", Payload: "{}", CreatedAt: time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)}}})
+		if row, _ := m.DetailRow(model.TabEvents, 0); row.Time != tt.want {
+			t.Errorf("zone %q: time = %q, want %q", tt.zone, row.Time, tt.want)
+		}
 	}
 }
 
