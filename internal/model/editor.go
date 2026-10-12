@@ -155,7 +155,8 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 		if draft, ok := m.Drafts[msg.UID]; ok {
 			draft.Err = msg.Err
 			if msg.Err == nil {
-				draft.Editor = draft.Editor.ApplyEdit(0, len16(draft.Editor.Text), msg.Text, len16(msg.Text), len16(draft.Editor.Text))
+				text := normalizeLineBreaks(msg.Text)
+				draft.Editor = draft.Editor.ApplyEdit(0, len16(draft.Editor.Text), text, len16(text), len16(draft.Editor.Text))
 			}
 			m = putDraft(m, msg.UID, draft)
 		}

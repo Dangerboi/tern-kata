@@ -2,7 +2,6 @@ package model
 
 import (
 	"slices"
-	"strings"
 	"unicode/utf8"
 )
 
@@ -241,5 +240,5 @@ func typedText(msg KeyMsg) string {
 	case text == "" && utf8.RuneCountInString(msg.Chord) == 1:
 		text = msg.Chord
 	}
-	return strings.NewReplacer("\r", " ", "\n", " ").Replace(text)
+	return singleLineText(text)
 }
