@@ -156,6 +156,7 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 	if !msg.NotModified {
 		if msg.LocalDate != "" {
 			m.LocalDate, m.TimeZone, m.TimeZoneNote = msg.LocalDate, msg.TimeZone, msg.TimeZoneNote
+			m.zone, _ = time.LoadLocation(msg.TimeZone) // an unloadable name reads as UTC
 		}
 		selected, cursorChild := m.SelectedUID, m.cursorChildUID()
 		m = m.applyCollection(msg.Snapshot, msg.ChildCounts).snapshotArrived(msg.Snapshot.Selected, selected, cursorChild)

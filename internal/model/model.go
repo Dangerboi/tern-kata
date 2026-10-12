@@ -1,6 +1,10 @@
 package model
 
-import g "go.kenn.io/kata/pkg/client/generated"
+import (
+	"time"
+
+	g "go.kenn.io/kata/pkg/client/generated"
+)
 
 type Issue = g.UIIssue
 
@@ -45,6 +49,7 @@ type Model struct {
 	Groups              []IssueGroup
 	LocalDate, TimeZone string
 	TimeZoneNote        string
+	zone                *time.Location // TimeZone loaded once; nil (UTC) before the first snapshot
 	HelpOpen            bool
 	Flat                bool
 	ExpandedUIDs        map[string]bool
