@@ -14,4 +14,4 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 
 ### Secret scan
 
-Before every commit, stage your changes and run `gitleaks git --pre-commit --staged --no-banner`. Don't commit if it reports leaks; remove the secret instead.
+`.githooks/pre-commit` runs gitleaks on staged changes and blocks the commit if it finds a secret. Install it once per clone: `ln -sf ../../.githooks/pre-commit .git/hooks/pre-commit`. If it blocks a commit, remove the secret; never bypass it with `--no-verify`.
