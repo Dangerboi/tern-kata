@@ -5,14 +5,32 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
+// childEnv returns environ for a child with KATA_AUTHOR set to actor, dropping every existing spelling first;
+// names compare case-insensitively on Windows. An empty actor leaves environ unchanged.
+func childEnv(environ []string, actor string, caseInsensitive bool) []string {
+	if actor == "" {
+		return environ
+	}
+	env := make([]string, 0, len(environ)+1)
+	for _, entry := range environ {
+		name, _, _ := strings.Cut(entry, "=")
+		if name == "KATA_AUTHOR" || caseInsensitive && strings.EqualFold(name, "KATA_AUTHOR") {
+			continue
+		}
+		env = append(env, entry)
+	}
+	return append(env, "KATA_AUTHOR="+actor)
+}
+
 func editorOptions() tern.Options {
-	return tern.Options{App: "tern-kata", Version: "dev", Features: []string{tern.FeatureEdit, tern.FeatureUndo}}
+	return tern.Options{App: "tern-kata", Version: buildVersion(), Features: []string{tern.FeatureEdit, tern.FeatureUndo}}
 }
 func editorSurfaceOptions() tern.SurfaceOptions {
 	return tern.SurfaceOptions{ID: "kata", Mode: tern.Screen, Title: "tern-kata", Discard: true}

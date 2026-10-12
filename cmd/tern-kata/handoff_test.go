@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -65,5 +66,32 @@ func TestEditDraftSpacedTempPathThroughShell(t *testing.T) {
 	got := editDraft(model.OpenDraftEditor{Text: "original"}, editorCommand)
 	if got.Err != nil || got.Text != "one" {
 		t.Errorf("got text %q err %v", got.Text, got.Err)
+	}
+}
+
+func TestChildEnv(t *testing.T) {
+	tests := []struct {
+		name            string
+		environ         []string
+		caseInsensitive bool
+		want            []string
+	}{
+		{"none, sensitive", []string{"PATH=/bin"}, false, []string{"PATH=/bin", "KATA_AUTHOR=ann"}},
+		{"none, insensitive", []string{"PATH=/bin"}, true, []string{"PATH=/bin", "KATA_AUTHOR=ann"}},
+		{"one, sensitive", []string{"PATH=/bin", "KATA_AUTHOR=old"}, false, []string{"PATH=/bin", "KATA_AUTHOR=ann"}},
+		{"one, insensitive", []string{"PATH=/bin", "Kata_Author=old"}, true, []string{"PATH=/bin", "KATA_AUTHOR=ann"}},
+		{"other spelling kept when sensitive", []string{"kata_author=old", "KATA_AUTHOR=old"}, false, []string{"kata_author=old", "KATA_AUTHOR=ann"}},
+		{"several, insensitive", []string{"KATA_AUTHOR=a", "HOME=/h", "kata_author=b", "Kata_Author=c"}, true, []string{"HOME=/h", "KATA_AUTHOR=ann"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := childEnv(tt.environ, "ann", tt.caseInsensitive); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("childEnv = %q, want %q", got, tt.want)
+			}
+		})
+	}
+	environ := []string{"KATA_AUTHOR=old"}
+	if got := childEnv(environ, "", true); !reflect.DeepEqual(got, environ) {
+		t.Errorf("no override: childEnv = %q, want unchanged", got)
 	}
 }

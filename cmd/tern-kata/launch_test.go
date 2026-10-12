@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"runtime/debug"
 	"slices"
 	"testing"
 )
@@ -33,7 +34,7 @@ func TestPlanLaunch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			plan, err := PlanLaunch(tt.args, lookupFrom(tt.env))
+			plan, err := PlanLaunch(tt.args, lookupFrom(tt.env), "v")
 			if tt.err != "" {
 				if err == nil || err.Error() != tt.err {
 					t.Fatalf("error = %v, want %q", err, tt.err)
@@ -80,7 +81,7 @@ func TestPlanLaunchActorPrecedence(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			plan, err := PlanLaunch(tt.args, lookupFrom(tt.env))
+			plan, err := PlanLaunch(tt.args, lookupFrom(tt.env), "v")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -97,7 +98,7 @@ func TestPlanLaunchGitLookupOnlyWhenNeeded(t *testing.T) {
 		asked = append(asked, key)
 		return "", false
 	}
-	if _, err := PlanLaunch([]string{"--as", "flag"}, lookup); err != nil {
+	if _, err := PlanLaunch([]string{"--as", "flag"}, lookup, "v"); err != nil {
 		t.Fatal(err)
 	}
 	if len(asked) != 0 {
@@ -105,32 +106,36 @@ func TestPlanLaunchGitLookupOnlyWhenNeeded(t *testing.T) {
 	}
 }
 
-func TestLaunchPlanFallbackEnv(t *testing.T) {
-	environ := []string{"PATH=/bin", "KATA_AUTHOR=old", "HOME=/h"}
+func TestPlanLaunchVersion(t *testing.T) {
+	for _, args := range [][]string{{"--version"}, {"--as"}, {"--issue", "bad", "--version"}, {"--bogus", "--version", "--as"}} {
+		plan, err := PlanLaunch(args, lookupFrom(nil), "1.2.3")
+		if err != nil || plan.Version != "1.2.3" || plan.FallbackArgs != nil {
+			t.Errorf("PlanLaunch(%q) = %+v, %v; want version plan", args, plan, err)
+		}
+	}
+}
+
+func TestResolveVersion(t *testing.T) {
+	info := func(v string, ok bool) func() (*debug.BuildInfo, bool) {
+		return func() (*debug.BuildInfo, bool) { return &debug.BuildInfo{Main: debug.Module{Version: v}}, ok }
+	}
 	tests := []struct {
-		name string
-		args []string
-		want []string
+		name   string
+		linker string
+		info   func() (*debug.BuildInfo, bool)
+		want   string
 	}{
-		{"as replaces existing KATA_AUTHOR", []string{"--as", "ann"}, []string{"PATH=/bin", "HOME=/h", "KATA_AUTHOR=ann"}},
-		{"equals form", []string{"--as=ann"}, []string{"PATH=/bin", "HOME=/h", "KATA_AUTHOR=ann"}},
-		{"no as leaves environment untouched", nil, environ},
-		{"empty as leaves environment untouched", []string{"--as="}, environ},
+		{"linker wins", "1.0.0", info("v2.0.0", true), "1.0.0"},
+		{"build info", "", info("v2.0.0", true), "v2.0.0"},
+		{"devel", "", info("(devel)", true), "dev"},
+		{"empty build info version", "", info("", true), "dev"},
+		{"no build info", "", info("v2.0.0", false), "dev"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			plan, err := PlanLaunch(tt.args, lookupFrom(nil))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got := plan.FallbackEnv(environ); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("FallbackEnv = %q, want %q", got, tt.want)
+			if got := resolveVersion(tt.linker, tt.info); got != tt.want {
+				t.Errorf("resolveVersion = %q, want %q", got, tt.want)
 			}
 		})
-	}
-	lower := []string{"kata_author=old", "KATA_AUTHOR=old"}
-	plan, _ := PlanLaunch([]string{"--as", "ann"}, lookupFrom(nil))
-	if got, want := plan.FallbackEnv(lower), []string{"kata_author=old", "KATA_AUTHOR=ann"}; !reflect.DeepEqual(got, want) {
-		t.Errorf("FallbackEnv = %q, want %q", got, want)
 	}
 }

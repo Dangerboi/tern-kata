@@ -11,9 +11,9 @@ import (
 )
 
 // execKata runs `kata tui` as a child with stdio attached and exits with its status.
-func execKata(kata string, args, env []string) error {
+func execKata(kata string, args, environ []string, actor string) error {
 	cmd := exec.Command(kata, append([]string{"tui"}, args...)...)
-	cmd.Env = env
+	cmd.Env = childEnv(environ, actor, true)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	// Keep the parent alive on Ctrl+C/Break so it still exits with the child's status.
 	signal.Notify(make(chan os.Signal, 1), os.Interrupt)

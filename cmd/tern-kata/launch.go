@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"runtime/debug"
+	"slices"
 	"strings"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -15,29 +17,37 @@ type LaunchPlan struct {
 	// IssueRef is the Issue reference (<project>/<short_id>) the Pane opens first; empty for none.
 	IssueRef string
 	Actor    string
+	// Version is non-empty when --version was given: main prints it and exits.
+	Version string
 	// FallbackArgs are the arguments for `kata tui` when Tern is unsupported.
 	FallbackArgs []string
 	// fallbackAuthor is the --as actor exported to `kata tui`; empty leaves the environment untouched.
 	fallbackAuthor string
 }
 
-// FallbackEnv returns environ for `kata tui`, with KATA_AUTHOR replaced by the --as actor when one was given.
-func (p LaunchPlan) FallbackEnv(environ []string) []string {
-	if p.fallbackAuthor == "" {
-		return environ
+// version is the release build's version, set with -ldflags "-X main.version=...".
+var version string
+
+// resolveVersion picks the linker value, else the main module version from build info unless empty or "(devel)", else "dev".
+func resolveVersion(linker string, buildInfo func() (*debug.BuildInfo, bool)) string {
+	if linker != "" {
+		return linker
 	}
-	env := make([]string, 0, len(environ)+1)
-	for _, entry := range environ {
-		if !strings.HasPrefix(entry, "KATA_AUTHOR=") {
-			env = append(env, entry)
-		}
+	if info, ok := buildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
 	}
-	return append(env, "KATA_AUTHOR="+p.fallbackAuthor)
+	return "dev"
 }
 
-// PlanLaunch parses args (without the program name). Unknown arguments pass through to `kata tui`.
+// buildVersion is this binary's version.
+func buildVersion() string { return resolveVersion(version, debug.ReadBuildInfo) }
+
+// PlanLaunch parses args (without the program name). --version anywhere wins over everything else. Unknown arguments pass through to `kata tui`.
 // The actor is the first non-empty of --as, KATA_AUTHOR, USER, the gitUserNameKey lookup, then "anonymous".
-func PlanLaunch(args []string, lookup func(string) (string, bool)) (LaunchPlan, error) {
+func PlanLaunch(args []string, lookup func(string) (string, bool), version string) (LaunchPlan, error) {
+	if slices.Contains(args, "--version") {
+		return LaunchPlan{Version: version}, nil
+	}
 	var plan LaunchPlan
 	plan.FallbackArgs = make([]string, 0, len(args))
 	issueSet := false
