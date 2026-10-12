@@ -24,11 +24,7 @@ func main() {
 }
 
 func run() error {
-	override, args, err := actorArgs(os.Args[1:])
-	if err != nil {
-		return err
-	}
-	issueRef, fallbackArgs, err := launchArgs(args)
+	plan, err := PlanLaunch(os.Args[1:], lookupEnv)
 	if err != nil {
 		return err
 	}
@@ -40,7 +36,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		return execKata(kata, fallbackArgs, actorEnvironment(override))
+		return execKata(kata, plan.FallbackArgs, plan.FallbackEnv(os.Environ()))
 	}
 	if err != nil {
 		return err
@@ -62,11 +58,11 @@ func run() error {
 	inputErrors := make(chan error, 1)
 	stopInput := startInputReader(ctx, session, inputs, inputErrors)
 	defer func() { stopInput() }()
-	state := driver.State{Model: model.Model{Cols: session.Caps().Cols, Actor: resolveActor(override)}}
+	state := driver.State{Model: model.Model{Cols: session.Caps().Cols, Actor: plan.Actor}}
 	results := make(chan model.Msg)
 	gateway := data.NewGateway(data.LocateWithKata)
 	defer gateway.Close()
-	input := any(model.Start{Workspace: workspace, IssueRef: issueRef})
+	input := any(model.Start{Workspace: workspace, IssueRef: plan.IssueRef})
 eventLoop:
 	for {
 		out := driver.Step(state, input, time.Now())
@@ -122,32 +118,14 @@ eventLoop:
 	}
 }
 
-func launchArgs(args []string) (string, []string, error) {
-	ref := ""
-	issueSet := false
-	fallback := make([]string, 0, len(args))
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if arg == "--issue" {
-			issueSet = true
-			i++
-			if i == len(args) {
-				return "", nil, fmt.Errorf("--issue requires <project>/<short_id>")
-			}
-			ref = args[i]
-		} else if value, ok := strings.CutPrefix(arg, "--issue="); ok {
-			issueSet = true
-			ref = value
-		} else {
-			fallback = append(fallback, arg)
-		}
+// lookupEnv reads the environment and answers gitUserNameKey from `git config user.name`.
+func lookupEnv(key string) (string, bool) {
+	if key != gitUserNameKey {
+		return os.LookupEnv(key)
 	}
-	if issueSet {
-		project, shortID, err := model.ParseIssueRef(ref)
-		if err != nil {
-			return "", nil, err
-		}
-		fallback = append(fallback, "--project", project, project+"#"+shortID)
+	out, err := exec.Command("git", "config", "user.name").Output()
+	if err != nil {
+		return "", false
 	}
-	return ref, fallback, nil
+	return strings.TrimSpace(string(out)), true
 }
