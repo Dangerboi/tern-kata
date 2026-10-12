@@ -16,7 +16,7 @@ In a directory bound with `kata init`, `tern-kata` opens that Project's Issues. 
 Tern draws `kata://` links in chat as plain text, so agents should write ticket references as `https://kata.invalid/...` links, which the plugin intercepts. To make OMP do that in every kata-tracked repo, add this to `~/.omp/agent/RULES.md` (or to one repo's `AGENTS.md`):
 
 ```markdown
-In a repo with a `.kata.toml`, write kata ticket references as `[<id>](https://kata.invalid/<project>/<id>)`, with `<project>` the name in `.kata.toml`. The tern-kata window plugin opens them in tern-kata; Tern draws `kata://` links in chat as plain text.
+In a repo with a `.kata.toml`, write kata ticket references as `[<id>](https://kata.invalid/<project>/<id>)`, with `<project>` the name in `.kata.toml`.
 ```
 
 ## Install
