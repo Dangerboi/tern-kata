@@ -21,13 +21,19 @@ const (
 )
 
 // DetailTime is the one time rule of the detail: Events, comments and the Created/Updated properties read
-// like 2026-10-09 22:42, in the local zone.
-func DetailTime(t time.Time) string { return t.Local().Format("2006-01-02 15:04") }
+// like 2026-10-09 22:42, in the zone of the Collection snapshot (UTC before the first one).
+func (m Model) DetailTime(t time.Time) string {
+	loc, err := time.LoadLocation(m.TimeZone) // the empty name is UTC
+	if err != nil {
+		loc = time.UTC
+	}
+	return t.In(loc).Format("2006-01-02 15:04")
+}
 
 // historyRow phrases one event as "<actor> <verb> <object>" plus an optional
 // detail (Body: the whole message, evidence or comment). Types kata adds later fall back to their sorted
 // payload pairs.
-func historyRow(event g.Event) DetailRow {
+func (m Model) historyRow(event g.Event) DetailRow {
 	payload, decodeErr := decodePayload(event.Payload)
 	verb, object, detail, tone := "", "", "", VerbTone("")
 	switch event.Type {
@@ -78,7 +84,7 @@ func historyRow(event g.Event) DetailRow {
 		}
 	}
 	row := DetailRow{
-		Key: event.UID, Author: event.Actor, Time: DetailTime(event.CreatedAt), Body: detail,
+		Key: event.UID, Author: event.Actor, Time: m.DetailTime(event.CreatedAt), Body: detail,
 		History: &HistorySentence{Verb: verb, Object: object, Tone: tone},
 	}
 	if event.RelatedIssueUID != nil {

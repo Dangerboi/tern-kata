@@ -61,7 +61,7 @@ func (s ActivityTab) String() string {
 	return [...]string{"Comments", "Events", "Links"}[s]
 }
 
-// DetailRow is one row of an Activity tab. A Comment or Event row has its Author and Time (DetailTime); a Link row has Relation and Ref
+// DetailRow is one row of an Activity tab. A Comment or Event row has its Author and Time (Model.DetailTime); a Link row has Relation and Ref
 // instead; a history row also carries its sentence in parts.
 type DetailRow struct {
 	Key, Author, Time, Body, ReferenceUID string
@@ -125,9 +125,9 @@ func (m Model) DetailRow(tab ActivityTab, index int) (DetailRow, bool) {
 		return row, true
 	case TabComments:
 		comment := m.authority.Comments[index]
-		return DetailRow{Key: comment.UID, Author: comment.Author, Time: DetailTime(comment.CreatedAt), Body: comment.Body}, true
+		return DetailRow{Key: comment.UID, Author: comment.Author, Time: m.DetailTime(comment.CreatedAt), Body: comment.Body}, true
 	case TabEvents:
-		return historyRow(m.authority.History[index]), true
+		return m.historyRow(m.authority.History[index]), true
 	}
 	return DetailRow{}, false
 }
