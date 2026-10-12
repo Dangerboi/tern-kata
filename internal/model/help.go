@@ -1,9 +1,6 @@
 package model
 
-import (
-	"iter"
-	"slices"
-)
+import "iter"
 
 func (m Model) CurrentMode() Mode {
 	if mode := m.cardMode(); mode != "" {
@@ -36,7 +33,7 @@ func LookupBindingForMode(chord string, mode Mode) (Binding, bool) {
 			return binding, true
 		}
 	}
-	if through, isCard := cardGlobalChords[mode]; isCard && !slices.Contains(through, chord) {
+	if isCard, through := cardLetsThrough(mode, chord); isCard && !through {
 		return Binding{}, false
 	}
 	if inputMode(mode) {

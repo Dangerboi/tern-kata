@@ -13,7 +13,7 @@ type SearchState struct {
 	InitialText, InitialUID string
 }
 
-// inputMode is a mode whose keys type into Search. The popup cards own theirs: see cardGlobalChords.
+// inputMode is a mode whose keys type into Search. The popup cards own theirs: see cardEntry.
 func inputMode(mode Mode) bool {
 	return mode == ModeSearch || mode == ModeSearchResults
 }
