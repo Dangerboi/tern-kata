@@ -1,0 +1,479 @@
+package model_test
+
+import (
+	"reflect"
+	"testing"
+
+	"github.com/Dangerboi/tern-kata/internal/model"
+	g "go.kenn.io/kata/pkg/client/generated"
+)
+
+// The bound Project sorts last in the catalog so that pinning it first is visible.
+func pickerCatalog() []g.UIProject {
+	return []g.UIProject{
+		{Project: model.Project{UID: "alpha-uid", Name: "alpha"}},
+		{Project: model.Project{UID: "smoke-uid", Name: "smoke"}},
+	}
+}
+
+func pickerStart(cols int, bound bool) model.Model {
+	loaded, snapshot := model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
+		Catalog:    pickerCatalog(),
+		Collection: []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}, {UID: "b", ShortID: "bbbb", Title: "Second"}},
+	}}
+	if bound {
+		loaded.Project = model.Project{UID: "smoke-uid", Name: "smoke"}
+	}
+	m, _ := loadFirst(model.Model{Cols: cols}, loaded, snapshot)
+	return m
+}
+
+func TestStartupColumnsFollowBinding(t *testing.T) {
+	for _, tt := range []struct {
+		name          string
+		bound, hidden bool
+		cols          int
+		collection    string
+		want          []model.Column
+	}{
+		{"bound opens the Project without the sidebar", true, false, 160, "project", []model.Column{model.ColumnList, model.ColumnDetail}},
+		{"bound with detail hidden", true, true, 160, "project", []model.Column{model.ColumnList}},
+		{"unbound keeps three columns on Inbox", false, false, 160, "inbox", []model.Column{model.ColumnCollections, model.ColumnList, model.ColumnDetail}},
+		{"unbound with detail hidden", false, true, 160, "inbox", []model.Column{model.ColumnCollections, model.ColumnList}},
+		{"bound narrow folds to the focused column", true, false, 100, "project", []model.Column{model.ColumnList}},
+		{"unbound narrow folds to the focused column", false, false, 100, "inbox", []model.Column{model.ColumnList}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m := pickerStart(tt.cols, tt.bound)
+			if tt.hidden {
+				m, _ = model.Update(m, model.KeyMsg{Chord: "shift+l"})
+			}
+			if m.Collection.View != tt.collection || m.Focus != model.ColumnList {
+				t.Fatalf("startup Collection %+v focus %v", m.Collection, m.Focus)
+			}
+			if got := m.VisibleColumns(); !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("visible columns = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func pickerKeys(m model.Model, keys ...string) (model.Model, []model.Cmd) {
+	var cmds []model.Cmd
+	for _, key := range keys {
+		msg := model.KeyMsg{Chord: key}
+		if len([]rune(key)) == 1 {
+			msg.Text = key
+		}
+		m, cmds = model.Update(m, msg)
+	}
+	return m, cmds
+}
+
+func TestPickerOpensWithPFromListAndDetail(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		keys  []string
+		focus model.Column
+	}{
+		{"list", nil, model.ColumnList},
+		{"detail", []string{"enter"}, model.ColumnDetail},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m, _ := pickerKeys(pickerStart(120, true), tt.keys...)
+			opened, cmds := pickerKeys(m, "p")
+			if !opened.Picker.Open || opened.CurrentMode() != model.ModePicker || opened.Focus != tt.focus || len(cmds) != 0 {
+				t.Fatalf("after p: picker open=%v mode=%s focus=%v cmds=%#v", opened.Picker.Open, opened.CurrentMode(), opened.Focus, cmds)
+			}
+		})
+	}
+}
+
+func TestPTypesIntoSearchInsteadOfOpeningPicker(t *testing.T) {
+	m, _ := pickerKeys(pickerStart(120, true), "/", "p")
+	if m.Picker.Open || m.Filters.Search != "p" {
+		t.Fatalf("p in search: picker=%v search=%q", m.Picker.Open, m.Filters.Search)
+	}
+}
+
+func TestEscapeUnwindsDetailListThenPickerWhenBound(t *testing.T) {
+	m, _ := pickerKeys(pickerStart(120, true), "enter")
+	for i, want := range []struct {
+		mode   model.Mode
+		focus  model.Column
+		picker bool
+	}{
+		{model.ModeList, model.ColumnList, false},
+		{model.ModePicker, model.ColumnList, true},
+	} {
+		var cmds []model.Cmd
+		m, cmds = pickerKeys(m, "escape")
+		if m.CurrentMode() != want.mode || m.Focus != want.focus || m.Picker.Open != want.picker || len(cmds) != 0 {
+			t.Fatalf("escape %d: mode=%s focus=%v picker=%v cmds=%#v", i+1, m.CurrentMode(), m.Focus, m.Picker.Open, cmds)
+		}
+	}
+}
+
+func TestEscapeFocusesSidebarWhenUnbound(t *testing.T) {
+	m, _ := pickerKeys(pickerStart(120, false), "escape")
+	if m.CurrentMode() != model.ModeCollections || m.Focus != model.ColumnCollections || m.Picker.Open {
+		t.Fatalf("unbound escape: mode=%s focus=%v picker=%v", m.CurrentMode(), m.Focus, m.Picker.Open)
+	}
+}
+
+func pickerTitles(m model.Model) []string {
+	titles := []string{}
+	for _, collection := range m.PickerEntries() {
+		titles = append(titles, collection.Title)
+	}
+	return titles
+}
+
+func TestPickerEntries(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		bound  bool
+		filter string
+		want   []string
+	}{
+		{"bound Project is pinned first", true, "", []string{"smoke", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Projects", "New Project"}},
+		{"unbound lists no Project inline", false, "", []string{"Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Projects", "New Project"}},
+		{"filter matches any case and keeps the order", true, "AL", []string{"All Open", "alpha"}},
+		{"filter can drop the pinned Project", true, "alp", []string{"alpha"}},
+		{"filter finds the Projects entry and New Project by title", true, "PROJ", []string{"Projects", "New Project"}},
+		{"filter without a match lists nothing", true, "zzz", []string{}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m := pickerStart(120, tt.bound)
+			m.Picker = model.PickerState{Open: true, Filter: tt.filter}
+			if got := pickerTitles(m); !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("entries = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPickerCursorMoves(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		keys []string
+		want int
+	}{
+		{"starts on the first entry", nil, 0},
+		{"down", []string{"down"}, 1},
+		{"j", []string{"j"}, 1},
+		{"up from the top stays", []string{"up"}, 0},
+		{"k from the top stays", []string{"k"}, 0},
+		{"down then up", []string{"down", "down", "up"}, 1},
+		{"end", []string{"end"}, 8},
+		{"home", []string{"end", "home"}, 0},
+		{"down stops at the last entry", []string{"end", "down", "j"}, 8},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m, cmds := pickerKeys(pickerStart(120, true), append([]string{"p"}, tt.keys...)...)
+			if !m.Picker.Open || m.Picker.Cursor != tt.want || len(cmds) != 0 {
+				t.Fatalf("picker cursor = %d open=%v cmds=%#v, want %d", m.Picker.Cursor, m.Picker.Open, cmds, tt.want)
+			}
+		})
+	}
+}
+
+func TestPickerEnterSwitchesLikeTheSidebar(t *testing.T) {
+	inbox := model.Collection{View: "inbox", Title: "Inbox"}
+	for _, tt := range []struct {
+		name string
+		keys []string
+	}{
+		{"from the list", nil},
+		{"from detail", []string{"enter"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			base, _ := pickerKeys(pickerStart(120, true), tt.keys...)
+			want, wantCmds := model.Update(base, model.CollectionSelected{Collection: inbox})
+			want.Focus = model.ColumnList
+			got, gotCmds := pickerKeys(base, "p", "down", "enter")
+			if !reflect.DeepEqual(got, want) || !reflect.DeepEqual(gotCmds, wantCmds) || len(gotCmds) != 1 {
+				t.Fatalf("picker switch: collection=%+v loading=%v focus=%v picker=%+v cmds=%#v, want %+v %#v", got.Collection, got.Loading, got.Focus, got.Picker, gotCmds, want.Collection, wantCmds)
+			}
+		})
+	}
+}
+
+func TestPickerReturnsToBoundProject(t *testing.T) {
+	m, _ := pickerKeys(pickerStart(120, true), "p", "down", "enter")
+	if m.Collection.View != "inbox" {
+		t.Fatalf("first switch: %+v", m.Collection)
+	}
+	m, cmds := pickerKeys(m, "p", "enter")
+	want := model.Collection{View: "project", ProjectUID: "smoke-uid", Title: "smoke"}
+	if m.Collection != want || !readsCollection(cmds, m, "") {
+		t.Fatalf("pinned entry did not return to the bound Project: %+v %#v", m.Collection, cmds)
+	}
+}
+
+func TestPickerEscapeChangesNothing(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		keys []string
+	}{
+		{"from the list", nil},
+		{"from detail", []string{"enter"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			base, _ := pickerKeys(pickerStart(120, true), tt.keys...)
+			got, cmds := pickerKeys(base, "p", "down", "escape")
+			if !reflect.DeepEqual(got, base) || len(cmds) != 0 {
+				t.Fatalf("escape changed state: picker=%+v focus=%v collection=%+v cmds=%#v", got.Picker, got.Focus, got.Collection, cmds)
+			}
+		})
+	}
+}
+
+func TestPickerTypingFiltersEntries(t *testing.T) {
+	all := []string{"smoke", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Projects", "New Project"}
+	for _, tt := range []struct {
+		name   string
+		keys   []string
+		filter string
+		titles []string
+		cursor int
+	}{
+		{"typing narrows", []string{"a", "l"}, "al", []string{"All Open", "alpha"}, 0},
+		{"typing returns the cursor to the top", []string{"down", "down", "a"}, "a", []string{"Today", "Deadlines", "All Open", "alpha"}, 0},
+		{"backspace widens", []string{"a", "l", "backspace"}, "a", []string{"Today", "Deadlines", "All Open", "alpha"}, 0},
+		{"ctrl+u clears", []string{"a", "l", "ctrl+u"}, "", all, 0},
+		{"space is typed", []string{"a", "l", "l", "space", "o"}, "all o", []string{"All Open"}, 0},
+		{"j and k move while the filter is empty", []string{"j", "j", "k"}, "", all, 1},
+		{"j and k are typed once filtering", []string{"a", "l", "k"}, "alk", []string{}, 0},
+		{"global keys are typed", []string{"q", "?", "p"}, "q?p", []string{}, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m, cmds := pickerKeys(pickerStart(120, true), append([]string{"p"}, tt.keys...)...)
+			if m.Picker.Filter != tt.filter || m.Picker.Cursor != tt.cursor || !reflect.DeepEqual(pickerTitles(m), tt.titles) {
+				t.Fatalf("filter=%q cursor=%d entries=%q, want %q %d %q", m.Picker.Filter, m.Picker.Cursor, pickerTitles(m), tt.filter, tt.cursor, tt.titles)
+			}
+			if !m.Picker.Open || m.Quitting || m.HelpOpen || len(cmds) != 0 {
+				t.Fatalf("typing left the picker: open=%v quitting=%v help=%v cmds=%#v", m.Picker.Open, m.Quitting, m.HelpOpen, cmds)
+			}
+		})
+	}
+}
+
+func TestPickerEnterOpensTheFilteredEntry(t *testing.T) {
+	m, cmds := pickerKeys(pickerStart(120, true), "p", "t", "o", "enter")
+	want := model.Collection{View: "today", Title: "Today"}
+	if m.Picker.Open || m.Collection != want || m.Focus != model.ColumnList || !readsCollection(cmds, m, "") {
+		t.Fatalf("filtered pick: open=%v collection=%+v cmds=%#v", m.Picker.Open, m.Collection, cmds)
+	}
+}
+
+func TestPickerEnterWithoutMatchKeepsPickerOpen(t *testing.T) {
+	base := pickerStart(120, true)
+	m, cmds := pickerKeys(base, "p", "z", "z", "enter")
+	if !m.Picker.Open || m.Collection != base.Collection || len(cmds) != 0 {
+		t.Fatalf("no-match enter: open=%v collection=%+v cmds=%#v", m.Picker.Open, m.Collection, cmds)
+	}
+}
+
+func TestPickerInterruptQuits(t *testing.T) {
+	m, cmds := pickerKeys(pickerStart(120, true), "p", "ctrl+c")
+	if !m.Quitting || len(cmds) != 0 {
+		t.Fatalf("ctrl+c in picker: quitting=%v cmds=%#v", m.Quitting, cmds)
+	}
+}
+
+func TestPickerPointerEqualsKeyboard(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		key  string
+		keys []string
+	}{
+		{"Inbox", "inbox", []string{"down", "enter"}},
+		{"the pinned bound Project", "project.smoke-uid", []string{"enter"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			opened, _ := pickerKeys(pickerStart(120, true), "p")
+			want, wantCmds := pickerKeys(opened, tt.keys...)
+			got, gotCmds := model.Update(opened, model.PickerSelected{Key: tt.key})
+			if !reflect.DeepEqual(got, want) || !reflect.DeepEqual(gotCmds, wantCmds) || len(gotCmds) != 1 {
+				t.Fatalf("click differs from keyboard: %+v %#v vs %+v %#v", got.Collection, gotCmds, want.Collection, wantCmds)
+			}
+		})
+	}
+}
+
+func TestPickerIgnoresUnknownAndStaleClicks(t *testing.T) {
+	opened, _ := pickerKeys(pickerStart(120, true), "p")
+	for _, tt := range []struct {
+		name  string
+		start model.Model
+		key   string
+	}{
+		{"unknown entry", opened, "project.missing"},
+		{"closed picker", pickerStart(120, true), "inbox"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, cmds := model.Update(tt.start, model.PickerSelected{Key: tt.key})
+			if !reflect.DeepEqual(got, tt.start) || len(cmds) != 0 {
+				t.Fatalf("click changed state: %+v %#v", got.Collection, cmds)
+			}
+		})
+	}
+}
+
+func TestPickerKeysAreAdvertisedFromTheKeymap(t *testing.T) {
+	advertised := func(mode model.Mode) map[string]model.Action {
+		bindings := map[string]model.Action{}
+		for binding := range model.BindingsForMode(mode, true) {
+			if mode == model.ModePicker && binding.Mode != model.ModePicker {
+				t.Fatalf("picker advertises an inactive global binding: %+v", binding)
+			}
+			bindings[binding.Chord] = binding.Action
+		}
+		return bindings
+	}
+	for _, mode := range []model.Mode{model.ModeList, model.ModeDetail} {
+		if advertised(mode)["p"] != model.OpenPicker {
+			t.Fatalf("%s hints omit p", mode)
+		}
+	}
+	picker := advertised(model.ModePicker)
+	for chord, action := range map[string]model.Action{"down": model.MoveDown, "up": model.MoveUp, "enter": model.PickCollection, "escape": model.ClosePicker} {
+		if picker[chord] != action {
+			t.Fatalf("picker hints: %s = %q, want %q", chord, picker[chord], action)
+		}
+	}
+}
+
+func TestListHeadingClickOpensThePickerFromTheSidebar(t *testing.T) {
+	m := pickerStart(120, false)
+	m, _ = pickerKeys(m, "escape")
+	if m.Focus != model.ColumnCollections {
+		t.Fatalf("fixture: focus %v", m.Focus)
+	}
+	m, _ = model.Update(m, model.KeyMsg{Chord: "p"})
+	if !m.Picker.Open {
+		t.Fatal("clicking the top bar title did not open the picker")
+	}
+}
+
+func projectsLevel(t *testing.T, bound bool) model.Model {
+	t.Helper()
+	m, cmds := pickerKeys(pickerStart(120, bound), "p", "end", "up", "enter")
+	if !m.Picker.Open || !m.Picker.Projects || len(cmds) != 0 {
+		t.Fatalf("Projects entry: open=%v projects=%v cmds=%#v", m.Picker.Open, m.Picker.Projects, cmds)
+	}
+	return m
+}
+
+func TestPickerProjectsEntryListsEveryProject(t *testing.T) {
+	m := projectsLevel(t, true)
+	if got, want := pickerTitles(m), []string{"Back", "alpha", "smoke"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Projects level = %q, want %q", got, want)
+	}
+}
+
+func TestPickerPicksAProjectFromTheProjectsLevel(t *testing.T) {
+	alpha := model.Collection{View: "project", ProjectUID: "alpha-uid", Title: "alpha"}
+	m, cmds := pickerKeys(projectsLevel(t, true), "up", "enter")
+	if m.Picker.Open || m.Collection != alpha || m.Focus != model.ColumnList || !readsCollection(cmds, m, "") {
+		t.Fatalf("pick: open=%v collection=%+v cmds=%#v", m.Picker.Open, m.Collection, cmds)
+	}
+	if reopened, _ := pickerKeys(m, "p"); reopened.Picker.Projects {
+		t.Fatal("the Menu reopened on the Projects level")
+	}
+}
+
+func TestPickerEscapeLeavesTheProjectsLevelBeforeClosing(t *testing.T) {
+	base := projectsLevel(t, true)
+	m, cmds := pickerKeys(base, "escape")
+	if !m.Picker.Open || m.Picker.Projects || len(cmds) != 0 || pickerTitles(m)[7] != "Projects" || m.Picker.Cursor != 7 {
+		t.Fatalf("esc: open=%v projects=%v cursor=%d entries=%q", m.Picker.Open, m.Picker.Projects, m.Picker.Cursor, pickerTitles(m))
+	}
+	if m, _ = pickerKeys(m, "escape"); m.Picker.Open {
+		t.Fatal("second esc did not close the Menu")
+	}
+}
+
+func TestPickerBackEntryAndClicksSwitchLevels(t *testing.T) {
+	base := projectsLevel(t, true)
+	viaEnter, _ := pickerKeys(base, "home", "enter")
+	viaEsc, _ := pickerKeys(base, "escape")
+	viaClick, _ := model.Update(base, model.PickerSelected{Key: "back"})
+	if viaEnter.Picker.Projects || !reflect.DeepEqual(viaEnter, viaEsc) || !reflect.DeepEqual(viaClick, viaEsc) {
+		t.Fatalf("back: enter %+v, esc %+v, click %+v", viaEnter.Picker, viaEsc.Picker, viaClick.Picker)
+	}
+	top, _ := pickerKeys(pickerStart(120, true), "p")
+	into, _ := model.Update(top, model.PickerSelected{Key: "projects"})
+	if want := projectsLevel(t, true); !reflect.DeepEqual(into, want) {
+		t.Fatalf("click on Projects: %+v, want %+v", into.Picker, want.Picker)
+	}
+	m, cmds := model.Update(into, model.PickerSelected{Key: "project.alpha-uid"})
+	if m.Picker.Open || m.Collection.ProjectUID != "alpha-uid" || len(cmds) != 1 {
+		t.Fatalf("click on a Project: open=%v collection=%+v", m.Picker.Open, m.Collection)
+	}
+}
+
+func TestPickerFilterMatchesAcrossLevels(t *testing.T) {
+	for _, m := range []model.Model{
+		func() model.Model { m, _ := pickerKeys(pickerStart(120, true), "p"); return m }(),
+		projectsLevel(t, true),
+	} {
+		m, _ = pickerKeys(m, "a", "l")
+		if got, want := pickerTitles(m), []string{"All Open", "alpha"}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("filter from projects=%v: %q, want %q", m.Picker.Projects, got, want)
+		}
+	}
+	m, _ := pickerKeys(projectsLevel(t, true), "s", "m", "o")
+	if got := pickerTitles(m); !reflect.DeepEqual(got, []string{"smoke"}) {
+		t.Fatalf("pinned-less filter = %q", got)
+	}
+	if m, _ = pickerKeys(m, "escape"); m.Picker.Open {
+		t.Fatal("esc with a filter should close the Menu")
+	}
+}
+
+func TestSidebarProjectsLevel(t *testing.T) {
+	alpha := model.Collection{View: "project", ProjectUID: "alpha-uid", Title: "alpha"}
+	titles := func(m model.Model) []string {
+		out := []string{}
+		for _, entry := range m.SidebarEntries() {
+			out = append(out, entry.Title)
+		}
+		return out
+	}
+	top, _ := pickerKeys(pickerStart(120, false), "escape")
+	if got, want := titles(top), []string{"Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Projects", "New Project"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("top level = %q, want %q", got, want)
+	}
+	m, cmds := pickerKeys(top, "end", "up", "enter")
+	if !m.SidebarProjects || m.Focus != model.ColumnCollections || len(cmds) != 0 || !reflect.DeepEqual(titles(m), []string{"Back", "alpha", "smoke"}) {
+		t.Fatalf("Projects entry: level=%v focus=%v entries=%q", m.SidebarProjects, m.Focus, titles(m))
+	}
+	if back, _ := pickerKeys(m, "escape"); back.SidebarProjects || back.Focus != model.ColumnCollections || !reflect.DeepEqual(titles(back), titles(top)) {
+		t.Fatalf("esc: level=%v focus=%v", back.SidebarProjects, back.Focus)
+	}
+	if back, _ := pickerKeys(m, "enter"); back.SidebarProjects {
+		t.Fatal("enter on Back stayed on the Projects level")
+	}
+	m, cmds = pickerKeys(m, "down", "enter")
+	if m.SidebarProjects || m.Collection != alpha || m.Focus != model.ColumnList || !readsCollection(cmds, m, "") {
+		t.Fatalf("pick: level=%v collection=%+v cmds=%#v", m.SidebarProjects, m.Collection, cmds)
+	}
+	clicked, _ := model.Update(top, model.CollectionPointerSelected{Key: "projects"})
+	if !clicked.SidebarProjects || clicked.Focus != model.ColumnCollections {
+		t.Fatalf("click on Projects: level=%v focus=%v", clicked.SidebarProjects, clicked.Focus)
+	}
+	clicked, _ = model.Update(clicked, model.CollectionPointerSelected{Key: "project.alpha-uid"})
+	if clicked.Collection != alpha || clicked.Focus != model.ColumnList {
+		t.Fatalf("click on a Project: %+v focus=%v", clicked.Collection, clicked.Focus)
+	}
+}
+
+func TestPopupPickResetsTheSidebarLevel(t *testing.T) {
+	m, _ := pickerKeys(pickerStart(120, false), "escape", "end", "up", "enter", "down", "enter")
+	m, _ = pickerKeys(m, "p", "end", "up", "enter")
+	if m.SidebarProjects {
+		t.Fatal("sidebar kept its Projects level after a pick in the popup")
+	}
+}

@@ -36,7 +36,7 @@ end
 local function exitedRightAway(cx, pane)
     fresh[pane] = nil
     cx:toast("error", "tern-kata exited right away",
-        "Is it installed on the session host? go install github.com/Dangerboi/tern-kata@latest")
+        "Is it installed on the session host? go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest")
 end
 
 -- After the window, a failing exit still closes the Pane (spec), silently: poll once a second until it is gone or replaced.

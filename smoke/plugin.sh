@@ -57,7 +57,7 @@ expect_toast() {
   return 1
 }
 mkdir -p "$tmp/workspace" "$tmp/bin" "$tmp/pane-bin" "$tmp/app" "$tmp/crates/tern/goldens" "$tmp/crates/plugins/fixtures"
-if [[ $# -gt 0 ]]; then cp "$1" "$tmp/app/tern-kata"; else (cd "$repo" && go build -o "$tmp/app/tern-kata" .); fi
+if [[ $# -gt 0 ]]; then cp "$1" "$tmp/app/tern-kata"; else (cd "$repo" && go build -o "$tmp/app/tern-kata" ./cmd/tern-kata); fi
 printf '#!/bin/sh\nexec env KATA_HOME=%q %q "$@"\n' "$KATA_HOME" "$tmp/app/tern-kata" >"$tmp/pane-bin/tern-kata"
 chmod +x "$tmp/pane-bin/tern-kata"
 ln -s "$repo" "$tmp/crates/plugins/fixtures/tern-kata"
@@ -176,7 +176,7 @@ rm "$tmp/pane-bin/tern-kata"
 ctl plugins run plugin.tern-kata.open
 ctl focus left
 expect_toast 'tern-kata exited right away'
-expect_toast 'Is it installed on the session host? go install github.com/Dangerboi/tern-kata@latest'
+expect_toast 'Is it installed on the session host? go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest'
 expect_panes 1
 jq -Rse 'contains("plugin window halves loaded count=1") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
 printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, shell-syntax Project link, quit closes the Pane, missing-binary toast\n'
