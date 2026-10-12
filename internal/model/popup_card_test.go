@@ -2,26 +2,56 @@ package model_test
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-// popupCard describes one card (or Search) for the shared behaviour test: how to open it, which
-// field a click focuses, and how to read the text and the focused field back.
+// cardState is one state of a card that owns the keyboard, with the mode it puts the keymap in.
+type cardState struct {
+	name string
+	open func() model.Model
+	mode model.Mode
+}
+
+// cardBody describes the multi-line Draft body of Create and the Draft editor.
+type cardBody struct {
+	// focus focuses the body of an opened card; ready makes the Draft saveable once it has text.
+	focus, ready func(model.Model) model.Model
+	// text is what the Draft holds; present says the card is on screen.
+	text    func(model.Model) string
+	present func(model.Model) bool
+	// target names the card's body editor for native edits.
+	target model.EditTarget
+	// save submits the card; fail answers the save with an error.
+	save string
+	fail func(model.Model, error) model.Msg
+}
+
+// popupCard describes one card (or Search, which is not one) for the shared behaviour tests: how
+// to open it, which field a click focuses, and how to read the text and the focused field back.
 type popupCard struct {
-	name      string
-	open      func() model.Model
-	fields    []model.Field // the fields in tab order; focus cycling is checked when there are several
-	textField model.Field   // a text field of the card
+	name string
+	card model.Card // NoCard for Search
+	// states are the keymap modes the card can be in; the first is the plain opened card.
+	states []cardState
+	// quits says ctrl+c quits from the card (the Menu, Close and New Project cards).
+	quits bool
+	// graft puts the card's state on another model, to open several at once.
+	graft func(dst *model.Model, src model.Model)
+	// multiline cards edit a body, not a single-line text field.
+	multiline bool
+	textField model.Field // a text field of the card
 	field     func(model.Model) model.Field
 	text      func(model.Model, model.Field) string
 	// save submits the card; result answers it with an error. Nil when the card does not save.
 	save   []string
 	result func(model.Model, error) model.Msg
-	// cleared is true when opening leaves the field empty already.
-	cleared bool
+	body   *cardBody
 }
+
+func (c popupCard) open() model.Model { return c.states[0].open() }
 
 func opened(keys ...string) func() model.Model {
 	return func() model.Model {
@@ -36,37 +66,110 @@ func openedCreate() model.Model {
 	return m
 }
 
+func openedDraft() model.Model {
+	m, _ := model.Update(editorModel(), model.KeyMsg{Chord: "c"})
+	return m
+}
+
+// typed enters a body, as Tern sends a key whose text is its character.
+func typed(m model.Model, text string) model.Model {
+	m, _ = model.Update(m, model.KeyMsg{Chord: text, Text: text})
+	return m
+}
+
+// asking opens a card that holds a Draft and presses esc with text typed, which asks to discard.
+func asking(c popupCard) func() model.Model {
+	return func() model.Model {
+		m, _ := clickPress(typed(c.body.focus(c.open()), "x"), "escape")
+		return m
+	}
+}
+
 func popupCards() []popupCard {
-	return []popupCard{
-		{
-			name: "Close", open: opened("x"), fields: fieldNames(model.CloseFields), textField: model.CloseCommit, cleared: true,
-			field:  func(m model.Model) model.Field { return m.CloseForm.Field },
-			text:   func(m model.Model, f model.Field) string { return m.CloseForm.Values.Value(f) },
-			save:   []string{"ctrl+d"},
-			result: func(m model.Model, err error) model.Msg { return model.CloseResultMsg{UID: m.CloseForm.UID, Err: err} },
+	create := popupCard{
+		name: "Create", card: model.CardCreate, textField: model.CreateTitle,
+		states: []cardState{{"", openedCreate, model.ModeCreate}},
+		graft:  func(dst *model.Model, src model.Model) { dst.Create = src.Create },
+		field:  func(m model.Model) model.Field { return m.Create.Field },
+		text:   func(m model.Model, _ model.Field) string { return m.Create.Title },
+		save:   []string{"ctrl+o"},
+		result: func(_ model.Model, err error) model.Msg { return model.IssueCreated{Err: err} },
+		body: &cardBody{
+			target: model.EditCreateBody, save: "ctrl+o",
+			focus: func(m model.Model) model.Model {
+				m, _ = model.Update(m, model.FocusFieldMsg{Field: model.CreateBody})
+				return m
+			},
+			ready: func(m model.Model) model.Model {
+				m, _ = model.Update(m, model.FocusFieldMsg{Field: model.CreateTitle})
+				return typed(m, "t")
+			},
+			text:    func(m model.Model) string { return m.Create.Editor.Text },
+			present: func(m model.Model) bool { return m.Create.Open },
+			fail:    func(_ model.Model, err error) model.Msg { return model.IssueCreated{Err: err} },
 		},
+	}
+	create.states = append(create.states, cardState{"asking to discard", asking(create), model.ModeDiscard})
+	draft := popupCard{
+		name: "Draft editor", card: model.CardDraft, multiline: true,
+		states: []cardState{{"", openedDraft, model.ModeEditor}},
+		graft:  func(dst *model.Model, src model.Model) { dst.Drafts, dst.EditorUID = src.Drafts, src.EditorUID },
+		field:  func(model.Model) model.Field { return "" },
+		body: &cardBody{
+			target: model.EditDraftBody, save: "ctrl+o",
+			focus:   func(m model.Model) model.Model { return m },
+			ready:   func(m model.Model) model.Model { return m },
+			text:    func(m model.Model) string { d, _ := m.ActiveDraft(); return d.Editor.Text },
+			present: func(m model.Model) bool { _, ok := m.ActiveDraft(); return ok },
+			fail:    func(m model.Model, err error) model.Msg { return model.DraftFailed{UID: m.EditorUID, Err: err} },
+		},
+	}
+	draft.states = append(draft.states,
+		cardState{"asking to discard", asking(draft), model.ModeDiscard},
+		cardState{"with a conflict", func() model.Model {
+			m := openedDraft()
+			m, _ = model.Update(m, model.DraftConflict{UID: m.EditorUID, Issue: model.Issue{UID: m.EditorUID, Revision: 9}})
+			return m
+		}, model.ModeConflict})
+	return []popupCard{
+		create,
+		draft,
 		{
-			name: "single-field form", open: opened("+"), cleared: true,
+			name: "single-field form", card: model.CardField,
+			states: []cardState{{"", opened("+"), model.ModeFieldForm}},
+			graft:  func(dst *model.Model, src model.Model) { dst.FieldForm = src.FieldForm },
 			field:  func(model.Model) model.Field { return "" },
 			text:   func(m model.Model, _ model.Field) string { return m.FieldForm.Value },
 			save:   []string{"enter"},
 			result: func(m model.Model, err error) model.Msg { return model.FieldWritten{UID: m.FieldForm.UID, Err: err} },
 		},
 		{
-			name: "New Project",
-			open: func() model.Model {
+			name: "Close", card: model.CardClose, quits: true, textField: model.CloseCommit,
+			states: []cardState{{"", opened("x"), model.ModeCloseForm}},
+			graft:  func(dst *model.Model, src model.Model) { dst.CloseForm = src.CloseForm },
+			field:  func(m model.Model) model.Field { return m.CloseForm.Field },
+			text:   func(m model.Model, f model.Field) string { return m.CloseForm.Values.Value(f) },
+			save:   []string{"ctrl+d"},
+			result: func(m model.Model, err error) model.Msg { return model.CloseResultMsg{UID: m.CloseForm.UID, Err: err} },
+		},
+		{
+			name: "New Project", card: model.CardProject, quits: true,
+			states: []cardState{{"", func() model.Model {
 				m, _ := model.Update(clickAt(model.ColumnList), model.CollectionPointerSelected{Key: model.NewProjectKey})
 				m, _ = clickPress(m, "ctrl+u")
 				return m
-			},
+			}, model.ModeProjectForm}},
+			graft:  func(dst *model.Model, src model.Model) { dst.ProjectForm = src.ProjectForm },
 			field:  func(model.Model) model.Field { return "" },
 			text:   func(m model.Model, _ model.Field) string { return m.ProjectForm.Name },
 			save:   []string{"enter"},
 			result: func(_ model.Model, err error) model.Msg { return model.ProjectSaved{Err: err} },
 		},
 		{
-			name: "Filter form", open: opened("f"), fields: fieldNames(model.FilterFields), textField: model.FilterOwner, cleared: true,
-			field: func(m model.Model) model.Field { return m.FilterForm.Field },
+			name: "Filter form", card: model.CardFilter, textField: model.FilterOwner,
+			states: []cardState{{"", opened("f"), model.ModeFilterForm}},
+			graft:  func(dst *model.Model, src model.Model) { dst.FilterForm = src.FilterForm },
+			field:  func(m model.Model) model.Field { return m.FilterForm.Field },
 			text: func(m model.Model, f model.Field) string {
 				if f == model.FilterLabel {
 					return m.FilterForm.Values.Label
@@ -75,26 +178,24 @@ func popupCards() []popupCard {
 			},
 		},
 		{
-			name: "Menu", open: opened("p"), cleared: true,
-			field: func(model.Model) model.Field { return "" },
-			text:  func(m model.Model, _ model.Field) string { return m.Picker.Filter },
+			name: "Menu", card: model.CardPicker, quits: true,
+			states: []cardState{{"", opened("p"), model.ModePicker}},
+			graft:  func(dst *model.Model, src model.Model) { dst.Picker = src.Picker },
+			field:  func(model.Model) model.Field { return "" },
+			text:   func(m model.Model, _ model.Field) string { return m.Picker.Filter },
 		},
 		{
-			name: "Search", open: opened("/"), cleared: true,
-			field: func(model.Model) model.Field { return "" },
-			text:  func(m model.Model, _ model.Field) string { return m.Filters.Search },
-		},
-		{
-			name: "Create", open: openedCreate, fields: fieldNames(model.CreateFields), textField: model.CreateTitle, cleared: true,
-			field:  func(m model.Model) model.Field { return m.Create.Field },
-			text:   func(m model.Model, _ model.Field) string { return m.Create.Title },
-			save:   []string{"ctrl+o"},
-			result: func(_ model.Model, err error) model.Msg { return model.IssueCreated{Err: err} },
+			name: "Search", card: model.NoCard,
+			states: []cardState{{"", opened("/"), model.ModeSearch}},
+			field:  func(model.Model) model.Field { return "" },
+			text:   func(m model.Model, _ model.Field) string { return m.Filters.Search },
 		},
 	}
 }
 
-func fieldNames(specs []model.FieldSpec) []model.Field {
+// fieldNames is the field names a card declares, in tab order.
+func fieldNames(card model.Card) []model.Field {
+	specs, _ := model.CardFields(card)
 	names := make([]model.Field, len(specs))
 	for i, spec := range specs {
 		names[i] = spec.Name
@@ -119,33 +220,35 @@ func TestPopupCardSharedBehaviour(t *testing.T) {
 			m, _ = model.Update(m, model.FocusFieldMsg{Field: c.textField})
 			return m
 		}
-		t.Run(c.name+"/typing", func(t *testing.T) {
-			// q is a global binding (quit) and space a binding in some modes: both are text here.
-			m := typeKeys(focused(), model.KeyMsg{Chord: "q"}, model.KeyMsg{Chord: "space"}, model.KeyMsg{Chord: "x", Text: "x"})
-			if got := c.text(m, c.textField); got != "q x" || m.Quitting {
-				t.Fatalf("typed %q quitting=%v", got, m.Quitting)
-			}
-		})
-		t.Run(c.name+"/backspace by rune", func(t *testing.T) {
-			for _, tt := range []struct{ typed, want string }{{"aé", "a"}, {"a😀", "a"}} {
-				m := typeKeys(focused(), model.KeyMsg{Text: tt.typed}, model.KeyMsg{Chord: "backspace"})
-				if got := c.text(m, c.textField); got != tt.want {
-					t.Fatalf("%q then backspace = %q, want %q", tt.typed, got, tt.want)
+		if !c.multiline {
+			t.Run(c.name+"/typing", func(t *testing.T) {
+				// q is a global binding (quit) and space a binding in some modes: both are text here.
+				m := typeKeys(focused(), model.KeyMsg{Chord: "q"}, model.KeyMsg{Chord: "space"}, model.KeyMsg{Chord: "x", Text: "x"})
+				if got := c.text(m, c.textField); got != "q x" || m.Quitting {
+					t.Fatalf("typed %q quitting=%v", got, m.Quitting)
 				}
-			}
-		})
-		t.Run(c.name+"/clear", func(t *testing.T) {
-			m := typeKeys(focused(), model.KeyMsg{Text: "abc"}, model.KeyMsg{Chord: "ctrl+u"})
-			if got := c.text(m, c.textField); got != "" {
-				t.Fatalf("after ctrl+u: %q", got)
-			}
-		})
-		t.Run(c.name+"/paste is flattened", func(t *testing.T) {
-			m := typeKeys(focused(), model.KeyMsg{Text: "one\ntwo\r\nthree"})
-			if got := c.text(m, c.textField); got != "one two three" {
-				t.Fatalf("pasted: %q", got)
-			}
-		})
+			})
+			t.Run(c.name+"/backspace by rune", func(t *testing.T) {
+				for _, tt := range []struct{ typed, want string }{{"aé", "a"}, {"a😀", "a"}} {
+					m := typeKeys(focused(), model.KeyMsg{Text: tt.typed}, model.KeyMsg{Chord: "backspace"})
+					if got := c.text(m, c.textField); got != tt.want {
+						t.Fatalf("%q then backspace = %q, want %q", tt.typed, got, tt.want)
+					}
+				}
+			})
+			t.Run(c.name+"/clear", func(t *testing.T) {
+				m := typeKeys(focused(), model.KeyMsg{Text: "abc"}, model.KeyMsg{Chord: "ctrl+u"})
+				if got := c.text(m, c.textField); got != "" {
+					t.Fatalf("after ctrl+u: %q", got)
+				}
+			})
+			t.Run(c.name+"/paste is flattened", func(t *testing.T) {
+				m := typeKeys(focused(), model.KeyMsg{Text: "one\ntwo\r\nthree"})
+				if got := c.text(m, c.textField); got != "one two three" {
+					t.Fatalf("pasted: %q", got)
+				}
+			})
+		}
 		t.Run(c.name+"/esc after a click", func(t *testing.T) {
 			m := focused()
 			card := m.CurrentMode()
@@ -163,18 +266,18 @@ func TestPopupCardSharedBehaviour(t *testing.T) {
 				t.Fatalf("click on an unknown field focused %q", got)
 			}
 		})
-		if len(c.fields) > 1 {
+		if fields := fieldNames(c.card); len(fields) > 1 {
 			t.Run(c.name+"/field cycling wraps", func(t *testing.T) {
 				m := c.open()
-				m, _ = model.Update(m, model.FocusFieldMsg{Field: c.fields[0]})
-				for range c.fields {
+				m, _ = model.Update(m, model.FocusFieldMsg{Field: fields[0]})
+				for range fields {
 					m, _ = clickPress(m, "tab")
 				}
-				if got := c.field(m); got != c.fields[0] {
-					t.Fatalf("%d tabs from %q reached %q", len(c.fields), c.fields[0], got)
+				if got := c.field(m); got != fields[0] {
+					t.Fatalf("%d tabs from %q reached %q", len(fields), fields[0], got)
 				}
-				if m, _ = clickPress(m, "shift+tab"); c.field(m) != c.fields[len(c.fields)-1] {
-					t.Fatalf("shift+tab from %q reached %q", c.fields[0], c.field(m))
+				if m, _ = clickPress(m, "shift+tab"); c.field(m) != fields[len(fields)-1] {
+					t.Fatalf("shift+tab from %q reached %q", fields[0], c.field(m))
 				}
 			})
 		}
@@ -192,5 +295,199 @@ func TestPopupCardSharedBehaviour(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// Every card in the order has a row in the table and declares its fields, so a card added to the
+// order without either fails here.
+func TestEveryPopupCardIsDescribed(t *testing.T) {
+	table := popupCards()
+	for _, card := range model.Cards() {
+		if !slices.ContainsFunc(table, func(c popupCard) bool { return c.card == card }) {
+			t.Errorf("card %d has no row in the shared card table", card)
+		}
+		if _, declared := model.CardFields(card); !declared {
+			t.Errorf("card %d declares no field list; a card without fields declares an empty one", card)
+		}
+	}
+	for _, c := range table {
+		if c.card != model.NoCard && !slices.Contains(model.Cards(), c.card) {
+			t.Errorf("%s is not in the card order", c.name)
+		}
+		if specs, _ := model.CardFields(c.card); c.textField != "" && !slices.ContainsFunc(specs, func(f model.FieldSpec) bool { return f.Name == c.textField && f.Text }) {
+			t.Errorf("%s: %q is not one of its text fields", c.name, c.textField)
+		}
+	}
+}
+
+func TestPopupCardStates(t *testing.T) {
+	for _, c := range popupCards() {
+		for _, state := range c.states {
+			t.Run(c.name+" "+state.name, func(t *testing.T) {
+				m := state.open()
+				if got := m.CurrentMode(); got != state.mode {
+					t.Fatalf("mode %s, want %s", got, state.mode)
+				}
+				if got := m.TopCard(); got != c.card {
+					t.Fatalf("top card %d, want %d", got, c.card)
+				}
+				if m, _ = clickPress(m, "ctrl+c"); m.Quitting != (c.quits && c.card != model.NoCard) {
+					t.Fatalf("ctrl+c: quitting=%v, want %v", m.Quitting, c.quits)
+				}
+			})
+			// A card lists a global key (quit, help) only if pressing it does what it says.
+			t.Run(c.name+" "+state.name+"/hints", func(t *testing.T) {
+				if c.card == model.NoCard {
+					t.Skip("Search is not a card")
+				}
+				listed := false
+				for binding := range model.BindingsForMode(state.mode, false) {
+					if binding.Mode != "" {
+						continue
+					}
+					m, _ := clickPress(state.open(), binding.Chord)
+					if !m.Quitting && !m.HelpOpen {
+						t.Errorf("%s lists %s (%s), which the card swallows", state.mode, binding.Chord, binding.Help)
+					}
+					listed = listed || binding.Chord == "ctrl+c"
+				}
+				if listed != c.quits {
+					t.Errorf("%s lists ctrl+c = %v, but it quits = %v", state.mode, listed, c.quits)
+				}
+			})
+		}
+	}
+}
+
+// Of any two cards open at once, the earlier one in the order is on top and owns the mode.
+func TestPopupCardOrder(t *testing.T) {
+	var cards []popupCard
+	for _, card := range model.Cards() {
+		i := slices.IndexFunc(popupCards(), func(c popupCard) bool { return c.card == card })
+		if i < 0 {
+			t.Fatalf("card %d has no row", card)
+		}
+		cards = append(cards, popupCards()[i])
+	}
+	for i, top := range cards {
+		for _, under := range cards[i+1:] {
+			t.Run(top.name+" over "+under.name, func(t *testing.T) {
+				m := model.Model{}
+				under.graft(&m, under.open())
+				top.graft(&m, top.open())
+				if m.TopCard() != top.card || m.CurrentMode() != top.states[0].mode {
+					t.Fatalf("top card %d mode %s, want %d %s", m.TopCard(), m.CurrentMode(), top.card, top.states[0].mode)
+				}
+			})
+		}
+	}
+}
+
+func TestDraftCardsTypePrintableKeysIntoTheBody(t *testing.T) {
+	for _, c := range popupCards() {
+		if c.body == nil {
+			continue
+		}
+		t.Run(c.name, func(t *testing.T) {
+			m := c.body.focus(c.open())
+			for _, key := range []string{"q", "?", "p", "j"} {
+				m = typed(m, key)
+			}
+			if got := c.body.text(m); got != "q?pj" || m.Quitting || m.HelpOpen {
+				t.Fatalf("body %q quitting=%v help=%v", got, m.Quitting, m.HelpOpen)
+			}
+		})
+	}
+}
+
+func TestDraftCardsShareDiscardConfirmation(t *testing.T) {
+	for _, c := range popupCards() {
+		if c.body == nil {
+			continue
+		}
+		body := c.body
+		t.Run(c.name+"/leaving with nothing typed does not ask", func(t *testing.T) {
+			m, _ := clickPress(c.open(), "escape")
+			if body.present(m) {
+				t.Fatalf("esc on an empty Draft left mode %s", m.CurrentMode())
+			}
+		})
+		t.Run(c.name+"/asking swallows other keys and edits", func(t *testing.T) {
+			m, _ := clickPress(typed(asking(c)(), "z"), "ctrl+c", "tab")
+			m, _ = model.Update(m, model.EditMsg{Target: body.target, From: 0, To: 0, Text: "e", Cursor: 1, Len: 1})
+			if got := body.text(m); got != "x" || m.Quitting || m.CurrentMode() != model.ModeDiscard {
+				t.Fatalf("while asking: text %q quitting=%v mode %s", got, m.Quitting, m.CurrentMode())
+			}
+		})
+		for _, keep := range []string{"n", "escape"} {
+			t.Run(c.name+"/"+keep+" keeps the text", func(t *testing.T) {
+				m, _ := clickPress(asking(c)(), keep)
+				if !body.present(m) || m.CurrentMode() == model.ModeDiscard || body.text(m) != "x" {
+					t.Fatalf("after %s: present=%v mode %s text %q", keep, body.present(m), m.CurrentMode(), body.text(m))
+				}
+			})
+		}
+		t.Run(c.name+"/y discards", func(t *testing.T) {
+			m, _ := clickPress(asking(c)(), "y")
+			if body.present(m) {
+				t.Fatalf("y left mode %s", m.CurrentMode())
+			}
+		})
+	}
+}
+
+func TestDraftCardsSaveErrorKeepsTheDraft(t *testing.T) {
+	for _, c := range popupCards() {
+		if c.body == nil {
+			continue
+		}
+		body := c.body
+		t.Run(c.name, func(t *testing.T) {
+			m := body.ready(typed(typed(body.focus(c.open()), "k"), "p"))
+			m, cmds := clickPress(m, body.save)
+			if len(cmds) == 0 {
+				t.Fatalf("save sent nothing: mode %s", m.CurrentMode())
+			}
+			// While saving, nothing edits the Draft.
+			before := body.text(m)
+			m, _ = model.Update(typed(m, "z"), model.EditMsg{Target: body.target, From: 0, To: 0, Text: "e", Cursor: 1, Len: 1})
+			if body.text(m) != before {
+				t.Fatalf("saving Draft edited: %q -> %q", before, body.text(m))
+			}
+			m, _ = model.Update(m, body.fail(m, errors.New("daemon said no")))
+			if !body.present(m) || body.text(m) != before {
+				t.Fatalf("after a save error: present=%v text %q, want %q", body.present(m), body.text(m), before)
+			}
+			// The card is editable again.
+			if m = typed(body.focus(m), "!"); body.text(m) != before+"!" {
+				t.Fatalf("Draft not editable after the error: %q", body.text(m))
+			}
+		})
+	}
+}
+
+func TestDraftCardsTakeNativeEditsAndUndo(t *testing.T) {
+	for _, c := range popupCards() {
+		if c.body == nil {
+			continue
+		}
+		body := c.body
+		t.Run(c.name, func(t *testing.T) {
+			m, _ := model.Update(body.focus(c.open()), model.EditMsg{Target: body.target, Text: "hi", Cursor: 2})
+			if got := body.text(m); got != "hi" {
+				t.Fatalf("after a native edit: %q", got)
+			}
+			if m, _ = model.Update(m, model.UndoMsg{Target: body.target}); body.text(m) != "" {
+				t.Fatalf("after undo: %q", body.text(m))
+			}
+			// An edit for the other card's body does not reach this one.
+			other := model.EditCreateBody
+			if body.target == other {
+				other = model.EditDraftBody
+			}
+			if m, _ = model.Update(m, model.EditMsg{Target: other, Text: "no", Cursor: 2}); body.text(m) != "" {
+				t.Fatalf("the other card's edit landed: %q", body.text(m))
+			}
+		})
 	}
 }

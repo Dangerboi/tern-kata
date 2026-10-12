@@ -35,95 +35,173 @@ const (
 	CardPicker
 )
 
-// TopCard is the one popup card that takes the keys, is drawn on top and holds the text caret: the
-// first open card in this order. The help sheet covers every card, so none is on top while it is
-// open. The mode, key dispatch, the view and the Pane driver all read this one order.
-func (m Model) TopCard() Card {
-	_, draft := m.ActiveDraft()
-	switch {
-	case m.HelpOpen:
-		return NoCard
-	case m.Create.Open:
-		return CardCreate
-	case draft:
-		return CardDraft
-	case m.FieldForm.Open:
-		return CardField
-	case m.CloseForm.Open:
-		return CardClose
-	case m.ProjectForm.Open:
-		return CardProject
-	case m.FilterForm.Open:
-		return CardFilter
-	case m.Picker.Open:
-		return CardPicker
+// cardEntry is everything the model knows about one popup card. Each card fills in one.
+type cardEntry struct {
+	card Card
+	open func(Model) bool
+	// modes is every keymap mode the card can be in; mode picks the current one from its state.
+	modes []Mode
+	mode  func(Model) Mode
+	// chords lists the global chords the card lets through to their global binding; every other
+	// global chord is the card's to swallow or type. ctrl+c quits from the Menu, Close and New
+	// Project cards and is swallowed by the others.
+	chords []string
+	key    func(Model, KeyMsg) (Model, []Cmd)
+	// fields is the card's field list in tab order; a card without fields declares an empty,
+	// non-nil list. focus finds the focused field and locked says the card takes no focus change
+	// (it is saving or asking to discard); both are nil for a card without fields.
+	fields []FieldSpec
+	focus  func(*Model) *Field
+	locked func(Model) bool
+	// target names the card's multi-line body for native edits, and edit applies one to it; both
+	// are zero for a card without a body.
+	target EditTarget
+	edit   func(Model, func(TextEditor) TextEditor) Model
+}
+
+// cards lists every popup card in the one order that decides which is on top. It is filled in by
+// init because the cards' key handlers read it back through cycleField.
+var cards []cardEntry
+
+func init() {
+	cards = []cardEntry{
+		{
+			card: CardCreate, open: func(m Model) bool { return m.Create.Open },
+			modes: []Mode{ModeCreate, ModeDiscard},
+			mode: func(m Model) Mode {
+				if m.Create.DiscardConfirm {
+					return ModeDiscard
+				}
+				return ModeCreate
+			},
+			key:    createKey,
+			fields: CreateFields, focus: func(m *Model) *Field { return &m.Create.Field },
+			locked: func(m Model) bool { return m.Create.Saving || m.Create.DiscardConfirm },
+			target: EditCreateBody,
+			edit: func(m Model, apply func(TextEditor) TextEditor) Model {
+				if m.Create.Draft.editable() {
+					m.Create.Editor = apply(m.Create.Editor)
+				}
+				return m
+			},
+		},
+		{
+			card: CardDraft, open: func(m Model) bool { _, ok := m.ActiveDraft(); return ok },
+			modes:  []Mode{ModeEditor, ModeDiscard, ModeConflict},
+			mode:   Model.EditorMode,
+			key:    draftKey,
+			fields: []FieldSpec{},
+			target: EditDraftBody,
+			edit: func(m Model, apply func(TextEditor) TextEditor) Model {
+				if draft, _ := m.ActiveDraft(); draft.editable() {
+					draft.Editor = apply(draft.Editor)
+					m = putDraft(m, m.EditorUID, draft)
+				}
+				return m
+			},
+		},
+		{
+			card: CardField, open: func(m Model) bool { return m.FieldForm.Open },
+			modes: []Mode{ModeFieldForm}, mode: func(Model) Mode { return ModeFieldForm },
+			key: updateFieldKey, fields: []FieldSpec{},
+		},
+		{
+			card: CardClose, open: func(m Model) bool { return m.CloseForm.Open },
+			modes: []Mode{ModeCloseForm}, mode: func(Model) Mode { return ModeCloseForm },
+			chords: []string{"ctrl+c"},
+			key:    closeKey,
+			fields: CloseFields, focus: func(m *Model) *Field { return &m.CloseForm.Field },
+			locked: func(m Model) bool { return m.CloseForm.Saving },
+		},
+		{
+			card: CardProject, open: func(m Model) bool { return m.ProjectForm.Open },
+			modes: []Mode{ModeProjectForm}, mode: func(Model) Mode { return ModeProjectForm },
+			chords: []string{"ctrl+c"},
+			key:    updateProjectFormKey, fields: []FieldSpec{},
+		},
+		{
+			card: CardFilter, open: func(m Model) bool { return m.FilterForm.Open },
+			modes: []Mode{ModeFilterForm}, mode: func(Model) Mode { return ModeFilterForm },
+			key:    filterFormKey,
+			fields: FilterFields, focus: func(m *Model) *Field { return &m.FilterForm.Field },
+			locked: func(Model) bool { return false },
+		},
+		{
+			card: CardPicker, open: func(m Model) bool { return m.Picker.Open },
+			modes: []Mode{ModePicker}, mode: func(Model) Mode { return ModePicker },
+			chords: []string{"ctrl+c"},
+			key:    updatePicker, fields: []FieldSpec{},
+		},
 	}
-	return NoCard
+}
+
+// Cards lists every popup card in the order TopCard tries them.
+func Cards() []Card {
+	list := make([]Card, len(cards))
+	for i, entry := range cards {
+		list[i] = entry.card
+	}
+	return list
+}
+
+// CardFields is the field list a popup card declares, in tab order. Declared is false for a card
+// that does not declare one; a card without fields declares an empty list.
+func CardFields(card Card) (fields []FieldSpec, declared bool) {
+	for _, entry := range cards {
+		if entry.card == card {
+			return entry.fields, entry.fields != nil
+		}
+	}
+	return nil, false
+}
+
+// topEntry is the entry of the card on top, false when none is.
+func (m Model) topEntry() (cardEntry, bool) {
+	if m.HelpOpen {
+		return cardEntry{}, false
+	}
+	for _, entry := range cards {
+		if entry.open(m) {
+			return entry, true
+		}
+	}
+	return cardEntry{}, false
+}
+
+// TopCard is the one popup card that takes the keys, is drawn on top and holds the text caret: the
+// first open card in the order of cards. The help sheet covers every card, so none is on top while
+// it is open. The mode, key dispatch, the view and the Pane driver all read this one order.
+func (m Model) TopCard() Card {
+	entry, _ := m.topEntry()
+	return entry.card
 }
 
 // cardMode is the keymap mode of the card on top, "" when there is none.
 func (m Model) cardMode() Mode {
-	switch m.TopCard() {
-	case CardCreate:
-		if m.Create.DiscardConfirm {
-			return ModeDiscard
-		}
-		return ModeCreate
-	case CardDraft:
-		return m.EditorMode()
-	case CardField:
-		return ModeFieldForm
-	case CardClose:
-		return ModeCloseForm
-	case CardProject:
-		return ModeProjectForm
-	case CardFilter:
-		return ModeFilterForm
-	case CardPicker:
-		return ModePicker
+	if entry, ok := m.topEntry(); ok {
+		return entry.mode(m)
 	}
 	return ""
 }
 
-// cardGlobalChords lists, for each mode a popup card owns, the global chords it lets through to
-// their global binding; every other global chord is the card's to swallow or type. ctrl+c quits
-// from the Menu, Close and New Project cards and is swallowed by the others.
-var cardGlobalChords = map[Mode][]string{
-	ModeCreate:      nil,
-	ModeDiscard:     nil,
-	ModeEditor:      nil,
-	ModeConflict:    nil,
-	ModeFieldForm:   nil,
-	ModeFilterForm:  nil,
-	ModeCloseForm:   {"ctrl+c"},
-	ModeProjectForm: {"ctrl+c"},
-	ModePicker:      {"ctrl+c"},
+// cardLetsThrough reports whether mode belongs to a popup card and, if so, whether the card lets
+// chord through to its global binding.
+func cardLetsThrough(mode Mode, chord string) (isCard, through bool) {
+	for _, entry := range cards {
+		if slices.Contains(entry.modes, mode) {
+			return true, slices.Contains(entry.chords, chord)
+		}
+	}
+	return false, false
 }
 
 // updateTopCardKey gives a key to the card on top; it reports false when no card is open.
 func updateTopCardKey(m Model, msg KeyMsg) (Model, []Cmd, bool) {
-	if slices.Contains(cardGlobalChords[m.cardMode()], msg.Chord) {
+	entry, ok := m.topEntry()
+	if !ok || slices.Contains(entry.chords, msg.Chord) {
 		return m, nil, false
 	}
-	var cmds []Cmd
-	switch m.TopCard() {
-	case CardCreate:
-		m, cmds = createKey(m, msg)
-	case CardDraft:
-		m, cmds = draftKey(m, msg)
-	case CardField:
-		m, cmds = updateFieldKey(m, msg)
-	case CardClose:
-		m, cmds = closeKey(m, msg)
-	case CardProject:
-		m, cmds = updateProjectFormKey(m, msg)
-	case CardFilter:
-		m, cmds = filterFormKey(m, msg)
-	case CardPicker:
-		m, cmds = updatePicker(m, msg)
-	default:
-		return m, nil, false
-	}
+	m, cmds := entry.key(m, msg)
 	return m, cmds, true
 }
 
@@ -140,18 +218,8 @@ const (
 // editBody applies a native edit or undo to target, if the card on top owns it. It reports whether
 // the card took the message, which it does even when the Draft is read-only.
 func editBody(m Model, target EditTarget, apply func(TextEditor) TextEditor) (Model, bool) {
-	switch {
-	case target == EditCreateBody && m.TopCard() == CardCreate:
-		if m.Create.Draft.editable() {
-			m.Create.Editor = apply(m.Create.Editor)
-		}
-		return m, true
-	case target == EditDraftBody && m.TopCard() == CardDraft:
-		if draft, _ := m.ActiveDraft(); draft.editable() {
-			draft.Editor = apply(draft.Editor)
-			m = putDraft(m, m.EditorUID, draft)
-		}
-		return m, true
+	if entry, ok := m.topEntry(); ok && target != NoEditTarget && entry.target == target {
+		return entry.edit(m, apply), true
 	}
 	return m, false
 }
@@ -181,32 +249,10 @@ func answerDiscard(d Draft, binding Binding, bound bool) (Draft, bool) {
 	return d, false
 }
 
-// cardFields is the field list of the open popup card that has several: Field is the focused
-// field, List the fields in tab order, and Locked says the card takes no focus change (it is
-// saving or asking to discard).
-type cardFields struct {
-	Field  *Field
-	List   []FieldSpec
-	Locked bool
-}
-
-// openCardFields is the field list of the card on top, when it has more than one field.
-func openCardFields(m *Model) (cardFields, bool) {
-	switch m.TopCard() {
-	case CardCreate:
-		return cardFields{&m.Create.Field, CreateFields, m.Create.Saving || m.Create.DiscardConfirm}, true
-	case CardClose:
-		return cardFields{&m.CloseForm.Field, CloseFields, m.CloseForm.Saving}, true
-	case CardFilter:
-		return cardFields{Field: &m.FilterForm.Field, List: FilterFields}, true
-	}
-	return cardFields{}, false
-}
-
 // focusField puts focus on the field called name of the open card; a name outside its field list is ignored.
 func focusField(m Model, name Field) Model {
-	if fields, ok := openCardFields(&m); ok && !fields.Locked && takesFocus(fields.List, name) {
-		*fields.Field = name
+	if entry, ok := m.topEntry(); ok && entry.focus != nil && !entry.locked(m) && takesFocus(entry.fields, name) {
+		*entry.focus(&m) = name
 	}
 	return m
 }
@@ -222,9 +268,10 @@ func takesText(list []FieldSpec, name Field) bool {
 
 // cycleField moves focus step fields on, wrapping around the open card's field list.
 func cycleField(m *Model, step int) {
-	if fields, ok := openCardFields(m); ok && !fields.Locked {
-		at := max(slices.IndexFunc(fields.List, func(f FieldSpec) bool { return f.Name == *fields.Field }), 0)
-		*fields.Field = fields.List[((at+step)%len(fields.List)+len(fields.List))%len(fields.List)].Name
+	if entry, ok := m.topEntry(); ok && entry.focus != nil && !entry.locked(*m) {
+		field := entry.focus(m)
+		at := max(slices.IndexFunc(entry.fields, func(f FieldSpec) bool { return f.Name == *field }), 0)
+		*field = entry.fields[((at+step)%len(entry.fields)+len(entry.fields))%len(entry.fields)].Name
 	}
 }
 
