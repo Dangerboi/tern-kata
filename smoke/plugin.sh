@@ -163,9 +163,10 @@ expect_panes 2
 ctl key q
 expect_panes 1
 expect_no_kata_toast
-# A Pane started by hand through a full path is a kata Pane too: a link focuses it and opens no second Pane. The stand-in
-# never sets the Pane title, so only its program name can identify it; the real binary (through its wrapper script) shows
-# the Issue is selected in it.
+# A Pane started by hand is a kata Pane when its title is `tern-kata` or its program's file name is tern-kata or
+# tern-kata.exe, whatever the path: a link then focuses it and opens no second Pane. The stand-in never sets the title, so
+# only its program name can identify it; the real binary (through its wrapper script) sets the title. The wrapper under
+# another name is identified by title alone, and a longer name containing tern-kata is not a kata Pane at all.
 standin_dir="$tmp/standin"
 mkdir -p "$standin_dir"
 # It prints while it waits for Enter so frames keep coming, or ctl focus would stall.
@@ -173,16 +174,20 @@ printf '#!/bin/bash\nwhile ! read -t 0.2 line; do echo tick; done\n' >"$standin_
 # A file name that holds backslashes stands for a Windows path: Linux has no .exe files, but the program name Tern
 # reports is what the plugin splits.
 cp "$standin_dir/tern-kata" "$standin_dir/C:\\Tools\\tern-kata.exe"
+cp "$standin_dir/tern-kata" "$standin_dir/my-tern-kata"
+ln -s "$tmp/pane-bin/tern-kata" "$standin_dir/kata-pane"
 chmod +x "$standin_dir"/*
 # ctl focus stalls while a hand-started Pane runs, so the link is shown before the split and clicked in place.
-link_focuses_pane() { # $1 the shell word that starts the Pane, $2 optional text its surface shows once up
+start_hand_pane() { # $1 the shell word that starts the Pane, $2 optional text its surface shows once up (else the stand-in's tick)
   show_issue_link "kata://smoke/$first"
   ctl split right
   ctl ready
   printf 'run %s\n' "$(jq -rRn --arg command "$1" '$command | @json')" >"$tmp/start.ctl"
   ctl --file "$tmp/start.ctl"
-  [[ -z "${2:-}" ]] || ctl plugins expect "$2"
+  if [[ -n "${2:-}" ]]; then ctl plugins expect "$2"; else ctl expect tick; fi
   started=$(ctl state | jq -r '.focused.id')
+}
+link_focuses_pane() { # the click opened no Pane and focused the one started
   ctl click "$x" "$y" cmd
   ctl state >"$tmp/full-path.json"
   jq -e --argjson id "$started" '.tabs[0].panes == 2 and .focused.id == $id' "$tmp/full-path.json" >/dev/null
@@ -194,13 +199,38 @@ end_hand_started_pane() { # $1 the key that ends the program
   ctl close
   expect_panes 1
 }
-link_focuses_pane "$standin_dir/tern-kata"
+start_hand_pane "$standin_dir/tern-kata"
+link_focuses_pane
 end_hand_started_pane Enter
-link_focuses_pane "$standin_dir/C:\\\\Tools\\\\tern-kata.exe"
+start_hand_pane "$standin_dir/C:\\\\Tools\\\\tern-kata.exe"
+link_focuses_pane
 end_hand_started_pane Enter
-link_focuses_pane "$tmp/pane-bin/tern-kata" Daemon
+start_hand_pane "$standin_dir/kata-pane" Daemon
+link_focuses_pane
+end_hand_started_pane q
+# The real binary starts on the other Issue, so the link's select-issue must arrive for the first one to show.
+start_hand_pane "$tmp/pane-bin/tern-kata --issue smoke/$second" '"Plugin second body"'
+link_focuses_pane
 ctl plugins expect '"Plugin first body"'
 end_hand_started_pane q
+start_hand_pane "$standin_dir/my-tern-kata"
+ctl click "$x" "$y" cmd
+# expect_panes waits for every Pane to reach its prompt, which the running stand-in never does.
+wait_panes() {
+  for ((attempt=0; attempt<100; attempt++)); do
+    [[ $(ctl state | jq -r '.tabs[0].panes') == "$1" ]] && return 0
+    sleep 0.1
+  done
+  echo "expected $1 Panes, state: $(ctl state | jq -c '.tabs[0]')" >&2
+  return 1
+}
+wait_panes 3
+ctl key q
+wait_panes 2
+# Focus went back to the left Pane; ctl focus would stall, so a click on the stand-in's Pane focuses it.
+read -r x y < <(ctl tree '.tv-grid' | jq -r '.nodes[1].rect | "\(.[0]+4) \(.[1]+8)"')
+ctl click "$x" "$y"
+end_hand_started_pane Enter
 # A tern-kata that fails after the 2 s window still closes its Pane, with no install toast. The stub prints while it
 # runs so frames (and the 2 s window) advance, and ctl can focus the original Pane before the stub exits.
 printf '#!/bin/sh\ni=0\nwhile [ $i -lt 30 ]; do echo tick; sleep 0.2; i=$((i+1)); done\nexit 1\n' >"$tmp/pane-bin/tern-kata"
@@ -242,7 +272,10 @@ for status in 1 127; do
   printf '#!/bin/sh\nexit %s\n' "$status" >"$tmp/pane-bin/tern-kata"
   expect_launch_toast "$not_installed_toast" "$failed_start_toast"
 done
+# The real binary failing before it connects exits 3, which reads as a failed start.
+printf '#!/bin/sh\necho start\nexec %q --issue\n' "$tmp/app/tern-kata" >"$tmp/pane-bin/tern-kata"
+expect_launch_toast "$failed_start_toast" "$not_installed_toast"
 rm "$tmp/pane-bin/tern-kata"
 expect_launch_toast "$not_installed_toast" "$failed_start_toast"
 jq -Rse 'contains("plugin window halves loaded count=1") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
-printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, shell-syntax Project link, quick quit without toast, links into Panes started by full and backslash path, startup-failure and not-installed toasts by exit status\n'
+printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, shell-syntax Project link, quick quit without toast, links into Panes started by full path, backslash path and title alone, a longer name not matched, startup-failure and not-installed toasts by exit status\n'

@@ -50,6 +50,7 @@ func run() error {
 		return err
 	}
 	defer func() { session.Close() }()
+	// Pane contract with window.luau: this title identifies a kata Pane.
 	if _, err := fmt.Fprint(os.Stdout, "\x1b]0;tern-kata\x07"); err != nil {
 		return err
 	}

@@ -46,6 +46,7 @@ end
 -- shell's own not-found code (127, 9009, or 1 in PowerShell), so it is not installed or not on PATH.
 local function exitedRightAway(cx: WindowCx, pane: number, status: number)
     fresh[pane] = nil
+    if status == 0 then return end
     if status == 2 or status == 3 then
         cx:toast("error", "tern-kata failed to start", "Run tern-kata in a shell to see why")
     else
