@@ -98,11 +98,11 @@ expect_tree "[data-id='layer.create']" '.ok and .count == 0'
 hint_expect_mode list
 ctl key x
 expect_tree "[data-id='layer.close']" '.ok and .count == 1'
-ctl click "[data-id='layer.close.field2']"
-# The click makes field 2 the one the keys edit, not just where Tern's caret is.
+ctl click "[data-id='layer.close.commit']"
+# The click makes Commit the field the keys edit, not just where Tern's caret is.
 ctl key z
-expect_tree "[data-id='layer.close.field2']" '.ok and (.nodes[0] | tostring | contains("z"))'
-expect_tree "[data-id='layer.close.field0']" '.ok and (.nodes[0] | tostring | contains("z") | not)'
+expect_tree "[data-id='layer.close.commit']" '.ok and (.nodes[0] | tostring | contains("z"))'
+expect_tree "[data-id='layer.close.reason']" '.ok and (.nodes[0] | tostring | contains("z") | not)'
 ctl key esc
 expect_tree "[data-id='layer.close']" '.ok and .count == 0'
 hint_expect_mode list
