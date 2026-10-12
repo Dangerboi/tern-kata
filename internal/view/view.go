@@ -176,7 +176,7 @@ func topBar(m model.Model) tern.Element {
 		return ui.Common{Key: key, Tone: tone, Shrink: &shrink}
 	}
 	headingCell := flexCell("heading", tone, 0)
-	headingCell.Title, headingCell.Actions = "Menu (p)", &ui.Actions{Click: KeyClick("p")}
+	headingCell.Title, headingCell.Actions = "Menu", &ui.Actions{Click: MenuClick}
 	rightCell := flexCell("right", ui.ToneNeutral, 100)
 	var zoneNote []tern.Element
 	if m.TimeZoneNote != "" {

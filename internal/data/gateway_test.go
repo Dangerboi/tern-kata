@@ -243,6 +243,24 @@ func TestGatewayReadsAndWritesIssues(t *testing.T) {
 	}
 }
 
+func TestGatewayWritesAParentLink(t *testing.T) {
+	kata := startKata(t, "0.18.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	parent := createIssue(t, gateway, workspace, demo, "Parent")
+	child := createIssue(t, gateway, workspace, demo, "Child")
+	shortID := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: parent})).Selected.Issue.ShortID
+
+	write := model.WriteField{Workspace: workspace, UID: child, ProjectID: demo.ID, Actor: "tester", Action: model.SetParentAction, Value: shortID}
+	if written := as[model.FieldWritten](t, run(t, gateway, write)); written.UID != child || written.Err != nil {
+		t.Fatalf("set parent: %+v", written)
+	}
+	links := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: child})).Selected.Links
+	if len(links) != 1 || links[0].Type != "parent" || links[0].FromIssueUID != child || links[0].ToIssueUID != parent {
+		t.Fatalf("links %+v, want %s as the parent of %s", links, parent, child)
+	}
+}
+
 func quickClose(actor string) g.CloseIssueBody {
 	reason, protocol, source := g.CloseActionRequestBodyReason("done"), g.CloseActionRequestBodyRetryProtocol("close-v1"), g.CloseActionRequestBodySource("tui")
 	return g.CloseIssueBody{Actor: &actor, Reason: &reason, RetryProtocol: &protocol, Source: &source}

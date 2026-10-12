@@ -69,7 +69,7 @@ func TestNewProjectFromTheSidebarCreatesAndBinds(t *testing.T) {
 // directory, or, when bound, from the picker.
 func newProjectOpened(bound bool) model.Model {
 	if bound {
-		m, _ := pickerKeys(newProjectStart(true), "p", "end", "enter")
+		m, _ := menuKeys(newProjectStart(true), "end", "enter")
 		return m
 	}
 	m, _ := pickerKeys(newProjectStart(false), "escape", "end", "enter")
@@ -200,11 +200,11 @@ func TestPickerNewProjectOpensTheFormAndEscReturnsToThePicker(t *testing.T) {
 		keys   []string
 		filter string
 	}{
-		{"last entry", []string{"p", "end", "enter"}, ""},
-		{"found by its title", []string{"p", "n", "e", "w", "enter"}, "new"},
+		{"last entry", []string{"end", "enter"}, ""},
+		{"found by its title", []string{"n", "e", "w", "enter"}, "new"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			opened, cmds := pickerKeys(newProjectStart(true), tt.keys...)
+			opened, cmds := menuKeys(newProjectStart(true), tt.keys...)
 			if !opened.ProjectForm.Open || opened.ProjectForm.Bind || opened.CurrentMode() != model.ModeProjectForm || len(cmds) != 0 {
 				t.Fatalf("form=%+v mode=%s cmds=%#v", opened.ProjectForm, opened.CurrentMode(), cmds)
 			}
@@ -257,7 +257,7 @@ func TestNewProjectPointerEqualsKeyboard(t *testing.T) {
 		t.Fatalf("sidebar click differs from the keyboard: %+v vs %+v", gotSidebar.ProjectForm, wantSidebar.ProjectForm)
 	}
 
-	picker, _ := pickerKeys(newProjectStart(true), "p")
+	picker, _ := menuKeys(newProjectStart(true))
 	wantPicker, wantCmds := pickerKeys(picker, "end", "enter")
 	gotPicker, gotCmds := model.Update(picker, model.PickerSelected{Key: "new-project"})
 	if !wantPicker.ProjectForm.Open || !reflect.DeepEqual(gotPicker, wantPicker) || !reflect.DeepEqual(gotCmds, wantCmds) {
@@ -266,7 +266,7 @@ func TestNewProjectPointerEqualsKeyboard(t *testing.T) {
 }
 
 func TestPickerNewProjectBindsAnUnboundDirectory(t *testing.T) {
-	m, _ := pickerKeys(newProjectStart(false), "p", "end", "enter")
+	m, _ := menuKeys(newProjectStart(false), "end", "enter")
 	if !m.ProjectForm.Open || !m.ProjectForm.Bind {
 		t.Fatalf("form = %+v", m.ProjectForm)
 	}

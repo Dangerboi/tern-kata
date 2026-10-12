@@ -20,10 +20,11 @@ const (
 	detailItemAct  = "detail-item"
 )
 
-// FocusDetailClick and RetryClick carry no value.
+// FocusDetailClick, RetryClick and MenuClick carry no value.
 const (
 	FocusDetailClick = string(model.FocusDetail)
 	RetryClick       = string(model.RetryAction)
+	MenuClick        = string(model.OpenPicker)
 )
 
 func click(act, value string) string { return act + "=" + value }
@@ -58,7 +59,7 @@ func DecodeAction(id, act, value string) model.Msg {
 	switch act {
 	case keyAct:
 		return model.KeyMsg{Chord: value}
-	case string(model.SelectIssueAction), string(model.ToggleExpansion), string(model.OpenRow):
+	case string(model.SelectIssueAction), string(model.ToggleExpansion), string(model.OpenRow), MenuClick:
 		return model.ActionMsg{Action: model.Action(act), Value: value}
 	case FocusDetailClick:
 		return model.FocusColumnMsg{Column: model.ColumnDetail}

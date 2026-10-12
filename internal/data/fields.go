@@ -48,6 +48,12 @@ func (c *Client) WriteField(ctx context.Context, cmd model.WriteField) error {
 			return ReadError(r.Body, e)
 		}
 		return e
+	case model.SetParentAction:
+		r, e := c.CreateLinkWithResponse(ctx, &g.CreateLinkRequestOptions{PathParams: &g.CreateLinkPath{ProjectID: cmd.ProjectID, Ref: cmd.UID}, Body: &g.CreateLinkBody{Actor: actor, Type: g.CreateLinkRequestBodyTypeParent, ToRef: cmd.Value}})
+		if r != nil && e != nil {
+			return ReadError(r.Body, e)
+		}
+		return e
 	}
 	return nil
 }

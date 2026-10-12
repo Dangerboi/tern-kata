@@ -177,8 +177,8 @@ func TestEveryClickTargetEndsWhereItsKeysEnd(t *testing.T) {
 		{"parent row from detail", model.ColumnDetail, nil, toggle, model.ColumnDetail, keys("escape", "space")},
 		{"parent row from Collections", model.ColumnCollections, nil, toggle, model.ColumnList, keys("space")},
 		{"parent row collapses an expanded parent", model.ColumnCollections, []string{"space"}, toggle, model.ColumnList, keys("space")},
-		{"top bar title from list", model.ColumnList, nil, click("", view.KeyClick("p")), model.ColumnList, keys("p")},
-		{"top bar title from detail", model.ColumnDetail, nil, click("", view.KeyClick("p")), model.ColumnDetail, keys("p")},
+		{"top bar title from list", model.ColumnList, nil, click("", view.MenuClick), model.ColumnList, inputs(openMenu)},
+		{"top bar title from detail", model.ColumnDetail, nil, click("", view.MenuClick), model.ColumnDetail, inputs(openMenu)},
 		{"detail title from list", model.ColumnList, nil, click("", view.FocusDetailClick), model.ColumnList, keys("enter")},
 		{"Activity tab", model.ColumnList, nil, click("", view.ActivityTabClick(model.TabLinks)), model.ColumnList, detailPath(model.TabLinks)},
 		{"detail row", model.ColumnDetail, nil, click("", view.DetailItemClick(model.TabLinks, "1")), model.ColumnDetail, detailPath(model.TabLinks)},
@@ -213,7 +213,7 @@ func TestEveryFooterHintClicksLikeItsKey(t *testing.T) {
 }
 
 func TestPointerHintsUseKeyboardDispatch(t *testing.T) {
-	for _, c := range []string{"n", "x", "/", "?", "page_down", "p"} {
+	for _, c := range []string{"n", "x", "/", "?", "page_down"} {
 		t.Run(c, func(t *testing.T) {
 			s := driver.State{Model: withDetail(model.Model{Project: model.Project{ID: 7}, SelectedUID: "issue", Issues: []model.Issue{{UID: "issue", Status: "open", ProjectID: 7}}}, nil)}
 			keyboard, keyCmds := keys(c)(s)

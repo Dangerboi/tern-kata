@@ -33,6 +33,12 @@ func pickerNodes(t *testing.T, m model.Model) map[string]tern.WireNode {
 	return nodes
 }
 
+// menuOpened is m after a click on the top bar's Menu.
+func menuOpened(m model.Model) model.Model {
+	m, _ = model.Update(m, model.ActionMsg{Action: model.OpenPicker})
+	return m
+}
+
 func pickerChildIDs(node tern.WireNode) []string {
 	ids := make([]string, 0, len(node.C))
 	for _, child := range node.C {
@@ -81,7 +87,7 @@ func TestRenderCollectionsColumnOnlyWhenUnbound(t *testing.T) {
 
 func TestRenderPickerListsPinnedProjectFirstAndMarksCurrent(t *testing.T) {
 	m := pickerLoaded(true)
-	m, _ = model.Update(m, model.KeyMsg{Chord: "p", Text: "p"})
+	m = menuOpened(m)
 	m, _ = model.Update(m, model.KeyMsg{Chord: "down"})
 	nodes := pickerNodes(t, m)
 	list, ok := nodes["layer.collections.list"]
@@ -110,7 +116,7 @@ func TestRenderPickerListsPinnedProjectFirstAndMarksCurrent(t *testing.T) {
 
 func TestRenderPickerFollowsFilterAndShowsEmptyState(t *testing.T) {
 	m := pickerLoaded(true)
-	m, _ = model.Update(m, model.KeyMsg{Chord: "p", Text: "p"})
+	m = menuOpened(m)
 	for _, key := range []string{"a", "l"} {
 		m, _ = model.Update(m, model.KeyMsg{Chord: key, Text: key})
 	}
@@ -133,7 +139,7 @@ func TestRenderPickerOnlyWhenOpen(t *testing.T) {
 	if _, ok := pickerNodes(t, m)["layer.collections"]; ok {
 		t.Fatal("closed picker rendered")
 	}
-	m, _ = model.Update(m, model.KeyMsg{Chord: "p", Text: "p"})
+	m = menuOpened(m)
 	if _, ok := pickerNodes(t, m)["layer.collections"]; !ok || view.PickerFilterID != "layer.collections.filter" {
 		t.Fatalf("open picker: filter id %q", view.PickerFilterID)
 	}
@@ -146,21 +152,21 @@ func TestRenderPickerOnlyWhenOpen(t *testing.T) {
 func TestRenderTopBarTitleOpensPicker(t *testing.T) {
 	heading := pickerNodes(t, pickerLoaded(true))["main.topbar.left.heading"]
 	actions, _ := heading.P["actions"].(map[string]any)
-	if actions["click"] != view.KeyClick("p") {
+	if actions["click"] != view.MenuClick {
 		t.Fatalf("heading actions = %v", heading.P["actions"])
 	}
 }
 
 func TestRenderMenuTextsAndButtons(t *testing.T) {
-	m, _ := model.Update(pickerLoaded(true), model.KeyMsg{Chord: "p", Text: "p"})
+	m := menuOpened(pickerLoaded(true))
 	nodes := pickerNodes(t, m)
-	if got := nodes["main.topbar.right.menu"]; text(nodes["main.topbar.right.menu.label"]) != "Menu" || got.P["actions"].(map[string]any)["click"] != view.KeyClick("p") {
+	if got := nodes["main.topbar.right.menu"]; text(nodes["main.topbar.right.menu.label"]) != "Menu" || got.P["actions"].(map[string]any)["click"] != view.MenuClick {
 		t.Fatalf("top bar button = %v", got)
 	}
 	if got := nodes["layer.collections.close"]; got.P["text"] != "Close (esc)" || got.P["actions"].(map[string]any)["click"] != view.KeyClick("escape") {
 		t.Fatalf("close button = %v", got)
 	}
-	if got := nodes["main.topbar.left.heading"].P["title"]; got != "Menu (p)" {
+	if got := nodes["main.topbar.left.heading"].P["title"]; got != "Menu" {
 		t.Fatalf("heading tooltip = %v", got)
 	}
 	if got := nodes["layer.collections.filter"].P["placeholder"]; got != "Filter Menu" {
@@ -169,8 +175,8 @@ func TestRenderMenuTextsAndButtons(t *testing.T) {
 }
 
 func TestRenderMenuProjectsLevelListsProjectsAndMarksCurrent(t *testing.T) {
-	m := pickerLoaded(true)
-	for _, key := range []string{"p", "end", "up", "enter"} {
+	m := menuOpened(pickerLoaded(true))
+	for _, key := range []string{"end", "up", "enter"} {
 		m, _ = model.Update(m, model.KeyMsg{Chord: key, Text: key})
 	}
 	nodes := pickerNodes(t, m)
@@ -207,7 +213,7 @@ func TestRenderSidebarListsProjectsOnlyAtItsProjectsLevel(t *testing.T) {
 }
 
 func TestMenuButtonSaysBackOnTheProjectsLevel(t *testing.T) {
-	m, _ := model.Update(pickerLoaded(true), model.KeyMsg{Chord: "p", Text: "p"})
+	m := menuOpened(pickerLoaded(true))
 	if got := text(pickerNodes(t, m)["layer.collections.close"]); got != "Close (esc)" {
 		t.Fatalf("top level button = %q", got)
 	}

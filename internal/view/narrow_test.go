@@ -16,7 +16,7 @@ func TestBelowMinimumWidthShowsOnlyTheNotice(t *testing.T) {
 		{"list", nil},
 		{"detail focused", []model.Msg{model.KeyMsg{Chord: "enter"}}},
 		{"help open", []model.Msg{model.KeyMsg{Chord: "?"}}},
-		{"picker open", []model.Msg{model.KeyMsg{Chord: "p"}}},
+		{"picker open", []model.Msg{model.ActionMsg{Action: model.OpenPicker}}},
 		{"daemon failure", []model.Msg{model.Failed{Err: errors.New("daemon down")}}},
 		{"tiny", []model.Msg{model.ResizeMsg{Cols: 2}}},
 	} {

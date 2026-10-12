@@ -13,6 +13,7 @@ const (
 	AssignOwnerAction Action = "assign-owner"
 	ClearOwnerAction  Action = "clear-owner"
 	PriorityAction    Action = "priority"
+	SetParentAction   Action = "set-parent"
 	FieldSubmit       Action = "field-submit"
 	FieldCancel       Action = "field-cancel"
 	FieldComplete     Action = "field-complete"
@@ -76,7 +77,7 @@ func (m Model) FieldSuggestions() []string {
 }
 
 func fieldAction(action Action) bool {
-	return action == AddLabelAction || action == RemoveLabelAction || action == AssignOwnerAction || action == ClearOwnerAction || action == PriorityAction
+	return action == AddLabelAction || action == RemoveLabelAction || action == AssignOwnerAction || action == ClearOwnerAction || action == PriorityAction || action == SetParentAction
 }
 func openField(m Model, action Action) (Model, []Cmd) {
 	if m.Stale || m.FieldForm.Saving {
@@ -112,6 +113,9 @@ func submitField(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	f.Value = strings.TrimSpace(f.Value)
+	if f.Action == SetParentAction {
+		f.Value = strings.TrimPrefix(f.Value, "#")
+	}
 	if f.Action == PriorityAction && f.Value != "-" {
 		n, err := strconv.Atoi(f.Value)
 		if err != nil || n < 0 || n > 4 {
@@ -119,7 +123,7 @@ func submitField(m Model) (Model, []Cmd) {
 			return m, nil
 		}
 	}
-	if (f.Action == AddLabelAction || f.Action == RemoveLabelAction || f.Action == AssignOwnerAction) && f.Value == "" {
+	if (f.Action == AddLabelAction || f.Action == RemoveLabelAction || f.Action == AssignOwnerAction || f.Action == SetParentAction) && f.Value == "" {
 		f.Err = errors.New("Enter a value.")
 		return m, nil
 	}

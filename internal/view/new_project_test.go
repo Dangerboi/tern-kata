@@ -45,7 +45,7 @@ func TestRenderSidebarEndsWithNewProjectWhenUnbound(t *testing.T) {
 }
 
 func TestRenderPickerRowForNewProject(t *testing.T) {
-	m := newProjectModel(true, "p", "end")
+	m := newProjectModel(true, "escape", "end")
 	nodes := pickerNodes(t, m)
 	row, ok := nodes["layer.collections.list.new-project"]
 	if !ok {
@@ -97,7 +97,7 @@ func TestRenderNewProjectFormFollowsTheModel(t *testing.T) {
 }
 
 func TestRenderNewProjectFormCoversThePicker(t *testing.T) {
-	m := newProjectModel(true, "p", "end", "enter")
+	m := newProjectModel(true, "escape", "end", "enter")
 	nodes := pickerNodes(t, m)
 	if _, ok := nodes[newProjectIDPrefix]; !ok {
 		t.Fatal("form not rendered over the picker")

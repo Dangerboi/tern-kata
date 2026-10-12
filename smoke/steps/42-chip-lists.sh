@@ -21,7 +21,7 @@ ctl key esc
 ctl key y
 expect_tree "[data-id='layer.create']" '.count == 0'
 
-ctl key p
+ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 ctl type '"inb"'
 expect_tree "[data-id='layer.collections.filter']" '.nodes[0].text | contains("inb")'

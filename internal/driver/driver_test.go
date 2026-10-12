@@ -31,6 +31,9 @@ func key(chord string) tern.Key {
 	return tern.Key{Name: chord}
 }
 
+// openMenu is what a click on the top bar's Menu sends.
+var openMenu = model.ActionMsg{Action: model.OpenPicker}
+
 func resize(cols int) *tern.Resize { return &tern.Resize{Cols: cols} }
 
 func alphaLoaded() model.Msg {
@@ -317,7 +320,7 @@ func TestDifferentIssueScrollsTheDetailToItsStart(t *testing.T) {
 }
 
 func TestMenuAndNewProjectCardTakeTheCaret(t *testing.T) {
-	menu := step(t, browsing(t, 160), key("p"))
+	menu := step(t, browsing(t, 160), openMenu)
 	wantOps(t, menu, tern.OpFocus(view.PickerFilterID))
 
 	form := feed(t, menu.State, key("end"), key("enter"))

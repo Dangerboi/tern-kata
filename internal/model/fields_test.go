@@ -40,6 +40,25 @@ func TestQuickFieldCommands(t *testing.T) {
 	}
 }
 
+func TestSetParentFieldStripsTheHashAndRequiresAValue(t *testing.T) {
+	for _, focus := range []model.Column{model.ColumnList, model.ColumnDetail} {
+		m := model.Model{Actor: "reviewer", Focus: focus, SelectedUID: "issue", Issues: []model.Issue{{UID: "issue", ProjectID: 2}}}
+		m, cmds := model.Update(m, model.KeyMsg{Chord: "p"})
+		if !m.FieldForm.Open || m.FieldForm.Action != model.SetParentAction {
+			t.Fatalf("focus %v: p opened %+v cmds %#v", focus, m.FieldForm, cmds)
+		}
+		empty, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
+		if len(cmds) != 0 || empty.FieldForm.Err == nil || empty.FieldForm.Err.Error() != "Enter a value." {
+			t.Fatalf("focus %v: empty submit err=%v cmds=%#v", focus, empty.FieldForm.Err, cmds)
+		}
+		m, _ = model.Update(m, model.FieldValueMsg{Value: "#abcd"})
+		_, cmds = model.Update(m, model.KeyMsg{Chord: "enter"})
+		if want := (model.WriteField{UID: "issue", ProjectID: 2, Action: model.SetParentAction, Value: "abcd", Actor: "reviewer"}); len(cmds) != 1 || cmds[0] != want {
+			t.Fatalf("focus %v: submit %#v, want %#v", focus, cmds, want)
+		}
+	}
+}
+
 func TestLabelCompletionAndPriorityBounds(t *testing.T) {
 	m := model.Model{SelectedUID: "i", Issues: []model.Issue{{UID: "i", Labels: []string{"bug", "build"}}, {UID: "j", Labels: []string{"other"}}}}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "+"})

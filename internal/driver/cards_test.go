@@ -56,7 +56,8 @@ func popups() []popup {
 			return m
 		}, func(dst *model.Model, src model.Model) { dst.FilterForm = src.FilterForm },
 			model.ModeFilterForm, "layer.filters", func(m model.Model) string { return m.FilterForm.Values.Owner }},
-		{"Menu", keyOpen("p"), func(dst *model.Model, src model.Model) { dst.Picker = src.Picker },
+		{"Menu", func(t *testing.T, s driver.State) model.Model { return step(t, s, openMenu).State.Model },
+			func(dst *model.Model, src model.Model) { dst.Picker = src.Picker },
 			model.ModePicker, view.PickerID, func(m model.Model) string { return m.Picker.Filter }},
 	}
 }

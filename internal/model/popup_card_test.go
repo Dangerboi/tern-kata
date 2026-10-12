@@ -64,6 +64,12 @@ func opened(keys ...string) func() model.Model {
 	}
 }
 
+// openedMenu opens the Menu as a click on the top bar does.
+func openedMenu() model.Model {
+	m, _ := model.Update(clickAt(model.ColumnList), model.ActionMsg{Action: model.OpenPicker})
+	return m
+}
+
 // openedCreate opens Create on a bound Project, so a card with a title can be saved.
 func openedCreate() model.Model {
 	m, _ := model.Update(model.Model{Project: model.Project{ID: 7}}, model.KeyMsg{Chord: "n"})
@@ -188,7 +194,7 @@ func popupCards() []popupCard {
 		},
 		{
 			name: "Menu", card: model.CardPicker, quits: true,
-			states: []cardState{{"", opened("p"), model.ModePicker}},
+			states: []cardState{{"", openedMenu, model.ModePicker}},
 			graft:  func(dst *model.Model, src model.Model) { dst.Picker = src.Picker },
 			field:  func(model.Model) model.Field { return "" },
 			text:   func(m model.Model, _ model.Field) string { return m.Picker.Filter },

@@ -13,7 +13,7 @@ func fieldLayer(m model.Model) tern.Nodes {
 	if !m.FieldForm.Open {
 		return nil
 	}
-	title := map[model.Action]string{model.AddLabelAction: "Add label", model.RemoveLabelAction: "Remove label", model.AssignOwnerAction: "Assign owner", model.ClearOwnerAction: "Clear owner", model.PriorityAction: "Priority (0-4, or - to clear)"}[m.FieldForm.Action]
+	title := map[model.Action]string{model.AddLabelAction: "Add label", model.RemoveLabelAction: "Remove label", model.AssignOwnerAction: "Assign owner", model.ClearOwnerAction: "Clear owner", model.PriorityAction: "Priority (0-4, or - to clear)", model.SetParentAction: "Set parent (Issue id)"}[m.FieldForm.Action]
 	children := []tern.Element{ui.Input{Common: ui.Common{Key: "value", Tone: ui.ToneAccent}, Field: ui.Field{Text: m.FieldForm.Value, Mode: "insert", Readonly: m.FieldForm.Saving}}}
 	suggestions := m.FieldSuggestions()
 	for i, label := range suggestions {

@@ -20,7 +20,7 @@ np_projects() { kata projects list --json | jq -r '[.projects[].name] | join(","
 quit_app
 ctl --file "$tmp/launch.ctl"
 expect_tree "$np_heading" '.ok and .nodes[0].text == "Project: smoke"'
-ctl key p
+ctl click "[data-id='main.topbar.right.menu']"
 ctl key End
 expect_tree "$np_picker_rows" '.ok and .nodes[-1].text == "New Project" and .nodes[-1]["aria-selected"] == "true"'
 ctl key enter
@@ -54,7 +54,7 @@ expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 expect_tree "$np_heading" '.ok and .nodes[0].text == "Project: workspace-extra"'
 [[ $(np_projects) == *workspace-extra* ]]
 grep -qx 'name = "smoke"' "$tmp/workspace/.kata.toml"
-ctl key p
+ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "$np_picker_rows" '.ok and .nodes[0].text == "smoke"'
 ctl click "[data-id='layer.collections.list.projects']"
 expect_tree "$np_picker_rows" '.ok and ([.nodes[] | select(.text == "workspace-extracurrent")] | length == 1)'

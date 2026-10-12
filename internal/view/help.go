@@ -29,7 +29,8 @@ var helpTable = []helpGroup{
 	{"Global", []helpEntry{
 		{"help", "", []model.Action{model.ToggleHelp}},
 		{"quit", "", []model.Action{model.QuitAction}},
-		{"menu/projects", model.ModeList, []model.Action{model.OpenPicker}},
+		{"projects", model.ModeList, []model.Action{model.OpenProjects}},
+		{"menu", model.ModeList, []model.Action{model.DrillOut}},
 		{"toggle layout", model.ModeList, []model.Action{model.ToggleDetail}},
 	}},
 	{"Graph", []helpEntry{
@@ -56,6 +57,7 @@ var helpTable = []helpGroup{
 		{"back", model.ModeDetail, []model.Action{model.DrillOut}},
 		{"edit body", model.ModeDetail, []model.Action{model.EditBody}},
 		{"new comment", model.ModeDetail, []model.Action{model.AddComment}},
+		{"set parent", model.ModeDetail, []model.Action{model.SetParentAction}},
 		{"add label", model.ModeDetail, []model.Action{model.AddLabelAction}},
 		{"remove label", model.ModeDetail, []model.Action{model.RemoveLabelAction}},
 		{"assign owner", model.ModeDetail, []model.Action{model.AssignOwnerAction}},

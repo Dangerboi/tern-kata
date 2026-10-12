@@ -11,9 +11,9 @@ expect_tree "[data-id='main.columns.collections']" '.ok and .count == 0'
 expect_tree "[data-id='main.columns.detail']" '.ok and .count == 1'
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 
-# p opens the Menu at its top level: the bound Project first and marked current, the fixed Collections, then Projects and New Project. No other Project is listed inline.
+# The Menu button opens the Menu at its top level: the bound Project first and marked current, the fixed Collections, then Projects and New Project. No other Project is listed inline.
 picker_projects_entry="[data-id='layer.collections.list.projects']"
-ctl key p
+ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 expect_tree "$picker_items" '.ok and .count == 9 and .nodes[0].text == "smokecurrent" and .nodes[0]["aria-selected"] == "true" and .nodes[1].text == "Inbox" and .nodes[-1].text == "New Project"'
 expect_tree "$picker_items" '.nodes[-2].text == "Projects"'
@@ -39,13 +39,13 @@ expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
 
 # enter switches to the filtered Collection; reopening shows it as current while the bound Project stays first.
-ctl key p
+ctl click "[data-id='main.topbar.right.menu']"
 for letter in a l p h a; do ctl key "$letter"; done
 ctl key enter
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: picker-alpha"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 1 and (.nodes[0].text | contains("Picker alpha Issue"))'
-ctl key p
+ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "$picker_items" '.ok and .nodes[0].text == "smoke" and .nodes[0]["aria-selected"] == "true"'
 expect_tree "[data-id='layer.collections.list.project.$picker_alpha_uid']" '.ok and .count == 0'
 # enter on Projects lists every Project with the current one marked and the cursor on it; esc returns to the top level, still open.
@@ -65,7 +65,7 @@ expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
 
 # A click on a row switches like enter; the top bar title opens the picker; esc closes it, also after a click inside it.
-ctl key p
+ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 ctl click "$picker_projects_entry"
 expect_tree "[data-id='layer.collections.list.project.$picker_alpha_uid']" '.ok and .count == 1'
@@ -78,7 +78,7 @@ ctl click "[data-id='layer.collections.filter']"
 ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: picker-alpha"'
-ctl key p
+ctl click "[data-id='main.topbar.right.menu']"
 ctl key enter
 expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
@@ -100,7 +100,7 @@ ctl resize 800 "$picker_height"
 expect_tree "[data-id='main.columns.detail']" '.ok and .count == 0'
 expect_tree "[data-id='main.columns.list']" '.ok and .count == 1'
 expect_tree "[data-id='main.columns.collections']" '.ok and .count == 0'
-ctl key p
+ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'

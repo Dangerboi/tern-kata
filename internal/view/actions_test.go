@@ -26,6 +26,7 @@ func TestClicksDecodeToTheirMessages(t *testing.T) {
 		{"", view.DetailItemClick(model.TabEvents, "e:1"), model.DetailItemMsg{Tab: model.TabEvents, Key: "e:1"}},
 		{"", view.ToggleClick("parent"), model.ActionMsg{Action: model.ToggleExpansion, Value: "parent"}},
 		{"", view.OpenRowClick("leaf"), model.ActionMsg{Action: model.OpenRow, Value: "leaf"}},
+		{"", view.MenuClick, model.ActionMsg{Action: model.OpenPicker}},
 		{view.RetryID, view.RetryClick, model.Retry{}},
 	} {
 		if got := decodeClick(tt.id, tt.click); !reflect.DeepEqual(got, tt.want) {

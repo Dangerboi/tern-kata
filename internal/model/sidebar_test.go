@@ -32,14 +32,14 @@ func TestUnboundSidebarGoesWhenAProjectIsEntered(t *testing.T) {
 	}
 
 	// A fixed Collection picked again, from the popup, brings it back.
-	reopened, _ := pickerKeys(entered, "p", "home", "enter")
+	reopened, _ := menuKeys(entered, "home", "enter")
 	if reopened.Collection.View != "inbox" || reopened.Picker.Open || !reflect.DeepEqual(reopened.VisibleColumns(), sidebarShown) {
 		t.Fatalf("fixed Collection again: %+v columns %v", reopened.Collection, reopened.VisibleColumns())
 	}
 }
 
 func TestUnboundSidebarGoesWhenAProjectIsPickedInThePopup(t *testing.T) {
-	m, _ := pickerKeys(pickerStart(160, false), "p", "a", "l", "p", "enter")
+	m, _ := menuKeys(pickerStart(160, false), "a", "l", "p", "enter")
 	if m.Collection.Title != "alpha" || m.Picker.Open || !reflect.DeepEqual(m.VisibleColumns(), sidebarHidden) {
 		t.Fatalf("picked alpha: %+v picker %v columns %v", m.Collection, m.Picker.Open, m.VisibleColumns())
 	}

@@ -177,6 +177,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			return toggleRow(m, msg.Value)
 		case OpenRow:
 			return openRow(m, msg.Value)
+		case OpenPicker:
+			return openPicker(m), nil
 		}
 	case IssueOpened:
 		m = m.openByReference(msg.Ref, msg.Selected)
@@ -199,8 +201,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			if binding.Action == OpenClose {
 				return openClose(m), nil
 			}
-			if binding.Action == OpenPicker {
-				return openPicker(m), nil
+			if binding.Action == OpenProjects {
+				return openProjects(m), nil
 			}
 			if binding.Action == ReopenAction {
 				issue := closeIssue(m)

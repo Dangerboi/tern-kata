@@ -9,6 +9,7 @@ import (
 const (
 	ModePicker     Mode   = "picker"
 	OpenPicker     Action = "open-picker"
+	OpenProjects   Action = "open-projects"
 	ClosePicker    Action = "close-picker"
 	PickCollection Action = "pick-collection"
 )
@@ -126,6 +127,18 @@ func (m Model) syncSidebarCursor() Model {
 func openPicker(m Model) Model {
 	if mode := m.CurrentMode(); mode == ModeList || mode == ModeDetail || mode == ModeCollections {
 		m.Picker = PickerState{Open: true}
+	}
+	return m
+}
+
+// openProjects is kata's P: the Menu's Projects level, in the sidebar while it shows, else in the popup.
+func openProjects(m Model) Model {
+	if m.SidebarShown() {
+		m.Picker, m.Focus = PickerState{}, ColumnCollections
+		return setMenuLevel(m, false, true)
+	}
+	if m = openPicker(m); m.Picker.Open {
+		m = setMenuLevel(m, true, true)
 	}
 	return m
 }

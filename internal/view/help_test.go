@@ -42,12 +42,12 @@ func TestHelpIsAFullPaneSheet(t *testing.T) {
 		at += i + 1
 	}
 	joined := strings.Join(lines, "\n")
-	for _, want := range []string{"?         help", "q/ctrl+c  quit", "j/↓     down", "expand/collapse all", "toggle flat/nested view", "jump to referenced issue", "new child", "reset filter form"} {
+	for _, want := range []string{"?         help", "q/ctrl+c  quit", "j/↓     down", "expand/collapse all", "toggle flat/nested view", "jump to referenced issue", "new child", "reset filter form", "set parent", "projects", "menu"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("row %q missing in %q", want, lines)
 		}
 	}
-	for _, gone := range []string{"federation", "credentials", "daemons", "set parent", "Tern headless", "Everywhere", "Issue list", "Menu sidebar"} {
+	for _, gone := range []string{"federation", "credentials", "daemons", "Tern headless", "Everywhere", "Issue list", "Menu sidebar"} {
 		if strings.Contains(joined, gone) {
 			t.Errorf("%q listed although tern-kata has no such binding", gone)
 		}

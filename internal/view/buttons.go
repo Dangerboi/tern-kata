@@ -17,7 +17,7 @@ func keyButton(key, text, chord string, primary bool) el.Button {
 
 // menuButton is the top bar's Menu button, its label in the accent colour of the Project heading.
 func menuButton() el.Button {
-	button := keyButton("menu", "", "p", true)
+	button := el.Button{Common: ui.Common{Key: "menu", Tone: ui.ToneAccent, Actions: &ui.Actions{Click: MenuClick}}}
 	button.Children = []tern.Element{ui.Text{Common: ui.Common{Key: "label"}, Spans: []ui.Span{{T: "Menu", S: "accent strong"}}, Wrap: ui.WrapNone}}
 	return button
 }

@@ -73,8 +73,8 @@ func TestEveryClickTheViewDrawsDecodesToAMessage(t *testing.T) {
 		"list":        browsing(t, 160),
 		"narrow":      browsing(t, 100),
 		"help":        feed(t, browsing(t, 160), key("?")).State,
-		"menu":        feed(t, browsing(t, 160), key("p")).State,
-		"new project": feed(t, browsing(t, 160), key("p"), key("end"), key("enter")).State,
+		"menu":        feed(t, browsing(t, 160), openMenu).State,
+		"new project": feed(t, browsing(t, 160), openMenu, key("end"), key("enter")).State,
 		"create":      feed(t, browsing(t, 160), key("n")).State,
 		"close":       feed(t, browsing(t, 160), key("x")).State,
 		"field form":  feed(t, browsing(t, 160), key("+")).State,
@@ -119,7 +119,7 @@ func TestSelectInputsDecodeForTheListAndBothMenus(t *testing.T) {
 	if out := driver.Step(unbound, &tern.Select{ID: view.CollectionsID, Item: view.CollectionItemID("today")}, now); len(out.Cmds) != 1 {
 		t.Errorf("sidebar select commands = %#v", out.Cmds)
 	}
-	menu := feed(t, s, key("p")).State
+	menu := feed(t, s, openMenu).State
 	if out := driver.Step(menu, &tern.Select{ID: view.PickerListID, Item: view.PickerItemID("today")}, now); out.State.Model.Picker.Open {
 		t.Error("Menu select left the Menu open")
 	}
