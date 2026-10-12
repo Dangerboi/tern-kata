@@ -8,8 +8,8 @@ import (
 )
 
 // execKata replaces this process with `kata tui`.
-func execKata(kata string, args, env []string) error {
-	return syscall.Exec(kata, append([]string{"kata", "tui"}, args...), env)
+func execKata(kata string, args, environ []string, actor string) error {
+	return syscall.Exec(kata, append([]string{"kata", "tui"}, args...), childEnv(environ, actor, false))
 }
 
 func editorCommand(editor, file string) *exec.Cmd {

@@ -25,8 +25,12 @@ func main() {
 }
 
 func run() error {
-	plan, err := PlanLaunch(os.Args[1:], lookupEnv)
+	plan, err := PlanLaunch(os.Args[1:], lookupEnv, buildVersion())
 	if err != nil {
+		return err
+	}
+	if plan.Version != "" {
+		_, err := fmt.Fprintln(os.Stdout, "tern-kata", plan.Version)
 		return err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -37,7 +41,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		return execKata(kata, plan.FallbackArgs, plan.FallbackEnv(os.Environ()))
+		return execKata(kata, plan.FallbackArgs, os.Environ(), plan.fallbackAuthor)
 	}
 	if err != nil {
 		return err
