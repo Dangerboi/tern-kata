@@ -284,7 +284,7 @@ func TestParentSectionMatchingAndEmptyBody(t *testing.T) {
 	links := []g.UILink{{ID: 1, Type: "parent", FromIssueUID: "kid", FromQualifiedID: "work#kidd", ToIssueUID: "up", ToQualifiedID: "work#upup"}}
 	bodyText := func(body string) string {
 		issue := model.Issue{UID: "kid", ShortID: "kidd", Title: "K", Status: "open", ProjectName: "work", Revision: 1, Body: body}
-		nodes := render(t, withZone(apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: links}}},
+		nodes := render(t, apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: links}}},
 			model.DetailLoaded{UID: "kid", Selected: &g.UISelectedAuthority{Issue: &issue, Links: links}}))
 		return text(nodes[view.DetailContentID+".body"])
 	}
