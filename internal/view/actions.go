@@ -110,23 +110,45 @@ func DecodeSelect(id, item string) model.Msg {
 
 // DecodeFocus is the message for Tern's focus on node id: focus that field of the open card, nil for any other node.
 func DecodeFocus(id string) model.Msg {
-	if field, ok := FieldFromID(id); ok {
+	if _, field, ok := FieldFromID(id); ok && field != "" {
 		return model.FocusFieldMsg{Field: field}
 	}
 	return nil
 }
 
-// FieldFromID is the field of a Create, Close or Filter card whose node has id.
-func FieldFromID(id string) (model.Field, bool) {
-	for _, card := range []struct {
-		fields []model.FieldSpec
-		id     func(model.Field) string
-	}{{model.CreateFields, CreateFieldID}, {model.CloseFields, CloseFieldID}, {model.FilterFields, FilterFieldID}} {
-		for _, field := range card.fields {
-			if id == card.id(field.Name) {
-				return field.Name, true
+// FieldID is the node that holds card's field called name; a card without fields has one input, named "".
+func FieldID(card model.Card, name model.Field) string {
+	switch card {
+	case model.CardCreate:
+		return CreateFieldID(name)
+	case model.CardDraft:
+		return DraftEditorID
+	case model.CardField:
+		return FieldInputID
+	case model.CardClose:
+		return CloseFieldID(name)
+	case model.CardProject:
+		return ProjectInputID
+	case model.CardFilter:
+		return FilterFieldID(name)
+	case model.CardPicker:
+		return PickerFilterID
+	}
+	return ""
+}
+
+// FieldFromID is the card and field whose node has id; the field is "" for the one input of a card without fields.
+func FieldFromID(id string) (model.Card, model.Field, bool) {
+	for _, card := range model.Cards() {
+		fields, _ := model.CardFields(card)
+		for _, field := range fields {
+			if id == FieldID(card, field.Name) {
+				return card, field.Name, true
 			}
 		}
+		if len(fields) == 0 && id == FieldID(card, "") {
+			return card, "", true
+		}
 	}
-	return "", false
+	return model.NoCard, "", false
 }

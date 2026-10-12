@@ -9,38 +9,11 @@ import (
 
 // textFocusID is the node that should hold Tern's caret, "" for none.
 func textFocusID(m model.Model) string {
-	switch m.TopCard() {
-	case model.CardCreate:
-		if m.Create.Saving || m.Create.DiscardConfirm {
-			return ""
-		}
-		return view.CreateFieldID(m.Create.Field)
-	case model.CardDraft:
-		if draft, _ := m.ActiveDraft(); m.EditorMode() == model.ModeEditor && !draft.Saving {
-			return view.DraftEditorID
-		}
-	case model.CardField:
-		if !m.FieldForm.Saving {
-			return view.FieldInputID
-		}
-	case model.CardClose:
-		if !m.CloseForm.Saving {
-			return view.CloseFieldID(m.CloseForm.Field)
-		}
-	case model.CardProject:
-		if !m.ProjectForm.Saving {
-			return view.ProjectInputID
-		}
-	case model.CardFilter:
-		if m.FilterTextFieldFocused() {
-			return view.FilterFieldID(m.FilterForm.Field)
-		}
-	case model.CardPicker:
-		return view.PickerFilterID
-	default:
-		if m.Search.Open && !m.Search.Results && m.Err == nil && !m.FirstLoad() && m.Focus == model.ColumnList {
-			return view.SearchID
-		}
+	if card, field, ok := m.TextCaret(); ok {
+		return view.FieldID(card, field)
+	}
+	if m.TopCard() == model.NoCard && m.SearchInputFocused() {
+		return view.SearchID
 	}
 	return ""
 }
@@ -49,10 +22,7 @@ func textFocusID(m model.Model) string {
 // queued focus, reveal or scroll op and the next render, so that Tern's
 // "unknown id" answer for it is expected.
 func transientTarget(id string) bool {
-	if _, ok := view.FieldFromID(id); ok {
-		return true
-	}
-	if id == view.FieldInputID || id == view.SearchID || id == view.DraftEditorID || id == view.PickerFilterID || id == view.ProjectInputID {
+	if _, _, ok := view.FieldFromID(id); ok || id == view.SearchID {
 		return true
 	}
 	if view.IsIssueID(id) {

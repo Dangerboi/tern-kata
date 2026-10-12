@@ -13,6 +13,11 @@ type SearchState struct {
 	InitialText, InitialUID string
 }
 
+// SearchInputFocused reports whether the Search input, not a popup card, holds the text caret.
+func (m Model) SearchInputFocused() bool {
+	return m.Search.Open && !m.Search.Results && m.Err == nil && !m.FirstLoad() && m.Focus == ColumnList
+}
+
 // inputMode is a mode whose keys type into Search. The popup cards own theirs: see cardEntry.
 func inputMode(mode Mode) bool {
 	return mode == ModeSearch || mode == ModeSearchResults
