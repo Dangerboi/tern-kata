@@ -91,11 +91,11 @@ eventLoop:
 		}
 		for _, cmd := range out.Cmds {
 			if external, ok := cmd.(model.OpenDraftEditor); ok {
-				var handErr error
-				input, session, surface, stopInput, handErr = handOff(ctx, external, session, surface, stopInput, inputs, inputErrors)
+				closed, nextSession, nextSurface, nextStop, handErr := handOff(ctx, external, session, surface, stopInput, inputs, inputErrors)
 				if handErr != nil {
 					return handErr
 				}
+				input, session, surface, stopInput = closed, nextSession, nextSurface, nextStop
 				state = state.Fresh()
 				continue eventLoop
 			}

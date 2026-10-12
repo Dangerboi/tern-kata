@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"runtime/debug"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -27,6 +28,8 @@ func TestPlanLaunch(t *testing.T) {
 		{name: "issue separate value", args: []string{"--issue", "proj/ab12"}, issueRef: "proj/ab12", fallbackArgs: []string{"--project", "proj", "proj#ab12"}},
 		{name: "issue equals value", args: []string{"--issue=proj/ab12"}, issueRef: "proj/ab12", fallbackArgs: []string{"--project", "proj", "proj#ab12"}},
 		{name: "issue missing value", args: []string{"--issue"}, err: "--issue requires <project>/<short_id>"},
+		{name: "issue followed by as", args: []string{"--issue", "--as", "bob"}, err: "--issue requires <project>/<short_id>"},
+		{name: "issue followed by as equals", args: []string{"--issue", "--as=bob"}, err: "--issue requires <project>/<short_id>"},
 		{name: "as missing value", args: []string{"--as"}, err: "--as requires an actor"},
 		{name: "malformed issue ref", args: []string{"--issue", "noslash"}, err: `Issue reference must be <project>/<short_id>: "noslash"`},
 		{name: "empty issue equals value", args: []string{"--issue="}, err: `Issue reference must be <project>/<short_id>: ""`},
@@ -89,6 +92,19 @@ func TestPlanLaunchActorPrecedence(t *testing.T) {
 				t.Errorf("Actor = %q, want %q", plan.Actor, tt.want)
 			}
 		})
+	}
+}
+
+func TestPlanLaunchFallbackAuthor(t *testing.T) {
+	env := map[string]string{"KATA_AUTHOR": "author", "USER": "user"}
+	for args, want := range map[string]string{"--as ann": "ann", "--as=ann": "ann", "": "", "--as=": ""} {
+		plan, err := PlanLaunch(strings.Fields(args), lookupFrom(env), "v")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if plan.fallbackAuthor != want {
+			t.Errorf("fallbackAuthor for %q = %q, want %q", args, plan.fallbackAuthor, want)
+		}
 	}
 }
 

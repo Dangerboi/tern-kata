@@ -59,7 +59,7 @@ func PlanLaunch(args []string, lookup func(string) (string, bool), version strin
 		arg := args[i]
 		if arg == "--as" || arg == "--issue" {
 			i++
-			if i == len(args) {
+			if i == len(args) || (arg == "--issue" && (args[i] == "--as" || strings.HasPrefix(args[i], "--as="))) {
 				if arg == "--as" {
 					return LaunchPlan{}, fmt.Errorf("--as requires an actor")
 				}
