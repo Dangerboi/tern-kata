@@ -2,6 +2,7 @@ package model_test
 
 import (
 	"errors"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -22,6 +23,8 @@ type cardBody struct {
 	// text is what the Draft holds; present says the card is on screen.
 	text    func(model.Model) string
 	present func(model.Model) bool
+	// err is the card's save error.
+	err func(model.Model) error
 	// target names the card's body editor for native edits.
 	target model.EditTarget
 	// save submits the card; fail answers the save with an error.
@@ -106,6 +109,7 @@ func popupCards() []popupCard {
 			},
 			text:    func(m model.Model) string { return m.Create.Editor.Text },
 			present: func(m model.Model) bool { return m.Create.Open },
+			err:     func(m model.Model) error { return m.Create.Err },
 			fail:    func(_ model.Model, err error) model.Msg { return model.IssueCreated{Err: err} },
 		},
 	}
@@ -121,6 +125,7 @@ func popupCards() []popupCard {
 			ready:   func(m model.Model) model.Model { return m },
 			text:    func(m model.Model) string { d, _ := m.ActiveDraft(); return d.Editor.Text },
 			present: func(m model.Model) bool { _, ok := m.ActiveDraft(); return ok },
+			err:     func(m model.Model) error { d, _ := m.ActiveDraft(); return d.Err },
 			fail:    func(m model.Model, err error) model.Msg { return model.DraftFailed{UID: m.EditorUID, Err: err} },
 		},
 	}
@@ -458,9 +463,37 @@ func TestDraftCardsSaveErrorKeepsTheDraft(t *testing.T) {
 			if !body.present(m) || body.text(m) != before {
 				t.Fatalf("after a save error: present=%v text %q, want %q", body.present(m), body.text(m), before)
 			}
-			// The card is editable again.
+			if body.err(m) == nil {
+				t.Fatal("the save error was not kept")
+			}
+			// The card is editable again, and the next edit clears the error.
 			if m = typed(body.focus(m), "!"); body.text(m) != before+"!" {
 				t.Fatalf("Draft not editable after the error: %q", body.text(m))
+			}
+			if err := body.err(m); err != nil {
+				t.Fatalf("the next edit left the error %q", err)
+			}
+		})
+	}
+}
+
+func TestDraftCardsIgnoreKeysWhileSaving(t *testing.T) {
+	for _, c := range popupCards() {
+		if c.body == nil {
+			continue
+		}
+		body := c.body
+		t.Run(c.name, func(t *testing.T) {
+			m := body.ready(typed(body.focus(c.open()), "k"))
+			m, cmds := clickPress(m, body.save)
+			if len(cmds) == 0 {
+				t.Fatalf("save sent nothing: mode %s", m.CurrentMode())
+			}
+			for _, chord := range []string{body.save, "escape", "tab", "y", "z"} {
+				next, cmds := model.Update(m, model.KeyMsg{Chord: chord, Text: chord})
+				if len(cmds) != 0 || !reflect.DeepEqual(next, m) {
+					t.Fatalf("%s while saving: cmds %v, state changed", chord, cmds)
+				}
 			}
 		})
 	}
