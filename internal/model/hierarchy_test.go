@@ -88,6 +88,35 @@ func TestHierarchyExpansion(t *testing.T) {
 	}
 }
 
+// A middle child continues its ancestor's line; the last child of each level ends it.
+func TestHierarchyGuides(t *testing.T) {
+	snap := g.UISnapshotResponseBody{
+		Collection: []model.Issue{
+			{UID: "p", Title: "P", UpdatedAt: ago(1)},
+			{UID: "a", Title: "A", UpdatedAt: ago(2)},
+			{UID: "a1", Title: "A1", UpdatedAt: ago(3)},
+			{UID: "b", Title: "B", UpdatedAt: ago(4)},
+			{UID: "b1", Title: "B1", UpdatedAt: ago(5)},
+		},
+		CollectionLinks: []g.UILink{
+			{Type: "parent", FromIssueUID: "a", ToIssueUID: "p"},
+			{Type: "parent", FromIssueUID: "a1", ToIssueUID: "a"},
+			{Type: "parent", FromIssueUID: "b", ToIssueUID: "p"},
+			{Type: "parent", FromIssueUID: "b1", ToIssueUID: "b"},
+		},
+	}
+	m, _ := loadFirst(model.Model{}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: snap})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "shift+e"})
+	got := map[string]string{}
+	for _, row := range m.VisibleRows() {
+		got[row.UID] = row.Guide
+	}
+	want := map[string]string{"p": "", "a": "├─\u00a0", "a1": "│\u00a0\u00a0└─\u00a0", "b": "└─\u00a0", "b1": "\u00a0\u00a0\u00a0└─\u00a0"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("guides = %q, want %q", got, want)
+	}
+}
+
 func TestHierarchyViewAndRefresh(t *testing.T) {
 	refresh := hierarchySnapshot()
 	refresh.Collection[0].ShortID = "renamed"

@@ -17,13 +17,13 @@ ctl key L
 expect_tree "[data-id$='.$hierarchy_parent']" '.count == 1 and (.nodes[0].text | contains("smoke-o…") | not)'
 ctl click "[data-id$='.$hierarchy_parent']"
 ctl key Right
-expect_tree "[data-id$='.$hierarchy_child']" '.count == 1 and (.nodes[0].text | startswith("│"))'
+expect_tree "[data-id$='.$hierarchy_child']" '.count == 1 and (.nodes[0].text | startswith("└─"))'
 expect_tree "[data-id$='.$hierarchy_grandchild']" '.count == 0'
 ctl key E
-expect_tree "[data-id$='.$hierarchy_grandchild']" '.count == 1 and (.nodes[0].text | test("^│\\s*│"))'
+expect_tree "[data-id$='.$hierarchy_grandchild']" '.count == 1 and (.nodes[0].text | startswith("└─"))'
 ctl key E
 expect_tree "[data-id$='.$hierarchy_child']" '.count == 0'
 ctl key v
-expect_tree "[data-id$='.$hierarchy_grandchild']" '.count == 1 and (.nodes[0].text | startswith("│") | not)'
+expect_tree "[data-id$='.$hierarchy_grandchild']" '.count == 1 and (.nodes[0].text | test("[├└]") | not)'
 ctl key v
 expect_tree "[data-id$='.$hierarchy_child']" '.count == 0'

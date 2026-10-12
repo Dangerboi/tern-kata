@@ -222,7 +222,7 @@ func panel(m model.Model, column model.Column, common ui.Common, gap ui.Gap, chi
 	return ui.Card{Common: common, Selected: m.Focus == column, Children: children}
 }
 
-// idCell is the first cell: the tree indent, the fold marker and the short id.
+// idCell is the first cell: the tree connectors, the fold marker and the short id.
 func idCell(row model.IssueRow) string {
 	disclosure := ""
 	if row.HasChildren {
@@ -231,7 +231,7 @@ func idCell(row model.IssueRow) string {
 			disclosure = "▾ "
 		}
 	}
-	return strings.Repeat("│\u00a0\u00a0", row.Depth) + disclosure + row.ShortID
+	return row.Guide + disclosure + row.ShortID
 }
 
 // cell is text padded with spaces to width characters, or cut to it with an ellipsis.

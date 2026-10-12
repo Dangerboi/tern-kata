@@ -3,6 +3,7 @@ package model
 type IssueRow struct {
 	Issue
 	Depth       int
+	Guide       string // tree connectors before the id: "├─ ", "│  └─ "
 	HasChildren bool
 	Expanded    bool
 	OpenKids    int
@@ -63,19 +64,25 @@ func (m Model) VisibleRows() []IssueRow {
 		}
 		return rows
 	}
-	var appendIssue func(Issue, int)
-	appendIssue = func(issue Issue, depth int) {
+	// guide is this row's connector; indent is what its children's guides start with.
+	var appendIssue func(issue Issue, depth int, guide, indent string)
+	appendIssue = func(issue Issue, depth int, guide, indent string) {
 		expanded := m.ExpandedUIDs[issue.UID]
-		rows = append(rows, kids(IssueRow{Issue: issue, Depth: depth, HasChildren: len(children[issue.UID]) > 0, Expanded: expanded}))
+		rows = append(rows, kids(IssueRow{Issue: issue, Depth: depth, Guide: guide, HasChildren: len(children[issue.UID]) > 0, Expanded: expanded}))
 		if expanded {
-			for _, child := range children[issue.UID] {
-				appendIssue(child, depth+1)
+			kin := children[issue.UID]
+			for i, child := range kin {
+				if i == len(kin)-1 {
+					appendIssue(child, depth+1, indent+"└─\u00a0", indent+"\u00a0\u00a0\u00a0")
+				} else {
+					appendIssue(child, depth+1, indent+"├─\u00a0", indent+"│\u00a0\u00a0")
+				}
 			}
 		}
 	}
 	for _, issue := range m.Issues {
 		if parents[issue.UID] == "" {
-			appendIssue(issue, 0)
+			appendIssue(issue, 0, "", "")
 		}
 	}
 	return rows

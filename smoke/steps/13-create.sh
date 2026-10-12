@@ -18,7 +18,7 @@ expect_tree "[data-id='layer.create.title']" '.count == 1'
 ctl type '"Smoke key-created child"'
 ctl key Ctrl+o
 expect_tree "[data-id='layer.create']" '.count == 0'
-expect_tree "[data-id^='main.columns.list.issues.']" '[.nodes[] | select(.["aria-selected"] == "true") | .. | objects | .text? // empty] | any(contains("Smoke key-created child") and contains("│"))'
+expect_tree "[data-id^='main.columns.list.issues.']" '[.nodes[] | select(.["aria-selected"] == "true") | .. | objects | .text? // empty] | any(contains("Smoke key-created child") and test("[├└]─"))'
 expect_tree "[data-id^='main.columns.list.issues.']" '[.nodes[] | .. | objects | .text? // empty] | any(contains("Smoke key-created parent") and contains("▾"))'
 kata --workspace "$tmp/workspace" create "Smoke create refresh trigger" --json
 expect_tree "[data-id^='main.columns.list.issues.']" '[.nodes[] | .. | objects | .text? // empty] | any(contains("Smoke create refresh trigger"))'
