@@ -640,3 +640,15 @@ func TestGatewaySnapshotCountsChildrenOnEveryRead(t *testing.T) {
 		t.Fatalf("current ETag: %+v, want not modified", unchanged)
 	}
 }
+
+func TestGatewayReadsASnapshotWhenTheTimeZoneIsBad(t *testing.T) {
+	t.Setenv("TZ", "Nowhere/Land")
+	kata := startKata(t, "0.18.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	query := model.CollectionQuery(model.Collection{View: "project", ProjectUID: demo.UID, Title: demo.Name}, model.Filters{})
+	loaded := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, Request: 1}))
+	if loaded.TimeZone != "UTC" || !strings.Contains(loaded.TimeZoneNote, "Nowhere/Land") {
+		t.Fatalf("zone %q note %q", loaded.TimeZone, loaded.TimeZoneNote)
+	}
+}

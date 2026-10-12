@@ -213,3 +213,14 @@ func TestFilterLineAppearsOnlyWhenFiltered(t *testing.T) {
 		t.Error("filter line is inside the one-row top bar")
 	}
 }
+
+func TestTopBarShowsTheTimeZoneNote(t *testing.T) {
+	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{LocalDate: "2026-10-12", TimeZone: "UTC", TimeZoneNote: "time zone unknown, using UTC"}})
+	nodes := render(t, m)
+	if got := text(nodes["main.topbar.right.zone-note"]); got != "time zone unknown, using UTC" {
+		t.Fatalf("zone note %q", got)
+	}
+	if _, ok := render(t, browsing())["main.topbar.right.zone-note"]; ok {
+		t.Error("zone note shown with none set")
+	}
+}
