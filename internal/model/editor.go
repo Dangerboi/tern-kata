@@ -117,10 +117,8 @@ func startDraft(m Model, comment bool) Model {
 	m.EditorUID = uid
 	return m.focusDetail()
 }
-func saveDraft(m Model, draft Draft) (Model, []Cmd) {
-	if draft.Saving {
-		return m, nil
-	}
+func saveDraft(m Model) (Model, []Cmd) {
+	draft, _ := m.ActiveDraft()
 	if m.Stale {
 		draft.Err = errDraftReadOnly
 		return putDraft(m, m.EditorUID, draft), nil
@@ -169,48 +167,24 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 	return m, nil, false
 }
 
-// draftKey is one key for the Draft editor on top.
-func draftKey(m Model, msg KeyMsg) (Model, []Cmd) {
-	draft, _ := m.ActiveDraft()
-	binding, ok := LookupBindingForMode(msg.Chord, m.CurrentMode())
-	if draft.Saving {
-		return m, nil
-	}
-	if draft.Conflict != nil {
-		if ok && binding.Action == OverwriteDraft {
-			draft.BaseRevision = draft.Conflict.Revision
-			draft.Conflict = nil
-			return saveDraft(m, draft)
+// draftCard is the Draft editor's part of the shared Draft key handler: its text is the body of the
+// Draft being edited and saving sends it back to kata.
+var draftCard = draftCardKeys{
+	draft: func(m Model) Draft { d, _ := m.ActiveDraft(); return d },
+	set:   func(m Model, d Draft) Model { return putDraft(m, m.EditorUID, d) },
+	close: func(m Model) Model { return dropDraft(m, m.EditorUID) },
+	save:  saveDraft,
+	empty: func(m Model) bool { d, _ := m.ActiveDraft(); return d.Editor.Text == "" },
+	own: func(m Model, b Binding, _ KeyMsg) (Model, []Cmd, bool) {
+		if b.Action != ExternalEditorAction {
+			return m, nil, false
 		}
-		if ok && binding.Action == DiscardDraft {
-			return dropDraft(m, m.EditorUID), nil
-		}
-		return m, nil
-	}
-	if draft.DiscardConfirm {
-		draft, gone := answerDiscard(draft, binding, ok)
-		if gone {
-			return dropDraft(m, m.EditorUID), nil
-		}
-		return putDraft(m, m.EditorUID, draft), nil
-	}
-	if ok {
-		switch binding.Action {
-		case SaveDraftAction:
-			return saveDraft(m, draft)
-		case CancelDraft:
-			draft, gone := leaveDraft(draft, draft.Editor.Text == "")
-			if gone {
-				return dropDraft(m, m.EditorUID), nil
-			}
-			return putDraft(m, m.EditorUID, draft), nil
-		case ExternalEditorAction:
-			return m, []Cmd{OpenDraftEditor{UID: m.EditorUID, Text: draft.Editor.Text}}
-		default:
-			draft.Editor = draft.Editor.Key(binding.Action, editorSelectionChord(msg.Chord))
-		}
-	} else if msg.Text != "" {
-		draft.Editor = draft.Editor.Insert(msg.Text)
-	}
-	return putDraft(m, m.EditorUID, draft), nil
+		d, _ := m.ActiveDraft()
+		return m, []Cmd{OpenDraftEditor{UID: m.EditorUID, Text: d.Editor.Text}}, true
+	},
+	edit: func(m Model, b Binding, bound bool, msg KeyMsg) Model {
+		d, _ := m.ActiveDraft()
+		d.Editor = editorKey(d.Editor, b, bound, msg)
+		return putDraft(m, m.EditorUID, d)
+	},
 }

@@ -77,7 +77,7 @@ func init() {
 				}
 				return ModeCreate
 			},
-			key:    createKey,
+			key:    createCard.key,
 			fields: CreateFields, focus: func(m *Model) *Field { return &m.Create.Field },
 			locked: func(m Model) bool { return m.Create.Saving || m.Create.DiscardConfirm },
 			caret:  func(m Model) (Field, bool) { return m.Create.Field, !(m.Create.Saving || m.Create.DiscardConfirm) },
@@ -93,7 +93,7 @@ func init() {
 			card: CardDraft, open: func(m Model) bool { _, ok := m.ActiveDraft(); return ok },
 			modes:  []Mode{ModeEditor, ModeDiscard, ModeConflict},
 			mode:   Model.EditorMode,
-			key:    draftKey,
+			key:    draftCard.key,
 			fields: []FieldSpec{},
 			caret:  func(m Model) (Field, bool) { draft, _ := m.ActiveDraft(); return "", m.EditorMode() == ModeEditor && !draft.Saving },
 			target: EditDraftBody,
@@ -268,6 +268,80 @@ func answerDiscard(d Draft, binding Binding, bound bool) (Draft, bool) {
 		d.DiscardConfirm = false
 	}
 	return d, false
+}
+
+// draftCardKeys is what the Create card and the Draft editor each supply to the one key handler they
+// share: where the Draft lives, what saving sends and which keys and edits are the card's own.
+type draftCardKeys struct {
+	draft func(Model) Draft
+	set   func(Model, Draft) Model
+	// close removes the card and its Draft.
+	close func(Model) Model
+	save  func(Model) (Model, []Cmd)
+	// empty says the card holds nothing worth asking to discard.
+	empty func(Model) bool
+	// own handles a bound key only this card has; it reports false for any other.
+	own func(Model, Binding, KeyMsg) (Model, []Cmd, bool)
+	// edit applies a key that no card action took to the card's text.
+	edit func(Model, Binding, bool, KeyMsg) Model
+}
+
+// key is one key for a card holding a Draft. While saving it does nothing, before any binding is
+// looked up; an edit clears the card's error.
+func (c draftCardKeys) key(m Model, msg KeyMsg) (Model, []Cmd) {
+	d := c.draft(m)
+	if d.Saving {
+		return m, nil
+	}
+	binding, ok := LookupBindingForMode(msg.Chord, m.CurrentMode())
+	switch {
+	case d.Conflict != nil:
+		if ok && binding.Action == OverwriteDraft {
+			d.BaseRevision = d.Conflict.Revision
+			d.Conflict = nil
+			return c.save(c.set(m, d))
+		}
+		if ok && binding.Action == DiscardDraft {
+			return c.close(m), nil
+		}
+		return m, nil
+	case d.DiscardConfirm:
+		d, gone := answerDiscard(d, binding, ok)
+		if gone {
+			return c.close(m), nil
+		}
+		return c.set(m, d), nil
+	}
+	if ok {
+		switch binding.Action {
+		case SaveDraftAction:
+			return c.save(m)
+		case CancelDraft:
+			d, gone := leaveDraft(d, c.empty(m))
+			if gone {
+				return c.close(m), nil
+			}
+			return c.set(m, d), nil
+		}
+		if m, cmds, handled := c.own(m, binding, msg); handled {
+			return m, cmds
+		}
+	}
+	m = c.edit(m, binding, ok, msg)
+	d = c.draft(m)
+	d.Err = nil
+	return c.set(m, d), nil
+}
+
+// editorKey is one key for a multi-line body: a bound editor action, or typed text.
+func editorKey(e TextEditor, binding Binding, bound bool, msg KeyMsg) TextEditor {
+	if bound {
+		return e.Key(binding.Action, editorSelectionChord(msg.Chord))
+	}
+	if msg.Text != "" {
+		return e.Insert(msg.Text)
+	}
+	return e
 }
 
 // focusField puts focus on the field called name of the open card; a name outside its field list is ignored.

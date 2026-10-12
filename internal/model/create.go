@@ -101,9 +101,6 @@ func createValue(f *CreateState) *string {
 }
 func submitCreate(m Model) (Model, []Cmd) {
 	f := &m.Create
-	if f.Saving {
-		return m, nil
-	}
 	if m.Stale {
 		f.Err = errDraftReadOnly
 		return m, nil
@@ -173,70 +170,50 @@ func updateCreate(m Model, msg Msg) (Model, []Cmd, bool) {
 	return m, nil, false
 }
 
-// createKey is one key for the Create card on top.
-func createKey(m Model, msg KeyMsg) (Model, []Cmd) {
-	if m.Create.Saving {
-		return m, nil
-	}
-	if m.Create.DiscardConfirm {
-		b, ok := LookupBindingForMode(msg.Chord, ModeDiscard)
-		draft, gone := answerDiscard(m.Create.Draft, b, ok)
-		if gone {
-			m.Create = CreateState{}
-		} else {
-			m.Create.Draft = draft
-		}
-		return m, nil
-	}
-	b, ok := LookupBindingForMode(msg.Chord, ModeCreate)
-	if ok {
+// createCard is the Create card's part of the shared Draft key handler: its text is the title, body
+// and the three single-line fields, and saving sends an issue.
+var createCard = draftCardKeys{
+	draft: func(m Model) Draft { return m.Create.Draft },
+	set:   func(m Model, d Draft) Model { m.Create.Draft = d; return m },
+	close: func(m Model) Model { m.Create = CreateState{}; return m },
+	save:  submitCreate,
+	empty: func(m Model) bool {
+		f := m.Create
+		return f.Title+f.Editor.Text+f.Labels+f.Owner+f.Priority == ""
+	},
+	own: func(m Model, b Binding, _ KeyMsg) (Model, []Cmd, bool) {
 		switch b.Action {
-		case SaveDraftAction:
-			return submitCreate(m)
-		case CancelDraft:
-			f := m.Create
-			draft, gone := leaveDraft(f.Draft, f.Title+f.Editor.Text+f.Labels+f.Owner+f.Priority == "")
-			if gone {
-				m.Create = CreateState{}
-			} else {
-				m.Create.Draft = draft
-			}
-			return m, nil
 		case CreateNext:
 			cycleField(&m, 1)
-			return m, nil
 		case CreatePrevious:
 			cycleField(&m, -1)
-			return m, nil
 		case CreateComplete:
 			if m.Create.Field == CreateLabels {
-				s := m.CreateSuggestions()
-				if len(s) > 0 {
+				if s := m.CreateSuggestions(); len(s) > 0 {
 					parts := strings.Split(m.Create.Labels, ",")
 					parts[len(parts)-1] = s[m.Create.Completion.Suggestion%len(s)]
 					m.Create.Labels = strings.Join(parts, ",")
 				}
 			}
-			return m, nil
+		default:
+			return m, nil, false
 		}
-	}
-	if m.Create.Field == CreateBody {
-		b, ok = LookupBindingForMode(msg.Chord, ModeEditor)
-		if ok {
-			m.Create.Editor = m.Create.Editor.Key(b.Action, editorSelectionChord(msg.Chord))
-		} else if msg.Text != "" {
-			m.Create.Editor = m.Create.Editor.Insert(msg.Text)
+		return m, nil, true
+	},
+	edit: func(m Model, _ Binding, _ bool, msg KeyMsg) Model {
+		if m.Create.Field == CreateBody {
+			b, ok := LookupBindingForMode(msg.Chord, ModeEditor)
+			m.Create.Editor = editorKey(m.Create.Editor, b, ok, msg)
+		} else if value := createValue(&m.Create); value != nil {
+			b, ok := LookupBindingForMode(msg.Chord, ModeFieldForm)
+			if ok && b.Action == FieldNext {
+				m.Create.Completion.Suggestion++
+			} else if ok && b.Action == FieldPrevious {
+				m.Create.Completion.Suggestion = max(0, m.Create.Completion.Suggestion-1)
+			} else {
+				*value, _ = editText(*value, b, ok, msg)
+			}
 		}
-	} else if value := createValue(&m.Create); value != nil {
-		b, ok = LookupBindingForMode(msg.Chord, ModeFieldForm)
-		if ok && b.Action == FieldNext {
-			m.Create.Completion.Suggestion++
-		} else if ok && b.Action == FieldPrevious {
-			m.Create.Completion.Suggestion = max(0, m.Create.Completion.Suggestion-1)
-		} else {
-			*value, _ = editText(*value, b, ok, msg)
-		}
-	}
-	m.Create.Err = nil
-	return m, nil
+		return m
+	},
 }
