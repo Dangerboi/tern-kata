@@ -29,7 +29,7 @@ Requires Go 1.27+, kata v0.18.0+ and a Tern that supports the Surface Protocol.
    CGO_ENABLED=0 go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest
    ```
 
-   `tern-kata` must be on your shell's `PATH` (Go puts it in `~/go/bin`, or `%USERPROFILE%\go\bin` on Windows).
+   `tern-kata` must be on your shell's `PATH` (Go puts it in `~/go/bin`, or `%USERPROFILE%\go\bin` on Windows). `tern-kata --version` prints the installed version.
 
 2. On the **machine showing the Tern window**, install the window plugin:
 
@@ -48,6 +48,8 @@ CGO_ENABLED=0 go test ./...
 tern plugin link .  # use this checkout as the window plugin
 tern plugin reload  # exits 1 if a plugin fails to load; window failures show only as a toast
 ```
+
+A release build sets the version with `-ldflags "-X main.version=vX.Y.Z"`. Without it, `tern-kata --version` reports the Go module version (`go install …@vX.Y.Z`), or `dev` for an untagged build.
 
 `window.luau` is `--!strict`. To type-check it against the installed Tern's API (needs [luau-lsp](https://github.com/JohnnyMorganz/luau-lsp)):
 
