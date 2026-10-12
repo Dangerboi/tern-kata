@@ -110,10 +110,23 @@ func DecodeSelect(id, item string) model.Msg {
 
 // DecodeFocus is the message for Tern's focus on node id: focus that field of the open card, nil for any other node.
 func DecodeFocus(id string) model.Msg {
-	for _, index := range []func(string) (int, bool){CreateFieldIndex, CloseFieldIndex, FilterFieldIndex} {
-		if field, ok := index(id); ok {
-			return model.FocusFieldMsg{Field: field}
-		}
+	if field, ok := FieldFromID(id); ok {
+		return model.FocusFieldMsg{Field: field}
 	}
 	return nil
+}
+
+// FieldFromID is the field of a Create, Close or Filter card whose node has id.
+func FieldFromID(id string) (model.Field, bool) {
+	for _, card := range []struct {
+		fields []model.FieldSpec
+		id     func(model.Field) string
+	}{{model.CreateFields, CreateFieldID}, {model.CloseFields, CloseFieldID}, {model.FilterFields, FilterFieldID}} {
+		for _, field := range card.fields {
+			if id == card.id(field.Name) {
+				return field.Name, true
+			}
+		}
+	}
+	return "", false
 }

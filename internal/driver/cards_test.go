@@ -42,14 +42,17 @@ func popups() []popup {
 		{"single-field form", keyOpen("+"), func(dst *model.Model, src model.Model) { dst.FieldForm = src.FieldForm },
 			model.ModeFieldForm, "layer.fields", func(m model.Model) string { return m.FieldForm.Value }},
 		{"Close", keyOpen("x"), func(dst *model.Model, src model.Model) { dst.CloseForm = src.CloseForm },
-			model.ModeCloseForm, "layer.close", func(m model.Model) string { return strings.Join(m.CloseForm.Values[:], "") }},
+			model.ModeCloseForm, "layer.close", func(m model.Model) string {
+				values := m.CloseForm.Values
+				return values.Reason + values.Message + values.Commit + values.PR + values.Test + values.Reference + values.Rationale
+			}},
 		{"New Project", func(t *testing.T, s driver.State) model.Model {
 			return step(t, s, model.CollectionPointerSelected{Key: model.NewProjectKey}).State.Model
 		}, func(dst *model.Model, src model.Model) { dst.ProjectForm = src.ProjectForm },
 			model.ModeProjectForm, view.ProjectID, func(m model.Model) string { return m.ProjectForm.Name }},
 		{"Filter form", func(t *testing.T, s driver.State) model.Model {
 			m := keyOpen("f")(t, s)
-			m.FilterForm.Field = 2 // the owner text field
+			m.FilterForm.Field = model.FilterOwner // a text field
 			return m
 		}, func(dst *model.Model, src model.Model) { dst.FilterForm = src.FilterForm },
 			model.ModeFilterForm, "layer.filters", func(m model.Model) string { return m.FilterForm.Values.Owner }},
@@ -108,7 +111,7 @@ func TestPopupCardPrecedenceIsOneOrder(t *testing.T) {
 
 // Tern names a body editor by node id; the model hears which card's body it is.
 func TestBodyEditsAndUndoReachTheirCard(t *testing.T) {
-	create := feed(t, browsing(t, 160), key("n"), &tern.Focus{ID: view.CreateFieldID(1)})
+	create := feed(t, browsing(t, 160), key("n"), &tern.Focus{ID: view.CreateFieldID(model.CreateBody)})
 	draft := feed(t, browsing(t, 160), key("e"))
 	for _, tt := range []struct {
 		name string
@@ -116,7 +119,7 @@ func TestBodyEditsAndUndoReachTheirCard(t *testing.T) {
 		id   string
 		text func(model.Model) string
 	}{
-		{"Create", create.State, view.CreateFieldID(1), func(m model.Model) string { return m.Create.Editor.Text }},
+		{"Create", create.State, view.CreateFieldID(model.CreateBody), func(m model.Model) string { return m.Create.Editor.Text }},
 		{"Draft editor", draft.State, view.DraftEditorID, func(m model.Model) string { d, _ := m.ActiveDraft(); return d.Editor.Text }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

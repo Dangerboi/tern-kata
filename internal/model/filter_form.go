@@ -2,32 +2,97 @@ package model
 
 import "strings"
 
-// FieldSpec is one field of a popup card: Key names its node and Text says it takes typed text.
-type FieldSpec struct {
-	Key  string
-	Text bool
-}
+// The Filter form's fields.
+const (
+	FilterProject      Field = "project"
+	FilterStatus       Field = "status"
+	FilterOwner        Field = "owner"
+	FilterLabel        Field = "label"
+	FilterRelationship Field = "relationship"
+)
 
 // FilterFields is the Filter form's field list, in tab order.
-var FilterFields = [...]FieldSpec{{"project", false}, {"status", false}, {"owner", true}, {"label", true}, {"relationship", false}}
+var FilterFields = []FieldSpec{{FilterProject, false}, {FilterStatus, false}, {FilterOwner, true}, {FilterLabel, true}, {FilterRelationship, false}}
+
+// FilterChoice is one value a Filter form choice field cycles through and how the form shows it.
+type FilterChoice struct{ Value, Label string }
+
+// The Filter form's fixed choice lists; the empty value first is "no filter".
+var (
+	FilterStatuses      = []FilterChoice{{"", "all"}, {"open", "open"}, {"closed", "closed"}}
+	FilterRelationships = []FilterChoice{{"", "Any"}, {"parent", "Has parent"}, {"child", "Has child"}, {"blocks", "Blocks"}, {"blocked_by", "Blocked by"}, {"related", "Related"}}
+)
+
+// FilterChoiceLabel is how the form shows value, the first choice's label for a value not in choices.
+func FilterChoiceLabel(choices []FilterChoice, value string) string {
+	for _, choice := range choices {
+		if choice.Value == value {
+			return choice.Label
+		}
+	}
+	return choices[0].Label
+}
 
 // FilterTextFieldFocused reports whether the Filter form's focused field takes typed text.
-func (m Model) FilterTextFieldFocused() bool { return FilterFields[m.FilterForm.Field].Text }
+func (m Model) FilterTextFieldFocused() bool {
+	return takesText(FilterFields, m.FilterForm.Field)
+}
 
 type FilterFormState struct {
 	Open   bool
-	Field  int
+	Field  Field
 	Values Filters
 }
 
-func filterTextField(form *FilterFormState) *string {
-	switch form.Field {
-	case 2:
-		return &form.Values.Owner
-	case 3:
-		return &form.Values.Label
+// value is the filter value the field called name holds, nil for a name that is not a Filter field.
+func (f *Filters) value(name Field) *string {
+	switch name {
+	case FilterProject:
+		return &f.ProjectUID
+	case FilterStatus:
+		return &f.Status
+	case FilterOwner:
+		return &f.Owner
+	case FilterLabel:
+		return &f.Label
+	case FilterRelationship:
+		return &f.Relationship
 	}
 	return nil
+}
+
+func filterTextField(form *FilterFormState) *string {
+	if !takesText(FilterFields, form.Field) {
+		return nil
+	}
+	return form.Values.value(form.Field)
+}
+
+// filterChoices is the values the choice field called name cycles through, nil for a text field.
+func (m Model) filterChoices(name Field) []string {
+	var choices []FilterChoice
+	switch name {
+	case FilterProject:
+		values := []string{""}
+		for _, project := range m.Snapshot.Catalog {
+			if m.Collection.ProjectUID == "" || m.Collection.ProjectUID == project.Project.UID {
+				values = append(values, project.Project.UID)
+			}
+		}
+		return values
+	case FilterStatus:
+		choices = FilterStatuses
+	case FilterRelationship:
+		choices = FilterRelationships
+	}
+	values := make([]string, len(choices))
+	for i, choice := range choices {
+		values[i] = choice.Value
+	}
+	if len(values) == 0 {
+		return nil
+	}
+	return values
 }
 
 // filterFormKey is one key for the Filter form on top: a bound chord acts, any other types.
@@ -63,35 +128,15 @@ func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 	case DeleteInput, ClearInput:
 		if field := filterTextField(&m.FilterForm); field != nil {
 			*field, _ = editText(*field, Binding{Action: action}, true, KeyMsg{})
-		} else {
-			switch m.FilterForm.Field {
-			case 0:
-				m.FilterForm.Values.ProjectUID = ""
-			case 1:
-				m.FilterForm.Values.Status = ""
-			case 4:
-				m.FilterForm.Values.Relationship = ""
-			}
+		} else if choice := m.FilterForm.Values.value(m.FilterForm.Field); choice != nil {
+			*choice = ""
 		}
 	case NextFilterChoice, PreviousFilterChoice:
-		var field *string
-		var choices []string
-		switch m.FilterForm.Field {
-		case 0:
-			field = &m.FilterForm.Values.ProjectUID
-			choices = []string{""}
-			for _, project := range m.Snapshot.Catalog {
-				if m.Collection.ProjectUID == "" || m.Collection.ProjectUID == project.Project.UID {
-					choices = append(choices, project.Project.UID)
-				}
-			}
-		case 1:
-			field, choices = &m.FilterForm.Values.Status, []string{"", "open", "closed"}
-		case 4:
-			field, choices = &m.FilterForm.Values.Relationship, []string{"", "parent", "child", "blocks", "blocked_by", "related"}
-		default:
+		choices := m.filterChoices(m.FilterForm.Field)
+		if choices == nil {
 			return m, nil
 		}
+		field := m.FilterForm.Values.value(m.FilterForm.Field)
 		index := 0
 		for i, value := range choices {
 			if value == *field {

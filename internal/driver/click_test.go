@@ -125,38 +125,39 @@ func TestSelectInputsDecodeForTheListAndBothMenus(t *testing.T) {
 	}
 }
 
-// Tern's focus input on any field of the open card is "focus field N of that card": the Close card included.
+// Tern's focus input on any field of the open card is "focus that field of that card": the Close card included.
 func TestClickingAFieldMakesItTheFieldTheKeysEdit(t *testing.T) {
 	for _, tt := range []struct {
-		name string
-		open string
-		id   func(int) string
-		keys []string
-		read func(model.Model) int
+		name  string
+		open  string
+		id    func(model.Field) string
+		field model.Field // the field three tabs from the first
+		keys  []string
+		read  func(model.Model) model.Field
 	}{
-		{"Create", "n", view.CreateFieldID, []string{"tab", "tab", "tab"}, func(m model.Model) int { return m.Create.Field }},
-		{"Close", "x", view.CloseFieldID, []string{"tab", "tab", "tab"}, func(m model.Model) int { return m.CloseForm.Field }},
-		{"Filters", "f", view.FilterFieldID, []string{"tab", "tab", "tab"}, func(m model.Model) int { return m.FilterForm.Field }},
+		{"Create", "n", view.CreateFieldID, model.CreateOwner, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.Create.Field }},
+		{"Close", "x", view.CloseFieldID, model.ClosePR, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.CloseForm.Field }},
+		{"Filters", "f", view.FilterFieldID, model.FilterLabel, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.FilterForm.Field }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			opened := feed(t, browsing(t, 160), key(tt.open)).State
-			clicked := step(t, opened, &tern.Focus{ID: tt.id(3)})
+			clicked := step(t, opened, &tern.Focus{ID: tt.id(tt.field)})
 			var keys []any
 			for _, chord := range tt.keys {
 				keys = append(keys, key(chord))
 			}
 			typed := feed(t, opened, keys...)
-			if tt.read(clicked.State.Model) != 3 || !reflect.DeepEqual(clicked.State.Model, typed.State.Model) {
-				t.Fatalf("click on field 3 left field %d, keys left %d", tt.read(clicked.State.Model), tt.read(typed.State.Model))
+			if tt.read(clicked.State.Model) != tt.field || !reflect.DeepEqual(clicked.State.Model, typed.State.Model) {
+				t.Fatalf("click on %q left field %q, keys left %q", tt.field, tt.read(clicked.State.Model), tt.read(typed.State.Model))
 			}
-			wantOps(t, clicked, tern.OpFocus(tt.id(3)))
+			wantOps(t, clicked, tern.OpFocus(tt.id(tt.field)))
 		})
 	}
 }
 
 func TestTextTypedAfterClickingACloseFieldGoesToThatField(t *testing.T) {
-	s := feed(t, browsing(t, 160), key("x"), &tern.Focus{ID: view.CloseFieldID(2)}, key("a")).State
-	if values := s.Model.CloseForm.Values; values[2] != "a" || values[1] != "" {
-		t.Fatalf("values = %q", values)
+	s := feed(t, browsing(t, 160), key("x"), &tern.Focus{ID: view.CloseFieldID(model.CloseCommit)}, key("a")).State
+	if values := s.Model.CloseForm.Values; values.Commit != "a" || values.Message != "" {
+		t.Fatalf("values = %+v", values)
 	}
 }

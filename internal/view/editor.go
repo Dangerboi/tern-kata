@@ -15,7 +15,7 @@ func BodyTarget(id string) model.EditTarget {
 	switch id {
 	case DraftEditorID:
 		return model.EditDraftBody
-	case CreateFieldID(1):
+	case CreateFieldID(model.CreateBody):
 		return model.EditCreateBody
 	}
 	return model.NoEditTarget

@@ -20,16 +20,62 @@ const (
 	CloseCancel   Action = "close-cancel"
 )
 
+// The Close card's fields.
+const (
+	CloseReason    Field = "reason"
+	CloseMessage   Field = "message"
+	CloseCommit    Field = "commit"
+	ClosePR        Field = "pr"
+	CloseTest      Field = "test"
+	CloseReference Field = "reference"
+	CloseRationale Field = "rationale"
+)
+
+// CloseFields is the Close card's field list, in tab order.
+var CloseFields = []FieldSpec{{CloseReason, true}, {CloseMessage, true}, {CloseCommit, true}, {ClosePR, true}, {CloseTest, true}, {CloseReference, true}, {CloseRationale, true}}
+
+// CloseValues holds what each Close field has been typed.
+type CloseValues struct{ Reason, Message, Commit, PR, Test, Reference, Rationale string }
+
+// at is the value the field called name holds, nil for a name that is not a Close field.
+func (v *CloseValues) at(name Field) *string {
+	switch name {
+	case CloseReason:
+		return &v.Reason
+	case CloseMessage:
+		return &v.Message
+	case CloseCommit:
+		return &v.Commit
+	case ClosePR:
+		return &v.PR
+	case CloseTest:
+		return &v.Test
+	case CloseReference:
+		return &v.Reference
+	case CloseRationale:
+		return &v.Rationale
+	}
+	return nil
+}
+
+// Value is what the field called name holds, "" for a name that is not a Close field.
+func (v CloseValues) Value(name Field) string {
+	if value := v.at(name); value != nil {
+		return *value
+	}
+	return ""
+}
+
 type CloseFormState struct {
 	Open, Saving        bool
-	Field               int
+	Field               Field
 	UID                 string
 	ProjectID, Revision int64
-	Values              [7]string
+	Values              CloseValues
 	Err                 error
 }
 type CloseFieldMsg struct {
-	Field int
+	Field Field
 	Value string
 }
 
@@ -77,8 +123,8 @@ func openClose(m Model) Model {
 	if issue == nil {
 		return m
 	}
-	m.CloseForm = CloseFormState{Open: true, UID: issue.UID, ProjectID: issue.ProjectID, Revision: issue.Revision}
-	m.CloseForm.Values[0] = "done"
+	m.CloseForm = CloseFormState{Open: true, Field: CloseFields[0].Name, UID: issue.UID, ProjectID: issue.ProjectID, Revision: issue.Revision}
+	m.CloseForm.Values.Reason = "done"
 	return m
 }
 
@@ -91,7 +137,7 @@ func submitClose(m Model, quick bool) (Model, []Cmd) {
 		f.Err = errors.New("Daemon disconnected; reconnect before closing.")
 		return m, nil
 	}
-	reason := g.CloseActionRequestBodyReason(strings.TrimSpace(f.Values[0]))
+	reason := g.CloseActionRequestBodyReason(strings.TrimSpace(f.Values.Reason))
 	protocol := g.CloseActionRequestBodyRetryProtocol("close-v1")
 	body := g.CloseIssueBody{Actor: &m.Actor, Reason: &reason, RetryProtocol: &protocol}
 	if quick {
@@ -99,25 +145,25 @@ func submitClose(m Model, quick bool) (Model, []Cmd) {
 		source := g.CloseActionRequestBodySource("tui")
 		body.Source = &source
 	} else {
-		message := strings.TrimSpace(f.Values[1])
+		message := strings.TrimSpace(f.Values.Message)
 		body.Message = &message
-		if sha := strings.TrimSpace(f.Values[2]); sha != "" {
+		if sha := strings.TrimSpace(f.Values.Commit); sha != "" {
 			body.Evidence = append(body.Evidence, g.Evidence{Type: "commit", Sha: &sha})
 		}
-		if url := strings.TrimSpace(f.Values[3]); url != "" {
+		if url := strings.TrimSpace(f.Values.PR); url != "" {
 			body.Evidence = append(body.Evidence, g.Evidence{Type: "pr", URL: &url})
 		}
-		if command := strings.TrimSpace(f.Values[4]); command != "" {
+		if command := strings.TrimSpace(f.Values.Test); command != "" {
 			body.Evidence = append(body.Evidence, g.Evidence{Type: "test", Command: &command})
 		}
-		if ref := strings.TrimSpace(f.Values[5]); ref != "" {
+		if ref := strings.TrimSpace(f.Values.Reference); ref != "" {
 			kind := "duplicate-of"
 			if reason == "superseded" {
 				kind = "superseded-by"
 			}
 			body.Evidence = append(body.Evidence, g.Evidence{Type: kind, IssueRef: &ref})
 		}
-		if rationale := strings.TrimSpace(f.Values[6]); rationale != "" {
+		if rationale := strings.TrimSpace(f.Values.Rationale); rationale != "" {
 			body.Evidence = append(body.Evidence, g.Evidence{Type: "no-change-audit", Rationale: &rationale})
 		}
 		if err := validateClose(body); err != nil {
@@ -187,8 +233,8 @@ func validateClose(body g.CloseIssueBody) error {
 func updateClose(m Model, msg Msg) (Model, []Cmd) {
 	switch msg := msg.(type) {
 	case CloseFieldMsg:
-		if m.CloseForm.Open && !m.CloseForm.Saving && msg.Field >= 0 && msg.Field < len(m.CloseForm.Values) {
-			m.CloseForm.Values[msg.Field] = msg.Value
+		if value := m.CloseForm.Values.at(msg.Field); value != nil && m.CloseForm.Open && !m.CloseForm.Saving {
+			*value = msg.Value
 			m.CloseForm.Err = nil
 		}
 	case CloseResultMsg:
@@ -224,9 +270,11 @@ func closeKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case bound && binding.Action == CloseQuick:
 		return submitClose(m, true)
 	case !f.Saving:
-		var edited bool
-		if f.Values[f.Field], edited = editText(f.Values[f.Field], binding, bound, msg); edited {
-			f.Err = nil
+		if value := f.Values.at(f.Field); value != nil {
+			var edited bool
+			if *value, edited = editText(*value, binding, bound, msg); edited {
+				f.Err = nil
+			}
 		}
 	}
 	return m, nil

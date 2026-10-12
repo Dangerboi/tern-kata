@@ -134,9 +134,9 @@ func TestTextFocusIsClearedWhileSavingOrConfirming(t *testing.T) {
 
 func TestOpeningACardFocusesItsField(t *testing.T) {
 	out := step(t, browsing(t, 160), key("n"))
-	wantOps(t, out, tern.OpFocus(view.CreateFieldID(0)))
-	out = step(t, out.State, &tern.Focus{ID: view.CreateFieldID(2)})
-	wantOps(t, out, tern.OpFocus(view.CreateFieldID(2)))
+	wantOps(t, out, tern.OpFocus(view.CreateFieldID(model.CreateTitle)))
+	out = step(t, out.State, &tern.Focus{ID: view.CreateFieldID(model.CreateLabels)})
+	wantOps(t, out, tern.OpFocus(view.CreateFieldID(model.CreateLabels)))
 }
 
 func TestRowIsRevealedOnKeyMovesButNotOnRowClicks(t *testing.T) {
@@ -247,7 +247,7 @@ func TestColumnsStayMountedWhileHelpIsOpen(t *testing.T) {
 
 func TestUnknownIDOnATransientNodeIsIgnored(t *testing.T) {
 	s := browsing(t, 160)
-	for _, id := range []string{view.IssueID("beta"), view.SearchID, view.CreateFieldID(1), view.CloseFieldID(3), view.DetailActivityID + ".empty", view.ProjectInputID} {
+	for _, id := range []string{view.IssueID("beta"), view.SearchID, view.CreateFieldID(model.CreateBody), view.CloseFieldID(model.ClosePR), view.DetailActivityID + ".empty", view.ProjectInputID} {
 		out := driver.Step(s, &tern.ErrorEvent{Msg: "unknown id " + id}, now)
 		if out.Err != nil || out.Quit || out.View != nil || len(out.Ops) != 0 {
 			t.Errorf("unknown id %q: %+v", id, out)

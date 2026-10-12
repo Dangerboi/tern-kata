@@ -20,7 +20,7 @@ const (
 type CreateState struct {
 	Draft
 	Open                                      bool
-	Field                                     int
+	Field                                     Field
 	Title, Labels, Owner, Priority, ParentUID string
 	Completion                                FieldFormState
 }
@@ -59,7 +59,7 @@ func openCreate(m Model, child bool) (Model, []Cmd) {
 	} else if !m.Collection.IsProject() && issue != nil {
 		projectID = issue.ProjectID
 	}
-	m.Create = CreateState{Open: true, Draft: Draft{ProjectID: projectID, Editor: NewTextEditor("")}, ParentUID: parent}
+	m.Create = CreateState{Open: true, Field: CreateFields[0].Name, Draft: Draft{ProjectID: projectID, Editor: NewTextEditor("")}, ParentUID: parent}
 	if projectID == 0 {
 		m.Create.Err = errors.New("Select a Project before creating an Issue.")
 		return m, nil
@@ -74,18 +74,27 @@ func (m Model) CreateSuggestions() []string {
 	return m.FieldSuggestions()
 }
 
+// The Create card's fields.
+const (
+	CreateTitle    Field = "title"
+	CreateBody     Field = "body"
+	CreateLabels   Field = "labels"
+	CreateOwner    Field = "owner"
+	CreatePriority Field = "priority"
+)
+
 // CreateFields is the Create card's field list, in tab order; the body is the multi-line editor.
-var CreateFields = [...]FieldSpec{{"title", true}, {"body", false}, {"labels", true}, {"owner", true}, {"priority", true}}
+var CreateFields = []FieldSpec{{CreateTitle, true}, {CreateBody, false}, {CreateLabels, true}, {CreateOwner, true}, {CreatePriority, true}}
 
 func createValue(f *CreateState) *string {
 	switch f.Field {
-	case 0:
+	case CreateTitle:
 		return &f.Title
-	case 2:
+	case CreateLabels:
 		return &f.Labels
-	case 3:
+	case CreateOwner:
 		return &f.Owner
-	case 4:
+	case CreatePriority:
 		return &f.Priority
 	}
 	return nil
@@ -200,7 +209,7 @@ func createKey(m Model, msg KeyMsg) (Model, []Cmd) {
 			cycleField(&m, -1)
 			return m, nil
 		case CreateComplete:
-			if m.Create.Field == 2 {
+			if m.Create.Field == CreateLabels {
 				s := m.CreateSuggestions()
 				if len(s) > 0 {
 					parts := strings.Split(m.Create.Labels, ",")
@@ -211,7 +220,7 @@ func createKey(m Model, msg KeyMsg) (Model, []Cmd) {
 			return m, nil
 		}
 	}
-	if m.Create.Field == 1 {
+	if m.Create.Field == CreateBody {
 		b, ok = LookupBindingForMode(msg.Chord, ModeEditor)
 		if ok {
 			m.Create.Editor = m.Create.Editor.Key(b.Action, editorSelectionChord(msg.Chord))

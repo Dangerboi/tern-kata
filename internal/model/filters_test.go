@@ -187,13 +187,13 @@ func TestCollectionSwitchKeepsFilterIntent(t *testing.T) {
 func TestFilterFormInputAndChoices(t *testing.T) {
 	for _, tt := range []struct {
 		name                       string
-		field                      int
+		field                      model.Field
 		keys                       []string
 		owner, label, relationship string
-		endField                   int
+		endField                   model.Field
 	}{
-		{"relationship choices wrap backwards", 4, []string{"left"}, "", "", "related", 4},
-		{"reset does not apply", 2, []string{"q", "ctrl+r"}, "", "", "", 2},
+		{"relationship choices wrap backwards", model.FilterRelationship, []string{"left"}, "", "", "related", model.FilterRelationship},
+		{"reset does not apply", model.FilterOwner, []string{"q", "ctrl+r"}, "", "", "", model.FilterOwner},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m := model.Model{}
