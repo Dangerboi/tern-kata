@@ -93,12 +93,12 @@ func popupCards() []popupCard {
 	create := popupCard{
 		name: "Create", card: model.CardCreate, textField: model.CreateTitle,
 		tabOrder: []model.Field{model.CreateTitle, model.CreateBody, model.CreateLabels, model.CreateOwner, model.CreatePriority},
-		states: []cardState{{"", openedCreate, model.ModeCreate}},
-		graft:  func(dst *model.Model, src model.Model) { dst.Create = src.Create },
-		field:  func(m model.Model) model.Field { return m.Create.Field },
-		text:   func(m model.Model, _ model.Field) string { return m.Create.Title },
-		save:   []string{"ctrl+o"},
-		result: func(_ model.Model, err error) model.Msg { return model.IssueCreated{Err: err} },
+		states:   []cardState{{"", openedCreate, model.ModeCreate}},
+		graft:    func(dst *model.Model, src model.Model) { dst.Create = src.Create },
+		field:    func(m model.Model) model.Field { return m.Create.Field },
+		text:     func(m model.Model, _ model.Field) string { return m.Create.Title },
+		save:     []string{"ctrl+o"},
+		result:   func(_ model.Model, err error) model.Msg { return model.IssueCreated{Err: err} },
 		body: &cardBody{
 			target: model.EditCreateBody, save: "ctrl+o",
 			focus: func(m model.Model) model.Model {
@@ -153,12 +153,12 @@ func popupCards() []popupCard {
 		{
 			name: "Close", card: model.CardClose, quits: true, textField: model.CloseCommit,
 			tabOrder: []model.Field{model.CloseReason, model.CloseMessage, model.CloseCommit, model.ClosePR, model.CloseTest, model.CloseReference, model.CloseRationale},
-			states: []cardState{{"", opened("x"), model.ModeCloseForm}},
-			graft:  func(dst *model.Model, src model.Model) { dst.CloseForm = src.CloseForm },
-			field:  func(m model.Model) model.Field { return m.CloseForm.Field },
-			text:   func(m model.Model, f model.Field) string { return m.CloseForm.Values.Value(f) },
-			save:   []string{"ctrl+d"},
-			result: func(m model.Model, err error) model.Msg { return model.CloseResultMsg{UID: m.CloseForm.UID, Err: err} },
+			states:   []cardState{{"", opened("x"), model.ModeCloseForm}},
+			graft:    func(dst *model.Model, src model.Model) { dst.CloseForm = src.CloseForm },
+			field:    func(m model.Model) model.Field { return m.CloseForm.Field },
+			text:     func(m model.Model, f model.Field) string { return m.CloseForm.Values.Value(f) },
+			save:     []string{"ctrl+d"},
+			result:   func(m model.Model, err error) model.Msg { return model.CloseResultMsg{UID: m.CloseForm.UID, Err: err} },
 		},
 		{
 			name: "New Project", card: model.CardProject, quits: true,
@@ -176,9 +176,9 @@ func popupCards() []popupCard {
 		{
 			name: "Filter form", card: model.CardFilter, textField: model.FilterOwner,
 			tabOrder: []model.Field{model.FilterProject, model.FilterStatus, model.FilterOwner, model.FilterLabel, model.FilterRelationship},
-			states: []cardState{{"", opened("f"), model.ModeFilterForm}},
-			graft:  func(dst *model.Model, src model.Model) { dst.FilterForm = src.FilterForm },
-			field:  func(m model.Model) model.Field { return m.FilterForm.Field },
+			states:   []cardState{{"", opened("f"), model.ModeFilterForm}},
+			graft:    func(dst *model.Model, src model.Model) { dst.FilterForm = src.FilterForm },
+			field:    func(m model.Model) model.Field { return m.FilterForm.Field },
 			text: func(m model.Model, f model.Field) string {
 				if f == model.FilterLabel {
 					return m.FilterForm.Values.Label
