@@ -158,3 +158,14 @@ func TestNavigationReleasesExcludedCreatedIssue(t *testing.T) {
 		})
 	}
 }
+
+func TestCreatePasteNormalisesLineBreaks(t *testing.T) {
+	m := model.Model{Workspace: "workspace", Project: model.Project{ID: 7}}
+	m, _ = model.Update(m, model.KeyMsg{Chord: "shift+n"})
+	m, _ = model.Update(m, model.KeyMsg{Text: "a\r\nb\rc"})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "tab"})
+	m, _ = model.Update(m, model.KeyMsg{Text: "x\r\ny\rz"})
+	if m.Create.Title != "a b c" || m.Create.Editor.Text != "x\ny\nz" {
+		t.Fatalf("title %q body %q", m.Create.Title, m.Create.Editor.Text)
+	}
+}

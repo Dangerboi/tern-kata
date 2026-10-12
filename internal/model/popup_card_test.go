@@ -134,7 +134,7 @@ func TestPopupCardSharedBehaviour(t *testing.T) {
 		})
 		t.Run(c.name+"/paste is flattened", func(t *testing.T) {
 			m := typeKeys(focused(), model.KeyMsg{Text: "one\ntwo\r\nthree"})
-			if got := c.text(m, c.textField); got != "one two  three" {
+			if got := c.text(m, c.textField); got != "one two three" {
 				t.Fatalf("pasted: %q", got)
 			}
 		})

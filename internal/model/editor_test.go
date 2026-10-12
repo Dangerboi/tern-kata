@@ -56,6 +56,14 @@ func TestDraftSequences(t *testing.T) {
 		{"live detail preserves Draft", []model.Msg{key("e"), typed, model.DetailLoaded{UID: "a", Selected: &g.UISelectedAuthority{Issue: &latest}}}, "a😀blocal", model.ModeEditor, true, nil},
 		{"comment save", []model.Msg{key("c"), typed, key("meta+o")}, "local", model.ModeEditor, true, model.SaveDraft{Workspace: "/repo", UID: "a", ProjectID: 2, BaseRevision: 7, Text: "local", Comment: true}},
 		{"external editor", []model.Msg{key("e"), key("ctrl+e")}, "a😀b", model.ModeEditor, true, model.OpenDraftEditor{UID: "a", Text: "a😀b"}},
+		{"CRLF paste", []model.Msg{key("e"), model.KeyMsg{Chord: "paste", Text: "x\r\ny\rz"}}, "a😀bx\ny\nz", model.ModeEditor, true, nil},
+		{"plain paste unchanged", []model.Msg{key("e"), model.KeyMsg{Chord: "paste", Text: "x\ny"}}, "a😀bx\ny", model.ModeEditor, true, nil},
+		{"CRLF paste then Home", []model.Msg{key("e"), model.KeyMsg{Chord: "paste", Text: "x\r\ny"}, key("home"), model.KeyMsg{Text: "Z"}}, "a😀bx\nZy", model.ModeEditor, true, nil},
+		{"CRLF paste then Up", []model.Msg{key("e"), model.KeyMsg{Chord: "paste", Text: "x\r\ny"}, key("up"), model.KeyMsg{Text: "Z"}}, "aZ😀bx\ny", model.ModeEditor, true, nil},
+		{"CRLF paste then Up End", []model.Msg{key("e"), model.KeyMsg{Chord: "paste", Text: "x\r\ny"}, key("up"), key("end"), model.KeyMsg{Text: "Z"}}, "a😀bxZ\ny", model.ModeEditor, true, nil},
+		{"CRLF paste then Up Down", []model.Msg{key("e"), model.KeyMsg{Chord: "paste", Text: "x\r\ny"}, key("up"), key("down"), model.KeyMsg{Text: "Z"}}, "a😀bx\nyZ", model.ModeEditor, true, nil},
+		{"CRLF paste undo is one step", []model.Msg{key("e"), model.KeyMsg{Chord: "paste", Text: "x\r\ny\rz"}, key("ctrl+z")}, "a😀b", model.ModeEditor, true, nil},
+		{"external CRLF", []model.Msg{key("e"), model.DraftEditorClosed{UID: "a", Text: "one\r\ntwo\rthree"}}, "one\ntwo\nthree", model.ModeEditor, true, nil},
 		{"external edit undo", []model.Msg{key("e"), model.DraftEditorClosed{UID: "a", Text: "external"}, key("ctrl+z")}, "a😀b", model.ModeEditor, true, nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
