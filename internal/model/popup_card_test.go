@@ -45,7 +45,8 @@ type popupCard struct {
 	graft func(dst *model.Model, src model.Model)
 	// multiline cards edit a body, not a single-line text field.
 	multiline bool
-	textField model.Field // a text field of the card
+	textField model.Field   // a text field of the card
+	tabOrder  []model.Field // the card's fields in tab order, written out; nil for one field
 	field     func(model.Model) model.Field
 	text      func(model.Model, model.Field) string
 	// save submits the card; result answers it with an error. Nil when the card does not save.
@@ -91,6 +92,7 @@ func asking(c popupCard) func() model.Model {
 func popupCards() []popupCard {
 	create := popupCard{
 		name: "Create", card: model.CardCreate, textField: model.CreateTitle,
+		tabOrder: []model.Field{model.CreateTitle, model.CreateBody, model.CreateLabels, model.CreateOwner, model.CreatePriority},
 		states: []cardState{{"", openedCreate, model.ModeCreate}},
 		graft:  func(dst *model.Model, src model.Model) { dst.Create = src.Create },
 		field:  func(m model.Model) model.Field { return m.Create.Field },
@@ -150,6 +152,7 @@ func popupCards() []popupCard {
 		},
 		{
 			name: "Close", card: model.CardClose, quits: true, textField: model.CloseCommit,
+			tabOrder: []model.Field{model.CloseReason, model.CloseMessage, model.CloseCommit, model.ClosePR, model.CloseTest, model.CloseReference, model.CloseRationale},
 			states: []cardState{{"", opened("x"), model.ModeCloseForm}},
 			graft:  func(dst *model.Model, src model.Model) { dst.CloseForm = src.CloseForm },
 			field:  func(m model.Model) model.Field { return m.CloseForm.Field },
@@ -172,6 +175,7 @@ func popupCards() []popupCard {
 		},
 		{
 			name: "Filter form", card: model.CardFilter, textField: model.FilterOwner,
+			tabOrder: []model.Field{model.FilterProject, model.FilterStatus, model.FilterOwner, model.FilterLabel, model.FilterRelationship},
 			states: []cardState{{"", opened("f"), model.ModeFilterForm}},
 			graft:  func(dst *model.Model, src model.Model) { dst.FilterForm = src.FilterForm },
 			field:  func(m model.Model) model.Field { return m.FilterForm.Field },
@@ -196,16 +200,6 @@ func popupCards() []popupCard {
 			text:   func(m model.Model, _ model.Field) string { return m.Filters.Search },
 		},
 	}
-}
-
-// fieldNames is the field names a card declares, in tab order.
-func fieldNames(card model.Card) []model.Field {
-	specs, _ := model.CardFields(card)
-	names := make([]model.Field, len(specs))
-	for i, spec := range specs {
-		names[i] = spec.Name
-	}
-	return names
 }
 
 func typeKeys(m model.Model, keys ...model.KeyMsg) model.Model {
@@ -271,18 +265,21 @@ func TestPopupCardSharedBehaviour(t *testing.T) {
 				t.Fatalf("click on an unknown field focused %q", got)
 			}
 		})
-		if fields := fieldNames(c.card); len(fields) > 1 {
+		if fields := c.tabOrder; len(fields) > 0 {
 			t.Run(c.name+"/field cycling wraps", func(t *testing.T) {
 				m := c.open()
 				m, _ = model.Update(m, model.FocusFieldMsg{Field: fields[0]})
-				for range fields {
+				for i := 1; i <= len(fields); i++ {
 					m, _ = clickPress(m, "tab")
+					if got, want := c.field(m), fields[i%len(fields)]; got != want {
+						t.Fatalf("tab %d reached %q, want %q", i, got, want)
+					}
 				}
-				if got := c.field(m); got != fields[0] {
-					t.Fatalf("%d tabs from %q reached %q", len(fields), fields[0], got)
-				}
-				if m, _ = clickPress(m, "shift+tab"); c.field(m) != fields[len(fields)-1] {
-					t.Fatalf("shift+tab from %q reached %q", fields[0], c.field(m))
+				for i := len(fields) - 1; i >= 0; i-- {
+					m, _ = clickPress(m, "shift+tab")
+					if got, want := c.field(m), fields[i]; got != want {
+						t.Fatalf("shift+tab to index %d reached %q, want %q", i, got, want)
+					}
 				}
 			})
 		}
@@ -366,11 +363,12 @@ func TestPopupCardStates(t *testing.T) {
 
 // Of any two cards open at once, the earlier one in the order is on top and owns the mode.
 func TestPopupCardOrder(t *testing.T) {
+	// The order is spelled out here, not read from model.Cards().
 	var cards []popupCard
-	for _, card := range model.Cards() {
-		i := slices.IndexFunc(popupCards(), func(c popupCard) bool { return c.card == card })
+	for _, name := range []string{"Create", "Draft editor", "single-field form", "Close", "New Project", "Filter form", "Menu"} {
+		i := slices.IndexFunc(popupCards(), func(c popupCard) bool { return c.name == name })
 		if i < 0 {
-			t.Fatalf("card %d has no row", card)
+			t.Fatalf("card %q has no row", name)
 		}
 		cards = append(cards, popupCards()[i])
 	}
