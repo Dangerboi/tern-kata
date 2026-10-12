@@ -1,4 +1,4 @@
-# Closing the help sheet gives the columns back as they were (spec h9k4, story 25): the detail and the Issue list
+# Closing the help sheet gives the columns back as they were: the detail and the Issue list
 # stay scrolled where they were. Own Project and Issues; it cleans up.
 hs_y() { ctl tree "$1" | jq -r '.nodes[0].rect[1] // empty | floor'; }
 hs_title="[data-id='main.columns.detail.viewport.content.heading.title']"

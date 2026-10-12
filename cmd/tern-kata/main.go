@@ -82,7 +82,7 @@ eventLoop:
 				return err
 			}
 		}
-		// One Send per op, so each goes out in its own frame as before: Tern needs the first tab reveal laid out before the second (19-yd2n).
+		// One Send per op, so each goes out in its own frame as before: Tern needs the first tab reveal laid out before the second.
 		for _, op := range out.Ops {
 			if err := surface.Send(op); err != nil {
 				return err

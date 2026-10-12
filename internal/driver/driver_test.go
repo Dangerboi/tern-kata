@@ -343,7 +343,7 @@ func TestSearchKeepsItsCaretWhileACollectionLoads(t *testing.T) {
 }
 
 // Tern keeps the node of the last reveal in view and ignores the wheel past it, so nothing but a
-// tab switch may reveal inside the detail (ef39): not a click on the title or a row, a jump, a
+// tab switch may reveal inside the detail: not a click on the title or a row, a jump, a
 // Collection switch, a resize, a key move in the detail, or a live refresh of the shown Issue.
 func TestOnlyATabSwitchRevealsInsideTheDetail(t *testing.T) {
 	peer := "peer"

@@ -1,6 +1,6 @@
 # The detail is one scroll container: with the detail focused the wheel, ↓ and pgdn reach the end of a
 # long body, ↑ and pgup come back, the top bar never moves, a key move in the detail leaves the wheel
-# working (Tern pins a reveal's target, so the detail reveals only for a tab switch, 19-yd2n), and a different Issue opens at its
+# working (Tern pins a reveal's target, so the detail reveals only for a tab switch), and a different Issue opens at its
 # top. Own Project and Issues; it cleans up.
 vp_rects() { ctl tree "[data-id='main.columns.detail.viewport'],[data-id='main.columns.detail.viewport.content']" | jq -c '[.nodes[].rect]'; }
 # How far the content is scrolled and how much is left below the viewport's bottom edge, in px.

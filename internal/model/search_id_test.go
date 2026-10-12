@@ -68,12 +68,12 @@ func found(t *testing.T, m model.Model, lookup model.LookupSearchID, uid string,
 }
 
 func TestSearchByID(t *testing.T) {
-	for _, typed := range []string{"0zpn", "#0zpn", "0ZPN"} {
+	for _, typed := range []string{"4kxn", "#4kxn", "4KXN"} {
 		t.Run(typed, func(t *testing.T) {
 			m := idSearching(idCollection, typed)
 			m, cmds := model.Update(m, model.KeyMsg{Text: typed[len(typed)-1:]})
 			lookup := cmdOf[model.LookupSearchID](t, cmds)
-			if want := (model.LookupSearchID{Workspace: "/repo", ProjectID: 7, ShortID: "0zpn", Request: m.RefreshRequest}); lookup != want {
+			if want := (model.LookupSearchID{Workspace: "/repo", ProjectID: 7, ShortID: "4kxn", Request: m.RefreshRequest}); lookup != want {
 				t.Fatalf("lookup: %+v, want %+v", lookup, want)
 			}
 			if !reflect.DeepEqual(listed(m), []string{"a", "b", "c"}) {
@@ -91,7 +91,7 @@ func TestSearchByID(t *testing.T) {
 }
 
 func TestSearchThatIsNotAnIDRunsFullText(t *testing.T) {
-	for _, typed := range []string{"Search target", "abc", "0zpl", "0zpn link"} {
+	for _, typed := range []string{"Search target", "abc", "4kxl", "4kxn link"} {
 		t.Run(typed, func(t *testing.T) {
 			m := idSearching(idCollection, typed)
 			_, cmds := model.Update(m, model.KeyMsg{Text: typed[len(typed)-1:]})
@@ -103,16 +103,16 @@ func TestSearchThatIsNotAnIDRunsFullText(t *testing.T) {
 }
 
 func TestUnknownIDRunsFullText(t *testing.T) {
-	m := idSearching(idCollection, "0zpn")
+	m := idSearching(idCollection, "4kxn")
 	m, cmds := model.Update(m, model.KeyMsg{Text: "n"})
 	m, refresh := found(t, m, cmdOf[model.LookupSearchID](t, cmds), "", "a", "c")
-	if refresh.Query.Text == nil || *refresh.Query.Text != "0zpn" || !reflect.DeepEqual(listed(m), []string{"a", "c"}) {
+	if refresh.Query.Text == nil || *refresh.Query.Text != "4kxn" || !reflect.DeepEqual(listed(m), []string{"a", "c"}) {
 		t.Fatalf("unknown id: query %+v, rows %v", refresh.Query, listed(m))
 	}
 }
 
 func TestTypingPastAnIDReturnsToFullText(t *testing.T) {
-	m := idSearching(idCollection, "0zpn")
+	m := idSearching(idCollection, "4kxn")
 	m, cmds := model.Update(m, model.KeyMsg{Text: "n"})
 	m, _ = found(t, m, cmdOf[model.LookupSearchID](t, cmds), "b", "a", "b", "c")
 	for _, key := range []model.KeyMsg{{Chord: "space"}, {Text: "l"}} {
@@ -120,13 +120,13 @@ func TestTypingPastAnIDReturnsToFullText(t *testing.T) {
 		refresh := cmdOf[model.ReadSnapshot](t, cmds)
 		m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: idSnapshot("a", "c")})
 	}
-	if m.Filters.Search != "0zpn l" || !reflect.DeepEqual(listed(m), []string{"a", "c"}) {
+	if m.Filters.Search != "4kxn l" || !reflect.DeepEqual(listed(m), []string{"a", "c"}) {
 		t.Fatalf("typing past the id: search %q, rows %v", m.Filters.Search, listed(m))
 	}
 }
 
 func TestStaleIDLookupNeverReplacesNewerQuery(t *testing.T) {
-	m := idSearching(idCollection, "0zpn")
+	m := idSearching(idCollection, "4kxn")
 	m, cmds := model.Update(m, model.KeyMsg{Text: "n"})
 	lookup := cmdOf[model.LookupSearchID](t, cmds)
 	for _, key := range []model.KeyMsg{{Chord: "space"}, {Text: "l"}} {
@@ -136,12 +136,12 @@ func TestStaleIDLookupNeverReplacesNewerQuery(t *testing.T) {
 	}
 	superseded := lookup
 	superseded.Request--
-	if m, cmds = model.Update(m, model.SearchIDLooked{Request: superseded.Request, ShortID: "0zpn", UID: "b"}); len(cmds) != 0 {
+	if m, cmds = model.Update(m, model.SearchIDLooked{Request: superseded.Request, ShortID: "4kxn", UID: "b"}); len(cmds) != 0 {
 		t.Fatalf("a superseded lookup was answered: %#v", cmds)
 	}
 	m, cmds = model.Update(m, model.SearchIDLooked{Request: lookup.Request, ShortID: lookup.ShortID, UID: "b"})
 	refresh := cmdOf[model.ReadSnapshot](t, cmds)
-	if refresh.Query.Text == nil || *refresh.Query.Text != "0zpn l" || !reflect.DeepEqual(listed(m), []string{"a", "b", "c"}) {
+	if refresh.Query.Text == nil || *refresh.Query.Text != "4kxn l" || !reflect.DeepEqual(listed(m), []string{"a", "b", "c"}) {
 		t.Fatalf("stale lookup: query %+v, rows %v", refresh.Query, listed(m))
 	}
 	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: idSnapshot("a")})
@@ -178,7 +178,7 @@ func TestSearchByIDInCollections(t *testing.T) {
 		{"other Collection without the Issue", idDeadlines, []string{"a", "c"}, []string{"a", "c"}, true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			m := idSearching(tt.collection, "0zpn")
+			m := idSearching(tt.collection, "4kxn")
 			m, cmds := model.Update(m, model.KeyMsg{Text: "n"})
 			lookup := cmdOf[model.LookupSearchID](t, cmds)
 			if lookup.ProjectID != 7 {
@@ -189,7 +189,7 @@ func TestSearchByIDInCollections(t *testing.T) {
 			m, cmds = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: idSnapshot(tt.inside...)})
 			if tt.fullText {
 				refresh = cmdOf[model.ReadSnapshot](t, cmds)
-				if refresh.Query.Text == nil || *refresh.Query.Text != "0zpn" {
+				if refresh.Query.Text == nil || *refresh.Query.Text != "4kxn" {
 					t.Fatalf("an id outside the Collection did not fall back to full text: %+v", refresh.Query)
 				}
 				m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: idSnapshot(tt.want...)})
@@ -202,7 +202,7 @@ func TestSearchByIDInCollections(t *testing.T) {
 }
 
 func TestIDResultKeepsSearchKeysAndLiveRefresh(t *testing.T) {
-	m := idSearching(idCollection, "0zpn")
+	m := idSearching(idCollection, "4kxn")
 	m, cmds := model.Update(m, model.KeyMsg{Text: "n"})
 	m, _ = found(t, m, cmdOf[model.LookupSearchID](t, cmds), "b", "a", "b", "c")
 	m, cmds = model.Update(m, model.StreamEvent{Generation: 1, ID: 1, Type: "issue.updated"})
@@ -219,14 +219,14 @@ func TestIDResultKeepsSearchKeysAndLiveRefresh(t *testing.T) {
 		mode  model.Mode
 	}{{"down", model.ModeSearchResults}, {"escape", model.ModeSearch}, {"enter", model.ModeSearchResults}, {"enter", model.ModeList}} {
 		m, cmds = model.Update(m, model.KeyMsg{Chord: step.chord})
-		if m.CurrentMode() != step.mode || m.SelectedUID != "b" || m.Filters.Search != "0zpn" || !reflect.DeepEqual(listed(m), []string{"b"}) {
+		if m.CurrentMode() != step.mode || m.SelectedUID != "b" || m.Filters.Search != "4kxn" || !reflect.DeepEqual(listed(m), []string{"b"}) {
 			t.Fatalf("%s: mode %s, selected %q, search %q, rows %v, cmds %#v", step.chord, m.CurrentMode(), m.SelectedUID, m.Filters.Search, listed(m), cmds)
 		}
 	}
 }
 
 func TestCollectionSwitchLooksTheIDUpAgain(t *testing.T) {
-	m := idSearching(idCollection, "0zpn")
+	m := idSearching(idCollection, "4kxn")
 	m, cmds := model.Update(m, model.KeyMsg{Text: "n"})
 	m, _ = found(t, m, cmdOf[model.LookupSearchID](t, cmds), "b", "a", "b", "c")
 	m, cmds = model.Update(m, model.CollectionSelected{Collection: idDeadlines})
@@ -237,14 +237,14 @@ func TestCollectionSwitchLooksTheIDUpAgain(t *testing.T) {
 }
 
 func TestRetypedIDIsLookedUpAgain(t *testing.T) {
-	m := idSearching(idCollection, "0zpn")
+	m := idSearching(idCollection, "4kxn")
 	m, cmds := model.Update(m, model.KeyMsg{Text: "n"})
 	m, _ = found(t, m, cmdOf[model.LookupSearchID](t, cmds), "", "a")
 	m, cmds = model.Update(m, model.KeyMsg{Chord: "space"})
 	refresh := cmdOf[model.ReadSnapshot](t, cmds)
 	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: idSnapshot("a")})
 	_, cmds = model.Update(m, model.KeyMsg{Chord: "backspace"})
-	if lookup := cmdOf[model.LookupSearchID](t, cmds); lookup.ShortID != "0zpn" {
+	if lookup := cmdOf[model.LookupSearchID](t, cmds); lookup.ShortID != "4kxn" {
 		t.Fatalf("retyped id: %+v", lookup)
 	}
 }
