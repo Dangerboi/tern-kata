@@ -160,7 +160,7 @@ func TestNavigationReleasesExcludedCreatedIssue(t *testing.T) {
 }
 
 func TestCreatePasteNormalisesLineBreaks(t *testing.T) {
-	m := model.Model{Workspace: "workspace", Project: model.Project{ID: 7}}
+	m := model.Model{Workspace: "workspace", Actor: "actor", Project: model.Project{ID: 7}, SelectedUID: "parent", Issues: []model.Issue{{UID: "parent", ProjectID: 7}}}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "shift+n"})
 	m, _ = model.Update(m, model.KeyMsg{Text: "a\r\nb\rc"})
 	m, _ = model.Update(m, model.KeyMsg{Chord: "tab"})
