@@ -42,13 +42,16 @@ local function deliver(cx: WindowCx, pane: number)
 end
 
 -- Startup-failure rule, the plugin's half of the contract with cmd/tern-kata: a kata Pane failing within 2 s with
--- status 2 (Go panic) or 3 (the binary's own error) means tern-kata ran and failed; any other failing status is the
--- shell's own not-found code (127, 9009, or 1 in PowerShell), so it is not installed or not on PATH.
+-- status 2 (Go panic) or 3 (the binary's own error) means tern-kata ran and failed. Status 1 can be either: it is
+-- PowerShell's not-found code, and on Windows Tern reports every failing launch as 1, so tern-kata's 3 never arrives.
+-- Any other failing status is the shell's own not-found code (127, 9009), so it is not installed or not on PATH.
 local function exitedRightAway(cx: WindowCx, pane: number, status: number)
     fresh[pane] = nil
     if status == 0 then return end
     if status == 2 or status == 3 then
         cx:toast("error", "tern-kata failed to start", "Run tern-kata in a shell to see why")
+    elseif status == 1 then
+        cx:toast("error", "tern-kata didn't start", "If it isn't installed: go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest. Otherwise run tern-kata in a shell to see why")
     else
         cx:toast("error", "tern-kata is not installed or not on PATH", "go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest")
     end

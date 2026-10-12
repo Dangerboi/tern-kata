@@ -47,12 +47,14 @@ toast_shown() { ctl tree | jq -e --arg text "$1" 'tostring | contains($text)' >/
 expect_no_toast() {
   if toast_shown "$1"; then echo "unexpected toast: $1" >&2; return 1; fi
 }
-# The two startup-failure toasts, told apart by these fragments: which one shows is the contract with the binary.
+# The startup-failure toasts, told apart by these fragments: which one shows is the contract with the binary.
 failed_start_toast='tern-kata failed to start'
 not_installed_toast='tern-kata is not installed'
+didnt_start_toast="tern-kata didn't start"
 expect_no_kata_toast() {
   expect_no_toast "$failed_start_toast"
   expect_no_toast "$not_installed_toast"
+  expect_no_toast "$didnt_start_toast"
 }
 expect_toast() {
   printf 'run "true"\n' >"$tmp/pump.ctl"
@@ -246,36 +248,39 @@ done
 [[ $seen == 1 && $panes == 1 ]] || { echo "failing tern-kata Pane did not close (seen=$seen panes=$panes)" >&2; exit 1; }
 expect_no_kata_toast
 # A launch of tern-kata that fails inside the 2 s window closes its Pane and toasts by exit status: 2 (Go panic) and 3
-# (the binary's own error) are a failed start; anything else, including 1 (PowerShell's not-found) and 127, is "not installed".
+# (the binary's own error) are a failed start; 1 can be either (PowerShell's not-found, and Windows reports every failing
+# launch as 1); anything else, such as 127, is "not installed".
 wait_no_kata_toast() {
   for ((attempt=0; attempt<100; attempt++)); do
-    if ! toast_shown "$failed_start_toast" && ! toast_shown "$not_installed_toast"; then return 0; fi
+    if ! toast_shown "$failed_start_toast" && ! toast_shown "$not_installed_toast" && ! toast_shown "$didnt_start_toast"; then return 0; fi
     ctl --file "$tmp/pump.ctl"
     sleep 0.1
   done
   echo "kata toast did not clear" >&2
   return 1
 }
-expect_launch_toast() { # $1 the toast that must show, $2 the one that must not
+expect_launch_toast() { # $1 the one startup-failure toast that must show
   wait_no_kata_toast
   ctl plugins run plugin.tern-kata.open
   ctl focus left
   expect_toast "$1"
-  expect_no_toast "$2"
+  for toast in "$failed_start_toast" "$not_installed_toast" "$didnt_start_toast"; do
+    [[ $toast == "$1" ]] || expect_no_toast "$toast"
+  done
   expect_panes 1
 }
 for status in 2 3; do
   printf '#!/bin/sh\nexit %s\n' "$status" >"$tmp/pane-bin/tern-kata"
-  expect_launch_toast "$failed_start_toast" "$not_installed_toast"
+  expect_launch_toast "$failed_start_toast"
 done
-for status in 1 127; do
-  printf '#!/bin/sh\nexit %s\n' "$status" >"$tmp/pane-bin/tern-kata"
-  expect_launch_toast "$not_installed_toast" "$failed_start_toast"
-done
+printf '#!/bin/sh\nexit 1\n' >"$tmp/pane-bin/tern-kata"
+expect_launch_toast "$didnt_start_toast"
+printf '#!/bin/sh\nexit 127\n' >"$tmp/pane-bin/tern-kata"
+expect_launch_toast "$not_installed_toast"
 # The real binary failing before it connects exits 3, which reads as a failed start.
 printf '#!/bin/sh\necho start\nexec %q --issue\n' "$tmp/app/tern-kata" >"$tmp/pane-bin/tern-kata"
-expect_launch_toast "$failed_start_toast" "$not_installed_toast"
+expect_launch_toast "$failed_start_toast"
 rm "$tmp/pane-bin/tern-kata"
-expect_launch_toast "$not_installed_toast" "$failed_start_toast"
+expect_launch_toast "$not_installed_toast"
 jq -Rse 'contains("plugin window halves loaded count=1") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
 printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, shell-syntax Project link, quick quit without toast, links into Panes started by full path, backslash path and title alone, a longer name not matched, startup-failure and not-installed toasts by exit status\n'
