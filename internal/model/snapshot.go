@@ -34,6 +34,7 @@ type SnapshotLoaded struct {
 	ETag                string
 	NotModified         bool
 	LocalDate, TimeZone string
+	TimeZoneNote        string // set when UTC stands in for an unknown or unloadable zone
 }
 
 func (SnapshotLoaded) msg() {}
@@ -154,7 +155,7 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 	var cmds []Cmd
 	if !msg.NotModified {
 		if msg.LocalDate != "" {
-			m.LocalDate, m.TimeZone = msg.LocalDate, msg.TimeZone
+			m.LocalDate, m.TimeZone, m.TimeZoneNote = msg.LocalDate, msg.TimeZone, msg.TimeZoneNote
 		}
 		selected, cursorChild := m.SelectedUID, m.cursorChildUID()
 		m = m.applyCollection(msg.Snapshot, msg.ChildCounts).snapshotArrived(msg.Snapshot.Selected, selected, cursorChild)

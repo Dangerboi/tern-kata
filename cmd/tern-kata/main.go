@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+	_ "time/tzdata" // zone database for hosts without one, such as Windows
 
 	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/driver"

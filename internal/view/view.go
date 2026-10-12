@@ -178,16 +178,23 @@ func topBar(m model.Model) tern.Element {
 	headingCell := flexCell("heading", tone, 0)
 	headingCell.Title, headingCell.Actions = "Menu (p)", &ui.Actions{Click: KeyClick("p")}
 	rightCell := flexCell("right", ui.ToneNeutral, 100)
+	var zoneNote []tern.Element
+	if m.TimeZoneNote != "" {
+		zoneNote = ui.Nodes(
+			ui.Text{Common: flexCell("zone-note", ui.ToneWarning, 0), Text: m.TimeZoneNote, Wrap: ui.WrapNone},
+			ui.Text{Common: flexCell("zone-sep", ui.ToneMuted, 0), Text: model.DaemonSeparator, Wrap: ui.WrapNone},
+		)
+	}
 	return ui.Row{Common: ui.Common{Key: "topbar", Hidden: m.HelpOpen}, Gap: ui.GapMD, Justify: ui.JustifyBetween, Children: ui.Nodes(
 		ui.Row{Common: flexCell("left", ui.ToneNeutral, 0), Gap: ui.GapSM, Children: ui.Nodes(
 			ui.Text{Common: headingCell, Spans: heading, Wrap: ui.WrapNone},
 		)},
 		ui.Text{Common: flexCell("counts", ui.ToneMuted, 1), Text: m.CountsLine(), Wrap: ui.WrapNone},
-		ui.Row{Common: rightCell, Gap: ui.GapNone, Children: ui.Nodes(
+		ui.Row{Common: rightCell, Gap: ui.GapNone, Children: append(zoneNote, ui.Nodes(
 			ui.Text{Common: flexCell("daemon", ui.ToneMuted, 100), Text: m.DaemonLine(), Wrap: ui.WrapNone},
 			ui.Text{Common: flexCell("sep", ui.ToneMuted, 0), Text: model.DaemonSeparator, Wrap: ui.WrapNone},
 			menuButton(),
-		)},
+		)...)},
 	)}
 }
 

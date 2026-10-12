@@ -44,6 +44,7 @@ type Model struct {
 	Focus               Column
 	Groups              []IssueGroup
 	LocalDate, TimeZone string
+	TimeZoneNote        string
 	HelpOpen            bool
 	Flat                bool
 	ExpandedUIDs        map[string]bool
