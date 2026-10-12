@@ -47,9 +47,12 @@ toast_shown() { ctl tree | jq -e --arg text "$1" 'tostring | contains($text)' >/
 expect_no_toast() {
   if toast_shown "$1"; then echo "unexpected toast: $1" >&2; return 1; fi
 }
+# The two startup-failure toasts, told apart by these fragments: which one shows is the contract with the binary.
+failed_start_toast='tern-kata failed to start'
+not_installed_toast='tern-kata is not installed'
 expect_no_kata_toast() {
-  expect_no_toast 'tern-kata is not installed'
-  expect_no_toast 'tern-kata exited with status'
+  expect_no_toast "$failed_start_toast"
+  expect_no_toast "$not_installed_toast"
 }
 expect_toast() {
   printf 'run "true"\n' >"$tmp/pump.ctl"
@@ -129,13 +132,16 @@ expect_panes 1
 # A quit inside the 2 s window is a clean exit too, not a startup failure.
 expect_no_kata_toast
 # A real OSC-8 terminal link exercises route.link, not a plugin-origin cx:open.
-click_issue_link() {
+show_issue_link() {
   command="printf '\\033[2J\\033[H\\033]8;;$1\\007Plugin link\\033]8;;\\007\\n'"
   printf 'run %s\n' "$(jq -rRn --arg command "$command" '$command | @json')" >"$tmp/link.ctl"
   ctl --file "$tmp/link.ctl"
   ctl expect Plugin
   ctl tree '.tv-grid' >"$tmp/link-tree.json"
   read -r x y < <(jq -r '.nodes[0].rect | "\(.[0]+4) \(.[1]+8)"' "$tmp/link-tree.json")
+}
+click_issue_link() {
+  show_issue_link "$1"
   ctl click "$x" "$y" cmd
 }
 click_issue_link "kata://smoke/$first"
@@ -157,6 +163,44 @@ expect_panes 2
 ctl key q
 expect_panes 1
 expect_no_kata_toast
+# A Pane started by hand through a full path is a kata Pane too: a link focuses it and opens no second Pane. The stand-in
+# never sets the Pane title, so only its program name can identify it; the real binary (through its wrapper script) shows
+# the Issue is selected in it.
+standin_dir="$tmp/standin"
+mkdir -p "$standin_dir"
+# It prints while it waits for Enter so frames keep coming, or ctl focus would stall.
+printf '#!/bin/bash\nwhile ! read -t 0.2 line; do echo tick; done\n' >"$standin_dir/tern-kata"
+# A file name that holds backslashes stands for a Windows path: Linux has no .exe files, but the program name Tern
+# reports is what the plugin splits.
+cp "$standin_dir/tern-kata" "$standin_dir/C:\\Tools\\tern-kata.exe"
+chmod +x "$standin_dir"/*
+# ctl focus stalls while a hand-started Pane runs, so the link is shown before the split and clicked in place.
+link_focuses_pane() { # $1 the shell word that starts the Pane, $2 optional text its surface shows once up
+  show_issue_link "kata://smoke/$first"
+  ctl split right
+  ctl ready
+  printf 'run %s\n' "$(jq -rRn --arg command "$1" '$command | @json')" >"$tmp/start.ctl"
+  ctl --file "$tmp/start.ctl"
+  [[ -z "${2:-}" ]] || ctl plugins expect "$2"
+  started=$(ctl state | jq -r '.focused.id')
+  ctl click "$x" "$y" cmd
+  ctl state >"$tmp/full-path.json"
+  jq -e --argjson id "$started" '.tabs[0].panes == 2 and .focused.id == $id' "$tmp/full-path.json" >/dev/null
+}
+# The program ends back at the shell prompt, so the Pane is closed by hand.
+end_hand_started_pane() { # $1 the key that ends the program
+  ctl key "$1"
+  ctl ready
+  ctl close
+  expect_panes 1
+}
+link_focuses_pane "$standin_dir/tern-kata"
+end_hand_started_pane Enter
+link_focuses_pane "$standin_dir/C:\\\\Tools\\\\tern-kata.exe"
+end_hand_started_pane Enter
+link_focuses_pane "$tmp/pane-bin/tern-kata" Daemon
+ctl plugins expect '"Plugin first body"'
+end_hand_started_pane q
 # A tern-kata that fails after the 2 s window still closes its Pane, with no install toast. The stub prints while it
 # runs so frames (and the 2 s window) advance, and ctl can focus the original Pane before the stub exits.
 printf '#!/bin/sh\ni=0\nwhile [ $i -lt 30 ]; do echo tick; sleep 0.2; i=$((i+1)); done\nexit 1\n' >"$tmp/pane-bin/tern-kata"
@@ -171,17 +215,34 @@ for ((attempt=0; attempt<100; attempt++)); do
 done
 [[ $seen == 1 && $panes == 1 ]] || { echo "failing tern-kata Pane did not close (seen=$seen panes=$panes)" >&2; exit 1; }
 expect_no_kata_toast
-# A tern-kata failing inside the 2 s window closes its Pane and toasts its status.
-printf '#!/bin/sh\nexit 3\n' >"$tmp/pane-bin/tern-kata"
-ctl plugins run plugin.tern-kata.open
-ctl focus left
-expect_toast 'tern-kata exited with status 3'
-expect_panes 1
+# A launch of tern-kata that fails inside the 2 s window closes its Pane and toasts by exit status: 2 (Go panic) and 3
+# (the binary's own error) are a failed start; anything else, including 1 (PowerShell's not-found) and 127, is "not installed".
+wait_no_kata_toast() {
+  for ((attempt=0; attempt<100; attempt++)); do
+    if ! toast_shown "$failed_start_toast" && ! toast_shown "$not_installed_toast"; then return 0; fi
+    ctl --file "$tmp/pump.ctl"
+    sleep 0.1
+  done
+  echo "kata toast did not clear" >&2
+  return 1
+}
+expect_launch_toast() { # $1 the toast that must show, $2 the one that must not
+  wait_no_kata_toast
+  ctl plugins run plugin.tern-kata.open
+  ctl focus left
+  expect_toast "$1"
+  expect_no_toast "$2"
+  expect_panes 1
+}
+for status in 2 3; do
+  printf '#!/bin/sh\nexit %s\n' "$status" >"$tmp/pane-bin/tern-kata"
+  expect_launch_toast "$failed_start_toast" "$not_installed_toast"
+done
+for status in 1 127; do
+  printf '#!/bin/sh\nexit %s\n' "$status" >"$tmp/pane-bin/tern-kata"
+  expect_launch_toast "$not_installed_toast" "$failed_start_toast"
+done
 rm "$tmp/pane-bin/tern-kata"
-ctl plugins run plugin.tern-kata.open
-ctl focus left
-expect_toast 'tern-kata is not installed'
-expect_toast 'go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest'
-expect_panes 1
+expect_launch_toast "$not_installed_toast" "$failed_start_toast"
 jq -Rse 'contains("plugin window halves loaded count=1") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
-printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, shell-syntax Project link, quick quit without toast, startup-failure and missing-binary toasts\n'
+printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, shell-syntax Project link, quick quit without toast, links into Panes started by full and backslash path, startup-failure and not-installed toasts by exit status\n'

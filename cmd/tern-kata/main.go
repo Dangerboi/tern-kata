@@ -19,7 +19,10 @@ import (
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "tern-kata:", err)
-		os.Exit(1)
+		// Pane contract with window.luau: the Pane title is `tern-kata` (set in run) and this binary's own failures
+		// exit 3; Go exits 2 on a panic. The plugin reads 2 and 3 as "failed to start", any other early failing status
+		// as "not installed", so a failure must never exit with some other status.
+		os.Exit(3)
 	}
 }
 

@@ -5,10 +5,16 @@ local fresh: { [number]: boolean } = {}
 -- Issue reference per new kata Pane, sent over TSP once its surface is live, so it never passes through a shell.
 local pending: { [number]: string? } = {}
 
+-- A kata Pane has the title `tern-kata` (which the binary sets), or a program whose file name is tern-kata or
+-- tern-kata.exe, split on either path separator so Windows paths match. A longer name merely containing it does not.
+local function isKataProgram(program: string?): boolean
+    if program == nil then return false end
+    local name = (program:match("[^/\\]*$") or ""):lower()
+    return name == "tern-kata" or name == "tern-kata.exe"
+end
+
 local function isKata(info: PaneInfo?): boolean
-    return info ~= nil and info.exited == nil
-        and (info.title == "tern-kata" or info.program == "tern-kata"
-            or (info.program ~= nil and info.program:match("/tern%-kata$") ~= nil))
+    return info ~= nil and info.exited == nil and (info.title == "tern-kata" or isKataProgram(info.program))
 end
 
 local function existingPane(cx: WindowCx): number?
@@ -35,12 +41,15 @@ local function deliver(cx: WindowCx, pane: number)
     end
 end
 
+-- Startup-failure rule, the plugin's half of the contract with cmd/tern-kata: a kata Pane failing within 2 s with
+-- status 2 (Go panic) or 3 (the binary's own error) means tern-kata ran and failed; any other failing status is the
+-- shell's own not-found code (127, 9009, or 1 in PowerShell), so it is not installed or not on PATH.
 local function exitedRightAway(cx: WindowCx, pane: number, status: number)
     fresh[pane] = nil
-    if status == 127 then -- the shell's "command not found"
-        cx:toast("error", "tern-kata is not installed", "go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest")
+    if status == 2 or status == 3 then
+        cx:toast("error", "tern-kata failed to start", "Run tern-kata in a shell to see why")
     else
-        cx:toast("error", "tern-kata exited with status " .. tostring(status), "Run tern-kata in a shell to see why")
+        cx:toast("error", "tern-kata is not installed or not on PATH", "go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest")
     end
 end
 
