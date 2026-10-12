@@ -107,7 +107,7 @@ func TestPlanLaunchGitLookupOnlyWhenNeeded(t *testing.T) {
 }
 
 func TestPlanLaunchVersion(t *testing.T) {
-	for _, args := range [][]string{{"--version"}, {"--as"}, {"--issue", "bad", "--version"}, {"--bogus", "--version", "--as"}} {
+	for _, args := range [][]string{{"--version"}, {"--as", "--version"}, {"--issue", "bad", "--version"}, {"--bogus", "--version", "--as"}} {
 		plan, err := PlanLaunch(args, lookupFrom(nil), "1.2.3")
 		if err != nil || plan.Version != "1.2.3" || plan.FallbackArgs != nil {
 			t.Errorf("PlanLaunch(%q) = %+v, %v; want version plan", args, plan, err)
