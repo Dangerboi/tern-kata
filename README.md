@@ -46,4 +46,12 @@ CGO_ENABLED=0 go build -o tern-kata ./cmd/tern-kata
 CGO_ENABLED=0 go test ./...
 ./smoke/run.sh      # end-to-end against a headless Tern and a throwaway kata daemon
 tern plugin link .  # use this checkout as the window plugin
+tern plugin reload  # exits 1 if a plugin fails to load; window failures show only as a toast
+```
+
+`window.luau` is `--!strict`. To type-check it against the installed Tern's API (needs [luau-lsp](https://github.com/JohnnyMorganz/luau-lsp)):
+
+```sh
+tern plugin types .  # writes tern.d.luau (gitignored; regenerate per Tern version)
+luau-lsp analyze --platform=standard --definitions=@tern=tern.d.luau --ignore=tern.d.luau window.luau
 ```

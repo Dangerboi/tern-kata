@@ -1,15 +1,17 @@
-local kataPane = nil
-local fresh = {}
--- Issue reference per new kata Pane, sent over TSP once its surface is live, so it never passes through a shell.
-local pending = {}
+--!strict
 
-local function isKata(info)
-    return info and info.exited == nil
+local kataPane: number? = nil
+local fresh: { [number]: boolean } = {}
+-- Issue reference per new kata Pane, sent over TSP once its surface is live, so it never passes through a shell.
+local pending: { [number]: string? } = {}
+
+local function isKata(info: PaneInfo?): boolean
+    return info ~= nil and info.exited == nil
         and (info.title == "tern-kata" or info.program == "tern-kata"
-            or (info.program and info.program:match("/tern%-kata$")))
+            or (info.program ~= nil and info.program:match("/tern%-kata$") ~= nil))
 end
 
-local function existingPane(cx)
+local function existingPane(cx: WindowCx): number?
     if kataPane and isKata(cx.session:pane(kataPane)) then return kataPane end
     for _, info in cx.session:panes() do
         if isKata(info) then
@@ -21,11 +23,11 @@ local function existingPane(cx)
     return nil
 end
 
-local function selectIssue(cx, pane, ref)
+local function selectIssue(cx: WindowCx, pane: number, ref: string)
     cx.session:event(pane, {ev = "action", id = "main.columns.list.issues", act = "select-issue", value = ref})
 end
 
-local function deliver(cx, pane)
+local function deliver(cx: WindowCx, pane: number)
     local ref = pending[pane]
     if ref and cx.session:surface(pane) then
         pending[pane] = nil
@@ -33,7 +35,7 @@ local function deliver(cx, pane)
     end
 end
 
-local function exitedRightAway(cx, pane, status)
+local function exitedRightAway(cx: WindowCx, pane: number, status: number)
     fresh[pane] = nil
     if status == 127 then -- the shell's "command not found"
         cx:toast("error", "tern-kata is not installed", "go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest")
@@ -43,12 +45,12 @@ local function exitedRightAway(cx, pane, status)
 end
 
 -- After the window, a failing exit still closes the Pane (spec), silently: poll once a second until it is gone or replaced.
-local function reap(pane)
+local function reap(pane: number)
     tern.timer(1000, function(cx)
         if not cx or kataPane ~= pane then return end
         local info = cx.session:pane(pane)
         if not info then return end
-        if info.exited ~= nil then return cx.layout:close(pane) end
+        if info.exited ~= nil then cx.layout:close(pane); return end
         deliver(cx, pane)
         reap(pane)
     end)
@@ -57,7 +59,7 @@ end
 -- A kata Pane exited with a failure within the first 2 s (20 ticks of 100 ms) means the binary is missing or failed at
 -- startup. Tern closes the Pane on a clean exit (a quick quit is fine) but keeps it, marked exited, on a failing one,
 -- so close it here.
-local function watch(pane, ticks)
+local function watch(pane: number, ticks: number)
     fresh[pane] = true
     tern.timer(100, function(cx)
         if not cx or not fresh[pane] then return end
@@ -65,14 +67,15 @@ local function watch(pane, ticks)
         if not info then fresh[pane] = nil; return end
         if info.exited ~= nil then
             exitedRightAway(cx, pane, info.exited)
-            return cx.layout:close(pane)
+            cx.layout:close(pane)
+            return
         end
         deliver(cx, pane)
         if ticks > 1 then watch(pane, ticks - 1) else fresh[pane] = nil; reap(pane) end
     end)
 end
 
-local function open(cx, ref)
+local function open(cx: WindowCx, ref: string?)
     if ref then
         local pane = existingPane(cx)
         if pane then
@@ -111,7 +114,7 @@ tern.route.link(function(link, cx)
     -- Tern's chat markdown links https but not custom schemes; .invalid never resolves, so only this route opens it.
     if not project then project, shortID = link.url:match("^https://kata%.invalid/([^/]+)/([^/?#]+)$") end
     -- References are literal URL segments: encoded or ambiguous separators are declined.
-    if not project or project:find("[?#%%\\]") or shortID:find("[%%\\]")
+    if not project or not shortID or project:find("[?#%%\\]") or shortID:find("[%%\\]")
         or (project .. shortID):find("[%z\r\n]") then return nil end
     open(cx, project .. "/" .. shortID)
     return {handled = true}
