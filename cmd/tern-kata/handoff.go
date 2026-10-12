@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
@@ -29,7 +31,28 @@ func openSurface(session *tern.Session) (*tern.Surface, error) {
 	return surface, nil
 }
 
-func editExternally(cmd model.OpenDraftEditor) model.DraftEditorClosed {
+// handOff gives the terminal to $EDITOR for the Draft and returns the editor result with the resumed Tern session pieces.
+func handOff(ctx context.Context, draft model.OpenDraftEditor, session *tern.Session, surface *tern.Surface, stopInput func(), inputs chan<- any, inputErrors chan<- error) (model.DraftEditorClosed, *tern.Session, *tern.Surface, func(), error) {
+	var none model.DraftEditorClosed
+	stopInput()
+	surface.Close()
+	// The Session must be closed first: Suspend leaves its stdin pump and raw mode active.
+	session.Close()
+	result := editDraft(draft, editorCommand)
+	next, err := tern.Connect(ctx, editorOptions())
+	if err != nil {
+		return none, nil, nil, nil, err
+	}
+	nextSurface, err := openSurface(next)
+	if err != nil {
+		next.Close()
+		return none, nil, nil, nil, err
+	}
+	return result, next, nextSurface, startInputReader(ctx, next, inputs, inputErrors), nil
+}
+
+// editDraft round-trips the Draft text through a temp file edited by the command build returns.
+func editDraft(cmd model.OpenDraftEditor, build func(editor, file string) *exec.Cmd) model.DraftEditorClosed {
 	result := model.DraftEditorClosed{UID: cmd.UID, Text: cmd.Text}
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
@@ -51,13 +74,11 @@ func editExternally(cmd model.OpenDraftEditor) model.DraftEditorClosed {
 		result.Err = err
 		return result
 	}
-	// The Session must be closed first: Suspend leaves its stdin pump and raw mode active.
-	process := editorCommand(editor, file.Name())
+	process := build(editor, file.Name())
 	process.Stdin = os.Stdin
 	process.Stdout = os.Stdout
 	process.Stderr = os.Stderr
-	err = process.Run()
-	if err != nil {
+	if err := process.Run(); err != nil {
 		result.Err = fmt.Errorf("$EDITOR: %w; original Draft kept", err)
 		return result
 	}

@@ -86,22 +86,12 @@ eventLoop:
 		}
 		for _, cmd := range out.Cmds {
 			if external, ok := cmd.(model.OpenDraftEditor); ok {
-				stopInput()
-				surface.Close()
-				session.Close()
-				input = editExternally(external)
-				nextSession, connectErr := tern.Connect(ctx, editorOptions())
-				if connectErr != nil {
-					return connectErr
+				var handErr error
+				input, session, surface, stopInput, handErr = handOff(ctx, external, session, surface, stopInput, inputs, inputErrors)
+				if handErr != nil {
+					return handErr
 				}
-				nextSurface, openErr := openSurface(nextSession)
-				if openErr != nil {
-					nextSession.Close()
-					return openErr
-				}
-				session, surface = nextSession, nextSurface
 				state = state.Fresh()
-				stopInput = startInputReader(ctx, session, inputs, inputErrors)
 				continue eventLoop
 			}
 			go gateway.Run(ctx, cmd, results)
