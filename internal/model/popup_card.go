@@ -5,9 +5,19 @@ import (
 	"unicode/utf8"
 )
 
-// FocusFieldMsg is the pointer putting focus on field Field of the open popup card, so the keys
-// edit that field as they do after tab moves there.
-type FocusFieldMsg struct{ Field int }
+// Field names one field of a multi-field popup card; a card lists its fields in tab order.
+type Field string
+
+// FieldSpec is one field of a popup card: Name addresses it and names its node, and Text says it
+// takes typed text.
+type FieldSpec struct {
+	Name Field
+	Text bool
+}
+
+// FocusFieldMsg is the pointer putting focus on the field called Field of the open popup card, so
+// the keys edit that field as they do after tab moves there.
+type FocusFieldMsg struct{ Field Field }
 
 func (FocusFieldMsg) msg() {}
 
@@ -172,11 +182,11 @@ func answerDiscard(d Draft, binding Binding, bound bool) (Draft, bool) {
 }
 
 // cardFields is the field list of the open popup card that has several: Field is the focused
-// index, Count the length of the list, and Locked says the card takes no focus change (it is
+// field, List the fields in tab order, and Locked says the card takes no focus change (it is
 // saving or asking to discard).
 type cardFields struct {
-	Field  *int
-	Count  int
+	Field  *Field
+	List   []FieldSpec
 	Locked bool
 }
 
@@ -184,27 +194,37 @@ type cardFields struct {
 func openCardFields(m *Model) (cardFields, bool) {
 	switch m.TopCard() {
 	case CardCreate:
-		return cardFields{&m.Create.Field, len(CreateFields), m.Create.Saving || m.Create.DiscardConfirm}, true
+		return cardFields{&m.Create.Field, CreateFields, m.Create.Saving || m.Create.DiscardConfirm}, true
 	case CardClose:
-		return cardFields{&m.CloseForm.Field, len(m.CloseForm.Values), m.CloseForm.Saving}, true
+		return cardFields{&m.CloseForm.Field, CloseFields, m.CloseForm.Saving}, true
 	case CardFilter:
-		return cardFields{Field: &m.FilterForm.Field, Count: len(FilterFields)}, true
+		return cardFields{Field: &m.FilterForm.Field, List: FilterFields}, true
 	}
 	return cardFields{}, false
 }
 
-// focusField puts focus on field of the open card; an index outside its field list is ignored.
-func focusField(m Model, field int) Model {
-	if fields, ok := openCardFields(&m); ok && !fields.Locked && field >= 0 && field < fields.Count {
-		*fields.Field = field
+// focusField puts focus on the field called name of the open card; a name outside its field list is ignored.
+func focusField(m Model, name Field) Model {
+	if fields, ok := openCardFields(&m); ok && !fields.Locked && takesFocus(fields.List, name) {
+		*fields.Field = name
 	}
 	return m
+}
+
+func takesFocus(list []FieldSpec, name Field) bool {
+	return slices.ContainsFunc(list, func(f FieldSpec) bool { return f.Name == name })
+}
+
+// takesText reports whether the field called name in list takes typed text.
+func takesText(list []FieldSpec, name Field) bool {
+	return slices.ContainsFunc(list, func(f FieldSpec) bool { return f.Name == name && f.Text })
 }
 
 // cycleField moves focus step fields on, wrapping around the open card's field list.
 func cycleField(m *Model, step int) {
 	if fields, ok := openCardFields(m); ok && !fields.Locked {
-		*fields.Field = ((*fields.Field+step)%fields.Count + fields.Count) % fields.Count
+		at := max(slices.IndexFunc(fields.List, func(f FieldSpec) bool { return f.Name == *fields.Field }), 0)
+		*fields.Field = fields.List[((at+step)%len(fields.List)+len(fields.List))%len(fields.List)].Name
 	}
 }
 

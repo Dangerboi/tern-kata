@@ -49,16 +49,10 @@ func textFocusID(m model.Model) string {
 // queued focus, reveal or scroll op and the next render, so that Tern's
 // "unknown id" answer for it is expected.
 func transientTarget(id string) bool {
-	if _, ok := view.CreateFieldIndex(id); ok {
+	if _, ok := view.FieldFromID(id); ok {
 		return true
 	}
 	if id == view.FieldInputID || id == view.SearchID || id == view.DraftEditorID || id == view.PickerFilterID || id == view.ProjectInputID {
-		return true
-	}
-	if _, ok := view.FilterFieldIndex(id); ok {
-		return true
-	}
-	if _, ok := view.CloseFieldIndex(id); ok {
 		return true
 	}
 	if view.IsIssueID(id) {

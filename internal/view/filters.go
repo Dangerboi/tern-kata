@@ -8,65 +8,54 @@ import (
 
 const SearchID = "main.columns.list.search"
 
-// FilterFieldID is the id of the Filter form's field index.
-func FilterFieldID(index int) string { return "layer.filters." + model.FilterFields[index].Key }
+// FilterFieldID is the id of the Filter form's field called name.
+func FilterFieldID(name model.Field) string { return "layer.filters." + string(name) }
 
-func FilterFieldIndex(id string) (int, bool) {
-	for index := range model.FilterFields {
-		if id == FilterFieldID(index) {
-			return index, true
+var filterTitles = map[model.Field]string{
+	model.FilterProject:      "Project",
+	model.FilterStatus:       "Status",
+	model.FilterOwner:        "Owner",
+	model.FilterLabel:        "Label (comma-separated, any match)",
+	model.FilterRelationship: "Relationship",
+}
+
+// filterText is what the Filter form shows in the field called name.
+func filterText(m model.Model, name model.Field) string {
+	values := m.FilterForm.Values
+	switch name {
+	case model.FilterProject:
+		if values.ProjectUID != "" {
+			return m.ProjectFilterName(values.ProjectUID)
 		}
+		return "Any Project in this Collection"
+	case model.FilterStatus:
+		return model.FilterChoiceLabel(model.FilterStatuses, values.Status)
+	case model.FilterOwner:
+		return values.Owner
+	case model.FilterLabel:
+		return values.Label
+	case model.FilterRelationship:
+		return model.FilterChoiceLabel(model.FilterRelationships, values.Relationship)
 	}
-	return 0, false
+	return ""
 }
 
 func filterLayer(m model.Model) tern.Element {
 	if !m.FilterForm.Open {
 		return nil
 	}
-	values := m.FilterForm.Values
-	project := "Any Project in this Collection"
-	if values.ProjectUID != "" {
-		project = m.ProjectFilterName(values.ProjectUID)
-	}
-	status := "all"
-	if values.Status != "" {
-		status = values.Status
-	}
-	relationship := "Any"
-	switch values.Relationship {
-	case "parent":
-		relationship = "Has parent"
-	case "child":
-		relationship = "Has child"
-	case "blocks":
-		relationship = "Blocks"
-	case "blocked_by":
-		relationship = "Blocked by"
-	case "related":
-		relationship = "Related"
-	}
-	fields := []struct {
-		key, title, text string
-		readonly         bool
-	}{
-		{"project", "Project", project, true},
-		{"status", "Status", status, true},
-		{"owner", "Owner", values.Owner, false},
-		{"label", "Label (comma-separated, any match)", values.Label, false},
-		{"relationship", "Relationship", relationship, true},
-	}
-	children := make([]tern.Element, 0, len(fields))
-	for index, field := range fields {
+	children := make([]tern.Element, 0, len(model.FilterFields)+1)
+	for _, field := range model.FilterFields {
 		tone := ui.ToneNeutral
-		prompt := field.title + ": "
-		if index == m.FilterForm.Field {
+		title := filterTitles[field.Name]
+		prompt := title + ": "
+		if field.Name == m.FilterForm.Field {
 			tone = ui.ToneAccent
 			prompt = "> " + prompt
 		}
 		children = append(children, ui.Input{
-			Common: ui.Common{Key: field.key, Tone: tone, Aria: field.title},
-			Field:  ui.Field{Text: field.text, Mode: "insert", Readonly: field.readonly, Prompt: []ui.Span{{T: prompt}}, Placeholder: "Any"},
+			Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: title},
+			Field:  ui.Field{Text: filterText(m, field.Name), Mode: "insert", Readonly: !field.Text, Prompt: []ui.Span{{T: prompt}}, Placeholder: "Any"},
 		})
 	}
 	children = append(children, buttonRow(keyButton("apply", "Apply filters", "ctrl+o", true), keyButton("cancel", "Cancel", "escape", false)))

@@ -25,7 +25,7 @@ func updateFilterAction(m Model, action Action) (Model, []Cmd) {
 		m.SelectedUID = ""
 		return snapshotChanged(m)
 	case OpenFilterForm:
-		m.FilterForm = FilterFormState{Open: true, Values: m.Filters}
+		m.FilterForm = FilterFormState{Open: true, Field: FilterFields[0].Name, Values: m.Filters}
 	case CycleStatus:
 		switch m.Filters.Status {
 		case "open":

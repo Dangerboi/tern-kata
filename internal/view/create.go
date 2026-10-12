@@ -7,16 +7,15 @@ import (
 	"strings"
 )
 
-// CreateFieldID is the id of the Create card's field index.
-func CreateFieldID(index int) string { return "layer.create." + model.CreateFields[index].Key }
+// CreateFieldID is the id of the Create card's field called name.
+func CreateFieldID(name model.Field) string { return "layer.create." + string(name) }
 
-func CreateFieldIndex(id string) (int, bool) {
-	for i := range model.CreateFields {
-		if id == CreateFieldID(i) {
-			return i, true
-		}
-	}
-	return 0, false
+var createLabels = map[model.Field]string{
+	model.CreateTitle:    "Title",
+	model.CreateBody:     "Body (optional)",
+	model.CreateLabels:   "Labels (optional, comma-separated)",
+	model.CreateOwner:    "Owner (optional)",
+	model.CreatePriority: "Priority (optional, 0-4)",
 }
 
 func createLayer(m model.Model) tern.Element {
@@ -25,24 +24,24 @@ func createLayer(m model.Model) tern.Element {
 	if f.ParentUID != "" {
 		title = "Create child Issue"
 	}
-	values := [...]string{f.Title, f.Editor.Text, f.Labels, f.Owner, f.Priority}
-	names := [...]string{"Title", "Body (optional)", "Labels (optional, comma-separated)", "Owner (optional)", "Priority (optional, 0-4)"}
+	values := map[model.Field]string{model.CreateTitle: f.Title, model.CreateLabels: f.Labels, model.CreateOwner: f.Owner, model.CreatePriority: f.Priority}
 	children := []tern.Element{}
-	for i, field := range model.CreateFields {
-		key := field.Key
+	for _, field := range model.CreateFields {
+		key := string(field.Name)
+		label := createLabels[field.Name]
 		tone := ui.ToneNeutral
-		if i == f.Field {
+		if field.Name == f.Field {
 			tone = ui.ToneAccent
 		}
-		children = append(children, ui.Text{Common: ui.Common{Key: key + "-label", Tone: tone}, Text: names[i]})
+		children = append(children, ui.Text{Common: ui.Common{Key: key + "-label", Tone: tone}, Text: label})
 		readonly := f.Saving || f.DiscardConfirm
-		if i == 1 {
+		if field.Name == model.CreateBody {
 			children = append(children, TextEditor(key, f.Editor, readonly))
 		} else {
-			children = append(children, ui.Input{Common: ui.Common{Key: key, Tone: tone, Aria: names[i]}, Field: ui.Field{Text: values[i], Mode: "insert", Readonly: readonly}})
+			children = append(children, ui.Input{Common: ui.Common{Key: key, Tone: tone, Aria: label}, Field: ui.Field{Text: values[field.Name], Mode: "insert", Readonly: readonly}})
 		}
 	}
-	if f.Field == 2 {
+	if f.Field == model.CreateLabels {
 		children = append(children, ui.Text{Common: ui.Common{Key: "completion", Tone: ui.ToneMuted}, Text: strings.Join(m.CreateSuggestions(), ", ")})
 	}
 	if f.Err != nil {

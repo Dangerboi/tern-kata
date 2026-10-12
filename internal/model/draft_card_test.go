@@ -28,7 +28,10 @@ func draftCards() []draftCard {
 	return []draftCard{
 		{
 			name: "Create", open: openedCreate, target: model.EditCreateBody, save: "ctrl+o",
-			body:    func(m model.Model) model.Model { m, _ = model.Update(m, model.FocusFieldMsg{Field: 1}); return m },
+			body: func(m model.Model) model.Model {
+				m, _ = model.Update(m, model.FocusFieldMsg{Field: model.CreateBody})
+				return m
+			},
 			text:    func(m model.Model) string { return m.Create.Editor.Text },
 			present: func(m model.Model) bool { return m.Create.Open },
 			fail:    func(_ model.Model, err error) model.Msg { return model.IssueCreated{Err: err} },
@@ -113,7 +116,7 @@ func TestDraftCardsSaveErrorKeepsTheDraft(t *testing.T) {
 			m := c.body(c.open())
 			m = typed(typed(m, "k"), "p")
 			if c.name == "Create" {
-				m, _ = model.Update(m, model.FocusFieldMsg{Field: 0})
+				m, _ = model.Update(m, model.FocusFieldMsg{Field: model.CreateTitle})
 				m = typed(m, "t")
 			}
 			m, cmds := clickPress(m, c.save)

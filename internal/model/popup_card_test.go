@@ -12,10 +12,10 @@ import (
 type popupCard struct {
 	name      string
 	open      func() model.Model
-	fields    int // number of fields; focus cycling is checked when above 1
-	textField int // a text field of the card
-	field     func(model.Model) int
-	text      func(model.Model, int) string
+	fields    []model.Field // the fields in tab order; focus cycling is checked when there are several
+	textField model.Field   // a text field of the card
+	field     func(model.Model) model.Field
+	text      func(model.Model, model.Field) string
 	// save submits the card; result answers it with an error. Nil when the card does not save.
 	save   []string
 	result func(model.Model, error) model.Msg
@@ -39,59 +39,67 @@ func openedCreate() model.Model {
 func popupCards() []popupCard {
 	return []popupCard{
 		{
-			name: "Close", open: opened("x"), fields: 7, textField: 2, cleared: true,
-			field:  func(m model.Model) int { return m.CloseForm.Field },
-			text:   func(m model.Model, f int) string { return m.CloseForm.Values[f] },
+			name: "Close", open: opened("x"), fields: fieldNames(model.CloseFields), textField: model.CloseCommit, cleared: true,
+			field:  func(m model.Model) model.Field { return m.CloseForm.Field },
+			text:   func(m model.Model, f model.Field) string { return m.CloseForm.Values.Value(f) },
 			save:   []string{"ctrl+d"},
 			result: func(m model.Model, err error) model.Msg { return model.CloseResultMsg{UID: m.CloseForm.UID, Err: err} },
 		},
 		{
-			name: "single-field form", open: opened("+"), fields: 1, cleared: true,
-			field:  func(model.Model) int { return 0 },
-			text:   func(m model.Model, _ int) string { return m.FieldForm.Value },
+			name: "single-field form", open: opened("+"), cleared: true,
+			field:  func(model.Model) model.Field { return "" },
+			text:   func(m model.Model, _ model.Field) string { return m.FieldForm.Value },
 			save:   []string{"enter"},
 			result: func(m model.Model, err error) model.Msg { return model.FieldWritten{UID: m.FieldForm.UID, Err: err} },
 		},
 		{
-			name: "New Project", fields: 1,
+			name: "New Project",
 			open: func() model.Model {
 				m, _ := model.Update(clickAt(model.ColumnList), model.CollectionPointerSelected{Key: model.NewProjectKey})
 				m, _ = clickPress(m, "ctrl+u")
 				return m
 			},
-			field:  func(model.Model) int { return 0 },
-			text:   func(m model.Model, _ int) string { return m.ProjectForm.Name },
+			field:  func(model.Model) model.Field { return "" },
+			text:   func(m model.Model, _ model.Field) string { return m.ProjectForm.Name },
 			save:   []string{"enter"},
 			result: func(_ model.Model, err error) model.Msg { return model.ProjectSaved{Err: err} },
 		},
 		{
-			name: "Filter form", open: opened("f"), fields: 5, textField: 2, cleared: true,
-			field: func(m model.Model) int { return m.FilterForm.Field },
-			text: func(m model.Model, f int) string {
-				if f == 3 {
+			name: "Filter form", open: opened("f"), fields: fieldNames(model.FilterFields), textField: model.FilterOwner, cleared: true,
+			field: func(m model.Model) model.Field { return m.FilterForm.Field },
+			text: func(m model.Model, f model.Field) string {
+				if f == model.FilterLabel {
 					return m.FilterForm.Values.Label
 				}
 				return m.FilterForm.Values.Owner
 			},
 		},
 		{
-			name: "Menu", open: opened("p"), fields: 1, cleared: true,
-			field: func(model.Model) int { return 0 },
-			text:  func(m model.Model, _ int) string { return m.Picker.Filter },
+			name: "Menu", open: opened("p"), cleared: true,
+			field: func(model.Model) model.Field { return "" },
+			text:  func(m model.Model, _ model.Field) string { return m.Picker.Filter },
 		},
 		{
-			name: "Search", open: opened("/"), fields: 1, cleared: true,
-			field: func(model.Model) int { return 0 },
-			text:  func(m model.Model, _ int) string { return m.Filters.Search },
+			name: "Search", open: opened("/"), cleared: true,
+			field: func(model.Model) model.Field { return "" },
+			text:  func(m model.Model, _ model.Field) string { return m.Filters.Search },
 		},
 		{
-			name: "Create", open: openedCreate, fields: 5, textField: 0, cleared: true,
-			field:  func(m model.Model) int { return m.Create.Field },
-			text:   func(m model.Model, _ int) string { return m.Create.Title },
+			name: "Create", open: openedCreate, fields: fieldNames(model.CreateFields), textField: model.CreateTitle, cleared: true,
+			field:  func(m model.Model) model.Field { return m.Create.Field },
+			text:   func(m model.Model, _ model.Field) string { return m.Create.Title },
 			save:   []string{"ctrl+o"},
 			result: func(_ model.Model, err error) model.Msg { return model.IssueCreated{Err: err} },
 		},
 	}
+}
+
+func fieldNames(specs []model.FieldSpec) []model.Field {
+	names := make([]model.Field, len(specs))
+	for i, spec := range specs {
+		names[i] = spec.Name
+	}
+	return names
 }
 
 func typeKeys(m model.Model, keys ...model.KeyMsg) model.Model {
@@ -147,25 +155,26 @@ func TestPopupCardSharedBehaviour(t *testing.T) {
 		})
 		t.Run(c.name+"/click focuses the field", func(t *testing.T) {
 			if got := c.field(focused()); got != c.textField {
-				t.Fatalf("focused field %d, want %d", got, c.textField)
+				t.Fatalf("focused field %q, want %q", got, c.textField)
 			}
-			m, _ := model.Update(c.open(), model.FocusFieldMsg{Field: c.fields})
-			if got := c.field(m); got >= c.fields {
-				t.Fatalf("click past the last field focused %d", got)
+			open := c.open()
+			m, _ := model.Update(open, model.FocusFieldMsg{Field: "no-such-field"})
+			if got := c.field(m); got != c.field(open) {
+				t.Fatalf("click on an unknown field focused %q", got)
 			}
 		})
-		if c.fields > 1 {
+		if len(c.fields) > 1 {
 			t.Run(c.name+"/field cycling wraps", func(t *testing.T) {
 				m := c.open()
-				m, _ = model.Update(m, model.FocusFieldMsg{Field: 0})
+				m, _ = model.Update(m, model.FocusFieldMsg{Field: c.fields[0]})
 				for range c.fields {
 					m, _ = clickPress(m, "tab")
 				}
-				if got := c.field(m); got != 0 {
-					t.Fatalf("%d tabs from field 0 reached %d", c.fields, got)
+				if got := c.field(m); got != c.fields[0] {
+					t.Fatalf("%d tabs from %q reached %q", len(c.fields), c.fields[0], got)
 				}
-				if m, _ = clickPress(m, "shift+tab"); c.field(m) != c.fields-1 {
-					t.Fatalf("shift+tab from field 0 reached %d", c.field(m))
+				if m, _ = clickPress(m, "shift+tab"); c.field(m) != c.fields[len(c.fields)-1] {
+					t.Fatalf("shift+tab from %q reached %q", c.fields[0], c.field(m))
 				}
 			})
 		}

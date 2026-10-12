@@ -33,7 +33,7 @@ func TestCloseCardKeepsItsFieldWhileSaving(t *testing.T) {
 	field := m.CloseForm.Field
 	for _, chord := range []string{"tab", "shift+tab"} {
 		if m, _ = model.Update(m, model.KeyMsg{Chord: chord}); m.CloseForm.Field != field {
-			t.Fatalf("%s moved the Close card's field from %d to %d while saving", chord, field, m.CloseForm.Field)
+			t.Fatalf("%s moved the Close card's field from %q to %q while saving", chord, field, m.CloseForm.Field)
 		}
 	}
 }

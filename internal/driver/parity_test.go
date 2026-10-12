@@ -230,9 +230,9 @@ func TestLayerClicksEndWhereTheirKeysEnd(t *testing.T) {
 		click *tern.Focus
 		keys  []string
 	}{
-		{"filters field", "f", &tern.Focus{ID: view.FilterFieldID(2)}, []string{"tab", "tab"}},
-		{"create field", "n", &tern.Focus{ID: view.CreateFieldID(3)}, []string{"tab", "tab", "tab"}},
-		{"close field", "x", &tern.Focus{ID: view.CloseFieldID(3)}, []string{"tab", "tab", "tab"}},
+		{"filters field", "f", &tern.Focus{ID: view.FilterFieldID(model.FilterOwner)}, []string{"tab", "tab"}},
+		{"create field", "n", &tern.Focus{ID: view.CreateFieldID(model.CreateOwner)}, []string{"tab", "tab", "tab"}},
+		{"close field", "x", &tern.Focus{ID: view.CloseFieldID(model.ClosePR)}, []string{"tab", "tab", "tab"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			open := pressed(clickAt(model.ColumnList), tt.open)
