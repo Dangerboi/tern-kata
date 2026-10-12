@@ -1,6 +1,16 @@
 # tern-kata
 
-Browse and edit kata Issues in a native [Tern](https://docs.stencil.so/tern/) Pane.
+Browse and edit [kata](https://katatracker.com/) Issues in a native [Tern](https://docs.stencil.so/tern/) Pane.
+
+kata ([source](https://github.com/kenn-io/kata)) is an issue tracker built for coding agents and the people steering them. Agents create, claim, relate and close Issues from its CLI, and people follow the same work in its terminal UI, `kata tui`. By default Issues live in a local SQLite database rather than in your repo, and no hosted service is needed. tern-kata shows that work in a Tern Pane drawn with Tern's own widgets instead of terminal text.
+
+The same example Project in tern-kata (top) and in `kata tui` (bottom), both running in Tern:
+
+![tern-kata showing the acme-shop Project with "Add Apple Pay to checkout" selected](docs/images/tern-kata.png)
+
+![kata tui showing the same Project and Issue](docs/images/kata-tui.png)
+
+In tern-kata, Issue bodies render as Markdown, priorities and labels show as chips, and rows, tabs and links respond to mouse clicks.
 
 ## How it works
 

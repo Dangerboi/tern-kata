@@ -28,7 +28,7 @@ at_body=$(for line in $(seq 40); do printf 'Body line %s\n\n' "$line"; done)
 kata --workspace "$at_dir" create "Tabs main" --body "$at_body" --blocked-by "$(jq -r '.issue.short_id' "$tmp/tabs-peer.json")" --json >"$tmp/tabs-main.json"
 at_main=$(jq -r '.issue.uid' "$tmp/tabs-main.json")
 at_peer=$(jq -r '.issue.uid' "$tmp/tabs-peer.json")
-for n in 1 2; do kata --workspace "$at_dir" comment "$(jq -r '.issue.short_id' "$tmp/tabs-main.json")" --body "Tabs comment $n" --json >/dev/null; done
+for n in 1 2; do kata --as dana --workspace "$at_dir" comment "$(jq -r '.issue.short_id' "$tmp/tabs-main.json")" --body "Tabs comment $n" --json >/dev/null; done
 
 quit_app
 printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$tmp/tabs-unbound" "$KATA_HOME" "$tmp" >"$tmp/tabs-launch.ctl"
@@ -47,7 +47,7 @@ ctl key enter
 at_label 0 'startswith("[ Comments (2) ]")'
 at_label 1 'test("^Events \\([0-9]+\\)$")'
 at_label 2 'startswith("Links (1)")'
-expect_tree "$at_cards .sf-t-strong" '.ok and .count == 2 and ([.nodes[].text] | all(. == "dangerboi"))'
+expect_tree "$at_cards .sf-t-strong" '.ok and .count == 2 and ([.nodes[].text] | all(. == "dana"))'
 expect_tree "$at_cards .sf-t-muted" '.ok and .count == 2 and ([.nodes[].text] | all(test("^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$")))'
 
 # tab and shift+tab cycle Comments -> Events -> Links -> Comments.
