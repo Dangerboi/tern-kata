@@ -11,3 +11,7 @@ Default five-role vocabulary, applied as kata labels. See `docs/agents/triage-la
 ### Domain docs
 
 Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### Secret scan
+
+Before every commit, stage your changes and run `gitleaks git --pre-commit --staged --no-banner`. Don't commit if it reports leaks; remove the secret instead.
