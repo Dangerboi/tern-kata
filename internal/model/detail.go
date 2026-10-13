@@ -136,9 +136,9 @@ func (m Model) DetailRow(tab ActivityTab, index int) (DetailRow, bool) {
 // ChildRow is one row of the Children table. Key is the Link's, which is daemon-wide unique, so a
 // row's id never ends in the child's UID as the list row's does. A child that is not loaded has only its UID, Key and Ref.
 type ChildRow struct {
-	Key, UID, Ref, Title, Status string
-	UpdatedAt                    time.Time
-	Loaded, Closed               bool
+	Key, UID, Ref, Title, Status, Owner string
+	UpdatedAt                           time.Time
+	Loaded, Closed                      bool
 }
 
 // DetailChildren are the detail Issue's children: the loaded ones in the list's order, then
@@ -155,7 +155,11 @@ func (m Model) DetailChildren() []ChildRow {
 	rows := make([]ChildRow, 0, len(uids))
 	for _, issue := range m.Issues {
 		if link, ok := links[issue.UID]; ok {
-			rows = append(rows, ChildRow{Key: link.Key, UID: issue.UID, Ref: link.Ref, Title: issue.Title, Status: issue.Status, UpdatedAt: issue.UpdatedAt, Loaded: true, Closed: IsClosed(issue)})
+			owner := ""
+			if issue.Owner != nil {
+				owner = *issue.Owner
+			}
+			rows = append(rows, ChildRow{Key: link.Key, UID: issue.UID, Ref: link.Ref, Title: issue.Title, Status: issue.Status, Owner: owner, UpdatedAt: issue.UpdatedAt, Loaded: true, Closed: IsClosed(issue)})
 			delete(links, issue.UID)
 		}
 	}

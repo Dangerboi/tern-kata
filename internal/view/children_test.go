@@ -23,12 +23,13 @@ const (
 )
 
 // parenting is a wide Pane on a parent "alpha" with three children: "kid" (open,
-// updated 38 minutes before testNow), "done" (closed, 3 hours before) and "ghost",
-// which is not in the Collection. The daemon counts 1 open of 3.
+// owned by dana, updated 38 minutes before testNow), "done" (closed, unowned, 3 hours
+// before) and "ghost", which is not in the Collection. The daemon counts 1 open of 3.
 func parenting(tab model.ActivityTab) model.Model {
 	parent := alpha
 	parent.Body = "The parent's body."
-	kid := model.Issue{UID: "kid", ShortID: "kidd", Title: "Open kid", Status: "open", ProjectName: "work", UpdatedAt: testNow.Add(-38 * time.Minute)}
+	dana := "dana"
+	kid := model.Issue{UID: "kid", ShortID: "kidd", Title: "Open kid", Status: "open", ProjectName: "work", Owner: &dana, UpdatedAt: testNow.Add(-38 * time.Minute)}
 	done := model.Issue{UID: "done", ShortID: "done", Title: "Closed kid", Status: "closed", ProjectName: "work", UpdatedAt: testNow.Add(-3 * time.Hour)}
 	child := func(id int64, uid string) g.UILink {
 		return g.UILink{ID: id, Type: "parent", FromIssueUID: uid, FromQualifiedID: "work#" + uid, ToIssueUID: "alpha", ToQualifiedID: "work#aaaa"}
@@ -68,22 +69,22 @@ func TestChildrenTableSitsBetweenTheBodyAndActivity(t *testing.T) {
 	}
 }
 
-func TestChildRowsShowReferenceStatusTitleAndUpdatedInTheListsOrder(t *testing.T) {
+func TestChildRowsShowReferenceStatusTitleOwnerAndUpdatedInTheListsOrder(t *testing.T) {
 	nodes := render(t, parenting(model.TabComments))
 	var rows []string
 	for _, c := range nodes[childrenID].C {
-		if c.ID != childrenID+".heading" {
+		if c.ID != childrenID+".heading" && c.ID != childrenID+".header" {
 			rows = append(rows, c.ID)
 		}
 	}
 	if want := []string{kidRow, doneRow, ghostRow}; !slices.Equal(rows, want) {
 		t.Fatalf("rows = %v, want %v", rows, want)
 	}
-	for row, want := range map[string][4]string{
-		kidRow:  {"#kid\u00a0\u00a0", "open\u00a0\u00a0", "Open kid", "38m ago"},
-		doneRow: {"#done\u00a0", "closed", "Closed kid", "3h ago\u00a0"},
+	for row, want := range map[string][5]string{
+		kidRow:  {"#kid\u00a0\u00a0", "open\u00a0\u00a0", "Open kid", "dana\u00a0", "38m ago"},
+		doneRow: {"#done\u00a0", "closed", "Closed kid", "\u00a0\u00a0\u00a0\u00a0\u00a0", "3h ago\u00a0"},
 	} {
-		for i, cell := range []string{"jump", "status", "title", "updated"} {
+		for i, cell := range []string{"jump", "status", "title", "owner", "updated"} {
 			if got := text(nodes[row+"."+cell]); got != want[i] {
 				t.Errorf("%s %s = %q, want %q", row, cell, got, want[i])
 			}
@@ -91,9 +92,49 @@ func TestChildRowsShowReferenceStatusTitleAndUpdatedInTheListsOrder(t *testing.T
 	}
 }
 
+func TestChildCellsRunTicketStatusTitleOwnerUpdatedUnderALabelledHeader(t *testing.T) {
+	nodes := render(t, parenting(model.TabComments))
+	order := func(row string) (ids, labels []string) {
+		for _, c := range nodes[row].C {
+			ids = append(ids, strings.TrimPrefix(c.ID, row+"."))
+			labels = append(labels, strings.TrimRight(text(nodes[c.ID]), "\u00a0"))
+		}
+		return ids, labels
+	}
+	ids, labels := order(childrenID + ".header")
+	if want := []string{"jump", "status", "title", "owner", "updated"}; !slices.Equal(ids, want) {
+		t.Errorf("header cells = %v, want %v", ids, want)
+	}
+	if want := []string{"ticket", "status", "title", "owner", "updated"}; !slices.Equal(labels, want) {
+		t.Errorf("header labels = %v, want %v", labels, want)
+	}
+	if ids, _ := order(kidRow); !slices.Equal(ids, []string{"jump", "status", "title", "owner", "updated"}) {
+		t.Errorf("row cells = %v", ids)
+	}
+	for _, cell := range []string{"jump", "status", "owner", "updated"} {
+		h, r := text(nodes[childrenID+".header."+cell]), text(nodes[kidRow+"."+cell])
+		if utf8.RuneCountInString(h) != utf8.RuneCountInString(r) {
+			t.Errorf("%s header %q and row %q differ in width", cell, h, r)
+		}
+	}
+}
+
+// The shading is the Issue list's: the same role on every other drawn row, the first unshaded; the header is not shaded.
+func TestChildRowsAlternateTheListsShadingBelowAnUnshadedHeader(t *testing.T) {
+	nodes := render(t, parenting(model.TabComments))
+	if role := nodes[childrenID+".header"].P["role"]; role != nil {
+		t.Errorf("header role = %v, want none", role)
+	}
+	for row, want := range map[string]any{kidRow: nil, doneRow: view.StripeRole, ghostRow: nil} {
+		if got := nodes[row].P["role"]; got != want {
+			t.Errorf("%s role = %v, want %v", row, got, want)
+		}
+	}
+}
+
 func TestChildCellsArePaddedToTheWidestRowAndNeverWrap(t *testing.T) {
 	nodes := render(t, parenting(model.TabComments))
-	for _, cell := range []string{"jump", "status", "updated"} {
+	for _, cell := range []string{"jump", "status", "owner", "updated"} {
 		a, b := text(nodes[kidRow+"."+cell]), text(nodes[doneRow+"."+cell])
 		if utf8.RuneCountInString(a) != utf8.RuneCountInString(b) {
 			t.Errorf("%s widths differ: %q vs %q", cell, a, b)
@@ -106,7 +147,7 @@ func TestChildCellsArePaddedToTheWidestRowAndNeverWrap(t *testing.T) {
 
 func TestEveryChildCellJumpsToTheChild(t *testing.T) {
 	nodes := render(t, parenting(model.TabComments))
-	for _, cell := range []string{"jump", "status", "title", "updated"} {
+	for _, cell := range []string{"jump", "status", "title", "owner", "updated"} {
 		n := nodes[kidRow+"."+cell]
 		if click := n.P["actions"].(map[string]any)["click"]; click != view.JumpClick("kid") {
 			t.Errorf("%s click = %v", cell, click)
@@ -120,8 +161,8 @@ func TestClosedChildIsMutedAndOpenChildIsNot(t *testing.T) {
 	for _, tt := range []struct {
 		row, cell, want string
 	}{
-		{doneRow, "status", "muted"}, {doneRow, "title", "muted"}, {doneRow, "updated", "muted"},
-		{kidRow, "status", "accent"}, {kidRow, "title", ""}, {kidRow, "updated", "muted"},
+		{doneRow, "status", "muted"}, {doneRow, "title", "muted"}, {doneRow, "owner", "muted"}, {doneRow, "updated", "muted"},
+		{kidRow, "status", "accent"}, {kidRow, "title", ""}, {kidRow, "owner", "muted"}, {kidRow, "updated", "muted"},
 	} {
 		got := ""
 		for _, style := range spanStyles(t, nodes[tt.row+"."+tt.cell].P) {
