@@ -61,10 +61,10 @@ func (s ActivityTab) String() string {
 	return [...]string{"Comments", "Events", "Links"}[s]
 }
 
-// DetailRow is one row of an Activity tab. A Comment or Event row has its Author and Time (Model.DetailTime); a Link row has Relation and Ref
+// DetailRow is one row of an Activity tab (Type is a history event's kata type). A Comment or Event row has its Author and Time (Model.DetailTime); a Link row has Relation and Ref
 // instead; a history row also carries its sentence in parts.
 type DetailRow struct {
-	Key, Author, Time, Body, ReferenceUID string
+	Key, Type, Author, Time, Body, ReferenceUID string
 	// Ref is the referenced Issue's id as shown (#<short_id> in the detail Issue's Project), and Relation how it relates to the
 	// detail's Issue. RefTitle is that Issue's title when it is loaded.
 	Relation, Ref, RefTitle string
@@ -127,7 +127,8 @@ func (m Model) DetailRow(tab ActivityTab, index int) (DetailRow, bool) {
 		comment := m.authority.Comments[index]
 		return DetailRow{Key: comment.UID, Author: comment.Author, Time: m.DetailTime(comment.CreatedAt), Body: comment.Body}, true
 	case TabEvents:
-		return m.historyRow(m.authority.History[index]), true
+		// The snapshot lists History newest first; rows read oldest first, like Comments.
+		return m.historyRow(m.authority.History[len(m.authority.History)-1-index]), true
 	}
 	return DetailRow{}, false
 }

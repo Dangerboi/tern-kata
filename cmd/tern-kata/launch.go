@@ -20,6 +20,8 @@ type LaunchPlan struct {
 	Actor    string
 	// Version is non-empty when --version was given: main prints it and exits.
 	Version string
+	// Help is true when --help or -h was given: main prints usage and exits.
+	Help bool
 	// FallbackArgs are the arguments for `kata tui` when Tern is unsupported.
 	FallbackArgs []string
 	// fallbackAuthor is the --as actor exported to `kata tui`; empty leaves the environment untouched.
@@ -46,11 +48,14 @@ func resolveVersion(linker string, buildInfo func() (*debug.BuildInfo, bool)) st
 // buildVersion is this binary's version.
 func buildVersion() string { return resolveVersion(version, debug.ReadBuildInfo) }
 
-// PlanLaunch parses args (without the program name). --version anywhere wins over everything else. Unknown arguments pass through to `kata tui`.
+// PlanLaunch parses args (without the program name). --version anywhere wins over everything else, then --help or -h. Unknown arguments pass through to `kata tui`.
 // The actor is the first non-empty of --as, KATA_AUTHOR, USER, the gitUserNameKey lookup, then "anonymous".
 func PlanLaunch(args []string, lookup func(string) (string, bool), version string) (LaunchPlan, error) {
 	if slices.Contains(args, "--version") {
 		return LaunchPlan{Version: version}, nil
+	}
+	if slices.Contains(args, "--help") || slices.Contains(args, "-h") {
+		return LaunchPlan{Help: true}, nil
 	}
 	var plan LaunchPlan
 	plan.FallbackArgs = make([]string, 0, len(args))
@@ -99,3 +104,28 @@ func PlanLaunch(args []string, lookup func(string) (string, bool), version strin
 	}
 	return plan, nil
 }
+
+// usage is the --help text.
+const usage = `tern-kata: browse and edit kata Issues in a native Tern Pane.
+
+Usage:
+  tern-kata [--issue <project>/<short_id>] [--as <actor>] [kata tui args...]
+  tern-kata --version
+  tern-kata --help
+
+Flags:
+  --issue <project>/<short_id>  open this Issue first
+  --as <actor>                  author for edits (default: $KATA_AUTHOR, $USER,
+                                git config user.name, then "anonymous")
+  --version                     print the version and exit
+  -h, --help                    print this help and exit
+Any other argument is passed to ` + "`kata tui`" + ` when Tern is unavailable.
+
+Inside Tern, it opens a Pane. Outside Tern, it runs ` + "`kata tui`" + ` instead.
+In a directory bound to a kata Project (a .kata.toml in it or a parent), it opens
+that Project's Issues; elsewhere it opens Inbox.
+
+Environment: KATA_AUTHOR, USER (actor), EDITOR (external Draft editing), TZ (time zone).
+
+Docs: https://github.com/Dangerboi/tern-kata#readme
+`

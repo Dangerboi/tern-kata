@@ -30,19 +30,19 @@ func (m Model) DetailTime(t time.Time) string {
 	return t.In(loc).Format("2006-01-02 15:04")
 }
 
-// historyRow phrases one event as "<actor> <verb> <object>" plus an optional
-// detail (Body: the whole message, evidence or comment). Types kata adds later fall back to their sorted
-// payload pairs.
+// historyRow phrases one event as "<actor> <verb> <object>". Only issue.closed carries a detail
+// (Body: the close message and evidence); every other event stays one line. Types kata adds later
+// read as their type name.
 func (m Model) historyRow(event g.Event) DetailRow {
-	payload, decodeErr := decodePayload(event.Payload)
+	payload, _ := decodePayload(event.Payload)
 	verb, object, detail, tone := "", "", "", VerbTone("")
 	switch event.Type {
 	case "issue.created":
 		verb, object, tone = "created", "this Issue", VerbAccent
 	case "issue.commented":
-		verb, detail = "commented", strings.TrimSpace(payload.text("body"))
+		verb = "commented"
 	case "issue.comment_edited":
-		verb, object, detail = "edited", "a comment", strings.TrimSpace(payload.text("body"))
+		verb, object = "edited", "a comment"
 	case "issue.assigned":
 		verb, object = "assigned", "to "+payload.text("owner")
 	case "issue.unassigned":
@@ -61,9 +61,6 @@ func (m Model) historyRow(event g.Event) DetailRow {
 		verb = "cleared priority"
 	case "issue.updated":
 		verb, object = "edited", editedFields(payload)
-		if _, ok := payload["title"]; ok {
-			detail = oneLine(payload.text("title"))
-		}
 	case "issue.linked", "issue.unlinked":
 		verb = strings.TrimPrefix(event.Type, "issue.")
 		object = linkObject(event, payload)
@@ -79,12 +76,9 @@ func (m Model) historyRow(event g.Event) DetailRow {
 		verb = "restored"
 	default:
 		verb = strings.NewReplacer(".", " ", "_", " ").Replace(strings.TrimPrefix(event.Type, "issue."))
-		if detail = payload.pairs(); decodeErr != nil {
-			detail = oneLine(event.Payload) // not a JSON object: show it as written
-		}
 	}
 	row := DetailRow{
-		Key: event.UID, Author: event.Actor, Time: m.DetailTime(event.CreatedAt), Body: detail,
+		Key: event.UID, Type: event.Type, Author: event.Actor, Time: m.DetailTime(event.CreatedAt), Body: detail,
 		History: &HistorySentence{Verb: verb, Object: object, Tone: tone},
 	}
 	if event.RelatedIssueUID != nil {

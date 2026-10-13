@@ -1,6 +1,7 @@
 package model_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -34,9 +35,9 @@ func TestHistoryReadsAsOneSentencePerEvent(t *testing.T) {
 		tone   model.VerbTone
 	}{
 		{"created", g.Event{Type: "issue.created", Payload: `{"title":"Fix it","labels":["bug"]}`}, "dana created this Issue", "", model.VerbAccent},
-		{"commented", g.Event{Type: "issue.commented", Payload: `{"body":"first line\nsecond line"}`}, "dana commented", "first line\nsecond line", ""},
-		{"comment kept whole", g.Event{Type: "issue.commented", Payload: `{"body":"` + long + `\n\nsecond paragraph"}`}, "dana commented", long + "\n\nsecond paragraph", ""},
-		{"comment edited", g.Event{Type: "issue.comment_edited", Payload: `{"body":"better"}`}, "dana edited a comment", "better", ""},
+		{"commented", g.Event{Type: "issue.commented", Payload: `{"body":"first line\nsecond line"}`}, "dana commented", "", ""},
+		{"comment body not shown", g.Event{Type: "issue.commented", Payload: `{"body":"` + long + `\n\nsecond paragraph"}`}, "dana commented", "", ""},
+		{"comment edited", g.Event{Type: "issue.comment_edited", Payload: `{"body":"better"}`}, "dana edited a comment", "", ""},
 		{"assigned", g.Event{Type: "issue.assigned", Payload: `{"owner":"alice"}`}, "dana assigned to alice", "", ""},
 		{"unassigned", g.Event{Type: "issue.unassigned", Payload: `{"owner":null}`}, "dana unassigned", "", ""},
 		{"closed with reason", g.Event{Type: "issue.closed", Payload: `{"reason":"wontfix"}`}, "dana closed: wontfix", "", model.VerbSuccess},
@@ -46,7 +47,7 @@ func TestHistoryReadsAsOneSentencePerEvent(t *testing.T) {
 		{"unlabelled", g.Event{Type: "issue.unlabeled", Payload: `{"label":"bug"}`}, "dana removed label `bug`", "", ""},
 		{"priority set", g.Event{Type: "issue.priority_set", Payload: `{"priority":1,"old_priority":2}`}, "dana set priority to 1", "", ""},
 		{"priority cleared", g.Event{Type: "issue.priority_cleared", Payload: `{"old_priority":3}`}, "dana cleared priority", "", ""},
-		{"title and body edited", g.Event{Type: "issue.updated", Payload: `{"title":"New title","old_title":"Old","body":"x"}`}, "dana edited title and body", "New title", ""},
+		{"title and body edited", g.Event{Type: "issue.updated", Payload: `{"title":"New title","old_title":"Old","body":"x"}`}, "dana edited title and body", "", ""},
 		{"body edited", g.Event{Type: "issue.updated", Payload: `{"body":"x"}`}, "dana edited body", "", ""},
 		{"owner edited", g.Event{Type: "issue.updated", Payload: `{"owner":"bob","old_owner":"alice"}`}, "dana edited owner", "", ""},
 		{"linked", g.Event{Type: "issue.linked", Payload: `{"type":"blocks","from_short_id":"aaaa","to_short_id":"bbbb","incoming":false}`}, "dana linked blocks bbbb", "", ""},
@@ -63,10 +64,10 @@ func TestHistoryReadsAsOneSentencePerEvent(t *testing.T) {
 		{"moved", g.Event{Type: "issue.moved", ProjectName: "other", Payload: `{"from_short_id":"aaaa","to_short_id":"bbbb","to_project_uid":"p"}`}, "dana moved to other as bbbb", "", ""},
 		{"deleted", g.Event{Type: "issue.soft_deleted", Payload: `{}`}, "dana deleted", "", ""},
 		{"restored", g.Event{Type: "issue.restored", Payload: `{}`}, "dana restored", "", ""},
-		{"unknown type lists sorted pairs", g.Event{Type: "issue.frobbed", Payload: `{"zeta":"last","alpha":["a","b"],"mid":{"k":1},"gone":null,"n":3}`}, "dana frobbed", "alpha: a, b, gone: none, mid: k: 1, n: 3, zeta: last", ""},
-		{"unknown values kept whole", g.Event{Type: "thing.happened", Payload: `{"text":"` + long + `"}`}, "dana thing happened", "text: " + long, ""},
+		{"unknown type lists sorted pairs", g.Event{Type: "issue.frobbed", Payload: `{"zeta":"last","alpha":["a","b"],"mid":{"k":1},"gone":null,"n":3}`}, "dana frobbed", "", ""},
+		{"unknown values kept whole", g.Event{Type: "thing.happened", Payload: `{"text":"` + long + `"}`}, "dana thing happened", "", ""},
 		{"long close message with evidence kept whole", g.Event{Type: "issue.closed", Payload: `{"reason":"done","message":"` + long + `","evidence":[{"type":"test","command":"` + long + `"}]}`}, "dana closed: done", long + " (test " + long + ")", model.VerbSuccess},
-		{"unknown payload that is not JSON", g.Event{Type: "issue.frobbed", Payload: "plain text"}, "dana frobbed", "plain text", ""},
+		{"unknown payload that is not JSON", g.Event{Type: "issue.frobbed", Payload: "plain text"}, "dana frobbed", "", ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			row := historyRow(t, tt.event)
@@ -87,6 +88,19 @@ func TestHistoryReadsAsOneSentencePerEvent(t *testing.T) {
 // sentence is the event as one line, author first, the way a reader takes it in.
 func sentence(row model.DetailRow) string {
 	return strings.TrimSpace(strings.Join([]string{row.Author, row.History.Verb, row.History.Object, row.Ref}, " "))
+}
+
+func TestHistoryRowsReadOldestFirst(t *testing.T) {
+	// The snapshot lists History newest first.
+	m := withDetail(model.Model{}, &g.UISelectedAuthority{History: []g.Event{{UID: "new", Type: "issue.reopened", Payload: "{}"}, {UID: "old", Type: "issue.created", Payload: "{}"}}})
+	var got []string
+	for i := range m.DetailRowCount(model.TabEvents) {
+		row, _ := m.DetailRow(model.TabEvents, i)
+		got = append(got, row.Key+" "+row.Type)
+	}
+	if want := []string{"old issue.created", "new issue.reopened"}; !slices.Equal(got, want) {
+		t.Errorf("rows = %v, want %v", got, want)
+	}
 }
 
 func TestHistoryTimestampsUseTheSnapshotZoneAndAreShort(t *testing.T) {

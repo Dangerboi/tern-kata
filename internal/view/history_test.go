@@ -49,8 +49,8 @@ func TestHistoryRendersSentencesWithTonedVerbs(t *testing.T) {
 		{"e4", "assigned to alice", "assigned", ""},
 	} {
 		heading := nodes[activity+"."+tt.event+".heading"]
-		if !strings.HasPrefix(text(heading), tt.sentence) {
-			t.Errorf("%s reads %q, want it to start with %q", tt.event, text(heading), tt.sentence)
+		if !strings.Contains(text(heading), " dana - "+tt.sentence) {
+			t.Errorf("%s reads %q, want it to contain %q", tt.event, text(heading), " dana - "+tt.sentence)
 		}
 		var got string
 		found := false

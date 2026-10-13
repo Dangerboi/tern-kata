@@ -72,7 +72,7 @@ func TestOnlyTheActiveTabsRowsRender(t *testing.T) {
 		rows []string
 	}{
 		{model.TabComments, []string{"c1", "c2"}},
-		{model.TabEvents, []string{"e1", "e2", "e3"}},
+		{model.TabEvents, []string{"e3", "e2", "e1"}}, // the snapshot lists History newest first
 		{model.TabLinks, []string{"7"}},
 	} {
 		nodes := render(t, detailWithActivity(tt.tab))
@@ -188,7 +188,7 @@ func TestCommentsAndEventsAreCardsWithTheAuthorAndTheTimeApart(t *testing.T) {
 	for _, tt := range []struct {
 		tab model.ActivityTab
 		key string
-	}{{model.TabComments, "c1"}, {model.TabEvents, "e1"}} {
+	}{{model.TabComments, "c1"}} {
 		card := render(t, detailWithActivity(tt.tab))[view.DetailActivityID+"."+tt.key]
 		if card.K != "card" || card.P["variant"] != "bare" {
 			t.Fatalf("%s is %s %v, want a bare card", tt.key, card.K, card.P["variant"])
@@ -203,6 +203,18 @@ func TestCommentsAndEventsAreCardsWithTheAuthorAndTheTimeApart(t *testing.T) {
 		if !slices.Equal(got, want) {
 			t.Errorf("%s head = %v, want %v", tt.key, got, want)
 		}
+	}
+}
+
+func TestEventsAreOneCompactLine(t *testing.T) {
+	processZoneIsUTC(t)
+	card := render(t, detailWithActivity(model.TabEvents))[view.DetailActivityID+".e1"]
+	if card.P["head"] != nil || len(card.C) != 1 {
+		t.Fatalf("event card head %v with %d children, want no head and one line", card.P["head"], len(card.C))
+	}
+	nodes := render(t, detailWithActivity(model.TabEvents))
+	if got, want := text(nodes[view.DetailActivityID+".e1.heading"]), "[issue.created] 2026-10-09 03:05 dana - created this Issue"; got != want {
+		t.Errorf("event line = %q, want %q", got, want)
 	}
 }
 

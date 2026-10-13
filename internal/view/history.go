@@ -37,11 +37,14 @@ func linkRow(row model.DetailRow, click *ui.Actions) tern.Element {
 	return ui.Row{Common: ui.Common{Key: "row"}, Gap: ui.GapNone, Align: ui.AlignStart, Children: ui.Nodes(lead, referenceText("jump", row.ReferenceUID, row.Ref, row.RefTitle))}
 }
 
-// historySentence is what an event did, verb toned, the object after it. An event with a Ref makes the
+// historySentence is the compact event line `[type] time actor - what it did`; the verb is toned, verb toned, the object after it. An event with a Ref makes the
 // reference a link after the sentence. The author and the time are the card's head.
 func historySentence(row model.DetailRow, action string) tern.Element {
 	sentence := row.History
-	spans := []ui.Span{{T: sentence.Verb, S: string(sentence.Tone)}}
+	spans := []ui.Span{
+		{T: "[" + row.Type + "]", S: "muted"}, {T: " " + row.Time, S: "muted"}, {T: " "}, {T: row.Author, S: "strong"}, {T: " - "},
+		{T: sentence.Verb, S: string(sentence.Tone)},
+	}
 	if object := strings.TrimRight(sentence.Object, " "); object != "" {
 		spans = append(spans, ui.Span{T: " " + object})
 	}

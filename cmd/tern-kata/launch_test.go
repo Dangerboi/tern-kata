@@ -131,6 +131,18 @@ func TestPlanLaunchVersion(t *testing.T) {
 	}
 }
 
+func TestPlanLaunchHelp(t *testing.T) {
+	for _, args := range [][]string{{"--help"}, {"-h"}, {"--as", "--help"}, {"--issue", "bad", "-h"}, {"--bogus", "--help", "--as"}} {
+		plan, err := PlanLaunch(args, lookupFrom(nil), "1.2.3")
+		if err != nil || !plan.Help || plan.FallbackArgs != nil {
+			t.Errorf("PlanLaunch(%q) = %+v, %v; want help plan", args, plan, err)
+		}
+	}
+	if plan, _ := PlanLaunch([]string{"--help", "--version"}, lookupFrom(nil), "1.2.3"); plan.Help || plan.Version != "1.2.3" {
+		t.Errorf("--version must win over --help, got %+v", plan)
+	}
+}
+
 func TestResolveVersion(t *testing.T) {
 	info := func(v string, ok bool) func() (*debug.BuildInfo, bool) {
 		return func() (*debug.BuildInfo, bool) { return &debug.BuildInfo{Main: debug.Module{Version: v}}, ok }

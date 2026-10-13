@@ -118,13 +118,15 @@ func detailRows(m model.Model, tab model.ActivityTab, cursorOffset int) tern.Nod
 			continue
 		}
 		var parts tern.Nodes
+		var head ui.Rich
 		if tab == model.TabEvents {
 			parts = ui.Nodes(historySentence(row, action))
+		} else {
+			head = ui.Spans(ui.Span{T: row.Author, S: "strong"}, ui.Span{T: "  "}, ui.Span{T: row.Time, S: "muted"})
 		}
 		if row.Body != "" {
 			parts = append(parts, ui.Md{Common: ui.Common{Key: "body"}, Text: row.Body})
 		}
-		head := ui.Spans(ui.Span{T: row.Author, S: "strong"}, ui.Span{T: "  "}, ui.Span{T: row.Time, S: "muted"})
 		rows = append(rows, ui.Card{Common: ui.Common{Key: row.Key, Mark: mark, Actions: &ui.Actions{Click: action}}, Variant: ui.CardBare, Head: head, Children: parts})
 	}
 	return rows

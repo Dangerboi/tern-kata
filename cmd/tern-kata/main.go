@@ -36,6 +36,10 @@ func run() error {
 		_, err := fmt.Fprintln(os.Stdout, "tern-kata", plan.Version)
 		return err
 	}
+	if plan.Help {
+		_, err := fmt.Fprint(os.Stdout, usage)
+		return err
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	session, err := tern.Connect(ctx, editorOptions())
