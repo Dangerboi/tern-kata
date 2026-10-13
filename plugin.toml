@@ -1,6 +1,6 @@
 schema = 1
 id = "tern-kata"
 name = "Kata"
-version = "0.1.0"
+version = "0.1.1"
 description = "Browse and edit kata Issues in a Tern Pane; kata links open the Issue."
 window = "window.luau"
