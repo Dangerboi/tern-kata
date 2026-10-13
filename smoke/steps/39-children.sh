@@ -32,12 +32,13 @@ expect_tree "[data-id='$ch_content.heading.title']" '.ok and (.nodes[0].text | c
 expect_tree "[data-id='$ch_content.properties.children.v']" '.ok and .count == 1 and (.nodes[0].text == "2 open / 3 total")'
 expect_tree "[data-id^='$ch_content.properties.parent']" '.ok and .count == 0'
 
-# The table sits below the body and above Activity, one row per child with its four cells.
+# The table sits below the body and above Activity: a header row, then one row per child with its five cells.
 expect_tree "[data-id='$ch_content.children.heading']" '.ok and .count == 1 and (.nodes[0].text == "Children")'
-expect_tree "[data-id^='$ch_content.children.'][data-id\$='.jump']" '.ok and .count == 3'
-expect_tree "[data-id^='$ch_content.children.'][data-id\$='.status']" '.ok and .count == 3'
-expect_tree "[data-id^='$ch_content.children.'][data-id\$='.title']" '.ok and .count == 3'
-expect_tree "[data-id^='$ch_content.children.'][data-id\$='.updated']" '.ok and .count == 3 and ([.nodes[].text | select(test(" ago$"))] | length == 3)'
+expect_tree "[data-id^='$ch_content.children.'][data-id\$='.jump']" '.ok and .count == 4'
+expect_tree "[data-id^='$ch_content.children.'][data-id\$='.status']" '.ok and .count == 4'
+expect_tree "[data-id^='$ch_content.children.'][data-id\$='.owner']" '.ok and .count == 4'
+expect_tree "[data-id^='$ch_content.children.'][data-id\$='.title']" '.ok and .count == 4'
+expect_tree "[data-id^='$ch_content.children.'][data-id\$='.updated']" '.ok and .count == 4 and ([.nodes[].text | select(test(" ago$"))] | length == 3)'
 ch_y() { ctl tree "[data-id='$1']" | jq -r ".nodes[0].rect[${2:-1}]"; }
 ch_body=$(ch_y "$ch_content.body")
 ch_table=$(ch_y "$ch_content.children")
@@ -47,7 +48,7 @@ awk -v b="$ch_body" -v t="$ch_table" -v a="$ch_activity" 'BEGIN { exit !(b < t &
 expect_tree "[data-id^='$ch_content.children.'][data-id\$='.status']" '.ok and ([.nodes[].rect[0]] | unique | length == 1)'
 # The reference and status cells are one line high at this width: as high as the one-line Children heading.
 ch_line=$(ch_y "$ch_content.children.heading" 3)
-expect_tree "[data-id^='$ch_content.children.'][data-id\$='.jump'], [data-id^='$ch_content.children.'][data-id\$='.status']" ".ok and .count == 6 and ([.nodes[].rect[3]] | all(. == $ch_line))"
+expect_tree "[data-id^='$ch_content.children.'][data-id\$='.jump'], [data-id^='$ch_content.children.'][data-id\$='.status']" ".ok and .count == 8 and ([.nodes[].rect[3]] | all(. == $ch_line))"
 expect_tree "[data-id^='$ch_content.children.'][data-id\$='.jump']" '.ok and ([.nodes[].rect[0]] | unique | length == 1) and ([.nodes[].rect[2]] | unique | length == 1)'
 expect_tree "[data-id^='$ch_content.children.'][data-id\$='.updated']" '.ok and ([.nodes[].rect[0]] | unique | length == 1) and ([.nodes[].rect[2]] | unique | length == 1)'
 # The closed child's status and title are muted, the open child's are not.
@@ -61,7 +62,7 @@ ctl key esc
 expect_tree "[data-id='$ch_content.heading.title']" '.ok and (.nodes[0].text | contains("Children parent"))'
 
 # esc leaves the focus in the detail, so j walks the child rows from the first; enter opens the second.
-ch_second=$(ctl tree "[data-id^='$ch_content.children.'][data-id\$='.title']" | jq -r '.nodes[1].text')
+ch_second=$(ctl tree "[data-id^='$ch_content.children.'][data-id\$='.title']:not([data-id*='.header.'])" | jq -r '.nodes[1].text')
 ctl key j
 ctl key enter
 expect_tree "[data-id='$ch_content.heading.title']" ".ok and (.nodes[0].text | contains(\"$ch_second\"))"

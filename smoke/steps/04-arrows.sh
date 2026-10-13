@@ -76,7 +76,7 @@ else
 fi
 expect_detail "$ref_a" "$ref_b"
 back_to_parent
-expect_tree "[data-id^='main.columns.detail.viewport.content.children.'][data-id\$='.title']" '.ok and .count == 2'
+expect_tree "[data-id^='main.columns.detail.viewport.content.children.'][data-id\$='.title']:not([data-id*='.header.'])" '.ok and .count == 2'
 cp "$tmp/assert-tree.json" "$tmp/arrows-children.json"
 if jq -e '.nodes[0].text | contains("first child")' "$tmp/arrows-children.json" >/dev/null; then
   table_first=first table_last=second

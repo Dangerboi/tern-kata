@@ -35,7 +35,7 @@ parent_expect_drawn() {
   expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']" '.ok and .count == 40'
   expect_tree "[data-id='main.columns.detail.viewport.content.properties.children.v']" '.ok and .count == 1 and (.nodes[0].text == "40 open / 40 total")'
   expect_tree "[data-id^='main.columns.detail.viewport.content.properties.parent']" '.ok and .count == 0'
-  expect_tree "[data-id^='main.columns.detail.viewport.content.children.'][data-id\$='.jump']" '.ok and .count == 40'
+  expect_tree "[data-id^='main.columns.detail.viewport.content.children.'][data-id\$='.jump']:not([data-id*='.header.'])" '.ok and .count == 40'
 }
 
 # j/k onto the collapsed parent: from row 1 down to it, or up from row 2 when it is the first.
