@@ -129,8 +129,10 @@ local installScripts = "https://raw.githubusercontent.com/Dangerboi/tern-kata/ma
 local installChoices: { PickItem } = {
     {label = "Linux or macOS (sh)", command = "curl -fsSL " .. installScripts .. "install.sh | sh",
         pause = "printf 'Press Enter to close '; read _"},
-    {label = "Windows (PowerShell)", command = "irm " .. installScripts .. "install.ps1 | iex",
-        pause = "Read-Host 'Press Enter to close'"},
+    -- Wrapped in powershell so it also works when the Pane's default shell is cmd, where `;` is no separator.
+    {label = "Windows (PowerShell)",
+        command = "powershell -NoProfile -ExecutionPolicy Bypass -Command \"irm " .. installScripts
+            .. "install.ps1 | iex; Read-Host 'Press Enter to close'\""},
 }
 for _, choice in installChoices do choice.detail = choice.command end
 
@@ -144,7 +146,7 @@ tern.command({
             action = "install",
         }):next(function(choice, err, cx2)
             if not choice or not cx2 then return end
-            launch(cx2, choice.command .. "; " .. choice.pause)
+            launch(cx2, choice.pause and (choice.command .. "; " .. choice.pause) or choice.command)
         end)
     end,
 })

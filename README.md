@@ -31,15 +31,29 @@ In a repo with a `.kata.toml`, write kata ticket references in chat replies as `
 
 ## Install
 
-Requires Go 1.27+, kata v0.18.0+ and a Tern that supports the Surface Protocol.
+Requires kata v0.18.0+ and a Tern that supports the Surface Protocol.
 
-1. On the **session host** (the machine whose shells run in your Panes), install kata, then:
+1. On the **session host** (the machine whose shells run in your Panes), install kata, then tern-kata. On Linux or macOS:
+
+   ```sh
+   curl -fsSL https://raw.githubusercontent.com/Dangerboi/tern-kata/main/install.sh | sh
+   ```
+
+   On Windows, in PowerShell:
+
+   ```powershell
+   irm https://raw.githubusercontent.com/Dangerboi/tern-kata/main/install.ps1 | iex
+   ```
+
+   They install the latest release to `~/.local/bin` (`%LOCALAPPDATA%\Programs\tern-kata` on Windows, added to your user `PATH`), verify its checksum, and also install the window plugin when `tern` is on `PATH`. Once the plugin is installed, the **Install tern-kata** palette command runs the same one-liner in a new Pane. `tern-kata --version` prints the installed version.
+
+   Alternatively, with Go 1.27+:
 
    ```sh
    CGO_ENABLED=0 go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest
    ```
 
-   `tern-kata` must be on your shell's `PATH` (Go puts it in `~/go/bin`, or `%USERPROFILE%\go\bin` on Windows). `tern-kata --version` prints the installed version.
+   Go puts the binary in `~/go/bin` (`%USERPROFILE%\go\bin` on Windows); it must be on your shell's `PATH`.
 
 2. On the **machine showing the Tern window**, install the window plugin:
 

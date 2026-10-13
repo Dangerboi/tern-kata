@@ -13,7 +13,7 @@ function Install-TernKata {
     $arch = switch ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()) {
         'X64' { 'amd64' }
         'Arm64' { 'arm64' }
-        default { throw "install.ps1: unsupported CPU $_: tern-kata is released for amd64 and arm64" }
+        default { throw "install.ps1: unsupported CPU ${_}: tern-kata is released for amd64 and arm64" }
     }
 
     $base = if ($env:TERN_KATA_BASE_URL) { $env:TERN_KATA_BASE_URL } else { 'https://github.com/Dangerboi/tern-kata/releases/latest/download' }
@@ -50,10 +50,12 @@ function Install-TernKata {
         Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    # Read the raw value so %VAR% entries stay unexpanded, and write it back as REG_EXPAND_SZ.
+    $envKey = Get-Item 'HKCU:\Environment'
+    $userPath = $envKey.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
     $entries = @(if ($userPath) { $userPath -split ';' | Where-Object { $_ } })
     if (-not ($entries | Where-Object { $_.TrimEnd('\') -eq $dir.TrimEnd('\') })) {
-        [Environment]::SetEnvironmentVariable('Path', (($entries + $dir) -join ';'), 'User')
+        Set-ItemProperty -Path 'HKCU:\Environment' -Name Path -Value (($entries + $dir) -join ';') -Type ExpandString
         $env:Path = "$env:Path;$dir"
         Write-Host "Added $dir to your user PATH; shells that are already open need restarting to see it."
     }
