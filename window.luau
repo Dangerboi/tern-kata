@@ -88,6 +88,13 @@ local function watch(pane: number, ticks: number)
     end)
 end
 
+-- A new Pane running `command`: a split of the focused Pane, so it starts on the session host, or a tab when none is focused.
+local function launch(cx: WindowCx, command: string): number?
+    local target = cx.session:focused()
+    if target then return cx.layout:split(target, "right", {command = command}) end
+    return cx.layout:new_tab({command = command})
+end
+
 local function open(cx: WindowCx, ref: string?)
     if ref then
         local pane = existingPane(cx)
@@ -97,13 +104,7 @@ local function open(cx: WindowCx, ref: string?)
             return
         end
     end
-    local target = cx.session:focused()
-    local pane
-    if target then
-        pane = cx.layout:split(target, "right", {command = "tern-kata"})
-    else
-        pane = cx.layout:new_tab({command = "tern-kata"})
-    end
+    local pane = launch(cx, "tern-kata")
     if not pane then return end
     kataPane = pane
     pending[pane] = ref
@@ -120,6 +121,32 @@ tern.command({
     title = "Open kata",
     keys = {"f9"},
     run = function(cx) open(cx, nil) end,
+})
+
+-- The install one-liners per shell family; the session host's OS is not visible from the window, so the user picks.
+-- The trailing read keeps the Pane open to show the script's output (a clean exit closes the Pane).
+local installScripts = "https://raw.githubusercontent.com/Dangerboi/tern-kata/main/"
+local installChoices: { PickItem } = {
+    {label = "Linux or macOS (sh)", command = "curl -fsSL " .. installScripts .. "install.sh | sh",
+        pause = "printf 'Press Enter to close '; read _"},
+    {label = "Windows (PowerShell)", command = "irm " .. installScripts .. "install.ps1 | iex",
+        pause = "Read-Host 'Press Enter to close'"},
+}
+for _, choice in installChoices do choice.detail = choice.command end
+
+tern.command({
+    id = "install",
+    title = "Install tern-kata",
+    run = function(cx)
+        cx:pick({
+            items = installChoices,
+            placeholder = "Run the install script in a new Pane on the session host",
+            action = "install",
+        }):next(function(choice, err, cx2)
+            if not choice or not cx2 then return end
+            launch(cx2, choice.command .. "; " .. choice.pause)
+        end)
+    end,
 })
 
 tern.route.link(function(link, cx)

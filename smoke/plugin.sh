@@ -282,5 +282,23 @@ printf '#!/bin/sh\necho start\nexec %q --issue\n' "$tmp/app/tern-kata" >"$tmp/pa
 expect_launch_toast "$failed_start_toast"
 rm "$tmp/pane-bin/tern-kata"
 expect_launch_toast "$not_installed_toast"
+# The install command asks first: dismissing the picker opens no Pane, choosing a row opens one running the install one-liner.
+printf 'palette "Install tern-kata"\nkey Enter\n' >"$tmp/install.ctl"
+ctl --file "$tmp/install.ctl"
+ctl ready
+toast_shown 'Windows (PowerShell)'
+toast_shown 'Linux or macOS'
+ctl key Escape
+expect_panes 1
+ctl --file "$tmp/install.ctl"
+ctl ready
+toast_shown 'Linux or macOS'
+ctl key Enter
+ctl state >"$tmp/install-state.json"
+jq -e '.tabs[0].panes == 2' "$tmp/install-state.json" >/dev/null
+# The Pane waits for Enter after the script, then closes.
+ctl expect Press
+ctl key Enter
+expect_panes 1
 jq -Rse 'contains("plugin window halves loaded count=1") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
 printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, shell-syntax Project link, quick quit without toast, links into Panes started by full path, backslash path and title alone, a longer name not matched, startup-failure and not-installed toasts by exit status\n'
