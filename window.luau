@@ -51,9 +51,9 @@ local function exitedRightAway(cx: WindowCx, pane: number, status: number)
     if status == 2 or status == 3 then
         cx:toast("error", "tern-kata failed to start", "Run tern-kata in a shell to see why")
     elseif status == 1 then
-        cx:toast("error", "tern-kata didn't start", "If it isn't installed: go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest. Otherwise run tern-kata in a shell to see why")
+        cx:toast("error", "tern-kata didn't start", "If it isn't installed, run Install tern-kata from the command palette (or the install script in the README). Otherwise run tern-kata in a shell to see why")
     else
-        cx:toast("error", "tern-kata is not installed or not on PATH", "go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest")
+        cx:toast("error", "tern-kata is not installed or not on PATH", "Run Install tern-kata from the command palette, or the install script in the README")
     end
 end
 

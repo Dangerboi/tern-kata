@@ -51,6 +51,8 @@ expect_no_toast() {
 failed_start_toast='tern-kata failed to start'
 not_installed_toast='tern-kata is not installed'
 didnt_start_toast="tern-kata didn't start"
+# Both install hints point to the palette command.
+install_hint='Install tern-kata from the command palette'
 expect_no_kata_toast() {
   expect_no_toast "$failed_start_toast"
   expect_no_toast "$not_installed_toast"
@@ -259,11 +261,12 @@ wait_no_kata_toast() {
   echo "kata toast did not clear" >&2
   return 1
 }
-expect_launch_toast() { # $1 the one startup-failure toast that must show
+expect_launch_toast() { # $1 the one startup-failure toast that must show, $2 optional text it must also carry
   wait_no_kata_toast
   ctl plugins run plugin.tern-kata.open
   ctl focus left
   expect_toast "$1"
+  [[ -z "${2:-}" ]] || toast_shown "$2"
   for toast in "$failed_start_toast" "$not_installed_toast" "$didnt_start_toast"; do
     [[ $toast == "$1" ]] || expect_no_toast "$toast"
   done
@@ -274,14 +277,14 @@ for status in 2 3; do
   expect_launch_toast "$failed_start_toast"
 done
 printf '#!/bin/sh\nexit 1\n' >"$tmp/pane-bin/tern-kata"
-expect_launch_toast "$didnt_start_toast"
+expect_launch_toast "$didnt_start_toast" "$install_hint"
 printf '#!/bin/sh\nexit 127\n' >"$tmp/pane-bin/tern-kata"
-expect_launch_toast "$not_installed_toast"
+expect_launch_toast "$not_installed_toast" "$install_hint"
 # The real binary failing before it connects exits 3, which reads as a failed start.
 printf '#!/bin/sh\necho start\nexec %q --issue\n' "$tmp/app/tern-kata" >"$tmp/pane-bin/tern-kata"
 expect_launch_toast "$failed_start_toast"
 rm "$tmp/pane-bin/tern-kata"
-expect_launch_toast "$not_installed_toast"
+expect_launch_toast "$not_installed_toast" "$install_hint"
 # The install command asks first: dismissing the picker opens no Pane, choosing a row opens one running the install one-liner.
 printf 'palette "Install tern-kata"\nkey Enter\n' >"$tmp/install.ctl"
 ctl --file "$tmp/install.ctl"
