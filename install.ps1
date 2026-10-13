@@ -57,8 +57,16 @@ function Install-TernKata {
     if (-not ($entries | Where-Object { $_.TrimEnd('\') -eq $dir.TrimEnd('\') })) {
         Set-ItemProperty -Path 'HKCU:\Environment' -Name Path -Value (($entries + $dir) -join ';') -Type ExpandString
         $env:Path = "$env:Path;$dir"
-        Write-Host "Added $dir to your user PATH; shells that are already open need restarting to see it."
+        Write-Host "Added $dir to your user PATH; programs already running, such as Tern and its session daemon, need restarting to see it."
     }
+    # Explorer, which starts Tern from the Start menu or taskbar, rereads the user PATH only when told it changed.
+    # Sent on every run, so a rerun also fixes a PATH written before this broadcast was added.
+    if (-not ('TernKata.Environment' -as [type])) {
+        Add-Type -Namespace TernKata -Name Environment -MemberDefinition '[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg, UIntPtr wParam, string lParam, uint flags, uint timeout, out UIntPtr result);'
+    }
+    $result = [UIntPtr]::Zero
+    # HWND_BROADCAST, WM_SETTINGCHANGE "Environment", SMTO_ABORTIFHUNG, 5 s.
+    [void][TernKata.Environment]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result)
 
     if (Get-Command tern -ErrorAction SilentlyContinue) {
         tern plugin install github.com/Dangerboi/tern-kata --force
