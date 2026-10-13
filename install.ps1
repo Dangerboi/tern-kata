@@ -69,6 +69,7 @@ function Install-TernKata {
     [void][TernKata.Environment]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result)
 
     if (Get-Command tern -ErrorAction SilentlyContinue) {
+        Write-Host 'Installing the Tern window plugin (kata links, the Install tern-kata palette command, startup toasts):'
         tern plugin install github.com/Dangerboi/tern-kata --force
         if ($LASTEXITCODE -ne 0) { Write-Warning 'Could not install the tern-kata window plugin; run: tern plugin install github.com/Dangerboi/tern-kata --force' }
     } else {

@@ -71,6 +71,7 @@ main() {
 	esac
 
 	if command -v tern >/dev/null 2>&1; then
+		echo "Installing the Tern window plugin (kata links, the Install tern-kata palette command, startup toasts):"
 		tern plugin install github.com/Dangerboi/tern-kata --force || echo "Could not install the tern-kata window plugin; run: tern plugin install github.com/Dangerboi/tern-kata --force" >&2
 	else
 		echo "tern is not on this machine's PATH: install the window plugin on the machine that shows the Tern window: tern plugin install github.com/Dangerboi/tern-kata"
