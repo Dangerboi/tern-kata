@@ -158,6 +158,25 @@ click_issue_link "https://kata.invalid/smoke/$second"
 ctl plugins expect '"Plugin second body"'
 ctl state >"$tmp/link-focus.json"
 jq -e --argjson id "$kata_pane" '.tabs[0].panes == 2 and .focused.id == $id' "$tmp/link-focus.json" >/dev/null
+# A link in a tab with no kata Pane opens one in that tab, leaving the other tab's kata Pane alone; a second link reuses it.
+ctl tab new
+ctl ready
+click_issue_link "kata://smoke/$first"
+ctl plugins expect '"Plugin first body"'
+ctl state >"$tmp/link-tab.json"
+tab_kata_pane=$(jq -r '.focused.id' "$tmp/link-tab.json")
+jq -e --argjson id "$kata_pane" '.tabs[1].active and .tabs[0].panes == 2 and .tabs[1].panes == 2 and .focused.id != $id' "$tmp/link-tab.json" >/dev/null
+ctl focus left
+click_issue_link "https://kata.invalid/smoke/$second"
+ctl plugins expect '"Plugin second body"'
+ctl state >"$tmp/link-tab-focus.json"
+jq -e --argjson id "$tab_kata_pane" '.tabs[1].active and .tabs[0].panes == 2 and .tabs[1].panes == 2 and .focused.id == $id' "$tmp/link-tab-focus.json" >/dev/null
+ctl key q
+for ((attempt=0; attempt<100; attempt++)); do [[ $(ctl state | jq '.tabs[1].panes') == 1 ]] && break; sleep 0.1; done
+ctl tab close
+ctl ready
+ctl state >"$tmp/link-tab-back.json"
+jq -e --argjson id "$kata_pane" '(.tabs | length) == 1 and .focused.id == $id' "$tmp/link-tab-back.json" >/dev/null
 ctl key q
 expect_panes 1
 # Shell syntax in a reference is passed to kata as data: the odd Project's Issue opens in a new kata Pane.
@@ -304,4 +323,4 @@ ctl expect Press
 ctl key Enter
 expect_panes 1
 jq -Rse 'contains("plugin window halves loaded count=1") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
-printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, shell-syntax Project link, quick quit without toast, links into Panes started by full path, backslash path and title alone, a longer name not matched, startup-failure and not-installed toasts by exit status\n'
+printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, links reuse only the current tab'"'"'s kata Pane, shell-syntax Project link, quick quit without toast, links into Panes started by full path, backslash path and title alone, a longer name not matched, startup-failure and not-installed toasts by exit status\n'

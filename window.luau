@@ -1,6 +1,7 @@
 --!strict
 
-local kataPane: number? = nil
+-- kata Panes this plugin launched, until they close: each is reaped on its own, since every tab may have one.
+local launched: { [number]: boolean } = {}
 local fresh: { [number]: boolean } = {}
 -- Issue reference per new kata Pane, sent over TSP once its surface is live, so it never passes through a shell.
 local pending: { [number]: string? } = {}
@@ -17,15 +18,14 @@ local function isKata(info: PaneInfo?): boolean
     return info ~= nil and info.exited == nil and (info.title == "tern-kata" or isKataProgram(info.program))
 end
 
+-- Links reuse a kata Pane only in the focused Pane's tab; a parked Pane has no tab.
 local function existingPane(cx: WindowCx): number?
-    if kataPane and isKata(cx.session:pane(kataPane)) then return kataPane end
+    local focused = cx.session:focused()
+    local tab = focused and cx.session:tab_of(focused)
+    if not tab then return nil end
     for _, info in cx.session:panes() do
-        if isKata(info) then
-            kataPane = info.pane
-            return kataPane
-        end
+        if info.tab == tab and isKata(info) then return info.pane end
     end
-    kataPane = nil
     return nil
 end
 
@@ -57,10 +57,10 @@ local function exitedRightAway(cx: WindowCx, pane: number, status: number)
     end
 end
 
--- After the window, a failing exit still closes the Pane (spec), silently: poll once a second until it is gone or replaced.
+-- After the window, a failing exit still closes the Pane (spec), silently: poll once a second until it is gone.
 local function reap(pane: number)
     tern.timer(1000, function(cx)
-        if not cx or kataPane ~= pane then return end
+        if not cx or not launched[pane] then return end
         local info = cx.session:pane(pane)
         if not info then return end
         if info.exited ~= nil then cx.layout:close(pane); return end
@@ -106,13 +106,13 @@ local function open(cx: WindowCx, ref: string?)
     end
     local pane = launch(cx, "tern-kata")
     if not pane then return end
-    kataPane = pane
+    launched[pane] = true
     pending[pane] = ref
     watch(pane, 20)
 end
 
 tern.on("pane_closed", function(ev, cx)
-    if kataPane == ev.pane then kataPane = nil end
+    launched[ev.pane] = nil
     pending[ev.pane] = nil
 end)
 
