@@ -53,11 +53,27 @@ Requires kata v0.18.0+ and a Tern that supports the Surface Protocol.
    tern plugin install github.com/Dangerboi/tern-kata
    ```
 
-The session host can run Linux, macOS or Windows. If it is the same machine as the window, you can do both steps on that one machine.
+The window machine needs only the window plugin; kata and tern-kata run on the session host. For example, with a Tern window on Windows 11 and Panes on an Ubuntu host, install the window plugin on Windows and kata and tern-kata on Ubuntu. If the session host and the window are the same machine, do both steps on it.
+
+## Install with an agent
+
+In a Pane on the session host, give your coding agent this prompt:
+
+```text
+Install tern-kata by following the "Install with an agent" section of https://raw.githubusercontent.com/Dangerboi/tern-kata/main/README.md
+```
+
+Agents: follow these steps only when the user has asked you to install tern-kata.
+
+1. Check that `kata` is on `PATH`. If it isn't, stop and tell the user that tern-kata requires kata, which they install themselves: https://katatracker.com/.
+2. Run the install one-liner from [Install](#install) step 1 for this machine's OS.
+3. Run `tern-kata --version`. If it isn't found, pass on the `PATH` instructions the install script printed.
+4. If the script reported that `tern` is not on `PATH`, tell the user to run `tern plugin install github.com/Dangerboi/tern-kata` on the machine that shows the Tern window. Without it, the Open kata command, `F9` and kata links don't work.
+5. Ask the user whether to add the rule from [Clickable ticket links from agents](#clickable-ticket-links-from-agents) to your global rules file, the one you load in every repo. The links only work when your chat is shown in Tern with the window plugin installed. Copy the rule block exactly, and skip it if the file already contains it.
 
 ## Clickable ticket links from agents
 
-Tern draws `kata://` links in chat as plain text, so agents should write ticket references as `https://kata.invalid/...` links, which the plugin intercepts. To make OMP do that in every kata-tracked repo, add this to `~/.omp/agent/RULES.md` (or to one repo's `AGENTS.md`):
+Tern draws `kata://` links in chat as plain text, so agents should write ticket references as `https://kata.invalid/...` links, which the plugin intercepts. To make your agent do that in every kata-tracked repo, add this to its global rules file (`~/.omp/agent/RULES.md` for OMP):
 
 ```markdown
 In a repo with a `.kata.toml`, write kata ticket references in chat replies as `[<id>](https://kata.invalid/<project>/<id>)`, with `<project>` the name in `.kata.toml`. The tern-kata window plugin opens them in tern-kata; Tern draws `kata://` links in chat as plain text. Everywhere else (files, commit messages, kata Issue text) write the bare id; those links only work inside Tern.
