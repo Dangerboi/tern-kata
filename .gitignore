@@ -1,7 +1,6 @@
 .kata.local.toml
 /tern-kata
 .codegraph
-.kata.toml
 skills-lock.json
 .agents
 .notes/
