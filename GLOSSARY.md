@@ -23,3 +23,11 @@
 **Daemon gateway**: The module that runs one command against the kata daemon and returns exactly one result message.
 
 **Collection snapshot**: What the daemon says the shown Collection holds for the current Collection and filters. One path loads it for the first load, a Collection switch, a filter change, an id search and a live refresh; a result is applied only if it answers the current query.
+
+**Board file**: The Markdown file Tern's board block shows for one kata Project, with one heading per Lane and one task per Issue. _Avoid_: kanban; "board" alone means Tern's board block.
+
+**Lane**: A heading in the Board file. It stands for one kata label and holds the open Issues carrying it; two fixed Lanes frame them: No lane (open Issues with no Lane label) and Done (closed Issues). _Avoid_: column (the list and detail are columns).
+
+**Sync**: What keeps a Board file and its kata Project in step, in both directions.
+
+**Move**: An Issue changing Lane, which changes its labels, or closes or reopens it. _Avoid_: drag (the gesture, not the change).
