@@ -25,3 +25,9 @@
 **Guarded write**: A write the Daemon gateway applies only if the issue has not changed in a way that matters since the user saw it: saving a Draft of the issue's text, posting a comment, and closing. A Draft or comment conflicts only when the issue's text differs from the text the Draft started against; a revision that moved for another reason (owner, status, claim, expiry) is written against as it now stands. Closing succeeds while the issue is open and reports an issue closed meanwhile without writing.
 
 **Collection snapshot**: What the daemon says the shown Collection holds for the current Collection and filters. One path loads it for the first load, a Collection switch, a filter change, an id search and a live refresh; a result is applied only if it answers the current query.
+
+**Reply**: A comment that answers another comment, with a kind: reply, confirm, refute or supersede.
+
+**Recurrence**: kata's schedule that creates the next Occurrence of an Issue when the current one closes as done. Stopping it creates no further Occurrences and leaves the existing ones as they are.
+
+**Occurrence**: An Issue a Recurrence created, or the Issue that was made the first one.

@@ -228,7 +228,11 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 	}
 	add("Owner", text(owner))
 	if issue.RecurrenceID != nil {
-		add("Recurring", text("Yes"))
+		recurrence := model.Recurrence{Stopped: true}
+		if d := m.DetailAuthority(); d != nil && d.Recurrence != nil {
+			recurrence = *d.Recurrence
+		}
+		add("Recurring", text(recurrence.Text()))
 	}
 	if issue.Priority != nil {
 		add("Priority", ui.Badge{Common: ui.Common{Key: "v", Tone: priorityTone(*issue.Priority)}, Text: fmt.Sprintf("P%d", *issue.Priority)})

@@ -1008,3 +1008,55 @@ func TestGatewayReportsADuplicateReplyAndSendsItAnywayWithForce(t *testing.T) {
 		t.Fatalf("%d comments after sending anyway, want 3", got)
 	}
 }
+
+func TestGatewayTranslatesTheRecurrenceFromTheSnapshotIncludingAStoppedOne(t *testing.T) {
+	kata := startKata(t, "0.19.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	wire, err := client.New(kata.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, actor := context.Background(), "tester"
+	recur := func(title, rule string) (uid string, rec g.Recurrence) {
+		uid = createIssue(t, gateway, workspace, demo, title)
+		created, err := wire.CreateRecurrenceWithResponse(ctx, &g.CreateRecurrenceRequestOptions{
+			PathParams: &g.CreateRecurrencePath{ProjectID: demo.ID},
+			Body: &g.CreateRecurrenceBody{Actor: &actor, Rrule: rule, Dtstart: "2026-10-19", Timezone: "Europe/Zurich", InitialIssueRef: &uid,
+				Template: g.RecurrenceTemplateInput{Title: title}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return uid, created.JSON201.Recurrence
+	}
+	live, liveRec := recur("Live", "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,TH")
+	stopped, stoppedRec := recur("Stopped", "FREQ=DAILY;INTERVAL=1")
+	if _, err := wire.DeleteRecurrence(ctx, &g.DeleteRecurrenceRequestOptions{
+		PathParams: &g.DeleteRecurrencePath{ProjectID: demo.ID, RecurrenceUID: stoppedRec.UID},
+		Query:      &g.DeleteRecurrenceQuery{Actor: &actor},
+		Header:     &g.DeleteRecurrenceHeaders{IfMatch: fmt.Sprintf("\"rev-%d\"", stoppedRec.Revision)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	plain := createIssue(t, gateway, workspace, demo, "Plain")
+
+	selected := func(uid string) *model.IssueDetailData {
+		query := model.CollectionQuery(model.Collection{View: "project", ProjectUID: demo.UID, Title: demo.Name}, model.Filters{})
+		query.SelectedIssueUID = &uid
+		return as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, Request: 1})).Selected
+	}
+	want := model.Recurrence{UID: liveRec.UID, Rule: "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,TH", Start: "2026-10-19", TimeZone: "Europe/Zurich", Next: "2026-10-22", Revision: liveRec.Revision}
+	if got := selected(live).Recurrence; got == nil || *got != want {
+		t.Errorf("live recurrence %+v, want %+v", got, want)
+	}
+	if got := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: live})).Selected.Recurrence; got == nil || *got != want {
+		t.Errorf("detail load recurrence %+v, want %+v", got, want)
+	}
+	if got := selected(stopped).Recurrence; got == nil || !got.Stopped {
+		t.Errorf("stopped recurrence %+v, want stopped", got)
+	}
+	if got := selected(plain).Recurrence; got != nil {
+		t.Errorf("plain Issue has recurrence %+v", got)
+	}
+}

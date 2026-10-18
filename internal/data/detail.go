@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	g "go.kenn.io/kata/pkg/client/generated"
@@ -51,7 +52,25 @@ func translateDetail(s *g.UISelectedAuthority) *model.IssueDetailData {
 	for _, l := range s.Links {
 		d.Links = append(d.Links, translateLink(l))
 	}
+	if d.Issue != nil && d.Issue.RecurrenceID != nil {
+		d.Recurrence = translateRecurrence(*d.Issue.RecurrenceID, s.Recurrences)
+	}
 	return d
+}
+
+// translateRecurrence picks the Issue's recurrence out of the Project's live ones. kata omits a deleted recurrence, so an Issue
+// whose recurrence is not there reads as stopped.
+func translateRecurrence(id int64, live []g.Recurrence) *model.Recurrence {
+	i := slices.IndexFunc(live, func(r g.Recurrence) bool { return r.ID == id })
+	if i < 0 {
+		return &model.Recurrence{Stopped: true}
+	}
+	r := live[i]
+	out := &model.Recurrence{UID: r.UID, Rule: r.Rrule, Start: r.Dtstart, TimeZone: r.Timezone, Revision: r.Revision}
+	if r.NextOccurrenceKey != nil {
+		out.Next = *r.NextOccurrenceKey
+	}
+	return out
 }
 
 func translateLink(l g.UILink) model.Link {
