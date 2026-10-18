@@ -62,6 +62,9 @@ type DetailRow struct {
 	// detail's Issue. RefTitle is that Issue's title when it is loaded.
 	Relation, Ref, RefTitle string
 	History                 *HistorySentence
+	// Reply says what a comment answers ("confirms dana's comment in #bbbb") and Replies how many comments answer it; both
+	// are empty without reply information.
+	Reply, Replies string
 }
 
 // HistorySentence is "<Verb> <Object>" (the row's Author did it) with the Verb's

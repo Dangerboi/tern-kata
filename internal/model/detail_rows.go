@@ -19,10 +19,12 @@ const (
 
 // DetailItem is one row of the Issue detail's cursor list, shaped for the view. A RowChild row carries Child; every other
 // row carries Activity. Key is unique within the list, and ReferenceUID is the Issue the row opens ("" when it opens none).
+// ReplyKey is the key of the comment in this Issue that a reply row answers, which enter moves the cursor to.
 type DetailItem struct {
 	Kind         RowKind
 	Key          string
 	ReferenceUID string
+	ReplyKey     string
 	Child        ChildRow
 	Activity     DetailRow
 }
@@ -112,8 +114,8 @@ func (m Model) withRows() Model {
 		}
 	case TabComments:
 		for _, comment := range m.authority.Comments {
-			row := DetailRow{Key: comment.UID, Author: comment.Author, Time: m.DetailTime(comment.CreatedAt), Body: comment.Body}
-			m.rows.items = append(m.rows.items, DetailItem{Kind: RowComment, Key: row.Key, Activity: row})
+			item := m.commentItem(comment)
+			m.rows.items = append(m.rows.items, item)
 		}
 	case TabEvents:
 		// The snapshot lists History newest first; rows read oldest first, like Comments.
@@ -123,6 +125,39 @@ func (m Model) withRows() Model {
 		}
 	}
 	return m
+}
+
+// commentItem is a comment row; a reply opens the comment it answers, here or in another Issue.
+func (m Model) commentItem(comment Comment) DetailItem {
+	row := DetailRow{Key: comment.UID, Author: comment.Author, Time: m.DetailTime(comment.CreatedAt), Body: comment.Body}
+	item := DetailItem{Kind: RowComment, Key: row.Key}
+	if n := len(comment.Backlinks); n == 1 {
+		row.Replies = "1 reply"
+	} else if n > 1 {
+		row.Replies = fmt.Sprintf("%d replies", n)
+	}
+	if target := comment.Reply; target != nil && comment.ReplyKind != nil {
+		verb := map[string]string{"confirm": "confirms", "refute": "refutes", "supersede": "supersedes"}[*comment.ReplyKind]
+		if verb == "" {
+			verb = "replies to"
+		}
+		whose := "a comment"
+		if target.Author != nil {
+			whose = *target.Author + "'s comment"
+		}
+		row.Reply = verb + " " + whose
+		switch {
+		case target.IssueUID != nil && *target.IssueUID != m.DetailIssueUID():
+			if target.IssueShortID != nil {
+				row.Reply += " in #" + *target.IssueShortID
+			}
+			item.ReferenceUID = *target.IssueUID
+		case target.UID != nil && slices.ContainsFunc(m.authority.Comments, func(c Comment) bool { return c.UID == *target.UID }):
+			item.ReplyKey = *target.UID
+		}
+	}
+	item.Activity = row
+	return item
 }
 
 func (m Model) linkRow(link Link) DetailRow {
