@@ -8,8 +8,11 @@ kata --workspace "$tmp/workspace" create "Smoke claim close Issue" --body "Claim
 claim_draft=$(jq -r '.issue.uid' "$tmp/claim-draft.json")
 claim_close=$(jq -r '.issue.uid' "$tmp/claim-close.json")
 
+# Both rows are listed before the click: a row arriving late shifts the list under the click.
+expect_tree "[data-id='main.columns.list.issues.$claim_close']" '.ok and .count == 1'
 expect_tree "[data-id='main.columns.list.issues.$claim_draft']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.list.issues.$claim_draft']"
+expect_tree "[data-id='main.columns.list.issues.$claim_draft']" '.ok and .nodes[0]["aria-selected"] == "true"'
 ctl key enter
 ctl key e
 expect_tree "[data-id='layer.editor.body']" '.ok and .count == 1'
