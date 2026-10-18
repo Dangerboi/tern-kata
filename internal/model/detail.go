@@ -137,6 +137,7 @@ func (m Model) DetailRow(tab ActivityTab, index int) (DetailRow, bool) {
 // row's id never ends in the child's UID as the list row's does. A child that is not loaded has only its UID, Key and Ref.
 type ChildRow struct {
 	Key, UID, Ref, Title, Status, Owner string
+	OwnerExpires                        *time.Time
 	UpdatedAt                           time.Time
 	Loaded, Closed                      bool
 }
@@ -159,7 +160,7 @@ func (m Model) DetailChildren() []ChildRow {
 			if issue.Owner != nil {
 				owner = *issue.Owner
 			}
-			rows = append(rows, ChildRow{Key: link.Key, UID: issue.UID, Ref: link.Ref, Title: issue.Title, Status: issue.Status, Owner: owner, UpdatedAt: issue.UpdatedAt, Loaded: true, Closed: IsClosed(issue)})
+			rows = append(rows, ChildRow{Key: link.Key, UID: issue.UID, Ref: link.Ref, Title: issue.Title, Status: issue.Status, Owner: owner, OwnerExpires: issue.AssignmentExpiresOn, UpdatedAt: issue.UpdatedAt, Loaded: true, Closed: IsClosed(issue)})
 			delete(links, issue.UID)
 		}
 	}

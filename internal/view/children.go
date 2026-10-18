@@ -30,7 +30,7 @@ func childrenTable(m model.Model, children []model.ChildRow, now time.Time) tern
 		refWidth = max(refWidth, utf8.RuneCountInString(child.Ref))
 	}
 	statusW := width("status", func(c model.ChildRow) string { return c.Status })
-	ownerW := width("owner", func(c model.ChildRow) string { return c.Owner })
+	ownerW := width("owner", func(c model.ChildRow) string { return m.OwnerDisplay(&c.Owner, c.OwnerExpires, now) })
 	updatedW := width("updated", func(c model.ChildRow) string { return relativeTime(c.UpdatedAt, now) })
 	// row is the status, title, owner and updated cells after ref, in that order.
 	row := func(c ui.Common, follow *ui.Actions, ref ui.Text, texts, styles [4]string) ui.Row {
@@ -68,7 +68,7 @@ func childrenTable(m model.Model, children []model.ChildRow, now time.Time) tern
 		if child.Closed {
 			styles = muted
 		}
-		nodes = append(nodes, row(common, &ui.Actions{Click: JumpClick(child.UID)}, ref, [4]string{child.Status, child.Title, child.Owner, relativeTime(child.UpdatedAt, now)}, styles))
+		nodes = append(nodes, row(common, &ui.Actions{Click: JumpClick(child.UID)}, ref, [4]string{child.Status, child.Title, m.OwnerDisplay(&child.Owner, child.OwnerExpires, now), relativeTime(child.UpdatedAt, now)}, styles))
 	}
 	return ui.Col{Common: ui.Common{Key: "children"}, Gap: ui.GapNone, Children: nodes}
 }

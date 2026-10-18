@@ -29,7 +29,7 @@ func parenting(tab model.ActivityTab) model.Model {
 	parent := alpha
 	parent.Body = "The parent's body."
 	dana := "dana"
-	kid := model.Issue{UID: "kid", ShortID: "kidd", Title: "Open kid", Status: "open", ProjectName: "work", Owner: &dana, UpdatedAt: testNow.Add(-38 * time.Minute)}
+	kid := model.Issue{UID: "kid", ShortID: "kidd", Title: "Open kid", Status: "open", ProjectName: "work", Owner: &dana, AssignmentExpiresOn: ptr(testNow.Add(time.Hour)), UpdatedAt: testNow.Add(-38 * time.Minute)}
 	done := model.Issue{UID: "done", ShortID: "done", Title: "Closed kid", Status: "closed", ProjectName: "work", UpdatedAt: testNow.Add(-3 * time.Hour)}
 	child := func(id int64, uid string) g.UILink {
 		return g.UILink{ID: id, Type: "parent", FromIssueUID: uid, FromQualifiedID: "work#" + uid, ToIssueUID: "alpha", ToQualifiedID: "work#aaaa"}
@@ -81,8 +81,8 @@ func TestChildRowsShowReferenceStatusTitleOwnerAndUpdatedInTheListsOrder(t *test
 		t.Fatalf("rows = %v, want %v", rows, want)
 	}
 	for row, want := range map[string][5]string{
-		kidRow:  {"#kid\u00a0\u00a0", "open\u00a0\u00a0", "Open kid", "dana\u00a0", "38m ago"},
-		doneRow: {"#done\u00a0", "closed", "Closed kid", "\u00a0\u00a0\u00a0\u00a0\u00a0", "3h ago\u00a0"},
+		kidRow:  {"#kid\u00a0\u00a0", "open\u00a0\u00a0", "Open kid", "dana until 13:00", "38m ago"},
+		doneRow: {"#done\u00a0", "closed", "Closed kid", strings.Repeat("\u00a0", 16), "3h ago\u00a0"},
 	} {
 		for i, cell := range []string{"jump", "status", "title", "owner", "updated"} {
 			if got := text(nodes[row+"."+cell]); got != want[i] {

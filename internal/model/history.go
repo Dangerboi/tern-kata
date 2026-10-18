@@ -286,3 +286,25 @@ func movedTo(event g.Event, p payloadMap) string {
 	}
 	return strings.Join(parts, " ")
 }
+
+// OwnerDisplay is the one owner text of list rows, the children table and the Issue detail:
+// "<owner>", or "<owner> until HH:MM" when the claim expires today and "<owner> until
+// YYYY-MM-DD HH:MM" otherwise, in the Pane's zone. "" when nobody owns the Issue.
+func (m Model) OwnerDisplay(owner *string, expires *time.Time, now time.Time) string {
+	if owner == nil || *owner == "" {
+		return ""
+	}
+	if expires == nil {
+		return *owner
+	}
+	loc := m.zone
+	if loc == nil {
+		loc = time.UTC
+	}
+	at := expires.In(loc)
+	layout := "2006-01-02 15:04"
+	if y, mo, d := now.In(loc).Date(); at.Year() == y && at.Month() == mo && at.Day() == d {
+		layout = "15:04"
+	}
+	return *owner + " until " + at.Format(layout)
+}
