@@ -64,17 +64,17 @@ type RecurrenceFormState struct {
 	Change, StopConfirm, Stopping bool
 	Opened                        Recurrence
 	Raw                           string
-	ProjectID    int64
-	Frequency    Frequency
-	Every        string
-	Weekdays     [7]bool // indexed by time.Weekday
-	WeekdayAt    int     // the weekday under the cursor, 0 for Monday: the field lists Monday first
-	Day          string  // "" for the start date's day, "15", "last", "2nd tue"
-	Month        int     // 1 to 12
-	Ends         EndKind
-	Until, Count string
-	Start, Zone  string
-	Err          error
+	ProjectID                     int64
+	Frequency                     Frequency
+	Every                         string
+	Weekdays                      [7]bool // indexed by time.Weekday
+	WeekdayAt                     int     // the weekday under the cursor, 0 for Monday: the field lists Monday first
+	Day                           string  // "" for the start date's day, "15", "last", "2nd tue"
+	Month                         int     // 1 to 12
+	Ends                          EndKind
+	Until, Count                  string
+	Start, Zone                   string
+	Err                           error
 }
 
 // Shows says the field applies to the card as it stands; the others are hidden and tab skips them.
