@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 func TestLiveSearch(t *testing.T) {
@@ -115,7 +114,7 @@ func TestFilterForm(t *testing.T) {
 			}
 			refresh := cmds[0].(model.ReadSnapshot)
 			q := refresh.Query
-			if *q.View != "today" || *q.ProjectUID != "p" || !reflect.DeepEqual(q.Status, []string{"open"}) || !reflect.DeepEqual(q.Owner, []string{"q"}) || !reflect.DeepEqual(q.Label, []string{"bug", "ux"}) || !reflect.DeepEqual(q.Relationship, []g.ReadUISnapshotQueryRelationship{"parent"}) || *q.Text != "existing" {
+			if *q.View != "today" || *q.ProjectUID != "p" || !reflect.DeepEqual(q.Status, []string{"open"}) || !reflect.DeepEqual(q.Owner, []string{"q"}) || !reflect.DeepEqual(q.Label, []string{"bug", "ux"}) || !reflect.DeepEqual(q.Relationship, []string{"parent"}) || *q.Text != "existing" {
 				t.Fatalf("form query: %+v", q)
 			}
 		})

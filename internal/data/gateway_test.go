@@ -368,7 +368,7 @@ func TestGatewayReportsDaemonErrorsInTheAskingMessage(t *testing.T) {
 		{"project", model.BindProject{Workspace: workspace, Actor: "tester", Name: "other"}, func(err error) model.Msg { return model.ProjectSaved{Err: err} }},
 		{"new project", model.CreateProject{Workspace: t.TempDir(), Actor: "tester", Name: "demo"}, func(err error) model.Msg { return model.ProjectSaved{Err: err} }},
 		{"labels", model.LoadFieldLabels{Workspace: workspace, UID: "nope", ProjectID: 9999}, func(err error) model.Msg { return model.FieldLabelsLoaded{UID: "nope", Err: err} }},
-		{"snapshot", model.ReadSnapshot{Workspace: workspace, Request: 4, Query: g.ReadUISnapshotQuery{View: &snapshotView, ProjectUID: &nope}}, func(err error) model.Msg { return model.SnapshotFailed{Request: 4, Err: err} }},
+		{"snapshot", model.ReadSnapshot{Workspace: workspace, Request: 4, Query: model.SnapshotQuery{View: &snapshotView, ProjectUID: &nope}}, func(err error) model.Msg { return model.SnapshotFailed{Request: 4, Err: err} }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got := run(t, gateway, tt.cmd)

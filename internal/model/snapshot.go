@@ -6,9 +6,21 @@ import (
 	"slices"
 	"strings"
 	"time"
-
-	g "go.kenn.io/kata/pkg/client/generated"
 )
+
+// SnapshotQuery is what picks a snapshot: the Collection and filters, plus the selected Issue's detail riding along. The
+// gateway translates it to kata's wire query and adds the local calendar the dated Collections need.
+type SnapshotQuery struct {
+	View             *string
+	ProjectUID       *string
+	Status           []string
+	Owner            []string
+	Label            []string
+	Relationship     []string
+	Text             *string
+	SelectedIssueUID *string
+	IncludeHistory   *bool
+}
 
 // The Collection snapshot is how the shown Collection is brought in line with the daemon: the first load, a Collection switch,
 // a filter change, an id search and a live refresh all go through snapshotChanged (the writers' one call) and arrive as one
@@ -17,7 +29,7 @@ import (
 // ReadSnapshot asks the daemon for the snapshot answering Query. ETag is sent only when the snapshot on screen answers the same query.
 type ReadSnapshot struct {
 	Workspace string
-	Query     g.ReadUISnapshotQuery
+	Query     SnapshotQuery
 	ETag      string
 	Request   int64
 }
@@ -28,7 +40,7 @@ func (ReadSnapshot) cmd() {}
 // adds the local calendar the dated Collections need and reports it in LocalDate and TimeZone.
 type SnapshotLoaded struct {
 	Request             int64
-	Query               g.ReadUISnapshotQuery
+	Query               SnapshotQuery
 	Snapshot            Snapshot
 	Selected            *IssueDetailData // the snapshot's selected part, translated by the gateway
 	ETag                string
@@ -73,8 +85,8 @@ func DatedView(view string) bool {
 }
 
 // CollectionQuery is the snapshot query for a Collection and the filters alone.
-func CollectionQuery(c Collection, f Filters) g.ReadUISnapshotQuery {
-	q := g.ReadUISnapshotQuery{View: new(c.View)}
+func CollectionQuery(c Collection, f Filters) SnapshotQuery {
+	q := SnapshotQuery{View: new(c.View)}
 	if c.ProjectUID != "" {
 		q.ProjectUID = new(c.ProjectUID)
 	} else if f.ProjectUID != "" {
@@ -95,13 +107,13 @@ func CollectionQuery(c Collection, f Filters) g.ReadUISnapshotQuery {
 		}
 	}
 	if f.Relationship != "" {
-		q.Relationship = []g.ReadUISnapshotQueryRelationship{g.ReadUISnapshotQueryRelationship(f.Relationship)}
+		q.Relationship = []string{f.Relationship}
 	}
 	return q
 }
 
 // SnapshotQuery is the query the shown Collection answers; a search that names an Issue by short id is answered by that Issue, not by text.
-func (m Model) SnapshotQuery() g.ReadUISnapshotQuery {
+func (m Model) SnapshotQuery() SnapshotQuery {
 	q := CollectionQuery(m.Collection, m.Filters)
 	if m.idMatch() != "" {
 		q.Text = nil
@@ -110,7 +122,7 @@ func (m Model) SnapshotQuery() g.ReadUISnapshotQuery {
 }
 
 // liveQuery is SnapshotQuery plus the selected Issue's detail, which rides along so the shown Issue refreshes in place.
-func liveQuery(m Model) g.ReadUISnapshotQuery {
+func liveQuery(m Model) SnapshotQuery {
 	q := m.SnapshotQuery()
 	if m.SelectedUID != "" && !m.DetailHidden() {
 		q.SelectedIssueUID = new(m.SelectedUID)
@@ -120,7 +132,7 @@ func liveQuery(m Model) g.ReadUISnapshotQuery {
 }
 
 // sameCollectionQuery compares what picks the Issues, not the detail riding along.
-func sameCollectionQuery(a, b g.ReadUISnapshotQuery) bool {
+func sameCollectionQuery(a, b SnapshotQuery) bool {
 	a.SelectedIssueUID, b.SelectedIssueUID = nil, nil
 	a.IncludeHistory, b.IncludeHistory = nil, nil
 	return reflect.DeepEqual(a, b)

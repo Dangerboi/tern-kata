@@ -27,7 +27,11 @@ func translateDetail(s *g.UISelectedAuthority) *model.IssueDetailData {
 	if s == nil {
 		return nil
 	}
-	d := &model.IssueDetailData{Issue: s.Issue}
+	d := &model.IssueDetailData{}
+	if s.Issue != nil {
+		issue := translateIssue(s.Issue)
+		d.Issue = &issue
+	}
 	for _, c := range s.Comments {
 		comment := model.Comment{
 			UID: c.UID, Handle: c.Handle, Author: c.Author, Body: c.Body, CreatedAt: c.CreatedAt,

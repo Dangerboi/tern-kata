@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 func editorModel() model.Model {
@@ -112,7 +111,7 @@ func TestDraftSurvivesLiveSnapshotAndSaveFailure(t *testing.T) {
 		t.Fatalf("a daemon event asked for %#v, want a snapshot read", cmds)
 	}
 	latest := model.Issue{UID: "a", ProjectID: 2, Body: "Remote body", Revision: 8}
-	snapshot := model.Snapshot{Cursor: 9, Issues: []g.UIIssue{latest}}
+	snapshot := model.Snapshot{Cursor: 9, Issues: []model.Issue{latest}}
 	m, _ = model.Update(m, model.SnapshotLoaded{Request: read.Request, Query: read.Query, Snapshot: snapshot, Selected: &model.IssueDetailData{Issue: &latest}})
 	if m.Drafts["a"].Editor.Text != "a😀blocal" || m.Drafts["a"].BaseRevision != 7 {
 		t.Fatal("snapshot destroyed/rebased Draft")

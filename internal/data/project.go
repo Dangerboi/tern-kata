@@ -35,7 +35,7 @@ func (c *Client) ReadProject(ctx context.Context, workspace string) (model.Proje
 			if response.JSON200 == nil {
 				return model.ProjectLoaded{}, fmt.Errorf("kata daemon returned no Project")
 			}
-			project = response.JSON200.Project
+			project = translateProject(response.JSON200.Project)
 		}
 	}
 	return model.ProjectLoaded{Project: project, Daemon: model.Daemon{Remote: c.remote, Version: c.version}}, nil
