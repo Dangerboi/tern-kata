@@ -25,7 +25,12 @@ func (c *Client) ReadEvents(ctx context.Context, cmd model.Subscribe, send func(
 		if err != nil {
 			return err
 		}
-		return ReadError(body, fmt.Errorf("kata event stream: HTTP %d", response.StatusCode))
+		// The raw stream response is the one place no decoded error reaches us.
+		var envelope g.ErrorEnvelope
+		if json.Unmarshal(body, &envelope) != nil {
+			return fmt.Errorf("kata event stream: HTTP %d", response.StatusCode)
+		}
+		return daemonError(envelope)
 	}
 	if !send(model.StreamOpened{Generation: cmd.Generation}) {
 		return ctx.Err()

@@ -11,29 +11,17 @@ func (c *Client) WriteField(ctx context.Context, cmd model.WriteField) error {
 	actor := &cmd.Actor
 	switch cmd.Action {
 	case model.AddLabelAction:
-		r, e := c.AddLabelWithResponse(ctx, &g.AddLabelRequestOptions{PathParams: &g.AddLabelPath{ProjectID: strconv.FormatInt(cmd.ProjectID, 10), Ref: cmd.UID}, Body: &g.AddLabelBody{Actor: actor, Label: cmd.Value}})
-		if r != nil && e != nil {
-			return ReadError(r.Body, e)
-		}
-		return e
+		_, e := c.AddLabelWithResponse(ctx, &g.AddLabelRequestOptions{PathParams: &g.AddLabelPath{ProjectID: strconv.FormatInt(cmd.ProjectID, 10), Ref: cmd.UID}, Body: &g.AddLabelBody{Actor: actor, Label: cmd.Value}})
+		return daemonError(e)
 	case model.RemoveLabelAction:
-		r, e := c.RemoveLabelWithResponse(ctx, &g.RemoveLabelRequestOptions{PathParams: &g.RemoveLabelPath{ProjectID: cmd.ProjectID, Ref: cmd.UID, Label: cmd.Value}, Query: &g.RemoveLabelQuery{Actor: actor}})
-		if r != nil && e != nil {
-			return ReadError(r.Body, e)
-		}
-		return e
+		_, e := c.RemoveLabelWithResponse(ctx, &g.RemoveLabelRequestOptions{PathParams: &g.RemoveLabelPath{ProjectID: cmd.ProjectID, Ref: cmd.UID, Label: cmd.Value}, Query: &g.RemoveLabelQuery{Actor: actor}})
+		return daemonError(e)
 	case model.AssignOwnerAction:
-		r, e := c.AssignIssueWithResponse(ctx, &g.AssignIssueRequestOptions{PathParams: &g.AssignIssuePath{ProjectID: cmd.ProjectID, Ref: cmd.UID}, Body: &g.AssignIssueBody{Actor: actor, Owner: cmd.Value}})
-		if r != nil && e != nil {
-			return ReadError(r.Body, e)
-		}
-		return e
+		_, e := c.AssignIssueWithResponse(ctx, &g.AssignIssueRequestOptions{PathParams: &g.AssignIssuePath{ProjectID: cmd.ProjectID, Ref: cmd.UID}, Body: &g.AssignIssueBody{Actor: actor, Owner: cmd.Value}})
+		return daemonError(e)
 	case model.ClearOwnerAction:
-		r, e := c.UnassignIssueWithResponse(ctx, &g.UnassignIssueRequestOptions{PathParams: &g.UnassignIssuePath{ProjectID: cmd.ProjectID, Ref: cmd.UID}, Body: &g.UnassignIssueBody{Actor: actor}})
-		if r != nil && e != nil {
-			return ReadError(r.Body, e)
-		}
-		return e
+		_, e := c.UnassignIssueWithResponse(ctx, &g.UnassignIssueRequestOptions{PathParams: &g.UnassignIssuePath{ProjectID: cmd.ProjectID, Ref: cmd.UID}, Body: &g.UnassignIssueBody{Actor: actor}})
+		return daemonError(e)
 	case model.PriorityAction:
 		var priority *int64
 		if cmd.Value != "-" {
@@ -43,27 +31,18 @@ func (c *Client) WriteField(ctx context.Context, cmd model.WriteField) error {
 			}
 			priority = &n
 		}
-		r, e := c.SetIssuePriorityWithResponse(ctx, &g.SetIssuePriorityRequestOptions{PathParams: &g.SetIssuePriorityPath{ProjectID: cmd.ProjectID, Ref: cmd.UID}, Body: &g.SetIssuePriorityBody{Actor: actor, Priority: priority}})
-		if r != nil && e != nil {
-			return ReadError(r.Body, e)
-		}
-		return e
+		_, e := c.SetIssuePriorityWithResponse(ctx, &g.SetIssuePriorityRequestOptions{PathParams: &g.SetIssuePriorityPath{ProjectID: cmd.ProjectID, Ref: cmd.UID}, Body: &g.SetIssuePriorityBody{Actor: actor, Priority: priority}})
+		return daemonError(e)
 	case model.SetParentAction:
-		r, e := c.CreateLinkWithResponse(ctx, &g.CreateLinkRequestOptions{PathParams: &g.CreateLinkPath{ProjectID: cmd.ProjectID, Ref: cmd.UID}, Body: &g.CreateLinkBody{Actor: actor, Type: g.CreateLinkRequestBodyTypeParent, ToRef: cmd.Value}})
-		if r != nil && e != nil {
-			return ReadError(r.Body, e)
-		}
-		return e
+		_, e := c.CreateLinkWithResponse(ctx, &g.CreateLinkRequestOptions{PathParams: &g.CreateLinkPath{ProjectID: cmd.ProjectID, Ref: cmd.UID}, Body: &g.CreateLinkBody{Actor: actor, Type: g.CreateLinkRequestBodyTypeParent, ToRef: cmd.Value}})
+		return daemonError(e)
 	}
 	return nil
 }
 func (c *Client) FieldLabels(ctx context.Context, cmd model.LoadFieldLabels) (model.FieldLabelsLoaded, error) {
 	r, e := c.ListLabelsWithResponse(ctx, &g.ListLabelsRequestOptions{PathParams: &g.ListLabelsPath{ProjectID: cmd.ProjectID}})
 	if e != nil {
-		if r != nil {
-			e = ReadError(r.Body, e)
-		}
-		return model.FieldLabelsLoaded{}, e
+		return model.FieldLabelsLoaded{}, daemonError(e)
 	}
 	labels := []string{}
 	if r.JSON200 != nil {

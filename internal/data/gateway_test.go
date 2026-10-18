@@ -304,6 +304,7 @@ func TestGatewayReportsDaemonErrorsInTheAskingMessage(t *testing.T) {
 	kata := startKata(t, "0.18.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
+	snapshotView, nope := "project", "nope"
 
 	for _, tt := range []struct {
 		name string
@@ -318,6 +319,9 @@ func TestGatewayReportsDaemonErrorsInTheAskingMessage(t *testing.T) {
 		{"reopen", model.ReopenIssueCmd{Workspace: workspace, UID: "nope", ProjectID: demo.ID, Actor: "tester"}, func(err error) model.Msg { return model.CloseResultMsg{UID: "nope", Err: err} }},
 		{"field", model.WriteField{Workspace: workspace, UID: "nope", ProjectID: demo.ID, Action: model.AddLabelAction, Value: "x", Actor: "tester"}, func(err error) model.Msg { return model.FieldWritten{UID: "nope", Err: err} }},
 		{"project", model.BindProject{Workspace: workspace, Actor: "tester", Name: "other"}, func(err error) model.Msg { return model.ProjectSaved{Err: err} }},
+		{"new project", model.CreateProject{Workspace: t.TempDir(), Actor: "tester", Name: "demo"}, func(err error) model.Msg { return model.ProjectSaved{Err: err} }},
+		{"labels", model.LoadFieldLabels{Workspace: workspace, UID: "nope", ProjectID: 9999}, func(err error) model.Msg { return model.FieldLabelsLoaded{UID: "nope", Err: err} }},
+		{"snapshot", model.ReadSnapshot{Workspace: workspace, Request: 4, Query: g.ReadUISnapshotQuery{View: &snapshotView, ProjectUID: &nope}}, func(err error) model.Msg { return model.SnapshotFailed{Request: 4, Err: err} }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got := run(t, gateway, tt.cmd)
@@ -337,11 +341,30 @@ func TestGatewayReportsDaemonErrorsInTheAskingMessage(t *testing.T) {
 				failure = got.Err
 			case model.ProjectSaved:
 				failure = got.Err
+			case model.FieldLabelsLoaded:
+				failure = got.Err
+			case model.SnapshotFailed:
+				failure = got.Err
 			}
 			if failure == nil || !reflect.DeepEqual(got, tt.want(failure)) {
 				t.Fatalf("got %#v, want a %T carrying the daemon's error", got, tt.want(nil))
 			}
 		})
+	}
+}
+
+func TestGatewayShowsKatasMessageThenItsHintWithoutStatusAndCode(t *testing.T) {
+	kata := startKata(t, "0.18.0")
+	c, err := connect(context.Background(), kata.target())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(c.CloseIdleConnections)
+	unbound := t.TempDir()
+	_, err = c.ResolveProjectWithResponse(context.Background(), &g.ResolveProjectRequestOptions{Body: &g.ResolveProjectBody{StartPath: &unbound}})
+	want := "no .kata.toml ancestor and no git ancestor\nrun \"kata init --project <name>\" in the workspace root, or pass --project <name>"
+	if got := daemonError(err); got == nil || got.Error() != want {
+		t.Fatalf("got %v, want %q", got, want)
 	}
 }
 

@@ -17,10 +17,7 @@ const guardedAttempts = 3
 func (c *Client) SaveDraft(ctx context.Context, cmd model.SaveDraft) (model.Msg, error) {
 	current, err := c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: cmd.ProjectID, Ref: cmd.UID}})
 	if err != nil {
-		if current != nil {
-			err = ReadError(current.Body, err)
-		}
-		return nil, err
+		return nil, daemonError(err)
 	}
 	if current.JSON200 == nil {
 		return nil, fmt.Errorf("kata returned no Issue before saving Draft")
@@ -30,23 +27,14 @@ func (c *Client) SaveDraft(ctx context.Context, cmd model.SaveDraft) (model.Msg,
 	}
 	actor := cmd.Actor
 	// shortcut: check-then-write races (kata v0.19 enforces no precondition on edits or comments); upgrade when it does.
-	var body []byte
 	var werr error
 	if cmd.Comment {
-		response, err := c.CreateCommentWithResponse(ctx, &g.CreateCommentRequestOptions{PathParams: &g.CreateCommentPath{ProjectID: fmt.Sprint(cmd.ProjectID), Ref: cmd.UID}, Body: &g.CreateCommentBody{Body: cmd.Text, Actor: &actor}})
-		werr = err
-		if response != nil {
-			body = response.Body
-		}
+		_, werr = c.CreateCommentWithResponse(ctx, &g.CreateCommentRequestOptions{PathParams: &g.CreateCommentPath{ProjectID: fmt.Sprint(cmd.ProjectID), Ref: cmd.UID}, Body: &g.CreateCommentBody{Body: cmd.Text, Actor: &actor}})
 	} else {
-		response, err := c.EditIssueWithResponse(ctx, &g.EditIssueRequestOptions{PathParams: &g.EditIssuePath{ProjectID: fmt.Sprint(cmd.ProjectID), Ref: cmd.UID}, Body: &g.EditIssueBody{Body: &cmd.Text, Actor: &actor}})
-		werr = err
-		if response != nil {
-			body = response.Body
-		}
+		_, werr = c.EditIssueWithResponse(ctx, &g.EditIssueRequestOptions{PathParams: &g.EditIssuePath{ProjectID: fmt.Sprint(cmd.ProjectID), Ref: cmd.UID}, Body: &g.EditIssueBody{Body: &cmd.Text, Actor: &actor}})
 	}
 	if werr != nil {
-		return nil, ReadError(body, werr)
+		return nil, daemonError(werr)
 	}
 	return model.DraftSaved{UID: cmd.UID}, nil
 }

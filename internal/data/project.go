@@ -2,7 +2,6 @@ package data
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -29,15 +28,8 @@ func (c *Client) ReadProject(ctx context.Context, workspace string) (model.Proje
 	if request != nil {
 		response, err := c.ResolveProjectWithResponse(ctx, &g.ResolveProjectRequestOptions{Body: request})
 		if err != nil {
-			if response == nil {
-				return model.ProjectLoaded{}, err
-			}
-			var envelope g.ErrorEnvelope
-			if json.Unmarshal(response.Body, &envelope) != nil || envelope.ErrorData.Code != "project_not_initialized" {
-				return model.ProjectLoaded{}, ReadError(response.Body, err)
-			}
-			if c.remote && request.Name != nil {
-				return model.ProjectLoaded{}, ReadError(response.Body, err)
+			if daemonCode(err) != "project_not_initialized" || (c.remote && request.Name != nil) {
+				return model.ProjectLoaded{}, daemonError(err)
 			}
 		} else {
 			if response.JSON200 == nil {
