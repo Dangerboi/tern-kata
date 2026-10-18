@@ -1,6 +1,7 @@
 package data
 
 import (
+	g "go.kenn.io/kata/pkg/client/generated"
 	"context"
 	"encoding/json"
 	"errors"
@@ -284,6 +285,25 @@ func TestGatewayClosesWithEveryReason(t *testing.T) {
 				t.Fatalf("close %+v", closed)
 			}
 			got := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected.Issue
+			stored := closePayload(t, gateway, workspace, uid)
+			wantReason := tt.cmd.Reason
+			if tt.cmd.Quick {
+				wantReason = "done"
+			}
+			if stored["reason"] != wantReason {
+				t.Fatalf("stored reason %v, want %q", stored["reason"], wantReason)
+			}
+			if got, _ := stored["message"].(string); got != tt.cmd.Message {
+				t.Fatalf("stored message %q, want %q", got, tt.cmd.Message)
+			}
+			valueField := map[model.CloseEvidenceKind]string{model.EvidenceCommit: "sha", model.EvidencePR: "url", model.EvidenceTest: "command", model.EvidenceAudit: "rationale", model.EvidenceDuplicateOf: "issue_ref", model.EvidenceSupersededBy: "issue_ref"}
+			var want []any
+			for _, e := range tt.cmd.Evidence {
+				want = append(want, map[string]any{"type": string(e.Kind), valueField[e.Kind]: e.Value})
+			}
+			if got, _ := stored["evidence"].([]any); !reflect.DeepEqual(got, want) {
+				t.Fatalf("stored evidence %v, want %v", got, want)
+			}
 			if got.Status != "closed" {
 				t.Fatalf("status %q, want closed", got.Status)
 			}
@@ -753,4 +773,30 @@ func TestGatewayGuardedWritesSurviveAnOwnerChange(t *testing.T) {
 			t.Fatalf("second close %+v wrote events %d -> %d", closed, len(before.Selected.History), len(after.Selected.History))
 		}
 	})
+}
+
+// closePayload is what the daemon recorded when the Issue uid was closed.
+func closePayload(t *testing.T, gateway *Gateway, workspace, uid string) map[string]any {
+	t.Helper()
+	ctx := context.Background()
+	client, err := gateway.client(ctx, workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	limit := int64(1000)
+	events, err := client.PollEventsWithResponse(ctx, &g.PollEventsRequestOptions{Query: &g.PollEventsQuery{Limit: &limit}})
+	if err != nil || events.JSON200 == nil {
+		t.Fatalf("poll events: %v", err)
+	}
+	for _, e := range events.JSON200.Events {
+		if e.IssueUID != nil && *e.IssueUID == uid && e.Type == "issue.closed" {
+			var payload map[string]any
+			if err := json.Unmarshal(e.Payload, &payload); err != nil {
+				t.Fatal(err)
+			}
+			return payload
+		}
+	}
+	t.Fatalf("no close event for %s", uid)
+	return nil
 }
