@@ -6,7 +6,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-
 )
 
 // VerbTone marks the history verbs that are worth a colour. The view maps it

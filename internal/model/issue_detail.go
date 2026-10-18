@@ -1,6 +1,5 @@
 package model
 
-
 // IssueDetail owns what the detail column shows: the Issue it was asked for, that Issue's loaded authority, loading and error
 // state, the Activity tab, the row cursor, the jump history, the hidden flag and the Issue opened by reference. Only this file
 // writes these fields; every other caller reports what happened (an Issue was written, a snapshot arrived, a tab was chosen).
@@ -23,13 +22,13 @@ type IssueDetail struct {
 }
 
 func (d IssueDetail) DetailAuthority() *IssueDetailData { return d.authority }
-func (d IssueDetail) DetailLoading() bool                     { return d.loading }
-func (d IssueDetail) DetailErr() error                        { return d.err }
-func (d IssueDetail) DetailIndex() int                        { return d.cursor }
-func (d IssueDetail) DetailHidden() bool                      { return d.hidden }
-func (d IssueDetail) ActiveTab() ActivityTab                  { return d.tab }
-func (d IssueDetail) OpenedIssueUID() string                  { return d.openedUID }
-func (d IssueDetail) OpenIssueRef() string                    { return d.openRef }
+func (d IssueDetail) DetailLoading() bool               { return d.loading }
+func (d IssueDetail) DetailErr() error                  { return d.err }
+func (d IssueDetail) DetailIndex() int                  { return d.cursor }
+func (d IssueDetail) DetailHidden() bool                { return d.hidden }
+func (d IssueDetail) ActiveTab() ActivityTab            { return d.tab }
+func (d IssueDetail) OpenedIssueUID() string            { return d.openedUID }
+func (d IssueDetail) OpenIssueRef() string              { return d.openRef }
 
 // updateWithDetail runs one Model step and then settles the detail: tab and Issue changes become intents, the jump history ends
 // whenever focus is not on the detail or it shows an Issue no jump landed on, and a changed selection or a stale detail loads.

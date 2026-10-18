@@ -3,7 +3,6 @@ package model
 import (
 	"fmt"
 	"strings"
-
 )
 
 type ActionMsg struct {

@@ -5,7 +5,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-
 )
 
 type ActivityTab uint8

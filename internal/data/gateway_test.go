@@ -1,11 +1,11 @@
 package data
 
 import (
-	g "go.kenn.io/kata/pkg/client/generated"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	g "go.kenn.io/kata/pkg/client/generated"
 	"net/http"
 	"net/http/httptest"
 	"os"
