@@ -9,6 +9,8 @@ type IssueDetailData struct {
 	Comments []Comment
 	History  []Event
 	Links    []Link
+	// Recurrence is the Issue's recurrence; nil when the Issue does not recur.
+	Recurrence *Recurrence
 }
 
 // Comment is one comment; ReplyKind is set when it replies to another, Reply is the answered comment and
