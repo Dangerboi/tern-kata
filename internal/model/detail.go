@@ -1,11 +1,6 @@
 package model
 
-import (
-	"fmt"
-	"slices"
-	"strings"
-	"time"
-)
+import "slices"
 
 type ActivityTab uint8
 
@@ -89,99 +84,6 @@ func (m Model) DetailRowCount(tab ActivityTab) int {
 		return len(m.authority.History)
 	}
 	return 0
-}
-
-func (m Model) DetailRow(tab ActivityTab, index int) (DetailRow, bool) {
-	if index < 0 || index >= m.DetailRowCount(tab) {
-		return DetailRow{}, false
-	}
-	switch tab {
-	case TabLinks:
-		link := m.authority.Links[index]
-		uid, ref := link.ToIssueUID, link.ToQualifiedID
-		relation := link.Type
-		if uid == m.DetailIssueUID() {
-			uid, ref = link.FromIssueUID, link.FromQualifiedID
-			switch relation {
-			case "parent":
-				relation = "child"
-			case "child":
-				relation = "parent"
-			case "blocks":
-				relation = "blocked_by"
-			case "blocked_by":
-				relation = "blocks"
-			}
-		}
-		if project, short, ok := strings.Cut(ref, "#"); ok && m.authority.Issue != nil && project == m.authority.Issue.ProjectName {
-			ref = "#" + short
-		}
-		row := DetailRow{Key: fmt.Sprint(link.ID), Relation: relation, Ref: ref, ReferenceUID: uid}
-		if i := slices.IndexFunc(m.Issues, func(issue Issue) bool { return issue.UID == uid }); i >= 0 {
-			row.RefTitle = m.Issues[i].Title
-		}
-		return row, true
-	case TabComments:
-		comment := m.authority.Comments[index]
-		return DetailRow{Key: comment.UID, Author: comment.Author, Time: m.DetailTime(comment.CreatedAt), Body: comment.Body}, true
-	case TabEvents:
-		// The snapshot lists History newest first; rows read oldest first, like Comments.
-		return m.historyRow(m.authority.History[len(m.authority.History)-1-index]), true
-	}
-	return DetailRow{}, false
-}
-
-// ChildRow is one row of the Children table. Key is the Link's, which is daemon-wide unique, so a
-// row's id never ends in the child's UID as the list row's does. A child that is not loaded has only its UID, Key and Ref.
-type ChildRow struct {
-	Key, UID, Ref, Title, Status, Owner string
-	OwnerExpires                        *time.Time
-	UpdatedAt                           time.Time
-	Loaded, Closed                      bool
-}
-
-// DetailChildren are the detail Issue's children: the loaded ones in the list's order, then
-// the ones not loaded in the Link order. Titles, statuses and times come from the loaded Issues.
-func (m Model) DetailChildren() []ChildRow {
-	links := make(map[string]DetailRow)
-	var uids []string
-	for i := range m.DetailRowCount(TabLinks) {
-		if link, _ := m.DetailRow(TabLinks, i); link.Relation == "child" {
-			links[link.ReferenceUID] = link
-			uids = append(uids, link.ReferenceUID)
-		}
-	}
-	rows := make([]ChildRow, 0, len(uids))
-	for _, issue := range m.Issues {
-		if link, ok := links[issue.UID]; ok {
-			owner := ""
-			if issue.Owner != nil {
-				owner = *issue.Owner
-			}
-			rows = append(rows, ChildRow{Key: link.Key, UID: issue.UID, Ref: link.Ref, Title: issue.Title, Status: issue.Status, Owner: owner, OwnerExpires: issue.AssignmentExpiresOn, UpdatedAt: issue.UpdatedAt, Loaded: true, Closed: IsClosed(issue)})
-			delete(links, issue.UID)
-		}
-	}
-	for _, uid := range uids {
-		if link, ok := links[uid]; ok {
-			rows = append(rows, ChildRow{Key: link.Key, UID: uid, Ref: link.Ref})
-			delete(links, uid)
-		}
-	}
-	return rows
-}
-
-// cursorChildUID is the child under the detail cursor, or "" when the cursor is on an Activity row.
-func (m Model) cursorChildUID() string {
-	if children := m.DetailChildren(); m.Focus == ColumnDetail && m.cursor < len(children) {
-		return children[m.cursor].UID
-	}
-	return ""
-}
-
-// DetailCursorCount is the rows the detail's j/k cursor walks: the children, then the active tab's rows.
-func (m Model) DetailCursorCount() int {
-	return len(m.DetailChildren()) + m.DetailRowCount(m.tab)
 }
 
 // Width tiers, in Pane columns, matching kata's own TUI.

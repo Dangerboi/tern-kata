@@ -87,21 +87,21 @@ func TestDetailReturnsToFirstRowOnlyForADifferentIssueAndKeepsItsTab(t *testing.
 	a := &model.IssueDetailData{Issue: &model.Issue{UID: "a"}, Comments: []model.Comment{{UID: "one"}, {UID: "two"}}}
 	m, _ := model.Update(projectOf("a", "b"), model.DetailLoaded{UID: "a", Selected: a})
 	m, _ = model.Update(m, model.DetailItemMsg{Tab: model.TabComments, Key: "two"})
-	if m.ActiveTab() != model.TabComments || m.DetailIndex() != 1 {
-		t.Fatalf("fixture: tab=%v index=%d", m.ActiveTab(), m.DetailIndex())
+	if m.ActiveTab() != model.TabComments || cursorKey(m) != "two" {
+		t.Fatalf("fixture: tab=%v cursor on %q", m.ActiveTab(), cursorKey(m))
 	}
 
 	// The same Issue reloads (after saving a Draft) where the reader was.
 	m, _ = model.Update(m, model.DraftSaved{UID: "a"})
 	m, _ = model.Update(m, model.DetailLoaded{UID: "a", Selected: a})
-	if m.DetailIssueUID() != "a" || m.ActiveTab() != model.TabComments || m.DetailIndex() != 1 {
-		t.Fatalf("reload moved the reader: issue=%q tab=%v index=%d", m.DetailIssueUID(), m.ActiveTab(), m.DetailIndex())
+	if m.DetailIssueUID() != "a" || m.ActiveTab() != model.TabComments || cursorKey(m) != "two" {
+		t.Fatalf("reload moved the reader: issue=%q tab=%v cursor on %q", m.DetailIssueUID(), m.ActiveTab(), cursorKey(m))
 	}
 
 	// Another Issue starts at its first row on the same tab, while the previous detail stays until it arrives.
 	m, _ = model.Update(m, model.SelectMsg{UID: "b"})
-	if m.DetailIssueUID() != "a" || m.ActiveTab() != model.TabComments || m.DetailIndex() != 0 {
-		t.Fatalf("selecting b: issue=%q tab=%v index=%d", m.DetailIssueUID(), m.ActiveTab(), m.DetailIndex())
+	if m.DetailIssueUID() != "a" || m.ActiveTab() != model.TabComments || cursorKey(m) != "one" {
+		t.Fatalf("selecting b: issue=%q tab=%v cursor on %q", m.DetailIssueUID(), m.ActiveTab(), cursorKey(m))
 	}
 }
 
@@ -110,7 +110,7 @@ func TestPreviousDetailLinksStayRelativeToTheirOwnIssue(t *testing.T) {
 	m, _ := model.Update(projectOf("a", "b"), model.DetailLoaded{UID: "a", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "a"}, Links: []model.Link{link}}})
 	m, _ = model.Update(m, model.SelectMsg{UID: "b"})
 
-	row, ok := m.DetailRow(model.TabLinks, 0)
+	row, ok := activityRow(m, model.TabLinks, 0)
 	if !ok || row.Relation != "child" || row.Ref != "work#child" || row.ReferenceUID != "child" {
 		t.Fatalf("link row while another Issue loads: %+v", row)
 	}
