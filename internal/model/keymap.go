@@ -1,5 +1,7 @@
 package model
 
+import "strings"
+
 type Action string
 
 const (
@@ -60,6 +62,12 @@ type Binding struct {
 	entry        *actionEntry
 }
 
+// headlessNote ends the help of a chord only the headless Tern delivers; Headless tells such bindings apart.
+const headlessNote = " (Tern headless)"
+
+// Headless says the binding is a chord only the headless Tern delivers, which no footer or help sheet shows.
+func (b Binding) Headless() bool { return strings.HasSuffix(b.Help, headlessNote) }
+
 type Mode string
 
 const (
@@ -79,16 +87,16 @@ var cardBindings = []Binding{
 	{Chord: "tab", Key: "tab", Action: CreateNext, Help: "next field", Mode: ModeCreate, ShowInFooter: true},
 	{Chord: "shift+tab", Key: "shift+tab", Action: CreatePrevious, Help: "previous field", Mode: ModeCreate},
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: SaveDraftAction, Help: "create Issue", Mode: ModeCreate, ShowInFooter: true},
-	{Chord: "meta+o", Key: "meta+o", Action: SaveDraftAction, Help: "create Issue (Tern headless)", Mode: ModeCreate},
+	{Chord: "meta+o", Key: "meta+o", Action: SaveDraftAction, Help: "create Issue" + headlessNote, Mode: ModeCreate},
 	{Chord: "escape", Key: "esc", Action: CancelDraft, Help: "discard?", Mode: ModeCreate, ShowInFooter: true},
 	{Chord: "ctrl+space", Key: "ctrl+space", Action: CreateComplete, Help: "complete label", Mode: ModeCreate, ShowInFooter: true},
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: SaveDraftAction, Help: "save Draft", Mode: ModeEditor, ShowInFooter: true},
-	{Chord: "meta+o", Key: "meta+o", Action: SaveDraftAction, Help: "save Draft (Tern headless)", Mode: ModeEditor},
+	{Chord: "meta+o", Key: "meta+o", Action: SaveDraftAction, Help: "save Draft" + headlessNote, Mode: ModeEditor},
 	{Chord: "ctrl+e", Key: "ctrl+e", Action: ExternalEditorAction, Help: "$EDITOR", Mode: ModeEditor, ShowInFooter: true},
-	{Chord: "meta+e", Key: "meta+e", Action: ExternalEditorAction, Help: "$EDITOR (Tern headless)", Mode: ModeEditor},
+	{Chord: "meta+e", Key: "meta+e", Action: ExternalEditorAction, Help: "$EDITOR" + headlessNote, Mode: ModeEditor},
 	{Chord: "escape", Key: "esc", Action: CancelDraft, Help: "discard?", Mode: ModeEditor, ShowInFooter: true},
 	{Chord: "ctrl+z", Key: "ctrl+z", Action: EditorUndo, Help: "undo", Mode: ModeEditor, ShowInFooter: true},
-	{Chord: "meta+z", Key: "meta+z", Action: EditorUndo, Help: "undo (Tern headless)", Mode: ModeEditor},
+	{Chord: "meta+z", Key: "meta+z", Action: EditorUndo, Help: "undo" + headlessNote, Mode: ModeEditor},
 	{Chord: "y", Key: "y", Action: DiscardDraft, Help: "discard Draft", Mode: ModeDiscard, ShowInFooter: true},
 	{Chord: "n", Key: "n", Action: KeepDraft, Help: "keep editing", Mode: ModeDiscard, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: KeepDraft, Help: "keep editing", Mode: ModeDiscard},
@@ -110,7 +118,7 @@ var cardBindings = []Binding{
 	{Chord: "shift+home", Key: "shift+home", Action: EditorHome, Help: "select to line start", Mode: ModeEditor},
 	{Chord: "shift+end", Key: "shift+end", Action: EditorEnd, Help: "select to line end", Mode: ModeEditor},
 	{Chord: "ctrl+a", Key: "ctrl+a", Action: EditorSelectAll, Help: "select all", Mode: ModeEditor},
-	{Chord: "meta+a", Key: "meta+a", Action: EditorSelectAll, Help: "select all (Tern headless)", Mode: ModeEditor},
+	{Chord: "meta+a", Key: "meta+a", Action: EditorSelectAll, Help: "select all" + headlessNote, Mode: ModeEditor},
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: ApplyFilters, Help: "apply filters", Mode: ModeFilterForm, ShowInFooter: true},
 	{Chord: "ctrl+s", Key: "ctrl+s", Action: ApplyFilters, Help: "apply filters", Mode: ModeFilterForm},
 	{Chord: "escape", Key: "esc", Action: CancelFilters, Help: "cancel", Mode: ModeFilterForm, ShowInFooter: true},

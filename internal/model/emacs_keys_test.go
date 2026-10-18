@@ -8,7 +8,8 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-// ctrl+n/ctrl+p and ctrl+v/alt+v do what the arrows and the page keys do on every main surface.
+// ctrl+n/ctrl+p and ctrl+v/alt+v do what the arrows and the page keys do on every main surface; in the Issue detail
+// the arrows scroll, so ctrl+n/ctrl+p move the row cursor like j and k.
 func TestEmacsKeysMatchArrowAndPageKeys(t *testing.T) {
 	modes := arrowModes(t)
 	modes["search"] = pagedList(25)
@@ -18,16 +19,22 @@ func TestEmacsKeysMatchArrowAndPageKeys(t *testing.T) {
 		for _, pair := range []struct{ emacs, twin string }{
 			{"ctrl+n", "down"}, {"ctrl+p", "up"}, {"ctrl+v", "page_down"}, {"alt+v", "page_up"},
 		} {
+			twin := pair.twin
+			if name == "detail" && twin == "down" {
+				twin = "j"
+			} else if name == "detail" && twin == "up" {
+				twin = "k"
+			}
 			t.Run(name+"/"+pair.emacs, func(t *testing.T) {
 				for _, setup := range [][]string{nil, {"page_down"}, {"page_down", "page_down"}} {
 					m := start
 					for _, chord := range setup {
 						m, _ = model.Update(m, model.KeyMsg{Chord: chord})
 					}
-					want, wantCmds := model.Update(m, model.KeyMsg{Chord: pair.twin})
+					want, wantCmds := model.Update(m, model.KeyMsg{Chord: twin})
 					got, gotCmds := model.Update(m, model.KeyMsg{Chord: pair.emacs})
 					if !reflect.DeepEqual(got, want) || !reflect.DeepEqual(gotCmds, wantCmds) {
-						t.Fatalf("%s after %v differs from %s: %+v vs %+v", pair.emacs, setup, pair.twin, got, want)
+						t.Fatalf("%s after %v differs from %s: %+v vs %+v", pair.emacs, setup, twin, got, want)
 					}
 				}
 			})
@@ -55,7 +62,7 @@ func TestInboxKeyIsTextInSearch(t *testing.T) {
 	}
 }
 
-func TestEmacsKeysAreHelpedAndNotInTheFooter(t *testing.T) {
+func TestEmacsKeysAreNotInTheFooter(t *testing.T) {
 	for _, mode := range []model.Mode{model.ModeList, model.ModeCollections, model.ModeDetail} {
 		var footer []string
 		for binding := range model.BindingsForMode(mode, true) {
