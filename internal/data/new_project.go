@@ -77,10 +77,7 @@ func (c *Client) BindProject(ctx context.Context, cmd model.BindProject) (model.
 func (c *Client) initProject(ctx context.Context, body g.InitProjectBody) (model.Project, bool, error) {
 	response, err := c.InitProjectWithResponse(ctx, &g.InitProjectRequestOptions{Body: &body})
 	if err != nil {
-		if response != nil {
-			err = ReadError(response.Body, err)
-		}
-		return model.Project{}, false, err
+		return model.Project{}, false, daemonError(err)
 	}
 	if response.JSON200 == nil {
 		return model.Project{}, false, errors.New("kata daemon returned no Project")

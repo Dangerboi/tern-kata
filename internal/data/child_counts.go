@@ -22,10 +22,7 @@ func (c *Client) readChildCounts(ctx context.Context, snapshot g.UISnapshotRespo
 	}
 	response, err := c.ListAllIssuesWithResponse(ctx, &g.ListAllIssuesRequestOptions{Query: query})
 	if err != nil {
-		if response != nil {
-			return nil, ReadError(response.Body, err)
-		}
-		return nil, err
+		return nil, daemonError(err)
 	}
 	if response.JSON200 == nil {
 		return nil, fmt.Errorf("kata daemon returned no Issue list")

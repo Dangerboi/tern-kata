@@ -18,10 +18,7 @@ func (c *Client) CreateIssue(ctx context.Context, cmd model.CreateIssueCmd) (mod
 	}
 	response, err := c.CreateIssueWithResponse(ctx, &g.CreateIssueRequestOptions{PathParams: &g.CreateIssuePath{ProjectID: strconv.FormatInt(cmd.ProjectID, 10)}, Body: &body})
 	if err != nil {
-		if response != nil {
-			err = ReadError(response.Body, err)
-		}
-		return model.IssueCreated{}, err
+		return model.IssueCreated{}, daemonError(err)
 	}
 	if response == nil || response.JSON200 == nil {
 		return model.IssueCreated{}, errors.New("kata returned no created Issue")

@@ -1,6 +1,7 @@
 package data
 
 import (
+	g "go.kenn.io/kata/pkg/client/generated"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,7 +17,6 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"go.kenn.io/kata"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // kataServer is kata's own service, run in process over HTTP with a database of
@@ -229,7 +229,7 @@ func TestGatewayReadsAndWritesIssues(t *testing.T) {
 		t.Fatalf("written fields not stored: %+v", got)
 	}
 
-	closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Body: quickClose("tester")}))
+	closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true}))
 	if closed.UID != uid || closed.Err != nil {
 		t.Fatalf("close %+v", closed)
 	}
@@ -261,9 +261,54 @@ func TestGatewayWritesAParentLink(t *testing.T) {
 	}
 }
 
-func quickClose(actor string) g.CloseIssueBody {
-	reason, protocol, source := g.CloseActionRequestBodyReason("done"), g.CloseActionRequestBodyRetryProtocol("close-v1"), g.CloseActionRequestBodySource("tui")
-	return g.CloseIssueBody{Actor: &actor, Reason: &reason, RetryProtocol: &protocol, Source: &source}
+func TestGatewayClosesWithEveryReason(t *testing.T) {
+	kata := startKata(t, "0.18.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	target := createIssue(t, gateway, workspace, demo, "Target")
+	message := "Implemented the requested change and verified the result."
+	for _, tt := range []struct {
+		name string
+		cmd  model.CloseIssueCmd
+	}{
+		{"quick", model.CloseIssueCmd{Quick: true}},
+		{"done", model.CloseIssueCmd{Reason: "done", Message: message, Evidence: []model.CloseEvidence{{Kind: model.EvidenceCommit, Value: "abcdef1"}, {Kind: model.EvidencePR, Value: "https://example.com/pr/1"}, {Kind: model.EvidenceTest, Value: "go test ./..."}}}},
+		{"wontfix", model.CloseIssueCmd{Reason: "wontfix", Message: message + " It is out of scope for this project, so it will not be done."}},
+		{"duplicate", model.CloseIssueCmd{Reason: "duplicate", Message: message, Evidence: []model.CloseEvidence{{Kind: model.EvidenceDuplicateOf, Value: target}}}},
+		{"superseded", model.CloseIssueCmd{Reason: "superseded", Message: message, Evidence: []model.CloseEvidence{{Kind: model.EvidenceSupersededBy, Value: target}}}},
+		{"audit-no-change", model.CloseIssueCmd{Reason: "audit-no-change", Message: message, Evidence: []model.CloseEvidence{{Kind: model.EvidenceAudit, Value: "Checked every caller; nothing needed to change."}}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			uid := createIssue(t, gateway, workspace, demo, tt.name)
+			tt.cmd.Workspace, tt.cmd.UID, tt.cmd.ProjectID, tt.cmd.Actor = workspace, uid, demo.ID, "tester"
+			if closed := as[model.CloseResultMsg](t, run(t, gateway, tt.cmd)); closed.UID != uid || closed.Err != nil {
+				t.Fatalf("close %+v", closed)
+			}
+			got := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected.Issue
+			stored := closePayload(t, gateway, workspace, uid)
+			wantReason := tt.cmd.Reason
+			if tt.cmd.Quick {
+				wantReason = "done"
+			}
+			if stored["reason"] != wantReason {
+				t.Fatalf("stored reason %v, want %q", stored["reason"], wantReason)
+			}
+			if got, _ := stored["message"].(string); got != tt.cmd.Message {
+				t.Fatalf("stored message %q, want %q", got, tt.cmd.Message)
+			}
+			valueField := map[model.CloseEvidenceKind]string{model.EvidenceCommit: "sha", model.EvidencePR: "url", model.EvidenceTest: "command", model.EvidenceAudit: "rationale", model.EvidenceDuplicateOf: "issue_ref", model.EvidenceSupersededBy: "issue_ref"}
+			var want []any
+			for _, e := range tt.cmd.Evidence {
+				want = append(want, map[string]any{"type": string(e.Kind), valueField[e.Kind]: e.Value})
+			}
+			if got, _ := stored["evidence"].([]any); !reflect.DeepEqual(got, want) {
+				t.Fatalf("stored evidence %v, want %v", got, want)
+			}
+			if got.Status != "closed" {
+				t.Fatalf("status %q, want closed", got.Status)
+			}
+		})
+	}
 }
 
 func TestGatewayDraftTextConflicts(t *testing.T) {
@@ -304,6 +349,7 @@ func TestGatewayReportsDaemonErrorsInTheAskingMessage(t *testing.T) {
 	kata := startKata(t, "0.18.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
+	snapshotView, nope := "project", "nope"
 
 	for _, tt := range []struct {
 		name string
@@ -318,6 +364,9 @@ func TestGatewayReportsDaemonErrorsInTheAskingMessage(t *testing.T) {
 		{"reopen", model.ReopenIssueCmd{Workspace: workspace, UID: "nope", ProjectID: demo.ID, Actor: "tester"}, func(err error) model.Msg { return model.CloseResultMsg{UID: "nope", Err: err} }},
 		{"field", model.WriteField{Workspace: workspace, UID: "nope", ProjectID: demo.ID, Action: model.AddLabelAction, Value: "x", Actor: "tester"}, func(err error) model.Msg { return model.FieldWritten{UID: "nope", Err: err} }},
 		{"project", model.BindProject{Workspace: workspace, Actor: "tester", Name: "other"}, func(err error) model.Msg { return model.ProjectSaved{Err: err} }},
+		{"new project", model.CreateProject{Workspace: t.TempDir(), Actor: "tester", Name: "demo"}, func(err error) model.Msg { return model.ProjectSaved{Err: err} }},
+		{"labels", model.LoadFieldLabels{Workspace: workspace, UID: "nope", ProjectID: 9999}, func(err error) model.Msg { return model.FieldLabelsLoaded{UID: "nope", Err: err} }},
+		{"snapshot", model.ReadSnapshot{Workspace: workspace, Request: 4, Query: g.ReadUISnapshotQuery{View: &snapshotView, ProjectUID: &nope}}, func(err error) model.Msg { return model.SnapshotFailed{Request: 4, Err: err} }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got := run(t, gateway, tt.cmd)
@@ -337,11 +386,30 @@ func TestGatewayReportsDaemonErrorsInTheAskingMessage(t *testing.T) {
 				failure = got.Err
 			case model.ProjectSaved:
 				failure = got.Err
+			case model.FieldLabelsLoaded:
+				failure = got.Err
+			case model.SnapshotFailed:
+				failure = got.Err
 			}
 			if failure == nil || !reflect.DeepEqual(got, tt.want(failure)) {
 				t.Fatalf("got %#v, want a %T carrying the daemon's error", got, tt.want(nil))
 			}
 		})
+	}
+}
+
+func TestGatewayShowsKatasMessageThenItsHintWithoutStatusAndCode(t *testing.T) {
+	kata := startKata(t, "0.18.0")
+	c, err := connect(context.Background(), kata.target())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(c.CloseIdleConnections)
+	unbound := t.TempDir()
+	_, err = c.ResolveProjectWithResponse(context.Background(), &g.ResolveProjectRequestOptions{Body: &g.ResolveProjectBody{StartPath: &unbound}})
+	want := "no .kata.toml ancestor and no git ancestor\nrun \"kata init --project <name>\" in the workspace root, or pass --project <name>"
+	if got := daemonError(err); got == nil || got.Error() != want {
+		t.Fatalf("got %v, want %q", got, want)
 	}
 }
 
@@ -713,19 +781,45 @@ func TestGatewayGuardedWritesSurviveAnOwnerChange(t *testing.T) {
 		uid := createIssue(t, gateway, workspace, demo, "Close me")
 		issue := seen(uid)
 		changeOwner(t, gateway, workspace, demo, uid, "alice")
-		closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Body: quickClose("tester")}))
+		closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true}))
 		if closed.Err != nil {
 			t.Fatalf("close after an owner change from revision %d: %v", issue.Revision, closed.Err)
 		}
 	})
 	t.Run("closed meanwhile", func(t *testing.T) {
 		uid := createIssue(t, gateway, workspace, demo, "Closed twice")
-		as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Body: quickClose("someone")}))
+		as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "someone", Quick: true}))
 		before := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid}))
-		closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Body: quickClose("tester")}))
+		closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true}))
 		after := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid}))
 		if closed.Err == nil || !strings.Contains(closed.Err.Error(), "closed") || len(after.Selected.History) != len(before.Selected.History) {
 			t.Fatalf("second close %+v wrote events %d -> %d", closed, len(before.Selected.History), len(after.Selected.History))
 		}
 	})
+}
+
+// closePayload is what the daemon recorded when the Issue uid was closed.
+func closePayload(t *testing.T, gateway *Gateway, workspace, uid string) map[string]any {
+	t.Helper()
+	ctx := context.Background()
+	client, err := gateway.client(ctx, workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	limit := int64(1000)
+	events, err := client.PollEventsWithResponse(ctx, &g.PollEventsRequestOptions{Query: &g.PollEventsQuery{Limit: &limit}})
+	if err != nil || events.JSON200 == nil {
+		t.Fatalf("poll events: %v", err)
+	}
+	for _, e := range events.JSON200.Events {
+		if e.IssueUID != nil && *e.IssueUID == uid && e.Type == "issue.closed" {
+			var payload map[string]any
+			if err := json.Unmarshal(e.Payload, &payload); err != nil {
+				t.Fatal(err)
+			}
+			return payload
+		}
+	}
+	t.Fatalf("no close event for %s", uid)
+	return nil
 }
