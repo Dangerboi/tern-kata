@@ -53,11 +53,11 @@ func TestEveryFormShapeRoundTripsThroughItsRRULE(t *testing.T) {
 func TestRulesTheWebUICommonModeAcceptsParseToTheSameSchedule(t *testing.T) {
 	weekly := model.Schedule{Frequency: model.Weekly, Interval: 1, Weekdays: []time.Weekday{time.Monday, time.Wednesday, time.Friday}}
 	for rule, want := range map[string]model.Schedule{
-		"FREQ=WEEKLY":                         {Frequency: model.Weekly, Interval: 1},
-		"FREQ=WEEKLY;BYDAY=FR,MO,WE":          weekly,
+		"FREQ=WEEKLY":                           {Frequency: model.Weekly, Interval: 1},
+		"FREQ=WEEKLY;BYDAY=FR,MO,WE":            weekly,
 		"FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=-1": {Frequency: model.Monthly, Interval: 1, Day: model.LastDay},
-		"FREQ=YEARLY;BYMONTH=5;BYMONTHDAY=05": {Frequency: model.Yearly, Interval: 1, Month: 5, Day: model.DayOfMonth, DayOfMonth: 5},
-		"FREQ=DAILY;UNTIL=20261231":           {Frequency: model.Daily, Interval: 1, End: model.EndUntil, Until: "2026-12-31"},
+		"FREQ=YEARLY;BYMONTH=5;BYMONTHDAY=05":   {Frequency: model.Yearly, Interval: 1, Month: 5, Day: model.DayOfMonth, DayOfMonth: 5},
+		"FREQ=DAILY;UNTIL=20261231":             {Frequency: model.Daily, Interval: 1, End: model.EndUntil, Until: "2026-12-31"},
 	} {
 		if got := model.ParseSchedule(rule); !reflect.DeepEqual(got, want) {
 			t.Errorf("%s parsed %+v, want %+v", rule, got, want)

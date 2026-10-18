@@ -4,13 +4,13 @@ package model
 // Collection snapshot. A Recurrence with Stopped set has only that: kata no longer lists a deleted recurrence, so its other
 // fields are unknown.
 type Recurrence struct {
-	UID       string
-	Rule      string // kata's rule text; Schedule reads it
-	Start     string // YYYY-MM-DD
-	TimeZone  string
-	Next      string // YYYY-MM-DD of the next Occurrence; empty once the series is exhausted
-	Revision  int64
-	Stopped   bool
+	UID      string
+	Rule     string // kata's rule text; Schedule reads it
+	Start    string // YYYY-MM-DD
+	TimeZone string
+	Next     string // YYYY-MM-DD of the next Occurrence; empty once the series is exhausted
+	Revision int64
+	Stopped  bool
 }
 
 // Schedule is the rule as the form shape, or raw.
