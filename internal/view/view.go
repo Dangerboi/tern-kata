@@ -104,7 +104,7 @@ func issues(m model.Model, now time.Time) tern.Element {
 	}
 	ownerW := ownerWidth
 	for _, row := range rows {
-		ownerW = max(ownerW, utf8.RuneCountInString(m.OwnerDisplay(row.Owner, row.AssignmentExpiresOn, now)))
+		ownerW = max(ownerW, utf8.RuneCountInString(listOwner(m, row, now)))
 	}
 	items := make([]tern.Element, 0, len(rows)+len(m.Groups))
 	groups := make(map[string]model.IssueGroup, len(m.Issues))
@@ -294,7 +294,7 @@ func issueRow(m model.Model, row model.IssueRow, selected bool, role string, own
 		{T: cellGap + cell(row.Status, statusWidth), S: statusStyle},
 		{T: cellGap + title},
 	}
-	owner := m.OwnerDisplay(row.Owner, row.AssignmentExpiresOn, now)
+	owner := listOwner(m, row, now)
 	// A parent's click folds it; a double click on any row opens it. Tern sends the two clicks first, so a parent's fold ends where it began.
 	actions := &ui.Actions{DblClick: OpenRowClick(row.UID)}
 	if row.HasChildren {
@@ -369,4 +369,13 @@ func relativeTime(t, now time.Time) string {
 	default:
 		return fmt.Sprintf("%dw ago", int(d.Hours()/(24*7)))
 	}
+}
+
+// listOwner is the owner cell text: the name cut to ownerWidth as before, then " until …" whole when the claim expires.
+func listOwner(m model.Model, row model.IssueRow, now time.Time) string {
+	full := m.OwnerDisplay(row.Owner, row.AssignmentExpiresOn, now)
+	if row.Owner == nil || utf8.RuneCountInString(*row.Owner) <= ownerWidth {
+		return full
+	}
+	return cell(*row.Owner, ownerWidth) + strings.TrimPrefix(full, *row.Owner)
 }

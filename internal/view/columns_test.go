@@ -167,3 +167,20 @@ func TestDetailShowsTheOwnerExpiryAndRecurring(t *testing.T) {
 		t.Errorf("recurring property %q, want Yes", got)
 	}
 }
+
+func TestLongOwnerIsCutWithoutAnExpiryAndKeepsItsUntilWithOne(t *testing.T) {
+	long := "smoke-owner-long"
+	soon := time.Date(2026, 10, 8, 13, 30, 0, 0, time.UTC)
+	m := ownerFixture(t)
+	m.Issues = []model.Issue{
+		{UID: "bare", ShortID: "bbbb", Title: "Bare", Status: "open", ProjectName: "work", Owner: &long, UpdatedAt: testNow},
+		{UID: "timed", ShortID: "tttt", Title: "Timed", Status: "open", ProjectName: "work", Owner: &long, AssignmentExpiresOn: &soon, UpdatedAt: testNow},
+	}
+	nodes := render(t, m)
+	if row := text(nodes[view.IssueID("bare")]); !strings.Contains(row, "smoke-o…") || strings.Contains(row, long) {
+		t.Errorf("bare long owner row %q: want the name cut to smoke-o…", row)
+	}
+	if row := text(nodes[view.IssueID("timed")]); !strings.Contains(row, "smoke-o… until 22:30") {
+		t.Errorf("timed long owner row %q: want smoke-o… until 22:30", row)
+	}
+}
