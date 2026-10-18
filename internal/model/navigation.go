@@ -42,44 +42,11 @@ func (m Model) Shows(c Column) bool {
 	return m.Err == nil && !m.FirstLoad() && slices.Contains(m.VisibleColumns(), c)
 }
 
-// scrollFor is the scroll an action asks of the focused column: the page keys in
-// the Menu sidebar, and the arrows and page keys in the detail.
-func scrollFor(focus Column, action Action) (ScrollBy, bool) {
-	paged := focus == ColumnCollections || focus == ColumnDetail
-	switch action {
-	case PageUp:
-		return ScrollPageUp, paged
-	case PageDown:
-		return ScrollPageDown, paged
-	case ScrollUp:
-		return ScrollLineUp, focus == ColumnDetail
-	case ScrollDown:
-		return ScrollLineDown, focus == ColumnDetail
-	}
-	return "", false
-}
-
-func updateNavigation(m Model, action Action) (Model, []Cmd) {
-	if by, ok := scrollFor(m.Focus, action); ok {
-		return m, []Cmd{Scroll{Column: m.Focus, By: by}}
-	}
-	if action == RetryAction {
-		return updateLive(m, Retry{})
-	}
-	if action == QuitAction {
-		m.Quitting = true
-		return m, nil
-	}
-	if action == DrillIn || action == DrillOut || action == ToggleDetail || action == FocusDetail || action == NextActivityTab || action == PreviousActivityTab || m.Focus != ColumnList {
-		return updateDetailNavigation(m, action)
-	}
-	switch action {
-	case ToggleExpansion, ExpandIssue, CollapseIssue, ToggleAllExpansion, ToggleIssueView:
-		return updateHierarchy(m, action), nil
-	}
+// moveSelection moves the list selection by action: one row, to either end, or a page.
+func moveSelection(m Model, action Action) Model {
 	rows := m.VisibleRows()
 	if len(rows) == 0 {
-		return m, nil
+		return m
 	}
 	index := 0
 	for i, issue := range rows {
@@ -103,7 +70,7 @@ func updateNavigation(m Model, action Action) (Model, []Cmd) {
 		index = max(index-pageRows, 0)
 	}
 	m.SelectedUID = rows[index].UID
-	return m, nil
+	return m
 }
 
 // pageRows is how far Page Up/Page Down move the Issue list selection; the

@@ -76,9 +76,6 @@ func (m Model) FieldSuggestions() []string {
 	return labels
 }
 
-func fieldAction(action Action) bool {
-	return action == AddLabelAction || action == RemoveLabelAction || action == AssignOwnerAction || action == ClearOwnerAction || action == PriorityAction || action == SetParentAction
-}
 func openField(m Model, action Action) (Model, []Cmd) {
 	if m.Stale || m.FieldForm.Saving {
 		return m, nil

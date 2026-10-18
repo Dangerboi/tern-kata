@@ -188,48 +188,12 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			m.Err = msg.Err
 		}
 	case KeyMsg:
-		if inputMode(m.CurrentMode()) {
-			if binding, ok := LookupBindingForMode(msg.Chord, m.CurrentMode()); ok {
-				return updateFilterAction(m, binding.Action)
-			}
-			return updateFilterText(m, msg)
+		mode := m.CurrentMode()
+		if binding, ok := LookupBindingForMode(msg.Chord, mode); ok && binding.entry != nil {
+			return binding.entry.handle(m)
 		}
-		if binding, ok := LookupBindingForMode(msg.Chord, m.CurrentMode()); ok {
-			if binding.Action == SearchIssues || binding.Action == CycleStatus || binding.Action == OpenFilterForm || binding.Action == ClearFilters {
-				return updateFilterAction(m, binding.Action)
-			}
-			if binding.Action == OpenClose {
-				return openClose(m), nil
-			}
-			if binding.Action == OpenProjects {
-				return openProjects(m), nil
-			}
-			if binding.Action == ReopenAction {
-				issue := closeIssue(m)
-				if issue != nil && !m.Stale && !m.CloseForm.Saving {
-					m.CloseForm = CloseFormState{UID: issue.UID, Saving: true}
-					return m, []Cmd{ReopenIssueCmd{Workspace: m.Workspace, UID: issue.UID, ProjectID: issue.ProjectID, Actor: m.Actor}}
-				}
-				return m, nil
-			}
-			if fieldAction(binding.Action) {
-				return openField(m, binding.Action)
-			}
-			if binding.Action == ToggleHelp {
-				m.HelpOpen = !m.HelpOpen
-				return m, nil
-			}
-			if binding.Action == CloseHelp {
-				m.HelpOpen = false
-				return m, nil
-			}
-			if binding.Action == QuitAction {
-				return updateNavigation(m, binding.Action)
-			}
-			if m.Focus == ColumnCollections {
-				return updateCollectionNavigation(m, binding.Action)
-			}
-			return updateNavigation(m, binding.Action)
+		if inputMode(mode) {
+			return updateFilterText(m, msg)
 		}
 	case SelectMsg:
 		return selectRow(m, msg.UID), nil

@@ -161,10 +161,6 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 			m = putDraft(m, msg.UID, draft)
 		}
 		return m, nil, true
-	case KeyMsg:
-		if binding, ok := LookupBindingForMode(msg.Chord, m.CurrentMode()); ok && (binding.Action == EditBody || binding.Action == AddComment) {
-			return startDraft(m, binding.Action == AddComment), nil, true
-		}
 	}
 	return m, nil, false
 }

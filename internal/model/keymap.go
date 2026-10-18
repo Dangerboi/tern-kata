@@ -48,6 +48,8 @@ const (
 	InputSpace           Action = "input-space"
 )
 
+// Binding is one chord in one mode, as the lookup, the footer and the help sheet read it. A binding of
+// a main-surface action carries its entry; a Popup card's binding has none, the card handles its keys.
 type Binding struct {
 	Chord        string
 	Key          string
@@ -55,6 +57,7 @@ type Binding struct {
 	Help         string
 	Mode         Mode
 	ShowInFooter bool
+	entry        *actionEntry
 }
 
 type Mode string
@@ -70,40 +73,15 @@ const (
 	ModeFilterForm    Mode = "filter-form"
 )
 
-// Chord dispatches Action; Key and Help label it. Empty Mode is global;
-// otherwise the binding is active only in that mode. ShowInFooter selects hints.
-var Keymap = []Binding{
-	{Chord: "page_up", Key: "pgup", Action: PageUp, Help: "page up", Mode: ModeList},
-	{Chord: "page_down", Key: "pgdn", Action: PageDown, Help: "page down", Mode: ModeList},
-	{Chord: "page_up", Key: "pgup", Action: PageUp, Help: "page up", Mode: ModeCollections},
-	{Chord: "page_down", Key: "pgdn", Action: PageDown, Help: "page down", Mode: ModeCollections},
-	{Chord: "page_up", Key: "pgup", Action: PageUp, Help: "scroll page up", Mode: ModeDetail},
-	{Chord: "page_down", Key: "pgdn", Action: PageDown, Help: "scroll page down", Mode: ModeDetail},
-	{Chord: "page_up", Key: "pgup", Action: PageUp, Help: "page up", Mode: ModeSearch},
-	{Chord: "page_down", Key: "pgdn", Action: PageDown, Help: "page down", Mode: ModeSearch},
-	{Chord: "page_up", Key: "pgup", Action: PageUp, Help: "page up", Mode: ModeSearchResults},
-	{Chord: "page_down", Key: "pgdn", Action: PageDown, Help: "page down", Mode: ModeSearchResults},
-	{Chord: "n", Key: "n", Action: NewIssue, Help: "new Issue", Mode: ModeList, ShowInFooter: true},
-	{Chord: "shift+n", Key: "N", Action: NewChild, Help: "new child", Mode: ModeList, ShowInFooter: true},
-	{Chord: "n", Key: "n", Action: NewIssue, Help: "new Issue", Mode: ModeDetail, ShowInFooter: true},
-	{Chord: "shift+n", Key: "N", Action: NewChild, Help: "new child", Mode: ModeDetail, ShowInFooter: true},
+// cardBindings are the keys of the Popup cards. Each card's handler reads them by mode; the
+// main-surface keys are registered in mainActions.
+var cardBindings = []Binding{
 	{Chord: "tab", Key: "tab", Action: CreateNext, Help: "next field", Mode: ModeCreate, ShowInFooter: true},
 	{Chord: "shift+tab", Key: "shift+tab", Action: CreatePrevious, Help: "previous field", Mode: ModeCreate},
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: SaveDraftAction, Help: "create Issue", Mode: ModeCreate, ShowInFooter: true},
 	{Chord: "meta+o", Key: "meta+o", Action: SaveDraftAction, Help: "create Issue (Tern headless)", Mode: ModeCreate},
 	{Chord: "escape", Key: "esc", Action: CancelDraft, Help: "discard?", Mode: ModeCreate, ShowInFooter: true},
 	{Chord: "ctrl+space", Key: "ctrl+space", Action: CreateComplete, Help: "complete label", Mode: ModeCreate, ShowInFooter: true},
-	{Chord: "j", Key: "j/↓", Action: MoveDown, Help: "next Issue", Mode: ModeList, ShowInFooter: true},
-	{Chord: "down", Key: "↓", Action: MoveDown, Help: "next Issue", Mode: ModeList},
-	{Chord: "k", Key: "k/↑", Action: MoveUp, Help: "previous Issue", Mode: ModeList, ShowInFooter: true},
-	{Chord: "up", Key: "↑", Action: MoveUp, Help: "previous Issue", Mode: ModeList},
-	{Chord: "g", Key: "g", Action: MoveFirst, Help: "first Issue", Mode: ModeList},
-	{Chord: "home", Key: "home", Action: MoveFirst, Help: "first Issue", Mode: ModeList},
-	{Chord: "shift+g", Key: "G", Action: MoveLast, Help: "last Issue", Mode: ModeList},
-	{Chord: "end", Key: "end", Action: MoveLast, Help: "last Issue", Mode: ModeList},
-	{Chord: "e", Key: "e", Action: EditBody, Help: "edit body", Mode: ModeDetail, ShowInFooter: true},
-	{Chord: "e", Key: "e", Action: EditBody, Help: "edit body", Mode: ModeList, ShowInFooter: true},
-	{Chord: "c", Key: "c", Action: AddComment, Help: "add comment", Mode: ModeDetail, ShowInFooter: true},
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: SaveDraftAction, Help: "save Draft", Mode: ModeEditor, ShowInFooter: true},
 	{Chord: "meta+o", Key: "meta+o", Action: SaveDraftAction, Help: "save Draft (Tern headless)", Mode: ModeEditor},
 	{Chord: "ctrl+e", Key: "ctrl+e", Action: ExternalEditorAction, Help: "$EDITOR", Mode: ModeEditor, ShowInFooter: true},
@@ -133,8 +111,6 @@ var Keymap = []Binding{
 	{Chord: "shift+end", Key: "shift+end", Action: EditorEnd, Help: "select to line end", Mode: ModeEditor},
 	{Chord: "ctrl+a", Key: "ctrl+a", Action: EditorSelectAll, Help: "select all", Mode: ModeEditor},
 	{Chord: "meta+a", Key: "meta+a", Action: EditorSelectAll, Help: "select all (Tern headless)", Mode: ModeEditor},
-	{Chord: "c", Key: "c", Action: ClearFilters, Help: "clear filters", Mode: ModeList, ShowInFooter: true},
-	{Chord: "f", Key: "f", Action: OpenFilterForm, Help: "filters", Mode: ModeList, ShowInFooter: true},
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: ApplyFilters, Help: "apply filters", Mode: ModeFilterForm, ShowInFooter: true},
 	{Chord: "ctrl+s", Key: "ctrl+s", Action: ApplyFilters, Help: "apply filters", Mode: ModeFilterForm},
 	{Chord: "escape", Key: "esc", Action: CancelFilters, Help: "cancel", Mode: ModeFilterForm, ShowInFooter: true},
@@ -147,63 +123,6 @@ var Keymap = []Binding{
 	{Chord: "backspace", Key: "backspace", Action: DeleteInput, Help: "delete", Mode: ModeFilterForm},
 	{Chord: "ctrl+u", Key: "ctrl+u", Action: ClearInput, Help: "clear field", Mode: ModeFilterForm},
 	{Chord: "ctrl+r", Key: "ctrl+r", Action: ResetFilterForm, Help: "reset form", Mode: ModeFilterForm},
-	{Chord: "s", Key: "s", Action: CycleStatus, Help: "cycle status", Mode: ModeList, ShowInFooter: true},
-	{Chord: "/", Key: "/", Action: SearchIssues, Help: "search", Mode: ModeList, ShowInFooter: true},
-	{Chord: "enter", Key: "enter", Action: SearchEnter, Help: "results", Mode: ModeSearch, ShowInFooter: true},
-	{Chord: "escape", Key: "esc", Action: SearchBack, Help: "cancel search", Mode: ModeSearch, ShowInFooter: true},
-	{Chord: "up", Key: "up", Action: MoveUp, Help: "previous result", Mode: ModeSearch},
-	{Chord: "down", Key: "down", Action: MoveDown, Help: "next result", Mode: ModeSearch},
-	{Chord: "backspace", Key: "backspace", Action: DeleteInput, Help: "delete", Mode: ModeSearch},
-	{Chord: "ctrl+u", Key: "ctrl+u", Action: ClearInput, Help: "clear search", Mode: ModeSearch},
-	{Chord: "up", Key: "up", Action: MoveUp, Help: "previous result", Mode: ModeSearchResults, ShowInFooter: true},
-	{Chord: "down", Key: "down", Action: MoveDown, Help: "next result", Mode: ModeSearchResults, ShowInFooter: true},
-	{Chord: "enter", Key: "enter", Action: SearchEnter, Help: "commit search", Mode: ModeSearchResults, ShowInFooter: true},
-	{Chord: "escape", Key: "esc", Action: SearchBack, Help: "edit query", Mode: ModeSearchResults, ShowInFooter: true},
-	{Chord: "/", Key: "/", Action: SearchQuery, Help: "edit query", Mode: ModeSearchResults},
-	{Chord: "space", Key: "space", Action: ToggleExpansion, Help: "expand/collapse", Mode: ModeList, ShowInFooter: true},
-	{Chord: "right", Key: "right", Action: ExpandIssue, Help: "expand", Mode: ModeList},
-	{Chord: "left", Key: "left", Action: CollapseIssue, Help: "collapse", Mode: ModeList},
-	{Chord: "shift+e", Key: "E", Action: ToggleAllExpansion, Help: "expand/collapse all", Mode: ModeList},
-	{Chord: "v", Key: "v", Action: ToggleIssueView, Help: "flat/nested", Mode: ModeList, ShowInFooter: true},
-	{Chord: "escape", Key: "esc", Action: DrillOut, Help: "Menu", Mode: ModeList, ShowInFooter: true},
-	{Chord: "j", Key: "j/↓", Action: MoveDown, Help: "next Collection", Mode: ModeCollections, ShowInFooter: true},
-	{Chord: "down", Key: "↓", Action: MoveDown, Help: "next Collection", Mode: ModeCollections},
-	{Chord: "k", Key: "k/↑", Action: MoveUp, Help: "previous Collection", Mode: ModeCollections, ShowInFooter: true},
-	{Chord: "up", Key: "↑", Action: MoveUp, Help: "previous Collection", Mode: ModeCollections},
-	{Chord: "g", Key: "g", Action: MoveFirst, Help: "first Collection", Mode: ModeCollections},
-	{Chord: "home", Key: "home", Action: MoveFirst, Help: "first Collection", Mode: ModeCollections},
-	{Chord: "shift+g", Key: "G", Action: MoveLast, Help: "last Collection", Mode: ModeCollections},
-	{Chord: "end", Key: "end", Action: MoveLast, Help: "last Collection", Mode: ModeCollections},
-	{Chord: "enter", Key: "enter", Action: DrillIn, Help: "open Collection", Mode: ModeCollections, ShowInFooter: true},
-	{Chord: "escape", Key: "esc", Action: MenuBack, Help: "back", Mode: ModeCollections, ShowInFooter: true},
-	{Chord: "shift+p", Key: "P", Action: OpenProjects, Help: "projects", Mode: ModeCollections},
-	{Chord: "q", Key: "q", Action: QuitAction, Help: "quit", ShowInFooter: true},
-	{Chord: "enter", Key: "enter", Action: DrillIn, Help: "open", Mode: ModeList, ShowInFooter: true},
-	{Chord: "tab", Key: "tab", Action: FocusDetail, Help: "detail", Mode: ModeList, ShowInFooter: true},
-	{Chord: "shift+l", Key: "L", Action: ToggleDetail, Help: "toggle detail", Mode: ModeList, ShowInFooter: true},
-	{Chord: "shift+l", Key: "L", Action: ToggleDetail, Help: "toggle detail", Mode: ModeDetail, ShowInFooter: true},
-	{Chord: "j", Key: "j/k", Action: MoveDown, Help: "row", Mode: ModeDetail, ShowInFooter: true},
-	{Chord: "k", Key: "k", Action: MoveUp, Help: "previous row", Mode: ModeDetail},
-	{Chord: "down", Key: "↓", Action: ScrollDown, Help: "scroll down", Mode: ModeDetail, ShowInFooter: true},
-	{Chord: "up", Key: "↑", Action: ScrollUp, Help: "scroll up", Mode: ModeDetail, ShowInFooter: true},
-	{Chord: "g", Key: "g", Action: MoveFirst, Help: "first row", Mode: ModeDetail},
-	{Chord: "home", Key: "home", Action: MoveFirst, Help: "first row", Mode: ModeDetail},
-	{Chord: "shift+g", Key: "G", Action: MoveLast, Help: "last row", Mode: ModeDetail},
-	{Chord: "end", Key: "end", Action: MoveLast, Help: "last row", Mode: ModeDetail},
-	{Chord: "enter", Key: "↵", Action: DrillIn, Help: "open", Mode: ModeDetail, ShowInFooter: true},
-	{Chord: "escape", Key: "esc", Action: DrillOut, Help: "back", Mode: ModeDetail, ShowInFooter: true},
-	{Chord: "left", Key: "←", Action: DrillOut, Help: "back", Mode: ModeDetail},
-	{Chord: "tab", Key: "↹", Action: NextActivityTab, Help: "tab", Mode: ModeDetail, ShowInFooter: true},
-	{Chord: "shift+tab", Key: "shift+tab", Action: PreviousActivityTab, Help: "previous tab", Mode: ModeDetail},
-	{Chord: "ctrl+c", Key: "ctrl+c", Action: QuitAction, Help: "quit"},
-	{Chord: "ctrl+r", Key: "ctrl+r", Action: RetryAction, Help: "retry daemon", Mode: ModeError, ShowInFooter: true},
-	{Chord: "?", Key: "?", Action: ToggleHelp, Help: "help", ShowInFooter: true},
-	{Chord: "shift+?", Key: "?", Action: ToggleHelp, Help: "help"},
-	{Chord: "escape", Key: "esc", Action: CloseHelp, Help: "close help", Mode: ModeHelp, ShowInFooter: true},
-	{Chord: "x", Key: "x", Action: OpenClose, Help: "close Issue", Mode: ModeList, ShowInFooter: true},
-	{Chord: "x", Key: "x", Action: OpenClose, Help: "close Issue", Mode: ModeDetail, ShowInFooter: true},
-	{Chord: "r", Key: "r", Action: ReopenAction, Help: "reopen Issue", Mode: ModeList, ShowInFooter: true},
-	{Chord: "r", Key: "r", Action: ReopenAction, Help: "reopen Issue", Mode: ModeDetail, ShowInFooter: true},
 	{Chord: "tab", Key: "tab", Action: CloseNext, Help: "next field", Mode: ModeCloseForm, ShowInFooter: true},
 	{Chord: "shift+tab", Key: "shift+tab", Action: ClosePrevious, Help: "previous field", Mode: ModeCloseForm},
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: CloseSave, Help: "close", Mode: ModeCloseForm, ShowInFooter: true},
@@ -211,18 +130,6 @@ var Keymap = []Binding{
 	{Chord: "escape", Key: "esc", Action: CloseCancel, Help: "cancel", Mode: ModeCloseForm, ShowInFooter: true},
 	{Chord: "backspace", Key: "backspace", Action: DeleteInput, Help: "erase", Mode: ModeCloseForm},
 	{Chord: "ctrl+u", Key: "ctrl+u", Action: ClearInput, Help: "clear field", Mode: ModeCloseForm},
-	{Chord: "+", Key: "+", Action: AddLabelAction, Help: "add label", Mode: ModeList},
-	{Chord: "-", Key: "-", Action: RemoveLabelAction, Help: "remove label", Mode: ModeList},
-	{Chord: "a", Key: "a", Action: AssignOwnerAction, Help: "assign owner", Mode: ModeList},
-	{Chord: "shift+a", Key: "A", Action: ClearOwnerAction, Help: "clear owner", Mode: ModeList},
-	{Chord: "!", Key: "!", Action: PriorityAction, Help: "priority", Mode: ModeList},
-	{Chord: "+", Key: "+", Action: AddLabelAction, Help: "add label", Mode: ModeDetail},
-	{Chord: "-", Key: "-", Action: RemoveLabelAction, Help: "remove label", Mode: ModeDetail},
-	{Chord: "a", Key: "a", Action: AssignOwnerAction, Help: "assign owner", Mode: ModeDetail},
-	{Chord: "shift+a", Key: "A", Action: ClearOwnerAction, Help: "clear owner", Mode: ModeDetail},
-	{Chord: "!", Key: "!", Action: PriorityAction, Help: "priority", Mode: ModeDetail},
-	{Chord: "p", Key: "p", Action: SetParentAction, Help: "set parent", Mode: ModeList},
-	{Chord: "p", Key: "p", Action: SetParentAction, Help: "set parent", Mode: ModeDetail},
 	{Chord: "enter", Key: "enter", Action: FieldSubmit, Help: "save", Mode: ModeFieldForm, ShowInFooter: true},
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: FieldSubmit, Help: "save", Mode: ModeFieldForm},
 	{Chord: "ctrl+s", Key: "ctrl+s", Action: FieldSubmit, Help: "save", Mode: ModeFieldForm},
@@ -232,9 +139,6 @@ var Keymap = []Binding{
 	{Chord: "up", Key: "up", Action: FieldPrevious, Help: "previous completion", Mode: ModeFieldForm},
 	{Chord: "backspace", Key: "backspace", Action: DeleteInput, Help: "erase", Mode: ModeFieldForm},
 	{Chord: "ctrl+u", Key: "ctrl+u", Action: ClearInput, Help: "clear input", Mode: ModeFieldForm},
-	// Menu. It has a type-to-filter box, so single-character bindings (j, k) move only while the filter is empty.
-	{Chord: "shift+p", Key: "P", Action: OpenProjects, Help: "projects", Mode: ModeList},
-	{Chord: "shift+p", Key: "P", Action: OpenProjects, Help: "projects", Mode: ModeDetail},
 	{Chord: "down", Key: "↓", Action: MoveDown, Help: "next Collection", Mode: ModePicker, ShowInFooter: true},
 	{Chord: "up", Key: "↑", Action: MoveUp, Help: "previous Collection", Mode: ModePicker, ShowInFooter: true},
 	{Chord: "j", Key: "j", Action: MoveDown, Help: "next Collection (empty filter)", Mode: ModePicker},
