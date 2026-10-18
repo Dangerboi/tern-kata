@@ -9,7 +9,6 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 func detailNodes(t *testing.T, issue model.Issue) shown {
@@ -237,8 +236,8 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	issue := model.Issue{UID: "alpha", ShortID: "aaaa", Title: "A", Status: "closed", ProjectName: "work", Author: "ann", Revision: 4,
 		CreatedAt: at, UpdatedAt: at, Priority: &p1, Owner: &owner, ClosedReason: &reason, ScheduledOnDate: &day, Metadata: map[string]any{"deadline_on": day}, Labels: []string{"bug"}}
 	links := []model.Link{{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#up"}}
-	counts := map[string]g.ChildCounts{"alpha": {Open: 1, Total: 2}}
-	nodes := render(t, apply(withZone(browsing()), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{ChildCounts: counts, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: collectionLinks(links)}}},
+	counts := map[string]model.ChildCounts{"alpha": {Open: 1, Total: 2}}
+	nodes := render(t, apply(withZone(browsing()), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{issue}, Links: links, ChildCounts: counts}}},
 		model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &issue, Links: links}}))
 	props := nodes[view.DetailContentID+".properties"]
 	var keys []string
@@ -272,7 +271,7 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 func TestLeadingParentSectionIsHiddenOnlyWhenItNamesTheParent(t *testing.T) {
 	links := []model.Link{{ID: 1, Type: "parent", FromIssueUID: "kid", FromQualifiedID: "work#kidd", ToIssueUID: "up", ToQualifiedID: "work#upup"}}
 	bodyText := func(issue model.Issue, links []model.Link) string {
-		nodes := render(t, apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: collectionLinks(links)}}},
+		nodes := render(t, apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{issue}, Links: links}}},
 			model.DetailLoaded{UID: "kid", Selected: &model.IssueDetailData{Issue: &issue, Links: links}}))
 		return text(nodes[view.DetailContentID+".body"])
 	}
@@ -296,7 +295,7 @@ func TestParentSectionMatchingAndEmptyBody(t *testing.T) {
 	links := []model.Link{{ID: 1, Type: "parent", FromIssueUID: "kid", FromQualifiedID: "work#kidd", ToIssueUID: "up", ToQualifiedID: "work#upup"}}
 	bodyText := func(body string) string {
 		issue := model.Issue{UID: "kid", ShortID: "kidd", Title: "K", Status: "open", ProjectName: "work", Revision: 1, Body: body}
-		nodes := render(t, apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: collectionLinks(links)}}},
+		nodes := render(t, apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{issue}, Links: links}}},
 			model.DetailLoaded{UID: "kid", Selected: &model.IssueDetailData{Issue: &issue, Links: links}}))
 		return text(nodes[view.DetailContentID+".body"])
 	}

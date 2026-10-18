@@ -29,9 +29,8 @@ func (ReadSnapshot) cmd() {}
 type SnapshotLoaded struct {
 	Request             int64
 	Query               g.ReadUISnapshotQuery
-	Snapshot            g.UISnapshotResponseBody
+	Snapshot            Snapshot
 	Selected            *IssueDetailData // the snapshot's selected part, translated by the gateway
-	ChildCounts         map[string]g.ChildCounts
 	ETag                string
 	NotModified         bool
 	LocalDate, TimeZone string
@@ -39,6 +38,27 @@ type SnapshotLoaded struct {
 }
 
 func (SnapshotLoaded) msg() {}
+
+// Snapshot is the Collection snapshot as the model holds it: the Issues the query selected, the Links among them, the Project
+// catalog, the event cursor it answers and the daemon's direct-child counts by Issue UID (whatever the filters; an Issue with no
+// children has none). The gateway translates it from kata's wire shape.
+type Snapshot struct {
+	Issues      []Issue
+	Links       []Link
+	Catalog     []CatalogProject
+	Cursor      int64
+	ChildCounts map[string]ChildCounts
+}
+
+// CatalogProject is one Project of the catalog; Stats is nil when the daemon sent none.
+type CatalogProject struct {
+	Project Project
+	Stats   *ProjectStats
+}
+
+type ProjectStats struct{ Open, Closed int }
+
+type ChildCounts struct{ Open, Total int }
 
 type SnapshotFailed struct {
 	Request int64
@@ -146,7 +166,7 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 	if !sameCollectionQuery(liveQuery(m), msg.Query) {
 		return snapshotChanged(m)
 	}
-	if uid := m.idMatch(); uid != "" && !msg.NotModified && !slices.ContainsFunc(msg.Snapshot.Collection, func(issue Issue) bool { return issue.UID == uid }) {
+	if uid := m.idMatch(); uid != "" && !msg.NotModified && !slices.ContainsFunc(msg.Snapshot.Issues, func(issue Issue) bool { return issue.UID == uid }) {
 		// The Collection does not list the Issue the id names, so the id does not count.
 		m.IDSearch.UID = ""
 		return snapshotChanged(m)
@@ -161,7 +181,7 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 		}
 		selected := m.SelectedUID
 		anchor, anchored := m.cursorRowID()
-		m = m.applyCollection(msg.Snapshot, msg.ChildCounts).snapshotArrived(msg.Selected, selected, anchor, anchored)
+		m = m.applyCollection(msg.Snapshot).snapshotArrived(msg.Selected, selected, anchor, anchored)
 		m.etag, m.etagQuery = msg.ETag, msg.Query
 		m.Cursor = msg.Snapshot.Cursor
 	}
@@ -230,9 +250,8 @@ func (m Model) cancelPending(before Model, msg Msg) Model {
 }
 
 // applyCollection puts a snapshot on screen: the Collections, the grouped Issues, and the selection.
-func (m Model) applyCollection(snapshot g.UISnapshotResponseBody, childCounts map[string]g.ChildCounts) Model {
+func (m Model) applyCollection(snapshot Snapshot) Model {
 	m.Snapshot = snapshot
-	m.ChildCounts = childCounts
 	m.Collections = []Collection{{View: "inbox", Title: "Inbox"}, {View: "today", Title: "Today"}, {View: "upcoming", Title: "Upcoming"}, {View: "deadlines", Title: "Deadlines"}, {View: "all-open", Title: "All Open"}, {View: "logbook", Title: "Logbook"}}
 	for _, p := range snapshot.Catalog {
 		m.Collections = append(m.Collections, Collection{View: "project", ProjectUID: p.Project.UID, Title: p.Project.Name})
@@ -241,7 +260,7 @@ func (m Model) applyCollection(snapshot g.UISnapshotResponseBody, childCounts ma
 	if m.Filters != (Filters{}) {
 		groupCollection = Collection{View: "results", Title: "Results"}
 	}
-	issues := snapshot.Collection
+	issues := snapshot.Issues
 	if uid := m.idMatch(); uid != "" {
 		issues = slices.DeleteFunc(slices.Clone(issues), func(issue Issue) bool { return issue.UID != uid })
 	}

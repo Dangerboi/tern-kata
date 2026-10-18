@@ -13,7 +13,7 @@ import (
 // child_counts, scoped to the Project when the Collection is one (the snapshot
 // has none of its own). Only a snapshot that changed needs it: the ETag moves
 // with every event.
-func (c *Client) readChildCounts(ctx context.Context, snapshot g.UISnapshotResponseBody, projectUID *string) (map[string]g.ChildCounts, error) {
+func (c *Client) readChildCounts(ctx context.Context, snapshot model.Snapshot, projectUID *string) (map[string]model.ChildCounts, error) {
 	query := &g.ListAllIssuesQuery{}
 	if projectUID != nil {
 		if entry, ok := model.CatalogEntry(snapshot, *projectUID); ok {
@@ -27,10 +27,10 @@ func (c *Client) readChildCounts(ctx context.Context, snapshot g.UISnapshotRespo
 	if response.JSON200 == nil {
 		return nil, fmt.Errorf("kata daemon returned no Issue list")
 	}
-	counts := make(map[string]g.ChildCounts)
+	counts := make(map[string]model.ChildCounts)
 	for _, issue := range response.JSON200.Issues {
 		if issue.ChildCounts != nil {
-			counts[issue.UID] = *issue.ChildCounts
+			counts[issue.UID] = model.ChildCounts{Open: int(issue.ChildCounts.Open), Total: int(issue.ChildCounts.Total)}
 		}
 	}
 	return counts, nil

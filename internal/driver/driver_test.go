@@ -11,7 +11,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 var now = time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
@@ -85,11 +84,11 @@ func feed(t *testing.T, s driver.State, inputs ...any) driver.Output {
 // browsing is a Pane of the given width on a Project of alpha and beta, alpha's detail loaded.
 func browsing(t *testing.T, cols int) driver.State {
 	t.Helper()
-	return loadedWith(t, cols, model.Project{ID: 7, UID: "p", Name: "work"}, g.UISnapshotResponseBody{Collection: []model.Issue{alpha, beta}}, alphaLoaded())
+	return loadedWith(t, cols, model.Project{ID: 7, UID: "p", Name: "work"}, model.Snapshot{Issues: []model.Issue{alpha, beta}}, alphaLoaded())
 }
 
 // loadedWith is a Pane of the given width after its first load of the Project and snapshot, then the given messages.
-func loadedWith(t *testing.T, cols int, project model.Project, snapshot g.UISnapshotResponseBody, then ...any) driver.State {
+func loadedWith(t *testing.T, cols int, project model.Project, snapshot model.Snapshot, then ...any) driver.State {
 	t.Helper()
 	s := feed(t, driver.State{}, model.Start{Workspace: "/repo"}, resize(cols)).State
 	s.Model = loadFirst(s.Model, model.ProjectLoaded{Project: project}, model.SnapshotLoaded{Snapshot: snapshot})

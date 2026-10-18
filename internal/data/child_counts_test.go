@@ -8,7 +8,6 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"go.kenn.io/kata/pkg/client"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 func TestChildCountsAreTheDaemonsWithOneRequest(t *testing.T) {
@@ -26,7 +25,7 @@ func TestChildCountsAreTheDaemonsWithOneRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := &Client{Client: raw}
-	snapshot := g.UISnapshotResponseBody{Catalog: []g.UIProject{{Project: model.Project{ID: 7, UID: "p"}}}}
+	snapshot := model.Snapshot{Catalog: []model.CatalogProject{{Project: model.Project{ID: 7, UID: "p"}}}}
 	for _, tt := range []struct {
 		name       string
 		projectUID *string
@@ -40,7 +39,7 @@ func TestChildCountsAreTheDaemonsWithOneRequest(t *testing.T) {
 		if err != nil || len(queries) != 1 || queries[0] != tt.wantQuery {
 			t.Fatalf("%s: err %v, requests %q, want %q", tt.name, err, queries, tt.wantQuery)
 		}
-		if counts["parent"] != (g.ChildCounts{Open: 2, Total: 6}) || len(counts) != 1 {
+		if counts["parent"] != (model.ChildCounts{Open: 2, Total: 6}) || len(counts) != 1 {
 			t.Fatalf("%s: counts %+v: only an Issue with children has an entry", tt.name, counts)
 		}
 	}

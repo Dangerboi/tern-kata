@@ -6,16 +6,15 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 var workProject = model.Project{ID: 7, UID: "p", Name: "work"}
 
-func workSnapshot(uids ...string) g.UISnapshotResponseBody {
-	snapshot := g.UISnapshotResponseBody{Catalog: []g.UIProject{{Project: workProject}}}
+func workSnapshot(uids ...string) model.Snapshot {
+	snapshot := model.Snapshot{Catalog: []model.CatalogProject{{Project: workProject}}}
 	for i, uid := range uids {
 		// the Collection lists newest first, so a later uid is lower in the list
-		snapshot.Collection = append(snapshot.Collection, model.Issue{UID: uid, ShortID: uid + "00", Status: "open", ProjectID: 7, UpdatedAt: ago(i)})
+		snapshot.Issues = append(snapshot.Issues, model.Issue{UID: uid, ShortID: uid + "00", Status: "open", ProjectID: 7, UpdatedAt: ago(i)})
 	}
 	return snapshot
 }

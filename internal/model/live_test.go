@@ -8,11 +8,10 @@ import (
 	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 func TestLiveMergePreservesIssueSelection(t *testing.T) {
-	m, cmds := loadFirst(model.Model{Workspace: "/repo", SelectedUID: "b"}, model.ProjectLoaded{Project: model.Project{UID: "project"}}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Cursor: 10, Collection: []model.Issue{{UID: "a"}, {UID: "b", Title: "Before"}}}})
+	m, cmds := loadFirst(model.Model{Workspace: "/repo", SelectedUID: "b"}, model.ProjectLoaded{Project: model.Project{UID: "project"}}, model.SnapshotLoaded{Snapshot: model.Snapshot{Cursor: 10, Issues: []model.Issue{{UID: "a"}, {UID: "b", Title: "Before"}}}})
 	if !reflect.DeepEqual(cmds, []model.Cmd{model.Subscribe{Workspace: "/repo", AfterID: 10, Generation: 1}, model.LoadDetail{Workspace: "/repo", UID: "b"}}) {
 		t.Fatalf("initial subscription: %#v", cmds)
 	}
@@ -23,7 +22,7 @@ func TestLiveMergePreservesIssueSelection(t *testing.T) {
 	refresh := cmds[0].(model.ReadSnapshot)
 	m, _ = model.Update(m, model.SnapshotLoaded{
 		Request: refresh.Request, Query: refresh.Query,
-		Snapshot: g.UISnapshotResponseBody{Cursor: 11, Collection: []model.Issue{{UID: "new"}, {UID: "b", Title: "After"}, {UID: "a"}}},
+		Snapshot: model.Snapshot{Cursor: 11, Issues: []model.Issue{{UID: "new"}, {UID: "b", Title: "After"}, {UID: "a"}}},
 	})
 	selected := slices.IndexFunc(m.Issues, func(issue model.Issue) bool { return issue.UID == "b" })
 	if m.SelectedUID != "b" || selected < 0 || m.Issues[selected].Title != "After" || m.Cursor != 11 {
@@ -85,7 +84,7 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 					t.Fatalf("history reset: %+v, %#v", m, cmds)
 				}
 				m, cmds = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query,
-					Snapshot: g.UISnapshotResponseBody{Cursor: 30, Collection: []model.Issue{{UID: "b", Title: "Survivor"}}},
+					Snapshot: model.Snapshot{Cursor: 30, Issues: []model.Issue{{UID: "b", Title: "Survivor"}}},
 				})
 				if m.Resetting || len(m.Issues) != 1 || m.SelectedUID != "b" || !reflect.DeepEqual(cmds, []model.Cmd{model.Subscribe{Workspace: "/repo", AfterID: 30, Generation: 2}, model.LoadDetail{Workspace: "/repo", UID: "b"}}) {
 					t.Fatalf("reset replaced purged Issues and resumed: %+v, %#v", m, cmds)
@@ -117,7 +116,7 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			m, _ := loadFirst(model.Model{Workspace: "/repo", SelectedUID: "b"}, model.ProjectLoaded{Project: model.Project{UID: "project"}}, model.SnapshotLoaded{ETag: "\"old\"", Snapshot: g.UISnapshotResponseBody{Cursor: 10, Collection: []model.Issue{{UID: "a"}, {UID: "b"}}}})
+			m, _ := loadFirst(model.Model{Workspace: "/repo", SelectedUID: "b"}, model.ProjectLoaded{Project: model.Project{UID: "project"}}, model.SnapshotLoaded{ETag: "\"old\"", Snapshot: model.Snapshot{Cursor: 10, Issues: []model.Issue{{UID: "a"}, {UID: "b"}}}})
 			var cmds []model.Cmd
 			for _, msg := range tt.messages {
 				m, cmds = model.Update(m, msg)
@@ -138,7 +137,7 @@ func TestLiveRefreshPreservesDetailPosition(t *testing.T) {
 			if refresh.Query.SelectedIssueUID == nil || *refresh.Query.SelectedIssueUID != "issue" || refresh.Query.IncludeHistory == nil || !*refresh.Query.IncludeHistory {
 				t.Fatalf("refresh omitted selected authority/history: %+v", refresh.Query)
 			}
-			snapshot := g.UISnapshotResponseBody{Cursor: 1, Collection: []model.Issue{{UID: "issue"}}}
+			snapshot := model.Snapshot{Cursor: 1, Issues: []model.Issue{{UID: "issue"}}}
 			loaded := model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot}
 			if authority {
 				loaded.Selected = m.DetailAuthority()

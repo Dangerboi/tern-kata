@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 var (
@@ -22,8 +21,8 @@ func idIssues(uids ...string) []model.Issue {
 	return issues
 }
 
-func idSnapshot(uids ...string) g.UISnapshotResponseBody {
-	return g.UISnapshotResponseBody{Catalog: []g.UIProject{{Project: idProject}}, Collection: idIssues(uids...)}
+func idSnapshot(uids ...string) model.Snapshot {
+	return model.Snapshot{Catalog: []model.CatalogProject{{Project: idProject}}, Issues: idIssues(uids...)}
 }
 
 // idSearching is a Pane browsing collection with a, b and c listed and `typed` all but its last character in the search box.

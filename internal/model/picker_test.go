@@ -5,21 +5,20 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // The bound Project sorts last in the catalog so that pinning it first is visible.
-func pickerCatalog() []g.UIProject {
-	return []g.UIProject{
+func pickerCatalog() []model.CatalogProject {
+	return []model.CatalogProject{
 		{Project: model.Project{UID: "alpha-uid", Name: "alpha"}},
 		{Project: model.Project{UID: "smoke-uid", Name: "smoke"}},
 	}
 }
 
 func pickerStart(cols int, bound bool) model.Model {
-	loaded, snapshot := model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
+	loaded, snapshot := model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{
 		Catalog:    pickerCatalog(),
-		Collection: []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}, {UID: "b", ShortID: "bbbb", Title: "Second"}},
+		Issues: []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}, {UID: "b", ShortID: "bbbb", Title: "Second"}},
 	}}
 	if bound {
 		loaded.Project = model.Project{UID: "smoke-uid", Name: "smoke"}

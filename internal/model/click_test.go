@@ -6,21 +6,20 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // clickBase is an unbound workspace in the Issue list. Rows sort by update time, newest first:
 // a parent (collapsed, with one child), two leaves, and a detail whose Links
 // name "other".
 func clickBase() model.Model {
-	m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
-		Collection: []model.Issue{
+	m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{
+		Issues: []model.Issue{
 			{UID: "parent", ShortID: "par1", Title: "A parent", Status: "open", UpdatedAt: ago(1)},
 			{UID: "child", ShortID: "chi1", Title: "B child", Status: "open", UpdatedAt: ago(2)},
 			{UID: "leaf", ShortID: "lea1", Title: "C leaf", Status: "open", UpdatedAt: ago(3)},
 			{UID: "other", ShortID: "oth1", Title: "D other", Status: "open", UpdatedAt: ago(4)},
 		},
-		CollectionLinks: []g.UILink{{Type: "parent", FromIssueUID: "child", ToIssueUID: "parent"}},
+		Links: []model.Link{{Type: "parent", FromIssueUID: "child", ToIssueUID: "parent"}},
 	}})
 	m, _ = model.Update(m, model.DetailLoaded{UID: "parent", Selected: &model.IssueDetailData{
 		Issue: &model.Issue{UID: "parent"},

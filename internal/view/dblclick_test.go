@@ -5,7 +5,6 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // Every Issue row, a parent's and a nested child's included, names its own UID in the double-click action.
@@ -20,7 +19,7 @@ func TestEveryIssueRowCarriesTheDoubleClickAction(t *testing.T) {
 	m := apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: collectionLinks(links)}}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: issues, Links: links}}},
 		model.KeyMsg{Chord: "shift+e"},
 	)
 	nodes := render(t, m)

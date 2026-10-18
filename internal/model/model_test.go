@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 func TestOpeningBoundProject(t *testing.T) {
@@ -38,7 +37,7 @@ func TestIssueNavigation(t *testing.T) {
 		{"interrupt", []string{"ctrl+c"}, "uid-a", true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			m, _ := loadFirst(model.Model{Loading: true}, model.ProjectLoaded{Project: model.Project{UID: "project", Name: "test"}}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{
+			m, _ := loadFirst(model.Model{Loading: true}, model.ProjectLoaded{Project: model.Project{UID: "project", Name: "test"}}, model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{
 				{UID: "uid-a", ShortID: "aaaa", Title: "First"},
 				{UID: "uid-b", ShortID: "bbbb", Title: "Second"},
 				{UID: "uid-c", ShortID: "cccc", Title: "Third"},

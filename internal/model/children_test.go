@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // childLink is "<child> is a child of parent".
@@ -131,8 +130,8 @@ func TestChildRowsFollowLiveRefreshes(t *testing.T) {
 	refresh := cmds[0].(model.ReadSnapshot)
 	// "gone" is removed, "fresh" is added and "new" changed its title.
 	parent := model.Issue{UID: "parent", ProjectName: "work"}
-	snapshot := g.UISnapshotResponseBody{Cursor: 1,
-		Collection: []model.Issue{
+	snapshot := model.Snapshot{Cursor: 1,
+		Issues: []model.Issue{
 			parent,
 			{UID: "fresh", ShortID: "fre1", Title: "Fresh", Status: "open", ProjectName: "work", UpdatedAt: ago(0)},
 			{UID: "new", ShortID: "new1", Title: "Renamed", Status: "open", ProjectName: "work", UpdatedAt: ago(1)},
@@ -157,8 +156,8 @@ func TestCursorStaysOnItsChildWhenARefreshReordersTheChildren(t *testing.T) {
 	refresh := cmds[0].(model.ReadSnapshot)
 	parent := model.Issue{UID: "parent", ProjectName: "work"}
 	// "old", under the cursor, was edited and moves above "new".
-	snapshot := g.UISnapshotResponseBody{Cursor: 1,
-		Collection: []model.Issue{
+	snapshot := model.Snapshot{Cursor: 1,
+		Issues: []model.Issue{
 			parent,
 			{UID: "old", ShortID: "old1", Title: "Older", Status: "closed", ProjectName: "work", UpdatedAt: ago(0)},
 			{UID: "new", ShortID: "new1", Title: "Newer", Status: "open", ProjectName: "work", UpdatedAt: ago(1)},
@@ -178,7 +177,7 @@ func TestCursorStaysOnItsCommentWhenARefreshAddsOneAbove(t *testing.T) {
 	refresh := cmds[0].(model.ReadSnapshot)
 	parent := model.Issue{UID: "parent", ProjectName: "work"}
 	selected := &model.IssueDetailData{Issue: &parent, Links: []model.Link{childLink(3, "new")}, Comments: []model.Comment{{UID: "c0"}, {UID: "c1"}, {UID: "c2"}}}
-	snapshot := g.UISnapshotResponseBody{Cursor: 1, Collection: []model.Issue{parent, {UID: "new", ShortID: "new1", Title: "Newer", Status: "open", ProjectName: "work"}}}
+	snapshot := model.Snapshot{Cursor: 1, Issues: []model.Issue{parent, {UID: "new", ShortID: "new1", Title: "Newer", Status: "open", ProjectName: "work"}}}
 	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot, Selected: selected})
 	if cursorKey(m) != "c2" {
 		t.Fatalf("cursor on %q after the refresh, want c2", cursorKey(m))

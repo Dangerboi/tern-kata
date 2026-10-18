@@ -8,7 +8,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // referencing is a wide Pane on Issue "main" with one Link to "peer", a linked
@@ -27,7 +26,7 @@ func referencing(tab model.ActivityTab) (model.Model, string) {
 	m := apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{main, peer}, CollectionLinks: collectionLinks(links)}}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{main, peer}, Links: links}}},
 		model.DetailLoaded{UID: "main", Selected: &model.IssueDetailData{Issue: &main, Links: links, History: events}},
 		model.ActivityTabMsg{Tab: tab},
 	)
@@ -193,7 +192,7 @@ func TestLinkRowReadsRelationReferenceDashTitle(t *testing.T) {
 func TestPropertiesTitleJumpsToTheReferencedIssue(t *testing.T) {
 	links := []model.Link{{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#up"}}
 	up := model.Issue{UID: "up", ShortID: "up", Title: "Up", ProjectName: "work"}
-	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, up}}}}, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &alpha, Links: links}})
+	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{alpha, up}}}}, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &alpha, Links: links}})
 	nodes := render(t, m)
 	value := nodes[view.DetailContentID+".properties.parent.v"]
 	if text(value) != "#up - Up" || value.P["actions"].(map[string]any)["click"] != view.JumpClick("up") {

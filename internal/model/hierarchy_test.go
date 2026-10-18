@@ -5,18 +5,17 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
-func hierarchySnapshot() g.UISnapshotResponseBody {
-	return g.UISnapshotResponseBody{
-		Collection: []model.Issue{
+func hierarchySnapshot() model.Snapshot {
+	return model.Snapshot{
+		Issues: []model.Issue{
 			{UID: "parent", ShortID: "same", ProjectID: 1, Title: "Parent", UpdatedAt: ago(1)},
 			{UID: "child", ShortID: "same", ProjectID: 2, Title: "Child", UpdatedAt: ago(2)},
 			{UID: "grandchild", Title: "Grandchild", UpdatedAt: ago(3)},
 			{UID: "root", Title: "Outside parent", UpdatedAt: ago(4)},
 		},
-		CollectionLinks: []g.UILink{
+		Links: []model.Link{
 			{Type: "parent", FromIssueUID: "child", ToIssueUID: "parent"},
 			{Type: "parent", FromIssueUID: "grandchild", ToIssueUID: "child"},
 			{Type: "parent", FromIssueUID: "root", ToIssueUID: "outside"},
@@ -90,15 +89,15 @@ func TestHierarchyExpansion(t *testing.T) {
 
 // A middle child continues its ancestor's line; the last child of each level ends it.
 func TestHierarchyGuides(t *testing.T) {
-	snap := g.UISnapshotResponseBody{
-		Collection: []model.Issue{
+	snap := model.Snapshot{
+		Issues: []model.Issue{
 			{UID: "p", Title: "P", UpdatedAt: ago(1)},
 			{UID: "a", Title: "A", UpdatedAt: ago(2)},
 			{UID: "a1", Title: "A1", UpdatedAt: ago(3)},
 			{UID: "b", Title: "B", UpdatedAt: ago(4)},
 			{UID: "b1", Title: "B1", UpdatedAt: ago(5)},
 		},
-		CollectionLinks: []g.UILink{
+		Links: []model.Link{
 			{Type: "parent", FromIssueUID: "a", ToIssueUID: "p"},
 			{Type: "parent", FromIssueUID: "a1", ToIssueUID: "a"},
 			{Type: "parent", FromIssueUID: "b", ToIssueUID: "p"},
@@ -119,9 +118,9 @@ func TestHierarchyGuides(t *testing.T) {
 
 func TestHierarchyViewAndRefresh(t *testing.T) {
 	refresh := hierarchySnapshot()
-	refresh.Collection[0].ShortID = "renamed"
-	refresh.Collection[3].UpdatedAt = ago(0)
-	refresh.Collection[0], refresh.Collection[3] = refresh.Collection[3], refresh.Collection[0]
+	refresh.Issues[0].ShortID = "renamed"
+	refresh.Issues[3].UpdatedAt = ago(0)
+	refresh.Issues[0], refresh.Issues[3] = refresh.Issues[3], refresh.Issues[0]
 	for _, tt := range []struct {
 		name     string
 		msgs     []model.Msg
@@ -168,20 +167,20 @@ func TestHierarchyViewAndRefresh(t *testing.T) {
 func TestHierarchyCyclesAndEmptyLists(t *testing.T) {
 	for _, tt := range []struct {
 		name     string
-		snapshot g.UISnapshotResponseBody
+		snapshot model.Snapshot
 		want     []string
 	}{
-		{"empty", g.UISnapshotResponseBody{}, nil},
-		{"cycle", g.UISnapshotResponseBody{
-			Collection: []model.Issue{{UID: "a"}, {UID: "b"}},
-			CollectionLinks: []g.UILink{
+		{"empty", model.Snapshot{}, nil},
+		{"cycle", model.Snapshot{
+			Issues: []model.Issue{{UID: "a"}, {UID: "b"}},
+			Links: []model.Link{
 				{Type: "parent", FromIssueUID: "a", ToIssueUID: "b"},
 				{Type: "parent", FromIssueUID: "b", ToIssueUID: "a"},
 			},
 		}, []string{"a", "b"}},
-		{"unrelated links do not nest", g.UISnapshotResponseBody{
-			Collection:      []model.Issue{{UID: "a"}, {UID: "b"}},
-			CollectionLinks: []g.UILink{{Type: "blocks", FromIssueUID: "a", ToIssueUID: "b"}},
+		{"unrelated links do not nest", model.Snapshot{
+			Issues:      []model.Issue{{UID: "a"}, {UID: "b"}},
+			Links: []model.Link{{Type: "blocks", FromIssueUID: "a", ToIssueUID: "b"}},
 		}, []string{"a", "b"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -226,7 +225,7 @@ func TestHierarchyLiveRefreshSelectsVisibleAncestor(t *testing.T) {
 		t.Fatalf("event command=%#v", cmds[0])
 	}
 	snapshot := hierarchySnapshot()
-	snapshot.Collection = append(snapshot.Collection[:2], snapshot.Collection[3:]...)
+	snapshot.Issues = append(snapshot.Issues[:2], snapshot.Issues[3:]...)
 	snapshot.Cursor = 1
 	m, cmds = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot})
 	if m.SelectedUID != "parent" || !m.ExpandedUIDs["parent"] || !m.ExpandedUIDs["child"] || !reflect.DeepEqual(cmds, []model.Cmd{model.LoadDetail{UID: "parent"}}) {
@@ -237,8 +236,7 @@ func TestHierarchyLiveRefreshSelectsVisibleAncestor(t *testing.T) {
 // The kids cell is the daemon's count of direct children, not a count over the
 // Issues the filters left in the list.
 func TestKidsAreTheDaemonsCountsWhateverTheFilters(t *testing.T) {
-	snapshot := g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "parent", Status: "open"}, {UID: "leaf", Status: "open"}}}
-	counts := map[string]g.ChildCounts{"parent": {Open: 2, Total: 6}}
+	snapshot := model.Snapshot{Issues: []model.Issue{{UID: "parent", Status: "open"}, {UID: "leaf", Status: "open"}}, ChildCounts: map[string]model.ChildCounts{"parent": {Open: 2, Total: 6}}}
 	kids := func(m model.Model) [2]int {
 		var got [2]int
 		for _, row := range m.VisibleRows() {
@@ -251,16 +249,16 @@ func TestKidsAreTheDaemonsCountsWhateverTheFilters(t *testing.T) {
 		}
 		return got
 	}
-	m, _ := loadFirst(model.Model{}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: snapshot, ChildCounts: counts})
+	m, _ := loadFirst(model.Model{}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: snapshot})
 	if got := kids(m); got != [2]int{2, 6} {
 		t.Fatalf("project load: kids %v, want 2/6", got)
 	}
 	m.Collection = model.Collection{View: "all-open", Title: "All Open"}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: snapshot, ChildCounts: map[string]g.ChildCounts{"parent": {Open: 1, Total: 6}}})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: snapshot.Issues, ChildCounts: map[string]model.ChildCounts{"parent": {Open: 1, Total: 6}}}})
 	if got := kids(m); got != [2]int{1, 6} {
 		t.Fatalf("collection load: kids %v, want 1/6", got)
 	}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: snapshot})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: snapshot.Issues}})
 	if got := kids(m); got != [2]int{0, 0} {
 		t.Fatalf("a load carries its own counts: kids %v", got)
 	}

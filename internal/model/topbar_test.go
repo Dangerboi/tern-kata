@@ -4,29 +4,28 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 func TestTopBarDaemonAndCounts(t *testing.T) {
 	project := model.Project{UID: "p", Name: "work"}
 	issues := []model.Issue{{UID: "a", Status: "open"}, {UID: "b", Status: "closed"}}
-	load := func(m model.Model, stats *g.ProjectStats) model.Model {
-		m, _ = loadFirst(m, model.ProjectLoaded{Project: project, Daemon: model.Daemon{Remote: true, Version: "v0.18.0"}}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
-			Catalog:    []g.UIProject{{Project: project, Stats: stats}},
-			Collection: issues,
+	load := func(m model.Model, stats *model.ProjectStats) model.Model {
+		m, _ = loadFirst(m, model.ProjectLoaded{Project: project, Daemon: model.Daemon{Remote: true, Version: "v0.18.0"}}, model.SnapshotLoaded{Snapshot: model.Snapshot{
+			Catalog:    []model.CatalogProject{{Project: project, Stats: stats}},
+			Issues: issues,
 		}})
 		return m
 	}
-	m := load(model.Model{Workspace: "/repo"}, &g.ProjectStats{Open: 5, Closed: 7})
+	m := load(model.Model{Workspace: "/repo"}, &model.ProjectStats{Open: 5, Closed: 7})
 	if got := m.DaemonLine(); got != "Daemon: remote · kata v0.18.0" {
 		t.Fatalf("daemon line %q", got)
 	}
 	if got := m.CountsLine(); got != "open: 5 · closed: 7 · all: 12" {
 		t.Fatalf("catalog counts %q", got)
 	}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: g.UISnapshotResponseBody{
-		Catalog:    []g.UIProject{{Project: project, Stats: &g.ProjectStats{Open: 6, Closed: 7}}},
-		Collection: issues,
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: model.Snapshot{
+		Catalog:    []model.CatalogProject{{Project: project, Stats: &model.ProjectStats{Open: 6, Closed: 7}}},
+		Issues: issues,
 	}})
 	if got := m.CountsLine(); got != "open: 6 · closed: 7 · all: 13" {
 		t.Fatalf("counts after refresh %q", got)
@@ -41,9 +40,9 @@ func TestTopBarDaemonAndCounts(t *testing.T) {
 // Pane is bound to it; any other Collection counts the Issues it lists.
 func TestCountsLineForAnUnboundProjectCollection(t *testing.T) {
 	project := model.Project{UID: "p", Name: "work"}
-	snapshot := g.UISnapshotResponseBody{
-		Catalog:    []g.UIProject{{Project: project, Stats: &g.ProjectStats{Open: 5, Closed: 7}}},
-		Collection: []model.Issue{{UID: "a", Status: "open"}},
+	snapshot := model.Snapshot{
+		Catalog:    []model.CatalogProject{{Project: project, Stats: &model.ProjectStats{Open: 5, Closed: 7}}},
+		Issues: []model.Issue{{UID: "a", Status: "open"}},
 	}
 	m, _ := loadFirst(model.Model{Workspace: "/repo"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: snapshot})
 	if m.Bound || m.CountsLine() != "open: 1 · closed: 0 · all: 1" {
