@@ -12,7 +12,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // chord is the key as Tern reports it for a bare chord, without text.
@@ -90,18 +89,18 @@ func clickBase() driver.State {
 	hours := func(n int) time.Time {
 		return time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC).Add(-time.Duration(n) * time.Hour)
 	}
-	m := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
-		Collection: []model.Issue{
+	m := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{
+		Issues: []model.Issue{
 			{UID: "parent", ShortID: "par1", Title: "A parent", Status: "open", UpdatedAt: hours(1)},
 			{UID: "child", ShortID: "chi1", Title: "B child", Status: "open", UpdatedAt: hours(2)},
 			{UID: "leaf", ShortID: "lea1", Title: "C leaf", Status: "open", UpdatedAt: hours(3)},
 			{UID: "other", ShortID: "oth1", Title: "D other", Status: "open", UpdatedAt: hours(4)},
 		},
-		CollectionLinks: []g.UILink{{Type: "parent", FromIssueUID: "child", ToIssueUID: "parent"}},
+		Links: []model.Link{{Type: "parent", FromIssueUID: "child", ToIssueUID: "parent"}},
 	}})
-	m, _ = model.Update(m, model.DetailLoaded{UID: "parent", Selected: &g.UISelectedAuthority{
+	m, _ = model.Update(m, model.DetailLoaded{UID: "parent", Selected: &model.IssueDetailData{
 		Issue: &model.Issue{UID: "parent"},
-		Links: []g.UILink{{ID: 1, Type: "related", FromIssueUID: "parent", ToIssueUID: "other", ToQualifiedID: "work#oth1"}},
+		Links: []model.Link{{ID: 1, Type: "related", FromIssueUID: "parent", ToIssueUID: "other", ToQualifiedID: "work#oth1"}},
 	}})
 	return driver.State{Model: m}
 }
@@ -253,15 +252,15 @@ func TestRetryButtonRetriesLikeItsKey(t *testing.T) {
 	sameAs(t, "retry click and key diverge", pointer, clickCmds, keyboard, keyCmds)
 }
 
-func pickerCatalog() []g.UIProject {
-	return []g.UIProject{{Project: model.Project{UID: "alpha-uid", Name: "alpha"}}, {Project: model.Project{UID: "smoke-uid", Name: "smoke"}}}
+func pickerCatalog() []model.CatalogProject {
+	return []model.CatalogProject{{Project: model.Project{UID: "alpha-uid", Name: "alpha"}}, {Project: model.Project{UID: "smoke-uid", Name: "smoke"}}}
 }
 
 // newProject is an unbound directory with the New Project card open from the sidebar.
 func newProject() driver.State {
-	m := loadFirst(model.Model{Cols: 160, Workspace: "/home/dev/my-repo", Actor: "alice"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
+	m := loadFirst(model.Model{Cols: 160, Workspace: "/home/dev/my-repo", Actor: "alice"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{
 		Catalog:    pickerCatalog(),
-		Collection: []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}},
+		Issues: []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}},
 	}})
 	return pressed(driver.State{Model: m}, "escape", "end", "enter")
 }
@@ -272,7 +271,7 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 	creating := driver.State{Model: model.Model{Project: model.Project{ID: 7}}}
 	titled, _ := inputs(chord("n"), tern.Key{Text: "title"})(creating)
 	asking := pressed(titled, "escape")
-	draftModel := withDetail(model.Model{Workspace: "/repo", SelectedUID: "a"}, &g.UISelectedAuthority{Issue: &model.Issue{UID: "a", ProjectID: 2, Body: "a😀b", Revision: 7}})
+	draftModel := withDetail(model.Model{Workspace: "/repo", SelectedUID: "a"}, &model.IssueDetailData{Issue: &model.Issue{UID: "a", ProjectID: 2, Body: "a😀b", Revision: 7}})
 	draft := pressed(driver.State{Model: draftModel}, "enter", "e")
 	typed, _ := inputs(tern.Key{Name: "paste", Text: "more"})(draft)
 	asked := pressed(typed, "escape")
@@ -314,7 +313,7 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 }
 
 // withDetail is m with the detail of its selected Issue loaded.
-func withDetail(m model.Model, authority *g.UISelectedAuthority) model.Model {
+func withDetail(m model.Model, authority *model.IssueDetailData) model.Model {
 	m, _ = model.Update(m, model.ResizeMsg{Cols: m.Cols})
 	m, _ = model.Update(m, model.DetailLoaded{UID: m.SelectedUID, Selected: authority})
 	return m

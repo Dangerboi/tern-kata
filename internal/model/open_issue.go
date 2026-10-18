@@ -3,8 +3,6 @@ package model
 import (
 	"fmt"
 	"strings"
-
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 type ActionMsg struct {
@@ -23,7 +21,7 @@ func (OpenIssue) cmd() {}
 
 type IssueOpened struct {
 	Ref      string
-	Selected *g.UISelectedAuthority
+	Selected *IssueDetailData
 }
 
 func (IssueOpened) msg() {}

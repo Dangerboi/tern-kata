@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 const newProjectWorkspace = "/home/dev/my-repo"
@@ -14,9 +13,9 @@ const newProjectWorkspace = "/home/dev/my-repo"
 // newProjectStart is a loaded Pane in newProjectWorkspace: bound to Project
 // smoke, or unbound on Inbox with the Menu sidebar.
 func newProjectStart(bound bool) model.Model {
-	loaded, snapshot := model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
+	loaded, snapshot := model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{
 		Catalog:    pickerCatalog(),
-		Collection: []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}},
+		Issues: []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}},
 	}}
 	if bound {
 		loaded.Project = model.Project{ID: 7, UID: "smoke-uid", Name: "smoke"}
@@ -187,7 +186,7 @@ func TestNewProjectBindOpensTheProjectFirst(t *testing.T) {
 	}
 
 	// The snapshot that arrives lists the Project, which is now the pinned entry.
-	snapshot := g.UISnapshotResponseBody{Catalog: append(pickerCatalog(), g.UIProject{Project: created})}
+	snapshot := model.Snapshot{Catalog: append(pickerCatalog(), model.CatalogProject{Project: created})}
 	loaded, _ := model.Update(got, model.SnapshotLoaded{Request: got.RefreshRequest, Query: got.SnapshotQuery(), Snapshot: snapshot})
 	if loaded.Loading || !reflect.DeepEqual(pickerTitles(loaded)[:2], []string{"my-repo", "Inbox"}) {
 		t.Fatalf("loaded: loading=%v entries=%q", loaded.Loading, pickerTitles(loaded))

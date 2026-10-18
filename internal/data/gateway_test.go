@@ -1,10 +1,11 @@
 package data
 
 import (
-	g "go.kenn.io/kata/pkg/client/generated"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	g "go.kenn.io/kata/pkg/client/generated"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -193,16 +194,16 @@ func TestGatewayReadsAndWritesIssues(t *testing.T) {
 	collection := model.Collection{View: "project", ProjectUID: demo.UID, Title: demo.Name}
 	query := model.CollectionQuery(collection, model.Filters{})
 	loaded := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, Request: 3}))
-	if loaded.ETag == "" || loaded.Request != 3 || loaded.LocalDate == "" || len(loaded.Snapshot.Collection) != 1 || loaded.Snapshot.Collection[0].UID != uid {
+	if loaded.ETag == "" || loaded.Request != 3 || loaded.LocalDate == "" || len(loaded.Snapshot.Issues) != 1 || loaded.Snapshot.Issues[0].UID != uid {
 		t.Fatalf("collection %+v", loaded)
 	}
 	unchanged := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ETag: loaded.ETag, Request: 4}))
-	if !unchanged.NotModified || unchanged.Request != 4 || len(unchanged.Snapshot.Collection) != 0 {
+	if !unchanged.NotModified || unchanged.Request != 4 || len(unchanged.Snapshot.Issues) != 0 {
 		t.Fatalf("refresh with the current ETag %+v, want a 304", unchanged)
 	}
 	createIssue(t, gateway, workspace, demo, "Zebra migration")
 	changed := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ETag: loaded.ETag, Request: 5}))
-	if changed.NotModified || len(changed.Snapshot.Collection) != 2 || changed.ETag == "" || changed.ETag == loaded.ETag {
+	if changed.NotModified || len(changed.Snapshot.Issues) != 2 || changed.ETag == "" || changed.ETag == loaded.ETag {
 		t.Fatalf("refresh after a write %+v, want the new snapshot and ETag", changed)
 	}
 
@@ -726,16 +727,26 @@ func TestGatewaySnapshotCountsChildrenOnEveryRead(t *testing.T) {
 	query := model.CollectionQuery(model.Collection{View: "project", ProjectUID: demo.UID, Title: demo.Name}, model.Filters{})
 
 	before := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query}))
-	if len(before.ChildCounts) != 0 {
-		t.Fatalf("child counts %+v before any child", before.ChildCounts)
+	if len(before.Snapshot.ChildCounts) != 0 {
+		t.Fatalf("child counts %+v before any child", before.Snapshot.ChildCounts)
 	}
 	child := as[model.IssueCreated](t, run(t, gateway, model.CreateIssueCmd{Workspace: workspace, Actor: "tester", ProjectID: demo.ID, Title: "Child", ParentUID: parent}))
 	if child.Err != nil {
 		t.Fatal(child.Err)
 	}
 	after := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ETag: before.ETag}))
-	if counts := after.ChildCounts[parent]; after.NotModified || counts.Total != 1 || counts.Open != 1 {
+	if counts := after.Snapshot.ChildCounts[parent]; after.NotModified || counts.Total != 1 || counts.Open != 1 {
 		t.Fatalf("after a child: %+v, want the parent to count its one open child", after)
+	}
+	links := after.Snapshot.Links
+	if len(links) != 1 || links[0].Type != "parent" || links[0].FromIssueUID != child.UID || links[0].ToIssueUID != parent {
+		t.Fatalf("links %+v, want the child's parent link to %s", links, parent)
+	}
+	if len(after.Snapshot.Issues) != 2 || after.Snapshot.Cursor == 0 {
+		t.Fatalf("snapshot %+v, want both Issues and the event cursor", after.Snapshot)
+	}
+	if len(after.Snapshot.Catalog) != 1 || after.Snapshot.Catalog[0].Project.UID != demo.UID || after.Snapshot.Catalog[0].Stats == nil || after.Snapshot.Catalog[0].Stats.Open != 2 {
+		t.Fatalf("catalog %+v, want the Project with two open Issues", after.Snapshot.Catalog)
 	}
 	unchanged := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ETag: after.ETag}))
 	if !unchanged.NotModified {
@@ -848,4 +859,69 @@ func closePayload(t *testing.T, gateway *Gateway, workspace, uid string) map[str
 	}
 	t.Fatalf("no close event for %s", uid)
 	return nil
+}
+
+func TestGatewayTranslatesTheIssueDetailFromRealPayloads(t *testing.T) {
+	kata := startKata(t, "0.19.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	uid := createIssue(t, gateway, workspace, demo, "Discuss")
+	parent := createIssue(t, gateway, workspace, demo, "Parent")
+	detailOf := func() *model.IssueDetailData {
+		return as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected
+	}
+
+	as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseRevision: detailOf().Issue.Revision, BaseText: detailOf().Issue.Body, Text: "the question", Comment: true, Actor: "asker"}))
+	question := detailOf().Comments[0]
+	// A reply is only reachable through kata's wire client; the Pane writes plain comments.
+	wire, err := client.New(kata.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kind, reply, actor := g.Confirm, question.UID, "answerer"
+	if _, err := wire.CreateCommentWithResponse(context.Background(), &g.CreateCommentRequestOptions{
+		PathParams: &g.CreateCommentPath{ProjectID: fmt.Sprint(demo.ID), Ref: uid},
+		Body:       &g.CreateCommentBody{Body: "confirmed: " + strings.Repeat("it reproduces. ", 4), Actor: &actor, Kind: &kind, ReplyTo: &reply},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	shortID := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: parent})).Selected.Issue.ShortID
+	as[model.FieldWritten](t, run(t, gateway, model.WriteField{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Action: model.SetParentAction, Value: shortID}))
+
+	check := func(name string, d *model.IssueDetailData) {
+		t.Helper()
+		if d.Issue == nil || d.Issue.UID != uid || len(d.Comments) != 2 {
+			t.Fatalf("%s: detail %+v", name, d)
+		}
+		asked, answer := d.Comments[0], d.Comments[1]
+		if asked.Author != "asker" || asked.Body != "the question" || asked.ReplyKind != nil || asked.Reply != nil ||
+			len(asked.Backlinks) != 1 || asked.Backlinks[0].Kind != "confirm" || asked.Backlinks[0].UID == nil || *asked.Backlinks[0].UID != answer.UID {
+			t.Errorf("%s: the answered comment %+v", name, asked)
+		}
+		if answer.Author != "answerer" || answer.ReplyKind == nil || *answer.ReplyKind != "confirm" || answer.ReplyToUID == nil || *answer.ReplyToUID != asked.UID ||
+			answer.Reply == nil || answer.Reply.UID == nil || *answer.Reply.UID != asked.UID || answer.Reply.Body == nil || *answer.Reply.Body != "the question" || answer.Reply.IssueUID == nil || *answer.Reply.IssueUID != uid {
+			t.Errorf("%s: the reply %+v", name, answer)
+		}
+		if len(d.Links) != 1 || d.Links[0].Type != "parent" || d.Links[0].FromIssueUID != uid || d.Links[0].ToIssueUID != parent || d.Links[0].ToQualifiedID == "" {
+			t.Errorf("%s: links %+v", name, d.Links)
+		}
+		types := make([]string, len(d.History))
+		for i, e := range d.History {
+			types[i] = e.Type
+			if e.UID == "" || e.Actor == "" || e.Payload == "" || e.CreatedAt.IsZero() || e.ProjectName != "demo" {
+				t.Errorf("%s: event %+v", name, e)
+			}
+		}
+		// Newest first, as kata lists them.
+		if len(types) < 4 || types[0] != "issue.linked" && types[0] != "issue.links_changed" || types[len(types)-1] != "issue.created" {
+			t.Errorf("%s: history %v", name, types)
+		}
+	}
+
+	check("detail load", detailOf())
+	collection := model.Collection{View: "project", ProjectUID: demo.UID, Title: demo.Name}
+	query := model.CollectionQuery(collection, model.Filters{})
+	query.SelectedIssueUID, query.IncludeHistory = &uid, new(true)
+	check("snapshot", as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, Request: 1})).Selected)
+	check("opened reference", as[model.IssueOpened](t, run(t, gateway, model.OpenIssue{Workspace: workspace, Ref: "demo/" + detailOf().Issue.ShortID, ProjectID: demo.ID})).Selected)
 }

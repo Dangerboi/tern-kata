@@ -11,7 +11,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 var now = time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
@@ -37,7 +36,7 @@ var openMenu = model.ActionMsg{Action: model.OpenPicker}
 func resize(cols int) *tern.Resize { return &tern.Resize{Cols: cols} }
 
 func alphaLoaded() model.Msg {
-	return model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &alpha}}
+	return model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &alpha}}
 }
 
 // drawnIDs is every node id Tern would hold after v is rendered.
@@ -85,11 +84,11 @@ func feed(t *testing.T, s driver.State, inputs ...any) driver.Output {
 // browsing is a Pane of the given width on a Project of alpha and beta, alpha's detail loaded.
 func browsing(t *testing.T, cols int) driver.State {
 	t.Helper()
-	return loadedWith(t, cols, model.Project{ID: 7, UID: "p", Name: "work"}, g.UISnapshotResponseBody{Collection: []model.Issue{alpha, beta}}, alphaLoaded())
+	return loadedWith(t, cols, model.Project{ID: 7, UID: "p", Name: "work"}, model.Snapshot{Issues: []model.Issue{alpha, beta}}, alphaLoaded())
 }
 
 // loadedWith is a Pane of the given width after its first load of the Project and snapshot, then the given messages.
-func loadedWith(t *testing.T, cols int, project model.Project, snapshot g.UISnapshotResponseBody, then ...any) driver.State {
+func loadedWith(t *testing.T, cols int, project model.Project, snapshot model.Snapshot, then ...any) driver.State {
 	t.Helper()
 	s := feed(t, driver.State{}, model.Start{Workspace: "/repo"}, resize(cols)).State
 	s.Model = loadFirst(s.Model, model.ProjectLoaded{Project: project}, model.SnapshotLoaded{Snapshot: snapshot})
@@ -315,7 +314,7 @@ func TestDaemonCommandsAreReturnedAndOpsAreNot(t *testing.T) {
 
 func TestDifferentIssueScrollsTheDetailToItsStart(t *testing.T) {
 	s := feed(t, browsing(t, 160), key("j")).State
-	out := step(t, s, model.DetailLoaded{UID: "beta", Selected: &g.UISelectedAuthority{Issue: &beta}})
+	out := step(t, s, model.DetailLoaded{UID: "beta", Selected: &model.IssueDetailData{Issue: &beta}})
 	wantOps(t, out, tern.OpScroll(view.DetailContentID, "start"))
 }
 
@@ -350,7 +349,7 @@ func TestSearchKeepsItsCaretWhileACollectionLoads(t *testing.T) {
 // Collection switch, a resize, a key move in the detail, or a live refresh of the shown Issue.
 func TestOnlyATabSwitchRevealsInsideTheDetail(t *testing.T) {
 	peer := "peer"
-	withLink := &g.UISelectedAuthority{Issue: &alpha, Links: []g.UILink{{ID: 1, FromIssueUID: "alpha", ToIssueUID: peer, ToQualifiedID: "work#peer", Type: "related"}}}
+	withLink := &model.IssueDetailData{Issue: &alpha, Links: []model.Link{{ID: 1, FromIssueUID: "alpha", ToIssueUID: peer, ToQualifiedID: "work#peer", Type: "related"}}}
 	s := feed(t, browsing(t, 160), model.DetailLoaded{UID: "alpha", Selected: withLink}, click("", view.FocusDetailClick)).State
 	for name, in := range map[string]any{
 		"title click":     click("", view.FocusDetailClick),

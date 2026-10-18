@@ -26,7 +26,7 @@ func TestLiveSearch(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m := model.Model{Collection: model.Collection{View: "project", ProjectUID: "p", Title: "Work"}, SelectedUID: "b"}
-			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "a", Title: "Alpha", Status: "open"}, {UID: "b", Title: "Beta", Status: "open"}}}, ETag: "original"})
+			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a", Title: "Alpha", Status: "open"}, {UID: "b", Title: "Beta", Status: "open"}}}, ETag: "original"})
 			for _, chord := range tt.keys {
 				var cmds []model.Cmd
 				m, cmds = model.Update(m, model.KeyMsg{Chord: chord})
@@ -43,7 +43,7 @@ func TestLiveSearch(t *testing.T) {
 					if !ok || !reflect.DeepEqual(query, m.SnapshotQuery()) || refresh.ETag != "" {
 						t.Fatalf("search command: %#v", cmds)
 					}
-					m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "a", Title: "Alpha", Status: "open"}, {UID: "b", Title: "Beta", Status: "open"}}}})
+					m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a", Title: "Alpha", Status: "open"}, {UID: "b", Title: "Beta", Status: "open"}}}})
 				}
 			}
 			if m.CurrentMode() != tt.mode || m.Filters.Search != tt.query || m.SelectedUID != tt.uid || m.Quitting {
@@ -76,7 +76,7 @@ func TestStatusFilterCycle(t *testing.T) {
 		if !reflect.DeepEqual(refresh.Query.Status, want) || *refresh.Query.View != "all-open" {
 			t.Fatalf("status query: %+v", refresh.Query)
 		}
-		m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "a", Status: tt.status}}}})
+		m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a", Status: tt.status}}}})
 		if tt.status == "closed" && (len(m.VisibleRows()) != 1 || m.VisibleRows()[0].Status != "closed") {
 			t.Fatalf("Collection regrouping dropped status-filter match: %+v", m.Issues)
 		}
@@ -94,7 +94,7 @@ func TestFilterForm(t *testing.T) {
 		{"cancel", "escape", false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			m := model.Model{Collection: model.Collection{View: "today", Title: "Today"}, LocalDate: "2026-10-08", TimeZone: "UTC", Filters: model.Filters{Search: "existing"}, Snapshot: g.UISnapshotResponseBody{Catalog: []g.UIProject{{Project: model.Project{UID: "p", Name: "Work"}}}}}
+			m := model.Model{Collection: model.Collection{View: "today", Title: "Today"}, LocalDate: "2026-10-08", TimeZone: "UTC", Filters: model.Filters{Search: "existing"}, Snapshot: model.Snapshot{Catalog: []model.CatalogProject{{Project: model.Project{UID: "p", Name: "Work"}}}}}
 			keys := []string{"f", "right", "tab", "right", "tab", "q", "tab", "b", "u", "g", ",", "u", "x", "tab", "right", tt.ending}
 			var cmds []model.Cmd
 			for _, chord := range keys {
@@ -133,7 +133,7 @@ func TestFiltersSurviveRefreshAndClear(t *testing.T) {
 	if !reflect.DeepEqual(query, m.SnapshotQuery()) || *refresh.Query.ProjectUID != "p" || *refresh.Query.Text != "fix" {
 		t.Fatalf("live refresh loses filter intent: %+v", refresh.Query)
 	}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: g.UISnapshotResponseBody{Cursor: 1, Collection: []model.Issue{{UID: "a", Status: "closed"}}}})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: model.Snapshot{Cursor: 1, Issues: []model.Issue{{UID: "a", Status: "closed"}}}})
 	if m.Filters != filters || m.Collection != collection || m.SelectedUID != "a" || len(m.VisibleRows()) != 1 {
 		t.Fatalf("live refresh loses filters/results: %+v", m)
 	}
@@ -156,7 +156,7 @@ func TestSearchCoalescesSupersededQueries(t *testing.T) {
 	if len(cmds) != 0 {
 		t.Fatal("parallel refresh instead of coalescing")
 	}
-	m, cmds = model.Update(m, model.SnapshotLoaded{Request: first.Request, Query: first.Query, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "stale"}}}})
+	m, cmds = model.Update(m, model.SnapshotLoaded{Request: first.Request, Query: first.Query, Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "stale"}}}})
 	if len(m.Issues) != 0 || len(cmds) != 1 {
 		t.Fatalf("superseded result applied: %+v %#v", m.Issues, cmds)
 	}
@@ -174,11 +174,11 @@ func TestCollectionSwitchKeepsFilterIntent(t *testing.T) {
 	if !readsCollection(cmds, m, "") || cmds[0].(model.ReadSnapshot).Query.Text == nil || *cmds[0].(model.ReadSnapshot).Query.Text != "fix" {
 		t.Fatalf("Collection query loses filters: %#v", cmds)
 	}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), LocalDate: "2026-10-08", TimeZone: "UTC", Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "a", Status: "open", ScheduledOnDate: new("2026-10-08")}}}})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), LocalDate: "2026-10-08", TimeZone: "UTC", Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a", Status: "open", ScheduledOnDate: new("2026-10-08")}}}})
 	if m.Filters != filters || m.SelectedUID != "a" || m.Loading {
 		t.Fatalf("Collection load loses filters: %+v", m)
 	}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: model.CollectionQuery(collection, model.Filters{}), Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "stale"}}}})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: model.CollectionQuery(collection, model.Filters{}), Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "stale"}}}})
 	if m.SelectedUID != "a" {
 		t.Fatal("unfiltered Collection snapshot applied")
 	}
@@ -218,7 +218,7 @@ func TestFilterFormActionsAndProjectScope(t *testing.T) {
 		t.Fatalf("filter form apply action: %+v %#v", m, cmds)
 	}
 	refresh := cmds[0].(model.ReadSnapshot)
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "a", Status: "open", ProjectUID: new("other")}}}})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a", Status: "open", ProjectUID: new("other")}}}})
 	if len(m.VisibleRows()) != 0 {
 		t.Fatal("Project filter widened current Project Collection")
 	}

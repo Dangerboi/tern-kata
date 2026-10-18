@@ -7,7 +7,6 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // spansOf is the (text, style) runs of a node's spans.
@@ -24,13 +23,13 @@ func spansOf(n map[string]any) [][2]string {
 
 func TestHistoryRendersSentencesWithTonedVerbs(t *testing.T) {
 	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
-	events := []g.Event{
+	events := []model.Event{
 		{UID: "e1", Actor: "dana", Type: "issue.created", Payload: `{"title":"Alpha"}`, CreatedAt: at},
 		{UID: "e2", Actor: "dana", Type: "issue.closed", Payload: `{"reason":"done","message":"shipped"}`, CreatedAt: at},
 		{UID: "e3", Actor: "dana", Type: "issue.reopened", Payload: `{}`, CreatedAt: at},
 		{UID: "e4", Actor: "dana", Type: "issue.assigned", Payload: `{"owner":"alice"}`, CreatedAt: at},
 	}
-	m := apply(browsing(), model.DetailLoaded{UID: alpha.UID, Selected: &g.UISelectedAuthority{Issue: &alpha, History: events}}, model.ActivityTabMsg{Tab: model.TabEvents})
+	m := apply(browsing(), model.DetailLoaded{UID: alpha.UID, Selected: &model.IssueDetailData{Issue: &alpha, History: events}}, model.ActivityTabMsg{Tab: model.TabEvents})
 	nodes := render(t, m)
 	activity := view.DetailActivityID
 

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // Loads leave what is on screen in place until the new content arrives.
@@ -16,12 +15,12 @@ func projectOf(uids ...string) model.Model {
 	for i, uid := range uids {
 		issues[i] = model.Issue{UID: uid, Status: "open"}
 	}
-	m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{Project: model.Project{UID: "project", Name: "work"}}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues}})
+	m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{Project: model.Project{UID: "project", Name: "work"}}, model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: issues}})
 	return m
 }
 
-func authority(uid string) *g.UISelectedAuthority {
-	return &g.UISelectedAuthority{Issue: &model.Issue{UID: uid}}
+func authority(uid string) *model.IssueDetailData {
+	return &model.IssueDetailData{Issue: &model.Issue{UID: uid}}
 }
 
 func TestFirstLoadIsTheOnlyFullPaneLoad(t *testing.T) {
@@ -44,7 +43,7 @@ func TestSwitchingCollectionKeepsPreviousIssues(t *testing.T) {
 	if !m.Loading || len(m.Issues) != 2 || m.SelectedUID != "b" || !readsCollection(cmds, m, "") {
 		t.Fatalf("switching Collection: loading=%v issues=%d selected=%q cmds=%#v", m.Loading, len(m.Issues), m.SelectedUID, cmds)
 	}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "c", Status: "open"}}}})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "c", Status: "open"}}}})
 	if m.Loading || len(m.Issues) != 1 || m.Issues[0].UID != "c" {
 		t.Fatalf("new Collection did not replace the Issues: loading=%v issues=%+v", m.Loading, m.Issues)
 	}
@@ -69,7 +68,7 @@ func TestDetailStaysOnScreenUntilTheSelectedIssueArrives(t *testing.T) {
 		{"c arrives after b", []model.Msg{model.SelectMsg{UID: "b"}, model.SelectMsg{UID: "c"}, model.DetailLoaded{UID: "b", Selected: authority("b")}, model.DetailLoaded{UID: "c", Selected: authority("c")}}, "c", false, nil, []model.Cmd{detailTop}},
 		{"b fails", []model.Msg{model.SelectMsg{UID: "b"}, model.DetailFailed{UID: "b", Err: failure}}, "", false, failure, nil},
 		{"a reloads after saving a Draft", []model.Msg{model.DraftSaved{UID: "a"}}, "a", true, nil, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "a"}}},
-		{"empty Collection", []model.Msg{snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{}}}}, "", false, nil, nil},
+		{"empty Collection", []model.Msg{snap{model.SnapshotLoaded{Snapshot: model.Snapshot{}}}}, "", false, nil, nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m, _ := model.Update(projectOf("a", "b", "c"), model.DetailLoaded{UID: "a", Selected: authority("a")})
@@ -85,7 +84,7 @@ func TestDetailStaysOnScreenUntilTheSelectedIssueArrives(t *testing.T) {
 }
 
 func TestDetailReturnsToFirstRowOnlyForADifferentIssueAndKeepsItsTab(t *testing.T) {
-	a := &g.UISelectedAuthority{Issue: &model.Issue{UID: "a"}, Comments: []g.CommentOut{{UID: "one"}, {UID: "two"}}}
+	a := &model.IssueDetailData{Issue: &model.Issue{UID: "a"}, Comments: []model.Comment{{UID: "one"}, {UID: "two"}}}
 	m, _ := model.Update(projectOf("a", "b"), model.DetailLoaded{UID: "a", Selected: a})
 	m, _ = model.Update(m, model.DetailItemMsg{Tab: model.TabComments, Key: "two"})
 	if m.ActiveTab() != model.TabComments || m.DetailIndex() != 1 {
@@ -107,8 +106,8 @@ func TestDetailReturnsToFirstRowOnlyForADifferentIssueAndKeepsItsTab(t *testing.
 }
 
 func TestPreviousDetailLinksStayRelativeToTheirOwnIssue(t *testing.T) {
-	link := g.UILink{ID: 1, Type: "parent", FromIssueUID: "child", ToIssueUID: "a", FromQualifiedID: "work#child", ToQualifiedID: "work#a"}
-	m, _ := model.Update(projectOf("a", "b"), model.DetailLoaded{UID: "a", Selected: &g.UISelectedAuthority{Issue: &model.Issue{UID: "a"}, Links: []g.UILink{link}}})
+	link := model.Link{ID: 1, Type: "parent", FromIssueUID: "child", ToIssueUID: "a", FromQualifiedID: "work#child", ToQualifiedID: "work#a"}
+	m, _ := model.Update(projectOf("a", "b"), model.DetailLoaded{UID: "a", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "a"}, Links: []model.Link{link}}})
 	m, _ = model.Update(m, model.SelectMsg{UID: "b"})
 
 	row, ok := m.DetailRow(model.TabLinks, 0)

@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // arrowModes returns one Model per mode whose navigation visibly moves.
@@ -15,15 +14,15 @@ func arrowModes(t *testing.T) map[string]model.Model {
 	t.Helper()
 	peer := "peer"
 	// Unbound: a bound Project has no sidebar, so escape would open the Menu.
-	list, _ := loadFirst(model.Model{Cols: 160}, model.ProjectLoaded{Project: model.Project{Name: "Work"}}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "a"}, {UID: "b"}, {UID: "c"}}}})
+	list, _ := loadFirst(model.Model{Cols: 160}, model.ProjectLoaded{Project: model.Project{Name: "Work"}}, model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a"}, {UID: "b"}, {UID: "c"}}}})
 	collections, _ := model.Update(list, model.KeyMsg{Chord: "escape"})
-	detail := withDetail(model.Model{Cols: 160, Focus: model.ColumnDetail, SelectedUID: "a", Issues: []model.Issue{{UID: "a"}}}, &g.UISelectedAuthority{
+	detail := withDetail(model.Model{Cols: 160, Focus: model.ColumnDetail, SelectedUID: "a", Issues: []model.Issue{{UID: "a"}}}, &model.IssueDetailData{
 		Issue: &model.Issue{UID: "a"},
-		Links: []g.UILink{
+		Links: []model.Link{
 			{ID: 1, FromIssueUID: "a", ToIssueUID: peer, ToQualifiedID: "other#bbbb", Type: "related"},
 			{ID: 2, FromIssueUID: "a", ToIssueUID: "peer2", ToQualifiedID: "other#cccc", Type: "related"},
 		},
-		History: []g.Event{{UID: "event-1", RelatedIssueUID: &peer}},
+		History: []model.Event{{UID: "event-1", RelatedIssueUID: &peer}},
 	})
 	detail, _ = model.Update(detail, model.KeyMsg{Chord: "tab"})
 	detail, _ = model.Update(detail, model.KeyMsg{Chord: "tab"})

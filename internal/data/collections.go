@@ -34,10 +34,31 @@ func (c *Client) ReadSnapshot(ctx context.Context, cmd model.ReadSnapshot) (mode
 	if response.JSON200 == nil {
 		return result, fmt.Errorf("kata daemon returned no Issue collection")
 	}
-	result.Snapshot = *response.JSON200
+	result.Snapshot = translateSnapshot(response.JSON200)
+	result.Selected = translateDetail(response.JSON200.Selected)
 	if response.Headers200 != nil {
 		result.ETag = response.Headers200.ETag
 	}
-	result.ChildCounts, err = c.readChildCounts(ctx, result.Snapshot, query.ProjectUID)
+	result.Snapshot.ChildCounts, err = c.readChildCounts(ctx, result.Snapshot, query.ProjectUID)
 	return result, err
+}
+
+// translateSnapshot is the one place kata's snapshot body becomes the model's Collection snapshot; the child counts are read
+// separately.
+func translateSnapshot(s *g.UISnapshotResponseBody) model.Snapshot {
+	snapshot := model.Snapshot{Issues: s.Collection, Cursor: s.Cursor}
+	for _, l := range s.CollectionLinks {
+		snapshot.Links = append(snapshot.Links, model.Link{
+			ID: l.ID, Type: l.Type, FromIssueUID: l.FromIssueUID, FromQualifiedID: l.FromQualifiedID,
+			ToIssueUID: l.ToIssueUID, ToQualifiedID: l.ToQualifiedID,
+		})
+	}
+	for _, p := range s.Catalog {
+		entry := model.CatalogProject{Project: p.Project}
+		if p.Stats != nil {
+			entry.Stats = &model.ProjectStats{Open: int(p.Stats.Open), Closed: int(p.Stats.Closed)}
+		}
+		snapshot.Catalog = append(snapshot.Catalog, entry)
+	}
+	return snapshot
 }

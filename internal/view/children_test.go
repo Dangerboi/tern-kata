@@ -10,7 +10,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 const childrenID = view.DetailContentID + ".children"
@@ -29,17 +28,17 @@ func parenting(tab model.ActivityTab) model.Model {
 	parent := alpha
 	parent.Body = "The parent's body."
 	dana := "dana"
-	kid := model.Issue{UID: "kid", ShortID: "kidd", Title: "Open kid", Status: "open", ProjectName: "work", Owner: &dana, UpdatedAt: testNow.Add(-38 * time.Minute)}
+	kid := model.Issue{UID: "kid", ShortID: "kidd", Title: "Open kid", Status: "open", ProjectName: "work", Owner: &dana, AssignmentExpiresOn: ptr(testNow.Add(time.Hour)), UpdatedAt: testNow.Add(-38 * time.Minute)}
 	done := model.Issue{UID: "done", ShortID: "done", Title: "Closed kid", Status: "closed", ProjectName: "work", UpdatedAt: testNow.Add(-3 * time.Hour)}
-	child := func(id int64, uid string) g.UILink {
-		return g.UILink{ID: id, Type: "parent", FromIssueUID: uid, FromQualifiedID: "work#" + uid, ToIssueUID: "alpha", ToQualifiedID: "work#aaaa"}
+	child := func(id int64, uid string) model.Link {
+		return model.Link{ID: id, Type: "parent", FromIssueUID: uid, FromQualifiedID: "work#" + uid, ToIssueUID: "alpha", ToQualifiedID: "work#aaaa"}
 	}
-	links := []g.UILink{child(1, "ghost"), child(2, "done"), child(3, "kid")}
+	links := []model.Link{child(1, "ghost"), child(2, "done"), child(3, "kid")}
 	return apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{ChildCounts: map[string]g.ChildCounts{"alpha": {Open: 1, Total: 3}}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{parent, kid, done}, CollectionLinks: links}}},
-		model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &parent, Links: links, Comments: []g.CommentOut{{UID: "c1", Body: "hi"}}}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{parent, kid, done}, Links: links, ChildCounts: map[string]model.ChildCounts{"alpha": {Open: 1, Total: 3}}}}},
+		model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &parent, Links: links, Comments: []model.Comment{{UID: "c1", Body: "hi"}}}},
 		model.ActivityTabMsg{Tab: tab},
 	)
 }
@@ -81,8 +80,8 @@ func TestChildRowsShowReferenceStatusTitleOwnerAndUpdatedInTheListsOrder(t *test
 		t.Fatalf("rows = %v, want %v", rows, want)
 	}
 	for row, want := range map[string][5]string{
-		kidRow:  {"#kid\u00a0\u00a0", "open\u00a0\u00a0", "Open kid", "dana\u00a0", "38m ago"},
-		doneRow: {"#done\u00a0", "closed", "Closed kid", "\u00a0\u00a0\u00a0\u00a0\u00a0", "3h ago\u00a0"},
+		kidRow:  {"#kid\u00a0\u00a0", "open\u00a0\u00a0", "Open kid", "dana until 13:00", "38m ago"},
+		doneRow: {"#done\u00a0", "closed", "Closed kid", strings.Repeat("\u00a0", 16), "3h ago\u00a0"},
 	} {
 		for i, cell := range []string{"jump", "status", "title", "owner", "updated"} {
 			if got := text(nodes[row+"."+cell]); got != want[i] {

@@ -7,17 +7,16 @@ import (
 	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // historyRow is the detail row the model builds for one history event by dana.
-func historyRow(t *testing.T, event g.Event) model.DetailRow {
+func historyRow(t *testing.T, event model.Event) model.DetailRow {
 	t.Helper()
 	event.UID, event.Actor = "event", "dana"
 	if event.CreatedAt.IsZero() {
 		event.CreatedAt = time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
 	}
-	m := withDetail(model.Model{}, &g.UISelectedAuthority{History: []g.Event{event}})
+	m := withDetail(model.Model{}, &model.IssueDetailData{History: []model.Event{event}})
 	row, ok := m.DetailRow(model.TabEvents, 0)
 	if !ok {
 		t.Fatal("no history row")
@@ -29,45 +28,45 @@ func TestHistoryReadsAsOneSentencePerEvent(t *testing.T) {
 	long := strings.TrimSpace(strings.Repeat("word ", 40))
 	for _, tt := range []struct {
 		name   string
-		event  g.Event
+		event  model.Event
 		title  string
 		detail string
 		tone   model.VerbTone
 	}{
-		{"created", g.Event{Type: "issue.created", Payload: `{"title":"Fix it","labels":["bug"]}`}, "dana created this Issue", "", model.VerbAccent},
-		{"commented", g.Event{Type: "issue.commented", Payload: `{"body":"first line\nsecond line"}`}, "dana commented", "", ""},
-		{"comment body not shown", g.Event{Type: "issue.commented", Payload: `{"body":"` + long + `\n\nsecond paragraph"}`}, "dana commented", "", ""},
-		{"comment edited", g.Event{Type: "issue.comment_edited", Payload: `{"body":"better"}`}, "dana edited a comment", "", ""},
-		{"assigned", g.Event{Type: "issue.assigned", Payload: `{"owner":"alice"}`}, "dana assigned to alice", "", ""},
-		{"unassigned", g.Event{Type: "issue.unassigned", Payload: `{"owner":null}`}, "dana unassigned", "", ""},
-		{"closed with reason", g.Event{Type: "issue.closed", Payload: `{"reason":"wontfix"}`}, "dana closed: wontfix", "", model.VerbSuccess},
-		{"closed with message and evidence", g.Event{Type: "issue.closed", Payload: `{"reason":"done","message":"shipped it","evidence":[{"type":"commit","sha":"abc123def4"},{"type":"pr","url":"https://x/y/1"},{"type":"test","command":"go test ./..."}]}`}, "dana closed: done", "shipped it (commit abc123d, pr https://x/y/1, test go test ./...)", model.VerbSuccess},
-		{"reopened", g.Event{Type: "issue.reopened", Payload: `{"reopened_at":"2026-10-08T18:05:05Z"}`}, "dana reopened", "", model.VerbWarning},
-		{"labelled", g.Event{Type: "issue.labeled", Payload: `{"label":"bug"}`}, "dana added label `bug`", "", ""},
-		{"unlabelled", g.Event{Type: "issue.unlabeled", Payload: `{"label":"bug"}`}, "dana removed label `bug`", "", ""},
-		{"priority set", g.Event{Type: "issue.priority_set", Payload: `{"priority":1,"old_priority":2}`}, "dana set priority to 1", "", ""},
-		{"priority cleared", g.Event{Type: "issue.priority_cleared", Payload: `{"old_priority":3}`}, "dana cleared priority", "", ""},
-		{"title and body edited", g.Event{Type: "issue.updated", Payload: `{"title":"New title","old_title":"Old","body":"x"}`}, "dana edited title and body", "", ""},
-		{"body edited", g.Event{Type: "issue.updated", Payload: `{"body":"x"}`}, "dana edited body", "", ""},
-		{"owner edited", g.Event{Type: "issue.updated", Payload: `{"owner":"bob","old_owner":"alice"}`}, "dana edited owner", "", ""},
-		{"linked", g.Event{Type: "issue.linked", Payload: `{"type":"blocks","from_short_id":"aaaa","to_short_id":"bbbb","incoming":false}`}, "dana linked blocks bbbb", "", ""},
-		{"linked incoming", g.Event{Type: "issue.linked", Payload: `{"type":"blocks","from_short_id":"aaaa","to_short_id":"bbbb","incoming":true}`}, "dana linked blocked by bbbb", "", ""},
-		{"unlinked", g.Event{Type: "issue.unlinked", Payload: `{"type":"related","from_short_id":"aaaa","to_short_id":"bbbb"}`}, "dana unlinked related bbbb", "", ""},
-		{"links added", g.Event{Type: "issue.links_changed", Payload: `{"parent_set":"pppp","blocked_by_added":["bbbb","cccc"]}`}, "dana linked parent pppp, blocked by bbbb, blocked by cccc", "", ""},
-		{"links removed", g.Event{Type: "issue.links_changed", Payload: `{"related_removed":["rrrr"]}`}, "dana unlinked related rrrr", "", ""},
-		{"links changed", g.Event{Type: "issue.links_changed", Payload: `{"blocks_added":["bbbb"],"parent_removed":"pppp"}`}, "dana changed links: +blocks bbbb, -parent pppp", "", ""},
-		{"scheduled", g.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"scheduled_on":{"from":null,"to":"2026-12-01"}}}`}, "dana scheduled for 2026-12-01", "", ""},
-		{"schedule cleared", g.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"scheduled_on":{"from":"2026-12-01","to":null}}}`}, "dana cleared schedule", "", ""},
-		{"deadline", g.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"deadline_on":{"from":null,"to":"2026-12-31"}}}`}, "dana set deadline to 2026-12-31", "", ""},
-		{"deadline cleared", g.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"deadline_on":{"from":"2026-12-31","to":null}}}`}, "dana cleared deadline", "", ""},
-		{"other metadata", g.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"zeta":{"from":null,"to":1},"alpha":{"from":null,"to":2}}}`}, "dana updated metadata: alpha, zeta", "", ""},
-		{"moved", g.Event{Type: "issue.moved", ProjectName: "other", Payload: `{"from_short_id":"aaaa","to_short_id":"bbbb","to_project_uid":"p"}`}, "dana moved to other as bbbb", "", ""},
-		{"deleted", g.Event{Type: "issue.soft_deleted", Payload: `{}`}, "dana deleted", "", ""},
-		{"restored", g.Event{Type: "issue.restored", Payload: `{}`}, "dana restored", "", ""},
-		{"unknown type lists sorted pairs", g.Event{Type: "issue.frobbed", Payload: `{"zeta":"last","alpha":["a","b"],"mid":{"k":1},"gone":null,"n":3}`}, "dana frobbed", "", ""},
-		{"unknown values kept whole", g.Event{Type: "thing.happened", Payload: `{"text":"` + long + `"}`}, "dana thing happened", "", ""},
-		{"long close message with evidence kept whole", g.Event{Type: "issue.closed", Payload: `{"reason":"done","message":"` + long + `","evidence":[{"type":"test","command":"` + long + `"}]}`}, "dana closed: done", long + " (test " + long + ")", model.VerbSuccess},
-		{"unknown payload that is not JSON", g.Event{Type: "issue.frobbed", Payload: "plain text"}, "dana frobbed", "", ""},
+		{"created", model.Event{Type: "issue.created", Payload: `{"title":"Fix it","labels":["bug"]}`}, "dana created this Issue", "", model.VerbAccent},
+		{"commented", model.Event{Type: "issue.commented", Payload: `{"body":"first line\nsecond line"}`}, "dana commented", "", ""},
+		{"comment body not shown", model.Event{Type: "issue.commented", Payload: `{"body":"` + long + `\n\nsecond paragraph"}`}, "dana commented", "", ""},
+		{"comment edited", model.Event{Type: "issue.comment_edited", Payload: `{"body":"better"}`}, "dana edited a comment", "", ""},
+		{"assigned", model.Event{Type: "issue.assigned", Payload: `{"owner":"alice"}`}, "dana assigned to alice", "", ""},
+		{"unassigned", model.Event{Type: "issue.unassigned", Payload: `{"owner":null}`}, "dana unassigned", "", ""},
+		{"closed with reason", model.Event{Type: "issue.closed", Payload: `{"reason":"wontfix"}`}, "dana closed: wontfix", "", model.VerbSuccess},
+		{"closed with message and evidence", model.Event{Type: "issue.closed", Payload: `{"reason":"done","message":"shipped it","evidence":[{"type":"commit","sha":"abc123def4"},{"type":"pr","url":"https://x/y/1"},{"type":"test","command":"go test ./..."}]}`}, "dana closed: done", "shipped it (commit abc123d, pr https://x/y/1, test go test ./...)", model.VerbSuccess},
+		{"reopened", model.Event{Type: "issue.reopened", Payload: `{"reopened_at":"2026-10-08T18:05:05Z"}`}, "dana reopened", "", model.VerbWarning},
+		{"labelled", model.Event{Type: "issue.labeled", Payload: `{"label":"bug"}`}, "dana added label `bug`", "", ""},
+		{"unlabelled", model.Event{Type: "issue.unlabeled", Payload: `{"label":"bug"}`}, "dana removed label `bug`", "", ""},
+		{"priority set", model.Event{Type: "issue.priority_set", Payload: `{"priority":1,"old_priority":2}`}, "dana set priority to 1", "", ""},
+		{"priority cleared", model.Event{Type: "issue.priority_cleared", Payload: `{"old_priority":3}`}, "dana cleared priority", "", ""},
+		{"title and body edited", model.Event{Type: "issue.updated", Payload: `{"title":"New title","old_title":"Old","body":"x"}`}, "dana edited title and body", "", ""},
+		{"body edited", model.Event{Type: "issue.updated", Payload: `{"body":"x"}`}, "dana edited body", "", ""},
+		{"owner edited", model.Event{Type: "issue.updated", Payload: `{"owner":"bob","old_owner":"alice"}`}, "dana edited owner", "", ""},
+		{"linked", model.Event{Type: "issue.linked", Payload: `{"type":"blocks","from_short_id":"aaaa","to_short_id":"bbbb","incoming":false}`}, "dana linked blocks bbbb", "", ""},
+		{"linked incoming", model.Event{Type: "issue.linked", Payload: `{"type":"blocks","from_short_id":"aaaa","to_short_id":"bbbb","incoming":true}`}, "dana linked blocked by bbbb", "", ""},
+		{"unlinked", model.Event{Type: "issue.unlinked", Payload: `{"type":"related","from_short_id":"aaaa","to_short_id":"bbbb"}`}, "dana unlinked related bbbb", "", ""},
+		{"links added", model.Event{Type: "issue.links_changed", Payload: `{"parent_set":"pppp","blocked_by_added":["bbbb","cccc"]}`}, "dana linked parent pppp, blocked by bbbb, blocked by cccc", "", ""},
+		{"links removed", model.Event{Type: "issue.links_changed", Payload: `{"related_removed":["rrrr"]}`}, "dana unlinked related rrrr", "", ""},
+		{"links changed", model.Event{Type: "issue.links_changed", Payload: `{"blocks_added":["bbbb"],"parent_removed":"pppp"}`}, "dana changed links: +blocks bbbb, -parent pppp", "", ""},
+		{"scheduled", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"scheduled_on":{"from":null,"to":"2026-12-01"}}}`}, "dana scheduled for 2026-12-01", "", ""},
+		{"schedule cleared", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"scheduled_on":{"from":"2026-12-01","to":null}}}`}, "dana cleared schedule", "", ""},
+		{"deadline", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"deadline_on":{"from":null,"to":"2026-12-31"}}}`}, "dana set deadline to 2026-12-31", "", ""},
+		{"deadline cleared", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"deadline_on":{"from":"2026-12-31","to":null}}}`}, "dana cleared deadline", "", ""},
+		{"other metadata", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"zeta":{"from":null,"to":1},"alpha":{"from":null,"to":2}}}`}, "dana updated metadata: alpha, zeta", "", ""},
+		{"moved", model.Event{Type: "issue.moved", ProjectName: "other", Payload: `{"from_short_id":"aaaa","to_short_id":"bbbb","to_project_uid":"p"}`}, "dana moved to other as bbbb", "", ""},
+		{"deleted", model.Event{Type: "issue.soft_deleted", Payload: `{}`}, "dana deleted", "", ""},
+		{"restored", model.Event{Type: "issue.restored", Payload: `{}`}, "dana restored", "", ""},
+		{"unknown type lists sorted pairs", model.Event{Type: "issue.frobbed", Payload: `{"zeta":"last","alpha":["a","b"],"mid":{"k":1},"gone":null,"n":3}`}, "dana frobbed", "", ""},
+		{"unknown values kept whole", model.Event{Type: "thing.happened", Payload: `{"text":"` + long + `"}`}, "dana thing happened", "", ""},
+		{"long close message with evidence kept whole", model.Event{Type: "issue.closed", Payload: `{"reason":"done","message":"` + long + `","evidence":[{"type":"test","command":"` + long + `"}]}`}, "dana closed: done", long + " (test " + long + ")", model.VerbSuccess},
+		{"unknown payload that is not JSON", model.Event{Type: "issue.frobbed", Payload: "plain text"}, "dana frobbed", "", ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			row := historyRow(t, tt.event)
@@ -92,7 +91,7 @@ func sentence(row model.DetailRow) string {
 
 func TestHistoryRowsReadOldestFirst(t *testing.T) {
 	// The snapshot lists History newest first.
-	m := withDetail(model.Model{}, &g.UISelectedAuthority{History: []g.Event{{UID: "new", Type: "issue.reopened", Payload: "{}"}, {UID: "old", Type: "issue.created", Payload: "{}"}}})
+	m := withDetail(model.Model{}, &model.IssueDetailData{History: []model.Event{{UID: "new", Type: "issue.reopened", Payload: "{}"}, {UID: "old", Type: "issue.created", Payload: "{}"}}})
 	var got []string
 	for i := range m.DetailRowCount(model.TabEvents) {
 		row, _ := m.DetailRow(model.TabEvents, i)
@@ -108,7 +107,7 @@ func TestHistoryTimestampsUseTheSnapshotZoneAndAreShort(t *testing.T) {
 	time.Local = time.FixedZone("x", 2*3600) // the process zone must be ignored
 	t.Cleanup(func() { time.Local = saved })
 	for _, tt := range []struct{ zone, want string }{{"", "2026-10-08 18:05"}, {"Asia/Tokyo", "2026-10-09 03:05"}} {
-		m := withDetail(inZone(tt.zone), &g.UISelectedAuthority{History: []g.Event{{UID: "event", Type: "issue.reopened", Payload: "{}", CreatedAt: time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)}}})
+		m := withDetail(inZone(tt.zone), &model.IssueDetailData{History: []model.Event{{UID: "event", Type: "issue.reopened", Payload: "{}", CreatedAt: time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)}}})
 		if row, _ := m.DetailRow(model.TabEvents, 0); row.Time != tt.want {
 			t.Errorf("zone %q: time = %q, want %q", tt.zone, row.Time, tt.want)
 		}
@@ -117,7 +116,7 @@ func TestHistoryTimestampsUseTheSnapshotZoneAndAreShort(t *testing.T) {
 
 func TestHistoryEventsKeepTheirIssueReference(t *testing.T) {
 	peer := "peer-uid"
-	row := historyRow(t, g.Event{Type: "issue.linked", Payload: `{"type":"related","to_short_id":"bbbb"}`, RelatedIssueUID: &peer})
+	row := historyRow(t, model.Event{Type: "issue.linked", Payload: `{"type":"related","to_short_id":"bbbb"}`, RelatedIssueUID: &peer})
 	if row.ReferenceUID != peer {
 		t.Fatalf("reference = %q", row.ReferenceUID)
 	}

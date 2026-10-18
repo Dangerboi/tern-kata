@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 const manyChildren = 40
@@ -21,14 +20,14 @@ func parentBase() model.Model {
 		{UID: "parent", ShortID: "par1", Title: "B parent", Status: "open", UpdatedAt: ago(2)},
 		{UID: "last", ShortID: "las1", Title: "Z leaf", Status: "open", UpdatedAt: ago(3)},
 	}
-	var links []g.UILink
+	var links []model.Link
 	for i := range manyChildren {
 		uid := fmt.Sprintf("child%02d", i)
 		issues = append(issues, model.Issue{UID: uid, ShortID: uid, Title: "C " + uid, Status: "open", UpdatedAt: ago(4)})
-		links = append(links, g.UILink{ID: int64(i + 1), Type: "parent", FromIssueUID: uid, ToIssueUID: "parent", FromQualifiedID: "work#" + uid})
+		links = append(links, model.Link{ID: int64(i + 1), Type: "parent", FromIssueUID: uid, ToIssueUID: "parent", FromQualifiedID: "work#" + uid})
 	}
-	m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: links}})
-	m, _ = model.Update(m, model.DetailLoaded{UID: "first", Selected: &g.UISelectedAuthority{Issue: &issues[0]}})
+	m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: issues, Links: links}})
+	m, _ = model.Update(m, model.DetailLoaded{UID: "first", Selected: &model.IssueDetailData{Issue: &issues[0]}})
 	return m
 }
 
@@ -36,13 +35,13 @@ func parentBase() model.Model {
 func parentAt(keys ...string) model.Model {
 	m, _ := clickPress(parentBase(), keys...)
 	parent := model.Issue{UID: m.SelectedUID}
-	var links []g.UILink
+	var links []model.Link
 	if m.SelectedUID == "parent" {
 		for i := range manyChildren {
-			links = append(links, g.UILink{ID: int64(i + 1), Type: "parent", FromIssueUID: fmt.Sprintf("child%02d", i), ToIssueUID: "parent"})
+			links = append(links, model.Link{ID: int64(i + 1), Type: "parent", FromIssueUID: fmt.Sprintf("child%02d", i), ToIssueUID: "parent"})
 		}
 	}
-	m, _ = model.Update(m, model.DetailLoaded{UID: m.SelectedUID, Selected: &g.UISelectedAuthority{Issue: &parent, Links: links}})
+	m, _ = model.Update(m, model.DetailLoaded{UID: m.SelectedUID, Selected: &model.IssueDetailData{Issue: &parent, Links: links}})
 	return m
 }
 

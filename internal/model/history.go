@@ -6,8 +6,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // VerbTone marks the history verbs that are worth a colour. The view maps it
@@ -33,7 +31,7 @@ func (m Model) DetailTime(t time.Time) string {
 // historyRow phrases one event as "<actor> <verb> <object>". Only issue.closed carries a detail
 // (Body: the close message and evidence); every other event stays one line. Types kata adds later
 // read as their type name.
-func (m Model) historyRow(event g.Event) DetailRow {
+func (m Model) historyRow(event Event) DetailRow {
 	payload, _ := decodePayload(event.Payload)
 	verb, object, detail, tone := "", "", "", VerbTone("")
 	switch event.Type {
@@ -198,7 +196,7 @@ var inverseRelation = map[string]string{"parent": "child", "child": "parent", "b
 
 func relationName(relation string) string { return strings.ReplaceAll(relation, "_", " ") }
 
-func linkObject(event g.Event, p payloadMap) string {
+func linkObject(event Event, p payloadMap) string {
 	relation, peer := p.text("type"), p.text("to_short_id")
 	if event.RelatedIssueShortID != nil {
 		peer = *event.RelatedIssueShortID
@@ -276,7 +274,7 @@ func metadataChanged(p payloadMap) (verb, object string) {
 	return "updated metadata:", strings.Join(keys, ", ")
 }
 
-func movedTo(event g.Event, p payloadMap) string {
+func movedTo(event Event, p payloadMap) string {
 	var parts []string
 	if event.ProjectName != "" {
 		parts = append(parts, "to "+event.ProjectName)
@@ -285,4 +283,26 @@ func movedTo(event g.Event, p payloadMap) string {
 		parts = append(parts, "as "+id)
 	}
 	return strings.Join(parts, " ")
+}
+
+// OwnerDisplay is the one owner text of list rows, the children table and the Issue detail:
+// "<owner>", or "<owner> until HH:MM" when the claim expires today and "<owner> until
+// YYYY-MM-DD HH:MM" otherwise, in the Pane's zone. "" when nobody owns the Issue.
+func (m Model) OwnerDisplay(owner *string, expires *time.Time, now time.Time) string {
+	if owner == nil || *owner == "" {
+		return ""
+	}
+	if expires == nil {
+		return *owner
+	}
+	loc := m.zone
+	if loc == nil {
+		loc = time.UTC
+	}
+	at := expires.In(loc)
+	layout := "2006-01-02 15:04"
+	if y, mo, d := now.In(loc).Date(); at.Year() == y && at.Month() == mo && at.Day() == d {
+		layout = "15:04"
+	}
+	return *owner + " until " + at.Format(layout)
 }

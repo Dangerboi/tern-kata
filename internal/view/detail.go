@@ -65,7 +65,7 @@ func detail(m model.Model, now time.Time) tern.Element {
 		if strings.TrimSpace(body) == "" {
 			body = "No body yet."
 		}
-		parts = append(parts, properties(m, issue), ui.Md{Common: ui.Common{Key: "body"}, Text: body})
+		parts = append(parts, properties(m, issue, now), ui.Md{Common: ui.Common{Key: "body"}, Text: body})
 		kids := m.DetailChildren()
 		if len(kids) > 0 {
 			parts = append(parts, ui.Spacer{Common: ui.Common{Key: "gap-children"}, Size: ui.GapMD}, childrenTable(m, kids, now))
@@ -199,7 +199,7 @@ func priorityTone(priority int64) ui.Tone {
 
 // properties is one Name: value grid: every row's key sits in a column as wide as the longest key, so the
 // values line up. A row with nothing to show is left out. The status badge is in the heading.
-func properties(m model.Model, issue *model.Issue) tern.Element {
+func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 	type row struct {
 		name  string
 		value tern.Element
@@ -218,11 +218,14 @@ func properties(m model.Model, issue *model.Issue) tern.Element {
 	if day := model.IssueDate(issue.DeadlineOnDate, issue.Metadata, "deadline_on"); day != "" {
 		add("Deadline", text(day))
 	}
-	owner := "Unassigned"
-	if issue.Owner != nil && *issue.Owner != "" {
-		owner = *issue.Owner
+	owner := m.OwnerDisplay(issue.Owner, issue.AssignmentExpiresOn, now)
+	if owner == "" {
+		owner = "Unassigned"
 	}
 	add("Owner", text(owner))
+	if issue.RecurrenceID != nil {
+		add("Recurring", text("Yes"))
+	}
 	if issue.Priority != nil {
 		add("Priority", ui.Badge{Common: ui.Common{Key: "v", Tone: priorityTone(*issue.Priority)}, Text: fmt.Sprintf("P%d", *issue.Priority)})
 	}
@@ -236,7 +239,7 @@ func properties(m model.Model, issue *model.Issue) tern.Element {
 	if link, ok := parentLink(m); ok {
 		add("Parent", referenceText("v", link.ReferenceUID, link.Ref, link.RefTitle))
 	}
-	if counts := m.ChildCounts[issue.UID]; counts.Total > 0 {
+	if counts := m.Snapshot.ChildCounts[issue.UID]; counts.Total > 0 {
 		add("Children", text(fmt.Sprintf("%d open / %d total", counts.Open, counts.Total)))
 	}
 	keyWidth := 0

@@ -11,7 +11,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // click is the Action input Tern sends for a click on node id that runs
@@ -49,18 +48,18 @@ func activity(t *testing.T, tab model.ActivityTab) driver.State {
 	t.Helper()
 	kid := model.Issue{UID: "kid", ShortID: "kidd", Title: "Kid", Status: "open", ProjectName: "work"}
 	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
-	selected := &g.UISelectedAuthority{Issue: &alpha,
-		Comments: []g.CommentOut{{UID: "c1", Author: "dana", CreatedAt: at, Body: "first"}},
-		History:  []g.Event{{UID: "e1", Actor: "dana", Type: "issue.reopened", Payload: `{}`, CreatedAt: at}},
-		Links: []g.UILink{
+	selected := &model.IssueDetailData{Issue: &alpha,
+		Comments: []model.Comment{{UID: "c1", Author: "dana", CreatedAt: at, Body: "first"}},
+		History:  []model.Event{{UID: "e1", Actor: "dana", Type: "issue.reopened", Payload: `{}`, CreatedAt: at}},
+		Links: []model.Link{
 			{ID: 1, FromIssueUID: "alpha", ToIssueUID: "beta", ToQualifiedID: "work#bbbb", Type: "related"},
 			{ID: 2, FromIssueUID: "kid", FromQualifiedID: "work#kidd", ToIssueUID: "alpha", ToQualifiedID: "work#aaaa", Type: "parent"},
 		},
 	}
-	return loadedWith(t, 160, model.Project{ID: 7, UID: "p", Name: "work"}, g.UISnapshotResponseBody{
-		Catalog:         []g.UIProject{{Project: model.Project{UID: "p", Name: "work"}}},
-		Collection:      []model.Issue{alpha, beta, kid},
-		CollectionLinks: []g.UILink{{Type: "parent", FromIssueUID: "kid", ToIssueUID: "alpha"}},
+	return loadedWith(t, 160, model.Project{ID: 7, UID: "p", Name: "work"}, model.Snapshot{
+		Catalog:         []model.CatalogProject{{Project: model.Project{UID: "p", Name: "work"}}},
+		Issues:      []model.Issue{alpha, beta, kid},
+		Links: []model.Link{{Type: "parent", FromIssueUID: "kid", ToIssueUID: "alpha"}},
 	}, model.DetailLoaded{UID: "alpha", Selected: selected}, model.ActivityTabMsg{Tab: tab})
 }
 
@@ -115,7 +114,7 @@ func TestSelectInputsDecodeForTheListAndBothMenus(t *testing.T) {
 	if got := driver.Step(s, &tern.Select{ID: view.IssueListID, Item: view.IssueID("beta")}, now).State.Model.SelectedUID; got != "beta" {
 		t.Errorf("Issue row select picked %q", got)
 	}
-	unbound := loadedWith(t, 160, model.Project{}, g.UISnapshotResponseBody{Collection: []model.Issue{alpha}})
+	unbound := loadedWith(t, 160, model.Project{}, model.Snapshot{Issues: []model.Issue{alpha}})
 	if out := driver.Step(unbound, &tern.Select{ID: view.CollectionsID, Item: view.CollectionItemID("today")}, now); len(out.Cmds) != 1 {
 		t.Errorf("sidebar select commands = %#v", out.Cmds)
 	}

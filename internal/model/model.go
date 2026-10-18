@@ -28,10 +28,7 @@ type Model struct {
 	Workspace string
 	Project   Project
 	Daemon    Daemon
-	Snapshot  g.UISnapshotResponseBody
-	// ChildCounts are the daemon's direct-child counts by Issue UID, whatever the
-	// filters; kata leaves out an Issue with no children.
-	ChildCounts         map[string]g.ChildCounts
+	Snapshot  Snapshot
 	Issues              []Issue
 	SelectedUID         string
 	Loading             bool

@@ -5,12 +5,11 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 func shownIssueA() model.Model {
 	return withDetail(model.Model{Workspace: "/repo", Cols: 160, Focus: model.ColumnDetail, SelectedUID: "a", Issues: []model.Issue{{UID: "a", ProjectID: 1, Status: "open"}}},
-		&g.UISelectedAuthority{Issue: &model.Issue{UID: "a", ProjectID: 1, Status: "open"}, Comments: []g.CommentOut{{UID: "c1"}, {UID: "c2"}}})
+		&model.IssueDetailData{Issue: &model.Issue{UID: "a", ProjectID: 1, Status: "open"}, Comments: []model.Comment{{UID: "c1"}, {UID: "c2"}}})
 }
 
 func reloads(cmds []model.Cmd) bool {
@@ -75,11 +74,11 @@ func TestJumpHistoryEndsOnEveryWayOutOfTheDetail(t *testing.T) {
 func TestIssueOpenedByReferenceShowsOutsideTheCollection(t *testing.T) {
 	m := model.Model{Workspace: "/repo", Cols: 160, Issues: []model.Issue{{UID: "a"}}, SelectedUID: "a"}
 	m, _ = model.Update(m, model.Start{Workspace: "/repo", IssueRef: "other/bbbb"})
-	m, _ = loadFirst(m, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
-		Catalog:    []g.UIProject{{Project: model.Project{ID: 7, Name: "other"}}},
-		Collection: []model.Issue{{UID: "a"}},
+	m, _ = loadFirst(m, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{
+		Catalog:    []model.CatalogProject{{Project: model.Project{ID: 7, Name: "other"}}},
+		Issues: []model.Issue{{UID: "a"}},
 	}})
-	m, _ = model.Update(m, model.IssueOpened{Ref: "other/bbbb", Selected: &g.UISelectedAuthority{Issue: &model.Issue{UID: "far"}}})
+	m, _ = model.Update(m, model.IssueOpened{Ref: "other/bbbb", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "far"}}})
 	if m.SelectedUID != "far" || m.DetailIssueUID() != "far" || m.Focus != model.ColumnDetail || m.DetailLoading() {
 		t.Fatalf("selected=%q shown=%q focus=%v loading=%v", m.SelectedUID, m.DetailIssueUID(), m.Focus, m.DetailLoading())
 	}

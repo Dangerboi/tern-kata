@@ -16,7 +16,7 @@ func (m Model) issueHierarchy() (map[string]string, map[string][]Issue) {
 		loaded[issue.UID] = true
 	}
 	parents := make(map[string]string)
-	for _, link := range m.Snapshot.CollectionLinks {
+	for _, link := range m.Snapshot.Links {
 		if link.Type == "parent" && loaded[link.FromIssueUID] && loaded[link.ToIssueUID] && link.FromIssueUID != link.ToIssueUID {
 			parents[link.FromIssueUID] = link.ToIssueUID
 		}
@@ -54,8 +54,8 @@ func (m Model) VisibleRows() []IssueRow {
 	rows := make([]IssueRow, 0, len(m.Issues))
 	parents, children := m.issueHierarchy()
 	kids := func(row IssueRow) IssueRow {
-		counts := m.ChildCounts[row.UID]
-		row.OpenKids, row.TotalKids = int(counts.Open), int(counts.Total)
+		counts := m.Snapshot.ChildCounts[row.UID]
+		row.OpenKids, row.TotalKids = counts.Open, counts.Total
 		return row
 	}
 	if m.Flat {

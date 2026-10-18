@@ -102,6 +102,10 @@ func issues(m model.Model, now time.Time) tern.Element {
 	for _, row := range rows {
 		idWidth = max(idWidth, utf8.RuneCountInString(idCell(row)))
 	}
+	ownerW := ownerWidth
+	for _, row := range rows {
+		ownerW = max(ownerW, utf8.RuneCountInString(m.OwnerDisplay(row.Owner, row.AssignmentExpiresOn, now)))
+	}
 	items := make([]tern.Element, 0, len(rows)+len(m.Groups))
 	groups := make(map[string]model.IssueGroup, len(m.Issues))
 	for _, group := range m.Groups {
@@ -116,13 +120,13 @@ func issues(m model.Model, now time.Time) tern.Element {
 			items = append(items, ui.Text{Common: ui.Common{Key: "group." + group.ID}, Spans: []ui.Span{{T: group.Title, S: "strong"}}})
 			shownGroups[group.ID] = true
 		}
-		items = append(items, issueRow(row, row.UID == m.SelectedUID, stripeRole(i), ownerShown, idWidth, now))
+		items = append(items, issueRow(m, row, row.UID == m.SelectedUID, stripeRole(i), ownerShown, idWidth, ownerW, now))
 	}
 	selected := ""
 	if m.SelectedUID != "" {
 		selected = IssueID(m.SelectedUID)
 	}
-	children := ui.Nodes(headerRow(ownerShown, idWidth))
+	children := ui.Nodes(headerRow(ownerShown, idWidth, ownerW))
 	if m.Search.Open {
 		placeholder := "Search Issues in " + m.Collection.Title
 		children = append(children, ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Mode: "insert", Placeholder: placeholder, Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}})
@@ -254,7 +258,7 @@ func stripeRole(i int) string {
 // issueRow is one Issue: the id, prio, status and title on the left, the
 // title being the cell that gives way, and kids, owner and updated pinned to
 // the right so each column lines up with the header. A blank cell keeps its width.
-func issueRow(row model.IssueRow, selected bool, role string, ownerShown bool, idWidth int, now time.Time) tern.Element {
+func issueRow(m model.Model, row model.IssueRow, selected bool, role string, ownerShown bool, idWidth, ownerW int, now time.Time) tern.Element {
 	tone := ui.ToneNeutral
 	statusStyle := "accent"
 	if model.IsClosed(row.Issue) {
@@ -280,29 +284,30 @@ func issueRow(row model.IssueRow, selected bool, role string, ownerShown bool, i
 	if row.TotalKids > 0 {
 		kids = fmt.Sprintf("%d/%d", row.OpenKids, row.TotalKids)
 	}
+	title := row.Title
+	if row.RecurrenceID != nil {
+		title = "↻ " + title
+	}
 	left := []ui.Span{
 		{T: cell(idCell(row), idWidth)},
 		{T: cellGap + cell(prio, prioWidth), S: prioStyle},
 		{T: cellGap + cell(row.Status, statusWidth), S: statusStyle},
-		{T: cellGap + row.Title},
+		{T: cellGap + title},
 	}
-	owner := ""
-	if row.Owner != nil {
-		owner = *row.Owner
-	}
+	owner := m.OwnerDisplay(row.Owner, row.AssignmentExpiresOn, now)
 	// A parent's click folds it; a double click on any row opens it. Tern sends the two clicks first, so a parent's fold ends where it began.
 	actions := &ui.Actions{DblClick: OpenRowClick(row.UID)}
 	if row.HasChildren {
 		actions.Click = ToggleClick(row.UID)
 	}
-	return ui.Item{Common: ui.Common{Key: row.UID, Role: role, Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells(kids, owner, relativeTime(row.UpdatedAt, now), ownerShown, "muted")...)}
+	return ui.Item{Common: ui.Common{Key: row.UID, Role: role, Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells(kids, owner, relativeTime(row.UpdatedAt, now), ownerShown, ownerW, "muted")...)}
 }
 
 // rightCells are the kids, owner and updated cells, the owner only when shown.
-func rightCells(kids, owner, updated string, ownerShown bool, style string) []ui.Span {
+func rightCells(kids, owner, updated string, ownerShown bool, ownerW int, style string) []ui.Span {
 	spans := []ui.Span{{T: cell(kids, kidsWidth), S: style}}
 	if ownerShown {
-		spans = append(spans, ui.Span{T: cellGap + cell(owner, ownerWidth), S: style})
+		spans = append(spans, ui.Span{T: cellGap + cell(owner, ownerW), S: style})
 	}
 	return append(spans, ui.Span{T: cellGap + cell(updated, updatedWidth), S: style})
 }
@@ -336,14 +341,14 @@ func footer(m model.Model) tern.Element {
 
 // headerRow labels the Issue rows. It is an Item like the rows, so its cells sit
 // where theirs do, and a node of its own, outside the scrolling list.
-func headerRow(ownerShown bool, idWidth int) tern.Element {
+func headerRow(ownerShown bool, idWidth, ownerW int) tern.Element {
 	left := []ui.Span{
 		{T: cell("#", idWidth), S: "muted"},
 		{T: cellGap + cell("prio", prioWidth), S: "muted"},
 		{T: cellGap + cell("status", statusWidth), S: "muted"},
 		{T: cellGap + "title", S: "muted"},
 	}
-	return ui.Item{Common: ui.Common{Key: "header", Tone: ui.ToneMuted}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells("kids", "owner", "updated", ownerShown, "muted")...)}
+	return ui.Item{Common: ui.Common{Key: "header", Tone: ui.ToneMuted}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells("kids", "owner", "updated", ownerShown, ownerW, "muted")...)}
 }
 
 // relativeTime is kata's TUI "updated" cell: "2h ago", "3d ago", "-" when unset.
