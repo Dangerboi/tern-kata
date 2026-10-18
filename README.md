@@ -23,7 +23,7 @@ In a directory bound to a kata Project, `tern-kata` opens that Project's Issues.
 
 ## Install
 
-Requires kata v0.18.0+ and a Tern that supports the Surface Protocol.
+Requires kata v0.19.0+ and a Tern that supports the Surface Protocol.
 
 1. On the **session host** (the machine whose shells run in your Panes), install kata, then tern-kata. On Linux or macOS:
 

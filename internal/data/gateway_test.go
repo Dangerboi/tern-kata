@@ -142,7 +142,7 @@ func createIssue(t *testing.T, gateway *Gateway, workspace string, project model
 }
 
 func TestGatewayBindsAndCreatesProjects(t *testing.T) {
-	kata := startKata(t, "0.18.0")
+	kata := startKata(t, "0.19.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 
 	workspace, bound := project(t, gateway, "demo")
@@ -151,8 +151,8 @@ func TestGatewayBindsAndCreatesProjects(t *testing.T) {
 		t.Fatalf(".kata.toml %q, %v", binding, err)
 	}
 	loaded := as[model.ProjectLoaded](t, run(t, gateway, model.LoadProject{Workspace: workspace}))
-	if loaded.Project.UID != bound.UID || loaded.Daemon.Remote || loaded.Daemon.Version != "v0.18.0" {
-		t.Fatalf("workspace resolves to %+v, daemon %+v; want the bound Project %q on a local v0.18.0 daemon", loaded.Project, loaded.Daemon, bound.UID)
+	if loaded.Project.UID != bound.UID || loaded.Daemon.Remote || loaded.Daemon.Version != "v0.19.0" {
+		t.Fatalf("workspace resolves to %+v, daemon %+v; want the bound Project %q on a local v0.19.0 daemon", loaded.Project, loaded.Daemon, bound.UID)
 	}
 
 	other := t.TempDir()
@@ -179,7 +179,7 @@ func TestGatewayBindsAndCreatesProjects(t *testing.T) {
 }
 
 func TestGatewayReadsAndWritesIssues(t *testing.T) {
-	kata := startKata(t, "0.18.0")
+	kata := startKata(t, "0.19.0")
 	l := newLocator(kata.target())
 	gateway := newGateway(t, l)
 	workspace, demo := project(t, gateway, "demo")
@@ -251,7 +251,7 @@ func TestGatewayReadsAndWritesIssues(t *testing.T) {
 }
 
 func TestGatewayWritesAParentLink(t *testing.T) {
-	kata := startKata(t, "0.18.0")
+	kata := startKata(t, "0.19.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
 	parent := createIssue(t, gateway, workspace, demo, "Parent")
@@ -269,7 +269,7 @@ func TestGatewayWritesAParentLink(t *testing.T) {
 }
 
 func TestGatewayClosesWithEveryReason(t *testing.T) {
-	kata := startKata(t, "0.18.0")
+	kata := startKata(t, "0.19.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
 	target := createIssue(t, gateway, workspace, demo, "Target")
@@ -319,7 +319,7 @@ func TestGatewayClosesWithEveryReason(t *testing.T) {
 }
 
 func TestGatewayDraftTextConflicts(t *testing.T) {
-	kata := startKata(t, "0.18.0")
+	kata := startKata(t, "0.19.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
 	uid := createIssue(t, gateway, workspace, demo, "Draft me")
@@ -352,7 +352,7 @@ func TestGatewayDraftTextConflicts(t *testing.T) {
 }
 
 func TestGatewayReportsDaemonErrorsInTheAskingMessage(t *testing.T) {
-	kata := startKata(t, "0.18.0")
+	kata := startKata(t, "0.19.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
 	snapshotView, nope := "project", "nope"
@@ -464,7 +464,7 @@ func TestGatewayFailureShapePerCommand(t *testing.T) {
 }
 
 func TestGatewayLocatorFailureIsRetriedOnTheNextCommand(t *testing.T) {
-	kata := startKata(t, "0.18.0")
+	kata := startKata(t, "0.19.0")
 	l := newLocator(kata.target())
 	boom := errors.New("kata daemon locate: no daemon")
 	l.err.Store(&boom)
@@ -484,7 +484,7 @@ func TestGatewayLocatorFailureIsRetriedOnTheNextCommand(t *testing.T) {
 }
 
 func TestGatewayDiscoversTheDaemonTheServerVariableNames(t *testing.T) {
-	kata := startKata(t, "0.18.0")
+	kata := startKata(t, "0.19.0")
 	t.Setenv("KATA_SERVER", kata.URL)
 	gateway := NewGateway(locateWith(func(context.Context, string) (bool, error) { return false, nil }))
 	t.Cleanup(gateway.Close)
@@ -496,7 +496,7 @@ func TestGatewayDiscoversTheDaemonTheServerVariableNames(t *testing.T) {
 }
 
 func TestGatewayWithNoDaemonShowsKatasMessageAndTheStartHint(t *testing.T) {
-	startKata(t, "0.18.0") // only for its isolated kata home; the server is stopped
+	startKata(t, "0.19.0") // only for its isolated kata home; the server is stopped
 	gateway := NewGateway(LocateWithKata)
 	t.Cleanup(gateway.Close)
 	got := as[model.SnapshotFailed](t, run(t, gateway, model.ReadSnapshot{Request: 1}))
@@ -510,10 +510,10 @@ func TestGatewayVersionGate(t *testing.T) {
 		version string
 		wantErr string
 	}{
-		{"0.17.9", "kata daemon 0.17.9 is too old; tern-kata requires v0.18.0 or newer; upgrade kata"},
-		{"dev", `cannot verify kata daemon version "dev"; tern-kata requires v0.18.0 or newer`},
-		{"g1a2b3c", `cannot verify kata daemon version "g1a2b3c"; tern-kata requires v0.18.0 or newer`},
-		{"v0.18.0", ""},
+		{"0.18.0", "kata daemon 0.18.0 is too old; tern-kata requires v0.19.0 or newer; upgrade kata"},
+		{"dev", `cannot verify kata daemon version "dev"; tern-kata requires v0.19.0 or newer`},
+		{"g1a2b3c", `cannot verify kata daemon version "g1a2b3c"; tern-kata requires v0.19.0 or newer`},
+		{"v0.19.0", ""},
 		{"1.2.0", ""},
 	} {
 		t.Run(tt.version, func(t *testing.T) {
@@ -523,7 +523,7 @@ func TestGatewayVersionGate(t *testing.T) {
 			failed, isFailure := got.(model.DetailFailed)
 			if tt.wantErr == "" {
 				// The gate passed; the daemon then reports the Issue missing.
-				if !isFailure || strings.Contains(failed.Err.Error(), "requires v0.18.0") {
+				if !isFailure || strings.Contains(failed.Err.Error(), "requires v0.19.0") {
 					t.Fatalf("got %#v, want the version accepted", got)
 				}
 				return
@@ -536,14 +536,14 @@ func TestGatewayVersionGate(t *testing.T) {
 }
 
 func TestGatewayFindsARestartedDaemonAgain(t *testing.T) {
-	first := startKata(t, "0.18.0")
+	first := startKata(t, "0.19.0")
 	l := newLocator(first.target())
 	gateway := newGateway(t, l)
 	workspace, demo := project(t, gateway, "demo")
 	uid := createIssue(t, gateway, workspace, demo, "Survives")
 
 	// The restarted daemon is a new process on a new address, with the same data.
-	second := serve(t, first.handler, "0.18.0")
+	second := serve(t, first.handler, "0.19.0")
 	l.target.Store(new(second.target()))
 	first.Close()
 
@@ -561,7 +561,7 @@ func TestGatewayFindsARestartedDaemonAgain(t *testing.T) {
 }
 
 func TestGatewayAppliesTheVersionGateToEveryDiscovery(t *testing.T) {
-	first := startKata(t, "0.18.0")
+	first := startKata(t, "0.19.0")
 	l := newLocator(first.target())
 	gateway := newGateway(t, l)
 	workspace, demo := project(t, gateway, "demo")
@@ -578,7 +578,7 @@ func TestGatewayAppliesTheVersionGateToEveryDiscovery(t *testing.T) {
 }
 
 func TestGatewayReportsAnUnreachableDaemonAfterLocatingAgain(t *testing.T) {
-	first := startKata(t, "0.18.0")
+	first := startKata(t, "0.19.0")
 	l := newLocator(first.target())
 	gateway := newGateway(t, l)
 	workspace, _ := project(t, gateway, "demo")
@@ -626,7 +626,7 @@ func stream(t *testing.T, gateway *Gateway, cmd model.Subscribe) (<-chan model.M
 }
 
 func TestGatewayStreamsEventsAndReportsOneDrop(t *testing.T) {
-	kata := startKata(t, "0.18.0")
+	kata := startKata(t, "0.19.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
 
@@ -656,7 +656,7 @@ func TestGatewayStreamsEventsAndReportsOneDrop(t *testing.T) {
 }
 
 func TestGatewayStreamResumesAfterTheGivenEvent(t *testing.T) {
-	kata := startKata(t, "0.18.0")
+	kata := startKata(t, "0.19.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
 	createIssue(t, gateway, workspace, demo, "Alpha release")
@@ -675,7 +675,7 @@ func TestGatewayStreamResumesAfterTheGivenEvent(t *testing.T) {
 }
 
 func TestGatewayNewerSubscriptionReplacesTheRunningStream(t *testing.T) {
-	kata := startKata(t, "0.18.0")
+	kata := startKata(t, "0.19.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, _ := project(t, gateway, "demo")
 
@@ -706,7 +706,7 @@ func TestGatewayNewerSubscriptionReplacesTheRunningStream(t *testing.T) {
 }
 
 func TestGatewayStreamHonoursTheReconnectDelay(t *testing.T) {
-	kata := startKata(t, "0.18.0")
+	kata := startKata(t, "0.19.0")
 	l := newLocator(kata.target())
 	gateway := newGateway(t, l)
 	delay := 300 * time.Millisecond
@@ -736,7 +736,7 @@ func TestGatewayStreamDropReportsAnUnreachableDaemon(t *testing.T) {
 }
 
 func TestGatewaySnapshotCountsChildrenOnEveryRead(t *testing.T) {
-	kata := startKata(t, "0.18.0")
+	kata := startKata(t, "0.19.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
 	parent := createIssue(t, gateway, workspace, demo, "Parent")
@@ -772,7 +772,7 @@ func TestGatewaySnapshotCountsChildrenOnEveryRead(t *testing.T) {
 
 func TestGatewayReadsASnapshotWhenTheTimeZoneIsBad(t *testing.T) {
 	t.Setenv("TZ", "Nowhere/Land")
-	kata := startKata(t, "0.18.0")
+	kata := startKata(t, "0.19.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
 	query := model.CollectionQuery(model.Collection{View: "project", ProjectUID: demo.UID, Title: demo.Name}, model.Filters{})
