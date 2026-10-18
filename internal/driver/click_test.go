@@ -50,7 +50,7 @@ func activity(t *testing.T, tab model.ActivityTab) driver.State {
 	kid := model.Issue{UID: "kid", ShortID: "kidd", Title: "Kid", Status: "open", ProjectName: "work"}
 	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
 	selected := &g.UISelectedAuthority{Issue: &alpha,
-		Comments: []g.Comment{{UID: "c1", Author: "dana", CreatedAt: at, Body: "first"}},
+		Comments: []g.CommentOut{{UID: "c1", Author: "dana", CreatedAt: at, Body: "first"}},
 		History:  []g.Event{{UID: "e1", Actor: "dana", Type: "issue.reopened", Payload: `{}`, CreatedAt: at}},
 		Links: []g.UILink{
 			{ID: 1, FromIssueUID: "alpha", ToIssueUID: "beta", ToQualifiedID: "work#bbbb", Type: "related"},

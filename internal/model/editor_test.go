@@ -20,7 +20,7 @@ func TestDraftNativeEditAndSave(t *testing.T) {
 		m, _ = model.Update(m, msg)
 	}
 	m, cmds := model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
-	want := []model.Cmd{model.SaveDraft{Workspace: "/repo", UID: "a", ProjectID: 2, BaseRevision: 7, Text: "anewb"}}
+	want := []model.Cmd{model.SaveDraft{Workspace: "/repo", UID: "a", ProjectID: 2, BaseRevision: 7, BaseText: "a😀b", Text: "anewb"}}
 	if m.Drafts["a"].Editor.Text != "anewb" || !m.Drafts["a"].Saving || !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("Draft/save: %+v %#v", m.Drafts, cmds)
 	}
@@ -51,10 +51,10 @@ func TestDraftSequences(t *testing.T) {
 		{"discard confirmed", []model.Msg{key("e"), key("escape"), key("y")}, "", model.ModeDetail, false, nil},
 		{"empty comment escape", []model.Msg{key("c"), key("escape")}, "", model.ModeDetail, false, nil},
 		{"conflict keeps both", []model.Msg{key("e"), typed, key("ctrl+o"), conflict}, "a😀blocal", model.ModeConflict, true, nil},
-		{"conflict overwrite", []model.Msg{key("e"), typed, conflict, key("o")}, "a😀blocal", model.ModeEditor, true, model.SaveDraft{Workspace: "/repo", UID: "a", ProjectID: 2, BaseRevision: 8, Text: "a😀blocal"}},
+		{"conflict overwrite", []model.Msg{key("e"), typed, conflict, key("o")}, "a😀blocal", model.ModeEditor, true, model.SaveDraft{Workspace: "/repo", UID: "a", ProjectID: 2, BaseRevision: 8, BaseText: "Remote body", Text: "a😀blocal"}},
 		{"conflict discard", []model.Msg{key("e"), typed, conflict, key("d")}, "", model.ModeDetail, false, nil},
 		{"live detail preserves Draft", []model.Msg{key("e"), typed, model.DetailLoaded{UID: "a", Selected: &g.UISelectedAuthority{Issue: &latest}}}, "a😀blocal", model.ModeEditor, true, nil},
-		{"comment save", []model.Msg{key("c"), typed, key("meta+o")}, "local", model.ModeEditor, true, model.SaveDraft{Workspace: "/repo", UID: "a", ProjectID: 2, BaseRevision: 7, Text: "local", Comment: true}},
+		{"comment save", []model.Msg{key("c"), typed, key("meta+o")}, "local", model.ModeEditor, true, model.SaveDraft{Workspace: "/repo", UID: "a", ProjectID: 2, BaseRevision: 7, BaseText: "a😀b", Text: "local", Comment: true}},
 		{"external editor", []model.Msg{key("e"), key("ctrl+e")}, "a😀b", model.ModeEditor, true, model.OpenDraftEditor{UID: "a", Text: "a😀b"}},
 		{"CRLF paste", []model.Msg{key("e"), model.KeyMsg{Chord: "paste", Text: "x\r\ny\rz"}}, "a😀bx\ny\nz", model.ModeEditor, true, nil},
 		{"plain paste unchanged", []model.Msg{key("e"), model.KeyMsg{Chord: "paste", Text: "x\ny"}}, "a😀bx\ny", model.ModeEditor, true, nil},

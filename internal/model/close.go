@@ -67,12 +67,12 @@ func (v CloseValues) Value(name Field) string {
 }
 
 type CloseFormState struct {
-	Open, Saving        bool
-	Field               Field
-	UID                 string
-	ProjectID, Revision int64
-	Values              CloseValues
-	Err                 error
+	Open, Saving bool
+	Field        Field
+	UID          string
+	ProjectID    int64
+	Values       CloseValues
+	Err          error
 }
 type CloseFieldMsg struct {
 	Field Field
@@ -89,9 +89,9 @@ type CloseResultMsg struct {
 func (CloseResultMsg) msg() {}
 
 type CloseIssueCmd struct {
-	Workspace, UID      string
-	ProjectID, Revision int64
-	Body                g.CloseIssueBody
+	Workspace, UID string
+	ProjectID      int64
+	Body           g.CloseIssueBody
 }
 
 func (CloseIssueCmd) cmd() {}
@@ -123,7 +123,7 @@ func openClose(m Model) Model {
 	if issue == nil {
 		return m
 	}
-	m.CloseForm = CloseFormState{Open: true, Field: CloseFields[0].Name, UID: issue.UID, ProjectID: issue.ProjectID, Revision: issue.Revision}
+	m.CloseForm = CloseFormState{Open: true, Field: CloseFields[0].Name, UID: issue.UID, ProjectID: issue.ProjectID}
 	m.CloseForm.Values.Reason = "done"
 	return m
 }
@@ -172,7 +172,7 @@ func submitClose(m Model, quick bool) (Model, []Cmd) {
 		}
 	}
 	f.Saving, f.Err = true, nil
-	return m, []Cmd{CloseIssueCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Revision: f.Revision, Body: body}}
+	return m, []Cmd{CloseIssueCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Body: body}}
 }
 
 var closeSHA = regexp.MustCompile(`^[0-9a-fA-F]{7,40}$`)

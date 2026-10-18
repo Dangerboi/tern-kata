@@ -300,7 +300,7 @@ func (c draftCardKeys) key(m Model, msg KeyMsg) (Model, []Cmd) {
 	switch {
 	case d.Conflict != nil:
 		if ok && binding.Action == OverwriteDraft {
-			d.BaseRevision = d.Conflict.Revision
+			d.BaseRevision, d.BaseText = d.Conflict.Revision, d.Conflict.Body
 			d.Conflict = nil
 			return c.save(c.set(m, d))
 		}

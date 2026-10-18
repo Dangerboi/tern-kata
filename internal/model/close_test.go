@@ -18,7 +18,7 @@ func TestCloseFormOpensAndQuickDone(t *testing.T) {
 			close = c
 		}
 	}
-	if close.UID != "issue" || close.Revision != 7 || close.Body.Source == nil || *close.Body.Source != "tui" || close.Body.Reason == nil || *close.Body.Reason != "done" || close.Body.RetryProtocol == nil || *close.Body.RetryProtocol != "close-v1" || close.Body.Message != nil || len(close.Body.Evidence) != 0 || !m.CloseForm.Saving {
+	if close.UID != "issue" || close.Body.Source == nil || *close.Body.Source != "tui" || close.Body.Reason == nil || *close.Body.Reason != "done" || close.Body.RetryProtocol == nil || *close.Body.RetryProtocol != "close-v1" || close.Body.Message != nil || len(close.Body.Evidence) != 0 || !m.CloseForm.Saving {
 		t.Fatalf("quick done: %+v %+v", close, m.CloseForm)
 	}
 }

@@ -30,7 +30,7 @@ func parentDetail(links ...g.UILink) model.Model {
 	}, &g.UISelectedAuthority{
 		Issue:    &model.Issue{UID: "parent", ProjectName: "work"},
 		Links:    links,
-		Comments: []g.Comment{{UID: "c1"}, {UID: "c2"}},
+		Comments: []g.CommentOut{{UID: "c1"}, {UID: "c2"}},
 	})
 }
 
@@ -139,7 +139,7 @@ func TestChildRowsFollowLiveRefreshes(t *testing.T) {
 			{UID: "fresh", ShortID: "fre1", Title: "Fresh", Status: "open", ProjectName: "work", UpdatedAt: ago(0)},
 			{UID: "new", ShortID: "new1", Title: "Renamed", Status: "open", ProjectName: "work", UpdatedAt: ago(1)},
 		},
-		Selected: &g.UISelectedAuthority{Issue: &parent, Links: []g.UILink{childLink(2, "fresh"), childLink(3, "new")}, Comments: []g.Comment{{UID: "c1"}, {UID: "c2"}}},
+		Selected: &g.UISelectedAuthority{Issue: &parent, Links: []g.UILink{childLink(2, "fresh"), childLink(3, "new")}, Comments: []g.CommentOut{{UID: "c1"}, {UID: "c2"}}},
 	}
 	m = cursorAt(m, 4) // on the last of the 2 comments, past all 3 children
 	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot})

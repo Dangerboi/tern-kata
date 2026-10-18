@@ -229,7 +229,7 @@ func TestGatewayReadsAndWritesIssues(t *testing.T) {
 		t.Fatalf("written fields not stored: %+v", got)
 	}
 
-	closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Revision: detail.Selected.Issue.Revision, Body: quickClose("tester")}))
+	closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Body: quickClose("tester")}))
 	if closed.UID != uid || closed.Err != nil {
 		t.Fatalf("close %+v", closed)
 	}
@@ -266,41 +266,31 @@ func quickClose(actor string) g.CloseIssueBody {
 	return g.CloseIssueBody{Actor: &actor, Reason: &reason, RetryProtocol: &protocol, Source: &source}
 }
 
-func TestGatewayDraftRevisionConflicts(t *testing.T) {
+func TestGatewayDraftTextConflicts(t *testing.T) {
 	kata := startKata(t, "0.18.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
 	uid := createIssue(t, gateway, workspace, demo, "Draft me")
 	detail := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid}))
 	base := detail.Selected.Issue.Revision
+	baseText := detail.Selected.Issue.Body
 	save := func(text string, revision int64, comment bool) model.Msg {
-		return run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseRevision: revision, Text: text, Comment: comment, Actor: "tester"})
+		return run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseRevision: revision, BaseText: baseText, Text: text, Comment: comment, Actor: "tester"})
 	}
 
-	if saved := as[model.DraftSaved](t, save("first body", base, false)); saved.UID != uid {
+	// Another writer changes the Issue's text after the Draft was started.
+	if saved := as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseRevision: base, BaseText: baseText, Text: "first body", Actor: "someone"})); saved.UID != uid {
 		t.Fatalf("saved %+v", saved)
 	}
-	// Another writer changes the Issue after the Draft was started.
-	other, err := connect(context.Background(), kata.target())
-	if err != nil {
-		t.Fatal(err)
-	}
-	actor := "someone"
-	patched, err := other.PatchIssueMetadataWithResponse(context.Background(), &g.PatchIssueMetadataRequestOptions{
-		PathParams: &g.PatchIssueMetadataPath{ProjectID: demo.ID, Ref: uid},
-		Body:       &g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{"work.attention": "needs-human"}},
-	})
-	if err != nil {
-		t.Fatalf("%v: %s", err, patched.Body)
-	}
 	conflict := as[model.DraftConflict](t, save("stale body", base, false))
-	if conflict.UID != uid || conflict.Issue.Body != "first body" || conflict.Issue.Revision <= base {
+	if conflict.UID != uid || conflict.Issue.Body != "first body" {
 		t.Fatalf("stale edit %+v, want the stored Issue", conflict)
 	}
 	staleComment := as[model.DraftConflict](t, save("stale comment", base, true))
 	if staleComment.Issue.Body != "first body" {
 		t.Fatalf("stale comment %+v", staleComment)
 	}
+	baseText = conflict.Issue.Body
 	if saved := as[model.DraftSaved](t, save("a comment", conflict.Issue.Revision, true)); saved.UID != uid {
 		t.Fatalf("comment %+v", saved)
 	}
@@ -669,4 +659,73 @@ func TestGatewayReadsASnapshotWhenTheTimeZoneIsBad(t *testing.T) {
 	if loaded.TimeZone != "UTC" || !strings.Contains(loaded.TimeZoneNote, "Nowhere/Land") {
 		t.Fatalf("zone %q note %q", loaded.TimeZone, loaded.TimeZoneNote)
 	}
+}
+
+// changeOwner is another actor assigning the Issue: on kata v0.19 that moves the revision without touching the text.
+func changeOwner(t *testing.T, gateway *Gateway, workspace string, project model.Project, uid, owner string) {
+	t.Helper()
+	written := as[model.FieldWritten](t, run(t, gateway, model.WriteField{Workspace: workspace, UID: uid, ProjectID: project.ID, Actor: "someone", Action: model.AssignOwnerAction, Value: owner}))
+	if written.Err != nil {
+		t.Fatal(written.Err)
+	}
+}
+
+func TestGatewayGuardedWritesSurviveAnOwnerChange(t *testing.T) {
+	kata := startKata(t, "0.19.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	seen := func(uid string) model.Issue {
+		detail := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid}))
+		return *detail.Selected.Issue
+	}
+
+	t.Run("Draft", func(t *testing.T) {
+		uid := createIssue(t, gateway, workspace, demo, "Draft me")
+		issue := seen(uid)
+		changeOwner(t, gateway, workspace, demo, uid, "alice")
+		as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseRevision: issue.Revision, BaseText: issue.Body, Text: "new body", Actor: "tester"}))
+		if body := seen(uid).Body; body != "new body" {
+			t.Fatalf("body %q", body)
+		}
+	})
+	t.Run("comment", func(t *testing.T) {
+		uid := createIssue(t, gateway, workspace, demo, "Comment on me")
+		issue := seen(uid)
+		changeOwner(t, gateway, workspace, demo, uid, "alice")
+		as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseRevision: issue.Revision, BaseText: issue.Body, Text: "hello", Comment: true, Actor: "tester"}))
+		detail := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid}))
+		if len(detail.Selected.Comments) != 1 {
+			t.Fatalf("comments %+v", detail.Selected.Comments)
+		}
+	})
+	t.Run("text changed", func(t *testing.T) {
+		uid := createIssue(t, gateway, workspace, demo, "Real conflict")
+		issue := seen(uid)
+		as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseRevision: issue.Revision, BaseText: issue.Body, Text: "their body", Actor: "someone"}))
+		for _, comment := range []bool{false, true} {
+			conflict := as[model.DraftConflict](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseRevision: issue.Revision, BaseText: issue.Body, Text: "mine", Comment: comment, Actor: "tester"}))
+			if conflict.Issue.Body != "their body" {
+				t.Fatalf("conflict %+v", conflict)
+			}
+		}
+	})
+	t.Run("close", func(t *testing.T) {
+		uid := createIssue(t, gateway, workspace, demo, "Close me")
+		issue := seen(uid)
+		changeOwner(t, gateway, workspace, demo, uid, "alice")
+		closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Body: quickClose("tester")}))
+		if closed.Err != nil {
+			t.Fatalf("close after an owner change from revision %d: %v", issue.Revision, closed.Err)
+		}
+	})
+	t.Run("closed meanwhile", func(t *testing.T) {
+		uid := createIssue(t, gateway, workspace, demo, "Closed twice")
+		as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Body: quickClose("someone")}))
+		before := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid}))
+		closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Body: quickClose("tester")}))
+		after := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid}))
+		if closed.Err == nil || !strings.Contains(closed.Err.Error(), "closed") || len(after.Selected.History) != len(before.Selected.History) {
+			t.Fatalf("second close %+v wrote events %d -> %d", closed, len(before.Selected.History), len(after.Selected.History))
+		}
+	})
 }
