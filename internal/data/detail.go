@@ -20,11 +20,14 @@ func (c *Client) ReadDetail(ctx context.Context, uid string) (model.DetailLoaded
 	if response.JSON200 == nil || response.JSON200.Selected == nil {
 		return model.DetailLoaded{}, fmt.Errorf("kata daemon returned no detail for Issue %s", uid)
 	}
-	return model.DetailLoaded{UID: uid, Selected: translateDetail(response.JSON200.Selected)}, nil
+	return model.DetailLoaded{UID: uid, Selected: translateDetail(response.JSON200.Selected, response.JSON200.Capabilities.Scope != nil)}, nil
 }
 
 // translateDetail is the one place kata's selected authority becomes the model's Issue detail; nil stays nil.
-func translateDetail(s *g.UISelectedAuthority) *model.IssueDetailData {
+//
+// A scoped access gets no recurrences at all while the Issue stays visible, so for it the Recurrence stays nil ("not provided"),
+// not stopped.
+func translateDetail(s *g.UISelectedAuthority, scoped bool) *model.IssueDetailData {
 	if s == nil {
 		return nil
 	}
@@ -52,7 +55,7 @@ func translateDetail(s *g.UISelectedAuthority) *model.IssueDetailData {
 	for _, l := range s.Links {
 		d.Links = append(d.Links, translateLink(l))
 	}
-	if d.Issue != nil && d.Issue.RecurrenceID != nil {
+	if d.Issue != nil && d.Issue.RecurrenceID != nil && !scoped {
 		d.Recurrence = translateRecurrence(*d.Issue.RecurrenceID, s.Recurrences)
 	}
 	return d
@@ -70,7 +73,7 @@ func translateRecurrence(id int64, live []g.Recurrence) *model.Recurrence {
 }
 
 func translateLiveRecurrence(r g.Recurrence) model.Recurrence {
-	out := model.Recurrence{UID: r.UID, Rule: r.Rrule, Start: r.Dtstart, TimeZone: r.Timezone, Revision: r.Revision}
+	out := model.Recurrence{UID: r.UID, RecurrenceTerms: model.RecurrenceTerms{Rule: r.Rrule, Start: r.Dtstart, TimeZone: r.Timezone}, Revision: r.Revision}
 	if r.NextOccurrenceKey != nil {
 		out.Next = *r.NextOccurrenceKey
 	}

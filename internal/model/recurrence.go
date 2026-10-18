@@ -4,14 +4,16 @@ package model
 // Collection snapshot. A Recurrence with Stopped set has only that: kata no longer lists a deleted recurrence, so its other
 // fields are unknown.
 type Recurrence struct {
-	UID      string
-	Rule     string // kata's rule text; Schedule reads it
-	Start    string // YYYY-MM-DD
-	TimeZone string
+	UID string
+	RecurrenceTerms
 	Next     string // YYYY-MM-DD of the next Occurrence; empty once the series is exhausted
 	Revision int64
 	Stopped  bool
 }
+
+// RecurrenceTerms are the three values that make a recurrence's schedule: kata's rule text (Schedule reads it), the start
+// date as YYYY-MM-DD and the IANA time zone. They are written together and a Guarded write compares them together.
+type RecurrenceTerms struct{ Rule, Start, TimeZone string }
 
 // Schedule is the rule as the form shape, or raw.
 func (r Recurrence) Schedule() Schedule { return ParseSchedule(r.Rule) }
@@ -34,20 +36,19 @@ func (r Recurrence) Text() string {
 type CreateRecurrenceCmd struct {
 	Workspace, UID, Actor string
 	ProjectID             int64
-	Rule, Start, TimeZone string
+	RecurrenceTerms
 }
 
 func (CreateRecurrenceCmd) cmd() {}
 
-// ChangeRecurrenceCmd is a Guarded write of the schedule: the Daemon gateway sends the rule, start date and time zone at the
-// recurrence's current revision, and writes nothing when these differ from the Opened ones the card read. The template is
-// never sent.
+// ChangeRecurrenceCmd is a Guarded write of the schedule: the Daemon gateway sends the terms at the recurrence's current
+// revision, and writes nothing when the recurrence's terms differ from the Opened ones the card read. The template is never sent.
 type ChangeRecurrenceCmd struct {
-	Workspace, UID, Actor               string
-	ProjectID                           int64
-	RecurrenceUID                       string
-	Rule, Start, TimeZone               string
-	OpenedRule, OpenedStart, OpenedZone string
+	Workspace, UID, Actor string
+	ProjectID             int64
+	RecurrenceUID         string
+	RecurrenceTerms
+	Opened RecurrenceTerms
 }
 
 func (ChangeRecurrenceCmd) cmd() {}

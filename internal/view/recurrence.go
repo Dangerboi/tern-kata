@@ -35,8 +35,7 @@ func recurrenceText(f model.RecurrenceFormState, name model.Field) string {
 		return f.Every
 	case model.RecurrenceWeekdays:
 		var b strings.Builder
-		for i := range 7 {
-			day := time.Weekday((i + 1) % 7)
+		for i, day := range model.MondayFirst {
 			mark := "[ ] "
 			if f.Weekdays[day] {
 				mark = "[x] "
@@ -69,6 +68,11 @@ func recurrenceLayer(m model.Model) tern.Element {
 		return nil
 	}
 	children := make([]tern.Element, 0, len(model.RecurrenceFields)+4)
+	if f.Refused {
+		return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "recurrence"}, Modal: true, Size: ui.SizeLG, Head: ui.T("Recurrence"), Children: ui.Nodes(
+			ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: f.Err.Error()},
+			buttonRow(keyButton("cancel", "Close (esc)", "escape", true)))})
+	}
 	if f.Raw != "" {
 		children = append(children, ui.Text{Common: ui.Common{Key: "raw", Tone: ui.ToneWarning}, Text: "Current rule, set elsewhere: " + f.Raw + "\nSaving the form replaces it."})
 	}
@@ -83,13 +87,9 @@ func recurrenceLayer(m model.Model) tern.Element {
 			tone = ui.ToneAccent
 			prompt = "> " + prompt
 		}
-		placeholder := ""
-		if field.Name == model.RecurrenceDay {
-			placeholder = "the start date's day"
-		}
 		children = append(children, ui.Input{
 			Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: title},
-			Field:  ui.Field{Text: recurrenceText(f, field.Name), Mode: "insert", Readonly: f.Saving || f.StopConfirm || !field.Text, Prompt: []ui.Span{{T: prompt}}, Placeholder: placeholder},
+			Field:  ui.Field{Text: recurrenceText(f, field.Name), Mode: "insert", Readonly: f.Saving || f.StopConfirm || !field.Text, Prompt: []ui.Span{{T: prompt}}},
 		})
 	}
 	if f.Err != nil {

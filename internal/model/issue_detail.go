@@ -22,6 +22,9 @@ type IssueDetail struct {
 	landedOn string
 	// openRef is a reference being opened; openedUID is the Issue it opened, which may be outside the Collection.
 	openRef, openedUID string
+	// recurrenceWanted is the Issue whose recurrence `O` waits for: the detail loads even while hidden, and the Recurrence card
+	// opens once the loaded detail has it.
+	recurrenceWanted string
 }
 
 func (d IssueDetail) DetailAuthority() *IssueDetailData { return d.authority }
@@ -48,8 +51,40 @@ func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 	if m.Focus != ColumnDetail || m.SelectedUID != m.landedOn {
 		m = m.endJumpHistory()
 	}
+	m = m.settleWantedRecurrence()
 	m, load := m.loadDetail()
 	return m.withRows(), append(cmds, load...)
+}
+
+// wantRecurrence is `O` on an Issue that recurs: the Recurrence card opens at once when the shown detail has the Issue's
+// recurrence as of now, else once the detail has been loaded again. A hidden detail is not refreshed by snapshots, so it
+// always loads again.
+func (m Model) wantRecurrence(uid string) Model {
+	m.recurrenceWanted = uid
+	if m.hidden || !m.detailCurrent(uid) {
+		m.stale, m.err = true, nil
+	}
+	return m
+}
+
+// detailCurrent says the detail shows uid, loaded and not known to be out of date.
+func (m Model) detailCurrent(uid string) bool {
+	return m.authority != nil && m.authority.Issue != nil && m.authority.Issue.UID == uid && !m.stale && !m.loading
+}
+
+// settleWantedRecurrence opens the card the wanted recurrence waits for, or drops the wish when the selection moved on or the
+// detail failed to load.
+func (m Model) settleWantedRecurrence() Model {
+	uid := m.recurrenceWanted
+	switch {
+	case uid == "":
+	case uid != m.SelectedUID || m.err != nil:
+		m.recurrenceWanted = ""
+	case m.detailCurrent(uid):
+		m.recurrenceWanted = ""
+		m = openWantedRecurrence(m)
+	}
+	return m
 }
 
 // shownIssue is the loaded Issue of the detail when it is the selected one, else nil.
@@ -68,7 +103,7 @@ func (m Model) endJumpHistory() Model {
 
 // loadDetail loads the selected Issue's detail when the selection changed or the detail went stale.
 func (m Model) loadDetail() (Model, []Cmd) {
-	if m.Quitting || m.hidden || (m.SelectedUID == m.uid && !m.stale) {
+	if m.Quitting || (m.hidden && m.recurrenceWanted == "") || (m.SelectedUID == m.uid && !m.stale) {
 		return m, nil
 	}
 	m.uid = m.SelectedUID

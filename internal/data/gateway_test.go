@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	g "go.kenn.io/kata/pkg/client/generated"
 	"net/http"
 	"net/http/httptest"
@@ -910,18 +909,8 @@ func TestGatewayTranslatesTheIssueDetailFromRealPayloads(t *testing.T) {
 
 	as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseText: detailOf().Issue.Body, Text: "the question", Comment: true, Actor: "asker"}))
 	question := detailOf().Comments[0]
-	// A reply is only reachable through kata's wire client; the Pane writes plain comments.
-	wire, err := client.New(kata.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	kind, reply, actor := g.Confirm, question.UID, "answerer"
-	if _, err := wire.CreateCommentWithResponse(context.Background(), &g.CreateCommentRequestOptions{
-		PathParams: &g.CreateCommentPath{ProjectID: fmt.Sprint(demo.ID), Ref: uid},
-		Body:       &g.CreateCommentBody{Body: "confirmed: " + strings.Repeat("it reproduces. ", 4), Actor: &actor, Kind: &kind, ReplyTo: &reply},
-	}); err != nil {
-		t.Fatal(err)
-	}
+	as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseText: detailOf().Issue.Body, Text: "confirmed: " + strings.Repeat("it reproduces. ", 4),
+		Comment: true, Actor: "answerer", ReplyTo: question.UID, ReplyKind: model.ReplyConfirm}))
 	shortID := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: parent})).Selected.Issue.ShortID
 	as[model.FieldWritten](t, run(t, gateway, model.WriteField{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Action: model.SetParentAction, Value: shortID}))
 
@@ -971,23 +960,23 @@ func TestGatewayPostsRepliesOfEachKindWithTheirTarget(t *testing.T) {
 	detailOf := func() *model.IssueDetailData {
 		return as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected
 	}
-	save := func(text, replyTo, kind string, force bool) model.Msg {
-		return run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseText: detailOf().Issue.Body, Text: text, Comment: true, Actor: "answerer", ReplyTo: replyTo, Kind: kind, Force: force})
+	save := func(text, replyTo string, kind model.ReplyKind, force bool) model.Msg {
+		return run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseText: detailOf().Issue.Body, Text: text, Comment: true, Actor: "answerer", ReplyTo: replyTo, ReplyKind: kind, Force: force})
 	}
 	as[model.DraftSaved](t, save("the question", "", "", false))
 	question := detailOf().Comments[0].UID
 	evidence := strings.Repeat("it reproduces here. ", 3)
 
-	for _, kind := range []string{"reply", "confirm", "refute", "supersede"} {
+	for _, kind := range model.ReplyKinds {
 		as[model.DraftSaved](t, save(evidence, question, kind, false))
 	}
 	comments := detailOf().Comments
 	if len(comments) != 5 {
 		t.Fatalf("%d comments, want the question and four replies", len(comments))
 	}
-	for i, kind := range []string{"reply", "confirm", "refute", "supersede"} {
+	for i, kind := range model.ReplyKinds {
 		reply := comments[i+1]
-		if reply.ReplyKind == nil || *reply.ReplyKind != kind || reply.Reply == nil || reply.Reply.UID == nil || *reply.Reply.UID != question {
+		if reply.ReplyKind == nil || *reply.ReplyKind != string(kind) || reply.Reply == nil || reply.Reply.UID == nil || *reply.Reply.UID != question {
 			t.Errorf("reply %d: %+v, want a %s answering %s", i, reply, kind, question)
 		}
 	}
@@ -998,19 +987,19 @@ func TestGatewayReportsADuplicateReplyAndSendsItAnywayWithForce(t *testing.T) {
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
 	uid := createIssue(t, gateway, workspace, demo, "Discuss")
-	save := func(text, replyTo, kind string, force bool) model.Msg {
+	save := func(text, replyTo string, kind model.ReplyKind, force bool) model.Msg {
 		detail := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected
-		return run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseText: detail.Issue.Body, Text: text, Comment: true, Actor: "answerer", ReplyTo: replyTo, Kind: kind, Force: force})
+		return run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseText: detail.Issue.Body, Text: text, Comment: true, Actor: "answerer", ReplyTo: replyTo, ReplyKind: kind, Force: force})
 	}
 	as[model.DraftSaved](t, save("the question", "", "", false))
 	question := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected.Comments[0].UID
-	as[model.DraftSaved](t, save("first", question, "reply", false))
+	as[model.DraftSaved](t, save("first", question, model.ReplyPlain, false))
 
-	dup := as[model.DraftFailed](t, save("second", question, "reply", false))
-	if !dup.Duplicate || dup.UID != uid || !strings.Contains(dup.Err.Error(), "already exists") || strings.Contains(dup.Err.Error(), "--force") {
+	dup := as[model.DraftFailed](t, save("second", question, model.ReplyPlain, false))
+	if _, ok := errors.AsType[model.DuplicateReply](dup.Err); !ok || dup.UID != uid || !strings.Contains(dup.Err.Error(), "already exists") || strings.Contains(dup.Err.Error(), "--force") {
 		t.Fatalf("duplicate result %+v", dup)
 	}
-	as[model.DraftSaved](t, save("second", question, "reply", true))
+	as[model.DraftSaved](t, save("second", question, model.ReplyPlain, true))
 	if got := len(as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected.Comments); got != 3 {
 		t.Fatalf("%d comments after sending anyway, want 3", got)
 	}
@@ -1020,31 +1009,10 @@ func TestGatewayTranslatesTheRecurrenceFromTheSnapshotIncludingAStoppedOne(t *te
 	kata := startKata(t, "0.19.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
-	wire, err := client.New(kata.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, actor := context.Background(), "tester"
-	recur := func(title, rule string) (uid string, rec g.Recurrence) {
-		uid = createIssue(t, gateway, workspace, demo, title)
-		created, err := wire.CreateRecurrenceWithResponse(ctx, &g.CreateRecurrenceRequestOptions{
-			PathParams: &g.CreateRecurrencePath{ProjectID: demo.ID},
-			Body: &g.CreateRecurrenceBody{Actor: &actor, Rrule: rule, Dtstart: "2026-10-19", Timezone: "Europe/Zurich", InitialIssueRef: &uid,
-				Template: g.RecurrenceTemplateInput{Title: title}},
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return uid, created.JSON201.Recurrence
-	}
-	live, liveRec := recur("Live", "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,TH")
-	stopped, stoppedRec := recur("Stopped", "FREQ=DAILY;INTERVAL=1")
-	if _, err := wire.DeleteRecurrence(ctx, &g.DeleteRecurrenceRequestOptions{
-		PathParams: &g.DeleteRecurrencePath{ProjectID: demo.ID, RecurrenceUID: stoppedRec.UID},
-		Query:      &g.DeleteRecurrenceQuery{Actor: &actor},
-		Header:     &g.DeleteRecurrenceHeaders{IfMatch: fmt.Sprintf("\"rev-%d\"", stoppedRec.Revision)},
-	}); err != nil {
-		t.Fatal(err)
+	live, liveRec := recurringIssue(t, gateway, workspace, demo, "Live", "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,TH")
+	stopped, stoppedRec := recurringIssue(t, gateway, workspace, demo, "Stopped", "FREQ=DAILY;INTERVAL=1")
+	if got := as[model.RecurrenceResultMsg](t, run(t, gateway, model.StopRecurrenceCmd{Workspace: workspace, UID: stopped, ProjectID: demo.ID, Actor: "tester", RecurrenceUID: stoppedRec.UID})); got.Err != nil {
+		t.Fatal(got.Err)
 	}
 	plain := createIssue(t, gateway, workspace, demo, "Plain")
 
@@ -1053,7 +1021,7 @@ func TestGatewayTranslatesTheRecurrenceFromTheSnapshotIncludingAStoppedOne(t *te
 		query.SelectedIssueUID = &uid
 		return as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, Request: 1})).Selected
 	}
-	want := model.Recurrence{UID: liveRec.UID, Rule: "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,TH", Start: "2026-10-19", TimeZone: "Europe/Zurich", Next: "2026-10-22", Revision: liveRec.Revision}
+	want := model.Recurrence{UID: liveRec.UID, RecurrenceTerms: model.RecurrenceTerms{Rule: "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,TH", Start: "2026-10-19", TimeZone: "Europe/Zurich"}, Next: "2026-10-22", Revision: liveRec.Revision}
 	if got := selected(live).Recurrence; got == nil || *got != want {
 		t.Errorf("live recurrence %+v, want %+v", got, want)
 	}
@@ -1079,7 +1047,7 @@ func TestGatewayMakesAnIssueTheFirstOccurrenceAndClosingItCreatesTheNext(t *test
 	}
 	uid := created.UID
 
-	saved := as[model.RecurrenceResultMsg](t, run(t, gateway, model.CreateRecurrenceCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Rule: "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO", Start: "2026-10-19", TimeZone: "Europe/Zurich"}))
+	saved := as[model.RecurrenceResultMsg](t, run(t, gateway, model.CreateRecurrenceCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", RecurrenceTerms: weeklyTerms("FREQ=WEEKLY;INTERVAL=1;BYDAY=MO")}))
 	if saved.UID != uid || saved.Err != nil {
 		t.Fatalf("create recurrence %+v", saved)
 	}
@@ -1109,11 +1077,16 @@ func TestGatewayMakesAnIssueTheFirstOccurrenceAndClosingItCreatesTheNext(t *test
 	}
 }
 
-// recurringIssue makes a new Issue the first occurrence of a weekly recurrence and returns its UID and the recurrence as the detail shows it.
-func recurringIssue(t *testing.T, gateway *Gateway, workspace string, demo model.Project) (string, model.Recurrence) {
+// weeklyTerms are the terms of a schedule that starts on Monday 2026-10-19 in Zurich.
+func weeklyTerms(rule string) model.RecurrenceTerms {
+	return model.RecurrenceTerms{Rule: rule, Start: "2026-10-19", TimeZone: "Europe/Zurich"}
+}
+
+// recurringIssue makes a new Issue the first occurrence of a recurrence with the rule and returns its UID and the recurrence as the detail shows it.
+func recurringIssue(t *testing.T, gateway *Gateway, workspace string, demo model.Project, title, rule string) (string, model.Recurrence) {
 	t.Helper()
-	uid := createIssue(t, gateway, workspace, demo, "Water plants")
-	saved := as[model.RecurrenceResultMsg](t, run(t, gateway, model.CreateRecurrenceCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Rule: "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO", Start: "2026-10-19", TimeZone: "Europe/Zurich"}))
+	uid := createIssue(t, gateway, workspace, demo, title)
+	saved := as[model.RecurrenceResultMsg](t, run(t, gateway, model.CreateRecurrenceCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", RecurrenceTerms: weeklyTerms(rule)}))
 	if saved.Err != nil {
 		t.Fatal(saved.Err)
 	}
@@ -1131,14 +1104,14 @@ func recurrenceOf(t *testing.T, gateway *Gateway, workspace, uid string) model.R
 
 func changeTo(demo model.Project, uid string, opened model.Recurrence, workspace, rule string) model.ChangeRecurrenceCmd {
 	return model.ChangeRecurrenceCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", RecurrenceUID: opened.UID,
-		Rule: rule, Start: "2026-10-26", TimeZone: "UTC", OpenedRule: opened.Rule, OpenedStart: opened.Start, OpenedZone: opened.TimeZone}
+		RecurrenceTerms: model.RecurrenceTerms{Rule: rule, Start: "2026-10-26", TimeZone: "UTC"}, Opened: opened.RecurrenceTerms}
 }
 
 func TestGatewayChangesTheScheduleAfterOnlyBookkeepingMoved(t *testing.T) {
 	kata := startKata(t, "0.19.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
-	uid, opened := recurringIssue(t, gateway, workspace, demo)
+	uid, opened := recurringIssue(t, gateway, workspace, demo, "Water plants", "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO")
 
 	// Closing the occurrence as done creates the next one and moves the recurrence's revision, not its schedule.
 	if closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true})); closed.Err != nil {
@@ -1162,7 +1135,7 @@ func TestGatewayChangeAfterTheRuleMovedWritesNothingAndReturnsTheCurrentSchedule
 	kata := startKata(t, "0.19.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
-	uid, opened := recurringIssue(t, gateway, workspace, demo)
+	uid, opened := recurringIssue(t, gateway, workspace, demo, "Water plants", "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO")
 
 	elsewhere := as[model.RecurrenceResultMsg](t, run(t, gateway, changeTo(demo, uid, opened, workspace, "FREQ=MONTHLY;INTERVAL=1")))
 	if elsewhere.Err != nil || elsewhere.Changed != nil {
@@ -1183,7 +1156,7 @@ func TestGatewayStopsTheRecurrenceAndReportsOneAlreadyStopped(t *testing.T) {
 	kata := startKata(t, "0.19.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
-	uid, opened := recurringIssue(t, gateway, workspace, demo)
+	uid, opened := recurringIssue(t, gateway, workspace, demo, "Water plants", "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO")
 	stop := model.StopRecurrenceCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", RecurrenceUID: opened.UID}
 
 	if got := as[model.RecurrenceResultMsg](t, run(t, gateway, stop)); got.UID != uid || got.Err != nil {

@@ -3,27 +3,19 @@ package data
 import (
 	"context"
 	"errors"
-	"fmt"
-	"net/http"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
 )
-
-// guardedAttempts bounds how often Close retries when the revision moves between reading the Issue and closing it.
-const guardedAttempts = 3
-
-func etag(revision int64) string { return fmt.Sprintf("\"rev-%d\"", revision) }
 
 // Close is a Guarded write: an Issue that is still open closes at the revision it has now, whatever
 // else changed since the Close card opened. One that was closed meanwhile is an error and nothing is written.
 func (c *Client) Close(ctx context.Context, cmd model.CloseIssueCmd) error {
 	body := closeBody(cmd)
-	for attempt := 1; ; attempt++ {
+	return guardedWrite(func() error {
 		current, err := c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: cmd.ProjectID, Ref: cmd.UID}})
 		if err != nil {
-			return daemonError(err)
+			return err
 		}
 		if current.JSON200 == nil {
 			return errors.New("kata returned no Issue before closing")
@@ -33,11 +25,8 @@ func (c *Client) Close(ctx context.Context, cmd model.CloseIssueCmd) error {
 		}
 		tag := etag(current.JSON200.Issue.Revision)
 		_, err = c.CloseIssueWithResponse(ctx, &g.CloseIssueRequestOptions{PathParams: &g.CloseIssuePath{ProjectID: cmd.ProjectID, Ref: cmd.UID}, Header: &g.CloseIssueHeaders{IfMatch: &tag}, Body: &body})
-		if client.StatusCode(err) == http.StatusPreconditionFailed && attempt < guardedAttempts {
-			continue
-		}
-		return daemonError(err)
-	}
+		return err
+	})
 }
 
 func (c *Client) Reopen(ctx context.Context, cmd model.ReopenIssueCmd) error {

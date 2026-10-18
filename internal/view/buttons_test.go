@@ -1,7 +1,6 @@
 package view_test
 
 import (
-	"errors"
 	"strings"
 	"testing"
 
@@ -141,10 +140,12 @@ func TestReplyDraftNamesItsKindAndOffersTheKindKeyAndSendAnyway(t *testing.T) {
 		t.Fatalf("reply title: %q", got)
 	}
 	cardButtons(t, m, "layer.editor.actions", []button{{"save", "Save (ctrl+o)", "ctrl+o"}, {"kind", "Kind (ctrl+r)", "ctrl+r"}}, "save")
-	m = press(m, "ctrl+r")
-	if got := editor(m); !strings.Contains(got, "Confirm dana's comment") {
-		t.Fatalf("confirm title: %q", got)
+	for _, want := range []string{"Confirm dana's comment", "Refute dana's comment", "Supersede dana's comment", "Reply to dana's comment", "Confirm dana's comment"} {
+		m = press(m, "ctrl+r")
+		if got := editor(m); got != want {
+			t.Fatalf("title after cycling the kind: %q, want %q", got, want)
+		}
 	}
-	m, _ = model.Update(m, model.DraftFailed{UID: "a", Err: errors.New("a reply of this kind already exists"), Duplicate: true})
+	m, _ = model.Update(m, model.DraftFailed{UID: "a", Err: model.DuplicateReply{Message: "a reply of this kind already exists"}})
 	cardButtons(t, m, "layer.editor.actions", []button{{"force", "Send anyway (ctrl+f)", "ctrl+f"}}, "save")
 }

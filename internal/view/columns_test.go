@@ -163,9 +163,9 @@ func TestDetailShowsTheOwnerExpiryAndRecurring(t *testing.T) {
 			t.Errorf("%s detail owner %q, want %q", uid, got, want)
 		}
 	}
-	// The detail data carries no recurrence for it: kata did not list one, so it is stopped.
-	if got := text(props("loop")[view.DetailContentID+".properties.recurring.v"]); got != "stopped" {
-		t.Errorf("recurring property %q, want stopped", got)
+	// The detail data carries no recurrence for it (kata withholds them from a scoped access): the property says no more than yes.
+	if got := text(props("loop")[view.DetailContentID+".properties.recurring.v"]); got != "Yes" {
+		t.Errorf("recurring property %q, want Yes", got)
 	}
 }
 

@@ -228,11 +228,11 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 	}
 	add("Owner", text(owner))
 	if issue.RecurrenceID != nil {
-		recurrence := model.Recurrence{Stopped: true}
+		recurring := "Yes" // kata did not say more: it withholds recurrences from a scoped access
 		if d := m.DetailAuthority(); d != nil && d.Recurrence != nil {
-			recurrence = *d.Recurrence
+			recurring = d.Recurrence.Text()
 		}
-		add("Recurring", text(recurrence.Text()))
+		add("Recurring", text(recurring))
 	}
 	if issue.Priority != nil {
 		add("Priority", ui.Badge{Common: ui.Common{Key: "v", Tone: priorityTone(*issue.Priority)}, Text: fmt.Sprintf("P%d", *issue.Priority)})

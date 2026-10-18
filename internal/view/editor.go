@@ -51,7 +51,7 @@ func editorLayer(m model.Model) tern.Element {
 		children = append(children, ui.Text{Common: ui.Common{Key: "discard", Tone: ui.ToneWarning}, Text: "Discard this Draft? y discards; n or esc keeps editing."}, discardButtons())
 	case !draft.Saving && draft.Conflict == nil:
 		buttons := []tern.Element{keyButton("save", "Save (ctrl+o)", "ctrl+o", true)}
-		if draft.Duplicate {
+		if draft.Duplicate() {
 			buttons = append(buttons, keyButton("force", "Send anyway (ctrl+f)", "ctrl+f", false))
 		}
 		if draft.ReplyTo != "" {
@@ -77,8 +77,9 @@ func replyTitle(draft model.Draft) string {
 	if draft.ReplyAuthor != "" {
 		whose = draft.ReplyAuthor + "'s comment"
 	}
-	if draft.Kind == "reply" {
+	kind := string(draft.ReplyKind)
+	if draft.ReplyKind == model.ReplyPlain {
 		return "Reply to " + whose
 	}
-	return strings.ToUpper(draft.Kind[:1]) + draft.Kind[1:] + " " + whose
+	return strings.ToUpper(kind[:1]) + kind[1:] + " " + whose
 }

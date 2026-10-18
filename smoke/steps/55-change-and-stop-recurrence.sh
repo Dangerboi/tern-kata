@@ -39,8 +39,11 @@ expect_tree "[data-id='layer.recurrence.stop']" '.ok and .count == 1'
 ctl key y
 expect_tree "[data-id='layer.recurrence']" '.ok and .count == 0'
 expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("stopped")))'
-# A stopped Issue gets no card: kata refuses a second recurrence.
+# A stopped Issue gets a card that only says so: kata refuses a second recurrence.
 ctl key O
+expect_tree "[data-id='layer.recurrence.error']" '.ok and .count == 1 and (.nodes[0].text | contains("stopped"))'
+expect_tree "[data-id='layer.recurrence.frequency']" '.ok and .count == 0'
+ctl key Escape
 expect_tree "[data-id='layer.recurrence']" '.ok and .count == 0'
 
 kata --workspace "$cs_dir" close "$cs_short" --done --message "Finished the stopped recurring fixture and verified it by hand" --commit abc1234def56 --json >/dev/null

@@ -29,7 +29,7 @@ func (c *Client) SaveDraft(ctx context.Context, cmd model.SaveDraft) (model.Msg,
 	if cmd.Comment {
 		body := &g.CreateCommentBody{Body: cmd.Text, Actor: &actor}
 		if cmd.ReplyTo != "" {
-			kind := g.CommentRequestBodyKind(cmd.Kind)
+			kind := g.CommentRequestBodyKind(cmd.ReplyKind)
 			body.ReplyTo, body.Kind = &cmd.ReplyTo, &kind
 			if cmd.Force {
 				body.Force = &cmd.Force
@@ -42,7 +42,8 @@ func (c *Client) SaveDraft(ctx context.Context, cmd model.SaveDraft) (model.Msg,
 	if cmd.ReplyTo != "" && daemonCode(werr) == "duplicate_reply" {
 		// kata's hint names the CLI's --force; the card offers Send anyway instead.
 		envelope, _ := errors.AsType[g.ErrorEnvelope](werr)
-		return model.DraftFailed{UID: cmd.UID, Err: errors.New(envelope.ErrorData.Message), Duplicate: true}, nil
+		envelope.ErrorData.Hint = nil
+		return model.DraftFailed{UID: cmd.UID, Err: model.DuplicateReply{Message: daemonError(envelope).Error()}}, nil
 	}
 	if werr != nil {
 		return nil, daemonError(werr)

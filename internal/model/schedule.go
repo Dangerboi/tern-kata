@@ -19,6 +19,9 @@ const (
 	Yearly  Frequency = "YEARLY"
 )
 
+// Frequencies is every Frequency, in the order the card cycles them.
+var Frequencies = []Frequency{Daily, Weekly, Monthly, Yearly}
+
 // DayKind says which day of the month a monthly or yearly Schedule falls on.
 type DayKind int
 
@@ -40,7 +43,7 @@ const (
 
 // Schedule is a recurrence rule in the shape of kata's web UI Common mode: the one thing the Recurrence card edits. A rule
 // Common mode cannot express is raw: Raw holds its text and every other field is zero. RRULE and ParseSchedule are inverse
-// for every non-raw Schedule, except a yearly LastDay, which the web UI parses as raw.
+// for every non-raw Schedule. LastDay is monthly only: the web UI reads a yearly BYMONTHDAY=-1 as raw.
 type Schedule struct {
 	Raw        string
 	Frequency  Frequency
@@ -59,19 +62,28 @@ type Schedule struct {
 // IsRaw says the rule is outside the form and Raw holds its text.
 func (s Schedule) IsRaw() bool { return s.Raw != "" }
 
-var weekdayCodes = []string{"MO", "TU", "WE", "TH", "FR", "SA", "SU"} // Monday first, as the web UI sorts
+// MondayFirst is the weekdays in the order the web UI sorts and the card lists them.
+var MondayFirst = []time.Weekday{time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday, time.Saturday, time.Sunday}
 
-func weekdayCode(d time.Weekday) string { return weekdayCodes[(int(d)+6)%7] }
+var weekdayCodes = []string{"MO", "TU", "WE", "TH", "FR", "SA", "SU"} // parallel to MondayFirst
+
+// MondayIndex is where d falls in MondayFirst.
+func MondayIndex(d time.Weekday) int { return slices.Index(MondayFirst, d) }
+
+func weekdayCode(d time.Weekday) string { return weekdayCodes[MondayIndex(d)] }
 
 func weekdayOf(code string) (time.Weekday, bool) {
 	i := slices.Index(weekdayCodes, code)
-	return time.Weekday((i + 1) % 7), i >= 0
+	if i < 0 {
+		return 0, false
+	}
+	return MondayFirst[i], true
 }
 
 // sortWeekdays returns days Monday first, without repeats.
 func sortWeekdays(days []time.Weekday) []time.Weekday {
 	out := slices.Clone(days)
-	slices.SortFunc(out, func(a, b time.Weekday) int { return (int(a)+6)%7 - (int(b)+6)%7 })
+	slices.SortFunc(out, func(a, b time.Weekday) int { return MondayIndex(a) - MondayIndex(b) })
 	return slices.Compact(out)
 }
 
@@ -138,7 +150,7 @@ func parseCommon(rule string) (Schedule, bool) {
 		parts[key] = value
 	}
 	s := Schedule{Frequency: Frequency(parts["FREQ"]), Interval: 1}
-	if !slices.Contains([]Frequency{Daily, Weekly, Monthly, Yearly}, s.Frequency) {
+	if !slices.Contains(Frequencies, s.Frequency) {
 		return Schedule{}, false
 	}
 	for _, key := range []string{"BYYEARDAY", "BYWEEKNO", "BYHOUR", "BYMINUTE", "BYSECOND", "BYSETPOS", "WKST"} {
@@ -293,8 +305,6 @@ func (s Schedule) Words() string {
 		switch {
 		case s.Day == DayOfMonth && s.Month > 0:
 			fmt.Fprintf(&b, " on %s %d", month, s.DayOfMonth)
-		case s.Day == LastDay && s.Month > 0:
-			fmt.Fprintf(&b, " on the last day of %s", month)
 		case s.Day == NthWeekday && s.Month > 0:
 			fmt.Fprintf(&b, " on the %s %s of %s", ordinals[s.Nth], s.Weekday, month)
 		case s.Month > 0:

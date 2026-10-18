@@ -9,7 +9,8 @@ type IssueDetailData struct {
 	Comments []Comment
 	History  []Event
 	Links    []Link
-	// Recurrence is the Issue's recurrence; nil when the Issue does not recur.
+	// Recurrence is the Issue's recurrence, Stopped once kata no longer lists it; nil when the Issue does not recur or the daemon
+	// withholds recurrences from this access.
 	Recurrence *Recurrence
 }
 

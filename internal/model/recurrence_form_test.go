@@ -68,7 +68,7 @@ func TestRecurrenceCardOpensWithWeeklyDefaults(t *testing.T) {
 		t.Fatalf("O opened card %d", m.TopCard())
 	}
 	m, cmds := saveRecurrence(m)
-	want := model.CreateRecurrenceCmd{UID: "parent", Workspace: "/repo", Rule: "FREQ=WEEKLY;INTERVAL=1;BYDAY=WE", Start: "2026-10-21", TimeZone: "Europe/Zurich"}
+	want := model.CreateRecurrenceCmd{UID: "parent", Workspace: "/repo", RecurrenceTerms: model.RecurrenceTerms{Rule: "FREQ=WEEKLY;INTERVAL=1;BYDAY=WE", Start: "2026-10-21", TimeZone: "Europe/Zurich"}}
 	if len(cmds) != 1 || cmds[0] != want {
 		t.Fatalf("saving the defaults sent %#v, want %#v", cmds, want)
 	}
@@ -83,7 +83,7 @@ func TestRecurrenceCardStartsOnTheIssuesScheduledDateAndFallsBackToUTC(t *testin
 	scheduled := "2026-10-26"
 	m, _ = model.Update(m, model.DetailLoaded{UID: "parent", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "parent", ScheduledOnDate: &scheduled}}})
 	_, cmds := saveRecurrence(openRecurrenceCard(m))
-	want := model.CreateRecurrenceCmd{UID: "parent", Workspace: "/repo", Rule: "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO", Start: scheduled, TimeZone: "UTC"}
+	want := model.CreateRecurrenceCmd{UID: "parent", Workspace: "/repo", RecurrenceTerms: model.RecurrenceTerms{Rule: "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO", Start: scheduled, TimeZone: "UTC"}}
 	if len(cmds) != 1 || cmds[0] != want {
 		t.Fatalf("sent %#v, want %#v", cmds, want)
 	}
@@ -150,6 +150,12 @@ func TestRecurrenceCardRefusesAnInvalidScheduleAndSendsNothing(t *testing.T) {
 		{"day 0", func(m model.Model) model.Model {
 			return fillField(choose(m, model.RecurrenceFrequency, frequency(model.Yearly)), model.RecurrenceDay, "0")
 		}, "Day must be between 1 and 31."},
+		{"day empty", func(m model.Model) model.Model {
+			return fillField(choose(m, model.RecurrenceFrequency, frequency(model.Monthly)), model.RecurrenceDay, "")
+		}, "Day must not be empty"},
+		{"yearly last day", func(m model.Model) model.Model {
+			return fillField(choose(m, model.RecurrenceFrequency, frequency(model.Yearly)), model.RecurrenceDay, "last")
+		}, "The last day works for monthly schedules only."},
 		{"day not a day", func(m model.Model) model.Model {
 			return fillField(choose(m, model.RecurrenceFrequency, frequency(model.Monthly)), model.RecurrenceDay, "someday")
 		}, "Day must be a number from 1 to 31"},
@@ -194,9 +200,9 @@ func TestRecurrenceCardWritesTheRuleTheFormDescribes(t *testing.T) {
 		{"monthly on day 15", func(m model.Model) model.Model {
 			return fillField(choose(m, model.RecurrenceFrequency, frequency(model.Monthly)), model.RecurrenceDay, "15")
 		}, "FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=15"},
-		{"monthly on the start date's day", func(m model.Model) model.Model {
+		{"monthly on the start date's day, prefilled", func(m model.Model) model.Model {
 			return choose(m, model.RecurrenceFrequency, frequency(model.Monthly))
-		}, "FREQ=MONTHLY;INTERVAL=1"},
+		}, "FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=21"},
 		{"monthly on the 2nd Tuesday", func(m model.Model) model.Model {
 			return fillField(choose(m, model.RecurrenceFrequency, frequency(model.Monthly)), model.RecurrenceDay, "2nd tue")
 		}, "FREQ=MONTHLY;INTERVAL=1;BYDAY=2TU"},
@@ -209,10 +215,13 @@ func TestRecurrenceCardWritesTheRuleTheFormDescribes(t *testing.T) {
 		{"yearly in the start date's month on day 3", func(m model.Model) model.Model {
 			return fillField(choose(m, model.RecurrenceFrequency, frequency(model.Yearly)), model.RecurrenceDay, "3")
 		}, "FREQ=YEARLY;INTERVAL=1;BYMONTH=10;BYMONTHDAY=3"},
-		{"yearly in March", func(m model.Model) model.Model {
+		{"yearly in March, day prefilled", func(m model.Model) model.Model {
 			m = choose(m, model.RecurrenceFrequency, frequency(model.Yearly))
 			return choose(m, model.RecurrenceMonth, func(s model.RecurrenceFormState) bool { return s.Month == 3 })
-		}, "FREQ=YEARLY;INTERVAL=1;BYMONTH=3"},
+		}, "FREQ=YEARLY;INTERVAL=1;BYMONTH=3;BYMONTHDAY=21"},
+		{"yearly on the 2nd Tuesday", func(m model.Model) model.Model {
+			return fillField(choose(m, model.RecurrenceFrequency, frequency(model.Yearly)), model.RecurrenceDay, "2nd tue")
+		}, "FREQ=YEARLY;INTERVAL=1;BYMONTH=10;BYDAY=2TU"},
 		{"daily until a date", func(m model.Model) model.Model {
 			m = choose(m, model.RecurrenceFrequency, frequency(model.Daily))
 			return fillField(choose(m, model.RecurrenceEnds, ends(model.EndUntil)), model.RecurrenceEnd, "2026-12-31")
@@ -234,28 +243,54 @@ func TestRecurrenceCardWritesTheRuleTheFormDescribes(t *testing.T) {
 	}
 }
 
-func TestRecurrenceCardOffersNothingForAStoppedRecurrenceOrOneNotYetLoaded(t *testing.T) {
+func TestOnAStoppedRecurrenceOTellsSoAndWritesNothing(t *testing.T) {
 	recurrence := int64(4)
-	for _, tt := range []struct {
-		name   string
-		detail *model.IssueDetailData
-	}{
-		{"stopped", &model.IssueDetailData{Issue: &model.Issue{UID: "parent", RecurrenceID: &recurrence}, Recurrence: &model.Recurrence{Stopped: true}}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			m, _ := model.Update(recurrenceBase(), model.DetailLoaded{UID: "parent", Selected: tt.detail})
-			if m = openRecurrenceCard(m); m.TopCard() == model.CardRecurrence {
-				t.Fatal("O opened a card for a stopped recurrence")
-			}
-		})
+	detail := &model.IssueDetailData{Issue: &model.Issue{UID: "parent", RecurrenceID: &recurrence}, Recurrence: &model.Recurrence{Stopped: true}}
+	m, _ := model.Update(recurrenceBase(), model.DetailLoaded{UID: "parent", Selected: detail})
+	m = openRecurrenceCard(m)
+	f := m.RecurrenceForm
+	if m.TopCard() != model.CardRecurrence || !f.Refused || f.Err == nil || !strings.Contains(f.Err.Error(), "stopped") {
+		t.Fatalf("O on a stopped recurrence: card %d, form %+v, want a card saying it was stopped", m.TopCard(), f)
 	}
-	listed := recurrenceBase()
-	for i := range listed.Issues {
-		listed.Issues[i].RecurrenceID = &recurrence
+	m, cmds := clickPress(m, "ctrl+o", "ctrl+x", "x")
+	if len(cmds) != 0 || m.RecurrenceForm.Saving || m.RecurrenceForm.StopConfirm {
+		t.Fatalf("the notice card wrote or asked: %#v %+v", cmds, m.RecurrenceForm)
 	}
-	listed, _ = model.Update(listed, model.DetailLoaded{UID: "parent", Selected: nil})
-	if listed = openRecurrenceCard(listed); listed.TopCard() == model.CardRecurrence {
-		t.Fatal("O opened a card for a listed Issue whose recurrence is not loaded")
+	if m, _ = clickPress(m, "escape"); m.TopCard() == model.CardRecurrence {
+		t.Fatal("esc left the notice card open")
+	}
+}
+
+func TestOOnARecurringIssueWithTheDetailHiddenLoadsItsRecurrenceThenOpensTheCard(t *testing.T) {
+	recurrence := int64(4)
+	detailWith := func(rule string) (model.DetailLoaded, *model.Recurrence) {
+		rec := &model.Recurrence{UID: "rec-uid", RecurrenceTerms: model.RecurrenceTerms{Rule: rule, Start: "2026-10-19", TimeZone: "Europe/Zurich"}, Revision: 3}
+		return model.DetailLoaded{UID: "parent", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "parent", RecurrenceID: &recurrence}, Recurrence: rec}}, rec
+	}
+	// The detail was loaded, then hidden; snapshots no longer refresh it, so what it holds may be old.
+	old, _ := detailWith("FREQ=WEEKLY;INTERVAL=1;BYDAY=MO")
+	m, _ := model.Update(recurrenceBase(), old)
+	m, _ = clickPress(m, "shift+l")
+	if !m.DetailHidden() {
+		t.Fatal("the detail is still shown")
+	}
+	m, cmds := clickPress(m, "shift+o")
+	if m.TopCard() == model.CardRecurrence || !slices.Contains(cmds, model.Cmd(model.LoadDetail{Workspace: "/repo", UID: "parent"})) {
+		t.Fatalf("O with the detail hidden: card %d, sent %#v, want the detail asked for and no card yet", m.TopCard(), cmds)
+	}
+	fresh, rec := detailWith("FREQ=DAILY;INTERVAL=1")
+	m, _ = model.Update(m, fresh)
+	if f := m.RecurrenceForm; m.TopCard() != model.CardRecurrence || !f.Change || f.Frequency != model.Daily || f.Opened != *rec {
+		t.Fatalf("after the detail arrived: card %d, form %+v, want Change recurrence prefilled from the fresh recurrence", m.TopCard(), f)
+	}
+}
+
+func TestOOnARecurringIssueWhoseRecurrenceKataWithholdsSaysSo(t *testing.T) {
+	recurrence := int64(4)
+	m, _ := model.Update(recurrenceBase(), model.DetailLoaded{UID: "parent", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "parent", RecurrenceID: &recurrence}}})
+	m = openRecurrenceCard(m)
+	if f := m.RecurrenceForm; m.TopCard() != model.CardRecurrence || !f.Refused || f.Err == nil {
+		t.Fatalf("O with no recurrence provided: card %d, form %+v, want a card saying why nothing can change", m.TopCard(), f)
 	}
 }
 
@@ -271,21 +306,10 @@ func TestRecurrenceCardClosesWhenSavedAndKeepsItselfOnAFailure(t *testing.T) {
 	}
 }
 
-func TestHelpSheetListsMakeRecurring(t *testing.T) {
-	for _, group := range model.HelpSheet() {
-		for _, line := range group.Lines {
-			if line.Text == "make or change recurrence" && slices.Equal(line.Keys, []string{"O"}) {
-				return
-			}
-		}
-	}
-	t.Fatal("the help sheet has no line for O")
-}
-
 // recurring is the Issue "parent" in a recurrence with the rule, as the detail shows it.
 func recurring(rule string) model.Model {
 	recurrence := int64(4)
-	rec := &model.Recurrence{UID: "rec-uid", Rule: rule, Start: "2026-10-19", TimeZone: "Europe/Zurich", Revision: 3, Next: "2026-10-26"}
+	rec := &model.Recurrence{UID: "rec-uid", RecurrenceTerms: model.RecurrenceTerms{Rule: rule, Start: "2026-10-19", TimeZone: "Europe/Zurich"}, Revision: 3, Next: "2026-10-26"}
 	m, _ := model.Update(recurrenceBase(), model.DetailLoaded{UID: "parent", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "parent", RecurrenceID: &recurrence}, Recurrence: rec}})
 	return m
 }
@@ -301,8 +325,8 @@ func TestRecurrenceCardOpensAsChangeRecurrencePrefilledFromTheSchedule(t *testin
 	}
 	// Saving what the card shows sends the same rule, to the recurrence it read, with what it read as the guard.
 	_, cmds := saveRecurrence(m)
-	want := model.ChangeRecurrenceCmd{Workspace: "/repo", UID: "parent", RecurrenceUID: "rec-uid", Rule: "FREQ=MONTHLY;INTERVAL=2;BYDAY=2TU;COUNT=5", Start: "2026-10-19", TimeZone: "Europe/Zurich",
-		OpenedRule: "FREQ=MONTHLY;INTERVAL=2;BYDAY=2TU;COUNT=5", OpenedStart: "2026-10-19", OpenedZone: "Europe/Zurich"}
+	terms := model.RecurrenceTerms{Rule: "FREQ=MONTHLY;INTERVAL=2;BYDAY=2TU;COUNT=5", Start: "2026-10-19", TimeZone: "Europe/Zurich"}
+	want := model.ChangeRecurrenceCmd{Workspace: "/repo", UID: "parent", RecurrenceUID: "rec-uid", RecurrenceTerms: terms, Opened: terms}
 	if len(cmds) != 1 || cmds[0] != want {
 		t.Fatalf("saving sent %#v, want %#v", cmds, want)
 	}
@@ -319,14 +343,14 @@ func TestRecurrenceCardShowsARawRuleAboveTheFormAndSavingTheFormReplacesIt(t *te
 		t.Fatalf("sent %#v", cmds)
 	}
 	got := cmds[0].(model.ChangeRecurrenceCmd)
-	if got.Rule != "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO" || got.OpenedRule != raw {
-		t.Fatalf("saving sent rule %q guarded by %q, want the form's rule guarded by the raw one", got.Rule, got.OpenedRule)
+	if got.Rule != "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO" || got.Opened.Rule != raw {
+		t.Fatalf("saving sent rule %q guarded by %q, want the form's rule guarded by the raw one", got.Rule, got.Opened.Rule)
 	}
 }
 
 func TestRecurrenceCardReloadsTheCurrentScheduleWhenItChangedMeanwhile(t *testing.T) {
 	m, _ := saveRecurrence(openRecurrenceCard(recurring("FREQ=DAILY;INTERVAL=1")))
-	current := model.Recurrence{UID: "rec-uid", Rule: "FREQ=WEEKLY;INTERVAL=3;BYDAY=FR", Start: "2026-11-02", TimeZone: "UTC", Revision: 5}
+	current := model.Recurrence{UID: "rec-uid", RecurrenceTerms: model.RecurrenceTerms{Rule: "FREQ=WEEKLY;INTERVAL=3;BYDAY=FR", Start: "2026-11-02", TimeZone: "UTC"}, Revision: 5}
 	m, cmds := model.Update(m, model.RecurrenceResultMsg{UID: "parent", Changed: &current})
 	f := m.RecurrenceForm
 	if m.TopCard() != model.CardRecurrence || f.Saving || f.Frequency != model.Weekly || f.Every != "3" || !f.Weekdays[time.Friday] || f.Start != "2026-11-02" || f.Zone != "UTC" || f.Opened != current {
@@ -374,5 +398,23 @@ func TestRecurrenceCardOfANewRecurrenceHasNoStop(t *testing.T) {
 	m, _ := model.Update(openRecurrenceCard(recurrenceBase()), model.KeyMsg{Chord: "ctrl+x"})
 	if m.RecurrenceForm.StopConfirm {
 		t.Fatal("ctrl+x asked to stop a recurrence that does not exist")
+	}
+}
+
+func TestRecurrenceCardFillsAnEmptyDayWithTheStartDatesDay(t *testing.T) {
+	// A rule the web UI writes without a day opens with the start date's day, and saving writes the explicit day.
+	m := openRecurrenceCard(recurring("FREQ=MONTHLY;INTERVAL=1"))
+	if m.RecurrenceForm.Day != "19" {
+		t.Fatalf("Day %q, want the start date's day 19", m.RecurrenceForm.Day)
+	}
+	_, cmds := saveRecurrence(m)
+	if got := cmds[0].(model.ChangeRecurrenceCmd).Rule; got != "FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=19" {
+		t.Fatalf("rule %q, want the explicit day", got)
+	}
+	// Changing the frequency fills a Day the user emptied.
+	m = openRecurrenceCard(recurrenceBase())
+	m = fillField(choose(m, model.RecurrenceFrequency, frequency(model.Monthly)), model.RecurrenceDay, "")
+	if m = choose(m, model.RecurrenceFrequency, frequency(model.Yearly)); m.RecurrenceForm.Day != "21" {
+		t.Fatalf("Day %q after changing the frequency, want 21", m.RecurrenceForm.Day)
 	}
 }

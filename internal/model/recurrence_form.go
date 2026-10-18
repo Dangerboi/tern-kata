@@ -46,11 +46,8 @@ var RecurrenceFields = []FieldSpec{
 	{RecurrenceMonth, false}, {RecurrenceEnds, false}, {RecurrenceEnd, true}, {RecurrenceStart, true}, {RecurrenceZone, true},
 }
 
-// RecurrenceFrequencies and RecurrenceEnds are the choices of the Frequency and Ends fields, in cycling order.
-var (
-	RecurrenceFrequencies = []Frequency{Daily, Weekly, Monthly, Yearly}
-	RecurrenceEndKinds    = []EndKind{EndNever, EndUntil, EndCount}
-)
+// RecurrenceEndKinds are the choices of the Ends field, in cycling order; the Frequency field cycles Frequencies.
+var RecurrenceEndKinds = []EndKind{EndNever, EndUntil, EndCount}
 
 // RecurrenceFormState is the Recurrence card. The text fields hold what was typed and the card reads it into a Schedule only
 // when saving, so every validation message comes from one place.
@@ -60,16 +57,16 @@ type RecurrenceFormState struct {
 	UID          string
 	// Change says the Issue already recurs: the card changes Opened, the recurrence it read, instead of making a new one.
 	// Raw is the rule text when the form cannot express it. StopConfirm asks y/n before stopping; Stopping says the pending
-	// write is the stop.
-	Change, StopConfirm, Stopping bool
+	// write is the stop. Refused says nothing can be changed: the card only reports Err, and esc closes it.
+	Change, StopConfirm, Stopping, Refused bool
 	Opened                        Recurrence
 	Raw                           string
 	ProjectID                     int64
 	Frequency                     Frequency
 	Every                         string
 	Weekdays                      [7]bool // indexed by time.Weekday
-	WeekdayAt                     int     // the weekday under the cursor, 0 for Monday: the field lists Monday first
-	Day                           string  // "" for the start date's day, "15", "last", "2nd tue"
+	WeekdayAt                     int     // the weekday under the cursor, an index into MondayFirst: the field lists Monday first
+	Day                           string  // "15", "last" (monthly only), "2nd tue"
 	Month                         int     // 1 to 12
 	Ends                          EndKind
 	Until, Count                  string
@@ -133,10 +130,19 @@ func newRecurrenceForm(m Model, issue *Issue) RecurrenceFormState {
 	}
 	if start, err := time.Parse(time.DateOnly, f.Start); err == nil {
 		f.Weekdays[start.Weekday()] = true
-		f.WeekdayAt = (int(start.Weekday()) + 6) % 7
+		f.WeekdayAt = MondayIndex(start.Weekday())
 		f.Month = int(start.Month())
 	}
+	f.Day = f.startDay()
 	return f
+}
+
+// startDay is the start date's day of the month, "" while the start date is not a date.
+func (f RecurrenceFormState) startDay() string {
+	if start, err := time.Parse(time.DateOnly, strings.TrimSpace(f.Start)); err == nil {
+		return strconv.Itoa(start.Day())
+	}
+	return ""
 }
 
 // changeRecurrenceForm is the card for an Issue whose recurrence is rec, prefilled from its Schedule. A rule the form cannot
@@ -160,7 +166,7 @@ func changeRecurrenceForm(m Model, issue *Issue, rec Recurrence) RecurrenceFormS
 		for _, d := range s.Weekdays {
 			f.Weekdays[d] = true
 		}
-		f.WeekdayAt = (int(s.Weekdays[0]) + 6) % 7
+		f.WeekdayAt = MondayIndex(s.Weekdays[0])
 	}
 	if s.Month > 0 {
 		f.Month = s.Month
@@ -181,8 +187,8 @@ func changeRecurrenceForm(m Model, issue *Issue, rec Recurrence) RecurrenceFormS
 }
 
 // openRecurrence is `O`. An Issue that does not recur gets a card to make it recur; one that does gets the card to change or
-// stop it. One whose recurrence was stopped gets nothing: kata refuses to put an Issue into a second recurrence, and the detail
-// already reads "stopped".
+// stop it, once the detail has its recurrence: with the detail hidden or not yet loaded, the detail is asked for and the card
+// opens when it arrives.
 func openRecurrence(m Model) Model {
 	issue := closeIssue(m)
 	if m.Stale || issue == nil {
@@ -192,8 +198,26 @@ func openRecurrence(m Model) Model {
 		m.RecurrenceForm = newRecurrenceForm(m, issue)
 		return m
 	}
-	if d := m.authority; d != nil && d.Issue != nil && d.Issue.UID == issue.UID && d.Recurrence != nil && !d.Recurrence.Stopped {
-		m.RecurrenceForm = changeRecurrenceForm(m, issue, *d.Recurrence)
+	return m.wantRecurrence(issue.UID)
+}
+
+var (
+	errRecurrenceStoppedHere = errors.New("The recurrence was stopped; kata can't make this Issue recur again.")
+	errRecurrenceWithheld    = errors.New("kata does not show this recurrence to your access, so it can't be changed from here.")
+)
+
+// openWantedRecurrence opens the card for the loaded recurrence of the Issue the detail shows. A stopped one, or one kata
+// withholds, gets a card that only says so: kata refuses to put an Issue into a second recurrence.
+func openWantedRecurrence(m Model) Model {
+	issue, rec := closeIssue(m), m.authority.Recurrence
+	switch {
+	case issue == nil:
+	case rec == nil:
+		m.RecurrenceForm = RecurrenceFormState{Open: true, Refused: true, UID: issue.UID, Err: errRecurrenceWithheld}
+	case rec.Stopped:
+		m.RecurrenceForm = RecurrenceFormState{Open: true, Refused: true, UID: issue.UID, Err: errRecurrenceStoppedHere}
+	default:
+		m.RecurrenceForm = changeRecurrenceForm(m, issue, *rec)
 	}
 	return m
 }
@@ -202,7 +226,9 @@ var (
 	errEveryTooSmall  = errors.New("Every must be a whole number, 1 or more.")
 	errNoWeekday      = errors.New("Pick at least one weekday.")
 	errDayRange       = errors.New("Day must be between 1 and 31.")
+	errDayEmpty       = errors.New("Day must not be empty: enter 1 to 31, last, or a weekday like 2nd tue or last fri.")
 	errDayForm        = errors.New("Day must be a number from 1 to 31, last, or a weekday like 2nd tue or last fri.")
+	errYearlyLast     = errors.New("The last day works for monthly schedules only.")
 	errCountTooSmall  = errors.New("Count must be a whole number, 1 or more.")
 	errStartDate      = errors.New("Start date must be a date like 2026-10-19.")
 	errEndDate        = errors.New("End date must be a date like 2026-10-19.")
@@ -211,63 +237,66 @@ var (
 	errRecurrenceChanged = errors.New("The schedule changed meanwhile; nothing was written. The card shows the current schedule.")
 )
 
-// schedule reads the card into the Schedule it would send, or says what is wrong with it. Nothing leaves the card until it does.
-func (f RecurrenceFormState) schedule() (Schedule, error) {
+// terms reads the card into the terms it would send, or says what is wrong with it. Nothing leaves the card until it does.
+func (f RecurrenceFormState) terms() (RecurrenceTerms, error) {
+	start, zone := strings.TrimSpace(f.Start), strings.TrimSpace(f.Zone)
 	s := Schedule{Frequency: f.Frequency, End: f.Ends}
 	var err error
 	if s.Interval, err = strconv.Atoi(strings.TrimSpace(f.Every)); err != nil || s.Interval < 1 {
-		return Schedule{}, errEveryTooSmall
+		return RecurrenceTerms{}, errEveryTooSmall
 	}
 	switch f.Frequency {
 	case Weekly:
-		for d, on := range f.Weekdays {
-			if on {
-				s.Weekdays = append(s.Weekdays, time.Weekday(d))
+		for _, d := range MondayFirst {
+			if f.Weekdays[d] {
+				s.Weekdays = append(s.Weekdays, d)
 			}
 		}
 		if len(s.Weekdays) == 0 {
-			return Schedule{}, errNoWeekday
+			return RecurrenceTerms{}, errNoWeekday
 		}
 	case Monthly, Yearly:
 		if err := parseDay(strings.TrimSpace(f.Day), &s); err != nil {
-			return Schedule{}, err
+			return RecurrenceTerms{}, err
 		}
 		if f.Frequency == Yearly {
 			s.Month = f.Month
 		}
 	}
-	start, err := time.Parse(time.DateOnly, strings.TrimSpace(f.Start))
+	startDate, err := time.Parse(time.DateOnly, start)
 	if err != nil {
-		return Schedule{}, errStartDate
+		return RecurrenceTerms{}, errStartDate
 	}
 	switch f.Ends {
 	case EndCount:
 		if s.Count, err = strconv.Atoi(strings.TrimSpace(f.Count)); err != nil || s.Count < 1 {
-			return Schedule{}, errCountTooSmall
+			return RecurrenceTerms{}, errCountTooSmall
 		}
 	case EndUntil:
 		until, err := time.Parse(time.DateOnly, strings.TrimSpace(f.Until))
 		if err != nil {
-			return Schedule{}, errEndDate
+			return RecurrenceTerms{}, errEndDate
 		}
-		if until.Before(start) {
-			return Schedule{}, errEndBeforeStart
+		if until.Before(startDate) {
+			return RecurrenceTerms{}, errEndBeforeStart
 		}
 		s.Until = until.Format(time.DateOnly)
 	}
-	if _, err := time.LoadLocation(strings.TrimSpace(f.Zone)); err != nil || strings.TrimSpace(f.Zone) == "" {
-		return Schedule{}, fmt.Errorf("Unknown time zone %q.", strings.TrimSpace(f.Zone))
+	if _, err := time.LoadLocation(zone); err != nil || zone == "" {
+		return RecurrenceTerms{}, fmt.Errorf("Unknown time zone %q.", zone)
 	}
-	return s, nil
+	return RecurrenceTerms{Rule: s.RRULE(), Start: start, TimeZone: zone}, nil
 }
 
-// parseDay reads the Day field into s: empty is the start date's day, a number is that day of the month, "last" the last day,
-// and "<n> <weekday>" the nth weekday, n being 1 to 5 or "last".
+// parseDay reads the Day field into s: a number is that day of the month, "last" the last day (monthly only: the web UI reads
+// a yearly last day as an Advanced rule), and "<n> <weekday>" the nth weekday, n being 1 to 5 or "last".
 func parseDay(text string, s *Schedule) error {
 	words := strings.Fields(strings.ToLower(text))
 	switch {
 	case len(words) == 0:
-		s.Day = DayFromStart
+		return errDayEmpty
+	case len(words) == 1 && words[0] == "last" && s.Frequency == Yearly:
+		return errYearlyLast
 	case len(words) == 1 && words[0] == "last":
 		s.Day = LastDay
 	case len(words) == 1:
@@ -313,14 +342,14 @@ func weekdayNamed(word string) (time.Weekday, bool) {
 
 func submitRecurrence(m Model) (Model, []Cmd) {
 	f := &m.RecurrenceForm
-	if !f.Open || f.Saving {
+	if !f.Open || f.Saving || f.Refused {
 		return m, nil
 	}
 	if m.Stale {
 		f.Err = errors.New("Daemon disconnected; reconnect before making this Issue recur.")
 		return m, nil
 	}
-	s, err := f.schedule()
+	terms, err := f.terms()
 	if err != nil {
 		f.Err = err
 		return m, nil
@@ -328,10 +357,9 @@ func submitRecurrence(m Model) (Model, []Cmd) {
 	f.Saving, f.Err = true, nil
 	if f.Change {
 		return m, []Cmd{ChangeRecurrenceCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, RecurrenceUID: f.Opened.UID,
-			Rule: s.RRULE(), Start: strings.TrimSpace(f.Start), TimeZone: strings.TrimSpace(f.Zone),
-			OpenedRule: f.Opened.Rule, OpenedStart: f.Opened.Start, OpenedZone: f.Opened.TimeZone}}
+			RecurrenceTerms: terms, Opened: f.Opened.RecurrenceTerms}}
 	}
-	return m, []Cmd{CreateRecurrenceCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, Rule: s.RRULE(), Start: strings.TrimSpace(f.Start), TimeZone: strings.TrimSpace(f.Zone)}}
+	return m, []Cmd{CreateRecurrenceCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, RecurrenceTerms: terms}}
 }
 
 func updateRecurrence(m Model, msg Msg) (Model, []Cmd) {
@@ -366,7 +394,10 @@ func (f *RecurrenceFormState) step(back bool) {
 	cycle := func(i, n int) int { return ((i+d)%n + n) % n }
 	switch f.Field {
 	case RecurrenceFrequency:
-		f.Frequency = RecurrenceFrequencies[cycle(slices.Index(RecurrenceFrequencies, f.Frequency), len(RecurrenceFrequencies))]
+		f.Frequency = Frequencies[cycle(slices.Index(Frequencies, f.Frequency), len(Frequencies))]
+		if f.Day == "" {
+			f.Day = f.startDay()
+		}
 	case RecurrenceEnds:
 		f.Ends = RecurrenceEndKinds[cycle(slices.Index(RecurrenceEndKinds, f.Ends), len(RecurrenceEndKinds))]
 	case RecurrenceMonth:
@@ -389,6 +420,7 @@ func recurrenceKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	binding, bound := LookupBindingForMode(msg.Chord, ModeRecurrenceForm)
 	field := f.text(f.Field)
 	switch {
+	case f.Refused && !(bound && binding.Action == RecurrenceCancel):
 	case bound && binding.Action == RecurrenceCancel:
 		f.Open = false
 	case bound && binding.Action == RecurrenceNext:
@@ -400,7 +432,7 @@ func recurrenceKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case bound && binding.Action == RecurrenceStop && f.Change:
 		f.StopConfirm, f.Err = true, nil
 	case bound && binding.Action == InputSpace && field == nil && f.Field == RecurrenceWeekdays:
-		day := time.Weekday((f.WeekdayAt + 1) % 7)
+		day := MondayFirst[f.WeekdayAt]
 		f.Weekdays[day] = !f.Weekdays[day]
 		f.Err = nil
 	case bound && binding.Action == InputSpace && field == nil, bound && binding.Action == RecurrenceNextChoice && field == nil:
