@@ -19,7 +19,7 @@ type Draft struct {
 type SaveDraft struct {
 	Workspace, UID, Text, Actor string
 	BaseText                    string
-	ProjectID, BaseRevision     int64
+	ProjectID                   int64
 	Comment                     bool
 }
 
@@ -128,7 +128,7 @@ func saveDraft(m Model) (Model, []Cmd) {
 	draft.Saving = true
 	draft.Err = nil
 	m = putDraft(m, m.EditorUID, draft)
-	return m, []Cmd{SaveDraft{Workspace: m.Workspace, UID: m.EditorUID, ProjectID: draft.ProjectID, BaseText: draft.BaseText, BaseRevision: draft.BaseRevision, Text: draft.Editor.Text, Comment: draft.Comment, Actor: m.Actor}}
+	return m, []Cmd{SaveDraft{Workspace: m.Workspace, UID: m.EditorUID, ProjectID: draft.ProjectID, BaseText: draft.BaseText, Text: draft.Editor.Text, Comment: draft.Comment, Actor: m.Actor}}
 }
 
 func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {

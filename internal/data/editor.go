@@ -8,9 +8,6 @@ import (
 	g "go.kenn.io/kata/pkg/client/generated"
 )
 
-// guardedAttempts bounds how often Close retries when the revision moves between reading the Issue and closing it.
-const guardedAttempts = 3
-
 // SaveDraft is a Guarded write: it conflicts only when the Issue's text differs from the text the
 // Draft started against, and then reports a DraftConflict, not an error. A revision that moved for
 // any other reason (owner, status, claim, expiry) does not matter.
@@ -26,7 +23,7 @@ func (c *Client) SaveDraft(ctx context.Context, cmd model.SaveDraft) (model.Msg,
 		return c.draftConflict(ctx, cmd.UID)
 	}
 	actor := cmd.Actor
-	// shortcut: check-then-write races (kata v0.19 enforces no precondition on edits or comments); upgrade when it does.
+	// shortcut: check-then-write races (kata v0.19 honours no revision precondition on edits or comments); upgrade when it does.
 	var werr error
 	if cmd.Comment {
 		_, werr = c.CreateCommentWithResponse(ctx, &g.CreateCommentRequestOptions{PathParams: &g.CreateCommentPath{ProjectID: fmt.Sprint(cmd.ProjectID), Ref: cmd.UID}, Body: &g.CreateCommentBody{Body: cmd.Text, Actor: &actor}})
@@ -49,5 +46,3 @@ func (c *Client) draftConflict(ctx context.Context, uid string) (model.Msg, erro
 	}
 	return model.DraftConflict{UID: uid, Issue: *detail.Selected.Issue}, nil
 }
-
-func etag(revision int64) string { return fmt.Sprintf("\"rev-%d\"", revision) }

@@ -30,6 +30,7 @@ func (c *Client) ReadEvents(ctx context.Context, cmd model.Subscribe, send func(
 		if json.Unmarshal(body, &envelope) != nil {
 			return fmt.Errorf("kata event stream: HTTP %d", response.StatusCode)
 		}
+		envelope.Status = int64(response.StatusCode)
 		return daemonError(envelope)
 	}
 	if !send(model.StreamOpened{Generation: cmd.Generation}) {

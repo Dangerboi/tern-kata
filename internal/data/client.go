@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os/exec"
 	"strings"
 
@@ -32,16 +33,21 @@ type Locator func(ctx context.Context, workspace string) (Target, error)
 // noDaemonHint is what tern-kata adds when no daemon answers.
 const noDaemonHint = "start the kata daemon (kata daemon start) or run `kata doctor`"
 
-// LocateWithKata is the production Locator: it uses kata's own discovery for the workspace.
-func LocateWithKata(ctx context.Context, workspace string) (Target, error) {
-	c, err := client.Discover(ctx, client.DiscoverOptions{Workspace: workspace})
-	if err != nil {
-		if errors.Is(err, client.ErrDaemonUnavailable) {
-			err = fmt.Errorf("%w\n%s", err, noDaemonHint)
+// LocateWithKata is the production Locator: it uses kata's own discovery for the workspace and the kata CLI for the daemon kind.
+var LocateWithKata = locateWith(daemonIsRemote)
+
+// locateWith is kata's discovery with remote answering whether the daemon is remote.
+func locateWith(remote func(ctx context.Context, workspace string) (bool, error)) Locator {
+	return func(ctx context.Context, workspace string) (Target, error) {
+		c, err := client.Discover(ctx, client.DiscoverOptions{Workspace: workspace})
+		if err != nil {
+			if errors.Is(err, client.ErrDaemonUnavailable) {
+				err = fmt.Errorf("%w\n%s", err, noDaemonHint)
+			}
+			return Target{}, err
 		}
-		return Target{}, err
+		return Target{Client: c, Remote: func(ctx context.Context) (bool, error) { return remote(ctx, workspace) }}, nil
 	}
-	return Target{Client: c, Remote: func(ctx context.Context) (bool, error) { return daemonIsRemote(ctx, workspace) }}, nil
 }
 
 // daemonIsRemote asks the kata CLI which kind of daemon serves workspace.
@@ -69,8 +75,9 @@ func connect(ctx context.Context, target Target) (*Client, error) {
 	c := target.Client
 	ping, err := c.PingWithResponse(ctx)
 	if err != nil {
+		noStatus := client.StatusCode(err) == 0
 		err = daemonError(err)
-		if client.StatusCode(err) == 0 {
+		if noStatus {
 			err = fmt.Errorf("%w\n%s", err, noDaemonHint)
 		}
 		return nil, err
@@ -96,13 +103,26 @@ func connect(ctx context.Context, target Target) (*Client, error) {
 }
 
 // daemonError is the text the Pane shows for any daemon failure: kata's message, then its recovery hint on its
-// own line, without the status-and-code prefix kata's error type carries. A failure with no kata message keeps its own text.
+// own line, without the status-and-code prefix kata's error type carries. A kata failure with no message shows the
+// status text, or kata's code when there is no status.
 func daemonError(err error) error {
 	envelope, ok := errors.AsType[g.ErrorEnvelope](err)
-	if !ok || envelope.ErrorData.Message == "" {
+	if !ok {
 		return err
 	}
 	message := envelope.ErrorData.Message
+	if message == "" {
+		status := client.StatusCode(err)
+		if status == 0 {
+			status = int(envelope.Status)
+		}
+		if message = http.StatusText(status); message == "" {
+			message = envelope.ErrorData.Code
+		}
+	}
+	if message == "" {
+		return err
+	}
 	if hint := envelope.ErrorData.Hint; hint != nil && *hint != "" {
 		message += "\n" + *hint
 	}

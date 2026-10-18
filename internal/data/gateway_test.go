@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -323,26 +324,25 @@ func TestGatewayDraftTextConflicts(t *testing.T) {
 	workspace, demo := project(t, gateway, "demo")
 	uid := createIssue(t, gateway, workspace, demo, "Draft me")
 	detail := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid}))
-	base := detail.Selected.Issue.Revision
 	baseText := detail.Selected.Issue.Body
-	save := func(text string, revision int64, comment bool) model.Msg {
-		return run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseRevision: revision, BaseText: baseText, Text: text, Comment: comment, Actor: "tester"})
+	save := func(text string, comment bool) model.Msg {
+		return run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseText: baseText, Text: text, Comment: comment, Actor: "tester"})
 	}
 
 	// Another writer changes the Issue's text after the Draft was started.
-	if saved := as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseRevision: base, BaseText: baseText, Text: "first body", Actor: "someone"})); saved.UID != uid {
+	if saved := as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseText: baseText, Text: "first body", Actor: "someone"})); saved.UID != uid {
 		t.Fatalf("saved %+v", saved)
 	}
-	conflict := as[model.DraftConflict](t, save("stale body", base, false))
+	conflict := as[model.DraftConflict](t, save("stale body", false))
 	if conflict.UID != uid || conflict.Issue.Body != "first body" {
 		t.Fatalf("stale edit %+v, want the stored Issue", conflict)
 	}
-	staleComment := as[model.DraftConflict](t, save("stale comment", base, true))
+	staleComment := as[model.DraftConflict](t, save("stale comment", true))
 	if staleComment.Issue.Body != "first body" {
 		t.Fatalf("stale comment %+v", staleComment)
 	}
 	baseText = conflict.Issue.Body
-	if saved := as[model.DraftSaved](t, save("a comment", conflict.Issue.Revision, true)); saved.UID != uid {
+	if saved := as[model.DraftSaved](t, save("a comment", true)); saved.UID != uid {
 		t.Fatalf("comment %+v", saved)
 	}
 	detail = as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid}))
@@ -400,21 +400,37 @@ func TestGatewayReportsDaemonErrorsInTheAskingMessage(t *testing.T) {
 			if failure == nil || !reflect.DeepEqual(got, tt.want(failure)) {
 				t.Fatalf("got %#v, want a %T carrying the daemon's error", got, tt.want(nil))
 			}
+			if statusAndCode.MatchString(failure.Error()) {
+				t.Fatalf("failure text %q carries kata's status-and-code prefix", failure)
+			}
 		})
 	}
 }
 
+// statusAndCode matches the prefix kata's error type puts before its message, such as "404 issue_not_found:".
+var statusAndCode = regexp.MustCompile(`^\d{3} \w+:`)
+
 func TestGatewayShowsKatasMessageThenItsHintWithoutStatusAndCode(t *testing.T) {
-	kata := startKata(t, "0.18.0")
-	c, err := connect(context.Background(), kata.target())
-	if err != nil {
-		t.Fatal(err)
-	}
-	unbound := t.TempDir()
-	_, err = c.ResolveProjectWithResponse(context.Background(), &g.ResolveProjectRequestOptions{Body: &g.ResolveProjectBody{StartPath: &unbound}})
-	want := "no .kata.toml ancestor and no git ancestor\nrun \"kata init --project <name>\" in the workspace root, or pass --project <name>"
-	if got := daemonError(err); got == nil || got.Error() != want {
-		t.Fatalf("got %v, want %q", got, want)
+	for _, tt := range []struct {
+		name, body, want string
+		status           int
+	}{
+		{"message and hint", `{"status":404,"error":{"code":"issue_not_found","message":"issue not found","hint":"check the ref"}}`, "issue not found\ncheck the ref", http.StatusNotFound},
+		{"no message", `{"status":404,"error":{"code":"issue_not_found","message":"","hint":"check the ref"}}`, "Not Found\ncheck the ref", http.StatusNotFound},
+		{"no message and an unnamed status", `{"status":599,"error":{"code":"odd_failure","message":""}}`, "odd_failure", 599},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			failing := serve(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			}), "0.19.0")
+			gateway := newGateway(t, newLocator(failing.target()))
+			got := as[model.IssueCreated](t, run(t, gateway, model.CreateIssueCmd{Workspace: t.TempDir(), ProjectID: 1, Title: "x", Actor: "tester"}))
+			if got.Err == nil || got.Err.Error() != tt.want {
+				t.Fatalf("got %v, want %q", got.Err, tt.want)
+			}
+		})
 	}
 }
 
@@ -470,7 +486,7 @@ func TestGatewayLocatorFailureIsRetriedOnTheNextCommand(t *testing.T) {
 func TestGatewayDiscoversTheDaemonTheServerVariableNames(t *testing.T) {
 	kata := startKata(t, "0.18.0")
 	t.Setenv("KATA_SERVER", kata.URL)
-	gateway := NewGateway(LocateWithKata)
+	gateway := NewGateway(locateWith(func(context.Context, string) (bool, error) { return false, nil }))
 	t.Cleanup(gateway.Close)
 	workspace, demo := project(t, gateway, "demo")
 	uid := createIssue(t, gateway, workspace, demo, "Found by discovery")
@@ -775,7 +791,18 @@ func changeOwner(t *testing.T, gateway *Gateway, workspace string, project model
 	}
 }
 
-func TestGatewayGuardedWritesSurviveAnOwnerChange(t *testing.T) {
+// bounceStatus is another actor closing and reopening the Issue: the revision moves twice and the status ends where it began.
+func bounceStatus(t *testing.T, gateway *Gateway, workspace string, project model.Project, uid string) {
+	t.Helper()
+	if closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: project.ID, Actor: "someone", Quick: true})); closed.Err != nil {
+		t.Fatal(closed.Err)
+	}
+	if reopened := as[model.CloseResultMsg](t, run(t, gateway, model.ReopenIssueCmd{Workspace: workspace, UID: uid, ProjectID: project.ID, Actor: "someone"})); reopened.Err != nil {
+		t.Fatal(reopened.Err)
+	}
+}
+
+func TestGatewayGuardedWritesSurviveOwnerAndStatusChanges(t *testing.T) {
 	kata := startKata(t, "0.19.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
@@ -788,7 +815,8 @@ func TestGatewayGuardedWritesSurviveAnOwnerChange(t *testing.T) {
 		uid := createIssue(t, gateway, workspace, demo, "Draft me")
 		issue := seen(uid)
 		changeOwner(t, gateway, workspace, demo, uid, "alice")
-		as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseRevision: issue.Revision, BaseText: issue.Body, Text: "new body", Actor: "tester"}))
+		bounceStatus(t, gateway, workspace, demo, uid)
+		as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseText: issue.Body, Text: "new body", Actor: "tester"}))
 		if body := seen(uid).Body; body != "new body" {
 			t.Fatalf("body %q", body)
 		}
@@ -797,7 +825,8 @@ func TestGatewayGuardedWritesSurviveAnOwnerChange(t *testing.T) {
 		uid := createIssue(t, gateway, workspace, demo, "Comment on me")
 		issue := seen(uid)
 		changeOwner(t, gateway, workspace, demo, uid, "alice")
-		as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseRevision: issue.Revision, BaseText: issue.Body, Text: "hello", Comment: true, Actor: "tester"}))
+		bounceStatus(t, gateway, workspace, demo, uid)
+		as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseText: issue.Body, Text: "hello", Comment: true, Actor: "tester"}))
 		detail := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid}))
 		if len(detail.Selected.Comments) != 1 {
 			t.Fatalf("comments %+v", detail.Selected.Comments)
@@ -806,9 +835,9 @@ func TestGatewayGuardedWritesSurviveAnOwnerChange(t *testing.T) {
 	t.Run("text changed", func(t *testing.T) {
 		uid := createIssue(t, gateway, workspace, demo, "Real conflict")
 		issue := seen(uid)
-		as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseRevision: issue.Revision, BaseText: issue.Body, Text: "their body", Actor: "someone"}))
+		as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseText: issue.Body, Text: "their body", Actor: "someone"}))
 		for _, comment := range []bool{false, true} {
-			conflict := as[model.DraftConflict](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseRevision: issue.Revision, BaseText: issue.Body, Text: "mine", Comment: comment, Actor: "tester"}))
+			conflict := as[model.DraftConflict](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseText: issue.Body, Text: "mine", Comment: comment, Actor: "tester"}))
 			if conflict.Issue.Body != "their body" {
 				t.Fatalf("conflict %+v", conflict)
 			}
@@ -818,9 +847,10 @@ func TestGatewayGuardedWritesSurviveAnOwnerChange(t *testing.T) {
 		uid := createIssue(t, gateway, workspace, demo, "Close me")
 		issue := seen(uid)
 		changeOwner(t, gateway, workspace, demo, uid, "alice")
+		bounceStatus(t, gateway, workspace, demo, uid)
 		closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true}))
 		if closed.Err != nil {
-			t.Fatalf("close after an owner change from revision %d: %v", issue.Revision, closed.Err)
+			t.Fatalf("close after an owner and status change from revision %d: %v", issue.Revision, closed.Err)
 		}
 	})
 	t.Run("closed meanwhile", func(t *testing.T) {
@@ -871,7 +901,7 @@ func TestGatewayTranslatesTheIssueDetailFromRealPayloads(t *testing.T) {
 		return as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected
 	}
 
-	as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseRevision: detailOf().Issue.Revision, BaseText: detailOf().Issue.Body, Text: "the question", Comment: true, Actor: "asker"}))
+	as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseText: detailOf().Issue.Body, Text: "the question", Comment: true, Actor: "asker"}))
 	question := detailOf().Comments[0]
 	// A reply is only reachable through kata's wire client; the Pane writes plain comments.
 	wire, err := client.New(kata.URL)
