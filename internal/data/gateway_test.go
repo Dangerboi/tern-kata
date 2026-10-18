@@ -687,6 +687,10 @@ func TestGatewayNewerSubscriptionReplacesTheRunningStream(t *testing.T) {
 
 	oldMessages, oldDone := stream(t, gateway, model.Subscribe{Workspace: workspace, Generation: 1})
 	receive(t, oldMessages)
+	// The stream starts after event 0, so it replays the Project's creation; read it before the newer subscription.
+	if replayed := as[model.StreamEvent](t, receive(t, oldMessages)); replayed.Type != "project.created" {
+		t.Fatalf("replayed %+v", replayed)
+	}
 	newMessages, _ := stream(t, gateway, model.Subscribe{Workspace: workspace, Generation: 2})
 	if opened := as[model.StreamOpened](t, receive(t, newMessages)); opened.Generation != 2 {
 		t.Fatalf("opened %+v", opened)
