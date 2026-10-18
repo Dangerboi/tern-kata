@@ -30,7 +30,7 @@ func tabLabels(nodes shown) []string {
 func detailWithActivity(tab model.ActivityTab) model.Model {
 	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
 	selected := &g.UISelectedAuthority{Issue: &alpha,
-		Comments: []g.Comment{{UID: "c1", Author: "dana", CreatedAt: at, Body: "first"}, {UID: "c2", Author: "dana", CreatedAt: at, Body: "second"}},
+		Comments: []g.CommentOut{{UID: "c1", Author: "dana", CreatedAt: at, Body: "first"}, {UID: "c2", Author: "dana", CreatedAt: at, Body: "second"}},
 		History:  []g.Event{{UID: "e1", Actor: "dana", Type: "issue.created", Payload: `{}`, CreatedAt: at}, {UID: "e2", Actor: "dana", Type: "issue.reopened", Payload: `{}`, CreatedAt: at}, {UID: "e3", Actor: "dana", Type: "issue.reopened", Payload: `{}`, CreatedAt: at}},
 		Links:    []g.UILink{{ID: 7, FromIssueUID: "alpha", ToIssueUID: "beta", ToQualifiedID: "work#bbbb", Type: "related"}},
 	}

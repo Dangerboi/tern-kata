@@ -164,7 +164,7 @@ func TestLinkRelationsRelativeToSelectedIssue(t *testing.T) {
 func TestJKMoveTheRowCursorInsideTheActiveTab(t *testing.T) {
 	m := withDetail(model.Model{Workspace: "/repo", Cols: 160, Focus: model.ColumnDetail, SelectedUID: "a", Issues: []model.Issue{{UID: "a"}}}, &g.UISelectedAuthority{
 		Issue:    &model.Issue{UID: "a"},
-		Comments: []g.Comment{{UID: "c1"}, {UID: "c2"}, {UID: "c3"}},
+		Comments: []g.CommentOut{{UID: "c1"}, {UID: "c2"}, {UID: "c3"}},
 		Links:    []g.UILink{{ID: 1, FromIssueUID: "a", ToIssueUID: "b", ToQualifiedID: "w#b", Type: "related"}},
 	})
 	for _, step := range []struct {

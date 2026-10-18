@@ -10,7 +10,7 @@ import (
 
 func shownIssueA() model.Model {
 	return withDetail(model.Model{Workspace: "/repo", Cols: 160, Focus: model.ColumnDetail, SelectedUID: "a", Issues: []model.Issue{{UID: "a", ProjectID: 1, Status: "open"}}},
-		&g.UISelectedAuthority{Issue: &model.Issue{UID: "a", ProjectID: 1, Status: "open"}, Comments: []g.Comment{{UID: "c1"}, {UID: "c2"}}})
+		&g.UISelectedAuthority{Issue: &model.Issue{UID: "a", ProjectID: 1, Status: "open"}, Comments: []g.CommentOut{{UID: "c1"}, {UID: "c2"}}})
 }
 
 func reloads(cmds []model.Cmd) bool {

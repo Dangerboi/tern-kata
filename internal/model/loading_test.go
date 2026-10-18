@@ -85,7 +85,7 @@ func TestDetailStaysOnScreenUntilTheSelectedIssueArrives(t *testing.T) {
 }
 
 func TestDetailReturnsToFirstRowOnlyForADifferentIssueAndKeepsItsTab(t *testing.T) {
-	a := &g.UISelectedAuthority{Issue: &model.Issue{UID: "a"}, Comments: []g.Comment{{UID: "one"}, {UID: "two"}}}
+	a := &g.UISelectedAuthority{Issue: &model.Issue{UID: "a"}, Comments: []g.CommentOut{{UID: "one"}, {UID: "two"}}}
 	m, _ := model.Update(projectOf("a", "b"), model.DetailLoaded{UID: "a", Selected: a})
 	m, _ = model.Update(m, model.DetailItemMsg{Tab: model.TabComments, Key: "two"})
 	if m.ActiveTab() != model.TabComments || m.DetailIndex() != 1 {

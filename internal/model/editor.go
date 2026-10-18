@@ -9,6 +9,7 @@ var errDraftReadOnly = errors.New("Read-only: reconnecting to kata; Draft kept")
 
 type Draft struct {
 	Editor                          TextEditor
+	BaseText                        string // the Issue text the Draft started against
 	ProjectID, BaseRevision         int64
 	Comment, Saving, DiscardConfirm bool
 	Conflict                        *Issue
@@ -17,6 +18,7 @@ type Draft struct {
 
 type SaveDraft struct {
 	Workspace, UID, Text, Actor string
+	BaseText                    string
 	ProjectID, BaseRevision     int64
 	Comment                     bool
 }
@@ -112,7 +114,7 @@ func startDraft(m Model, comment bool) Model {
 		if comment {
 			text = ""
 		}
-		m = putDraft(m, uid, Draft{Editor: NewTextEditor(text), ProjectID: issue.ProjectID, BaseRevision: issue.Revision, Comment: comment})
+		m = putDraft(m, uid, Draft{Editor: NewTextEditor(text), ProjectID: issue.ProjectID, BaseText: issue.Body, BaseRevision: issue.Revision, Comment: comment})
 	}
 	m.EditorUID = uid
 	return m.focusDetail()
@@ -126,7 +128,7 @@ func saveDraft(m Model) (Model, []Cmd) {
 	draft.Saving = true
 	draft.Err = nil
 	m = putDraft(m, m.EditorUID, draft)
-	return m, []Cmd{SaveDraft{Workspace: m.Workspace, UID: m.EditorUID, ProjectID: draft.ProjectID, BaseRevision: draft.BaseRevision, Text: draft.Editor.Text, Comment: draft.Comment, Actor: m.Actor}}
+	return m, []Cmd{SaveDraft{Workspace: m.Workspace, UID: m.EditorUID, ProjectID: draft.ProjectID, BaseText: draft.BaseText, BaseRevision: draft.BaseRevision, Text: draft.Editor.Text, Comment: draft.Comment, Actor: m.Actor}}
 }
 
 func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
