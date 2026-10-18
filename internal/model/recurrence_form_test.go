@@ -186,7 +186,7 @@ func TestRecurrenceCardWritesTheRuleTheFormDescribes(t *testing.T) {
 		{"every 2 weeks on Mon, Wed and Thu", func(m model.Model) model.Model {
 			m = fillField(m, model.RecurrenceEvery, "2")
 			m, _ = model.Update(m, model.FocusFieldMsg{Field: model.RecurrenceWeekdays})
-			m, _ = clickPress(m, "left", "left", "space") // Wednesday back to Monday
+			m, _ = clickPress(m, "left", "left", "space")            // Wednesday back to Monday
 			m, _ = clickPress(m, "right", "right", "right", "space") // on to Thursday
 			return m
 		}, "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,TH"},
