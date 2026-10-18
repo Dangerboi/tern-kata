@@ -34,7 +34,7 @@ func TestCloseSequences(t *testing.T) {
 				switch cmd := cmd.(type) {
 				case model.CloseIssueCmd:
 					submitted = true
-					if cmd.Body.Source != nil || cmd.Body.Message == nil || len(cmd.Body.Evidence) != 1 || cmd.Body.Evidence[0].Type != "test" {
+					if cmd.Quick || cmd.Reason != "done" || cmd.Message == "" || len(cmd.Evidence) != 1 || cmd.Evidence[0] != (model.CloseEvidence{Kind: model.EvidenceTest, Value: "go test ./model"}) {
 						t.Fatalf("form fields: %+v", cmd)
 					}
 				case model.ReopenIssueCmd:

@@ -3,7 +3,6 @@ package model
 import (
 	"errors"
 	"fmt"
-	g "go.kenn.io/kata/pkg/client/generated"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -88,10 +87,32 @@ type CloseResultMsg struct {
 
 func (CloseResultMsg) msg() {}
 
+// CloseEvidenceKind names what a piece of close evidence is.
+type CloseEvidenceKind string
+
+const (
+	EvidenceCommit       CloseEvidenceKind = "commit"
+	EvidencePR           CloseEvidenceKind = "pr"
+	EvidenceTest         CloseEvidenceKind = "test"
+	EvidenceDuplicateOf  CloseEvidenceKind = "duplicate-of"
+	EvidenceSupersededBy CloseEvidenceKind = "superseded-by"
+	EvidenceAudit        CloseEvidenceKind = "no-change-audit"
+)
+
+// CloseEvidence is one trimmed evidence entry: a SHA, URL, test command, Issue reference or audit rationale.
+type CloseEvidence struct {
+	Kind  CloseEvidenceKind
+	Value string
+}
+
+// CloseIssueCmd describes a close in plain values; the Daemon gateway turns it into kata's request.
+// Quick is the owner-local close: reason done, no message, no evidence.
 type CloseIssueCmd struct {
-	Workspace, UID string
-	ProjectID      int64
-	Body           g.CloseIssueBody
+	Workspace, UID, Actor string
+	ProjectID             int64
+	Quick                 bool
+	Reason, Message       string
+	Evidence              []CloseEvidence
 }
 
 func (CloseIssueCmd) cmd() {}
@@ -137,48 +158,42 @@ func submitClose(m Model, quick bool) (Model, []Cmd) {
 		f.Err = errors.New("Daemon disconnected; reconnect before closing.")
 		return m, nil
 	}
-	reason := g.CloseActionRequestBodyReason(strings.TrimSpace(f.Values.Reason))
-	protocol := g.CloseActionRequestBodyRetryProtocol("close-v1")
-	body := g.CloseIssueBody{Actor: &m.Actor, Reason: &reason, RetryProtocol: &protocol}
+	cmd := CloseIssueCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, Quick: quick, Reason: strings.TrimSpace(f.Values.Reason)}
 	if quick {
-		reason = "done"
-		source := g.CloseActionRequestBodySource("tui")
-		body.Source = &source
+		cmd.Reason = "done"
 	} else {
-		message := strings.TrimSpace(f.Values.Message)
-		body.Message = &message
-		if sha := strings.TrimSpace(f.Values.Commit); sha != "" {
-			body.Evidence = append(body.Evidence, g.Evidence{Type: "commit", Sha: &sha})
-		}
-		if url := strings.TrimSpace(f.Values.PR); url != "" {
-			body.Evidence = append(body.Evidence, g.Evidence{Type: "pr", URL: &url})
-		}
-		if command := strings.TrimSpace(f.Values.Test); command != "" {
-			body.Evidence = append(body.Evidence, g.Evidence{Type: "test", Command: &command})
-		}
-		if ref := strings.TrimSpace(f.Values.Reference); ref != "" {
-			kind := "duplicate-of"
-			if reason == "superseded" {
-				kind = "superseded-by"
+		cmd.Message = strings.TrimSpace(f.Values.Message)
+		for _, e := range []CloseEvidence{
+			{EvidenceCommit, f.Values.Commit},
+			{EvidencePR, f.Values.PR},
+			{EvidenceTest, f.Values.Test},
+			{referenceKind(cmd.Reason), f.Values.Reference},
+			{EvidenceAudit, f.Values.Rationale},
+		} {
+			if e.Value = strings.TrimSpace(e.Value); e.Value != "" {
+				cmd.Evidence = append(cmd.Evidence, e)
 			}
-			body.Evidence = append(body.Evidence, g.Evidence{Type: kind, IssueRef: &ref})
 		}
-		if rationale := strings.TrimSpace(f.Values.Rationale); rationale != "" {
-			body.Evidence = append(body.Evidence, g.Evidence{Type: "no-change-audit", Rationale: &rationale})
-		}
-		if err := validateClose(body); err != nil {
+		if err := validateClose(cmd); err != nil {
 			f.Err = err
 			return m, nil
 		}
 	}
 	f.Saving, f.Err = true, nil
-	return m, []Cmd{CloseIssueCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Body: body}}
+	return m, []Cmd{cmd}
 }
 
 var closeSHA = regexp.MustCompile(`^[0-9a-fA-F]{7,40}$`)
 
-func validateClose(body g.CloseIssueBody) error {
-	reason := string(*body.Reason)
+func referenceKind(reason string) CloseEvidenceKind {
+	if reason == "superseded" {
+		return EvidenceSupersededBy
+	}
+	return EvidenceDuplicateOf
+}
+
+func validateClose(cmd CloseIssueCmd) error {
+	reason := cmd.Reason
 	floor := 40
 	switch reason {
 	case "done", "audit-no-change":
@@ -189,41 +204,38 @@ func validateClose(body g.CloseIssueBody) error {
 	default:
 		return errors.New("Reason must be done, wontfix, duplicate, superseded, or audit-no-change.")
 	}
-	message := strings.TrimRight(strings.ToLower(strings.Join(strings.Fields(*body.Message), " ")), ".?!")
+	message := strings.TrimRight(strings.ToLower(strings.Join(strings.Fields(cmd.Message), " ")), ".?!")
 	if utf8.RuneCountInString(message) < floor {
 		return fmt.Errorf("Explain this closure in at least %d characters.", floor)
 	}
-	for _, e := range body.Evidence {
-		if e.Type == "commit" && !closeSHA.MatchString(*e.Sha) {
+	for _, e := range cmd.Evidence {
+		if e.Kind == EvidenceCommit && !closeSHA.MatchString(e.Value) {
 			return errors.New("Commit must be a 7–40 character hexadecimal SHA.")
 		}
 	}
-	kinds := map[string]int{}
-	for _, e := range body.Evidence {
-		kinds[e.Type]++
+	kinds := map[CloseEvidenceKind]int{}
+	for _, e := range cmd.Evidence {
+		kinds[e.Kind]++
 	}
 	switch reason {
 	case "done":
-		if kinds["commit"]+kinds["pr"]+kinds["test"] == 0 {
+		if kinds[EvidenceCommit]+kinds[EvidencePR]+kinds[EvidenceTest] == 0 {
 			return errors.New("Done requires commit, PR, or test evidence; use Quick done for owner-local interactive closing.")
 		}
-		if kinds["duplicate-of"]+kinds["no-change-audit"] > 0 {
+		if kinds[EvidenceDuplicateOf]+kinds[EvidenceAudit] > 0 {
 			return errors.New("Done accepts commit, PR, or test evidence, not reference or audit evidence.")
 		}
 	case "duplicate", "superseded":
-		kind := "duplicate-of"
-		if reason == "superseded" {
-			kind = "superseded-by"
-		}
-		if len(body.Evidence) != 1 || kinds[kind] != 1 {
+		kind := referenceKind(reason)
+		if len(cmd.Evidence) != 1 || kinds[kind] != 1 {
 			return errors.New("Duplicate/superseded requires exactly one Issue reference and no other evidence.")
 		}
 	case "audit-no-change":
-		if len(body.Evidence) != 1 || kinds["no-change-audit"] != 1 {
+		if len(cmd.Evidence) != 1 || kinds[EvidenceAudit] != 1 {
 			return errors.New("Audit requires an audit rationale and no other evidence.")
 		}
 	case "wontfix":
-		if kinds["duplicate-of"]+kinds["no-change-audit"] > 0 {
+		if kinds[EvidenceDuplicateOf]+kinds[EvidenceAudit] > 0 {
 			return errors.New("Wontfix does not accept reference or audit evidence.")
 		}
 	}
