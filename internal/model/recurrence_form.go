@@ -59,19 +59,19 @@ type RecurrenceFormState struct {
 	// Raw is the rule text when the form cannot express it. StopConfirm asks y/n before stopping; Stopping says the pending
 	// write is the stop. Refused says nothing can be changed: the card only reports Err, and esc closes it.
 	Change, StopConfirm, Stopping, Refused bool
-	Opened                        Recurrence
-	Raw                           string
-	ProjectID                     int64
-	Frequency                     Frequency
-	Every                         string
-	Weekdays                      [7]bool // indexed by time.Weekday
-	WeekdayAt                     int     // the weekday under the cursor, an index into MondayFirst: the field lists Monday first
-	Day                           string  // "15", "last" (monthly only), "2nd tue"
-	Month                         int     // 1 to 12
-	Ends                          EndKind
-	Until, Count                  string
-	Start, Zone                   string
-	Err                           error
+	Opened                                 Recurrence
+	Raw                                    string
+	ProjectID                              int64
+	Frequency                              Frequency
+	Every                                  string
+	Weekdays                               [7]bool // indexed by time.Weekday
+	WeekdayAt                              int     // the weekday under the cursor, an index into MondayFirst: the field lists Monday first
+	Day                                    string  // "15", "last" (monthly only), "2nd tue"
+	Month                                  int     // 1 to 12
+	Ends                                   EndKind
+	Until, Count                           string
+	Start, Zone                            string
+	Err                                    error
 }
 
 // Shows says the field applies to the card as it stands; the others are hidden and tab skips them.
