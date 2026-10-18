@@ -12,11 +12,10 @@ import (
 
 // childrenTable is the Children heading, a header row and one row per child: reference,
 // status, title, owner and updated time, as in kata's TUI. Rows are shaded as the Issue
-// list's are. A child's row index is its place in the detail's j/k cursor, which walks
-// these rows before the Activity rows. A click on any cell jumps to the child; a child
+// list's are. A click on any cell jumps to the child; a child
 // that is not loaded shows only its reference.
-func childrenTable(m model.Model, children []model.ChildRow, now time.Time) tern.Element {
-	width := func(label string, text func(model.ChildRow) string) int {
+func childrenTable(m model.Model, children []detailChild, now time.Time) tern.Element {
+	width := func(label string, text func(detailChild) string) int {
 		w := utf8.RuneCountInString(label)
 		for _, child := range children {
 			if child.Loaded {
@@ -29,9 +28,9 @@ func childrenTable(m model.Model, children []model.ChildRow, now time.Time) tern
 	for _, child := range children {
 		refWidth = max(refWidth, utf8.RuneCountInString(child.Ref))
 	}
-	statusW := width("status", func(c model.ChildRow) string { return c.Status })
-	ownerW := width("owner", func(c model.ChildRow) string { return m.OwnerDisplay(&c.Owner, c.OwnerExpires, now) })
-	updatedW := width("updated", func(c model.ChildRow) string { return relativeTime(c.UpdatedAt, now) })
+	statusW := width("status", func(c detailChild) string { return c.Status })
+	ownerW := width("owner", func(c detailChild) string { return m.OwnerDisplay(&c.Owner, c.OwnerExpires, now) })
+	updatedW := width("updated", func(c detailChild) string { return relativeTime(c.UpdatedAt, now) })
 	// row is the status, title, owner and updated cells after ref, in that order.
 	row := func(c ui.Common, follow *ui.Actions, ref ui.Text, texts, styles [4]string) ui.Row {
 		widths := [4]int{statusW, 0, ownerW, updatedW}
@@ -56,10 +55,7 @@ func childrenTable(m model.Model, children []model.ChildRow, now time.Time) tern
 		ref := jumpLink(child.UID, child.Ref)
 		ref.Spans = append(ref.Spans, ui.Span{T: pad("", refWidth-utf8.RuneCountInString(child.Ref))})
 		ref.Wrap, ref.Shrink = ui.WrapNone, &fixedShrink
-		common := ui.Common{Key: child.Key, Role: stripeRole(i)}
-		if m.Focus == model.ColumnDetail && m.DetailIndex() == i {
-			common.Mark = ui.MarkPick
-		}
+		common := ui.Common{Key: child.Key, Role: stripeRole(i), Mark: child.mark}
 		if !child.Loaded {
 			nodes = append(nodes, ui.Row{Common: common, Gap: ui.GapSM, Children: ui.Nodes(ref)})
 			continue

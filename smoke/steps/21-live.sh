@@ -5,7 +5,7 @@ expect_tree "[data-id^='main.columns.list.issues.']" '[.nodes[] | .. | objects |
 ctl tree "[data-id^='main.columns.list.issues.']" >"$tmp/live-after.json"
 [[ $(jq -r '.nodes[] | select(.["aria-selected"] == "true") | .["data-id"]' "$tmp/live-after.json") == "$selected_before" ]]
 
-# Use a fixed throwaway TCP target so locate cannot auto-start away a failure.
+# Use a fixed throwaway TCP target so nothing can start a daemon and hide the failure.
 quit_app
 stop_live_daemon
 kata daemon start --listen 127.0.0.1:0
@@ -13,7 +13,7 @@ stream_target=$(kata daemon locate --json | jq -r .address)
 stop_live_daemon
 printf 'ready\nrun "env -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s KATA_SERVER=http://%s %s/tern-kata"\n' "$KATA_HOME" "$stream_target" "$tmp" >"$tmp/live-launch.ctl"
 ctl --file "$tmp/live-launch.ctl"
-expect_tree "[data-id='main.error']" '[.nodes[] | .. | objects | .text? // empty] | any(contains("kata server not responding:"))'
+expect_tree "[data-id='main.error']" '[.nodes[] | .. | objects | .text? // empty] | any(contains("start the kata daemon"))'
 expect_tree "[data-id='main.retry']" '.ok and .count == 1'
 kata daemon start --listen "$stream_target"
 ctl click "[data-id='main.retry']"

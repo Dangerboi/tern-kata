@@ -61,7 +61,11 @@ func serve(t *testing.T, service http.Handler, version string) *kataServer {
 }
 
 func (s *kataServer) target() Target {
-	return Target{Kind: "local", Network: "tcp", RequestBaseURL: s.URL}
+	c, err := client.New(s.URL)
+	if err != nil {
+		panic(err)
+	}
+	return Target{Client: c}
 }
 
 // locator counts its calls and answers with whichever Target is current.
@@ -406,7 +410,6 @@ func TestGatewayShowsKatasMessageThenItsHintWithoutStatusAndCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(c.CloseIdleConnections)
 	unbound := t.TempDir()
 	_, err = c.ResolveProjectWithResponse(context.Background(), &g.ResolveProjectRequestOptions{Body: &g.ResolveProjectBody{StartPath: &unbound}})
 	want := "no .kata.toml ancestor and no git ancestor\nrun \"kata init --project <name>\" in the workspace root, or pass --project <name>"
@@ -461,6 +464,28 @@ func TestGatewayLocatorFailureIsRetriedOnTheNextCommand(t *testing.T) {
 	}
 	if got := l.calls.Load(); got != 2 {
 		t.Fatalf("located %d times, want the failed attempt and one success reused", got)
+	}
+}
+
+func TestGatewayDiscoversTheDaemonTheServerVariableNames(t *testing.T) {
+	kata := startKata(t, "0.18.0")
+	t.Setenv("KATA_SERVER", kata.URL)
+	gateway := NewGateway(LocateWithKata)
+	t.Cleanup(gateway.Close)
+	workspace, demo := project(t, gateway, "demo")
+	uid := createIssue(t, gateway, workspace, demo, "Found by discovery")
+	if detail := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})); detail.Selected.Issue.Title != "Found by discovery" {
+		t.Fatalf("detail %+v", detail)
+	}
+}
+
+func TestGatewayWithNoDaemonShowsKatasMessageAndTheStartHint(t *testing.T) {
+	startKata(t, "0.18.0") // only for its isolated kata home; the server is stopped
+	gateway := NewGateway(LocateWithKata)
+	t.Cleanup(gateway.Close)
+	got := as[model.SnapshotFailed](t, run(t, gateway, model.ReadSnapshot{Request: 1}))
+	if got.Err == nil || !strings.Contains(got.Err.Error(), "no reachable kata daemon") || !strings.Contains(got.Err.Error(), "kata doctor") {
+		t.Fatalf("got %v, want kata's message and the hint to start the daemon or run kata doctor", got.Err)
 	}
 }
 

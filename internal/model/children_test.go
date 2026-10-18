@@ -56,18 +56,15 @@ func TestNoChildrenWithoutChildLinks(t *testing.T) {
 
 func TestJKWalkTheChildRowsBeforeTheActivityRows(t *testing.T) {
 	m := parentDetail()
-	// 3 children (0-2), then the 2 comments (3-4).
-	for _, step := range []struct {
-		chord string
-		index int
-	}{
-		{"j", 1}, {"j", 2}, {"j", 3}, {"j", 4}, {"j", 4}, {"k", 3}, {"k", 2}, {"k", 1}, {"k", 0}, {"k", 0}, {"shift+g", 4}, {"g", 0},
+	// The 3 children ("new", "old", "gone"), then the 2 comments.
+	for _, step := range []struct{ chord, row string }{
+		{"j", "2"}, {"j", "1"}, {"j", "c1"}, {"j", "c2"}, {"j", "c2"}, {"k", "c1"}, {"k", "1"}, {"k", "2"}, {"k", "3"}, {"k", "3"}, {"shift+g", "c2"}, {"g", "3"},
 		// Events is empty: the cursor rests below the children and j leaves it there.
-		{"tab", 3}, {"j", 3},
+		{"tab", ""}, {"j", ""},
 	} {
 		m, _ = model.Update(m, model.KeyMsg{Chord: step.chord})
-		if m.DetailIndex() != step.index {
-			t.Fatalf("after %s: index %d, want %d", step.chord, m.DetailIndex(), step.index)
+		if got := cursorKey(m); got != step.row {
+			t.Fatalf("after %s: cursor on %q, want %q", step.chord, got, step.row)
 		}
 	}
 }
@@ -94,8 +91,8 @@ func TestEnterOnAnUnloadedChildStillJumps(t *testing.T) {
 
 func TestEnterOnAnActivityRowBelowTheChildrenDoesNotJump(t *testing.T) {
 	m, cmds := clickPress(parentDetail(), "j", "j", "j", "enter")
-	if m.SelectedUID != "parent" || m.DetailIndex() != 3 || len(cmds) != 0 {
-		t.Fatalf("selected=%s index=%d commands=%#v", m.SelectedUID, m.DetailIndex(), cmds)
+	if m.SelectedUID != "parent" || cursorKey(m) != "c1" || len(cmds) != 0 {
+		t.Fatalf("selected=%s cursor on %q commands=%#v", m.SelectedUID, cursorKey(m), cmds)
 	}
 }
 
@@ -111,18 +108,19 @@ func TestClickOnAChildJumpsAndEscComesBack(t *testing.T) {
 }
 
 func TestTabSwitchLandsOnTheFirstActivityRow(t *testing.T) {
-	for _, msg := range []model.Msg{model.KeyMsg{Chord: "tab"}, model.ActivityTabMsg{Tab: model.TabLinks}} {
+	for _, msg := range []model.Msg{model.ActivityTabMsg{Tab: model.TabComments}, model.ActivityTabMsg{Tab: model.TabLinks}} {
 		m, _ := model.Update(parentDetail(), msg)
-		if m.DetailIndex() != 3 {
-			t.Fatalf("%T: index %d, want 3 (after the 3 children)", msg, m.DetailIndex())
+		rows := m.DetailRows()
+		if i := m.DetailIndex(); i >= len(rows) || rows[i].Kind == model.RowChild || (i > 0 && rows[i-1].Kind != model.RowChild) {
+			t.Fatalf("%T: cursor %d is not on the first Activity row", msg, i)
 		}
 	}
 }
 
 func TestClickOnAnActivityRowCursorsPastTheChildren(t *testing.T) {
 	m, _ := model.Update(parentDetail(), model.DetailItemMsg{Tab: model.TabComments, Key: "c2"})
-	if m.DetailIndex() != 4 {
-		t.Fatalf("index %d, want 4", m.DetailIndex())
+	if cursorKey(m) != "c2" {
+		t.Fatalf("cursor on %q, want c2", cursorKey(m))
 	}
 }
 
@@ -147,8 +145,8 @@ func TestChildRowsFollowLiveRefreshes(t *testing.T) {
 			t.Errorf("enter on child row %d opened %q, want %q", index, got, want)
 		}
 	}
-	if m.DetailIndex() != 3 { // 2 children + 2 comments: the last row is 3
-		t.Errorf("cursor not clamped to the rows left: %d", m.DetailIndex())
+	if cursorKey(m) != "c2" {
+		t.Errorf("cursor left its comment: on %q", cursorKey(m))
 	}
 }
 
@@ -170,5 +168,18 @@ func TestCursorStaysOnItsChildWhenARefreshReordersTheChildren(t *testing.T) {
 	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot, Selected: selected})
 	if got := enterOpens(m, m.DetailIndex()); got != "old" {
 		t.Fatalf("enter after the refresh opened %q, want old", got)
+	}
+}
+
+func TestCursorStaysOnItsCommentWhenARefreshAddsOneAbove(t *testing.T) {
+	m := cursorAt(parentDetail(), 4) // "c2"
+	m, cmds := model.Update(m, model.StreamEvent{ID: 1, Type: "issue.updated"})
+	refresh := cmds[0].(model.ReadSnapshot)
+	parent := model.Issue{UID: "parent", ProjectName: "work"}
+	selected := &model.IssueDetailData{Issue: &parent, Links: []model.Link{childLink(3, "new")}, Comments: []model.Comment{{UID: "c0"}, {UID: "c1"}, {UID: "c2"}}}
+	snapshot := model.Snapshot{Cursor: 1, Issues: []model.Issue{parent, {UID: "new", ShortID: "new1", Title: "Newer", Status: "open", ProjectName: "work"}}}
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot, Selected: selected})
+	if cursorKey(m) != "c2" {
+		t.Fatalf("cursor on %q after the refresh, want c2", cursorKey(m))
 	}
 }

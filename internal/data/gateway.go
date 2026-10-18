@@ -39,10 +39,7 @@ func (g *Gateway) Close() {
 	g.streamMu.Unlock()
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	for workspace, c := range g.clients {
-		c.CloseIdleConnections()
-		delete(g.clients, workspace)
-	}
+	clear(g.clients)
 }
 
 // Run executes cmd and sends each result to messages until ctx ends.
@@ -205,7 +202,6 @@ func (g *Gateway) forget(workspace string, c *Client) {
 	if g.clients[workspace] == c {
 		delete(g.clients, workspace)
 	}
-	c.CloseIdleConnections()
 }
 
 func (g *Gateway) stream(ctx context.Context, cmd model.Subscribe, messages chan<- model.Msg) {

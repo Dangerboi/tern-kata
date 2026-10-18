@@ -17,7 +17,7 @@ func historyRow(t *testing.T, event model.Event) model.DetailRow {
 		event.CreatedAt = time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
 	}
 	m := withDetail(model.Model{}, &model.IssueDetailData{History: []model.Event{event}})
-	row, ok := m.DetailRow(model.TabEvents, 0)
+	row, ok := activityRow(m, model.TabEvents, 0)
 	if !ok {
 		t.Fatal("no history row")
 	}
@@ -94,7 +94,7 @@ func TestHistoryRowsReadOldestFirst(t *testing.T) {
 	m := withDetail(model.Model{}, &model.IssueDetailData{History: []model.Event{{UID: "new", Type: "issue.reopened", Payload: "{}"}, {UID: "old", Type: "issue.created", Payload: "{}"}}})
 	var got []string
 	for i := range m.DetailRowCount(model.TabEvents) {
-		row, _ := m.DetailRow(model.TabEvents, i)
+		row, _ := activityRow(m, model.TabEvents, i)
 		got = append(got, row.Key+" "+row.Type)
 	}
 	if want := []string{"old issue.created", "new issue.reopened"}; !slices.Equal(got, want) {
@@ -108,7 +108,7 @@ func TestHistoryTimestampsUseTheSnapshotZoneAndAreShort(t *testing.T) {
 	t.Cleanup(func() { time.Local = saved })
 	for _, tt := range []struct{ zone, want string }{{"", "2026-10-08 18:05"}, {"Asia/Tokyo", "2026-10-09 03:05"}} {
 		m := withDetail(inZone(tt.zone), &model.IssueDetailData{History: []model.Event{{UID: "event", Type: "issue.reopened", Payload: "{}", CreatedAt: time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)}}})
-		if row, _ := m.DetailRow(model.TabEvents, 0); row.Time != tt.want {
+		if row, _ := activityRow(m, model.TabEvents, 0); row.Time != tt.want {
 			t.Errorf("zone %q: time = %q, want %q", tt.zone, row.Time, tt.want)
 		}
 	}

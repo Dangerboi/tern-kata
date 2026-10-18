@@ -174,8 +174,9 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 			m.LocalDate, m.TimeZone, m.TimeZoneNote = msg.LocalDate, msg.TimeZone, msg.TimeZoneNote
 			m.zone, _ = time.LoadLocation(msg.TimeZone) // an unloadable name reads as UTC
 		}
-		selected, cursorChild := m.SelectedUID, m.cursorChildUID()
-		m = m.applyCollection(msg.Snapshot).snapshotArrived(msg.Selected, selected, cursorChild)
+		selected := m.SelectedUID
+		anchor, anchored := m.cursorRowID()
+		m = m.applyCollection(msg.Snapshot).snapshotArrived(msg.Selected, selected, anchor, anchored)
 		m.etag, m.etagQuery = msg.ETag, msg.Query
 		m.Cursor = msg.Snapshot.Cursor
 	}
