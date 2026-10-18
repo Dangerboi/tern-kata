@@ -39,10 +39,34 @@ type CreateRecurrenceCmd struct {
 
 func (CreateRecurrenceCmd) cmd() {}
 
-// RecurrenceResultMsg is the result of a recurrence write for the Issue UID; Err is nil when it landed.
+// ChangeRecurrenceCmd is a Guarded write of the schedule: the Daemon gateway sends the rule, start date and time zone at the
+// recurrence's current revision, and writes nothing when these differ from the Opened ones the card read. The template is
+// never sent.
+type ChangeRecurrenceCmd struct {
+	Workspace, UID, Actor               string
+	ProjectID                           int64
+	RecurrenceUID                       string
+	Rule, Start, TimeZone               string
+	OpenedRule, OpenedStart, OpenedZone string
+}
+
+func (ChangeRecurrenceCmd) cmd() {}
+
+// StopRecurrenceCmd deletes the recurrence at its current revision; the Occurrences stay.
+type StopRecurrenceCmd struct {
+	Workspace, UID, Actor string
+	ProjectID             int64
+	RecurrenceUID         string
+}
+
+func (StopRecurrenceCmd) cmd() {}
+
+// RecurrenceResultMsg is the result of a recurrence write for the Issue UID; Err is nil when it landed. Changed is the
+// current recurrence when a change found the schedule moved meanwhile: nothing was written and Err is nil.
 type RecurrenceResultMsg struct {
-	UID string
-	Err error
+	UID     string
+	Err     error
+	Changed *Recurrence
 }
 
 func (RecurrenceResultMsg) msg() {}

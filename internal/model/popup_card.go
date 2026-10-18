@@ -128,14 +128,21 @@ func init() {
 		},
 		{
 			card: CardRecurrence, open: func(m Model) bool { return m.RecurrenceForm.Open },
-			modes: []Mode{ModeRecurrenceForm}, mode: func(Model) Mode { return ModeRecurrenceForm },
+			modes: []Mode{ModeRecurrenceForm, ModeRecurrenceStop},
+			mode: func(m Model) Mode {
+				if m.RecurrenceForm.StopConfirm {
+					return ModeRecurrenceStop
+				}
+				return ModeRecurrenceForm
+			},
 			chords: []string{"ctrl+c"},
 			key:    recurrenceKey,
 			fields: RecurrenceFields, focus: func(m *Model) *Field { return &m.RecurrenceForm.Field },
-			locked: func(m Model) bool { return m.RecurrenceForm.Saving },
+			locked: func(m Model) bool { return m.RecurrenceForm.Saving || m.RecurrenceForm.StopConfirm },
 			hidden: func(m Model, name Field) bool { return !m.RecurrenceForm.Shows(name) },
 			caret: func(m Model) (Field, bool) {
-				return m.RecurrenceForm.Field, !m.RecurrenceForm.Saving && takesText(RecurrenceFields, m.RecurrenceForm.Field)
+				f := m.RecurrenceForm
+				return f.Field, !f.Saving && !f.StopConfirm && takesText(RecurrenceFields, f.Field)
 			},
 		},
 		{

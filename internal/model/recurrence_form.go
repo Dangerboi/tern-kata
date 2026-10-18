@@ -9,7 +9,10 @@ import (
 	"time"
 )
 
-const ModeRecurrenceForm Mode = "recurrence-form"
+const (
+	ModeRecurrenceForm Mode = "recurrence-form"
+	ModeRecurrenceStop Mode = "recurrence-stop"
+)
 
 const (
 	OpenRecurrenceAction     Action = "open-recurrence"
@@ -19,6 +22,9 @@ const (
 	RecurrencePreviousChoice Action = "recurrence-previous-choice"
 	RecurrenceSave           Action = "recurrence-save"
 	RecurrenceCancel         Action = "recurrence-cancel"
+	RecurrenceStop           Action = "recurrence-stop"
+	RecurrenceStopConfirm    Action = "recurrence-stop-confirm"
+	RecurrenceStopKeep       Action = "recurrence-stop-keep"
 )
 
 // The Recurrence card's fields.
@@ -52,6 +58,12 @@ type RecurrenceFormState struct {
 	Open, Saving bool
 	Field        Field
 	UID          string
+	// Change says the Issue already recurs: the card changes Opened, the recurrence it read, instead of making a new one.
+	// Raw is the rule text when the form cannot express it. StopConfirm asks y/n before stopping; Stopping says the pending
+	// write is the stop.
+	Change, StopConfirm, Stopping bool
+	Opened                        Recurrence
+	Raw                           string
 	ProjectID    int64
 	Frequency    Frequency
 	Every        string
@@ -127,14 +139,62 @@ func newRecurrenceForm(m Model, issue *Issue) RecurrenceFormState {
 	return f
 }
 
-// openRecurrence is `O`. An Issue that already recurs, or whose recurrence was stopped, does not open a card to make a new one:
-// kata refuses to put an Issue into a second recurrence.
+// changeRecurrenceForm is the card for an Issue whose recurrence is rec, prefilled from its Schedule. A rule the form cannot
+// express shows as text above the form, which then holds the defaults; saving the form replaces the rule.
+func changeRecurrenceForm(m Model, issue *Issue, rec Recurrence) RecurrenceFormState {
+	started := *issue
+	started.ScheduledOnDate = &rec.Start
+	f := newRecurrenceForm(m, &started)
+	f.Change, f.Opened, f.Zone = true, rec, rec.TimeZone
+	s := rec.Schedule()
+	if s.IsRaw() {
+		f.Raw = s.Raw
+		return f
+	}
+	f.Frequency, f.Every, f.Ends, f.Until, f.Count = s.Frequency, strconv.Itoa(s.Interval), s.End, s.Until, strconv.Itoa(s.Count)
+	if s.End != EndCount {
+		f.Count = ""
+	}
+	if len(s.Weekdays) > 0 {
+		f.Weekdays = [7]bool{}
+		for _, d := range s.Weekdays {
+			f.Weekdays[d] = true
+		}
+		f.WeekdayAt = (int(s.Weekdays[0]) + 6) % 7
+	}
+	if s.Month > 0 {
+		f.Month = s.Month
+	}
+	switch s.Day {
+	case DayOfMonth:
+		f.Day = strconv.Itoa(s.DayOfMonth)
+	case LastDay:
+		f.Day = "last"
+	case NthWeekday:
+		f.Day = "last"
+		if s.Nth > 0 {
+			f.Day = strconv.Itoa(s.Nth)
+		}
+		f.Day += " " + strings.ToLower(s.Weekday.String()[:3])
+	}
+	return f
+}
+
+// openRecurrence is `O`. An Issue that does not recur gets a card to make it recur; one that does gets the card to change or
+// stop it. One whose recurrence was stopped gets nothing: kata refuses to put an Issue into a second recurrence, and the detail
+// already reads "stopped".
 func openRecurrence(m Model) Model {
 	issue := closeIssue(m)
-	if m.Stale || issue == nil || issue.RecurrenceID != nil {
+	if m.Stale || issue == nil {
 		return m
 	}
-	m.RecurrenceForm = newRecurrenceForm(m, issue)
+	if issue.RecurrenceID == nil {
+		m.RecurrenceForm = newRecurrenceForm(m, issue)
+		return m
+	}
+	if d := m.authority; d != nil && d.Issue != nil && d.Issue.UID == issue.UID && d.Recurrence != nil && !d.Recurrence.Stopped {
+		m.RecurrenceForm = changeRecurrenceForm(m, issue, *d.Recurrence)
+	}
 	return m
 }
 
@@ -147,6 +207,8 @@ var (
 	errStartDate      = errors.New("Start date must be a date like 2026-10-19.")
 	errEndDate        = errors.New("End date must be a date like 2026-10-19.")
 	errEndBeforeStart = errors.New("End date must not be before the start date.")
+
+	errRecurrenceChanged = errors.New("The schedule changed meanwhile; nothing was written. The card shows the current schedule.")
 )
 
 // schedule reads the card into the Schedule it would send, or says what is wrong with it. Nothing leaves the card until it does.
@@ -264,6 +326,11 @@ func submitRecurrence(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	f.Saving, f.Err = true, nil
+	if f.Change {
+		return m, []Cmd{ChangeRecurrenceCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, RecurrenceUID: f.Opened.UID,
+			Rule: s.RRULE(), Start: strings.TrimSpace(f.Start), TimeZone: strings.TrimSpace(f.Zone),
+			OpenedRule: f.Opened.Rule, OpenedStart: f.Opened.Start, OpenedZone: f.Opened.TimeZone}}
+	}
 	return m, []Cmd{CreateRecurrenceCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, Rule: s.RRULE(), Start: strings.TrimSpace(f.Start), TimeZone: strings.TrimSpace(f.Zone)}}
 }
 
@@ -272,7 +339,16 @@ func updateRecurrence(m Model, msg Msg) (Model, []Cmd) {
 	if !ok || m.RecurrenceForm.UID != result.UID {
 		return m, nil
 	}
-	m.RecurrenceForm.Saving, m.RecurrenceForm.Err = false, result.Err
+	m.RecurrenceForm.Saving, m.RecurrenceForm.Stopping, m.RecurrenceForm.Err = false, false, result.Err
+	if result.Changed != nil {
+		// Someone else changed the schedule: nothing was written, and the card shows what is there now.
+		if issue := closeIssue(m); issue != nil {
+			m.RecurrenceForm = changeRecurrenceForm(m, issue, *result.Changed)
+			m.RecurrenceForm.Err = errRecurrenceChanged
+		}
+		m = m.issueWritten(result.UID)
+		return snapshotChanged(m)
+	}
 	if result.Err == nil {
 		m.RecurrenceForm.Open = false
 		m = m.issueWritten(result.UID)
@@ -307,6 +383,9 @@ func recurrenceKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	if f.Saving {
 		return m, nil
 	}
+	if f.StopConfirm {
+		return answerStop(m, msg)
+	}
 	binding, bound := LookupBindingForMode(msg.Chord, ModeRecurrenceForm)
 	field := f.text(f.Field)
 	switch {
@@ -318,6 +397,8 @@ func recurrenceKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		cycleField(&m, -1)
 	case bound && binding.Action == RecurrenceSave:
 		return submitRecurrence(m)
+	case bound && binding.Action == RecurrenceStop && f.Change:
+		f.StopConfirm, f.Err = true, nil
 	case bound && binding.Action == InputSpace && field == nil && f.Field == RecurrenceWeekdays:
 		day := time.Weekday((f.WeekdayAt + 1) % 7)
 		f.Weekdays[day] = !f.Weekdays[day]
@@ -336,6 +417,26 @@ func recurrenceKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		if *field, edited = editText(*field, binding, bound, msg); edited {
 			f.Err = nil
 		}
+	}
+	return m, nil
+}
+
+// answerStop is one key while the card asks whether to stop the recurrence: the confirm binding stops it at the recurrence's
+// current revision, the keep binding goes back to the form, and any other key is swallowed.
+func answerStop(m Model, msg KeyMsg) (Model, []Cmd) {
+	f := &m.RecurrenceForm
+	binding, bound := LookupBindingForMode(msg.Chord, ModeRecurrenceStop)
+	switch {
+	case bound && binding.Action == RecurrenceStopKeep:
+		f.StopConfirm = false
+	case bound && binding.Action == RecurrenceStopConfirm:
+		f.StopConfirm = false
+		if m.Stale {
+			f.Err = errors.New("Daemon disconnected; reconnect before stopping this recurrence.")
+			return m, nil
+		}
+		f.Saving, f.Stopping, f.Err = true, true, nil
+		return m, []Cmd{StopRecurrenceCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, RecurrenceUID: f.Opened.UID}}
 	}
 	return m, nil
 }

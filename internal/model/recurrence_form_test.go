@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
@@ -233,19 +234,18 @@ func TestRecurrenceCardWritesTheRuleTheFormDescribes(t *testing.T) {
 	}
 }
 
-func TestRecurrenceCardOnlyMakesAnIssueRecurThatDoesNot(t *testing.T) {
+func TestRecurrenceCardOffersNothingForAStoppedRecurrenceOrOneNotYetLoaded(t *testing.T) {
 	recurrence := int64(4)
 	for _, tt := range []struct {
 		name   string
 		detail *model.IssueDetailData
 	}{
-		{"recurring", &model.IssueDetailData{Issue: &model.Issue{UID: "parent", RecurrenceID: &recurrence}, Recurrence: &model.Recurrence{UID: "r", Rule: "FREQ=DAILY;INTERVAL=1"}}},
 		{"stopped", &model.IssueDetailData{Issue: &model.Issue{UID: "parent", RecurrenceID: &recurrence}, Recurrence: &model.Recurrence{Stopped: true}}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m, _ := model.Update(recurrenceBase(), model.DetailLoaded{UID: "parent", Selected: tt.detail})
 			if m = openRecurrenceCard(m); m.TopCard() == model.CardRecurrence {
-				t.Fatal("O opened a card to make a second recurrence")
+				t.Fatal("O opened a card for a stopped recurrence")
 			}
 		})
 	}
@@ -255,7 +255,7 @@ func TestRecurrenceCardOnlyMakesAnIssueRecurThatDoesNot(t *testing.T) {
 	}
 	listed, _ = model.Update(listed, model.DetailLoaded{UID: "parent", Selected: nil})
 	if listed = openRecurrenceCard(listed); listed.TopCard() == model.CardRecurrence {
-		t.Fatal("O opened a card for a listed Issue that recurs")
+		t.Fatal("O opened a card for a listed Issue whose recurrence is not loaded")
 	}
 }
 
@@ -274,10 +274,105 @@ func TestRecurrenceCardClosesWhenSavedAndKeepsItselfOnAFailure(t *testing.T) {
 func TestHelpSheetListsMakeRecurring(t *testing.T) {
 	for _, group := range model.HelpSheet() {
 		for _, line := range group.Lines {
-			if line.Text == "make recurring" && slices.Equal(line.Keys, []string{"O"}) {
+			if line.Text == "make or change recurrence" && slices.Equal(line.Keys, []string{"O"}) {
 				return
 			}
 		}
 	}
 	t.Fatal("the help sheet has no line for O")
+}
+
+// recurring is the Issue "parent" in a recurrence with the rule, as the detail shows it.
+func recurring(rule string) model.Model {
+	recurrence := int64(4)
+	rec := &model.Recurrence{UID: "rec-uid", Rule: rule, Start: "2026-10-19", TimeZone: "Europe/Zurich", Revision: 3, Next: "2026-10-26"}
+	m, _ := model.Update(recurrenceBase(), model.DetailLoaded{UID: "parent", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "parent", RecurrenceID: &recurrence}, Recurrence: rec}})
+	return m
+}
+
+func TestRecurrenceCardOpensAsChangeRecurrencePrefilledFromTheSchedule(t *testing.T) {
+	m := openRecurrenceCard(recurring("FREQ=MONTHLY;INTERVAL=2;BYDAY=2TU;COUNT=5"))
+	f := m.RecurrenceForm
+	if m.TopCard() != model.CardRecurrence || !f.Change || f.Raw != "" {
+		t.Fatalf("O opened card %d, form %+v", m.TopCard(), f)
+	}
+	if f.Frequency != model.Monthly || f.Every != "2" || f.Day != "2 tue" || f.Ends != model.EndCount || f.Count != "5" || f.Start != "2026-10-19" || f.Zone != "Europe/Zurich" {
+		t.Fatalf("prefill %+v", f)
+	}
+	// Saving what the card shows sends the same rule, to the recurrence it read, with what it read as the guard.
+	_, cmds := saveRecurrence(m)
+	want := model.ChangeRecurrenceCmd{Workspace: "/repo", UID: "parent", RecurrenceUID: "rec-uid", Rule: "FREQ=MONTHLY;INTERVAL=2;BYDAY=2TU;COUNT=5", Start: "2026-10-19", TimeZone: "Europe/Zurich",
+		OpenedRule: "FREQ=MONTHLY;INTERVAL=2;BYDAY=2TU;COUNT=5", OpenedStart: "2026-10-19", OpenedZone: "Europe/Zurich"}
+	if len(cmds) != 1 || cmds[0] != want {
+		t.Fatalf("saving sent %#v, want %#v", cmds, want)
+	}
+}
+
+func TestRecurrenceCardShowsARawRuleAboveTheFormAndSavingTheFormReplacesIt(t *testing.T) {
+	const raw = "FREQ=WEEKLY;BYDAY=MO;BYHOUR=9"
+	m := openRecurrenceCard(recurring(raw))
+	if m.RecurrenceForm.Raw != raw || !m.RecurrenceForm.Change {
+		t.Fatalf("form %+v, want the raw rule kept for display", m.RecurrenceForm)
+	}
+	_, cmds := saveRecurrence(m)
+	if len(cmds) != 1 {
+		t.Fatalf("sent %#v", cmds)
+	}
+	got := cmds[0].(model.ChangeRecurrenceCmd)
+	if got.Rule != "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO" || got.OpenedRule != raw {
+		t.Fatalf("saving sent rule %q guarded by %q, want the form's rule guarded by the raw one", got.Rule, got.OpenedRule)
+	}
+}
+
+func TestRecurrenceCardReloadsTheCurrentScheduleWhenItChangedMeanwhile(t *testing.T) {
+	m, _ := saveRecurrence(openRecurrenceCard(recurring("FREQ=DAILY;INTERVAL=1")))
+	current := model.Recurrence{UID: "rec-uid", Rule: "FREQ=WEEKLY;INTERVAL=3;BYDAY=FR", Start: "2026-11-02", TimeZone: "UTC", Revision: 5}
+	m, cmds := model.Update(m, model.RecurrenceResultMsg{UID: "parent", Changed: &current})
+	f := m.RecurrenceForm
+	if m.TopCard() != model.CardRecurrence || f.Saving || f.Frequency != model.Weekly || f.Every != "3" || !f.Weekdays[time.Friday] || f.Start != "2026-11-02" || f.Zone != "UTC" || f.Opened != current {
+		t.Fatalf("card %d, form %+v, want it reloaded with the current schedule", m.TopCard(), f)
+	}
+	if f.Err == nil || !strings.Contains(f.Err.Error(), "changed meanwhile") {
+		t.Fatalf("message %v, want one saying the schedule changed meanwhile", f.Err)
+	}
+	if len(cmds) == 0 {
+		t.Fatal("the detail was not refreshed")
+	}
+}
+
+func TestRecurrenceCardStopAsksYesOrNoThenStops(t *testing.T) {
+	m := openRecurrenceCard(recurring("FREQ=DAILY;INTERVAL=1"))
+	asked, cmds := model.Update(m, model.KeyMsg{Chord: "ctrl+x"})
+	if !asked.RecurrenceForm.StopConfirm || len(cmds) != 0 {
+		t.Fatalf("ctrl+x: form %+v, sent %#v, want it to ask first", asked.RecurrenceForm, cmds)
+	}
+	if mode := asked.CurrentMode(); mode != model.ModeRecurrenceStop {
+		t.Fatalf("mode %q while asking", mode)
+	}
+	for _, key := range []string{"n", "escape"} {
+		kept, cmds := model.Update(asked, model.KeyMsg{Chord: key})
+		if kept.RecurrenceForm.StopConfirm || !kept.RecurrenceForm.Open || len(cmds) != 0 {
+			t.Fatalf("%s: form %+v, sent %#v, want the form back and nothing sent", key, kept.RecurrenceForm, cmds)
+		}
+	}
+	swallowed, cmds := model.Update(asked, model.KeyMsg{Chord: "x", Text: "x"})
+	if !swallowed.RecurrenceForm.StopConfirm || len(cmds) != 0 {
+		t.Fatal("another key left the question")
+	}
+	stopping, cmds := model.Update(asked, model.KeyMsg{Chord: "y"})
+	want := model.StopRecurrenceCmd{Workspace: "/repo", UID: "parent", RecurrenceUID: "rec-uid"}
+	if len(cmds) != 1 || cmds[0] != want || !stopping.RecurrenceForm.Saving {
+		t.Fatalf("y sent %#v (saving %v), want %#v", cmds, stopping.RecurrenceForm.Saving, want)
+	}
+	stopped, _ := model.Update(stopping, model.RecurrenceResultMsg{UID: "parent"})
+	if stopped.TopCard() == model.CardRecurrence {
+		t.Fatal("the card stayed open after the recurrence stopped")
+	}
+}
+
+func TestRecurrenceCardOfANewRecurrenceHasNoStop(t *testing.T) {
+	m, _ := model.Update(openRecurrenceCard(recurrenceBase()), model.KeyMsg{Chord: "ctrl+x"})
+	if m.RecurrenceForm.StopConfirm {
+		t.Fatal("ctrl+x asked to stop a recurrence that does not exist")
+	}
 }

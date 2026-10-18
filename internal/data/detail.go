@@ -65,8 +65,12 @@ func translateRecurrence(id int64, live []g.Recurrence) *model.Recurrence {
 	if i < 0 {
 		return &model.Recurrence{Stopped: true}
 	}
-	r := live[i]
-	out := &model.Recurrence{UID: r.UID, Rule: r.Rrule, Start: r.Dtstart, TimeZone: r.Timezone, Revision: r.Revision}
+	out := translateLiveRecurrence(live[i])
+	return &out
+}
+
+func translateLiveRecurrence(r g.Recurrence) model.Recurrence {
+	out := model.Recurrence{UID: r.UID, Rule: r.Rrule, Start: r.Dtstart, TimeZone: r.Timezone, Revision: r.Revision}
 	if r.NextOccurrenceKey != nil {
 		out.Next = *r.NextOccurrenceKey
 	}
