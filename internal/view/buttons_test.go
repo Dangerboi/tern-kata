@@ -133,7 +133,10 @@ func TestReplyDraftNamesItsKindAndOffersTheKindKeyAndSendAnyway(t *testing.T) {
 	comments := []model.Comment{{UID: "c1", Author: "dana", Body: "claim"}}
 	m, _ := model.Update(selectedFirst(), model.DetailLoaded{UID: "a", Selected: &model.IssueDetailData{Issue: &issue, Comments: comments}})
 	m = press(m, "enter", "shift+r")
-	editor := func(m model.Model) string { title, _ := pickerNodes(t, m)["layer.editor"].P["head"].(string); return title }
+	editor := func(m model.Model) string {
+		title, _ := pickerNodes(t, m)["layer.editor"].P["head"].(string)
+		return title
+	}
 	if got := editor(m); !strings.Contains(got, "Reply to dana's comment") {
 		t.Fatalf("reply title: %q", got)
 	}
