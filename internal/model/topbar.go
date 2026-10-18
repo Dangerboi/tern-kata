@@ -34,7 +34,7 @@ func (m Model) CountsLine() string {
 	counted := false
 	if m.Collection.IsProject() {
 		if entry, ok := CatalogEntry(m.Snapshot, m.Collection.ProjectUID); ok && entry.Stats != nil {
-			open, closed, counted = int(entry.Stats.Open), int(entry.Stats.Closed), true
+			open, closed, counted = entry.Stats.Open, entry.Stats.Closed, true
 		}
 	}
 	if !counted {

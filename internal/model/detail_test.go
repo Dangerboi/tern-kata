@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 func TestColumnDrillAndFolding(t *testing.T) {
@@ -124,8 +123,8 @@ func TestLiveDetailAuthority(t *testing.T) {
 			}
 			m, cmds := model.Update(m, model.StreamEvent{Generation: 1, ID: 1, Type: "issue.updated"})
 			refresh := cmds[0].(model.ReadSnapshot)
-			m, cmds = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: g.UISnapshotResponseBody{
-				Cursor: 1, Collection: []model.Issue{{UID: "a"}, {UID: "b"}},
+			m, cmds = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: model.Snapshot{
+				Cursor: 1, Issues: []model.Issue{{UID: "a"}, {UID: "b"}},
 			}, Selected: &model.IssueDetailData{Issue: &model.Issue{UID: tt.authority, Body: "Live body"}}})
 			body := ""
 			if m.DetailAuthority() != nil && m.DetailAuthority().Issue != nil {

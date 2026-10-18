@@ -12,7 +12,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // chord is the key as Tern reports it for a bare chord, without text.
@@ -90,14 +89,14 @@ func clickBase() driver.State {
 	hours := func(n int) time.Time {
 		return time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC).Add(-time.Duration(n) * time.Hour)
 	}
-	m := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
-		Collection: []model.Issue{
+	m := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{
+		Issues: []model.Issue{
 			{UID: "parent", ShortID: "par1", Title: "A parent", Status: "open", UpdatedAt: hours(1)},
 			{UID: "child", ShortID: "chi1", Title: "B child", Status: "open", UpdatedAt: hours(2)},
 			{UID: "leaf", ShortID: "lea1", Title: "C leaf", Status: "open", UpdatedAt: hours(3)},
 			{UID: "other", ShortID: "oth1", Title: "D other", Status: "open", UpdatedAt: hours(4)},
 		},
-		CollectionLinks: []g.UILink{{Type: "parent", FromIssueUID: "child", ToIssueUID: "parent"}},
+		Links: []model.Link{{Type: "parent", FromIssueUID: "child", ToIssueUID: "parent"}},
 	}})
 	m, _ = model.Update(m, model.DetailLoaded{UID: "parent", Selected: &model.IssueDetailData{
 		Issue: &model.Issue{UID: "parent"},
@@ -253,15 +252,15 @@ func TestRetryButtonRetriesLikeItsKey(t *testing.T) {
 	sameAs(t, "retry click and key diverge", pointer, clickCmds, keyboard, keyCmds)
 }
 
-func pickerCatalog() []g.UIProject {
-	return []g.UIProject{{Project: model.Project{UID: "alpha-uid", Name: "alpha"}}, {Project: model.Project{UID: "smoke-uid", Name: "smoke"}}}
+func pickerCatalog() []model.CatalogProject {
+	return []model.CatalogProject{{Project: model.Project{UID: "alpha-uid", Name: "alpha"}}, {Project: model.Project{UID: "smoke-uid", Name: "smoke"}}}
 }
 
 // newProject is an unbound directory with the New Project card open from the sidebar.
 func newProject() driver.State {
-	m := loadFirst(model.Model{Cols: 160, Workspace: "/home/dev/my-repo", Actor: "alice"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
+	m := loadFirst(model.Model{Cols: 160, Workspace: "/home/dev/my-repo", Actor: "alice"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{
 		Catalog:    pickerCatalog(),
-		Collection: []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}},
+		Issues: []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}},
 	}})
 	return pressed(driver.State{Model: m}, "escape", "end", "enter")
 }

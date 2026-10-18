@@ -1,22 +1,18 @@
 package model
 
-import (
-	g "go.kenn.io/kata/pkg/client/generated"
-)
-
 type Collection struct{ View, ProjectUID, Title string }
 
 // IsProject says the Collection is one Project's Issues, not a named view.
 func (c Collection) IsProject() bool { return c.View == "project" }
 
 // CatalogEntry is the snapshot's catalog entry for the Project with uid.
-func CatalogEntry(snapshot g.UISnapshotResponseBody, uid string) (g.UIProject, bool) {
+func CatalogEntry(snapshot Snapshot, uid string) (CatalogProject, bool) {
 	for _, entry := range snapshot.Catalog {
 		if entry.Project.UID == uid {
 			return entry, true
 		}
 	}
-	return g.UIProject{}, false
+	return CatalogProject{}, false
 }
 
 type IssueGroup struct {

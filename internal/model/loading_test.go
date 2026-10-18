@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // Loads leave what is on screen in place until the new content arrives.
@@ -16,7 +15,7 @@ func projectOf(uids ...string) model.Model {
 	for i, uid := range uids {
 		issues[i] = model.Issue{UID: uid, Status: "open"}
 	}
-	m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{Project: model.Project{UID: "project", Name: "work"}}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues}})
+	m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{Project: model.Project{UID: "project", Name: "work"}}, model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: issues}})
 	return m
 }
 
@@ -44,7 +43,7 @@ func TestSwitchingCollectionKeepsPreviousIssues(t *testing.T) {
 	if !m.Loading || len(m.Issues) != 2 || m.SelectedUID != "b" || !readsCollection(cmds, m, "") {
 		t.Fatalf("switching Collection: loading=%v issues=%d selected=%q cmds=%#v", m.Loading, len(m.Issues), m.SelectedUID, cmds)
 	}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{{UID: "c", Status: "open"}}}})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "c", Status: "open"}}}})
 	if m.Loading || len(m.Issues) != 1 || m.Issues[0].UID != "c" {
 		t.Fatalf("new Collection did not replace the Issues: loading=%v issues=%+v", m.Loading, m.Issues)
 	}
@@ -69,7 +68,7 @@ func TestDetailStaysOnScreenUntilTheSelectedIssueArrives(t *testing.T) {
 		{"c arrives after b", []model.Msg{model.SelectMsg{UID: "b"}, model.SelectMsg{UID: "c"}, model.DetailLoaded{UID: "b", Selected: authority("b")}, model.DetailLoaded{UID: "c", Selected: authority("c")}}, "c", false, nil, []model.Cmd{detailTop}},
 		{"b fails", []model.Msg{model.SelectMsg{UID: "b"}, model.DetailFailed{UID: "b", Err: failure}}, "", false, failure, nil},
 		{"a reloads after saving a Draft", []model.Msg{model.DraftSaved{UID: "a"}}, "a", true, nil, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "a"}}},
-		{"empty Collection", []model.Msg{snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{}}}}, "", false, nil, nil},
+		{"empty Collection", []model.Msg{snap{model.SnapshotLoaded{Snapshot: model.Snapshot{}}}}, "", false, nil, nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m, _ := model.Update(projectOf("a", "b", "c"), model.DetailLoaded{UID: "a", Selected: authority("a")})

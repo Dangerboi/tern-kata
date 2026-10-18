@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 const (
@@ -109,7 +107,7 @@ func projectSaved(m Model, msg ProjectSaved) (Model, []Cmd) {
 	if !slices.Contains(m.Collections, collection) {
 		// The snapshot on screen predates the Project; list it until the next one arrives.
 		m.Collections = append(slices.Clip(m.Collections), collection)
-		m.Snapshot.Catalog = append(slices.Clip(m.Snapshot.Catalog), g.UIProject{Project: msg.Project})
+		m.Snapshot.Catalog = append(slices.Clip(m.Snapshot.Catalog), CatalogProject{Project: msg.Project})
 	}
 	m.ProjectForm, m.Picker, m.Focus = ProjectFormState{}, PickerState{}, ColumnList
 	return updateCollection(m, CollectionSelected{Collection: collection})

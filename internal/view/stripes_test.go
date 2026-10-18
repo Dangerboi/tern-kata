@@ -7,7 +7,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // drawnRows are the Issue rows of the list in the order they are drawn.
@@ -61,7 +60,7 @@ func stripedProject() model.Model {
 	return apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: collectionLinks(links)}}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: issues, Links: links}}},
 	)
 }
 
@@ -89,7 +88,7 @@ func TestEveryOtherDrawnRowIsShadedAndStaysSoAfterFoldAndFilter(t *testing.T) {
 			open = append(open, issue)
 		}
 	}
-	m = apply(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: g.UISnapshotResponseBody{Collection: open, CollectionLinks: m.Snapshot.CollectionLinks}})
+	m = apply(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: model.Snapshot{Issues: open, Links: m.Snapshot.Links}})
 	filtered := render(t, m)
 	if got := len(drawnRows(filtered)); got != len(rows)+1 {
 		t.Fatalf("fixture: the filter left %d rows, want %d", got, len(rows)+1)

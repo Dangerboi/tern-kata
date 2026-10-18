@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 const manyChildren = 40
@@ -27,7 +26,7 @@ func parentBase() model.Model {
 		issues = append(issues, model.Issue{UID: uid, ShortID: uid, Title: "C " + uid, Status: "open", UpdatedAt: ago(4)})
 		links = append(links, model.Link{ID: int64(i + 1), Type: "parent", FromIssueUID: uid, ToIssueUID: "parent", FromQualifiedID: "work#" + uid})
 	}
-	m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: collectionLinks(links)}})
+	m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: issues, Links: links}})
 	m, _ = model.Update(m, model.DetailLoaded{UID: "first", Selected: &model.IssueDetailData{Issue: &issues[0]}})
 	return m
 }

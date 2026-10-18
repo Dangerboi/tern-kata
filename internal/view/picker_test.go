@@ -7,7 +7,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // pickerNodes renders m and indexes every node by the id Tern gives it.
@@ -48,12 +47,12 @@ func pickerChildIDs(node tern.WireNode) []string {
 }
 
 func pickerLoaded(bound bool) model.Model {
-	loaded, snapshot := model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{
-		Catalog: []g.UIProject{
+	loaded, snapshot := model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{
+		Catalog: []model.CatalogProject{
 			{Project: model.Project{UID: "alpha-uid", Name: "alpha"}},
 			{Project: model.Project{UID: "smoke-uid", Name: "smoke"}},
 		},
-		Collection: []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}},
+		Issues: []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}},
 	}}
 	if bound {
 		loaded.Project = model.Project{UID: "smoke-uid", Name: "smoke"}

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 func pagedList(n int) model.Model {
@@ -14,7 +13,7 @@ func pagedList(n int) model.Model {
 	for i := range issues {
 		issues[i] = model.Issue{UID: fmt.Sprintf("i%02d", i), Status: "open"}
 	}
-	m, _ := loadFirst(model.Model{Cols: 160}, model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues}})
+	m, _ := loadFirst(model.Model{Cols: 160}, model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: issues}})
 	return m
 }
 

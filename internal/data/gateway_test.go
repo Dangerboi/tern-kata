@@ -190,16 +190,16 @@ func TestGatewayReadsAndWritesIssues(t *testing.T) {
 	collection := model.Collection{View: "project", ProjectUID: demo.UID, Title: demo.Name}
 	query := model.CollectionQuery(collection, model.Filters{})
 	loaded := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, Request: 3}))
-	if loaded.ETag == "" || loaded.Request != 3 || loaded.LocalDate == "" || len(loaded.Snapshot.Collection) != 1 || loaded.Snapshot.Collection[0].UID != uid {
+	if loaded.ETag == "" || loaded.Request != 3 || loaded.LocalDate == "" || len(loaded.Snapshot.Issues) != 1 || loaded.Snapshot.Issues[0].UID != uid {
 		t.Fatalf("collection %+v", loaded)
 	}
 	unchanged := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ETag: loaded.ETag, Request: 4}))
-	if !unchanged.NotModified || unchanged.Request != 4 || len(unchanged.Snapshot.Collection) != 0 {
+	if !unchanged.NotModified || unchanged.Request != 4 || len(unchanged.Snapshot.Issues) != 0 {
 		t.Fatalf("refresh with the current ETag %+v, want a 304", unchanged)
 	}
 	createIssue(t, gateway, workspace, demo, "Zebra migration")
 	changed := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ETag: loaded.ETag, Request: 5}))
-	if changed.NotModified || len(changed.Snapshot.Collection) != 2 || changed.ETag == "" || changed.ETag == loaded.ETag {
+	if changed.NotModified || len(changed.Snapshot.Issues) != 2 || changed.ETag == "" || changed.ETag == loaded.ETag {
 		t.Fatalf("refresh after a write %+v, want the new snapshot and ETag", changed)
 	}
 
@@ -702,16 +702,26 @@ func TestGatewaySnapshotCountsChildrenOnEveryRead(t *testing.T) {
 	query := model.CollectionQuery(model.Collection{View: "project", ProjectUID: demo.UID, Title: demo.Name}, model.Filters{})
 
 	before := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query}))
-	if len(before.ChildCounts) != 0 {
-		t.Fatalf("child counts %+v before any child", before.ChildCounts)
+	if len(before.Snapshot.ChildCounts) != 0 {
+		t.Fatalf("child counts %+v before any child", before.Snapshot.ChildCounts)
 	}
 	child := as[model.IssueCreated](t, run(t, gateway, model.CreateIssueCmd{Workspace: workspace, Actor: "tester", ProjectID: demo.ID, Title: "Child", ParentUID: parent}))
 	if child.Err != nil {
 		t.Fatal(child.Err)
 	}
 	after := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ETag: before.ETag}))
-	if counts := after.ChildCounts[parent]; after.NotModified || counts.Total != 1 || counts.Open != 1 {
+	if counts := after.Snapshot.ChildCounts[parent]; after.NotModified || counts.Total != 1 || counts.Open != 1 {
 		t.Fatalf("after a child: %+v, want the parent to count its one open child", after)
+	}
+	links := after.Snapshot.Links
+	if len(links) != 1 || links[0].Type != "parent" || links[0].FromIssueUID != child.UID || links[0].ToIssueUID != parent {
+		t.Fatalf("links %+v, want the child's parent link to %s", links, parent)
+	}
+	if len(after.Snapshot.Issues) != 2 || after.Snapshot.Cursor == 0 {
+		t.Fatalf("snapshot %+v, want both Issues and the event cursor", after.Snapshot)
+	}
+	if len(after.Snapshot.Catalog) != 1 || after.Snapshot.Catalog[0].Project.UID != demo.UID || after.Snapshot.Catalog[0].Stats == nil || after.Snapshot.Catalog[0].Stats.Open != 2 {
+		t.Fatalf("catalog %+v, want the Project with two open Issues", after.Snapshot.Catalog)
 	}
 	unchanged := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ETag: after.ETag}))
 	if !unchanged.NotModified {
