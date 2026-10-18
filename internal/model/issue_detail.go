@@ -248,9 +248,13 @@ func (m Model) chooseRow(tab ActivityTab, key string) Model {
 	return m
 }
 
-// openCursorRow follows the row under the cursor: a child or a referenced Issue.
+// openCursorRow follows the row under the cursor: a child, a referenced Issue or, for a reply, the comment it answers.
 func (m Model) openCursorRow() Model {
 	if row, ok := m.withRows().cursorRow(); ok {
+		if i := slices.IndexFunc(m.rows.items, func(r DetailItem) bool { return row.ReplyKey != "" && r.Key == row.ReplyKey }); i >= 0 {
+			m.cursor = i
+			return m
+		}
 		return m.jumpTo(row.ReferenceUID)
 	}
 	return m

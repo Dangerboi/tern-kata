@@ -125,7 +125,13 @@ func detailRows(m model.Model) (children []detailChild, activity tern.Nodes) {
 		if item.Kind == model.RowEvent {
 			parts = ui.Nodes(historySentence(row, action))
 		} else {
-			head = ui.Spans(ui.Span{T: row.Author, S: "strong"}, ui.Span{T: "  "}, ui.Span{T: row.Time, S: "muted"})
+			spans := []ui.Span{{T: row.Author, S: "strong"}, {T: "  "}, {T: row.Time, S: "muted"}}
+			for _, note := range []string{row.Reply, row.Replies} {
+				if note != "" {
+					spans = append(spans, ui.Span{T: "  " + note, S: "accent"})
+				}
+			}
+			head = ui.Spans(spans...)
 		}
 		if row.Body != "" {
 			parts = append(parts, ui.Md{Common: ui.Common{Key: "body"}, Text: row.Body})
