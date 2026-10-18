@@ -128,6 +128,8 @@ func FieldID(card model.Card, name model.Field) string {
 		return FieldInputID
 	case model.CardClose:
 		return CloseFieldID(name)
+	case model.CardRecurrence:
+		return RecurrenceFieldID(name)
 	case model.CardProject:
 		return ProjectInputID
 	case model.CardFilter:

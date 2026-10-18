@@ -167,6 +167,14 @@ func popupCards() []popupCard {
 			result:   func(m model.Model, err error) model.Msg { return model.CloseResultMsg{UID: m.CloseForm.UID, Err: err} },
 		},
 		{
+			name: "Recurrence", card: model.CardRecurrence, quits: true, textField: model.RecurrenceStart,
+			tabOrder: []model.Field{model.RecurrenceFrequency, model.RecurrenceEvery, model.RecurrenceWeekdays, model.RecurrenceEnds, model.RecurrenceStart, model.RecurrenceZone},
+			states:   []cardState{{"", opened("shift+o"), model.ModeRecurrenceForm}},
+			graft:    func(dst *model.Model, src model.Model) { dst.RecurrenceForm = src.RecurrenceForm },
+			field:    func(m model.Model) model.Field { return m.RecurrenceForm.Field },
+			text:     func(m model.Model, _ model.Field) string { return m.RecurrenceForm.Start },
+		},
+		{
 			name: "New Project", card: model.CardProject, quits: true,
 			states: []cardState{{"", func() model.Model {
 				m, _ := model.Update(clickAt(model.ColumnList), model.CollectionPointerSelected{Key: model.NewProjectKey})
@@ -371,7 +379,7 @@ func TestPopupCardStates(t *testing.T) {
 func TestPopupCardOrder(t *testing.T) {
 	// The order is spelled out here, not read from model.Cards().
 	var cards []popupCard
-	for _, name := range []string{"Create", "Draft editor", "single-field form", "Close", "New Project", "Filter form", "Menu"} {
+	for _, name := range []string{"Create", "Draft editor", "single-field form", "Close", "Recurrence", "New Project", "Filter form", "Menu"} {
 		i := slices.IndexFunc(popupCards(), func(c popupCard) bool { return c.name == name })
 		if i < 0 {
 			t.Fatalf("card %q has no row", name)

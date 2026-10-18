@@ -296,6 +296,8 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 		{"Close Issue with no message", pressed(issue, "x"), []string{"ctrl+o"}, func(m model.Model) bool { return m.CloseForm.Err != nil }},
 		{"Close Quick done", pressed(issue, "x"), []string{"ctrl+d"}, func(m model.Model) bool { return m.CloseForm.Saving }},
 		{"Close Cancel", pressed(issue, "x"), []string{"escape"}, func(m model.Model) bool { return !m.CloseForm.Open }},
+		{"Recurrence Save with no start date", pressed(issue, "shift+o"), []string{"ctrl+o"}, func(m model.Model) bool { return m.RecurrenceForm.Err != nil }},
+		{"Recurrence Cancel", pressed(issue, "shift+o"), []string{"escape"}, func(m model.Model) bool { return !m.RecurrenceForm.Open }},
 		{"Filters Apply", pressed(issue, "f"), []string{"ctrl+o"}, func(m model.Model) bool { return !m.FilterForm.Open }},
 		{"Filters Cancel", pressed(issue, "f"), []string{"escape"}, func(m model.Model) bool { return !m.FilterForm.Open }},
 	} {

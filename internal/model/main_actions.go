@@ -195,6 +195,7 @@ var mainActions = []actionEntry{
 	{action: ToggleHelp, keys: keys("?", "?", "shift+?", "?"), help: "help", footer: true, sheet: []sheetLine{{sheetGlobal, 1, "help"}}, handle: pure(func(m Model) Model { m.HelpOpen = !m.HelpOpen; return m })},
 	{action: CloseHelp, modes: []Mode{ModeHelp}, keys: keys("escape", "esc"), help: "close help", footer: true, handle: pure(func(m Model) Model { m.HelpOpen = false; return m })},
 	{action: OpenClose, modes: listAndDetail, keys: keys("x", "x"), help: "close Issue", footer: true, sheet: []sheetLine{{sheetGraph, 14, "close"}}, handle: pure(openClose)},
+	{action: OpenRecurrenceAction, modes: listAndDetail, keys: keys("shift+o", "O"), help: "make recurring", sheet: []sheetLine{{sheetDetail, 13, "make recurring"}}, handle: pure(openRecurrence)},
 	{action: ReopenAction, modes: listAndDetail, keys: keys("r", "r"), help: "reopen Issue", footer: true, sheet: []sheetLine{{sheetGraph, 15, "reopen"}}, handle: reopenIssue},
 	{action: AddLabelAction, modes: listAndDetail, keys: keys("+", "+"), help: "add label", sheet: []sheetLine{{sheetDetail, 8, "add label"}}, handle: fieldFor(AddLabelAction)},
 	{action: RemoveLabelAction, modes: listAndDetail, keys: keys("-", "-"), help: "remove label", sheet: []sheetLine{{sheetDetail, 9, "remove label"}}, handle: fieldFor(RemoveLabelAction)},

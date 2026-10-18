@@ -136,6 +136,7 @@ func TestClickingAFieldMakesItTheFieldTheKeysEdit(t *testing.T) {
 	}{
 		{"Create", "n", view.CreateFieldID, model.CreateOwner, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.Create.Field }},
 		{"Close", "x", view.CloseFieldID, model.ClosePR, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.CloseForm.Field }},
+		{"Recurrence", "shift+o", view.RecurrenceFieldID, model.RecurrenceStart, []string{"tab", "tab", "tab", "tab"}, func(m model.Model) model.Field { return m.RecurrenceForm.Field }},
 		{"Filters", "f", view.FilterFieldID, model.FilterLabel, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.FilterForm.Field }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

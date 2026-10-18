@@ -46,6 +46,12 @@ func popups() []popup {
 				values := m.CloseForm.Values
 				return values.Reason + values.Message + values.Commit + values.PR + values.Test + values.Reference + values.Rationale
 			}},
+		{"Recurrence", func(t *testing.T, s driver.State) model.Model {
+			m := keyOpen("shift+o")(t, s)
+			m.RecurrenceForm.Field = model.RecurrenceZone // a text field
+			return m
+		}, func(dst *model.Model, src model.Model) { dst.RecurrenceForm = src.RecurrenceForm },
+			model.ModeRecurrenceForm, "layer.recurrence", func(m model.Model) string { return m.RecurrenceForm.Zone }},
 		{"New Project", func(t *testing.T, s driver.State) model.Model {
 			return step(t, s, model.CollectionPointerSelected{Key: model.NewProjectKey}).State.Model
 		}, func(dst *model.Model, src model.Model) { dst.ProjectForm = src.ProjectForm },

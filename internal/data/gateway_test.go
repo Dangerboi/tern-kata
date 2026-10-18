@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"regexp"
 	"strings"
 	"sync/atomic"
@@ -368,6 +369,7 @@ func TestGatewayReportsDaemonErrorsInTheAskingMessage(t *testing.T) {
 		{"draft", model.SaveDraft{Workspace: workspace, UID: "nope", ProjectID: demo.ID, Actor: "tester"}, func(err error) model.Msg { return model.DraftFailed{UID: "nope", Err: err} }},
 		{"close", model.CloseIssueCmd{Workspace: workspace, UID: "nope", ProjectID: demo.ID}, func(err error) model.Msg { return model.CloseResultMsg{UID: "nope", Err: err} }},
 		{"reopen", model.ReopenIssueCmd{Workspace: workspace, UID: "nope", ProjectID: demo.ID, Actor: "tester"}, func(err error) model.Msg { return model.CloseResultMsg{UID: "nope", Err: err} }},
+		{"recurrence", model.CreateRecurrenceCmd{Workspace: workspace, UID: "nope", ProjectID: demo.ID, Actor: "tester"}, func(err error) model.Msg { return model.RecurrenceResultMsg{UID: "nope", Err: err} }},
 		{"field", model.WriteField{Workspace: workspace, UID: "nope", ProjectID: demo.ID, Action: model.AddLabelAction, Value: "x", Actor: "tester"}, func(err error) model.Msg { return model.FieldWritten{UID: "nope", Err: err} }},
 		{"project", model.BindProject{Workspace: workspace, Actor: "tester", Name: "other"}, func(err error) model.Msg { return model.ProjectSaved{Err: err} }},
 		{"new project", model.CreateProject{Workspace: t.TempDir(), Actor: "tester", Name: "demo"}, func(err error) model.Msg { return model.ProjectSaved{Err: err} }},
@@ -387,6 +389,8 @@ func TestGatewayReportsDaemonErrorsInTheAskingMessage(t *testing.T) {
 			case model.DraftFailed:
 				failure = got.Err
 			case model.CloseResultMsg:
+				failure = got.Err
+			case model.RecurrenceResultMsg:
 				failure = got.Err
 			case model.FieldWritten:
 				failure = got.Err
@@ -449,6 +453,7 @@ func TestGatewayFailureShapePerCommand(t *testing.T) {
 		{model.SaveDraft{UID: "u"}, model.DraftFailed{UID: "u", Err: boom}},
 		{model.CloseIssueCmd{UID: "u"}, model.CloseResultMsg{UID: "u", Err: boom}},
 		{model.ReopenIssueCmd{UID: "u"}, model.CloseResultMsg{UID: "u", Err: boom}},
+		{model.CreateRecurrenceCmd{UID: "u"}, model.RecurrenceResultMsg{UID: "u", Err: boom}},
 		{model.WriteField{UID: "u"}, model.FieldWritten{UID: "u", Err: boom}},
 		{model.LoadFieldLabels{UID: "u"}, model.FieldLabelsLoaded{UID: "u", Err: boom}},
 		{model.CreateProject{}, model.ProjectSaved{Err: boom}},
@@ -1005,5 +1010,46 @@ func TestGatewayTranslatesTheRecurrenceFromTheSnapshotIncludingAStoppedOne(t *te
 	}
 	if got := selected(plain).Recurrence; got != nil {
 		t.Errorf("plain Issue has recurrence %+v", got)
+	}
+}
+
+func TestGatewayMakesAnIssueTheFirstOccurrenceAndClosingItCreatesTheNext(t *testing.T) {
+	kata := startKata(t, "0.19.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	priority := int64(2)
+	created := as[model.IssueCreated](t, run(t, gateway, model.CreateIssueCmd{Workspace: workspace, Actor: "tester", ProjectID: demo.ID, Title: "Water plants", Body: "Every pot", Owner: "alice", Labels: []string{"home"}, Priority: &priority}))
+	if created.Err != nil {
+		t.Fatal(created.Err)
+	}
+	uid := created.UID
+
+	saved := as[model.RecurrenceResultMsg](t, run(t, gateway, model.CreateRecurrenceCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Rule: "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO", Start: "2026-10-19", TimeZone: "Europe/Zurich"}))
+	if saved.UID != uid || saved.Err != nil {
+		t.Fatalf("create recurrence %+v", saved)
+	}
+	first := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected
+	if first.Issue.RecurrenceID == nil || first.Recurrence == nil || first.Recurrence.Stopped || first.Recurrence.Revision != 2 || first.Recurrence.Next != "2026-10-26" {
+		t.Fatalf("first occurrence %+v, recurrence %+v", first.Issue, first.Recurrence)
+	}
+	if owner := first.Issue.Owner; owner == nil || *owner != "alice" {
+		t.Fatalf("the first occurrence kept owner %v, want alice", owner)
+	}
+
+	if closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true})); closed.Err != nil {
+		t.Fatal(closed.Err)
+	}
+	query := model.CollectionQuery(model.Collection{View: "project", ProjectUID: demo.UID, Title: demo.Name}, model.Filters{})
+	var next *model.Issue
+	for _, issue := range as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, Request: 1})).Snapshot.Issues {
+		if issue.UID != uid && issue.Status != "closed" {
+			next = &issue
+		}
+	}
+	if next == nil || next.Title != "Water plants" || next.Body != "Every pot" || next.Priority == nil || *next.Priority != 2 || !slices.Equal(next.Labels, []string{"home"}) || next.Owner != nil {
+		t.Fatalf("next occurrence %+v, want the template copied without the owner", next)
+	}
+	if next.RecurrenceID == nil || *next.RecurrenceID != *first.Issue.RecurrenceID {
+		t.Fatalf("next occurrence belongs to recurrence %v, want %v", next.RecurrenceID, first.Issue.RecurrenceID)
 	}
 }

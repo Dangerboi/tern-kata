@@ -98,6 +98,12 @@ func plan(cmd model.Cmd) (request, bool) {
 				return ok(model.CloseResultMsg{UID: cmd.UID}, c.Close(ctx, cmd))
 			},
 			func(err error) model.Msg { return model.CloseResultMsg{UID: cmd.UID, Err: err} }}, true
+	case model.CreateRecurrenceCmd:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) {
+				return ok(model.RecurrenceResultMsg{UID: cmd.UID}, c.CreateRecurrence(ctx, cmd))
+			},
+			func(err error) model.Msg { return model.RecurrenceResultMsg{UID: cmd.UID, Err: err} }}, true
 	case model.ReopenIssueCmd:
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) {

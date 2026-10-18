@@ -30,6 +30,7 @@ const (
 	CardDraft
 	CardField
 	CardClose
+	CardRecurrence
 	CardProject
 	CardFilter
 	CardPicker
@@ -53,6 +54,8 @@ type cardEntry struct {
 	fields []FieldSpec
 	focus  func(*Model) *Field
 	locked func(Model) bool
+	// hidden says a field of the list does not apply to the card as it stands: tab skips it. Nil when every field always applies.
+	hidden func(Model, Field) bool
 	// caret finds the field holding the text caret, false when the card holds none; a card without
 	// fields has one input and names it "".
 	caret func(Model) (Field, bool)
@@ -122,6 +125,18 @@ func init() {
 			fields: CloseFields, focus: func(m *Model) *Field { return &m.CloseForm.Field },
 			locked: func(m Model) bool { return m.CloseForm.Saving },
 			caret:  func(m Model) (Field, bool) { return m.CloseForm.Field, !m.CloseForm.Saving },
+		},
+		{
+			card: CardRecurrence, open: func(m Model) bool { return m.RecurrenceForm.Open },
+			modes: []Mode{ModeRecurrenceForm}, mode: func(Model) Mode { return ModeRecurrenceForm },
+			chords: []string{"ctrl+c"},
+			key:    recurrenceKey,
+			fields: RecurrenceFields, focus: func(m *Model) *Field { return &m.RecurrenceForm.Field },
+			locked: func(m Model) bool { return m.RecurrenceForm.Saving },
+			hidden: func(m Model, name Field) bool { return !m.RecurrenceForm.Shows(name) },
+			caret: func(m Model) (Field, bool) {
+				return m.RecurrenceForm.Field, !m.RecurrenceForm.Saving && takesText(RecurrenceFields, m.RecurrenceForm.Field)
+			},
 		},
 		{
 			card: CardProject, open: func(m Model) bool { return m.ProjectForm.Open },
@@ -349,7 +364,7 @@ func editorKey(e TextEditor, binding Binding, bound bool, msg KeyMsg) TextEditor
 
 // focusField puts focus on the field called name of the open card; a name outside its field list is ignored.
 func focusField(m Model, name Field) Model {
-	if entry, ok := m.topEntry(); ok && entry.focus != nil && !entry.locked(m) && takesFocus(entry.fields, name) {
+	if entry, ok := m.topEntry(); ok && entry.focus != nil && !entry.locked(m) && takesFocus(entry.fields, name) && (entry.hidden == nil || !entry.hidden(m, name)) {
 		*entry.focus(&m) = name
 	}
 	return m
@@ -364,12 +379,19 @@ func takesText(list []FieldSpec, name Field) bool {
 	return slices.ContainsFunc(list, func(f FieldSpec) bool { return f.Name == name && f.Text })
 }
 
-// cycleField moves focus step fields on, wrapping around the open card's field list.
+// cycleField moves focus step fields on, wrapping around the open card's field list and skipping the fields it hides.
 func cycleField(m *Model, step int) {
 	if entry, ok := m.topEntry(); ok && entry.focus != nil && !entry.locked(*m) {
 		field := entry.focus(m)
+		n := len(entry.fields)
 		at := max(slices.IndexFunc(entry.fields, func(f FieldSpec) bool { return f.Name == *field }), 0)
-		*field = entry.fields[((at+step)%len(entry.fields)+len(entry.fields))%len(entry.fields)].Name
+		for i := 1; i <= n; i++ {
+			next := entry.fields[((at+step*i)%n+n)%n].Name
+			if entry.hidden == nil || !entry.hidden(*m, next) {
+				*field = next
+				return
+			}
+		}
 	}
 }
 

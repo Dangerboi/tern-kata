@@ -53,6 +53,7 @@ type Model struct {
 	etag                string
 	etagQuery           SnapshotQuery
 	CloseForm           CloseFormState
+	RecurrenceForm      RecurrenceFormState
 	Actor               string
 	FieldForm           FieldFormState
 	Workspace           string
@@ -124,6 +125,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	switch msg.(type) {
 	case CloseFieldMsg, CloseResultMsg:
 		return updateClose(m, msg)
+	case RecurrenceResultMsg:
+		return updateRecurrence(m, msg)
 	}
 	if msg, ok := msg.(PickerSelected); ok {
 		return pickCollectionKey(m, msg.Key)

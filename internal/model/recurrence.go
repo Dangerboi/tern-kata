@@ -28,3 +28,21 @@ func (r Recurrence) Text() string {
 	}
 	return s.Words() + " · next " + r.Next
 }
+
+// CreateRecurrenceCmd makes the Issue the first Occurrence of a new recurrence; the Daemon gateway builds the template from the
+// Issue as it stands.
+type CreateRecurrenceCmd struct {
+	Workspace, UID, Actor string
+	ProjectID             int64
+	Rule, Start, TimeZone string
+}
+
+func (CreateRecurrenceCmd) cmd() {}
+
+// RecurrenceResultMsg is the result of a recurrence write for the Issue UID; Err is nil when it landed.
+type RecurrenceResultMsg struct {
+	UID string
+	Err error
+}
+
+func (RecurrenceResultMsg) msg() {}
