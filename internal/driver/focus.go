@@ -28,7 +28,8 @@ func transientTarget(id string) bool {
 	if view.IsIssueID(id) {
 		return true
 	}
-	// The active tab's rows and its empty line go when the tab switches; the tab names and the activity container stay.
+	// The active tab's rows and its empty line go when the tab switches, and the tab names with them when the detail turns
+	// to loading another Issue before Tern runs the reveal.
 	row, ok := strings.CutPrefix(id, view.DetailActivityID+".")
-	return ok && row != "tabs" && !strings.Contains(row, ".")
+	return ok && !strings.Contains(row, ".")
 }
