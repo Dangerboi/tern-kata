@@ -83,11 +83,12 @@ In a repo with a `.kata.toml`, write kata ticket references in chat replies as `
 
 tern-kata takes kata tui's movement keys: `j`/`k` and the arrows, `ctrl+n`/`ctrl+p` to move a row, `pgup`/`pgdn` and `alt+v`/`ctrl+v` to page, `g`/`G`, and `I` to open the Inbox (from the list, the Issue detail and the Menu sidebar; tern-kata opens it, where kata tui toggles it). `?` lists every key. The Emacs keys and `I` are plain text in search and in Popup cards.
 
+`R` on a comment in the Issue detail's Comments tab replies to it; `ctrl+r` in the card cycles reply, confirm, refute and supersede.
+
 It lacks these kata tui keys:
 
 - `u`: undo the last change.
 - `t`: timed assignment.
-- `R`: typed reply to a comment.
 - `[` and `]`: previous and next comment link.
 
 ## Known issues

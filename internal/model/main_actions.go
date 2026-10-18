@@ -143,6 +143,7 @@ var mainActions = []actionEntry{
 	{action: MoveLast, modes: []Mode{ModeList}, keys: keys("shift+g", "G", "end", "end"), help: "last Issue", sheet: []sheetLine{{sheetGraph, 6, "last"}}, handle: selection(MoveLast)},
 	{action: EditBody, modes: []Mode{ModeDetail, ModeList}, keys: keys("e", "e"), help: "edit body", footer: true, sheet: []sheetLine{{sheetDetail, 5, "edit body"}}, handle: pure(func(m Model) Model { return startDraft(m, false) })},
 	{action: AddComment, modes: []Mode{ModeDetail}, keys: keys("c", "c"), help: "add comment", footer: true, sheet: []sheetLine{{sheetDetail, 6, "new comment"}}, handle: pure(func(m Model) Model { return startDraft(m, true) })},
+	{action: ReplyAction, modes: []Mode{ModeDetail}, keys: keys("shift+r", "R"), help: "reply to comment", sheet: []sheetLine{{sheetDetail, 13, "reply to comment"}}, handle: pure(startReply)},
 	{action: ClearFilters, modes: []Mode{ModeList}, keys: keys("c", "c"), help: "clear filters", footer: true, sheet: []sheetLine{{sheetFilters, 4, "clear filters"}}, handle: clearFilters},
 	{action: OpenFilterForm, modes: []Mode{ModeList}, keys: keys("f", "f"), help: "filters", footer: true, sheet: []sheetLine{{sheetFilters, 3, "filter (form)"}}, handle: pure(openFilterForm)},
 	{action: CycleStatus, modes: []Mode{ModeList}, keys: keys("s", "s"), help: "cycle status", footer: true, sheet: []sheetLine{{sheetFilters, 2, "cycle status filter"}}, handle: cycleStatus},

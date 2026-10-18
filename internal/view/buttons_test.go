@@ -1,6 +1,8 @@
 package view_test
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -124,4 +126,22 @@ func TestDraftConflictEndsInButtons(t *testing.T) {
 	latest.Revision, latest.Body = 2, "Remote body"
 	m, _ = model.Update(m, model.DraftConflict{UID: "a", Issue: latest})
 	cardButtons(t, m, "layer.editor.actions", []button{{"overwrite", "Overwrite (o)", "o"}, {"discard", "Discard Draft (d)", "d"}}, "overwrite")
+}
+
+func TestReplyDraftNamesItsKindAndOffersTheKindKeyAndSendAnyway(t *testing.T) {
+	issue := model.Issue{UID: "a", ProjectID: 2, Body: "body", Revision: 1}
+	comments := []model.Comment{{UID: "c1", Author: "dana", Body: "claim"}}
+	m, _ := model.Update(selectedFirst(), model.DetailLoaded{UID: "a", Selected: &model.IssueDetailData{Issue: &issue, Comments: comments}})
+	m = press(m, "enter", "shift+r")
+	editor := func(m model.Model) string { title, _ := pickerNodes(t, m)["layer.editor"].P["head"].(string); return title }
+	if got := editor(m); !strings.Contains(got, "Reply to dana's comment") {
+		t.Fatalf("reply title: %q", got)
+	}
+	cardButtons(t, m, "layer.editor.actions", []button{{"save", "Save (ctrl+o)", "ctrl+o"}, {"kind", "Kind (ctrl+r)", "ctrl+r"}}, "save")
+	m = press(m, "ctrl+r")
+	if got := editor(m); !strings.Contains(got, "Confirm dana's comment") {
+		t.Fatalf("confirm title: %q", got)
+	}
+	m, _ = model.Update(m, model.DraftFailed{UID: "a", Err: errors.New("a reply of this kind already exists"), Duplicate: true})
+	cardButtons(t, m, "layer.editor.actions", []button{{"force", "Send anyway (ctrl+f)", "ctrl+f"}}, "save")
 }

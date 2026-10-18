@@ -2,6 +2,7 @@ package view
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
@@ -35,6 +36,9 @@ func editorLayer(m model.Model) tern.Element {
 	if draft.Comment {
 		title = "Add comment"
 	}
+	if draft.ReplyTo != "" {
+		title = replyTitle(draft)
+	}
 	children := ui.Nodes(TextEditor("body", draft.Editor, draft.Saving || draft.DiscardConfirm || draft.Conflict != nil))
 	if draft.Saving {
 		children = append(children, ui.Text{Common: ui.Common{Key: "saving", Tone: ui.TonePending}, Text: "Saving Draft…"})
@@ -46,7 +50,15 @@ func editorLayer(m model.Model) tern.Element {
 	case draft.DiscardConfirm:
 		children = append(children, ui.Text{Common: ui.Common{Key: "discard", Tone: ui.ToneWarning}, Text: "Discard this Draft? y discards; n or esc keeps editing."}, discardButtons())
 	case !draft.Saving && draft.Conflict == nil:
-		children = append(children, buttonRow(keyButton("save", "Save (ctrl+o)", "ctrl+o", true), keyButton("editor", "$EDITOR (ctrl+e)", "ctrl+e", false), keyButton("discard", "Discard (esc)", "escape", false)))
+		buttons := []tern.Element{keyButton("save", "Save (ctrl+o)", "ctrl+o", true)}
+		if draft.Duplicate {
+			buttons = append(buttons, keyButton("force", "Send anyway (ctrl+f)", "ctrl+f", false))
+		}
+		if draft.ReplyTo != "" {
+			buttons = append(buttons, keyButton("kind", "Kind (ctrl+r)", "ctrl+r", false))
+		}
+		buttons = append(buttons, keyButton("editor", "$EDITOR (ctrl+e)", "ctrl+e", false), keyButton("discard", "Discard (esc)", "escape", false))
+		children = append(children, buttonRow(buttons...))
 	}
 	if draft.Conflict != nil {
 		title = "Issue changed: Draft kept"
@@ -57,4 +69,16 @@ func editorLayer(m model.Model) tern.Element {
 			buttonRow(keyButton("overwrite", "Overwrite (o)", "o", true), keyButton("discard", "Discard Draft (d)", "d", false)))
 	}
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "editor"}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
+}
+
+// replyTitle names the kind of a Reply Draft and whose comment it answers, e.g. "Confirm dana's comment".
+func replyTitle(draft model.Draft) string {
+	whose := "a comment"
+	if draft.ReplyAuthor != "" {
+		whose = draft.ReplyAuthor + "'s comment"
+	}
+	if draft.Kind == "reply" {
+		return "Reply to " + whose
+	}
+	return strings.ToUpper(draft.Kind[:1]) + draft.Kind[1:] + " " + whose
 }
