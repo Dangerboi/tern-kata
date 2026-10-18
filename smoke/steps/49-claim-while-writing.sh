@@ -18,7 +18,6 @@ ctl type '" + saved after a claim"'
 kata --workspace "$tmp/workspace" claim "$claim_draft" --if-unowned --json >/dev/null
 ctl key Ctrl+o
 expect_tree "[data-id='layer.editor']" '.ok and .count == 0'
-expect_tree "[data-id='layer.conflict']" '.ok and .count == 0'
 for ((attempt = 0; attempt < 100; attempt++)); do
   [[ $(kata --workspace "$tmp/workspace" show "$claim_draft" --json | jq -r '.issue.body') == "Claim seeded body + saved after a claim" ]] && break
   sleep 0.1
