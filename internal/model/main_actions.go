@@ -14,9 +14,13 @@ type actionEntry struct {
 	// modes is where the keys are bound; none means every mode, as for a global binding.
 	modes []Mode
 	// keys are the chords; the footer shows the first one only, the others are aliases.
-	keys   []Key
-	help   string
-	footer bool
+	keys []Key
+	// help is the footer's text for the entry, kata tui's word for it where kata has one.
+	help string
+	// footer is the modes whose footer shows the entry's first key and help; global for an entry with no modes.
+	// footerKey, when set, is what the footer names instead of the first key's label: one hint for a pair, as ↑↓.
+	footer    []Mode
+	footerKey string
 	// sheet are the help sheet lines the entry's keys appear on; none means the sheet does not list it.
 	sheet  []sheetLine
 	handle func(Model) (Model, []Cmd)
@@ -125,85 +129,95 @@ var (
 	emacsUp      = keys("ctrl+p", "C-p", "meta+p", "")
 )
 
-// mainActions lists the main-surface actions in the order the footer shows them.
+// global is the one mode an entry without modes binds in; footer: global puts the entry in every footer it is bound in.
+var global = []Mode{""}
+
+// mainActions lists the main-surface actions. A mode's footer shows its entries in this order, after kata tui's footers:
+// moving and opening first, then what acts on the Issues, then layout, back, help and quit.
 var mainActions = []actionEntry{
-	{action: PageUp, modes: []Mode{ModeList}, keys: pageUpKeys, help: "page up", sheet: []sheetLine{{sheetGraph, 3, "page up"}}, handle: selection(PageUp)},
-	{action: PageDown, modes: []Mode{ModeList}, keys: pageDownKeys, help: "page down", sheet: []sheetLine{{sheetGraph, 4, "page down"}}, handle: selection(PageDown)},
-	{action: PageUp, modes: []Mode{ModeCollections}, keys: pageUpKeys, help: "page up", handle: scrolling(ColumnCollections, ScrollPageUp)},
-	{action: PageDown, modes: []Mode{ModeCollections}, keys: pageDownKeys, help: "page down", handle: scrolling(ColumnCollections, ScrollPageDown)},
-	{action: PageUp, modes: []Mode{ModeDetail}, keys: pageUpKeys, help: "scroll page up", handle: scrolling(ColumnDetail, ScrollPageUp)},
-	{action: PageDown, modes: []Mode{ModeDetail}, keys: pageDownKeys, help: "scroll page down", handle: scrolling(ColumnDetail, ScrollPageDown)},
-	{action: PageUp, modes: searching, keys: pageUpKeys, help: "page up", handle: searchMoving(PageUp)},
-	{action: PageDown, modes: searching, keys: pageDownKeys, help: "page down", handle: searchMoving(PageDown)},
-	{action: NewIssue, modes: listAndDetail, keys: keys("n", "n"), help: "new Issue", footer: true, sheet: []sheetLine{{sheetGraph, 12, "new issue (form)"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, false) }},
-	{action: NewChild, modes: listAndDetail, keys: keys("shift+n", "N"), help: "new child", footer: true, sheet: []sheetLine{{sheetChildren, 1, "new child"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, true) }},
-	{action: MoveDown, modes: []Mode{ModeList}, keys: slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), help: "next Issue", footer: true, sheet: []sheetLine{{sheetGraph, 2, "down"}}, handle: selection(MoveDown)},
-	{action: MoveUp, modes: []Mode{ModeList}, keys: slices.Concat(keys("k", "k/↑", "up", "↑"), emacsUp), help: "previous Issue", footer: true, sheet: []sheetLine{{sheetGraph, 1, "up"}}, handle: selection(MoveUp)},
-	{action: MoveFirst, modes: []Mode{ModeList}, keys: keys("g", "g", "home", "home"), help: "first Issue", sheet: []sheetLine{{sheetGraph, 5, "first"}}, handle: selection(MoveFirst)},
-	{action: MoveLast, modes: []Mode{ModeList}, keys: keys("shift+g", "G", "end", "end"), help: "last Issue", sheet: []sheetLine{{sheetGraph, 6, "last"}}, handle: selection(MoveLast)},
-	{action: EditBody, modes: []Mode{ModeDetail, ModeList}, keys: keys("e", "e"), help: "edit body", footer: true, sheet: []sheetLine{{sheetDetail, 5, "edit body"}}, handle: pure(func(m Model) Model { return startDraft(m, false) })},
-	{action: AddComment, modes: []Mode{ModeDetail}, keys: keys("c", "c"), help: "add comment", footer: true, sheet: []sheetLine{{sheetDetail, 6, "new comment"}}, handle: pure(func(m Model) Model { return startDraft(m, true) })},
-	{action: ReplyAction, modes: []Mode{ModeDetail}, keys: keys("shift+r", "R"), help: "reply to comment", sheet: []sheetLine{{sheetDetail, 13, "reply to comment"}}, handle: pure(startReply)},
-	{action: ClearFilters, modes: []Mode{ModeList}, keys: keys("c", "c"), help: "clear filters", footer: true, sheet: []sheetLine{{sheetFilters, 4, "clear filters"}}, handle: clearFilters},
-	{action: OpenFilterForm, modes: []Mode{ModeList}, keys: keys("f", "f"), help: "filters", footer: true, sheet: []sheetLine{{sheetFilters, 3, "filter (form)"}}, handle: pure(openFilterForm)},
-	{action: CycleStatus, modes: []Mode{ModeList}, keys: keys("s", "s"), help: "cycle status", footer: true, sheet: []sheetLine{{sheetFilters, 2, "cycle status filter"}}, handle: cycleStatus},
-	{action: SearchIssues, modes: []Mode{ModeList}, keys: keys("/", "/"), help: "search", footer: true, sheet: []sheetLine{{sheetFilters, 1, "search"}}, handle: pure(openSearch)},
-	{action: SearchEnter, modes: []Mode{ModeSearch}, keys: keys("enter", "enter"), help: "results", footer: true, handle: pure(searchEnter)},
-	{action: SearchBack, modes: []Mode{ModeSearch}, keys: keys("escape", "esc"), help: "cancel search", footer: true, handle: searchBack},
-	{action: MoveUp, modes: []Mode{ModeSearch}, keys: slices.Concat(keys("up", "up"), emacsUp), help: "previous result", handle: searchMoving(MoveUp)},
-	{action: MoveDown, modes: []Mode{ModeSearch}, keys: slices.Concat(keys("down", "down"), emacsDown), help: "next result", handle: searchMoving(MoveDown)},
-	{action: DeleteInput, modes: []Mode{ModeSearch}, keys: keys("backspace", "backspace"), help: "delete", handle: func(m Model) (Model, []Cmd) { return searchEdit(m, deleteLastRune(m.Filters.Search)) }},
-	{action: ClearInput, modes: []Mode{ModeSearch}, keys: keys("ctrl+u", "ctrl+u"), help: "clear search", handle: func(m Model) (Model, []Cmd) { return searchEdit(m, "") }},
-	{action: MoveUp, modes: []Mode{ModeSearchResults}, keys: slices.Concat(keys("up", "up"), emacsUp), help: "previous result", footer: true, handle: searchMoving(MoveUp)},
-	{action: MoveDown, modes: []Mode{ModeSearchResults}, keys: slices.Concat(keys("down", "down"), emacsDown), help: "next result", footer: true, handle: searchMoving(MoveDown)},
-	{action: SearchEnter, modes: []Mode{ModeSearchResults}, keys: keys("enter", "enter"), help: "commit search", footer: true, handle: pure(searchEnter)},
-	{action: SearchBack, modes: []Mode{ModeSearchResults}, keys: keys("escape", "esc"), help: "edit query", footer: true, handle: searchBack},
-	{action: SearchQuery, modes: []Mode{ModeSearchResults}, keys: keys("/", "/"), help: "edit query", handle: pure(func(m Model) Model { m.Search.Results = false; return m })},
-	{action: ToggleExpansion, modes: []Mode{ModeList}, keys: keys("space", "space"), help: "expand/collapse", footer: true, sheet: []sheetLine{{sheetGraph, 8, "expand/collapse"}}, handle: hierarchy(ToggleExpansion)},
-	{action: ExpandIssue, modes: []Mode{ModeList}, keys: keys("right", "right"), help: "expand", sheet: []sheetLine{{sheetGraph, 9, "expand"}}, handle: hierarchy(ExpandIssue)},
-	{action: CollapseIssue, modes: []Mode{ModeList}, keys: keys("left", "left"), help: "collapse", sheet: []sheetLine{{sheetGraph, 10, "collapse"}}, handle: hierarchy(CollapseIssue)},
-	{action: ToggleAllExpansion, modes: []Mode{ModeList}, keys: keys("shift+e", "E"), help: "expand/collapse all", sheet: []sheetLine{{sheetGraph, 11, "expand/collapse all"}}, handle: hierarchy(ToggleAllExpansion)},
-	{action: ToggleIssueView, modes: []Mode{ModeList}, keys: keys("v", "v"), help: "flat/nested", footer: true, sheet: []sheetLine{{sheetGraph, 13, "toggle flat/nested view"}}, handle: hierarchy(ToggleIssueView)},
-	{action: DrillOut, modes: []Mode{ModeList}, keys: keys("escape", "esc"), help: "Menu", footer: true, sheet: []sheetLine{{sheetGlobal, 5, "menu"}}, handle: drillOut},
-	{action: MoveDown, modes: []Mode{ModeCollections}, keys: slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), help: "next Collection", footer: true, handle: sidebarMoving(MoveDown)},
-	{action: MoveUp, modes: []Mode{ModeCollections}, keys: slices.Concat(keys("k", "k/↑", "up", "↑"), emacsUp), help: "previous Collection", footer: true, handle: sidebarMoving(MoveUp)},
-	{action: MoveFirst, modes: []Mode{ModeCollections}, keys: keys("g", "g", "home", "home"), help: "first Collection", handle: sidebarMoving(MoveFirst)},
-	{action: MoveLast, modes: []Mode{ModeCollections}, keys: keys("shift+g", "G", "end", "end"), help: "last Collection", handle: sidebarMoving(MoveLast)},
-	{action: DrillIn, modes: []Mode{ModeCollections}, keys: keys("enter", "enter"), help: "open Collection", footer: true, handle: sidebarOpen},
-	{action: MenuBack, modes: []Mode{ModeCollections}, keys: keys("escape", "esc"), help: "back", footer: true, handle: pure(menuBack)},
-	{action: OpenProjects, modes: []Mode{ModeCollections, ModeList, ModeDetail}, keys: keys("shift+p", "P"), help: "projects", sheet: []sheetLine{{sheetGlobal, 4, "projects"}}, handle: pure(openProjects)},
-	{action: OpenInbox, modes: []Mode{ModeCollections, ModeList, ModeDetail}, keys: keys("shift+i", "I"), help: "inbox", sheet: []sheetLine{{sheetGlobal, 3, "inbox"}}, handle: openInbox},
-	{action: QuitAction, keys: keys("q", "q", "ctrl+c", "ctrl+c"), help: "quit", footer: true, sheet: []sheetLine{{sheetGlobal, 2, "quit"}}, handle: pure(func(m Model) Model { m.Quitting = true; return m })},
-	{action: DrillIn, modes: []Mode{ModeList}, keys: keys("enter", "enter"), help: "open", footer: true, sheet: []sheetLine{{sheetGraph, 7, "open detail"}}, handle: pure(drillIn)},
-	{action: FocusDetail, modes: []Mode{ModeList}, keys: keys("tab", "tab"), help: "detail", footer: true, handle: pure(func(m Model) Model {
+	// Moving and opening in the Issue list.
+	{action: MoveDown, modes: []Mode{ModeList}, keys: slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), help: "move", footer: []Mode{ModeList}, footerKey: "↑↓", sheet: []sheetLine{{sheetGraph, 2, "down"}}, handle: selection(MoveDown)},
+	{action: MoveUp, modes: []Mode{ModeList}, keys: slices.Concat(keys("k", "k/↑", "up", "↑"), emacsUp), help: "previous Issue", sheet: []sheetLine{{sheetGraph, 1, "up"}}, handle: selection(MoveUp)},
+	{action: DrillIn, modes: []Mode{ModeList}, keys: keys("enter", "enter"), help: "open", footer: []Mode{ModeList}, footerKey: "↵", sheet: []sheetLine{{sheetGraph, 7, "open detail"}}, handle: pure(drillIn)},
+	{action: FocusDetail, modes: []Mode{ModeList}, keys: keys("tab", "tab"), help: "detail", footer: []Mode{ModeList}, handle: pure(func(m Model) Model {
 		if m.CanFocusDetail() {
 			m.Focus = ColumnDetail
 		}
 		return m
 	})},
-	{action: ToggleDetail, modes: listAndDetail, keys: keys("shift+l", "L"), help: "toggle detail", footer: true, sheet: []sheetLine{{sheetGlobal, 6, "toggle layout"}}, handle: pure(Model.toggleDetail)},
-	{action: MoveDown, modes: []Mode{ModeDetail}, keys: slices.Concat(keys("j", "j/k"), emacsDown), help: "row", footer: true, sheet: []sheetLine{{sheetChildren, 2, "move child cursor"}}, handle: cursorMoving(MoveDown)},
+	{action: ToggleExpansion, modes: []Mode{ModeList}, keys: keys("space", "space"), help: "expand", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetGraph, 8, "expand/collapse"}}, handle: hierarchy(ToggleExpansion)},
+	{action: ToggleAllExpansion, modes: []Mode{ModeList}, keys: keys("shift+e", "E"), help: "all", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetGraph, 11, "expand/collapse all"}}, handle: hierarchy(ToggleAllExpansion)},
+	{action: ExpandIssue, modes: []Mode{ModeList}, keys: keys("right", "right"), help: "expand", sheet: []sheetLine{{sheetGraph, 9, "expand"}}, handle: hierarchy(ExpandIssue)},
+	{action: CollapseIssue, modes: []Mode{ModeList}, keys: keys("left", "left"), help: "collapse", sheet: []sheetLine{{sheetGraph, 10, "collapse"}}, handle: hierarchy(CollapseIssue)},
+	{action: MoveFirst, modes: []Mode{ModeList}, keys: keys("g", "g", "home", "home"), help: "first Issue", sheet: []sheetLine{{sheetGraph, 5, "first"}}, handle: selection(MoveFirst)},
+	{action: MoveLast, modes: []Mode{ModeList}, keys: keys("shift+g", "G", "end", "end"), help: "last Issue", sheet: []sheetLine{{sheetGraph, 6, "last"}}, handle: selection(MoveLast)},
+	{action: PageUp, modes: []Mode{ModeList}, keys: pageUpKeys, help: "page up", sheet: []sheetLine{{sheetGraph, 3, "page up"}}, handle: selection(PageUp)},
+	{action: PageDown, modes: []Mode{ModeList}, keys: pageDownKeys, help: "page down", sheet: []sheetLine{{sheetGraph, 4, "page down"}}, handle: selection(PageDown)},
+	// Moving and opening in the Issue detail.
+	{action: ScrollDown, modes: []Mode{ModeDetail}, keys: keys("down", "↓"), help: "scroll", footer: []Mode{ModeDetail}, footerKey: "↑↓", sheet: []sheetLine{{sheetChildren, 5, "scroll detail viewport"}}, handle: scrolling(ColumnDetail, ScrollLineDown)},
+	{action: ScrollUp, modes: []Mode{ModeDetail}, keys: keys("up", "↑"), help: "scroll up", sheet: []sheetLine{{sheetChildren, 4, "scroll detail viewport"}}, handle: scrolling(ColumnDetail, ScrollLineUp)},
+	{action: MoveDown, modes: []Mode{ModeDetail}, keys: slices.Concat(keys("j", "j/k"), emacsDown), help: "row", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetChildren, 2, "move child cursor"}}, handle: cursorMoving(MoveDown)},
 	{action: MoveUp, modes: []Mode{ModeDetail}, keys: slices.Concat(keys("k", "k"), emacsUp), help: "previous row", sheet: []sheetLine{{sheetChildren, 3, "move child cursor"}}, handle: cursorMoving(MoveUp)},
-	{action: ScrollDown, modes: []Mode{ModeDetail}, keys: keys("down", "↓"), help: "scroll down", footer: true, sheet: []sheetLine{{sheetChildren, 5, "scroll detail viewport"}}, handle: scrolling(ColumnDetail, ScrollLineDown)},
-	{action: ScrollUp, modes: []Mode{ModeDetail}, keys: keys("up", "↑"), help: "scroll up", footer: true, sheet: []sheetLine{{sheetChildren, 4, "scroll detail viewport"}}, handle: scrolling(ColumnDetail, ScrollLineUp)},
+	{action: NextActivityTab, modes: []Mode{ModeDetail}, keys: keys("tab", "↹"), help: "tab", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 1, "next tab"}}, handle: pure(func(m Model) Model { return m.cycleTab(true) })},
+	{action: PreviousActivityTab, modes: []Mode{ModeDetail}, keys: keys("shift+tab", "shift+tab"), help: "previous tab", sheet: []sheetLine{{sheetDetail, 2, "prev tab"}}, handle: pure(func(m Model) Model { return m.cycleTab(false) })},
+	{action: DrillIn, modes: []Mode{ModeDetail}, keys: keys("enter", "↵"), help: "open", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 3, "jump to referenced issue"}, {sheetChildren, 6, "open child"}}, handle: pure(drillIn)},
+	{action: PageUp, modes: []Mode{ModeDetail}, keys: pageUpKeys, help: "scroll page up", handle: scrolling(ColumnDetail, ScrollPageUp)},
+	{action: PageDown, modes: []Mode{ModeDetail}, keys: pageDownKeys, help: "page", footer: []Mode{ModeDetail}, footerKey: "pgup/pgdn", handle: scrolling(ColumnDetail, ScrollPageDown)},
 	{action: MoveFirst, modes: []Mode{ModeDetail}, keys: keys("g", "g", "home", "home"), help: "first row", handle: cursorMoving(MoveFirst)},
 	{action: MoveLast, modes: []Mode{ModeDetail}, keys: keys("shift+g", "G", "end", "end"), help: "last row", handle: cursorMoving(MoveLast)},
-	{action: DrillIn, modes: []Mode{ModeDetail}, keys: keys("enter", "↵"), help: "open", footer: true, sheet: []sheetLine{{sheetDetail, 3, "jump to referenced issue"}, {sheetChildren, 6, "open child"}}, handle: pure(drillIn)},
-	{action: DrillOut, modes: []Mode{ModeDetail}, keys: keys("escape", "esc", "left", "←"), help: "back", footer: true, sheet: []sheetLine{{sheetDetail, 4, "back"}}, handle: drillOut},
-	{action: NextActivityTab, modes: []Mode{ModeDetail}, keys: keys("tab", "↹"), help: "tab", footer: true, sheet: []sheetLine{{sheetDetail, 1, "next tab"}}, handle: pure(func(m Model) Model { return m.cycleTab(true) })},
-	{action: PreviousActivityTab, modes: []Mode{ModeDetail}, keys: keys("shift+tab", "shift+tab"), help: "previous tab", sheet: []sheetLine{{sheetDetail, 2, "prev tab"}}, handle: pure(func(m Model) Model { return m.cycleTab(false) })},
-	{action: RetryAction, modes: []Mode{ModeError}, keys: keys("ctrl+r", "ctrl+r"), help: "retry daemon", footer: true, handle: func(m Model) (Model, []Cmd) { return updateLive(m, Retry{}) }},
-	{action: ToggleHelp, keys: keys("?", "?", "shift+?", "?"), help: "help", footer: true, sheet: []sheetLine{{sheetGlobal, 1, "help"}}, handle: pure(func(m Model) Model { m.HelpOpen = !m.HelpOpen; return m })},
-	{action: CloseHelp, modes: []Mode{ModeHelp}, keys: keys("escape", "esc"), help: "close help", footer: true, handle: pure(func(m Model) Model { m.HelpOpen = false; return m })},
-	{action: OpenClose, modes: listAndDetail, keys: keys("x", "x"), help: "close Issue", footer: true, sheet: []sheetLine{{sheetGraph, 14, "close"}}, handle: pure(openClose)},
+	// Moving and opening in the Menu sidebar.
+	{action: MoveDown, modes: []Mode{ModeCollections}, keys: slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), help: "next Collection", footer: []Mode{ModeCollections}, handle: sidebarMoving(MoveDown)},
+	{action: MoveUp, modes: []Mode{ModeCollections}, keys: slices.Concat(keys("k", "k/↑", "up", "↑"), emacsUp), help: "previous Collection", footer: []Mode{ModeCollections}, handle: sidebarMoving(MoveUp)},
+	{action: MoveFirst, modes: []Mode{ModeCollections}, keys: keys("g", "g", "home", "home"), help: "first Collection", handle: sidebarMoving(MoveFirst)},
+	{action: MoveLast, modes: []Mode{ModeCollections}, keys: keys("shift+g", "G", "end", "end"), help: "last Collection", handle: sidebarMoving(MoveLast)},
+	{action: PageUp, modes: []Mode{ModeCollections}, keys: pageUpKeys, help: "page up", handle: scrolling(ColumnCollections, ScrollPageUp)},
+	{action: PageDown, modes: []Mode{ModeCollections}, keys: pageDownKeys, help: "page down", handle: scrolling(ColumnCollections, ScrollPageDown)},
+	{action: DrillIn, modes: []Mode{ModeCollections}, keys: keys("enter", "enter"), help: "open Collection", footer: []Mode{ModeCollections}, handle: sidebarOpen},
+	{action: MenuBack, modes: []Mode{ModeCollections}, keys: keys("escape", "esc"), help: "back", footer: []Mode{ModeCollections}, handle: pure(menuBack)},
+	// Searching.
+	{action: SearchEnter, modes: []Mode{ModeSearch}, keys: keys("enter", "enter"), help: "results", footer: []Mode{ModeSearch}, handle: pure(searchEnter)},
+	{action: SearchBack, modes: []Mode{ModeSearch}, keys: keys("escape", "esc"), help: "cancel search", footer: []Mode{ModeSearch}, handle: searchBack},
+	{action: MoveUp, modes: []Mode{ModeSearch}, keys: slices.Concat(keys("up", "up"), emacsUp), help: "previous result", handle: searchMoving(MoveUp)},
+	{action: MoveDown, modes: []Mode{ModeSearch}, keys: slices.Concat(keys("down", "down"), emacsDown), help: "next result", handle: searchMoving(MoveDown)},
+	{action: DeleteInput, modes: []Mode{ModeSearch}, keys: keys("backspace", "backspace"), help: "delete", handle: func(m Model) (Model, []Cmd) { return searchEdit(m, deleteLastRune(m.Filters.Search)) }},
+	{action: ClearInput, modes: []Mode{ModeSearch}, keys: keys("ctrl+u", "ctrl+u"), help: "clear search", handle: func(m Model) (Model, []Cmd) { return searchEdit(m, "") }},
+	{action: PageUp, modes: searching, keys: pageUpKeys, help: "page up", handle: searchMoving(PageUp)},
+	{action: PageDown, modes: searching, keys: pageDownKeys, help: "page down", handle: searchMoving(PageDown)},
+	{action: MoveUp, modes: []Mode{ModeSearchResults}, keys: slices.Concat(keys("up", "up"), emacsUp), help: "previous result", footer: []Mode{ModeSearchResults}, handle: searchMoving(MoveUp)},
+	{action: MoveDown, modes: []Mode{ModeSearchResults}, keys: slices.Concat(keys("down", "down"), emacsDown), help: "next result", footer: []Mode{ModeSearchResults}, handle: searchMoving(MoveDown)},
+	{action: SearchEnter, modes: []Mode{ModeSearchResults}, keys: keys("enter", "enter"), help: "commit search", footer: []Mode{ModeSearchResults}, handle: pure(searchEnter)},
+	{action: SearchBack, modes: []Mode{ModeSearchResults}, keys: keys("escape", "esc"), help: "edit query", footer: []Mode{ModeSearchResults}, handle: searchBack},
+	{action: SearchQuery, modes: []Mode{ModeSearchResults}, keys: keys("/", "/"), help: "edit query", handle: pure(func(m Model) Model { m.Search.Results = false; return m })},
+	// Acting on the Issues.
+	{action: NewIssue, modes: listAndDetail, keys: keys("n", "n"), help: "new", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetGraph, 12, "new issue (form)"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, false) }},
+	{action: SearchIssues, modes: []Mode{ModeList}, keys: keys("/", "/"), help: "search", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetFilters, 1, "search"}}, handle: pure(openSearch)},
+	{action: OpenFilterForm, modes: []Mode{ModeList}, keys: keys("f", "f"), help: "filter", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetFilters, 3, "filter (form)"}}, handle: pure(openFilterForm)},
+	{action: CycleStatus, modes: []Mode{ModeList}, keys: keys("s", "s"), help: "status", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetFilters, 2, "cycle status filter"}}, handle: cycleStatus},
+	{action: ToggleIssueView, modes: []Mode{ModeList}, keys: keys("v", "v"), help: "view", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetGraph, 13, "toggle flat/nested view"}}, handle: hierarchy(ToggleIssueView)},
+	{action: ClearFilters, modes: []Mode{ModeList}, keys: keys("c", "c"), help: "clear", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetFilters, 4, "clear filters"}}, handle: clearFilters},
+	{action: EditBody, modes: []Mode{ModeDetail, ModeList}, keys: keys("e", "e"), help: "edit", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 5, "edit body"}}, handle: pure(func(m Model) Model { return startDraft(m, false) })},
+	{action: AddComment, modes: []Mode{ModeDetail}, keys: keys("c", "c"), help: "comment", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 6, "new comment"}}, handle: pure(func(m Model) Model { return startDraft(m, true) })},
+	{action: ReplyAction, modes: []Mode{ModeDetail}, keys: keys("shift+r", "R"), help: "reply to comment", sheet: []sheetLine{{sheetDetail, 13, "reply to comment"}}, handle: pure(startReply)},
+	{action: AddLabelAction, modes: listAndDetail, keys: keys("+", "+"), help: "label", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 8, "add label"}}, handle: fieldFor(AddLabelAction)},
+	{action: RemoveLabelAction, modes: listAndDetail, keys: keys("-", "-"), help: "unlabel", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 9, "remove label"}}, handle: fieldFor(RemoveLabelAction)},
+	{action: AssignOwnerAction, modes: listAndDetail, keys: keys("a", "a"), help: "owner", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 10, "assign owner"}}, handle: fieldFor(AssignOwnerAction)},
+	{action: ClearOwnerAction, modes: listAndDetail, keys: keys("shift+a", "A"), help: "unassign", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 11, "clear owner"}}, handle: fieldFor(ClearOwnerAction)},
+	{action: OpenClose, modes: listAndDetail, keys: keys("x", "x"), help: "close", footer: listAndDetail, sheet: []sheetLine{{sheetGraph, 14, "close"}}, handle: pure(openClose)},
+	{action: ReopenAction, modes: listAndDetail, keys: keys("r", "r"), help: "reopen", footer: listAndDetail, sheet: []sheetLine{{sheetGraph, 15, "reopen"}}, handle: reopenIssue},
+	{action: SetParentAction, modes: listAndDetail, keys: keys("p", "p"), help: "parent", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 7, "set parent"}}, handle: fieldFor(SetParentAction)},
+	{action: PriorityAction, modes: listAndDetail, keys: keys("!", "!"), help: "priority", footer: listAndDetail, sheet: []sheetLine{{sheetDetail, 12, "set priority"}}, handle: fieldFor(PriorityAction)},
 	{action: OpenRecurrenceAction, modes: listAndDetail, keys: keys("shift+o", "O"), help: "make or change recurrence", sheet: []sheetLine{{sheetDetail, 14, "make or change recurrence"}}, handle: pure(openRecurrence)},
-	{action: ReopenAction, modes: listAndDetail, keys: keys("r", "r"), help: "reopen Issue", footer: true, sheet: []sheetLine{{sheetGraph, 15, "reopen"}}, handle: reopenIssue},
-	{action: AddLabelAction, modes: listAndDetail, keys: keys("+", "+"), help: "add label", sheet: []sheetLine{{sheetDetail, 8, "add label"}}, handle: fieldFor(AddLabelAction)},
-	{action: RemoveLabelAction, modes: listAndDetail, keys: keys("-", "-"), help: "remove label", sheet: []sheetLine{{sheetDetail, 9, "remove label"}}, handle: fieldFor(RemoveLabelAction)},
-	{action: AssignOwnerAction, modes: listAndDetail, keys: keys("a", "a"), help: "assign owner", sheet: []sheetLine{{sheetDetail, 10, "assign owner"}}, handle: fieldFor(AssignOwnerAction)},
-	{action: ClearOwnerAction, modes: listAndDetail, keys: keys("shift+a", "A"), help: "clear owner", sheet: []sheetLine{{sheetDetail, 11, "clear owner"}}, handle: fieldFor(ClearOwnerAction)},
-	{action: PriorityAction, modes: listAndDetail, keys: keys("!", "!"), help: "priority", sheet: []sheetLine{{sheetDetail, 12, "set priority"}}, handle: fieldFor(PriorityAction)},
-	{action: SetParentAction, modes: listAndDetail, keys: keys("p", "p"), help: "set parent", sheet: []sheetLine{{sheetDetail, 7, "set parent"}}, handle: fieldFor(SetParentAction)},
+	{action: NewChild, modes: listAndDetail, keys: keys("shift+n", "N"), help: "child", footer: listAndDetail, sheet: []sheetLine{{sheetChildren, 1, "new child"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, true) }},
+	// Layout, back, help and quit.
+	{action: ToggleDetail, modes: listAndDetail, keys: keys("shift+l", "L"), help: "layout", footer: listAndDetail, sheet: []sheetLine{{sheetGlobal, 6, "toggle layout"}}, handle: pure(Model.toggleDetail)},
+	{action: DrillOut, modes: []Mode{ModeList}, keys: keys("escape", "esc"), help: "Menu", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetGlobal, 5, "menu"}}, handle: drillOut},
+	{action: DrillOut, modes: []Mode{ModeDetail}, keys: keys("escape", "esc", "left", "←"), help: "back", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 4, "back"}}, handle: drillOut},
+	{action: OpenProjects, modes: []Mode{ModeCollections, ModeList, ModeDetail}, keys: keys("shift+p", "P"), help: "projects", sheet: []sheetLine{{sheetGlobal, 4, "projects"}}, handle: pure(openProjects)},
+	{action: OpenInbox, modes: []Mode{ModeCollections, ModeList, ModeDetail}, keys: keys("shift+i", "I"), help: "inbox", sheet: []sheetLine{{sheetGlobal, 3, "inbox"}}, handle: openInbox},
+	{action: RetryAction, modes: []Mode{ModeError}, keys: keys("ctrl+r", "ctrl+r"), help: "retry daemon", footer: []Mode{ModeError}, handle: func(m Model) (Model, []Cmd) { return updateLive(m, Retry{}) }},
+	{action: CloseHelp, modes: []Mode{ModeHelp}, keys: keys("escape", "esc"), help: "close help", footer: []Mode{ModeHelp}, handle: pure(func(m Model) Model { m.HelpOpen = false; return m })},
+	{action: ToggleHelp, keys: keys("?", "?", "shift+?", "?"), help: "help", footer: global, sheet: []sheetLine{{sheetGlobal, 1, "help"}}, handle: pure(func(m Model) Model { m.HelpOpen = !m.HelpOpen; return m })},
+	{action: QuitAction, keys: keys("q", "q", "ctrl+c", "ctrl+c"), help: "quit", footer: global, sheet: []sheetLine{{sheetGlobal, 2, "quit"}}, handle: pure(func(m Model) Model { m.Quitting = true; return m })},
 }
 
 // Keymap is every binding: the Popup cards' keys, then the main-surface actions' keys, expanded from
@@ -220,7 +234,11 @@ func init() {
 				if key.Label == "" {
 					help += headlessNote
 				}
-				Keymap = append(Keymap, Binding{Chord: key.Chord, Key: key.Label, Action: entry.action, Help: help, Mode: mode, ShowInFooter: entry.footer && j == 0, entry: entry})
+				label := key.Label
+				if j == 0 && entry.footerKey != "" {
+					label = entry.footerKey
+				}
+				Keymap = append(Keymap, Binding{Chord: key.Chord, Key: label, Action: entry.action, Help: help, Mode: mode, ShowInFooter: slices.Contains(entry.footer, mode) && j == 0, entry: entry})
 			}
 		}
 	}

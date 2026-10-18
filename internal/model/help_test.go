@@ -34,6 +34,8 @@ func TestHelpKeys(t *testing.T) {
 	}
 }
 
+// Each place has its own footer, as in kata tui: the list's moves and filters, the detail's scrolling and what edits the
+// Issue, the help sheet's way out.
 func TestHintsFollowCurrentMode(t *testing.T) {
 	footer := func(m model.Model) string {
 		got := ""
@@ -44,11 +46,18 @@ func TestHintsFollowCurrentMode(t *testing.T) {
 	}
 	m := model.Model{}
 	listHints := footer(m)
-	if !strings.Contains(listHints, "j/↓ next Issue;") || !strings.Contains(listHints, "? help;") || strings.Contains(listHints, "close help") {
+	if !strings.Contains(listHints, "↑↓ move;") || !strings.Contains(listHints, "f filter;") || !strings.Contains(listHints, "? help;") ||
+		strings.Contains(listHints, "+ label;") || strings.Contains(listHints, "close help") {
 		t.Fatalf("list hints = %q", listHints)
 	}
+	detail := m
+	detail.Focus = model.ColumnDetail
+	if got := footer(detail); !strings.HasPrefix(got, "↑↓ scroll;j/k row;") || !strings.Contains(got, "+ label;") || !strings.Contains(got, "esc back;") ||
+		strings.Contains(got, "move;") || strings.Contains(got, "f filter;") {
+		t.Fatalf("detail hints = %q", got)
+	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "?"})
-	if got := footer(m); !strings.Contains(got, "esc close help;") || strings.Contains(got, "next Issue") {
+	if got := footer(m); !strings.Contains(got, "esc close help;") || strings.Contains(got, "move;") {
 		t.Fatalf("help hints = %q", got)
 	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "escape"})

@@ -29,7 +29,7 @@ expect_tree "[data-id='main.topbar.left.heading']" '.ok and .nodes[0].text == "P
 expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("commit search"))'
 ctl key Escape
 ctl key Escape
-expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("next Issue"))'
+expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("↑↓ move"))'
 
 # The Issue detail: I opens the Inbox from it.
 ctl key Tab
