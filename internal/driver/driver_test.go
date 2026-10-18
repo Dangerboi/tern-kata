@@ -37,7 +37,7 @@ var openMenu = model.ActionMsg{Action: model.OpenPicker}
 func resize(cols int) *tern.Resize { return &tern.Resize{Cols: cols} }
 
 func alphaLoaded() model.Msg {
-	return model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &alpha}}
+	return model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &alpha}}
 }
 
 // drawnIDs is every node id Tern would hold after v is rendered.
@@ -315,7 +315,7 @@ func TestDaemonCommandsAreReturnedAndOpsAreNot(t *testing.T) {
 
 func TestDifferentIssueScrollsTheDetailToItsStart(t *testing.T) {
 	s := feed(t, browsing(t, 160), key("j")).State
-	out := step(t, s, model.DetailLoaded{UID: "beta", Selected: &g.UISelectedAuthority{Issue: &beta}})
+	out := step(t, s, model.DetailLoaded{UID: "beta", Selected: &model.IssueDetailData{Issue: &beta}})
 	wantOps(t, out, tern.OpScroll(view.DetailContentID, "start"))
 }
 
@@ -350,7 +350,7 @@ func TestSearchKeepsItsCaretWhileACollectionLoads(t *testing.T) {
 // Collection switch, a resize, a key move in the detail, or a live refresh of the shown Issue.
 func TestOnlyATabSwitchRevealsInsideTheDetail(t *testing.T) {
 	peer := "peer"
-	withLink := &g.UISelectedAuthority{Issue: &alpha, Links: []g.UILink{{ID: 1, FromIssueUID: "alpha", ToIssueUID: peer, ToQualifiedID: "work#peer", Type: "related"}}}
+	withLink := &model.IssueDetailData{Issue: &alpha, Links: []model.Link{{ID: 1, FromIssueUID: "alpha", ToIssueUID: peer, ToQualifiedID: "work#peer", Type: "related"}}}
 	s := feed(t, browsing(t, 160), model.DetailLoaded{UID: "alpha", Selected: withLink}, click("", view.FocusDetailClick)).State
 	for name, in := range map[string]any{
 		"title click":     click("", view.FocusDetailClick),

@@ -54,14 +54,14 @@ func stripedProject() model.Model {
 		{UID: "y", ShortID: "yyyy", Title: "Closed", Status: "closed", ProjectName: "work"},
 		{UID: "z", ShortID: "zzzz", Title: "Last", Status: "open", ProjectName: "work"},
 	}
-	links := []g.UILink{
+	links := []model.Link{
 		{ID: 1, Type: "parent", FromIssueUID: "c1", FromQualifiedID: "work#cc01", ToIssueUID: "p", ToQualifiedID: "work#pppp"},
 		{ID: 2, Type: "parent", FromIssueUID: "c2", FromQualifiedID: "work#cc02", ToIssueUID: "p", ToQualifiedID: "work#pppp"},
 	}
 	return apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: links}}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: collectionLinks(links)}}},
 	)
 }
 

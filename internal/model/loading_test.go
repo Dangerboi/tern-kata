@@ -20,8 +20,8 @@ func projectOf(uids ...string) model.Model {
 	return m
 }
 
-func authority(uid string) *g.UISelectedAuthority {
-	return &g.UISelectedAuthority{Issue: &model.Issue{UID: uid}}
+func authority(uid string) *model.IssueDetailData {
+	return &model.IssueDetailData{Issue: &model.Issue{UID: uid}}
 }
 
 func TestFirstLoadIsTheOnlyFullPaneLoad(t *testing.T) {
@@ -85,7 +85,7 @@ func TestDetailStaysOnScreenUntilTheSelectedIssueArrives(t *testing.T) {
 }
 
 func TestDetailReturnsToFirstRowOnlyForADifferentIssueAndKeepsItsTab(t *testing.T) {
-	a := &g.UISelectedAuthority{Issue: &model.Issue{UID: "a"}, Comments: []g.CommentOut{{UID: "one"}, {UID: "two"}}}
+	a := &model.IssueDetailData{Issue: &model.Issue{UID: "a"}, Comments: []model.Comment{{UID: "one"}, {UID: "two"}}}
 	m, _ := model.Update(projectOf("a", "b"), model.DetailLoaded{UID: "a", Selected: a})
 	m, _ = model.Update(m, model.DetailItemMsg{Tab: model.TabComments, Key: "two"})
 	if m.ActiveTab() != model.TabComments || m.DetailIndex() != 1 {
@@ -107,8 +107,8 @@ func TestDetailReturnsToFirstRowOnlyForADifferentIssueAndKeepsItsTab(t *testing.
 }
 
 func TestPreviousDetailLinksStayRelativeToTheirOwnIssue(t *testing.T) {
-	link := g.UILink{ID: 1, Type: "parent", FromIssueUID: "child", ToIssueUID: "a", FromQualifiedID: "work#child", ToQualifiedID: "work#a"}
-	m, _ := model.Update(projectOf("a", "b"), model.DetailLoaded{UID: "a", Selected: &g.UISelectedAuthority{Issue: &model.Issue{UID: "a"}, Links: []g.UILink{link}}})
+	link := model.Link{ID: 1, Type: "parent", FromIssueUID: "child", ToIssueUID: "a", FromQualifiedID: "work#child", ToQualifiedID: "work#a"}
+	m, _ := model.Update(projectOf("a", "b"), model.DetailLoaded{UID: "a", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "a"}, Links: []model.Link{link}}})
 	m, _ = model.Update(m, model.SelectMsg{UID: "b"})
 
 	row, ok := m.DetailRow(model.TabLinks, 0)

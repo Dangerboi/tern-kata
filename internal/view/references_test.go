@@ -17,18 +17,18 @@ func referencing(tab model.ActivityTab) (model.Model, string) {
 	long := strings.Repeat("a long close message ", 30)
 	main := model.Issue{UID: "main", ShortID: "main", Title: "Main", Status: "open", ProjectName: "work"}
 	peer := model.Issue{UID: "peer", ShortID: "peer", Title: "Peer", Status: "open", ProjectName: "work"}
-	links := []g.UILink{{ID: 1, Type: "blocks", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "peer", ToQualifiedID: "work#peer"}}
+	links := []model.Link{{ID: 1, Type: "blocks", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "peer", ToQualifiedID: "work#peer"}}
 	peerUID, peerShort := "peer", "peer"
 	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
-	events := []g.Event{
+	events := []model.Event{
 		{UID: "linked", Actor: "dana", Type: "issue.linked", Payload: `{"type":"blocks","to_short_id":"peer"}`, RelatedIssueUID: &peerUID, RelatedIssueShortID: &peerShort, CreatedAt: at},
 		{UID: "closed", Actor: "dana", Type: "issue.closed", Payload: `{"reason":"done","message":"` + strings.TrimSpace(long) + `","evidence":[{"type":"commit","sha":"abc123def4"},{"type":"test","command":"go test ./..."}]}`, CreatedAt: at},
 	}
 	m := apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{main, peer}, CollectionLinks: links}}},
-		model.DetailLoaded{UID: "main", Selected: &g.UISelectedAuthority{Issue: &main, Links: links, History: events}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{main, peer}, CollectionLinks: collectionLinks(links)}}},
+		model.DetailLoaded{UID: "main", Selected: &model.IssueDetailData{Issue: &main, Links: links, History: events}},
 		model.ActivityTabMsg{Tab: tab},
 	)
 	return m, strings.TrimSpace(long)
@@ -109,12 +109,12 @@ func TestLongCloseMessageAndEvidenceRenderWhole(t *testing.T) {
 }
 
 func TestPropertiesShowTheParentAsAReferenceAndNoChildLines(t *testing.T) {
-	links := []g.UILink{
+	links := []model.Link{
 		{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#up"},
 		{ID: 2, Type: "parent", FromIssueUID: "kid", FromQualifiedID: "work#kid", ToIssueUID: "alpha", ToQualifiedID: "work#aaaa"},
 		{ID: 3, Type: "blocks", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "other", ToQualifiedID: "work#other"},
 	}
-	m := apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &alpha, Links: links}})
+	m := apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &alpha, Links: links}})
 	nodes := render(t, m)
 	parent := view.DetailContentID + ".properties.parent"
 	assertReference(t, nodes, parent+".v", "#up", "up")
@@ -148,9 +148,9 @@ func TestLinksRowShowsThePeersTitleWhenLoaded(t *testing.T) {
 		t.Errorf("reference and title = %q, want %q", got, "#peer - Peer")
 	}
 
-	ghost := g.UILink{ID: 2, Type: "related", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "ghost", ToQualifiedID: "work#ghost"}
+	ghost := model.Link{ID: 2, Type: "related", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "ghost", ToQualifiedID: "work#ghost"}
 	main := model.Issue{UID: "main", ShortID: "main", Title: "Main", Status: "open", ProjectName: "work"}
-	nodes = render(t, apply(m, model.DetailLoaded{UID: "main", Selected: &g.UISelectedAuthority{Issue: &main, Links: []g.UILink{ghost}}}))
+	nodes = render(t, apply(m, model.DetailLoaded{UID: "main", Selected: &model.IssueDetailData{Issue: &main, Links: []model.Link{ghost}}}))
 	assertReference(t, nodes, view.DetailActivityID+".2.row.jump", "#ghost", "ghost")
 	if got := text(nodes[view.DetailActivityID+".2.row.jump"]); got != "#ghost" {
 		t.Errorf("a peer that is not loaded draws %q", got)
@@ -176,24 +176,24 @@ func TestLinkRowReadsRelationReferenceDashTitle(t *testing.T) {
 	}
 
 	main := model.Issue{UID: "main", ShortID: "main", Title: "Main", Status: "open", ProjectName: "work"}
-	other := g.UILink{ID: 2, Type: "related", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "peer", ToQualifiedID: "elsewhere#peer"}
-	nodes = render(t, apply(m, model.DetailLoaded{UID: "main", Selected: &g.UISelectedAuthority{Issue: &main, Links: []g.UILink{other}}}))
+	other := model.Link{ID: 2, Type: "related", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "peer", ToQualifiedID: "elsewhere#peer"}
+	nodes = render(t, apply(m, model.DetailLoaded{UID: "main", Selected: &model.IssueDetailData{Issue: &main, Links: []model.Link{other}}}))
 	assertReference(t, nodes, view.DetailActivityID+".2.row.jump", "elsewhere#peer", "peer")
 	if got := drawn(nodes[view.DetailActivityID+".2.row"]); got != "related | elsewhere#peer - Peer" {
 		t.Errorf("cross-Project row draws %q", got)
 	}
 
-	ghost := g.UILink{ID: 3, Type: "related", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "ghost", ToQualifiedID: "work#ghost"}
-	nodes = render(t, apply(m, model.DetailLoaded{UID: "main", Selected: &g.UISelectedAuthority{Issue: &main, Links: []g.UILink{ghost}}}))
+	ghost := model.Link{ID: 3, Type: "related", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "ghost", ToQualifiedID: "work#ghost"}
+	nodes = render(t, apply(m, model.DetailLoaded{UID: "main", Selected: &model.IssueDetailData{Issue: &main, Links: []model.Link{ghost}}}))
 	if got := drawn(nodes[view.DetailActivityID+".3.row"]); got != "related | #ghost" {
 		t.Errorf("row without a title draws %q", got)
 	}
 }
 
 func TestPropertiesTitleJumpsToTheReferencedIssue(t *testing.T) {
-	links := []g.UILink{{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#up"}}
+	links := []model.Link{{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#up"}}
 	up := model.Issue{UID: "up", ShortID: "up", Title: "Up", ProjectName: "work"}
-	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, up}}}}, model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &alpha, Links: links}})
+	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{alpha, up}}}}, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &alpha, Links: links}})
 	nodes := render(t, m)
 	value := nodes[view.DetailContentID+".properties.parent.v"]
 	if text(value) != "#up - Up" || value.P["actions"].(map[string]any)["click"] != view.JumpClick("up") {

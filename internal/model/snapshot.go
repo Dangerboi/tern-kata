@@ -30,6 +30,7 @@ type SnapshotLoaded struct {
 	Request             int64
 	Query               g.ReadUISnapshotQuery
 	Snapshot            g.UISnapshotResponseBody
+	Selected            *IssueDetailData // the snapshot's selected part, translated by the gateway
 	ChildCounts         map[string]g.ChildCounts
 	ETag                string
 	NotModified         bool
@@ -159,7 +160,7 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 			m.zone, _ = time.LoadLocation(msg.TimeZone) // an unloadable name reads as UTC
 		}
 		selected, cursorChild := m.SelectedUID, m.cursorChildUID()
-		m = m.applyCollection(msg.Snapshot, msg.ChildCounts).snapshotArrived(msg.Snapshot.Selected, selected, cursorChild)
+		m = m.applyCollection(msg.Snapshot, msg.ChildCounts).snapshotArrived(msg.Selected, selected, cursorChild)
 		m.etag, m.etagQuery = msg.ETag, msg.Query
 		m.Cursor = msg.Snapshot.Cursor
 	}

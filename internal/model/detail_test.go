@@ -51,11 +51,11 @@ func TestSelectedIssueRequestsDetail(t *testing.T) {
 	if m.SelectedUID != "b" || !m.DetailLoading() || !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("selected detail: %+v %#v", m, cmds)
 	}
-	m, _ = model.Update(m, model.DetailLoaded{UID: "a", Selected: &g.UISelectedAuthority{Issue: &model.Issue{UID: "a"}}})
+	m, _ = model.Update(m, model.DetailLoaded{UID: "a", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "a"}}})
 	if m.DetailAuthority() != nil || !m.DetailLoading() {
 		t.Fatal("old request replaced current detail")
 	}
-	m, cmds = model.Update(m, model.DetailLoaded{UID: "b", Selected: &g.UISelectedAuthority{Issue: &model.Issue{UID: "b", Body: "Markdown"}}})
+	m, cmds = model.Update(m, model.DetailLoaded{UID: "b", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "b", Body: "Markdown"}}})
 	if m.DetailAuthority() == nil || m.DetailAuthority().Issue.Body != "Markdown" || m.DetailLoading() || len(cmds) != 0 {
 		t.Fatalf("loaded detail: %+v %#v", m, cmds)
 	}
@@ -82,10 +82,10 @@ func TestActivityTabsAndReferenceJump(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			peer := "closed-b"
-			m := withDetail(model.Model{Workspace: "/repo", Cols: 160, Focus: model.ColumnDetail, SelectedUID: "a", Issues: []model.Issue{{UID: "a"}}}, &g.UISelectedAuthority{
+			m := withDetail(model.Model{Workspace: "/repo", Cols: 160, Focus: model.ColumnDetail, SelectedUID: "a", Issues: []model.Issue{{UID: "a"}}}, &model.IssueDetailData{
 				Issue:   &model.Issue{UID: "a"},
-				Links:   []g.UILink{{ID: 1, FromIssueUID: "a", ToIssueUID: peer, ToQualifiedID: "other#bbbb", Type: "related"}},
-				History: []g.Event{{UID: "event-1", RelatedIssueUID: &peer}},
+				Links:   []model.Link{{ID: 1, FromIssueUID: "a", ToIssueUID: peer, ToQualifiedID: "other#bbbb", Type: "related"}},
+				History: []model.Event{{UID: "event-1", RelatedIssueUID: &peer}},
 			})
 			var cmds []model.Cmd
 			for _, msg := range tt.msgs {
@@ -126,8 +126,7 @@ func TestLiveDetailAuthority(t *testing.T) {
 			refresh := cmds[0].(model.ReadSnapshot)
 			m, cmds = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: g.UISnapshotResponseBody{
 				Cursor: 1, Collection: []model.Issue{{UID: "a"}, {UID: "b"}},
-				Selected: &g.UISelectedAuthority{Issue: &model.Issue{UID: tt.authority, Body: "Live body"}},
-			}})
+			}, Selected: &model.IssueDetailData{Issue: &model.Issue{UID: tt.authority, Body: "Live body"}}})
 			body := ""
 			if m.DetailAuthority() != nil && m.DetailAuthority().Issue != nil {
 				body = m.DetailAuthority().Issue.Body
@@ -149,7 +148,7 @@ func TestLinkRelationsRelativeToSelectedIssue(t *testing.T) {
 	} {
 		t.Run(tt.relation+"/"+tt.selected, func(t *testing.T) {
 			m, _ := model.Update(withDetail(model.Model{SelectedUID: tt.selected}, nil), model.DetailLoaded{
-				UID: tt.selected, Selected: &g.UISelectedAuthority{Issue: &model.Issue{UID: tt.selected}, Links: []g.UILink{{
+				UID: tt.selected, Selected: &model.IssueDetailData{Issue: &model.Issue{UID: tt.selected}, Links: []model.Link{{
 					ID: 1, Type: tt.relation, FromIssueUID: "child", ToIssueUID: "parent", FromQualifiedID: "project#child", ToQualifiedID: "project#parent",
 				}}},
 			})
@@ -162,10 +161,10 @@ func TestLinkRelationsRelativeToSelectedIssue(t *testing.T) {
 }
 
 func TestJKMoveTheRowCursorInsideTheActiveTab(t *testing.T) {
-	m := withDetail(model.Model{Workspace: "/repo", Cols: 160, Focus: model.ColumnDetail, SelectedUID: "a", Issues: []model.Issue{{UID: "a"}}}, &g.UISelectedAuthority{
+	m := withDetail(model.Model{Workspace: "/repo", Cols: 160, Focus: model.ColumnDetail, SelectedUID: "a", Issues: []model.Issue{{UID: "a"}}}, &model.IssueDetailData{
 		Issue:    &model.Issue{UID: "a"},
-		Comments: []g.CommentOut{{UID: "c1"}, {UID: "c2"}, {UID: "c3"}},
-		Links:    []g.UILink{{ID: 1, FromIssueUID: "a", ToIssueUID: "b", ToQualifiedID: "w#b", Type: "related"}},
+		Comments: []model.Comment{{UID: "c1"}, {UID: "c2"}, {UID: "c3"}},
+		Links:    []model.Link{{ID: 1, FromIssueUID: "a", ToIssueUID: "b", ToQualifiedID: "w#b", Type: "related"}},
 	})
 	for _, step := range []struct {
 		chord    string
@@ -192,11 +191,11 @@ func TestJKMoveTheRowCursorInsideTheActiveTab(t *testing.T) {
 }
 
 func TestLinkRefIsShortInTheShownIssuesProject(t *testing.T) {
-	link := func(id int64, peer string) g.UILink {
-		return g.UILink{ID: id, Type: "related", FromIssueUID: "a", FromQualifiedID: "work#a", ToIssueUID: peer, ToQualifiedID: peer + "#x"}
+	link := func(id int64, peer string) model.Link {
+		return model.Link{ID: id, Type: "related", FromIssueUID: "a", FromQualifiedID: "work#a", ToIssueUID: peer, ToQualifiedID: peer + "#x"}
 	}
-	m, _ := model.Update(withDetail(model.Model{SelectedUID: "a"}, nil), model.DetailLoaded{UID: "a", Selected: &g.UISelectedAuthority{
-		Issue: &model.Issue{UID: "a", ProjectName: "work"}, Links: []g.UILink{link(1, "work"), link(2, "other")},
+	m, _ := model.Update(withDetail(model.Model{SelectedUID: "a"}, nil), model.DetailLoaded{UID: "a", Selected: &model.IssueDetailData{
+		Issue: &model.Issue{UID: "a", ProjectName: "work"}, Links: []model.Link{link(1, "work"), link(2, "other")},
 	}})
 	for i, want := range []string{"#x", "other#x"} {
 		if row, _ := m.DetailRow(model.TabLinks, i); row.Ref != want {

@@ -131,7 +131,7 @@ func TestLiveRefreshPreservesDetailPosition(t *testing.T) {
 	for _, authority := range []bool{true, false} {
 		t.Run(map[bool]string{true: "snapshot authority", false: "detail refetch"}[authority], func(t *testing.T) {
 			m := withDetail(model.Model{LiveState: model.LiveState{StreamGeneration: 1}, SelectedUID: "issue", Focus: model.ColumnDetail},
-				&g.UISelectedAuthority{Issue: &model.Issue{UID: "issue"}, Comments: []g.CommentOut{{UID: "one"}, {UID: "two"}}})
+				&model.IssueDetailData{Issue: &model.Issue{UID: "issue"}, Comments: []model.Comment{{UID: "one"}, {UID: "two"}}})
 			m = cursorAt(m, 1)
 			m, cmds := model.Update(m, model.StreamEvent{Generation: 1, ID: 1, Type: "issue.updated"})
 			refresh := cmds[0].(model.ReadSnapshot)
@@ -139,15 +139,16 @@ func TestLiveRefreshPreservesDetailPosition(t *testing.T) {
 				t.Fatalf("refresh omitted selected authority/history: %+v", refresh.Query)
 			}
 			snapshot := g.UISnapshotResponseBody{Cursor: 1, Collection: []model.Issue{{UID: "issue"}}}
+			loaded := model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot}
 			if authority {
-				snapshot.Selected = m.DetailAuthority()
+				loaded.Selected = m.DetailAuthority()
 			}
-			m, cmds = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot})
+			m, cmds = model.Update(m, loaded)
 			if !authority {
 				if len(cmds) != 1 {
 					t.Fatalf("missing detail refetch: %#v", cmds)
 				}
-				m, _ = model.Update(m, model.DetailLoaded{UID: "issue", Selected: &g.UISelectedAuthority{Issue: &model.Issue{UID: "issue"}, Comments: []g.CommentOut{{UID: "one"}, {UID: "two"}}}})
+				m, _ = model.Update(m, model.DetailLoaded{UID: "issue", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "issue"}, Comments: []model.Comment{{UID: "one"}, {UID: "two"}}}})
 			}
 			if m.ActiveTab() != model.TabComments || m.DetailIndex() != 1 || m.SelectedUID != "issue" {
 				t.Fatalf("refresh reset reading position: tab=%v index=%d selected=%q", m.ActiveTab(), m.DetailIndex(), m.SelectedUID)

@@ -21,14 +21,14 @@ func columnsFixture(t testing.TB) model.Model {
 	open := model.Issue{UID: "open", ShortID: "oooo", Title: "Open child", Status: "open", ProjectName: "work", UpdatedAt: noon}
 	done := model.Issue{UID: "done", ShortID: "dddd", Title: "Done child", Status: "closed", ProjectName: "work", UpdatedAt: noon}
 	leaf := model.Issue{UID: "leaf", ShortID: "llll", Title: "Leaf", Status: "open", ProjectName: "work", UpdatedAt: noon.Add(-3 * 24 * time.Hour)}
-	links := []g.UILink{
+	links := []model.Link{
 		{Type: "parent", FromIssueUID: "open", ToIssueUID: "parent"},
 		{Type: "parent", FromIssueUID: "done", ToIssueUID: "parent"},
 	}
 	return apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{parent, open, done, leaf}, CollectionLinks: links}, ChildCounts: map[string]g.ChildCounts{"parent": {Open: 1, Total: 2}}}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{parent, open, done, leaf}, CollectionLinks: collectionLinks(links)}, ChildCounts: map[string]g.ChildCounts{"parent": {Open: 1, Total: 2}}}},
 	)
 }
 

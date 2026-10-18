@@ -29,10 +29,10 @@ func tabLabels(nodes shown) []string {
 // detailWithActivity is alpha with 2 comments, 3 events and 1 Link.
 func detailWithActivity(tab model.ActivityTab) model.Model {
 	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
-	selected := &g.UISelectedAuthority{Issue: &alpha,
-		Comments: []g.CommentOut{{UID: "c1", Author: "dana", CreatedAt: at, Body: "first"}, {UID: "c2", Author: "dana", CreatedAt: at, Body: "second"}},
-		History:  []g.Event{{UID: "e1", Actor: "dana", Type: "issue.created", Payload: `{}`, CreatedAt: at}, {UID: "e2", Actor: "dana", Type: "issue.reopened", Payload: `{}`, CreatedAt: at}, {UID: "e3", Actor: "dana", Type: "issue.reopened", Payload: `{}`, CreatedAt: at}},
-		Links:    []g.UILink{{ID: 7, FromIssueUID: "alpha", ToIssueUID: "beta", ToQualifiedID: "work#bbbb", Type: "related"}},
+	selected := &model.IssueDetailData{Issue: &alpha,
+		Comments: []model.Comment{{UID: "c1", Author: "dana", CreatedAt: at, Body: "first"}, {UID: "c2", Author: "dana", CreatedAt: at, Body: "second"}},
+		History:  []model.Event{{UID: "e1", Actor: "dana", Type: "issue.created", Payload: `{}`, CreatedAt: at}, {UID: "e2", Actor: "dana", Type: "issue.reopened", Payload: `{}`, CreatedAt: at}, {UID: "e3", Actor: "dana", Type: "issue.reopened", Payload: `{}`, CreatedAt: at}},
+		Links:    []model.Link{{ID: 7, FromIssueUID: "alpha", ToIssueUID: "beta", ToQualifiedID: "work#bbbb", Type: "related"}},
 	}
 	return apply(withZone(browsing()), model.DetailLoaded{UID: "alpha", Selected: selected}, model.ActivityTabMsg{Tab: tab})
 }
@@ -108,7 +108,7 @@ func TestDetailBadgesAndChipsAreToned(t *testing.T) {
 		{"closed P3", model.Issue{UID: "a", ShortID: "aaaa", Title: "A", Status: "closed", Priority: &p3, Labels: []string{"bug", "ui"}}, "muted", "muted"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			m := apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &tt.issue}})
+			m := apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &tt.issue}})
 			nodes := render(t, m)
 			props := view.DetailContentID + ".properties"
 			if n := nodes[view.DetailContentID+".heading.status"]; n.P["tone"] != tt.status || text(n) != tt.issue.Status {
@@ -236,10 +236,10 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
 	issue := model.Issue{UID: "alpha", ShortID: "aaaa", Title: "A", Status: "closed", ProjectName: "work", Author: "ann", Revision: 4,
 		CreatedAt: at, UpdatedAt: at, Priority: &p1, Owner: &owner, ClosedReason: &reason, ScheduledOnDate: &day, Metadata: map[string]any{"deadline_on": day}, Labels: []string{"bug"}}
-	links := []g.UILink{{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#up"}}
+	links := []model.Link{{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#up"}}
 	counts := map[string]g.ChildCounts{"alpha": {Open: 1, Total: 2}}
-	nodes := render(t, apply(withZone(browsing()), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{ChildCounts: counts, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: links}}},
-		model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &issue, Links: links}}))
+	nodes := render(t, apply(withZone(browsing()), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{ChildCounts: counts, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: collectionLinks(links)}}},
+		model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &issue, Links: links}}))
 	props := nodes[view.DetailContentID+".properties"]
 	var keys []string
 	for _, row := range props.C {
@@ -270,10 +270,10 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 }
 
 func TestLeadingParentSectionIsHiddenOnlyWhenItNamesTheParent(t *testing.T) {
-	links := []g.UILink{{ID: 1, Type: "parent", FromIssueUID: "kid", FromQualifiedID: "work#kidd", ToIssueUID: "up", ToQualifiedID: "work#upup"}}
-	bodyText := func(issue model.Issue, links []g.UILink) string {
-		nodes := render(t, apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: links}}},
-			model.DetailLoaded{UID: "kid", Selected: &g.UISelectedAuthority{Issue: &issue, Links: links}}))
+	links := []model.Link{{ID: 1, Type: "parent", FromIssueUID: "kid", FromQualifiedID: "work#kidd", ToIssueUID: "up", ToQualifiedID: "work#upup"}}
+	bodyText := func(issue model.Issue, links []model.Link) string {
+		nodes := render(t, apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: collectionLinks(links)}}},
+			model.DetailLoaded{UID: "kid", Selected: &model.IssueDetailData{Issue: &issue, Links: links}}))
 		return text(nodes[view.DetailContentID+".body"])
 	}
 	kid := func(body string) model.Issue {
@@ -293,11 +293,11 @@ func TestLeadingParentSectionIsHiddenOnlyWhenItNamesTheParent(t *testing.T) {
 }
 
 func TestParentSectionMatchingAndEmptyBody(t *testing.T) {
-	links := []g.UILink{{ID: 1, Type: "parent", FromIssueUID: "kid", FromQualifiedID: "work#kidd", ToIssueUID: "up", ToQualifiedID: "work#upup"}}
+	links := []model.Link{{ID: 1, Type: "parent", FromIssueUID: "kid", FromQualifiedID: "work#kidd", ToIssueUID: "up", ToQualifiedID: "work#upup"}}
 	bodyText := func(body string) string {
 		issue := model.Issue{UID: "kid", ShortID: "kidd", Title: "K", Status: "open", ProjectName: "work", Revision: 1, Body: body}
-		nodes := render(t, apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: links}}},
-			model.DetailLoaded{UID: "kid", Selected: &g.UISelectedAuthority{Issue: &issue, Links: links}}))
+		nodes := render(t, apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{issue}, CollectionLinks: collectionLinks(links)}}},
+			model.DetailLoaded{UID: "kid", Selected: &model.IssueDetailData{Issue: &issue, Links: links}}))
 		return text(nodes[view.DetailContentID+".body"])
 	}
 	for body, want := range map[string]string{

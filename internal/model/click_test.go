@@ -22,9 +22,9 @@ func clickBase() model.Model {
 		},
 		CollectionLinks: []g.UILink{{Type: "parent", FromIssueUID: "child", ToIssueUID: "parent"}},
 	}})
-	m, _ = model.Update(m, model.DetailLoaded{UID: "parent", Selected: &g.UISelectedAuthority{
+	m, _ = model.Update(m, model.DetailLoaded{UID: "parent", Selected: &model.IssueDetailData{
 		Issue: &model.Issue{UID: "parent"},
-		Links: []g.UILink{{ID: 1, Type: "related", FromIssueUID: "parent", ToIssueUID: "other", ToQualifiedID: "work#oth1"}},
+		Links: []model.Link{{ID: 1, Type: "related", FromIssueUID: "parent", ToIssueUID: "other", ToQualifiedID: "work#oth1"}},
 	}})
 	return m
 }

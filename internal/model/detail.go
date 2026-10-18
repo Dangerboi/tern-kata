@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 type ActivityTab uint8
@@ -26,7 +25,7 @@ func (LoadDetail) cmd() {}
 
 type DetailLoaded struct {
 	UID      string
-	Selected *g.UISelectedAuthority
+	Selected *IssueDetailData
 }
 
 func (DetailLoaded) msg() {}

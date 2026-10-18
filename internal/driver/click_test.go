@@ -49,10 +49,10 @@ func activity(t *testing.T, tab model.ActivityTab) driver.State {
 	t.Helper()
 	kid := model.Issue{UID: "kid", ShortID: "kidd", Title: "Kid", Status: "open", ProjectName: "work"}
 	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
-	selected := &g.UISelectedAuthority{Issue: &alpha,
-		Comments: []g.CommentOut{{UID: "c1", Author: "dana", CreatedAt: at, Body: "first"}},
-		History:  []g.Event{{UID: "e1", Actor: "dana", Type: "issue.reopened", Payload: `{}`, CreatedAt: at}},
-		Links: []g.UILink{
+	selected := &model.IssueDetailData{Issue: &alpha,
+		Comments: []model.Comment{{UID: "c1", Author: "dana", CreatedAt: at, Body: "first"}},
+		History:  []model.Event{{UID: "e1", Actor: "dana", Type: "issue.reopened", Payload: `{}`, CreatedAt: at}},
+		Links: []model.Link{
 			{ID: 1, FromIssueUID: "alpha", ToIssueUID: "beta", ToQualifiedID: "work#bbbb", Type: "related"},
 			{ID: 2, FromIssueUID: "kid", FromQualifiedID: "work#kidd", ToIssueUID: "alpha", ToQualifiedID: "work#aaaa", Type: "parent"},
 		},

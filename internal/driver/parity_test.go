@@ -99,9 +99,9 @@ func clickBase() driver.State {
 		},
 		CollectionLinks: []g.UILink{{Type: "parent", FromIssueUID: "child", ToIssueUID: "parent"}},
 	}})
-	m, _ = model.Update(m, model.DetailLoaded{UID: "parent", Selected: &g.UISelectedAuthority{
+	m, _ = model.Update(m, model.DetailLoaded{UID: "parent", Selected: &model.IssueDetailData{
 		Issue: &model.Issue{UID: "parent"},
-		Links: []g.UILink{{ID: 1, Type: "related", FromIssueUID: "parent", ToIssueUID: "other", ToQualifiedID: "work#oth1"}},
+		Links: []model.Link{{ID: 1, Type: "related", FromIssueUID: "parent", ToIssueUID: "other", ToQualifiedID: "work#oth1"}},
 	}})
 	return driver.State{Model: m}
 }
@@ -272,7 +272,7 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 	creating := driver.State{Model: model.Model{Project: model.Project{ID: 7}}}
 	titled, _ := inputs(chord("n"), tern.Key{Text: "title"})(creating)
 	asking := pressed(titled, "escape")
-	draftModel := withDetail(model.Model{Workspace: "/repo", SelectedUID: "a"}, &g.UISelectedAuthority{Issue: &model.Issue{UID: "a", ProjectID: 2, Body: "a😀b", Revision: 7}})
+	draftModel := withDetail(model.Model{Workspace: "/repo", SelectedUID: "a"}, &model.IssueDetailData{Issue: &model.Issue{UID: "a", ProjectID: 2, Body: "a😀b", Revision: 7}})
 	draft := pressed(driver.State{Model: draftModel}, "enter", "e")
 	typed, _ := inputs(tern.Key{Name: "paste", Text: "more"})(draft)
 	asked := pressed(typed, "escape")
@@ -314,7 +314,7 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 }
 
 // withDetail is m with the detail of its selected Issue loaded.
-func withDetail(m model.Model, authority *g.UISelectedAuthority) model.Model {
+func withDetail(m model.Model, authority *model.IssueDetailData) model.Model {
 	m, _ = model.Update(m, model.ResizeMsg{Cols: m.Cols})
 	m, _ = model.Update(m, model.DetailLoaded{UID: m.SelectedUID, Selected: authority})
 	return m

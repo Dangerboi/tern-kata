@@ -31,15 +31,15 @@ func parenting(tab model.ActivityTab) model.Model {
 	dana := "dana"
 	kid := model.Issue{UID: "kid", ShortID: "kidd", Title: "Open kid", Status: "open", ProjectName: "work", Owner: &dana, AssignmentExpiresOn: ptr(testNow.Add(time.Hour)), UpdatedAt: testNow.Add(-38 * time.Minute)}
 	done := model.Issue{UID: "done", ShortID: "done", Title: "Closed kid", Status: "closed", ProjectName: "work", UpdatedAt: testNow.Add(-3 * time.Hour)}
-	child := func(id int64, uid string) g.UILink {
-		return g.UILink{ID: id, Type: "parent", FromIssueUID: uid, FromQualifiedID: "work#" + uid, ToIssueUID: "alpha", ToQualifiedID: "work#aaaa"}
+	child := func(id int64, uid string) model.Link {
+		return model.Link{ID: id, Type: "parent", FromIssueUID: uid, FromQualifiedID: "work#" + uid, ToIssueUID: "alpha", ToQualifiedID: "work#aaaa"}
 	}
-	links := []g.UILink{child(1, "ghost"), child(2, "done"), child(3, "kid")}
+	links := []model.Link{child(1, "ghost"), child(2, "done"), child(3, "kid")}
 	return apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{ChildCounts: map[string]g.ChildCounts{"alpha": {Open: 1, Total: 3}}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{parent, kid, done}, CollectionLinks: links}}},
-		model.DetailLoaded{UID: "alpha", Selected: &g.UISelectedAuthority{Issue: &parent, Links: links, Comments: []g.CommentOut{{UID: "c1", Body: "hi"}}}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{ChildCounts: map[string]g.ChildCounts{"alpha": {Open: 1, Total: 3}}, Snapshot: g.UISnapshotResponseBody{Collection: []model.Issue{parent, kid, done}, CollectionLinks: collectionLinks(links)}}},
+		model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &parent, Links: links, Comments: []model.Comment{{UID: "c1", Body: "hi"}}}},
 		model.ActivityTabMsg{Tab: tab},
 	)
 }

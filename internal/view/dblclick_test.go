@@ -16,11 +16,11 @@ func TestEveryIssueRowCarriesTheDoubleClickAction(t *testing.T) {
 		{UID: "child", ShortID: "chld", Title: "Child", Status: "open", ProjectName: "work"},
 		{UID: "leaf", ShortID: "leaf", Title: "Leaf", Status: "closed", ProjectName: "work"},
 	}
-	links := []g.UILink{{Type: "parent", FromIssueUID: "child", ToIssueUID: "parent"}}
+	links := []model.Link{{Type: "parent", FromIssueUID: "child", ToIssueUID: "parent"}}
 	m := apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: links}}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: g.UISnapshotResponseBody{Collection: issues, CollectionLinks: collectionLinks(links)}}},
 		model.KeyMsg{Chord: "shift+e"},
 	)
 	nodes := render(t, m)
