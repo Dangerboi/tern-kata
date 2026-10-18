@@ -1,5 +1,7 @@
 package model
 
+import "slices"
+
 // IssueDetail owns what the detail column shows: the Issue it was asked for, that Issue's loaded authority, loading and error
 // state, the Activity tab, the row cursor, the jump history, the hidden flag and the Issue opened by reference. Only this file
 // writes these fields; every other caller reports what happened (an Issue was written, a snapshot arrived, a tab was chosen).
@@ -13,7 +15,8 @@ type IssueDetail struct {
 	loading bool
 	err     error
 	tab     ActivityTab
-	cursor  int
+	cursor  int // an index into rows.items
+	rows    detailRows
 	back    []string
 	// landedOn is the Issue the last jump landed on; the history ends once the detail shows another one.
 	landedOn string
@@ -46,7 +49,7 @@ func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 		m = m.endJumpHistory()
 	}
 	m, load := m.loadDetail()
-	return m, append(cmds, load...)
+	return m.withRows(), append(cmds, load...)
 }
 
 // shownIssue is the loaded Issue of the detail when it is the selected one, else nil.
@@ -123,9 +126,11 @@ func (m Model) conflictResolved(uid string, stored *Issue) Model {
 // detailLoaded and detailFailed apply the result of a LoadDetail; one for an Issue no longer asked for is dropped.
 func (m Model) detailLoaded(msg DetailLoaded) Model {
 	if msg.UID == m.SelectedUID && msg.UID == m.uid {
+		anchor, anchored := m.cursorRowID()
 		m.authority = msg.Selected
 		m.loading = false
 		m.err = nil
+		m = m.reanchor(anchor, anchored)
 	}
 	return m
 }
@@ -142,8 +147,8 @@ func (m Model) detailFailed(msg DetailFailed) Model {
 }
 
 // snapshotArrived refreshes the shown Issue in place from a snapshot's selected authority, keeping the tab and the cursor where
-// its rows still exist. selected and cursorChild are the selection and the child under the cursor before the snapshot applied.
-func (m Model) snapshotArrived(authority *IssueDetailData, selected, cursorChild string) Model {
+// its rows still exist. selected and anchor are the selection and the row under the cursor before the snapshot applied.
+func (m Model) snapshotArrived(authority *IssueDetailData, selected string, anchor rowID, anchored bool) Model {
 	if m.Focus == ColumnDetail && len(m.back) > 0 {
 		m.SelectedUID = selected // the Issue jumped to stays shown
 	}
@@ -153,12 +158,7 @@ func (m Model) snapshotArrived(authority *IssueDetailData, selected, cursorChild
 		m.stale = false
 		m.loading = false
 		m.err = nil
-		m.cursor = min(m.cursor, max(m.DetailCursorCount()-1, 0))
-		for i, child := range m.DetailChildren() {
-			if cursorChild != "" && child.UID == cursorChild {
-				m.cursor = i
-			}
-		}
+		m = m.reanchor(anchor, anchored)
 	} else if m.uid == m.SelectedUID {
 		m.stale = true
 	}
@@ -224,7 +224,8 @@ func (m Model) jumpBack() (Model, bool) {
 func (m Model) chooseTab(tab ActivityTab) Model {
 	m.Focus = ColumnDetail
 	m.tab = tab
-	m.cursor = len(m.DetailChildren())
+	m = m.withRows()
+	m.cursor = m.firstActivityIndex()
 	return m
 }
 
@@ -240,20 +241,16 @@ func (m Model) cycleTab(next bool) Model {
 func (m Model) chooseRow(tab ActivityTab, key string) Model {
 	m.Focus = ColumnDetail
 	m.tab = tab
-	for i := range m.DetailRowCount(tab) {
-		if row, _ := m.DetailRow(tab, i); row.Key == key {
-			m.cursor = len(m.DetailChildren()) + i
-			break
-		}
+	m = m.withRows()
+	if i := slices.IndexFunc(m.rows.items, func(r DetailItem) bool { return r.Kind == tab.kind() && r.Key == key }); i >= 0 {
+		m.cursor = i
 	}
 	return m
 }
 
 // openCursorRow follows the row under the cursor: a child or a referenced Issue.
 func (m Model) openCursorRow() Model {
-	if children := m.DetailChildren(); m.cursor < len(children) {
-		return m.jumpTo(children[m.cursor].UID)
-	} else if row, ok := m.DetailRow(m.tab, m.cursor-len(children)); ok {
+	if row, ok := m.withRows().cursorRow(); ok {
 		return m.jumpTo(row.ReferenceUID)
 	}
 	return m
@@ -261,7 +258,8 @@ func (m Model) openCursorRow() Model {
 
 // moveCursor walks the cursor over the children and the active tab's rows.
 func (m Model) moveCursor(action Action) Model {
-	count := m.DetailCursorCount()
+	m = m.withRows()
+	count := len(m.rows.items)
 	if count == 0 {
 		return m
 	}
