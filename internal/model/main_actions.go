@@ -219,5 +219,5 @@ func orGlobal(list []Mode) []Mode {
 
 // openInbox is `I`: it opens the Inbox Collection wherever the Menu is, like picking it in the sidebar.
 func openInbox(m Model) (Model, []Cmd) {
-	return openEntry(m, PickerEntry{Collection: Collection{View: "inbox", Title: "Inbox"}}, false)
+	return openEntry(m, PickerEntry{Collection: InboxCollection()}, false)
 }

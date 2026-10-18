@@ -103,7 +103,7 @@ func projectSaved(m Model, msg ProjectSaved) (Model, []Cmd) {
 	if m.ProjectForm.Bind {
 		m.Project, m.Bound = msg.Project, true
 	}
-	collection := Collection{View: "project", ProjectUID: msg.Project.UID, Title: msg.Project.Name}
+	collection := ProjectCollection(msg.Project.UID, msg.Project.Name)
 	if !slices.Contains(m.Collections, collection) {
 		// The snapshot on screen predates the Project; list it until the next one arrives.
 		m.Collections = append(slices.Clip(m.Collections), collection)
