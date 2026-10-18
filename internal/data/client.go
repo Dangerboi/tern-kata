@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
-	"net/http"
 	"os/exec"
 	"strings"
 
@@ -17,63 +15,65 @@ import (
 
 type Client struct {
 	*client.Client
-	transport *http.Transport
-	remote    bool
-	version   string
+	remote  bool
+	version string
 }
 
-// Target is where a located daemon listens, as `kata daemon locate --json` reports it.
+// Target is a client for the daemon that serves a workspace.
 type Target struct {
-	Kind           string `json:"kind"`
-	Network        string `json:"network"`
-	Address        string `json:"address"`
-	RequestBaseURL string `json:"request_base_url"`
+	Client *client.Client
+	// Remote reports whether the daemon is remote; nil means local.
+	Remote func(ctx context.Context) (bool, error)
 }
 
 // Locator finds the daemon that serves workspace.
 type Locator func(ctx context.Context, workspace string) (Target, error)
 
-// LocateWithKata is the production Locator: it asks the kata CLI.
+// noDaemonHint is what tern-kata adds when no daemon answers.
+const noDaemonHint = "start the kata daemon (kata daemon start) or run `kata doctor`"
+
+// LocateWithKata is the production Locator: it uses kata's own discovery for the workspace.
 func LocateWithKata(ctx context.Context, workspace string) (Target, error) {
+	c, err := client.Discover(ctx, client.DiscoverOptions{Workspace: workspace})
+	if err != nil {
+		if errors.Is(err, client.ErrDaemonUnavailable) {
+			err = fmt.Errorf("%w\n%s", err, noDaemonHint)
+		}
+		return Target{}, err
+	}
+	return Target{Client: c, Remote: func(ctx context.Context) (bool, error) { return daemonIsRemote(ctx, workspace) }}, nil
+}
+
+// daemonIsRemote asks the kata CLI which kind of daemon serves workspace.
+// shortcut: kata's client does not expose the daemon kind; delete this once it does.
+func daemonIsRemote(ctx context.Context, workspace string) (bool, error) {
 	raw, err := exec.CommandContext(ctx, "kata", "--workspace", workspace, "daemon", "locate", "--json").Output()
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && len(exit.Stderr) > 0 {
-			return Target{}, errors.New(strings.TrimSpace(string(exit.Stderr)))
+			return false, errors.New(strings.TrimSpace(string(exit.Stderr)))
 		}
-		return Target{}, fmt.Errorf("kata daemon locate: %w", err)
+		return false, fmt.Errorf("kata daemon locate: %w", err)
 	}
-	var target Target
-	if err := json.Unmarshal(raw, &target); err != nil {
-		return Target{}, fmt.Errorf("kata daemon locate response: %w", err)
+	var located struct {
+		Kind string `json:"kind"`
 	}
-	return target, nil
+	if err := json.Unmarshal(raw, &located); err != nil {
+		return false, fmt.Errorf("kata daemon locate response: %w", err)
+	}
+	return located.Kind == "remote", nil
 }
 
-// connect builds a client for target and applies the version gate.
-func connect(ctx context.Context, target Target) (result *Client, err error) {
-	var c *client.Client
-	var transport *http.Transport
-	defer func() {
-		if result == nil && transport != nil {
-			transport.CloseIdleConnections()
-		}
-	}()
-	if target.Network == "unix" {
-		socket := strings.TrimPrefix(target.Address, "unix://")
-		transport = &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return (&net.Dialer{}).DialContext(ctx, "unix", socket)
-		}}
-		c, err = client.NewWithHTTPClient("http://kata.invalid", &http.Client{Transport: transport})
-	} else {
-		c, err = client.NewWithGlobalAuth(ctx, target.RequestBaseURL)
-	}
-	if err != nil {
-		return nil, err
-	}
+// connect applies the version gate to target's daemon.
+func connect(ctx context.Context, target Target) (*Client, error) {
+	c := target.Client
 	ping, err := c.PingWithResponse(ctx)
 	if err != nil {
-		return nil, daemonError(err)
+		err = daemonError(err)
+		if client.StatusCode(err) == 0 {
+			err = fmt.Errorf("%w\n%s", err, noDaemonHint)
+		}
+		return nil, err
 	}
 	if ping.JSON200 == nil {
 		return nil, fmt.Errorf("kata daemon returned no version")
@@ -86,14 +86,13 @@ func connect(ctx context.Context, target Target) (result *Client, err error) {
 	if semver.Compare(normalized, "v0.18.0") < 0 {
 		return nil, fmt.Errorf("kata daemon %s is too old; tern-kata requires v0.18.0 or newer; upgrade kata", version)
 	}
-	return &Client{Client: c, transport: transport, remote: target.Kind == "remote", version: normalized}, nil
-}
-
-// CloseIdleConnections releases the owned Unix transport when the client is dropped.
-func (c *Client) CloseIdleConnections() {
-	if c.transport != nil {
-		c.transport.CloseIdleConnections()
+	var remote bool
+	if target.Remote != nil {
+		if remote, err = target.Remote(ctx); err != nil {
+			return nil, err
+		}
 	}
+	return &Client{Client: c, remote: remote, version: normalized}, nil
 }
 
 // daemonError is the text the Pane shows for any daemon failure: kata's message, then its recovery hint on its
