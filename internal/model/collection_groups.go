@@ -18,6 +18,7 @@ func IssueDate(projected *string, metadata map[string]any, key string) string {
 
 // GroupIssues follows kata web view.ts: calendar strings are not timezone-converted.
 func GroupIssues(collection Collection, issues []Issue, today string) []IssueGroup {
+	grouping := collection.Def().Grouping
 	groups := map[string][]Issue{}
 	titles := map[string]string{}
 	for _, issue := range issues {
@@ -25,19 +26,19 @@ func GroupIssues(collection Collection, issues []Issue, today string) []IssueGro
 		title := collection.Title
 		schedule := IssueDate(issue.ScheduledOnDate, issue.Metadata, "scheduled_on")
 		deadline := IssueDate(issue.DeadlineOnDate, issue.Metadata, "deadline_on")
-		switch collection.View {
-		case "upcoming":
+		switch grouping {
+		case GroupScheduledDate:
 			if issue.Status != "open" || schedule == "" || schedule <= today {
 				continue
 			}
 			id, title = schedule, schedule
-		case "logbook":
+		case GroupClosedDate:
 			if !IsClosed(issue) || issue.ClosedAt == nil {
 				continue
 			}
 			id = issue.ClosedAt.Format("2006-01-02")
 			title = id
-		case "today":
+		case GroupToday:
 			if issue.Status != "open" || !((schedule != "" && schedule <= today) || (deadline != "" && deadline <= today)) {
 				continue
 			}
@@ -45,7 +46,7 @@ func GroupIssues(collection Collection, issues []Issue, today string) []IssueGro
 			if (schedule != "" && schedule < today) || (deadline != "" && deadline < today) {
 				id, title = "0-overdue", "Overdue"
 			}
-		case "deadlines":
+		case GroupDeadline:
 			if issue.Status != "open" || deadline == "" {
 				continue
 			}
@@ -55,7 +56,7 @@ func GroupIssues(collection Collection, issues []Issue, today string) []IssueGro
 			} else if deadline == today {
 				id, title = "1-today", "Today"
 			}
-		case "all-open":
+		case GroupProject:
 			if issue.Status != "open" {
 				continue
 			}
@@ -70,7 +71,7 @@ func GroupIssues(collection Collection, issues []Issue, today string) []IssueGro
 	result := make([]IssueGroup, 0, len(groups))
 	for id, items := range groups {
 		slices.SortStableFunc(items, func(a, b Issue) int {
-			if collection.View == "deadlines" && (id == "0-overdue" || id == "1-today") {
+			if grouping == GroupDeadline && (id == "0-overdue" || id == "1-today") {
 				if c := cmp.Compare(IssueDate(a.DeadlineOnDate, a.Metadata, "deadline_on"), IssueDate(b.DeadlineOnDate, b.Metadata, "deadline_on")); c != 0 {
 					return c
 				}
@@ -83,7 +84,7 @@ func GroupIssues(collection Collection, issues []Issue, today string) []IssueGro
 		result = append(result, IssueGroup{ID: id, Title: titles[id], Issues: items})
 	}
 	slices.SortFunc(result, func(a, b IssueGroup) int {
-		if collection.View == "logbook" {
+		if grouping == GroupClosedDate {
 			return cmp.Compare(b.ID, a.ID)
 		}
 		return cmp.Compare(a.ID, b.ID)

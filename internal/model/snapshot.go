@@ -67,14 +67,9 @@ type SnapshotFailed struct {
 
 func (SnapshotFailed) msg() {}
 
-// DatedView says the Collection's query needs the local calendar date.
-func DatedView(view string) bool {
-	return view == "today" || view == "upcoming" || view == "deadlines"
-}
-
 // CollectionQuery is the snapshot query for a Collection and the filters alone.
 func CollectionQuery(c Collection, f Filters) g.ReadUISnapshotQuery {
-	q := g.ReadUISnapshotQuery{View: new(c.View)}
+	q := g.ReadUISnapshotQuery{View: new(c.Def().DaemonView)}
 	if c.ProjectUID != "" {
 		q.ProjectUID = new(c.ProjectUID)
 	} else if f.ProjectUID != "" {
@@ -252,13 +247,13 @@ func (m Model) cancelPending(before Model, msg Msg) Model {
 // applyCollection puts a snapshot on screen: the Collections, the grouped Issues, and the selection.
 func (m Model) applyCollection(snapshot Snapshot) Model {
 	m.Snapshot = snapshot
-	m.Collections = []Collection{{View: "inbox", Title: "Inbox"}, {View: "today", Title: "Today"}, {View: "upcoming", Title: "Upcoming"}, {View: "deadlines", Title: "Deadlines"}, {View: "all-open", Title: "All Open"}, {View: "logbook", Title: "Logbook"}}
+	m.Collections = FixedCollections()
 	for _, p := range snapshot.Catalog {
-		m.Collections = append(m.Collections, Collection{View: "project", ProjectUID: p.Project.UID, Title: p.Project.Name})
+		m.Collections = append(m.Collections, ProjectCollection(p.Project.UID, p.Project.Name))
 	}
 	groupCollection := m.Collection
 	if m.Filters != (Filters{}) {
-		groupCollection = Collection{View: "results", Title: "Results"}
+		groupCollection = ResultsCollection()
 	}
 	issues := snapshot.Issues
 	if uid := m.idMatch(); uid != "" {
@@ -270,7 +265,7 @@ func (m Model) applyCollection(snapshot Snapshot) Model {
 	}
 	m.Groups = GroupIssues(groupCollection, issues, m.LocalDate)
 	for i := range m.Groups {
-		m.Groups[i].Heading = !m.Collection.IsProject()
+		m.Groups[i].Heading = m.Collection.Def().Headings
 	}
 	m.Issues = nil
 	for _, group := range m.Groups {
