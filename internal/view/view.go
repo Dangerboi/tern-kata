@@ -3,6 +3,7 @@ package view
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -10,6 +11,7 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
+	"go.kenn.io/kit/tui/helplayout"
 )
 
 // Cell widths of an Issue row, in characters. The Pane is monospaced, so a cell
@@ -148,13 +150,14 @@ func scrollerCommon(key string) ui.CommonWithoutMax {
 
 // scrollMax caps a scrolling list. Without a card the list fills the space its
 // column has left. A card's body sizes to its content, not to the card, so
-// there the cap is a fraction of the window.
-// ponytail: Tern gives a card body no fill, so the card tier assumes the window is at least ~600px (about 25 rows) tall; below that the card clips the list's lowest rows instead of the Pane scrolling the top bar away. Upgrade: a Tern prop for a card body that fills its card, or the Pane's rows in tern.Caps to cap in lines.
+// there the cap is a fraction of the window, less a share for each footer line past the first.
+// ponytail: Tern gives a card body no fill, so the card tier assumes the window is at least ~420px tall with a footer of up to three lines; below that the card clips the list's lowest rows instead of the Pane scrolling the top bar away. A footer line takes about 5% of a 420px window, and more than it needs of a taller one. Upgrade: a Tern prop for a card body that fills its card, or the Pane's rows in tern.Caps to cap in lines.
 func scrollMax(m model.Model) ui.ListMax {
 	if len(m.VisibleColumns()) < 2 {
 		return ui.MaxFrac(1)
 	}
-	return ui.MaxFrac(0.6)
+	grid, _, _ := footerGrid(m)
+	return ui.MaxFrac(0.6 - 0.05*float64(max(len(grid)-1, 0)))
 }
 
 // topBar is the pinned row above the columns: the Collection title with its
@@ -316,8 +319,17 @@ func rightCells(kids, owner, updated string, cols listColumns, style string) []u
 	return append(spans, ui.Span{T: cellGap + cell(updated, updatedWidth), S: style})
 }
 
-func footer(m model.Model) tern.Element {
-	segments := make([]tern.Element, 0, len(model.Keymap)+1)
+// footerSeparator stands between two columns of footer hints, and footerMargin is the Dock's padding, in columns.
+const (
+	footerSeparator = " ▕ "
+	footerMargin    = 4
+)
+
+// footerGrid is the current mode's hints laid out as kata's TUI lays out its footer: a grid with as many columns as fit the
+// Pane, so a narrow Pane gets more lines instead of losing hints. chords are the hints' chords in reading order, and
+// position is the selected row's place in the list, drawn at the grid's top right.
+func footerGrid(m model.Model) (grid [][]helplayout.HelpItem, chords []string, position string) {
+	var items []helplayout.HelpItem
 	for binding := range model.BindingsForMode(m.CurrentMode(), true) {
 		if binding.Action == model.FocusDetail && !m.CanFocusDetail() {
 			continue
@@ -329,7 +341,8 @@ func footer(m model.Model) tern.Element {
 		if binding.Action == model.ClosePicker && m.Picker.Projects && m.Picker.Filter == "" {
 			help = "back"
 		}
-		segments = append(segments, ui.Seg{Common: ui.Common{Key: binding.Chord, Actions: &ui.Actions{Click: KeyClick(binding.Chord)}}, Text: binding.Key + " " + help})
+		items = append(items, helplayout.HelpItem{Key: binding.Key, Description: help})
+		chords = append(chords, binding.Chord)
 	}
 	selected := 0
 	rows := m.VisibleRows()
@@ -339,8 +352,33 @@ func footer(m model.Model) tern.Element {
 			break
 		}
 	}
-	segments = append(segments, ui.Seg{Common: ui.Common{Key: "position"}, Side: ui.SideRight, Text: fmt.Sprintf("%d / %d", selected, len(rows))})
-	return ui.Nodes(ui.Status{Common: ui.Common{Key: "hints"}, Children: segments})
+	position = fmt.Sprintf("%d / %d", selected, len(rows))
+	gap := utf8.RuneCountInString(footerSeparator)
+	grid = helplayout.ReflowRows([][]helplayout.HelpItem{items}, m.Cols-footerMargin-gap-utf8.RuneCountInString(position), gap)
+	return grid, chords, position
+}
+
+func footer(m model.Model) tern.Element {
+	grid, chords, position := footerGrid(m)
+	widths := helplayout.ColumnWidths(grid)
+	lines := make([]tern.Element, len(grid))
+	next := 0
+	for r, row := range grid {
+		cells := make([]tern.Element, 0, 2*len(row))
+		for c, item := range row {
+			if c > 0 {
+				cells = append(cells, ui.Text{Common: ui.Common{Key: "sep" + strconv.Itoa(c)}, Spans: []ui.Span{{T: footerSeparator, S: "muted"}}, Wrap: ui.WrapNone})
+			}
+			chord, pad := chords[next], strings.Repeat(" ", widths[c]-helplayout.ItemWidth(item))
+			next++
+			cells = append(cells, ui.Text{Common: ui.Common{Key: chord, Actions: &ui.Actions{Click: KeyClick(chord)}},
+				Spans: []ui.Span{{T: item.Key, S: "strong"}, {T: " " + item.Description + pad, S: "muted"}}, Wrap: ui.WrapNone})
+		}
+		lines[r] = ui.Row{Common: ui.Common{Key: strconv.Itoa(r)}, Gap: ui.GapNone, Children: cells}
+	}
+	return ui.Nodes(ui.Row{Common: ui.Common{Key: "hints"}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(
+		ui.Col{Common: ui.Common{Key: "grid", Grow: 1}, Children: lines},
+		ui.Text{Common: ui.Common{Key: "position", Shrink: new(float64)}, Text: position, Wrap: ui.WrapNone})})
 }
 
 // headerRow labels the Issue rows. It is an Item like the rows, so its cells sit

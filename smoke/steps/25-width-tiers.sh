@@ -44,6 +44,9 @@ expect_width 1000 0 1 0
 (( $(width_cols) >= 80 && $(width_cols) < 140 ))
 expect_width 700 0 1 0
 expect_tree "[data-id='dock.hints']" '.ok and .count == 1'
+# The footer wraps its hints onto more lines rather than running past the Pane's edge.
+footer_right=$(ctl stats | jq -r '.viewport[0]')
+expect_tree "[data-id^='dock.hints.grid.']" ".ok and .count > 1 and ([.nodes[] | .rect[0] + .rect[2]] | max <= $footer_right)"
 
 # Moving through the list in that column loads each detail behind it; the
 # detail column is not drawn, so nothing may be asked of it.
