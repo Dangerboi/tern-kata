@@ -19,25 +19,18 @@ var filterTitles = map[model.Field]string{
 	model.FilterRelationship: "Relationship",
 }
 
-// filterText is what the Filter form shows in the field called name.
-func filterText(m model.Model, name model.Field) string {
-	values := m.FilterForm.Values
+// filterChoiceLabel is how the Filter form shows value of the choice field called name.
+func filterChoiceLabel(m model.Model, name model.Field, value string) string {
 	switch name {
 	case model.FilterProject:
-		if values.ProjectUID != "" {
-			return m.ProjectFilterName(values.ProjectUID)
+		if value != "" {
+			return m.ProjectFilterName(value)
 		}
 		return "Any Project in this Collection"
 	case model.FilterStatus:
-		return model.FilterChoiceLabel(model.FilterStatuses, values.Status)
-	case model.FilterOwner:
-		return values.Owner
-	case model.FilterLabel:
-		return values.Label
-	case model.FilterRelationship:
-		return model.FilterChoiceLabel(model.FilterRelationships, values.Relationship)
+		return model.FilterChoiceLabel(model.FilterStatuses, value)
 	}
-	return ""
+	return model.FilterChoiceLabel(model.FilterRelationships, value)
 }
 
 func filterLayer(m model.Model) tern.Element {
@@ -53,9 +46,19 @@ func filterLayer(m model.Model) tern.Element {
 			tone = ui.ToneAccent
 			prompt = "> " + prompt
 		}
+		value := m.FilterForm.Values.Value(field.Name)
+		if !field.Text {
+			choices := m.FilterChoices(field.Name)
+			labels := make([]string, len(choices))
+			for i, choice := range choices {
+				labels[i] = filterChoiceLabel(m, field.Name, choice)
+			}
+			children = append(children, choiceField(field.Name, tone, title, prompt, labels, func(i int) bool { return choices[i] == value }, -1))
+			continue
+		}
 		children = append(children, ui.Input{
 			Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: title},
-			Field:  ui.Field{Text: filterText(m, field.Name), Mode: "insert", Readonly: !field.Text, Prompt: []ui.Span{{T: prompt}}, Placeholder: "Any"},
+			Field:  ui.Field{Text: value, Mode: "insert", Prompt: []ui.Span{{T: prompt}}, Placeholder: "Any"},
 		})
 	}
 	children = append(children, buttonRow(keyButton("apply", "Apply filters", "ctrl+o", true), keyButton("cancel", "Cancel", "escape", false)))

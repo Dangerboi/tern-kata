@@ -21,6 +21,15 @@ type FocusFieldMsg struct{ Field Field }
 
 func (FocusFieldMsg) msg() {}
 
+// ChooseMsg is the pointer choosing the choice at Index, in the order the card shows them, of the choice field called Field of
+// the open popup card. The field takes focus, as after FocusFieldMsg, and holds that choice.
+type ChooseMsg struct {
+	Field Field
+	Index int
+}
+
+func (ChooseMsg) msg() {}
+
 // Card names a popup card.
 type Card int
 
@@ -63,6 +72,8 @@ type cardEntry struct {
 	// are zero for a card without a body.
 	target EditTarget
 	edit   func(Model, func(TextEditor) TextEditor) Model
+	// choose gives the focused choice field its choice at an index; nil for a card without choice fields.
+	choose func(Model, int) Model
 }
 
 // cards lists every popup card in the one order that decides which is on top. It is filled in by
@@ -140,6 +151,7 @@ func init() {
 			fields: RecurrenceFields, focus: func(m *Model) *Field { return &m.RecurrenceForm.Field },
 			locked: func(m Model) bool { return m.RecurrenceForm.Saving || m.RecurrenceForm.StopConfirm },
 			hidden: func(m Model, name Field) bool { return !m.RecurrenceForm.Shows(name) },
+			choose: func(m Model, i int) Model { m.RecurrenceForm.choose(i); return m },
 			caret: func(m Model) (Field, bool) {
 				f := m.RecurrenceForm
 				return f.Field, !f.Saving && !f.StopConfirm && takesText(RecurrenceFields, f.Field)
@@ -159,6 +171,7 @@ func init() {
 			fields: FilterFields, focus: func(m *Model) *Field { return &m.FilterForm.Field },
 			locked: func(Model) bool { return false },
 			caret:  func(m Model) (Field, bool) { return m.FilterForm.Field, takesText(FilterFields, m.FilterForm.Field) },
+			choose: chooseFilter,
 		},
 		{
 			card: CardPicker, open: func(m Model) bool { return m.Picker.Open },
@@ -373,6 +386,16 @@ func editorKey(e TextEditor, binding Binding, bound bool, msg KeyMsg) TextEditor
 func focusField(m Model, name Field) Model {
 	if entry, ok := m.topEntry(); ok && entry.focus != nil && !entry.locked(m) && takesFocus(entry.fields, name) && (entry.hidden == nil || !entry.hidden(m, name)) {
 		*entry.focus(&m) = name
+	}
+	return m
+}
+
+// chooseField focuses the choice field called name of the open card and gives it its choice at index; a text field, a
+// field the card hides or a locked card changes nothing.
+func chooseField(m Model, name Field, index int) Model {
+	m = focusField(m, name)
+	if entry, ok := m.topEntry(); ok && entry.choose != nil && !entry.locked(m) && *entry.focus(&m) == name && !takesText(entry.fields, name) {
+		m = entry.choose(m, index)
 	}
 	return m
 }

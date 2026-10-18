@@ -39,8 +39,7 @@ expect_tree "[data-id$='.$search_alpha']" '.count == 1'
 ctl key f
 expect_tree "[data-id='layer.filters']" '.count == 1 and (.nodes[0].text | contains("Filter smoke"))'
 ctl key Right
-ctl key tab
-ctl key Right
+ctl click "[data-id='layer.filters.status.1']"
 ctl key tab
 for letter in f i l t e r - o w n e r; do ctl key "$letter"; done
 ctl key tab

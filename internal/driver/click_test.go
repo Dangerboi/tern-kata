@@ -78,6 +78,7 @@ func TestEveryClickTheViewDrawsDecodesToAMessage(t *testing.T) {
 		"close":       feed(t, browsing(t, 160), key("x")).State,
 		"field form":  feed(t, browsing(t, 160), key("+")).State,
 		"filters":     feed(t, browsing(t, 160), key("f")).State,
+		"recurrence":  feed(t, browsing(t, 160), key("shift+o")).State,
 		"draft":       feed(t, browsing(t, 160), key("enter"), key("e")).State,
 	}
 	for tab := model.TabComments; tab < model.TabCount; tab++ {
@@ -151,6 +152,49 @@ func TestClickingAFieldMakesItTheFieldTheKeysEdit(t *testing.T) {
 				t.Fatalf("click on %q left field %q, keys left %q", tt.field, tt.read(clicked.State.Model), tt.read(typed.State.Model))
 			}
 			wantOps(t, clicked, tern.OpFocus(tt.id(tt.field)))
+		})
+	}
+}
+
+// A click on one choice of a card's choice field is the keys that focus that field and reach that choice: the click Tern
+// sends is the one the view draws on it.
+func TestClickingAChoiceIsTheKeysThatReachIt(t *testing.T) {
+	weekdays := func(s driver.State) []string {
+		keys := []string{"tab", "tab"} // Frequency, Every, Weekdays
+		for range (4 - s.Model.RecurrenceForm.WeekdayAt + 7) % 7 {
+			keys = append(keys, "right")
+		}
+		return append(keys, "space")
+	}
+	for _, tt := range []struct {
+		name, open, id string
+		keys           func(driver.State) []string
+	}{
+		{"Recurrence frequency", "shift+o", view.RecurrenceFieldID(model.RecurrenceFrequency) + ".2", func(driver.State) []string { return []string{"right"} }}, // Weekly to Monthly
+		{"Recurrence weekday", "shift+o", view.RecurrenceFieldID(model.RecurrenceWeekdays) + ".4", weekdays},                                                    // Friday
+		{"Filter status", "f", view.FilterFieldID(model.FilterStatus) + ".1", func(driver.State) []string { return []string{"tab", "right"} }},                  // open
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			opened := feed(t, browsing(t, 160), key(tt.open)).State
+			var action string
+			for _, node := range wireNodes(t, view.Render(opened.Model, now)) {
+				if node.ID == tt.id {
+					actions, _ := node.P["actions"].(map[string]any)
+					action, _ = actions["click"].(string)
+				}
+			}
+			if action == "" {
+				t.Fatalf("no click drawn on %s", tt.id)
+			}
+			clicked := step(t, opened, click(tt.id, action))
+			var keys []any
+			for _, chord := range tt.keys(opened) {
+				keys = append(keys, key(chord))
+			}
+			typed := feed(t, opened, keys...)
+			if !reflect.DeepEqual(clicked.State.Model, typed.State.Model) {
+				t.Fatalf("click on %s left\n%+v\nkeys left\n%+v", tt.id, clicked.State.Model.RecurrenceForm, typed.State.Model.RecurrenceForm)
+			}
 		})
 	}
 }

@@ -18,7 +18,7 @@ expect_tree "[data-id='main.columns.list.issues.$cs_uid']" '.ok and .count == 1 
 ctl key O
 expect_tree "[data-id='layer.recurrence']" '.ok and .count == 1 and (.nodes[0].text | contains("Change recurrence"))'
 expect_tree "[data-id='layer.recurrence.actions.stop']" '.ok and .count == 1'
-expect_tree "[data-id='layer.recurrence.every']" '.ok and .count == 1 and (.nodes[0].text | contains("Every: 1"))'
+expect_tree "[data-id='layer.recurrence.every']" '.ok and .count == 1 and (.nodes[0].text | contains("Every (weeks): 1"))'
 ctl key Tab
 ctl key Backspace
 ctl type '"2"'

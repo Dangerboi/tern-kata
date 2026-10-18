@@ -1,10 +1,30 @@
 package view
 
 import (
+	"strconv"
+
+	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/stencil-hq/tern-sdk/go/tern/el"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
+
+// choiceField is a popup card's choice field: its prompt, then every choice as a label whose click picks it, the chosen ones
+// bracketed in the accent as the active Activity tab is. The choice at cursor gets the keys' cursor mark; -1 marks none.
+func choiceField(name model.Field, tone ui.Tone, title, prompt string, labels []string, chosen func(int) bool, cursor int) tern.Element {
+	children := ui.Nodes(ui.Text{Common: ui.Common{Key: "prompt"}, Text: prompt})
+	for i, label := range labels {
+		style := ""
+		if chosen(i) {
+			label, style = "[ "+label+" ]", "accent strong"
+		}
+		if i == cursor {
+			label = "▸" + label
+		}
+		children = append(children, ui.Text{Common: ui.Common{Key: strconv.Itoa(i), Actions: &ui.Actions{Click: ChooseClick(name, i)}}, Spans: []ui.Span{{T: label, S: style}}})
+	}
+	return ui.Row{Common: ui.Common{Key: string(name), Tone: tone, Aria: title}, Gap: ui.GapMD, Wrap: true, Children: children}
+}
 
 // keyButton is a button whose click is the key press chord, so a click and the key never disagree.
 func keyButton(key, text, chord string, primary bool) el.Button {

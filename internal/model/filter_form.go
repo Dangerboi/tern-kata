@@ -56,6 +56,14 @@ func (f *Filters) value(name Field) *string {
 	return nil
 }
 
+// Value is the filter value the field called name holds, "" for a name that is not a Filter field.
+func (f Filters) Value(name Field) string {
+	if value := f.value(name); value != nil {
+		return *value
+	}
+	return ""
+}
+
 func filterTextField(form *FilterFormState) *string {
 	if !takesText(FilterFields, form.Field) {
 		return nil
@@ -63,8 +71,9 @@ func filterTextField(form *FilterFormState) *string {
 	return form.Values.value(form.Field)
 }
 
-// filterChoices is the values the choice field called name cycles through, nil for a text field.
-func (m Model) filterChoices(name Field) []string {
+// FilterChoices is the values the choice field called name cycles through, in the order the form shows them; nil for a text
+// field.
+func (m Model) FilterChoices(name Field) []string {
 	var choices []FilterChoice
 	switch name {
 	case FilterProject:
@@ -88,6 +97,14 @@ func (m Model) filterChoices(name Field) []string {
 		return nil
 	}
 	return values
+}
+
+// chooseFilter gives the focused choice field its value at index i in FilterChoices; an index out of range changes nothing.
+func chooseFilter(m Model, i int) Model {
+	if choices := m.FilterChoices(m.FilterForm.Field); i >= 0 && i < len(choices) {
+		*m.FilterForm.Values.value(m.FilterForm.Field) = choices[i]
+	}
+	return m
 }
 
 // filterFormKey is one key for the Filter form on top: a bound chord acts, any other types.
@@ -127,7 +144,7 @@ func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 			*choice = ""
 		}
 	case NextFilterChoice, PreviousFilterChoice:
-		choices := m.filterChoices(m.FilterForm.Field)
+		choices := m.FilterChoices(m.FilterForm.Field)
 		if choices == nil {
 			return m, nil
 		}

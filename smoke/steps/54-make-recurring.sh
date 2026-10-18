@@ -9,8 +9,14 @@ expect_tree "[data-id='main.columns.list.issues.$mr_uid']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.list.issues.$mr_uid']"
 expect_tree "[data-id='main.columns.list.issues.$mr_uid']" '.ok and .nodes[0]["aria-selected"] == "true"'
 ctl key O
-expect_tree "[data-id='layer.recurrence.frequency']" '.ok and .count == 1 and (.nodes[0] | [.. | objects | .text? // empty] | join(" ") | contains("Weekly"))'
-# Weekly shows no Day or Month field.
+expect_tree "[data-id='layer.recurrence.frequency']" '.ok and .count == 1 and (.nodes[0] | [.. | objects | .text? // empty] | join(" ") | contains("[ Weekly ]"))'
+expect_tree "[data-id='layer.recurrence.every']" '.ok and .count == 1 and (.nodes[0].text | contains("Every (weeks): 1"))'
+# Weekly shows no Day or Month field; clicking Monthly shows Day, clicking Weekly hides it again.
+expect_tree "[data-id='layer.recurrence.day']" '.ok and .count == 0'
+ctl click "[data-id='layer.recurrence.frequency.2']"
+expect_tree "[data-id='layer.recurrence.day']" '.ok and .count == 1'
+expect_tree "[data-id='layer.recurrence.every']" '.ok and .count == 1 and (.nodes[0].text | contains("Every (months): 1"))'
+ctl click "[data-id='layer.recurrence.frequency.1']"
 expect_tree "[data-id='layer.recurrence.day']" '.ok and .count == 0'
 ctl click "[data-id='layer.recurrence.actions.save']"
 expect_tree "[data-id='layer.recurrence']" '.ok and .count == 0'

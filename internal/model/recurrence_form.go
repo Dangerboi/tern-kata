@@ -394,17 +394,39 @@ func (f *RecurrenceFormState) step(back bool) {
 	cycle := func(i, n int) int { return ((i+d)%n + n) % n }
 	switch f.Field {
 	case RecurrenceFrequency:
-		f.Frequency = Frequencies[cycle(slices.Index(Frequencies, f.Frequency), len(Frequencies))]
-		if f.Day == "" {
-			f.Day = f.startDay()
-		}
+		f.choose(cycle(slices.Index(Frequencies, f.Frequency), len(Frequencies)))
 	case RecurrenceEnds:
-		f.Ends = RecurrenceEndKinds[cycle(slices.Index(RecurrenceEndKinds, f.Ends), len(RecurrenceEndKinds))]
+		f.choose(cycle(slices.Index(RecurrenceEndKinds, f.Ends), len(RecurrenceEndKinds)))
 	case RecurrenceMonth:
-		f.Month = cycle(f.Month-1, 12) + 1
+		f.choose(cycle(f.Month-1, 12))
 	case RecurrenceWeekdays:
 		f.WeekdayAt = cycle(f.WeekdayAt, 7)
 	}
+}
+
+// choose gives the focused choice field its choice at index i, in the order the card shows them (Frequencies, MondayFirst,
+// January first, RecurrenceEndKinds). In the Weekdays field it puts the cursor on that day and toggles it. An index out of
+// range changes nothing.
+func (f *RecurrenceFormState) choose(i int) {
+	switch {
+	case i < 0:
+		return
+	case f.Field == RecurrenceFrequency && i < len(Frequencies):
+		f.Frequency = Frequencies[i]
+		if f.Day == "" {
+			f.Day = f.startDay()
+		}
+	case f.Field == RecurrenceEnds && i < len(RecurrenceEndKinds):
+		f.Ends = RecurrenceEndKinds[i]
+	case f.Field == RecurrenceMonth && i < 12:
+		f.Month = i + 1
+	case f.Field == RecurrenceWeekdays && i < len(MondayFirst):
+		f.WeekdayAt = i
+		f.Weekdays[MondayFirst[i]] = !f.Weekdays[MondayFirst[i]]
+	default:
+		return
+	}
+	f.Err = nil
 }
 
 // recurrenceKey is one key for the Recurrence card on top. Left, right and space move through a choice field's choices; in the
@@ -432,9 +454,7 @@ func recurrenceKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case bound && binding.Action == RecurrenceStop && f.Change:
 		f.StopConfirm, f.Err = true, nil
 	case bound && binding.Action == InputSpace && field == nil && f.Field == RecurrenceWeekdays:
-		day := MondayFirst[f.WeekdayAt]
-		f.Weekdays[day] = !f.Weekdays[day]
-		f.Err = nil
+		f.choose(f.WeekdayAt)
 	case bound && binding.Action == InputSpace && field == nil, bound && binding.Action == RecurrenceNextChoice && field == nil:
 		f.step(false)
 		f.Err = nil

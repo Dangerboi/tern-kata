@@ -98,6 +98,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	switch msg := msg.(type) {
 	case FocusFieldMsg:
 		return focusField(m, msg.Field), nil
+	case ChooseMsg:
+		return chooseField(m, msg.Field, msg.Index), nil
 	case KeyMsg:
 		if next, cmds, handled := updateTopCardKey(m, msg); handled {
 			return next, cmds

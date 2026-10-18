@@ -14,7 +14,6 @@ func RecurrenceFieldID(name model.Field) string { return "layer.recurrence." + s
 
 var recurrenceTitles = map[model.Field]string{
 	model.RecurrenceFrequency: "Frequency",
-	model.RecurrenceEvery:     "Every",
 	model.RecurrenceWeekdays:  "Weekdays",
 	model.RecurrenceDay:       "Day (1-31, last, 2nd tue, last fri)",
 	model.RecurrenceMonth:     "Month",
@@ -24,34 +23,26 @@ var recurrenceTitles = map[model.Field]string{
 	model.RecurrenceZone:      "Time zone",
 }
 
+// everyUnits is what the Every field counts at each frequency.
+var everyUnits = map[model.Frequency]string{model.Daily: "days", model.Weekly: "weeks", model.Monthly: "months", model.Yearly: "years"}
+
 var endLabels = map[model.EndKind]string{model.EndNever: "Never", model.EndUntil: "On a date", model.EndCount: "After a number of occurrences"}
 
-// recurrenceText is what the card shows in the field called name.
+// recurrenceTitle is the label of the field called name as the card stands: Every names what it counts.
+func recurrenceTitle(f model.RecurrenceFormState, name model.Field) string {
+	if name == model.RecurrenceEvery {
+		return "Every (" + everyUnits[f.Frequency] + ")"
+	}
+	return recurrenceTitles[name]
+}
+
+// recurrenceText is what the card shows in the text field called name.
 func recurrenceText(f model.RecurrenceFormState, name model.Field) string {
 	switch name {
-	case model.RecurrenceFrequency:
-		return strings.ToUpper(string(f.Frequency[:1])) + strings.ToLower(string(f.Frequency[1:]))
 	case model.RecurrenceEvery:
 		return f.Every
-	case model.RecurrenceWeekdays:
-		var b strings.Builder
-		for i, day := range model.MondayFirst {
-			mark := "[ ] "
-			if f.Weekdays[day] {
-				mark = "[x] "
-			}
-			if name == f.Field && i == f.WeekdayAt {
-				b.WriteString("▸")
-			}
-			b.WriteString(mark + day.String()[:3] + "  ")
-		}
-		return strings.TrimSpace(b.String())
 	case model.RecurrenceDay:
 		return f.Day
-	case model.RecurrenceMonth:
-		return time.Month(f.Month).String()
-	case model.RecurrenceEnds:
-		return endLabels[f.Ends]
 	case model.RecurrenceEnd:
 		return f.EndText()
 	case model.RecurrenceStart:
@@ -60,6 +51,36 @@ func recurrenceText(f model.RecurrenceFormState, name model.Field) string {
 		return f.Zone
 	}
 	return ""
+}
+
+// recurrenceChoices is the choice field called name: its choices' labels in the order the model picks them by index, which
+// are chosen, and the choice under the keys' cursor, -1 for none.
+func recurrenceChoices(f model.RecurrenceFormState, name model.Field) (labels []string, chosen func(int) bool, cursor int) {
+	switch name {
+	case model.RecurrenceFrequency:
+		for _, frequency := range model.Frequencies {
+			labels = append(labels, strings.ToUpper(string(frequency[:1]))+strings.ToLower(string(frequency[1:])))
+		}
+		return labels, func(i int) bool { return model.Frequencies[i] == f.Frequency }, -1
+	case model.RecurrenceWeekdays:
+		for _, day := range model.MondayFirst {
+			labels = append(labels, day.String()[:3])
+		}
+		cursor = -1
+		if f.Field == name {
+			cursor = f.WeekdayAt
+		}
+		return labels, func(i int) bool { return f.Weekdays[model.MondayFirst[i]] }, cursor
+	case model.RecurrenceMonth:
+		for month := time.January; month <= time.December; month++ {
+			labels = append(labels, month.String()[:3])
+		}
+		return labels, func(i int) bool { return i+1 == f.Month }, -1
+	}
+	for _, kind := range model.RecurrenceEndKinds {
+		labels = append(labels, endLabels[kind])
+	}
+	return labels, func(i int) bool { return model.RecurrenceEndKinds[i] == f.Ends }, -1
 }
 
 func recurrenceLayer(m model.Model) tern.Element {
@@ -81,15 +102,20 @@ func recurrenceLayer(m model.Model) tern.Element {
 			continue
 		}
 		tone := ui.ToneNeutral
-		title := recurrenceTitles[field.Name]
+		title := recurrenceTitle(f, field.Name)
 		prompt := title + ": "
 		if field.Name == f.Field {
 			tone = ui.ToneAccent
 			prompt = "> " + prompt
 		}
+		if !field.Text {
+			labels, chosen, cursor := recurrenceChoices(f, field.Name)
+			children = append(children, choiceField(field.Name, tone, title, prompt, labels, chosen, cursor))
+			continue
+		}
 		children = append(children, ui.Input{
 			Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: title},
-			Field:  ui.Field{Text: recurrenceText(f, field.Name), Mode: "insert", Readonly: f.Saving || f.StopConfirm || !field.Text, Prompt: []ui.Span{{T: prompt}}},
+			Field:  ui.Field{Text: recurrenceText(f, field.Name), Mode: "insert", Readonly: f.Saving || f.StopConfirm, Prompt: []ui.Span{{T: prompt}}},
 		})
 	}
 	if f.Err != nil {

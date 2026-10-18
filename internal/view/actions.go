@@ -18,6 +18,7 @@ const (
 	jumpAct        = "jump"
 	activityTabAct = "activity-tab"
 	detailItemAct  = "detail-item"
+	chooseAct      = "choose"
 )
 
 // FocusDetailClick, RetryClick and MenuClick carry no value.
@@ -49,6 +50,11 @@ func DetailItemClick(tab model.ActivityTab, key string) string {
 	return click(detailItemAct, strconv.Itoa(int(tab))+":"+key)
 }
 
+// ChooseClick picks the choice at index of the open card's choice field called name.
+func ChooseClick(name model.Field, index int) string {
+	return click(chooseAct, string(name)+":"+strconv.Itoa(index))
+}
+
 func parseTab(text string) (model.ActivityTab, bool) {
 	tab, err := strconv.Atoi(text)
 	return model.ActivityTab(tab), err == nil && tab >= 0 && tab < int(model.TabCount)
@@ -75,6 +81,11 @@ func DecodeAction(id, act, value string) model.Msg {
 		tabText, key, found := strings.Cut(value, ":")
 		if tab, ok := parseTab(tabText); found && ok {
 			return model.DetailItemMsg{Tab: tab, Key: key}
+		}
+	case chooseAct:
+		name, index, found := strings.Cut(value, ":")
+		if i, err := strconv.Atoi(index); found && err == nil {
+			return model.ChooseMsg{Field: model.Field(name), Index: i}
 		}
 	case jumpAct:
 		return model.JumpIssueMsg{UID: value}
