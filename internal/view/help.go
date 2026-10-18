@@ -23,6 +23,8 @@ var cardHelp = map[string][]struct {
 		{"cancel", model.ModeCreate, []model.Action{model.CancelDraft}},
 		{"change field", model.ModeCreate, []model.Action{model.CreateNext, model.CreatePrevious}},
 		{"open editor", model.ModeEditor, []model.Action{model.ExternalEditorAction}},
+		{"cycle reply kind", model.ModeEditor, []model.Action{model.CycleReplyKind}},
+		{"send reply anyway", model.ModeEditor, []model.Action{model.SendReplyAnyway}},
 	},
 	"Filters": {
 		{"reset filter form", model.ModeFilterForm, []model.Action{model.ResetFilterForm}},

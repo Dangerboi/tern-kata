@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -26,9 +27,22 @@ func (c *Client) SaveDraft(ctx context.Context, cmd model.SaveDraft) (model.Msg,
 	// shortcut: check-then-write races (kata v0.19 honours no revision precondition on edits or comments); upgrade when it does.
 	var werr error
 	if cmd.Comment {
-		_, werr = c.CreateCommentWithResponse(ctx, &g.CreateCommentRequestOptions{PathParams: &g.CreateCommentPath{ProjectID: fmt.Sprint(cmd.ProjectID), Ref: cmd.UID}, Body: &g.CreateCommentBody{Body: cmd.Text, Actor: &actor}})
+		body := &g.CreateCommentBody{Body: cmd.Text, Actor: &actor}
+		if cmd.ReplyTo != "" {
+			kind := g.CommentRequestBodyKind(cmd.Kind)
+			body.ReplyTo, body.Kind = &cmd.ReplyTo, &kind
+			if cmd.Force {
+				body.Force = &cmd.Force
+			}
+		}
+		_, werr = c.CreateCommentWithResponse(ctx, &g.CreateCommentRequestOptions{PathParams: &g.CreateCommentPath{ProjectID: fmt.Sprint(cmd.ProjectID), Ref: cmd.UID}, Body: body})
 	} else {
 		_, werr = c.EditIssueWithResponse(ctx, &g.EditIssueRequestOptions{PathParams: &g.EditIssuePath{ProjectID: fmt.Sprint(cmd.ProjectID), Ref: cmd.UID}, Body: &g.EditIssueBody{Body: &cmd.Text, Actor: &actor}})
+	}
+	if cmd.ReplyTo != "" && daemonCode(werr) == "duplicate_reply" {
+		// kata's hint names the CLI's --force; the card offers Send anyway instead.
+		envelope, _ := errors.AsType[g.ErrorEnvelope](werr)
+		return model.DraftFailed{UID: cmd.UID, Err: errors.New(envelope.ErrorData.Message), Duplicate: true}, nil
 	}
 	if werr != nil {
 		return nil, daemonError(werr)

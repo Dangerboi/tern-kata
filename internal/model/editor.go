@@ -2,7 +2,11 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"maps"
+	"slices"
+	"strings"
+	"unicode/utf8"
 )
 
 var errDraftReadOnly = errors.New("Read-only: reconnecting to kata; Draft kept")
@@ -14,6 +18,28 @@ type Draft struct {
 	Comment, Saving, DiscardConfirm bool
 	Conflict                        *Issue
 	Err                             error
+	// ReplyTo is the UID of the comment a comment Draft answers ("" for a plain comment), ReplyAuthor its author and Kind
+	// what the reply is: one of ReplyKinds. Duplicate says kata refused the last send as a duplicate reply, which Send
+	// anyway can override.
+	ReplyTo, ReplyAuthor, Kind string
+	Duplicate                  bool
+}
+
+// ReplyKinds are the kinds of a Reply, in the order the kind key cycles them.
+var ReplyKinds = []string{"reply", "confirm", "refute", "supersede"}
+
+// minEvidence is the length kata asks of a confirm or refute, counted in characters once whitespace collapses.
+const minEvidence = 40
+
+// validReply is the refusal of a Reply the daemon would reject for too little evidence, nil when it may be sent.
+func (d Draft) validReply() error {
+	if d.ReplyTo == "" || (d.Kind != "confirm" && d.Kind != "refute") {
+		return nil
+	}
+	if utf8.RuneCountInString(strings.Join(strings.Fields(d.Editor.Text), " ")) < minEvidence {
+		return fmt.Errorf("A %s needs at least %d characters, not counting extra whitespace. Nothing was sent.", d.Kind, minEvidence)
+	}
+	return nil
 }
 
 type SaveDraft struct {
@@ -21,6 +47,9 @@ type SaveDraft struct {
 	BaseText                    string
 	ProjectID                   int64
 	Comment                     bool
+	// ReplyTo and Kind make the comment a Reply to the comment with that UID; Force sends it although kata sees a duplicate.
+	ReplyTo, Kind string
+	Force         bool
 }
 
 func (SaveDraft) cmd() {}
@@ -49,6 +78,8 @@ func (DraftSaved) msg() {}
 type DraftFailed struct {
 	UID string
 	Err error
+	// Duplicate says the daemon refused a Reply as a duplicate of an earlier one of the same kind.
+	Duplicate bool
 }
 
 func (DraftFailed) msg() {}
@@ -119,16 +150,61 @@ func startDraft(m Model, comment bool) Model {
 	m.EditorUID = uid
 	return m.focusDetail()
 }
-func saveDraft(m Model) (Model, []Cmd) {
+
+// startReply is `R`: on a comment row it opens the Issue's comment Draft as a reply to that comment, keeping the Draft's text.
+// A body Draft already open stays as it is, as `c` leaves it.
+func startReply(m Model) Model {
+	row, ok := m.withRows().cursorRow()
+	if !ok || row.Kind != RowComment || m.shownIssue() == nil {
+		return m
+	}
+	m = startDraft(m, true)
+	if draft, ok := m.ActiveDraft(); ok && draft.Comment {
+		draft.ReplyTo, draft.ReplyAuthor, draft.Kind = row.Key, row.Activity.Author, ReplyKinds[0]
+		draft.Duplicate = false
+		m = putDraft(m, m.EditorUID, draft)
+	}
+	return m
+}
+
+func saveDraft(m Model) (Model, []Cmd) { return sendDraft(m, false) }
+
+func sendDraft(m Model, force bool) (Model, []Cmd) {
 	draft, _ := m.ActiveDraft()
 	if m.Stale {
 		draft.Err = errDraftReadOnly
 		return putDraft(m, m.EditorUID, draft), nil
 	}
+	if err := draft.validReply(); err != nil {
+		draft.Err = err
+		return putDraft(m, m.EditorUID, draft), nil
+	}
 	draft.Saving = true
 	draft.Err = nil
+	draft.Duplicate = false
 	m = putDraft(m, m.EditorUID, draft)
-	return m, []Cmd{SaveDraft{Workspace: m.Workspace, UID: m.EditorUID, ProjectID: draft.ProjectID, BaseText: draft.BaseText, Text: draft.Editor.Text, Comment: draft.Comment, Actor: m.Actor}}
+	return m, []Cmd{SaveDraft{Workspace: m.Workspace, UID: m.EditorUID, ProjectID: draft.ProjectID, BaseText: draft.BaseText, Text: draft.Editor.Text, Comment: draft.Comment, Actor: m.Actor, ReplyTo: draft.ReplyTo, Kind: draft.Kind, Force: force}}
+}
+
+// replyKey handles the keys only a Reply Draft has: the kind key cycles the kind and Send anyway resends a duplicate with force.
+func replyKey(m Model, b Binding) (Model, []Cmd, bool) {
+	d, _ := m.ActiveDraft()
+	switch b.Action {
+	case CycleReplyKind:
+		if d.ReplyTo != "" {
+			d.Kind = ReplyKinds[(slices.Index(ReplyKinds, d.Kind)+1)%len(ReplyKinds)]
+			d.Err, d.Duplicate = nil, false
+			m = putDraft(m, m.EditorUID, d)
+		}
+		return m, nil, true
+	case SendReplyAnyway:
+		if !d.Duplicate {
+			return m, nil, true
+		}
+		m, cmds := sendDraft(m, true)
+		return m, cmds, true
+	}
+	return m, nil, false
 }
 
 func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
@@ -140,6 +216,7 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 		if draft, ok := m.Drafts[msg.UID]; ok {
 			draft.Saving = false
 			draft.Err = msg.Err
+			draft.Duplicate = msg.Duplicate
 			m = putDraft(m, msg.UID, draft)
 		}
 		return m, nil, true
@@ -175,7 +252,7 @@ var draftCard = draftCardKeys{
 	empty: func(m Model) bool { d, _ := m.ActiveDraft(); return d.Editor.Text == "" },
 	own: func(m Model, b Binding, _ KeyMsg) (Model, []Cmd, bool) {
 		if b.Action != ExternalEditorAction {
-			return m, nil, false
+			return replyKey(m, b)
 		}
 		d, _ := m.ActiveDraft()
 		return m, []Cmd{OpenDraftEditor{UID: m.EditorUID, Text: d.Editor.Text}}, true

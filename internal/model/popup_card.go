@@ -347,7 +347,7 @@ func (c draftCardKeys) key(m Model, msg KeyMsg) (Model, []Cmd) {
 	}
 	m = c.edit(m, binding, ok, msg)
 	d = c.draft(m)
-	d.Err = nil
+	d.Err, d.Duplicate = nil, false
 	return c.set(m, d), nil
 }
 

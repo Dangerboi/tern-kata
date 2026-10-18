@@ -961,6 +961,59 @@ func TestGatewayTranslatesTheIssueDetailFromRealPayloads(t *testing.T) {
 	check("opened reference", as[model.IssueOpened](t, run(t, gateway, model.OpenIssue{Workspace: workspace, Ref: "demo/" + detailOf().Issue.ShortID, ProjectID: demo.ID})).Selected)
 }
 
+func TestGatewayPostsRepliesOfEachKindWithTheirTarget(t *testing.T) {
+	kata := startKata(t, "0.19.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	uid := createIssue(t, gateway, workspace, demo, "Discuss")
+	detailOf := func() *model.IssueDetailData {
+		return as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected
+	}
+	save := func(text, replyTo, kind string, force bool) model.Msg {
+		return run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseText: detailOf().Issue.Body, Text: text, Comment: true, Actor: "answerer", ReplyTo: replyTo, Kind: kind, Force: force})
+	}
+	as[model.DraftSaved](t, save("the question", "", "", false))
+	question := detailOf().Comments[0].UID
+	evidence := strings.Repeat("it reproduces here. ", 3)
+
+	for _, kind := range []string{"reply", "confirm", "refute", "supersede"} {
+		as[model.DraftSaved](t, save(evidence, question, kind, false))
+	}
+	comments := detailOf().Comments
+	if len(comments) != 5 {
+		t.Fatalf("%d comments, want the question and four replies", len(comments))
+	}
+	for i, kind := range []string{"reply", "confirm", "refute", "supersede"} {
+		reply := comments[i+1]
+		if reply.ReplyKind == nil || *reply.ReplyKind != kind || reply.Reply == nil || reply.Reply.UID == nil || *reply.Reply.UID != question {
+			t.Errorf("reply %d: %+v, want a %s answering %s", i, reply, kind, question)
+		}
+	}
+}
+
+func TestGatewayReportsADuplicateReplyAndSendsItAnywayWithForce(t *testing.T) {
+	kata := startKata(t, "0.19.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	uid := createIssue(t, gateway, workspace, demo, "Discuss")
+	save := func(text, replyTo, kind string, force bool) model.Msg {
+		detail := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected
+		return run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseText: detail.Issue.Body, Text: text, Comment: true, Actor: "answerer", ReplyTo: replyTo, Kind: kind, Force: force})
+	}
+	as[model.DraftSaved](t, save("the question", "", "", false))
+	question := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected.Comments[0].UID
+	as[model.DraftSaved](t, save("first", question, "reply", false))
+
+	dup := as[model.DraftFailed](t, save("second", question, "reply", false))
+	if !dup.Duplicate || dup.UID != uid || !strings.Contains(dup.Err.Error(), "already exists") || strings.Contains(dup.Err.Error(), "--force") {
+		t.Fatalf("duplicate result %+v", dup)
+	}
+	as[model.DraftSaved](t, save("second", question, "reply", true))
+	if got := len(as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected.Comments); got != 3 {
+		t.Fatalf("%d comments after sending anyway, want 3", got)
+	}
+}
+
 func TestGatewayTranslatesTheRecurrenceFromTheSnapshotIncludingAStoppedOne(t *testing.T) {
 	kata := startKata(t, "0.19.0")
 	gateway := newGateway(t, newLocator(kata.target()))
