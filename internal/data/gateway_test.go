@@ -293,7 +293,7 @@ func TestGatewayClosesWithEveryReason(t *testing.T) {
 			}
 			got := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected.Issue
 			stored := closePayload(t, gateway, workspace, uid)
-			wantReason := tt.cmd.Reason
+			wantReason := string(tt.cmd.Reason)
 			if tt.cmd.Quick {
 				wantReason = "done"
 			}

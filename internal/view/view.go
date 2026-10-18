@@ -96,15 +96,11 @@ func Render(m model.Model, now time.Time) tern.View {
 
 func issues(m model.Model, now time.Time) tern.Element {
 	columns := m.VisibleColumns()
-	ownerShown := !(slices.Contains(columns, model.ColumnList) && slices.Contains(columns, model.ColumnDetail))
 	rows := m.VisibleRows()
-	idWidth := 1
+	cols := listColumns{ownerShown: !(slices.Contains(columns, model.ColumnList) && slices.Contains(columns, model.ColumnDetail)), id: 1, owner: ownerWidth}
 	for _, row := range rows {
-		idWidth = max(idWidth, utf8.RuneCountInString(idCell(row)))
-	}
-	ownerW := ownerWidth
-	for _, row := range rows {
-		ownerW = max(ownerW, utf8.RuneCountInString(listOwner(m, row, now)))
+		cols.id = max(cols.id, utf8.RuneCountInString(idCell(row)))
+		cols.owner = max(cols.owner, utf8.RuneCountInString(listOwner(m, row, now)))
 	}
 	items := make([]tern.Element, 0, len(rows)+len(m.Groups))
 	groups := make(map[string]model.IssueGroup, len(m.Issues))
@@ -120,13 +116,13 @@ func issues(m model.Model, now time.Time) tern.Element {
 			items = append(items, ui.Text{Common: ui.Common{Key: "group." + group.ID}, Spans: []ui.Span{{T: group.Title, S: "strong"}}})
 			shownGroups[group.ID] = true
 		}
-		items = append(items, issueRow(m, row, row.UID == m.SelectedUID, stripeRole(i), ownerShown, idWidth, ownerW, now))
+		items = append(items, issueRow(m, row, row.UID == m.SelectedUID, stripeRole(i), cols, now))
 	}
 	selected := ""
 	if m.SelectedUID != "" {
 		selected = IssueID(m.SelectedUID)
 	}
-	children := ui.Nodes(headerRow(ownerShown, idWidth, ownerW))
+	children := ui.Nodes(headerRow(cols))
 	if m.Search.Open {
 		placeholder := "Search Issues in " + m.Collection.Title
 		children = append(children, ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Mode: "insert", Placeholder: placeholder, Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}})
@@ -255,10 +251,16 @@ func stripeRole(i int) string {
 	return ""
 }
 
+// listColumns are the list's cell widths, and whether the owner column is drawn.
+type listColumns struct {
+	ownerShown bool
+	id, owner  int
+}
+
 // issueRow is one Issue: the id, prio, status and title on the left, the
 // title being the cell that gives way, and kids, owner and updated pinned to
 // the right so each column lines up with the header. A blank cell keeps its width.
-func issueRow(m model.Model, row model.IssueRow, selected bool, role string, ownerShown bool, idWidth, ownerW int, now time.Time) tern.Element {
+func issueRow(m model.Model, row model.IssueRow, selected bool, role string, cols listColumns, now time.Time) tern.Element {
 	tone := ui.ToneNeutral
 	statusStyle := "accent"
 	if model.IsClosed(row.Issue) {
@@ -289,7 +291,7 @@ func issueRow(m model.Model, row model.IssueRow, selected bool, role string, own
 		title = "↻ " + title
 	}
 	left := []ui.Span{
-		{T: cell(idCell(row), idWidth)},
+		{T: cell(idCell(row), cols.id)},
 		{T: cellGap + cell(prio, prioWidth), S: prioStyle},
 		{T: cellGap + cell(row.Status, statusWidth), S: statusStyle},
 		{T: cellGap + title},
@@ -300,14 +302,14 @@ func issueRow(m model.Model, row model.IssueRow, selected bool, role string, own
 	if row.HasChildren {
 		actions.Click = ToggleClick(row.UID)
 	}
-	return ui.Item{Common: ui.Common{Key: row.UID, Role: role, Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells(kids, owner, relativeTime(row.UpdatedAt, now), ownerShown, ownerW, "muted")...)}
+	return ui.Item{Common: ui.Common{Key: row.UID, Role: role, Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells(kids, owner, model.RelativeTime(row.UpdatedAt, now), cols, "muted")...)}
 }
 
 // rightCells are the kids, owner and updated cells, the owner only when shown.
-func rightCells(kids, owner, updated string, ownerShown bool, ownerW int, style string) []ui.Span {
+func rightCells(kids, owner, updated string, cols listColumns, style string) []ui.Span {
 	spans := []ui.Span{{T: cell(kids, kidsWidth), S: style}}
-	if ownerShown {
-		spans = append(spans, ui.Span{T: cellGap + cell(owner, ownerW), S: style})
+	if cols.ownerShown {
+		spans = append(spans, ui.Span{T: cellGap + cell(owner, cols.owner), S: style})
 	}
 	return append(spans, ui.Span{T: cellGap + cell(updated, updatedWidth), S: style})
 }
@@ -341,41 +343,21 @@ func footer(m model.Model) tern.Element {
 
 // headerRow labels the Issue rows. It is an Item like the rows, so its cells sit
 // where theirs do, and a node of its own, outside the scrolling list.
-func headerRow(ownerShown bool, idWidth, ownerW int) tern.Element {
+func headerRow(cols listColumns) tern.Element {
 	left := []ui.Span{
-		{T: cell("#", idWidth), S: "muted"},
+		{T: cell("#", cols.id), S: "muted"},
 		{T: cellGap + cell("prio", prioWidth), S: "muted"},
 		{T: cellGap + cell("status", statusWidth), S: "muted"},
 		{T: cellGap + "title", S: "muted"},
 	}
-	return ui.Item{Common: ui.Common{Key: "header", Tone: ui.ToneMuted}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells("kids", "owner", "updated", ownerShown, ownerW, "muted")...)}
-}
-
-// relativeTime is kata's TUI "updated" cell: "2h ago", "3d ago", "-" when unset.
-func relativeTime(t, now time.Time) string {
-	if t.IsZero() {
-		return "-"
-	}
-	d := now.Sub(t)
-	switch {
-	case d < time.Minute:
-		return fmt.Sprintf("%ds ago", int(d.Seconds()))
-	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
-	case d < 7*24*time.Hour:
-		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
-	default:
-		return fmt.Sprintf("%dw ago", int(d.Hours()/(24*7)))
-	}
+	return ui.Item{Common: ui.Common{Key: "header", Tone: ui.ToneMuted}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells("kids", "owner", "updated", cols, "muted")...)}
 }
 
 // listOwner is the owner cell text: the name cut to ownerWidth as before, then " until …" whole when the claim expires.
 func listOwner(m model.Model, row model.IssueRow, now time.Time) string {
-	full := m.OwnerDisplay(row.Owner, row.AssignmentExpiresOn, now)
-	if row.Owner == nil || utf8.RuneCountInString(*row.Owner) <= ownerWidth {
-		return full
+	owner := m.OwnerText(row.Owner, row.AssignmentExpiresOn, now)
+	if utf8.RuneCountInString(owner.Name) <= ownerWidth {
+		return owner.String()
 	}
-	return cell(*row.Owner, ownerWidth) + strings.TrimPrefix(full, *row.Owner)
+	return cell(owner.Name, ownerWidth) + owner.Until
 }

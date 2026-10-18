@@ -115,7 +115,7 @@ func detailRows(m model.Model) (children []detailChild, activity tern.Nodes) {
 			continue
 		}
 		row := item.Activity
-		action := DetailItemClick(tabOf(item.Kind), row.Key)
+		action := DetailItemClick(item.Kind.Tab(), row.Key)
 		if item.Kind == model.RowLink {
 			activity = append(activity, ui.Col{Common: ui.Common{Key: row.Key, Mark: mark}, Children: ui.Nodes(linkRow(row, &ui.Actions{Click: action}))})
 			continue
@@ -125,11 +125,9 @@ func detailRows(m model.Model) (children []detailChild, activity tern.Nodes) {
 		if item.Kind == model.RowEvent {
 			parts = ui.Nodes(historySentence(row, action))
 		} else {
-			spans := []ui.Span{{T: row.Author, S: "strong"}, {T: "  "}, {T: row.Time, S: "muted"}}
-			for _, note := range []string{row.Reply, row.Replies} {
-				if note != "" {
-					spans = append(spans, ui.Span{T: "  " + note, S: "accent"})
-				}
+			spans := make([]ui.Span, len(row.Head))
+			for i, part := range row.Head {
+				spans[i] = ui.Span{T: part.Text, S: string(part.Style)}
 			}
 			head = ui.Spans(spans...)
 		}
@@ -145,16 +143,6 @@ func detailRows(m model.Model) (children []detailChild, activity tern.Nodes) {
 type detailChild struct {
 	model.ChildRow
 	mark ui.Mark
-}
-
-func tabOf(kind model.RowKind) model.ActivityTab {
-	switch kind {
-	case model.RowLink:
-		return model.TabLinks
-	case model.RowEvent:
-		return model.TabEvents
-	}
-	return model.TabComments
 }
 
 var (
@@ -234,7 +222,7 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 	if day := model.IssueDate(issue.DeadlineOnDate, issue.Metadata, "deadline_on"); day != "" {
 		add("Deadline", text(day))
 	}
-	owner := m.OwnerDisplay(issue.Owner, issue.AssignmentExpiresOn, now)
+	owner := m.OwnerText(issue.Owner, issue.AssignmentExpiresOn, now).String()
 	if owner == "" {
 		owner = "Unassigned"
 	}

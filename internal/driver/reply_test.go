@@ -59,7 +59,7 @@ func TestEnterOnAReplyToAnotherIssueOpensItAndBackReturns(t *testing.T) {
 	}
 }
 
-func TestCommentsWithoutReplyInformationShowAsBefore(t *testing.T) {
+func TestCommentWithoutReplyInformationHasNoReplyNote(t *testing.T) {
 	selected := &model.IssueDetailData{Issue: &alpha, Comments: []model.Comment{{UID: "c1", Author: "dana", Body: "plain"}}}
 	s := feed(t, browsing(t, 160), model.DetailLoaded{UID: "alpha", Selected: selected}, key("enter")).State
 	if got := replyNotes(s.Model); len(got) != 1 || got[0] != "" {

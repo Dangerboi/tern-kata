@@ -87,6 +87,17 @@ type CloseResultMsg struct {
 
 func (CloseResultMsg) msg() {}
 
+// CloseReasonKind is why an Issue is closed.
+type CloseReasonKind string
+
+const (
+	ReasonDone          CloseReasonKind = "done"
+	ReasonWontfix       CloseReasonKind = "wontfix"
+	ReasonDuplicate     CloseReasonKind = "duplicate"
+	ReasonSuperseded    CloseReasonKind = "superseded"
+	ReasonAuditNoChange CloseReasonKind = "audit-no-change"
+)
+
 // CloseEvidenceKind names what a piece of close evidence is.
 type CloseEvidenceKind string
 
@@ -111,7 +122,8 @@ type CloseIssueCmd struct {
 	Workspace, UID, Actor string
 	ProjectID             int64
 	Quick                 bool
-	Reason, Message       string
+	Reason                CloseReasonKind
+	Message               string
 	Evidence              []CloseEvidence
 }
 
@@ -145,7 +157,7 @@ func openClose(m Model) Model {
 		return m
 	}
 	m.CloseForm = CloseFormState{Open: true, Field: CloseFields[0].Name, UID: issue.UID, ProjectID: issue.ProjectID}
-	m.CloseForm.Values.Reason = "done"
+	m.CloseForm.Values.Reason = string(ReasonDone)
 	return m
 }
 
@@ -158,9 +170,9 @@ func submitClose(m Model, quick bool) (Model, []Cmd) {
 		f.Err = errors.New("Daemon disconnected; reconnect before closing.")
 		return m, nil
 	}
-	cmd := CloseIssueCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, Quick: quick, Reason: strings.TrimSpace(f.Values.Reason)}
+	cmd := CloseIssueCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, Quick: quick, Reason: CloseReasonKind(strings.TrimSpace(f.Values.Reason))}
 	if quick {
-		cmd.Reason = "done"
+		cmd.Reason = ReasonDone
 	} else {
 		cmd.Message = strings.TrimSpace(f.Values.Message)
 		for _, e := range []CloseEvidence{
@@ -185,8 +197,8 @@ func submitClose(m Model, quick bool) (Model, []Cmd) {
 
 var closeSHA = regexp.MustCompile(`^[0-9a-fA-F]{7,40}$`)
 
-func referenceKind(reason string) CloseEvidenceKind {
-	if reason == "superseded" {
+func referenceKind(reason CloseReasonKind) CloseEvidenceKind {
+	if reason == ReasonSuperseded {
 		return EvidenceSupersededBy
 	}
 	return EvidenceDuplicateOf
@@ -196,10 +208,10 @@ func validateClose(cmd CloseIssueCmd) error {
 	reason := cmd.Reason
 	floor := 40
 	switch reason {
-	case "done", "audit-no-change":
-	case "wontfix":
+	case ReasonDone, ReasonAuditNoChange:
+	case ReasonWontfix:
 		floor = 60
-	case "duplicate", "superseded":
+	case ReasonDuplicate, ReasonSuperseded:
 		floor = 20
 	default:
 		return errors.New("Reason must be done, wontfix, duplicate, superseded, or audit-no-change.")
@@ -218,19 +230,19 @@ func validateClose(cmd CloseIssueCmd) error {
 		kinds[e.Kind]++
 	}
 	switch reason {
-	case "done":
+	case ReasonDone:
 		if kinds[EvidenceCommit]+kinds[EvidencePR]+kinds[EvidenceTest] == 0 {
 			return errors.New("Done requires commit, PR, or test evidence; use Quick done for owner-local interactive closing.")
 		}
 		if kinds[EvidenceDuplicateOf]+kinds[EvidenceAudit] > 0 {
 			return errors.New("Done accepts commit, PR, or test evidence, not reference or audit evidence.")
 		}
-	case "duplicate", "superseded":
+	case ReasonDuplicate, ReasonSuperseded:
 		kind := referenceKind(reason)
 		if len(cmd.Evidence) != 1 || kinds[kind] != 1 {
 			return errors.New("Duplicate/superseded requires exactly one Issue reference and no other evidence.")
 		}
-	case "audit-no-change":
+	case ReasonAuditNoChange:
 		if len(cmd.Evidence) != 1 || kinds[EvidenceAudit] != 1 {
 			return errors.New("Audit requires an audit rationale and no other evidence.")
 		}

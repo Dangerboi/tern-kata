@@ -65,7 +65,24 @@ type DetailRow struct {
 	// Reply says what a comment answers ("confirms dana's comment in #bbbb") and Replies how many comments answer it; both
 	// are empty without reply information.
 	Reply, Replies string
+	// Head is a comment row's heading as styled parts: its Author, Time and the reply notes.
+	Head []RowSpan
 }
+
+// RowSpan is a part of a row's heading with its style.
+type RowSpan struct {
+	Text  string
+	Style SpanStyle
+}
+
+// SpanStyle is how the view draws a RowSpan; the values are Tern's span styles.
+type SpanStyle string
+
+const (
+	SpanStrong SpanStyle = "strong"
+	SpanMuted  SpanStyle = "muted"
+	SpanAccent SpanStyle = "accent"
+)
 
 // HistorySentence is "<Verb> <Object>" (the row's Author did it) with the Verb's
 // tone. Object stops before the row's Ref when the sentence names the referenced Issue.

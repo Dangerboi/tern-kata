@@ -29,24 +29,22 @@ type DetailItem struct {
 	Activity     DetailRow
 }
 
-// kind is the row kind of an Activity tab.
-func (t ActivityTab) kind() RowKind {
-	switch t {
-	case TabLinks:
-		return RowLink
-	case TabEvents:
-		return RowEvent
-	}
-	return RowComment
-}
+// tabKinds is the row kind each Activity tab lists.
+var tabKinds = [TabCount]RowKind{TabComments: RowComment, TabLinks: RowLink, TabEvents: RowEvent}
+
+func (t ActivityTab) kind() RowKind { return tabKinds[t] }
+
+// Tab is the Activity tab that lists rows of the kind; a child row belongs to none and answers the first tab.
+func (k RowKind) Tab() ActivityTab { return ActivityTab(max(slices.Index(tabKinds[:], k), 0)) }
 
 // ChildRow is one row of the Children table. Key is the Link's, which is daemon-wide unique, so a
 // row's id never ends in the child's UID as the list row's does. A child that is not loaded has only its UID, Key and Ref.
 type ChildRow struct {
-	Key, UID, Ref, Title, Status, Owner string
-	OwnerExpires                        *time.Time
-	UpdatedAt                           time.Time
-	Loaded, Closed                      bool
+	Key, UID, Ref, Title, Status string
+	Owner                        *string
+	OwnerExpires                 *time.Time
+	UpdatedAt                    time.Time
+	Loaded, Closed               bool
 }
 
 // rowID names a row across refreshes.
@@ -57,11 +55,11 @@ type rowID struct {
 
 // rowInputs are what the rows are worked out from; the rows are rebuilt only when one of them changes.
 type rowInputs struct {
-	authority *IssueDetailData
-	issues    *Issue
-	issueN    int
-	tab       ActivityTab
-	zone      *time.Location
+	authority  *IssueDetailData
+	firstIssue *Issue // with issueN, tells when the loaded Issues changed
+	issueN     int
+	tab        ActivityTab
+	zone       *time.Location
 }
 
 // detailRows is the Issue detail's cursor list: the children, then the active tab's rows.
@@ -87,7 +85,7 @@ func (m Model) DetailParent() (DetailRow, bool) {
 func (m Model) withRows() Model {
 	in := rowInputs{authority: m.authority, issueN: len(m.Issues), tab: m.tab, zone: m.zone}
 	if len(m.Issues) > 0 {
-		in.issues = &m.Issues[0]
+		in.firstIssue = &m.Issues[0]
 	}
 	if in == m.rows.inputs {
 		return m
@@ -156,6 +154,12 @@ func (m Model) commentItem(comment Comment) DetailItem {
 			item.ReplyKey = *target.UID
 		}
 	}
+	row.Head = []RowSpan{{row.Author, SpanStrong}, {"  ", ""}, {row.Time, SpanMuted}}
+	for _, note := range []string{row.Reply, row.Replies} {
+		if note != "" {
+			row.Head = append(row.Head, RowSpan{"  " + note, SpanAccent})
+		}
+	}
 	item.Activity = row
 	return item
 }
@@ -204,11 +208,7 @@ func (m Model) childItems(links []DetailRow) []DetailItem {
 	}
 	for _, issue := range m.Issues {
 		if link, ok := byUID[issue.UID]; ok {
-			owner := ""
-			if issue.Owner != nil {
-				owner = *issue.Owner
-			}
-			add(ChildRow{Key: link.Key, UID: issue.UID, Ref: link.Ref, Title: issue.Title, Status: issue.Status, Owner: owner, OwnerExpires: issue.AssignmentExpiresOn, UpdatedAt: issue.UpdatedAt, Loaded: true, Closed: IsClosed(issue)})
+			add(ChildRow{Key: link.Key, UID: issue.UID, Ref: link.Ref, Title: issue.Title, Status: issue.Status, Owner: issue.Owner, OwnerExpires: issue.AssignmentExpiresOn, UpdatedAt: issue.UpdatedAt, Loaded: true, Closed: IsClosed(issue)})
 		}
 	}
 	for _, uid := range uids {

@@ -15,11 +15,15 @@ import (
 // list's are. A click on any cell jumps to the child; a child
 // that is not loaded shows only its reference.
 func childrenTable(m model.Model, children []detailChild, now time.Time) tern.Element {
-	width := func(label string, text func(detailChild) string) int {
+	cells := make([]model.ChildCells, len(children))
+	for i, child := range children {
+		cells[i] = m.ChildCells(child.ChildRow, now)
+	}
+	width := func(label string, text func(model.ChildCells) string) int {
 		w := utf8.RuneCountInString(label)
-		for _, child := range children {
+		for i, child := range children {
 			if child.Loaded {
-				w = max(w, utf8.RuneCountInString(text(child)))
+				w = max(w, utf8.RuneCountInString(text(cells[i])))
 			}
 		}
 		return w
@@ -28,9 +32,9 @@ func childrenTable(m model.Model, children []detailChild, now time.Time) tern.El
 	for _, child := range children {
 		refWidth = max(refWidth, utf8.RuneCountInString(child.Ref))
 	}
-	statusW := width("status", func(c detailChild) string { return c.Status })
-	ownerW := width("owner", func(c detailChild) string { return m.OwnerDisplay(&c.Owner, c.OwnerExpires, now) })
-	updatedW := width("updated", func(c detailChild) string { return relativeTime(c.UpdatedAt, now) })
+	statusW := width("status", func(c model.ChildCells) string { return c.Status })
+	ownerW := width("owner", func(c model.ChildCells) string { return c.Owner })
+	updatedW := width("updated", func(c model.ChildCells) string { return c.Updated })
 	// row is the status, title, owner and updated cells after ref, in that order.
 	row := func(c ui.Common, follow *ui.Actions, ref ui.Text, texts, styles [4]string) ui.Row {
 		widths := [4]int{statusW, 0, ownerW, updatedW}
@@ -64,7 +68,7 @@ func childrenTable(m model.Model, children []detailChild, now time.Time) tern.El
 		if child.Closed {
 			styles = muted
 		}
-		nodes = append(nodes, row(common, &ui.Actions{Click: JumpClick(child.UID)}, ref, [4]string{child.Status, child.Title, m.OwnerDisplay(&child.Owner, child.OwnerExpires, now), relativeTime(child.UpdatedAt, now)}, styles))
+		nodes = append(nodes, row(common, &ui.Actions{Click: JumpClick(child.UID)}, ref, [4]string{cells[i].Status, cells[i].Title, cells[i].Owner, cells[i].Updated}, styles))
 	}
 	return ui.Col{Common: ui.Common{Key: "children"}, Gap: ui.GapNone, Children: nodes}
 }
