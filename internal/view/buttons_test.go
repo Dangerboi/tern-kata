@@ -5,7 +5,6 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 type button struct{ id, text, click string }
@@ -87,7 +86,7 @@ func TestNewProjectEndsInButtons(t *testing.T) {
 
 func TestDraftEditorEndsInButtons(t *testing.T) {
 	issue := model.Issue{UID: "a", ProjectID: 2, Body: "body", Revision: 1}
-	m, _ := model.Update(selectedFirst(), model.DetailLoaded{UID: "a", Selected: &g.UISelectedAuthority{Issue: &issue}})
+	m, _ := model.Update(selectedFirst(), model.DetailLoaded{UID: "a", Selected: &model.IssueDetailData{Issue: &issue}})
 	m = press(m, "e")
 	cardButtons(t, m, "layer.editor.actions", []button{{"save", "Save (ctrl+o)", "ctrl+o"}, {"editor", "$EDITOR (ctrl+e)", "ctrl+e"}, {"discard", "Discard (esc)", "escape"}}, "save")
 	m, _ = model.Update(m, model.KeyMsg{Chord: "paste", Text: "more"})
@@ -119,7 +118,7 @@ func TestCloseAndFiltersButtonsClickKeys(t *testing.T) {
 
 func TestDraftConflictEndsInButtons(t *testing.T) {
 	issue := model.Issue{UID: "a", ProjectID: 2, Body: "body", Revision: 1}
-	m, _ := model.Update(selectedFirst(), model.DetailLoaded{UID: "a", Selected: &g.UISelectedAuthority{Issue: &issue}})
+	m, _ := model.Update(selectedFirst(), model.DetailLoaded{UID: "a", Selected: &model.IssueDetailData{Issue: &issue}})
 	m = press(m, "e", "ctrl+o")
 	latest := issue
 	latest.Revision, latest.Body = 2, "Remote body"

@@ -9,16 +9,16 @@ import (
 )
 
 // childLink is "<child> is a child of parent".
-func childLink(id int64, child string) g.UILink {
-	return g.UILink{ID: id, Type: "parent", FromIssueUID: child, FromQualifiedID: "work#" + child, ToIssueUID: "parent", ToQualifiedID: "work#parent"}
+func childLink(id int64, child string) model.Link {
+	return model.Link{ID: id, Type: "parent", FromIssueUID: child, FromQualifiedID: "work#" + child, ToIssueUID: "parent", ToQualifiedID: "work#parent"}
 }
 
 // parentDetail is Issue "parent" with the keys in its detail: children "new"
 // and "old" are loaded (in the list's order, "new" first), "gone" is not, and
 // there are two comments.
-func parentDetail(links ...g.UILink) model.Model {
+func parentDetail(links ...model.Link) model.Model {
 	if links == nil {
-		links = []g.UILink{childLink(1, "gone"), childLink(2, "old"), childLink(3, "new")}
+		links = []model.Link{childLink(1, "gone"), childLink(2, "old"), childLink(3, "new")}
 	}
 	return withDetail(model.Model{
 		Workspace: "/repo", Cols: 160, Focus: model.ColumnDetail, SelectedUID: "parent",
@@ -27,10 +27,10 @@ func parentDetail(links ...g.UILink) model.Model {
 			{UID: "new", ShortID: "new1", Title: "Newer", Status: "open", ProjectName: "work", UpdatedAt: ago(1)},
 			{UID: "old", ShortID: "old1", Title: "Older", Status: "closed", ProjectName: "work", UpdatedAt: ago(5)},
 		},
-	}, &g.UISelectedAuthority{
+	}, &model.IssueDetailData{
 		Issue:    &model.Issue{UID: "parent", ProjectName: "work"},
 		Links:    links,
-		Comments: []g.CommentOut{{UID: "c1"}, {UID: "c2"}},
+		Comments: []model.Comment{{UID: "c1"}, {UID: "c2"}},
 	})
 }
 
@@ -49,7 +49,7 @@ func TestEnterOnChildRowsOpensTheLinkedChildrenInTheListsOrderUnloadedLast(t *te
 }
 
 func TestNoChildrenWithoutChildLinks(t *testing.T) {
-	m := parentDetail(g.UILink{ID: 1, Type: "related", FromIssueUID: "parent", ToIssueUID: "new", ToQualifiedID: "work#new1"})
+	m := parentDetail(model.Link{ID: 1, Type: "related", FromIssueUID: "parent", ToIssueUID: "new", ToQualifiedID: "work#new1"})
 	if got := enterOpens(m, 0); got != "parent" {
 		t.Fatalf("enter with no child rows opened %q", got)
 	}
@@ -139,10 +139,10 @@ func TestChildRowsFollowLiveRefreshes(t *testing.T) {
 			{UID: "fresh", ShortID: "fre1", Title: "Fresh", Status: "open", ProjectName: "work", UpdatedAt: ago(0)},
 			{UID: "new", ShortID: "new1", Title: "Renamed", Status: "open", ProjectName: "work", UpdatedAt: ago(1)},
 		},
-		Selected: &g.UISelectedAuthority{Issue: &parent, Links: []g.UILink{childLink(2, "fresh"), childLink(3, "new")}, Comments: []g.CommentOut{{UID: "c1"}, {UID: "c2"}}},
 	}
+	selected := &model.IssueDetailData{Issue: &parent, Links: []model.Link{childLink(2, "fresh"), childLink(3, "new")}, Comments: []model.Comment{{UID: "c1"}, {UID: "c2"}}}
 	m = cursorAt(m, 4) // on the last of the 2 comments, past all 3 children
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot, Selected: selected})
 	for index, want := range []string{"fresh", "new"} {
 		if got := enterOpens(m, index); got != want {
 			t.Errorf("enter on child row %d opened %q, want %q", index, got, want)
@@ -165,10 +165,10 @@ func TestCursorStaysOnItsChildWhenARefreshReordersTheChildren(t *testing.T) {
 			{UID: "old", ShortID: "old1", Title: "Older", Status: "closed", ProjectName: "work", UpdatedAt: ago(0)},
 			{UID: "new", ShortID: "new1", Title: "Newer", Status: "open", ProjectName: "work", UpdatedAt: ago(1)},
 		},
-		Selected: &g.UISelectedAuthority{Issue: &parent, Links: []g.UILink{childLink(1, "gone"), childLink(2, "old"), childLink(3, "new")}},
 	}
+	selected := &model.IssueDetailData{Issue: &parent, Links: []model.Link{childLink(1, "gone"), childLink(2, "old"), childLink(3, "new")}}
 	m = cursorAt(m, 1) // "old"
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: snapshot, Selected: selected})
 	if got := enterOpens(m, m.DetailIndex()); got != "old" {
 		t.Fatalf("enter after the refresh opened %q, want old", got)
 	}

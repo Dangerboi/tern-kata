@@ -29,7 +29,7 @@ func TestOpenAtIssueAndSelectAction(t *testing.T) {
 			if !found {
 				t.Fatalf("missing Issue resolution command: %#v", cmds)
 			}
-			selected := &g.UISelectedAuthority{Issue: &model.Issue{UID: "target", ShortID: "bbbb", Title: "Target"}}
+			selected := &model.IssueDetailData{Issue: &model.Issue{UID: "target", ShortID: "bbbb", Title: "Target"}}
 			m, _ = model.Update(m, model.IssueOpened{Ref: "other/bbbb", Selected: selected})
 			if m.SelectedUID != "target" || m.DetailAuthority() != selected || m.Focus != model.ColumnDetail || m.DetailHidden() || m.DetailLoading() {
 				t.Fatalf("Issue not selected in detail: %+v", m)

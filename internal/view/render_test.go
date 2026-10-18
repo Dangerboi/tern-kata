@@ -101,7 +101,7 @@ var (
 )
 
 func detailOf(issue model.Issue) model.Msg {
-	return model.DetailLoaded{UID: issue.UID, Selected: &g.UISelectedAuthority{Issue: &issue}}
+	return model.DetailLoaded{UID: issue.UID, Selected: &model.IssueDetailData{Issue: &issue}}
 }
 
 // browsing is a wide Pane on a Project of alpha and beta, alpha's detail loaded.

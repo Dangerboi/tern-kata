@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"go.kenn.io/kata"
+	"go.kenn.io/kata/pkg/client"
 )
 
 // kataServer is kata's own service, run in process over HTTP with a database of
@@ -822,4 +824,69 @@ func closePayload(t *testing.T, gateway *Gateway, workspace, uid string) map[str
 	}
 	t.Fatalf("no close event for %s", uid)
 	return nil
+}
+
+func TestGatewayTranslatesTheIssueDetailFromRealPayloads(t *testing.T) {
+	kata := startKata(t, "0.19.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	uid := createIssue(t, gateway, workspace, demo, "Discuss")
+	parent := createIssue(t, gateway, workspace, demo, "Parent")
+	detailOf := func() *model.IssueDetailData {
+		return as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected
+	}
+
+	as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseRevision: detailOf().Issue.Revision, BaseText: detailOf().Issue.Body, Text: "the question", Comment: true, Actor: "asker"}))
+	question := detailOf().Comments[0]
+	// A reply is only reachable through kata's wire client; the Pane writes plain comments.
+	wire, err := client.New(kata.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kind, reply, actor := g.Confirm, question.UID, "answerer"
+	if _, err := wire.CreateCommentWithResponse(context.Background(), &g.CreateCommentRequestOptions{
+		PathParams: &g.CreateCommentPath{ProjectID: fmt.Sprint(demo.ID), Ref: uid},
+		Body:       &g.CreateCommentBody{Body: "confirmed: " + strings.Repeat("it reproduces. ", 4), Actor: &actor, Kind: &kind, ReplyTo: &reply},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	shortID := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: parent})).Selected.Issue.ShortID
+	as[model.FieldWritten](t, run(t, gateway, model.WriteField{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Action: model.SetParentAction, Value: shortID}))
+
+	check := func(name string, d *model.IssueDetailData) {
+		t.Helper()
+		if d.Issue == nil || d.Issue.UID != uid || len(d.Comments) != 2 {
+			t.Fatalf("%s: detail %+v", name, d)
+		}
+		asked, answer := d.Comments[0], d.Comments[1]
+		if asked.Author != "asker" || asked.Body != "the question" || asked.ReplyKind != nil || asked.Reply != nil ||
+			len(asked.Backlinks) != 1 || asked.Backlinks[0].Kind != "confirm" || asked.Backlinks[0].UID == nil || *asked.Backlinks[0].UID != answer.UID {
+			t.Errorf("%s: the answered comment %+v", name, asked)
+		}
+		if answer.Author != "answerer" || answer.ReplyKind == nil || *answer.ReplyKind != "confirm" || answer.ReplyToUID == nil || *answer.ReplyToUID != asked.UID ||
+			answer.Reply == nil || answer.Reply.UID == nil || *answer.Reply.UID != asked.UID || answer.Reply.Body == nil || *answer.Reply.Body != "the question" || answer.Reply.IssueUID == nil || *answer.Reply.IssueUID != uid {
+			t.Errorf("%s: the reply %+v", name, answer)
+		}
+		if len(d.Links) != 1 || d.Links[0].Type != "parent" || d.Links[0].FromIssueUID != uid || d.Links[0].ToIssueUID != parent || d.Links[0].ToQualifiedID == "" {
+			t.Errorf("%s: links %+v", name, d.Links)
+		}
+		types := make([]string, len(d.History))
+		for i, e := range d.History {
+			types[i] = e.Type
+			if e.UID == "" || e.Actor == "" || e.Payload == "" || e.CreatedAt.IsZero() || e.ProjectName != "demo" {
+				t.Errorf("%s: event %+v", name, e)
+			}
+		}
+		// Newest first, as kata lists them.
+		if len(types) < 4 || types[0] != "issue.linked" && types[0] != "issue.links_changed" || types[len(types)-1] != "issue.created" {
+			t.Errorf("%s: history %v", name, types)
+		}
+	}
+
+	check("detail load", detailOf())
+	collection := model.Collection{View: "project", ProjectUID: demo.UID, Title: demo.Name}
+	query := model.CollectionQuery(collection, model.Filters{})
+	query.SelectedIssueUID, query.IncludeHistory = &uid, new(true)
+	check("snapshot", as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, Request: 1})).Selected)
+	check("opened reference", as[model.IssueOpened](t, run(t, gateway, model.OpenIssue{Workspace: workspace, Ref: "demo/" + detailOf().Issue.ShortID, ProjectID: demo.ID})).Selected)
 }

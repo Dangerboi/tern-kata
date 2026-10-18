@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // VerbTone marks the history verbs that are worth a colour. The view maps it
@@ -33,7 +32,7 @@ func (m Model) DetailTime(t time.Time) string {
 // historyRow phrases one event as "<actor> <verb> <object>". Only issue.closed carries a detail
 // (Body: the close message and evidence); every other event stays one line. Types kata adds later
 // read as their type name.
-func (m Model) historyRow(event g.Event) DetailRow {
+func (m Model) historyRow(event Event) DetailRow {
 	payload, _ := decodePayload(event.Payload)
 	verb, object, detail, tone := "", "", "", VerbTone("")
 	switch event.Type {
@@ -198,7 +197,7 @@ var inverseRelation = map[string]string{"parent": "child", "child": "parent", "b
 
 func relationName(relation string) string { return strings.ReplaceAll(relation, "_", " ") }
 
-func linkObject(event g.Event, p payloadMap) string {
+func linkObject(event Event, p payloadMap) string {
 	relation, peer := p.text("type"), p.text("to_short_id")
 	if event.RelatedIssueShortID != nil {
 		peer = *event.RelatedIssueShortID
@@ -276,7 +275,7 @@ func metadataChanged(p payloadMap) (verb, object string) {
 	return "updated metadata:", strings.Join(keys, ", ")
 }
 
-func movedTo(event g.Event, p payloadMap) string {
+func movedTo(event Event, p payloadMap) string {
 	var parts []string
 	if event.ProjectName != "" {
 		parts = append(parts, "to "+event.ProjectName)

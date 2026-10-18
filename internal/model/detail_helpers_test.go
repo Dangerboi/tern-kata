@@ -2,12 +2,11 @@ package model_test
 
 import (
 	"github.com/Dangerboi/tern-kata/internal/model"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // withDetail shows the selected Issue's loaded authority the way a user sees it: the step asks for the detail and the daemon
 // answers.
-func withDetail(m model.Model, authority *g.UISelectedAuthority) model.Model {
+func withDetail(m model.Model, authority *model.IssueDetailData) model.Model {
 	m, _ = model.Update(m, model.ResizeMsg{Cols: m.Cols})
 	m, _ = model.Update(m, model.DetailLoaded{UID: m.SelectedUID, Selected: authority})
 	return m

@@ -1,15 +1,12 @@
 package model
 
-import (
-	g "go.kenn.io/kata/pkg/client/generated"
-)
 
 // IssueDetail owns what the detail column shows: the Issue it was asked for, that Issue's loaded authority, loading and error
 // state, the Activity tab, the row cursor, the jump history, the hidden flag and the Issue opened by reference. Only this file
 // writes these fields; every other caller reports what happened (an Issue was written, a snapshot arrived, a tab was chosen).
 type IssueDetail struct {
 	hidden    bool
-	authority *g.UISelectedAuthority
+	authority *IssueDetailData
 	// uid is the Issue the detail was last asked to show; it differs from the selection until the next step reloads.
 	uid string
 	// stale asks for a reload of uid even though the selection did not change.
@@ -25,7 +22,7 @@ type IssueDetail struct {
 	openRef, openedUID string
 }
 
-func (d IssueDetail) DetailAuthority() *g.UISelectedAuthority { return d.authority }
+func (d IssueDetail) DetailAuthority() *IssueDetailData { return d.authority }
 func (d IssueDetail) DetailLoading() bool                     { return d.loading }
 func (d IssueDetail) DetailErr() error                        { return d.err }
 func (d IssueDetail) DetailIndex() int                        { return d.cursor }
@@ -147,7 +144,7 @@ func (m Model) detailFailed(msg DetailFailed) Model {
 
 // snapshotArrived refreshes the shown Issue in place from a snapshot's selected authority, keeping the tab and the cursor where
 // its rows still exist. selected and cursorChild are the selection and the child under the cursor before the snapshot applied.
-func (m Model) snapshotArrived(authority *g.UISelectedAuthority, selected, cursorChild string) Model {
+func (m Model) snapshotArrived(authority *IssueDetailData, selected, cursorChild string) Model {
 	if m.Focus == ColumnDetail && len(m.back) > 0 {
 		m.SelectedUID = selected // the Issue jumped to stays shown
 	}
@@ -171,7 +168,7 @@ func (m Model) snapshotArrived(authority *g.UISelectedAuthority, selected, curso
 
 // openByReference says the Issue named by the reference being opened arrived; the detail shows it even when the Collection
 // does not list it.
-func (m Model) openByReference(ref string, authority *g.UISelectedAuthority) Model {
+func (m Model) openByReference(ref string, authority *IssueDetailData) Model {
 	if ref != m.openRef || authority == nil || authority.Issue == nil {
 		return m
 	}
