@@ -16,7 +16,6 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"go.kenn.io/kata"
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // kataServer is kata's own service, run in process over HTTP with a database of
@@ -229,7 +228,7 @@ func TestGatewayReadsAndWritesIssues(t *testing.T) {
 		t.Fatalf("written fields not stored: %+v", got)
 	}
 
-	closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Body: quickClose("tester")}))
+	closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true}))
 	if closed.UID != uid || closed.Err != nil {
 		t.Fatalf("close %+v", closed)
 	}
@@ -261,9 +260,35 @@ func TestGatewayWritesAParentLink(t *testing.T) {
 	}
 }
 
-func quickClose(actor string) g.CloseIssueBody {
-	reason, protocol, source := g.CloseActionRequestBodyReason("done"), g.CloseActionRequestBodyRetryProtocol("close-v1"), g.CloseActionRequestBodySource("tui")
-	return g.CloseIssueBody{Actor: &actor, Reason: &reason, RetryProtocol: &protocol, Source: &source}
+func TestGatewayClosesWithEveryReason(t *testing.T) {
+	kata := startKata(t, "0.18.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	target := createIssue(t, gateway, workspace, demo, "Target")
+	message := "Implemented the requested change and verified the result."
+	for _, tt := range []struct {
+		name string
+		cmd  model.CloseIssueCmd
+	}{
+		{"quick", model.CloseIssueCmd{Quick: true}},
+		{"done", model.CloseIssueCmd{Reason: "done", Message: message, Evidence: []model.CloseEvidence{{Kind: model.EvidenceCommit, Value: "abcdef1"}, {Kind: model.EvidencePR, Value: "https://example.com/pr/1"}, {Kind: model.EvidenceTest, Value: "go test ./..."}}}},
+		{"wontfix", model.CloseIssueCmd{Reason: "wontfix", Message: message + " It is out of scope for this project, so it will not be done."}},
+		{"duplicate", model.CloseIssueCmd{Reason: "duplicate", Message: message, Evidence: []model.CloseEvidence{{Kind: model.EvidenceDuplicateOf, Value: target}}}},
+		{"superseded", model.CloseIssueCmd{Reason: "superseded", Message: message, Evidence: []model.CloseEvidence{{Kind: model.EvidenceSupersededBy, Value: target}}}},
+		{"audit-no-change", model.CloseIssueCmd{Reason: "audit-no-change", Message: message, Evidence: []model.CloseEvidence{{Kind: model.EvidenceAudit, Value: "Checked every caller; nothing needed to change."}}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			uid := createIssue(t, gateway, workspace, demo, tt.name)
+			tt.cmd.Workspace, tt.cmd.UID, tt.cmd.ProjectID, tt.cmd.Actor = workspace, uid, demo.ID, "tester"
+			if closed := as[model.CloseResultMsg](t, run(t, gateway, tt.cmd)); closed.UID != uid || closed.Err != nil {
+				t.Fatalf("close %+v", closed)
+			}
+			got := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected.Issue
+			if got.Status != "closed" {
+				t.Fatalf("status %q, want closed", got.Status)
+			}
+		})
+	}
 }
 
 func TestGatewayDraftTextConflicts(t *testing.T) {
@@ -713,16 +738,16 @@ func TestGatewayGuardedWritesSurviveAnOwnerChange(t *testing.T) {
 		uid := createIssue(t, gateway, workspace, demo, "Close me")
 		issue := seen(uid)
 		changeOwner(t, gateway, workspace, demo, uid, "alice")
-		closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Body: quickClose("tester")}))
+		closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true}))
 		if closed.Err != nil {
 			t.Fatalf("close after an owner change from revision %d: %v", issue.Revision, closed.Err)
 		}
 	})
 	t.Run("closed meanwhile", func(t *testing.T) {
 		uid := createIssue(t, gateway, workspace, demo, "Closed twice")
-		as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Body: quickClose("someone")}))
+		as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "someone", Quick: true}))
 		before := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid}))
-		closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Body: quickClose("tester")}))
+		closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true}))
 		after := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid}))
 		if closed.Err == nil || !strings.Contains(closed.Err.Error(), "closed") || len(after.Selected.History) != len(before.Selected.History) {
 			t.Fatalf("second close %+v wrote events %d -> %d", closed, len(before.Selected.History), len(after.Selected.History))
