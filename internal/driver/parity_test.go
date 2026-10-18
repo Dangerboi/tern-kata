@@ -259,8 +259,8 @@ func pickerCatalog() []model.CatalogProject {
 // newProject is an unbound directory with the New Project card open from the sidebar.
 func newProject() driver.State {
 	m := loadFirst(model.Model{Cols: 160, Workspace: "/home/dev/my-repo", Actor: "alice"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{
-		Catalog:    pickerCatalog(),
-		Issues: []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}},
+		Catalog: pickerCatalog(),
+		Issues:  []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}},
 	}})
 	return pressed(driver.State{Model: m}, "escape", "end", "enter")
 }

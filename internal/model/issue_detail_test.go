@@ -75,8 +75,8 @@ func TestIssueOpenedByReferenceShowsOutsideTheCollection(t *testing.T) {
 	m := model.Model{Workspace: "/repo", Cols: 160, Issues: []model.Issue{{UID: "a"}}, SelectedUID: "a"}
 	m, _ = model.Update(m, model.Start{Workspace: "/repo", IssueRef: "other/bbbb"})
 	m, _ = loadFirst(m, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{
-		Catalog:    []model.CatalogProject{{Project: model.Project{ID: 7, Name: "other"}}},
-		Issues: []model.Issue{{UID: "a"}},
+		Catalog: []model.CatalogProject{{Project: model.Project{ID: 7, Name: "other"}}},
+		Issues:  []model.Issue{{UID: "a"}},
 	}})
 	m, _ = model.Update(m, model.IssueOpened{Ref: "other/bbbb", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "far"}}})
 	if m.SelectedUID != "far" || m.DetailIssueUID() != "far" || m.Focus != model.ColumnDetail || m.DetailLoading() {

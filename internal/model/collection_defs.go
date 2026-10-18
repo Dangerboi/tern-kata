@@ -26,10 +26,10 @@ type CollectionDef struct {
 }
 
 var (
-	inboxDef    = CollectionDef{Key: "inbox", Title: "Inbox", DaemonView: "inbox", Headings: true}
-	projectDef  = CollectionDef{Key: "project", DaemonView: "project", Grouping: GroupFlat}
-	resultsDef  = CollectionDef{Key: "results", Title: "Results", Headings: true}
-	fixedDefs = []CollectionDef{
+	inboxDef   = CollectionDef{Key: "inbox", Title: "Inbox", DaemonView: "inbox", Headings: true}
+	projectDef = CollectionDef{Key: "project", DaemonView: "project", Grouping: GroupFlat}
+	resultsDef = CollectionDef{Key: "results", Title: "Results", Headings: true}
+	fixedDefs  = []CollectionDef{
 		inboxDef,
 		{Key: "today", Title: "Today", DaemonView: "today", Dated: true, Grouping: GroupToday, Headings: true},
 		{Key: "upcoming", Title: "Upcoming", DaemonView: "upcoming", Dated: true, Grouping: GroupScheduledDate, Headings: true},

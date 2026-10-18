@@ -11,8 +11,8 @@ func TestTopBarDaemonAndCounts(t *testing.T) {
 	issues := []model.Issue{{UID: "a", Status: "open"}, {UID: "b", Status: "closed"}}
 	load := func(m model.Model, stats *model.ProjectStats) model.Model {
 		m, _ = loadFirst(m, model.ProjectLoaded{Project: project, Daemon: model.Daemon{Remote: true, Version: "v0.18.0"}}, model.SnapshotLoaded{Snapshot: model.Snapshot{
-			Catalog:    []model.CatalogProject{{Project: project, Stats: stats}},
-			Issues: issues,
+			Catalog: []model.CatalogProject{{Project: project, Stats: stats}},
+			Issues:  issues,
 		}})
 		return m
 	}
@@ -24,8 +24,8 @@ func TestTopBarDaemonAndCounts(t *testing.T) {
 		t.Fatalf("catalog counts %q", got)
 	}
 	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: model.Snapshot{
-		Catalog:    []model.CatalogProject{{Project: project, Stats: &model.ProjectStats{Open: 6, Closed: 7}}},
-		Issues: issues,
+		Catalog: []model.CatalogProject{{Project: project, Stats: &model.ProjectStats{Open: 6, Closed: 7}}},
+		Issues:  issues,
 	}})
 	if got := m.CountsLine(); got != "open: 6 · closed: 7 · all: 13" {
 		t.Fatalf("counts after refresh %q", got)
@@ -41,8 +41,8 @@ func TestTopBarDaemonAndCounts(t *testing.T) {
 func TestCountsLineForAnUnboundProjectCollection(t *testing.T) {
 	project := model.Project{UID: "p", Name: "work"}
 	snapshot := model.Snapshot{
-		Catalog:    []model.CatalogProject{{Project: project, Stats: &model.ProjectStats{Open: 5, Closed: 7}}},
-		Issues: []model.Issue{{UID: "a", Status: "open"}},
+		Catalog: []model.CatalogProject{{Project: project, Stats: &model.ProjectStats{Open: 5, Closed: 7}}},
+		Issues:  []model.Issue{{UID: "a", Status: "open"}},
 	}
 	m, _ := loadFirst(model.Model{Workspace: "/repo"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: snapshot})
 	if m.Bound || m.CountsLine() != "open: 1 · closed: 0 · all: 1" {

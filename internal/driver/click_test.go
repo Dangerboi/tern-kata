@@ -57,9 +57,9 @@ func activity(t *testing.T, tab model.ActivityTab) driver.State {
 		},
 	}
 	return loadedWith(t, 160, model.Project{ID: 7, UID: "p", Name: "work"}, model.Snapshot{
-		Catalog:         []model.CatalogProject{{Project: model.Project{UID: "p", Name: "work"}}},
-		Issues:      []model.Issue{alpha, beta, kid},
-		Links: []model.Link{{Type: "parent", FromIssueUID: "kid", ToIssueUID: "alpha"}},
+		Catalog: []model.CatalogProject{{Project: model.Project{UID: "p", Name: "work"}}},
+		Issues:  []model.Issue{alpha, beta, kid},
+		Links:   []model.Link{{Type: "parent", FromIssueUID: "kid", ToIssueUID: "alpha"}},
 	}, model.DetailLoaded{UID: "alpha", Selected: selected}, model.ActivityTabMsg{Tab: tab})
 }
 

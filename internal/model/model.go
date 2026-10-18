@@ -50,15 +50,15 @@ type Model struct {
 	// pending is the Issue Create just made, selected as soon as a snapshot lists it.
 	pending string
 	// etag answers etagQuery: the snapshot on screen.
-	etag      string
-	etagQuery SnapshotQuery
-	CloseForm CloseFormState
-	Actor     string
-	FieldForm FieldFormState
-	Workspace string
-	Project   Project
-	Daemon    Daemon
-	Snapshot  Snapshot
+	etag                string
+	etagQuery           SnapshotQuery
+	CloseForm           CloseFormState
+	Actor               string
+	FieldForm           FieldFormState
+	Workspace           string
+	Project             Project
+	Daemon              Daemon
+	Snapshot            Snapshot
 	Issues              []Issue
 	SelectedUID         string
 	Loading             bool

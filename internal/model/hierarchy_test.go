@@ -179,8 +179,8 @@ func TestHierarchyCyclesAndEmptyLists(t *testing.T) {
 			},
 		}, []string{"a", "b"}},
 		{"unrelated links do not nest", model.Snapshot{
-			Issues:      []model.Issue{{UID: "a"}, {UID: "b"}},
-			Links: []model.Link{{Type: "blocks", FromIssueUID: "a", ToIssueUID: "b"}},
+			Issues: []model.Issue{{UID: "a"}, {UID: "b"}},
+			Links:  []model.Link{{Type: "blocks", FromIssueUID: "a", ToIssueUID: "b"}},
 		}, []string{"a", "b"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

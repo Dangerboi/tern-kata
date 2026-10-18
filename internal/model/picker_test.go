@@ -17,8 +17,8 @@ func pickerCatalog() []model.CatalogProject {
 
 func pickerStart(cols int, bound bool) model.Model {
 	loaded, snapshot := model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{
-		Catalog:    pickerCatalog(),
-		Issues: []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}, {UID: "b", ShortID: "bbbb", Title: "Second"}},
+		Catalog: pickerCatalog(),
+		Issues:  []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}, {UID: "b", ShortID: "bbbb", Title: "Second"}},
 	}}
 	if bound {
 		loaded.Project = model.Project{UID: "smoke-uid", Name: "smoke"}

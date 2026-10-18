@@ -14,8 +14,8 @@ const newProjectWorkspace = "/home/dev/my-repo"
 // smoke, or unbound on Inbox with the Menu sidebar.
 func newProjectStart(bound bool) model.Model {
 	loaded, snapshot := model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{
-		Catalog:    pickerCatalog(),
-		Issues: []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}},
+		Catalog: pickerCatalog(),
+		Issues:  []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}},
 	}}
 	if bound {
 		loaded.Project = model.Project{ID: 7, UID: "smoke-uid", Name: "smoke"}
