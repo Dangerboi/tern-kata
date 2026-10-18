@@ -51,10 +51,7 @@ func translateSnapshot(s *g.UISnapshotResponseBody) model.Snapshot {
 		snapshot.Issues = append(snapshot.Issues, translateIssue(&s.Collection[i]))
 	}
 	for _, l := range s.CollectionLinks {
-		snapshot.Links = append(snapshot.Links, model.Link{
-			ID: l.ID, Type: l.Type, FromIssueUID: l.FromIssueUID, FromQualifiedID: l.FromQualifiedID,
-			ToIssueUID: l.ToIssueUID, ToQualifiedID: l.ToQualifiedID,
-		})
+		snapshot.Links = append(snapshot.Links, translateLink(l))
 	}
 	for _, p := range s.Catalog {
 		entry := model.CatalogProject{Project: translateProject(p.Project)}

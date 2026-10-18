@@ -9,7 +9,7 @@ import (
 )
 
 func (c *Client) ReadDetail(ctx context.Context, uid string) (model.DetailLoaded, error) {
-	view, history := "all-open", true
+	view, history := model.DetailDaemonView(), true
 	response, err := c.ReadUISnapshotWithResponse(ctx, &g.ReadUISnapshotRequestOptions{
 		Query: &g.ReadUISnapshotQuery{View: &view, SelectedIssueUID: &uid, IncludeHistory: &history},
 	})
@@ -34,8 +34,8 @@ func translateDetail(s *g.UISelectedAuthority) *model.IssueDetailData {
 	}
 	for _, c := range s.Comments {
 		comment := model.Comment{
-			UID: c.UID, Handle: c.Handle, Author: c.Author, Body: c.Body, CreatedAt: c.CreatedAt,
-			ReplyKind: c.ReplyKind, ReplyToUID: c.ReplyToUID, Reply: translateCommentLink(c.Reply),
+			UID: c.UID, Author: c.Author, Body: c.Body, CreatedAt: c.CreatedAt,
+			ReplyKind: c.ReplyKind, Reply: translateCommentLink(c.Reply),
 		}
 		for i := range c.Backlinks {
 			comment.Backlinks = append(comment.Backlinks, *translateCommentLink(&c.Backlinks[i]))
@@ -49,12 +49,16 @@ func translateDetail(s *g.UISelectedAuthority) *model.IssueDetailData {
 		})
 	}
 	for _, l := range s.Links {
-		d.Links = append(d.Links, model.Link{
-			ID: l.ID, Type: l.Type, FromIssueUID: l.FromIssueUID, FromQualifiedID: l.FromQualifiedID,
-			ToIssueUID: l.ToIssueUID, ToQualifiedID: l.ToQualifiedID,
-		})
+		d.Links = append(d.Links, translateLink(l))
 	}
 	return d
+}
+
+func translateLink(l g.UILink) model.Link {
+	return model.Link{
+		ID: l.ID, Type: l.Type, FromIssueUID: l.FromIssueUID, FromQualifiedID: l.FromQualifiedID,
+		ToIssueUID: l.ToIssueUID, ToQualifiedID: l.ToQualifiedID,
+	}
 }
 
 func translateCommentLink(l *g.CommentLink) *model.CommentLink {
@@ -62,7 +66,6 @@ func translateCommentLink(l *g.CommentLink) *model.CommentLink {
 		return nil
 	}
 	return &model.CommentLink{
-		UID: l.UID, Handle: l.Handle, Kind: l.Kind, Author: l.Author, Body: l.Body,
-		IssueUID: l.IssueUID, IssueShortID: l.IssueShortID, Status: l.Status, TargetEdited: l.TargetEdited,
+		UID: l.UID, Kind: l.Kind, Author: l.Author, IssueUID: l.IssueUID, IssueShortID: l.IssueShortID,
 	}
 }

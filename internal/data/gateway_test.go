@@ -928,8 +928,8 @@ func TestGatewayTranslatesTheIssueDetailFromRealPayloads(t *testing.T) {
 			len(asked.Backlinks) != 1 || asked.Backlinks[0].Kind != "confirm" || asked.Backlinks[0].UID == nil || *asked.Backlinks[0].UID != answer.UID {
 			t.Errorf("%s: the answered comment %+v", name, asked)
 		}
-		if answer.Author != "answerer" || answer.ReplyKind == nil || *answer.ReplyKind != "confirm" || answer.ReplyToUID == nil || *answer.ReplyToUID != asked.UID ||
-			answer.Reply == nil || answer.Reply.UID == nil || *answer.Reply.UID != asked.UID || answer.Reply.Body == nil || *answer.Reply.Body != "the question" || answer.Reply.IssueUID == nil || *answer.Reply.IssueUID != uid {
+		if answer.Author != "answerer" || answer.ReplyKind == nil || *answer.ReplyKind != "confirm" ||
+			answer.Reply == nil || answer.Reply.UID == nil || *answer.Reply.UID != asked.UID || answer.Reply.IssueUID == nil || *answer.Reply.IssueUID != uid {
 			t.Errorf("%s: the reply %+v", name, answer)
 		}
 		if len(d.Links) != 1 || d.Links[0].Type != "parent" || d.Links[0].FromIssueUID != uid || d.Links[0].ToIssueUID != parent || d.Links[0].ToQualifiedID == "" {

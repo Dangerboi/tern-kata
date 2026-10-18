@@ -18,9 +18,9 @@ func onReplies(t *testing.T) driver.State {
 	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
 	selected := &model.IssueDetailData{Issue: &alpha, Comments: []model.Comment{
 		{UID: "c1", Author: "dana", CreatedAt: at, Body: "claim", Backlinks: []model.CommentLink{{Kind: "confirm"}, {Kind: "refute"}}},
-		{UID: "c2", Author: "eli", CreatedAt: at.Add(time.Minute), Body: "agreed", ReplyKind: ptr("confirm"), ReplyToUID: ptr("c1"),
+		{UID: "c2", Author: "eli", CreatedAt: at.Add(time.Minute), Body: "agreed", ReplyKind: ptr("confirm"),
 			Reply: &model.CommentLink{UID: ptr("c1"), Kind: "confirm", Author: ptr("dana"), IssueUID: ptr("alpha"), IssueShortID: ptr("aaaa")}},
-		{UID: "c3", Author: "eli", CreatedAt: at.Add(2 * time.Minute), Body: "no", ReplyKind: ptr("refute"), ReplyToUID: ptr("b1"),
+		{UID: "c3", Author: "eli", CreatedAt: at.Add(2 * time.Minute), Body: "no", ReplyKind: ptr("refute"),
 			Reply: &model.CommentLink{UID: ptr("b1"), Kind: "refute", Author: ptr("fay"), IssueUID: ptr("beta"), IssueShortID: ptr("bbbb")}},
 	}}
 	return feed(t, browsing(t, 160), model.DetailLoaded{UID: "alpha", Selected: selected}, key("enter")).State

@@ -29,12 +29,13 @@ var (
 	inboxDef   = CollectionDef{Key: "inbox", Title: "Inbox", DaemonView: "inbox", Headings: true}
 	projectDef = CollectionDef{Key: "project", DaemonView: "project", Grouping: GroupFlat}
 	resultsDef = CollectionDef{Key: "results", Title: "Results", Headings: true}
+	allOpenDef = CollectionDef{Key: "all-open", Title: "All Open", DaemonView: "all-open", Grouping: GroupProject, Headings: true}
 	fixedDefs  = []CollectionDef{
 		inboxDef,
 		{Key: "today", Title: "Today", DaemonView: "today", Dated: true, Grouping: GroupToday, Headings: true},
 		{Key: "upcoming", Title: "Upcoming", DaemonView: "upcoming", Dated: true, Grouping: GroupScheduledDate, Headings: true},
 		{Key: "deadlines", Title: "Deadlines", DaemonView: "deadlines", Dated: true, Grouping: GroupDeadline, Headings: true},
-		{Key: "all-open", Title: "All Open", DaemonView: "all-open", Grouping: GroupProject, Headings: true},
+		allOpenDef,
 		{Key: "logbook", Title: "Logbook", DaemonView: "logbook", Grouping: GroupClosedDate, Headings: true},
 	}
 )
@@ -53,9 +54,9 @@ func ResultsCollection() Collection { return Collection{View: resultsDef.Key, Ti
 // Def is the definition of the Collection's kind; an unknown kind groups flat without headings.
 func (c Collection) Def() CollectionDef {
 	switch c.View {
-	case "project":
+	case projectDef.Key:
 		return projectDef
-	case "results":
+	case resultsDef.Key:
 		return resultsDef
 	}
 	if i := slices.IndexFunc(fixedDefs, func(d CollectionDef) bool { return d.Key == c.View }); i >= 0 {
@@ -77,3 +78,6 @@ func FixedCollections() []Collection {
 func DatedView(daemonView string) bool {
 	return slices.ContainsFunc(fixedDefs, func(d CollectionDef) bool { return d.DaemonView == daemonView && d.Dated })
 }
+
+// DetailDaemonView is the daemon view an Issue's detail is read through.
+func DetailDaemonView() string { return allOpenDef.DaemonView }

@@ -11,32 +11,25 @@ type IssueDetailData struct {
 	Links    []Link
 }
 
-// Comment is one comment; ReplyKind and ReplyToUID are set when it replies to another, Reply is the answered comment and
+// Comment is one comment; ReplyKind is set when it replies to another, Reply is the answered comment and
 // Backlinks are the comments replying to this one.
 type Comment struct {
-	UID        string
-	Handle     *string
-	Author     string
-	Body       string
-	CreatedAt  time.Time
-	ReplyKind  *string
-	ReplyToUID *string
-	Reply      *CommentLink
-	Backlinks  []CommentLink
+	UID       string
+	Author    string
+	Body      string
+	CreatedAt time.Time
+	ReplyKind *string
+	Reply     *CommentLink
+	Backlinks []CommentLink
 }
 
-// CommentLink is a comment on the other end of a reply; Kind is the reply's kind and Status says why the comment is
-// unavailable ("pending", "hidden", "moved", "removed").
+// CommentLink is a comment on the other end of a reply; Kind is the reply's kind.
 type CommentLink struct {
 	UID          *string
-	Handle       *string
 	Kind         string
 	Author       *string
-	Body         *string
 	IssueUID     *string
 	IssueShortID *string
-	Status       *string
-	TargetEdited *bool
 }
 
 // Event is one history event; Payload is kata's JSON text of it, which historyRow turns into a sentence.
