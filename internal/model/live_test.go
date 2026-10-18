@@ -149,8 +149,8 @@ func TestLiveRefreshPreservesDetailPosition(t *testing.T) {
 				}
 				m, _ = model.Update(m, model.DetailLoaded{UID: "issue", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "issue"}, Comments: []model.Comment{{UID: "one"}, {UID: "two"}}}})
 			}
-			if m.ActiveTab() != model.TabComments || m.DetailIndex() != 1 || m.SelectedUID != "issue" {
-				t.Fatalf("refresh reset reading position: tab=%v index=%d selected=%q", m.ActiveTab(), m.DetailIndex(), m.SelectedUID)
+			if m.ActiveTab() != model.TabComments || cursorKey(m) != "two" || m.SelectedUID != "issue" {
+				t.Fatalf("refresh reset reading position: tab=%v cursor on %q selected=%q", m.ActiveTab(), cursorKey(m), m.SelectedUID)
 			}
 		})
 	}

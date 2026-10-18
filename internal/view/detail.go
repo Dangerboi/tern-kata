@@ -30,9 +30,8 @@ const DetailActivityID = DetailContentID + ".activity"
 // the last node of its rows (or its empty line), then the tab names.
 func ActivityRevealIDs(m model.Model) []string {
 	last := DetailActivityID + ".empty"
-	if count := m.DetailRowCount(m.ActiveTab()); count > 0 {
-		row, _ := m.DetailRow(m.ActiveTab(), count-1)
-		last = DetailActivityID + "." + row.Key
+	if rows := m.DetailRows(); len(rows) > 0 && rows[len(rows)-1].Kind != model.RowChild {
+		last = DetailActivityID + "." + rows[len(rows)-1].Key
 	}
 	return []string{last, DetailActivityID + ".tabs"}
 }
@@ -59,20 +58,23 @@ func detail(m model.Model, now time.Time) tern.Element {
 			ui.Badge{Common: ui.Common{Key: "status", Tone: statusTone(issue.Status)}, Text: statusText(issue)},
 		)}, ui.Spacer{Common: ui.Common{Key: "gap"}, Size: ui.GapMD}}
 		body := issue.Body
-		if parent, ok := parentLink(m); ok {
+		if parent, ok := m.DetailParent(); ok {
 			body = withoutParentSection(body, parent.Ref)
 		}
 		if strings.TrimSpace(body) == "" {
 			body = "No body yet."
 		}
 		parts = append(parts, properties(m, issue, now), ui.Md{Common: ui.Common{Key: "body"}, Text: body})
-		kids := m.DetailChildren()
+		kids, activity := detailRows(m)
 		if len(kids) > 0 {
 			parts = append(parts, ui.Spacer{Common: ui.Common{Key: "gap-children"}, Size: ui.GapMD}, childrenTable(m, kids, now))
 		}
+		if len(activity) == 0 {
+			activity = ui.Nodes(ui.Text{Common: ui.Common{Key: "empty"}, Text: "No " + strings.ToLower(m.ActiveTab().String()) + "."})
+		}
 		parts = append(parts,
 			ui.Spacer{Common: ui.Common{Key: "gap-activity"}, Size: ui.GapMD},
-			ui.Col{Common: ui.Common{Key: "activity"}, Gap: ui.GapSM, Children: append(ui.Nodes(activityTabs(m)), detailRows(m, m.ActiveTab(), len(kids))...)})
+			ui.Col{Common: ui.Common{Key: "activity"}, Gap: ui.GapSM, Children: append(ui.Nodes(activityTabs(m)), activity...)})
 		children = append(children, ui.List{CommonWithoutMax: scrollerCommon("viewport"), Max: scrollMax(m), Children: ui.Nodes(ui.Col{Common: ui.Common{Key: "content"}, Gap: ui.GapSM, Children: parts})})
 	}
 	return panel(m, model.ColumnDetail, ui.Common{Key: "detail", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapMD, children)
@@ -100,26 +102,27 @@ func activityTabs(m model.Model) tern.Element {
 	return ui.Row{Common: ui.Common{Key: "tabs"}, Gap: ui.GapMD, Children: tabs}
 }
 
-func detailRows(m model.Model, tab model.ActivityTab, cursorOffset int) tern.Nodes {
-	count := m.DetailRowCount(tab)
-	if count == 0 {
-		return ui.Nodes(ui.Text{Common: ui.Common{Key: "empty"}, Text: "No " + strings.ToLower(tab.String()) + "."})
-	}
-	rows := make(tern.Nodes, 0, count)
-	for i := range count {
-		row, _ := m.DetailRow(tab, i)
-		action := DetailItemClick(tab, row.Key)
+// detailRows draws the model's rows: the children as table rows and the others as Activity cards, the one under the
+// cursor marked.
+func detailRows(m model.Model) (children []detailChild, activity tern.Nodes) {
+	for i, item := range m.DetailRows() {
 		mark := ui.Mark("")
-		if m.Focus == model.ColumnDetail && m.DetailIndex() == cursorOffset+i {
+		if m.Focus == model.ColumnDetail && m.DetailIndex() == i {
 			mark = ui.MarkPick
 		}
-		if tab == model.TabLinks {
-			rows = append(rows, ui.Col{Common: ui.Common{Key: row.Key, Mark: mark}, Children: ui.Nodes(linkRow(row, &ui.Actions{Click: action}))})
+		if item.Kind == model.RowChild {
+			children = append(children, detailChild{item.Child, mark})
+			continue
+		}
+		row := item.Activity
+		action := DetailItemClick(tabOf(item.Kind), row.Key)
+		if item.Kind == model.RowLink {
+			activity = append(activity, ui.Col{Common: ui.Common{Key: row.Key, Mark: mark}, Children: ui.Nodes(linkRow(row, &ui.Actions{Click: action}))})
 			continue
 		}
 		var parts tern.Nodes
 		var head ui.Rich
-		if tab == model.TabEvents {
+		if item.Kind == model.RowEvent {
 			parts = ui.Nodes(historySentence(row, action))
 		} else {
 			head = ui.Spans(ui.Span{T: row.Author, S: "strong"}, ui.Span{T: "  "}, ui.Span{T: row.Time, S: "muted"})
@@ -127,18 +130,25 @@ func detailRows(m model.Model, tab model.ActivityTab, cursorOffset int) tern.Nod
 		if row.Body != "" {
 			parts = append(parts, ui.Md{Common: ui.Common{Key: "body"}, Text: row.Body})
 		}
-		rows = append(rows, ui.Card{Common: ui.Common{Key: row.Key, Mark: mark, Actions: &ui.Actions{Click: action}}, Variant: ui.CardBare, Head: head, Children: parts})
+		activity = append(activity, ui.Card{Common: ui.Common{Key: row.Key, Mark: mark, Actions: &ui.Actions{Click: action}}, Variant: ui.CardBare, Head: head, Children: parts})
 	}
-	return rows
+	return children, activity
 }
 
-func parentLink(m model.Model) (model.DetailRow, bool) {
-	for i := range m.DetailRowCount(model.TabLinks) {
-		if link, _ := m.DetailRow(model.TabLinks, i); link.Relation == "parent" {
-			return link, true
-		}
+// detailChild is a child row with its cursor mark.
+type detailChild struct {
+	model.ChildRow
+	mark ui.Mark
+}
+
+func tabOf(kind model.RowKind) model.ActivityTab {
+	switch kind {
+	case model.RowLink:
+		return model.TabLinks
+	case model.RowEvent:
+		return model.TabEvents
 	}
-	return model.DetailRow{}, false
+	return model.TabComments
 }
 
 var (
@@ -236,7 +246,7 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 		}
 		add("Labels", ui.Row{Common: ui.Common{Key: "v"}, Gap: ui.GapSM, Wrap: true, Children: chips})
 	}
-	if link, ok := parentLink(m); ok {
+	if link, ok := m.DetailParent(); ok {
 		add("Parent", referenceText("v", link.ReferenceUID, link.Ref, link.RefTitle))
 	}
 	if counts := m.Snapshot.ChildCounts[issue.UID]; counts.Total > 0 {

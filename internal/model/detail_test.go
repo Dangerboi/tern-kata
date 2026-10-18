@@ -151,7 +151,7 @@ func TestLinkRelationsRelativeToSelectedIssue(t *testing.T) {
 					ID: 1, Type: tt.relation, FromIssueUID: "child", ToIssueUID: "parent", FromQualifiedID: "project#child", ToQualifiedID: "project#parent",
 				}}},
 			})
-			row, ok := m.DetailRow(model.TabLinks, 0)
+			row, ok := activityRow(m, model.TabLinks, 0)
 			if !ok || row.Relation != tt.shown || row.Ref != tt.ref || row.ReferenceUID != tt.peer {
 				t.Fatalf("relation: %+v, want %q %q -> %q", row, tt.shown, tt.ref, tt.peer)
 			}
@@ -197,7 +197,7 @@ func TestLinkRefIsShortInTheShownIssuesProject(t *testing.T) {
 		Issue: &model.Issue{UID: "a", ProjectName: "work"}, Links: []model.Link{link(1, "work"), link(2, "other")},
 	}})
 	for i, want := range []string{"#x", "other#x"} {
-		if row, _ := m.DetailRow(model.TabLinks, i); row.Ref != want {
+		if row, _ := activityRow(m, model.TabLinks, i); row.Ref != want {
 			t.Errorf("row %d ref = %q, want %q", i, row.Ref, want)
 		}
 	}
