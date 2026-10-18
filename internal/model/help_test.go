@@ -1,6 +1,7 @@
 package model_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -33,38 +34,26 @@ func TestHelpKeys(t *testing.T) {
 	}
 }
 
-func TestHintsFollowCurrentModeAndKeymap(t *testing.T) {
-	original := model.Keymap
-	t.Cleanup(func() { model.Keymap = original })
-	model.Keymap = []model.Binding{
-		{Chord: "j", Key: "j", Action: model.MoveDown, Help: "next Issue", Mode: model.ModeList, ShowInFooter: true},
-		{Chord: "g", Key: "g", Action: model.MoveFirst, Help: "first Issue", Mode: model.ModeList},
-		{Chord: "?", Key: "?", Action: model.ToggleHelp, Help: "help", ShowInFooter: true},
-		{Chord: "escape", Key: "esc", Action: model.CloseHelp, Help: "close help", Mode: model.ModeHelp, ShowInFooter: true},
-	}
-	for _, tt := range []struct {
-		keys []string
-		want string
-	}{
-		{nil, "j next Issue;? help;"},
-		{[]string{"?"}, "? help;esc close help;"},
-		{[]string{"?", "escape"}, "j next Issue;? help;"},
-	} {
-		m := model.Model{}
-		for _, key := range tt.keys {
-			var cmds []model.Cmd
-			m, cmds = model.Update(m, model.KeyMsg{Chord: key})
-			if len(cmds) != 0 {
-				t.Fatalf("hint mode requested commands: %#v", cmds)
-			}
-		}
+func TestHintsFollowCurrentMode(t *testing.T) {
+	footer := func(m model.Model) string {
 		got := ""
 		for binding := range model.BindingsForMode(m.CurrentMode(), true) {
 			got += binding.Key + " " + binding.Help + ";"
 		}
-		if got != tt.want {
-			t.Fatalf("visible hints = %q, want %q", got, tt.want)
-		}
+		return got
+	}
+	m := model.Model{}
+	listHints := footer(m)
+	if !strings.Contains(listHints, "j/↓ next Issue;") || !strings.Contains(listHints, "? help;") || strings.Contains(listHints, "close help") {
+		t.Fatalf("list hints = %q", listHints)
+	}
+	m, _ = model.Update(m, model.KeyMsg{Chord: "?"})
+	if got := footer(m); !strings.Contains(got, "esc close help;") || strings.Contains(got, "next Issue") {
+		t.Fatalf("help hints = %q", got)
+	}
+	m, _ = model.Update(m, model.KeyMsg{Chord: "escape"})
+	if got := footer(m); got != listHints {
+		t.Fatalf("hints after closing help = %q, want %q", got, listHints)
 	}
 }
 

@@ -161,11 +161,6 @@ func updateCreate(m Model, msg Msg) (Model, []Cmd, bool) {
 			m.Create.Err = msg.Err
 			return m, nil, true
 		}
-	case KeyMsg:
-		if b, ok := LookupBindingForMode(msg.Chord, m.CurrentMode()); ok && (b.Action == NewIssue || b.Action == NewChild) {
-			next, cmds := openCreate(m, b.Action == NewChild)
-			return next, cmds, true
-		}
 	}
 	return m, nil, false
 }

@@ -23,53 +23,68 @@ func inputMode(mode Mode) bool {
 	return mode == ModeSearch || mode == ModeSearchResults
 }
 
-func updateFilterAction(m Model, action Action) (Model, []Cmd) {
-	switch action {
-	case ClearFilters:
-		m.Filters = Filters{}
-		m.SelectedUID = ""
-		return snapshotChanged(m)
-	case OpenFilterForm:
-		m.FilterForm = FilterFormState{Open: true, Field: FilterFields[0].Name, Values: m.Filters}
-	case CycleStatus:
-		switch m.Filters.Status {
-		case "open":
-			m.Filters.Status = "closed"
-		case "closed":
-			m.Filters.Status = ""
-		default:
-			m.Filters.Status = "open"
-		}
-		m.SelectedUID = ""
-		return snapshotChanged(m)
-	case SearchIssues:
-		m.Search = SearchState{Open: true, InitialText: m.Filters.Search, InitialUID: m.SelectedUID}
-	case MoveDown, MoveUp, PageUp, PageDown:
-		m.Search.Results = true
-		return updateNavigation(m, action)
-	case SearchEnter:
-		if m.Search.Results {
-			m.Search = SearchState{}
-		} else {
-			m.Search.Results = true
-		}
-	case SearchBack:
-		if m.Search.Results {
-			m.Search.Results = false
-		} else {
-			m.Filters.Search = m.Search.InitialText
-			m.SelectedUID = m.Search.InitialUID
-			m.Search = SearchState{}
-			return snapshotChanged(m)
-		}
-	case SearchQuery:
-		m.Search.Results = false
-	case DeleteInput, ClearInput:
-		m.Filters.Search, _ = editText(m.Filters.Search, Binding{Action: action}, true, KeyMsg{})
-		m.SelectedUID = ""
-		return snapshotChanged(m)
+func clearFilters(m Model) (Model, []Cmd) {
+	m.Filters = Filters{}
+	m.SelectedUID = ""
+	return snapshotChanged(m)
+}
+
+func openFilterForm(m Model) Model {
+	m.FilterForm = FilterFormState{Open: true, Field: FilterFields[0].Name, Values: m.Filters}
+	return m
+}
+
+func cycleStatus(m Model) (Model, []Cmd) {
+	switch m.Filters.Status {
+	case "open":
+		m.Filters.Status = "closed"
+	case "closed":
+		m.Filters.Status = ""
+	default:
+		m.Filters.Status = "open"
 	}
-	return m, nil
+	m.SelectedUID = ""
+	return snapshotChanged(m)
+}
+
+func openSearch(m Model) Model {
+	m.Search = SearchState{Open: true, InitialText: m.Filters.Search, InitialUID: m.SelectedUID}
+	return m
+}
+
+// searchMove is a row or page key in the search modes: it moves through the results, which it shows.
+func searchMove(m Model, action Action) Model {
+	m.Search.Results = true
+	return moveSelection(m, action)
+}
+
+// searchEnter shows the results from the query, and commits the search from the results.
+func searchEnter(m Model) Model {
+	if m.Search.Results {
+		m.Search = SearchState{}
+	} else {
+		m.Search.Results = true
+	}
+	return m
+}
+
+// searchBack goes from the results to the query, and from the query cancels the search.
+func searchBack(m Model) (Model, []Cmd) {
+	if m.Search.Results {
+		m.Search.Results = false
+		return m, nil
+	}
+	m.Filters.Search = m.Search.InitialText
+	m.SelectedUID = m.Search.InitialUID
+	m.Search = SearchState{}
+	return snapshotChanged(m)
+}
+
+// searchEdit sets the query to text, as backspace and ctrl+u do.
+func searchEdit(m Model, text string) (Model, []Cmd) {
+	m.Filters.Search = text
+	m.SelectedUID = ""
+	return snapshotChanged(m)
 }
 
 func updateFilterText(m Model, msg KeyMsg) (Model, []Cmd) {

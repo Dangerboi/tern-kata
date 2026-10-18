@@ -225,42 +225,34 @@ func (m Model) CanFocusDetail() bool {
 	return m.SelectedUID != "" && slices.Contains(m.VisibleColumns(), ColumnList) && slices.Contains(m.VisibleColumns(), ColumnDetail)
 }
 
-func updateDetailNavigation(m Model, action Action) (Model, []Cmd) {
-	switch action {
-	case DrillIn:
-		if m.Focus == ColumnCollections {
-			m.Focus = ColumnList
-		} else if m.Focus == ColumnList && m.SelectedUID != "" {
-			m = m.focusDetail()
-		} else if m.Focus == ColumnDetail {
-			m = m.openCursorRow()
+// drillIn is enter on whichever column has focus: the Menu hands focus to the list, the list to the
+// detail of the selected Issue, the detail opens the row under its cursor.
+func drillIn(m Model) Model {
+	switch {
+	case m.Focus == ColumnCollections:
+		m.Focus = ColumnList
+	case m.Focus == ColumnList && m.SelectedUID != "":
+		m = m.focusDetail()
+	case m.Focus == ColumnDetail:
+		m = m.openCursorRow()
+	}
+	return m
+}
+
+// drillOut is esc or left: the detail goes back through the jump history or to the list, the list
+// to the Menu.
+func drillOut(m Model) (Model, []Cmd) {
+	switch m.Focus {
+	case ColumnDetail:
+		if back, ok := m.jumpBack(); ok {
+			return back, nil
 		}
-	case DrillOut:
-		if m.Focus == ColumnDetail {
-			if back, ok := m.jumpBack(); ok {
-				return back, nil
-			}
-			m.Focus = ColumnList
-		} else if m.Focus == ColumnList {
-			if !m.SidebarShown() {
-				return openPicker(m), nil
-			}
-			m.Focus = ColumnCollections
+		m.Focus = ColumnList
+	case ColumnList:
+		if !m.SidebarShown() {
+			return openPicker(m), nil
 		}
-	case FocusDetail:
-		if m.CanFocusDetail() {
-			m.Focus = ColumnDetail
-		}
-	case ToggleDetail:
-		m = m.toggleDetail()
-	case NextActivityTab, PreviousActivityTab:
-		if m.Focus == ColumnDetail {
-			m = m.cycleTab(action == NextActivityTab)
-		}
-	case MoveDown, MoveUp, MoveFirst, MoveLast:
-		if m.Focus == ColumnDetail {
-			m = m.moveCursor(action)
-		}
+		m.Focus = ColumnCollections
 	}
 	return m, nil
 }
