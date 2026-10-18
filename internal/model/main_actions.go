@@ -113,20 +113,22 @@ var (
 	searching     = modes(ModeSearch, ModeSearchResults)
 )
 
+// The headless Tern the smoke harness drives delivers its Ctrl+<key> as meta+<key>, so the Emacs keys
+// carry a meta+ twin with no label: the footer and the help sheet never show it. alt+v arrives as alt+v in both.
 // mainActions lists the main-surface actions in the order the footer shows them.
 var mainActions = []actionEntry{
-	{action: PageUp, modes: modes(ModeList), keys: keys("page_up", "pgup"), help: "page up", handle: selection(PageUp)},
-	{action: PageDown, modes: modes(ModeList), keys: keys("page_down", "pgdn"), help: "page down", handle: selection(PageDown)},
-	{action: PageUp, modes: modes(ModeCollections), keys: keys("page_up", "pgup"), help: "page up", handle: scrolling(ColumnCollections, ScrollPageUp)},
-	{action: PageDown, modes: modes(ModeCollections), keys: keys("page_down", "pgdn"), help: "page down", handle: scrolling(ColumnCollections, ScrollPageDown)},
-	{action: PageUp, modes: modes(ModeDetail), keys: keys("page_up", "pgup"), help: "scroll page up", handle: scrolling(ColumnDetail, ScrollPageUp)},
-	{action: PageDown, modes: modes(ModeDetail), keys: keys("page_down", "pgdn"), help: "scroll page down", handle: scrolling(ColumnDetail, ScrollPageDown)},
-	{action: PageUp, modes: searching, keys: keys("page_up", "pgup"), help: "page up", handle: searchMoving(PageUp)},
-	{action: PageDown, modes: searching, keys: keys("page_down", "pgdn"), help: "page down", handle: searchMoving(PageDown)},
+	{action: PageUp, modes: modes(ModeList), keys: keys("page_up", "pgup", "alt+v", "M-v"), help: "page up", handle: selection(PageUp)},
+	{action: PageDown, modes: modes(ModeList), keys: keys("page_down", "pgdn", "ctrl+v", "C-v", "meta+v", ""), help: "page down", handle: selection(PageDown)},
+	{action: PageUp, modes: modes(ModeCollections), keys: keys("page_up", "pgup", "alt+v", "M-v"), help: "page up", handle: scrolling(ColumnCollections, ScrollPageUp)},
+	{action: PageDown, modes: modes(ModeCollections), keys: keys("page_down", "pgdn", "ctrl+v", "C-v", "meta+v", ""), help: "page down", handle: scrolling(ColumnCollections, ScrollPageDown)},
+	{action: PageUp, modes: modes(ModeDetail), keys: keys("page_up", "pgup", "alt+v", "M-v"), help: "scroll page up", handle: scrolling(ColumnDetail, ScrollPageUp)},
+	{action: PageDown, modes: modes(ModeDetail), keys: keys("page_down", "pgdn", "ctrl+v", "C-v", "meta+v", ""), help: "scroll page down", handle: scrolling(ColumnDetail, ScrollPageDown)},
+	{action: PageUp, modes: searching, keys: keys("page_up", "pgup", "alt+v", "M-v"), help: "page up", handle: searchMoving(PageUp)},
+	{action: PageDown, modes: searching, keys: keys("page_down", "pgdn", "ctrl+v", "C-v", "meta+v", ""), help: "page down", handle: searchMoving(PageDown)},
 	{action: NewIssue, modes: listAndDetail, keys: keys("n", "n"), help: "new Issue", footer: true, handle: func(m Model) (Model, []Cmd) { return openCreate(m, false) }},
 	{action: NewChild, modes: listAndDetail, keys: keys("shift+n", "N"), help: "new child", footer: true, handle: func(m Model) (Model, []Cmd) { return openCreate(m, true) }},
-	{action: MoveDown, modes: modes(ModeList), keys: keys("j", "j/↓", "down", "↓"), help: "next Issue", footer: true, handle: selection(MoveDown)},
-	{action: MoveUp, modes: modes(ModeList), keys: keys("k", "k/↑", "up", "↑"), help: "previous Issue", footer: true, handle: selection(MoveUp)},
+	{action: MoveDown, modes: modes(ModeList), keys: keys("j", "j/↓", "down", "↓", "ctrl+n", "C-n", "meta+n", ""), help: "next Issue", footer: true, handle: selection(MoveDown)},
+	{action: MoveUp, modes: modes(ModeList), keys: keys("k", "k/↑", "up", "↑", "ctrl+p", "C-p", "meta+p", ""), help: "previous Issue", footer: true, handle: selection(MoveUp)},
 	{action: MoveFirst, modes: modes(ModeList), keys: keys("g", "g", "home", "home"), help: "first Issue", handle: selection(MoveFirst)},
 	{action: MoveLast, modes: modes(ModeList), keys: keys("shift+g", "G", "end", "end"), help: "last Issue", handle: selection(MoveLast)},
 	{action: EditBody, modes: modes(ModeDetail, ModeList), keys: keys("e", "e"), help: "edit body", footer: true, handle: pure(func(m Model) Model { return startDraft(m, false) })},
@@ -137,12 +139,12 @@ var mainActions = []actionEntry{
 	{action: SearchIssues, modes: modes(ModeList), keys: keys("/", "/"), help: "search", footer: true, handle: pure(openSearch)},
 	{action: SearchEnter, modes: modes(ModeSearch), keys: keys("enter", "enter"), help: "results", footer: true, handle: pure(searchEnter)},
 	{action: SearchBack, modes: modes(ModeSearch), keys: keys("escape", "esc"), help: "cancel search", footer: true, handle: searchBack},
-	{action: MoveUp, modes: modes(ModeSearch), keys: keys("up", "up"), help: "previous result", handle: searchMoving(MoveUp)},
-	{action: MoveDown, modes: modes(ModeSearch), keys: keys("down", "down"), help: "next result", handle: searchMoving(MoveDown)},
+	{action: MoveUp, modes: modes(ModeSearch), keys: keys("up", "up", "ctrl+p", "C-p", "meta+p", ""), help: "previous result", handle: searchMoving(MoveUp)},
+	{action: MoveDown, modes: modes(ModeSearch), keys: keys("down", "down", "ctrl+n", "C-n", "meta+n", ""), help: "next result", handle: searchMoving(MoveDown)},
 	{action: DeleteInput, modes: modes(ModeSearch), keys: keys("backspace", "backspace"), help: "delete", handle: func(m Model) (Model, []Cmd) { return searchEdit(m, deleteLastRune(m.Filters.Search)) }},
 	{action: ClearInput, modes: modes(ModeSearch), keys: keys("ctrl+u", "ctrl+u"), help: "clear search", handle: func(m Model) (Model, []Cmd) { return searchEdit(m, "") }},
-	{action: MoveUp, modes: modes(ModeSearchResults), keys: keys("up", "up"), help: "previous result", footer: true, handle: searchMoving(MoveUp)},
-	{action: MoveDown, modes: modes(ModeSearchResults), keys: keys("down", "down"), help: "next result", footer: true, handle: searchMoving(MoveDown)},
+	{action: MoveUp, modes: modes(ModeSearchResults), keys: keys("up", "up", "ctrl+p", "C-p", "meta+p", ""), help: "previous result", footer: true, handle: searchMoving(MoveUp)},
+	{action: MoveDown, modes: modes(ModeSearchResults), keys: keys("down", "down", "ctrl+n", "C-n", "meta+n", ""), help: "next result", footer: true, handle: searchMoving(MoveDown)},
 	{action: SearchEnter, modes: modes(ModeSearchResults), keys: keys("enter", "enter"), help: "commit search", footer: true, handle: pure(searchEnter)},
 	{action: SearchBack, modes: modes(ModeSearchResults), keys: keys("escape", "esc"), help: "edit query", footer: true, handle: searchBack},
 	{action: SearchQuery, modes: modes(ModeSearchResults), keys: keys("/", "/"), help: "edit query", handle: pure(func(m Model) Model { m.Search.Results = false; return m })},
@@ -152,13 +154,14 @@ var mainActions = []actionEntry{
 	{action: ToggleAllExpansion, modes: modes(ModeList), keys: keys("shift+e", "E"), help: "expand/collapse all", handle: hierarchy(ToggleAllExpansion)},
 	{action: ToggleIssueView, modes: modes(ModeList), keys: keys("v", "v"), help: "flat/nested", footer: true, handle: hierarchy(ToggleIssueView)},
 	{action: DrillOut, modes: modes(ModeList), keys: keys("escape", "esc"), help: "Menu", footer: true, handle: drillOut},
-	{action: MoveDown, modes: modes(ModeCollections), keys: keys("j", "j/↓", "down", "↓"), help: "next Collection", footer: true, handle: sidebarMoving(MoveDown)},
-	{action: MoveUp, modes: modes(ModeCollections), keys: keys("k", "k/↑", "up", "↑"), help: "previous Collection", footer: true, handle: sidebarMoving(MoveUp)},
+	{action: MoveDown, modes: modes(ModeCollections), keys: keys("j", "j/↓", "down", "↓", "ctrl+n", "C-n", "meta+n", ""), help: "next Collection", footer: true, handle: sidebarMoving(MoveDown)},
+	{action: MoveUp, modes: modes(ModeCollections), keys: keys("k", "k/↑", "up", "↑", "ctrl+p", "C-p", "meta+p", ""), help: "previous Collection", footer: true, handle: sidebarMoving(MoveUp)},
 	{action: MoveFirst, modes: modes(ModeCollections), keys: keys("g", "g", "home", "home"), help: "first Collection", handle: sidebarMoving(MoveFirst)},
 	{action: MoveLast, modes: modes(ModeCollections), keys: keys("shift+g", "G", "end", "end"), help: "last Collection", handle: sidebarMoving(MoveLast)},
 	{action: DrillIn, modes: modes(ModeCollections), keys: keys("enter", "enter"), help: "open Collection", footer: true, handle: sidebarOpen},
 	{action: MenuBack, modes: modes(ModeCollections), keys: keys("escape", "esc"), help: "back", footer: true, handle: pure(menuBack)},
 	{action: OpenProjects, modes: modes(ModeCollections, ModeList, ModeDetail), keys: keys("shift+p", "P"), help: "projects", handle: pure(openProjects)},
+	{action: OpenInbox, modes: modes(ModeCollections, ModeList, ModeDetail), keys: keys("shift+i", "I"), help: "inbox", handle: openInbox},
 	{action: QuitAction, keys: keys("q", "q", "ctrl+c", "ctrl+c"), help: "quit", footer: true, handle: pure(func(m Model) Model { m.Quitting = true; return m })},
 	{action: DrillIn, modes: modes(ModeList), keys: keys("enter", "enter"), help: "open", footer: true, handle: pure(drillIn)},
 	{action: FocusDetail, modes: modes(ModeList), keys: keys("tab", "tab"), help: "detail", footer: true, handle: pure(func(m Model) Model {
@@ -170,8 +173,8 @@ var mainActions = []actionEntry{
 	{action: ToggleDetail, modes: listAndDetail, keys: keys("shift+l", "L"), help: "toggle detail", footer: true, handle: pure(Model.toggleDetail)},
 	{action: MoveDown, modes: modes(ModeDetail), keys: keys("j", "j/k"), help: "row", footer: true, handle: cursorMoving(MoveDown)},
 	{action: MoveUp, modes: modes(ModeDetail), keys: keys("k", "k"), help: "previous row", handle: cursorMoving(MoveUp)},
-	{action: ScrollDown, modes: modes(ModeDetail), keys: keys("down", "↓"), help: "scroll down", footer: true, handle: scrolling(ColumnDetail, ScrollLineDown)},
-	{action: ScrollUp, modes: modes(ModeDetail), keys: keys("up", "↑"), help: "scroll up", footer: true, handle: scrolling(ColumnDetail, ScrollLineUp)},
+	{action: ScrollDown, modes: modes(ModeDetail), keys: keys("down", "↓", "ctrl+n", "C-n", "meta+n", ""), help: "scroll down", footer: true, handle: scrolling(ColumnDetail, ScrollLineDown)},
+	{action: ScrollUp, modes: modes(ModeDetail), keys: keys("up", "↑", "ctrl+p", "C-p", "meta+p", ""), help: "scroll up", footer: true, handle: scrolling(ColumnDetail, ScrollLineUp)},
 	{action: MoveFirst, modes: modes(ModeDetail), keys: keys("g", "g", "home", "home"), help: "first row", handle: cursorMoving(MoveFirst)},
 	{action: MoveLast, modes: modes(ModeDetail), keys: keys("shift+g", "G", "end", "end"), help: "last row", handle: cursorMoving(MoveLast)},
 	{action: DrillIn, modes: modes(ModeDetail), keys: keys("enter", "↵"), help: "open", footer: true, handle: pure(drillIn)},
@@ -212,4 +215,9 @@ func orGlobal(list []Mode) []Mode {
 		return []Mode{""}
 	}
 	return list
+}
+
+// openInbox is `I`: it opens the Inbox Collection wherever the Menu is, like picking it in the sidebar.
+func openInbox(m Model) (Model, []Cmd) {
+	return openEntry(m, PickerEntry{Collection: Collection{View: "inbox", Title: "Inbox"}}, false)
 }

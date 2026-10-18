@@ -10,6 +10,7 @@ const (
 	ModePicker     Mode   = "picker"
 	OpenPicker     Action = "open-picker"
 	OpenProjects   Action = "open-projects"
+	OpenInbox      Action = "open-inbox"
 	ClosePicker    Action = "close-picker"
 	PickCollection Action = "pick-collection"
 )

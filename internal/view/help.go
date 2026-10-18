@@ -29,6 +29,7 @@ var helpTable = []helpGroup{
 	{"Global", []helpEntry{
 		{"help", "", []model.Action{model.ToggleHelp}},
 		{"quit", "", []model.Action{model.QuitAction}},
+		{"inbox", model.ModeList, []model.Action{model.OpenInbox}},
 		{"projects", model.ModeList, []model.Action{model.OpenProjects}},
 		{"menu", model.ModeList, []model.Action{model.DrillOut}},
 		{"toggle layout", model.ModeList, []model.Action{model.ToggleDetail}},
@@ -86,7 +87,7 @@ var helpTable = []helpGroup{
 }
 
 // keys is the entry's keys from the Keymap, in action order, "" when nothing is bound.
-// Tern-headless-only chords are left out.
+// Tern-headless-only chords are left out, and so are chords with no label.
 func (e helpEntry) keys() string {
 	var keys []string
 	for _, action := range e.actions {
@@ -95,7 +96,7 @@ func (e helpEntry) keys() string {
 				continue
 			}
 			for _, k := range strings.Split(b.Key, "/") {
-				if !slices.Contains(keys, k) {
+				if k != "" && !slices.Contains(keys, k) {
 					keys = append(keys, k)
 				}
 			}
