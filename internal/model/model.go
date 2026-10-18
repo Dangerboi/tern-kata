@@ -2,16 +2,46 @@ package model
 
 import (
 	"time"
-
-	g "go.kenn.io/kata/pkg/client/generated"
 )
 
-type Issue = g.UIIssue
+// Issue is an Issue as the Pane shows it. The gateway translates it from kata's wire shape.
+type Issue struct {
+	AssignmentExpiresOn *time.Time
+	Author              string
+	Body                string
+	ClosedAt            *time.Time
+	ClosedReason        *string
+	CreatedAt           time.Time
+	DeadlineOnDate      *string
+	ID                  int64
+	Labels              []string
+	Metadata            map[string]any
+	Owner               *string
+	Priority            *int64
+	ProjectID           int64
+	ProjectName         string
+	ProjectUID          *string
+	QualifiedID         string
+	RecurrenceID        *int64
+	Revision            int64
+	ScheduledOnDate     *string
+	ShortID             string
+	Status              string
+	Title               string
+	UID                 string
+	UpdatedAt           time.Time
+}
 
 // IsClosed says the Issue is closed; any other status counts as open.
 func IsClosed(issue Issue) bool { return issue.Status == "closed" }
 
-type Project = g.ProjectOut
+// Project is a Project as the Pane holds it. The gateway translates it from kata's wire shape.
+type Project struct {
+	ID       int64
+	Name     string
+	Revision int64
+	UID      string
+}
 
 type Model struct {
 	LiveState
@@ -21,7 +51,7 @@ type Model struct {
 	pending string
 	// etag answers etagQuery: the snapshot on screen.
 	etag      string
-	etagQuery g.ReadUISnapshotQuery
+	etagQuery SnapshotQuery
 	CloseForm CloseFormState
 	Actor     string
 	FieldForm FieldFormState

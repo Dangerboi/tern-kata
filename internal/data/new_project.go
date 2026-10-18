@@ -82,7 +82,7 @@ func (c *Client) initProject(ctx context.Context, body g.InitProjectBody) (model
 	if response.JSON200 == nil {
 		return model.Project{}, false, errors.New("kata daemon returned no Project")
 	}
-	return response.JSON200.Project, response.JSON200.Created, nil
+	return translateProject(response.JSON200.Project), response.JSON200.Created, nil
 }
 
 // ignoreLocalConfig lists .kata.local.toml, a developer's per-machine overrides,
