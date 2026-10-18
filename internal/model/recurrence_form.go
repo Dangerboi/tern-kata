@@ -43,7 +43,7 @@ const (
 // RecurrenceFields is the Recurrence card's field list in tab order. Which of them apply depends on the frequency and the end.
 var RecurrenceFields = []FieldSpec{
 	{RecurrenceFrequency, false}, {RecurrenceEvery, true}, {RecurrenceWeekdays, false}, {RecurrenceDay, true},
-	{RecurrenceMonth, false}, {RecurrenceEnds, false}, {RecurrenceEnd, true}, {RecurrenceStart, true}, {RecurrenceZone, true},
+	{RecurrenceMonth, false}, {RecurrenceStart, true}, {RecurrenceEnds, false}, {RecurrenceEnd, true}, {RecurrenceZone, true},
 }
 
 // RecurrenceEndKinds are the choices of the Ends field, in cycling order; the Frequency field cycles Frequencies.
@@ -229,7 +229,7 @@ var (
 	errDayEmpty       = errors.New("Day must not be empty: enter 1 to 31, last, or a weekday like 2nd tue or last fri.")
 	errDayForm        = errors.New("Day must be a number from 1 to 31, last, or a weekday like 2nd tue or last fri.")
 	errYearlyLast     = errors.New("The last day works for monthly schedules only.")
-	errCountTooSmall  = errors.New("Count must be a whole number, 1 or more.")
+	errCountTooSmall  = errors.New("Occurrences must be a whole number, 1 or more.")
 	errStartDate      = errors.New("Start date must be a date like 2026-10-19.")
 	errEndDate        = errors.New("End date must be a date like 2026-10-19.")
 	errEndBeforeStart = errors.New("End date must not be before the start date.")

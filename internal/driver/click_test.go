@@ -137,7 +137,7 @@ func TestClickingAFieldMakesItTheFieldTheKeysEdit(t *testing.T) {
 	}{
 		{"Create", "n", view.CreateFieldID, model.CreateOwner, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.Create.Field }},
 		{"Close", "x", view.CloseFieldID, model.ClosePR, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.CloseForm.Field }},
-		{"Recurrence", "shift+o", view.RecurrenceFieldID, model.RecurrenceStart, []string{"tab", "tab", "tab", "tab"}, func(m model.Model) model.Field { return m.RecurrenceForm.Field }},
+		{"Recurrence", "shift+o", view.RecurrenceFieldID, model.RecurrenceStart, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.RecurrenceForm.Field }},
 		{"Filters", "f", view.FilterFieldID, model.FilterLabel, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.FilterForm.Field }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -170,9 +170,9 @@ func TestClickingAChoiceIsTheKeysThatReachIt(t *testing.T) {
 		name, open, id string
 		keys           func(driver.State) []string
 	}{
-		{"Recurrence frequency", "shift+o", view.RecurrenceFieldID(model.RecurrenceFrequency) + ".2", func(driver.State) []string { return []string{"right"} }}, // Weekly to Monthly
-		{"Recurrence weekday", "shift+o", view.RecurrenceFieldID(model.RecurrenceWeekdays) + ".4", weekdays},                                                    // Friday
-		{"Filter status", "f", view.FilterFieldID(model.FilterStatus) + ".1", func(driver.State) []string { return []string{"tab", "right"} }},                  // open
+		{"Recurrence frequency", "shift+o", view.RecurrenceFieldID(model.RecurrenceFrequency) + ".choices.2", func(driver.State) []string { return []string{"right"} }}, // Weekly to Monthly
+		{"Recurrence weekday", "shift+o", view.RecurrenceFieldID(model.RecurrenceWeekdays) + ".choices.4", weekdays},                                                    // Friday
+		{"Filter status", "f", view.FilterFieldID(model.FilterStatus) + ".choices.1", func(driver.State) []string { return []string{"tab", "right"} }},                  // open
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			opened := feed(t, browsing(t, 160), key(tt.open)).State

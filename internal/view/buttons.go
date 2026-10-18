@@ -10,9 +10,10 @@ import (
 )
 
 // choiceField is a popup card's choice field: its prompt, then every choice as a label whose click picks it, the chosen ones
-// bracketed in the accent as the active Activity tab is. The choice at cursor gets the keys' cursor mark; -1 marks none.
+// bracketed in the accent as the active Activity tab is. The choices wrap in their own column, so a wrapped line never reads
+// as another field. The choice at cursor gets the keys' cursor mark; -1 marks none.
 func choiceField(name model.Field, tone ui.Tone, title, prompt string, labels []string, chosen func(int) bool, cursor int) tern.Element {
-	children := ui.Nodes(ui.Text{Common: ui.Common{Key: "prompt"}, Text: prompt})
+	choices := make([]tern.Element, 0, len(labels))
 	for i, label := range labels {
 		style := ""
 		if chosen(i) {
@@ -21,9 +22,11 @@ func choiceField(name model.Field, tone ui.Tone, title, prompt string, labels []
 		if i == cursor {
 			label = "▸" + label
 		}
-		children = append(children, ui.Text{Common: ui.Common{Key: strconv.Itoa(i), Actions: &ui.Actions{Click: ChooseClick(name, i)}}, Spans: []ui.Span{{T: label, S: style}}})
+		choices = append(choices, ui.Text{Common: ui.Common{Key: strconv.Itoa(i), Actions: &ui.Actions{Click: ChooseClick(name, i)}}, Spans: []ui.Span{{T: label, S: style}}, Wrap: ui.WrapNone})
 	}
-	return ui.Row{Common: ui.Common{Key: string(name), Tone: tone, Aria: title}, Gap: ui.GapMD, Wrap: true, Children: children}
+	return ui.Row{Common: ui.Common{Key: string(name), Tone: tone, Aria: title}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(
+		ui.Text{Common: ui.Common{Key: "prompt", Shrink: new(float64)}, Text: prompt, Wrap: ui.WrapNone},
+		ui.Row{Common: ui.Common{Key: "choices", Grow: 1}, Gap: ui.GapMD, Wrap: true, Children: choices})}
 }
 
 // keyButton is a button whose click is the key press chord, so a click and the key never disagree.

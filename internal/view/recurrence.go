@@ -18,7 +18,6 @@ var recurrenceTitles = map[model.Field]string{
 	model.RecurrenceDay:       "Day (1-31, last, 2nd tue, last fri)",
 	model.RecurrenceMonth:     "Month",
 	model.RecurrenceEnds:      "Ends",
-	model.RecurrenceEnd:       "End date (YYYY-MM-DD) or count",
 	model.RecurrenceStart:     "Start date (YYYY-MM-DD)",
 	model.RecurrenceZone:      "Time zone",
 }
@@ -28,10 +27,16 @@ var everyUnits = map[model.Frequency]string{model.Daily: "days", model.Weekly: "
 
 var endLabels = map[model.EndKind]string{model.EndNever: "Never", model.EndUntil: "On a date", model.EndCount: "After a number of occurrences"}
 
-// recurrenceTitle is the label of the field called name as the card stands: Every names what it counts.
+// recurrenceTitle is the label of the field called name as the card stands: Every names what it counts, and the end field
+// asks for a date or a count by the end chosen.
 func recurrenceTitle(f model.RecurrenceFormState, name model.Field) string {
-	if name == model.RecurrenceEvery {
+	switch {
+	case name == model.RecurrenceEvery:
 		return "Every (" + everyUnits[f.Frequency] + ")"
+	case name == model.RecurrenceEnd && f.Ends == model.EndCount:
+		return "Occurrences"
+	case name == model.RecurrenceEnd:
+		return "End date (YYYY-MM-DD)"
 	}
 	return recurrenceTitles[name]
 }

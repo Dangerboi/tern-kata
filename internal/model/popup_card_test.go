@@ -168,7 +168,7 @@ func popupCards() []popupCard {
 		},
 		{
 			name: "Recurrence", card: model.CardRecurrence, quits: true, textField: model.RecurrenceStart,
-			tabOrder: []model.Field{model.RecurrenceFrequency, model.RecurrenceEvery, model.RecurrenceWeekdays, model.RecurrenceEnds, model.RecurrenceStart, model.RecurrenceZone},
+			tabOrder: []model.Field{model.RecurrenceFrequency, model.RecurrenceEvery, model.RecurrenceWeekdays, model.RecurrenceStart, model.RecurrenceEnds, model.RecurrenceZone},
 			states:   []cardState{{"", opened("shift+o"), model.ModeRecurrenceForm}},
 			graft:    func(dst *model.Model, src model.Model) { dst.RecurrenceForm = src.RecurrenceForm },
 			field:    func(m model.Model) model.Field { return m.RecurrenceForm.Field },

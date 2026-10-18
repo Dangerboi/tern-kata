@@ -90,7 +90,7 @@ func TestRecurrenceCardStartsOnTheIssuesScheduledDateAndFallsBackToUTC(t *testin
 }
 
 func TestRecurrenceCardHidesFieldsThatDoNotApplyAndTabSkipsThem(t *testing.T) {
-	all := []model.Field{model.RecurrenceFrequency, model.RecurrenceEvery, model.RecurrenceWeekdays, model.RecurrenceDay, model.RecurrenceMonth, model.RecurrenceEnds, model.RecurrenceEnd, model.RecurrenceStart, model.RecurrenceZone}
+	all := []model.Field{model.RecurrenceFrequency, model.RecurrenceEvery, model.RecurrenceWeekdays, model.RecurrenceDay, model.RecurrenceMonth, model.RecurrenceStart, model.RecurrenceEnds, model.RecurrenceEnd, model.RecurrenceZone}
 	without := func(hidden ...model.Field) []model.Field {
 		return slices.DeleteFunc(slices.Clone(all), func(f model.Field) bool { return slices.Contains(hidden, f) })
 	}
@@ -161,7 +161,7 @@ func TestRecurrenceCardRefusesAnInvalidScheduleAndSendsNothing(t *testing.T) {
 		}, "Day must be a number from 1 to 31"},
 		{"count zero", func(m model.Model) model.Model {
 			return fillField(choose(m, model.RecurrenceEnds, ends(model.EndCount)), model.RecurrenceEnd, "0")
-		}, "Count must be a whole number, 1 or more."},
+		}, "Occurrences must be a whole number, 1 or more."},
 		{"end before start", func(m model.Model) model.Model {
 			return fillField(choose(m, model.RecurrenceEnds, ends(model.EndUntil)), model.RecurrenceEnd, "2026-10-20")
 		}, "End date must not be before the start date."},
