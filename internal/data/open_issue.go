@@ -12,10 +12,7 @@ import (
 func (c *Client) ResolveIssue(ctx context.Context, projectID int64, shortID string) (string, error) {
 	response, err := c.ResolveUIIssueReferenceWithResponse(ctx, &g.ResolveUIIssueReferenceRequestOptions{Query: &g.ResolveUIIssueReferenceQuery{ProjectID: projectID, Ref: shortID}})
 	if err != nil {
-		if response != nil {
-			return "", ReadError(response.Body, err)
-		}
-		return "", err
+		return "", daemonError(err)
 	}
 	if response.JSON200 == nil {
 		return "", fmt.Errorf("kata daemon returned no Issue reference")

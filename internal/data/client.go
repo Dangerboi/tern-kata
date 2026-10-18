@@ -39,7 +39,7 @@ func LocateWithKata(ctx context.Context, workspace string) (Target, error) {
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && len(exit.Stderr) > 0 {
-			return Target{}, ReadError(exit.Stderr, err)
+			return Target{}, errors.New(strings.TrimSpace(string(exit.Stderr)))
 		}
 		return Target{}, fmt.Errorf("kata daemon locate: %w", err)
 	}
@@ -73,10 +73,7 @@ func connect(ctx context.Context, target Target) (result *Client, err error) {
 	}
 	ping, err := c.PingWithResponse(ctx)
 	if err != nil {
-		if ping != nil {
-			return nil, ReadError(ping.Body, err)
-		}
-		return nil, err
+		return nil, daemonError(err)
 	}
 	if ping.JSON200 == nil {
 		return nil, fmt.Errorf("kata daemon returned no version")
@@ -99,17 +96,22 @@ func (c *Client) CloseIdleConnections() {
 	}
 }
 
-func ReadError(body []byte, fallback error) error {
-	var envelope g.ErrorEnvelope
-	if json.Unmarshal(body, &envelope) == nil && envelope.ErrorData.Message != "" {
-		message := envelope.ErrorData.Message
-		if envelope.ErrorData.Hint != nil {
-			message += "\n" + *envelope.ErrorData.Hint
-		}
-		return errors.New(message)
+// daemonError is the text the Pane shows for any daemon failure: kata's message, then its recovery hint on its
+// own line, without the status-and-code prefix kata's error type carries. A failure with no kata message keeps its own text.
+func daemonError(err error) error {
+	envelope, ok := errors.AsType[g.ErrorEnvelope](err)
+	if !ok || envelope.ErrorData.Message == "" {
+		return err
 	}
-	if len(body) > 0 {
-		return errors.New(strings.TrimSpace(string(body)))
+	message := envelope.ErrorData.Message
+	if hint := envelope.ErrorData.Hint; hint != nil && *hint != "" {
+		message += "\n" + *hint
 	}
-	return fallback
+	return errors.New(message)
+}
+
+// daemonCode is the error code kata gave the failure, empty when it gave none.
+func daemonCode(err error) string {
+	envelope, _ := errors.AsType[g.ErrorEnvelope](err)
+	return envelope.ErrorData.Code
 }

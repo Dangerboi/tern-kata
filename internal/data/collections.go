@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
 )
 
@@ -23,15 +24,12 @@ func (c *Client) ReadSnapshot(ctx context.Context, cmd model.ReadSnapshot) (mode
 		options.Header = &g.ReadUISnapshotHeaders{IfNoneMatch: &cmd.ETag}
 	}
 	response, err := c.ReadUISnapshotWithResponse(ctx, options)
-	if response != nil && response.StatusCode == http.StatusNotModified {
+	if client.StatusCode(err) == http.StatusNotModified {
 		result.NotModified = true
 		return result, nil
 	}
 	if err != nil {
-		if response != nil {
-			return result, ReadError(response.Body, err)
-		}
-		return result, err
+		return result, daemonError(err)
 	}
 	if response.JSON200 == nil {
 		return result, fmt.Errorf("kata daemon returned no Issue collection")
