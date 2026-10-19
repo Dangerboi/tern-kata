@@ -32,13 +32,14 @@ type DetailItem struct {
 	Activity     DetailRow
 }
 
-// tabKinds is the row kind each Activity tab lists.
-var tabKinds = [TabCount]RowKind{TabComments: RowComment, TabLinks: RowLink, TabEvents: RowEvent, TabAttachments: RowAttachment}
-
-func (t ActivityTab) kind() RowKind { return tabKinds[t] }
+func (t ActivityTab) kind() RowKind { return tabTable[t].kind }
 
 // Tab is the Activity tab that lists rows of the kind; a child row belongs to none and answers the first tab.
-func (k RowKind) Tab() ActivityTab { return ActivityTab(max(slices.Index(tabKinds[:], k), 0)) }
+func (k RowKind) Tab() ActivityTab {
+	return ActivityTab(max(slices.IndexFunc(tabTable[:], func(e tabSpec) bool {
+		return e.kind == k
+	}), 0))
+}
 
 // ChildRow is one row of the Children table. Key is the Link's, which is daemon-wide unique, so a
 // row's id never ends in the child's UID as the list row's does. A child that is not loaded has only its UID, Key and Ref.

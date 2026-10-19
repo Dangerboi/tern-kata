@@ -1,6 +1,7 @@
 package view_test
 
 import (
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -19,7 +20,7 @@ func detailNodes(t *testing.T, issue model.Issue) shown {
 
 func tabLabels(nodes shown) []string {
 	var labels []string
-	for tab := model.TabComments; tab <= model.TabLinks; tab++ {
+	for tab := range model.TabCount {
 		labels = append(labels, text(nodes[view.DetailActivityID+".tabs.tab"+strconv.Itoa(int(tab))]))
 	}
 	return labels
@@ -37,14 +38,19 @@ func detailWithActivity(tab model.ActivityTab) model.Model {
 }
 
 func TestActivityTabsShowCountsAndMarkTheActiveOne(t *testing.T) {
-	for _, tt := range []struct {
-		tab  model.ActivityTab
-		want []string
-	}{
-		{model.TabComments, []string{"[ Comments (2) ]", "Events (3)", "Links (1)"}},
-		{model.TabEvents, []string{"Comments (2)", "[ Events (3) ]", "Links (1)"}},
-		{model.TabLinks, []string{"Comments (2)", "Events (3)", "[ Links (1) ]"}},
-	} {
+	counts := [model.TabCount]int{model.TabComments: 2, model.TabEvents: 3, model.TabLinks: 1, model.TabAttachments: 0}
+	for active := range model.TabCount {
+		tt := struct {
+			tab  model.ActivityTab
+			want []string
+		}{active, nil}
+		for tab := range model.TabCount {
+			label := fmt.Sprintf("%s (%d)", tab, counts[tab])
+			if tab == active {
+				label = "[ " + label + " ]"
+			}
+			tt.want = append(tt.want, label)
+		}
 		nodes := render(t, detailWithActivity(tt.tab))
 		if got := tabLabels(nodes); !slices.Equal(got, tt.want) {
 			t.Errorf("tab %v: labels %v, want %v", tt.tab, got, tt.want)
@@ -52,7 +58,7 @@ func TestActivityTabsShowCountsAndMarkTheActiveOne(t *testing.T) {
 		if text(nodes[view.DetailActivityID+".tabs.name"]) != "Activity" {
 			t.Error("no Activity heading")
 		}
-		for tab := model.TabComments; tab <= model.TabLinks; tab++ {
+		for tab := range model.TabCount {
 			n := nodes[view.DetailActivityID+".tabs.tab"+strconv.Itoa(int(tab))]
 			style := spansOf(n.P)[0][1]
 			if (tab == tt.tab) != strings.Contains(style, "accent") {
@@ -88,7 +94,8 @@ func TestOnlyTheActiveTabsRowsRender(t *testing.T) {
 }
 
 func TestEmptyActivityTabsSaySo(t *testing.T) {
-	for tab, want := range map[model.ActivityTab]string{model.TabComments: "No comments.", model.TabEvents: "No events.", model.TabLinks: "No links."} {
+	for tab := range model.TabCount {
+		want := map[model.ActivityTab]string{model.TabComments: "No comments.", model.TabEvents: "No events.", model.TabLinks: "No links.", model.TabAttachments: "No attachments, u to attach"}[tab]
 		nodes := render(t, apply(browsing(), model.ActivityTabMsg{Tab: tab}))
 		if got := text(nodes[view.DetailActivityID+".empty"]); got != want {
 			t.Errorf("tab %v says %q, want %q", tab, got, want)
