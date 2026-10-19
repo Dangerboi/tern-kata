@@ -65,12 +65,12 @@ func run() error {
 		return err
 	}
 	term := newTerminal(ctx, session, surface, connectPane)
-	defer func() { term.Close() }()
+	defer term.Close()
 	workspace, err := os.Getwd()
 	if err != nil {
 		return err
 	}
-	state := driver.State{Model: model.Model{Cols: term.session.Caps().Cols, Actor: plan.Actor}}
+	state := driver.State{Model: model.Model{Cols: term.Caps().Cols, Actor: plan.Actor}}
 	results := make(chan model.Msg)
 	gateway := data.NewGateway(data.LocateWithKata)
 	defer gateway.Close()
@@ -89,7 +89,6 @@ func run() error {
 				return err
 			}
 		}
-		// One Send per op, so each goes out in its own frame as before: Tern needs the first tab reveal laid out before the second.
 		for _, op := range out.Ops {
 			if err := term.Send(op); err != nil {
 				return err
