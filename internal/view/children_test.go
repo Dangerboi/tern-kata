@@ -23,27 +23,27 @@ const (
 
 // parenting is a wide Pane on a parent "alpha" with three children: "kid" (open,
 // owned by dana, updated 38 minutes before testNow), "done" (closed, unowned, 3 hours
-// before) and "ghost", which is not in the Collection. The daemon counts 1 open of 3.
+// before) and "ghost", which is not in the Collection. The links count 1 open of 3.
 func parenting(tab model.ActivityTab) model.Model {
 	parent := alpha
 	parent.Body = "The parent's body."
 	dana := "dana"
 	kid := model.Issue{UID: "kid", ShortID: "kidd", Title: "Open kid", Status: "open", ProjectName: "work", Owner: &dana, AssignmentExpiresOn: ptr(testNow.Add(time.Hour)), UpdatedAt: testNow.Add(-38 * time.Minute)}
 	done := model.Issue{UID: "done", ShortID: "done", Title: "Closed kid", Status: "closed", ProjectName: "work", UpdatedAt: testNow.Add(-3 * time.Hour)}
-	child := func(id int64, uid string) model.Link {
-		return model.Link{ID: id, Type: "parent", FromIssueUID: uid, FromQualifiedID: "work#" + uid, ToIssueUID: "alpha", ToQualifiedID: "work#aaaa"}
+	child := func(id int64, uid, status string) model.Link {
+		return model.Link{ID: id, Type: "parent", FromIssueUID: uid, FromStatus: status, FromQualifiedID: "work#" + uid, ToIssueUID: "alpha", ToQualifiedID: "work#aaaa"}
 	}
-	links := []model.Link{child(1, "ghost"), child(2, "done"), child(3, "kid")}
+	links := []model.Link{child(1, "ghost", "closed"), child(2, "done", "closed"), child(3, "kid", "open")}
 	return apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{CountsRead: true, Snapshot: model.Snapshot{Issues: []model.Issue{parent, kid, done}, Links: links, ChildCounts: map[string]model.ChildCounts{"alpha": {Open: 1, Total: 3}}}}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{parent, kid, done}, Links: links}}},
 		model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &parent, Links: links, Comments: []model.Comment{{UID: "c1", Body: "hi"}}}},
 		model.ActivityTabMsg{Tab: tab},
 	)
 }
 
-func TestPropertiesShowTheDaemonsChildCountsAndNoChildLines(t *testing.T) {
+func TestPropertiesShowTheChildCountsAndNoChildLines(t *testing.T) {
 	nodes := render(t, parenting(model.TabLinks))
 	if got := text(nodes[view.DetailContentID+".properties.children.v"]); got != "1 open / 3 total" {
 		t.Errorf("counts line = %q", got)

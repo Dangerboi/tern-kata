@@ -123,10 +123,13 @@ func TestPropertiesShowTheParentAsAReferenceAndNoChildLines(t *testing.T) {
 	if got := strings.TrimRight(text(nodes[parent+".k"]), "\u00a0"); got != "Parent:" {
 		t.Errorf("parent key %q", got)
 	}
-	for _, other := range []string{"kid", "other", "blocks", "children"} {
+	for _, other := range []string{"kid", "other", "blocks"} {
 		if _, ok := nodes[view.DetailContentID+".properties."+other]; ok {
 			t.Errorf("properties has a %s row", other)
 		}
+	}
+	if got := text(nodes[view.DetailContentID+".properties.children.v"]); got != "0 open / 1 total" {
+		t.Errorf("counts line = %q", got)
 	}
 }
 

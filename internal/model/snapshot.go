@@ -32,14 +32,11 @@ type ReadSnapshot struct {
 	Query     SnapshotQuery
 	ETag      string
 	Request   int64
-	// ChildCounts asks for the daemon's child counts too; without it the result carries none and the model keeps its own.
-	ChildCounts bool
 }
 
 func (ReadSnapshot) cmd() {}
 
-// SnapshotLoaded is the one message that carries a snapshot into the model. CountsRead says Snapshot.ChildCounts is the daemon's
-// answer (possibly empty); without it the counts were not asked for or their download failed, and the model keeps its own.
+// SnapshotLoaded is the one message that carries a snapshot into the model.
 // Query is the query it answers; the daemon side adds the local calendar the dated Collections need and reports it in LocalDate and TimeZone.
 type SnapshotLoaded struct {
 	Request             int64
@@ -50,20 +47,18 @@ type SnapshotLoaded struct {
 	NotModified         bool
 	LocalDate, TimeZone string
 	TimeZoneNote        string // set when UTC stands in for an unknown or unloadable zone
-	CountsRead          bool
 }
 
 func (SnapshotLoaded) msg() {}
 
-// Snapshot is the Collection snapshot as the model holds it: the Issues the query selected, the Links among them, the Project
-// catalog, the event cursor it answers and the daemon's direct-child counts by Issue UID (whatever the filters; an Issue with no
-// children has none). The gateway translates it from kata's wire shape.
+// Snapshot is the Collection snapshot as the model holds it: the Issues the query selected, the Links of those Issues
+// (child counts are counted from them, see CountChildren), the Project catalog and the event cursor it answers.
+// The gateway translates it from kata's wire shape.
 type Snapshot struct {
-	Issues      []Issue
-	Links       []Link
-	Catalog     []CatalogProject
-	Cursor      int64
-	ChildCounts map[string]ChildCounts
+	Issues  []Issue
+	Links   []Link
+	Catalog []CatalogProject
+	Cursor  int64
 }
 
 // CatalogProject is one Project of the catalog; Stats is nil when the daemon sent none.
@@ -76,16 +71,21 @@ type ProjectStats struct{ Open, Closed int }
 
 type ChildCounts struct{ Open, Total int }
 
-// CountChildren is uid's direct children among links, counted as kata counts them: every parent Link pointing at uid, open
-// when the child's status is open. Links must hold every Link of uid, as a snapshot's links do for its Issues.
-func CountChildren(links []Link, uid string) ChildCounts {
-	var counts ChildCounts
+// CountChildren is uid's direct children among links; see ChildCountsByParent.
+func CountChildren(links []Link, uid string) ChildCounts { return ChildCountsByParent(links)[uid] }
+
+// ChildCountsByParent counts every Issue's direct children among links as kata counts them: every parent Link pointing at
+// the Issue, open when the child's status is open. Links must hold every Link of the Issues counted, as a snapshot's links do.
+func ChildCountsByParent(links []Link) map[string]ChildCounts {
+	counts := make(map[string]ChildCounts)
 	for _, l := range links {
-		if l.Type == "parent" && l.ToIssueUID == uid {
-			counts.Total++
+		if l.Type == "parent" {
+			c := counts[l.ToIssueUID]
+			c.Total++
 			if l.FromStatus == "open" {
-				counts.Open++
+				c.Open++
 			}
+			counts[l.ToIssueUID] = c
 		}
 	}
 	return counts
@@ -145,14 +145,6 @@ func liveQuery(m Model) SnapshotQuery {
 	return q
 }
 
-// scope is the Project UID the query is scoped to, empty for every Project.
-func (q SnapshotQuery) scope() string {
-	if q.ProjectUID == nil {
-		return ""
-	}
-	return *q.ProjectUID
-}
-
 // sameCollectionQuery compares what picks the Issues, not the detail riding along.
 func sameCollectionQuery(a, b SnapshotQuery) bool {
 	a.SelectedIssueUID, b.SelectedIssueUID = nil, nil
@@ -176,14 +168,11 @@ func snapshotChanged(m Model) (Model, []Cmd) {
 		return m, []Cmd{lookup}
 	}
 	query := liveQuery(m)
-	counts := !m.countsFresh || query.scope() != m.countsScope
-	m.countsCovered = counts
 	etag := ""
-	// A read that wants counts must not be answered 304, or a failed count download would never be retried.
-	if !counts && !m.Resetting && sameCollectionQuery(query, m.etagQuery) {
+	if !m.Resetting && sameCollectionQuery(query, m.etagQuery) {
 		etag = m.etag
 	}
-	return m, []Cmd{ReadSnapshot{Workspace: m.Workspace, Query: query, ETag: etag, Request: m.RefreshRequest, ChildCounts: counts}}
+	return m, []Cmd{ReadSnapshot{Workspace: m.Workspace, Query: query, ETag: etag, Request: m.RefreshRequest}}
 }
 
 // collectionSwitched is a Collection switch: deliberate, so it neither waits for the read of the Collection left behind (that
@@ -224,13 +213,6 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 				cmds = append(cmds, WakeAt{Day: m.Calendar.Date, At: at, Generation: m.wakeGeneration})
 			}
 		}
-		if !msg.CountsRead {
-			msg.Snapshot.ChildCounts = m.Snapshot.ChildCounts
-		} else if m.countsCovered {
-			m.countsFresh = true
-			m.countsScope = msg.Query.scope()
-			m.countsAt = msg.Snapshot.Cursor
-		}
 		selected := m.SelectedUID
 		anchor, anchored := m.cursorRowID()
 		m = m.applyCollection(msg.Snapshot).snapshotArrived(msg.Selected, selected, anchor, anchored)
@@ -267,8 +249,8 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 		m.StreamErr = nil
 		m.ReconnectAttempt = 0
 	}
-	if _, lookup := m.idLookup(); lookup || m.PendingCursor > m.Cursor || m.countsWanted > m.countsAt && !m.countsCovered {
-		// A short id the lookup has not answered, events newer than this snapshot, or a count-changing event this read did not cover.
+	if _, lookup := m.idLookup(); lookup || m.PendingCursor > m.Cursor {
+		// A short id the lookup has not answered, or events newer than this snapshot.
 		var next []Cmd
 		m, next = snapshotChanged(m)
 		cmds = append(cmds, next...)

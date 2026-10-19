@@ -21,13 +21,13 @@ func columnsFixture(t testing.TB) model.Model {
 	done := model.Issue{UID: "done", ShortID: "dddd", Title: "Done child", Status: "closed", ProjectName: "work", UpdatedAt: noon}
 	leaf := model.Issue{UID: "leaf", ShortID: "llll", Title: "Leaf", Status: "open", ProjectName: "work", UpdatedAt: noon.Add(-3 * 24 * time.Hour)}
 	links := []model.Link{
-		{Type: "parent", FromIssueUID: "open", ToIssueUID: "parent"},
-		{Type: "parent", FromIssueUID: "done", ToIssueUID: "parent"},
+		{Type: "parent", FromIssueUID: "open", FromStatus: "open", ToIssueUID: "parent"},
+		{Type: "parent", FromIssueUID: "done", FromStatus: "closed", ToIssueUID: "parent"},
 	}
 	return apply(model.Model{},
 		model.Start{Workspace: "/repo"},
 		model.ResizeMsg{Cols: 160},
-		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{CountsRead: true, Snapshot: model.Snapshot{Issues: []model.Issue{parent, open, done, leaf}, Links: links, ChildCounts: map[string]model.ChildCounts{"parent": {Open: 1, Total: 2}}}}},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{parent, open, done, leaf}, Links: links}}},
 	)
 }
 
