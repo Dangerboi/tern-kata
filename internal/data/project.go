@@ -156,6 +156,34 @@ func projectAncestor(start, entry, stop string, allowDir bool) (string, error) {
 
 var projectGit = gitcmd.New()
 
+// PrimaryCheckoutRoot is the top level of the main worktree of the repository holding workspace, the parent of git's common
+// directory, so every linked worktree shares one answer. Outside git it is the directory holding the workspace's .kata.toml.
+func PrimaryCheckoutRoot(ctx context.Context, workspace string) (string, error) {
+	workspaceRoot, gitRoot, err := discoverProjectRoots(workspace)
+	if err != nil {
+		return "", err
+	}
+	if gitRoot == "" {
+		if workspaceRoot == "" {
+			return "", fmt.Errorf("%s is neither in a git repository nor under a .kata.toml", workspace)
+		}
+		return workspaceRoot, nil
+	}
+	raw, err := projectGit.Output(ctx, gitRoot, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return "", fmt.Errorf("git rev-parse --git-common-dir: %w", err)
+	}
+	// A submodule's common directory sits inside its parent's .git, so its own top level is the root.
+	super, err := projectGit.Output(ctx, gitRoot, "rev-parse", "--show-superproject-working-tree")
+	if err != nil {
+		return "", fmt.Errorf("git rev-parse --show-superproject-working-tree: %w", err)
+	}
+	if strings.TrimSpace(string(super)) != "" {
+		return gitRoot, nil
+	}
+	return filepath.Dir(filepath.Clean(filepath.FromSlash(strings.TrimSpace(string(raw))))), nil
+}
+
 func projectAlias(ctx context.Context, workspaceRoot, gitRoot string) (*g.AliasInput, error) {
 	if gitRoot == "" {
 		return &g.AliasInput{Identity: "local://" + workspaceRoot, Kind: "local"}, nil

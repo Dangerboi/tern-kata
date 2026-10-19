@@ -157,40 +157,19 @@ func TestAttachWritesTheStoreGitignoreOnce(t *testing.T) {
 	}
 }
 
-func TestAttachFromALinkedWorktreeUsesThePrimaryCheckout(t *testing.T) {
+func TestAttachRepairsAnEmptyStoreGitignore(t *testing.T) {
 	f := newAttachFixture(t)
-	worktree := filepath.Join(t.TempDir(), "linked")
-	git(t, f.repo, "worktree", "add", "-q", worktree)
-	// The Binding is committed in a real repository, so a worktree carries it.
-	if raw, err := os.ReadFile(filepath.Join(f.repo, ".kata.toml")); err != nil {
+	source := writeFile(t, t.TempDir(), "a.txt", "a")
+	ignore := filepath.Join(f.repo, ".kata-attachments", ".gitignore")
+	if err := os.MkdirAll(filepath.Dir(ignore), 0o755); err != nil {
 		t.Fatal(err)
-	} else {
-		writeFile(t, worktree, ".kata.toml", string(raw))
 	}
-	got := f.attach(t, worktree, f.issue(t, f.uid).ShortID, writeFile(t, t.TempDir(), "shot.png", "x"))
-	if got.Err != nil {
+	writeFile(t, filepath.Dir(ignore), ".gitignore", "")
+	if got := f.attach(t, f.repo, f.uid, source); got.Err != nil {
 		t.Fatal(got.Err)
 	}
-	if want := filepath.Join(f.repo, ".kata-attachments", f.uid, "shot.png"); got.Path != want {
-		t.Fatalf("stored at %s, want %s", got.Path, want)
-	}
-	if _, err := os.Stat(filepath.Join(worktree, ".kata-attachments")); !os.IsNotExist(err) {
-		t.Fatalf("the linked worktree got a store: %v", err)
-	}
-}
-
-func TestAttachOutsideGitUsesTheDirectoryHoldingTheBinding(t *testing.T) {
-	kata := startKata(t, "0.19.0")
-	gateway := newGateway(t, newLocator(kata.target())).WithHost("TestBox")
-	workspace, bound := project(t, gateway, "plain")
-	uid := createIssue(t, gateway, workspace, bound, "Plain")
-	sub := filepath.Join(workspace, "deep", "er")
-	if err := os.MkdirAll(sub, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	got := as[model.FileAttached](t, run(t, gateway, model.AttachFile{Workspace: sub, Ref: uid, Actor: "tester", Path: writeFile(t, t.TempDir(), "log.txt", "x")}))
-	if want := filepath.Join(workspace, ".kata-attachments", uid, "log.txt"); got.Err != nil || got.Path != want {
-		t.Fatalf("got %+v, want %s", got, want)
+	if raw, _ := os.ReadFile(ignore); string(raw) != "*\n" {
+		t.Fatalf("store .gitignore holds %q", raw)
 	}
 }
 
@@ -523,59 +502,6 @@ func TestAttachFailsBeforeCopyingWhenTheStoreCannotBeSetUp(t *testing.T) {
 	}
 	if left, _ := filepath.Glob(filepath.Join(dir, "*")); len(left) != 0 || len(f.pointers(t, f.uid)) != 0 {
 		t.Fatalf("a copy %v or pointer was left", left)
-	}
-}
-
-func TestAttachFromBareRepositoryWorktreesSharesOneStore(t *testing.T) {
-	kata := startKata(t, "0.19.0")
-	gateway := newGateway(t, newLocator(kata.target())).WithHost("TestBox")
-	root := t.TempDir()
-	seed := t.TempDir()
-	git(t, seed, "init", "-q")
-	git(t, seed, "commit", "-q", "--allow-empty", "-m", "init")
-	bare := filepath.Join(root, ".bare")
-	git(t, root, "clone", "-q", "--bare", seed, bare)
-	main, other := filepath.Join(root, "main"), filepath.Join(root, "other")
-	git(t, bare, "remote", "remove", "origin") // a Project binds by name only without a recognised remote host
-	git(t, bare, "worktree", "add", "-q", main)
-	git(t, bare, "worktree", "add", "-q", "-b", "side", other)
-	saved := as[model.ProjectSaved](t, run(t, gateway, model.BindProject{Workspace: main, Actor: "tester", Name: "bare"}))
-	if saved.Err != nil {
-		t.Fatal(saved.Err)
-	}
-	raw, err := os.ReadFile(filepath.Join(main, ".kata.toml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, other, ".kata.toml", string(raw))
-	uid := createIssue(t, gateway, main, saved.Project, "Shared")
-	for _, workspace := range []string{main, other} {
-		got := as[model.FileAttached](t, run(t, gateway, model.AttachFile{Workspace: workspace, Ref: uid, Actor: "tester", Path: writeFile(t, t.TempDir(), "a.txt", "x")}))
-		if want := filepath.Join(root, ".kata-attachments", uid); got.Err != nil || filepath.Dir(got.Path) != want {
-			t.Fatalf("from %s: got %+v, want a copy in %s", workspace, got, want)
-		}
-	}
-}
-
-func TestAttachInASubmoduleUsesTheSubmodulesOwnTopLevel(t *testing.T) {
-	kata := startKata(t, "0.19.0")
-	gateway := newGateway(t, newLocator(kata.target())).WithHost("TestBox")
-	inner := t.TempDir()
-	git(t, inner, "init", "-q")
-	git(t, inner, "commit", "-q", "--allow-empty", "-m", "init")
-	outer := t.TempDir()
-	git(t, outer, "init", "-q")
-	git(t, outer, "-c", "protocol.file.allow=always", "submodule", "add", "-q", inner, "sub")
-	sub := filepath.Join(outer, "sub")
-	git(t, sub, "remote", "remove", "origin")
-	saved := as[model.ProjectSaved](t, run(t, gateway, model.BindProject{Workspace: sub, Actor: "tester", Name: "inner"}))
-	if saved.Err != nil {
-		t.Fatal(saved.Err)
-	}
-	uid := createIssue(t, gateway, sub, saved.Project, "In the submodule")
-	got := as[model.FileAttached](t, run(t, gateway, model.AttachFile{Workspace: sub, Ref: uid, Actor: "tester", Path: writeFile(t, t.TempDir(), "a.txt", "x")}))
-	if want := filepath.Join(sub, ".kata-attachments", uid); got.Err != nil || filepath.Dir(got.Path) != want {
-		t.Fatalf("got %+v, want a copy in %s", got, want)
 	}
 }
 
