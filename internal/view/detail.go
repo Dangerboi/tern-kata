@@ -70,7 +70,7 @@ func detail(m model.Model, now time.Time) tern.Element {
 			parts = append(parts, ui.Spacer{Common: ui.Common{Key: "gap-children"}, Size: ui.GapMD}, childrenTable(m, kids, now))
 		}
 		if len(activity) == 0 {
-			activity = ui.Nodes(ui.Text{Common: ui.Common{Key: "empty"}, Text: emptyTabText(m.ActiveTab())})
+			activity = ui.Nodes(ui.Text{Common: ui.Common{Key: "empty"}, Text: m.ActiveTab().EmptyText()})
 		}
 		parts = append(parts,
 			ui.Spacer{Common: ui.Common{Key: "gap-activity"}, Size: ui.GapMD},
