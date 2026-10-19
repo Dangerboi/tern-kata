@@ -33,6 +33,19 @@ var ulid = regexp.MustCompile(`(?i)^[0-9A-HJKMNP-TV-Z]{26}$`)
 type attachTarget struct {
 	issue   g.ShowIssueOut
 	binding model.Project
+	// raw is the Issue's metadata as the daemon wrote it: the generated client decodes numbers to float64, which would change a
+	// literal such as 1.0 that kata compares byte for byte in a guard.
+	raw map[string]json.RawMessage
+}
+
+// rawMetadata is the metadata of an Issue response body with every value left as its JSON text.
+func rawMetadata(body []byte) (map[string]json.RawMessage, error) {
+	var shown struct {
+		Issue struct {
+			Metadata map[string]json.RawMessage `json:"metadata"`
+		} `json:"issue"`
+	}
+	return shown.Issue.Metadata, json.Unmarshal(body, &shown)
 }
 
 // resolveAttachTarget is the step Attach and Detach share: the Issue ref names, refused when it is outside the workspace's Binding.
@@ -61,6 +74,9 @@ func (c *Client) readAttachTarget(ctx context.Context, workspace, ref string) (a
 			return attachTarget{}, errors.New("kata daemon returned no Issue")
 		}
 		target.issue = response.JSON200.Issue
+		if target.raw, err = rawMetadata(response.Body); err != nil {
+			return attachTarget{}, err
+		}
 		return target, nil
 	}
 	projectName, shortID, qualified := strings.Cut(ref, "#")
@@ -93,6 +109,9 @@ func (c *Client) readAttachTarget(ctx context.Context, workspace, ref string) (a
 		return attachTarget{}, errors.New("kata daemon returned no Issue")
 	}
 	target.issue = response.JSON200.Issue
+	if target.raw, err = rawMetadata(response.Body); err != nil {
+		return attachTarget{}, err
+	}
 	return target, nil
 }
 
@@ -230,7 +249,7 @@ func (c *Client) DetachFile(ctx context.Context, host string, cmd model.DetachFi
 	if err != nil {
 		return model.FileDetached{}, err
 	}
-	raw, exists := target.issue.Metadata[model.AttachmentKey(cmd.Name)]
+	_, exists := target.issue.Metadata[model.AttachmentKey(cmd.Name)]
 	if !exists {
 		return model.FileDetached{}, model.NoAttachmentError(target.issue.ShortID, cmd.Name)
 	}
@@ -240,11 +259,8 @@ func (c *Client) DetachFile(ctx context.Context, host string, cmd model.DetachFi
 			pointer = &a
 		}
 	}
-	read, err := json.Marshal(raw)
-	if err != nil {
-		return model.FileDetached{}, err
-	}
-	if err := c.patchAttachment(ctx, target, cmd.Actor, cmd.Name, nil, string(read)); err != nil {
+	read := string(target.raw[model.AttachmentKey(cmd.Name)])
+	if err := c.patchAttachment(ctx, target, cmd.Actor, cmd.Name, nil, read); err != nil {
 		if daemonCode(err) != "metadata_guard_failed" {
 			return model.FileDetached{}, daemonError(err)
 		}

@@ -3,6 +3,7 @@ package data
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -593,6 +594,26 @@ func (f attachFixture) setKey(t *testing.T, name string, value any) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDetachClearsAKeyWhoseValueHasANonCanonicalNumber(t *testing.T) {
+	for name, literal := range map[string]string{
+		"bare":    `1.0`,
+		"pointer": `{"host":"Elsewhere","path":"/x/y.png","n":1.0}`,
+		"big":     `{"host":"Elsewhere","path":"/x/y.png","n":12345678901234567890}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newAttachFixture(t)
+			setPointer(t, f, "odd", json.RawMessage(literal))
+			got := f.detach(t, f.repo, f.uid, "odd")
+			if got.Err != nil || !got.Cleared {
+				t.Fatalf("got %+v, want the key cleared", got)
+			}
+			if _, still := f.issue(t, f.uid).Metadata["attachment.odd"]; still {
+				t.Fatal("the key is still set")
+			}
+		})
 	}
 }
 
