@@ -27,6 +27,7 @@ ctl key u
 ctl type "$(jq -rn --arg p "\"$tmp/attach-src/shot.png\"" '$p | @json')"
 ctl key enter
 expect_tree "[data-id='layer.fields']" '.ok and .count == 0'
+expect_tree "[data-id='main.notice']" ".ok and .count == 1 and (.nodes[0].text == \"Attached shot.png to $at_short\")"
 expect_tree "$at_tab" '.ok and (.nodes[0].text | contains("Attachments (1)"))'
 expect_tree "[data-id='main.columns.detail.viewport.content.activity']" ".ok and (.nodes[0] | $at_text | contains(\"shot.png\"))"
 kata --workspace "$at_dir" show "$at_uid" --json >"$tmp/attachments-shown.json"

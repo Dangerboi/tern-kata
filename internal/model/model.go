@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -156,7 +157,11 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case FieldWritten:
 		return fieldWritten(m, msg.UID, "", msg.Err)
 	case FileAttached:
-		return fieldWritten(m, msg.Ref, "", msg.Err)
+		report := ""
+		if issue := m.issueByUID(msg.Ref); issue != nil {
+			report = fmt.Sprintf("Attached %s to %s", msg.Name, issue.ShortID)
+		}
+		return fieldWritten(m, msg.Ref, report, msg.Err)
 	case FileDetached:
 		return fieldWritten(m, msg.Ref, msg.Report(), msg.Err)
 	case Start:
