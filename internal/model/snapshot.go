@@ -193,7 +193,14 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 	var cmds []Cmd
 	if !msg.NotModified {
 		if msg.LocalDate != "" {
+			newDay := msg.LocalDate != m.Calendar.Date
 			m.Calendar = NewPaneCalendar(msg.LocalDate, msg.TimeZone, msg.TimeZoneNote)
+			if newDay {
+				m.DayEnded = false
+				if at, ok := m.Calendar.EndOfDate(); ok {
+					cmds = append(cmds, WakeAt{Day: m.Calendar.Date, At: at})
+				}
+			}
 		}
 		if msg.Snapshot.ChildCounts == nil {
 			msg.Snapshot.ChildCounts = m.Snapshot.ChildCounts
@@ -212,17 +219,28 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 	}
 	if m.StreamGeneration == 0 {
 		// The first snapshot is on screen: follow the daemon from its cursor, and open the Issue the Pane was asked to show.
-		m, cmds = startStream(m, 0)
+		var stream []Cmd
+		m, stream = startStream(m, 0)
+		cmds = append(cmds, stream...)
 		if ref := m.OpenIssueRef(); ref != "" {
 			var open []Cmd
 			m, open = openIssue(m, ref)
 			cmds = append(cmds, open...)
 		}
 	}
+	if m.DayEnded {
+		// The read was dated the day that ended (it was in flight at the wake): read again.
+		var next []Cmd
+		m.etag = ""
+		m, next = snapshotChanged(m)
+		cmds = append(cmds, next...)
+	}
 	if m.Resetting {
 		m.Resetting = false
 		m.PendingCursor = 0
-		return startStream(m, 0)
+		var next []Cmd
+		m, next = startStream(m, 0)
+		return m, append(cmds, next...)
 	}
 	if m.StreamConnected {
 		m.Stale = false
