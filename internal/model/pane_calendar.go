@@ -47,3 +47,16 @@ func (c PaneCalendar) DayEnds(now time.Time) time.Time {
 	}
 	return time.Date(y, mo, d+1, 0, 0, 0, 0, loc)
 }
+
+// EndOfDate is when the local day named by Date ends; an empty or unreadable Date has none.
+func (c PaneCalendar) EndOfDate() (time.Time, bool) {
+	loc := c.loc
+	if loc == nil {
+		loc = time.UTC
+	}
+	day, err := time.ParseInLocation("2006-01-02", c.Date, loc)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return c.DayEnds(day.Add(12 * time.Hour)), true
+}

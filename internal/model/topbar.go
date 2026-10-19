@@ -1,27 +1,38 @@
 package model
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Daemon is the kata daemon this Pane talks to, read at discovery.
 type Daemon struct {
-	Remote  bool
+	Kind    DaemonKind
 	Version string
 }
+
+// DaemonKind is whether the daemon runs on this machine; the zero value means the kind check did not answer.
+type DaemonKind string
+
+const (
+	DaemonKindUnknown DaemonKind = ""
+	DaemonLocal       DaemonKind = "local"
+	DaemonRemote      DaemonKind = "remote"
+)
 
 // DaemonSeparator divides the top bar's daemon line and its Menu button.
 const DaemonSeparator = " · "
 
 // DaemonLine is the top bar's daemon line.
 func (m Model) DaemonLine() string {
-	kind := "local"
-	if m.Daemon.Remote {
-		kind = "remote"
+	var parts []string
+	if m.Daemon.Kind != DaemonKindUnknown {
+		parts = append(parts, string(m.Daemon.Kind))
 	}
-	line := "Daemon: " + kind
 	if m.Daemon.Version != "" {
-		line += DaemonSeparator + "kata " + m.Daemon.Version
+		parts = append(parts, "kata "+m.Daemon.Version)
 	}
-	return line
+	return "Daemon: " + strings.Join(parts, DaemonSeparator)
 }
 
 // CountsLine is the top bar's counts line. A Project Collection (bound or picked)

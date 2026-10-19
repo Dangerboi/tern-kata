@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"go.kenn.io/kata/pkg/client"
+
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
@@ -17,6 +19,8 @@ import (
 // again when the daemon cannot be reached.
 type Gateway struct {
 	locate Locator
+	// deadline bounds discovery, the version Ping and the kind check of one connection attempt.
+	deadline time.Duration
 
 	mu      sync.Mutex
 	clients map[string]*Client
@@ -24,10 +28,15 @@ type Gateway struct {
 	streamMu         sync.Mutex
 	streamCancel     context.CancelFunc
 	streamGeneration int64
+
+	wakeMu     sync.Mutex
+	wakeCancel context.CancelFunc
+	now        func() time.Time
+	wakePoll   time.Duration
 }
 
 func NewGateway(locate Locator) *Gateway {
-	return &Gateway{locate: locate, clients: map[string]*Client{}}
+	return &Gateway{locate: locate, deadline: connectDeadline, clients: map[string]*Client{}, now: time.Now, wakePoll: time.Minute}
 }
 
 // Close ends the running stream and drops the cached clients.
@@ -37,6 +46,11 @@ func (g *Gateway) Close() {
 		g.streamCancel()
 	}
 	g.streamMu.Unlock()
+	g.wakeMu.Lock()
+	if g.wakeCancel != nil {
+		g.wakeCancel()
+	}
+	g.wakeMu.Unlock()
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	clear(g.clients)
@@ -47,6 +61,10 @@ func (g *Gateway) Close() {
 func (g *Gateway) Run(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 	if subscription, ok := cmd.(model.Subscribe); ok {
 		g.stream(ctx, subscription, messages)
+		return
+	}
+	if wake, ok := cmd.(model.WakeAt); ok {
+		g.wake(ctx, wake, messages)
 		return
 	}
 	select {
@@ -203,16 +221,26 @@ func (g *Gateway) client(ctx context.Context, workspace string) (*Client, error)
 	if c := g.clients[workspace]; c != nil {
 		return c, nil
 	}
-	target, err := g.locate(ctx, workspace)
+	// shortcut: the lock is held while connecting, so one hung daemon holds up other workspaces until the deadline.
+	connectCtx, cancel := context.WithTimeout(ctx, g.deadline)
+	defer cancel()
+	c, err := g.connect(connectCtx, workspace)
 	if err != nil {
-		return nil, err
-	}
-	c, err := connect(ctx, target)
-	if err != nil {
+		if connectCtx.Err() != nil && ctx.Err() == nil {
+			err = fmt.Errorf("%w\n%s", client.ErrDaemonUnavailable, noDaemonHint)
+		}
 		return nil, err
 	}
 	g.clients[workspace] = c
 	return c, nil
+}
+
+func (g *Gateway) connect(ctx context.Context, workspace string) (*Client, error) {
+	target, err := g.locate(ctx, workspace)
+	if err != nil {
+		return nil, err
+	}
+	return connect(ctx, target)
 }
 
 func (g *Gateway) forget(workspace string, c *Client) {
@@ -260,5 +288,36 @@ func (g *Gateway) stream(ctx context.Context, cmd model.Subscribe, messages chan
 	})
 	if err != nil && ctx.Err() == nil {
 		send(model.StreamDropped{Generation: cmd.Generation, Err: err})
+	}
+}
+
+// wake answers DayEnded once the wall clock reaches cmd.At. It checks the wall clock at least every wakePoll, so a machine that
+// slept past At answers soon after resuming, and ends when ctx ends or a newer wake replaces it.
+func (g *Gateway) wake(ctx context.Context, cmd model.WakeAt, messages chan<- model.Msg) {
+	g.wakeMu.Lock()
+	if g.wakeCancel != nil {
+		g.wakeCancel()
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	g.wakeCancel = cancel
+	g.wakeMu.Unlock()
+	defer cancel()
+	for {
+		// Round(0) drops the monotonic reading, which does not advance while the machine sleeps.
+		left := cmd.At.Round(0).Sub(g.now().Round(0))
+		if left <= 0 {
+			break
+		}
+		timer := time.NewTimer(min(left, g.wakePoll))
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		}
+	}
+	select {
+	case messages <- model.DayEnded{Day: cmd.Day}:
+	case <-ctx.Done():
 	}
 }

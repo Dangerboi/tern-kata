@@ -22,7 +22,7 @@
 
 **Pane driver**: The step that turns one Tern input or daemon result into the next state, the view to draw, the Tern ops to send and the daemon commands to run.
 
-**Daemon gateway**: The module that runs one command against the kata daemon and returns exactly one result message.
+**Daemon gateway**: The module that runs one command against the kata daemon and returns exactly one result message. It also runs the Pane's timed waits: the stream's reconnect delay and the end-of-day wake, which it checks against the wall clock at least once a minute.
 
 **Guarded write**: A write the Daemon gateway applies only if the issue has not changed in a way that matters since the user saw it: saving a Draft of the issue's text, posting a comment or reply, closing, and changing or stopping a Recurrence. A Draft or comment conflicts only when the issue's text differs from the text the Draft started against; a revision that moved for another reason (owner, status, claim, expiry) is written against as it now stands. Closing succeeds while the issue is open and reports an issue closed meanwhile without writing; kata enforces this atomically for a close sent with its idempotency key. A Recurrence change is guarded on the Recurrence's rule, start date and time zone: it conflicts only when one of them differs from what the Recurrence card opened with, and then writes nothing and shows the current schedule; a revision that moved because an Occurrence was created is written against as it now stands. Stopping succeeds while the Recurrence is live and reports one already stopped without writing.
 
