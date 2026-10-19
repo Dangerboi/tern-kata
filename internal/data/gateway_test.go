@@ -831,59 +831,173 @@ func TestGatewayStreamDropReportsAnUnreachableDaemon(t *testing.T) {
 	<-done
 }
 
-func TestGatewaySnapshotCountsChildrenOnlyWhenAsked(t *testing.T) {
+// childCountFixture is a parent in one Project with an open child in the same Project, an open child and a closed child in
+// another, and a soft-deleted child: kata counts three children, two open.
+type childCountFixture struct {
+	gateway          *Gateway
+	kata             *kataServer
+	requests         *atomic.Int32
+	workspace        string
+	demo, other      model.Project
+	parent, otherKid string
+}
+
+func newChildCountFixture(t *testing.T) *childCountFixture {
+	t.Helper()
 	kata := startKata(t, "0.19.0")
-	var failCounts atomic.Bool
+	var listed atomic.Int32
 	front := serve(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if failCounts.Load() && r.URL.Path == "/api/v1/issues" {
-			http.Error(w, "boom", http.StatusInternalServerError)
-			return
+		if r.URL.Path == "/api/v1/issues" {
+			listed.Add(1)
 		}
 		kata.handler.ServeHTTP(w, r)
 	}), "0.19.0")
 	gateway := newGateway(t, newLocator(front.target()))
 	workspace, demo := project(t, gateway, "demo")
-	parent := createIssue(t, gateway, workspace, demo, "Parent")
-	query := model.CollectionQuery(model.Collection{View: "project", ProjectUID: demo.UID, Title: demo.Name}, model.Filters{})
+	_, other := project(t, gateway, "other")
+	f := &childCountFixture{gateway: gateway, kata: kata, requests: &listed, workspace: workspace, demo: demo, other: other}
+	f.parent = createIssue(t, gateway, workspace, demo, "Parent")
+	child := func(project model.Project, title string) string {
+		created := as[model.IssueCreated](t, run(t, gateway, model.CreateIssueCmd{Workspace: workspace, Actor: "tester", ProjectID: project.ID, Title: title, ParentUID: f.parent}))
+		if created.Err != nil {
+			t.Fatal(created.Err)
+		}
+		return created.UID
+	}
+	child(demo, "Same project child")
+	f.otherKid = child(other, "Other project child")
+	f.setClosed(t, child(other, "Closed child"), other, true)
+	f.remove(t, child(demo, "Deleted child"), demo)
+	return f
+}
 
-	before := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ChildCounts: true}))
-	if before.Snapshot.ChildCounts == nil || len(before.Snapshot.ChildCounts) != 0 {
-		t.Fatalf("child counts %+v before any child, want an empty read", before.Snapshot.ChildCounts)
+func (f *childCountFixture) setClosed(t *testing.T, uid string, project model.Project, closed bool) {
+	t.Helper()
+	var msg model.Msg
+	if closed {
+		msg = run(t, f.gateway, model.CloseIssueCmd{Workspace: f.workspace, UID: uid, ProjectID: project.ID, Actor: "tester", Quick: true, Key: fmt.Sprintf("k-%s-%d", uid, time.Now().UnixNano())})
+	} else {
+		msg = run(t, f.gateway, model.ReopenIssueCmd{Workspace: f.workspace, UID: uid, ProjectID: project.ID, Actor: "tester"})
 	}
-	child := as[model.IssueCreated](t, run(t, gateway, model.CreateIssueCmd{Workspace: workspace, Actor: "tester", ProjectID: demo.ID, Title: "Child", ParentUID: parent}))
-	if child.Err != nil {
-		t.Fatal(child.Err)
+	if res := as[model.CloseResultMsg](t, msg); res.Err != nil {
+		t.Fatal(res.Err)
 	}
+}
 
-	without := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ETag: before.ETag}))
-	if without.NotModified || without.Snapshot.ChildCounts != nil || len(without.Snapshot.Issues) != 2 {
-		t.Fatalf("read without counts: %+v, want the snapshot and no counts", without)
+func (f *childCountFixture) remove(t *testing.T, uid string, project model.Project) {
+	t.Helper()
+	detail := as[model.DetailLoaded](t, run(t, f.gateway, model.LoadDetail{Workspace: f.workspace, UID: uid})).Selected
+	c, err := f.gateway.client(context.Background(), f.workspace)
+	if err != nil {
+		t.Fatal(err)
 	}
+	confirm := "DELETE " + detail.Issue.QualifiedID
+	response, err := c.DeleteIssueWithResponse(context.Background(), &g.DeleteIssueRequestOptions{
+		PathParams: &g.DeleteIssuePath{ProjectID: project.ID, Ref: uid},
+		Header:     &g.DeleteIssueHeaders{XKataConfirm: &confirm},
+		Body:       &g.DeleteIssueBody{Actor: "tester"},
+	})
+	if err != nil || response.JSON200 == nil {
+		t.Fatalf("delete %s: %v", uid, err)
+	}
+}
 
-	failCounts.Store(true)
-	failed := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ChildCounts: true}))
-	if failed.Snapshot.ChildCounts != nil || len(failed.Snapshot.Issues) != 2 || failed.ETag == "" || failed.Snapshot.Cursor == 0 {
-		t.Fatalf("failing count download: %+v, want the snapshot, ETag and cursor with no counts", failed)
+// kataCounts is kata's own child_counts for uid, from the Issue list the Pane no longer reads.
+func (f *childCountFixture) kataCounts(t *testing.T, uid string) model.ChildCounts {
+	t.Helper()
+	c, err := f.gateway.client(context.Background(), f.workspace)
+	if err != nil {
+		t.Fatal(err)
 	}
-	failCounts.Store(false)
+	response, err := c.ListAllIssuesWithResponse(context.Background(), &g.ListAllIssuesRequestOptions{Query: &g.ListAllIssuesQuery{}})
+	if err != nil || response.JSON200 == nil {
+		t.Fatalf("list Issues: %v", err)
+	}
+	for _, issue := range response.JSON200.Issues {
+		if issue.UID == uid && issue.ChildCounts != nil {
+			return model.ChildCounts{Open: int(issue.ChildCounts.Open), Total: int(issue.ChildCounts.Total)}
+		}
+	}
+	return model.ChildCounts{}
+}
 
-	after := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ChildCounts: true}))
-	if counts := after.Snapshot.ChildCounts[parent]; counts.Total != 1 || counts.Open != 1 {
-		t.Fatalf("after a child: %+v, want the parent to count its one open child", after)
+func (f *childCountFixture) read(t *testing.T, filters model.Filters, project model.Project, etag string) model.SnapshotLoaded {
+	t.Helper()
+	query := model.CollectionQuery(model.Collection{View: "project", ProjectUID: project.UID, Title: project.Name}, filters)
+	return as[model.SnapshotLoaded](t, run(t, f.gateway, model.ReadSnapshot{Workspace: f.workspace, Query: query, ETag: etag}))
+}
+
+func TestGatewaySnapshotLinksCountChildrenAsKataDoes(t *testing.T) {
+	f := newChildCountFixture(t)
+	want := model.ChildCounts{Open: 2, Total: 3}
+	if got := f.kataCounts(t, f.parent); got != want {
+		t.Fatalf("kata counts %+v, want %+v (the deleted child left out)", got, want)
 	}
-	links := after.Snapshot.Links
-	if len(links) != 1 || links[0].Type != "parent" || links[0].FromIssueUID != child.UID || links[0].ToIssueUID != parent {
-		t.Fatalf("links %+v, want the child's parent link to %s", links, parent)
+	f.requests.Store(0)
+	for _, tt := range []struct {
+		name    string
+		filters model.Filters
+		project model.Project
+	}{
+		{"filters hide the children", model.Filters{Search: "Parent"}, f.demo},
+		{"an unfiltered Project", model.Filters{}, f.demo},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			loaded := f.read(t, tt.filters, tt.project, "")
+			if got := model.CountChildren(loaded.Snapshot.Links, f.parent); got != want {
+				t.Fatalf("counted %+v, want kata's %+v", got, want)
+			}
+		})
 	}
-	if len(after.Snapshot.Issues) != 2 || after.Snapshot.Cursor == 0 {
-		t.Fatalf("snapshot %+v, want both Issues and the event cursor", after.Snapshot)
+	if f.requests.Load() != 0 {
+		t.Fatalf("snapshot reads requested the Issue list %d times", f.requests.Load())
 	}
-	if len(after.Snapshot.Catalog) != 1 || after.Snapshot.Catalog[0].Project.UID != demo.UID || after.Snapshot.Catalog[0].Stats == nil || after.Snapshot.Catalog[0].Stats.Open != 2 {
-		t.Fatalf("catalog %+v, want the Project with two open Issues", after.Snapshot.Catalog)
+}
+
+func TestGatewaySnapshotLinksAreTheCollectionsOwn(t *testing.T) {
+	f := newChildCountFixture(t)
+	loaded := f.read(t, model.Filters{}, f.other, "")
+	// The Collection holds only the other Project's children: their two Links count for the parent that is not in it, and the
+	// same-Project children have no end in this Collection.
+	if got := model.CountChildren(loaded.Snapshot.Links, f.parent); got != (model.ChildCounts{Open: 1, Total: 2}) {
+		t.Fatalf("counted %+v, want the two children in the Collection", got)
 	}
-	unchanged := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ETag: after.ETag}))
-	if !unchanged.NotModified {
-		t.Fatalf("current ETag: %+v, want not modified", unchanged)
+	if len(loaded.Snapshot.Catalog) != 2 || loaded.Snapshot.Cursor == 0 || loaded.ETag == "" {
+		t.Fatalf("snapshot %+v, want the catalog of both Projects, an event cursor and an ETag", loaded)
+	}
+}
+
+func TestGatewayChildOutsideTheCollectionMovesTheNextReadsCounts(t *testing.T) {
+	f := newChildCountFixture(t)
+	filters := model.Filters{Search: "Parent"}
+	first := f.read(t, filters, f.demo, "")
+	if got := model.CountChildren(first.Snapshot.Links, f.parent); got != (model.ChildCounts{Open: 2, Total: 3}) {
+		t.Fatalf("counted %+v", got)
+	}
+	etag := first.ETag
+	for _, closed := range []bool{true, false} {
+		f.setClosed(t, f.otherKid, f.other, closed)
+		next := f.read(t, filters, f.demo, etag)
+		if next.NotModified {
+			t.Fatalf("closed=%v: the previous ETag answered 304 over a changed count", closed)
+		}
+		want := f.kataCounts(t, f.parent)
+		if got := model.CountChildren(next.Snapshot.Links, f.parent); got != want || (want.Open == 2) == closed {
+			t.Fatalf("closed=%v: counted %+v, kata %+v", closed, got, want)
+		}
+		etag = next.ETag
+	}
+	if again := f.read(t, filters, f.demo, etag); !again.NotModified {
+		t.Fatal("an unchanged Collection must still answer 304")
+	}
+}
+
+func TestGatewayDetailLinksCarryTheChildStatuses(t *testing.T) {
+	f := newChildCountFixture(t)
+	detail := as[model.DetailLoaded](t, run(t, f.gateway, model.LoadDetail{Workspace: f.workspace, UID: f.parent})).Selected
+	want := f.kataCounts(t, f.parent)
+	if got := model.CountChildren(detail.Links, f.parent); got != want || want.Total != 3 {
+		t.Fatalf("detail links count %+v, kata %+v", got, want)
 	}
 }
 

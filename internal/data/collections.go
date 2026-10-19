@@ -11,7 +11,7 @@ import (
 )
 
 // ReadSnapshot is the one read of a Collection snapshot, for the first load, a Collection switch, a filter change and a live
-// refresh. Child counts are read only when cmd asks. A dated Collection is asked for today's calendar date; the result reports the calendar. A matching ETag answers 304.
+// refresh, in one daemon request: the snapshot's links carry the child counts. A dated Collection is asked for today's calendar date; the result reports the calendar. A matching ETag answers 304.
 func (c *Client) ReadSnapshot(ctx context.Context, cmd model.ReadSnapshot) (model.SnapshotLoaded, error) {
 	date, zone, note := systemCalendar.Today()
 	result := model.SnapshotLoaded{Request: cmd.Request, Query: cmd.Query, LocalDate: date, TimeZone: zone, TimeZoneNote: note}
@@ -39,17 +39,11 @@ func (c *Client) ReadSnapshot(ctx context.Context, cmd model.ReadSnapshot) (mode
 	if response.Headers200 != nil {
 		result.ETag = response.Headers200.ETag
 	}
-	if cmd.ChildCounts {
-		// A failed count download keeps the snapshot; CountsRead stays false so the model keeps its own counts.
-		if counts, err := c.readChildCounts(ctx, result.Snapshot, query.ProjectUID); err == nil {
-			result.Snapshot.ChildCounts, result.CountsRead = counts, true
-		}
-	}
 	return result, nil
 }
 
-// translateSnapshot is the one place kata's snapshot body becomes the model's Collection snapshot; the child counts are read
-// separately.
+// translateSnapshot is the one place kata's snapshot body becomes the model's Collection snapshot; its links are what
+// model.CountChildren counts.
 func translateSnapshot(s *g.UISnapshotResponseBody) model.Snapshot {
 	snapshot := model.Snapshot{Cursor: s.Cursor}
 	for i := range s.Collection {
