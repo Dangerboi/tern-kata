@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/Dangerboi/tern-kata/internal/view"
+	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
 func detailNodes(t *testing.T, issue model.Issue) shown {
