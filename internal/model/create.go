@@ -29,6 +29,8 @@ type CreateIssueCmd struct {
 	ProjectID                                       int64
 	Labels                                          []string
 	Priority                                        *int64
+	// Key is kata's Idempotency-Key for this create.
+	Key string
 }
 
 func (CreateIssueCmd) cmd() {}
@@ -130,7 +132,9 @@ func submitCreate(m Model) (Model, []Cmd) {
 	}
 	f.Saving = true
 	f.Err = nil
-	return m, []Cmd{CreateIssueCmd{Workspace: m.Workspace, Actor: m.Actor, ProjectID: f.ProjectID, Title: strings.TrimSpace(f.Title), Body: f.Editor.Text, Labels: labels, Owner: strings.TrimSpace(f.Owner), Priority: priority, ParentUID: f.ParentUID}}
+	cmd := CreateIssueCmd{Workspace: m.Workspace, Actor: m.Actor, ProjectID: f.ProjectID, Title: strings.TrimSpace(f.Title), Body: f.Editor.Text, Labels: labels, Owner: strings.TrimSpace(f.Owner), Priority: priority, ParentUID: f.ParentUID}
+	cmd.Key = m.mintKey(&f.Draft, cmd)
+	return m, []Cmd{cmd}
 }
 func updateCreate(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {

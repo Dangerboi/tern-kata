@@ -87,6 +87,9 @@ type Model struct {
 	Search              SearchState
 	IDSearch            IDSearch
 	FilterForm          FilterFormState
+	// nonce is the random per-run prefix of every idempotency key and keys counts the keys minted.
+	nonce string
+	keys  int
 }
 
 func Update(m Model, msg Msg) (Model, []Cmd) {
@@ -160,6 +163,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return snapshotChanged(m)
 	case Start:
 		m.Workspace = msg.Workspace
+		m.nonce = msg.Nonce
 		m = m.openRequested(msg.IssueRef)
 		m.Loading = true
 		m.Err = nil

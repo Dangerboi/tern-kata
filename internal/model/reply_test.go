@@ -103,7 +103,7 @@ func TestAReplySavesWithItsTargetAndKind(t *testing.T) {
 	text := strings.Repeat("it reproduces. ", 3)
 	m = typed(m, text)
 	_, cmds := clickPress(m, "ctrl+o")
-	want := []model.Cmd{model.SaveDraft{Workspace: "/repo", UID: "a", ProjectID: 2, BaseText: "body", Text: text, Comment: true, Actor: "me", ReplyTo: "c1", ReplyKind: model.ReplyConfirm}}
+	want := []model.Cmd{model.SaveDraft{Workspace: "/repo", UID: "a", ProjectID: 2, BaseText: "body", Text: text, Comment: true, Actor: "me", ReplyTo: "c1", ReplyKind: model.ReplyConfirm, Key: "-1"}}
 	if !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("cmds %#v, want %#v", cmds, want)
 	}
@@ -119,7 +119,7 @@ func TestADuplicateReplyOffersSendAnywayWhichResendsWithForce(t *testing.T) {
 		t.Fatalf("Draft after duplicate: %+v", d)
 	}
 	_, cmds := clickPress(m, "ctrl+f")
-	want := []model.Cmd{model.SaveDraft{Workspace: "/repo", UID: "a", ProjectID: 2, BaseText: "body", Text: "again", Comment: true, Actor: "me", ReplyTo: "c1", ReplyKind: model.ReplyPlain, Force: true}}
+	want := []model.Cmd{model.SaveDraft{Workspace: "/repo", UID: "a", ProjectID: 2, BaseText: "body", Text: "again", Comment: true, Actor: "me", ReplyTo: "c1", ReplyKind: model.ReplyPlain, Force: true, Key: "-2"}}
 	if !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("send anyway %#v, want %#v", cmds, want)
 	}
