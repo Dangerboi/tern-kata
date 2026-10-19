@@ -1,6 +1,7 @@
 package model_test
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -55,5 +56,32 @@ func TestAWakeForADayTheCalendarLeftChangesNothing(t *testing.T) {
 	next, cmds := model.Update(m, model.DayEnded{Day: "2026-10-08"})
 	if len(cmds) != 0 || next.DayEnded || next.Refreshing != m.Refreshing {
 		t.Fatalf("stale wake changed the model: %+v %+v", next, cmds)
+	}
+}
+
+func TestDeadlinesMoveToTheNewDayAfterTheWakeWithoutADaemonEvent(t *testing.T) {
+	issues := []model.Issue{
+		{UID: "due-d", Status: "open", DeadlineOnDate: new("2026-10-08")},
+		{UID: "due-next", Status: "open", DeadlineOnDate: new("2026-10-09")},
+	}
+	rows := func(m model.Model) map[string][]string {
+		out := map[string][]string{}
+		for _, g := range m.Groups {
+			for _, issue := range g.Issues {
+				out[g.Title] = append(out[g.Title], issue.UID)
+			}
+		}
+		return out
+	}
+	m := model.Model{Collection: model.Collection{View: "deadlines", Title: "deadlines"}}
+	m, _ = step(m, snap{model.SnapshotLoaded{LocalDate: "2026-10-08", TimeZone: "UTC", Snapshot: model.Snapshot{Issues: issues}}})
+	if got := rows(m); !reflect.DeepEqual(got, map[string][]string{"Today": {"due-d"}, "2026-10-09": {"due-next"}}) {
+		t.Fatalf("before midnight: %v", got)
+	}
+
+	m, _ = model.Update(m, model.DayEnded{Day: "2026-10-08"})
+	m, _ = step(m, snap{model.SnapshotLoaded{LocalDate: "2026-10-09", TimeZone: "UTC", Snapshot: model.Snapshot{Issues: issues}}})
+	if got := rows(m); !reflect.DeepEqual(got, map[string][]string{"Overdue": {"due-d"}, "Today": {"due-next"}}) {
+		t.Fatalf("after midnight: %v", got)
 	}
 }
