@@ -127,7 +127,7 @@ func (m Model) withRows() Model {
 		if m.authority.Issue != nil {
 			for _, a := range Attachments(m.authority.Issue.Metadata) {
 				row := DetailRow{Key: a.Name, File: a}
-				if m.Host != "" && SameHost(a.Host, m.Host) {
+				if a.OnHost(m.Host) {
 					row.URL = fileURL(a.Path)
 				}
 				m.rows.items = append(m.rows.items, DetailItem{Kind: RowAttachment, Key: row.Key, Activity: row})

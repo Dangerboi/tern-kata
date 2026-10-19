@@ -48,7 +48,7 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	if plan.Subcommand != "" {
-		return runSubcommand(ctx, plan, data.NewGateway(data.LocateWithKata), os.Stdout)
+		return runSubcommand(ctx, plan, data.NewGateway(data.LocateWithKata).WithHost(data.HostName()), os.Stdout)
 	}
 	session, err := tern.Connect(ctx, editorOptions())
 	if errors.Is(err, tern.ErrUnsupported) {
@@ -77,10 +77,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	host, _ := os.Hostname() // without a host name no Attachment counts as held here
+	host := data.HostName()
 	state := driver.State{Model: model.Model{Cols: term.Caps().Cols, Actor: plan.Actor, Host: host}}
 	results := make(chan model.Msg)
-	gateway := data.NewGateway(data.LocateWithKata)
+	gateway := data.NewGateway(data.LocateWithKata).WithHost(host)
 	defer gateway.Close()
 	input := any(model.Start{Workspace: workspace, IssueRef: plan.IssueRef, Nonce: rand.Text()})
 	for {

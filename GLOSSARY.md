@@ -38,6 +38,8 @@
 
 **Attachment**: A file copied into a Project's Attachment store and pointed to by one `attachment.<name>` meta key on one Issue. The key holds `{"host", "path"}`: the OS host name of the machine with the copy and its absolute native path. Attachments are context for agents; tern-kata lists them and never previews them. _Avoid_: upload, image.
 
+**Attachment pointer**: The `{"host", "path"}` value an `attachment.<name>` meta key holds, naming the machine with the copy and the copy's absolute native path. A pointer is on this machine when its host equals this machine's host name without regard to case; an empty host is never this machine.
+
 **Attachment store**: The `.kata-attachments` folder at the root of a Project's primary checkout, holding `<Issue ULID>/<name>` copies and a `.gitignore` of `*`. Outside git the root is the directory holding the workspace's `.kata.toml`.
 
 **Primary checkout**: The main worktree of a git repository, the parent of git's common directory; every linked worktree shares it.
