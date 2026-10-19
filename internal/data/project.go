@@ -38,7 +38,7 @@ func (c *Client) ReadProject(ctx context.Context, workspace string) (model.Proje
 			project = translateProject(response.JSON200.Project)
 		}
 	}
-	return model.ProjectLoaded{Project: project, Daemon: model.Daemon{Remote: c.remote, Version: c.version}}, nil
+	return model.ProjectLoaded{Project: project, Daemon: model.Daemon{Kind: c.kind, Version: c.version}}, nil
 }
 
 func (c *Client) projectRequest(ctx context.Context, workspace string) (*g.ResolveProjectBody, error) {

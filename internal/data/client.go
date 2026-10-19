@@ -8,15 +8,18 @@ import (
 	"net/http"
 	"os/exec"
 	"strings"
+	"time"
 
 	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
 	"golang.org/x/mod/semver"
+
+	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
 type Client struct {
 	*client.Client
-	remote  bool
+	kind    model.DaemonKind
 	version string
 }
 
@@ -29,6 +32,9 @@ type Target struct {
 
 // Locator finds the daemon that serves workspace.
 type Locator func(ctx context.Context, workspace string) (Target, error)
+
+// connectDeadline is how long locating and connecting to the daemon may take.
+const connectDeadline = 10 * time.Second
 
 // noDaemonHint is what tern-kata adds when no daemon answers.
 const noDaemonHint = "start the kata daemon (kata daemon start) or run `kata doctor`"
@@ -93,13 +99,17 @@ func connect(ctx context.Context, target Target) (*Client, error) {
 	if semver.Compare(normalized, "v0.19.0") < 0 {
 		return nil, fmt.Errorf("kata daemon %s is too old; tern-kata requires v0.19.0 or newer; upgrade kata", version)
 	}
-	var remote bool
+	// A failing kind check leaves the kind unknown; it never fails the connection.
+	kind := model.DaemonLocal
 	if target.Remote != nil {
-		if remote, err = target.Remote(ctx); err != nil {
-			return nil, err
+		switch remote, err := target.Remote(ctx); {
+		case err != nil:
+			kind = model.DaemonKindUnknown
+		case remote:
+			kind = model.DaemonRemote
 		}
 	}
-	return &Client{Client: c, remote: remote, version: normalized}, nil
+	return &Client{Client: c, kind: kind, version: normalized}, nil
 }
 
 // daemonError is the text the Pane shows for any daemon failure: kata's message, then its recovery hint on its
