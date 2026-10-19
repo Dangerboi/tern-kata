@@ -20,7 +20,7 @@ func attachPane(focus model.Column, metadata map[string]any, projectID int64) mo
 func pointers(names ...string) map[string]any {
 	meta := map[string]any{"unrelated": "x"}
 	for _, n := range names {
-		meta[model.AttachmentKeyPrefix+n] = map[string]any{"host": "box", "path": "/store/issue/" + n}
+		meta[model.AttachmentKey(n)] = map[string]any{"host": "box", "path": "/store/issue/" + n}
 	}
 	return meta
 }

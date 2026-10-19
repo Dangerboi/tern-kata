@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strings"
@@ -34,12 +35,14 @@ type attachFixture struct {
 	gateway   *Gateway
 	repo, uid string
 	project   model.Project
+	host      string
 }
 
 func newAttachFixture(t *testing.T) attachFixture {
 	t.Helper()
 	kata := startKata(t, "0.19.0")
-	gateway := newGateway(t, newLocator(kata.target()))
+	const host = "TestBox"
+	gateway := newGateway(t, newLocator(kata.target())).WithHost(host)
 	repo := t.TempDir()
 	git(t, repo, "init", "-q")
 	git(t, repo, "commit", "-q", "--allow-empty", "-m", "init")
@@ -47,7 +50,7 @@ func newAttachFixture(t *testing.T) attachFixture {
 	if saved.Err != nil {
 		t.Fatal(saved.Err)
 	}
-	return attachFixture{kata, gateway, repo, createIssue(t, gateway, repo, saved.Project, "Screenshot"), saved.Project}
+	return attachFixture{kata, gateway, repo, createIssue(t, gateway, repo, saved.Project, "Screenshot"), saved.Project, host}
 }
 
 func (f attachFixture) attach(t *testing.T, workspace, ref, path string) model.FileAttached {
@@ -125,7 +128,7 @@ func TestAttachCopiesIntoTheStoreAndPointsAtTheCopy(t *testing.T) {
 	if content, err := os.ReadFile(want); err != nil || string(content) != "pixels" {
 		t.Fatalf("copy %q, %v", content, err)
 	}
-	host, _ := os.Hostname()
+	host := f.host
 	if pointer := f.pointers(t, f.uid)["shot.png"]; pointer["host"] != host || pointer["path"] != want || len(pointer) != 2 {
 		t.Fatalf("pointer %v, want host %q path %q", pointer, host, want)
 	}
@@ -178,7 +181,7 @@ func TestAttachFromALinkedWorktreeUsesThePrimaryCheckout(t *testing.T) {
 
 func TestAttachOutsideGitUsesTheDirectoryHoldingTheBinding(t *testing.T) {
 	kata := startKata(t, "0.19.0")
-	gateway := newGateway(t, newLocator(kata.target()))
+	gateway := newGateway(t, newLocator(kata.target())).WithHost("TestBox")
 	workspace, bound := project(t, gateway, "plain")
 	uid := createIssue(t, gateway, workspace, bound, "Plain")
 	sub := filepath.Join(workspace, "deep", "er")
@@ -357,7 +360,7 @@ func TestAFailedPointerWriteLeavesNoCopy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gateway := newGateway(t, newLocator(Target{Client: c}))
+	gateway := newGateway(t, newLocator(Target{Client: c})).WithHost("TestBox")
 	got := as[model.FileAttached](t, run(t, gateway, model.AttachFile{Workspace: f.repo, Ref: f.uid, Actor: "tester", Path: writeFile(t, t.TempDir(), "shot.png", "x")}))
 	if got.Err == nil {
 		t.Fatalf("got %+v, want the pointer write's failure", got)
@@ -475,7 +478,7 @@ func TestDetachNeverDeletesAnotherIssuesCopy(t *testing.T) {
 	if theirs.Err != nil {
 		t.Fatal(theirs.Err)
 	}
-	host, _ := os.Hostname()
+	host := f.host
 	setPointer(t, f, "borrowed.png", map[string]any{"host": host, "path": theirs.Path})
 	got := f.detach(t, f.repo, f.uid, "borrowed.png")
 	if got.Err != nil || got.Fate != model.FileLeft {
@@ -525,7 +528,7 @@ func TestAttachFailsBeforeCopyingWhenTheStoreCannotBeSetUp(t *testing.T) {
 
 func TestAttachFromBareRepositoryWorktreesSharesOneStore(t *testing.T) {
 	kata := startKata(t, "0.19.0")
-	gateway := newGateway(t, newLocator(kata.target()))
+	gateway := newGateway(t, newLocator(kata.target())).WithHost("TestBox")
 	root := t.TempDir()
 	seed := t.TempDir()
 	git(t, seed, "init", "-q")
@@ -556,7 +559,7 @@ func TestAttachFromBareRepositoryWorktreesSharesOneStore(t *testing.T) {
 
 func TestAttachInASubmoduleUsesTheSubmodulesOwnTopLevel(t *testing.T) {
 	kata := startKata(t, "0.19.0")
-	gateway := newGateway(t, newLocator(kata.target()))
+	gateway := newGateway(t, newLocator(kata.target())).WithHost("TestBox")
 	inner := t.TempDir()
 	git(t, inner, "init", "-q")
 	git(t, inner, "commit", "-q", "--allow-empty", "-m", "init")
@@ -585,5 +588,53 @@ func setPointer(t *testing.T, f attachFixture, name string, value any) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestAttachWritesExactlyHostAndPathAndDecodesBack(t *testing.T) {
+	f := newAttachFixture(t)
+	got := f.attach(t, f.repo, f.uid, writeFile(t, t.TempDir(), "shot.png", "x"))
+	if got.Err != nil {
+		t.Fatal(got.Err)
+	}
+	meta := f.issue(t, f.uid).Metadata
+	if want := (map[string]any{"host": f.host, "path": got.Path}); !reflect.DeepEqual(meta["attachment.shot.png"], want) {
+		t.Fatalf("meta value %v, want %v", meta["attachment.shot.png"], want)
+	}
+	if a := model.Attachments(meta); len(a) != 1 || a[0] != (model.Attachment{Name: "shot.png", Host: f.host, Path: got.Path}) {
+		t.Fatalf("decoded %v", a)
+	}
+}
+
+func TestAttachWithoutAHostNameLeavesNoCopyOrPointer(t *testing.T) {
+	f := newAttachFixture(t)
+	f.gateway.WithHost("")
+	got := f.attach(t, f.repo, f.uid, writeFile(t, t.TempDir(), "shot.png", "x"))
+	if got.Err == nil || !strings.Contains(got.Err.Error(), "host name") {
+		t.Fatalf("got %+v", got)
+	}
+	if _, err := os.Stat(filepath.Join(f.repo, ".kata-attachments")); err == nil {
+		t.Fatal("a store was made")
+	}
+	if len(f.pointers(t, f.uid)) != 0 {
+		t.Fatal("a pointer was written")
+	}
+}
+
+func TestDetachIgnoresHostCaseAndNeverDeletesForAnEmptyHost(t *testing.T) {
+	f := newAttachFixture(t)
+	copy1 := f.attach(t, f.repo, f.uid, writeFile(t, t.TempDir(), "a.png", "x"))
+	setPointer(t, f, "a.png", map[string]any{"host": strings.ToUpper(f.host), "path": copy1.Path})
+	if got := f.detach(t, f.repo, f.uid, "a.png"); got.Err != nil || got.Fate != model.FileDeleted {
+		t.Fatalf("case-differing host: %+v", got)
+	}
+	copy2 := f.attach(t, f.repo, f.uid, writeFile(t, t.TempDir(), "b.png", "x"))
+	setPointer(t, f, "b.png", map[string]any{"host": "", "path": copy2.Path})
+	f.gateway.WithHost("")
+	if got := f.detach(t, f.repo, f.uid, "b.png"); got.Err != nil || got.Fate != model.FileLeft {
+		t.Fatalf("empty host: %+v", got)
+	}
+	if _, err := os.Stat(copy2.Path); err != nil {
+		t.Fatalf("an empty-host pointer deleted the file: %v", err)
 	}
 }

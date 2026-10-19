@@ -19,6 +19,8 @@ import (
 // again when the daemon cannot be reached.
 type Gateway struct {
 	locate Locator
+	// host is this machine's host name for Attachment pointers; empty when unreadable.
+	host string
 	// deadline bounds discovery, the version Ping and the kind check of one connection attempt.
 	deadline time.Duration
 
@@ -38,6 +40,12 @@ type Gateway struct {
 
 func NewGateway(locate Locator) *Gateway {
 	return &Gateway{locate: locate, deadline: connectDeadline, clients: map[string]*Client{}, now: time.Now, wakePoll: time.Minute}
+}
+
+// WithHost sets this machine's host name, the one every Attachment pointer is written with and compared against.
+func (g *Gateway) WithHost(host string) *Gateway {
+	g.host = host
+	return g
 }
 
 // Close ends the running stream and drops the cached clients.
@@ -89,7 +97,7 @@ func ok[T model.Msg](result T, err error) (model.Msg, error) {
 	return result, nil
 }
 
-func plan(cmd model.Cmd) (request, bool) {
+func plan(cmd model.Cmd, host string) (request, bool) {
 	switch cmd := cmd.(type) {
 	case model.CreateIssueCmd:
 		return request{cmd.Workspace,
@@ -150,11 +158,11 @@ func plan(cmd model.Cmd) (request, bool) {
 			func(err error) model.Msg { return model.FieldWritten{UID: cmd.UID, Err: err} }}, true
 	case model.AttachFile:
 		return request{cmd.Workspace,
-			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.AttachFile(ctx, cmd)) },
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.AttachFile(ctx, host, cmd)) },
 			func(err error) model.Msg { return model.FileAttached{Ref: cmd.Ref, Err: err} }}, true
 	case model.DetachFile:
 		return request{cmd.Workspace,
-			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.DetachFile(ctx, cmd)) },
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.DetachFile(ctx, host, cmd)) },
 			func(err error) model.Msg { return model.FileDetached{Ref: cmd.Ref, Name: cmd.Name, Err: err} }}, true
 	case model.LoadFieldLabels:
 		return request{cmd.Workspace,
@@ -191,7 +199,7 @@ func plan(cmd model.Cmd) (request, bool) {
 }
 
 func (g *Gateway) do(ctx context.Context, cmd model.Cmd) model.Msg {
-	req, known := plan(cmd)
+	req, known := plan(cmd, g.host)
 	if !known {
 		return model.Failed{Err: fmt.Errorf("tern-kata: unknown command %T", cmd)}
 	}
