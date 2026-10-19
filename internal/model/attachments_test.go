@@ -2,6 +2,7 @@ package model_test
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -50,7 +51,7 @@ func TestAttachmentRowsAreSortedByNameAndIgnoreOtherMeta(t *testing.T) {
 		"attachment.b.png": pointer("box", "/b.png"), "attachment.a.png": pointer("elsewhere", "/a.png"),
 		"attachment.bad": "not a pointer", "scheduled_on": "2026-10-20", "other.x": pointer("box", "/x"),
 	})
-	if got := attachmentKeys(m); !slices.Equal(got, []string{"a.png", "b.png"}) {
+	if got := attachmentKeys(m); !slices.Equal(got, []string{model.AttachmentRowKey("a.png"), model.AttachmentRowKey("b.png")}) {
 		t.Fatalf("rows %v", got)
 	}
 	if n := m.DetailRowCount(model.TabAttachments); n != 2 {
@@ -78,10 +79,33 @@ func TestAttachmentFileURLKeepsABackslashInAUnixName(t *testing.T) {
 	}
 }
 
+func TestAttachmentCursorStaysOnItsNameAcrossARefreshThatAddsOne(t *testing.T) {
+	m := attached(map[string]any{"attachment.b": pointer("box", "/b")})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "j"})
+	m, cmds := model.Update(m, model.StreamEvent{ID: 1, Type: "issue.updated"})
+	refresh := cmds[0].(model.ReadSnapshot)
+	issue := model.Issue{UID: "a", Metadata: map[string]any{"attachment.a": pointer("box", "/a"), "attachment.b": pointer("box", "/b")}}
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: model.Snapshot{Cursor: 1, Issues: []model.Issue{issue}}, Selected: &model.IssueDetailData{Issue: &issue}})
+	if got := cursorKey(m); got != model.AttachmentRowKey("b") {
+		t.Fatalf("cursor on %q", got)
+	}
+}
+
+func TestAttachmentRowKeysAreUniqueAndDotFree(t *testing.T) {
+	seen := map[string]bool{}
+	for _, name := range []string{"tabs", "empty", "a", "a.row", "a-row", ""} {
+		key := model.AttachmentRowKey(name)
+		if strings.Contains(key, ".") || seen[key] {
+			t.Fatalf("key %q for %q", key, name)
+		}
+		seen[key] = true
+	}
+}
+
 func TestEnterOnAnAttachmentRowDoesNothing(t *testing.T) {
 	m := attached(map[string]any{"attachment.a": pointer("box", "/a")})
 	next, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
-	if len(cmds) != 0 || next.SelectedUID != "a" || next.ActiveTab() != model.TabAttachments || cursorKey(next) != "a" || next.Focus != model.ColumnDetail {
+	if len(cmds) != 0 || next.SelectedUID != "a" || next.ActiveTab() != model.TabAttachments || cursorKey(next) != model.AttachmentRowKey("a") || next.Focus != model.ColumnDetail {
 		t.Fatalf("enter changed state: cmds %v selected %q tab %v", cmds, next.SelectedUID, next.ActiveTab())
 	}
 }
@@ -92,7 +116,7 @@ func TestAttachmentRowsFollowLiveRefreshes(t *testing.T) {
 	refresh := cmds[0].(model.ReadSnapshot)
 	issue := model.Issue{UID: "a", Metadata: map[string]any{"attachment.b": pointer("box", "/b"), "attachment.c": pointer("box", "/c")}}
 	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: model.Snapshot{Cursor: 1, Issues: []model.Issue{issue}}, Selected: &model.IssueDetailData{Issue: &issue}})
-	if got := attachmentKeys(m); !slices.Equal(got, []string{"b", "c"}) {
+	if got := attachmentKeys(m); !slices.Equal(got, []string{model.AttachmentRowKey("b"), model.AttachmentRowKey("c")}) {
 		t.Fatalf("rows after the refresh %v", got)
 	}
 }

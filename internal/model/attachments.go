@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/hex"
 	"slices"
 	"strings"
 )
@@ -36,3 +37,7 @@ func Attachments(metadata map[string]any) []Attachment {
 
 // SameHost is whether two host names are the same machine; host names compare without regard to case.
 func SameHost(a, b string) bool { return strings.EqualFold(a, b) }
+
+// AttachmentRowKey is the Issue detail row key of an Attachment: hex of its name, which has no ".", is unique per name and
+// sits under a prefix no fixed Issue detail key uses.
+func AttachmentRowKey(name string) string { return "attachment-" + hex.EncodeToString([]byte(name)) }
