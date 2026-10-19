@@ -4,18 +4,15 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-20
+
 ### Added
 
 - `tern-kata attach <ref> <file>...` and `tern-kata detach <ref> <name>` attach files to an Issue and remove them again from a shell or an agent, without Tern. `attach` prints each stored absolute path; both need the directory to be bound to the Issue's Project and exit 1 on any failure.
 - An Attachment is a copy of the file in `.kata-attachments` at the root of the Project's primary checkout, which every linked worktree shares and which stays out of git; an empty `.gitignore` there is rewritten with `*` on the next attach. An `attachment.<name>` meta key on the Issue holds the copy's host and path. Detach clears the key, including one with an unreadable value, and deletes the copy only when it is on this machine and in that Issue's folder, saying what became of the file. A detach clears the key only while it still holds what was read: a pointer rewritten meanwhile survives with its file, and the refusal says the Attachment changed. When the key is cleared but the copy can't be deleted, `U` closes the form and `tern-kata detach` prints "Removed <name>; could not delete <path>: <reason>" on stdout, then exits 1 with the error on stderr.
-- The Issue detail has an Attachments tab after Links. It lists the Issue's Attachments by name; a file held on this machine is a link to the file, one held elsewhere reads "<name> on <host>", and an Issue with none says "No attachments, u to attach".
+- The Issue detail has an Attachments tab after Links. It lists the Issue's Attachments by name, each on its own row whatever the name; a file held on this machine is a link to the file (one on a Windows network share links as `file://server/share/...`), one held elsewhere reads "<name> on <host>", and an Issue with none says "No attachments, u to attach".
 - `u` on the selected Issue, in the list or the Issue detail, asks for a file's path and attaches it. `U` lists the Issue's Attachments by name and removes the one chosen, and says so instead of opening a picker when there are none. Both keys explain why when the directory is not bound to the Issue's Project. Attaching is refused when this machine's host name can't be read, and a pointer with an empty host is never treated as on this machine. The footer and help sheet list them beside the label keys. A successful `u` shows "Attached <stored name> to <short id>", so a file stored as `shot-2.png` is named.
 - Two agent skills ship with tern-kata: `kata` for working with the kata CLI and `tern-kata` for reading and attaching Attachments. `npx skills add Dangerboi/tern-kata -g` installs them (`bunx` works too), and the install scripts offer to run it when they run in a terminal, with `bunx` when Node.js is missing.
-
-### Fixed
-
-- An Attachment named `tabs`, `empty` or like another row's dotted id no longer shares a node id with anything else in the Issue detail.
-- An Attachment on a Windows network share (`\\server\share\file`) now links as `file://server/share/file` instead of a link with four slashes that did not open.
 
 ## [0.2.0] - 2026-10-19
 
@@ -55,5 +52,6 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `install.ps1` parses, keeps `%VAR%` entries in `PATH` and says when it changes `PATH`, so programs started from Explorer, such as Tern, see it.
 - **Open kata**, `F9` and kata links open tern-kata in a new tab, in the focused Pane's directory, when Tern can't split the focused Pane, instead of doing nothing.
 
-[Unreleased]: https://github.com/Dangerboi/tern-kata/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Dangerboi/tern-kata/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Dangerboi/tern-kata/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Dangerboi/tern-kata/compare/v0.1.1...v0.2.0
