@@ -25,6 +25,8 @@ type DetailItem struct {
 	Key          string
 	ReferenceUID string
 	ReplyKey     string
+	// ReferenceKey is the comment in the ReferenceUID Issue that a cross-Issue reply answers: the row a jump lands on.
+	ReferenceKey string
 	Child        ChildRow
 	Activity     DetailRow
 }
@@ -150,6 +152,9 @@ func (m Model) commentItem(comment Comment) DetailItem {
 				row.Reply += " in #" + *target.IssueShortID
 			}
 			item.ReferenceUID = *target.IssueUID
+			if target.UID != nil {
+				item.ReferenceKey = *target.UID
+			}
 		case target.UID != nil && slices.ContainsFunc(m.authority.Comments, func(c Comment) bool { return c.UID == *target.UID }):
 			item.ReplyKey = *target.UID
 		}

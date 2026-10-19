@@ -171,7 +171,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case DetailFailed:
 		m = m.detailFailed(msg)
 	case JumpIssueMsg:
-		return m.jumpTo(msg.UID), nil
+		return m.jumpTo(msg.UID, nil), nil
 	case FocusColumnMsg:
 		if msg.Column <= ColumnDetail {
 			m.Focus = msg.Column
