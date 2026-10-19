@@ -72,6 +72,8 @@ type CloseFormState struct {
 	ProjectID    int64
 	Values       CloseValues
 	Err          error
+	// Draft holds the idempotency key of the last send; see Model.mintKey.
+	Draft Draft
 }
 type CloseFieldMsg struct {
 	Field Field
@@ -125,6 +127,8 @@ type CloseIssueCmd struct {
 	Reason                CloseReasonKind
 	Message               string
 	Evidence              []CloseEvidence
+	// Key is kata's Idempotency-Key for this close.
+	Key string
 }
 
 func (CloseIssueCmd) cmd() {}
@@ -191,6 +195,7 @@ func submitClose(m Model, quick bool) (Model, []Cmd) {
 			return m, nil
 		}
 	}
+	cmd.Key = m.mintKey(&f.Draft, cmd)
 	f.Saving, f.Err = true, nil
 	return m, []Cmd{cmd}
 }

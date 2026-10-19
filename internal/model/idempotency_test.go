@@ -19,6 +19,8 @@ func keyOf(t *testing.T, cmds []model.Cmd) string {
 		return c.Key
 	case model.CreateIssueCmd:
 		return c.Key
+	case model.CloseIssueCmd:
+		return c.Key
 	}
 	t.Fatalf("cmd %T", cmds[0])
 	return ""
@@ -102,6 +104,48 @@ func TestCreateCardKeys(t *testing.T) {
 	m = open(m)
 	_, cmds = model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
 	if got := keyOf(t, cmds); got == first || got == edited {
+		t.Fatalf("new card key %q reused", got)
+	}
+}
+
+func TestCloseCardKeys(t *testing.T) {
+	open := func(m model.Model) model.Model {
+		m, _ = model.Update(m, model.KeyMsg{Chord: "x"})
+		return m
+	}
+	m, _ := model.Update(model.Model{}, model.Start{Nonce: "run1"})
+	m.SelectedUID, m.Issues = "issue", []model.Issue{{UID: "issue", ProjectID: 2}}
+	m = open(m)
+	m, cmds := model.Update(m, model.KeyMsg{Chord: "ctrl+d"})
+	first := keyOf(t, cmds)
+	m, _ = model.Update(m, model.CloseResultMsg{UID: "issue", Err: errTest})
+	m, cmds = model.Update(m, model.KeyMsg{Chord: "ctrl+d"})
+	if got := keyOf(t, cmds); got != first {
+		t.Fatalf("unchanged resend key %q, want %q", got, first)
+	}
+	m, _ = model.Update(m, model.CloseResultMsg{UID: "issue", Err: errTest})
+	m, _ = model.Update(m, model.CloseFieldMsg{Field: model.CloseReason, Value: "wontfix"})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "ctrl+d"})
+	m, _ = model.Update(m, model.CloseResultMsg{UID: "issue", Err: errTest})
+	m, cmds = model.Update(m, model.KeyMsg{Chord: "ctrl+d"})
+	edited := keyOf(t, cmds)
+	if edited != first {
+		// quick close ignores the typed reason, so it is the same request: the key stays.
+		t.Fatalf("quick resend key %q, want %q", edited, first)
+	}
+	m, _ = model.Update(m, model.CloseResultMsg{UID: "issue", Err: errTest})
+	m, _ = model.Update(m, model.CloseFieldMsg{Field: model.CloseMessage, Value: "Shipped in the release, verified by the tests."})
+	m, _ = model.Update(m, model.CloseFieldMsg{Field: model.CloseCommit, Value: "abcdef1"})
+	m, _ = model.Update(m, model.CloseFieldMsg{Field: model.CloseReason, Value: "done"})
+	m, cmds = model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
+	full := keyOf(t, cmds)
+	if full == first {
+		t.Fatal("an edited close reused the key")
+	}
+	m, _ = model.Update(m, model.CloseResultMsg{UID: "issue"})
+	m = open(m)
+	_, cmds = model.Update(m, model.KeyMsg{Chord: "ctrl+d"})
+	if got := keyOf(t, cmds); got == first || got == full {
 		t.Fatalf("new card key %q reused", got)
 	}
 }

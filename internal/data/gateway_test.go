@@ -963,18 +963,18 @@ func TestGatewayGuardedWritesSurviveOwnerAndStatusChanges(t *testing.T) {
 		issue := seen(uid)
 		changeOwner(t, gateway, workspace, demo, uid, "alice")
 		bounceStatus(t, gateway, workspace, demo, uid)
-		closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true}))
+		closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true, Key: "k-moved"}))
 		if closed.Err != nil {
 			t.Fatalf("close after an owner and status change from revision %d: %v", issue.Revision, closed.Err)
 		}
 	})
 	t.Run("closed meanwhile", func(t *testing.T) {
 		uid := createIssue(t, gateway, workspace, demo, "Closed twice")
-		as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "someone", Quick: true}))
+		as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "someone", Quick: true, Key: "k-theirs"}))
 		before := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid}))
-		closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true}))
+		closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true, Key: "k-mine"}))
 		after := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid}))
-		if closed.Err == nil || !strings.Contains(closed.Err.Error(), "closed") || len(after.Selected.History) != len(before.Selected.History) {
+		if closed.Err == nil || closed.Err.Error() != "Issue was closed meanwhile; nothing was written" || len(after.Selected.History) != len(before.Selected.History) {
 			t.Fatalf("second close %+v wrote events %d -> %d", closed, len(before.Selected.History), len(after.Selected.History))
 		}
 	})
@@ -1327,5 +1327,53 @@ func TestGatewaySendsTheIdempotencyKeyOnCommentsRepliesAndCreates(t *testing.T) 
 	}
 	if keyed != 1 {
 		t.Fatalf("%d Issues titled Keyed, want 1", keyed)
+	}
+}
+
+func TestGatewayClosingTwiceWithOneKeyClosesOnce(t *testing.T) {
+	kata := startKata(t, "0.19.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	uid := createIssue(t, gateway, workspace, demo, "Close once")
+	closeIt := func() model.CloseResultMsg {
+		return as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true, Key: "k-once"}))
+	}
+	if first, second := closeIt(), closeIt(); first.Err != nil || second.Err != nil {
+		t.Fatalf("close twice with one key: %v then %v", first.Err, second.Err)
+	}
+	closes := 0
+	for _, e := range as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected.History {
+		if e.Type == "issue.closed" {
+			closes++
+		}
+	}
+	if closes != 1 {
+		t.Fatalf("%d close events, want 1", closes)
+	}
+}
+
+func TestRecurrenceConflictingThroughAllAttemptsSaysSoPlainly(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodGet {
+			_, _ = w.Write([]byte(`{"recurrence":{"uid":"r","revision":3,"rrule":"FREQ=DAILY","dtstart":"2026-10-19","timezone":"UTC"}}`))
+			return
+		}
+		w.WriteHeader(http.StatusPreconditionFailed)
+		_, _ = w.Write([]byte(`{"status":412,"error":{"code":"revision_conflict","message":"issue revision is 3"}}`))
+	}))
+	t.Cleanup(server.Close)
+	raw, err := client.NewWithHTTPClient(server.URL, server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &Client{Client: raw}
+	const want = "The Recurrence kept changing while saving; nothing was written. Try again."
+	terms := model.RecurrenceTerms{Rule: "FREQ=DAILY", Start: "2026-10-19", TimeZone: "UTC"}
+	if _, err := c.ChangeRecurrence(context.Background(), model.ChangeRecurrenceCmd{RecurrenceUID: "r", RecurrenceTerms: terms, Opened: terms}); err == nil || err.Error() != want {
+		t.Fatalf("change: %v", err)
+	}
+	if err := c.StopRecurrence(context.Background(), model.StopRecurrenceCmd{RecurrenceUID: "r"}); err == nil || err.Error() != want {
+		t.Fatalf("stop: %v", err)
 	}
 }
