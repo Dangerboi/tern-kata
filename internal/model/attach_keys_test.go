@@ -122,7 +122,7 @@ func TestSubmitWhenTheFormsIssueIsGoneShowsAnError(t *testing.T) {
 func TestDetachReportShowsAsANoticeUntilTheNextKey(t *testing.T) {
 	m, _ := model.Update(attachPane(model.ColumnList, pointers("a.png"), 2), model.KeyMsg{Chord: "shift+u"})
 	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
-	done := model.FileDetached{Ref: "issue", Name: "a.png", Host: "other-box", Path: "/s/a.png", Fate: model.FileLeft}
+	done := model.FileDetached{Ref: "issue", Name: "a.png", Host: "other-box", Path: "/s/a.png", Fate: model.FileLeft, Cleared: true}
 	m, _ = model.Update(m, done)
 	if m.FieldForm.Open || m.Notice != done.Report() || !strings.Contains(m.Notice, "other-box") {
 		t.Fatalf("form %+v notice %q", m.FieldForm, m.Notice)
@@ -130,6 +130,25 @@ func TestDetachReportShowsAsANoticeUntilTheNextKey(t *testing.T) {
 	m, _ = model.Update(m, model.KeyMsg{Chord: "down"})
 	if m.Notice != "" {
 		t.Fatalf("notice outlived a key: %q", m.Notice)
+	}
+}
+
+func TestAClearedDetachWithAnErrorClosesTheFormWithItsReport(t *testing.T) {
+	m, _ := model.Update(attachPane(model.ColumnList, pointers("a.png"), 2), model.KeyMsg{Chord: "shift+u"})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
+	done := model.FileDetached{Ref: "issue", Name: "a.png", Host: "box", Path: "/s/a.png", Fate: model.FileLeft, Cleared: true, Err: errors.New("permission denied")}
+	m, _ = model.Update(m, done)
+	if m.FieldForm.Open || m.Notice != "Removed a.png; could not delete /s/a.png: permission denied" {
+		t.Fatalf("form %+v notice %q", m.FieldForm, m.Notice)
+	}
+}
+
+func TestADetachThatClearedNothingKeepsItsErrorInTheForm(t *testing.T) {
+	m, _ := model.Update(attachPane(model.ColumnList, pointers("a.png"), 2), model.KeyMsg{Chord: "shift+u"})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
+	m, _ = model.Update(m, model.FileDetached{Ref: "issue", Name: "a.png", Err: errors.New("changed")})
+	if !m.FieldForm.Open || m.FieldForm.Err == nil || m.Notice != "" {
+		t.Fatalf("form %+v notice %q", m.FieldForm, m.Notice)
 	}
 }
 
