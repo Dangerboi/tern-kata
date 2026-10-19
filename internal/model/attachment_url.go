@@ -5,11 +5,16 @@ import (
 	"strings"
 )
 
-// fileURL is the file URL of an absolute native path: C:\a b\x.png is file:///C:/a%20b/x.png, /a/x.png is file:///a/x.png.
+// fileURL is the file URL of an absolute native path: C:\a b\x.png is file:///C:/a%20b/x.png, /a/x.png is file:///a/x.png, \\\\srv\\share\\x.png is file://srv/share/x.png.
 // Only a Windows path (a drive letter or a UNC share) has its backslashes turned into slashes; on Unix one is part of a name.
 func fileURL(path string) string {
-	if windowsPath(path) {
+	win := windowsPath(path)
+	if win {
 		path = strings.ReplaceAll(path, "\\", "/")
+	}
+	if unc, ok := strings.CutPrefix(path, "//"); ok && win {
+		host, rest, _ := strings.Cut(unc, "/")
+		return (&url.URL{Scheme: "file", Host: host, Path: "/" + rest}).String()
 	}
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path

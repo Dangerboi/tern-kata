@@ -12,6 +12,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `u` on the selected Issue, in the list or the Issue detail, asks for a file's path and attaches it. `U` lists the Issue's Attachments by name and removes the one chosen, and says so instead of opening a picker when there are none. Both keys explain why when the directory is not bound to the Issue's Project. The footer and help sheet list them beside the label keys.
 - Two agent skills ship with tern-kata: `kata` for working with the kata CLI and `tern-kata` for reading and attaching Attachments. `npx skills add Dangerboi/tern-kata -g` installs them (`bunx` works too), and the install scripts offer to run it when they run in a terminal, with `bunx` when Node.js is missing.
 
+### Fixed
+
+- An Attachment on a Windows network share (`\\server\share\file`) now links as `file://server/share/file` instead of a link with four slashes that did not open.
+
 ## [0.2.0] - 2026-10-19
 
 ### Added
