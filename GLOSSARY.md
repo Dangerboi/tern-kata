@@ -6,6 +6,8 @@
 
 **Project**: kata's namespace for issues, links, labels and events.
 
+**Binding**: The Project a workspace names in its `.kata.toml`, or failing that its git alias. A workspace with neither is unbound and opens the Inbox.
+
 **Collection**: A named set of issues the user browses: Inbox, Today, Upcoming, Deadlines, All Open, Logbook, or one project.
 
 **Menu**: The popup inside the Pane that switches the current Collection: a type-to-filter list of the fixed Collections, the bound Project pinned first, a **Projects** entry that opens the list of kata Projects, and New Project, with the current Collection marked. It stands in for the Menu sidebar, which only an unbound directory shows, and only while a fixed Collection is current. _Avoid_: palette (Tern's own command palette).
