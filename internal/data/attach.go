@@ -115,18 +115,14 @@ func (c *Client) projectNames(ctx context.Context) (map[int64]string, error) {
 
 // requireBinding refuses an Issue whose Project is not the workspace's Binding, naming the Project to attach from.
 func (c *Client) requireBinding(ctx context.Context, t attachTarget) error {
-	if t.binding.UID != "" && t.binding.ID == t.issue.ProjectID {
+	if model.AttachRefusal(t.binding, t.issue.ProjectID, "", "") == nil {
 		return nil
 	}
 	names, err := c.projectNames(ctx)
 	if err != nil {
 		return err
 	}
-	owner := names[t.issue.ProjectID]
-	if t.binding.UID == "" {
-		return fmt.Errorf("This workspace is not bound to a kata Project, so it cannot hold attachments. Attach to %s from a workspace bound to Project %q.", t.issue.ShortID, owner)
-	}
-	return fmt.Errorf("%s belongs to Project %q, but this workspace is bound to %q. Attach from a workspace bound to %q.", t.issue.ShortID, owner, t.binding.Name, owner)
+	return model.AttachRefusal(t.binding, t.issue.ProjectID, t.issue.ShortID, names[t.issue.ProjectID])
 }
 
 // patchAttachment sets (pointer non-nil) or clears the attachment.<name> key. A set is guarded so it applies only while the key is absent.
@@ -279,6 +275,9 @@ func copyNew(source, dst string) (err error) {
 func (c *Client) DetachFile(ctx context.Context, cmd model.DetachFile) (model.FileDetached, error) {
 	target, err := c.resolveAttachTarget(ctx, cmd.Workspace, cmd.Ref)
 	if err != nil {
+		return model.FileDetached{}, err
+	}
+	if err := c.requireBinding(ctx, target); err != nil {
 		return model.FileDetached{}, err
 	}
 	var pointer *model.Attachment

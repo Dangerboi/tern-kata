@@ -437,3 +437,25 @@ func TestAttachAndDetachTakeEveryRefForm(t *testing.T) {
 		t.Fatalf("unknown project: %+v", got)
 	}
 }
+
+func TestDetachIsRefusedOutsideTheIssuesBinding(t *testing.T) {
+	f := newAttachFixture(t)
+	attached := f.attach(t, f.repo, f.uid, writeFile(t, t.TempDir(), "shot.png", "x"))
+
+	other := t.TempDir()
+	if saved := as[model.ProjectSaved](t, run(t, f.gateway, model.BindProject{Workspace: other, Actor: "tester", Name: "elsewhere"})); saved.Err != nil {
+		t.Fatal(saved.Err)
+	}
+	for workspace, bound := range map[string]string{other: `"elsewhere"`, t.TempDir(): "not bound"} {
+		got := f.detach(t, workspace, f.uid, "shot.png")
+		if got.Err == nil || !strings.Contains(got.Err.Error(), `"demo"`) || !strings.Contains(got.Err.Error(), bound) {
+			t.Fatalf("got %+v, want a refusal naming demo and %s", got, bound)
+		}
+	}
+	if _, err := os.Stat(attached.Path); err != nil {
+		t.Fatalf("a refused detach deleted the copy: %v", err)
+	}
+	if len(f.pointers(t, f.uid)) != 1 {
+		t.Fatal("a refused detach cleared the pointer")
+	}
+}

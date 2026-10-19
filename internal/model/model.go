@@ -58,6 +58,8 @@ type Model struct {
 	// Host is this machine's host name, which tells an Attachment held here from one held elsewhere.
 	Host             string
 	FieldForm        FieldFormState
+	// Notice reports a write that has nothing to show in the Issues, and goes at the next key.
+	Notice           string
 	Workspace        string
 	Project          Project
 	Daemon           Daemon
@@ -93,6 +95,9 @@ type Model struct {
 }
 
 func Update(m Model, msg Msg) (Model, []Cmd) {
+	if _, ok := msg.(KeyMsg); ok {
+		m.Notice = ""
+	}
 	next, cmds := updateWithDetail(m, msg)
 	return next.cancelPending(m, msg), cmds
 }
@@ -161,6 +166,10 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m.FieldForm = FieldFormState{}
 		m = m.issueWritten(msg.UID)
 		return snapshotChanged(m)
+	case FileAttached:
+		return attachmentWritten(m, msg.Ref, "", msg.Err)
+	case FileDetached:
+		return attachmentWritten(m, msg.Ref, msg.Report(), msg.Err)
 	case Start:
 		m.Workspace = msg.Workspace
 		m.nonce = msg.Nonce

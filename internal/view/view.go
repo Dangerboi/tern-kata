@@ -70,6 +70,9 @@ func Render(m model.Model, now time.Time) tern.View {
 	if m.Stale && m.Err == nil && !m.FirstLoad() && !m.HelpOpen {
 		main = append(main, staleNotice(m))
 	}
+	if m.Notice != "" && !m.HelpOpen {
+		main = append(main, ui.Text{Common: ui.Common{Key: "notice", Tone: ui.ToneAccent}, Text: m.Notice})
+	}
 	var layer tern.Element
 	switch m.TopCard() {
 	case model.CardCreate:

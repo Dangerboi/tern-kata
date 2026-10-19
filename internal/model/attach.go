@@ -52,3 +52,16 @@ func (d FileDetached) Report() string {
 	}
 	return fmt.Sprintf("Removed %s; the file was left on %s at %s", d.Name, d.Host, d.Path)
 }
+
+// AttachRefusal is why a workspace bound to binding cannot attach to the Issue shortID of Project issueProject, owner being
+// that Project's name, or nil when it can: only the Binding's own Project holds attachments. The Pane and the gateway both
+// word the refusal here.
+func AttachRefusal(binding Project, issueProject int64, shortID, owner string) error {
+	if binding.UID != "" && binding.ID == issueProject {
+		return nil
+	}
+	if binding.UID == "" {
+		return fmt.Errorf("This workspace is not bound to a kata Project, so it cannot hold attachments. Attach to %s from a workspace bound to Project %q.", shortID, owner)
+	}
+	return fmt.Errorf("%s belongs to Project %q, but this workspace is bound to %q. Attach from a workspace bound to %q.", shortID, owner, binding.Name, owner)
+}

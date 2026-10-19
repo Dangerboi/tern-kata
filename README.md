@@ -81,7 +81,7 @@ In a repo with a `.kata.toml`, write kata ticket references in chat replies as `
 
 ## Attachments
 
-Attach a screenshot, log or any other file to an Issue so whoever picks it up sees what you saw:
+Attach a screenshot, log or any other file to an Issue so whoever picks it up sees what you saw. In a Pane, `u` on the selected Issue (in the list or the Issue detail) asks for a path, quoted, starting with `~` or relative to the directory, and attaches the file; a refusal or a failure shows in the form. `U` lists the Issue's Attachments by name: `tab` or `down` moves and `enter` removes the one chosen, with no further confirmation, and a notice says what happened to the file. `U` on an Issue with none says so. Both keys explain why when this directory is not bound to the Issue's Project. From a shell or for an agent:
 
 ```sh
 tern-kata attach <ref> <file>...   # prints each stored absolute path, one per line

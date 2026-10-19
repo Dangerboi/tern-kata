@@ -2,6 +2,8 @@ package model
 
 import (
 	"errors"
+	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,6 +16,8 @@ const (
 	ClearOwnerAction  Action = "clear-owner"
 	PriorityAction    Action = "priority"
 	SetParentAction   Action = "set-parent"
+	AttachFileAction  Action = "attach-file"
+	DetachFileAction  Action = "detach-file"
 	FieldSubmit       Action = "field-submit"
 	FieldCancel       Action = "field-cancel"
 	FieldComplete     Action = "field-complete"
@@ -76,23 +80,31 @@ func (m Model) FieldSuggestions() []string {
 	return labels
 }
 
+// fieldIssue is the Issue the field keys act on: the one the Issue detail shows, else the selected one in the list.
+func (m Model) fieldIssue() *Issue {
+	if issue := m.shownIssue(); issue != nil {
+		return issue
+	}
+	for i := range m.Issues {
+		if m.Issues[i].UID == m.SelectedUID {
+			return &m.Issues[i]
+		}
+	}
+	return nil
+}
+
 func openField(m Model, action Action) (Model, []Cmd) {
 	if m.Stale || m.FieldForm.Saving {
 		return m, nil
 	}
-	issue := m.shownIssue()
-	if issue == nil {
-		for i := range m.Issues {
-			if m.Issues[i].UID == m.SelectedUID {
-				issue = &m.Issues[i]
-				break
-			}
-		}
-	}
+	issue := m.fieldIssue()
 	if issue == nil {
 		return m, nil
 	}
 	m.FieldForm = FieldFormState{Open: true, Action: action, UID: issue.UID, ProjectID: issue.ProjectID}
+	if action == AttachFileAction || action == DetachFileAction {
+		return openAttachment(m, issue)
+	}
 	if action == RemoveLabelAction {
 		m.FieldForm.Labels = issue.Labels
 	}
@@ -104,6 +116,27 @@ func openField(m Model, action Action) (Model, []Cmd) {
 	}
 	return m, nil
 }
+
+// attachRefusal is why this workspace cannot attach to or detach from the Issue, or nil.
+func (m Model) attachRefusal(issue *Issue) error {
+	return AttachRefusal(m.Project, issue.ProjectID, issue.ShortID, issue.ProjectName)
+}
+
+// openAttachment finishes opening the form of u or U. A refusal, or no Attachments to remove, shows as the form's error.
+func openAttachment(m Model, issue *Issue) (Model, []Cmd) {
+	f := &m.FieldForm
+	f.Err = m.attachRefusal(issue)
+	if f.Action == DetachFileAction {
+		for _, a := range Attachments(issue.Metadata) {
+			f.Labels = append(f.Labels, a.Name)
+		}
+		if f.Err == nil && len(f.Labels) == 0 {
+			f.Err = fmt.Errorf("%s has no attachments.", issue.ShortID)
+		}
+	}
+	return m, nil
+}
+
 func submitField(m Model) (Model, []Cmd) {
 	f := &m.FieldForm
 	if f.Saving || m.Stale {
@@ -120,14 +153,44 @@ func submitField(m Model) (Model, []Cmd) {
 			return m, nil
 		}
 	}
-	if (f.Action == AddLabelAction || f.Action == RemoveLabelAction || f.Action == AssignOwnerAction || f.Action == SetParentAction) && f.Value == "" {
+	if (f.Action == AddLabelAction || f.Action == RemoveLabelAction || f.Action == AssignOwnerAction || f.Action == SetParentAction || f.Action == AttachFileAction) && f.Value == "" {
 		f.Err = errors.New("Enter a value.")
 		return m, nil
+	}
+	if f.Action == AttachFileAction || f.Action == DetachFileAction {
+		return submitAttachment(m)
 	}
 	f.Saving = true
 	f.Err = nil
 	return m, []Cmd{WriteField{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Action: f.Action, Value: f.Value, Actor: m.Actor}}
 }
+// submitAttachment sends the form of u or U. U removes the Attachment typed in full, else the highlighted one.
+func submitAttachment(m Model) (Model, []Cmd) {
+	f := &m.FieldForm
+	issue := m.fieldIssue()
+	if issue == nil {
+		return m, nil
+	}
+	if f.Err = m.attachRefusal(issue); f.Err != nil {
+		return m, nil
+	}
+	if f.Action == AttachFileAction {
+		f.Saving = true
+		return m, []Cmd{AttachFile{Workspace: m.Workspace, Ref: f.UID, Actor: m.Actor, Path: f.Value}}
+	}
+	name := f.Value
+	if !slices.Contains(f.Labels, name) {
+		suggestions := m.FieldSuggestions()
+		if len(suggestions) == 0 {
+			f.Err = fmt.Errorf("%s has no attachment named %q.", issue.ShortID, name)
+			return m, nil
+		}
+		name = suggestions[f.Suggestion%len(suggestions)]
+	}
+	f.Saving = true
+	return m, []Cmd{DetachFile{Workspace: m.Workspace, Ref: f.UID, Actor: m.Actor, Name: name}}
+}
+
 func updateFieldKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	if m.FieldForm.Saving {
 		return m, nil
@@ -157,4 +220,20 @@ func updateFieldKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	}
 	m.FieldForm.Err = nil
 	return m, nil
+}
+
+// attachmentWritten closes the form of u or U for the Issue uid when the write succeeded, leaving report as the Notice, and
+// keeps it open with the failure otherwise.
+func attachmentWritten(m Model, uid, report string, err error) (Model, []Cmd) {
+	if m.FieldForm.UID != uid {
+		return m, nil
+	}
+	m.FieldForm.Saving = false
+	if err != nil {
+		m.FieldForm.Err = err
+		return m, nil
+	}
+	m.FieldForm = FieldFormState{}
+	m.Notice = report
+	return snapshotChanged(m.issueWritten(uid))
 }
