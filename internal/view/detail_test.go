@@ -235,9 +235,10 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
 	issue := model.Issue{UID: "alpha", ShortID: "aaaa", Title: "A", Status: "closed", ProjectName: "work", Author: "ann", Revision: 4,
 		CreatedAt: at, UpdatedAt: at, Priority: &p1, Owner: &owner, ClosedReason: &reason, ScheduledOnDate: &day, Metadata: map[string]any{"deadline_on": day}, Labels: []string{"bug"}}
-	links := []model.Link{{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#up"}}
-	counts := map[string]model.ChildCounts{"alpha": {Open: 1, Total: 2}}
-	nodes := render(t, apply(withZone(browsing()), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{CountsRead: true, Snapshot: model.Snapshot{Issues: []model.Issue{issue}, Links: links, ChildCounts: counts}}},
+	links := []model.Link{{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#up"},
+		{ID: 2, Type: "parent", FromIssueUID: "k1", FromStatus: "open", ToIssueUID: "alpha"},
+		{ID: 3, Type: "parent", FromIssueUID: "k2", FromStatus: "closed", ToIssueUID: "alpha"}}
+	nodes := render(t, apply(withZone(browsing()), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{issue}, Links: links}}},
 		model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &issue, Links: links}}))
 	props := nodes[view.DetailContentID+".properties"]
 	var keys []string

@@ -1,6 +1,7 @@
 package model_test
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -233,10 +234,22 @@ func TestHierarchyLiveRefreshSelectsVisibleAncestor(t *testing.T) {
 	}
 }
 
-// The kids cell is the daemon's count of direct children, not a count over the
-// Issues the filters left in the list.
-func TestKidsAreTheDaemonsCountsWhateverTheFilters(t *testing.T) {
-	snapshot := model.Snapshot{Issues: []model.Issue{{UID: "parent", Status: "open"}, {UID: "leaf", Status: "open"}}, ChildCounts: map[string]model.ChildCounts{"parent": {Open: 2, Total: 6}}}
+// childLinks is n parent Links to parent, the first open of them open and the rest closed.
+func childLinks(parent string, open, closed int) []model.Link {
+	var links []model.Link
+	for i := range open + closed {
+		status := "closed"
+		if i < open {
+			status = "open"
+		}
+		links = append(links, model.Link{Type: "parent", FromIssueUID: fmt.Sprint("c", i), FromStatus: status, ToIssueUID: parent})
+	}
+	return links
+}
+
+// The kids cell counts the parent Links in the snapshot, not the Issues the filters left in the list.
+func TestKidsAreCountedFromTheSnapshotLinksWhateverTheFilters(t *testing.T) {
+	snapshot := model.Snapshot{Issues: []model.Issue{{UID: "parent", Status: "open"}, {UID: "leaf", Status: "open"}}, Links: childLinks("parent", 2, 4)}
 	kids := func(m model.Model) [2]int {
 		var got [2]int
 		for _, row := range m.VisibleRows() {
@@ -249,13 +262,61 @@ func TestKidsAreTheDaemonsCountsWhateverTheFilters(t *testing.T) {
 		}
 		return got
 	}
-	m, _ := loadFirst(model.Model{}, model.ProjectLoaded{}, model.SnapshotLoaded{CountsRead: true, Snapshot: snapshot})
+	m, _ := loadFirst(model.Model{}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: snapshot})
 	if got := kids(m); got != [2]int{2, 6} {
 		t.Fatalf("project load: kids %v, want 2/6", got)
 	}
 	m.Collection = model.Collection{View: "all-open", Title: "All Open"}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), CountsRead: true, Snapshot: model.Snapshot{Issues: snapshot.Issues, ChildCounts: map[string]model.ChildCounts{"parent": {Open: 1, Total: 6}}}})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: snapshot.Issues, Links: childLinks("parent", 1, 5)}})
 	if got := kids(m); got != [2]int{1, 6} {
 		t.Fatalf("collection load: kids %v, want 1/6", got)
+	}
+}
+
+func parentKids(m model.Model) [2]int {
+	for _, row := range m.VisibleRows() {
+		if row.UID == "parent" {
+			return [2]int{row.OpenKids, row.TotalKids}
+		}
+	}
+	return [2]int{-1, -1}
+}
+
+// A child closing arrives as an event and a refresh; the parent row reads the new counts with no other message.
+func TestParentRowReadsTheCountsOfTheRefreshAfterAnEvent(t *testing.T) {
+	issues := []model.Issue{{UID: "parent", Status: "open"}}
+	m, _ := loadFirst(model.Model{}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{Cursor: 1, Issues: issues, Links: childLinks("parent", 2, 0)}})
+	if got := parentKids(m); got != [2]int{2, 2} {
+		t.Fatalf("before: %v", got)
+	}
+	m, cmds := model.Update(m, model.StreamEvent{Generation: m.StreamGeneration, ID: 2, Type: "issue.closed"})
+	read, ok := cmds[0].(model.ReadSnapshot)
+	if !ok {
+		t.Fatalf("event commands=%#v", cmds)
+	}
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: read.Request, Query: read.Query, Snapshot: model.Snapshot{Cursor: 2, Issues: issues, Links: childLinks("parent", 1, 1)}})
+	if got := parentKids(m); got != [2]int{1, 2} {
+		t.Fatalf("after: %v, want 1/2", got)
+	}
+}
+
+func TestNotModifiedKeepsTheRowCounts(t *testing.T) {
+	m, _ := loadFirst(model.Model{}, model.ProjectLoaded{}, model.SnapshotLoaded{ETag: "e", Snapshot: model.Snapshot{Cursor: 1, Issues: []model.Issue{{UID: "parent", Status: "open"}}, Links: childLinks("parent", 1, 2)}})
+	m, cmds := model.Update(m, model.StreamEvent{Generation: m.StreamGeneration, ID: 2, Type: "issue.commented"})
+	read := cmds[0].(model.ReadSnapshot)
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: read.Request, Query: read.Query, NotModified: true})
+	if got := parentKids(m); got != [2]int{1, 3} {
+		t.Fatalf("after 304: %v, want 1/3", got)
+	}
+}
+
+// An Issue the Collection does not list still has its children counted, from its own detail links.
+func TestDetailCountsChildrenOfAnIssueOutsideTheCollection(t *testing.T) {
+	m := withDetail(model.Model{SelectedUID: "outside"}, &model.IssueDetailData{Issue: &model.Issue{UID: "outside"}, Links: childLinks("outside", 1, 2)})
+	if got := m.DetailChildCounts("outside"); got != (model.ChildCounts{Open: 1, Total: 3}) {
+		t.Fatalf("counts %+v, want 1/3", got)
+	}
+	if got := m.DetailChildCounts("other"); got != (model.ChildCounts{}) {
+		t.Fatalf("another Issue's counts %+v", got)
 	}
 }

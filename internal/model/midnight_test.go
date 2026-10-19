@@ -2,6 +2,7 @@ package model_test
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -115,4 +116,8 @@ func TestDeadlinesMoveToTheNewDayAfterTheWakeWithoutADaemonEvent(t *testing.T) {
 	if got := rows(m); !reflect.DeepEqual(got, map[string][]string{"Overdue": {"due-d"}, "Today": {"due-next"}}) {
 		t.Fatalf("after midnight: %v", got)
 	}
+}
+
+func hasRead(cmds []model.Cmd) bool {
+	return slices.ContainsFunc(cmds, func(cmd model.Cmd) bool { _, ok := cmd.(model.ReadSnapshot); return ok })
 }

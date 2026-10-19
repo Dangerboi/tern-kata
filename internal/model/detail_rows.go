@@ -83,6 +83,14 @@ func (m Model) DetailParent() (DetailRow, bool) {
 	return *m.rows.parent, true
 }
 
+// DetailChildCounts is the shown Issue's direct children, counted from its own detail links, so an Issue outside the Collection has them too.
+func (m Model) DetailChildCounts(uid string) ChildCounts {
+	if m.authority == nil || m.authority.Issue == nil || m.authority.Issue.UID != uid {
+		return ChildCounts{}
+	}
+	return CountChildren(m.authority.Links, uid)
+}
+
 // withRows brings the rows up to date with the authority, the loaded Issues and the active tab.
 func (m Model) withRows() Model {
 	in := rowInputs{authority: m.authority, issueN: len(m.Issues), tab: m.tab, calendar: m.Calendar}

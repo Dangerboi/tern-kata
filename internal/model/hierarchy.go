@@ -53,9 +53,10 @@ func (m Model) issueHierarchy() (map[string]string, map[string][]Issue) {
 func (m Model) VisibleRows() []IssueRow {
 	rows := make([]IssueRow, 0, len(m.Issues))
 	parents, children := m.issueHierarchy()
+	counts := ChildCountsByParent(m.Snapshot.Links)
 	kids := func(row IssueRow) IssueRow {
-		counts := m.Snapshot.ChildCounts[row.UID]
-		row.OpenKids, row.TotalKids = counts.Open, counts.Total
+		c := counts[row.UID]
+		row.OpenKids, row.TotalKids = c.Open, c.Total
 		return row
 	}
 	if m.Flat {

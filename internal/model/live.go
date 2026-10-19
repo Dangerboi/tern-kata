@@ -1,7 +1,6 @@
 package model
 
 import (
-	"slices"
 	"time"
 )
 
@@ -16,21 +15,8 @@ type LiveState struct {
 	RefreshRequest   int64
 	PendingCursor    int64
 	Resetting        bool
-	dayInFlight      bool   // the end-of-day wake fired while a read was in flight; a result still dated that day reads again
-	countsFresh      bool   // the counts on screen cover every event so far
-	countsCovered    bool   // the read in flight asks for counts and no count-changing event has come since
-	countsScope      string // the Project UID the counts on screen are scoped to
-	countsAt         int64  // the event cursor the counts on screen were read at
-	countsWanted     int64  // the newest count-changing event the counts on screen were not read after
+	dayInFlight      bool // the end-of-day wake fired while a read was in flight; a result still dated that day reads again
 	wakeGeneration   int64
-}
-
-// countsKept are the event types known not to change an Issue's parent or status; any other event, including one this
-// version does not know, makes the next Collection snapshot read ask for child counts.
-var countsKept = []string{
-	"issue.commented", "issue.comment_edited", "issue.assigned", "issue.unassigned", "issue.assignment_expired",
-	"issue.assignment_renewed", "issue.labeled", "issue.unlabeled", "issue.priority_set", "issue.priority_cleared",
-	"issue.updated", "issue.metadata_updated",
 }
 
 // WakeAt asks for one wake at At, the end of the local day Day. Generation numbers the asks; a wake replaces an older one
@@ -103,21 +89,11 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 		if msg.Type == "sync.reset_required" {
 			m.Stale = true
 			m.Resetting = true
-			m.countsFresh, m.countsAt, m.countsWanted = false, 0, 0
 			m.StreamConnected = false
 			m.Refreshing = false
 			return snapshotChanged(m)
 		}
-		// An event the counts on screen were not read after wants them again, even when a read already covers the event itself.
-		changes := !slices.Contains(countsKept, msg.Type) && msg.ID > m.countsAt
-		if changes {
-			m.countsFresh, m.countsCovered = false, false
-			m.countsWanted = max(m.countsWanted, msg.ID)
-		}
 		if msg.ID <= m.Cursor {
-			if changes {
-				return snapshotChanged(m)
-			}
 			return m, nil
 		}
 		m.PendingCursor = max(m.PendingCursor, msg.ID)

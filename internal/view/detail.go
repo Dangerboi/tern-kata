@@ -247,7 +247,7 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 	if link, ok := m.DetailParent(); ok {
 		add("Parent", referenceText("v", link.ReferenceUID, link.Ref, link.RefTitle))
 	}
-	if counts := m.Snapshot.ChildCounts[issue.UID]; counts.Total > 0 {
+	if counts := m.DetailChildCounts(issue.UID); counts.Total > 0 {
 		add("Children", text(fmt.Sprintf("%d open / %d total", counts.Open, counts.Total)))
 	}
 	keyWidth := 0
