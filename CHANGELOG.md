@@ -38,5 +38,6 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - Text written in `$EDITOR` is kept in a file, and its path is printed, when Tern cannot be reached after the editor closes.
 - `--as` and `--issue` refuse a value that is another flag, so `--as --issue x` no longer starts tern-kata as the actor `--issue`.
 - `install.ps1` parses, keeps `%VAR%` entries in `PATH` and says when it changes `PATH`, so programs started from Explorer, such as Tern, see it.
+- **Open kata**, `F9` and kata links open tern-kata in a new tab, in the focused Pane's directory, when Tern can't split the focused Pane, instead of doing nothing.
 
 [Unreleased]: https://github.com/Dangerboi/tern-kata/compare/v0.1.1...HEAD

@@ -91,8 +91,12 @@ end
 -- A new Pane running `command`: a split of the focused Pane, so it starts on the session host, or a tab when none is focused.
 local function launch(cx: WindowCx, command: string): number?
     local target = cx.session:focused()
-    if target then return cx.layout:split(target, "right", {command = command}) end
-    return cx.layout:new_tab({command = command})
+    local pane = target and cx.layout:split(target, "right", {command = command})
+    if pane then return pane end
+    -- shortcut: Tern 0.9.4 hands plugins pane ids without the bits above 2^44, so split can't find newer Panes; a tab in
+    -- the focused Pane's directory (resolved by name, which still works) stands in. Drop once Tern keeps the full ids.
+    local focused = cx.session:pane("@focused")
+    return cx.layout:new_tab({command = command, cwd = focused and focused.cwd ~= "" and focused.cwd or nil})
 end
 
 local function open(cx: WindowCx, ref: string?)
