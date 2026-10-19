@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -26,39 +25,8 @@ func HostName() string {
 	return host
 }
 
-// attachmentStoreName is the Attachment store's folder in the primary checkout.
-const attachmentStoreName = ".kata-attachments"
-
 // ulid is the shape of a kata Issue UID; any other ref is a short id, optionally behind "<project>#".
 var ulid = regexp.MustCompile(`(?i)^[0-9A-HJKMNP-TV-Z]{26}$`)
-
-// PrimaryCheckoutRoot is the top level of the main worktree of the repository holding workspace, the parent of git's common
-// directory, so every linked worktree shares one answer. Outside git it is the directory holding the workspace's .kata.toml.
-func PrimaryCheckoutRoot(ctx context.Context, workspace string) (string, error) {
-	workspaceRoot, gitRoot, err := discoverProjectRoots(workspace)
-	if err != nil {
-		return "", err
-	}
-	if gitRoot == "" {
-		if workspaceRoot == "" {
-			return "", fmt.Errorf("%s is neither in a git repository nor under a .kata.toml", workspace)
-		}
-		return workspaceRoot, nil
-	}
-	raw, err := projectGit.Output(ctx, gitRoot, "rev-parse", "--path-format=absolute", "--git-common-dir")
-	if err != nil {
-		return "", fmt.Errorf("git rev-parse --git-common-dir: %w", err)
-	}
-	// A submodule's common directory sits inside its parent's .git, so its own top level is the root.
-	super, err := projectGit.Output(ctx, gitRoot, "rev-parse", "--show-superproject-working-tree")
-	if err != nil {
-		return "", fmt.Errorf("git rev-parse --show-superproject-working-tree: %w", err)
-	}
-	if strings.TrimSpace(string(super)) != "" {
-		return gitRoot, nil
-	}
-	return filepath.Dir(filepath.Clean(filepath.FromSlash(strings.TrimSpace(string(raw))))), nil
-}
 
 // attachTarget is an Issue to attach to or detach from, read once.
 type attachTarget struct {
@@ -66,8 +34,17 @@ type attachTarget struct {
 	binding model.Project
 }
 
-// resolveAttachTarget reads the Issue ref names, as kata show takes it, and the Project the workspace is bound to.
+// resolveAttachTarget is the step Attach and Detach share: the Issue ref names, refused when it is outside the workspace's Binding.
 func (c *Client) resolveAttachTarget(ctx context.Context, workspace, ref string) (attachTarget, error) {
+	target, err := c.readAttachTarget(ctx, workspace, ref)
+	if err != nil {
+		return attachTarget{}, err
+	}
+	return target, c.requireBinding(ctx, target)
+}
+
+// readAttachTarget reads the Issue ref names, as kata show takes it, and the Project the workspace is bound to.
+func (c *Client) readAttachTarget(ctx context.Context, workspace, ref string) (attachTarget, error) {
 	loaded, err := c.ReadProject(ctx, workspace)
 	if err != nil {
 		return attachTarget{}, err
@@ -172,9 +149,6 @@ func (c *Client) AttachFile(ctx context.Context, host string, cmd model.AttachFi
 	if err != nil {
 		return model.FileAttached{}, err
 	}
-	if err := c.requireBinding(ctx, target); err != nil {
-		return model.FileAttached{}, err
-	}
 	source, err := attachSource(cmd.Workspace, cmd.Path)
 	if err != nil {
 		return model.FileAttached{}, err
@@ -183,58 +157,29 @@ func (c *Client) AttachFile(ctx context.Context, host string, cmd model.AttachFi
 	if err != nil {
 		return model.FileAttached{}, err
 	}
-	store := filepath.Join(root, attachmentStoreName)
-	dir := filepath.Join(store, target.issue.UID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return model.FileAttached{}, err
+	store := attachmentStore{root}
+	var taken []string
+	for key := range target.issue.Metadata {
+		if name, ok := strings.CutPrefix(key, model.AttachmentKey("")); ok {
+			taken = append(taken, name)
+		}
 	}
-	// The store keeps itself out of git; O_EXCL leaves an existing file, and the repo's own ignore files alone.
-	switch f, err := os.OpenFile(filepath.Join(store, ".gitignore"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644); {
-	case err == nil:
-		_, werr := f.WriteString("*\n")
-		if err := errors.Join(werr, f.Close()); err != nil {
+	for {
+		name, stored, err := store.put(ctx, target.issue.UID, source, filepath.Base(source), taken)
+		if err != nil {
 			return model.FileAttached{}, err
 		}
-	case !errors.Is(err, fs.ErrExist):
-		return model.FileAttached{}, err
-	}
-	base := filepath.Base(source)
-	for n := 1; ; n++ {
-		if err := ctx.Err(); err != nil {
-			return model.FileAttached{}, err
-		}
-		name := numberedName(base, n)
-		if _, taken := target.issue.Metadata[model.AttachmentKey(name)]; taken {
-			continue
-		}
-		stored := filepath.Join(dir, name)
-		if err := copyNew(source, stored); errors.Is(err, fs.ErrExist) {
-			continue
-		} else if err != nil {
-			return model.FileAttached{}, err
-		}
-		err := c.patchAttachment(ctx, target, cmd.Actor, name, model.Attachment{Host: host, Path: stored}.Pointer())
+		err = c.patchAttachment(ctx, target, cmd.Actor, name, model.Attachment{Host: host, Path: stored}.Pointer())
 		if err == nil {
 			return model.FileAttached{Ref: cmd.Ref, Name: name, Path: stored}, nil
 		}
-		_ = os.Remove(stored)
-		// Another attach took the key since the Issue was read: try the next name.
+		_, _ = store.remove(target.issue.UID, stored)
+		// Another attach took the key since the Issue was read: ask the store for the next name.
 		if daemonCode(err) != "metadata_guard_failed" {
 			return model.FileAttached{}, daemonError(err)
 		}
+		taken = append(taken, name)
 	}
-}
-
-// numberedName is name for n == 1, else <stem>-n<ext>.
-func numberedName(name string, n int) string {
-	if n == 1 {
-		return name
-	}
-	ext := filepath.Ext(name)
-	if ext == name { // a dotfile has no stem
-		ext = ""
-	}
-	return fmt.Sprintf("%s-%d%s", strings.TrimSuffix(name, ext), n, ext)
 }
 
 // attachSource is the regular file input names: whitespace and one pair of wrapping quotes stripped, a leading ~ expanded, a
@@ -271,37 +216,12 @@ func attachSource(workspace, input string) (string, error) {
 	return path, nil
 }
 
-// copyNew copies source to a new file at dst, failing with fs.ErrExist if dst exists, and leaves nothing at dst on failure.
-func copyNew(source, dst string) (err error) {
-	in, err := os.Open(source)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
-	if err != nil {
-		return err
-	}
-	if _, err = io.Copy(out, in); err != nil {
-		_ = out.Close()
-		_ = os.Remove(dst)
-		return err
-	}
-	if err = out.Close(); err != nil {
-		_ = os.Remove(dst)
-	}
-	return err
-}
-
 // DetachFile is the one shared Detach write. It clears the pointer first, so the worst partial failure is a leftover file, then
 // deletes the copy if it is on this machine, still there and inside this Issue's folder of the Attachment store. A key that
 // holds no readable pointer is cleared too, touching no file.
 func (c *Client) DetachFile(ctx context.Context, host string, cmd model.DetachFile) (model.FileDetached, error) {
 	target, err := c.resolveAttachTarget(ctx, cmd.Workspace, cmd.Ref)
 	if err != nil {
-		return model.FileDetached{}, err
-	}
-	if err := c.requireBinding(ctx, target); err != nil {
 		return model.FileDetached{}, err
 	}
 	if _, exists := target.issue.Metadata[model.AttachmentKey(cmd.Name)]; !exists {
@@ -324,26 +244,10 @@ func (c *Client) DetachFile(ctx context.Context, host string, cmd model.DetachFi
 	if !pointer.OnHost(host) {
 		return result, nil
 	}
-	if _, err := os.Lstat(pointer.Path); errors.Is(err, fs.ErrNotExist) {
-		result.Fate = model.FileGone
-		return result, nil
-	}
 	root, err := PrimaryCheckoutRoot(ctx, cmd.Workspace)
 	if err != nil {
 		return result, err
 	}
-	// A pointer is data any writer can set; only delete what this Issue's folder of the store holds.
-	rel, err := filepath.Rel(filepath.Join(root, attachmentStoreName, target.issue.UID), pointer.Path)
-	if err != nil || !filepath.IsAbs(pointer.Path) || rel == "." || !filepath.IsLocal(rel) {
-		return result, nil
-	}
-	switch err := os.Remove(pointer.Path); {
-	case err == nil:
-		result.Fate = model.FileDeleted
-	case errors.Is(err, fs.ErrNotExist):
-		result.Fate = model.FileGone
-	default:
-		return result, err
-	}
-	return result, nil
+	result.Fate, err = attachmentStore{root}.remove(target.issue.UID, pointer.Path)
+	return result, err
 }
