@@ -50,14 +50,14 @@ func editorLayer(m model.Model) tern.Element {
 	case draft.DiscardConfirm:
 		children = append(children, ui.Text{Common: ui.Common{Key: "discard", Tone: ui.ToneWarning}, Text: "Discard this Draft? y discards; n or esc keeps editing."}, discardButtons())
 	case !draft.Saving && draft.Conflict == nil:
-		buttons := []tern.Element{keyButton("save", "Save (ctrl+o)", "ctrl+o", true)}
+		buttons := []tern.Element{cardButton("save", model.ModeEditor, model.SaveDraftAction, "Save", true)}
 		if draft.Duplicate() {
-			buttons = append(buttons, keyButton("force", "Send anyway (ctrl+f)", "ctrl+f", false))
+			buttons = append(buttons, cardButton("force", model.ModeEditor, model.SendReplyAnyway, "Send anyway", false))
 		}
 		if draft.ReplyTo != "" {
-			buttons = append(buttons, keyButton("kind", "Kind (ctrl+r)", "ctrl+r", false))
+			buttons = append(buttons, cardButton("kind", model.ModeEditor, model.CycleReplyKind, "Kind", false))
 		}
-		buttons = append(buttons, keyButton("editor", "$EDITOR (ctrl+e)", "ctrl+e", false), keyButton("discard", "Discard (esc)", "escape", false))
+		buttons = append(buttons, cardButton("editor", model.ModeEditor, model.ExternalEditorAction, "$EDITOR", false), cardButton("discard", model.ModeEditor, model.CancelDraft, "Discard", false))
 		children = append(children, buttonRow(buttons...))
 	}
 	if draft.Conflict != nil {
@@ -66,7 +66,7 @@ func editorLayer(m model.Model) tern.Element {
 			ui.Col{Common: ui.Common{Key: "draft", Grow: 1, Basis: ui.BasisFrac(0.5)}, Children: ui.Nodes(ui.Text{Text: fmt.Sprintf("Your Draft (base revision %d)", draft.BaseRevision)}, TextEditor("body", draft.Editor, true))},
 			ui.Col{Common: ui.Common{Key: "current", Grow: 1, Basis: ui.BasisFrac(0.5)}, Children: ui.Nodes(ui.Text{Text: fmt.Sprintf("New version (revision %d)", draft.Conflict.Revision)}, ui.Md{Text: draft.Conflict.Body})},
 		)}, ui.Text{Common: ui.Common{Key: "choice", Tone: ui.ToneWarning}, Text: "o overwrites against the new revision; d discards only your Draft."},
-			buttonRow(keyButton("overwrite", "Overwrite (o)", "o", true), keyButton("discard", "Discard Draft (d)", "d", false)))
+			buttonRow(cardButton("overwrite", model.ModeConflict, model.OverwriteDraft, "Overwrite", true), cardButton("discard", model.ModeConflict, model.DiscardDraft, "Discard Draft", false)))
 	}
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "editor"}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
 }

@@ -702,7 +702,7 @@ func receive(t *testing.T, messages <-chan model.Msg) model.Msg {
 	}
 }
 
-func stream(t *testing.T, gateway *Gateway, cmd model.Subscribe) (<-chan model.Msg, <-chan struct{}) {
+func stream(t *testing.T, gateway *Gateway, cmd model.Cmd) (<-chan model.Msg, <-chan struct{}) {
 	t.Helper()
 	messages := make(chan model.Msg, 16)
 	done := make(chan struct{})
@@ -1351,5 +1351,88 @@ func TestGatewayHungLocatorOrPingReadsAsAnUnreachableDaemonAndIsLocatedAgain(t *
 				t.Fatalf("located %d times, want once per command", got)
 			}
 		})
+	}
+}
+
+func TestGatewayWakeFiresOnTheWallClockEvenIfTheMonotonicClockLagged(t *testing.T) {
+	gateway := newGateway(t, newLocator(Target{}))
+	gateway.wakePoll = 5 * time.Millisecond
+	deadline := time.Date(2026, 10, 9, 0, 0, 0, 0, time.UTC)
+	var wall atomic.Int64
+	wall.Store(deadline.Add(-time.Hour).UnixNano())
+	gateway.now = func() time.Time { return time.Unix(0, wall.Load()) }
+
+	messages, _ := stream(t, gateway, model.WakeAt{Day: "2026-10-08", At: deadline})
+	select {
+	case msg := <-messages:
+		t.Fatalf("woke an hour early: %+v", msg)
+	case <-time.After(50 * time.Millisecond):
+	}
+	wall.Store(deadline.UnixNano()) // the machine slept: only the wall clock moved
+	if got := receive(t, messages); got != (model.DayEnded{Day: "2026-10-08"}) {
+		t.Fatalf("wake = %+v", got)
+	}
+}
+
+func TestGatewayWakeEndsWhenThePaneCloses(t *testing.T) {
+	gateway := newGateway(t, newLocator(Target{}))
+	gateway.now = func() time.Time { return time.Unix(0, 0) }
+	messages := make(chan model.Msg, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { defer close(done); gateway.Run(ctx, model.WakeAt{Day: "d", At: time.Unix(1<<40, 0)}, messages) }()
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("wake outlived the Pane")
+	}
+	if len(messages) != 0 {
+		t.Fatal("a closed Pane got a wake")
+	}
+}
+
+func TestGatewaySendsTheIdempotencyKeyOnCommentsRepliesAndCreates(t *testing.T) {
+	kata := startKata(t, "0.19.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	uid := createIssue(t, gateway, workspace, demo, "Discuss")
+	detailOf := func() *model.IssueDetailData {
+		return as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected
+	}
+	comment := func(text, replyTo, key string) {
+		as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseText: detailOf().Issue.Body, Text: text, Comment: true, Actor: "tester", ReplyTo: replyTo, ReplyKind: model.ReplyPlain, Key: key}))
+	}
+
+	comment("once", "", "k-comment")
+	comment("once", "", "k-comment")
+	if got := len(detailOf().Comments); got != 1 {
+		t.Fatalf("%d comments after one key sent twice, want 1", got)
+	}
+	// Two deliberate comments with the same text carry different keys and both post.
+	comment("once", "", "k-other")
+	question := detailOf().Comments[0].UID
+	comment("answer", question, "k-reply")
+	comment("answer", question, "k-reply")
+	if got := len(detailOf().Comments); got != 3 {
+		t.Fatalf("%d comments, want the two deliberate comments and one reply", got)
+	}
+
+	create := func(key string) model.IssueCreated {
+		return as[model.IssueCreated](t, run(t, gateway, model.CreateIssueCmd{Workspace: workspace, Actor: "tester", ProjectID: demo.ID, Title: "Keyed", Key: key}))
+	}
+	first, second := create("k-create"), create("k-create")
+	if first.Err != nil || first.UID == "" || second != first {
+		t.Fatalf("create twice with one key: %+v then %+v", first, second)
+	}
+	snapshot := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: model.CollectionQuery(model.Collection{View: "project", ProjectUID: demo.UID, Title: demo.Name}, model.Filters{}), Request: 1}))
+	keyed := 0
+	for _, issue := range snapshot.Snapshot.Issues {
+		if issue.Title == "Keyed" {
+			keyed++
+		}
+	}
+	if keyed != 1 {
+		t.Fatalf("%d Issues titled Keyed, want 1", keyed)
 	}
 }

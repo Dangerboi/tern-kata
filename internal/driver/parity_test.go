@@ -149,12 +149,10 @@ func detailPath(tab model.ActivityTab, after ...string) path {
 }
 
 // jumpPath is the keys to a Link row's reference. The click needs the Links tab on screen first, so the
-// pointer side starts there too and the tab is put back for the comparison.
-func jumpPath(s driver.State) (driver.State, []model.Cmd) {
-	s, cmds := detailPath(model.TabLinks, "enter")(s)
-	s, _ = clicked(s, click("", view.ActivityTabClick(model.TabComments)))
-	return s, cmds
-}
+// pointer side clicks that tab first too (linksTab); both record the same jump history entry.
+var jumpPath = detailPath(model.TabLinks, "enter")
+
+var linksTab = click("", view.ActivityTabClick(model.TabLinks))
 
 func TestEveryClickTargetEndsWhereItsKeysEnd(t *testing.T) {
 	today := "today"
@@ -167,28 +165,34 @@ func TestEveryClickTargetEndsWhereItsKeysEnd(t *testing.T) {
 		// The keyboard user starts here, and then presses keyboard.
 		keyFrom  model.Column
 		keyboard path
+		// before is clicked ahead of click on the pointer side.
+		before any
 	}{
-		{"leaf row from list", model.ColumnList, nil, &tern.Select{ID: view.IssueListID, Item: view.IssueID("leaf")}, model.ColumnList, keys("j")},
-		{"leaf row from detail", model.ColumnDetail, nil, &tern.Select{ID: view.IssueListID, Item: view.IssueID("leaf")}, model.ColumnDetail, keys("escape", "j")},
-		{"leaf row from Collections", model.ColumnCollections, nil, &tern.Select{ID: view.IssueListID, Item: view.IssueID("leaf")}, model.ColumnList, keys("j")},
-		{"nested child row", model.ColumnList, []string{"space"}, &tern.Select{ID: view.IssueListID, Item: view.IssueID("child")}, model.ColumnList, keys("j")},
-		{"parent row from list", model.ColumnList, []string{"shift+g"}, toggle, model.ColumnList, keys("g", "space")},
-		{"parent row from detail", model.ColumnDetail, nil, toggle, model.ColumnDetail, keys("escape", "space")},
-		{"parent row from Collections", model.ColumnCollections, nil, toggle, model.ColumnList, keys("space")},
-		{"parent row collapses an expanded parent", model.ColumnCollections, []string{"space"}, toggle, model.ColumnList, keys("space")},
-		{"top bar title from list", model.ColumnList, nil, click("", view.MenuClick), model.ColumnList, inputs(openMenu)},
-		{"top bar title from detail", model.ColumnDetail, nil, click("", view.MenuClick), model.ColumnDetail, inputs(openMenu)},
-		{"detail title from list", model.ColumnList, nil, click("", view.FocusDetailClick), model.ColumnList, keys("enter")},
-		{"Activity tab", model.ColumnList, nil, click("", view.ActivityTabClick(model.TabLinks)), model.ColumnList, detailPath(model.TabLinks)},
-		{"detail row", model.ColumnDetail, nil, click("", view.DetailItemClick(model.TabLinks, "1")), model.ColumnDetail, detailPath(model.TabLinks)},
-		{"referenced Issue from detail", model.ColumnDetail, nil, click("", view.JumpClick("other")), model.ColumnDetail, jumpPath},
-		{"referenced Issue from list", model.ColumnList, nil, click("", view.JumpClick("other")), model.ColumnList, jumpPath},
-		{"Collection from Collections", model.ColumnCollections, nil, &tern.Select{ID: view.CollectionsID, Item: view.CollectionItemID(today)}, model.ColumnCollections, keys("j", "enter")},
-		{"Collection from list", model.ColumnList, nil, &tern.Select{ID: view.CollectionsID, Item: view.CollectionItemID(today)}, model.ColumnList, keys("escape", "j", "enter")},
-		{"Collection from detail", model.ColumnDetail, nil, &tern.Select{ID: view.CollectionsID, Item: view.CollectionItemID(today)}, model.ColumnDetail, keys("escape", "escape", "j", "enter")},
+		{"leaf row from list", model.ColumnList, nil, &tern.Select{ID: view.IssueListID, Item: view.IssueID("leaf")}, model.ColumnList, keys("j"), nil},
+		{"leaf row from detail", model.ColumnDetail, nil, &tern.Select{ID: view.IssueListID, Item: view.IssueID("leaf")}, model.ColumnDetail, keys("escape", "j"), nil},
+		{"leaf row from Collections", model.ColumnCollections, nil, &tern.Select{ID: view.IssueListID, Item: view.IssueID("leaf")}, model.ColumnList, keys("j"), nil},
+		{"nested child row", model.ColumnList, []string{"space"}, &tern.Select{ID: view.IssueListID, Item: view.IssueID("child")}, model.ColumnList, keys("j"), nil},
+		{"parent row from list", model.ColumnList, []string{"shift+g"}, toggle, model.ColumnList, keys("g", "space"), nil},
+		{"parent row from detail", model.ColumnDetail, nil, toggle, model.ColumnDetail, keys("escape", "space"), nil},
+		{"parent row from Collections", model.ColumnCollections, nil, toggle, model.ColumnList, keys("space"), nil},
+		{"parent row collapses an expanded parent", model.ColumnCollections, []string{"space"}, toggle, model.ColumnList, keys("space"), nil},
+		{"top bar title from list", model.ColumnList, nil, click("", view.MenuClick), model.ColumnList, inputs(openMenu), nil},
+		{"top bar title from detail", model.ColumnDetail, nil, click("", view.MenuClick), model.ColumnDetail, inputs(openMenu), nil},
+		{"detail title from list", model.ColumnList, nil, click("", view.FocusDetailClick), model.ColumnList, keys("enter"), nil},
+		{"Activity tab", model.ColumnList, nil, click("", view.ActivityTabClick(model.TabLinks)), model.ColumnList, detailPath(model.TabLinks), nil},
+		{"detail row", model.ColumnDetail, nil, click("", view.DetailItemClick(model.TabLinks, "1")), model.ColumnDetail, detailPath(model.TabLinks), nil},
+		{"referenced Issue from detail", model.ColumnDetail, nil, click("", view.JumpClick("other")), model.ColumnDetail, jumpPath, linksTab},
+		{"referenced Issue from list", model.ColumnList, nil, click("", view.JumpClick("other")), model.ColumnList, jumpPath, linksTab},
+		{"Collection from Collections", model.ColumnCollections, nil, &tern.Select{ID: view.CollectionsID, Item: view.CollectionItemID(today)}, model.ColumnCollections, keys("j", "enter"), nil},
+		{"Collection from list", model.ColumnList, nil, &tern.Select{ID: view.CollectionsID, Item: view.CollectionItemID(today)}, model.ColumnList, keys("escape", "j", "enter"), nil},
+		{"Collection from detail", model.ColumnDetail, nil, &tern.Select{ID: view.CollectionsID, Item: view.CollectionItemID(today)}, model.ColumnDetail, keys("escape", "escape", "j", "enter"), nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			pointer, pointerCmds := clicked(clickAt(tt.from, tt.listKeys...), tt.click)
+			pointer := clickAt(tt.from, tt.listKeys...)
+			if tt.before != nil {
+				pointer, _ = clicked(pointer, tt.before)
+			}
+			pointer, pointerCmds := clicked(pointer, tt.click)
 			keyboard, keyboardCmds := tt.keyboard(clickAt(tt.keyFrom, tt.listKeys...))
 			sameAs(t, "click and keys diverge", pointer, pointerCmds, keyboard, keyboardCmds)
 			afterClick, clickCmds := keys("escape")(pointer)
@@ -265,7 +269,24 @@ func newProject() driver.State {
 	return pressed(driver.State{Model: m}, "escape", "end", "enter")
 }
 
-// A card's button clicks its key, so the click ends where the key ends.
+// cardButtonsOf are the buttons the card on top of s draws, by node id: every key click under a layer or the Menu.
+func cardButtonsOf(t *testing.T, s driver.State) (map[string]string, map[string]string) {
+	t.Helper()
+	out := step(t, s, resize(160))
+	found, labels := map[string]string{}, map[string]string{}
+	for _, node := range wireNodes(t, *out.View) {
+		actions, _ := node.P["actions"].(map[string]any)
+		clickAct, _ := actions["click"].(string)
+		if strings.HasPrefix(clickAct, view.KeyClick("")) && (strings.HasPrefix(node.ID, "layer.") || strings.HasPrefix(node.ID, view.PickerID)) {
+			found[node.ID] = clickAct
+			labels[node.ID], _ = node.P["text"].(string)
+		}
+	}
+	return found, labels
+}
+
+// Every button of every Popup card state that draws buttons ends where the key it names ends: the chord it sends is bound
+// in the card's mode, and its label names the card's keys for that action.
 func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 	issue := driver.State{Model: model.Model{Actor: "reviewer", SelectedUID: "issue", Issues: []model.Issue{{UID: "issue", ProjectID: 2, Labels: []string{"bug"}}}}}
 	creating := driver.State{Model: model.Model{Project: model.Project{ID: 7}}}
@@ -275,42 +296,68 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 	draft := pressed(driver.State{Model: draftModel}, "enter", "e")
 	typed, _ := inputs(tern.Key{Name: "paste", Text: "more"})(draft)
 	asked := pressed(typed, "escape")
+	conflict := driver.State{Model: draft.Model}
+	conflict.Model, _ = model.Update(conflict.Model, model.DraftConflict{UID: "a", Issue: model.Issue{UID: "a", ProjectID: 2, Body: "Remote", Revision: 8}})
+	replyModel := withDetail(model.Model{Workspace: "/repo", SelectedUID: "a"}, &model.IssueDetailData{Issue: &model.Issue{UID: "a", ProjectID: 2, Revision: 1}, Comments: []model.Comment{{UID: "c1", Author: "dana", Body: "claim"}}})
+	reply := pressed(driver.State{Model: replyModel}, "enter", "shift+r")
+	duplicate := driver.State{Model: reply.Model}
+	duplicate.Model, _ = model.Update(duplicate.Model, model.DraftFailed{UID: "a", Err: model.DuplicateReply{Message: "a reply of this kind already exists"}})
+	recurrence := int64(4)
+	recurring := func(rec *model.Recurrence) driver.State {
+		m := withDetail(model.Model{Workspace: "/repo", SelectedUID: "a", Issues: []model.Issue{{UID: "a", ProjectID: 2, RecurrenceID: &recurrence}}},
+			&model.IssueDetailData{Issue: &model.Issue{UID: "a", ProjectID: 2, RecurrenceID: &recurrence}, Recurrence: rec})
+		return pressed(driver.State{Model: m}, "shift+o")
+	}
+	change := recurring(&model.Recurrence{UID: "rec", RecurrenceTerms: model.RecurrenceTerms{Rule: "FREQ=DAILY;INTERVAL=1", Start: "2026-10-19", TimeZone: "UTC"}, Revision: 3})
+	bound := browsing(t, 160)
 	for _, tt := range []struct {
-		name   string
-		start  driver.State
-		chords []string
-		check  func(model.Model) bool
+		name  string
+		start driver.State
+		mode  model.Mode
 	}{
-		{"Create Issue with no title", pressed(creating, "n"), []string{"ctrl+o"}, func(m model.Model) bool { return m.Create.Err != nil && m.Create.Open }},
-		{"Create Issue", titled, []string{"ctrl+o"}, func(m model.Model) bool { return m.Create.Saving }},
-		{"Create Cancel", titled, []string{"escape"}, func(m model.Model) bool { return m.Create.DiscardConfirm }},
-		{"Create discard prompt", asking, []string{"y", "n"}, func(m model.Model) bool { return !m.Create.Open || !m.Create.DiscardConfirm }},
-		{"field form Save without a value", pressed(issue, "+"), []string{"enter"}, func(m model.Model) bool { return m.FieldForm.Err != nil }},
-		{"field form Cancel", pressed(issue, "+"), []string{"escape"}, func(m model.Model) bool { return !m.FieldForm.Open }},
-		{"New Project with no name", pressed(newProject(), "ctrl+u"), []string{"enter"}, func(m model.Model) bool { return m.ProjectForm.Err != nil }},
-		{"New Project Cancel", newProject(), []string{"escape"}, func(m model.Model) bool { return !m.ProjectForm.Open }},
-		{"Draft Save", draft, []string{"ctrl+o"}, func(m model.Model) bool { return m.Drafts["a"].Saving }},
-		{"Draft $EDITOR", draft, []string{"ctrl+e"}, func(model.Model) bool { return true }},
-		{"Draft Discard", typed, []string{"escape"}, func(m model.Model) bool { return m.Drafts["a"].DiscardConfirm }},
-		{"Draft discard prompt", asked, []string{"y", "n"}, func(model.Model) bool { return true }},
-		{"Close Issue with no message", pressed(issue, "x"), []string{"ctrl+o"}, func(m model.Model) bool { return m.CloseForm.Err != nil }},
-		{"Close Quick done", pressed(issue, "x"), []string{"ctrl+d"}, func(m model.Model) bool { return m.CloseForm.Saving }},
-		{"Close Cancel", pressed(issue, "x"), []string{"escape"}, func(m model.Model) bool { return !m.CloseForm.Open }},
-		{"Recurrence Save with no start date", pressed(issue, "shift+o"), []string{"ctrl+o"}, func(m model.Model) bool { return m.RecurrenceForm.Err != nil }},
-		{"Recurrence Cancel", pressed(issue, "shift+o"), []string{"escape"}, func(m model.Model) bool { return !m.RecurrenceForm.Open }},
-		{"Filters Apply", pressed(issue, "f"), []string{"ctrl+o"}, func(m model.Model) bool { return !m.FilterForm.Open }},
-		{"Filters Cancel", pressed(issue, "f"), []string{"escape"}, func(m model.Model) bool { return !m.FilterForm.Open }},
+		{"Create", titled, model.ModeCreate},
+		{"Create discard prompt", asking, model.ModeDiscard},
+		{"Draft editor", draft, model.ModeEditor},
+		{"reply Draft", reply, model.ModeEditor},
+		{"duplicate reply Draft", duplicate, model.ModeEditor},
+		{"Draft discard prompt", asked, model.ModeDiscard},
+		{"Draft conflict", conflict, model.ModeConflict},
+		{"Close", pressed(issue, "x"), model.ModeCloseForm},
+		{"Recurrence make", pressed(issue, "shift+o"), model.ModeRecurrenceForm},
+		{"Recurrence change", change, model.ModeRecurrenceForm},
+		{"Recurrence stop", pressed(change, "ctrl+x"), model.ModeRecurrenceStop},
+		{"Recurrence error", recurring(nil), model.ModeRecurrenceForm},
+		{"Filter", pressed(issue, "f"), model.ModeFilterForm},
+		{"single field", pressed(issue, "+"), model.ModeFieldForm},
+		{"New Project", newProject(), model.ModeProjectForm},
+		{"Menu", step(t, bound, openMenu).State, model.ModePicker},
+		{"Menu Projects", pressed(bound, "shift+p"), model.ModePicker},
 	} {
-		for _, c := range tt.chords {
-			t.Run(tt.name+"/"+c, func(t *testing.T) {
-				keyboard, keyCmds := keys(c)(tt.start)
-				pointer, clickCmds := clicked(tt.start, click("", view.KeyClick(c)))
-				sameAs(t, "click and key diverge", pointer, clickCmds, keyboard, keyCmds)
-				if len(tt.chords) == 1 && !tt.check(pointer.Model) {
-					t.Fatalf("the click did not do what the button says: %+v", pointer.Model)
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.start.Model.CurrentMode(); got != tt.mode {
+				t.Fatalf("mode %s, want %s", got, tt.mode)
+			}
+			buttons, labels := cardButtonsOf(t, tt.start)
+			if len(buttons) == 0 {
+				t.Fatal("the card draws no buttons")
+			}
+			for id, act := range buttons {
+				chord := strings.TrimPrefix(act, view.KeyClick(""))
+				binding, ok := model.LookupBindingForMode(chord, tt.mode)
+				if !ok || binding.Mode != tt.mode {
+					t.Errorf("%s sends %q, which %s does not bind", id, chord, tt.mode)
+					continue
 				}
-			})
-		}
+				keyboard, keyCmds := keys(chord)(tt.start)
+				pointer, clickCmds := clicked(tt.start, click(id, act))
+				sameAs(t, id+" differs from its key", pointer, clickCmds, keyboard, keyCmds)
+				for _, b := range model.CardKeys(tt.mode, binding.Action) {
+					if !strings.Contains(labels[id], b.Key) {
+						t.Errorf("%s label %q does not name key %s", id, labels[id], b.Key)
+					}
+				}
+			}
+		})
 	}
 }
 

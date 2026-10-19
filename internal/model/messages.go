@@ -3,7 +3,8 @@ package model
 type Msg interface{ msg() }
 type Cmd interface{ cmd() }
 
-type Start struct{ Workspace, IssueRef string }
+// Start opens the Pane; Nonce is random per run and prefixes the idempotency keys the model mints.
+type Start struct{ Workspace, IssueRef, Nonce string }
 
 func (Start) msg() {}
 

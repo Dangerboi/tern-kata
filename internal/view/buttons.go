@@ -2,6 +2,7 @@ package view
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
@@ -29,8 +30,19 @@ func choiceField(name model.Field, tone ui.Tone, title, prompt string, labels []
 		ui.Row{Common: ui.Common{Key: "choices", Grow: 1}, Gap: ui.GapMD, Wrap: true, Children: choices})}
 }
 
-// keyButton is a button whose click is the key press chord, so a click and the key never disagree.
-func keyButton(key, text, chord string, primary bool) el.Button {
+// cardButton is a card's button for action in mode. Its click is the key press of the action's first non-headless chord and
+// its label is words followed by every non-headless key label of the action, so a click and the key never disagree and a
+// rebind moves both. An action with no binding in its mode gets no chord, which the driver's card test fails.
+func cardButton(key string, mode model.Mode, action model.Action, words string, primary bool) el.Button {
+	bindings := model.CardKeys(mode, action)
+	chord, text := "", words
+	if len(bindings) > 0 {
+		labels := make([]string, len(bindings))
+		for i, b := range bindings {
+			labels[i] = b.Key
+		}
+		chord, text = bindings[0].Chord, words+" ("+strings.Join(labels, " / ")+")"
+	}
 	button := el.Button{Common: ui.Common{Key: key, Actions: &ui.Actions{Click: KeyClick(chord)}}, Text: text}
 	if primary {
 		button.Tone = ui.ToneAccent
@@ -52,5 +64,5 @@ func buttonRow(buttons ...tern.Element) tern.Element {
 
 // discardButtons answer the discard prompt of a Draft.
 func discardButtons() tern.Element {
-	return buttonRow(keyButton("discard", "Discard (y)", "y", false), keyButton("keep", "Keep editing (n / esc)", "n", true))
+	return buttonRow(cardButton("discard", model.ModeDiscard, model.DiscardDraft, "Discard", false), cardButton("keep", model.ModeDiscard, model.KeepDraft, "Keep editing", true))
 }
