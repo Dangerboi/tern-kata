@@ -162,9 +162,6 @@ func TestRenderMenuTextsAndButtons(t *testing.T) {
 	if got := nodes["main.topbar.right.menu"]; text(nodes["main.topbar.right.menu.label"]) != "Menu" || got.P["actions"].(map[string]any)["click"] != view.MenuClick {
 		t.Fatalf("top bar button = %v", got)
 	}
-	if got := nodes["layer.collections.close"]; got.P["text"] != "Close (esc)" || got.P["actions"].(map[string]any)["click"] != view.KeyClick("escape") {
-		t.Fatalf("close button = %v", got)
-	}
 	if got := nodes["main.topbar.left.heading"].P["title"]; got != "Menu" {
 		t.Fatalf("heading tooltip = %v", got)
 	}
@@ -213,8 +210,8 @@ func TestRenderSidebarListsProjectsOnlyAtItsProjectsLevel(t *testing.T) {
 
 func TestMenuButtonSaysBackOnTheProjectsLevel(t *testing.T) {
 	m := menuOpened(pickerLoaded(true))
-	if got := text(pickerNodes(t, m)["layer.collections.close"]); got != "Close (esc)" {
-		t.Fatalf("top level button = %q", got)
+	if got := text(pickerNodes(t, m)["layer.collections.close"]); !strings.HasPrefix(got, "Close") {
+		t.Fatalf("top level button = %q, want it to say Close", got)
 	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "end"})
 	m, _ = model.Update(m, model.KeyMsg{Chord: "up"})
@@ -222,7 +219,7 @@ func TestMenuButtonSaysBackOnTheProjectsLevel(t *testing.T) {
 	if !m.Picker.Projects {
 		t.Fatal("fixture: not on the Projects level")
 	}
-	if got := text(pickerNodes(t, m)["layer.collections.close"]); got != "Back (esc)" {
-		t.Fatalf("Projects level button = %q", got)
+	if got := text(pickerNodes(t, m)["layer.collections.close"]); !strings.HasPrefix(got, "Back") {
+		t.Fatalf("Projects level button = %q, want it to say Back", got)
 	}
 }

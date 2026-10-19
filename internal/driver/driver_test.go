@@ -370,3 +370,16 @@ func TestOnlyATabSwitchRevealsInsideTheDetail(t *testing.T) {
 		}
 	}
 }
+
+func TestOneStepKeepsEveryDaemonCommandAndTheEditorRoundTrip(t *testing.T) {
+	s := feed(t, browsing(t, 160), key("e")).State
+	s.Model.SelectedUID = "beta" // the detail on screen is no longer the selected Issue's, so the step reloads it too
+	out := step(t, s, key("ctrl+e"))
+	load := model.LoadDetail{Workspace: "/repo", UID: "beta"}
+	if !reflect.DeepEqual(out.Cmds, []model.Cmd{load}) {
+		t.Errorf("daemon commands = %#v, want %#v", out.Cmds, load)
+	}
+	if want := (model.OpenDraftEditor{UID: "alpha", Text: alpha.Body}); out.Editor == nil || *out.Editor != want {
+		t.Errorf("editor = %#v, want %#v", out.Editor, want)
+	}
+}
