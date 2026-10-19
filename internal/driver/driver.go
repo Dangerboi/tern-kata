@@ -29,17 +29,19 @@ func (s State) Fresh() State {
 }
 
 // Output is what one step asks of the process, in this order: render View,
-// send Ops, launch Cmds. A non-nil Err is fatal; Quit ends the loop without
-// drawing.
+// send Ops, launch Cmds, then run Editor. A non-nil Err is fatal; Quit ends the
+// loop without drawing.
 type Output struct {
 	State State
 	// View is nil when the input changed nothing to draw.
 	View *tern.View
 	Ops  []tern.Op
-	// Cmds are the daemon commands, plus any command only the process can run.
+	// Cmds are the daemon commands.
 	Cmds []model.Cmd
-	Quit bool
-	Err  error
+	// Editor is the $EDITOR round trip, kept apart so every daemon command of the step runs before it.
+	Editor *model.OpenDraftEditor
+	Quit   bool
+	Err    error
 }
 
 // Step applies in, a tern.Input or a model.Msg (a daemon result), to s. now is
@@ -78,6 +80,12 @@ func Step(s State, in any, now time.Time) Output {
 	if !rowClick(msg) && !m.Loading && m.Focus == model.ColumnList && m.Shows(model.ColumnList) && m.SelectedUID != "" && m.SelectedUID != previousSelection {
 		out.Ops = append(out.Ops, tern.OpReveal(view.IssueID(m.SelectedUID), "nearest"))
 	}
+	out.route(m, cmds)
+	return out
+}
+
+// route sorts the model's commands: intents become Ops, the editor round trip its own field, the rest daemon Cmds.
+func (out *Output) route(m model.Model, cmds []model.Cmd) {
 	for _, cmd := range cmds {
 		switch cmd := cmd.(type) {
 		case model.Scroll:
@@ -91,11 +99,12 @@ func Step(s State, in any, now time.Time) Output {
 					out.Ops = append(out.Ops, tern.OpReveal(id, "nearest"))
 				}
 			}
+		case model.OpenDraftEditor:
+			out.Editor = &cmd
 		default:
 			out.Cmds = append(out.Cmds, cmd)
 		}
 	}
-	return out
 }
 
 func scrollTarget(c model.Column) string {
