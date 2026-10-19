@@ -56,8 +56,7 @@ expect_tree "[data-id='layer.fields']" '.ok and .count == 0'
 [[ ! -e $at_shot ]]
 expect_tree "$at_tab" '.ok and (.nodes[0].text | contains("Attachments (0)"))'
 ctl key U
-expect_tree "[data-id='layer.fields.error']" '.ok and .count == 1 and (.nodes[0].text | contains("no attachments"))'
-ctl key Escape
+expect_tree "[data-id='main.notice']" '.ok and .count == 1 and (.nodes[0].text | contains("no attachments"))'
 expect_tree "[data-id='layer.fields']" '.ok and .count == 0'
 
 kata --workspace "$at_dir" delete "$at_uid" --force --confirm "DELETE smoke#$at_short" --json >/dev/null
