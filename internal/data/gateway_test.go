@@ -835,7 +835,6 @@ func TestGatewayStreamDropReportsAnUnreachableDaemon(t *testing.T) {
 // another, and a soft-deleted child: kata counts three children, two open.
 type childCountFixture struct {
 	gateway          *Gateway
-	kata             *kataServer
 	requests         *atomic.Int32
 	workspace        string
 	demo, other      model.Project
@@ -855,7 +854,7 @@ func newChildCountFixture(t *testing.T) *childCountFixture {
 	gateway := newGateway(t, newLocator(front.target()))
 	workspace, demo := project(t, gateway, "demo")
 	_, other := project(t, gateway, "other")
-	f := &childCountFixture{gateway: gateway, kata: kata, requests: &listed, workspace: workspace, demo: demo, other: other}
+	f := &childCountFixture{gateway: gateway, requests: &listed, workspace: workspace, demo: demo, other: other}
 	f.parent = createIssue(t, gateway, workspace, demo, "Parent")
 	child := func(project model.Project, title string) string {
 		created := as[model.IssueCreated](t, run(t, gateway, model.CreateIssueCmd{Workspace: workspace, Actor: "tester", ProjectID: project.ID, Title: title, ParentUID: f.parent}))
@@ -902,7 +901,7 @@ func (f *childCountFixture) remove(t *testing.T, uid string, project model.Proje
 	}
 }
 
-// kataCounts is kata's own child_counts for uid, from the Issue list the Pane no longer reads.
+// kataCounts is kata's own child_counts for uid, the figure the snapshot's link counts must match.
 func (f *childCountFixture) kataCounts(t *testing.T, uid string) model.ChildCounts {
 	t.Helper()
 	c, err := f.gateway.client(context.Background(), f.workspace)

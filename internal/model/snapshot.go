@@ -52,7 +52,7 @@ type SnapshotLoaded struct {
 func (SnapshotLoaded) msg() {}
 
 // Snapshot is the Collection snapshot as the model holds it: the Issues the query selected, the Links of those Issues
-// (child counts are counted from them, see CountChildren), the Project catalog and the event cursor it answers.
+// (child counts are counted from them), the Project catalog and the event cursor it answers.
 // The gateway translates it from kata's wire shape.
 type Snapshot struct {
 	Issues  []Issue
@@ -71,12 +71,12 @@ type ProjectStats struct{ Open, Closed int }
 
 type ChildCounts struct{ Open, Total int }
 
-// CountChildren is uid's direct children among links; see ChildCountsByParent.
-func CountChildren(links []Link, uid string) ChildCounts { return ChildCountsByParent(links)[uid] }
+// CountChildren is uid's direct children among links; see childCountsByParent.
+func CountChildren(links []Link, uid string) ChildCounts { return childCountsByParent(links)[uid] }
 
-// ChildCountsByParent counts every Issue's direct children among links as kata counts them: every parent Link pointing at
+// childCountsByParent counts every Issue's direct children among links as kata counts them: every parent Link pointing at
 // the Issue, open when the child's status is open. Links must hold every Link of the Issues counted, as a snapshot's links do.
-func ChildCountsByParent(links []Link) map[string]ChildCounts {
+func childCountsByParent(links []Link) map[string]ChildCounts {
 	counts := make(map[string]ChildCounts)
 	for _, l := range links {
 		if l.Type == "parent" {

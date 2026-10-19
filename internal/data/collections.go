@@ -42,8 +42,8 @@ func (c *Client) ReadSnapshot(ctx context.Context, cmd model.ReadSnapshot) (mode
 	return result, nil
 }
 
-// translateSnapshot is the one place kata's snapshot body becomes the model's Collection snapshot; its links are what
-// model.CountChildren counts.
+// translateSnapshot is the one place kata's snapshot body becomes the model's Collection snapshot; its links carry each
+// end's status, so the model counts children from them.
 func translateSnapshot(s *g.UISnapshotResponseBody) model.Snapshot {
 	snapshot := model.Snapshot{Cursor: s.Cursor}
 	for i := range s.Collection {

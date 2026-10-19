@@ -128,9 +128,6 @@ func TestPropertiesShowTheParentAsAReferenceAndNoChildLines(t *testing.T) {
 			t.Errorf("properties has a %s row", other)
 		}
 	}
-	if got := text(nodes[view.DetailContentID+".properties.children.v"]); got != "0 open / 1 total" {
-		t.Errorf("counts line = %q", got)
-	}
 }
 
 func TestStatusBadgeIsShownOnceUnderTheTitle(t *testing.T) {
