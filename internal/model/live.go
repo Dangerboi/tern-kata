@@ -16,10 +16,13 @@ type LiveState struct {
 	RefreshRequest   int64
 	PendingCursor    int64
 	Resetting        bool
-	DayEnded         bool   // the end-of-day wake fired for the Pane calendar's date; the next read must show a newer date
+	dayInFlight      bool   // the end-of-day wake fired while a read was in flight; a result still dated that day reads again
 	countsFresh      bool   // the counts on screen cover every event so far
 	countsCovered    bool   // the read in flight asks for counts and no count-changing event has come since
 	countsScope      string // the Project UID the counts on screen are scoped to
+	countsAt         int64  // the event cursor the counts on screen were read at
+	countsWanted     int64  // the newest count-changing event the counts on screen were not read after
+	wakeGeneration   int64
 }
 
 // countsKept are the event types known not to change an Issue's parent or status; any other event, including one this
@@ -30,10 +33,12 @@ var countsKept = []string{
 	"issue.updated", "issue.metadata_updated",
 }
 
-// WakeAt asks for one wake at At, the end of the local day Day; a newer WakeAt replaces an older one.
+// WakeAt asks for one wake at At, the end of the local day Day. Generation numbers the asks; a wake replaces an older one
+// and is ignored once a newer one has been asked for.
 type WakeAt struct {
-	Day string
-	At  time.Time
+	Day        string
+	At         time.Time
+	Generation int64
 }
 
 func (WakeAt) cmd() {}
@@ -98,16 +103,22 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 		if msg.Type == "sync.reset_required" {
 			m.Stale = true
 			m.Resetting = true
-			m.countsFresh = false
+			m.countsFresh, m.countsAt, m.countsWanted = false, 0, 0
 			m.StreamConnected = false
 			m.Refreshing = false
 			return snapshotChanged(m)
 		}
-		if msg.ID <= m.Cursor {
-			return m, nil
-		}
-		if !slices.Contains(countsKept, msg.Type) {
+		// An event the counts on screen were not read after wants them again, even when a read already covers the event itself.
+		changes := !slices.Contains(countsKept, msg.Type) && msg.ID > m.countsAt
+		if changes {
 			m.countsFresh, m.countsCovered = false, false
+			m.countsWanted = max(m.countsWanted, msg.ID)
+		}
+		if msg.ID <= m.Cursor {
+			if changes {
+				return snapshotChanged(m)
+			}
+			return m, nil
 		}
 		m.PendingCursor = max(m.PendingCursor, msg.ID)
 		return snapshotChanged(m)
@@ -130,7 +141,7 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 		if msg.Day != m.Calendar.Date {
 			return m, nil
 		}
-		m.DayEnded = true
+		m.dayInFlight = m.Refreshing
 		m.etag = "" // a 304 would keep the old day
 		return snapshotChanged(m)
 	case SnapshotLoaded:

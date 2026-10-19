@@ -40,9 +40,9 @@ func (c *Client) ReadSnapshot(ctx context.Context, cmd model.ReadSnapshot) (mode
 		result.ETag = response.Headers200.ETag
 	}
 	if cmd.ChildCounts {
-		// A failed count download keeps the snapshot; the nil counts tell the model they were not read.
+		// A failed count download keeps the snapshot; CountsRead stays false so the model keeps its own counts.
 		if counts, err := c.readChildCounts(ctx, result.Snapshot, query.ProjectUID); err == nil {
-			result.Snapshot.ChildCounts = counts
+			result.Snapshot.ChildCounts, result.CountsRead = counts, true
 		}
 	}
 	return result, nil

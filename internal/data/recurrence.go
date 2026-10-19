@@ -53,7 +53,7 @@ func (c *Client) currentRecurrence(ctx context.Context, projectID int64, uid str
 // card opened with, nothing is written and the current recurrence comes back.
 func (c *Client) ChangeRecurrence(ctx context.Context, cmd model.ChangeRecurrenceCmd) (*model.Recurrence, error) {
 	var changed *model.Recurrence
-	err := guardedWrite(func() error {
+	err := recurrenceWrite(func() error {
 		current, err := c.currentRecurrence(ctx, cmd.ProjectID, cmd.RecurrenceUID)
 		if err != nil {
 			return err
@@ -75,7 +75,7 @@ func (c *Client) ChangeRecurrence(ctx context.Context, cmd model.ChangeRecurrenc
 
 // StopRecurrence deletes the recurrence at the revision it has now. One already stopped is an error and nothing is written.
 func (c *Client) StopRecurrence(ctx context.Context, cmd model.StopRecurrenceCmd) error {
-	return guardedWrite(func() error {
+	return recurrenceWrite(func() error {
 		current, err := c.currentRecurrence(ctx, cmd.ProjectID, cmd.RecurrenceUID)
 		if err != nil {
 			return err

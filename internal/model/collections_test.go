@@ -17,7 +17,7 @@ func TestCollectionSwitching(t *testing.T) {
 		{"bound opens Project", model.Project{UID: "p", Name: "Work"}, "project"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			m, _ := loadFirst(model.Model{}, model.ProjectLoaded{Project: tt.project}, model.SnapshotLoaded{Snapshot: model.Snapshot{Catalog: []model.CatalogProject{{Project: model.Project{UID: "p", Name: "Work"}}}, ChildCounts: map[string]model.ChildCounts{}}, ETag: "original"})
+			m, _ := loadFirst(model.Model{}, model.ProjectLoaded{Project: tt.project}, model.SnapshotLoaded{Snapshot: model.Snapshot{Catalog: []model.CatalogProject{{Project: model.Project{UID: "p", Name: "Work"}}}}, CountsRead: true, ETag: "original"})
 			if m.Collection.View != tt.view || len(m.Collections) != 7 {
 				t.Fatalf("sidebar: %+v", m)
 			}
@@ -26,7 +26,7 @@ func TestCollectionSwitching(t *testing.T) {
 			if !m.Loading || m.Collection != today || !readsCollection(cmds, m, "") {
 				t.Fatalf("switch: %+v %#v", m, cmds)
 			}
-			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a", Status: "open", Title: "Today", ScheduledOnDate: new("2026-05-15")}}, ChildCounts: map[string]model.ChildCounts{}}, ETag: "today", LocalDate: "2026-05-15", TimeZone: "America/Los_Angeles"})
+			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a", Status: "open", Title: "Today", ScheduledOnDate: new("2026-05-15")}}}, CountsRead: true, ETag: "today", LocalDate: "2026-05-15", TimeZone: "America/Los_Angeles"})
 			if m.Loading || m.SelectedUID != "a" || len(m.Groups) != 1 || m.Groups[0].Title != "Today" {
 				t.Fatalf("loaded: %+v", m)
 			}

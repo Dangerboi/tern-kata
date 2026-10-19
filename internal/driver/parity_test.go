@@ -351,10 +351,12 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 				keyboard, keyCmds := keys(chord)(tt.start)
 				pointer, clickCmds := clicked(tt.start, click(id, act))
 				sameAs(t, id+" differs from its key", pointer, clickCmds, keyboard, keyCmds)
+				var labelKeys []string
 				for _, b := range model.CardKeys(tt.mode, binding.Action) {
-					if !strings.Contains(labels[id], b.Key) {
-						t.Errorf("%s label %q does not name key %s", id, labels[id], b.Key)
-					}
+					labelKeys = append(labelKeys, b.Key)
+				}
+				if want := " (" + strings.Join(labelKeys, " / ") + ")"; !strings.HasSuffix(labels[id], want) || labels[id] == want {
+					t.Errorf("%s label %q is not words followed by %q", id, labels[id], want)
 				}
 			}
 		})

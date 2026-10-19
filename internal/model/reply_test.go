@@ -103,8 +103,8 @@ func TestAReplySavesWithItsTargetAndKind(t *testing.T) {
 	text := strings.Repeat("it reproduces. ", 3)
 	m = typed(m, text)
 	_, cmds := clickPress(m, "ctrl+o")
-	want := []model.Cmd{model.SaveDraft{Workspace: "/repo", UID: "a", ProjectID: 2, BaseText: "body", Text: text, Comment: true, Actor: "me", ReplyTo: "c1", ReplyKind: model.ReplyConfirm, Key: "-1"}}
-	if !reflect.DeepEqual(cmds, want) {
+	want := []model.Cmd{model.SaveDraft{Workspace: "/repo", UID: "a", ProjectID: 2, BaseText: "body", Text: text, Comment: true, Actor: "me", ReplyTo: "c1", ReplyKind: model.ReplyConfirm}}
+	if !reflect.DeepEqual(withoutKeys(cmds), want) {
 		t.Fatalf("cmds %#v, want %#v", cmds, want)
 	}
 }
@@ -112,16 +112,17 @@ func TestAReplySavesWithItsTargetAndKind(t *testing.T) {
 func TestADuplicateReplyOffersSendAnywayWhichResendsWithForce(t *testing.T) {
 	m, _ := clickPress(onComments(), "shift+r")
 	m = typed(m, "again")
-	m, _ = clickPress(m, "ctrl+o")
+	m, cmds := clickPress(m, "ctrl+o")
+	first := keyOf(t, cmds)
 	m, _ = model.Update(m, model.DraftFailed{UID: "a", Err: model.DuplicateReply{Message: "a reply of this kind already exists"}})
 	d, _ := m.ActiveDraft()
 	if d.Saving || !d.Duplicate() || d.Err == nil || d.Editor.Text != "again" {
 		t.Fatalf("Draft after duplicate: %+v", d)
 	}
-	_, cmds := clickPress(m, "ctrl+f")
-	want := []model.Cmd{model.SaveDraft{Workspace: "/repo", UID: "a", ProjectID: 2, BaseText: "body", Text: "again", Comment: true, Actor: "me", ReplyTo: "c1", ReplyKind: model.ReplyPlain, Force: true, Key: "-2"}}
-	if !reflect.DeepEqual(cmds, want) {
-		t.Fatalf("send anyway %#v, want %#v", cmds, want)
+	_, cmds = clickPress(m, "ctrl+f")
+	want := []model.Cmd{model.SaveDraft{Workspace: "/repo", UID: "a", ProjectID: 2, BaseText: "body", Text: "again", Comment: true, Actor: "me", ReplyTo: "c1", ReplyKind: model.ReplyPlain, Force: true}}
+	if !reflect.DeepEqual(withoutKeys(cmds), want) || keyOf(t, cmds) != first {
+		t.Fatalf("send anyway %#v, want %#v under the key of the refused send %q", cmds, want, first)
 	}
 	// Anything else that changes the Draft takes the offer back.
 	m, _ = model.Update(m, model.DraftFailed{UID: "a", Err: model.DuplicateReply{Message: "dup"}})

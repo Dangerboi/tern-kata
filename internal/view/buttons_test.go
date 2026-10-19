@@ -1,6 +1,7 @@
 package view_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -107,15 +108,13 @@ func TestCloseAndFiltersEndInButtons(t *testing.T) {
 
 func TestCardButtonFollowsItsBinding(t *testing.T) {
 	m := press(selectedFirst(), "x")
-	rebind := func(chord, key string) {
-		for i, b := range model.Keymap {
-			if b.Mode == model.ModeCloseForm && b.Action == model.CloseQuick {
-				model.Keymap[i].Chord, model.Keymap[i].Key = chord, key
-			}
+	saved := slices.Clone(model.Keymap)
+	t.Cleanup(func() { copy(model.Keymap, saved) })
+	for i, b := range model.Keymap {
+		if b.Mode == model.ModeCloseForm && b.Action == model.CloseQuick {
+			model.Keymap[i].Chord, model.Keymap[i].Key = "ctrl+q", "ctrl+q"
 		}
 	}
-	defer rebind("ctrl+d", "ctrl+d")
-	rebind("ctrl+q", "ctrl+q")
 	node := pickerNodes(t, m)["layer.close.actions.quick"]
 	actions, _ := node.P["actions"].(map[string]any)
 	if text(node) != "Quick done (ctrl+q)" || actions["click"] != view.KeyClick("ctrl+q") {

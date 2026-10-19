@@ -10,9 +10,8 @@ import (
 
 // readChildCounts is kata's direct-child count of each Issue with children,
 // whatever the filters left in the snapshot: one list request whose rows carry
-// child_counts, scoped to the Project when the Collection is one (the snapshot
-// has none of its own). Only a snapshot that changed needs it: the ETag moves
-// with every event.
+// child_counts, scoped to the Project when the Collection is one (the snapshot has none of its own). The model asks for it
+// only when an event could have changed a count.
 func (c *Client) readChildCounts(ctx context.Context, snapshot model.Snapshot, projectUID *string) (map[string]model.ChildCounts, error) {
 	query := &g.ListAllIssuesQuery{}
 	if projectUID != nil {

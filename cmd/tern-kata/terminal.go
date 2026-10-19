@@ -43,6 +43,8 @@ func (t *terminal) Render(v tern.View) error { return t.surface.Render(v) }
 // Send sends one op per frame: Tern needs the first tab reveal laid out before the second.
 func (t *terminal) Send(op tern.Op) error { return t.surface.Send(op) }
 
+func (t *terminal) Caps() tern.Caps { return t.session.Caps() }
+
 // Inputs delivers every Tern input; InputErrors the reader's failure.
 func (t *terminal) Inputs() <-chan any        { return t.inputs }
 func (t *terminal) InputErrors() <-chan error { return t.inputErrors }

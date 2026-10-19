@@ -12,6 +12,10 @@ import (
 // else changed since the Close card opened, replays a close it already stored under that key, and refuses one that another
 // request closed. The close carries no revision, because kata fingerprints it and a revision would defeat the replay.
 func (c *Client) Close(ctx context.Context, cmd model.CloseIssueCmd) error {
+	if cmd.Key == "" {
+		// Without its key kata answers 200 for an Issue already closed, which would read as a close that happened.
+		return errors.New("A close needs an idempotency key.")
+	}
 	body := closeBody(cmd)
 	_, err := c.CloseIssueWithResponse(ctx, &g.CloseIssueRequestOptions{PathParams: &g.CloseIssuePath{ProjectID: cmd.ProjectID, Ref: cmd.UID}, Header: &g.CloseIssueHeaders{IdempotencyKey: idempotencyKey(cmd.Key)}, Body: &body})
 	if daemonCode(err) == "issue_already_closed" {

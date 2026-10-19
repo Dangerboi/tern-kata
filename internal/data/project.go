@@ -20,7 +20,7 @@ import (
 )
 
 func (c *Client) ReadProject(ctx context.Context, workspace string) (model.ProjectLoaded, error) {
-	request, err := c.projectRequest(ctx, workspace)
+	request, err := projectRequest(ctx, workspace)
 	if err != nil {
 		return model.ProjectLoaded{}, err
 	}
@@ -41,7 +41,7 @@ func (c *Client) ReadProject(ctx context.Context, workspace string) (model.Proje
 	return model.ProjectLoaded{Project: project, Daemon: model.Daemon{Kind: c.kind, Version: c.version}}, nil
 }
 
-func (c *Client) projectRequest(ctx context.Context, workspace string) (*g.ResolveProjectBody, error) {
+func projectRequest(ctx context.Context, workspace string) (*g.ResolveProjectBody, error) {
 	workspaceRoot, gitRoot, err := discoverProjectRoots(workspace)
 	if err != nil {
 		return nil, err
