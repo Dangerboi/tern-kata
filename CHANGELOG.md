@@ -15,6 +15,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 ### Fixed
 
 - An Attachment named `tabs`, `empty` or like another row's dotted id no longer shares a node id with anything else in the Issue detail.
+- An Attachment on a Windows network share (`\\server\share\file`) now links as `file://server/share/file` instead of a link with four slashes that did not open.
 
 ## [0.2.0] - 2026-10-19
 

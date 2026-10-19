@@ -71,6 +71,13 @@ func TestAttachmentFileURLEscapesAndHandlesWindowsPaths(t *testing.T) {
 	}
 }
 
+func TestAttachmentFileURLOfANetworkShareHasTheServerAsHost(t *testing.T) {
+	m := attached(map[string]any{"attachment.a": pointer("box", `\\srv\share\a b\x#1%.png`)})
+	if got := m.DetailRows()[0].Activity.URL; got != "file://srv/share/a%20b/x%231%25.png" {
+		t.Fatalf("url %q", got)
+	}
+}
+
 func TestAttachmentFileURLKeepsABackslashInAUnixName(t *testing.T) {
 	m := attached(map[string]any{"attachment.a": pointer("box", `/a/b\c.png`)})
 	rows := m.DetailRows()
