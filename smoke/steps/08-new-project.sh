@@ -94,32 +94,18 @@ expect_tree "$np_heading" '.ok and .nodes[0].text == "Project: np-unbound"'
 expect_tree "[data-id='main.columns.collections']" '.ok and .count == 0'
 expect_tree "$np_issue_rows" '.ok and .count == 1'
 
-# A .kata.toml naming a Project this kata has never seen leaves the directory unbound. Another name is refused before kata is asked; the file's own name binds.
-# The directory's .gitignore has no final newline, which the new line must not run into.
+# A .kata.toml naming a Project this kata has never seen is an error, not an Inbox: the Pane shows kata's not-registered message and the `kata init` hint, and registers nothing.
 quit_app
 mkdir -p "$tmp/np-stale"
 printf 'version = 1\n\n[project]\nname = "np-stale-bound"\n' >"$tmp/np-stale/.kata.toml"
-printf 'node_modules' >"$tmp/np-stale/.gitignore"
 np_launch "$tmp/np-stale"
-expect_tree "[data-id='main.columns.collections']" '.ok and .count == 1'
-ctl key esc
-ctl key End
-ctl key enter
-expect_tree "$np_input" '.ok and (.nodes[0].text | startswith("np-stale"))'
-ctl key enter
-expect_tree "$np_error" '.ok and .count == 1 and (.nodes[0].text | contains("binds this directory to Project \"np-stale-bound\""))'
+expect_tree "[data-id='main.error']" '([.nodes[] | .. | objects | .text? // empty] | join(" ")) | contains("project np-stale-bound is not registered") and contains("run \"kata init\" in this workspace")'
+expect_tree "[data-id='main.columns.collections']" '.ok and .count == 0'
 [[ $(np_projects) != *np-stale* ]]
-ctl type '"-bound"'
-ctl key enter
-expect_tree "$np_heading" '.ok and .nodes[0].text == "Project: np-stale-bound"'
-grep -qx 'name = "np-stale-bound"' "$tmp/np-stale/.kata.toml"
-grep -qx 'node_modules' "$tmp/np-stale/.gitignore"
-grep -qx '.kata.local.toml' "$tmp/np-stale/.gitignore"
-[[ $(np_projects) == *np-stale-bound* ]]
 
 # Restore the bound Project and remove this step's fixtures.
 quit_app
-for project in workspace-extra np-unbound np-stale-bound; do
+for project in workspace-extra np-unbound; do
   kata projects remove "$project" --force --json >/dev/null
 done
 ctl --file "$tmp/launch.ctl"
