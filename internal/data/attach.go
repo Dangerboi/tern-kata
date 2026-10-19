@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -123,16 +124,20 @@ func (c *Client) requireBinding(ctx context.Context, t attachTarget) error {
 	return model.AttachRefusal(t.binding, t.issue.ProjectID, t.issue.ShortID, names[t.issue.ProjectID])
 }
 
-// patchAttachment sets (pointer non-nil) or clears the attachment.<name> key. A set is guarded so it applies only while the key is absent.
-func (c *Client) patchAttachment(ctx context.Context, t attachTarget, actor, name string, pointer map[string]any) error {
+// patchAttachment sets (pointer non-nil) or clears the attachment.<name> key. A set applies only while the key is absent; a
+// clear only while the key still holds the JSON text clearIf.
+func (c *Client) patchAttachment(ctx context.Context, t attachTarget, actor, name string, pointer map[string]any, clearIf string) error {
 	key := model.AttachmentKey(name)
 	body := g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{key: nil}}
+	var guard g.MetadataPatchGuard_OneOf_0
+	either := runtime.NewEitherFromB[g.MetadataPatchGuard_OneOf_0, g.MetadataPatchGuard_OneOf_1](g.MetadataPatchGuard_OneOf_1{Key: key, IfAbsent: g.True})
 	if pointer != nil {
 		body.Patch[key] = pointer
-		body.Guard = &g.MetadataPatchGuard{MetadataPatchGuard_OneOf: &g.MetadataPatchGuard_OneOf{
-			Either: runtime.NewEitherFromB[g.MetadataPatchGuard_OneOf_0, g.MetadataPatchGuard_OneOf_1](g.MetadataPatchGuard_OneOf_1{Key: key, IfAbsent: g.True}),
-		}}
+	} else {
+		guard = g.MetadataPatchGuard_OneOf_0{Key: key, IfValue: clearIf}
+		either = runtime.NewEitherFromA[g.MetadataPatchGuard_OneOf_0, g.MetadataPatchGuard_OneOf_1](guard)
 	}
+	body.Guard = &g.MetadataPatchGuard{MetadataPatchGuard_OneOf: &g.MetadataPatchGuard_OneOf{Either: either}}
 	_, err := c.PatchIssueMetadataWithResponse(ctx, &g.PatchIssueMetadataRequestOptions{
 		PathParams: &g.PatchIssueMetadataPath{ProjectID: t.issue.ProjectID, Ref: t.issue.UID}, Body: &body,
 	})
@@ -169,7 +174,7 @@ func (c *Client) AttachFile(ctx context.Context, host string, cmd model.AttachFi
 		if err != nil {
 			return model.FileAttached{}, err
 		}
-		err = c.patchAttachment(ctx, target, cmd.Actor, name, model.Attachment{Host: host, Path: stored}.Pointer())
+		err = c.patchAttachment(ctx, target, cmd.Actor, name, model.Attachment{Host: host, Path: stored}.Pointer(), "")
 		if err == nil {
 			return model.FileAttached{Ref: cmd.Ref, Name: name, Path: stored}, nil
 		}
@@ -218,13 +223,15 @@ func attachSource(workspace, input string) (string, error) {
 
 // DetachFile is the one shared Detach write. It clears the pointer first, so the worst partial failure is a leftover file, then
 // deletes the copy if it is on this machine, still there and inside this Issue's folder of the Attachment store. A key that
-// holds no readable pointer is cleared too, touching no file.
+// holds no readable pointer is cleared too, touching no file. The key is cleared only while it still holds the value read, so a
+// pointer written meanwhile survives. Once the key is cleared, a later failure still returns the report's facts with its error.
 func (c *Client) DetachFile(ctx context.Context, host string, cmd model.DetachFile) (model.FileDetached, error) {
 	target, err := c.resolveAttachTarget(ctx, cmd.Workspace, cmd.Ref)
 	if err != nil {
 		return model.FileDetached{}, err
 	}
-	if _, exists := target.issue.Metadata[model.AttachmentKey(cmd.Name)]; !exists {
+	raw, exists := target.issue.Metadata[model.AttachmentKey(cmd.Name)]
+	if !exists {
 		return model.FileDetached{}, model.NoAttachmentError(target.issue.ShortID, cmd.Name)
 	}
 	var pointer *model.Attachment
@@ -233,10 +240,25 @@ func (c *Client) DetachFile(ctx context.Context, host string, cmd model.DetachFi
 			pointer = &a
 		}
 	}
-	if err := c.patchAttachment(ctx, target, cmd.Actor, cmd.Name, nil); err != nil {
-		return model.FileDetached{}, daemonError(err)
+	read, err := json.Marshal(raw)
+	if err != nil {
+		return model.FileDetached{}, err
 	}
-	result := model.FileDetached{Ref: cmd.Ref, Name: cmd.Name, Fate: model.FileLeft}
+	if err := c.patchAttachment(ctx, target, cmd.Actor, cmd.Name, nil, string(read)); err != nil {
+		if daemonCode(err) != "metadata_guard_failed" {
+			return model.FileDetached{}, daemonError(err)
+		}
+		// The guard fails for a key that changed and for one that is gone; the Issue says which.
+		now, err := c.resolveAttachTarget(ctx, cmd.Workspace, cmd.Ref)
+		if err != nil {
+			return model.FileDetached{}, err
+		}
+		if _, still := now.issue.Metadata[model.AttachmentKey(cmd.Name)]; !still {
+			return model.FileDetached{}, model.NoAttachmentError(target.issue.ShortID, cmd.Name)
+		}
+		return model.FileDetached{}, model.AttachmentChangedError(target.issue.ShortID, cmd.Name)
+	}
+	result := model.FileDetached{Ref: cmd.Ref, Name: cmd.Name, Fate: model.FileLeft, Cleared: true}
 	if pointer == nil {
 		return result, nil
 	}

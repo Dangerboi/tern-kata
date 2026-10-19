@@ -1,9 +1,11 @@
 package data
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -562,5 +564,88 @@ func TestDetachIgnoresHostCaseAndNeverDeletesForAnEmptyHost(t *testing.T) {
 	}
 	if _, err := os.Stat(copy2.Path); err != nil {
 		t.Fatalf("an empty-host pointer deleted the file: %v", err)
+	}
+}
+
+// racingGateway is a gateway whose daemon first runs before when a clear of the key named attachment.<name> arrives.
+func (f attachFixture) racingGateway(t *testing.T, name string, before func()) *Gateway {
+	t.Helper()
+	racing := serve(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/metadata") {
+			body, _ := io.ReadAll(r.Body)
+			r.Body = io.NopCloser(bytes.NewReader(body))
+			if bytes.Contains(body, []byte(`"attachment.`+name+`":null`)) {
+				before()
+			}
+		}
+		f.kata.handler.ServeHTTP(w, r)
+	}), "0.19.0")
+	return newGateway(t, newLocator(racing.target())).WithHost(f.host)
+}
+
+// setKey writes the attachment.<name> meta key straight to kata, bypassing every guard; nil deletes it.
+func (f attachFixture) setKey(t *testing.T, name string, value any) {
+	t.Helper()
+	actor := "rival"
+	_, err := f.kata.target().Client.PatchIssueMetadataWithResponse(context.Background(), &g.PatchIssueMetadataRequestOptions{
+		PathParams: &g.PatchIssueMetadataPath{ProjectID: f.project.ID, Ref: f.uid},
+		Body:       &g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{"attachment." + name: value}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDetachRefusesAPointerRewrittenSinceItWasRead(t *testing.T) {
+	f := newAttachFixture(t)
+	attached := f.attach(t, f.repo, f.uid, writeFile(t, t.TempDir(), "shot.png", "x"))
+	rival := map[string]any{"host": f.host, "path": "/elsewhere/shot.png"}
+	gateway := f.racingGateway(t, "shot.png", func() { f.setKey(t, "shot.png", rival) })
+	got := as[model.FileDetached](t, run(t, gateway, model.DetachFile{Workspace: f.repo, Ref: f.uid, Actor: "tester", Name: "shot.png"}))
+	if got.Err == nil || got.Cleared || !strings.Contains(got.Err.Error(), "changed") {
+		t.Fatalf("got %+v, want the changed-Attachment refusal", got)
+	}
+	if !reflect.DeepEqual(f.pointers(t, f.uid)["shot.png"], rival) {
+		t.Fatalf("the newer pointer did not survive: %v", f.pointers(t, f.uid))
+	}
+	if _, err := os.Stat(attached.Path); err != nil {
+		t.Fatalf("a file was touched: %v", err)
+	}
+}
+
+func TestDetachOfAKeyDeletedSinceItWasReadSaysNoSuchAttachment(t *testing.T) {
+	f := newAttachFixture(t)
+	attached := f.attach(t, f.repo, f.uid, writeFile(t, t.TempDir(), "shot.png", "x"))
+	gateway := f.racingGateway(t, "shot.png", func() { f.setKey(t, "shot.png", nil) })
+	got := as[model.FileDetached](t, run(t, gateway, model.DetachFile{Workspace: f.repo, Ref: f.uid, Actor: "tester", Name: "shot.png"}))
+	if got.Cleared || got.Err == nil || !strings.Contains(got.Err.Error(), "has no attachment named") {
+		t.Fatalf("got %+v, want the no-such-Attachment error", got)
+	}
+	if _, err := os.Stat(attached.Path); err != nil {
+		t.Fatalf("a file was touched: %v", err)
+	}
+}
+
+func TestDetachReportsACopyItCouldNotDelete(t *testing.T) {
+	f := newAttachFixture(t)
+	attached := f.attach(t, f.repo, f.uid, writeFile(t, t.TempDir(), "shot.png", "x"))
+	dir := filepath.Dir(attached.Path)
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	if probe, err := os.CreateTemp(dir, "probe"); err == nil {
+		probe.Close()
+		t.Skip("a read-only folder is not enforced here")
+	}
+	got := f.detach(t, f.repo, f.uid, "shot.png")
+	if !got.Cleared || got.Err == nil || got.Host != f.host || got.Path != attached.Path || got.Fate != model.FileLeft {
+		t.Fatalf("got %+v", got)
+	}
+	if want := "Removed shot.png; could not delete " + attached.Path + ": "; !strings.HasPrefix(got.Report(), want) {
+		t.Fatalf("report %q, want it to start %q", got.Report(), want)
+	}
+	if len(f.pointers(t, f.uid)) != 0 {
+		t.Fatal("the pointer survived")
 	}
 }

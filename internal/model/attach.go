@@ -1,6 +1,10 @@
 package model
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+	"io/fs"
+)
 
 // AttachFile copies the file at Path into the Project's Attachment store and points an attachment.<name> meta key of the Issue
 // Ref names at the copy. Ref is anything kata accepts: a short id in the workspace's Binding, <project>#<short id> or a ULID.
@@ -33,17 +37,26 @@ const (
 	FileGone FileFate = "gone"
 )
 
-// FileDetached answers DetachFile. The pointer is cleared whenever Err is nil; Fate says what became of the file at Path on Host.
+// FileDetached answers DetachFile. Cleared says whether the pointer was cleared, whatever Err is: once it is, a later failure
+// still reports Host, Path and Fate, the file's fate being FileLeft when it could not be deleted.
 type FileDetached struct {
 	Ref, Name, Host, Path string
 	Fate                  FileFate
+	Cleared               bool
 	Err                   error
 }
 
 func (FileDetached) msg() {}
 
-// Report is the sentence the Pane and the command line show for a successful detach.
+// Report is the sentence the Pane and the command line show for a detach that cleared the pointer.
 func (d FileDetached) Report() string {
+	if d.Err != nil {
+		reason := d.Err
+		if pathErr, ok := errors.AsType[*fs.PathError](d.Err); ok {
+			reason = pathErr.Err
+		}
+		return fmt.Sprintf("Removed %s; could not delete %s: %v", d.Name, d.Path, reason)
+	}
 	switch d.Fate {
 	case FileDeleted:
 		return fmt.Sprintf("Removed %s and deleted %s", d.Name, d.Path)
@@ -77,4 +90,9 @@ func AttachRefusal(binding Project, issueProject int64, shortID, owner string) e
 // NoAttachmentError is the refusal to detach a name the Issue shortID does not have.
 func NoAttachmentError(shortID, name string) error {
 	return fmt.Errorf("%s has no attachment named %q.", shortID, name)
+}
+
+// AttachmentChangedError is the refusal to detach a name whose pointer changed after it was read.
+func AttachmentChangedError(shortID, name string) error {
+	return fmt.Errorf("The attachment %q of %s changed since it was read, so nothing was removed.", name, shortID)
 }

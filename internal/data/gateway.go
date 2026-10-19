@@ -162,7 +162,15 @@ func plan(cmd model.Cmd, host string) (request, bool) {
 			func(err error) model.Msg { return model.FileAttached{Ref: cmd.Ref, Err: err} }}, true
 	case model.DetachFile:
 		return request{cmd.Workspace,
-			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.DetachFile(ctx, host, cmd)) },
+			func(ctx context.Context, c *Client) (model.Msg, error) {
+				detached, err := c.DetachFile(ctx, host, cmd)
+				if detached.Cleared {
+					// Cleared is final: the result and its error travel together, and nothing is retried.
+					detached.Err = err
+					return detached, nil
+				}
+				return ok(detached, err)
+			},
 			func(err error) model.Msg { return model.FileDetached{Ref: cmd.Ref, Name: cmd.Name, Err: err} }}, true
 	case model.LoadFieldLabels:
 		return request{cmd.Workspace,

@@ -163,7 +163,10 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		}
 		return fieldWritten(m, msg.Ref, report, msg.Err)
 	case FileDetached:
-		return fieldWritten(m, msg.Ref, msg.Report(), msg.Err)
+		if msg.Cleared {
+			return fieldWritten(m, msg.Ref, msg.Report(), nil)
+		}
+		return fieldWritten(m, msg.Ref, "", msg.Err)
 	case Start:
 		m.Workspace = msg.Workspace
 		m.nonce = msg.Nonce
