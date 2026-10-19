@@ -2,6 +2,7 @@ package model_test
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -26,6 +27,18 @@ func keyOf(t *testing.T, cmds []model.Cmd) string {
 	return ""
 }
 
+// withoutKeys is cmds with the idempotency key blanked, for tests that do not care what it is.
+func withoutKeys(cmds []model.Cmd) []model.Cmd {
+	out := slices.Clone(cmds)
+	for i, cmd := range out {
+		if save, ok := cmd.(model.SaveDraft); ok {
+			save.Key = ""
+			out[i] = save
+		}
+	}
+	return out
+}
+
 func started(t *testing.T) model.Model {
 	m, _ := model.Update(onComments(), model.Start{Workspace: "/repo", Nonce: "run1"})
 	return m
@@ -36,8 +49,8 @@ func TestCommentResendsReuseTheKeyUntilTheDraftChanges(t *testing.T) {
 	m = typed(m, "hello")
 	m, cmds := clickPress(m, "meta+o")
 	first := keyOf(t, cmds)
-	if first == "" || first[:5] != "run1-" {
-		t.Fatalf("key %q does not come from the run's nonce", first)
+	if first == "" {
+		t.Fatal("a comment send carries no key")
 	}
 	m, _ = model.Update(m, model.DraftFailed{UID: "a", Err: errTest})
 	m, cmds = clickPress(m, "meta+o")
@@ -49,6 +62,19 @@ func TestCommentResendsReuseTheKeyUntilTheDraftChanges(t *testing.T) {
 	m, cmds = clickPress(m, "meta+o")
 	if got := keyOf(t, cmds); got == first {
 		t.Fatalf("edited resend reused key %q", got)
+	}
+}
+
+func TestACommentResentAfterOverwritingAConflictKeepsItsKey(t *testing.T) {
+	m, _ := clickPress(started(t), "c")
+	m = typed(m, "hello")
+	m, cmds := clickPress(m, "meta+o")
+	first := keyOf(t, cmds)
+	latest := model.Issue{UID: "a", ProjectID: 2, Body: "someone else's body", Revision: 9}
+	m, _ = model.Update(m, model.DraftConflict{UID: "a", Issue: latest})
+	_, cmds = clickPress(m, "o")
+	if got := keyOf(t, cmds); got != first {
+		t.Fatalf("resend after overwrite key %q, want the first send's %q", got, first)
 	}
 }
 

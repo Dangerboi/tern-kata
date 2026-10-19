@@ -24,7 +24,11 @@ type Draft struct {
 	// ReplyKind what the reply is.
 	ReplyTo, ReplyAuthor string
 	ReplyKind            ReplyKind
-	// Key is the idempotency key of the last send and sent the request it went with; see mintKey.
+	Keyed
+}
+
+// Keyed is the idempotency key of a request's last send and the request it went with; see mintKey.
+type Keyed struct {
 	Key  string
 	sent any
 }
@@ -210,21 +214,24 @@ func sendDraft(m Model, force bool) (Model, []Cmd) {
 	draft.Err = nil
 	cmd := SaveDraft{Workspace: m.Workspace, UID: m.EditorUID, ProjectID: draft.ProjectID, BaseText: draft.BaseText, Text: draft.Editor.Text, Comment: draft.Comment, Actor: m.Actor, ReplyTo: draft.ReplyTo, ReplyKind: draft.ReplyKind, Force: force}
 	if draft.Comment {
-		cmd.Key = m.mintKey(&draft, cmd)
+		request := cmd
+		request.BaseText, request.Force = "", false // kata fingerprints neither, so a resend that differs in them keeps its key
+		m, draft.Keyed = m.mintKey(draft.Keyed, request)
+		cmd.Key = draft.Key
 	}
 	m = putDraft(m, m.EditorUID, draft)
 	return m, []Cmd{cmd}
 }
 
-// mintKey is the idempotency key for sending request from d: the key of d's previous send when the request is
-// unchanged (kata fingerprints a request with its key, so only an identical resend may reuse it), a new one otherwise.
+// mintKey is the idempotency key for sending request: the key of k's previous send when the request is unchanged (kata
+// fingerprints a request with its key, so only an identical resend may reuse it), a new one otherwise.
 // request must carry no key.
-func (m *Model) mintKey(d *Draft, request any) string {
-	if d.Key == "" || !reflect.DeepEqual(d.sent, request) {
+func (m Model) mintKey(k Keyed, request any) (Model, Keyed) {
+	if k.Key == "" || !reflect.DeepEqual(k.sent, request) {
 		m.keys++
-		d.Key, d.sent = m.nonce+"-"+strconv.Itoa(m.keys), request
+		k = Keyed{Key: m.nonce + "-" + strconv.Itoa(m.keys), sent: request}
 	}
-	return d.Key
+	return m, k
 }
 
 // replyKey handles the keys only a Reply Draft has: the kind key cycles the kind and Send anyway resends a duplicate with force.

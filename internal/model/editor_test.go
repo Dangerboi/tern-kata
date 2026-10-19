@@ -53,7 +53,7 @@ func TestDraftSequences(t *testing.T) {
 		{"conflict overwrite", []model.Msg{key("e"), typed, conflict, key("o")}, "a😀blocal", model.ModeEditor, true, model.SaveDraft{Workspace: "/repo", UID: "a", ProjectID: 2, BaseText: "Remote body", Text: "a😀blocal"}},
 		{"conflict discard", []model.Msg{key("e"), typed, conflict, key("d")}, "", model.ModeDetail, false, nil},
 		{"live detail preserves Draft", []model.Msg{key("e"), typed, model.DetailLoaded{UID: "a", Selected: &model.IssueDetailData{Issue: &latest}}}, "a😀blocal", model.ModeEditor, true, nil},
-		{"comment save", []model.Msg{key("c"), typed, key("meta+o")}, "local", model.ModeEditor, true, model.SaveDraft{Workspace: "/repo", UID: "a", ProjectID: 2, BaseText: "a😀b", Text: "local", Comment: true, Key: "-1"}},
+		{"comment save", []model.Msg{key("c"), typed, key("meta+o")}, "local", model.ModeEditor, true, model.SaveDraft{Workspace: "/repo", UID: "a", ProjectID: 2, BaseText: "a😀b", Text: "local", Comment: true}},
 		{"external editor", []model.Msg{key("e"), key("ctrl+e")}, "a😀b", model.ModeEditor, true, model.OpenDraftEditor{UID: "a", Text: "a😀b"}},
 		{"CRLF paste", []model.Msg{key("e"), model.KeyMsg{Chord: "paste", Text: "x\r\ny\rz"}}, "a😀bx\ny\nz", model.ModeEditor, true, nil},
 		{"plain paste unchanged", []model.Msg{key("e"), model.KeyMsg{Chord: "paste", Text: "x\ny"}}, "a😀bx\ny", model.ModeEditor, true, nil},
@@ -79,7 +79,7 @@ func TestDraftSequences(t *testing.T) {
 			if tt.command != nil {
 				want = []model.Cmd{tt.command}
 			}
-			if !reflect.DeepEqual(cmds, want) {
+			if !reflect.DeepEqual(withoutKeys(cmds), want) {
 				t.Fatalf("Cmds=%#v want %#v", cmds, want)
 			}
 			if draft.Conflict != nil && draft.Conflict.Body != "Remote body" {

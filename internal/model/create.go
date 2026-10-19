@@ -133,7 +133,9 @@ func submitCreate(m Model) (Model, []Cmd) {
 	f.Saving = true
 	f.Err = nil
 	cmd := CreateIssueCmd{Workspace: m.Workspace, Actor: m.Actor, ProjectID: f.ProjectID, Title: strings.TrimSpace(f.Title), Body: f.Editor.Text, Labels: labels, Owner: strings.TrimSpace(f.Owner), Priority: priority, ParentUID: f.ParentUID}
-	cmd.Key = m.mintKey(&f.Draft, cmd)
+	var keyed Keyed
+	m, keyed = m.mintKey(f.Keyed, cmd)
+	f.Keyed, cmd.Key = keyed, keyed.Key
 	return m, []Cmd{cmd}
 }
 func updateCreate(m Model, msg Msg) (Model, []Cmd, bool) {
