@@ -4,6 +4,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-19
+
 ### Added
 
 - Install scripts (`install.sh`, `install.ps1`) download the latest release, verify its checksum and install the window plugin when `tern` is on `PATH`. The **Install tern-kata** palette command runs them in a new Pane.
@@ -40,4 +42,5 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `install.ps1` parses, keeps `%VAR%` entries in `PATH` and says when it changes `PATH`, so programs started from Explorer, such as Tern, see it.
 - **Open kata**, `F9` and kata links open tern-kata in a new tab, in the focused Pane's directory, when Tern can't split the focused Pane, instead of doing nothing.
 
-[Unreleased]: https://github.com/Dangerboi/tern-kata/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/Dangerboi/tern-kata/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Dangerboi/tern-kata/compare/v0.1.1...v0.2.0
