@@ -17,7 +17,9 @@ type IssueDetail struct {
 	tab     ActivityTab
 	cursor  int // an index into rows.items
 	rows    detailRows
-	back    []string
+	back    []jumpEntry
+	// landing is where the cursor goes once the detail of the Issue it names arrives.
+	landing *jumpEntry
 	// landedOn is the Issue the last jump landed on; the history ends once the detail shows another one.
 	landedOn string
 	// openRef is a reference being opened; openedUID is the Issue it opened, which may be outside the Collection.
@@ -97,7 +99,7 @@ func (m Model) shownIssue() *Issue {
 
 // endJumpHistory is the one way the jump history ends.
 func (m Model) endJumpHistory() Model {
-	m.back = nil
+	m.back, m.landing = nil, nil
 	return m
 }
 
@@ -165,7 +167,7 @@ func (m Model) detailLoaded(msg DetailLoaded) Model {
 		m.authority = msg.Selected
 		m.loading = false
 		m.err = nil
-		m = m.reanchor(anchor, anchored)
+		m = m.arrived(anchor, anchored)
 	}
 	return m
 }
@@ -193,7 +195,7 @@ func (m Model) snapshotArrived(authority *IssueDetailData, selected string, anch
 		m.stale = false
 		m.loading = false
 		m.err = nil
-		m = m.reanchor(anchor, anchored)
+		m = m.arrived(anchor, anchored)
 	} else if m.uid == m.SelectedUID {
 		m.stale = true
 	}
@@ -234,24 +236,61 @@ func (m Model) openFailed(ref string) Model {
 	return m
 }
 
-// jumpTo shows another Issue and remembers where it came from.
-func (m Model) jumpTo(uid string) Model {
+// jumpEntry is a place in an Issue's detail: the Issue, its Activity tab and a row. A jump history entry records where the
+// jump left from; a landing is where the detail puts the cursor once the Issue arrives.
+type jumpEntry struct {
+	uid    string
+	tab    ActivityTab
+	row    rowID
+	hasRow bool
+}
+
+// arrived puts the cursor where a pending landing asks, else keeps it on its row (anchor) by reanchoring. A landing row that is
+// gone leaves the cursor on the tab's first row.
+func (m Model) arrived(anchor rowID, anchored bool) Model {
+	land := m.landing
+	if land == nil || land.uid != m.SelectedUID {
+		return m.reanchor(anchor, anchored)
+	}
+	m.landing = nil
+	m.cursor = 0
+	m = m.withRows()
+	if land.hasRow {
+		m = m.reanchor(land.row, true)
+		if row, ok := m.cursorRow(); ok && row.Kind == land.row.kind && row.Key == land.row.key {
+			return m
+		}
+	}
+	m.cursor = m.firstActivityIndex()
+	return m
+}
+
+// jumpTo shows another Issue and remembers where it came from. A landing, when given, is the tab and row the Issue opens on;
+// without one the Issue opens at its first row on the tab already shown.
+func (m Model) jumpTo(uid string, landing *jumpEntry) Model {
 	if uid == "" || uid == m.SelectedUID {
 		return m
 	}
-	m.back = append(m.back[:len(m.back):len(m.back)], m.SelectedUID)
+	row, hasRow := m.cursorRowID()
+	m.back = append(m.back[:len(m.back):len(m.back)], jumpEntry{uid: m.SelectedUID, tab: m.tab, row: row, hasRow: hasRow})
 	m.SelectedUID, m.landedOn = uid, uid
+	m.landing = nil
+	if landing != nil {
+		landing.uid = uid
+		m.tab, m.landing = landing.tab, landing
+	}
 	return m.focusDetail()
 }
 
-// jumpBack returns to the Issue the last jump came from.
+// jumpBack returns to the Issue, tab and row the last jump came from.
 func (m Model) jumpBack() (Model, bool) {
 	if len(m.back) == 0 {
 		return m, false
 	}
-	m.SelectedUID = m.back[len(m.back)-1]
+	entry := m.back[len(m.back)-1]
 	m.back = m.back[:len(m.back)-1]
-	m.landedOn = m.SelectedUID
+	m.SelectedUID, m.landedOn = entry.uid, entry.uid
+	m.tab, m.landing = entry.tab, &entry
 	return m, true
 }
 
@@ -290,7 +329,13 @@ func (m Model) openCursorRow() Model {
 			m.cursor = i
 			return m
 		}
-		return m.jumpTo(row.ReferenceUID)
+		var landing *jumpEntry
+		if row.ReferenceKey != "" {
+			landing = &jumpEntry{tab: TabComments, row: rowID{RowComment, row.ReferenceKey}, hasRow: true}
+		} else if row.Kind == RowComment {
+			landing = &jumpEntry{tab: TabComments}
+		}
+		return m.jumpTo(row.ReferenceUID, landing)
 	}
 	return m
 }

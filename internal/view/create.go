@@ -53,7 +53,7 @@ func createLayer(m model.Model) tern.Element {
 	case f.DiscardConfirm:
 		children = append(children, ui.Text{Common: ui.Common{Key: "discard", Tone: ui.ToneWarning}, Text: "Discard this Draft? y discards; n or esc keeps editing."}, discardButtons())
 	default:
-		children = append(children, buttonRow(keyButton("save", title+" (ctrl+o)", "ctrl+o", true), keyButton("cancel", "Cancel (esc)", "escape", false)))
+		children = append(children, buttonRow(cardButton("save", model.ModeCreate, model.SaveDraftAction, title, true), cardButton("cancel", model.ModeCreate, model.CancelDraft, "Cancel", false)))
 	}
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "create"}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
 }

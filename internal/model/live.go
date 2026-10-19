@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 type LiveState struct {
 	Cursor           int64
@@ -13,7 +16,18 @@ type LiveState struct {
 	RefreshRequest   int64
 	PendingCursor    int64
 	Resetting        bool
-	DayEnded         bool // the end-of-day wake fired for the Pane calendar's date; the next read must show a newer date
+	DayEnded         bool   // the end-of-day wake fired for the Pane calendar's date; the next read must show a newer date
+	countsFresh      bool   // the counts on screen cover every event so far
+	countsCovered    bool   // the read in flight asks for counts and no count-changing event has come since
+	countsScope      string // the Project UID the counts on screen are scoped to
+}
+
+// countsKept are the event types known not to change an Issue's parent or status; any other event, including one this
+// version does not know, makes the next Collection snapshot read ask for child counts.
+var countsKept = []string{
+	"issue.commented", "issue.comment_edited", "issue.assigned", "issue.unassigned", "issue.assignment_expired",
+	"issue.assignment_renewed", "issue.labeled", "issue.unlabeled", "issue.priority_set", "issue.priority_cleared",
+	"issue.updated", "issue.metadata_updated",
 }
 
 // WakeAt asks for one wake at At, the end of the local day Day; a newer WakeAt replaces an older one.
@@ -84,12 +98,16 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 		if msg.Type == "sync.reset_required" {
 			m.Stale = true
 			m.Resetting = true
+			m.countsFresh = false
 			m.StreamConnected = false
 			m.Refreshing = false
 			return snapshotChanged(m)
 		}
 		if msg.ID <= m.Cursor {
 			return m, nil
+		}
+		if !slices.Contains(countsKept, msg.Type) {
+			m.countsFresh, m.countsCovered = false, false
 		}
 		m.PendingCursor = max(m.PendingCursor, msg.ID)
 		return snapshotChanged(m)

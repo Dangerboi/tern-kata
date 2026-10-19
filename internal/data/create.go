@@ -16,7 +16,7 @@ func (c *Client) CreateIssue(ctx context.Context, cmd model.CreateIssueCmd) (mod
 	if cmd.ParentUID != "" {
 		body.Links = []g.CreateInitialLinkBody{{Type: "parent", ToRef: cmd.ParentUID}}
 	}
-	response, err := c.CreateIssueWithResponse(ctx, &g.CreateIssueRequestOptions{PathParams: &g.CreateIssuePath{ProjectID: strconv.FormatInt(cmd.ProjectID, 10)}, Body: &body})
+	response, err := c.CreateIssueWithResponse(ctx, &g.CreateIssueRequestOptions{PathParams: &g.CreateIssuePath{ProjectID: strconv.FormatInt(cmd.ProjectID, 10)}, Body: &body, Header: &g.CreateIssueHeaders{IdempotencyKey: idempotencyKey(cmd.Key)}})
 	if err != nil {
 		return model.IssueCreated{}, daemonError(err)
 	}
@@ -24,4 +24,12 @@ func (c *Client) CreateIssue(ctx context.Context, cmd model.CreateIssueCmd) (mod
 		return model.IssueCreated{}, errors.New("kata returned no created Issue")
 	}
 	return model.IssueCreated{UID: response.JSON200.Issue.UID}, nil
+}
+
+// idempotencyKey is the Idempotency-Key header value for key, nil when the write carries none.
+func idempotencyKey(key string) *string {
+	if key == "" {
+		return nil
+	}
+	return &key
 }

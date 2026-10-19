@@ -30,7 +30,7 @@ func projectLayer(m model.Model) tern.Element {
 	if form.Saving {
 		children = append(children, ui.Text{Common: ui.Common{Key: "saving", Tone: ui.TonePending}, Text: "Creating Project…"})
 	} else {
-		children = append(children, buttonRow(keyButton("create", "Create Project (enter)", "enter", true), keyButton("cancel", "Cancel (esc)", "escape", false)))
+		children = append(children, buttonRow(cardButton("create", model.ModeProjectForm, model.ProjectSubmit, "Create Project", true), cardButton("cancel", model.ModeProjectForm, model.ProjectCancel, "Cancel", false)))
 	}
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "project"}, Head: ui.T(model.NewProjectTitle), Modal: true, Size: ui.SizeMD, Children: children})
 }

@@ -35,7 +35,7 @@ func (c *Client) SaveDraft(ctx context.Context, cmd model.SaveDraft) (model.Msg,
 				body.Force = &cmd.Force
 			}
 		}
-		_, werr = c.CreateCommentWithResponse(ctx, &g.CreateCommentRequestOptions{PathParams: &g.CreateCommentPath{ProjectID: fmt.Sprint(cmd.ProjectID), Ref: cmd.UID}, Body: body})
+		_, werr = c.CreateCommentWithResponse(ctx, &g.CreateCommentRequestOptions{PathParams: &g.CreateCommentPath{ProjectID: fmt.Sprint(cmd.ProjectID), Ref: cmd.UID}, Body: body, Header: &g.CreateCommentHeaders{IdempotencyKey: idempotencyKey(cmd.Key)}})
 	} else {
 		_, werr = c.EditIssueWithResponse(ctx, &g.EditIssueRequestOptions{PathParams: &g.EditIssuePath{ProjectID: fmt.Sprint(cmd.ProjectID), Ref: cmd.UID}, Body: &g.EditIssueBody{Body: &cmd.Text, Actor: &actor}})
 	}
