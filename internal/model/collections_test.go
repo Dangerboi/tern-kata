@@ -86,7 +86,7 @@ func TestCollectionKeyboardSwitching(t *testing.T) {
 
 func TestLiveRefreshKeepsCollection(t *testing.T) {
 	collection := model.Collection{View: "upcoming", Title: "Upcoming"}
-	m := model.Model{Collection: collection, LocalDate: "2026-12-31", TimeZone: "UTC", SelectedUID: "future"}
+	m := model.Model{Collection: collection, Calendar: model.NewPaneCalendar("2026-12-31", "UTC", ""), SelectedUID: "future"}
 	m, cmds := model.Update(m, model.StreamEvent{Generation: 0, ID: 1, Type: "issue.updated"})
 	refresh := cmds[0].(model.ReadSnapshot)
 	query := refresh.Query
@@ -95,7 +95,7 @@ func TestLiveRefreshKeepsCollection(t *testing.T) {
 		t.Fatalf("wrong Collection query: %+v", refresh.Query)
 	}
 	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: model.Snapshot{Cursor: 1, Issues: []model.Issue{{UID: "future", Status: "open", ScheduledOnDate: new("2027-01-01")}}}})
-	if m.Collection != collection || m.SelectedUID != "future" || m.LocalDate != "2026-12-31" || len(m.Groups) != 1 || m.Groups[0].Title != "2027-01-01" {
+	if m.Collection != collection || m.SelectedUID != "future" || m.Calendar.Date != "2026-12-31" || len(m.Groups) != 1 || m.Groups[0].Title != "2027-01-01" {
 		t.Fatalf("live refresh lost Collection: %+v", m)
 	}
 }
