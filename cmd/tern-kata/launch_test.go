@@ -29,6 +29,7 @@ func TestPlanLaunch(t *testing.T) {
 		{name: "issue equals value", args: []string{"--issue=proj/ab12"}, issueRef: "proj/ab12", fallbackArgs: []string{"--project", "proj", "proj#ab12"}},
 		{name: "issue missing value", args: []string{"--issue"}, err: "--issue requires <project>/<short_id>"},
 		{name: "issue followed by as", args: []string{"--issue", "--as", "bob"}, err: "--issue requires <project>/<short_id>"},
+		{name: "as followed by issue", args: []string{"--as", "--issue", "x"}, err: "--as requires an actor"},
 		{name: "issue followed by as equals", args: []string{"--issue", "--as=bob"}, err: "--issue requires <project>/<short_id>"},
 		{name: "as missing value", args: []string{"--as"}, err: "--as requires an actor"},
 		{name: "malformed issue ref", args: []string{"--issue", "noslash"}, err: `Issue reference must be <project>/<short_id>: "noslash"`},
