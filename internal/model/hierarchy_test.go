@@ -249,17 +249,13 @@ func TestKidsAreTheDaemonsCountsWhateverTheFilters(t *testing.T) {
 		}
 		return got
 	}
-	m, _ := loadFirst(model.Model{}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: snapshot})
+	m, _ := loadFirst(model.Model{}, model.ProjectLoaded{}, model.SnapshotLoaded{CountsRead: true, Snapshot: snapshot})
 	if got := kids(m); got != [2]int{2, 6} {
 		t.Fatalf("project load: kids %v, want 2/6", got)
 	}
 	m.Collection = model.Collection{View: "all-open", Title: "All Open"}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: snapshot.Issues, ChildCounts: map[string]model.ChildCounts{"parent": {Open: 1, Total: 6}}}})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), CountsRead: true, Snapshot: model.Snapshot{Issues: snapshot.Issues, ChildCounts: map[string]model.ChildCounts{"parent": {Open: 1, Total: 6}}}})
 	if got := kids(m); got != [2]int{1, 6} {
 		t.Fatalf("collection load: kids %v, want 1/6", got)
-	}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: snapshot.Issues}})
-	if got := kids(m); got != [2]int{1, 6} {
-		t.Fatalf("a load that read no counts keeps the ones on screen: kids %v", got)
 	}
 }

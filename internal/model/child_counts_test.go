@@ -1,6 +1,7 @@
 package model_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -11,7 +12,7 @@ var parentCounts = map[string]model.ChildCounts{"parent": {Open: 1, Total: 2}}
 func countsLoaded(t *testing.T) model.Model {
 	t.Helper()
 	m, _ := loadFirst(model.Model{Workspace: "/repo"}, model.ProjectLoaded{Project: model.Project{UID: "project"}},
-		model.SnapshotLoaded{Snapshot: model.Snapshot{Cursor: 10, Issues: []model.Issue{{UID: "parent"}}, ChildCounts: parentCounts}})
+		model.SnapshotLoaded{CountsRead: true, Snapshot: model.Snapshot{Cursor: 10, Issues: []model.Issue{{UID: "parent"}}, ChildCounts: parentCounts}})
 	return m
 }
 
@@ -61,13 +62,13 @@ func TestDaemonResetAsksForChildCounts(t *testing.T) {
 
 func TestSwitchingProjectScopeAsksForChildCounts(t *testing.T) {
 	m, _ := loadFirst(model.Model{Workspace: "/repo"}, model.ProjectLoaded{Project: model.Project{UID: "project"}},
-		model.SnapshotLoaded{Snapshot: model.Snapshot{Cursor: 10, ChildCounts: parentCounts, Catalog: []model.CatalogProject{{Project: model.Project{UID: "other", Name: "Other"}}}}})
+		model.SnapshotLoaded{CountsRead: true, Snapshot: model.Snapshot{Cursor: 10, ChildCounts: parentCounts, Catalog: []model.CatalogProject{{Project: model.Project{UID: "other", Name: "Other"}}}}})
 	m, cmds := model.Update(m, model.CollectionSelected{Collection: model.ProjectCollection("other", "Other")})
 	read := cmdOf[model.ReadSnapshot](t, cmds)
 	if !read.ChildCounts {
 		t.Fatal("a Project scope change did not ask for child counts")
 	}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: read.Request, Query: read.Query, Snapshot: model.Snapshot{Cursor: 11, ChildCounts: map[string]model.ChildCounts{}}})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: read.Request, Query: read.Query, CountsRead: true, Snapshot: model.Snapshot{Cursor: 11, ChildCounts: map[string]model.ChildCounts{}}})
 	if _, read = event(t, m, "issue.updated"); read.ChildCounts {
 		t.Fatal("asked again within the same scope")
 	}
@@ -100,5 +101,60 @@ func TestLiveRefreshKeepsCountsWhenTheirDownloadFails(t *testing.T) {
 	}
 	if _, read = event(t, m, "issue.commented"); !read.ChildCounts {
 		t.Fatal("did not ask again after the failure")
+	}
+}
+
+func hasRead(cmds []model.Cmd) bool {
+	return slices.ContainsFunc(cmds, func(cmd model.Cmd) bool { _, ok := cmd.(model.ReadSnapshot); return ok })
+}
+
+func streamEvent(m model.Model, id int64, typ string) (model.Model, []model.Cmd) {
+	return model.Update(m, model.StreamEvent{Generation: m.StreamGeneration, ID: id, Type: typ})
+}
+
+func TestACountChangingEventAReadWithoutCountsAlreadyCoveredStillRefreshesCounts(t *testing.T) {
+	t.Run("event arrives before the result", func(t *testing.T) {
+		m, cmds := streamEvent(countsLoaded(t), 11, "issue.commented")
+		read := cmdOf[model.ReadSnapshot](t, cmds)
+		m, cmds = streamEvent(m, 12, "issue.closed")
+		if len(cmds) != 0 {
+			t.Fatalf("a second read started beside the one in flight: %+v", cmds)
+		}
+		_, cmds = model.Update(m, model.SnapshotLoaded{Request: read.Request, Query: read.Query, Snapshot: model.Snapshot{Cursor: 12, Issues: []model.Issue{{UID: "parent"}}}})
+		if !cmdOf[model.ReadSnapshot](t, cmds).ChildCounts {
+			t.Fatal("the result covers the close but not its counts, and no read asked for them")
+		}
+	})
+	t.Run("event arrives after the result", func(t *testing.T) {
+		m, cmds := streamEvent(countsLoaded(t), 11, "issue.commented")
+		read := cmdOf[model.ReadSnapshot](t, cmds)
+		m, cmds = model.Update(m, model.SnapshotLoaded{Request: read.Request, Query: read.Query, Snapshot: model.Snapshot{Cursor: 12, Issues: []model.Issue{{UID: "parent"}}}})
+		if hasRead(cmds) {
+			t.Fatalf("a result with nothing newer read again: %+v", cmds)
+		}
+		_, cmds = streamEvent(m, 12, "issue.closed")
+		if !cmdOf[model.ReadSnapshot](t, cmds).ChildCounts {
+			t.Fatal("a close the result already covered was dropped and the counts stay stale")
+		}
+	})
+}
+
+func TestAReadWithCountsCoversTheEventsItAlreadyHolds(t *testing.T) {
+	m, cmds := streamEvent(countsLoaded(t), 11, "issue.closed")
+	read := cmdOf[model.ReadSnapshot](t, cmds)
+	m, cmds = model.Update(m, model.SnapshotLoaded{Request: read.Request, Query: read.Query, CountsRead: true, Snapshot: model.Snapshot{Cursor: 12, Issues: []model.Issue{{UID: "parent"}}, ChildCounts: parentCounts}})
+	if hasRead(cmds) {
+		t.Fatalf("a result with fresh counts read again: %+v", cmds)
+	}
+	if _, cmds = streamEvent(m, 12, "issue.closed"); hasRead(cmds) {
+		t.Fatalf("a replayed event the counts already cover read again: %+v", cmds)
+	}
+}
+
+func TestAFailedCountDownloadDoesNotReadAgainOnItsOwn(t *testing.T) {
+	m, cmds := streamEvent(countsLoaded(t), 11, "issue.closed")
+	read := cmdOf[model.ReadSnapshot](t, cmds)
+	if _, cmds = model.Update(m, model.SnapshotLoaded{Request: read.Request, Query: read.Query, Snapshot: model.Snapshot{Cursor: 11, Issues: []model.Issue{{UID: "parent"}}}}); hasRead(cmds) {
+		t.Fatalf("a failed count download looped: %+v", cmds)
 	}
 }

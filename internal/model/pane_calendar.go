@@ -6,7 +6,6 @@ import "time"
 // Scheduled and deadline dates are not read through it: they compare as kata stores them.
 type PaneCalendar struct {
 	Date string // today's local date, YYYY-MM-DD; empty before the first dated Collection snapshot
-	Zone string
 	Note string // set when UTC stands in for an unknown or unloadable zone
 	loc  *time.Location
 }
@@ -14,15 +13,21 @@ type PaneCalendar struct {
 // NewPaneCalendar reads date in zone; an unloadable zone reads as UTC.
 func NewPaneCalendar(date, zone, note string) PaneCalendar {
 	loc, _ := time.LoadLocation(zone)
-	return PaneCalendar{Date: date, Zone: zone, Note: note, loc: loc}
+	return PaneCalendar{Date: date, Note: note, loc: loc}
 }
 
-func (c PaneCalendar) in(t time.Time) time.Time {
+// location is the one place the zero value becomes UTC.
+func (c PaneCalendar) location() *time.Location {
 	if c.loc == nil {
-		return t.UTC()
+		return time.UTC
 	}
-	return t.In(c.loc)
+	return c.loc
 }
+
+// Zone is the name of the time zone the Pane reads dates in.
+func (c PaneCalendar) Zone() string { return c.location().String() }
+
+func (c PaneCalendar) in(t time.Time) time.Time { return t.In(c.location()) }
 
 // DayOf is the local day an instant falls on, YYYY-MM-DD.
 func (c PaneCalendar) DayOf(t time.Time) string { return c.in(t).Format("2006-01-02") }
@@ -41,20 +46,12 @@ func (c PaneCalendar) Read(t, now time.Time) string {
 // DayEnds is local midnight of the day after the one now falls on; daylight-saving days are 23 or 25 hours long.
 func (c PaneCalendar) DayEnds(now time.Time) time.Time {
 	y, mo, d := c.in(now).Date()
-	loc := c.loc
-	if loc == nil {
-		loc = time.UTC
-	}
-	return time.Date(y, mo, d+1, 0, 0, 0, 0, loc)
+	return time.Date(y, mo, d+1, 0, 0, 0, 0, c.location())
 }
 
 // EndOfDate is when the local day named by Date ends; an empty or unreadable Date has none.
 func (c PaneCalendar) EndOfDate() (time.Time, bool) {
-	loc := c.loc
-	if loc == nil {
-		loc = time.UTC
-	}
-	day, err := time.ParseInLocation("2006-01-02", c.Date, loc)
+	day, err := time.ParseInLocation("2006-01-02", c.Date, c.location())
 	if err != nil {
 		return time.Time{}, false
 	}

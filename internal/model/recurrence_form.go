@@ -121,12 +121,9 @@ func (f *RecurrenceFormState) text(name Field) *string {
 // The start date is the Issue's scheduled date, else today; the zone is the Pane's.
 func newRecurrenceForm(m Model, issue *Issue) RecurrenceFormState {
 	f := RecurrenceFormState{Open: true, Field: RecurrenceFields[0].Name, UID: issue.UID, ProjectID: issue.ProjectID, Frequency: Weekly, Every: "1", Month: 1,
-		Start: m.Calendar.Date, Zone: m.Calendar.Zone}
+		Start: m.Calendar.Date, Zone: m.Calendar.Zone()}
 	if issue.ScheduledOnDate != nil && *issue.ScheduledOnDate != "" {
 		f.Start = *issue.ScheduledOnDate
-	}
-	if f.Zone == "" {
-		f.Zone = "UTC"
 	}
 	if start, err := time.Parse(time.DateOnly, f.Start); err == nil {
 		f.Weekdays[start.Weekday()] = true

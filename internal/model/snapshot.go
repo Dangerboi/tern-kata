@@ -38,9 +38,9 @@ type ReadSnapshot struct {
 
 func (ReadSnapshot) cmd() {}
 
-// SnapshotLoaded is the one message that carries a snapshot into the model. A nil Snapshot.ChildCounts means counts were not
-// read (not asked for, or their download failed); a read with none to report has an empty, non-nil map. Query is the query it answers; the daemon side
-// adds the local calendar the dated Collections need and reports it in LocalDate and TimeZone.
+// SnapshotLoaded is the one message that carries a snapshot into the model. CountsRead says Snapshot.ChildCounts is the daemon's
+// answer (possibly empty); without it the counts were not asked for or their download failed, and the model keeps its own.
+// Query is the query it answers; the daemon side adds the local calendar the dated Collections need and reports it in LocalDate and TimeZone.
 type SnapshotLoaded struct {
 	Request             int64
 	Query               SnapshotQuery
@@ -50,6 +50,7 @@ type SnapshotLoaded struct {
 	NotModified         bool
 	LocalDate, TimeZone string
 	TimeZoneNote        string // set when UTC stands in for an unknown or unloadable zone
+	CountsRead          bool
 }
 
 func (SnapshotLoaded) msg() {}
@@ -129,6 +130,14 @@ func liveQuery(m Model) SnapshotQuery {
 	return q
 }
 
+// scope is the Project UID the query is scoped to, empty for every Project.
+func (q SnapshotQuery) scope() string {
+	if q.ProjectUID == nil {
+		return ""
+	}
+	return *q.ProjectUID
+}
+
 // sameCollectionQuery compares what picks the Issues, not the detail riding along.
 func sameCollectionQuery(a, b SnapshotQuery) bool {
 	a.SelectedIssueUID, b.SelectedIssueUID = nil, nil
@@ -152,11 +161,7 @@ func snapshotChanged(m Model) (Model, []Cmd) {
 		return m, []Cmd{lookup}
 	}
 	query := liveQuery(m)
-	scope := ""
-	if query.ProjectUID != nil {
-		scope = *query.ProjectUID
-	}
-	counts := !m.countsFresh || scope != m.countsScope
+	counts := !m.countsFresh || query.scope() != m.countsScope
 	m.countsCovered = counts
 	etag := ""
 	// A read that wants counts must not be answered 304, or a failed count download would never be retried.
@@ -180,6 +185,8 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 		return m, nil
 	}
 	m.Refreshing = false
+	rereadForDay := m.dayInFlight
+	m.dayInFlight = false
 	if !sameCollectionQuery(liveQuery(m), msg.Query) {
 		return snapshotChanged(m)
 	}
@@ -193,23 +200,21 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 	var cmds []Cmd
 	if !msg.NotModified {
 		if msg.LocalDate != "" {
-			newDay := msg.LocalDate != m.Calendar.Date
-			m.Calendar = NewPaneCalendar(msg.LocalDate, msg.TimeZone, msg.TimeZoneNote)
-			if newDay {
-				m.DayEnded = false
-				if at, ok := m.Calendar.EndOfDate(); ok {
-					cmds = append(cmds, WakeAt{Day: m.Calendar.Date, At: at})
-				}
+			calendar := NewPaneCalendar(msg.LocalDate, msg.TimeZone, msg.TimeZoneNote)
+			rescheduled := calendar.Date != m.Calendar.Date || calendar.Zone() != m.Calendar.Zone()
+			rereadForDay = rereadForDay && !rescheduled
+			m.Calendar = calendar
+			if at, ok := m.Calendar.EndOfDate(); ok && rescheduled {
+				m.wakeGeneration++
+				cmds = append(cmds, WakeAt{Day: m.Calendar.Date, At: at, Generation: m.wakeGeneration})
 			}
 		}
-		if msg.Snapshot.ChildCounts == nil {
+		if !msg.CountsRead {
 			msg.Snapshot.ChildCounts = m.Snapshot.ChildCounts
 		} else if m.countsCovered {
 			m.countsFresh = true
-			m.countsScope = ""
-			if msg.Query.ProjectUID != nil {
-				m.countsScope = *msg.Query.ProjectUID
-			}
+			m.countsScope = msg.Query.scope()
+			m.countsAt = msg.Snapshot.Cursor
 		}
 		selected := m.SelectedUID
 		anchor, anchored := m.cursorRowID()
@@ -228,8 +233,8 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 			cmds = append(cmds, open...)
 		}
 	}
-	if m.DayEnded {
-		// The read was dated the day that ended (it was in flight at the wake): read again.
+	if rereadForDay {
+		// The read was in flight at the wake and still dated the day that ended: read again.
 		var next []Cmd
 		m.etag = ""
 		m, next = snapshotChanged(m)
@@ -247,8 +252,8 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 		m.StreamErr = nil
 		m.ReconnectAttempt = 0
 	}
-	if _, lookup := m.idLookup(); lookup || m.PendingCursor > m.Cursor {
-		// A short id the lookup has not answered, or events newer than this snapshot.
+	if _, lookup := m.idLookup(); lookup || m.PendingCursor > m.Cursor || m.countsWanted > m.countsAt && !m.countsCovered {
+		// A short id the lookup has not answered, events newer than this snapshot, or a count-changing event this read did not cover.
 		var next []Cmd
 		m, next = snapshotChanged(m)
 		cmds = append(cmds, next...)
