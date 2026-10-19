@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/Dangerboi/tern-kata/internal/view"
 )
 
@@ -374,15 +375,39 @@ func TestEmptyAttachmentsTabSaysHowToAttach(t *testing.T) {
 
 func TestAttachmentRowsWithCollidingNamesGetUniqueNodeIDs(t *testing.T) {
 	p := map[string]any{"host": "box", "path": "/x"}
-	nodes := attachmentsTab(t, "box", map[string]any{"attachment.tabs": p, "attachment.empty": p, "attachment.a": p, "attachment.a.row": p})
+	issue := alpha
+	issue.Metadata = map[string]any{"attachment.tabs": p, "attachment.empty": p, "attachment.a": p, "attachment.a.row": p}
+	m := browsing()
+	m.Host = "box"
+	m = apply(m, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &issue}}, model.ActivityTabMsg{Tab: model.TabAttachments})
+	ops, err := tern.NewReconciler("test").Diff(view.Render(m, testNow))
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := map[string]int{}
+	var walk func(n tern.WireNode)
+	walk = func(n tern.WireNode) {
+		count[n.ID]++
+		for _, c := range n.C {
+			walk(c)
+		}
+	}
+	for _, op := range ops {
+		if op[0] == "add" {
+			walk(op[4].(tern.WireNode))
+		}
+	}
 	rows := 0
-	for _, c := range nodes[view.DetailActivityID].C {
-		if strings.HasPrefix(c.ID, view.DetailActivityID+".attachment-") {
+	for id, n := range count {
+		if n != 1 {
+			t.Errorf("node id %q appears %d times", id, n)
+		}
+		if strings.HasPrefix(id, view.DetailActivityID+".attachment-") {
 			rows++
 		}
 	}
-	if rows != 4 || nodes[view.DetailActivityID+".tabs"].ID == "" || nodes[view.DetailActivityID+".empty"].ID != "" {
-		t.Fatalf("rows %d", rows)
+	if rows != 4 {
+		t.Fatalf("attachment rows %d", rows)
 	}
 }
 
