@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"go.kenn.io/kata/pkg/client"
+
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
@@ -17,6 +19,8 @@ import (
 // again when the daemon cannot be reached.
 type Gateway struct {
 	locate Locator
+	// deadline bounds discovery, the version Ping and the kind check of one connection attempt.
+	deadline time.Duration
 
 	mu      sync.Mutex
 	clients map[string]*Client
@@ -32,7 +36,7 @@ type Gateway struct {
 }
 
 func NewGateway(locate Locator) *Gateway {
-	return &Gateway{locate: locate, clients: map[string]*Client{}, now: time.Now, wakePoll: time.Minute}
+	return &Gateway{locate: locate, deadline: connectDeadline, clients: map[string]*Client{}, now: time.Now, wakePoll: time.Minute}
 }
 
 // Close ends the running stream and drops the cached clients.
@@ -217,16 +221,26 @@ func (g *Gateway) client(ctx context.Context, workspace string) (*Client, error)
 	if c := g.clients[workspace]; c != nil {
 		return c, nil
 	}
-	target, err := g.locate(ctx, workspace)
+	// shortcut: the lock is held while connecting, so one hung daemon holds up other workspaces until the deadline.
+	connectCtx, cancel := context.WithTimeout(ctx, g.deadline)
+	defer cancel()
+	c, err := g.connect(connectCtx, workspace)
 	if err != nil {
-		return nil, err
-	}
-	c, err := connect(ctx, target)
-	if err != nil {
+		if connectCtx.Err() != nil && ctx.Err() == nil {
+			err = fmt.Errorf("%w\n%s", client.ErrDaemonUnavailable, noDaemonHint)
+		}
 		return nil, err
 	}
 	g.clients[workspace] = c
 	return c, nil
+}
+
+func (g *Gateway) connect(ctx context.Context, workspace string) (*Client, error) {
+	target, err := g.locate(ctx, workspace)
+	if err != nil {
+		return nil, err
+	}
+	return connect(ctx, target)
 }
 
 func (g *Gateway) forget(workspace string, c *Client) {

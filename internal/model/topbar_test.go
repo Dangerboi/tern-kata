@@ -10,7 +10,7 @@ func TestTopBarDaemonAndCounts(t *testing.T) {
 	project := model.Project{UID: "p", Name: "work"}
 	issues := []model.Issue{{UID: "a", Status: "open"}, {UID: "b", Status: "closed"}}
 	load := func(m model.Model, stats *model.ProjectStats) model.Model {
-		m, _ = loadFirst(m, model.ProjectLoaded{Project: project, Daemon: model.Daemon{Remote: true, Version: "v0.18.0"}}, model.SnapshotLoaded{Snapshot: model.Snapshot{
+		m, _ = loadFirst(m, model.ProjectLoaded{Project: project, Daemon: model.Daemon{Kind: model.DaemonRemote, Version: "v0.18.0"}}, model.SnapshotLoaded{Snapshot: model.Snapshot{
 			Catalog: []model.CatalogProject{{Project: project, Stats: stats}},
 			Issues:  issues,
 		}})
@@ -19,6 +19,10 @@ func TestTopBarDaemonAndCounts(t *testing.T) {
 	m := load(model.Model{Workspace: "/repo"}, &model.ProjectStats{Open: 5, Closed: 7})
 	if got := m.DaemonLine(); got != "Daemon: remote · kata v0.18.0" {
 		t.Fatalf("daemon line %q", got)
+	}
+	m.Daemon.Kind = model.DaemonKindUnknown
+	if got := m.DaemonLine(); got != "Daemon: kata v0.18.0" {
+		t.Fatalf("daemon line with an unknown kind %q", got)
 	}
 	if got := m.CountsLine(); got != "open: 5 · closed: 7 · all: 12" {
 		t.Fatalf("catalog counts %q", got)

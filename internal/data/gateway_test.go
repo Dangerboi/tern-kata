@@ -152,7 +152,7 @@ func TestGatewayBindsAndCreatesProjects(t *testing.T) {
 		t.Fatalf(".kata.toml %q, %v", binding, err)
 	}
 	loaded := as[model.ProjectLoaded](t, run(t, gateway, model.LoadProject{Workspace: workspace}))
-	if loaded.Project.UID != bound.UID || loaded.Daemon.Remote || loaded.Daemon.Version != "v0.19.0" {
+	if loaded.Project.UID != bound.UID || loaded.Daemon.Kind != model.DaemonLocal || loaded.Daemon.Version != "v0.19.0" {
 		t.Fatalf("workspace resolves to %+v, daemon %+v; want the bound Project %q on a local v0.19.0 daemon", loaded.Project, loaded.Daemon, bound.UID)
 	}
 
@@ -211,7 +211,7 @@ func TestGatewayResolvesTheBindingTheSameForBothDaemonKinds(t *testing.T) {
 
 		t.Run(kind+" bound workspace", func(t *testing.T) {
 			workspace, bound := project(t, gateway, "demo-"+kind)
-			if got, err := load(workspace); err != nil || got.Project.UID != bound.UID || got.Daemon.Remote != remote {
+			if got, err := load(workspace); err != nil || got.Project.UID != bound.UID || got.Daemon.Kind != map[bool]model.DaemonKind{false: model.DaemonLocal, true: model.DaemonRemote}[remote] {
 				t.Fatalf("got %+v, %v, want the bound Project on a %s daemon", got, err, kind)
 			}
 		})
@@ -1282,6 +1282,75 @@ func TestGatewayStopsTheRecurrenceAndReportsOneAlreadyStopped(t *testing.T) {
 	change := as[model.RecurrenceResultMsg](t, run(t, gateway, changeTo(demo, uid, opened, workspace, "FREQ=DAILY;INTERVAL=1")))
 	if change.Err == nil || change.Changed != nil {
 		t.Fatalf("changing a stopped recurrence: %+v, want an error", change)
+	}
+}
+
+func TestGatewayKindCheckFailureLeavesTheKindUnknown(t *testing.T) {
+	kata := startKata(t, "0.19.0")
+	target := kata.target()
+	target.Remote = func(context.Context) (bool, error) { return false, errors.New("kata: not found") }
+	gateway := newGateway(t, newLocator(target))
+	workspace, _ := project(t, gateway, "demo")
+	loaded := as[model.ProjectLoaded](t, run(t, gateway, model.LoadProject{Workspace: workspace}))
+	if loaded.Daemon.Kind != model.DaemonKindUnknown || loaded.Daemon.Version != "v0.19.0" {
+		t.Fatalf("daemon %+v, want the version with no kind", loaded.Daemon)
+	}
+}
+
+func TestGatewayWithoutTheKataBinaryStillLoadsWithoutAKind(t *testing.T) {
+	kata := startKata(t, "0.19.0")
+	t.Setenv("KATA_SERVER", kata.URL)
+	t.Setenv("PATH", t.TempDir())
+	gateway := NewGateway(LocateWithKata)
+	t.Cleanup(gateway.Close)
+	workspace, _ := project(t, gateway, "demo")
+	loaded := as[model.ProjectLoaded](t, run(t, gateway, model.LoadProject{Workspace: workspace}))
+	if loaded.Daemon.Kind != model.DaemonKindUnknown || loaded.Daemon.Version != "v0.19.0" {
+		t.Fatalf("daemon %+v, want the version with no kind", loaded.Daemon)
+	}
+}
+
+func TestGatewayHungKindCheckStillConnects(t *testing.T) {
+	kata := startKata(t, "0.19.0")
+	target := kata.target()
+	target.Remote = func(ctx context.Context) (bool, error) { <-ctx.Done(); return false, ctx.Err() }
+	l := newLocator(target)
+	gateway := newGateway(t, l)
+	gateway.deadline = 50 * time.Millisecond
+	workspace := t.TempDir()
+	loaded := as[model.ProjectLoaded](t, run(t, gateway, model.LoadProject{Workspace: workspace}))
+	if loaded.Daemon.Kind != model.DaemonKindUnknown || loaded.Daemon.Version != "v0.19.0" {
+		t.Fatalf("daemon %+v, want the version with no kind", loaded.Daemon)
+	}
+}
+
+func TestGatewayHungLocatorOrPingReadsAsAnUnreachableDaemonAndIsLocatedAgain(t *testing.T) {
+	hungPing := &kataServer{Server: httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { <-r.Context().Done() }))}
+	t.Cleanup(hungPing.Close)
+	for name, tt := range map[string]struct {
+		locate func(context.Context, string) (Target, error)
+	}{
+		"locator": {func(ctx context.Context, _ string) (Target, error) { <-ctx.Done(); return Target{}, ctx.Err() }},
+		"ping":    {func(context.Context, string) (Target, error) { return hungPing.target(), nil }},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var calls atomic.Int32
+			gateway := NewGateway(func(ctx context.Context, w string) (Target, error) {
+				calls.Add(1)
+				return tt.locate(ctx, w)
+			})
+			t.Cleanup(gateway.Close)
+			gateway.deadline = 50 * time.Millisecond
+			for range 2 {
+				got := as[model.SnapshotFailed](t, run(t, gateway, model.ReadSnapshot{Request: 1}))
+				if got.Err == nil || !strings.Contains(got.Err.Error(), "no reachable kata daemon") || !strings.Contains(got.Err.Error(), "kata doctor") {
+					t.Fatalf("got %v, want kata's message and the start hint", got.Err)
+				}
+			}
+			if got := calls.Load(); got != 2 {
+				t.Fatalf("located %d times, want once per command", got)
+			}
+		})
 	}
 }
 

@@ -177,7 +177,7 @@ func TestStaleNoticeStaysWhileACollectionLoads(t *testing.T) {
 }
 
 func TestTopBarIsOneRowWithTheDaemonRightAligned(t *testing.T) {
-	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Daemon: model.Daemon{Version: "v0.18.0"}}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{alpha, beta}}}})
+	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Daemon: model.Daemon{Kind: model.DaemonLocal, Version: "v0.18.0"}}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{alpha, beta}}}})
 	nodes := render(t, m)
 	var got []string
 	for _, id := range []string{"main.topbar.left.heading", "main.topbar.counts", "main.topbar.right.daemon", "main.topbar.right.sep", "main.topbar.right.menu.label"} {
