@@ -17,8 +17,9 @@ func IssueDate(projected *string, metadata map[string]any, key string) string {
 }
 
 // GroupIssues follows kata web view.ts: calendar strings are not timezone-converted.
-func GroupIssues(collection Collection, issues []Issue, today string) []IssueGroup {
+func GroupIssues(collection Collection, issues []Issue, cal PaneCalendar) []IssueGroup {
 	grouping := collection.Def().Grouping
+	today := cal.Date
 	groups := map[string][]Issue{}
 	titles := map[string]string{}
 	for _, issue := range issues {
@@ -36,7 +37,7 @@ func GroupIssues(collection Collection, issues []Issue, today string) []IssueGro
 			if !IsClosed(issue) || issue.ClosedAt == nil {
 				continue
 			}
-			id = issue.ClosedAt.Format("2006-01-02")
+			id = cal.DayOf(*issue.ClosedAt)
 			title = id
 		case GroupToday:
 			if issue.Status != "open" || !((schedule != "" && schedule <= today) || (deadline != "" && deadline <= today)) {

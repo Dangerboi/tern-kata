@@ -28,7 +28,7 @@ func (c *Client) ReadProject(ctx context.Context, workspace string) (model.Proje
 	if request != nil {
 		response, err := c.ResolveProjectWithResponse(ctx, &g.ResolveProjectRequestOptions{Body: request})
 		if err != nil {
-			if daemonCode(err) != "project_not_initialized" || (c.remote && request.Name != nil) {
+			if daemonCode(err) != "project_not_initialized" || request.Name != nil {
 				return model.ProjectLoaded{}, daemonError(err)
 			}
 		} else {
@@ -42,9 +42,6 @@ func (c *Client) ReadProject(ctx context.Context, workspace string) (model.Proje
 }
 
 func (c *Client) projectRequest(ctx context.Context, workspace string) (*g.ResolveProjectBody, error) {
-	if !c.remote {
-		return &g.ResolveProjectBody{StartPath: &workspace}, nil
-	}
 	workspaceRoot, gitRoot, err := discoverProjectRoots(workspace)
 	if err != nil {
 		return nil, err
