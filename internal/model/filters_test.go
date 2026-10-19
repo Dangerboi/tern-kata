@@ -93,7 +93,7 @@ func TestFilterForm(t *testing.T) {
 		{"cancel", "escape", false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			m := model.Model{Collection: model.Collection{View: "today", Title: "Today"}, LocalDate: "2026-10-08", TimeZone: "UTC", Filters: model.Filters{Search: "existing"}, Snapshot: model.Snapshot{Catalog: []model.CatalogProject{{Project: model.Project{UID: "p", Name: "Work"}}}}}
+			m := model.Model{Collection: model.Collection{View: "today", Title: "Today"}, Calendar: model.NewPaneCalendar("2026-10-08", "UTC", ""), Filters: model.Filters{Search: "existing"}, Snapshot: model.Snapshot{Catalog: []model.CatalogProject{{Project: model.Project{UID: "p", Name: "Work"}}}}}
 			keys := []string{"f", "right", "tab", "right", "tab", "q", "tab", "b", "u", "g", ",", "u", "x", "tab", "right", tt.ending}
 			var cmds []model.Cmd
 			for _, chord := range keys {

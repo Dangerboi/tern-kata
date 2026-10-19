@@ -259,7 +259,7 @@ func TestKidsAreTheDaemonsCountsWhateverTheFilters(t *testing.T) {
 		t.Fatalf("collection load: kids %v, want 1/6", got)
 	}
 	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: snapshot.Issues}})
-	if got := kids(m); got != [2]int{0, 0} {
-		t.Fatalf("a load carries its own counts: kids %v", got)
+	if got := kids(m); got != [2]int{1, 6} {
+		t.Fatalf("a load that read no counts keeps the ones on screen: kids %v", got)
 	}
 }

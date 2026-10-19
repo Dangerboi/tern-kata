@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -175,6 +176,89 @@ func TestGatewayBindsAndCreatesProjects(t *testing.T) {
 	elsewhere := as[model.ProjectSaved](t, run(t, gateway, model.BindProject{Workspace: workspace, Actor: "tester", Name: "extra"}))
 	if elsewhere.Err == nil || !strings.Contains(elsewhere.Err.Error(), "binds this directory to Project") {
 		t.Fatalf("binding a bound directory to another name: %+v", elsewhere)
+	}
+}
+
+// TestGatewayResolvesTheBindingTheSameForBothDaemonKinds runs every workspace
+// shape against the in-process daemon, with the kind chosen by the Locator.
+func TestGatewayResolvesTheBindingTheSameForBothDaemonKinds(t *testing.T) {
+	git := func(t *testing.T, dir string, args ...string) {
+		t.Helper()
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	repo := func(t *testing.T, remote string) string {
+		dir := t.TempDir()
+		git(t, dir, "init", "-q")
+		git(t, dir, "remote", "add", "origin", remote)
+		return dir
+	}
+	for _, remote := range []bool{false, true} {
+		kind := map[bool]string{false: "local", true: "remote"}[remote]
+		kata := startKata(t, "0.19.0")
+		target := kata.target()
+		target.Remote = func(context.Context) (bool, error) { return remote, nil }
+		gateway := newGateway(t, newLocator(target))
+		load := func(workspace string) (model.ProjectLoaded, error) {
+			t.Helper()
+			msg := run(t, gateway, model.LoadProject{Workspace: workspace})
+			if failed, ok := msg.(model.Failed); ok {
+				return model.ProjectLoaded{}, failed.Err
+			}
+			return as[model.ProjectLoaded](t, msg), nil
+		}
+
+		t.Run(kind+" bound workspace", func(t *testing.T) {
+			workspace, bound := project(t, gateway, "demo-"+kind)
+			if got, err := load(workspace); err != nil || got.Project.UID != bound.UID || got.Daemon.Remote != remote {
+				t.Fatalf("got %+v, %v, want the bound Project on a %s daemon", got, err, kind)
+			}
+		})
+		t.Run(kind+" alias-only repository the daemon knows", func(t *testing.T) {
+			workspace := repo(t, "https://example.com/acme/known-"+kind+".git")
+			bound := as[model.ProjectSaved](t, run(t, gateway, model.BindProject{Workspace: workspace, Actor: "tester", Name: "known-" + kind}))
+			if bound.Err != nil {
+				t.Fatal(bound.Err)
+			}
+			if err := os.Remove(filepath.Join(workspace, ".kata.toml")); err != nil {
+				t.Fatal(err)
+			}
+			if got, err := load(workspace); err != nil || got.Project.UID != bound.Project.UID {
+				t.Fatalf("got %+v, %v, want the Project the alias names", got, err)
+			}
+		})
+		t.Run(kind+" alias-only repository the daemon does not know", func(t *testing.T) {
+			got, err := load(repo(t, "https://example.com/acme/unknown-"+kind+".git"))
+			if err != nil || got.Project.UID != "" {
+				t.Fatalf("got %+v, %v, want the Inbox", got, err)
+			}
+		})
+		t.Run(kind+" unbound directory", func(t *testing.T) {
+			got, err := load(t.TempDir())
+			if err != nil || got.Project.UID != "" {
+				t.Fatalf("got %+v, %v, want the Inbox", got, err)
+			}
+		})
+		t.Run(kind+" named workspace the daemon does not know", func(t *testing.T) {
+			workspace := t.TempDir()
+			if err := os.WriteFile(filepath.Join(workspace, ".kata.toml"), []byte("version = 1\n\n[project]\nname = \"ghost\"\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			_, err := load(workspace)
+			if err == nil || !strings.Contains(err.Error(), "kata init") {
+				t.Fatalf("got %v, want kata's message and its kata init hint", err)
+			}
+		})
+		t.Run(kind+" named workspace whose git remotes cannot be read", func(t *testing.T) {
+			workspace, bound := project(t, gateway, "unreadable-"+kind)
+			if err := os.Mkdir(filepath.Join(workspace, ".git"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if got, err := load(workspace); err != nil || got.Project.UID != bound.UID {
+				t.Fatalf("got %+v, %v, want the Project resolved by name", got, err)
+			}
+		})
 	}
 }
 
@@ -745,23 +829,44 @@ func TestGatewayStreamDropReportsAnUnreachableDaemon(t *testing.T) {
 	<-done
 }
 
-func TestGatewaySnapshotCountsChildrenOnEveryRead(t *testing.T) {
+func TestGatewaySnapshotCountsChildrenOnlyWhenAsked(t *testing.T) {
 	kata := startKata(t, "0.19.0")
-	gateway := newGateway(t, newLocator(kata.target()))
+	var failCounts atomic.Bool
+	front := serve(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if failCounts.Load() && r.URL.Path == "/api/v1/issues" {
+			http.Error(w, "boom", http.StatusInternalServerError)
+			return
+		}
+		kata.handler.ServeHTTP(w, r)
+	}), "0.19.0")
+	gateway := newGateway(t, newLocator(front.target()))
 	workspace, demo := project(t, gateway, "demo")
 	parent := createIssue(t, gateway, workspace, demo, "Parent")
 	query := model.CollectionQuery(model.Collection{View: "project", ProjectUID: demo.UID, Title: demo.Name}, model.Filters{})
 
-	before := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query}))
-	if len(before.Snapshot.ChildCounts) != 0 {
-		t.Fatalf("child counts %+v before any child", before.Snapshot.ChildCounts)
+	before := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ChildCounts: true}))
+	if before.Snapshot.ChildCounts == nil || len(before.Snapshot.ChildCounts) != 0 {
+		t.Fatalf("child counts %+v before any child, want an empty read", before.Snapshot.ChildCounts)
 	}
 	child := as[model.IssueCreated](t, run(t, gateway, model.CreateIssueCmd{Workspace: workspace, Actor: "tester", ProjectID: demo.ID, Title: "Child", ParentUID: parent}))
 	if child.Err != nil {
 		t.Fatal(child.Err)
 	}
-	after := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ETag: before.ETag}))
-	if counts := after.Snapshot.ChildCounts[parent]; after.NotModified || counts.Total != 1 || counts.Open != 1 {
+
+	without := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ETag: before.ETag}))
+	if without.NotModified || without.Snapshot.ChildCounts != nil || len(without.Snapshot.Issues) != 2 {
+		t.Fatalf("read without counts: %+v, want the snapshot and no counts", without)
+	}
+
+	failCounts.Store(true)
+	failed := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ChildCounts: true}))
+	if failed.Snapshot.ChildCounts != nil || len(failed.Snapshot.Issues) != 2 || failed.ETag == "" || failed.Snapshot.Cursor == 0 {
+		t.Fatalf("failing count download: %+v, want the snapshot, ETag and cursor with no counts", failed)
+	}
+	failCounts.Store(false)
+
+	after := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ChildCounts: true}))
+	if counts := after.Snapshot.ChildCounts[parent]; counts.Total != 1 || counts.Open != 1 {
 		t.Fatalf("after a child: %+v, want the parent to count its one open child", after)
 	}
 	links := after.Snapshot.Links

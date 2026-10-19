@@ -32,11 +32,14 @@ type ReadSnapshot struct {
 	Query     SnapshotQuery
 	ETag      string
 	Request   int64
+	// ChildCounts asks for the daemon's child counts too; without it the result carries none and the model keeps its own.
+	ChildCounts bool
 }
 
 func (ReadSnapshot) cmd() {}
 
-// SnapshotLoaded is the one message that carries a snapshot into the model. Query is the query it answers; the daemon side
+// SnapshotLoaded is the one message that carries a snapshot into the model. A nil Snapshot.ChildCounts means counts were not
+// read (not asked for, or their download failed); a read with none to report has an empty, non-nil map. Query is the query it answers; the daemon side
 // adds the local calendar the dated Collections need and reports it in LocalDate and TimeZone.
 type SnapshotLoaded struct {
 	Request             int64
@@ -149,11 +152,18 @@ func snapshotChanged(m Model) (Model, []Cmd) {
 		return m, []Cmd{lookup}
 	}
 	query := liveQuery(m)
+	scope := ""
+	if query.ProjectUID != nil {
+		scope = *query.ProjectUID
+	}
+	counts := !m.countsFresh || scope != m.countsScope
+	m.countsCovered = counts
 	etag := ""
-	if !m.Resetting && sameCollectionQuery(query, m.etagQuery) {
+	// A read that wants counts must not be answered 304, or a failed count download would never be retried.
+	if !counts && !m.Resetting && sameCollectionQuery(query, m.etagQuery) {
 		etag = m.etag
 	}
-	return m, []Cmd{ReadSnapshot{Workspace: m.Workspace, Query: query, ETag: etag, Request: m.RefreshRequest}}
+	return m, []Cmd{ReadSnapshot{Workspace: m.Workspace, Query: query, ETag: etag, Request: m.RefreshRequest, ChildCounts: counts}}
 }
 
 // collectionSwitched is a Collection switch: deliberate, so it neither waits for the read of the Collection left behind (that
@@ -183,8 +193,16 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 	var cmds []Cmd
 	if !msg.NotModified {
 		if msg.LocalDate != "" {
-			m.LocalDate, m.TimeZone, m.TimeZoneNote = msg.LocalDate, msg.TimeZone, msg.TimeZoneNote
-			m.zone, _ = time.LoadLocation(msg.TimeZone) // an unloadable name reads as UTC
+			m.Calendar = NewPaneCalendar(msg.LocalDate, msg.TimeZone, msg.TimeZoneNote)
+		}
+		if msg.Snapshot.ChildCounts == nil {
+			msg.Snapshot.ChildCounts = m.Snapshot.ChildCounts
+		} else if m.countsCovered {
+			m.countsFresh = true
+			m.countsScope = ""
+			if msg.Query.ProjectUID != nil {
+				m.countsScope = *msg.Query.ProjectUID
+			}
 		}
 		selected := m.SelectedUID
 		anchor, anchored := m.cursorRowID()
@@ -275,7 +293,7 @@ func (m Model) applyCollection(snapshot Snapshot) Model {
 	if m.Collection.ProjectUID != "" && m.Filters.ProjectUID != "" && m.Collection.ProjectUID != m.Filters.ProjectUID {
 		issues = nil
 	}
-	m.Groups = GroupIssues(groupCollection, issues, m.LocalDate)
+	m.Groups = GroupIssues(groupCollection, issues, m.Calendar)
 	for i := range m.Groups {
 		m.Groups[i].Heading = m.Collection.Def().Headings
 	}

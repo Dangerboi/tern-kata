@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -49,62 +48,61 @@ func openSurface(session *tern.Session) (*tern.Surface, error) {
 	return surface, nil
 }
 
-// handOff gives the terminal to $EDITOR for the Draft and returns the editor result with the resumed Tern session pieces.
-func handOff(ctx context.Context, draft model.OpenDraftEditor, session *tern.Session, surface *tern.Surface, stopInput func(), inputs chan<- any, inputErrors chan<- error) (model.DraftEditorClosed, *tern.Session, *tern.Surface, func(), error) {
-	var none model.DraftEditorClosed
-	stopInput()
-	surface.Close()
-	// The Session must be closed first: Suspend leaves its stdin pump and raw mode active.
-	session.Close()
-	result := editDraft(draft, editorCommand)
-	next, err := tern.Connect(ctx, editorOptions())
-	if err != nil {
-		return none, nil, nil, nil, err
+// editInTerminal gives the terminal to $EDITOR for the Draft and resumes the Pane. When resuming fails after the
+// editor succeeded, the edited text stays in its file, whose path is printed and named in the error.
+func editInTerminal(t *terminal, draft model.OpenDraftEditor, build func(editor, file string) *exec.Cmd) (model.DraftEditorClosed, error) {
+	var result model.DraftEditorClosed
+	var kept string
+	err := t.Suspend(func() { result, kept = editDraft(draft, build) })
+	if err != nil && kept != "" {
+		fmt.Fprintf(os.Stderr, "tern-kata: could not reconnect to Tern; your edited Draft is kept in %s\n", kept)
+		return result, fmt.Errorf("%w; your edited Draft is kept in %s", err, kept)
 	}
-	nextSurface, err := openSurface(next)
-	if err != nil {
-		next.Close()
-		return none, nil, nil, nil, err
+	if kept != "" {
+		os.Remove(kept)
 	}
-	return result, next, nextSurface, startInputReader(ctx, next, inputs, inputErrors), nil
+	return result, err
 }
 
-// editDraft round-trips the Draft text through a temp file edited by the command build returns.
-func editDraft(cmd model.OpenDraftEditor, build func(editor, file string) *exec.Cmd) model.DraftEditorClosed {
+// editDraft round-trips the Draft text through a temp file edited by the command build returns. It returns the file's
+// path only when the editor succeeded; the caller removes it once the text is safe.
+func editDraft(cmd model.OpenDraftEditor, build func(editor, file string) *exec.Cmd) (model.DraftEditorClosed, string) {
 	result := model.DraftEditorClosed{UID: cmd.UID, Text: cmd.Text}
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
 		result.Err = fmt.Errorf("set $EDITOR to edit the Draft externally")
-		return result
+		return result, ""
 	}
 	file, err := os.CreateTemp("", "tern-kata-Draft-*.md")
 	if err != nil {
 		result.Err = err
-		return result
+		return result, ""
 	}
-	defer os.Remove(file.Name())
 	_, err = file.WriteString(cmd.Text)
 	closeErr := file.Close()
 	if err == nil {
 		err = closeErr
 	}
 	if err != nil {
+		os.Remove(file.Name())
 		result.Err = err
-		return result
+		return result, ""
 	}
 	process := build(editor, file.Name())
 	process.Stdin = os.Stdin
 	process.Stdout = os.Stdout
 	process.Stderr = os.Stderr
 	if err := process.Run(); err != nil {
+		os.Remove(file.Name())
 		result.Err = fmt.Errorf("$EDITOR: %w; original Draft kept", err)
-		return result
+		return result, ""
 	}
 	text, err := os.ReadFile(file.Name())
 	if err != nil {
+		os.Remove(file.Name())
 		result.Err = err
-		return result
+		return result, ""
 	}
 	result.Text = string(text)
-	return result
+	return result, file.Name()
 }

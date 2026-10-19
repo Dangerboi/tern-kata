@@ -54,30 +54,27 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer func() { session.Close() }()
 	// Pane contract with window.luau: this title identifies a kata Pane.
 	if _, err := fmt.Fprint(os.Stdout, "\x1b]0;tern-kata\x07"); err != nil {
+		session.Close()
 		return err
 	}
 	surface, err := openSurface(session)
 	if err != nil {
+		session.Close()
 		return err
 	}
-	defer func() { surface.Close() }()
+	term := newTerminal(ctx, session, surface, connectPane)
+	defer func() { term.Close() }()
 	workspace, err := os.Getwd()
 	if err != nil {
 		return err
 	}
-	inputs := make(chan any)
-	inputErrors := make(chan error, 1)
-	stopInput := startInputReader(ctx, session, inputs, inputErrors)
-	defer func() { stopInput() }()
-	state := driver.State{Model: model.Model{Cols: session.Caps().Cols, Actor: plan.Actor}}
+	state := driver.State{Model: model.Model{Cols: term.session.Caps().Cols, Actor: plan.Actor}}
 	results := make(chan model.Msg)
 	gateway := data.NewGateway(data.LocateWithKata)
 	defer gateway.Close()
 	input := any(model.Start{Workspace: workspace, IssueRef: plan.IssueRef, Nonce: rand.Text()})
-eventLoop:
 	for {
 		out := driver.Step(state, input, time.Now())
 		state = out.State
@@ -88,32 +85,31 @@ eventLoop:
 			return nil
 		}
 		if out.View != nil {
-			if err := surface.Render(*out.View); err != nil {
+			if err := term.Render(*out.View); err != nil {
 				return err
 			}
 		}
 		// One Send per op, so each goes out in its own frame as before: Tern needs the first tab reveal laid out before the second.
 		for _, op := range out.Ops {
-			if err := surface.Send(op); err != nil {
+			if err := term.Send(op); err != nil {
 				return err
 			}
 		}
 		for _, cmd := range out.Cmds {
-			if external, ok := cmd.(model.OpenDraftEditor); ok {
-				closed, nextSession, nextSurface, nextStop, handErr := handOff(ctx, external, session, surface, stopInput, inputs, inputErrors)
-				if handErr != nil {
-					return handErr
-				}
-				input, session, surface, stopInput = closed, nextSession, nextSurface, nextStop
-				state = state.Fresh()
-				continue eventLoop
-			}
 			go gateway.Run(ctx, cmd, results)
 		}
+		if out.Editor != nil {
+			closed, err := editInTerminal(term, *out.Editor, editorCommand)
+			if err != nil {
+				return err
+			}
+			input, state = closed, state.Fresh()
+			continue
+		}
 		select {
-		case input = <-inputs:
+		case input = <-term.Inputs():
 		case input = <-results:
-		case err := <-inputErrors:
+		case err := <-term.InputErrors():
 			if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
 				return nil
 			}

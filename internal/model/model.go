@@ -50,43 +50,41 @@ type Model struct {
 	// pending is the Issue Create just made, selected as soon as a snapshot lists it.
 	pending string
 	// etag answers etagQuery: the snapshot on screen.
-	etag                string
-	etagQuery           SnapshotQuery
-	CloseForm           CloseFormState
-	RecurrenceForm      RecurrenceFormState
-	Actor               string
-	FieldForm           FieldFormState
-	Workspace           string
-	Project             Project
-	Daemon              Daemon
-	Snapshot            Snapshot
-	Issues              []Issue
-	SelectedUID         string
-	Loading             bool
-	Err                 error
-	Cols                int
-	Quitting            bool
-	Collection          Collection
-	Collections         []Collection
-	CollectionCursor    int
-	SidebarProjects     bool
-	Bound               bool
-	Picker              PickerState
-	ProjectForm         ProjectFormState
-	Focus               Column
-	Groups              []IssueGroup
-	LocalDate, TimeZone string
-	TimeZoneNote        string
-	zone                *time.Location // TimeZone loaded once; nil (UTC) before the first snapshot
-	HelpOpen            bool
-	Flat                bool
-	ExpandedUIDs        map[string]bool
-	Drafts              map[string]Draft
-	EditorUID           string
-	Filters             Filters
-	Search              SearchState
-	IDSearch            IDSearch
-	FilterForm          FilterFormState
+	etag             string
+	etagQuery        SnapshotQuery
+	CloseForm        CloseFormState
+	RecurrenceForm   RecurrenceFormState
+	Actor            string
+	FieldForm        FieldFormState
+	Workspace        string
+	Project          Project
+	Daemon           Daemon
+	Snapshot         Snapshot
+	Issues           []Issue
+	SelectedUID      string
+	Loading          bool
+	Err              error
+	Cols             int
+	Quitting         bool
+	Collection       Collection
+	Collections      []Collection
+	CollectionCursor int
+	SidebarProjects  bool
+	Bound            bool
+	Picker           PickerState
+	ProjectForm      ProjectFormState
+	Focus            Column
+	Groups           []IssueGroup
+	Calendar         PaneCalendar
+	HelpOpen         bool
+	Flat             bool
+	ExpandedUIDs     map[string]bool
+	Drafts           map[string]Draft
+	EditorUID        string
+	Filters          Filters
+	Search           SearchState
+	IDSearch         IDSearch
+	FilterForm       FilterFormState
 	// nonce is the random per-run prefix of every idempotency key and keys counts the keys minted.
 	nonce string
 	keys  int
@@ -175,7 +173,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case DetailFailed:
 		m = m.detailFailed(msg)
 	case JumpIssueMsg:
-		return m.jumpTo(msg.UID), nil
+		return m.jumpTo(msg.UID, nil), nil
 	case FocusColumnMsg:
 		if msg.Column <= ColumnDetail {
 			m.Focus = msg.Column
