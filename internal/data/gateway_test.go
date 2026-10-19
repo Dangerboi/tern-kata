@@ -1284,3 +1284,48 @@ func TestGatewayStopsTheRecurrenceAndReportsOneAlreadyStopped(t *testing.T) {
 		t.Fatalf("changing a stopped recurrence: %+v, want an error", change)
 	}
 }
+
+func TestGatewaySendsTheIdempotencyKeyOnCommentsRepliesAndCreates(t *testing.T) {
+	kata := startKata(t, "0.19.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	uid := createIssue(t, gateway, workspace, demo, "Discuss")
+	detailOf := func() *model.IssueDetailData {
+		return as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected
+	}
+	comment := func(text, replyTo, key string) {
+		as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseText: detailOf().Issue.Body, Text: text, Comment: true, Actor: "tester", ReplyTo: replyTo, ReplyKind: model.ReplyPlain, Key: key}))
+	}
+
+	comment("once", "", "k-comment")
+	comment("once", "", "k-comment")
+	if got := len(detailOf().Comments); got != 1 {
+		t.Fatalf("%d comments after one key sent twice, want 1", got)
+	}
+	// Two deliberate comments with the same text carry different keys and both post.
+	comment("once", "", "k-other")
+	question := detailOf().Comments[0].UID
+	comment("answer", question, "k-reply")
+	comment("answer", question, "k-reply")
+	if got := len(detailOf().Comments); got != 3 {
+		t.Fatalf("%d comments, want the two deliberate comments and one reply", got)
+	}
+
+	create := func(key string) model.IssueCreated {
+		return as[model.IssueCreated](t, run(t, gateway, model.CreateIssueCmd{Workspace: workspace, Actor: "tester", ProjectID: demo.ID, Title: "Keyed", Key: key}))
+	}
+	first, second := create("k-create"), create("k-create")
+	if first.Err != nil || first.UID == "" || second != first {
+		t.Fatalf("create twice with one key: %+v then %+v", first, second)
+	}
+	snapshot := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: model.CollectionQuery(model.Collection{View: "project", ProjectUID: demo.UID, Title: demo.Name}, model.Filters{}), Request: 1}))
+	keyed := 0
+	for _, issue := range snapshot.Snapshot.Issues {
+		if issue.Title == "Keyed" {
+			keyed++
+		}
+	}
+	if keyed != 1 {
+		t.Fatalf("%d Issues titled Keyed, want 1", keyed)
+	}
+}

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"reflect"
+	"strconv"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -22,6 +24,9 @@ type Draft struct {
 	// ReplyKind what the reply is.
 	ReplyTo, ReplyAuthor string
 	ReplyKind            ReplyKind
+	// Key is the idempotency key of the last send and sent the request it went with; see mintKey.
+	Key  string
+	sent any
 }
 
 // ReplyKind is what a Reply is to the comment it answers.
@@ -72,6 +77,8 @@ type SaveDraft struct {
 	ReplyTo   string
 	ReplyKind ReplyKind
 	Force     bool
+	// Key is kata's Idempotency-Key for a comment or Reply; a body edit has none.
+	Key string
 }
 
 func (SaveDraft) cmd() {}
@@ -201,8 +208,23 @@ func sendDraft(m Model, force bool) (Model, []Cmd) {
 	}
 	draft.Saving = true
 	draft.Err = nil
+	cmd := SaveDraft{Workspace: m.Workspace, UID: m.EditorUID, ProjectID: draft.ProjectID, BaseText: draft.BaseText, Text: draft.Editor.Text, Comment: draft.Comment, Actor: m.Actor, ReplyTo: draft.ReplyTo, ReplyKind: draft.ReplyKind, Force: force}
+	if draft.Comment {
+		cmd.Key = m.mintKey(&draft, cmd)
+	}
 	m = putDraft(m, m.EditorUID, draft)
-	return m, []Cmd{SaveDraft{Workspace: m.Workspace, UID: m.EditorUID, ProjectID: draft.ProjectID, BaseText: draft.BaseText, Text: draft.Editor.Text, Comment: draft.Comment, Actor: m.Actor, ReplyTo: draft.ReplyTo, ReplyKind: draft.ReplyKind, Force: force}}
+	return m, []Cmd{cmd}
+}
+
+// mintKey is the idempotency key for sending request from d: the key of d's previous send when the request is
+// unchanged (kata fingerprints a request with its key, so only an identical resend may reuse it), a new one otherwise.
+// request must carry no key.
+func (m *Model) mintKey(d *Draft, request any) string {
+	if d.Key == "" || !reflect.DeepEqual(d.sent, request) {
+		m.keys++
+		d.Key, d.sent = m.nonce+"-"+strconv.Itoa(m.keys), request
+	}
+	return d.Key
 }
 
 // replyKey handles the keys only a Reply Draft has: the kind key cycles the kind and Send anyway resends a duplicate with force.

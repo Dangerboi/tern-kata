@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -73,7 +74,7 @@ func run() error {
 	results := make(chan model.Msg)
 	gateway := data.NewGateway(data.LocateWithKata)
 	defer gateway.Close()
-	input := any(model.Start{Workspace: workspace, IssueRef: plan.IssueRef})
+	input := any(model.Start{Workspace: workspace, IssueRef: plan.IssueRef, Nonce: rand.Text()})
 	for {
 		out := driver.Step(state, input, time.Now())
 		state = out.State
