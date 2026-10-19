@@ -63,9 +63,9 @@ type DetailRow struct {
 	// detail's Issue. RefTitle is that Issue's title when it is loaded.
 	Relation, Ref, RefTitle string
 	// File is an Attachment row's Attachment, and URL the file URL of its path, empty when its Host is not this machine.
-	File            Attachment
-	URL             string
-	History         *HistorySentence
+	File    Attachment
+	URL     string
+	History *HistorySentence
 	// Reply says what a comment answers ("confirms dana's comment in #bbbb") and Replies how many comments answer it; both
 	// are empty without reply information.
 	Reply, Replies string
