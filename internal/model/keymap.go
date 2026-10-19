@@ -62,6 +62,17 @@ type Binding struct {
 	entry        *actionEntry
 }
 
+// CardKeys are the non-headless bindings of action in mode, in keymap order: what a card button names and sends.
+func CardKeys(mode Mode, action Action) []Binding {
+	var keys []Binding
+	for _, b := range Keymap {
+		if b.Mode == mode && b.Action == action && !b.Headless() {
+			keys = append(keys, b)
+		}
+	}
+	return keys
+}
+
 // headlessNote ends the help of a chord only the headless Tern delivers; Headless tells such bindings apart.
 const headlessNote = " (Tern headless)"
 

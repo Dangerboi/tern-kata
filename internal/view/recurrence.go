@@ -97,7 +97,7 @@ func recurrenceLayer(m model.Model) tern.Element {
 	if f.Refused {
 		return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "recurrence"}, Modal: true, Size: ui.SizeLG, Head: ui.T("Recurrence"), Children: ui.Nodes(
 			ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: f.Err.Error()},
-			buttonRow(keyButton("cancel", "Close (esc)", "escape", true)))})
+			buttonRow(cardButton("cancel", model.ModeRecurrenceForm, model.RecurrenceCancel, "Close", true)))})
 	}
 	if f.Raw != "" {
 		children = append(children, ui.Text{Common: ui.Common{Key: "raw", Tone: ui.ToneWarning}, Text: "Current rule, set elsewhere: " + f.Raw + "\nSaving the form replaces it."})
@@ -126,9 +126,9 @@ func recurrenceLayer(m model.Model) tern.Element {
 	if f.Err != nil {
 		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: f.Err.Error()})
 	}
-	title, save, pending := "Make recurring", "Make recurring (ctrl+o)", "Making Issue recur…"
+	title, save, pending := "Make recurring", "Make recurring", "Making Issue recur…"
 	if f.Change {
-		title, save, pending = "Change recurrence", "Save (ctrl+o)", "Saving the schedule…"
+		title, save, pending = "Change recurrence", "Save", "Saving the schedule…"
 	}
 	switch {
 	case f.Saving && f.Stopping:
@@ -137,11 +137,11 @@ func recurrenceLayer(m model.Model) tern.Element {
 		children = append(children, ui.Text{Common: ui.Common{Key: "pending", Tone: ui.TonePending}, Text: pending})
 	case f.StopConfirm:
 		children = append(children, ui.Text{Common: ui.Common{Key: "stop", Tone: ui.ToneWarning}, Text: "Stop this Issue recurring? Existing occurrences stay. y stops; n or esc keeps editing."},
-			buttonRow(keyButton("stop-yes", "Stop recurring (y)", "y", false), keyButton("stop-keep", "Keep editing (n / esc)", "n", true)))
+			buttonRow(cardButton("stop-yes", model.ModeRecurrenceStop, model.RecurrenceStopConfirm, "Stop recurring", false), cardButton("stop-keep", model.ModeRecurrenceStop, model.RecurrenceStopKeep, "Keep editing", true)))
 	case f.Change:
-		children = append(children, buttonRow(keyButton("save", save, "ctrl+o", true), keyButton("stop", "Stop recurring (ctrl+x)", "ctrl+x", false), keyButton("cancel", "Cancel (esc)", "escape", false)))
+		children = append(children, buttonRow(cardButton("save", model.ModeRecurrenceForm, model.RecurrenceSave, save, true), cardButton("stop", model.ModeRecurrenceForm, model.RecurrenceStop, "Stop recurring", false), cardButton("cancel", model.ModeRecurrenceForm, model.RecurrenceCancel, "Cancel", false)))
 	default:
-		children = append(children, buttonRow(keyButton("save", save, "ctrl+o", true), keyButton("cancel", "Cancel (esc)", "escape", false)))
+		children = append(children, buttonRow(cardButton("save", model.ModeRecurrenceForm, model.RecurrenceSave, save, true), cardButton("cancel", model.ModeRecurrenceForm, model.RecurrenceCancel, "Cancel", false)))
 	}
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "recurrence"}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
 }

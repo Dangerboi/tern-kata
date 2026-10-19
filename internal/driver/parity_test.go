@@ -265,7 +265,24 @@ func newProject() driver.State {
 	return pressed(driver.State{Model: m}, "escape", "end", "enter")
 }
 
-// A card's button clicks its key, so the click ends where the key ends.
+// cardButtonsOf are the buttons the card on top of s draws, by node id: every key click under a layer or the Menu.
+func cardButtonsOf(t *testing.T, s driver.State) (map[string]string, map[string]string) {
+	t.Helper()
+	out := step(t, s, resize(160))
+	found, labels := map[string]string{}, map[string]string{}
+	for _, node := range wireNodes(t, *out.View) {
+		actions, _ := node.P["actions"].(map[string]any)
+		clickAct, _ := actions["click"].(string)
+		if strings.HasPrefix(clickAct, view.KeyClick("")) && (strings.HasPrefix(node.ID, "layer.") || strings.HasPrefix(node.ID, view.PickerID)) {
+			found[node.ID] = clickAct
+			labels[node.ID], _ = node.P["text"].(string)
+		}
+	}
+	return found, labels
+}
+
+// Every button of every Popup card state that draws buttons ends where the key it names ends: the chord it sends is bound
+// in the card's mode, and its label names the card's keys for that action.
 func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 	issue := driver.State{Model: model.Model{Actor: "reviewer", SelectedUID: "issue", Issues: []model.Issue{{UID: "issue", ProjectID: 2, Labels: []string{"bug"}}}}}
 	creating := driver.State{Model: model.Model{Project: model.Project{ID: 7}}}
@@ -275,42 +292,68 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 	draft := pressed(driver.State{Model: draftModel}, "enter", "e")
 	typed, _ := inputs(tern.Key{Name: "paste", Text: "more"})(draft)
 	asked := pressed(typed, "escape")
+	conflict := driver.State{Model: draft.Model}
+	conflict.Model, _ = model.Update(conflict.Model, model.DraftConflict{UID: "a", Issue: model.Issue{UID: "a", ProjectID: 2, Body: "Remote", Revision: 8}})
+	replyModel := withDetail(model.Model{Workspace: "/repo", SelectedUID: "a"}, &model.IssueDetailData{Issue: &model.Issue{UID: "a", ProjectID: 2, Revision: 1}, Comments: []model.Comment{{UID: "c1", Author: "dana", Body: "claim"}}})
+	reply := pressed(driver.State{Model: replyModel}, "enter", "shift+r")
+	duplicate := driver.State{Model: reply.Model}
+	duplicate.Model, _ = model.Update(duplicate.Model, model.DraftFailed{UID: "a", Err: model.DuplicateReply{Message: "a reply of this kind already exists"}})
+	recurrence := int64(4)
+	recurring := func(rec *model.Recurrence) driver.State {
+		m := withDetail(model.Model{Workspace: "/repo", SelectedUID: "a", Issues: []model.Issue{{UID: "a", ProjectID: 2, RecurrenceID: &recurrence}}},
+			&model.IssueDetailData{Issue: &model.Issue{UID: "a", ProjectID: 2, RecurrenceID: &recurrence}, Recurrence: rec})
+		return pressed(driver.State{Model: m}, "shift+o")
+	}
+	change := recurring(&model.Recurrence{UID: "rec", RecurrenceTerms: model.RecurrenceTerms{Rule: "FREQ=DAILY;INTERVAL=1", Start: "2026-10-19", TimeZone: "UTC"}, Revision: 3})
+	bound := browsing(t, 160)
 	for _, tt := range []struct {
-		name   string
-		start  driver.State
-		chords []string
-		check  func(model.Model) bool
+		name  string
+		start driver.State
+		mode  model.Mode
 	}{
-		{"Create Issue with no title", pressed(creating, "n"), []string{"ctrl+o"}, func(m model.Model) bool { return m.Create.Err != nil && m.Create.Open }},
-		{"Create Issue", titled, []string{"ctrl+o"}, func(m model.Model) bool { return m.Create.Saving }},
-		{"Create Cancel", titled, []string{"escape"}, func(m model.Model) bool { return m.Create.DiscardConfirm }},
-		{"Create discard prompt", asking, []string{"y", "n"}, func(m model.Model) bool { return !m.Create.Open || !m.Create.DiscardConfirm }},
-		{"field form Save without a value", pressed(issue, "+"), []string{"enter"}, func(m model.Model) bool { return m.FieldForm.Err != nil }},
-		{"field form Cancel", pressed(issue, "+"), []string{"escape"}, func(m model.Model) bool { return !m.FieldForm.Open }},
-		{"New Project with no name", pressed(newProject(), "ctrl+u"), []string{"enter"}, func(m model.Model) bool { return m.ProjectForm.Err != nil }},
-		{"New Project Cancel", newProject(), []string{"escape"}, func(m model.Model) bool { return !m.ProjectForm.Open }},
-		{"Draft Save", draft, []string{"ctrl+o"}, func(m model.Model) bool { return m.Drafts["a"].Saving }},
-		{"Draft $EDITOR", draft, []string{"ctrl+e"}, func(model.Model) bool { return true }},
-		{"Draft Discard", typed, []string{"escape"}, func(m model.Model) bool { return m.Drafts["a"].DiscardConfirm }},
-		{"Draft discard prompt", asked, []string{"y", "n"}, func(model.Model) bool { return true }},
-		{"Close Issue with no message", pressed(issue, "x"), []string{"ctrl+o"}, func(m model.Model) bool { return m.CloseForm.Err != nil }},
-		{"Close Quick done", pressed(issue, "x"), []string{"ctrl+d"}, func(m model.Model) bool { return m.CloseForm.Saving }},
-		{"Close Cancel", pressed(issue, "x"), []string{"escape"}, func(m model.Model) bool { return !m.CloseForm.Open }},
-		{"Recurrence Save with no start date", pressed(issue, "shift+o"), []string{"ctrl+o"}, func(m model.Model) bool { return m.RecurrenceForm.Err != nil }},
-		{"Recurrence Cancel", pressed(issue, "shift+o"), []string{"escape"}, func(m model.Model) bool { return !m.RecurrenceForm.Open }},
-		{"Filters Apply", pressed(issue, "f"), []string{"ctrl+o"}, func(m model.Model) bool { return !m.FilterForm.Open }},
-		{"Filters Cancel", pressed(issue, "f"), []string{"escape"}, func(m model.Model) bool { return !m.FilterForm.Open }},
+		{"Create", titled, model.ModeCreate},
+		{"Create discard prompt", asking, model.ModeDiscard},
+		{"Draft editor", draft, model.ModeEditor},
+		{"reply Draft", reply, model.ModeEditor},
+		{"duplicate reply Draft", duplicate, model.ModeEditor},
+		{"Draft discard prompt", asked, model.ModeDiscard},
+		{"Draft conflict", conflict, model.ModeConflict},
+		{"Close", pressed(issue, "x"), model.ModeCloseForm},
+		{"Recurrence make", pressed(issue, "shift+o"), model.ModeRecurrenceForm},
+		{"Recurrence change", change, model.ModeRecurrenceForm},
+		{"Recurrence stop", pressed(change, "ctrl+x"), model.ModeRecurrenceStop},
+		{"Recurrence error", recurring(nil), model.ModeRecurrenceForm},
+		{"Filter", pressed(issue, "f"), model.ModeFilterForm},
+		{"single field", pressed(issue, "+"), model.ModeFieldForm},
+		{"New Project", newProject(), model.ModeProjectForm},
+		{"Menu", step(t, bound, openMenu).State, model.ModePicker},
+		{"Menu Projects", pressed(bound, "shift+p"), model.ModePicker},
 	} {
-		for _, c := range tt.chords {
-			t.Run(tt.name+"/"+c, func(t *testing.T) {
-				keyboard, keyCmds := keys(c)(tt.start)
-				pointer, clickCmds := clicked(tt.start, click("", view.KeyClick(c)))
-				sameAs(t, "click and key diverge", pointer, clickCmds, keyboard, keyCmds)
-				if len(tt.chords) == 1 && !tt.check(pointer.Model) {
-					t.Fatalf("the click did not do what the button says: %+v", pointer.Model)
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.start.Model.CurrentMode(); got != tt.mode {
+				t.Fatalf("mode %s, want %s", got, tt.mode)
+			}
+			buttons, labels := cardButtonsOf(t, tt.start)
+			if len(buttons) == 0 {
+				t.Fatal("the card draws no buttons")
+			}
+			for id, act := range buttons {
+				chord := strings.TrimPrefix(act, view.KeyClick(""))
+				binding, ok := model.LookupBindingForMode(chord, tt.mode)
+				if !ok || binding.Mode != tt.mode {
+					t.Errorf("%s sends %q, which %s does not bind", id, chord, tt.mode)
+					continue
 				}
-			})
-		}
+				keyboard, keyCmds := keys(chord)(tt.start)
+				pointer, clickCmds := clicked(tt.start, click(id, act))
+				sameAs(t, id+" differs from its key", pointer, clickCmds, keyboard, keyCmds)
+				for _, b := range model.CardKeys(tt.mode, binding.Action) {
+					if !strings.Contains(labels[id], b.Key) {
+						t.Errorf("%s label %q does not name key %s", id, labels[id], b.Key)
+					}
+				}
+			}
+		})
 	}
 }
 

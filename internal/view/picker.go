@@ -30,9 +30,9 @@ func pickerLayer(m model.Model) tern.Element {
 		selected = PickerItemID(entries[min(m.Picker.Cursor, len(entries)-1)].Key())
 	}
 	// esc goes Back on the Projects level, so the button says so, as the footer does.
-	closeLabel := "Close (esc)"
+	closeLabel := "Close"
 	if m.Picker.Projects && m.Picker.Filter == "" {
-		closeLabel = "Back (esc)"
+		closeLabel = "Back"
 	}
 	empty := "No Menu entries match."
 	if len(m.Collections) == 0 {
@@ -41,6 +41,6 @@ func pickerLayer(m model.Model) tern.Element {
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "collections"}, Head: ui.T("Menu"), Modal: true, Size: ui.SizeMD, Children: []tern.Element{
 		ui.Input{Common: ui.Common{Key: "filter", Tone: ui.ToneAccent, Aria: "Filter Menu"}, Field: ui.Field{Text: m.Picker.Filter, Mode: "insert", Placeholder: "Filter Menu"}},
 		ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "list"}, Selected: selected, Empty: ui.T(empty), Max: ui.MaxLines(12), Children: items},
-		keyButton("close", closeLabel, "escape", false),
+		cardButton("close", model.ModePicker, model.ClosePicker, closeLabel, false),
 	}})
 }
