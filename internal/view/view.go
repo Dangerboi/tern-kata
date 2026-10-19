@@ -184,9 +184,9 @@ func topBar(m model.Model) tern.Element {
 	headingCell.Title, headingCell.Actions = "Menu", &ui.Actions{Click: MenuClick}
 	rightCell := flexCell("right", ui.ToneNeutral, 100)
 	var zoneNote []tern.Element
-	if m.TimeZoneNote != "" {
+	if m.Calendar.Note != "" {
 		zoneNote = ui.Nodes(
-			ui.Text{Common: flexCell("zone-note", ui.ToneWarning, 0), Text: m.TimeZoneNote, Wrap: ui.WrapNone},
+			ui.Text{Common: flexCell("zone-note", ui.ToneWarning, 0), Text: m.Calendar.Note, Wrap: ui.WrapNone},
 			ui.Text{Common: flexCell("zone-sep", ui.ToneMuted, 0), Text: model.DaemonSeparator, Wrap: ui.WrapNone},
 		)
 	}

@@ -19,13 +19,9 @@ const (
 )
 
 // DetailTime is the one time rule of the detail: Events, comments and the Created/Updated properties read
-// like 2026-10-09 22:42, in the zone of the Collection snapshot (UTC before the first one).
+// like 2026-10-09 22:42, in the Pane calendar.
 func (m Model) DetailTime(t time.Time) string {
-	loc := m.zone
-	if loc == nil {
-		loc = time.UTC
-	}
-	return t.In(loc).Format("2006-01-02 15:04")
+	return m.Calendar.Stamp(t)
 }
 
 // historyRow phrases one event as "<actor> <verb> <object>". Only issue.closed carries a detail

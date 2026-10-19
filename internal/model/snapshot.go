@@ -183,8 +183,7 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 	var cmds []Cmd
 	if !msg.NotModified {
 		if msg.LocalDate != "" {
-			m.LocalDate, m.TimeZone, m.TimeZoneNote = msg.LocalDate, msg.TimeZone, msg.TimeZoneNote
-			m.zone, _ = time.LoadLocation(msg.TimeZone) // an unloadable name reads as UTC
+			m.Calendar = NewPaneCalendar(msg.LocalDate, msg.TimeZone, msg.TimeZoneNote)
 		}
 		selected := m.SelectedUID
 		anchor, anchored := m.cursorRowID()
@@ -275,7 +274,7 @@ func (m Model) applyCollection(snapshot Snapshot) Model {
 	if m.Collection.ProjectUID != "" && m.Filters.ProjectUID != "" && m.Collection.ProjectUID != m.Filters.ProjectUID {
 		issues = nil
 	}
-	m.Groups = GroupIssues(groupCollection, issues, m.LocalDate)
+	m.Groups = GroupIssues(groupCollection, issues, m.Calendar)
 	for i := range m.Groups {
 		m.Groups[i].Heading = m.Collection.Def().Headings
 	}

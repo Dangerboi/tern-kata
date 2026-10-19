@@ -75,9 +75,7 @@ type Model struct {
 	ProjectForm         ProjectFormState
 	Focus               Column
 	Groups              []IssueGroup
-	LocalDate, TimeZone string
-	TimeZoneNote        string
-	zone                *time.Location // TimeZone loaded once; nil (UTC) before the first snapshot
+	Calendar            PaneCalendar
 	HelpOpen            bool
 	Flat                bool
 	ExpandedUIDs        map[string]bool

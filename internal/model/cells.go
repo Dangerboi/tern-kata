@@ -20,16 +20,7 @@ func (m Model) OwnerText(owner *string, expires *time.Time, now time.Time) Owner
 	if expires == nil {
 		return OwnerText{Name: *owner}
 	}
-	loc := m.zone
-	if loc == nil {
-		loc = time.UTC
-	}
-	at := expires.In(loc)
-	layout := "2006-01-02 15:04"
-	if y, mo, d := now.In(loc).Date(); at.Year() == y && at.Month() == mo && at.Day() == d {
-		layout = "15:04"
-	}
-	return OwnerText{Name: *owner, Until: " until " + at.Format(layout)}
+	return OwnerText{Name: *owner, Until: " until " + m.Calendar.Read(*expires, now)}
 }
 
 // RelativeTime is kata's TUI "updated" cell: "2h ago", "3d ago", "-" when unset.
