@@ -148,6 +148,14 @@ func plan(cmd model.Cmd) (request, bool) {
 				return ok(model.FieldWritten{UID: cmd.UID}, c.WriteField(ctx, cmd))
 			},
 			func(err error) model.Msg { return model.FieldWritten{UID: cmd.UID, Err: err} }}, true
+	case model.AttachFile:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.AttachFile(ctx, cmd)) },
+			func(err error) model.Msg { return model.FileAttached{Ref: cmd.Ref, Err: err} }}, true
+	case model.DetachFile:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.DetachFile(ctx, cmd)) },
+			func(err error) model.Msg { return model.FileDetached{Ref: cmd.Ref, Name: cmd.Name, Err: err} }}, true
 	case model.LoadFieldLabels:
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.FieldLabels(ctx, cmd)) },

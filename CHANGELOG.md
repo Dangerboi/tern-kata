@@ -4,6 +4,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+- `tern-kata attach <ref> <file>...` and `tern-kata detach <ref> <name>` attach files to an Issue from a shell or an agent, without Tern. Each file is copied into the Project's Attachment store (`.kata-attachments` in the primary checkout, kept out of git) and an `attachment.<name>` meta key holding its host and path points to it.
+
 ## [0.2.0] - 2026-10-19
 
 ### Added

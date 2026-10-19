@@ -4,6 +4,7 @@ go 1.27.0
 
 require (
 	github.com/BurntSushi/toml v1.6.0
+	github.com/doordash-oss/oapi-codegen-dd/v3 v3.75.5
 	github.com/stencil-hq/tern-sdk/go/tern v0.1.0
 	go.kenn.io/kata v0.19.0
 	go.kenn.io/kit v0.34.1
@@ -21,7 +22,6 @@ require (
 	github.com/cenkalti/backoff/v7 v7.0.1 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/danielgtaylor/huma/v2 v2.37.3 // indirect
-	github.com/doordash-oss/oapi-codegen-dd/v3 v3.75.5 // indirect
 	github.com/dunglas/httpsfv v1.1.2 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/ebitengine/purego v0.10.1 // indirect

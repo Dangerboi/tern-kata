@@ -35,3 +35,9 @@
 **Recurrence**: kata's schedule that creates the next Occurrence of an Issue when the current one closes as done. Stopping it creates no further Occurrences and leaves the existing ones as they are.
 
 **Occurrence**: An Issue a Recurrence created, or the Issue that was made the first one.
+
+**Attachment**: A file copied into a Project's Attachment store and pointed to by one `attachment.<name>` meta key on one Issue. The key holds `{"host", "path"}`: the OS host name of the machine with the copy and its absolute native path. Attachments are context for agents; tern-kata lists them and never previews them. _Avoid_: upload, image.
+
+**Attachment store**: The `.kata-attachments` folder at the root of a Project's primary checkout, holding `<Issue ULID>/<name>` copies and a `.gitignore` of `*`. Outside git the root is the directory holding the workspace's `.kata.toml`.
+
+**Primary checkout**: The main worktree of a git repository, the parent of git's common directory; every linked worktree shares it.

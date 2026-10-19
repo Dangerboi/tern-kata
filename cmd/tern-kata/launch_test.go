@@ -174,3 +174,58 @@ func TestResolveVersion(t *testing.T) {
 		})
 	}
 }
+
+func TestPlanLaunchSubcommands(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		env      map[string]string
+		sub, ref string
+		operands []string
+		actor    string
+		err      string
+	}{
+		{name: "attach several files", args: []string{"attach", "ab12", "a.png", "b.png"}, sub: "attach", ref: "ab12", operands: []string{"a.png", "b.png"}, actor: "anonymous"},
+		{name: "detach", args: []string{"detach", "proj#ab12", "a.png"}, sub: "detach", ref: "proj#ab12", operands: []string{"a.png"}, actor: "anonymous"},
+		{name: "as before and after", args: []string{"attach", "--as", "bob", "ab12", "a.png", "--as=amy"}, sub: "attach", ref: "ab12", operands: []string{"a.png"}, actor: "amy"},
+		{name: "actor falls back like the Pane", args: []string{"detach", "ab12", "a.png"}, env: map[string]string{"KATA_AUTHOR": "env-actor", "USER": "u"}, sub: "detach", ref: "ab12", operands: []string{"a.png"}, actor: "env-actor"},
+		{name: "double dash ends flags", args: []string{"attach", "ab12", "--", "--odd.png"}, sub: "attach", ref: "ab12", operands: []string{"--odd.png"}, actor: "anonymous"},
+		{name: "attach without a file", args: []string{"attach", "ab12"}, err: "usage: tern-kata attach <ref> <file>..."},
+		{name: "attach without anything", args: []string{"attach"}, err: "usage: tern-kata attach <ref> <file>..."},
+		{name: "detach without a name", args: []string{"detach", "ab12"}, err: "usage: tern-kata detach <ref> <name>"},
+		{name: "detach with two names", args: []string{"detach", "ab12", "a", "b"}, err: "usage: tern-kata detach <ref> <name>"},
+		{name: "as without an actor", args: []string{"attach", "ab12", "a", "--as"}, err: "--as requires an actor"},
+		{name: "unknown flag", args: []string{"attach", "--issue", "x", "ab12", "a"}, err: "attach: unknown flag --issue"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			plan, err := PlanLaunch(tt.args, lookupFrom(tt.env), "v")
+			if tt.err != "" {
+				if err == nil || err.Error() != tt.err {
+					t.Fatalf("error = %v, want %q", err, tt.err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if plan.Subcommand != tt.sub || plan.Ref != tt.ref || !slices.Equal(plan.Operands, tt.operands) || plan.Actor != tt.actor {
+				t.Errorf("plan = %+v, want %s %s %q as %s", plan, tt.sub, tt.ref, tt.operands, tt.actor)
+			}
+		})
+	}
+}
+
+func TestSubcommandsAreOnlyTakenOverAsTheFirstArgument(t *testing.T) {
+	plan, err := PlanLaunch([]string{"--as", "ann", "attach", "x"}, lookupFrom(nil), "v")
+	if err != nil || plan.Subcommand != "" || !slices.Equal(plan.FallbackArgs, []string{"attach", "x"}) {
+		t.Fatalf("got %+v, %v, want attach passed through to kata tui", plan, err)
+	}
+	plan, err = PlanLaunch([]string{"detach", "--help"}, lookupFrom(nil), "v")
+	if err != nil || !plan.Help {
+		t.Fatalf("got %+v, %v, want --help to win", plan, err)
+	}
+	if !strings.Contains(usage, "tern-kata attach <ref> <file>...") || !strings.Contains(usage, "tern-kata detach <ref> <name>") {
+		t.Fatal("--help does not document attach and detach")
+	}
+}
