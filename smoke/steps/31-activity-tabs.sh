@@ -1,4 +1,4 @@
-# The Activity tabs: Comments, Events and Links with their counts, one tab's rows at a time. tab and
+# The Activity tabs: Comments, Events, Links and Attachments with their counts, one tab's rows at a time. tab and
 # shift+tab cycle them, a click on a tab name selects it, the tab stays when another Issue opens, and j/k
 # move the row cursor, so the wheel and the keys still scroll the detail afterwards. Own Project and Issues; it cleans up.
 at_rects() { ctl tree "[data-id='main.columns.detail.viewport'],[data-id='main.columns.detail.viewport.content']" | jq -c '[.nodes[].rect]'; }
@@ -43,14 +43,15 @@ at_cards="[data-id^='main.columns.detail.viewport.content.activity.'].sf-card"
 at_label() { expect_tree "[data-id='$at_tab$1']" ".ok and (.nodes[0].text | $2)"; }
 ctl key enter
 
-# Comments (2) is the default, bracketed; the Events and Links tabs carry their counts.
+# Comments (2) is the default, bracketed; the Events, Links and Attachments tabs carry their counts.
 at_label 0 'startswith("[ Comments (2) ]")'
 at_label 1 'test("^Events \\([0-9]+\\)$")'
 at_label 2 'startswith("Links (1)")'
+at_label 3 'startswith("Attachments (0)")'
 expect_tree "$at_cards .sf-t-strong" '.ok and .count == 2 and ([.nodes[].text] | all(. == "dana"))'
 expect_tree "$at_cards .sf-t-muted" '.ok and .count == 2 and ([.nodes[].text] | all(test("^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$")))'
 
-# tab and shift+tab cycle Comments -> Events -> Links -> Comments.
+# tab and shift+tab cycle Comments -> Events -> Links -> Attachments -> Comments.
 ctl key Tab
 at_label 1 'startswith("[ Events (")'
 expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']" '.ok and .count == 0'
@@ -58,9 +59,14 @@ ctl key Tab
 at_label 2 'startswith("[ Links (1) ]")'
 expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']" '.ok and .count == 1'
 ctl key Tab
+at_label 3 'startswith("[ Attachments (0) ]")'
+ctl key Tab
 at_label 0 'startswith("[ Comments (2) ]")'
 ctl key shift+Tab
+at_label 3 'startswith("[ Attachments (0) ]")'
+ctl key shift+Tab
 at_label 2 'startswith("[ Links (1) ]")'
+ctl key Tab
 ctl key Tab
 
 # j/k move the row cursor, and the wheel, ↓ and pgdn still scroll the detail afterwards.

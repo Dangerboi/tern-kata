@@ -70,7 +70,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	state := driver.State{Model: model.Model{Cols: term.Caps().Cols, Actor: plan.Actor}}
+	host, _ := os.Hostname() // without a host name no Attachment counts as held here
+	state := driver.State{Model: model.Model{Cols: term.Caps().Cols, Actor: plan.Actor, Host: host}}
 	results := make(chan model.Msg)
 	gateway := data.NewGateway(data.LocateWithKata)
 	defer gateway.Close()

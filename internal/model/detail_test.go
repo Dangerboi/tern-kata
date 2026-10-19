@@ -71,7 +71,7 @@ func TestActivityTabsAndReferenceJump(t *testing.T) {
 		wantCmds []model.Cmd
 	}{
 		{"next tab", []model.Msg{model.KeyMsg{Chord: "tab"}}, model.TabEvents, "a", model.ColumnDetail, reveal},
-		{"previous wraps", []model.Msg{model.KeyMsg{Chord: "shift+tab"}}, model.TabLinks, "a", model.ColumnDetail, reveal},
+		{"previous wraps", []model.Msg{model.KeyMsg{Chord: "shift+tab"}}, model.TabAttachments, "a", model.ColumnDetail, reveal},
 		{"next wraps", []model.Msg{model.KeyMsg{Chord: "shift+tab"}, model.KeyMsg{Chord: "tab"}}, model.TabComments, "a", model.ColumnDetail, reveal},
 		{"click selects a tab", []model.Msg{model.ActivityTabMsg{Tab: model.TabLinks}}, model.TabLinks, "a", model.ColumnDetail, reveal},
 		{"link reference, tab kept across Issues", []model.Msg{model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "tab"}, model.KeyMsg{Chord: "enter"}}, model.TabLinks, "closed-b", model.ColumnDetail, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "closed-b"}}},

@@ -9,6 +9,7 @@ const (
 	TabComments ActivityTab = iota
 	TabEvents
 	TabLinks
+	TabAttachments
 	// TabCount is the number of tabs.
 	TabCount
 )
@@ -51,7 +52,7 @@ type DetailItemMsg struct {
 func (DetailItemMsg) msg() {}
 
 func (s ActivityTab) String() string {
-	return [...]string{"Comments", "Events", "Links"}[s]
+	return [...]string{"Comments", "Events", "Links", "Attachments"}[s]
 }
 
 // DetailRow is one row of an Activity tab (Type is a history event's kata type). A Comment or Event row has its Author and Time (Model.DetailTime); a Link row has Relation and Ref
@@ -61,7 +62,9 @@ type DetailRow struct {
 	// Ref is the referenced Issue's id as shown (#<short_id> in the detail Issue's Project), and Relation how it relates to the
 	// detail's Issue. RefTitle is that Issue's title when it is loaded.
 	Relation, Ref, RefTitle string
-	History                 *HistorySentence
+	// Name, Host and URL are an Attachment row's: URL is the file URL of its path, empty when Host is not this machine.
+	Name, Host, URL string
+	History         *HistorySentence
 	// Reply says what a comment answers ("confirms dana's comment in #bbbb") and Replies how many comments answer it; both
 	// are empty without reply information.
 	Reply, Replies string
@@ -102,6 +105,10 @@ func (m Model) DetailRowCount(tab ActivityTab) int {
 		return len(m.authority.Comments)
 	case TabEvents:
 		return len(m.authority.History)
+	case TabAttachments:
+		if m.authority.Issue != nil {
+			return len(Attachments(m.authority.Issue.Metadata))
+		}
 	}
 	return 0
 }

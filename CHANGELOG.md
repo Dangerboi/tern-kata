@@ -4,6 +4,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+- The Issue detail has an Attachments tab after Links. It lists the Issue's `attachment.*` meta keys by name; a file held on this machine is a link to the file, one held elsewhere reads "<name> on <host>", and an Issue with none says "No attachments, u to attach".
+
 ## [0.2.0] - 2026-10-19
 
 ### Added

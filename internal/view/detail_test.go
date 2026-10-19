@@ -345,3 +345,62 @@ func processZoneIsUTC(t *testing.T) {
 func withZone(m model.Model) model.Model {
 	return apply(m, snap{model.SnapshotLoaded{LocalDate: "2026-10-12", TimeZone: "Asia/Tokyo", Snapshot: m.Snapshot}})
 }
+
+func attachmentsTab(t *testing.T, host string, metadata map[string]any) shown {
+	t.Helper()
+	issue := alpha
+	issue.Metadata = metadata
+	m := browsing()
+	m.Host = host
+	return render(t, apply(m, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &issue}}, model.ActivityTabMsg{Tab: model.TabAttachments}))
+}
+
+func TestAttachmentsTabIsFourthWithItsCount(t *testing.T) {
+	nodes := attachmentsTab(t, "box", map[string]any{"attachment.a.png": map[string]any{"host": "box", "path": "/a.png"}, "note": "x"})
+	if got := text(nodes[view.DetailActivityID+".tabs.tab3"]); got != "[ Attachments (1) ]" {
+		t.Errorf("fourth tab = %q", got)
+	}
+	if got := text(nodes[view.DetailActivityID+".tabs.tab2"]); got != "Links (0)" {
+		t.Errorf("third tab = %q", got)
+	}
+}
+
+func TestEmptyAttachmentsTabSaysHowToAttach(t *testing.T) {
+	nodes := attachmentsTab(t, "box", map[string]any{"scheduled_on": "2026-10-20"})
+	if got := text(nodes[view.DetailActivityID+".empty"]); got != "No attachments, u to attach" {
+		t.Errorf("empty text = %q", got)
+	}
+}
+
+func TestAttachmentRowsLinkThisHostAndNameOtherHosts(t *testing.T) {
+	nodes := attachmentsTab(t, "box", map[string]any{
+		"attachment.z.png":  map[string]any{"host": "other", "path": "/z.png"},
+		"attachment.my pic": map[string]any{"host": "box", "path": `C:\a b\x.png`},
+		"attachment.a.png":  map[string]any{"host": "box", "path": "/a/x.png"},
+		"unrelated":         map[string]any{"host": "box", "path": "/u"},
+	})
+	var order []string
+	for _, c := range nodes[view.DetailActivityID].C {
+		if id := strings.TrimPrefix(c.ID, view.DetailActivityID+"."); id != "tabs" {
+			order = append(order, id)
+		}
+	}
+	if want := []string{"a.png", "my pic", "z.png"}; !slices.Equal(order, want) {
+		t.Fatalf("rows %v, want %v", order, want)
+	}
+	href := func(id string) any {
+		return nodes[view.DetailActivityID+"."+id].P["spans"].([]any)[0].(map[string]any)["href"]
+	}
+	if got := href("a.png"); got != "file:///a/x.png" {
+		t.Errorf("unix href = %v", got)
+	}
+	if got := href("my pic"); got != "file:///C:/a%20b/x.png" {
+		t.Errorf("windows href = %v", got)
+	}
+	if got := href("z.png"); got != nil {
+		t.Errorf("other host links to %v", got)
+	}
+	if got := text(nodes[view.DetailActivityID+".z.png"]); got != "z.png on other" {
+		t.Errorf("other host row = %q", got)
+	}
+}
