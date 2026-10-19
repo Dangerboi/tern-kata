@@ -164,6 +164,7 @@ func submitField(m Model) (Model, []Cmd) {
 	f.Err = nil
 	return m, []Cmd{WriteField{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Action: f.Action, Value: f.Value, Actor: m.Actor}}
 }
+
 // submitAttachment sends the form of u or U. U removes the Attachment typed in full, else the highlighted one.
 func submitAttachment(m Model) (Model, []Cmd) {
 	f := &m.FieldForm

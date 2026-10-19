@@ -56,8 +56,8 @@ type Model struct {
 	RecurrenceForm RecurrenceFormState
 	Actor          string
 	// Host is this machine's host name, which tells an Attachment held here from one held elsewhere.
-	Host             string
-	FieldForm        FieldFormState
+	Host      string
+	FieldForm FieldFormState
 	// Notice reports a write that has nothing to show in the Issues, and goes at the next key.
 	Notice           string
 	Workspace        string
