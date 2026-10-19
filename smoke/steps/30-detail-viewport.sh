@@ -65,9 +65,9 @@ vp_keys PageUp 12
 vp_wait "pgup returns to the top" '$a == 0'
 
 # Key moves in the detail (tab, j) leave the wheel working.
-vp_keys Tab 3
+vp_keys Tab 4
 vp_keys j 2
-vp_keys Tab 3
+vp_keys Tab 4
 vp_wheel 300 12
 vp_wait "the wheel after tab and j" '$b <= 1'
 vp_wheel -300 12

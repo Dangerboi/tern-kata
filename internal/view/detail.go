@@ -70,7 +70,7 @@ func detail(m model.Model, now time.Time) tern.Element {
 			parts = append(parts, ui.Spacer{Common: ui.Common{Key: "gap-children"}, Size: ui.GapMD}, childrenTable(m, kids, now))
 		}
 		if len(activity) == 0 {
-			activity = ui.Nodes(ui.Text{Common: ui.Common{Key: "empty"}, Text: "No " + strings.ToLower(m.ActiveTab().String()) + "."})
+			activity = ui.Nodes(ui.Text{Common: ui.Common{Key: "empty"}, Text: emptyTabText(m.ActiveTab())})
 		}
 		parts = append(parts,
 			ui.Spacer{Common: ui.Common{Key: "gap-activity"}, Size: ui.GapMD},
@@ -116,6 +116,10 @@ func detailRows(m model.Model) (children []detailChild, activity tern.Nodes) {
 		}
 		row := item.Activity
 		action := DetailItemClick(item.Kind.Tab(), row.Key)
+		if item.Kind == model.RowAttachment {
+			activity = append(activity, ui.Text{Common: ui.Common{Key: row.Key, Mark: mark}, Spans: attachmentSpans(row)})
+			continue
+		}
 		if item.Kind == model.RowLink {
 			activity = append(activity, ui.Col{Common: ui.Common{Key: row.Key, Mark: mark}, Children: ui.Nodes(linkRow(row, &ui.Actions{Click: action}))})
 			continue

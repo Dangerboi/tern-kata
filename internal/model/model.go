@@ -50,11 +50,13 @@ type Model struct {
 	// pending is the Issue Create just made, selected as soon as a snapshot lists it.
 	pending string
 	// etag answers etagQuery: the snapshot on screen.
-	etag             string
-	etagQuery        SnapshotQuery
-	CloseForm        CloseFormState
-	RecurrenceForm   RecurrenceFormState
-	Actor            string
+	etag           string
+	etagQuery      SnapshotQuery
+	CloseForm      CloseFormState
+	RecurrenceForm RecurrenceFormState
+	Actor          string
+	// Host is this machine's host name, which tells an Attachment held here from one held elsewhere.
+	Host             string
 	FieldForm        FieldFormState
 	Workspace        string
 	Project          Project

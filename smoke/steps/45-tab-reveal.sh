@@ -1,5 +1,5 @@
 # Switching Activity tab scrolls the new tab into view: with the detail scrolled to the bottom on the empty
-# Links tab, tab to Comments (taller) and its last card is on screen; the same by a click on a tab name.
+# Attachments tab, tab to Comments (taller) and its last card is on screen; the same by a click on a tab name.
 # Own Project and Issue; it cleans up.
 tr_rects() { ctl tree "[data-id='main.columns.detail.viewport'],$1" | jq -c '[.nodes[].rect]'; }
 # Whether the last node of selector $1 lies inside the detail viewport, in px.
@@ -48,9 +48,9 @@ tr_cards="[data-id^='$tr_activity.'].sf-card"
 ctl key enter
 tr_label 0 'startswith("[ Comments (4) ]")'
 
-# To the Links tab (empty), then to the bottom of the detail.
+# To the Attachments tab (empty), then to the bottom of the detail.
 ctl key shift+Tab
-tr_label 2 'startswith("[ Links (0) ]")'
+tr_label 3 'startswith("[ Attachments (0) ]")'
 tr_scroll_to_bottom
 expect_tree "[data-id='$tr_activity.empty']" '.ok and .count == 1'
 
@@ -61,9 +61,9 @@ expect_tree "$tr_cards" '.ok and .count == 4'
 tr_wait_inside "tab to Comments" "$tr_cards"
 tr_wait_inside "tab to Comments, tab names" "[data-id='$tr_activity.tabs']"
 
-# The same by a click on a tab name: to the bottom on Links again, click Comments.
+# The same by a click on a tab name: to the bottom on Attachments again, click Comments.
 ctl key shift+Tab
-tr_label 2 'startswith("[ Links (0) ]")'
+tr_label 3 'startswith("[ Attachments (0) ]")'
 tr_scroll_to_bottom
 ctl click "[data-id='${tr_tab}0']"
 tr_label 0 'startswith("[ Comments (4) ]")'

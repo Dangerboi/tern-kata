@@ -15,6 +15,7 @@ const (
 	RowComment
 	RowLink
 	RowEvent
+	RowAttachment
 )
 
 // DetailItem is one row of the Issue detail's cursor list, shaped for the view. A RowChild row carries Child; every other
@@ -32,7 +33,7 @@ type DetailItem struct {
 }
 
 // tabKinds is the row kind each Activity tab lists.
-var tabKinds = [TabCount]RowKind{TabComments: RowComment, TabLinks: RowLink, TabEvents: RowEvent}
+var tabKinds = [TabCount]RowKind{TabComments: RowComment, TabLinks: RowLink, TabEvents: RowEvent, TabAttachments: RowAttachment}
 
 func (t ActivityTab) kind() RowKind { return tabKinds[t] }
 
@@ -62,6 +63,7 @@ type rowInputs struct {
 	issueN     int
 	tab        ActivityTab
 	calendar   PaneCalendar
+	host       string
 }
 
 // detailRows is the Issue detail's cursor list: the children, then the active tab's rows.
@@ -93,7 +95,7 @@ func (m Model) DetailChildCounts() ChildCounts {
 
 // withRows brings the rows up to date with the authority, the loaded Issues and the active tab.
 func (m Model) withRows() Model {
-	in := rowInputs{authority: m.authority, issueN: len(m.Issues), tab: m.tab, calendar: m.Calendar}
+	in := rowInputs{authority: m.authority, issueN: len(m.Issues), tab: m.tab, calendar: m.Calendar, host: m.Host}
 	if len(m.Issues) > 0 {
 		in.firstIssue = &m.Issues[0]
 	}
@@ -119,6 +121,16 @@ func (m Model) withRows() Model {
 	case TabLinks:
 		for _, link := range links {
 			m.rows.items = append(m.rows.items, DetailItem{Kind: RowLink, Key: link.Key, ReferenceUID: link.ReferenceUID, Activity: link})
+		}
+	case TabAttachments:
+		if m.authority.Issue != nil {
+			for _, a := range Attachments(m.authority.Issue.Metadata) {
+				row := DetailRow{Key: a.Name, Name: a.Name, Host: a.Host}
+				if m.Host != "" && strings.EqualFold(a.Host, m.Host) {
+					row.URL = fileURL(a.Path)
+				}
+				m.rows.items = append(m.rows.items, DetailItem{Kind: RowAttachment, Key: row.Key, Activity: row})
+			}
 		}
 	case TabComments:
 		for _, comment := range m.authority.Comments {
