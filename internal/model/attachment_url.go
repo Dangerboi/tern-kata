@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// fileURL is the file URL of an absolute native path: C:\a b\x.png is file:///C:/a%20b/x.png, /a/x.png is file:///a/x.png, \\\\srv\\share\\x.png is file://srv/share/x.png.
+// fileURL is the file URL of an absolute native path: C:\a b\x.png is file:///C:/a%20b/x.png, /a/x.png is file:///a/x.png, \\srv\share\x.png is file://srv/share/x.png.
 // Only a Windows path (a drive letter or a UNC share) has its backslashes turned into slashes; on Unix one is part of a name.
 func fileURL(path string) string {
 	win := windowsPath(path)
