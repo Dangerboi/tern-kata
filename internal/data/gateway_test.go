@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	g "go.kenn.io/kata/pkg/client/generated"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -320,7 +322,7 @@ func TestGatewayReadsAndWritesIssues(t *testing.T) {
 		t.Fatalf("written fields not stored: %+v", got)
 	}
 
-	closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true}))
+	closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true, Key: "k-quick"}))
 	if closed.UID != uid || closed.Err != nil {
 		t.Fatalf("close %+v", closed)
 	}
@@ -371,7 +373,7 @@ func TestGatewayClosesWithEveryReason(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			uid := createIssue(t, gateway, workspace, demo, tt.name)
-			tt.cmd.Workspace, tt.cmd.UID, tt.cmd.ProjectID, tt.cmd.Actor = workspace, uid, demo.ID, "tester"
+			tt.cmd.Workspace, tt.cmd.UID, tt.cmd.ProjectID, tt.cmd.Actor, tt.cmd.Key = workspace, uid, demo.ID, "tester", "k-"+tt.name
 			if closed := as[model.CloseResultMsg](t, run(t, gateway, tt.cmd)); closed.UID != uid || closed.Err != nil {
 				t.Fatalf("close %+v", closed)
 			}
@@ -450,7 +452,7 @@ func TestGatewayReportsDaemonErrorsInTheAskingMessage(t *testing.T) {
 		{"create", model.CreateIssueCmd{Workspace: workspace, ProjectID: 9999, Title: "x", Actor: "tester"}, func(err error) model.Msg { return model.IssueCreated{Err: err} }},
 		{"open", model.OpenIssue{Workspace: workspace, Ref: "demo/zzzz", ProjectID: demo.ID}, func(err error) model.Msg { return model.IssueOpenFailed{Ref: "demo/zzzz", Err: err} }},
 		{"draft", model.SaveDraft{Workspace: workspace, UID: "nope", ProjectID: demo.ID, Actor: "tester"}, func(err error) model.Msg { return model.DraftFailed{UID: "nope", Err: err} }},
-		{"close", model.CloseIssueCmd{Workspace: workspace, UID: "nope", ProjectID: demo.ID}, func(err error) model.Msg { return model.CloseResultMsg{UID: "nope", Err: err} }},
+		{"close", model.CloseIssueCmd{Workspace: workspace, UID: "nope", ProjectID: demo.ID, Key: "k-nope"}, func(err error) model.Msg { return model.CloseResultMsg{UID: "nope", Err: err} }},
 		{"reopen", model.ReopenIssueCmd{Workspace: workspace, UID: "nope", ProjectID: demo.ID, Actor: "tester"}, func(err error) model.Msg { return model.CloseResultMsg{UID: "nope", Err: err} }},
 		{"recurrence", model.CreateRecurrenceCmd{Workspace: workspace, UID: "nope", ProjectID: demo.ID, Actor: "tester"}, func(err error) model.Msg { return model.RecurrenceResultMsg{UID: "nope", Err: err} }},
 		{"field", model.WriteField{Workspace: workspace, UID: "nope", ProjectID: demo.ID, Action: model.AddLabelAction, Value: "x", Actor: "tester"}, func(err error) model.Msg { return model.FieldWritten{UID: "nope", Err: err} }},
@@ -534,7 +536,7 @@ func TestGatewayFailureShapePerCommand(t *testing.T) {
 		{model.OpenIssue{Ref: "p/x"}, model.IssueOpenFailed{Ref: "p/x", Err: boom}},
 		{model.LookupSearchID{Request: 3, ShortID: "abcd"}, model.SearchIDLooked{Request: 3, ShortID: "abcd"}},
 		{model.SaveDraft{UID: "u"}, model.DraftFailed{UID: "u", Err: boom}},
-		{model.CloseIssueCmd{UID: "u"}, model.CloseResultMsg{UID: "u", Err: boom}},
+		{model.CloseIssueCmd{UID: "u", Key: "k-u"}, model.CloseResultMsg{UID: "u", Err: boom}},
 		{model.ReopenIssueCmd{UID: "u"}, model.CloseResultMsg{UID: "u", Err: boom}},
 		{model.CreateRecurrenceCmd{UID: "u"}, model.RecurrenceResultMsg{UID: "u", Err: boom}},
 		{model.ChangeRecurrenceCmd{UID: "u"}, model.RecurrenceResultMsg{UID: "u", Err: boom}},
@@ -909,7 +911,7 @@ func changeOwner(t *testing.T, gateway *Gateway, workspace string, project model
 // bounceStatus is another actor closing and reopening the Issue: the revision moves twice and the status ends where it began.
 func bounceStatus(t *testing.T, gateway *Gateway, workspace string, project model.Project, uid string) {
 	t.Helper()
-	if closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: project.ID, Actor: "someone", Quick: true})); closed.Err != nil {
+	if closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: project.ID, Actor: "someone", Quick: true, Key: fmt.Sprintf("k-bounce-%s-%d", uid, time.Now().UnixNano())})); closed.Err != nil {
 		t.Fatal(closed.Err)
 	}
 	if reopened := as[model.CloseResultMsg](t, run(t, gateway, model.ReopenIssueCmd{Workspace: workspace, UID: uid, ProjectID: project.ID, Actor: "someone"})); reopened.Err != nil {
@@ -974,7 +976,7 @@ func TestGatewayGuardedWritesSurviveOwnerAndStatusChanges(t *testing.T) {
 		before := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid}))
 		closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true, Key: "k-mine"}))
 		after := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid}))
-		if closed.Err == nil || closed.Err.Error() != "Issue was closed meanwhile; nothing was written" || len(after.Selected.History) != len(before.Selected.History) {
+		if closed.Err == nil || !strings.Contains(closed.Err.Error(), "closed meanwhile; nothing was written") || len(after.Selected.History) != len(before.Selected.History) {
 			t.Fatalf("second close %+v wrote events %d -> %d", closed, len(before.Selected.History), len(after.Selected.History))
 		}
 	})
@@ -1168,7 +1170,7 @@ func TestGatewayMakesAnIssueTheFirstOccurrenceAndClosingItCreatesTheNext(t *test
 		t.Fatalf("the first occurrence kept owner %v, want alice", owner)
 	}
 
-	if closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true})); closed.Err != nil {
+	if closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true, Key: "k-snapshot"})); closed.Err != nil {
 		t.Fatal(closed.Err)
 	}
 	query := model.CollectionQuery(model.Collection{View: "project", ProjectUID: demo.UID, Title: demo.Name}, model.Filters{})
@@ -1223,7 +1225,7 @@ func TestGatewayChangesTheScheduleAfterOnlyBookkeepingMoved(t *testing.T) {
 	uid, opened := recurringIssue(t, gateway, workspace, demo, "Water plants", "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO")
 
 	// Closing the occurrence as done creates the next one and moves the recurrence's revision, not its schedule.
-	if closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true})); closed.Err != nil {
+	if closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true, Key: "k-occurrence"})); closed.Err != nil {
 		t.Fatal(closed.Err)
 	}
 	if now := recurrenceOf(t, gateway, workspace, uid); now.Revision == opened.Revision || now.Rule != opened.Rule {
@@ -1362,7 +1364,7 @@ func TestGatewayWakeFiresOnTheWallClockEvenIfTheMonotonicClockLagged(t *testing.
 	wall.Store(deadline.Add(-time.Hour).UnixNano())
 	gateway.now = func() time.Time { return time.Unix(0, wall.Load()) }
 
-	messages, _ := stream(t, gateway, model.WakeAt{Day: "2026-10-08", At: deadline})
+	messages, _ := stream(t, gateway, model.WakeAt{Day: "2026-10-08", At: deadline, Generation: 1})
 	select {
 	case msg := <-messages:
 		t.Fatalf("woke an hour early: %+v", msg)
@@ -1380,7 +1382,7 @@ func TestGatewayWakeEndsWhenThePaneCloses(t *testing.T) {
 	messages := make(chan model.Msg, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	go func() { defer close(done); gateway.Run(ctx, model.WakeAt{Day: "d", At: time.Unix(1<<40, 0)}, messages) }()
+	go func() { defer close(done); gateway.Run(ctx, model.WakeAt{Day: "d", At: time.Unix(1<<40, 0), Generation: 1}, messages) }()
 	cancel()
 	select {
 	case <-done:
@@ -1389,6 +1391,60 @@ func TestGatewayWakeEndsWhenThePaneCloses(t *testing.T) {
 	}
 	if len(messages) != 0 {
 		t.Fatal("a closed Pane got a wake")
+	}
+}
+
+func TestGatewayNewestWakeSurvivesAnOlderOneArrivingLate(t *testing.T) {
+	gateway := newGateway(t, newLocator(Target{}))
+	gateway.wakePoll = 5 * time.Millisecond
+	var wall atomic.Int64
+	gateway.now = func() time.Time { return time.Unix(0, wall.Load()) }
+
+	newest, _ := stream(t, gateway, model.WakeAt{Day: "new", At: time.Unix(100, 0), Generation: 2})
+	older, olderDone := stream(t, gateway, model.WakeAt{Day: "old", At: time.Unix(100, 0), Generation: 1})
+	select {
+	case <-olderDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("an older wake kept running")
+	}
+	wall.Store(time.Unix(100, 0).UnixNano())
+	if got := receive(t, newest); got != (model.DayEnded{Day: "new"}) {
+		t.Fatalf("the newest wake answered %+v", got)
+	}
+	if len(older) != 0 {
+		t.Fatal("the older wake answered")
+	}
+}
+
+func TestGatewayCloseWithoutAKeyIsRefusedAndWritesNothing(t *testing.T) {
+	kata := startKata(t, "0.19.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	uid := createIssue(t, gateway, workspace, demo, "Keyless")
+	got := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true}))
+	if got.Err == nil || !strings.Contains(got.Err.Error(), "idempotency key") {
+		t.Fatalf("keyless close %+v", got)
+	}
+	if issue := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected.Issue; issue.Status != "open" {
+		t.Fatalf("a refused close left the Issue %q", issue.Status)
+	}
+}
+
+func TestGatewayACommandQueuedBehindAHungConnectGivesUpWithinOneDeadline(t *testing.T) {
+	gateway := NewGateway(func(ctx context.Context, _ string) (Target, error) {
+		<-ctx.Done()
+		return Target{}, ctx.Err()
+	})
+	t.Cleanup(gateway.Close)
+	gateway.deadline = 150 * time.Millisecond
+	start := time.Now()
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Go(func() { run(t, gateway, model.ReadSnapshot{Request: 1}) })
+	}
+	wg.Wait()
+	if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
+		t.Fatalf("two queued commands took %v, want about one deadline of 150ms", elapsed)
 	}
 }
 

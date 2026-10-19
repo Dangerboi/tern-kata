@@ -29,10 +29,11 @@ type Gateway struct {
 	streamCancel     context.CancelFunc
 	streamGeneration int64
 
-	wakeMu     sync.Mutex
-	wakeCancel context.CancelFunc
-	now        func() time.Time
-	wakePoll   time.Duration
+	wakeMu         sync.Mutex
+	wakeCancel     context.CancelFunc
+	wakeGeneration int64
+	now            func() time.Time
+	wakePoll       time.Duration
 }
 
 func NewGateway(locate Locator) *Gateway {
@@ -216,14 +217,15 @@ func unreachable(err error) bool {
 }
 
 func (g *Gateway) client(ctx context.Context, workspace string) (*Client, error) {
+	// The deadline counts from the call, so a command queued behind another's connect gives up after one deadline in all.
+	connectCtx, cancel := context.WithTimeout(ctx, g.deadline)
+	defer cancel()
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if c := g.clients[workspace]; c != nil {
 		return c, nil
 	}
 	// shortcut: the lock is held while connecting, so one hung daemon holds up other workspaces until the deadline.
-	connectCtx, cancel := context.WithTimeout(ctx, g.deadline)
-	defer cancel()
 	c, err := g.connect(connectCtx, workspace)
 	if err != nil {
 		if connectCtx.Err() != nil && ctx.Err() == nil {
@@ -295,6 +297,11 @@ func (g *Gateway) stream(ctx context.Context, cmd model.Subscribe, messages chan
 // slept past At answers soon after resuming, and ends when ctx ends or a newer wake replaces it.
 func (g *Gateway) wake(ctx context.Context, cmd model.WakeAt, messages chan<- model.Msg) {
 	g.wakeMu.Lock()
+	if cmd.Generation <= g.wakeGeneration {
+		g.wakeMu.Unlock()
+		return
+	}
+	g.wakeGeneration = cmd.Generation
 	if g.wakeCancel != nil {
 		g.wakeCancel()
 	}
