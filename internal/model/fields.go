@@ -106,6 +106,49 @@ func (m Model) issueByUID(uid string) *Issue {
 	return nil
 }
 
+// fieldOpen says how the form of an action opens.
+type fieldOpen int
+
+const (
+	openInput         fieldOpen = iota // a plain input
+	openProjectLabels                  // a picker of the Project's labels, loaded from the daemon
+	openIssueLabels                    // a picker of the Issue's labels
+	openAttachments                    // a picker of the Issue's Attachments; none says so as the Notice
+	openImmediate                      // submits at once
+)
+
+// fieldSpec describes one single-field form action. Opening and submitting read it instead of branching on the action.
+type fieldSpec struct {
+	title      string
+	needsValue bool
+	clean      func(string) string
+	check      func(string) error
+	open       fieldOpen
+	refuse     bool // the Binding's refusal shows as the form's error
+	send       func(m Model) (Model, []Cmd)
+}
+
+var fieldSpecs = map[Action]fieldSpec{
+	AddLabelAction:    {title: "Add label", needsValue: true, open: openProjectLabels, send: sendFieldWrite},
+	RemoveLabelAction: {title: "Remove label", needsValue: true, open: openIssueLabels, send: sendFieldWrite},
+	AssignOwnerAction: {title: "Assign owner", needsValue: true, send: sendFieldWrite},
+	ClearOwnerAction:  {title: "Clear owner", open: openImmediate, send: sendFieldWrite},
+	PriorityAction:    {title: "Priority (0-4, or - to clear)", check: checkPriority, send: sendFieldWrite},
+	SetParentAction:   {title: "Set parent (Issue id)", needsValue: true, clean: func(v string) string { return strings.TrimPrefix(v, "#") }, send: sendFieldWrite},
+	AttachFileAction:  {title: "Attach a file (path)", needsValue: true, refuse: true, send: sendAttach},
+	DetachFileAction:  {title: "Remove attachment", open: openAttachments, refuse: true, send: sendDetach},
+}
+
+// FieldTitle is the title of the form of an action.
+func FieldTitle(action Action) string { return fieldSpecs[action].title }
+
+func checkPriority(v string) error {
+	if n, err := strconv.Atoi(v); v != "-" && (err != nil || n < 0 || n > 4) {
+		return errors.New("Priority must be 0-4, or - to clear.")
+	}
+	return nil
+}
+
 func openField(m Model, action Action) (Model, []Cmd) {
 	if m.Stale || m.FieldForm.Saving {
 		return m, nil
@@ -114,38 +157,29 @@ func openField(m Model, action Action) (Model, []Cmd) {
 	if issue == nil {
 		return m, nil
 	}
+	spec := fieldSpecs[action]
 	m.FieldForm = FieldFormState{Open: true, Action: action, UID: issue.UID, ProjectID: issue.ProjectID}
-	if action == AttachFileAction || action == DetachFileAction {
-		return openAttachment(m, issue), nil
+	f := &m.FieldForm
+	if spec.refuse {
+		f.Err = AttachRefusal(m.Project, issue.ProjectID, issue.ShortID, issue.ProjectName)
 	}
-	if action == RemoveLabelAction {
-		m.FieldForm.Labels = issue.Labels
-	}
-	if action == ClearOwnerAction {
+	switch spec.open {
+	case openImmediate:
 		return submitField(m)
-	}
-	if action == AddLabelAction {
+	case openProjectLabels:
 		return m, []Cmd{LoadFieldLabels{Workspace: m.Workspace, UID: issue.UID, ProjectID: issue.ProjectID}}
+	case openIssueLabels:
+		f.Labels = issue.Labels
+	case openAttachments:
+		for _, a := range Attachments(issue.Metadata) {
+			f.Labels = append(f.Labels, a.Name)
+		}
+		if f.Err == nil && len(f.Labels) == 0 {
+			m.FieldForm = FieldFormState{}
+			m.Notice = fmt.Sprintf("%s has no attachments.", issue.ShortID)
+		}
 	}
 	return m, nil
-}
-
-// openAttachment finishes opening the form of u or U. A refusal shows as the form's error; U with no Attachments says so as
-// the Notice instead of opening an empty picker.
-func openAttachment(m Model, issue *Issue) Model {
-	f := &m.FieldForm
-	f.Err = AttachRefusal(m.Project, issue.ProjectID, issue.ShortID, issue.ProjectName)
-	if f.Action != DetachFileAction {
-		return m
-	}
-	for _, a := range Attachments(issue.Metadata) {
-		f.Labels = append(f.Labels, a.Name)
-	}
-	if f.Err == nil && len(f.Labels) == 0 {
-		m.FieldForm = FieldFormState{}
-		m.Notice = fmt.Sprintf("%s has no attachments.", issue.ShortID)
-	}
-	return m
 }
 
 func submitField(m Model) (Model, []Cmd) {
@@ -153,44 +187,60 @@ func submitField(m Model) (Model, []Cmd) {
 	if f.Saving || m.Stale {
 		return m, nil
 	}
+	spec := fieldSpecs[f.Action]
 	f.Value = strings.TrimSpace(f.Value)
-	if f.Action == SetParentAction {
-		f.Value = strings.TrimPrefix(f.Value, "#")
+	if spec.clean != nil {
+		f.Value = spec.clean(f.Value)
 	}
-	if f.Action == PriorityAction && f.Value != "-" {
-		n, err := strconv.Atoi(f.Value)
-		if err != nil || n < 0 || n > 4 {
-			f.Err = errors.New("Priority must be 0-4, or - to clear.")
+	if spec.check != nil {
+		if f.Err = spec.check(f.Value); f.Err != nil {
 			return m, nil
 		}
 	}
-	if (f.Action == AddLabelAction || f.Action == RemoveLabelAction || f.Action == AssignOwnerAction || f.Action == SetParentAction || f.Action == AttachFileAction) && f.Value == "" {
+	if spec.needsValue && f.Value == "" {
 		f.Err = errors.New("Enter a value.")
 		return m, nil
 	}
-	if f.Action == AttachFileAction || f.Action == DetachFileAction {
-		return submitAttachment(m)
-	}
+	return spec.send(m)
+}
+
+func sendFieldWrite(m Model) (Model, []Cmd) {
+	f := &m.FieldForm
 	f.Saving = true
 	f.Err = nil
 	return m, []Cmd{WriteField{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Action: f.Action, Value: f.Value, Actor: m.Actor}}
 }
 
-// submitAttachment sends the form of u or U. U removes the Attachment typed in full, else the highlighted one.
-func submitAttachment(m Model) (Model, []Cmd) {
+// attachIssue is the Issue of an attachment form, or the form's error when it is gone or the Binding refuses it.
+func attachIssue(m *Model) *Issue {
 	f := &m.FieldForm
 	issue := m.issueByUID(f.UID)
 	if issue == nil {
 		f.Err = errors.New("That Issue is no longer listed.")
-		return m, nil
+		return nil
 	}
 	if f.Err = AttachRefusal(m.Project, issue.ProjectID, issue.ShortID, issue.ProjectName); f.Err != nil {
+		return nil
+	}
+	return issue
+}
+
+func sendAttach(m Model) (Model, []Cmd) {
+	if attachIssue(&m) == nil {
 		return m, nil
 	}
-	if f.Action == AttachFileAction {
-		f.Saving = true
-		return m, []Cmd{AttachFile{Workspace: m.Workspace, Ref: f.UID, Actor: m.Actor, Path: f.Value}}
+	f := &m.FieldForm
+	f.Saving = true
+	return m, []Cmd{AttachFile{Workspace: m.Workspace, Ref: f.UID, Actor: m.Actor, Path: f.Value}}
+}
+
+// sendDetach removes the Attachment typed in full, else the highlighted one.
+func sendDetach(m Model) (Model, []Cmd) {
+	issue := attachIssue(&m)
+	if issue == nil {
+		return m, nil
 	}
+	f := &m.FieldForm
 	name := f.Value
 	if !slices.Contains(f.Labels, name) {
 		suggestions := m.FieldSuggestions()
