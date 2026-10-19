@@ -745,23 +745,44 @@ func TestGatewayStreamDropReportsAnUnreachableDaemon(t *testing.T) {
 	<-done
 }
 
-func TestGatewaySnapshotCountsChildrenOnEveryRead(t *testing.T) {
+func TestGatewaySnapshotCountsChildrenOnlyWhenAsked(t *testing.T) {
 	kata := startKata(t, "0.19.0")
-	gateway := newGateway(t, newLocator(kata.target()))
+	var failCounts atomic.Bool
+	front := serve(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if failCounts.Load() && r.URL.Path == "/api/v1/issues" {
+			http.Error(w, "boom", http.StatusInternalServerError)
+			return
+		}
+		kata.handler.ServeHTTP(w, r)
+	}), "0.19.0")
+	gateway := newGateway(t, newLocator(front.target()))
 	workspace, demo := project(t, gateway, "demo")
 	parent := createIssue(t, gateway, workspace, demo, "Parent")
 	query := model.CollectionQuery(model.Collection{View: "project", ProjectUID: demo.UID, Title: demo.Name}, model.Filters{})
 
-	before := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query}))
-	if len(before.Snapshot.ChildCounts) != 0 {
-		t.Fatalf("child counts %+v before any child", before.Snapshot.ChildCounts)
+	before := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ChildCounts: true}))
+	if before.Snapshot.ChildCounts == nil || len(before.Snapshot.ChildCounts) != 0 {
+		t.Fatalf("child counts %+v before any child, want an empty read", before.Snapshot.ChildCounts)
 	}
 	child := as[model.IssueCreated](t, run(t, gateway, model.CreateIssueCmd{Workspace: workspace, Actor: "tester", ProjectID: demo.ID, Title: "Child", ParentUID: parent}))
 	if child.Err != nil {
 		t.Fatal(child.Err)
 	}
-	after := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ETag: before.ETag}))
-	if counts := after.Snapshot.ChildCounts[parent]; after.NotModified || counts.Total != 1 || counts.Open != 1 {
+
+	without := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ETag: before.ETag}))
+	if without.NotModified || without.Snapshot.ChildCounts != nil || len(without.Snapshot.Issues) != 2 {
+		t.Fatalf("read without counts: %+v, want the snapshot and no counts", without)
+	}
+
+	failCounts.Store(true)
+	failed := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ChildCounts: true}))
+	if failed.Snapshot.ChildCounts != nil || len(failed.Snapshot.Issues) != 2 || failed.ETag == "" || failed.Snapshot.Cursor == 0 {
+		t.Fatalf("failing count download: %+v, want the snapshot, ETag and cursor with no counts", failed)
+	}
+	failCounts.Store(false)
+
+	after := as[model.SnapshotLoaded](t, run(t, gateway, model.ReadSnapshot{Workspace: workspace, Query: query, ChildCounts: true}))
+	if counts := after.Snapshot.ChildCounts[parent]; counts.Total != 1 || counts.Open != 1 {
 		t.Fatalf("after a child: %+v, want the parent to count its one open child", after)
 	}
 	links := after.Snapshot.Links

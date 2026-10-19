@@ -11,7 +11,7 @@ import (
 )
 
 // ReadSnapshot is the one read of a Collection snapshot, for the first load, a Collection switch, a filter change and a live
-// refresh. A dated Collection is asked for today's calendar date; the result reports the calendar. A matching ETag answers 304.
+// refresh. Child counts are read only when cmd asks. A dated Collection is asked for today's calendar date; the result reports the calendar. A matching ETag answers 304.
 func (c *Client) ReadSnapshot(ctx context.Context, cmd model.ReadSnapshot) (model.SnapshotLoaded, error) {
 	date, zone, note := systemCalendar.Today()
 	result := model.SnapshotLoaded{Request: cmd.Request, Query: cmd.Query, LocalDate: date, TimeZone: zone, TimeZoneNote: note}
@@ -39,8 +39,13 @@ func (c *Client) ReadSnapshot(ctx context.Context, cmd model.ReadSnapshot) (mode
 	if response.Headers200 != nil {
 		result.ETag = response.Headers200.ETag
 	}
-	result.Snapshot.ChildCounts, err = c.readChildCounts(ctx, result.Snapshot, query.ProjectUID)
-	return result, err
+	if cmd.ChildCounts {
+		// A failed count download keeps the snapshot; the nil counts tell the model they were not read.
+		if counts, err := c.readChildCounts(ctx, result.Snapshot, query.ProjectUID); err == nil {
+			result.Snapshot.ChildCounts = counts
+		}
+	}
+	return result, nil
 }
 
 // translateSnapshot is the one place kata's snapshot body becomes the model's Collection snapshot; the child counts are read
