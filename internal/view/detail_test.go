@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/Dangerboi/tern-kata/internal/view"
 )
 
@@ -379,6 +380,44 @@ func TestEmptyAttachmentsTabSaysHowToAttach(t *testing.T) {
 	}
 }
 
+func TestAttachmentRowsWithCollidingNamesGetUniqueNodeIDs(t *testing.T) {
+	p := map[string]any{"host": "box", "path": "/x"}
+	issue := alpha
+	issue.Metadata = map[string]any{"attachment.tabs": p, "attachment.empty": p, "attachment.a": p, "attachment.a.row": p}
+	m := browsing()
+	m.Host = "box"
+	m = apply(m, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &issue}}, model.ActivityTabMsg{Tab: model.TabAttachments})
+	ops, err := tern.NewReconciler("test").Diff(view.Render(m, testNow))
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := map[string]int{}
+	var walk func(n tern.WireNode)
+	walk = func(n tern.WireNode) {
+		count[n.ID]++
+		for _, c := range n.C {
+			walk(c)
+		}
+	}
+	for _, op := range ops {
+		if op[0] == "add" {
+			walk(op[4].(tern.WireNode))
+		}
+	}
+	rows := 0
+	for id, n := range count {
+		if n != 1 {
+			t.Errorf("node id %q appears %d times", id, n)
+		}
+		if strings.HasPrefix(id, view.DetailActivityID+".attachment-") {
+			rows++
+		}
+	}
+	if rows != 4 {
+		t.Fatalf("attachment rows %d", rows)
+	}
+}
+
 func TestAttachmentRowsLinkThisHostAndNameOtherHosts(t *testing.T) {
 	nodes := attachmentsTab(t, "box", map[string]any{
 		"attachment.z.png":  map[string]any{"host": "other", "path": "/z.png"},
@@ -392,22 +431,22 @@ func TestAttachmentRowsLinkThisHostAndNameOtherHosts(t *testing.T) {
 			order = append(order, id)
 		}
 	}
-	if want := []string{"a.png", "my pic", "z.png"}; !slices.Equal(order, want) {
+	if want := []string{model.AttachmentRowKey("a.png"), model.AttachmentRowKey("my pic"), model.AttachmentRowKey("z.png")}; !slices.Equal(order, want) {
 		t.Fatalf("rows %v, want %v", order, want)
 	}
 	href := func(id string) any {
 		return nodes[view.DetailActivityID+"."+id].P["spans"].([]any)[0].(map[string]any)["href"]
 	}
-	if got := href("a.png"); got != "file:///a/x.png" {
+	if got := href(model.AttachmentRowKey("a.png")); got != "file:///a/x.png" {
 		t.Errorf("unix href = %v", got)
 	}
-	if got := href("my pic"); got != "file:///C:/a%20b/x.png" {
+	if got := href(model.AttachmentRowKey("my pic")); got != "file:///C:/a%20b/x.png" {
 		t.Errorf("windows href = %v", got)
 	}
-	if got := href("z.png"); got != nil {
+	if got := href(model.AttachmentRowKey("z.png")); got != nil {
 		t.Errorf("other host links to %v", got)
 	}
-	if got := text(nodes[view.DetailActivityID+".z.png"]); got != "z.png on other" {
+	if got := text(nodes[view.DetailActivityID+"."+model.AttachmentRowKey("z.png")]); got != "z.png on other" {
 		t.Errorf("other host row = %q", got)
 	}
 }

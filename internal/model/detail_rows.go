@@ -126,7 +126,7 @@ func (m Model) withRows() Model {
 	case TabAttachments:
 		if m.authority.Issue != nil {
 			for _, a := range Attachments(m.authority.Issue.Metadata) {
-				row := DetailRow{Key: a.Name, File: a}
+				row := DetailRow{Key: AttachmentRowKey(a.Name), File: a}
 				if a.OnHost(m.Host) {
 					row.URL = fileURL(a.Path)
 				}
