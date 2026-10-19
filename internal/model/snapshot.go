@@ -76,6 +76,21 @@ type ProjectStats struct{ Open, Closed int }
 
 type ChildCounts struct{ Open, Total int }
 
+// CountChildren is uid's direct children among links, counted as kata counts them: every parent Link pointing at uid, open
+// when the child's status is open. Links must hold every Link of uid, as a snapshot's links do for its Issues.
+func CountChildren(links []Link, uid string) ChildCounts {
+	var counts ChildCounts
+	for _, l := range links {
+		if l.Type == "parent" && l.ToIssueUID == uid {
+			counts.Total++
+			if l.FromStatus == "open" {
+				counts.Open++
+			}
+		}
+	}
+	return counts
+}
+
 type SnapshotFailed struct {
 	Request int64
 	Err     error

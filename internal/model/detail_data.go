@@ -47,12 +47,13 @@ type Event struct {
 	RelatedIssueShortID *string
 }
 
-// Link is one Link touching the Issue, with both ends.
+// Link is one Link touching the Issue, with both ends. FromStatus is the from end's status: a parent Link's child.
 type Link struct {
 	ID              int64
 	Type            string
 	FromIssueUID    string
 	FromQualifiedID string
+	FromStatus      string
 	ToIssueUID      string
 	ToQualifiedID   string
 }
