@@ -6,6 +6,8 @@
 
 **Project**: kata's namespace for issues, links, labels and events.
 
+**Binding**: The Project a workspace names in its `.kata.toml`, or failing that its git alias. A workspace with neither is unbound and opens the Inbox.
+
 **Collection**: A named set of issues the user browses: Inbox, Today, Upcoming, Deadlines, All Open, Logbook, or one project.
 
 **Menu**: The popup inside the Pane that switches the current Collection: a type-to-filter list of the fixed Collections, the bound Project pinned first, a **Projects** entry that opens the list of kata Projects, and New Project, with the current Collection marked. It stands in for the Menu sidebar, which only an unbound directory shows, and only while a fixed Collection is current. _Avoid_: palette (Tern's own command palette).
@@ -23,6 +25,8 @@
 **Daemon gateway**: The module that runs one command against the kata daemon and returns exactly one result message.
 
 **Guarded write**: A write the Daemon gateway applies only if the issue has not changed in a way that matters since the user saw it: saving a Draft of the issue's text, posting a comment or reply, closing, and changing or stopping a Recurrence. A Draft or comment conflicts only when the issue's text differs from the text the Draft started against; a revision that moved for another reason (owner, status, claim, expiry) is written against as it now stands. Closing succeeds while the issue is open and reports an issue closed meanwhile without writing. A Recurrence change is guarded on the Recurrence's rule, start date and time zone: it conflicts only when one of them differs from what the Recurrence card opened with, and then writes nothing and shows the current schedule; a revision that moved because an Occurrence was created is written against as it now stands. Stopping succeeds while the Recurrence is live and reports one already stopped without writing.
+
+**Pane calendar**: The day and time zone the Pane reads every date in. Today's date and zone arrive with each Collection snapshot, and the day ends at local midnight, when the Pane reads the Collection snapshot again.
 
 **Collection snapshot**: What the daemon says the shown Collection holds for the current Collection and filters. One path loads it for the first load, a Collection switch, a filter change, an id search and a live refresh; a result is applied only if it answers the current query.
 

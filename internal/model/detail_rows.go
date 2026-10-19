@@ -59,7 +59,7 @@ type rowInputs struct {
 	firstIssue *Issue // with issueN, tells when the loaded Issues changed
 	issueN     int
 	tab        ActivityTab
-	zone       *time.Location
+	calendar   PaneCalendar
 }
 
 // detailRows is the Issue detail's cursor list: the children, then the active tab's rows.
@@ -83,7 +83,7 @@ func (m Model) DetailParent() (DetailRow, bool) {
 
 // withRows brings the rows up to date with the authority, the loaded Issues and the active tab.
 func (m Model) withRows() Model {
-	in := rowInputs{authority: m.authority, issueN: len(m.Issues), tab: m.tab, zone: m.zone}
+	in := rowInputs{authority: m.authority, issueN: len(m.Issues), tab: m.tab, calendar: m.Calendar}
 	if len(m.Issues) > 0 {
 		in.firstIssue = &m.Issues[0]
 	}

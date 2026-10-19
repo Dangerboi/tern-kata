@@ -15,7 +15,7 @@ var errBoom = errors.New("boom")
 
 func recurrenceBase() model.Model {
 	m := clickBase()
-	m.LocalDate, m.TimeZone = "2026-10-21", "Europe/Zurich"
+	m.Calendar = model.NewPaneCalendar("2026-10-21", "Europe/Zurich", "")
 	return m
 }
 
@@ -79,7 +79,7 @@ func TestRecurrenceCardOpensWithWeeklyDefaults(t *testing.T) {
 
 func TestRecurrenceCardStartsOnTheIssuesScheduledDateAndFallsBackToUTC(t *testing.T) {
 	m := recurrenceBase()
-	m.TimeZone = ""
+	m.Calendar = model.PaneCalendar{Date: m.Calendar.Date}
 	scheduled := "2026-10-26"
 	m, _ = model.Update(m, model.DetailLoaded{UID: "parent", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "parent", ScheduledOnDate: &scheduled}}})
 	_, cmds := saveRecurrence(openRecurrenceCard(m))
