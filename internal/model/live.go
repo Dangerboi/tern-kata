@@ -13,7 +13,21 @@ type LiveState struct {
 	RefreshRequest   int64
 	PendingCursor    int64
 	Resetting        bool
+	DayEnded         bool // the end-of-day wake fired for the Pane calendar's date; the next read must show a newer date
 }
+
+// WakeAt asks for one wake at At, the end of the local day Day; a newer WakeAt replaces an older one.
+type WakeAt struct {
+	Day string
+	At  time.Time
+}
+
+func (WakeAt) cmd() {}
+
+// DayEnded is the wake for the end of local day Day.
+type DayEnded struct{ Day string }
+
+func (DayEnded) msg() {}
 
 type Subscribe struct {
 	Workspace  string
@@ -94,6 +108,13 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 		m.StreamErr = msg.Err
 		m.ReconnectAttempt++
 		return startStream(m, time.Second<<min(m.ReconnectAttempt-1, 5))
+	case DayEnded:
+		if msg.Day != m.Calendar.Date {
+			return m, nil
+		}
+		m.DayEnded = true
+		m.etag = "" // a 304 would keep the old day
+		return snapshotChanged(m)
 	case SnapshotLoaded:
 		return snapshotLoaded(m, msg)
 	case SnapshotFailed:
