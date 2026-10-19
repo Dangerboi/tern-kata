@@ -149,12 +149,10 @@ func detailPath(tab model.ActivityTab, after ...string) path {
 }
 
 // jumpPath is the keys to a Link row's reference. The click needs the Links tab on screen first, so the
-// pointer side starts there too and the tab is put back for the comparison.
-func jumpPath(s driver.State) (driver.State, []model.Cmd) {
-	s, cmds := detailPath(model.TabLinks, "enter")(s)
-	s, _ = clicked(s, click("", view.ActivityTabClick(model.TabComments)))
-	return s, cmds
-}
+// pointer side clicks that tab first too (linksTab); both record the same jump history entry.
+var jumpPath = detailPath(model.TabLinks, "enter")
+
+var linksTab = click("", view.ActivityTabClick(model.TabLinks))
 
 func TestEveryClickTargetEndsWhereItsKeysEnd(t *testing.T) {
 	today := "today"
@@ -167,28 +165,34 @@ func TestEveryClickTargetEndsWhereItsKeysEnd(t *testing.T) {
 		// The keyboard user starts here, and then presses keyboard.
 		keyFrom  model.Column
 		keyboard path
+		// before is clicked ahead of click on the pointer side.
+		before any
 	}{
-		{"leaf row from list", model.ColumnList, nil, &tern.Select{ID: view.IssueListID, Item: view.IssueID("leaf")}, model.ColumnList, keys("j")},
-		{"leaf row from detail", model.ColumnDetail, nil, &tern.Select{ID: view.IssueListID, Item: view.IssueID("leaf")}, model.ColumnDetail, keys("escape", "j")},
-		{"leaf row from Collections", model.ColumnCollections, nil, &tern.Select{ID: view.IssueListID, Item: view.IssueID("leaf")}, model.ColumnList, keys("j")},
-		{"nested child row", model.ColumnList, []string{"space"}, &tern.Select{ID: view.IssueListID, Item: view.IssueID("child")}, model.ColumnList, keys("j")},
-		{"parent row from list", model.ColumnList, []string{"shift+g"}, toggle, model.ColumnList, keys("g", "space")},
-		{"parent row from detail", model.ColumnDetail, nil, toggle, model.ColumnDetail, keys("escape", "space")},
-		{"parent row from Collections", model.ColumnCollections, nil, toggle, model.ColumnList, keys("space")},
-		{"parent row collapses an expanded parent", model.ColumnCollections, []string{"space"}, toggle, model.ColumnList, keys("space")},
-		{"top bar title from list", model.ColumnList, nil, click("", view.MenuClick), model.ColumnList, inputs(openMenu)},
-		{"top bar title from detail", model.ColumnDetail, nil, click("", view.MenuClick), model.ColumnDetail, inputs(openMenu)},
-		{"detail title from list", model.ColumnList, nil, click("", view.FocusDetailClick), model.ColumnList, keys("enter")},
-		{"Activity tab", model.ColumnList, nil, click("", view.ActivityTabClick(model.TabLinks)), model.ColumnList, detailPath(model.TabLinks)},
-		{"detail row", model.ColumnDetail, nil, click("", view.DetailItemClick(model.TabLinks, "1")), model.ColumnDetail, detailPath(model.TabLinks)},
-		{"referenced Issue from detail", model.ColumnDetail, nil, click("", view.JumpClick("other")), model.ColumnDetail, jumpPath},
-		{"referenced Issue from list", model.ColumnList, nil, click("", view.JumpClick("other")), model.ColumnList, jumpPath},
-		{"Collection from Collections", model.ColumnCollections, nil, &tern.Select{ID: view.CollectionsID, Item: view.CollectionItemID(today)}, model.ColumnCollections, keys("j", "enter")},
-		{"Collection from list", model.ColumnList, nil, &tern.Select{ID: view.CollectionsID, Item: view.CollectionItemID(today)}, model.ColumnList, keys("escape", "j", "enter")},
-		{"Collection from detail", model.ColumnDetail, nil, &tern.Select{ID: view.CollectionsID, Item: view.CollectionItemID(today)}, model.ColumnDetail, keys("escape", "escape", "j", "enter")},
+		{"leaf row from list", model.ColumnList, nil, &tern.Select{ID: view.IssueListID, Item: view.IssueID("leaf")}, model.ColumnList, keys("j"), nil},
+		{"leaf row from detail", model.ColumnDetail, nil, &tern.Select{ID: view.IssueListID, Item: view.IssueID("leaf")}, model.ColumnDetail, keys("escape", "j"), nil},
+		{"leaf row from Collections", model.ColumnCollections, nil, &tern.Select{ID: view.IssueListID, Item: view.IssueID("leaf")}, model.ColumnList, keys("j"), nil},
+		{"nested child row", model.ColumnList, []string{"space"}, &tern.Select{ID: view.IssueListID, Item: view.IssueID("child")}, model.ColumnList, keys("j"), nil},
+		{"parent row from list", model.ColumnList, []string{"shift+g"}, toggle, model.ColumnList, keys("g", "space"), nil},
+		{"parent row from detail", model.ColumnDetail, nil, toggle, model.ColumnDetail, keys("escape", "space"), nil},
+		{"parent row from Collections", model.ColumnCollections, nil, toggle, model.ColumnList, keys("space"), nil},
+		{"parent row collapses an expanded parent", model.ColumnCollections, []string{"space"}, toggle, model.ColumnList, keys("space"), nil},
+		{"top bar title from list", model.ColumnList, nil, click("", view.MenuClick), model.ColumnList, inputs(openMenu), nil},
+		{"top bar title from detail", model.ColumnDetail, nil, click("", view.MenuClick), model.ColumnDetail, inputs(openMenu), nil},
+		{"detail title from list", model.ColumnList, nil, click("", view.FocusDetailClick), model.ColumnList, keys("enter"), nil},
+		{"Activity tab", model.ColumnList, nil, click("", view.ActivityTabClick(model.TabLinks)), model.ColumnList, detailPath(model.TabLinks), nil},
+		{"detail row", model.ColumnDetail, nil, click("", view.DetailItemClick(model.TabLinks, "1")), model.ColumnDetail, detailPath(model.TabLinks), nil},
+		{"referenced Issue from detail", model.ColumnDetail, nil, click("", view.JumpClick("other")), model.ColumnDetail, jumpPath, linksTab},
+		{"referenced Issue from list", model.ColumnList, nil, click("", view.JumpClick("other")), model.ColumnList, jumpPath, linksTab},
+		{"Collection from Collections", model.ColumnCollections, nil, &tern.Select{ID: view.CollectionsID, Item: view.CollectionItemID(today)}, model.ColumnCollections, keys("j", "enter"), nil},
+		{"Collection from list", model.ColumnList, nil, &tern.Select{ID: view.CollectionsID, Item: view.CollectionItemID(today)}, model.ColumnList, keys("escape", "j", "enter"), nil},
+		{"Collection from detail", model.ColumnDetail, nil, &tern.Select{ID: view.CollectionsID, Item: view.CollectionItemID(today)}, model.ColumnDetail, keys("escape", "escape", "j", "enter"), nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			pointer, pointerCmds := clicked(clickAt(tt.from, tt.listKeys...), tt.click)
+			pointer := clickAt(tt.from, tt.listKeys...)
+			if tt.before != nil {
+				pointer, _ = clicked(pointer, tt.before)
+			}
+			pointer, pointerCmds := clicked(pointer, tt.click)
 			keyboard, keyboardCmds := tt.keyboard(clickAt(tt.keyFrom, tt.listKeys...))
 			sameAs(t, "click and keys diverge", pointer, pointerCmds, keyboard, keyboardCmds)
 			afterClick, clickCmds := keys("escape")(pointer)
