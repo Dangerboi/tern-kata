@@ -17,6 +17,15 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
+// errNoHostName refuses an attach that would write a pointer with an empty host.
+var errNoHostName = errors.New("This machine's host name can't be read, so the file can't be attached.")
+
+// HostName is this machine's host name, or empty when the OS can't say; the program reads it once and hands it to the model and the Gateway.
+func HostName() string {
+	host, _ := os.Hostname()
+	return host
+}
+
 // attachmentStoreName is the Attachment store's folder in the primary checkout.
 const attachmentStoreName = ".kata-attachments"
 
@@ -139,7 +148,7 @@ func (c *Client) requireBinding(ctx context.Context, t attachTarget) error {
 
 // patchAttachment sets (pointer non-nil) or clears the attachment.<name> key. A set is guarded so it applies only while the key is absent.
 func (c *Client) patchAttachment(ctx context.Context, t attachTarget, actor, name string, pointer map[string]any) error {
-	key := model.AttachmentKeyPrefix + name
+	key := model.AttachmentKey(name)
 	body := g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{key: nil}}
 	if pointer != nil {
 		body.Patch[key] = pointer
@@ -155,7 +164,10 @@ func (c *Client) patchAttachment(ctx context.Context, t attachTarget, actor, nam
 
 // AttachFile is the one shared Attach write. The copy is made before the pointer so a pointer never names a missing file, and
 // deleted again if the pointer is not written, so the store only holds files an Issue points to.
-func (c *Client) AttachFile(ctx context.Context, cmd model.AttachFile) (model.FileAttached, error) {
+func (c *Client) AttachFile(ctx context.Context, host string, cmd model.AttachFile) (model.FileAttached, error) {
+	if host == "" {
+		return model.FileAttached{}, errNoHostName
+	}
 	target, err := c.resolveAttachTarget(ctx, cmd.Workspace, cmd.Ref)
 	if err != nil {
 		return model.FileAttached{}, err
@@ -186,17 +198,13 @@ func (c *Client) AttachFile(ctx context.Context, cmd model.AttachFile) (model.Fi
 	case !errors.Is(err, fs.ErrExist):
 		return model.FileAttached{}, err
 	}
-	host, err := os.Hostname()
-	if err != nil {
-		return model.FileAttached{}, err
-	}
 	base := filepath.Base(source)
 	for n := 1; ; n++ {
 		if err := ctx.Err(); err != nil {
 			return model.FileAttached{}, err
 		}
 		name := numberedName(base, n)
-		if _, taken := target.issue.Metadata[model.AttachmentKeyPrefix+name]; taken {
+		if _, taken := target.issue.Metadata[model.AttachmentKey(name)]; taken {
 			continue
 		}
 		stored := filepath.Join(dir, name)
@@ -205,7 +213,7 @@ func (c *Client) AttachFile(ctx context.Context, cmd model.AttachFile) (model.Fi
 		} else if err != nil {
 			return model.FileAttached{}, err
 		}
-		err := c.patchAttachment(ctx, target, cmd.Actor, name, map[string]any{"host": host, "path": stored})
+		err := c.patchAttachment(ctx, target, cmd.Actor, name, model.Attachment{Host: host, Path: stored}.Pointer())
 		if err == nil {
 			return model.FileAttached{Ref: cmd.Ref, Name: name, Path: stored}, nil
 		}
@@ -288,7 +296,7 @@ func copyNew(source, dst string) (err error) {
 // DetachFile is the one shared Detach write. It clears the pointer first, so the worst partial failure is a leftover file, then
 // deletes the copy if it is on this machine, still there and inside this Issue's folder of the Attachment store. A key that
 // holds no readable pointer is cleared too, touching no file.
-func (c *Client) DetachFile(ctx context.Context, cmd model.DetachFile) (model.FileDetached, error) {
+func (c *Client) DetachFile(ctx context.Context, host string, cmd model.DetachFile) (model.FileDetached, error) {
 	target, err := c.resolveAttachTarget(ctx, cmd.Workspace, cmd.Ref)
 	if err != nil {
 		return model.FileDetached{}, err
@@ -296,7 +304,7 @@ func (c *Client) DetachFile(ctx context.Context, cmd model.DetachFile) (model.Fi
 	if err := c.requireBinding(ctx, target); err != nil {
 		return model.FileDetached{}, err
 	}
-	if _, exists := target.issue.Metadata[model.AttachmentKeyPrefix+cmd.Name]; !exists {
+	if _, exists := target.issue.Metadata[model.AttachmentKey(cmd.Name)]; !exists {
 		return model.FileDetached{}, model.NoAttachmentError(target.issue.ShortID, cmd.Name)
 	}
 	var pointer *model.Attachment
@@ -313,7 +321,7 @@ func (c *Client) DetachFile(ctx context.Context, cmd model.DetachFile) (model.Fi
 		return result, nil
 	}
 	result.Host, result.Path = pointer.Host, pointer.Path
-	if host, err := os.Hostname(); err != nil || !model.SameHost(host, pointer.Host) {
+	if !pointer.OnHost(host) {
 		return result, nil
 	}
 	if _, err := os.Lstat(pointer.Path); errors.Is(err, fs.ErrNotExist) {
