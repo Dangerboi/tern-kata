@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
 // fakeEditor builds a command that runs script with the temp file path as $1.
@@ -39,7 +42,10 @@ func TestEditDraft(t *testing.T) {
 			tmp := t.TempDir()
 			t.Setenv("TMPDIR", tmp)
 			t.Setenv("EDITOR", tt.editor)
-			got := editDraft(model.OpenDraftEditor{Text: "original"}, fakeEditor(tt.script))
+			got, kept := editDraft(model.OpenDraftEditor{Text: "original"}, fakeEditor(tt.script))
+			if kept != "" {
+				os.Remove(kept)
+			}
 			if got.Text != tt.want {
 				t.Errorf("text = %q, want %q", got.Text, tt.want)
 			}
@@ -63,7 +69,8 @@ func TestEditDraftSpacedTempPathThroughShell(t *testing.T) {
 	}
 	t.Setenv("TMPDIR", tmp)
 	t.Setenv("EDITOR", `sh -c 'test $# -eq 1 && printf one > "$1"' editor`)
-	got := editDraft(model.OpenDraftEditor{Text: "original"}, editorCommand)
+	got, kept := editDraft(model.OpenDraftEditor{Text: "original"}, editorCommand)
+	os.Remove(kept)
 	if got.Err != nil || got.Text != "one" {
 		t.Errorf("got text %q err %v", got.Text, got.Err)
 	}
@@ -93,5 +100,59 @@ func TestChildEnv(t *testing.T) {
 	environ := []string{"KATA_AUTHOR=old"}
 	if got := childEnv(environ, "", true); !reflect.DeepEqual(got, environ) {
 		t.Errorf("no override: childEnv = %q, want unchanged", got)
+	}
+}
+
+type stubSession struct{}
+
+func (stubSession) Next(ctx context.Context) (tern.Input, error) { <-ctx.Done(); return nil, ctx.Err() }
+func (stubSession) Caps() tern.Caps                              { return tern.Caps{} }
+func (stubSession) Close() error                                 { return nil }
+
+type stubSurface struct{}
+
+func (stubSurface) Render(tern.View) error { return nil }
+func (stubSurface) Send(...tern.Op) error  { return nil }
+func (stubSurface) Close() error           { return nil }
+
+func TestEditInTerminalKeepsTextWhenResumeFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake editors use sh")
+	}
+	t.Setenv("TMPDIR", t.TempDir())
+	t.Setenv("EDITOR", "x")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	fail := func(context.Context) (paneSession, paneSurface, error) { return nil, nil, errors.New("tern gone") }
+	term := newTerminal(ctx, stubSession{}, stubSurface{}, fail)
+	_, err := editInTerminal(term, model.OpenDraftEditor{Text: "original"}, fakeEditor(`printf edited > "$1"`))
+	if err == nil || !strings.Contains(err.Error(), "tern gone") {
+		t.Fatalf("err = %v", err)
+	}
+	files, _ := filepath.Glob(filepath.Join(os.TempDir(), "tern-kata-Draft-*.md"))
+	if len(files) != 1 || !strings.Contains(err.Error(), files[0]) {
+		t.Fatalf("files = %v, error = %v", files, err)
+	}
+	if text, _ := os.ReadFile(files[0]); string(text) != "edited" {
+		t.Errorf("kept text = %q", text)
+	}
+}
+
+func TestEditInTerminalRemovesFileWhenResumeWorks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake editors use sh")
+	}
+	t.Setenv("TMPDIR", t.TempDir())
+	t.Setenv("EDITOR", "x")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ok := func(context.Context) (paneSession, paneSurface, error) { return stubSession{}, stubSurface{}, nil }
+	term := newTerminal(ctx, stubSession{}, stubSurface{}, ok)
+	got, err := editInTerminal(term, model.OpenDraftEditor{Text: "original"}, fakeEditor(`printf edited > "$1"`))
+	if err != nil || got.Text != "edited" {
+		t.Fatalf("got %q, %v", got.Text, err)
+	}
+	if left, _ := filepath.Glob(filepath.Join(os.TempDir(), "*")); len(left) != 0 {
+		t.Errorf("leftover files: %v", left)
 	}
 }
