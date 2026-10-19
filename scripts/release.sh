@@ -13,6 +13,7 @@ if [ "$manifest" != "${tag#v}" ]; then
 	echo "plugin.toml version \"$manifest\" does not match tag \"$tag\"" >&2
 	exit 1
 fi
+scripts/release-notes.sh "$tag" >/dev/null
 
 rm -rf "$dist"
 mkdir -p "$dist"

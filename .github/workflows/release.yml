@@ -12,19 +12,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # the notes need the previous tag and the commits since it
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - run: go vet ./...
       - run: go test ./...
-      - name: Build archives (fails if plugin.toml version differs from the tag)
+      - name: Build archives (fails if plugin.toml or CHANGELOG.md does not match the tag)
         run: scripts/release.sh "$GITHUB_REF_NAME" dist
-      - name: Release notes (commit subjects since the previous tag)
-        run: |
-          prev=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
-          git log --no-merges --format='- %s' ${prev:+"$prev.."}"$GITHUB_REF_NAME" > notes.md
+      - name: Release notes (the tag's CHANGELOG.md section)
+        run: scripts/release-notes.sh "$GITHUB_REF_NAME" > notes.md
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}

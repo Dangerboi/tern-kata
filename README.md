@@ -105,10 +105,11 @@ tern plugin link .  # use this checkout as the window plugin
 tern plugin reload  # exits 1 if a plugin fails to load; window failures show only as a toast
 ```
 
-Releases: pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml` (vet, test, then publish). Check it locally before tagging:
+Releases: pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml` (vet, test, then publish), with the tag's `CHANGELOG.md` section as the release notes. Check it locally before tagging:
 
 ```sh
-scripts/release.sh vX.Y.Z   # writes dist/ (gitignored); fails unless plugin.toml's version is X.Y.Z; publishes nothing
+scripts/release-notes.sh vX.Y.Z   # prints the notes; fails unless CHANGELOG.md has a [X.Y.Z] section
+scripts/release.sh vX.Y.Z         # writes dist/ (gitignored); fails unless plugin.toml's version is X.Y.Z and the notes exist; publishes nothing
 ```
 
 It builds `tern-kata_<os>_<arch>.tar.gz` (`.zip` for `windows`) for `linux`, `darwin` and `windows` on `amd64` and `arm64`, plus `checksums.txt` in `sha256sum` format.

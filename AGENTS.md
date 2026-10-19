@@ -11,3 +11,7 @@ Default five-role vocabulary, applied as kata labels. See `docs/agents/triage-la
 ### Domain docs
 
 Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## Changelog
+
+Every user-visible change adds its line under `## [Unreleased]` in `CHANGELOG.md`, in the commit that closes its spec or ticket. Entry rules and release steps: `docs/agents/changelog.md`.
