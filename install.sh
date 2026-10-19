@@ -76,6 +76,29 @@ main() {
 	else
 		echo "tern is not on this machine's PATH: install the window plugin on the machine that shows the Tern window: tern plugin install github.com/Dangerboi/tern-kata"
 	fi
+
+	# npx is the skills CLI's documented runner; bunx runs it the same way where only Bun is installed.
+	if command -v npx >/dev/null 2>&1; then
+		run="npx --yes"
+		skills="npx skills add Dangerboi/tern-kata -g"
+	elif command -v bunx >/dev/null 2>&1; then
+		run=bunx
+		skills="bunx skills add Dangerboi/tern-kata -g"
+	else
+		run=
+		skills="npx skills add Dangerboi/tern-kata -g (or bunx)"
+	fi
+	# `curl | sh` gives the script the pipe as stdin, so the question goes to the terminal, and only when there is one.
+	if [ -n "$run" ] && [ -t 1 ] && (: </dev/tty) 2>/dev/null; then
+		printf 'Install the kata and tern-kata agent skills (%s)? [y/N] ' "$skills" >/dev/tty
+		read -r answer </dev/tty || answer=
+		case $answer in
+		[yY]*) $run skills add Dangerboi/tern-kata -g </dev/tty || echo "Could not install the agent skills; run: $skills" >&2 ;;
+		*) echo "Skipped the agent skills; to install them later: $skills" ;;
+		esac
+	else
+		echo "Agent skills for kata and tern-kata (needs Node.js or Bun): $skills"
+	fi
 }
 
 main

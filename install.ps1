@@ -75,6 +75,25 @@ function Install-TernKata {
     } else {
         Write-Host "tern is not on this machine's PATH: install the window plugin on the machine that shows the Tern window: tern plugin install github.com/Dangerboi/tern-kata"
     }
+
+    # npx is the skills CLI's documented runner; bunx runs it the same way where only Bun is installed. npx.cmd, not npx:
+    # the npx.ps1 beside it is refused under the Restricted execution policy Windows starts with.
+    $run = 'npx.cmd', 'npx.exe', 'bunx.exe' | ForEach-Object { Get-Command $_ -CommandType Application -ErrorAction SilentlyContinue } | Select-Object -First 1
+    $skills = if ($run) { "$([IO.Path]::GetFileNameWithoutExtension($run.Name)) skills add Dangerboi/tern-kata -g" } else { 'npx skills add Dangerboi/tern-kata -g (or bunx)' }
+    $yes = @(if ($run -and $run.Name -like 'npx*') { '--yes' })
+    # Asked only when input comes from the console, so a scripted install never waits on an answer. UserInteractive would
+    # also rule out SSH sessions, whose consoles can still answer.
+    if ($run -and -not [Console]::IsInputRedirected) {
+        $answer = Read-Host "Install the kata and tern-kata agent skills ($skills)? [y/N]"
+        if ($answer -match '^[yY]') {
+            & $run.Source @yes skills add Dangerboi/tern-kata -g
+            if ($LASTEXITCODE -ne 0) { Write-Warning "Could not install the agent skills; run: $skills" }
+        } else {
+            Write-Host "Skipped the agent skills; to install them later: $skills"
+        }
+    } else {
+        Write-Host "Agent skills for kata and tern-kata (needs Node.js or Bun): $skills"
+    }
 }
 
 Install-TernKata
