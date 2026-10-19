@@ -41,9 +41,15 @@ func TestUAttachesTheTypedPath(t *testing.T) {
 		if !m.FieldForm.Open || m.FieldForm.Err == nil || m.FieldForm.Err.Error() != "/x does not exist." {
 			t.Fatalf("failure not shown in the form: %+v", m.FieldForm)
 		}
-		m, _ = model.Update(m, model.FileAttached{Ref: "issue", Name: "shot.png", Path: "/store/issue/shot.png"})
+		if m.Notice != "" {
+			t.Fatalf("failed attach set notice %q", m.Notice)
+		}
+		m, _ = model.Update(m, model.FileAttached{Ref: "issue", Name: "shot-2.png", Path: "/store/issue/shot-2.png"})
 		if m.FieldForm.Open {
 			t.Fatal("form still open after attaching")
+		}
+		if m.Notice != "Attached shot-2.png to abcd" {
+			t.Fatalf("notice %q", m.Notice)
 		}
 	}
 }
