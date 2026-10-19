@@ -33,3 +33,6 @@ func Attachments(metadata map[string]any) []Attachment {
 	slices.SortFunc(list, func(a, b Attachment) int { return strings.Compare(a.Name, b.Name) })
 	return list
 }
+
+// SameHost is whether two host names are the same machine; host names compare without regard to case.
+func SameHost(a, b string) bool { return strings.EqualFold(a, b) }

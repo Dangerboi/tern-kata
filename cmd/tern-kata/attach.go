@@ -10,7 +10,7 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-// subcommandError is a failed attach or detach: the command line exits 1 with kata's message, not the Pane's start-failure status.
+// subcommandError is any failure of attach or detach, from its usage to its output: main exits 1 with the message, not the Pane's start-failure status.
 type subcommandError struct{ error }
 
 func (e subcommandError) Unwrap() error { return e.error }
@@ -29,20 +29,22 @@ func runSubcommand(ctx context.Context, plan LaunchPlan, gateway *data.Gateway, 
 		return <-results
 	}
 	if plan.Subcommand == "detach" {
-		detached := send(model.DetachFile{Workspace: workspace, Ref: plan.Ref, Actor: plan.Actor, Name: plan.Operands[0]}).(model.FileDetached)
+		detached := send(model.DetachFile{Workspace: workspace, Ref: plan.TargetRef, Actor: plan.Actor, Name: plan.Operands[0]}).(model.FileDetached)
 		if detached.Err != nil {
 			return subcommandError{detached.Err}
 		}
-		_, err := fmt.Fprintln(out, detached.Report())
-		return err
+		if _, err := fmt.Fprintln(out, detached.Report()); err != nil {
+			return subcommandError{err}
+		}
+		return nil
 	}
 	for _, file := range plan.Operands {
-		attached := send(model.AttachFile{Workspace: workspace, Ref: plan.Ref, Actor: plan.Actor, Path: file}).(model.FileAttached)
+		attached := send(model.AttachFile{Workspace: workspace, Ref: plan.TargetRef, Actor: plan.Actor, Path: file}).(model.FileAttached)
 		if attached.Err != nil {
 			return subcommandError{attached.Err}
 		}
 		if _, err := fmt.Fprintln(out, attached.Path); err != nil {
-			return err
+			return subcommandError{err}
 		}
 	}
 	return nil

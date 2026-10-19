@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"reflect"
 	"runtime/debug"
 	"slices"
@@ -204,12 +205,15 @@ func TestPlanLaunchSubcommands(t *testing.T) {
 				if err == nil || err.Error() != tt.err {
 					t.Fatalf("error = %v, want %q", err, tt.err)
 				}
+				if _, ok := errors.AsType[subcommandError](err); !ok {
+					t.Fatalf("error %T would not exit 1 like every other attach or detach failure", err)
+				}
 				return
 			}
 			if err != nil {
 				t.Fatal(err)
 			}
-			if plan.Subcommand != tt.sub || plan.Ref != tt.ref || !slices.Equal(plan.Operands, tt.operands) || plan.Actor != tt.actor {
+			if plan.Subcommand != tt.sub || plan.TargetRef != tt.ref || !slices.Equal(plan.Operands, tt.operands) || plan.Actor != tt.actor {
 				t.Errorf("plan = %+v, want %s %s %q as %s", plan, tt.sub, tt.ref, tt.operands, tt.actor)
 			}
 		})

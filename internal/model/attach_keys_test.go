@@ -2,6 +2,7 @@ package model_test
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -81,10 +82,34 @@ func TestShiftUNamesAnAttachmentTypedInFull(t *testing.T) {
 	}
 }
 
-func TestShiftUWithNoAttachmentsSaysSo(t *testing.T) {
-	m, _ := model.Update(attachPane(model.ColumnList, map[string]any{"other": 1}, 2), model.KeyMsg{Chord: "shift+u"})
-	if !m.FieldForm.Open || m.FieldForm.Err == nil || !strings.Contains(m.FieldForm.Err.Error(), "no attachments") {
-		t.Fatalf("U with none: %+v", m.FieldForm)
+func TestShiftUWithNoAttachmentsSaysSoWithoutOpeningAForm(t *testing.T) {
+	m, cmds := model.Update(attachPane(model.ColumnList, map[string]any{"other": 1}, 2), model.KeyMsg{Chord: "shift+u"})
+	if m.FieldForm.Open || slices.ContainsFunc(cmds, func(c model.Cmd) bool { _, ok := c.(model.DetachFile); return ok }) || m.Notice != "abcd has no attachments." {
+		t.Fatalf("U with none: form %+v notice %q", m.FieldForm, m.Notice)
+	}
+}
+
+func TestSubmitTargetsTheFormsIssueWhenTheCursorMoves(t *testing.T) {
+	m := attachPane(model.ColumnList, pointers("a.png"), 2)
+	m.Issues = append([]model.Issue{{UID: "newer", ShortID: "zzzz", ProjectID: 2}}, m.Issues...)
+	m, _ = model.Update(m, model.KeyMsg{Chord: "u"})
+	m, _ = model.Update(m, model.FieldValueMsg{Value: "/x"})
+	// A live refresh moves the cursor to another Issue while the form is open.
+	m.SelectedUID = "newer"
+	_, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
+	want := model.AttachFile{Workspace: "/ws", Ref: "issue", Actor: "reviewer", Path: "/x"}
+	if !slices.Contains(cmds, model.Cmd(want)) {
+		t.Fatalf("cmds %#v, want %#v", cmds, want)
+	}
+}
+
+func TestSubmitWhenTheFormsIssueIsGoneShowsAnError(t *testing.T) {
+	m, _ := model.Update(attachPane(model.ColumnList, nil, 2), model.KeyMsg{Chord: "u"})
+	m, _ = model.Update(m, model.FieldValueMsg{Value: "/x"})
+	m.Issues = nil
+	m, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
+	if len(cmds) != 0 || m.FieldForm.Err == nil {
+		t.Fatalf("cmds %#v, err %v", cmds, m.FieldForm.Err)
 	}
 }
 
@@ -105,20 +130,21 @@ func TestDetachReportShowsAsANoticeUntilTheNextKey(t *testing.T) {
 func TestAttachKeysExplainARefusal(t *testing.T) {
 	unbound := attachPane(model.ColumnList, pointers("a.png"), 2)
 	unbound.Bound, unbound.Project = false, model.Project{}
-	for name, pane := range map[string]model.Model{
-		"unbound":       unbound,
-		"other Project": attachPane(model.ColumnList, pointers("a.png"), 3),
+	for name, tc := range map[string]struct {
+		pane model.Model
+		want string
+	}{
+		"unbound": {unbound, `This workspace is not bound to a kata Project, so it cannot hold attachments. To change the attachments of abcd, work from a workspace bound to Project "other".`},
+		"other Project": {attachPane(model.ColumnList, pointers("a.png"), 3),
+			`abcd belongs to Project "other", but this workspace is bound to "work". To change its attachments, work from a workspace bound to "other".`},
 	} {
+		pane := tc.pane
 		for _, chord := range []string{"u", "shift+u"} {
 			m, cmds := model.Update(pane, model.KeyMsg{Chord: chord})
 			if !m.FieldForm.Open || m.FieldForm.Err == nil {
 				t.Fatalf("%s %s: no reason shown: %+v", name, chord, m.FieldForm)
 			}
-			want := model.AttachRefusal(pane.Project, 3, "abcd", "other")
-			if name == "unbound" {
-				want = model.AttachRefusal(pane.Project, 2, "abcd", "other")
-			}
-			if m.FieldForm.Err.Error() != want.Error() || !strings.Contains(want.Error(), `"other"`) {
+			if m.FieldForm.Err.Error() != tc.want {
 				t.Fatalf("%s %s: reason %q", name, chord, m.FieldForm.Err)
 			}
 			m, cmds = model.Update(m, model.FieldValueMsg{Value: "a.png"})

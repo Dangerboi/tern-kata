@@ -27,7 +27,7 @@ type FileFate string
 const (
 	// FileDeleted: the copy on this machine was deleted.
 	FileDeleted FileFate = "deleted"
-	// FileLeft: the copy was not deleted because it is on another host, or outside an Attachment store.
+	// FileLeft: no file was deleted: the copy is on another host, outside this Issue's folder of the Attachment store, or the pointer named none.
 	FileLeft FileFate = "left"
 	// FileGone: the copy was already missing on this machine.
 	FileGone FileFate = "gone"
@@ -50,18 +50,31 @@ func (d FileDetached) Report() string {
 	case FileGone:
 		return fmt.Sprintf("Removed %s; the file %s was already gone", d.Name, d.Path)
 	}
+	if d.Host == "" && d.Path == "" {
+		return fmt.Sprintf("Removed %s; it named no readable file, so no file was touched", d.Name)
+	}
 	return fmt.Sprintf("Removed %s; the file was left on %s at %s", d.Name, d.Host, d.Path)
 }
 
-// AttachRefusal is why a workspace bound to binding cannot attach to the Issue shortID of Project issueProject, owner being
-// that Project's name, or nil when it can: only the Binding's own Project holds attachments. The Pane and the gateway both
-// word the refusal here.
+// CanAttach is whether a workspace bound to binding may attach to or detach from an Issue of issueProject: only the
+// Binding's own Project holds attachments.
+func CanAttach(binding Project, issueProject int64) bool {
+	return binding.UID != "" && binding.ID == issueProject
+}
+
+// AttachRefusal is why a workspace bound to binding cannot attach to or detach from the Issue shortID of Project
+// issueProject, owner being that Project's name, or nil when it can. The Pane and the gateway both word the refusal here.
 func AttachRefusal(binding Project, issueProject int64, shortID, owner string) error {
-	if binding.UID != "" && binding.ID == issueProject {
+	if CanAttach(binding, issueProject) {
 		return nil
 	}
 	if binding.UID == "" {
-		return fmt.Errorf("This workspace is not bound to a kata Project, so it cannot hold attachments. Attach to %s from a workspace bound to Project %q.", shortID, owner)
+		return fmt.Errorf("This workspace is not bound to a kata Project, so it cannot hold attachments. To change the attachments of %s, work from a workspace bound to Project %q.", shortID, owner)
 	}
-	return fmt.Errorf("%s belongs to Project %q, but this workspace is bound to %q. Attach from a workspace bound to %q.", shortID, owner, binding.Name, owner)
+	return fmt.Errorf("%s belongs to Project %q, but this workspace is bound to %q. To change its attachments, work from a workspace bound to %q.", shortID, owner, binding.Name, owner)
+}
+
+// NoAttachmentError is the refusal to detach a name the Issue shortID does not have.
+func NoAttachmentError(shortID, name string) error {
+	return fmt.Errorf("%s has no attachment named %q.", shortID, name)
 }

@@ -172,7 +172,7 @@ var cardBindings = []Binding{
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: FieldSubmit, Help: "save", Mode: ModeFieldForm},
 	{Chord: "ctrl+s", Key: "ctrl+s", Action: FieldSubmit, Help: "save", Mode: ModeFieldForm},
 	{Chord: "escape", Key: "esc", Action: FieldCancel, Help: "cancel", Mode: ModeFieldForm, ShowInFooter: true},
-	{Chord: "tab", Key: "tab", Action: FieldComplete, Help: "complete label", Mode: ModeFieldForm, ShowInFooter: true},
+	{Chord: "tab", Key: "tab", Action: FieldComplete, Help: "complete name", Mode: ModeFieldForm, ShowInFooter: true},
 	{Chord: "down", Key: "down", Action: FieldNext, Help: "next completion", Mode: ModeFieldForm},
 	{Chord: "up", Key: "up", Action: FieldPrevious, Help: "previous completion", Mode: ModeFieldForm},
 	{Chord: "backspace", Key: "backspace", Action: DeleteInput, Help: "erase", Mode: ModeFieldForm},

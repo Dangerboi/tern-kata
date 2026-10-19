@@ -40,12 +40,15 @@ func PrimaryCheckoutRoot(ctx context.Context, workspace string) (string, error) 
 	if err != nil {
 		return "", fmt.Errorf("git rev-parse --git-common-dir: %w", err)
 	}
-	common := filepath.Clean(filepath.FromSlash(strings.TrimSpace(string(raw))))
 	// A submodule's common directory sits inside its parent's .git, so its own top level is the root.
-	if filepath.Base(common) != ".git" {
+	super, err := projectGit.Output(ctx, gitRoot, "rev-parse", "--show-superproject-working-tree")
+	if err != nil {
+		return "", fmt.Errorf("git rev-parse --show-superproject-working-tree: %w", err)
+	}
+	if strings.TrimSpace(string(super)) != "" {
 		return gitRoot, nil
 	}
-	return filepath.Dir(common), nil
+	return filepath.Dir(filepath.Clean(filepath.FromSlash(strings.TrimSpace(string(raw))))), nil
 }
 
 // attachTarget is an Issue to attach to or detach from, read once.
@@ -66,6 +69,9 @@ func (c *Client) resolveAttachTarget(ctx context.Context, workspace, ref string)
 		response, err := c.ShowIssueByUIDWithResponse(ctx, &g.ShowIssueByUIDRequestOptions{PathParams: &g.ShowIssueByUIDPath{UID: ref}})
 		if err != nil {
 			return attachTarget{}, daemonError(err)
+		}
+		if response.JSON200 == nil {
+			return attachTarget{}, errors.New("kata daemon returned no Issue")
 		}
 		target.issue = response.JSON200.Issue
 		return target, nil
@@ -96,6 +102,9 @@ func (c *Client) resolveAttachTarget(ctx context.Context, workspace, ref string)
 	if err != nil {
 		return attachTarget{}, daemonError(err)
 	}
+	if response.JSON200 == nil {
+		return attachTarget{}, errors.New("kata daemon returned no Issue")
+	}
 	target.issue = response.JSON200.Issue
 	return target, nil
 }
@@ -106,6 +115,9 @@ func (c *Client) projectNames(ctx context.Context) (map[int64]string, error) {
 	if err != nil {
 		return nil, daemonError(err)
 	}
+	if response.JSON200 == nil {
+		return nil, errors.New("kata daemon returned no Projects")
+	}
 	names := map[int64]string{}
 	for _, p := range response.JSON200.Projects {
 		names[p.ID] = p.Name
@@ -115,7 +127,7 @@ func (c *Client) projectNames(ctx context.Context) (map[int64]string, error) {
 
 // requireBinding refuses an Issue whose Project is not the workspace's Binding, naming the Project to attach from.
 func (c *Client) requireBinding(ctx context.Context, t attachTarget) error {
-	if model.AttachRefusal(t.binding, t.issue.ProjectID, "", "") == nil {
+	if model.CanAttach(t.binding, t.issue.ProjectID) {
 		return nil
 	}
 	names, err := c.projectNames(ctx)
@@ -165,11 +177,14 @@ func (c *Client) AttachFile(ctx context.Context, cmd model.AttachFile) (model.Fi
 		return model.FileAttached{}, err
 	}
 	// The store keeps itself out of git; O_EXCL leaves an existing file, and the repo's own ignore files alone.
-	if f, err := os.OpenFile(filepath.Join(store, ".gitignore"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644); err == nil {
+	switch f, err := os.OpenFile(filepath.Join(store, ".gitignore"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644); {
+	case err == nil:
 		_, werr := f.WriteString("*\n")
 		if err := errors.Join(werr, f.Close()); err != nil {
 			return model.FileAttached{}, err
 		}
+	case !errors.Is(err, fs.ErrExist):
+		return model.FileAttached{}, err
 	}
 	host, err := os.Hostname()
 	if err != nil {
@@ -271,7 +286,8 @@ func copyNew(source, dst string) (err error) {
 }
 
 // DetachFile is the one shared Detach write. It clears the pointer first, so the worst partial failure is a leftover file, then
-// deletes the copy if it is on this machine, inside an Attachment store and still there.
+// deletes the copy if it is on this machine, still there and inside this Issue's folder of the Attachment store. A key that
+// holds no readable pointer is cleared too, touching no file.
 func (c *Client) DetachFile(ctx context.Context, cmd model.DetachFile) (model.FileDetached, error) {
 	target, err := c.resolveAttachTarget(ctx, cmd.Workspace, cmd.Ref)
 	if err != nil {
@@ -280,24 +296,37 @@ func (c *Client) DetachFile(ctx context.Context, cmd model.DetachFile) (model.Fi
 	if err := c.requireBinding(ctx, target); err != nil {
 		return model.FileDetached{}, err
 	}
+	if _, exists := target.issue.Metadata[model.AttachmentKeyPrefix+cmd.Name]; !exists {
+		return model.FileDetached{}, model.NoAttachmentError(target.issue.ShortID, cmd.Name)
+	}
 	var pointer *model.Attachment
 	for _, a := range model.Attachments(target.issue.Metadata) {
 		if a.Name == cmd.Name {
 			pointer = &a
 		}
 	}
-	if pointer == nil {
-		return model.FileDetached{}, fmt.Errorf("%s has no attachment named %q.", target.issue.ShortID, cmd.Name)
-	}
 	if err := c.patchAttachment(ctx, target, cmd.Actor, cmd.Name, nil); err != nil {
 		return model.FileDetached{}, daemonError(err)
 	}
-	result := model.FileDetached{Ref: cmd.Ref, Name: cmd.Name, Host: pointer.Host, Path: pointer.Path, Fate: model.FileLeft}
-	if host, err := os.Hostname(); err != nil || host != pointer.Host {
+	result := model.FileDetached{Ref: cmd.Ref, Name: cmd.Name, Fate: model.FileLeft}
+	if pointer == nil {
 		return result, nil
 	}
-	// A pointer is data any writer can set; only delete what an Attachment store would hold.
-	if filepath.Base(filepath.Dir(filepath.Dir(pointer.Path))) != attachmentStoreName {
+	result.Host, result.Path = pointer.Host, pointer.Path
+	if host, err := os.Hostname(); err != nil || !model.SameHost(host, pointer.Host) {
+		return result, nil
+	}
+	if _, err := os.Lstat(pointer.Path); errors.Is(err, fs.ErrNotExist) {
+		result.Fate = model.FileGone
+		return result, nil
+	}
+	root, err := PrimaryCheckoutRoot(ctx, cmd.Workspace)
+	if err != nil {
+		return result, err
+	}
+	// A pointer is data any writer can set; only delete what this Issue's folder of the store holds.
+	rel, err := filepath.Rel(filepath.Join(root, attachmentStoreName, target.issue.UID), pointer.Path)
+	if err != nil || !filepath.IsAbs(pointer.Path) || rel == "." || !filepath.IsLocal(rel) {
 		return result, nil
 	}
 	switch err := os.Remove(pointer.Path); {

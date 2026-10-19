@@ -125,8 +125,8 @@ func (m Model) withRows() Model {
 	case TabAttachments:
 		if m.authority.Issue != nil {
 			for _, a := range Attachments(m.authority.Issue.Metadata) {
-				row := DetailRow{Key: a.Name, Name: a.Name, Host: a.Host}
-				if m.Host != "" && strings.EqualFold(a.Host, m.Host) {
+				row := DetailRow{Key: a.Name, File: a}
+				if m.Host != "" && SameHost(a.Host, m.Host) {
 					row.URL = fileURL(a.Path)
 				}
 				m.rows.items = append(m.rows.items, DetailItem{Kind: RowAttachment, Key: row.Key, Activity: row})

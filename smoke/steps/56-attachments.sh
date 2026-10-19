@@ -61,4 +61,5 @@ ctl key Escape
 expect_tree "[data-id='layer.fields']" '.ok and .count == 0'
 
 kata --workspace "$at_dir" delete "$at_uid" --force --confirm "DELETE smoke#$at_short" --json >/dev/null
+expect_tree "[data-id='main.columns.list.issues.$at_uid']" '.ok and .count == 0'
 ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab0']"

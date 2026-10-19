@@ -154,22 +154,11 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			m.FieldForm.Err = msg.Err
 		}
 	case FieldWritten:
-		if m.FieldForm.UID != msg.UID {
-			return m, nil
-		}
-		m.FieldForm.Saving = false
-		if msg.Err != nil {
-			m.FieldForm.Open = true
-			m.FieldForm.Err = msg.Err
-			return m, nil
-		}
-		m.FieldForm = FieldFormState{}
-		m = m.issueWritten(msg.UID)
-		return snapshotChanged(m)
+		return fieldWritten(m, msg.UID, "", msg.Err)
 	case FileAttached:
-		return attachmentWritten(m, msg.Ref, "", msg.Err)
+		return fieldWritten(m, msg.Ref, "", msg.Err)
 	case FileDetached:
-		return attachmentWritten(m, msg.Ref, msg.Report(), msg.Err)
+		return fieldWritten(m, msg.Ref, msg.Report(), msg.Err)
 	case Start:
 		m.Workspace = msg.Workspace
 		m.nonce = msg.Nonce

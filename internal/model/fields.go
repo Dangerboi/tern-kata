@@ -93,6 +93,19 @@ func (m Model) fieldIssue() *Issue {
 	return nil
 }
 
+// issueByUID is the Issue uid, as the detail shows it or as the list holds it.
+func (m Model) issueByUID(uid string) *Issue {
+	if issue := m.shownIssue(); issue != nil && issue.UID == uid {
+		return issue
+	}
+	for i := range m.Issues {
+		if m.Issues[i].UID == uid {
+			return &m.Issues[i]
+		}
+	}
+	return nil
+}
+
 func openField(m Model, action Action) (Model, []Cmd) {
 	if m.Stale || m.FieldForm.Saving {
 		return m, nil
@@ -103,7 +116,7 @@ func openField(m Model, action Action) (Model, []Cmd) {
 	}
 	m.FieldForm = FieldFormState{Open: true, Action: action, UID: issue.UID, ProjectID: issue.ProjectID}
 	if action == AttachFileAction || action == DetachFileAction {
-		return openAttachment(m, issue)
+		return openAttachment(m, issue), nil
 	}
 	if action == RemoveLabelAction {
 		m.FieldForm.Labels = issue.Labels
@@ -117,24 +130,22 @@ func openField(m Model, action Action) (Model, []Cmd) {
 	return m, nil
 }
 
-// attachRefusal is why this workspace cannot attach to or detach from the Issue, or nil.
-func (m Model) attachRefusal(issue *Issue) error {
-	return AttachRefusal(m.Project, issue.ProjectID, issue.ShortID, issue.ProjectName)
-}
-
-// openAttachment finishes opening the form of u or U. A refusal, or no Attachments to remove, shows as the form's error.
-func openAttachment(m Model, issue *Issue) (Model, []Cmd) {
+// openAttachment finishes opening the form of u or U. A refusal shows as the form's error; U with no Attachments says so as
+// the Notice instead of opening an empty picker.
+func openAttachment(m Model, issue *Issue) Model {
 	f := &m.FieldForm
-	f.Err = m.attachRefusal(issue)
-	if f.Action == DetachFileAction {
-		for _, a := range Attachments(issue.Metadata) {
-			f.Labels = append(f.Labels, a.Name)
-		}
-		if f.Err == nil && len(f.Labels) == 0 {
-			f.Err = fmt.Errorf("%s has no attachments.", issue.ShortID)
-		}
+	f.Err = AttachRefusal(m.Project, issue.ProjectID, issue.ShortID, issue.ProjectName)
+	if f.Action != DetachFileAction {
+		return m
 	}
-	return m, nil
+	for _, a := range Attachments(issue.Metadata) {
+		f.Labels = append(f.Labels, a.Name)
+	}
+	if f.Err == nil && len(f.Labels) == 0 {
+		m.FieldForm = FieldFormState{}
+		m.Notice = fmt.Sprintf("%s has no attachments.", issue.ShortID)
+	}
+	return m
 }
 
 func submitField(m Model) (Model, []Cmd) {
@@ -168,11 +179,12 @@ func submitField(m Model) (Model, []Cmd) {
 // submitAttachment sends the form of u or U. U removes the Attachment typed in full, else the highlighted one.
 func submitAttachment(m Model) (Model, []Cmd) {
 	f := &m.FieldForm
-	issue := m.fieldIssue()
+	issue := m.issueByUID(f.UID)
 	if issue == nil {
+		f.Err = errors.New("That Issue is no longer listed.")
 		return m, nil
 	}
-	if f.Err = m.attachRefusal(issue); f.Err != nil {
+	if f.Err = AttachRefusal(m.Project, issue.ProjectID, issue.ShortID, issue.ProjectName); f.Err != nil {
 		return m, nil
 	}
 	if f.Action == AttachFileAction {
@@ -183,7 +195,7 @@ func submitAttachment(m Model) (Model, []Cmd) {
 	if !slices.Contains(f.Labels, name) {
 		suggestions := m.FieldSuggestions()
 		if len(suggestions) == 0 {
-			f.Err = fmt.Errorf("%s has no attachment named %q.", issue.ShortID, name)
+			f.Err = NoAttachmentError(issue.ShortID, name)
 			return m, nil
 		}
 		name = suggestions[f.Suggestion%len(suggestions)]
@@ -223,18 +235,21 @@ func updateFieldKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	return m, nil
 }
 
-// attachmentWritten closes the form of u or U for the Issue uid when the write succeeded, leaving report as the Notice, and
-// keeps it open with the failure otherwise.
-func attachmentWritten(m Model, uid, report string, err error) (Model, []Cmd) {
+// fieldWritten closes the form of a write to the Issue uid when it succeeded, leaving a non-empty report as the Notice, and
+// keeps it open with the failure otherwise. A write for another Issue than the form's is ignored.
+func fieldWritten(m Model, uid, report string, err error) (Model, []Cmd) {
 	if m.FieldForm.UID != uid {
 		return m, nil
 	}
 	m.FieldForm.Saving = false
 	if err != nil {
+		m.FieldForm.Open = true
 		m.FieldForm.Err = err
 		return m, nil
 	}
 	m.FieldForm = FieldFormState{}
-	m.Notice = report
+	if report != "" {
+		m.Notice = report
+	}
 	return snapshotChanged(m.issueWritten(uid))
 }

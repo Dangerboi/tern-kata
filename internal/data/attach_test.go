@@ -2,6 +2,8 @@ package data
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -53,6 +55,21 @@ func (f attachFixture) attach(t *testing.T, workspace, ref, path string) model.F
 	return as[model.FileAttached](t, run(t, f.gateway, model.AttachFile{Workspace: workspace, Ref: ref, Actor: "tester", Path: path}))
 }
 
+// attachResult is attach for a goroutine other than the test's: t.Fatal is not allowed there, so a harness failure comes back as Err.
+func (f attachFixture) attachResult(workspace, ref, path string) model.FileAttached {
+	messages := make(chan model.Msg, 1)
+	f.gateway.Run(context.Background(), model.AttachFile{Workspace: workspace, Ref: ref, Actor: "tester", Path: path}, messages)
+	select {
+	case msg := <-messages:
+		if got, ok := msg.(model.FileAttached); ok {
+			return got
+		}
+		return model.FileAttached{Err: fmt.Errorf("gateway answered %T", msg)}
+	default:
+		return model.FileAttached{Err: errors.New("gateway produced no message")}
+	}
+}
+
 func (f attachFixture) detach(t *testing.T, workspace, ref, name string) model.FileDetached {
 	t.Helper()
 	return as[model.FileDetached](t, run(t, f.gateway, model.DetachFile{Workspace: workspace, Ref: ref, Actor: "tester", Name: name}))
@@ -86,15 +103,6 @@ func writeFile(t *testing.T, dir, name, content string) string {
 		t.Fatal(err)
 	}
 	return path
-}
-
-func realPath(t *testing.T, path string) string {
-	t.Helper()
-	real, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return real
 }
 
 func TestAttachCopiesIntoTheStoreAndPointsAtTheCopy(t *testing.T) {
@@ -215,7 +223,7 @@ func TestConcurrentAttachesOfOneNameAreAllKept(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			results[i] = f.attach(t, f.repo, f.uid, source)
+			results[i] = f.attachResult(f.repo, f.uid, source)
 		}()
 	}
 	wg.Wait()
@@ -426,7 +434,7 @@ func TestAttachAndDetachTakeEveryRefForm(t *testing.T) {
 		if got.Err != nil {
 			t.Fatalf("ref %q: %v", ref, got.Err)
 		}
-		if want := numberedName("shot.png", i+1); got.Name != want {
+		if want := []string{"shot.png", "shot-2.png", "shot-3.png"}[i]; got.Name != want {
 			t.Fatalf("ref %q stored %q, want %q", ref, got.Name, want)
 		}
 	}
@@ -457,5 +465,125 @@ func TestDetachIsRefusedOutsideTheIssuesBinding(t *testing.T) {
 	}
 	if len(f.pointers(t, f.uid)) != 1 {
 		t.Fatal("a refused detach cleared the pointer")
+	}
+}
+
+func TestDetachNeverDeletesAnotherIssuesCopy(t *testing.T) {
+	f := newAttachFixture(t)
+	second := createIssue(t, f.gateway, f.repo, f.project, "Other")
+	theirs := f.attach(t, f.repo, second, writeFile(t, t.TempDir(), "keep.png", "x"))
+	if theirs.Err != nil {
+		t.Fatal(theirs.Err)
+	}
+	host, _ := os.Hostname()
+	setPointer(t, f, "borrowed.png", map[string]any{"host": host, "path": theirs.Path})
+	got := f.detach(t, f.repo, f.uid, "borrowed.png")
+	if got.Err != nil || got.Fate != model.FileLeft {
+		t.Fatalf("got %+v", got)
+	}
+	if _, err := os.Stat(theirs.Path); err != nil {
+		t.Fatalf("another Issue's copy was deleted: %v", err)
+	}
+	if len(f.pointers(t, f.uid)) != 0 {
+		t.Fatal("the pointer survived")
+	}
+}
+
+func TestDetachClearsAMalformedPointerAndTouchesNoFile(t *testing.T) {
+	f := newAttachFixture(t)
+	setPointer(t, f, "odd", "not a pointer")
+	got := f.detach(t, f.repo, f.uid, "odd")
+	if got.Err != nil || got.Fate != model.FileLeft || !strings.Contains(got.Report(), "no file was touched") {
+		t.Fatalf("got %+v, report %q", got, got.Report())
+	}
+	if _, still := f.issue(t, f.uid).Metadata["attachment.odd"]; still {
+		t.Fatal("the malformed key survived")
+	}
+}
+
+func TestAttachFailsBeforeCopyingWhenTheStoreCannotBeSetUp(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs a directory this user cannot write to")
+	}
+	f := newAttachFixture(t)
+	store := filepath.Join(f.repo, ".kata-attachments")
+	dir := filepath.Join(store, f.uid)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(store, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(store, 0o755) })
+	if got := f.attach(t, f.repo, f.uid, writeFile(t, t.TempDir(), "a.txt", "x")); got.Err == nil {
+		t.Fatalf("attach went on without the store's .gitignore: %+v", got)
+	}
+	if left, _ := filepath.Glob(filepath.Join(dir, "*")); len(left) != 0 || len(f.pointers(t, f.uid)) != 0 {
+		t.Fatalf("a copy %v or pointer was left", left)
+	}
+}
+
+func TestAttachFromBareRepositoryWorktreesSharesOneStore(t *testing.T) {
+	kata := startKata(t, "0.19.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	root := t.TempDir()
+	seed := t.TempDir()
+	git(t, seed, "init", "-q")
+	git(t, seed, "commit", "-q", "--allow-empty", "-m", "init")
+	bare := filepath.Join(root, ".bare")
+	git(t, root, "clone", "-q", "--bare", seed, bare)
+	main, other := filepath.Join(root, "main"), filepath.Join(root, "other")
+	git(t, bare, "remote", "remove", "origin") // a Project binds by name only without a recognised remote host
+	git(t, bare, "worktree", "add", "-q", main)
+	git(t, bare, "worktree", "add", "-q", "-b", "side", other)
+	saved := as[model.ProjectSaved](t, run(t, gateway, model.BindProject{Workspace: main, Actor: "tester", Name: "bare"}))
+	if saved.Err != nil {
+		t.Fatal(saved.Err)
+	}
+	raw, err := os.ReadFile(filepath.Join(main, ".kata.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, other, ".kata.toml", string(raw))
+	uid := createIssue(t, gateway, main, saved.Project, "Shared")
+	for _, workspace := range []string{main, other} {
+		got := as[model.FileAttached](t, run(t, gateway, model.AttachFile{Workspace: workspace, Ref: uid, Actor: "tester", Path: writeFile(t, t.TempDir(), "a.txt", "x")}))
+		if want := filepath.Join(root, ".kata-attachments", uid); got.Err != nil || filepath.Dir(got.Path) != want {
+			t.Fatalf("from %s: got %+v, want a copy in %s", workspace, got, want)
+		}
+	}
+}
+
+func TestAttachInASubmoduleUsesTheSubmodulesOwnTopLevel(t *testing.T) {
+	kata := startKata(t, "0.19.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	inner := t.TempDir()
+	git(t, inner, "init", "-q")
+	git(t, inner, "commit", "-q", "--allow-empty", "-m", "init")
+	outer := t.TempDir()
+	git(t, outer, "init", "-q")
+	git(t, outer, "-c", "protocol.file.allow=always", "submodule", "add", "-q", inner, "sub")
+	sub := filepath.Join(outer, "sub")
+	git(t, sub, "remote", "remove", "origin")
+	saved := as[model.ProjectSaved](t, run(t, gateway, model.BindProject{Workspace: sub, Actor: "tester", Name: "inner"}))
+	if saved.Err != nil {
+		t.Fatal(saved.Err)
+	}
+	uid := createIssue(t, gateway, sub, saved.Project, "In the submodule")
+	got := as[model.FileAttached](t, run(t, gateway, model.AttachFile{Workspace: sub, Ref: uid, Actor: "tester", Path: writeFile(t, t.TempDir(), "a.txt", "x")}))
+	if want := filepath.Join(sub, ".kata-attachments", uid); got.Err != nil || filepath.Dir(got.Path) != want {
+		t.Fatalf("got %+v, want a copy in %s", got, want)
+	}
+}
+
+// setPointer writes the attachment.<name> key of the fixture's Issue as any writer could.
+func setPointer(t *testing.T, f attachFixture, name string, value any) {
+	t.Helper()
+	_, err := f.kata.target().Client.PatchIssueMetadataWithResponse(context.Background(), &g.PatchIssueMetadataRequestOptions{
+		PathParams: &g.PatchIssueMetadataPath{ProjectID: f.project.ID, Ref: f.uid},
+		Body:       &g.PatchIssueMetadataBody{Actor: new("tester"), Patch: map[string]any{"attachment." + name: value}},
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

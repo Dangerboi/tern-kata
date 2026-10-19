@@ -57,7 +57,7 @@ func TestAttachmentRowsAreSortedByNameAndIgnoreOtherMeta(t *testing.T) {
 		t.Fatalf("count %d", n)
 	}
 	rows := m.DetailRows()
-	if rows[0].Activity.URL != "" || rows[0].Activity.Host != "elsewhere" || rows[1].Activity.URL != "file:///b.png" {
+	if rows[0].Activity.URL != "" || rows[0].Activity.File.Host != "elsewhere" || rows[1].Activity.URL != "file:///b.png" {
 		t.Fatalf("rows %+v", rows)
 	}
 }
@@ -67,6 +67,14 @@ func TestAttachmentFileURLEscapesAndHandlesWindowsPaths(t *testing.T) {
 	rows := m.DetailRows()
 	if rows[0].Activity.URL != "file:///a%20b/x.png" || rows[1].Activity.URL != "file:///C:/a%20b/x.png" {
 		t.Fatalf("urls %q %q", rows[0].Activity.URL, rows[1].Activity.URL)
+	}
+}
+
+func TestAttachmentFileURLKeepsABackslashInAUnixName(t *testing.T) {
+	m := attached(map[string]any{"attachment.a": pointer("box", `/a/b\c.png`)})
+	rows := m.DetailRows()
+	if rows[0].Activity.URL != "file:///a/b%5Cc.png" {
+		t.Fatalf("url %q", rows[0].Activity.URL)
 	}
 }
 

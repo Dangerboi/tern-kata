@@ -18,7 +18,7 @@ func emptyTabText(tab model.ActivityTab) string {
 // attachmentSpans is an Attachment row: the name as a link to its file when this machine holds it, else `<name> on <host>`.
 func attachmentSpans(row model.DetailRow) []ui.Span {
 	if row.URL != "" {
-		return []ui.Span{{T: row.Name, S: "accent link", Href: row.URL}}
+		return []ui.Span{{T: row.File.Name, S: "accent link", Href: row.URL}}
 	}
-	return []ui.Span{{T: row.Name + " on " + row.Host}}
+	return []ui.Span{{T: row.File.Name + " on " + row.File.Host}}
 }

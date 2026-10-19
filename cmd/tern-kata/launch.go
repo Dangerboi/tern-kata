@@ -26,9 +26,10 @@ type LaunchPlan struct {
 	FallbackArgs []string
 	// Subcommand is "attach" or "detach" when it was the first argument; main runs it without Tern.
 	Subcommand string
-	// Ref and Operands are the Issue reference and the files to attach, or the Attachment name to detach.
-	Ref      string
-	Operands []string
+	// TargetRef is the Issue as attach and detach take it (what `kata show` takes: a short id, <project>#<short id> or a ULID),
+	// unlike IssueRef; Operands are the files to attach, or the Attachment name to detach.
+	TargetRef string
+	Operands  []string
 	// fallbackAuthor is the --as actor exported to `kata tui`; empty leaves the environment untouched.
 	fallbackAuthor string
 }
@@ -63,28 +64,27 @@ func PlanLaunch(args []string, lookup func(string) (string, bool), version strin
 		return LaunchPlan{Help: true}, nil
 	}
 	if len(args) > 0 && (args[0] == "attach" || args[0] == "detach") {
-		return planSubcommand(args, lookup)
+		plan, err := planSubcommand(args, lookup)
+		if err != nil {
+			err = subcommandError{err}
+		}
+		return plan, err
 	}
 	var plan LaunchPlan
 	plan.FallbackArgs = make([]string, 0, len(args))
 	issueSet := false
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
-		if arg == "--as" || arg == "--issue" {
+		if actor, matched, err := parseAs(args, &i); err != nil {
+			return LaunchPlan{}, err
+		} else if matched {
+			plan.fallbackAuthor = actor
+		} else if arg == "--issue" {
 			i++
 			if i == len(args) || strings.HasPrefix(args[i], "--") {
-				if arg == "--as" {
-					return LaunchPlan{}, fmt.Errorf("--as requires an actor")
-				}
 				return LaunchPlan{}, fmt.Errorf("--issue requires <project>/<short_id>")
 			}
-			if arg == "--as" {
-				plan.fallbackAuthor = args[i]
-			} else {
-				issueSet, plan.IssueRef = true, args[i]
-			}
-		} else if value, ok := strings.CutPrefix(arg, "--as="); ok {
-			plan.fallbackAuthor = value
+			issueSet, plan.IssueRef = true, args[i]
 		} else if value, ok := strings.CutPrefix(arg, "--issue="); ok {
 			issueSet, plan.IssueRef = true, value
 		} else {
@@ -100,6 +100,21 @@ func PlanLaunch(args []string, lookup func(string) (string, bool), version strin
 	}
 	plan.Actor = resolveActor(plan.fallbackAuthor, lookup)
 	return plan, nil
+}
+
+// parseAs reads --as <actor> or --as=<actor> at args[*i], moving *i past a separate value; matched is false for any other argument.
+func parseAs(args []string, i *int) (actor string, matched bool, err error) {
+	if value, ok := strings.CutPrefix(args[*i], "--as="); ok {
+		return value, true, nil
+	}
+	if args[*i] != "--as" {
+		return "", false, nil
+	}
+	*i++
+	if *i == len(args) || strings.HasPrefix(args[*i], "--") {
+		return "", true, fmt.Errorf("--as requires an actor")
+	}
+	return args[*i], true, nil
 }
 
 // resolveActor is flag, else the first set of KATA_AUTHOR, USER and the gitUserNameKey lookup, else "anonymous".
@@ -120,29 +135,30 @@ func resolveActor(flag string, lookup func(string) (string, bool)) string {
 }
 
 // planSubcommand parses `attach <ref> <file>...` and `detach <ref> <name>` (args[0] is the subcommand). --as may stand anywhere;
-// a lone -- ends the flags, so a file may be named like one.
+// a lone -- ends the flags, so a file may be named like one. --version, --help and -h are caught anywhere first, so a file
+// cannot be named exactly that.
 func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPlan, error) {
 	plan := LaunchPlan{Subcommand: args[0]}
 	var operands []string
 	flagsEnded := false
 	for i := 1; i < len(args); i++ {
 		arg := args[i]
-		switch {
-		case flagsEnded || !strings.HasPrefix(arg, "--"):
+		if flagsEnded || !strings.HasPrefix(arg, "--") {
 			operands = append(operands, arg)
-		case arg == "--":
+			continue
+		}
+		if arg == "--" {
 			flagsEnded = true
-		case arg == "--as":
-			i++
-			if i == len(args) || strings.HasPrefix(args[i], "--") {
-				return LaunchPlan{}, fmt.Errorf("--as requires an actor")
-			}
-			plan.fallbackAuthor = args[i]
-		case strings.HasPrefix(arg, "--as="):
-			plan.fallbackAuthor = strings.TrimPrefix(arg, "--as=")
-		default:
+			continue
+		}
+		actor, matched, err := parseAs(args, &i)
+		if err != nil {
+			return LaunchPlan{}, err
+		}
+		if !matched {
 			return LaunchPlan{}, fmt.Errorf("%s: unknown flag %s", plan.Subcommand, arg)
 		}
+		plan.fallbackAuthor = actor
 	}
 	switch {
 	case plan.Subcommand == "attach" && len(operands) < 2:
@@ -150,7 +166,7 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 	case plan.Subcommand == "detach" && len(operands) != 2:
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata detach <ref> <name>")
 	}
-	plan.Ref, plan.Operands = operands[0], operands[1:]
+	plan.TargetRef, plan.Operands = operands[0], operands[1:]
 	plan.Actor = resolveActor(plan.fallbackAuthor, lookup)
 	return plan, nil
 }

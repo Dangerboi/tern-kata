@@ -62,8 +62,9 @@ type DetailRow struct {
 	// Ref is the referenced Issue's id as shown (#<short_id> in the detail Issue's Project), and Relation how it relates to the
 	// detail's Issue. RefTitle is that Issue's title when it is loaded.
 	Relation, Ref, RefTitle string
-	// Name, Host and URL are an Attachment row's: URL is the file URL of its path, empty when Host is not this machine.
-	Name, Host, URL string
+	// File is an Attachment row's Attachment, and URL the file URL of its path, empty when its Host is not this machine.
+	File            Attachment
+	URL             string
 	History         *HistorySentence
 	// Reply says what a comment answers ("confirms dana's comment in #bbbb") and Replies how many comments answer it; both
 	// are empty without reply information.

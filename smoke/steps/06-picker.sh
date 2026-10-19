@@ -55,7 +55,7 @@ expect_tree "$picker_projects_entry" '.ok and .nodes[0]["aria-selected"] == "tru
 ctl key enter
 expect_tree "$picker_items" '.ok and .nodes[0].text == "Back" and (.nodes | map(.text) | index("picker-alphacurrent") != null)'
 expect_tree "[data-id='layer.collections.list.project.$picker_alpha_uid']" '.ok and .nodes[0]["aria-selected"] == "true"'
-expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("esc back"))'
+expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 and (.nodes[0].text | contains("esc back"))'
 ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 expect_tree "$picker_projects_entry" '.ok and .nodes[0]["aria-selected"] == "true"'
@@ -85,7 +85,7 @@ expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
 
 # esc backs out detail, then the list, into the picker, then closes it.
 ctl key enter
-expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("esc back"))'
+expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 and (.nodes[0].text | contains("esc back"))'
 ctl key esc
 expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("esc Menu"))'
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'

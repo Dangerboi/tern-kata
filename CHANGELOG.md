@@ -6,9 +6,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Added
 
-- `tern-kata attach <ref> <file>...` and `tern-kata detach <ref> <name>` attach files to an Issue from a shell or an agent, without Tern. Each file is copied into the Project's Attachment store (`.kata-attachments` in the primary checkout, kept out of git) and an `attachment.<name>` meta key holding its host and path points to it.
-- The Issue detail has an Attachments tab after Links. It lists the Issue's `attachment.*` meta keys by name; a file held on this machine is a link to the file, one held elsewhere reads "<name> on <host>", and an Issue with none says "No attachments, u to attach".
-- `u` on the selected Issue, in the list or the Issue detail, asks for a file's path and attaches it. `U` lists the Issue's Attachments by name and removes the one chosen, deleting its copy when it is on this machine, and says what happened to a file that was left or already gone. Both keys explain why when the directory is not bound to the Issue's Project, and `U` on an Issue with none says so. The footer and help sheet list them beside the label keys.
+- `tern-kata attach <ref> <file>...` and `tern-kata detach <ref> <name>` attach files to an Issue and remove them again from a shell or an agent, without Tern. `attach` prints each stored absolute path; both need the directory to be bound to the Issue's Project and exit 1 on any failure.
+- An Attachment is a copy of the file in `.kata-attachments` at the root of the Project's primary checkout, which every linked worktree shares and which stays out of git. An `attachment.<name>` meta key on the Issue holds the copy's host and path. Detach clears the key, including one with an unreadable value, and deletes the copy only when it is on this machine and in that Issue's folder, saying what became of the file.
+- The Issue detail has an Attachments tab after Links. It lists the Issue's Attachments by name; a file held on this machine is a link to the file, one held elsewhere reads "<name> on <host>", and an Issue with none says "No attachments, u to attach".
+- `u` on the selected Issue, in the list or the Issue detail, asks for a file's path and attaches it. `U` lists the Issue's Attachments by name and removes the one chosen, and says so instead of opening a picker when there are none. Both keys explain why when the directory is not bound to the Issue's Project. The footer and help sheet list them beside the label keys.
 
 ## [0.2.0] - 2026-10-19
 
