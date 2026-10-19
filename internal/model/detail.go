@@ -51,9 +51,25 @@ type DetailItemMsg struct {
 
 func (DetailItemMsg) msg() {}
 
-func (s ActivityTab) String() string {
-	return [...]string{"Comments", "Events", "Links", "Attachments"}[s]
+type tabSpec struct {
+	label string
+	kind  RowKind
+	empty string
 }
+
+// tabTable lists the Activity tabs in order: the label, the kind of row it lists and what it says when empty. The label, a
+// row kind's tab and the empty text all come from it; a test fails for a tab left out.
+var tabTable = [TabCount]tabSpec{
+	TabComments:    {"Comments", RowComment, "No comments."},
+	TabEvents:      {"Events", RowEvent, "No events."},
+	TabLinks:       {"Links", RowLink, "No links."},
+	TabAttachments: {"Attachments", RowAttachment, "No attachments, u to attach"},
+}
+
+func (s ActivityTab) String() string { return tabTable[s].label }
+
+// EmptyText is what the tab says when it has no rows.
+func (s ActivityTab) EmptyText() string { return tabTable[s].empty }
 
 // DetailRow is one row of an Activity tab (Type is a history event's kata type). A Comment or Event row has its Author and Time (Model.DetailTime); a Link row has Relation and Ref
 // instead; a history row also carries its sentence in parts.
