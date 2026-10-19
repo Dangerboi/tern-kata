@@ -1382,7 +1382,10 @@ func TestGatewayWakeEndsWhenThePaneCloses(t *testing.T) {
 	messages := make(chan model.Msg, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	go func() { defer close(done); gateway.Run(ctx, model.WakeAt{Day: "d", At: time.Unix(1<<40, 0), Generation: 1}, messages) }()
+	go func() {
+		defer close(done)
+		gateway.Run(ctx, model.WakeAt{Day: "d", At: time.Unix(1<<40, 0), Generation: 1}, messages)
+	}()
 	cancel()
 	select {
 	case <-done:
