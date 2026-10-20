@@ -126,7 +126,7 @@ func (m Model) syncSidebarCursor() Model {
 
 // openPicker opens the picker over the columns, at the top level; other layers keep the keys.
 func openPicker(m Model) Model {
-	if mode := m.CurrentMode(); mode == ModeList || mode == ModeBoard || mode == ModeDetail || mode == ModeCollections {
+	if mode := m.CurrentMode(); mode == ModeList || mode == ModeBoard || mode == ModeLane || mode == ModeDetail || mode == ModeCollections {
 		m.Picker = PickerState{Open: true}
 	}
 	return m

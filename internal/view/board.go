@@ -13,6 +13,9 @@ import (
 // BoardID is the Board's row of Lane columns; a Lane's column is its key under it, a card the Issue's key under the column's card list.
 const BoardID = "main.columns.list.board"
 
+// LaneHeaderID is the Lane view's header line over its list.
+const LaneHeaderID = "main.columns.list.lane"
+
 func laneKey(column int) string { return "lane" + strconv.Itoa(column) }
 
 // CardID is the id of the Board card of uid, "" when the Board draws none.
@@ -29,7 +32,7 @@ func CardID(m model.Model, uid string) string {
 
 // SelectedRowID is the node of the selected Issue's row in the list, or its card on the Board.
 func SelectedRowID(m model.Model) string {
-	if m.Board.On() {
+	if m.Board.Mode == model.BoardColumns {
 		return CardID(m, m.SelectedUID)
 	}
 	return IssueID(m.SelectedUID)
@@ -95,7 +98,7 @@ func boardCard(m model.Model, card model.BoardCard, now time.Time) tern.Element 
 		body = append(body, ui.Text{Common: ui.Common{Key: "reopen", Tone: ui.ToneMuted}, Text: "r → " + card.Reopen, Wrap: ui.WrapNone})
 	}
 	return ui.Card{
-		Common:   ui.Common{Key: issue.UID, Tone: tone, Actions: &ui.Actions{Click: CardClick(issue.UID)}},
+		Common:   ui.Common{Key: issue.UID, Tone: tone, Actions: &ui.Actions{Click: CardClick(issue.UID), DblClick: OpenRowClick(issue.UID)}},
 		Head:     ui.Spans(ui.Span{T: issue.ShortID, S: "strong"}),
 		Selected: selected,
 		Children: body,

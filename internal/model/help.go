@@ -23,8 +23,11 @@ func (m Model) CurrentMode() Mode {
 	if m.Err != nil {
 		return ModeError
 	}
-	if m.Board.On() {
+	if m.Board.Mode == BoardColumns {
 		return ModeBoard
+	}
+	if m.Board.Mode == BoardLane && m.Focus != ColumnDetail {
+		return ModeLane
 	}
 	switch m.Focus {
 	case ColumnDetail:
