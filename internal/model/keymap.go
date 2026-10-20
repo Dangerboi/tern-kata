@@ -51,6 +51,8 @@ const (
 	ToggleBoard          Action = "toggle-board"
 	PreviousLane         Action = "previous-lane"
 	NextLane             Action = "next-lane"
+	MoveCardLeft         Action = "move-card-left"
+	MoveCardRight        Action = "move-card-right"
 )
 
 // Binding is one chord in one mode, as the lookup, the footer and the help sheet read it. A binding of

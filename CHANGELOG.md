@@ -6,6 +6,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Added
 
+- `>` and `<` on the Board move the selected card one Lane right or left among No lane and the Lanes. The target label is added first, then the other Lane labels are removed, so a failure leaves the Issue in two Lanes, never none; an Issue with two Lane labels ends with one. The card shows in its new Lane at once, a failure leaves a Notice with the daemon's reason, and a Move is refused while the daemon is disconnected.
 - `b` in a Project Collection switches the list to a Board: a column for No lane (open Issues with none of the Lane labels, even one labelled only `bug`), one per Lane (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, each with its card count) and Done (Issues closed in the last 14 days, newest first). A card shows its short id, its title over at most two lines and its labels that aren't Lane labels; an Issue with several Lane labels shows once, in the first Lane, with "also: …", and a Done card says which Lane `r` reopens it into. The selected card shows its full title, owner and every label. `↑`/`↓`/`j`/`k` move within a Lane, `←`/`→` across Lanes (skipping empty ones), a click selects a card, and the Issue keys, `x`, `r`, the filters and live refresh work as in the list. `b` again returns to the list with the same Issue selected. Board mode needs a Project Collection and a Pane at least 140 columns wide, and says so otherwise.
 
 ## [0.3.0] - 2026-10-20

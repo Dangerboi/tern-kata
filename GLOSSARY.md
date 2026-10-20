@@ -50,6 +50,8 @@
 
 **Lane**: One label of the Lane list, shown as a column and titled from its label ("ready-for-agent" reads "Ready for agent"). Every Lane stands for one kata label, so the Board is a view of kata data, not a copy.
 
+**Move**: Taking an open card one Lane left or right (`<`, `>`) among No lane and the Lanes, never into or out of Done. One daemon command adds the target Lane's label (if missing), then removes the Issue's other Lane labels.
+
 **Lane label**: Any label of the Lane list. An Issue whose only labels are not Lane labels has no Lane label.
 
 **Lane list**: A Project's ordered Lane labels. Until a saved one is loaded it is the default: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`.

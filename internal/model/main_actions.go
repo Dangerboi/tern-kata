@@ -167,6 +167,8 @@ var mainActions = []actionEntry{
 	{action: MoveUp, modes: []Mode{ModeBoard}, keys: slices.Concat(keys("k", "k/↑", "up", "↑"), emacsUp), help: "previous card", sheet: []sheetLine{{sheetBoard, 3, "previous card in the Lane"}}, handle: boardMoving(MoveUp)},
 	{action: NextLane, modes: []Mode{ModeBoard}, keys: keys("right", "→"), help: "Lane", footer: []Mode{ModeBoard}, footerKey: "←→", sheet: []sheetLine{{sheetBoard, 5, "next Lane"}}, handle: boardMoving(NextLane)},
 	{action: PreviousLane, modes: []Mode{ModeBoard}, keys: keys("left", "←"), help: "previous Lane", sheet: []sheetLine{{sheetBoard, 4, "previous Lane"}}, handle: boardMoving(PreviousLane)},
+	{action: MoveCardLeft, modes: []Mode{ModeBoard}, keys: keys("<", "<"), help: "previous Lane", sheet: []sheetLine{{sheetBoard, 6, "move card to the previous Lane"}}, handle: boardCardMove(-1)},
+	{action: MoveCardRight, modes: []Mode{ModeBoard}, keys: keys(">", ">"), help: "move card", footer: []Mode{ModeBoard}, footerKey: "<>", sheet: []sheetLine{{sheetBoard, 7, "move card to the next Lane"}}, handle: boardCardMove(1)},
 	// Moving and opening in the Issue detail.
 	{action: ScrollDown, modes: []Mode{ModeDetail}, keys: keys("down", "↓"), help: "scroll", footer: []Mode{ModeDetail}, footerKey: "↑↓", sheet: []sheetLine{{sheetChildren, 5, "scroll detail viewport"}}, handle: scrolling(ColumnDetail, ScrollLineDown)},
 	{action: ScrollUp, modes: []Mode{ModeDetail}, keys: keys("up", "↑"), help: "scroll up", sheet: []sheetLine{{sheetChildren, 4, "scroll detail viewport"}}, handle: scrolling(ColumnDetail, ScrollLineUp)},
