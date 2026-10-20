@@ -52,7 +52,7 @@ func Render(m model.Model, now time.Time) tern.View {
 			case model.ColumnCollections:
 				columns = append(columns, Collections(m))
 			case model.ColumnList:
-				if m.Board.On() {
+				if m.Board.Mode == model.BoardColumns {
 					columns = append(columns, board(m, now))
 				} else {
 					columns = append(columns, issues(m, now))
@@ -135,7 +135,11 @@ func issues(m model.Model, now time.Time) tern.Element {
 	if m.SelectedUID != "" {
 		selected = IssueID(m.SelectedUID)
 	}
-	children := ui.Nodes(headerRow(cols))
+	children := ui.Nodes()
+	if m.Board.Mode == model.BoardLane {
+		children = append(children, laneHeader(m))
+	}
+	children = append(children, headerRow(cols))
 	if m.Search.Open {
 		children = append(children, searchInput(m))
 	}
@@ -148,6 +152,16 @@ func issues(m model.Model, now time.Time) tern.Element {
 	}
 	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("issues"), Max: scrollMax(m), Selected: selected, Empty: ui.T(empty), Children: items})
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.4)}, "", children)
+}
+
+// laneHeader is the Lane view's header line: the Lane's title and card count, as on the Board.
+func laneHeader(m model.Model) tern.Element {
+	for _, column := range m.BoardColumns() {
+		if column.Lane == m.Board.Lane {
+			return ui.Text{Common: ui.Common{Key: "lane"}, Spans: []ui.Span{{T: column.Title, S: "strong"}, {T: " " + strconv.Itoa(len(column.Cards)), S: "muted"}}}
+		}
+	}
+	return ui.Text{Common: ui.Common{Key: "lane"}, Spans: []ui.Span{{T: model.LaneTitle(m.Board.Lane), S: "strong"}}}
 }
 
 // searchInput is the Search field above the Issues, in the list and on the Board.

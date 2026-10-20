@@ -301,7 +301,7 @@ func TestBoardSelectionOnAnIssueFoldedInTheListSurvivesTheRoundTrip(t *testing.T
 	}
 }
 
-func TestBoardModeNeedsAProjectAndWidth(t *testing.T) {
+func TestBoardModeNeedsAProject(t *testing.T) {
 	inbox := loadedWith(t, 160, model.Project{}, model.Snapshot{Issues: []model.Issue{alpha}})
 	out := step(t, inbox, key("b"))
 	if !strings.Contains(out.State.Model.Notice, "Project") {
@@ -309,13 +309,6 @@ func TestBoardModeNeedsAProjectAndWidth(t *testing.T) {
 	}
 	if heads, _ := lanes(t, out.State); len(heads) != 0 {
 		t.Error("the Board opened outside a Project")
-	}
-	narrow := step(t, projectPane(t, 139, boardCard("a")), key("b"))
-	if !strings.Contains(narrow.State.Model.Notice, "140") {
-		t.Errorf("notice in a narrow Pane = %q", narrow.State.Model.Notice)
-	}
-	if heads, _ := lanes(t, narrow.State); len(heads) != 0 {
-		t.Error("the Board opened in a narrow Pane")
 	}
 }
 
@@ -327,13 +320,6 @@ func TestSwitchingToAnotherCollectionEndsBoardMode(t *testing.T) {
 	}
 	if out.View == nil || !drawnIDs(t, *out.View)["main.columns.list.issues"] {
 		t.Error("the list is not drawn")
-	}
-}
-
-func TestBoardModeEndsWhenThePaneGrowsNarrow(t *testing.T) {
-	out := step(t, boardPane(t, boardCard("a")), resize(120))
-	if heads, _ := lanes(t, out.State); len(heads) != 0 {
-		t.Error("the Board stays on in a narrow Pane")
 	}
 }
 

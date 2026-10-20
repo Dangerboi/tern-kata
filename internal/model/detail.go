@@ -174,6 +174,8 @@ func (m Model) CanFocusDetail() bool {
 // detail of the selected Issue, the detail opens the row under its cursor.
 func drillIn(m Model) Model {
 	switch {
+	case m.Board.Mode == BoardColumns:
+		m = openLane(m)
 	case m.Focus == ColumnCollections:
 		m.Focus = ColumnList
 	case m.Focus == ColumnList && m.SelectedUID != "":

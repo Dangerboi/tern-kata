@@ -72,6 +72,8 @@ func TestEveryClickTheViewDrawsDecodesToAMessage(t *testing.T) {
 		"list":        browsing(t, 160),
 		"board":       boardPane(t, alpha, beta, closedAt("shut", time.October, 7)),
 		"board help":  feed(t, boardPane(t, alpha), key("?")).State,
+		"lane view":   feed(t, boardPane(t, alpha, beta), key("enter")).State,
+		"lane narrow": feed(t, projectPane(t, 120, alpha, beta), key("b")).State,
 		"narrow":      browsing(t, 100),
 		"help":        feed(t, browsing(t, 160), key("?")).State,
 		"menu":        feed(t, browsing(t, 160), openMenu).State,

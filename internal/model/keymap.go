@@ -54,6 +54,7 @@ const (
 	NextLane             Action = "next-lane"
 	MoveCardLeft         Action = "move-card-left"
 	MoveCardRight        Action = "move-card-right"
+	OpenLane             Action = "open-lane"
 )
 
 // Binding is one chord in one mode, as the lookup, the footer and the help sheet read it. A binding of
@@ -97,6 +98,7 @@ const (
 	ModeSearchResults Mode = "search-results"
 	ModeFilterForm    Mode = "filter-form"
 	ModeBoard         Mode = "board"
+	ModeLane          Mode = "lane"
 )
 
 // cardBindings are the keys of the Popup cards. Each card's handler reads them by mode; the
