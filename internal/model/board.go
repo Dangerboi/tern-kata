@@ -27,6 +27,8 @@ type BoardState struct {
 	Mode BoardMode
 	// Lanes is the Project's Lane list; empty means the default.
 	Lanes []string
+	// fileErr is why the Lanes file could not be read; while it is set the file is never overwritten.
+	fileErr error
 	// detailHidden is the detail column's hidden flag from before the Board took its place.
 	detailHidden bool
 }

@@ -76,8 +76,17 @@ func (g *Gateway) Run(ctx context.Context, cmd model.Cmd, messages chan<- model.
 		g.wake(ctx, wake, messages)
 		return
 	}
+	var result model.Msg
+	switch cmd := cmd.(type) {
+	case model.LoadLanes:
+		result = loadLanes(cmd)
+	case model.SaveLanes:
+		result = saveLanes(cmd)
+	default:
+		result = g.do(ctx, cmd)
+	}
 	select {
-	case messages <- g.do(ctx, cmd):
+	case messages <- result:
 	case <-ctx.Done():
 	}
 }

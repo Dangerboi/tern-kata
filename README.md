@@ -120,11 +120,23 @@ The file must already be on the session host, the machine running tern-kata. Wit
 
 `b` in a Project Collection shows the Project's Issues as a **Board**; `b` again returns to the list with the same Issue selected. Columns, left to right: **No lane** (open Issues with none of the Lane labels, always shown), one **Lane** per label of the Lane list, and **Done** (Issues closed in the last 14 days, newest first).
 
-- The Lane list is `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`. A Lane is one kata label: an Issue sits in the first of its Lane labels in Lane order, and an Issue with none (an unlabelled one, or one labelled only `bug`) sits in No lane. An Issue with several Lane labels shows once, with "also: …" naming the rest. A closed Issue keeps its Lane label, and its Done card says "r → <Lane>", the Lane `r` reopens it into.
+- The Lane list is `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human` unless the Project has its own (see below). A Lane is one kata label: an Issue sits in the first of its Lane labels in Lane order, and an Issue with none (an unlabelled one, or one labelled only `bug`) sits in No lane. An Issue with several Lane labels shows once, with "also: …" naming the rest. A closed Issue keeps its Lane label, and its Done card says "r → <Lane>", the Lane `r` reopens it into.
 - A card shows its short id, its title over at most two lines and its labels that aren't Lane labels. The selected card shows its full title, owner and every label.
 - `↑`/`↓`/`j`/`k` move within a Lane and `←`/`→` to the neighbouring Lane that has cards. A click selects a card. `x` opens the Close card, `r` reopens a closed Issue into its Lane, and `+`, `-`, `a`, `A`, `!`, `p`, `u`, `U`, `e` and `n` act on the selected card as in the list. `esc` opens the Menu.
 - The filters (`/`, `f`, `s`, `c`) narrow the Board as they do the list, and a live refresh moves cards. Done shows only what the Collection holds, so the `open` status filter leaves it empty.
 - The Board needs a Pane at least 140 columns wide and a Project Collection; `b` explains when it can't open, and the Board closes when you switch to another Collection or narrow the Pane.
+
+### The Lane list file
+
+A Project's own Lane list lives in `lanes.toml` in `tern-kata` under your user config directory: `~/.config/tern-kata/lanes.toml` on Linux (`$XDG_CONFIG_HOME` if set), `~/Library/Application Support/tern-kata/lanes.toml` on macOS and `%AppData%\tern-kata\lanes.toml` on Windows. It has one table per Project UID, with the Project's name (for readers) and its ordered labels:
+
+```toml
+["01JABC..."]
+name = "work"
+labels = ["needs-triage", "in-review", "ready-for-agent"]
+```
+
+tern-kata reads it each time the Board turns on and when the Project changes while it is on, so an edit shows the next time you press `b`. Labels are tidied like kata's (`In review` reads `in-review`). A missing file, or no table for the Project, gives the default Lanes. A file that can't be read or parsed gives the default Lanes and a Notice, and tern-kata won't overwrite it. Removing a label sends its Issues to No lane, or to their next Lane label; kata isn't touched.
 
 ## Compared with `kata tui`
 

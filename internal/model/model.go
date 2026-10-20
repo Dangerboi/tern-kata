@@ -177,6 +177,10 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return m, []Cmd{LoadProject{Workspace: msg.Workspace}}
 	case ProjectLoaded:
 		return updateProject(m, msg)
+	case LanesLoaded:
+		m = lanesLoaded(m, msg)
+	case LanesSaved:
+		m = lanesSaved(m, msg)
 	case DetailLoaded:
 		m = m.detailLoaded(msg)
 	case DetailFailed:
