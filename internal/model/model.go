@@ -91,6 +91,8 @@ type Model struct {
 	IDSearch         IDSearch
 	FilterForm       FilterFormState
 	Board            BoardState
+	// Moving is the Issue whose Move is in flight; further Moves wait for its result.
+	Moving string
 	// nonce is the random per-run prefix of every idempotency key and keys counts the keys minted.
 	nonce string
 	keys  int
@@ -155,6 +157,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			m.FieldForm.Labels = msg.Labels
 			m.FieldForm.Err = msg.Err
 		}
+	case MoveResultMsg:
+		return updateMove(m, msg)
 	case FieldWritten:
 		return fieldWritten(m, msg.UID, "", msg.Err)
 	case FileAttached:

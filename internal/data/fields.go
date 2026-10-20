@@ -39,6 +39,26 @@ func (c *Client) WriteField(ctx context.Context, cmd model.WriteField) error {
 	}
 	return nil
 }
+
+// Move adds the label to add, then removes each label to remove, and stops at the first failure.
+func (c *Client) Move(ctx context.Context, cmd model.MoveIssueCmd) error {
+	write := model.WriteField{Workspace: cmd.Workspace, UID: cmd.UID, ProjectID: cmd.ProjectID, Actor: cmd.Actor}
+	if cmd.Add != "" {
+		write.Action, write.Value = model.AddLabelAction, cmd.Add
+		if err := c.WriteField(ctx, write); err != nil {
+			return err
+		}
+	}
+	write.Action = model.RemoveLabelAction
+	for _, label := range cmd.Remove {
+		write.Value = label
+		if err := c.WriteField(ctx, write); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (c *Client) FieldLabels(ctx context.Context, cmd model.LoadFieldLabels) (model.FieldLabelsLoaded, error) {
 	r, e := c.ListLabelsWithResponse(ctx, &g.ListLabelsRequestOptions{PathParams: &g.ListLabelsPath{ProjectID: cmd.ProjectID}})
 	if e != nil {
