@@ -59,7 +59,7 @@ func cardMoving(dir int) func(Model) (Model, []Cmd) {
 		if m.Board.Mode == BoardLane {
 			return laneCardMove(dir)(m)
 		}
-		return boardCardMove(dir)(m)
+		return MoveCard(m, m.SelectedUID, dir)
 	}
 }
 
@@ -140,9 +140,8 @@ func reopenIssue(m Model) (Model, []Cmd) {
 
 var (
 	// issueModes are the modes whose keys act on the selected Issue: the list, the Board and the detail.
-	issueModes    = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail}
-	listAndDetail = []Mode{ModeList, ModeDetail}
-	listAndBoard  = []Mode{ModeList, ModeBoard, ModeLane}
+	issueModes   = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail}
+	listAndBoard = []Mode{ModeList, ModeBoard, ModeLane}
 	// listModes are the modes with the list's rows: the list and the Lane view.
 	listModes = []Mode{ModeList, ModeLane}
 	// laneModes are the modes that show Lanes: the Board and the Lane view.
@@ -187,7 +186,7 @@ var mainActions = []actionEntry{
 	// Board mode: the Board takes the list's place, with the cards in Lanes.
 	{action: ToggleBoard, modes: []Mode{ModeList, ModeCollections}, keys: keys("b", "b"), help: "Board", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetBoard, 1, "toggle Board mode"}}, handle: pure(toggleBoard)},
 	{action: ToggleBoard, modes: laneModes, keys: keys("b", "b"), help: "list", footer: laneModes, sheet: []sheetLine{{sheetBoard, 1, "toggle Board mode"}}, handle: pure(toggleBoard)},
-	{action: OpenLanes, modes: []Mode{ModeBoard}, keys: keys("shift+b", "B"), help: "Lanes", sheet: []sheetLine{{sheetBoard, 8, "edit the Lane list (Lanes card)"}}, handle: pure(openLanesForm)},
+	{action: OpenLanes, modes: laneModes, keys: keys("shift+b", "B"), help: "Lanes", sheet: []sheetLine{{sheetBoard, 9, "edit the Lane list (Lanes card)"}}, handle: pure(openLanesForm)},
 	{action: MoveDown, modes: []Mode{ModeBoard}, keys: slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), help: "move", footer: []Mode{ModeBoard}, footerKey: "↑↓", sheet: []sheetLine{{sheetBoard, 2, "next card in the Lane"}}, handle: boardMoving(MoveDown)},
 	{action: MoveUp, modes: []Mode{ModeBoard}, keys: slices.Concat(keys("k", "k/↑", "up", "↑"), emacsUp), help: "previous card", sheet: []sheetLine{{sheetBoard, 3, "previous card in the Lane"}}, handle: boardMoving(MoveUp)},
 	{action: NextLane, modes: laneModes, keys: keys("right", "→"), help: "Lane", footer: laneModes, footerKey: "←→", sheet: []sheetLine{{sheetBoard, 5, "next Lane"}}, handle: laneMoving(NextLane, 1)},
@@ -253,12 +252,12 @@ var mainActions = []actionEntry{
 	{action: OpenRecurrenceAction, modes: issueModes, keys: keys("shift+o", "O"), help: "make or change recurrence", sheet: []sheetLine{{sheetDetail, 16, "make or change recurrence"}}, handle: pure(openRecurrence)},
 	{action: NewChild, modes: issueModes, keys: keys("shift+n", "N"), help: "child", footer: issueModes, sheet: []sheetLine{{sheetChildren, 1, "new child"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, true) }},
 	// Layout, back, help and quit.
-	{action: ToggleDetail, modes: listAndDetail, keys: keys("shift+l", "L"), help: "layout", footer: listAndDetail, sheet: []sheetLine{{sheetGlobal, 6, "toggle layout"}}, handle: pure(Model.toggleDetail)},
+	{action: ToggleDetail, modes: []Mode{ModeList, ModeLane, ModeDetail}, keys: keys("shift+l", "L"), help: "layout", footer: []Mode{ModeList, ModeLane, ModeDetail}, sheet: []sheetLine{{sheetGlobal, 6, "toggle layout"}}, handle: pure(Model.toggleDetail)},
 	{action: DrillOut, modes: []Mode{ModeList, ModeBoard}, keys: keys("escape", "esc"), help: "Menu", footer: []Mode{ModeList, ModeBoard}, sheet: []sheetLine{{sheetGlobal, 5, "menu"}}, handle: drillOut},
-	{action: DrillOut, modes: []Mode{ModeLane}, keys: keys("escape", "esc"), help: "back", footer: []Mode{ModeLane}, sheet: []sheetLine{{sheetBoard, 9, "back to the Board, or the Menu in a narrow Pane"}}, handle: laneBack},
+	{action: DrillOut, modes: []Mode{ModeLane}, keys: keys("escape", "esc"), help: "back", footer: []Mode{ModeLane}, sheet: []sheetLine{{sheetBoard, 10, "back to the Board, or the Menu in a narrow Pane"}}, handle: laneBack},
 	{action: DrillOut, modes: []Mode{ModeDetail}, keys: keys("escape", "esc", "left", "←"), help: "back", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 4, "back"}}, handle: drillOut},
-	{action: OpenProjects, modes: []Mode{ModeCollections, ModeList, ModeBoard, ModeDetail}, keys: keys("shift+p", "P"), help: "projects", sheet: []sheetLine{{sheetGlobal, 4, "projects"}}, handle: pure(openProjects)},
-	{action: OpenInbox, modes: []Mode{ModeCollections, ModeList, ModeBoard, ModeDetail}, keys: keys("shift+i", "I"), help: "inbox", sheet: []sheetLine{{sheetGlobal, 3, "inbox"}}, handle: openInbox},
+	{action: OpenProjects, modes: []Mode{ModeCollections, ModeList, ModeBoard, ModeLane, ModeDetail}, keys: keys("shift+p", "P"), help: "projects", sheet: []sheetLine{{sheetGlobal, 4, "projects"}}, handle: pure(openProjects)},
+	{action: OpenInbox, modes: []Mode{ModeCollections, ModeList, ModeBoard, ModeLane, ModeDetail}, keys: keys("shift+i", "I"), help: "inbox", sheet: []sheetLine{{sheetGlobal, 3, "inbox"}}, handle: openInbox},
 	{action: RetryAction, modes: []Mode{ModeError}, keys: keys("ctrl+r", "ctrl+r"), help: "retry daemon", footer: []Mode{ModeError}, handle: func(m Model) (Model, []Cmd) { return updateLive(m, Retry{}) }},
 	{action: CloseHelp, modes: []Mode{ModeHelp}, keys: keys("escape", "esc"), help: "close help", footer: []Mode{ModeHelp}, handle: pure(func(m Model) Model { m.HelpOpen = false; return m })},
 	{action: ToggleHelp, keys: keys("?", "?", "shift+?", "?"), help: "help", footer: global, sheet: []sheetLine{{sheetGlobal, 1, "help"}}, handle: pure(func(m Model) Model { m.HelpOpen = !m.HelpOpen; return m })},

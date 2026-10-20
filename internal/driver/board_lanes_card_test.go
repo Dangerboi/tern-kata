@@ -122,10 +122,10 @@ func TestLanesCardRefusesBadNamesNamingTheEntry(t *testing.T) {
 	}
 }
 
-func TestEmptyLanesFieldSavesTheDefaultList(t *testing.T) {
+func TestEmptyLanesFieldSavesNoLanesWhichRestoresTheDefault(t *testing.T) {
 	s := step(t, lanesCard(t), key("ctrl+u")).State
 	out := step(t, s, key("enter"))
-	want := []model.Cmd{model.SaveLanes{ProjectUID: "p", ProjectName: "work", Lanes: model.DefaultLanes()}}
+	want := []model.Cmd{model.SaveLanes{ProjectUID: "p", ProjectName: "work"}}
 	if !reflect.DeepEqual(out.Cmds, want) {
 		t.Fatalf("enter sent %#v, want %#v", out.Cmds, want)
 	}
@@ -153,5 +153,42 @@ func TestLanesCardLetsNoGlobalChordThrough(t *testing.T) {
 	}
 	if got := lanesField(t, step(t, s, tern.Key{Name: "z", Text: "z"}).State); !strings.HasSuffix(got, "z") {
 		t.Errorf("a typed key did not reach the field: %q", got)
+	}
+}
+
+func TestBWaitsForTheSavedLaneListToLoad(t *testing.T) {
+	s := feed(t, projectPane(t, 160, boardCard("a")), key("b")).State
+	out := step(t, s, key("shift+b"))
+	if out.State.Model.TopCard() != model.NoCard || out.State.Model.Notice == "" {
+		t.Fatalf("card %v notice %q, want no card and a Notice", out.State.Model.TopCard(), out.State.Model.Notice)
+	}
+	out = step(t, step(t, s, model.LanesLoaded{ProjectUID: "p", Lanes: []string{"in-review"}}).State, key("shift+b"))
+	if out.State.Model.TopCard() != model.CardLanes {
+		t.Fatalf("card %v after the load answered", out.State.Model.TopCard())
+	}
+}
+
+func TestBOpensTheLanesCardInTheLaneViewOfANarrowPane(t *testing.T) {
+	s := feed(t, projectPane(t, 120, boardCard("a", "needs-info")), key("b"), model.LanesLoaded{ProjectUID: "p"}).State
+	if got := step(t, s, key("shift+b")).State.Model.TopCard(); got != model.CardLanes {
+		t.Fatalf("card %v", got)
+	}
+}
+
+func TestALoadThatDropsTheNarrowLaneViewsLaneRepicksIt(t *testing.T) {
+	s := feed(t, projectPane(t, 120, boardCard("a", "needs-info")), key("b")).State
+	if !strings.Contains(laneHeader(t, s), "Needs info") {
+		t.Fatalf("fixture: header %s", laneHeader(t, s))
+	}
+	s = step(t, s, model.LanesLoaded{ProjectUID: "p", Lanes: []string{"in-review"}}).State
+	if got := laneHeader(t, s); !strings.Contains(got, "No lane") || !reflect.DeepEqual(laneRows(t, s), []string{"a"}) {
+		t.Errorf("header %s rows %v, want a under No lane", got, laneRows(t, s))
+	}
+}
+
+func TestLaneViewTogglesTheDetailLikeTheList(t *testing.T) {
+	s := feed(t, laneBoard(t, 160), key("enter")).State
+	if got := step(t, s, key("shift+l")).State; drawsDetail(t, got) {
+		t.Error("L left the detail drawn")
 	}
 }

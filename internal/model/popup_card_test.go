@@ -191,7 +191,9 @@ func popupCards() []popupCard {
 			name: "Lanes", card: model.CardLanes,
 			states: []cardState{{"", func() model.Model {
 				m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, model.SnapshotLoaded{})
-				m, _ = clickPress(m, "b", "shift+b", "ctrl+u")
+				m, _ = clickPress(m, "b")
+				m, _ = model.Update(m, model.LanesLoaded{ProjectUID: "p"})
+				m, _ = clickPress(m, "shift+b", "ctrl+u")
 				return m
 			}, model.ModeLanesForm}},
 			graft: func(dst *model.Model, src model.Model) { dst.LanesForm = src.LanesForm },

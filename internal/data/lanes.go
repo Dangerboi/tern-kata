@@ -56,7 +56,7 @@ func loadLanes(cmd model.LoadLanes) model.LanesLoaded {
 func cleanLanes(labels []string) []string {
 	var lanes []string
 	for _, text := range labels {
-		if label, ok := model.NormalizeLabel(text); ok && !slices.Contains(lanes, label) {
+		if label, err := model.CheckLabel(text); err == nil && !slices.Contains(lanes, label) {
 			lanes = append(lanes, label)
 		}
 	}
@@ -84,7 +84,12 @@ func writeLanes(cmd model.SaveLanes) error {
 	if file == nil {
 		file = lanesFile{}
 	}
-	file[cmd.ProjectUID] = projectLanes{Name: cmd.ProjectName, Labels: cmd.Lanes}
+	if len(cmd.Lanes) == 0 {
+		// No Lanes restores the default: the Project's table goes, so a later change of the default reaches it.
+		delete(file, cmd.ProjectUID)
+	} else {
+		file[cmd.ProjectUID] = projectLanes{Name: cmd.ProjectName, Labels: cmd.Lanes}
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}

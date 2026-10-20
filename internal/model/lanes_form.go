@@ -19,7 +19,12 @@ type LanesFormState struct {
 	Err  error
 }
 
+// openLanesForm is `B`. It waits for the saved Lane list to load: a card prefilled with the default would overwrite it on save.
 func openLanesForm(m Model) Model {
+	if !m.Board.loaded {
+		m.Notice = "The Lane list is still loading."
+		return m
+	}
 	m.LanesForm = LanesFormState{Open: true, Text: strings.Join(m.LaneList(), ", ")}
 	return m
 }
@@ -39,11 +44,11 @@ func (m Model) UnusedLabels() []string {
 	return unused
 }
 
-// parseLanes reads the Lanes card's text. An empty field is the default list; a name that cannot be a Lane is refused with
+// parseLanes reads the Lanes card's text. An empty field gives no Lanes, which restores the default list; a name that cannot be a Lane is refused with
 // an error naming it.
 func parseLanes(text string) ([]string, error) {
 	if strings.TrimSpace(text) == "" {
-		return DefaultLanes(), nil
+		return nil, nil
 	}
 	var lanes []string
 	for i, entry := range strings.Split(text, ",") {

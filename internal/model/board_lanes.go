@@ -23,6 +23,7 @@ type LanesLoaded struct {
 func (LanesLoaded) msg() {}
 
 // SaveLanes asks for Lanes to be written as the Project's Lane list; ProjectName is written beside it for readers of the file.
+// No Lanes removes the Project's list, which restores the default.
 type SaveLanes struct {
 	ProjectUID, ProjectName string
 	Lanes                   []string
@@ -55,6 +56,7 @@ func (m Model) lanesLoad(wasOn bool, was string) (Model, []Cmd) {
 	if !m.Board.On() || (wasOn && was == m.Collection.ProjectUID) {
 		return m, nil
 	}
+	m.Board.loaded = false
 	if was != m.Collection.ProjectUID {
 		m.Board.Lanes, m.Board.fileErr = nil, nil
 	}
@@ -65,12 +67,12 @@ func lanesLoaded(m Model, msg LanesLoaded) Model {
 	if msg.ProjectUID != m.Collection.ProjectUID {
 		return m
 	}
-	m.Board.Lanes, m.Board.fileErr = msg.Lanes, msg.Err
+	m.Board.Lanes, m.Board.fileErr, m.Board.loaded = msg.Lanes, msg.Err, true
 	if msg.Err != nil {
 		m.Board.Lanes = nil
-		m.Notice = fmt.Sprintf("Lanes file unreadable, showing the default Lanes: %v", msg.Err)
+		m.Notice = fmt.Sprintf("Lane list file unreadable, showing the default Lanes: %v", msg.Err)
 	}
-	return m.WithVisibleSelection()
+	return m.keepLane().WithVisibleSelection()
 }
 
 func lanesSaved(m Model, msg LanesSaved) Model {
@@ -81,5 +83,13 @@ func lanesSaved(m Model, msg LanesSaved) Model {
 	if msg.ProjectUID == m.Collection.ProjectUID {
 		m.Board.Lanes = msg.Lanes
 	}
-	return m.WithVisibleSelection()
+	return m.keepLane().WithVisibleSelection()
+}
+
+// keepLane re-picks the Lane view's Lane when a new Lane list dropped it.
+func (m Model) keepLane() Model {
+	if m.Board.Mode != BoardLane || slices.ContainsFunc(m.BoardColumns(), func(c BoardColumn) bool { return c.Lane == m.Board.Lane }) {
+		return m
+	}
+	return m.laneView()
 }

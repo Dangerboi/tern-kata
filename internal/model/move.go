@@ -30,11 +30,6 @@ type MoveResultMsg struct {
 
 func (MoveResultMsg) msg() {}
 
-// boardCardMove is `<` and `>` on the Board: the selected card moves one Lane.
-func boardCardMove(dir int) func(Model) (Model, []Cmd) {
-	return func(m Model) (Model, []Cmd) { return MoveCard(m, m.SelectedUID, dir) }
-}
-
 // MoveCard moves the open Issue uid one Lane towards dir (-1 left, +1 right). The card shows in its target Lane at once; the
 // snapshot after the result is the truth.
 func MoveCard(m Model, uid string, dir int) (Model, []Cmd) {

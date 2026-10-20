@@ -32,8 +32,10 @@ type BoardState struct {
 	Lanes []string
 	// Lane is the key of the Lane the Lane view shows.
 	Lane string
-	// fileErr is why the Lanes file could not be read; while it is set the file is never overwritten.
+	// fileErr is why the Lane list file could not be read; while it is set the file is never overwritten.
 	fileErr error
+	// loaded says the load for the current Project has answered; until then Lanes is the default, not the saved list.
+	loaded bool
 	// detailHidden is the detail column's hidden flag from before the Board took its place.
 	detailHidden bool
 }
@@ -147,13 +149,37 @@ func toggleBoard(m Model) Model {
 	return m
 }
 
-// laneView shows the Lane of the selected card (No lane when there is none) as the Lane view, with the detail beside it.
-func (m Model) laneView() Model {
-	m.Board.Lane = LaneNone
-	for _, column := range m.BoardColumns() {
-		if slices.ContainsFunc(column.Cards, func(card BoardCard) bool { return card.Issue.UID == m.SelectedUID }) {
-			m.Board.Lane = column.Lane
+// cardAt is the column and row of the card of uid, -1 and -1 when no column holds it.
+func cardAt(columns []BoardColumn, uid string) (col, row int) {
+	for c, column := range columns {
+		if i := slices.IndexFunc(column.Cards, func(card BoardCard) bool { return card.Issue.UID == uid }); i >= 0 {
+			return c, i
 		}
+	}
+	return -1, -1
+}
+
+// CardAt is cardAt for the view.
+func CardAt(columns []BoardColumn, uid string) (col, row int) { return cardAt(columns, uid) }
+
+// neighbour is the nearest column from step away from from, towards step, that has cards; -1 when there is none.
+func neighbour(columns []BoardColumn, from, step int) int {
+	for c := from + step; c >= 0 && c < len(columns); c += step {
+		if len(columns[c].Cards) > 0 {
+			return c
+		}
+	}
+	return -1
+}
+
+// laneView shows the Lane of the selected card (else the first Lane with cards, else No lane) as the Lane view, with the detail beside it.
+func (m Model) laneView() Model {
+	columns := m.BoardColumns()
+	m.Board.Lane = LaneNone
+	if col, _ := cardAt(columns, m.SelectedUID); col >= 0 {
+		m.Board.Lane = columns[col].Lane
+	} else if col := neighbour(columns, -1, 1); col >= 0 {
+		m.Board.Lane = columns[col].Lane
 	}
 	m.Board.Mode = BoardLane
 	m = m.setDetailHidden(false)
@@ -176,13 +202,13 @@ func laneBack(m Model) (Model, []Cmd) {
 func switchLane(m Model, step int) Model {
 	columns := m.BoardColumns()
 	at := slices.IndexFunc(columns, func(c BoardColumn) bool { return c.Lane == m.Board.Lane })
-	row := max(slices.IndexFunc(columns[max(at, 0)].Cards, func(card BoardCard) bool { return card.Issue.UID == m.SelectedUID }), 0)
-	for c := at + step; at >= 0 && c >= 0 && c < len(columns); c += step {
-		if cards := columns[c].Cards; len(cards) > 0 {
-			m.Board.Lane = columns[c].Lane
-			m.SelectedUID = cards[min(row, len(cards)-1)].Issue.UID
-			break
-		}
+	col, row := cardAt(columns, m.SelectedUID)
+	if col != at {
+		row = 0
+	}
+	if c := neighbour(columns, at, step); at >= 0 && c >= 0 {
+		m.Board.Lane = columns[c].Lane
+		m.SelectedUID = columns[c].Cards[min(row, len(columns[c].Cards)-1)].Issue.UID
 	}
 	return m
 }
@@ -251,12 +277,7 @@ func (m Model) revealInList(uid string) Model {
 // moveOnBoard moves the selected card up or down its Lane, or to the neighbouring Lane that has cards, keeping its row where it can.
 func moveOnBoard(m Model, action Action) Model {
 	columns := m.BoardColumns()
-	col, row := -1, 0
-	for c, column := range columns {
-		if i := slices.IndexFunc(column.Cards, func(card BoardCard) bool { return card.Issue.UID == m.SelectedUID }); i >= 0 {
-			col, row = c, i
-		}
-	}
+	col, row := cardAt(columns, m.SelectedUID)
 	if col < 0 {
 		return m.WithVisibleSelection()
 	}
@@ -270,12 +291,9 @@ func moveOnBoard(m Model, action Action) Model {
 		if action == PreviousLane {
 			step = -1
 		}
-		for c := col + step; c >= 0 && c < len(columns); c += step {
-			if len(columns[c].Cards) > 0 {
-				col = c
-				row = min(row, len(columns[c].Cards)-1)
-				break
-			}
+		if c := neighbour(columns, col, step); c >= 0 {
+			col = c
+			row = min(row, len(columns[c].Cards)-1)
 		}
 	}
 	m.SelectedUID = columns[col].Cards[row].Issue.UID

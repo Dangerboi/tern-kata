@@ -20,12 +20,8 @@ func laneKey(column int) string { return "lane" + strconv.Itoa(column) }
 
 // CardID is the id of the Board card of uid, "" when the Board draws none.
 func CardID(m model.Model, uid string) string {
-	for i, column := range m.BoardColumns() {
-		for _, card := range column.Cards {
-			if card.Issue.UID == uid {
-				return itemID(itemID(itemID(BoardID, laneKey(i)), "cards"), uid)
-			}
-		}
+	if col, _ := model.CardAt(m.BoardColumns(), uid); col >= 0 {
+		return itemID(itemID(itemID(BoardID, laneKey(col)), "cards"), uid)
 	}
 	return ""
 }

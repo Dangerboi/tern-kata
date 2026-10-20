@@ -56,9 +56,9 @@
 
 **Lane label**: Any label of the Lane list. An Issue whose only labels are not Lane labels has no Lane label.
 
-**Lanes card**: The Popup card `B` opens on the Board. One text field holds the Lane list as comma-separated names; enter saves it to the Lane list file, esc cancels, and an empty field restores the default. It lets no global chord through. Saving never changes a label in kata. _Avoid_: Lane editor, Lanes form.
+**Lanes card**: The Popup card `B` opens on the Board or in the Lane view. One text field holds the Lane list as comma-separated names; enter saves it to the Lane list file, esc cancels, and an empty field removes the Project's list and so restores the default. It lets no global chord through. Saving never changes a label in kata. _Avoid_: Lane editor, Lanes form.
 
-**Lane list**: A Project's ordered Lane labels. Saved in `lanes.toml` in tern-kata's user config folder and loaded when Board mode turns on or the Project changes; until one is loaded, or when none is saved, it is the default: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`.
+**Lane list**: A Project's ordered Lane labels. Saved in the **Lane list file**, `lanes.toml` in tern-kata's user config folder, and loaded when Board mode turns on or the Project changes; until one is loaded, or when none is saved, it is the default: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`.
 
 **No lane**: The column of open Issues with no Lane label. It is always shown. An Issue with several Lane labels shows once, in the first of its Lanes in Lane order, with an "also" note naming the others.
 

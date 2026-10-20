@@ -18,3 +18,17 @@ func TestEveryMainSurfaceKeyHasAHandlerInItsMode(t *testing.T) {
 		}
 	}
 }
+
+// Rank orders the help sheet's lines of a group: two lines with different text on one rank would order by table position.
+func TestHelpSheetLinesOfAGroupHaveDistinctRanks(t *testing.T) {
+	text := map[[2]int]string{}
+	for _, entry := range mainActions {
+		for _, line := range entry.sheet {
+			at := [2]int{int(line.group), line.rank}
+			if was, ok := text[at]; ok && was != line.text {
+				t.Errorf("group %d rank %d is both %q and %q", line.group, line.rank, was, line.text)
+			}
+			text[at] = line.text
+		}
+	}
+}

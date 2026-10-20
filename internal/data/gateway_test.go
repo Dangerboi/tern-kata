@@ -538,6 +538,7 @@ func TestGatewayFailureShapePerCommand(t *testing.T) {
 		{model.SaveDraft{UID: "u"}, model.DraftFailed{UID: "u", Err: boom}},
 		{model.CloseIssueCmd{UID: "u", Key: "k-u"}, model.CloseResultMsg{UID: "u", Err: boom}},
 		{model.ReopenIssueCmd{UID: "u"}, model.CloseResultMsg{UID: "u", Err: boom}},
+		{model.MoveIssueCmd{UID: "u"}, model.MoveResultMsg{UID: "u", Err: boom}},
 		{model.CreateRecurrenceCmd{UID: "u"}, model.RecurrenceResultMsg{UID: "u", Err: boom}},
 		{model.ChangeRecurrenceCmd{UID: "u"}, model.RecurrenceResultMsg{UID: "u", Err: boom}},
 		{model.StopRecurrenceCmd{UID: "u"}, model.RecurrenceResultMsg{UID: "u", Err: boom}},
