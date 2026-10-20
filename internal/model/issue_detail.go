@@ -42,8 +42,11 @@ func (d IssueDetail) OpenIssueRef() string              { return d.openRef }
 // whenever focus is not on the detail or it shows an Issue no jump landed on, and a changed selection or a stale detail loads.
 func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 	shown, tab := m.DetailIssueUID(), m.tab
+	wasOn, was := m.Board.On(), m.Collection.ProjectUID
 	m, cmds := update(m, msg)
 	m = m.settleBoard()
+	m, load := m.lanesLoad(wasOn, was)
+	cmds = append(cmds, load...)
 	if m.tab != tab {
 		cmds = append(cmds, RevealActivityTab{})
 	}
@@ -55,8 +58,8 @@ func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 		m = m.endJumpHistory()
 	}
 	m = m.settleWantedRecurrence()
-	m, load := m.loadDetail()
-	return m.withRows(), append(cmds, load...)
+	m, loadIssue := m.loadDetail()
+	return m.withRows(), append(cmds, loadIssue...)
 }
 
 // wantRecurrence is `O` on an Issue that recurs: the Recurrence card opens at once when the shown detail has the Issue's

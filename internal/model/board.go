@@ -32,6 +32,8 @@ type BoardState struct {
 	Lanes []string
 	// Lane is the key of the Lane the Lane view shows.
 	Lane string
+	// fileErr is why the Lanes file could not be read; while it is set the file is never overwritten.
+	fileErr error
 	// detailHidden is the detail column's hidden flag from before the Board took its place.
 	detailHidden bool
 }
