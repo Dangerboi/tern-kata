@@ -124,6 +124,7 @@ The file must already be on the session host, the machine running tern-kata. Wit
 - A card shows its short id, its title over at most two lines and its labels that aren't Lane labels. The selected card shows its full title, owner and every label.
 - `↑`/`↓`/`j`/`k` move within a Lane and `←`/`→` to the neighbouring Lane that has cards. A click selects a card. `x` opens the Close card, `r` reopens a closed Issue into its Lane, and `+`, `-`, `a`, `A`, `!`, `p`, `u`, `U`, `e` and `n` act on the selected card as in the list. `esc` opens the Menu.
 - `>` moves the selected card one Lane right and `<` one Lane left, among No lane and the Lanes; a Move never enters or leaves Done (`x` closes, `r` reopens). Leaving No lane adds the first Lane's label; moving into No lane removes the Lane labels and keeps every other label. A Move adds the target label first, then removes the other Lane labels, so a failure halfway leaves the Issue in two Lanes, never none, and a Move of an Issue with two Lane labels leaves it with one. The card shows in its new Lane at once; a failure leaves a Notice with the daemon's reason. Moves are refused while the daemon is disconnected.
+- `B` opens the **Lanes card**: one field holding the Lane list as comma-separated names, in order (`needs-triage, in review, ready-for-agent`). `enter` saves and `esc` cancels. Each name is tidied to a label (`In review` reads `in-review`); an empty name, a name over 64 characters and a duplicate are refused with a message naming the entry. Saving an empty field restores the default list. A muted line lists the labels on loaded Issues that aren't Lanes yet. Saving writes the Lane list file only and never changes a label in kata, so renaming a Lane just changes which label it shows.
 - The filters (`/`, `f`, `s`, `c`) narrow the Board as they do the list, and a live refresh moves cards. Done shows only what the Collection holds, so the `open` status filter leaves it empty.
 - The Board needs a Pane at least 140 columns wide and a Project Collection; `b` explains when it can't open, and the Board closes when you switch to another Collection or narrow the Pane.
 
@@ -137,7 +138,7 @@ name = "work"
 labels = ["needs-triage", "in-review", "ready-for-agent"]
 ```
 
-tern-kata reads it each time the Board turns on and when the Project changes while it is on, so an edit shows the next time you press `b`. Labels are tidied like kata's (`In review` reads `in-review`). A missing file, or no table for the Project, gives the default Lanes. A file that can't be read or parsed gives the default Lanes and a Notice, and tern-kata won't overwrite it. Removing a label sends its Issues to No lane, or to their next Lane label; kata isn't touched.
+tern-kata reads it each time the Board turns on and when the Project changes while it is on, so an edit shows the next time you press `b`; the Lanes card (`B`) writes it for you. Labels are tidied like kata's (`In review` reads `in-review`). A missing file, or no table for the Project, gives the default Lanes. A file that can't be read or parsed gives the default Lanes and a Notice, and tern-kata won't overwrite it. Removing a label sends its Issues to No lane, or to their next Lane label; kata isn't touched.
 
 ## Compared with `kata tui`
 

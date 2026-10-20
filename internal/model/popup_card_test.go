@@ -188,6 +188,17 @@ func popupCards() []popupCard {
 			result: func(_ model.Model, err error) model.Msg { return model.ProjectSaved{Err: err} },
 		},
 		{
+			name: "Lanes", card: model.CardLanes,
+			states: []cardState{{"", func() model.Model {
+				m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, model.SnapshotLoaded{})
+				m, _ = clickPress(m, "b", "shift+b", "ctrl+u")
+				return m
+			}, model.ModeLanesForm}},
+			graft: func(dst *model.Model, src model.Model) { dst.LanesForm = src.LanesForm },
+			field: func(model.Model) model.Field { return "" },
+			text:  func(m model.Model, _ model.Field) string { return m.LanesForm.Text },
+		},
+		{
 			name: "Filter form", card: model.CardFilter, textField: model.FilterOwner,
 			tabOrder: []model.Field{model.FilterProject, model.FilterStatus, model.FilterOwner, model.FilterLabel, model.FilterRelationship},
 			states:   []cardState{{"", opened("f"), model.ModeFilterForm}},

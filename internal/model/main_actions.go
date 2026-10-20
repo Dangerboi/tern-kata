@@ -163,6 +163,7 @@ var mainActions = []actionEntry{
 	// Board mode: the Board takes the list's place, with the cards in Lanes.
 	{action: ToggleBoard, modes: []Mode{ModeList, ModeCollections}, keys: keys("b", "b"), help: "Board", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetBoard, 1, "toggle Board mode"}}, handle: pure(toggleBoard)},
 	{action: ToggleBoard, modes: []Mode{ModeBoard}, keys: keys("b", "b"), help: "list", footer: []Mode{ModeBoard}, sheet: []sheetLine{{sheetBoard, 1, "toggle Board mode"}}, handle: pure(toggleBoard)},
+	{action: OpenLanes, modes: []Mode{ModeBoard}, keys: keys("shift+b", "B"), help: "Lanes", sheet: []sheetLine{{sheetBoard, 8, "edit the Lane list (Lanes card)"}}, handle: pure(openLanesForm)},
 	{action: MoveDown, modes: []Mode{ModeBoard}, keys: slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), help: "move", footer: []Mode{ModeBoard}, footerKey: "↑↓", sheet: []sheetLine{{sheetBoard, 2, "next card in the Lane"}}, handle: boardMoving(MoveDown)},
 	{action: MoveUp, modes: []Mode{ModeBoard}, keys: slices.Concat(keys("k", "k/↑", "up", "↑"), emacsUp), help: "previous card", sheet: []sheetLine{{sheetBoard, 3, "previous card in the Lane"}}, handle: boardMoving(MoveUp)},
 	{action: NextLane, modes: []Mode{ModeBoard}, keys: keys("right", "→"), help: "Lane", footer: []Mode{ModeBoard}, footerKey: "←→", sheet: []sheetLine{{sheetBoard, 5, "next Lane"}}, handle: boardMoving(NextLane)},

@@ -49,6 +49,7 @@ const (
 	ClearFilters         Action = "clear-filters"
 	InputSpace           Action = "input-space"
 	ToggleBoard          Action = "toggle-board"
+	OpenLanes            Action = "open-lanes"
 	PreviousLane         Action = "previous-lane"
 	NextLane             Action = "next-lane"
 	MoveCardLeft         Action = "move-card-left"
@@ -200,4 +201,10 @@ var cardBindings = []Binding{
 	{Chord: "escape", Key: "esc", Action: ProjectCancel, Help: "cancel", Mode: ModeProjectForm, ShowInFooter: true},
 	{Chord: "backspace", Key: "backspace", Action: DeleteInput, Help: "delete", Mode: ModeProjectForm},
 	{Chord: "ctrl+u", Key: "ctrl+u", Action: ClearInput, Help: "clear name", Mode: ModeProjectForm},
+	// Lanes card: one field holding the Lane list, so every other key is typed.
+	{Chord: "enter", Key: "enter", Action: LanesSubmit, Help: "save Lanes", Mode: ModeLanesForm, ShowInFooter: true},
+	{Chord: "ctrl+s", Key: "ctrl+s", Action: LanesSubmit, Help: "save Lanes", Mode: ModeLanesForm},
+	{Chord: "escape", Key: "esc", Action: LanesCancel, Help: "cancel", Mode: ModeLanesForm, ShowInFooter: true},
+	{Chord: "backspace", Key: "backspace", Action: DeleteInput, Help: "delete", Mode: ModeLanesForm},
+	{Chord: "ctrl+u", Key: "ctrl+u", Action: ClearInput, Help: "clear Lanes", Mode: ModeLanesForm},
 }

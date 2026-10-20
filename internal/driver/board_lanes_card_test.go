@@ -1,0 +1,157 @@
+package driver_test
+
+import (
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/Dangerboi/tern-kata/internal/driver"
+	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/Dangerboi/tern-kata/internal/view"
+	"github.com/stencil-hq/tern-sdk/go/tern"
+)
+
+func typed(t *testing.T, s driver.State, text string) driver.State {
+	t.Helper()
+	for _, r := range text {
+		chord := string(r)
+		if r == ' ' {
+			chord = "space"
+		}
+		s = step(t, s, key(chord)).State
+	}
+	return s
+}
+
+// lanesCard is the Board with the Lanes card open and its field emptied.
+func lanesCard(t *testing.T, issues ...model.Issue) driver.State {
+	t.Helper()
+	return step(t, boardPane(t, issues...), key("shift+b")).State
+}
+
+func nodeText(t *testing.T, s driver.State, id string) (string, bool) {
+	t.Helper()
+	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
+		if n.ID == id {
+			text, _ := n.P["text"].(string)
+			return text, true
+		}
+	}
+	return "", false
+}
+
+func lanesField(t *testing.T, s driver.State) string {
+	t.Helper()
+	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
+		if n.ID == view.LanesInputID {
+			text, _ := n.P["text"].(string)
+			return text
+		}
+	}
+	t.Fatal("the Lanes card draws no field")
+	return ""
+}
+
+func TestBOpensTheLanesCardPrefilledAndEscClosesItUnchanged(t *testing.T) {
+	board := boardPane(t, boardCard("a", "needs-triage"))
+	board = step(t, board, model.LanesLoaded{ProjectUID: "p", Lanes: []string{"in-review", "shipping"}}).State
+	open := step(t, board, key("shift+b"))
+	if open.State.Model.CurrentMode() != model.ModeLanesForm || open.State.Model.TopCard() != model.CardLanes || len(open.Cmds) != 0 {
+		t.Fatalf("mode %s card %v cmds %v", open.State.Model.CurrentMode(), open.State.Model.TopCard(), open.Cmds)
+	}
+	if got := lanesField(t, open.State); got != "in-review, shipping" {
+		t.Errorf("field = %q, want the current Lane list", got)
+	}
+	if !strings.HasPrefix(open.State.Focus, view.LanesID) {
+		t.Errorf("text focus %q is not on the Lanes card", open.State.Focus)
+	}
+	edited := typed(t, open.State, "x")
+	closed := step(t, edited, key("escape"))
+	if closed.State.Model.TopCard() != model.NoCard || len(closed.Cmds) != 0 || !reflect.DeepEqual(closed.State.Model.LaneList(), board.Model.LaneList()) {
+		t.Fatalf("esc: card %v cmds %v lanes %v", closed.State.Model.TopCard(), closed.Cmds, closed.State.Model.LaneList())
+	}
+}
+
+func TestBDoesNothingOffTheBoard(t *testing.T) {
+	out := step(t, projectPane(t, 160, boardCard("a")), key("shift+b"))
+	if out.State.Model.TopCard() != model.NoCard {
+		t.Fatalf("B opened %v off the Board", out.State.Model.TopCard())
+	}
+}
+
+func TestEnterSavesTheNormalisedListWithOneSaveAndTheBoardChanges(t *testing.T) {
+	s := lanesCard(t, boardCard("a", "in-review"))
+	s = typed(t, step(t, s, key("ctrl+u")).State, "In review,  Ready  to ship ,wip")
+	out := step(t, s, key("enter"))
+	want := []model.Cmd{model.SaveLanes{ProjectUID: "p", ProjectName: "work", Lanes: []string{"in-review", "ready-to-ship", "wip"}}}
+	if !reflect.DeepEqual(out.Cmds, want) {
+		t.Fatalf("enter sent %#v, want exactly %#v", out.Cmds, want)
+	}
+	if out.State.Model.TopCard() != model.NoCard {
+		t.Errorf("the card stays open after a save: %v", out.State.Model.TopCard())
+	}
+	saved := step(t, out.State, model.LanesSaved{ProjectUID: "p", Lanes: []string{"in-review", "ready-to-ship", "wip"}}).State
+	wantLane(t, saved, 1, "In review", "a")
+	wantLane(t, saved, 2, "Ready to ship")
+	wantLane(t, saved, 3, "Wip")
+}
+
+func TestLanesCardRefusesBadNamesNamingTheEntry(t *testing.T) {
+	long := strings.Repeat("x", 65)
+	for _, tt := range []struct{ name, text, want string }{
+		{"empty entry", "a,, b", "Entry 2"},
+		{"trailing comma", "a, b,", "Entry 3"},
+		{"nothing left after tidying", "a, !!!", `"!!!"`},
+		{"too long", "a, " + long, `"` + long[:20]},
+		{"duplicate", "In review, ready, in-review", `"in-review"`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s := typed(t, step(t, lanesCard(t), key("ctrl+u")).State, tt.text)
+			out := step(t, s, key("enter"))
+			if len(out.Cmds) != 0 || out.State.Model.TopCard() != model.CardLanes {
+				t.Fatalf("cmds %v card %v, want a refusal with the card open", out.Cmds, out.State.Model.TopCard())
+			}
+			msg, ok := nodeText(t, out.State, view.LanesID+".error")
+			if !ok || !strings.Contains(msg, tt.want) {
+				t.Errorf("error = %q (drawn %v), want it to name %q", msg, ok, tt.want)
+			}
+			if got := lanesField(t, out.State); got != tt.text {
+				t.Errorf("a refusal changed the field to %q", got)
+			}
+		})
+	}
+}
+
+func TestEmptyLanesFieldSavesTheDefaultList(t *testing.T) {
+	s := step(t, lanesCard(t), key("ctrl+u")).State
+	out := step(t, s, key("enter"))
+	want := []model.Cmd{model.SaveLanes{ProjectUID: "p", ProjectName: "work", Lanes: model.DefaultLanes()}}
+	if !reflect.DeepEqual(out.Cmds, want) {
+		t.Fatalf("enter sent %#v, want %#v", out.Cmds, want)
+	}
+}
+
+func TestLanesCardHintListsLabelsThatAreNotLanesYet(t *testing.T) {
+	s := lanesCard(t, boardCard("a", "needs-triage", "bug"), boardCard("b", "docs", "bug"))
+	hint, ok := nodeText(t, s, view.LanesID+".unused")
+	if !ok || !strings.Contains(hint, "bug, docs") || strings.Contains(hint, "needs-triage") {
+		t.Fatalf("hint = %q (drawn %v), want bug and docs only", hint, ok)
+	}
+	s = step(t, lanesCard(t, boardCard("a", "needs-triage")), key("a")).State
+	if _, ok := nodeText(t, s, view.LanesID+".unused"); ok {
+		t.Error("the hint is drawn although every label is a Lane")
+	}
+}
+
+func TestLanesCardLetsNoGlobalChordThrough(t *testing.T) {
+	s := lanesCard(t)
+	for _, chord := range []string{"ctrl+c", "?", "q"} {
+		out := step(t, s, key(chord))
+		if out.State.Model.Quitting || out.State.Model.HelpOpen || out.State.Model.TopCard() != model.CardLanes {
+			t.Errorf("%s: quitting=%v help=%v card=%v", chord, out.State.Model.Quitting, out.State.Model.HelpOpen, out.State.Model.TopCard())
+		}
+	}
+	if got := lanesField(t, step(t, s, tern.Key{Name: "z", Text: "z"}).State); !strings.HasSuffix(got, "z") {
+		t.Errorf("a typed key did not reach the field: %q", got)
+	}
+}

@@ -80,6 +80,7 @@ func TestEveryClickTheViewDrawsDecodesToAMessage(t *testing.T) {
 		"close":       feed(t, browsing(t, 160), key("x")).State,
 		"field form":  feed(t, browsing(t, 160), key("+")).State,
 		"filters":     feed(t, browsing(t, 160), key("f")).State,
+		"lanes card":  feed(t, boardPane(t, alpha), key("shift+b")).State,
 		"recurrence":  feed(t, browsing(t, 160), key("shift+o")).State,
 		"draft":       feed(t, browsing(t, 160), key("enter"), key("e")).State,
 	}

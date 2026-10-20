@@ -56,6 +56,10 @@ func popups() []popup {
 			return step(t, s, model.CollectionPointerSelected{Key: model.NewProjectKey}).State.Model
 		}, func(dst *model.Model, src model.Model) { dst.ProjectForm = src.ProjectForm },
 			model.ModeProjectForm, view.ProjectID, func(m model.Model) string { return m.ProjectForm.Name }},
+		{"Lanes", func(t *testing.T, s driver.State) model.Model {
+			return keyOpen("b", "shift+b")(t, s)
+		}, func(dst *model.Model, src model.Model) { dst.LanesForm = src.LanesForm },
+			model.ModeLanesForm, view.LanesID, func(m model.Model) string { return m.LanesForm.Text }},
 		{"Filter form", func(t *testing.T, s driver.State) model.Model {
 			m := keyOpen("f")(t, s)
 			m.FilterForm.Field = model.FilterOwner // a text field

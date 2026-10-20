@@ -327,6 +327,7 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 		{"Recurrence change", change, model.ModeRecurrenceForm},
 		{"Recurrence stop", pressed(change, "ctrl+x"), model.ModeRecurrenceStop},
 		{"Recurrence error", recurring(nil), model.ModeRecurrenceForm},
+		{"Lanes", pressed(bound, "b", "shift+b"), model.ModeLanesForm},
 		{"Filter", pressed(issue, "f"), model.ModeFilterForm},
 		{"single field", pressed(issue, "+"), model.ModeFieldForm},
 		{"New Project", newProject(), model.ModeProjectForm},

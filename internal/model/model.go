@@ -78,6 +78,7 @@ type Model struct {
 	Bound            bool
 	Picker           PickerState
 	ProjectForm      ProjectFormState
+	LanesForm        LanesFormState
 	Focus            Column
 	Groups           []IssueGroup
 	Calendar         PaneCalendar

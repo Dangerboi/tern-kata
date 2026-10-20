@@ -1,6 +1,8 @@
 package model
 
 import (
+	"errors"
+	"fmt"
 	"regexp"
 	"slices"
 	"strings"
@@ -32,8 +34,20 @@ const maxLabelLen = 64
 // NormalizeLabel turns a name typed as "In review" into the kata label `in-review`. It reports false for a name that
 // leaves no label (empty, or over kata's 64 characters).
 func NormalizeLabel(text string) (string, bool) {
+	label, err := CheckLabel(text)
+	return label, err == nil
+}
+
+// CheckLabel is NormalizeLabel with the reason a name leaves no label.
+func CheckLabel(text string) (string, error) {
 	label := labelJunk.ReplaceAllString(strings.Join(strings.Fields(strings.ToLower(text)), "-"), "")
-	return label, label != "" && utf8.RuneCountInString(label) <= maxLabelLen
+	switch {
+	case label == "":
+		return "", errors.New("leaves no label")
+	case utf8.RuneCountInString(label) > maxLabelLen:
+		return "", fmt.Errorf("is longer than %d characters", maxLabelLen)
+	}
+	return label, nil
 }
 
 // LaneLabels are the Lane labels of issue, in Lane order.

@@ -41,6 +41,7 @@ const (
 	CardClose
 	CardRecurrence
 	CardProject
+	CardLanes
 	CardFilter
 	CardPicker
 )
@@ -163,6 +164,12 @@ func init() {
 			chords: []string{"ctrl+c"},
 			key:    updateProjectFormKey, fields: []FieldSpec{},
 			caret: func(m Model) (Field, bool) { return "", !m.ProjectForm.Saving },
+		},
+		{
+			card: CardLanes, open: func(m Model) bool { return m.LanesForm.Open },
+			modes: []Mode{ModeLanesForm}, mode: func(Model) Mode { return ModeLanesForm },
+			key: updateLanesFormKey, fields: []FieldSpec{},
+			caret: func(Model) (Field, bool) { return "", true },
 		},
 		{
 			card: CardFilter, open: func(m Model) bool { return m.FilterForm.Open },
