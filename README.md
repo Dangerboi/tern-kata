@@ -116,6 +116,16 @@ The pointer agents read is one kata meta key per Attachment, visible in `kata sh
 
 The file must already be on the session host, the machine running tern-kata. With a Windows Tern window and a Linux session host, copy a Windows file over first. With a remote kata daemon, attaching still works for your own agents on this machine, but teammates' agents see a path on your machine that they can open only if they can SSH to it; the `tern-kata` agent skill copies the file over SSH when that works.
 
+## Board mode
+
+`b` in a Project Collection shows the Project's Issues as a **Board**; `b` again returns to the list with the same Issue selected. Columns, left to right: **No lane** (open Issues with none of the Lane labels, always shown), one **Lane** per label of the Lane list, and **Done** (Issues closed in the last 14 days, newest first).
+
+- The Lane list is `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`. A Lane is one kata label: an Issue sits in the first of its Lane labels in Lane order, and an Issue with none (an unlabelled one, or one labelled only `bug`) sits in No lane. An Issue with several Lane labels shows once, with "also: …" naming the rest. A closed Issue keeps its Lane label, and its Done card says "r → <Lane>", the Lane `r` reopens it into.
+- A card shows its short id, its title over at most two lines and its labels that aren't Lane labels. The selected card shows its full title, owner and every label.
+- `↑`/`↓`/`j`/`k` move within a Lane and `←`/`→` to the neighbouring Lane that has cards. A click selects a card. `x` opens the Close card, `r` reopens a closed Issue into its Lane, and `+`, `-`, `a`, `A`, `!`, `p`, `u`, `U`, `e` and `n` act on the selected card as in the list. `esc` opens the Menu.
+- The filters (`/`, `f`, `s`, `c`) narrow the Board as they do the list, and a live refresh moves cards. Done shows only what the Collection holds, so the `open` status filter leaves it empty.
+- The Board needs a Pane at least 140 columns wide and a Project Collection; `b` explains when it can't open, and the Board closes when you switch to another Collection or narrow the Pane.
+
 ## Compared with `kata tui`
 
 tern-kata takes kata tui's movement keys: `j`/`k` and the arrows, `ctrl+n`/`ctrl+p` to move a row, `pgup`/`pgdn` and `alt+v`/`ctrl+v` to page, `g`/`G`, and `I` to open the Inbox (from the list, the Issue detail and the Menu sidebar; tern-kata opens it, where kata tui toggles it). `?` lists every key. The Emacs keys and `I` are plain text in search and in Popup cards.

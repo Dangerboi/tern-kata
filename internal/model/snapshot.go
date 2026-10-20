@@ -1,7 +1,6 @@
 package model
 
 import (
-	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -326,14 +325,7 @@ func (m Model) applyCollection(snapshot Snapshot) Model {
 		m.SelectedUID = m.pending
 		for _, issue := range m.Issues {
 			if issue.UID == m.pending {
-				m.ExpandedUIDs = maps.Clone(m.ExpandedUIDs)
-				if m.ExpandedUIDs == nil {
-					m.ExpandedUIDs = map[string]bool{}
-				}
-				parents, _ := m.issueHierarchy()
-				for uid := parents[issue.UID]; uid != ""; uid = parents[uid] {
-					m.ExpandedUIDs[uid] = true
-				}
+				m = m.revealInList(issue.UID)
 				m.pending = ""
 				break
 			}

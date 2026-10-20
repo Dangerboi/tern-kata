@@ -77,8 +77,8 @@ func Step(s State, in any, now time.Time) Output {
 		out.Ops = append(out.Ops, tern.OpFocus(target))
 		out.State.Focus = target
 	}
-	if !rowClick(msg) && !m.Loading && m.Focus == model.ColumnList && m.Shows(model.ColumnList) && m.SelectedUID != "" && m.SelectedUID != previousSelection {
-		out.Ops = append(out.Ops, tern.OpReveal(view.IssueID(m.SelectedUID), "nearest"))
+	if reveal := view.SelectedRowID(m); reveal != "" && !rowClick(msg) && !m.Loading && m.Focus == model.ColumnList && m.Shows(model.ColumnList) && m.SelectedUID != "" && m.SelectedUID != previousSelection {
+		out.Ops = append(out.Ops, tern.OpReveal(reveal, "nearest"))
 	}
 	out.route(m, cmds)
 	return out

@@ -19,6 +19,7 @@ const (
 	activityTabAct = "activity-tab"
 	detailItemAct  = "detail-item"
 	chooseAct      = "choose"
+	cardAct        = "card"
 )
 
 // FocusDetailClick, RetryClick and MenuClick carry no value.
@@ -39,6 +40,9 @@ func JumpClick(uid string) string { return click(jumpAct, uid) }
 // ToggleClick folds or unfolds the Issue row, and OpenRowClick is its double click.
 func ToggleClick(uid string) string  { return click(string(model.ToggleExpansion), uid) }
 func OpenRowClick(uid string) string { return click(string(model.OpenRow), uid) }
+
+// CardClick selects the Board card of the Issue.
+func CardClick(uid string) string { return click(cardAct, uid) }
 
 // ActivityTabClick shows the Activity tab.
 func ActivityTabClick(tab model.ActivityTab) string {
@@ -89,6 +93,8 @@ func DecodeAction(id, act, value string) model.Msg {
 		}
 	case jumpAct:
 		return model.JumpIssueMsg{UID: value}
+	case cardAct:
+		return model.SelectMsg{UID: value}
 	}
 	return nil
 }

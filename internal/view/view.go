@@ -52,7 +52,11 @@ func Render(m model.Model, now time.Time) tern.View {
 			case model.ColumnCollections:
 				columns = append(columns, Collections(m))
 			case model.ColumnList:
-				columns = append(columns, issues(m, now))
+				if m.Board.On() {
+					columns = append(columns, board(m, now))
+				} else {
+					columns = append(columns, issues(m, now))
+				}
 			case model.ColumnDetail:
 				columns = append(columns, detail(m, now))
 			}
@@ -131,8 +135,7 @@ func issues(m model.Model, now time.Time) tern.Element {
 	}
 	children := ui.Nodes(headerRow(cols))
 	if m.Search.Open {
-		placeholder := "Search Issues in " + m.Collection.Title
-		children = append(children, ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Mode: "insert", Placeholder: placeholder, Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}})
+		children = append(children, searchInput(m))
 	}
 	empty := "No Issues in this Collection. Select another Collection or create one with kata create."
 	if m.Filters != (model.Filters{}) {
@@ -143,6 +146,12 @@ func issues(m model.Model, now time.Time) tern.Element {
 	}
 	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("issues"), Max: scrollMax(m), Selected: selected, Empty: ui.T(empty), Children: items})
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.4)}, "", children)
+}
+
+// searchInput is the Search field above the Issues, in the list and on the Board.
+func searchInput(m model.Model) tern.Element {
+	placeholder := "Search Issues in " + m.Collection.Title
+	return ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Mode: "insert", Placeholder: placeholder, Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}}
 }
 
 // scrollerCommon is a list that scrolls its own content inside its column, so

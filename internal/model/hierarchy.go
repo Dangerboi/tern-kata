@@ -51,6 +51,9 @@ func (m Model) issueHierarchy() (map[string]string, map[string][]Issue) {
 }
 
 func (m Model) VisibleRows() []IssueRow {
+	if m.Board.On() {
+		return m.boardRows()
+	}
 	rows := make([]IssueRow, 0, len(m.Issues))
 	parents, children := m.issueHierarchy()
 	counts := childCountsByParent(m.Snapshot.Links)

@@ -39,6 +39,10 @@ func pure(f func(Model) Model) func(Model) (Model, []Cmd) {
 	return func(m Model) (Model, []Cmd) { return f(m), nil }
 }
 
+func boardMoving(action Action) func(Model) (Model, []Cmd) {
+	return pure(func(m Model) Model { return moveOnBoard(m, action) })
+}
+
 func selection(action Action) func(Model) (Model, []Cmd) {
 	return pure(func(m Model) Model { return moveSelection(m, action) })
 }
@@ -115,7 +119,10 @@ func reopenIssue(m Model) (Model, []Cmd) {
 }
 
 var (
+	// issueModes are the modes whose keys act on the selected Issue: the list, the Board and the detail.
+	issueModes    = []Mode{ModeList, ModeBoard, ModeDetail}
 	listAndDetail = []Mode{ModeList, ModeDetail}
+	listAndBoard  = []Mode{ModeList, ModeBoard}
 	searching     = []Mode{ModeSearch, ModeSearchResults}
 )
 
@@ -153,6 +160,13 @@ var mainActions = []actionEntry{
 	{action: MoveLast, modes: []Mode{ModeList}, keys: keys("shift+g", "G", "end", "end"), help: "last Issue", sheet: []sheetLine{{sheetGraph, 6, "last"}}, handle: selection(MoveLast)},
 	{action: PageUp, modes: []Mode{ModeList}, keys: pageUpKeys, help: "page up", sheet: []sheetLine{{sheetGraph, 3, "page up"}}, handle: selection(PageUp)},
 	{action: PageDown, modes: []Mode{ModeList}, keys: pageDownKeys, help: "page down", sheet: []sheetLine{{sheetGraph, 4, "page down"}}, handle: selection(PageDown)},
+	// Board mode: the Board takes the list's place, with the cards in Lanes.
+	{action: ToggleBoard, modes: []Mode{ModeList, ModeCollections}, keys: keys("b", "b"), help: "Board", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetBoard, 1, "toggle Board mode"}}, handle: pure(toggleBoard)},
+	{action: ToggleBoard, modes: []Mode{ModeBoard}, keys: keys("b", "b"), help: "list", footer: []Mode{ModeBoard}, sheet: []sheetLine{{sheetBoard, 1, "toggle Board mode"}}, handle: pure(toggleBoard)},
+	{action: MoveDown, modes: []Mode{ModeBoard}, keys: slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), help: "move", footer: []Mode{ModeBoard}, footerKey: "↑↓", sheet: []sheetLine{{sheetBoard, 2, "next card in the Lane"}}, handle: boardMoving(MoveDown)},
+	{action: MoveUp, modes: []Mode{ModeBoard}, keys: slices.Concat(keys("k", "k/↑", "up", "↑"), emacsUp), help: "previous card", sheet: []sheetLine{{sheetBoard, 3, "previous card in the Lane"}}, handle: boardMoving(MoveUp)},
+	{action: NextLane, modes: []Mode{ModeBoard}, keys: keys("right", "→"), help: "Lane", footer: []Mode{ModeBoard}, footerKey: "←→", sheet: []sheetLine{{sheetBoard, 5, "next Lane"}}, handle: boardMoving(NextLane)},
+	{action: PreviousLane, modes: []Mode{ModeBoard}, keys: keys("left", "←"), help: "previous Lane", sheet: []sheetLine{{sheetBoard, 4, "previous Lane"}}, handle: boardMoving(PreviousLane)},
 	// Moving and opening in the Issue detail.
 	{action: ScrollDown, modes: []Mode{ModeDetail}, keys: keys("down", "↓"), help: "scroll", footer: []Mode{ModeDetail}, footerKey: "↑↓", sheet: []sheetLine{{sheetChildren, 5, "scroll detail viewport"}}, handle: scrolling(ColumnDetail, ScrollLineDown)},
 	{action: ScrollUp, modes: []Mode{ModeDetail}, keys: keys("up", "↑"), help: "scroll up", sheet: []sheetLine{{sheetChildren, 4, "scroll detail viewport"}}, handle: scrolling(ColumnDetail, ScrollLineUp)},
@@ -189,33 +203,33 @@ var mainActions = []actionEntry{
 	{action: SearchBack, modes: []Mode{ModeSearchResults}, keys: keys("escape", "esc"), help: "edit query", footer: []Mode{ModeSearchResults}, handle: searchBack},
 	{action: SearchQuery, modes: []Mode{ModeSearchResults}, keys: keys("/", "/"), help: "edit query", handle: pure(func(m Model) Model { m.Search.Results = false; return m })},
 	// Acting on the Issues.
-	{action: NewIssue, modes: listAndDetail, keys: keys("n", "n"), help: "new", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetGraph, 12, "new issue (form)"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, false) }},
-	{action: SearchIssues, modes: []Mode{ModeList}, keys: keys("/", "/"), help: "search", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetFilters, 1, "search"}}, handle: pure(openSearch)},
-	{action: OpenFilterForm, modes: []Mode{ModeList}, keys: keys("f", "f"), help: "filter", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetFilters, 3, "filter (form)"}}, handle: pure(openFilterForm)},
-	{action: CycleStatus, modes: []Mode{ModeList}, keys: keys("s", "s"), help: "status", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetFilters, 2, "cycle status filter"}}, handle: cycleStatus},
+	{action: NewIssue, modes: issueModes, keys: keys("n", "n"), help: "new", footer: listAndBoard, sheet: []sheetLine{{sheetGraph, 12, "new issue (form)"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, false) }},
+	{action: SearchIssues, modes: listAndBoard, keys: keys("/", "/"), help: "search", footer: listAndBoard, sheet: []sheetLine{{sheetFilters, 1, "search"}}, handle: pure(openSearch)},
+	{action: OpenFilterForm, modes: listAndBoard, keys: keys("f", "f"), help: "filter", footer: listAndBoard, sheet: []sheetLine{{sheetFilters, 3, "filter (form)"}}, handle: pure(openFilterForm)},
+	{action: CycleStatus, modes: listAndBoard, keys: keys("s", "s"), help: "status", footer: listAndBoard, sheet: []sheetLine{{sheetFilters, 2, "cycle status filter"}}, handle: cycleStatus},
 	{action: ToggleIssueView, modes: []Mode{ModeList}, keys: keys("v", "v"), help: "view", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetGraph, 13, "toggle flat/nested view"}}, handle: hierarchy(ToggleIssueView)},
-	{action: ClearFilters, modes: []Mode{ModeList}, keys: keys("c", "c"), help: "clear", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetFilters, 4, "clear filters"}}, handle: clearFilters},
-	{action: EditBody, modes: []Mode{ModeDetail, ModeList}, keys: keys("e", "e"), help: "edit", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 5, "edit body"}}, handle: pure(func(m Model) Model { return startDraft(m, false) })},
+	{action: ClearFilters, modes: listAndBoard, keys: keys("c", "c"), help: "clear", footer: listAndBoard, sheet: []sheetLine{{sheetFilters, 4, "clear filters"}}, handle: clearFilters},
+	{action: EditBody, modes: issueModes, keys: keys("e", "e"), help: "edit", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 5, "edit body"}}, handle: pure(func(m Model) Model { return startDraft(m, false) })},
 	{action: AddComment, modes: []Mode{ModeDetail}, keys: keys("c", "c"), help: "comment", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 6, "new comment"}}, handle: pure(func(m Model) Model { return startDraft(m, true) })},
 	{action: ReplyAction, modes: []Mode{ModeDetail}, keys: keys("shift+r", "R"), help: "reply to comment", sheet: []sheetLine{{sheetDetail, 15, "reply to comment"}}, handle: pure(startReply)},
-	{action: AddLabelAction, modes: listAndDetail, keys: keys("+", "+"), help: "label", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 8, "add label"}}, handle: fieldFor(AddLabelAction)},
-	{action: RemoveLabelAction, modes: listAndDetail, keys: keys("-", "-"), help: "unlabel", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 9, "remove label"}}, handle: fieldFor(RemoveLabelAction)},
-	{action: AttachFileAction, modes: listAndDetail, keys: keys("u", "u"), help: "attach", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 10, "attach file"}}, handle: fieldFor(AttachFileAction)},
-	{action: DetachFileAction, modes: listAndDetail, keys: keys("shift+u", "U"), help: "detach", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 11, "remove attachment"}}, handle: fieldFor(DetachFileAction)},
-	{action: AssignOwnerAction, modes: listAndDetail, keys: keys("a", "a"), help: "owner", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 12, "assign owner"}}, handle: fieldFor(AssignOwnerAction)},
-	{action: ClearOwnerAction, modes: listAndDetail, keys: keys("shift+a", "A"), help: "unassign", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 13, "clear owner"}}, handle: fieldFor(ClearOwnerAction)},
-	{action: OpenClose, modes: listAndDetail, keys: keys("x", "x"), help: "close", footer: listAndDetail, sheet: []sheetLine{{sheetGraph, 14, "close"}}, handle: pure(openClose)},
-	{action: ReopenAction, modes: listAndDetail, keys: keys("r", "r"), help: "reopen", footer: listAndDetail, sheet: []sheetLine{{sheetGraph, 15, "reopen"}}, handle: reopenIssue},
-	{action: SetParentAction, modes: listAndDetail, keys: keys("p", "p"), help: "parent", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 7, "set parent"}}, handle: fieldFor(SetParentAction)},
-	{action: PriorityAction, modes: listAndDetail, keys: keys("!", "!"), help: "priority", footer: listAndDetail, sheet: []sheetLine{{sheetDetail, 14, "set priority"}}, handle: fieldFor(PriorityAction)},
-	{action: OpenRecurrenceAction, modes: listAndDetail, keys: keys("shift+o", "O"), help: "make or change recurrence", sheet: []sheetLine{{sheetDetail, 16, "make or change recurrence"}}, handle: pure(openRecurrence)},
-	{action: NewChild, modes: listAndDetail, keys: keys("shift+n", "N"), help: "child", footer: listAndDetail, sheet: []sheetLine{{sheetChildren, 1, "new child"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, true) }},
+	{action: AddLabelAction, modes: issueModes, keys: keys("+", "+"), help: "label", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 8, "add label"}}, handle: fieldFor(AddLabelAction)},
+	{action: RemoveLabelAction, modes: issueModes, keys: keys("-", "-"), help: "unlabel", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 9, "remove label"}}, handle: fieldFor(RemoveLabelAction)},
+	{action: AttachFileAction, modes: issueModes, keys: keys("u", "u"), help: "attach", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 10, "attach file"}}, handle: fieldFor(AttachFileAction)},
+	{action: DetachFileAction, modes: issueModes, keys: keys("shift+u", "U"), help: "detach", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 11, "remove attachment"}}, handle: fieldFor(DetachFileAction)},
+	{action: AssignOwnerAction, modes: issueModes, keys: keys("a", "a"), help: "owner", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 12, "assign owner"}}, handle: fieldFor(AssignOwnerAction)},
+	{action: ClearOwnerAction, modes: issueModes, keys: keys("shift+a", "A"), help: "unassign", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 13, "clear owner"}}, handle: fieldFor(ClearOwnerAction)},
+	{action: OpenClose, modes: issueModes, keys: keys("x", "x"), help: "close", footer: issueModes, sheet: []sheetLine{{sheetGraph, 14, "close"}}, handle: pure(openClose)},
+	{action: ReopenAction, modes: issueModes, keys: keys("r", "r"), help: "reopen", footer: issueModes, sheet: []sheetLine{{sheetGraph, 15, "reopen"}}, handle: reopenIssue},
+	{action: SetParentAction, modes: issueModes, keys: keys("p", "p"), help: "parent", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 7, "set parent"}}, handle: fieldFor(SetParentAction)},
+	{action: PriorityAction, modes: issueModes, keys: keys("!", "!"), help: "priority", footer: issueModes, sheet: []sheetLine{{sheetDetail, 14, "set priority"}}, handle: fieldFor(PriorityAction)},
+	{action: OpenRecurrenceAction, modes: issueModes, keys: keys("shift+o", "O"), help: "make or change recurrence", sheet: []sheetLine{{sheetDetail, 16, "make or change recurrence"}}, handle: pure(openRecurrence)},
+	{action: NewChild, modes: issueModes, keys: keys("shift+n", "N"), help: "child", footer: issueModes, sheet: []sheetLine{{sheetChildren, 1, "new child"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, true) }},
 	// Layout, back, help and quit.
 	{action: ToggleDetail, modes: listAndDetail, keys: keys("shift+l", "L"), help: "layout", footer: listAndDetail, sheet: []sheetLine{{sheetGlobal, 6, "toggle layout"}}, handle: pure(Model.toggleDetail)},
-	{action: DrillOut, modes: []Mode{ModeList}, keys: keys("escape", "esc"), help: "Menu", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetGlobal, 5, "menu"}}, handle: drillOut},
+	{action: DrillOut, modes: listAndBoard, keys: keys("escape", "esc"), help: "Menu", footer: listAndBoard, sheet: []sheetLine{{sheetGlobal, 5, "menu"}}, handle: drillOut},
 	{action: DrillOut, modes: []Mode{ModeDetail}, keys: keys("escape", "esc", "left", "←"), help: "back", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 4, "back"}}, handle: drillOut},
-	{action: OpenProjects, modes: []Mode{ModeCollections, ModeList, ModeDetail}, keys: keys("shift+p", "P"), help: "projects", sheet: []sheetLine{{sheetGlobal, 4, "projects"}}, handle: pure(openProjects)},
-	{action: OpenInbox, modes: []Mode{ModeCollections, ModeList, ModeDetail}, keys: keys("shift+i", "I"), help: "inbox", sheet: []sheetLine{{sheetGlobal, 3, "inbox"}}, handle: openInbox},
+	{action: OpenProjects, modes: []Mode{ModeCollections, ModeList, ModeBoard, ModeDetail}, keys: keys("shift+p", "P"), help: "projects", sheet: []sheetLine{{sheetGlobal, 4, "projects"}}, handle: pure(openProjects)},
+	{action: OpenInbox, modes: []Mode{ModeCollections, ModeList, ModeBoard, ModeDetail}, keys: keys("shift+i", "I"), help: "inbox", sheet: []sheetLine{{sheetGlobal, 3, "inbox"}}, handle: openInbox},
 	{action: RetryAction, modes: []Mode{ModeError}, keys: keys("ctrl+r", "ctrl+r"), help: "retry daemon", footer: []Mode{ModeError}, handle: func(m Model) (Model, []Cmd) { return updateLive(m, Retry{}) }},
 	{action: CloseHelp, modes: []Mode{ModeHelp}, keys: keys("escape", "esc"), help: "close help", footer: []Mode{ModeHelp}, handle: pure(func(m Model) Model { m.HelpOpen = false; return m })},
 	{action: ToggleHelp, keys: keys("?", "?", "shift+?", "?"), help: "help", footer: global, sheet: []sheetLine{{sheetGlobal, 1, "help"}}, handle: pure(func(m Model) Model { m.HelpOpen = !m.HelpOpen; return m })},

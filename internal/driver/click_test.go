@@ -70,6 +70,8 @@ func TestEveryClickTheViewDrawsDecodesToAMessage(t *testing.T) {
 		"first load":  feed(t, driver.State{}, model.Start{Workspace: "/repo"}, resize(160)).State,
 		"error":       feed(t, browsing(t, 160), model.Failed{Err: errors.New("kata server not responding")}).State,
 		"list":        browsing(t, 160),
+		"board":       boardPane(t, alpha, beta, closedAt("shut", time.October, 7)),
+		"board help":  feed(t, boardPane(t, alpha), key("?")).State,
 		"narrow":      browsing(t, 100),
 		"help":        feed(t, browsing(t, 160), key("?")).State,
 		"menu":        feed(t, browsing(t, 160), openMenu).State,

@@ -43,3 +43,17 @@
 **Attachment store**: The `.kata-attachments` folder at the root of a Project's primary checkout, holding `<Issue ULID>/<name>` copies and a `.gitignore` of `*`. Outside git the root is the directory holding the workspace's `.kata.toml`.
 
 **Primary checkout**: The main worktree of a git repository, the parent of git's common directory; every linked worktree shares it.
+
+**Board mode**: A view of one Project Collection's Issues as a Board instead of the list. It is Pane state that is not saved, starts off, and ends when the Collection is not a Project or the Pane is narrower than the side-by-side width. In code and on the help sheet "focus" already means the focused column, so no Board mode term uses it.
+
+**Board**: All Lanes side by side, in place of the list column, with the Issue detail column hidden: No lane, one Lane per Lane label, then Done. Each Issue is a card; the selected card shows its full title, owner and labels.
+
+**Lane**: One label of the Lane list, shown as a column and titled from its label ("ready-for-agent" reads "Ready for agent"). Every Lane stands for one kata label, so the Board is a view of kata data, not a copy.
+
+**Lane label**: Any label of the Lane list. An Issue whose only labels are not Lane labels has no Lane label.
+
+**Lane list**: A Project's ordered Lane labels. Until a saved one is loaded it is the default: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`.
+
+**No lane**: The column of open Issues with no Lane label. It is always shown. An Issue with several Lane labels shows once, in the first of its Lanes in Lane order, with an "also" note naming the others.
+
+**Done**: The column of Issues closed in the last 14 days of the Pane calendar, newest closed first. It shows only what the Collection snapshot holds, so a status filter of `open` leaves it empty. Each card names the Lane `r` would reopen it into, the Lane its labels point at.

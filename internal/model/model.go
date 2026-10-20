@@ -90,6 +90,7 @@ type Model struct {
 	Search           SearchState
 	IDSearch         IDSearch
 	FilterForm       FilterFormState
+	Board            BoardState
 	// nonce is the random per-run prefix of every idempotency key and keys counts the keys minted.
 	nonce string
 	keys  int

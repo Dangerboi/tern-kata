@@ -43,6 +43,7 @@ func (d IssueDetail) OpenIssueRef() string              { return d.openRef }
 func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 	shown, tab := m.DetailIssueUID(), m.tab
 	m, cmds := update(m, msg)
+	m = m.settleBoard()
 	if m.tab != tab {
 		cmds = append(cmds, RevealActivityTab{})
 	}
@@ -139,6 +140,12 @@ func (m Model) toggleDetail() Model {
 	if m.hidden && m.Focus == ColumnDetail {
 		m.Focus = ColumnList
 	}
+	return m
+}
+
+// setDetailHidden shows or hides the column without moving focus; Board mode hides it while the Board holds the screen.
+func (m Model) setDetailHidden(hidden bool) Model {
+	m.hidden = hidden
 	return m
 }
 

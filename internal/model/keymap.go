@@ -48,6 +48,9 @@ const (
 	ResetFilterForm      Action = "reset-filter-form"
 	ClearFilters         Action = "clear-filters"
 	InputSpace           Action = "input-space"
+	ToggleBoard          Action = "toggle-board"
+	PreviousLane         Action = "previous-lane"
+	NextLane             Action = "next-lane"
 )
 
 // Binding is one chord in one mode, as the lookup, the footer and the help sheet read it. A binding of
@@ -90,6 +93,7 @@ const (
 	ModeSearch        Mode = "search"
 	ModeSearchResults Mode = "search-results"
 	ModeFilterForm    Mode = "filter-form"
+	ModeBoard         Mode = "board"
 )
 
 // cardBindings are the keys of the Popup cards. Each card's handler reads them by mode; the

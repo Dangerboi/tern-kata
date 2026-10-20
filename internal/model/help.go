@@ -23,6 +23,9 @@ func (m Model) CurrentMode() Mode {
 	if m.Err != nil {
 		return ModeError
 	}
+	if m.Board.On() {
+		return ModeBoard
+	}
 	switch m.Focus {
 	case ColumnDetail:
 		return ModeDetail
@@ -81,9 +84,10 @@ const (
 	sheetChildren
 	sheetForms
 	sheetFilters
+	sheetBoard
 )
 
-var sheetTitles = [...]string{"Global", "Graph", "Detail", "Children", "Forms", "Filters"}
+var sheetTitles = [...]string{"Global", "Graph", "Detail", "Children", "Forms", "Filters", "Board"}
 
 // sheetLine places an entry's keys on one line of the help sheet. Rank orders the lines of a group; entries that
 // share a group and text share the line, their keys in rank order.
