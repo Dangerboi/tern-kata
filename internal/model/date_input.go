@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-const dayLayout = "2006-01-02"
-
 // DateInputHint says which forms ParseDateInput reads, for a message that refuses anything else.
 const DateInputHint = "YYYY-MM-DD, today, tomorrow, +Nd or +Nw"
 

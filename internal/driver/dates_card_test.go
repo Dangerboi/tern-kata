@@ -11,7 +11,7 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/view"
 )
 
-func dated(uid, scheduled, deadline string) model.Issue {
+func withDates(uid, scheduled, deadline string) model.Issue {
 	issue := boardCard(uid, "ready-for-agent")
 	issue.ProjectID = 7
 	issue.Metadata = map[string]any{}
@@ -46,7 +46,7 @@ func emptied(t *testing.T, s driver.State) driver.State {
 }
 
 func TestDOpensTheDatesCardPrefilledInEveryModeAndEscClosesItUnchanged(t *testing.T) {
-	issue := dated("a", "2026-10-12", "2026-11-02T17:30:00")
+	issue := withDates("a", "2026-10-12", "2026-11-02T17:30:00")
 	list := projectPane(t, 160, issue)
 	board := boardPane(t, issue)
 	lane := step(t, board, key("enter")).State
@@ -86,20 +86,20 @@ func TestDatesCardResolvesEachFormAgainstThePaneCalendarAndPreviewsIt(t *testing
 		{"+30d", "2026-11-07 Sat"},
 		{"", "no date"},
 	} {
-		s := emptied(t, step(t, projectPane(t, 160, dated("a", "2026-10-12", "")), key("d")).State)
+		s := emptied(t, step(t, projectPane(t, 160, withDates("a", "2026-10-12", "")), key("d")).State)
 		s = typed(t, s, tt.input)
 		if got := datesPreview(t, s, model.DatesScheduled); got != tt.want {
 			t.Errorf("%q previews %q, want %q", tt.input, got, tt.want)
 		}
 	}
-	s := typed(t, emptied(t, step(t, projectPane(t, 160, dated("a", "", "")), key("d")).State), "someday")
+	s := typed(t, emptied(t, step(t, projectPane(t, 160, withDates("a", "", "")), key("d")).State), "someday")
 	if got := datesPreview(t, s, model.DatesScheduled); got != "" {
 		t.Errorf("invalid input previews %q", got)
 	}
 }
 
 func TestDatesCardSavesOnlyChangedKeysInOneCommand(t *testing.T) {
-	issue := dated("a", "2026-10-12", "2026-11-02T17:30:00")
+	issue := withDates("a", "2026-10-12", "2026-11-02T17:30:00")
 	s := step(t, projectPane(t, 160, issue), key("d")).State
 	s = typed(t, emptied(t, s), "+1w")
 	out := step(t, s, key("enter"))
@@ -122,7 +122,7 @@ func TestDatesCardSavesOnlyChangedKeysInOneCommand(t *testing.T) {
 }
 
 func TestDatesCardSetsAndClearsBothAndGuardsOnWhatItOpenedWith(t *testing.T) {
-	s := step(t, projectPane(t, 160, dated("a", "", "2026-10-30")), key("d")).State
+	s := step(t, projectPane(t, 160, withDates("a", "", "2026-10-30")), key("d")).State
 	s = typed(t, s, "today")
 	s = step(t, s, key("tab")).State
 	s = emptied(t, s)
@@ -137,7 +137,7 @@ func TestDatesCardSetsAndClearsBothAndGuardsOnWhatItOpenedWith(t *testing.T) {
 }
 
 func TestDatesCardRefusesInvalidInputNamingTheField(t *testing.T) {
-	s := step(t, projectPane(t, 160, dated("a", "2026-10-12", "2026-10-30")), key("d")).State
+	s := step(t, projectPane(t, 160, withDates("a", "2026-10-12", "2026-10-30")), key("d")).State
 	s = step(t, s, key("tab")).State
 	s = typed(t, emptied(t, s), "next week")
 	out := step(t, s, key("enter"))
@@ -153,7 +153,7 @@ func TestDatesCardRefusesInvalidInputNamingTheField(t *testing.T) {
 		t.Error("an edit left the refusal")
 	}
 	for _, bad := range []string{"2026-13-01", "2026-02-30", "+d", "+3", "-1d", "26-10-12"} {
-		s := step(t, projectPane(t, 160, dated("a", "", "")), key("d")).State
+		s := step(t, projectPane(t, 160, withDates("a", "", "")), key("d")).State
 		out := step(t, typed(t, s, bad), key("enter"))
 		if f := out.State.Model.DatesForm; len(out.Cmds) != 0 || f.Err == nil || !strings.HasPrefix(f.Err.Error(), "Scheduled must be ") {
 			t.Errorf("%q: cmds %v err %v", bad, out.Cmds, f.Err)
@@ -162,7 +162,7 @@ func TestDatesCardRefusesInvalidInputNamingTheField(t *testing.T) {
 }
 
 func TestDatesCardSavingNothingChangedSendsNothing(t *testing.T) {
-	s := step(t, projectPane(t, 160, dated("a", "2026-10-12", "2026-11-02T17:30:00")), key("d")).State
+	s := step(t, projectPane(t, 160, withDates("a", "2026-10-12", "2026-11-02T17:30:00")), key("d")).State
 	out := step(t, s, key("enter"))
 	if len(out.Cmds) != 0 || out.State.Model.TopCard() != model.NoCard {
 		t.Fatalf("cmds %v card %v", out.Cmds, out.State.Model.TopCard())
@@ -170,7 +170,7 @@ func TestDatesCardSavingNothingChangedSendsNothing(t *testing.T) {
 }
 
 func TestDatesCardReportsAChangedKeyAndKeepsTheCardOpen(t *testing.T) {
-	s := step(t, projectPane(t, 160, dated("a", "2026-10-12", "2026-10-30")), key("d")).State
+	s := step(t, projectPane(t, 160, withDates("a", "2026-10-12", "2026-10-30")), key("d")).State
 	s = typed(t, emptied(t, s), "+1d")
 	s = step(t, s, key("tab")).State
 	s = typed(t, emptied(t, s), "+2d")
@@ -202,13 +202,13 @@ func TestDatesCardReportsAChangedKeyAndKeepsTheCardOpen(t *testing.T) {
 }
 
 func TestDatesCardIsRefusedWhileTheDaemonIsDisconnected(t *testing.T) {
-	s := projectPane(t, 160, dated("a", "2026-10-12", ""))
+	s := projectPane(t, 160, withDates("a", "2026-10-12", ""))
 	s.Model.Stale = true
 	if got := step(t, s, key("d")).State.Model.TopCard(); got != model.NoCard {
 		t.Fatalf("d opened %v while disconnected", got)
 	}
 	// A card already open refuses the save when the daemon drops.
-	s = step(t, projectPane(t, 160, dated("a", "2026-10-12", "")), key("d")).State
+	s = step(t, projectPane(t, 160, withDates("a", "2026-10-12", "")), key("d")).State
 	s = typed(t, s, "1")
 	s.Model.Stale = true
 	out := step(t, s, key("enter"))
