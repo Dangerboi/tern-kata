@@ -16,6 +16,15 @@ func (c *Client) CreateIssue(ctx context.Context, cmd model.CreateIssueCmd) (mod
 	if cmd.ParentUID != "" {
 		body.Links = []g.CreateInitialLinkBody{{Type: "parent", ToRef: cmd.ParentUID}}
 	}
+	if cmd.ScheduledOn != "" || cmd.DeadlineOn != "" {
+		body.Metadata = map[string]any{}
+		if cmd.ScheduledOn != "" {
+			body.Metadata[model.ScheduledKey] = cmd.ScheduledOn
+		}
+		if cmd.DeadlineOn != "" {
+			body.Metadata[model.DeadlineKey] = cmd.DeadlineOn
+		}
+	}
 	response, err := c.CreateIssueWithResponse(ctx, &g.CreateIssueRequestOptions{PathParams: &g.CreateIssuePath{ProjectID: strconv.FormatInt(cmd.ProjectID, 10)}, Body: &body, Header: &g.CreateIssueHeaders{IdempotencyKey: idempotencyKey(cmd.Key)}})
 	if err != nil {
 		return model.IssueCreated{}, daemonError(err)

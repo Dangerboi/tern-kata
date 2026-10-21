@@ -98,7 +98,7 @@ func asking(c popupCard) func() model.Model {
 func popupCards() []popupCard {
 	create := popupCard{
 		name: "Create", card: model.CardCreate, textField: model.CreateTitle,
-		tabOrder: []model.Field{model.CreateTitle, model.CreateBody, model.CreateLabels, model.CreateOwner, model.CreatePriority},
+		tabOrder: []model.Field{model.CreateTitle, model.CreateBody, model.CreateLabels, model.CreateOwner, model.CreatePriority, model.CreateScheduled, model.CreateDeadline},
 		states:   []cardState{{"", openedCreate, model.ModeCreate}},
 		graft:    func(dst *model.Model, src model.Model) { dst.Create = src.Create },
 		field:    func(m model.Model) model.Field { return m.Create.Field },

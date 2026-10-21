@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"maps"
 	"strconv"
 	"strings"
@@ -22,14 +23,18 @@ type CreateState struct {
 	Open                                      bool
 	Field                                     Field
 	Title, Labels, Owner, Priority, ParentUID string
-	Completion                                FieldFormState
-	Caret                                     Caret
+	// Scheduled and Deadline are the typed dates, read when saving.
+	Scheduled, Deadline string
+	Completion          FieldFormState
+	Caret               Caret
 }
 type CreateIssueCmd struct {
 	Workspace, Actor, Title, Body, Owner, ParentUID string
 	ProjectID                                       int64
 	Labels                                          []string
 	Priority                                        *int64
+	// ScheduledOn and DeadlineOn are YYYY-MM-DD days, "" for none; kata gets only the ones set.
+	ScheduledOn, DeadlineOn string
 	// Key is kata's Idempotency-Key for this create.
 	Key string
 }
@@ -79,15 +84,17 @@ func (m Model) CreateSuggestions() []string {
 
 // The Create card's fields.
 const (
-	CreateTitle    Field = "title"
-	CreateBody     Field = "body"
-	CreateLabels   Field = "labels"
-	CreateOwner    Field = "owner"
-	CreatePriority Field = "priority"
+	CreateTitle     Field = "title"
+	CreateBody      Field = "body"
+	CreateLabels    Field = "labels"
+	CreateOwner     Field = "owner"
+	CreatePriority  Field = "priority"
+	CreateScheduled Field = "scheduled"
+	CreateDeadline  Field = "deadline"
 )
 
 // CreateFields is the Create card's field list, in tab order; the body is the multi-line editor.
-var CreateFields = []FieldSpec{{CreateTitle, true}, {CreateBody, false}, {CreateLabels, true}, {CreateOwner, true}, {CreatePriority, true}}
+var CreateFields = []FieldSpec{{CreateTitle, true}, {CreateBody, false}, {CreateLabels, true}, {CreateOwner, true}, {CreatePriority, true}, {CreateScheduled, true}, {CreateDeadline, true}}
 
 func createValue(f *CreateState) *string {
 	switch f.Field {
@@ -99,8 +106,29 @@ func createValue(f *CreateState) *string {
 		return &f.Owner
 	case CreatePriority:
 		return &f.Priority
+	case CreateScheduled:
+		return &f.Scheduled
+	case CreateDeadline:
+		return &f.Deadline
 	}
 	return nil
+}
+
+// CreatePreview is the muted line under a date field of the Create card: the day its text resolves to with its weekday,
+// "no date" for blank, and nothing for text that is not a date (saving refuses it).
+func (m Model) CreatePreview(name Field) string {
+	text := m.Create.Scheduled
+	if name == CreateDeadline {
+		text = m.Create.Deadline
+	}
+	day, err := ParseDateInput(text, m.Calendar.Date)
+	switch {
+	case err != nil:
+		return ""
+	case day == "":
+		return "no date"
+	}
+	return DateWithWeekday(day)
 }
 func submitCreate(m Model) (Model, []Cmd) {
 	f := &m.Create
@@ -125,6 +153,18 @@ func submitCreate(m Model) (Model, []Cmd) {
 		}
 		priority = &n
 	}
+	var days [2]string
+	for i, date := range []struct {
+		field Field
+		text  string
+	}{{DatesScheduled, f.Scheduled}, {DatesDeadline, f.Deadline}} {
+		day, err := ParseDateInput(date.text, m.Calendar.Date)
+		if err != nil {
+			f.Err = fmt.Errorf("%s %s", DatesLabel(date.field), err.Error())
+			return m, nil
+		}
+		days[i] = day
+	}
 	labels := []string{}
 	for _, label := range strings.Split(f.Labels, ",") {
 		if label = strings.TrimSpace(label); label != "" {
@@ -133,7 +173,7 @@ func submitCreate(m Model) (Model, []Cmd) {
 	}
 	f.Saving = true
 	f.Err = nil
-	cmd := CreateIssueCmd{Workspace: m.Workspace, Actor: m.Actor, ProjectID: f.ProjectID, Title: strings.TrimSpace(f.Title), Body: f.Editor.Text, Labels: labels, Owner: strings.TrimSpace(f.Owner), Priority: priority, ParentUID: f.ParentUID}
+	cmd := CreateIssueCmd{Workspace: m.Workspace, Actor: m.Actor, ProjectID: f.ProjectID, Title: strings.TrimSpace(f.Title), Body: f.Editor.Text, Labels: labels, Owner: strings.TrimSpace(f.Owner), Priority: priority, ParentUID: f.ParentUID, ScheduledOn: days[0], DeadlineOn: days[1]}
 	var keyed Keyed
 	m, keyed = m.mintKey(f.Keyed, cmd)
 	f.Keyed, cmd.Key = keyed, keyed.Key
@@ -173,7 +213,7 @@ func updateCreate(m Model, msg Msg) (Model, []Cmd, bool) {
 }
 
 // createCard is the Create card's part of the shared Draft key handler: its text is the title, body
-// and the three single-line fields, and saving sends an issue.
+// and the single-line fields, and saving sends an issue.
 var createCard = draftCardKeys{
 	draft: func(m Model) Draft { return m.Create.Draft },
 	set:   func(m Model, d Draft) Model { m.Create.Draft = d; return m },
@@ -181,7 +221,7 @@ var createCard = draftCardKeys{
 	save:  submitCreate,
 	empty: func(m Model) bool {
 		f := m.Create
-		return f.Title+f.Editor.Text+f.Labels+f.Owner+f.Priority == ""
+		return f.Title+f.Editor.Text+f.Labels+f.Owner+f.Priority+f.Scheduled+f.Deadline == ""
 	},
 	own: func(m Model, b Binding, _ KeyMsg) (Model, []Cmd, bool) {
 		switch b.Action {

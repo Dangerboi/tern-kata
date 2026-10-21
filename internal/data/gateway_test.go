@@ -1657,3 +1657,31 @@ func TestRecurrenceConflictingThroughAllAttemptsSaysSoPlainly(t *testing.T) {
 		t.Fatalf("stop: %v", err)
 	}
 }
+
+func TestGatewayCreatesAnIssueWithDateMetadataOnlyForTheDatesSet(t *testing.T) {
+	kata := startKata(t, "0.19.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	for _, tt := range []struct {
+		title, scheduled, deadline string
+		want                       map[string]any
+	}{
+		{"Both", "2026-10-30", "2026-10-28", map[string]any{"scheduled_on": "2026-10-30", "deadline_on": "2026-10-28"}},
+		{"Deadline only", "", "2026-11-01", map[string]any{"deadline_on": "2026-11-01"}},
+		{"Neither", "", "", map[string]any{}},
+	} {
+		created := as[model.IssueCreated](t, run(t, gateway, model.CreateIssueCmd{Workspace: workspace, Actor: "tester", ProjectID: demo.ID, Title: tt.title, ScheduledOn: tt.scheduled, DeadlineOn: tt.deadline}))
+		if created.Err != nil {
+			t.Fatalf("%s: %v", tt.title, created.Err)
+		}
+		got := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: created.UID})).Selected.Issue.Metadata
+		if len(got) != len(tt.want) {
+			t.Errorf("%s: metadata %v, want %v", tt.title, got, tt.want)
+		}
+		for k, v := range tt.want {
+			if got[k] != v {
+				t.Errorf("%s: %s = %v, want %v", tt.title, k, got[k], v)
+			}
+		}
+	}
+}
