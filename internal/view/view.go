@@ -325,10 +325,7 @@ func issueRow(m model.Model, row model.IssueRow, selected bool, role string, col
 	if row.TotalKids > 0 {
 		kids = fmt.Sprintf("%d/%d", row.OpenKids, row.TotalKids)
 	}
-	title := row.Title
-	if row.RecurrenceID != nil {
-		title = "↻ " + title
-	}
+	title := issueTitle(row.Issue)
 	left := []ui.Span{
 		{T: cell(idCell(row), cols.id)},
 		{T: cellGap + cell(prio, prioWidth), S: prioStyle},
@@ -434,4 +431,12 @@ func listOwner(m model.Model, row model.IssueRow, now time.Time) string {
 		return owner.String()
 	}
 	return cell(owner.Name, ownerWidth) + owner.Until
+}
+
+// issueTitle is the title as the list and the Board draw it: a recurring Issue's starts with "↻ ".
+func issueTitle(issue model.Issue) string {
+	if issue.RecurrenceID != nil {
+		return "↻ " + issue.Title
+	}
+	return issue.Title
 }

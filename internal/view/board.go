@@ -120,7 +120,7 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 	if done {
 		titleStyle = "muted"
 	}
-	title := ui.Text{Common: ui.Common{Key: "title"}, Spans: []ui.Span{{T: issue.Title, S: titleStyle}}, Lines: 2}
+	title := ui.Text{Common: ui.Common{Key: "title"}, Spans: []ui.Span{{T: issueTitle(issue), S: titleStyle}}, Lines: 2}
 	labels := card.Labels
 	if selected {
 		title.Lines = 0
