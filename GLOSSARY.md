@@ -48,6 +48,10 @@
 
 **Board**: All Lanes side by side, in place of the list column, with the Issue detail column hidden: No lane, one Lane per Lane label, then Done. Each Issue is a card; the selected card shows its full title, owner and labels.
 
+**Relationship**: A parent, child, Blocking link or related link between two Issues, as seen from one of them; the word the Filter form already uses. Read from the Collection snapshot's links, so it counts Issues the Board doesn't draw. _Avoid_: relation, dependency.
+
+**Blocked marker**: The "blocked by 8gm4" line, in the warning tone, on an open Board card that at least one open Issue blocks. It names the open blockers, qualified (`project#id`) outside the Project, cut to three and "+N". Done cards never show it.
+
 **Lane view**: One Lane as a flat, full-width list under a Lane header line, with the Issue detail column beside it (only the focused column in a Pane narrower than the side-by-side width). Enter or a double-click on a card opens it, `←`/`→` switch Lanes, and Esc returns to the Board. The name avoids "focus", which already means the focused column.
 
 **Lane**: One label of the Lane list, shown as a column and titled from its label ("ready-for-agent" reads "Ready for agent"). Every Lane stands for one kata label, so the Board is a view of kata data, not a copy.

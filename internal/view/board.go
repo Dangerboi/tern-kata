@@ -136,6 +136,11 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, now
 	if len(card.Also) > 0 {
 		body = append(body, ui.Text{Common: ui.Common{Key: "also"}, Spans: []ui.Span{{T: "also: " + strings.Join(card.Also, ", "), S: "warning"}}})
 	}
+	if !done {
+		if marker := blockedMarker(card); marker != "" {
+			body = append(body, ui.Text{Common: ui.Common{Key: "blocked"}, Spans: []ui.Span{{T: marker, S: "warning"}}})
+		}
+	}
 	if card.Reopen != "" {
 		body = append(body, ui.Text{Common: ui.Common{Key: "reopen"}, Spans: []ui.Span{{T: "r → " + card.Reopen, S: "muted"}}})
 	}
@@ -169,4 +174,29 @@ func laneMax(m model.Model) ui.ListMax {
 		chrome += 24
 	}
 	return ui.MaxLines(max((m.Rows*m.RowPx-chrome)/(m.RowPx+6), 1))
+}
+
+// maxRelationshipIDs is how many ids a Blocked marker names before it says "+N".
+const maxRelationshipIDs = 3
+
+// blockedMarker is "blocked by 8gm4, other#ab12" for the open Issues that block the card, "" when none do.
+func blockedMarker(card model.BoardCard) string {
+	blockers := card.Relationships.OpenBlockers()
+	if len(blockers) == 0 {
+		return ""
+	}
+	return "blocked by " + refList(blockers, card.Issue.ProjectName)
+}
+
+// refList names refs by id as seen from project, cut to maxRelationshipIDs and "+N".
+func refList(refs []model.RelationshipRef, project string) string {
+	ids := make([]string, 0, maxRelationshipIDs)
+	for _, r := range refs[:min(len(refs), maxRelationshipIDs)] {
+		ids = append(ids, r.ID(project))
+	}
+	list := strings.Join(ids, ", ")
+	if len(refs) > maxRelationshipIDs {
+		list += " +" + strconv.Itoa(len(refs)-maxRelationshipIDs)
+	}
+	return list
 }

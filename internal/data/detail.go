@@ -83,7 +83,7 @@ func translateLiveRecurrence(r g.Recurrence) model.Recurrence {
 func translateLink(l g.UILink) model.Link {
 	return model.Link{
 		ID: l.ID, Type: l.Type, FromIssueUID: l.FromIssueUID, FromQualifiedID: l.FromQualifiedID, FromStatus: l.FromStatus,
-		ToIssueUID: l.ToIssueUID, ToQualifiedID: l.ToQualifiedID,
+		ToIssueUID: l.ToIssueUID, ToQualifiedID: l.ToQualifiedID, ToStatus: l.ToStatus,
 	}
 }
 

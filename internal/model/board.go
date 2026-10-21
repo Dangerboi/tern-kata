@@ -77,6 +77,8 @@ type BoardCard struct {
 	Also []string
 	// Reopen titles the Lane a Done card reopens into.
 	Reopen string
+	// Relationships are the Issue's Relationships from the Collection snapshot's links, every linked Issue counted whether the Board draws it or not.
+	Relationships Relationships
 }
 
 // BoardColumn is one column of the Board: No lane, a Lane, or Done. Lane is its key, see LaneNone and LaneDone.
@@ -99,12 +101,13 @@ func (m Model) BoardColumns() []BoardColumn {
 	for i, key := range keys {
 		columns[i] = BoardColumn{Lane: key, Title: LaneTitle(key)}
 	}
+	relationships := NewRelationshipIndex(m.Snapshot.Links)
 	for _, issue := range m.Issues {
 		lane := LaneOf(issue, lanes)
 		if lane == LaneDone && !m.Calendar.closedWithin(issue, doneDays) {
 			continue
 		}
-		card := BoardCard{Issue: issue}
+		card := BoardCard{Issue: issue, Relationships: relationships.Of(issue.UID)}
 		for _, label := range issue.Labels {
 			if !slices.Contains(lanes, label) {
 				card.Labels = append(card.Labels, label)

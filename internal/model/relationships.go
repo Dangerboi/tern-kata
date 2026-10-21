@@ -1,0 +1,96 @@
+package model
+
+import (
+	"slices"
+	"strings"
+)
+
+// RelationshipRef is the other end of a Relationship: the Issue's UID, its qualified id (project#id) and its status.
+type RelationshipRef struct {
+	UID, QualifiedID, Status string
+}
+
+// Open says the Issue on the other end is open.
+func (r RelationshipRef) Open() bool { return r.Status == "open" }
+
+// ID is the Issue's id as shown from project: the short id inside it, the qualified id outside.
+func (r RelationshipRef) ID(project string) string {
+	if short, ok := strings.CutPrefix(r.QualifiedID, project+"#"); ok {
+		return short
+	}
+	return r.QualifiedID
+}
+
+// Relationships are one Issue's Relationships, as seen from it: each other Issue appears once per kind, in link order.
+type Relationships struct {
+	Parent    *RelationshipRef
+	Children  []RelationshipRef
+	Blocks    []RelationshipRef
+	BlockedBy []RelationshipRef
+	Related   []RelationshipRef
+}
+
+// OpenBlockers are the Issues that block this one and are still open.
+func (r Relationships) OpenBlockers() []RelationshipRef { return openRefs(r.BlockedBy) }
+
+func openRefs(refs []RelationshipRef) []RelationshipRef {
+	return slices.DeleteFunc(slices.Clone(refs), func(r RelationshipRef) bool { return !r.Open() })
+}
+
+// RelationshipIndex is every Issue's Relationships, built once from the Collection snapshot's links.
+type RelationshipIndex map[string]*Relationships
+
+// NewRelationshipIndex reads links: a parent link runs from the child to the parent, a blocks link from the blocker to the Issue
+// it blocks, a blocked_by link the other way round, and a related link has no direction. Self-links are ignored, an Issue is
+// kept once per kind, and an Issue with several parent links has the first by link id.
+func NewRelationshipIndex(links []Link) RelationshipIndex {
+	ordered := slices.Clone(links)
+	slices.SortStableFunc(ordered, func(a, b Link) int { return int(a.ID - b.ID) })
+	index := RelationshipIndex{}
+	for _, l := range ordered {
+		if l.FromIssueUID == l.ToIssueUID {
+			continue
+		}
+		from := RelationshipRef{UID: l.FromIssueUID, QualifiedID: l.FromQualifiedID, Status: l.FromStatus}
+		to := RelationshipRef{UID: l.ToIssueUID, QualifiedID: l.ToQualifiedID, Status: l.ToStatus}
+		switch l.Type {
+		case "parent":
+			if r := index.of(from.UID); r.Parent == nil {
+				r.Parent = &to
+			}
+			index.of(to.UID).Children = addRef(index.of(to.UID).Children, from)
+		case "blocks":
+			index.of(from.UID).Blocks = addRef(index.of(from.UID).Blocks, to)
+			index.of(to.UID).BlockedBy = addRef(index.of(to.UID).BlockedBy, from)
+		case "blocked_by":
+			index.of(from.UID).BlockedBy = addRef(index.of(from.UID).BlockedBy, to)
+			index.of(to.UID).Blocks = addRef(index.of(to.UID).Blocks, from)
+		case "related":
+			index.of(from.UID).Related = addRef(index.of(from.UID).Related, to)
+			index.of(to.UID).Related = addRef(index.of(to.UID).Related, from)
+		}
+	}
+	return index
+}
+
+func (x RelationshipIndex) of(uid string) *Relationships {
+	if x[uid] == nil {
+		x[uid] = &Relationships{}
+	}
+	return x[uid]
+}
+
+// Of is uid's Relationships; an Issue with none has the zero value.
+func (x RelationshipIndex) Of(uid string) Relationships {
+	if r := x[uid]; r != nil {
+		return *r
+	}
+	return Relationships{}
+}
+
+func addRef(refs []RelationshipRef, ref RelationshipRef) []RelationshipRef {
+	if slices.ContainsFunc(refs, func(r RelationshipRef) bool { return r.UID == ref.UID }) {
+		return refs
+	}
+	return append(refs, ref)
+}
