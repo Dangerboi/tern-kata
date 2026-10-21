@@ -204,9 +204,11 @@ var cardBindings = []Binding{
 	{Chord: "backspace", Key: "backspace", Action: DeleteInput, Help: "delete", Mode: ModeProjectForm},
 	{Chord: "ctrl+u", Key: "ctrl+u", Action: ClearInput, Help: "clear name", Mode: ModeProjectForm},
 	// Lanes card: one field holding the Lane list, so every other key is typed.
+	{Chord: "tab", Key: "tab", Action: LanesNext, Help: "next field", Mode: ModeLanesForm, ShowInFooter: true},
+	{Chord: "shift+tab", Key: "shift+tab", Action: LanesPrevious, Help: "previous field", Mode: ModeLanesForm},
 	{Chord: "enter", Key: "enter", Action: LanesSubmit, Help: "save Lanes", Mode: ModeLanesForm, ShowInFooter: true},
 	{Chord: "ctrl+s", Key: "ctrl+s", Action: LanesSubmit, Help: "save Lanes", Mode: ModeLanesForm},
 	{Chord: "escape", Key: "esc", Action: LanesCancel, Help: "cancel", Mode: ModeLanesForm, ShowInFooter: true},
 	{Chord: "backspace", Key: "backspace", Action: DeleteInput, Help: "delete", Mode: ModeLanesForm},
-	{Chord: "ctrl+u", Key: "ctrl+u", Action: ClearInput, Help: "clear Lanes", Mode: ModeLanesForm},
+	{Chord: "ctrl+u", Key: "ctrl+u", Action: ClearInput, Help: "clear field", Mode: ModeLanesForm},
 }

@@ -10,8 +10,11 @@ import (
 // detail column, so the snapshot read carries no selected detail while it is shown. The Lane view is one Lane as the list's
 // rows beside the detail column.
 
-// doneDays is how many days back Done reaches, counted in the Pane calendar.
-const doneDays = 14
+// Done's defaults: it reaches back DefaultDoneDays days of the Pane calendar and shows at most DefaultDoneCards cards.
+const (
+	DefaultDoneDays  = 14
+	DefaultDoneCards = 20
+)
 
 // BoardMode is what Board mode shows.
 type BoardMode uint8
@@ -30,6 +33,8 @@ type BoardState struct {
 	Mode BoardMode
 	// Lanes is the Project's Lane list; empty means the default.
 	Lanes []string
+	// DoneDays and DoneCards are the Project's own Done limits; zero means the default.
+	DoneDays, DoneCards int
 	// Lane is the key of the Lane the Lane view shows.
 	Lane string
 	// fileErr is why the Lane list file could not be read; while it is set the file is never overwritten.
@@ -42,6 +47,18 @@ type BoardState struct {
 
 // On says the Board is shown.
 func (b BoardState) On() bool { return b.Mode != BoardOff }
+
+// DoneLimits are how many days back Done reaches and how many cards it shows at most.
+func (m Model) DoneLimits() (days, cards int) {
+	days, cards = m.Board.DoneDays, m.Board.DoneCards
+	if days <= 0 {
+		days = DefaultDoneDays
+	}
+	if cards <= 0 {
+		cards = DefaultDoneCards
+	}
+	return days, cards
+}
 
 // LaneList is the Lane list the Board draws.
 func (m Model) LaneList() []string {
@@ -67,12 +84,15 @@ type BoardColumn struct {
 	Lane  string
 	Title string
 	Cards []BoardCard
+	// Total is how many cards qualify for Done, of which Cards holds the newest; zero in every other column.
+	Total int
 }
 
 // BoardColumns are the Board's columns, left to right: No lane, one per Lane, Done. Cards follow the list's order, Done's
-// newest closed first. Done holds only Issues closed in the last doneDays days of the Pane calendar.
+// newest closed first. Done holds only Issues closed in the last DoneLimits days of the Pane calendar, at most DoneLimits cards.
 func (m Model) BoardColumns() []BoardColumn {
 	lanes := m.LaneList()
+	doneDays, doneCards := m.DoneLimits()
 	keys := append([]string{LaneNone}, lanes...)
 	keys = append(keys, LaneDone)
 	columns := make([]BoardColumn, len(keys))
@@ -102,6 +122,8 @@ func (m Model) BoardColumns() []BoardColumn {
 	}
 	done := &columns[len(columns)-1]
 	slices.SortStableFunc(done.Cards, func(a, b BoardCard) int { return b.Issue.ClosedAt.Compare(*a.Issue.ClosedAt) })
+	done.Total = len(done.Cards)
+	done.Cards = done.Cards[:min(done.Total, doneCards)]
 	return columns
 }
 

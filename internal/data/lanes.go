@@ -17,11 +17,15 @@ import (
 //	["01JABC..."]
 //	name = "work"
 //	labels = ["needs-triage", "in-review"]
+//	done_days = 14
+//	done_cards = 20
 type lanesFile map[string]projectLanes
 
 type projectLanes struct {
-	Name   string   `toml:"name"`
-	Labels []string `toml:"labels"`
+	Name      string   `toml:"name"`
+	Labels    []string `toml:"labels,omitempty"`
+	DoneDays  int      `toml:"done_days,omitempty"`
+	DoneCards int      `toml:"done_cards,omitempty"`
 }
 
 func lanesPath() (string, error) {
@@ -47,7 +51,8 @@ func loadLanes(cmd model.LoadLanes) model.LanesLoaded {
 	if err == nil {
 		var file lanesFile
 		if file, err = readLanes(path); err == nil {
-			return model.LanesLoaded{ProjectUID: cmd.ProjectUID, Lanes: cleanLanes(file[cmd.ProjectUID].Labels)}
+			p := file[cmd.ProjectUID]
+			return model.LanesLoaded{ProjectUID: cmd.ProjectUID, Lanes: cleanLanes(p.Labels), DoneDays: max(p.DoneDays, 0), DoneCards: max(p.DoneCards, 0)}
 		}
 	}
 	return model.LanesLoaded{ProjectUID: cmd.ProjectUID, Err: err}
@@ -67,7 +72,7 @@ func cleanLanes(labels []string) []string {
 // renames a temporary file into place so a failed write leaves the old file. shortcut: comments in a hand-edited file are
 // lost on save, and two Panes saving at once race; upgrade if either bites.
 func saveLanes(cmd model.SaveLanes) model.LanesSaved {
-	return model.LanesSaved{ProjectUID: cmd.ProjectUID, Lanes: cmd.Lanes, Err: writeLanes(cmd)}
+	return model.LanesSaved{ProjectUID: cmd.ProjectUID, Lanes: cmd.Lanes, DoneDays: cmd.DoneDays, DoneCards: cmd.DoneCards, Err: writeLanes(cmd)}
 }
 
 func writeLanes(cmd model.SaveLanes) error {
@@ -82,11 +87,11 @@ func writeLanes(cmd model.SaveLanes) error {
 	if file == nil {
 		file = lanesFile{}
 	}
-	if len(cmd.Lanes) == 0 {
-		// No Lanes restores the default: the Project's table goes, so a later change of the default reaches it.
+	if len(cmd.Lanes) == 0 && cmd.DoneDays == 0 && cmd.DoneCards == 0 {
+		// All default: the Project's table goes, so a later change of the default reaches it.
 		delete(file, cmd.ProjectUID)
 	} else {
-		file[cmd.ProjectUID] = projectLanes{Name: cmd.ProjectName, Labels: cmd.Lanes}
+		file[cmd.ProjectUID] = projectLanes{Name: cmd.ProjectName, Labels: cmd.Lanes, DoneDays: cmd.DoneDays, DoneCards: cmd.DoneCards}
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err

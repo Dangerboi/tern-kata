@@ -67,7 +67,7 @@ func TestBoardShowsTheDefaultLanesAndANoticeForAnUnreadableFile(t *testing.T) {
 	}
 	var cmds []model.Cmd
 	s.Model.Notice = ""
-	s.Model, cmds = s.Model.SaveLaneList([]string{"x"})
+	s.Model, cmds = s.Model.SaveLaneList([]string{"x"}, 0, 0)
 	if len(cmds) != 0 || s.Model.Notice == "" {
 		t.Errorf("a save to an unreadable file was not refused with its error: %v, Notice %q", cmds, s.Model.Notice)
 	}
@@ -75,7 +75,7 @@ func TestBoardShowsTheDefaultLanesAndANoticeForAnUnreadableFile(t *testing.T) {
 
 func TestBoardSaveAsksForTheProjectsList(t *testing.T) {
 	s := boardPane(t, boardCard("a"))
-	_, cmds := s.Model.SaveLaneList([]string{"in-review"})
+	_, cmds := s.Model.SaveLaneList([]string{"in-review"}, 0, 0)
 	want := model.SaveLanes{ProjectUID: "p", ProjectName: "work", Lanes: []string{"in-review"}}
 	if len(cmds) != 1 || !equalSave(cmds[0], want) {
 		t.Fatalf("save asked %#v, want %#v", cmds, want)

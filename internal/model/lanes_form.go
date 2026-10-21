@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -10,14 +11,50 @@ const (
 	ModeLanesForm Mode   = "lanes-form"
 	LanesSubmit   Action = "lanes-submit"
 	LanesCancel   Action = "lanes-cancel"
+	LanesNext     Action = "lanes-next"
+	LanesPrevious Action = "lanes-previous"
 )
 
-// LanesFormState is the Lanes card: the Lane list typed as comma-separated names. Saving writes the Lane list file only.
+// The Lanes card's fields.
+const (
+	LanesNames Field = "names"
+	LanesDays  Field = "days"
+	LanesCards Field = "cards"
+)
+
+// LanesFields is the Lanes card's field list, in tab order.
+var LanesFields = []FieldSpec{{LanesNames, true}, {LanesDays, true}, {LanesCards, true}}
+
+// LanesFormState is the Lanes card: the Lane list typed as comma-separated names, then Done's days and card count. Saving
+// writes the Lane list file only.
 type LanesFormState struct {
 	Open  bool
-	Text  string
-	Caret Caret
-	Err   error
+	Field Field
+	// Text is the Lane list; Days and Cards are Done's limits, blank for the default.
+	Text, Days, Cards string
+	Caret             Caret
+	Err               error
+}
+
+// at is the text of the field called name, nil for a name that is not a Lanes field.
+func (f *LanesFormState) at(name Field) *string {
+	switch name {
+	case LanesNames:
+		return &f.Text
+	case LanesDays:
+		return &f.Days
+	case LanesCards:
+		return &f.Cards
+	}
+	return nil
+}
+
+// Value is the text the field called name holds.
+func (f LanesFormState) Value(name Field) string {
+	if text := f.at(name); text != nil {
+		return *text
+	}
+	return ""
 }
 
 // openLanesForm is `B`. It waits for the saved Lane list to load: a card prefilled with the default would overwrite it on save.
@@ -26,7 +63,13 @@ func openLanesForm(m Model) Model {
 		m.Notice = "The Lane list is still loading."
 		return m
 	}
-	m.LanesForm = LanesFormState{Open: true, Text: strings.Join(m.LaneList(), ", ")}
+	m.LanesForm = LanesFormState{Open: true, Field: LanesNames, Text: strings.Join(m.LaneList(), ", ")}
+	if m.Board.DoneDays > 0 {
+		m.LanesForm.Days = strconv.Itoa(m.Board.DoneDays)
+	}
+	if m.Board.DoneCards > 0 {
+		m.LanesForm.Cards = strconv.Itoa(m.Board.DoneCards)
+	}
 	return m
 }
 
@@ -69,6 +112,18 @@ func parseLanes(text string) ([]string, error) {
 	return lanes, nil
 }
 
+// parseDone reads a Done limit field called name: blank is 0, the default; anything but a positive whole number is refused naming the field.
+func parseDone(text, name string) (int, error) {
+	if text = strings.TrimSpace(text); text == "" {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(text)
+	if err != nil || n <= 0 {
+		return 0, fmt.Errorf("%s must be a positive whole number.", name)
+	}
+	return n, nil
+}
+
 func shortEntry(text string) string {
 	const n = 20
 	if r := []rune(text); len(r) > n {
@@ -83,17 +138,29 @@ func updateLanesFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	switch {
 	case bound && binding.Action == LanesSubmit:
 		lanes, err := parseLanes(form.Text)
+		var days, cards int
+		if err == nil {
+			days, err = parseDone(form.Days, "Done days")
+		}
+		if err == nil {
+			cards, err = parseDone(form.Cards, "Done cards")
+		}
 		if err != nil {
 			form.Err = err
 			return m, nil
 		}
 		m.LanesForm = LanesFormState{}
-		return m.SaveLaneList(lanes)
+		return m.SaveLaneList(lanes, days, cards)
+	case bound && binding.Action == LanesNext:
+		cycleField(&m, 1)
+	case bound && binding.Action == LanesPrevious:
+		cycleField(&m, -1)
 	case bound && binding.Action == LanesCancel:
 		m.LanesForm = LanesFormState{}
 	default:
+		text := form.at(form.Field)
 		var edited bool
-		if form.Text, edited = editText(form.Text, &form.Caret, "", binding, bound, msg); edited {
+		if *text, edited = editText(*text, &form.Caret, form.Field, binding, bound, msg); edited {
 			form.Err = nil
 		}
 	}

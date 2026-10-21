@@ -17,37 +17,42 @@ func (LoadLanes) cmd() {}
 type LanesLoaded struct {
 	ProjectUID string
 	Lanes      []string
-	Err        error
+	// DoneDays and DoneCards are the Project's Done limits; zero means the default.
+	DoneDays, DoneCards int
+	Err                 error
 }
 
 func (LanesLoaded) msg() {}
 
 // SaveLanes asks for Lanes to be written as the Project's Lane list; ProjectName is written beside it for readers of the file.
-// No Lanes removes the Project's list, which restores the default.
+// No Lanes restores the default list; DoneDays and DoneCards, zero for the default, are written beside it. With every part
+// default the Project's table is removed.
 type SaveLanes struct {
 	ProjectUID, ProjectName string
 	Lanes                   []string
+	DoneDays, DoneCards     int
 }
 
 func (SaveLanes) cmd() {}
 
 // LanesSaved answers SaveLanes.
 type LanesSaved struct {
-	ProjectUID string
-	Lanes      []string
-	Err        error
+	ProjectUID          string
+	Lanes               []string
+	DoneDays, DoneCards int
+	Err                 error
 }
 
 func (LanesSaved) msg() {}
 
-// SaveLaneList is how the Lanes card saves: it asks to write lanes (already normalised) as the Project's Lane list. It is
+// SaveLaneList is how the Lanes card saves: it asks to write lanes (already normalised) as the Project's Lane list, with its Done limits. It is
 // refused with the file's error while the file could not be read, so a hand-edited file is never overwritten.
-func (m Model) SaveLaneList(lanes []string) (Model, []Cmd) {
+func (m Model) SaveLaneList(lanes []string, doneDays, doneCards int) (Model, []Cmd) {
 	if m.Board.fileErr != nil {
 		m.Notice = fmt.Sprintf("Lanes not saved: %v", m.Board.fileErr)
 		return m, nil
 	}
-	return m, []Cmd{SaveLanes{ProjectUID: m.Collection.ProjectUID, ProjectName: m.Collection.Title, Lanes: slices.Clone(lanes)}}
+	return m, []Cmd{SaveLanes{ProjectUID: m.Collection.ProjectUID, ProjectName: m.Collection.Title, Lanes: slices.Clone(lanes), DoneDays: doneDays, DoneCards: doneCards}}
 }
 
 // lanesLoad is the load a Step's change of Board mode or Project calls for: one command when the Board has just turned on or
@@ -58,7 +63,7 @@ func (m Model) lanesLoad(wasOn bool, was string) (Model, []Cmd) {
 	}
 	m.Board.loaded = false
 	if was != m.Collection.ProjectUID {
-		m.Board.Lanes, m.Board.fileErr = nil, nil
+		m.Board.Lanes, m.Board.DoneDays, m.Board.DoneCards, m.Board.fileErr = nil, 0, 0, nil
 	}
 	return m, []Cmd{LoadLanes{ProjectUID: m.Collection.ProjectUID}}
 }
@@ -67,9 +72,10 @@ func lanesLoaded(m Model, msg LanesLoaded) Model {
 	if msg.ProjectUID != m.Collection.ProjectUID {
 		return m
 	}
-	m.Board.Lanes, m.Board.fileErr, m.Board.loaded = msg.Lanes, msg.Err, true
+	m.Board.Lanes, m.Board.DoneDays, m.Board.DoneCards = msg.Lanes, msg.DoneDays, msg.DoneCards
+	m.Board.fileErr, m.Board.loaded = msg.Err, true
 	if msg.Err != nil {
-		m.Board.Lanes = nil
+		m.Board.Lanes, m.Board.DoneDays, m.Board.DoneCards = nil, 0, 0
 		m.Notice = fmt.Sprintf("Lane list file unreadable, showing the default Lanes: %v", msg.Err)
 	}
 	return m.keepLane().WithVisibleSelection()
@@ -81,7 +87,7 @@ func lanesSaved(m Model, msg LanesSaved) Model {
 		return m
 	}
 	if msg.ProjectUID == m.Collection.ProjectUID {
-		m.Board.Lanes = msg.Lanes
+		m.Board.Lanes, m.Board.DoneDays, m.Board.DoneCards = msg.Lanes, msg.DoneDays, msg.DoneCards
 	}
 	return m.keepLane().WithVisibleSelection()
 }

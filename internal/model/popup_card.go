@@ -169,8 +169,10 @@ func init() {
 		{
 			card: CardLanes, open: func(m Model) bool { return m.LanesForm.Open },
 			modes: []Mode{ModeLanesForm}, mode: func(Model) Mode { return ModeLanesForm },
-			key: updateLanesFormKey, fields: []FieldSpec{},
-			caret: func(Model) (Field, bool) { return "", true },
+			key:    updateLanesFormKey,
+			fields: LanesFields, focus: func(m *Model) *Field { return &m.LanesForm.Field },
+			locked: func(Model) bool { return false },
+			caret:  func(m Model) (Field, bool) { return m.LanesForm.Field, true },
 		},
 		{
 			card: CardFilter, open: func(m Model) bool { return m.FilterForm.Open },

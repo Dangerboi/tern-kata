@@ -43,7 +43,11 @@ func board(m model.Model, now time.Time) tern.Element {
 		for j, card := range column.Cards {
 			cards[j] = boardCard(m, card, now)
 		}
-		head := ui.Spans(ui.Span{T: column.Title, S: "strong"}, ui.Span{T: " " + strconv.Itoa(len(column.Cards)), S: "muted"})
+		count := strconv.Itoa(len(column.Cards))
+		if column.Total > len(column.Cards) {
+			count += " of " + strconv.Itoa(column.Total)
+		}
+		head := ui.Spans(ui.Span{T: column.Title, S: "strong"}, ui.Span{T: " " + count, S: "muted"})
 		lanes[i] = ui.Card{
 			Common:   ui.Common{Key: laneKey(i), Grow: 1, Basis: ui.BasisFrac(1 / float64(len(columns))), Min: &ui.Bounds{H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}},
 			Head:     head,
