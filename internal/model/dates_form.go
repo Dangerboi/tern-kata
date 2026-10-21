@@ -114,6 +114,28 @@ func DatesChangedError(label string) error {
 	return fmt.Errorf("%s changed elsewhere since the card opened; it was not overwritten. Close the card and open it again to see the new date.", label)
 }
 
+// datePreview is the muted line under a date field: the day text resolves to with its weekday, "no date" for blank, and nothing
+// for text that is not a date (saving refuses it).
+func datePreview(text, today string) string {
+	day, err := ParseDateInput(text, today)
+	switch {
+	case err != nil:
+		return ""
+	case day == "":
+		return "no date"
+	}
+	return DateWithWeekday(day)
+}
+
+// dateDay is the day text resolves to, "" for blank, or an error naming the field by label.
+func dateDay(label, text, today string) (string, error) {
+	day, err := ParseDateInput(text, today)
+	if err != nil {
+		return "", fmt.Errorf("%s %s", label, err.Error())
+	}
+	return day, nil
+}
+
 // DatesPreview is the muted line under a field: the day its text resolves to with its weekday, "no date" for blank, and nothing
 // for text that is not a date (saving refuses it). A prefilled value kata holds with a time shows its day.
 func (m Model) DatesPreview(name Field) string {
@@ -122,14 +144,7 @@ func (m Model) DatesPreview(name Field) string {
 	if text == f.Prefill.Of(name) && text != "" {
 		return DateWithWeekday(text[:min(len(text), len(dayLayout))])
 	}
-	day, err := ParseDateInput(text, m.Calendar.Date)
-	switch {
-	case err != nil:
-		return ""
-	case day == "":
-		return "no date"
-	}
-	return DateWithWeekday(day)
+	return datePreview(text, m.Calendar.Date)
 }
 
 // openDates is `d`: the card prefilled with the Issue's two dates as kata holds them.
@@ -172,9 +187,9 @@ func datesChanges(f DatesFormState, today string) ([]DateChange, error) {
 		if text == prefill {
 			continue
 		}
-		day, err := ParseDateInput(text, today)
+		day, err := dateDay(DatesLabel(name), text, today)
 		if err != nil {
-			return nil, fmt.Errorf("%s %s", DatesLabel(name), err.Error())
+			return nil, err
 		}
 		if day == prefill || (day == "" && prefill == "") {
 			continue

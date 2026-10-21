@@ -141,13 +141,13 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	if next, cmds, handled := updateProjectForm(m, msg); handled {
 		return next, cmds
 	}
-	switch msg.(type) {
+	switch msg := msg.(type) {
 	case CloseFieldMsg, CloseResultMsg:
 		return updateClose(m, msg)
 	case RecurrenceResultMsg:
 		return updateRecurrence(m, msg)
 	case DatesResultMsg:
-		return updateDates(m, msg.(DatesResultMsg))
+		return updateDates(m, msg)
 	}
 	if msg, ok := msg.(PickerSelected); ok {
 		return pickCollectionKey(m, msg.Key)

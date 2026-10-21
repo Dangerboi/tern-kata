@@ -25,7 +25,7 @@ const dayLayout = "2006-01-02"
 
 // IssueDates are the Issue's scheduled date and deadline as the date Collections read them, empty when absent.
 func IssueDates(issue Issue) (scheduled, deadline string) {
-	return IssueDate(issue.ScheduledOnDate, issue.Metadata, "scheduled_on"), IssueDate(issue.DeadlineOnDate, issue.Metadata, "deadline_on")
+	return IssueDate(issue.ScheduledOnDate, issue.Metadata, ScheduledKey), IssueDate(issue.DeadlineOnDate, issue.Metadata, DeadlineKey)
 }
 
 // ChooseDateBadge is the Date badge of an open Issue against the Pane calendar's date today, and false when it has none.
@@ -87,6 +87,12 @@ func shortDay(day, today string) string {
 // DatesLine is the selected card's line "scheduled YYYY-MM-DD · due YYYY-MM-DD", absent parts left out, empty without dates.
 func DatesLine(issue Issue) string {
 	scheduled, deadline := IssueDates(issue)
+	if _, err := time.Parse(dayLayout, scheduled); err != nil {
+		scheduled = ""
+	}
+	if _, err := time.Parse(dayLayout, deadline); err != nil {
+		deadline = ""
+	}
 	line := ""
 	if scheduled != "" {
 		line = "scheduled " + scheduled

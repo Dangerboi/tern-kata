@@ -251,13 +251,13 @@ func metadataChanged(p payloadMap) (verb, object string) {
 				to = plain(fields["to"])
 			}
 			switch {
-			case key == "scheduled_on" && to != "":
+			case key == ScheduledKey && to != "":
 				return "scheduled for", oneLine(to)
-			case key == "scheduled_on":
+			case key == ScheduledKey:
 				return "cleared schedule", ""
-			case key == "deadline_on" && to != "":
+			case key == DeadlineKey && to != "":
 				return "set deadline to", oneLine(to)
-			case key == "deadline_on":
+			case key == DeadlineKey:
 				return "cleared deadline", ""
 			}
 		}

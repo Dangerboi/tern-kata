@@ -26,7 +26,7 @@ func createLayer(m model.Model) tern.Element {
 	if f.ParentUID != "" {
 		title = "Create child Issue"
 	}
-	values := map[model.Field]string{model.CreateTitle: f.Title, model.CreateLabels: f.Labels, model.CreateOwner: f.Owner, model.CreatePriority: f.Priority, model.CreateScheduled: f.Scheduled, model.CreateDeadline: f.Deadline}
+	values := map[model.Field]string{model.CreateTitle: f.Title, model.CreateLabels: f.Labels, model.CreateOwner: f.Owner, model.CreatePriority: f.Priority, model.CreateScheduled: f.Dates.Scheduled, model.CreateDeadline: f.Dates.Deadline}
 	children := []tern.Element{}
 	for _, field := range model.CreateFields {
 		key := string(field.Name)

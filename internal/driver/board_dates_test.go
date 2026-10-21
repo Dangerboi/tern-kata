@@ -159,6 +159,8 @@ func TestSelectedCardShowsTheDatesLine(t *testing.T) {
 		{"scheduled only", "2026-10-28", "", "scheduled 2026-10-28"},
 		{"deadline only", "", "2026-11-02", "due 2026-11-02"},
 		{"none", "", "", ""},
+		{"unreadable deadline skipped", "2026-10-28", "soon", "scheduled 2026-10-28"},
+		{"only unreadable", "", "soon", ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s := boardPane(t, dated("a", c.scheduled, c.deadline), dated("b", "2026-10-28", "2026-11-02"))

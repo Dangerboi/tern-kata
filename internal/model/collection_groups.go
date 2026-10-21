@@ -25,8 +25,8 @@ func GroupIssues(collection Collection, issues []Issue, cal PaneCalendar) []Issu
 	for _, issue := range issues {
 		id := collection.View
 		title := collection.Title
-		schedule := IssueDate(issue.ScheduledOnDate, issue.Metadata, "scheduled_on")
-		deadline := IssueDate(issue.DeadlineOnDate, issue.Metadata, "deadline_on")
+		schedule := IssueDate(issue.ScheduledOnDate, issue.Metadata, ScheduledKey)
+		deadline := IssueDate(issue.DeadlineOnDate, issue.Metadata, DeadlineKey)
 		switch grouping {
 		case GroupScheduledDate:
 			if issue.Status != "open" || schedule == "" || schedule <= today {
@@ -73,7 +73,7 @@ func GroupIssues(collection Collection, issues []Issue, cal PaneCalendar) []Issu
 	for id, items := range groups {
 		slices.SortStableFunc(items, func(a, b Issue) int {
 			if grouping == GroupDeadline && (id == "0-overdue" || id == "1-today") {
-				if c := cmp.Compare(IssueDate(a.DeadlineOnDate, a.Metadata, "deadline_on"), IssueDate(b.DeadlineOnDate, b.Metadata, "deadline_on")); c != 0 {
+				if c := cmp.Compare(IssueDate(a.DeadlineOnDate, a.Metadata, DeadlineKey), IssueDate(b.DeadlineOnDate, b.Metadata, DeadlineKey)); c != 0 {
 					return c
 				}
 			}

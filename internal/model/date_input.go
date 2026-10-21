@@ -22,7 +22,7 @@ func ParseDateInput(input, today string) (string, error) {
 	if text == "" {
 		return "", nil
 	}
-	if day, err := time.Parse(dayLayout, text); err == nil && len(text) == len(dayLayout) {
+	if day, err := time.Parse(dayLayout, text); err == nil {
 		return day.Format(dayLayout), nil
 	}
 	var days int

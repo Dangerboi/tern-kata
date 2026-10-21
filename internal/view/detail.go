@@ -220,10 +220,10 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 	}
 	add("Created", text(m.DetailTime(issue.CreatedAt)))
 	add("Updated", text(m.DetailTime(issue.UpdatedAt)))
-	if day := model.IssueDate(issue.ScheduledOnDate, issue.Metadata, "scheduled_on"); day != "" {
+	if day := model.IssueDate(issue.ScheduledOnDate, issue.Metadata, model.ScheduledKey); day != "" {
 		add("Scheduled", text(day))
 	}
-	if day := model.IssueDate(issue.DeadlineOnDate, issue.Metadata, "deadline_on"); day != "" {
+	if day := model.IssueDate(issue.DeadlineOnDate, issue.Metadata, model.DeadlineKey); day != "" {
 		add("Deadline", text(day))
 	}
 	owner := m.OwnerText(issue.Owner, issue.AssignmentExpiresOn, now).String()
