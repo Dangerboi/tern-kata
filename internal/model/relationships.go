@@ -1,6 +1,7 @@
 package model
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strings"
@@ -52,7 +53,7 @@ type RelationshipIndex map[string]*Relationships
 // kept once per kind, and an Issue with several parent links has the first by link id.
 func NewRelationshipIndex(links []Link) RelationshipIndex {
 	ordered := slices.Clone(links)
-	slices.SortStableFunc(ordered, func(a, b Link) int { return int(a.ID - b.ID) })
+	slices.SortStableFunc(ordered, func(a, b Link) int { return cmp.Compare(a.ID, b.ID) })
 	index := RelationshipIndex{}
 	for _, l := range ordered {
 		if l.FromIssueUID == l.ToIssueUID {
@@ -114,26 +115,36 @@ const (
 	HighlightRelated       Highlight = "related"
 )
 
+// Find is the Relationships of uid to the Issue these Relationships belong to, in ring precedence, each with the ref to uid
+// as the Issue's Relationships name it; nil when unrelated.
+func (r Relationships) Find(uid string) []Found {
+	var out []Found
+	look := func(h Highlight, refs ...RelationshipRef) {
+		if i := slices.IndexFunc(refs, func(x RelationshipRef) bool { return x.UID == uid }); i >= 0 {
+			out = append(out, Found{h, refs[i]})
+		}
+	}
+	look(HighlightBlocksThis, r.BlockedBy...)
+	look(HighlightBlockedByThis, r.Blocks...)
+	if r.Parent != nil {
+		look(HighlightParent, *r.Parent)
+	}
+	look(HighlightChild, r.Children...)
+	look(HighlightRelated, r.Related...)
+	return out
+}
+
+// Found is one Relationship of an Issue to another: how they relate and the other Issue.
+type Found struct {
+	Highlight Highlight
+	Ref       RelationshipRef
+}
+
 // HighlightsOf are the Relationships of uid to the Issue these Relationships belong to, in ring precedence, nil when unrelated.
 func (r Relationships) HighlightsOf(uid string) []Highlight {
-	has := func(refs []RelationshipRef) bool {
-		return slices.ContainsFunc(refs, func(x RelationshipRef) bool { return x.UID == uid })
-	}
 	var out []Highlight
-	if has(r.BlockedBy) {
-		out = append(out, HighlightBlocksThis)
-	}
-	if has(r.Blocks) {
-		out = append(out, HighlightBlockedByThis)
-	}
-	if r.Parent != nil && r.Parent.UID == uid {
-		out = append(out, HighlightParent)
-	}
-	if has(r.Children) {
-		out = append(out, HighlightChild)
-	}
-	if has(r.Related) {
-		out = append(out, HighlightRelated)
+	for _, f := range r.Find(uid) {
+		out = append(out, f.Highlight)
 	}
 	return out
 }
@@ -162,7 +173,7 @@ func selectParent(m Model) Model {
 	if issue == nil {
 		return m
 	}
-	parent := NewRelationshipIndex(m.Snapshot.Links).Of(issue.UID).Parent
+	parent := m.Relationships.Of(issue.UID).Parent
 	if parent == nil {
 		m.Notice = fmt.Sprintf("%s has no parent.", issue.ShortID)
 		return m
@@ -176,15 +187,8 @@ func (m Model) relatedID(uid string) string {
 	if issue == nil {
 		return uid
 	}
-	r := NewRelationshipIndex(m.Snapshot.Links).Of(issue.UID)
-	groups := [][]RelationshipRef{r.Children, r.Blocks, r.BlockedBy, r.Related}
-	if r.Parent != nil {
-		groups = append(groups, []RelationshipRef{*r.Parent})
-	}
-	for _, refs := range groups {
-		if i := slices.IndexFunc(refs, func(ref RelationshipRef) bool { return ref.UID == uid }); i >= 0 {
-			return refs[i].ID(issue.ProjectName)
-		}
+	if found := m.Relationships.Of(issue.UID).Find(uid); len(found) > 0 {
+		return found[0].Ref.ID(issue.ProjectName)
 	}
 	return uid
 }

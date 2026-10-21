@@ -2,6 +2,7 @@ package view
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -68,7 +69,7 @@ func board(m model.Model, now time.Time) tern.Element {
 	tones := laneTones(columns)
 	var selected model.Relationships
 	if m.SelectedUID != "" {
-		selected = model.NewRelationshipIndex(m.Snapshot.Links).Of(m.SelectedUID)
+		selected = m.Relationships.Of(m.SelectedUID)
 	}
 	lanes := make([]tern.Element, len(columns))
 	for i, column := range columns {
@@ -118,12 +119,8 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 		title.Lines = 0
 		labels = issue.Labels
 	}
-	body := ui.Nodes(
-		ui.Row{Common: ui.Common{Key: "id"}, Gap: ui.GapSM, Wrap: true, Children: ui.Nodes(
-			ui.Badge{Common: ui.Common{Key: "short", Tone: tone}, Text: issue.ShortID},
-		)},
-		title,
-	)
+	ids := ui.Nodes(ui.Badge{Common: ui.Common{Key: "short", Tone: tone}, Text: issue.ShortID})
+	body := ui.Nodes(title)
 	if selected {
 		owner := m.OwnerText(issue.Owner, issue.AssignmentExpiresOn, now).String()
 		if owner == "" {
@@ -158,18 +155,19 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 	if done {
 		cardTone = ui.ToneMuted
 	}
-	var head ui.Rich
 	if m.Board.Mode == model.BoardColumns && !selected {
 		if tags := selectedRels.HighlightsOf(issue.UID); len(tags) > 0 {
-			head = highlightHead(tags)
+			for _, tag := range tags {
+				ids = append(ids, ui.Badge{Common: ui.Common{Key: "tag-" + string(tag), Tone: highlightTone[tag]}, Text: string(tag)})
+			}
 			if !done {
 				cardTone = highlightTone[tags[0]]
 			}
 		}
 	}
+	body = slices.Insert(body, 0, tern.Element(ui.Row{Common: ui.Common{Key: "id"}, Gap: ui.GapSM, Wrap: true, Children: ids}))
 	return ui.Card{
 		Common:   ui.Common{Key: issue.UID, Tone: cardTone, Actions: &ui.Actions{Click: CardClick(issue.UID), DblClick: OpenRowClick(issue.UID)}},
-		Head:     head,
 		Selected: selected,
 		Children: body,
 	}
@@ -235,26 +233,6 @@ var highlightTone = map[model.Highlight]ui.Tone{
 	model.HighlightParent:        ui.ToneAccent,
 	model.HighlightChild:         ui.ToneInfo,
 	model.HighlightRelated:       ui.ToneNeutral,
-}
-
-// highlightHead is the card head naming every Relationship to the selected card, each tag in its own tone.
-func highlightHead(tags []model.Highlight) ui.Rich {
-	spans := make([]ui.Span, 0, 2*len(tags))
-	for i, tag := range tags {
-		if i > 0 {
-			spans = append(spans, ui.Span{T: " "})
-		}
-		spans = append(spans, ui.Span{T: string(tag), S: highlightStyle(tag)})
-	}
-	return ui.Spans(spans...)
-}
-
-// highlightStyle is the span style of a tag: the tone's own, and related has none, so it is the normal text colour.
-func highlightStyle(tag model.Highlight) string {
-	if tone := highlightTone[tag]; tone != ui.ToneNeutral {
-		return string(tone)
-	}
-	return ""
 }
 
 // relationshipsLine is the selected card's Relationships line: "parent zpxs  6 children, 2 open  blocks e000  blocked by 8gm4  related 7x74".

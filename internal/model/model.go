@@ -60,11 +60,13 @@ type Model struct {
 	Host      string
 	FieldForm FieldFormState
 	// Notice reports a write that has nothing to show in the Issues, and goes at the next key.
-	Notice           string
-	Workspace        string
-	Project          Project
-	Daemon           Daemon
-	Snapshot         Snapshot
+	Notice    string
+	Workspace string
+	Project   Project
+	Daemon    Daemon
+	Snapshot  Snapshot
+	// Relationships is every Issue's Relationships, built from Snapshot's links each time a snapshot is applied.
+	Relationships    RelationshipIndex
 	Issues           []Issue
 	SelectedUID      string
 	Loading          bool

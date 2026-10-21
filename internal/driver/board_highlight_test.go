@@ -28,16 +28,24 @@ func highlightBoard(t *testing.T) driver.State {
 	return step(t, linkedBoard(t, links, issues...), model.SelectMsg{UID: "sel"}).State
 }
 
-// highlight is the tags and the tone of uid's card as drawn: the head's spans and the card's own tone.
+// highlight is the tags and the tone of uid's card as drawn: the badges after the short id badge in the card's id row, each
+// with its tone, and the card's own tone.
 func highlight(t *testing.T, s driver.State, uid string) (tags []string, tone string) {
 	t.Helper()
-	n := node(t, wireNodes(t, view.Render(s.Model, now)), view.CardID(s.Model, uid))
-	if head, ok := n.P["head"].([]any); ok {
-		for _, span := range head {
-			if text := strings.TrimSpace(span.(map[string]any)["t"].(string)); text != "" {
-				tags = append(tags, text)
-			}
+	nodes := wireNodes(t, view.Render(s.Model, now))
+	card := view.CardID(s.Model, uid)
+	n := node(t, nodes, card)
+	if _, ok := n.P["head"]; ok {
+		t.Errorf("%s draws a head, the tags are badges in the id row", uid)
+	}
+	row := node(t, nodes, card+".id")
+	for i, c := range row.C {
+		if i == 0 {
+			continue
 		}
+		text, _ := c.P["text"].(string)
+		tone, _ := c.P["tone"].(string)
+		tags = append(tags, text+"/"+tone)
 	}
 	tone, _ = n.P["tone"].(string)
 	return tags, tone
@@ -53,7 +61,7 @@ func TestEachRelationshipTagsTheOtherCardInItsTone(t *testing.T) {
 		{"rel", "related", "neutral"},
 	} {
 		tags, tone := highlight(t, s, c.uid)
-		if len(tags) != 1 || tags[0] != c.tag || tone != c.tone {
+		if len(tags) != 1 || tags[0] != c.tag+"/"+c.tone || tone != c.tone {
 			t.Errorf("%s: tags %q tone %q, want [%s] %s", c.uid, tags, tone, c.tag, c.tone)
 		}
 	}
@@ -64,7 +72,7 @@ func TestEachRelationshipTagsTheOtherCardInItsTone(t *testing.T) {
 
 func TestSeveralRelationshipsShowEveryTagAndRingByPrecedence(t *testing.T) {
 	tags, tone := highlight(t, highlightBoard(t), "both")
-	if want := []string{"blocks this", "child"}; strings.Join(tags, "|") != strings.Join(want, "|") || tone != "error" {
+	if want := []string{"blocks this/error", "child/info"}; strings.Join(tags, "|") != strings.Join(want, "|") || tone != "error" {
 		t.Errorf("tags %q tone %q, want %q error", tags, tone, want)
 	}
 }
@@ -79,14 +87,14 @@ func TestTheSelectedCardKeepsItsRingAndDoneCardsStayMuted(t *testing.T) {
 		t.Errorf("the selected card lost its selected ring")
 	}
 	tags, tone := highlight(t, s, "old")
-	if len(tags) != 1 || tags[0] != "related" || tone != "muted" {
+	if len(tags) != 1 || tags[0] != "related/neutral" || tone != "muted" {
 		t.Errorf("a related Done card: tags %q tone %q, want [related] muted", tags, tone)
 	}
 }
 
 func TestTheHighlightFollowsTheSelectionAndNeedsOne(t *testing.T) {
 	s := step(t, highlightBoard(t), model.SelectMsg{UID: "par"}).State
-	if tags, tone := highlight(t, s, "sel"); len(tags) != 1 || tags[0] != "child" || tone != "info" {
+	if tags, tone := highlight(t, s, "sel"); len(tags) != 1 || tags[0] != "child/info" || tone != "info" {
 		t.Errorf("with the parent selected, sel has tags %q tone %q, want [child] info", tags, tone)
 	}
 	if tags, _ := highlight(t, s, "kid"); len(tags) != 0 {
@@ -104,8 +112,8 @@ func TestTheLaneViewDrawsNoHighlight(t *testing.T) {
 	s := highlightBoard(t)
 	s.Model.Board.Mode = model.BoardLane
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
-		if _, ok := n.P["head"]; ok {
-			t.Errorf("the Lane view draws a head on %s", n.ID)
+		if _, ok := n.P["head"]; ok || strings.Contains(n.ID, ".tag-") {
+			t.Errorf("the Lane view draws a highlight on %s", n.ID)
 		}
 	}
 }

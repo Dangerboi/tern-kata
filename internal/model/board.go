@@ -101,13 +101,12 @@ func (m Model) BoardColumns() []BoardColumn {
 	for i, key := range keys {
 		columns[i] = BoardColumn{Lane: key, Title: LaneTitle(key)}
 	}
-	relationships := NewRelationshipIndex(m.Snapshot.Links)
 	for _, issue := range m.Issues {
 		lane := LaneOf(issue, lanes)
 		if lane == LaneDone && !m.Calendar.closedWithin(issue, doneDays) {
 			continue
 		}
-		card := BoardCard{Issue: issue, Relationships: relationships.Of(issue.UID)}
+		card := BoardCard{Issue: issue, Relationships: m.Relationships.Of(issue.UID)}
 		for _, label := range issue.Labels {
 			if !slices.Contains(lanes, label) {
 				card.Labels = append(card.Labels, label)

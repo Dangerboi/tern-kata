@@ -296,6 +296,7 @@ func (m Model) cancelPending(before Model, msg Msg) Model {
 // applyCollection puts a snapshot on screen: the Collections, the grouped Issues, and the selection.
 func (m Model) applyCollection(snapshot Snapshot) Model {
 	m.Snapshot = snapshot
+	m.Relationships = NewRelationshipIndex(snapshot.Links)
 	m.Collections = FixedCollections()
 	for _, p := range snapshot.Catalog {
 		m.Collections = append(m.Collections, ProjectCollection(p.Project.UID, p.Project.Name))
