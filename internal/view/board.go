@@ -65,11 +65,15 @@ func laneTones(columns []model.BoardColumn) []ui.Tone {
 func board(m model.Model, now time.Time) tern.Element {
 	columns := m.BoardColumns()
 	tones := laneTones(columns)
+	var selected model.Relationships
+	if m.SelectedUID != "" {
+		selected = model.NewRelationshipIndex(m.Snapshot.Links).Of(m.SelectedUID)
+	}
 	lanes := make([]tern.Element, len(columns))
 	for i, column := range columns {
 		cards := make([]tern.Element, len(column.Cards))
 		for j, card := range column.Cards {
-			cards[j] = boardCard(m, card, tones[i], column.Lane == model.LaneDone, now)
+			cards[j] = boardCard(m, card, tones[i], column.Lane == model.LaneDone, selected, now)
 		}
 		count := strconv.Itoa(len(column.Cards))
 		if column.Total > len(column.Cards) {
@@ -100,7 +104,7 @@ func board(m model.Model, now time.Time) tern.Element {
 // boardCard is one Issue: its short id over its title clamped to two lines and its labels that are not Lane labels. The selected card
 // is unclamped and adds the owner and every label. The id is a badge in its Lane's tone; the title is the normal text colour, a Done
 // card's muted. Labels are info badges, the owner a user badge, "also" warning and the reopen hint muted.
-func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, now time.Time) tern.Element {
+func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, selectedRels model.Relationships, now time.Time) tern.Element {
 	issue := card.Issue
 	selected := issue.UID == m.SelectedUID
 	titleStyle := ""
@@ -148,8 +152,18 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, now
 	if done {
 		cardTone = ui.ToneMuted
 	}
+	var head ui.Rich
+	if m.Board.Mode == model.BoardColumns && !selected {
+		if tags := selectedRels.HighlightsOf(issue.UID); len(tags) > 0 {
+			head = highlightHead(tags)
+			if !done {
+				cardTone = highlightTone[tags[0]]
+			}
+		}
+	}
 	return ui.Card{
 		Common:   ui.Common{Key: issue.UID, Tone: cardTone, Actions: &ui.Actions{Click: CardClick(issue.UID), DblClick: OpenRowClick(issue.UID)}},
+		Head:     head,
 		Selected: selected,
 		Children: body,
 	}
@@ -199,4 +213,33 @@ func refList(refs []model.RelationshipRef, project string) string {
 		list += " +" + strconv.Itoa(len(refs)-maxRelationshipIDs)
 	}
 	return list
+}
+
+// highlightTone is the tone of a Relationship highlight's tag and ring.
+var highlightTone = map[model.Highlight]ui.Tone{
+	model.HighlightBlocksThis:    ui.ToneError,
+	model.HighlightBlockedByThis: ui.ToneWarning,
+	model.HighlightParent:        ui.ToneAccent,
+	model.HighlightChild:         ui.ToneInfo,
+	model.HighlightRelated:       ui.ToneNeutral,
+}
+
+// highlightHead is the card head naming every Relationship to the selected card, each tag in its own tone.
+func highlightHead(tags []model.Highlight) ui.Rich {
+	spans := make([]ui.Span, 0, 2*len(tags))
+	for i, tag := range tags {
+		if i > 0 {
+			spans = append(spans, ui.Span{T: " "})
+		}
+		spans = append(spans, ui.Span{T: string(tag), S: highlightStyle(tag)})
+	}
+	return ui.Spans(spans...)
+}
+
+// highlightStyle is the span style of a tag: the tone's own, and related has none, so it is the normal text colour.
+func highlightStyle(tag model.Highlight) string {
+	if tone := highlightTone[tag]; tone != ui.ToneNeutral {
+		return string(tone)
+	}
+	return ""
 }

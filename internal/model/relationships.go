@@ -94,3 +94,39 @@ func addRef(refs []RelationshipRef, ref RelationshipRef) []RelationshipRef {
 	}
 	return append(refs, ref)
 }
+
+// Highlight is how an Issue relates to the selected one, named from the selected Issue's side.
+type Highlight string
+
+// Highlights, in ring precedence: the first one an Issue has gives its ring.
+const (
+	HighlightBlocksThis    Highlight = "blocks this"
+	HighlightBlockedByThis Highlight = "blocked by this"
+	HighlightParent        Highlight = "parent"
+	HighlightChild         Highlight = "child"
+	HighlightRelated       Highlight = "related"
+)
+
+// HighlightsOf are the Relationships of uid to the Issue these Relationships belong to, in ring precedence, nil when unrelated.
+func (r Relationships) HighlightsOf(uid string) []Highlight {
+	has := func(refs []RelationshipRef) bool {
+		return slices.ContainsFunc(refs, func(x RelationshipRef) bool { return x.UID == uid })
+	}
+	var out []Highlight
+	if has(r.BlockedBy) {
+		out = append(out, HighlightBlocksThis)
+	}
+	if has(r.Blocks) {
+		out = append(out, HighlightBlockedByThis)
+	}
+	if r.Parent != nil && r.Parent.UID == uid {
+		out = append(out, HighlightParent)
+	}
+	if has(r.Children) {
+		out = append(out, HighlightChild)
+	}
+	if has(r.Related) {
+		out = append(out, HighlightRelated)
+	}
+	return out
+}

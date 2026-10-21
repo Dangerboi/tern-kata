@@ -52,6 +52,8 @@
 
 **Blocked marker**: The "blocked by 8gm4" line, in the warning tone, on an open Board card that at least one open Issue blocks. It names the open blockers, qualified (`project#id`) outside the Project, cut to three and "+N". Done cards never show it.
 
+**Relationship highlight**: What the Board draws on the cards related to the selected card: a tag in the card head naming the Relationship as seen from the selected card ("parent", "child", "blocks this", "blocked by this", "related") and a ring in the Relationship's tone. A card with several Relationships shows every tag; its ring takes the first of blocks this, blocked by this, parent, child, related. Only the Board draws it, not the Lane view.
+
 **Lane view**: One Lane as a flat, full-width list under a Lane header line, with the Issue detail column beside it (only the focused column in a Pane narrower than the side-by-side width). Enter or a double-click on a card opens it, `←`/`→` switch Lanes, and Esc returns to the Board. The name avoids "focus", which already means the focused column.
 
 **Lane**: One label of the Lane list, shown as a column and titled from its label ("ready-for-agent" reads "Ready for agent"). Every Lane stands for one kata label, so the Board is a view of kata data, not a copy.
