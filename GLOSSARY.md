@@ -52,6 +52,10 @@
 
 **Blocked marker**: The "blocked by 8gm4" line, in the warning tone, on an open Board card that at least one open Issue blocks. It names the open blockers, qualified (`project#id`) outside the Project, cut to three and "+N". Done cards never show it.
 
+**Date badge**: The one badge on an open Board card, in the id row after the priority badge, for the most pressing of its deadline and scheduled date, worded in the Pane calendar's terms: "overdue 2d" (error), "due today" (warning), "scheduled 3d ago" (warning), "scheduled today" (accent), "due tomorrow" (warning), "due 10-24" (muted), "scheduled tomorrow" and "scheduled 10-28" (muted); another year reads YYYY-MM-DD. Done cards and undated cards have none.
+
+**Dates line**: The line on the selected Board card giving both dates in full, "scheduled 2026-10-28 · due 2026-11-02", absent parts left out and no line without dates.
+
 **Relationship highlight**: What the Board draws on the cards related to the selected card: a badge beside the short id in the card head naming the Relationship as seen from the selected card ("parent", "child", "blocks this", "blocked by this", "related") and a ring in the Relationship's tone. A card with several Relationships shows every tag; its ring takes the first of blocks this, blocked by this, parent, child, related. Only the Board draws it, not the Lane view.
 
 **Relationships line**: The line on the selected Board card that names its Relationships: "parent zpxs, 6 children, 2 open, blocks e000, blocked by 8gm4, related 7x74", empty parts left out. Each id is a click that selects that Issue's card; `^` selects the parent's.

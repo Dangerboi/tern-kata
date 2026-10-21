@@ -103,9 +103,16 @@ func board(m model.Model, now time.Time) tern.Element {
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1}, "", children)
 }
 
+var dateTones = map[model.DateTone]ui.Tone{
+	model.DateMuted:   ui.ToneMuted,
+	model.DateWarning: ui.ToneWarning,
+	model.DateError:   ui.ToneError,
+	model.DateAccent:  ui.ToneAccent,
+}
+
 // boardCard is one Issue: its short id over its title clamped to two lines and its labels that are not Lane labels. The selected card
 // is unclamped and adds the owner and every label. The id is a badge in its Lane's tone; the title is the normal text colour, a Done
-// card's muted. Labels are info badges, the owner a user badge, "also" warning and the reopen hint muted.
+// card's muted. The id row ends with the Date badge of an open card; the selected card adds the Dates line. Labels are info badges, the owner a user badge, "also" warning and the reopen hint muted.
 func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, selectedRels model.Relationships, now time.Time) tern.Element {
 	issue := card.Issue
 	selected := issue.UID == m.SelectedUID
@@ -122,6 +129,11 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 	ids := ui.Nodes(ui.Badge{Common: ui.Common{Key: "short", Tone: tone}, Text: issue.ShortID})
 	if text, prioTone := priorityText(issue.Priority); text != "" {
 		ids = append(ids, ui.Badge{Common: ui.Common{Key: "prio", Tone: prioTone}, Text: text})
+	}
+	if !done {
+		if badge, ok := model.ChooseDateBadge(issue, m.Calendar.Date); ok {
+			ids = append(ids, ui.Badge{Common: ui.Common{Key: "date", Tone: dateTones[badge.Tone]}, Text: badge.Text})
+		}
 	}
 	body := ui.Nodes(title)
 	if selected {
@@ -140,6 +152,11 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 	}
 	if len(card.Also) > 0 {
 		body = append(body, ui.Text{Common: ui.Common{Key: "also"}, Spans: []ui.Span{{T: "also: " + strings.Join(card.Also, ", "), S: "warning"}}})
+	}
+	if selected {
+		if line := model.DatesLine(issue); line != "" {
+			body = append(body, ui.Text{Common: ui.Common{Key: "dates"}, Spans: []ui.Span{{T: line, S: "muted"}}})
+		}
 	}
 	if !done {
 		if marker := blockedMarker(card); marker != "" {
