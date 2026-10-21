@@ -50,6 +50,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Changed
 
+- The Issue list draws each id in its Lane's Board colour (Done's for a closed Issue) and each owner in the user colour, as the Board does; where a list span has no such colour it takes the nearest text colour. A Project's Lane list now loads when the Project opens, not only when the Board turns on.
 - tern-kata requires the kata v0.19.0 daemon. Against an older daemon the Pane refuses to connect and says to upgrade.
 - Saving a Draft and posting a comment or reply conflict only when the Issue's text changed. An agent claiming the Issue, a claim expiring or an owner change no longer causes a conflict. Closing succeeds while the Issue is open, and if someone closed it first the Close card says so.
 - The Pane finds the daemon the way the kata CLI does, so it works without `kata` on `PATH`. Connecting gives up after 10 seconds instead of hanging.

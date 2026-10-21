@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
@@ -16,10 +17,15 @@ func loadCmds(cmds []model.Cmd) (loads []model.LoadLanes) {
 	return loads
 }
 
-func TestBoardOnAsksForTheProjectsLanesOnce(t *testing.T) {
+func TestOpeningAProjectAsksForItsLanesOnceNotTheBoard(t *testing.T) {
+	s := feed(t, driver.State{}, model.Start{Workspace: "/repo"}, resize(160)).State
+	opened := step(t, s, model.ProjectLoaded{Project: model.Project{ID: 7, UID: "p", Name: "work"}})
+	if got := loadCmds(opened.Cmds); len(got) != 1 || got[0].ProjectUID != "p" {
+		t.Fatalf("opening a Project asked %v, want one load for Project p", got)
+	}
 	out := step(t, projectPane(t, 160, boardCard("a")), key("b"))
-	if got := loadCmds(out.Cmds); len(got) != 1 || got[0].ProjectUID != "p" {
-		t.Fatalf("turning the Board on asked %v, want one load for Project p", got)
+	if got := loadCmds(out.Cmds); len(got) != 0 {
+		t.Fatalf("turning the Board on asked %v, want none: the Project's open already asked", got)
 	}
 	if got := loadCmds(step(t, out.State, key("j")).Cmds); len(got) != 0 {
 		t.Errorf("a key on the Board asked %v, want no load", got)

@@ -2,6 +2,7 @@ package model_test
 
 import (
 	"reflect"
+	"slices"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
@@ -32,6 +33,8 @@ func loadFirst(m model.Model, loaded model.ProjectLoaded, snapshot model.Snapsho
 
 // readsCollection says cmds are one read of the Collection snapshot on screen, sending etag.
 func readsCollection(cmds []model.Cmd, m model.Model, etag string) bool {
+	// A Project Collection also asks for its Lane list, which the Board and the list's colours read.
+	cmds = slices.DeleteFunc(slices.Clone(cmds), func(c model.Cmd) bool { _, ok := c.(model.LoadLanes); return ok })
 	if len(cmds) != 1 {
 		return false
 	}

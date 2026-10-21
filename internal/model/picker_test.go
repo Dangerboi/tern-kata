@@ -427,7 +427,7 @@ func TestPickerBackEntryAndClicksSwitchLevels(t *testing.T) {
 		t.Fatalf("click on Projects: %+v, want %+v", into.Picker, want.Picker)
 	}
 	m, cmds := model.Update(into, model.PickerSelected{Key: "project.alpha-uid"})
-	if m.Picker.Open || m.Collection.ProjectUID != "alpha-uid" || len(cmds) != 1 {
+	if m.Picker.Open || m.Collection.ProjectUID != "alpha-uid" || len(cmds) != 2 {
 		t.Fatalf("click on a Project: open=%v collection=%+v", m.Picker.Open, m.Collection)
 	}
 }

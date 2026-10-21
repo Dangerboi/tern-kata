@@ -65,8 +65,8 @@ func TestRowShowsKidsOwnerAndUpdated(t *testing.T) {
 	if strings.Contains(leaf, "/") || !strings.Contains(leaf, "3d ago") {
 		t.Errorf("leaf row %q: want no kids and 3d ago", leaf)
 	}
-	if got := style(t, nodes[view.IssueID("parent")], "dana"); got != "muted" {
-		t.Errorf("owner style = %q, want muted", got)
+	if got := style(t, nodes[view.IssueID("parent")], "dana"); got != "accent" {
+		t.Errorf("owner style = %q, want accent, the nearest text colour to the user tone", got)
 	}
 }
 

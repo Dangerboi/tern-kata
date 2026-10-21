@@ -41,6 +41,8 @@ type BoardState struct {
 	fileErr error
 	// loaded says the load for the current Project has answered; until then Lanes is the default, not the saved list.
 	loaded bool
+	// asked is the Project whose Lane list was last asked for; empty when the Collection is not a Project.
+	asked string
 	// detailHidden is the detail column's hidden flag from before the Board took its place.
 	detailHidden bool
 }

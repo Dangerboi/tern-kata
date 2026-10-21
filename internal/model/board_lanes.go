@@ -5,7 +5,7 @@ import (
 	"slices"
 )
 
-// The Lane list is read from tern-kata's user config when Board mode turns on and when the Project changes while it is on. A file
+// The Lane list is read from tern-kata's user config whenever a Project Collection becomes current. A file
 // that cannot be read leaves the default Lane list and is never overwritten.
 
 // LoadLanes asks for the saved Lane list of the Project with ProjectUID.
@@ -55,17 +55,23 @@ func (m Model) SaveLaneList(lanes []string, doneDays, doneCards int) (Model, []C
 	return m, []Cmd{SaveLanes{ProjectUID: m.Collection.ProjectUID, ProjectName: m.Collection.Title, Lanes: slices.Clone(lanes), DoneDays: doneDays, DoneCards: doneCards}}
 }
 
-// lanesLoad is the load a Step's change of Board mode or Project calls for: one command when the Board has just turned on or
-// its Project has changed, and the old Project's Lanes are dropped at once.
-func (m Model) lanesLoad(wasOn bool, was string) (Model, []Cmd) {
-	if !m.Board.On() || (wasOn && was == m.Collection.ProjectUID) {
+// lanesLoad is the load a Step's change of Collection calls for: one command when a Project Collection becomes current, whether or
+// not the Board is on, because the list colours Issues by Lane too. Other Collections use the default Lane list and load nothing.
+// The old Project's Lanes are dropped at once.
+func (m Model) lanesLoad() (Model, []Cmd) {
+	uid := ""
+	if m.Collection.IsProject() {
+		uid = m.Collection.ProjectUID
+	}
+	if uid == m.Board.asked {
 		return m, nil
 	}
-	m.Board.loaded = false
-	if was != m.Collection.ProjectUID {
-		m.Board.Lanes, m.Board.DoneDays, m.Board.DoneCards, m.Board.fileErr = nil, 0, 0, nil
+	m.Board.asked, m.Board.loaded = uid, false
+	m.Board.Lanes, m.Board.DoneDays, m.Board.DoneCards, m.Board.fileErr = nil, 0, 0, nil
+	if uid == "" {
+		return m, nil
 	}
-	return m, []Cmd{LoadLanes{ProjectUID: m.Collection.ProjectUID}}
+	return m, []Cmd{LoadLanes{ProjectUID: uid}}
 }
 
 func lanesLoaded(m Model, msg LanesLoaded) Model {

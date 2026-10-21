@@ -42,10 +42,9 @@ func (d IssueDetail) OpenIssueRef() string              { return d.openRef }
 // whenever focus is not on the detail or it shows an Issue no jump landed on, and a changed selection or a stale detail loads.
 func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 	shown, tab := m.DetailIssueUID(), m.tab
-	wasOn, was := m.Board.On(), m.Collection.ProjectUID
 	m, cmds := update(m, msg)
 	m = m.settleBoard()
-	m, load := m.lanesLoad(wasOn, was)
+	m, load := m.lanesLoad()
 	cmds = append(cmds, load...)
 	if m.tab != tab {
 		cmds = append(cmds, RevealActivityTab{})
