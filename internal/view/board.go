@@ -49,9 +49,9 @@ func board(m model.Model, now time.Time) tern.Element {
 		}
 		head := ui.Spans(ui.Span{T: column.Title, S: "strong"}, ui.Span{T: " " + count, S: "muted"})
 		lanes[i] = ui.Card{
-			Common:   ui.Common{Key: laneKey(i), Grow: 1, Basis: ui.BasisFrac(1 / float64(len(columns))), Min: &ui.Bounds{H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}},
+			Common:   ui.Common{Key: laneKey(i), Grow: 1, Basis: ui.BasisFrac(0), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}},
 			Head:     head,
-			Children: ui.Nodes(ui.List{CommonWithoutMax: scrollerCommon("cards"), Max: scrollMax(m), Empty: ui.T("No cards"), Children: cards}),
+			Children: ui.Nodes(ui.List{CommonWithoutMax: scrollerCommon("cards"), Max: boardMax(m), Empty: ui.T("No cards"), Children: cards}),
 		}
 	}
 	children := []tern.Element{}
@@ -86,7 +86,7 @@ func boardCard(m model.Model, card model.BoardCard, now time.Time) tern.Element 
 		if owner == "" {
 			owner = "unassigned"
 		}
-		body = append(body, ui.Text{Common: ui.Common{Key: "owner", Tone: ui.ToneMuted}, Text: owner, Wrap: ui.WrapNone})
+		body = append(body, ui.Text{Common: ui.Common{Key: "owner", Tone: ui.ToneMuted}, Text: owner})
 	}
 	if len(labels) > 0 {
 		body = append(body, ui.Text{Common: ui.Common{Key: "labels", Tone: ui.ToneMuted}, Text: strings.Join(labels, ", ")})
@@ -95,7 +95,7 @@ func boardCard(m model.Model, card model.BoardCard, now time.Time) tern.Element 
 		body = append(body, ui.Text{Common: ui.Common{Key: "also", Tone: ui.ToneWarning}, Text: "also: " + strings.Join(card.Also, ", ")})
 	}
 	if card.Reopen != "" {
-		body = append(body, ui.Text{Common: ui.Common{Key: "reopen", Tone: ui.ToneMuted}, Text: "r → " + card.Reopen, Wrap: ui.WrapNone})
+		body = append(body, ui.Text{Common: ui.Common{Key: "reopen", Tone: ui.ToneMuted}, Text: "r → " + card.Reopen})
 	}
 	return ui.Card{
 		Common:   ui.Common{Key: issue.UID, Tone: tone, Actions: &ui.Actions{Click: CardClick(issue.UID), DblClick: OpenRowClick(issue.UID)}},
@@ -103,4 +103,20 @@ func boardCard(m model.Model, card model.BoardCard, now time.Time) tern.Element 
 		Selected: selected,
 		Children: body,
 	}
+}
+
+// boardMax caps a Lane's card list so the Lane ends above the footer and the list scrolls inside it: the Pane has nothing to
+// scroll, so the top bar stays. MaxFrac is a fraction of the window, so the room the chrome takes (top bar, Lane header, Search
+// line, filter line, footer lines) is a share of an assumed 500px window, as in scrollMax.
+// ponytail: below ~500px the Lane clips its lowest cards; above it the Lane leaves some of the window unused. Upgrade: a Tern prop for a card body that fills its card.
+func boardMax(m model.Model) ui.ListMax {
+	grid, _, _ := footerGrid(m)
+	chrome := 120 + 16*len(grid)
+	if m.FilterSummary() != "" {
+		chrome += 16
+	}
+	if m.Search.Open {
+		chrome += 40
+	}
+	return ui.MaxFrac(max(1-float64(chrome)/500, 0.3))
 }
