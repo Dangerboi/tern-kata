@@ -1,6 +1,7 @@
 package view
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -141,6 +142,11 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, now
 			body = append(body, ui.Text{Common: ui.Common{Key: "blocked"}, Spans: []ui.Span{{T: marker, S: "warning"}}})
 		}
 	}
+	if selected {
+		if line := relationshipsLine(card); line != nil {
+			body = append(body, line)
+		}
+	}
 	if card.Reopen != "" {
 		body = append(body, ui.Text{Common: ui.Common{Key: "reopen"}, Spans: []ui.Span{{T: "r → " + card.Reopen, S: "muted"}}})
 	}
@@ -188,15 +194,65 @@ func blockedMarker(card model.BoardCard) string {
 	return "blocked by " + refList(blockers, card.Issue.ProjectName)
 }
 
+// shownRefs are the refs a list names and how many more it leaves out, cut to maxRelationshipIDs.
+func shownRefs(refs []model.RelationshipRef) ([]model.RelationshipRef, int) {
+	shown := min(len(refs), maxRelationshipIDs)
+	return refs[:shown], len(refs) - shown
+}
+
 // refList names refs by id as seen from project, cut to maxRelationshipIDs and "+N".
 func refList(refs []model.RelationshipRef, project string) string {
-	ids := make([]string, 0, maxRelationshipIDs)
-	for _, r := range refs[:min(len(refs), maxRelationshipIDs)] {
-		ids = append(ids, r.ID(project))
+	shown, more := shownRefs(refs)
+	ids := make([]string, len(shown))
+	for i, r := range shown {
+		ids[i] = r.ID(project)
 	}
 	list := strings.Join(ids, ", ")
-	if len(refs) > maxRelationshipIDs {
-		list += " +" + strconv.Itoa(len(refs)-maxRelationshipIDs)
+	if more > 0 {
+		list += " +" + strconv.Itoa(more)
 	}
 	return list
+}
+
+// relationshipsLine is the selected card's Relationships line: "parent zpxs  6 children, 2 open  blocks e000  blocked by 8gm4  related 7x74".
+// The parts are set off by the row gap, so a narrow card wraps between them; empty parts are left out and the line is nil without any.
+// Every id is its own clickable node, so a click selects that Issue's card.
+func relationshipsLine(card model.BoardCard) tern.Element {
+	r, project := card.Relationships, card.Issue.ProjectName
+	var parts []tern.Element
+	add := func(key, label string, refs ...model.RelationshipRef) {
+		shown, more := shownRefs(refs)
+		items := ui.Nodes(ui.Text{Common: ui.Common{Key: "label"}, Spans: []ui.Span{{T: label, S: "muted"}}})
+		for _, ref := range shown {
+			items = append(items, ui.Text{Common: ui.Common{Key: ref.UID, Actions: &ui.Actions{Click: RefClick(ref.UID)}}, Spans: []ui.Span{{T: ref.ID(project), S: "accent link"}}})
+		}
+		if more > 0 {
+			items = append(items, ui.Text{Common: ui.Common{Key: "more"}, Spans: []ui.Span{{T: "+" + strconv.Itoa(more), S: "muted"}}})
+		}
+		parts = append(parts, ui.Row{Common: ui.Common{Key: key}, Gap: ui.GapSM, Wrap: true, Children: items})
+	}
+	if r.Parent != nil {
+		add("parent", "parent", *r.Parent)
+	}
+	if len(r.Children) > 0 {
+		open := len(r.OpenChildren())
+		noun := "children"
+		if len(r.Children) == 1 {
+			noun = "child"
+		}
+		parts = append(parts, ui.Text{Common: ui.Common{Key: "children"}, Spans: []ui.Span{{T: fmt.Sprintf("%d %s, %d open", len(r.Children), noun, open), S: "muted"}}})
+	}
+	if blocks := r.OpenBlocked(); len(blocks) > 0 {
+		add("blocks", "blocks", blocks...)
+	}
+	if blockers := r.OpenBlockers(); len(blockers) > 0 {
+		add("blocked-by", "blocked by", blockers...)
+	}
+	if len(r.Related) > 0 {
+		add("related", "related", r.Related...)
+	}
+	if len(parts) == 0 {
+		return nil
+	}
+	return ui.Row{Common: ui.Common{Key: "relationships"}, Gap: ui.GapMD, Wrap: true, Children: parts}
 }

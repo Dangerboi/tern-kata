@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 )
@@ -32,6 +33,12 @@ type Relationships struct {
 
 // OpenBlockers are the Issues that block this one and are still open.
 func (r Relationships) OpenBlockers() []RelationshipRef { return openRefs(r.BlockedBy) }
+
+// OpenChildren are the children that are still open.
+func (r Relationships) OpenChildren() []RelationshipRef { return openRefs(r.Children) }
+
+// OpenBlocked are the Issues this one blocks that are still open.
+func (r Relationships) OpenBlocked() []RelationshipRef { return openRefs(r.Blocks) }
 
 func openRefs(refs []RelationshipRef) []RelationshipRef {
 	return slices.DeleteFunc(slices.Clone(refs), func(r RelationshipRef) bool { return !r.Open() })
@@ -93,4 +100,55 @@ func addRef(refs []RelationshipRef, ref RelationshipRef) []RelationshipRef {
 		return refs
 	}
 	return append(refs, ref)
+}
+
+// showCard selects the Board card of uid, in the Lane view switching to its Lane, or leaves the Notice that the Board does not draw it.
+func showCard(m Model, uid string) Model {
+	if !m.Board.On() {
+		return m
+	}
+	columns := m.BoardColumns()
+	col, _ := CardAt(columns, uid)
+	if col < 0 {
+		m.Notice = fmt.Sprintf("%s isn't on the Board.", m.relatedID(uid))
+		return m
+	}
+	if m.Board.Mode == BoardLane {
+		m.Board.Lane = columns[col].Lane
+	}
+	m.SelectedUID, m.Focus = uid, ColumnList
+	return m
+}
+
+// selectParent is `^`: the selected card's parent's card, or the Notice that it has none.
+func selectParent(m Model) Model {
+	issue := m.issueByUID(m.SelectedUID)
+	if issue == nil {
+		return m
+	}
+	parent := NewRelationshipIndex(m.Snapshot.Links).Of(issue.UID).Parent
+	if parent == nil {
+		m.Notice = fmt.Sprintf("%s has no parent.", issue.ShortID)
+		return m
+	}
+	return showCard(m, parent.UID)
+}
+
+// relatedID is uid's id as the selected Issue's Relationships line names it, the bare uid when it is not one of them.
+func (m Model) relatedID(uid string) string {
+	issue := m.issueByUID(m.SelectedUID)
+	if issue == nil {
+		return uid
+	}
+	r := NewRelationshipIndex(m.Snapshot.Links).Of(issue.UID)
+	groups := [][]RelationshipRef{r.Children, r.Blocks, r.BlockedBy, r.Related}
+	if r.Parent != nil {
+		groups = append(groups, []RelationshipRef{*r.Parent})
+	}
+	for _, refs := range groups {
+		if i := slices.IndexFunc(refs, func(ref RelationshipRef) bool { return ref.UID == uid }); i >= 0 {
+			return refs[i].ID(issue.ProjectName)
+		}
+	}
+	return uid
 }
