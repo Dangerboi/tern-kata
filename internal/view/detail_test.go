@@ -180,12 +180,78 @@ func TestDetailIsOneScrollContainerWithOneChild(t *testing.T) {
 	}
 }
 
-func TestDetailTitleShowsIDInAccentThenTitleStrong(t *testing.T) {
-	nodes := detailNodes(t, alpha)
-	title := nodes[view.DetailID+".viewport.content.heading.title"]
-	want := [][2]string{{"#" + alpha.ShortID, "accent"}, {" - " + alpha.Title, "strong"}}
-	if got := styled(title); !slices.Equal(got, want) {
-		t.Errorf("title spans = %v, want %v", got, want)
+func TestDetailTitleShowsIDInItsLaneToneThenTitleStrong(t *testing.T) {
+	readyForHuman := alpha
+	readyForHuman.Labels = []string{"ready-for-human"}
+	closed := alpha
+	closed.Status = "closed"
+	for _, tt := range []struct {
+		name  string
+		issue model.Issue
+		style string
+	}{
+		{"in a Lane", readyForHuman, "accent"}, // user tone has no span style: the nearest, accent
+		{"closed", closed, "success"},
+		{"no Lane", alpha, "muted"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			title := detailNodes(t, tt.issue)[view.DetailID+".viewport.content.heading.title"]
+			want := [][2]string{{"#" + tt.issue.ShortID, tt.style}, {" - " + tt.issue.Title, "strong"}}
+			if got := styled(title); !slices.Equal(got, want) {
+				t.Errorf("title spans = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestDetailOwnerAndLabelsAreBadgesInTheBoardTones(t *testing.T) {
+	owner := "dana"
+	issue := alpha
+	issue.Owner = &owner
+	issue.Labels = []string{"bug"}
+	props := view.DetailContentID + ".properties"
+	nodes := detailNodes(t, issue)
+	if n := nodes[props+".owner.v"]; n.P["tone"] != "user" || text(n) != "dana" {
+		t.Errorf("owner %v", n)
+	}
+	if n := nodes[props+".labels.v.label-bug"]; n.P["tone"] != "info" {
+		t.Errorf("label %v", n)
+	}
+	if n := detailNodes(t, alpha)[props+".owner.v"]; n.P["tone"] != "user" || text(n) != "Unassigned" {
+		t.Errorf("unassigned owner %v", n)
+	}
+}
+
+func TestDetailDatesAreToneByTheirOwnDateAgainstThePaneCalendar(t *testing.T) {
+	today := "2026-10-20"
+	for _, tt := range []struct {
+		name                  string
+		status, calendar      string
+		scheduled, deadline   string
+		wantSched, wantDeadln string
+	}{
+		{"overdue and passed", "open", today, "2026-10-10", "2026-10-10", "warning", "error"},
+		{"today", "open", today, today, today, "accent", "warning"},
+		{"tomorrow", "open", today, "2026-10-21", "2026-10-21", "muted", "warning"},
+		{"later", "open", today, "2026-10-22", "2026-10-22", "muted", "muted"},
+		{"closed", "closed", today, "2026-10-10", "2026-10-10", "muted", "muted"},
+		{"calendar unknown", "open", "", "2026-10-10", "2026-10-10", "muted", "muted"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			issue := alpha
+			issue.Status = tt.status
+			issue.ScheduledOnDate, issue.DeadlineOnDate = &tt.scheduled, &tt.deadline
+			m := apply(browsing(), detailOf(issue))
+			m.Calendar = model.NewPaneCalendar(tt.calendar, "UTC", "")
+			nodes := render(t, m)
+			props := view.DetailContentID + ".properties"
+			if n := nodes[props+".scheduled.v"]; n.P["tone"] != tt.wantSched || text(n) != tt.scheduled {
+				t.Errorf("scheduled %v, want %s %s", n, tt.wantSched, tt.scheduled)
+			}
+			if n := nodes[props+".deadline.v"]; n.P["tone"] != tt.wantDeadln || text(n) != tt.deadline {
+				t.Errorf("deadline %v, want %s %s", n, tt.wantDeadln, tt.deadline)
+			}
+		})
 	}
 }
 
