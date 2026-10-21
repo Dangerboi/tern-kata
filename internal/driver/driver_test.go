@@ -206,6 +206,26 @@ func TestScrollsAndRevealsAreDroppedWhenNothingIsDrawn(t *testing.T) {
 	}
 }
 
+// The detail column shows a placeholder instead of its scroller while it holds no Issue: an error line or an Issue kata no
+// longer shows. A scroll key there must send nothing, since Tern ends the program on a scroll of a node it doesn't draw.
+func TestDetailScrollsAreDroppedWhileTheDetailHoldsNoIssue(t *testing.T) {
+	for name, then := range map[string]model.Msg{
+		"detail error": model.DetailFailed{UID: "alpha", Err: errors.New("kata server not responding")},
+		"unavailable":  model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{}},
+	} {
+		for _, cols := range []int{100, 160} {
+			s := feed(t, browsing(t, cols), click("", view.FocusDetailClick), then).State
+			for _, chord := range []string{"page_down", "page_up", "down", "up"} {
+				for _, op := range step(t, s, key(chord)).Ops {
+					if op[0] == "scroll" {
+						t.Errorf("%s at %d columns, %s: sent %v", name, cols, chord, op)
+					}
+				}
+			}
+		}
+	}
+}
+
 func TestScrollAndRevealAreSentForDrawnColumns(t *testing.T) {
 	s := feed(t, browsing(t, 160), click("", view.FocusDetailClick)).State
 	wantOps(t, step(t, s, key("page_down")), tern.OpScroll(view.DetailContentID, "page-down"))

@@ -89,8 +89,9 @@ func (out *Output) route(m model.Model, cmds []model.Cmd) {
 	for _, cmd := range cmds {
 		switch cmd := cmd.(type) {
 		case model.Scroll:
-			// A column drawn again later starts at its top, so a dropped scroll loses nothing.
-			if m.Shows(cmd.Column) {
+			// A column drawn again later starts at its top, so a dropped scroll loses nothing. The detail column draws its
+			// scroller only while it holds an Issue, not while it shows a placeholder or an error line.
+			if m.Shows(cmd.Column) && (cmd.Column != model.ColumnDetail || m.DetailDrawn()) {
 				out.Ops = append(out.Ops, tern.OpScroll(scrollTarget(cmd.Column), string(cmd.By)))
 			}
 		case model.RevealActivityTab:

@@ -19,6 +19,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The Create card (`n`, `N`) has Scheduled and Deadline fields after Priority, taking the same `YYYY-MM-DD`, `today`, `tomorrow`, `+Nd` and `+Nw` input with a muted weekday preview as the Dates card; an invalid date is refused naming the field and nothing is created. The dates are sent in the one create request as the Issue's `scheduled_on` and `deadline_on` metadata, and none when the fields are blank.
 - Every single-line text field has a movable caret: Create, Close, Recurrence, New Project, the single-field forms, the Lanes card, the Dates card, the Filter form, the Menu filter and Search. `←`/`→` move it a character, `Home`/`End` or `ctrl+a`/`ctrl+e` to the ends; typed and pasted text goes in at the caret, Backspace deletes before it, Delete after it, `ctrl+u` clears the field. The Menu keeps `Home`/`End` for its entries (`ctrl+a`/`ctrl+e` move the caret), and the Filter and Recurrence cards keep `←`/`→` for their choice fields.
 
+### Fixed
+
+- Scrolling the Issue detail (`↑`, `↓`, Page Up, Page Down) while it shows an error line or an Issue that is no longer available does nothing instead of ending the Pane with "Tern surface: unknown id main.columns.detail.viewport.content".
+
 ## [0.3.0] - 2026-10-20
 
 ### Added
