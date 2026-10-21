@@ -20,6 +20,7 @@ const (
 	detailItemAct  = "detail-item"
 	chooseAct      = "choose"
 	cardAct        = "card"
+	refAct         = "ref"
 )
 
 // FocusDetailClick, RetryClick and MenuClick carry no value.
@@ -43,6 +44,9 @@ func OpenRowClick(uid string) string { return click(string(model.OpenRow), uid) 
 
 // CardClick selects the Board card of the Issue.
 func CardClick(uid string) string { return click(cardAct, uid) }
+
+// RefClick selects the Board card of a related Issue, revealing it in its Lane, or says the Board does not draw it.
+func RefClick(uid string) string { return click(refAct, uid) }
 
 // ActivityTabClick shows the Activity tab.
 func ActivityTabClick(tab model.ActivityTab) string {
@@ -95,6 +99,8 @@ func DecodeAction(id, act, value string) model.Msg {
 		return model.JumpIssueMsg{UID: value}
 	case cardAct:
 		return model.SelectMsg{UID: value}
+	case refAct:
+		return model.ShowCardMsg{UID: value}
 	}
 	return nil
 }

@@ -55,6 +55,7 @@ const (
 	MoveCardLeft         Action = "move-card-left"
 	MoveCardRight        Action = "move-card-right"
 	OpenLane             Action = "open-lane"
+	SelectParent         Action = "select-parent"
 )
 
 // Binding is one chord in one mode, as the lookup, the footer and the help sheet read it. A binding of

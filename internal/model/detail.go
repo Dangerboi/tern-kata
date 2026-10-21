@@ -36,6 +36,11 @@ type JumpIssueMsg struct{ UID string }
 
 func (JumpIssueMsg) msg() {}
 
+// ShowCardMsg is a click on a related Issue's id on the Board: its card is selected, or the Notice says the Board does not draw it.
+type ShowCardMsg struct{ UID string }
+
+func (ShowCardMsg) msg() {}
+
 type FocusColumnMsg struct{ Column Column }
 
 func (FocusColumnMsg) msg() {}
