@@ -120,6 +120,9 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 		labels = issue.Labels
 	}
 	ids := ui.Nodes(ui.Badge{Common: ui.Common{Key: "short", Tone: tone}, Text: issue.ShortID})
+	if text, prioTone := priorityText(issue.Priority); text != "" {
+		ids = append(ids, ui.Badge{Common: ui.Common{Key: "prio", Tone: prioTone}, Text: text})
+	}
 	body := ui.Nodes(title)
 	if selected {
 		owner := m.OwnerText(issue.Owner, issue.AssignmentExpiresOn, now).String()
