@@ -148,6 +148,12 @@ done_cards = 20
 
 tern-kata reads it each time the Board turns on and when the Project changes while it is on, so an edit shows the next time you press `b`; the Lanes card (`B`) writes it for you. Labels are tidied like kata's (`In review` reads `in-review`). A missing file, or no table for the Project, gives the default Lanes. A file that can't be read or parsed gives the default Lanes and a Notice, and tern-kata won't overwrite it. Removing a label sends its Issues to No lane, or to their next Lane label; kata isn't touched.
 
+## Dates card
+
+`d` on the selected Issue (in the list, on the Board, in the Lane view and in the Issue detail) opens the **Dates card**: a Scheduled field and a Deadline field holding the Issue's current dates. `tab` moves between them, `enter` saves and `esc` cancels. A field takes `YYYY-MM-DD`, `today`, `tomorrow`, `+Nd` (N days on) or `+Nw` (N weeks on), counted from the Pane calendar's date, and a muted line under it shows the date it resolves to with its weekday (`2026-10-24 Sat`). A blank field clears the date; anything else is refused with a message naming the field. A date kata holds with a time (`2026-11-02T17:30:00`) is shown as it is and left alone unless you edit that field.
+
+Saving writes the changed dates only, as the Issue's `scheduled_on` and `deadline_on` metadata, each guarded on the value the card opened with: a date changed elsewhere (the kata CLI, an agent, another Pane) since then is reported and not overwritten, and the card stays open with the reason. It is refused while the daemon is disconnected.
+
 ## Compared with `kata tui`
 
 tern-kata takes kata tui's movement keys: `j`/`k` and the arrows, `ctrl+n`/`ctrl+p` to move a row, `pgup`/`pgdn` and `alt+v`/`ctrl+v` to page, `g`/`G`, and `I` to open the Inbox (from the list, the Issue detail and the Menu sidebar; tern-kata opens it, where kata tui toggles it). `?` lists every key. The Emacs keys and `I` are plain text in search and in Popup cards.

@@ -252,6 +252,7 @@ var mainActions = []actionEntry{
 	{action: ReopenAction, modes: issueModes, keys: keys("r", "r"), help: "reopen", footer: issueModes, sheet: []sheetLine{{sheetGraph, 15, "reopen"}}, handle: reopenIssue},
 	{action: SetParentAction, modes: issueModes, keys: keys("p", "p"), help: "parent", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 7, "set parent"}}, handle: fieldFor(SetParentAction)},
 	{action: PriorityAction, modes: issueModes, keys: keys("!", "!"), help: "priority", footer: issueModes, sheet: []sheetLine{{sheetDetail, 14, "set priority"}}, handle: fieldFor(PriorityAction)},
+	{action: OpenDates, modes: issueModes, keys: keys("d", "d"), help: "dates", footer: issueModes, sheet: []sheetLine{{sheetDetail, 17, "set scheduled date and deadline (Dates card)"}}, handle: pure(openDates)},
 	{action: OpenRecurrenceAction, modes: issueModes, keys: keys("shift+o", "O"), help: "make or change recurrence", sheet: []sheetLine{{sheetDetail, 16, "make or change recurrence"}}, handle: pure(openRecurrence)},
 	{action: NewChild, modes: issueModes, keys: keys("shift+n", "N"), help: "child", footer: issueModes, sheet: []sheetLine{{sheetChildren, 1, "new child"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, true) }},
 	// Layout, back, help and quit.

@@ -46,6 +46,8 @@ func popups() []popup {
 				values := m.CloseForm.Values
 				return values.Reason + values.Message + values.Commit + values.PR + values.Test + values.Reference + values.Rationale
 			}},
+		{"Dates", keyOpen("d"), func(dst *model.Model, src model.Model) { dst.DatesForm = src.DatesForm },
+			model.ModeDatesForm, view.DatesID, func(m model.Model) string { return m.DatesForm.Text.Scheduled }},
 		{"Recurrence", func(t *testing.T, s driver.State) model.Model {
 			m := keyOpen("shift+o")(t, s)
 			m.RecurrenceForm.Field = model.RecurrenceZone // a text field

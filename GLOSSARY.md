@@ -16,7 +16,7 @@
 
 **Draft**: An unsaved edit to an issue's text or fields, kept until the user saves or discards it, even if the issue changes underneath.
 
-**Popup card**: A card drawn over the columns that takes the keyboard until closed: Create, Close, Recurrence, the Draft editor, the single-field form, New Project, the Lanes card, the Menu and the Filter form. When several are open, one order (`TopCard`) decides which takes the keys, is drawn and holds the text caret; the help sheet covers them all. A card may hide fields that do not apply to its state (the Recurrence card does by frequency), and tab skips them. Each card declares which global chords it lets through (only `ctrl+c`, from the Menu, Close, Recurrence and New Project). _Avoid_: layer, modal, overlay (Tern's element name).
+**Popup card**: A card drawn over the columns that takes the keyboard until closed: Create, Close, Recurrence, the Draft editor, the single-field form, New Project, the Lanes card, the Dates card, the Menu and the Filter form. When several are open, one order (`TopCard`) decides which takes the keys, is drawn and holds the text caret; the help sheet covers them all. A card may hide fields that do not apply to its state (the Recurrence card does by frequency), and tab skips them. Each card declares which global chords it lets through (only `ctrl+c`, from the Menu, Close, Recurrence and New Project). _Avoid_: layer, modal, overlay (Tern's element name).
 
 **Issue detail**: The column showing one Issue: its properties, Children and Activity tabs, with its own row cursor and jump history.
 
@@ -63,6 +63,8 @@
 **Move**: Taking an open card one Lane left or right (`<`, `>`) among No lane and the Lanes, never into or out of Done. One daemon command adds the target Lane's label (if missing), then removes the Issue's other Lane labels.
 
 **Lane label**: Any label of the Lane list. An Issue whose only labels are not Lane labels has no Lane label.
+
+**Dates card**: The Popup card `d` opens on the selected Issue in the list, the Board, the Lane view and the Issue detail. Two text fields, Scheduled and Deadline, prefilled with the Issue's dates; each takes `YYYY-MM-DD`, `today`, `tomorrow`, `+Nd` or `+Nw` against the Pane calendar's date, previews the day it resolves to with its weekday, and clears the date when blank. Saving sends one command for the changed fields only; the Daemon gateway patches the `scheduled_on` and `deadline_on` metadata keys one at a time, each guarded on the value the card opened with, and stops at the first failure. A key changed meanwhile is reported, not overwritten. It lets no global chord through. _Avoid_: date form, schedule card.
 
 **Lanes card**: The Popup card `B` opens on the Board or in the Lane view. One text field holds the Lane list as comma-separated names; enter saves it to the Lane list file, esc cancels, and an empty field removes the Project's list and so restores the default. It lets no global chord through. Saving never changes a label in kata. _Avoid_: Lane editor, Lanes form.
 

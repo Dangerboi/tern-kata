@@ -87,6 +87,8 @@ func Render(m model.Model, now time.Time) tern.View {
 		layer = fieldLayer(m)
 	case model.CardClose:
 		layer = closeLayer(m)
+	case model.CardDates:
+		layer = datesLayer(m)
 	case model.CardRecurrence:
 		layer = recurrenceLayer(m)
 	case model.CardProject:

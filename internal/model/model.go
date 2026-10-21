@@ -54,6 +54,7 @@ type Model struct {
 	etag           string
 	etagQuery      SnapshotQuery
 	CloseForm      CloseFormState
+	DatesForm      DatesFormState
 	RecurrenceForm RecurrenceFormState
 	Actor          string
 	// Host is this machine's host name, which tells an Attachment held here from one held elsewhere.
@@ -145,6 +146,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return updateClose(m, msg)
 	case RecurrenceResultMsg:
 		return updateRecurrence(m, msg)
+	case DatesResultMsg:
+		return updateDates(m, msg.(DatesResultMsg))
 	}
 	if msg, ok := msg.(PickerSelected); ok {
 		return pickCollectionKey(m, msg.Key)

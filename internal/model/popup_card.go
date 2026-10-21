@@ -40,6 +40,7 @@ const (
 	CardDraft
 	CardField
 	CardClose
+	CardDates
 	CardRecurrence
 	CardProject
 	CardLanes
@@ -138,6 +139,14 @@ func init() {
 			fields: CloseFields, focus: func(m *Model) *Field { return &m.CloseForm.Field },
 			locked: func(m Model) bool { return m.CloseForm.Saving },
 			caret:  func(m Model) (Field, bool) { return m.CloseForm.Field, !m.CloseForm.Saving },
+		},
+		{
+			card: CardDates, open: func(m Model) bool { return m.DatesForm.Open },
+			modes: []Mode{ModeDatesForm}, mode: func(Model) Mode { return ModeDatesForm },
+			key:    updateDatesFormKey,
+			fields: DatesFields, focus: func(m *Model) *Field { return &m.DatesForm.Field },
+			locked: func(m Model) bool { return m.DatesForm.Saving },
+			caret:  func(m Model) (Field, bool) { return m.DatesForm.Field, !m.DatesForm.Saving },
 		},
 		{
 			card: CardRecurrence, open: func(m Model) bool { return m.RecurrenceForm.Open },

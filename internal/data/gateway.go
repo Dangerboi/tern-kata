@@ -171,6 +171,17 @@ func plan(cmd model.Cmd, host string) (request, bool) {
 				return ok(model.FieldWritten{UID: cmd.UID}, c.WriteField(ctx, cmd))
 			},
 			func(err error) model.Msg { return model.FieldWritten{UID: cmd.UID, Err: err} }}, true
+	case model.SetDatesCmd:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) {
+				applied, err := c.SetDates(ctx, cmd)
+				if len(applied) > 0 {
+					// A write has landed: the result and its error travel together, and nothing is retried.
+					return model.DatesResultMsg{UID: cmd.UID, Applied: applied, Err: err}, nil
+				}
+				return ok(model.DatesResultMsg{UID: cmd.UID}, err)
+			},
+			func(err error) model.Msg { return model.DatesResultMsg{UID: cmd.UID, Err: err} }}, true
 	case model.AttachFile:
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.AttachFile(ctx, host, cmd)) },

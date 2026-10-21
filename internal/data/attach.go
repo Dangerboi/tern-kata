@@ -147,18 +147,23 @@ func (c *Client) requireBinding(ctx context.Context, t attachTarget) error {
 // clear only while the key still holds the JSON text clearIf.
 func (c *Client) patchAttachment(ctx context.Context, t attachTarget, actor, name string, pointer map[string]any, clearIf string) error {
 	key := model.AttachmentKey(name)
-	body := g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{key: nil}}
-	var guard g.MetadataPatchGuard_OneOf_0
-	either := runtime.NewEitherFromB[g.MetadataPatchGuard_OneOf_0, g.MetadataPatchGuard_OneOf_1](g.MetadataPatchGuard_OneOf_1{Key: key, IfAbsent: g.True})
 	if pointer != nil {
-		body.Patch[key] = pointer
-	} else {
-		guard = g.MetadataPatchGuard_OneOf_0{Key: key, IfValue: clearIf}
-		either = runtime.NewEitherFromA[g.MetadataPatchGuard_OneOf_0, g.MetadataPatchGuard_OneOf_1](guard)
+		return c.patchMetadataKey(ctx, t.issue.ProjectID, t.issue.UID, actor, key, pointer, nil)
+	}
+	return c.patchMetadataKey(ctx, t.issue.ProjectID, t.issue.UID, actor, key, nil, &clearIf)
+}
+
+// patchMetadataKey writes one metadata key of an Issue, a null value clearing it, guarded on the key still holding the JSON
+// text ifValue, or on its being absent when ifValue is nil.
+func (c *Client) patchMetadataKey(ctx context.Context, projectID int64, uid, actor, key string, value any, ifValue *string) error {
+	body := g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{key: value}}
+	either := runtime.NewEitherFromB[g.MetadataPatchGuard_OneOf_0, g.MetadataPatchGuard_OneOf_1](g.MetadataPatchGuard_OneOf_1{Key: key, IfAbsent: g.True})
+	if ifValue != nil {
+		either = runtime.NewEitherFromA[g.MetadataPatchGuard_OneOf_0, g.MetadataPatchGuard_OneOf_1](g.MetadataPatchGuard_OneOf_0{Key: key, IfValue: *ifValue})
 	}
 	body.Guard = &g.MetadataPatchGuard{MetadataPatchGuard_OneOf: &g.MetadataPatchGuard_OneOf{Either: either}}
 	_, err := c.PatchIssueMetadataWithResponse(ctx, &g.PatchIssueMetadataRequestOptions{
-		PathParams: &g.PatchIssueMetadataPath{ProjectID: t.issue.ProjectID, Ref: t.issue.UID}, Body: &body,
+		PathParams: &g.PatchIssueMetadataPath{ProjectID: projectID, Ref: uid}, Body: &body,
 	})
 	return err
 }
