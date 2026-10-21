@@ -193,18 +193,6 @@ func statusTone(status string) ui.Tone {
 	return ui.ToneMuted
 }
 
-func priorityTone(priority int64) ui.Tone {
-	switch priority {
-	case 0:
-		return ui.ToneError
-	case 1:
-		return ui.ToneWarning
-	case 2:
-		return ui.ToneInfo
-	}
-	return ui.ToneMuted
-}
-
 // properties is one Name: value grid: every row's key sits in a column as wide as the longest key, so the
 // values line up. A row with nothing to show is left out. The status badge is in the heading.
 func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
@@ -239,7 +227,8 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 		add("Recurring", text(recurring))
 	}
 	if issue.Priority != nil {
-		add("Priority", ui.Badge{Common: ui.Common{Key: "v", Tone: priorityTone(*issue.Priority)}, Text: fmt.Sprintf("P%d", *issue.Priority)})
+		prio, tone := priorityText(issue.Priority)
+		add("Priority", ui.Badge{Common: ui.Common{Key: "v", Tone: tone}, Text: prio})
 	}
 	if len(issue.Labels) > 0 {
 		chips := make(tern.Nodes, len(issue.Labels))

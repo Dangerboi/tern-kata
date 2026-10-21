@@ -292,22 +292,6 @@ type listColumns struct {
 	id, owner  int
 }
 
-// priorityText is "P1" and its tone for a priority, "" and muted for none: P0 error, P1 warning, P2 info, the rest muted.
-func priorityText(p *int64) (string, ui.Tone) {
-	if p == nil {
-		return "", ui.ToneMuted
-	}
-	switch *p {
-	case 0:
-		return "P0", ui.ToneError
-	case 1:
-		return "P1", ui.ToneWarning
-	case 2:
-		return "P2", ui.ToneInfo
-	}
-	return fmt.Sprintf("P%d", *p), ui.ToneMuted
-}
-
 // issueRow is one Issue: the id, prio, status and title on the left, the
 // title being the cell that gives way, and kids, owner and updated pinned to
 // the right so each column lines up with the header. A blank cell keeps its width.

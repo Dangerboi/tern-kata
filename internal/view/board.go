@@ -36,37 +36,16 @@ func SelectedRowID(m model.Model) string {
 	return IssueID(m.SelectedUID)
 }
 
-// laneTones are the tones of the Board's columns, one per column: the default Lanes each have theirs, No lane is muted and Done
-// success, and custom Lanes take the rest in turn.
-func laneTones(columns []model.BoardColumn) []ui.Tone {
-	named := map[string]ui.Tone{
-		model.LaneNone:    ui.ToneMuted,
-		"needs-triage":    ui.ToneWarning,
-		"needs-info":      ui.ToneError,
-		"ready-for-agent": ui.ToneInfo,
-		"ready-for-human": ui.ToneUser,
-		model.LaneDone:    ui.ToneSuccess,
-	}
-	rest := []ui.Tone{ui.ToneAccent, ui.TonePending, ui.ToneNeutral}
-	tones := make([]ui.Tone, len(columns))
-	custom := 0
-	for i, column := range columns {
-		if tone, ok := named[column.Lane]; ok {
-			tones[i] = tone
-			continue
-		}
-		tones[i] = rest[custom%len(rest)]
-		custom++
-	}
-	return tones
-}
-
 // board is the Board: one column per Lane, No lane first and Done last, each a header over its cards. It takes the list column's
 // place. A Lane is a column, not a Card: a Card's body sizes to its content, so only a column's list fills the Lane down to the
 // bottom and scrolls inside it, which keeps the Pane itself from scrolling the top bar away.
 func board(m model.Model, now time.Time) tern.Element {
 	columns := m.BoardColumns()
-	tones := laneTones(columns)
+	laneList := m.LaneList()
+	tones := make([]ui.Tone, len(columns))
+	for i, column := range columns {
+		tones[i] = laneTone(laneList, column.Lane)
+	}
 	var selected model.Relationships
 	if m.SelectedUID != "" {
 		selected = m.Relationships.Of(m.SelectedUID)
@@ -141,12 +120,12 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 		if owner == "" {
 			owner = "unassigned"
 		}
-		body = append(body, ui.Badge{Common: ui.Common{Key: "owner", Tone: ui.ToneUser}, Text: owner})
+		body = append(body, ui.Badge{Common: ui.Common{Key: "owner", Tone: ownerTone}, Text: owner})
 	}
 	if len(labels) > 0 {
 		chips := make([]tern.Element, len(labels))
 		for i, label := range labels {
-			chips[i] = ui.Badge{Common: ui.Common{Key: label, Tone: ui.ToneInfo}, Text: label}
+			chips[i] = ui.Badge{Common: ui.Common{Key: label, Tone: labelTone}, Text: label}
 		}
 		body = append(body, ui.Row{Common: ui.Common{Key: "labels"}, Gap: ui.GapSM, Wrap: true, Children: chips})
 	}
