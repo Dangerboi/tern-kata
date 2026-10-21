@@ -24,8 +24,8 @@ type lanesFile map[string]projectLanes
 type projectLanes struct {
 	Name      string   `toml:"name"`
 	Labels    []string `toml:"labels,omitempty"`
-	DoneDays  int      `toml:"done_days,omitempty"`
-	DoneCards int      `toml:"done_cards,omitempty"`
+	DoneDays  int      `toml:"done_days,omitzero"`
+	DoneCards int      `toml:"done_cards,omitzero"`
 }
 
 func lanesPath() (string, error) {
