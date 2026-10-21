@@ -14,9 +14,10 @@ const (
 
 // LanesFormState is the Lanes card: the Lane list typed as comma-separated names. Saving writes the Lane list file only.
 type LanesFormState struct {
-	Open bool
-	Text string
-	Err  error
+	Open  bool
+	Text  string
+	Caret Caret
+	Err   error
 }
 
 // openLanesForm is `B`. It waits for the saved Lane list to load: a card prefilled with the default would overwrite it on save.
@@ -92,7 +93,7 @@ func updateLanesFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		m.LanesForm = LanesFormState{}
 	default:
 		var edited bool
-		if form.Text, edited = editText(form.Text, binding, bound, msg); edited {
+		if form.Text, edited = editText(form.Text, &form.Caret, "", binding, bound, msg); edited {
 			form.Err = nil
 		}
 	}

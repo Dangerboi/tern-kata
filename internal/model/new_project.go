@@ -23,6 +23,7 @@ const (
 type ProjectFormState struct {
 	Open, Saving, Bind bool
 	Name               string
+	Caret              Caret
 	Err                error
 }
 
@@ -125,7 +126,7 @@ func updateProjectFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		m.ProjectForm = ProjectFormState{}
 	default:
 		var edited bool
-		if form.Name, edited = editText(form.Name, binding, bound, msg); edited {
+		if form.Name, edited = editText(form.Name, &form.Caret, "", binding, bound, msg); edited {
 			form.Err = nil
 		}
 	}

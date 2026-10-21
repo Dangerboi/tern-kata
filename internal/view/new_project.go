@@ -21,7 +21,7 @@ func projectLayer(m model.Model) tern.Element {
 		note = "Creates the Project. This directory stays bound to " + m.Project.Name + "."
 	}
 	children := []tern.Element{
-		ui.Input{Common: ui.Common{Key: "name", Tone: ui.ToneAccent, Aria: "Project name"}, Field: ui.Field{Text: form.Name, Mode: "insert", Placeholder: "Project name", Readonly: form.Saving}},
+		ui.Input{Common: ui.Common{Key: "name", Tone: ui.ToneAccent, Aria: "Project name"}, Field: ui.Field{Text: form.Name, Cursor: caretAt(form.Caret, "", form.Name), Mode: "insert", Placeholder: "Project name", Readonly: form.Saving}},
 		ui.Text{Common: ui.Common{Key: "note", Tone: ui.ToneMuted}, Text: note},
 	}
 	if form.Err != nil {

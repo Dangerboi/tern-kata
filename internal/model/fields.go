@@ -33,6 +33,7 @@ type FieldFormState struct {
 	ProjectID    int64
 	Labels       []string
 	Suggestion   int
+	Caret        Caret
 	Err          error
 }
 type WriteField struct {
@@ -267,7 +268,7 @@ func updateFieldKey(m Model, msg KeyMsg) (Model, []Cmd) {
 			m.FieldForm = FieldFormState{}
 			return m, nil
 		case DeleteInput, ClearInput:
-			m.FieldForm.Value, _ = editText(m.FieldForm.Value, binding, true, msg)
+			m.FieldForm.Value, _ = editText(m.FieldForm.Value, &m.FieldForm.Caret, "", binding, true, msg)
 		case FieldNext:
 			m.FieldForm.Suggestion++
 		case FieldPrevious:
@@ -276,10 +277,11 @@ func updateFieldKey(m Model, msg KeyMsg) (Model, []Cmd) {
 			s := m.FieldSuggestions()
 			if len(s) > 0 {
 				m.FieldForm.Value = s[m.FieldForm.Suggestion%len(s)]
+				m.FieldForm.Caret = Caret{}
 			}
 		}
 	} else {
-		m.FieldForm.Value, _ = editText(m.FieldForm.Value, binding, false, msg)
+		m.FieldForm.Value, _ = editText(m.FieldForm.Value, &m.FieldForm.Caret, "", binding, false, msg)
 	}
 	m.FieldForm.Err = nil
 	return m, nil

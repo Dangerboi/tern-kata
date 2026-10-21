@@ -37,6 +37,7 @@ type FilterFormState struct {
 	Open   bool
 	Field  Field
 	Values Filters
+	Caret  Caret
 }
 
 // value is the filter value the field called name holds, nil for a name that is not a Filter field.
@@ -109,7 +110,7 @@ func chooseFilter(m Model, i int) Model {
 
 // filterFormKey is one key for the Filter form on top: a bound chord acts, any other types.
 func filterFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
-	if binding, ok := LookupBindingForMode(msg.Chord, ModeFilterForm); ok {
+	if binding, ok := LookupBindingForMode(msg.Chord, ModeFilterForm); ok && !(isCaretChord(msg.Chord) && filterTextField(&m.FilterForm) != nil) {
 		return updateFilterForm(m, binding.Action)
 	}
 	return updateFilterText(m, msg)
@@ -139,7 +140,7 @@ func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 		m.FilterForm.Values = Filters{}
 	case DeleteInput, ClearInput:
 		if field := filterTextField(&m.FilterForm); field != nil {
-			*field, _ = editText(*field, Binding{Action: action}, true, KeyMsg{})
+			*field, _ = editText(*field, &m.FilterForm.Caret, m.FilterForm.Field, Binding{Action: action}, true, KeyMsg{})
 		} else if choice := m.FilterForm.Values.value(m.FilterForm.Field); choice != nil {
 			*choice = ""
 		}

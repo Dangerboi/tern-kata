@@ -39,7 +39,7 @@ func pickerLayer(m model.Model) tern.Element {
 		empty = "Loading Menu…"
 	}
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "collections"}, Head: ui.T("Menu"), Modal: true, Size: ui.SizeMD, Children: []tern.Element{
-		ui.Input{Common: ui.Common{Key: "filter", Tone: ui.ToneAccent, Aria: "Filter Menu"}, Field: ui.Field{Text: m.Picker.Filter, Mode: "insert", Placeholder: "Filter Menu"}},
+		ui.Input{Common: ui.Common{Key: "filter", Tone: ui.ToneAccent, Aria: "Filter Menu"}, Field: ui.Field{Text: m.Picker.Filter, Cursor: caretAt(m.Picker.Caret, "", m.Picker.Filter), Mode: "insert", Placeholder: "Filter Menu"}},
 		ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "list"}, Selected: selected, Empty: ui.T(empty), Max: ui.MaxLines(12), Children: items},
 		cardButton("close", model.ModePicker, model.ClosePicker, closeLabel, false),
 	}})

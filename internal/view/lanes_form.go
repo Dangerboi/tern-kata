@@ -19,7 +19,7 @@ func lanesLayer(m model.Model) tern.Element {
 		return nil
 	}
 	children := []tern.Element{
-		ui.Input{Common: ui.Common{Key: "names", Tone: ui.ToneAccent, Aria: "Lanes"}, Field: ui.Field{Text: form.Text, Mode: "insert", Placeholder: "Lanes, comma separated"}},
+		ui.Input{Common: ui.Common{Key: "names", Tone: ui.ToneAccent, Aria: "Lanes"}, Field: ui.Field{Text: form.Text, Cursor: caretAt(form.Caret, "", form.Text), Mode: "insert", Placeholder: "Lanes, comma separated"}},
 		ui.Text{Common: ui.Common{Key: "note", Tone: ui.ToneMuted}, Text: "Names in order, comma separated; an empty field restores the default. Saving never changes a label in kata."},
 	}
 	if unused := m.UnusedLabels(); len(unused) > 0 {

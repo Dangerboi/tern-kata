@@ -11,6 +11,7 @@ type Filters struct {
 type SearchState struct {
 	Open, Results           bool
 	InitialText, InitialUID string
+	Caret                   Caret
 }
 
 // SearchInputFocused reports whether the Search input, not a popup card, holds the text caret.
@@ -80,6 +81,14 @@ func searchBack(m Model) (Model, []Cmd) {
 	return snapshotChanged(m)
 }
 
+// searchErasing is the handler of the key that deletes before the caret or clears the query.
+func searchErasing(action Action) func(Model) (Model, []Cmd) {
+	return func(m Model) (Model, []Cmd) {
+		text, _ := editText(m.Filters.Search, &m.Search.Caret, "", Binding{Action: action}, true, KeyMsg{})
+		return searchEdit(m, text)
+	}
+}
+
 // searchEdit sets the query to text, as backspace and ctrl+u do.
 func searchEdit(m Model, text string) (Model, []Cmd) {
 	m.Filters.Search = text
@@ -93,12 +102,12 @@ func updateFilterText(m Model, msg KeyMsg) (Model, []Cmd) {
 	}
 	if m.FilterForm.Open {
 		if field := filterTextField(&m.FilterForm); field != nil {
-			*field, _ = editText(*field, Binding{}, false, msg)
+			*field, _ = editText(*field, &m.FilterForm.Caret, m.FilterForm.Field, Binding{}, false, msg)
 		}
 		return m, nil
 	}
-	text, edited := editText(m.Filters.Search, Binding{}, false, msg)
-	if !edited {
+	text, edited := editText(m.Filters.Search, &m.Search.Caret, "", Binding{}, false, msg)
+	if !edited { // the caret may still have moved
 		return m, nil
 	}
 	m.Filters.Search = text

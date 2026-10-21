@@ -23,6 +23,7 @@ type CreateState struct {
 	Field                                     Field
 	Title, Labels, Owner, Priority, ParentUID string
 	Completion                                FieldFormState
+	Caret                                     Caret
 }
 type CreateIssueCmd struct {
 	Workspace, Actor, Title, Body, Owner, ParentUID string
@@ -194,6 +195,7 @@ var createCard = draftCardKeys{
 					parts := strings.Split(m.Create.Labels, ",")
 					parts[len(parts)-1] = s[m.Create.Completion.Suggestion%len(s)]
 					m.Create.Labels = strings.Join(parts, ",")
+					m.Create.Caret = Caret{}
 				}
 			}
 		default:
@@ -212,7 +214,7 @@ var createCard = draftCardKeys{
 			} else if ok && b.Action == FieldPrevious {
 				m.Create.Completion.Suggestion = max(0, m.Create.Completion.Suggestion-1)
 			} else {
-				*value, _ = editText(*value, b, ok, msg)
+				*value, _ = editText(*value, &m.Create.Caret, m.Create.Field, b, ok, msg)
 			}
 		}
 		return m

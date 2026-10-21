@@ -2,6 +2,7 @@ package model
 
 import (
 	"slices"
+	"unicode/utf16"
 	"unicode/utf8"
 )
 
@@ -432,26 +433,77 @@ func cycleField(m *Model, step int) {
 	}
 }
 
-// editText applies one key to a single-line text field. Backspace deletes a rune and ctrl+u clears
-// the field, both through the card's DeleteInput and ClearInput bindings; a key bound to anything
-// else is not text; a key with no binding types its character, a space, or pasted text with its
-// line breaks flattened. It reports whether the field was edited.
-func editText(value string, binding Binding, bound bool, msg KeyMsg) (string, bool) {
-	switch {
-	case bound && binding.Action == DeleteInput:
-		return deleteLastRune(value), true
-	case bound && binding.Action == ClearInput:
-		return "", true
-	case bound:
-		return value, false
-	}
-	text := typedText(msg)
-	return value + text, text != ""
+// Caret is where the caret sits in a single-line text field: Back runes before the end of the text, so the zero
+// value is the end. Field names the field of the card it belongs to ("" for a one-field card); any other field of the
+// card has its caret at the end.
+type Caret struct {
+	Field Field
+	Back  int
 }
 
-func deleteLastRune(text string) string {
-	_, size := utf8.DecodeLastRuneInString(text)
-	return text[:len(text)-size]
+// back is the caret's distance from the end of the text of field, clamped to the n runes it holds.
+func (c Caret) back(field Field, n int) int {
+	if c.Field != field {
+		return 0
+	}
+	return max(0, min(c.Back, n))
+}
+
+// Offset is the caret of field in UTF-16 units into text, as Tern takes it.
+func (c Caret) Offset(field Field, text string) int {
+	runes := []rune(text)
+	return len(utf16.Encode(runes[:len(runes)-c.back(field, len(runes))]))
+}
+
+// isCaretChord says the chord moves or deletes at a text field's caret. The headless Tern delivers Ctrl+a and Ctrl+e
+// as meta+a and meta+e.
+func isCaretChord(chord string) bool {
+	switch chord {
+	case "left", "right", "home", "end", "ctrl+a", "ctrl+e", "meta+a", "meta+e", "delete":
+		return true
+	}
+	return false
+}
+
+// editText applies one key to a single-line text field called field, whose caret is c. Backspace deletes the rune before
+// the caret and ctrl+u clears the field, both through the card's DeleteInput and ClearInput bindings; the caret chords move
+// it or delete after it whatever else they are bound to, since a card calls this only for keys its text field takes; a
+// key bound to anything else is not text; a key with no binding inserts its character, a space, or pasted text with its
+// line breaks flattened at the caret. It reports whether the text changed.
+func editText(value string, c *Caret, field Field, binding Binding, bound bool, msg KeyMsg) (string, bool) {
+	runes := []rune(value)
+	n := len(runes)
+	at := n - c.back(field, n)
+	*c = Caret{field, n - at}
+	switch {
+	case bound && binding.Action == ClearInput:
+		*c = Caret{}
+		return "", true
+	case bound && binding.Action == DeleteInput:
+		if at == 0 {
+			return value, true
+		}
+		return string(slices.Delete(runes, at-1, at)), true
+	case msg.Chord == "delete":
+		if at == n {
+			return value, false
+		}
+		*c = Caret{field, n - at - 1}
+		return string(slices.Delete(runes, at, at+1)), true
+	case msg.Chord == "left":
+		*c = Caret{field, n - max(at-1, 0)}
+	case msg.Chord == "right":
+		*c = Caret{field, n - min(at+1, n)}
+	case msg.Chord == "home" || msg.Chord == "ctrl+a" || msg.Chord == "meta+a":
+		*c = Caret{field, n}
+	case msg.Chord == "end" || msg.Chord == "ctrl+e" || msg.Chord == "meta+e":
+		*c = Caret{}
+	case bound:
+	default:
+		text := typedText(msg)
+		return string(slices.Insert(runes, at, []rune(text)...)), text != ""
+	}
+	return value, false
 }
 
 // typedText is what a key adds to a text field: a bare character, a space, or
