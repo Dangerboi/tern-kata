@@ -55,16 +55,21 @@ func (m Model) SaveLaneList(lanes []string, doneDays, doneCards int) (Model, []C
 	return m, []Cmd{SaveLanes{ProjectUID: m.Collection.ProjectUID, ProjectName: m.Collection.Title, Lanes: slices.Clone(lanes), DoneDays: doneDays, DoneCards: doneCards}}
 }
 
-// lanesLoad is the load a Step's change of Collection calls for: one command when a Project Collection becomes current, whether or
-// not the Board is on, because the list colours Issues by Lane too. Other Collections use the default Lane list and load nothing.
-// The old Project's Lanes are dropped at once.
-func (m Model) lanesLoad() (Model, []Cmd) {
+// lanesLoad is the load a Step calls for: one command when a Project Collection becomes current, whether or not the Board is on,
+// because the list colours Issues by Lane too, and one more each time Board mode turns on, so a change made in another Pane or by
+// hand shows up. Other Collections use the default Lane list and load nothing. A new Project's Lanes are dropped at once; a reload
+// for the same Project keeps showing the list already held until it answers.
+func (m Model) lanesLoad(boardWasOn bool) (Model, []Cmd) {
 	uid := ""
 	if m.Collection.IsProject() {
 		uid = m.Collection.ProjectUID
 	}
 	if uid == m.Board.asked {
-		return m, nil
+		if uid == "" || boardWasOn || !m.Board.On() {
+			return m, nil
+		}
+		m.Board.loaded = false
+		return m, []Cmd{LoadLanes{ProjectUID: uid}}
 	}
 	m.Board.asked, m.Board.loaded = uid, false
 	m.Board.Lanes, m.Board.DoneDays, m.Board.DoneCards, m.Board.fileErr = nil, 0, 0, nil

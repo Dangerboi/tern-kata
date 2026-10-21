@@ -17,21 +17,45 @@ func loadCmds(cmds []model.Cmd) (loads []model.LoadLanes) {
 	return loads
 }
 
-func TestOpeningAProjectAsksForItsLanesOnceNotTheBoard(t *testing.T) {
+func TestLanesAreAskedForOnOpeningAProjectAndEachTimeTheBoardTurnsOn(t *testing.T) {
 	s := feed(t, driver.State{}, model.Start{Workspace: "/repo"}, resize(160)).State
 	opened := step(t, s, model.ProjectLoaded{Project: model.Project{ID: 7, UID: "p", Name: "work"}})
 	if got := loadCmds(opened.Cmds); len(got) != 1 || got[0].ProjectUID != "p" {
 		t.Fatalf("opening a Project asked %v, want one load for Project p", got)
 	}
-	out := step(t, projectPane(t, 160, boardCard("a")), key("b"))
-	if got := loadCmds(out.Cmds); len(got) != 0 {
-		t.Fatalf("turning the Board on asked %v, want none: the Project's open already asked", got)
+	pane := projectPane(t, 160, boardCard("a"))
+	if got := loadCmds(step(t, pane, key("j")).Cmds); len(got) != 0 {
+		t.Errorf("a plain key on the list asked %v, want no load", got)
+	}
+	out := step(t, pane, key("b"))
+	if got := loadCmds(out.Cmds); len(got) != 1 || got[0].ProjectUID != "p" {
+		t.Fatalf("turning the Board on asked %v, want one load for Project p", got)
 	}
 	if got := loadCmds(step(t, out.State, key("j")).Cmds); len(got) != 0 {
 		t.Errorf("a key on the Board asked %v, want no load", got)
 	}
-	if got := loadCmds(step(t, out.State, key("b")).Cmds); len(got) != 0 {
+	off := step(t, out.State, key("b"))
+	if got := loadCmds(off.Cmds); len(got) != 0 {
 		t.Errorf("turning the Board off asked %v, want no load", got)
+	}
+	if got := loadCmds(step(t, off.State, key("b")).Cmds); len(got) != 1 {
+		t.Errorf("turning the Board on again asked %v, want one load", got)
+	}
+}
+
+func TestBoardOnPicksUpAChangedLaneListAndKeepsTheHeldOneMeanwhile(t *testing.T) {
+	s := projectPane(t, 160, boardCard("a", "in-review"))
+	s = step(t, s, model.LanesLoaded{ProjectUID: "p", Lanes: []string{"in-review"}}).State
+	on := step(t, s, key("b"))
+	if got := loadCmds(on.Cmds); len(got) != 1 {
+		t.Fatalf("b asked %v, want one load", got)
+	}
+	if got := on.State.Model.LaneList(); len(got) != 1 || got[0] != "in-review" {
+		t.Fatalf("while the reload is out the Lane list is %v, want the held one", got)
+	}
+	s = step(t, on.State, model.LanesLoaded{ProjectUID: "p", Lanes: []string{"in-review", "shipping"}}).State
+	if got := s.Model.LaneList(); len(got) != 2 || got[1] != "shipping" {
+		t.Errorf("after the file changed the Lane list is %v, want in-review and shipping", got)
 	}
 }
 
