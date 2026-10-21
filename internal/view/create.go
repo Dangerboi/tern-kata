@@ -38,7 +38,7 @@ func createLayer(m model.Model) tern.Element {
 		if field.Name == model.CreateBody {
 			children = append(children, TextEditor(key, f.Editor, readonly))
 		} else {
-			children = append(children, ui.Input{Common: ui.Common{Key: key, Tone: tone, Aria: label}, Field: ui.Field{Text: values[field.Name], Mode: "insert", Readonly: readonly}})
+			children = append(children, ui.Input{Common: ui.Common{Key: key, Tone: tone, Aria: label}, Field: ui.Field{Text: values[field.Name], Cursor: caretAt(f.Caret, field.Name, values[field.Name]), Mode: "insert", Readonly: readonly}})
 		}
 	}
 	if f.Field == model.CreateLabels {

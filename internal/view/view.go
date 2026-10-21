@@ -167,7 +167,7 @@ func laneHeader(m model.Model) tern.Element {
 // searchInput is the Search field above the Issues, in the list and on the Board.
 func searchInput(m model.Model) tern.Element {
 	placeholder := "Search Issues in " + m.Collection.Title
-	return ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Mode: "insert", Placeholder: placeholder, Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}}
+	return ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Cursor: caretAt(m.Search.Caret, "", m.Filters.Search), Mode: "insert", Placeholder: placeholder, Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}}
 }
 
 // scrollerCommon is a list that scrolls its own content inside its column, so

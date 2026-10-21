@@ -71,6 +71,7 @@ type CloseFormState struct {
 	UID          string
 	ProjectID    int64
 	Values       CloseValues
+	Caret        Caret
 	Err          error
 	Keyed
 }
@@ -265,6 +266,7 @@ func updateClose(m Model, msg Msg) (Model, []Cmd) {
 	case CloseFieldMsg:
 		if value := m.CloseForm.Values.at(msg.Field); value != nil && m.CloseForm.Open && !m.CloseForm.Saving {
 			*value = msg.Value
+			m.CloseForm.Caret = Caret{}
 			m.CloseForm.Err = nil
 		}
 	case CloseResultMsg:
@@ -302,7 +304,7 @@ func closeKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case !f.Saving:
 		if value := f.Values.at(f.Field); value != nil {
 			var edited bool
-			if *value, edited = editText(*value, binding, bound, msg); edited {
+			if *value, edited = editText(*value, &f.Caret, f.Field, binding, bound, msg); edited {
 				f.Err = nil
 			}
 		}

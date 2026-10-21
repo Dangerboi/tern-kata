@@ -29,7 +29,7 @@ func closeLayer(m model.Model) tern.Element {
 		}
 		children = append(children,
 			ui.Text{Common: ui.Common{Key: string(field.Name) + "-label", Tone: tone}, Text: label},
-			ui.Input{Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: label}, Field: ui.Field{Text: m.CloseForm.Values.Value(field.Name), Mode: "insert", Readonly: m.CloseForm.Saving}})
+			ui.Input{Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: label}, Field: ui.Field{Text: m.CloseForm.Values.Value(field.Name), Cursor: caretAt(m.CloseForm.Caret, field.Name, m.CloseForm.Values.Value(field.Name)), Mode: "insert", Readonly: m.CloseForm.Saving}})
 	}
 	if m.CloseForm.Err != nil {
 		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.CloseForm.Err.Error()})

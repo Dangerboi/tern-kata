@@ -61,6 +61,7 @@ type RecurrenceFormState struct {
 	Change, StopConfirm, Stopping, Refused bool
 	Opened                                 Recurrence
 	Raw                                    string
+	Caret                                  Caret
 	ProjectID                              int64
 	Frequency                              Frequency
 	Every                                  string
@@ -463,7 +464,7 @@ func recurrenceKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		if bound && binding.Action == InputSpace {
 			bound = false // a space in a text field is typed
 		}
-		if *field, edited = editText(*field, binding, bound, msg); edited {
+		if *field, edited = editText(*field, &f.Caret, f.Field, binding, bound, msg); edited {
 			f.Err = nil
 		}
 	}

@@ -20,6 +20,7 @@ const (
 type PickerState struct {
 	Open     bool
 	Filter   string
+	Caret    Caret
 	Cursor   int
 	Projects bool
 }
@@ -211,7 +212,7 @@ func updatePicker(m Model, msg KeyMsg) (Model, []Cmd) {
 		ok = false
 	}
 	if !ok {
-		if text, edited := editText(m.Picker.Filter, binding, false, msg); edited {
+		if text, edited := editText(m.Picker.Filter, &m.Picker.Caret, "", binding, false, msg); edited {
 			m.Picker.Filter, m.Picker.Cursor = text, 0
 		}
 		return m, nil
@@ -234,7 +235,7 @@ func updatePicker(m Model, msg KeyMsg) (Model, []Cmd) {
 	case MoveLast:
 		m.Picker.Cursor = max(0, last)
 	case DeleteInput, ClearInput:
-		m.Picker.Filter, _ = editText(m.Picker.Filter, binding, true, msg)
+		m.Picker.Filter, _ = editText(m.Picker.Filter, &m.Picker.Caret, "", binding, true, msg)
 		m.Picker.Cursor = 0
 	}
 	return m, nil

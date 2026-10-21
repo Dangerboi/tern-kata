@@ -58,7 +58,7 @@ func filterLayer(m model.Model) tern.Element {
 		}
 		children = append(children, ui.Input{
 			Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: title},
-			Field:  ui.Field{Text: value, Mode: "insert", Prompt: []ui.Span{{T: prompt}}, Placeholder: "Any"},
+			Field:  ui.Field{Text: value, Cursor: caretAt(m.FilterForm.Caret, field.Name, value), Mode: "insert", Prompt: []ui.Span{{T: prompt}}, Placeholder: "Any"},
 		})
 	}
 	children = append(children, buttonRow(cardButton("apply", model.ModeFilterForm, model.ApplyFilters, "Apply filters", true), cardButton("cancel", model.ModeFilterForm, model.CancelFilters, "Cancel", false)))

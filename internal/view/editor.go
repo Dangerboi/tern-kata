@@ -23,6 +23,12 @@ func BodyTarget(id string) model.EditTarget {
 }
 
 // TextEditor presents the reusable buffer; the model owns text, selection and undo.
+// caretAt is the caret of the single-line field in UTF-16 units for ui.Field.Cursor.
+func caretAt(c model.Caret, field model.Field, text string) *int {
+	offset := c.Offset(field, text)
+	return &offset
+}
+
 func TextEditor(key string, editor model.TextEditor, readonly bool) tern.Element {
 	return ui.Editor{Common: ui.Common{Key: key, Tone: ui.ToneAccent}, Field: ui.Field{Text: editor.Text, Cursor: &editor.Cursor, Anchor: &editor.Anchor, Readonly: readonly}, MaxLines: 24}
 }

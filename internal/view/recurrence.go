@@ -120,7 +120,7 @@ func recurrenceLayer(m model.Model) tern.Element {
 		}
 		children = append(children, ui.Input{
 			Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: title},
-			Field:  ui.Field{Text: recurrenceText(f, field.Name), Mode: "insert", Readonly: f.Saving || f.StopConfirm, Prompt: []ui.Span{{T: prompt}}},
+			Field:  ui.Field{Text: recurrenceText(f, field.Name), Cursor: caretAt(f.Caret, field.Name, recurrenceText(f, field.Name)), Mode: "insert", Readonly: f.Saving || f.StopConfirm, Prompt: []ui.Span{{T: prompt}}},
 		})
 	}
 	if f.Err != nil {
