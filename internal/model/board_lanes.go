@@ -47,7 +47,7 @@ func (m Model) SaveLaneList(lanes []string) (Model, []Cmd) {
 		m.Notice = fmt.Sprintf("Lanes not saved: %v", m.Board.fileErr)
 		return m, nil
 	}
-	return m, []Cmd{SaveLanes{ProjectUID: m.Collection.ProjectUID, ProjectName: m.Project.Name, Lanes: slices.Clone(lanes)}}
+	return m, []Cmd{SaveLanes{ProjectUID: m.Collection.ProjectUID, ProjectName: m.Collection.Title, Lanes: slices.Clone(lanes)}}
 }
 
 // lanesLoad is the load a Step's change of Board mode or Project calls for: one command when the Board has just turned on or

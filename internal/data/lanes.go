@@ -67,9 +67,7 @@ func cleanLanes(labels []string) []string {
 // renames a temporary file into place so a failed write leaves the old file. shortcut: comments in a hand-edited file are
 // lost on save, and two Panes saving at once race; upgrade if either bites.
 func saveLanes(cmd model.SaveLanes) model.LanesSaved {
-	saved := model.LanesSaved{ProjectUID: cmd.ProjectUID, Lanes: cmd.Lanes}
-	saved.Err = writeLanes(cmd)
-	return saved
+	return model.LanesSaved{ProjectUID: cmd.ProjectUID, Lanes: cmd.Lanes, Err: writeLanes(cmd)}
 }
 
 func writeLanes(cmd model.SaveLanes) error {

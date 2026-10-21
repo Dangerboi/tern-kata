@@ -82,14 +82,18 @@ func MoveCard(m Model, uid string, dir int) (Model, []Cmd) {
 	return m, []Cmd{cmd}
 }
 
-// matchesLabelFilter says issue carries every label of the comma-separated label filter.
+// matchesLabelFilter says issue carries any label of the comma-separated label filter, as kata's filter does; an empty filter matches.
 func matchesLabelFilter(issue Issue, filter string) bool {
+	empty := true
 	for _, label := range strings.Split(filter, ",") {
-		if label = strings.TrimSpace(label); label != "" && !slices.Contains(issue.Labels, label) {
-			return false
+		if label = strings.TrimSpace(label); label != "" {
+			empty = false
+			if slices.ContainsFunc(issue.Labels, func(l string) bool { return strings.EqualFold(l, label) }) {
+				return true
+			}
 		}
 	}
-	return true
+	return empty
 }
 
 func updateMove(m Model, msg MoveResultMsg) (Model, []Cmd) {

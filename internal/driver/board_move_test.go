@@ -129,6 +129,11 @@ func TestMoveOutOfTheFilteredSetNamesTheLane(t *testing.T) {
 	if n := step(t, s, key(">")).State.Model.Notice; n != "" {
 		t.Errorf("Move inside the filtered set left Notice %q", n)
 	}
+	// kata's label filter matches any of its labels, in any case.
+	s.Model.Filters.Label = "needs-triage, Needs-Info"
+	if n := step(t, s, key(">")).State.Model.Notice; n != "" {
+		t.Errorf("Move into another filtered label left Notice %q", n)
+	}
 }
 
 func containsAll(s string, parts ...string) bool {

@@ -139,7 +139,7 @@ func toggleBoard(m Model) Model {
 	default:
 		m.Board.Mode = BoardColumns
 		m.Board.detailHidden = m.DetailHidden()
-		m = m.setDetailHidden(true)
+		m.hidden = true
 		m.Focus = ColumnList
 		m = m.WithVisibleSelection()
 		if m.Cols < SideBySideCols {
@@ -149,8 +149,8 @@ func toggleBoard(m Model) Model {
 	return m
 }
 
-// cardAt is the column and row of the card of uid, -1 and -1 when no column holds it.
-func cardAt(columns []BoardColumn, uid string) (col, row int) {
+// CardAt is the column and row of the card of uid, -1 and -1 when no column holds it.
+func CardAt(columns []BoardColumn, uid string) (col, row int) {
 	for c, column := range columns {
 		if i := slices.IndexFunc(column.Cards, func(card BoardCard) bool { return card.Issue.UID == uid }); i >= 0 {
 			return c, i
@@ -158,9 +158,6 @@ func cardAt(columns []BoardColumn, uid string) (col, row int) {
 	}
 	return -1, -1
 }
-
-// CardAt is cardAt for the view.
-func CardAt(columns []BoardColumn, uid string) (col, row int) { return cardAt(columns, uid) }
 
 // neighbour is the nearest column from step away from from, towards step, that has cards; -1 when there is none.
 func neighbour(columns []BoardColumn, from, step int) int {
@@ -176,13 +173,13 @@ func neighbour(columns []BoardColumn, from, step int) int {
 func (m Model) laneView() Model {
 	columns := m.BoardColumns()
 	m.Board.Lane = LaneNone
-	if col, _ := cardAt(columns, m.SelectedUID); col >= 0 {
+	if col, _ := CardAt(columns, m.SelectedUID); col >= 0 {
 		m.Board.Lane = columns[col].Lane
 	} else if col := neighbour(columns, -1, 1); col >= 0 {
 		m.Board.Lane = columns[col].Lane
 	}
 	m.Board.Mode = BoardLane
-	m = m.setDetailHidden(false)
+	m.hidden = false
 	m.Focus = ColumnList
 	return m.WithVisibleSelection()
 }
@@ -193,7 +190,7 @@ func laneBack(m Model) (Model, []Cmd) {
 		return drillOut(m)
 	}
 	m.Board.Mode = BoardColumns
-	m = m.setDetailHidden(true)
+	m.hidden = true
 	m.Focus = ColumnList
 	return m.WithVisibleSelection(), nil
 }
@@ -202,7 +199,7 @@ func laneBack(m Model) (Model, []Cmd) {
 func switchLane(m Model, step int) Model {
 	columns := m.BoardColumns()
 	at := slices.IndexFunc(columns, func(c BoardColumn) bool { return c.Lane == m.Board.Lane })
-	col, row := cardAt(columns, m.SelectedUID)
+	col, row := CardAt(columns, m.SelectedUID)
 	if col != at {
 		row = 0
 	}
@@ -241,7 +238,7 @@ func openLane(m Model) Model {
 func (m Model) boardOff() Model {
 	m.Board.Mode = BoardOff
 	if m.Focus != ColumnDetail {
-		m = m.setDetailHidden(m.Board.detailHidden)
+		m.hidden = m.Board.detailHidden
 	}
 	return m.revealInList(m.SelectedUID).WithVisibleSelection()
 }
@@ -277,7 +274,7 @@ func (m Model) revealInList(uid string) Model {
 // moveOnBoard moves the selected card up or down its Lane, or to the neighbouring Lane that has cards, keeping its row where it can.
 func moveOnBoard(m Model, action Action) Model {
 	columns := m.BoardColumns()
-	col, row := cardAt(columns, m.SelectedUID)
+	col, row := CardAt(columns, m.SelectedUID)
 	if col < 0 {
 		return m.WithVisibleSelection()
 	}

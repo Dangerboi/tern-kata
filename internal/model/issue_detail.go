@@ -146,12 +146,6 @@ func (m Model) toggleDetail() Model {
 	return m
 }
 
-// setDetailHidden shows or hides the column without moving focus; Board mode hides it while the Board holds the screen.
-func (m Model) setDetailHidden(hidden bool) Model {
-	m.hidden = hidden
-	return m
-}
-
 // issueWritten says the Issue was changed in kata (a Draft saved, closed, reopened, a field written); the shown detail reloads.
 func (m Model) issueWritten(uid string) Model {
 	if uid == m.uid {
