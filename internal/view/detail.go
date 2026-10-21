@@ -49,7 +49,7 @@ func detail(m model.Model, now time.Time) tern.Element {
 		children = append(children, ui.Text{Common: ui.Common{Key: "unavailable"}, Text: "This Issue is unavailable or no longer visible."})
 	default:
 		issue := m.DetailAuthority().Issue
-		title := []ui.Span{{T: "#" + issue.ShortID, S: "accent"}, {T: " - " + issue.Title, S: "strong"}}
+		title := []ui.Span{{T: "#" + issue.ShortID, S: toneStyle(issueLaneTone(m, *issue))}, {T: " - " + issue.Title, S: "strong"}}
 		if m.DetailLoading() {
 			title = append(title, loadingMarker)
 		}
@@ -208,17 +208,25 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 	}
 	add("Created", text(m.DetailTime(issue.CreatedAt)))
 	add("Updated", text(m.DetailTime(issue.UpdatedAt)))
-	if day := model.IssueDate(issue.ScheduledOnDate, issue.Metadata, model.ScheduledKey); day != "" {
-		add("Scheduled", text(day))
+	scheduled, deadline := model.IssueDates(*issue)
+	dateBadge := func(day string, rule func(day, today string) model.DateTone) tern.Element {
+		tone := ui.ToneMuted
+		if issue.Status != "closed" {
+			tone = dateTones[rule(day, m.Calendar.Date)]
+		}
+		return ui.Badge{Common: ui.Common{Key: "v", Tone: tone}, Text: day}
 	}
-	if day := model.IssueDate(issue.DeadlineOnDate, issue.Metadata, model.DeadlineKey); day != "" {
-		add("Deadline", text(day))
+	if scheduled != "" {
+		add("Scheduled", dateBadge(scheduled, model.ScheduledTone))
+	}
+	if deadline != "" {
+		add("Deadline", dateBadge(deadline, model.DeadlineTone))
 	}
 	owner := m.OwnerText(issue.Owner, issue.AssignmentExpiresOn, now).String()
 	if owner == "" {
 		owner = "Unassigned"
 	}
-	add("Owner", text(owner))
+	add("Owner", ui.Badge{Common: ui.Common{Key: "v", Tone: ownerTone}, Text: owner})
 	if issue.RecurrenceID != nil {
 		recurring := "Yes" // kata did not say more: it withholds recurrences from a scoped access
 		if d := m.DetailAuthority(); d != nil && d.Recurrence != nil {
@@ -233,7 +241,7 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 	if len(issue.Labels) > 0 {
 		chips := make(tern.Nodes, len(issue.Labels))
 		for i, name := range issue.Labels {
-			chips[i] = ui.Badge{Common: ui.Common{Key: "label-" + name, Tone: ui.ToneNeutral}, Text: name}
+			chips[i] = ui.Badge{Common: ui.Common{Key: "label-" + name, Tone: labelTone}, Text: name}
 		}
 		add("Labels", ui.Row{Common: ui.Common{Key: "v"}, Gap: ui.GapSM, Wrap: true, Children: chips})
 	}

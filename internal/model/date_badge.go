@@ -50,16 +50,16 @@ func ChooseDateBadge(issue Issue, today string) (DateBadge, bool) {
 	}
 	switch {
 	case deadline != "" && deadline < today:
-		return DateBadge{Text: fmt.Sprintf("overdue %dd", daysBetween(deadline, today)), Tone: DateError}, true
+		return DateBadge{Text: fmt.Sprintf("overdue %dd", daysBetween(deadline, today)), Tone: DeadlineTone(deadline, today)}, true
 	case deadline == today:
-		return DateBadge{Text: "due today", Tone: DateWarning}, true
+		return DateBadge{Text: "due today", Tone: DeadlineTone(deadline, today)}, true
 	case scheduled != "" && scheduled < today:
-		return DateBadge{Text: fmt.Sprintf("scheduled %dd ago", daysBetween(scheduled, today)), Tone: DateWarning}, true
+		return DateBadge{Text: fmt.Sprintf("scheduled %dd ago", daysBetween(scheduled, today)), Tone: ScheduledTone(scheduled, today)}, true
 	case scheduled == today:
-		return DateBadge{Text: "scheduled today", Tone: DateAccent}, true
+		return DateBadge{Text: "scheduled today", Tone: ScheduledTone(scheduled, today)}, true
 	case deadline != "":
 		if daysBetween(today, deadline) == 1 {
-			return DateBadge{Text: "due tomorrow", Tone: DateWarning}, true
+			return DateBadge{Text: "due tomorrow", Tone: DeadlineTone(deadline, today)}, true
 		}
 		return DateBadge{Text: "due " + shortDay(deadline, today)}, true
 	}
@@ -67,6 +67,45 @@ func ChooseDateBadge(issue Issue, today string) (DateBadge, bool) {
 		return DateBadge{Text: "scheduled tomorrow"}, true
 	}
 	return DateBadge{Text: "scheduled " + shortDay(scheduled, today)}, true
+}
+
+// DeadlineTone is the tone of a deadline day against today: overdue error, today and tomorrow warning, later muted.
+// Muted when either day is unreadable.
+func DeadlineTone(day, today string) DateTone {
+	if !readableDays(day, today) {
+		return DateMuted
+	}
+	switch {
+	case day < today:
+		return DateError
+	case daysBetween(today, day) <= 1:
+		return DateWarning
+	}
+	return DateMuted
+}
+
+// ScheduledTone is the tone of a scheduled day against today: passed warning, today accent, later muted.
+// Muted when either day is unreadable.
+func ScheduledTone(day, today string) DateTone {
+	if !readableDays(day, today) {
+		return DateMuted
+	}
+	switch {
+	case day < today:
+		return DateWarning
+	case day == today:
+		return DateAccent
+	}
+	return DateMuted
+}
+
+func readableDays(days ...string) bool {
+	for _, d := range days {
+		if _, err := time.Parse(dayLayout, d); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // daysBetween is the whole days from the earlier calendar day a to the later b.
