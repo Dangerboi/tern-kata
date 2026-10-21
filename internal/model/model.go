@@ -70,6 +70,7 @@ type Model struct {
 	Loading          bool
 	Err              error
 	Cols             int
+	Rows, RowPx      int
 	Quitting         bool
 	Collection       Collection
 	Collections      []Collection
@@ -250,7 +251,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case SelectMsg:
 		return selectRow(m, msg.UID), nil
 	case ResizeMsg:
-		m.Cols = msg.Cols
+		m.Cols, m.Rows, m.RowPx = msg.Cols, msg.Rows, msg.RowPx
 	default:
 		return updateLive(m, msg)
 	}

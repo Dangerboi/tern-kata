@@ -34,8 +34,6 @@ func decode(input tern.Input) model.Msg {
 		return view.DecodeSelect(input.ID, input.Item)
 	case *tern.Action:
 		return view.DecodeAction(input.ID, input.Act, input.Value)
-	case *tern.Resize:
-		return model.ResizeMsg{Cols: input.Cols}
 	}
 	return nil
 }

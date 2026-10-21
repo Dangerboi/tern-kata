@@ -78,7 +78,8 @@ func run() error {
 		return err
 	}
 	host := data.HostName()
-	state := driver.State{Model: model.Model{Cols: term.Caps().Cols, Actor: plan.Actor, Host: host}}
+	size := paneSize(term.Caps().Cols, term.Caps().Cell)
+	state := driver.State{Model: model.Model{Cols: size.Cols, Rows: size.Rows, RowPx: size.RowPx, Actor: plan.Actor, Host: host}}
 	results := make(chan model.Msg)
 	gateway := data.NewGateway(data.LocateWithKata).WithHost(host)
 	defer gateway.Close()

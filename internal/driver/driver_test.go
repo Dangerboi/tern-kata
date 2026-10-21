@@ -33,7 +33,7 @@ func key(chord string) tern.Key {
 // openMenu is what a click on the top bar's Menu sends.
 var openMenu = model.ActionMsg{Action: model.OpenPicker}
 
-func resize(cols int) *tern.Resize { return &tern.Resize{Cols: cols} }
+func resize(cols int) model.ResizeMsg { return model.ResizeMsg{Cols: cols} }
 
 func alphaLoaded() model.Msg {
 	return model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &alpha}}

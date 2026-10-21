@@ -94,8 +94,11 @@ func lanes(t *testing.T, s driver.State) (heads []string, cards [][]string) {
 		if at < 0 {
 			return heads, cards
 		}
-		head, _ := json.Marshal(nodes[at].P["head"])
-		heads = append(heads, string(head))
+		head := slices.IndexFunc(nodes, func(n tern.WireNode) bool { return n.ID == id+".head" })
+		if head < 0 {
+			t.Fatalf("Lane %d draws no head", i)
+		}
+		heads = append(heads, wireText(nodes[head]))
 		uids := []string{}
 		for _, n := range nodes {
 			if rest, ok := strings.CutPrefix(n.ID, id+".cards."); ok && !strings.Contains(rest, ".") {
@@ -156,7 +159,7 @@ func TestBoardShowsNoLaneTheDefaultLanesAndDone(t *testing.T) {
 func TestLaneHeadersShowTheirCardCount(t *testing.T) {
 	s := boardPane(t, boardCard("a"), boardCard("b"), boardCard("c", "needs-info"))
 	heads, _ := lanes(t, s)
-	if !strings.Contains(heads[0], " 2") || !strings.Contains(heads[2], " 1") || !strings.Contains(heads[1], " 0") {
+	if !strings.Contains(heads[0], `"t":"2"`) || !strings.Contains(heads[2], `"t":"1"`) || !strings.Contains(heads[1], `"t":"0"`) {
 		t.Errorf("heads = %v, want counts 2, 0 and 1", heads)
 	}
 }

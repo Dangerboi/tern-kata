@@ -28,7 +28,9 @@ type SelectMsg struct{ UID string }
 
 func (SelectMsg) msg() {}
 
-type ResizeMsg struct{ Cols int }
+// ResizeMsg is the Pane's new size: its width in columns, its height in rows and the height of a row in pixels. Rows and RowPx are
+// zero when Tern does not say.
+type ResizeMsg struct{ Cols, Rows, RowPx int }
 
 func (ResizeMsg) msg() {}
 
