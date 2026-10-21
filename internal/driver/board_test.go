@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -425,6 +426,58 @@ func TestFooterAndHelpSheetListTheBoardKeys(t *testing.T) {
 	for _, want := range []string{"Board", "toggle Board mode", "next Lane", "previous Lane"} {
 		if !strings.Contains(helpText, want) {
 			t.Errorf("help sheet lacks %q", want)
+		}
+	}
+}
+
+func footerText(t *testing.T, s driver.State) string {
+	t.Helper()
+	footer := ""
+	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
+		if n.ID == "dock.hints" || strings.HasPrefix(n.ID, "dock.hints.") {
+			footer += wireText(n)
+		}
+	}
+	return footer
+}
+
+func TestBoardAndLaneFootersListTheLabelAndOwnerKeys(t *testing.T) {
+	board := boardPane(t, boardCard("a", "needs-triage"))
+	lane := feed(t, board, key("right"), key("enter")).State
+	for name, s := range map[string]driver.State{"Board": board, "Lane view": lane} {
+		footer := footerText(t, s)
+		for _, want := range []string{"label", "unlabel", "owner", "unassign"} {
+			if !strings.Contains(footer, want) {
+				t.Errorf("%s footer lacks %q: %s", name, want, footer)
+			}
+		}
+	}
+}
+
+func TestBoardLaneListsScrollInsideTheirLanesAndLanesShrink(t *testing.T) {
+	s := boardPane(t, ownedBy(closedAt("d", 10, 5, "needs-triage"), "someone-with-a-long-name"), boardCard("a"))
+	s = feed(t, s, key("right"), key("right")).State // the selected card draws its owner
+	nodes := wireNodes(t, view.Render(s.Model, now))
+	for col := 0; col < 6; col++ {
+		id := view.BoardID + ".lane" + fmt.Sprint(col)
+		for _, n := range nodes {
+			switch n.ID {
+			case id + ".cards":
+				if max, err := strconv.ParseFloat(fmt.Sprint(n.P["max"]), 64); err != nil || max >= 1 {
+					t.Errorf("Lane %d list max = %v, want a fraction of the window below 1", col, n.P["max"])
+				}
+			case id:
+				if min, _ := json.Marshal(n.P["min"]); !strings.Contains(string(min), `"w":"0ch"`) {
+					t.Errorf("Lane %d min = %s, want a 0ch width so it can shrink", col, min)
+				}
+			}
+		}
+	}
+	for _, n := range nodes {
+		if strings.Contains(n.ID, ".owner") || strings.Contains(n.ID, ".reopen") {
+			if _, nowrap := n.P["wrap"]; nowrap {
+				t.Errorf("%s does not wrap: %v", n.ID, n.P)
+			}
 		}
 	}
 }

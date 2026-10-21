@@ -142,6 +142,8 @@ var (
 	// issueModes are the modes whose keys act on the selected Issue: the list, the Board and the detail.
 	issueModes   = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail}
 	listAndBoard = []Mode{ModeList, ModeBoard, ModeLane}
+	// boardAndDetail are the modes whose footer lists the label and owner keys.
+	boardAndDetail = []Mode{ModeBoard, ModeLane, ModeDetail}
 	// listModes are the modes with the list's rows: the list and the Lane view.
 	listModes = []Mode{ModeList, ModeLane}
 	// laneModes are the modes that show Lanes: the Board and the Lane view.
@@ -239,12 +241,12 @@ var mainActions = []actionEntry{
 	{action: EditBody, modes: issueModes, keys: keys("e", "e"), help: "edit", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 5, "edit body"}}, handle: pure(func(m Model) Model { return startDraft(m, false) })},
 	{action: AddComment, modes: []Mode{ModeDetail}, keys: keys("c", "c"), help: "comment", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 6, "new comment"}}, handle: pure(func(m Model) Model { return startDraft(m, true) })},
 	{action: ReplyAction, modes: []Mode{ModeDetail}, keys: keys("shift+r", "R"), help: "reply to comment", sheet: []sheetLine{{sheetDetail, 15, "reply to comment"}}, handle: pure(startReply)},
-	{action: AddLabelAction, modes: issueModes, keys: keys("+", "+"), help: "label", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 8, "add label"}}, handle: fieldFor(AddLabelAction)},
-	{action: RemoveLabelAction, modes: issueModes, keys: keys("-", "-"), help: "unlabel", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 9, "remove label"}}, handle: fieldFor(RemoveLabelAction)},
+	{action: AddLabelAction, modes: issueModes, keys: keys("+", "+"), help: "label", footer: boardAndDetail, sheet: []sheetLine{{sheetDetail, 8, "add label"}}, handle: fieldFor(AddLabelAction)},
+	{action: RemoveLabelAction, modes: issueModes, keys: keys("-", "-"), help: "unlabel", footer: boardAndDetail, sheet: []sheetLine{{sheetDetail, 9, "remove label"}}, handle: fieldFor(RemoveLabelAction)},
 	{action: AttachFileAction, modes: issueModes, keys: keys("u", "u"), help: "attach", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 10, "attach file"}}, handle: fieldFor(AttachFileAction)},
 	{action: DetachFileAction, modes: issueModes, keys: keys("shift+u", "U"), help: "detach", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 11, "remove attachment"}}, handle: fieldFor(DetachFileAction)},
-	{action: AssignOwnerAction, modes: issueModes, keys: keys("a", "a"), help: "owner", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 12, "assign owner"}}, handle: fieldFor(AssignOwnerAction)},
-	{action: ClearOwnerAction, modes: issueModes, keys: keys("shift+a", "A"), help: "unassign", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 13, "clear owner"}}, handle: fieldFor(ClearOwnerAction)},
+	{action: AssignOwnerAction, modes: issueModes, keys: keys("a", "a"), help: "owner", footer: boardAndDetail, sheet: []sheetLine{{sheetDetail, 12, "assign owner"}}, handle: fieldFor(AssignOwnerAction)},
+	{action: ClearOwnerAction, modes: issueModes, keys: keys("shift+a", "A"), help: "unassign", footer: boardAndDetail, sheet: []sheetLine{{sheetDetail, 13, "clear owner"}}, handle: fieldFor(ClearOwnerAction)},
 	{action: OpenClose, modes: issueModes, keys: keys("x", "x"), help: "close", footer: issueModes, sheet: []sheetLine{{sheetGraph, 14, "close"}}, handle: pure(openClose)},
 	{action: ReopenAction, modes: issueModes, keys: keys("r", "r"), help: "reopen", footer: issueModes, sheet: []sheetLine{{sheetGraph, 15, "reopen"}}, handle: reopenIssue},
 	{action: SetParentAction, modes: issueModes, keys: keys("p", "p"), help: "parent", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 7, "set parent"}}, handle: fieldFor(SetParentAction)},
