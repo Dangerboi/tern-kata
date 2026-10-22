@@ -13,8 +13,8 @@ func TestPageBarShowsIssuesAndBoardAndKeysAndClicksSwitchPages(t *testing.T) {
 	s := projectPane(t, 160, boardCard("a"), boardCard("b"))
 	drawn := drawnIDs(t, view.Render(s.Model, now))
 	for _, id := range []string{"issues", "board"} {
-		if !drawn[view.PageTabID(id)] {
-			t.Errorf("the Page bar draws no %s tab", id)
+		if !drawn[view.PageBarEntryID(id)] {
+			t.Errorf("the Page bar draws no %s entry", id)
 		}
 	}
 	for name, to := range map[string]func(driver.State) driver.State{
@@ -22,7 +22,7 @@ func TestPageBarShowsIssuesAndBoardAndKeysAndClicksSwitchPages(t *testing.T) {
 			return feed(t, s, key("2"), model.LanesLoaded{ProjectUID: "p"}).State
 		},
 		"click": func(s driver.State) driver.State {
-			return feed(t, s, click(view.PageTabID("board"), view.KeyClick("2")), model.LanesLoaded{ProjectUID: "p"}).State
+			return feed(t, s, click(view.PageBarEntryID("board"), view.KeyClick("2")), model.LanesLoaded{ProjectUID: "p"}).State
 		},
 		"b": func(s driver.State) driver.State {
 			return feed(t, s, key("b"), model.LanesLoaded{ProjectUID: "p"}).State
@@ -35,7 +35,7 @@ func TestPageBarShowsIssuesAndBoardAndKeysAndClicksSwitchPages(t *testing.T) {
 		if heads, _ := lanes(t, board); len(heads) == 0 {
 			t.Errorf("%s: the Board is not drawn", name)
 		}
-		for back, press := range map[string]any{"1": key("1"), "b": key("b"), "click": click(view.PageTabID("issues"), view.KeyClick("1"))} {
+		for back, press := range map[string]any{"1": key("1"), "b": key("b"), "click": click(view.PageBarEntryID("issues"), view.KeyClick("1"))} {
 			issues := step(t, board, press).State
 			if issues.Model.Page != model.PageIssues {
 				t.Errorf("%s then %s: page %v, want the Issues Page", name, back, issues.Model.Page)
@@ -83,25 +83,25 @@ func TestBoardPageWithoutAProjectSaysSoAndOpensTheMenusProjects(t *testing.T) {
 	}
 }
 
-func TestEveryPageTabClicksLikeItsKey(t *testing.T) {
+func TestEveryPageBarEntryClicksLikeItsKey(t *testing.T) {
 	for _, focus := range []model.Column{model.ColumnList, model.ColumnCollections, model.ColumnDetail} {
 		s := clickAt(focus)
-		for _, tab := range s.Model.PageBar() {
-			keyboard, keyCmds := keys(tab.Chord)(s)
-			pointer, clickCmds := clicked(s, click(view.PageTabID(tab.ID), view.KeyClick(tab.Chord)))
-			sameAs(t, tab.Label+" tab differs from its key", pointer, clickCmds, keyboard, keyCmds)
+		for _, entry := range s.Model.PageBar() {
+			keyboard, keyCmds := keys(entry.Chord)(s)
+			pointer, clickCmds := clicked(s, click(view.PageBarEntryID(entry.ID), view.KeyClick(entry.Chord)))
+			sameAs(t, entry.Label+" entry differs from its key", pointer, clickCmds, keyboard, keyCmds)
 		}
 	}
 }
 
-// pageTabTexts is what each Page tab of the top bar draws, by tab id, wherever the Page bar sits.
-func pageTabTexts(t *testing.T, s driver.State) map[string]string {
+// pageBarTexts is what each Page entry of the top bar draws, by entry id, wherever the Page bar sits.
+func pageBarTexts(t *testing.T, s driver.State) map[string]string {
 	t.Helper()
 	texts := map[string]string{}
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
-		for _, tab := range s.Model.PageBar() {
-			if n.ID == view.PageTabID(tab.ID) || n.ID == "main.pagebar."+tab.ID {
-				texts[tab.ID] = wireText(n)
+		for _, entry := range s.Model.PageBar() {
+			if n.ID == view.PageBarEntryID(entry.ID) || n.ID == "main.pagebar."+entry.ID {
+				texts[entry.ID] = wireText(n)
 			}
 		}
 	}
@@ -121,12 +121,12 @@ func TestPageBarCompactsThenMovesToItsOwnLineBeforeAnythingLeavesTheTopBar(t *te
 		{80, true, true, ""},
 	} {
 		s := loadedWith(t, tt.cols, long, model.Snapshot{Issues: []model.Issue{alpha}})
-		texts := pageTabTexts(t, s)
+		texts := pageBarTexts(t, s)
 		if len(texts) != len(s.Model.PageBar()) {
-			t.Fatalf("%d columns: %d Page tabs drawn, want %d", tt.cols, len(texts), len(s.Model.PageBar()))
+			t.Fatalf("%d columns: %d Page bar entries drawn, want %d", tt.cols, len(texts), len(s.Model.PageBar()))
 		}
 		if got := strings.Contains(texts["workflows"], `"t":"Workflows"`); got == tt.compact {
-			t.Errorf("%d columns: Workflows tab %s, compact %v", tt.cols, texts["workflows"], tt.compact)
+			t.Errorf("%d columns: Workflows entry %s, compact %v", tt.cols, texts["workflows"], tt.compact)
 		}
 		if !strings.Contains(texts["issues"], `"t":"Issues"`) {
 			t.Errorf("%d columns: the current Page lost its label: %s", tt.cols, texts["issues"])

@@ -13,7 +13,7 @@ import (
 
 // guarded is the native job every test below edits, at the version its guard names.
 func guarded(uid, name, event string) model.CronJob {
-	job := recurringJob(uid, name, jobParent("open", false))
+	job := nativeJob(uid, name, jobParent("open", false))
 	job.DefinitionEventUID = event
 	return job
 }
@@ -439,7 +439,7 @@ func TestJobKeysAreOnTheFooterAndTheHelpSheet(t *testing.T) {
 	s := jobsPane(t, 160, guarded("J1", "Weekly", "EV1"))
 	wantText(t, "Jobs Page footer", footerText(t, s), "new job", "edit job", "pause or resume", "archive")
 	help := wireTextOf(t, feed(t, s, key("?")).State)
-	wantText(t, "help sheet", help, "new job (Job card)", "edit the selected job", "pause or resume the selected job", "archive the selected job, or restore it", "new recurring job on the selected Issue")
+	wantText(t, "help sheet", help, "new job (Job card)", "edit the selected job", "pause or resume the selected job", "archive the selected job, or restore it", "new native job on the selected Issue")
 	card := step(t, s, key("n")).State
 	wantText(t, "card footer", footerText(t, card), "save job", "cancel", "next field")
 }

@@ -82,7 +82,7 @@ func TestRRunsTheSelectedAdapterJobOnTheWorker(t *testing.T) {
 }
 
 func TestRRefusesANativeJobAndAMissingOrNonServingWorker(t *testing.T) {
-	native := jobsPaneWithWorker(t, servingWorker(), recurringJob("N1", "Hourly", jobParent("open", false)))
+	native := jobsPaneWithWorker(t, servingWorker(), nativeJob("N1", "Hourly", jobParent("open", false)))
 	out := step(t, native, key("shift+r"))
 	if len(out.Cmds) != 0 {
 		t.Errorf("a native job asked the worker: %#v", out.Cmds)

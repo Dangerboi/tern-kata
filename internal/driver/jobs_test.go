@@ -19,8 +19,8 @@ var (
 	}
 )
 
-// recurringJob is a native job: kata's daemon makes a child Issue per run of its hourly interval.
-func recurringJob(uid, name string, parent *model.CronJobParent) model.CronJob {
+// nativeJob is a native job: kata's daemon makes a child Issue per run of its hourly interval.
+func nativeJob(uid, name string, parent *model.CronJobParent) model.CronJob {
 	return model.CronJob{
 		UID: uid, Name: name, Author: "tester", Revision: 2, CreatedAt: jobAnchor, UpdatedAt: jobAnchor,
 		Definition: model.CronDefinition{
@@ -109,7 +109,7 @@ func wantText(t *testing.T, what, text string, want ...string) {
 	}
 }
 
-func TestJobsPageKeyAsksForTheProjectsJobsAndTheTabShowsTheCurrentPage(t *testing.T) {
+func TestJobsPageKeyAsksForTheProjectsJobsAndThePageBarShowsTheCurrentPage(t *testing.T) {
 	s := projectPane(t, 160, boardCard("a"))
 	out := step(t, s, key("3"))
 	load, ok := askedJobs(out.Cmds)
@@ -119,12 +119,12 @@ func TestJobsPageKeyAsksForTheProjectsJobsAndTheTabShowsTheCurrentPage(t *testin
 	if out.State.Model.Page != model.PageJobs {
 		t.Fatalf("page %v", out.State.Model.Page)
 	}
-	if !drawnIDs(t, view.Render(out.State.Model, now))[view.PageTabID("jobs")] {
-		t.Error("the Page bar draws no Jobs tab")
+	if !drawnIDs(t, view.Render(out.State.Model, now))[view.PageBarEntryID("jobs")] {
+		t.Error("the Page bar draws no Jobs Page bar entry")
 	}
-	clicked := step(t, s, click(view.PageTabID("jobs"), view.KeyClick("3")))
+	clicked := step(t, s, click(view.PageBarEntryID("jobs"), view.KeyClick("3")))
 	if _, ok := askedJobs(clicked.Cmds); !ok {
-		t.Error("clicking the Jobs tab asks for no jobs")
+		t.Error("clicking the Jobs Page bar entry asks for no jobs")
 	}
 	back := step(t, out.State, key("1"))
 	if back.State.Model.Page != model.PageIssues {
@@ -133,7 +133,7 @@ func TestJobsPageKeyAsksForTheProjectsJobsAndTheTabShowsTheCurrentPage(t *testin
 }
 
 func TestJobsPageRowsShowStateNameKindScheduleProfileAndNextRun(t *testing.T) {
-	s := jobsPane(t, 160, recurringJob("J1", "Weekly", jobParent("open", false)), promptJob("J2", "Triage"))
+	s := jobsPane(t, 160, nativeJob("J1", "Weekly", jobParent("open", false)), promptJob("J2", "Triage"))
 
 	wantText(t, "native job row", jobCardText(t, s, "J1"), "active", "Weekly", "recurring child", "every hour", "next 13:00")
 	// 2026-10-08 is a Thursday: the next nine o'clock in Berlin is 07:00 UTC on Friday.
@@ -153,14 +153,14 @@ func TestJobsPageLeavesOutWhatItCannotWorkOut(t *testing.T) {
 }
 
 func TestJobsPageShowsEachPauseReason(t *testing.T) {
-	disabled := recurringJob("J3", "Off", jobParent("open", false))
+	disabled := nativeJob("J3", "Off", jobParent("open", false))
 	disabled.Definition.Enabled = false
 	archivedAt := now.Add(-time.Hour)
 	archived := promptJob("J4", "Retired")
 	archived.DeletedAt = &archivedAt
 	s := jobsPane(t, 160,
-		recurringJob("J1", "Closed parent", jobParent("closed", false)),
-		recurringJob("J2", "Deleted parent", jobParent("open", true)),
+		nativeJob("J1", "Closed parent", jobParent("closed", false)),
+		nativeJob("J2", "Deleted parent", jobParent("open", true)),
 		disabled,
 		promptJob("J5", "Running"),
 	)
@@ -171,8 +171,8 @@ func TestJobsPageShowsEachPauseReason(t *testing.T) {
 		t.Fatalf("a asks for %#v, want a read that includes the archived", shown.Cmds)
 	}
 	s = step(t, shown.State, model.JobsLoaded{Request: load.Request, Jobs: []model.CronJob{
-		recurringJob("J1", "Closed parent", jobParent("closed", false)),
-		recurringJob("J2", "Deleted parent", jobParent("open", true)),
+		nativeJob("J1", "Closed parent", jobParent("closed", false)),
+		nativeJob("J2", "Deleted parent", jobParent("open", true)),
 		disabled, archived, promptJob("J5", "Running"),
 	}}).State
 	for uid, want := range map[string]string{"J1": "paused: parent closed", "J2": "paused: parent deleted", "J3": "disabled", "J4": "archived", "J5": "active"} {
@@ -187,7 +187,7 @@ func TestJobsPageShowsEachPauseReason(t *testing.T) {
 }
 
 func TestJobsPageOfAnArchivedProjectPausesTheJobsItHolds(t *testing.T) {
-	s := jobsPane(t, 160, recurringJob("J1", "Weekly", jobParent("open", false)), promptJob("J2", "Triage"))
+	s := jobsPane(t, 160, nativeJob("J1", "Weekly", jobParent("open", false)), promptJob("J2", "Triage"))
 	out := step(t, s, key("ctrl+r"))
 	load, ok := askedJobs(out.Cmds)
 	if !ok {
@@ -232,7 +232,7 @@ func TestJobsPageArchivedToggleHidesAndShowsArchivedJobs(t *testing.T) {
 }
 
 func TestJobsPageInspectorShowsTheSelectedJobsDefinitionAndParent(t *testing.T) {
-	s := jobsPane(t, 160, recurringJob("J1", "Weekly", jobParent("open", false)), promptJob("J2", "Triage"))
+	s := jobsPane(t, 160, nativeJob("J1", "Weekly", jobParent("open", false)), promptJob("J2", "Triage"))
 	wantText(t, "inspector of the native job", inspectorText(t, s),
 		"Weekly", "recurring child", "Child title", "Tick", "Write the report", "current-owner-or-author", "Catchup", "all",
 		"#pa11 Weekly report · open", "Delivered through")
@@ -265,7 +265,7 @@ func TestJobsPageSelectionMovesWithTheKeysAndIsRevealed(t *testing.T) {
 }
 
 func TestEnterOnANativeJobsParentOpensItOnTheIssuesPage(t *testing.T) {
-	s := jobsPane(t, 160, promptJob("J0", "Adapter"), recurringJob("J1", "Weekly", jobParent("open", false)))
+	s := jobsPane(t, 160, promptJob("J0", "Adapter"), nativeJob("J1", "Weekly", jobParent("open", false)))
 	s = feed(t, s, key("j")).State
 	inspected := step(t, s, key("enter"))
 	if inspected.State.Model.CurrentMode() != model.ModeJobInspector {
@@ -293,7 +293,7 @@ func TestEnterOnAnAdapterJobsInspectorOpensNothingAndADeletedParentSaysSo(t *tes
 	if got.Page != model.PageJobs {
 		t.Errorf("enter on an adapter job's inspector left the Jobs Page for %v", got.Page)
 	}
-	s = jobsPane(t, 160, recurringJob("J1", "Weekly", jobParent("open", true)))
+	s = jobsPane(t, 160, nativeJob("J1", "Weekly", jobParent("open", true)))
 	got = feed(t, s, key("enter"), key("enter")).State.Model
 	if got.Page != model.PageJobs || !strings.Contains(got.Notice, "deleted") {
 		t.Errorf("page %v notice %q, want the Jobs Page and a notice that the parent is deleted", got.Page, got.Notice)
@@ -301,7 +301,7 @@ func TestEnterOnAnAdapterJobsInspectorOpensNothingAndADeletedParentSaysSo(t *tes
 }
 
 func TestJobsPageNarrowShowsTheListThenTheInspector(t *testing.T) {
-	s := jobsPane(t, 100, recurringJob("J1", "Weekly", jobParent("open", false)))
+	s := jobsPane(t, 100, nativeJob("J1", "Weekly", jobParent("open", false)))
 	ids := drawnIDs(t, view.Render(s.Model, now))
 	if !ids[view.JobID("J1")] || ids[view.DetailID] {
 		t.Fatalf("narrow list draws the card %v and the inspector %v, want the card only", ids[view.JobID("J1")], ids[view.DetailID])
@@ -339,7 +339,7 @@ func TestJobsPageNeedsAProject(t *testing.T) {
 }
 
 func TestFooterAndHelpSheetListTheJobsPageKeys(t *testing.T) {
-	s := jobsPane(t, 160, recurringJob("J1", "Weekly", jobParent("open", false)))
+	s := jobsPane(t, 160, nativeJob("J1", "Weekly", jobParent("open", false)))
 	wantText(t, "Jobs Page footer", footerText(t, s), "archived", "inspect")
 	inspector := feed(t, s, key("enter")).State
 	wantText(t, "inspector footer", footerText(t, inspector), "open parent", "back")
@@ -372,7 +372,7 @@ func TestJobsPageRowsShowTheLatestRunOrChildAndTheInspectorTheRecentOnes(t *test
 	older := finishedRun("R1")
 	load, _ := askedJobs(out.Cmds)
 	s := step(t, out.State, model.JobsLoaded{Request: load.Request,
-		Jobs: []model.CronJob{recurringJob("N1", "Hourly", jobParent("open", false)), promptJob("J3", "Idle"), promptJob("J1", "Triage")},
+		Jobs: []model.CronJob{nativeJob("N1", "Hourly", jobParent("open", false)), promptJob("J3", "Idle"), promptJob("J1", "Triage")},
 		Activity: map[string]model.JobActivity{
 			"J1": {Runs: []model.Run{failed, older}},
 			"N1": {Children: []model.CronChild{
@@ -401,7 +401,7 @@ func TestJobsPageWarnsOfAnAdapterJobMakingMoreThanADayOfIssuesPerDay(t *testing.
 	existing := promptJob("J4", "Reports to one Issue")
 	existing.Definition.Trigger = model.CronTrigger{Kind: model.TriggerInterval, IntervalSeconds: 60}
 	existing.Definition.Issue = &model.CronIssuePolicy{Kind: model.IssueExisting, UID: "parent-a"}
-	native := recurringJob("N1", "Native", jobParent("open", false))
+	native := nativeJob("N1", "Native", jobParent("open", false))
 	native.Definition.Trigger = model.CronTrigger{Kind: model.TriggerInterval, IntervalSeconds: 60}
 
 	s := jobsPane(t, 160, everyMinute, everyThirtyMinutes, hourly, existing, native)

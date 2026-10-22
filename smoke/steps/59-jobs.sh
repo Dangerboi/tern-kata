@@ -1,7 +1,7 @@
 # The Jobs Page lists a Cron job made with kata cron job create: its state, name, kind and schedule in words, and the inspector
 # beside it shows the definition and the parent, which Enter opens on the Issues Page. Own Issue and job; it cleans up.
 jb_dir="$tmp/workspace"
-kata --workspace "$jb_dir" create "Smoke jobs parent" --body "Parent of a recurring job" --json >"$tmp/jobs-parent.json"
+kata --workspace "$jb_dir" create "Smoke jobs parent" --body "Parent of a native job" --json >"$tmp/jobs-parent.json"
 jb_uid=$(jq -r '.issue.uid' "$tmp/jobs-parent.json")
 jb_short=$(jq -r '.issue.short_id' "$tmp/jobs-parent.json")
 cat >"$tmp/jobs-job.json" <<'JSON'

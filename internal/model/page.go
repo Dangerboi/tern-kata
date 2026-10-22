@@ -44,19 +44,19 @@ var pageDefs = []pageDef{
 // pageModes are the modes where the Page keys work: wherever the main surface has the keyboard and no text is being typed.
 var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollections, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows}
 
-// PageTab is one entry of the Page bar.
-type PageTab struct {
+// PageBarEntry is one entry of the Page bar.
+type PageBarEntry struct {
 	ID, Label, Chord string
 	Current          bool
 }
 
 // PageBar is the Page bar's entries, left to right.
-func (m Model) PageBar() []PageTab {
-	tabs := make([]PageTab, len(pageDefs))
+func (m Model) PageBar() []PageBarEntry {
+	entries := make([]PageBarEntry, len(pageDefs))
 	for i, def := range pageDefs {
-		tabs[i] = PageTab{ID: def.id, Label: def.label, Chord: def.chord, Current: def.page == m.Page}
+		entries[i] = PageBarEntry{ID: def.id, Label: def.label, Chord: def.chord, Current: def.page == m.Page}
 	}
-	return tabs
+	return entries
 }
 
 // showPage is a Page's key: it leaves the current Page (back to Issues) and enters the target, and does nothing when the

@@ -16,7 +16,7 @@ import (
 func owing(uid string, parent string, catchup string) model.CronJob {
 	p := jobParent(parent, false)
 	p.Progress = &model.CronProgress{Anchor: jobAnchor, Through: now.Add(-3*time.Hour - 30*time.Minute)}
-	job := recurringJob(uid, "Weekly "+uid, p)
+	job := nativeJob(uid, "Weekly "+uid, p)
 	job.DefinitionEventUID = "EV1"
 	job.Definition.Catchup = catchup
 	return job

@@ -72,18 +72,18 @@ func runCardText(t *testing.T, s driver.State, uid string) string {
 	return text
 }
 
-func TestRunsPageKeyAsksForTheProjectsRunsAndTheTabShowsThePage(t *testing.T) {
+func TestRunsPageKeyAsksForTheProjectsRunsAndThePageBarShowsThePage(t *testing.T) {
 	s := projectPane(t, 160, boardCard("a"))
 	out := step(t, s, key("4"))
 	load, ok := askedRuns(out.Cmds)
 	if !ok || load.ProjectID != 7 || load.JobUID != "" || load.Before != "" || load.Workspace != "/repo" {
 		t.Fatalf("cmds %#v, want a read of the Project's newest runs", out.Cmds)
 	}
-	if out.State.Model.Page != model.PageRuns || !drawnIDs(t, view.Render(out.State.Model, now))[view.PageTabID("runs")] {
-		t.Fatalf("page %v, want the Runs Page with its tab", out.State.Model.Page)
+	if out.State.Model.Page != model.PageRuns || !drawnIDs(t, view.Render(out.State.Model, now))[view.PageBarEntryID("runs")] {
+		t.Fatalf("page %v, want the Runs Page with its Page bar entry", out.State.Model.Page)
 	}
-	if _, ok := askedRuns(step(t, s, click(view.PageTabID("runs"), view.KeyClick("4"))).Cmds); !ok {
-		t.Error("clicking the Runs tab asks for no runs")
+	if _, ok := askedRuns(step(t, s, click(view.PageBarEntryID("runs"), view.KeyClick("4"))).Cmds); !ok {
+		t.Error("clicking the Runs entry asks for no runs")
 	}
 	if back := step(t, out.State, key("1")); back.State.Model.Page != model.PageIssues {
 		t.Errorf("1 leaves the Runs Page on page %v", back.State.Model.Page)
