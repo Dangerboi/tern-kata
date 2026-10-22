@@ -187,6 +187,9 @@ func TestWorkerStatusAndDoctorListSetAsideJobsAndTheHighRateWarning(t *testing.T
 			t.Errorf("doctor lacks %q:\n%s", want, out)
 		}
 	}
+	if strings.Contains(out, "chatty but off") {
+		t.Errorf("doctor warns of a disabled job:\n%s", out)
+	}
 }
 
 func TestWorkerStatusSaysHowItIsSupervised(t *testing.T) {
