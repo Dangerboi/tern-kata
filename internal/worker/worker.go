@@ -164,6 +164,7 @@ func (w *Worker) Run(ctx context.Context) error {
 	go func() { defer w.runs.Done(); w.serveControl(ctx, ln) }()
 	w.runs.Add(1)
 	go func() { defer w.runs.Done(); w.retireUnserved(ctx) }()
+	w.runs.Add(1)
 	go func() { defer w.runs.Done(); w.retain(ctx) }()
 	for _, ps := range w.projects {
 		w.runs.Add(1)
