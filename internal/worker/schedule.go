@@ -169,7 +169,7 @@ type jobSchedule struct {
 	trig     trigger
 	why      string // the definition's trigger can't be scheduled
 	through  time.Time
-	date     time.Time // the instant an Issue-date trigger last fired at, the zero time when its Issue has none
+	date     time.Time   // the instant an Issue-date trigger last fired at, the zero time when its Issue has none
 	pending  []time.Time // occurrences to run, oldest first
 	next     time.Time
 	lastErr  string

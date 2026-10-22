@@ -11,7 +11,9 @@ import (
 // The Issue-date seam: triggers that fire on an Issue's planning date, and notify jobs the worker delivers.
 
 // minuteIn is a minute-aligned instant d from the harness clock, the resolution kata's dates have.
-func (h *harness) minuteIn(d time.Duration) time.Time { return h.clock.Now().Add(d).Truncate(time.Minute) }
+func (h *harness) minuteIn(d time.Duration) time.Time {
+	return h.clock.Now().Add(d).Truncate(time.Minute)
+}
 
 func TestAnIssueScheduledJobRunsOncePerDateAtTheIssuesInstantAndMovesWithIt(t *testing.T) {
 	h := newHarness(t)

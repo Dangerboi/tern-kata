@@ -2,8 +2,8 @@ package worker
 
 import (
 	"bufio"
-	"encoding/base64"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
