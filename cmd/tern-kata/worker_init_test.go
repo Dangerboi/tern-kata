@@ -32,9 +32,9 @@ func setupEnv(t *testing.T, dir string) workerEnv {
 }
 
 // runSetup runs `tern-kata worker <sub>` through the argument parser and the runner.
-func runSetup(t *testing.T, env workerEnv, sub string) (string, error) {
+func runSetup(t *testing.T, env workerEnv, sub string, flags ...string) (string, error) {
 	t.Helper()
-	plan, err := PlanLaunch([]string{"worker", sub}, func(string) (string, bool) { return "robot", true }, "test")
+	plan, err := PlanLaunch(append([]string{"worker", sub}, flags...), func(string) (string, bool) { return "robot", true }, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,6 +264,45 @@ func TestWorkerSetupFormsAreListedAndParsed(t *testing.T) {
 	for _, args := range [][]string{{"worker", "init", "x"}, {"worker", "--takeover", "init"}} {
 		if _, err := PlanLaunch(args, func(string) (string, bool) { return "", false }, "t"); err == nil {
 			t.Errorf("%v accepted", args)
+		}
+	}
+}
+
+func TestWorkerInitFlagsLandInTheFileAndItLoads(t *testing.T) {
+	env := setupEnv(t, boundCheckout(t, "demo"))
+	if _, err := runSetup(t, env, "init", "--executor", "box-1", "--actor=ci-bot", "--command", "/opt/omp", "--model", "openai/gpt-5", "--thinking=low"); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := worker.LoadConfig(env.Dirs.ConfigPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := cfg.Profiles["default"]
+	if cfg.Executor != "box-1" || cfg.Actor != "ci-bot" || p.Command != "/opt/omp" || p.Model != "openai/gpt-5" || p.Thinking != "low" {
+		t.Errorf("config %+v", cfg)
+	}
+}
+
+func TestWorkerInitRefusesAValueTheLoaderRefusesAndWritesNothing(t *testing.T) {
+	env := setupEnv(t, boundCheckout(t, "demo"))
+	_, err := runSetup(t, env, "init", "--executor", "has space")
+	if err == nil || !strings.Contains(err.Error(), "executor") {
+		t.Fatalf("error %v", err)
+	}
+	if entries, _ := os.ReadDir(env.Dirs.Config); len(entries) != 0 {
+		t.Errorf("files written: %v", entries)
+	}
+}
+
+func TestWorkerInitFlagsApplyToInitOnly(t *testing.T) {
+	for _, args := range [][]string{{"worker", "add", "--model", "x"}, {"worker", "--executor", "x"}, {"worker", "init", "--model"}, {"worker", "init", "--model", ""}, {"worker", "init", "--model=a", "--model=b"}} {
+		if _, err := PlanLaunch(args, func(string) (string, bool) { return "", false }, "t"); err == nil {
+			t.Errorf("%v accepted", args)
+		}
+	}
+	for _, flag := range []string{"--executor", "--actor", "--command", "--model", "--thinking"} {
+		if !strings.Contains(usage, flag) {
+			t.Errorf("--help lacks %s", flag)
 		}
 	}
 }
