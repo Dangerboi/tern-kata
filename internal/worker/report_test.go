@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/worker"
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
