@@ -224,7 +224,7 @@ func TestLanesCardSavingKeepsTheCardLockedWithoutACaret(t *testing.T) {
 }
 
 func TestAFailedLanesSaveKeepsTheCardWithTextAndError(t *testing.T) {
-	s := step(t, savingLanesCard(t), model.LanesSaved{ProjectUID: "p", Err: errors.New("disk full")}).State
+	s := step(t, savingLanesCard(t), model.LanesSaved{ProjectUID: "p", Lanes: []string{"wip", "shipping"}, Err: errors.New("disk full")}).State
 	msg, ok := nodeText(t, s, view.LanesID+".error")
 	if s.Model.TopCard() != model.CardLanes || !ok || !strings.Contains(msg, "disk full") || lanesField(t, s) != "wip, shipping" {
 		t.Fatalf("card %v error %q (drawn %v) field %q", s.Model.TopCard(), msg, ok, lanesField(t, s))
@@ -273,11 +273,9 @@ func TestLanesCardRefusesDoneLimitsAboveTheMaximumNamingTheField(t *testing.T) {
 			t.Errorf("%s: cmds %v error %q, want a refusal naming %q", tt.text, out.Cmds, msg, tt.want)
 		}
 	}
-	for _, text := range []string{"3650"} {
-		s := typed(t, step(t, lanesCard(t), key("tab")).State, text)
-		if out := step(t, s, key("enter")); len(out.Cmds) != 1 {
-			t.Errorf("%s refused: %v", text, out.Cmds)
-		}
+	s := typed(t, step(t, lanesCard(t), key("tab")).State, "3650")
+	if out := step(t, s, key("enter")); len(out.Cmds) != 1 {
+		t.Errorf("3650 refused: %v", out.Cmds)
 	}
 }
 
@@ -287,6 +285,40 @@ func TestALoadedDoneLimitAboveTheMaximumCountsAsUnset(t *testing.T) {
 	for _, name := range []model.Field{model.LanesDays, model.LanesCards} {
 		if text, _ := nodeText(t, s, view.LanesFieldID(name)); text != "" {
 			t.Errorf("%s = %q, want blank (the default)", name, text)
+		}
+	}
+}
+
+func TestAnEarlierCancelledSavesResultLeavesTheNewerCardAlone(t *testing.T) {
+	first := savingLanesCard(t)
+	s := step(t, first, key("escape")).State
+	s = typed(t, step(t, s, key("shift+b")).State, "x")
+	s = step(t, s, key("enter")).State
+	if !s.Model.LanesForm.Saving {
+		t.Fatalf("fixture: second card not saving: %+v", s.Model.LanesForm)
+	}
+	stale := model.LanesSaved{ProjectUID: "p", Lanes: []string{"wip", "shipping"}}
+	for _, msg := range []model.LanesSaved{stale, {ProjectUID: "p", Lanes: []string{"wip", "shipping"}, Err: errors.New("late")}} {
+		got := step(t, s, msg).State.Model
+		if got.TopCard() != model.CardLanes || !got.LanesForm.Saving || got.LanesForm.Err != nil {
+			t.Fatalf("%+v touched the newer card: %v %+v", msg, got.TopCard(), got.LanesForm)
+		}
+	}
+	own := model.LanesSaved{ProjectUID: "p", Lanes: s.Model.LanesForm.Sent.Lanes}
+	if got := step(t, s, own).State.Model.TopCard(); got != model.NoCard {
+		t.Errorf("its own result left card %v open", got)
+	}
+}
+
+func TestALoadedDoneLimitAtTheMaximumStaysSet(t *testing.T) {
+	s := step(t, boardPane(t, boardCard("a")), model.LanesLoaded{ProjectUID: "p", DoneDays: 3650, DoneCards: 500}).State
+	if s.Model.Board.DoneDays != 3650 || s.Model.Board.DoneCards != 500 {
+		t.Errorf("limits %d days %d cards, want 3650 and 500", s.Model.Board.DoneDays, s.Model.Board.DoneCards)
+	}
+	s = step(t, s, key("shift+b")).State
+	for name, want := range map[model.Field]string{model.LanesDays: "3650", model.LanesCards: "500"} {
+		if text, _ := nodeText(t, s, view.LanesFieldID(name)); text != want {
+			t.Errorf("%s = %q, want %q", name, text, want)
 		}
 	}
 }

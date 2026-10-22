@@ -71,11 +71,8 @@ func Render(m model.Model, now time.Time) tern.View {
 			main = append(main, help(m)...)
 		}
 	}
-	if m.Stale && m.Err == nil && !m.FirstLoad() && !m.HelpOpen {
-		main = append(main, staleNotice(m))
-	}
-	if m.Notice != "" && !m.HelpOpen {
-		main = append(main, ui.Text{Common: ui.Common{Key: "notice", Tone: ui.ToneAccent}, Text: m.Notice})
+	for _, text := range footerTexts(m) {
+		main = append(main, text)
 	}
 	var layer tern.Element
 	switch m.TopCard() {

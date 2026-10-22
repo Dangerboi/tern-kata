@@ -34,6 +34,8 @@ type LanesFormState struct {
 	Text, Days, Cards string
 	Caret             Caret
 	Err               error
+	// Sent is the save the card is waiting on, so only its own result closes or fails the card.
+	Sent SaveLanes
 }
 
 // at is the text of the field called name, nil for a name that is not a Lanes field.

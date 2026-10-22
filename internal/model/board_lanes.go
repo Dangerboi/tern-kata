@@ -52,7 +52,9 @@ func (m Model) SaveLaneList(lanes []string, doneDays, doneCards int) (Model, []C
 		m.Notice = fmt.Sprintf("Lanes not saved: %v", m.Board.fileErr)
 		return m, nil
 	}
-	return m, []Cmd{SaveLanes{ProjectUID: m.Collection.ProjectUID, ProjectName: m.Collection.Title, Lanes: slices.Clone(lanes), DoneDays: doneDays, DoneCards: doneCards}}
+	save := SaveLanes{ProjectUID: m.Collection.ProjectUID, ProjectName: m.Collection.Title, Lanes: slices.Clone(lanes), DoneDays: doneDays, DoneCards: doneCards}
+	m.LanesForm.Sent = save
+	return m, []Cmd{save}
 }
 
 // lanesLoad is the load a Step calls for: one command when a Project Collection becomes current, whether or not the Board is on,
@@ -98,8 +100,13 @@ func lanesLoaded(m Model, msg LanesLoaded) Model {
 	return m.keepLane().WithVisibleSelection()
 }
 
+// answeredBy says msg is the result of this save and not of an earlier one, whose card was cancelled.
+func (s SaveLanes) answeredBy(msg LanesSaved) bool {
+	return msg.ProjectUID == s.ProjectUID && msg.DoneDays == s.DoneDays && msg.DoneCards == s.DoneCards && slices.Equal(msg.Lanes, s.Lanes)
+}
+
 func lanesSaved(m Model, msg LanesSaved) Model {
-	if msg.ProjectUID == m.Collection.ProjectUID && m.LanesForm.Open && m.LanesForm.Saving {
+	if m.LanesForm.Open && m.LanesForm.Saving && m.LanesForm.Sent.answeredBy(msg) {
 		if msg.Err != nil {
 			m.LanesForm.Saving, m.LanesForm.Err = false, fmt.Errorf("Lanes not saved: %w", msg.Err)
 			return m

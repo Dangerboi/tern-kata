@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -130,5 +131,16 @@ func TestLaneListsLeaveRoomForTheNoticeAndTheDisconnectedLine(t *testing.T) {
 		if got, want := pane(rows, "Lanes not saved", true), pane(rows-4, "", false); got != want {
 			t.Errorf("a %d-row Pane with both caps a Lane list at %d list rows, want the %d of a Pane four rows shorter", rows, got, want)
 		}
+	}
+}
+
+func TestAWrappingNoticeLowersTheLaneListCapMoreThanAShortOne(t *testing.T) {
+	s := boardPane(t, boardCard("a"))
+	s = step(t, s, model.ResizeMsg{Cols: 160, Rows: 60, RowPx: 16}).State
+	short, long := s, s
+	short.Model.Notice = "Lanes not saved."
+	long.Model.Notice = strings.Repeat("unreadable lane list ", 40)
+	if shortLines, longLines := laneListLines(t, short), laneListLines(t, long); longLines >= shortLines {
+		t.Errorf("a Notice wrapping over several rows left %d list rows, a one-row Notice %d; want fewer", longLines, shortLines)
 	}
 }

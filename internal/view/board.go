@@ -175,7 +175,9 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 // fills the Lane and scrolls inside it and the Pane has nothing to scroll: the top bar stays. Tern has no fill for a list, only a
 // height cap in list rows, each a text row and 6px tall; so the cap is the Pane's pixel height less its chrome in rows, rounded
 // down, and the list ends up to one list row above the footer.
-// The Notice and the "disconnected" line, each a text row and the gap above it under the columns while drawn (the disconnected line more rows with the stream's error), are part of the chrome. The cap is worked out once per draw and shared by every Lane.
+// The disconnected line and the Notice are part of the chrome while drawn: each is the gap above it and its lines, wrapped at the
+// Pane's columns (footerTextRows).
+// The cap is worked out once per draw and shared by every Lane.
 // ponytail: the chrome is measured at Tern's default density (the Pane's 6px padding, a text row for the top bar and for each gap, 46px of Lane header, a 24px footer margin, 24px for the Search field); a denser theme leaves more room unused, a looser one clips the lowest card. Upgrade: a Tern prop for a list that fills its column.
 // Until Tern says the Pane's size there is nothing to measure and the list takes half the window.
 func laneMax(m model.Model) ui.ListMax {
@@ -187,12 +189,7 @@ func laneMax(m model.Model) ui.ListMax {
 	if m.FilterSummary() != "" {
 		chrome += 2 * m.RowPx
 	}
-	if m.Stale && m.Err == nil && !m.FirstLoad() && !m.HelpOpen {
-		chrome += m.RowPx * (2 + strings.Count(staleText(m), "\n"))
-	}
-	if m.Notice != "" && !m.HelpOpen {
-		chrome += 2 * m.RowPx
-	}
+	chrome += m.RowPx * footerTextRows(m)
 	if m.Search.Open {
 		chrome += 24
 	}
