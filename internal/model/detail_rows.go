@@ -16,6 +16,8 @@ const (
 	RowLink
 	RowEvent
 	RowAttachment
+	// RowCron is a Cron job named by a property of the Issue detail's header; it sits ahead of the children.
+	RowCron
 )
 
 // DetailItem is one row of the Issue detail's cursor list, shaped for the view. A RowChild row carries Child; every other
@@ -29,10 +31,16 @@ type DetailItem struct {
 	// ReferenceKey is the comment in the ReferenceUID Issue that a cross-Issue reply answers: the row a jump lands on.
 	ReferenceKey string
 	Child        ChildRow
+	// JobUID and Cron are a RowCron row's job and what the property says of it; enter opens the job on the Jobs Page.
+	JobUID string
+	Cron   CronRow
 	Activity     DetailRow
 }
 
 func (t ActivityTab) kind() RowKind { return tabTable[t].kind }
+
+// InActivity says rows of the kind belong to an Activity tab; a child row and a Cron job row do not.
+func (k RowKind) InActivity() bool { return k != RowChild && k != RowCron }
 
 // Tab is the Activity tab that lists rows of the kind; a child row belongs to none and answers the first tab.
 func (k RowKind) Tab() ActivityTab {
@@ -65,6 +73,9 @@ type rowInputs struct {
 	tab        ActivityTab
 	calendar   PaneCalendar
 	host       string
+	// jobs are the Cron jobs the Cron rows name: where they were read, which read, and its answer.
+	jobsProject, jobsRequest, jobsRev int64
+	jobsLoading                       bool
 }
 
 // detailRows is the Issue detail's cursor list: the children, then the active tab's rows.
@@ -96,7 +107,8 @@ func (m Model) DetailChildCounts() ChildCounts {
 
 // withRows brings the rows up to date with the authority, the loaded Issues and the active tab.
 func (m Model) withRows() Model {
-	in := rowInputs{authority: m.authority, issueN: len(m.Issues), tab: m.tab, calendar: m.Calendar, host: m.Host}
+	in := rowInputs{authority: m.authority, issueN: len(m.Issues), tab: m.tab, calendar: m.Calendar, host: m.Host,
+		jobsProject: m.Jobs.ProjectID, jobsRequest: m.Jobs.request, jobsRev: m.Jobs.rev, jobsLoading: m.Jobs.Loading}
 	if len(m.Issues) > 0 {
 		in.firstIssue = &m.Issues[0]
 	}
@@ -111,7 +123,7 @@ func (m Model) withRows() Model {
 	for i, link := range m.authority.Links {
 		links[i] = m.linkRow(link)
 	}
-	m.rows.items = m.childItems(links)
+	m.rows.items = append(m.cronItems(), m.childItems(links)...)
 	for i := range links {
 		if links[i].Relation == "parent" {
 			m.rows.parent = &links[i]
@@ -273,7 +285,7 @@ func (m Model) reanchor(anchor rowID, anchored bool) Model {
 
 // firstActivityIndex is the cursor index of the active tab's first row (past the children).
 func (m Model) firstActivityIndex() int {
-	if i := slices.IndexFunc(m.rows.items, func(r DetailItem) bool { return r.Kind != RowChild }); i >= 0 {
+	if i := slices.IndexFunc(m.rows.items, func(r DetailItem) bool { return r.Kind.InActivity() }); i >= 0 {
 		return i
 	}
 	return len(m.rows.items)

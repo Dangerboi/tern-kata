@@ -13,6 +13,8 @@ type Issue struct {
 	ClosedAt            *time.Time
 	ClosedReason        *string
 	CreatedAt           time.Time
+	// CronOccurrence is set on an Issue a Cron job made.
+	CronOccurrence      *CronOccurrence
 	DeadlineOnDate      *string
 	ID                  int64
 	Labels              []string
@@ -196,6 +198,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m = lanesSaved(m, msg)
 	case JobsLoaded:
 		m = jobsLoaded(m, msg)
+	case OpenJobMsg:
+		return openJob(m, msg.UID)
 	case JobSelectMsg:
 		m.Jobs.Selected, m.Focus = msg.UID, ColumnList
 	case DetailLoaded:

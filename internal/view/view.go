@@ -446,10 +446,14 @@ func listOwner(m model.Model, row model.IssueRow, now time.Time) string {
 	return cell(owner.Name, ownerWidth) + owner.Until
 }
 
-// issueTitle is the title as the list and the Board draw it: a recurring Issue's starts with "↻ ".
+// issueTitle is the title as the list and the Board draw it: a recurring Issue's starts with "↻ ", one a Cron job made with "◷ ".
 func issueTitle(issue model.Issue) string {
-	if issue.RecurrenceID != nil {
-		return "↻ " + issue.Title
+	title := issue.Title
+	if issue.CronMade() {
+		title = "◷ " + title
 	}
-	return issue.Title
+	if issue.RecurrenceID != nil {
+		title = "↻ " + title
+	}
+	return title
 }

@@ -22,6 +22,7 @@ const (
 	cardAct        = "card"
 	refAct         = "ref"
 	jobAct         = "job"
+	openJobAct     = "open-job"
 )
 
 // FocusDetailClick, RetryClick and MenuClick carry no value.
@@ -48,6 +49,9 @@ func CardClick(uid string) string { return click(cardAct, uid) }
 
 // JobClick selects the job's card on the Jobs Page.
 func JobClick(uid string) string { return click(jobAct, uid) }
+
+// OpenJobClick opens the Cron job on the Jobs Page.
+func OpenJobClick(uid string) string { return click(openJobAct, uid) }
 
 // RefClick selects the Board card of a related Issue, revealing it in its Lane, or opens its detail when the Board does not draw it.
 func RefClick(uid string) string { return click(refAct, uid) }
@@ -105,6 +109,8 @@ func DecodeAction(id, act, value string) model.Msg {
 		return model.SelectMsg{UID: value}
 	case refAct:
 		return model.ShowCardMsg{UID: value}
+	case openJobAct:
+		return model.OpenJobMsg{UID: value}
 	case jobAct:
 		return model.JobSelectMsg{UID: value}
 	}
