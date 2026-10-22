@@ -21,7 +21,7 @@ It needs kata v0.19.0 or newer and `omp` on `PATH`. On Windows, workflow command
 
 ## Set it up
 
-`worker.toml` lives in tern-kata's config folder: `~/.config/tern-kata/worker.toml` on Linux (honouring `$XDG_CONFIG_HOME`, beside `lanes.toml`) and `%AppData%\tern-kata\worker.toml` on Windows. Two commands write it for you. Run both in a directory bound to a kata Project, the same Binding the Pane uses (a `.kata.toml` in the directory or a parent up to the git root; `kata init` creates one). The directory is the Project's checkout. Neither command calls the kata daemon.
+`worker.toml` lives in tern-kata's config folder: `~/.config/tern-kata/worker.toml` on Linux (honouring `$XDG_CONFIG_HOME`, beside `lanes.toml`) and `%AppData%\tern-kata\worker.toml` on Windows. Two commands write it for you. Run both in a directory bound to a kata Project, the same Binding the Pane uses (a `.kata.toml` in the directory or a parent up to the git root; `kata init` creates one). The checkout is the directory holding the `.kata.toml` (the Binding's directory), also when you run the command from a subdirectory. Neither command calls the kata daemon.
 
 ### `tern-kata worker init`
 

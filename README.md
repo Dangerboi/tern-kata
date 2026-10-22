@@ -28,7 +28,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 **Runs.** `4` lists a Project's runs newest first, with held runs, steps and output from this machine's worker. See [Runs](docs/guide/runs.md).
 
-![The Runs Page with a failed run selected and its detail open](docs/images/runs.png)
+![The Runs Page with an unknown run selected and its detail open](docs/images/runs.png)
 
 **Workflows.** `5` lists a Project's kata workflows, their steps and the jobs that run them, and edits them as JSON. See [Workflows](docs/guide/workflows.md).
 

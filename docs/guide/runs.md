@@ -4,7 +4,7 @@
 
 A Run is kata's record of one execution of a Cron job or workflow, written by whoever ran it: an adapter, a worker here or another machine's. The Pane shows what kata holds, whoever the executor was.
 
-![The Runs Page with a failed run selected and its detail open](../images/runs.png)
+![The Runs Page with an unknown run selected and its detail open](../images/runs.png)
 
 Each card has:
 

@@ -12,9 +12,11 @@ The file is decoded strictly (an unknown key is an error) and read once at start
 | `actor` | Optional. Author of runs and Issues; default `$KATA_AUTHOR`, `$USER`, then git `user.name`. |
 | `[limits]` `max_active_runs` | Optional. Runs at once across all Projects; unset means each Project's capacity only. |
 | `[limits]` `default_timeout` | Optional. Timeout when a job sets none; a job's `timeout_seconds` overrides it, up to `max_timeout`. |
+| `[limits]` `max_run_prompts` | Optional. The most prompts one run may send, 1 to 100; default 12. It is frozen into a run when the run is prepared. A workflow that could send more (prompt steps plus their retries) is refused. The cap is global: a profile has none of its own. |
 | `[limits]` `max_timeout` | Optional. The longest timeout a job may ask for; a job over it is set aside. |
 | `[[projects]]` `name` | A kata Project; listing it trusts it. |
 | `[[projects]]` `capacity` | Runs at once for the Project; default 1. |
+| `[[projects]]` `actor` | Optional. Overrides the worker's `actor` for this Project; the order is Project `actor`, then top-level `actor`, then the default. |
 | `[[projects]]` `checkouts` | Optional allowlist of checkout keys; default all. |
 | `[[projects]]` `profiles` | Optional allowlist of profile names; default all. |
 | `[checkouts]` | A job's `checkout_key` mapped to an absolute directory. |
@@ -32,10 +34,12 @@ actor    = "dangerboi"         # optional: author of runs and Issues; default $K
 max_active_runs = 4            # across all Projects; unset = each Project's capacity only
 default_timeout = "2h"         # a job's timeout_seconds overrides it, up to max_timeout
 max_timeout     = "8h"
+max_run_prompts = 12           # most prompts one run may send; 1 to 100, default 12
 
 [[projects]]
 name      = "tern-kata"        # a kata Project; it is trusted
 capacity  = 1                  # runs at once; default 1
+actor     = "dangerboi"        # optional: overrides the worker's actor for this Project
 checkouts = ["tern-kata"]      # optional allowlist of checkout keys; default all
 profiles  = ["default"]        # optional allowlist of profile names; default all
 
