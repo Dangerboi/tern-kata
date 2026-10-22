@@ -164,7 +164,7 @@ func (w *Worker) resumeRefusal(j *Journal) string {
 		return "the worker cannot prove the agent was never started, so it will not start another on this run; abandon it"
 	case processMayBeAlive(j):
 		return fmt.Sprintf("the agent's process group %d is still present; the worker never stops a process to make a resume possible", j.Launch.PGID)
-	case w.sessionID(j) == "":
+	case w.sessionID(j) == "" && !j.activeIsCommand():
 		return fmt.Sprintf("there is no omp session to continue (%s); only abandon remains", j.Outcome.Hold)
 	}
 	return ""
@@ -236,7 +236,7 @@ func providerHold(j *Journal) (reason, detail string) {
 // finishedItsTurn reports whether the agent's saved output shows a terminal agent_end: the turn ended, so a hold
 // with no exit status is a missing receipt rather than an interruption.
 func (w *Worker) finishedItsTurn(j *Journal) bool {
-	return readOutput(filepath.Join(w.store.RunDir(j.RunUID), "output.jsonl")).Terminal
+	return readOutput(filepath.Join(w.attemptDir(j), "output.jsonl")).Terminal
 }
 
 // readOutput folds a saved output.jsonl through the same parser the live run used.
@@ -261,7 +261,7 @@ func readOutput(path string) AgentResult {
 // sessionID is the omp session a resume would continue: the one the run recorded or, when the worker stopped before
 // saving it, the only session file in the run's session folder. Empty when no session file exists.
 func (w *Worker) sessionID(j *Journal) string {
-	dir := sessionFolder(w.store.RunDir(j.RunUID))
+	dir := sessionFolder(w.attemptDir(j))
 	if j.Launch != nil && j.Launch.SessionID != "" {
 		if m, _ := filepath.Glob(filepath.Join(dir, "*_"+j.Launch.SessionID+".jsonl")); len(m) > 0 {
 			return j.Launch.SessionID
@@ -279,7 +279,7 @@ func (w *Worker) sessionID(j *Journal) string {
 // keepAttemptOutput moves the finished attempt's output and stderr aside so the next attempt writes fresh files and
 // the held attempt's remain readable. An existing aside copy is never replaced.
 func keepAttemptOutput(runDir string, attempt int) {
-	for _, name := range []string{"output.jsonl", "stderr.log"} {
+	for _, name := range []string{"output.jsonl", "stderr.log", "output.log"} {
 		ext := filepath.Ext(name)
 		aside := filepath.Join(runDir, fmt.Sprintf("%s.attempt%d%s", strings.TrimSuffix(name, ext), attempt, ext))
 		if _, err := os.Stat(aside); err == nil {

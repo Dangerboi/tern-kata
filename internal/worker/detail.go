@@ -27,8 +27,11 @@ type RunDetail struct {
 // StepDetail is one step of a run as the journal knows it.
 type StepDetail struct {
 	Index   int    // 1-based
-	Kind    string // "prompt"
+	Kind    string // "prompt" or "command"
+	Key     string // a workflow step's key; empty for a prompt job's one step
 	Attempt int
+	// Summary is what the step said or why it ended as it did; empty while it runs.
+	Summary string
 	// State is running, held: <reason>, succeeded, failed or cancelled for the step.
 	State     string
 	SessionID string
@@ -43,17 +46,38 @@ type StepDetail struct {
 // OutputTailBytes bounds RunDetail.OutputTail.
 const OutputTailBytes = 4 << 10
 
-// stepsOf is the journal's steps. A workflow run lists one entry per step here once the journal records them.
+// stepsOf is the journal's steps: one for a prompt job, one per step of a workflow's plan in order, a step not yet
+// reached showing as pending.
 func stepsOf(j *Journal) []StepDetail {
-	st := StepDetail{Index: 1, Kind: "prompt", Attempt: j.attempt(), State: runStatus(j).State}
-	if l := j.Launch; l != nil {
-		st.PID, st.SessionID, st.StartedAt = l.PID, l.SessionID, l.At
+	if j.Workflow == nil {
+		st := StepDetail{Index: 1, Kind: "prompt", Attempt: j.attempt(), State: runStatus(j).State}
+		if l := j.Launch; l != nil {
+			st.PID, st.SessionID, st.StartedAt = l.PID, l.SessionID, l.At
+		}
+		if e := j.Exit; e != nil {
+			code := e.Code
+			st.ExitCode, st.Signal, st.TimedOut, st.EndedAt = &code, e.Signal, e.TimedOut, e.At
+		}
+		return []StepDetail{st}
 	}
-	if e := j.Exit; e != nil {
-		code := e.Code
-		st.ExitCode, st.Signal, st.TimedOut, st.EndedAt = &code, e.Signal, e.TimedOut, e.At
+	steps := make([]StepDetail, len(j.Steps))
+	active := j.activeStep()
+	for i, r := range j.Steps {
+		st := StepDetail{Index: i + 1, Kind: j.Workflow.Steps[i].Kind, Key: r.Key, Attempt: r.Tries, State: stepStateText(j, i), Summary: r.Summary, StartedAt: r.StartedAt, EndedAt: r.EndedAt}
+		launch, exit := r.Launch, r.Exit
+		if i == active { // the attempt in flight keeps its records on the run until it concludes
+			launch, exit = j.Launch, j.Exit
+		}
+		if launch != nil {
+			st.PID, st.SessionID, st.StartedAt = launch.PID, launch.SessionID, launch.At
+		}
+		if exit != nil {
+			code := exit.Code
+			st.ExitCode, st.Signal, st.TimedOut, st.EndedAt = &code, exit.Signal, exit.TimedOut, exit.At
+		}
+		steps[i] = st
 	}
-	return []StepDetail{st}
+	return steps
 }
 
 // RunDetail reads one run of this worker for a Pane.
@@ -69,8 +93,11 @@ func (w *Worker) RunDetail(uid string) (RunDetail, error) {
 	case j.Executor != w.opt.Config.Executor:
 		return RunDetail{}, fmt.Errorf("run %s belongs to worker %q, not %q", uid, j.Executor, w.opt.Config.Executor)
 	}
-	dir := w.store.RunDir(uid)
+	dir := w.attemptDir(j) // a workflow shows its latest step's output
 	d := RunDetail{RunStatus: w.runStatus(j), Steps: stepsOf(j), OutputTail: outputTail(filepath.Join(dir, "output.jsonl"), OutputTailBytes), StderrTail: fileTail(filepath.Join(dir, "stderr.log"), 2048)}
+	if d.OutputTail == "" { // a command step's output is its own log
+		d.OutputTail = fileTail(filepath.Join(dir, "output.log"), OutputTailBytes)
+	}
 	if j.Outcome != nil {
 		d.Summary = j.Outcome.Summary
 	}

@@ -312,6 +312,7 @@ type Run struct {
 	Status        string
 	Revision      int64
 	JobUID        string
+	WorkflowUID   string
 	IssueUID      string
 	ExecutorLabel string
 	OccurrenceKey string
@@ -323,7 +324,7 @@ type Run struct {
 }
 
 func runOf(r g.CronRun) Run {
-	return Run{UID: r.UID, Status: r.Status, Revision: r.Revision, JobUID: deref(r.JobUID), IssueUID: deref(r.IssueUID),
+	return Run{UID: r.UID, Status: r.Status, Revision: r.Revision, JobUID: deref(r.JobUID), WorkflowUID: deref(r.WorkflowUID), IssueUID: deref(r.IssueUID),
 		ExecutorLabel: deref(r.ExecutorLabel), OccurrenceKey: deref(r.OccurrenceKey), Summary: deref(r.Summary.Message), InputTokens: r.Summary.InputTokens, OutputTokens: r.Summary.OutputTokens, StartedAt: r.StartedAt, EndedAt: r.EndedAt}
 }
 
@@ -362,6 +363,9 @@ type Observation struct {
 	RunUID             string
 	JobUID             string
 	DefinitionEventUID string
+	// WorkflowUID and WorkflowEventUID name the workflow a workflow job's run executes; both empty for a prompt job.
+	WorkflowUID        string
+	WorkflowEventUID   string
 	OccurrenceKey      string
 	IssueUID           string
 	Executor           string
@@ -383,6 +387,9 @@ func (k *Kata) Observe(ctx context.Context, projectID int64, o Observation) (Run
 		IssueUID: &o.IssueUID, ExecutorLabel: &o.Executor, Status: g.ObserveCronRunBodyStatus(o.Status),
 		Summary:   g.Summary{Version: 1, Message: &msg, InputTokens: o.InputTokens, OutputTokens: o.OutputTokens},
 		StartedAt: &o.StartedAt, EndedAt: o.EndedAt, ExpectedRevision: o.ExpectedRevision,
+	}
+	if o.WorkflowUID != "" {
+		body.WorkflowUID, body.WorkflowDefinitionEventUID = &o.WorkflowUID, &o.WorkflowEventUID
 	}
 	r, err := k.c.ObserveCronRunWithResponse(ctx, &g.ObserveCronRunRequestOptions{PathParams: &g.ObserveCronRunPath{ProjectID: projectID, RunUID: o.RunUID}, Body: body})
 	if err != nil {
@@ -575,4 +582,46 @@ func (k *Kata) Stream(ctx context.Context, projectID, after int64, opened func()
 			}
 		}
 	}
+}
+
+// WorkflowStep is one step of a kata workflow as the worker reads it. Options keeps the step's raw options so the
+// worker can refuse the keys it does not run (ADR-0008).
+type WorkflowStep struct {
+	Key     string
+	Kind    string // "prompt" or "command"
+	Command string
+	Prompt  string
+	After   []string
+	Retries int64
+	Options map[string]any
+}
+
+// Workflow is a kata workflow definition at one version.
+type Workflow struct {
+	UID                string
+	Name               string
+	DefinitionEventUID string
+	Deleted            bool
+	Version            int64
+	About              string
+	Options            map[string]any
+	Steps              []WorkflowStep
+}
+
+// Workflow reads one workflow of the Project.
+func (k *Kata) Workflow(ctx context.Context, projectID int64, uid string) (Workflow, error) {
+	r, err := k.c.ShowCronWorkflowWithResponse(ctx, &g.ShowCronWorkflowRequestOptions{PathParams: &g.ShowCronWorkflowPath{ProjectID: projectID, CronUID: uid}})
+	if err != nil {
+		return Workflow{}, apiError(err)
+	}
+	if r.JSON200 == nil {
+		return Workflow{}, errors.New("kata daemon returned no workflow")
+	}
+	w := r.JSON200.Workflow
+	d := w.Definition
+	out := Workflow{UID: w.UID, Name: w.Name, DefinitionEventUID: w.DefinitionEventUID, Deleted: w.DeletedAt != nil, Version: d.Version, About: deref(d.About), Options: d.Options}
+	for _, s := range d.Steps {
+		out.Steps = append(out.Steps, WorkflowStep{Key: s.Key, Kind: s.Kind, Command: deref(s.Command), Prompt: deref(s.Prompt), After: s.After, Retries: derefInt(s.Retries), Options: s.Options})
+	}
+	return out, nil
 }

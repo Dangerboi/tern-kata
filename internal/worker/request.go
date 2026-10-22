@@ -164,8 +164,8 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurre
 			return nil, false, errors.New(unsupported)
 		}
 		switch {
-		case d.WorkflowUID != "" || strings.TrimSpace(d.Prompt) == "":
-			return nil, false, fmt.Errorf("job %q runs a workflow; the worker runs prompt jobs only so far", job.Name)
+		case d.WorkflowUID == "" && strings.TrimSpace(d.Prompt) == "":
+			return nil, false, fmt.Errorf("job %q has neither a prompt nor a workflow", job.Name)
 		case d.Issue == nil:
 			return nil, false, fmt.Errorf("job %q has no Issue policy", job.Name)
 		}
@@ -220,6 +220,13 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurre
 			return nil, false, fmt.Errorf("job %q reports to Issue %s, which is closed; reopen it first", job.Name, issue.ShortID)
 		}
 	}
+	var workflow *WorkflowPlan
+	if d.ActionKind != "notify" && d.WorkflowUID != "" {
+		var err error
+		if workflow, err = w.planWorkflow(ctx, ps, job, profileName); err != nil {
+			return nil, false, err
+		}
+	}
 	uid := ""
 	if manual {
 		uid = newManualUID(occurrence)
@@ -242,9 +249,10 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurre
 	j := &Journal{
 		Version: 1, RunUID: uid, JournalID: newJournalID(), Executor: w.opt.Config.Executor, Actor: ps.actor, Generation: generation,
 		ProjectUID: ps.project.UID, ProjectID: ps.project.ID, ProjectName: ps.project.Name,
-		JobUID: job.UID, JobName: job.Name, DefinitionEventUID: job.DefinitionEventUID, Prompt: d.Prompt, IssuePolicy: issuePolicy, Notify: notify,
+		JobUID: job.UID, JobName: job.Name, DefinitionEventUID: job.DefinitionEventUID, Prompt: d.Prompt, IssuePolicy: issuePolicy, Notify: notify, Workflow: workflow,
 		SecretRefs: d.SecretRefs, ProfileName: profileName, Profile: profile, Checkout: checkout, TimeoutSeconds: int64(timeout / time.Second),
 		OccurrenceKey: occurrenceKey, Occurrence: occurrence.UTC(), Manual: manual,
+		Steps: stepsFor(workflow),
 		Phase: PhasePrepared, StartedAt: w.clock.Now().UTC(),
 	}
 	if err := w.store.Create(j, "prepared"); err != nil {

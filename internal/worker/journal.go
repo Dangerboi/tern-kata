@@ -104,6 +104,14 @@ type Journal struct {
 	TimeoutSeconds     int64             `json:"timeout_seconds"`
 	// Notify is set for a notify job's run instead of a prompt: the inbox request it sends and nothing else.
 	Notify *NotifySpec `json:"notify,omitempty"`
+	// Workflow is set for a workflow job's run instead of a prompt: the definition as it was when the run was prepared,
+	// and Steps the state of each of its steps, in the same order (ADR-0008).
+	Workflow *WorkflowPlan `json:"workflow,omitempty"`
+	Steps    []StepRecord  `json:"steps,omitempty"`
+	// ExpiresAt is the run's expiry, shared by every step and retry of a workflow; ExpiryAttempt is the attempt it was
+	// set for, so an accepted resume (a new attempt) gets one fresh expiry from the frozen timeout.
+	ExpiresAt     time.Time `json:"expires_at,omitempty"`
+	ExpiryAttempt int       `json:"expiry_attempt,omitempty"`
 
 	OccurrenceKey string    `json:"occurrence_key"`
 	Occurrence    time.Time `json:"occurrence"`

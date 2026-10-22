@@ -77,6 +77,8 @@ func (d *Daemon) Project(t *testing.T, name string) worker.Project {
 type Job struct {
 	Name        string
 	Prompt      string
+	// Workflow makes the job run the workflow with this uid instead of Prompt.
+	Workflow    string
 	Profile     string
 	Checkout    string
 	IssueTitle  string
@@ -139,6 +141,9 @@ func (j Job) definition() g.CronJobDefinition {
 		if j.ExistingUID != "" {
 			def.Issue = &g.IssuePolicy{Kind: "existing", UID: &j.ExistingUID}
 		}
+	}
+	if j.Workflow != "" {
+		def.Action = g.Action{Kind: "execute", WorkflowUID: &j.Workflow}
 	}
 	if j.Profile != "" {
 		def.Options = map[string]any{"profile": j.Profile}
@@ -375,4 +380,42 @@ func shortTemp(t *testing.T) string {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	return dir
+}
+
+// Step is one step of a workflow to create: a command step when Command is set, else a prompt step.
+type Step struct {
+	Key     string
+	Command string
+	Prompt  string
+	After   []string
+	Retries int64
+	Options map[string]any
+}
+
+// CreateWorkflow creates a workflow in the Project and returns it as the worker reads it.
+func (d *Daemon) CreateWorkflow(t *testing.T, p worker.Project, name string, steps ...Step) worker.Workflow {
+	t.Helper()
+	actor := "tester"
+	def := g.CronWorkflowDefinition{Version: 1, About: ptr("workflow about")}
+	for _, s := range steps {
+		step := g.CronWorkflowStep{Key: s.Key, Kind: "prompt", Prompt: optional(s.Prompt), After: s.After, Options: s.Options}
+		if s.Command != "" {
+			step.Kind, step.Command = "command", &s.Command
+		}
+		if s.Retries > 0 {
+			step.Retries = &s.Retries
+		}
+		def.Steps = append(def.Steps, step)
+	}
+	r, err := d.Client.CreateCronWorkflowWithResponse(context.Background(), &g.CreateCronWorkflowRequestOptions{
+		PathParams: &g.CreateCronWorkflowPath{ProjectID: p.ID}, Body: &g.CreateCronWorkflowBody{Actor: &actor, Name: name, Definition: def},
+	})
+	if err != nil || r.JSON201 == nil {
+		t.Fatalf("creating workflow %s: %v (%d %s)", name, err, r.StatusCode, r.Body)
+	}
+	wf, err := d.Kata.Workflow(context.Background(), p.ID, r.JSON201.Workflow.UID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return wf
 }

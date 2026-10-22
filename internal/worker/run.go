@@ -107,17 +107,21 @@ func (w *Worker) recoverRun(ctx context.Context, ps *projectState, uid string) {
 	if err != nil {
 		return
 	}
+	what := "agent"
+	if j.activeIsCommand() {
+		what = "command"
+	}
 	switch {
 	case j.Phase == PhaseLaunching:
-		err = w.hold(j, HoldLaunchUnproven, "the worker stopped while starting the agent, so it may have started")
+		err = w.hold(j, HoldLaunchUnproven, "the worker stopped while starting the "+what+", so it may have started")
 	case j.Phase == PhaseStarted && j.Exit == nil:
 		switch {
 		case processMayBeAlive(j):
-			err = w.hold(j, HoldGroupUnproven, fmt.Sprintf("the agent's process group %d is still present", j.Launch.PGID))
-		case w.finishedItsTurn(j):
+			err = w.hold(j, HoldGroupUnproven, fmt.Sprintf("the %s's process group %d is still present", what, j.Launch.PGID))
+		case what == "agent" && w.finishedItsTurn(j):
 			err = w.hold(j, HoldNoReceipt, "the agent finished its turn and its process is gone, but the worker saved no exit status")
 		default:
-			err = w.hold(j, HoldInterrupted, "the worker stopped while the agent ran")
+			err = w.hold(j, HoldInterrupted, "the worker stopped while the "+what+" ran")
 		}
 	case j.Phase == PhaseStarted:
 		err = w.conclude(ctx, j)
@@ -203,6 +207,9 @@ func (w *Worker) observation(j *Journal, status, message string, revision int64)
 	}
 	if j.Issue != nil {
 		o.IssueUID = j.Issue.UID
+	}
+	if j.Workflow != nil {
+		o.WorkflowUID, o.WorkflowEventUID = j.Workflow.UID, j.Workflow.EventUID
 	}
 	return o
 }
@@ -305,21 +312,35 @@ func childEnv(actor string, secrets map[string]string) []string {
 	return env
 }
 
-// launch runs one attempt: prompt file, `launching` mark, process, start record, wait, exit record, outcome. It
-// returns once the journal says finished, or an error that leaves the journal where it was.
+// launch runs the run's next attempt: a notify run's request, a workflow's next step, or a prompt job's one agent.
 func (w *Worker) launch(ctx context.Context, ps *projectState, j *Journal) error {
-	if j.Notify != nil {
+	switch {
+	case j.Notify != nil:
 		return w.notify(ctx, j)
+	case j.Workflow != nil:
+		return w.workflowStep(ctx, j)
 	}
-	runDir := w.store.RunDir(j.RunUID)
-	failFast := func(status, reason string) error {
-		_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
-			j.Outcome = &Outcome{Status: status, Summary: reason, At: w.clock.Now().UTC()}
-			j.Phase = PhaseFinished
-			return nil
-		})
-		return err
+	return w.runPrompt(ctx, j, attemptSpec{dir: w.store.RunDir(j.RunUID), task: j.Prompt, profile: j.Profile})
+}
+
+// failAttempt records an attempt that certainly never ran, so the failure is not uncertain: a prompt job's run fails,
+// a workflow step fails (and is retried when it has retries left).
+func (w *Worker) failAttempt(j *Journal, reason string) error {
+	outcome := &Outcome{Status: StatusFailed, Summary: reason, At: w.clock.Now().UTC()}
+	if j.Workflow != nil {
+		return w.concludeStep(j, outcome)
 	}
+	_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
+		j.Outcome = outcome
+		j.Phase = PhaseFinished
+		return nil
+	})
+	return err
+}
+
+// runPrompt runs one agent attempt: prompt file, `launching` mark, process, start record, wait, exit record, outcome.
+// It returns once the journal says the attempt is concluded, or an error that leaves the journal where it was.
+func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) error {
 	secrets, err := w.secrets(j)
 	if err != nil {
 		return w.hold(j, HoldSecretUnavailable, err.Error())
@@ -327,7 +348,11 @@ func (w *Worker) launch(ctx context.Context, ps *projectState, j *Journal) error
 	attempt, resumeID := j.attempt(), ""
 	in := PromptInput{
 		Actor: j.Actor, IssueRef: j.Issue.Ref, IssueTitle: j.Issue.Title, IssueBody: j.Issue.Body, ExistingIssue: j.Issue.Existing,
-		JobName: j.JobName, RunUID: j.RunUID, Occurrence: OccurrenceKey(j.Occurrence), Task: j.Prompt, Attempt: attempt,
+		JobName: j.JobName, RunUID: j.RunUID, Occurrence: OccurrenceKey(j.Occurrence), Task: sp.task, Attempt: attempt,
+	}
+	if sp.plan != nil {
+		in.Step = &StepInput{Workflow: j.Workflow.Name, About: j.Workflow.About, Key: sp.plan.Key, Number: sp.index + 1, Count: len(j.Workflow.Steps), Failure: sp.failure}
+		in.Attempt = sp.tries
 	}
 	if attempt > 1 && j.Resume != nil {
 		resumeID = j.Resume.SessionID
@@ -337,29 +362,26 @@ func (w *Worker) launch(ctx context.Context, ps *projectState, j *Journal) error
 	if err != nil {
 		return w.hold(j, HoldInvalidPrompt, err.Error())
 	}
-	promptFile := filepath.Join(runDir, "prompt.md")
+	promptFile := filepath.Join(sp.dir, "prompt.md")
 	if err := replaceFile(promptFile, []byte(prompt)); err != nil {
 		return w.hold(j, HoldInvalidPrompt, "the prompt could not be written: "+err.Error())
 	}
-	cwd := j.Checkout
-	if cwd == "" {
-		cwd = runDir
-	}
+	cwd := cmpOr(j.Checkout, w.store.RunDir(j.RunUID))
 	// A spawn error is certain, not uncertain: nothing was started.
-	program, err := exec.LookPath(j.Profile.command())
+	program, err := exec.LookPath(sp.profile.command())
 	if err != nil {
-		return failFast(StatusFailed, "cannot start the agent: "+err.Error())
+		return w.failAttempt(j, "cannot start the agent: "+err.Error())
 	}
 	if info, err := os.Stat(cwd); err != nil || !info.IsDir() {
-		return failFast(StatusFailed, fmt.Sprintf("cannot start the agent: checkout %s is not a directory", cwd))
+		return w.failAttempt(j, fmt.Sprintf("cannot start the agent: checkout %s is not a directory", cwd))
 	}
-	if err := os.MkdirAll(sessionFolder(runDir), 0o700); err != nil {
+	if err := os.MkdirAll(sessionFolder(sp.dir), 0o700); err != nil {
 		return w.hold(j, HoldExecutionError, err.Error())
 	}
-	if attempt > 1 {
-		keepAttemptOutput(runDir, attempt-1)
+	if attempt > 1 && j.Resume != nil {
+		keepAttemptOutput(sp.dir, attempt-1)
 	}
-	cmd := exec.Command(program, agentArgs(j.Profile, runDir, promptFile, resumeID)...)
+	cmd := exec.Command(program, agentArgs(sp.profile, sp.dir, promptFile, resumeID)...)
 	cmd.Dir = cwd
 	cmd.Env = childEnv(j.Actor, secrets)
 	cmd.Stdin = nil // /dev/null: omp reads an open stdin to EOF as prompt text
@@ -374,64 +396,18 @@ func (w *Worker) launch(ctx context.Context, ps *projectState, j *Journal) error
 		})
 		w.noteHook(err)
 	}}
-	stdout := &lineSink{parser: parser, file: openCapped(filepath.Join(runDir, "output.jsonl"), 8<<20)}
-	stderr := newTailSink(filepath.Join(runDir, "stderr.log"))
+	stdout := &lineSink{parser: parser, file: openCapped(filepath.Join(sp.dir, "output.jsonl"), 8<<20)}
+	stderr := newTailSink(filepath.Join(sp.dir, "stderr.log"))
 	defer stdout.close()
 	defer stderr.close()
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 
-	runtime.LockOSThread() // the parent-death signal follows the thread that started the child
-	defer runtime.UnlockOSThread()
-	if _, err := w.store.Update(j.RunUID, "launching", func(j *Journal) error {
-		j.Phase = PhaseLaunching
-		j.Launch = nil // a record of an earlier attempt must not stand for this one's process
-		return nil
-	}); err != nil {
+	exit, err := w.supervise(ctx, j, cmd, sessionFolder(sp.dir), resumeID)
+	if se, ok := errors.AsType[startError](err); ok {
+		return w.failAttempt(j, "cannot start the agent: "+se.Error())
+	}
+	if err != nil {
 		return err
-	}
-	if err := cmd.Start(); err != nil {
-		return failFast(StatusFailed, "cannot start the agent: "+err.Error())
-	}
-	pid := cmd.Process.Pid
-	if _, err := w.store.Update(j.RunUID, "started", func(j *Journal) error {
-		j.Phase = PhaseStarted
-		j.Launch = &LaunchRecord{PID: pid, PGID: pid, StartTicks: startTicks(pid), SessionDir: sessionFolder(runDir), SessionID: resumeID, At: w.clock.Now().UTC()}
-		return nil
-	}); err != nil {
-		signalGroup(pid, true)
-		_ = cmd.Wait()
-		return err
-	}
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-	timedOut := false
-	var waitErr error
-	timeout := time.Duration(j.TimeoutSeconds) * time.Second
-	select {
-	case waitErr = <-done:
-	case <-ctx.Done():
-		signalGroup(pid, true)
-		<-done
-		return ctx.Err() // the journal stays started: the next start finds it interrupted
-	case <-w.clock.After(timeout):
-		timedOut = true
-		signalGroup(pid, false)
-		select {
-		case waitErr = <-done:
-		case <-ctx.Done():
-			signalGroup(pid, true)
-			<-done
-			return ctx.Err()
-		case <-w.clock.After(10 * time.Second):
-			signalGroup(pid, true)
-			waitErr = <-done
-		}
-	}
-	exit := &ExitRecord{At: w.clock.Now().UTC(), TimedOut: timedOut}
-	if ee, ok := errors.AsType[*exec.ExitError](waitErr); ok {
-		exit.Code, exit.Signal = ee.ExitCode(), exitSignal(ee.ProcessState)
-	} else if waitErr != nil {
-		exit.Code = -1
 	}
 	stdout.flush()
 	result := parser.Result()
@@ -450,8 +426,84 @@ func (w *Worker) launch(ctx context.Context, ps *projectState, j *Journal) error
 	return w.conclude(ctx, j)
 }
 
+// startError is a process that could not be started: nothing ran, so the failure is certain.
+type startError struct{ error }
+
+// timeLeft is how long the run's current attempt may run: the job's timeout for a prompt job, what is left of the
+// run's shared expiry for a workflow step.
+func (w *Worker) timeLeft(j *Journal) time.Duration {
+	if j.Workflow != nil && !j.ExpiresAt.IsZero() {
+		return j.ExpiresAt.Sub(w.clock.Now())
+	}
+	return time.Duration(j.TimeoutSeconds) * time.Second
+}
+
+// supervise starts cmd and waits for it: the `launching` mark, the start record, the wait with the run's expiry (SIGTERM,
+// then SIGKILL after 10 s) and the exit record's contents. A worker stop kills the group and leaves the journal
+// `started`, which the next start finds interrupted. The caller saves the returned exit record.
+func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessionDir, resumeID string) (*ExitRecord, error) {
+	runtime.LockOSThread() // the parent-death signal follows the thread that started the child
+	defer runtime.UnlockOSThread()
+	if _, err := w.store.Update(j.RunUID, "launching", func(j *Journal) error {
+		j.Phase = PhaseLaunching
+		j.Launch = nil // a record of an earlier attempt must not stand for this one's process
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, startError{err}
+	}
+	pid := cmd.Process.Pid
+	if _, err := w.store.Update(j.RunUID, "started", func(j *Journal) error {
+		j.Phase = PhaseStarted
+		j.Launch = &LaunchRecord{PID: pid, PGID: pid, StartTicks: startTicks(pid), SessionDir: sessionDir, SessionID: resumeID, At: w.clock.Now().UTC()}
+		return nil
+	}); err != nil {
+		signalGroup(pid, true)
+		_ = cmd.Wait()
+		return nil, err
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	timedOut := false
+	var waitErr error
+	select {
+	case waitErr = <-done:
+	case <-ctx.Done():
+		signalGroup(pid, true)
+		<-done
+		return nil, ctx.Err() // the journal stays started: the next start finds it interrupted
+	case <-w.clock.After(w.timeLeft(j)):
+		timedOut = true
+		signalGroup(pid, false)
+		select {
+		case waitErr = <-done:
+		case <-ctx.Done():
+			signalGroup(pid, true)
+			<-done
+			return nil, ctx.Err()
+		case <-w.clock.After(10 * time.Second):
+			signalGroup(pid, true)
+			waitErr = <-done
+		}
+	}
+	exit := &ExitRecord{At: w.clock.Now().UTC(), TimedOut: timedOut}
+	if ee, ok := errors.AsType[*exec.ExitError](waitErr); ok {
+		exit.Code, exit.Signal = ee.ExitCode(), exitSignal(ee.ProcessState)
+	} else if waitErr != nil {
+		exit.Code = -1
+	}
+	return exit, nil
+}
+
 // conclude proves the process group gone and decides the outcome of a run that has an exit record.
 func (w *Worker) conclude(ctx context.Context, j *Journal) error {
+	command := j.activeIsCommand()
+	if command && j.Launch != nil && groupAlive(j.Launch.PGID) {
+		// A command's leftover process is not the worker's to guess about: it may still be doing what the command began.
+		return w.hold(j, HoldGroupUnproven, fmt.Sprintf("process group %d is still present after the command exited", j.Launch.PGID))
+	}
 	if j.Launch != nil && groupAlive(j.Launch.PGID) {
 		signalGroup(j.Launch.PGID, false)
 		for i := 0; i < 150 && groupAlive(j.Launch.PGID); i++ {
@@ -469,7 +521,15 @@ func (w *Worker) conclude(ctx context.Context, j *Journal) error {
 	if hold, detail := providerHold(j); hold != "" {
 		return w.hold(j, hold, detail)
 	}
-	outcome := classify(j)
+	var outcome *Outcome
+	if command {
+		outcome = classifyCommand(j, commandTail1K(w.attemptDir(j)))
+	} else {
+		outcome = classify(j)
+	}
+	if j.Workflow != nil {
+		return w.concludeStep(j, outcome)
+	}
 	_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
 		outcome.At = w.clock.Now().UTC()
 		j.Outcome, j.Phase = outcome, PhaseFinished

@@ -9,6 +9,9 @@
 //	--stub-log FILE        append one JSON line describing this launch
 //	--stub-hang-first      like --stub-hang, but only when not started with --resume (so a resumed attempt finishes)
 //	--stub-linger          after agent_end, keep running until signalled (the process ended its turn but has not exited)
+//	--stub-fail-when T     exit 1 when the prompt contains T
+//	--stub-fail-once-when T  like --stub-fail-when, but not on a retry (a prompt with a "# Retry" section)
+//	--stub-hang-when T     like --stub-hang-first for a prompt that contains T: hang unless resumed
 //	--stub-error-status N  end the turn with a provider failure: stopReason error, errorStatus N, exit 1
 package main
 
@@ -18,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -31,6 +35,9 @@ func main() {
 		hangFirst bool
 		linger    bool
 		errStatus int
+		failWhen  string
+		failOnce  string
+		hangWhen  string
 		logPath   string
 		sessionIn string
 		resume    string
@@ -59,6 +66,15 @@ func main() {
 			hangFirst = true
 		case "--stub-linger":
 			linger = true
+		case "--stub-fail-when":
+			i++
+			failWhen = args[i]
+		case "--stub-fail-once-when":
+			i++
+			failOnce = args[i]
+		case "--stub-hang-when":
+			i++
+			hangWhen = args[i]
 		case "--stub-error-status":
 			i++
 			errStatus, _ = strconv.Atoi(args[i])
@@ -76,6 +92,12 @@ func main() {
 				prompt = string(raw)
 			}
 		}
+	}
+	if failWhen != "" && strings.Contains(prompt, failWhen) || failOnce != "" && strings.Contains(prompt, failOnce) && !strings.Contains(prompt, "# Retry") {
+		exit = 1
+	}
+	if hangWhen != "" && strings.Contains(prompt, hangWhen) && resume == "" {
+		hang = true
 	}
 	if logPath != "" {
 		cwd, _ := os.Getwd()
