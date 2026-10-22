@@ -77,7 +77,7 @@ func Render(m model.Model, now time.Time) tern.View {
 		// The top bar heads the whole Pane at every width, above the columns and outside their borders.
 		// The columns fill what is left of the Pane under it and stretch to equal height: a Row centres its children by default, and a parent's detail (a Link per child) is far taller than the Pane.
 		// Min H 0 lets the row shrink to the Pane instead of growing to the tallest column, so the Pane has nothing to scroll and the bar stays put.
-		main = append(ui.Nodes(topBar(m)), filterLine(m)...)
+		main = append(append(ui.Nodes(topBar(m)), pageLine(m)...), filterLine(m)...)
 		main = append(main, ui.Row{Common: ui.Common{Key: "columns", Hidden: m.HelpOpen, Grow: 1, Min: &ui.Bounds{H: ui.Lines(0)}}, Gap: ui.GapMD, Align: ui.AlignStretch, Children: columns})
 		if m.HelpOpen {
 			// The top bar, filters and columns stay mounted but hidden, so Tern keeps their scroll offsets for when the sheet closes.
@@ -245,10 +245,7 @@ func topBar(m model.Model) tern.Element {
 	if m.Focus == model.ColumnList {
 		tone, style = ui.ToneAccent, "accent strong"
 	}
-	title := m.Collection.Title
-	if m.Collection.IsProject() {
-		title = "Project: " + title
-	}
+	title := barTitle(m)
 	heading := []ui.Span{{T: title, S: style}}
 	if m.Loading {
 		heading = append(heading, loadingMarker)
@@ -259,6 +256,8 @@ func topBar(m model.Model) tern.Element {
 	headingCell := flexCell("heading", tone, 0)
 	headingCell.Title, headingCell.Actions = "Menu", &ui.Actions{Click: MenuClick}
 	rightCell := flexCell("right", ui.ToneNeutral, 100)
+	// The right cell never narrows below "… · Menu", so the Menu button is never pushed off the bar; the Daemon inside gives way first.
+	rightCell.Min = &ui.Bounds{W: ui.Ch(8)}
 	var zoneNote []tern.Element
 	if m.Calendar.Note != "" {
 		zoneNote = ui.Nodes(
@@ -266,10 +265,12 @@ func topBar(m model.Model) tern.Element {
 			ui.Text{Common: flexCell("zone-sep", ui.ToneMuted, 0), Text: model.DaemonSeparator, Wrap: ui.WrapNone},
 		)
 	}
+	leftCells := ui.Nodes(ui.Text{Common: headingCell, Spans: heading, Wrap: ui.WrapNone})
+	if fit := topBarFit(m); fit != barOwnLine {
+		leftCells = append(leftCells, pageBar(m, flexCell, fit == barCompact))
+	}
 	return ui.Row{Common: ui.Common{Key: "topbar", Hidden: m.HelpOpen}, Gap: ui.GapMD, Justify: ui.JustifyBetween, Children: ui.Nodes(
-		ui.Row{Common: flexCell("left", ui.ToneNeutral, 0), Gap: ui.GapMD, Children: append(ui.Nodes(
-			ui.Text{Common: headingCell, Spans: heading, Wrap: ui.WrapNone},
-		), pageBar(m, flexCell)...)},
+		ui.Row{Common: flexCell("left", ui.ToneNeutral, 0), Gap: ui.GapMD, Children: leftCells},
 		ui.Text{Common: flexCell("counts", ui.ToneMuted, 1), Text: m.CountsLine(), Wrap: ui.WrapNone},
 		ui.Row{Common: rightCell, Gap: ui.GapNone, Children: append(zoneNote, ui.Nodes(
 			ui.Text{Common: flexCell("daemon", ui.ToneMuted, 100), Text: m.DaemonLine(), Wrap: ui.WrapNone},

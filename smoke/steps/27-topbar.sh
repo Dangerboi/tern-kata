@@ -26,9 +26,13 @@ expect_tree "[data-id='main.filters']" '.ok and .count == 0'
 
 # One column (80-139): the Daemon gives way first, then the counts, the title is cut last.
 ctl resize 900 "$bar_height"
+expect_tree "[data-id='main.topbar.right.menu']" '.ok and .count == 1'
 expect_tree "[data-id='main.topbar.right.daemon']" '.ok and .count == 1 and (.nodes[0].text | endswith("…"))'
 expect_tree "[data-id='main.topbar.left.heading']" ".nodes[0].text == \"Project: $bar_name\""
 ctl resize 680 "$bar_height"
+expect_tree "[data-id='main.topbar.right.menu']" '.ok and .count == 1'
+# The Page bar is compact: only the current Page keeps its label, every Page stays a tab.
+expect_tree "[data-id^='main.topbar.left.pages.'],[data-id^='main.pagebar.']" '.ok and .count == 5 and ([.nodes[].text] | map(select(length > 1)) | length) <= 1'
 expect_tree "[data-id='main.topbar.counts']" '.nodes[0].text | endswith("…")'
 expect_tree "[data-id='main.topbar.left.heading']" ".nodes[0].text == \"Project: $bar_name\""
 ctl resize "$bar_full" "$bar_height"
