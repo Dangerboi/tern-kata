@@ -258,9 +258,6 @@ func (j *Journal) Inspections() []string {
 	return out
 }
 
-// Active reports whether the run still holds a slot: it is not settled and not provably over without a process.
-func (j *Journal) Active() bool { return j.Phase != PhaseSettled }
-
 const maxJournalBytes = 1 << 20
 
 // Hooks lets a test observe or kill the worker at named journal points (ADR-0006 "Test seam"). AfterSave is called
