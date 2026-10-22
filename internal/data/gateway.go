@@ -259,10 +259,6 @@ func plan(cmd model.Cmd, host string) (request, bool) {
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ShowRun(ctx, cmd)) },
 			func(err error) model.Msg { return model.RunShown{UID: cmd.UID, Err: err} }}, true
-	case model.ShowJob:
-		return request{cmd.Workspace,
-			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ShowJob(ctx, cmd)) },
-			func(err error) model.Msg { return model.JobShown{UID: cmd.UID, Err: err} }}, true
 	case model.SaveJobCmd:
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.SaveJob(ctx, cmd)) },
