@@ -122,15 +122,45 @@ func TestClickingAnIDSelectsItsCardAndRevealsIt(t *testing.T) {
 	wantOps(t, out, tern.OpReveal(view.CardID(out.State.Model, "par"), "nearest"))
 }
 
-func TestClickingAnIDTheBoardDoesNotDrawLeavesANotice(t *testing.T) {
+// opensInTheDetail checks out is the Lane view of task's Lane with uid's detail focused and loading, and no Notice.
+func opensInTheDetail(t *testing.T, out driver.Output, uid string) {
+	t.Helper()
+	m := out.State.Model
+	if m.Board.Mode != model.BoardLane || m.Board.Lane != model.LaneNone || m.SelectedUID != uid || m.Focus != model.ColumnDetail || m.Notice != "" {
+		t.Errorf("open %s: mode %v Lane %q selected %q focus %v notice %q; want the Lane view of No lane with %s's detail focused",
+			uid, m.Board.Mode, m.Board.Lane, m.SelectedUID, m.Focus, m.Notice, uid)
+	}
+	if !slices.Contains(out.Cmds, model.Cmd(model.LoadDetail{Workspace: "/repo", UID: uid})) {
+		t.Errorf("open %s: cmds %#v load no detail of it", uid, out.Cmds)
+	}
+}
+
+func TestClickingAnIDTheBoardDoesNotDrawOpensItsDetailAndEscGoesBackToTheBoard(t *testing.T) {
 	far := model.Link{ID: 1, Type: "related", FromIssueUID: "task", FromQualifiedID: "work#task", FromStatus: "open", ToIssueUID: "far", ToQualifiedID: "other#ab12", ToStatus: "open"}
 	s := selectedBoard(t, "task", []model.Link{far, childOf(2, "task", "open", "par")}, boardCard("task"))
-	for _, tt := range []struct{ uid, notice string }{{"far", "other#ab12 isn't on the Board."}, {"par", "par isn't on the Board."}} {
-		out := step(t, s, click("", refClick(t, s, "task", tt.uid)))
-		if got := out.State.Model; got.SelectedUID != "task" || got.Notice != tt.notice {
-			t.Errorf("click on %s: selected %q, notice %q; want task and %q", tt.uid, got.SelectedUID, got.Notice, tt.notice)
+	for _, uid := range []string{"far", "par"} {
+		out := step(t, s, click("", refClick(t, s, "task", uid)))
+		opensInTheDetail(t, out, uid)
+
+		back := step(t, out.State, key("escape")).State.Model
+		if back.SelectedUID != "task" || back.Focus != model.ColumnDetail {
+			t.Errorf("esc after opening %s: selected %q focus %v; want task's detail", uid, back.SelectedUID, back.Focus)
 		}
-		wantOps(t, out)
+		lane := step(t, step(t, out.State, key("escape")).State, key("escape")).State
+		if m := lane.Model; m.Board.Mode != model.BoardLane || m.Focus != model.ColumnList || m.SelectedUID != "task" {
+			t.Errorf("second esc after opening %s: mode %v focus %v selected %q; want task in the Lane view", uid, m.Board.Mode, m.Focus, m.SelectedUID)
+		}
+		if m := step(t, lane, key("escape")).State.Model; m.Board.Mode != model.BoardColumns || m.SelectedUID != "task" {
+			t.Errorf("third esc after opening %s: mode %v selected %q; want task's card on the Board", uid, m.Board.Mode, m.SelectedUID)
+		}
+	}
+}
+
+func TestAnIssueOpenedFromTheBoardStaysThroughARefresh(t *testing.T) {
+	s := selectedBoard(t, "task", []model.Link{relatedTo(1, "task", "far")}, boardCard("task"))
+	opened := step(t, s, click("", refClick(t, s, "task", "far"))).State
+	if m := refreshed(t, opened, []model.Link{relatedTo(1, "task", "far")}, []model.Issue{boardCard("task")}).Model; m.SelectedUID != "far" || m.Focus != model.ColumnDetail {
+		t.Errorf("after a refresh: selected %q focus %v; want far's detail", m.SelectedUID, m.Focus)
 	}
 }
 
@@ -164,12 +194,7 @@ func TestCaretSelectsTheParentOrSaysThereIsNone(t *testing.T) {
 	}
 
 	s = selectedBoard(t, "task", []model.Link{childOf(1, "task", "open", "missing")}, boardCard("task"))
-	if m := step(t, s, key("^")).State.Model; m.SelectedUID != "task" || m.Notice != "missing isn't on the Board." {
-		t.Errorf("selected %q, notice %q; want task and %q", m.SelectedUID, m.Notice, "missing isn't on the Board.")
-	}
-	if m := step(t, step(t, s, key("^")).State, key("j")).State.Model; m.Notice != "" {
-		t.Errorf("notice %q outlived a key", m.Notice)
-	}
+	opensInTheDetail(t, step(t, s, key("^")), "missing")
 }
 
 func TestShiftedCaretSelectsTheParentToo(t *testing.T) {

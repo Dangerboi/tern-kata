@@ -149,7 +149,8 @@ func (r Relationships) HighlightsOf(uid string) []Highlight {
 	return out
 }
 
-// showCard selects the Board card of uid, in the Lane view switching to its Lane, or leaves the Notice that the Board does not draw it.
+// showCard selects the Board card of uid, in the Lane view switching to its Lane. An Issue the Board does not draw opens in the
+// detail beside the Lane view as a jump, so Esc comes back to the card.
 func showCard(m Model, uid string) Model {
 	if !m.Board.On() {
 		return m
@@ -157,8 +158,10 @@ func showCard(m Model, uid string) Model {
 	columns := m.BoardColumns()
 	col, _ := CardAt(columns, uid)
 	if col < 0 {
-		m.Notice = fmt.Sprintf("%s isn't on the Board.", m.relatedID(uid))
-		return m
+		if m.Board.Mode == BoardColumns {
+			m = m.laneView()
+		}
+		return m.jumpTo(uid, nil)
 	}
 	if m.Board.Mode == BoardLane {
 		m.Board.Lane = columns[col].Lane
@@ -179,16 +182,4 @@ func selectParent(m Model) Model {
 		return m
 	}
 	return showCard(m, parent.UID)
-}
-
-// relatedID is uid's id as the selected Issue's Relationships line names it, the bare uid when it is not one of them.
-func (m Model) relatedID(uid string) string {
-	issue := m.issueByUID(m.SelectedUID)
-	if issue == nil {
-		return uid
-	}
-	if found := m.Relationships.Of(issue.UID).Find(uid); len(found) > 0 {
-		return found[0].Ref.ID(issue.ProjectName)
-	}
-	return uid
 }

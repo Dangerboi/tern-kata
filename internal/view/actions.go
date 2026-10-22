@@ -45,7 +45,7 @@ func OpenRowClick(uid string) string { return click(string(model.OpenRow), uid) 
 // CardClick selects the Board card of the Issue.
 func CardClick(uid string) string { return click(cardAct, uid) }
 
-// RefClick selects the Board card of a related Issue, revealing it in its Lane, or says the Board does not draw it.
+// RefClick selects the Board card of a related Issue, revealing it in its Lane, or opens its detail when the Board does not draw it.
 func RefClick(uid string) string { return click(refAct, uid) }
 
 // ActivityTabClick shows the Activity tab.
