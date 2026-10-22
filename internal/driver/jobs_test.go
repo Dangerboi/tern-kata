@@ -403,11 +403,14 @@ func TestJobsPageWarnsOfAnAdapterJobMakingMoreThanADayOfIssuesPerDay(t *testing.
 	existing.Definition.Issue = &model.CronIssuePolicy{Kind: model.IssueExisting, UID: "parent-a"}
 	native := nativeJob("N1", "Native", jobParent("open", false))
 	native.Definition.Trigger = model.CronTrigger{Kind: model.TriggerInterval, IntervalSeconds: 60}
+	disabled := promptJob("J5", "Switched off")
+	disabled.Definition.Trigger = model.CronTrigger{Kind: model.TriggerInterval, IntervalSeconds: 60}
+	disabled.Definition.Enabled = false
 
-	s := jobsPane(t, 160, everyMinute, everyThirtyMinutes, hourly, existing, native)
+	s := jobsPane(t, 160, everyMinute, everyThirtyMinutes, hourly, existing, native, disabled)
 	wantText(t, "every minute", jobCardText(t, s, "J1"), "creates about 1440 Issues a day; consider an existing Issue")
 	wantText(t, "every 30 minutes", jobCardText(t, s, "J2"), "creates about 48 Issues a day; consider an existing Issue")
-	for uid, why := range map[string]string{"J3": "24 a day is the limit, not over it", "J4": "it reports to an existing Issue", "N1": "a recurring child is made of children"} {
+	for uid, why := range map[string]string{"J3": "24 a day is the limit, not over it", "J4": "it reports to an existing Issue", "N1": "a recurring child is made of children", "J5": "it is disabled and makes none"} {
 		if strings.Contains(jobCardText(t, s, uid), "Issues a day") {
 			t.Errorf("%s warns, but %s", uid, why)
 		}

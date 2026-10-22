@@ -237,6 +237,12 @@ func TestJobCardPreviewsTheScheduleInWordsAndTheNextThreeRuns(t *testing.T) {
 	s = set(t, s, model.JobFieldZone, "Europe/Berlin")
 	wantText(t, "preview follows the fields", cardText(t, s), "every 20 minutes Europe/Berlin", "Thu 2026-10-08 14:20 CEST", "Thu 2026-10-08 14:40 CEST", "Thu 2026-10-08 15:00 CEST")
 
+	s = set(t, s, model.JobFieldCron, "*/40 * * * *")
+	wantText(t, "a step that does not divide an hour reads as its expression", cardText(t, s), "cron */40 * * * * Europe/Berlin")
+	if strings.Contains(cardText(t, s), "every 40 minutes") {
+		t.Errorf("a */40 step is worded as every 40 minutes, but it fires at :00 and :40: %s", cardText(t, s))
+	}
+
 	s = choose(t, s, model.JobFieldTrigger, 1)
 	s = set(t, s, model.JobFieldInterval, "15m")
 	wantText(t, "interval preview", cardText(t, s), "every 15 minutes", "Thu 2026-10-08 12:15 UTC", "Thu 2026-10-08 12:30 UTC", "Thu 2026-10-08 12:45 UTC")
