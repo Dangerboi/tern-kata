@@ -529,13 +529,13 @@ const (
 // headTail drains a command's output to a file: the first head bytes as they come, then only the last tail bytes,
 // written with a marker when the file is closed.
 type headTail struct {
-	f         *os.File
-	head      int
-	tailMax   int
-	written   int
-	tail      []byte
-	overflow  int64
-	closed    bool
+	f        *os.File
+	head     int
+	tailMax  int
+	written  int
+	tail     []byte
+	overflow int64
+	closed   bool
 }
 
 func openHeadTail(path string, head, tail int) (*headTail, error) {

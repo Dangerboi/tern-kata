@@ -364,19 +364,19 @@ type Observation struct {
 	JobUID             string
 	DefinitionEventUID string
 	// WorkflowUID and WorkflowEventUID name the workflow a workflow job's run executes; both empty for a prompt job.
-	WorkflowUID        string
-	WorkflowEventUID   string
-	OccurrenceKey      string
-	IssueUID           string
-	Executor           string
-	Actor              string
-	Status             string
-	Message            string
-	InputTokens        *int64
-	OutputTokens       *int64
-	StartedAt          time.Time
-	EndedAt            *time.Time
-	ExpectedRevision   int64
+	WorkflowUID      string
+	WorkflowEventUID string
+	OccurrenceKey    string
+	IssueUID         string
+	Executor         string
+	Actor            string
+	Status           string
+	Message          string
+	InputTokens      *int64
+	OutputTokens     *int64
+	StartedAt        time.Time
+	EndedAt          *time.Time
+	ExpectedRevision int64
 }
 
 // Observe sends an observation and returns the stored Run and whether kata replayed an identical one.

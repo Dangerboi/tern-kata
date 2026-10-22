@@ -79,7 +79,7 @@ expect_tree "[data-id='main.columns.list.jobs.$jc_job']" '.ok and .count == 1 an
 # x archives it: it leaves the list, a shows it archived, x restores it, x archives it for good.
 ctl key x
 expect_tree "[data-id='main.columns.list.jobs.$jc_job']" '.ok and .count == 0'
-kata --workspace "$jc_dir" cron job list --json | jq -e '.jobs | length == 0' >/dev/null
+kata --workspace "$jc_dir" cron job list --json | jq -e --arg uid "$jc_job" '[.jobs[] | select(.uid == $uid)] | length == 0' >/dev/null
 ctl key a
 expect_tree "[data-id='main.columns.list.jobs.$jc_job']" '.ok and .count == 1 and (.nodes[0].text | contains("archived"))'
 ctl key x

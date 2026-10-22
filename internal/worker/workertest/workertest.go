@@ -75,8 +75,8 @@ func (d *Daemon) Project(t *testing.T, name string) worker.Project {
 
 // Job describes a prompt job to create. Zero values give an enabled manual-trigger job with a per-run Issue.
 type Job struct {
-	Name        string
-	Prompt      string
+	Name   string
+	Prompt string
 	// Workflow makes the job run the workflow with this uid instead of Prompt.
 	Workflow    string
 	Profile     string
