@@ -21,11 +21,11 @@ const WorkflowEditorID = "layer.workflow.body"
 
 // Tones the Workflows Page gives what it names: a workflow's steps by kind, its retries and its waits.
 const (
-	commandTone = ui.ToneInfo
-	promptTone  = ui.ToneUser
-	retryTone   = ui.ToneWarning
-	afterTone   = ui.TonePending
-	usingJobTone     = ui.ToneAccent
+	commandTone  = ui.ToneInfo
+	promptTone   = ui.ToneUser
+	retryTone    = ui.ToneWarning
+	afterTone    = ui.TonePending
+	usingJobTone = ui.ToneAccent
 )
 
 // workflows is the Workflows Page: the Project's workflows, and beside them (in a narrow Pane instead of them) the steps of the
