@@ -1,6 +1,6 @@
 ---
 name: tern-kata
-description: Files attached to kata Issues through tern-kata. Use when an Issue's metadata has `attachment.*` keys, or to attach a screenshot, log or other file to an Issue.
+description: Files attached to kata Issues and recurring Issues, through tern-kata. Use when an Issue's metadata has `attachment.*` keys, to attach a screenshot, log or other file to an Issue, or to make an Issue recur, change or stop its schedule, or print it (`tern-kata recur`).
 ---
 
 An Attachment is a file copied into the Project's Attachment store, `<primary checkout>/.kata-attachments/<Issue ULID>/<name>`, and pointed to by one `attachment.<name>` meta key on the Issue. The store is gitignored and never committed.
@@ -28,3 +28,20 @@ tern-kata detach <ref> <name> [--as <actor>]      # clears the pointer, deletes 
 - A name the Issue already uses is stored as `<stem>-2<ext>`, then `-3`: cite the printed path, not the original name. `attach` stops at the first failing file and keeps those already attached; any failure exits non-zero with the reason on stderr.
 - The file must be on this machine. With a Windows Tern window and a Linux session host, a file on the Windows side has to be copied over first.
 - Change attachments only through these two commands, which keep the copy and its pointer together (`kata meta unset` would strand the copy).
+
+## Recur
+
+`tern-kata recur` makes an Issue recur, changes or stops its schedule and prints it, with the Recurrence card's rules and messages. It needs the `tern-kata` binary on `PATH` (check with `command -v tern-kata`; PowerShell: `Get-Command tern-kata`); when it is missing, tell the user and point them to https://github.com/Dangerboi/tern-kata#install. kata's CLI has no recurrence command, so do not tell the user to do it by hand.
+
+```bash
+tern-kata recur <ref>                                   # prints the schedule in words and the next Occurrence's date, or says the Issue does not recur
+tern-kata recur <ref> --frequency weekly --on mon,thu   # makes it recur, or changes its schedule when it already recurs
+tern-kata recur <ref> --rule 'FREQ=WEEKLY;BYDAY=MO'     # a raw RRULE instead of the frequency flags
+tern-kata recur <ref> --stop                            # stops the Recurrence; existing Occurrences stay
+```
+
+- Schedule flags: `--frequency daily|weekly|monthly|yearly`, `--every N`, `--on mon,thu` (weekly), `--day 15|last|"2nd tue"` (monthly, yearly; `last` monthly only), `--month 1-12` (yearly), `--until YYYY-MM-DD` or `--count N`, `--start YYYY-MM-DD`, `--zone <IANA zone>`. Start defaults to the Issue's scheduled date, else today (a recurring Issue keeps its start); the zone to this machine's IANA zone, else UTC; weekly with no `--on` falls on the start date's weekday.
+- Closing an Occurrence `--done` creates the next one; `--wontfix` and the other closes do not, so the series stalls.
+- Same refs, `--as`, Binding rule and exit codes as `attach`: run from a checkout of the Issue's own Project; one result line on success, the reason on stderr and exit 1 on failure. Invalid input is refused and nothing is sent.
+- Changing a schedule someone else changed meanwhile writes nothing: it prints the current schedule and exits 1. Changing or stopping an Issue that never recurred or whose Recurrence was stopped is refused; kata won't make a stopped Issue recur again.
+- Leave the `O` card and `kata ui` to people.

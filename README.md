@@ -109,7 +109,7 @@ In a repo with a `.kata.toml`, write kata ticket references in chat replies as `
 The repo ships two skills for coding agents:
 
 - `kata`: the kata CLI, for finding, creating, claiming, commenting on, linking and closing Issues, and coordinating subagents through them.
-- `tern-kata`: reading an Issue's [Attachments](#attachments) and attaching files with `tern-kata attach`.
+- `tern-kata`: reading an Issue's [Attachments](#attachments), attaching files with `tern-kata attach`, and making Issues recur with [`tern-kata recur`](#recurring-issues-from-a-shell).
 
 Install them for the agents on this machine with the [skills](https://github.com/vercel-labs/skills) CLI, which asks which skills and which agents. It needs Node.js; with only Bun installed, use `bunx` in place of `npx`:
 
@@ -139,6 +139,20 @@ The pointer agents read is one kata meta key per Attachment, visible in `kata sh
 `host` is the OS host name of the machine that holds the copy and `path` is the absolute native path there. `detach` clears the key, then deletes the copy only if `host` is this machine; otherwise it says the file was left on that host, or was already gone. If the pointer is cleared but the copy can't be deleted, `detach` still prints `Removed <name>; could not delete <path>: <reason>` and exits non-zero, and `U` shows the same line as its notice. A pointer that changed while it was being removed is left alone and nothing is deleted.
 
 The file must already be on the session host, the machine running tern-kata. With a Windows Tern window and a Linux session host, copy a Windows file over first. With a remote kata daemon, attaching still works for your own agents on this machine, but teammates' agents see a path on your machine that they can open only if they can SSH to it; the `tern-kata` agent skill copies the file over SSH when that works.
+
+## Recurring issues from a shell
+
+`O` opens the Recurrence card in a Pane. `tern-kata recur` does the same from a shell or an agent, without Tern, with the card's rules and messages:
+
+```sh
+tern-kata recur <ref>                                         # the schedule in words and the next Occurrence's date
+tern-kata recur <ref> --frequency weekly --on mon,thu         # make it recur, or change its schedule
+tern-kata recur <ref> --frequency monthly --day "2nd tue" --count 6 --zone Europe/Oslo
+tern-kata recur <ref> --rule 'FREQ=WEEKLY;BYDAY=MO'           # a raw RRULE instead of the frequency flags
+tern-kata recur <ref> --stop                                  # existing Occurrences stay
+```
+
+Flags: `--frequency daily|weekly|monthly|yearly`, `--every N`, `--on mon,thu`, `--day 15|last|"2nd tue"`, `--month 1-12`, `--until DATE` or `--count N`, `--start DATE`, `--zone <IANA>`. The start date defaults to the Issue's scheduled date or today, the zone to this machine's IANA zone or UTC. Refs, `--as` and the Binding rule are those of `attach`; success prints one line and a failure prints the reason on stderr and exits 1. Invalid input is refused with the card's message and nothing is sent; a schedule changed by someone else while the command ran is not overwritten but printed, and the command exits 1.
 
 ## Pages and the Board Page
 

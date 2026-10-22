@@ -88,3 +88,36 @@ func (c *Client) StopRecurrence(ctx context.Context, cmd model.StopRecurrenceCmd
 		return err
 	})
 }
+
+// ReadRecurTarget reads the Issue a ref names, refused outside the workspace's Binding, with its Recurrence as it stands now.
+func (c *Client) ReadRecurTarget(ctx context.Context, cmd model.LoadRecurTarget) (model.RecurTarget, error) {
+	target, err := c.readAttachTarget(ctx, cmd.Workspace, cmd.Ref)
+	if err != nil {
+		return model.RecurTarget{}, err
+	}
+	if !model.CanAttach(target.binding, target.issue.ProjectID) {
+		names, err := c.projectNames(ctx)
+		if err != nil {
+			return model.RecurTarget{}, err
+		}
+		return model.RecurTarget{}, model.RecurRefusal(target.binding, target.issue.ProjectID, target.issue.ShortID, names[target.issue.ProjectID])
+	}
+	detail, err := c.ReadDetail(ctx, target.issue.UID)
+	if err != nil {
+		return model.RecurTarget{}, err
+	}
+	out := model.RecurTarget{Ref: cmd.Ref, UID: target.issue.UID, ShortID: target.issue.ShortID, ProjectID: target.issue.ProjectID}
+	out.Today, out.Zone, _ = systemCalendar.Today()
+	if issue := detail.Selected.Issue; issue != nil {
+		if issue.ScheduledOnDate != nil {
+			out.ScheduledOnDate = *issue.ScheduledOnDate
+		}
+		if issue.RecurrenceID != nil {
+			if detail.Selected.Recurrence == nil {
+				return model.RecurTarget{}, model.ErrRecurrenceWithheld
+			}
+			out.Recurrence = detail.Selected.Recurrence
+		}
+	}
+	return out, nil
+}
