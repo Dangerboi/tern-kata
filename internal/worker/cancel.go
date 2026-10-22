@@ -46,6 +46,8 @@ func cancelRefusal(j *Journal) string {
 		return fmt.Sprintf("%s already asked to cancel it", j.Cancel.By)
 	case j.Outcome != nil || j.Phase == PhaseFinished || j.Phase == PhaseSettled:
 		return "it is " + runStatus(j).State + ", not held"
+	case j.Notify != nil:
+		return "its notification is being sent and it ends in a moment"
 	case j.Phase == PhasePrepared:
 		return "it is still being admitted; try again in a moment"
 	case j.Phase == PhaseResuming:
