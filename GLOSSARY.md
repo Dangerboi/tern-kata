@@ -81,3 +81,7 @@
 **No lane**: The column of open Issues with no Lane label. It is always shown. An Issue with several Lane labels shows once, in the first of its Lanes in Lane order, with an "also" note naming the others.
 
 **Done**: The column of Issues closed in the last N days of the Pane calendar (default 14), at most M of them (default 20), newest closed first; N and M are per Project, set on the Lanes card or in `lanes.toml`. Its header says "20 of 192" when more qualify. It shows only what the Collection snapshot holds, so a status filter of `open` leaves it empty. Each card names the Lane `r` would reopen it into, the Lane its labels point at.
+
+**Worker**: tern-kata's kata adapter, `tern-kata worker`: a foreground process, one per machine, that runs the adapter prompt jobs of the Projects listed in its `worker.toml` through omp and records every run in kata. It reads its Projects' events, holds each Project's lease, and holds a run it cannot prove finished instead of sending its prompt again. It never runs native jobs and has no window or Pane. A Project listed in `worker.toml` is trusted: anyone who can write its jobs can run prompts and commands on the machine. _Avoid_: daemon (kata's, Tern's), scheduler, runner.
+
+**Agent profile**: A named omp command line in `worker.toml` (`[profiles.<name>]`: command, model, thinking level, extra arguments) that a job selects with `options.profile`, `default` when it names none. _Avoid_: agent (the program), config.

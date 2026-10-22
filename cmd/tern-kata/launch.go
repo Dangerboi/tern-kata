@@ -24,7 +24,7 @@ type LaunchPlan struct {
 	Help bool
 	// FallbackArgs are the arguments for `kata tui` when Tern is unsupported.
 	FallbackArgs []string
-	// Subcommand is "attach", "detach" or "recur" when it was the first argument; main runs it without Tern.
+	// Subcommand is "attach", "detach", "recur", "run" or "worker" when it was the first argument; main runs it without Tern.
 	Subcommand string
 	// TargetRef is the Issue as attach, detach and recur take it (what `kata show` takes: a short id, <project>#<short id> or a ULID),
 	// unlike IssueRef; Operands are the files to attach, or the Attachment name to detach.
@@ -33,6 +33,8 @@ type LaunchPlan struct {
 	// RecurFlags are recur's schedule flags by name without dashes (model.RecurFlagNames), as typed; Stop is --stop.
 	RecurFlags map[string]string
 	Stop       bool
+	// Takeover is `worker --takeover`: claim the served Projects' leases even from another live worker.
+	Takeover bool
 	// fallbackAuthor is the --as actor exported to `kata tui`; empty leaves the environment untouched.
 	fallbackAuthor string
 }
@@ -66,7 +68,7 @@ func PlanLaunch(args []string, lookup func(string) (string, bool), version strin
 	if slices.Contains(args, "--help") || slices.Contains(args, "-h") {
 		return LaunchPlan{Help: true}, nil
 	}
-	if len(args) > 0 && (args[0] == "attach" || args[0] == "detach" || args[0] == "recur") {
+	if len(args) > 0 && (args[0] == "attach" || args[0] == "detach" || args[0] == "recur" || args[0] == "run" || args[0] == "worker") {
 		plan, err := planSubcommand(args, lookup)
 		if err != nil {
 			err = subcommandError{err}
@@ -154,6 +156,10 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 			flagsEnded = true
 			continue
 		}
+		if plan.Subcommand == "worker" && arg == "--takeover" {
+			plan.Takeover = true
+			continue
+		}
 		if plan.Subcommand == "recur" {
 			if matched, err := parseRecurFlag(args, &i, &plan); err != nil {
 				return LaunchPlan{}, err
@@ -179,9 +185,19 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata recur <ref> [--frequency daily|weekly|monthly|yearly ... | --rule <rrule> | --stop]")
 	case plan.Stop && len(plan.RecurFlags) > 0:
 		return LaunchPlan{}, fmt.Errorf("recur: --stop takes no schedule flags")
+	case plan.Subcommand == "run" && len(operands) != 1:
+		return LaunchPlan{}, fmt.Errorf("usage: tern-kata run <job-uid>")
+	case plan.Subcommand == "worker" && (len(operands) > 1 || len(operands) == 1 && operands[0] != "status" && operands[0] != "doctor"):
+		return LaunchPlan{}, fmt.Errorf("usage: tern-kata worker [--takeover] | tern-kata worker status | tern-kata worker doctor")
+	case plan.Subcommand == "worker" && len(operands) == 1 && plan.Takeover:
+		return LaunchPlan{}, fmt.Errorf("worker: --takeover applies to `tern-kata worker` only")
+	}
+	plan.Actor = resolveActor(plan.fallbackAuthor, lookup)
+	if plan.Subcommand == "worker" {
+		plan.Operands = operands
+		return plan, nil
 	}
 	plan.TargetRef, plan.Operands = operands[0], operands[1:]
-	plan.Actor = resolveActor(plan.fallbackAuthor, lookup)
 	return plan, nil
 }
 
@@ -223,6 +239,10 @@ Usage:
   tern-kata recur <ref> [--frequency daily|weekly|monthly|yearly [--every N] [--on mon,thu]
                    [--day 15|last|"2nd tue"] [--month 1-12] [--until DATE | --count N]
                    | --rule <rrule>] [--start DATE] [--zone <iana>] [--stop] [--as <actor>]
+  tern-kata run <job-uid> [--as <actor>]
+  tern-kata worker [--takeover]
+  tern-kata worker status
+  tern-kata worker doctor
   tern-kata --version
   tern-kata --help
 
@@ -247,6 +267,15 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 defaults to the Issue's scheduled date or today, the zone to
                                 this machine's IANA zone or UTC
   recur <ref> --stop            stop the Recurrence; existing Occurrences stay
+  run <job-uid>                 ask this machine's worker to run an adapter prompt job now,
+                                prints the new run's uid once the worker has saved it
+  worker                        run the worker in the foreground: it runs the adapter jobs of the
+                                Projects listed in worker.toml (tern-kata's config folder) through
+                                omp and records each run in kata; --takeover claims the Projects'
+                                leases from another machine's worker
+  worker status                 say what the running worker serves, runs and refuses
+  worker doctor                 check worker.toml, the checkouts, agent commands, secrets, the kata
+                                daemon and each Project's lease, and say how to fix what is missing
 <ref> is a short id in this workspace's Project, <project>#<short id>, or a ULID.
 The Issue's Project must be this workspace's Binding.
 

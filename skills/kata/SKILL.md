@@ -1,6 +1,6 @@
 ---
 name: kata
-description: "Kata issue tracker CLI. Use when a repo has `.kata.toml` or names Kata as its tracker: finding, creating, claiming, commenting, replying, labelling or closing issues (tickets), making work recur, or coordinating subagents through issues."
+description: "Kata issue tracker CLI. Use when a repo has `.kata.toml` or names Kata as its tracker: finding, creating, claiming, commenting, replying, labelling or closing issues (tickets), making work recur, scheduling agent jobs, being run by a tern-kata worker, or coordinating subagents through issues."
 ---
 
 Kata is a daemon-backed issue ledger shared by humans and agents. Written against kata v0.19; `kata <cmd> --help` is the source of truth for flags, `kata quickstart --format contract` for upstream agent policy. Repo specifics (project name, extra labels, human gates) live in that repo's `AGENTS.md`.
@@ -186,6 +186,34 @@ kata cron job update <job-uid> --parent <ref> --expected-event-uid <uid> --file 
 - The parent stays open as the standing commitment. Each run adds a child titled with a UTC timestamp and the parent's current owner, plus an inbox request to that owner (or the parent's author). Clear it with `kata notify <child> --to <addr> --clear`.
 - Triggers: `cron` (5 fields or `@daily`, IANA `timezone`) or `interval` (`interval_seconds` ≥ 60). `overlap` must be `allow`. `catchup`: `all` backfills every missed run, including runs missed while paused; `latest` only the newest; `skip` needs `grace_seconds`.
 - The daemon delivers, so it must be running. Pause by setting `enabled` to false or closing the parent. `update`, `delete` and `restore` need the current `.job.definition_event_uid` from `kata cron job show <job-uid> --json`. Full format: https://www.katatracker.com/docs/reference/cron/#recurring-child-issues
+
+### Jobs the tern-kata worker runs
+
+Any other job (`action.kind` `execute`, or `notify` on an existing Issue or an Issue date) is for an adapter; kata never runs it. The user's `tern-kata worker` runs `execute` jobs with a prompt through omp, in a checkout, on the Projects listed in its `worker.toml`. Define one like this (`kata cron job create --file`, without `--parent`):
+```json
+{"name": "Review open PRs",
+ "definition": {"version": 1, "kind": "job", "enabled": true,
+  "trigger": {"kind": "cron", "cron": "0 9 * * 1-5", "timezone": "Europe/Oslo"},
+  "action": {"kind": "execute", "prompt": "Review the open pull requests and record what needs a person."},
+  "issue": {"kind": "per-run", "title": "PR review", "body": "<context for the run>"},
+  "checkout_key": "tern-kata", "options": {"profile": "default"},
+  "secret_refs": {"GITHUB_TOKEN": "github-review"},
+  "overlap": "forbid", "catchup": "latest", "timeout_seconds": 3600}}
+```
+- `checkout_key` and `options.profile` name entries of the user's `worker.toml` (`[checkouts]`, `[profiles.<name>]`; the profile defaults to `default`). Never write a path or a secret into the definition: `secret_refs` maps an environment variable name to a `[secrets]` name the user defined. If the name is not in their `worker.toml`, tell them what to add.
+- `issue` is either `per-run` (a new Issue per run, titled `<title> — <UTC occurrence>`) or `{"kind": "existing", "uid": "<ULID>"}` (the run only comments on that open Issue).
+- The worker runs a job whoever wrote it, so write only what the user asked for. Native jobs (`notify` with a per-run Issue and a parent) stay with kata's daemon.
+- The user can run one now with `tern-kata run <job-uid>` (see the `tern-kata` skill).
+
+### If you are a run the worker started
+
+The prompt that started you names your Issue (`<project>#<short id>`), the job, the run uid and the occurrence, then the task, then a contract. You run as the worker's actor (`KATA_AUTHOR`), in the job's checkout, headless with no one to answer questions. When you finish, the worker records your run in kata; you do not report it yourself. What you must do:
+- Comment on your Issue what you did and how you checked it: `kata comment <ref> -m "..."`.
+- When the work is done and verified, close the Issue with evidence: `kata close <ref> --done -m "<what was done and how it was verified>"` plus `--commit <sha>`, `--pr <url>`, `--test "<command>"` or `--reviewed <path>`; when nothing needed changing, `kata close <ref> --audit-no-change -m "<what you checked>" --evidence "no-change-audit:<what was checked>"`. Never close it when the work is not done, and never invent evidence.
+- On an existing Issue the job reports to (the prompt says so), only comment: never close, label or edit it.
+- Your final message is the run's summary in kata: say plainly what happened, and say so when the task failed or needs a person. Exit status 0 with a finished turn is `succeeded`; anything else is `failed`.
+- If you leave the Issue open, the worker comments your final message on it and labels it `needs-review`. If your process dies, the worker holds the run and never sends the prompt again.
+- Do not run `tern-kata worker` or `tern-kata run` from inside a run.
 
 ## Fan-out / join (coordinating subagents)
 

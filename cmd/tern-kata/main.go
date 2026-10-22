@@ -47,6 +47,15 @@ func run() error {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	if isWorkerCommand(plan) {
+		env, err := newWorkerEnv()
+		if err != nil {
+			return err
+		}
+		ctx, stop := workerContext(ctx)
+		defer stop()
+		return runWorkerCommand(ctx, plan, env, os.Stdout)
+	}
 	if plan.Subcommand != "" {
 		return runSubcommand(ctx, plan, data.NewGateway(data.LocateWithKata).WithHost(data.HostName()), os.Stdout)
 	}

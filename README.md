@@ -18,6 +18,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 - **Collections and the Menu**: Inbox, Today, Upcoming, Deadlines, All Open, Logbook and every kata Project, plus a search (`/`) and filters (`f`, `s`) over any of them.
 - **Editing from the Pane**: Create (`n`, `N` for a child), Close (`x`), reopen (`r`), comments (`c` in the detail) and replies (`R`), labels (`+`, `-`), owner (`a`, `A`), priority (`!`), parent (`p`), recurrence (`O`) and the Issue body in Tern's editor (`e`).
 - **Pages (Issues and Board), Attachments and the Dates card**, shown below.
+- **[The worker](#scheduled-agent-runs-the-worker)**: `tern-kata worker` runs kata's agent prompt jobs through omp on your machine and records every run in kata.
 - **[kata links](#clickable-ticket-links-from-agents)** from agents' chat replies open the Issue in tern-kata.
 
 **Board Page** ([details](#pages-and-the-board-page)): `2` or `b` in a Project shows its Issues as cards in Lanes, one per triage label, with No lane on the left and recently closed Issues in Done on the right. `<` and `>` move a card to the next Lane by swapping its label in kata. A card shows its priority, its most pressing date and a Blocked marker when an open Issue blocks it; selecting one tags its related cards (`parent`, `blocks this`) and lists its Relationships.
@@ -109,7 +110,7 @@ In a repo with a `.kata.toml`, write kata ticket references in chat replies as `
 The repo ships two skills for coding agents:
 
 - `kata`: the kata CLI, for finding, creating, claiming, commenting on, linking and closing Issues, and coordinating subagents through them.
-- `tern-kata`: reading an Issue's [Attachments](#attachments), attaching files with `tern-kata attach`, and making Issues recur with [`tern-kata recur`](#recurring-issues-from-a-shell).
+- `tern-kata`: reading an Issue's [Attachments](#attachments), attaching files with `tern-kata attach`, making Issues recur with [`tern-kata recur`](#recurring-issues-from-a-shell), and running agent jobs now and checking the [worker](#scheduled-agent-runs-the-worker).
 
 Install them for the agents on this machine with the [skills](https://github.com/vercel-labs/skills) CLI, which asks which skills and which agents. It needs Node.js; with only Bun installed, use `bunx` in place of `npx`:
 
@@ -153,6 +154,56 @@ tern-kata recur <ref> --stop                                  # existing Occurre
 ```
 
 Flags: `--frequency daily|weekly|monthly|yearly`, `--every N`, `--on mon,thu`, `--day 15|last|"2nd tue"`, `--month 1-12`, `--until DATE` or `--count N`, `--start DATE`, `--zone <IANA>`. The start date defaults to the Issue's scheduled date or today, the zone to this machine's IANA zone or UTC. Refs, `--as` and the Binding rule are those of `attach`; success prints one line and a failure prints the reason on stderr and exits 1. Invalid input is refused with the card's message and nothing is sent; a schedule changed by someone else while the command ran is not overwritten but printed, and the command exits 1.
+
+## Scheduled agent runs (the worker)
+
+kata stores jobs that run an agent prompt on a schedule, and the evidence of each run, but runs none of them. `tern-kata worker` is the adapter that does, on your machine, with no Tern tab or window open: it runs prompt jobs through [omp](https://github.com/can1357/oh-my-pi) headless in the job's checkout with the job's agent profile, creates each run's Issue (or comments on the job's existing one), and records every run in kata as running, then succeeded or failed with a summary and token counts. It never runs native jobs (a recurring child kata's daemon delivers) and never sends a prompt twice: a run whose outcome is uncertain after a crash is held. Needs kata v0.19.0 or newer and `omp` on `PATH`.
+
+> **Trust.** Anyone who can write jobs in a Project you list in `worker.toml` can run prompts and commands on this machine, as your user, with your files and credentials, and the agent runs unattended (`--approval-mode yolo`) in the checkout the job names. There are no command allowlists and no sandbox. List only Projects whose writers you trust, and keep secrets out of the checkouts a job can name.
+
+**Setup.** Create `worker.toml` in tern-kata's config folder (`~/.config/tern-kata/worker.toml` on Linux, beside `lanes.toml`):
+
+```toml
+executor = "laptop"            # required: a unique, stable name for this machine's worker
+actor    = "dangerboi"         # optional: author of runs and Issues; default $KATA_AUTHOR, $USER, git user.name
+
+[limits]                       # all optional
+max_active_runs = 4            # across all Projects; unset = each Project's capacity only
+default_timeout = "2h"         # a job's timeout_seconds overrides it, up to max_timeout
+max_timeout     = "8h"
+
+[[projects]]
+name      = "tern-kata"        # a kata Project; it is trusted
+capacity  = 1                  # runs at once; default 1
+checkouts = ["tern-kata"]      # optional allowlist of checkout keys; default all
+profiles  = ["default"]        # optional allowlist of profile names; default all
+
+[checkouts]                    # a job's checkout_key -> absolute directory
+tern-kata = "/home/me/Code/tern-kata"
+
+[profiles.default]             # a job's options.profile (default "default"); this one is required
+command  = "omp"
+model    = "anthropic/claude-sonnet-5-5"
+thinking = "medium"
+args     = []                  # extra arguments, e.g. ["--profile", "worker"] to isolate omp's own state
+
+[secrets]                      # a job's secret_refs name -> where the value lives; never a literal
+github-review = { file = "~/.config/tern-kata/github-review" }   # a private (0600) regular file
+# token = { env = "GITHUB_TOKEN" }
+```
+
+The file is decoded strictly (an unknown key is an error) and read once at start. It holds no kata address or credential: the worker finds the daemon the way the Pane does (`KATA_SERVER`, `.kata.local.toml` in its working directory, then the default local daemon) and refuses a Project whose uid, actor or executor differs from what it saw at first start (`state/projects/<uid>/pin.json`).
+
+```sh
+tern-kata worker doctor     # checks the file, checkouts, commands, secrets, kata and each Project's lease; says how to fix them
+tern-kata worker            # runs in the foreground; ctrl+c stops it
+tern-kata worker status     # from another shell: what it serves, runs and refuses
+tern-kata run <job-uid>     # run an adapter prompt job now
+```
+
+State lives in `$XDG_STATE_HOME/tern-kata` (else `~/.local/state/tern-kata`): `worker.lock` (a second worker on the machine is refused), the control socket, each run's journal (`runs/<run uid>/run.json` with its prompt, session and output) and the pins. Across machines, the worker holds a lease for each Project in the Project's own kata metadata (`tern_kata.lease`, renewed every 3 minutes, expiring after 10): a Project whose lease another worker holds admits nothing here and `worker status` says which worker owns it; `tern-kata worker --takeover` moves it on purpose. Keeping the worker alive across logins is up to you for now (a systemd user unit or similar); a plugin host half that starts it is planned.
+
+The agent is told its Issue and how to leave a record: comment what it did, close the Issue with evidence when the work is verified. When it exits without closing, the worker comments its final message and labels the Issue `needs-review`. Exit status 0 after a finished turn is `succeeded`, anything else `failed`; a run over its timeout is stopped and failed as "timed out". A run whose prompt may have reached the agent when the worker stopped is held (`unknown` in kata, with the reason first in its summary), never repeated. Jobs this version does not run: workflows, notify jobs, and scheduled triggers (only `run` starts a run so far); `worker status` and `run` say so.
 
 ## Pages and the Board Page
 
