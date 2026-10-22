@@ -105,6 +105,9 @@ func (t RecurTarget) Terms(flags map[string]string) (RecurrenceTerms, error) {
 		issue.ScheduledOnDate = &t.ScheduledOnDate
 	}
 	if v, ok := flags["start"]; ok {
+		if _, err := time.Parse(time.DateOnly, strings.TrimSpace(v)); err != nil {
+			return RecurrenceTerms{}, errStartDate
+		}
 		issue.ScheduledOnDate = &v
 	}
 	f := newRecurrenceForm(Model{Calendar: NewPaneCalendar(t.Today, zone, "")}, issue)

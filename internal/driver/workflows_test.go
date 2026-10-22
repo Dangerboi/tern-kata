@@ -339,8 +339,10 @@ func TestAFailedReadOfTheWorkflowsShowsAsItsOwnLineAboveTheHeldRows(t *testing.T
 	}
 	failed := step(t, out.State, model.WorkflowsLoaded{ProjectUID: "p", Err: errText("kata server not responding")}).State
 	mustShow(t, failed, "failed read", "kata server not responding", reviewFlow().Name, nightlyFlow().Name)
-	line := slices.IndexFunc(wireNodes(t, view.Render(failed.Model, now)), func(n tern.WireNode) bool { return strings.HasSuffix(n.ID, ".names.error") })
-	if line < 0 {
-		t.Error("the read error is not its own line above the list")
+	nodes := wireNodes(t, view.Render(failed.Model, now))
+	line := slices.IndexFunc(nodes, func(n tern.WireNode) bool { return strings.HasSuffix(n.ID, ".names.error") })
+	rows := slices.IndexFunc(nodes, func(n tern.WireNode) bool { return n.ID == view.WorkflowListID })
+	if line < 0 || rows < 0 || line > rows {
+		t.Errorf("the read error (node %d) is not its own line above the held rows (node %d)", line, rows)
 	}
 }

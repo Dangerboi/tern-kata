@@ -3,7 +3,9 @@ package data
 import (
 	"context"
 	"errors"
+	"net/http"
 
+	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -56,18 +58,66 @@ func (c *Client) ShowRun(ctx context.Context, cmd model.ShowRun) (model.RunShown
 	if response.JSON200 == nil {
 		return model.RunShown{}, errors.New("kata daemon returned no Run")
 	}
-	names, err := c.readRunNames(ctx, cmd.ProjectID)
+	names, err := c.readOneRunNames(ctx, cmd.ProjectID, response.JSON200.Run)
 	if err != nil {
 		return model.RunShown{}, err
 	}
 	return model.RunShown{UID: cmd.UID, Run: names.translate(response.JSON200.Run)}, nil
 }
 
+// readOneRunNames reads only the names one Run holds: its Issue (deleted or not), its job and its workflow, one request each.
+// What kata no longer answers for stays unnamed.
+func (c *Client) readOneRunNames(ctx context.Context, projectID int64, wire g.CronRun) (runNames, error) {
+	names := runNames{jobs: map[string]string{}, workflows: map[string]string{}, issues: map[string]model.Run{}}
+	run := translateRun(wire)
+	if run.JobUID != "" {
+		response, err := c.ShowCronJobWithResponse(ctx, &g.ShowCronJobRequestOptions{PathParams: &g.ShowCronJobPath{ProjectID: projectID, CronUID: run.JobUID}})
+		switch {
+		case client.StatusCode(err) == http.StatusNotFound:
+		case err != nil:
+			return names, daemonError(err)
+		case response.JSON200 == nil:
+			return names, errors.New("kata daemon returned no Cron job")
+		default:
+			names.jobs[run.JobUID] = response.JSON200.Job.Name
+		}
+	}
+	if run.WorkflowUID != "" {
+		response, err := c.ShowCronWorkflowWithResponse(ctx, &g.ShowCronWorkflowRequestOptions{PathParams: &g.ShowCronWorkflowPath{ProjectID: projectID, CronUID: run.WorkflowUID}})
+		switch {
+		case client.StatusCode(err) == http.StatusNotFound:
+		case err != nil:
+			return names, daemonError(err)
+		case response.JSON200 == nil:
+			return names, errors.New("kata daemon returned no workflow")
+		default:
+			names.workflows[run.WorkflowUID] = response.JSON200.Workflow.Name
+		}
+	}
+	if run.IssueUID != "" {
+		deleted := true
+		response, err := c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{
+			PathParams: &g.ShowIssuePath{ProjectID: projectID, Ref: run.IssueUID},
+			Query:      &g.ShowIssueQuery{IncludeDeleted: &deleted},
+		})
+		switch {
+		case client.StatusCode(err) == http.StatusNotFound:
+		case err != nil:
+			return names, daemonError(err)
+		case response.JSON200 == nil:
+			return names, errors.New("kata daemon returned no Issue")
+		default:
+			names.issues[run.IssueUID] = model.Run{IssueShortID: response.JSON200.Issue.ShortID, IssueTitle: response.JSON200.Issue.Title}
+		}
+	}
+	return names, nil
+}
+
 // runsPageSize is the most Runs kata answers in one page.
 const runsPageSize = 100
 
 // runNames resolves the uids a Run holds to the names a row shows: the job's, the workflow's and the Issue's short id and title.
-// Each kind is read once for the Project, however many Runs there are. What kata does not list stays unnamed: a deleted Issue then
+// ListRuns reads each kind once for the Project, however many Runs there are. What kata does not list stays unnamed: a deleted Issue then
 // shows by its uid.
 type runNames struct {
 	jobs      map[string]string

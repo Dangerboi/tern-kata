@@ -61,6 +61,7 @@ func TestInvalidScheduleFlagsAreRefusedWithTheCardsMessagesAndNothingIsSent(t *t
 		{[]string{"--frequency", "monthly", "--day", "32"}, "Day must be between 1 and 31."},
 		{[]string{"--frequency", "daily", "--count", "0"}, "Occurrences must be a whole number, 1 or more."},
 		{[]string{"--frequency", "daily", "--start", "2026-11-02", "--until", "2026-11-01"}, "End date must not be before the start date."},
+		{[]string{"--frequency", "daily", "--start", ""}, "Start date must be"},
 		{[]string{"--frequency", "daily", "--zone", "Mars/Base"}, `Unknown time zone "Mars/Base".`},
 		{[]string{"--frequency", "daily", "--until", "2027-01-01", "--count", "2"}, "Give --until or --count, not both."},
 		{[]string{"--every", "2"}, "Give --frequency"},
