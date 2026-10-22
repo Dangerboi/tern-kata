@@ -35,6 +35,9 @@ type SaveJobCmd struct {
 	// ParentRef names the Issue a new native job hangs from, by short id or uid; the Daemon gateway resolves it to the full uid
 	// that Definition.Issue.ParentUID takes. Empty on a replace, which keeps the parent.
 	ParentRef string
+	// IssueRef names the Issue an Issue-date trigger or an existing-Issue policy points at; the Daemon gateway resolves it to the
+	// uid that Definition.Trigger.IssueUID and Definition.Issue.UID take.
+	IssueRef string
 }
 
 func (SaveJobCmd) cmd() {}

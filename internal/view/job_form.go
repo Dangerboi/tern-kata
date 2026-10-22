@@ -56,9 +56,23 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 				labels[i] = c.Label
 			}
 			children = append(children, choiceField(field.Name, tone, model.JobPrompt(field.Name), prompt, labels, func(i int) bool { return choices[i].Chosen }, -1))
+			if note := f.WorkflowsNote(); field.Name == model.JobFieldWorkflow && note != "" {
+				children = append(children, ui.Text{Common: ui.Common{Key: "workflow-note", Tone: ui.ToneMuted}, Text: note})
+			}
 			continue
 		}
+		if field.Name == model.JobFieldProfile && f.Worker.Note != "" {
+			children = append(children, ui.Text{Common: ui.Common{Key: "worker-note", Tone: ui.ToneWarning}, Text: "The worker's config could not be read, so profile and checkout are free text: " + f.Worker.Note})
+		}
 		text := f.Text(field.Name)
+		if field.Name == model.JobFieldPrompt {
+			children = append(children, ui.Editor{
+				Common:   ui.Common{Key: string(field.Name), Tone: tone, Aria: model.JobPrompt(field.Name)},
+				Field:    ui.Field{Text: text, Cursor: caretAt(f.Caret, field.Name, text), Mode: "insert", Readonly: f.Saving, Prompt: []ui.Span{{T: prompt}}},
+				MaxLines: 8,
+			})
+			continue
+		}
 		children = append(children, ui.Input{
 			Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: model.JobPrompt(field.Name)},
 			Field:  ui.Field{Text: text, Cursor: caretAt(f.Caret, field.Name, text), Mode: "insert", Readonly: f.Saving, Prompt: []ui.Span{{T: prompt}}},
@@ -84,10 +98,11 @@ func jobPreview(f model.JobFormState, cal model.PaneCalendar, now time.Time) ter
 	if preview.Err != nil {
 		return ui.Text{Common: ui.Common{Key: "preview", Tone: ui.ToneWarning}, Text: "Schedule: not yet; " + preview.Err.Error()}
 	}
-	return ui.Col{Common: ui.Common{Key: "preview"}, Children: ui.Nodes(
-		ui.Text{Common: ui.Common{Key: "words", Tone: ui.ToneInfo}, Text: "Schedule: " + preview.Words},
-		ui.Text{Common: ui.Common{Key: "runs", Tone: ui.ToneMuted}, Text: "Next runs: " + strings.Join(preview.Runs, " · ")},
-	)}
+	lines := []tern.Element{ui.Text{Common: ui.Common{Key: "words", Tone: ui.ToneInfo}, Text: "Schedule: " + preview.Words}}
+	if len(preview.Runs) > 0 {
+		lines = append(lines, ui.Text{Common: ui.Common{Key: "runs", Tone: ui.ToneMuted}, Text: "Next runs: " + strings.Join(preview.Runs, " · ")})
+	}
+	return ui.Col{Common: ui.Common{Key: "preview"}, Children: ui.Nodes(lines...)}
 }
 
 // jobConflict is the card after a save found the job changed: the newer job, the draft kept, and the three ways out.

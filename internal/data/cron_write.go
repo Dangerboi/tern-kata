@@ -24,7 +24,7 @@ const cronConflict = "cron_conflict"
 func (c *Client) SaveJob(ctx context.Context, cmd model.SaveJobCmd) (model.JobWritten, error) {
 	def := cmd.Definition
 	if cmd.ParentRef != "" {
-		parent, err := c.resolveParent(ctx, cmd.ProjectID, cmd.ParentRef)
+		parent, err := c.resolveIssue(ctx, cmd.ProjectID, cmd.ParentRef, "Parent")
 		if err != nil {
 			return model.JobWritten{}, err
 		}
@@ -34,6 +34,21 @@ func (c *Client) SaveJob(ctx context.Context, cmd model.SaveJobCmd) (model.JobWr
 		}
 		policy.ParentUID = parent
 		def.Issue = &policy
+	}
+	if cmd.IssueRef != "" {
+		issue, err := c.resolveIssue(ctx, cmd.ProjectID, cmd.IssueRef, "Target Issue")
+		if err != nil {
+			return model.JobWritten{}, err
+		}
+		def.Trigger.IssueUID = ""
+		if model.DateTrigger(def.Trigger.Kind) {
+			def.Trigger.IssueUID = issue
+		}
+		if def.Issue != nil && def.Issue.Kind == model.IssueExisting {
+			policy := *def.Issue
+			policy.UID = issue
+			def.Issue = &policy
+		}
 	}
 	body := g.PutCronJobBody{Actor: &cmd.Actor, Name: cmd.Name, Definition: wireDefinition(def)}
 	op := model.JobCreated
@@ -132,13 +147,14 @@ func (c *Client) conflictingJob(ctx context.Context, projectID int64, uid string
 	return job, readErr == nil, readErr
 }
 
-// resolveParent is the full uid of the Issue a reference names: a short id with or without its #, or a uid. The Issue must be live.
-func (c *Client) resolveParent(ctx context.Context, projectID int64, ref string) (string, error) {
+// resolveIssue is the full uid of the Issue a reference names: a short id with or without its #, or a uid. The Issue must be
+// live. label names the card's field in the message when there is no such Issue.
+func (c *Client) resolveIssue(ctx context.Context, projectID int64, ref, label string) (string, error) {
 	ref = strings.TrimPrefix(strings.TrimSpace(ref), "#")
 	response, err := c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: projectID, Ref: ref}})
 	switch {
 	case client.StatusCode(err) == http.StatusNotFound:
-		return "", fmt.Errorf("Parent: no Issue %q in this Project.", ref)
+		return "", fmt.Errorf("%s: no Issue %q in this Project.", label, ref)
 	case err != nil:
 		return "", daemonError(err)
 	case response.JSON200 == nil:

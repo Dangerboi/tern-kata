@@ -206,6 +206,10 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m = jobsLoaded(m, msg)
 	case JobWritten:
 		m = jobWritten(m, msg)
+	case WorkerPickersLoaded:
+		m = workerPickersLoaded(m, msg)
+	case JobWorkflowsLoaded:
+		m = jobWorkflowsLoaded(m, msg)
 	case OpenJobMsg:
 		return openJob(m, msg.UID)
 	case JobSelectMsg:

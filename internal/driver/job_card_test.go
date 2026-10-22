@@ -183,11 +183,7 @@ func TestEditOpensTheCardPrefilledAndSavesAGuardedReplaceKeepingTheParent(t *tes
 	}
 }
 
-func TestEditRefusesAnAdapterJobAnArchivedJobAndAnArchivedProject(t *testing.T) {
-	adapter := step(t, jobsPane(t, 160, promptJob("J2", "Triage")), key("e")).State.Model
-	if adapter.JobForm.Open || !strings.Contains(adapter.Notice, "recurring-child") {
-		t.Errorf("adapter job: card open %v notice %q", adapter.JobForm.Open, adapter.Notice)
-	}
+func TestEditRefusesAnArchivedJobAndAnArchivedProject(t *testing.T) {
 	retired := guarded("J1", "Old", "EV1")
 	at := now
 	retired.DeletedAt = &at

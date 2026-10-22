@@ -222,6 +222,7 @@ var cardBindings = []Binding{
 	{Chord: "space", Key: "space", Action: InputSpace, Help: "next choice / space", Mode: ModeJobForm},
 	{Chord: "backspace", Key: "backspace", Action: DeleteInput, Help: "erase", Mode: ModeJobForm},
 	{Chord: "ctrl+u", Key: "ctrl+u", Action: ClearInput, Help: "clear field", Mode: ModeJobForm},
+	{Chord: "enter", Key: "enter", Action: JobNewline, Help: "new line (in the prompt)", Mode: ModeJobForm},
 	{Chord: "o", Key: "o", Action: JobOverwrite, Help: "save over the newer job", Mode: ModeJobConflict, ShowInFooter: true},
 	{Chord: "u", Key: "u", Action: JobTakeNewer, Help: "use the newer job", Mode: ModeJobConflict, ShowInFooter: true},
 	{Chord: "d", Key: "d", Action: JobDiscard, Help: "discard draft", Mode: ModeJobConflict, ShowInFooter: true},

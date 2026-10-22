@@ -82,6 +82,8 @@ func (g *Gateway) Run(ctx context.Context, cmd model.Cmd, messages chan<- model.
 		result = loadLanes(cmd)
 	case model.SaveLanes:
 		result = saveLanes(cmd)
+	case model.LoadWorkerPickers:
+		result = loadWorkerPickers()
 	default:
 		result = g.do(ctx, cmd)
 	}
@@ -263,6 +265,13 @@ func plan(cmd model.Cmd, host string) (request, bool) {
 				return ok(model.WorkflowsLoaded{ProjectUID: cmd.ProjectUID, Workflows: workflows}, err)
 			},
 			func(err error) model.Msg { return model.WorkflowsLoaded{ProjectUID: cmd.ProjectUID, Err: err} }}, true
+	case model.LoadJobWorkflows:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) {
+				workflows, err := c.ListWorkflows(ctx, cmd.ProjectID)
+				return ok(model.JobWorkflowsLoaded{ProjectID: cmd.ProjectID, Workflows: workflows}, err)
+			},
+			func(err error) model.Msg { return model.JobWorkflowsLoaded{ProjectID: cmd.ProjectID, Err: err} }}, true
 	case model.SaveWorkflow:
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.SaveWorkflow(ctx, cmd)) },
