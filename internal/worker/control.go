@@ -12,18 +12,28 @@ import (
 // The control socket (ADR-0004): one JSON request per connection, one JSON reply. It replaces polling of request
 // files; the socket reply is the acknowledgement, sent only after a run's journal is durable (ADR-0002).
 
-// Request is one control request. Ops: "run" (Job: a job uid) and "status".
+// Request is one control request. Ops:
+//
+//	"run"        Job: a job uid; answers Run.
+//	"status"     answers Status, whose Runs carry each run's hold, reason and which verbs would be accepted.
+//	"run-detail" Run: a run uid; answers Detail (status line, hold reason, steps, output tail).
+//	"resume"     Run: a held run's uid, Actor: who asks (optional); answers Transition.
+//	"abandon"    Run: a held run's uid, Actor: who asks (optional); answers Transition.
 type Request struct {
-	Op  string `json:"op"`
-	Job string `json:"job,omitempty"`
+	Op    string `json:"op"`
+	Job   string `json:"job,omitempty"`
+	Run   string `json:"run,omitempty"`
+	Actor string `json:"actor,omitempty"`
 }
 
 // Response answers a Request; Error is set when it was refused, in words for the user.
 type Response struct {
-	OK     bool         `json:"ok"`
-	Error  string       `json:"error,omitempty"`
-	Run    *RunAccepted `json:"run,omitempty"`
-	Status *Status      `json:"status,omitempty"`
+	OK         bool           `json:"ok"`
+	Error      string         `json:"error,omitempty"`
+	Run        *RunAccepted   `json:"run,omitempty"`
+	Status     *Status        `json:"status,omitempty"`
+	Detail     *RunDetail     `json:"detail,omitempty"`
+	Transition *RunTransition `json:"transition,omitempty"`
 }
 
 // ErrNoWorker means nothing answers on the control socket.
@@ -89,6 +99,24 @@ func (w *Worker) handle(ctx context.Context, req Request) Response {
 			return Response{Error: err.Error()}
 		}
 		return Response{OK: true, Run: &accepted}
+	case "run-detail":
+		d, err := w.RunDetail(req.Run)
+		if err != nil {
+			return Response{Error: err.Error()}
+		}
+		return Response{OK: true, Detail: &d}
+	case "resume", "abandon":
+		var t RunTransition
+		var err error
+		if req.Op == "resume" {
+			t, err = w.Resume(ctx, req.Run, req.Actor)
+		} else {
+			t, err = w.Abandon(ctx, req.Run, req.Actor)
+		}
+		if err != nil {
+			return Response{Error: err.Error()}
+		}
+		return Response{OK: true, Transition: &t}
 	}
 	return Response{Error: "unknown request " + req.Op}
 }

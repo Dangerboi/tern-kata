@@ -51,8 +51,14 @@ func (w *Worker) spawn(ps *projectState, uid string) {
 func (w *Worker) retryPending(ps *projectState) {
 	journals, _, _ := w.store.Scan()
 	for _, j := range journals {
-		if j.ProjectUID == ps.project.UID && j.Executor == w.opt.Config.Executor && (j.Phase == PhasePrepared || j.Phase == PhaseAdmitted || j.Phase == PhaseFinished) {
+		if j.ProjectUID != ps.project.UID || j.Executor != w.opt.Config.Executor {
+			continue
+		}
+		switch {
+		case j.Phase == PhasePrepared || j.Phase == PhaseAdmitted || j.Phase == PhaseResuming || j.Phase == PhaseFinished:
 			w.spawn(ps, j.RunUID)
+		case j.Phase == PhaseSettled && !holdsSlot(j):
+			w.release(ps, j.RunUID) // a held run whose process has since gone no longer takes a slot
 		}
 	}
 }
@@ -74,6 +80,8 @@ func (w *Worker) advance(ctx context.Context, ps *projectState, uid string) (err
 		switch j.Phase {
 		case PhasePrepared:
 			err = w.admit(ctx, ps, j)
+		case PhaseResuming:
+			err = w.reopen(ctx, ps, j)
 		case PhaseAdmitted:
 			err = w.launch(ctx, ps, j)
 		case PhaseFinished:
@@ -102,9 +110,12 @@ func (w *Worker) recoverRun(ctx context.Context, ps *projectState, uid string) {
 	case j.Phase == PhaseLaunching:
 		err = w.hold(j, HoldLaunchUnproven, "the worker stopped while starting the agent, so it may have started")
 	case j.Phase == PhaseStarted && j.Exit == nil:
-		if processMayBeAlive(j) {
+		switch {
+		case processMayBeAlive(j):
 			err = w.hold(j, HoldGroupUnproven, fmt.Sprintf("the agent's process group %d is still present", j.Launch.PGID))
-		} else {
+		case w.finishedItsTurn(j):
+			err = w.hold(j, HoldNoReceipt, "the agent finished its turn and its process is gone, but the worker saved no exit status")
+		default:
 			err = w.hold(j, HoldInterrupted, "the worker stopped while the agent ran")
 		}
 	case j.Phase == PhaseStarted:
@@ -303,10 +314,16 @@ func (w *Worker) launch(ctx context.Context, ps *projectState, j *Journal) error
 	if err != nil {
 		return w.hold(j, HoldSecretUnavailable, err.Error())
 	}
-	prompt, err := BuildPrompt(PromptInput{
+	attempt, resumeID := j.attempt(), ""
+	in := PromptInput{
 		Actor: j.Actor, IssueRef: j.Issue.Ref, IssueTitle: j.Issue.Title, IssueBody: j.Issue.Body, ExistingIssue: j.Issue.Existing,
-		JobName: j.JobName, RunUID: j.RunUID, Occurrence: OccurrenceKey(j.Occurrence), Task: j.Prompt,
-	})
+		JobName: j.JobName, RunUID: j.RunUID, Occurrence: OccurrenceKey(j.Occurrence), Task: j.Prompt, Attempt: attempt,
+	}
+	if attempt > 1 && j.Resume != nil {
+		resumeID = j.Resume.SessionID
+		in.Resumed = &ResumeNote{Hold: j.Resume.Hold, Detail: j.Resume.Detail}
+	}
+	prompt, err := BuildPrompt(in)
 	if err != nil {
 		return w.hold(j, HoldInvalidPrompt, err.Error())
 	}
@@ -329,19 +346,23 @@ func (w *Worker) launch(ctx context.Context, ps *projectState, j *Journal) error
 	if err := os.MkdirAll(sessionFolder(runDir), 0o700); err != nil {
 		return w.hold(j, HoldExecutionError, err.Error())
 	}
-	cmd := exec.Command(program, agentArgs(j.Profile, runDir, promptFile, "")...)
+	if attempt > 1 {
+		keepAttemptOutput(runDir, attempt-1)
+	}
+	cmd := exec.Command(program, agentArgs(j.Profile, runDir, promptFile, resumeID)...)
 	cmd.Dir = cwd
 	cmd.Env = childEnv(j.Actor, secrets)
 	cmd.Stdin = nil // /dev/null: omp reads an open stdin to EOF as prompt text
 	cmd.WaitDelay = 5 * time.Second
 	isolate(cmd)
 	parser := &agentParser{onSession: func(id string) {
-		_, _ = w.store.Update(j.RunUID, "session", func(j *Journal) error {
+		_, err := w.store.Update(j.RunUID, "session", func(j *Journal) error {
 			if j.Launch != nil {
 				j.Launch.SessionID = id
 			}
 			return nil
 		})
+		w.noteHook(err)
 	}}
 	stdout := &lineSink{parser: parser, file: openCapped(filepath.Join(runDir, "output.jsonl"), 8<<20)}
 	stderr := newTailSink(filepath.Join(runDir, "stderr.log"))
@@ -351,7 +372,11 @@ func (w *Worker) launch(ctx context.Context, ps *projectState, j *Journal) error
 
 	runtime.LockOSThread() // the parent-death signal follows the thread that started the child
 	defer runtime.UnlockOSThread()
-	if _, err := w.store.Update(j.RunUID, "launching", func(j *Journal) error { j.Phase = PhaseLaunching; return nil }); err != nil {
+	if _, err := w.store.Update(j.RunUID, "launching", func(j *Journal) error {
+		j.Phase = PhaseLaunching
+		j.Launch = nil // a record of an earlier attempt must not stand for this one's process
+		return nil
+	}); err != nil {
 		return err
 	}
 	if err := cmd.Start(); err != nil {
@@ -360,7 +385,7 @@ func (w *Worker) launch(ctx context.Context, ps *projectState, j *Journal) error
 	pid := cmd.Process.Pid
 	if _, err := w.store.Update(j.RunUID, "started", func(j *Journal) error {
 		j.Phase = PhaseStarted
-		j.Launch = &LaunchRecord{PID: pid, PGID: pid, StartTicks: startTicks(pid), SessionDir: sessionFolder(runDir), At: w.clock.Now().UTC()}
+		j.Launch = &LaunchRecord{PID: pid, PGID: pid, StartTicks: startTicks(pid), SessionDir: sessionFolder(runDir), SessionID: resumeID, At: w.clock.Now().UTC()}
 		return nil
 	}); err != nil {
 		signalGroup(pid, true)
@@ -431,6 +456,9 @@ func (w *Worker) conclude(ctx context.Context, j *Journal) error {
 			return w.hold(j, HoldGroupUnproven, fmt.Sprintf("process group %d is still present after the agent exited", j.Launch.PGID))
 		}
 	}
+	if hold, detail := providerHold(j); hold != "" {
+		return w.hold(j, hold, detail)
+	}
 	outcome := classify(j)
 	_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
 		outcome.At = w.clock.Now().UTC()
@@ -438,6 +466,16 @@ func (w *Worker) conclude(ctx context.Context, j *Journal) error {
 		return nil
 	})
 	return err
+}
+
+// commentKey is the idempotency key of the run's comment of the given kind. A resumed attempt gets its own, so its
+// comment is not swallowed as a replay of the first attempt's.
+func (j *Journal) commentKey(kind string) string {
+	key := "tern-kata:" + j.RunUID + ":comment:" + kind
+	if a := j.attempt(); a > 1 {
+		key += fmt.Sprintf(":a%d", a)
+	}
+	return key
 }
 
 // classify is the rule of ADR-0009: exit 0 and a terminal agent_end whose last assistant message stopped normally is
@@ -493,15 +531,17 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 		switch j.Outcome.Status {
 		case StatusSucceeded:
 			if j.Issue.Existing || issueOpen {
-				intents = append(intents, Intent{Kind: IntentComment, Key: "tern-kata:" + j.RunUID + ":comment:succeeded", Text: j.Outcome.Summary})
+				intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("succeeded"), Text: j.Outcome.Summary})
 				if !j.Issue.Existing {
 					intents = append(intents, Intent{Kind: IntentLabel, Text: "needs-review"})
 				}
 			}
 		case StatusFailed:
-			intents = append(intents, Intent{Kind: IntentComment, Key: "tern-kata:" + j.RunUID + ":comment:failed", Text: "The run failed: " + j.Outcome.Summary})
+			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("failed"), Text: "The run failed: " + j.Outcome.Summary})
 		case StatusUnknown:
-			intents = append(intents, Intent{Kind: IntentComment, Key: "tern-kata:" + j.RunUID + ":comment:held", Text: "The run is held: " + j.Outcome.Summary})
+			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("held"), Text: "The run is held: " + j.Outcome.Summary + "\n\nResume it with `tern-kata worker resume " + j.RunUID + "` or abandon it with `tern-kata worker abandon " + j.RunUID + "`."})
+		case StatusCancelled:
+			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("cancelled"), Text: "The run was abandoned: " + j.Outcome.Summary})
 		}
 		var err error
 		if j, err = w.store.Update(j.RunUID, "intents-planned", func(j *Journal) error { j.Intents = intents; return nil }); err != nil {
@@ -557,7 +597,7 @@ func (w *Worker) send(ctx context.Context, j *Journal, it Intent) error {
 			return nil
 		}
 		obs.ExpectedRevision = current.Revision
-		if current.Status == StatusRunning {
+		if current.Status == StatusRunning || current.Status == StatusUnknown { // unknown is this worker's own earlier hold
 			_, _, err = w.opt.Kata.Observe(ctx, j.ProjectID, obs)
 		}
 	}

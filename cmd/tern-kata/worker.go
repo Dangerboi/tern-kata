@@ -53,10 +53,32 @@ func runWorkerCommand(ctx context.Context, plan LaunchPlan, env workerEnv, out i
 		}
 		_, err = fmt.Fprint(out, resp.Status.String())
 		return err
+	case len(plan.Operands) == 2:
+		return settleHeldRun(ctx, plan, env, out)
 	case len(plan.Operands) == 1:
 		return runDoctor(ctx, plan, env, out)
 	}
 	return runForeground(ctx, plan, env, out)
+}
+
+// settleHeldRun is `worker resume <run-uid>` or `worker abandon <run-uid>`: it asks the running worker to continue or
+// give up a held run and prints what the worker saved.
+func settleHeldRun(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Writer) error {
+	verb, uid := plan.Operands[0], plan.Operands[1]
+	resp, err := worker.Ask(ctx, env.Dirs, worker.Request{Op: verb, Run: uid, Actor: plan.Actor})
+	if err != nil {
+		return subcommandError{err}
+	}
+	if !resp.OK {
+		return subcommandError{errors.New(resp.Error)}
+	}
+	t := resp.Transition
+	if verb == "resume" {
+		_, err = fmt.Fprintf(out, "Run %s of job %q in Project %s resumed: the worker continues its omp session; follow it with `tern-kata worker status`.\n", t.RunUID, t.Job, t.Project)
+		return err
+	}
+	_, err = fmt.Fprintf(out, "Run %s of job %q in Project %s abandoned: kata will record it cancelled and its slot is free.\n", t.RunUID, t.Job, t.Project)
+	return err
 }
 
 // runJobNow asks the running worker for a manual occurrence and prints the run's uid once the worker has saved it.
