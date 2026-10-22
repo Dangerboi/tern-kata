@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"time"
 
 	"go.kenn.io/kata/pkg/client"
@@ -39,7 +40,79 @@ func (c *Client) ListJobs(ctx context.Context, cmd model.LoadJobs) (model.JobsLo
 			return model.JobsLoaded{}, err
 		}
 	}
-	return model.JobsLoaded{Request: cmd.Request, Jobs: jobs}, nil
+	loaded := model.JobsLoaded{Request: cmd.Request, Jobs: jobs}
+	if cmd.Activity {
+		if loaded.Activity, err = c.jobActivity(ctx, cmd.ProjectID, jobs, &parents); err != nil {
+			return model.JobsLoaded{}, err
+		}
+	}
+	return loaded, nil
+}
+
+// jobActivityPages bounds how many pages of the Project's Runs are read to find each adapter job's recent runs.
+const jobActivityPages = 5
+
+// jobActivity is what each job has done lately: for a native job the children its parent holds that carry its uid in their
+// cron.occurrence metadata, newest first; for the others the newest Runs of the Project, read page by page until every live
+// adapter job has its share or kata has no more.
+func (c *Client) jobActivity(ctx context.Context, projectID int64, jobs []model.CronJob, parents *parentReader) (map[string]model.JobActivity, error) {
+	activity := map[string]model.JobActivity{}
+	waiting := 0
+	for _, job := range jobs {
+		switch {
+		case job.Native():
+			if children := parents.read[job.Definition.Issue.ParentUID].children[job.UID]; len(children) > 0 {
+				activity[job.UID] = model.JobActivity{Children: children[:min(len(children), model.JobActivityShown)]}
+			}
+		case !job.Archived():
+			waiting++
+		}
+	}
+	if waiting == 0 {
+		return activity, nil
+	}
+	before := ""
+	for page := 0; page < jobActivityPages; page++ {
+		limit := int64(runsPageSize)
+		query := &g.ListCronRunsQuery{Limit: &limit}
+		if before != "" {
+			query.BeforeUID = &before
+		}
+		response, err := c.ListCronRunsWithResponse(ctx, &g.ListCronRunsRequestOptions{PathParams: &g.ListCronRunsPath{ProjectID: projectID}, Query: query})
+		if err != nil {
+			return nil, daemonError(err)
+		}
+		if response.JSON200 == nil {
+			return nil, errors.New("kata daemon returned no Runs")
+		}
+		for _, wire := range response.JSON200.Runs {
+			if run := translateRun(wire); run.JobUID != "" && !isNativeJob(jobs, run.JobUID) {
+				if held := activity[run.JobUID]; len(held.Runs) < model.JobActivityShown {
+					held.Runs = append(held.Runs, run)
+					activity[run.JobUID] = held
+				}
+			}
+		}
+		if response.JSON200.NextBeforeUID == nil {
+			break
+		}
+		before = *response.JSON200.NextBeforeUID
+		if satisfied(jobs, activity) {
+			break
+		}
+	}
+	return activity, nil
+}
+
+func isNativeJob(jobs []model.CronJob, uid string) bool {
+	return slices.ContainsFunc(jobs, func(j model.CronJob) bool { return j.UID == uid && j.Native() })
+}
+
+// satisfied says every live adapter job has its share of runs.
+func satisfied(jobs []model.CronJob, activity map[string]model.JobActivity) bool {
+	return !slices.ContainsFunc(jobs, func(j model.CronJob) bool {
+		return !j.Native() && !j.Archived() && len(activity[j.UID].Runs) < model.JobActivityShown
+	})
 }
 
 // ShowJob reads one Cron job, archived or not, with its parent when it is native.
@@ -104,6 +177,8 @@ func (p *parentReader) translate(ctx context.Context, wire g.CronJob) (model.Cro
 type readParent struct {
 	parent   model.CronJobParent
 	metadata map[string]any
+	// children are the parent's children that a Cron job made, newest first, by the job's uid.
+	children map[string][]model.CronChild
 }
 
 func (p *parentReader) parent(ctx context.Context, uid string) (readParent, error) {
@@ -129,10 +204,29 @@ func (p *parentReader) parent(ctx context.Context, uid string) (readParent, erro
 		read = readParent{
 			parent:   model.CronJobParent{UID: issue.UID, ShortID: issue.ShortID, Title: issue.Title, Status: issue.Status, Deleted: issue.DeletedAt != nil},
 			metadata: issue.Metadata,
+			children: cronChildren(response.JSON200.Children),
 		}
 	}
 	p.read[uid] = read
 	return read, nil
+}
+
+// cronChildren groups the children a Cron job made by that job, newest first by the run each was made for.
+func cronChildren(wire []g.IssueOut) map[string][]model.CronChild {
+	byJob := map[string][]model.CronChild{}
+	for _, child := range wire {
+		occurrence := translateOccurrence(child.Metadata)
+		if occurrence == nil || child.DeletedAt != nil {
+			continue
+		}
+		byJob[occurrence.JobUID] = append(byJob[occurrence.JobUID], model.CronChild{
+			UID: child.UID, ShortID: child.ShortID, Title: child.Title, Status: child.Status, ScheduledAt: occurrence.ScheduledAt, CreatedAt: child.CreatedAt,
+		})
+	}
+	for _, children := range byJob {
+		slices.SortStableFunc(children, func(a, b model.CronChild) int { return b.When().Compare(a.When()) })
+	}
+	return byJob
 }
 
 // translateJob is kata's Cron job as the model holds it, without the parent.

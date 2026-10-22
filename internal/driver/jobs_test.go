@@ -361,3 +361,32 @@ func TestJobsPageDoesNotRevealACardAReadJustAdded(t *testing.T) {
 	}
 	wantOps(t, answered)
 }
+
+func TestJobsPageRowsShowTheLatestRunOrChildAndTheInspectorTheRecentOnes(t *testing.T) {
+	out := step(t, projectPane(t, 160, boardCard("parent-a")), key("3"))
+	if load, ok := askedJobs(out.Cmds); !ok || !load.Activity {
+		t.Fatalf("the Jobs Page asked %#v, want the jobs read with what each has done lately", out.Cmds)
+	}
+	failed := finishedRun("R2")
+	failed.Status, failed.Message = model.RunFailed, "step build failed"
+	older := finishedRun("R1")
+	load, _ := askedJobs(out.Cmds)
+	s := step(t, out.State, model.JobsLoaded{Request: load.Request,
+		Jobs: []model.CronJob{recurringJob("N1", "Hourly", jobParent("open", false)), promptJob("J3", "Idle"), promptJob("J1", "Triage")},
+		Activity: map[string]model.JobActivity{
+			"J1": {Runs: []model.Run{failed, older}},
+			"N1": {Children: []model.CronChild{
+				{UID: "c2", ShortID: "ab12", Title: "Tick — 2026-10-08T11:00:00Z", Status: "open", ScheduledAt: now.Add(-1 * time.Hour)},
+				{UID: "c1", ShortID: "cd34", Title: "Tick — 2026-10-08T10:00:00Z", Status: "closed", ScheduledAt: now.Add(-2 * time.Hour)},
+			}},
+		}}).State
+	wantText(t, "adapter row", jobCardText(t, s, "J1"), "last run failed", "step build failed")
+	wantText(t, "native row", jobCardText(t, s, "N1"), "last child #ab12", "open")
+	if strings.Contains(jobCardText(t, s, "J3"), "last") {
+		t.Errorf("a job that did nothing yet draws a last line: %s", jobCardText(t, s, "J3"))
+	}
+
+	wantText(t, "native inspector", inspectorText(t, s), "Recent children", "#ab12", "#cd34", "closed")
+	adapter := feed(t, s, key("j"), key("j")).State
+	wantText(t, "adapter inspector", inspectorText(t, adapter), "Recent runs", "failed", "step build failed", "succeeded", "triaged 4 items")
+}

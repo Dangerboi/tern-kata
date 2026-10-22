@@ -146,3 +146,33 @@ func TestGatewayShowsOneRunByUID(t *testing.T) {
 		t.Fatalf("shown %+v", shown)
 	}
 }
+
+func TestGatewayJobsReadWithActivityCarryEachAdapterJobsNewestRuns(t *testing.T) {
+	f := newJobsFixture(t)
+	busy := f.adapter(t, "Busy")
+	quiet := f.adapter(t, "Quiet")
+	// The quiet job's only run is older than a whole page of the busy one's: following the pages finds it.
+	f.observe(t, g.ObserveCronRunBody{JobUID: &quiet.UID, DefinitionEventUID: &quiet.DefinitionEventUID, Status: "failed", Summary: g.Summary{Version: 1}})
+	var uids []string
+	for i := range runsPageSize + 3 {
+		uids = append(uids, f.observe(t, g.ObserveCronRunBody{
+			JobUID: &busy.UID, DefinitionEventUID: &busy.DefinitionEventUID, Status: "succeeded", Summary: g.Summary{Version: 1, Message: new(fmt.Sprint("run ", i))},
+		}))
+	}
+
+	plain := f.list(t, false)
+	if plain.Activity != nil {
+		t.Fatalf("a read that did not ask for activity came with %+v", plain.Activity)
+	}
+	loaded := as[model.JobsLoaded](t, run(t, f.gateway, model.LoadJobs{Workspace: f.workspace, ProjectID: f.demo.ID, Request: 7, Activity: true}))
+	if loaded.Err != nil {
+		t.Fatal(loaded.Err)
+	}
+	got := loaded.Activity[busy.UID].Runs
+	if len(got) != model.JobActivityShown || got[0].UID != uids[len(uids)-1] || got[1].UID != uids[len(uids)-2] {
+		t.Fatalf("busy job's runs %d, first %q, want its %d newest", len(got), got[0].UID, model.JobActivityShown)
+	}
+	if runs := loaded.Activity[quiet.UID].Runs; len(runs) != 1 || runs[0].Status != model.RunFailed {
+		t.Fatalf("quiet job's runs %+v, want its failed run", runs)
+	}
+}
