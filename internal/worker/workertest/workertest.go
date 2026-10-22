@@ -12,6 +12,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -27,6 +30,17 @@ type Daemon struct {
 	Client *client.Client
 	Kata   *worker.Kata
 	Server *httptest.Server
+
+	mu       sync.Mutex
+	rules    []*rule
+	requests []string
+	inflight int
+	peak     int
+}
+
+type rule struct {
+	match  func(*http.Request) bool
+	handle func(w http.ResponseWriter, r *http.Request, next http.Handler)
 }
 
 // StartKata starts kata and points kata's discovery variables away from the real daemon. Its ping reports 0.19.0,
@@ -45,20 +59,86 @@ func StartKata(t *testing.T) *Daemon {
 	}
 	t.Cleanup(func() { _ = service.Close() })
 	handler := service.Handler()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	d := &Daemon{}
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/ping" {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "service": "kata", "version": "0.19.0"})
 			return
 		}
 		handler.ServeHTTP(w, r)
+	})
+	d.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		stream := strings.Contains(r.URL.Path, "/events")
+		d.mu.Lock()
+		d.requests = append(d.requests, r.Method+" "+r.URL.Path)
+		var intercepted func(http.ResponseWriter, *http.Request, http.Handler)
+		for _, rule := range d.rules {
+			if rule.match(r) {
+				intercepted = rule.handle
+				break
+			}
+		}
+		if !stream {
+			d.inflight++
+			d.peak = max(d.peak, d.inflight)
+		}
+		d.mu.Unlock()
+		if !stream {
+			defer func() {
+				d.mu.Lock()
+				d.inflight--
+				d.mu.Unlock()
+			}()
+		}
+		if intercepted != nil {
+			intercepted(w, r, next)
+			return
+		}
+		next.ServeHTTP(w, r)
 	}))
-	t.Cleanup(server.Close)
-	c, err := client.New(server.URL)
+	t.Cleanup(d.Server.Close)
+	c, err := client.New(d.Server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &Daemon{Client: c, Kata: worker.NewKata(c), Server: server}
+	d.Client, d.Kata = c, worker.NewKata(c)
+	return d
+}
+
+// Intercept answers every request match accepts with handle instead of kata, until the returned function is called;
+// handle may pass the request on through next. A handler that waits should also watch r.Context(), which ends when
+// the caller gives up.
+func (d *Daemon) Intercept(match func(*http.Request) bool, handle func(w http.ResponseWriter, r *http.Request, next http.Handler)) (remove func()) {
+	r := &rule{match: match, handle: handle}
+	d.mu.Lock()
+	d.rules = append(d.rules, r)
+	d.mu.Unlock()
+	return func() {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		d.rules = slices.DeleteFunc(d.rules, func(x *rule) bool { return x == r })
+	}
+}
+
+// Requests counts the requests so far whose method and path ("GET /api/v1/projects") contain text.
+func (d *Daemon) Requests(text string) int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	n := 0
+	for _, r := range d.requests {
+		if strings.Contains(r, text) {
+			n++
+		}
+	}
+	return n
+}
+
+// PeakInFlight is the most requests (event streams aside) that were being answered at once.
+func (d *Daemon) PeakInFlight() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.peak
 }
 
 // Project creates (or finds) a Project.
@@ -418,4 +498,23 @@ func (d *Daemon) CreateWorkflow(t *testing.T, p worker.Project, name string, ste
 		t.Fatal(err)
 	}
 	return wf
+}
+
+// EditIssue changes an Issue's title and owner as a person would; an empty argument leaves that field alone.
+func (d *Daemon) EditIssue(t *testing.T, p worker.Project, issueUID, title, owner string) {
+	t.Helper()
+	actor := "tester"
+	body := &g.EditIssueBody{Actor: &actor}
+	if title != "" {
+		body.Title = &title
+	}
+	if owner != "" {
+		body.Owner = &owner
+	}
+	r, err := d.Client.EditIssueWithResponse(context.Background(), &g.EditIssueRequestOptions{
+		PathParams: &g.EditIssuePath{ProjectID: strconv.FormatInt(p.ID, 10), Ref: issueUID}, Body: body,
+	})
+	if err != nil || r.JSON200 == nil {
+		t.Fatalf("editing Issue %s: %v", issueUID, err)
+	}
 }

@@ -96,6 +96,8 @@ type JobRow struct {
 	Schedule string
 	Profile  string
 	Next     string
+	// Unsupported is why this machine's worker sets the job aside, empty when it runs it or serves another Project.
+	Unsupported string
 }
 
 // visibleJobs are the jobs the list shows.
@@ -112,7 +114,7 @@ func (m Model) JobRows(now time.Time) []JobRow {
 	rows := make([]JobRow, len(jobs))
 	for i, job := range jobs {
 		pause := job.Pause(m.Jobs.ProjectArchived)
-		row := JobRow{Job: job, Pause: pause, State: pause.StateText(), Kind: job.Kind(), Schedule: job.Definition.Trigger.Words(), Profile: job.Definition.Profile}
+		row := JobRow{Job: job, Pause: pause, State: pause.StateText(), Kind: job.Kind(), Schedule: job.Definition.Trigger.Words(), Profile: job.Definition.Profile, Unsupported: m.workerUnsupported(job.UID)}
 		if next, ok := job.NextRun(now, m.Jobs.ProjectArchived); ok {
 			row.Next = m.Calendar.Read(next, now)
 		}
@@ -165,6 +167,7 @@ func (m Model) JobFacts(now time.Time) []JobFact {
 	pause := job.Pause(m.Jobs.ProjectArchived)
 	add("Name", job.Name)
 	add("State", pause.StateText())
+	add("Set aside", m.workerUnsupported(job.UID))
 	add("Kind", job.Kind())
 	add("Schedule", t.Words())
 	if next, ok := job.NextRun(now, m.Jobs.ProjectArchived); ok {

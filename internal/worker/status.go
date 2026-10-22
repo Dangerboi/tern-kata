@@ -41,6 +41,9 @@ type ProjectStatus struct {
 	Scheduled int
 	Queued    int
 	NextRun   time.Time
+	// Aside lists the jobs the worker sets aside with the reason of each; Warnings the per-run Issue jobs that create
+	// many Issues a day. Both are as of the last definition refresh and stop no other job.
+	Aside, Warnings []JobNote
 }
 
 // RunStatus is one run of this machine.
@@ -51,6 +54,8 @@ type RunStatus struct {
 	Issue   string
 	State   string // running, resuming, held: <reason>, succeeded, failed, cancelled, ...
 	Pending string // what is still unreported
+	// Inspect names each report kata holds something newer than, so it was not sent: the run needs a person to look.
+	Inspect []string
 	// Attempt is the current attempt of the run's prompt step, 1 for a run never resumed.
 	Attempt int
 	// Held is true while the run waits for the user; Hold is its reason (a Hold* constant) and Detail what the
@@ -79,6 +84,8 @@ func (w *Worker) Status() Status {
 			p.Why = "not resolved yet"
 		case !ps.lease.Held:
 			p.Why = ps.lease.Why()
+		case ps.route.err != "":
+			p.Why = "the kata route is not confirmed: " + ps.route.err
 		default:
 			p.Admitting = true
 		}
@@ -90,6 +97,7 @@ func (w *Worker) Status() Status {
 				p.AdapterJobs++
 			}
 		}
+		p.Aside, p.Warnings = slices.Clone(ps.aside), slices.Clone(ps.warnings)
 		s.Projects = append(s.Projects, p)
 	}
 	w.mu.Unlock()
@@ -103,7 +111,7 @@ func (w *Worker) Status() Status {
 		if j.Executor != w.opt.Config.Executor {
 			continue
 		}
-		if j.Phase == PhaseSettled && !j.Held() {
+		if j.Phase == PhaseSettled && !j.Held() && len(j.Inspections()) == 0 {
 			if settled++; settled > 5 {
 				continue
 			}
@@ -150,6 +158,7 @@ func runStatus(j *Journal) RunStatus {
 		}
 	}
 	r.Pending = strings.Join(pending, ", ")
+	r.Inspect = j.Inspections()
 	return r
 }
 
@@ -192,6 +201,12 @@ func (s Status) String() string {
 		} else {
 			fmt.Fprintf(&b, "Project %s: admits nothing: %s\n", p.Name, p.Why)
 		}
+		for _, n := range p.Aside {
+			fmt.Fprintf(&b, "  Job %q is set aside: %s\n", n.Name, n.Text)
+		}
+		for _, n := range p.Warnings {
+			fmt.Fprintf(&b, "  Job %q %s\n", n.Name, n.Text)
+		}
 	}
 	if len(s.Runs) == 0 {
 		b.WriteString("No runs on this machine yet.\n")
@@ -203,6 +218,9 @@ func (s Status) String() string {
 		}
 		if r.Pending != "" {
 			fmt.Fprintf(&b, "  (not yet reported: %s)", r.Pending)
+		}
+		for _, why := range r.Inspect {
+			b.WriteString("\n    needs inspection: " + why)
 		}
 		b.WriteString("\n")
 		if r.Held {

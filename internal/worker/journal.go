@@ -66,6 +66,9 @@ const (
 	IntentComment IntentKind = "comment"
 	IntentLabel   IntentKind = "label"
 	IntentFinal   IntentKind = "final-observation"
+	// IntentNotify is the inbox request a held run owes the Issue's owner or author (ADR-0005). Its Recipient is read
+	// from the Issue once and saved before the request is sent, so a retry never recomputes it.
+	IntentNotify IntentKind = "notify"
 )
 
 // Intent is one owed kata write, saved with its exact payload before it is sent; a retry reuses it.
@@ -75,6 +78,11 @@ type Intent struct {
 	Text  string     `json:"text,omitempty"`
 	Done  bool       `json:"done,omitempty"`
 	Error string     `json:"error,omitempty"`
+	// Recipient is a notify intent's resolved inbox address, empty until it is resolved.
+	Recipient string `json:"recipient,omitempty"`
+	// Inspect says the write cannot be delivered without a person looking: kata holds something a retry would
+	// overwrite. The run is settled with it marked and `worker status` and `worker doctor` name it (ADR-0006).
+	Inspect string `json:"inspect,omitempty"`
 }
 
 // Journal is run.json: everything the worker needs to continue one Run alone.
@@ -155,6 +163,14 @@ func (j *Journal) attempt() int { return max(j.Attempt, 1) }
 type NotifySpec struct {
 	Recipient string `json:"recipient"`
 	Message   string `json:"message,omitempty"`
+	// Resolved is the request as the worker first worked it out from the Issue; a retry or a restart sends exactly it.
+	Resolved *ResolvedNotice `json:"resolved,omitempty"`
+}
+
+// ResolvedNotice is an inbox request with its recipient and text settled.
+type ResolvedNotice struct {
+	Recipient string `json:"recipient"`
+	Message   string `json:"message"`
 }
 
 // JournalIssue is the run's Issue.
@@ -197,6 +213,17 @@ type Outcome struct {
 
 // Held reports whether the run waits for the user.
 func (j *Journal) Held() bool { return j.Outcome != nil && j.Outcome.Hold != "" }
+
+// Inspections are the reasons the run's reports could not be delivered without a person looking.
+func (j *Journal) Inspections() []string {
+	var out []string
+	for _, it := range j.Intents {
+		if it.Inspect != "" {
+			out = append(out, string(it.Kind)+": "+it.Inspect)
+		}
+	}
+	return out
+}
 
 // Active reports whether the run still holds a slot: it is not settled and not provably over without a process.
 func (j *Journal) Active() bool { return j.Phase != PhaseSettled }

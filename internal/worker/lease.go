@@ -54,7 +54,7 @@ func leaseOf(p Project) (v leaseValue, present bool, err error) {
 		return leaseValue{}, false, nil
 	}
 	b, _ := json.Marshal(raw)
-	if err := json.Unmarshal(b, &v); err != nil || v.Owner == "" {
+	if err := json.Unmarshal(b, &v); err != nil || v.Version == 0 { // an empty Owner is a lease its owner released
 		return leaseValue{}, true, fmt.Errorf("the Project's %s metadata is not a lease", leaseKey)
 	}
 	return v, true, nil
@@ -75,7 +75,7 @@ func claimLease(ctx context.Context, k *Kata, clock Clock, executor, actor strin
 		}
 		now := clock.Now().UTC()
 		own := present && cur.Owner == executor
-		live := present && now.Sub(cur.Heartbeat) < LeaseExpiry
+		live := present && cur.Owner != "" && now.Sub(cur.Heartbeat) < LeaseExpiry
 		if present && !own && live && !takeover {
 			return LeaseState{Owner: cur.Owner, Generation: cur.Generation}
 		}
@@ -110,4 +110,26 @@ func readLease(ctx context.Context, k *Kata, clock Clock, projectID int64) (owne
 		return "", 0, false, err
 	}
 	return v.Owner, v.Generation, clock.Now().Sub(v.Heartbeat) < LeaseExpiry, nil
+}
+
+// releaseLease clears the owner of the Project's lease when it is this executor's, keeping the generation, so the next
+// worker takes the next one at once (ADR-0003 "Retire"). A lease that is another executor's, or absent, is left alone.
+func releaseLease(ctx context.Context, k *Kata, clock Clock, executor, actor string, projectID int64) error {
+	for range 3 {
+		p, err := k.Project(ctx, projectID)
+		if err != nil {
+			return err
+		}
+		cur, present, err := leaseOf(p)
+		if err != nil || !present || cur.Owner != executor {
+			return err
+		}
+		value := leaseValue{Version: 1, Generation: cur.Generation, Heartbeat: clock.Now().UTC()}
+		_, err = k.PatchProjectMetadata(ctx, projectID, p.Revision, actor, map[string]any{leaseKey: value})
+		if errors.Is(err, ErrRevisionConflict) {
+			continue
+		}
+		return err
+	}
+	return errors.New("the Project's metadata kept changing while releasing its lease")
 }

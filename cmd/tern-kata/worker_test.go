@@ -162,6 +162,29 @@ func TestWorkerStatusSaysWhatItServes(t *testing.T) {
 	}
 }
 
+func TestWorkerStatusAndDoctorListSetAsideJobsAndTheHighRateWarning(t *testing.T) {
+	f := newWorkerFixture(t, "")
+	f.kata.CreateJob(t, f.proj, workertest.Job{Name: "fine", Prompt: "Do it."})
+	f.kata.CreateJob(t, f.proj, workertest.Job{Name: "mapped nowhere", Prompt: "Do it.", Profile: "nope"})
+	f.kata.CreateJob(t, f.proj, workertest.Job{Name: "chatty", Prompt: "Do it.", Trigger: worker.Trigger{Kind: "interval", IntervalSeconds: 600}})
+	f.serve(t)
+	setAside := `Job "mapped nowhere" is set aside: it names profile "nope", which is not available to Project demo in worker.toml`
+	chatty := `Job "chatty" creates about 144 Issues a day; consider an existing Issue`
+	eventually(t, "status to list both", func() bool {
+		out, _ := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}})
+		return strings.Contains(out, setAside) && strings.Contains(out, chatty)
+	})
+	out, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"doctor"}, Actor: "robot"})
+	if err == nil {
+		t.Errorf("doctor accepted a set-aside job:\n%s", out)
+	}
+	for _, want := range []string{strings.ToLower(setAside[:1]) + setAside[1:], strings.ToLower(chatty[:1]) + chatty[1:]} {
+		if !strings.Contains(out, want) {
+			t.Errorf("doctor lacks %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestWorkerStatusSaysHowItIsSupervised(t *testing.T) {
 	for _, tc := range []struct{ supervisor, want string }{
 		{"", "Not supervised: it was started by hand"},

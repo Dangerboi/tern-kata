@@ -177,6 +177,9 @@ func (c *Config) validate() error {
 		if s.File != "" && !strings.HasPrefix(s.File, "~/") && !filepath.IsAbs(s.File) {
 			return fmt.Errorf("secrets.%s: file %q must be absolute or start with ~/", name, s.File)
 		}
+		if why := credentialAlias(s); why != "" {
+			return fmt.Errorf("secrets.%s: %s", name, why)
+		}
 	}
 	seen := map[string]bool{}
 	for i, p := range c.Projects {
@@ -261,4 +264,63 @@ func (p Profile) command() string {
 		return "omp"
 	}
 	return p.Command
+}
+
+// credentialAlias says why a secret source is one of kata's own credential sources, empty when it is not. A job could
+// otherwise be handed the token the worker reaches kata with (ADR-0010).
+func credentialAlias(s SecretSource) string {
+	switch s.Env {
+	case "KATA_AUTH_TOKEN", "KATA_AUTH_TOKEN_FILE":
+		return s.Env + " is kata's credential; a secret may not alias it"
+	}
+	if s.File == "" {
+		return ""
+	}
+	path, err := expandHome(s.File)
+	if err != nil {
+		return ""
+	}
+	if tokenFile := strings.TrimSpace(os.Getenv("KATA_AUTH_TOKEN_FILE")); tokenFile != "" && samePath(path, tokenFile) {
+		return s.File + " is the file KATA_AUTH_TOKEN_FILE names; a secret may not alias kata's credential"
+	}
+	home := os.Getenv("KATA_HOME")
+	if home == "" {
+		if user, err := os.UserHomeDir(); err == nil {
+			home = filepath.Join(user, ".kata")
+		}
+	}
+	if home != "" && insidePath(home, path) {
+		return s.File + " is inside kata's home, where its credentials live; a secret may not alias them"
+	}
+	return ""
+}
+
+// expandHome resolves a leading ~/ to the user's home folder.
+func expandHome(path string) (string, error) {
+	rest, ok := strings.CutPrefix(path, "~/")
+	if !ok {
+		return path, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, rest), nil
+}
+
+// resolved is path with its symlinks followed where it exists, so an alias through a link is still seen.
+func resolved(path string) string {
+	path = filepath.Clean(path)
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		return real
+	}
+	return path
+}
+
+func samePath(a, b string) bool { return resolved(a) == resolved(b) }
+
+// insidePath reports whether path is dir or lies under it.
+func insidePath(dir, path string) bool {
+	rel, err := filepath.Rel(resolved(dir), resolved(path))
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }

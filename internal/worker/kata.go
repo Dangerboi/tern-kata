@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"slices"
 	"strings"
 	"time"
 
@@ -18,12 +19,78 @@ import (
 	"golang.org/x/mod/semver"
 )
 
+// Limits on the worker's calls (ADR-0004): at most four one-shot kata calls at once across Projects, each with a
+// deadline that starts when it takes its slot. Event streams take no slot.
+const (
+	maxCalls        = 4
+	callTimeout     = 60 * time.Second
+	readAttempts    = 3
+	firstReadRetry  = time.Second
+	secondReadRetry = 2 * time.Second
+)
+
 // Kata is the worker's whole view of the daemon: kata's HTTP client behind the calls the worker makes (ADR-0001: the
 // worker runs no `kata` binary). The worker's other files speak these model types, never the generated ones.
-type Kata struct{ c *client.Client }
+type Kata struct {
+	c       *client.Client
+	slots   chan struct{}
+	timeout time.Duration
+	retries [readAttempts - 1]time.Duration
+}
+
+// KataOption changes one of the limits of a Kata; tests use them to shorten the waits.
+type KataOption func(*Kata)
+
+// WithCallTimeout sets the deadline every one-shot call gets from the moment it takes a slot.
+func WithCallTimeout(d time.Duration) KataOption { return func(k *Kata) { k.timeout = d } }
+
+// WithReadRetryDelays sets the waits before the second and third attempt of a read-only call that ran out of time.
+func WithReadRetryDelays(first, second time.Duration) KataOption {
+	return func(k *Kata) { k.retries = [readAttempts - 1]time.Duration{first, second} }
+}
 
 // NewKata wraps c, which the caller found with client.Discover (as the Pane does) or built for a test.
-func NewKata(c *client.Client) *Kata { return &Kata{c: c} }
+func NewKata(c *client.Client, opts ...KataOption) *Kata {
+	k := &Kata{c: c, slots: make(chan struct{}, maxCalls), timeout: callTimeout, retries: [readAttempts - 1]time.Duration{firstReadRetry, secondReadRetry}}
+	for _, o := range opts {
+		o(k)
+	}
+	return k
+}
+
+// call runs one kata request inside a slot with its own deadline. A read-only request that ran out of time is tried
+// again, up to three times in all, after the first and then the second retry delay; a mutation is never repeated here,
+// its journal intent decides (ADR-0006).
+func call[T any](ctx context.Context, k *Kata, readOnly bool, f func(context.Context) (T, error)) (T, error) {
+	attempts := 1
+	if readOnly {
+		attempts = readAttempts
+	}
+	for attempt := 0; ; attempt++ {
+		select {
+		case k.slots <- struct{}{}:
+		case <-ctx.Done():
+			var zero T
+			return zero, ctx.Err()
+		}
+		callCtx, cancel := context.WithTimeout(ctx, k.timeout)
+		out, err := f(callCtx)
+		expired := err != nil && callCtx.Err() != nil && ctx.Err() == nil
+		cancel()
+		<-k.slots
+		if !expired {
+			return out, err
+		}
+		if attempt+1 >= attempts {
+			return out, fmt.Errorf("kata did not answer within %s: %w", k.timeout, err)
+		}
+		select {
+		case <-time.After(k.retries[attempt]):
+		case <-ctx.Done():
+			return out, ctx.Err()
+		}
+	}
+}
 
 // Errors the worker tells apart from any other daemon failure.
 var (
@@ -95,7 +162,7 @@ const MinKataVersion = "v0.19.0"
 
 // Ping returns the daemon's version, refusing one older than MinKataVersion.
 func (k *Kata) Ping(ctx context.Context) (string, error) {
-	r, err := k.c.PingWithResponse(ctx)
+	r, err := call(ctx, k, true, func(ctx context.Context) (*g.PingResp, error) { return k.c.PingWithResponse(ctx) })
 	if err != nil {
 		return "", apiError(err)
 	}
@@ -127,7 +194,9 @@ func projectOf(p g.ProjectOut) Project {
 
 // Projects lists the live Projects.
 func (k *Kata) Projects(ctx context.Context) ([]Project, error) {
-	r, err := k.c.ListProjectsWithResponse(ctx, &g.ListProjectsRequestOptions{})
+	r, err := call(ctx, k, true, func(ctx context.Context) (*g.ListProjectsResp, error) {
+		return k.c.ListProjectsWithResponse(ctx, &g.ListProjectsRequestOptions{})
+	})
 	if err != nil {
 		return nil, apiError(err)
 	}
@@ -145,7 +214,9 @@ func (k *Kata) Projects(ctx context.Context) ([]Project, error) {
 
 // Project reads one Project by id.
 func (k *Kata) Project(ctx context.Context, id int64) (Project, error) {
-	r, err := k.c.ShowProjectWithResponse(ctx, &g.ShowProjectRequestOptions{PathParams: &g.ShowProjectPath{ProjectID: id}})
+	r, err := call(ctx, k, true, func(ctx context.Context) (*g.ShowProjectResp, error) {
+		return k.c.ShowProjectWithResponse(ctx, &g.ShowProjectRequestOptions{PathParams: &g.ShowProjectPath{ProjectID: id}})
+	})
 	if err != nil {
 		return Project{}, apiError(err)
 	}
@@ -158,10 +229,12 @@ func (k *Kata) Project(ctx context.Context, id int64) (Project, error) {
 // PatchProjectMetadata writes patch only while the Project is still at revision (ADR-0003), returning the new revision.
 func (k *Kata) PatchProjectMetadata(ctx context.Context, id, revision int64, actor string, patch map[string]any) (int64, error) {
 	etag := `"rev-` + strconv.FormatInt(revision, 10) + `"`
-	r, err := k.c.PatchProjectMetadataWithResponse(ctx, &g.PatchProjectMetadataRequestOptions{
-		PathParams: &g.PatchProjectMetadataPath{ProjectID: id},
-		Body:       &g.PatchProjectMetadataBody{Actor: actor, Patch: patch},
-		Header:     &g.PatchProjectMetadataHeaders{IfMatch: &etag},
+	r, err := call(ctx, k, false, func(ctx context.Context) (*g.PatchProjectMetadataResp, error) {
+		return k.c.PatchProjectMetadataWithResponse(ctx, &g.PatchProjectMetadataRequestOptions{
+			PathParams: &g.PatchProjectMetadataPath{ProjectID: id},
+			Body:       &g.PatchProjectMetadataBody{Actor: actor, Patch: patch},
+			Header:     &g.PatchProjectMetadataHeaders{IfMatch: &etag},
+		})
 	})
 	if err != nil {
 		return 0, apiError(err)
@@ -172,16 +245,47 @@ func (k *Kata) PatchProjectMetadata(ctx context.Context, id, revision int64, act
 	return r.JSON200.Project.Revision, nil
 }
 
-// Capabilities are the cron event features the Project's daemon advertises.
-func (k *Kata) Capabilities(ctx context.Context, projectID int64) ([]string, error) {
-	r, err := k.c.GetCronCapabilitiesWithResponse(ctx, &g.GetCronCapabilitiesRequestOptions{PathParams: &g.GetCronCapabilitiesPath{ProjectID: projectID}})
+// Capabilities is what a Project's daemon answers about its cron API: the event features it advertises and the uid of
+// the Project it answers for.
+type Capabilities struct {
+	Features   []string
+	ProjectUID string
+}
+
+// Has reports whether the daemon advertises feature.
+func (c Capabilities) Has(feature string) bool { return slices.Contains(c.Features, feature) }
+
+// Capabilities reads the Project's cron capabilities.
+func (k *Kata) Capabilities(ctx context.Context, projectID int64) (Capabilities, error) {
+	r, err := call(ctx, k, true, func(ctx context.Context) (*g.GetCronCapabilitiesResp, error) {
+		return k.c.GetCronCapabilitiesWithResponse(ctx, &g.GetCronCapabilitiesRequestOptions{PathParams: &g.GetCronCapabilitiesPath{ProjectID: projectID}})
+	})
 	if err != nil {
-		return nil, apiError(err)
+		return Capabilities{}, apiError(err)
 	}
 	if r.JSON200 == nil {
-		return nil, errors.New("kata daemon returned no capabilities")
+		return Capabilities{}, errors.New("kata daemon returned no capabilities")
 	}
-	return r.JSON200.EventFeatures, nil
+	return Capabilities{Features: r.JSON200.EventFeatures, ProjectUID: r.JSON200.ProjectUID}, nil
+}
+
+// Instance is who the daemon is and who it says the worker authenticates as.
+type Instance struct {
+	UID string
+	// Actor is the authenticated actor, empty when the daemon names none.
+	Actor string
+}
+
+// Instance reads the daemon's instance uid and the actor its credential authenticates as.
+func (k *Kata) Instance(ctx context.Context) (Instance, error) {
+	r, err := call(ctx, k, true, func(ctx context.Context) (*g.InstanceResp, error) { return k.c.InstanceWithResponse(ctx) })
+	if err != nil {
+		return Instance{}, apiError(err)
+	}
+	if r.JSON200 == nil {
+		return Instance{}, errors.New("kata daemon returned no instance")
+	}
+	return Instance{UID: r.JSON200.InstanceUID, Actor: deref(r.JSON200.Auth.Actor)}, nil
 }
 
 // Trigger, IssuePolicy and JobDefinition are the parts of a kata job definition the worker reads.
@@ -292,7 +396,9 @@ func derefInt(n *int64) int64 {
 
 // Jobs lists the Project's live jobs.
 func (k *Kata) Jobs(ctx context.Context, projectID int64) ([]Job, error) {
-	r, err := k.c.ListCronJobsWithResponse(ctx, &g.ListCronJobsRequestOptions{PathParams: &g.ListCronJobsPath{ProjectID: projectID}})
+	r, err := call(ctx, k, true, func(ctx context.Context) (*g.ListCronJobsResp, error) {
+		return k.c.ListCronJobsWithResponse(ctx, &g.ListCronJobsRequestOptions{PathParams: &g.ListCronJobsPath{ProjectID: projectID}})
+	})
 	if err != nil {
 		return nil, apiError(err)
 	}
@@ -330,7 +436,9 @@ func runOf(r g.CronRun) Run {
 
 // ShowRun reads a Run; ErrNotFound means kata holds no evidence of it.
 func (k *Kata) ShowRun(ctx context.Context, projectID int64, uid string) (Run, error) {
-	r, err := k.c.ShowCronRunWithResponse(ctx, &g.ShowCronRunRequestOptions{PathParams: &g.ShowCronRunPath{ProjectID: projectID, RunUID: uid}})
+	r, err := call(ctx, k, true, func(ctx context.Context) (*g.ShowCronRunResp, error) {
+		return k.c.ShowCronRunWithResponse(ctx, &g.ShowCronRunRequestOptions{PathParams: &g.ShowCronRunPath{ProjectID: projectID, RunUID: uid}})
+	})
 	if err != nil {
 		return Run{}, apiError(err)
 	}
@@ -343,7 +451,9 @@ func (k *Kata) ShowRun(ctx context.Context, projectID int64, uid string) (Run, e
 // Runs lists the newest runs of the Project (at most 100).
 func (k *Kata) Runs(ctx context.Context, projectID int64) ([]Run, error) {
 	limit := int64(100)
-	r, err := k.c.ListCronRunsWithResponse(ctx, &g.ListCronRunsRequestOptions{PathParams: &g.ListCronRunsPath{ProjectID: projectID}, Query: &g.ListCronRunsQuery{Limit: &limit}})
+	r, err := call(ctx, k, true, func(ctx context.Context) (*g.ListCronRunsResp, error) {
+		return k.c.ListCronRunsWithResponse(ctx, &g.ListCronRunsRequestOptions{PathParams: &g.ListCronRunsPath{ProjectID: projectID}, Query: &g.ListCronRunsQuery{Limit: &limit}})
+	})
 	if err != nil {
 		return nil, apiError(err)
 	}
@@ -391,7 +501,9 @@ func (k *Kata) Observe(ctx context.Context, projectID int64, o Observation) (Run
 	if o.WorkflowUID != "" {
 		body.WorkflowUID, body.WorkflowDefinitionEventUID = &o.WorkflowUID, &o.WorkflowEventUID
 	}
-	r, err := k.c.ObserveCronRunWithResponse(ctx, &g.ObserveCronRunRequestOptions{PathParams: &g.ObserveCronRunPath{ProjectID: projectID, RunUID: o.RunUID}, Body: body})
+	r, err := call(ctx, k, false, func(ctx context.Context) (*g.ObserveCronRunResp, error) {
+		return k.c.ObserveCronRunWithResponse(ctx, &g.ObserveCronRunRequestOptions{PathParams: &g.ObserveCronRunPath{ProjectID: projectID, RunUID: o.RunUID}, Body: body})
+	})
 	if err != nil {
 		return Run{}, false, apiError(err)
 	}
@@ -414,6 +526,8 @@ type Issue struct {
 	Comments  []string
 	Owner     string
 	Author    string
+	// Metadata is the Issue's metadata, where inbox requests live.
+	Metadata map[string]any
 }
 
 // Open reports whether the Issue is open.
@@ -422,10 +536,12 @@ func (i Issue) Open() bool { return i.Status == "open" }
 // CreateIssue creates the per-run Issue, always keyed and with force_new (ADR-0002), and says whether kata made a new one.
 func (k *Kata) CreateIssue(ctx context.Context, projectID int64, actor, key, title, body string, metadata map[string]any) (Issue, error) {
 	force := true
-	r, err := k.c.CreateIssueWithResponse(ctx, &g.CreateIssueRequestOptions{
-		PathParams: &g.CreateIssuePath{ProjectID: strconv.FormatInt(projectID, 10)},
-		Body:       &g.CreateIssueBody{Actor: &actor, Title: title, Body: &body, ForceNew: &force, Metadata: metadata},
-		Header:     &g.CreateIssueHeaders{IdempotencyKey: &key},
+	r, err := call(ctx, k, false, func(ctx context.Context) (*g.CreateIssueResp, error) {
+		return k.c.CreateIssueWithResponse(ctx, &g.CreateIssueRequestOptions{
+			PathParams: &g.CreateIssuePath{ProjectID: strconv.FormatInt(projectID, 10)},
+			Body:       &g.CreateIssueBody{Actor: &actor, Title: title, Body: &body, ForceNew: &force, Metadata: metadata},
+			Header:     &g.CreateIssueHeaders{IdempotencyKey: &key},
+		})
 	})
 	if err != nil {
 		return Issue{}, apiError(err)
@@ -439,7 +555,9 @@ func (k *Kata) CreateIssue(ctx context.Context, projectID int64, actor, key, tit
 
 // ShowIssue reads an Issue by uid.
 func (k *Kata) ShowIssue(ctx context.Context, projectID int64, uid string) (Issue, error) {
-	r, err := k.c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: projectID, Ref: uid}})
+	r, err := call(ctx, k, true, func(ctx context.Context) (*g.ShowIssueResp, error) {
+		return k.c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: projectID, Ref: uid}})
+	})
 	if err != nil {
 		return Issue{}, apiError(err)
 	}
@@ -447,7 +565,7 @@ func (k *Kata) ShowIssue(ctx context.Context, projectID int64, uid string) (Issu
 		return Issue{}, errors.New("kata daemon returned no Issue")
 	}
 	i := r.JSON200.Issue
-	issue := Issue{ID: i.ID, UID: i.UID, ShortID: i.ShortID, Title: i.Title, Body: i.Body, Status: i.Status, ProjectID: i.ProjectID, Labels: i.Labels, Owner: deref(i.Owner), Author: i.Author}
+	issue := Issue{ID: i.ID, UID: i.UID, ShortID: i.ShortID, Title: i.Title, Body: i.Body, Status: i.Status, ProjectID: i.ProjectID, Labels: i.Labels, Owner: deref(i.Owner), Author: i.Author, Metadata: i.Metadata}
 	for _, c := range r.JSON200.Comments {
 		issue.Comments = append(issue.Comments, c.Body)
 	}
@@ -464,7 +582,9 @@ type PlanningDates struct {
 
 // PlanningDates reads the Issue's planning-date instants.
 func (k *Kata) PlanningDates(ctx context.Context, projectID int64, issueUID string) (PlanningDates, error) {
-	r, err := k.c.IssuePlanningDatesWithResponse(ctx, &g.IssuePlanningDatesRequestOptions{PathParams: &g.IssuePlanningDatesPath{ProjectID: projectID, Ref: issueUID}})
+	r, err := call(ctx, k, true, func(ctx context.Context) (*g.IssuePlanningDatesResp, error) {
+		return k.c.IssuePlanningDatesWithResponse(ctx, &g.IssuePlanningDatesRequestOptions{PathParams: &g.IssuePlanningDatesPath{ProjectID: projectID, Ref: issueUID}})
+	})
 	if err != nil {
 		return PlanningDates{}, apiError(err)
 	}
@@ -481,6 +601,20 @@ func (k *Kata) PlanningDates(ctx context.Context, projectID int64, issueUID stri
 	return d, nil
 }
 
+// inboxSlot is the metadata key of the inbox request for recipient: one slot per Issue and recipient.
+func inboxSlot(recipient string) string { return "notify." + base64.RawURLEncoding.EncodeToString([]byte(recipient)) }
+
+// InboxRequest is the request the Issue holds for recipient, ok false when there is none.
+func (i Issue) InboxRequest(recipient string) (from, message string, ok bool) {
+	slot, _ := i.Metadata[inboxSlot(recipient)].(map[string]any)
+	if slot == nil {
+		return "", "", false
+	}
+	from, _ = slot["from"].(string)
+	message, _ = slot["message"].(string)
+	return from, message, true
+}
+
 // Notify puts an inbox request for recipient on the Issue: the ordinary metadata write `kata notify` makes, one slot
 // per Issue and recipient, so sending the same request again changes nothing.
 func (k *Kata) Notify(ctx context.Context, projectID int64, actor, issueUID, recipient, teammate, message string) error {
@@ -488,29 +622,34 @@ func (k *Kata) Notify(ctx context.Context, projectID int64, actor, issueUID, rec
 	if teammate != "" {
 		value["teammate"] = teammate
 	}
-	key := "notify." + base64.RawURLEncoding.EncodeToString([]byte(recipient))
-	_, err := k.c.PatchIssueMetadataWithResponse(ctx, &g.PatchIssueMetadataRequestOptions{
-		PathParams: &g.PatchIssueMetadataPath{ProjectID: projectID, Ref: issueUID},
-		Body:       &g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{key: value}},
+	_, err := call(ctx, k, false, func(ctx context.Context) (*g.PatchIssueMetadataResp, error) {
+		return k.c.PatchIssueMetadataWithResponse(ctx, &g.PatchIssueMetadataRequestOptions{
+			PathParams: &g.PatchIssueMetadataPath{ProjectID: projectID, Ref: issueUID},
+			Body:       &g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{inboxSlot(recipient): value}},
+		})
 	})
 	return apiError(err)
 }
 
 // Comment adds a keyed comment, so a retry within kata's window adds nothing.
 func (k *Kata) Comment(ctx context.Context, projectID int64, actor, issueUID, key, text string) error {
-	_, err := k.c.CreateCommentWithResponse(ctx, &g.CreateCommentRequestOptions{
-		PathParams: &g.CreateCommentPath{ProjectID: strconv.FormatInt(projectID, 10), Ref: issueUID},
-		Body:       &g.CreateCommentBody{Actor: &actor, Body: text},
-		Header:     &g.CreateCommentHeaders{IdempotencyKey: &key},
+	_, err := call(ctx, k, false, func(ctx context.Context) (*g.CreateCommentResp, error) {
+		return k.c.CreateCommentWithResponse(ctx, &g.CreateCommentRequestOptions{
+			PathParams: &g.CreateCommentPath{ProjectID: strconv.FormatInt(projectID, 10), Ref: issueUID},
+			Body:       &g.CreateCommentBody{Actor: &actor, Body: text},
+			Header:     &g.CreateCommentHeaders{IdempotencyKey: &key},
+		})
 	})
 	return apiError(err)
 }
 
 // AddLabel labels an Issue; adding one already there changes nothing.
 func (k *Kata) AddLabel(ctx context.Context, projectID int64, actor, issueUID, label string) error {
-	_, err := k.c.AddLabelWithResponse(ctx, &g.AddLabelRequestOptions{
-		PathParams: &g.AddLabelPath{ProjectID: strconv.FormatInt(projectID, 10), Ref: issueUID},
-		Body:       &g.AddLabelBody{Actor: &actor, Label: label},
+	_, err := call(ctx, k, false, func(ctx context.Context) (*g.AddLabelResp, error) {
+		return k.c.AddLabelWithResponse(ctx, &g.AddLabelRequestOptions{
+			PathParams: &g.AddLabelPath{ProjectID: strconv.FormatInt(projectID, 10), Ref: issueUID},
+			Body:       &g.AddLabelBody{Actor: &actor, Label: label},
+		})
 	})
 	return apiError(err)
 }
@@ -610,7 +749,9 @@ type Workflow struct {
 
 // Workflow reads one workflow of the Project.
 func (k *Kata) Workflow(ctx context.Context, projectID int64, uid string) (Workflow, error) {
-	r, err := k.c.ShowCronWorkflowWithResponse(ctx, &g.ShowCronWorkflowRequestOptions{PathParams: &g.ShowCronWorkflowPath{ProjectID: projectID, CronUID: uid}})
+	r, err := call(ctx, k, true, func(ctx context.Context) (*g.ShowCronWorkflowResp, error) {
+		return k.c.ShowCronWorkflowWithResponse(ctx, &g.ShowCronWorkflowRequestOptions{PathParams: &g.ShowCronWorkflowPath{ProjectID: projectID, CronUID: uid}})
+	})
 	if err != nil {
 		return Workflow{}, apiError(err)
 	}

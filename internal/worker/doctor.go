@@ -155,20 +155,31 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 
 func (o DoctorOptions) checkProject(ctx context.Context, cfg Config, pc ProjectConfig, p Project, add func(level, subject, detail, fix string)) {
 	subject := "Project " + pc.Name
-	features, err := o.Kata.Capabilities(ctx, p.ID)
+	caps, err := o.Kata.Capabilities(ctx, p.ID)
 	switch {
 	case err != nil:
 		add("FAIL", subject, "cannot read the cron capabilities: "+err.Error(), "Upgrade kata to "+MinKataVersion+" or newer.")
 		return
-	case !slices.Contains(features, "cron_v1"):
+	case !caps.Has("cron_v1"):
 		add("FAIL", subject, "the daemon does not advertise cron_v1", "Upgrade kata to "+MinKataVersion+" or newer.")
+		return
+	case caps.ProjectUID != p.UID:
+		add("FAIL", subject, fmt.Sprintf("the daemon answers for Project %s where %q resolves to %s", caps.ProjectUID, p.Name, p.UID), "")
+		return
+	}
+	instance, err := o.Kata.Instance(ctx)
+	if err != nil {
+		add("FAIL", subject, "cannot read the daemon's instance: "+err.Error(), "")
 		return
 	}
 	actor := cmpOr(pc.Actor, cfg.Actor, o.Actor)
 	dir := filepath.Join(o.Dirs.State, "projects", p.UID)
-	if prev, ok := readPin(filepath.Join(dir, "pin.json")); ok && (prev.Actor != actor || prev.Executor != cfg.Executor) {
-		add("FAIL", subject, fmt.Sprintf("its pinned route differs: pinned actor %q and executor %q, now %q and %q", prev.Actor, prev.Executor, actor, cfg.Executor), "There is no repin command: restore the old values, or use a new state folder and executor.")
-		return
+	now := pin{ProjectUID: p.UID, InstanceUID: instance.UID, Name: p.Name, Actor: actor, AuthActor: instance.Actor, Executor: cfg.Executor}
+	if prev, ok := readPin(filepath.Join(dir, "pin.json")); ok {
+		if diff := pinDifferences(prev, now); len(diff) > 0 {
+			add("FAIL", subject, "its pinned route differs: "+joinWords(diff), "There is no repin command: restore the old values, or use a new state folder and executor.")
+			return
+		}
 	}
 	owner, generation, live, err := readLease(ctx, o.Kata, o.Clock, p.ID)
 	switch {
@@ -180,6 +191,15 @@ func (o DoctorOptions) checkProject(ctx context.Context, cfg Config, pc ProjectC
 		add("ok", subject, fmt.Sprintf("this executor holds the lease (generation %d)", generation), "")
 	default:
 		add("ok", subject, "the lease is free", "")
+	}
+	if jobs, err := o.Kata.Jobs(ctx, p.ID); err == nil {
+		aside, warnings := definitionNotes(ctx, o.Kata, cfg, pc, p.ID, jobs, o.Clock.Now())
+		for _, n := range aside {
+			add("FAIL", subject, fmt.Sprintf("job %q is set aside: %s", n.Name, n.Text), "Edit the job, or worker.toml, so the worker can run it.")
+		}
+		for _, n := range warnings {
+			add("note", subject, fmt.Sprintf("job %q %s", n.Name, n.Text), "")
+		}
 	}
 	// Runs kata says are running for this executor with no local journal are never rerun.
 	store := NewStore(o.Dirs, Hooks{})
@@ -197,6 +217,19 @@ func (o DoctorOptions) checkProject(ctx context.Context, cfg Config, pc ProjectC
 	}
 	for _, uid := range store.Quarantine() {
 		add("FAIL", "quarantine", fmt.Sprintf("run %s: its journal could not be read and is kept whole under %s; the run is never repeated", uid, store.Quarantined(uid)), "")
+	}
+	runDirs, _ := os.ReadDir(o.Dirs.Runs())
+	for _, e := range runDirs {
+		j, err := store.Load(e.Name())
+		if err != nil {
+			continue
+		}
+		if j.ProjectUID != p.UID || j.Executor != cfg.Executor {
+			continue
+		}
+		for _, why := range j.Inspections() {
+			add("FAIL", subject, fmt.Sprintf("run %s needs inspection: %s", j.RunUID, why), "Read the run in kata (`kata cron run show`) and decide what it should say; the worker never overwrites it.")
+		}
 	}
 }
 

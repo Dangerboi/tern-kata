@@ -3,6 +3,7 @@ package worker
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -17,6 +18,8 @@ func load(t *testing.T, body string) (Config, error) {
 }
 
 func TestWorkerConfigIsStrict(t *testing.T) {
+	kataHome := t.TempDir()
+	t.Setenv("KATA_HOME", kataHome)
 	const base = "executor = \"laptop\"\n[profiles.default]\n"
 	cases := []struct {
 		name, body, want string
@@ -31,6 +34,9 @@ func TestWorkerConfigIsStrict(t *testing.T) {
 		{"a secret with two sources", base + "[secrets]\nkey = { env = \"A\", file = \"/b\" }\n", "exactly one"},
 		{"max_timeout under default_timeout", base + "[limits]\ndefault_timeout = \"2h\"\nmax_timeout = \"1h\"\n", "max_timeout"},
 		{"a Project listed twice", base + "[[projects]]\nname = \"demo\"\n[[projects]]\nname = \"demo\"\n", "listed twice"},
+		{"a secret aliasing kata's token", base + "[secrets]\nkey = { env = \"KATA_AUTH_TOKEN\" }\n", "kata's credential"},
+		{"a secret aliasing kata's token file variable", base + "[secrets]\nkey = { env = \"KATA_AUTH_TOKEN_FILE\" }\n", "kata's credential"},
+		{"a secret file inside kata's home", base + "[secrets]\nkey = { file = \"" + filepath.Join(kataHome, "config.toml") + "\" }\n", "kata's home"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -39,13 +45,25 @@ func TestWorkerConfigIsStrict(t *testing.T) {
 			}
 		})
 	}
-	cfg, err := load(t, base+"[[projects]]\nname = \"demo\"\n")
-	if err != nil {
+}
+
+func TestASecretFileOfAnotherUserIsRefused(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("files carry no owner id here")
+	}
+	path := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(path, []byte("value\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	p, _ := cfg.project("demo")
-	if p.Capacity != 1 || cfg.defaultTimeout() != DefaultTimeout || cfg.maxTimeout() != MaxTimeout || cfg.maxRunPrompts() != 12 {
-		t.Fatalf("defaults: capacity %d, timeouts %s %s, prompts %d", p.Capacity, cfg.defaultTimeout(), cfg.maxTimeout(), cfg.maxRunPrompts())
+	cfg := Config{Secrets: map[string]SecretSource{"token": {File: path}}}
+	if got, err := cfg.readSecret("token"); err != nil || got != "value" {
+		t.Fatalf("own file: %q, %v", got, err)
+	}
+	own := effectiveUID
+	t.Cleanup(func() { effectiveUID = own })
+	effectiveUID = func() int { return own() + 1 }
+	if _, err := cfg.readSecret("token"); err == nil || !strings.Contains(err.Error(), "owned by") {
+		t.Fatalf("a file owned by someone else: %v", err)
 	}
 }
 

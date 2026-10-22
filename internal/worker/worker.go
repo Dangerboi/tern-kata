@@ -50,6 +50,8 @@ type Worker struct {
 	// pendingTotal counts slots reserved across Projects (worker-wide max_active_runs).
 	projects []*projectState
 	runs     sync.WaitGroup
+	// starting limits how many Projects resolve and recover at the same time (ADR-0004).
+	starting chan struct{}
 }
 
 // projectState is one served Project: its config, what kata resolved it to, its lease, its definitions and its slots.
@@ -64,6 +66,9 @@ type projectState struct {
 	blocked string
 	lease   LeaseState
 	leaseAt time.Time
+	// route is the last route check; instanceUID is the daemon instance the Project is pinned to.
+	route       routeState
+	instanceUID string
 
 	jobs       map[string]Job
 	jobsErr    string
@@ -87,6 +92,9 @@ type projectState struct {
 	// scheduled, queued and nextRun summarize sched for Status (guarded by Worker.mu).
 	scheduled, queued int
 	nextRun           time.Time
+	// aside and warnings are the jobs the worker sets aside with their reasons, and the per-run Issue jobs that create
+	// many Issues a day, as of the last definition refresh (guarded by Worker.mu).
+	aside, warnings []JobNote
 }
 
 // New checks opts and builds a worker.
@@ -103,7 +111,7 @@ func New(opts Options) (*Worker, error) {
 	if opts.Config.Executor == "" {
 		return nil, errors.New("worker: no executor label")
 	}
-	w := &Worker{opt: opts, clock: opts.Clock, store: NewStore(opts.Dirs, opts.Hooks), ready: make(chan struct{}), pid: os.Getpid()}
+	w := &Worker{opt: opts, clock: opts.Clock, store: NewStore(opts.Dirs, opts.Hooks), ready: make(chan struct{}), pid: os.Getpid(), starting: make(chan struct{}, startingProjects)}
 	for _, p := range opts.Config.Projects {
 		cfg, _ := opts.Config.project(p.Name)
 		actor := cmpOr(cfg.Actor, opts.Config.Actor, opts.Actor)
@@ -158,6 +166,8 @@ func (w *Worker) Run(ctx context.Context) error {
 	}()
 	w.runs.Add(1)
 	go func() { defer w.runs.Done(); w.serveControl(ctx, ln) }()
+	w.runs.Add(1)
+	go func() { defer w.runs.Done(); w.retireUnserved(ctx) }()
 	for _, ps := range w.projects {
 		w.runs.Add(1)
 		go func() { defer w.runs.Done(); w.serveProject(ctx, ps) }()
@@ -179,13 +189,15 @@ func (w *Worker) projectNamed(name string) *projectState {
 }
 
 // pin is projects/<uid>/pin.json: what the worker first saw of a Project, so a later start that sees something
-// else admits nothing there (ADR-0010). kata's client API does not expose the daemon's instance uid, so the pin holds
-// the Project uid, its name, the actor and the executor.
+// else admits nothing there (ADR-0010): the Project uid and name, the daemon's instance uid and the actor its
+// credential authenticates as, and the configured actor and executor.
 type pin struct {
-	ProjectUID string `json:"project_uid"`
-	Name       string `json:"name"`
-	Actor      string `json:"actor"`
-	Executor   string `json:"executor"`
+	ProjectUID  string `json:"project_uid"`
+	InstanceUID string `json:"instance_uid,omitempty"`
+	Name        string `json:"name"`
+	Actor       string `json:"actor"`
+	AuthActor   string `json:"auth_actor,omitempty"`
+	Executor    string `json:"executor"`
 }
 
 // resolve finds the Project, checks the cron API and the pin, and returns a reason when the Project must admit
@@ -200,25 +212,34 @@ func (w *Worker) resolve(ctx context.Context, ps *projectState) (blocked string,
 		return fmt.Sprintf("Project %q does not exist in kata", ps.cfg.Name), nil
 	}
 	p := projects[i]
-	features, err := w.opt.Kata.Capabilities(ctx, p.ID)
+	caps, err := w.opt.Kata.Capabilities(ctx, p.ID)
 	if err != nil {
 		return "", err
 	}
-	if !slices.Contains(features, "cron_v1") {
+	if !caps.Has("cron_v1") {
 		return "the kata daemon does not advertise cron_v1; upgrade kata to v0.19.0 or newer", nil
 	}
-	if reason := w.checkPin(p, ps.actor); reason != "" {
+	if caps.ProjectUID != p.UID {
+		return fmt.Sprintf("the kata daemon answers for Project %s where %q resolves to %s", caps.ProjectUID, p.Name, p.UID), nil
+	}
+	instance, err := w.opt.Kata.Instance(ctx)
+	if err != nil {
+		return "", err
+	}
+	if reason := w.checkPin(p, ps.actor, instance); reason != "" {
 		return reason, nil
 	}
 	w.mu.Lock()
-	ps.project = p
+	ps.project, ps.instanceUID, ps.route = p, instance.UID, routeState{passedAt: w.clock.Now()}
 	w.mu.Unlock()
 	return "", nil
 }
 
-func (w *Worker) checkPin(p Project, actor string) string {
+// checkPin compares the Project with its pin and returns why it must admit nothing, empty when it may. A first start
+// saves the pin; a Project that cannot be pinned is not served, since nothing would then notice a changed route.
+func (w *Worker) checkPin(p Project, actor string, instance Instance) string {
 	dir := w.opt.Dirs.ProjectDir(p.UID)
-	want := pin{ProjectUID: p.UID, Name: p.Name, Actor: actor, Executor: w.opt.Config.Executor}
+	want := pin{ProjectUID: p.UID, InstanceUID: instance.UID, Name: p.Name, Actor: actor, AuthActor: instance.Actor, Executor: w.opt.Config.Executor}
 	// A name that earlier resolved to another uid is a different Project.
 	others, _ := filepath.Glob(filepath.Join(w.opt.Dirs.State, "projects", "*", "pin.json"))
 	for _, path := range others {
@@ -230,22 +251,47 @@ func (w *Worker) checkPin(p Project, actor string) string {
 		}
 	}
 	path := filepath.Join(dir, "pin.json")
-	if prev, ok := readPin(path); ok {
-		var diff []string
-		if prev.Actor != want.Actor {
-			diff = append(diff, fmt.Sprintf("actor %q is now %q", prev.Actor, want.Actor))
+	prev, ok := readPin(path)
+	if !ok {
+		if _, err := os.Stat(path); err == nil {
+			return fmt.Sprintf("the pin of Project %q (%s) cannot be read; an intentional move needs a new state folder and executor", p.Name, path)
 		}
-		if prev.Executor != want.Executor {
-			diff = append(diff, fmt.Sprintf("executor %q is now %q", prev.Executor, want.Executor))
-		}
-		if len(diff) > 0 {
-			return fmt.Sprintf("the pinned route of Project %q differs: %s; an intentional move needs a new state folder and executor", p.Name, joinWords(diff))
-		}
-		return ""
+		return w.savePin(path, want)
 	}
-	if err := os.MkdirAll(dir, 0o700); err == nil {
-		raw, _ := json.Marshal(want)
-		_ = replaceFile(path, raw)
+	if diff := pinDifferences(prev, want); len(diff) > 0 {
+		return fmt.Sprintf("the pinned route of Project %q differs: %s; an intentional move needs a new state folder and executor", p.Name, joinWords(diff))
+	}
+	if prev.InstanceUID == "" && want.InstanceUID != "" { // a pin saved before instances were pinned learns its daemon now
+		return w.savePin(path, want)
+	}
+	return ""
+}
+
+// pinDifferences names each pinned field whose value now differs; a field the pin never recorded is no difference.
+func pinDifferences(prev, now pin) []string {
+	var diff []string
+	if prev.Actor != now.Actor {
+		diff = append(diff, fmt.Sprintf("actor %q is now %q", prev.Actor, now.Actor))
+	}
+	if prev.Executor != now.Executor {
+		diff = append(diff, fmt.Sprintf("executor %q is now %q", prev.Executor, now.Executor))
+	}
+	if prev.InstanceUID != "" && prev.InstanceUID != now.InstanceUID {
+		diff = append(diff, fmt.Sprintf("daemon instance %s is now %s", prev.InstanceUID, now.InstanceUID))
+	}
+	if prev.AuthActor != "" && prev.AuthActor != now.AuthActor {
+		diff = append(diff, fmt.Sprintf("authenticated actor %q is now %q", prev.AuthActor, now.AuthActor))
+	}
+	return diff
+}
+
+func (w *Worker) savePin(path string, p pin) string {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Sprintf("its pin cannot be saved, so the worker would not notice a changed route: %v", err)
+	}
+	raw, _ := json.Marshal(p)
+	if err := replaceFile(path, raw); err != nil {
+		return fmt.Sprintf("its pin cannot be saved, so the worker would not notice a changed route: %v", err)
 	}
 	return ""
 }

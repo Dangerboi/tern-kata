@@ -2,6 +2,7 @@ package driver_test
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/driver"
@@ -66,6 +67,22 @@ func TestJobsPageSaysWhetherThisMachinesWorkerRunsAndServesTheProject(t *testing
 			s := jobsPaneWithWorker(t, c.status, promptJob("A1", "Triage"))
 			wantText(t, "Jobs Page", wireTextOf(t, s), c.want)
 		})
+	}
+}
+
+func TestJobsPageShowsWhyThisMachinesWorkerSetsAJobAside(t *testing.T) {
+	reason := "its profile is not available to Project work in worker.toml"
+	status := servingWorker()
+	status.Projects[0].Unsupported = map[string]string{"A1": reason}
+	s := jobsPaneWithWorker(t, status, promptJob("A1", "Triage"))
+	wantText(t, "Jobs Page", wireTextOf(t, s), "Set aside on this machine: "+reason)
+	other := jobsPaneWithWorker(t, status, promptJob("A2", "Report"))
+	if strings.Contains(wireTextOf(t, other), "Set aside on this machine") {
+		t.Fatal("a job the worker runs shown as set aside")
+	}
+	elsewhere := jobsPaneWithWorker(t, &model.WorkerStatus{Executor: "laptop", Projects: []model.WorkerProject{{Name: "other", Admitting: true, Unsupported: map[string]string{"A1": reason}}}}, promptJob("A1", "Triage"))
+	if strings.Contains(wireTextOf(t, elsewhere), "Set aside on this machine") {
+		t.Fatal("a worker that does not serve the Project cannot set its jobs aside")
 	}
 }
 

@@ -121,7 +121,14 @@ func execTern(ctx context.Context, args []string) ([]byte, error) {
 func translateWorkerStatus(s worker.Status) model.WorkerStatus {
 	out := model.WorkerStatus{Executor: s.Executor}
 	for _, p := range s.Projects {
-		out.Projects = append(out.Projects, model.WorkerProject{Name: p.Name, Admitting: p.Admitting, Why: p.Why, InUse: p.InUse, Capacity: p.Capacity})
+		project := model.WorkerProject{Name: p.Name, Admitting: p.Admitting, Why: p.Why, InUse: p.InUse, Capacity: p.Capacity}
+		if len(p.Aside) > 0 {
+			project.Unsupported = make(map[string]string, len(p.Aside))
+			for _, n := range p.Aside {
+				project.Unsupported[n.UID] = n.Text
+			}
+		}
+		out.Projects = append(out.Projects, project)
 	}
 	for _, r := range s.Runs {
 		out.Runs = append(out.Runs, translateLocalRun(r))

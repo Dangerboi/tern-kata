@@ -32,6 +32,9 @@ type WorkerProject struct {
 	// Why is what stops it admitting, in words: its lease is held by another worker, a pause, and so on.
 	Why             string
 	InUse, Capacity int
+	// Unsupported is why the worker sets each job aside, by job uid: a profile, checkout or secret worker.toml does not map, a
+	// workflow it does not run, and so on.
+	Unsupported map[string]string
 }
 
 // LocalRun is a run of this machine's worker as the worker reports it.
@@ -275,6 +278,19 @@ func (m Model) workerProjectName() string {
 		return m.Collection.Title
 	}
 	return m.Project.Name
+}
+
+// workerUnsupported is why this machine's worker sets the job aside, empty when it runs it or does not serve the Project.
+func (m Model) workerUnsupported(uid string) string {
+	if !m.Worker.Running {
+		return ""
+	}
+	for _, p := range m.Worker.Projects {
+		if p.Name == m.workerProjectName() {
+			return p.Unsupported[uid]
+		}
+	}
+	return ""
 }
 
 // WorkerLine is the Jobs Page's line about this machine's worker, and whether it is good news: whether the worker is running and

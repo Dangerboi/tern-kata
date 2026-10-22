@@ -129,6 +129,8 @@ func (w *Worker) admitsNothing(ps *projectState) string {
 		return "not resolved yet"
 	case !ps.lease.Held:
 		return ps.lease.Why()
+	case ps.route.err != "":
+		return "the kata route is not confirmed: " + ps.route.err
 	}
 	return ""
 }

@@ -41,7 +41,13 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 		recovered bool
 		started   bool
 		takeover  = w.opt.Takeover
+		nextRoute time.Time
 	)
+	starting, ok := w.beginStarting(ctx)
+	if !ok {
+		return
+	}
+	defer starting()
 	for ctx.Err() == nil {
 		now := w.clock.Now()
 		if !ps.resolved {
@@ -56,6 +62,7 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 			ps.resolved = err == nil && blocked == ""
 			w.mu.Unlock()
 			if !ps.resolved {
+				starting() // a Project kata cannot answer for yet waits without holding a start-up place
 				wait := jitter(retry/2, retry)
 				if err == nil {
 					wait = jitter(2*time.Minute+30*time.Second, 5*time.Minute)
@@ -88,6 +95,22 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 			if !recovered && !state.Unknown {
 				recovered = true
 				w.recoverProject(ctx, ps)
+			}
+			starting()
+		}
+		if ps.resolved {
+			if nextRoute.IsZero() {
+				nextRoute = now.Add(routeIdle)
+			}
+			if at, failing := w.routeFailing(ps); failing {
+				nextRoute = at
+			}
+			if !now.Before(nextRoute) {
+				_ = w.checkRoute(ctx, ps, true)
+				nextRoute = now.Add(routeIdle)
+				if at, failing := w.routeFailing(ps); failing {
+					nextRoute = at
+				}
 			}
 		}
 		if w.leaseHeld(ps) {
@@ -130,6 +153,9 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 		if dirty {
 			wake = minTime(wake, maxTime(dirtyAt.Add(250*time.Millisecond), refreshed.Add(2*time.Second)))
 		}
+		if ps.resolved {
+			wake = minTime(wake, nextRoute)
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -171,6 +197,10 @@ func (w *Worker) refreshEvery(ps *projectState) time.Duration {
 // refusal) but are never run.
 func (w *Worker) refreshJobs(ctx context.Context, ps *projectState) error {
 	jobs, err := w.opt.Kata.Jobs(ctx, ps.project.ID)
+	var aside, warnings []JobNote
+	if err == nil {
+		aside, warnings = definitionNotes(ctx, w.opt.Kata, w.opt.Config, ps.cfg, ps.project.ID, jobs, w.clock.Now())
+	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if err != nil {
@@ -181,6 +211,7 @@ func (w *Worker) refreshJobs(ctx context.Context, ps *projectState) error {
 	for _, j := range jobs {
 		ps.jobs[j.UID] = j
 	}
+	ps.aside, ps.warnings = aside, warnings
 	ps.jobsErr, ps.jobsAt = "", w.clock.Now()
 	return nil
 }
@@ -191,6 +222,13 @@ func (w *Worker) follow(ctx context.Context, ps *projectState) {
 	backoff := 500 * time.Millisecond
 	cursor := w.readCursor(ps.project.UID)
 	for ctx.Err() == nil {
+		if err := w.checkRoute(ctx, ps, true); err != nil {
+			at, _ := w.routeFailing(ps)
+			if !w.sleep(ctx, max(at.Sub(w.clock.Now()), time.Second)) {
+				return
+			}
+			continue
+		}
 		var opened time.Time
 		delivered := false
 		err := w.opt.Kata.Stream(ctx, ps.project.ID, cursor, func() {

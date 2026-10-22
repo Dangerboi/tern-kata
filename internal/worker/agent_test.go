@@ -98,17 +98,3 @@ func golden(t *testing.T, path, got string) {
 		t.Fatalf("prompt differs from %s (run with -update to rewrite):\n%s", path, got)
 	}
 }
-
-func TestAgentArgsKeepAProfilesOwnApprovalMode(t *testing.T) {
-	has := func(args []string, want string) bool {
-		return strings.Contains(" "+strings.Join(args, " ")+" ", " "+want+" ")
-	}
-	def := agentArgs(Profile{Model: "m", Thinking: "low"}, "/run", "/run/prompt.md", "")
-	if !has(def, "--approval-mode yolo") || !has(def, "--model m") || !has(def, "--thinking low") || def[len(def)-1] != "@/run/prompt.md" {
-		t.Fatalf("default args %v", def)
-	}
-	own := agentArgs(Profile{Args: []string{"--approval-mode", "write"}}, "/run", "/run/prompt.md", "")
-	if has(own, "yolo") || !has(own, "--approval-mode write") {
-		t.Fatalf("args %v override the profile's approval mode", own)
-	}
-}

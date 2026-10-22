@@ -87,6 +87,9 @@ func jobCard(row model.JobRow, selected bool) tern.Element {
 	if len(meta) > 0 {
 		body = append(body, ui.Text{Common: ui.Common{Key: "meta"}, Spans: []ui.Span{{T: strings.Join(meta, " · "), S: "muted"}}})
 	}
+	if row.Unsupported != "" {
+		body = append(body, ui.Text{Common: ui.Common{Key: "unsupported", Tone: ui.ToneWarning}, Text: "Set aside on this machine: " + row.Unsupported})
+	}
 	cardTone := ui.ToneNeutral
 	if row.Pause == model.PauseDisabled || row.Pause == model.PauseArchived {
 		cardTone = ui.ToneMuted

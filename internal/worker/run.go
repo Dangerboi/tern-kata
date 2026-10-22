@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -159,7 +160,7 @@ func (w *Worker) qualified(j *Journal, shortID string) string { return j.Project
 // admit is ADR-0002's order: confirm the lease generation, resolve the per-run Issue, then send the revision-0
 // running observation. Only a created or replayed reply authorizes execution.
 func (w *Worker) admit(ctx context.Context, ps *projectState, j *Journal) error {
-	if _, err := w.opt.Kata.Capabilities(ctx, j.ProjectID); err != nil {
+	if err := w.checkRoute(ctx, ps, false); err != nil {
 		return fmt.Errorf("cannot confirm the kata route: %w", err)
 	}
 	state := claimLease(ctx, w.opt.Kata, w.clock, w.opt.Config.Executor, ps.actor, j.ProjectID, false)
@@ -288,6 +289,9 @@ func (c Config) readSecret(name string) (string, error) {
 	}
 	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
 		return "", fmt.Errorf("secret %q: %s must be private (mode 0600), it is %o", name, path, info.Mode().Perm())
+	}
+	if foreignOwned(info) {
+		return "", fmt.Errorf("secret %q: %s must be owned by the user the worker runs as", name, path)
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -586,8 +590,13 @@ func classify(j *Journal) *Outcome {
 }
 
 // report sends what the run owes kata: the final observation first (it never waits for an Issue write), then the
-// comment and label the closure check calls for (ADR-0009). Every write is an intent saved before it is sent.
+// comment and label the closure check calls for (ADR-0009), and for a held run the inbox request to the Issue's owner or
+// author (ADR-0005). Every write is an intent saved before it is sent, and nothing is sent while the Project's route is
+// unconfirmed (ADR-0004).
 func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error {
+	if err := w.checkRoute(ctx, ps, false); err != nil {
+		return fmt.Errorf("cannot confirm the kata route: %w", err)
+	}
 	if len(j.Intents) == 0 {
 		intents := []Intent{{Kind: IntentFinal}}
 		issueOpen := true
@@ -600,6 +609,9 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 		}
 		switch j.Outcome.Status {
 		case StatusSucceeded:
+			if quietSuccess(j) {
+				break // every step was a command that exited 0 on an existing Issue: the Run says it all
+			}
 			if j.Issue.Existing || issueOpen {
 				intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("succeeded"), Text: j.Outcome.Summary})
 				if !j.Issue.Existing {
@@ -610,10 +622,11 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("failed"), Text: "The run failed: " + j.Outcome.Summary})
 		case StatusUnknown:
 			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("held"), Text: "The run is held: " + j.Outcome.Summary + "\n\nResume it with `tern-kata worker resume " + j.RunUID + "` or abandon it with `tern-kata worker abandon " + j.RunUID + "`."})
+			intents = append(intents, Intent{Kind: IntentNotify, Text: heldNotice(j)})
 		case StatusCancelled:
 			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("cancelled"), Text: "The run was abandoned: " + j.Outcome.Summary})
 		}
-		if j.Notify != nil { // a notify run's only record is the Run itself; the Issue gets no comment or label
+		if j.Notify != nil { // a notify run's only record is the Run itself; the Issue gets no comment, label or request
 			intents = intents[:1]
 		}
 		var err error
@@ -622,17 +635,31 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 		}
 	}
 	for i := range j.Intents {
-		it := j.Intents[i]
-		if it.Done {
+		if j.Intents[i].Done || j.Intents[i].Inspect != "" {
 			continue
 		}
-		err := w.send(ctx, j, it)
+		var err error
+		if it := j.Intents[i]; it.Kind == IntentNotify && it.Recipient == "" {
+			if j, err = w.resolveRecipient(ctx, j, i); err == nil && j.Intents[i].Done {
+				continue // the Issue names nobody to tell
+			}
+		}
+		var revision int64
+		if err == nil {
+			revision, err = w.send(ctx, j, j.Intents[i])
+		}
 		var herr error
-		j, herr = w.store.Update(j.RunUID, "intent-"+string(it.Kind), func(j *Journal) error {
-			j.Intents[i].Done = err == nil
-			j.Intents[i].Error = ""
-			if err != nil {
-				j.Intents[i].Error = err.Error()
+		kind := j.Intents[i].Kind
+		j, herr = w.store.Update(j.RunUID, "intent-"+string(kind), func(j *Journal) error {
+			it := &j.Intents[i]
+			it.Done, it.Error, it.Inspect = err == nil, "", ""
+			if inspect, ok := errors.AsType[*inspectError](err); ok {
+				it.Inspect = inspect.reason
+			} else if err != nil {
+				it.Error = err.Error()
+			}
+			if err == nil && revision > 0 {
+				j.Revision = revision
 			}
 			return nil
 		})
@@ -641,40 +668,99 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 		}
 	}
 	for _, it := range j.Intents {
-		if !it.Done {
+		if !it.Done && it.Inspect == "" {
 			return fmt.Errorf("%s not delivered yet: %s", it.Kind, it.Error)
 		}
+	}
+	for _, why := range j.Inspections() {
+		w.opt.Log("run %s: needs inspection: %s", j.RunUID, why)
 	}
 	_, err := w.store.Update(j.RunUID, "settled", func(j *Journal) error { j.Phase = PhaseSettled; return nil })
 	return err
 }
 
-// send delivers one intent. A final observation that finds the stored run already at the intended status counts as delivered.
-func (w *Worker) send(ctx context.Context, j *Journal, it Intent) error {
+// inspectError is a write that cannot be delivered without a person looking: kata holds something a retry would
+// overwrite (ADR-0006).
+type inspectError struct{ reason string }
+
+func (e *inspectError) Error() string { return e.reason }
+
+// quietSuccess is ADR-0009's quiet success: a run of command steps only, each of which exited 0, on an existing Issue
+// says nothing there; its final observation carries the receipt.
+func quietSuccess(j *Journal) bool {
+	if !j.Issue.Existing || j.Workflow == nil || len(j.Workflow.Steps) == 0 || len(j.Steps) != len(j.Workflow.Steps) {
+		return false
+	}
+	for i, s := range j.Workflow.Steps {
+		step := j.Steps[i]
+		if s.Kind != "command" || step.State != StepSucceeded || step.Exit == nil || step.Exit.Code != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// heldNotice is the inbox request for a held run, saved in its intent so a retry sends the same words.
+func heldNotice(j *Journal) string {
+	return truncate(fmt.Sprintf("Run %s of %q on %s is held: %s Resume it with `tern-kata worker resume %s` or abandon it with `tern-kata worker abandon %s`.",
+		j.RunUID, j.JobName, j.Issue.Ref, j.Outcome.Summary, j.RunUID, j.RunUID), maxNotifyBytes)
+}
+
+// resolveRecipient reads the Issue and saves who its owner or author is in the notify intent, once: from then on a
+// retry sends to that address whatever the Issue says.
+func (w *Worker) resolveRecipient(ctx context.Context, j *Journal, i int) (*Journal, error) {
+	issue, err := w.opt.Kata.ShowIssue(ctx, j.ProjectID, j.Issue.UID)
+	if err != nil {
+		return j, err
+	}
+	recipient := cmp.Or(issue.Owner, issue.Author)
+	return w.store.Update(j.RunUID, "intent-notify-resolved", func(j *Journal) error {
+		j.Intents[i].Recipient, j.Intents[i].Done = recipient, recipient == ""
+		return nil
+	})
+}
+
+// send delivers one intent and returns the Run revision kata stored when it was a final observation. A final
+// observation that finds kata holding a different revision is never sent over it: the journal's revision is the one
+// the worker last wrote, and anything newer is somebody else's observation (ADR-0006). It counts as delivered only
+// when the stored run already says what the worker means to.
+func (w *Worker) send(ctx context.Context, j *Journal, it Intent) (int64, error) {
 	switch it.Kind {
 	case IntentComment:
-		return w.opt.Kata.Comment(ctx, j.ProjectID, j.Actor, j.Issue.UID, it.Key, it.Text)
+		return 0, w.opt.Kata.Comment(ctx, j.ProjectID, j.Actor, j.Issue.UID, it.Key, it.Text)
 	case IntentLabel:
-		return w.opt.Kata.AddLabel(ctx, j.ProjectID, j.Actor, j.Issue.UID, it.Text)
+		return 0, w.opt.Kata.AddLabel(ctx, j.ProjectID, j.Actor, j.Issue.UID, it.Text)
+	case IntentNotify:
+		return 0, w.sendNotice(ctx, j, it.Recipient, it.Text)
 	}
 	obs := w.observation(j, j.Outcome.Status, j.Outcome.Summary, j.Revision)
 	end := j.Outcome.At
 	obs.EndedAt, obs.InputTokens, obs.OutputTokens = &end, j.Outcome.InputTokens, j.Outcome.OutputTokens
-	_, _, err := w.opt.Kata.Observe(ctx, j.ProjectID, obs)
-	if errors.Is(err, ErrConflict) {
-		current, serr := w.opt.Kata.ShowRun(ctx, j.ProjectID, j.RunUID)
-		if serr != nil {
-			return err
-		}
-		if current.Status == j.Outcome.Status {
-			return nil
-		}
-		obs.ExpectedRevision = current.Revision
-		if current.Status == StatusRunning || current.Status == StatusUnknown { // unknown is this worker's own earlier hold
-			_, _, err = w.opt.Kata.Observe(ctx, j.ProjectID, obs)
-		}
+	stored, _, err := w.opt.Kata.Observe(ctx, j.ProjectID, obs)
+	if !errors.Is(err, ErrConflict) {
+		return stored.Revision, err
 	}
-	return err
+	current, serr := w.opt.Kata.ShowRun(ctx, j.ProjectID, j.RunUID)
+	if serr != nil {
+		return 0, err
+	}
+	if current.Status == j.Outcome.Status {
+		return current.Revision, nil
+	}
+	return 0, &inspectError{fmt.Sprintf("kata holds this run as %s at revision %d, not at the revision %d this worker last wrote; the final %s observation was not sent over it", current.Status, current.Revision, j.Revision, j.Outcome.Status)}
+}
+
+// sendNotice puts an inbox request on the run's Issue. The write is a read-back class (ADR-0006): the Issue is read
+// first and a request already there with these words from this actor counts as sent.
+func (w *Worker) sendNotice(ctx context.Context, j *Journal, recipient, message string) error {
+	issue, err := w.opt.Kata.ShowIssue(ctx, j.ProjectID, j.Issue.UID)
+	if err != nil {
+		return err
+	}
+	if from, text, ok := issue.InboxRequest(recipient); ok && from == j.Actor && text == message {
+		return nil
+	}
+	return w.opt.Kata.Notify(ctx, j.ProjectID, j.Actor, j.Issue.UID, recipient, w.opt.Config.Executor, message)
 }
 
 // lineSink feeds omp's stdout, line by line, to the parser and keeps the first bytes in a capped file.
@@ -793,9 +879,9 @@ func (t *tailSink) tailText() string {
 func (t *tailSink) close() { _ = t.file.Close() }
 
 // notify is a notify run's whole work: send the inbox request to the recipient on the run's Issue and record the
-// outcome. The request is one metadata slot per Issue and recipient with fixed content, so repeating it after a crash
-// between the send and the saved outcome changes nothing; the run's identity (ADR-0002) already keeps a restart from
-// preparing the occurrence twice.
+// outcome. The request is worked out from the Issue once and saved in the journal, so a retry or a restart sends the
+// same words to the same address; before sending, the Issue is read, and a request already there counts as sent
+// (ADR-0006 "read-back"). The run's identity (ADR-0002) already keeps a restart from preparing the occurrence twice.
 func (w *Worker) notify(ctx context.Context, j *Journal) error {
 	finish := func(status, summary string) error {
 		_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
@@ -805,29 +891,42 @@ func (w *Worker) notify(ctx context.Context, j *Journal) error {
 		})
 		return err
 	}
-	issue, err := w.opt.Kata.ShowIssue(ctx, j.ProjectID, j.Issue.UID)
-	if err != nil {
-		if refused(err) {
-			return finish(StatusFailed, "cannot read the Issue to notify about: "+err.Error())
+	notice := j.Notify.Resolved
+	if notice == nil {
+		issue, err := w.opt.Kata.ShowIssue(ctx, j.ProjectID, j.Issue.UID)
+		if err != nil {
+			if refused(err) {
+				return finish(StatusFailed, "cannot read the Issue to notify about: "+err.Error())
+			}
+			return err
 		}
-		return err
+		recipient := j.Notify.Recipient
+		if recipient == currentOwnerOrAuthor {
+			recipient = cmp.Or(issue.Owner, issue.Author)
+		}
+		message := j.Notify.Message
+		if strings.TrimSpace(message) == "" {
+			message = fmt.Sprintf("%s: %s", w.qualified(j, issue.ShortID), issue.Title)
+		}
+		saved, err := w.store.Update(j.RunUID, "notify-resolved", func(j *Journal) error {
+			j.Notify.Resolved = &ResolvedNotice{Recipient: recipient, Message: truncate(message, maxNotifyBytes)}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		j, notice = saved, saved.Notify.Resolved
 	}
-	recipient := j.Notify.Recipient
-	if recipient == currentOwnerOrAuthor {
-		recipient = cmpOr(issue.Owner, issue.Author)
+	if notice.Recipient == "" {
+		return finish(StatusFailed, "the Issue has no owner or author to notify")
 	}
-	message := j.Notify.Message
-	if strings.TrimSpace(message) == "" {
-		message = fmt.Sprintf("%s: %s", w.qualified(j, issue.ShortID), issue.Title)
-	}
-	message = truncate(message, maxNotifyBytes)
-	if err := w.opt.Kata.Notify(ctx, j.ProjectID, j.Actor, j.Issue.UID, recipient, w.opt.Config.Executor, message); err != nil {
+	if err := w.sendNotice(ctx, j, notice.Recipient, notice.Message); err != nil {
 		if refused(err) {
 			return finish(StatusFailed, "kata refused the notification: "+err.Error())
 		}
 		return err
 	}
-	return finish(StatusSucceeded, "Notified "+recipient+": "+message)
+	return finish(StatusSucceeded, "Notified "+notice.Recipient+": "+notice.Message)
 }
 
 const (
