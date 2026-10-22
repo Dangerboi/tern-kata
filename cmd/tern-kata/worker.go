@@ -24,6 +24,8 @@ type workerEnv struct {
 	Version string
 	// Supervisor is who started this worker, from TERN_KATA_SUPERVISOR; empty when it was started by hand.
 	Supervisor string
+	// Dir is the directory `worker init` and `worker add` read the Binding from, and Hostname names the machine's executor.
+	Dir, Hostname string
 }
 
 // newWorkerEnv is the production environment: tern-kata's user folders and kata's own discovery.
@@ -32,7 +34,12 @@ func newWorkerEnv() (workerEnv, error) {
 	if err != nil {
 		return workerEnv{}, subcommandError{err}
 	}
-	return workerEnv{Dirs: dirs, Locate: data.LocateWithKata, Log: os.Stderr, Version: buildVersion(), Supervisor: os.Getenv("TERN_KATA_SUPERVISOR")}, nil
+	dir, err := os.Getwd()
+	if err != nil {
+		return workerEnv{}, subcommandError{err}
+	}
+	host, _ := os.Hostname()
+	return workerEnv{Dirs: dirs, Locate: data.LocateWithKata, Log: os.Stderr, Version: buildVersion(), Supervisor: os.Getenv("TERN_KATA_SUPERVISOR"), Dir: dir, Hostname: host}, nil
 }
 
 // isWorkerCommand reports whether the plan is `run` or one of the `worker` forms, which need no workspace or gateway.
@@ -45,6 +52,8 @@ func runWorkerCommand(ctx context.Context, plan LaunchPlan, env workerEnv, out i
 	switch {
 	case plan.Subcommand == "run":
 		return runJobNow(ctx, plan, env, out)
+	case len(plan.Operands) == 1 && (plan.Operands[0] == "init" || plan.Operands[0] == "add"):
+		return setupWorkerConfig(plan.Operands[0] == "add", plan, env, out)
 	case len(plan.Operands) == 1 && plan.Operands[0] == "status":
 		resp, err := worker.Ask(ctx, env.Dirs, worker.Request{Op: "status"})
 		if err != nil {
