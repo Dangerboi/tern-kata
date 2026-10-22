@@ -268,6 +268,8 @@ func TestUResumesAndAAbandonsTheHeldRunThroughTheWorker(t *testing.T) {
 	// The worker's refusal is shown; its acceptance reads the worker and the runs again.
 	refused := step(t, resumed.State, model.LocalRunMoved{UID: "R1", Resumed: true, Err: errors.New("run R1 cannot be resumed: its Project's lease is held elsewhere")})
 	wantText(t, "refusal", refused.State.Model.Notice, "Cannot resume", "lease is held elsewhere")
+	notRefused := step(t, abandoned.State, model.LocalRunMoved{UID: "R1", Err: errors.New("run R1 cannot be abandoned: its notification is being sent and it ends in a moment")})
+	wantText(t, "abandon refusal", notRefused.State.Model.Notice, "Cannot abandon", "being sent")
 	accepted := step(t, resumed.State, model.LocalRunMoved{UID: "R1", Resumed: true, State: "resuming"})
 	if _, ok := askedWorker(accepted.Cmds); !ok {
 		t.Errorf("cmds %#v, want the worker's status read again", accepted.Cmds)
