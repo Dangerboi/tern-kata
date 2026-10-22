@@ -3,6 +3,7 @@ package worker
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -98,7 +99,7 @@ func (w *Worker) RunDetail(uid string) (RunDetail, error) {
 	}
 	dir := w.attemptDir(j) // a workflow shows its latest step's output
 	d := RunDetail{RunStatus: w.runStatus(j), Steps: stepsOf(j), OutputTail: outputTail(filepath.Join(dir, "output.jsonl"), OutputTailBytes), StderrTail: fileTail(filepath.Join(dir, "stderr.log"), 2048)}
-	d.Cwd = cmpOr(j.Checkout, w.store.RunDir(uid))
+	d.Cwd = cmp.Or(j.Checkout, w.store.RunDir(uid))
 	d.SessionDir, d.SessionID = w.sessionOf(j)
 	if d.OutputTail == "" { // a command step's output is its own log
 		d.OutputTail = fileTail(filepath.Join(dir, "output.log"), OutputTailBytes)

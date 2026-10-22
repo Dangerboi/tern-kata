@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strings"
@@ -68,7 +69,7 @@ type RunStatus struct {
 
 // Status reports the worker as it is now.
 func (w *Worker) Status() Status {
-	s := Status{Executor: w.opt.Config.Executor, Actor: cmpOr(w.opt.Config.Actor, w.opt.Actor), Version: w.opt.Version, Supervisor: w.opt.Supervisor, PID: w.pid, Started: w.started, Now: w.clock.Now(), Unsupported: unsupported}
+	s := Status{Executor: w.opt.Config.Executor, Actor: cmp.Or(w.opt.Config.Actor, w.opt.Actor), Version: w.opt.Version, Supervisor: w.opt.Supervisor, PID: w.pid, Started: w.started, Now: w.clock.Now(), Unsupported: unsupported}
 	w.mu.Lock()
 	for _, ps := range w.projects {
 		p := ProjectStatus{Name: ps.cfg.Name, Capacity: ps.cfg.Capacity, InUse: len(ps.held) + ps.pending, Following: ps.streamOpen}
@@ -97,6 +98,7 @@ func (w *Worker) Status() Status {
 	s.Quarantined = append(quarantined, w.store.Quarantine()...)
 	slices.Sort(s.Quarantined)
 	s.Quarantined = slices.Compact(s.Quarantined)
+	s.Quarantined = slices.DeleteFunc(s.Quarantined, func(uid string) bool { _, seen := w.store.Acknowledged(uid); return seen })
 	slices.SortFunc(journals, func(a, b *Journal) int { return b.StartedAt.Compare(a.StartedAt) })
 	settled := 0
 	for _, j := range journals {
@@ -120,6 +122,8 @@ func (w *Worker) runStatus(j *Journal) RunStatus {
 		r.ResumeRefusal = w.resumeRefusal(j)
 		r.Resumable = r.ResumeRefusal == ""
 		r.Abandonable = abandonRefusal(j) == ""
+	} else {
+		r.Abandonable = cancelRefusal(j) == "" // a running run can be asked to stop
 	}
 	return r
 }
@@ -135,6 +139,8 @@ func runStatus(j *Journal) RunStatus {
 		r.Held, r.Hold, r.Detail = true, j.Outcome.Hold, j.Outcome.Summary
 	case j.Outcome != nil:
 		r.State = j.Outcome.Status
+	case j.Cancel != nil:
+		r.State = "cancelling"
 	case j.Phase == PhaseStarted, j.Phase == PhaseLaunching:
 		r.State = "running"
 	default:

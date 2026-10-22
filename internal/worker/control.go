@@ -18,7 +18,7 @@ import (
 //	"status"     answers Status, whose Runs carry each run's hold, reason and which verbs would be accepted.
 //	"run-detail" Run: a run uid; answers Detail (status line, hold reason, steps, output tail).
 //	"resume"     Run: a held run's uid, Actor: who asks (optional); answers Transition.
-//	"abandon"    Run: a held run's uid, Actor: who asks (optional); answers Transition.
+//	"abandon"    Run: a held or running run's uid (or one this machine lost the state of), Actor: who asks (optional); answers Transition.
 type Request struct {
 	Op    string `json:"op"`
 	Job   string `json:"job,omitempty"`
@@ -74,6 +74,7 @@ func (w *Worker) serveControl(ctx context.Context, ln interface {
 		go func() {
 			defer w.runs.Done()
 			defer conn.Close()
+			defer context.AfterFunc(ctx, func() { _ = conn.Close() })() // a client that says nothing must not outlive the worker
 			_ = conn.SetDeadline(time.Now().Add(2 * time.Minute))
 			var req Request
 			if err := json.NewDecoder(conn).Decode(&req); err != nil {

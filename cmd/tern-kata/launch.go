@@ -284,7 +284,9 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 the run's saved session (--resume) with a prompt that warns the
                                 previous turn may have partly run; the run goes back to running
   worker abandon <run-uid>      give up a held run: kata records it cancelled ("abandoned by <actor>")
-                                and the run's slot and overlap gate are freed
+                                and the run's slot and overlap gate are freed. A running run is stopped
+                                first (SIGTERM, SIGKILL after 10 s); a run this machine lost the state of
+                                is recorded unknown ("local state lost"), a quarantined one acknowledged
 <ref> is a short id in this workspace's Project, <project>#<short id>, or a ULID.
 The Issue's Project must be this workspace's Binding.
 

@@ -2,12 +2,14 @@ package worker
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // RunTransition is what a resume or an abandon answers once the run's journal records it.
@@ -16,18 +18,24 @@ type RunTransition struct {
 	Project string
 	Job     string
 	Issue   string
-	// State is the run's state as saved: "resuming" after a resume, "cancelled" after an abandon.
+	// State is the run's state as saved: "resuming" after a resume, "cancelled" after an abandon of a held run,
+	// "cancelling" after an abandon of a running one, "unknown" after one of a run whose local state was lost and
+	// "acknowledged" after one of a quarantined run kata holds nothing running of.
 	State string
 }
 
 // Resume continues a held run's omp session as a new headless attempt (ADR-0005 "Resume"). It refuses unless the run
 // is an uncertainty hold of this worker with its whole process group proven gone, its Project's lease is held, its
-// Issue is open and a slot is free. Acceptance saves the new attempt, the generation and the session id before
-// anything starts; the held attempt's prompt is never sent again. by is the actor recorded for the resume.
+// Issue is open and a slot is free. Acceptance saves the new attempt, the generation, the session id and a fresh
+// expiry before anything starts; the held attempt's prompt is never sent again. by is the actor recorded for the
+// resume. One request owns a run at a time, so two resumes of one hold accept one and the other never touches its slot.
 func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, error) {
 	if w.halted.Load() {
 		return RunTransition{}, errors.New("the worker is stopping")
 	}
+	op := w.runOps.get(uid)
+	op.Lock()
+	defer op.Unlock()
 	j, ps, err := w.heldRun(uid)
 	if err != nil {
 		return RunTransition{}, err
@@ -58,15 +66,20 @@ func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, err
 	w.mu.Lock()
 	generation := ps.lease.Generation
 	w.mu.Unlock()
-	by = cmpOr(by, ps.actor)
+	by = cmp.Or(by, ps.actor)
 	updated, err := w.store.Update(uid, "resume-accepted", func(j *Journal) error {
-		// Checked again under the journal's lock: two requests for one hold accept one.
+		// Checked again under the journal's lock: a request that is not this worker's own cannot slip in between.
 		if reason := w.resumeRefusal(j); reason != "" {
 			return fmt.Errorf("run %s cannot be resumed: %s", uid, reason)
 		}
+		in, out := w.heldTokens(j)
+		j.CarriedInput, j.CarriedOutput = addTokens(j.CarriedInput, in), addTokens(j.CarriedOutput, out)
 		j.Attempt = j.attempt() + 1
 		j.Resume = &ResumeRecord{Attempt: j.Attempt, SessionID: w.sessionID(j), By: by, At: w.clock.Now().UTC(), Hold: j.Outcome.Hold, Detail: j.Outcome.Summary}
 		j.Generation = generation
+		if j.Workflow != nil { // one fresh expiry from the frozen timeout, from the moment the resume is accepted
+			j.ExpiresAt = w.clock.Now().UTC().Add(time.Duration(j.TimeoutSeconds) * time.Second)
+		}
 		j.Outcome, j.Exit, j.Result, j.Intents = nil, nil, nil, nil
 		j.Phase = PhaseResuming
 		return nil
@@ -81,21 +94,54 @@ func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, err
 	return transition(updated), nil
 }
 
-// Abandon records a held run as cancelled (ADR-0005 "Abandon"): "abandoned by <actor>" with the held reason, an
-// Issue comment, and the slot and overlap gate freed. A hold from before kata saw the run is closed locally without
-// writing to kata. It refuses a run that is not held, still being reported, or whose recorded process group is still present.
+// heldTokens is what the held attempt's agent reported: from its saved result, else from the output it left behind
+// (a worker that stopped before saving the exit status still has its agent's last usage on disk).
+func (w *Worker) heldTokens(j *Journal) (in, out *int64) {
+	if r := j.Result; r != nil && (r.InputTokens != nil || r.OutputTokens != nil) {
+		return r.InputTokens, r.OutputTokens
+	}
+	r := readOutput(filepath.Join(w.attemptDir(j), "output.jsonl"))
+	return r.InputTokens, r.OutputTokens
+}
+
+// Abandon ends a run the user no longer wants (ADR-0005 "Abandon"). A held run is recorded as cancelled, "abandoned
+// by <actor>" with the held reason, with an Issue comment, and its slot and overlap gate freed; a hold from before
+// kata saw the run is closed locally without writing to kata. A running run is asked to stop: its process group gets
+// SIGTERM, then SIGKILL after 10 s, and the run is recorded cancelled once the group is gone (ADR-0008). A run this
+// machine lost (no journal, or one in quarantine) is recorded `unknown` "local state lost" in kata. It refuses a run
+// that is settled, still being reported, or whose recorded process group is still present, and every Project that
+// admits nothing, as run and resume do.
 func (w *Worker) Abandon(ctx context.Context, uid, by string) (RunTransition, error) {
 	if w.halted.Load() {
 		return RunTransition{}, errors.New("the worker is stopping")
 	}
+	op := w.runOps.get(uid)
+	op.Lock()
+	defer op.Unlock()
 	j, ps, err := w.heldRun(uid)
+	if lost, ok := errors.AsType[*noRunError](err); ok {
+		return w.abandonLost(ctx, lost, by)
+	}
 	if err != nil {
 		return RunTransition{}, err
+	}
+	if why := w.admitsNothing(ps); why != "" {
+		return RunTransition{}, fmt.Errorf("run %s cannot be abandoned: Project %s admits nothing: %s", uid, ps.cfg.Name, why)
+	}
+	by = cmp.Or(by, ps.actor)
+	if !j.Held() {
+		if reason := cancelRefusal(j); reason != "" {
+			return RunTransition{}, fmt.Errorf("run %s cannot be abandoned: %s", uid, reason)
+		}
+		updated, err := w.cancelRunning(ps, uid, by)
+		if err != nil {
+			return RunTransition{}, err
+		}
+		return transition(updated), nil
 	}
 	if reason := abandonRefusal(j); reason != "" {
 		return RunTransition{}, fmt.Errorf("run %s cannot be abandoned: %s", uid, reason)
 	}
-	by = cmpOr(by, ps.actor)
 	updated, err := w.store.Update(uid, "abandoned", func(j *Journal) error {
 		if reason := abandonRefusal(j); reason != "" {
 			return fmt.Errorf("run %s cannot be abandoned: %s", uid, reason)
@@ -127,14 +173,25 @@ func transition(j *Journal) RunTransition {
 	return t
 }
 
+// noRunError means this worker holds no readable journal of the run: it has none, or it was set aside in quarantine.
+type noRunError struct {
+	uid         string
+	quarantined bool
+}
+
+func (e *noRunError) Error() string {
+	if e.quarantined {
+		return fmt.Sprintf("run %s has a damaged journal, set aside in quarantine; run `tern-kata worker doctor`", e.uid)
+	}
+	return fmt.Sprintf("this worker has no run %s", e.uid)
+}
+
 // heldRun loads a run this worker owns and the Project state serving it.
 func (w *Worker) heldRun(uid string) (*Journal, *projectState, error) {
 	j, err := w.store.Load(uid)
 	switch {
-	case errors.Is(err, ErrNoJournal) && w.store.IsQuarantined(uid):
-		return nil, nil, fmt.Errorf("run %s has a damaged journal, set aside in quarantine; run `tern-kata worker doctor`", uid)
 	case errors.Is(err, ErrNoJournal):
-		return nil, nil, fmt.Errorf("this worker has no run %s", uid)
+		return nil, nil, &noRunError{uid: uid, quarantined: w.store.IsQuarantined(uid)}
 	case err != nil:
 		return nil, nil, err
 	case j.Executor != w.opt.Config.Executor:
@@ -230,7 +287,7 @@ func providerHold(j *Journal) (reason, detail string) {
 	default:
 		return "", ""
 	}
-	return reason, fmt.Sprintf("the provider answered %d: %s", r.ErrorStatus, cmpOr(strings.TrimSpace(r.ErrorText), "no message"))
+	return reason, fmt.Sprintf("the provider answered %d: %s", r.ErrorStatus, cmp.Or(strings.TrimSpace(r.ErrorText), "no message"))
 }
 
 // finishedItsTurn reports whether the agent's saved output shows a terminal agent_end: the turn ended, so a hold
