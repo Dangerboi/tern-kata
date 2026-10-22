@@ -12,6 +12,30 @@ The same example Project in tern-kata (top) and in `kata tui` (bottom), both run
 
 In tern-kata, Issue bodies render as Markdown, priorities and labels show as chips, and rows, tabs and links respond to mouse clicks.
 
+## Features
+
+- **Issue list and detail**: a Project's Issues nested under their parents, with priority, status, child counts and age, beside the Issue detail with its Markdown body, properties and Activity tabs (Comments, Events, Links, Attachments). Changes made anywhere, by you or an agent, show up live.
+- **Collections and the Menu**: Inbox, Today, Upcoming, Deadlines, All Open, Logbook and every kata Project, plus a search (`/`) and filters (`f`, `s`) over any of them.
+- **Editing from the Pane**: Create (`n`, `N` for a child), Close (`x`), reopen (`r`), comments (`c` in the detail) and replies (`R`), labels (`+`, `-`), owner (`a`, `A`), priority (`!`), parent (`p`), recurrence (`O`) and the Issue body in Tern's editor (`e`).
+- **Board mode, Attachments and the Dates card**, shown below.
+- **[kata links](#clickable-ticket-links-from-agents)** from agents' chat replies open the Issue in tern-kata.
+
+**Board mode** ([details](#board-mode)): `b` in a Project shows its Issues as cards in Lanes, one per triage label, with No lane on the left and recently closed Issues in Done on the right. `<` and `>` move a card to the next Lane by swapping its label in kata. A card shows its priority, its most pressing date and a Blocked marker when an open Issue blocks it; selecting one tags its related cards (`parent`, `blocks this`) and lists its Relationships.
+
+![The acme-shop Board with "Add Apple Pay to checkout" selected, its parent and blocker tagged](docs/images/board.png)
+
+Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relationships line selects that card; an Issue the Board doesn't draw, like this one in another Project, opens in the detail, and Esc goes back.
+
+![The Ready for agent Lane beside the detail of a related Issue in the acme-infra Project](docs/images/related-detail.png)
+
+**Attachments** ([details](#attachments)): `u` attaches a screenshot, log or any other file to an Issue, and the Attachments tab lists them. Agents find them through the Issue's kata metadata, and `tern-kata attach` does the same from a shell.
+
+![The Attachments tab of "Add Apple Pay to checkout" listing a screenshot and a log](docs/images/attachments.png)
+
+**Dates card** ([details](#dates-card)): `d` sets an Issue's scheduled date and deadline, typed as a date, `today`, `tomorrow`, `+3d` or `+1w`, with the day it resolves to shown under the field. Dated cards on the Board show a badge such as "overdue 1d" or "due tomorrow".
+
+![The Dates card over the Board, with "+1w" resolving to 2026-10-29](docs/images/dates-card.png)
+
 ## How it works
 
 The plugin has two halves:
