@@ -35,6 +35,8 @@ type LaunchPlan struct {
 	Stop       bool
 	// Takeover is `worker --takeover`: claim the served Projects' leases even from another live worker.
 	Takeover bool
+	// InitFlags are `worker init`'s --executor, --actor, --command, --model and --thinking by name without dashes, as typed; unset ones are absent.
+	InitFlags map[string]string
 	// fallbackAuthor is the --as actor exported to `kata tui`; empty leaves the environment untouched.
 	fallbackAuthor string
 }
@@ -160,6 +162,13 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 			plan.Takeover = true
 			continue
 		}
+		if plan.Subcommand == "worker" {
+			if matched, err := parseInitFlag(args, &i, &plan); err != nil {
+				return LaunchPlan{}, err
+			} else if matched {
+				continue
+			}
+		}
 		if plan.Subcommand == "recur" {
 			if matched, err := parseRecurFlag(args, &i, &plan); err != nil {
 				return LaunchPlan{}, err
@@ -191,6 +200,8 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 		// `worker resume <run-uid>` and `worker abandon <run-uid>`; validated below like the other forms.
 	case plan.Subcommand == "worker" && (len(operands) > 1 || len(operands) == 1 && !slices.Contains([]string{"status", "doctor", "init", "add"}, operands[0])):
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata worker [--takeover] | tern-kata worker init | tern-kata worker add | tern-kata worker status | tern-kata worker doctor | tern-kata worker resume <run-uid> | tern-kata worker abandon <run-uid>")
+	case len(plan.InitFlags) > 0 && !slices.Equal(operands, []string{"init"}):
+		return LaunchPlan{}, fmt.Errorf("worker: --executor, --actor, --command, --model and --thinking apply to `tern-kata worker init` only")
 	case plan.Subcommand == "worker" && len(operands) >= 1 && plan.Takeover:
 		return LaunchPlan{}, fmt.Errorf("worker: --takeover applies to `tern-kata worker` only")
 	}
@@ -201,6 +212,36 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 	}
 	plan.TargetRef, plan.Operands = operands[0], operands[1:]
 	return plan, nil
+}
+
+// initFlagNames are the flags of `worker init` that set a value of the written file.
+var initFlagNames = []string{"executor", "actor", "command", "model", "thinking"}
+
+// parseInitFlag reads one of initFlagNames as --name value or --name=value at args[*i], moving *i past a separate value;
+// matched is false for any other argument. The value must not be empty.
+func parseInitFlag(args []string, i *int, plan *LaunchPlan) (matched bool, err error) {
+	name, value, hasValue := strings.Cut(strings.TrimPrefix(args[*i], "--"), "=")
+	if !slices.Contains(initFlagNames, name) {
+		return false, nil
+	}
+	if !hasValue {
+		if *i+1 == len(args) {
+			return true, fmt.Errorf("--%s requires a value", name)
+		}
+		*i++
+		value = args[*i]
+	}
+	if value == "" {
+		return true, fmt.Errorf("--%s requires a value", name)
+	}
+	if _, given := plan.InitFlags[name]; given {
+		return true, fmt.Errorf("--%s given twice", name)
+	}
+	if plan.InitFlags == nil {
+		plan.InitFlags = map[string]string{}
+	}
+	plan.InitFlags[name] = value
+	return true, nil
 }
 
 // parseRecurFlag reads --stop, or one of recur's schedule flags as --name value or --name=value, at args[*i], moving *i past a
@@ -243,7 +284,8 @@ Usage:
                    | --rule <rrule>] [--start DATE] [--zone <iana>] [--stop] [--as <actor>]
   tern-kata run <job-uid> [--as <actor>]
   tern-kata worker [--takeover]
-  tern-kata worker init
+  tern-kata worker init [--executor <name>] [--actor <actor>] [--command <cmd>]
+                        [--model <model>] [--thinking <level>]
   tern-kata worker add
   tern-kata worker status
   tern-kata worker doctor
@@ -281,7 +323,10 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 leases from another machine's worker
   worker init                   write worker.toml for the Project bound to this directory: it serves
                                 that Project from this checkout through the omp default profile;
-                                refuses when the file exists or the directory is not bound
+                                refuses when the file exists or the directory is not bound;
+                                --executor, --actor, --command, --model and --thinking set those
+                                values in it (default: a name from this host, the --as actor
+                                left commented, command omp, no model or thinking)
   worker add                    add the Project bound to this directory (and its checkout) to an
                                 existing worker.toml, leaving every other line as it is
   worker status                 say what the running worker serves, runs and refuses

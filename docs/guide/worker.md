@@ -25,15 +25,15 @@ It needs kata v0.19.0 or newer and `omp` on `PATH`. On Windows, workflow command
 
 ### `tern-kata worker init`
 
-Writes a new `worker.toml`. It refuses when the file already exists (use `worker add`) or when the directory is not bound (run `kata init`). The file holds, in this order, with short comments:
+Writes a new `worker.toml`. Five optional flags set values in it: `--executor <name>`, `--actor <actor>`, `--command <cmd>`, `--model <model>` and `--thinking <level>`; one you leave out keeps the value below. A value the worker's loader refuses (an executor with whitespace, say) is refused naming it, and nothing is written. It refuses when the file already exists (use `worker add`) or when the directory is not bound (run `kata init`). The file holds, in this order, with short comments:
 
 1. a header comment with the trust note;
-2. `executor = "<hostname>"`, the machine's hostname lowercased with every character outside `a-z 0-9 _ -` replaced by `-`;
-3. a commented-out `# actor = "..."` showing the default the worker would use;
+2. `executor = "<hostname>"`, the machine's hostname lowercased with every character outside `a-z 0-9 _ -` replaced by `-` (or the `--executor` value);
+3. a commented-out `# actor = "..."` showing the default the worker would use (or `actor = "..."` with `--actor`);
 4. a commented `[limits]` example;
 5. a `[[projects]]` block for this Project with `capacity = 1` and `checkouts = ["<key>"]`, so the Project's jobs may use only its own checkout;
 6. `[checkouts]` with `<key> = "<absolute checkout>"`;
-7. `[profiles.default]` with `command = "omp"` and commented `model`, `thinking` and `args` examples;
+7. `[profiles.default]` with `command = "omp"` (or `--command`), `model` and `thinking` as commented examples (or set by `--model` and `--thinking`) and a commented `args` example;
 8. a commented `[secrets]` example.
 
 When it finishes it prints the path written and what was added, one line of the trust note, that the plugin's host half starts the worker within 10 seconds (else run `tern-kata worker`), and that `tern-kata worker doctor` checks the setup.

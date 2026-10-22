@@ -34,7 +34,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 ![The Workflows Page with a workflow selected and its steps shown](docs/images/workflows.png)
 
-**The worker.** `tern-kata worker` runs kata's agent prompt jobs and workflows through omp and your shell on your machine and records every run in kata. `tern-kata worker init` and `worker add` set it up. Read the trust note first. See [The worker](docs/guide/worker.md).
+**The worker.** `tern-kata worker` runs kata's agent prompt jobs and workflows through omp and your shell on your machine and records every run in kata. `tern-kata worker init` (with optional `--executor`, `--actor`, `--command`, `--model` and `--thinking`) and `worker add` set it up. Read the trust note first. See [The worker](docs/guide/worker.md).
 
 **Attachments.** `u` attaches a screenshot, log or any other file to an Issue; agents find it through the Issue's kata metadata. See [Attachments](docs/guide/attachments.md).
 
