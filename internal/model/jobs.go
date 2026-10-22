@@ -133,6 +133,8 @@ type JobRow struct {
 	Next     string
 	// Last is the job's latest run or child in words, empty when it has none on record.
 	Last string
+	// Warning is the high-rate warning of a job that makes more than 24 Issues a day, empty for any other.
+	Warning string
 }
 
 // visibleJobs are the jobs the list shows.
@@ -154,6 +156,9 @@ func (m Model) JobRows(now time.Time) []JobRow {
 			row.Next = m.Calendar.Read(next, now)
 		}
 		row.Last = m.lastActivity(job, now)
+		if !job.Archived() {
+			row.Warning = job.HighRateWarning(now)
+		}
 		rows[i] = row
 	}
 	return rows
@@ -229,6 +234,9 @@ func (m Model) JobFacts(now time.Time) []JobFact {
 	add("Schedule", t.Words())
 	if next, ok := job.NextRun(now, m.Jobs.ProjectArchived); ok {
 		add("Next run", m.Calendar.Stamp(next))
+	}
+	if !job.Archived() {
+		add("Warning", job.HighRateWarning(now))
 	}
 	activity := m.Jobs.Activity[job.UID]
 	for i, r := range activity.Runs[:min(len(activity.Runs), JobActivityShown)] {

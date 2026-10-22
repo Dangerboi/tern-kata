@@ -240,6 +240,9 @@ func (j CronJob) NextRun(now time.Time, projectArchived bool) (time.Time, bool) 
 		if !ok {
 			return time.Time{}, false
 		}
+		if every, ok := schedule.(cron.ConstantDelaySchedule); ok && !j.Native() && !j.CreatedAt.IsZero() && every.Delay > 0 {
+			return nextTick(j.CreatedAt, every.Delay, now), true // an adapter's @every counts from its creation like an interval
+		}
 		next := schedule.Next(now)
 		return next, !next.IsZero()
 	case TriggerInterval:
@@ -283,6 +286,48 @@ func nextTick(anchor time.Time, step time.Duration, now time.Time) time.Time {
 		return anchor.Add(step)
 	}
 	return anchor.Add((now.Sub(anchor)/step + 1) * step)
+}
+
+// highRateIssuesPerDay is the most Issues a day a job may create before the Jobs Page warns of it.
+const highRateIssuesPerDay = 24
+
+// IssuesPerDay is about how many Issues a day a job that makes one per run creates, counted over a week from now so a weekday
+// schedule averages out. It is zero for a job that makes none: a native job (its children are what it is for), one that reports to
+// an existing Issue or only notifies, and a trigger without a rate.
+func (j CronJob) IssuesPerDay(now time.Time) int {
+	d := j.Definition
+	if j.Native() || d.Action.Kind != ActionExecute || d.Issue == nil || d.Issue.Kind != IssuePerRun {
+		return 0
+	}
+	const week = 7 * 24 * time.Hour
+	switch t := d.Trigger; t.Kind {
+	case TriggerInterval:
+		if step, ok := intervalStep(t.IntervalSeconds); ok {
+			return int((24*time.Hour + step/2) / step)
+		}
+	case TriggerCron:
+		schedule, ok := t.cronSchedule()
+		if !ok {
+			return 0
+		}
+		if every, isEvery := schedule.(cron.ConstantDelaySchedule); isEvery && every.Delay > 0 {
+			return int((24*time.Hour + every.Delay/2) / every.Delay)
+		}
+		count := 0
+		for next := schedule.Next(now); !next.IsZero() && next.Before(now.Add(week)); next = schedule.Next(next) {
+			count++
+		}
+		return (count + 3) / 7
+	}
+	return 0
+}
+
+// HighRateWarning is the line the Jobs Page shows for a job that makes more than 24 Issues a day, "" for any other.
+func (j CronJob) HighRateWarning(now time.Time) string {
+	if n := j.IssuesPerDay(now); n > highRateIssuesPerDay {
+		return fmt.Sprintf("creates about %d Issues a day; consider an existing Issue", n)
+	}
+	return ""
 }
 
 // cronParser is kata's own: five fields and descriptors, never seconds, so an expression parses here as it does there.

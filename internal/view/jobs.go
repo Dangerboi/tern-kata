@@ -90,6 +90,9 @@ func jobCard(row model.JobRow, selected bool) tern.Element {
 	if row.Last != "" {
 		body = append(body, ui.Text{Common: ui.Common{Key: "last"}, Spans: []ui.Span{{T: row.Last, S: "muted"}}})
 	}
+	if row.Warning != "" {
+		body = append(body, ui.Text{Common: ui.Common{Key: "warning", Tone: ui.ToneWarning}, Text: row.Warning})
+	}
 	cardTone := ui.ToneNeutral
 	if row.Pause == model.PauseDisabled || row.Pause == model.PauseArchived {
 		cardTone = ui.ToneMuted
