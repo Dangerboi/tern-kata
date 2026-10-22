@@ -232,6 +232,14 @@ func plan(cmd model.Cmd, host string) (request, bool) {
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ListJobs(ctx, cmd)) },
 			func(err error) model.Msg { return model.JobsLoaded{Request: cmd.Request, Err: err} }}, true
+	case model.LoadRuns:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ListRuns(ctx, cmd)) },
+			func(err error) model.Msg { return model.RunsLoaded{Request: cmd.Request, Before: cmd.Before, Err: err} }}, true
+	case model.ShowRun:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ShowRun(ctx, cmd)) },
+			func(err error) model.Msg { return model.RunShown{UID: cmd.UID, Err: err} }}, true
 	case model.ShowJob:
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ShowJob(ctx, cmd)) },
@@ -248,6 +256,31 @@ func plan(cmd model.Cmd, host string) (request, bool) {
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.RestoreJob(ctx, cmd)) },
 			func(err error) model.Msg { return model.JobWritten{ProjectID: cmd.ProjectID, UID: cmd.UID, Err: err} }}, true
+	case model.LoadWorkflows:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) {
+				workflows, err := c.ListWorkflows(ctx, cmd.ProjectID)
+				return ok(model.WorkflowsLoaded{ProjectUID: cmd.ProjectUID, Workflows: workflows}, err)
+			},
+			func(err error) model.Msg { return model.WorkflowsLoaded{ProjectUID: cmd.ProjectUID, Err: err} }}, true
+	case model.SaveWorkflow:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.SaveWorkflow(ctx, cmd)) },
+			func(err error) model.Msg {
+				return model.WorkflowWritten{ProjectUID: cmd.ProjectUID, Op: model.WorkflowOpSave, UID: cmd.UID, Err: err}
+			}}, true
+	case model.ArchiveWorkflow:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ArchiveWorkflow(ctx, cmd)) },
+			func(err error) model.Msg {
+				return model.WorkflowWritten{ProjectUID: cmd.ProjectUID, Op: model.WorkflowOpArchive, UID: cmd.UID, Err: err}
+			}}, true
+	case model.RestoreWorkflow:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.RestoreWorkflow(ctx, cmd)) },
+			func(err error) model.Msg {
+				return model.WorkflowWritten{ProjectUID: cmd.ProjectUID, Op: model.WorkflowOpRestore, UID: cmd.UID, Err: err}
+			}}, true
 	case model.ReadSnapshot:
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ReadSnapshot(ctx, cmd)) },

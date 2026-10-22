@@ -2,9 +2,9 @@
 
 **Pane**: The Tern area the program draws into. _Avoid_: block (in Tern a block is a pane type; in kata `blocks` is a link).
 
-**Page**: One of the Pane's top-level views, chosen from the **Page bar**: Issues (the list and the Issue detail), Board and Jobs for now. Each Page keeps its own state, such as its selection, while another is shown. _Avoid_: tab (Tern's tabs and the Issue detail's tabs).
+**Page**: One of the Pane's top-level views, chosen from the **Page bar**: Issues (the list and the Issue detail), Board, Jobs and Workflows for now. Each Page keeps its own state, such as its selection, while another is shown. _Avoid_: tab (Tern's tabs and the Issue detail's tabs).
 
-**Page bar**: The row in the top bar that names the Pages with their keys (`1` Issues, `2` Board, `3` Jobs); a click on a Page presses its key. _Avoid_: tab bar.
+**Page bar**: The row in the top bar that names the Pages with their keys (`1` Issues, `2` Board, `3` Jobs, `5` Workflows); a click on a Page presses its key. _Avoid_: tab bar.
 
 **Issue**: One unit of tracked work in kata, as kata defines it.
 
@@ -82,12 +82,27 @@
 
 **Done**: The column of Issues closed in the last N days of the Pane calendar (default 14), at most M of them (default 20), newest closed first; N and M are per Project, set on the Lanes card or in `lanes.toml`. Its header says "20 of 192" when more qualify. It shows only what the Collection snapshot holds, so a status filter of `open` leaves it empty. Each card names the Lane `r` would reopen it into, the Lane its labels point at.
 
+**Worker**: tern-kata's kata adapter, `tern-kata worker`: a foreground process, one per machine, that runs the adapter prompt jobs of the Projects listed in its `worker.toml` through omp and records every run in kata. It reads its Projects' events, holds each Project's lease, and holds a run it cannot prove finished instead of sending its prompt again. It never runs native jobs and has no window or Pane. A Project listed in `worker.toml` is trusted: anyone who can write its jobs can run prompts and commands on the machine. _Avoid_: daemon (kata's, Tern's), scheduler, runner.
+
+**Agent profile**: A named omp command line in `worker.toml` (`[profiles.<name>]`: command, model, thinking level, extra arguments) that a job selects with `options.profile`, `default` when it names none. _Avoid_: agent (the program), config.
+
 **Cron job**: kata's recurring or scheduled definition in one Project: a name, a trigger (cron expression, interval, once, manual, or an Issue's scheduled date or deadline with a lead), an action (notify, or run an agent prompt or a workflow), an Issue policy and the overlap and catchup rules. Kata stores it and reads it back; it also delivers a **native job**, while an **adapter job** is run by a worker on someone's machine. Archiving (kata calls it deleting) a Cron job stops it until restored. The Jobs Page lists them. _Avoid_: cron (alone), schedule (that is the trigger's words), task.
 
 **Native job**: A Cron job that notifies with a fresh Issue per run (`notify` action, `per-run` Issue policy), whatever its enabled state. Kata's own daemon delivers it: each due occurrence becomes a child Issue of the job's **parent** Issue, and the parent's `cron.progress.<job uid>` metadata records how far delivery has got (`anchor`, the job's creation, and `through`). The Pane reads that metadata and the parent's status. The Jobs Page calls it a "recurring child". _Avoid_: recurring job (a **recurrence** is the Issue's own RRULE).
+
+**Cron-made Issue**: An Issue a native job created, recognised by its `cron.occurrence` metadata (`job_uid`, `definition_event_uid`, `scheduled_at`), which only kata's daemon writes. The list row and Board card carry a "◷" marker, distinct from the Recurrence's "↻", and the Issue detail's Cron job property names the job (its uid when the job is gone) and the run's scheduled time; Enter on it opens the Jobs Page on that job. The job's parent Issue shows a Cron jobs property listing its jobs. _Avoid_: occurrence (that is a Recurrence's Issue), generated Issue.
 
 **Adapter job**: Any Cron job that is not native: it runs an agent prompt or a workflow, or notifies about an existing Issue or an Issue date. Kata never runs it; a worker does, so its interval counts from a start only the worker knows and the Jobs Page leaves its next run out. _Avoid_: external job.
 
 **Pause reason**: Why a Cron job is not running, shown in its state: "archived", "paused: Project archived", "disabled", "paused: parent deleted" or "paused: parent closed"; a job with none is "active". Kata stores no pause, so the Pane derives it, in that order: the job's `deleted_at` beats everything, then an archived Project (read from the Project's own state, because kata answers none of its jobs), then `enabled: false`, then the parent's deleted or closed status. Reopening the parent, restoring the Project or the job, or enabling the job resumes a native job.
 
 **Job card**: The Popup card that makes and edits a Cron job: `n` on the Jobs Page for a new one, `J` on an Issue for a new native job with that Issue as its parent, `e` on the selected job. It edits native jobs for now. A kind and a trigger each decide which fields it shows, and under the trigger it previews the schedule in words and the next three runs. A new job is sent at a uid the card made when it opened, so a resend is not a second job; an edit is a Guarded write on the job's `definition_event_uid`, and when that moved the card shows the newer job, keeps the Draft and takes an explicit choice to save over it, take it or discard. It lets only ctrl+c through. _Avoid_: job form.
+**Run**: Kata's record of one execution of a Cron job or **Workflow**, written by the executor that ran it (an adapter, a worker, another machine's): its status (`running`, `succeeded`, `failed`, `cancelled` or `unknown`, the last for one nobody could settle), the job or workflow it names, the Issue it ran for, the executor's label, start and end, and a summary (message and token counts). Kata keeps it as a revisioned observation and lists runs newest first by when each was first observed. The Runs Page lists them. _Avoid_: execution, job run, history entry.
+
+**Runs Page**: The **Page** (`4`) that lists the Pane's Project's **Runs**, with a detail (Enter) and a filter to one Cron job. Its state is Pane state that is not saved. It acts on the Pane's Project like the Board Page.
+
+**Workflow**: One of a Project's kata workflows: reusable command and prompt steps, each with a key, optional `after` steps it waits for (earlier steps only) and optional retries (0 to 100). Kata stores it; a Cron job that runs one names it. Archiving one that a live Cron job uses is refused by kata. _Avoid_: pipeline, recipe.
+
+**Workflows Page**: The **Page** (`5`) that lists the Pane's Project's Workflows, archived ones hidden until asked for, with an inspector (Enter) that reads the selected one as steps with their dependencies and retries. Its state is Pane state that is not saved. It acts on the Pane's Project like the Board Page, and ends when the Collection is not a Project.
+
+**Workflow card**: The Popup card `n` and `e` open on the Workflows Page. It holds the Workflow as the JSON text kata takes (`{"name": ..., "definition": {...}}`) in the Draft editor's text field, edited in the card or in `$EDITOR`. Saving checks the text locally against kata's rules first and keeps the text on any failure; the write is a Guarded write on the Workflow's `definition_event_uid`, and a conflict keeps the text beside the Workflow as it stands now.

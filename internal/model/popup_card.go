@@ -38,6 +38,7 @@ const (
 	NoCard Card = iota
 	CardCreate
 	CardDraft
+	CardWorkflow
 	CardField
 	CardClose
 	CardDates
@@ -125,6 +126,19 @@ func init() {
 				}
 				return m
 			},
+		},
+		{
+			card: CardWorkflow, open: func(m Model) bool { return m.Workflows.Card.Open },
+			modes:  []Mode{ModeEditor, ModeDiscard, ModeConflict},
+			mode:   workflowMode,
+			key:    workflowCardKey,
+			fields: []FieldSpec{},
+			caret: func(m Model) (Field, bool) {
+				c := m.Workflows.Card
+				return "", workflowMode(m) == ModeEditor && !c.Saving
+			},
+			target: EditWorkflowBody,
+			edit:   workflowCardEdit,
 		},
 		{
 			card: CardField, open: func(m Model) bool { return m.FieldForm.Open },
@@ -312,6 +326,7 @@ const (
 	NoEditTarget EditTarget = iota
 	EditCreateBody
 	EditDraftBody
+	EditWorkflowBody
 )
 
 // editBody applies a native edit or undo to target, if the card on top owns it. It reports whether

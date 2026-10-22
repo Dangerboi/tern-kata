@@ -17,7 +17,8 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 - **Issue list and detail**: a Project's Issues nested under their parents, with priority, status, child counts and age, beside the Issue detail with its Markdown body, properties and Activity tabs (Comments, Events, Links, Attachments). Changes made anywhere, by you or an agent, show up live.
 - **Collections and the Menu**: Inbox, Today, Upcoming, Deadlines, All Open, Logbook and every kata Project, plus a search (`/`) and filters (`f`, `s`) over any of them.
 - **Editing from the Pane**: Create (`n`, `N` for a child), Close (`x`), reopen (`r`), comments (`c` in the detail) and replies (`R`), labels (`+`, `-`), owner (`a`, `A`), priority (`!`), parent (`p`), recurrence (`O`) and the Issue body in Tern's editor (`e`).
-- **Pages (Issues, Board and Jobs), Attachments and the Dates card**, shown below.
+- **[The worker](#scheduled-agent-runs-the-worker)**: `tern-kata worker` runs kata's agent prompt jobs through omp on your machine and records every run in kata.
+- **Pages (Issues, Board, Jobs, Runs and Workflows), Attachments and the Dates card**, shown below.
 - **[kata links](#clickable-ticket-links-from-agents)** from agents' chat replies open the Issue in tern-kata.
 
 **Board Page** ([details](#pages-and-the-board-page)): `2` or `b` in a Project shows its Issues as cards in Lanes, one per triage label, with No lane on the left and recently closed Issues in Done on the right. `<` and `>` move a card to the next Lane by swapping its label in kata. A card shows its priority, its most pressing date and a Blocked marker when an open Issue blocks it; selecting one tags its related cards (`parent`, `blocks this`) and lists its Relationships.
@@ -28,7 +29,9 @@ Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relat
 
 ![The Ready for agent Lane beside the detail of a related Issue in the acme-infra Project](docs/images/related-detail.png)
 
-**Jobs Page** ([details](#jobs-page)): `3` in a Project lists its Cron jobs with their state (and why one is paused), kind, schedule in words, agent profile and next run, with the selected job's definition and parent beside them; Enter on a recurring job's parent opens that Issue. The **Job card** ([details](#job-card)) makes and edits recurring-child jobs (`n`, `J` on an Issue, `e`), with a live schedule preview; `p` pauses and resumes, `x` archives and `r` restores.
+**Jobs Page** ([details](#jobs-page)): `3` in a Project lists its Cron jobs with their state (and why one is paused), kind, schedule in words, agent profile and next run, with the selected job's definition and parent beside them; Enter on a recurring job's parent opens that Issue. The **Job card** ([details](#job-card)) makes and edits recurring-child jobs (`n`, `J` on an Issue, `e`), with a live schedule preview; `p` pauses and resumes, `x` archives and `R` restores.
+
+**Runs Page** ([details](#runs-page)): `4` in a Project lists its runs newest first (status, job or workflow, Issue, executor, start, duration, summary); Enter shows a run's detail, `i` opens its Issue and `r` on the Jobs Page shows the runs of one job.
 
 **Attachments** ([details](#attachments)): `u` attaches a screenshot, log or any other file to an Issue, and the Attachments tab lists them. Agents find them through the Issue's kata metadata, and `tern-kata attach` does the same from a shell.
 
@@ -111,7 +114,7 @@ In a repo with a `.kata.toml`, write kata ticket references in chat replies as `
 The repo ships two skills for coding agents:
 
 - `kata`: the kata CLI, for finding, creating, claiming, commenting on, linking and closing Issues, and coordinating subagents through them.
-- `tern-kata`: reading an Issue's [Attachments](#attachments), attaching files with `tern-kata attach`, and making Issues recur with [`tern-kata recur`](#recurring-issues-from-a-shell).
+- `tern-kata`: reading an Issue's [Attachments](#attachments), attaching files with `tern-kata attach`, making Issues recur with [`tern-kata recur`](#recurring-issues-from-a-shell), and running agent jobs now and checking the [worker](#scheduled-agent-runs-the-worker).
 
 Install them for the agents on this machine with the [skills](https://github.com/vercel-labs/skills) CLI, which asks which skills and which agents. It needs Node.js; with only Bun installed, use `bunx` in place of `npx`:
 
@@ -156,9 +159,59 @@ tern-kata recur <ref> --stop                                  # existing Occurre
 
 Flags: `--frequency daily|weekly|monthly|yearly`, `--every N`, `--on mon,thu`, `--day 15|last|"2nd tue"`, `--month 1-12`, `--until DATE` or `--count N`, `--start DATE`, `--zone <IANA>`. The start date defaults to the Issue's scheduled date or today, the zone to this machine's IANA zone or UTC. Refs, `--as` and the Binding rule are those of `attach`; success prints one line and a failure prints the reason on stderr and exits 1. Invalid input is refused with the card's message and nothing is sent; a schedule changed by someone else while the command ran is not overwritten but printed, and the command exits 1.
 
+## Scheduled agent runs (the worker)
+
+kata stores jobs that run an agent prompt on a schedule, and the evidence of each run, but runs none of them. `tern-kata worker` is the adapter that does, on your machine, with no Tern tab or window open: it runs prompt jobs through [omp](https://github.com/can1357/oh-my-pi) headless in the job's checkout with the job's agent profile, creates each run's Issue (or comments on the job's existing one), and records every run in kata as running, then succeeded or failed with a summary and token counts. It never runs native jobs (a recurring child kata's daemon delivers) and never sends a prompt twice: a run whose outcome is uncertain after a crash is held. Needs kata v0.19.0 or newer and `omp` on `PATH`.
+
+> **Trust.** Anyone who can write jobs in a Project you list in `worker.toml` can run prompts and commands on this machine, as your user, with your files and credentials, and the agent runs unattended (`--approval-mode yolo`) in the checkout the job names. There are no command allowlists and no sandbox. List only Projects whose writers you trust, and keep secrets out of the checkouts a job can name.
+
+**Setup.** Create `worker.toml` in tern-kata's config folder (`~/.config/tern-kata/worker.toml` on Linux, beside `lanes.toml`):
+
+```toml
+executor = "laptop"            # required: a unique, stable name for this machine's worker
+actor    = "dangerboi"         # optional: author of runs and Issues; default $KATA_AUTHOR, $USER, git user.name
+
+[limits]                       # all optional
+max_active_runs = 4            # across all Projects; unset = each Project's capacity only
+default_timeout = "2h"         # a job's timeout_seconds overrides it, up to max_timeout
+max_timeout     = "8h"
+
+[[projects]]
+name      = "tern-kata"        # a kata Project; it is trusted
+capacity  = 1                  # runs at once; default 1
+checkouts = ["tern-kata"]      # optional allowlist of checkout keys; default all
+profiles  = ["default"]        # optional allowlist of profile names; default all
+
+[checkouts]                    # a job's checkout_key -> absolute directory
+tern-kata = "/home/me/Code/tern-kata"
+
+[profiles.default]             # a job's options.profile (default "default"); this one is required
+command  = "omp"
+model    = "anthropic/claude-sonnet-5-5"
+thinking = "medium"
+args     = []                  # extra arguments, e.g. ["--profile", "worker"] to isolate omp's own state
+
+[secrets]                      # a job's secret_refs name -> where the value lives; never a literal
+github-review = { file = "~/.config/tern-kata/github-review" }   # a private (0600) regular file
+# token = { env = "GITHUB_TOKEN" }
+```
+
+The file is decoded strictly (an unknown key is an error) and read once at start. It holds no kata address or credential: the worker finds the daemon the way the Pane does (`KATA_SERVER`, `.kata.local.toml` in its working directory, then the default local daemon) and refuses a Project whose uid, actor or executor differs from what it saw at first start (`state/projects/<uid>/pin.json`).
+
+```sh
+tern-kata worker doctor     # checks the file, checkouts, commands, secrets, kata and each Project's lease; says how to fix them
+tern-kata worker            # runs in the foreground; ctrl+c stops it
+tern-kata worker status     # from another shell: what it serves, runs and refuses
+tern-kata run <job-uid>     # run an adapter prompt job now
+```
+
+State lives in `$XDG_STATE_HOME/tern-kata` (else `~/.local/state/tern-kata`): `worker.lock` (a second worker on the machine is refused), the control socket, each run's journal (`runs/<run uid>/run.json` with its prompt, session and output) and the pins. Across machines, the worker holds a lease for each Project in the Project's own kata metadata (`tern_kata.lease`, renewed every 3 minutes, expiring after 10): a Project whose lease another worker holds admits nothing here and `worker status` says which worker owns it; `tern-kata worker --takeover` moves it on purpose. Keeping the worker alive across logins is up to you for now (a systemd user unit or similar); a plugin host half that starts it is planned.
+
+The agent is told its Issue and how to leave a record: comment what it did, close the Issue with evidence when the work is verified. When it exits without closing, the worker comments its final message and labels the Issue `needs-review`. Exit status 0 after a finished turn is `succeeded`, anything else `failed`; a run over its timeout is stopped and failed as "timed out". A run whose prompt may have reached the agent when the worker stopped is held (`unknown` in kata, with the reason first in its summary), never repeated. Jobs this version does not run: workflows, notify jobs, and scheduled triggers (only `run` starts a run so far); `worker status` and `run` say so.
+
 ## Pages and the Board Page
 
-The top bar holds the **Page bar**, "1 Issues  2 Board  3 Jobs". `1`, `2` and `3`, or a click on a Page, switch Pages; `b` toggles between Issues and Board. The Issues Page is the list and Issue detail; each Page keeps its selection while another is shown. The Board Page and the Jobs Page act on the Pane's Project: the current Project Collection, else the workspace's Binding (from Inbox or another fixed Collection in a bound workspace it switches to the Binding's Project). With neither it says so and opens the Menu's Projects list.
+The top bar holds the **Page bar**, "1 Issues  2 Board  3 Jobs  4 Runs  5 Workflows". `1` to `5`, or a click on a Page, switch Pages; `b` toggles between Issues and Board. The Issues Page is the list and Issue detail; each Page keeps its selection while another is shown. The Board, Jobs, Runs and Workflows Pages act on the Pane's Project: the current Project Collection, else the workspace's Binding (from Inbox or another fixed Collection in a bound workspace it switches to the Binding's Project). With neither it says so and opens the Menu's Projects list.
 
 ### Board Page
 
@@ -177,6 +230,16 @@ The top bar holds the **Page bar**, "1 Issues  2 Board  3 Jobs". `1`, `2` and `3
 - The filters (`/`, `f`, `s`, `c`) narrow the Board as they do the list, and a live refresh moves cards. Done shows only what the Collection holds, so the `open` status filter leaves it empty.
 - Enter on a card, or a double-click, opens the **Lane view**: that Lane's Issues as a flat, full-width list under a Lane header line, with the Issue detail beside it at 140 columns and wider. It works like the list (tab moves to the detail, the same keys apply, including `L`), except `←`/`→` switch to the neighbouring Lane that has cards, and `<`/`>` Move the selected card with the selection going to the next card in the Lane. Esc returns to the Board with the same card selected.
 - The Board Page needs a Project and ends when you switch to a Collection that is not a Project. A Pane under 140 columns opens it straight in the Lane view, on the selected Issue's Lane, and narrowing the Pane switches the Board to the Lane view; only the focused column shows, so Enter shows the detail, Esc returns to the Lane view, and Esc from the Lane view opens the Menu.
+
+### Workflows Page
+
+`5` shows the Pane's Project's kata **Workflows**, one row each with its name and step count; archived ones stay hidden until `a` shows them. The Project is found as the Board Page finds it, and the Page ends when you leave the Project Collection. Esc closes the steps first, then goes to the Menu.
+
+- **Enter** opens the inspector for the selected workflow: each step in order with its kind (`command` or `prompt`), its command or prompt, the steps it waits for (`after review`) and its retries, the live Cron jobs that run it, and who wrote it. A row also names those jobs. Beside the list at 140 columns and wider, in place of it in a narrower Pane.
+- **`n` and `e`** open the **Workflow card** on a new workflow or the selected one, as the JSON kata takes: `{"name": "...", "definition": {"version": 1, "steps": [{"key": "review", "kind": "prompt", "prompt": "..."}, {"key": "test", "kind": "command", "command": "make test", "after": ["review"], "retries": 1}]}}`. Edit it in the card or press `ctrl+e` for `$EDITOR`; `ctrl+o` saves.
+- Saving checks the text first, and nothing is sent while it fails: valid JSON, a name, version 1, at least one step, unique step keys of letters, digits, `-`, `_` and `.`, `after` naming earlier steps only (so steps are listed in the order they run), retries from 0 to 100, and exactly one of `command` or `prompt` matching the step's kind. The card names the problem and keeps your text.
+- A save is a Guarded write on the version you started from. If the workflow changed meanwhile, nothing is written: the card shows your text beside the workflow as it stands now, `o` saves yours over it and `d` drops your text.
+- `x` archives the selected workflow and `r` restores an archived one, both guarded the same way. Kata refuses to archive a workflow a live Cron job uses, and the Pane shows its message: "workflow W is used by live job J; update or delete that job first".
 
 ### The Lane list file
 
@@ -202,6 +265,7 @@ tern-kata reads it each time the Board turns on and when the Project changes whi
 - `a` shows or hides archived jobs; they are hidden until then. `ctrl+r` reads the jobs again; they also reload when the daemon reports a change. `↑`/`↓` (or `j`/`k`), `g`, `G` and Page Up/Down move the selection.
 - At 140 columns and wider an **inspector** beside the list shows the selected job's full definition (trigger, prompt or workflow, recipient and message, Issue policy, overlap, catchup, timeout, checkout, the names of its secrets) and, for a recurring-child job, its parent Issue with the delivery progress. Narrower, only the focused column shows: Enter or Tab on a card shows the inspector, Esc or Tab goes back.
 - With the inspector focused, Enter on a recurring-child job's parent opens that Issue on the Issues Page (a deleted parent leaves a Notice instead).
+- An Issue a recurring-child job made is marked "◷" in the list and on its Board card, and its detail has a **Cron job** property: the job's name (its uid when the job is gone) and the run's scheduled time. Enter on it (it is the first row the detail's cursor stands on) or a click opens the Jobs Page with that job selected. The parent's detail has a **Cron jobs** property listing its jobs with state, pause reason and schedule, each openable the same way; a closed parent says its Cron jobs are paused. The detail reads the Project's jobs for this, so it names them a moment after the Issue shows.
 - The Jobs Page needs a Project like the Board Page and ends when you switch to a Collection that is not a Project.
 
 ### Job card
@@ -214,7 +278,17 @@ tern-kata reads it each time the Board turns on and when the Project changes whi
 
 `ctrl+o` saves (or the button). Invalid input (a bad cron expression, an unknown time zone, an interval under 60 seconds, skip without a grace, a blank name or child title) is refused naming the field and nothing is sent. A new job is sent at a uid the card made when it opened, so sending the same card again is not a second job. An edit is a Guarded write on the job's `definition_event_uid`: if the job changed meanwhile nothing is written, the card shows the newer job (name, state, schedule, child title, catch-up, when it changed) and keeps your draft, and saving again needs an explicit choice: `o` saves the draft over the newer job, `u` replaces the draft with the newer job, `d` discards the draft.
 
-On the Jobs Page, `p` pauses a job that is running (it writes the job disabled) and resumes one that is not (enabled again); `x` archives the selected job, and `r` restores an archived one (press `a` to list them). All three are Guarded writes too: a job changed meanwhile is left alone, the list shows the newer job and a Notice says nothing was written. A job's list and inspector update as soon as the write is answered.
+On the Jobs Page, `p` pauses a job that is running (it writes the job disabled) and resumes one that is not (enabled again); `x` archives the selected job, and `R` restores an archived one (press `a` to list them). All three are Guarded writes too: a job changed meanwhile is left alone, the list shows the newer job and a Notice says nothing was written. A job's list and inspector update as soon as the write is answered.
+### Runs Page
+
+`4` shows the Pane's Project's **Runs**, newest first as kata lists them (by when each was first observed). A Run is kata's record of one execution of a Cron job or workflow, written by whoever ran it: an adapter, a worker here or another machine's. The Pane shows what kata holds, whoever the executor was. Each card has a status badge (`running`, `succeeded`, `failed`, `cancelled`, `unknown`), the job's or workflow's name, the Issue the run is for (`#short title`), the executor (its label, else the actor), when it started, how long it took (so far, while it runs) and the first line of its summary.
+
+- Enter (or Tab) opens the **detail**: status, job and workflow, Issue, executor, actor and teammate, start, end, duration, the summary's whole message, input and output token counts, and the references kata holds (occurrence, job and workflow uids and the version of each the run used, Issue uid, run uid and revision). Enter reads the run from kata again. Esc or Tab goes back; at 140 columns and wider the detail sits beside the list, narrower only the focused column shows.
+- `i` opens the run's Issue on the Issues Page (a run with no Issue leaves a Notice instead), from the list or the detail.
+- `r` on the Jobs Page opens the Runs Page filtered to the selected job. On the Runs Page `f` narrows the list to the selected run's job, or shows every run again; leaving the page lifts the filter. A run of a workflow alone has no job to narrow to.
+- Kata lists at most 100 runs a page, filters them only by job (a run that names a workflow alone matches no job, and there is no filter by status or workflow) and names none of them by job or workflow. The Pane reads the newest 100, `m` reads the next older 100 and adds them, and it looks up each job's, workflow's and Issue's name itself. `ctrl+r` and daemon events read the newest page again.
+- The Workflows Page shows each workflow's latest run on its row and its latest runs in its inspector, from the newest 100 runs of the Project: a workflow whose runs are all older than that shows none.
+- The Runs Page needs a Project like the Board Page and ends when you switch to a Collection that is not a Project.
 
 ## Dates card
 

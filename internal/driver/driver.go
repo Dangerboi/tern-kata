@@ -77,7 +77,7 @@ func Step(s State, in any, now time.Time) Output {
 		out.Ops = append(out.Ops, tern.OpFocus(target))
 		out.State.Focus = target
 	}
-	if reveal := view.SelectedRowID(m); reveal != "" && !rowClick(msg) && !jobsRead(msg) && !m.Loading && m.Focus == model.ColumnList && m.Shows(model.ColumnList) && m.CurrentSelection() != "" && m.CurrentSelection() != previousSelection {
+	if reveal := view.SelectedRowID(m); reveal != "" && !rowClick(msg) && !listRead(msg) && !m.Loading && m.Focus == model.ColumnList && m.Shows(model.ColumnList) && m.CurrentSelection() != "" && m.CurrentSelection() != previousSelection {
 		out.Ops = append(out.Ops, tern.OpReveal(reveal, "nearest"))
 	}
 	out.route(m, cmds)
@@ -115,24 +115,30 @@ func scrollTarget(m model.Model, c model.Column) string {
 	case model.ColumnDetail:
 		return view.DetailContentID
 	}
+	if m.OnRuns() {
+		return view.RunListID
+	}
 	if m.OnJobs() {
 		return view.JobListID
 	}
 	return view.IssueListID
 }
 
-// jobsRead reports the answer to a read of the jobs. A card it adds is new to Tern and a reveal naming it ends the Pane with an
-// unknown id, so the selection it settles on is not revealed.
-func jobsRead(msg model.Msg) bool {
-	_, ok := msg.(model.JobsLoaded)
-	return ok
+// listRead reports the answer to a read of the jobs or the Runs. A card it adds is new to Tern and a reveal naming it ends the
+// Pane with an unknown id, so the selection it settles on is not revealed.
+func listRead(msg model.Msg) bool {
+	switch msg.(type) {
+	case model.JobsLoaded, model.RunsLoaded:
+		return true
+	}
+	return false
 }
 
 // rowClick reports a click on an Issue row. Tern has already put that row under
 // the pointer, so revealing it again would scroll the list from under it.
 func rowClick(msg model.Msg) bool {
 	switch msg := msg.(type) {
-	case model.SelectMsg, model.JobSelectMsg:
+	case model.SelectMsg, model.JobSelectMsg, model.RunSelectMsg:
 		return true
 	case model.ActionMsg:
 		return msg.Action == model.ToggleExpansion

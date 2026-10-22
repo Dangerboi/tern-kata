@@ -13,24 +13,26 @@ type Issue struct {
 	ClosedAt            *time.Time
 	ClosedReason        *string
 	CreatedAt           time.Time
-	DeadlineOnDate      *string
-	ID                  int64
-	Labels              []string
-	Metadata            map[string]any
-	Owner               *string
-	Priority            *int64
-	ProjectID           int64
-	ProjectName         string
-	ProjectUID          *string
-	QualifiedID         string
-	RecurrenceID        *int64
-	Revision            int64
-	ScheduledOnDate     *string
-	ShortID             string
-	Status              string
-	Title               string
-	UID                 string
-	UpdatedAt           time.Time
+	// CronOccurrence is set on an Issue a Cron job made.
+	CronOccurrence  *CronOccurrence
+	DeadlineOnDate  *string
+	ID              int64
+	Labels          []string
+	Metadata        map[string]any
+	Owner           *string
+	Priority        *int64
+	ProjectID       int64
+	ProjectName     string
+	ProjectUID      *string
+	QualifiedID     string
+	RecurrenceID    *int64
+	Revision        int64
+	ScheduledOnDate *string
+	ShortID         string
+	Status          string
+	Title           string
+	UID             string
+	UpdatedAt       time.Time
 }
 
 // IsClosed says the Issue is closed; any other status counts as open.
@@ -99,6 +101,8 @@ type Model struct {
 	Page             Page
 	Board            BoardState
 	Jobs             JobsState
+	Runs             RunsState
+	Workflows        WorkflowsState
 	// Moving is the Issue whose Move is in flight; further Moves wait for its result.
 	Moving string
 	// nonce is the random per-run prefix of every idempotency key and keys counts the keys minted.
@@ -136,6 +140,9 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		}
 	}
 	if next, cmds, handled := updateCreate(m, msg); handled {
+		return next, cmds
+	}
+	if next, cmds, handled := updateWorkflows(m, msg); handled {
 		return next, cmds
 	}
 	if next, cmds, handled := updateEditor(m, msg); handled {
@@ -199,8 +206,16 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m = jobsLoaded(m, msg)
 	case JobWritten:
 		m = jobWritten(m, msg)
+	case OpenJobMsg:
+		return openJob(m, msg.UID)
 	case JobSelectMsg:
 		m.Jobs.Selected, m.Focus = msg.UID, ColumnList
+	case RunsLoaded:
+		m = runsLoaded(m, msg)
+	case RunShown:
+		m = runShown(m, msg)
+	case RunSelectMsg:
+		m.Runs.Selected, m.Focus = msg.UID, ColumnList
 	case DetailLoaded:
 		m = m.detailLoaded(msg)
 	case DetailFailed:
@@ -212,7 +227,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case FocusColumnMsg:
 		if msg.Column <= ColumnDetail {
 			m.Focus = msg.Column
-			if m.Focus == ColumnDetail && !m.OnJobs() {
+			if m.Focus == ColumnDetail && !m.OnJobs() && !m.OnRuns() {
 				m = m.focusDetail()
 			}
 		}

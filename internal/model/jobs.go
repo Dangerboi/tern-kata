@@ -77,6 +77,11 @@ type JobsState struct {
 	stale   bool
 	// detailHidden is the detail column's hidden flag from before the Jobs Page took its place.
 	detailHidden bool
+	// pick is the job the next read selects: the one an Issue detail's Cron job property opened.
+	pick string
+	// cronRead is what the Issue detail last read the list for; rev counts the answers, for the detail's rows.
+	cronRead cronRead
+	rev      int64
 }
 
 // OnJobs says the Jobs Page is current.
@@ -128,6 +133,9 @@ func (m Model) SelectedJob() *CronJob {
 
 // CurrentSelection is the uid of the selected row of the current Page's list: a job on the Jobs Page, else an Issue.
 func (m Model) CurrentSelection() string {
+	if m.OnRuns() {
+		return m.Runs.Selected
+	}
 	if m.OnJobs() {
 		return m.Jobs.Selected
 	}
@@ -292,6 +300,7 @@ func (m Model) jobsOff() Model {
 	}
 	m.hidden = m.Jobs.detailHidden
 	m.Jobs.Loading = false
+	m.Jobs.cronRead = cronRead{}
 	return m.revealInList(m.SelectedUID).WithVisibleSelection()
 }
 
@@ -327,14 +336,20 @@ func jobsLoaded(m Model, msg JobsLoaded) Model {
 		return m
 	}
 	m.Jobs.Loading = false
+	m.Jobs.rev++
 	m.Jobs.Err = msg.Err
 	if msg.Err != nil {
+		m.Jobs.pick = ""
 		return m.settleJobSelection()
 	}
 	m.Jobs.ProjectArchived = msg.ProjectArchived
 	if !msg.ProjectArchived {
 		m.Jobs.Jobs = msg.Jobs
 	}
+	if m.Jobs.pick != "" && slices.ContainsFunc(m.visibleJobs(), func(j CronJob) bool { return j.UID == m.Jobs.pick }) {
+		m.Jobs.Selected = m.Jobs.pick
+	}
+	m.Jobs.pick = ""
 	return m.settleJobSelection()
 }
 

@@ -392,7 +392,7 @@ func TestPauseResumeArchiveAndRestoreAreGuardedWritesThatWaitForTheirAnswer(t *t
 	listed := step(t, s, key("a"))
 	load, _ := askedJobs(listed.Cmds)
 	s = step(t, listed.State, model.JobsLoaded{Request: load.Request, Jobs: []model.CronJob{gone}}).State
-	restoring := step(t, s, key("r"))
+	restoring := step(t, s, key("shift+r"))
 	var restore model.RestoreJobCmd
 	for _, cmd := range restoring.Cmds {
 		restore, _ = cmd.(model.RestoreJobCmd)
@@ -408,7 +408,7 @@ func TestPauseResumeArchiveAndRestoreAreGuardedWritesThatWaitForTheirAnswer(t *t
 
 func TestJobKeysThatDoNotApplyExplainInsteadOfWriting(t *testing.T) {
 	s := jobsPane(t, 160, guarded("J1", "Weekly", "EV1"))
-	if out := step(t, s, key("r")); len(out.Cmds) != 0 || !strings.Contains(out.State.Model.Notice, "not archived") {
+	if out := step(t, s, key("shift+r")); len(out.Cmds) != 0 || !strings.Contains(out.State.Model.Notice, "not archived") {
 		t.Errorf("r on a live job: cmds %#v notice %q", out.Cmds, out.State.Model.Notice)
 	}
 	retired := guarded("J2", "Old", "EV1")

@@ -172,7 +172,7 @@ var mainActions = []actionEntry{
 	// Moving and opening in the Issue list.
 	{action: MoveDown, modes: listModes, keys: slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), help: "move", footer: listModes, footerKey: "↑↓", sheet: []sheetLine{{sheetGraph, 2, "down"}}, handle: selection(MoveDown)},
 	{action: MoveUp, modes: listModes, keys: slices.Concat(keys("k", "k/↑", "up", "↑"), emacsUp), help: "previous Issue", sheet: []sheetLine{{sheetGraph, 1, "up"}}, handle: selection(MoveUp)},
-	{action: DrillIn, modes: listModes, keys: keys("enter", "enter"), help: "open", footer: listModes, footerKey: "↵", sheet: []sheetLine{{sheetGraph, 7, "open detail"}}, handle: pure(drillIn)},
+	{action: DrillIn, modes: listModes, keys: keys("enter", "enter"), help: "open", footer: listModes, footerKey: "↵", sheet: []sheetLine{{sheetGraph, 7, "open detail"}}, handle: drillIn},
 	{action: FocusDetail, modes: listModes, keys: keys("tab", "tab"), help: "detail", footer: listModes, handle: pure(func(m Model) Model {
 		if m.CanFocusDetail() {
 			m.Focus = ColumnDetail
@@ -215,12 +215,30 @@ var mainActions = []actionEntry{
 	{action: PageDown, modes: []Mode{ModeJobInspector}, keys: pageDownKeys, help: "page", handle: scrolling(ColumnDetail, ScrollPageDown)},
 	{action: PageUp, modes: []Mode{ModeJobInspector}, keys: pageUpKeys, help: "page up", handle: scrolling(ColumnDetail, ScrollPageUp)},
 	{action: JobInspectorBack, modes: []Mode{ModeJobInspector}, keys: keys("escape", "esc", "tab", "tab", "left", "←"), help: "back", footer: []Mode{ModeJobInspector}, sheet: []sheetLine{{sheetJobs, 10, "back to the job list"}}, handle: pure(inspectorBack)},
-	{action: NewJobAction, modes: jobsModes, keys: keys("n", "n"), help: "new job", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 11, "new job (Job card)"}}, handle: openNewJob},
-	{action: EditJobAction, modes: jobsModes, keys: keys("e", "e"), help: "edit job", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 12, "edit the selected job (Job card)"}}, handle: openEditJob},
-	{action: PauseJobAction, modes: jobsModes, keys: keys("p", "p"), help: "pause or resume", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 13, "pause or resume the selected job"}}, handle: toggleJob},
-	{action: ArchiveJobAction, modes: jobsModes, keys: keys("x", "x"), help: "archive", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 14, "archive the selected job"}}, handle: archiveJob},
-	{action: RestoreJobAction, modes: jobsModes, keys: keys("r", "r"), help: "restore", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 15, "restore an archived job (press a to list them)"}}, handle: restoreJob},
-	{action: NewIssueJobAction, modes: issueModes, keys: keys("shift+j", "J"), help: "job", sheet: []sheetLine{{sheetJobs, 16, "new recurring job on the selected Issue (Job card)"}}, handle: openIssueJob},
+	{action: NewJobAction, modes: jobsModes, keys: keys("n", "n"), help: "new job", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 12, "new job (Job card)"}}, handle: openNewJob},
+	{action: EditJobAction, modes: jobsModes, keys: keys("e", "e"), help: "edit job", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 13, "edit the selected job (Job card)"}}, handle: openEditJob},
+	{action: PauseJobAction, modes: jobsModes, keys: keys("p", "p"), help: "pause or resume", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 14, "pause or resume the selected job"}}, handle: toggleJob},
+	{action: ArchiveJobAction, modes: jobsModes, keys: keys("x", "x"), help: "archive", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 15, "archive the selected job"}}, handle: archiveJob},
+	{action: RestoreJobAction, modes: jobsModes, keys: keys("shift+r", "R"), help: "restore", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 16, "restore an archived job (press a to list them)"}}, handle: restoreJob},
+	{action: NewIssueJobAction, modes: issueModes, keys: keys("shift+j", "J"), help: "job", sheet: []sheetLine{{sheetJobs, 17, "new recurring job on the selected Issue (Job card)"}}, handle: openIssueJob},
+	{action: RunsOfJob, modes: []Mode{ModeJobs, ModeJobInspector}, keys: keys("r", "r"), help: "runs", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 11, "open the Runs Page on the job's runs"}}, handle: runsOfJob},
+	// Runs Page: the Project's Runs newest first, with the selected Run's detail beside them.
+	{action: MoveDown, modes: []Mode{ModeRuns}, keys: slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), help: "move", footer: []Mode{ModeRuns}, footerKey: "↑↓", sheet: []sheetLine{{sheetRuns, 1, "next run"}}, handle: pure(func(m Model) Model { return moveRun(m, MoveDown) })},
+	{action: MoveUp, modes: []Mode{ModeRuns}, keys: slices.Concat(keys("k", "k/↑", "up", "↑"), emacsUp), help: "previous run", sheet: []sheetLine{{sheetRuns, 2, "previous run"}}, handle: pure(func(m Model) Model { return moveRun(m, MoveUp) })},
+	{action: MoveFirst, modes: []Mode{ModeRuns}, keys: keys("g", "g", "home", "home"), help: "first run", sheet: []sheetLine{{sheetRuns, 3, "first run"}}, handle: pure(func(m Model) Model { return moveRun(m, MoveFirst) })},
+	{action: MoveLast, modes: []Mode{ModeRuns}, keys: keys("shift+g", "G", "end", "end"), help: "last run", sheet: []sheetLine{{sheetRuns, 4, "last run"}}, handle: pure(func(m Model) Model { return moveRun(m, MoveLast) })},
+	{action: PageUp, modes: []Mode{ModeRuns}, keys: pageUpKeys, help: "page up", handle: pure(func(m Model) Model { return moveRun(m, PageUp) })},
+	{action: PageDown, modes: []Mode{ModeRuns}, keys: pageDownKeys, help: "page down", handle: pure(func(m Model) Model { return moveRun(m, PageDown) })},
+	{action: FocusJobInspector, modes: []Mode{ModeRuns}, keys: keys("enter", "↵", "tab", "tab"), help: "detail", footer: []Mode{ModeRuns}, footerKey: "↵", sheet: []sheetLine{{sheetRuns, 5, "show the run's detail"}}, handle: inspectRun},
+	{action: OpenRunIssue, modes: []Mode{ModeRuns, ModeRunInspector}, keys: keys("i", "i"), help: "issue", footer: []Mode{ModeRuns, ModeRunInspector}, sheet: []sheetLine{{sheetRuns, 6, "open the run's Issue"}}, handle: pure(openRunIssue)},
+	{action: FilterRunsByJob, modes: []Mode{ModeRuns, ModeRunInspector}, keys: keys("f", "f"), help: "job filter", footer: []Mode{ModeRuns}, sheet: []sheetLine{{sheetRuns, 7, "show only the selected run's job, or all runs again"}}, handle: pure(toggleRunJobFilter)},
+	{action: OlderRuns, modes: []Mode{ModeRuns}, keys: keys("m", "m"), help: "older", footer: []Mode{ModeRuns}, sheet: []sheetLine{{sheetRuns, 8, "read the next older runs"}}, handle: olderRuns},
+	{action: ReloadRuns, modes: []Mode{ModeRuns, ModeRunInspector}, keys: keys("ctrl+r", "ctrl+r", "meta+r", ""), help: "reload", sheet: []sheetLine{{sheetRuns, 9, "read the runs again"}}, handle: pure(reloadRuns)},
+	{action: ScrollDown, modes: []Mode{ModeRunInspector}, keys: slices.Concat(keys("down", "↓", "j", "j/↓"), emacsDown), help: "scroll", footer: []Mode{ModeRunInspector}, footerKey: "↑↓", sheet: []sheetLine{{sheetRuns, 10, "scroll the detail"}}, handle: scrolling(ColumnDetail, ScrollLineDown)},
+	{action: ScrollUp, modes: []Mode{ModeRunInspector}, keys: slices.Concat(keys("up", "↑", "k", "k/↑"), emacsUp), help: "scroll up", handle: scrolling(ColumnDetail, ScrollLineUp)},
+	{action: PageDown, modes: []Mode{ModeRunInspector}, keys: pageDownKeys, help: "page", handle: scrolling(ColumnDetail, ScrollPageDown)},
+	{action: PageUp, modes: []Mode{ModeRunInspector}, keys: pageUpKeys, help: "page up", handle: scrolling(ColumnDetail, ScrollPageUp)},
+	{action: RunInspectorBack, modes: []Mode{ModeRunInspector}, keys: keys("escape", "esc", "tab", "tab", "left", "←"), help: "back", footer: []Mode{ModeRunInspector}, sheet: []sheetLine{{sheetRuns, 11, "back to the run list"}}, handle: pure(runInspectorBack)},
 	// Moving and opening in the Issue detail.
 	{action: ScrollDown, modes: []Mode{ModeDetail}, keys: keys("down", "↓"), help: "scroll", footer: []Mode{ModeDetail}, footerKey: "↑↓", sheet: []sheetLine{{sheetChildren, 5, "scroll detail viewport"}}, handle: scrolling(ColumnDetail, ScrollLineDown)},
 	{action: ScrollUp, modes: []Mode{ModeDetail}, keys: keys("up", "↑"), help: "scroll up", sheet: []sheetLine{{sheetChildren, 4, "scroll detail viewport"}}, handle: scrolling(ColumnDetail, ScrollLineUp)},
@@ -228,7 +246,7 @@ var mainActions = []actionEntry{
 	{action: MoveUp, modes: []Mode{ModeDetail}, keys: slices.Concat(keys("k", "k"), emacsUp), help: "previous row", sheet: []sheetLine{{sheetChildren, 3, "move child cursor"}}, handle: cursorMoving(MoveUp)},
 	{action: NextActivityTab, modes: []Mode{ModeDetail}, keys: keys("tab", "↹"), help: "tab", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 1, "next tab"}}, handle: pure(func(m Model) Model { return m.cycleTab(true) })},
 	{action: PreviousActivityTab, modes: []Mode{ModeDetail}, keys: keys("shift+tab", "shift+tab"), help: "previous tab", sheet: []sheetLine{{sheetDetail, 2, "prev tab"}}, handle: pure(func(m Model) Model { return m.cycleTab(false) })},
-	{action: DrillIn, modes: []Mode{ModeDetail}, keys: keys("enter", "↵"), help: "open", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 3, "jump to referenced issue"}, {sheetChildren, 6, "open child"}}, handle: pure(drillIn)},
+	{action: DrillIn, modes: []Mode{ModeDetail}, keys: keys("enter", "↵"), help: "open", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 3, "jump to referenced issue or open the Cron job"}, {sheetChildren, 6, "open child"}}, handle: drillIn},
 	{action: PageUp, modes: []Mode{ModeDetail}, keys: pageUpKeys, help: "scroll page up", handle: scrolling(ColumnDetail, ScrollPageUp)},
 	{action: PageDown, modes: []Mode{ModeDetail}, keys: pageDownKeys, help: "page", footer: []Mode{ModeDetail}, footerKey: "pgup/pgdn", handle: scrolling(ColumnDetail, ScrollPageDown)},
 	{action: MoveFirst, modes: []Mode{ModeDetail}, keys: keys("g", "g", "home", "home"), help: "first row", handle: cursorMoving(MoveFirst)},
@@ -281,11 +299,11 @@ var mainActions = []actionEntry{
 	{action: NewChild, modes: issueModes, keys: keys("shift+n", "N"), help: "child", footer: issueModes, sheet: []sheetLine{{sheetChildren, 1, "new child"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, true) }},
 	// Layout, back, help and quit.
 	{action: ToggleDetail, modes: []Mode{ModeList, ModeLane, ModeDetail}, keys: keys("shift+l", "L"), help: "layout", footer: []Mode{ModeList, ModeLane, ModeDetail}, sheet: []sheetLine{{sheetGlobal, 6, "toggle layout"}}, handle: pure(Model.toggleDetail)},
-	{action: DrillOut, modes: []Mode{ModeList, ModeBoard, ModeJobs}, keys: keys("escape", "esc"), help: "Menu", footer: []Mode{ModeList, ModeBoard, ModeJobs}, sheet: []sheetLine{{sheetGlobal, 5, "menu"}}, handle: drillOut},
+	{action: DrillOut, modes: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns}, keys: keys("escape", "esc"), help: "Menu", footer: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns}, sheet: []sheetLine{{sheetGlobal, 5, "menu"}}, handle: drillOut},
 	{action: DrillOut, modes: []Mode{ModeLane}, keys: keys("escape", "esc"), help: "back", footer: []Mode{ModeLane}, sheet: []sheetLine{{sheetBoard, 10, "back to the Board, or the Menu in a narrow Pane"}}, handle: laneBack},
 	{action: DrillOut, modes: []Mode{ModeDetail}, keys: keys("escape", "esc", "left", "←"), help: "back", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 4, "back"}}, handle: drillOut},
-	{action: OpenProjects, modes: []Mode{ModeCollections, ModeList, ModeBoard, ModeLane, ModeDetail, ModeJobs, ModeJobInspector}, keys: keys("shift+p", "P"), help: "projects", sheet: []sheetLine{{sheetGlobal, 4, "projects"}}, handle: pure(openProjects)},
-	{action: OpenInbox, modes: []Mode{ModeCollections, ModeList, ModeBoard, ModeLane, ModeDetail, ModeJobs, ModeJobInspector}, keys: keys("shift+i", "I"), help: "inbox", sheet: []sheetLine{{sheetGlobal, 3, "inbox"}}, handle: openInbox},
+	{action: OpenProjects, modes: []Mode{ModeCollections, ModeList, ModeBoard, ModeLane, ModeDetail, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector}, keys: keys("shift+p", "P"), help: "projects", sheet: []sheetLine{{sheetGlobal, 4, "projects"}}, handle: pure(openProjects)},
+	{action: OpenInbox, modes: []Mode{ModeCollections, ModeList, ModeBoard, ModeLane, ModeDetail, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector}, keys: keys("shift+i", "I"), help: "inbox", sheet: []sheetLine{{sheetGlobal, 3, "inbox"}}, handle: openInbox},
 	{action: RetryAction, modes: []Mode{ModeError}, keys: keys("ctrl+r", "ctrl+r"), help: "retry daemon", footer: []Mode{ModeError}, handle: func(m Model) (Model, []Cmd) { return updateLive(m, Retry{}) }},
 	{action: CloseHelp, modes: []Mode{ModeHelp}, keys: keys("escape", "esc"), help: "close help", footer: []Mode{ModeHelp}, handle: pure(func(m Model) Model { m.HelpOpen = false; return m })},
 	{action: ToggleHelp, keys: keys("?", "?", "shift+?", "?"), help: "help", footer: global, sheet: []sheetLine{{sheetGlobal, 1, "help"}}, handle: pure(func(m Model) Model { m.HelpOpen = !m.HelpOpen; return m })},
@@ -297,6 +315,7 @@ var mainActions = []actionEntry{
 var Keymap []Binding
 
 func init() {
+	mainActions = append(mainActions, workflowActions()...)
 	mainActions = append(mainActions, pageActions()...)
 	Keymap = append([]Binding(nil), cardBindings...)
 	for i := range mainActions {

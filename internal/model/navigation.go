@@ -33,6 +33,9 @@ func (m Model) DetailDrawn() bool {
 	if m.OnJobs() {
 		return m.Shows(ColumnDetail) && m.SelectedJob() != nil
 	}
+	if m.OnRuns() {
+		return m.Shows(ColumnDetail) && m.SelectedRun() != nil
+	}
 	return m.Shows(ColumnDetail) && m.SelectedUID != "" && m.err == nil && m.authority != nil && m.authority.Issue != nil
 }
 
@@ -85,6 +88,9 @@ const pageRows = 10
 // Position is the place of the selected row in the current Page's list, counted from one and zero when nothing is selected,
 // and the number of rows: what the footer shows at its right.
 func (m Model) Position() (selected, total int) {
+	if m.OnRuns() {
+		return slices.IndexFunc(m.Runs.Runs, func(r Run) bool { return r.UID == m.Runs.Selected }) + 1, len(m.Runs.Runs)
+	}
 	if m.OnJobs() {
 		jobs := m.visibleJobs()
 		return slices.IndexFunc(jobs, func(j CronJob) bool { return j.UID == m.Jobs.Selected }) + 1, len(jobs)

@@ -76,6 +76,15 @@ func openedCreate() model.Model {
 	return m
 }
 
+// openedWorkflow opens the Workflow card for a new workflow and empties its starting text, as a Draft opens empty.
+func openedWorkflow() model.Model {
+	m, _ := workflowsPage()
+	m, _ = model.Update(m, model.KeyMsg{Chord: "n"})
+	old := len(m.Workflows.Card.Editor.Text)
+	m, _ = model.Update(m, model.EditMsg{Target: model.EditWorkflowBody, From: 0, To: old, Text: "", Cursor: 0, Len: old})
+	return m
+}
+
 func openedDraft() model.Model {
 	m, _ := model.Update(editorModel(), model.KeyMsg{Chord: "c"})
 	return m
@@ -144,9 +153,40 @@ func popupCards() []popupCard {
 			m, _ = model.Update(m, model.DraftConflict{UID: m.EditorUID, Issue: model.Issue{UID: m.EditorUID, Revision: 9}})
 			return m
 		}, model.ModeConflict})
+	workflow := popupCard{
+		name: "Workflow editor", card: model.CardWorkflow, multiline: true,
+		states: []cardState{{"", openedWorkflow, model.ModeEditor}},
+		graft:  func(dst *model.Model, src model.Model) { dst.Workflows = src.Workflows },
+		field:  func(model.Model) model.Field { return "" },
+		body: &cardBody{
+			target: model.EditWorkflowBody, save: "ctrl+o",
+			focus: func(m model.Model) model.Model { return m },
+			// ready replaces the text with a workflow the local check passes, so a save goes out.
+			ready: func(m model.Model) model.Model {
+				const valid = `{"name":"w","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c"}]}}`
+				old := len(m.Workflows.Card.Editor.Text)
+				m, _ = model.Update(m, model.EditMsg{Target: model.EditWorkflowBody, From: 0, To: old, Text: valid, Cursor: len(valid), Len: old})
+				return m
+			},
+			text:    func(m model.Model) string { return m.Workflows.Card.Editor.Text },
+			present: func(m model.Model) bool { return m.Workflows.Card.Open },
+			err:     func(m model.Model) error { return m.Workflows.Card.Err },
+			fail: func(_ model.Model, err error) model.Msg {
+				return model.WorkflowWritten{ProjectUID: "p", Op: model.WorkflowOpSave, Err: err}
+			},
+		},
+	}
+	workflow.states = append(workflow.states,
+		cardState{"asking to discard", asking(workflow), model.ModeDiscard},
+		cardState{"with a conflict", func() model.Model {
+			m, _ := clickPress(workflow.body.ready(openedWorkflow()), "ctrl+o")
+			m, _ = model.Update(m, model.WorkflowWritten{ProjectUID: "p", Op: model.WorkflowOpSave, Current: &model.Workflow{UID: "W", EventUID: "E2"}})
+			return m
+		}, model.ModeConflict})
 	return []popupCard{
 		create,
 		draft,
+		workflow,
 		{
 			name: "single-field form", card: model.CardField,
 			states: []cardState{{"", opened("+"), model.ModeFieldForm}},

@@ -1,6 +1,6 @@
 ---
 name: tern-kata
-description: Files attached to kata Issues and recurring Issues, through tern-kata. Use when an Issue's metadata has `attachment.*` keys, to attach a screenshot, log or other file to an Issue, or to make an Issue recur, change or stop its schedule, or print it (`tern-kata recur`).
+description: Files attached to kata Issues, recurring Issues, and the tern-kata worker, through tern-kata. Use when an Issue's metadata has `attachment.*` keys, to attach a screenshot, log or other file to an Issue, to make an Issue recur, change or stop its schedule, or print it (`tern-kata recur`), to run a scheduled agent job now (`tern-kata run`), or to check what the worker serves and runs (`tern-kata worker status`, `worker doctor`).
 ---
 
 An Attachment is a file copied into the Project's Attachment store, `<primary checkout>/.kata-attachments/<Issue ULID>/<name>`, and pointed to by one `attachment.<name>` meta key on the Issue. The store is gitignored and never committed.

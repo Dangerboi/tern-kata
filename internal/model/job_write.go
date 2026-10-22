@@ -156,7 +156,7 @@ func archiveJob(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if job.Archived() {
-		return refuse(m, "The job is already archived; r restores it.")
+		return refuse(m, "The job is already archived; R restores it.")
 	}
 	m.Jobs.Writing = job.UID
 	return m, []Cmd{ArchiveJobCmd{Workspace: m.Workspace, ProjectID: m.Jobs.ProjectID, Actor: m.Actor, UID: job.UID, ExpectedEventUID: job.DefinitionEventUID}}
