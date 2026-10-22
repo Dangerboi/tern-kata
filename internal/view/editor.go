@@ -16,6 +16,8 @@ func BodyTarget(id string) model.EditTarget {
 	switch id {
 	case DraftEditorID:
 		return model.EditDraftBody
+	case WorkflowEditorID:
+		return model.EditWorkflowBody
 	case CreateFieldID(model.CreateBody):
 		return model.EditCreateBody
 	}

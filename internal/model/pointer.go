@@ -32,5 +32,5 @@ func openRow(m Model, uid string) (Model, []Cmd) {
 	if selected.SelectedUID != uid {
 		return m, nil
 	}
-	return drillIn(selected), nil
+	return drillIn(selected)
 }

@@ -64,7 +64,7 @@ func Step(s State, in any, now time.Time) Output {
 		return Output{State: s}
 	}
 
-	previousSelection := s.Model.SelectedUID
+	previousSelection := s.Model.CurrentSelection()
 	m, cmds := model.Update(s.Model, msg)
 	s.Model = m
 	if m.Quitting {
@@ -77,7 +77,7 @@ func Step(s State, in any, now time.Time) Output {
 		out.Ops = append(out.Ops, tern.OpFocus(target))
 		out.State.Focus = target
 	}
-	if reveal := view.SelectedRowID(m); reveal != "" && !rowClick(msg) && !m.Loading && m.Focus == model.ColumnList && m.Shows(model.ColumnList) && m.SelectedUID != "" && m.SelectedUID != previousSelection {
+	if reveal := view.SelectedRowID(m); reveal != "" && !rowClick(msg) && !listRead(msg) && !m.Loading && m.Focus == model.ColumnList && m.Shows(model.ColumnList) && m.CurrentSelection() != "" && m.CurrentSelection() != previousSelection {
 		out.Ops = append(out.Ops, tern.OpReveal(reveal, "nearest"))
 	}
 	out.route(m, cmds)
@@ -92,7 +92,7 @@ func (out *Output) route(m model.Model, cmds []model.Cmd) {
 			// A column drawn again later starts at its top, so a dropped scroll loses nothing. The detail column draws its
 			// scroller only while it holds an Issue, not while it shows a placeholder or an error line.
 			if m.Shows(cmd.Column) && (cmd.Column != model.ColumnDetail || m.DetailDrawn()) {
-				out.Ops = append(out.Ops, tern.OpScroll(scrollTarget(cmd.Column), string(cmd.By)))
+				out.Ops = append(out.Ops, tern.OpScroll(scrollTarget(m, cmd.Column), string(cmd.By)))
 			}
 		case model.RevealActivityTab:
 			if m.DetailDrawn() {
@@ -108,21 +108,37 @@ func (out *Output) route(m model.Model, cmds []model.Cmd) {
 	}
 }
 
-func scrollTarget(c model.Column) string {
+func scrollTarget(m model.Model, c model.Column) string {
 	switch c {
 	case model.ColumnCollections:
 		return view.CollectionsID
 	case model.ColumnDetail:
 		return view.DetailContentID
 	}
+	if m.OnRuns() {
+		return view.RunListID
+	}
+	if m.OnJobs() {
+		return view.JobListID
+	}
 	return view.IssueListID
+}
+
+// listRead reports the answer to a read of the jobs or the Runs. A card it adds is new to Tern and a reveal naming it ends the
+// Pane with an unknown id, so the selection it settles on is not revealed.
+func listRead(msg model.Msg) bool {
+	switch msg.(type) {
+	case model.JobsLoaded, model.RunsLoaded:
+		return true
+	}
+	return false
 }
 
 // rowClick reports a click on an Issue row. Tern has already put that row under
 // the pointer, so revealing it again would scroll the list from under it.
 func rowClick(msg model.Msg) bool {
 	switch msg := msg.(type) {
-	case model.SelectMsg:
+	case model.SelectMsg, model.JobSelectMsg, model.RunSelectMsg:
 		return true
 	case model.ActionMsg:
 		return msg.Action == model.ToggleExpansion

@@ -167,21 +167,12 @@ func toggleBoard(m Model) (Model, []Cmd) {
 	return showPage(PageBoard)(m)
 }
 
-// enterBoard is the Board Page's entry: the Board of the Pane's Project, the Project Collection if that is current, else the
-// Binding's Project, which becomes the current Collection. With neither it says so and opens the Menu's Projects entry.
-// A Pane too narrow for the Board opens the Lane view of the selected Issue's Lane.
+// enterBoard is the Board Page's entry, on the Pane's Project (see enterProjectPage). A Pane too narrow for the Board opens the
+// Lane view of the selected Issue's Lane.
 func enterBoard(m Model) (Model, []Cmd) {
-	var cmds []Cmd
-	switch {
-	case m.Collection.IsProject():
-	case m.Bound:
-		m.Collection = ProjectCollection(m.Project.UID, m.Project.Name)
-		m = m.syncSidebarCursor()
-		m.Loading, m.Err = true, nil
-		m, cmds = collectionSwitched(m)
-	default:
-		m.Notice = "The Board needs a Project: choose one in the Menu."
-		return openProjects(m), nil
+	m, cmds, ok := enterProjectPage(m, "Board")
+	if !ok {
+		return m, nil
 	}
 	m.Page = PageBoard
 	m.Board.Mode = BoardColumns

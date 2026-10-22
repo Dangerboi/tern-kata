@@ -43,9 +43,24 @@ func (d IssueDetail) OpenIssueRef() string              { return d.openRef }
 func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 	shown, tab, boardWasOn := m.DetailIssueUID(), m.tab, m.OnBoard()
 	m, cmds := update(m, msg)
+	if _, ok := msg.(StreamEvent); ok {
+		switch {
+		case m.OnJobs():
+			m.Jobs.stale = true
+		case m.OnRuns():
+			m.Runs.stale = true
+		}
+	}
 	m = m.settleBoard()
+	m = m.settleWorkflows()
 	m, load := m.lanesLoad(boardWasOn)
 	cmds = append(cmds, load...)
+	m, jobs := m.settleJobs()
+	cmds = append(cmds, jobs...)
+	m, runs := m.settleRuns()
+	cmds = append(cmds, runs...)
+	m, cron := m.settleCronJobs()
+	cmds = append(cmds, cron...)
 	if m.tab != tab {
 		cmds = append(cmds, RevealActivityTab{})
 	}
@@ -325,12 +340,16 @@ func (m Model) chooseRow(tab ActivityTab, key string) Model {
 	return m
 }
 
-// openCursorRow follows the row under the cursor: a child, a referenced Issue or, for a reply, the comment it answers.
-func (m Model) openCursorRow() Model {
+// openCursorRow follows the row under the cursor: a child, a referenced Issue, a Cron job (on the Jobs Page) or, for a reply,
+// the comment it answers.
+func (m Model) openCursorRow() (Model, []Cmd) {
 	if row, ok := m.withRows().cursorRow(); ok {
+		if row.Kind == RowCron {
+			return openJob(m, row.JobUID)
+		}
 		if i := slices.IndexFunc(m.rows.items, func(r DetailItem) bool { return row.ReplyKey != "" && r.Key == row.ReplyKey }); i >= 0 {
 			m.cursor = i
-			return m
+			return m, nil
 		}
 		var landing *jumpEntry
 		if row.ReferenceKey != "" {
@@ -338,9 +357,9 @@ func (m Model) openCursorRow() Model {
 		} else if row.Kind == RowComment {
 			landing = &jumpEntry{tab: TabComments}
 		}
-		return m.jumpTo(row.ReferenceUID, landing)
+		return m.jumpTo(row.ReferenceUID, landing), nil
 	}
-	return m
+	return m, nil
 }
 
 // moveCursor walks the cursor over the children and the active tab's rows.

@@ -30,7 +30,7 @@ const DetailActivityID = DetailContentID + ".activity"
 // the last node of its rows (or its empty line), then the tab names.
 func ActivityRevealIDs(m model.Model) []string {
 	last := DetailActivityID + ".empty"
-	if rows := m.DetailRows(); len(rows) > 0 && rows[len(rows)-1].Kind != model.RowChild {
+	if rows := m.DetailRows(); len(rows) > 0 && rows[len(rows)-1].Kind.InActivity() {
 		last = DetailActivityID + "." + rows[len(rows)-1].Key
 	}
 	return []string{last, DetailActivityID + ".tabs"}
@@ -109,6 +109,9 @@ func detailRows(m model.Model) (children []detailChild, activity tern.Nodes) {
 		mark := ui.Mark("")
 		if m.Focus == model.ColumnDetail && m.DetailIndex() == i {
 			mark = ui.MarkPick
+		}
+		if item.Kind == model.RowCron {
+			continue // drawn by the properties
 		}
 		if item.Kind == model.RowChild {
 			children = append(children, detailChild{item.Child, mark})
@@ -196,10 +199,7 @@ func statusTone(status string) ui.Tone {
 // properties is one Name: value grid: every row's key sits in a column as wide as the longest key, so the
 // values line up. A row with nothing to show is left out. The status badge is in the heading.
 func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
-	type row struct {
-		name  string
-		value tern.Element
-	}
+	type row = propertyRow
 	text := func(s string) tern.Element { return ui.Text{Common: ui.Common{Key: "v"}, Text: s} }
 	var rows []row
 	add := func(name string, value tern.Element) { rows = append(rows, row{name, value}) }
@@ -245,6 +245,9 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 		}
 		add("Labels", ui.Row{Common: ui.Common{Key: "v"}, Gap: ui.GapSM, Wrap: true, Children: chips})
 	}
+	for _, r := range cronProperties(m) {
+		add(r.name, r.value)
+	}
 	if link, ok := m.DetailParent(); ok {
 		add("Parent", referenceText("v", link.ReferenceUID, link.Ref, link.RefTitle))
 	}
@@ -259,7 +262,55 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 	children := make(tern.Nodes, len(rows))
 	for i, r := range rows {
 		key := ui.Text{Common: ui.Common{Key: "k", Shrink: &noShrink}, Text: pad(r.name+":", keyWidth-len(r.name)-1), Wrap: ui.WrapNone}
-		children[i] = ui.Row{Common: ui.Common{Key: strings.ToLower(r.name)}, Gap: ui.GapSM, Align: ui.AlignStart, Children: ui.Nodes(key, r.value)}
+		children[i] = ui.Row{Common: ui.Common{Key: strings.ReplaceAll(strings.ToLower(r.name), " ", "-")}, Gap: ui.GapSM, Align: ui.AlignStart, Children: ui.Nodes(key, r.value)}
 	}
 	return ui.Col{Common: ui.Common{Key: "properties"}, Gap: ui.GapNone, Children: children}
+}
+
+// propertyRow is a Name: value row of the properties grid.
+type propertyRow struct {
+	name  string
+	value tern.Element
+}
+
+// cronProperties are the Cron job property of a cron-made Issue and the Cron jobs property of a parent, each job a row the
+// cursor can stand on and a click opens on the Jobs Page. A closed parent says its jobs are paused.
+func cronProperties(m model.Model) []propertyRow {
+	var job tern.Element
+	var jobs tern.Nodes
+	for i, item := range m.DetailRows() {
+		if item.Kind != model.RowCron {
+			continue
+		}
+		mark := ui.Mark("")
+		if m.Focus == model.ColumnDetail && m.DetailIndex() == i {
+			mark = ui.MarkPick
+		}
+		spans := []ui.Span{{T: item.Cron.Name, S: "accent link"}}
+		common := ui.Common{Key: item.Key, Mark: mark, Actions: &ui.Actions{Click: OpenJobClick(item.JobUID)}}
+		if item.Cron.Property == "Cron job" {
+			if item.Cron.Scheduled != "" {
+				spans = append(spans, ui.Span{T: " · scheduled " + item.Cron.Scheduled, S: "muted"})
+			}
+			common.Key = "v"
+			job = ui.Text{Common: common, Spans: spans}
+			continue
+		}
+		spans = append(spans, ui.Span{T: " · " + item.Cron.State, S: "muted"})
+		if item.Cron.Schedule != "" {
+			spans = append(spans, ui.Span{T: " · " + item.Cron.Schedule, S: "muted"})
+		}
+		jobs = append(jobs, ui.Text{Common: common, Spans: spans})
+	}
+	var rows []propertyRow
+	if job != nil {
+		rows = append(rows, propertyRow{"Cron job", job})
+	}
+	if len(jobs) > 0 {
+		if m.CronJobsClosed() {
+			jobs = append(jobs, ui.Text{Common: ui.Common{Key: "paused", Tone: ui.ToneMuted}, Text: "Closed: its Cron jobs are paused."})
+		}
+		rows = append(rows, propertyRow{"Cron jobs", ui.Col{Common: ui.Common{Key: "v"}, Gap: ui.GapNone, Children: jobs}})
+	}
+	return rows
 }

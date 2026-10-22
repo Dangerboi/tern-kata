@@ -160,7 +160,7 @@ func (m Model) VisibleColumns() []Column {
 		return []Column{m.Focus}
 	}
 	columns := []Column{ColumnList}
-	if !m.hidden {
+	if !m.hidden || m.OnJobs() || m.OnRuns() {
 		columns = append(columns, ColumnDetail)
 	}
 	if m.SidebarShown() {
@@ -177,7 +177,7 @@ func (m Model) CanFocusDetail() bool {
 
 // drillIn is enter on whichever column has focus: the Menu hands focus to the list, the list to the
 // detail of the selected Issue, the detail opens the row under its cursor.
-func drillIn(m Model) Model {
+func drillIn(m Model) (Model, []Cmd) {
 	switch {
 	case m.BoardShown():
 		m = openLane(m)
@@ -186,9 +186,9 @@ func drillIn(m Model) Model {
 	case m.Focus == ColumnList && m.SelectedUID != "":
 		m = m.focusDetail()
 	case m.Focus == ColumnDetail:
-		m = m.openCursorRow()
+		return m.openCursorRow()
 	}
-	return m
+	return m, nil
 }
 
 // drillOut is esc or left: the detail goes back through the jump history or to the list, the list

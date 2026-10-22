@@ -52,13 +52,26 @@ func Render(m model.Model, now time.Time) tern.View {
 			case model.ColumnCollections:
 				columns = append(columns, Collections(m))
 			case model.ColumnList:
-				if m.BoardShown() {
+				switch {
+				case m.OnRuns():
+					columns = append(columns, runs(m, now))
+				case m.OnJobs():
+					columns = append(columns, jobs(m, now))
+				case m.BoardShown():
 					columns = append(columns, board(m, now))
-				} else {
+				case m.OnWorkflows():
+					columns = append(columns, workflows(m, now))
+				default:
 					columns = append(columns, issues(m, now))
 				}
 			case model.ColumnDetail:
-				columns = append(columns, detail(m, now))
+				if m.OnRuns() {
+					columns = append(columns, runInspector(m, now))
+				} else if m.OnJobs() {
+					columns = append(columns, inspector(m, now))
+				} else {
+					columns = append(columns, detail(m, now))
+				}
 			}
 		}
 		// The top bar heads the whole Pane at every width, above the columns and outside their borders.
@@ -80,6 +93,8 @@ func Render(m model.Model, now time.Time) tern.View {
 		layer = createLayer(m)
 	case model.CardDraft:
 		layer = editorLayer(m)
+	case model.CardWorkflow:
+		layer = workflowLayer(m)
 	case model.CardField:
 		layer = fieldLayer(m)
 	case model.CardClose:
@@ -205,7 +220,7 @@ func columnsPx(m model.Model) (int, bool) {
 	}
 	grid, _, _ := footerGrid(m)
 	chrome := m.RowPx + 50 + m.RowPx*len(grid) + m.RowPx*footerTextRows(m)
-	if m.FilterSummary() != "" {
+	if m.FilterSummary() != "" && !m.OnJobs() && !m.OnRuns() {
 		chrome += 2 * m.RowPx
 	}
 	return m.Rows*m.RowPx - chrome, true
@@ -263,7 +278,7 @@ func topBar(m model.Model) tern.Element {
 // filterLine lists the active filters under the top bar; nil when none is on.
 func filterLine(m model.Model) []tern.Element {
 	summary := m.FilterSummary()
-	if summary == "" {
+	if summary == "" || m.OnJobs() || m.OnRuns() {
 		return nil
 	}
 	return []tern.Element{ui.Text{Common: ui.Common{Key: "filters", Hidden: m.HelpOpen, Tone: ui.ToneMuted}, Text: summary, Wrap: ui.WrapNone}}
@@ -388,15 +403,8 @@ func footerGrid(m model.Model) (grid [][]helplayout.HelpItem, chords []string, p
 		items = append(items, helplayout.HelpItem{Key: binding.Key, Description: help})
 		chords = append(chords, binding.Chord)
 	}
-	selected := 0
-	rows := m.VisibleRows()
-	for i, issue := range rows {
-		if issue.UID == m.SelectedUID {
-			selected = i + 1
-			break
-		}
-	}
-	position = fmt.Sprintf("%d / %d", selected, len(rows))
+	selected, total := m.Position()
+	position = fmt.Sprintf("%d / %d", selected, total)
 	gap := utf8.RuneCountInString(footerSeparator)
 	grid = helplayout.ReflowRows([][]helplayout.HelpItem{items}, m.Cols-footerMargin-gap-utf8.RuneCountInString(position), gap)
 	return grid, chords, position
@@ -446,10 +454,14 @@ func listOwner(m model.Model, row model.IssueRow, now time.Time) string {
 	return cell(owner.Name, ownerWidth) + owner.Until
 }
 
-// issueTitle is the title as the list and the Board draw it: a recurring Issue's starts with "↻ ".
+// issueTitle is the title as the list and the Board draw it: a recurring Issue's starts with "↻ ", one a Cron job made with "◷ ".
 func issueTitle(issue model.Issue) string {
-	if issue.RecurrenceID != nil {
-		return "↻ " + issue.Title
+	title := issue.Title
+	if issue.CronMade() {
+		title = "◷ " + title
 	}
-	return issue.Title
+	if issue.RecurrenceID != nil {
+		title = "↻ " + title
+	}
+	return title
 }

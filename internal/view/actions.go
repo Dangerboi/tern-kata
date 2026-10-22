@@ -21,6 +21,9 @@ const (
 	chooseAct      = "choose"
 	cardAct        = "card"
 	refAct         = "ref"
+	jobAct         = "job"
+	runAct         = "run"
+	openJobAct     = "open-job"
 )
 
 // FocusDetailClick, RetryClick and MenuClick carry no value.
@@ -44,6 +47,14 @@ func OpenRowClick(uid string) string { return click(string(model.OpenRow), uid) 
 
 // CardClick selects the Board card of the Issue.
 func CardClick(uid string) string { return click(cardAct, uid) }
+
+// JobClick selects the job's card on the Jobs Page.
+func JobClick(uid string) string { return click(jobAct, uid) }
+
+// RunClick selects the Run's card on the Runs Page.
+func RunClick(uid string) string { return click(runAct, uid) }
+// OpenJobClick opens the Cron job on the Jobs Page.
+func OpenJobClick(uid string) string { return click(openJobAct, uid) }
 
 // RefClick selects the Board card of a related Issue, revealing it in its Lane, or opens its detail when the Board does not draw it.
 func RefClick(uid string) string { return click(refAct, uid) }
@@ -101,6 +112,12 @@ func DecodeAction(id, act, value string) model.Msg {
 		return model.SelectMsg{UID: value}
 	case refAct:
 		return model.ShowCardMsg{UID: value}
+	case runAct:
+		return model.RunSelectMsg{UID: value}
+	case openJobAct:
+		return model.OpenJobMsg{UID: value}
+	case jobAct:
+		return model.JobSelectMsg{UID: value}
 	}
 	return nil
 }
@@ -127,6 +144,8 @@ func DecodeSelect(id, item string) model.Msg {
 	switch id {
 	case IssueListID:
 		return model.SelectMsg{UID: itemKey(IssueListID, item)}
+	case WorkflowListID:
+		return model.WorkflowSelectMsg{UID: itemKey(WorkflowListID, item)}
 	case CollectionsID:
 		return model.CollectionPointerSelected{Key: itemKey(CollectionsID, item)}
 	case PickerListID:
@@ -150,6 +169,8 @@ func FieldID(card model.Card, name model.Field) string {
 		return CreateFieldID(name)
 	case model.CardDraft:
 		return DraftEditorID
+	case model.CardWorkflow:
+		return WorkflowEditorID
 	case model.CardField:
 		return FieldInputID
 	case model.CardClose:

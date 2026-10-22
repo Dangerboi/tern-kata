@@ -6,6 +6,7 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/doordash-oss/oapi-codegen-dd/v3 v3.75.5
 	github.com/oklog/ulid/v2 v2.1.1
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/stencil-hq/tern-sdk/go/tern v0.1.0
 	go.kenn.io/kata v0.19.0
 	go.kenn.io/kit v0.34.1
@@ -56,7 +57,6 @@ require (
 	github.com/posthog/posthog-go v1.30.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/shirou/gopsutil/v4 v4.26.6 // indirect
 	github.com/spf13/pathologize v1.1.0 // indirect
 	github.com/teambition/rrule-go v1.8.2 // indirect
