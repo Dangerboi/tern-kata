@@ -153,6 +153,9 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	if next, cmds, handled := updateWorkflows(m, msg); handled {
 		return next, cmds
 	}
+	if next, cmds, handled := workerEditorClosedMsg(m, msg); handled {
+		return next, cmds
+	}
 	if next, cmds, handled := updateEditor(m, msg); handled {
 		return next, cmds
 	}
@@ -240,6 +243,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m = workerSetupLoaded(m, msg)
 	case WorkerSetupSaved:
 		return workerSetupSaved(m, msg)
+	case WorkerEdited:
+		return workerEdited(m, msg)
 	case WorkerStopped:
 		return workerStopped(m, msg)
 	case LocalRunLoaded:
@@ -325,4 +330,11 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return updateLive(m, msg)
 	}
 	return m, nil
+}
+
+func workerEditorClosedMsg(m Model, msg Msg) (Model, []Cmd, bool) {
+	if closed, ok := msg.(DraftEditorClosed); ok {
+		return workerEditorClosed(m, closed)
+	}
+	return m, nil, false
 }

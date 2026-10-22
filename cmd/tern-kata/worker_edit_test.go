@@ -106,3 +106,21 @@ func mustRead(t *testing.T, path string) []byte {
 	}
 	return raw
 }
+
+func TestWorkerEditWithAWorkerRunningSaysStopMakesItReload(t *testing.T) {
+	f := newWorkerFixture(t, "")
+	f.serve(t)
+	scriptedEditor(t, `sed -i 's/^executor = .*/executor = "renamed"/' "$1"`)
+	out, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"edit"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Wrote", "tern-kata worker stop", "reload"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "No worker is running") {
+		t.Errorf("a running worker was reported absent:\n%s", out)
+	}
+}

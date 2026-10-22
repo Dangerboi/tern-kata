@@ -270,6 +270,7 @@ var cardBindings = []Binding{
 	// Worker card. Its edit (e) and supervision keys are added here by the tickets that build them.
 	{Chord: "tab", Key: "tab", Action: WorkerNext, Help: "next field", Mode: ModeWorkerCard, ShowInFooter: true},
 	{Chord: "shift+tab", Key: "shift+tab", Action: WorkerPrevious, Help: "previous field", Mode: ModeWorkerCard},
+	{Chord: "e", Key: "e", Action: WorkerEdit, Help: "edit worker.toml", Mode: ModeWorkerCard, ShowInFooter: true},
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: WorkerSave, Help: "save worker config", Mode: ModeWorkerCard, ShowInFooter: true},
 	{Chord: "meta+o", Key: "meta+o", Action: WorkerSave, Help: "save worker config" + headlessNote, Mode: ModeWorkerCard},
 	{Chord: "escape", Key: "esc", Action: WorkerCancel, Help: "close", Mode: ModeWorkerCard, ShowInFooter: true},

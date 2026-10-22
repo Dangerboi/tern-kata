@@ -30,7 +30,11 @@ const (
 	WorkerRestartIdle    Action = "worker-restart-idle"
 	WorkerRestartNow     Action = "worker-restart-now"
 	WorkerLeave          Action = "worker-leave"
+	WorkerEdit           Action = "worker-edit"
 )
+
+// WorkerDraftUID is the key of the $EDITOR round trip of worker.toml.
+const WorkerDraftUID = "worker-draft"
 
 // The Worker card's fields.
 const (
@@ -77,6 +81,8 @@ type WorkerSetup struct {
 	Checkouts []string
 	// Executor is the file's executor label.
 	Executor string
+	// Text is the file's content as read; the edit opens it in $EDITOR.
+	Text string
 	// Manual says worker.manual sits beside worker.toml: the plugin neither starts nor restarts the worker.
 	Manual bool
 }
@@ -117,6 +123,19 @@ type WorkerSetupSaved struct {
 
 func (WorkerSetupSaved) msg() {}
 
+// SaveWorkerEdit asks for Text to replace worker.toml: the worker package checks it first, and nothing is written when it would not load.
+type SaveWorkerEdit struct{ Text string }
+
+func (SaveWorkerEdit) cmd() {}
+
+// WorkerEdited answers SaveWorkerEdit with the text sent. Err is the refusal, naming the problem.
+type WorkerEdited struct {
+	Text string
+	Err  error
+}
+
+func (WorkerEdited) msg() {}
+
 // StopWorker sends the worker its stop request: Mode idle drains and exits once no run is in flight, now ends it at once.
 type StopWorker struct{ Mode string }
 
@@ -150,6 +169,8 @@ type WorkerCardState struct {
 	// restart it.
 	Saved, Next string
 	Restart     bool
+	// EditText is the text of an edit that was refused; the next edit starts from it, not from the file.
+	EditText string
 }
 
 func (f *WorkerCardState) at(name Field) *string {
@@ -220,6 +241,12 @@ func (m Model) WorkerCardKind() WorkerCardKind {
 func (m Model) WorkerCardSaves() bool {
 	kind := m.WorkerCardKind()
 	return (kind == WorkerSetUp || kind == WorkerServe) && m.WorkerCard.Saved == ""
+}
+
+// WorkerCardEdits says the card offers the edit: worker.toml is there, whether it loads or not, and no save or restart question is under way.
+func (m Model) WorkerCardEdits() bool {
+	f := m.WorkerCard
+	return m.WorkerCardKind() >= WorkerBroken && f.Saved == "" && !f.Saving && !f.Stopping
 }
 
 // WorkerCardShows says the field applies to the card as it stands; the others are hidden and tab skips them.
@@ -403,7 +430,13 @@ func workerSetupSaved(m Model, msg WorkerSetupSaved) (Model, []Cmd) {
 	if msg.Serve {
 		verb = "Now serving " + msg.Project
 	}
-	f.Saved = verb + ": worker.toml written (checkout " + msg.Key + ")."
+	return m.workerWritten(verb + ": worker.toml written (checkout " + msg.Key + ").")
+}
+
+// workerWritten is the card after worker.toml was written: what was saved, what happens to the worker, and the setup read again.
+func (m Model) workerWritten(saved string) (Model, []Cmd) {
+	f := &m.WorkerCard
+	f.Saved = saved
 	f.Restart = m.Worker.Running
 	if f.Restart {
 		f.Next = "The running worker reads worker.toml only at start."
@@ -412,6 +445,51 @@ func workerSetupSaved(m Model, msg WorkerSetupSaved) (Model, []Cmd) {
 	}
 	m, ask := m.askWorker(0)
 	return m, []Cmd{LoadWorkerSetup{Workspace: m.Workspace}, ask}
+}
+
+// workerEditorClosed takes the text back from $EDITOR: an unchanged or blank result changes nothing, anything else is sent to be
+// checked and written.
+func workerEditorClosed(m Model, msg DraftEditorClosed) (Model, []Cmd, bool) {
+	if msg.UID != WorkerDraftUID {
+		return m, nil, false
+	}
+	f := &m.WorkerCard
+	if !f.Open {
+		return m, nil, true
+	}
+	if msg.Err != nil {
+		f.Err = msg.Err
+		return m, nil, true
+	}
+	text := normalizeLineBreaks(msg.Text)
+	if strings.TrimSpace(text) == "" || text == m.workerEditStart() {
+		return m, nil, true
+	}
+	f.Saving, f.Err = true, nil
+	return m, []Cmd{SaveWorkerEdit{Text: text}}, true
+}
+
+// workerEditStart is the text the editor is given: the refused edit when there is one, else the file.
+func (m Model) workerEditStart() string {
+	if m.WorkerCard.EditText != "" {
+		return m.WorkerCard.EditText
+	}
+	return m.Worker.Setup.Text
+}
+
+func workerEdited(m Model, msg WorkerEdited) (Model, []Cmd) {
+	f := &m.WorkerCard
+	if !f.Open || !f.Saving {
+		return m, nil
+	}
+	f.Saving = false
+	if msg.Err != nil {
+		f.EditText = msg.Text
+		f.Err = fmt.Errorf("The edit was not saved and the file is as it was: %w. Press e to keep editing; your text is kept.", msg.Err)
+		return m, nil
+	}
+	f.EditText, f.Err = "", nil
+	return m.workerWritten("Edited the worker: worker.toml written.")
 }
 
 // workerStopped closes the card with what the stop did.
@@ -465,6 +543,12 @@ func workerCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		return workerRestartKey(m, msg)
 	}
 	binding, bound := LookupBindingForMode(msg.Chord, ModeWorkerCard)
+	if bound && binding.Action == WorkerEdit {
+		if m.WorkerCardEdits() {
+			return m, []Cmd{OpenDraftEditor{UID: WorkerDraftUID, Text: m.workerEditStart(), Suffix: ".toml"}}
+		}
+		bound = false // no file to edit: the key is typed
+	}
 	field := f.at(f.Field)
 	switch {
 	case bound && binding.Action == WorkerCancel:

@@ -90,6 +90,7 @@ main = '` + repo + `'
 				t.Fatal("an unloadable file gave no reason")
 			}
 			got.Setup.LoadErr = ""
+			tt.want.Text = tt.file
 			tt.want.Project, tt.want.Checkout, tt.want.Path = "work", folder, dirs.ConfigPath()
 			if !reflect.DeepEqual(got.Setup, tt.want) {
 				t.Fatalf("setup %+v, want %+v", got.Setup, tt.want)
@@ -186,5 +187,27 @@ func TestStopRequestCarriesTheModeAndTheWorkersAnswer(t *testing.T) {
 	refused, _ := fakeWorker(t, map[string]worker.Response{"stop": {Error: "unknown stop mode"}})
 	if got := as[model.WorkerStopped](t, run(t, workerGateway(refused), model.StopWorker{Mode: "soon"})); got.Err == nil {
 		t.Fatalf("a refused stop reported none: %+v", got)
+	}
+}
+
+func TestEditedWorkerTomlIsWrittenOnlyWhenItLoads(t *testing.T) {
+	g, dirs := setupGateway(t)
+	writeWorkerFile(t, dirs, "worker.toml", "executor = \"laptop\"\n\n[profiles.default]\n")
+	before, _ := os.ReadFile(dirs.ConfigPath())
+
+	refused := as[model.WorkerEdited](t, run(t, g, model.SaveWorkerEdit{Text: "executor = \"laptop\"\nbogus = 1\n"}))
+	if refused.Err == nil || !strings.Contains(refused.Err.Error(), "unknown key bogus") || strings.Contains(refused.Err.Error(), "/tmp") {
+		t.Fatalf("refusal %v, want the problem named with the file called worker.toml", refused.Err)
+	}
+	if after, _ := os.ReadFile(dirs.ConfigPath()); string(after) != string(before) {
+		t.Errorf("a refused edit changed the file:\n%s", after)
+	}
+
+	text := "executor = \"renamed\"\n\n[profiles.default]\n"
+	if saved := as[model.WorkerEdited](t, run(t, g, model.SaveWorkerEdit{Text: text})); saved.Err != nil {
+		t.Fatal(saved.Err)
+	}
+	if after, _ := os.ReadFile(dirs.ConfigPath()); string(after) != text {
+		t.Errorf("file:\n%s", after)
 	}
 }

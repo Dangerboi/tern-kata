@@ -129,7 +129,14 @@ func workerActions(m model.Model) tern.Element {
 		if m.WorkerCardKind() == model.WorkerServe {
 			save = "Serve " + m.Worker.Setup.Project
 		}
-		return buttonRow(cardButton("save", model.ModeWorkerCard, model.WorkerSave, save, true), cardButton("cancel", model.ModeWorkerCard, model.WorkerCancel, "Cancel", false))
+		buttons := []tern.Element{cardButton("save", model.ModeWorkerCard, model.WorkerSave, save, true)}
+		if m.WorkerCardEdits() {
+			buttons = append(buttons, cardButton("edit", model.ModeWorkerCard, model.WorkerEdit, "Edit worker.toml", false))
+		}
+		return buttonRow(append(buttons, cardButton("cancel", model.ModeWorkerCard, model.WorkerCancel, "Cancel", false))...)
+	}
+	if m.WorkerCardEdits() {
+		return buttonRow(cardButton("edit", model.ModeWorkerCard, model.WorkerEdit, "Edit worker.toml", true), cardButton("close", model.ModeWorkerCard, model.WorkerCancel, "Close", false))
 	}
 	return buttonRow(cardButton("close", model.ModeWorkerCard, model.WorkerCancel, "Close", false))
 }

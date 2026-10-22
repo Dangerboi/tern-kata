@@ -38,6 +38,10 @@ Writes a new `worker.toml`. Five optional flags set values in it: `--executor <n
 
 When it finishes it prints the path written and what was added, one line of the trust note, that the plugin's host half starts the worker within 10 seconds (else run `tern-kata worker`), and that `tern-kata worker doctor` checks the setup.
 
+### `tern-kata worker edit`
+
+Opens `worker.toml` in `$VISUAL` (else `$EDITOR`) on a temporary copy. What you save must pass the same strict check the worker applies at start before it replaces the file. When it does not, the editor reopens on your text with the problem as `#!` comment lines at the top (stripped again before the next check) until it loads. Saving the file unchanged, or empty, cancels and leaves `worker.toml` as it was. After a write the command says whether a worker runs and that `tern-kata worker stop` makes it reload. With no `worker.toml` it refuses and points at `worker init`.
+
 ### `tern-kata worker add`
 
 Adds the current Project to an existing `worker.toml`. It refuses when there is no file (run `tern-kata worker init`), when the directory is not bound, or when the Project is already listed (the message names it). It:
@@ -94,9 +98,11 @@ In the Pane, `W` on the Jobs Page (from the list or the inspector) opens the Wor
 - whether a worker runs, with its process id, executor and runs in flight;
 - whether the plugin supervises it, or `worker.manual` turned that off.
 
-With no `worker.toml` the card offers **Set up**: executor, actor, command, model and thinking, prefilled as `tern-kata worker init` would. With a file that loads but does not list the Project it offers **Serve this Project**, which does what `worker add` does. Both show the checkout and the trust note, and save only when the trust choice is Yes (it starts at No; space, left and right or a click change it). They write through the same checked write as the commands, so a value the loader refuses is named (the card puts focus on that field) and the input stays. A file that does not load is only shown, never written over; a folder bound to no Project gets a message and no fields. Esc closes the card.
+With no `worker.toml` the card offers **Set up**: executor, actor, command, model and thinking, prefilled as `tern-kata worker init` would. With a file that loads but does not list the Project it offers **Serve this Project**, which does what `worker add` does. Both show the checkout and the trust note, and save only when the trust choice is Yes (it starts at No; space, left and right or a click change it). They write through the same checked write as the commands, so a value the loader refuses is named (the card puts focus on that field) and the input stays. A file that does not load is never written over by those saves, but **Edit** can repair it; a folder bound to no Project gets a message and no fields. Esc closes the card.
 
-After a save, with a worker running, the card asks how to restart it, since it reads `worker.toml` only at start: **when idle** (`i` or enter, the default) sends the stop request that refuses new work and exits once the runs in flight finish, and **now** (`n`) ends it at once and holds the runs it interrupts `interrupted`; the card names the runs in flight. Esc leaves the worker running. The plugin then starts a fresh worker when it supervises this one; the card's notice says so, or says that nothing will. With no worker running, the card says the plugin starts one within 10 seconds, or, under `worker.manual`, that you start it.
+When `worker.toml` exists (loading or not) the card also offers **Edit** (`e`): the file opens in `$EDITOR` as a `.toml` file, and the text you save is checked by the same strict check and written through the same checked write. A refusal names the problem on the card and keeps your text, so `e` again reopens it rather than the file; an unchanged or empty result changes nothing.
+
+After a save or an edit, with a worker running, the card asks how to restart it, since it reads `worker.toml` only at start: **when idle** (`i` or enter, the default) sends the stop request that refuses new work and exits once the runs in flight finish, and **now** (`n`) ends it at once and holds the runs it interrupts `interrupted`; the card names the runs in flight. Esc leaves the worker running. The plugin then starts a fresh worker when it supervises this one; the card's notice says so, or says that nothing will. With no worker running, the card says the plugin starts one within 10 seconds, or, under `worker.manual`, that you start it.
 
 The Jobs Page banner says per state what is missing (no file, a file that does not load, a Project not listed, no worker running, `worker.manual`) and points at `W`.
 
@@ -106,6 +112,7 @@ The Jobs Page banner says per state what is missing (no file, a file that does n
 tern-kata worker doctor     # checks the file, checkouts, commands, secrets, kata and each Project's lease; says how to fix them
 tern-kata worker            # runs in the foreground; ctrl+c stops it
 tern-kata worker status     # from another shell: what it serves, runs and refuses
+tern-kata worker edit       # edit worker.toml in $EDITOR; the result must load before it is written
 tern-kata worker stop [--now]  # stop the running worker: let its runs finish first, or end at once
 tern-kata run <job-uid>     # run an adapter prompt job now
 tern-kata worker resume <run-uid>    # continue a held run in its omp session
