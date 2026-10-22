@@ -480,7 +480,7 @@ func isCaretChord(chord string) bool {
 // the caret and ctrl+u clears the field, both through the card's DeleteInput and ClearInput bindings; the caret chords move
 // it or delete after it whatever else they are bound to, since a card calls this only for keys its text field takes; a
 // key bound to anything else is not text; a key with no binding inserts its character, a space, or pasted text with its
-// line breaks flattened at the caret. It reports whether the text changed.
+// line breaks flattened at the caret. It reports whether the text changed; Backspace at the start does not change it.
 func editText(value string, c *Caret, field Field, binding Binding, bound bool, msg KeyMsg) (string, bool) {
 	runes := []rune(value)
 	n := len(runes)
@@ -492,7 +492,7 @@ func editText(value string, c *Caret, field Field, binding Binding, bound bool, 
 		return "", true
 	case bound && binding.Action == DeleteInput:
 		if at == 0 {
-			return value, true
+			return value, false
 		}
 		return string(slices.Delete(runes, at-1, at)), true
 	case msg.Chord == "delete":

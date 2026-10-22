@@ -127,3 +127,27 @@ func TestCaretKeysKeepTheirOtherJobs(t *testing.T) {
 		t.Errorf("→ on the status choice gave %q, want open", got)
 	}
 }
+
+// Backspace with nothing before the caret is no edit: the selection stays and no snapshot is read.
+func TestSearchBackspaceAtTheStartKeepsTheSelection(t *testing.T) {
+	s := feed(t, browsing(t, 160), key("/"), key("a"), key("c"), key("home")).State
+	s.Model.SelectedUID, s.Model.Refreshing = "alpha", false
+	out := step(t, s, key("backspace"))
+	if readsSnapshot(out) || out.State.Model.SelectedUID != "alpha" || out.State.Model.Filters.Search != "ac" {
+		t.Errorf("cmds %v, selected %q, query %q; want no read, alpha, ac", out.Cmds, out.State.Model.SelectedUID, out.State.Model.Filters.Search)
+	}
+	s.Model.Search.Caret = model.Caret{Back: 1}
+	out = step(t, s, key("backspace"))
+	if !readsSnapshot(out) || out.State.Model.Filters.Search != "c" {
+		t.Errorf("mid-text backspace: cmds %v, query %q; want a read for c", out.Cmds, out.State.Model.Filters.Search)
+	}
+}
+
+func readsSnapshot(out driver.Output) bool {
+	for _, c := range out.Cmds {
+		if _, ok := c.(model.ReadSnapshot); ok {
+			return true
+		}
+	}
+	return false
+}
