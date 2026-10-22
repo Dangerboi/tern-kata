@@ -25,7 +25,7 @@ func transientTarget(id string) bool {
 	if _, _, ok := view.FieldFromID(id); ok || id == view.SearchID {
 		return true
 	}
-	if view.IsIssueID(id) {
+	if view.IsIssueID(id) || view.IsBoardCardID(id) {
 		return true
 	}
 	// The active tab's rows and its empty line go when the tab switches, and the tab names with them when the detail turns

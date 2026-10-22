@@ -45,6 +45,15 @@ func readLanes(path string) (lanesFile, error) {
 	return file, nil
 }
 
+// readRawLanes reads the file as untyped tables so a save can write back keys tern-kata doesn't know; a missing file is an empty one.
+func readRawLanes(path string) (map[string]any, error) {
+	file := map[string]any{}
+	if _, err := toml.DecodeFile(path, &file); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return file, nil
+}
+
 // loadLanes is the Project's saved Lane list; labels are normalised and repeated or empty ones dropped. No list means none saved.
 func loadLanes(cmd model.LoadLanes) model.LanesLoaded {
 	path, err := lanesPath()
@@ -68,9 +77,9 @@ func cleanLanes(labels []string) []string {
 	return lanes
 }
 
-// saveLanes writes the Project's list into the file, keeping every other Project's table. It refuses a file it cannot read, and
-// renames a temporary file into place so a failed write leaves the old file. shortcut: comments in a hand-edited file are
-// lost on save, and two Panes saving at once race; upgrade if either bites.
+// saveLanes writes the Project's list into the file, keeping every other table and every key it doesn't know. It refuses a file
+// it cannot read, and renames a temporary file into place so a failed write leaves the old file. shortcut: comments in a
+// hand-edited file are lost on save, and two Panes saving at once race; upgrade if either bites.
 func saveLanes(cmd model.SaveLanes) model.LanesSaved {
 	return model.LanesSaved{ProjectUID: cmd.ProjectUID, Lanes: cmd.Lanes, DoneDays: cmd.DoneDays, DoneCards: cmd.DoneCards, Err: writeLanes(cmd)}
 }
@@ -80,18 +89,34 @@ func writeLanes(cmd model.SaveLanes) error {
 	if err != nil {
 		return err
 	}
-	file, err := readLanes(path)
+	file, err := readRawLanes(path)
 	if err != nil {
 		return err
 	}
-	if file == nil {
-		file = lanesFile{}
+	table, _ := file[cmd.ProjectUID].(map[string]any)
+	if table == nil {
+		table = map[string]any{}
 	}
-	if len(cmd.Lanes) == 0 && cmd.DoneDays == 0 && cmd.DoneCards == 0 {
-		// All default: the Project's table goes, so a later change of the default reaches it.
+	for _, key := range []string{"name", "labels", "done_days", "done_cards"} {
+		delete(table, key)
+	}
+	if len(cmd.Lanes) == 0 && cmd.DoneDays == 0 && cmd.DoneCards == 0 && len(table) == 0 {
+		// All default and nothing else in it: the Project's table goes, so a later change of the default reaches it.
 		delete(file, cmd.ProjectUID)
 	} else {
-		file[cmd.ProjectUID] = projectLanes{Name: cmd.ProjectName, Labels: cmd.Lanes, DoneDays: cmd.DoneDays, DoneCards: cmd.DoneCards}
+		if len(cmd.Lanes) > 0 || cmd.DoneDays != 0 || cmd.DoneCards != 0 {
+			table["name"] = cmd.ProjectName
+		}
+		if len(cmd.Lanes) > 0 {
+			table["labels"] = cmd.Lanes
+		}
+		if cmd.DoneDays != 0 {
+			table["done_days"] = cmd.DoneDays
+		}
+		if cmd.DoneCards != 0 {
+			table["done_cards"] = cmd.DoneCards
+		}
+		file[cmd.ProjectUID] = table
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err

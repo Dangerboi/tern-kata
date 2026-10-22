@@ -269,7 +269,7 @@ func TestColumnsStayMountedWhileHelpIsOpen(t *testing.T) {
 
 func TestUnknownIDOnATransientNodeIsIgnored(t *testing.T) {
 	s := browsing(t, 160)
-	for _, id := range []string{view.IssueID("beta"), view.SearchID, view.CreateFieldID(model.CreateBody), view.CloseFieldID(model.ClosePR), view.DetailActivityID + ".empty", view.DetailActivityID + ".tabs", view.ProjectInputID} {
+	for _, id := range []string{view.IssueID("beta"), view.SearchID, view.CreateFieldID(model.CreateBody), view.CloseFieldID(model.ClosePR), view.DetailActivityID + ".empty", view.DetailActivityID + ".tabs", view.ProjectInputID, view.BoardID + ".lane1.cards.beta"} {
 		out := driver.Step(s, &tern.ErrorEvent{Msg: "unknown id " + id}, now)
 		if out.Err != nil || out.Quit || out.View != nil || len(out.Ops) != 0 {
 			t.Errorf("unknown id %q: %+v", id, out)
@@ -279,7 +279,7 @@ func TestUnknownIDOnATransientNodeIsIgnored(t *testing.T) {
 
 func TestAnyOtherErrorIsFatal(t *testing.T) {
 	s := browsing(t, 160)
-	for _, msg := range []string{"unknown id " + view.DetailActivityID, "unknown id main.columns", "bad op", "unknown id "} {
+	for _, msg := range []string{"unknown id " + view.DetailActivityID, "unknown id main.columns", "unknown id " + view.BoardID, "bad op", "unknown id "} {
 		out := driver.Step(s, &tern.ErrorEvent{Msg: msg}, now)
 		if out.Err == nil || !strings.Contains(out.Err.Error(), msg) {
 			t.Errorf("%q: err = %v", msg, out.Err)
