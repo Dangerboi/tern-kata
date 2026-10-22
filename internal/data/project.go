@@ -68,6 +68,20 @@ func projectRequest(ctx context.Context, workspace string) (*g.ResolveProjectBod
 	return request, nil
 }
 
+// ResolveBinding is the Project the directory dir is bound to and the absolute directory holding that Binding's
+// .kata.toml (the one in dir or a parent up to the git root). Both are empty when dir is not bound.
+func ResolveBinding(dir string) (project, root string, err error) {
+	root, _, err = discoverProjectRoots(dir)
+	if err != nil || root == "" {
+		return "", "", err
+	}
+	project, err = readBinding(root)
+	if err != nil {
+		return "", "", err
+	}
+	return project, root, nil
+}
+
 // readBinding is the Project name the .kata.toml at workspaceRoot binds to.
 func readBinding(workspaceRoot string) (string, error) {
 	path := filepath.Join(workspaceRoot, ".kata.toml")
