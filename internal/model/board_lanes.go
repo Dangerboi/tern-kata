@@ -84,6 +84,12 @@ func lanesLoaded(m Model, msg LanesLoaded) Model {
 		return m
 	}
 	m.Board.Lanes, m.Board.DoneDays, m.Board.DoneCards = msg.Lanes, msg.DoneDays, msg.DoneCards
+	if m.Board.DoneDays > maxDoneDays {
+		m.Board.DoneDays = 0
+	}
+	if m.Board.DoneCards > maxDoneCards {
+		m.Board.DoneCards = 0
+	}
 	m.Board.fileErr, m.Board.loaded = msg.Err, true
 	if msg.Err != nil {
 		m.Board.Lanes, m.Board.DoneDays, m.Board.DoneCards = nil, 0, 0
@@ -93,6 +99,13 @@ func lanesLoaded(m Model, msg LanesLoaded) Model {
 }
 
 func lanesSaved(m Model, msg LanesSaved) Model {
+	if msg.ProjectUID == m.Collection.ProjectUID && m.LanesForm.Open && m.LanesForm.Saving {
+		if msg.Err != nil {
+			m.LanesForm.Saving, m.LanesForm.Err = false, fmt.Errorf("Lanes not saved: %w", msg.Err)
+			return m
+		}
+		m.LanesForm = LanesFormState{}
+	}
 	if msg.Err != nil {
 		m.Notice = fmt.Sprintf("Lanes not saved: %v", msg.Err)
 		return m

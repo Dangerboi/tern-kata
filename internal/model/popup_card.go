@@ -180,8 +180,8 @@ func init() {
 			modes: []Mode{ModeLanesForm}, mode: func(Model) Mode { return ModeLanesForm },
 			key:    updateLanesFormKey,
 			fields: LanesFields, focus: func(m *Model) *Field { return &m.LanesForm.Field },
-			locked: func(Model) bool { return false },
-			caret:  func(m Model) (Field, bool) { return m.LanesForm.Field, true },
+			locked: func(m Model) bool { return m.LanesForm.Saving },
+			caret:  func(m Model) (Field, bool) { return m.LanesForm.Field, !m.LanesForm.Saving },
 		},
 		{
 			card: CardFilter, open: func(m Model) bool { return m.FilterForm.Open },
