@@ -340,6 +340,7 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 		{"Worker setup", workerCardOpen(t, nil, noWorkerFile), model.ModeWorkerCard},
 		{"Worker serve", workerCardOpen(t, nil, otherProject), model.ModeWorkerCard},
 		{"Worker served", workerCardOpen(t, supervisedHere, listedProject), model.ModeWorkerCard},
+		{"Worker supervision off", step(t, workerCardOpen(t, supervisedHere, listedProject), key("s")).State, model.ModeWorkerOff},
 		{"Worker restart", func() driver.State {
 			s := step(t, workerCardOpen(t, supervisedHere, otherProject), key("space")).State
 			s = step(t, s, key("ctrl+o")).State

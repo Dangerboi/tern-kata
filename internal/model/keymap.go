@@ -267,7 +267,8 @@ var cardBindings = []Binding{
 	{Chord: "escape", Key: "esc", Action: LanesCancel, Help: "cancel", Mode: ModeLanesForm, ShowInFooter: true},
 	{Chord: "backspace", Key: "backspace", Action: DeleteInput, Help: "delete", Mode: ModeLanesForm},
 	{Chord: "ctrl+u", Key: "ctrl+u", Action: ClearInput, Help: "clear field", Mode: ModeLanesForm},
-	// Worker card. Its edit (e) and supervision keys are added here by the tickets that build them.
+	// Worker card. Its edit (e) key is added here by the ticket that builds it. s (supervision) is typed while the card draws fields.
+	{Chord: "s", Key: "s", Action: WorkerSupervision, Help: "supervision off / on", Mode: ModeWorkerCard, ShowInFooter: true},
 	{Chord: "tab", Key: "tab", Action: WorkerNext, Help: "next field", Mode: ModeWorkerCard, ShowInFooter: true},
 	{Chord: "shift+tab", Key: "shift+tab", Action: WorkerPrevious, Help: "previous field", Mode: ModeWorkerCard},
 	{Chord: "e", Key: "e", Action: WorkerEdit, Help: "edit worker.toml", Mode: ModeWorkerCard, ShowInFooter: true},
@@ -283,4 +284,8 @@ var cardBindings = []Binding{
 	{Chord: "enter", Key: "enter", Action: WorkerRestartIdle, Help: "restart when idle", Mode: ModeWorkerRestart},
 	{Chord: "n", Key: "n", Action: WorkerRestartNow, Help: "restart now", Mode: ModeWorkerRestart, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: WorkerLeave, Help: "leave it running", Mode: ModeWorkerRestart, ShowInFooter: true},
+	{Chord: "i", Key: "i", Action: WorkerOffIdle, Help: "stop when idle", Mode: ModeWorkerOff, ShowInFooter: true},
+	{Chord: "enter", Key: "enter", Action: WorkerOffIdle, Help: "stop when idle", Mode: ModeWorkerOff},
+	{Chord: "n", Key: "n", Action: WorkerOffNow, Help: "stop now", Mode: ModeWorkerOff, ShowInFooter: true},
+	{Chord: "escape", Key: "esc", Action: WorkerOffCancel, Help: "keep supervision", Mode: ModeWorkerOff, ShowInFooter: true},
 }

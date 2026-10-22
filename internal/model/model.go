@@ -247,6 +247,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return workerEdited(m, msg)
 	case WorkerStopped:
 		return workerStopped(m, msg)
+	case WorkerSupervisionSet:
+		return workerSupervisionSet(m, msg)
 	case LocalRunLoaded:
 		m = localRunLoaded(m, msg)
 	case JobRunRequested:
