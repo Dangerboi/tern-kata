@@ -35,6 +35,8 @@ type LaunchPlan struct {
 	Stop       bool
 	// Takeover is `worker --takeover`: claim the served Projects' leases even from another live worker.
 	Takeover bool
+	// Now is `worker stop --now`: end the worker at once instead of letting its runs in flight finish.
+	Now bool
 	// fallbackAuthor is the --as actor exported to `kata tui`; empty leaves the environment untouched.
 	fallbackAuthor string
 }
@@ -160,6 +162,10 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 			plan.Takeover = true
 			continue
 		}
+		if plan.Subcommand == "worker" && arg == "--now" {
+			plan.Now = true
+			continue
+		}
 		if plan.Subcommand == "recur" {
 			if matched, err := parseRecurFlag(args, &i, &plan); err != nil {
 				return LaunchPlan{}, err
@@ -189,8 +195,10 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata run <job-uid>")
 	case plan.Subcommand == "worker" && len(operands) == 2 && (operands[0] == "resume" || operands[0] == "abandon") && !plan.Takeover:
 		// `worker resume <run-uid>` and `worker abandon <run-uid>`; validated below like the other forms.
-	case plan.Subcommand == "worker" && (len(operands) > 1 || len(operands) == 1 && !slices.Contains([]string{"status", "doctor", "init", "add"}, operands[0])):
-		return LaunchPlan{}, fmt.Errorf("usage: tern-kata worker [--takeover] | tern-kata worker init | tern-kata worker add | tern-kata worker status | tern-kata worker doctor | tern-kata worker resume <run-uid> | tern-kata worker abandon <run-uid>")
+	case plan.Subcommand == "worker" && (len(operands) > 1 || len(operands) == 1 && !slices.Contains([]string{"status", "doctor", "init", "add", "stop"}, operands[0])):
+		return LaunchPlan{}, fmt.Errorf("usage: tern-kata worker [--takeover] | tern-kata worker init | tern-kata worker add | tern-kata worker status | tern-kata worker stop [--now] | tern-kata worker doctor | tern-kata worker resume <run-uid> | tern-kata worker abandon <run-uid>")
+	case plan.Subcommand == "worker" && plan.Now && !slices.Equal(operands, []string{"stop"}):
+		return LaunchPlan{}, fmt.Errorf("worker: --now applies to `tern-kata worker stop` only")
 	case plan.Subcommand == "worker" && len(operands) >= 1 && plan.Takeover:
 		return LaunchPlan{}, fmt.Errorf("worker: --takeover applies to `tern-kata worker` only")
 	}
@@ -246,6 +254,7 @@ Usage:
   tern-kata worker init
   tern-kata worker add
   tern-kata worker status
+  tern-kata worker stop [--now]
   tern-kata worker doctor
   tern-kata worker resume <run-uid> [--as <actor>]
   tern-kata worker abandon <run-uid> [--as <actor>]
@@ -285,6 +294,10 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
   worker add                    add the Project bound to this directory (and its checkout) to an
                                 existing worker.toml, leaving every other line as it is
   worker status                 say what the running worker serves, runs and refuses
+  worker stop [--now]           stop the running worker: it admits nothing new, lets its runs in flight
+                                finish and report, then exits 0; --now ends it at once and the runs it
+                                interrupts are held interrupted and resumable. Says whether the plugin
+                                starts a fresh worker. Config changes take effect by restarting it
   worker doctor                 check worker.toml, the checkouts, agent commands, secrets, the kata
                                 daemon and each Project's lease, and say how to fix what is missing
   worker resume <run-uid>       continue a held run: the worker starts a new headless omp attempt on

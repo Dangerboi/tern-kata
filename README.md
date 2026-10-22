@@ -34,7 +34,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 ![The Workflows Page with a workflow selected and its steps shown](docs/images/workflows.png)
 
-**The worker.** `tern-kata worker` runs kata's agent prompt jobs and workflows through omp and your shell on your machine and records every run in kata. `tern-kata worker init` and `worker add` set it up. Read the trust note first. See [The worker](docs/guide/worker.md).
+**The worker.** `tern-kata worker` runs kata's agent prompt jobs and workflows through omp and your shell on your machine and records every run in kata. `tern-kata worker init` and `worker add` set it up, and `worker stop` ends it once its runs finish (or `--now`), after which the plugin starts a fresh one. Read the trust note first. See [The worker](docs/guide/worker.md).
 
 **Attachments.** `u` attaches a screenshot, log or any other file to an Issue; agents find it through the Issue's kata metadata. See [Attachments](docs/guide/attachments.md).
 
@@ -121,7 +121,7 @@ The [guide index](docs/guide/README.md) lists every page:
 
 ## Credits
 
-- [herdr-kata](https://github.com/salmonumbrella/herdr-kata) inspired the worker. [ADRs 0002 to 0011](docs/adr) record which of its adapter decisions tern-kata adopted, adapted or rejected.
+- [herdr-kata](https://github.com/salmonumbrella/herdr-kata) inspired the worker. [ADRs 0002 to 0012](docs/adr) record which of its adapter decisions tern-kata adopted, adapted or rejected.
 - [kata](https://github.com/kenn-io/kata) is the issue tracker, [Tern](https://docs.stencil.so/tern/) hosts the Pane, and [omp](https://github.com/can1357/oh-my-pi) runs the agents.
 
 ## License

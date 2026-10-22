@@ -42,6 +42,7 @@ func (w *Worker) spawn(ps *projectState, uid string) {
 		w.mu.Lock()
 		delete(ps.running, uid)
 		w.mu.Unlock()
+		w.finishDrain()
 		if err != nil && w.ctx.Err() == nil && !w.halted.Load() {
 			w.opt.Log("run %s: %v", uid, err)
 		}

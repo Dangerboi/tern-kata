@@ -64,12 +64,54 @@ func runWorkerCommand(ctx context.Context, plan LaunchPlan, env workerEnv, out i
 		}
 		_, err = fmt.Fprint(out, resp.Status.String())
 		return err
+	case len(plan.Operands) == 1 && plan.Operands[0] == "stop":
+		return stopWorker(ctx, plan, env, out)
 	case len(plan.Operands) == 2:
 		return settleHeldRun(ctx, plan, env, out)
 	case len(plan.Operands) == 1:
 		return runDoctor(ctx, plan, env, out)
 	}
 	return runForeground(ctx, plan, env, out)
+}
+
+// stopWorker is `worker stop [--now]`: it asks the running worker to drain (or, with --now, to end at once) and says what
+// the worker answered.
+func stopWorker(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Writer) error {
+	mode := worker.StopIdle
+	if plan.Now {
+		mode = worker.StopNow
+	}
+	resp, err := worker.Ask(ctx, env.Dirs, worker.Request{Op: "stop", Mode: mode})
+	if errors.Is(err, worker.ErrNoWorker) {
+		return subcommandError{errors.New("no tern-kata worker is running on this machine: there is nothing to stop")}
+	}
+	if err != nil {
+		return subcommandError{err}
+	}
+	if !resp.OK {
+		return subcommandError{errors.New(resp.Error)}
+	}
+	a := resp.Stop
+	runs := fmt.Sprintf("%d %s in flight", a.InFlight, plural(a.InFlight, "run", "runs"))
+	switch {
+	case a.Mode == worker.StopNow && a.InFlight == 0:
+		_, err = fmt.Fprintf(out, "Stopping now: the worker is ending; %s.", runs)
+	case a.Mode == worker.StopNow:
+		_, err = fmt.Fprintf(out, "Stopping now: the worker is ending and %s; held interrupted, resumable once a worker runs again.", runs)
+	case a.InFlight == 0:
+		_, err = fmt.Fprintf(out, "Stopping when idle: %s, so the worker exits now.", runs)
+	default:
+		_, err = fmt.Fprintf(out, "Stopping when idle: the worker admits nothing new and exits once its runs in flight have finished (%s now). `tern-kata worker stop --now` ends it at once.", runs)
+	}
+	if err != nil {
+		return err
+	}
+	if a.Restarts {
+		_, err = fmt.Fprintln(out, " The plugin will start a fresh worker.")
+	} else {
+		_, err = fmt.Fprintln(out, " Nothing will start it again: start one with `tern-kata worker`, or let the plugin (a worker.toml without worker.manual beside it).")
+	}
+	return err
 }
 
 // settleHeldRun is `worker resume <run-uid>` or `worker abandon <run-uid>`: it asks the running worker to continue or
@@ -164,4 +206,11 @@ func runForeground(ctx context.Context, plan LaunchPlan, env workerEnv, out io.W
 // workerContext ends on an interrupt or a terminate signal.
 func workerContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	return signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }

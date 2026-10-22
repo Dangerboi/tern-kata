@@ -1,6 +1,6 @@
 ---
 name: tern-kata
-description: Files attached to kata Issues, recurring Issues, and the tern-kata worker, through tern-kata. Use when an Issue's metadata has `attachment.*` keys, to attach a screenshot, log or other file to an Issue, to make an Issue recur, change or stop its schedule, or print it (`tern-kata recur`), to run a scheduled agent job now (`tern-kata run`), or to check what the worker serves and runs (`tern-kata worker status`, `worker doctor`), or to resume or abandon a held worker run (`tern-kata worker resume`, `worker abandon`).
+description: Files attached to kata Issues, recurring Issues, and the tern-kata worker, through tern-kata. Use when an Issue's metadata has `attachment.*` keys, to attach a screenshot, log or other file to an Issue, to make an Issue recur, change or stop its schedule, or print it (`tern-kata recur`), to run a scheduled agent job now (`tern-kata run`), or to check what the worker serves and runs (`tern-kata worker status`, `worker doctor`), or to resume or abandon a held worker run (`tern-kata worker resume`, `worker abandon`), or to stop the worker (`tern-kata worker stop`).
 ---
 
 An Attachment is a file copied into the Project's Attachment store, `<primary checkout>/.kata-attachments/<Issue ULID>/<name>`, and pointed to by one `attachment.<name>` meta key on the Issue. The store is gitignored and never committed.
@@ -53,11 +53,12 @@ tern-kata recur <ref> --stop                            # stops the Recurrence; 
 ```bash
 tern-kata run <job-uid>                       # run an adapter prompt job now; prints the run's uid
 tern-kata worker status                       # what the worker serves and runs, with each held run's reason and next step
+tern-kata worker stop [--now]                 # stop the worker: let its runs finish (default) or end at once; says whether the plugin starts a fresh one
 tern-kata worker resume <run-uid> [--as me]   # continue a held run in its omp session
 tern-kata worker abandon <run-uid> [--as me]  # give up a held run: kata records it cancelled
 ```
 
-To set the worker up for the Project this directory is bound to, `tern-kata worker init` writes a new `worker.toml` (it refuses when one exists) and `tern-kata worker add` adds this Project and its checkout to an existing one (it refuses when there is none, or the Project is already listed). Anyone who can write jobs in a listed Project can run prompts and commands on the machine as the user, so run them only when the user asked. A running worker reads `worker.toml` only at start: after `worker add`, the user ends it (`tern-kata worker status` prints its process id) and the plugin starts a fresh one. Guide: https://github.com/Dangerboi/tern-kata/blob/main/docs/guide/worker.md
+To set the worker up for the Project this directory is bound to, `tern-kata worker init` writes a new `worker.toml` (it refuses when one exists) and `tern-kata worker add` adds this Project and its checkout to an existing one (it refuses when there is none, or the Project is already listed). Anyone who can write jobs in a listed Project can run prompts and commands on the machine as the user, so run them only when the user asked. A running worker reads `worker.toml` only at start: after `worker add`, `tern-kata worker stop` ends it and the plugin starts a fresh one. Guide: https://github.com/Dangerboi/tern-kata/blob/main/docs/guide/worker.md
 
 - A **held run** is `unknown` in kata with the reason first in its summary (`interrupted`, `launch_unproven`, `no_receipt`, `group_unproven`, `agent_login`, `agent_quota`, `secret_unavailable`, `invalid_prompt`, `execution_error`, or, before kata saw the run, `admission_rejected` and `create_rejected`). The worker never starts its prompt again and nothing restarts it; read the reason and the run's Issue comments, then resume or abandon.
 - Resume starts a new headless omp attempt on the saved session; the agent is told its previous turn may have partly run. It is refused unless the run is held `unknown` with a saved omp session, its agent process group is gone, the Project's lease is held, the Issue is open and the Project has a free slot; the refusal names which. Abandon is refused while a recorded process group is still present and for runs that are not held. Neither kills a process.

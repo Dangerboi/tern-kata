@@ -24,6 +24,9 @@ type Status struct {
 	Projects    []ProjectStatus
 	Runs        []RunStatus
 	Quarantined []string
+	// Stopping is "idle" while the worker drains toward an exit, "now" once it was told to end at once; InFlight is the runs a drain waits for.
+	Stopping string
+	InFlight int
 }
 
 // ProjectStatus is one served Project.
@@ -75,9 +78,12 @@ type RunStatus struct {
 func (w *Worker) Status() Status {
 	s := Status{Executor: w.opt.Config.Executor, Actor: cmp.Or(w.opt.Config.Actor, w.opt.Actor), Version: w.opt.Version, Supervisor: w.opt.Supervisor, PID: w.pid, Started: w.started, Now: w.clock.Now()}
 	w.mu.Lock()
+	s.Stopping, s.InFlight = w.stopping, w.inFlightLocked()
 	for _, ps := range w.projects {
 		p := ProjectStatus{Name: ps.cfg.Name, Capacity: ps.cfg.Capacity, InUse: len(ps.held) + ps.pending, Following: ps.streamOpen}
 		switch {
+		case w.stopping != "":
+			p.Why = errStopping.Error()
 		case ps.blocked != "":
 			p.Why = ps.blocked
 		case !ps.resolved:
@@ -176,6 +182,12 @@ func (s Status) String() string {
 	}
 	b.WriteString(")\n")
 	b.WriteString(s.supervision())
+	switch s.Stopping {
+	case StopIdle:
+		fmt.Fprintf(&b, "Stopping: it admits nothing new and exits once its runs in flight have finished, waiting for %d %s. `tern-kata worker stop --now` ends it at once.\n", s.InFlight, plural(s.InFlight, "run", "runs"))
+	case StopNow:
+		b.WriteString("Stopping now: it is ending its runs in flight, which are held interrupted and resumable.\n")
+	}
 	if len(s.Projects) == 0 {
 		b.WriteString("It serves no Projects: list them under [[projects]] in worker.toml.\n")
 	}

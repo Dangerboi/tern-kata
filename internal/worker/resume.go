@@ -30,8 +30,8 @@ type RunTransition struct {
 // expiry before anything starts; the held attempt's prompt is never sent again. by is the actor recorded for the
 // resume. One request owns a run at a time, so two resumes of one hold accept one and the other never touches its slot.
 func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, error) {
-	if w.halted.Load() {
-		return RunTransition{}, errors.New("the worker is stopping")
+	if w.halted.Load() || w.isStopping() {
+		return RunTransition{}, errStopping
 	}
 	op := w.runOps.get(uid)
 	op.Lock()

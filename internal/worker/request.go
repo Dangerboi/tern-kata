@@ -144,6 +144,8 @@ func (w *Worker) admitsNothing(ps *projectState) string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	switch {
+	case w.stopping != "":
+		return errStopping.Error()
 	case ps.blocked != "":
 		return ps.blocked
 	case !ps.resolved:

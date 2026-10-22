@@ -83,6 +83,8 @@ State lives in `$XDG_STATE_HOME/tern-kata` (else `~/.local/state/tern-kata`):
 - each run's journal (`runs/<run uid>/run.json` with its prompt, session and output);
 - the pins.
 
+`tern-kata worker stop` keeps leases: a stopped worker does not release them, and its next start renews them.
+
 Across machines, the worker holds a lease for each Project in the Project's own kata metadata (`tern_kata.lease`, renewed every 3 minutes, expiring after 10). A Project whose lease another worker holds admits nothing here and `worker status` says which worker owns it. `tern-kata worker --takeover` moves it on purpose.
 
 ## What a run does

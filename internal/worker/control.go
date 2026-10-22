@@ -18,12 +18,14 @@ import (
 //	"status"     answers Status, whose Runs carry each run's hold, reason and which verbs would be accepted.
 //	"run-detail" Run: a run uid; answers Detail (status line, hold reason, steps, output tail).
 //	"resume"     Run: a held run's uid, Actor: who asks (optional); answers Transition.
+//	"stop"       Mode: "idle" (the default) or "now"; answers Stop. Idle refuses new work and exits once no run is in flight; now exits at once.
 //	"abandon"    Run: a held or running run's uid (or one this machine lost the state of), Actor: who asks (optional); answers Transition.
 type Request struct {
 	Op    string `json:"op"`
 	Job   string `json:"job,omitempty"`
 	Run   string `json:"run,omitempty"`
 	Actor string `json:"actor,omitempty"`
+	Mode  string `json:"mode,omitempty"`
 }
 
 // Response answers a Request; Error is set when it was refused, in words for the user.
@@ -34,6 +36,7 @@ type Response struct {
 	Status     *Status        `json:"status,omitempty"`
 	Detail     *RunDetail     `json:"detail,omitempty"`
 	Transition *RunTransition `json:"transition,omitempty"`
+	Stop       *StopAnswer    `json:"stop,omitempty"`
 }
 
 // ErrNoWorker means nothing answers on the control socket.
@@ -82,6 +85,9 @@ func (w *Worker) serveControl(ctx context.Context, ln interface {
 				return
 			}
 			_ = json.NewEncoder(conn).Encode(w.handle(ctx, req))
+			if req.Op == "stop" {
+				w.finishDrain()
+			}
 		}()
 	}
 }
@@ -92,14 +98,20 @@ func (w *Worker) handle(ctx context.Context, req Request) Response {
 		s := w.Status()
 		return Response{OK: true, Status: &s}
 	case "run":
-		if w.halted.Load() {
-			return Response{Error: "the worker is stopping"}
+		if w.halted.Load() || w.isStopping() {
+			return Response{Error: errStopping.Error()}
 		}
 		accepted, err := w.RequestRun(ctx, req.Job)
 		if err != nil {
 			return Response{Error: err.Error()}
 		}
 		return Response{OK: true, Run: &accepted}
+	case "stop":
+		a, err := w.Stop(req.Mode)
+		if err != nil {
+			return Response{Error: err.Error()}
+		}
+		return Response{OK: true, Stop: &a}
 	case "run-detail":
 		d, err := w.RunDetail(req.Run)
 		if err != nil {

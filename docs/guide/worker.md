@@ -46,7 +46,7 @@ Adds the current Project to an existing `worker.toml`. It refuses when there is 
 - puts the checkout line inside the existing `[checkouts]` table, creating the table at the end when absent;
 - leaves every other line and comment byte for byte unchanged.
 
-A running worker reads `worker.toml` only at start. After `worker add`, end it (`tern-kata worker status` prints its process id; `kill <id>`, or `Stop-Process -Id <id>` on Windows) and the plugin starts a fresh one.
+A running worker reads `worker.toml` only at start. After `worker add`, run `tern-kata worker stop` and the plugin starts a fresh one (see [Stopping the worker](#stopping-the-worker)).
 
 ### The checkout key
 
@@ -92,12 +92,19 @@ Each `[[projects]]` block lists its own checkout only, so a job in `acme-shop` c
 tern-kata worker doctor     # checks the file, checkouts, commands, secrets, kata and each Project's lease; says how to fix them
 tern-kata worker            # runs in the foreground; ctrl+c stops it
 tern-kata worker status     # from another shell: what it serves, runs and refuses
+tern-kata worker stop [--now]  # stop the running worker: let its runs finish first, or end at once
 tern-kata run <job-uid>     # run an adapter prompt job now
 tern-kata worker resume <run-uid>    # continue a held run in its omp session
 tern-kata worker abandon <run-uid>   # give up a held run (kata records it cancelled), stop a running one, or settle one whose local state is lost
 ```
 
 `tern-kata worker --takeover` moves a Project's lease on purpose (see [state and leases](worker-reference.md#state-and-leases)). `tern-kata --help` lists every command.
+
+## Stopping the worker
+
+`tern-kata worker stop` asks the running worker to stop. By default it stops admitting (scheduled occurrences, `run` requests and resumes are refused with "the worker is stopping"), lets the runs in flight finish and report to kata, and exits with status 0 once none is in flight; held runs do not count. `tern-kata worker status` says the worker is stopping and how many runs it waits for. `tern-kata worker stop --now` ends it at once: the runs it interrupts are held `interrupted` and resumable, as after a terminate signal, and a `--now` during a drain upgrades the drain. Leases are kept.
+
+The command prints the mode, the runs in flight and whether a fresh worker follows: the plugin starts one when it supervises this worker and no `worker.manual` lies beside `worker.toml`; a worker you started by hand stays stopped. That is how a change to `worker.toml` takes effect: stop the worker, and the new one reads the file.
 
 ## Supervision
 
@@ -114,7 +121,7 @@ This is the one supervision path tern-kata ships. A service of your own (a syste
 
 ## Turning supervision off
 
-Create an empty `worker.manual` next to `worker.toml` (or delete `worker.toml`): the host half starts no worker, and looks again every 10 seconds. It cannot stop a worker that already runs: end that one yourself, with the process id `worker status` prints (`kill <id>`, or `Stop-Process -Id <id>` on Windows). Create the marker first, or the host half starts a new one. Removing the marker turns supervision back on.
+Create an empty `worker.manual` next to `worker.toml` (or delete `worker.toml`): the host half starts no worker, and looks again every 10 seconds. It cannot stop a worker that already runs: stop that one yourself with `tern-kata worker stop`. Create the marker first, or the host half starts a new one. Removing the marker turns supervision back on.
 
 `tern plugin remove tern-kata` or disabling the plugin in Tern's settings removes the host half altogether, together with the window half.
 
