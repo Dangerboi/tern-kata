@@ -20,7 +20,7 @@ func parse(lines ...string) AgentResult {
 
 func TestOmpOutputIsReadByItsEventsNotItsText(t *testing.T) {
 	assistant := func(text, stop string, in, out int) string {
-		return `{"role":"assistant","content":[{"type":"thinking","text":"x"},{"type":"text","text":"` + text + `"}],"stopReason":"` + stop + `","usage":{"input":` + itoa(in) + `,"output":` + itoa(out) + `}}`
+		return `{"role":"assistant","content":[{"type":"thinking","text":"x"},{"type":"text","text":"` + text + `"}],"stopReason":"` + stop + `","usage":{"input":` + strconv.Itoa(in) + `,"output":` + strconv.Itoa(out) + `}}`
 	}
 	cases := []struct {
 		name     string
@@ -55,8 +55,6 @@ func TestOmpOutputIsReadByItsEventsNotItsText(t *testing.T) {
 		})
 	}
 }
-
-func itoa(n int) string { return strconv.Itoa(n) }
 
 func TestThePromptOfAJobRunIsStable(t *testing.T) {
 	got, err := BuildPrompt(PromptInput{

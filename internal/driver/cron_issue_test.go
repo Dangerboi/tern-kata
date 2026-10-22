@@ -71,7 +71,7 @@ func TestCronMadeIssueShowsTheMarkerInTheListAndOnItsBoardCard(t *testing.T) {
 }
 
 func TestCronMadeIssueDetailNamesTheJobAndTheScheduledTimeAndUsesTheUidWhenTheJobIsGone(t *testing.T) {
-	s, _ := detailOf(t, cronChild(), nil, recurringJob("J1", "Weekly report", jobParent("open", false)))
+	s, _ := detailOf(t, cronChild(), nil, nativeJob("J1", "Weekly report", jobParent("open", false)))
 	wantText(t, "the detail", inspectorText(t, s), "Cron job", "Weekly report", "scheduled "+s.Model.DetailTime(cronRun))
 
 	gone, asked := detailOf(t, cronChild(), nil, promptJob("J9", "Unrelated"))
@@ -96,7 +96,7 @@ func TestIssueWithoutCronMetadataShowsNothingNewAndReadsNoJobs(t *testing.T) {
 }
 
 func TestSelectingTheCronJobPropertyOpensTheJobsPageWithTheJobSelected(t *testing.T) {
-	jobs := []model.CronJob{promptJob("J0", "Adapter"), recurringJob("J1", "Weekly report", jobParent("open", false)), promptJob("J2", "Other")}
+	jobs := []model.CronJob{promptJob("J0", "Adapter"), nativeJob("J1", "Weekly report", jobParent("open", false)), promptJob("J2", "Other")}
 	for name, open := range map[string]func(driver.State) driver.Output{
 		"enter": func(s driver.State) driver.Output { return step(t, feed(t, s, key("enter")).State, key("enter")) },
 		"click": func(s driver.State) driver.Output { return step(t, s, click("", view.OpenJobClick("J1"))) },
@@ -114,7 +114,7 @@ func TestSelectingTheCronJobPropertyOpensTheJobsPageWithTheJobSelected(t *testin
 }
 
 func TestParentsDetailListsItsJobsWithStateAndSaysClosedMeansPaused(t *testing.T) {
-	jobs := []model.CronJob{recurringJob("J1", "Weekly report", jobParent("open", false)), promptJob("J0", "Adapter")}
+	jobs := []model.CronJob{nativeJob("J1", "Weekly report", jobParent("open", false)), promptJob("J0", "Adapter")}
 	open, _ := detailOf(t, cronParentIssue("open"), nil, jobs...)
 	text := inspectorText(t, open)
 	wantText(t, "an open parent's detail", text, "Cron jobs", "Weekly report", "active", "every hour")
@@ -127,7 +127,7 @@ func TestParentsDetailListsItsJobsWithStateAndSaysClosedMeansPaused(t *testing.T
 }
 
 func TestOpeningAParentsJobFromItsDetailOpensTheJobsPage(t *testing.T) {
-	jobs := []model.CronJob{recurringJob("J1", "Weekly report", jobParent("open", false))}
+	jobs := []model.CronJob{nativeJob("J1", "Weekly report", jobParent("open", false))}
 	s, _ := detailOf(t, cronParentIssue("open"), nil, jobs...)
 	opened := step(t, feed(t, s, key("enter")).State, key("enter"))
 	if opened.State.Model.Page != model.PageJobs {

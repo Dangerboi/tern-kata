@@ -62,19 +62,18 @@ func saved(t *testing.T, s driver.State) model.SaveJobCmd {
 	return save
 }
 
-func TestOpeningTheCardAsksForTheWorkersConfigAndTheProjectsWorkflows(t *testing.T) {
-	out := step(t, jobsPane(t, 160, promptJob("J2", "Triage")), key("n"))
-	var picked, listed bool
-	for _, cmd := range out.Cmds {
-		switch cmd := cmd.(type) {
-		case model.LoadWorkerPickers:
-			picked = true
-		case model.LoadJobWorkflows:
-			listed = cmd.ProjectID == 7
-		}
+func TestTheCardOffersTheWorkersProfilesAndCheckoutsAndTheProjectsLiveWorkflows(t *testing.T) {
+	s := adapterCard(t, kindPrompt)
+	wantText(t, "pickers", cardText(t, feed(t, s, workerOfThisMachine).State), "default", "fast", "repo", "site")
+	// With no worker config read the fields take free text.
+	if drawn(t, s, model.JobFieldProfilePick) || !drawn(t, s, model.JobFieldProfile) {
+		t.Error("without a worker config the profile is not free text")
 	}
-	if !picked || !listed {
-		t.Fatalf("opening the card sent %#v", out.Cmds)
+	flow := choose(t, s, model.JobFieldKind, kindWorkflow)
+	text := cardText(t, flow)
+	wantText(t, "workflow picker", text, "Release", "Nightly")
+	if strings.Contains(text, "Retired") {
+		t.Errorf("the workflow picker offers an archived workflow: %s", text)
 	}
 }
 
@@ -445,12 +444,8 @@ func TestEditingAnAgentPromptJobPrefillsEveryFieldAndKeepsTheOptionsItDoesNotEdi
 	day := int64(86400)
 	job.Definition.Issue.ScheduledOffsetSeconds = &day
 	s := editedJob(t, job)
+	wantText(t, "prefilled card", cardText(t, s), "triage the inbox", "then report", "fast", "repo", "GH_TOKEN=github", "Triage", "86400", "600", "60", "0 9 * * 1-5", "Europe/Berlin", "Agent prompt", "Skip runs older than the grace")
 	f := s.Model.JobForm
-	if f.Kind != "prompt" || f.Trigger != model.TriggerCron || f.Prompt != "triage the inbox\nthen report" || f.Profile != "fast" || f.Checkout != "repo" || f.Secrets != "GH_TOKEN=github" ||
-		f.Policy != model.IssuePerRun || f.Title != "Triage" || f.Scheduled != "86400" || f.Overlap != "forbid" || f.Timeout != "600" || f.Catchup != model.CatchupSkip || f.Grace != "60" ||
-		f.Cron != "0 9 * * 1-5" || f.Zone != "Europe/Berlin" {
-		t.Fatalf("prefilled card %+v", f)
-	}
 	if kinds := f.JobChoices(model.JobFieldKind); len(kinds) != 3 || kinds[0].Label == "Recurring child" {
 		t.Fatalf("an adapter job offers the kinds %+v, which should not include the recurring child", kinds)
 	}
@@ -472,19 +467,16 @@ func TestEditingAnAgentPromptJobPrefillsEveryFieldAndKeepsTheOptionsItDoesNotEdi
 func TestEditingAWorkflowJobAndANotifyJobPrefillsThem(t *testing.T) {
 	workflow := promptJob("J3", "Release")
 	workflow.Definition.Action = model.CronAction{Kind: model.ActionExecute, WorkflowUID: "W1"}
-	f := editedJob(t, workflow).Model.JobForm
-	if f.Kind != "workflow" || f.Workflow != "W1" || !f.JobChoices(model.JobFieldWorkflow)[0].Chosen {
-		t.Fatalf("workflow card %+v", f)
+	if f := editedJob(t, workflow).Model.JobForm; !f.JobChoices(model.JobFieldWorkflow)[0].Chosen {
+		t.Fatalf("the workflow picker does not hold the job's workflow: %+v", f.JobChoices(model.JobFieldWorkflow))
 	}
+	wantText(t, "workflow card", cardText(t, editedJob(t, workflow)), "Workflow", "Release")
 
 	notify := promptJob("J4", "Remind")
 	notify.Definition.Action = model.CronAction{Kind: model.ActionNotify, Recipient: "alice", Message: "Look"}
 	notify.Definition.Issue = &model.CronIssuePolicy{Kind: model.IssueExisting, UID: "ISSUE1"}
 	s := editedJob(t, notify)
-	f = s.Model.JobForm
-	if f.Kind != "notify" || f.Issue != "ISSUE1" || f.Recipient != "alice" || f.Message != "Look" {
-		t.Fatalf("notify card %+v", f)
-	}
+	wantText(t, "notify card", cardText(t, s), "Notify", "ISSUE1", "alice", "Look")
 	if save := saved(t, s); save.IssueRef != "ISSUE1" || save.Definition.Issue.Kind != model.IssueExisting || save.ExpectedEventUID != notify.DefinitionEventUID {
 		t.Fatalf("save %+v", save)
 	}
@@ -494,11 +486,26 @@ func TestEditingAWorkflowJobAndANotifyJobPrefillsThem(t *testing.T) {
 	dated.Definition.Action = model.CronAction{Kind: model.ActionNotify, Recipient: "current-owner-or-author"}
 	dated.Definition.Issue = nil
 	s = editedJob(t, dated)
-	if f := s.Model.JobForm; f.Trigger != model.TriggerIssueDeadline || f.Issue != "ISSUE2" || f.Lead != "3600" {
-		t.Fatalf("deadline card %+v", f)
-	}
+	wantText(t, "deadline card", cardText(t, s), "ISSUE2", "3600", "1 hour before the Issue's deadline")
 	if save := saved(t, s); save.IssueRef != "ISSUE2" || save.Definition.Trigger.LeadSeconds != 3600 || save.Definition.Issue != nil {
 		t.Fatalf("save %+v", save)
+	}
+}
+
+func TestEditingADeadlineNotifyJobThatNotifiesAnotherIssueKeepsBothIssues(t *testing.T) {
+	job := promptJob("J5", "On the day")
+	job.Definition.Trigger = model.CronTrigger{Kind: model.TriggerIssueDeadline, IssueUID: "ISSUE2", LeadSeconds: 3600}
+	job.Definition.Action = model.CronAction{Kind: model.ActionNotify, Recipient: "current-owner-or-author"}
+	job.Definition.Issue = &model.CronIssuePolicy{Kind: model.IssueExisting, UID: "ISSUE3"}
+	s := editedJob(t, job)
+	wantText(t, "card", cardText(t, s), "ISSUE2", "ISSUE3")
+	save := saved(t, s)
+	if save.IssueRef != "ISSUE2" || save.ReportRef != "ISSUE3" || save.Definition.Issue == nil || save.Definition.Issue.Kind != model.IssueExisting {
+		t.Fatalf("save %+v issue %+v, want the trigger's Issue and the notified one kept apart", save, save.Definition.Issue)
+	}
+	// Blank, it falls back to the trigger's own Issue: the policy goes.
+	if save := saved(t, set(t, s, model.JobFieldReport, "")); save.ReportRef != "" || save.Definition.Issue != nil {
+		t.Fatalf("save %+v issue %+v", save, save.Definition.Issue)
 	}
 }
 
@@ -534,5 +541,28 @@ func TestASavedAdapterJobJoinsTheListAndTheNewerJobKeepsThePickers(t *testing.T)
 	s = step(t, s, key("u")).State
 	if !s.Model.JobForm.Open || s.Model.JobForm.Conflict != nil || s.Model.JobForm.Name != "Someone else's" || !s.Model.JobForm.Worker.Read {
 		t.Fatal("taking the newer job dropped the worker pickers")
+	}
+}
+
+func TestAnAdapterIntervalCountsFromTheJobsCreationInTheRowAndThePreview(t *testing.T) {
+	// Created at 08:00, every 90 minutes: ticks at 09:30, 11:00, 12:30 ... and the Pane's clock is 12:00.
+	job := promptJob("J2", "Triage")
+	job.Definition.Trigger = model.CronTrigger{Kind: model.TriggerInterval, IntervalSeconds: 5400}
+	s := jobsPane(t, 160, job)
+	wantText(t, "adapter job row", jobCardText(t, s, "J2"), "every 90 minutes", "next 12:30")
+
+	card := editedJob(t, job)
+	wantText(t, "preview", cardText(t, card), "Thu 2026-10-08 12:30 UTC", "Thu 2026-10-08 14:00 UTC", "Thu 2026-10-08 15:30 UTC")
+	card = set(t, card, model.JobFieldInterval, "45m") // ticks at 11:45, 12:30, 13:15
+	wantText(t, "preview follows the field", cardText(t, card), "Thu 2026-10-08 12:30 UTC", "Thu 2026-10-08 13:15 UTC")
+}
+
+func TestAnIntervalTooLongForKataIsRefusedNamingTheFieldInsteadOfWrappingToZero(t *testing.T) {
+	s := choose(t, newJobCard(t), model.JobFieldTrigger, 1)
+	s = set(t, s, model.JobFieldInterval, "36028797018963968")
+	wantText(t, "preview", cardText(t, s), "Interval", "longer than kata accepts")
+	out := step(t, s, key("ctrl+o"))
+	if _, sent := savedJob(out.Cmds); sent || out.State.Model.JobForm.Field != model.JobFieldInterval || out.State.Model.JobForm.Err == nil {
+		t.Fatalf("saving sent %#v, focus %q, error %v", out.Cmds, out.State.Model.JobForm.Field, out.State.Model.JobForm.Err)
 	}
 }

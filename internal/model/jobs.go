@@ -18,6 +18,9 @@ type LoadJobs struct {
 	ProjectID int64
 	Archived  bool
 	Request   int64
+	// Activity asks for what each job has done lately with the jobs: the Jobs Page's reads do, the ones that only need the
+	// definitions do not.
+	Activity bool
 }
 
 func (LoadJobs) cmd() {}
@@ -28,8 +31,38 @@ type JobsLoaded struct {
 	Request         int64
 	Jobs            []CronJob
 	ProjectArchived bool
-	Err             error
+	// Activity is what each job has done lately, by the job's uid, when the read asked for it.
+	Activity map[string]JobActivity
+	Err      error
 }
+
+// JobActivity is what a job has done lately, newest first: the Runs of an adapter job, the child Issues a native job made.
+type JobActivity struct {
+	Runs     []Run
+	Children []CronChild
+}
+
+// CronChild is a child Issue a native job made, read from its parent's children by their cron.occurrence metadata.
+type CronChild struct {
+	UID, ShortID, Title, Status string
+	ScheduledAt, CreatedAt      time.Time
+}
+
+// When is the run the child was made for, else when it was made.
+func (c CronChild) When() time.Time {
+	if c.ScheduledAt.IsZero() {
+		return c.CreatedAt
+	}
+	return c.ScheduledAt
+}
+
+// Words is the child as a row words it: "#ab12 Tick — 2026… · open".
+func (c CronChild) Words() string {
+	return "#" + c.ShortID + " " + c.Title + " · " + c.Status
+}
+
+// JobActivityShown is how many recent runs or children a job keeps and the inspector lists.
+const JobActivityShown = 5
 
 func (JobsLoaded) msg() {}
 
@@ -68,6 +101,8 @@ type JobsState struct {
 	ShowArchived bool
 	// Selected is the uid of the job the inspector shows.
 	Selected string
+	// Activity is what each job has done lately, as the last read found it.
+	Activity map[string]JobActivity
 	Loading  bool
 	Err      error
 	// Writing is the uid of the job a pause, resume, archive or restore is writing; the keys wait for its answer.
@@ -98,6 +133,10 @@ type JobRow struct {
 	Next     string
 	// Unsupported is why this machine's worker sets the job aside, empty when it runs it or serves another Project.
 	Unsupported string
+	// Last is the job's latest run or child in words, empty when it has none on record.
+	Last string
+	// Warning is the high-rate warning of a job that makes more than 24 Issues a day, empty for any other.
+	Warning string
 }
 
 // visibleJobs are the jobs the list shows.
@@ -118,9 +157,35 @@ func (m Model) JobRows(now time.Time) []JobRow {
 		if next, ok := job.NextRun(now, m.Jobs.ProjectArchived); ok {
 			row.Next = m.Calendar.Read(next, now)
 		}
+		row.Last = m.lastActivity(job, now)
+		if !job.Archived() {
+			row.Warning = job.HighRateWarning(now)
+		}
 		rows[i] = row
 	}
 	return rows
+}
+
+// lastActivity is the job's latest run or child in words, "" when none is on record.
+func (m Model) lastActivity(job CronJob, now time.Time) string {
+	activity := m.Jobs.Activity[job.UID]
+	switch {
+	case len(activity.Runs) > 0:
+		return "last run " + m.runWords(activity.Runs[0], now)
+	case len(activity.Children) > 0:
+		c := activity.Children[0]
+		return "last child " + c.Words() + " · " + m.Calendar.Read(c.When(), now)
+	}
+	return ""
+}
+
+// runWords is a Run in a line, as the Jobs Page words it: its status, when it started, and the first line of its summary.
+func (m Model) runWords(r Run, now time.Time) string {
+	words := string(r.Status) + " · " + m.Calendar.Read(r.Started(), now)
+	if first, _, _ := strings.Cut(r.Message, "\n"); strings.TrimSpace(first) != "" {
+		words += " · " + strings.TrimSpace(first)
+	}
+	return words
 }
 
 // SelectedJob is the job the inspector shows: the selected one if the list shows it, else nil.
@@ -172,6 +237,24 @@ func (m Model) JobFacts(now time.Time) []JobFact {
 	add("Schedule", t.Words())
 	if next, ok := job.NextRun(now, m.Jobs.ProjectArchived); ok {
 		add("Next run", m.Calendar.Stamp(next))
+	}
+	if !job.Archived() {
+		add("Warning", job.HighRateWarning(now))
+	}
+	activity := m.Jobs.Activity[job.UID]
+	for i, r := range activity.Runs[:min(len(activity.Runs), JobActivityShown)] {
+		label := ""
+		if i == 0 {
+			label = "Recent runs"
+		}
+		facts = append(facts, JobFact{Label: label, Value: m.runWords(r, now)})
+	}
+	for i, c := range activity.Children[:min(len(activity.Children), JobActivityShown)] {
+		label := ""
+		if i == 0 {
+			label = "Recent children"
+		}
+		facts = append(facts, JobFact{Label: label, Value: c.Words() + " · " + m.Calendar.Read(c.When(), now)})
 	}
 	switch t.Kind {
 	case TriggerCron:
@@ -290,8 +373,12 @@ func enterJobs(m Model) (Model, []Cmd) {
 	m.Jobs.detailHidden = m.DetailHidden()
 	m.hidden = true
 	m.Focus = ColumnList
-	m.Jobs.ProjectID, m.Jobs.Jobs, m.Jobs.Selected, m.Jobs.Err = 0, nil, "", nil
-	m.Jobs.ProjectArchived = false
+	// The Page keeps its selection while another Page is shown; only another Project resets it, and the jobs are read again.
+	if id, known := m.jobsProjectID(); !known || id != m.Jobs.ProjectID {
+		m.Jobs.ProjectID, m.Jobs.Jobs, m.Jobs.Selected, m.Jobs.Err, m.Jobs.Activity = 0, nil, "", nil, nil
+		m.Jobs.ProjectArchived = false
+	}
+	m.Jobs.stale = true
 	m, ask := m.askWorker(0)
 	return m, append(cmds, ask)
 }
@@ -322,7 +409,7 @@ func (m Model) settleJobs() (Model, []Cmd) {
 		return m, nil
 	}
 	if id != m.Jobs.ProjectID {
-		m.Jobs.ProjectID, m.Jobs.Jobs, m.Jobs.Selected, m.Jobs.Err, m.Jobs.ProjectArchived = id, nil, "", nil, false
+		m.Jobs.ProjectID, m.Jobs.Jobs, m.Jobs.Selected, m.Jobs.Err, m.Jobs.ProjectArchived, m.Jobs.Activity = id, nil, "", nil, false, nil
 		m.Jobs.stale = true
 	}
 	if !m.Jobs.stale {
@@ -330,7 +417,7 @@ func (m Model) settleJobs() (Model, []Cmd) {
 	}
 	m.Jobs.stale, m.Jobs.Loading = false, true
 	m.Jobs.request++
-	return m, []Cmd{LoadJobs{Workspace: m.Workspace, ProjectID: id, Archived: m.Jobs.ShowArchived, Request: m.Jobs.request}}
+	return m, []Cmd{LoadJobs{Workspace: m.Workspace, ProjectID: id, Archived: m.Jobs.ShowArchived, Request: m.Jobs.request, Activity: true}}
 }
 
 // jobsLoaded applies the answer to the latest read. A Project that is archived keeps the jobs already held: they are what is
@@ -349,6 +436,9 @@ func jobsLoaded(m Model, msg JobsLoaded) Model {
 	m.Jobs.ProjectArchived = msg.ProjectArchived
 	if !msg.ProjectArchived {
 		m.Jobs.Jobs = msg.Jobs
+		if msg.Activity != nil {
+			m.Jobs.Activity = msg.Activity
+		}
 	}
 	if m.Jobs.pick != "" && slices.ContainsFunc(m.visibleJobs(), func(j CronJob) bool { return j.UID == m.Jobs.pick }) {
 		m.Jobs.Selected = m.Jobs.pick
@@ -377,21 +467,7 @@ func moveJob(m Model, action Action) Model {
 		return m
 	}
 	at := slices.IndexFunc(jobs, func(j CronJob) bool { return j.UID == m.Jobs.Selected })
-	switch action {
-	case MoveDown:
-		at++
-	case MoveUp:
-		at--
-	case PageDown:
-		at += 10
-	case PageUp:
-		at -= 10
-	case MoveFirst:
-		at = 0
-	case MoveLast:
-		at = len(jobs) - 1
-	}
-	m.Jobs.Selected = jobs[max(0, min(at, len(jobs)-1))].UID
+	m.Jobs.Selected = jobs[movedIndex(at, len(jobs), listPage, action)].UID
 	return m
 }
 

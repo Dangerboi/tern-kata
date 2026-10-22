@@ -394,8 +394,8 @@ func (m Model) notLocal(run Run, verb string) string {
 	return fmt.Sprintf("This run belongs to executor %q, not this machine's worker %q; only its own machine can %s.", run.Executor(), m.Worker.Executor, verb)
 }
 
-// moveHeldRun is u and A on the Runs Page: the worker resumes or abandons the selected held run. A run that is not held is
-// refused here; whatever else stands against it (a lease held elsewhere, no free slot) is the worker's answer to give.
+// moveHeldRun is u and A on the Runs Page: the worker resumes the selected held run, or abandons it (cancels it when it is still
+// running). A run the worker would not take the verb for is refused here; whatever else stands against it (a lease held elsewhere, no free slot) is the worker's answer to give.
 func moveHeldRun(resume bool) func(Model) (Model, []Cmd) {
 	verb := "abandon"
 	if resume {
@@ -410,7 +410,8 @@ func moveHeldRun(resume bool) func(Model) (Model, []Cmd) {
 			m.Notice = reason
 			return m, nil
 		}
-		if local, ok := m.LocalRunOf(run.UID); !ok || !local.Held {
+		local, ok := m.LocalRunOf(run.UID)
+		if !ok || !(local.Held || !resume && local.Abandonable) {
 			m.Notice = "This run is not held, so there is nothing to " + verb + "."
 			return m, nil
 		}
@@ -432,6 +433,8 @@ func localRunMoved(m Model, msg LocalRunMoved) (Model, []Cmd) {
 	}
 	if msg.Resumed {
 		m.Notice = "Resuming the run: its omp session continues as a new attempt."
+	} else if msg.State == "cancelling" {
+		m.Notice = "Cancelling the run: the worker stops its agent and records it cancelled at kata."
 	} else {
 		m.Notice = "Abandoned the run; the worker cancels it at kata."
 	}
@@ -471,9 +474,9 @@ func (m Model) localFacts(run Run) (hold []RunFact, rest []RunFact) {
 		} else {
 			add(&hold, "Resume", "not now: "+local.ResumeRefusal)
 		}
-		if local.Abandonable {
-			add(&hold, "Abandon", "A cancels the run")
-		}
+	}
+	if local.Abandonable {
+		add(&hold, "Abandon", "A cancels the run")
 	}
 	if local.Attempt > 1 {
 		add(&hold, "Attempt", strconv.Itoa(local.Attempt))

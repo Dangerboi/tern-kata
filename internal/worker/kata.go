@@ -427,11 +427,15 @@ type Run struct {
 	OutputTokens  *int64
 	StartedAt     *time.Time
 	EndedAt       *time.Time
+	// DefinitionEventUID and WorkflowEventUID are the definition versions the run was admitted under.
+	DefinitionEventUID string
+	WorkflowEventUID   string
 }
 
 func runOf(r g.CronRun) Run {
 	return Run{UID: r.UID, Status: r.Status, Revision: r.Revision, JobUID: deref(r.JobUID), WorkflowUID: deref(r.WorkflowUID), IssueUID: deref(r.IssueUID),
-		ExecutorLabel: deref(r.ExecutorLabel), OccurrenceKey: deref(r.OccurrenceKey), Summary: deref(r.Summary.Message), InputTokens: r.Summary.InputTokens, OutputTokens: r.Summary.OutputTokens, StartedAt: r.StartedAt, EndedAt: r.EndedAt}
+		ExecutorLabel: deref(r.ExecutorLabel), OccurrenceKey: deref(r.OccurrenceKey), Summary: deref(r.Summary.Message), InputTokens: r.Summary.InputTokens, OutputTokens: r.Summary.OutputTokens, StartedAt: r.StartedAt, EndedAt: r.EndedAt,
+		DefinitionEventUID: deref(r.DefinitionEventUID), WorkflowEventUID: deref(r.WorkflowDefinitionEventUID)}
 }
 
 // ShowRun reads a Run; ErrNotFound means kata holds no evidence of it.

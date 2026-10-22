@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -238,23 +239,13 @@ func (w *Worker) workflowStep(ctx context.Context, j *Journal) error {
 		return w.finishWorkflow(j)
 	}
 	rec := j.Steps[i]
-	fresh := rec.State != StepRunning
-	if fresh || j.ExpiresAt.IsZero() || j.ExpiryAttempt != j.attempt() {
-		point := "step-started"
-		if !fresh {
-			point = "expiry-set"
-		}
-		j, err = w.store.Update(j.RunUID, point, func(j *Journal) error {
+	if rec.State != StepRunning {
+		j, err = w.store.Update(j.RunUID, "step-started", func(j *Journal) error {
 			r := &j.Steps[i]
-			if r.State != StepRunning {
-				r.State, r.Tries = StepRunning, r.Tries+1
-				r.Dir = fmt.Sprintf("steps/%d-%d", i+1, r.Tries)
-				if r.StartedAt.IsZero() {
-					r.StartedAt = w.clock.Now().UTC()
-				}
-			}
-			if j.ExpiresAt.IsZero() || j.ExpiryAttempt != j.attempt() {
-				j.ExpiresAt, j.ExpiryAttempt = w.clock.Now().UTC().Add(time.Duration(j.TimeoutSeconds)*time.Second), j.attempt()
+			r.State, r.Tries = StepRunning, r.Tries+1
+			r.Dir = fmt.Sprintf("steps/%d-%d", i+1, r.Tries)
+			if r.StartedAt.IsZero() {
+				r.StartedAt = w.clock.Now().UTC()
 			}
 			return nil
 		})
@@ -318,7 +309,8 @@ func (w *Worker) concludeStep(j *Journal, outcome *Outcome) error {
 		}
 		r, plan := &j.Steps[i], j.Workflow.Steps[i]
 		r.Launch, r.Exit, r.Summary, r.EndedAt = j.Launch, j.Exit, outcome.Summary, w.clock.Now().UTC()
-		r.InputTokens, r.OutputTokens = outcome.InputTokens, outcome.OutputTokens
+		// A retried step keeps what its earlier attempts used; outcome already carries what a resume continued.
+		r.InputTokens, r.OutputTokens = addTokens(r.InputTokens, outcome.InputTokens), addTokens(r.OutputTokens, outcome.OutputTokens)
 		timedOut := j.Exit != nil && j.Exit.TimedOut
 		switch {
 		case outcome.Status == StatusSucceeded:
@@ -337,35 +329,45 @@ func (w *Worker) concludeStep(j *Journal, outcome *Outcome) error {
 			r.State = StepFailed
 		}
 		j.Launch, j.Exit, j.Result, j.Resume = nil, nil, nil, nil
+		j.CarriedInput, j.CarriedOutput = nil, nil
 		j.Phase = PhaseAdmitted
 		return nil
 	})
 	return err
 }
 
+// sumStepTokens is the tokens every attempt of every step used; nil when no attempt reported any.
+func sumStepTokens(steps []StepRecord) (in, out *int64) {
+	var sumIn, sumOut int64
+	var saw bool
+	for _, r := range steps {
+		if r.InputTokens == nil && r.OutputTokens == nil {
+			continue
+		}
+		saw = true
+		if r.InputTokens != nil {
+			sumIn += *r.InputTokens
+		}
+		if r.OutputTokens != nil {
+			sumOut += *r.OutputTokens
+		}
+	}
+	if !saw {
+		return nil, nil
+	}
+	return &sumIn, &sumOut
+}
+
 // finishWorkflow decides the run's outcome once every step is succeeded, failed or skipped: failed when any step failed.
 func (w *Worker) finishWorkflow(j *Journal) error {
 	status := StatusSucceeded
-	var in, out int64
-	var sawTokens bool
 	for _, r := range j.Steps {
 		if r.State == StepFailed {
 			status = StatusFailed
 		}
-		if r.InputTokens != nil || r.OutputTokens != nil {
-			sawTokens = true
-			if r.InputTokens != nil {
-				in += *r.InputTokens
-			}
-			if r.OutputTokens != nil {
-				out += *r.OutputTokens
-			}
-		}
 	}
 	o := &Outcome{Status: status, Summary: truncate(workflowSummary(j, status), maxSummaryBytes), At: w.clock.Now().UTC()}
-	if sawTokens {
-		o.InputTokens, o.OutputTokens = &in, &out
-	}
+	o.InputTokens, o.OutputTokens = sumStepTokens(j.Steps)
 	_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
 		j.Outcome, j.Phase = o, PhaseFinished
 		return nil
@@ -386,7 +388,7 @@ func workflowSummary(j *Journal, status string) string {
 	}
 	fmt.Fprintf(&b, " (%d of %d steps succeeded)\n", done, len(j.Steps))
 	for i, r := range j.Steps {
-		state := cmpOr(r.State, StepPending)
+		state := cmp.Or(r.State, StepPending)
 		fmt.Fprintf(&b, "\n%d. %s [%s]: %s", i+1, r.Key, j.Workflow.Steps[i].Kind, state)
 		if r.Tries > 1 {
 			fmt.Fprintf(&b, " after %d attempts", r.Tries)
@@ -415,7 +417,7 @@ func workflowSummary(j *Journal, status string) string {
 func stepStateText(j *Journal, i int) string {
 	r := j.Steps[i]
 	if r.State != StepRunning {
-		return cmpOr(r.State, StepPending)
+		return cmp.Or(r.State, StepPending)
 	}
 	switch {
 	case j.Held():
@@ -452,7 +454,7 @@ func (w *Worker) runCommand(ctx context.Context, j *Journal, sp attemptSpec) err
 		return w.hold(j, HoldSecretUnavailable, err.Error())
 	}
 	runDir := w.store.RunDir(j.RunUID)
-	cwd := cmpOr(j.Checkout, runDir)
+	cwd := cmp.Or(j.Checkout, runDir)
 	if info, err := os.Stat(cwd); err != nil || !info.IsDir() {
 		return w.failAttempt(j, fmt.Sprintf("cannot start the command: checkout %s is not a directory", cwd))
 	}
@@ -587,4 +589,12 @@ func (h *headTail) Close() {
 // commandTail1K is the end of a command step's output, kept in the step's result.
 func commandTail1K(dir string) string {
 	return fileTail(filepath.Join(dir, "output.log"), 1024)
+}
+
+// workflowExpiry is when a workflow run prepared at now expires: its frozen timeout from preparation. A prompt job has none here.
+func workflowExpiry(plan *WorkflowPlan, now time.Time, timeout time.Duration) time.Time {
+	if plan == nil {
+		return time.Time{}
+	}
+	return now.Add(timeout)
 }

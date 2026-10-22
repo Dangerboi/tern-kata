@@ -387,6 +387,8 @@ var notifyJobKind = jobKind{
 			return true
 		case JobFieldIssue:
 			return !DateTrigger(f.Trigger)
+		case JobFieldReport:
+			return DateTrigger(f.Trigger)
 		}
 		return adapterCatchupShown(f, name)
 	},
@@ -399,7 +401,10 @@ var notifyJobKind = jobKind{
 		if d.GraceSeconds > 0 {
 			f.Grace = strconv.FormatInt(d.GraceSeconds, 10)
 		}
-		if d.Issue != nil && !DateTrigger(d.Trigger.Kind) {
+		switch {
+		case d.Issue != nil && DateTrigger(d.Trigger.Kind):
+			f.Report = d.Issue.UID
+		case d.Issue != nil:
 			f.Issue = d.Issue.UID
 		}
 	},
@@ -409,10 +414,13 @@ var notifyJobKind = jobKind{
 		if err := notification(f, &def, true); err != nil {
 			return def, "", err
 		}
-		if !DateTrigger(f.Trigger) {
+		switch {
+		case !DateTrigger(f.Trigger):
 			if f.issueRef() == "" {
 				return def, "", fieldError(JobFieldIssue, "name the Issue to notify about, by its short id.")
 			}
+			def.Issue = &CronIssuePolicy{Kind: IssueExisting}
+		case f.reportRef() != "":
 			def.Issue = &CronIssuePolicy{Kind: IssueExisting}
 		}
 		grace, err := adapterGrace(f)

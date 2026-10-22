@@ -2,7 +2,7 @@
 
 **Pane**: The Tern area the program draws into. _Avoid_: block (in Tern a block is a pane type; in kata `blocks` is a link).
 
-**Page**: One of the Pane's top-level views, chosen from the **Page bar**: Issues (the list and the Issue detail), Board, Jobs and Workflows for now. Each Page keeps its own state, such as its selection, while another is shown. _Avoid_: tab (Tern's tabs and the Issue detail's tabs).
+**Page**: One of the Pane's top-level views, chosen from the **Page bar**: Issues (the list and the Issue detail), Board, Jobs and Workflows for now. Each Page keeps its own state, such as its selection, loaded runs and filter, while another is shown, and resets it only when the Project changes. _Avoid_: tab (Tern's tabs and the Issue detail's tabs).
 
 **Page bar**: The row in the top bar that names the Pages with their keys (`1` Issues, `2` Board, `3` Jobs, `5` Workflows); a click on a Page presses its key. _Avoid_: tab bar.
 

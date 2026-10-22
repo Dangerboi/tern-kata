@@ -19,6 +19,8 @@ func backfillLayer(m model.Model) tern.Element {
 	switch b.For {
 	case model.BackfillRestore:
 		head, step, latest = "Restore job?", "Restoring", "Switch to latest and restore"
+	case model.BackfillSave:
+		head, step, latest = "Save and resume job?", "Resuming", "Switch to latest and save"
 	case model.BackfillReopen:
 		head, step, latest = "Reopen Issue?", "Reopening", "Switch to latest and reopen"
 	}

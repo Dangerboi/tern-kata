@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -8,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -20,11 +22,25 @@ type RunAccepted struct {
 }
 
 // RequestRun runs an adapter job now: a manual occurrence with a fresh random uid. It applies the lease, support,
-// overlap and capacity rules; a refusal says why and nothing is written to kata. The run itself then proceeds in the background.
+// overlap and capacity rules; a refusal says why and nothing is written to kata. The Project's jobs are read again
+// first and the run is frozen from that fresh definition; when they cannot be read the request is refused (ADR-0011).
+// The run itself then proceeds in the background.
 func (w *Worker) RequestRun(ctx context.Context, jobUID string) (RunAccepted, error) {
-	ps, job, err := w.findJob(ctx, jobUID)
+	ps, _, err := w.findJob(ctx, jobUID)
 	if err != nil {
 		return RunAccepted{}, err
+	}
+	if why := w.admitsNothing(ps); why != "" {
+		return RunAccepted{}, fmt.Errorf("Project %s admits nothing: %s", ps.cfg.Name, why)
+	}
+	if err := w.refreshJobs(ctx, ps); err != nil {
+		return RunAccepted{}, fmt.Errorf("cannot refresh the jobs of Project %s before running: %w", ps.cfg.Name, err)
+	}
+	w.mu.Lock()
+	job, ok := ps.jobs[jobUID]
+	w.mu.Unlock()
+	if !ok {
+		return RunAccepted{}, fmt.Errorf("job %s is no longer in Project %s", jobUID, ps.cfg.Name)
 	}
 	j, _, err := w.prepare(ctx, ps, job, w.clock.Now(), "")
 	if err != nil {
@@ -32,6 +48,11 @@ func (w *Worker) RequestRun(ctx context.Context, jobUID string) (RunAccepted, er
 	}
 	w.spawn(ps, j.RunUID)
 	return RunAccepted{RunUID: j.RunUID, JobUID: job.UID, JobName: job.Name, Project: ps.cfg.Name}, nil
+}
+
+// overlapGate is the mutex that makes a job's overlap check and the creation of the journal that closes the gate one step.
+func (w *Worker) overlapGate(projectUID, jobUID string) *sync.Mutex {
+	return w.gates.get(projectUID + "/" + jobUID)
 }
 
 // RunOccurrence prepares the run of one scheduled occurrence of a job in a served Project and starts it. The same
@@ -172,7 +193,7 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurre
 			return nil, false, fmt.Errorf("job %q has no Issue policy", job.Name)
 		}
 		issuePolicy = *d.Issue
-		profileName = cmpOr(d.Profile, "default")
+		profileName = cmp.Or(d.Profile, "default")
 		var ok bool
 		profile, ok = w.opt.Config.Profiles[profileName]
 		if !ok || !ps.cfg.allowsProfile(profileName) {
@@ -200,6 +221,10 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurre
 		}
 	}
 	if d.Overlap == "forbid" {
+		// Another request for this job must not pass the check before this one's journal closes the gate.
+		gate := w.overlapGate(ps.project.UID, job.UID)
+		gate.Lock()
+		defer gate.Unlock()
 		if earlier := w.gateClosed(job.UID, ps.project.UID); earlier != "" {
 			return nil, false, &busyError{fmt.Sprintf("job %q forbids overlap and run %s is not settled", job.Name, earlier), false}
 		}
@@ -218,7 +243,7 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurre
 		if err != nil {
 			return nil, false, fmt.Errorf("job %q: its Issue could not be read: %w", job.Name, err)
 		}
-		if !issue.Open() {
+		if !issue.Open() && d.ActionKind != "notify" { // a notify job has no readiness requirement
 			return nil, false, fmt.Errorf("job %q reports to Issue %s, which is closed; reopen it first", job.Name, issue.ShortID)
 		}
 	}
@@ -254,8 +279,9 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurre
 		JobUID: job.UID, JobName: job.Name, DefinitionEventUID: job.DefinitionEventUID, Prompt: d.Prompt, IssuePolicy: issuePolicy, Notify: notify, Workflow: workflow,
 		SecretRefs: d.SecretRefs, ProfileName: profileName, Profile: profile, Checkout: checkout, TimeoutSeconds: int64(timeout / time.Second),
 		OccurrenceKey: occurrenceKey, Occurrence: occurrence.UTC(), Manual: manual,
-		Steps: stepsFor(workflow),
-		Phase: PhasePrepared, StartedAt: w.clock.Now().UTC(),
+		Steps:     stepsFor(workflow),
+		ExpiresAt: workflowExpiry(workflow, w.clock.Now().UTC(), timeout),
+		Phase:     PhasePrepared, StartedAt: w.clock.Now().UTC(),
 	}
 	if err := w.store.Create(j, "prepared"); err != nil {
 		w.noteHook(err)

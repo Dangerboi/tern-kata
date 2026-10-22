@@ -185,6 +185,12 @@ func init() {
 			},
 		},
 		{
+			card: CardBackfill, open: func(m Model) bool { return m.Backfill.Open },
+			modes: []Mode{ModeBackfill}, mode: func(Model) Mode { return ModeBackfill },
+			key: backfillKey, fields: []FieldSpec{},
+			caret: func(Model) (Field, bool) { return "", false },
+		},
+		{
 			card: CardJob, open: func(m Model) bool { return m.JobForm.Open },
 			modes: []Mode{ModeJobForm, ModeJobConflict},
 			mode: func(m Model) Mode {
@@ -203,12 +209,6 @@ func init() {
 				f := m.JobForm
 				return f.Field, !f.Saving && f.Conflict == nil && takesText(JobFields, f.Field)
 			},
-		},
-		{
-			card: CardBackfill, open: func(m Model) bool { return m.Backfill.Open },
-			modes: []Mode{ModeBackfill}, mode: func(Model) Mode { return ModeBackfill },
-			key: backfillKey, fields: []FieldSpec{},
-			caret: func(Model) (Field, bool) { return "", false },
 		},
 		{
 			card: CardProject, open: func(m Model) bool { return m.ProjectForm.Open },

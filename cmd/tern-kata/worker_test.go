@@ -404,3 +404,21 @@ func TestWorkerResumeWithNoWorkerSaysSo(t *testing.T) {
 		t.Fatalf("error %v", err)
 	}
 }
+
+func TestWorkerAbandonStopsARunThatIsRunning(t *testing.T) {
+	stub := workertest.BuildStub(t)
+	f := newWorkerFixture(t, "[profiles.stuck]\ncommand = "+quote(stub)+"\nargs = [\"--stub-hang\"]\n")
+	job := f.kata.CreateJob(t, f.proj, workertest.Job{Name: "stuck", Prompt: "Check it.", Profile: "stuck"})
+	f.serve(t)
+	uid := f.runJob(t, job)
+	f.startedRun(t, uid)
+
+	out, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"abandon", uid}, Actor: "ann"})
+	if want := "Run " + uid + ` of job "stuck" in Project demo is being stopped: the worker signals its process group (SIGTERM, then SIGKILL after 10 s) and kata records it cancelled once it is gone.` + "\n"; err != nil || out != want {
+		t.Fatalf("abandon printed %q, %v", out, err)
+	}
+	eventually(t, "kata to hold the stopped run as cancelled", func() bool {
+		run, err := f.kata.Kata.ShowRun(context.Background(), f.proj.ID, uid)
+		return err == nil && run.Status == "cancelled" && strings.HasPrefix(run.Summary, "abandoned by ann (was running)")
+	})
+}

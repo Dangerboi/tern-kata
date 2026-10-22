@@ -98,26 +98,27 @@ func TestANewWorkflowIsCreatedWithoutAGuard(t *testing.T) {
 
 func TestAWorkflowTheLocalCheckRefusesStaysInTheCardWithTheProblemNamed(t *testing.T) {
 	for name, tc := range map[string]struct{ text, problem string }{
-		"broken JSON":        {`{"name": "x", "definition": }`, "line 1"},
-		"truncated JSON":     {`{"name": "x"`, "ends early"},
-		"nothing":            {``, "empty"},
-		"unknown field":      {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c","when":"now"}]}}`, `"when"`},
-		"no name":            {`{"name":" ","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c"}]}}`, `"name"`},
-		"wrong version":      {`{"name":"x","definition":{"version":2,"steps":[{"key":"a","kind":"command","command":"c"}]}}`, `"version"`},
-		"no steps":           {`{"name":"x","definition":{"version":1,"steps":[]}}`, `"steps"`},
-		"duplicate keys":     {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c"},{"key":"a","kind":"command","command":"c"}]}}`, `"key" is used by an earlier step`},
-		"unportable key":     {`{"name":"x","definition":{"version":1,"steps":[{"key":"a b","kind":"command","command":"c"}]}}`, `"key" must be a name`},
-		"forward after":      {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c","after":["b"]},{"key":"b","kind":"command","command":"c"}]}}`, `"after" names "b", which is not an earlier step`},
-		"self after":         {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c","after":["a"]}]}}`, `"after" names "a"`},
-		"too many retries":   {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c","retries":101}]}}`, `"retries" must be between 0 and 100`},
-		"negative retries":   {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c","retries":-1}]}}`, `"retries"`},
-		"fractional retries": {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c","retries":1.5}]}}`, "whole number"},
-		"command and prompt": {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c","prompt":"p"}]}}`, "command step needs"},
-		"prompt and command": {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"prompt","command":"c","prompt":"p"}]}}`, "prompt step needs"},
-		"neither":            {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command"}]}}`, "command step needs"},
-		"unknown kind":       {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"shell","command":"c"}]}}`, `"kind" must be`},
-		"secret in options":  {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c","options":{"deep":{"Token":"t"}}}]}}`, "credentials or local paths"},
-		"text after":         {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c"}]}} {}`, "more text follows"},
+		"broken JSON":                  {`{"name": "x", "definition": }`, "line 1"},
+		"syntax error on a later line": {"{\n  \"name\": \"x\",\n  \"definition\": }\n}", "line 3"},
+		"truncated JSON":               {`{"name": "x"`, "ends early"},
+		"nothing":                      {``, "empty"},
+		"unknown field":                {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c","when":"now"}]}}`, `"when"`},
+		"no name":                      {`{"name":" ","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c"}]}}`, `"name"`},
+		"wrong version":                {`{"name":"x","definition":{"version":2,"steps":[{"key":"a","kind":"command","command":"c"}]}}`, `"version"`},
+		"no steps":                     {`{"name":"x","definition":{"version":1,"steps":[]}}`, `"steps"`},
+		"duplicate keys":               {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c"},{"key":"a","kind":"command","command":"c"}]}}`, `"key" is used by an earlier step`},
+		"unportable key":               {`{"name":"x","definition":{"version":1,"steps":[{"key":"a b","kind":"command","command":"c"}]}}`, `"key" must be a name`},
+		"forward after":                {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c","after":["b"]},{"key":"b","kind":"command","command":"c"}]}}`, `"after" names "b", which is not an earlier step`},
+		"self after":                   {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c","after":["a"]}]}}`, `"after" names "a"`},
+		"too many retries":             {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c","retries":101}]}}`, `"retries" must be between 0 and 100`},
+		"negative retries":             {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c","retries":-1}]}}`, `"retries"`},
+		"fractional retries":           {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c","retries":1.5}]}}`, "whole number"},
+		"command and prompt":           {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c","prompt":"p"}]}}`, "command step needs"},
+		"prompt and command":           {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"prompt","command":"c","prompt":"p"}]}}`, "prompt step needs"},
+		"neither":                      {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command"}]}}`, "command step needs"},
+		"unknown kind":                 {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"shell","command":"c"}]}}`, `"kind" must be`},
+		"secret in options":            {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c","options":{"deep":{"Token":"t"}}}]}}`, "credentials or local paths"},
+		"text after":                   {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c"}]}} {}`, "more text follows"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			m := onWorkflows(t)
@@ -135,13 +136,6 @@ func TestAWorkflowTheLocalCheckRefusesStaysInTheCardWithTheProblemNamed(t *testi
 				t.Errorf("the card kept %q (open %v), want the edited text kept", card.Editor.Text, card.Open)
 			}
 		})
-	}
-}
-
-func TestASyntaxErrorNamesItsLine(t *testing.T) {
-	_, err := model.ParseWorkflow("{\n  \"name\": \"x\",\n  \"definition\": }\n}")
-	if err == nil || !strings.Contains(err.Error(), "line 3") {
-		t.Fatalf("error %v, want line 3", err)
 	}
 }
 

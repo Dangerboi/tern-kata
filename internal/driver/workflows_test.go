@@ -65,8 +65,8 @@ func mustShow(t *testing.T, s driver.State, what string, texts ...string) {
 func TestWorkflowsPageListsTheProjectsWorkflowsAndOpensTheirStepsWithDependenciesAndRetries(t *testing.T) {
 	s := workflowsPane(t, 160, reviewFlow(), nightlyFlow())
 	drawn := drawnIDs(t, view.Render(s.Model, now))
-	if !drawn[view.PageTabID("workflows")] || !drawn[view.WorkflowID("W1")] || !drawn[view.WorkflowID("W2")] {
-		t.Fatalf("the Workflows Page draws its tab and a row per workflow, got %v", drawn)
+	if !drawn[view.PageBarEntryID("workflows")] || !drawn[view.WorkflowID("W1")] || !drawn[view.WorkflowID("W2")] {
+		t.Fatalf("the Workflows Page draws its Page bar entry and a row per workflow, got %v", drawn)
 	}
 	mustShow(t, s, "list", "Review then test", "2 steps", "1 step")
 

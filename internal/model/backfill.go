@@ -31,6 +31,8 @@ const (
 	BackfillResume  BackfillFor = "resume"
 	BackfillRestore BackfillFor = "restore"
 	BackfillReopen  BackfillFor = "reopen"
+	// BackfillSave is the Job card's save that turns a paused job on: the card's draft is what goes out once answered.
+	BackfillSave BackfillFor = "save"
 )
 
 // BackfillJob is a job that owes a Backfill with the number of children it would create.
@@ -48,6 +50,8 @@ type BackfillState struct {
 	Issue  Issue
 	Saving bool
 	Err    error
+	// Save is the Job card's write a BackfillSave holds back.
+	Save *SaveJobCmd
 	// request is the number of the jobs read a reopen waits for.
 	request int64
 }
@@ -189,6 +193,8 @@ func backfillKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case BackfillCreate:
 		m.Backfill = BackfillState{}
 		switch b.For {
+		case BackfillSave:
+			return sendJobSave(m, *b.Save)
 		case BackfillResume:
 			return writeJobEnabled(m, b.Jobs[0].Job, true)
 		case BackfillRestore:
@@ -196,9 +202,21 @@ func backfillKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		}
 		return reopenNow(m, b.Issue)
 	case BackfillLatest:
+		if b.For == BackfillSave {
+			m.Backfill = BackfillState{}
+			save := *b.Save
+			save.Definition.Catchup = CatchupLatest
+			return sendJobSave(m, save)
+		}
 		return writeNextLatest(m)
 	}
 	return m, nil
+}
+
+// sendJobSave sends the Job card's save, which the card waits on as it does any save.
+func sendJobSave(m Model, save SaveJobCmd) (Model, []Cmd) {
+	m.JobForm.Saving, m.JobForm.Err = true, nil
+	return m, []Cmd{save}
 }
 
 // writeNextLatest replaces the catch-up of the first job still set to "all" with "latest", guarded on the version the Pane

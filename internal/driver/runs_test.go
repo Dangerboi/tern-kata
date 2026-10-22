@@ -72,18 +72,18 @@ func runCardText(t *testing.T, s driver.State, uid string) string {
 	return text
 }
 
-func TestRunsPageKeyAsksForTheProjectsRunsAndTheTabShowsThePage(t *testing.T) {
+func TestRunsPageKeyAsksForTheProjectsRunsAndThePageBarShowsThePage(t *testing.T) {
 	s := projectPane(t, 160, boardCard("a"))
 	out := step(t, s, key("4"))
 	load, ok := askedRuns(out.Cmds)
 	if !ok || load.ProjectID != 7 || load.JobUID != "" || load.Before != "" || load.Workspace != "/repo" {
 		t.Fatalf("cmds %#v, want a read of the Project's newest runs", out.Cmds)
 	}
-	if out.State.Model.Page != model.PageRuns || !drawnIDs(t, view.Render(out.State.Model, now))[view.PageTabID("runs")] {
-		t.Fatalf("page %v, want the Runs Page with its tab", out.State.Model.Page)
+	if out.State.Model.Page != model.PageRuns || !drawnIDs(t, view.Render(out.State.Model, now))[view.PageBarEntryID("runs")] {
+		t.Fatalf("page %v, want the Runs Page with its Page bar entry", out.State.Model.Page)
 	}
-	if _, ok := askedRuns(step(t, s, click(view.PageTabID("runs"), view.KeyClick("4"))).Cmds); !ok {
-		t.Error("clicking the Runs tab asks for no runs")
+	if _, ok := askedRuns(step(t, s, click(view.PageBarEntryID("runs"), view.KeyClick("4"))).Cmds); !ok {
+		t.Error("clicking the Runs entry asks for no runs")
 	}
 	if back := step(t, out.State, key("1")); back.State.Model.Page != model.PageIssues {
 		t.Errorf("1 leaves the Runs Page on page %v", back.State.Model.Page)
@@ -204,11 +204,29 @@ func TestRKeyOnTheJobsPageOpensTheRunsFilteredToTheSelectedJob(t *testing.T) {
 	}
 }
 
-func TestLeavingTheRunsPageForgetsItsJobFilter(t *testing.T) {
-	s := feed(t, jobsPane(t, 160, promptJob("J1", "Triage")), key("r")).State
-	s = feed(t, s, key("1"), key("4")).State
-	if s.Model.Runs.JobUID != "" {
-		t.Errorf("filter %q survives leaving the page", s.Model.Runs.JobUID)
+func TestSwitchingPagesKeepsEachPagesSelectionLoadedRunsAndFilter(t *testing.T) {
+	// Runs: the job filter, the selection and the older page already read survive a visit to another Page.
+	out := step(t, jobsPane(t, 160, promptJob("J1", "Triage")), key("r"))
+	s := answerRuns(t, out, "cursor-1", finishedRun("R2"))
+	s = answerRuns(t, step(t, s, key("m")), "", finishedRun("R2"), finishedRun("R1"))
+	s = feed(t, s, key("j")).State
+	back := step(t, step(t, s, key("1")).State, key("4"))
+	if got := back.State.Model.Runs; got.JobUID != "J1" || got.Selected != "R1" || len(got.Runs) != 2 {
+		t.Fatalf("after a visit elsewhere: filter %q selected %q runs %d, want J1, R1 and both pages", got.JobUID, got.Selected, len(got.Runs))
+	}
+	load, ok := askedRuns(back.Cmds)
+	if !ok || load.JobUID != "J1" || !load.Refresh {
+		t.Fatalf("cmds %#v, want the newest page of J1's runs read again to join the ones held", back.Cmds)
+	}
+
+	// Jobs: the selected job survives too.
+	j := feed(t, jobsPane(t, 160, promptJob("J1", "Triage"), promptJob("J2", "Other")), key("j")).State
+	again := step(t, step(t, j, key("1")).State, key("3"))
+	if got := again.State.Model.Jobs.Selected; got != "J2" {
+		t.Fatalf("selected %q after a visit elsewhere, want J2", got)
+	}
+	if _, ok := askedJobs(again.Cmds); !ok {
+		t.Fatalf("cmds %#v, want the jobs read again", again.Cmds)
 	}
 }
 
@@ -273,8 +291,8 @@ func TestFooterAndHelpSheetListTheRunsPageKeys(t *testing.T) {
 func TestWorkflowRowAndInspectorShowTheWorkflowsLatestRuns(t *testing.T) {
 	out := feed(t, projectPane(t, 160, boardCard("a")), key("5"))
 	load, ok := askedRuns(out.Cmds)
-	if !ok || load.ProjectID != 7 || load.JobUID != "" || load.Request >= 0 {
-		t.Fatalf("the Page asked for runs with %#v, want the Project's newest runs on a request of its own", out.Cmds)
+	if !ok || load.ProjectID != 7 || load.JobUID != "" {
+		t.Fatalf("the Page asked for runs with %#v, want the Project's newest runs", out.Cmds)
 	}
 	failed := workflowRun("R1")
 	failed.Status = model.RunFailed
@@ -296,5 +314,64 @@ func TestWorkflowRowAndInspectorShowTheWorkflowsLatestRuns(t *testing.T) {
 	mustShow(t, s, "inspector", "step build failed", "failed")
 	if got := s.Model.WorkflowRuns("W1"); len(got) != 2 {
 		t.Errorf("runs of W1 %+v, want its two", got)
+	}
+}
+
+func TestAnAnswerToTheRunsPagesReadDoesNotLandOnTheWorkflowsPage(t *testing.T) {
+	out := feed(t, projectPane(t, 160, boardCard("a")), key("5"))
+	load, _ := askedRuns(out.Cmds)
+	s := step(t, out.State, model.WorkflowsLoaded{ProjectUID: "p", Workflows: []model.Workflow{reviewFlow()}}).State
+	running := workflowRun("R2")
+	running.WorkflowUID = "W1"
+	stray := workflowRun("R9")
+	stray.WorkflowUID = "W1"
+	stray.Status = model.RunFailed
+	// The Runs Page's own reads are numbered upward; an answer to one of them is not the Workflows Page's.
+	s = step(t, s, model.RunsLoaded{Request: 1, Runs: []model.Run{stray}}).State
+	if _, ok := s.Model.LatestWorkflowRun("W1"); ok {
+		t.Fatal("the Workflows Page took the answer to a read it never asked")
+	}
+	s = step(t, s, model.RunsLoaded{Request: load.Request, Runs: []model.Run{running}}).State
+	if latest, ok := s.Model.LatestWorkflowRun("W1"); !ok || latest.UID != "R2" {
+		t.Fatalf("latest run of W1 %+v after its own answer", latest)
+	}
+}
+
+func TestWorkflowsPageFollowsRunPagesToFindEachWorkflowsLatestRunAndOlderRuns(t *testing.T) {
+	out := feed(t, projectPane(t, 160, boardCard("a")), key("5"))
+	first, ok := askedRuns(out.Cmds)
+	if !ok {
+		t.Fatalf("no runs read asked for: %#v", out.Cmds)
+	}
+	s := step(t, out.State, model.WorkflowsLoaded{ProjectUID: "p", Workflows: []model.Workflow{reviewFlow(), nightlyFlow()}}).State
+	onW1 := func(uid string) model.Run {
+		r := workflowRun(uid)
+		r.WorkflowUID = "W1"
+		return r
+	}
+	onW2 := workflowRun("R9")
+	onW2.WorkflowUID = "W2"
+
+	// The newest page holds runs of the first workflow alone, and kata has an older page.
+	next := step(t, s, model.RunsLoaded{Request: first.Request, Runs: []model.Run{onW1("R1"), onW1("R2")}, NextBefore: "c1"})
+	second, ok := askedRuns(next.Cmds)
+	if !ok || second.Before != "c1" || second.Request != first.Request {
+		t.Fatalf("cmds %#v, want the page before c1 read on the same request: W2 has no run yet", next.Cmds)
+	}
+	// W2 turns up there; the selected W1 still lists fewer runs than the inspector shows, so the next page is read too.
+	more := step(t, next.State, model.RunsLoaded{Request: first.Request, Before: "c1", Runs: []model.Run{onW2}, NextBefore: "c2"})
+	third, ok := askedRuns(more.Cmds)
+	if !ok || third.Before != "c2" {
+		t.Fatalf("cmds %#v, want the page before c2 read: W1 shows two of its five runs", more.Cmds)
+	}
+	if latest, ok := more.State.Model.LatestWorkflowRun("W2"); !ok || latest.UID != "R9" {
+		t.Fatalf("latest run of W2 %+v, want R9 from the older page", latest)
+	}
+	done := step(t, more.State, model.RunsLoaded{Request: first.Request, Before: "c2", Runs: []model.Run{onW1("R3"), onW1("R4"), onW1("R5")}, NextBefore: "c3"})
+	if _, again := askedRuns(done.Cmds); again {
+		t.Fatalf("cmds %#v, want no more pages once every workflow has its latest run and the selection its five", done.Cmds)
+	}
+	if got := done.State.Model.WorkflowRuns("W1"); len(got) != 5 {
+		t.Fatalf("runs of W1 %d, want 5", len(got))
 	}
 }

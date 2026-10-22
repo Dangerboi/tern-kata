@@ -36,6 +36,67 @@ type Daemon struct {
 	requests []string
 	inflight int
 	peak     int
+	gate     *Gate
+	failing  func(*http.Request) bool
+}
+
+// Gate holds every request its match accepts until the test lets it through, so a test can freeze the worker at a
+// chosen call to kata and run another request meanwhile.
+type Gate struct {
+	match func(*http.Request) bool
+	// Arrived receives one value per held request (never blocks the daemon: it is buffered).
+	Arrived chan struct{}
+	pass    chan struct{}
+	open    chan struct{}
+	once    sync.Once
+}
+
+// Hold starts holding the requests match accepts.
+func (d *Daemon) Hold(match func(*http.Request) bool) *Gate {
+	g := &Gate{match: match, Arrived: make(chan struct{}, 64), pass: make(chan struct{}, 64), open: make(chan struct{})}
+	d.mu.Lock()
+	d.gate = g
+	d.mu.Unlock()
+	return g
+}
+
+// Release lets one held request through.
+func (g *Gate) Release() { g.pass <- struct{}{} }
+
+// Open lets every held and later request through.
+func (g *Gate) Open() { g.once.Do(func() { close(g.open) }) }
+
+// Fail answers 503 to every request match accepts until Heal.
+func (d *Daemon) Fail(match func(*http.Request) bool) {
+	d.mu.Lock()
+	d.failing = match
+	d.mu.Unlock()
+}
+
+// Heal stops what Fail started.
+func (d *Daemon) Heal() { d.Fail(nil) }
+
+func (d *Daemon) intercept(w http.ResponseWriter, r *http.Request) (served bool) {
+	d.mu.Lock()
+	g, failing := d.gate, d.failing
+	d.mu.Unlock()
+	if g != nil && g.match(r) {
+		select {
+		case g.Arrived <- struct{}{}:
+		default:
+		}
+		select {
+		case <-g.pass:
+		case <-g.open:
+		case <-r.Context().Done():
+			return true
+		}
+	}
+	if failing != nil && failing(r) {
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		return true
+	}
+	return false
 }
 
 type rule struct {
@@ -64,6 +125,9 @@ func StartKata(t *testing.T) *Daemon {
 		if r.URL.Path == "/api/v1/ping" {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "service": "kata", "version": "0.19.0"})
+			return
+		}
+		if d.intercept(w, r) {
 			return
 		}
 		handler.ServeHTTP(w, r)
@@ -361,6 +425,21 @@ func (d *Daemon) Issue(t *testing.T, p worker.Project, title string) worker.Issu
 		t.Fatal(err)
 	}
 	return issue
+}
+
+// CloseIssue closes the Issue as done.
+func (d *Daemon) CloseIssue(t *testing.T, p worker.Project, issueUID string) {
+	t.Helper()
+	reason := g.CloseActionRequestBodyReason("done")
+	protocol := g.CloseActionRequestBodyRetryProtocol("close-v1")
+	source := g.CloseActionRequestBodySource("tui")
+	actor, key := "tester", "close-"+issueUID
+	if _, err := d.Client.CloseIssueWithResponse(context.Background(), &g.CloseIssueRequestOptions{
+		PathParams: &g.CloseIssuePath{ProjectID: p.ID, Ref: issueUID}, Header: &g.CloseIssueHeaders{IdempotencyKey: &key},
+		Body: &g.CloseIssueBody{Actor: &actor, Reason: &reason, RetryProtocol: &protocol, Source: &source},
+	}); err != nil {
+		t.Fatalf("closing Issue %s: %v", issueUID, err)
+	}
 }
 
 func ptr[T any](v T) *T { return &v }

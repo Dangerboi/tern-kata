@@ -307,10 +307,9 @@ func (m Model) RunFacts(now time.Time) []RunFact {
 	return facts
 }
 
-// enterRunsPage is the Runs Page's entry from its key: all the Project's Runs. The jobs page's filter key enters through
-// enterRuns with a filter set after.
+// enterRunsPage is the Runs Page's entry from its key: the Runs as the Page left them. The jobs page's filter key enters
+// through enterRuns with a filter set after.
 func enterRunsPage(m Model) (Model, []Cmd) {
-	m.Runs.JobUID, m.Runs.JobName = "", ""
 	return enterRuns(m)
 }
 
@@ -324,8 +323,15 @@ func enterRuns(m Model) (Model, []Cmd) {
 	m.Runs.detailHidden = m.DetailHidden()
 	m.hidden = true
 	m.Focus = ColumnList
-	m.Runs.ProjectID, m.Runs.Runs, m.Runs.More, m.Runs.Selected, m.Runs.Err = 0, nil, "", "", nil
-	m.Runs.ProjectArchived = false
+	// The Page keeps its selection, loaded pages and filter while another Page is shown; only another Project resets them, and
+	// the newest page is read again to join what is held.
+	if id, known := m.jobsProjectID(); !known || id != m.Runs.ProjectID {
+		m.Runs.ProjectID, m.Runs.Runs, m.Runs.More, m.Runs.Selected, m.Runs.Err = 0, nil, "", "", nil
+		m.Runs.JobUID, m.Runs.JobName = "", ""
+		m.Runs.ProjectArchived = false
+	} else {
+		m.Runs.refresh, m.Runs.stale = true, true
+	}
 	m, ask := m.askWorker(0)
 	return m, append(cmds, ask)
 }
@@ -338,7 +344,6 @@ func (m Model) runsOff() Model {
 	}
 	m.hidden = m.Runs.detailHidden
 	m.Runs.Loading = false
-	m.Runs.JobUID, m.Runs.JobName = "", ""
 	return m.revealInList(m.SelectedUID).WithVisibleSelection()
 }
 
@@ -443,21 +448,7 @@ func moveRun(m Model, action Action) Model {
 		return m
 	}
 	at := slices.IndexFunc(runs, func(r Run) bool { return r.UID == m.Runs.Selected })
-	switch action {
-	case MoveDown:
-		at++
-	case MoveUp:
-		at--
-	case PageDown:
-		at += 10
-	case PageUp:
-		at -= 10
-	case MoveFirst:
-		at = 0
-	case MoveLast:
-		at = len(runs) - 1
-	}
-	m.Runs.Selected = runs[max(0, min(at, len(runs)-1))].UID
+	m.Runs.Selected = runs[movedIndex(at, len(runs), listPage, action)].UID
 	return m
 }
 
@@ -528,6 +519,10 @@ func runsOfJob(m Model) (Model, []Cmd) {
 	m = m.jobsOff()
 	m, cmds := enterRuns(m)
 	if m.OnRuns() {
+		if m.Runs.JobUID != job.UID {
+			m = m.refilteredRuns()
+			m.Runs.refresh = false
+		}
 		m.Runs.JobUID, m.Runs.JobName = job.UID, job.Name
 	}
 	return m, cmds

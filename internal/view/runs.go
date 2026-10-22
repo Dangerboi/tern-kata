@@ -114,22 +114,17 @@ func runCard(row model.RunRow, selected bool) tern.Element {
 func runInspector(m model.Model, now time.Time) tern.Element {
 	facts := m.RunFacts(now)
 	if len(facts) == 0 {
-		return panel(m, model.ColumnDetail, ui.Common{Key: "detail", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapMD,
-			ui.Nodes(ui.Text{Common: ui.Common{Key: "empty"}, Text: "Select a run to read its detail."}))
+		return emptyInspector(m, "Select a run to read its detail.")
 	}
-	rows := make([]tern.Element, len(facts))
+	lines := make([]factLine, len(facts))
 	for i, fact := range facts {
-		label := ui.Text{Common: ui.Common{Key: "label", Shrink: new(float64), Min: &ui.Bounds{W: ui.Ch(18)}}, Spans: []ui.Span{{T: fact.Label, S: "muted"}}, Wrap: ui.WrapNone}
-		style := ""
-		if fact.Label == "Status" {
-			style = toneStyle(runTone(model.RunStatus(fact.Value)))
+		lines[i] = factLine{Label: fact.Label, Value: fact.Value}
+		switch fact.Label {
+		case "Status":
+			lines[i].Style = toneStyle(runTone(model.RunStatus(fact.Value)))
+		case "Held because":
+			lines[i].Style = toneStyle(ui.ToneWarning)
 		}
-		if fact.Label == "Held because" {
-			style = toneStyle(ui.ToneWarning)
-		}
-		value := ui.Text{Common: ui.Common{Key: "value", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}, Spans: []ui.Span{{T: fact.Value, S: style}}}
-		rows[i] = ui.Row{Common: ui.Common{Key: "fact" + strconv.Itoa(i)}, Gap: ui.GapSM, Align: ui.AlignStart, Children: ui.Nodes(label, value)}
 	}
-	list := ui.List{CommonWithoutMax: scrollerCommon("viewport"), Max: scrollMax(m, 0), Children: ui.Nodes(ui.Col{Common: ui.Common{Key: "content"}, Gap: ui.GapSM, Children: rows})}
-	return panel(m, model.ColumnDetail, ui.Common{Key: "detail", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapMD, ui.Nodes(list))
+	return factInspector(m, lines)
 }

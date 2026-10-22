@@ -50,6 +50,7 @@ const (
 	JobFieldInterval     Field = "interval"
 	JobFieldAt           Field = "at"
 	JobFieldIssue        Field = "issue"
+	JobFieldReport       Field = "report"
 	JobFieldLead         Field = "lead"
 	JobFieldParent       Field = "parent"
 	JobFieldPrompt       Field = "prompt"
@@ -77,7 +78,7 @@ const (
 // it stands is JobFormState.Shows; tab skips the others.
 var JobFields = []FieldSpec{
 	{JobFieldKind, false}, {JobFieldName, true}, {JobFieldTrigger, false},
-	{JobFieldCron, true}, {JobFieldZone, true}, {JobFieldInterval, true}, {JobFieldAt, true}, {JobFieldIssue, true}, {JobFieldLead, true},
+	{JobFieldCron, true}, {JobFieldZone, true}, {JobFieldInterval, true}, {JobFieldAt, true}, {JobFieldIssue, true}, {JobFieldReport, true}, {JobFieldLead, true},
 	{JobFieldParent, true},
 	{JobFieldPrompt, true}, {JobFieldWorkflow, false}, {JobFieldProfile, true}, {JobFieldProfilePick, false},
 	{JobFieldCheckout, true}, {JobFieldCheckoutPick, false}, {JobFieldSecrets, true},
@@ -96,6 +97,7 @@ var jobFieldTitles = map[Field]string{
 	JobFieldInterval:     "Interval (seconds, or 15m, 2h; a recurring child needs 60 s or more)",
 	JobFieldAt:           "Once at (full RFC 3339 instant, like 2026-11-01T09:00:00+01:00)",
 	JobFieldIssue:        "Target Issue (short id)",
+	JobFieldReport:       "Other Issue to notify about (short id, blank: the trigger's Issue)",
 	JobFieldLead:         "Lead before the deadline (seconds, or 2h, 1d; blank: at the deadline)",
 	JobFieldParent:       "Parent Issue (short id)",
 	JobFieldPrompt:       "Prompt (Enter adds a line)",
@@ -310,8 +312,11 @@ var intervalJobTrigger = jobTrigger{
 			}
 			seconds = int64(d / time.Second)
 		}
-		if seconds <= 0 {
+		switch {
+		case seconds <= 0:
 			return CronTrigger{}, fieldError(JobFieldInterval, "must be positive.")
+		case seconds > maxJobSeconds:
+			return CronTrigger{}, fieldError(JobFieldInterval, "is longer than kata accepts.")
 		}
 		return CronTrigger{Kind: TriggerInterval, IntervalSeconds: seconds}, nil
 	},
@@ -336,8 +341,10 @@ type JobFormState struct {
 	Kind, Trigger                                              string
 	Name, Cron, Zone, Interval, Parent, Title, Body, Recipient string
 	Message, Grace                                             string
-	// At is a once trigger's instant, Issue the Issue an Issue-date trigger or an existing-Issue policy names, Lead the deadline lead.
-	At, Issue, Lead string
+	// At is a once trigger's instant, Issue the Issue an Issue-date trigger fires on or an existing-Issue policy names (kata makes
+	// them one Issue for a job that executes), Report the Issue a notify job with an Issue-date trigger notifies about instead
+	// of the trigger's own, Lead the deadline lead.
+	At, Issue, Report, Lead string
 	// Prompt, Workflow (a uid), Profile, Checkout and Secrets are an execute job's; Secrets is "ENV=source" pairs.
 	Prompt, Workflow, Profile, Checkout, Secrets string
 	// Policy is the Issue policy's kind, Scheduled and DeadlineOffset the per-run Issue's date offsets, Timeout the run's limit.
@@ -398,6 +405,8 @@ func (f *JobFormState) text(name Field) *string {
 		return &f.At
 	case JobFieldIssue:
 		return &f.Issue
+	case JobFieldReport:
+		return &f.Report
 	case JobFieldLead:
 		return &f.Lead
 	case JobFieldParent:
@@ -683,18 +692,25 @@ func (f JobFormState) buildTrigger() (CronTrigger, error) {
 	return t, f.kind().checkTrigger(t)
 }
 
-// JobTerms is what the card sends once it reads clean. IssueRef is the reference of the Issue the trigger or the policy names,
-// which the gateway turns into its uid; ParentRef is the same for a native job's parent.
+// JobTerms is what the card sends once it reads clean. IssueRef is the reference of the Issue the trigger or the policy names and
+// ReportRef that of a notify job's own Issue when its trigger fires on another's date, which the gateway turns into uids;
+// ParentRef is the same for a native job's parent.
 type JobTerms struct {
 	Name       string
 	Definition CronDefinition
 	ParentRef  string
 	IssueRef   string
+	ReportRef  string
 }
 
 // issueRef is the Issue reference the card holds, without the # a short id may carry.
 func (f JobFormState) issueRef() string {
 	return strings.TrimPrefix(strings.TrimSpace(f.Issue), "#")
+}
+
+// reportRef is the Issue reference of a notify job's own Issue under an Issue-date trigger, without the # a short id may carry.
+func (f JobFormState) reportRef() string {
+	return strings.TrimPrefix(strings.TrimSpace(f.Report), "#")
 }
 
 // terms reads the card into the terms it would send, or says what is wrong with it, naming the field. Nothing leaves the card
@@ -723,6 +739,9 @@ func (f JobFormState) terms() (JobTerms, error) {
 	if DateTrigger(trigger.Kind) || (def.Issue != nil && def.Issue.Kind == IssueExisting) {
 		terms.IssueRef = f.issueRef()
 	}
+	if def.Issue != nil && DateTrigger(trigger.Kind) {
+		terms.ReportRef = f.reportRef()
+	}
 	return terms, nil
 }
 
@@ -744,8 +763,10 @@ func (f JobFormState) Preview(cal PaneCalendar, now time.Time) JobPreview {
 		return JobPreview{Err: err}
 	}
 	anchor := now
-	if p := f.Opened.Parent; f.Change && p != nil && p.Progress != nil {
-		anchor = p.Progress.Anchor
+	if f.Change {
+		if opened, ok := f.Opened.intervalAnchor(); ok {
+			anchor = opened
+		}
 	}
 	const layout = "Mon 2006-01-02 15:04 MST"
 	preview := JobPreview{Words: t.Words()}
@@ -758,11 +779,8 @@ func (f JobFormState) Preview(cal PaneCalendar, now time.Time) JobPreview {
 			preview.Runs = append(preview.Runs, next.In(loc).Format(layout))
 		}
 	case TriggerInterval:
-		if f.Kind != nativeJobKind.id {
-			break // an adapter's interval counts from a start only the worker knows
-		}
-		step := time.Duration(t.IntervalSeconds) * time.Second
-		next := anchor.Add((now.Sub(anchor)/step + 1) * step)
+		step, _ := intervalStep(t.IntervalSeconds) // buildTrigger refused any other
+		next := nextTick(anchor, step, now)
 		for range previewRuns {
 			preview.Runs = append(preview.Runs, cal.in(next).Format(layout))
 			next = next.Add(step)
@@ -795,11 +813,20 @@ func submitJob(m Model) (Model, []Cmd) {
 		}
 		return m, nil
 	}
-	f.Saving, f.Err = true, nil
-	cmd := SaveJobCmd{Workspace: m.Workspace, ProjectID: f.ProjectID, Actor: m.Actor, UID: f.UID, Name: terms.Name, Definition: terms.Definition, ParentRef: terms.ParentRef, IssueRef: terms.IssueRef}
+	cmd := SaveJobCmd{Workspace: m.Workspace, ProjectID: f.ProjectID, Actor: m.Actor, UID: f.UID, Name: terms.Name, Definition: terms.Definition, ParentRef: terms.ParentRef, IssueRef: terms.IssueRef, ReportRef: terms.ReportRef}
 	if f.Change {
 		cmd.ExpectedEventUID = f.Opened.DefinitionEventUID
+		if !f.Opened.Definition.Enabled && terms.Definition.Enabled && parentOpen(f.Opened) {
+			// Turning a paused job on is a resume: it asks about a Backfill first, like p does.
+			resumed := f.Opened
+			resumed.Definition = terms.Definition
+			if asked, ok := m.askBackfill(BackfillSave, Issue{}, resumed); ok {
+				asked.Backfill.Save = &cmd
+				return asked, nil
+			}
+		}
 	}
+	f.Saving, f.Err = true, nil
 	return m, []Cmd{cmd}
 }
 
@@ -828,15 +855,10 @@ func jobFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		f.step(false)
 	case field == nil && bound && binding.Action == JobPreviousChoice:
 		f.step(true)
-	case field != nil && f.Field == JobFieldPrompt && (msg.Chord == "enter" || (!bound && strings.ContainsAny(msg.Text, "\r\n"))):
-		text := "\n"
-		if msg.Chord != "enter" {
-			text = normalizeLineBreaks(msg.Text)
-		}
-		runes := []rune(*field)
-		at := len(runes) - f.Caret.back(f.Field, len(runes))
-		*field = string(slices.Insert(runes, at, []rune(text)...))
-		f.Caret, f.Err = Caret{f.Field, len(runes) - at}, nil
+	case field != nil && f.Field == JobFieldPrompt && bound && binding.Action == JobNewline:
+		f.insertPrompt(field, "\n")
+	case field != nil && f.Field == JobFieldPrompt && !bound && strings.ContainsAny(msg.Text, "\r\n"):
+		f.insertPrompt(field, normalizeLineBreaks(msg.Text)) // pasted lines stay lines
 	case field != nil:
 		var edited bool
 		if bound && binding.Action == InputSpace {
@@ -847,6 +869,14 @@ func jobFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		}
 	}
 	return m, nil
+}
+
+// insertPrompt puts text, line breaks included, at the caret of the prompt field.
+func (f *JobFormState) insertPrompt(field *string, text string) {
+	runes := []rune(*field)
+	at := len(runes) - f.Caret.back(f.Field, len(runes))
+	*field = string(slices.Insert(runes, at, []rune(text)...))
+	f.Caret, f.Err = Caret{f.Field, len(runes) - at}, nil
 }
 
 // answerJobConflict is one key while the card shows the newer job: overwrite saves the draft over it, take newer replaces the
