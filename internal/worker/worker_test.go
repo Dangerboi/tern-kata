@@ -334,16 +334,26 @@ func TestASecondWorkerOnTheMachineIsRefused(t *testing.T) {
 	}
 }
 
+// foreignLease writes another worker's lease. The running worker renews its own lease concurrently, so a lost
+// revision race is retried; it reports failures with Error, not Fatal, because a crash hook calls it from the worker's goroutine.
 func (h *harness) foreignLease(owner string, heartbeat time.Time, generation int64) {
 	h.t.Helper()
-	p, err := h.kata.Kata.Project(context.Background(), h.proj.ID)
-	if err != nil {
-		h.t.Fatal(err)
-	}
 	value := map[string]any{"version": 1, "owner": owner, "generation": generation, "heartbeat": heartbeat.UTC()}
-	if _, err := h.kata.Kata.PatchProjectMetadata(context.Background(), h.proj.ID, p.Revision, "desktop-user", map[string]any{"tern_kata.lease": value}); err != nil {
-		h.t.Fatal(err)
+	for range 20 {
+		p, err := h.kata.Kata.Project(context.Background(), h.proj.ID)
+		if err != nil {
+			h.t.Error(err)
+			return
+		}
+		_, err = h.kata.Kata.PatchProjectMetadata(context.Background(), h.proj.ID, p.Revision, "desktop-user", map[string]any{"tern_kata.lease": value})
+		if !errors.Is(err, worker.ErrRevisionConflict) {
+			if err != nil {
+				h.t.Error(err)
+			}
+			return
+		}
 	}
+	h.t.Error("the foreign lease kept losing the revision race")
 }
 
 func (h *harness) lease() (owner string, generation float64) {
