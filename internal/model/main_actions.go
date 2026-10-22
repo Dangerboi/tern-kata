@@ -141,6 +141,8 @@ var (
 	laneModes = []Mode{ModeBoard, ModeLane}
 	// jobsModes are the modes of the Jobs Page, whose keys act on the selected job.
 	jobsModes = []Mode{ModeJobs, ModeJobInspector}
+	// runsModes are the modes of the Runs Page, whose keys act on the selected Run.
+	runsModes = []Mode{ModeRuns, ModeRunInspector}
 	searching = []Mode{ModeSearch, ModeSearchResults}
 )
 
@@ -199,7 +201,7 @@ var mainActions = []actionEntry{
 	{action: PageDown, modes: []Mode{ModeJobs}, keys: pageDownKeys, help: "page down", handle: pure(func(m Model) Model { return moveJob(m, PageDown) })},
 	{action: FocusJobInspector, modes: []Mode{ModeJobs}, keys: keys("enter", "↵", "tab", "tab"), help: "inspect", footer: []Mode{ModeJobs}, footerKey: "↵", sheet: []sheetLine{{sheetJobs, 5, "inspect the job (definition and parent)"}}, handle: pure(focusInspector)},
 	{action: ToggleArchivedJobs, modes: []Mode{ModeJobs}, keys: keys("a", "a"), help: "archived", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 6, "show or hide archived jobs"}}, handle: pure(toggleArchivedJobs)},
-	{action: ReloadJobs, modes: []Mode{ModeJobs, ModeJobInspector}, keys: keys("ctrl+r", "ctrl+r", "meta+r", ""), help: "reload", sheet: []sheetLine{{sheetJobs, 7, "read the jobs again"}}, handle: pure(reloadJobs)},
+	{action: ReloadJobs, modes: []Mode{ModeJobs, ModeJobInspector}, keys: keys("ctrl+r", "ctrl+r", "meta+r", ""), help: "reload", sheet: []sheetLine{{sheetJobs, 7, "read the jobs again"}}, handle: reloadJobs},
 	{action: OpenJobParent, modes: []Mode{ModeJobInspector}, keys: keys("enter", "↵"), help: "open parent", footer: []Mode{ModeJobInspector}, sheet: []sheetLine{{sheetJobs, 8, "open a native job's parent Issue"}}, handle: pure(openJobParent)},
 	{action: ScrollDown, modes: []Mode{ModeJobInspector}, keys: slices.Concat(keys("down", "↓", "j", "j/↓"), emacsDown), help: "scroll", footer: []Mode{ModeJobInspector}, footerKey: "↑↓", sheet: []sheetLine{{sheetJobs, 9, "scroll the inspector"}}, handle: scrolling(ColumnDetail, ScrollLineDown)},
 	{action: ScrollUp, modes: []Mode{ModeJobInspector}, keys: slices.Concat(keys("up", "↑", "k", "k/↑"), emacsUp), help: "scroll up", handle: scrolling(ColumnDetail, ScrollLineUp)},
@@ -213,6 +215,10 @@ var mainActions = []actionEntry{
 	{action: NewIssueJobAction, modes: issueModes, keys: keys("shift+j", "J"), help: "job", sheet: []sheetLine{{sheetJobs, 16, "new recurring job on the selected Issue (Job card)"}}, handle: openIssueJob},
 	{action: RunsOfJob, modes: []Mode{ModeJobs, ModeJobInspector}, keys: keys("r", "r"), help: "runs", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 11, "open the Runs Page on the job's runs"}}, handle: runsOfJob},
 	// Runs Page: the Project's Runs newest first, with the selected Run's detail beside them.
+	{action: RunJobNowAction, modes: jobsModes, keys: keys("shift+r", "R"), help: "run now", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 17, "run the selected adapter job now on this machine's worker"}}, handle: runJobNow},
+	{action: OpenRunSessionAction, modes: runsModes, keys: keys("o", "o"), help: "session", footer: runsModes, sheet: []sheetLine{{sheetRuns, 13, "open the run's omp session in a new Tern tab (this machine's finished or held runs)"}}, handle: openRunSession},
+	{action: ResumeRunAction, modes: runsModes, keys: keys("u", "u"), help: "resume", footer: runsModes, sheet: []sheetLine{{sheetRuns, 14, "resume the selected held run (this machine's worker)"}}, handle: moveHeldRun(true)},
+	{action: AbandonRunAction, modes: runsModes, keys: keys("shift+a", "A"), help: "abandon", footer: runsModes, sheet: []sheetLine{{sheetRuns, 15, "abandon the selected held run (this machine's worker)"}}, handle: moveHeldRun(false)},
 	{action: MoveDown, modes: []Mode{ModeRuns}, keys: slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), help: "move", footer: []Mode{ModeRuns}, footerKey: "↑↓", sheet: []sheetLine{{sheetRuns, 1, "next run"}}, handle: pure(func(m Model) Model { return moveRun(m, MoveDown) })},
 	{action: MoveUp, modes: []Mode{ModeRuns}, keys: slices.Concat(keys("k", "k/↑", "up", "↑"), emacsUp), help: "previous run", sheet: []sheetLine{{sheetRuns, 2, "previous run"}}, handle: pure(func(m Model) Model { return moveRun(m, MoveUp) })},
 	{action: MoveFirst, modes: []Mode{ModeRuns}, keys: keys("g", "g", "home", "home"), help: "first run", sheet: []sheetLine{{sheetRuns, 3, "first run"}}, handle: pure(func(m Model) Model { return moveRun(m, MoveFirst) })},
@@ -223,7 +229,7 @@ var mainActions = []actionEntry{
 	{action: OpenRunIssue, modes: []Mode{ModeRuns, ModeRunInspector}, keys: keys("i", "i"), help: "issue", footer: []Mode{ModeRuns, ModeRunInspector}, sheet: []sheetLine{{sheetRuns, 6, "open the run's Issue"}}, handle: pure(openRunIssue)},
 	{action: FilterRunsByJob, modes: []Mode{ModeRuns, ModeRunInspector}, keys: keys("f", "f"), help: "job filter", footer: []Mode{ModeRuns}, sheet: []sheetLine{{sheetRuns, 7, "show only the selected run's job, or all runs again"}}, handle: pure(toggleRunJobFilter)},
 	{action: OlderRuns, modes: []Mode{ModeRuns}, keys: keys("m", "m"), help: "older", footer: []Mode{ModeRuns}, sheet: []sheetLine{{sheetRuns, 8, "read the next older runs"}}, handle: olderRuns},
-	{action: ReloadRuns, modes: []Mode{ModeRuns, ModeRunInspector}, keys: keys("ctrl+r", "ctrl+r", "meta+r", ""), help: "reload", sheet: []sheetLine{{sheetRuns, 9, "read the runs again"}}, handle: pure(reloadRuns)},
+	{action: ReloadRuns, modes: []Mode{ModeRuns, ModeRunInspector}, keys: keys("ctrl+r", "ctrl+r", "meta+r", ""), help: "reload", sheet: []sheetLine{{sheetRuns, 9, "read the runs again"}}, handle: reloadRuns},
 	{action: ScrollDown, modes: []Mode{ModeRunInspector}, keys: slices.Concat(keys("down", "↓", "j", "j/↓"), emacsDown), help: "scroll", footer: []Mode{ModeRunInspector}, footerKey: "↑↓", sheet: []sheetLine{{sheetRuns, 10, "scroll the detail"}}, handle: scrolling(ColumnDetail, ScrollLineDown)},
 	{action: ScrollUp, modes: []Mode{ModeRunInspector}, keys: slices.Concat(keys("up", "↑", "k", "k/↑"), emacsUp), help: "scroll up", handle: scrolling(ColumnDetail, ScrollLineUp)},
 	{action: PageDown, modes: []Mode{ModeRunInspector}, keys: pageDownKeys, help: "page", handle: scrolling(ColumnDetail, ScrollPageDown)},

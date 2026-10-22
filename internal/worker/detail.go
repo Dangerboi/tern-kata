@@ -22,6 +22,9 @@ type RunDetail struct {
 	// OutputTail is the end of the agent's assistant messages (at most OutputTailBytes), StderrTail the end of its stderr.
 	OutputTail string
 	StderrTail string
+	// Cwd is where the agent ran (the job's checkout, else the run's own folder), SessionDir the folder omp keeps the
+	// run's sessions in and SessionID the session a resume continues; the last is empty until omp has written one.
+	Cwd, SessionDir, SessionID string
 }
 
 // StepDetail is one step of a run as the journal knows it.
@@ -95,6 +98,8 @@ func (w *Worker) RunDetail(uid string) (RunDetail, error) {
 	}
 	dir := w.attemptDir(j) // a workflow shows its latest step's output
 	d := RunDetail{RunStatus: w.runStatus(j), Steps: stepsOf(j), OutputTail: outputTail(filepath.Join(dir, "output.jsonl"), OutputTailBytes), StderrTail: fileTail(filepath.Join(dir, "stderr.log"), 2048)}
+	d.Cwd = cmpOr(j.Checkout, w.store.RunDir(uid))
+	d.SessionDir, d.SessionID = w.sessionOf(j)
 	if d.OutputTail == "" { // a command step's output is its own log
 		d.OutputTail = fileTail(filepath.Join(dir, "output.log"), OutputTailBytes)
 	}
@@ -102,6 +107,36 @@ func (w *Worker) RunDetail(uid string) (RunDetail, error) {
 		d.Summary = j.Outcome.Summary
 	}
 	return d, nil
+}
+
+// sessionOf is the omp session a Pane opens for the run and the folder holding it: a prompt job's, or for a workflow
+// the latest prompt step's that has one (each step keeps its own session folder). Empty when there is none, as for a
+// workflow of command steps alone.
+func (w *Worker) sessionOf(j *Journal) (folder, id string) {
+	runDir := w.store.RunDir(j.RunUID)
+	if j.Workflow == nil {
+		return sessionFolder(runDir), w.sessionID(j)
+	}
+	active := j.activeStep()
+	for i := len(j.Steps) - 1; i >= 0; i-- {
+		r := j.Steps[i]
+		if j.Workflow.Steps[i].Kind != "prompt" || r.Dir == "" {
+			continue
+		}
+		launch := r.Launch
+		if i == active {
+			launch = j.Launch
+		}
+		var launched string
+		if launch != nil {
+			launched = launch.SessionID
+		}
+		dir := sessionFolder(filepath.Join(runDir, r.Dir))
+		if id := sessionIn(dir, launched); id != "" {
+			return dir, id
+		}
+	}
+	return "", ""
 }
 
 // outputTail joins the assistant messages of an output.jsonl and keeps the last max bytes.

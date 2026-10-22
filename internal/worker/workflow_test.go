@@ -83,6 +83,24 @@ func TestAWorkflowRunsItsPromptAndCommandStepsInOrderAsOneRun(t *testing.T) {
 			t.Errorf("step %d is %+v, want %s %s succeeded in one attempt", i+1, s, want.key, want.kind)
 		}
 	}
+	// A Pane opens the session of the latest prompt step, from that step's own folder, in the checkout.
+	d := resp.Detail
+	if d.SessionID == "" || !strings.HasSuffix(d.SessionDir, "/session") || strings.Count(d.SessionDir, "/") <= strings.Count(filepath.Join(h.dirs.Runs(), uid), "/")+1 || d.Cwd != h.repo {
+		t.Errorf("session %q in %q, cwd %q: want the review step's session in the checkout", d.SessionID, d.SessionDir, d.Cwd)
+	}
+}
+
+func TestACommandOnlyWorkflowHasNoSessionToOpen(t *testing.T) {
+	h := newHarness(t)
+	_, job := h.workflowJob("plain", workertest.Step{Key: "build", Command: "echo hi"})
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	uid := h.runWorkflow(r, job)
+	h.settled(uid)
+	resp := h.ask(worker.Request{Op: "run-detail", Run: uid})
+	if !resp.OK || resp.Detail == nil || resp.Detail.SessionID != "" || resp.Detail.SessionDir != "" {
+		t.Fatalf("detail %+v, want no session", resp.Detail)
+	}
 }
 
 func TestAFailingStepIsRetriedThenFailsTheRunAndOnlyDependentStepsAreSkipped(t *testing.T) {

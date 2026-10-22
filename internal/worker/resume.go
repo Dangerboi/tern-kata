@@ -261,10 +261,19 @@ func readOutput(path string) AgentResult {
 // sessionID is the omp session a resume would continue: the one the run recorded or, when the worker stopped before
 // saving it, the only session file in the run's session folder. Empty when no session file exists.
 func (w *Worker) sessionID(j *Journal) string {
-	dir := sessionFolder(w.attemptDir(j))
-	if j.Launch != nil && j.Launch.SessionID != "" {
-		if m, _ := filepath.Glob(filepath.Join(dir, "*_"+j.Launch.SessionID+".jsonl")); len(m) > 0 {
-			return j.Launch.SessionID
+	var launched string
+	if j.Launch != nil {
+		launched = j.Launch.SessionID
+	}
+	return sessionIn(sessionFolder(w.attemptDir(j)), launched)
+}
+
+// sessionIn is the session in an omp session folder: launched when its file is there, else (launched unknown) the only
+// session file. Empty when none.
+func sessionIn(dir, launched string) string {
+	if launched != "" {
+		if m, _ := filepath.Glob(filepath.Join(dir, "*_"+launched+".jsonl")); len(m) > 0 {
+			return launched
 		}
 		return ""
 	}

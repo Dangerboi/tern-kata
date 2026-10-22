@@ -232,7 +232,8 @@ func TestResumeContinuesTheOmpSessionAndRecordsTheOutcome(t *testing.T) {
 		t.Fatalf("run-detail: %+v", resp)
 	}
 	d := resp.Detail
-	if !d.Held || d.Hold != "interrupted" || !d.Resumable || !d.Abandonable || len(d.Steps) != 1 || d.Steps[0].SessionID == "" || d.Steps[0].Kind != "prompt" || d.Steps[0].Attempt != 1 {
+	if !d.Held || d.Hold != "interrupted" || !d.Resumable || !d.Abandonable || len(d.Steps) != 1 || d.Steps[0].SessionID == "" || d.Steps[0].Kind != "prompt" || d.Steps[0].Attempt != 1 ||
+		d.SessionID != d.Steps[0].SessionID || !strings.HasSuffix(d.SessionDir, "/session") || d.Cwd == "" {
 		t.Fatalf("detail %+v", d)
 	}
 

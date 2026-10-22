@@ -112,6 +112,8 @@ type LoadRuns struct {
 	JobUID    string
 	Before    string
 	Request   int64
+	// Refresh says the newest page is read again to follow runs in flight: the answer joins the Runs held instead of replacing them.
+	Refresh bool
 }
 
 func (LoadRuns) cmd() {}
@@ -125,6 +127,7 @@ type RunsLoaded struct {
 	Before          string
 	NextBefore      string
 	ProjectArchived bool
+	Refresh         bool
 	Err             error
 }
 
@@ -171,6 +174,8 @@ type RunsState struct {
 	// request counts the reads asked for; stale asks for another.
 	request int64
 	stale   bool
+	// refresh makes the next read of the newest page join the Runs held.
+	refresh bool
 	// detailHidden is the detail column's hidden flag from before the Runs Page took its place.
 	detailHidden bool
 }
@@ -187,6 +192,11 @@ type RunRow struct {
 	Start    string
 	Duration string
 	Summary  string
+	// Held says the worker of this machine holds the Run for the user; Hold is why, in words. State is the status the row shows:
+	// "held" for a held Run, else kata's.
+	Held  bool
+	Hold  string
+	State string
 }
 
 // RunRows are the Runs Page's rows, newest first as kata lists them. now is when the start times are worded from and a running
@@ -194,7 +204,10 @@ type RunRow struct {
 func (m Model) RunRows(now time.Time) []RunRow {
 	rows := make([]RunRow, len(m.Runs.Runs))
 	for i, run := range m.Runs.Runs {
-		row := RunRow{Run: run, Name: run.Name(), Issue: run.IssueRef(), Executor: run.Executor(), Start: m.Calendar.Read(run.Started(), now)}
+		row := RunRow{Run: run, Name: run.Name(), Issue: run.IssueRef(), Executor: run.Executor(), Start: m.Calendar.Read(run.Started(), now), State: string(run.Status)}
+		if local, ok := m.LocalRunOf(run.UID); ok && m.IsLocalRun(run) && local.Held {
+			row.Held, row.Hold, row.State = true, holdWords(local.Hold), "held"
+		}
 		if d, ok := run.Duration(now); ok {
 			row.Duration = ShortDuration(d)
 		}
@@ -264,6 +277,8 @@ func (m Model) RunFacts(now time.Time) []RunFact {
 		return m.Calendar.Stamp(*t)
 	}
 	add("Status", string(run.Status))
+	hold, local := m.localFacts(*run)
+	facts = append(facts, hold...)
 	add("Job", run.JobName)
 	add("Workflow", run.WorkflowName)
 	add("Issue", run.IssueRef())
@@ -276,6 +291,7 @@ func (m Model) RunFacts(now time.Time) []RunFact {
 		add("Duration", ShortDuration(d))
 	}
 	add("Summary", strings.TrimSpace(run.Message))
+	facts = append(facts, local...)
 	add("Input tokens", count(run.InputTokens))
 	add("Output tokens", count(run.OutputTokens))
 	add("Occurrence", run.OccurrenceKey)
@@ -310,7 +326,8 @@ func enterRuns(m Model) (Model, []Cmd) {
 	m.Focus = ColumnList
 	m.Runs.ProjectID, m.Runs.Runs, m.Runs.More, m.Runs.Selected, m.Runs.Err = 0, nil, "", "", nil
 	m.Runs.ProjectArchived = false
-	return m, cmds
+	m, ask := m.askWorker(0)
+	return m, append(cmds, ask)
 }
 
 // runsOff leaves the Runs Page for the Issues Page, the keys on the list, and gives the detail column back.
@@ -347,7 +364,9 @@ func (m Model) settleRuns() (Model, []Cmd) {
 	}
 	m.Runs.stale, m.Runs.Loading = false, true
 	m.Runs.request++
-	return m, []Cmd{LoadRuns{Workspace: m.Workspace, ProjectID: id, JobUID: m.Runs.JobUID, Request: m.Runs.request}}
+	refresh := m.Runs.refresh
+	m.Runs.refresh = false
+	return m, []Cmd{LoadRuns{Workspace: m.Workspace, ProjectID: id, JobUID: m.Runs.JobUID, Request: m.Runs.request, Refresh: refresh}}
 }
 
 // runsLoaded applies the answer to the latest read: an older page is appended to the Runs held, the newest replaces them. A
@@ -363,6 +382,17 @@ func runsLoaded(m Model, msg RunsLoaded) Model {
 	}
 	m.Runs.ProjectArchived = msg.ProjectArchived
 	if msg.ProjectArchived {
+		return m.settleRunSelection()
+	}
+	if msg.Refresh {
+		// The newest page, read again: its Runs replace the ones held of the same uid and the older pages already read stay.
+		held := slices.DeleteFunc(slices.Clone(m.Runs.Runs), func(r Run) bool {
+			return slices.ContainsFunc(msg.Runs, func(n Run) bool { return n.UID == r.UID })
+		})
+		if len(held) == 0 {
+			m.Runs.More = msg.NextBefore
+		}
+		m.Runs.Runs = append(slices.Clone(msg.Runs), held...)
 		return m.settleRunSelection()
 	}
 	m.Runs.More = msg.NextBefore
@@ -432,9 +462,10 @@ func moveRun(m Model, action Action) Model {
 }
 
 // reloadRuns reads the newest Runs again.
-func reloadRuns(m Model) Model {
+func reloadRuns(m Model) (Model, []Cmd) {
 	m.Runs.stale = true
-	return m
+	m, cmd := m.askWorker(0)
+	return m, []Cmd{cmd}
 }
 
 // olderRuns asks for the next older page of Runs, when kata holds more.
