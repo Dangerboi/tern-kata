@@ -43,10 +43,11 @@ Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relat
 
 ## How it works
 
-The plugin has two halves:
+The plugin has three parts:
 
 - **`tern-kata`**: a Go program that runs in a Pane. It talks to kata's daemon and draws the Issue list and detail with Tern's own widgets, using the Tern Surface Protocol. Run outside Tern, it falls back to `kata tui`.
 - **Window plugin** (`window.luau`): adds **Open kata** to the palette and binds `F9`. Both open `tern-kata` in a split on the right, in the focused Pane's directory. It also opens kata links: `kata://<project>/<id>` or `https://kata.invalid/<project>/<id>` focuses the kata Pane in the current tab (or opens one there) and selects that Issue. A kata Pane in another tab is left alone.
+- **Host half** (`host.luau`): runs in Tern's session daemon, with or without a window, and keeps [the worker](#scheduled-agent-runs-the-worker) running. It does nothing until you create `worker.toml`.
 
 In a directory bound to a kata Project, `tern-kata` opens that Project's Issues. A directory is bound when it, or a parent up to the enclosing git root, contains a `.kata.toml`, which `kata init` creates. Anywhere else it opens Inbox beside the Menu sidebar, where you can switch to another view (Today, All Open, Logbook and others), browse your kata Projects or create a new one. In a bound directory the same Menu opens as a popup with `esc`, and `P` opens it straight at the list of Projects. Press `?` for the keybindings.
 
@@ -205,7 +206,16 @@ tern-kata worker status     # from another shell: what it serves, runs and refus
 tern-kata run <job-uid>     # run an adapter prompt job now
 ```
 
-State lives in `$XDG_STATE_HOME/tern-kata` (else `~/.local/state/tern-kata`): `worker.lock` (a second worker on the machine is refused), the control socket, each run's journal (`runs/<run uid>/run.json` with its prompt, session and output) and the pins. Across machines, the worker holds a lease for each Project in the Project's own kata metadata (`tern_kata.lease`, renewed every 3 minutes, expiring after 10): a Project whose lease another worker holds admits nothing here and `worker status` says which worker owns it; `tern-kata worker --takeover` moves it on purpose. Keeping the worker alive across logins is up to you for now (a systemd user unit or similar); a plugin host half that starts it is planned.
+State lives in `$XDG_STATE_HOME/tern-kata` (else `~/.local/state/tern-kata`): `worker.lock` (a second worker on the machine is refused), the control socket, each run's journal (`runs/<run uid>/run.json` with its prompt, session and output) and the pins. Across machines, the worker holds a lease for each Project in the Project's own kata metadata (`tern_kata.lease`, renewed every 3 minutes, expiring after 10): a Project whose lease another worker holds admits nothing here and `worker status` says which worker owns it; `tern-kata worker --takeover` moves it on purpose.
+
+
+**Supervision.** The plugin's host half starts `tern-kata worker` when `worker.toml` exists and keeps it running: it runs in Tern's session daemon, so it needs no window, and it starts the worker again whenever it exits, after 1 second, then 2, 4 and so on up to a minute between tries (a worker that stayed up for a minute starts the count over). When Tern's daemon starts, which a window does on demand and Tern's "Start at login" setting does at login, the host half starts the worker with it. Nothing starts the daemon at boot or after a quit by itself: with Tern not running, no worker runs. The host half finds `tern-kata` on the daemon's `PATH` or in the folder the install scripts use (`~/.local/bin`, `%LOCALAPPDATA%\Programs\tern-kata`, `$TERN_KATA_INSTALL_DIR`), and gives the worker the daemon's `PATH` plus those folders, Tern's bundled omp, `~/go/bin` and Homebrew's, so `omp` resolves even when Tern was started from a launcher with a short `PATH`. Its log lines (`tern-kata: worker started`, `the worker exited with status ...`) are in Tern's daemon log. `tern-kata worker status` says whether Tern supervises the worker or you started it by hand.
+
+A worker the daemon left running when it stopped keeps running (Tern does not stop its children), so after a daemon restart the host half's new attempts are refused by `worker.lock` until it ends, and then the next attempt starts a worker.
+
+This is the one supervision path tern-kata ships. A service of your own (a systemd user unit, a launchd agent) also works: create an empty `worker.manual` beside `worker.toml`, and the host half never starts a worker.
+
+**Turning supervision off.** Create an empty `worker.manual` next to `worker.toml` (or delete `worker.toml`): the host half starts no worker, and looks again every 10 seconds. It cannot stop a worker that already runs: end that one yourself, with the process id `worker status` prints (`kill <id>`, or `Stop-Process -Id <id>` on Windows). Create the marker first, or the host half starts a new one. Removing the marker turns supervision back on. `tern plugin remove tern-kata` or disabling the plugin in Tern's settings removes the host half altogether, together with the window half.
 
 The agent is told its Issue and how to leave a record: comment what it did, close the Issue with evidence when the work is verified. When it exits without closing, the worker comments its final message and labels the Issue `needs-review`. Exit status 0 after a finished turn is `succeeded`, anything else `failed`; a run over its timeout is stopped and failed as "timed out". A run whose prompt may have reached the agent when the worker stopped is held (`unknown` in kata, with the reason first in its summary), never repeated. Jobs this version does not run: workflows, notify jobs, and scheduled triggers (only `run` starts a run so far); `worker status` and `run` say so.
 
@@ -327,9 +337,9 @@ It builds `tern-kata_<os>_<arch>.tar.gz` (`.zip` for `windows`) for `linux`, `da
 
 A release build sets the version with `-ldflags "-X main.version=vX.Y.Z"`. Without it, `tern-kata --version` reports the Go module version (`go install …@vX.Y.Z`), or `dev` for an untagged build.
 
-`window.luau` is `--!strict`. To type-check it against the installed Tern's API (needs [luau-lsp](https://github.com/JohnnyMorganz/luau-lsp)):
+`window.luau` and `host.luau` are `--!strict`. To type-check it against the installed Tern's API (needs [luau-lsp](https://github.com/JohnnyMorganz/luau-lsp)):
 
 ```sh
 tern plugin types .  # writes tern.d.luau (gitignored; regenerate per Tern version)
-luau-lsp analyze --platform=standard --definitions=@tern=tern.d.luau --ignore=tern.d.luau window.luau
+luau-lsp analyze --platform=standard --definitions=@tern=tern.d.luau --ignore=tern.d.luau window.luau host.luau
 ```
