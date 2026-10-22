@@ -18,9 +18,15 @@ func TestPageBarShowsIssuesAndBoardAndKeysAndClicksSwitchPages(t *testing.T) {
 		}
 	}
 	for name, to := range map[string]func(driver.State) driver.State{
-		"key":   func(s driver.State) driver.State { return feed(t, s, key("2"), model.LanesLoaded{ProjectUID: "p"}).State },
-		"click": func(s driver.State) driver.State { return feed(t, s, click(view.PageTabID("board"), view.KeyClick("2")), model.LanesLoaded{ProjectUID: "p"}).State },
-		"b":     func(s driver.State) driver.State { return feed(t, s, key("b"), model.LanesLoaded{ProjectUID: "p"}).State },
+		"key": func(s driver.State) driver.State {
+			return feed(t, s, key("2"), model.LanesLoaded{ProjectUID: "p"}).State
+		},
+		"click": func(s driver.State) driver.State {
+			return feed(t, s, click(view.PageTabID("board"), view.KeyClick("2")), model.LanesLoaded{ProjectUID: "p"}).State
+		},
+		"b": func(s driver.State) driver.State {
+			return feed(t, s, key("b"), model.LanesLoaded{ProjectUID: "p"}).State
+		},
 	} {
 		board := to(s)
 		if board.Model.Page != model.PageBoard {
