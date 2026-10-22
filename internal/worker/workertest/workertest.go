@@ -4,6 +4,7 @@ package workertest
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -89,9 +90,15 @@ type Job struct {
 	Catchup      string
 	GraceSeconds *int64
 	Disabled     bool
+	// Notify makes the job a notify job on ExistingUID (or on Trigger.IssueUID for an Issue-date trigger) instead of a
+	// prompt job.
+	Notify *Notify
 	// ScheduledOffset and DeadlineOffset are the per-run Issue's date offsets in seconds.
 	ScheduledOffset, DeadlineOffset *int64
 }
+
+// Notify is a notify action: the inbox address (or "current-owner-or-author") and the text.
+type Notify struct{ Recipient, Message string }
 
 // Seconds is a pointer to n, for the optional numeric fields of Job.
 func Seconds(n int64) *int64 { return &n }
@@ -116,11 +123,22 @@ func (j Job) definition() g.CronJobDefinition {
 		if t.IntervalSeconds != 0 {
 			trigger.IntervalSeconds = &t.IntervalSeconds
 		}
+		trigger.IssueUID = optional(t.IssueUID)
+		if t.Kind == "issue-deadline" {
+			trigger.LeadSeconds = &t.LeadSeconds
+		}
 	}
 	def := g.CronJobDefinition{
 		Version: 1, Kind: "job", Enabled: !j.Disabled, Trigger: trigger,
 		Action: g.Action{Kind: "execute", Prompt: &j.Prompt}, Issue: policy, Overlap: j.Overlap, Catchup: j.Catchup, GraceSeconds: j.GraceSeconds,
 		SecretRefs: j.Secrets,
+	}
+	if n := j.Notify; n != nil {
+		def.Action = g.Action{Kind: "notify", Recipient: &n.Recipient, Message: optional(n.Message)}
+		def.Issue, def.GraceSeconds = nil, j.GraceSeconds
+		if j.ExistingUID != "" {
+			def.Issue = &g.IssuePolicy{Kind: "existing", UID: &j.ExistingUID}
+		}
 	}
 	if j.Profile != "" {
 		def.Options = map[string]any{"profile": j.Profile}
@@ -195,6 +213,34 @@ func (d *Daemon) PlanningDates(t *testing.T, p worker.Project, issueUID string) 
 		deadline = dl.Instant
 	}
 	return scheduled, deadline
+}
+
+// SetIssueDate sets the Issue's scheduled_on or deadline_on to the minute containing t, read by kata as UTC.
+func (d *Daemon) SetIssueDate(t *testing.T, p worker.Project, issueUID, field string, at time.Time) {
+	t.Helper()
+	actor := "tester"
+	value := at.UTC().Format("2006-01-02T15:04")
+	if _, err := d.Client.PatchIssueMetadataWithResponse(context.Background(), &g.PatchIssueMetadataRequestOptions{
+		PathParams: &g.PatchIssueMetadataPath{ProjectID: p.ID, Ref: issueUID}, Body: &g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{field: value}},
+	}); err != nil {
+		t.Fatalf("setting %s of %s: %v", field, issueUID, err)
+	}
+}
+
+// InboxRequest is the notification an Issue holds for a recipient: its sender and text, ok false when there is none.
+func (d *Daemon) InboxRequest(t *testing.T, p worker.Project, issueUID, recipient string) (from, message string, ok bool) {
+	t.Helper()
+	r, err := d.Client.ShowIssueWithResponse(context.Background(), &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: p.ID, Ref: issueUID}})
+	if err != nil || r.JSON200 == nil {
+		t.Fatalf("reading Issue %s: %v", issueUID, err)
+	}
+	slot, _ := r.JSON200.Issue.Metadata["notify."+base64.RawURLEncoding.EncodeToString([]byte(recipient))].(map[string]any)
+	if slot == nil {
+		return "", "", false
+	}
+	from, _ = slot["from"].(string)
+	message, _ = slot["message"].(string)
+	return from, message, true
 }
 
 // CreateNativeJob creates a recurring-child job under parent, which kata's daemon delivers and the worker never runs.

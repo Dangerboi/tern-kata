@@ -100,9 +100,13 @@ func parseCron(t Trigger) (cron.Schedule, error) {
 	return schedule, nil
 }
 
-// newTrigger builds the job's trigger. A nil trigger with no error means the job schedules nothing here: a manual job
-// runs only on request, and trigger kinds this evaluator does not own yet (issue dates) are left to their own source.
-func newTrigger(job Job) (trigger, error) {
+// isIssueDate reports whether the trigger fires on an Issue's planning date.
+func (t Trigger) isIssueDate() bool { return t.Kind == "issue-scheduled" || t.Kind == "issue-deadline" }
+
+// newTrigger builds the job's trigger. date is the instant an Issue-date trigger fires at (see Worker.issueDate). A nil
+// trigger with no error means the job schedules nothing here: a manual job runs only on request, and an Issue-date job
+// waits while its Issue has no such date.
+func newTrigger(job Job, date time.Time) (trigger, error) {
 	t := job.Definition.Trigger
 	switch t.Kind {
 	case "cron":
@@ -125,15 +129,30 @@ func newTrigger(job Job) (trigger, error) {
 			return nil, errors.New("once requires an RFC3339 instant")
 		}
 		return onceTrigger{at.UTC()}, nil
+	case "issue-scheduled", "issue-deadline":
+		if date.IsZero() {
+			return nil, nil
+		}
+		return onceTrigger{date}, nil // an Issue date is one instant; a changed date is a new trigger
 	}
 	return nil, nil
 }
 
 // schedulable reports whether the worker plans occurrences for the job. Native jobs belong to kata's daemon, disabled
-// and deleted jobs schedule nothing, and notify jobs are not run yet.
+// and deleted jobs schedule nothing, and so does the one notify job kata's own date sweeper already delivers: a
+// zero-lead `current-owner-or-author` notification on an Issue date (ADR-0011).
 func schedulable(job Job) bool {
 	d := job.Definition
-	return !job.Deleted && !job.IsNative() && d.Enabled && d.ActionKind == "execute"
+	if job.Deleted || job.IsNative() || !d.Enabled {
+		return false
+	}
+	switch d.ActionKind {
+	case "execute":
+		return true
+	case "notify":
+		return !(d.Trigger.isIssueDate() && d.Trigger.LeadSeconds == 0 && d.Recipient == currentOwnerOrAuthor)
+	}
+	return false
 }
 
 // busyError is a refusal that waiting cures: the Project is full or the job's overlap gate is closed.
@@ -150,6 +169,7 @@ type jobSchedule struct {
 	trig     trigger
 	why      string // the definition's trigger can't be scheduled
 	through  time.Time
+	date     time.Time // the instant an Issue-date trigger last fired at, the zero time when its Issue has none
 	pending  []time.Time // occurrences to run, oldest first
 	next     time.Time
 	lastErr  string
@@ -161,6 +181,7 @@ type checkpoint struct {
 	Version            int         `json:"version"`
 	DefinitionEventUID string      `json:"definition_event_uid"`
 	Through            time.Time   `json:"through"`
+	Date               time.Time   `json:"date,omitzero"` // the Issue-date trigger's instant the pending work belongs to
 	Pending            []time.Time `json:"pending,omitempty"`
 }
 
@@ -182,7 +203,7 @@ func (w *Worker) loadCheckpoint(ps *projectState, jobUID string) (checkpoint, bo
 }
 
 func (w *Worker) saveCheckpoint(ps *projectState, jobUID string, st *jobSchedule) {
-	raw, _ := json.Marshal(checkpoint{Version: 1, DefinitionEventUID: st.defEvent, Through: st.through, Pending: st.pending})
+	raw, _ := json.Marshal(checkpoint{Version: 1, DefinitionEventUID: st.defEvent, Through: st.through, Date: st.date, Pending: st.pending})
 	path := w.checkpointPath(ps, jobUID)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err == nil {
 		err = replaceFile(path, raw)
@@ -242,14 +263,28 @@ func (w *Worker) plan(ps *projectState, job Job, now time.Time) {
 		st = &jobSchedule{}
 		ps.sched[job.UID] = st
 		if c, ok := w.loadCheckpoint(ps, job.UID); ok {
-			st.defEvent, st.through, st.pending = c.DefinitionEventUID, c.Through, c.Pending
+			st.defEvent, st.through, st.date, st.pending = c.DefinitionEventUID, c.Through, c.Date, c.Pending
 		}
 	}
 	changed := false
 	if st.through.IsZero() { // first sight: work starts at the later of now and the job's creation
 		st.through, changed = maxTime(now, job.CreatedAt), true
 	}
-	if st.defEvent != job.DefinitionEventUID || st.trig == nil && st.why == "" {
+	dateChanged := false
+	if job.Definition.Trigger.isIssueDate() {
+		if at, known := w.issueDate(ps, job); known && !at.Equal(st.date) {
+			// The Issue's date moved: work waiting for the old value is stale, and an earlier date that is already
+			// behind the checkpoint is evaluated again under the catchup policy.
+			if len(st.pending) > 0 {
+				w.opt.Log("Project %s: the date of job %s changed; %d waiting occurrence(s) dropped", ps.cfg.Name, job.Name, len(st.pending))
+			}
+			if !st.date.IsZero() && !at.IsZero() && at.Before(st.through) {
+				st.through = at.Add(-time.Nanosecond)
+			}
+			st.pending, st.date, changed, dateChanged = nil, at, true, true
+		}
+	}
+	if st.defEvent != job.DefinitionEventUID || st.trig == nil && st.why == "" || dateChanged {
 		if st.defEvent != job.DefinitionEventUID && len(st.pending) > 0 { // a changed definition supersedes unadmitted work
 			w.opt.Log("Project %s: job %s changed; %d waiting occurrence(s) dropped", ps.cfg.Name, job.Name, len(st.pending))
 		}
@@ -257,7 +292,7 @@ func (w *Worker) plan(ps *projectState, job Job, now time.Time) {
 			st.pending, st.defEvent, changed = nil, job.DefinitionEventUID, true
 		}
 		var err error
-		st.trig, err = newTrigger(job)
+		st.trig, err = newTrigger(job, st.date)
 		st.why = ""
 		if err != nil {
 			st.why = err.Error()
@@ -313,6 +348,7 @@ func (w *Worker) tick(ctx context.Context, ps *projectState) time.Time {
 		ps.sched = map[string]*jobSchedule{}
 	}
 	now := w.clock.Now()
+	w.refreshDates(ctx, ps)
 	if !w.planAll(ps, now) {
 		return time.Time{}
 	}
@@ -424,5 +460,69 @@ func (w *Worker) admitDue(ctx context.Context, ps *projectState) {
 			st.lastErr = msg
 			w.opt.Log("Project %s: %s", ps.cfg.Name, msg)
 		}
+	}
+}
+
+// issueDates is what the worker last read of one Issue's planning dates.
+type issueDates struct {
+	at        time.Time // when the read succeeded
+	scheduled time.Time
+	deadline  time.Time
+}
+
+// datesStale is how long a read stays good without an Issue event, a net for a dropped event stream.
+const datesStale = 5 * time.Minute
+
+// issueDate is the instant an Issue-date job fires at: the Issue's scheduled date, or its deadline less the trigger's
+// lead. known is false until the worker has read the Issue's dates; a date the Issue lacks is known and zero.
+func (w *Worker) issueDate(ps *projectState, job Job) (at time.Time, known bool) {
+	t := job.Definition.Trigger
+	d, ok := ps.dates[t.IssueUID]
+	if !ok {
+		return time.Time{}, false
+	}
+	if t.Kind == "issue-scheduled" {
+		return d.scheduled, true
+	}
+	if d.deadline.IsZero() {
+		return time.Time{}, true
+	}
+	return d.deadline.Add(-time.Duration(t.LeadSeconds) * time.Second), true
+}
+
+// refreshDates reads the planning dates of every Issue an Issue-date job watches: once, again when the Project's event
+// stream reports an Issue change, and at least every datesStale. A failed read keeps the last good dates (ADR-0011).
+func (w *Worker) refreshDates(ctx context.Context, ps *projectState) {
+	dirty := ps.datesDirty.Swap(false)
+	w.mu.Lock()
+	var issues []string
+	for _, j := range ps.jobs {
+		if schedulable(j) && j.Definition.Trigger.isIssueDate() && !slices.Contains(issues, j.Definition.Trigger.IssueUID) {
+			issues = append(issues, j.Definition.Trigger.IssueUID)
+		}
+	}
+	w.mu.Unlock()
+	now := w.clock.Now()
+	if ps.dates == nil {
+		ps.dates = map[string]issueDates{}
+	}
+	for uid := range ps.dates {
+		if !slices.Contains(issues, uid) {
+			delete(ps.dates, uid)
+		}
+	}
+	for _, uid := range issues {
+		if have, ok := ps.dates[uid]; ok && !dirty && now.Sub(have.at) < datesStale {
+			continue
+		}
+		read, err := w.opt.Kata.PlanningDates(ctx, ps.project.ID, uid)
+		if err != nil {
+			if ctx.Err() == nil {
+				w.opt.Log("Project %s: reading the planning dates of Issue %s: %v", ps.cfg.Name, uid, err)
+			}
+			ps.datesDirty.Store(true) // try again at the next look
+			continue
+		}
+		ps.dates[uid] = issueDates{at: now, scheduled: read.Scheduled, deadline: read.Deadline}
 	}
 }
