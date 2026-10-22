@@ -305,12 +305,12 @@ type JobFormState struct {
 	// Conflict is the newer job a save found: nothing was written, the draft stays, and the card asks what to do.
 	Conflict *CronJob
 	// Kind and Trigger are the ids of the kind and the trigger of the job.
-	Kind, Trigger                                               string
-	Name, Cron, Zone, Interval, Parent, Title, Body, Recipient  string
-	Message, Grace                                              string
-	Catchup                                                     string
-	Enabled                                                     bool
-	Err                                                         error
+	Kind, Trigger                                              string
+	Name, Cron, Zone, Interval, Parent, Title, Body, Recipient string
+	Message, Grace                                             string
+	Catchup                                                    string
+	Enabled                                                    bool
+	Err                                                        error
 }
 
 func (f JobFormState) kind() jobKind {

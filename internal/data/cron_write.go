@@ -153,8 +153,8 @@ func wireDefinition(d model.CronDefinition) g.CronJobDefinition {
 	t, a := d.Trigger, d.Action
 	wire := g.CronJobDefinition{
 		Version: 1, Kind: "job", Enabled: d.Enabled, Overlap: d.Overlap, Catchup: d.Catchup,
-		Trigger: g.Trigger{Kind: t.Kind, Cron: textOrNil(t.Cron), At: textOrNil(t.At), IssueUID: textOrNil(t.IssueUID), Timezone: textOrNil(t.Timezone)},
-		Action:  g.Action{Kind: a.Kind, Message: textOrNil(a.Message), Recipient: textOrNil(a.Recipient), Prompt: textOrNil(a.Prompt), WorkflowUID: textOrNil(a.WorkflowUID)},
+		Trigger:      g.Trigger{Kind: t.Kind, Cron: textOrNil(t.Cron), At: textOrNil(t.At), IssueUID: textOrNil(t.IssueUID), Timezone: textOrNil(t.Timezone)},
+		Action:       g.Action{Kind: a.Kind, Message: textOrNil(a.Message), Recipient: textOrNil(a.Recipient), Prompt: textOrNil(a.Prompt), WorkflowUID: textOrNil(a.WorkflowUID)},
 		GraceSeconds: positiveOrNil(d.GraceSeconds), TimeoutSeconds: positiveOrNil(d.TimeoutSeconds), CheckoutKey: textOrNil(d.CheckoutKey),
 		Options: d.Options,
 	}

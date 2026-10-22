@@ -254,10 +254,10 @@ func TestJobCardPreviewsTheScheduleInWordsAndTheNextThreeRuns(t *testing.T) {
 
 func TestJobCardRefusesInvalidInputNamingTheFieldAndSendsNothing(t *testing.T) {
 	for _, tt := range []struct {
-		name  string
+		name   string
 		break_ func(*testing.T, driver.State) driver.State
-		field model.Field
-		want  string
+		field  model.Field
+		want   string
 	}{
 		{"cron expression", func(t *testing.T, s driver.State) driver.State { return set(t, s, model.JobFieldCron, "nonsense") }, model.JobFieldCron, "Cron expression"},
 		{"time zone", func(t *testing.T, s driver.State) driver.State { return set(t, s, model.JobFieldZone, "Mars/Olympus") }, model.JobFieldZone, "Time zone"},
@@ -268,7 +268,9 @@ func TestJobCardRefusesInvalidInputNamingTheFieldAndSendsNothing(t *testing.T) {
 		{"blank child title", func(t *testing.T, s driver.State) driver.State { return set(t, s, model.JobFieldTitle, "") }, model.JobFieldTitle, "Child title"},
 		{"blank name", func(t *testing.T, s driver.State) driver.State { return set(t, s, model.JobFieldName, "") }, model.JobFieldName, "Name"},
 		{"blank parent", func(t *testing.T, s driver.State) driver.State { return set(t, s, model.JobFieldParent, "") }, model.JobFieldParent, "Parent Issue"},
-		{"recipient with a space", func(t *testing.T, s driver.State) driver.State { return set(t, s, model.JobFieldRecipient, "two words") }, model.JobFieldRecipient, "Inbox recipient"},
+		{"recipient with a space", func(t *testing.T, s driver.State) driver.State {
+			return set(t, s, model.JobFieldRecipient, "two words")
+		}, model.JobFieldRecipient, "Inbox recipient"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			s := tt.break_(t, newJobCard(t))
