@@ -170,7 +170,7 @@ var mainActions = []actionEntry{
 	// Moving and opening in the Issue list.
 	{action: MoveDown, modes: listModes, keys: slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), help: "move", footer: listModes, footerKey: "↑↓", sheet: []sheetLine{{sheetGraph, 2, "down"}}, handle: selection(MoveDown)},
 	{action: MoveUp, modes: listModes, keys: slices.Concat(keys("k", "k/↑", "up", "↑"), emacsUp), help: "previous Issue", sheet: []sheetLine{{sheetGraph, 1, "up"}}, handle: selection(MoveUp)},
-	{action: DrillIn, modes: listModes, keys: keys("enter", "enter"), help: "open", footer: listModes, footerKey: "↵", sheet: []sheetLine{{sheetGraph, 7, "open detail"}}, handle: pure(drillIn)},
+	{action: DrillIn, modes: listModes, keys: keys("enter", "enter"), help: "open", footer: listModes, footerKey: "↵", sheet: []sheetLine{{sheetGraph, 7, "open detail"}}, handle: drillIn},
 	{action: FocusDetail, modes: listModes, keys: keys("tab", "tab"), help: "detail", footer: listModes, handle: pure(func(m Model) Model {
 		if m.CanFocusDetail() {
 			m.Focus = ColumnDetail
@@ -238,7 +238,7 @@ var mainActions = []actionEntry{
 	{action: MoveUp, modes: []Mode{ModeDetail}, keys: slices.Concat(keys("k", "k"), emacsUp), help: "previous row", sheet: []sheetLine{{sheetChildren, 3, "move child cursor"}}, handle: cursorMoving(MoveUp)},
 	{action: NextActivityTab, modes: []Mode{ModeDetail}, keys: keys("tab", "↹"), help: "tab", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 1, "next tab"}}, handle: pure(func(m Model) Model { return m.cycleTab(true) })},
 	{action: PreviousActivityTab, modes: []Mode{ModeDetail}, keys: keys("shift+tab", "shift+tab"), help: "previous tab", sheet: []sheetLine{{sheetDetail, 2, "prev tab"}}, handle: pure(func(m Model) Model { return m.cycleTab(false) })},
-	{action: DrillIn, modes: []Mode{ModeDetail}, keys: keys("enter", "↵"), help: "open", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 3, "jump to referenced issue"}, {sheetChildren, 6, "open child"}}, handle: pure(drillIn)},
+	{action: DrillIn, modes: []Mode{ModeDetail}, keys: keys("enter", "↵"), help: "open", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 3, "jump to referenced issue or open the Cron job"}, {sheetChildren, 6, "open child"}}, handle: drillIn},
 	{action: PageUp, modes: []Mode{ModeDetail}, keys: pageUpKeys, help: "scroll page up", handle: scrolling(ColumnDetail, ScrollPageUp)},
 	{action: PageDown, modes: []Mode{ModeDetail}, keys: pageDownKeys, help: "page", footer: []Mode{ModeDetail}, footerKey: "pgup/pgdn", handle: scrolling(ColumnDetail, ScrollPageDown)},
 	{action: MoveFirst, modes: []Mode{ModeDetail}, keys: keys("g", "g", "home", "home"), help: "first row", handle: cursorMoving(MoveFirst)},
