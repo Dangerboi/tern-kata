@@ -62,7 +62,9 @@ type DoctorOptions struct {
 // Doctor checks the config, the machine and kata, and says what is missing and how to fix it. It writes nothing.
 func Doctor(ctx context.Context, o DoctorOptions) Report {
 	var r Report
-	add := func(level, subject, detail, fix string) { r.Checks = append(r.Checks, Check{level, subject, detail, fix}) }
+	add := func(level, subject, detail, fix string) {
+		r.Checks = append(r.Checks, Check{level, subject, detail, fix})
+	}
 	if o.Clock == nil {
 		o.Clock = SystemClock{}
 	}

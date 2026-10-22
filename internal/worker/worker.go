@@ -42,8 +42,8 @@ type Worker struct {
 	pid     int
 
 	ctx    context.Context // set by Run; every run goroutine ends with it
-	halted atomic.Bool    // set when a test hook killed the worker: no run work happens after it
-	mu  sync.Mutex      // guards every projectState field and pendingTotal
+	halted atomic.Bool     // set when a test hook killed the worker: no run work happens after it
+	mu     sync.Mutex      // guards every projectState field and pendingTotal
 	// pendingTotal counts slots reserved across Projects (worker-wide max_active_runs).
 	projects []*projectState
 	runs     sync.WaitGroup

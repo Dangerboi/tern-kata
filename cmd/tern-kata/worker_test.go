@@ -49,7 +49,9 @@ func (f workerFixture) serve(t *testing.T) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- runWorkerCommand(ctx, LaunchPlan{Subcommand: "worker", Actor: "fallback"}, f.env, io.Discard) }()
+	go func() {
+		done <- runWorkerCommand(ctx, LaunchPlan{Subcommand: "worker", Actor: "fallback"}, f.env, io.Discard)
+	}()
 	t.Cleanup(func() {
 		cancel()
 		select {
@@ -227,11 +229,11 @@ func TestPlanLaunchWorkerSubcommands(t *testing.T) {
 		}
 	}
 	for args, want := range map[string]string{
-		"run":                    "usage: tern-kata run <job-uid>",
-		"run a b":                "usage: tern-kata run <job-uid>",
-		"worker stop":            "usage: tern-kata worker",
+		"run":                      "usage: tern-kata run <job-uid>",
+		"run a b":                  "usage: tern-kata run <job-uid>",
+		"worker stop":              "usage: tern-kata worker",
 		"worker status --takeover": "--takeover applies to `tern-kata worker` only",
-		"run x --takeover":       "run: unknown flag --takeover",
+		"run x --takeover":         "run: unknown flag --takeover",
 	} {
 		_, err := PlanLaunch(strings.Fields(args), lookupFrom(nil), "v")
 		if _, is := err.(subcommandError); !is || !strings.Contains(err.Error(), want) {

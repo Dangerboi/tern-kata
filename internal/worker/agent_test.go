@@ -100,7 +100,9 @@ func golden(t *testing.T, path, got string) {
 }
 
 func TestAgentArgsKeepAProfilesOwnApprovalMode(t *testing.T) {
-	has := func(args []string, want string) bool { return strings.Contains(" "+strings.Join(args, " ")+" ", " "+want+" ") }
+	has := func(args []string, want string) bool {
+		return strings.Contains(" "+strings.Join(args, " ")+" ", " "+want+" ")
+	}
 	def := agentArgs(Profile{Model: "m", Thinking: "low"}, "/run", "/run/prompt.md", "")
 	if !has(def, "--approval-mode yolo") || !has(def, "--model m") || !has(def, "--thinking low") || def[len(def)-1] != "@/run/prompt.md" {
 		t.Fatalf("default args %v", def)

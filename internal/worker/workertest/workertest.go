@@ -136,8 +136,8 @@ func (d *Daemon) CreateNativeJob(t *testing.T, p worker.Project, name, parentUID
 	actor := "tester"
 	def := g.CronJobDefinition{
 		Version: 1, Kind: "job", Enabled: true, Trigger: g.Trigger{Kind: "interval", IntervalSeconds: ptr(int64(3600))},
-		Action: g.Action{Kind: "notify", Recipient: ptr("current-owner-or-author")},
-		Issue:  &g.IssuePolicy{Kind: "per-run", ParentUID: &parentUID, Title: ptr("Child")},
+		Action:  g.Action{Kind: "notify", Recipient: ptr("current-owner-or-author")},
+		Issue:   &g.IssuePolicy{Kind: "per-run", ParentUID: &parentUID, Title: ptr("Child")},
 		Overlap: "allow", Catchup: "all",
 	}
 	if _, err := d.Client.CreateCronJobWithResponse(context.Background(), &g.CreateCronJobRequestOptions{
@@ -205,7 +205,9 @@ type waiter struct {
 }
 
 // NewManualClock starts at the real now, so timestamps kata also stamps stay comparable.
-func NewManualClock() *ManualClock { return &ManualClock{now: time.Now().UTC().Truncate(time.Millisecond)} }
+func NewManualClock() *ManualClock {
+	return &ManualClock{now: time.Now().UTC().Truncate(time.Millisecond)}
+}
 
 func (c *ManualClock) Now() time.Time {
 	c.mu.Lock()

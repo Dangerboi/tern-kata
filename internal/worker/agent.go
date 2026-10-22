@@ -160,15 +160,15 @@ const MaxPromptBytes = 256 << 10
 
 // PromptInput is what a prompt step's text is built from.
 type PromptInput struct {
-	Actor       string
-	IssueRef    string // qualified: <project>#<short id>
-	IssueTitle  string
-	IssueBody   string
+	Actor         string
+	IssueRef      string // qualified: <project>#<short id>
+	IssueTitle    string
+	IssueBody     string
 	ExistingIssue bool
-	JobName     string
-	RunUID      string
-	Occurrence  string
-	Task        string
+	JobName       string
+	RunUID        string
+	Occurrence    string
+	Task          string
 }
 
 // BuildPrompt is the prompt of a prompt-job run, in ADR-0009's order: the run's Issue, the job and run identity, the

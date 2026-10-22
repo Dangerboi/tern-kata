@@ -368,7 +368,7 @@ func (k *Kata) Observe(ctx context.Context, projectID int64, o Observation) (Run
 	body := &g.ObserveCronRunBody{
 		Actor: &o.Actor, JobUID: &o.JobUID, DefinitionEventUID: &o.DefinitionEventUID, OccurrenceKey: &o.OccurrenceKey,
 		IssueUID: &o.IssueUID, ExecutorLabel: &o.Executor, Status: g.ObserveCronRunBodyStatus(o.Status),
-		Summary: g.Summary{Version: 1, Message: &msg, InputTokens: o.InputTokens, OutputTokens: o.OutputTokens},
+		Summary:   g.Summary{Version: 1, Message: &msg, InputTokens: o.InputTokens, OutputTokens: o.OutputTokens},
 		StartedAt: &o.StartedAt, EndedAt: o.EndedAt, ExpectedRevision: o.ExpectedRevision,
 	}
 	r, err := k.c.ObserveCronRunWithResponse(ctx, &g.ObserveCronRunRequestOptions{PathParams: &g.ObserveCronRunPath{ProjectID: projectID, RunUID: o.RunUID}, Body: body})

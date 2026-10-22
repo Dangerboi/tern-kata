@@ -85,16 +85,16 @@ type Journal struct {
 	ProjectName string `json:"project_name"`
 
 	// The job as it was when the run was prepared; later edits never change a prepared run.
-	JobUID             string        `json:"job_uid"`
-	JobName            string        `json:"job_name"`
-	DefinitionEventUID string        `json:"definition_event_uid"`
-	Prompt             string        `json:"prompt"`
-	IssuePolicy        IssuePolicy   `json:"issue_policy"`
+	JobUID             string            `json:"job_uid"`
+	JobName            string            `json:"job_name"`
+	DefinitionEventUID string            `json:"definition_event_uid"`
+	Prompt             string            `json:"prompt"`
+	IssuePolicy        IssuePolicy       `json:"issue_policy"`
 	SecretRefs         map[string]string `json:"secret_refs,omitempty"`
-	ProfileName        string        `json:"profile_name"`
-	Profile            Profile       `json:"profile"`
-	Checkout           string        `json:"checkout,omitempty"`
-	TimeoutSeconds     int64         `json:"timeout_seconds"`
+	ProfileName        string            `json:"profile_name"`
+	Profile            Profile           `json:"profile"`
+	Checkout           string            `json:"checkout,omitempty"`
+	TimeoutSeconds     int64             `json:"timeout_seconds"`
 
 	OccurrenceKey string    `json:"occurrence_key"`
 	Occurrence    time.Time `json:"occurrence"`

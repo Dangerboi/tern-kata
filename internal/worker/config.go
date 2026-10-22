@@ -60,12 +60,12 @@ func (d Dirs) ProjectDir(projectUID string) string {
 // Config is worker.toml, strictly decoded (ADR-0010). It names what the worker may serve and holds no secret value.
 type Config struct {
 	// Executor labels this worker's runs and its Project leases; unique and stable, at most 256 bytes, no whitespace.
-	Executor  string                 `toml:"executor"`
-	Actor     string                 `toml:"actor"`
-	Limits    Limits                 `toml:"limits"`
-	Projects  []ProjectConfig        `toml:"projects"`
-	Checkouts map[string]string      `toml:"checkouts"`
-	Profiles  map[string]Profile     `toml:"profiles"`
+	Executor  string                  `toml:"executor"`
+	Actor     string                  `toml:"actor"`
+	Limits    Limits                  `toml:"limits"`
+	Projects  []ProjectConfig         `toml:"projects"`
+	Checkouts map[string]string       `toml:"checkouts"`
+	Profiles  map[string]Profile      `toml:"profiles"`
 	Secrets   map[string]SecretSource `toml:"secrets"`
 }
 

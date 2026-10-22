@@ -34,7 +34,9 @@ func newWorkerEnv() (workerEnv, error) {
 }
 
 // isWorkerCommand reports whether the plan is `run` or one of the `worker` forms, which need no workspace or gateway.
-func isWorkerCommand(plan LaunchPlan) bool { return plan.Subcommand == "run" || plan.Subcommand == "worker" }
+func isWorkerCommand(plan LaunchPlan) bool {
+	return plan.Subcommand == "run" || plan.Subcommand == "worker"
+}
 
 // runWorkerCommand runs `run <job-uid>`, `worker status`, `worker doctor` or the foreground worker.
 func runWorkerCommand(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Writer) error {
