@@ -27,7 +27,6 @@ const (
 	EditJobAction     Action = "edit-job"
 	PauseJobAction    Action = "pause-job"
 	ArchiveJobAction  Action = "archive-job"
-	RestoreJobAction  Action = "restore-job"
 
 	JobNext           Action = "job-next-field"
 	JobPrevious       Action = "job-previous-field"

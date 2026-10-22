@@ -392,13 +392,14 @@ func TestPauseResumeArchiveAndRestoreAreGuardedWritesThatWaitForTheirAnswer(t *t
 	listed := step(t, s, key("a"))
 	load, _ := askedJobs(listed.Cmds)
 	s = step(t, listed.State, model.JobsLoaded{Request: load.Request, Jobs: []model.CronJob{gone}}).State
-	restoring := step(t, s, key("shift+r"))
+	wantText(t, "archived footer", footerText(t, s), "restore")
+	restoring := step(t, s, key("x"))
 	var restore model.RestoreJobCmd
 	for _, cmd := range restoring.Cmds {
 		restore, _ = cmd.(model.RestoreJobCmd)
 	}
 	if restore.UID != "J1" || restore.ExpectedEventUID != "EV4" {
-		t.Fatalf("r sent %#v", restoring.Cmds)
+		t.Fatalf("x on an archived job sent %#v", restoring.Cmds)
 	}
 	back := on
 	back.DefinitionEventUID = "EV5"
@@ -408,16 +409,13 @@ func TestPauseResumeArchiveAndRestoreAreGuardedWritesThatWaitForTheirAnswer(t *t
 
 func TestJobKeysThatDoNotApplyExplainInsteadOfWriting(t *testing.T) {
 	s := jobsPane(t, 160, guarded("J1", "Weekly", "EV1"))
-	if out := step(t, s, key("shift+r")); len(out.Cmds) != 0 || !strings.Contains(out.State.Model.Notice, "not archived") {
-		t.Errorf("r on a live job: cmds %#v notice %q", out.Cmds, out.State.Model.Notice)
-	}
 	retired := guarded("J2", "Old", "EV1")
 	at := now
 	retired.DeletedAt = &at
 	on := step(t, s, key("a"))
 	load, _ := askedJobs(on.Cmds)
 	s = step(t, on.State, model.JobsLoaded{Request: load.Request, Jobs: []model.CronJob{retired}}).State
-	for _, c := range []string{"p", "x"} {
+	for _, c := range []string{"p"} {
 		if out := step(t, s, key(c)); len(out.Cmds) != 0 || out.State.Model.Notice == "" {
 			t.Errorf("%s on an archived job: cmds %#v notice %q", c, out.Cmds, out.State.Model.Notice)
 		}
@@ -441,9 +439,9 @@ func TestAPauseAgainstAJobChangedMeanwhileWritesNothingAndShowsTheNewerJob(t *te
 
 func TestJobKeysAreOnTheFooterAndTheHelpSheet(t *testing.T) {
 	s := jobsPane(t, 160, guarded("J1", "Weekly", "EV1"))
-	wantText(t, "Jobs Page footer", footerText(t, s), "new job", "edit job", "pause or resume", "archive", "restore")
+	wantText(t, "Jobs Page footer", footerText(t, s), "new job", "edit job", "pause or resume", "archive")
 	help := wireTextOf(t, feed(t, s, key("?")).State)
-	wantText(t, "help sheet", help, "new job (Job card)", "edit the selected job", "pause or resume the selected job", "archive the selected job", "restore an archived job", "new recurring job on the selected Issue")
+	wantText(t, "help sheet", help, "new job (Job card)", "edit the selected job", "pause or resume the selected job", "archive the selected job, or restore it", "new recurring job on the selected Issue")
 	card := step(t, s, key("n")).State
 	wantText(t, "card footer", footerText(t, card), "save job", "cancel", "next field")
 }

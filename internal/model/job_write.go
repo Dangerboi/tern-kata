@@ -149,30 +149,17 @@ func writeJobEnabled(m Model, job CronJob, enabled bool) (Model, []Cmd) {
 		ExpectedEventUID: job.DefinitionEventUID, Name: job.Name, Definition: def}}
 }
 
-// archiveJob is `x` on the Jobs Page.
+// archiveJob is `x` on the Jobs Page: it archives a live job and restores an archived one, which the list shows only when asked.
 func archiveJob(m Model) (Model, []Cmd) {
 	m, job, ok := writableJob(m)
 	if !ok {
 		return m, nil
 	}
+	m.Jobs.Writing = job.UID
 	if job.Archived() {
-		return refuse(m, "The job is already archived; R restores it.")
+		return m, []Cmd{RestoreJobCmd{Workspace: m.Workspace, ProjectID: m.Jobs.ProjectID, Actor: m.Actor, UID: job.UID, ExpectedEventUID: job.DefinitionEventUID}}
 	}
-	m.Jobs.Writing = job.UID
 	return m, []Cmd{ArchiveJobCmd{Workspace: m.Workspace, ProjectID: m.Jobs.ProjectID, Actor: m.Actor, UID: job.UID, ExpectedEventUID: job.DefinitionEventUID}}
-}
-
-// restoreJob is `r` on the Jobs Page, on an archived job, which the list shows only when asked.
-func restoreJob(m Model) (Model, []Cmd) {
-	m, job, ok := writableJob(m)
-	if !ok {
-		return m, nil
-	}
-	if !job.Archived() {
-		return refuse(m, "The job is not archived.")
-	}
-	m.Jobs.Writing = job.UID
-	return m, []Cmd{RestoreJobCmd{Workspace: m.Workspace, ProjectID: m.Jobs.ProjectID, Actor: m.Actor, UID: job.UID, ExpectedEventUID: job.DefinitionEventUID}}
 }
 
 // putJob puts job into the Jobs Page's list in kata's order, name then uid, in place of the one it replaces.

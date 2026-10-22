@@ -402,6 +402,9 @@ func footerGrid(m model.Model) (grid [][]helplayout.HelpItem, chords []string, p
 		if binding.Action == model.ClosePicker && m.Picker.Projects && m.Picker.Filter == "" {
 			help = "back"
 		}
+		if job := m.SelectedJob(); binding.Action == model.ArchiveJobAction && job != nil && job.Archived() {
+			help = "restore"
+		}
 		items = append(items, helplayout.HelpItem{Key: binding.Key, Description: help})
 		chords = append(chords, binding.Chord)
 	}

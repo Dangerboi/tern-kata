@@ -1,5 +1,5 @@
 # J on an Issue opens the Job card with that Issue as the parent; an every-60-seconds native job made from it makes a child
-# Issue under the parent, pausing it with p makes none, resuming makes one again, and x archives it (R restores it).
+# Issue under the parent, pausing it with p makes none, resuming makes one again, and x archives it (on an archived job it restores).
 # Own Issue and job; it cleans up. Kata's daemon delivers a due occurrence every 30 seconds at most, so this step waits.
 jc_dir="$tmp/workspace"
 kata --workspace "$jc_dir" create "Smoke job parent" --body "Parent of an every-minute job" --json >"$tmp/jobcard-parent.json"
@@ -76,13 +76,13 @@ ctl key Ctrl+o
 expect_tree "[data-id='layer.job']" '.ok and .count == 0'
 expect_tree "[data-id='main.columns.list.jobs.$jc_job']" '.ok and .count == 1 and (.nodes[0].text | contains("Smoke every minute again"))'
 
-# x archives it: it leaves the list, a shows it archived, R restores it, x archives it for good.
+# x archives it: it leaves the list, a shows it archived, x restores it, x archives it for good.
 ctl key x
 expect_tree "[data-id='main.columns.list.jobs.$jc_job']" '.ok and .count == 0'
 kata --workspace "$jc_dir" cron job list --json | jq -e '.jobs | length == 0' >/dev/null
 ctl key a
 expect_tree "[data-id='main.columns.list.jobs.$jc_job']" '.ok and .count == 1 and (.nodes[0].text | contains("archived"))'
-ctl key R
+ctl key x
 expect_tree "[data-id='main.columns.list.jobs.$jc_job']" '.ok and .count == 1 and (.nodes[0].text | contains("active"))'
 ctl key x
 expect_tree "[data-id='main.columns.list.jobs.$jc_job']" '.ok and .count == 1 and (.nodes[0].text | contains("archived"))'

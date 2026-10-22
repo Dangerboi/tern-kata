@@ -218,9 +218,8 @@ var mainActions = []actionEntry{
 	{action: NewJobAction, modes: jobsModes, keys: keys("n", "n"), help: "new job", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 12, "new job (Job card)"}}, handle: openNewJob},
 	{action: EditJobAction, modes: jobsModes, keys: keys("e", "e"), help: "edit job", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 13, "edit the selected job (Job card)"}}, handle: openEditJob},
 	{action: PauseJobAction, modes: jobsModes, keys: keys("p", "p"), help: "pause or resume", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 14, "pause or resume the selected job"}}, handle: toggleJob},
-	{action: ArchiveJobAction, modes: jobsModes, keys: keys("x", "x"), help: "archive", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 15, "archive the selected job"}}, handle: archiveJob},
-	{action: RestoreJobAction, modes: jobsModes, keys: keys("shift+r", "R"), help: "restore", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 16, "restore an archived job (press a to list them)"}}, handle: restoreJob},
-	{action: NewIssueJobAction, modes: issueModes, keys: keys("shift+j", "J"), help: "job", sheet: []sheetLine{{sheetJobs, 17, "new recurring job on the selected Issue (Job card)"}}, handle: openIssueJob},
+	{action: ArchiveJobAction, modes: jobsModes, keys: keys("x", "x"), help: "archive", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 15, "archive the selected job, or restore it when it is archived (press a to list them)"}}, handle: archiveJob},
+	{action: NewIssueJobAction, modes: issueModes, keys: keys("shift+j", "J"), help: "job", sheet: []sheetLine{{sheetJobs, 16, "new recurring job on the selected Issue (Job card)"}}, handle: openIssueJob},
 	{action: RunsOfJob, modes: []Mode{ModeJobs, ModeJobInspector}, keys: keys("r", "r"), help: "runs", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 11, "open the Runs Page on the job's runs"}}, handle: runsOfJob},
 	// Runs Page: the Project's Runs newest first, with the selected Run's detail beside them.
 	{action: MoveDown, modes: []Mode{ModeRuns}, keys: slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), help: "move", footer: []Mode{ModeRuns}, footerKey: "↑↓", sheet: []sheetLine{{sheetRuns, 1, "next run"}}, handle: pure(func(m Model) Model { return moveRun(m, MoveDown) })},
