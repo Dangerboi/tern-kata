@@ -17,6 +17,7 @@ import (
 const (
 	ModeWorkerCard    Mode = "worker-card"
 	ModeWorkerRestart Mode = "worker-restart"
+	ModeWorkerOff     Mode = "worker-supervision-off"
 )
 
 const (
@@ -30,6 +31,10 @@ const (
 	WorkerRestartIdle    Action = "worker-restart-idle"
 	WorkerRestartNow     Action = "worker-restart-now"
 	WorkerLeave          Action = "worker-leave"
+	WorkerSupervision    Action = "worker-supervision"
+	WorkerOffIdle        Action = "worker-off-idle"
+	WorkerOffNow         Action = "worker-off-now"
+	WorkerOffCancel      Action = "worker-off-cancel"
 )
 
 // The Worker card's fields.
@@ -134,12 +139,34 @@ type WorkerStopped struct {
 
 func (WorkerStopped) msg() {}
 
+// SetWorkerSupervision turns the plugin's supervision of the worker off (Manual: worker.manual is created beside worker.toml) or on
+// (it is removed). Stop, when set, is a stop request sent after the marker is written: "idle" or "now".
+type SetWorkerSupervision struct {
+	Manual bool
+	Stop   string
+}
+
+func (SetWorkerSupervision) cmd() {}
+
+// WorkerSupervisionSet answers SetWorkerSupervision. Stop is the worker's answer to the stop request, nil when none was sent. Err is
+// a marker that could not be written or removed; a refused stop is Stop.Err, with the marker already in place.
+type WorkerSupervisionSet struct {
+	Manual bool
+	Stop   *WorkerStopped
+	Err    error
+}
+
+func (WorkerSupervisionSet) msg() {}
+
 // WorkerCardState is the Worker card. What it shows about the machine is Model.Worker; the card holds what was typed, and the step
 // it is in after a save.
 type WorkerCardState struct {
 	Open bool
-	// Saving and Stopping say a write or a stop request has not answered; the card then takes no key.
-	Saving, Stopping bool
+	// Saving, Stopping and Switching say a write, a stop request or a supervision change has not answered; the card then takes no key.
+	Saving, Stopping, Switching bool
+	// AskOff says the card asks how to stop the running worker as supervision goes off; Supervision is what the last change did.
+	AskOff      bool
+	Supervision string
 	Field            Field
 	Caret            Caret
 	// Executor, Actor, Command, Model and Thinking are the setup fields, prefilled as `worker init` would; Trusted is the trust choice.
@@ -458,15 +485,23 @@ func plural(n int) string {
 // space is typed.
 func workerCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	f := &m.WorkerCard
-	if f.Saving || f.Stopping {
+	if f.Saving || f.Stopping || f.Switching {
 		return m, nil
 	}
 	if f.Restart {
 		return workerRestartKey(m, msg)
 	}
+	if f.AskOff {
+		return workerOffKey(m, msg)
+	}
 	binding, bound := LookupBindingForMode(msg.Chord, ModeWorkerCard)
 	field := f.at(f.Field)
+	if bound && binding.Action == WorkerSupervision && m.WorkerCardSaves() {
+		bound = false // while fields are drawn, s is typed
+	}
 	switch {
+	case bound && binding.Action == WorkerSupervision:
+		return switchSupervision(m)
 	case bound && binding.Action == WorkerCancel:
 		m.WorkerCard = WorkerCardState{}
 	case bound && binding.Action == WorkerNext:
@@ -517,4 +552,87 @@ func workerRestartKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		m.Notice = "Left the worker running; it reads the new worker.toml when it next starts."
 	}
 	return m, nil
+}
+
+// workerRunning says a worker answers on this machine, so turning supervision off has something to stop.
+func (m Model) workerRunning() bool { return m.Worker.Read && m.Worker.Err == nil && m.Worker.Running }
+
+// switchSupervision is s on the card. On removes the marker at once. Off creates it at once when no worker runs, and otherwise asks
+// first how to stop the running one.
+func switchSupervision(m Model) (Model, []Cmd) {
+	f := &m.WorkerCard
+	if m.WorkerCardKind() < WorkerSetUp {
+		return m, nil
+	}
+	f.Err, f.Supervision = nil, ""
+	if !m.Worker.Setup.Manual && m.workerRunning() {
+		f.AskOff = true
+		return m, nil
+	}
+	f.Switching = true
+	return m, []Cmd{SetWorkerSupervision{Manual: !m.Worker.Setup.Manual}}
+}
+
+// WorkerOffPrompt is what the card says when it asks how to stop the running worker as supervision goes off.
+func (m Model) WorkerOffPrompt() (when, now string) {
+	return "Stop when idle: the worker takes no new run, finishes " + m.workerInFlightWords() + " and exits; the plugin starts no new one.",
+		"Stop now: the worker exits at once; " + m.workerInFlightWords() + " is interrupted and held `interrupted`, to resume later; the plugin starts no new one."
+}
+
+// workerOffKey is one key while the card asks how to stop the worker: when idle (the default), now, or not at all.
+func workerOffKey(m Model, msg KeyMsg) (Model, []Cmd) {
+	binding, bound := LookupBindingForMode(msg.Chord, ModeWorkerOff)
+	if !bound {
+		return m, nil
+	}
+	f := &m.WorkerCard
+	switch binding.Action {
+	case WorkerOffIdle, WorkerOffNow:
+		mode := worker.StopIdle
+		if binding.Action == WorkerOffNow {
+			mode = worker.StopNow
+		}
+		f.AskOff, f.Switching = false, true
+		f.Supervision = m.workerInFlightWords() // named in the answer: the status read after the stop no longer lists them
+		return m, []Cmd{SetWorkerSupervision{Manual: true, Stop: mode}}
+	case WorkerOffCancel:
+		f.AskOff = false
+	}
+	return m, nil
+}
+
+// workerSupervisionSet is the answer: the card stays open and says what changed.
+func workerSupervisionSet(m Model, msg WorkerSupervisionSet) (Model, []Cmd) {
+	f := &m.WorkerCard
+	flight := f.Supervision
+	if !f.Open || !f.Switching {
+		return m, nil
+	}
+	f.Switching, f.Supervision = false, ""
+	if msg.Err != nil {
+		f.Err = msg.Err
+		return m, nil
+	}
+	m.Worker.Setup.Manual = msg.Manual
+	switch stop := msg.Stop; {
+	case !msg.Manual && m.workerRunning():
+		f.Supervision = "Supervision is on: worker.manual is removed. The running worker stays; the plugin starts it again whenever it exits."
+	case !msg.Manual:
+		f.Supervision = "Supervision is on: worker.manual is removed. The plugin starts the worker within 10 seconds."
+	case stop == nil:
+		f.Supervision = "Supervision is off: worker.manual is created, so the plugin starts no worker. Run `tern-kata worker` to start one by hand."
+	case stop.Err != nil:
+		f.Supervision = "Supervision is off: worker.manual is created, so the plugin starts no new worker."
+		f.Err = fmt.Errorf("The stop was refused: %w", stop.Err)
+	case stop.Gone:
+		f.Supervision = "Supervision is off: worker.manual is created. No worker is running now, and the plugin starts none."
+	case stop.Mode == worker.StopNow:
+		f.Supervision = "Supervision is off: worker.manual is created. The worker is ending now (" + flight + "; held `interrupted`), and nothing starts it again."
+	case stop.InFlight > 0:
+		f.Supervision = fmt.Sprintf("Supervision is off: worker.manual is created. The worker finishes its %d run%s in flight, then exits, and nothing starts it again.", stop.InFlight, plural(stop.InFlight))
+	default:
+		f.Supervision = "Supervision is off: worker.manual is created. The worker is exiting, and nothing starts it again."
+	}
+	m, ask := m.askWorker(workerPollEvery)
+	return m, []Cmd{LoadWorkerSetup{Workspace: m.Workspace}, ask}
 }

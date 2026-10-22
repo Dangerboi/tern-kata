@@ -228,21 +228,24 @@ func init() {
 		},
 		{
 			card: CardWorker, open: func(m Model) bool { return m.WorkerCard.Open },
-			modes: []Mode{ModeWorkerCard, ModeWorkerRestart},
+			modes: []Mode{ModeWorkerCard, ModeWorkerRestart, ModeWorkerOff},
 			mode: func(m Model) Mode {
 				if m.WorkerCard.Restart {
 					return ModeWorkerRestart
+				}
+				if m.WorkerCard.AskOff {
+					return ModeWorkerOff
 				}
 				return ModeWorkerCard
 			},
 			key:    workerCardKey,
 			fields: WorkerFields, focus: func(m *Model) *Field { return &m.WorkerCard.Field },
-			locked: func(m Model) bool { return m.WorkerCard.Saving || m.WorkerCard.Stopping || m.WorkerCard.Restart },
+			locked: func(m Model) bool { return m.WorkerCard.Saving || m.WorkerCard.Stopping || m.WorkerCard.Switching || m.WorkerCard.Restart || m.WorkerCard.AskOff },
 			hidden: func(m Model, name Field) bool { return !m.WorkerCardShows(name) },
 			choose: func(m Model, i int) Model { m.WorkerCard.choose(i); return m },
 			caret: func(m Model) (Field, bool) {
 				f := m.WorkerCard
-				return f.Field, !f.Saving && !f.Stopping && !f.Restart && m.WorkerCardShows(f.Field) && takesText(WorkerFields, f.Field)
+				return f.Field, !f.Saving && !f.Stopping && !f.Switching && !f.Restart && !f.AskOff && m.WorkerCardShows(f.Field) && takesText(WorkerFields, f.Field)
 			},
 		},
 		{

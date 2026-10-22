@@ -104,3 +104,31 @@ func (g *Gateway) stopWorker(ctx context.Context, cmd model.StopWorker) model.Wo
 	}
 	return model.WorkerStopped{Mode: resp.Stop.Mode, InFlight: resp.Stop.InFlight, Restarts: resp.Stop.Restarts}
 }
+
+// setWorkerSupervision creates worker.manual beside worker.toml (supervision off) or removes it (on), then, when asked, sends the
+// stop request: the marker comes first, so the plugin does not start a worker in between.
+func (g *Gateway) setWorkerSupervision(ctx context.Context, cmd model.SetWorkerSupervision) model.WorkerSupervisionSet {
+	done := model.WorkerSupervisionSet{Manual: cmd.Manual}
+	dirs, err := g.workerDirs()
+	if err != nil {
+		done.Err = err
+		return done
+	}
+	marker := filepath.Join(dirs.Config, workerManualFile)
+	if cmd.Manual {
+		if err = os.MkdirAll(dirs.Config, 0o700); err == nil {
+			err = os.WriteFile(marker, nil, 0o600)
+		}
+	} else if err = os.Remove(marker); errors.Is(err, fs.ErrNotExist) {
+		err = nil
+	}
+	if err != nil {
+		done.Err = err
+		return done
+	}
+	if cmd.Manual && cmd.Stop != "" {
+		stopped := g.stopWorker(ctx, model.StopWorker{Mode: cmd.Stop})
+		done.Stop = &stopped
+	}
+	return done
+}

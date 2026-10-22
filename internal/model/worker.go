@@ -318,6 +318,14 @@ func (m Model) workerUnsupported(uid string) string {
 // serves this Pane's Project. Where worker.toml was read for this Project, each state points at W. It is empty until the first
 // answer arrives.
 func (m Model) WorkerLine() (text string, ok bool) {
+	text, ok = m.workerLine()
+	if w := m.Worker; w.Running && w.Err == nil && w.SetupRead && w.SetupErr == nil && w.Setup.Manual && text != "" {
+		text += " Supervision is off (worker.manual): the plugin does not restart it."
+	}
+	return text, ok
+}
+
+func (m Model) workerLine() (text string, ok bool) {
 	w := m.Worker
 	project := m.workerProjectName()
 	known := w.SetupRead && w.SetupErr == nil && w.Setup.Project == project

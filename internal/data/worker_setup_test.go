@@ -188,3 +188,38 @@ func TestStopRequestCarriesTheModeAndTheWorkersAnswer(t *testing.T) {
 		t.Fatalf("a refused stop reported none: %+v", got)
 	}
 }
+
+func TestSupervisionOffWritesTheMarkerAndOnRemovesIt(t *testing.T) {
+	g, dirs := setupGateway(t)
+	marker := filepath.Join(dirs.Config, "worker.manual")
+	exists := func() bool { _, err := os.Stat(marker); return err == nil }
+
+	off := as[model.WorkerSupervisionSet](t, run(t, g, model.SetWorkerSupervision{Manual: true}))
+	if off.Err != nil || !off.Manual || off.Stop != nil || !exists() {
+		t.Fatalf("off: %+v, marker %v", off, exists())
+	}
+	if again := as[model.WorkerSupervisionSet](t, run(t, g, model.SetWorkerSupervision{Manual: true})); again.Err != nil || !exists() {
+		t.Fatalf("off twice: %+v", again)
+	}
+	on := as[model.WorkerSupervisionSet](t, run(t, g, model.SetWorkerSupervision{Manual: false}))
+	if on.Err != nil || on.Manual || exists() {
+		t.Fatalf("on: %+v, marker %v", on, exists())
+	}
+	if again := as[model.WorkerSupervisionSet](t, run(t, g, model.SetWorkerSupervision{})); again.Err != nil {
+		t.Fatalf("on with no marker: %+v", again)
+	}
+}
+
+func TestSupervisionOffWithAStopWritesTheMarkerThenAsksTheWorkerToStop(t *testing.T) {
+	dirs, seen := fakeWorker(t, map[string]worker.Response{"stop": {OK: true, Stop: &worker.StopAnswer{Mode: "now", InFlight: 1}}})
+	got := as[model.WorkerSupervisionSet](t, run(t, workerGateway(dirs), model.SetWorkerSupervision{Manual: true, Stop: "now"}))
+	if _, err := os.Stat(filepath.Join(dirs.Config, "worker.manual")); err != nil {
+		t.Fatalf("no marker: %v", err)
+	}
+	if got.Err != nil || got.Stop == nil || got.Stop.Mode != "now" || got.Stop.InFlight != 1 || got.Stop.Restarts {
+		t.Fatalf("answer %+v stop %+v", got, got.Stop)
+	}
+	if len(*seen) != 1 || (*seen)[0].Op != "stop" || (*seen)[0].Mode != "now" {
+		t.Fatalf("requests %+v", *seen)
+	}
+}

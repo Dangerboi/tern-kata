@@ -59,8 +59,17 @@ func workerLayer(m model.Model) tern.Element {
 			when, now := m.WorkerRestartPrompt()
 			children = append(children, gap("gap-restart"), line("restart-idle", ui.ToneNeutral, when), line("restart-now", ui.ToneWarning, now))
 		}
+	case f.AskOff:
+		when, now := m.WorkerOffPrompt()
+		children = append(children, gap("gap-off"), line("off-idle", ui.ToneNeutral, when), line("off-now", ui.ToneWarning, now))
 	case m.WorkerCardSaves():
 		children = append(append(children, gap("gap-fields")), workerFields(m)...)
+	}
+	if f.Supervision != "" {
+		children = append(children, gap("gap-supervision"), line("supervision-done", ui.ToneSuccess, f.Supervision))
+	}
+	if f.Switching {
+		children = append(children, line("pending", ui.TonePending, "Changing supervision…"))
 	}
 	if f.Saving {
 		children = append(children, line("pending", ui.TonePending, "Writing worker.toml…"))
@@ -114,8 +123,8 @@ func prefixIf(on bool, text string) string {
 	return text
 }
 
-// workerActions is the card's button row. It holds the saves and the restart choice today; the edit (e) and the supervision actions
-// that later tickets add join it here.
+// workerActions is the card's button row. It holds the saves, the restart choice and supervision; the edit (e)
+// that a later ticket adds join it here.
 func workerActions(m model.Model) tern.Element {
 	f := m.WorkerCard
 	switch {
@@ -124,12 +133,24 @@ func workerActions(m model.Model) tern.Element {
 			cardButton("restart-idle", model.ModeWorkerRestart, model.WorkerRestartIdle, "Restart when idle", true),
 			cardButton("restart-now", model.ModeWorkerRestart, model.WorkerRestartNow, "Restart now", false),
 			cardButton("leave", model.ModeWorkerRestart, model.WorkerLeave, "Leave it running", false))
+	case f.AskOff:
+		return buttonRow(
+			cardButton("off-idle", model.ModeWorkerOff, model.WorkerOffIdle, "Stop when idle", true),
+			cardButton("off-now", model.ModeWorkerOff, model.WorkerOffNow, "Stop now", false),
+			cardButton("off-cancel", model.ModeWorkerOff, model.WorkerOffCancel, "Keep supervision", false))
 	case m.WorkerCardSaves():
 		save := "Set up worker"
 		if m.WorkerCardKind() == model.WorkerServe {
 			save = "Serve " + m.Worker.Setup.Project
 		}
 		return buttonRow(cardButton("save", model.ModeWorkerCard, model.WorkerSave, save, true), cardButton("cancel", model.ModeWorkerCard, model.WorkerCancel, "Cancel", false))
+	}
+	if m.WorkerCardKind() >= model.WorkerSetUp {
+		label := "Turn supervision off"
+		if m.Worker.Setup.Manual {
+			label = "Turn supervision on"
+		}
+		return buttonRow(cardButton("supervision", model.ModeWorkerCard, model.WorkerSupervision, label, false), cardButton("close", model.ModeWorkerCard, model.WorkerCancel, "Close", false))
 	}
 	return buttonRow(cardButton("close", model.ModeWorkerCard, model.WorkerCancel, "Close", false))
 }

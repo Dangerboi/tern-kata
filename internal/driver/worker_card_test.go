@@ -318,6 +318,7 @@ func TestWorkerKeysFootersAndHelpAgree(t *testing.T) {
 		"jobs":    jobsPaneWithWorker(t, nil, promptJob("A1", "Triage")),
 		"card":    card,
 		"restart": restart.State,
+		"off":     step(t, workerCardOpen(t, supervisedHere, listedProject), key("s")).State,
 	} {
 		mode := from.Model.CurrentMode()
 		for binding := range model.BindingsForMode(mode, true) {
@@ -346,4 +347,81 @@ func TestWorkerKeysFootersAndHelpAgree(t *testing.T) {
 	if !slices.Contains(footer, "W") {
 		t.Errorf("the Jobs footer %v lacks W", footer)
 	}
+}
+
+func TestWorkerCardSupervisionOffWithNoWorkerWritesTheMarkerAtOnce(t *testing.T) {
+	s := workerCardOpen(t, nil, listedProject)
+	wantText(t, "card", wireTextOf(t, s), "Turn supervision off")
+	off := step(t, s, key("s"))
+	if !reflect.DeepEqual(off.Cmds, []model.Cmd{model.SetWorkerSupervision{Manual: true}}) {
+		t.Fatalf("s sent %#v, want the marker written with no stop", off.Cmds)
+	}
+	done := step(t, off.State, model.WorkerSupervisionSet{Manual: true})
+	wantText(t, "card", wireTextOf(t, done.State), "Supervision is off: worker.manual is created", "the plugin starts no worker", "Turn supervision on")
+	if !slices.Contains(done.Cmds, model.Cmd(askedSetup)) || done.State.Model.TopCard() != model.CardWorker {
+		t.Errorf("cmds %#v card %v, want the setup read again and the card open", done.Cmds, done.State.Model.TopCard())
+	}
+}
+
+func TestWorkerCardSupervisionOffWithAWorkerRunningAsksHowToStopIt(t *testing.T) {
+	running := &model.WorkerStatus{Executor: "laptop", PID: 9, Supervised: true, InFlight: 1,
+		Runs: []model.LocalRun{{UID: "R1", Project: "work", Job: "Triage", State: "running"}}}
+	s := workerCardOpen(t, running, listedProject)
+	asked := step(t, s, key("s"))
+	if len(asked.Cmds) != 0 || asked.State.Model.CurrentMode() != model.ModeWorkerOff {
+		t.Fatalf("s: cmds %#v mode %s, want the question and no write yet", asked.Cmds, asked.State.Model.CurrentMode())
+	}
+	wantText(t, "card", wireTextOf(t, asked.State), "Stop when idle", "Stop now", "1 run in flight (Triage)", "held `interrupted`")
+
+	idle := step(t, asked.State, key("i"))
+	if !reflect.DeepEqual(idle.Cmds, []model.Cmd{model.SetWorkerSupervision{Manual: true, Stop: "idle"}}) {
+		t.Fatalf("i sent %#v", idle.Cmds)
+	}
+	if enter := step(t, asked.State, key("enter")); !reflect.DeepEqual(enter.Cmds, idle.Cmds) {
+		t.Errorf("enter sent %#v, want the default, when idle", enter.Cmds)
+	}
+	now := step(t, asked.State, key("n"))
+	if !reflect.DeepEqual(now.Cmds, []model.Cmd{model.SetWorkerSupervision{Manual: true, Stop: "now"}}) {
+		t.Fatalf("n sent %#v", now.Cmds)
+	}
+
+	done := step(t, idle.State, model.WorkerSupervisionSet{Manual: true, Stop: &model.WorkerStopped{Mode: "idle", InFlight: 1}})
+	wantText(t, "card", wireTextOf(t, done.State), "worker.manual is created", "finishes its 1 run in flight", "nothing starts it again")
+	ended := step(t, now.State, model.WorkerSupervisionSet{Manual: true, Stop: &model.WorkerStopped{Mode: "now", InFlight: 1}})
+	wantText(t, "card", wireTextOf(t, ended.State), "ending now", "1 run in flight (Triage)", "held `interrupted`")
+	refused := step(t, idle.State, model.WorkerSupervisionSet{Manual: true, Stop: &model.WorkerStopped{Mode: "idle", Err: errors.New("busy")}})
+	wantText(t, "card", wireTextOf(t, refused.State), "worker.manual is created", "The stop was refused: busy")
+
+	kept := step(t, asked.State, key("escape"))
+	if kept.State.Model.TopCard() != model.CardWorker || len(kept.Cmds) != 0 || kept.State.Model.CurrentMode() != model.ModeWorkerCard {
+		t.Errorf("esc: card %v mode %s cmds %v, want the plain card and nothing written", kept.State.Model.TopCard(), kept.State.Model.CurrentMode(), kept.Cmds)
+	}
+}
+
+func TestWorkerCardSupervisionOnRemovesTheMarkerAndSaysThePluginStartsTheWorker(t *testing.T) {
+	s := workerCardOpen(t, nil, manual(listedProject))
+	wantText(t, "card", wireTextOf(t, s), "Turn supervision on", "worker.manual is present")
+	on := step(t, s, key("s"))
+	if !reflect.DeepEqual(on.Cmds, []model.Cmd{model.SetWorkerSupervision{Manual: false}}) {
+		t.Fatalf("s sent %#v, want the marker removed", on.Cmds)
+	}
+	done := step(t, on.State, model.WorkerSupervisionSet{})
+	wantText(t, "card", wireTextOf(t, done.State), "Supervision is on", "starts the worker within 10 seconds", "Turn supervision off")
+	if refused := step(t, on.State, model.WorkerSupervisionSet{Err: errors.New("permission denied")}); refused.State.Model.WorkerCard.Err == nil {
+		t.Errorf("a failed removal hid the reason")
+	}
+}
+
+func TestWorkerCardTypesSWhileFieldsAreDrawn(t *testing.T) {
+	s := workerCardOpen(t, nil, noWorkerFile)
+	typed := step(t, s, key("s"))
+	if len(typed.Cmds) != 0 || !strings.HasSuffix(typed.State.Model.WorkerCard.Executor, "s") {
+		t.Errorf("cmds %#v executor %q, want s typed into the field", typed.Cmds, typed.State.Model.WorkerCard.Executor)
+	}
+}
+
+func TestJobsPageBannerShowsSupervisionOffForARunningWorker(t *testing.T) {
+	s := jobsPaneWithWorker(t, servingWorker(), promptJob("A1", "Triage"))
+	s = step(t, s, model.WorkerSetupLoaded{Setup: manual(listedProject)}).State
+	wantText(t, "Jobs Page", wireTextOf(t, s), "running and serving work", "Supervision is off (worker.manual)")
 }

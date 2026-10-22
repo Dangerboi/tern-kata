@@ -98,6 +98,10 @@ With no `worker.toml` the card offers **Set up**: executor, actor, command, mode
 
 After a save, with a worker running, the card asks how to restart it, since it reads `worker.toml` only at start: **when idle** (`i` or enter, the default) sends the stop request that refuses new work and exits once the runs in flight finish, and **now** (`n`) ends it at once and holds the runs it interrupts `interrupted`; the card names the runs in flight. Esc leaves the worker running. The plugin then starts a fresh worker when it supervises this one; the card's notice says so, or says that nothing will. With no worker running, the card says the plugin starts one within 10 seconds, or, under `worker.manual`, that you start it.
 
+### Supervision from the card
+
+`s` on the card turns the plugin's supervision off or on (when the card draws no fields; otherwise `s` is typed). **Off** creates `worker.manual` beside `worker.toml`. With no worker running that is all; with one running, the card first asks how it stops: **when idle** (`i` or enter, the default) or **now** (`n`), naming the runs in flight, and esc keeps supervision on. The marker is written before the stop request, so the plugin does not start a new worker in between, and nothing starts the worker again until you turn supervision on or run `tern-kata worker`. **On** removes the marker, and the card says the plugin starts the worker within 10 seconds. The card and the Jobs Page banner show the state: the banner of a running worker adds that supervision is off.
+
 The Jobs Page banner says per state what is missing (no file, a file that does not load, a Project not listed, no worker running, `worker.manual`) and points at `W`.
 
 ## Commands
@@ -135,7 +139,7 @@ This is the one supervision path tern-kata ships. A service of your own (a syste
 
 ## Turning supervision off
 
-Create an empty `worker.manual` next to `worker.toml` (or delete `worker.toml`): the host half starts no worker, and looks again every 10 seconds. It cannot stop a worker that already runs: stop that one yourself with `tern-kata worker stop`. Create the marker first, or the host half starts a new one. Removing the marker turns supervision back on.
+Create an empty `worker.manual` next to `worker.toml` (or delete `worker.toml`): the host half starts no worker, and looks again every 10 seconds. It cannot stop a worker that already runs: stop that one yourself with `tern-kata worker stop`. Create the marker first, or the host half starts a new one. Removing the marker turns supervision back on. The Worker card does both from the Pane (`s`), and sends the stop request for you.
 
 `tern plugin remove tern-kata` or disabling the plugin in Tern's settings removes the host half altogether, together with the window half.
 
