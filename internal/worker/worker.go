@@ -28,6 +28,9 @@ type Options struct {
 	Takeover bool
 	Hooks    Hooks
 	Version  string
+	// Supervisor names what keeps this worker running ("tern" for the plugin host half in Tern's session daemon);
+	// empty when it was started by hand. `worker status` says it.
+	Supervisor string
 	// Log receives one line per notable event; nil discards.
 	Log func(format string, args ...any)
 }
