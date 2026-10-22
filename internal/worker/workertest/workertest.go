@@ -367,8 +367,18 @@ func (d *Daemon) PlanningDates(t *testing.T, p worker.Project, issueUID string) 
 // SetIssueDate sets the Issue's scheduled_on or deadline_on to the minute containing t, read by kata as UTC.
 func (d *Daemon) SetIssueDate(t *testing.T, p worker.Project, issueUID, field string, at time.Time) {
 	t.Helper()
+	d.patchIssueDate(t, p, issueUID, field, at.UTC().Format("2006-01-02T15:04"))
+}
+
+// ClearIssueDate removes one planning date (scheduled_on or deadline) from an Issue.
+func (d *Daemon) ClearIssueDate(t *testing.T, p worker.Project, issueUID, field string) {
+	t.Helper()
+	d.patchIssueDate(t, p, issueUID, field, nil)
+}
+
+func (d *Daemon) patchIssueDate(t *testing.T, p worker.Project, issueUID, field string, value any) {
+	t.Helper()
 	actor := "tester"
-	value := at.UTC().Format("2006-01-02T15:04")
 	if _, err := d.Client.PatchIssueMetadataWithResponse(context.Background(), &g.PatchIssueMetadataRequestOptions{
 		PathParams: &g.PatchIssueMetadataPath{ProjectID: p.ID, Ref: issueUID}, Body: &g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{field: value}},
 	}); err != nil {
