@@ -855,15 +855,10 @@ func jobFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		f.step(false)
 	case field == nil && bound && binding.Action == JobPreviousChoice:
 		f.step(true)
-	case field != nil && f.Field == JobFieldPrompt && (msg.Chord == "enter" || (!bound && strings.ContainsAny(msg.Text, "\r\n"))):
-		text := "\n"
-		if msg.Chord != "enter" {
-			text = normalizeLineBreaks(msg.Text)
-		}
-		runes := []rune(*field)
-		at := len(runes) - f.Caret.back(f.Field, len(runes))
-		*field = string(slices.Insert(runes, at, []rune(text)...))
-		f.Caret, f.Err = Caret{f.Field, len(runes) - at}, nil
+	case field != nil && f.Field == JobFieldPrompt && bound && binding.Action == JobNewline:
+		f.insertPrompt(field, "\n")
+	case field != nil && f.Field == JobFieldPrompt && !bound && strings.ContainsAny(msg.Text, "\r\n"):
+		f.insertPrompt(field, normalizeLineBreaks(msg.Text)) // pasted lines stay lines
 	case field != nil:
 		var edited bool
 		if bound && binding.Action == InputSpace {
@@ -874,6 +869,14 @@ func jobFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		}
 	}
 	return m, nil
+}
+
+// insertPrompt puts text, line breaks included, at the caret of the prompt field.
+func (f *JobFormState) insertPrompt(field *string, text string) {
+	runes := []rune(*field)
+	at := len(runes) - f.Caret.back(f.Field, len(runes))
+	*field = string(slices.Insert(runes, at, []rune(text)...))
+	f.Caret, f.Err = Caret{f.Field, len(runes) - at}, nil
 }
 
 // answerJobConflict is one key while the card shows the newer job: overwrite saves the draft over it, take newer replaces the
