@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 	"os/exec"
@@ -73,7 +74,8 @@ func editDraft(cmd model.OpenDraftEditor, build func(editor, file string) *exec.
 		result.Err = fmt.Errorf("set $EDITOR to edit the Draft externally")
 		return result, ""
 	}
-	file, err := os.CreateTemp("", "tern-kata-Draft-*.md")
+	suffix := cmp.Or(cmd.Suffix, ".md")
+	file, err := os.CreateTemp("", "tern-kata-Draft-*"+suffix)
 	if err != nil {
 		result.Err = err
 		return result, ""

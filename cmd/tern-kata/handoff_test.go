@@ -59,6 +59,21 @@ func TestEditDraft(t *testing.T) {
 	}
 }
 
+func TestEditDraftGivesTheEditorAFileWithTheRequestedExtension(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake editors use sh")
+	}
+	t.Setenv("TMPDIR", t.TempDir())
+	t.Setenv("EDITOR", "x")
+	for suffix, want := range map[string]string{"": ".md", ".json": ".json"} {
+		got, kept := editDraft(model.OpenDraftEditor{Text: "original", Suffix: suffix}, fakeEditor(`printf '%s' "$1" > "$1"`))
+		os.Remove(kept)
+		if got.Err != nil || !strings.HasSuffix(got.Text, want) {
+			t.Errorf("suffix %q: editor was given %q (err %v), want a %s file", suffix, got.Text, got.Err, want)
+		}
+	}
+}
+
 func TestEditDraftSpacedTempPathThroughShell(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("exercises the Unix sh -c adapter")

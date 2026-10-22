@@ -32,6 +32,9 @@ func (m Model) CurrentMode() Mode {
 	if m.BoardShown() {
 		return ModeBoard
 	}
+	if m.OnWorkflows() && m.Focus == ColumnList {
+		return ModeWorkflows
+	}
 	if m.LaneViewShown() && m.Focus != ColumnDetail {
 		return ModeLane
 	}
@@ -95,9 +98,10 @@ const (
 	sheetFilters
 	sheetBoard
 	sheetJobs
+	sheetWorkflows
 )
 
-var sheetTitles = [...]string{"Global", "Graph", "Detail", "Children", "Forms", "Filters", "Board", "Jobs"}
+var sheetTitles = [...]string{"Global", "Graph", "Detail", "Children", "Forms", "Filters", "Board", "Jobs", "Workflows"}
 
 // sheetLine places an entry's keys on one line of the help sheet. Rank orders the lines of a group; entries that
 // share a group and text share the line, their keys in rank order.

@@ -17,7 +17,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 - **Issue list and detail**: a Project's Issues nested under their parents, with priority, status, child counts and age, beside the Issue detail with its Markdown body, properties and Activity tabs (Comments, Events, Links, Attachments). Changes made anywhere, by you or an agent, show up live.
 - **Collections and the Menu**: Inbox, Today, Upcoming, Deadlines, All Open, Logbook and every kata Project, plus a search (`/`) and filters (`f`, `s`) over any of them.
 - **Editing from the Pane**: Create (`n`, `N` for a child), Close (`x`), reopen (`r`), comments (`c` in the detail) and replies (`R`), labels (`+`, `-`), owner (`a`, `A`), priority (`!`), parent (`p`), recurrence (`O`) and the Issue body in Tern's editor (`e`).
-- **Pages (Issues, Board and Jobs), Attachments and the Dates card**, shown below.
+- **Pages (Issues, Board, Jobs and Workflows), Attachments and the Dates card**, shown below.
 - **[kata links](#clickable-ticket-links-from-agents)** from agents' chat replies open the Issue in tern-kata.
 
 **Board Page** ([details](#pages-and-the-board-page)): `2` or `b` in a Project shows its Issues as cards in Lanes, one per triage label, with No lane on the left and recently closed Issues in Done on the right. `<` and `>` move a card to the next Lane by swapping its label in kata. A card shows its priority, its most pressing date and a Blocked marker when an open Issue blocks it; selecting one tags its related cards (`parent`, `blocks this`) and lists its Relationships.
@@ -158,7 +158,7 @@ Flags: `--frequency daily|weekly|monthly|yearly`, `--every N`, `--on mon,thu`, `
 
 ## Pages and the Board Page
 
-The top bar holds the **Page bar**, "1 Issues  2 Board  3 Jobs". `1`, `2` and `3`, or a click on a Page, switch Pages; `b` toggles between Issues and Board. The Issues Page is the list and Issue detail; each Page keeps its selection while another is shown. The Board Page and the Jobs Page act on the Pane's Project: the current Project Collection, else the workspace's Binding (from Inbox or another fixed Collection in a bound workspace it switches to the Binding's Project). With neither it says so and opens the Menu's Projects list.
+The top bar holds the **Page bar**, "1 Issues  2 Board  3 Jobs  5 Workflows". `1`, `2`, `3` and `5`, or a click on a Page, switch Pages; `b` toggles between Issues and Board. The Issues Page is the list and Issue detail; each Page keeps its selection while another is shown. The Board Page and the Jobs Page act on the Pane's Project: the current Project Collection, else the workspace's Binding (from Inbox or another fixed Collection in a bound workspace it switches to the Binding's Project). With neither it says so and opens the Menu's Projects list.
 
 ### Board Page
 
@@ -177,6 +177,16 @@ The top bar holds the **Page bar**, "1 Issues  2 Board  3 Jobs". `1`, `2` and `3
 - The filters (`/`, `f`, `s`, `c`) narrow the Board as they do the list, and a live refresh moves cards. Done shows only what the Collection holds, so the `open` status filter leaves it empty.
 - Enter on a card, or a double-click, opens the **Lane view**: that Lane's Issues as a flat, full-width list under a Lane header line, with the Issue detail beside it at 140 columns and wider. It works like the list (tab moves to the detail, the same keys apply, including `L`), except `←`/`→` switch to the neighbouring Lane that has cards, and `<`/`>` Move the selected card with the selection going to the next card in the Lane. Esc returns to the Board with the same card selected.
 - The Board Page needs a Project and ends when you switch to a Collection that is not a Project. A Pane under 140 columns opens it straight in the Lane view, on the selected Issue's Lane, and narrowing the Pane switches the Board to the Lane view; only the focused column shows, so Enter shows the detail, Esc returns to the Lane view, and Esc from the Lane view opens the Menu.
+
+### Workflows Page
+
+`5` shows the Pane's Project's kata **Workflows**, one row each with its name and step count; archived ones stay hidden until `a` shows them. The Project is found as the Board Page finds it, and the Page ends when you leave the Project Collection. Esc closes the steps first, then goes to the Menu.
+
+- **Enter** opens the inspector for the selected workflow: each step in order with its kind (`command` or `prompt`), its command or prompt, the steps it waits for (`after review`) and its retries, the live Cron jobs that run it, and who wrote it. A row also names those jobs. Beside the list at 140 columns and wider, in place of it in a narrower Pane.
+- **`n` and `e`** open the **Workflow card** on a new workflow or the selected one, as the JSON kata takes: `{"name": "...", "definition": {"version": 1, "steps": [{"key": "review", "kind": "prompt", "prompt": "..."}, {"key": "test", "kind": "command", "command": "make test", "after": ["review"], "retries": 1}]}}`. Edit it in the card or press `ctrl+e` for `$EDITOR`; `ctrl+o` saves.
+- Saving checks the text first, and nothing is sent while it fails: valid JSON, a name, version 1, at least one step, unique step keys of letters, digits, `-`, `_` and `.`, `after` naming earlier steps only (so steps are listed in the order they run), retries from 0 to 100, and exactly one of `command` or `prompt` matching the step's kind. The card names the problem and keeps your text.
+- A save is a Guarded write on the version you started from. If the workflow changed meanwhile, nothing is written: the card shows your text beside the workflow as it stands now, `o` saves yours over it and `d` drops your text.
+- `x` archives the selected workflow and `r` restores an archived one, both guarded the same way. Kata refuses to archive a workflow a live Cron job uses, and the Pane shows its message: "workflow W is used by live job J; update or delete that job first".
 
 ### The Lane list file
 

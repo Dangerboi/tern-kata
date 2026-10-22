@@ -87,7 +87,8 @@ type SaveDraft struct {
 
 func (SaveDraft) cmd() {}
 
-type OpenDraftEditor struct{ UID, Text string }
+// OpenDraftEditor opens text in $EDITOR; Suffix is the extension of the temporary file, "" for a Draft's Markdown.
+type OpenDraftEditor struct{ UID, Text, Suffix string }
 
 func (OpenDraftEditor) cmd() {}
 

@@ -47,6 +47,7 @@ func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 		m.Jobs.stale = true
 	}
 	m = m.settleBoard()
+	m = m.settleWorkflows()
 	m, load := m.lanesLoad(boardWasOn)
 	cmds = append(cmds, load...)
 	m, jobs := m.settleJobs()

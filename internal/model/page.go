@@ -15,6 +15,8 @@ const (
 	PageBoard
 	// PageJobs is the Project's Cron jobs; its state is Model.Jobs.
 	PageJobs
+	// PageWorkflows is the Project's kata workflows beside an inspector; its state is Model.Workflows.
+	PageWorkflows
 )
 
 type pageDef struct {
@@ -33,10 +35,11 @@ var pageDefs = []pageDef{
 	{page: PageIssues, id: "issues", label: "Issues", chord: "1", action: ShowIssuesPage},
 	{page: PageBoard, id: "board", label: "Board", chord: "2", action: ShowBoardPage, enter: enterBoard, leave: Model.boardOff},
 	{page: PageJobs, id: "jobs", label: "Jobs", chord: "3", action: ShowJobsPage, enter: enterJobs, leave: Model.jobsOff},
+	{page: PageWorkflows, id: "workflows", label: "Workflows", chord: "5", action: ShowWorkflowsPage, enter: enterWorkflows, leave: Model.workflowsOff},
 }
 
 // pageModes are the modes where the Page keys work: wherever the main surface has the keyboard and no text is being typed.
-var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollections, ModeJobs, ModeJobInspector}
+var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollections, ModeJobs, ModeJobInspector, ModeWorkflows}
 
 // PageTab is one entry of the Page bar.
 type PageTab struct {

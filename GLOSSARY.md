@@ -2,9 +2,9 @@
 
 **Pane**: The Tern area the program draws into. _Avoid_: block (in Tern a block is a pane type; in kata `blocks` is a link).
 
-**Page**: One of the Pane's top-level views, chosen from the **Page bar**: Issues (the list and the Issue detail), Board and Jobs for now. Each Page keeps its own state, such as its selection, while another is shown. _Avoid_: tab (Tern's tabs and the Issue detail's tabs).
+**Page**: One of the Pane's top-level views, chosen from the **Page bar**: Issues (the list and the Issue detail), Board, Jobs and Workflows for now. Each Page keeps its own state, such as its selection, while another is shown. _Avoid_: tab (Tern's tabs and the Issue detail's tabs).
 
-**Page bar**: The row in the top bar that names the Pages with their keys (`1` Issues, `2` Board, `3` Jobs); a click on a Page presses its key. _Avoid_: tab bar.
+**Page bar**: The row in the top bar that names the Pages with their keys (`1` Issues, `2` Board, `3` Jobs, `5` Workflows); a click on a Page presses its key. _Avoid_: tab bar.
 
 **Issue**: One unit of tracked work in kata, as kata defines it.
 
@@ -91,3 +91,9 @@
 **Adapter job**: Any Cron job that is not native: it runs an agent prompt or a workflow, or notifies about an existing Issue or an Issue date. Kata never runs it; a worker does, so its interval counts from a start only the worker knows and the Jobs Page leaves its next run out. _Avoid_: external job.
 
 **Pause reason**: Why a Cron job is not running, shown in its state: "archived", "paused: Project archived", "disabled", "paused: parent deleted" or "paused: parent closed"; a job with none is "active". Kata stores no pause, so the Pane derives it, in that order: the job's `deleted_at` beats everything, then an archived Project (read from the Project's own state, because kata answers none of its jobs), then `enabled: false`, then the parent's deleted or closed status. Reopening the parent, restoring the Project or the job, or enabling the job resumes a native job.
+
+**Workflow**: One of a Project's kata workflows: reusable command and prompt steps, each with a key, optional `after` steps it waits for (earlier steps only) and optional retries (0 to 100). Kata stores it; a Cron job that runs one names it. Archiving one that a live Cron job uses is refused by kata. _Avoid_: pipeline, recipe.
+
+**Workflows Page**: The **Page** (`5`) that lists the Pane's Project's Workflows, archived ones hidden until asked for, with an inspector (Enter) that reads the selected one as steps with their dependencies and retries. Its state is Pane state that is not saved. It acts on the Pane's Project like the Board Page, and ends when the Collection is not a Project.
+
+**Workflow card**: The Popup card `n` and `e` open on the Workflows Page. It holds the Workflow as the JSON text kata takes (`{"name": ..., "definition": {...}}`) in the Draft editor's text field, edited in the card or in `$EDITOR`. Saving checks the text locally against kata's rules first and keeps the text on any failure; the write is a Guarded write on the Workflow's `definition_event_uid`, and a conflict keeps the text beside the Workflow as it stands now.
