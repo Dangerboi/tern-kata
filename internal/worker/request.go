@@ -277,9 +277,9 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurre
 		JobUID: job.UID, JobName: job.Name, DefinitionEventUID: job.DefinitionEventUID, Prompt: d.Prompt, IssuePolicy: issuePolicy, Notify: notify, Workflow: workflow,
 		SecretRefs: d.SecretRefs, ProfileName: profileName, Profile: profile, Checkout: checkout, TimeoutSeconds: int64(timeout / time.Second),
 		OccurrenceKey: occurrenceKey, Occurrence: occurrence.UTC(), Manual: manual,
-		Steps: stepsFor(workflow),
+		Steps:     stepsFor(workflow),
 		ExpiresAt: workflowExpiry(workflow, w.clock.Now().UTC(), timeout),
-		Phase: PhasePrepared, StartedAt: w.clock.Now().UTC(),
+		Phase:     PhasePrepared, StartedAt: w.clock.Now().UTC(),
 	}
 	if err := w.store.Create(j, "prepared"); err != nil {
 		w.noteHook(err)

@@ -29,23 +29,23 @@ import (
 
 func main() {
 	var (
-		exit      = 0
-		text      = "done"
-		stop      = "stop"
-		noEnd     bool
-		hang      bool
-		hangFirst bool
+		exit        = 0
+		text        = "done"
+		stop        = "stop"
+		noEnd       bool
+		hang        bool
+		hangFirst   bool
 		linger      bool
 		lingerFirst bool
-		pause     int
-		errStatus int
-		failWhen  string
-		failOnce  string
-		hangWhen  string
-		logPath   string
-		sessionIn string
-		resume    string
-		prompt    string
+		pause       int
+		errStatus   int
+		failWhen    string
+		failOnce    string
+		hangWhen    string
+		logPath     string
+		sessionIn   string
+		resume      string
+		prompt      string
 	)
 	args := os.Args[1:]
 	for i := 0; i < len(args); i++ {
