@@ -83,7 +83,6 @@ func newMarkedJobsFixture(t *testing.T) (*jobsFixture, *marked) {
 	return &jobsFixture{gateway: gateway, client: server.target().Client, workspace: workspace, demo: demo}, marks
 }
 
-
 func TestGatewayMarksACronMadeIssueInTheDetailAndTheSnapshotAndNoOtherIssue(t *testing.T) {
 	f, marks := newMarkedJobsFixture(t)
 	made := createIssue(t, f.gateway, f.workspace, f.demo, "Report for the 14:00 run")

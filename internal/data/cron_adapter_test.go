@@ -73,12 +73,12 @@ func TestGatewayCreatesAdapterJobsKataAcceptsAndEachRoundTrips(t *testing.T) {
 	}
 
 	for _, tt := range []struct {
-		name  string
-		def   model.CronDefinition
+		name string
+		def  model.CronDefinition
 		// ref is the Issue the trigger or the policy names; report is a notify job's own Issue when its trigger fires on another's.
 		ref, report string
 		kind        string
-		wantD func(model.CronDefinition) model.CronDefinition
+		wantD       func(model.CronDefinition) model.CronDefinition
 	}{
 		{"prompt", prompt, "", "", model.KindAgentPrompt, nil},
 		{"workflow", byWorkflow, issue, "", model.KindWorkflow, func(d model.CronDefinition) model.CronDefinition { d.Issue.UID = issue; return d }},

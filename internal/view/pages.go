@@ -28,7 +28,7 @@ const (
 const (
 	menuCols  = 8
 	slackCols = 6
-	entryGap    = 2
+	entryGap  = 2
 )
 
 // entryText is a entry's text: the key and the label, or the key alone in a compact Page bar for a Page that is not current.
