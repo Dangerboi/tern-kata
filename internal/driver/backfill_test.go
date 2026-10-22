@@ -291,3 +291,44 @@ func TestNothingIsAskedWhenTheJobWouldStayPausedOrDoesNotRun(t *testing.T) {
 		t.Errorf("reopen with every job disabled: cmds %#v, card on top %v", reopen.Cmds, backfillOpen(reopen.State))
 	}
 }
+
+func TestEnablingAPausedJobThroughTheJobCardAsksAboutTheBackfillAndSendsTheCardsDraft(t *testing.T) {
+	s := step(t, jobsPane(t, 160, disabled(owing("J1", "open", "all"))), key("e")).State
+	s = set(t, s, model.JobFieldName, "Renamed")
+	s = choose(t, s, model.JobFieldEnabled, 0)
+	out := step(t, s, key("ctrl+o"))
+	if len(out.Cmds) != 0 || !backfillOpen(out.State) || !out.State.Model.JobForm.Open {
+		t.Fatalf("saving sent %#v, Backfill card on top %v", out.Cmds, backfillOpen(out.State))
+	}
+	wantText(t, "card", backfillText(t, out.State), "4 child Issues", "4 missed runs", "Create them", "Switch to latest and save")
+
+	create := step(t, out.State, key("c"))
+	save, ok := savedJob(create.Cmds)
+	if !ok || save.Name != "Renamed" || save.Definition.Catchup != model.CatchupAll || !save.Definition.Enabled || save.ExpectedEventUID != "EV1" || !create.State.Model.JobForm.Saving {
+		t.Fatalf("create them sent %#v", create.Cmds)
+	}
+
+	latest := step(t, out.State, key("l"))
+	save, ok = savedJob(latest.Cmds)
+	if !ok || save.Name != "Renamed" || save.Definition.Catchup != model.CatchupLatest || !save.Definition.Enabled || len(latest.Cmds) != 1 {
+		t.Fatalf("switch to latest sent %#v", latest.Cmds)
+	}
+
+	// Cancel leaves the card and its draft as they were.
+	cancel := step(t, out.State, key("escape"))
+	if len(cancel.Cmds) != 0 || backfillOpen(cancel.State) || !cancel.State.Model.JobForm.Open || cancel.State.Model.JobForm.Name != "Renamed" || cancel.State.Model.JobForm.Saving {
+		t.Fatalf("cancel: cmds %#v, form %+v", cancel.Cmds, cancel.State.Model.JobForm)
+	}
+}
+
+func TestSavingAPausedJobThatStaysPausedOrCatchesUpWithLatestAsksNothing(t *testing.T) {
+	s := step(t, jobsPane(t, 160, disabled(owing("J1", "open", "all"))), key("e")).State
+	s = set(t, s, model.JobFieldName, "Renamed")
+	if _, ok := savedJob(step(t, s, key("ctrl+o")).Cmds); !ok {
+		t.Fatal("a rename that leaves the job paused asked about a Backfill")
+	}
+	s = choose(t, choose(t, s, model.JobFieldEnabled, 0), model.JobFieldCatchup, 0)
+	if backfillOpen(step(t, s, key("ctrl+o")).State) {
+		t.Fatal("a catch-up of latest asked about a Backfill")
+	}
+}

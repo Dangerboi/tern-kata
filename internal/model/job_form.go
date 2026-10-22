@@ -795,11 +795,20 @@ func submitJob(m Model) (Model, []Cmd) {
 		}
 		return m, nil
 	}
-	f.Saving, f.Err = true, nil
 	cmd := SaveJobCmd{Workspace: m.Workspace, ProjectID: f.ProjectID, Actor: m.Actor, UID: f.UID, Name: terms.Name, Definition: terms.Definition, ParentRef: terms.ParentRef, IssueRef: terms.IssueRef}
 	if f.Change {
 		cmd.ExpectedEventUID = f.Opened.DefinitionEventUID
+		if !f.Opened.Definition.Enabled && terms.Definition.Enabled && parentOpen(f.Opened) {
+			// Turning a paused job on is a resume: it asks about a Backfill first, like p does.
+			resumed := f.Opened
+			resumed.Definition = terms.Definition
+			if asked, ok := m.askBackfill(BackfillSave, Issue{}, resumed); ok {
+				asked.Backfill.Save = &cmd
+				return asked, nil
+			}
+		}
 	}
+	f.Saving, f.Err = true, nil
 	return m, []Cmd{cmd}
 }
 
