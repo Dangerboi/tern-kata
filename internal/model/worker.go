@@ -268,6 +268,9 @@ func localRunLoaded(m Model, msg LocalRunLoaded) Model {
 		}
 		return m
 	}
+	if msg.UID != m.Worker.asked {
+		return m // a late answer for a run that is no longer the one asked for
+	}
 	m.Worker.Detail = &msg.Detail
 	return m
 }

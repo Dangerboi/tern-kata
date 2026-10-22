@@ -176,3 +176,39 @@ func TestGatewayJobsReadWithActivityCarryEachAdapterJobsNewestRuns(t *testing.T)
 		t.Fatalf("quiet job's runs %+v, want its failed run", runs)
 	}
 }
+
+func TestGatewayRunListAnswerCarriesTheRefreshFlagOfTheAsk(t *testing.T) {
+	f := newJobsFixture(t)
+	job := f.adapter(t, "Triage")
+	f.observe(t, g.ObserveCronRunBody{JobUID: &job.UID, DefinitionEventUID: &job.DefinitionEventUID, Status: "running", Summary: g.Summary{Version: 1}})
+
+	if loaded := f.runs(t, model.LoadRuns{Refresh: true}); !loaded.Refresh {
+		t.Errorf("answer to a refresh %+v, want Refresh set", loaded)
+	}
+	if loaded := f.runs(t, model.LoadRuns{}); loaded.Refresh {
+		t.Errorf("answer to a plain read %+v, want Refresh clear", loaded)
+	}
+}
+
+func TestGatewayNamesArchivedJobsAndWorkflowsAndShowsADeletedIssueByItsReference(t *testing.T) {
+	f := newJobsFixture(t)
+	issue := createIssue(t, f.gateway, f.workspace, f.demo, "Triage the inbox")
+	gone := createIssue(t, f.gateway, f.workspace, f.demo, "Soon gone")
+	job := f.adapter(t, "Triage")
+	workflow := f.workflow(t, "Nightly build")
+	f.observe(t, g.ObserveCronRunBody{JobUID: &job.UID, DefinitionEventUID: &job.DefinitionEventUID, IssueUID: &issue, Status: "succeeded", Summary: g.Summary{Version: 1}})
+	f.observe(t, g.ObserveCronRunBody{WorkflowUID: &workflow.UID, WorkflowDefinitionEventUID: &workflow.DefinitionEventUID, IssueUID: &gone, Status: "succeeded", Summary: g.Summary{Version: 1}})
+	f.archive(t, job)
+	(&childCountFixture{gateway: f.gateway, workspace: f.workspace}).remove(t, gone, f.demo)
+
+	byIssue := map[string]model.Run{}
+	for _, r := range f.runs(t, model.LoadRuns{}).Runs {
+		byIssue[r.IssueUID] = r
+	}
+	if r := byIssue[issue]; r.Name() != "Triage" || r.IssueTitle != "Triage the inbox" || r.IssueShortID == "" {
+		t.Errorf("run of an archived job %+v, want its name and its Issue's title", r)
+	}
+	if r := byIssue[gone]; r.Name() != "Nightly build" || r.IssueRef() != gone || r.IssueTitle != "" {
+		t.Errorf("run of a deleted Issue %+v, want the workflow's name and the Issue shown by its reference %q", r, gone)
+	}
+}
