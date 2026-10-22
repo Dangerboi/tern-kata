@@ -2,7 +2,7 @@
 
 -- The host half runs in Tern's session daemon, with or without a window. It keeps `tern-kata worker` running: it starts
 -- the worker when worker.toml exists, and starts it again, backing off, whenever it exits. With no worker.toml it does nothing.
--- Turning it off: create worker.manual beside worker.toml (see the README).
+-- Turning it off: create worker.manual beside worker.toml (see docs/guide/worker.md).
 
 local os_name = tern.runtime.os
 local windows = os_name == "windows"
