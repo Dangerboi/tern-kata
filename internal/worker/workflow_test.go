@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/worker"
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
@@ -297,5 +298,36 @@ func TestACommandStepKeepsTheStartAndEndOfItsOutputWithAMarkerBetween(t *testing
 	}
 	if max := (1 << 20) + (256 << 10) + 100; len(out) > max {
 		t.Fatalf("output is %d bytes, over the %d it may keep", len(out), max)
+	}
+}
+
+// A workflow run past its expiry starts no step: not the first one after a restart, nor the next one between two.
+func TestAWorkflowRunPastItsExpiryStartsNoStepAfterARestart(t *testing.T) {
+	for _, point := range []string{"admitted", "step-concluded"} {
+		t.Run(point, func(t *testing.T) {
+			h := newHarness(t)
+			wf := h.kata.CreateWorkflow(t, h.proj, "pipeline",
+				workertest.Step{Key: "build", Command: "echo build >> order.txt"},
+				workertest.Step{Key: "ship", Command: "echo ship >> order.txt", After: []string{"build"}},
+			)
+			job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "pipeline job", Workflow: wf.UID, Checkout: "repo", Timeout: 3600})
+			uid, _ := h.killedAt(point, job)
+			before := strings.Join(h.lines("order.txt"), ",")
+
+			h.clock.Advance(2 * time.Hour)
+			h.start(worker.Hooks{})
+			h.within("the run to fail", func() bool { return h.kataRun(uid).Status == "failed" })
+
+			run := h.kataRun(uid)
+			if !strings.Contains(run.Summary, "timed out") || !strings.Contains(run.Summary, "ship [command]: skipped") {
+				t.Fatalf("summary %q: want timed out with the unstarted step skipped", run.Summary)
+			}
+			if got := strings.Join(h.lines("order.txt"), ","); got != before {
+				t.Fatalf("commands ran as %q after the expiry, were %q before", got, before)
+			}
+			if len(h.launches()) != 0 {
+				t.Fatal("a process was launched past the expiry")
+			}
+		})
 	}
 }

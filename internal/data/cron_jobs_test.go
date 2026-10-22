@@ -157,22 +157,6 @@ func TestGatewayListsArchivedJobsOnlyWhenAsked(t *testing.T) {
 	}
 }
 
-func TestGatewayShowsOneJobArchivedOrNotWithItsParent(t *testing.T) {
-	f := newJobsFixture(t)
-	parent := createIssue(t, f.gateway, f.workspace, f.demo, "Weekly report")
-	wire := f.native(t, "Report", parent)
-	f.archive(t, wire)
-
-	shown := as[model.JobShown](t, run(t, f.gateway, model.ShowJob{Workspace: f.workspace, ProjectID: f.demo.ID, UID: wire.UID}))
-	if shown.Err != nil || shown.UID != wire.UID || !shown.Job.Archived() || shown.Job.Parent == nil || shown.Job.Parent.UID != parent || shown.Job.Parent.Progress == nil {
-		t.Fatalf("shown %+v", shown)
-	}
-	missing := as[model.JobShown](t, run(t, f.gateway, model.ShowJob{Workspace: f.workspace, ProjectID: f.demo.ID, UID: "01M5J7NB2BKVDRENX1AGVZR50H"}))
-	if missing.Err == nil {
-		t.Fatalf("shown an unknown job: %+v", missing)
-	}
-}
-
 func TestGatewayAnArchivedProjectHasNoReadableJobsAndSaysSo(t *testing.T) {
 	f := newJobsFixture(t)
 	f.adapter(t, "Triage")

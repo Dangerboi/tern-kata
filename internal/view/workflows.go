@@ -80,8 +80,6 @@ func workflowList(m model.Model, paired bool) tern.Element {
 	}
 	empty := "No workflows in " + m.Collection.Title + ". Press n to write one."
 	switch {
-	case m.Workflows.Err != nil:
-		empty = m.Workflows.Err.Error()
 	case m.Workflows.Loading:
 		empty = "Loading workflows…"
 	case len(m.Workflows.List) > 0:
@@ -93,10 +91,14 @@ func workflowList(m model.Model, paired bool) tern.Element {
 	}
 	list := ui.List{CommonWithoutMax: scrollerCommon("rows"), Max: scrollMax(m, m.RowPx+6+8), Selected: selected, Empty: ui.T(empty), Children: items}
 	common := ui.Common{Key: "names", Grow: 1, Basis: ui.BasisFrac(0.4), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}}
-	if paired {
-		return ui.Card{Common: common, Selected: true, Children: ui.Nodes(list)}
+	children := ui.Nodes(list)
+	if m.Workflows.Err != nil {
+		children = ui.Nodes(ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.Workflows.Err.Error()}, list)
 	}
-	return ui.Col{Common: common, Children: ui.Nodes(list)}
+	if paired {
+		return ui.Card{Common: common, Selected: true, Children: children}
+	}
+	return ui.Col{Common: common, Children: children}
 }
 
 // jobNames is the jobs that use a workflow, as a row's cell: the first name and how many more.

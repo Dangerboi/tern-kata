@@ -9,6 +9,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/Dangerboi/tern-kata/internal/crontrigger"
 )
 
 // The Job card is the Popup card that makes a Cron job and edits one. What a card offers depends on the job's kind and trigger,
@@ -292,7 +294,7 @@ var cronJobTrigger = jobTrigger{
 			return CronTrigger{}, fieldError(JobFieldZone, "unknown time zone %q; use an IANA name like Europe/Berlin or UTC.", zone)
 		}
 		t := CronTrigger{Kind: TriggerCron, Cron: expression, Timezone: zone}
-		if _, ok := t.cronSchedule(); !ok {
+		if !t.validCron() {
 			return CronTrigger{}, fieldError(JobFieldCron, "%q is not a valid expression; use 5 fields like 0 9 * * 1-5, or a descriptor like @daily.", expression)
 		}
 		return t, nil
@@ -772,18 +774,18 @@ func (f JobFormState) Preview(cal PaneCalendar, now time.Time) JobPreview {
 	preview := JobPreview{Words: t.Words()}
 	switch t.Kind {
 	case TriggerCron:
-		schedule, _ := t.cronSchedule()
+		schedule, _ := crontrigger.Cron(t.Cron, t.Timezone, time.Time{})
 		zone, _ := t.zoneAndExpression()
 		loc, _ := time.LoadLocation(zone)
 		for next := schedule.Next(now); len(preview.Runs) < previewRuns && !next.IsZero(); next = schedule.Next(next) {
 			preview.Runs = append(preview.Runs, next.In(loc).Format(layout))
 		}
 	case TriggerInterval:
-		step, _ := intervalStep(t.IntervalSeconds) // buildTrigger refused any other
-		next := nextTick(anchor, step, now)
+		schedule, _ := crontrigger.Interval(t.IntervalSeconds, anchor) // buildTrigger refused any other
+		next := schedule.Next(now)
 		for range previewRuns {
 			preview.Runs = append(preview.Runs, cal.in(next).Format(layout))
-			next = next.Add(step)
+			next = schedule.Next(next)
 		}
 	case TriggerOnce:
 		if at, err := time.Parse(time.RFC3339, t.At); err == nil && at.After(now) {
