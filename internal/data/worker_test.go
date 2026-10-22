@@ -121,7 +121,9 @@ func TestOpeningASessionRunsTernNewTabInTheRunsFolderWithTheSessionResumed(t *te
 	if got.Err != nil || !slices.Equal(ran, want) {
 		t.Fatalf("ran %q (err %v), want %q", ran, got.Err, want)
 	}
-	g.runTern = func(context.Context, []string) ([]byte, error) { return []byte("tern: there is no session\n"), errors.New("exit status 1") }
+	g.runTern = func(context.Context, []string) ([]byte, error) {
+		return []byte("tern: there is no session\n"), errors.New("exit status 1")
+	}
 	if failed := g.openRunSession(context.Background(), model.OpenRunSession{}); failed.Err == nil || failed.Err.Error() != "exit status 1: tern: there is no session" {
 		t.Errorf("failure %v", failed.Err)
 	}

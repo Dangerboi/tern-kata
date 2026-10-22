@@ -108,8 +108,8 @@ type Model struct {
 	Jobs             JobsState
 	Runs             RunsState
 	// Worker is what the Pane knows of this machine's worker: whether it runs, what it serves and the local state of its runs.
-	Worker           WorkerState
-	Workflows        WorkflowsState
+	Worker    WorkerState
+	Workflows WorkflowsState
 	// Moving is the Issue whose Move is in flight; further Moves wait for its result.
 	Moving string
 	// nonce is the random per-run prefix of every idempotency key and keys counts the keys minted.
