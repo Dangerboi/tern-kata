@@ -285,7 +285,7 @@ func (w *Worker) release(ps *projectState, uid string) {
 // holdsSlot reports whether the journal's run still occupies a slot: it is in flight, or its process may be alive.
 func holdsSlot(j *Journal) bool {
 	switch j.Phase {
-	case PhasePrepared, PhaseAdmitted, PhaseLaunching, PhaseStarted:
+	case PhasePrepared, PhaseAdmitted, PhaseResuming, PhaseLaunching, PhaseStarted:
 		return true
 	}
 	if j.Outcome != nil {

@@ -24,6 +24,9 @@ const (
 	PhaseLaunching Phase = "launching"
 	// PhaseStarted: the start record (pid, process group, kernel start time, session folder) is saved; the worker waits.
 	PhaseStarted Phase = "started"
+	// PhaseResuming: a resume was accepted and saved; the Run's running observation is not yet confirmed. The attempt
+	// counter, session id and fresh expiry are already recorded, so a crash here never repeats the acceptance.
+	PhaseResuming Phase = "resuming"
 	// PhaseFinished: the process is gone and its Outcome is decided (or the run is held); only reporting remains.
 	PhaseFinished Phase = "finished"
 	// PhaseSettled: every Issue write and the final observation have been sent.
@@ -50,6 +53,10 @@ const (
 	HoldGroupUnproven     = "group_unproven"
 	HoldInvalidPrompt     = "invalid_prompt"
 	HoldExecutionError    = "execution_error"
+	// HoldAgentLogin and HoldAgentQuota: omp ended a turn with a provider failure that a retry cannot fix until the
+	// user logs in again (401, 403) or the usage limit resets (429). Resume continues the session afterwards.
+	HoldAgentLogin = "agent_login"
+	HoldAgentQuota = "agent_quota"
 )
 
 // IntentKind names a kata write a run still owes (ADR-0006 "Reporting intents").
@@ -109,12 +116,31 @@ type Journal struct {
 	StartedAt time.Time `json:"started_at,omitempty"`
 	Revision  int64     `json:"revision"`
 
+	// Attempt counts launches of the run's prompt step: 0 or 1 is the first, each accepted resume adds one.
+	Attempt int `json:"attempt,omitempty"`
+	// Resume describes the latest accepted resume; nil for a run never resumed.
+	Resume *ResumeRecord `json:"resume,omitempty"`
+
 	Launch  *LaunchRecord `json:"launch,omitempty"`
 	Exit    *ExitRecord   `json:"exit,omitempty"`
 	Result  *AgentResult  `json:"result,omitempty"`
 	Outcome *Outcome      `json:"outcome,omitempty"`
 	Intents []Intent      `json:"intents,omitempty"`
 }
+
+// ResumeRecord is a resume the worker accepted: the session to continue and why the run was held.
+type ResumeRecord struct {
+	Attempt   int       `json:"attempt"`
+	SessionID string    `json:"session_id"`
+	By        string    `json:"by"`
+	At        time.Time `json:"at"`
+	// Hold and Detail are the reason and summary of the hold the resume lifted.
+	Hold   string `json:"hold"`
+	Detail string `json:"detail"`
+}
+
+// attempt is the number of the current attempt of the prompt step, starting at 1.
+func (j *Journal) attempt() int { return max(j.Attempt, 1) }
 
 // NotifySpec is a notify job's request as frozen when the run was prepared. Recipient may still be the alias
 // `current-owner-or-author`, resolved from a fresh Issue read when the request is sent.

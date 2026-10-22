@@ -1,6 +1,6 @@
 ---
 name: tern-kata
-description: Files attached to kata Issues, recurring Issues, and the tern-kata worker, through tern-kata. Use when an Issue's metadata has `attachment.*` keys, to attach a screenshot, log or other file to an Issue, to make an Issue recur, change or stop its schedule, or print it (`tern-kata recur`), to run a scheduled agent job now (`tern-kata run`), or to check what the worker serves and runs (`tern-kata worker status`, `worker doctor`).
+description: Files attached to kata Issues, recurring Issues, and the tern-kata worker, through tern-kata. Use when an Issue's metadata has `attachment.*` keys, to attach a screenshot, log or other file to an Issue, to make an Issue recur, change or stop its schedule, or print it (`tern-kata recur`), to run a scheduled agent job now (`tern-kata run`), or to check what the worker serves and runs (`tern-kata worker status`, `worker doctor`), or to resume or abandon a held worker run (`tern-kata worker resume`, `worker abandon`).
 ---
 
 An Attachment is a file copied into the Project's Attachment store, `<primary checkout>/.kata-attachments/<Issue ULID>/<name>`, and pointed to by one `attachment.<name>` meta key on the Issue. The store is gitignored and never committed.
@@ -45,3 +45,18 @@ tern-kata recur <ref> --stop                            # stops the Recurrence; 
 - Same refs, `--as`, Binding rule and exit codes as `attach`: run from a checkout of the Issue's own Project; one result line on success, the reason on stderr and exit 1 on failure. Invalid input is refused and nothing is sent.
 - Changing a schedule someone else changed meanwhile writes nothing: it prints the current schedule and exits 1. Changing or stopping an Issue that never recurred or whose Recurrence was stopped is refused; kata won't make a stopped Issue recur again.
 - Leave the `O` card and `kata ui` to people.
+
+## Worker runs
+
+`tern-kata worker` (a foreground process the user starts) runs kata's agent prompt jobs through omp on their machine and records each run in kata. The commands below talk to it; they need the worker running, say `no tern-kata worker is running on this machine` when it is not, and exit 1 with the reason on stderr when refused.
+
+```bash
+tern-kata run <job-uid>                       # run an adapter prompt job now; prints the run's uid
+tern-kata worker status                       # what the worker serves and runs, with each held run's reason and next step
+tern-kata worker resume <run-uid> [--as me]   # continue a held run in its omp session
+tern-kata worker abandon <run-uid> [--as me]  # give up a held run: kata records it cancelled
+```
+
+- A **held run** is `unknown` in kata with the reason first in its summary (`interrupted`, `launch_unproven`, `no_receipt`, `group_unproven`, `agent_login`, `agent_quota`, `secret_unavailable`, `invalid_prompt`, `execution_error`, or, before kata saw the run, `admission_rejected` and `create_rejected`). The worker never starts its prompt again and nothing restarts it; read the reason and the run's Issue comments, then resume or abandon.
+- Resume starts a new headless omp attempt on the saved session; the agent is told its previous turn may have partly run. It is refused unless the run is held `unknown` with a saved omp session, its agent process group is gone, the Project's lease is held, the Issue is open and the Project has a free slot; the refusal names which. Abandon is refused while a recorded process group is still present and for runs that are not held. Neither kills a process.
+- Decide for the user only when they asked you to: resuming spends model usage and lets the agent act again, abandoning ends the run for good. The refusal text is the answer when neither is possible; do not edit `~/.local/state/tern-kata` journals or delete a `quarantine/` folder to get around it.

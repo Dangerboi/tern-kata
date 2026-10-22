@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -47,23 +48,34 @@ func quote(s string) string { b, _ := json.Marshal(s); return string(b) }
 // serve runs the foreground worker until the test ends and waits until demo admits.
 func (f workerFixture) serve(t *testing.T) {
 	t.Helper()
+	f.serveUntilStopped(t)
+}
+
+// serveUntilStopped runs the foreground worker, waits until demo admits and returns the function that stops it.
+func (f workerFixture) serveUntilStopped(t *testing.T) (stop func()) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
 		done <- runWorkerCommand(ctx, LaunchPlan{Subcommand: "worker", Actor: "fallback"}, f.env, io.Discard)
 	}()
-	t.Cleanup(func() {
-		cancel()
-		select {
-		case <-done:
-		case <-time.After(10 * time.Second):
-			t.Error("the worker did not stop")
-		}
-	})
+	var once sync.Once
+	stop = func() {
+		once.Do(func() {
+			cancel()
+			select {
+			case <-done:
+			case <-time.After(10 * time.Second):
+				t.Error("the worker did not stop")
+			}
+		})
+	}
+	t.Cleanup(stop)
 	eventually(t, "the worker to admit for demo", func() bool {
 		var out bytes.Buffer
 		return runWorkerCommand(ctx, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}}, f.env, &out) == nil && strings.Contains(out.String(), "Project demo: admitting")
 	})
+	return stop
 }
 
 func eventually(t *testing.T, what string, cond func() bool) {
@@ -246,11 +258,20 @@ func TestPlanLaunchWorkerSubcommands(t *testing.T) {
 			t.Fatalf("%v: %+v, %v", args, plan, err)
 		}
 	}
+	for _, verb := range []string{"resume", "abandon"} {
+		plan, err := PlanLaunch([]string{"worker", verb, "01M5J9AAAAAAAAAAAAAAAAAAAA", "--as", "ann"}, lookupFrom(nil), "v")
+		if err != nil || plan.Subcommand != "worker" || len(plan.Operands) != 2 || plan.Operands[0] != verb || plan.Operands[1] != "01M5J9AAAAAAAAAAAAAAAAAAAA" || plan.Actor != "ann" {
+			t.Fatalf("worker %s: %+v, %v", verb, plan, err)
+		}
+	}
 	for args, want := range map[string]string{
 		"run":                      "usage: tern-kata run <job-uid>",
 		"run a b":                  "usage: tern-kata run <job-uid>",
 		"worker stop":              "usage: tern-kata worker",
 		"worker status --takeover": "--takeover applies to `tern-kata worker` only",
+		"worker resume":            "usage: tern-kata worker",
+		"worker abandon a b":       "usage: tern-kata worker",
+		"worker resume a --takeover": "usage: tern-kata worker",
 		"run x --takeover":         "run: unknown flag --takeover",
 	} {
 		_, err := PlanLaunch(strings.Fields(args), lookupFrom(nil), "v")
@@ -258,9 +279,105 @@ func TestPlanLaunchWorkerSubcommands(t *testing.T) {
 			t.Errorf("%q: %v, want a subcommand error saying %q", args, err, want)
 		}
 	}
-	for _, line := range []string{"tern-kata run <job-uid>", "tern-kata worker status", "tern-kata worker doctor", "tern-kata worker [--takeover]"} {
+	for _, line := range []string{"tern-kata run <job-uid>", "tern-kata worker status", "tern-kata worker doctor", "tern-kata worker [--takeover]", "tern-kata worker resume <run-uid>", "tern-kata worker abandon <run-uid>"} {
 		if !strings.Contains(usage, line) {
 			t.Errorf("--help lacks %q", line)
 		}
+	}
+}
+
+// runJob asks the worker to run job now and returns the run's uid.
+func (f workerFixture) runJob(t *testing.T, job worker.Job) string {
+	t.Helper()
+	out, err := f.run(t, LaunchPlan{Subcommand: "run", TargetRef: job.UID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, rest, _ := strings.Cut(out, "Run ")
+	uid, _, _ := strings.Cut(rest, " ")
+	return uid
+}
+
+// startedRun waits until the run's journal says its agent was started.
+func (f workerFixture) startedRun(t *testing.T, uid string) {
+	t.Helper()
+	store := worker.NewStore(f.env.Dirs, worker.Hooks{})
+	eventually(t, "the agent of run "+uid+" to start", func() bool {
+		j, err := store.Load(uid)
+		return err == nil && j.Phase == worker.PhaseStarted && j.Launch != nil && j.Launch.SessionID != ""
+	})
+}
+
+func TestWorkerResumeAndAbandonSettleRunsHeldByARestart(t *testing.T) {
+	stub := workertest.BuildStub(t)
+	f := newWorkerFixture(t, "[profiles.first]\ncommand = "+quote(stub)+"\nargs = [\"--stub-hang-first\", \"--stub-text\", \"Checked it.\"]\n"+
+		"[profiles.stuck]\ncommand = "+quote(stub)+"\nargs = [\"--stub-hang\"]\n")
+	resumable := f.kata.CreateJob(t, f.proj, workertest.Job{Name: "resumable", Prompt: "Check it.", Profile: "first"})
+	doomed := f.kata.CreateJob(t, f.proj, workertest.Job{Name: "doomed", Prompt: "Check it.", Profile: "stuck"})
+
+	// Each worker is stopped while its agent runs; the next one finds the run held.
+	stop := f.serveUntilStopped(t)
+	uidA := f.runJob(t, resumable)
+	f.startedRun(t, uidA)
+	stop()
+	stop = f.serveUntilStopped(t)
+	eventually(t, "the first run to be held and its slot free", func() bool {
+		out, _ := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}})
+		return strings.Contains(out, "Run "+uidA) && strings.Contains(out, "tern-kata worker resume "+uidA) && strings.Contains(out, "0 of 1 slots in use")
+	})
+	uidB := f.runJob(t, doomed)
+	f.startedRun(t, uidB)
+	stop()
+	f.serve(t)
+
+	var status string
+	eventually(t, "status to offer both held runs", func() bool {
+		status, _ = f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}})
+		return strings.Contains(status, "tern-kata worker resume "+uidA) && strings.Contains(status, "tern-kata worker resume "+uidB)
+	})
+	for _, want := range []string{"Run " + uidA, "held: interrupted", "or abandon it with `tern-kata worker abandon " + uidA + "`"} {
+		if !strings.Contains(status, want) {
+			t.Errorf("status lacks %q:\n%s", want, status)
+		}
+	}
+
+	out, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"resume", uidA}, Actor: "ann"})
+	if want := "Run " + uidA + ` of job "resumable" in Project demo resumed: the worker continues its omp session; follow it with ` + "`tern-kata worker status`.\n"; err != nil || out != want {
+		t.Fatalf("resume printed %q, %v", out, err)
+	}
+	eventually(t, "kata to hold the resumed run as succeeded", func() bool {
+		run, err := f.kata.Kata.ShowRun(context.Background(), f.proj.ID, uidA)
+		return err == nil && run.Status == "succeeded" && run.Summary == "Checked it."
+	})
+
+	out, err = f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"abandon", uidB}, Actor: "ann"})
+	if want := "Run " + uidB + ` of job "doomed" in Project demo abandoned: kata will record it cancelled and its slot is free.` + "\n"; err != nil || out != want {
+		t.Fatalf("abandon printed %q, %v", out, err)
+	}
+	eventually(t, "kata to hold the abandoned run as cancelled", func() bool {
+		run, err := f.kata.Kata.ShowRun(context.Background(), f.proj.ID, uidB)
+		return err == nil && run.Status == "cancelled" && strings.HasPrefix(run.Summary, "abandoned by ann (was held: interrupted: ")
+	})
+
+	for _, plan := range []LaunchPlan{
+		{Subcommand: "worker", Operands: []string{"resume", uidB}},
+		{Subcommand: "worker", Operands: []string{"abandon", uidA}},
+		{Subcommand: "worker", Operands: []string{"resume", "01M5J9AAAAAAAAAAAAAAAAAAAA"}},
+	} {
+		_, err := f.run(t, plan)
+		if _, is := err.(subcommandError); !is {
+			t.Errorf("%v: %v, want a refusal", plan.Operands, err)
+		}
+	}
+	if _, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"resume", uidB}}); err == nil || !strings.Contains(err.Error(), "not held") {
+		t.Errorf("resuming a cancelled run: %v", err)
+	}
+}
+
+func TestWorkerResumeWithNoWorkerSaysSo(t *testing.T) {
+	f := newWorkerFixture(t, "")
+	_, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"abandon", "01M5J9AAAAAAAAAAAAAAAAAAAA"}})
+	if _, is := err.(subcommandError); !is || !strings.Contains(err.Error(), "no tern-kata worker is running on this machine") {
+		t.Fatalf("error %v", err)
 	}
 }

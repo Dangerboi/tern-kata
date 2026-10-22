@@ -204,6 +204,8 @@ tern-kata worker doctor     # checks the file, checkouts, commands, secrets, kat
 tern-kata worker            # runs in the foreground; ctrl+c stops it
 tern-kata worker status     # from another shell: what it serves, runs and refuses
 tern-kata run <job-uid>     # run an adapter prompt job now
+tern-kata worker resume <run-uid>    # continue a held run in its omp session
+tern-kata worker abandon <run-uid>   # give up a held run: kata records it cancelled
 ```
 
 State lives in `$XDG_STATE_HOME/tern-kata` (else `~/.local/state/tern-kata`): `worker.lock` (a second worker on the machine is refused), the control socket, each run's journal (`runs/<run uid>/run.json` with its prompt, session and output) and the pins. Across machines, the worker holds a lease for each Project in the Project's own kata metadata (`tern_kata.lease`, renewed every 3 minutes, expiring after 10): a Project whose lease another worker holds admits nothing here and `worker status` says which worker owns it; `tern-kata worker --takeover` moves it on purpose.
@@ -218,6 +220,24 @@ This is the one supervision path tern-kata ships. A service of your own (a syste
 **Turning supervision off.** Create an empty `worker.manual` next to `worker.toml` (or delete `worker.toml`): the host half starts no worker, and looks again every 10 seconds. It cannot stop a worker that already runs: end that one yourself, with the process id `worker status` prints (`kill <id>`, or `Stop-Process -Id <id>` on Windows). Create the marker first, or the host half starts a new one. Removing the marker turns supervision back on. `tern plugin remove tern-kata` or disabling the plugin in Tern's settings removes the host half altogether, together with the window half.
 
 The agent is told its Issue and how to leave a record: comment what it did, close the Issue with evidence when the work is verified. When it exits without closing, the worker comments its final message and labels the Issue `needs-review`. Exit status 0 after a finished turn is `succeeded`, anything else `failed`; a run over its timeout is stopped and failed as "timed out". A run whose prompt may have reached the agent when the worker stopped is held (`unknown` in kata, with the reason first in its summary), never repeated. Jobs this version does not run: workflows, notify jobs, and scheduled triggers (only `run` starts a run so far); `worker status` and `run` say so.
+
+**Recovery.** The worker saves each run's journal before every step that has a side effect (creating its Issue, telling kata it runs, starting omp, recording the process, recording the exit, each comment and the final status), so a worker that is stopped or killed and started again on the same state folder continues from the journal: it finishes what it can prove and never sends a prompt that may have reached the agent a second time. A run whose agent may have started, and whose outcome the worker cannot prove, becomes a **held run**: kata records it `unknown` with the reason first in its summary, the Issue gets a comment, the run keeps its job's overlap gate closed, and nothing restarts it automatically. `worker status` lists each held run with its reason and how to settle it:
+
+| Reason | What happened |
+|---|---|
+| `launch_unproven` | the worker stopped while starting the agent, so it may have started (no process to check) |
+| `interrupted` | the worker stopped or died while the agent ran, and the agent is gone |
+| `no_receipt` | the agent finished its turn and is gone, but the worker never saved its exit status |
+| `group_unproven` | the agent's process group is still present (or cannot be checked); the worker waits it out and never stops it |
+| `agent_login`, `agent_quota` | omp ended the turn with a provider answer of 401/403 (log in again) or 429 (wait for the usage limit to reset) |
+| `secret_unavailable`, `invalid_prompt`, `execution_error` | nothing was started: a secret could not be read, the prompt is over 256 KiB, or the worker failed inside its own code (read its log) |
+| `admission_rejected`, `create_rejected` | held before kata saw the run (the lease moved, or kata refused the run's Issue): nothing was written to kata |
+
+A run that is not uncertain is never held: a nonzero exit, a timeout (the process group is stopped and proven gone) and a spawn error are recorded `failed` with the cause.
+
+`tern-kata worker resume <run-uid>` continues a held run: it starts a new headless `omp -p --mode json --session-dir <run folder> --resume <session id>` on the run's saved session, with a prompt that says the previous turn may have partly run and asks the agent to check the checkout and the Issue for work already done before redoing it. The held attempt's own prompt is never sent again; the run goes back to `running` in kata with its original start time, gets a fresh timeout and ends recorded `succeeded` or `failed` by the new attempt (the held attempt's output stays in the run folder as `output.attempt1.jsonl`). A resume is refused when the run is not held with `unknown`, when no omp session was saved (`launch_unproven`, and the nothing-started reasons: only abandon remains), when its recorded process group is still present, when the Project's lease is not held here, when the Issue is closed or when the Project is at capacity. `tern-kata worker abandon <run-uid>` gives up a held run: kata records it `cancelled` with "abandoned by <actor>" and the held reason, the Issue gets a comment, and the run's slot and overlap gate are freed; a hold from before kata saw the run is closed locally. Both take `--as <actor>`. A `launch_unproven` run keeps its slot until it is abandoned, because the worker cannot prove no agent exists.
+
+A journal the worker cannot read is moved whole to `quarantine/runs/<run uid>`, which keeps that run from ever starting again; `worker doctor` lists them. Never delete one to unblock a job.
 
 ## Pages and the Board Page
 

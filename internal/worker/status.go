@@ -49,8 +49,21 @@ type RunStatus struct {
 	Project string
 	Job     string
 	Issue   string
-	State   string // running, held: <reason>, succeeded, failed, ...
+	State   string // running, resuming, held: <reason>, succeeded, failed, cancelled, ...
 	Pending string // what is still unreported
+	// Attempt is the current attempt of the run's prompt step, 1 for a run never resumed.
+	Attempt int
+	// Held is true while the run waits for the user; Hold is its reason (a Hold* constant) and Detail what the
+	// worker knew when it held. Resumable and Abandonable say which verbs would be accepted now, and ResumeRefusal
+	// why a resume would not.
+	Held          bool
+	Hold          string
+	Detail        string
+	Resumable     bool
+	ResumeRefusal string
+	Abandonable   bool
+	StartedAt     time.Time
+	EndedAt       time.Time
 }
 
 // Status reports the worker as it is now.
@@ -95,25 +108,40 @@ func (w *Worker) Status() Status {
 				continue
 			}
 		}
-		s.Runs = append(s.Runs, runStatus(j))
+		s.Runs = append(s.Runs, w.runStatus(j))
 	}
 	return s
 }
 
+// runStatus is runStatus plus what depends on this worker: whether a resume or an abandon would be accepted.
+func (w *Worker) runStatus(j *Journal) RunStatus {
+	r := runStatus(j)
+	if j.Held() {
+		r.ResumeRefusal = w.resumeRefusal(j)
+		r.Resumable = r.ResumeRefusal == ""
+		r.Abandonable = abandonRefusal(j) == ""
+	}
+	return r
+}
+
 func runStatus(j *Journal) RunStatus {
-	r := RunStatus{UID: j.RunUID, Project: j.ProjectName, Job: j.JobName}
+	r := RunStatus{UID: j.RunUID, Project: j.ProjectName, Job: j.JobName, Attempt: j.attempt(), StartedAt: j.StartedAt}
 	if j.Issue != nil {
 		r.Issue = j.Issue.Ref
 	}
 	switch {
 	case j.Held():
 		r.State = "held: " + j.Outcome.Hold
+		r.Held, r.Hold, r.Detail = true, j.Outcome.Hold, j.Outcome.Summary
 	case j.Outcome != nil:
 		r.State = j.Outcome.Status
 	case j.Phase == PhaseStarted, j.Phase == PhaseLaunching:
 		r.State = "running"
 	default:
 		r.State = string(j.Phase)
+	}
+	if j.Outcome != nil {
+		r.EndedAt = j.Outcome.At
 	}
 	var pending []string
 	for _, it := range j.Intents {
@@ -177,6 +205,17 @@ func (s Status) String() string {
 			fmt.Fprintf(&b, "  (not yet reported: %s)", r.Pending)
 		}
 		b.WriteString("\n")
+		if r.Held {
+			fmt.Fprintf(&b, "    %s\n", r.Detail)
+			switch {
+			case r.Resumable:
+				fmt.Fprintf(&b, "    Resume it with `tern-kata worker resume %s` or abandon it with `tern-kata worker abandon %s`.\n", r.UID, r.UID)
+			case r.Abandonable:
+				fmt.Fprintf(&b, "    It cannot be resumed: %s. Abandon it with `tern-kata worker abandon %s`.\n", r.ResumeRefusal, r.UID)
+			default:
+				fmt.Fprintf(&b, "    It cannot be resumed or abandoned yet: %s.\n", r.ResumeRefusal)
+			}
+		}
 	}
 	for _, q := range s.Quarantined {
 		fmt.Fprintf(&b, "Quarantined run %s: its journal could not be read; run `tern-kata worker doctor`.\n", q)

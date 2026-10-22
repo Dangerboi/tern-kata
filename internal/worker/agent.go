@@ -20,6 +20,8 @@ type AgentResult struct {
 	StopReason string `json:"stop_reason,omitempty"`
 	// ErrorText is that message's errorMessage, the last error text omp reported.
 	ErrorText string `json:"error_text,omitempty"`
+	// ErrorStatus is that message's errorStatus (the provider's HTTP status), 0 when it had none.
+	ErrorStatus int `json:"error_status,omitempty"`
 	// Terminal is true once an agent_end with isTerminal absent or true arrived. No agent_end is a failure whatever the exit code.
 	Terminal     bool   `json:"terminal,omitempty"`
 	InputTokens  *int64 `json:"input_tokens,omitempty"`
@@ -41,6 +43,7 @@ type ompMessage struct {
 	Role         string `json:"role"`
 	StopReason   string `json:"stopReason"`
 	ErrorMessage string `json:"errorMessage"`
+	ErrorStatus  int    `json:"errorStatus"`
 	Content      []struct {
 		Type string `json:"type"`
 		Text string `json:"text"`
@@ -115,6 +118,7 @@ func (p *agentParser) final(m ompMessage) {
 	p.res.FinalText = m.text()
 	p.res.StopReason = m.StopReason
 	p.res.ErrorText = m.ErrorMessage
+	p.res.ErrorStatus = m.ErrorStatus
 }
 
 // Result is what the output said so far; tokens stay nil when omp reported no usage.
@@ -169,6 +173,16 @@ type PromptInput struct {
 	RunUID        string
 	Occurrence    string
 	Task          string
+	// Attempt is the step's attempt, 1 for the first. Resumed is set from the second on: the previous attempt's
+	// turn may have partly run, and the new prompt says so.
+	Attempt int
+	Resumed *ResumeNote
+}
+
+// ResumeNote says why a resumed attempt exists.
+type ResumeNote struct {
+	Hold   string // the hold reason that was lifted
+	Detail string // the hold's summary
 }
 
 // BuildPrompt is the prompt of a prompt-job run, in ADR-0009's order: the run's Issue, the job and run identity, the
@@ -184,9 +198,16 @@ func BuildPrompt(in PromptInput) (string, error) {
 	if in.ExistingIssue {
 		b.WriteString("This is an existing Issue that the job reports to.\n")
 	}
-	fmt.Fprintf(&b, "Job: %s\nRun: %s\nOccurrence: %s\nStep: 1, attempt 1\n", in.JobName, in.RunUID, in.Occurrence)
+	fmt.Fprintf(&b, "Job: %s\nRun: %s\nOccurrence: %s\nStep: 1, attempt %d\n", in.JobName, in.RunUID, in.Occurrence, max(in.Attempt, 1))
 	if body := strings.TrimSpace(in.IssueBody); body != "" && !in.ExistingIssue {
 		fmt.Fprintf(&b, "\nIssue body:\n\n%s\n", body)
+	}
+	if in.Resumed != nil {
+		b.WriteString("\n# Resumed run\n\n")
+		fmt.Fprintf(&b, "This run was held (%s) and a person resumed it. Your previous turn in this session was cut short and may have partly run: a command, an edit or a kata write may have happened without you seeing its result. Before redoing anything, check the checkout and this run's Issue (its comments, labels and status) for work already done, and carry on from there rather than starting over. The task and the run contract below still apply in full.\n", in.Resumed.Hold)
+		if d := strings.TrimSpace(in.Resumed.Detail); d != "" {
+			fmt.Fprintf(&b, "\nWhy it was held: %s\n", truncate(d, 2000))
+		}
 	}
 	b.WriteString("\n# Task\n\n")
 	b.WriteString(strings.TrimSpace(in.Task))

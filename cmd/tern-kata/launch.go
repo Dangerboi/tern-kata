@@ -187,9 +187,11 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 		return LaunchPlan{}, fmt.Errorf("recur: --stop takes no schedule flags")
 	case plan.Subcommand == "run" && len(operands) != 1:
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata run <job-uid>")
+	case plan.Subcommand == "worker" && len(operands) == 2 && (operands[0] == "resume" || operands[0] == "abandon") && !plan.Takeover:
+		// `worker resume <run-uid>` and `worker abandon <run-uid>`; validated below like the other forms.
 	case plan.Subcommand == "worker" && (len(operands) > 1 || len(operands) == 1 && operands[0] != "status" && operands[0] != "doctor"):
-		return LaunchPlan{}, fmt.Errorf("usage: tern-kata worker [--takeover] | tern-kata worker status | tern-kata worker doctor")
-	case plan.Subcommand == "worker" && len(operands) == 1 && plan.Takeover:
+		return LaunchPlan{}, fmt.Errorf("usage: tern-kata worker [--takeover] | tern-kata worker status | tern-kata worker doctor | tern-kata worker resume <run-uid> | tern-kata worker abandon <run-uid>")
+	case plan.Subcommand == "worker" && len(operands) >= 1 && plan.Takeover:
 		return LaunchPlan{}, fmt.Errorf("worker: --takeover applies to `tern-kata worker` only")
 	}
 	plan.Actor = resolveActor(plan.fallbackAuthor, lookup)
@@ -243,6 +245,8 @@ Usage:
   tern-kata worker [--takeover]
   tern-kata worker status
   tern-kata worker doctor
+  tern-kata worker resume <run-uid> [--as <actor>]
+  tern-kata worker abandon <run-uid> [--as <actor>]
   tern-kata --version
   tern-kata --help
 
@@ -276,6 +280,11 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
   worker status                 say what the running worker serves, runs and refuses
   worker doctor                 check worker.toml, the checkouts, agent commands, secrets, the kata
                                 daemon and each Project's lease, and say how to fix what is missing
+  worker resume <run-uid>       continue a held run: the worker starts a new headless omp attempt on
+                                the run's saved session (--resume) with a prompt that warns the
+                                previous turn may have partly run; the run goes back to running
+  worker abandon <run-uid>      give up a held run: kata records it cancelled ("abandoned by <actor>")
+                                and the run's slot and overlap gate are freed
 <ref> is a short id in this workspace's Project, <project>#<short id>, or a ULID.
 The Issue's Project must be this workspace's Binding.
 
