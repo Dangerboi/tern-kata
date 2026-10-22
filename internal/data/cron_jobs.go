@@ -115,20 +115,6 @@ func satisfied(jobs []model.CronJob, activity map[string]model.JobActivity) bool
 	})
 }
 
-// ShowJob reads one Cron job, archived or not, with its parent when it is native.
-func (c *Client) ShowJob(ctx context.Context, cmd model.ShowJob) (model.JobShown, error) {
-	response, err := c.ShowCronJobWithResponse(ctx, &g.ShowCronJobRequestOptions{PathParams: &g.ShowCronJobPath{ProjectID: cmd.ProjectID, CronUID: cmd.UID}})
-	if err != nil {
-		return model.JobShown{}, daemonError(err)
-	}
-	if response.JSON200 == nil {
-		return model.JobShown{}, errors.New("kata daemon returned no Cron job")
-	}
-	parents := parentReader{c: c, projectID: cmd.ProjectID, read: map[string]readParent{}}
-	job, err := parents.translate(ctx, response.JSON200.Job)
-	return model.JobShown{UID: cmd.UID, Job: job}, err
-}
-
 // projectArchived tells apart the two reasons a Project's cron routes answer "project not found": the Project is archived, or
 // it is gone. It reports true only when the Project's own state says archived; any other failure is err as it came.
 func (c *Client) projectArchived(ctx context.Context, projectID int64, err error) (bool, error) {

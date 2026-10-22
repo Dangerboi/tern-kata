@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/oklog/ulid/v2"
 )
 
 // The writes of a Cron job: the Job card's save, and the keys on the Jobs Page that pause, resume, archive and restore. Each is
@@ -84,19 +86,9 @@ func (JobWritten) msg() {}
 func (m Model) jobUID() (Model, string) {
 	m.keys++
 	sum := sha256.Sum256([]byte(fmt.Sprintf("%s-job-%d", m.nonce, m.keys)))
-	const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
-	var out [26]byte
-	out[0] = alphabet[sum[0]>>5]
-	// The other 25 characters take the remaining 125 of the 128 bits, 5 at a time.
-	for i := 1; i < 26; i++ {
-		at := 3 + 5*(i-1)
-		window := uint16(sum[at/8]) << 8
-		if at/8+1 < len(sum[:16]) {
-			window |= uint16(sum[at/8+1])
-		}
-		out[i] = alphabet[(window>>(11-at%8))&0x1f]
-	}
-	return m, string(out[:])
+	var id ulid.ULID
+	copy(id[:], sum[:16])
+	return m, id.String()
 }
 
 // writableJob is the selected job when a key may write to it: the Jobs Page shows it, the daemon is connected, no other write
