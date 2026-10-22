@@ -1,6 +1,6 @@
 ---
 name: kata
-description: "Kata issue tracker CLI. Use when a repo has `.kata.toml` or names Kata as its tracker: finding, creating, claiming, commenting, replying, labelling or closing issues, making work recur, or coordinating subagents through issues."
+description: "Kata issue tracker CLI. Use when a repo has `.kata.toml` or names Kata as its tracker: finding, creating, claiming, commenting, replying, labelling or closing issues (tickets), making work recur, or coordinating subagents through issues."
 ---
 
 Kata is a daemon-backed issue ledger shared by humans and agents. Written against kata v0.19; `kata <cmd> --help` is the source of truth for flags, `kata quickstart --format contract` for upstream agent policy. Repo specifics (project name, extra labels, human gates) live in that repo's `AGENTS.md`.
