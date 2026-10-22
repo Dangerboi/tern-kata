@@ -151,22 +151,31 @@ func TestTwoResumesOfOneHoldLeaveTheWinnersSlotAlone(t *testing.T) {
 	case <-gate.Arrived: // without the fix the second request is past its refusal check too
 	case <-time.After(300 * time.Millisecond):
 	}
-	gate.Release()
-	var winner, loser <-chan answer
-	var done answer
-	select {
-	case done = <-first:
-		winner, loser = first, second
-	case done = <-second:
-		winner, loser = second, first
+	// Whichever request got the run first is held at the gate; the other waits its turn or is refused.
+	var got []answer
+	a, b := first, second
+	for range 2 {
+		gate.Release()
+		select {
+		case r := <-a:
+			got, a = append(got, r), nil
+		case r := <-b:
+			got, b = append(got, r), nil
+		}
 	}
-	_ = winner
-	if done.err != nil || !done.resp.OK {
-		t.Fatalf("the first resume: %v %q", done.err, done.resp.Error)
+	accepted := 0
+	for _, r := range got {
+		if r.err != nil {
+			t.Fatal(r.err)
+		}
+		if r.resp.OK {
+			accepted++
+		} else if !strings.Contains(r.resp.Error, "not held") {
+			t.Fatalf("the refused resume says %q, want the not-held reason", r.resp.Error)
+		}
 	}
-	gate.Release()
-	if lost := <-loser; lost.err != nil || lost.resp.OK {
-		t.Fatalf("the second resume was accepted too: %+v %v", lost.resp, lost.err)
+	if accepted != 1 {
+		t.Fatalf("%d of two resumes of one hold were accepted, want exactly one", accepted)
 	}
 	gate.Open()
 	if got := r.w.Status().Projects[0].InUse; got != 1 {
