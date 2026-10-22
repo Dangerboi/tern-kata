@@ -21,6 +21,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Fixed
 
+- The last card of every Board Lane stays fully visible while a Notice or the "disconnected" line shows under the columns.
 - Scrolling the Issue detail (`↑`, `↓`, Page Up, Page Down) while it shows an error line or an Issue that is no longer available does nothing instead of ending the Pane with "Tern surface: unknown id main.columns.detail.viewport.content".
 
 ## [0.3.0] - 2026-10-20

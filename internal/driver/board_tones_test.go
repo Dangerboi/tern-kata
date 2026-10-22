@@ -111,3 +111,24 @@ func TestLaneListsAreCappedToTheRowsTheirPaneHas(t *testing.T) {
 		}
 	}
 }
+
+// Each line under the columns costs its text row and the gap above it.
+func TestLaneListsLeaveRoomForTheNoticeAndTheDisconnectedLine(t *testing.T) {
+	const rowPx = 16
+	pane := func(rows int, notice string, stale bool) int {
+		s := step(t, boardPane(t, boardCard("a")), model.ResizeMsg{Cols: 160, Rows: rows, RowPx: rowPx}).State
+		s.Model.Notice, s.Model.Stale = notice, stale
+		return laneListLines(t, s)
+	}
+	for rows := 44; rows <= 80; rows++ {
+		if got, want := pane(rows, "Lanes not saved", false), pane(rows-2, "", false); got != want {
+			t.Errorf("a %d-row Pane with a Notice caps a Lane list at %d list rows, want the %d of a Pane two rows shorter", rows, got, want)
+		}
+		if got, want := pane(rows, "", true), pane(rows-2, "", false); got != want {
+			t.Errorf("a %d-row Pane while disconnected caps a Lane list at %d list rows, want the %d of a Pane two rows shorter", rows, got, want)
+		}
+		if got, want := pane(rows, "Lanes not saved", true), pane(rows-4, "", false); got != want {
+			t.Errorf("a %d-row Pane with both caps a Lane list at %d list rows, want the %d of a Pane four rows shorter", rows, got, want)
+		}
+	}
+}

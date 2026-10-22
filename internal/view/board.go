@@ -51,6 +51,7 @@ func board(m model.Model, now time.Time) tern.Element {
 		selected = m.Relationships.Of(m.SelectedUID)
 	}
 	lanes := make([]tern.Element, len(columns))
+	listMax := laneMax(m)
 	for i, column := range columns {
 		cards := make([]tern.Element, len(column.Cards))
 		for j, card := range column.Cards {
@@ -70,7 +71,7 @@ func board(m model.Model, now time.Time) tern.Element {
 			Children: ui.Nodes(
 				head,
 				ui.Rule{Common: ui.Common{Key: "rule", Tone: tones[i]}},
-				ui.List{CommonWithoutMax: scrollerCommon("cards"), Max: laneMax(m), Empty: ui.T("No cards"), Children: cards},
+				ui.List{CommonWithoutMax: scrollerCommon("cards"), Max: listMax, Empty: ui.T("No cards"), Children: cards},
 			),
 		}
 	}
@@ -154,14 +155,12 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 	if done {
 		cardTone = ui.ToneMuted
 	}
-	if m.Board.Mode == model.BoardColumns && !selected {
-		if tags := selectedRels.HighlightsOf(issue.UID); len(tags) > 0 {
-			for _, tag := range tags {
-				ids = append(ids, ui.Badge{Common: ui.Common{Key: "tag-" + string(tag), Tone: highlightTone[tag]}, Text: string(tag)})
-			}
-			if !done {
-				cardTone = highlightTone[tags[0]]
-			}
+	if tags := selectedRels.HighlightsOf(issue.UID); len(tags) > 0 && !selected {
+		for _, tag := range tags {
+			ids = append(ids, ui.Badge{Common: ui.Common{Key: "tag-" + string(tag), Tone: highlightTone[tag]}, Text: string(tag)})
+		}
+		if !done {
+			cardTone = highlightTone[tags[0]]
 		}
 	}
 	body = slices.Insert(body, 0, tern.Element(ui.Row{Common: ui.Common{Key: "id"}, Gap: ui.GapSM, Wrap: true, Children: ids}))
@@ -176,6 +175,7 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 // fills the Lane and scrolls inside it and the Pane has nothing to scroll: the top bar stays. Tern has no fill for a list, only a
 // height cap in list rows, each a text row and 6px tall; so the cap is the Pane's pixel height less its chrome in rows, rounded
 // down, and the list ends up to one list row above the footer.
+// The Notice and the "disconnected" line, each a text row and the gap above it under the columns while drawn (the disconnected line more rows with the stream's error), are part of the chrome. The cap is worked out once per draw and shared by every Lane.
 // ponytail: the chrome is measured at Tern's default density (the Pane's 6px padding, a text row for the top bar and for each gap, 46px of Lane header, a 24px footer margin, 24px for the Search field); a denser theme leaves more room unused, a looser one clips the lowest card. Upgrade: a Tern prop for a list that fills its column.
 // Until Tern says the Pane's size there is nothing to measure and the list takes half the window.
 func laneMax(m model.Model) ui.ListMax {
@@ -185,6 +185,12 @@ func laneMax(m model.Model) ui.ListMax {
 	grid, _, _ := footerGrid(m)
 	chrome := 5*m.RowPx + 24 + m.RowPx*len(grid)
 	if m.FilterSummary() != "" {
+		chrome += 2 * m.RowPx
+	}
+	if m.Stale && m.Err == nil && !m.FirstLoad() && !m.HelpOpen {
+		chrome += m.RowPx * (2 + strings.Count(staleText(m), "\n"))
+	}
+	if m.Notice != "" && !m.HelpOpen {
 		chrome += 2 * m.RowPx
 	}
 	if m.Search.Open {
