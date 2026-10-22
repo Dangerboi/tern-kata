@@ -287,8 +287,12 @@ func enterJobs(m Model) (Model, []Cmd) {
 	m.Jobs.detailHidden = m.DetailHidden()
 	m.hidden = true
 	m.Focus = ColumnList
-	m.Jobs.ProjectID, m.Jobs.Jobs, m.Jobs.Selected, m.Jobs.Err = 0, nil, "", nil
-	m.Jobs.ProjectArchived = false
+	// The Page keeps its selection while another Page is shown; only another Project resets it, and the jobs are read again.
+	if id, known := m.jobsProjectID(); !known || id != m.Jobs.ProjectID {
+		m.Jobs.ProjectID, m.Jobs.Jobs, m.Jobs.Selected, m.Jobs.Err = 0, nil, "", nil
+		m.Jobs.ProjectArchived = false
+	}
+	m.Jobs.stale = true
 	m, ask := m.askWorker(0)
 	return m, append(cmds, ask)
 }

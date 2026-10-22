@@ -204,11 +204,29 @@ func TestRKeyOnTheJobsPageOpensTheRunsFilteredToTheSelectedJob(t *testing.T) {
 	}
 }
 
-func TestLeavingTheRunsPageForgetsItsJobFilter(t *testing.T) {
-	s := feed(t, jobsPane(t, 160, promptJob("J1", "Triage")), key("r")).State
-	s = feed(t, s, key("1"), key("4")).State
-	if s.Model.Runs.JobUID != "" {
-		t.Errorf("filter %q survives leaving the page", s.Model.Runs.JobUID)
+func TestSwitchingPagesKeepsEachPagesSelectionLoadedRunsAndFilter(t *testing.T) {
+	// Runs: the job filter, the selection and the older page already read survive a visit to another Page.
+	out := step(t, jobsPane(t, 160, promptJob("J1", "Triage")), key("r"))
+	s := answerRuns(t, out, "cursor-1", finishedRun("R2"))
+	s = answerRuns(t, step(t, s, key("m")), "", finishedRun("R2"), finishedRun("R1"))
+	s = feed(t, s, key("j")).State
+	back := step(t, step(t, s, key("1")).State, key("4"))
+	if got := back.State.Model.Runs; got.JobUID != "J1" || got.Selected != "R1" || len(got.Runs) != 2 {
+		t.Fatalf("after a visit elsewhere: filter %q selected %q runs %d, want J1, R1 and both pages", got.JobUID, got.Selected, len(got.Runs))
+	}
+	load, ok := askedRuns(back.Cmds)
+	if !ok || load.JobUID != "J1" || !load.Refresh {
+		t.Fatalf("cmds %#v, want the newest page of J1's runs read again to join the ones held", back.Cmds)
+	}
+
+	// Jobs: the selected job survives too.
+	j := feed(t, jobsPane(t, 160, promptJob("J1", "Triage"), promptJob("J2", "Other")), key("j")).State
+	again := step(t, step(t, j, key("1")).State, key("3"))
+	if got := again.State.Model.Jobs.Selected; got != "J2" {
+		t.Fatalf("selected %q after a visit elsewhere, want J2", got)
+	}
+	if _, ok := askedJobs(again.Cmds); !ok {
+		t.Fatalf("cmds %#v, want the jobs read again", again.Cmds)
 	}
 }
 
