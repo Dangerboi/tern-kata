@@ -28,5 +28,8 @@ kata --workspace "$jb_dir" cron job delete "$jb_job" --expected-event-uid "$jb_e
 expect_tree "[data-id='main.columns.list.jobs.$jb_job']" '.count == 0'
 ctl key a
 expect_tree "[data-id='main.columns.list.jobs.$jb_job']" '.ok and .count == 1 and (.nodes[0].text | contains("archived"))'
+# The Page keeps its archived toggle: turn it back off for later steps.
+ctl key a
+expect_tree "[data-id='main.columns.list.jobs.$jb_job']" '.count == 0'
 ctl key 1
 kata --workspace "$jb_dir" delete "$jb_uid" --force --confirm "DELETE smoke#$jb_short" --json >/dev/null

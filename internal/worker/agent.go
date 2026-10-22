@@ -177,6 +177,19 @@ type PromptInput struct {
 	// turn may have partly run, and the new prompt says so.
 	Attempt int
 	Resumed *ResumeNote
+	// Step is set for a workflow's prompt step; a prompt job's single step needs none.
+	Step *StepInput
+}
+
+// StepInput is where a prompt step sits in its workflow, and why it runs again when a failed attempt came before it.
+type StepInput struct {
+	Workflow string
+	About    string
+	Key      string
+	Number   int // 1-based
+	Count    int
+	// Failure is why the step's previous attempt failed; empty on the first attempt.
+	Failure string
 }
 
 // ResumeNote says why a resumed attempt exists.
@@ -198,7 +211,16 @@ func BuildPrompt(in PromptInput) (string, error) {
 	if in.ExistingIssue {
 		b.WriteString("This is an existing Issue that the job reports to.\n")
 	}
-	fmt.Fprintf(&b, "Job: %s\nRun: %s\nOccurrence: %s\nStep: 1, attempt %d\n", in.JobName, in.RunUID, in.Occurrence, max(in.Attempt, 1))
+	fmt.Fprintf(&b, "Job: %s\nRun: %s\nOccurrence: %s\n", in.JobName, in.RunUID, in.Occurrence)
+	if st := in.Step; st != nil {
+		fmt.Fprintf(&b, "Workflow: %s\n", st.Workflow)
+		if about := strings.TrimSpace(st.About); about != "" {
+			fmt.Fprintf(&b, "About: %s\n", truncate(about, 2000))
+		}
+		fmt.Fprintf(&b, "Step: %d of %d (%s), attempt %d\n", st.Number, st.Count, st.Key, max(in.Attempt, 1))
+	} else {
+		fmt.Fprintf(&b, "Step: 1, attempt %d\n", max(in.Attempt, 1))
+	}
 	if body := strings.TrimSpace(in.IssueBody); body != "" && !in.ExistingIssue {
 		fmt.Fprintf(&b, "\nIssue body:\n\n%s\n", body)
 	}
@@ -208,6 +230,10 @@ func BuildPrompt(in PromptInput) (string, error) {
 		if d := strings.TrimSpace(in.Resumed.Detail); d != "" {
 			fmt.Fprintf(&b, "\nWhy it was held: %s\n", truncate(d, 2000))
 		}
+	}
+	if st := in.Step; st != nil && st.Failure != "" {
+		b.WriteString("\n# Retry\n\n")
+		fmt.Fprintf(&b, "This is attempt %d of this step: the previous attempt failed. Before redoing anything, check the checkout and this run's Issue (its comments, labels and status) for work that attempt left partly done, and carry on from there. Earlier steps of this workflow ran in other processes; what they did is in the checkout and the Issue.\n\nWhy it failed: %s\n", max(in.Attempt, 2), truncate(strings.TrimSpace(st.Failure), 2000))
 	}
 	b.WriteString("\n# Task\n\n")
 	b.WriteString(strings.TrimSpace(in.Task))
