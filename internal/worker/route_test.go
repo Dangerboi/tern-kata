@@ -278,3 +278,67 @@ func TestAProjectRemovedFromTheConfigGetsItsSavedReportDeliveredAndItsLeaseOwner
 		return err == nil && lease != nil && (!hasOwner || owner == "") && lease["generation"] == float64(1)
 	})
 }
+
+func TestAProjectRemovedFromTheConfigIsNotRetiredWhileItsPinnedInstanceIsNotTheDaemon(t *testing.T) {
+	h := newHarness(t)
+	old := h.kata.Project(t, "old")
+	job := h.kata.CreateJob(t, old, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
+	h.config = strings.Replace(h.config, "[[projects]]\nname = \"demo\"\n", "[[projects]]\nname = \"demo\"\n[[projects]]\nname = \"old\"\n", 1)
+	if err := os.WriteFile(h.dirs.ConfigPath(), []byte(h.config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := newCrash("finished")
+	r := h.start(c.hooks())
+	h.eventually("both Projects to admit", func() bool {
+		p := r.w.Status().Projects
+		return len(p) == 2 && p[0].Admitting && p[1].Admitting
+	})
+	if resp := h.ask(worker.Request{Op: "run", Job: job.UID}); !resp.OK {
+		t.Fatal(resp.Error)
+	}
+	uid := c.wait(t)
+	r.stop()
+
+	path := filepath.Join(h.dirs.State, "projects", old.UID, "pin.json")
+	original, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pinned map[string]any
+	if err := json.Unmarshal(original, &pinned); err != nil {
+		t.Fatal(err)
+	}
+	pinned["instance_uid"] = "another-daemon"
+	changed, _ := json.Marshal(pinned)
+	if err := os.WriteFile(path, changed, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.config = strings.Replace(h.config, "[[projects]]\nname = \"old\"\n", "", 1)
+	if err := os.WriteFile(h.dirs.ConfigPath(), []byte(h.config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	probed := h.kata.Requests("cron/capabilities")
+	r2 := h.start(worker.Hooks{})
+	h.admitting(r2)
+	h.eventually("the retire to check the route", func() bool { return h.kata.Requests("cron/capabilities") > probed })
+	h.clock.Advance(time.Minute)
+	if run, err := h.kata.Kata.ShowRun(context.Background(), old.ID, uid); err != nil || run.Status != "running" {
+		t.Fatalf("kata holds the run as %q (%v): nothing is delivered to a daemon that is not the pinned instance", run.Status, err)
+	}
+	if p, err := h.kata.Kata.Project(context.Background(), old.ID); err != nil {
+		t.Fatal(err)
+	} else if lease, _ := p.Metadata["tern_kata.lease"].(map[string]any); lease != nil {
+		if owner, _ := lease["owner"].(string); owner == "" {
+			t.Fatalf("the lease %v was released for a daemon that is not the pinned instance", lease)
+		}
+	}
+
+	if err := os.WriteFile(path, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.clock.Advance(6 * time.Minute)
+	h.eventually("the report to be delivered once the pinned instance is back", func() bool {
+		run, err := h.kata.Kata.ShowRun(context.Background(), old.ID, uid)
+		return err == nil && run.Status == "succeeded"
+	})
+}

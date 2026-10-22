@@ -3,9 +3,7 @@ package data
 import (
 	"context"
 	"errors"
-	"net/http"
 
-	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -34,14 +32,15 @@ func (c *Client) ListRuns(ctx context.Context, cmd model.LoadRuns) (model.RunsLo
 	if response.JSON200 == nil {
 		return model.RunsLoaded{}, errors.New("kata daemon returned no Runs")
 	}
-	names := runNames{c: c, projectID: cmd.ProjectID, jobs: map[string]string{}, workflows: map[string]string{}, issues: map[string]model.Run{}}
+	names, err := c.readRunNames(ctx, cmd.ProjectID)
+	if err != nil {
+		return model.RunsLoaded{}, err
+	}
 	runs := make([]model.Run, len(response.JSON200.Runs))
 	for i, wire := range response.JSON200.Runs {
-		if runs[i], err = names.translate(ctx, wire); err != nil {
-			return model.RunsLoaded{}, err
-		}
+		runs[i] = names.translate(wire)
 	}
-	loaded := model.RunsLoaded{Request: cmd.Request, Runs: runs, Before: cmd.Before}
+	loaded := model.RunsLoaded{Request: cmd.Request, Runs: runs, Before: cmd.Before, Refresh: cmd.Refresh}
 	if response.JSON200.NextBeforeUID != nil {
 		loaded.NextBefore = *response.JSON200.NextBeforeUID
 	}
@@ -57,107 +56,69 @@ func (c *Client) ShowRun(ctx context.Context, cmd model.ShowRun) (model.RunShown
 	if response.JSON200 == nil {
 		return model.RunShown{}, errors.New("kata daemon returned no Run")
 	}
-	names := runNames{c: c, projectID: cmd.ProjectID, jobs: map[string]string{}, workflows: map[string]string{}, issues: map[string]model.Run{}}
-	run, err := names.translate(ctx, response.JSON200.Run)
-	return model.RunShown{UID: cmd.UID, Run: run}, err
+	names, err := c.readRunNames(ctx, cmd.ProjectID)
+	if err != nil {
+		return model.RunShown{}, err
+	}
+	return model.RunShown{UID: cmd.UID, Run: names.translate(response.JSON200.Run)}, nil
 }
 
 // runsPageSize is the most Runs kata answers in one page.
 const runsPageSize = 100
 
 // runNames resolves the uids a Run holds to the names a row shows: the job's, the workflow's and the Issue's short id and title.
-// It reads each once however many Runs share it. What kata no longer answers for stays unnamed.
+// Each kind is read once for the Project, however many Runs there are. What kata does not list stays unnamed: a deleted Issue then
+// shows by its uid.
 type runNames struct {
-	c         *Client
-	projectID int64
 	jobs      map[string]string
 	workflows map[string]string
 	// issues holds the Issue's short id and title in a Run's fields, keyed by the Issue's uid.
 	issues map[string]model.Run
 }
 
-func (n *runNames) translate(ctx context.Context, wire g.CronRun) (model.Run, error) {
+// readRunNames reads the Project's Issues of every status, jobs and workflows (the archived ones too), one request of each kind.
+func (c *Client) readRunNames(ctx context.Context, projectID int64) (runNames, error) {
+	names := runNames{jobs: map[string]string{}, workflows: map[string]string{}, issues: map[string]model.Run{}}
+	archived := true
+	jobs, err := c.ListCronJobsWithResponse(ctx, &g.ListCronJobsRequestOptions{PathParams: &g.ListCronJobsPath{ProjectID: projectID}, Query: &g.ListCronJobsQuery{IncludeDeleted: &archived}})
+	if err != nil {
+		return names, daemonError(err)
+	}
+	if jobs.JSON200 == nil {
+		return names, errors.New("kata daemon returned no Cron jobs")
+	}
+	for _, job := range jobs.JSON200.Jobs {
+		names.jobs[job.UID] = job.Name
+	}
+	workflows, err := c.ListCronWorkflowsWithResponse(ctx, &g.ListCronWorkflowsRequestOptions{PathParams: &g.ListCronWorkflowsPath{ProjectID: projectID}, Query: &g.ListCronWorkflowsQuery{IncludeDeleted: &archived}})
+	if err != nil {
+		return names, daemonError(err)
+	}
+	if workflows.JSON200 == nil {
+		return names, errors.New("kata daemon returned no workflows")
+	}
+	for _, workflow := range workflows.JSON200.Workflows {
+		names.workflows[workflow.UID] = workflow.Name
+	}
+	issues, err := c.ListIssuesWithResponse(ctx, &g.ListIssuesRequestOptions{PathParams: &g.ListIssuesPath{ProjectID: projectID}})
+	if err != nil {
+		return names, daemonError(err)
+	}
+	if issues.JSON200 == nil {
+		return names, errors.New("kata daemon returned no Issues")
+	}
+	for _, issue := range issues.JSON200.Issues {
+		names.issues[issue.UID] = model.Run{IssueShortID: issue.ShortID, IssueTitle: issue.Title}
+	}
+	return names, nil
+}
+
+func (n runNames) translate(wire g.CronRun) model.Run {
 	run := translateRun(wire)
-	var err error
-	if run.JobUID != "" {
-		if run.JobName, err = n.name(ctx, n.jobs, run.JobUID, n.jobName); err != nil {
-			return model.Run{}, err
-		}
-	}
-	if run.WorkflowUID != "" {
-		if run.WorkflowName, err = n.name(ctx, n.workflows, run.WorkflowUID, n.workflowName); err != nil {
-			return model.Run{}, err
-		}
-	}
-	if run.IssueUID != "" {
-		issue, err := n.issue(ctx, run.IssueUID)
-		if err != nil {
-			return model.Run{}, err
-		}
-		run.IssueShortID, run.IssueTitle = issue.IssueShortID, issue.IssueTitle
-	}
-	return run, nil
-}
-
-// name reads a name once into cache. A uid kata does not know reads as "".
-func (n *runNames) name(ctx context.Context, cache map[string]string, uid string, read func(context.Context, string) (string, error)) (string, error) {
-	if name, ok := cache[uid]; ok {
-		return name, nil
-	}
-	name, err := read(ctx, uid)
-	if client.StatusCode(err) == http.StatusNotFound {
-		name, err = "", nil
-	}
-	if err != nil {
-		return "", daemonError(err)
-	}
-	cache[uid] = name
-	return name, nil
-}
-
-func (n *runNames) jobName(ctx context.Context, uid string) (string, error) {
-	response, err := n.c.ShowCronJobWithResponse(ctx, &g.ShowCronJobRequestOptions{PathParams: &g.ShowCronJobPath{ProjectID: n.projectID, CronUID: uid}})
-	if err != nil {
-		return "", err
-	}
-	if response.JSON200 == nil {
-		return "", errors.New("kata daemon returned no Cron job")
-	}
-	return response.JSON200.Job.Name, nil
-}
-
-func (n *runNames) workflowName(ctx context.Context, uid string) (string, error) {
-	response, err := n.c.ShowCronWorkflowWithResponse(ctx, &g.ShowCronWorkflowRequestOptions{PathParams: &g.ShowCronWorkflowPath{ProjectID: n.projectID, CronUID: uid}})
-	if err != nil {
-		return "", err
-	}
-	if response.JSON200 == nil {
-		return "", errors.New("kata daemon returned no workflow")
-	}
-	return response.JSON200.Workflow.Name, nil
-}
-
-func (n *runNames) issue(ctx context.Context, uid string) (model.Run, error) {
-	if read, ok := n.issues[uid]; ok {
-		return read, nil
-	}
-	deleted := true
-	response, err := n.c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{
-		PathParams: &g.ShowIssuePath{ProjectID: n.projectID, Ref: uid},
-		Query:      &g.ShowIssueQuery{IncludeDeleted: &deleted},
-	})
-	var read model.Run
-	switch {
-	case client.StatusCode(err) == http.StatusNotFound:
-	case err != nil:
-		return model.Run{}, daemonError(err)
-	case response.JSON200 == nil:
-		return model.Run{}, errors.New("kata daemon returned no Issue")
-	default:
-		read = model.Run{IssueShortID: response.JSON200.Issue.ShortID, IssueTitle: response.JSON200.Issue.Title}
-	}
-	n.issues[uid] = read
-	return read, nil
+	run.JobName, run.WorkflowName = n.jobs[run.JobUID], n.workflows[run.WorkflowUID]
+	issue := n.issues[run.IssueUID]
+	run.IssueShortID, run.IssueTitle = issue.IssueShortID, issue.IssueTitle
+	return run
 }
 
 // translateRun is kata's Run as the model holds it, without the names its uids resolve to.

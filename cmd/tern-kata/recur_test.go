@@ -129,3 +129,27 @@ func TestAScheduleChangedMeanwhileIsNotOverwrittenAndIsPrinted(t *testing.T) {
 		t.Fatalf("the schedule is %q; the change overwrote the other one", now)
 	}
 }
+
+func TestTheScheduleDefaultsComeFromTheStartGivenAndExplicitFlagsWin(t *testing.T) {
+	// 2026-11-04 is a Wednesday.
+	for _, c := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"weekly takes the weekday of the start", []string{"--frequency", "weekly", "--start", "2026-11-04"}, "Weekly on Wed"},
+		{"weekly --on wins", []string{"--frequency", "weekly", "--start", "2026-11-04", "--on", "fri"}, "Weekly on Fri"},
+		{"monthly takes the day of the start", []string{"--frequency", "monthly", "--start", "2026-11-04"}, "day 4"},
+		{"monthly --day wins", []string{"--frequency", "monthly", "--start", "2026-11-04", "--day", "17"}, "day 17"},
+		{"yearly takes the month and day of the start", []string{"--frequency", "yearly", "--start", "2026-11-04"}, "Yearly on November 4"},
+		{"yearly --month and --day win", []string{"--frequency", "yearly", "--start", "2026-11-04", "--month", "3", "--day", "9"}, "Yearly on March 9"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newSubcommandFixture(t)
+			out, err := f.recur(t, c.args...)
+			if err != nil || !strings.Contains(out, c.want) {
+				t.Fatalf("stdout %q, err %v; want it to contain %q", out, err, c.want)
+			}
+		})
+	}
+}
