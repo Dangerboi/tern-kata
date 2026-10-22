@@ -164,10 +164,10 @@ func TestJOnAnIssueOpensTheCardWithThatIssueAsParentFromEveryMainSurface(t *test
 func TestEditOpensTheCardPrefilledAndSavesAGuardedReplaceKeepingTheParent(t *testing.T) {
 	s := jobsPane(t, 160, guarded("J1", "Weekly", "EV1"))
 	s = step(t, s, key("e")).State
-	f := s.Model.JobForm
-	if !f.Open || !f.Change || f.Name != "Weekly" || f.Trigger != model.TriggerInterval || f.Interval != "3600" || f.Title != "Tick" || f.Body != "Write the report" || f.Catchup != model.CatchupAll || !f.Enabled {
-		t.Fatalf("prefilled form %+v", f)
+	if !s.Model.JobForm.Open || !s.Model.JobForm.Change {
+		t.Fatalf("the card did not open to change the job: %+v", s.Model.JobForm)
 	}
+	wantText(t, "prefilled card", cardText(t, s), "Weekly", "3600", "Tick", "Write the report", "Every missed run", "every hour")
 	if drawn(t, s, model.JobFieldParent) {
 		t.Error("a job's parent can be edited; it is fixed")
 	}

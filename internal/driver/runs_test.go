@@ -291,8 +291,8 @@ func TestFooterAndHelpSheetListTheRunsPageKeys(t *testing.T) {
 func TestWorkflowRowAndInspectorShowTheWorkflowsLatestRuns(t *testing.T) {
 	out := feed(t, projectPane(t, 160, boardCard("a")), key("5"))
 	load, ok := askedRuns(out.Cmds)
-	if !ok || load.ProjectID != 7 || load.JobUID != "" || load.Request >= 0 {
-		t.Fatalf("the Page asked for runs with %#v, want the Project's newest runs on a request of its own", out.Cmds)
+	if !ok || load.ProjectID != 7 || load.JobUID != "" {
+		t.Fatalf("the Page asked for runs with %#v, want the Project's newest runs", out.Cmds)
 	}
 	failed := workflowRun("R1")
 	failed.Status = model.RunFailed
@@ -314,6 +314,26 @@ func TestWorkflowRowAndInspectorShowTheWorkflowsLatestRuns(t *testing.T) {
 	mustShow(t, s, "inspector", "step build failed", "failed")
 	if got := s.Model.WorkflowRuns("W1"); len(got) != 2 {
 		t.Errorf("runs of W1 %+v, want its two", got)
+	}
+}
+
+func TestAnAnswerToTheRunsPagesReadDoesNotLandOnTheWorkflowsPage(t *testing.T) {
+	out := feed(t, projectPane(t, 160, boardCard("a")), key("5"))
+	load, _ := askedRuns(out.Cmds)
+	s := step(t, out.State, model.WorkflowsLoaded{ProjectUID: "p", Workflows: []model.Workflow{reviewFlow()}}).State
+	running := workflowRun("R2")
+	running.WorkflowUID = "W1"
+	stray := workflowRun("R9")
+	stray.WorkflowUID = "W1"
+	stray.Status = model.RunFailed
+	// The Runs Page's own reads are numbered upward; an answer to one of them is not the Workflows Page's.
+	s = step(t, s, model.RunsLoaded{Request: 1, Runs: []model.Run{stray}}).State
+	if _, ok := s.Model.LatestWorkflowRun("W1"); ok {
+		t.Fatal("the Workflows Page took the answer to a read it never asked")
+	}
+	s = step(t, s, model.RunsLoaded{Request: load.Request, Runs: []model.Run{running}}).State
+	if latest, ok := s.Model.LatestWorkflowRun("W1"); !ok || latest.UID != "R2" {
+		t.Fatalf("latest run of W1 %+v after its own answer", latest)
 	}
 }
 
