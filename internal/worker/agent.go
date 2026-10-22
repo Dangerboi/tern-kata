@@ -116,9 +116,10 @@ func (p *agentParser) Line(line []byte) {
 }
 
 func (p *agentParser) final(m ompMessage) {
-	p.res.FinalText = m.text()
+	// The run folder's output file keeps the whole message; the result is journalled, so it stays under the summary bound.
+	p.res.FinalText = truncate(m.text(), maxSummaryBytes)
 	p.res.StopReason = m.StopReason
-	p.res.ErrorText = m.ErrorMessage
+	p.res.ErrorText = truncate(m.ErrorMessage, maxSummaryBytes)
 	p.res.ErrorStatus = m.ErrorStatus
 }
 
