@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/Dangerboi/tern-kata/internal/crontrigger"
 )
 
 // What the worker says about the definitions it was given (ADR-0011): a job it sets aside is listed with its reason, and a
@@ -19,14 +21,6 @@ type JobNote struct {
 	UID  string
 	Name string
 	Text string
-}
-
-// manyIssuesPerDay is the rate above which a per-run Issue job is warned about.
-const manyIssuesPerDay = 24
-
-// HighRateWarning is the sentence for a job that creates about n Issues a day.
-func HighRateWarning(n int) string {
-	return fmt.Sprintf("creates about %d Issues a day; consider an existing Issue", n)
 }
 
 // definitionNotes reads the Project's adapter jobs against the worker's config: the jobs it sets aside with their
@@ -60,8 +54,8 @@ func definitionNotes(ctx context.Context, k *Kata, cfg Config, pc ProjectConfig,
 			aside = append(aside, note)
 			continue
 		}
-		if n := issuesPerDay(job, now); n > manyIssuesPerDay {
-			note.Text = HighRateWarning(n)
+		if text := crontrigger.HighRateWarning(issuesPerDay(job, now)); text != "" {
+			note.Text = text
 			warnings = append(warnings, note)
 		}
 	}
@@ -164,16 +158,8 @@ func issuesPerDay(job Job, now time.Time) int {
 	if err != nil {
 		return 0
 	}
-	switch t := trig.(type) {
-	case intervalTrigger:
-		return int((24*time.Hour + t.step/2) / t.step)
-	case cronTrigger:
-		const week = 7 * 24 * time.Hour
-		count := 0
-		for at := trig.next(now); !at.IsZero() && at.Before(now.Add(week)) && count < 100_000; at = trig.next(at) {
-			count++
-		}
-		return (count + 3) / 7
+	if schedule, ok := trig.(scheduled); ok {
+		return schedule.PerDay(now)
 	}
 	return 0
 }

@@ -24,6 +24,7 @@ func TestJobsPageRowsPutTheScheduleInWordsForEveryTriggerKind(t *testing.T) {
 		{model.CronTrigger{Kind: model.TriggerCron, Cron: "30 6 * * 1-5"}, "every weekday at 06:30 UTC"},
 		{model.CronTrigger{Kind: model.TriggerCron, Cron: "0 18 * * Mon,Thu", Timezone: "UTC"}, "every Mon, Thu at 18:00 UTC"},
 		{model.CronTrigger{Kind: model.TriggerCron, Cron: "*/15 * * * *", Timezone: "UTC"}, "every 15 minutes UTC"},
+		{model.CronTrigger{Kind: model.TriggerCron, Cron: "*/40 * * * *", Timezone: "UTC"}, "cron */40 * * * * UTC"},
 		{model.CronTrigger{Kind: model.TriggerCron, Cron: "0 8 1 * *", Timezone: "UTC"}, "on day 1 of every month at 08:00 UTC"},
 		{model.CronTrigger{Kind: model.TriggerCron, Cron: "@daily", Timezone: "Europe/Berlin"}, "every day at 00:00 Europe/Berlin"},
 		{model.CronTrigger{Kind: model.TriggerCron, Cron: "CRON_TZ=Asia/Tokyo 0 7 * * *"}, "every day at 07:00 Asia/Tokyo"},

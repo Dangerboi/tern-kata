@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/Dangerboi/tern-kata/internal/crontrigger"
 )
 
 // The adapter side of the Job card: the kinds that a Worker runs (an agent prompt, a workflow) or that notify an existing Issue,
@@ -93,7 +95,7 @@ func (f JobFormState) WorkflowsNote() string {
 }
 
 // maxJobSeconds is the longest span kata accepts for an interval, a lead, an offset, a grace or a timeout.
-const maxJobSeconds = int64(1<<63-1) / 1e9
+const maxJobSeconds = crontrigger.MaxIntervalSeconds
 
 // parseSeconds reads a span as whole seconds: a number, a Go duration like 90m, or days like 2d. Negative spans read too.
 func parseSeconds(text string) (int64, bool) {
