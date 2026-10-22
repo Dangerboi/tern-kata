@@ -71,6 +71,8 @@ ctl click "[data-id='main.columns.list.jobs.$rd_slow']"
 ctl key R
 ctl key 4
 expect_tree "[data-id^='main.columns.list.runs.']" '.ok and .count >= 1 and (.nodes[0].text | contains("running") and contains("Smoke slow run") and contains("on smoke-box"))'
+# The Runs Page keeps its selection across Pages, which earlier steps left on their own run: g selects the newest.
+ctl key g
 ctl key enter
 expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("stub says all checked")))'
 expect_tree "[data-id^='main.columns.list.runs.']" '.ok and (.nodes[0].text | contains("succeeded") and contains("Smoke slow run"))'
