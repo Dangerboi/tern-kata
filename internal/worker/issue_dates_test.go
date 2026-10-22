@@ -184,7 +184,9 @@ func TestADateReadThatFailedAtFirstSightDoesNotMakeAnOldDateAChange(t *testing.T
 	issue := h.kata.Issue(t, h.proj, "Old date")
 	past := h.minuteIn(-5 * time.Minute)
 	h.kata.SetIssueDate(t, h.proj, issue.UID, "scheduled_on", past)
-	isRead := func(r *http.Request) bool { return r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/planning-dates") }
+	isRead := func(r *http.Request) bool {
+		return r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/planning-dates")
+	}
 	restore := h.kata.Intercept(isRead, func(w http.ResponseWriter, _ *http.Request, _ http.Handler) {
 		http.Error(w, "unavailable", http.StatusServiceUnavailable)
 	})

@@ -119,7 +119,7 @@ type jobSchedule struct {
 	trig     trigger
 	why      string // the definition's trigger can't be scheduled
 	through  time.Time
-	date     time.Time   // the instant an Issue-date trigger last fired at, the zero time when its Issue has none
+	date     time.Time // the instant an Issue-date trigger last fired at, the zero time when its Issue has none
 	// dateSeen is true once a planning-date read succeeded: date is then an observed baseline (possibly known-absent),
 	// not just the zero value of a read that never happened.
 	dateSeen bool
