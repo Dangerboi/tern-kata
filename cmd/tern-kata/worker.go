@@ -54,6 +54,8 @@ func runWorkerCommand(ctx context.Context, plan LaunchPlan, env workerEnv, out i
 		return runJobNow(ctx, plan, env, out)
 	case len(plan.Operands) == 1 && (plan.Operands[0] == "init" || plan.Operands[0] == "add"):
 		return setupWorkerConfig(plan.Operands[0] == "add", plan, env, out)
+	case len(plan.Operands) == 1 && plan.Operands[0] == "edit":
+		return editWorkerConfig(ctx, env, out)
 	case len(plan.Operands) == 1 && plan.Operands[0] == "status":
 		resp, err := worker.Ask(ctx, env.Dirs, worker.Request{Op: "status"})
 		if err != nil {
