@@ -45,12 +45,12 @@ type Worker struct {
 	ready   chan struct{}
 	pid     int
 
-	ctx    context.Context // set by Run; every run goroutine ends with it
+	ctx    context.Context    // set by Run; every run goroutine ends with it
 	cancel context.CancelFunc // set by Run: ends ctx, which a stop now and a finished drain do
 	// stopping is "" while serving, "idle" while draining and "now" once a stop now was asked; guarded by mu.
 	stopping string
-	halted atomic.Bool     // set when a test hook killed the worker: no run work happens after it
-	mu     sync.Mutex      // guards every projectState field and pendingTotal
+	halted   atomic.Bool // set when a test hook killed the worker: no run work happens after it
+	mu       sync.Mutex  // guards every projectState field and pendingTotal
 	// pendingTotal counts slots reserved across Projects (worker-wide max_active_runs).
 	projects []*projectState
 	runs     sync.WaitGroup
