@@ -183,7 +183,9 @@ func TestAReadThatRunsOutOfTimeIsTriedAgainButAWriteNever(t *testing.T) {
 		t.Fatalf("the read was asked %d times, want three", n)
 	}
 
-	d.Intercept(func(r *http.Request) bool { return r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/comments") },
+	d.Intercept(func(r *http.Request) bool {
+		return r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/comments")
+	},
 		func(w http.ResponseWriter, r *http.Request, _ http.Handler) {
 			select { // the server notices a closed connection only after the body is read, so do not wait for that
 			case <-r.Context().Done():

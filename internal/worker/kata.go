@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -606,7 +606,9 @@ func (k *Kata) PlanningDates(ctx context.Context, projectID int64, issueUID stri
 }
 
 // inboxSlot is the metadata key of the inbox request for recipient: one slot per Issue and recipient.
-func inboxSlot(recipient string) string { return "notify." + base64.RawURLEncoding.EncodeToString([]byte(recipient)) }
+func inboxSlot(recipient string) string {
+	return "notify." + base64.RawURLEncoding.EncodeToString([]byte(recipient))
+}
 
 // InboxRequest is the request the Issue holds for recipient, ok false when there is none.
 func (i Issue) InboxRequest(recipient string) (from, message string, ok bool) {
