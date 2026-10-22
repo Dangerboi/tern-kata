@@ -160,7 +160,7 @@ func (m Model) VisibleColumns() []Column {
 		return []Column{m.Focus}
 	}
 	columns := []Column{ColumnList}
-	if !m.hidden || m.OnJobs() {
+	if !m.hidden || m.OnJobs() || m.OnRuns() {
 		columns = append(columns, ColumnDetail)
 	}
 	if m.SidebarShown() {

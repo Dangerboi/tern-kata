@@ -43,8 +43,13 @@ func (d IssueDetail) OpenIssueRef() string              { return d.openRef }
 func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 	shown, tab, boardWasOn := m.DetailIssueUID(), m.tab, m.OnBoard()
 	m, cmds := update(m, msg)
-	if _, ok := msg.(StreamEvent); ok && m.OnJobs() {
-		m.Jobs.stale = true
+	if _, ok := msg.(StreamEvent); ok {
+		switch {
+		case m.OnJobs():
+			m.Jobs.stale = true
+		case m.OnRuns():
+			m.Runs.stale = true
+		}
 	}
 	m = m.settleBoard()
 	m = m.settleWorkflows()
@@ -52,6 +57,8 @@ func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 	cmds = append(cmds, load...)
 	m, jobs := m.settleJobs()
 	cmds = append(cmds, jobs...)
+	m, runs := m.settleRuns()
+	cmds = append(cmds, runs...)
 	if m.tab != tab {
 		cmds = append(cmds, RevealActivityTab{})
 	}

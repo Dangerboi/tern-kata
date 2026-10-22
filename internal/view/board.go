@@ -30,6 +30,12 @@ func CardID(m model.Model, uid string) string {
 
 // SelectedRowID is the node of the selected Issue's row in the list, or its card on the Board.
 func SelectedRowID(m model.Model) string {
+	if m.OnRuns() {
+		if m.Runs.Selected == "" {
+			return ""
+		}
+		return RunID(m.Runs.Selected)
+	}
 	if m.OnJobs() {
 		if m.Jobs.Selected == "" {
 			return ""

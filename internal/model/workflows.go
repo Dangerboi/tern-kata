@@ -33,6 +33,10 @@ type WorkflowsState struct {
 	// from zero, so no answer to the Jobs Page's reads can be taken for it).
 	jobs        []CronJob
 	jobsRequest int64
+	// runs are the Project's newest Runs as last read, for each workflow's latest and recent runs; runsRequest numbers the read the
+	// way jobsRequest does.
+	runs        []Run
+	runsRequest int64
 	// detailHidden is the detail column's hidden flag from before the Page took its place.
 	detailHidden bool
 }
@@ -143,6 +147,30 @@ func (m Model) WorkflowJobs(uid string) []CronJob {
 	return jobs
 }
 
+// WorkflowRunsShown is how many of a workflow's runs the inspector lists.
+const WorkflowRunsShown = 5
+
+// WorkflowRuns are the Runs of the workflow with uid among the Project's newest Runs the Page read, newest first. Kata lists no
+// Runs by workflow, so a workflow whose last Run is older than the newest page of the Project's Runs has none here.
+func (m Model) WorkflowRuns(uid string) []Run {
+	var runs []Run
+	for _, r := range m.Workflows.runs {
+		if r.WorkflowUID == uid {
+			runs = append(runs, r)
+		}
+	}
+	return runs
+}
+
+// LatestWorkflowRun is the newest Run of the workflow, false when none was read.
+func (m Model) LatestWorkflowRun(uid string) (Run, bool) {
+	runs := m.WorkflowRuns(uid)
+	if len(runs) == 0 {
+		return Run{}, false
+	}
+	return runs[0], true
+}
+
 // SelectedWorkflow is the selected workflow, false when the list is empty.
 func (m Model) SelectedWorkflow() (Workflow, bool) {
 	for _, w := range m.VisibleWorkflows() {
@@ -174,7 +202,7 @@ func enterWorkflows(m Model) (Model, []Cmd) {
 	}
 	w := &m.Workflows
 	if w.ProjectUID != m.Collection.ProjectUID {
-		*w = WorkflowsState{ProjectUID: m.Collection.ProjectUID, jobsRequest: w.jobsRequest}
+		*w = WorkflowsState{ProjectUID: m.Collection.ProjectUID, jobsRequest: w.jobsRequest, runsRequest: w.runsRequest}
 	}
 	w.ProjectID = m.collectionProjectID()
 	w.detailHidden = m.DetailHidden()
@@ -189,9 +217,11 @@ func enterWorkflows(m Model) (Model, []Cmd) {
 	w.Err = nil
 	w.Loading = true
 	w.jobsRequest--
+	w.runsRequest--
 	return m, append(cmds,
 		LoadWorkflows{Workspace: m.Workspace, ProjectID: w.ProjectID, ProjectUID: w.ProjectUID},
-		LoadJobs{Workspace: m.Workspace, ProjectID: w.ProjectID, Request: w.jobsRequest})
+		LoadJobs{Workspace: m.Workspace, ProjectID: w.ProjectID, Request: w.jobsRequest},
+		LoadRuns{Workspace: m.Workspace, ProjectID: w.ProjectID, Request: w.runsRequest})
 }
 
 // workflowsOff leaves the Workflows Page for the Issues Page and gives the detail column back, unless something already focused it.
@@ -364,6 +394,14 @@ func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 		}
 		if msg.Err == nil && !msg.ProjectArchived {
 			m.Workflows.jobs = msg.Jobs
+		}
+		return m, nil, true
+	case RunsLoaded:
+		if msg.Request >= 0 || msg.Request != m.Workflows.runsRequest {
+			return m, nil, false
+		}
+		if msg.Err == nil && !msg.ProjectArchived {
+			m.Workflows.runs = msg.Runs
 		}
 		return m, nil, true
 	case WorkflowSelectMsg:

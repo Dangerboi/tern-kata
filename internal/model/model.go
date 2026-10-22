@@ -98,6 +98,7 @@ type Model struct {
 	Page             Page
 	Board            BoardState
 	Jobs             JobsState
+	Runs             RunsState
 	Workflows        WorkflowsState
 	// Moving is the Issue whose Move is in flight; further Moves wait for its result.
 	Moving string
@@ -202,6 +203,12 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m = jobsLoaded(m, msg)
 	case JobSelectMsg:
 		m.Jobs.Selected, m.Focus = msg.UID, ColumnList
+	case RunsLoaded:
+		m = runsLoaded(m, msg)
+	case RunShown:
+		m = runShown(m, msg)
+	case RunSelectMsg:
+		m.Runs.Selected, m.Focus = msg.UID, ColumnList
 	case DetailLoaded:
 		m = m.detailLoaded(msg)
 	case DetailFailed:
@@ -213,7 +220,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case FocusColumnMsg:
 		if msg.Column <= ColumnDetail {
 			m.Focus = msg.Column
-			if m.Focus == ColumnDetail && !m.OnJobs() {
+			if m.Focus == ColumnDetail && !m.OnJobs() && !m.OnRuns() {
 				m = m.focusDetail()
 			}
 		}

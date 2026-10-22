@@ -232,6 +232,14 @@ func plan(cmd model.Cmd, host string) (request, bool) {
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ListJobs(ctx, cmd)) },
 			func(err error) model.Msg { return model.JobsLoaded{Request: cmd.Request, Err: err} }}, true
+	case model.LoadRuns:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ListRuns(ctx, cmd)) },
+			func(err error) model.Msg { return model.RunsLoaded{Request: cmd.Request, Before: cmd.Before, Err: err} }}, true
+	case model.ShowRun:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ShowRun(ctx, cmd)) },
+			func(err error) model.Msg { return model.RunShown{UID: cmd.UID, Err: err} }}, true
 	case model.ShowJob:
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ShowJob(ctx, cmd)) },

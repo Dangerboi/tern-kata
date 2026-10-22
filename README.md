@@ -17,7 +17,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 - **Issue list and detail**: a Project's Issues nested under their parents, with priority, status, child counts and age, beside the Issue detail with its Markdown body, properties and Activity tabs (Comments, Events, Links, Attachments). Changes made anywhere, by you or an agent, show up live.
 - **Collections and the Menu**: Inbox, Today, Upcoming, Deadlines, All Open, Logbook and every kata Project, plus a search (`/`) and filters (`f`, `s`) over any of them.
 - **Editing from the Pane**: Create (`n`, `N` for a child), Close (`x`), reopen (`r`), comments (`c` in the detail) and replies (`R`), labels (`+`, `-`), owner (`a`, `A`), priority (`!`), parent (`p`), recurrence (`O`) and the Issue body in Tern's editor (`e`).
-- **Pages (Issues, Board, Jobs and Workflows), Attachments and the Dates card**, shown below.
+- **Pages (Issues, Board, Jobs, Runs and Workflows), Attachments and the Dates card**, shown below.
 - **[kata links](#clickable-ticket-links-from-agents)** from agents' chat replies open the Issue in tern-kata.
 
 **Board Page** ([details](#pages-and-the-board-page)): `2` or `b` in a Project shows its Issues as cards in Lanes, one per triage label, with No lane on the left and recently closed Issues in Done on the right. `<` and `>` move a card to the next Lane by swapping its label in kata. A card shows its priority, its most pressing date and a Blocked marker when an open Issue blocks it; selecting one tags its related cards (`parent`, `blocks this`) and lists its Relationships.
@@ -29,6 +29,8 @@ Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relat
 ![The Ready for agent Lane beside the detail of a related Issue in the acme-infra Project](docs/images/related-detail.png)
 
 **Jobs Page** ([details](#jobs-page)): `3` in a Project lists its Cron jobs with their state (and why one is paused), kind, schedule in words, agent profile and next run, with the selected job's definition and parent beside them; Enter on a recurring job's parent opens that Issue.
+
+**Runs Page** ([details](#runs-page)): `4` in a Project lists its runs newest first (status, job or workflow, Issue, executor, start, duration, summary); Enter shows a run's detail, `i` opens its Issue and `r` on the Jobs Page shows the runs of one job.
 
 **Attachments** ([details](#attachments)): `u` attaches a screenshot, log or any other file to an Issue, and the Attachments tab lists them. Agents find them through the Issue's kata metadata, and `tern-kata attach` does the same from a shell.
 
@@ -158,7 +160,7 @@ Flags: `--frequency daily|weekly|monthly|yearly`, `--every N`, `--on mon,thu`, `
 
 ## Pages and the Board Page
 
-The top bar holds the **Page bar**, "1 Issues  2 Board  3 Jobs  5 Workflows". `1`, `2`, `3` and `5`, or a click on a Page, switch Pages; `b` toggles between Issues and Board. The Issues Page is the list and Issue detail; each Page keeps its selection while another is shown. The Board Page and the Jobs Page act on the Pane's Project: the current Project Collection, else the workspace's Binding (from Inbox or another fixed Collection in a bound workspace it switches to the Binding's Project). With neither it says so and opens the Menu's Projects list.
+The top bar holds the **Page bar**, "1 Issues  2 Board  3 Jobs  4 Runs  5 Workflows". `1` to `5`, or a click on a Page, switch Pages; `b` toggles between Issues and Board. The Issues Page is the list and Issue detail; each Page keeps its selection while another is shown. The Board, Jobs, Runs and Workflows Pages act on the Pane's Project: the current Project Collection, else the workspace's Binding (from Inbox or another fixed Collection in a bound workspace it switches to the Binding's Project). With neither it says so and opens the Menu's Projects list.
 
 ### Board Page
 
@@ -213,6 +215,17 @@ tern-kata reads it each time the Board turns on and when the Project changes whi
 - At 140 columns and wider an **inspector** beside the list shows the selected job's full definition (trigger, prompt or workflow, recipient and message, Issue policy, overlap, catchup, timeout, checkout, the names of its secrets) and, for a recurring-child job, its parent Issue with the delivery progress. Narrower, only the focused column shows: Enter or Tab on a card shows the inspector, Esc or Tab goes back.
 - With the inspector focused, Enter on a recurring-child job's parent opens that Issue on the Issues Page (a deleted parent leaves a Notice instead).
 - The Jobs Page needs a Project like the Board Page and ends when you switch to a Collection that is not a Project.
+
+### Runs Page
+
+`4` shows the Pane's Project's **Runs**, newest first as kata lists them (by when each was first observed). A Run is kata's record of one execution of a Cron job or workflow, written by whoever ran it: an adapter, a worker here or another machine's. The Pane shows what kata holds, whoever the executor was. Each card has a status badge (`running`, `succeeded`, `failed`, `cancelled`, `unknown`), the job's or workflow's name, the Issue the run is for (`#short title`), the executor (its label, else the actor), when it started, how long it took (so far, while it runs) and the first line of its summary.
+
+- Enter (or Tab) opens the **detail**: status, job and workflow, Issue, executor, actor and teammate, start, end, duration, the summary's whole message, input and output token counts, and the references kata holds (occurrence, job and workflow uids and the version of each the run used, Issue uid, run uid and revision). Enter reads the run from kata again. Esc or Tab goes back; at 140 columns and wider the detail sits beside the list, narrower only the focused column shows.
+- `i` opens the run's Issue on the Issues Page (a run with no Issue leaves a Notice instead), from the list or the detail.
+- `r` on the Jobs Page opens the Runs Page filtered to the selected job. On the Runs Page `f` narrows the list to the selected run's job, or shows every run again; leaving the page lifts the filter. A run of a workflow alone has no job to narrow to.
+- Kata lists at most 100 runs a page, filters them only by job (a run that names a workflow alone matches no job, and there is no filter by status or workflow) and names none of them by job or workflow. The Pane reads the newest 100, `m` reads the next older 100 and adds them, and it looks up each job's, workflow's and Issue's name itself. `ctrl+r` and daemon events read the newest page again.
+- The Workflows Page shows each workflow's latest run on its row and its latest runs in its inspector, from the newest 100 runs of the Project: a workflow whose runs are all older than that shows none.
+- The Runs Page needs a Project like the Board Page and ends when you switch to a Collection that is not a Project.
 
 ## Dates card
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
@@ -30,14 +31,14 @@ const (
 
 // workflows is the Workflows Page: the Project's workflows, and beside them (in a narrow Pane instead of them) the steps of the
 // selected one once Enter has opened them. It takes the list column's place.
-func workflows(m model.Model) tern.Element {
+func workflows(m model.Model, now time.Time) tern.Element {
 	sideBySide := m.Cols >= model.SideBySideCols
 	var panels []tern.Element
 	if !m.Workflows.Inspecting || sideBySide {
 		panels = append(panels, workflowList(m, sideBySide && m.Workflows.Inspecting))
 	}
 	if m.Workflows.Inspecting {
-		panels = append(panels, workflowInspector(m, sideBySide))
+		panels = append(panels, workflowInspector(m, sideBySide, now))
 	}
 	heading := ui.Text{Common: ui.Common{Key: "heading"}, Spans: []ui.Span{{T: "Workflows", S: "strong"}, {T: "  " + m.Collection.Title, S: "accent"}}}
 	if m.Workflows.Loading {
@@ -71,6 +72,9 @@ func workflowList(m model.Model, paired bool) tern.Element {
 		value := []ui.Span{{T: stepCount(len(w.Steps)), S: "muted"}}
 		if jobs := m.WorkflowJobs(w.UID); len(jobs) > 0 {
 			value = append(value, ui.Span{T: "  " + jobNames(jobs), S: toneStyle(usingJobTone)})
+		}
+		if run, ok := m.LatestWorkflowRun(w.UID); ok {
+			value = append(value, ui.Span{T: "  " + string(run.Status) + " " + m.Calendar.Stamp(run.Started()), S: toneStyle(runTone(run.Status))})
 		}
 		items[i] = ui.Item{Common: ui.Common{Key: w.UID, Role: stripeRole(i), Tone: tone}, Label: ui.Spans(label...), Detail: ui.T(" "), Value: ui.Spans(value...)}
 	}
@@ -111,7 +115,7 @@ func stepCount(n int) string {
 }
 
 // workflowInspector is the selected workflow read as steps: each with its kind, its text, the steps it waits for and its retries.
-func workflowInspector(m model.Model, paired bool) tern.Element {
+func workflowInspector(m model.Model, paired bool, now time.Time) tern.Element {
 	common := ui.Common{Key: "inspector", Grow: 1, Basis: ui.BasisFrac(0.6), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}}
 	w, ok := m.SelectedWorkflow()
 	if !ok {
@@ -133,6 +137,7 @@ func workflowInspector(m model.Model, paired bool) tern.Element {
 		parts = append(parts, workflowStep(i, step))
 	}
 	parts = append(parts, workflowJobs(m, w)...)
+	parts = append(parts, workflowRuns(m, w, now)...)
 	parts = append(parts, ui.Text{Common: ui.Common{Key: "by"}, Spans: []ui.Span{{T: fmt.Sprintf("by %s · revision %d", w.Author, w.Revision), S: "muted"}}})
 	body := ui.List{CommonWithoutMax: scrollerCommon("viewport"), Max: scrollMax(m, 0), Children: ui.Nodes(ui.Col{Common: ui.Common{Key: "content"}, Gap: ui.GapSM, Children: parts})}
 	if paired {
@@ -197,6 +202,27 @@ func workflowLayer(m model.Model) tern.Element {
 			cardButton("discard", model.ModeEditor, model.CancelDraft, "Discard", false)))
 	}
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "workflow"}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
+}
+
+// workflowRuns is the inspector's Runs section: the workflow's latest runs among those the Page read, newest first, each with its
+// status, start, duration and summary.
+func workflowRuns(m model.Model, w model.Workflow, now time.Time) []tern.Element {
+	runs := m.WorkflowRuns(w.UID)
+	if len(runs) == 0 {
+		return nil
+	}
+	parts := []tern.Element{ui.Text{Common: ui.Common{Key: "runs-title"}, Spans: []ui.Span{{T: "Runs", S: "strong"}, {T: " " + strconv.Itoa(len(runs)), S: "muted"}}}}
+	for _, r := range runs[:min(len(runs), model.WorkflowRunsShown)] {
+		spans := []ui.Span{{T: string(r.Status), S: toneStyle(runTone(r.Status))}, {T: "  " + m.Calendar.Stamp(r.Started()), S: "muted"}}
+		if d, ok := r.Duration(now); ok {
+			spans = append(spans, ui.Span{T: "  " + model.ShortDuration(d), S: "muted"})
+		}
+		if msg, _, _ := strings.Cut(strings.TrimSpace(r.Message), "\n"); msg != "" {
+			spans = append(spans, ui.Span{T: "  " + msg})
+		}
+		parts = append(parts, ui.Text{Common: ui.Common{Key: "run." + r.UID}, Spans: spans})
+	}
+	return parts
 }
 
 // workflowJobs is the inspector's Jobs section: the live Cron jobs that run the workflow, each with its name and whether it is on.

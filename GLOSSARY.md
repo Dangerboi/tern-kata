@@ -90,6 +90,10 @@
 
 **Pause reason**: Why a Cron job is not running, shown in its state: "archived", "paused: Project archived", "disabled", "paused: parent deleted" or "paused: parent closed"; a job with none is "active". Kata stores no pause, so the Pane derives it, in that order: the job's `deleted_at` beats everything, then an archived Project (read from the Project's own state, because kata answers none of its jobs), then `enabled: false`, then the parent's deleted or closed status. Reopening the parent, restoring the Project or the job, or enabling the job resumes a native job.
 
+**Run**: Kata's record of one execution of a Cron job or **Workflow**, written by the executor that ran it (an adapter, a worker, another machine's): its status (`running`, `succeeded`, `failed`, `cancelled` or `unknown`, the last for one nobody could settle), the job or workflow it names, the Issue it ran for, the executor's label, start and end, and a summary (message and token counts). Kata keeps it as a revisioned observation and lists runs newest first by when each was first observed. The Runs Page lists them. _Avoid_: execution, job run, history entry.
+
+**Runs Page**: The **Page** (`4`) that lists the Pane's Project's **Runs**, with a detail (Enter) and a filter to one Cron job. Its state is Pane state that is not saved. It acts on the Pane's Project like the Board Page.
+
 **Workflow**: One of a Project's kata workflows: reusable command and prompt steps, each with a key, optional `after` steps it waits for (earlier steps only) and optional retries (0 to 100). Kata stores it; a Cron job that runs one names it. Archiving one that a live Cron job uses is refused by kata. _Avoid_: pipeline, recipe.
 
 **Workflows Page**: The **Page** (`5`) that lists the Pane's Project's Workflows, archived ones hidden until asked for, with an inspector (Enter) that reads the selected one as steps with their dependencies and retries. Its state is Pane state that is not saved. It acts on the Pane's Project like the Board Page, and ends when the Collection is not a Project.

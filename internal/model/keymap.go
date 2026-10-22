@@ -64,6 +64,13 @@ const (
 	MoveCardRight           Action = "move-card-right"
 	OpenLane                Action = "open-lane"
 	SelectParent            Action = "select-parent"
+	ShowRunsPage            Action = "show-runs-page"
+	ReloadRuns              Action = "reload-runs"
+	OlderRuns               Action = "older-runs"
+	FilterRunsByJob         Action = "filter-runs-by-job"
+	OpenRunIssue            Action = "open-run-issue"
+	RunsOfJob               Action = "runs-of-job"
+	RunInspectorBack        Action = "run-inspector-back"
 	ShowWorkflowsPage       Action = "show-workflows-page"
 	OpenWorkflow            Action = "open-workflow"
 	NewWorkflow             Action = "new-workflow"
@@ -117,6 +124,8 @@ const (
 	ModeLane          Mode = "lane"
 	ModeJobs          Mode = "jobs"
 	ModeJobInspector  Mode = "job-inspector"
+	ModeRuns          Mode = "runs"
+	ModeRunInspector  Mode = "run-inspector"
 	ModeWorkflows     Mode = "workflows"
 )
 

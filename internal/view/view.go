@@ -53,17 +53,21 @@ func Render(m model.Model, now time.Time) tern.View {
 				columns = append(columns, Collections(m))
 			case model.ColumnList:
 				switch {
+				case m.OnRuns():
+					columns = append(columns, runs(m, now))
 				case m.OnJobs():
 					columns = append(columns, jobs(m, now))
 				case m.BoardShown():
 					columns = append(columns, board(m, now))
 				case m.OnWorkflows():
-					columns = append(columns, workflows(m))
+					columns = append(columns, workflows(m, now))
 				default:
 					columns = append(columns, issues(m, now))
 				}
 			case model.ColumnDetail:
-				if m.OnJobs() {
+				if m.OnRuns() {
+					columns = append(columns, runInspector(m, now))
+				} else if m.OnJobs() {
 					columns = append(columns, inspector(m, now))
 				} else {
 					columns = append(columns, detail(m, now))
@@ -216,7 +220,7 @@ func columnsPx(m model.Model) (int, bool) {
 	}
 	grid, _, _ := footerGrid(m)
 	chrome := m.RowPx + 50 + m.RowPx*len(grid) + m.RowPx*footerTextRows(m)
-	if m.FilterSummary() != "" && !m.OnJobs() {
+	if m.FilterSummary() != "" && !m.OnJobs() && !m.OnRuns() {
 		chrome += 2 * m.RowPx
 	}
 	return m.Rows*m.RowPx - chrome, true
@@ -274,7 +278,7 @@ func topBar(m model.Model) tern.Element {
 // filterLine lists the active filters under the top bar; nil when none is on.
 func filterLine(m model.Model) []tern.Element {
 	summary := m.FilterSummary()
-	if summary == "" || m.OnJobs() {
+	if summary == "" || m.OnJobs() || m.OnRuns() {
 		return nil
 	}
 	return []tern.Element{ui.Text{Common: ui.Common{Key: "filters", Hidden: m.HelpOpen, Tone: ui.ToneMuted}, Text: summary, Wrap: ui.WrapNone}}
