@@ -167,8 +167,8 @@ type WorkerCardState struct {
 	// AskOff says the card asks how to stop the running worker as supervision goes off; Supervision is what the last change did.
 	AskOff      bool
 	Supervision string
-	Field            Field
-	Caret            Caret
+	Field       Field
+	Caret       Caret
 	// Executor, Actor, Command, Model and Thinking are the setup fields, prefilled as `worker init` would; Trusted is the trust choice.
 	Executor, Actor, Command, Model, Thinking string
 	Trusted                                   bool

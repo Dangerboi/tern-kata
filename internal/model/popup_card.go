@@ -240,7 +240,9 @@ func init() {
 			},
 			key:    workerCardKey,
 			fields: WorkerFields, focus: func(m *Model) *Field { return &m.WorkerCard.Field },
-			locked: func(m Model) bool { return m.WorkerCard.Saving || m.WorkerCard.Stopping || m.WorkerCard.Switching || m.WorkerCard.Restart || m.WorkerCard.AskOff },
+			locked: func(m Model) bool {
+				return m.WorkerCard.Saving || m.WorkerCard.Stopping || m.WorkerCard.Switching || m.WorkerCard.Restart || m.WorkerCard.AskOff
+			},
 			hidden: func(m Model, name Field) bool { return !m.WorkerCardShows(name) },
 			choose: func(m Model, i int) Model { m.WorkerCard.choose(i); return m },
 			caret: func(m Model) (Field, bool) {
