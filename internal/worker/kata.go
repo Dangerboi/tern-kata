@@ -666,11 +666,16 @@ type Event struct {
 	Type string
 }
 
-// ErrResetRequired ends a stream whose cursor kata no longer holds; the caller refreshes everything and reopens.
-var ErrResetRequired = errors.New("kata asked for a full refresh (sync.reset_required)")
+// ResetRequired ends a stream whose cursor kata no longer holds (or whose replay was too long to send). The caller
+// refreshes everything and resumes after After; After is zero when the frame carried no usable position.
+type ResetRequired struct{ After int64 }
+
+func (r *ResetRequired) Error() string {
+	return "kata asked for a full refresh (sync.reset_required)"
+}
 
 // Stream reads the Project's event stream from after until it ends, calling handle for each event. It returns
-// ErrResetRequired on a stale cursor and the transport's error otherwise; cancelling ctx ends it (ADR-0004).
+// *ResetRequired on a stale cursor and the transport's error otherwise; cancelling ctx ends it (ADR-0004).
 func (k *Kata) Stream(ctx context.Context, projectID, after int64, opened func(), handle func(Event)) error {
 	response, err := k.c.StreamEventsRaw(ctx, &g.StreamEventsRequestOptions{Query: &g.StreamEventsQuery{AfterID: &after, ProjectID: &projectID}})
 	if err != nil {
@@ -687,7 +692,7 @@ func (k *Kata) Stream(ctx context.Context, projectID, after int64, opened func()
 	}
 	opened()
 	reader := bufio.NewReader(response.Body)
-	var id, kind string
+	var id, kind, data string
 	var hasData bool
 	for {
 		line, err := reader.ReadString('\n')
@@ -699,12 +704,12 @@ func (k *Kata) Stream(ctx context.Context, projectID, after int64, opened func()
 		case line == "":
 			if hasData || kind != "" {
 				if kind == "sync.reset_required" {
-					return ErrResetRequired
+					return &ResetRequired{After: resetPosition(id, data)}
 				}
 				n, _ := strconv.ParseInt(id, 10, 64)
 				handle(Event{ID: n, Type: kind})
 			}
-			id, kind, hasData = "", "", false
+			id, kind, data, hasData = "", "", "", false
 		case strings.HasPrefix(line, ":"):
 		default:
 			field, value, _ := strings.Cut(line, ":")
@@ -716,6 +721,7 @@ func (k *Kata) Stream(ctx context.Context, projectID, after int64, opened func()
 				kind = value
 			case "data":
 				hasData = true
+				data = value
 				if kind == "" {
 					var e struct {
 						Type string `json:"type"`
@@ -771,4 +777,17 @@ func (k *Kata) Workflow(ctx context.Context, projectID int64, uid string) (Workf
 		out.Steps = append(out.Steps, WorkflowStep{Key: s.Key, Kind: s.Kind, Command: deref(s.Command), Prompt: deref(s.Prompt), After: s.After, Retries: derefInt(s.Retries), Options: s.Options})
 	}
 	return out, nil
+}
+
+// resetPosition is where kata says to resume after a reset frame: the payload's reset_after_id, else the frame's id.
+// Zero means the frame named none.
+func resetPosition(id, data string) int64 {
+	var payload struct {
+		After int64 `json:"reset_after_id"`
+	}
+	if json.Unmarshal([]byte(data), &payload) == nil && payload.After > 0 {
+		return payload.After
+	}
+	n, _ := strconv.ParseInt(id, 10, 64)
+	return max(n, 0)
 }

@@ -4,8 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -547,6 +551,115 @@ func TestEditingAJobReachesTheWorkerThroughTheEventStream(t *testing.T) {
 	h.eventually("the stream to open", func() bool { return r.w.Status().Projects[0].Following })
 	h.kata.CreateJob(t, h.proj, workertest.Job{Name: "late", Prompt: "Do it."})
 	h.eventually("the new job to be counted", func() bool { return r.w.Status().Projects[0].AdapterJobs == 1 })
+}
+
+// resetDaemon makes kata answer every event stream with one reset frame and records, per connection, the position
+// the worker asked to resume after and when (on the worker's clock) it asked.
+type resetDaemon struct {
+	mu    sync.Mutex
+	after []string
+	at    []time.Time
+}
+
+func (h *harness) answerStreamsWithReset(frame string) *resetDaemon {
+	rd := &resetDaemon{}
+	h.kata.Intercept(func(r *http.Request) bool { return strings.HasSuffix(r.URL.Path, "/events/stream") }, func(w http.ResponseWriter, r *http.Request, _ http.Handler) {
+		rd.mu.Lock()
+		rd.after = append(rd.after, r.URL.Query().Get("after_id"))
+		rd.at = append(rd.at, h.clock.Now())
+		rd.mu.Unlock()
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, frame)
+	})
+	return rd
+}
+
+func (rd *resetDaemon) connections(t *testing.T) (after []string, at []time.Time) {
+	t.Helper()
+	rd.mu.Lock()
+	defer rd.mu.Unlock()
+	return slices.Clone(rd.after), slices.Clone(rd.at)
+}
+
+func (h *harness) waitForConnections(rd *resetDaemon, n int) (after []string, at []time.Time) {
+	h.t.Helper()
+	h.eventually(fmt.Sprintf("%d event stream connections", n), func() bool {
+		after, at = rd.connections(h.t)
+		return len(after) >= n
+	})
+	return after, at
+}
+
+func TestAResetFrameMovesTheCursorToItsPositionAndTheReconnectBacksOff(t *testing.T) {
+	h := newHarness(t)
+	h.seedCursor(5)
+	rd := h.answerStreamsWithReset("id: 7777\nevent: sync.reset_required\ndata: {\"event_id\":7777,\"reset_after_id\":7777}\n\n")
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	h.kata.CreateJob(t, h.proj, workertest.Job{Name: "skipped", Prompt: "Do it."})
+	started := h.clock.Now()
+	h.eventually("the job changed in the skipped events to take effect", func() bool {
+		return r.w.Status().Projects[0].AdapterJobs == 1
+	})
+	if h.clock.Now().Sub(started) > time.Minute {
+		t.Fatal("the job took a periodic refresh to appear, not the reset")
+	}
+	after, at := h.waitForConnections(rd, 3)
+	if after[0] != "5" {
+		t.Fatalf("first connection asked after %q, want the saved cursor 5", after[0])
+	}
+	for i, a := range after[1:] {
+		if a != "7777" {
+			t.Fatalf("connection %d asked after %q, want the reset frame's position 7777", i+2, a)
+		}
+	}
+	for i := 1; i < len(at); i++ {
+		if gap := at[i].Sub(at[i-1]); gap < 500*time.Millisecond {
+			t.Fatalf("connections %d and %d opened %v apart, want at least the 500ms backoff", i, i+1, gap)
+		}
+	}
+	if got := h.cursor(); got != 7777 {
+		t.Fatalf("saved cursor = %d, want 7777", got)
+	}
+}
+
+func TestAResetFrameWithoutAPositionKeepsTheCursorAndBacksOff(t *testing.T) {
+	h := newHarness(t)
+	h.seedCursor(42)
+	rd := h.answerStreamsWithReset("event: sync.reset_required\ndata: {}\n\n")
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	after, at := h.waitForConnections(rd, 3)
+	for i, a := range after {
+		if a != "42" {
+			t.Fatalf("connection %d asked after %q, want the kept cursor 42", i+1, a)
+		}
+	}
+	for i := 1; i < len(at); i++ {
+		if gap := at[i].Sub(at[i-1]); gap < 500*time.Millisecond {
+			t.Fatalf("connections %d and %d opened %v apart, want at least the 500ms backoff", i, i+1, gap)
+		}
+	}
+}
+
+func (h *harness) cursorPath() string {
+	return filepath.Join(h.dirs.ProjectDir(h.proj.UID), "events.cursor")
+}
+
+func (h *harness) seedCursor(n int) {
+	h.t.Helper()
+	if err := os.MkdirAll(filepath.Dir(h.cursorPath()), 0o700); err != nil {
+		h.t.Fatal(err)
+	}
+	if err := os.WriteFile(h.cursorPath(), []byte(fmt.Sprint(n)), 0o600); err != nil {
+		h.t.Fatal(err)
+	}
+}
+
+func (h *harness) cursor() int {
+	raw, _ := os.ReadFile(h.cursorPath())
+	n, _ := strconv.Atoi(string(raw))
+	return n
 }
 
 func TestAnAgentMessageOverAMegabyteStillSettlesTheRunWithACutSummary(t *testing.T) {

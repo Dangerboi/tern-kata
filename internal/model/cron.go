@@ -1,13 +1,12 @@
 package model
 
 import (
-	"cmp"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/robfig/cron/v3"
+	"github.com/Dangerboi/tern-kata/internal/crontrigger"
 )
 
 // A Cron job is kata's recurring or scheduled definition, one per Project. The gateway translates kata's wire shape into the
@@ -202,25 +201,11 @@ func (j CronJob) Missed(now time.Time) int {
 	if !j.Native() || j.Parent == nil || j.Parent.Progress == nil {
 		return 0
 	}
-	from, count := j.Parent.Progress.Through, 0
-	switch j.Definition.Trigger.Kind {
-	case TriggerInterval:
-		step, ok := intervalStep(j.Definition.Trigger.IntervalSeconds)
-		if !ok || now.Before(from) {
-			return 0
-		}
-		anchor := j.Parent.Progress.Anchor
-		return int(now.Sub(anchor)/step) - int(from.Sub(anchor)/step)
-	case TriggerCron:
-		schedule, ok := j.Definition.Trigger.cronSchedule()
-		if !ok {
-			return 0
-		}
-		for next := schedule.Next(from); !next.IsZero() && !next.After(now) && count < maxMissedCount; next = schedule.Next(next) {
-			count++
-		}
+	schedule, ok := j.schedule()
+	if !ok {
+		return 0
 	}
-	return count
+	return schedule.Between(j.Parent.Progress.Through, now, maxMissedCount)
 }
 
 // maxMissedCount stops counting missed cron occurrences: a count beyond it only needs to read as large.
@@ -233,30 +218,40 @@ func (j CronJob) NextRun(now time.Time, projectArchived bool) (time.Time, bool) 
 	if j.Pause(projectArchived) != NotPaused {
 		return time.Time{}, false
 	}
-	t := j.Definition.Trigger
-	switch t.Kind {
-	case TriggerCron:
-		schedule, ok := t.cronSchedule()
-		if !ok {
-			return time.Time{}, false
-		}
-		if every, ok := schedule.(cron.ConstantDelaySchedule); ok && !j.Native() && !j.CreatedAt.IsZero() && every.Delay > 0 {
-			return nextTick(j.CreatedAt, every.Delay, now), true // an adapter's @every counts from its creation like an interval
-		}
-		next := schedule.Next(now)
-		return next, !next.IsZero()
-	case TriggerInterval:
-		step, ok := intervalStep(t.IntervalSeconds)
-		anchor, anchored := j.intervalAnchor()
-		if !ok || !anchored {
-			return time.Time{}, false
-		}
-		return nextTick(anchor, step, now), true
-	case TriggerOnce:
+	if t := j.Definition.Trigger; t.Kind == TriggerOnce {
 		at, err := time.Parse(time.RFC3339, t.At)
 		return at, err == nil && at.After(now)
 	}
-	return time.Time{}, false
+	schedule, ok := j.schedule()
+	if !ok {
+		return time.Time{}, false
+	}
+	next := schedule.Next(now)
+	return next, !next.IsZero()
+}
+
+// schedule is the occurrences of a cron or interval trigger. An adapter job counts an interval and an @every from its
+// creation, as the worker does; a native job's interval from kata's delivery anchor on its parent. False for any other kind
+// of trigger, an expression that does not parse, and an interval with no anchor known.
+func (j CronJob) schedule() (crontrigger.Schedule, bool) {
+	t := j.Definition.Trigger
+	var created time.Time
+	if !j.Native() {
+		created = j.CreatedAt
+	}
+	switch t.Kind {
+	case TriggerCron:
+		schedule, err := crontrigger.Cron(t.Cron, t.Timezone, created)
+		return schedule, err == nil
+	case TriggerInterval:
+		anchor, anchored := j.intervalAnchor()
+		if !anchored {
+			return crontrigger.Schedule{}, false
+		}
+		schedule, err := crontrigger.Interval(t.IntervalSeconds, anchor)
+		return schedule, err == nil
+	}
+	return crontrigger.Schedule{}, false
 }
 
 // intervalAnchor is the instant an interval trigger counts from: a native job's, kata's delivery anchor on its parent; an
@@ -271,86 +266,38 @@ func (j CronJob) intervalAnchor() (time.Time, bool) {
 	return j.CreatedAt, !j.CreatedAt.IsZero()
 }
 
-// intervalStep is an interval trigger's period; false when it is not positive or longer than kata accepts, which a Duration
-// could not hold without wrapping.
-func intervalStep(seconds int64) (time.Duration, bool) {
-	if seconds <= 0 || seconds > maxJobSeconds {
-		return 0, false
-	}
-	return time.Duration(seconds) * time.Second, true
-}
-
-// nextTick is the first anchor + n*step after now, counting from the first step.
-func nextTick(anchor time.Time, step time.Duration, now time.Time) time.Time {
-	if now.Before(anchor) {
-		return anchor.Add(step)
-	}
-	return anchor.Add((now.Sub(anchor)/step + 1) * step)
-}
-
-// highRateIssuesPerDay is the most Issues a day a job may create before the Jobs Page warns of it.
-const highRateIssuesPerDay = 24
-
-// IssuesPerDay is about how many Issues a day a job that makes one per run creates, counted over a week from now so a weekday
-// schedule averages out. It is zero for a job that makes none: a native job (its children are what it is for), one that reports to
-// an existing Issue or only notifies, and a trigger without a rate.
+// IssuesPerDay is about how many Issues a day an enabled job that makes one per run creates. It is zero for a job that makes
+// none: a disabled or native job (its children are what it is for), one that reports to an existing Issue or only notifies,
+// and a trigger without a rate.
 func (j CronJob) IssuesPerDay(now time.Time) int {
 	d := j.Definition
-	if j.Native() || d.Action.Kind != ActionExecute || d.Issue == nil || d.Issue.Kind != IssuePerRun {
+	if j.Native() || !d.Enabled || d.Action.Kind != ActionExecute || d.Issue == nil || d.Issue.Kind != IssuePerRun {
 		return 0
 	}
-	const week = 7 * 24 * time.Hour
-	switch t := d.Trigger; t.Kind {
-	case TriggerInterval:
-		if step, ok := intervalStep(t.IntervalSeconds); ok {
-			return int((24*time.Hour + step/2) / step)
-		}
-	case TriggerCron:
-		schedule, ok := t.cronSchedule()
-		if !ok {
-			return 0
-		}
-		if every, isEvery := schedule.(cron.ConstantDelaySchedule); isEvery && every.Delay > 0 {
-			return int((24*time.Hour + every.Delay/2) / every.Delay)
-		}
-		count := 0
-		for next := schedule.Next(now); !next.IsZero() && next.Before(now.Add(week)); next = schedule.Next(next) {
-			count++
-		}
-		return (count + 3) / 7
+	if k := d.Trigger.Kind; k != TriggerCron && k != TriggerInterval {
+		return 0
 	}
-	return 0
+	schedule, ok := j.schedule()
+	if !ok {
+		return 0
+	}
+	return schedule.PerDay(now)
 }
 
 // HighRateWarning is the line the Jobs Page shows for a job that makes more than 24 Issues a day, "" for any other.
 func (j CronJob) HighRateWarning(now time.Time) string {
-	if n := j.IssuesPerDay(now); n > highRateIssuesPerDay {
-		return fmt.Sprintf("creates about %d Issues a day; consider an existing Issue", n)
-	}
-	return ""
+	return crontrigger.HighRateWarning(j.IssuesPerDay(now))
 }
 
-// cronParser is kata's own: five fields and descriptors, never seconds, so an expression parses here as it does there.
-var cronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
-
-// zoneAndExpression splits a cron trigger into its zone and bare expression: an embedded TZ= or CRON_TZ= directive wins as
-// it does in kata's parser, else the trigger's timezone, else UTC.
+// zoneAndExpression splits a cron trigger into its zone and bare expression.
 func (t CronTrigger) zoneAndExpression() (zone, expression string) {
-	expression = strings.TrimSpace(t.Cron)
-	for _, prefix := range []string{"CRON_TZ=", "TZ="} {
-		if rest, ok := strings.CutPrefix(expression, prefix); ok {
-			zone, expression, _ = strings.Cut(rest, " ")
-			return zone, strings.TrimSpace(expression)
-		}
-	}
-	return cmp.Or(t.Timezone, "UTC"), expression
+	return crontrigger.Zone(t.Cron, t.Timezone)
 }
 
-// cronSchedule parses the cron trigger in its zone as kata does: the zone rides on the expression as a CRON_TZ= directive.
-func (t CronTrigger) cronSchedule() (cron.Schedule, bool) {
-	zone, expression := t.zoneAndExpression()
-	schedule, err := cronParser.Parse("CRON_TZ=" + zone + " " + expression)
-	return schedule, err == nil
+// validCron reports whether the cron trigger parses.
+func (t CronTrigger) validCron() bool {
+	_, err := crontrigger.Cron(t.Cron, t.Timezone, time.Time{})
+	return err == nil
 }
 
 // Words reads the trigger as a phrase: "every day at 09:00 Europe/Berlin", "every 15 minutes", "once at 2026-11-01 09:00 UTC",
@@ -361,7 +308,7 @@ func (t CronTrigger) Words() string {
 	case TriggerManual:
 		return "manual"
 	case TriggerCron:
-		if _, ok := t.cronSchedule(); !ok {
+		if !t.validCron() {
 			return ""
 		}
 		zone, expression := t.zoneAndExpression()
@@ -464,9 +411,10 @@ func cronWords(expression string) string {
 		return "every minute"
 	case dom == "*" && dow == "*" && hour == "*":
 		if n, ok := strings.CutPrefix(minute, "*/"); ok {
-			if _, err := strconv.Atoi(n); err == nil {
-				return "every " + n + " minutes"
+			if step, err := strconv.Atoi(n); err == nil && step > 0 && step < 60 && 60%step == 0 {
+				return "every " + n + " minutes" // any other step restarts each hour, so it is not an even period
 			}
+			return "cron " + expression
 		}
 		if m, err := strconv.Atoi(minute); err == nil {
 			return fmt.Sprintf("every hour at minute %d", m)

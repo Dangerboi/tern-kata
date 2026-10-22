@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/worker"
@@ -202,5 +203,44 @@ func TestStatusAndDoctorListEachJobTheWorkerSetsAsideAndWarnOfManyIssuesADay(t *
 		if !strings.Contains(report, line) {
 			t.Errorf("worker doctor lacks %q:\n%s", line, report)
 		}
+	}
+}
+
+// A notify run is not abandoned while it is being sent: the refusal says so, and the run ends as it was sent.
+func TestAbandoningANotifyRunBeforeItSendsIsRefusedAndTheRunEndsSent(t *testing.T) {
+	h := newHarness(t)
+	issue := h.kata.Issue(t, h.proj, "Weekly")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "nudge", ExistingUID: issue.UID, Notify: &workertest.Notify{Recipient: "current-owner-or-author"}})
+	paused, release := make(chan string, 1), make(chan struct{})
+	r := h.start(worker.Hooks{AfterSave: func(point string, j *worker.Journal) error {
+		if point == "notify-resolved" {
+			paused <- j.RunUID
+			<-release
+		}
+		return nil
+	}})
+	h.admitting(r)
+	_ = h.ask(worker.Request{Op: "run", Job: job.UID})
+	var uid string
+	select {
+	case uid = <-paused:
+	case <-time.After(15 * time.Second):
+		t.Fatal("the notify run never reached the journal point before its send")
+	}
+	resp := h.ask(worker.Request{Op: "abandon", Run: uid, Actor: "ann"})
+	close(release)
+	if resp.OK || !strings.Contains(resp.Error, "being sent") || !strings.Contains(resp.Error, "in a moment") {
+		t.Fatalf("abandon of a notify run before its send: %+v", resp)
+	}
+	h.settled(uid)
+	run, err := h.kata.Kata.ShowRun(context.Background(), h.proj.ID, uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Status != "succeeded" {
+		t.Fatalf("the run ended %q (%s), want succeeded as sent", run.Status, run.Summary)
+	}
+	if _, _, ok := h.kata.InboxRequest(t, h.proj, issue.UID, "tester"); !ok {
+		t.Fatal("the inbox request was not delivered")
 	}
 }

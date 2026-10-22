@@ -5,14 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
-	"github.com/robfig/cron/v3"
+	"github.com/Dangerboi/tern-kata/internal/crontrigger"
 )
 
 // Scheduling (ADR-0004, ADR-0007, ADR-0011). Each Project loop keeps, for every enabled adapter `execute` job with a
@@ -38,30 +37,10 @@ type trigger interface {
 	next(t time.Time) time.Time
 }
 
-// cronTrigger is a cron expression in the trigger's zone, evaluated by kata's own parser.
-type cronTrigger struct{ schedule cron.Schedule }
+// scheduled is a cron expression or an interval, read by the rules the Pane shares (internal/crontrigger).
+type scheduled struct{ crontrigger.Schedule }
 
-func (c cronTrigger) next(t time.Time) time.Time {
-	n := c.schedule.Next(t)
-	if n.IsZero() {
-		return n
-	}
-	return n.UTC()
-}
-
-// intervalTrigger fires at anchor + n*step for n >= 1, anchored at the job's creation as kata anchors its own.
-type intervalTrigger struct {
-	anchor time.Time
-	step   time.Duration
-}
-
-func (i intervalTrigger) next(t time.Time) time.Time {
-	if t.Before(i.anchor) {
-		return i.anchor.Add(i.step)
-	}
-	n := t.Sub(i.anchor)/i.step + 1
-	return i.anchor.Add(n * i.step)
-}
+func (s scheduled) next(t time.Time) time.Time { return s.Next(t) }
 
 // onceTrigger fires at one instant.
 type onceTrigger struct{ at time.Time }
@@ -71,34 +50,6 @@ func (o onceTrigger) next(t time.Time) time.Time {
 		return o.at
 	}
 	return time.Time{}
-}
-
-// parseCron reads a trigger's cron expression with kata's parser (the five fields and descriptors) in the trigger's
-// zone (UTC when it has none). An embedded TZ= must agree with the trigger's zone.
-func parseCron(t Trigger) (cron.Schedule, error) {
-	expression, zone := strings.TrimSpace(t.Cron), t.Timezone
-	if strings.HasPrefix(expression, "TZ=") || strings.HasPrefix(expression, "CRON_TZ=") {
-		directive, rest, ok := strings.Cut(expression, " ")
-		if !ok {
-			return nil, errors.New("invalid timezone directive")
-		}
-		_, embedded, _ := strings.Cut(directive, "=")
-		if zone != "" && embedded != zone {
-			return nil, errors.New("conflicting cron timezone")
-		}
-		zone, expression = embedded, strings.TrimSpace(rest)
-	}
-	if zone == "" {
-		zone = "UTC"
-	}
-	if _, err := time.LoadLocation(zone); err != nil {
-		return nil, errors.New("invalid timezone")
-	}
-	schedule, err := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor).Parse("CRON_TZ=" + zone + " " + expression)
-	if err != nil {
-		return nil, fmt.Errorf("invalid cron expression: %w", err)
-	}
-	return schedule, nil
 }
 
 // isIssueDate reports whether the trigger fires on an Issue's planning date.
@@ -111,19 +62,17 @@ func newTrigger(job Job, date time.Time) (trigger, error) {
 	t := job.Definition.Trigger
 	switch t.Kind {
 	case "cron":
-		schedule, err := parseCron(t)
+		schedule, err := crontrigger.Cron(t.Cron, t.Timezone, job.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
-		if every, ok := schedule.(cron.ConstantDelaySchedule); ok { // @every is an interval, anchored the same way
-			return intervalTrigger{anchor: job.CreatedAt.UTC(), step: every.Delay}, nil
-		}
-		return cronTrigger{schedule}, nil
+		return scheduled{schedule}, nil
 	case "interval":
-		if t.IntervalSeconds <= 0 {
-			return nil, errors.New("interval must be positive")
+		schedule, err := crontrigger.Interval(t.IntervalSeconds, job.CreatedAt)
+		if err != nil {
+			return nil, err
 		}
-		return intervalTrigger{anchor: job.CreatedAt.UTC(), step: time.Duration(t.IntervalSeconds) * time.Second}, nil
+		return scheduled{schedule}, nil
 	case "once":
 		at, err := time.Parse(time.RFC3339, t.At)
 		if err != nil {
@@ -268,7 +217,8 @@ func (w *Worker) plan(ps *projectState, job Job, now time.Time) {
 		}
 	}
 	changed := false
-	if st.through.IsZero() { // first sight: work starts at the later of now and the job's creation
+	firstSight := st.through.IsZero()
+	if firstSight { // first sight: work starts at the later of now and the job's creation
 		st.through, changed = maxTime(now, job.CreatedAt), true
 	}
 	dateChanged := false
@@ -279,7 +229,7 @@ func (w *Worker) plan(ps *projectState, job Job, now time.Time) {
 			if len(st.pending) > 0 {
 				w.opt.Log("Project %s: the date of job %s changed; %d waiting occurrence(s) dropped", ps.cfg.Name, job.Name, len(st.pending))
 			}
-			if !st.date.IsZero() && !at.IsZero() && at.Before(st.through) {
+			if !firstSight && !at.IsZero() && at.Before(st.through) {
 				st.through = at.Add(-time.Nanosecond)
 			}
 			st.pending, st.date, changed, dateChanged = nil, at, true, true

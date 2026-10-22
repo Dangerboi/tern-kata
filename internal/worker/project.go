@@ -257,13 +257,17 @@ func (w *Worker) follow(ctx context.Context, ps *projectState) {
 		if ctx.Err() != nil {
 			return
 		}
-		if errors.Is(err, ErrResetRequired) {
-			cursor = 0
+		var reset *ResetRequired
+		if errors.As(err, &reset) {
+			// The events up to the position were skipped, so read the definitions again; the reconnect still backs off.
+			if reset.After > 0 {
+				cursor = reset.After
+				w.writeCursor(ps.project.UID, cursor)
+			}
 			select {
 			case ps.wake <- struct{}{}:
 			default:
 			}
-			continue
 		}
 		if delivered || (!opened.IsZero() && w.clock.Now().Sub(opened) >= 5*time.Minute) {
 			backoff = 500 * time.Millisecond
