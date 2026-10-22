@@ -126,3 +126,51 @@ func TestANotifyJobOnATimerReachesItsRecipientAndAnOwnerAliasResolvesFromTheIssu
 		t.Fatalf("the Issue's author got %q from %q (present %v), want a request with a default message", message, from, ok)
 	}
 }
+
+func TestADateSetAfterTheJobWasFirstSeenIsCaughtUpUnderTheJobsCatchup(t *testing.T) {
+	cases := []struct {
+		name    string
+		catchup string
+		grace   int64
+		runs    int
+	}{
+		{"all runs it", "all", 60, 1},
+		{"skip within grace runs it", "skip", 600, 1},
+		{"skip outside grace does not", "skip", 60, 0},
+	}
+	for _, tc := range cases {
+		for _, clearFirst := range []bool{false, true} {
+			name := tc.name
+			if clearFirst {
+				name += " after the date was cleared and set again"
+			}
+			t.Run(name, func(t *testing.T) {
+				h := newHarness(t)
+				issue := h.kata.Issue(t, h.proj, "Late date")
+				job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "on date", Prompt: "Do it.", ExistingUID: issue.UID,
+					Trigger: worker.Trigger{Kind: "issue-scheduled", IssueUID: issue.UID}, Catchup: tc.catchup, GraceSeconds: workertest.Seconds(tc.grace)})
+				r := h.start(worker.Hooks{})
+				h.admitting(r)
+				h.quiet(job, 0) // the job is seen once while its Issue has no date
+				if clearFirst {
+					later := h.minuteIn(time.Hour)
+					h.kata.SetIssueDate(t, h.proj, issue.UID, "scheduled_on", later)
+					h.eventually("the job to wait for the date", func() bool { return h.status(r).NextRun.Equal(later) })
+					h.kata.ClearIssueDate(t, h.proj, issue.UID, "scheduled_on")
+					h.eventually("the job to stop waiting", func() bool { return h.status(r).NextRun.IsZero() })
+				}
+				past := h.minuteIn(-5 * time.Minute)
+				h.kata.SetIssueDate(t, h.proj, issue.UID, "scheduled_on", past)
+				if tc.runs == 0 {
+					h.quiet(job, 0)
+					return
+				}
+				runs := h.waitRuns(job, 1)
+				if got := runs[len(runs)-1].OccurrenceKey; got != worker.OccurrenceKey(past) {
+					t.Fatalf("keys %v, want the date %s last", occurrenceKeys(runs), past)
+				}
+				h.quiet(job, 1)
+			})
+		}
+	}
+}

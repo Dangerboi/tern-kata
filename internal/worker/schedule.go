@@ -217,7 +217,8 @@ func (w *Worker) plan(ps *projectState, job Job, now time.Time) {
 		}
 	}
 	changed := false
-	if st.through.IsZero() { // first sight: work starts at the later of now and the job's creation
+	firstSight := st.through.IsZero()
+	if firstSight { // first sight: work starts at the later of now and the job's creation
 		st.through, changed = maxTime(now, job.CreatedAt), true
 	}
 	dateChanged := false
@@ -228,7 +229,7 @@ func (w *Worker) plan(ps *projectState, job Job, now time.Time) {
 			if len(st.pending) > 0 {
 				w.opt.Log("Project %s: the date of job %s changed; %d waiting occurrence(s) dropped", ps.cfg.Name, job.Name, len(st.pending))
 			}
-			if !st.date.IsZero() && !at.IsZero() && at.Before(st.through) {
+			if !firstSight && !at.IsZero() && at.Before(st.through) {
 				st.through = at.Add(-time.Nanosecond)
 			}
 			st.pending, st.date, changed, dateChanged = nil, at, true, true
