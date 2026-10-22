@@ -58,6 +58,13 @@ const (
 	MoveCardRight        Action = "move-card-right"
 	OpenLane             Action = "open-lane"
 	SelectParent         Action = "select-parent"
+	ShowWorkflowsPage    Action = "show-workflows-page"
+	OpenWorkflow         Action = "open-workflow"
+	NewWorkflow          Action = "new-workflow"
+	EditWorkflow         Action = "edit-workflow"
+	ArchiveWorkflowAction Action = "archive-workflow"
+	RestoreWorkflowAction Action = "restore-workflow"
+	ToggleArchivedWorkflows Action = "toggle-archived-workflows"
 )
 
 // Binding is one chord in one mode, as the lookup, the footer and the help sheet read it. A binding of
@@ -102,6 +109,7 @@ const (
 	ModeFilterForm    Mode = "filter-form"
 	ModeBoard         Mode = "board"
 	ModeLane          Mode = "lane"
+	ModeWorkflows     Mode = "workflows"
 )
 
 // cardBindings are the keys of the Popup cards. Each card's handler reads them by mode; the

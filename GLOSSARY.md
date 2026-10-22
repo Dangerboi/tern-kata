@@ -2,9 +2,9 @@
 
 **Pane**: The Tern area the program draws into. _Avoid_: block (in Tern a block is a pane type; in kata `blocks` is a link).
 
-**Page**: One of the Pane's top-level views, chosen from the **Page bar**: Issues (the list and the Issue detail) and Board for now. Each Page keeps its own state, such as its selection, while another is shown. _Avoid_: tab (Tern's tabs and the Issue detail's tabs).
+**Page**: One of the Pane's top-level views, chosen from the **Page bar**: Issues (the list and the Issue detail), Board and Workflows for now. Each Page keeps its own state, such as its selection, while another is shown. _Avoid_: tab (Tern's tabs and the Issue detail's tabs).
 
-**Page bar**: The row in the top bar that names the Pages with their keys (`1` Issues, `2` Board); a click on a Page presses its key. _Avoid_: tab bar.
+**Page bar**: The row in the top bar that names the Pages with their keys (`1` Issues, `2` Board, `5` Workflows); a click on a Page presses its key. _Avoid_: tab bar.
 
 **Issue**: One unit of tracked work in kata, as kata defines it.
 
@@ -81,3 +81,9 @@
 **No lane**: The column of open Issues with no Lane label. It is always shown. An Issue with several Lane labels shows once, in the first of its Lanes in Lane order, with an "also" note naming the others.
 
 **Done**: The column of Issues closed in the last N days of the Pane calendar (default 14), at most M of them (default 20), newest closed first; N and M are per Project, set on the Lanes card or in `lanes.toml`. Its header says "20 of 192" when more qualify. It shows only what the Collection snapshot holds, so a status filter of `open` leaves it empty. Each card names the Lane `r` would reopen it into, the Lane its labels point at.
+
+**Workflow**: One of a Project's kata workflows: reusable command and prompt steps, each with a key, optional `after` steps it waits for (earlier steps only) and optional retries (0 to 100). Kata stores it; a Cron job that runs one names it. Archiving one that a live Cron job uses is refused by kata. _Avoid_: pipeline, recipe.
+
+**Workflows Page**: The **Page** (`5`) that lists the Pane's Project's Workflows, archived ones hidden until asked for, with an inspector (Enter) that reads the selected one as steps with their dependencies and retries. Its state is Pane state that is not saved. It acts on the Pane's Project like the Board Page, and ends when the Collection is not a Project.
+
+**Workflow card**: The Popup card `n` and `e` open on the Workflows Page. It holds the Workflow as the JSON text kata takes (`{"name": ..., "definition": {...}}`) in the Draft editor's text field, edited in the card or in `$EDITOR`. Saving checks the text locally against kata's rules first and keeps the text on any failure; the write is a Guarded write on the Workflow's `definition_event_uid`, and a conflict keeps the text beside the Workflow as it stands now.

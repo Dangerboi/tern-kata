@@ -273,6 +273,7 @@ var mainActions = []actionEntry{
 var Keymap []Binding
 
 func init() {
+	mainActions = append(mainActions, workflowActions()...)
 	mainActions = append(mainActions, pageActions()...)
 	Keymap = append([]Binding(nil), cardBindings...)
 	for i := range mainActions {

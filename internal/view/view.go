@@ -54,6 +54,8 @@ func Render(m model.Model, now time.Time) tern.View {
 			case model.ColumnList:
 				if m.BoardShown() {
 					columns = append(columns, board(m, now))
+				} else if m.OnWorkflows() {
+					columns = append(columns, workflows(m))
 				} else {
 					columns = append(columns, issues(m, now))
 				}
@@ -80,6 +82,8 @@ func Render(m model.Model, now time.Time) tern.View {
 		layer = createLayer(m)
 	case model.CardDraft:
 		layer = editorLayer(m)
+	case model.CardWorkflow:
+		layer = workflowLayer(m)
 	case model.CardField:
 		layer = fieldLayer(m)
 	case model.CardClose:

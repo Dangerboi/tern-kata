@@ -127,6 +127,8 @@ func DecodeSelect(id, item string) model.Msg {
 	switch id {
 	case IssueListID:
 		return model.SelectMsg{UID: itemKey(IssueListID, item)}
+	case WorkflowListID:
+		return model.WorkflowSelectMsg{UID: itemKey(WorkflowListID, item)}
 	case CollectionsID:
 		return model.CollectionPointerSelected{Key: itemKey(CollectionsID, item)}
 	case PickerListID:
@@ -150,6 +152,8 @@ func FieldID(card model.Card, name model.Field) string {
 		return CreateFieldID(name)
 	case model.CardDraft:
 		return DraftEditorID
+	case model.CardWorkflow:
+		return WorkflowEditorID
 	case model.CardField:
 		return FieldInputID
 	case model.CardClose:

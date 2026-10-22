@@ -97,6 +97,7 @@ type Model struct {
 	FilterForm       FilterFormState
 	Page             Page
 	Board            BoardState
+	Workflows        WorkflowsState
 	// Moving is the Issue whose Move is in flight; further Moves wait for its result.
 	Moving string
 	// nonce is the random per-run prefix of every idempotency key and keys counts the keys minted.
@@ -134,6 +135,9 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		}
 	}
 	if next, cmds, handled := updateCreate(m, msg); handled {
+		return next, cmds
+	}
+	if next, cmds, handled := updateWorkflows(m, msg); handled {
 		return next, cmds
 	}
 	if next, cmds, handled := updateEditor(m, msg); handled {

@@ -44,6 +44,7 @@ func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 	shown, tab, boardWasOn := m.DetailIssueUID(), m.tab, m.OnBoard()
 	m, cmds := update(m, msg)
 	m = m.settleBoard()
+	m = m.settleWorkflows()
 	m, load := m.lanesLoad(boardWasOn)
 	cmds = append(cmds, load...)
 	if m.tab != tab {
