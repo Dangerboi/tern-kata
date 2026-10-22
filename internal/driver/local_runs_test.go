@@ -314,3 +314,19 @@ func TestACancelsARunningRunOfThisMachineAndUStillNeedsAHeldOne(t *testing.T) {
 		t.Errorf("A on a settled run sent %#v", got.Cmds)
 	}
 }
+
+func TestALateAnswerForAnotherRunDoesNotReplaceTheSelectedRunsDetail(t *testing.T) {
+	a, b := heldRun("R1"), heldRun("R2")
+	out := localRunsPane(t, servingWorker(a, b), heldKataRun("R1"), heldKataRun("R2"))
+	if load, ok := askedLocalRun(out.Cmds); !ok || load.UID != "R1" {
+		t.Fatalf("cmds %#v, want the detail of the first run asked for", out.Cmds)
+	}
+	out = step(t, out.State, key("j"))
+	if load, ok := askedLocalRun(out.Cmds); !ok || load.UID != "R2" {
+		t.Fatalf("cmds %#v, want the detail of the second run asked for", out.Cmds)
+	}
+	s := step(t, out.State, model.LocalRunLoaded{UID: "R2", Detail: localDetail("R2", b)}).State
+	s = step(t, s, model.LocalRunLoaded{UID: "R1", Detail: localDetail("R1", a)}).State
+	s = step(t, s, key("enter")).State
+	wantText(t, "run detail", inspectorText(t, s), "Held because", "Step 1", "sess-1")
+}

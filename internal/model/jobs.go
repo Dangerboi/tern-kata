@@ -66,24 +66,6 @@ const JobActivityShown = 5
 
 func (JobsLoaded) msg() {}
 
-// ShowJob asks for one Cron job, archived or not, with its parent for a native one.
-type ShowJob struct {
-	Workspace string
-	ProjectID int64
-	UID       string
-}
-
-func (ShowJob) cmd() {}
-
-// JobShown answers ShowJob.
-type JobShown struct {
-	UID string
-	Job CronJob
-	Err error
-}
-
-func (JobShown) msg() {}
-
 // JobSelectMsg is a click on a job's row.
 type JobSelectMsg struct{ UID string }
 
