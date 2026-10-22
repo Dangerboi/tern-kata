@@ -22,4 +22,4 @@ Sources: herdr-kata definitions.md "Workflows", agent-contract.md "Command resul
 
 - A workflow author who relied on herdr-kata's shared agent context must put what steps need in the checkout or the Issue.
 - Steps are serial; independent steps do not run in parallel.
-- Graceful shutdown during a step kills its group and holds the run `interrupted`; resume continues an omp step with `--restore`, a command step reruns.
+- Graceful shutdown during a step kills its group and holds the run `interrupted`; resume continues an omp step as a new headless run with `--resume` and a continuation prompt (ADR-0005), and a command step reruns.
