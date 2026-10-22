@@ -289,7 +289,8 @@ func enterJobs(m Model) (Model, []Cmd) {
 	m.Focus = ColumnList
 	m.Jobs.ProjectID, m.Jobs.Jobs, m.Jobs.Selected, m.Jobs.Err = 0, nil, "", nil
 	m.Jobs.ProjectArchived = false
-	return m, cmds
+	m, ask := m.askWorker(0)
+	return m, append(cmds, ask)
 }
 
 // jobsOff leaves the Jobs Page for the Issues Page, the keys on the list, and gives the detail column back.
@@ -399,9 +400,10 @@ func toggleArchivedJobs(m Model) Model {
 }
 
 // reloadJobs reads the jobs again.
-func reloadJobs(m Model) Model {
+func reloadJobs(m Model) (Model, []Cmd) {
 	m.Jobs.stale = true
-	return m
+	m, cmd := m.askWorker(0)
+	return m, []Cmd{cmd}
 }
 
 // focusInspector is enter on the job list: the inspector takes the keys.

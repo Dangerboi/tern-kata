@@ -11,6 +11,7 @@ import (
 	"go.kenn.io/kata/pkg/client"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
 // Gateway is the one way commands reach the kata daemon: every Cmd goes in and
@@ -36,10 +37,14 @@ type Gateway struct {
 	wakeGeneration int64
 	now            func() time.Time
 	wakePoll       time.Duration
+
+	// workerDirs locates this machine's worker; runTern runs the tern program. Both are the real ones unless a test replaces them.
+	workerDirs func() (worker.Dirs, error)
+	runTern    func(context.Context, []string) ([]byte, error)
 }
 
 func NewGateway(locate Locator) *Gateway {
-	return &Gateway{locate: locate, deadline: connectDeadline, clients: map[string]*Client{}, now: time.Now, wakePoll: time.Minute}
+	return &Gateway{locate: locate, deadline: connectDeadline, clients: map[string]*Client{}, now: time.Now, wakePoll: time.Minute, workerDirs: worker.DefaultDirs, runTern: execTern}
 }
 
 // WithHost sets this machine's host name, the one every Attachment pointer is written with and compared against.
@@ -84,6 +89,18 @@ func (g *Gateway) Run(ctx context.Context, cmd model.Cmd, messages chan<- model.
 		result = saveLanes(cmd)
 	case model.LoadWorkerPickers:
 		result = loadWorkerPickers()
+	case model.LoadWorker:
+		result = g.loadWorker(ctx, cmd)
+	case model.LoadLocalRun:
+		result = g.loadLocalRun(ctx, cmd)
+	case model.RunJobNow:
+		result = g.runJobNow(ctx, cmd)
+	case model.ResumeLocalRun:
+		result = g.moveRun(ctx, "resume", cmd.UID)
+	case model.AbandonLocalRun:
+		result = g.moveRun(ctx, "abandon", cmd.UID)
+	case model.OpenRunSession:
+		result = g.openRunSession(ctx, cmd)
 	default:
 		result = g.do(ctx, cmd)
 	}

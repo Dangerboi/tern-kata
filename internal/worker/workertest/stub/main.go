@@ -8,6 +8,7 @@
 //	--stub-hang            print the session line, then wait for a signal
 //	--stub-log FILE        append one JSON line describing this launch
 //	--stub-hang-first      like --stub-hang, but only when not started with --resume (so a resumed attempt finishes)
+//	--stub-pause MS        after the final assistant message, wait MS milliseconds before ending the turn (a run that has said something and runs on)
 //	--stub-linger          after agent_end, keep running until signalled (the process ended its turn but has not exited)
 //	--stub-error-status N  end the turn with a provider failure: stopReason error, errorStatus N, exit 1
 package main
@@ -30,6 +31,7 @@ func main() {
 		hang      bool
 		hangFirst bool
 		linger    bool
+		pause     int
 		errStatus int
 		logPath   string
 		sessionIn string
@@ -57,6 +59,9 @@ func main() {
 			hang = true
 		case "--stub-hang-first":
 			hangFirst = true
+		case "--stub-pause":
+			i++
+			pause, _ = strconv.Atoi(args[i])
 		case "--stub-linger":
 			linger = true
 		case "--stub-error-status":
@@ -127,6 +132,7 @@ func main() {
 	}
 	message, _ := json.Marshal(msg)
 	fmt.Printf(`{"type":"message_end","message":%s}`+"\n", message)
+	time.Sleep(time.Duration(pause) * time.Millisecond)
 	if !noEnd {
 		fmt.Printf(`{"type":"agent_end","messages":[{"role":"user","content":[{"type":"text","text":"p"}]},%s],"isTerminal":true,"yielded":true}`+"\n", message)
 	}

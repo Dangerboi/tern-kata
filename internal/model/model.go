@@ -107,6 +107,8 @@ type Model struct {
 	Board            BoardState
 	Jobs             JobsState
 	Runs             RunsState
+	// Worker is what the Pane knows of this machine's worker: whether it runs, what it serves and the local state of its runs.
+	Worker           WorkerState
 	Workflows        WorkflowsState
 	// Moving is the Issue whose Move is in flight; further Moves wait for its result.
 	Moving string
@@ -225,8 +227,22 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m.Jobs.Selected, m.Focus = msg.UID, ColumnList
 	case RunsLoaded:
 		m = runsLoaded(m, msg)
+		if m.OnRuns() && !m.Worker.inflight && m.runsRunning() {
+			next, cmd := m.askWorker(workerPollEvery)
+			return next, []Cmd{cmd}
+		}
 	case RunShown:
 		m = runShown(m, msg)
+	case WorkerLoaded:
+		return workerLoaded(m, msg)
+	case LocalRunLoaded:
+		m = localRunLoaded(m, msg)
+	case JobRunRequested:
+		return jobRunRequested(m, msg)
+	case LocalRunMoved:
+		return localRunMoved(m, msg)
+	case RunSessionOpened:
+		m = runSessionOpened(m, msg)
 	case RunSelectMsg:
 		m.Runs.Selected, m.Focus = msg.UID, ColumnList
 	case DetailLoaded:

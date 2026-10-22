@@ -74,8 +74,11 @@ func runs(m model.Model, now time.Time) tern.Element {
 // and the summary. A part that can't be worked out is left off its line.
 func runCard(row model.RunRow, selected bool) tern.Element {
 	tone := runTone(row.Run.Status)
+	if row.Held {
+		tone = ui.ToneWarning
+	}
 	head := ui.Row{Common: ui.Common{Key: "head"}, Gap: ui.GapSM, Wrap: true, Children: ui.Nodes(
-		ui.Badge{Common: ui.Common{Key: "status", Tone: tone}, Text: string(row.Run.Status)},
+		ui.Badge{Common: ui.Common{Key: "status", Tone: tone}, Text: row.State},
 		ui.Text{Common: ui.Common{Key: "name"}, Spans: []ui.Span{{T: row.Name, S: "strong"}}},
 	)}
 	body := ui.Nodes(head)
@@ -88,6 +91,9 @@ func runCard(row model.RunRow, selected bool) tern.Element {
 	}
 	if len(who) > 0 {
 		body = append(body, ui.Text{Common: ui.Common{Key: "who"}, Spans: []ui.Span{{T: strings.Join(who, " · "), S: toneStyle(ui.ToneInfo)}}})
+	}
+	if row.Held {
+		body = append(body, ui.Text{Common: ui.Common{Key: "hold", Tone: ui.ToneWarning}, Text: "held: " + row.Hold})
 	}
 	when := []string{"started " + row.Start}
 	if row.Duration != "" {
@@ -117,6 +123,9 @@ func runInspector(m model.Model, now time.Time) tern.Element {
 		style := ""
 		if fact.Label == "Status" {
 			style = toneStyle(runTone(model.RunStatus(fact.Value)))
+		}
+		if fact.Label == "Held because" {
+			style = toneStyle(ui.ToneWarning)
 		}
 		value := ui.Text{Common: ui.Common{Key: "value", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}, Spans: []ui.Span{{T: fact.Value, S: style}}}
 		rows[i] = ui.Row{Common: ui.Common{Key: "fact" + strconv.Itoa(i)}, Gap: ui.GapSM, Align: ui.AlignStart, Children: ui.Nodes(label, value)}

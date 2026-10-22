@@ -59,6 +59,8 @@ func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 	cmds = append(cmds, jobs...)
 	m, runs := m.settleRuns()
 	cmds = append(cmds, runs...)
+	m, local := m.settleLocalRun()
+	cmds = append(cmds, local...)
 	m, cron := m.settleCronJobs()
 	cmds = append(cmds, cron...)
 	if m.tab != tab {

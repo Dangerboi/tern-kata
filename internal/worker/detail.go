@@ -22,6 +22,9 @@ type RunDetail struct {
 	// OutputTail is the end of the agent's assistant messages (at most OutputTailBytes), StderrTail the end of its stderr.
 	OutputTail string
 	StderrTail string
+	// Cwd is where the agent ran (the job's checkout, else the run's own folder), SessionDir the folder omp keeps the
+	// run's sessions in and SessionID the session a resume continues; the last is empty until omp has written one.
+	Cwd, SessionDir, SessionID string
 }
 
 // StepDetail is one step of a run as the journal knows it.
@@ -71,6 +74,7 @@ func (w *Worker) RunDetail(uid string) (RunDetail, error) {
 	}
 	dir := w.store.RunDir(uid)
 	d := RunDetail{RunStatus: w.runStatus(j), Steps: stepsOf(j), OutputTail: outputTail(filepath.Join(dir, "output.jsonl"), OutputTailBytes), StderrTail: fileTail(filepath.Join(dir, "stderr.log"), 2048)}
+	d.Cwd, d.SessionDir, d.SessionID = cmpOr(j.Checkout, dir), sessionFolder(dir), w.sessionID(j)
 	if j.Outcome != nil {
 		d.Summary = j.Outcome.Summary
 	}

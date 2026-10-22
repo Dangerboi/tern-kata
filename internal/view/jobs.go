@@ -43,6 +43,13 @@ func jobs(m model.Model, now time.Time) tern.Element {
 		heading = append(heading, loadingMarker)
 	}
 	children := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading"}, Spans: heading, Wrap: ui.WrapNone})
+	if line, good := m.WorkerLine(); line != "" {
+		tone := ui.ToneWarning
+		if good {
+			tone = ui.ToneSuccess
+		}
+		children = append(children, ui.Text{Common: ui.Common{Key: "worker", Tone: tone}, Text: line})
+	}
 	if m.Jobs.ProjectArchived {
 		children = append(children, ui.Text{Common: ui.Common{Key: "archived-project", Tone: ui.ToneWarning}, Text: "This Project is archived: kata answers none of its jobs, so those held here are paused."})
 	}
