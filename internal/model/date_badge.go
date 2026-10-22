@@ -28,17 +28,23 @@ func IssueDates(issue Issue) (scheduled, deadline string) {
 	return IssueDate(issue.ScheduledOnDate, issue.Metadata, ScheduledKey), IssueDate(issue.DeadlineOnDate, issue.Metadata, DeadlineKey)
 }
 
+// readableDates are IssueDates with any day that does not read as YYYY-MM-DD left empty, as the Date badge and Dates line show them.
+func readableDates(issue Issue) (scheduled, deadline string) {
+	scheduled, deadline = IssueDates(issue)
+	if !readableDays(scheduled) {
+		scheduled = ""
+	}
+	if !readableDays(deadline) {
+		deadline = ""
+	}
+	return scheduled, deadline
+}
+
 // ChooseDateBadge is the Date badge of an open Issue against the Pane calendar's date today, and false when it has none.
 // Days are compared as calendar strings without time-zone conversion, as the date Collections do. Without today the earlier
 // date shows plainly (the deadline on a tie).
 func ChooseDateBadge(issue Issue, today string) (DateBadge, bool) {
-	scheduled, deadline := IssueDates(issue)
-	if _, err := time.Parse(dayLayout, scheduled); err != nil {
-		scheduled = ""
-	}
-	if _, err := time.Parse(dayLayout, deadline); err != nil {
-		deadline = ""
-	}
+	scheduled, deadline := readableDates(issue)
 	if scheduled == "" && deadline == "" {
 		return DateBadge{}, false
 	}
@@ -125,13 +131,7 @@ func shortDay(day, today string) string {
 
 // DatesLine is the selected card's line "scheduled YYYY-MM-DD · due YYYY-MM-DD", absent parts left out, empty without dates.
 func DatesLine(issue Issue) string {
-	scheduled, deadline := IssueDates(issue)
-	if _, err := time.Parse(dayLayout, scheduled); err != nil {
-		scheduled = ""
-	}
-	if _, err := time.Parse(dayLayout, deadline); err != nil {
-		deadline = ""
-	}
+	scheduled, deadline := readableDates(issue)
 	line := ""
 	if scheduled != "" {
 		line = "scheduled " + scheduled

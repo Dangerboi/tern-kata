@@ -115,6 +115,9 @@ func IssueID(uid string) string { return itemID(IssueListID, uid) }
 // IsIssueID reports whether id is a row of the Issue list.
 func IsIssueID(id string) bool { return strings.HasPrefix(id, itemID(IssueListID, "")) }
 
+// IsBoardCardID reports whether id is under the Board's node: a Lane column, its card list or a card.
+func IsBoardCardID(id string) bool { return strings.HasPrefix(id, BoardID+".") }
+
 // CollectionItemID and PickerItemID are the ids of the Menu sidebar's and the Menu popup's entry key.
 func CollectionItemID(key string) string { return itemID(CollectionsID, key) }
 func PickerItemID(key string) string     { return itemID(PickerListID, key) }

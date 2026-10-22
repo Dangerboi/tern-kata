@@ -28,8 +28,8 @@ var LanesFields = []FieldSpec{{LanesNames, true}, {LanesDays, true}, {LanesCards
 // LanesFormState is the Lanes card: the Lane list typed as comma-separated names, then Done's days and card count. Saving
 // writes the Lane list file only.
 type LanesFormState struct {
-	Open  bool
-	Field Field
+	Open, Saving bool
+	Field        Field
 	// Text is the Lane list; Days and Cards are Done's limits, blank for the default.
 	Text, Days, Cards string
 	Caret             Caret
@@ -61,6 +61,10 @@ func (f LanesFormState) Value(name Field) string {
 func openLanesForm(m Model) Model {
 	if !m.Board.loaded {
 		m.Notice = "The Lane list is still loading."
+		return m
+	}
+	if m.Board.fileErr != nil {
+		m.Notice = fmt.Sprintf("Lanes not opened: %v", m.Board.fileErr)
 		return m
 	}
 	m.LanesForm = LanesFormState{Open: true, Field: LanesNames, Text: strings.Join(m.LaneList(), ", ")}
@@ -112,14 +116,23 @@ func parseLanes(text string) ([]string, error) {
 	return lanes, nil
 }
 
-// parseDone reads a Done limit field called name: blank is 0, the default; anything but a positive whole number is refused naming the field.
-func parseDone(text, name string) (int, error) {
+// The largest Done limits the card accepts and the Lane list file counts as set.
+const (
+	maxDoneDays  = 3650
+	maxDoneCards = 500
+)
+
+// parseDone reads a Done limit field called name: blank is 0, the default; anything but a whole number from 1 to max is refused naming the field.
+func parseDone(text, name string, max int) (int, error) {
 	if text = strings.TrimSpace(text); text == "" {
 		return 0, nil
 	}
 	n, err := strconv.Atoi(text)
 	if err != nil || n <= 0 {
 		return 0, fmt.Errorf("%s must be a positive whole number.", name)
+	}
+	if n > max {
+		return 0, fmt.Errorf("%s must be at most %d.", name, max)
 	}
 	return n, nil
 }
@@ -136,20 +149,26 @@ func updateLanesFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	form := &m.LanesForm
 	binding, bound := LookupBindingForMode(msg.Chord, ModeLanesForm)
 	switch {
+	case form.Saving && !(bound && binding.Action == LanesCancel):
+		// The save has not answered: the text stays as sent.
 	case bound && binding.Action == LanesSubmit:
 		lanes, err := parseLanes(form.Text)
 		var days, cards int
 		if err == nil {
-			days, err = parseDone(form.Days, "Done days")
+			days, err = parseDone(form.Days, "Done days", maxDoneDays)
 		}
 		if err == nil {
-			cards, err = parseDone(form.Cards, "Done cards")
+			cards, err = parseDone(form.Cards, "Done cards", maxDoneCards)
 		}
 		if err != nil {
 			form.Err = err
 			return m, nil
 		}
-		m.LanesForm = LanesFormState{}
+		if m.Board.fileErr != nil {
+			form.Err = fmt.Errorf("Lanes not saved: %v", m.Board.fileErr)
+			return m, nil
+		}
+		form.Saving, form.Err = true, nil
 		return m.SaveLaneList(lanes, days, cards)
 	case bound && binding.Action == LanesNext:
 		cycleField(&m, 1)
