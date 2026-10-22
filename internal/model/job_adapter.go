@@ -155,7 +155,9 @@ func formatSecrets(refs map[string]string) string {
 }
 
 // DateTrigger says the trigger fires on a date of an Issue.
-func DateTrigger(kind string) bool { return kind == TriggerIssueScheduled || kind == TriggerIssueDeadline }
+func DateTrigger(kind string) bool {
+	return kind == TriggerIssueScheduled || kind == TriggerIssueDeadline
+}
 
 func dateName(kind string) string {
 	if kind == TriggerIssueDeadline {

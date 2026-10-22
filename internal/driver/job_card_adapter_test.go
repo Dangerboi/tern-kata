@@ -342,16 +342,18 @@ func TestANotifyJobNotifiesAnExistingIssue(t *testing.T) {
 }
 
 func TestJobCardRefusesInvalidAdapterInputNamingTheFieldAndSendsNothing(t *testing.T) {
-	notifyCard := func(t *testing.T) driver.State { return set(t, adapterCard(t, kindNotify), model.JobFieldIssue, "ab12") }
+	notifyCard := func(t *testing.T) driver.State {
+		return set(t, adapterCard(t, kindNotify), model.JobFieldIssue, "ab12")
+	}
 	workflowCard := func(t *testing.T) driver.State {
 		return set(t, choose(t, adapterCard(t, kindWorkflow), model.JobFieldWorkflow, 0), model.JobFieldTitle, "Run")
 	}
 	for _, tt := range []struct {
-		name  string
-		card  func(*testing.T) driver.State
+		name   string
+		card   func(*testing.T) driver.State
 		break_ func(*testing.T, driver.State) driver.State
-		field model.Field
-		want  string
+		field  model.Field
+		want   string
 	}{
 		{"blank prompt", promptCard, func(t *testing.T, s driver.State) driver.State { return set(t, s, model.JobFieldPrompt, "  ") }, model.JobFieldPrompt, "Prompt"},
 		{"blank run title", promptCard, func(t *testing.T, s driver.State) driver.State { return set(t, s, model.JobFieldTitle, "") }, model.JobFieldTitle, "Child title"},
