@@ -108,19 +108,19 @@ func TestAWorkerKilledAtAnyJournalPointNeverSendsThePromptAgain(t *testing.T) {
 	}
 	done := want{status: "succeeded", summary: "done", launches: 1}
 	cases := map[string]want{
-		"prepared":                {status: "succeeded", summary: "done", launches: 1},
-		"issue-resolved":          done,
-		"admitted":                done,
-		"launching":               {status: "unknown", summary: "launch_unproven: ", launches: 0},
-		"started":                 {status: "unknown", summary: "interrupted: ", launches: -1, stub: []string{"--stub-hang"}},
-		"session":                 {status: "unknown", summary: "interrupted: ", launches: 1, stub: []string{"--stub-hang"}},
-		"exited":                  done,
-		"finished":                done,
-		"intents-planned":         done,
+		"prepared":                 {status: "succeeded", summary: "done", launches: 1},
+		"issue-resolved":           done,
+		"admitted":                 done,
+		"launching":                {status: "unknown", summary: "launch_unproven: ", launches: 0},
+		"started":                  {status: "unknown", summary: "interrupted: ", launches: -1, stub: []string{"--stub-hang"}},
+		"session":                  {status: "unknown", summary: "interrupted: ", launches: 1, stub: []string{"--stub-hang"}},
+		"exited":                   done,
+		"finished":                 done,
+		"intents-planned":          done,
 		"intent-final-observation": done,
-		"intent-comment":          done,
-		"intent-label":            done,
-		"settled":                 done,
+		"intent-comment":           done,
+		"intent-label":             done,
+		"settled":                  done,
 	}
 	for point, w := range cases {
 		t.Run(point, func(t *testing.T) {

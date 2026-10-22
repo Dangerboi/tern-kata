@@ -18,7 +18,10 @@ expect_tree "$bar_cells" '.ok and .count == 5 and ([.nodes[].rect[1]] | unique |
   and (.nodes[0].rect as $bar | .nodes[1].rect as $h | .nodes[2].rect as $c | .nodes[4].rect as $d
     | $d[0] + $d[2] == $bar[0] + $bar[2] and $h[0] + $h[2] < $c[0] and $c[0] + $c[2] < $d[0])
 '
+# The long name and the five-Page Page bar squeeze the Daemon at the default width; a wider Pane shows it whole.
+ctl resize 3200 "$bar_height"
 expect_tree "[data-id='main.topbar.right.daemon']" '.nodes[0].text | startswith("Daemon: local")'
+ctl resize "$bar_full" "$bar_height"
 expect_tree "[data-id='main.filters']" '.ok and .count == 0'
 
 # One column (80-139): the Daemon gives way first, then the counts, the title is cut last.

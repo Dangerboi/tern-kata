@@ -265,14 +265,14 @@ func TestPlanLaunchWorkerSubcommands(t *testing.T) {
 		}
 	}
 	for args, want := range map[string]string{
-		"run":                      "usage: tern-kata run <job-uid>",
-		"run a b":                  "usage: tern-kata run <job-uid>",
-		"worker stop":              "usage: tern-kata worker",
-		"worker status --takeover": "--takeover applies to `tern-kata worker` only",
-		"worker resume":            "usage: tern-kata worker",
-		"worker abandon a b":       "usage: tern-kata worker",
+		"run":                        "usage: tern-kata run <job-uid>",
+		"run a b":                    "usage: tern-kata run <job-uid>",
+		"worker stop":                "usage: tern-kata worker",
+		"worker status --takeover":   "--takeover applies to `tern-kata worker` only",
+		"worker resume":              "usage: tern-kata worker",
+		"worker abandon a b":         "usage: tern-kata worker",
 		"worker resume a --takeover": "usage: tern-kata worker",
-		"run x --takeover":         "run: unknown flag --takeover",
+		"run x --takeover":           "run: unknown flag --takeover",
 	} {
 		_, err := PlanLaunch(strings.Fields(args), lookupFrom(nil), "v")
 		if _, is := err.(subcommandError); !is || !strings.Contains(err.Error(), want) {
