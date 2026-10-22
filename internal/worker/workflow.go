@@ -239,6 +239,9 @@ func (w *Worker) workflowStep(ctx context.Context, j *Journal) error {
 		return w.finishWorkflow(j)
 	}
 	rec := j.Steps[i]
+	if rec.State != StepRunning && !j.ExpiresAt.IsZero() && !w.clock.Now().Before(j.ExpiresAt) {
+		return w.timeOutWorkflow(j)
+	}
 	if rec.State != StepRunning {
 		j, err = w.store.Update(j.RunUID, "step-started", func(j *Journal) error {
 			r := &j.Steps[i]
@@ -331,6 +334,25 @@ func (w *Worker) concludeStep(j *Journal, outcome *Outcome) error {
 		j.Launch, j.Exit, j.Result, j.Resume = nil, nil, nil, nil
 		j.CarriedInput, j.CarriedOutput = nil, nil
 		j.Phase = PhaseAdmitted
+		return nil
+	})
+	return err
+}
+
+// timeOutWorkflow ends a run whose expiry passed before its next step started: every step that never ran is skipped
+// and the run fails as timed out, with no process started.
+func (w *Worker) timeOutWorkflow(j *Journal) error {
+	_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
+		for i := range j.Steps {
+			if !terminalStep(j.Steps[i].State) {
+				j.Steps[i].State, j.Steps[i].Summary = StepSkipped, "skipped: the run timed out"
+			}
+		}
+		reason := fmt.Sprintf("timed out after %s", time.Duration(j.TimeoutSeconds)*time.Second)
+		o := &Outcome{Status: StatusFailed, At: w.clock.Now().UTC()}
+		o.Summary = truncate(reason+"\n\n"+workflowSummary(j, StatusFailed), maxSummaryBytes)
+		o.InputTokens, o.OutputTokens = sumStepTokens(j.Steps)
+		j.Outcome, j.Phase = o, PhaseFinished
 		return nil
 	})
 	return err

@@ -3,6 +3,7 @@
 //
 //	--stub-exit N          exit status (default 0)
 //	--stub-text T          the final assistant message (default "done")
+//	--stub-text-bytes N    repeat the final message until it is at least N bytes (a message too long for an argument)
 //	--stub-stop REASON     stopReason of that message (default "stop")
 //	--stub-no-end          print no agent_end
 //	--stub-hang            print the session line, then wait for a signal
@@ -38,6 +39,7 @@ func main() {
 		linger      bool
 		lingerFirst bool
 		pause       int
+		textBytes   int
 		errStatus   int
 		failWhen    string
 		failOnce    string
@@ -56,6 +58,9 @@ func main() {
 		case "--stub-text":
 			i++
 			text = args[i]
+		case "--stub-text-bytes":
+			i++
+			textBytes, _ = strconv.Atoi(args[i])
 		case "--stub-stop":
 			i++
 			stop = args[i]
@@ -130,6 +135,9 @@ func main() {
 			_, _ = f.Write(append(line, '\n'))
 			_ = f.Close()
 		}
+	}
+	if textBytes > len(text) && text != "" {
+		text = strings.Repeat(text, textBytes/len(text)+1)
 	}
 	id := "00000000-0000-7000-8000-000000000001"
 	if sessionIn != "" {

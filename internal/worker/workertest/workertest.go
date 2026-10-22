@@ -3,6 +3,7 @@
 package workertest
 
 import (
+	"cmp"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -259,11 +260,11 @@ func (j Job) definition() g.CronJobDefinition {
 	if j.GraceSeconds == nil {
 		j.GraceSeconds = ptr(int64(60))
 	}
-	policy := &g.IssuePolicy{Kind: "per-run", Title: ptr(orDefault(j.IssueTitle, "Run of "+j.Name)), Body: ptr("job body"), ScheduledOffsetSeconds: j.ScheduledOffset, DeadlineOffsetSeconds: j.DeadlineOffset}
+	policy := &g.IssuePolicy{Kind: "per-run", Title: ptr(cmp.Or(j.IssueTitle, "Run of "+j.Name)), Body: ptr("job body"), ScheduledOffsetSeconds: j.ScheduledOffset, DeadlineOffsetSeconds: j.DeadlineOffset}
 	if j.ExistingUID != "" {
 		policy = &g.IssuePolicy{Kind: "existing", UID: &j.ExistingUID}
 	}
-	trigger := g.Trigger{Kind: orDefault(j.Trigger.Kind, "manual")}
+	trigger := g.Trigger{Kind: cmp.Or(j.Trigger.Kind, "manual")}
 	if t := j.Trigger; t.Kind != "" && t.Kind != "manual" {
 		trigger.Cron, trigger.At, trigger.Timezone = optional(t.Cron), optional(t.At), optional(t.Timezone)
 		if t.IntervalSeconds != 0 {
@@ -417,14 +418,7 @@ func (d *Daemon) CreateNativeJob(t *testing.T, p worker.Project, name, parentUID
 	}); err != nil {
 		t.Fatalf("creating native job: %v", err)
 	}
-	jobs, _ := d.Kata.Jobs(context.Background(), p.ID)
-	for _, found := range jobs {
-		if found.Name == name {
-			return found
-		}
-	}
-	t.Fatalf("job %s not listed", name)
-	return worker.Job{}
+	return d.findJob(t, p, name)
 }
 
 // Issue creates an Issue in the Project and returns it.
@@ -453,13 +447,6 @@ func (d *Daemon) CloseIssue(t *testing.T, p worker.Project, issueUID string) {
 }
 
 func ptr[T any](v T) *T { return &v }
-
-func orDefault(s, d string) string {
-	if s == "" {
-		return d
-	}
-	return s
-}
 
 // BuildStub compiles the stub agent program and returns its path.
 func BuildStub(t *testing.T) string {
