@@ -3,8 +3,8 @@
 package worker_test
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"os/exec"
 	"strings"
 	"syscall"
