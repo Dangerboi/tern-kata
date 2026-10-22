@@ -93,3 +93,47 @@ func TestEveryPageTabClicksLikeItsKey(t *testing.T) {
 		}
 	}
 }
+
+// pageTabTexts is what each Page tab of the top bar draws, by tab id, wherever the Page bar sits.
+func pageTabTexts(t *testing.T, s driver.State) map[string]string {
+	t.Helper()
+	texts := map[string]string{}
+	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
+		for _, tab := range s.Model.PageBar() {
+			if n.ID == view.PageTabID(tab.ID) || n.ID == "main.pagebar."+tab.ID {
+				texts[tab.ID] = wireText(n)
+			}
+		}
+	}
+	return texts
+}
+
+func TestPageBarCompactsThenMovesToItsOwnLineBeforeAnythingLeavesTheTopBar(t *testing.T) {
+	long := model.Project{ID: 7, UID: "p", Name: "a-rather-long-project-name-for-the-top-bar"}
+	for _, tt := range []struct {
+		cols      int
+		compact   bool
+		ownLine   bool
+		wantLabel string
+	}{
+		{200, false, false, "Workflows"},
+		{100, true, false, ""},
+		{80, true, true, ""},
+	} {
+		s := loadedWith(t, tt.cols, long, model.Snapshot{Issues: []model.Issue{alpha}})
+		texts := pageTabTexts(t, s)
+		if len(texts) != len(s.Model.PageBar()) {
+			t.Fatalf("%d columns: %d Page tabs drawn, want %d", tt.cols, len(texts), len(s.Model.PageBar()))
+		}
+		if got := strings.Contains(texts["workflows"], `"t":"Workflows"`); got == tt.compact {
+			t.Errorf("%d columns: Workflows tab %s, compact %v", tt.cols, texts["workflows"], tt.compact)
+		}
+		if !strings.Contains(texts["issues"], `"t":"Issues"`) {
+			t.Errorf("%d columns: the current Page lost its label: %s", tt.cols, texts["issues"])
+		}
+		_, own := drawnIDs(t, view.Render(s.Model, now))["main.pagebar"]
+		if own != tt.ownLine {
+			t.Errorf("%d columns: Page bar on its own line = %v, want %v", tt.cols, own, tt.ownLine)
+		}
+	}
+}

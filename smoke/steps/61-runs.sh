@@ -32,6 +32,8 @@ expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(c
 # The Jobs Page's r opens the runs of the selected job.
 ctl key 3
 expect_tree "[data-id='main.columns.list.jobs.$rn_job']" '.count == 1'
+# Earlier steps leave their own jobs in the Project: select this one.
+ctl click "[data-id='main.columns.list.jobs.$rn_job']"
 ctl key r
 expect_tree "[data-id='main.columns.list.runs.$rn_run']" '.count == 1'
 ctl key 1
