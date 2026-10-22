@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -83,14 +84,14 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 	} else {
 		add("note", "worker", "not running on this machine", "Start it with `tern-kata worker`.")
 	}
-	for _, name := range slices.Sorted(mapKeys(cfg.Checkouts)) {
+	for _, name := range slices.Sorted(maps.Keys(cfg.Checkouts)) {
 		if info, err := os.Stat(cfg.Checkouts[name]); err != nil || !info.IsDir() {
 			add("FAIL", "checkout "+name, cfg.Checkouts[name]+" is not a directory", "Fix the path under [checkouts] in worker.toml.")
 		} else {
 			add("ok", "checkout "+name, cfg.Checkouts[name], "")
 		}
 	}
-	for _, name := range slices.Sorted(mapKeys(cfg.Profiles)) {
+	for _, name := range slices.Sorted(maps.Keys(cfg.Profiles)) {
 		command := cfg.Profiles[name].command()
 		if path, err := exec.LookPath(command); err != nil {
 			add("FAIL", "profile "+name, fmt.Sprintf("command %q was not found", command), "Install it, or set the profile's command to an absolute path.")
@@ -98,7 +99,7 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 			add("ok", "profile "+name, path, "")
 		}
 	}
-	for _, name := range slices.Sorted(mapKeys(cfg.Secrets)) {
+	for _, name := range slices.Sorted(maps.Keys(cfg.Secrets)) {
 		if _, err := cfg.readSecret(name); err != nil {
 			add("FAIL", "secret "+name, strings.TrimPrefix(err.Error(), "secret "+fmt.Sprintf("%q", name)+": "), "Fix the source under [secrets] in worker.toml.")
 		} else {
@@ -232,16 +233,6 @@ func (o DoctorOptions) checkProject(ctx context.Context, cfg Config, pc ProjectC
 		}
 		for _, why := range j.Inspections() {
 			add("FAIL", subject, fmt.Sprintf("run %s needs inspection: %s", j.RunUID, why), "Read the run in kata (`kata cron run show`) and decide what it should say; the worker never overwrites it.")
-		}
-	}
-}
-
-func mapKeys[M ~map[K]V, K comparable, V any](m M) func(yield func(K) bool) {
-	return func(yield func(K) bool) {
-		for k := range m {
-			if !yield(k) {
-				return
-			}
 		}
 	}
 }
