@@ -63,8 +63,8 @@ type Model struct {
 	Backfill BackfillState
 	// Now is the instant the Pane driver last stepped the model at: the model reads no clock, so what it counts against the
 	// time, as the runs a job missed, counts against this.
-	Now time.Time
-	Actor          string
+	Now   time.Time
+	Actor string
 	// Host is this machine's host name, which tells an Attachment held here from one held elsewhere.
 	Host      string
 	FieldForm FieldFormState
