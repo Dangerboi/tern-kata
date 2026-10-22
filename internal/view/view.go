@@ -134,13 +134,15 @@ func issues(m model.Model, now time.Time) tern.Element {
 	if m.SelectedUID != "" {
 		selected = IssueID(m.SelectedUID)
 	}
-	children := ui.Nodes()
+	// above is what the card draws over the rows, each with the 8px gap under it: the Lane header's text row, the column
+	// header's list row and the Search field's 24px.
+	children, above := ui.Nodes(), m.RowPx+6+8
 	if m.Board.Mode == model.BoardLane {
-		children = append(children, laneHeader(m))
+		children, above = append(children, laneHeader(m)), above+m.RowPx+8
 	}
 	children = append(children, headerRow(cols))
 	if m.Search.Open {
-		children = append(children, searchInput(m))
+		children, above = append(children, searchInput(m)), above+24+8
 	}
 	empty := "No Issues in this Collection. Select another Collection or create one with kata create."
 	if m.Filters != (model.Filters{}) {
@@ -149,7 +151,7 @@ func issues(m model.Model, now time.Time) tern.Element {
 	if m.Loading {
 		empty = "Loading Issues…"
 	}
-	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("issues"), Max: scrollMax(m), Selected: selected, Empty: ui.T(empty), Children: items})
+	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("issues"), Max: scrollMax(m, above), Selected: selected, Empty: ui.T(empty), Children: items})
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.4)}, "", children)
 }
 
@@ -175,16 +177,44 @@ func scrollerCommon(key string) ui.CommonWithoutMax {
 	return ui.CommonWithoutMax{Key: key, Grow: 1, Min: &ui.Bounds{H: ui.Lines(0)}}
 }
 
-// scrollMax caps a scrolling list. Without a card the list fills the space its
-// column has left. A card's body sizes to its content, not to the card, so
-// there the cap is a fraction of the window, less a share for each footer line past the first.
-// ponytail: Tern gives a card body no fill, so the card tier assumes the window is at least ~420px tall with a footer of up to three lines; below that the card clips the list's lowest rows instead of the Pane scrolling the top bar away. A footer line takes about 5% of a 420px window, and more than it needs of a taller one. Upgrade: a Tern prop for a card body that fills its card, or the Pane's rows in tern.Caps to cap in lines.
-func scrollMax(m model.Model) ui.ListMax {
+// scrollMax caps a scrolling list. Without a card the list fills the space its column has left. A card's body sizes to its
+// content, not to the card, so there the list is capped at the rows its column has (columnsPx) less the card's 10px padding above
+// and below and the above px the card draws over the list.
+// Until Tern says the Pane's size there is nothing to measure and the list takes half the window.
+func scrollMax(m model.Model, above int) ui.ListMax {
 	if len(m.VisibleColumns()) < 2 {
 		return ui.MaxFrac(1)
 	}
+	px, ok := columnsPx(m)
+	if !ok {
+		return ui.MaxFrac(0.5)
+	}
+	return linesIn(m, px-20-above)
+}
+
+// columnsPx is the height the Pane leaves its columns, between the top bar and the footer, and false until Tern says the Pane's
+// size. Tern has no fill for a list, only a height cap in list rows, so a list that should fill its column is capped at the
+// Pane's pixel height less everything above and below the columns: the top bar's text row and 50px of padding and gaps, a text
+// row per footer line, two for the filter line, and the disconnected line and the Notice as footerTextRows counts them.
+// ponytail: the chrome is measured at Tern's default density; a denser theme leaves more room unused, a looser one clips the
+// lowest row. The Pane's rows are only read when Tern reports a new width, so a height-only resize keeps the old cap until then.
+// Upgrade: a Tern prop for a list that fills its column.
+func columnsPx(m model.Model) (int, bool) {
+	if m.Rows == 0 || m.RowPx == 0 {
+		return 0, false
+	}
 	grid, _, _ := footerGrid(m)
-	return ui.MaxFrac(0.6 - 0.05*float64(max(len(grid)-1, 0)))
+	chrome := m.RowPx + 50 + m.RowPx*len(grid) + m.RowPx*footerTextRows(m)
+	if m.FilterSummary() != "" {
+		chrome += 2 * m.RowPx
+	}
+	return m.Rows*m.RowPx - chrome, true
+}
+
+// linesIn is the cap of a list that fills px: Tern counts a list row as a text row and 6px, and the list ends up to one list row
+// short of px.
+func linesIn(m model.Model, px int) ui.ListMax {
+	return ui.MaxLines(max(px/(m.RowPx+6), 1))
 }
 
 // topBar is the pinned row above the columns: the Collection title with its

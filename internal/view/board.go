@@ -171,29 +171,20 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 	}
 }
 
-// laneMax caps a Lane's card list at the rows left in the Pane under the top bar and Lane header and above the footer, so the list
-// fills the Lane and scrolls inside it and the Pane has nothing to scroll: the top bar stays. Tern has no fill for a list, only a
-// height cap in list rows, each a text row and 6px tall; so the cap is the Pane's pixel height less its chrome in rows, rounded
-// down, and the list ends up to one list row above the footer.
-// The disconnected line and the Notice are part of the chrome while drawn: each is the gap above it and its lines, wrapped at the
-// Pane's columns (footerTextRows).
+// laneMax caps a Lane's card list at the rows its column has under the Lane header (46px, with the Search field's 24px above the
+// Lanes while it is open), so the list fills the Lane and scrolls inside it; see columnsPx.
 // The cap is worked out once per draw and shared by every Lane.
-// ponytail: the chrome is measured at Tern's default density (the Pane's 6px padding, a text row for the top bar and for each gap, 46px of Lane header, a 24px footer margin, 24px for the Search field); a denser theme leaves more room unused, a looser one clips the lowest card. Upgrade: a Tern prop for a list that fills its column.
 // Until Tern says the Pane's size there is nothing to measure and the list takes half the window.
 func laneMax(m model.Model) ui.ListMax {
-	if m.Rows == 0 || m.RowPx == 0 {
+	px, ok := columnsPx(m)
+	if !ok {
 		return ui.MaxFrac(0.5)
 	}
-	grid, _, _ := footerGrid(m)
-	chrome := 5*m.RowPx + 24 + m.RowPx*len(grid)
-	if m.FilterSummary() != "" {
-		chrome += 2 * m.RowPx
-	}
-	chrome += m.RowPx * footerTextRows(m)
+	px -= 46
 	if m.Search.Open {
-		chrome += 24
+		px -= 24
 	}
-	return ui.MaxLines(max((m.Rows*m.RowPx-chrome)/(m.RowPx+6), 1))
+	return linesIn(m, px)
 }
 
 // maxRelationshipIDs is how many ids a Blocked marker names before it says "+N".

@@ -21,6 +21,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Fixed
 
+- Beside each other, the Issue list and the Issue detail scroll inside their columns down to just above the footer at any Pane height, instead of stopping a little past half the window; they and the Board's Lanes also follow a Pane made taller or shorter without changing its width.
 - The last card of every Board Lane stays fully visible while a Notice or the "disconnected" line shows under the columns.
 - A Board card reveal queued for a card that a newer draw moved to another Lane or dropped from Done no longer ends the Pane with "Tern surface: unknown id".
 - Backspace with the caret at the start of the Search field does nothing; it no longer resets the selection and runs the search again.

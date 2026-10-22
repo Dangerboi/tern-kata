@@ -34,6 +34,12 @@ type ResizeMsg struct{ Cols, Rows, RowPx int }
 
 func (ResizeMsg) msg() {}
 
+// PaneRowsMsg is the Pane's new height in rows when only its height changed: Tern reports a resize only when the width changes, so
+// the Pane's terminal size is watched for the height.
+type PaneRowsMsg struct{ Rows int }
+
+func (PaneRowsMsg) msg() {}
+
 type LoadProject struct{ Workspace string }
 
 func (LoadProject) cmd() {}

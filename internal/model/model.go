@@ -259,6 +259,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return selectRow(m, msg.UID), nil
 	case ResizeMsg:
 		m.Cols, m.Rows, m.RowPx = msg.Cols, msg.Rows, msg.RowPx
+	case PaneRowsMsg:
+		m.Rows = msg.Rows
 	default:
 		return updateLive(m, msg)
 	}
