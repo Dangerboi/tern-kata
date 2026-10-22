@@ -29,11 +29,13 @@ func (w *Worker) retireUnserved(ctx context.Context) {
 // retireOnce retires every unserved Project it knows and reports whether none is left to retry.
 func (w *Worker) retireOnce(ctx context.Context, served map[string]bool) (done bool) {
 	journals, _, _ := w.store.Scan()
-	known := map[string]string{} // Project uid -> the name it was served under
+	known := map[string]string{}     // Project uid -> the name it was served under
+	instances := map[string]string{} // Project uid -> the daemon instance its pin records
 	pins, _ := filepath.Glob(filepath.Join(w.opt.Dirs.State, "projects", "*", "pin.json"))
 	for _, path := range pins {
 		if p, ok := readPin(path); ok && p.ProjectUID != "" {
 			known[p.ProjectUID] = p.Name
+			instances[p.ProjectUID] = p.InstanceUID
 		}
 	}
 	for _, j := range journals {
@@ -54,16 +56,23 @@ func (w *Worker) retireOnce(ctx context.Context, served map[string]bool) (done b
 		if i < 0 || served[projects[i].Name] {
 			continue // kata no longer has it, or it is served under a new name
 		}
-		if !w.retire(ctx, projects[i], journals) {
+		if !w.retire(ctx, projects[i], instances[uid], journals) {
 			done = false
 		}
 	}
 	return done
 }
 
-// retire delivers the reports the Project's finished runs still owe, then releases its lease. False means kata could
-// not be reached for one of them and the whole is tried again.
-func (w *Worker) retire(ctx context.Context, p Project, journals []*Journal) bool {
+// retire checks the Project's route first (ADR-0004), against the pinned daemon instance when its pin records one,
+// then delivers the reports its finished runs still owe and releases its lease. False means the route failed or kata
+// could not be reached for one of them; nothing more is done and the whole is tried again.
+func (w *Worker) retire(ctx context.Context, p Project, instance string, journals []*Journal) bool {
+	if err := w.probeRoute(ctx, p, instance); err != nil {
+		if ctx.Err() == nil {
+			w.opt.Log("retired Project %s: not retired until the route holds: %v", p.Name, err)
+		}
+		return false
+	}
 	for _, j := range journals {
 		if j.ProjectUID != p.UID || j.Executor != w.opt.Config.Executor || j.Phase != PhaseFinished {
 			continue
