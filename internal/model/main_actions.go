@@ -148,6 +148,8 @@ var (
 	listModes = []Mode{ModeList, ModeLane}
 	// laneModes are the modes that show Lanes: the Board and the Lane view.
 	laneModes = []Mode{ModeBoard, ModeLane}
+	// jobsModes are the modes of the Jobs Page, whose keys act on the selected job.
+	jobsModes = []Mode{ModeJobs, ModeJobInspector}
 	searching = []Mode{ModeSearch, ModeSearchResults}
 )
 
@@ -213,6 +215,12 @@ var mainActions = []actionEntry{
 	{action: PageDown, modes: []Mode{ModeJobInspector}, keys: pageDownKeys, help: "page", handle: scrolling(ColumnDetail, ScrollPageDown)},
 	{action: PageUp, modes: []Mode{ModeJobInspector}, keys: pageUpKeys, help: "page up", handle: scrolling(ColumnDetail, ScrollPageUp)},
 	{action: JobInspectorBack, modes: []Mode{ModeJobInspector}, keys: keys("escape", "esc", "tab", "tab", "left", "←"), help: "back", footer: []Mode{ModeJobInspector}, sheet: []sheetLine{{sheetJobs, 10, "back to the job list"}}, handle: pure(inspectorBack)},
+	{action: NewJobAction, modes: jobsModes, keys: keys("n", "n"), help: "new job", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 11, "new job (Job card)"}}, handle: openNewJob},
+	{action: EditJobAction, modes: jobsModes, keys: keys("e", "e"), help: "edit job", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 12, "edit the selected job (Job card)"}}, handle: openEditJob},
+	{action: PauseJobAction, modes: jobsModes, keys: keys("p", "p"), help: "pause or resume", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 13, "pause or resume the selected job"}}, handle: toggleJob},
+	{action: ArchiveJobAction, modes: jobsModes, keys: keys("x", "x"), help: "archive", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 14, "archive the selected job"}}, handle: archiveJob},
+	{action: RestoreJobAction, modes: jobsModes, keys: keys("r", "r"), help: "restore", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 15, "restore an archived job (press a to list them)"}}, handle: restoreJob},
+	{action: NewIssueJobAction, modes: issueModes, keys: keys("shift+j", "J"), help: "job", sheet: []sheetLine{{sheetJobs, 16, "new recurring job on the selected Issue (Job card)"}}, handle: openIssueJob},
 	// Moving and opening in the Issue detail.
 	{action: ScrollDown, modes: []Mode{ModeDetail}, keys: keys("down", "↓"), help: "scroll", footer: []Mode{ModeDetail}, footerKey: "↑↓", sheet: []sheetLine{{sheetChildren, 5, "scroll detail viewport"}}, handle: scrolling(ColumnDetail, ScrollLineDown)},
 	{action: ScrollUp, modes: []Mode{ModeDetail}, keys: keys("up", "↑"), help: "scroll up", sheet: []sheetLine{{sheetChildren, 4, "scroll detail viewport"}}, handle: scrolling(ColumnDetail, ScrollLineUp)},

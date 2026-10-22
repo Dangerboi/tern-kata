@@ -70,6 +70,8 @@ type JobsState struct {
 	Selected string
 	Loading  bool
 	Err      error
+	// Writing is the uid of the job a pause, resume, archive or restore is writing; the keys wait for its answer.
+	Writing string
 	// request counts the reads asked for; stale asks for another.
 	request int64
 	stale   bool

@@ -28,7 +28,7 @@ Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relat
 
 ![The Ready for agent Lane beside the detail of a related Issue in the acme-infra Project](docs/images/related-detail.png)
 
-**Jobs Page** ([details](#jobs-page)): `3` in a Project lists its Cron jobs with their state (and why one is paused), kind, schedule in words, agent profile and next run, with the selected job's definition and parent beside them; Enter on a recurring job's parent opens that Issue.
+**Jobs Page** ([details](#jobs-page)): `3` in a Project lists its Cron jobs with their state (and why one is paused), kind, schedule in words, agent profile and next run, with the selected job's definition and parent beside them; Enter on a recurring job's parent opens that Issue. The **Job card** ([details](#job-card)) makes and edits recurring-child jobs (`n`, `J` on an Issue, `e`), with a live schedule preview; `p` pauses and resumes, `x` archives and `r` restores.
 
 **Attachments** ([details](#attachments)): `u` attaches a screenshot, log or any other file to an Issue, and the Attachments tab lists them. Agents find them through the Issue's kata metadata, and `tern-kata attach` does the same from a shell.
 
@@ -203,6 +203,18 @@ tern-kata reads it each time the Board turns on and when the Project changes whi
 - At 140 columns and wider an **inspector** beside the list shows the selected job's full definition (trigger, prompt or workflow, recipient and message, Issue policy, overlap, catchup, timeout, checkout, the names of its secrets) and, for a recurring-child job, its parent Issue with the delivery progress. Narrower, only the focused column shows: Enter or Tab on a card shows the inspector, Esc or Tab goes back.
 - With the inspector focused, Enter on a recurring-child job's parent opens that Issue on the Issues Page (a deleted parent leaves a Notice instead).
 - The Jobs Page needs a Project like the Board Page and ends when you switch to a Collection that is not a Project.
+
+### Job card
+
+`n` on the Jobs Page opens the **Job card** for a new job; `J` on an Issue (list, Board, Lane view, Issue detail) opens it for a new recurring-child job with that Issue as its parent; `e` opens it on the selected job, prefilled. It makes and edits **recurring-child** jobs (the ones kata runs); the Kind field offers only that for now, and `e` on any other job leaves a Notice saying so. The fields, `tab` and `shift+tab` between them (a field that doesn't apply is hidden and skipped), are:
+
+- **Name**, and the **Trigger**: a cron expression (five fields, or a descriptor like `@daily`; `@every` and a `TZ=` prefix are refused) with its **time zone** (an IANA name, blank is UTC, the Pane's zone to start with), or an **interval** in seconds or as a duration like `15m` or `2h`, at least 60 seconds. Under the trigger a live preview reads the schedule in words and lists the next three runs; an interval counts from the job's creation, so a new job's runs are "about" those times. A trigger that can't be read says why instead.
+- **Parent Issue** (a short id, which a job made with `J` has filled in; the card resolves it to the Issue's full uid), **Child title** and **Child body** (one line: a body with line breaks is shown on one line and saved that way), **Inbox recipient** (blank is the parent's current owner or author; otherwise an exact address like `alice` or `alice/reviewer`) and **Inbox message**. A job keeps its parent: the field is hidden when editing.
+- **Catch up** (the latest missed run, every missed run, or skip runs older than the **grace** in seconds, which skip requires) and **Enabled**.
+
+`ctrl+o` saves (or the button). Invalid input (a bad cron expression, an unknown time zone, an interval under 60 seconds, skip without a grace, a blank name or child title) is refused naming the field and nothing is sent. A new job is sent at a uid the card made when it opened, so sending the same card again is not a second job. An edit is a Guarded write on the job's `definition_event_uid`: if the job changed meanwhile nothing is written, the card shows the newer job (name, state, schedule, child title, catch-up, when it changed) and keeps your draft, and saving again needs an explicit choice: `o` saves the draft over the newer job, `u` replaces the draft with the newer job, `d` discards the draft.
+
+On the Jobs Page, `p` pauses a job that is running (it writes the job disabled) and resumes one that is not (enabled again); `x` archives the selected job, and `r` restores an archived one (press `a` to list them). All three are Guarded writes too: a job changed meanwhile is left alone, the list shows the newer job and a Notice says nothing was written. A job's list and inspector update as soon as the write is answered.
 
 ## Dates card
 

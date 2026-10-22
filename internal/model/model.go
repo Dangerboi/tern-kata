@@ -56,6 +56,7 @@ type Model struct {
 	CloseForm      CloseFormState
 	DatesForm      DatesFormState
 	RecurrenceForm RecurrenceFormState
+	JobForm        JobFormState
 	Actor          string
 	// Host is this machine's host name, which tells an Attachment held here from one held elsewhere.
 	Host      string
@@ -196,6 +197,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m = lanesSaved(m, msg)
 	case JobsLoaded:
 		m = jobsLoaded(m, msg)
+	case JobWritten:
+		m = jobWritten(m, msg)
 	case JobSelectMsg:
 		m.Jobs.Selected, m.Focus = msg.UID, ColumnList
 	case DetailLoaded:

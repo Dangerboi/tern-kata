@@ -236,6 +236,18 @@ func plan(cmd model.Cmd, host string) (request, bool) {
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ShowJob(ctx, cmd)) },
 			func(err error) model.Msg { return model.JobShown{UID: cmd.UID, Err: err} }}, true
+	case model.SaveJobCmd:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.SaveJob(ctx, cmd)) },
+			func(err error) model.Msg { return model.JobWritten{ProjectID: cmd.ProjectID, UID: cmd.UID, Err: err} }}, true
+	case model.ArchiveJobCmd:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ArchiveJob(ctx, cmd)) },
+			func(err error) model.Msg { return model.JobWritten{ProjectID: cmd.ProjectID, UID: cmd.UID, Err: err} }}, true
+	case model.RestoreJobCmd:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.RestoreJob(ctx, cmd)) },
+			func(err error) model.Msg { return model.JobWritten{ProjectID: cmd.ProjectID, UID: cmd.UID, Err: err} }}, true
 	case model.ReadSnapshot:
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ReadSnapshot(ctx, cmd)) },

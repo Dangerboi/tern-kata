@@ -175,6 +175,21 @@ func popupCards() []popupCard {
 			text:     func(m model.Model, f model.Field) string { return m.DatesForm.Value(f) },
 		},
 		{
+			name: "Job", card: model.CardJob, quits: true, textField: model.JobFieldName,
+			tabOrder: []model.Field{model.JobFieldKind, model.JobFieldName, model.JobFieldTrigger, model.JobFieldCron, model.JobFieldZone, model.JobFieldParent, model.JobFieldTitle,
+				model.JobFieldBody, model.JobFieldRecipient, model.JobFieldMessage, model.JobFieldCatchup, model.JobFieldEnabled},
+			states: []cardState{{"", func() model.Model {
+				m, _ := clickPress(clickAt(model.ColumnList), "shift+j")
+				m, _ = model.Update(m, model.FocusFieldMsg{Field: model.JobFieldTitle})
+				return typed(m, "Tick")
+			}, model.ModeJobForm}},
+			graft:  func(dst *model.Model, src model.Model) { dst.JobForm = src.JobForm },
+			field:  func(m model.Model) model.Field { return m.JobForm.Field },
+			text:   func(m model.Model, _ model.Field) string { return m.JobForm.Name },
+			save:   []string{"ctrl+o"},
+			result: func(m model.Model, err error) model.Msg { return model.JobWritten{UID: m.JobForm.UID, Err: err} },
+		},
+		{
 			name: "Recurrence", card: model.CardRecurrence, quits: true, textField: model.RecurrenceStart,
 			tabOrder: []model.Field{model.RecurrenceFrequency, model.RecurrenceEvery, model.RecurrenceWeekdays, model.RecurrenceStart, model.RecurrenceEnds, model.RecurrenceZone},
 			states:   []cardState{{"", opened("shift+o"), model.ModeRecurrenceForm}},

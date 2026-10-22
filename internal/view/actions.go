@@ -164,6 +164,8 @@ func FieldID(card model.Card, name model.Field) string {
 		return DatesFieldID(name)
 	case model.CardRecurrence:
 		return RecurrenceFieldID(name)
+	case model.CardJob:
+		return JobFieldID(name)
 	case model.CardProject:
 		return ProjectInputID
 	case model.CardLanes:

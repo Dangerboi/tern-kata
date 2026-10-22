@@ -42,6 +42,7 @@ const (
 	CardClose
 	CardDates
 	CardRecurrence
+	CardJob
 	CardProject
 	CardLanes
 	CardFilter
@@ -166,6 +167,26 @@ func init() {
 			caret: func(m Model) (Field, bool) {
 				f := m.RecurrenceForm
 				return f.Field, !f.Saving && !f.StopConfirm && takesText(RecurrenceFields, f.Field)
+			},
+		},
+		{
+			card: CardJob, open: func(m Model) bool { return m.JobForm.Open },
+			modes: []Mode{ModeJobForm, ModeJobConflict},
+			mode: func(m Model) Mode {
+				if m.JobForm.Conflict != nil {
+					return ModeJobConflict
+				}
+				return ModeJobForm
+			},
+			chords: []string{"ctrl+c"},
+			key:    jobFormKey,
+			fields: JobFields, focus: func(m *Model) *Field { return &m.JobForm.Field },
+			locked: func(m Model) bool { return m.JobForm.Saving || m.JobForm.Conflict != nil },
+			hidden: func(m Model, name Field) bool { return !m.JobForm.Shows(name) },
+			choose: func(m Model, i int) Model { m.JobForm.choose(i); return m },
+			caret: func(m Model) (Field, bool) {
+				f := m.JobForm
+				return f.Field, !f.Saving && f.Conflict == nil && takesText(JobFields, f.Field)
 			},
 		},
 		{
