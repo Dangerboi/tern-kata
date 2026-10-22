@@ -202,6 +202,13 @@ func TestAHoldBeforeAdmissionNeedsNoKataWriteAndAbandonsLocally(t *testing.T) {
 	if resp := h.ask(worker.Request{Op: "resume", Run: uid}); resp.OK || !strings.Contains(resp.Error, "before kata saw it") {
 		t.Fatalf("resume: ok=%v %q", resp.OK, resp.Error)
 	}
+	h.eventually("the lease to be read", func() bool { return strings.Contains(restarted.w.Status().Projects[0].Why, "another worker") })
+	// Another worker still owns the Project: abandon fails at once with the owner named, like run and resume.
+	if resp := h.ask(worker.Request{Op: "abandon", Run: uid, Actor: "ann"}); resp.OK || !strings.Contains(resp.Error, "another worker (desktop) owns this Project") {
+		t.Fatalf("abandon while the lease is elsewhere: ok=%v %q", resp.OK, resp.Error)
+	}
+	h.clock.Advance(11 * time.Minute) // its lease expires and this worker takes the Project
+	h.admitting(restarted)
 	if resp := h.ask(worker.Request{Op: "abandon", Run: uid, Actor: "ann"}); !resp.OK || resp.Transition.State != "cancelled" {
 		t.Fatalf("abandon: %+v", resp)
 	}

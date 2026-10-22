@@ -64,7 +64,8 @@ func runWorkerCommand(ctx context.Context, plan LaunchPlan, env workerEnv, out i
 }
 
 // settleHeldRun is `worker resume <run-uid>` or `worker abandon <run-uid>`: it asks the running worker to continue or
-// give up a held run and prints what the worker saved.
+// give up a held run (or, for abandon, to stop a running one or settle one whose local state is lost) and prints what
+// the worker saved.
 func settleHeldRun(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Writer) error {
 	verb, uid := plan.Operands[0], plan.Operands[1]
 	resp, err := worker.Ask(ctx, env.Dirs, worker.Request{Op: verb, Run: uid, Actor: plan.Actor})
@@ -79,7 +80,16 @@ func settleHeldRun(ctx context.Context, plan LaunchPlan, env workerEnv, out io.W
 		_, err = fmt.Fprintf(out, "Run %s of job %q in Project %s resumed: the worker continues its omp session; follow it with `tern-kata worker status`.\n", t.RunUID, t.Job, t.Project)
 		return err
 	}
-	_, err = fmt.Fprintf(out, "Run %s of job %q in Project %s abandoned: kata will record it cancelled and its slot is free.\n", t.RunUID, t.Job, t.Project)
+	switch t.State {
+	case "cancelling":
+		_, err = fmt.Fprintf(out, "Run %s of job %q in Project %s is being stopped: the worker signals its process group (SIGTERM, then SIGKILL after 10 s) and kata records it cancelled once it is gone.\n", t.RunUID, t.Job, t.Project)
+	case "unknown":
+		_, err = fmt.Fprintf(out, "Run %s in Project %s had lost its local state: kata now records it unknown (\"local state lost\") and it is never rerun.\n", t.RunUID, t.Project)
+	case "acknowledged":
+		_, err = fmt.Fprintf(out, "Run %s: its damaged journal is acknowledged. The folder stays in quarantine and keeps vetoing the run.\n", t.RunUID)
+	default:
+		_, err = fmt.Fprintf(out, "Run %s of job %q in Project %s abandoned: kata will record it cancelled and its slot is free.\n", t.RunUID, t.Job, t.Project)
+	}
 	return err
 }
 

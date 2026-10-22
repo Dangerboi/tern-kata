@@ -10,6 +10,7 @@
 //	--stub-hang-first      like --stub-hang, but only when not started with --resume (so a resumed attempt finishes)
 //	--stub-pause MS        after the final assistant message, wait MS milliseconds before ending the turn (a run that has said something and runs on)
 //	--stub-linger          after agent_end, keep running until signalled (the process ended its turn but has not exited)
+//	--stub-linger-first    like --stub-linger, but only when not started with --resume (so a resumed attempt exits)
 //	--stub-fail-when T     exit 1 when the prompt contains T
 //	--stub-fail-once-when T  like --stub-fail-when, but not on a retry (a prompt with a "# Retry" section)
 //	--stub-hang-when T     like --stub-hang-first for a prompt that contains T: hang unless resumed
@@ -34,7 +35,8 @@ func main() {
 		noEnd     bool
 		hang      bool
 		hangFirst bool
-		linger    bool
+		linger      bool
+		lingerFirst bool
 		pause     int
 		errStatus int
 		failWhen  string
@@ -69,6 +71,8 @@ func main() {
 		case "--stub-pause":
 			i++
 			pause, _ = strconv.Atoi(args[i])
+		case "--stub-linger-first":
+			lingerFirst = true
 		case "--stub-linger":
 			linger = true
 		case "--stub-fail-when":
@@ -158,7 +162,7 @@ func main() {
 	if !noEnd {
 		fmt.Printf(`{"type":"agent_end","messages":[{"role":"user","content":[{"type":"text","text":"p"}]},%s],"isTerminal":true,"yielded":true}`+"\n", message)
 	}
-	if linger {
+	if linger || (lingerFirst && resume == "") {
 		time.Sleep(time.Hour)
 	}
 	os.Exit(exit)

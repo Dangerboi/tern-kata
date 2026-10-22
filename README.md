@@ -205,7 +205,7 @@ tern-kata worker            # runs in the foreground; ctrl+c stops it
 tern-kata worker status     # from another shell: what it serves, runs and refuses
 tern-kata run <job-uid>     # run an adapter prompt job now
 tern-kata worker resume <run-uid>    # continue a held run in its omp session
-tern-kata worker abandon <run-uid>   # give up a held run: kata records it cancelled
+tern-kata worker abandon <run-uid>   # give up a held run (kata records it cancelled), stop a running one, or settle one whose local state is lost
 ```
 
 State lives in `$XDG_STATE_HOME/tern-kata` (else `~/.local/state/tern-kata`): `worker.lock` (a second worker on the machine is refused), the control socket, each run's journal (`runs/<run uid>/run.json` with its prompt, session and output) and the pins. Across machines, the worker holds a lease for each Project in the Project's own kata metadata (`tern_kata.lease`, renewed every 3 minutes, expiring after 10): a Project whose lease another worker holds admits nothing here and `worker status` says which worker owns it; `tern-kata worker --takeover` moves it on purpose.
@@ -239,7 +239,11 @@ A run that is not uncertain is never held: a nonzero exit, a timeout (the proces
 
 `tern-kata worker resume <run-uid>` continues a held run: it starts a new headless `omp -p --mode json --session-dir <run folder> --resume <session id>` on the run's saved session, with a prompt that says the previous turn may have partly run and asks the agent to check the checkout and the Issue for work already done before redoing it. The held attempt's own prompt is never sent again; the run goes back to `running` in kata with its original start time, gets a fresh timeout and ends recorded `succeeded` or `failed` by the new attempt (the held attempt's output stays in the run folder as `output.attempt1.jsonl`). A resume is refused when the run is not held with `unknown`, when no omp session was saved (`launch_unproven`, and the nothing-started reasons: only abandon remains), when its recorded process group is still present, when the Project's lease is not held here, when the Issue is closed or when the Project is at capacity. `tern-kata worker abandon <run-uid>` gives up a held run: kata records it `cancelled` with "abandoned by <actor>" and the held reason, the Issue gets a comment, and the run's slot and overlap gate are freed; a hold from before kata saw the run is closed locally. Both take `--as <actor>`. A `launch_unproven` run keeps its slot until it is abandoned, because the worker cannot prove no agent exists.
 
-A journal the worker cannot read is moved whole to `quarantine/runs/<run uid>`, which keeps that run from ever starting again; `worker doctor` lists them. Never delete one to unblock a job.
+A journal the worker cannot read is moved whole to `quarantine/runs/<run uid>`, which keeps that run from ever starting again; `worker doctor` lists them. Never delete one to unblock a job. `tern-kata worker abandon <run-uid>` acknowledges one: if kata still shows the run running for this executor it is recorded `unknown` with the summary "local state lost" (and its Issue gets a comment), the folder stays where it is and keeps its veto, and the doctor lists it as a note instead of a problem.
+
+`worker abandon` also handles a run this machine has no journal of at all but kata shows running for this executor (the state folder was lost): it is never rerun, `worker doctor` lists it with the command, and abandoning records it `unknown` ("local state lost") and comments on its Issue. Abandoning a **running** run stops it: the process group gets SIGTERM, SIGKILL after 10 seconds, and the run is recorded `cancelled` ("abandoned by <actor> (was running)") once the group is gone. Like `run` and `resume`, every form of abandon is refused while another worker owns the Project's lease.
+
+A workflow run's time limit starts when its run is prepared, and a resume gets one fresh limit from the moment it is accepted, not from when a step starts. Tokens are summed over every attempt of a run: retried steps and resumed attempts all count. A daily pass removes the folders of runs that were settled and fully reported more than 14 days ago; held runs, runs with a write still owed and runs in flight stay.
 
 ## Pages and the Board Page
 

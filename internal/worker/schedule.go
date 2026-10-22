@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -327,7 +328,7 @@ func (w *Worker) plan(ps *projectState, job Job, now time.Time) {
 	d := job.Definition
 	keep, dropped := selectOccurrences(cands, now, d.Catchup, time.Duration(d.GraceSeconds)*time.Second)
 	if dropped > 0 {
-		w.opt.Log("Project %s: job %s (catchup %s): %d missed occurrence(s) not run", ps.cfg.Name, job.Name, cmpOr(d.Catchup, "skip"), dropped)
+		w.opt.Log("Project %s: job %s (catchup %s): %d missed occurrence(s) not run", ps.cfg.Name, job.Name, cmp.Or(d.Catchup, "skip"), dropped)
 	}
 	if !slices.Equal(keep, st.pending) {
 		st.pending, changed = keep, true

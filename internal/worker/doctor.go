@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -108,7 +109,7 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 		}
 	}
 	if o.Kata == nil {
-		add("FAIL", "kata", cmpOr(errString(o.KataErr), "no daemon"), "Start the kata daemon (`kata daemon start`) or run `kata doctor`.")
+		add("FAIL", "kata", cmp.Or(errString(o.KataErr), "no daemon"), "Start the kata daemon (`kata daemon start`) or run `kata doctor`.")
 		return r
 	}
 	version, err := o.Kata.Ping(ctx)
@@ -164,7 +165,7 @@ func (o DoctorOptions) checkProject(ctx context.Context, cfg Config, pc ProjectC
 		add("FAIL", subject, "the daemon does not advertise cron_v1", "Upgrade kata to "+MinKataVersion+" or newer.")
 		return
 	}
-	actor := cmpOr(pc.Actor, cfg.Actor, o.Actor)
+	actor := cmp.Or(pc.Actor, cfg.Actor, o.Actor)
 	dir := filepath.Join(o.Dirs.State, "projects", p.UID)
 	if prev, ok := readPin(filepath.Join(dir, "pin.json")); ok && (prev.Actor != actor || prev.Executor != cfg.Executor) {
 		add("FAIL", subject, fmt.Sprintf("its pinned route differs: pinned actor %q and executor %q, now %q and %q", prev.Actor, prev.Executor, actor, cfg.Executor), "There is no repin command: restore the old values, or use a new state folder and executor.")
@@ -192,11 +193,16 @@ func (o DoctorOptions) checkProject(ctx context.Context, cfg Config, pc ProjectC
 			continue
 		}
 		if _, err := store.Load(run.UID); errors.Is(err, ErrNoJournal) && !store.IsQuarantined(run.UID) {
-			add("FAIL", subject, fmt.Sprintf("run %s is running in kata for this executor but this machine has no journal of it; it is never rerun", run.UID), "Record it as `unknown` once abandon is available; do not delete anything to unblock the job.")
+			add("FAIL", subject, fmt.Sprintf("run %s is running in kata for this executor but this machine has no journal of it; it is never rerun", run.UID), "Record it as `unknown` (\"local state lost\") with `tern-kata worker abandon "+run.UID+"`; do not delete anything to unblock the job.")
 		}
 	}
 	for _, uid := range store.Quarantine() {
-		add("FAIL", "quarantine", fmt.Sprintf("run %s: its journal could not be read and is kept whole under %s; the run is never repeated", uid, store.Quarantined(uid)), "")
+		detail := fmt.Sprintf("run %s: its journal could not be read and is kept whole under %s; the run is never repeated", uid, store.Quarantined(uid))
+		if by, seen := store.Acknowledged(uid); seen {
+			add("note", "quarantine", detail+" (acknowledged by "+by+")", "")
+			continue
+		}
+		add("FAIL", "quarantine", detail, "Acknowledge it with `tern-kata worker abandon "+uid+"` (it records the run unknown in kata when kata still shows it running); the folder stays and keeps the veto.")
 	}
 }
 

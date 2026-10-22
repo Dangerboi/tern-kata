@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -68,6 +69,7 @@ func (w *Worker) retryPending(ps *projectState) {
 func (w *Worker) advance(ctx context.Context, ps *projectState, uid string) (err error) {
 	defer func() {
 		w.noteHook(err)
+		w.dropCancelSignal(uid)
 		if j, lerr := w.store.Load(uid); lerr == nil && !holdsSlot(j) {
 			w.release(ps, uid)
 		}
@@ -92,6 +94,9 @@ func (w *Worker) advance(ctx context.Context, ps *projectState, uid string) (err
 		default:
 			return fmt.Errorf("run is %s; recovery classifies that first", j.Phase)
 		}
+		if errors.Is(err, errRunCancelled) {
+			continue // the cancel request came first: the next pass concludes it
+		}
 		if err != nil {
 			return err
 		}
@@ -114,6 +119,8 @@ func (w *Worker) recoverRun(ctx context.Context, ps *projectState, uid string) {
 	switch {
 	case j.Phase == PhaseLaunching:
 		err = w.hold(j, HoldLaunchUnproven, "the worker stopped while starting the "+what+", so it may have started")
+	case j.Phase == PhaseStarted && j.Exit == nil && j.Cancel != nil && !processMayBeAlive(j):
+		err = w.concludeCancel(j) // asked to stop and its process is provably gone
 	case j.Phase == PhaseStarted && j.Exit == nil:
 		switch {
 		case processMayBeAlive(j):
@@ -222,7 +229,7 @@ func (w *Worker) resolveIssue(ctx context.Context, j *Journal) (*JournalIssue, e
 		if err != nil {
 			return nil, err
 		}
-		if !issue.Open() {
+		if !issue.Open() && j.Notify == nil { // a notify run has no readiness requirement
 			return nil, &APIError{Status: 409, Message: fmt.Sprintf("Issue %s is closed; reopen it first", issue.ShortID)}
 		}
 		return &JournalIssue{UID: issue.UID, Ref: w.qualified(j, issue.ShortID), Title: issue.Title, Body: issue.Body, Existing: true}, nil
@@ -314,6 +321,9 @@ func childEnv(actor string, secrets map[string]string) []string {
 
 // launch runs the run's next attempt: a notify run's request, a workflow's next step, or a prompt job's one agent.
 func (w *Worker) launch(ctx context.Context, ps *projectState, j *Journal) error {
+	if j.Cancel != nil {
+		return w.concludeCancel(j)
+	}
 	switch {
 	case j.Notify != nil:
 		return w.notify(ctx, j)
@@ -326,7 +336,7 @@ func (w *Worker) launch(ctx context.Context, ps *projectState, j *Journal) error
 // failAttempt records an attempt that certainly never ran, so the failure is not uncertain: a prompt job's run fails,
 // a workflow step fails (and is retried when it has retries left).
 func (w *Worker) failAttempt(j *Journal, reason string) error {
-	outcome := &Outcome{Status: StatusFailed, Summary: reason, At: w.clock.Now().UTC()}
+	outcome := j.withCarried(&Outcome{Status: StatusFailed, Summary: reason, At: w.clock.Now().UTC()})
 	if j.Workflow != nil {
 		return w.concludeStep(j, outcome)
 	}
@@ -366,7 +376,7 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 	if err := replaceFile(promptFile, []byte(prompt)); err != nil {
 		return w.hold(j, HoldInvalidPrompt, "the prompt could not be written: "+err.Error())
 	}
-	cwd := cmpOr(j.Checkout, w.store.RunDir(j.RunUID))
+	cwd := cmp.Or(j.Checkout, w.store.RunDir(j.RunUID))
 	// A spawn error is certain, not uncertain: nothing was started.
 	program, err := exec.LookPath(sp.profile.command())
 	if err != nil {
@@ -445,6 +455,9 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 	runtime.LockOSThread() // the parent-death signal follows the thread that started the child
 	defer runtime.UnlockOSThread()
 	if _, err := w.store.Update(j.RunUID, "launching", func(j *Journal) error {
+		if j.Cancel != nil {
+			return errRunCancelled
+		}
 		j.Phase = PhaseLaunching
 		j.Launch = nil // a record of an earlier attempt must not stand for this one's process
 		return nil
@@ -467,25 +480,22 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 	timedOut := false
-	var waitErr error
+	var waitErr, err error
+	cancel := w.cancelSignalOf(j.RunUID)
 	select {
 	case waitErr = <-done:
 	case <-ctx.Done():
 		signalGroup(pid, true)
 		<-done
 		return nil, ctx.Err() // the journal stays started: the next start finds it interrupted
+	case <-cancel.ch:
+		if waitErr, err = w.terminateGroup(ctx, pid, done); err != nil {
+			return nil, err
+		}
 	case <-w.clock.After(w.timeLeft(j)):
 		timedOut = true
-		signalGroup(pid, false)
-		select {
-		case waitErr = <-done:
-		case <-ctx.Done():
-			signalGroup(pid, true)
-			<-done
-			return nil, ctx.Err()
-		case <-w.clock.After(10 * time.Second):
-			signalGroup(pid, true)
-			waitErr = <-done
+		if waitErr, err = w.terminateGroup(ctx, pid, done); err != nil {
+			return nil, err
 		}
 	}
 	exit := &ExitRecord{At: w.clock.Now().UTC(), TimedOut: timedOut}
@@ -518,6 +528,9 @@ func (w *Worker) conclude(ctx context.Context, j *Journal) error {
 			return w.hold(j, HoldGroupUnproven, fmt.Sprintf("process group %d is still present after the agent exited", j.Launch.PGID))
 		}
 	}
+	if j.Cancel != nil {
+		return w.concludeCancel(j)
+	}
 	if hold, detail := providerHold(j); hold != "" {
 		return w.hold(j, hold, detail)
 	}
@@ -525,7 +538,7 @@ func (w *Worker) conclude(ctx context.Context, j *Journal) error {
 	if command {
 		outcome = classifyCommand(j, commandTail1K(w.attemptDir(j)))
 	} else {
-		outcome = classify(j)
+		outcome = j.withCarried(classify(j))
 	}
 	if j.Workflow != nil {
 		return w.concludeStep(j, outcome)
@@ -564,7 +577,7 @@ func classify(j *Journal) *Outcome {
 	case !r.Terminal:
 		reason = "the agent exited without finishing a turn (no agent_end)"
 	case r.StopReason != "stop":
-		reason = "the agent stopped with " + cmpOr(r.StopReason, "no stop reason")
+		reason = "the agent stopped with " + cmp.Or(r.StopReason, "no stop reason")
 	}
 	if reason != "" && r.ErrorText != "" {
 		reason += ": " + r.ErrorText
@@ -574,7 +587,7 @@ func classify(j *Journal) *Outcome {
 	}
 	o := &Outcome{InputTokens: r.InputTokens, OutputTokens: r.OutputTokens}
 	if reason == "" {
-		o.Status, o.Summary = StatusSucceeded, cmpOr(final, "(the agent gave no final message)")
+		o.Status, o.Summary = StatusSucceeded, cmp.Or(final, "(the agent gave no final message)")
 	} else {
 		o.Status, o.Summary = StatusFailed, reason
 		if final != "" {
@@ -814,7 +827,7 @@ func (w *Worker) notify(ctx context.Context, j *Journal) error {
 	}
 	recipient := j.Notify.Recipient
 	if recipient == currentOwnerOrAuthor {
-		recipient = cmpOr(issue.Owner, issue.Author)
+		recipient = cmp.Or(issue.Owner, issue.Author)
 	}
 	message := j.Notify.Message
 	if strings.TrimSpace(message) == "" {

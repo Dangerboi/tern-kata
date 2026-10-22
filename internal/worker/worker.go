@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -50,6 +51,10 @@ type Worker struct {
 	// pendingTotal counts slots reserved across Projects (worker-wide max_active_runs).
 	projects []*projectState
 	runs     sync.WaitGroup
+	// gates serializes the overlap check with the journal that closes it, per Project and job; runOps gives resume and
+	// abandon one owner per run at a time.
+	gates, runOps keyedMutex
+	cancels       map[string]*cancelSignal // guarded by mu: wakes the goroutine supervising a run that was asked to stop
 }
 
 // projectState is one served Project: its config, what kata resolved it to, its lease, its definitions and its slots.
@@ -106,19 +111,10 @@ func New(opts Options) (*Worker, error) {
 	w := &Worker{opt: opts, clock: opts.Clock, store: NewStore(opts.Dirs, opts.Hooks), ready: make(chan struct{}), pid: os.Getpid()}
 	for _, p := range opts.Config.Projects {
 		cfg, _ := opts.Config.project(p.Name)
-		actor := cmpOr(cfg.Actor, opts.Config.Actor, opts.Actor)
+		actor := cmp.Or(cfg.Actor, opts.Config.Actor, opts.Actor)
 		w.projects = append(w.projects, &projectState{cfg: cfg, actor: actor, held: map[string]string{}, wake: make(chan struct{}, 1), kick: make(chan struct{}, 1)})
 	}
 	return w, nil
-}
-
-func cmpOr(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
 }
 
 // Ready closes once the worker holds its lock and answers on its control socket.
@@ -158,6 +154,8 @@ func (w *Worker) Run(ctx context.Context) error {
 	}()
 	w.runs.Add(1)
 	go func() { defer w.runs.Done(); w.serveControl(ctx, ln) }()
+	w.runs.Add(1)
+	go func() { defer w.runs.Done(); w.retain(ctx) }()
 	for _, ps := range w.projects {
 		w.runs.Add(1)
 		go func() { defer w.runs.Done(); w.serveProject(ctx, ps) }()

@@ -108,10 +108,9 @@ type Journal struct {
 	// and Steps the state of each of its steps, in the same order (ADR-0008).
 	Workflow *WorkflowPlan `json:"workflow,omitempty"`
 	Steps    []StepRecord  `json:"steps,omitempty"`
-	// ExpiresAt is the run's expiry, shared by every step and retry of a workflow; ExpiryAttempt is the attempt it was
-	// set for, so an accepted resume (a new attempt) gets one fresh expiry from the frozen timeout.
-	ExpiresAt     time.Time `json:"expires_at,omitempty"`
-	ExpiryAttempt int       `json:"expiry_attempt,omitempty"`
+	// ExpiresAt is a workflow run's expiry, shared by every step and retry: it starts when the run is prepared and again,
+	// from the frozen timeout, when a resume is accepted (ADR-0008), never when a step happens to start.
+	ExpiresAt time.Time `json:"expires_at,omitempty"`
 
 	OccurrenceKey string    `json:"occurrence_key"`
 	Occurrence    time.Time `json:"occurrence"`
@@ -134,6 +133,40 @@ type Journal struct {
 	Result  *AgentResult  `json:"result,omitempty"`
 	Outcome *Outcome      `json:"outcome,omitempty"`
 	Intents []Intent      `json:"intents,omitempty"`
+
+	// Cancel is a request to stop the run, saved before the process is signalled (ADR-0008); the run then ends cancelled.
+	Cancel *CancelRecord `json:"cancel,omitempty"`
+	// CarriedInput and CarriedOutput are the tokens of the earlier attempts of the current prompt step (or prompt job)
+	// that a resume continued: each accepted resume adds the held attempt's, so the run's total sums every attempt.
+	CarriedInput  *int64 `json:"carried_input_tokens,omitempty"`
+	CarriedOutput *int64 `json:"carried_output_tokens,omitempty"`
+}
+
+// CancelRecord is who asked a running run to stop.
+type CancelRecord struct {
+	By string    `json:"by"`
+	At time.Time `json:"at"`
+}
+
+// addTokens sums two optional token counts; nil only when neither is known.
+func addTokens(a, b *int64) *int64 {
+	if a == nil && b == nil {
+		return nil
+	}
+	var sum int64
+	if a != nil {
+		sum += *a
+	}
+	if b != nil {
+		sum += *b
+	}
+	return &sum
+}
+
+// withCarried adds the carried tokens of earlier resumed attempts to an outcome's own.
+func (j *Journal) withCarried(o *Outcome) *Outcome {
+	o.InputTokens, o.OutputTokens = addTokens(j.CarriedInput, o.InputTokens), addTokens(j.CarriedOutput, o.OutputTokens)
+	return o
 }
 
 // ResumeRecord is a resume the worker accepted: the session to continue and why the run was held.
@@ -218,13 +251,12 @@ var ErrKilled = errors.New("worker killed by a test hook")
 type Store struct {
 	dirs  Dirs
 	hooks Hooks
-	mu    sync.Mutex
-	locks map[string]*sync.Mutex
+	locks keyedMutex
 }
 
 // NewStore opens the journals under dirs.
 func NewStore(dirs Dirs, hooks Hooks) *Store {
-	return &Store{dirs: dirs, hooks: hooks, locks: map[string]*sync.Mutex{}}
+	return &Store{dirs: dirs, hooks: hooks}
 }
 
 // RunDir is the run's folder: journal, prompt, session folder and output.
@@ -232,14 +264,7 @@ func (s *Store) RunDir(uid string) string { return filepath.Join(s.dirs.Runs(), 
 
 func (s *Store) path(uid string) string { return filepath.Join(s.RunDir(uid), "run.json") }
 
-func (s *Store) lock(uid string) *sync.Mutex {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.locks[uid] == nil {
-		s.locks[uid] = new(sync.Mutex)
-	}
-	return s.locks[uid]
-}
+func (s *Store) lock(uid string) *sync.Mutex { return s.locks.get(uid) }
 
 // ErrNoJournal means the run has no journal here.
 var ErrNoJournal = errors.New("no journal")
@@ -391,4 +416,87 @@ func (s *Store) Quarantine() []string {
 func (s *Store) IsQuarantined(uid string) bool {
 	_, err := os.Stat(s.Quarantined(uid))
 	return err == nil
+}
+
+// acknowledgement is the marker saved inside a quarantined run's folder when someone has seen it (ADR-0006): the
+// folder keeps vetoing the run, so nothing is deleted to unblock a job.
+type acknowledgement struct {
+	By string    `json:"by"`
+	At time.Time `json:"at"`
+}
+
+func (s *Store) acknowledgementPath(uid string) string {
+	return filepath.Join(s.Quarantined(uid), "acknowledged.json")
+}
+
+// Acknowledge records that by has seen the quarantined run's damaged journal. The folder stays and keeps its veto.
+func (s *Store) Acknowledge(uid, by string, at time.Time) error {
+	if !s.IsQuarantined(uid) {
+		return fmt.Errorf("run %s is not in quarantine", uid)
+	}
+	raw, err := json.Marshal(acknowledgement{By: by, At: at.UTC()})
+	if err != nil {
+		return err
+	}
+	return replaceFile(s.acknowledgementPath(uid), raw)
+}
+
+// Acknowledged says who acknowledged the quarantined run, if anyone did.
+func (s *Store) Acknowledged(uid string) (by string, ok bool) {
+	raw, err := os.ReadFile(s.acknowledgementPath(uid))
+	if err != nil {
+		return "", false
+	}
+	var a acknowledgement
+	if json.Unmarshal(raw, &a) != nil || a.By == "" {
+		return "", false
+	}
+	return a.By, true
+}
+
+// Retain removes the folders of runs that are settled, fully reported and ended before cutoff (ADR-0006 "Retention").
+// A held run, one with an unsent write and one still in flight stay, and so does a journal it cannot read (startup
+// recovery owns quarantine). The removed runs' mutexes are retired with them.
+func (s *Store) Retain(cutoff time.Time) (removed []string, err error) {
+	entries, err := os.ReadDir(s.dirs.Runs())
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		if j, lerr := s.Load(e.Name()); lerr != nil || !expired(j, cutoff) {
+			continue
+		}
+		l := s.lock(e.Name())
+		l.Lock()
+		// Read again under the run's lock: what was settled a moment ago is what is removed.
+		if current, lerr := s.Load(e.Name()); lerr == nil && expired(current, cutoff) {
+			if rerr := os.RemoveAll(s.RunDir(e.Name())); rerr != nil {
+				err = errors.Join(err, rerr)
+			} else {
+				s.locks.retire(e.Name())
+				removed = append(removed, e.Name())
+			}
+		}
+		l.Unlock()
+	}
+	return removed, err
+}
+
+// expired reports whether a journal may be removed: settled, nothing unsent, not held, ended before cutoff.
+func expired(j *Journal, cutoff time.Time) bool {
+	if j.Phase != PhaseSettled || j.Held() || j.Outcome == nil || !j.Outcome.At.Before(cutoff) {
+		return false
+	}
+	for _, it := range j.Intents {
+		if !it.Done {
+			return false
+		}
+	}
+	return true
 }
