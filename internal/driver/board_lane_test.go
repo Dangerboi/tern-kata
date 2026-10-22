@@ -208,8 +208,8 @@ func TestNarrowLaneViewEnterShowsTheDetailEscComesBackAndEscAgainOpensTheMenu(t 
 	if !drawsDetail(t, shown) || laneHeader(t, shown) != "" {
 		t.Fatalf("Enter did not show the detail alone: detail %v, header %q", drawsDetail(t, shown), laneHeader(t, shown))
 	}
-	if !shown.Model.Board.On() {
-		t.Fatal("focusing the detail ended Board mode")
+	if !shown.Model.OnBoard() {
+		t.Fatal("focusing the detail ended the Board Page")
 	}
 	back := step(t, shown, key("escape")).State
 	if laneHeader(t, back) == "" || drawsDetail(t, back) {
@@ -224,7 +224,7 @@ func TestNarrowLaneViewEnterShowsTheDetailEscComesBackAndEscAgainOpensTheMenu(t 
 func TestResizingBelowSideBySideWidthSwitchesTheBoardToTheLaneView(t *testing.T) {
 	s := feed(t, laneBoard(t, 160), key("right")).State // i1
 	out := step(t, s, resize(120))
-	if !out.State.Model.Board.On() || !strings.Contains(laneHeader(t, out.State), "Needs info") || out.State.Model.SelectedUID != "i1" {
+	if !out.State.Model.OnBoard() || !strings.Contains(laneHeader(t, out.State), "Needs info") || out.State.Model.SelectedUID != "i1" {
 		t.Errorf("header %s, selected %q", laneHeader(t, out.State), out.State.Model.SelectedUID)
 	}
 	wide := step(t, out.State, resize(160))

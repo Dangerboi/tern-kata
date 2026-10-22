@@ -49,6 +49,8 @@ const (
 	ClearFilters         Action = "clear-filters"
 	InputSpace           Action = "input-space"
 	ToggleBoard          Action = "toggle-board"
+	ShowIssuesPage       Action = "show-issues-page"
+	ShowBoardPage        Action = "show-board-page"
 	OpenLanes            Action = "open-lanes"
 	PreviousLane         Action = "previous-lane"
 	NextLane             Action = "next-lane"

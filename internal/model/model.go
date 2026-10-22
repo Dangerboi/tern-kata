@@ -95,6 +95,7 @@ type Model struct {
 	Search           SearchState
 	IDSearch         IDSearch
 	FilterForm       FilterFormState
+	Page             Page
 	Board            BoardState
 	// Moving is the Issue whose Move is in flight; further Moves wait for its result.
 	Moving string

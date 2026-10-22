@@ -2,6 +2,10 @@
 
 **Pane**: The Tern area the program draws into. _Avoid_: block (in Tern a block is a pane type; in kata `blocks` is a link).
 
+**Page**: One of the Pane's top-level views, chosen from the **Page bar**: Issues (the list and the Issue detail) and Board for now. Each Page keeps its own state, such as its selection, while another is shown. _Avoid_: tab (Tern's tabs and the Issue detail's tabs).
+
+**Page bar**: The row in the top bar that names the Pages with their keys (`1` Issues, `2` Board); a click on a Page presses its key. _Avoid_: tab bar.
+
 **Issue**: One unit of tracked work in kata, as kata defines it.
 
 **Project**: kata's namespace for issues, links, labels and events.
@@ -44,7 +48,7 @@
 
 **Primary checkout**: The main worktree of a git repository, the parent of git's common directory; every linked worktree shares it.
 
-**Board mode**: A view of one Project Collection's Issues as a Board instead of the list. It is Pane state that is not saved, starts off, and ends when the Collection is not a Project. A Pane narrower than the side-by-side width shows the Lane view in place of the Board. In code and on the help sheet "focus" already means the focused column, so no Board mode term uses it.
+**Board Page**: The **Page** that shows one Project's Issues as a Board instead of the list (Board mode before Pages existed). It is Pane state that is not saved, the Pane starts on the Issues Page, and it ends when the Collection is not a Project. It acts on the Pane's Project: the current Project Collection, else the Binding. A Pane narrower than the side-by-side width shows the Lane view in place of the Board. In code and on the help sheet "focus" already means the focused column, so no Board Page term uses it.
 
 **Board**: All Lanes side by side, in place of the list column, with the Issue detail column hidden: No lane, one Lane per Lane label, then Done. Each Issue is a card; the selected card shows its full title, owner and labels.
 
@@ -72,7 +76,7 @@
 
 **Lanes card**: The Popup card `B` opens on the Board or in the Lane view. One text field holds the Lane list as comma-separated names; enter saves it to the Lane list file, esc cancels, and an empty field removes the Project's list and so restores the default. It lets no global chord through. Saving never changes a label in kata. _Avoid_: Lane editor, Lanes form.
 
-**Lane list**: A Project's ordered Lane labels. Saved in the **Lane list file**, `lanes.toml` in tern-kata's user config folder, and loaded when Board mode turns on or the Project changes; until one is loaded, or when none is saved, it is the default: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`.
+**Lane list**: A Project's ordered Lane labels. Saved in the **Lane list file**, `lanes.toml` in tern-kata's user config folder, and loaded when the Board Page turns on or the Project changes; until one is loaded, or when none is saved, it is the default: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`.
 
 **No lane**: The column of open Issues with no Lane label. It is always shown. An Issue with several Lane labels shows once, in the first of its Lanes in Lane order, with an "also" note naming the others.
 

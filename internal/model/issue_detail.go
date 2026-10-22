@@ -41,7 +41,7 @@ func (d IssueDetail) OpenIssueRef() string              { return d.openRef }
 // updateWithDetail runs one Model step and then settles the detail: tab and Issue changes become intents, the jump history ends
 // whenever focus is not on the detail or it shows an Issue no jump landed on, and a changed selection or a stale detail loads.
 func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
-	shown, tab, boardWasOn := m.DetailIssueUID(), m.tab, m.Board.On()
+	shown, tab, boardWasOn := m.DetailIssueUID(), m.tab, m.OnBoard()
 	m, cmds := update(m, msg)
 	m = m.settleBoard()
 	m, load := m.lanesLoad(boardWasOn)

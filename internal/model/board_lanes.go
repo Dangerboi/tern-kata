@@ -67,7 +67,7 @@ func (m Model) lanesLoad(boardWasOn bool) (Model, []Cmd) {
 		uid = m.Collection.ProjectUID
 	}
 	if uid == m.Board.asked {
-		if uid == "" || boardWasOn || !m.Board.On() {
+		if uid == "" || boardWasOn || !m.OnBoard() {
 			return m, nil
 		}
 		m.Board.loaded = false
@@ -125,7 +125,7 @@ func lanesSaved(m Model, msg LanesSaved) Model {
 
 // keepLane re-picks the Lane view's Lane when a new Lane list dropped it.
 func (m Model) keepLane() Model {
-	if m.Board.Mode != BoardLane || slices.ContainsFunc(m.BoardColumns(), func(c BoardColumn) bool { return c.Lane == m.Board.Lane }) {
+	if !m.LaneViewShown() || slices.ContainsFunc(m.BoardColumns(), func(c BoardColumn) bool { return c.Lane == m.Board.Lane }) {
 		return m
 	}
 	return m.laneView()

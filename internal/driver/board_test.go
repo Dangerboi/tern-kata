@@ -426,7 +426,7 @@ func TestFooterAndHelpSheetListTheBoardKeys(t *testing.T) {
 	for _, n := range wireNodes(t, view.Render(feed(t, s, key("?")).State.Model, now)) {
 		helpText += wireText(n)
 	}
-	for _, want := range []string{"Board", "toggle Board mode", "next Lane", "previous Lane"} {
+	for _, want := range []string{"Board", "toggle Issues and Board Pages", "next Lane", "previous Lane"} {
 		if !strings.Contains(helpText, want) {
 			t.Errorf("help sheet lacks %q", want)
 		}

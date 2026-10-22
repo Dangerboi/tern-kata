@@ -152,18 +152,18 @@ func (r Relationships) HighlightsOf(uid string) []Highlight {
 // showCard selects the Board card of uid, in the Lane view switching to its Lane. An Issue the Board does not draw opens in the
 // detail beside the Lane view as a jump, so Esc comes back to the card.
 func showCard(m Model, uid string) Model {
-	if !m.Board.On() {
+	if !m.OnBoard() {
 		return m
 	}
 	columns := m.BoardColumns()
 	col, _ := CardAt(columns, uid)
 	if col < 0 {
-		if m.Board.Mode == BoardColumns {
+		if m.BoardShown() {
 			m = m.laneView()
 		}
 		return m.jumpTo(uid, nil)
 	}
-	if m.Board.Mode == BoardLane {
+	if m.LaneViewShown() {
 		m.Board.Lane = columns[col].Lane
 	}
 	m.SelectedUID, m.Focus = uid, ColumnList

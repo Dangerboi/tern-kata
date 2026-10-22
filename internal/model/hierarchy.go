@@ -51,7 +51,7 @@ func (m Model) issueHierarchy() (map[string]string, map[string][]Issue) {
 }
 
 func (m Model) VisibleRows() []IssueRow {
-	if m.Board.On() {
+	if m.OnBoard() {
 		return m.boardRows()
 	}
 	rows := make([]IssueRow, 0, len(m.Issues))

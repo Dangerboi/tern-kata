@@ -52,7 +52,7 @@ func Render(m model.Model, now time.Time) tern.View {
 			case model.ColumnCollections:
 				columns = append(columns, Collections(m))
 			case model.ColumnList:
-				if m.Board.Mode == model.BoardColumns {
+				if m.BoardShown() {
 					columns = append(columns, board(m, now))
 				} else {
 					columns = append(columns, issues(m, now))
@@ -137,7 +137,7 @@ func issues(m model.Model, now time.Time) tern.Element {
 	// above is what the card draws over the rows, each with the 8px gap under it: the Lane header's text row, the column
 	// header's list row and the Search field's 24px.
 	children, above := ui.Nodes(), m.RowPx+6+8
-	if m.Board.Mode == model.BoardLane {
+	if m.LaneViewShown() {
 		children, above = append(children, laneHeader(m)), above+m.RowPx+8
 	}
 	children = append(children, headerRow(cols))
@@ -248,9 +248,9 @@ func topBar(m model.Model) tern.Element {
 		)
 	}
 	return ui.Row{Common: ui.Common{Key: "topbar", Hidden: m.HelpOpen}, Gap: ui.GapMD, Justify: ui.JustifyBetween, Children: ui.Nodes(
-		ui.Row{Common: flexCell("left", ui.ToneNeutral, 0), Gap: ui.GapSM, Children: ui.Nodes(
+		ui.Row{Common: flexCell("left", ui.ToneNeutral, 0), Gap: ui.GapMD, Children: append(ui.Nodes(
 			ui.Text{Common: headingCell, Spans: heading, Wrap: ui.WrapNone},
-		)},
+		), pageBar(m, flexCell)...)},
 		ui.Text{Common: flexCell("counts", ui.ToneMuted, 1), Text: m.CountsLine(), Wrap: ui.WrapNone},
 		ui.Row{Common: rightCell, Gap: ui.GapNone, Children: append(zoneNote, ui.Nodes(
 			ui.Text{Common: flexCell("daemon", ui.ToneMuted, 100), Text: m.DaemonLine(), Wrap: ui.WrapNone},

@@ -46,7 +46,7 @@ func boardMoving(action Action) func(Model) (Model, []Cmd) {
 // laneMoving is `←` and `→`: the selection to the neighbouring Lane's card on the Board, the neighbouring Lane in the Lane view.
 func laneMoving(action Action, step int) func(Model) (Model, []Cmd) {
 	return func(m Model) (Model, []Cmd) {
-		if m.Board.Mode == BoardLane {
+		if m.LaneViewShown() {
 			return switchLane(m, step), nil
 		}
 		return boardMoving(action)(m)
@@ -56,7 +56,7 @@ func laneMoving(action Action, step int) func(Model) (Model, []Cmd) {
 // cardMoving is `<` and `>`: a Move of the selected card, which in the Lane view also picks the next selection.
 func cardMoving(dir int) func(Model) (Model, []Cmd) {
 	return func(m Model) (Model, []Cmd) {
-		if m.Board.Mode == BoardLane {
+		if m.LaneViewShown() {
 			return laneCardMove(dir)(m)
 		}
 		return MoveCard(m, m.SelectedUID, dir)
@@ -185,9 +185,9 @@ var mainActions = []actionEntry{
 	{action: MoveLast, modes: listModes, keys: keys("shift+g", "G", "end", "end"), help: "last Issue", sheet: []sheetLine{{sheetGraph, 6, "last"}}, handle: selection(MoveLast)},
 	{action: PageUp, modes: listModes, keys: pageUpKeys, help: "page up", sheet: []sheetLine{{sheetGraph, 3, "page up"}}, handle: selection(PageUp)},
 	{action: PageDown, modes: listModes, keys: pageDownKeys, help: "page down", sheet: []sheetLine{{sheetGraph, 4, "page down"}}, handle: selection(PageDown)},
-	// Board mode: the Board takes the list's place, with the cards in Lanes.
-	{action: ToggleBoard, modes: []Mode{ModeList, ModeCollections}, keys: keys("b", "b"), help: "Board", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetBoard, 1, "toggle Board mode"}}, handle: pure(toggleBoard)},
-	{action: ToggleBoard, modes: laneModes, keys: keys("b", "b"), help: "list", footer: laneModes, sheet: []sheetLine{{sheetBoard, 1, "toggle Board mode"}}, handle: pure(toggleBoard)},
+	// Board Page: the Board takes the list's place, with the cards in Lanes.
+	{action: ToggleBoard, modes: []Mode{ModeList, ModeCollections}, keys: keys("b", "b"), help: "Board", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetBoard, 1, "toggle Issues and Board Pages"}}, handle: toggleBoard},
+	{action: ToggleBoard, modes: laneModes, keys: keys("b", "b"), help: "list", footer: laneModes, sheet: []sheetLine{{sheetBoard, 1, "toggle Issues and Board Pages"}}, handle: toggleBoard},
 	{action: OpenLanes, modes: laneModes, keys: keys("shift+b", "B"), help: "Lanes", sheet: []sheetLine{{sheetBoard, 9, "edit the Lane list (Lanes card)"}}, handle: pure(openLanesForm)},
 	{action: MoveDown, modes: []Mode{ModeBoard}, keys: slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), help: "move", footer: []Mode{ModeBoard}, footerKey: "↑↓", sheet: []sheetLine{{sheetBoard, 2, "next card in the Lane"}}, handle: boardMoving(MoveDown)},
 	{action: MoveUp, modes: []Mode{ModeBoard}, keys: slices.Concat(keys("k", "k/↑", "up", "↑"), emacsUp), help: "previous card", sheet: []sheetLine{{sheetBoard, 3, "previous card in the Lane"}}, handle: boardMoving(MoveUp)},
@@ -273,6 +273,7 @@ var mainActions = []actionEntry{
 var Keymap []Binding
 
 func init() {
+	mainActions = append(mainActions, pageActions()...)
 	Keymap = append([]Binding(nil), cardBindings...)
 	for i := range mainActions {
 		entry := &mainActions[i]

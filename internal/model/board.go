@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Board mode shows one Project Collection's Issues in Lanes. The Board holds the screen's list column and hides the
+// The Board Page shows one Project's Issues in Lanes. The Board holds the screen's list column and hides the
 // detail column, so the snapshot read carries no selected detail while it is shown. The Lane view is one Lane as the list's
 // rows beside the detail column.
 
@@ -16,19 +16,18 @@ const (
 	DefaultDoneCards = 20
 )
 
-// BoardMode is what Board mode shows.
+// BoardMode is what the Board Page shows.
 type BoardMode uint8
 
 const (
-	// BoardOff is the Issue list.
-	BoardOff BoardMode = iota
 	// BoardColumns is the Board: every Lane side by side.
-	BoardColumns
+	BoardColumns BoardMode = iota
 	// BoardLane is the Lane view: the Lane named by BoardState.Lane as a flat list beside the detail.
 	BoardLane
 )
 
-// BoardState is the Pane's Board mode. It is not saved: a Pane starts with the Board off.
+// BoardState is the Board Page's state. It is not saved: a Pane starts on the Issues Page. Mode is only meaningful while the
+// Board Page is current; every way off the Board Page resets it to BoardColumns.
 type BoardState struct {
 	Mode BoardMode
 	// Lanes is the Project's Lane list; empty means the default.
@@ -47,8 +46,14 @@ type BoardState struct {
 	detailHidden bool
 }
 
-// On says the Board is shown.
-func (b BoardState) On() bool { return b.Mode != BoardOff }
+// OnBoard says the Board Page is current.
+func (m Model) OnBoard() bool { return m.Page == PageBoard }
+
+// BoardShown says the Board's Lane columns are on screen: the Board Page and not its Lane view.
+func (m Model) BoardShown() bool { return m.Page == PageBoard && m.Board.Mode == BoardColumns }
+
+// LaneViewShown says the Board Page shows its Lane view.
+func (m Model) LaneViewShown() bool { return m.Page == PageBoard && m.Board.Mode == BoardLane }
 
 // DoneLimits are how many days back Done reaches and how many cards it shows at most.
 func (m Model) DoneLimits() (days, cards int) {
@@ -140,7 +145,7 @@ func (c PaneCalendar) closedWithin(issue Issue, days int) bool {
 	return c.DayOf(*issue.ClosedAt) >= today.AddDate(0, 0, -days).Format("2006-01-02")
 }
 
-// boardRows are the Board's cards in reading order, or the Lane view's Lane's cards: the rows the selection moves over while Board mode is shown.
+// boardRows are the Board's cards in reading order, or the Lane view's Lane's cards: the rows the selection moves over while the Board Page is shown.
 func (m Model) boardRows() []IssueRow {
 	var rows []IssueRow
 	for _, column := range m.BoardColumns() {
@@ -154,25 +159,40 @@ func (m Model) boardRows() []IssueRow {
 	return rows
 }
 
-// toggleBoard is `b`: the Board on in a Project Collection, the list back with the same Issue selected.
-// A Pane too narrow for the Board opens the Lane view of the selected Issue's Lane.
-func toggleBoard(m Model) Model {
-	switch {
-	case m.Board.On():
-		return m.boardOff()
-	case !m.Collection.IsProject():
-		m.Notice = "Board mode needs a Project Collection."
-	default:
-		m.Board.Mode = BoardColumns
-		m.Board.detailHidden = m.DetailHidden()
-		m.hidden = true
-		m.Focus = ColumnList
-		m = m.WithVisibleSelection()
-		if m.Cols < SideBySideCols {
-			m = m.laneView()
-		}
+// toggleBoard is `b`: the Board Page from the Issues Page, the Issues Page back with the same Issue selected.
+func toggleBoard(m Model) (Model, []Cmd) {
+	if m.OnBoard() {
+		return showPage(PageIssues)(m)
 	}
-	return m
+	return showPage(PageBoard)(m)
+}
+
+// enterBoard is the Board Page's entry: the Board of the Pane's Project, the Project Collection if that is current, else the
+// Binding's Project, which becomes the current Collection. With neither it says so and opens the Menu's Projects entry.
+// A Pane too narrow for the Board opens the Lane view of the selected Issue's Lane.
+func enterBoard(m Model) (Model, []Cmd) {
+	var cmds []Cmd
+	switch {
+	case m.Collection.IsProject():
+	case m.Bound:
+		m.Collection = ProjectCollection(m.Project.UID, m.Project.Name)
+		m = m.syncSidebarCursor()
+		m.Loading, m.Err = true, nil
+		m, cmds = collectionSwitched(m)
+	default:
+		m.Notice = "The Board needs a Project: choose one in the Menu."
+		return openProjects(m), nil
+	}
+	m.Page = PageBoard
+	m.Board.Mode = BoardColumns
+	m.Board.detailHidden = m.DetailHidden()
+	m.hidden = true
+	m.Focus = ColumnList
+	m = m.WithVisibleSelection()
+	if m.Cols < SideBySideCols {
+		m = m.laneView()
+	}
+	return m, cmds
 }
 
 // CardAt is the column and row of the card of uid, -1 and -1 when no column holds it.
@@ -260,20 +280,20 @@ func openLane(m Model) Model {
 	return m.laneView()
 }
 
-// boardOff ends Board mode and gives the detail column back, unless something already focused it.
+// boardOff leaves the Board Page for the Issues Page and gives the detail column back, unless something already focused it.
 func (m Model) boardOff() Model {
-	m.Board.Mode = BoardOff
+	m.Page, m.Board.Mode = PageIssues, BoardColumns
 	if m.Focus != ColumnDetail {
 		m.hidden = m.Board.detailHidden
 	}
 	return m.revealInList(m.SelectedUID).WithVisibleSelection()
 }
 
-// settleBoard keeps Board mode consistent: it ends without a Project Collection, and the Board gives way to the Lane view
+// settleBoard keeps the Board Page consistent: it ends without a Project Collection, and the Board gives way to the Lane view
 // where the Pane is too narrow for it or the list lost focus.
 func (m Model) settleBoard() Model {
 	switch {
-	case !m.Board.On():
+	case !m.OnBoard():
 	case !m.Collection.IsProject():
 		return m.boardOff()
 	case m.Board.Mode == BoardColumns && m.Cols < SideBySideCols:

@@ -1,0 +1,89 @@
+package driver_test
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/Dangerboi/tern-kata/internal/driver"
+	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/Dangerboi/tern-kata/internal/view"
+)
+
+func TestPageBarShowsIssuesAndBoardAndKeysAndClicksSwitchPages(t *testing.T) {
+	s := projectPane(t, 160, boardCard("a"), boardCard("b"))
+	drawn := drawnIDs(t, view.Render(s.Model, now))
+	for _, id := range []string{"issues", "board"} {
+		if !drawn[view.PageTabID(id)] {
+			t.Errorf("the Page bar draws no %s tab", id)
+		}
+	}
+	for name, to := range map[string]func(driver.State) driver.State{
+		"key":   func(s driver.State) driver.State { return feed(t, s, key("2"), model.LanesLoaded{ProjectUID: "p"}).State },
+		"click": func(s driver.State) driver.State { return feed(t, s, click(view.PageTabID("board"), view.KeyClick("2")), model.LanesLoaded{ProjectUID: "p"}).State },
+		"b":     func(s driver.State) driver.State { return feed(t, s, key("b"), model.LanesLoaded{ProjectUID: "p"}).State },
+	} {
+		board := to(s)
+		if board.Model.Page != model.PageBoard {
+			t.Fatalf("%s: page %v, want the Board Page", name, board.Model.Page)
+		}
+		if heads, _ := lanes(t, board); len(heads) == 0 {
+			t.Errorf("%s: the Board is not drawn", name)
+		}
+		for back, press := range map[string]any{"1": key("1"), "b": key("b"), "click": click(view.PageTabID("issues"), view.KeyClick("1"))} {
+			issues := step(t, board, press).State
+			if issues.Model.Page != model.PageIssues {
+				t.Errorf("%s then %s: page %v, want the Issues Page", name, back, issues.Model.Page)
+			}
+		}
+	}
+}
+
+func TestEachPageKeepsItsSelectionWhileAnotherIsShown(t *testing.T) {
+	s := projectPane(t, 160, updatedAt(boardCard("a"), 9), boardCard("b"), boardCard("c"))
+	s = feed(t, s, key("j"), key("j")).State
+	if s.Model.SelectedUID != "c" {
+		t.Fatalf("fixture: selected %q", s.Model.SelectedUID)
+	}
+	board := feed(t, s, key("2"), model.LanesLoaded{ProjectUID: "p"}).State
+	if board.Model.SelectedUID != "c" {
+		t.Errorf("the Board Page selects %q, want c", board.Model.SelectedUID)
+	}
+	back := feed(t, board, key("1")).State
+	if back.Model.SelectedUID != "c" || !drawnIDs(t, view.Render(back.Model, now))[view.IssueID("c")] {
+		t.Errorf("the Issues Page selects %q and does not draw it", back.Model.SelectedUID)
+	}
+}
+
+func TestBoardPageShowsTheBindingsProjectFromAFixedCollection(t *testing.T) {
+	s := projectPane(t, 160, boardCard("a"))
+	s = feed(t, s, model.CollectionSelected{Collection: model.FixedCollections()[0]}).State
+	if s.Model.Collection.IsProject() {
+		t.Fatal("fixture: still in the Project Collection")
+	}
+	out := step(t, s, key("2"))
+	m := out.State.Model
+	if m.Page != model.PageBoard || m.Collection.ProjectUID != "p" || len(out.Cmds) == 0 {
+		t.Errorf("page %v, Collection %+v, commands %v; want the Board Page of the Binding's Project with its Issues loading", m.Page, m.Collection, out.Cmds)
+	}
+}
+
+func TestBoardPageWithoutAProjectSaysSoAndOpensTheMenusProjects(t *testing.T) {
+	s := loadedWith(t, 160, model.Project{}, model.Snapshot{Issues: []model.Issue{alpha}})
+	for _, press := range []string{"2", "b"} {
+		m := step(t, s, key(press)).State.Model
+		if m.Page != model.PageIssues || !strings.Contains(m.Notice, "Project") || m.Focus != model.ColumnCollections || !m.SidebarProjects {
+			t.Errorf("%s: page %v, notice %q, focus %v, Projects level %v", press, m.Page, m.Notice, m.Focus, m.SidebarProjects)
+		}
+	}
+}
+
+func TestEveryPageTabClicksLikeItsKey(t *testing.T) {
+	for _, focus := range []model.Column{model.ColumnList, model.ColumnCollections, model.ColumnDetail} {
+		s := clickAt(focus)
+		for _, tab := range s.Model.PageBar() {
+			keyboard, keyCmds := keys(tab.Chord)(s)
+			pointer, clickCmds := clicked(s, click(view.PageTabID(tab.ID), view.KeyClick(tab.Chord)))
+			sameAs(t, tab.Label+" tab differs from its key", pointer, clickCmds, keyboard, keyCmds)
+		}
+	}
+}
