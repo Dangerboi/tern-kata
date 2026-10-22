@@ -42,11 +42,11 @@ type Run struct {
 	Actor, Teammate, ExecutorLabel string
 	Status                         RunStatus
 	// Message and the token counts are the summary. A count kata does not hold is nil.
-	Message                  string
+	Message                   string
 	InputTokens, OutputTokens *int64
-	Revision                 int64
-	CreatedAt, UpdatedAt     time.Time
-	StartedAt, EndedAt       *time.Time
+	Revision                  int64
+	CreatedAt, UpdatedAt      time.Time
+	StartedAt, EndedAt        *time.Time
 }
 
 // Name is what the Run ran: the job's name, else the workflow's, else the uid of whichever kata holds.

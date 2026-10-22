@@ -53,6 +53,7 @@ func JobClick(uid string) string { return click(jobAct, uid) }
 
 // RunClick selects the Run's card on the Runs Page.
 func RunClick(uid string) string { return click(runAct, uid) }
+
 // OpenJobClick opens the Cron job on the Jobs Page.
 func OpenJobClick(uid string) string { return click(openJobAct, uid) }
 
