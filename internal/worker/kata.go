@@ -3,6 +3,7 @@ package worker
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -219,6 +220,9 @@ type JobDefinition struct {
 	CheckoutKey    string
 	SecretRefs     map[string]string
 	Profile        string // options.profile
+	// Recipient and Message are a notify action's inbox address (or "current-owner-or-author") and text.
+	Recipient string
+	Message   string
 }
 
 // Job is a kata cron job.
@@ -254,6 +258,8 @@ func jobOf(j g.CronJob) Job {
 		TimeoutSeconds: derefInt(d.TimeoutSeconds),
 		CheckoutKey:    deref(d.CheckoutKey),
 		SecretRefs:     d.SecretRefs,
+		Recipient:      deref(d.Action.Recipient),
+		Message:        deref(d.Action.Message),
 		Trigger: Trigger{
 			Kind: d.Trigger.Kind, Cron: deref(d.Trigger.Cron), At: deref(d.Trigger.At),
 			IntervalSeconds: derefInt(d.Trigger.IntervalSeconds), IssueUID: deref(d.Trigger.IssueUID),
@@ -399,6 +405,8 @@ type Issue struct {
 	ProjectID int64
 	Labels    []string
 	Comments  []string
+	Owner     string
+	Author    string
 }
 
 // Open reports whether the Issue is open.
@@ -432,11 +440,53 @@ func (k *Kata) ShowIssue(ctx context.Context, projectID int64, uid string) (Issu
 		return Issue{}, errors.New("kata daemon returned no Issue")
 	}
 	i := r.JSON200.Issue
-	issue := Issue{ID: i.ID, UID: i.UID, ShortID: i.ShortID, Title: i.Title, Body: i.Body, Status: i.Status, ProjectID: i.ProjectID, Labels: i.Labels}
+	issue := Issue{ID: i.ID, UID: i.UID, ShortID: i.ShortID, Title: i.Title, Body: i.Body, Status: i.Status, ProjectID: i.ProjectID, Labels: i.Labels, Owner: deref(i.Owner), Author: i.Author}
 	for _, c := range r.JSON200.Comments {
 		issue.Comments = append(issue.Comments, c.Body)
 	}
 	return issue, nil
+}
+
+// PlanningDates are an Issue's scheduled and deadline instants as kata resolves them (the Issue's zone, the
+// recurrence's, the daemon default, then UTC). A date the Issue lacks is the zero time.
+type PlanningDates struct {
+	Revision  int64
+	Scheduled time.Time
+	Deadline  time.Time
+}
+
+// PlanningDates reads the Issue's planning-date instants.
+func (k *Kata) PlanningDates(ctx context.Context, projectID int64, issueUID string) (PlanningDates, error) {
+	r, err := k.c.IssuePlanningDatesWithResponse(ctx, &g.IssuePlanningDatesRequestOptions{PathParams: &g.IssuePlanningDatesPath{ProjectID: projectID, Ref: issueUID}})
+	if err != nil {
+		return PlanningDates{}, apiError(err)
+	}
+	if r.JSON200 == nil {
+		return PlanningDates{}, errors.New("kata daemon returned no planning dates")
+	}
+	d := PlanningDates{Revision: r.JSON200.Revision}
+	if s := r.JSON200.ScheduledOn; s != nil {
+		d.Scheduled = s.Instant.UTC()
+	}
+	if dl := r.JSON200.DeadlineOn; dl != nil {
+		d.Deadline = dl.Instant.UTC()
+	}
+	return d, nil
+}
+
+// Notify puts an inbox request for recipient on the Issue: the ordinary metadata write `kata notify` makes, one slot
+// per Issue and recipient, so sending the same request again changes nothing.
+func (k *Kata) Notify(ctx context.Context, projectID int64, actor, issueUID, recipient, teammate, message string) error {
+	value := map[string]any{"from": actor, "message": message}
+	if teammate != "" {
+		value["teammate"] = teammate
+	}
+	key := "notify." + base64.RawURLEncoding.EncodeToString([]byte(recipient))
+	_, err := k.c.PatchIssueMetadataWithResponse(ctx, &g.PatchIssueMetadataRequestOptions{
+		PathParams: &g.PatchIssueMetadataPath{ProjectID: projectID, Ref: issueUID},
+		Body:       &g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{key: value}},
+	})
+	return apiError(err)
 }
 
 // Comment adds a keyed comment, so a retry within kata's window adds nothing.
