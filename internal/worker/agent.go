@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -132,7 +133,7 @@ func (p *agentParser) Result() AgentResult {
 }
 
 // sessionFolder is where omp keeps the run's sessions: directly in --session-dir.
-func sessionFolder(runDir string) string { return runDir + "/session" }
+func sessionFolder(runDir string) string { return filepath.Join(runDir, "session") }
 
 // args is the omp command line for a run (ADR-0009): headless JSON, the run's session folder, the profile's model
 // and thinking level, an unattended approval mode unless the profile sets its own, the profile's extra arguments, and

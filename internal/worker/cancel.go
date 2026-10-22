@@ -110,16 +110,16 @@ func (w *Worker) concludeCancel(j *Journal) error {
 
 // terminateGroup signals the process group SIGTERM, then SIGKILL after 10 s, and waits for the process to end.
 // waitErr is what the process answered; an error means the worker stopped first (the journal stays `started`).
-func (w *Worker) terminateGroup(ctx context.Context, pid int, done <-chan error) (waitErr error, err error) {
-	signalGroup(pid, false)
+func (w *Worker) terminateGroup(ctx context.Context, launch *LaunchRecord, done <-chan error) (waitErr error, err error) {
+	signalGroup(launch, false)
 	select {
 	case waitErr = <-done:
 	case <-ctx.Done():
-		signalGroup(pid, true)
+		signalGroup(launch, true)
 		<-done
 		return nil, ctx.Err()
 	case <-w.clock.After(10 * time.Second):
-		signalGroup(pid, true)
+		signalGroup(launch, true)
 		waitErr = <-done
 	}
 	return waitErr, nil

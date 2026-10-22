@@ -47,7 +47,7 @@ func newSubcommandFixture(t *testing.T) subcommandFixture {
 	}
 	f := subcommandFixture{repo: t.TempDir(), locate: func(context.Context, string) (data.Target, error) { return data.Target{Client: c}, nil }}
 	for _, args := range [][]string{{"init", "-q"}, {"commit", "-q", "--allow-empty", "-m", "init"}} {
-		if out, err := exec.Command("git", append([]string{"-C", f.repo, "-c", "user.name=t", "-c", "user.email=t@t"}, args...)...).CombinedOutput(); err != nil {
+		if out, err := exec.Command("git", append([]string{"-C", f.repo, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"}, args...)...).CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
 		}
 	}

@@ -183,9 +183,6 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurre
 			return nil, false, err
 		}
 	} else {
-		if unsupported != "" { // a notify run starts no process, so only execute runs need to prove one gone
-			return nil, false, errors.New(unsupported)
-		}
 		switch {
 		case d.WorkflowUID == "" && strings.TrimSpace(d.Prompt) == "":
 			return nil, false, fmt.Errorf("job %q has neither a prompt nor a workflow", job.Name)

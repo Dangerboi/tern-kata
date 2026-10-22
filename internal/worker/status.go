@@ -21,7 +21,6 @@ type Status struct {
 	PID         int
 	Started     time.Time
 	Now         time.Time
-	Unsupported string
 	Projects    []ProjectStatus
 	Runs        []RunStatus
 	Quarantined []string
@@ -74,7 +73,7 @@ type RunStatus struct {
 
 // Status reports the worker as it is now.
 func (w *Worker) Status() Status {
-	s := Status{Executor: w.opt.Config.Executor, Actor: cmp.Or(w.opt.Config.Actor, w.opt.Actor), Version: w.opt.Version, Supervisor: w.opt.Supervisor, PID: w.pid, Started: w.started, Now: w.clock.Now(), Unsupported: unsupported}
+	s := Status{Executor: w.opt.Config.Executor, Actor: cmp.Or(w.opt.Config.Actor, w.opt.Actor), Version: w.opt.Version, Supervisor: w.opt.Supervisor, PID: w.pid, Started: w.started, Now: w.clock.Now()}
 	w.mu.Lock()
 	for _, ps := range w.projects {
 		p := ProjectStatus{Name: ps.cfg.Name, Capacity: ps.cfg.Capacity, InUse: len(ps.held) + ps.pending, Following: ps.streamOpen}
@@ -177,9 +176,6 @@ func (s Status) String() string {
 	}
 	b.WriteString(")\n")
 	b.WriteString(s.supervision())
-	if s.Unsupported != "" {
-		fmt.Fprintf(&b, "It runs no agents: %s.\n", s.Unsupported)
-	}
 	if len(s.Projects) == 0 {
 		b.WriteString("It serves no Projects: list them under [[projects]] in worker.toml.\n")
 	}

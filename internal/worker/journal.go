@@ -298,7 +298,7 @@ var ErrNoJournal = errors.New("no journal")
 
 // Load reads a run's journal.
 func (s *Store) Load(uid string) (*Journal, error) {
-	raw, err := os.ReadFile(s.path(uid))
+	raw, err := readFile(s.path(uid))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, ErrNoJournal
 	}
@@ -380,7 +380,7 @@ func replaceFile(path string, raw []byte) error {
 		err = cerr
 	}
 	if err == nil {
-		err = os.Rename(name, path)
+		err = renameInDir(dir, filepath.Base(name), filepath.Base(path))
 	}
 	if err != nil {
 		_ = os.Remove(name)
@@ -391,6 +391,27 @@ func replaceFile(path string, raw []byte) error {
 		_ = d.Close()
 	}
 	return nil
+}
+
+// readFile and renameInDir go through os.Root, which on Windows opens files shareable for deletion and renames with
+// POSIX semantics: a journal replaced while another goroutine or process reads it neither fails the write nor the read,
+// as on Linux. os.ReadFile and os.Rename there make each refuse the other, and a refused read would quarantine a run.
+func readFile(path string) ([]byte, error) {
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	return root.ReadFile(filepath.Base(path))
+}
+
+func renameInDir(dir, from, to string) error {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	return root.Rename(from, to)
 }
 
 // Scan reads every journal. A journal that cannot be read moves whole to quarantine/runs/<uid>, which vetoes that
@@ -470,7 +491,7 @@ func (s *Store) Acknowledge(uid, by string, at time.Time) error {
 
 // Acknowledged says who acknowledged the quarantined run, if anyone did.
 func (s *Store) Acknowledged(uid string) (by string, ok bool) {
-	raw, err := os.ReadFile(s.acknowledgementPath(uid))
+	raw, err := readFile(s.acknowledgementPath(uid))
 	if err != nil {
 		return "", false
 	}

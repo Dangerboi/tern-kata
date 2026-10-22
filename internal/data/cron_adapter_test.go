@@ -156,6 +156,7 @@ func TestGatewayReadsTheWorkersProfilesAndCheckoutsForThePickers(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	t.Setenv("HOME", dir)
+	t.Setenv("AppData", dir)
 	askedFor := func() model.WorkerPickers {
 		return as[model.WorkerPickersLoaded](t, run(t, &Gateway{}, model.LoadWorkerPickers{})).Pickers
 	}
@@ -163,7 +164,11 @@ func TestGatewayReadsTheWorkersProfilesAndCheckoutsForThePickers(t *testing.T) {
 		t.Fatalf("no worker.toml: %+v, want free text and no complaint", got)
 	}
 
-	folder := filepath.Join(dir, "tern-kata")
+	base, err := os.UserConfigDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder := filepath.Join(base, "tern-kata")
 	if err := os.MkdirAll(folder, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -174,8 +179,8 @@ func TestGatewayReadsTheWorkersProfilesAndCheckoutsForThePickers(t *testing.T) {
 model = "haiku"
 
 [checkouts]
-site = "/srv/site"
-repo = "/srv/repo"
+site = '` + filepath.Join(dir, "site") + `'
+repo = '` + filepath.Join(dir, "repo") + `'
 
 [[projects]]
 name = "demo"

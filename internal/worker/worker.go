@@ -295,7 +295,7 @@ func (w *Worker) savePin(path string, p pin) string {
 }
 
 func readPin(path string) (pin, bool) {
-	raw, err := os.ReadFile(path)
+	raw, err := readFile(path)
 	if err != nil {
 		return pin{}, false
 	}
@@ -320,7 +320,7 @@ func (w *Worker) cursorPath(uid string) string {
 }
 
 func (w *Worker) readCursor(uid string) int64 {
-	raw, err := os.ReadFile(w.cursorPath(uid))
+	raw, err := readFile(w.cursorPath(uid))
 	if err != nil {
 		return 0
 	}

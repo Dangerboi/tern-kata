@@ -472,34 +472,39 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 	if err := cmd.Start(); err != nil {
 		return nil, startError{err}
 	}
-	pid := cmd.Process.Pid
+	launch, err := adopt(cmd)
+	if err != nil {
+		_ = cmd.Wait()
+		return nil, startError{err}
+	}
+	launch.SessionDir, launch.SessionID, launch.At = sessionDir, resumeID, w.clock.Now().UTC()
 	if _, err := w.store.Update(j.RunUID, "started", func(j *Journal) error {
 		j.Phase = PhaseStarted
-		j.Launch = &LaunchRecord{PID: pid, PGID: pid, StartTicks: startTicks(pid), SessionDir: sessionDir, SessionID: resumeID, At: w.clock.Now().UTC()}
+		j.Launch = launch
 		return nil
 	}); err != nil {
-		signalGroup(pid, true)
+		signalGroup(launch, true)
 		_ = cmd.Wait()
 		return nil, err
 	}
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 	timedOut := false
-	var waitErr, err error
+	var waitErr error
 	cancel := w.cancelSignalOf(j.RunUID)
 	select {
 	case waitErr = <-done:
 	case <-ctx.Done():
-		signalGroup(pid, true)
+		signalGroup(launch, true)
 		<-done
 		return nil, ctx.Err() // the journal stays started: the next start finds it interrupted
 	case <-cancel.ch:
-		if waitErr, err = w.terminateGroup(ctx, pid, done); err != nil {
+		if waitErr, err = w.terminateGroup(ctx, launch, done); err != nil {
 			return nil, err
 		}
 	case <-w.clock.After(w.timeLeft(j)):
 		timedOut = true
-		if waitErr, err = w.terminateGroup(ctx, pid, done); err != nil {
+		if waitErr, err = w.terminateGroup(ctx, launch, done); err != nil {
 			return nil, err
 		}
 	}
@@ -515,21 +520,21 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 // conclude proves the process group gone and decides the outcome of a run that has an exit record.
 func (w *Worker) conclude(ctx context.Context, j *Journal) error {
 	command := j.activeIsCommand()
-	if command && j.Launch != nil && groupAlive(j.Launch.PGID) {
+	if command && j.Launch != nil && groupAlive(j.Launch) {
 		// A command's leftover process is not the worker's to guess about: it may still be doing what the command began.
 		return w.hold(j, HoldGroupUnproven, fmt.Sprintf("process group %d is still present after the command exited", j.Launch.PGID))
 	}
-	if j.Launch != nil && groupAlive(j.Launch.PGID) {
-		signalGroup(j.Launch.PGID, false)
-		for i := 0; i < 150 && groupAlive(j.Launch.PGID); i++ {
+	if j.Launch != nil && groupAlive(j.Launch) {
+		signalGroup(j.Launch, false)
+		for i := 0; i < 150 && groupAlive(j.Launch); i++ {
 			if i == 50 {
-				signalGroup(j.Launch.PGID, true)
+				signalGroup(j.Launch, true)
 			}
 			if !w.sleep(ctx, 200*time.Millisecond) {
 				return ctx.Err()
 			}
 		}
-		if groupAlive(j.Launch.PGID) {
+		if groupAlive(j.Launch) {
 			return w.hold(j, HoldGroupUnproven, fmt.Sprintf("process group %d is still present after the agent exited", j.Launch.PGID))
 		}
 	}

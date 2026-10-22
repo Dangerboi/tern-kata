@@ -427,7 +427,7 @@ func TestARunInterruptedByACrashIsHeldAndNeverSentAgain(t *testing.T) {
 	var once sync.Once
 	killed := make(chan struct{})
 	hooks := worker.Hooks{AfterSave: func(point string, j *worker.Journal) error {
-		if point == "started" {
+		if point == "session" { // the agent has started and spoken, so its prompt may have been read
 			var err error
 			once.Do(func() { close(killed); err = errors.New("crash") })
 			return err

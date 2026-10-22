@@ -191,7 +191,7 @@ func (w *Worker) checkpointPath(ps *projectState, jobUID string) string {
 }
 
 func (w *Worker) loadCheckpoint(ps *projectState, jobUID string) (checkpoint, bool) {
-	raw, err := os.ReadFile(w.checkpointPath(ps, jobUID))
+	raw, err := readFile(w.checkpointPath(ps, jobUID))
 	if err != nil {
 		return checkpoint{}, false
 	}

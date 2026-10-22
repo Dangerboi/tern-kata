@@ -85,7 +85,8 @@ func TestAWorkflowRunsItsPromptAndCommandStepsInOrderAsOneRun(t *testing.T) {
 	}
 	// A Pane opens the session of the latest prompt step, from that step's own folder, in the checkout.
 	d := resp.Detail
-	if d.SessionID == "" || !strings.HasSuffix(d.SessionDir, "/session") || strings.Count(d.SessionDir, "/") <= strings.Count(filepath.Join(h.dirs.Runs(), uid), "/")+1 || d.Cwd != h.repo {
+	rel, err := filepath.Rel(filepath.Join(h.dirs.Runs(), uid), d.SessionDir)
+	if d.SessionID == "" || err != nil || filepath.Base(rel) != "session" || filepath.Dir(rel) == "." || d.Cwd != h.repo {
 		t.Errorf("session %q in %q, cwd %q: want the review step's session in the checkout", d.SessionID, d.SessionDir, d.Cwd)
 	}
 }

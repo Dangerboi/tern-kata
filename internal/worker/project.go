@@ -343,21 +343,13 @@ func holdsSlot(j *Journal) bool {
 	return j.Phase != PhaseSettled
 }
 
-// processMayBeAlive is the settlement proof for a run the worker spawned: its recorded process group is gone. With no
-// start record the process cannot be ruled out.
+// processMayBeAlive is the settlement proof for a run the worker spawned: its recorded process group (a Job Object on
+// Windows) is gone. With no start record the process cannot be ruled out.
 func processMayBeAlive(j *Journal) bool {
 	if j.Launch == nil {
 		return j.Phase == PhaseLaunching || (j.Outcome != nil && j.Outcome.Hold == HoldLaunchUnproven)
 	}
-	if !groupAlive(j.Launch.PGID) {
-		return false
-	}
-	if j.Launch.StartTicks != 0 {
-		if now := startTicks(j.Launch.PID); now != 0 && now != j.Launch.StartTicks {
-			return false // the pid was reused
-		}
-	}
-	return true
+	return groupAlive(j.Launch)
 }
 
 // gateClosed reports whether a job's overlap gate is closed: an earlier run is unsettled, or held for the user (ADR-0007).

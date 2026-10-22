@@ -36,7 +36,7 @@ func TestWorkerConfigIsStrict(t *testing.T) {
 		{"a Project listed twice", base + "[[projects]]\nname = \"demo\"\n[[projects]]\nname = \"demo\"\n", "listed twice"},
 		{"a secret aliasing kata's token", base + "[secrets]\nkey = { env = \"KATA_AUTH_TOKEN\" }\n", "kata's credential"},
 		{"a secret aliasing kata's token file variable", base + "[secrets]\nkey = { env = \"KATA_AUTH_TOKEN_FILE\" }\n", "kata's credential"},
-		{"a secret file inside kata's home", base + "[secrets]\nkey = { file = \"" + filepath.Join(kataHome, "config.toml") + "\" }\n", "kata's home"},
+		{"a secret file inside kata's home", base + "[secrets]\nkey = { file = '" + filepath.Join(kataHome, "config.toml") + "' }\n", "kata's home"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

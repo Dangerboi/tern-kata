@@ -69,9 +69,6 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 	if o.Clock == nil {
 		o.Clock = SystemClock{}
 	}
-	if unsupported != "" {
-		add("FAIL", "platform", unsupported, "")
-	}
 	cfg, err := LoadConfig(o.Dirs.ConfigPath())
 	if err != nil {
 		add("FAIL", "config", err.Error(), "Create "+o.Dirs.ConfigPath()+" (the README's worker setup shows one).")

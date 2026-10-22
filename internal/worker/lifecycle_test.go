@@ -389,7 +389,7 @@ func TestSettledRunsOlderThanTwoWeeksAreRemovedAndHeldOnesStay(t *testing.T) {
 func TestAbandoningARunWhoseLocalStateIsLostRecordsItUnknown(t *testing.T) {
 	h := newHarness(t, "--stub-hang")
 	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
-	uid, _ := h.killedAt("started", job)
+	uid, _ := h.killedAt("session", job)
 	if err := os.RemoveAll(filepath.Join(h.dirs.Runs(), uid)); err != nil {
 		t.Fatal(err)
 	}
