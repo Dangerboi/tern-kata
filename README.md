@@ -31,7 +31,7 @@ Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relat
 
 **Jobs Page** ([details](#jobs-page)): `3` in a Project lists its Cron jobs with their state (and why one is paused), kind, schedule in words, agent profile and next run, with the selected job's definition and parent beside them; Enter on a recurring job's parent opens that Issue. The **Job card** ([details](#job-card)) makes and edits every kind of job (recurring child, agent prompt, workflow, notify; `n`, `J` on an Issue, `e`), with a live schedule preview; `p` pauses and resumes, `x` archives or restores.
 
-**Runs Page** ([details](#runs-page)): `4` in a Project lists its runs newest first (status, job or workflow, Issue, executor, start, duration, summary); Enter shows a run's detail, `i` opens its Issue `r` on the Jobs Page shows the runs of one job, and this machine's worker adds held runs with their reason, steps and output tail (`o` opens the session, `u` resumes, `A` abandons) while `R` on the Jobs Page runs an adapter job now.
+**Runs Page** ([details](#runs-page)): `4` in a Project lists its runs newest first (status, job or workflow, Issue, executor, start, duration, summary); Enter shows a run's detail, `i` opens its Issue, `r` on the Jobs Page shows the runs of one job, and this machine's worker adds held runs with their reason, steps and output tail (`o` opens the session, `u` resumes, `A` abandons) while `R` on the Jobs Page runs an adapter job now.
 
 **Attachments** ([details](#attachments)): `u` attaches a screenshot, log or any other file to an Issue, and the Attachments tab lists them. Agents find them through the Issue's kata metadata, and `tern-kata attach` does the same from a shell.
 
