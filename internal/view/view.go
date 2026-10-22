@@ -105,6 +105,8 @@ func Render(m model.Model, now time.Time) tern.View {
 		layer = recurrenceLayer(m)
 	case model.CardJob:
 		layer = jobLayer(m, now)
+	case model.CardBackfill:
+		layer = backfillLayer(m)
 	case model.CardProject:
 		layer = projectLayer(m)
 	case model.CardLanes:

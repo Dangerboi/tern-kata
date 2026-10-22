@@ -140,10 +140,7 @@ func toggleJob(m Model) (Model, []Cmd) {
 // pauseJob writes the job disabled.
 func pauseJob(m Model, job CronJob) (Model, []Cmd) { return writeJobEnabled(m, job, false) }
 
-// resumeJob writes the job enabled. Every resume of a job goes through here, so what must happen before one (a native job's
-// backfill, which delivery owes for the time it was off) wraps this function and calls it once the user has agreed.
-func resumeJob(m Model, job CronJob) (Model, []Cmd) { return writeJobEnabled(m, job, true) }
-
+// writeJobEnabled writes the job enabled or disabled, guarded. A resume goes through resumeJob, which asks about a Backfill first.
 func writeJobEnabled(m Model, job CronJob, enabled bool) (Model, []Cmd) {
 	def := job.Definition
 	def.Enabled = enabled
@@ -158,10 +155,10 @@ func archiveJob(m Model) (Model, []Cmd) {
 	if !ok {
 		return m, nil
 	}
-	m.Jobs.Writing = job.UID
 	if job.Archived() {
-		return m, []Cmd{RestoreJobCmd{Workspace: m.Workspace, ProjectID: m.Jobs.ProjectID, Actor: m.Actor, UID: job.UID, ExpectedEventUID: job.DefinitionEventUID}}
+		return restoreJob(m, job)
 	}
+	m.Jobs.Writing = job.UID
 	return m, []Cmd{ArchiveJobCmd{Workspace: m.Workspace, ProjectID: m.Jobs.ProjectID, Actor: m.Actor, UID: job.UID, ExpectedEventUID: job.DefinitionEventUID}}
 }
 

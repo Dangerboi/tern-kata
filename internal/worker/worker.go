@@ -80,6 +80,10 @@ type projectState struct {
 	// kick asks the Project loop to look at its queued occurrences again; sched is that loop's own schedule state.
 	kick  chan struct{}
 	sched map[string]*jobSchedule
+	// dates caches the planning dates of the Issues Issue-date jobs watch (the Project loop's own); datesDirty is set
+	// by the event stream when an Issue changed.
+	dates      map[string]issueDates
+	datesDirty atomic.Bool
 	// scheduled, queued and nextRun summarize sched for Status (guarded by Worker.mu).
 	scheduled, queued int
 	nextRun           time.Time

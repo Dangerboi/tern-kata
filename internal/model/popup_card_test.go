@@ -251,6 +251,15 @@ func popupCards() []popupCard {
 			result: func(_ model.Model, err error) model.Msg { return model.ProjectSaved{Err: err} },
 		},
 		{
+			name: "Backfill", card: model.CardBackfill, multiline: true,
+			states: []cardState{{"", func() model.Model {
+				return model.Model{Backfill: model.BackfillState{Open: true, For: model.BackfillResume, Jobs: []model.BackfillJob{{Job: model.CronJob{UID: "J", Name: "Weekly"}, Missed: 3}}}}
+			}, model.ModeBackfill}},
+			graft: func(dst *model.Model, src model.Model) { dst.Backfill = src.Backfill },
+			field: func(model.Model) model.Field { return "" },
+			text:  func(model.Model, model.Field) string { return "" },
+		},
+		{
 			name: "Lanes", card: model.CardLanes,
 			states: []cardState{{"", func() model.Model {
 				m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, model.SnapshotLoaded{})

@@ -95,6 +95,8 @@ type Journal struct {
 	Profile            Profile           `json:"profile"`
 	Checkout           string            `json:"checkout,omitempty"`
 	TimeoutSeconds     int64             `json:"timeout_seconds"`
+	// Notify is set for a notify job's run instead of a prompt: the inbox request it sends and nothing else.
+	Notify *NotifySpec `json:"notify,omitempty"`
 
 	OccurrenceKey string    `json:"occurrence_key"`
 	Occurrence    time.Time `json:"occurrence"`
@@ -112,6 +114,13 @@ type Journal struct {
 	Result  *AgentResult  `json:"result,omitempty"`
 	Outcome *Outcome      `json:"outcome,omitempty"`
 	Intents []Intent      `json:"intents,omitempty"`
+}
+
+// NotifySpec is a notify job's request as frozen when the run was prepared. Recipient may still be the alias
+// `current-owner-or-author`, resolved from a fresh Issue read when the request is sent.
+type NotifySpec struct {
+	Recipient string `json:"recipient"`
+	Message   string `json:"message,omitempty"`
 }
 
 // JournalIssue is the run's Issue.

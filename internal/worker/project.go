@@ -201,6 +201,10 @@ func (w *Worker) follow(ctx context.Context, ps *projectState) {
 		}, func(e Event) {
 			delivered = true
 			cursor = max(cursor, e.ID)
+			if strings.HasPrefix(e.Type, "issue.") {
+				ps.datesDirty.Store(true)
+				w.kick(ps)
+			}
 			if strings.HasPrefix(e.Type, "cron.job.") || strings.HasPrefix(e.Type, "cron.workflow.") {
 				w.writeCursor(ps.project.UID, cursor)
 				select {
