@@ -204,8 +204,8 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata run <job-uid>")
 	case plan.Subcommand == "worker" && len(operands) == 2 && (operands[0] == "resume" || operands[0] == "abandon") && !plan.Takeover:
 		// `worker resume <run-uid>` and `worker abandon <run-uid>`; validated below like the other forms.
-	case plan.Subcommand == "worker" && (len(operands) > 1 || len(operands) == 1 && !slices.Contains([]string{"status", "doctor", "init", "add", "stop"}, operands[0])):
-		return LaunchPlan{}, fmt.Errorf("usage: tern-kata worker [--takeover] | tern-kata worker init | tern-kata worker add | tern-kata worker status | tern-kata worker stop [--now] | tern-kata worker doctor | tern-kata worker resume <run-uid> | tern-kata worker abandon <run-uid>")
+	case plan.Subcommand == "worker" && (len(operands) > 1 || len(operands) == 1 && !slices.Contains([]string{"status", "doctor", "init", "add", "edit", "stop"}, operands[0])):
+		return LaunchPlan{}, fmt.Errorf("usage: tern-kata worker [--takeover] | tern-kata worker init | tern-kata worker add | tern-kata worker edit | tern-kata worker status | tern-kata worker stop [--now] | tern-kata worker doctor | tern-kata worker resume <run-uid> | tern-kata worker abandon <run-uid>")
 	case plan.Subcommand == "worker" && plan.Now && !slices.Equal(operands, []string{"stop"}):
 		return LaunchPlan{}, fmt.Errorf("worker: --now applies to `tern-kata worker stop` only")
 	case len(plan.InitFlags) > 0 && !slices.Equal(operands, []string{"init"}):
@@ -295,6 +295,7 @@ Usage:
   tern-kata worker init [--executor <name>] [--actor <actor>] [--command <cmd>]
                         [--model <model>] [--thinking <level>]
   tern-kata worker add
+  tern-kata worker edit
   tern-kata worker status
   tern-kata worker stop [--now]
   tern-kata worker doctor
@@ -338,6 +339,10 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 left commented, command omp, no model or thinking)
   worker add                    add the Project bound to this directory (and its checkout) to an
                                 existing worker.toml, leaving every other line as it is
+  worker edit                   edit worker.toml in $VISUAL or $EDITOR: the result must load before it
+                                replaces the file, else the editor reopens with the problem as a comment
+                                at the top; an unchanged or empty result cancels. Says whether a worker
+                                runs and that ` + "`tern-kata worker stop`" + ` makes it reload
   worker status                 say what the running worker serves, runs and refuses
   worker stop [--now]           stop the running worker: it admits nothing new, lets its runs in flight
                                 finish and report, then exits 0; --now ends it at once and the runs it
