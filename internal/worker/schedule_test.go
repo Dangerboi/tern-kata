@@ -240,7 +240,7 @@ func TestForbiddenOverlapHoldsOccurrencesUntilTheEarlierRunSettlesAndTimesOut(t 
 	h.quiet(job, 1)
 
 	h.advanceTo(first.Add(380 * time.Second)) // the first run's timeout passes, and four more occurrences
-	h.started(r, job, 1)                       // the oldest waiting occurrence takes the gate, and only it
+	h.started(r, job, 1)                      // the oldest waiting occurrence takes the gate, and only it
 	runs := h.waitRuns(job, 2)
 	if runs[0].Status != "failed" || !strings.Contains(runs[0].Summary, "timed out") {
 		t.Fatalf("the first run is %q %q, want failed with a timeout", runs[0].Status, runs[0].Summary)
