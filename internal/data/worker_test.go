@@ -54,7 +54,7 @@ func TestWorkerStatusReachesThePaneAndNoWorkerIsNotAnError(t *testing.T) {
 	status := worker.Status{Executor: "laptop", Projects: []worker.ProjectStatus{{Name: "work", Admitting: true, Capacity: 2, InUse: 1}},
 		Runs: []worker.RunStatus{{UID: "R1", State: "held: interrupted", Held: true, Hold: "interrupted", Detail: "stopped", Resumable: true, Abandonable: true}}}
 	dirs, _ := fakeWorker(t, map[string]worker.Response{"status": {OK: true, Status: &status}})
-	got := workerGateway(dirs).loadWorker(context.Background(), model.LoadWorker{Request: 4})
+	got := as[model.WorkerLoaded](t, run(t, workerGateway(dirs), model.LoadWorker{Request: 4}))
 	if !got.Running || got.Request != 4 || got.Err != nil || got.Status.Executor != "laptop" || len(got.Status.Projects) != 1 || !got.Status.Projects[0].Admitting {
 		t.Fatalf("status %+v", got)
 	}
@@ -67,7 +67,7 @@ func TestWorkerStatusReachesThePaneAndNoWorkerIsNotAnError(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(empty)
-	none := workerGateway(worker.Dirs{Config: empty, State: empty}).loadWorker(context.Background(), model.LoadWorker{Request: 5})
+	none := as[model.WorkerLoaded](t, run(t, workerGateway(worker.Dirs{Config: empty, State: empty}), model.LoadWorker{Request: 5}))
 	if none.Running || none.Err != nil || none.Request != 5 {
 		t.Fatalf("no worker: %+v", none)
 	}
@@ -80,21 +80,20 @@ func TestRunNowResumeAndAbandonCarryTheWorkersAnswerAndRefusal(t *testing.T) {
 		"abandon": {Error: "run R1 cannot be abandoned: it is not held"},
 	})
 	g := workerGateway(dirs)
-	ctx := context.Background()
-	if got := g.runJobNow(ctx, model.RunJobNow{JobUID: "J1", JobName: "Triage"}); got.Err != nil || got.RunUID != "R9" {
+	if got := as[model.JobRunRequested](t, run(t, g, model.RunJobNow{JobUID: "J1", JobName: "Triage"})); got.Err != nil || got.RunUID != "R9" {
 		t.Errorf("run now: %+v", got)
 	}
-	if got := g.moveRun(ctx, "resume", "R1"); got.Err != nil || !got.Resumed || got.State != "resuming" {
+	if got := as[model.LocalRunMoved](t, run(t, g, model.ResumeLocalRun{UID: "R1"})); got.Err != nil || !got.Resumed || got.State != "resuming" {
 		t.Errorf("resume: %+v", got)
 	}
-	got := g.moveRun(ctx, "abandon", "R1")
+	got := as[model.LocalRunMoved](t, run(t, g, model.AbandonLocalRun{UID: "R1"}))
 	if got.Resumed || got.Err == nil || got.Err.Error() != "run R1 cannot be abandoned: it is not held" {
 		t.Errorf("abandon: %+v", got)
 	}
 	if len(*seen) != 3 || (*seen)[0].Job != "J1" || (*seen)[1].Run != "R1" || (*seen)[2].Op != "abandon" {
 		t.Errorf("requests %+v", *seen)
 	}
-	missing := workerGateway(worker.Dirs{Config: "/nonexistent", State: "/nonexistent"}).runJobNow(ctx, model.RunJobNow{JobUID: "J1"})
+	missing := as[model.JobRunRequested](t, run(t, workerGateway(worker.Dirs{Config: "/nonexistent", State: "/nonexistent"}), model.RunJobNow{JobUID: "J1"}))
 	if !errors.Is(missing.Err, worker.ErrNoWorker) {
 		t.Errorf("no worker: %v", missing.Err)
 	}
@@ -105,7 +104,7 @@ func TestRunDetailCarriesStepsOutputTailAndWhereToResume(t *testing.T) {
 	detail := worker.RunDetail{RunStatus: worker.RunStatus{UID: "R1", State: "failed"}, OutputTail: "said it", Cwd: "/work", SessionDir: "/runs/R1/session", SessionID: "s1",
 		Steps: []worker.StepDetail{{Index: 1, Kind: "prompt", Attempt: 1, State: "failed", ExitCode: &code}}}
 	dirs, _ := fakeWorker(t, map[string]worker.Response{"run-detail": {OK: true, Detail: &detail}})
-	got := workerGateway(dirs).loadLocalRun(context.Background(), model.LoadLocalRun{UID: "R1"})
+	got := as[model.LocalRunLoaded](t, run(t, workerGateway(dirs), model.LoadLocalRun{UID: "R1"}))
 	if got.Err != nil || got.Detail.OutputTail != "said it" || got.Detail.SessionID != "s1" || got.Detail.Cwd != "/work" || got.Detail.SessionDir != "/runs/R1/session" ||
 		len(got.Detail.Steps) != 1 || got.Detail.Steps[0].ExitCode == nil || *got.Detail.Steps[0].ExitCode != 1 {
 		t.Fatalf("detail %+v", got)
@@ -116,7 +115,7 @@ func TestOpeningASessionRunsTernNewTabInTheRunsFolderWithTheSessionResumed(t *te
 	var ran []string
 	g := NewGateway(nil)
 	g.runTern = func(_ context.Context, args []string) ([]byte, error) { ran = args; return nil, nil }
-	got := g.openRunSession(context.Background(), model.OpenRunSession{Cwd: "/home/me/my repo", SessionDir: "/state/runs/R1/session", SessionID: "sess-1"})
+	got := as[model.RunSessionOpened](t, run(t, g, model.OpenRunSession{Cwd: "/home/me/my repo", SessionDir: "/state/runs/R1/session", SessionID: "sess-1"}))
 	want := []string{"new", "tab", "--cwd", "/home/me/my repo", "--", "'omp'", "'--resume'", "'sess-1'", "'--session-dir'", "'/state/runs/R1/session'"}
 	if got.Err != nil || !slices.Equal(ran, want) {
 		t.Fatalf("ran %q (err %v), want %q", ran, got.Err, want)
@@ -124,7 +123,7 @@ func TestOpeningASessionRunsTernNewTabInTheRunsFolderWithTheSessionResumed(t *te
 	g.runTern = func(context.Context, []string) ([]byte, error) {
 		return []byte("tern: there is no session\n"), errors.New("exit status 1")
 	}
-	if failed := g.openRunSession(context.Background(), model.OpenRunSession{}); failed.Err == nil || failed.Err.Error() != "exit status 1: tern: there is no session" {
+	if failed := as[model.RunSessionOpened](t, run(t, g, model.OpenRunSession{})); failed.Err == nil || failed.Err.Error() != "exit status 1: tern: there is no session" {
 		t.Errorf("failure %v", failed.Err)
 	}
 }
