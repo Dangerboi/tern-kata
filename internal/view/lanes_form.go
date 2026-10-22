@@ -38,7 +38,7 @@ func lanesLayer(m model.Model) tern.Element {
 	gap := func(key string) tern.Element { return ui.Spacer{Common: ui.Common{Key: key}, Size: ui.GapMD} }
 	children := []tern.Element{
 		ui.Text{Common: ui.Common{Key: "names-label", Tone: fieldTone(form, model.LanesNames)}, Text: "Lane list"},
-		ui.Input{Common: ui.Common{Key: "names", Tone: fieldTone(form, model.LanesNames), Aria: "Lane list"}, Field: ui.Field{Text: form.Text, Cursor: caretAt(form.Caret, model.LanesNames, form.Text), Mode: "insert", Placeholder: "Lane names, comma separated"}},
+		ui.Input{Common: ui.Common{Key: "names", Tone: fieldTone(form, model.LanesNames), Aria: "Lane list"}, Field: ui.Field{Text: form.Text, Cursor: caretAt(form.Caret, model.LanesNames, form.Text), Mode: "insert", Placeholder: "Lane names, comma separated", Readonly: form.Saving}},
 		muted("note", "Names in order, comma separated. Empty restores the default list. Saving never changes a label in kata."),
 	}
 	if unused := m.UnusedLabels(); len(unused) > 0 {
@@ -52,7 +52,10 @@ func lanesLayer(m model.Model) tern.Element {
 		text := form.Value(name)
 		children = append(children,
 			ui.Text{Common: ui.Common{Key: string(name) + "-label", Tone: fieldTone(form, name)}, Text: lanesDoneLabels[name]},
-			ui.Input{Common: ui.Common{Key: string(name), Tone: fieldTone(form, name), Aria: lanesDoneLabels[name]}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Placeholder: lanesDonePlaceholders[name]}})
+			ui.Input{Common: ui.Common{Key: string(name), Tone: fieldTone(form, name), Aria: lanesDoneLabels[name]}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Placeholder: lanesDonePlaceholders[name], Readonly: form.Saving}})
+	}
+	if form.Saving {
+		children = append(children, ui.Text{Common: ui.Common{Key: "pending", Tone: ui.TonePending}, Text: "Saving Lanes…"})
 	}
 	if form.Err != nil {
 		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: form.Err.Error()})
