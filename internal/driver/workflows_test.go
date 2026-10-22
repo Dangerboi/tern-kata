@@ -1,6 +1,7 @@
 package driver_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -327,4 +328,19 @@ func TestWorkflowRowAndInspectorNameTheLiveJobsThatUseIt(t *testing.T) {
 	}
 	s = step(t, s, key("enter")).State
 	mustShow(t, s, "inspector", "Weekly review", "disabled", "enabled")
+}
+
+func TestAFailedReadOfTheWorkflowsShowsAsItsOwnLineAboveTheHeldRows(t *testing.T) {
+	s := workflowsPane(t, 160, reviewFlow(), nightlyFlow())
+	s = feed(t, s, key("1")).State
+	out := feed(t, s, key("5"))
+	if !hasLoad(out) {
+		t.Fatalf("reopening the Page asked for no workflows: %#v", out.Cmds)
+	}
+	failed := step(t, out.State, model.WorkflowsLoaded{ProjectUID: "p", Err: errText("kata server not responding")}).State
+	mustShow(t, failed, "failed read", "kata server not responding", reviewFlow().Name, nightlyFlow().Name)
+	line := slices.IndexFunc(wireNodes(t, view.Render(failed.Model, now)), func(n tern.WireNode) bool { return strings.HasSuffix(n.ID, ".names.error") })
+	if line < 0 {
+		t.Error("the read error is not its own line above the list")
+	}
 }

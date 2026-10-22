@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -546,4 +547,25 @@ func TestEditingAJobReachesTheWorkerThroughTheEventStream(t *testing.T) {
 	h.eventually("the stream to open", func() bool { return r.w.Status().Projects[0].Following })
 	h.kata.CreateJob(t, h.proj, workertest.Job{Name: "late", Prompt: "Do it."})
 	h.eventually("the new job to be counted", func() bool { return r.w.Status().Projects[0].AdapterJobs == 1 })
+}
+
+func TestAnAgentMessageOverAMegabyteStillSettlesTheRunWithACutSummary(t *testing.T) {
+	h := newHarness(t, "--stub-text", "0123456789abcdef", "--stub-text-bytes", strconv.Itoa(2<<20))
+	issue := h.kata.Issue(t, h.proj, "Weekly report")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "report", Prompt: "Write it.", ExistingUID: issue.UID})
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	run := h.settled(h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID)
+	if run.Status != "succeeded" || len(run.Summary) != 60<<10 || !strings.HasPrefix(run.Summary, "0123456789abcdef") {
+		t.Fatalf("run is %q with a %d byte summary", run.Status, len(run.Summary))
+	}
+	h.eventually("the slot to be free", func() bool { return h.status(r).InUse == 0 })
+	h.eventually("the comment", func() bool {
+		i, _ := h.kata.Kata.ShowIssue(context.Background(), h.proj.ID, issue.UID)
+		return len(i.Comments) == 1
+	})
+	raw, err := os.ReadFile(filepath.Join(h.dirs.Runs(), run.UID, "output.jsonl"))
+	if err != nil || !strings.Contains(string(raw), strings.Repeat("0123456789abcdef", 2<<16)) {
+		t.Fatalf("the output file lacks the whole message (%d bytes, %v)", len(raw), err)
+	}
 }

@@ -45,7 +45,7 @@ func answerRuns(t *testing.T, out driver.Output, next string, runs ...model.Run)
 	if !ok {
 		t.Fatalf("no runs read asked for: %#v", out.Cmds)
 	}
-	return step(t, out.State, model.RunsLoaded{Request: load.Request, Before: load.Before, Runs: runs, NextBefore: next}).State
+	return step(t, out.State, model.RunsLoaded{Request: load.Request, Before: load.Before, Refresh: load.Refresh, Runs: runs, NextBefore: next}).State
 }
 
 func askedRuns(cmds []model.Cmd) (model.LoadRuns, bool) {
@@ -227,6 +227,37 @@ func TestSwitchingPagesKeepsEachPagesSelectionLoadedRunsAndFilter(t *testing.T) 
 	}
 	if _, ok := askedJobs(again.Cmds); !ok {
 		t.Fatalf("cmds %#v, want the jobs read again", again.Cmds)
+	}
+}
+
+func TestAPolledRefreshKeepsTheOlderRunsLoadedAndTheSelectedOne(t *testing.T) {
+	running := model.LocalRun{UID: "R3", Project: "work", Job: "Triage", State: "running", Attempt: 1}
+	live := finishedRun("R3")
+	live.Status = model.RunRunning
+	out := step(t, projectPane(t, 160, boardCard("parent-a")), key("4"))
+	out.State = answerRuns(t, out, "cursor-1", live, finishedRun("R2"))
+	out = answerWorker(t, out, servingWorker(running))
+	s := answerRuns(t, step(t, out.State, key("m")), "", live, finishedRun("R2"), finishedRun("R1"))
+	s = feed(t, s, key("j")).State
+	s = feed(t, s, key("j")).State
+	if got := s.Model.Runs.Selected; got != "R1" {
+		t.Fatalf("selected %q, want the oldest run R1", got)
+	}
+
+	// The pause between the worker's answers ends with a run in flight: the newest page is read again as a refresh.
+	poll, ok := askedWorker(out.Cmds)
+	if !ok || poll.After <= 0 {
+		t.Fatalf("cmds %#v, want a status ask after a pause", out.Cmds)
+	}
+	polled := step(t, s, model.WorkerLoaded{Request: poll.Request, Running: true, Status: *servingWorker(running)})
+	load, ok := askedRuns(polled.Cmds)
+	if !ok || !load.Refresh {
+		t.Fatalf("cmds %#v, want the newest page read again as a refresh", polled.Cmds)
+	}
+	done := finishedRun("R3")
+	got := step(t, polled.State, model.RunsLoaded{Request: load.Request, Before: load.Before, Refresh: load.Refresh, Runs: []model.Run{done, finishedRun("R2")}, NextBefore: "cursor-1"}).State.Model.Runs
+	if got.Selected != "R1" || len(got.Runs) != 3 || got.Runs[0].Status != model.RunSucceeded {
+		t.Fatalf("after the refresh: selected %q, runs %+v, want R1 selected, all three runs and the newest settled", got.Selected, got.Runs)
 	}
 }
 
