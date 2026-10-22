@@ -298,23 +298,7 @@ func moveWorkflow(action Action) func(Model) (Model, []Cmd) {
 		if len(visible) == 0 {
 			return m
 		}
-		page := max(m.Rows-2, 1)
-		row := max(m.selectedRow(), 0)
-		switch action {
-		case MoveDown:
-			row++
-		case MoveUp:
-			row--
-		case PageDown:
-			row += page
-		case PageUp:
-			row -= page
-		case MoveFirst:
-			row = 0
-		case MoveLast:
-			row = len(visible) - 1
-		}
-		m.Workflows.Selected = visible[max(0, min(row, len(visible)-1))].UID
+		m.Workflows.Selected = visible[movedIndex(m.selectedRow(), len(visible), max(m.Rows-2, 1), action)].UID
 		return m
 	})
 }

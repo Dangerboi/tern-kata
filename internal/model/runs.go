@@ -448,21 +448,7 @@ func moveRun(m Model, action Action) Model {
 		return m
 	}
 	at := slices.IndexFunc(runs, func(r Run) bool { return r.UID == m.Runs.Selected })
-	switch action {
-	case MoveDown:
-		at++
-	case MoveUp:
-		at--
-	case PageDown:
-		at += 10
-	case PageUp:
-		at -= 10
-	case MoveFirst:
-		at = 0
-	case MoveLast:
-		at = len(runs) - 1
-	}
-	m.Runs.Selected = runs[max(0, min(at, len(runs)-1))].UID
+	m.Runs.Selected = runs[movedIndex(at, len(runs), listPage, action)].UID
 	return m
 }
 

@@ -464,21 +464,7 @@ func moveJob(m Model, action Action) Model {
 		return m
 	}
 	at := slices.IndexFunc(jobs, func(j CronJob) bool { return j.UID == m.Jobs.Selected })
-	switch action {
-	case MoveDown:
-		at++
-	case MoveUp:
-		at--
-	case PageDown:
-		at += 10
-	case PageUp:
-		at -= 10
-	case MoveFirst:
-		at = 0
-	case MoveLast:
-		at = len(jobs) - 1
-	}
-	m.Jobs.Selected = jobs[max(0, min(at, len(jobs)-1))].UID
+	m.Jobs.Selected = jobs[movedIndex(at, len(jobs), listPage, action)].UID
 	return m
 }
 

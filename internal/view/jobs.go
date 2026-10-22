@@ -102,25 +102,19 @@ func jobCard(row model.JobRow, selected bool) tern.Element {
 
 // inspector is the Jobs Page's second column: the selected job's definition and, for a native job, its parent, which Enter opens.
 func inspector(m model.Model, now time.Time) tern.Element {
-	var children tern.Nodes
 	facts := m.JobFacts(now)
 	if len(facts) == 0 {
-		children = append(children, ui.Text{Common: ui.Common{Key: "empty"}, Text: "Select a job to read its definition."})
-		return panel(m, model.ColumnDetail, ui.Common{Key: "detail", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapMD, children)
+		return emptyInspector(m, "Select a job to read its definition.")
 	}
-	rows := make([]tern.Element, len(facts))
+	lines := make([]factLine, len(facts))
 	for i, fact := range facts {
-		valueStyle, mark := "", ui.Mark("")
+		lines[i] = factLine{Label: fact.Label, Value: fact.Value}
 		if fact.Parent {
-			valueStyle = "accent"
+			lines[i].Style = "accent"
 			if m.Focus == model.ColumnDetail {
-				mark = ui.MarkPick
+				lines[i].Mark = ui.MarkPick
 			}
 		}
-		label := ui.Text{Common: ui.Common{Key: "label", Shrink: new(float64), Min: &ui.Bounds{W: ui.Ch(18)}}, Spans: []ui.Span{{T: fact.Label, S: "muted"}}, Wrap: ui.WrapNone}
-		value := ui.Text{Common: ui.Common{Key: "value", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}, Spans: []ui.Span{{T: fact.Value, S: valueStyle}}}
-		rows[i] = ui.Row{Common: ui.Common{Key: "fact" + strconv.Itoa(i), Mark: mark}, Gap: ui.GapSM, Align: ui.AlignStart, Children: ui.Nodes(label, value)}
 	}
-	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("viewport"), Max: scrollMax(m, 0), Children: ui.Nodes(ui.Col{Common: ui.Common{Key: "content"}, Gap: ui.GapSM, Children: rows})})
-	return panel(m, model.ColumnDetail, ui.Common{Key: "detail", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapMD, children)
+	return factInspector(m, lines)
 }
