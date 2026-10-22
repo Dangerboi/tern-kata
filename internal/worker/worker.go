@@ -74,6 +74,12 @@ type projectState struct {
 	running map[string]bool // run uids with a goroutine driving them
 
 	wake chan struct{}
+	// kick asks the Project loop to look at its queued occurrences again; sched is that loop's own schedule state.
+	kick  chan struct{}
+	sched map[string]*jobSchedule
+	// scheduled, queued and nextRun summarize sched for Status (guarded by Worker.mu).
+	scheduled, queued int
+	nextRun           time.Time
 }
 
 // New checks opts and builds a worker.
@@ -94,7 +100,7 @@ func New(opts Options) (*Worker, error) {
 	for _, p := range opts.Config.Projects {
 		cfg, _ := opts.Config.project(p.Name)
 		actor := cmpOr(cfg.Actor, opts.Config.Actor, opts.Actor)
-		w.projects = append(w.projects, &projectState{cfg: cfg, actor: actor, held: map[string]string{}, wake: make(chan struct{}, 1)})
+		w.projects = append(w.projects, &projectState{cfg: cfg, actor: actor, held: map[string]string{}, wake: make(chan struct{}, 1), kick: make(chan struct{}, 1)})
 	}
 	return w, nil
 }

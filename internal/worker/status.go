@@ -31,6 +31,11 @@ type ProjectStatus struct {
 	AdapterJobs int
 	NativeJobs  int
 	Following   bool
+	// Scheduled counts adapter jobs with a schedule, Queued the occurrences waiting for a slot or an overlap gate, and
+	// NextRun is the earliest next occurrence (zero when none).
+	Scheduled int
+	Queued    int
+	NextRun   time.Time
 }
 
 // RunStatus is one run of this machine.
@@ -59,6 +64,7 @@ func (w *Worker) Status() Status {
 		default:
 			p.Admitting = true
 		}
+		p.Scheduled, p.Queued, p.NextRun = ps.scheduled, ps.queued, ps.nextRun
 		for _, j := range ps.jobs {
 			if j.IsNative() {
 				p.NativeJobs++
@@ -139,6 +145,16 @@ func (s Status) String() string {
 				fmt.Fprintf(&b, " (%d native, left to kata)", p.NativeJobs)
 			}
 			fmt.Fprintf(&b, ", %s\n", follow)
+			if p.Scheduled > 0 {
+				fmt.Fprintf(&b, "  %d scheduled %s", p.Scheduled, plural(p.Scheduled, "job", "jobs"))
+				if !p.NextRun.IsZero() {
+					fmt.Fprintf(&b, ", next run %s", p.NextRun.Local().Format("2006-01-02 15:04"))
+				}
+				if p.Queued > 0 {
+					fmt.Fprintf(&b, ", %d queued", p.Queued)
+				}
+				b.WriteString("\n")
+			}
 		} else {
 			fmt.Fprintf(&b, "Project %s: admits nothing: %s\n", p.Name, p.Why)
 		}

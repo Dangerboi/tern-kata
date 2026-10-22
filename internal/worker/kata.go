@@ -199,6 +199,10 @@ type IssuePolicy struct {
 	Body      string
 	UID       string
 	ParentUID string
+	// ScheduledOffsetSeconds and DeadlineOffsetSeconds are the per-run Issue's planning dates, relative to the run's
+	// occurrence; nil leaves the date unset (zero is the occurrence itself).
+	ScheduledOffsetSeconds *int64
+	DeadlineOffsetSeconds  *int64
 }
 
 type JobDefinition struct {
@@ -225,7 +229,9 @@ type Job struct {
 	DefinitionEventUID string
 	Deleted            bool
 	ProjectID          int64
-	Definition         JobDefinition
+	// CreatedAt anchors interval triggers.
+	CreatedAt  time.Time
+	Definition JobDefinition
 }
 
 // IsNative is kata's own predicate: a notify action with a per-run Issue is delivered by kata's daemon, never by an
@@ -258,9 +264,10 @@ func jobOf(j g.CronJob) Job {
 		def.Profile = p
 	}
 	if d.Issue != nil {
-		def.Issue = &IssuePolicy{Kind: d.Issue.Kind, Title: deref(d.Issue.Title), Body: deref(d.Issue.Body), UID: deref(d.Issue.UID), ParentUID: deref(d.Issue.ParentUID)}
+		def.Issue = &IssuePolicy{Kind: d.Issue.Kind, Title: deref(d.Issue.Title), Body: deref(d.Issue.Body), UID: deref(d.Issue.UID), ParentUID: deref(d.Issue.ParentUID),
+			ScheduledOffsetSeconds: d.Issue.ScheduledOffsetSeconds, DeadlineOffsetSeconds: d.Issue.DeadlineOffsetSeconds}
 	}
-	return Job{UID: j.UID, Name: j.Name, Revision: j.Revision, DefinitionEventUID: j.DefinitionEventUID, Deleted: j.DeletedAt != nil, ProjectID: j.ProjectID, Definition: def}
+	return Job{UID: j.UID, Name: j.Name, Revision: j.Revision, DefinitionEventUID: j.DefinitionEventUID, Deleted: j.DeletedAt != nil, ProjectID: j.ProjectID, CreatedAt: j.CreatedAt.UTC(), Definition: def}
 }
 
 func deref(s *string) string {

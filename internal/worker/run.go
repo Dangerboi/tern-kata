@@ -65,6 +65,7 @@ func (w *Worker) advance(ctx context.Context, ps *projectState, uid string) (err
 		if j, lerr := w.store.Load(uid); lerr == nil && !holdsSlot(j) {
 			w.release(ps, uid)
 		}
+		w.kick(ps) // a slot or an overlap gate may have opened: queued occurrences are due another look
 	}()
 	for ctx.Err() == nil && !w.halted.Load() {
 		j, err := w.store.Load(uid)
@@ -209,7 +210,13 @@ func (w *Worker) resolveIssue(ctx context.Context, j *Journal) (*JournalIssue, e
 		return &JournalIssue{UID: issue.UID, Ref: w.qualified(j, issue.ShortID), Title: issue.Title, Body: issue.Body, Existing: true}, nil
 	}
 	title := p.Title + " — " + j.Occurrence.UTC().Format(time.RFC3339Nano)
-	issue, err := w.opt.Kata.CreateIssue(ctx, j.ProjectID, j.Actor, "tern-kata:"+j.RunUID, title, p.Body, map[string]any{"tern_kata.run": j.RunUID})
+	metadata := map[string]any{"tern_kata.run": j.RunUID}
+	for key, offset := range map[string]*int64{"scheduled_on": p.ScheduledOffsetSeconds, "deadline_on": p.DeadlineOffsetSeconds} {
+		if offset != nil {
+			metadata[key] = j.Occurrence.Add(time.Duration(*offset) * time.Second).UTC().Format(time.RFC3339)
+		}
+	}
+	issue, err := w.opt.Kata.CreateIssue(ctx, j.ProjectID, j.Actor, "tern-kata:"+j.RunUID, title, p.Body, metadata)
 	if err != nil {
 		return nil, err
 	}

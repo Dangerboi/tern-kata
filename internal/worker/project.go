@@ -119,6 +119,11 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 			w.retryPending(ps)
 		}
 		wake := minTime(now.Add(time.Minute), nextLease)
+		if w.leaseHeld(ps) {
+			if next := w.tick(ctx, ps); !next.IsZero() {
+				wake = minTime(wake, next)
+			}
+		}
 		if !nextDefs.IsZero() && w.leaseHeld(ps) {
 			wake = minTime(wake, nextDefs)
 		}
@@ -130,6 +135,7 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 			return
 		case <-ps.wake:
 			dirty, dirtyAt = true, w.clock.Now()
+		case <-ps.kick:
 		case <-w.clock.After(max(wake.Sub(w.clock.Now()), time.Millisecond)):
 		}
 	}

@@ -83,22 +83,43 @@ type Job struct {
 	Overlap     string
 	Timeout     int64
 	Secrets     map[string]string
+	// Trigger defaults to manual.
+	Trigger worker.Trigger
+	// Catchup defaults to skip; GraceSeconds to 60.
+	Catchup      string
+	GraceSeconds *int64
+	Disabled     bool
+	// ScheduledOffset and DeadlineOffset are the per-run Issue's date offsets in seconds.
+	ScheduledOffset, DeadlineOffset *int64
 }
 
-// CreateJob creates an adapter prompt job in the Project.
-func (d *Daemon) CreateJob(t *testing.T, p worker.Project, j Job) worker.Job {
-	t.Helper()
-	actor := "tester"
+// Seconds is a pointer to n, for the optional numeric fields of Job.
+func Seconds(n int64) *int64 { return &n }
+
+func (j Job) definition() g.CronJobDefinition {
 	if j.Overlap == "" {
 		j.Overlap = "allow"
 	}
-	policy := &g.IssuePolicy{Kind: "per-run", Title: ptr(orDefault(j.IssueTitle, "Run of "+j.Name)), Body: ptr("job body")}
+	if j.Catchup == "" {
+		j.Catchup = "skip"
+	}
+	if j.GraceSeconds == nil {
+		j.GraceSeconds = ptr(int64(60))
+	}
+	policy := &g.IssuePolicy{Kind: "per-run", Title: ptr(orDefault(j.IssueTitle, "Run of "+j.Name)), Body: ptr("job body"), ScheduledOffsetSeconds: j.ScheduledOffset, DeadlineOffsetSeconds: j.DeadlineOffset}
 	if j.ExistingUID != "" {
 		policy = &g.IssuePolicy{Kind: "existing", UID: &j.ExistingUID}
 	}
+	trigger := g.Trigger{Kind: orDefault(j.Trigger.Kind, "manual")}
+	if t := j.Trigger; t.Kind != "" && t.Kind != "manual" {
+		trigger.Cron, trigger.At, trigger.Timezone = optional(t.Cron), optional(t.At), optional(t.Timezone)
+		if t.IntervalSeconds != 0 {
+			trigger.IntervalSeconds = &t.IntervalSeconds
+		}
+	}
 	def := g.CronJobDefinition{
-		Version: 1, Kind: "job", Enabled: true, Trigger: g.Trigger{Kind: "manual"},
-		Action: g.Action{Kind: "execute", Prompt: &j.Prompt}, Issue: policy, Overlap: j.Overlap, Catchup: "skip", GraceSeconds: ptr(int64(60)),
+		Version: 1, Kind: "job", Enabled: !j.Disabled, Trigger: trigger,
+		Action: g.Action{Kind: "execute", Prompt: &j.Prompt}, Issue: policy, Overlap: j.Overlap, Catchup: j.Catchup, GraceSeconds: j.GraceSeconds,
 		SecretRefs: j.Secrets,
 	}
 	if j.Profile != "" {
@@ -110,24 +131,70 @@ func (d *Daemon) CreateJob(t *testing.T, p worker.Project, j Job) worker.Job {
 	if j.Timeout > 0 {
 		def.TimeoutSeconds = &j.Timeout
 	}
-	r, err := d.Client.CreateCronJobWithResponse(context.Background(), &g.CreateCronJobRequestOptions{
-		PathParams: &g.CreateCronJobPath{ProjectID: p.ID}, Body: &g.CreateCronJobBody{Actor: &actor, Name: j.Name, Definition: def},
-	})
-	if err != nil {
+	return def
+}
+
+func optional(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// CreateJob creates an adapter prompt job in the Project.
+func (d *Daemon) CreateJob(t *testing.T, p worker.Project, j Job) worker.Job {
+	t.Helper()
+	actor := "tester"
+	if _, err := d.Client.CreateCronJobWithResponse(context.Background(), &g.CreateCronJobRequestOptions{
+		PathParams: &g.CreateCronJobPath{ProjectID: p.ID}, Body: &g.CreateCronJobBody{Actor: &actor, Name: j.Name, Definition: j.definition()},
+	}); err != nil {
 		t.Fatalf("creating job %s: %v", j.Name, err)
 	}
+	return d.findJob(t, p, j.Name)
+}
+
+// ReplaceJob edits a job the way the Jobs Page does: the whole definition is replaced by j's, on the version found.
+func (d *Daemon) ReplaceJob(t *testing.T, p worker.Project, found worker.Job, j Job) worker.Job {
+	t.Helper()
+	actor := "tester"
+	if _, err := d.Client.ReplaceCronJobWithResponse(context.Background(), &g.ReplaceCronJobRequestOptions{
+		PathParams: &g.ReplaceCronJobPath{ProjectID: p.ID, CronUID: found.UID},
+		Body:       &g.ReplaceCronJobBody{Actor: &actor, Name: found.Name, Definition: j.definition(), ExpectedEventUID: &found.DefinitionEventUID},
+	}); err != nil {
+		t.Fatalf("replacing job %s: %v", found.Name, err)
+	}
+	return d.findJob(t, p, found.Name)
+}
+
+func (d *Daemon) findJob(t *testing.T, p worker.Project, name string) worker.Job {
+	t.Helper()
 	jobs, err := d.Kata.Jobs(context.Background(), p.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = r
 	for _, found := range jobs {
-		if found.Name == j.Name {
+		if found.Name == name {
 			return found
 		}
 	}
-	t.Fatalf("job %s not listed", j.Name)
+	t.Fatalf("job %s not listed", name)
 	return worker.Job{}
+}
+
+// PlanningDates reads an Issue's scheduled and deadline instants; a date the Issue lacks is the zero time.
+func (d *Daemon) PlanningDates(t *testing.T, p worker.Project, issueUID string) (scheduled, deadline time.Time) {
+	t.Helper()
+	r, err := d.Client.IssuePlanningDatesWithResponse(context.Background(), &g.IssuePlanningDatesRequestOptions{PathParams: &g.IssuePlanningDatesPath{ProjectID: p.ID, Ref: issueUID}})
+	if err != nil || r.JSON200 == nil {
+		t.Fatalf("reading the planning dates of %s: %v", issueUID, err)
+	}
+	if s := r.JSON200.ScheduledOn; s != nil {
+		scheduled = s.Instant
+	}
+	if dl := r.JSON200.DeadlineOn; dl != nil {
+		deadline = dl.Instant
+	}
+	return scheduled, deadline
 }
 
 // CreateNativeJob creates a recurring-child job under parent, which kata's daemon delivers and the worker never runs.

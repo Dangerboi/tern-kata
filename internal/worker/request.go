@@ -188,11 +188,11 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurre
 	}
 	if d.Overlap == "forbid" {
 		if earlier := w.gateClosed(job.UID, ps.project.UID); earlier != "" {
-			return nil, false, fmt.Errorf("job %q forbids overlap and run %s is not settled", job.Name, earlier)
+			return nil, false, &busyError{fmt.Sprintf("job %q forbids overlap and run %s is not settled", job.Name, earlier), false}
 		}
 	}
 	if !w.reserve(ps) {
-		return nil, false, fmt.Errorf("Project %s is at capacity (%d); try again when a run ends", ps.cfg.Name, ps.cfg.Capacity)
+		return nil, false, &busyError{fmt.Sprintf("Project %s is at capacity (%d); try again when a run ends", ps.cfg.Name, ps.cfg.Capacity), true}
 	}
 	bound := false
 	defer func() {
