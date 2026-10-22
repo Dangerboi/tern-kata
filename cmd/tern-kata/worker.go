@@ -22,6 +22,8 @@ type workerEnv struct {
 	// Log receives the foreground worker's log lines.
 	Log     io.Writer
 	Version string
+	// Supervisor is who started this worker, from TERN_KATA_SUPERVISOR; empty when it was started by hand.
+	Supervisor string
 }
 
 // newWorkerEnv is the production environment: tern-kata's user folders and kata's own discovery.
@@ -30,7 +32,7 @@ func newWorkerEnv() (workerEnv, error) {
 	if err != nil {
 		return workerEnv{}, subcommandError{err}
 	}
-	return workerEnv{Dirs: dirs, Locate: data.LocateWithKata, Log: os.Stderr, Version: buildVersion()}, nil
+	return workerEnv{Dirs: dirs, Locate: data.LocateWithKata, Log: os.Stderr, Version: buildVersion(), Supervisor: os.Getenv("TERN_KATA_SUPERVISOR")}, nil
 }
 
 // isWorkerCommand reports whether the plan is `run` or one of the `worker` forms, which need no workspace or gateway.
@@ -128,7 +130,7 @@ func runForeground(ctx context.Context, plan LaunchPlan, env workerEnv, out io.W
 	}
 	w, err := worker.New(worker.Options{
 		Config: cfg, Dirs: env.Dirs, Kata: worker.NewKata(target.Client), Clock: env.Clock, Actor: plan.Actor,
-		Takeover: plan.Takeover, Version: env.Version, Log: logger,
+		Takeover: plan.Takeover, Version: env.Version, Supervisor: env.Supervisor, Log: logger,
 	})
 	if err != nil {
 		return subcommandError{err}

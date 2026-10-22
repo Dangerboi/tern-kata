@@ -7,11 +7,16 @@ import (
 	"time"
 )
 
+// SupervisorTern is the Supervisor of a worker the plugin host half in Tern's session daemon started; the host half
+// sets it in the worker's environment as TERN_KATA_SUPERVISOR.
+const SupervisorTern = "tern"
+
 // Status is what `worker status` shows: what runs, what is served and what is missing.
 type Status struct {
 	Executor    string
 	Actor       string
 	Version     string
+	Supervisor  string
 	PID         int
 	Started     time.Time
 	Now         time.Time
@@ -31,6 +36,11 @@ type ProjectStatus struct {
 	AdapterJobs int
 	NativeJobs  int
 	Following   bool
+	// Scheduled counts adapter jobs with a schedule, Queued the occurrences waiting for a slot or an overlap gate, and
+	// NextRun is the earliest next occurrence (zero when none).
+	Scheduled int
+	Queued    int
+	NextRun   time.Time
 }
 
 // RunStatus is one run of this machine.
@@ -58,7 +68,7 @@ type RunStatus struct {
 
 // Status reports the worker as it is now.
 func (w *Worker) Status() Status {
-	s := Status{Executor: w.opt.Config.Executor, Actor: cmpOr(w.opt.Config.Actor, w.opt.Actor), Version: w.opt.Version, PID: w.pid, Started: w.started, Now: w.clock.Now(), Unsupported: unsupported}
+	s := Status{Executor: w.opt.Config.Executor, Actor: cmpOr(w.opt.Config.Actor, w.opt.Actor), Version: w.opt.Version, Supervisor: w.opt.Supervisor, PID: w.pid, Started: w.started, Now: w.clock.Now(), Unsupported: unsupported}
 	w.mu.Lock()
 	for _, ps := range w.projects {
 		p := ProjectStatus{Name: ps.cfg.Name, Capacity: ps.cfg.Capacity, InUse: len(ps.held) + ps.pending, Following: ps.streamOpen}
@@ -72,6 +82,7 @@ func (w *Worker) Status() Status {
 		default:
 			p.Admitting = true
 		}
+		p.Scheduled, p.Queued, p.NextRun = ps.scheduled, ps.queued, ps.nextRun
 		for _, j := range ps.jobs {
 			if j.IsNative() {
 				p.NativeJobs++
@@ -150,6 +161,7 @@ func (s Status) String() string {
 		fmt.Fprintf(&b, ", tern-kata %s", s.Version)
 	}
 	b.WriteString(")\n")
+	b.WriteString(s.supervision())
 	if s.Unsupported != "" {
 		fmt.Fprintf(&b, "It runs no agents: %s.\n", s.Unsupported)
 	}
@@ -167,6 +179,16 @@ func (s Status) String() string {
 				fmt.Fprintf(&b, " (%d native, left to kata)", p.NativeJobs)
 			}
 			fmt.Fprintf(&b, ", %s\n", follow)
+			if p.Scheduled > 0 {
+				fmt.Fprintf(&b, "  %d scheduled %s", p.Scheduled, plural(p.Scheduled, "job", "jobs"))
+				if !p.NextRun.IsZero() {
+					fmt.Fprintf(&b, ", next run %s", p.NextRun.Local().Format("2006-01-02 15:04"))
+				}
+				if p.Queued > 0 {
+					fmt.Fprintf(&b, ", %d queued", p.Queued)
+				}
+				b.WriteString("\n")
+			}
 		} else {
 			fmt.Fprintf(&b, "Project %s: admits nothing: %s\n", p.Name, p.Why)
 		}
@@ -199,6 +221,17 @@ func (s Status) String() string {
 		fmt.Fprintf(&b, "Quarantined run %s: its journal could not be read; run `tern-kata worker doctor`.\n", q)
 	}
 	return b.String()
+}
+
+// supervision says what keeps the worker running and how to turn that off.
+func (s Status) supervision() string {
+	switch s.Supervisor {
+	case "":
+		return "Not supervised: it was started by hand, so nothing starts it again when it exits.\n"
+	case SupervisorTern:
+		return "Supervised by Tern's session daemon (the tern-kata plugin's host half): it starts the worker again when it exits, waiting longer after each quick crash. To turn that off, create worker.manual beside worker.toml.\n"
+	}
+	return fmt.Sprintf("Supervised by %s.\n", s.Supervisor)
 }
 
 func plural(n int, one, many string) string {

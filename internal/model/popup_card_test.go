@@ -215,6 +215,21 @@ func popupCards() []popupCard {
 			text:     func(m model.Model, f model.Field) string { return m.DatesForm.Value(f) },
 		},
 		{
+			name: "Job", card: model.CardJob, quits: true, textField: model.JobFieldName,
+			tabOrder: []model.Field{model.JobFieldKind, model.JobFieldName, model.JobFieldTrigger, model.JobFieldCron, model.JobFieldZone, model.JobFieldParent, model.JobFieldTitle,
+				model.JobFieldBody, model.JobFieldRecipient, model.JobFieldMessage, model.JobFieldCatchup, model.JobFieldEnabled},
+			states: []cardState{{"", func() model.Model {
+				m, _ := clickPress(clickAt(model.ColumnList), "shift+j")
+				m, _ = model.Update(m, model.FocusFieldMsg{Field: model.JobFieldTitle})
+				return typed(m, "Tick")
+			}, model.ModeJobForm}},
+			graft:  func(dst *model.Model, src model.Model) { dst.JobForm = src.JobForm },
+			field:  func(m model.Model) model.Field { return m.JobForm.Field },
+			text:   func(m model.Model, _ model.Field) string { return m.JobForm.Name },
+			save:   []string{"ctrl+o"},
+			result: func(m model.Model, err error) model.Msg { return model.JobWritten{UID: m.JobForm.UID, Err: err} },
+		},
+		{
 			name: "Recurrence", card: model.CardRecurrence, quits: true, textField: model.RecurrenceStart,
 			tabOrder: []model.Field{model.RecurrenceFrequency, model.RecurrenceEvery, model.RecurrenceWeekdays, model.RecurrenceStart, model.RecurrenceEnds, model.RecurrenceZone},
 			states:   []cardState{{"", opened("shift+o"), model.ModeRecurrenceForm}},
@@ -234,6 +249,15 @@ func popupCards() []popupCard {
 			text:   func(m model.Model, _ model.Field) string { return m.ProjectForm.Name },
 			save:   []string{"enter"},
 			result: func(_ model.Model, err error) model.Msg { return model.ProjectSaved{Err: err} },
+		},
+		{
+			name: "Backfill", card: model.CardBackfill, multiline: true,
+			states: []cardState{{"", func() model.Model {
+				return model.Model{Backfill: model.BackfillState{Open: true, For: model.BackfillResume, Jobs: []model.BackfillJob{{Job: model.CronJob{UID: "J", Name: "Weekly"}, Missed: 3}}}}
+			}, model.ModeBackfill}},
+			graft: func(dst *model.Model, src model.Model) { dst.Backfill = src.Backfill },
+			field: func(model.Model) model.Field { return "" },
+			text:  func(model.Model, model.Field) string { return "" },
 		},
 		{
 			name: "Lanes", card: model.CardLanes,

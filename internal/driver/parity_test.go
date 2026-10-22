@@ -327,6 +327,12 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 		{"Recurrence change", change, model.ModeRecurrenceForm},
 		{"Recurrence stop", pressed(change, "ctrl+x"), model.ModeRecurrenceStop},
 		{"Recurrence error", recurring(nil), model.ModeRecurrenceForm},
+		{"Job new", pressed(issue, "shift+j"), model.ModeJobForm},
+		{"Job conflict", conflictedJobCard(t), model.ModeJobConflict},
+		{"Backfill", func() driver.State {
+			s := jobsPane(t, 160, disabled(owing("J1", "open", "all")))
+			return step(t, s, key("p")).State
+		}(), model.ModeBackfill},
 		{"Lanes", func() driver.State {
 			s, _ := inputs(chord("b"), model.LanesLoaded{ProjectUID: "p"}, chord("shift+b"))(bound)
 			return s

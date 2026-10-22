@@ -126,4 +126,5 @@ for step in "${steps[@]}"; do
 done
 quit_app
 "$repo/smoke/plugin.sh" "$tmp/tern-kata"
+"$repo/smoke/supervision.sh" "$tmp/tern-kata"
 printf '\nSmoke passed\n'

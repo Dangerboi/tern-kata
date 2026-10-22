@@ -103,6 +103,10 @@ func Render(m model.Model, now time.Time) tern.View {
 		layer = datesLayer(m)
 	case model.CardRecurrence:
 		layer = recurrenceLayer(m)
+	case model.CardJob:
+		layer = jobLayer(m, now)
+	case model.CardBackfill:
+		layer = backfillLayer(m)
 	case model.CardProject:
 		layer = projectLayer(m)
 	case model.CardLanes:
@@ -399,6 +403,9 @@ func footerGrid(m model.Model) (grid [][]helplayout.HelpItem, chords []string, p
 		help := binding.Help
 		if binding.Action == model.ClosePicker && m.Picker.Projects && m.Picker.Filter == "" {
 			help = "back"
+		}
+		if job := m.SelectedJob(); binding.Action == model.ArchiveJobAction && job != nil && job.Archived() {
+			help = "restore"
 		}
 		items = append(items, helplayout.HelpItem{Key: binding.Key, Description: help})
 		chords = append(chords, binding.Chord)

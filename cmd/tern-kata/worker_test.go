@@ -162,6 +162,24 @@ func TestWorkerStatusSaysWhatItServes(t *testing.T) {
 	}
 }
 
+func TestWorkerStatusSaysHowItIsSupervised(t *testing.T) {
+	for _, tc := range []struct{ supervisor, want string }{
+		{"", "Not supervised: it was started by hand"},
+		{worker.SupervisorTern, "Supervised by Tern's session daemon"},
+	} {
+		f := newWorkerFixture(t, "")
+		f.env.Supervisor = tc.supervisor
+		f.serve(t)
+		out, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}})
+		if err != nil || !strings.Contains(out, tc.want) {
+			t.Errorf("supervisor %q: want %q in:\n%s (err %v)", tc.supervisor, tc.want, out, err)
+		}
+		if tc.supervisor != "" && !strings.Contains(out, "worker.manual") {
+			t.Errorf("supervised status does not say how to turn supervision off:\n%s", out)
+		}
+	}
+}
+
 func TestWorkerDoctorReportsAGoodSetupAndSuggestsUnservedProjects(t *testing.T) {
 	f := newWorkerFixture(t, "")
 	other := f.kata.Project(t, "elsewhere")

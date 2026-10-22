@@ -71,6 +71,7 @@ func (w *Worker) advance(ctx context.Context, ps *projectState, uid string) (err
 		if j, lerr := w.store.Load(uid); lerr == nil && !holdsSlot(j) {
 			w.release(ps, uid)
 		}
+		w.kick(ps) // a slot or an overlap gate may have opened: queued occurrences are due another look
 	}()
 	for ctx.Err() == nil && !w.halted.Load() {
 		j, err := w.store.Load(uid)
@@ -220,7 +221,13 @@ func (w *Worker) resolveIssue(ctx context.Context, j *Journal) (*JournalIssue, e
 		return &JournalIssue{UID: issue.UID, Ref: w.qualified(j, issue.ShortID), Title: issue.Title, Body: issue.Body, Existing: true}, nil
 	}
 	title := p.Title + " — " + j.Occurrence.UTC().Format(time.RFC3339Nano)
-	issue, err := w.opt.Kata.CreateIssue(ctx, j.ProjectID, j.Actor, "tern-kata:"+j.RunUID, title, p.Body, map[string]any{"tern_kata.run": j.RunUID})
+	metadata := map[string]any{"tern_kata.run": j.RunUID}
+	for key, offset := range map[string]*int64{"scheduled_on": p.ScheduledOffsetSeconds, "deadline_on": p.DeadlineOffsetSeconds} {
+		if offset != nil {
+			metadata[key] = j.Occurrence.Add(time.Duration(*offset) * time.Second).UTC().Format(time.RFC3339)
+		}
+	}
+	issue, err := w.opt.Kata.CreateIssue(ctx, j.ProjectID, j.Actor, "tern-kata:"+j.RunUID, title, p.Body, metadata)
 	if err != nil {
 		return nil, err
 	}
@@ -301,6 +308,9 @@ func childEnv(actor string, secrets map[string]string) []string {
 // launch runs one attempt: prompt file, `launching` mark, process, start record, wait, exit record, outcome. It
 // returns once the journal says finished, or an error that leaves the journal where it was.
 func (w *Worker) launch(ctx context.Context, ps *projectState, j *Journal) error {
+	if j.Notify != nil {
+		return w.notify(ctx, j)
+	}
 	runDir := w.store.RunDir(j.RunUID)
 	failFast := func(status, reason string) error {
 		_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
@@ -543,6 +553,9 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 		case StatusCancelled:
 			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("cancelled"), Text: "The run was abandoned: " + j.Outcome.Summary})
 		}
+		if j.Notify != nil { // a notify run's only record is the Run itself; the Issue gets no comment or label
+			intents = intents[:1]
+		}
 		var err error
 		if j, err = w.store.Update(j.RunUID, "intents-planned", func(j *Journal) error { j.Intents = intents; return nil }); err != nil {
 			return err
@@ -718,3 +731,47 @@ func (t *tailSink) tailText() string {
 }
 
 func (t *tailSink) close() { _ = t.file.Close() }
+
+// notify is a notify run's whole work: send the inbox request to the recipient on the run's Issue and record the
+// outcome. The request is one metadata slot per Issue and recipient with fixed content, so repeating it after a crash
+// between the send and the saved outcome changes nothing; the run's identity (ADR-0002) already keeps a restart from
+// preparing the occurrence twice.
+func (w *Worker) notify(ctx context.Context, j *Journal) error {
+	finish := func(status, summary string) error {
+		_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
+			j.Outcome = &Outcome{Status: status, Summary: truncate(summary, maxSummaryBytes), At: w.clock.Now().UTC()}
+			j.Phase = PhaseFinished
+			return nil
+		})
+		return err
+	}
+	issue, err := w.opt.Kata.ShowIssue(ctx, j.ProjectID, j.Issue.UID)
+	if err != nil {
+		if refused(err) {
+			return finish(StatusFailed, "cannot read the Issue to notify about: "+err.Error())
+		}
+		return err
+	}
+	recipient := j.Notify.Recipient
+	if recipient == currentOwnerOrAuthor {
+		recipient = cmpOr(issue.Owner, issue.Author)
+	}
+	message := j.Notify.Message
+	if strings.TrimSpace(message) == "" {
+		message = fmt.Sprintf("%s: %s", w.qualified(j, issue.ShortID), issue.Title)
+	}
+	message = truncate(message, maxNotifyBytes)
+	if err := w.opt.Kata.Notify(ctx, j.ProjectID, j.Actor, j.Issue.UID, recipient, w.opt.Config.Executor, message); err != nil {
+		if refused(err) {
+			return finish(StatusFailed, "kata refused the notification: "+err.Error())
+		}
+		return err
+	}
+	return finish(StatusSucceeded, "Notified "+recipient+": "+message)
+}
+
+const (
+	currentOwnerOrAuthor = "current-owner-or-author"
+	// maxNotifyBytes is the inbox's message limit.
+	maxNotifyBytes = 1024
+)

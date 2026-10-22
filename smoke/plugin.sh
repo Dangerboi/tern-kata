@@ -5,6 +5,8 @@ tmp=$(mktemp -d)
 pid=
 export CGO_ENABLED=0 KATA_HOME="$tmp/kata" TERN_CONFIG_DIR="$tmp/config"
 export TERN_DAEMON_SOCKET="$tmp/daemon.sock" STENCIL_LOG_DIR="$tmp/logs"
+# The linked plugin's host half reads worker.toml from the config folder: point it at an empty one.
+export XDG_CONFIG_HOME="$tmp/xdg-config" XDG_STATE_HOME="$tmp/xdg-state"
 export STENCIL_FIXTURE_ROOT="$tmp/crates/tern"
 export STENCIL_LOG=warn,stencil_plugins=debug,stencil_tern=debug
 unset KATA_SERVER KATA_AUTH_TOKEN KATA_AUTHOR TMUX STY ZELLIJ TERN_TSP

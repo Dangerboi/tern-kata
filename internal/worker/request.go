@@ -142,9 +142,6 @@ func newJournalID() string {
 // prepare checks a job can run, reserves a slot, applies ADR-0002's veto and saves the run's journal. occurrenceKey is
 // empty for a manual run. It returns the existing journal, with created false, when the occurrence was prepared before.
 func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurrence time.Time, occurrenceKey string) (*Journal, bool, error) {
-	if unsupported != "" {
-		return nil, false, errors.New(unsupported)
-	}
 	if why := w.admitsNothing(ps); why != "" {
 		return nil, false, fmt.Errorf("Project %s admits nothing: %s", ps.cfg.Name, why)
 	}
@@ -152,33 +149,47 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurre
 		return nil, false, fmt.Errorf("job %q is a native job: kata's daemon delivers it, the worker never runs it", job.Name)
 	}
 	d := job.Definition
-	switch {
-	case d.ActionKind != "execute":
-		return nil, false, fmt.Errorf("job %q only notifies; the worker does not run notify jobs yet", job.Name)
-	case d.WorkflowUID != "" || strings.TrimSpace(d.Prompt) == "":
-		return nil, false, fmt.Errorf("job %q runs a workflow; the worker runs prompt jobs only so far", job.Name)
-	case d.Issue == nil:
-		return nil, false, fmt.Errorf("job %q has no Issue policy", job.Name)
-	}
-	profileName := cmpOr(d.Profile, "default")
-	profile, ok := w.opt.Config.Profiles[profileName]
-	if !ok || !ps.cfg.allowsProfile(profileName) {
-		return nil, false, fmt.Errorf("job %q names profile %q, which is not available to Project %s in worker.toml", job.Name, profileName, ps.cfg.Name)
-	}
-	var checkout string
-	if d.CheckoutKey != "" {
-		dir, ok := w.opt.Config.Checkouts[d.CheckoutKey]
-		if !ok || !ps.cfg.allowsCheckout(d.CheckoutKey) {
-			return nil, false, fmt.Errorf("job %q names checkout %q, which is not available to Project %s in worker.toml", job.Name, d.CheckoutKey, ps.cfg.Name)
+	var notify *NotifySpec
+	var issuePolicy IssuePolicy
+	var profileName, checkout string
+	var profile Profile
+	var timeout time.Duration
+	if d.ActionKind == "notify" {
+		var err error
+		if notify, issuePolicy, err = notifyPlan(job); err != nil {
+			return nil, false, err
 		}
-		checkout = dir
-	}
-	timeout := w.opt.Config.defaultTimeout()
-	if d.TimeoutSeconds > 0 {
-		timeout = time.Duration(d.TimeoutSeconds) * time.Second
-	}
-	if timeout > w.opt.Config.maxTimeout() {
-		return nil, false, fmt.Errorf("job %q asks for a timeout of %s, over max_timeout %s (default_timeout is %s)", job.Name, timeout, w.opt.Config.maxTimeout(), w.opt.Config.defaultTimeout())
+	} else {
+		if unsupported != "" { // a notify run starts no process, so only execute runs need to prove one gone
+			return nil, false, errors.New(unsupported)
+		}
+		switch {
+		case d.WorkflowUID != "" || strings.TrimSpace(d.Prompt) == "":
+			return nil, false, fmt.Errorf("job %q runs a workflow; the worker runs prompt jobs only so far", job.Name)
+		case d.Issue == nil:
+			return nil, false, fmt.Errorf("job %q has no Issue policy", job.Name)
+		}
+		issuePolicy = *d.Issue
+		profileName = cmpOr(d.Profile, "default")
+		var ok bool
+		profile, ok = w.opt.Config.Profiles[profileName]
+		if !ok || !ps.cfg.allowsProfile(profileName) {
+			return nil, false, fmt.Errorf("job %q names profile %q, which is not available to Project %s in worker.toml", job.Name, profileName, ps.cfg.Name)
+		}
+		if d.CheckoutKey != "" {
+			dir, ok := w.opt.Config.Checkouts[d.CheckoutKey]
+			if !ok || !ps.cfg.allowsCheckout(d.CheckoutKey) {
+				return nil, false, fmt.Errorf("job %q names checkout %q, which is not available to Project %s in worker.toml", job.Name, d.CheckoutKey, ps.cfg.Name)
+			}
+			checkout = dir
+		}
+		timeout = w.opt.Config.defaultTimeout()
+		if d.TimeoutSeconds > 0 {
+			timeout = time.Duration(d.TimeoutSeconds) * time.Second
+		}
+		if timeout > w.opt.Config.maxTimeout() {
+			return nil, false, fmt.Errorf("job %q asks for a timeout of %s, over max_timeout %s (default_timeout is %s)", job.Name, timeout, w.opt.Config.maxTimeout(), w.opt.Config.defaultTimeout())
+		}
 	}
 	manual := occurrenceKey == ""
 	if !manual {
@@ -188,11 +199,11 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurre
 	}
 	if d.Overlap == "forbid" {
 		if earlier := w.gateClosed(job.UID, ps.project.UID); earlier != "" {
-			return nil, false, fmt.Errorf("job %q forbids overlap and run %s is not settled", job.Name, earlier)
+			return nil, false, &busyError{fmt.Sprintf("job %q forbids overlap and run %s is not settled", job.Name, earlier), false}
 		}
 	}
 	if !w.reserve(ps) {
-		return nil, false, fmt.Errorf("Project %s is at capacity (%d); try again when a run ends", ps.cfg.Name, ps.cfg.Capacity)
+		return nil, false, &busyError{fmt.Sprintf("Project %s is at capacity (%d); try again when a run ends", ps.cfg.Name, ps.cfg.Capacity), true}
 	}
 	bound := false
 	defer func() {
@@ -200,8 +211,8 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurre
 			w.unreserve(ps)
 		}
 	}()
-	if d.Issue.Kind == "existing" {
-		issue, err := w.opt.Kata.ShowIssue(ctx, ps.project.ID, d.Issue.UID)
+	if issuePolicy.Kind == "existing" {
+		issue, err := w.opt.Kata.ShowIssue(ctx, ps.project.ID, issuePolicy.UID)
 		if err != nil {
 			return nil, false, fmt.Errorf("job %q: its Issue could not be read: %w", job.Name, err)
 		}
@@ -231,7 +242,7 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurre
 	j := &Journal{
 		Version: 1, RunUID: uid, JournalID: newJournalID(), Executor: w.opt.Config.Executor, Actor: ps.actor, Generation: generation,
 		ProjectUID: ps.project.UID, ProjectID: ps.project.ID, ProjectName: ps.project.Name,
-		JobUID: job.UID, JobName: job.Name, DefinitionEventUID: job.DefinitionEventUID, Prompt: d.Prompt, IssuePolicy: *d.Issue,
+		JobUID: job.UID, JobName: job.Name, DefinitionEventUID: job.DefinitionEventUID, Prompt: d.Prompt, IssuePolicy: issuePolicy, Notify: notify,
 		SecretRefs: d.SecretRefs, ProfileName: profileName, Profile: profile, Checkout: checkout, TimeoutSeconds: int64(timeout / time.Second),
 		OccurrenceKey: occurrenceKey, Occurrence: occurrence.UTC(), Manual: manual,
 		Phase: PhasePrepared, StartedAt: w.clock.Now().UTC(),
@@ -246,4 +257,21 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurre
 		return nil, false, err
 	}
 	return j, true, nil
+}
+
+// notifyPlan is what a notify job asks of the worker: the request to send and the existing Issue it goes to. The
+// Issue is the job's own `existing` policy, else the one its Issue-date trigger watches.
+func notifyPlan(job Job) (*NotifySpec, IssuePolicy, error) {
+	d := job.Definition
+	uid := d.Trigger.IssueUID
+	if d.Issue != nil {
+		if d.Issue.Kind != "existing" {
+			return nil, IssuePolicy{}, fmt.Errorf("job %q creates an Issue per run: kata's daemon delivers it, the worker never runs it", job.Name)
+		}
+		uid = d.Issue.UID
+	}
+	if uid == "" || d.Recipient == "" {
+		return nil, IssuePolicy{}, fmt.Errorf("job %q does not name an Issue and a recipient to notify", job.Name)
+	}
+	return &NotifySpec{Recipient: d.Recipient, Message: d.Message}, IssuePolicy{Kind: "existing", UID: uid}, nil
 }

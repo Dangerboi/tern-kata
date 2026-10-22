@@ -54,6 +54,8 @@ func popups() []popup {
 			return m
 		}, func(dst *model.Model, src model.Model) { dst.RecurrenceForm = src.RecurrenceForm },
 			model.ModeRecurrenceForm, "layer.recurrence", func(m model.Model) string { return m.RecurrenceForm.Zone }},
+		{"Job", keyOpen("shift+j"), func(dst *model.Model, src model.Model) { dst.JobForm = src.JobForm },
+			model.ModeJobForm, "layer.job", func(m model.Model) string { return m.JobForm.Name }},
 		{"New Project", func(t *testing.T, s driver.State) model.Model {
 			return step(t, s, model.CollectionPointerSelected{Key: model.NewProjectKey}).State.Model
 		}, func(dst *model.Model, src model.Model) { dst.ProjectForm = src.ProjectForm },

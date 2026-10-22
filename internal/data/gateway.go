@@ -82,6 +82,8 @@ func (g *Gateway) Run(ctx context.Context, cmd model.Cmd, messages chan<- model.
 		result = loadLanes(cmd)
 	case model.SaveLanes:
 		result = saveLanes(cmd)
+	case model.LoadWorkerPickers:
+		result = loadWorkerPickers()
 	default:
 		result = g.do(ctx, cmd)
 	}
@@ -244,6 +246,18 @@ func plan(cmd model.Cmd, host string) (request, bool) {
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ShowJob(ctx, cmd)) },
 			func(err error) model.Msg { return model.JobShown{UID: cmd.UID, Err: err} }}, true
+	case model.SaveJobCmd:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.SaveJob(ctx, cmd)) },
+			func(err error) model.Msg { return model.JobWritten{ProjectID: cmd.ProjectID, UID: cmd.UID, Err: err} }}, true
+	case model.ArchiveJobCmd:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ArchiveJob(ctx, cmd)) },
+			func(err error) model.Msg { return model.JobWritten{ProjectID: cmd.ProjectID, UID: cmd.UID, Err: err} }}, true
+	case model.RestoreJobCmd:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.RestoreJob(ctx, cmd)) },
+			func(err error) model.Msg { return model.JobWritten{ProjectID: cmd.ProjectID, UID: cmd.UID, Err: err} }}, true
 	case model.LoadWorkflows:
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) {
@@ -251,6 +265,13 @@ func plan(cmd model.Cmd, host string) (request, bool) {
 				return ok(model.WorkflowsLoaded{ProjectUID: cmd.ProjectUID, Workflows: workflows}, err)
 			},
 			func(err error) model.Msg { return model.WorkflowsLoaded{ProjectUID: cmd.ProjectUID, Err: err} }}, true
+	case model.LoadJobWorkflows:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) {
+				workflows, err := c.ListWorkflows(ctx, cmd.ProjectID)
+				return ok(model.JobWorkflowsLoaded{ProjectID: cmd.ProjectID, Workflows: workflows}, err)
+			},
+			func(err error) model.Msg { return model.JobWorkflowsLoaded{ProjectID: cmd.ProjectID, Err: err} }}, true
 	case model.SaveWorkflow:
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.SaveWorkflow(ctx, cmd)) },

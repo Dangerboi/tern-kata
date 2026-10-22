@@ -119,6 +119,11 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 			w.retryPending(ps)
 		}
 		wake := minTime(now.Add(time.Minute), nextLease)
+		if w.leaseHeld(ps) {
+			if next := w.tick(ctx, ps); !next.IsZero() {
+				wake = minTime(wake, next)
+			}
+		}
 		if !nextDefs.IsZero() && w.leaseHeld(ps) {
 			wake = minTime(wake, nextDefs)
 		}
@@ -130,6 +135,7 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 			return
 		case <-ps.wake:
 			dirty, dirtyAt = true, w.clock.Now()
+		case <-ps.kick:
 		case <-w.clock.After(max(wake.Sub(w.clock.Now()), time.Millisecond)):
 		}
 	}
@@ -195,6 +201,10 @@ func (w *Worker) follow(ctx context.Context, ps *projectState) {
 		}, func(e Event) {
 			delivered = true
 			cursor = max(cursor, e.ID)
+			if strings.HasPrefix(e.Type, "issue.") {
+				ps.datesDirty.Store(true)
+				w.kick(ps)
+			}
 			if strings.HasPrefix(e.Type, "cron.job.") || strings.HasPrefix(e.Type, "cron.workflow.") {
 				w.writeCursor(ps.project.UID, cursor)
 				select {

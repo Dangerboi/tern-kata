@@ -129,15 +129,6 @@ func menuBack(m Model) Model {
 	return m
 }
 
-func reopenIssue(m Model) (Model, []Cmd) {
-	issue := closeIssue(m)
-	if issue == nil || m.Stale || m.CloseForm.Saving {
-		return m, nil
-	}
-	m.CloseForm = CloseFormState{UID: issue.UID, Saving: true}
-	return m, []Cmd{ReopenIssueCmd{Workspace: m.Workspace, UID: issue.UID, ProjectID: issue.ProjectID, Actor: m.Actor}}
-}
-
 var (
 	// issueModes are the modes whose keys act on the selected Issue: the list, the Board and the detail.
 	issueModes   = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail}
@@ -148,6 +139,8 @@ var (
 	listModes = []Mode{ModeList, ModeLane}
 	// laneModes are the modes that show Lanes: the Board and the Lane view.
 	laneModes = []Mode{ModeBoard, ModeLane}
+	// jobsModes are the modes of the Jobs Page, whose keys act on the selected job.
+	jobsModes = []Mode{ModeJobs, ModeJobInspector}
 	searching = []Mode{ModeSearch, ModeSearchResults}
 )
 
@@ -213,6 +206,11 @@ var mainActions = []actionEntry{
 	{action: PageDown, modes: []Mode{ModeJobInspector}, keys: pageDownKeys, help: "page", handle: scrolling(ColumnDetail, ScrollPageDown)},
 	{action: PageUp, modes: []Mode{ModeJobInspector}, keys: pageUpKeys, help: "page up", handle: scrolling(ColumnDetail, ScrollPageUp)},
 	{action: JobInspectorBack, modes: []Mode{ModeJobInspector}, keys: keys("escape", "esc", "tab", "tab", "left", "←"), help: "back", footer: []Mode{ModeJobInspector}, sheet: []sheetLine{{sheetJobs, 10, "back to the job list"}}, handle: pure(inspectorBack)},
+	{action: NewJobAction, modes: jobsModes, keys: keys("n", "n"), help: "new job", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 12, "new job (Job card)"}}, handle: openNewJob},
+	{action: EditJobAction, modes: jobsModes, keys: keys("e", "e"), help: "edit job", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 13, "edit the selected job (Job card)"}}, handle: openEditJob},
+	{action: PauseJobAction, modes: jobsModes, keys: keys("p", "p"), help: "pause or resume", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 14, "pause or resume the selected job"}}, handle: toggleJob},
+	{action: ArchiveJobAction, modes: jobsModes, keys: keys("x", "x"), help: "archive", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 15, "archive the selected job, or restore it when it is archived (press a to list them)"}}, handle: archiveJob},
+	{action: NewIssueJobAction, modes: issueModes, keys: keys("shift+j", "J"), help: "job", sheet: []sheetLine{{sheetJobs, 16, "new recurring job on the selected Issue (Job card)"}}, handle: openIssueJob},
 	{action: RunsOfJob, modes: []Mode{ModeJobs, ModeJobInspector}, keys: keys("r", "r"), help: "runs", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 11, "open the Runs Page on the job's runs"}}, handle: runsOfJob},
 	// Runs Page: the Project's Runs newest first, with the selected Run's detail beside them.
 	{action: MoveDown, modes: []Mode{ModeRuns}, keys: slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), help: "move", footer: []Mode{ModeRuns}, footerKey: "↑↓", sheet: []sheetLine{{sheetRuns, 1, "next run"}}, handle: pure(func(m Model) Model { return moveRun(m, MoveDown) })},
