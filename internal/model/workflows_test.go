@@ -99,6 +99,7 @@ func TestANewWorkflowIsCreatedWithoutAGuard(t *testing.T) {
 func TestAWorkflowTheLocalCheckRefusesStaysInTheCardWithTheProblemNamed(t *testing.T) {
 	for name, tc := range map[string]struct{ text, problem string }{
 		"broken JSON":        {`{"name": "x", "definition": }`, "line 1"},
+		"syntax error on a later line": {"{\n  \"name\": \"x\",\n  \"definition\": }\n}", "line 3"},
 		"truncated JSON":     {`{"name": "x"`, "ends early"},
 		"nothing":            {``, "empty"},
 		"unknown field":      {`{"name":"x","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c","when":"now"}]}}`, `"when"`},
@@ -135,13 +136,6 @@ func TestAWorkflowTheLocalCheckRefusesStaysInTheCardWithTheProblemNamed(t *testi
 				t.Errorf("the card kept %q (open %v), want the edited text kept", card.Editor.Text, card.Open)
 			}
 		})
-	}
-}
-
-func TestASyntaxErrorNamesItsLine(t *testing.T) {
-	_, err := model.ParseWorkflow("{\n  \"name\": \"x\",\n  \"definition\": }\n}")
-	if err == nil || !strings.Contains(err.Error(), "line 3") {
-		t.Fatalf("error %v, want line 3", err)
 	}
 }
 
