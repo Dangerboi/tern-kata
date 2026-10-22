@@ -37,6 +37,11 @@ func (g *Gateway) loadWorkerSetup(cmd model.LoadWorkerSetup) model.WorkerSetupLo
 		return model.WorkerSetupLoaded{Err: err}
 	}
 	setup.Exists = true
+	raw, err := os.ReadFile(setup.Path)
+	if err != nil {
+		return model.WorkerSetupLoaded{Err: err}
+	}
+	setup.Text = string(raw)
 	cfg, err := worker.LoadConfig(setup.Path)
 	if err != nil {
 		setup.LoadErr = err.Error()
@@ -103,6 +108,18 @@ func (g *Gateway) stopWorker(ctx context.Context, cmd model.StopWorker) model.Wo
 		return model.WorkerStopped{Mode: cmd.Mode, Err: errors.New("the worker accepted the stop but gave no answer")}
 	}
 	return model.WorkerStopped{Mode: resp.Stop.Mode, InFlight: resp.Stop.InFlight, Restarts: resp.Stop.Restarts}
+}
+
+// saveWorkerEdit replaces worker.toml with text the worker package accepts; the refusal names the problem and nothing is written.
+func (g *Gateway) saveWorkerEdit(cmd model.SaveWorkerEdit) model.WorkerEdited {
+	dirs, err := g.workerDirs()
+	if err != nil {
+		return model.WorkerEdited{Text: cmd.Text, Err: err}
+	}
+	if err := worker.CheckConfig(cmd.Text); err != nil {
+		return model.WorkerEdited{Text: cmd.Text, Err: err}
+	}
+	return model.WorkerEdited{Text: cmd.Text, Err: worker.WriteConfig(dirs.ConfigPath(), cmd.Text)}
 }
 
 // setWorkerSupervision creates worker.manual beside worker.toml (supervision off) or removes it (on), then, when asked, sends the

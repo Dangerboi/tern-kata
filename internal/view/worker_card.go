@@ -123,8 +123,7 @@ func prefixIf(on bool, text string) string {
 	return text
 }
 
-// workerActions is the card's button row. It holds the saves, the restart choice and supervision; the edit (e)
-// that a later ticket adds join it here.
+// workerActions is the card's button row. It holds the saves, the restart choice, the edit (e) and supervision.
 func workerActions(m model.Model) tern.Element {
 	f := m.WorkerCard
 	switch {
@@ -143,16 +142,24 @@ func workerActions(m model.Model) tern.Element {
 		if m.WorkerCardKind() == model.WorkerServe {
 			save = "Serve " + m.Worker.Setup.Project
 		}
-		return buttonRow(cardButton("save", model.ModeWorkerCard, model.WorkerSave, save, true), cardButton("cancel", model.ModeWorkerCard, model.WorkerCancel, "Cancel", false))
+		buttons := []tern.Element{cardButton("save", model.ModeWorkerCard, model.WorkerSave, save, true)}
+		if m.WorkerCardEdits() {
+			buttons = append(buttons, cardButton("edit", model.ModeWorkerCard, model.WorkerEdit, "Edit worker.toml", false))
+		}
+		return buttonRow(append(buttons, cardButton("cancel", model.ModeWorkerCard, model.WorkerCancel, "Cancel", false))...)
+	}
+	var buttons []tern.Element
+	if m.WorkerCardEdits() {
+		buttons = append(buttons, cardButton("edit", model.ModeWorkerCard, model.WorkerEdit, "Edit worker.toml", true))
 	}
 	if m.WorkerCardKind() >= model.WorkerSetUp {
 		label := "Turn supervision off"
 		if m.Worker.Setup.Manual {
 			label = "Turn supervision on"
 		}
-		return buttonRow(cardButton("supervision", model.ModeWorkerCard, model.WorkerSupervision, label, false), cardButton("close", model.ModeWorkerCard, model.WorkerCancel, "Close", false))
+		buttons = append(buttons, cardButton("supervision", model.ModeWorkerCard, model.WorkerSupervision, label, false))
 	}
-	return buttonRow(cardButton("close", model.ModeWorkerCard, model.WorkerCancel, "Close", false))
+	return buttonRow(append(buttons, cardButton("close", model.ModeWorkerCard, model.WorkerCancel, "Close", false))...)
 }
 
 func fileWords(m model.Model) string {

@@ -349,6 +349,70 @@ func TestWorkerKeysFootersAndHelpAgree(t *testing.T) {
 	}
 }
 
+func withText(s model.WorkerSetup, text string) model.WorkerSetup { s.Text = text; return s }
+
+func TestWorkerCardEditOpensTheFileInEditorAndWritesWhatLoads(t *testing.T) {
+	running := &model.WorkerStatus{Executor: "laptop", PID: 9, Supervised: true, InFlight: 1,
+		Runs: []model.LocalRun{{UID: "R1", Project: "work", Job: "Triage", State: "running"}}}
+	s := workerCardOpen(t, running, withText(listedProject, "executor = \"laptop\"\n"))
+	opened := step(t, s, key("e"))
+	if opened.Editor == nil || opened.Editor.UID != model.WorkerDraftUID || opened.Editor.Text != "executor = \"laptop\"\n" || opened.Editor.Suffix != ".toml" {
+		t.Fatalf("e routed %#v to $EDITOR", opened.Editor)
+	}
+	back := step(t, opened.State, model.DraftEditorClosed{UID: model.WorkerDraftUID, Text: "executor = \"renamed\"\n"})
+	if !reflect.DeepEqual(back.Cmds, []model.Cmd{model.SaveWorkerEdit{Text: "executor = \"renamed\"\n"}}) {
+		t.Fatalf("the edited text sent %#v, want it checked and written", back.Cmds)
+	}
+	done := step(t, back.State, model.WorkerEdited{Text: "executor = \"renamed\"\n"})
+	if done.State.Model.CurrentMode() != model.ModeWorkerRestart {
+		t.Fatalf("mode %s, want the restart question", done.State.Model.CurrentMode())
+	}
+	wantText(t, "card", wireTextOf(t, done.State), "worker.toml written", "Restart when idle", "Restart now")
+	if !slices.Contains(done.Cmds, model.Cmd(askedSetup)) {
+		t.Errorf("cmds %#v, want the setup read again", done.Cmds)
+	}
+	if idle := step(t, done.State, key("i")); !reflect.DeepEqual(idle.Cmds, []model.Cmd{model.StopWorker{Mode: "idle"}}) {
+		t.Errorf("i sent %#v", idle.Cmds)
+	}
+}
+
+func TestWorkerCardRefusedEditKeepsTheTextAndNamesTheProblem(t *testing.T) {
+	s := workerCardOpen(t, nil, withText(listedProject, "executor = \"laptop\"\n"))
+	opened := step(t, s, key("e"))
+	bad := "executor = \"laptop\"\nbogus = 1\n"
+	sent := step(t, opened.State, model.DraftEditorClosed{UID: model.WorkerDraftUID, Text: bad})
+	refused := step(t, sent.State, model.WorkerEdited{Text: bad, Err: errors.New("worker.toml: unknown key bogus")})
+	msg, _ := nodeText(t, refused.State, view.WorkerID+".error")
+	if refused.State.Model.TopCard() != model.CardWorker || !strings.Contains(msg, "unknown key bogus") || !strings.Contains(msg, "not saved") {
+		t.Fatalf("card %v error %q, want the card kept with the problem named", refused.State.Model.TopCard(), msg)
+	}
+	again := step(t, refused.State, key("e"))
+	if again.Editor == nil || again.Editor.Text != bad {
+		t.Fatalf("e reopened %#v, want the refused text", again.Editor)
+	}
+}
+
+func TestWorkerCardEditThatChangesNothingSendsNothing(t *testing.T) {
+	s := workerCardOpen(t, nil, withText(listedProject, "executor = \"laptop\"\n"))
+	opened := step(t, s, key("e"))
+	for name, text := range map[string]string{"unchanged": "executor = \"laptop\"\n", "empty": " \n"} {
+		back := step(t, opened.State, model.DraftEditorClosed{UID: model.WorkerDraftUID, Text: text})
+		if len(back.Cmds) != 0 {
+			t.Errorf("%s: sent %#v", name, back.Cmds)
+		}
+	}
+}
+
+func TestWorkerCardEditKeyIsOnlyOfferedWhereAFileIsThere(t *testing.T) {
+	s := workerCardOpen(t, nil, noWorkerFile)
+	out := step(t, s, key("e"))
+	if out.Editor != nil {
+		t.Errorf("e opened the editor with no worker.toml")
+	}
+	if got := workerField(t, out.State, model.WorkerFieldExecutor); !strings.HasSuffix(got, "e") {
+		t.Errorf("e was not typed into the executor field: %q", got)
+	}
+}
 func TestWorkerCardSupervisionOffWithNoWorkerWritesTheMarkerAtOnce(t *testing.T) {
 	s := workerCardOpen(t, nil, listedProject)
 	wantText(t, "card", wireTextOf(t, s), "Turn supervision off")
