@@ -553,3 +553,26 @@ func TestASavedAdapterJobJoinsTheListAndTheNewerJobKeepsThePickers(t *testing.T)
 		t.Fatal("taking the newer job dropped the worker pickers")
 	}
 }
+
+func TestAnAdapterIntervalCountsFromTheJobsCreationInTheRowAndThePreview(t *testing.T) {
+	// Created at 08:00, every 90 minutes: ticks at 09:30, 11:00, 12:30 ... and the Pane's clock is 12:00.
+	job := promptJob("J2", "Triage")
+	job.Definition.Trigger = model.CronTrigger{Kind: model.TriggerInterval, IntervalSeconds: 5400}
+	s := jobsPane(t, 160, job)
+	wantText(t, "adapter job row", jobCardText(t, s, "J2"), "every 90 minutes", "next 12:30")
+
+	card := editedJob(t, job)
+	wantText(t, "preview", cardText(t, card), "Thu 2026-10-08 12:30 UTC", "Thu 2026-10-08 14:00 UTC", "Thu 2026-10-08 15:30 UTC")
+	card = set(t, card, model.JobFieldInterval, "45m") // ticks at 11:45, 12:30, 13:15
+	wantText(t, "preview follows the field", cardText(t, card), "Thu 2026-10-08 12:30 UTC", "Thu 2026-10-08 13:15 UTC")
+}
+
+func TestAnIntervalTooLongForKataIsRefusedNamingTheFieldInsteadOfWrappingToZero(t *testing.T) {
+	s := choose(t, newJobCard(t), model.JobFieldTrigger, 1)
+	s = set(t, s, model.JobFieldInterval, "36028797018963968")
+	wantText(t, "preview", cardText(t, s), "Interval", "longer than kata accepts")
+	out := step(t, s, key("ctrl+o"))
+	if _, sent := savedJob(out.Cmds); sent || out.State.Model.JobForm.Field != model.JobFieldInterval || out.State.Model.JobForm.Err == nil {
+		t.Fatalf("saving sent %#v, focus %q, error %v", out.Cmds, out.State.Model.JobForm.Field, out.State.Model.JobForm.Err)
+	}
+}

@@ -312,8 +312,11 @@ var intervalJobTrigger = jobTrigger{
 			}
 			seconds = int64(d / time.Second)
 		}
-		if seconds <= 0 {
+		switch {
+		case seconds <= 0:
 			return CronTrigger{}, fieldError(JobFieldInterval, "must be positive.")
+		case seconds > maxJobSeconds:
+			return CronTrigger{}, fieldError(JobFieldInterval, "is longer than kata accepts.")
 		}
 		return CronTrigger{Kind: TriggerInterval, IntervalSeconds: seconds}, nil
 	},
@@ -760,8 +763,10 @@ func (f JobFormState) Preview(cal PaneCalendar, now time.Time) JobPreview {
 		return JobPreview{Err: err}
 	}
 	anchor := now
-	if p := f.Opened.Parent; f.Change && p != nil && p.Progress != nil {
-		anchor = p.Progress.Anchor
+	if f.Change {
+		if opened, ok := f.Opened.intervalAnchor(); ok {
+			anchor = opened
+		}
 	}
 	const layout = "Mon 2006-01-02 15:04 MST"
 	preview := JobPreview{Words: t.Words()}
@@ -774,11 +779,8 @@ func (f JobFormState) Preview(cal PaneCalendar, now time.Time) JobPreview {
 			preview.Runs = append(preview.Runs, next.In(loc).Format(layout))
 		}
 	case TriggerInterval:
-		if f.Kind != nativeJobKind.id {
-			break // an adapter's interval counts from a start only the worker knows
-		}
-		step := time.Duration(t.IntervalSeconds) * time.Second
-		next := anchor.Add((now.Sub(anchor)/step + 1) * step)
+		step, _ := intervalStep(t.IntervalSeconds) // buildTrigger refused any other
+		next := nextTick(anchor, step, now)
 		for range previewRuns {
 			preview.Runs = append(preview.Runs, cal.in(next).Format(layout))
 			next = next.Add(step)
