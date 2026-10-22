@@ -316,3 +316,42 @@ func TestWorkflowRowAndInspectorShowTheWorkflowsLatestRuns(t *testing.T) {
 		t.Errorf("runs of W1 %+v, want its two", got)
 	}
 }
+
+func TestWorkflowsPageFollowsRunPagesToFindEachWorkflowsLatestRunAndOlderRuns(t *testing.T) {
+	out := feed(t, projectPane(t, 160, boardCard("a")), key("5"))
+	first, ok := askedRuns(out.Cmds)
+	if !ok {
+		t.Fatalf("no runs read asked for: %#v", out.Cmds)
+	}
+	s := step(t, out.State, model.WorkflowsLoaded{ProjectUID: "p", Workflows: []model.Workflow{reviewFlow(), nightlyFlow()}}).State
+	onW1 := func(uid string) model.Run {
+		r := workflowRun(uid)
+		r.WorkflowUID = "W1"
+		return r
+	}
+	onW2 := workflowRun("R9")
+	onW2.WorkflowUID = "W2"
+
+	// The newest page holds runs of the first workflow alone, and kata has an older page.
+	next := step(t, s, model.RunsLoaded{Request: first.Request, Runs: []model.Run{onW1("R1"), onW1("R2")}, NextBefore: "c1"})
+	second, ok := askedRuns(next.Cmds)
+	if !ok || second.Before != "c1" || second.Request != first.Request {
+		t.Fatalf("cmds %#v, want the page before c1 read on the same request: W2 has no run yet", next.Cmds)
+	}
+	// W2 turns up there; the selected W1 still lists fewer runs than the inspector shows, so the next page is read too.
+	more := step(t, next.State, model.RunsLoaded{Request: first.Request, Before: "c1", Runs: []model.Run{onW2}, NextBefore: "c2"})
+	third, ok := askedRuns(more.Cmds)
+	if !ok || third.Before != "c2" {
+		t.Fatalf("cmds %#v, want the page before c2 read: W1 shows two of its five runs", more.Cmds)
+	}
+	if latest, ok := more.State.Model.LatestWorkflowRun("W2"); !ok || latest.UID != "R9" {
+		t.Fatalf("latest run of W2 %+v, want R9 from the older page", latest)
+	}
+	done := step(t, more.State, model.RunsLoaded{Request: first.Request, Before: "c2", Runs: []model.Run{onW1("R3"), onW1("R4"), onW1("R5")}, NextBefore: "c3"})
+	if _, again := askedRuns(done.Cmds); again {
+		t.Fatalf("cmds %#v, want no more pages once every workflow has its latest run and the selection its five", done.Cmds)
+	}
+	if got := done.State.Model.WorkflowRuns("W1"); len(got) != 5 {
+		t.Fatalf("runs of W1 %d, want 5", len(got))
+	}
+}

@@ -37,6 +37,11 @@ type WorkflowsState struct {
 	// way jobsRequest does.
 	runs        []Run
 	runsRequest int64
+	// runsMore is the cursor of the next older page of runs, "" when kata holds no more; runsPages counts the pages read and
+	// runsAsked says a page is in flight.
+	runsMore  string
+	runsPages int
+	runsAsked bool
 	// detailHidden is the detail column's hidden flag from before the Page took its place.
 	detailHidden bool
 }
@@ -150,8 +155,12 @@ func (m Model) WorkflowJobs(uid string) []CronJob {
 // WorkflowRunsShown is how many of a workflow's runs the inspector lists.
 const WorkflowRunsShown = 5
 
-// WorkflowRuns are the Runs of the workflow with uid among the Project's newest Runs the Page read, newest first. Kata lists no
-// Runs by workflow, so a workflow whose last Run is older than the newest page of the Project's Runs has none here.
+// workflowRunPagesMax bounds how many pages of the Project's Runs the Page reads to find each workflow's runs.
+const workflowRunPagesMax = 10
+
+// WorkflowRuns are the Runs of the workflow with uid among the Project's Runs the Page read, newest first. Kata lists no Runs
+// by workflow, so the Page reads older pages of the Project's Runs until every workflow has its latest Run and the selected one
+// the runs its inspector lists, up to workflowRunPagesMax pages; a workflow whose last Run is older than that has none here.
 func (m Model) WorkflowRuns(uid string) []Run {
 	var runs []Run
 	for _, r := range m.Workflows.runs {
@@ -218,10 +227,29 @@ func enterWorkflows(m Model) (Model, []Cmd) {
 	w.Loading = true
 	w.jobsRequest--
 	w.runsRequest--
+	w.runsMore, w.runsPages, w.runsAsked = "", 0, true
 	return m, append(cmds,
 		LoadWorkflows{Workspace: m.Workspace, ProjectID: w.ProjectID, ProjectUID: w.ProjectUID},
 		LoadJobs{Workspace: m.Workspace, ProjectID: w.ProjectID, Request: w.jobsRequest},
 		LoadRuns{Workspace: m.Workspace, ProjectID: w.ProjectID, Request: w.runsRequest})
+}
+
+// settleWorkflowRuns reads the next older page of the Project's Runs while a workflow still lacks its latest Run or the selected
+// one the runs the inspector lists, and kata holds older Runs.
+func (m Model) settleWorkflowRuns() (Model, []Cmd) {
+	w := &m.Workflows
+	if m.Page != PageWorkflows || w.runsAsked || w.runsMore == "" || w.runsPages >= workflowRunPagesMax || w.ProjectID == 0 {
+		return m, nil
+	}
+	missing := slices.ContainsFunc(w.List, func(x Workflow) bool { return !x.Archived && len(m.WorkflowRuns(x.UID)) == 0 })
+	if sel, ok := m.SelectedWorkflow(); ok && len(m.WorkflowRuns(sel.UID)) < WorkflowRunsShown {
+		missing = true
+	}
+	if !missing {
+		return m, nil
+	}
+	w.runsAsked = true
+	return m, []Cmd{LoadRuns{Workspace: m.Workspace, ProjectID: w.ProjectID, Before: w.runsMore, Request: w.runsRequest}}
 }
 
 // workflowsOff leaves the Workflows Page for the Issues Page and gives the detail column back, unless something already focused it.
@@ -400,8 +428,17 @@ func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 		if msg.Request >= 0 || msg.Request != m.Workflows.runsRequest {
 			return m, nil, false
 		}
+		m.Workflows.runsAsked = false
 		if msg.Err == nil && !msg.ProjectArchived {
-			m.Workflows.runs = msg.Runs
+			if msg.Before == "" {
+				m.Workflows.runs, m.Workflows.runsPages = msg.Runs, 1
+			} else {
+				m.Workflows.runs = append(slices.Clone(m.Workflows.runs), msg.Runs...)
+				m.Workflows.runsPages++
+			}
+			m.Workflows.runsMore = msg.NextBefore
+		} else {
+			m.Workflows.runsMore = ""
 		}
 		return m, nil, true
 	case WorkflowSelectMsg:
