@@ -354,9 +354,10 @@ func TestWorkerResumeAndAbandonSettleRunsHeldByARestart(t *testing.T) {
 	f.serve(t)
 
 	var status string
-	eventually(t, "status to offer both held runs", func() bool {
+	// The slot of a run found held at start is freed only once its hold is reported to kata, after status first offers it.
+	eventually(t, "status to offer both held runs with their slots free", func() bool {
 		status, _ = f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}})
-		return strings.Contains(status, "tern-kata worker resume "+uidA) && strings.Contains(status, "tern-kata worker resume "+uidB)
+		return strings.Contains(status, "tern-kata worker resume "+uidA) && strings.Contains(status, "tern-kata worker resume "+uidB) && strings.Contains(status, "0 of 1 slots in use")
 	})
 	for _, want := range []string{"Run " + uidA, "held: interrupted", "or abandon it with `tern-kata worker abandon " + uidA + "`"} {
 		if !strings.Contains(status, want) {

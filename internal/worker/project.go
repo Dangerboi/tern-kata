@@ -320,6 +320,14 @@ func (w *Worker) release(ps *projectState, uid string) {
 	delete(ps.held, uid)
 }
 
+// holdsSlotOf reports whether uid is bound to a slot of ps.
+func (w *Worker) holdsSlotOf(ps *projectState, uid string) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	_, ok := ps.held[uid]
+	return ok
+}
+
 // holdsSlot reports whether the journal's run still occupies a slot: it is in flight, or its process may be alive.
 func holdsSlot(j *Journal) bool {
 	switch j.Phase {

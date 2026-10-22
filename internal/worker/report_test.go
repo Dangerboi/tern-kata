@@ -19,6 +19,8 @@ func (h *harness) settledOnDisk(r *running, uid string) {
 		j, err := r.w.Store().Load(uid)
 		return err == nil && j.Phase == worker.PhaseSettled
 	})
+	// The run's slot is freed by the worker's goroutine just after the journal settles; a request made before that is refused as at capacity.
+	h.eventually("the slot of "+uid+" to be free", func() bool { return r.w.Status().Projects[0].InUse == 0 })
 }
 
 func TestAFinalObservationNeverOverwritesANewerObservationBySomeoneElse(t *testing.T) {

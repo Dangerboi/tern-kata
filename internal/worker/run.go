@@ -56,6 +56,8 @@ func (w *Worker) retryPending(ps *projectState) {
 			continue
 		}
 		switch {
+		case j.Phase == PhasePrepared && !w.holdsSlotOf(ps, j.RunUID):
+			// prepare saved this journal but has not bound its slot yet; RequestRun or the scheduler spawns it next
 		case j.Phase == PhasePrepared || j.Phase == PhaseAdmitted || j.Phase == PhaseResuming || j.Phase == PhaseFinished:
 			w.spawn(ps, j.RunUID)
 		case j.Phase == PhaseSettled && !holdsSlot(j):
