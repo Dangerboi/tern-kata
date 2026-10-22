@@ -51,6 +51,12 @@ const (
 	ToggleBoard          Action = "toggle-board"
 	ShowIssuesPage       Action = "show-issues-page"
 	ShowBoardPage        Action = "show-board-page"
+	ShowJobsPage         Action = "show-jobs-page"
+	ToggleArchivedJobs   Action = "toggle-archived-jobs"
+	ReloadJobs           Action = "reload-jobs"
+	OpenJobParent        Action = "open-job-parent"
+	FocusJobInspector    Action = "focus-job-inspector"
+	JobInspectorBack     Action = "job-inspector-back"
 	OpenLanes            Action = "open-lanes"
 	PreviousLane         Action = "previous-lane"
 	NextLane             Action = "next-lane"
@@ -102,6 +108,8 @@ const (
 	ModeFilterForm    Mode = "filter-form"
 	ModeBoard         Mode = "board"
 	ModeLane          Mode = "lane"
+	ModeJobs          Mode = "jobs"
+	ModeJobInspector  Mode = "job-inspector"
 )
 
 // cardBindings are the keys of the Popup cards. Each card's handler reads them by mode; the

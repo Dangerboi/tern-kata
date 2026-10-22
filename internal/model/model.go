@@ -97,6 +97,7 @@ type Model struct {
 	FilterForm       FilterFormState
 	Page             Page
 	Board            BoardState
+	Jobs             JobsState
 	// Moving is the Issue whose Move is in flight; further Moves wait for its result.
 	Moving string
 	// nonce is the random per-run prefix of every idempotency key and keys counts the keys minted.
@@ -193,6 +194,10 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m = lanesLoaded(m, msg)
 	case LanesSaved:
 		m = lanesSaved(m, msg)
+	case JobsLoaded:
+		m = jobsLoaded(m, msg)
+	case JobSelectMsg:
+		m.Jobs.Selected, m.Focus = msg.UID, ColumnList
 	case DetailLoaded:
 		m = m.detailLoaded(msg)
 	case DetailFailed:
@@ -204,7 +209,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case FocusColumnMsg:
 		if msg.Column <= ColumnDetail {
 			m.Focus = msg.Column
-			if m.Focus == ColumnDetail {
+			if m.Focus == ColumnDetail && !m.OnJobs() {
 				m = m.focusDetail()
 			}
 		}

@@ -30,6 +30,9 @@ func (RevealActivityTab) cmd() {}
 // DetailDrawn reports whether the view draws the Activity tabs: the detail column
 // is on screen and holds a loaded Issue, not a placeholder or an error line.
 func (m Model) DetailDrawn() bool {
+	if m.OnJobs() {
+		return m.Shows(ColumnDetail) && m.SelectedJob() != nil
+	}
 	return m.Shows(ColumnDetail) && m.SelectedUID != "" && m.err == nil && m.authority != nil && m.authority.Issue != nil
 }
 
@@ -78,3 +81,19 @@ func moveSelection(m Model, action Action) Model {
 // list's own scroller and the Pane's rows are unknown here.
 // ponytail: a fixed step, not a measured page; if ResizeMsg ever carries rows, use rows minus the chrome.
 const pageRows = 10
+
+// Position is the place of the selected row in the current Page's list, counted from one and zero when nothing is selected,
+// and the number of rows: what the footer shows at its right.
+func (m Model) Position() (selected, total int) {
+	if m.OnJobs() {
+		jobs := m.visibleJobs()
+		return slices.IndexFunc(jobs, func(j CronJob) bool { return j.UID == m.Jobs.Selected }) + 1, len(jobs)
+	}
+	rows := m.VisibleRows()
+	for i, issue := range rows {
+		if issue.UID == m.SelectedUID {
+			return i + 1, len(rows)
+		}
+	}
+	return 0, len(rows)
+}
