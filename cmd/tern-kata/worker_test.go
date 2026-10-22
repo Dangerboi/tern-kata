@@ -321,9 +321,9 @@ func TestWorkerResumeAndAbandonSettleRunsHeldByARestart(t *testing.T) {
 	f.startedRun(t, uidA)
 	stop()
 	stop = f.serveUntilStopped(t)
-	eventually(t, "the first run to be held", func() bool {
+	eventually(t, "the first run to be held and its slot free", func() bool {
 		out, _ := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}})
-		return strings.Contains(out, "Run "+uidA) && strings.Contains(out, "tern-kata worker resume "+uidA)
+		return strings.Contains(out, "Run "+uidA) && strings.Contains(out, "tern-kata worker resume "+uidA) && strings.Contains(out, "0 of 1 slots in use")
 	})
 	uidB := f.runJob(t, doomed)
 	f.startedRun(t, uidB)
