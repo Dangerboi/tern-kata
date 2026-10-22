@@ -1,6 +1,8 @@
 package worker_test
 
 import (
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -173,4 +175,26 @@ func TestADateSetAfterTheJobWasFirstSeenIsCaughtUpUnderTheJobsCatchup(t *testing
 			})
 		}
 	}
+}
+
+// A planning-date read that failed when the job was first seen leaves no baseline: the Issue's date that was already
+// in the past when the job was created is its first sight, not a change to replay under `all`.
+func TestADateReadThatFailedAtFirstSightDoesNotMakeAnOldDateAChange(t *testing.T) {
+	h := newHarness(t)
+	issue := h.kata.Issue(t, h.proj, "Old date")
+	past := h.minuteIn(-5 * time.Minute)
+	h.kata.SetIssueDate(t, h.proj, issue.UID, "scheduled_on", past)
+	isRead := func(r *http.Request) bool { return r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/planning-dates") }
+	restore := h.kata.Intercept(isRead, func(w http.ResponseWriter, _ *http.Request, _ http.Handler) {
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+	})
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "on date", Prompt: "Do it.", ExistingUID: issue.UID,
+		Trigger: worker.Trigger{Kind: "issue-scheduled", IssueUID: issue.UID}, Catchup: "all"})
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	h.eventually("the first date read to fail", func() bool { return h.kata.Requests("planning-dates") > 0 })
+	failed := h.kata.Requests("planning-dates")
+	restore() // the loop plans the job right after that read, before it can read again
+	h.eventually("the date to be read again", func() bool { return h.kata.Requests("planning-dates") > failed })
+	h.quiet(job, 0)
 }

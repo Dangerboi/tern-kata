@@ -239,7 +239,9 @@ func (w *Worker) workflowStep(ctx context.Context, j *Journal) error {
 		return w.finishWorkflow(j)
 	}
 	rec := j.Steps[i]
-	if rec.State != StepRunning && !j.ExpiresAt.IsZero() && !w.clock.Now().Before(j.ExpiresAt) {
+	// A step still saved running here has no launch record (a launched one is held at recovery), so it is checked like a
+	// pending one; a resumed step carries a fresh expiry.
+	if !j.ExpiresAt.IsZero() && !w.clock.Now().Before(j.ExpiresAt) {
 		return w.timeOutWorkflow(j)
 	}
 	if rec.State != StepRunning {

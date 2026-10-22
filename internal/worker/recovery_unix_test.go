@@ -195,11 +195,10 @@ func TestAnAgentIsNotStartedWhenTheFolderSyncOfItsLaunchingSaveFails(t *testing.
 	uid := h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID
 	store := worker.NewStore(h.dirs, worker.Hooks{})
 	h.eventually("the launching save to be replaced", func() bool { j, err := store.Load(uid); return err == nil && j.Phase == worker.PhaseLaunching })
-	time.Sleep(200 * time.Millisecond) // a launch that wrongly went ahead would have started by now
+	r.stop() // returns once the worker has exited, so a launch that wrongly went ahead has already happened
 	if n := len(h.launches()); n != 0 {
 		t.Fatalf("agent launched %d times after a failed save, want none", n)
 	}
-	r.stop()
 
 	restarted := h.start(worker.Hooks{})
 	h.admitting(restarted)

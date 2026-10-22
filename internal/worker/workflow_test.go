@@ -301,9 +301,10 @@ func TestACommandStepKeepsTheStartAndEndOfItsOutputWithAMarkerBetween(t *testing
 	}
 }
 
-// A workflow run past its expiry starts no step: not the first one after a restart, nor the next one between two.
+// A workflow run past its expiry starts no step: not the first one after a restart, not one whose start was saved but
+// never launched, nor the next one between two.
 func TestAWorkflowRunPastItsExpiryStartsNoStepAfterARestart(t *testing.T) {
-	for _, point := range []string{"admitted", "step-concluded"} {
+	for _, point := range []string{"admitted", "step-started", "step-concluded"} {
 		t.Run(point, func(t *testing.T) {
 			h := newHarness(t)
 			wf := h.kata.CreateWorkflow(t, h.proj, "pipeline",

@@ -590,6 +590,16 @@ func (h *harness) waitForConnections(rd *resetDaemon, n int) (after []string, at
 	return after, at
 }
 
+// requireBackoff fails when two consecutive stream connections opened less than the 500ms reconnect backoff apart.
+func requireBackoff(t *testing.T, at []time.Time) {
+	t.Helper()
+	for i := 1; i < len(at); i++ {
+		if gap := at[i].Sub(at[i-1]); gap < 500*time.Millisecond {
+			t.Fatalf("connections %d and %d opened %v apart, want at least the 500ms backoff", i, i+1, gap)
+		}
+	}
+}
+
 func TestAResetFrameMovesTheCursorToItsPositionAndTheReconnectBacksOff(t *testing.T) {
 	h := newHarness(t)
 	h.seedCursor(5)
@@ -613,11 +623,7 @@ func TestAResetFrameMovesTheCursorToItsPositionAndTheReconnectBacksOff(t *testin
 			t.Fatalf("connection %d asked after %q, want the reset frame's position 7777", i+2, a)
 		}
 	}
-	for i := 1; i < len(at); i++ {
-		if gap := at[i].Sub(at[i-1]); gap < 500*time.Millisecond {
-			t.Fatalf("connections %d and %d opened %v apart, want at least the 500ms backoff", i, i+1, gap)
-		}
-	}
+	requireBackoff(t, at)
 	if got := h.cursor(); got != 7777 {
 		t.Fatalf("saved cursor = %d, want 7777", got)
 	}
@@ -635,11 +641,7 @@ func TestAResetFrameWithoutAPositionKeepsTheCursorAndBacksOff(t *testing.T) {
 			t.Fatalf("connection %d asked after %q, want the kept cursor 42", i+1, a)
 		}
 	}
-	for i := 1; i < len(at); i++ {
-		if gap := at[i].Sub(at[i-1]); gap < 500*time.Millisecond {
-			t.Fatalf("connections %d and %d opened %v apart, want at least the 500ms backoff", i, i+1, gap)
-		}
-	}
+	requireBackoff(t, at)
 }
 
 func (h *harness) cursorPath() string {

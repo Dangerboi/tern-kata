@@ -120,6 +120,9 @@ type jobSchedule struct {
 	why      string // the definition's trigger can't be scheduled
 	through  time.Time
 	date     time.Time   // the instant an Issue-date trigger last fired at, the zero time when its Issue has none
+	// dateSeen is true once a planning-date read succeeded: date is then an observed baseline (possibly known-absent),
+	// not just the zero value of a read that never happened.
+	dateSeen bool
 	pending  []time.Time // occurrences to run, oldest first
 	next     time.Time
 	lastErr  string
@@ -132,6 +135,7 @@ type checkpoint struct {
 	DefinitionEventUID string      `json:"definition_event_uid"`
 	Through            time.Time   `json:"through"`
 	Date               time.Time   `json:"date,omitzero"` // the Issue-date trigger's instant the pending work belongs to
+	DateSeen           bool        `json:"date_seen,omitempty"`
 	Pending            []time.Time `json:"pending,omitempty"`
 }
 
@@ -153,7 +157,7 @@ func (w *Worker) loadCheckpoint(ps *projectState, jobUID string) (checkpoint, bo
 }
 
 func (w *Worker) saveCheckpoint(ps *projectState, jobUID string, st *jobSchedule) {
-	raw, _ := json.Marshal(checkpoint{Version: 1, DefinitionEventUID: st.defEvent, Through: st.through, Date: st.date, Pending: st.pending})
+	raw, _ := json.Marshal(checkpoint{Version: 1, DefinitionEventUID: st.defEvent, Through: st.through, Date: st.date, DateSeen: st.dateSeen, Pending: st.pending})
 	path := w.checkpointPath(ps, jobUID)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err == nil {
 		err = replaceFile(path, raw)
@@ -214,6 +218,7 @@ func (w *Worker) plan(ps *projectState, job Job, now time.Time) {
 		ps.sched[job.UID] = st
 		if c, ok := w.loadCheckpoint(ps, job.UID); ok {
 			st.defEvent, st.through, st.date, st.pending = c.DefinitionEventUID, c.Through, c.Date, c.Pending
+			st.dateSeen = c.DateSeen || !c.Date.IsZero()
 		}
 	}
 	changed := false
@@ -223,13 +228,21 @@ func (w *Worker) plan(ps *projectState, job Job, now time.Time) {
 	}
 	dateChanged := false
 	if job.Definition.Trigger.isIssueDate() {
-		if at, known := w.issueDate(ps, job); known && !at.Equal(st.date) {
+		at, known := w.issueDate(ps, job)
+		if known && !st.dateSeen {
+			// The first successful read is the baseline, never a change: a read that failed before it must not make a
+			// date that was already there look like one that just moved.
+			st.dateSeen, changed = true, true
+			if !at.Equal(st.date) {
+				st.pending, st.date, dateChanged = nil, at, true
+			}
+		} else if known && !at.Equal(st.date) {
 			// The Issue's date moved: work waiting for the old value is stale, and an earlier date that is already
 			// behind the checkpoint is evaluated again under the catchup policy.
 			if len(st.pending) > 0 {
 				w.opt.Log("Project %s: the date of job %s changed; %d waiting occurrence(s) dropped", ps.cfg.Name, job.Name, len(st.pending))
 			}
-			if !firstSight && !at.IsZero() && at.Before(st.through) {
+			if !at.IsZero() && at.Before(st.through) {
 				st.through = at.Add(-time.Nanosecond)
 			}
 			st.pending, st.date, changed, dateChanged = nil, at, true, true
