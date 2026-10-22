@@ -267,3 +267,31 @@ func TestUOnARunThatIsNotHeldSaysSo(t *testing.T) {
 	}
 	wantText(t, "refusal", got.State.Model.Notice, "not held")
 }
+
+func TestACancelsARunningRunOfThisMachineAndUStillNeedsAHeldOne(t *testing.T) {
+	running := model.LocalRun{UID: "R1", Project: "work", Job: "Triage", State: "running", Attempt: 1, Abandonable: true}
+	kataRun := workflowRun("R1")
+	kataRun.ExecutorLabel = "laptop"
+	out := localRunsPane(t, servingWorker(running), kataRun)
+
+	cancelled := step(t, out.State, key("shift+a"))
+	if len(cancelled.Cmds) != 1 || cancelled.Cmds[0] != (model.AbandonLocalRun{UID: "R1"}) {
+		t.Fatalf("A on a running run: cmds %#v, want the worker asked to cancel it", cancelled.Cmds)
+	}
+	wantText(t, "inspector", inspectorText(t, out.State), "A cancels the run")
+	moved := step(t, cancelled.State, model.LocalRunMoved{UID: "R1", State: "cancelling"})
+	wantText(t, "notice", moved.State.Model.Notice, "Cancelling the run")
+
+	resumed := step(t, out.State, key("u"))
+	if len(resumed.Cmds) != 0 {
+		t.Errorf("u on a running run sent %#v", resumed.Cmds)
+	}
+	wantText(t, "refusal", resumed.State.Model.Notice, "not held")
+
+	// A running run the worker would not cancel (a settled one) is refused.
+	settled := model.LocalRun{UID: "R1", State: "succeeded", Attempt: 1}
+	out = localRunsPane(t, servingWorker(settled), finishedRun("R1"))
+	if got := step(t, out.State, key("shift+a")); len(got.Cmds) != 0 {
+		t.Errorf("A on a settled run sent %#v", got.Cmds)
+	}
+}
