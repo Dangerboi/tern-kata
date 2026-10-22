@@ -502,6 +502,23 @@ func TestEditingAWorkflowJobAndANotifyJobPrefillsThem(t *testing.T) {
 	}
 }
 
+func TestEditingADeadlineNotifyJobThatNotifiesAnotherIssueKeepsBothIssues(t *testing.T) {
+	job := promptJob("J5", "On the day")
+	job.Definition.Trigger = model.CronTrigger{Kind: model.TriggerIssueDeadline, IssueUID: "ISSUE2", LeadSeconds: 3600}
+	job.Definition.Action = model.CronAction{Kind: model.ActionNotify, Recipient: "current-owner-or-author"}
+	job.Definition.Issue = &model.CronIssuePolicy{Kind: model.IssueExisting, UID: "ISSUE3"}
+	s := editedJob(t, job)
+	wantText(t, "card", cardText(t, s), "ISSUE2", "ISSUE3")
+	save := saved(t, s)
+	if save.IssueRef != "ISSUE2" || save.ReportRef != "ISSUE3" || save.Definition.Issue == nil || save.Definition.Issue.Kind != model.IssueExisting {
+		t.Fatalf("save %+v issue %+v, want the trigger's Issue and the notified one kept apart", save, save.Definition.Issue)
+	}
+	// Blank, it falls back to the trigger's own Issue: the policy goes.
+	if save := saved(t, set(t, s, model.JobFieldReport, "")); save.ReportRef != "" || save.Definition.Issue != nil {
+		t.Fatalf("save %+v issue %+v", save, save.Definition.Issue)
+	}
+}
+
 func TestAWorkflowJobWhoseWorkflowWasArchivedShowsItAndRefusesToSave(t *testing.T) {
 	job := promptJob("J3", "Release")
 	job.Definition.Action = model.CronAction{Kind: model.ActionExecute, WorkflowUID: "W3"}

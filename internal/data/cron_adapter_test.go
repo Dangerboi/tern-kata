@@ -11,18 +11,19 @@ import (
 	"go.kenn.io/kata/pkg/client"
 )
 
-func (f *jobsFixture) create(t *testing.T, name string, def model.CronDefinition, issueRef string) model.JobWritten {
+func (f *jobsFixture) create(t *testing.T, name string, def model.CronDefinition, triggerRef, reportRef string) model.JobWritten {
 	t.Helper()
 	uid, err := client.NewCronUID()
 	if err != nil {
 		t.Fatal(err)
 	}
-	return f.save(t, model.SaveJobCmd{UID: uid, Name: name, Definition: def, IssueRef: issueRef})
+	return f.save(t, model.SaveJobCmd{UID: uid, Name: name, Definition: def, IssueRef: triggerRef, ReportRef: reportRef})
 }
 
 func TestGatewayCreatesAdapterJobsKataAcceptsAndEachRoundTrips(t *testing.T) {
 	f := newJobsFixture(t)
 	issue := createIssue(t, f.gateway, f.workspace, f.demo, "Release 1.0")
+	other := createIssue(t, f.gateway, f.workspace, f.demo, "Weekly report")
 	workflow := saveWorkflow(t, f.gateway, f.workspace, f.demo, "", "", reviewThenTest).Workflow
 	if workflow == nil {
 		t.Fatal("no workflow to run")
@@ -58,6 +59,12 @@ func TestGatewayCreatesAdapterJobsKataAcceptsAndEachRoundTrips(t *testing.T) {
 		Action:  model.CronAction{Kind: model.ActionExecute, Prompt: "start on the day"},
 		Issue:   &model.CronIssuePolicy{Kind: model.IssueExisting},
 	}
+	notifyOther := model.CronDefinition{
+		Enabled: true, Overlap: "allow", Catchup: model.CatchupLatest,
+		Trigger: model.CronTrigger{Kind: model.TriggerIssueDeadline},
+		Action:  model.CronAction{Kind: model.ActionNotify, Recipient: "current-owner-or-author"},
+		Issue:   &model.CronIssuePolicy{Kind: model.IssueExisting},
+	}
 	manual := model.CronDefinition{
 		Enabled: true, Overlap: "forbid", Catchup: model.CatchupLatest,
 		Trigger: model.CronTrigger{Kind: model.TriggerManual},
@@ -68,22 +75,28 @@ func TestGatewayCreatesAdapterJobsKataAcceptsAndEachRoundTrips(t *testing.T) {
 	for _, tt := range []struct {
 		name  string
 		def   model.CronDefinition
-		ref   string
-		kind  string
+		// ref is the Issue the trigger or the policy names; report is a notify job's own Issue when its trigger fires on another's.
+		ref, report string
+		kind        string
 		wantD func(model.CronDefinition) model.CronDefinition
 	}{
-		{"prompt", prompt, "", model.KindAgentPrompt, nil},
-		{"workflow", byWorkflow, issue, model.KindWorkflow, func(d model.CronDefinition) model.CronDefinition { d.Issue.UID = issue; return d }},
-		{"notify", notify, issue, model.KindNotify, func(d model.CronDefinition) model.CronDefinition { d.Issue.UID = issue; return d }},
-		{"deadline", deadline, issue, model.KindNotify, func(d model.CronDefinition) model.CronDefinition { d.Trigger.IssueUID = issue; return d }},
-		{"scheduled", scheduled, issue, model.KindAgentPrompt, func(d model.CronDefinition) model.CronDefinition {
+		{"prompt", prompt, "", "", model.KindAgentPrompt, nil},
+		{"workflow", byWorkflow, issue, "", model.KindWorkflow, func(d model.CronDefinition) model.CronDefinition { d.Issue.UID = issue; return d }},
+		{"notify", notify, issue, "", model.KindNotify, func(d model.CronDefinition) model.CronDefinition { d.Issue.UID = issue; return d }},
+		{"deadline", deadline, issue, "", model.KindNotify, func(d model.CronDefinition) model.CronDefinition { d.Trigger.IssueUID = issue; return d }},
+		{"scheduled", scheduled, issue, "", model.KindAgentPrompt, func(d model.CronDefinition) model.CronDefinition {
 			d.Trigger.IssueUID = issue
 			d.Issue.UID = issue
 			return d
 		}},
-		{"manual", manual, "", model.KindAgentPrompt, nil},
+		{"deadline of one Issue notifying another", notifyOther, issue, other, model.KindNotify, func(d model.CronDefinition) model.CronDefinition {
+			d.Trigger.IssueUID = issue
+			d.Issue.UID = other
+			return d
+		}},
+		{"manual", manual, "", "", model.KindAgentPrompt, nil},
 	} {
-		written := f.create(t, "Job "+tt.name, tt.def, tt.ref)
+		written := f.create(t, "Job "+tt.name, tt.def, tt.ref, tt.report)
 		if written.Err != nil || written.Job == nil || written.Op != model.JobCreated {
 			t.Fatalf("%s: create %+v", tt.name, written)
 		}
@@ -127,11 +140,11 @@ func TestGatewayRefusesAnAdapterJobKataRejectsAndNamesTheIssueThatDoesNotExist(t
 		Action:  model.CronAction{Kind: model.ActionExecute, Prompt: "run"},
 		Issue:   &model.CronIssuePolicy{Kind: model.IssueExisting},
 	}
-	if refused := f.create(t, "Deadline run", execute, issue); refused.Err == nil || !strings.Contains(refused.Err.Error(), "notification-only") {
+	if refused := f.create(t, "Deadline run", execute, issue, ""); refused.Err == nil || !strings.Contains(refused.Err.Error(), "notification-only") {
 		t.Fatalf("an executing deadline job: %+v", refused)
 	}
 	execute.Trigger = model.CronTrigger{Kind: model.TriggerIssueScheduled}
-	if refused := f.create(t, "Scheduled run", execute, "zzzz"); refused.Err == nil || !strings.Contains(refused.Err.Error(), `Target Issue: no Issue "zzzz"`) {
+	if refused := f.create(t, "Scheduled run", execute, "zzzz", ""); refused.Err == nil || !strings.Contains(refused.Err.Error(), `Target Issue: no Issue "zzzz"`) {
 		t.Fatalf("an Issue that does not exist: %+v", refused)
 	}
 	if jobs := f.list(t, false).Jobs; len(jobs) != 0 {

@@ -45,10 +45,20 @@ func (c *Client) SaveJob(ctx context.Context, cmd model.SaveJobCmd) (model.JobWr
 			def.Trigger.IssueUID = issue
 		}
 		if def.Issue != nil && def.Issue.Kind == model.IssueExisting {
+			// Kata makes a job that executes report to the Issue its trigger fires on.
 			policy := *def.Issue
 			policy.UID = issue
 			def.Issue = &policy
 		}
+	}
+	if cmd.ReportRef != "" && def.Issue != nil && def.Issue.Kind == model.IssueExisting {
+		issue, err := c.resolveIssue(ctx, cmd.ProjectID, cmd.ReportRef, "Notified Issue")
+		if err != nil {
+			return model.JobWritten{}, err
+		}
+		policy := *def.Issue
+		policy.UID = issue
+		def.Issue = &policy
 	}
 	body := g.PutCronJobBody{Actor: &cmd.Actor, Name: cmd.Name, Definition: wireDefinition(def)}
 	op := model.JobCreated

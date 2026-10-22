@@ -50,6 +50,7 @@ const (
 	JobFieldInterval     Field = "interval"
 	JobFieldAt           Field = "at"
 	JobFieldIssue        Field = "issue"
+	JobFieldReport       Field = "report"
 	JobFieldLead         Field = "lead"
 	JobFieldParent       Field = "parent"
 	JobFieldPrompt       Field = "prompt"
@@ -77,7 +78,7 @@ const (
 // it stands is JobFormState.Shows; tab skips the others.
 var JobFields = []FieldSpec{
 	{JobFieldKind, false}, {JobFieldName, true}, {JobFieldTrigger, false},
-	{JobFieldCron, true}, {JobFieldZone, true}, {JobFieldInterval, true}, {JobFieldAt, true}, {JobFieldIssue, true}, {JobFieldLead, true},
+	{JobFieldCron, true}, {JobFieldZone, true}, {JobFieldInterval, true}, {JobFieldAt, true}, {JobFieldIssue, true}, {JobFieldReport, true}, {JobFieldLead, true},
 	{JobFieldParent, true},
 	{JobFieldPrompt, true}, {JobFieldWorkflow, false}, {JobFieldProfile, true}, {JobFieldProfilePick, false},
 	{JobFieldCheckout, true}, {JobFieldCheckoutPick, false}, {JobFieldSecrets, true},
@@ -96,6 +97,7 @@ var jobFieldTitles = map[Field]string{
 	JobFieldInterval:     "Interval (seconds, or 15m, 2h; a recurring child needs 60 s or more)",
 	JobFieldAt:           "Once at (full RFC 3339 instant, like 2026-11-01T09:00:00+01:00)",
 	JobFieldIssue:        "Target Issue (short id)",
+	JobFieldReport:       "Other Issue to notify about (short id, blank: the trigger's Issue)",
 	JobFieldLead:         "Lead before the deadline (seconds, or 2h, 1d; blank: at the deadline)",
 	JobFieldParent:       "Parent Issue (short id)",
 	JobFieldPrompt:       "Prompt (Enter adds a line)",
@@ -336,8 +338,10 @@ type JobFormState struct {
 	Kind, Trigger                                              string
 	Name, Cron, Zone, Interval, Parent, Title, Body, Recipient string
 	Message, Grace                                             string
-	// At is a once trigger's instant, Issue the Issue an Issue-date trigger or an existing-Issue policy names, Lead the deadline lead.
-	At, Issue, Lead string
+	// At is a once trigger's instant, Issue the Issue an Issue-date trigger fires on or an existing-Issue policy names (kata makes
+	// them one Issue for a job that executes), Report the Issue a notify job with an Issue-date trigger notifies about instead
+	// of the trigger's own, Lead the deadline lead.
+	At, Issue, Report, Lead string
 	// Prompt, Workflow (a uid), Profile, Checkout and Secrets are an execute job's; Secrets is "ENV=source" pairs.
 	Prompt, Workflow, Profile, Checkout, Secrets string
 	// Policy is the Issue policy's kind, Scheduled and DeadlineOffset the per-run Issue's date offsets, Timeout the run's limit.
@@ -398,6 +402,8 @@ func (f *JobFormState) text(name Field) *string {
 		return &f.At
 	case JobFieldIssue:
 		return &f.Issue
+	case JobFieldReport:
+		return &f.Report
 	case JobFieldLead:
 		return &f.Lead
 	case JobFieldParent:
@@ -683,18 +689,25 @@ func (f JobFormState) buildTrigger() (CronTrigger, error) {
 	return t, f.kind().checkTrigger(t)
 }
 
-// JobTerms is what the card sends once it reads clean. IssueRef is the reference of the Issue the trigger or the policy names,
-// which the gateway turns into its uid; ParentRef is the same for a native job's parent.
+// JobTerms is what the card sends once it reads clean. IssueRef is the reference of the Issue the trigger or the policy names and
+// ReportRef that of a notify job's own Issue when its trigger fires on another's date, which the gateway turns into uids;
+// ParentRef is the same for a native job's parent.
 type JobTerms struct {
 	Name       string
 	Definition CronDefinition
 	ParentRef  string
 	IssueRef   string
+	ReportRef  string
 }
 
 // issueRef is the Issue reference the card holds, without the # a short id may carry.
 func (f JobFormState) issueRef() string {
 	return strings.TrimPrefix(strings.TrimSpace(f.Issue), "#")
+}
+
+// reportRef is the Issue reference of a notify job's own Issue under an Issue-date trigger, without the # a short id may carry.
+func (f JobFormState) reportRef() string {
+	return strings.TrimPrefix(strings.TrimSpace(f.Report), "#")
 }
 
 // terms reads the card into the terms it would send, or says what is wrong with it, naming the field. Nothing leaves the card
@@ -722,6 +735,9 @@ func (f JobFormState) terms() (JobTerms, error) {
 	terms := JobTerms{Name: name, Definition: def, ParentRef: parentRef}
 	if DateTrigger(trigger.Kind) || (def.Issue != nil && def.Issue.Kind == IssueExisting) {
 		terms.IssueRef = f.issueRef()
+	}
+	if def.Issue != nil && DateTrigger(trigger.Kind) {
+		terms.ReportRef = f.reportRef()
 	}
 	return terms, nil
 }
@@ -795,7 +811,7 @@ func submitJob(m Model) (Model, []Cmd) {
 		}
 		return m, nil
 	}
-	cmd := SaveJobCmd{Workspace: m.Workspace, ProjectID: f.ProjectID, Actor: m.Actor, UID: f.UID, Name: terms.Name, Definition: terms.Definition, ParentRef: terms.ParentRef, IssueRef: terms.IssueRef}
+	cmd := SaveJobCmd{Workspace: m.Workspace, ProjectID: f.ProjectID, Actor: m.Actor, UID: f.UID, Name: terms.Name, Definition: terms.Definition, ParentRef: terms.ParentRef, IssueRef: terms.IssueRef, ReportRef: terms.ReportRef}
 	if f.Change {
 		cmd.ExpectedEventUID = f.Opened.DefinitionEventUID
 		if !f.Opened.Definition.Enabled && terms.Definition.Enabled && parentOpen(f.Opened) {

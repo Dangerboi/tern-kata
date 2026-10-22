@@ -36,8 +36,9 @@ type SaveJobCmd struct {
 	// that Definition.Issue.ParentUID takes. Empty on a replace, which keeps the parent.
 	ParentRef string
 	// IssueRef names the Issue an Issue-date trigger or an existing-Issue policy points at; the Daemon gateway resolves it to the
-	// uid that Definition.Trigger.IssueUID and Definition.Issue.UID take.
-	IssueRef string
+	// uid that Definition.Trigger.IssueUID and Definition.Issue.UID take (kata makes them one Issue for a job that executes).
+	// ReportRef names the Issue a notify job's existing-Issue policy has when its Issue-date trigger fires on another Issue's date.
+	IssueRef, ReportRef string
 }
 
 func (SaveJobCmd) cmd() {}
