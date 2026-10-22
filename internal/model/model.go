@@ -14,25 +14,25 @@ type Issue struct {
 	ClosedReason        *string
 	CreatedAt           time.Time
 	// CronOccurrence is set on an Issue a Cron job made.
-	CronOccurrence      *CronOccurrence
-	DeadlineOnDate      *string
-	ID                  int64
-	Labels              []string
-	Metadata            map[string]any
-	Owner               *string
-	Priority            *int64
-	ProjectID           int64
-	ProjectName         string
-	ProjectUID          *string
-	QualifiedID         string
-	RecurrenceID        *int64
-	Revision            int64
-	ScheduledOnDate     *string
-	ShortID             string
-	Status              string
-	Title               string
-	UID                 string
-	UpdatedAt           time.Time
+	CronOccurrence  *CronOccurrence
+	DeadlineOnDate  *string
+	ID              int64
+	Labels          []string
+	Metadata        map[string]any
+	Owner           *string
+	Priority        *int64
+	ProjectID       int64
+	ProjectName     string
+	ProjectUID      *string
+	QualifiedID     string
+	RecurrenceID    *int64
+	Revision        int64
+	ScheduledOnDate *string
+	ShortID         string
+	Status          string
+	Title           string
+	UID             string
+	UpdatedAt       time.Time
 }
 
 // IsClosed says the Issue is closed; any other status counts as open.

@@ -28,9 +28,9 @@ func TestGatewayTranslatesACronMadeIssuesOccurrence(t *testing.T) {
 
 func TestGatewayAnIssueWithoutOccurrenceMetadataIsNotCronMade(t *testing.T) {
 	for name, metadata := range map[string]map[string]any{
-		"none":         nil,
-		"other keys":   {"cron.progress.01JOB": map[string]any{"anchor": "2026-10-22T14:00:00Z"}},
-		"no job":       {"cron.occurrence": map[string]any{"version": 1.0}},
+		"none":          nil,
+		"other keys":    {"cron.progress.01JOB": map[string]any{"anchor": "2026-10-22T14:00:00Z"}},
+		"no job":        {"cron.occurrence": map[string]any{"version": 1.0}},
 		"not an object": {"cron.occurrence": "x"},
 	} {
 		if got := translateIssue(&g.UIIssue{Metadata: metadata}); got.CronMade() {

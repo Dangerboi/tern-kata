@@ -32,9 +32,9 @@ type DetailItem struct {
 	ReferenceKey string
 	Child        ChildRow
 	// JobUID and Cron are a RowCron row's job and what the property says of it; enter opens the job on the Jobs Page.
-	JobUID string
-	Cron   CronRow
-	Activity     DetailRow
+	JobUID   string
+	Cron     CronRow
+	Activity DetailRow
 }
 
 func (t ActivityTab) kind() RowKind { return tabTable[t].kind }
