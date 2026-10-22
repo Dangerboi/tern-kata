@@ -146,12 +146,12 @@ executor = ` + tomlString(executorName(host)) + `
 # Identity of runs when a Project names none; the default is shown.
 # actor = ` + tomlString(actor) + `
 
-# Worker-wide limits; the values shown are the defaults.
+# Worker-wide limits.
 # [limits]
-# max_active_runs = 4
-# default_timeout = "2h"
-# max_timeout = "8h"
-# max_run_prompts = 12
+# max_active_runs = 4      # example; unset = each Project's capacity only
+# default_timeout = "2h"   # the default
+# max_timeout = "8h"       # the default
+# max_run_prompts = 12     # the default
 
 # A Project's jobs may use only the checkouts listed here.
 ` + projectBlock(project, key) + `
