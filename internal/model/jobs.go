@@ -362,7 +362,7 @@ func enterJobs(m Model) (Model, []Cmd) {
 	}
 	m.Jobs.stale = true
 	m, ask := m.askWorker(0)
-	return m, append(cmds, ask)
+	return m, append(cmds, ask, LoadWorkerSetup{Workspace: m.Workspace})
 }
 
 // jobsOff leaves the Jobs Page for the Issues Page, the keys on the list, and gives the detail column back.
@@ -464,7 +464,7 @@ func toggleArchivedJobs(m Model) Model {
 func reloadJobs(m Model) (Model, []Cmd) {
 	m.Jobs.stale = true
 	m, cmd := m.askWorker(0)
-	return m, []Cmd{cmd}
+	return m, []Cmd{cmd, LoadWorkerSetup{Workspace: m.Workspace}}
 }
 
 // focusInspector is enter on the job list: the inspector takes the keys.

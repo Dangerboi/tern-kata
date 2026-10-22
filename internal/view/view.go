@@ -111,6 +111,8 @@ func Render(m model.Model, now time.Time) tern.View {
 		layer = projectLayer(m)
 	case model.CardLanes:
 		layer = lanesLayer(m)
+	case model.CardWorker:
+		layer = workerLayer(m)
 	case model.CardFilter:
 		layer = filterLayer(m)
 	case model.CardPicker:

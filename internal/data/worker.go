@@ -119,7 +119,7 @@ func execTern(ctx context.Context, args []string) ([]byte, error) {
 }
 
 func translateWorkerStatus(s worker.Status) model.WorkerStatus {
-	out := model.WorkerStatus{Executor: s.Executor}
+	out := model.WorkerStatus{Executor: s.Executor, PID: s.PID, Supervised: s.Supervisor != "", Stopping: s.Stopping, InFlight: s.InFlight}
 	for _, p := range s.Projects {
 		project := model.WorkerProject{Name: p.Name, Admitting: p.Admitting, Why: p.Why, InUse: p.InUse, Capacity: p.Capacity}
 		if len(p.Aside) > 0 {

@@ -91,6 +91,7 @@ type Model struct {
 	Picker           PickerState
 	ProjectForm      ProjectFormState
 	LanesForm        LanesFormState
+	WorkerCard       WorkerCardState
 	Focus            Column
 	Groups           []IssueGroup
 	Calendar         PaneCalendar
@@ -235,6 +236,12 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m = runShown(m, msg)
 	case WorkerLoaded:
 		return workerLoaded(m, msg)
+	case WorkerSetupLoaded:
+		m = workerSetupLoaded(m, msg)
+	case WorkerSetupSaved:
+		return workerSetupSaved(m, msg)
+	case WorkerStopped:
+		return workerStopped(m, msg)
 	case LocalRunLoaded:
 		m = localRunLoaded(m, msg)
 	case JobRunRequested:

@@ -273,6 +273,20 @@ func popupCards() []popupCard {
 			text:  func(m model.Model, _ model.Field) string { return m.LanesForm.Text },
 		},
 		{
+			name: "Worker", card: model.CardWorker, textField: model.WorkerFieldExecutor,
+			tabOrder: []model.Field{model.WorkerFieldExecutor, model.WorkerFieldActor, model.WorkerFieldCommand, model.WorkerFieldModel, model.WorkerFieldThinking, model.WorkerFieldTrust},
+			states: []cardState{{"", func() model.Model {
+				m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo", Host: "laptop", Actor: "dana"}, model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, model.SnapshotLoaded{})
+				m, _ = clickPress(m, "3", "shift+w")
+				m, _ = model.Update(m, model.WorkerSetupLoaded{Setup: model.WorkerSetup{Project: "work", Checkout: "/repo", Path: "/cfg/worker.toml"}})
+				m, _ = clickPress(m, "ctrl+u")
+				return m
+			}, model.ModeWorkerCard}},
+			graft: func(dst *model.Model, src model.Model) { dst.WorkerCard, dst.Worker = src.WorkerCard, src.Worker },
+			field: func(m model.Model) model.Field { return m.WorkerCard.Field },
+			text:  func(m model.Model, _ model.Field) string { return m.WorkerCard.Executor },
+		},
+		{
 			name: "Filter form", card: model.CardFilter, textField: model.FilterOwner,
 			tabOrder: []model.Field{model.FilterProject, model.FilterStatus, model.FilterOwner, model.FilterLabel, model.FilterRelationship},
 			states:   []cardState{{"", opened("f"), model.ModeFilterForm}},

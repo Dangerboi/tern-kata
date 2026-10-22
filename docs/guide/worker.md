@@ -46,7 +46,7 @@ Adds the current Project to an existing `worker.toml`. It refuses when there is 
 - puts the checkout line inside the existing `[checkouts]` table, creating the table at the end when absent;
 - leaves every other line and comment byte for byte unchanged.
 
-A running worker reads `worker.toml` only at start. After `worker add`, run `tern-kata worker stop` and the plugin starts a fresh one (see [Stopping the worker](#stopping-the-worker)).
+A running worker reads `worker.toml` only at start. After `worker add`, run `tern-kata worker stop` and the plugin starts a fresh one (see [Stopping the worker](#stopping-the-worker)). The Pane does the same from [the Worker card](#the-worker-card).
 
 ### The checkout key
 
@@ -85,6 +85,20 @@ checkouts = ["acme-infra"]
 ```
 
 Each `[[projects]]` block lists its own checkout only, so a job in `acme-shop` cannot name the `acme-infra` directory. `worker add` appends its `[[projects]]` block at the end of the file; TOML lets the array of tables sit after other tables, and the `[checkouts]` line is added to the existing table. Every key is described in the [worker reference](worker-reference.md#workertoml).
+
+## The Worker card
+
+In the Pane, `W` on the Jobs Page (from the list or the inspector) opens the Worker card for the Project the Pane's folder is bound to. It reads this machine once and asks the worker for its status, then shows:
+
+- whether `worker.toml` exists, whether the worker's own loader accepts it (or why not), and whether it lists the Project, with the checkout it maps (the folder holding `.kata.toml`);
+- whether a worker runs, with its process id, executor and runs in flight;
+- whether the plugin supervises it, or `worker.manual` turned that off.
+
+With no `worker.toml` the card offers **Set up**: executor, actor, command, model and thinking, prefilled as `tern-kata worker init` would. With a file that loads but does not list the Project it offers **Serve this Project**, which does what `worker add` does. Both show the checkout and the trust note, and save only when the trust choice is Yes (it starts at No; space, left and right or a click change it). They write through the same checked write as the commands, so a value the loader refuses is named (the card puts focus on that field) and the input stays. A file that does not load is only shown, never written over; a folder bound to no Project gets a message and no fields. Esc closes the card.
+
+After a save, with a worker running, the card asks how to restart it, since it reads `worker.toml` only at start: **when idle** (`i` or enter, the default) sends the stop request that refuses new work and exits once the runs in flight finish, and **now** (`n`) ends it at once and holds the runs it interrupts `interrupted`; the card names the runs in flight. Esc leaves the worker running. The plugin then starts a fresh worker when it supervises this one; the card's notice says so, or says that nothing will. With no worker running, the card says the plugin starts one within 10 seconds, or, under `worker.manual`, that you start it.
+
+The Jobs Page banner says per state what is missing (no file, a file that does not load, a Project not listed, no worker running, `worker.manual`) and points at `W`.
 
 ## Commands
 

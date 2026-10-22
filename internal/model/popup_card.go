@@ -47,6 +47,7 @@ const (
 	CardBackfill
 	CardProject
 	CardLanes
+	CardWorker
 	CardFilter
 	CardPicker
 )
@@ -224,6 +225,25 @@ func init() {
 			fields: LanesFields, focus: func(m *Model) *Field { return &m.LanesForm.Field },
 			locked: func(m Model) bool { return m.LanesForm.Saving },
 			caret:  func(m Model) (Field, bool) { return m.LanesForm.Field, !m.LanesForm.Saving },
+		},
+		{
+			card: CardWorker, open: func(m Model) bool { return m.WorkerCard.Open },
+			modes: []Mode{ModeWorkerCard, ModeWorkerRestart},
+			mode: func(m Model) Mode {
+				if m.WorkerCard.Restart {
+					return ModeWorkerRestart
+				}
+				return ModeWorkerCard
+			},
+			key:    workerCardKey,
+			fields: WorkerFields, focus: func(m *Model) *Field { return &m.WorkerCard.Field },
+			locked: func(m Model) bool { return m.WorkerCard.Saving || m.WorkerCard.Stopping || m.WorkerCard.Restart },
+			hidden: func(m Model, name Field) bool { return !m.WorkerCardShows(name) },
+			choose: func(m Model, i int) Model { m.WorkerCard.choose(i); return m },
+			caret: func(m Model) (Field, bool) {
+				f := m.WorkerCard
+				return f.Field, !f.Saving && !f.Stopping && !f.Restart && m.WorkerCardShows(f.Field) && takesText(WorkerFields, f.Field)
+			},
 		},
 		{
 			card: CardFilter, open: func(m Model) bool { return m.FilterForm.Open },

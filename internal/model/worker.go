@@ -64,6 +64,13 @@ func (r LocalRun) Settled() bool {
 // WorkerStatus is what the worker answered to a status ask.
 type WorkerStatus struct {
 	Executor string
+	// PID is the worker's process id. Supervised says the plugin's host half started it and starts it again when it exits.
+	PID        int
+	Supervised bool
+	// Stopping is "idle" while the worker drains toward an exit and "now" once it was told to end at once; InFlight is the runs
+	// a drain waits for.
+	Stopping string
+	InFlight int
 	Projects []WorkerProject
 	Runs     []LocalRun
 }
@@ -162,8 +169,17 @@ type WorkerState struct {
 	Read, Running bool
 	Err           error
 	Executor      string
+	PID           int
+	Supervised    bool
+	Stopping      string
+	InFlight      int
 	Projects      []WorkerProject
 	Runs          []LocalRun
+	// Setup is the last read of this machine's worker.toml and the Pane folder's Binding; SetupRead says an answer arrived and
+	// SetupErr is a read that failed.
+	Setup     WorkerSetup
+	SetupRead bool
+	SetupErr  error
 	// Detail is the detail of the run last asked for; it is shown only while that run is selected.
 	Detail *LocalRunDetail
 	// request counts the status asks; asked is the run whose detail was asked for last and detailStale says a fresh status wants
@@ -193,8 +209,10 @@ func workerLoaded(m Model, msg WorkerLoaded) (Model, []Cmd) {
 	w.inflight, w.polling = false, false
 	w.Read, w.Running, w.Err = true, msg.Running, msg.Err
 	w.Executor, w.Projects, w.Runs = msg.Status.Executor, msg.Status.Projects, msg.Status.Runs
+	w.PID, w.Supervised, w.Stopping, w.InFlight = msg.Status.PID, msg.Status.Supervised, msg.Status.Stopping, msg.Status.InFlight
 	if !msg.Running {
 		w.Executor, w.Projects, w.Runs, w.Detail, w.asked = "", nil, nil, nil, ""
+		w.PID, w.Supervised, w.Stopping, w.InFlight = 0, false, "", 0
 	}
 	w.detailStale = true
 	if !m.OnRuns() || !m.runsRunning() {
@@ -297,15 +315,19 @@ func (m Model) workerUnsupported(uid string) string {
 }
 
 // WorkerLine is the Jobs Page's line about this machine's worker, and whether it is good news: whether the worker is running and
-// serves this Pane's Project. It is empty until the first answer arrives.
+// serves this Pane's Project. Where worker.toml was read for this Project, each state points at W. It is empty until the first
+// answer arrives.
 func (m Model) WorkerLine() (text string, ok bool) {
 	w := m.Worker
 	project := m.workerProjectName()
+	known := w.SetupRead && w.SetupErr == nil && w.Setup.Project == project
 	switch {
 	case !w.Read:
 		return "", false
 	case w.Err != nil:
 		return "Worker: " + w.Err.Error(), false
+	case !w.Running && known:
+		return m.stoppedWorkerLine(project), false
 	case !w.Running:
 		return "No worker is running on this machine; start one with `tern-kata worker`. Adapter jobs run only when one serves the Project.", false
 	}
@@ -316,9 +338,31 @@ func (m Model) WorkerLine() (text string, ok bool) {
 		if !p.Admitting {
 			return fmt.Sprintf("Worker %s serves %s but admits nothing: %s", w.Executor, project, p.Why), false
 		}
-		return fmt.Sprintf("Worker %s running and serving %s: %d of %d slots in use", w.Executor, project, p.InUse, p.Capacity), true
+		return fmt.Sprintf("Worker %s running and serving %s: %d of %d slots in use (W: worker)", w.Executor, project, p.InUse, p.Capacity), true
+	}
+	if known && !w.Setup.Lists {
+		return fmt.Sprintf("Worker %s is running but does not serve %s; press W to serve it, then restart the worker.", w.Executor, project), false
+	}
+	if known {
+		return fmt.Sprintf("Worker %s is running but does not serve %s, though worker.toml lists it; restart the worker to pick that up (W).", w.Executor, project), false
 	}
 	return fmt.Sprintf("Worker %s is running but does not serve %s; list the Project under [[projects]] in worker.toml.", w.Executor, project), false
+}
+
+// stoppedWorkerLine is the banner while no worker runs and worker.toml was read for the Project: what is missing, and W.
+func (m Model) stoppedWorkerLine(project string) string {
+	s := m.Worker.Setup
+	switch {
+	case !s.Exists:
+		return fmt.Sprintf("No worker is set up on this machine: press W to set one up for %s. Adapter jobs run only when a worker serves the Project.", project)
+	case s.LoadErr != "":
+		return "worker.toml does not load, so no worker can start: press W to see why."
+	case !s.Lists:
+		return fmt.Sprintf("worker.toml does not list %s, so no worker serves it: press W to serve it.", project)
+	case s.Manual:
+		return "No worker is running on this machine and worker.manual keeps the plugin from starting one: run `tern-kata worker` (W shows the setup)."
+	}
+	return "No worker is running on this machine yet; the plugin starts one within 10 seconds (W shows the setup)."
 }
 
 // runNowRefusal is why a job cannot be run now, from what the Pane already knows; empty when nothing is known against it.

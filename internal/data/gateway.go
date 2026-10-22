@@ -91,6 +91,12 @@ func (g *Gateway) Run(ctx context.Context, cmd model.Cmd, messages chan<- model.
 		result = loadWorkerPickers()
 	case model.LoadWorker:
 		result = g.loadWorker(ctx, cmd)
+	case model.LoadWorkerSetup:
+		result = g.loadWorkerSetup(cmd)
+	case model.SaveWorkerSetup:
+		result = g.saveWorkerSetup(cmd)
+	case model.StopWorker:
+		result = g.stopWorker(ctx, cmd)
 	case model.LoadLocalRun:
 		result = g.loadLocalRun(ctx, cmd)
 	case model.RunJobNow:

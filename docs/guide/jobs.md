@@ -33,6 +33,7 @@ A schedule that can't be read, or a next run that can't be worked out (a job tha
 | `ctrl+r` | Read the jobs again; they also reload when the daemon reports a change |
 | `r` | Open the Runs Page filtered to the selected job (see [Runs](runs.md)) |
 | `R` | Ask the worker to run the selected adapter job now |
+| `W` | Open the [Worker card](worker.md#the-worker-card): this machine's worker, set it up or serve the Project |
 
 ### What a card tells you
 
@@ -58,8 +59,9 @@ The parent's detail has a **Cron jobs** property listing its jobs with state, pa
 
 A line under the heading says whether **this machine's worker** runs and serves the Pane's Project:
 
-- no worker running (start one with `tern-kata worker`);
-- a worker that does not list the Project;
+- no worker set up, a `worker.toml` that does not load, or one that does not list the Project (the line says which and points at `W`);
+- no worker running yet (the plugin starts one, or `worker.manual` leaves it to you);
+- a worker that does not serve the Project;
 - a Project it serves but admits nothing for (the reason is the worker's, for instance another machine's lease);
 - the worker's executor label with its slots in use.
 

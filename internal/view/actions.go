@@ -186,6 +186,8 @@ func FieldID(card model.Card, name model.Field) string {
 		return ProjectInputID
 	case model.CardLanes:
 		return LanesFieldID(name)
+	case model.CardWorker:
+		return WorkerFieldID(name)
 	case model.CardFilter:
 		return FilterFieldID(name)
 	case model.CardPicker:

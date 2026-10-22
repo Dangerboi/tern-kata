@@ -51,12 +51,15 @@ func workerGateway(dirs worker.Dirs) *Gateway {
 }
 
 func TestWorkerStatusReachesThePaneAndNoWorkerIsNotAnError(t *testing.T) {
-	status := worker.Status{Executor: "laptop", Projects: []worker.ProjectStatus{{Name: "work", Admitting: true, Capacity: 2, InUse: 1}},
+	status := worker.Status{Executor: "laptop", PID: 4242, Supervisor: worker.SupervisorTern, Stopping: "idle", InFlight: 2, Projects: []worker.ProjectStatus{{Name: "work", Admitting: true, Capacity: 2, InUse: 1}},
 		Runs: []worker.RunStatus{{UID: "R1", State: "held: interrupted", Held: true, Hold: "interrupted", Detail: "stopped", Resumable: true, Abandonable: true}}}
 	dirs, _ := fakeWorker(t, map[string]worker.Response{"status": {OK: true, Status: &status}})
 	got := as[model.WorkerLoaded](t, run(t, workerGateway(dirs), model.LoadWorker{Request: 4}))
 	if !got.Running || got.Request != 4 || got.Err != nil || got.Status.Executor != "laptop" || len(got.Status.Projects) != 1 || !got.Status.Projects[0].Admitting {
 		t.Fatalf("status %+v", got)
+	}
+	if s := got.Status; s.PID != 4242 || !s.Supervised || s.Stopping != "idle" || s.InFlight != 2 {
+		t.Fatalf("process facts %+v", s)
 	}
 	if r := got.Status.Runs; len(r) != 1 || !r[0].Held || r[0].Hold != "interrupted" || !r[0].Resumable || !r[0].Abandonable {
 		t.Fatalf("runs %+v", r)

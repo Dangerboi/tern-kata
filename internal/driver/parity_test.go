@@ -337,6 +337,14 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 			s, _ := inputs(chord("b"), model.LanesLoaded{ProjectUID: "p"}, chord("shift+b"))(bound)
 			return s
 		}(), model.ModeLanesForm},
+		{"Worker setup", workerCardOpen(t, nil, noWorkerFile), model.ModeWorkerCard},
+		{"Worker serve", workerCardOpen(t, nil, otherProject), model.ModeWorkerCard},
+		{"Worker served", workerCardOpen(t, supervisedHere, listedProject), model.ModeWorkerCard},
+		{"Worker restart", func() driver.State {
+			s := step(t, workerCardOpen(t, supervisedHere, otherProject), key("space")).State
+			s = step(t, s, key("ctrl+o")).State
+			return step(t, s, model.WorkerSetupSaved{Serve: true, Project: "work", Key: "work"}).State
+		}(), model.ModeWorkerRestart},
 		{"Filter", pressed(issue, "f"), model.ModeFilterForm},
 		{"single field", pressed(issue, "+"), model.ModeFieldForm},
 		{"New Project", newProject(), model.ModeProjectForm},

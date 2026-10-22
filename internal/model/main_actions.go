@@ -214,6 +214,7 @@ var mainActions = []actionEntry{
 	{action: ArchiveJobAction, modes: jobsModes, keys: keys("x", "x"), help: "archive", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 15, "archive the selected job, or restore it when it is archived (press a to list them)"}}, handle: archiveJob},
 	{action: NewIssueJobAction, modes: issueModes, keys: keys("shift+j", "J"), help: "job", sheet: []sheetLine{{sheetJobs, 16, "new native job on the selected Issue (Job card)"}}, handle: openIssueJob},
 	{action: RunsOfJob, modes: []Mode{ModeJobs, ModeJobInspector}, keys: keys("r", "r"), help: "runs", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 11, "open the Runs Page on the job's runs"}}, handle: runsOfJob},
+	{action: OpenWorkerCard, modes: jobsModes, keys: keys("shift+w", "W"), help: "worker", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 18, "this machine's worker: set it up or serve the Project (Worker card)"}}, handle: openWorkerCard},
 	// Runs Page: the Project's Runs newest first, with the selected Run's detail beside them.
 	{action: RunJobNowAction, modes: jobsModes, keys: keys("shift+r", "R"), help: "run now", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 17, "run the selected adapter job now on this machine's worker"}}, handle: runJobNow},
 	{action: OpenRunSessionAction, modes: runsModes, keys: keys("o", "o"), help: "session", footer: runsModes, sheet: []sheetLine{{sheetRuns, 13, "open the run's omp session in a new Tern tab (this machine's finished or held runs)"}}, handle: openRunSession},
