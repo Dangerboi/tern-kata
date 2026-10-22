@@ -4,10 +4,15 @@ package worker_test
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/worker"
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
@@ -74,4 +79,101 @@ func TestAHeldRunWhoseProcessGroupIsStillPresentWaitsUntilItIsGone(t *testing.T)
 		run, _ := h.kata.Kata.ShowRun(context.Background(), h.proj.ID, uid)
 		return run.Status == "succeeded"
 	})
+}
+
+// A command step whose leader ends on SIGTERM but whose child ignores it and has let go of the output pipes: the group
+// outlives the first signal, and the command's wait ends without it.
+const stubbornCommand = "(trap '' TERM; exec >/dev/null 2>&1; sleep 300 & echo $! > child.pid; wait) & exec sleep 300"
+
+// stubbornChild is the pid the stubborn command's child recorded; it kills it when the test ends.
+func (h *harness) stubbornChild() int {
+	h.t.Helper()
+	var pid int
+	h.eventually("the command's child to record its pid", func() bool {
+		raw, err := os.ReadFile(filepath.Join(h.repo, "child.pid"))
+		pid, err = strconv.Atoi(strings.TrimSpace(string(raw)))
+		return err == nil && pid > 0
+	})
+	h.t.Cleanup(func() { _ = syscall.Kill(pid, syscall.SIGKILL) })
+	return pid
+}
+
+// processGone is true once pid no longer runs; a zombie nobody has reaped yet is gone too.
+func processGone(pid int) bool {
+	if err := syscall.Kill(pid, 0); err != nil {
+		return true
+	}
+	stat, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil {
+		return false
+	}
+	_, after, _ := strings.Cut(string(stat), ") ")
+	return strings.HasPrefix(after, "Z")
+}
+
+// A command step that runs out of time is stopped completely: SIGTERM, then SIGKILL for a child that ignores it, and
+// only then is the run recorded failed. It is not held as a process group the worker cannot prove gone.
+func TestATimedOutCommandStepWhoseChildIgnoresSigtermIsKilledAndTheRunFails(t *testing.T) {
+	h := newHarness(t)
+	wf := h.kata.CreateWorkflow(t, h.proj, "stubborn", workertest.Step{Key: "wait", Command: stubbornCommand})
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "stubborn job", Workflow: wf.UID, Checkout: "repo", Timeout: 3600})
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	uid := h.runWorkflow(r, job)
+	pid := h.stubbornChild()
+
+	h.clock.Advance(2 * time.Hour)
+	var run worker.Run
+	h.eventually("the run to be recorded failed", func() bool { run = h.kataRun(uid); return run.Status == "failed" })
+	if !strings.Contains(run.Summary, "timed out") {
+		t.Fatalf("run %q: %q", run.Status, run.Summary)
+	}
+	if !processGone(pid) {
+		t.Fatal("the command's child outlived the run")
+	}
+}
+
+// An abandoned command step is stopped the same way, and the run ends cancelled.
+func TestAnAbandonedCommandStepWhoseChildIgnoresSigtermIsKilledAndTheRunIsCancelled(t *testing.T) {
+	h := newHarness(t)
+	wf := h.kata.CreateWorkflow(t, h.proj, "stubborn", workertest.Step{Key: "wait", Command: stubbornCommand})
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "stubborn job", Workflow: wf.UID, Checkout: "repo"})
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	uid := h.runWorkflow(r, job)
+	pid := h.stubbornChild()
+	h.eventually("the run to be abandonable", func() bool { s, ok := h.runStatus(r, uid); return ok && s.State == "running" && s.Abandonable })
+
+	if resp := h.ask(worker.Request{Op: "abandon", Run: uid, Actor: "ann"}); !resp.OK {
+		t.Fatalf("abandon: %q", resp.Error)
+	}
+	var run worker.Run
+	h.eventually("the run to be recorded cancelled", func() bool { run = h.kataRun(uid); return run.Status == "cancelled" })
+	if !strings.HasPrefix(run.Summary, "abandoned by ann") {
+		t.Fatalf("run %q: %q", run.Status, run.Summary)
+	}
+	if !processGone(pid) {
+		t.Fatal("the command's child outlived the run")
+	}
+}
+
+// A command that exits by itself and leaves a process behind is held, not killed: the leftover may still be doing what
+// the command began.
+func TestACommandStepThatExitsLeavingAProcessBehindIsHeldWithItRunning(t *testing.T) {
+	h := newHarness(t)
+	wf := h.kata.CreateWorkflow(t, h.proj, "leaver", workertest.Step{Key: "leave", Command: "(sleep 300 >/dev/null 2>&1 & echo $! > child.pid) ; exit 0"})
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "leaver job", Workflow: wf.UID, Checkout: "repo"})
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	uid := h.runWorkflow(r, job)
+	pid := h.stubbornChild()
+
+	h.eventually("the run to be held", func() bool { return h.kataRun(uid).Status == "unknown" })
+	h.eventually("the hold to name the group", func() bool {
+		s, ok := h.runStatus(r, uid)
+		return ok && strings.Contains(s.ResumeRefusal, "is still present")
+	})
+	if processGone(pid) {
+		t.Fatal("the leftover process was killed")
+	}
 }

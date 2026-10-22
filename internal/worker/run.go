@@ -520,8 +520,9 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 // conclude proves the process group gone and decides the outcome of a run that has an exit record.
 func (w *Worker) conclude(ctx context.Context, j *Journal) error {
 	command := j.activeIsCommand()
-	if command && j.Launch != nil && groupAlive(j.Launch) {
-		// A command's leftover process is not the worker's to guess about: it may still be doing what the command began.
+	if command && j.Launch != nil && j.Cancel == nil && !j.Exit.TimedOut && groupAlive(j.Launch) {
+		// A command that ended by itself leaves a process that is not the worker's to guess about: it may still be doing
+		// what the command began. One the worker stopped (timeout, abandon) is stopped completely below.
 		return w.hold(j, HoldGroupUnproven, fmt.Sprintf("process group %d is still present after the command exited", j.Launch.PGID))
 	}
 	if j.Launch != nil && groupAlive(j.Launch) {
