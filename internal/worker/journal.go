@@ -265,9 +265,11 @@ const maxJournalBytes = 1 << 20
 
 // Hooks lets a test observe or kill the worker at named journal points (ADR-0006 "Test seam"). AfterSave is called
 // after each save with its point name; an error aborts the run exactly there, as a crash would, and nothing after it
-// runs. No build tag: production leaves it nil.
+// runs. No build tag: production leaves both nil.
 type Hooks struct {
 	AfterSave func(point string, j *Journal) error
+	// FailDirSync, when it returns an error for a save point, makes that save's folder sync fail with it.
+	FailDirSync func(point string) error
 }
 
 // ErrKilled wraps what a Hooks.AfterSave returned: the worker stops all run work at that point, as a crash would.
@@ -353,7 +355,16 @@ func (s *Store) write(j *Journal, point string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	if err := replaceFile(s.path(j.RunUID), raw); err != nil {
+	sync := syncDir
+	if s.hooks.FailDirSync != nil {
+		sync = func(dir string) error {
+			if err := s.hooks.FailDirSync(point); err != nil {
+				return err
+			}
+			return syncDir(dir)
+		}
+	}
+	if err := replaceFileSyncing(s.path(j.RunUID), raw, sync); err != nil {
 		return err
 	}
 	if s.hooks.AfterSave != nil {
@@ -364,8 +375,11 @@ func (s *Store) write(j *Journal, point string) error {
 	return nil
 }
 
-// replaceFile writes path durably: temp file, fsync, rename, directory fsync.
-func replaceFile(path string, raw []byte) error {
+// replaceFile writes path durably: temp file, fsync, rename, folder sync (not on Windows). A failed folder sync fails
+// the save though the file may already have been replaced; recovery handles either version (ADR-0006).
+func replaceFile(path string, raw []byte) error { return replaceFileSyncing(path, raw, syncDir) }
+
+func replaceFileSyncing(path string, raw []byte, sync func(dir string) error) error {
 	dir := filepath.Dir(path)
 	tmp, err := os.CreateTemp(dir, ".tmp-*")
 	if err != nil {
@@ -386,11 +400,7 @@ func replaceFile(path string, raw []byte) error {
 		_ = os.Remove(name)
 		return err
 	}
-	if d, derr := os.Open(dir); derr == nil {
-		_ = d.Sync()
-		_ = d.Close()
-	}
-	return nil
+	return sync(dir)
 }
 
 // readFile and renameInDir go through os.Root, which on Windows opens files shareable for deletion and renames with

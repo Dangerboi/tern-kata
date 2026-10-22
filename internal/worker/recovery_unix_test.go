@@ -3,11 +3,13 @@
 package worker_test
 
 import (
+	"errors"
 	"context"
 	"os/exec"
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/worker"
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
@@ -74,4 +76,34 @@ func TestAHeldRunWhoseProcessGroupIsStillPresentWaitsUntilItIsGone(t *testing.T)
 		run, _ := h.kata.Kata.ShowRun(context.Background(), h.proj.ID, uid)
 		return run.Status == "succeeded"
 	})
+}
+
+// A journal save counts only once its folder is synced: when the folder sync of the save before the launch fails, the
+// launch does not happen, and the restarted worker does not start the agent either.
+func TestAnAgentIsNotStartedWhenTheFolderSyncOfItsLaunchingSaveFails(t *testing.T) {
+	h := newHarness(t, "--stub-text", "done")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
+	hooks := worker.Hooks{FailDirSync: func(point string) error {
+		if point == "launching" {
+			return errors.New("folder sync failed")
+		}
+		return nil
+	}}
+	r := h.start(hooks)
+	h.admitting(r)
+	uid := h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID
+	store := worker.NewStore(h.dirs, worker.Hooks{})
+	h.eventually("the launching save to be replaced", func() bool { j, err := store.Load(uid); return err == nil && j.Phase == worker.PhaseLaunching })
+	time.Sleep(200 * time.Millisecond) // a launch that wrongly went ahead would have started by now
+	if n := len(h.launches()); n != 0 {
+		t.Fatalf("agent launched %d times after a failed save, want none", n)
+	}
+	r.stop()
+
+	restarted := h.start(worker.Hooks{})
+	h.admitting(restarted)
+	h.settled(uid)
+	if n := len(h.launches()); n != 0 {
+		t.Fatalf("agent launched %d times after the restart, want none", n)
+	}
 }
