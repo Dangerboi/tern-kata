@@ -3,6 +3,7 @@ package driver_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -299,4 +300,31 @@ func TestWorkflowCardButtonsAreDrawnForEveryState(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWorkflowRowAndInspectorNameTheLiveJobsThatUseIt(t *testing.T) {
+	out := feed(t, projectPane(t, 160, boardCard("a")), key("5"))
+	var load model.LoadJobs
+	for _, cmd := range out.Cmds {
+		if c, ok := cmd.(model.LoadJobs); ok {
+			load = c
+		}
+	}
+	if load.ProjectID != 7 || load.Archived {
+		t.Fatalf("the Page asked for jobs with %#v, want the Project's live jobs", out.Cmds)
+	}
+	use := func(uid, name string, enabled bool) model.CronJob {
+		return model.CronJob{UID: uid, Name: name, Definition: model.CronDefinition{Enabled: enabled, Action: model.CronAction{Kind: "execute", WorkflowUID: "W1"}}}
+	}
+	archived := use("J3", "Old review", true)
+	now := time.Now()
+	archived.DeletedAt = &now
+	s := step(t, out.State, model.WorkflowsLoaded{ProjectUID: "p", Workflows: []model.Workflow{reviewFlow(), nightlyFlow()}}).State
+	s = step(t, s, model.JobsLoaded{Request: load.Request, Jobs: []model.CronJob{use("J1", "Nightly review", true), use("J2", "Weekly review", false), archived}}).State
+	mustShow(t, s, "row", "Nightly review +1")
+	if strings.Contains(screen(t, s), "Old review") {
+		t.Error("an archived job is named as using the workflow")
+	}
+	s = step(t, s, key("enter")).State
+	mustShow(t, s, "inspector", "Weekly review", "disabled", "enabled")
 }

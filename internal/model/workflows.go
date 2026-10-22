@@ -29,6 +29,10 @@ type WorkflowsState struct {
 	Loading bool
 	Err     error
 	Card    WorkflowCard
+	// jobs are the Project's live Cron jobs as last read, to say which use each workflow; jobsRequest numbers the read (counting down
+	// from zero, so no answer to the Jobs Page's reads can be taken for it).
+	jobs        []CronJob
+	jobsRequest int64
 	// detailHidden is the detail column's hidden flag from before the Page took its place.
 	detailHidden bool
 }
@@ -127,6 +131,18 @@ func (m Model) VisibleWorkflows() []Workflow {
 	return slices.DeleteFunc(slices.Clone(w.List), func(x Workflow) bool { return x.Archived })
 }
 
+// WorkflowJobs are the live Cron jobs that run the workflow with uid: those whose action names it. They are what keeps kata from
+// archiving it. Empty until the Page's read of the Project's jobs answers.
+func (m Model) WorkflowJobs(uid string) []CronJob {
+	var jobs []CronJob
+	for _, j := range m.Workflows.jobs {
+		if !j.Archived() && j.Definition.Action.WorkflowUID == uid {
+			jobs = append(jobs, j)
+		}
+	}
+	return jobs
+}
+
 // SelectedWorkflow is the selected workflow, false when the list is empty.
 func (m Model) SelectedWorkflow() (Workflow, bool) {
 	for _, w := range m.VisibleWorkflows() {
@@ -149,35 +165,16 @@ func (m Model) collectionProjectID() int64 {
 	return 0
 }
 
-// enterProjectPage is the entry rule of the Pages that act on the Pane's Project: the Project Collection if that is current,
-// else the Binding's Project, which becomes the current Collection. With neither it says so, opens the Menu's Projects entry and
-// reports false.
-func enterProjectPage(m Model, name string) (Model, []Cmd, bool) {
-	var cmds []Cmd
-	switch {
-	case m.Collection.IsProject():
-	case m.Bound:
-		m.Collection = ProjectCollection(m.Project.UID, m.Project.Name)
-		m = m.syncSidebarCursor()
-		m.Loading, m.Err = true, nil
-		m, cmds = collectionSwitched(m)
-	default:
-		m.Notice = "The " + name + " Page needs a Project: choose one in the Menu."
-		return openProjects(m), nil, false
-	}
-	return m, cmds, true
-}
-
 // enterWorkflows is the Workflows Page's entry: the Project's workflows are read again each time, and the ones held stay on
 // screen until they answer.
 func enterWorkflows(m Model) (Model, []Cmd) {
-	m, cmds, ok := enterProjectPage(m, "Workflows")
+	m, cmds, ok := enterProjectPage(m, "Workflows Page")
 	if !ok {
 		return m, cmds
 	}
 	w := &m.Workflows
 	if w.ProjectUID != m.Collection.ProjectUID {
-		*w = WorkflowsState{ProjectUID: m.Collection.ProjectUID}
+		*w = WorkflowsState{ProjectUID: m.Collection.ProjectUID, jobsRequest: w.jobsRequest}
 	}
 	w.ProjectID = m.collectionProjectID()
 	w.detailHidden = m.DetailHidden()
@@ -191,7 +188,10 @@ func enterWorkflows(m Model) (Model, []Cmd) {
 	}
 	w.Err = nil
 	w.Loading = true
-	return m, append(cmds, LoadWorkflows{Workspace: m.Workspace, ProjectID: w.ProjectID, ProjectUID: w.ProjectUID})
+	w.jobsRequest--
+	return m, append(cmds,
+		LoadWorkflows{Workspace: m.Workspace, ProjectID: w.ProjectID, ProjectUID: w.ProjectUID},
+		LoadJobs{Workspace: m.Workspace, ProjectID: w.ProjectID, Request: w.jobsRequest})
 }
 
 // workflowsOff leaves the Workflows Page for the Issues Page and gives the detail column back, unless something already focused it.
@@ -358,6 +358,14 @@ func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 		return m, nil, true
 	case WorkflowWritten:
 		return workflowWritten(m, msg), nil, true
+	case JobsLoaded:
+		if msg.Request >= 0 || msg.Request != m.Workflows.jobsRequest {
+			return m, nil, false
+		}
+		if msg.Err == nil && !msg.ProjectArchived {
+			m.Workflows.jobs = msg.Jobs
+		}
+		return m, nil, true
 	case WorkflowSelectMsg:
 		if slices.ContainsFunc(m.VisibleWorkflows(), func(w Workflow) bool { return w.UID == msg.UID }) {
 			m.Workflows.Selected = msg.UID

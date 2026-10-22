@@ -52,15 +52,22 @@ func Render(m model.Model, now time.Time) tern.View {
 			case model.ColumnCollections:
 				columns = append(columns, Collections(m))
 			case model.ColumnList:
-				if m.BoardShown() {
+				switch {
+				case m.OnJobs():
+					columns = append(columns, jobs(m, now))
+				case m.BoardShown():
 					columns = append(columns, board(m, now))
-				} else if m.OnWorkflows() {
+				case m.OnWorkflows():
 					columns = append(columns, workflows(m))
-				} else {
+				default:
 					columns = append(columns, issues(m, now))
 				}
 			case model.ColumnDetail:
-				columns = append(columns, detail(m, now))
+				if m.OnJobs() {
+					columns = append(columns, inspector(m, now))
+				} else {
+					columns = append(columns, detail(m, now))
+				}
 			}
 		}
 		// The top bar heads the whole Pane at every width, above the columns and outside their borders.
@@ -209,7 +216,7 @@ func columnsPx(m model.Model) (int, bool) {
 	}
 	grid, _, _ := footerGrid(m)
 	chrome := m.RowPx + 50 + m.RowPx*len(grid) + m.RowPx*footerTextRows(m)
-	if m.FilterSummary() != "" {
+	if m.FilterSummary() != "" && !m.OnJobs() {
 		chrome += 2 * m.RowPx
 	}
 	return m.Rows*m.RowPx - chrome, true
@@ -267,7 +274,7 @@ func topBar(m model.Model) tern.Element {
 // filterLine lists the active filters under the top bar; nil when none is on.
 func filterLine(m model.Model) []tern.Element {
 	summary := m.FilterSummary()
-	if summary == "" {
+	if summary == "" || m.OnJobs() {
 		return nil
 	}
 	return []tern.Element{ui.Text{Common: ui.Common{Key: "filters", Hidden: m.HelpOpen, Tone: ui.ToneMuted}, Text: summary, Wrap: ui.WrapNone}}
@@ -392,15 +399,8 @@ func footerGrid(m model.Model) (grid [][]helplayout.HelpItem, chords []string, p
 		items = append(items, helplayout.HelpItem{Key: binding.Key, Description: help})
 		chords = append(chords, binding.Chord)
 	}
-	selected := 0
-	rows := m.VisibleRows()
-	for i, issue := range rows {
-		if issue.UID == m.SelectedUID {
-			selected = i + 1
-			break
-		}
-	}
-	position = fmt.Sprintf("%d / %d", selected, len(rows))
+	selected, total := m.Position()
+	position = fmt.Sprintf("%d / %d", selected, total)
 	gap := utf8.RuneCountInString(footerSeparator)
 	grid = helplayout.ReflowRows([][]helplayout.HelpItem{items}, m.Cols-footerMargin-gap-utf8.RuneCountInString(position), gap)
 	return grid, chords, position

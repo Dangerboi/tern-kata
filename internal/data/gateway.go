@@ -228,6 +228,14 @@ func plan(cmd model.Cmd, host string) (request, bool) {
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ReadDetail(ctx, cmd.UID)) },
 			func(err error) model.Msg { return model.DetailFailed{UID: cmd.UID, Err: err} }}, true
+	case model.LoadJobs:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ListJobs(ctx, cmd)) },
+			func(err error) model.Msg { return model.JobsLoaded{Request: cmd.Request, Err: err} }}, true
+	case model.ShowJob:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ShowJob(ctx, cmd)) },
+			func(err error) model.Msg { return model.JobShown{UID: cmd.UID, Err: err} }}, true
 	case model.LoadWorkflows:
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) {

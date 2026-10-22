@@ -25,6 +25,7 @@ const (
 	promptTone  = ui.ToneUser
 	retryTone   = ui.ToneWarning
 	afterTone   = ui.TonePending
+	usingJobTone     = ui.ToneAccent
 )
 
 // workflows is the Workflows Page: the Project's workflows, and beside them (in a narrow Pane instead of them) the steps of the
@@ -67,7 +68,11 @@ func workflowList(m model.Model, paired bool) tern.Element {
 		if w.Archived {
 			label = append(label, ui.Span{T: "  archived", S: "warning"})
 		}
-		items[i] = ui.Item{Common: ui.Common{Key: w.UID, Role: stripeRole(i), Tone: tone}, Label: ui.Spans(label...), Detail: ui.T(" "), Value: ui.Spans(ui.Span{T: stepCount(len(w.Steps)), S: "muted"})}
+		value := []ui.Span{{T: stepCount(len(w.Steps)), S: "muted"}}
+		if jobs := m.WorkflowJobs(w.UID); len(jobs) > 0 {
+			value = append(value, ui.Span{T: "  " + jobNames(jobs), S: toneStyle(usingJobTone)})
+		}
+		items[i] = ui.Item{Common: ui.Common{Key: w.UID, Role: stripeRole(i), Tone: tone}, Label: ui.Spans(label...), Detail: ui.T(" "), Value: ui.Spans(value...)}
 	}
 	empty := "No workflows in " + m.Collection.Title + ". Press n to write one."
 	switch {
@@ -88,6 +93,14 @@ func workflowList(m model.Model, paired bool) tern.Element {
 		return ui.Card{Common: common, Selected: true, Children: ui.Nodes(list)}
 	}
 	return ui.Col{Common: common, Children: ui.Nodes(list)}
+}
+
+// jobNames is the jobs that use a workflow, as a row's cell: the first name and how many more.
+func jobNames(jobs []model.CronJob) string {
+	if len(jobs) == 1 {
+		return jobs[0].Name
+	}
+	return fmt.Sprintf("%s +%d", jobs[0].Name, len(jobs)-1)
 }
 
 func stepCount(n int) string {
@@ -119,6 +132,7 @@ func workflowInspector(m model.Model, paired bool) tern.Element {
 	for i, step := range w.Steps {
 		parts = append(parts, workflowStep(i, step))
 	}
+	parts = append(parts, workflowJobs(m, w)...)
 	parts = append(parts, ui.Text{Common: ui.Common{Key: "by"}, Spans: []ui.Span{{T: fmt.Sprintf("by %s · revision %d", w.Author, w.Revision), S: "muted"}}})
 	body := ui.List{CommonWithoutMax: scrollerCommon("viewport"), Max: scrollMax(m, 0), Children: ui.Nodes(ui.Col{Common: ui.Common{Key: "content"}, Gap: ui.GapSM, Children: parts})}
 	if paired {
@@ -183,4 +197,21 @@ func workflowLayer(m model.Model) tern.Element {
 			cardButton("discard", model.ModeEditor, model.CancelDraft, "Discard", false)))
 	}
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "workflow"}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
+}
+
+// workflowJobs is the inspector's Jobs section: the live Cron jobs that run the workflow, each with its name and whether it is on.
+func workflowJobs(m model.Model, w model.Workflow) []tern.Element {
+	jobs := m.WorkflowJobs(w.UID)
+	if len(jobs) == 0 {
+		return nil
+	}
+	parts := []tern.Element{ui.Text{Common: ui.Common{Key: "jobs-title"}, Spans: []ui.Span{{T: "Jobs", S: "strong"}, {T: " " + strconv.Itoa(len(jobs)), S: "muted"}}}}
+	for _, j := range jobs {
+		state, style := "enabled", "success"
+		if !j.Definition.Enabled {
+			state, style = "disabled", "muted"
+		}
+		parts = append(parts, ui.Text{Common: ui.Common{Key: "job." + j.UID}, Spans: []ui.Span{{T: j.Name, S: toneStyle(usingJobTone)}, {T: "  " + state, S: style}}})
+	}
+	return parts
 }

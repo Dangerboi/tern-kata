@@ -2,9 +2,9 @@
 
 **Pane**: The Tern area the program draws into. _Avoid_: block (in Tern a block is a pane type; in kata `blocks` is a link).
 
-**Page**: One of the Pane's top-level views, chosen from the **Page bar**: Issues (the list and the Issue detail), Board and Workflows for now. Each Page keeps its own state, such as its selection, while another is shown. _Avoid_: tab (Tern's tabs and the Issue detail's tabs).
+**Page**: One of the Pane's top-level views, chosen from the **Page bar**: Issues (the list and the Issue detail), Board, Jobs and Workflows for now. Each Page keeps its own state, such as its selection, while another is shown. _Avoid_: tab (Tern's tabs and the Issue detail's tabs).
 
-**Page bar**: The row in the top bar that names the Pages with their keys (`1` Issues, `2` Board, `5` Workflows); a click on a Page presses its key. _Avoid_: tab bar.
+**Page bar**: The row in the top bar that names the Pages with their keys (`1` Issues, `2` Board, `3` Jobs, `5` Workflows); a click on a Page presses its key. _Avoid_: tab bar.
 
 **Issue**: One unit of tracked work in kata, as kata defines it.
 
@@ -81,6 +81,14 @@
 **No lane**: The column of open Issues with no Lane label. It is always shown. An Issue with several Lane labels shows once, in the first of its Lanes in Lane order, with an "also" note naming the others.
 
 **Done**: The column of Issues closed in the last N days of the Pane calendar (default 14), at most M of them (default 20), newest closed first; N and M are per Project, set on the Lanes card or in `lanes.toml`. Its header says "20 of 192" when more qualify. It shows only what the Collection snapshot holds, so a status filter of `open` leaves it empty. Each card names the Lane `r` would reopen it into, the Lane its labels point at.
+
+**Cron job**: kata's recurring or scheduled definition in one Project: a name, a trigger (cron expression, interval, once, manual, or an Issue's scheduled date or deadline with a lead), an action (notify, or run an agent prompt or a workflow), an Issue policy and the overlap and catchup rules. Kata stores it and reads it back; it also delivers a **native job**, while an **adapter job** is run by a worker on someone's machine. Archiving (kata calls it deleting) a Cron job stops it until restored. The Jobs Page lists them. _Avoid_: cron (alone), schedule (that is the trigger's words), task.
+
+**Native job**: A Cron job that notifies with a fresh Issue per run (`notify` action, `per-run` Issue policy), whatever its enabled state. Kata's own daemon delivers it: each due occurrence becomes a child Issue of the job's **parent** Issue, and the parent's `cron.progress.<job uid>` metadata records how far delivery has got (`anchor`, the job's creation, and `through`). The Pane reads that metadata and the parent's status. The Jobs Page calls it a "recurring child". _Avoid_: recurring job (a **recurrence** is the Issue's own RRULE).
+
+**Adapter job**: Any Cron job that is not native: it runs an agent prompt or a workflow, or notifies about an existing Issue or an Issue date. Kata never runs it; a worker does, so its interval counts from a start only the worker knows and the Jobs Page leaves its next run out. _Avoid_: external job.
+
+**Pause reason**: Why a Cron job is not running, shown in its state: "archived", "paused: Project archived", "disabled", "paused: parent deleted" or "paused: parent closed"; a job with none is "active". Kata stores no pause, so the Pane derives it, in that order: the job's `deleted_at` beats everything, then an archived Project (read from the Project's own state, because kata answers none of its jobs), then `enabled: false`, then the parent's deleted or closed status. Reopening the parent, restoring the Project or the job, or enabling the job resumes a native job.
 
 **Workflow**: One of a Project's kata workflows: reusable command and prompt steps, each with a key, optional `after` steps it waits for (earlier steps only) and optional retries (0 to 100). Kata stores it; a Cron job that runs one names it. Archiving one that a live Cron job uses is refused by kata. _Avoid_: pipeline, recipe.
 

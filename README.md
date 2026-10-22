@@ -17,7 +17,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 - **Issue list and detail**: a Project's Issues nested under their parents, with priority, status, child counts and age, beside the Issue detail with its Markdown body, properties and Activity tabs (Comments, Events, Links, Attachments). Changes made anywhere, by you or an agent, show up live.
 - **Collections and the Menu**: Inbox, Today, Upcoming, Deadlines, All Open, Logbook and every kata Project, plus a search (`/`) and filters (`f`, `s`) over any of them.
 - **Editing from the Pane**: Create (`n`, `N` for a child), Close (`x`), reopen (`r`), comments (`c` in the detail) and replies (`R`), labels (`+`, `-`), owner (`a`, `A`), priority (`!`), parent (`p`), recurrence (`O`) and the Issue body in Tern's editor (`e`).
-- **Pages (Issues, Board and Workflows), Attachments and the Dates card**, shown below.
+- **Pages (Issues, Board, Jobs and Workflows), Attachments and the Dates card**, shown below.
 - **[kata links](#clickable-ticket-links-from-agents)** from agents' chat replies open the Issue in tern-kata.
 
 **Board Page** ([details](#pages-and-the-board-page)): `2` or `b` in a Project shows its Issues as cards in Lanes, one per triage label, with No lane on the left and recently closed Issues in Done on the right. `<` and `>` move a card to the next Lane by swapping its label in kata. A card shows its priority, its most pressing date and a Blocked marker when an open Issue blocks it; selecting one tags its related cards (`parent`, `blocks this`) and lists its Relationships.
@@ -27,6 +27,8 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relationships line selects that card; an Issue the Board doesn't draw, like this one in another Project, opens in the detail, and Esc goes back.
 
 ![The Ready for agent Lane beside the detail of a related Issue in the acme-infra Project](docs/images/related-detail.png)
+
+**Jobs Page** ([details](#jobs-page)): `3` in a Project lists its Cron jobs with their state (and why one is paused), kind, schedule in words, agent profile and next run, with the selected job's definition and parent beside them; Enter on a recurring job's parent opens that Issue.
 
 **Attachments** ([details](#attachments)): `u` attaches a screenshot, log or any other file to an Issue, and the Attachments tab lists them. Agents find them through the Issue's kata metadata, and `tern-kata attach` does the same from a shell.
 
@@ -156,7 +158,7 @@ Flags: `--frequency daily|weekly|monthly|yearly`, `--every N`, `--on mon,thu`, `
 
 ## Pages and the Board Page
 
-The top bar holds the **Page bar**, "1 Issues  2 Board  5 Workflows". `1`, `2` and `5`, or a click on a Page, switch Pages; `b` toggles between Issues and Board. The Issues Page is the list and Issue detail; each Page keeps its selection while another is shown. The Board Page acts on the Pane's Project: the current Project Collection, else the workspace's Binding (from Inbox or another fixed Collection in a bound workspace it switches to the Binding's Project). With neither it says so and opens the Menu's Projects list.
+The top bar holds the **Page bar**, "1 Issues  2 Board  3 Jobs  5 Workflows". `1`, `2`, `3` and `5`, or a click on a Page, switch Pages; `b` toggles between Issues and Board. The Issues Page is the list and Issue detail; each Page keeps its selection while another is shown. The Board Page and the Jobs Page act on the Pane's Project: the current Project Collection, else the workspace's Binding (from Inbox or another fixed Collection in a bound workspace it switches to the Binding's Project). With neither it says so and opens the Menu's Projects list.
 
 ### Board Page
 
@@ -201,6 +203,16 @@ done_cards = 20
 `done_days` and `done_cards` are how many days back Done reaches and how many cards it shows at most; a missing or zero value means the default (14 and 20). A table with only `done_days`/`done_cards` and no `labels` keeps the default Lanes.
 
 tern-kata reads it each time the Board turns on and when the Project changes while it is on, so an edit shows the next time you press `b`; the Lanes card (`B`) writes it for you. Saving rewrites only the Project's `name`, `labels`, `done_days` and `done_cards`; other tables and any other keys you add are kept, but comments are lost. Labels are tidied like kata's (`In review` reads `in-review`). A missing file, or no table for the Project, gives the default Lanes. A file that can't be read or parsed gives the default Lanes and a Notice, and tern-kata won't overwrite it. Removing a label sends its Issues to No lane, or to their next Lane label; kata isn't touched.
+
+### Jobs Page
+
+`3` shows the Pane's Project's **Cron jobs**, the ones kata runs itself and the ones a worker runs, one card each. The card has a state badge (`active`, `disabled`, `archived` or `paused: parent closed`, `paused: parent deleted`, `paused: Project archived`), the name, the kind (`recurring child`, `agent prompt`, `workflow` or `notify`), the schedule in words ("every weekday at 09:00 Europe/Berlin", "every 15 minutes", "once at 2026-11-01 09:00 UTC", "manual", "at the Issue's scheduled date", "2 days before the Issue's deadline"), the agent profile and the next run in the Pane calendar's zone. A schedule that can't be read, or a next run that can't be worked out (a job that isn't running, a manual or Issue-date trigger, an interval of a job a worker runs), is left off the card.
+
+- A kata-run job ("recurring child") makes a child Issue under its parent each time it fires. It pauses by itself while its parent is closed or deleted or its Project is archived; reopening, restoring or re-enabling resumes it. The Pane works the reason out from the parent and the Project, since kata stores none: a disabled job reads `disabled` whatever its parent is doing, and an archived Project reads as paused for every job the Pane already holds, because kata then answers none of them.
+- `a` shows or hides archived jobs; they are hidden until then. `ctrl+r` reads the jobs again; they also reload when the daemon reports a change. `↑`/`↓` (or `j`/`k`), `g`, `G` and Page Up/Down move the selection.
+- At 140 columns and wider an **inspector** beside the list shows the selected job's full definition (trigger, prompt or workflow, recipient and message, Issue policy, overlap, catchup, timeout, checkout, the names of its secrets) and, for a recurring-child job, its parent Issue with the delivery progress. Narrower, only the focused column shows: Enter or Tab on a card shows the inspector, Esc or Tab goes back.
+- With the inspector focused, Enter on a recurring-child job's parent opens that Issue on the Issues Page (a deleted parent leaves a Notice instead).
+- The Jobs Page needs a Project like the Board Page and ends when you switch to a Collection that is not a Project.
 
 ## Dates card
 
