@@ -159,6 +159,10 @@ func plan(cmd model.Cmd, host string) (request, bool) {
 				return ok(model.RecurrenceResultMsg{UID: cmd.UID}, c.StopRecurrence(ctx, cmd))
 			},
 			func(err error) model.Msg { return model.RecurrenceResultMsg{UID: cmd.UID, Err: err} }}, true
+	case model.LoadRecurTarget:
+		return request{cmd.Workspace,
+			func(ctx context.Context, c *Client) (model.Msg, error) { return ok(c.ReadRecurTarget(ctx, cmd)) },
+			func(err error) model.Msg { return model.RecurTarget{Ref: cmd.Ref, Err: err} }}, true
 	case model.ReopenIssueCmd:
 		return request{cmd.Workspace,
 			func(ctx context.Context, c *Client) (model.Msg, error) {

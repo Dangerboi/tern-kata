@@ -161,10 +161,11 @@ Two mechanisms; pick by what should happen:
 
 | Want | Use |
 |---|---|
-| The same issue comes back after it is done, on a calendar rule | A **recurrence**. No CLI: create, change or stop it in `kata ui <ref>` (web UI) or tern-kata's `O` card. |
+| The same issue comes back after it is done, on a calendar rule | A **recurrence**. kata has no recurrence CLI: agents use `tern-kata recur` (below); people use `kata ui <ref>` (web UI) or tern-kata's `O` card. |
 | A new child issue plus an inbox request every period, done or not | A **native cron job** bound to a parent (below). |
 
 Recurrences:
+- Make, change, stop or print one with `tern-kata recur`, which needs the `tern-kata` binary on `PATH`: check with `command -v tern-kata` (PowerShell: `Get-Command tern-kata`), and when it is missing tell the user and point them to https://github.com/Dangerboi/tern-kata#install instead of handing the job back. See the `tern-kata` skill for its flags. Leave `O` and `kata ui` to people.
 - Each occurrence is an ordinary issue with `.issue.recurrence_id` and `.issue.occurrence_key` in `kata show --json`. Closing it `--done` creates the next one; `--wontfix`, `--duplicate-of` and `--superseded-by` create none, so the series stalls.
 - Stopping a recurrence keeps existing occurrences. Occurrences can't be `kata move`d.
 

@@ -28,6 +28,9 @@ func runSubcommand(ctx context.Context, plan LaunchPlan, gateway *data.Gateway, 
 		gateway.Run(ctx, cmd, results)
 		return <-results
 	}
+	if plan.Subcommand == "recur" {
+		return runRecur(plan, workspace, send, out)
+	}
 	if plan.Subcommand == "detach" {
 		detached := send(model.DetachFile{Workspace: workspace, Ref: plan.TargetRef, Actor: plan.Actor, Name: plan.Operands[0]}).(model.FileDetached)
 		if detached.Cleared {
@@ -50,4 +53,65 @@ func runSubcommand(ctx context.Context, plan LaunchPlan, gateway *data.Gateway, 
 		}
 	}
 	return nil
+}
+
+// runRecur is `recur`: print the schedule, make or change it from the flags, or stop it, through the commands the Recurrence
+// card sends. The flags are read into terms before anything is written, so a refusal sends nothing.
+func runRecur(plan LaunchPlan, workspace string, send func(model.Cmd) model.Msg, out io.Writer) error {
+	load := func() (model.RecurTarget, error) {
+		target := send(model.LoadRecurTarget{Workspace: workspace, Ref: plan.TargetRef}).(model.RecurTarget)
+		return target, target.Err
+	}
+	say := func(line string) error {
+		_, err := fmt.Fprintln(out, line)
+		return err
+	}
+	target, err := load()
+	if err != nil {
+		return subcommandError{err}
+	}
+	switch {
+	case plan.Stop:
+		switch {
+		case target.Recurrence == nil:
+			return subcommandError{model.NotRecurringError(target.ShortID)}
+		case target.Recurring() == nil:
+			return subcommandError{model.RecurStoppedError(target.ShortID)}
+		}
+		stopped := send(model.StopRecurrenceCmd{Workspace: workspace, UID: target.UID, ProjectID: target.ProjectID, Actor: plan.Actor, RecurrenceUID: target.Recurrence.UID}).(model.RecurrenceResultMsg)
+		if stopped.Err != nil {
+			return subcommandError{stopped.Err}
+		}
+		return say(target.StopReport())
+	case len(plan.RecurFlags) == 0:
+		return say(target.Report())
+	}
+	if target.Recurrence != nil && target.Recurring() == nil {
+		return subcommandError{model.RecurStoppedError(target.ShortID)}
+	}
+	terms, err := target.Terms(plan.RecurFlags)
+	if err != nil {
+		return subcommandError{err}
+	}
+	var written model.RecurrenceResultMsg
+	if current := target.Recurring(); current != nil {
+		written = send(model.ChangeRecurrenceCmd{Workspace: workspace, UID: target.UID, ProjectID: target.ProjectID, Actor: plan.Actor,
+			RecurrenceUID: current.UID, RecurrenceTerms: terms, Opened: current.RecurrenceTerms}).(model.RecurrenceResultMsg)
+	} else {
+		written = send(model.CreateRecurrenceCmd{Workspace: workspace, UID: target.UID, ProjectID: target.ProjectID, Actor: plan.Actor, RecurrenceTerms: terms}).(model.RecurrenceResultMsg)
+	}
+	if written.Err != nil {
+		return subcommandError{written.Err}
+	}
+	if written.Changed != nil {
+		if err := say(target.WithRecurrence(*written.Changed).Report()); err != nil {
+			return subcommandError{err}
+		}
+		return subcommandError{model.ErrRecurrenceMovedMeanwhile}
+	}
+	target, err = load()
+	if err != nil {
+		return subcommandError{err}
+	}
+	return say(target.Report())
 }

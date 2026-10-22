@@ -24,12 +24,15 @@ type LaunchPlan struct {
 	Help bool
 	// FallbackArgs are the arguments for `kata tui` when Tern is unsupported.
 	FallbackArgs []string
-	// Subcommand is "attach" or "detach" when it was the first argument; main runs it without Tern.
+	// Subcommand is "attach", "detach" or "recur" when it was the first argument; main runs it without Tern.
 	Subcommand string
-	// TargetRef is the Issue as attach and detach take it (what `kata show` takes: a short id, <project>#<short id> or a ULID),
+	// TargetRef is the Issue as attach, detach and recur take it (what `kata show` takes: a short id, <project>#<short id> or a ULID),
 	// unlike IssueRef; Operands are the files to attach, or the Attachment name to detach.
 	TargetRef string
 	Operands  []string
+	// RecurFlags are recur's schedule flags by name without dashes (model.RecurFlagNames), as typed; Stop is --stop.
+	RecurFlags map[string]string
+	Stop       bool
 	// fallbackAuthor is the --as actor exported to `kata tui`; empty leaves the environment untouched.
 	fallbackAuthor string
 }
@@ -63,7 +66,7 @@ func PlanLaunch(args []string, lookup func(string) (string, bool), version strin
 	if slices.Contains(args, "--help") || slices.Contains(args, "-h") {
 		return LaunchPlan{Help: true}, nil
 	}
-	if len(args) > 0 && (args[0] == "attach" || args[0] == "detach") {
+	if len(args) > 0 && (args[0] == "attach" || args[0] == "detach" || args[0] == "recur") {
 		plan, err := planSubcommand(args, lookup)
 		if err != nil {
 			err = subcommandError{err}
@@ -134,7 +137,7 @@ func resolveActor(flag string, lookup func(string) (string, bool)) string {
 	return actor
 }
 
-// planSubcommand parses `attach <ref> <file>...` and `detach <ref> <name>` (args[0] is the subcommand). --as may stand anywhere;
+// planSubcommand parses `attach <ref> <file>...`, `detach <ref> <name>` and `recur <ref> [flags]` (args[0] is the subcommand). --as may stand anywhere;
 // a lone -- ends the flags, so a file may be named like one. --version, --help and -h are caught anywhere first, so a file
 // cannot be named exactly that.
 func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPlan, error) {
@@ -151,6 +154,13 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 			flagsEnded = true
 			continue
 		}
+		if plan.Subcommand == "recur" {
+			if matched, err := parseRecurFlag(args, &i, &plan); err != nil {
+				return LaunchPlan{}, err
+			} else if matched {
+				continue
+			}
+		}
 		actor, matched, err := parseAs(args, &i)
 		if err != nil {
 			return LaunchPlan{}, err
@@ -165,10 +175,42 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata attach <ref> <file>...")
 	case plan.Subcommand == "detach" && len(operands) != 2:
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata detach <ref> <name>")
+	case plan.Subcommand == "recur" && len(operands) != 1:
+		return LaunchPlan{}, fmt.Errorf("usage: tern-kata recur <ref> [--frequency daily|weekly|monthly|yearly ... | --rule <rrule> | --stop]")
+	case plan.Stop && len(plan.RecurFlags) > 0:
+		return LaunchPlan{}, fmt.Errorf("recur: --stop takes no schedule flags")
 	}
 	plan.TargetRef, plan.Operands = operands[0], operands[1:]
 	plan.Actor = resolveActor(plan.fallbackAuthor, lookup)
 	return plan, nil
+}
+
+// parseRecurFlag reads --stop, or one of recur's schedule flags as --name value or --name=value, at args[*i], moving *i past a
+// separate value; matched is false for any other argument. A value may be empty (--on "") and is then refused by the schedule model.
+func parseRecurFlag(args []string, i *int, plan *LaunchPlan) (matched bool, err error) {
+	name, value, hasValue := strings.Cut(strings.TrimPrefix(args[*i], "--"), "=")
+	if name == "stop" && !hasValue {
+		plan.Stop = true
+		return true, nil
+	}
+	if !slices.Contains(model.RecurFlagNames, name) {
+		return false, nil
+	}
+	if !hasValue {
+		if *i+1 == len(args) {
+			return true, fmt.Errorf("--%s requires a value", name)
+		}
+		*i++
+		value = args[*i]
+	}
+	if _, given := plan.RecurFlags[name]; given {
+		return true, fmt.Errorf("--%s given twice", name)
+	}
+	if plan.RecurFlags == nil {
+		plan.RecurFlags = map[string]string{}
+	}
+	plan.RecurFlags[name] = value
+	return true, nil
 }
 
 // usage is the --help text.
@@ -178,6 +220,9 @@ Usage:
   tern-kata [--issue <project>/<short_id>] [--as <actor>] [kata tui args...]
   tern-kata attach <ref> <file>... [--as <actor>]
   tern-kata detach <ref> <name> [--as <actor>]
+  tern-kata recur <ref> [--frequency daily|weekly|monthly|yearly [--every N] [--on mon,thu]
+                   [--day 15|last|"2nd tue"] [--month 1-12] [--until DATE | --count N]
+                   | --rule <rrule>] [--start DATE] [--zone <iana>] [--stop] [--as <actor>]
   tern-kata --version
   tern-kata --help
 
@@ -194,6 +239,14 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 an attachment.<name> meta key of the Issue at it;
                                 prints each stored absolute path, stops at the first failure
   detach <ref> <name>           clear that key and delete the copy if it is on this machine
+  recur <ref>                   print the Issue's schedule in words and the next Occurrence's
+                                date, or say it doesn't recur
+  recur <ref> --frequency ...   make the Issue recur, or change its schedule when it already
+                                recurs (a schedule changed meanwhile is printed, not overwritten);
+                                --rule <rrule> replaces the frequency flags; the start date
+                                defaults to the Issue's scheduled date or today, the zone to
+                                this machine's IANA zone or UTC
+  recur <ref> --stop            stop the Recurrence; existing Occurrences stay
 <ref> is a short id in this workspace's Project, <project>#<short id>, or a ULID.
 The Issue's Project must be this workspace's Binding.
 
