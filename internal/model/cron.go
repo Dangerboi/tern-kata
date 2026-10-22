@@ -60,7 +60,7 @@ type CronIssuePolicy struct {
 	// UID is the existing Issue; ParentUID the parent of a native job's children.
 	UID, ParentUID string
 	// Title and Body make a per-run Issue; the offsets, in seconds, set its dates relative to the run.
-	Title, Body                                    string
+	Title, Body                                   string
 	ScheduledOffsetSeconds, DeadlineOffsetSeconds *int64
 }
 
