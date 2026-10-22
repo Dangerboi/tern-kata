@@ -22,6 +22,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 ### Fixed
 
 - A Board card reveal queued for a card that a newer draw moved to another Lane or dropped from Done no longer ends the Pane with "Tern surface: unknown id".
+- Backspace with the caret at the start of the Search field does nothing; it no longer resets the selection and runs the search again.
 - Scrolling the Issue detail (`↑`, `↓`, Page Up, Page Down) while it shows an error line or an Issue that is no longer available does nothing instead of ending the Pane with "Tern surface: unknown id main.columns.detail.viewport.content".
 
 ## [0.3.0] - 2026-10-20
