@@ -65,6 +65,7 @@ func Step(s State, in any, now time.Time) Output {
 	}
 
 	previousSelection := s.Model.CurrentSelection()
+	s.Model.Now = now
 	m, cmds := model.Update(s.Model, msg)
 	s.Model = m
 	if m.Quitting {

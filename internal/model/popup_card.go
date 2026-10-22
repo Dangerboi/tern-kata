@@ -44,6 +44,7 @@ const (
 	CardDates
 	CardRecurrence
 	CardJob
+	CardBackfill
 	CardProject
 	CardLanes
 	CardFilter
@@ -202,6 +203,12 @@ func init() {
 				f := m.JobForm
 				return f.Field, !f.Saving && f.Conflict == nil && takesText(JobFields, f.Field)
 			},
+		},
+		{
+			card: CardBackfill, open: func(m Model) bool { return m.Backfill.Open },
+			modes: []Mode{ModeBackfill}, mode: func(Model) Mode { return ModeBackfill },
+			key: backfillKey, fields: []FieldSpec{},
+			caret: func(Model) (Field, bool) { return "", false },
 		},
 		{
 			card: CardProject, open: func(m Model) bool { return m.ProjectForm.Open },

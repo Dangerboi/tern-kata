@@ -129,15 +129,6 @@ func menuBack(m Model) Model {
 	return m
 }
 
-func reopenIssue(m Model) (Model, []Cmd) {
-	issue := closeIssue(m)
-	if issue == nil || m.Stale || m.CloseForm.Saving {
-		return m, nil
-	}
-	m.CloseForm = CloseFormState{UID: issue.UID, Saving: true}
-	return m, []Cmd{ReopenIssueCmd{Workspace: m.Workspace, UID: issue.UID, ProjectID: issue.ProjectID, Actor: m.Actor}}
-}
-
 var (
 	// issueModes are the modes whose keys act on the selected Issue: the list, the Board and the detail.
 	issueModes   = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail}

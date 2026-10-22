@@ -59,6 +59,11 @@ type Model struct {
 	DatesForm      DatesFormState
 	RecurrenceForm RecurrenceFormState
 	JobForm        JobFormState
+	// Backfill is the card that asks whether the runs a native job missed are created before the job runs again.
+	Backfill BackfillState
+	// Now is the instant the Pane driver last stepped the model at: the model reads no clock, so what it counts against the
+	// time, as the runs a job missed, counts against this.
+	Now time.Time
 	Actor          string
 	// Host is this machine's host name, which tells an Attachment held here from one held elsewhere.
 	Host      string
@@ -204,7 +209,11 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m = lanesSaved(m, msg)
 	case JobsLoaded:
 		m = jobsLoaded(m, msg)
+		return backfillJobsRead(m, msg)
 	case JobWritten:
+		if next, cmds, ok := backfillWritten(m, msg); ok {
+			return next, cmds
+		}
 		m = jobWritten(m, msg)
 	case OpenJobMsg:
 		return openJob(m, msg.UID)

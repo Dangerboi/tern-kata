@@ -194,7 +194,8 @@ func FieldID(card model.Card, name model.Field) string {
 	return ""
 }
 
-// FieldFromID is the card and field whose node has id; the field is "" for the one input of a card without fields.
+// FieldFromID is the card and field whose node has id; the field is "" for the one input of a card without fields. A card with
+// no input at all, as Backfill, has no node to name.
 func FieldFromID(id string) (model.Card, model.Field, bool) {
 	for _, card := range model.Cards() {
 		fields, _ := model.CardFields(card)
@@ -203,7 +204,7 @@ func FieldFromID(id string) (model.Card, model.Field, bool) {
 				return card, field.Name, true
 			}
 		}
-		if len(fields) == 0 && id == FieldID(card, "") {
+		if len(fields) == 0 && id != "" && id == FieldID(card, "") {
 			return card, "", true
 		}
 	}
