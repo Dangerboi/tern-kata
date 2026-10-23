@@ -7,6 +7,7 @@ rd_bin="$tmp/rd-bin"
 rd_config="$tmp/rd-config"
 rd_state="$tmp/rd-state"
 rd_checkout="$tmp/rd-checkout"
+rd_release="$tmp/rd-release" # the slow agent holds its turn open until this file exists
 mkdir -p "$rd_bin" "$rd_config/tern-kata" "$rd_state" "$rd_checkout"
 (cd "$repo" && go build -o "$rd_bin/omp" ./internal/worker/workertest/stub)
 cat >"$rd_config/tern-kata/worker.toml" <<TOML
@@ -20,7 +21,7 @@ repo = "$rd_checkout"
 command = "$rd_bin/omp"
 [profiles.slow]
 command = "$rd_bin/omp"
-args = ["--stub-text", "stub says all checked", "--stub-pause", "8000"]
+args = ["--stub-text", "stub says all checked", "--stub-wait-for", "$rd_release"]
 [profiles.hang]
 command = "$rd_bin/omp"
 args = ["--stub-hang-first", "--stub-text", "resumed ok"]
@@ -75,6 +76,7 @@ expect_tree "[data-id^='main.columns.list.runs.']" '.ok and .count >= 1 and (.no
 ctl key g
 ctl key enter
 expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("stub says all checked")))'
+touch "$rd_release" # the checks while it ran are done: let the agent end its turn
 expect_tree "[data-id^='main.columns.list.runs.']" '.ok and (.nodes[0].text | contains("succeeded") and contains("Smoke slow run"))'
 ctl key escape
 
