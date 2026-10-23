@@ -61,7 +61,7 @@ func TestWOpensTheWorkerCardOnTheJobsPageAndItsInspector(t *testing.T) {
 			}
 		}
 		out := step(t, from, key("shift+w"))
-		if out.State.Model.TopCard() != model.CardWorker || out.State.Model.CurrentMode() != model.ModeWorkerCard {
+		if out.State.Model.TopCard() != model.CardWorker || out.State.Model.CurrentMode() != model.ModeWorkerRead {
 			t.Errorf("%s: card %v mode %s", name, out.State.Model.TopCard(), out.State.Model.CurrentMode())
 		}
 	}
@@ -243,7 +243,7 @@ func TestWorkerCardAfterASaveWithNoWorkerSaysThePluginStartsOne(t *testing.T) {
 			sent := step(t, s, key("ctrl+o"))
 			done := step(t, sent.State, model.WorkerSetupSaved{Project: "work", Key: "work"})
 			wantText(t, "card", wireTextOf(t, done.State), "worker.toml written (checkout work)", tt.want)
-			if done.State.Model.CurrentMode() != model.ModeWorkerCard || done.State.Model.WorkerCard.Restart {
+			if done.State.Model.CurrentMode() != model.ModeWorkerRead || done.State.Model.WorkerCard.Restart {
 				t.Errorf("mode %s restart %v, want the plain card", done.State.Model.CurrentMode(), done.State.Model.WorkerCard.Restart)
 			}
 			if !slices.Contains(done.Cmds, model.Cmd(askedSetup)) {
@@ -335,6 +335,7 @@ func TestWorkerKeysFootersAndHelpAgree(t *testing.T) {
 		"card":    card,
 		"restart": restart.State,
 		"off":     step(t, workerCardOpen(t, supervisedHere, listedProject), key("s")).State,
+		"read":    workerCardOpen(t, supervisedHere, listedProject),
 	} {
 		mode := from.Model.CurrentMode()
 		for binding := range model.BindingsForMode(mode, true) {
@@ -362,6 +363,33 @@ func TestWorkerKeysFootersAndHelpAgree(t *testing.T) {
 	}
 	if !slices.Contains(footer, "W") {
 		t.Errorf("the Jobs footer %v lacks W", footer)
+	}
+}
+
+func TestWorkerCardFooterListsOnlyTheKeysThatActInTheState(t *testing.T) {
+	footer := func(s driver.State) []string {
+		var keys []string
+		for b := range model.BindingsForMode(s.Model.CurrentMode(), true) {
+			keys = append(keys, b.Key)
+		}
+		return keys
+	}
+	read := footer(workerCardOpen(t, supervisedHere, listedProject))
+	for _, k := range []string{"tab", "ctrl+o", "right"} {
+		if slices.Contains(read, k) {
+			t.Errorf("read-only footer %v lists %s, which does nothing there", read, k)
+		}
+	}
+	for _, k := range []string{"e", "s", "esc"} {
+		if !slices.Contains(read, k) {
+			t.Errorf("read-only footer %v lacks %s", read, k)
+		}
+	}
+	fields := footer(workerCardOpen(t, nil, noWorkerFile))
+	for _, k := range []string{"tab", "ctrl+o", "right", "esc"} {
+		if !slices.Contains(fields, k) {
+			t.Errorf("field footer %v lacks %s", fields, k)
+		}
 	}
 }
 
@@ -473,7 +501,7 @@ func TestWorkerCardSupervisionOffWithAWorkerRunningAsksHowToStopIt(t *testing.T)
 	wantText(t, "card", wireTextOf(t, refused.State), "worker.manual is created", "The stop was refused: busy")
 
 	kept := step(t, asked.State, key("escape"))
-	if kept.State.Model.TopCard() != model.CardWorker || len(kept.Cmds) != 0 || kept.State.Model.CurrentMode() != model.ModeWorkerCard {
+	if kept.State.Model.TopCard() != model.CardWorker || len(kept.Cmds) != 0 || kept.State.Model.CurrentMode() != model.ModeWorkerRead {
 		t.Errorf("esc: card %v mode %s cmds %v, want the plain card and nothing written", kept.State.Model.TopCard(), kept.State.Model.CurrentMode(), kept.Cmds)
 	}
 }

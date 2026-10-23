@@ -153,12 +153,12 @@ func workerActions(m model.Model) tern.Element {
 	}
 	var buttons []tern.Element
 	if m.WorkerCardEdits() {
-		buttons = append(buttons, cardButton("edit", model.ModeWorkerCard, model.WorkerEdit, "Edit worker.toml", true))
+		buttons = append(buttons, cardButton("edit", model.ModeWorkerRead, model.WorkerEdit, "Edit worker.toml", true))
 	}
 	if m.WorkerCardKind() >= model.WorkerSetUp {
 		buttons = append(buttons, supervisionButton(m))
 	}
-	return buttonRow(append(buttons, cardButton("close", model.ModeWorkerCard, model.WorkerCancel, "Close", false))...)
+	return buttonRow(append(buttons, cardButton("close", model.ModeWorkerRead, model.WorkerCancel, "Close", false))...)
 }
 
 func supervisionButton(m model.Model) tern.Element {
@@ -166,7 +166,7 @@ func supervisionButton(m model.Model) tern.Element {
 	if m.Worker.Setup.Manual {
 		label = "Turn supervision on"
 	}
-	return cardButton("supervision", model.ModeWorkerCard, model.WorkerSupervision, label, false)
+	return cardButton("supervision", m.WorkerCardMode(), model.WorkerSupervision, label, false)
 }
 
 func fileWords(m model.Model) string {

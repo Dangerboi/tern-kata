@@ -18,6 +18,8 @@ const (
 	ModeWorkerCard    Mode = "worker-card"
 	ModeWorkerRestart Mode = "worker-restart"
 	ModeWorkerOff     Mode = "worker-supervision-off"
+	// ModeWorkerRead is the card when it draws no fields: only e, s and esc act.
+	ModeWorkerRead Mode = "worker-card-read"
 )
 
 const (
@@ -556,7 +558,7 @@ func workerCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	if f.AskOff {
 		return workerOffKey(m, msg)
 	}
-	binding, bound := LookupBindingForMode(msg.Chord, ModeWorkerCard)
+	binding, bound := LookupBindingForMode(msg.Chord, m.WorkerCardMode())
 	if bound && binding.Action == WorkerEdit {
 		if m.WorkerCardEdits() {
 			return m, []Cmd{OpenDraftEditor{UID: WorkerDraftUID, Text: m.workerEditStart(), Suffix: ".toml"}}
@@ -703,4 +705,12 @@ func workerSupervisionSet(m Model, msg WorkerSupervisionSet) (Model, []Cmd) {
 	}
 	m, ask := m.askWorker(workerPollEvery)
 	return m, []Cmd{LoadWorkerSetup{Workspace: m.Workspace}, ask}
+}
+
+// WorkerCardMode is the keymap the card answers to: the field keys while it draws fields, only e, s and esc when it does not.
+func (m Model) WorkerCardMode() Mode {
+	if m.WorkerCardSaves() {
+		return ModeWorkerCard
+	}
+	return ModeWorkerRead
 }
