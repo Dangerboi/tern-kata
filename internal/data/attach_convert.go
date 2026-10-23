@@ -178,10 +178,10 @@ func (g *Gateway) convertWith(ctx context.Context, c *Client, workspace, actor s
 	if marker == "" {
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(marker), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(marker), 0o700); err != nil { // the worker's state folder, which holds its journals, is private
 		return err
 	}
-	return os.WriteFile(marker, nil, 0o644)
+	return os.WriteFile(marker, nil, 0o600)
 }
 
 // safeFileName is whether name can be one folder entry as it stands.
