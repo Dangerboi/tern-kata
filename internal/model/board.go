@@ -29,6 +29,8 @@ const (
 // BoardState is the Board Page's state. It is not saved: a Pane starts on the Issues Page. Mode is only meaningful while the
 // Board Page is current; every way off the Board Page resets it to BoardColumns.
 type BoardState struct {
+	// ProjectUID is the Project the state was filled for; resetPagesForProject empties it when the Pane's Project differs.
+	ProjectUID string
 	Mode BoardMode
 	// Lanes is the Project's Lane list; empty means the default.
 	Lanes []string

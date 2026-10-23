@@ -73,8 +73,7 @@ func (m Model) lanesLoad(boardWasOn bool) (Model, []Cmd) {
 		m.Board.loaded = false
 		return m, []Cmd{LoadLanes{ProjectUID: uid}}
 	}
-	m.Board.asked, m.Board.loaded = uid, false
-	m.Board.Lanes, m.Board.DoneDays, m.Board.DoneCards, m.Board.fileErr = nil, 0, 0, nil
+	m.Board.asked = uid
 	if uid == "" {
 		return m, nil
 	}

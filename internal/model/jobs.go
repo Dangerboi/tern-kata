@@ -73,6 +73,8 @@ func (JobSelectMsg) msg() {}
 
 // JobsState is the Jobs Page's state. It is not saved: a Pane starts on the Issues Page.
 type JobsState struct {
+	// ProjectUID is the Project the state was filled for; resetPagesForProject empties it when the Pane's Project differs.
+	ProjectUID string
 	// Jobs are the Project's jobs as last read, archived ones only when ShowArchived asked for them.
 	Jobs []CronJob
 	// ProjectID is the Project Jobs belongs to; zero before a read was asked for.
@@ -342,7 +344,7 @@ func enterProjectPage(m Model, name string) (Model, []Cmd, bool) {
 		m.Notice = "The " + name + " needs a Project: choose one in the Menu."
 		return openProjects(m), nil, false
 	}
-	return m, cmds, true
+	return m.resetPagesForProject(), cmds, true
 }
 
 // enterJobs is the Jobs Page's entry. The jobs load as soon as the Project's id is known.
@@ -355,11 +357,7 @@ func enterJobs(m Model) (Model, []Cmd) {
 	m.Jobs.detailHidden = m.DetailHidden()
 	m.hidden = true
 	m.Focus = ColumnList
-	// The Page keeps its selection while another Page is shown; only another Project resets it, and the jobs are read again.
-	if id, known := m.jobsProjectID(); !known || id != m.Jobs.ProjectID {
-		m.Jobs.ProjectID, m.Jobs.Jobs, m.Jobs.Selected, m.Jobs.Err, m.Jobs.Activity = 0, nil, "", nil, nil
-		m.Jobs.ProjectArchived = false
-	}
+	// The Page keeps its selection while another Page is shown; the jobs are read again.
 	m.Jobs.stale = true
 	m, ask := m.askWorker(0)
 	return m, append(cmds, ask, LoadWorkerSetup{Workspace: m.Workspace})
@@ -391,8 +389,7 @@ func (m Model) settleJobs() (Model, []Cmd) {
 		return m, nil
 	}
 	if id != m.Jobs.ProjectID {
-		m.Jobs.ProjectID, m.Jobs.Jobs, m.Jobs.Selected, m.Jobs.Err, m.Jobs.ProjectArchived, m.Jobs.Activity = id, nil, "", nil, false, nil
-		m.Jobs.stale = true
+		m.Jobs.ProjectID, m.Jobs.stale = id, true
 	}
 	if !m.Jobs.stale {
 		return m, nil

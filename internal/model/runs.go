@@ -158,6 +158,8 @@ func (RunSelectMsg) msg() {}
 
 // RunsState is the Runs Page's state. It is not saved: a Pane starts on the Issues Page.
 type RunsState struct {
+	// ProjectUID is the Project the state was filled for; resetPagesForProject empties it when the Pane's Project differs.
+	ProjectUID string
 	// Runs are the Project's Runs as last read, newest first: the newest page and any older pages asked for.
 	Runs []Run
 	// ProjectID is the Project Runs belongs to; zero before a read was asked for.
@@ -323,15 +325,9 @@ func enterRuns(m Model) (Model, []Cmd) {
 	m.Runs.detailHidden = m.DetailHidden()
 	m.hidden = true
 	m.Focus = ColumnList
-	// The Page keeps its selection, loaded pages and filter while another Page is shown; only another Project resets them, and
-	// the newest page is read again to join what is held.
-	if id, known := m.jobsProjectID(); !known || id != m.Runs.ProjectID {
-		m.Runs.ProjectID, m.Runs.Runs, m.Runs.More, m.Runs.Selected, m.Runs.Err = 0, nil, "", "", nil
-		m.Runs.JobUID, m.Runs.JobName = "", ""
-		m.Runs.ProjectArchived = false
-	} else {
-		m.Runs.refresh, m.Runs.stale = true, true
-	}
+	// The Page keeps its selection, loaded pages and filter while another Page is shown; the newest page is read again to join
+	// what is held.
+	m.Runs.refresh, m.Runs.stale = m.Runs.ProjectID != 0, true
 	m, ask := m.askWorker(0)
 	return m, append(cmds, ask)
 }
@@ -361,8 +357,7 @@ func (m Model) settleRuns() (Model, []Cmd) {
 		return m, nil
 	}
 	if id != m.Runs.ProjectID {
-		m.Runs.ProjectID, m.Runs.Runs, m.Runs.More, m.Runs.Selected, m.Runs.Err, m.Runs.ProjectArchived = id, nil, "", "", nil, false
-		m.Runs.stale = true
+		m.Runs.ProjectID, m.Runs.stale = id, true
 	}
 	if !m.Runs.stale {
 		return m, nil

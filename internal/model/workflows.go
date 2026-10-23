@@ -210,9 +210,6 @@ func enterWorkflows(m Model) (Model, []Cmd) {
 		return m, cmds
 	}
 	w := &m.Workflows
-	if w.ProjectUID != m.Collection.ProjectUID {
-		*w = WorkflowsState{ProjectUID: m.Collection.ProjectUID, jobsRequest: w.jobsRequest, runsRequest: w.runsRequest}
-	}
 	w.ProjectID = m.collectionProjectID()
 	w.detailHidden = m.DetailHidden()
 	w.Inspecting = false
