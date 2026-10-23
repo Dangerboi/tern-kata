@@ -51,5 +51,5 @@ github-review = { file = "~/.config/tern-kata/github-review" }
 
 ## Consequences
 
-- The state folder is `$XDG_STATE_HOME/tern-kata`, else `~/.local/state/tern-kata`, beside the config folder `os.UserConfigDir()/tern-kata` that `lanes.toml` already uses (`internal/data/lanes.go`). Both are overridable in tests.
+- The state folder is `$XDG_STATE_HOME/tern-kata`, else `~/.local/state/tern-kata`, beside the config folder `os.UserConfigDir()/tern-kata`. One rule (`worker.ConfigDir`) gives the config folder, shared by the worker and by the Pane's Lane list and filters files, and it needs no state folder. Both are overridable in tests.
 - A user with Projects on two daemons runs one worker per daemon environment, as the Pane does today; federation stays out of scope.

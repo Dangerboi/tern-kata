@@ -101,11 +101,11 @@ func (g *Gateway) Run(ctx context.Context, cmd model.Cmd, messages chan<- model.
 	var result model.Msg
 	switch cmd := cmd.(type) {
 	case model.LoadLanes:
-		result = loadLanes(cmd)
+		result = g.loadLanes(cmd)
 	case model.SaveLanes:
-		result = saveLanes(cmd)
+		result = g.saveLanes(cmd)
 	case model.SaveFilters:
-		result = saveFilters(cmd)
+		result = g.saveFilters(cmd)
 	case model.LoadWorkerPickers:
 		result = loadWorkerPickers()
 	case model.LoadWorker:
@@ -122,7 +122,7 @@ func (g *Gateway) Run(ctx context.Context, cmd model.Cmd, messages chan<- model.
 		result = g.do(ctx, cmd)
 		if loaded, ok := result.(model.ProjectLoaded); ok && loaded.Project.UID != "" {
 			g.startPointerMove(cmd.Workspace, cmd.Actor)
-			loaded.Default, loaded.DefaultErr = loadFilters(loaded.Project.UID)
+			loaded.Default, loaded.DefaultErr = g.loadFilters(loaded.Project.UID)
 			result = loaded
 		}
 	case model.AttachFile:
