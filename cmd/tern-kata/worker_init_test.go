@@ -270,7 +270,8 @@ func TestWorkerSetupFormsAreListedAndParsed(t *testing.T) {
 
 func TestWorkerInitFlagsLandInTheFileAndItLoads(t *testing.T) {
 	env := setupEnv(t, boundCheckout(t, "demo"))
-	if _, err := runSetup(t, env, "init", "--executor", "box-1", "--actor=ci-bot", "--command", "/opt/omp", "--model", "openai/gpt-5", "--thinking=low"); err != nil {
+	command := filepath.Join(t.TempDir(), "omp") // absolute on every OS, unlike "/opt/omp" on Windows
+	if _, err := runSetup(t, env, "init", "--executor", "box-1", "--actor=ci-bot", "--command", command, "--model", "openai/gpt-5", "--thinking=low"); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := worker.LoadConfig(env.Dirs.ConfigPath())
@@ -278,7 +279,7 @@ func TestWorkerInitFlagsLandInTheFileAndItLoads(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := cfg.Profiles["default"]
-	if cfg.Executor != "box-1" || cfg.Actor != "ci-bot" || p.Command != "/opt/omp" || p.Model != "openai/gpt-5" || p.Thinking != "low" {
+	if cfg.Executor != "box-1" || cfg.Actor != "ci-bot" || p.Command != command || p.Model != "openai/gpt-5" || p.Thinking != "low" {
 		t.Errorf("config %+v", cfg)
 	}
 }
