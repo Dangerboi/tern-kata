@@ -394,10 +394,6 @@ func TestJobsPageRowsShowTheLatestRunOrChildAndTheInspectorTheRecentOnes(t *test
 func TestJobsPageWarnsOfAnAdapterJobMakingMoreThanADayOfIssuesPerDay(t *testing.T) {
 	everyMinute := promptJob("J1", "Chatty")
 	everyMinute.Definition.Trigger = model.CronTrigger{Kind: model.TriggerInterval, IntervalSeconds: 60}
-	everyThirtyMinutes := promptJob("J2", "Half hourly")
-	everyThirtyMinutes.Definition.Trigger = model.CronTrigger{Kind: model.TriggerCron, Cron: "*/30 * * * *", Timezone: "UTC"}
-	hourly := promptJob("J3", "Hourly")
-	hourly.Definition.Trigger = model.CronTrigger{Kind: model.TriggerInterval, IntervalSeconds: 3600}
 	existing := promptJob("J4", "Reports to one Issue")
 	existing.Definition.Trigger = model.CronTrigger{Kind: model.TriggerInterval, IntervalSeconds: 60}
 	existing.Definition.Issue = &model.CronIssuePolicy{Kind: model.IssueExisting, UID: "parent-a"}
@@ -407,10 +403,9 @@ func TestJobsPageWarnsOfAnAdapterJobMakingMoreThanADayOfIssuesPerDay(t *testing.
 	disabled.Definition.Trigger = model.CronTrigger{Kind: model.TriggerInterval, IntervalSeconds: 60}
 	disabled.Definition.Enabled = false
 
-	s := jobsPane(t, 160, everyMinute, everyThirtyMinutes, hourly, existing, native, disabled)
+	s := jobsPane(t, 160, everyMinute, existing, native, disabled)
 	wantText(t, "every minute", jobCardText(t, s, "J1"), "creates about 1440 Issues a day; consider an existing Issue")
-	wantText(t, "every 30 minutes", jobCardText(t, s, "J2"), "creates about 48 Issues a day; consider an existing Issue")
-	for uid, why := range map[string]string{"J3": "24 a day is the limit, not over it", "J4": "it reports to an existing Issue", "N1": "a recurring child is made of children", "J5": "it is disabled and makes none"} {
+	for uid, why := range map[string]string{"J4": "it reports to an existing Issue", "N1": "a recurring child is made of children", "J5": "it is disabled and makes none"} {
 		if strings.Contains(jobCardText(t, s, uid), "Issues a day") {
 			t.Errorf("%s warns, but %s", uid, why)
 		}

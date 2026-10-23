@@ -28,16 +28,18 @@ type projectLanes struct {
 	DoneCards int      `toml:"done_cards"`
 }
 
-// configPath is the file called name in tern-kata's folder of the user config dir.
-func configPath(name string) (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
+// configFolder is tern-kata's config folder from the gateway's folder hook, which finds the config folder even when the state
+// folder cannot be found.
+func (g *Gateway) configFolder() (string, error) {
+	dirs, err := g.workerDirs()
+	if dirs.Config == "" {
+		if err == nil {
+			err = errors.New("tern-kata's config folder is not known")
+		}
 		return "", err
 	}
-	return filepath.Join(dir, "tern-kata", name), nil
+	return dirs.Config, nil
 }
-
-func lanesPath() (string, error) { return configPath("lanes.toml") }
 
 // readLanes reads the whole file; a missing file is an empty one.
 func readLanes(path string) (lanesFile, error) {
@@ -58,11 +60,11 @@ func readRawTables(path string) (map[string]any, error) {
 }
 
 // loadLanes is the Project's saved Lane list; labels are normalised and repeated or empty ones dropped. No list means none saved.
-func loadLanes(cmd model.LoadLanes) model.LanesLoaded {
-	path, err := lanesPath()
+func (g *Gateway) loadLanes(cmd model.LoadLanes) model.LanesLoaded {
+	folder, err := g.configFolder()
 	if err == nil {
 		var file lanesFile
-		if file, err = readLanes(path); err == nil {
+		if file, err = readLanes(filepath.Join(folder, "lanes.toml")); err == nil {
 			p := file[cmd.ProjectUID]
 			return model.LanesLoaded{ProjectUID: cmd.ProjectUID, Lanes: cleanLanes(p.Labels), DoneDays: max(p.DoneDays, 0), DoneCards: max(p.DoneCards, 0)}
 		}
@@ -83,15 +85,16 @@ func cleanLanes(labels []string) []string {
 // saveLanes writes the Project's list into the file, keeping every other table and every key it doesn't know. It refuses a file
 // it cannot read, and renames a temporary file into place so a failed write leaves the old file. shortcut: comments in a
 // hand-edited file are lost on save, and two Panes saving at once race; upgrade if either bites.
-func saveLanes(cmd model.SaveLanes) model.LanesSaved {
-	return model.LanesSaved{ProjectUID: cmd.ProjectUID, Lanes: cmd.Lanes, DoneDays: cmd.DoneDays, DoneCards: cmd.DoneCards, Err: writeLanes(cmd)}
+func (g *Gateway) saveLanes(cmd model.SaveLanes) model.LanesSaved {
+	return model.LanesSaved{ProjectUID: cmd.ProjectUID, Lanes: cmd.Lanes, DoneDays: cmd.DoneDays, DoneCards: cmd.DoneCards, Err: g.writeLanes(cmd)}
 }
 
-func writeLanes(cmd model.SaveLanes) error {
-	path, err := lanesPath()
+func (g *Gateway) writeLanes(cmd model.SaveLanes) error {
+	folder, err := g.configFolder()
 	if err != nil {
 		return err
 	}
+	path := filepath.Join(folder, "lanes.toml")
 	file, err := readRawTables(path)
 	if err != nil {
 		return err
