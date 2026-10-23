@@ -33,7 +33,7 @@ A schedule that can't be read, or a next run that can't be worked out (a job tha
 | `ctrl+r` | Read the jobs again; they also reload when the daemon reports a change |
 | `r` | Open the Runs Page filtered to the selected job (see [Runs](runs.md)) |
 | `R` | Ask the worker to run the selected adapter job now |
-| `W` | Open the [Worker card](worker.md#the-worker-card): this machine's worker, set it up or serve the Project |
+| `W` | Open the [Worker card](worker.md#from-the-pane-the-worker-card): this machine's worker; set it up, serve the Project, edit, restart or stop it |
 
 ### What a card tells you
 

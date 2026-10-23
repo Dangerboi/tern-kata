@@ -1,6 +1,6 @@
 ---
 name: tern-kata
-description: Files attached to kata Issues, recurring Issues, and the tern-kata worker, through tern-kata. Use when an Issue's metadata has `attachment.*` keys, to attach a screenshot, log or other file to an Issue, to make an Issue recur, change or stop its schedule, or print it (`tern-kata recur`), to run a scheduled agent job now (`tern-kata run`), or to check what the worker serves and runs (`tern-kata worker status`, `worker doctor`), or to resume or abandon a held worker run (`tern-kata worker resume`, `worker abandon`), or to stop the worker (`tern-kata worker stop`).
+description: Files attached to kata Issues, recurring Issues, and the tern-kata worker, through tern-kata. Use when an Issue's metadata has `attachment.*` keys, to attach a screenshot, log or other file to an Issue, to make an Issue recur, change or stop its schedule, or print it (`tern-kata recur`), to run a scheduled agent job now (`tern-kata run`), to check what the worker serves and runs (`tern-kata worker status`, `worker doctor`), to set the worker up when the user asks (`tern-kata worker init`, `worker add`, `worker edit`), or to resume or abandon a held worker run (`tern-kata worker resume`, `worker abandon`). Never stop, edit or reconfigure the user's worker unasked.
 ---
 
 An Attachment is a file copied into the Project's Attachment store, `<primary checkout>/.kata-attachments/<Issue ULID>/<name>`, and pointed to by one `attachment.<name>` meta key on the Issue. The store is gitignored and never committed.
@@ -48,7 +48,7 @@ tern-kata recur <ref> --stop                            # stops the Recurrence; 
 
 ## Worker runs
 
-`tern-kata worker` (a foreground process the user starts) runs kata's agent prompt jobs through omp on their machine and records each run in kata. The commands below talk to it; they need the worker running, say `no tern-kata worker is running on this machine` when it is not, and exit 1 with the reason on stderr when refused.
+The tern-kata plugin supervises the worker: once `worker.toml` exists, the plugin starts `tern-kata worker` inside Tern's session daemon and starts it again when it exits, so it is not a foreground process the user starts. It runs kata's agent prompt jobs and workflows through omp on their machine and records each run in kata. The commands below that talk to it need it running, say `no tern-kata worker is running on this machine` when it is not, and exit 1 with the reason on stderr when refused.
 
 ```bash
 tern-kata run <job-uid>                       # run an adapter prompt job now; prints the run's uid
@@ -59,8 +59,23 @@ tern-kata worker resume <run-uid> [--as me]   # continue a held run in its omp s
 tern-kata worker abandon <run-uid> [--as me]  # give up a held run: kata records it cancelled
 ```
 
-To set the worker up for the Project this directory is bound to, `tern-kata worker init` writes a new `worker.toml` (it refuses when one exists; optional `--executor`, `--actor`, `--command`, `--model` and `--thinking` set those values, a value the loader refuses writes nothing) and `tern-kata worker add` adds this Project and its checkout to an existing one (it refuses when there is none, or the Project is already listed); `tern-kata worker edit` changes the file by hand in `$VISUAL`/`$EDITOR` (the worker's strict check must pass, else the editor reopens with the problem; a worker running reads the result after `worker stop`), and `e` on the Worker card does the same. Anyone who can write jobs in a listed Project can run prompts and commands on the machine as the user, so run them only when the user asked. The Pane does the same from the Worker card (`W` on the Jobs Page): it shows the setup, sets the worker up or serves the Project once its trust choice is yes, and offers to restart a running worker, and `s` on the card turns the plugin's supervision off (it creates `worker.manual` beside `worker.toml`; with a worker running it asks whether that worker stops when idle or now) or on (it removes the marker, and the plugin starts the worker within 10 seconds). Only turn supervision off when the user asked; the card and the Jobs Page banner show the state. The card also offers to restart a running worker (when idle, or now) with the stop request. A running worker reads `worker.toml` only at start: after `worker add` or a save from the card, `tern-kata worker stop` ends it and the plugin starts a fresh one. Guide: https://github.com/Dangerboi/tern-kata/blob/main/docs/guide/worker.md
+### Setting the worker up
+
+Only when the user asks. In a directory bound to the Project (a `.kata.toml`):
+
+- `tern-kata worker init` writes a new `worker.toml` for this Project and its checkout. It refuses when one exists. Optional `--executor`, `--actor`, `--command`, `--model` and `--thinking` set those values; a value the loader refuses writes nothing. Pass the flags the user gave you, and no others.
+- `tern-kata worker add` adds this Project and its checkout to an existing file (it refuses when there is none, or the Project is already listed). Neither calls the kata daemon.
+- `tern-kata worker edit` changes the file by hand. The strict check must pass, else the editor reopens with the problem. It needs a person at the editor.
+- `tern-kata worker doctor` checks the result.
+- A running worker reads `worker.toml` only at start. `tern-kata worker stop` (default: its runs finish first; `--now` ends it and holds the runs it interrupts `interrupted`) makes the plugin start a fresh one, unless supervision is off (a `worker.manual` file beside `worker.toml`).
+- The Pane does all of this from the Worker card (`W` on the Jobs Page): Set up, Serve this Project, Edit (`e`), the restart choice, and `s` for supervision. Leave the card to people.
+
+Anyone who can write jobs in a listed Project can run prompts and commands on the machine as the user, so listing a Project is the user's decision, with the trust note read.
+
+**Never stop, edit, reconfigure or restart the user's worker, turn its supervision off or on (`worker.manual`), or list a Project in `worker.toml` unless the user asked you to.** It may be running other runs for them, and a stop ends or interrupts those. If a change is needed, say what and let them decide. Guide: https://github.com/Dangerboi/tern-kata/blob/main/docs/guide/worker.md
+
+### Held runs
 
 - A **held run** is `unknown` in kata with the reason first in its summary (`interrupted`, `launch_unproven`, `no_receipt`, `group_unproven`, `agent_login`, `agent_quota`, `secret_unavailable`, `invalid_prompt`, `execution_error`, or, before kata saw the run, `admission_rejected` and `create_rejected`). The worker never starts its prompt again and nothing restarts it; read the reason and the run's Issue comments, then resume or abandon.
-- Resume starts a new headless omp attempt on the saved session; the agent is told its previous turn may have partly run. It is refused unless the run is held `unknown` with a saved omp session, its agent process group is gone, the Project's lease is held, the Issue is open and the Project has a free slot; the refusal names which. Abandon is refused while a recorded process group is still present and for runs that are not held. Neither kills a process.
+- Resume starts a new headless omp attempt on the saved session; the agent is told its previous turn may have partly run. It is refused unless the run is held `unknown` with a saved omp session, its agent process group is gone, the Project's lease is held, the Issue is open and the Project has a free slot; the refusal names which. Abandon of a held run is refused while a recorded process group is still present; abandoning a run that is running stops it. Resume kills nothing.
 - Decide for the user only when they asked you to: resuming spends model usage and lets the agent act again, abandoning ends the run for good. The refusal text is the answer when neither is possible; do not edit `~/.local/state/tern-kata` journals or delete a `quarantine/` folder to get around it.
