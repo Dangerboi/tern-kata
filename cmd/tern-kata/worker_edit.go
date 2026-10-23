@@ -19,7 +19,8 @@ const problemPrefix = "#! "
 
 // editWorkerConfig is `worker edit`: worker.toml goes through $VISUAL or $EDITOR in a temporary file, and the result
 // replaces it only when the shared strict check accepts it. A refusal reopens the text with the problem at the top;
-// an unchanged or empty result leaves the file as it was.
+// an unchanged or empty result leaves the file as it was, and so does a file that changed while the editor was open. Whenever
+// the write fails, the edited copy stays in its temporary file, whose path the error names.
 func editWorkerConfig(ctx context.Context, env workerEnv, out io.Writer) error {
 	path := env.Dirs.ConfigPath()
 	raw, err := os.ReadFile(path)
@@ -37,7 +38,12 @@ func editWorkerConfig(ctx context.Context, env workerEnv, out io.Writer) error {
 	if err != nil {
 		return subcommandError{err}
 	}
-	defer os.Remove(tmp.Name())
+	kept := false
+	defer func() {
+		if !kept {
+			os.Remove(tmp.Name())
+		}
+	}()
 	tmp.Close()
 
 	original := string(raw)
@@ -63,7 +69,7 @@ func editWorkerConfig(ctx context.Context, env workerEnv, out io.Writer) error {
 		if problem != "" {
 			text = stripProblem(text)
 		}
-		if strings.TrimSpace(text) == "" || text == offered {
+		if strings.TrimSpace(text) == "" || sameText(text, offered) {
 			_, err := fmt.Fprintf(out, "No change: %s is as it was.\n", path)
 			return err
 		}
@@ -71,11 +77,22 @@ func editWorkerConfig(ctx context.Context, env workerEnv, out io.Writer) error {
 			offered, problem = text, err.Error()
 			continue
 		}
-		if err := worker.WriteConfig(path, text); err != nil {
-			return subcommandError{err}
+		if err := worker.ReplaceConfig(path, original, text); err != nil {
+			// The temp file holds the edit, with any problem comment gone, and stays for the user.
+			if werr := os.WriteFile(tmp.Name(), []byte(text), 0o600); werr != nil {
+				return subcommandError{fmt.Errorf("%w; the edit could not be kept: %v", err, werr)}
+			}
+			kept = true
+			return subcommandError{fmt.Errorf("%w; your edit is kept in %s", err, tmp.Name())}
 		}
 		return reportEdit(ctx, env, path, out)
 	}
+}
+
+// sameText compares two texts without their line endings: an editor that saves CRLF as LF has changed nothing.
+func sameText(a, b string) bool {
+	lf := strings.NewReplacer("\r\n", "\n")
+	return lf.Replace(a) == lf.Replace(b)
 }
 
 func commentProblem(problem string) string {

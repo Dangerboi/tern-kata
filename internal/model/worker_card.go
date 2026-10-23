@@ -131,8 +131,9 @@ type WorkerSetupSaved struct {
 
 func (WorkerSetupSaved) msg() {}
 
-// SaveWorkerEdit asks for Text to replace worker.toml: the worker package checks it first, and nothing is written when it would not load.
-type SaveWorkerEdit struct{ Text string }
+// SaveWorkerEdit asks for Text to replace worker.toml: the worker package checks it first, and nothing is written when it would not load
+// or when the file is no longer Base, the text the edit started from.
+type SaveWorkerEdit struct{ Text, Base string }
 
 func (SaveWorkerEdit) cmd() {}
 
@@ -201,6 +202,8 @@ type WorkerCardState struct {
 	Restart     bool
 	// EditText is the text of an edit that was refused; the next edit starts from it, not from the file.
 	EditText string
+	// EditBase is the file's text when the editor was opened; the save is refused when the file has since changed.
+	EditBase string
 }
 
 func (f *WorkerCardState) at(name Field) *string {
@@ -475,11 +478,11 @@ func workerEditorClosed(m Model, msg DraftEditorClosed) (Model, []Cmd, bool) {
 		return m, nil, true
 	}
 	text := normalizeLineBreaks(msg.Text)
-	if strings.TrimSpace(text) == "" || text == m.workerEditStart() {
+	if strings.TrimSpace(text) == "" || text == normalizeLineBreaks(m.workerEditStart()) {
 		return m, nil, true
 	}
 	f.Saving, f.Err = true, nil
-	return m, []Cmd{SaveWorkerEdit{Text: text}}, true
+	return m, []Cmd{SaveWorkerEdit{Text: text, Base: f.EditBase}}, true
 }
 
 // workerEditStart is the text the editor is given: the refused edit when there is one, else the file.
@@ -496,6 +499,11 @@ func workerEdited(m Model, msg WorkerEdited) (Model, []Cmd) {
 		return m, nil
 	}
 	f.Saving = false
+	if errors.Is(msg.Err, worker.ErrConfigChanged) {
+		f.EditText = msg.Text
+		f.Err = errors.New("worker.toml changed while you edited it, so nothing was saved. Your text is kept but lacks that change; press e to edit it and save to replace the file with it.")
+		return m, []Cmd{LoadWorkerSetup{Workspace: m.Workspace}}
+	}
 	if msg.Err != nil {
 		f.EditText = msg.Text
 		f.Err = fmt.Errorf("The edit was not saved and the file is as it was: %w. Press e to keep editing; your text is kept.", msg.Err)
@@ -561,6 +569,7 @@ func workerCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	binding, bound := LookupBindingForMode(msg.Chord, m.WorkerCardMode())
 	if bound && binding.Action == WorkerEdit {
 		if m.WorkerCardEdits() {
+			f.EditBase = m.Worker.Setup.Text
 			return m, []Cmd{OpenDraftEditor{UID: WorkerDraftUID, Text: m.workerEditStart(), Suffix: ".toml"}}
 		}
 		bound = false // no file to edit: the key is typed

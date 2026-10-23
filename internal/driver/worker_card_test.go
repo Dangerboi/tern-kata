@@ -10,6 +10,7 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
+	"github.com/Dangerboi/tern-kata/internal/worker"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
@@ -404,7 +405,7 @@ func TestWorkerCardEditOpensTheFileInEditorAndWritesWhatLoads(t *testing.T) {
 		t.Fatalf("e routed %#v to $EDITOR", opened.Editor)
 	}
 	back := step(t, opened.State, model.DraftEditorClosed{UID: model.WorkerDraftUID, Text: "executor = \"renamed\"\n"})
-	if !reflect.DeepEqual(back.Cmds, []model.Cmd{model.SaveWorkerEdit{Text: "executor = \"renamed\"\n"}}) {
+	if !reflect.DeepEqual(back.Cmds, []model.Cmd{model.SaveWorkerEdit{Text: "executor = \"renamed\"\n", Base: "executor = \"laptop\"\n"}}) {
 		t.Fatalf("the edited text sent %#v, want it checked and written", back.Cmds)
 	}
 	done := step(t, back.State, model.WorkerEdited{Text: "executor = \"renamed\"\n"})
@@ -444,6 +445,42 @@ func TestWorkerCardEditThatChangesNothingSendsNothing(t *testing.T) {
 		if len(back.Cmds) != 0 {
 			t.Errorf("%s: sent %#v", name, back.Cmds)
 		}
+	}
+}
+
+func TestWorkerCardEditOfAFileThatChangedKeepsTheTextReadsTheSetupAgainAndSaysSo(t *testing.T) {
+	s := workerCardOpen(t, nil, withText(listedProject, "executor = \"laptop\"\n"))
+	opened := step(t, s, key("e"))
+	mine := "executor = \"mine\"\n"
+	sent := step(t, opened.State, model.DraftEditorClosed{UID: model.WorkerDraftUID, Text: mine})
+	refused := step(t, sent.State, model.WorkerEdited{Text: mine, Err: worker.ErrConfigChanged})
+	msg, _ := nodeText(t, refused.State, view.WorkerID+".error")
+	for _, want := range []string{"changed", "lacks that change"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error %q lacks %q", msg, want)
+		}
+	}
+	if !slices.Contains(refused.Cmds, model.Cmd(askedSetup)) {
+		t.Errorf("cmds %#v, want the setup read again", refused.Cmds)
+	}
+	reread := step(t, refused.State, model.WorkerSetupLoaded{Setup: withText(listedProject, "executor = \"theirs\"\n")})
+	again := step(t, reread.State, key("e"))
+	if again.Editor == nil || again.Editor.Text != mine {
+		t.Fatalf("e reopened %#v, want the kept text", again.Editor)
+	}
+	back := step(t, again.State, model.DraftEditorClosed{UID: model.WorkerDraftUID, Text: mine + "# more\n"})
+	want := model.SaveWorkerEdit{Text: mine + "# more\n", Base: "executor = \"theirs\"\n"}
+	if !reflect.DeepEqual(back.Cmds, []model.Cmd{want}) {
+		t.Errorf("the second save sent %#v, want %#v", back.Cmds, want)
+	}
+}
+
+func TestWorkerCardEditOfACRLFFileThatChangesNothingSendsNothing(t *testing.T) {
+	s := workerCardOpen(t, nil, withText(listedProject, "executor = \"laptop\"\r\n\r\n[profiles.default]\r\n"))
+	opened := step(t, s, key("e"))
+	back := step(t, opened.State, model.DraftEditorClosed{UID: model.WorkerDraftUID, Text: "executor = \"laptop\"\n\n[profiles.default]\n"})
+	if len(back.Cmds) != 0 {
+		t.Errorf("sent %#v", back.Cmds)
 	}
 }
 

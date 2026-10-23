@@ -13,6 +13,8 @@ import (
 const (
 	editorModeEnv = "TERN_KATA_TEST_EDITOR_MODE"
 	editorLogEnv  = "TERN_KATA_TEST_EDITOR_LOG"
+	// editorConfigEnv is the worker.toml the "clash" and "break" modes touch while the edit is open.
+	editorConfigEnv = "TERN_KATA_TEST_EDITOR_CONFIG"
 )
 
 var executorLine = regexp.MustCompile(`(?m)^executor = .*$`)
@@ -40,6 +42,16 @@ func TestScriptedEditorProcess(t *testing.T) {
 	switch mode {
 	case "rename":
 		out = executorLine.ReplaceAllString(text, `executor = "renamed"`)
+	case "clash", "break":
+		// The edit is renamed, and worker.toml is changed (clash) or turned into a folder, so no write can succeed (break).
+		out = executorLine.ReplaceAllString(text, `executor = "renamed"`)
+		config := os.Getenv(editorConfigEnv)
+		os.Remove(config)
+		if mode == "break" {
+			os.Mkdir(config, 0o700)
+		} else {
+			os.WriteFile(config, []byte(executorLine.ReplaceAllString(text, `executor = "theirs"`)), 0o600)
+		}
 	case "unchanged":
 		out = text
 	case "empty":
@@ -125,6 +137,46 @@ func TestWorkerEditReopensARefusedEditWithTheProblemAtTheTop(t *testing.T) {
 	got := readConfig(t, env)
 	if !strings.Contains(got, `executor = "second"`) || strings.Contains(got, "bogus") || strings.Contains(got, "#!") {
 		t.Errorf("file:\n%s", got)
+	}
+}
+
+// keptCopy is the path a refused write names as holding the edited copy; the file is removed with the test.
+func keptCopy(t *testing.T, err error) string {
+	t.Helper()
+	_, path, ok := strings.Cut(err.Error(), "your edit is kept in ")
+	if !ok {
+		t.Fatalf("error %q names no kept copy", err)
+	}
+	t.Cleanup(func() { os.Remove(path) })
+	return path
+}
+
+func TestWorkerEditKeepsTheEditedCopyWhenTheWriteFails(t *testing.T) {
+	env := initedEnv(t)
+	scriptedEditor(t, "break")
+	t.Setenv(editorConfigEnv, env.Dirs.ConfigPath())
+	_, err := runSetup(t, env, "edit")
+	if err == nil {
+		t.Fatal("a failed write reported success")
+	}
+	if got := string(mustRead(t, keptCopy(t, err))); !strings.Contains(got, `executor = "renamed"`) {
+		t.Errorf("the kept copy:\n%s", got)
+	}
+}
+
+func TestWorkerEditRefusesAFileThatChangedWhileEditingAndKeepsTheCopy(t *testing.T) {
+	env := initedEnv(t)
+	scriptedEditor(t, "clash")
+	t.Setenv(editorConfigEnv, env.Dirs.ConfigPath())
+	_, err := runSetup(t, env, "edit")
+	if err == nil || !strings.Contains(err.Error(), "changed while you edited it") {
+		t.Fatalf("error %v, want the changed file named", err)
+	}
+	if got := string(mustRead(t, keptCopy(t, err))); !strings.Contains(got, `executor = "renamed"`) {
+		t.Errorf("the kept copy:\n%s", got)
+	}
+	if !strings.Contains(readConfig(t, env), `executor = "theirs"`) {
+		t.Errorf("the other change was lost:\n%s", readConfig(t, env))
 	}
 }
 

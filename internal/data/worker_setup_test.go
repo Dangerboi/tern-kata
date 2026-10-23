@@ -213,7 +213,7 @@ func TestEditedWorkerTomlIsWrittenOnlyWhenItLoads(t *testing.T) {
 	writeWorkerFile(t, dirs, "worker.toml", "executor = \"laptop\"\n\n[profiles.default]\n")
 	before, _ := os.ReadFile(dirs.ConfigPath())
 
-	refused := as[model.WorkerEdited](t, run(t, g, model.SaveWorkerEdit{Text: "executor = \"laptop\"\nbogus = 1\n"}))
+	refused := as[model.WorkerEdited](t, run(t, g, model.SaveWorkerEdit{Text: "executor = \"laptop\"\nbogus = 1\n", Base: string(before)}))
 	if refused.Err == nil || !strings.Contains(refused.Err.Error(), "unknown key bogus") || strings.Contains(refused.Err.Error(), "/tmp") {
 		t.Fatalf("refusal %v, want the problem named with the file called worker.toml", refused.Err)
 	}
@@ -222,7 +222,11 @@ func TestEditedWorkerTomlIsWrittenOnlyWhenItLoads(t *testing.T) {
 	}
 
 	text := "executor = \"renamed\"\n\n[profiles.default]\n"
-	if saved := as[model.WorkerEdited](t, run(t, g, model.SaveWorkerEdit{Text: text})); saved.Err != nil {
+	stale := as[model.WorkerEdited](t, run(t, g, model.SaveWorkerEdit{Text: text, Base: "executor = \"older\"\n"}))
+	if !errors.Is(stale.Err, worker.ErrConfigChanged) {
+		t.Fatalf("an edit from another base: %v, want ErrConfigChanged", stale.Err)
+	}
+	if saved := as[model.WorkerEdited](t, run(t, g, model.SaveWorkerEdit{Text: text, Base: string(before)})); saved.Err != nil {
 		t.Fatal(saved.Err)
 	}
 	if after, _ := os.ReadFile(dirs.ConfigPath()); string(after) != text {

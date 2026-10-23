@@ -19,11 +19,13 @@ const TrustNote = "Anyone who can write jobs in a listed Project can run prompts
 var (
 	// ErrConfigExists is InitConfig refusing to overwrite a worker.toml.
 	ErrConfigExists = errors.New("worker config already exists")
+	// ErrConfigChanged is ReplaceConfig finding worker.toml no longer as the edit began.
+	ErrConfigChanged = errors.New("worker.toml changed while you edited it")
 	// ErrNoConfig is AddProject finding no worker.toml to extend.
 	ErrNoConfig = errors.New("no worker config")
 
 	unsafeKeyChars = regexp.MustCompile(`[^a-z0-9_-]`)
-	checkoutsTable = regexp.MustCompile(`^\s*\[\s*checkouts\s*\]\s*(#.*)?$`)
+	checkoutsTable = regexp.MustCompile(`^\s*\[\s*(?:checkouts|"checkouts"|'checkouts')\s*\]\s*(#.*)?$`)
 )
 
 // Binding is a kata Project and the primary checkout its directory is bound to.
@@ -235,7 +237,13 @@ func addToConfig(existing, project, key, checkout string, addCheckout bool) stri
 
 // WriteConfig writes a whole worker.toml: content goes next to path, is checked with LoadConfig, then renamed into place (mode 0600).
 // A file that would not load is removed and never replaces anything.
-func WriteConfig(path, content string) error {
+func WriteConfig(path, content string) error { return writeConfig(path, content, nil) }
+
+// ReplaceConfig is WriteConfig for an edit: it refuses with ErrConfigChanged, writing nothing, when the file on disk is no longer
+// base, the text the edit started from. The compare and the rename are not one step; another writer in between is not caught.
+func ReplaceConfig(path, base, content string) error { return writeConfig(path, content, &base) }
+
+func writeConfig(path, content string, base *string) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
@@ -258,6 +266,15 @@ func WriteConfig(path, content string) error {
 	}
 	if _, err := LoadConfig(tmp.Name()); err != nil {
 		return &refusedWrite{err: err, text: "the new worker.toml would not load, so nothing was written: " + strings.ReplaceAll(err.Error(), tmp.Name(), path)}
+	}
+	if base != nil {
+		disk, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if string(disk) != *base {
+			return ErrConfigChanged
+		}
 	}
 	return os.Rename(tmp.Name(), path)
 }

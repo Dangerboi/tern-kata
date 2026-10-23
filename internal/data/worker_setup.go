@@ -119,7 +119,8 @@ func (g *Gateway) stopWorker(ctx context.Context, cmd model.StopWorker) model.Wo
 	return model.WorkerStopped{Mode: resp.Stop.Mode, InFlight: resp.Stop.InFlight, Restarts: resp.Stop.Restarts}
 }
 
-// saveWorkerEdit replaces worker.toml with text the worker package accepts; the refusal names the problem and nothing is written.
+// saveWorkerEdit replaces worker.toml with text the worker package accepts, when the file is still the base the edit started from; the
+// refusal names the problem and nothing is written.
 func (g *Gateway) saveWorkerEdit(cmd model.SaveWorkerEdit) model.WorkerEdited {
 	dirs, err := g.workerDirs()
 	if err != nil {
@@ -128,7 +129,7 @@ func (g *Gateway) saveWorkerEdit(cmd model.SaveWorkerEdit) model.WorkerEdited {
 	if err := worker.CheckConfig(cmd.Text); err != nil {
 		return model.WorkerEdited{Text: cmd.Text, Err: err}
 	}
-	return model.WorkerEdited{Text: cmd.Text, Err: worker.WriteConfig(dirs.ConfigPath(), cmd.Text)}
+	return model.WorkerEdited{Text: cmd.Text, Err: worker.ReplaceConfig(dirs.ConfigPath(), cmd.Base, cmd.Text)}
 }
 
 // setWorkerSupervision creates worker.manual beside worker.toml (supervision off) or removes it (on), then, when asked, sends the
