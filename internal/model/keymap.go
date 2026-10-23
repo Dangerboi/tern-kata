@@ -179,6 +179,7 @@ var cardBindings = []Binding{
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: ApplyFilters, Help: "apply filters", Mode: ModeFilterForm, ShowInFooter: true},
 	{Chord: "ctrl+s", Key: "ctrl+s", Action: ApplyFilters, Help: "apply filters", Mode: ModeFilterForm},
 	{Chord: "ctrl+d", Key: "ctrl+d", Action: SaveFilterDefault, Help: "save as default", Mode: ModeFilterForm, ShowInFooter: true},
+	{Chord: "meta+d", Key: "meta+d", Action: SaveFilterDefault, Help: "save as default" + headlessNote, Mode: ModeFilterForm},
 	{Chord: "escape", Key: "esc", Action: CancelFilters, Help: "cancel", Mode: ModeFilterForm, ShowInFooter: true},
 	{Chord: "tab", Key: "tab", Action: NextFilterField, Help: "next field", Mode: ModeFilterForm, ShowInFooter: true},
 	{Chord: "enter", Key: "enter", Action: NextFilterField, Help: "next field", Mode: ModeFilterForm},
