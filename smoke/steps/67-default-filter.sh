@@ -8,8 +8,7 @@ expect_tree "[data-id='layer.filters']" '.count == 1'
 ctl key tab
 ctl key Right
 expect_tree "[data-id='layer.filters.status']" '.ok and (.nodes[0].text | contains("[ open ]"))'
-# The button sends the same ctrl+d chord; Tern does not deliver a typed ctrl+d to a Pane under `ctl key`, as the Close card shows.
-ctl click "[data-id='layer.filters.actions.default']"
+ctl key Ctrl+d
 expect_tree "[data-id='layer.filters']" '.count == 0'
 expect_tree "[data-id='main.filters']" '.nodes[0].text | contains("status=open") and endswith("(default)")'
 [[ -f "$XDG_CONFIG_HOME/tern-kata/filters.toml" ]]
