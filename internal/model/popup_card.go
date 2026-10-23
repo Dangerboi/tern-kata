@@ -255,8 +255,10 @@ func init() {
 			modes: []Mode{ModeFilterForm}, mode: func(Model) Mode { return ModeFilterForm },
 			key:    filterFormKey,
 			fields: FilterFields, focus: func(m *Model) *Field { return &m.FilterForm.Field },
-			locked: func(Model) bool { return false },
-			caret:  func(m Model) (Field, bool) { return m.FilterForm.Field, takesText(FilterFields, m.FilterForm.Field) },
+			locked: func(m Model) bool { return m.FilterForm.Saving },
+			caret: func(m Model) (Field, bool) {
+				return m.FilterForm.Field, !m.FilterForm.Saving && takesText(FilterFields, m.FilterForm.Field)
+			},
 			choose: chooseFilter,
 		},
 		{

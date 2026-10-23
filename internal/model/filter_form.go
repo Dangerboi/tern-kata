@@ -34,10 +34,14 @@ func FilterChoiceLabel(choices []FilterChoice, value string) string {
 }
 
 type FilterFormState struct {
-	Open   bool
-	Field  Field
-	Values Filters
-	Caret  Caret
+	Open, Saving bool
+	Field        Field
+	Values       Filters
+	Caret        Caret
+	// Err is why the last save as default did not happen; the card and its values stay.
+	Err error
+	// Sent is the save the card is waiting on, so only its own result closes or fails the card.
+	Sent SaveFilters
 }
 
 // value is the filter value the field called name holds, nil for a name that is not a Filter field.
@@ -110,10 +114,24 @@ func chooseFilter(m Model, i int) Model {
 
 // filterFormKey is one key for the Filter form on top: a bound chord acts, any other types.
 func filterFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
-	if binding, ok := LookupBindingForMode(msg.Chord, ModeFilterForm); ok && !(isCaretChord(msg.Chord) && filterTextField(&m.FilterForm) != nil) {
+	binding, bound := LookupBindingForMode(msg.Chord, ModeFilterForm)
+	bound = bound && !(isCaretChord(msg.Chord) && filterTextField(&m.FilterForm) != nil)
+	if m.FilterForm.Saving && !(bound && binding.Action == CancelFilters) {
+		return m, nil // the save has not answered: the values stay as sent
+	}
+	if !bound || binding.Action != SaveFilterDefault {
+		m.FilterForm.Err = nil
+	}
+	if bound {
 		return updateFilterForm(m, binding.Action)
 	}
 	return updateFilterText(m, msg)
+}
+
+func trimmedFilters(f Filters) Filters {
+	f.Owner = strings.TrimSpace(f.Owner)
+	f.Label = strings.TrimSpace(f.Label)
+	return f
 }
 
 func updateFilterForm(m Model, action Action) (Model, []Cmd) {
@@ -123,10 +141,10 @@ func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 			return updateFilterText(m, KeyMsg{Text: " "})
 		}
 		return updateFilterForm(m, NextFilterChoice)
+	case SaveFilterDefault:
+		return saveFilterDefault(m)
 	case ApplyFilters:
-		m.Filters = m.FilterForm.Values
-		m.Filters.Owner = strings.TrimSpace(m.Filters.Owner)
-		m.Filters.Label = strings.TrimSpace(m.Filters.Label)
+		m.Filters = trimmedFilters(m.FilterForm.Values)
 		m.FilterForm = FilterFormState{}
 		m.SelectedUID = ""
 		return snapshotChanged(m)

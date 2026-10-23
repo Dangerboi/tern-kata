@@ -101,13 +101,15 @@ type Model struct {
 	Drafts           map[string]Draft
 	EditorUID        string
 	Filters          Filters
-	Search           SearchState
-	IDSearch         IDSearch
-	FilterForm       FilterFormState
-	Page             Page
-	Board            BoardState
-	Jobs             JobsState
-	Runs             RunsState
+	// DefaultFilters is the bound Project's saved default filter, empty when it has none.
+	DefaultFilters Filters
+	Search         SearchState
+	IDSearch       IDSearch
+	FilterForm     FilterFormState
+	Page           Page
+	Board          BoardState
+	Jobs           JobsState
+	Runs           RunsState
 	// Worker is what the Pane knows of this machine's worker: whether it runs, what it serves and the local state of its runs.
 	Worker    WorkerState
 	Workflows WorkflowsState
@@ -209,6 +211,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return m, []Cmd{LoadProject{Workspace: msg.Workspace, Actor: m.Actor}}
 	case ProjectLoaded:
 		return updateProject(m, msg)
+	case FiltersSaved:
+		return filtersSaved(m, msg)
 	case LanesLoaded:
 		m = lanesLoaded(m, msg)
 	case LanesSaved:

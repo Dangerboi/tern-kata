@@ -41,6 +41,7 @@ const (
 	OpenFilterForm          Action = "filter-form"
 	ApplyFilters            Action = "apply-filters"
 	CancelFilters           Action = "cancel-filters"
+	SaveFilterDefault       Action = "save-filter-default"
 	NextFilterField         Action = "next-filter-field"
 	PreviousFilterField     Action = "previous-filter-field"
 	NextFilterChoice        Action = "next-filter-choice"
@@ -177,6 +178,7 @@ var cardBindings = []Binding{
 	{Chord: "meta+a", Key: "meta+a", Action: EditorSelectAll, Help: "select all" + headlessNote, Mode: ModeEditor},
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: ApplyFilters, Help: "apply filters", Mode: ModeFilterForm, ShowInFooter: true},
 	{Chord: "ctrl+s", Key: "ctrl+s", Action: ApplyFilters, Help: "apply filters", Mode: ModeFilterForm},
+	{Chord: "ctrl+d", Key: "ctrl+d", Action: SaveFilterDefault, Help: "save as default", Mode: ModeFilterForm, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: CancelFilters, Help: "cancel", Mode: ModeFilterForm, ShowInFooter: true},
 	{Chord: "tab", Key: "tab", Action: NextFilterField, Help: "next field", Mode: ModeFilterForm, ShowInFooter: true},
 	{Chord: "enter", Key: "enter", Action: NextFilterField, Help: "next field", Mode: ModeFilterForm},

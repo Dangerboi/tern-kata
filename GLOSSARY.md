@@ -74,6 +74,10 @@
 
 **Dates card**: The Popup card `d` opens on the selected Issue in the list, the Board, the Lane view and the Issue detail. Two text fields, Scheduled and Deadline, prefilled with the Issue's dates; each takes `YYYY-MM-DD`, `today`, `tomorrow`, `+Nd` or `+Nw` against the Pane calendar's date, previews the day it resolves to with its weekday, and clears the date when blank. Saving sends one command for the changed fields only; the Daemon gateway patches the `scheduled_on` and `deadline_on` metadata keys one at a time, each guarded on the value the card opened with, and stops at the first failure. A key changed meanwhile is reported, not overwritten. It lets no global chord through. _Avoid_: date form, schedule card.
 
+**Default filter**: A Project's saved field filters (project, status, owner, label, relationship; never search text), set with `ctrl+d` in the Filter form and kept in `filters.toml` beside the Lane list file. A Pane starts with its bound Project's default applied; `c` clears it for that Pane only. _Avoid_: saved search, preset.
+
+**Results**: The flat list a text search shows in place of the Collection's grouping. Field filters keep the Collection's grouping and headings.
+
 **Lanes card**: The Popup card `B` opens on the Board or in the Lane view. One text field holds the Lane list as comma-separated names; enter saves it to the Lane list file, esc cancels, and an empty field removes the Project's list and so restores the default. It lets no global chord through. Saving never changes a label in kata. _Avoid_: Lane editor, Lanes form.
 
 **Lane list**: A Project's ordered Lane labels. Saved in the **Lane list file**, `lanes.toml` in tern-kata's user config folder, and loaded when the Board Page turns on or the Project changes; until one is loaded, or when none is saved, it is the default: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`.

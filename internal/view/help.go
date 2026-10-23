@@ -28,6 +28,7 @@ var cardHelp = map[string][]struct {
 	},
 	"Filters": {
 		{"reset filter form", model.ModeFilterForm, []model.Action{model.ResetFilterForm}},
+		{"save as default filter", model.ModeFilterForm, []model.Action{model.SaveFilterDefault}},
 	},
 }
 

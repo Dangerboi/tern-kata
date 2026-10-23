@@ -139,7 +139,11 @@ func (m Model) FilterSummary() string {
 	if m.Filters.Search != "" {
 		parts = append(parts, "search="+m.Filters.Search)
 	}
-	return strings.Join(parts, " · ")
+	summary := strings.Join(parts, " · ")
+	if summary != "" && m.Filters == m.DefaultFilters {
+		summary += " (default)"
+	}
+	return summary
 }
 
 func (m Model) ProjectFilterName(uid string) string {

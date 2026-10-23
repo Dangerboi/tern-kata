@@ -26,6 +26,23 @@ The Issues Page is the list and the Issue detail.
 - **Detail**: the Issue's Markdown body, its properties and the Activity tabs (Comments, Events, Links, Attachments). Changes made anywhere, by you or an agent, show up live.
 - **Collections and the Menu**: Inbox, Today, Upcoming, Deadlines, All Open, Logbook and every kata Project, plus a search (`/`) and filters (`f`, `s`, `c`) over any of them.
 
+### Filters
+
+- `s` cycles the status filter, `f` opens the Filter card (project, status, owner, label, relationship), `/` searches text and `c` clears every filter for this Pane.
+- Field filters narrow a Collection but keep its grouping and headings: Today with `status=open` still shows Overdue and Today. Only a text search shows the flat **Results** list.
+- `ctrl+d` in the Filter card saves the card's values as the **default filter** of the Project the Pane's folder is bound to, and applies them. The card stays open, saving, until the save answers; a failure keeps the card and its values with the error. An empty card removes the default. Search text is never saved, and a folder bound to no Project has no default.
+- A Pane starts with its Project's default already applied, and the filter line under the top bar ends with "(default)" while the active filters equal it. `c` clears the filters for this Pane only; the default returns the next time a Pane starts.
+- Defaults live in `filters.toml`, beside `lanes.toml` (the paths are in [the Lane list file](#the-lane-list-file)), one table per Project UID with only the filters that are set; other tables and keys you add are kept on save:
+
+```toml
+["01JABC..."]
+name = "work"
+status = "open"
+owner = "me"
+```
+
+  A file that cannot be read starts the Pane unfiltered with a Notice naming the file and its error, and a save is refused rather than overwriting it.
+
 Editing from the Pane:
 
 | Key | Action |

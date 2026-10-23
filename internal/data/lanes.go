@@ -28,13 +28,16 @@ type projectLanes struct {
 	DoneCards int      `toml:"done_cards"`
 }
 
-func lanesPath() (string, error) {
+// configPath is the file called name in tern-kata's folder of the user config dir.
+func configPath(name string) (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "tern-kata", "lanes.toml"), nil
+	return filepath.Join(dir, "tern-kata", name), nil
 }
+
+func lanesPath() (string, error) { return configPath("lanes.toml") }
 
 // readLanes reads the whole file; a missing file is an empty one.
 func readLanes(path string) (lanesFile, error) {
@@ -45,8 +48,8 @@ func readLanes(path string) (lanesFile, error) {
 	return file, nil
 }
 
-// readRawLanes reads the file as untyped tables so a save can write back keys tern-kata doesn't know; a missing file is an empty one.
-func readRawLanes(path string) (map[string]any, error) {
+// readRawTables reads the file as untyped tables so a save can write back keys tern-kata doesn't know; a missing file is an empty one.
+func readRawTables(path string) (map[string]any, error) {
 	file := map[string]any{}
 	if _, err := toml.DecodeFile(path, &file); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("%s: %w", path, err)
@@ -89,7 +92,7 @@ func writeLanes(cmd model.SaveLanes) error {
 	if err != nil {
 		return err
 	}
-	file, err := readRawLanes(path)
+	file, err := readRawTables(path)
 	if err != nil {
 		return err
 	}
@@ -118,10 +121,15 @@ func writeLanes(cmd model.SaveLanes) error {
 		}
 		file[cmd.ProjectUID] = table
 	}
+	return writeTables(path, "lanes-*.toml", file)
+}
+
+// writeTables renames a temporary file holding file into place at path, so a failed write leaves the old file.
+func writeTables(path, pattern string, file map[string]any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), "lanes-*.toml")
+	tmp, err := os.CreateTemp(filepath.Dir(path), pattern)
 	if err != nil {
 		return err
 	}

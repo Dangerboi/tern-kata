@@ -313,7 +313,7 @@ func (m Model) applyCollection(snapshot Snapshot) Model {
 		m.Collections = append(m.Collections, ProjectCollection(p.Project.UID, p.Project.Name))
 	}
 	groupCollection := m.Collection
-	if m.Filters != (Filters{}) {
+	if m.Filters.Search != "" {
 		groupCollection = ResultsCollection()
 	}
 	issues := snapshot.Issues

@@ -53,7 +53,7 @@ func TestLiveSearch(t *testing.T) {
 }
 
 func TestStatusFilterCycle(t *testing.T) {
-	m := model.Model{Collection: model.Collection{View: "all-open", Title: "All Open"}}
+	m := model.Model{Collection: model.InboxCollection()}
 	for _, tt := range []struct {
 		status, header string
 	}{
@@ -72,7 +72,7 @@ func TestStatusFilterCycle(t *testing.T) {
 		if tt.status != "" {
 			want = []string{tt.status}
 		}
-		if !reflect.DeepEqual(refresh.Query.Status, want) || *refresh.Query.View != "all-open" {
+		if !reflect.DeepEqual(refresh.Query.Status, want) || *refresh.Query.View != "inbox" {
 			t.Fatalf("status query: %+v", refresh.Query)
 		}
 		m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a", Status: tt.status}}}})
