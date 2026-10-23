@@ -45,6 +45,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The Job card makes and edits recurring-child jobs: `n` on the Jobs Page opens it for a new job, `J` on an Issue (list, Board, Lane view, Issue detail) for a new job with that Issue as its parent, `e` on the selected job, prefilled. It has a name, a trigger (a cron expression with its time zone, or an interval of at least 60 seconds), the parent Issue's short id, a child title and body, an inbox recipient (blank is the parent's current owner or author) and message, a catch-up choice (latest, every missed run, or skip with a grace) and Enabled; fields that don't apply are hidden and skipped by `tab`. Under the trigger a live preview reads the schedule in words and lists the next three runs. `ctrl+o` saves; a bad cron expression, unknown time zone, interval under 60 seconds, skip without a grace or blank name or child title is refused naming the field and nothing is sent. An edit is a Guarded write: a job changed meanwhile is not overwritten, the card shows the newer job and keeps your draft, and `o`, `u` or `d` save the draft over it, replace the draft with it or discard the draft.
 - `p` on the Jobs Page pauses a running job or resumes one that is not, `x` archives the selected job, or restores it when it is archived (listed with `a`); each is a Guarded write that leaves a job changed meanwhile alone and says so in a Notice.
 
+### Changed
+
+- The Issue detail's heading names the Project of an Issue that isn't the Project on screen: `acme-infra#c6sy - …` for a related Issue opened from a Board card, and `project#id` in Collections that span Projects (Inbox, Today, All Open and the others). Inside a Project it stays `#id`.
+
 ### Fixed
 
 - Beside each other, the Issue list and the Issue detail scroll inside their columns down to just above the footer at any Pane height, instead of stopping a little past half the window; they and the Board's Lanes also follow a Pane made taller or shorter without changing its width.

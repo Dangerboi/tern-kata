@@ -161,6 +161,25 @@ func TestDetailHeaderIsTheTitleAndStatusWithoutButtonsOrBodyHeading(t *testing.T
 	}
 }
 
+// An Issue opened from another Project, as a related id on a Board card does, says whose it is: its id is the one the
+// Board's Relationships line shows, bare inside the Project on screen and qualified everywhere else.
+func TestDetailHeadingNamesTheProjectOfAnIssueOutsideTheProjectOnScreen(t *testing.T) {
+	heading := func(m model.Model) string { return text(render(t, m)[view.DetailContentID+".heading.title"]) }
+	far := alpha
+	far.ProjectName = "kata"
+	if got := heading(apply(browsing(), detailOf(alpha))); got != "#aaaa - Alpha" {
+		t.Errorf("an Issue of the Project on screen: %q", got)
+	}
+	if got := heading(apply(browsing(), detailOf(far))); got != "kata#aaaa - Alpha" {
+		t.Errorf("an Issue of another Project: %q", got)
+	}
+	m := browsing()
+	m = apply(m, model.CollectionSelected{Collection: m.Collections[4]}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{alpha, beta}}}}, detailOf(alpha))
+	if got := heading(m); got != "work#aaaa - Alpha" {
+		t.Errorf("in %s, which spans Projects: %q", m.Collection.Title, got)
+	}
+}
+
 // Tern's scroll op reaches a List's scroller only through a node inside it, so the detail is one List
 // whose single child holds everything: nothing of the detail sits outside the scroll container.
 func TestDetailIsOneScrollContainerWithOneChild(t *testing.T) {

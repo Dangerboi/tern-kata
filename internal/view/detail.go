@@ -49,7 +49,7 @@ func detail(m model.Model, now time.Time) tern.Element {
 		children = append(children, ui.Text{Common: ui.Common{Key: "unavailable"}, Text: "This Issue is unavailable or no longer visible."})
 	default:
 		issue := m.DetailAuthority().Issue
-		title := []ui.Span{{T: "#" + issue.ShortID, S: toneStyle(issueLaneTone(m, *issue))}, {T: " - " + issue.Title, S: "strong"}}
+		title := []ui.Span{{T: detailID(m, *issue), S: toneStyle(issueLaneTone(m, *issue))}, {T: " - " + issue.Title, S: "strong"}}
 		if m.DetailLoading() {
 			title = append(title, loadingMarker)
 		}
@@ -187,6 +187,15 @@ func withoutParentSection(body, ref string) string {
 		return body
 	}
 	return strings.TrimLeft(after, "\r\n")
+}
+
+// detailID is the Issue's id as the Pane's Collection sees it, the rule of the Board's Relationships line: "#id" inside the
+// Project Collection on screen, "project#id" for an Issue of another Project and in Collections that span Projects.
+func detailID(m model.Model, issue model.Issue) string {
+	if issue.ProjectName == "" || m.Collection.IsProject() && m.Collection.Title == issue.ProjectName {
+		return "#" + issue.ShortID
+	}
+	return issue.ProjectName + "#" + issue.ShortID
 }
 
 func statusTone(status string) ui.Tone {

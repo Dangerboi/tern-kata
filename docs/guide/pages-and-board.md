@@ -53,7 +53,7 @@ The Issue detail's Activity tabs are described in [Compared with `kata tui`](kat
 
 Columns, left to right: **No lane** (open Issues with none of the Lane labels, always shown), one **Lane** per label of the Lane list, and **Done** (Issues closed in the last 14 days, at most 20 of them, newest closed first; the header says "Done 20 of 192" when more qualify; both numbers are per Project, see [the Lanes card](#the-lanes-card)).
 
-Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relationships line selects that card; an Issue the Board doesn't draw, like this one in another Project, opens in the detail, and Esc goes back.
+Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relationships line selects that card; an Issue the Board doesn't draw, like this one in another Project, opens in the detail, and Esc goes back. The detail heads another Project's Issue with its qualified id, `acme-infra#c6sy`, as the Relationships line does.
 
 ![The Ready for agent Lane beside the detail of a related Issue in the acme-infra Project](../images/related-detail.png)
 
@@ -96,7 +96,7 @@ Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relat
 
   A card with several Relationships shows every tag and takes the ring of the first of blocks this, blocked by this, parent, child, related. The selected card keeps its own ring and Done cards keep their muted ring. The highlight follows the selection and shows nothing without one.
 - The selected card also shows a **Relationships line**: `parent a1b2`, `6 children, 2 open` (counted from each child's status), `blocks c3d4` (open Issues only), `blocked by e5f6` (open blockers only) and `related g7h8`. A part with nothing in it is left out, and a card with no Relationships has no line. Ids are short inside the Project and `project#id` outside it, cut to three and "+N", and Issues the Board doesn't draw count.
-- Click an id to select that card and scroll it into view in its Lane (in the Lane view, the Pane switches to that Lane). If the Board doesn't draw it (filtered out, closed beyond Done, in another Project) the click opens its detail beside the Lane view, and Esc goes back to the card you came from, then to the Lane view and the Board. `^` selects the parent's card the same way, or leaves "<id> has no parent." when there is none.
+- Click an id to select that card and scroll it into view in its Lane (in the Lane view, the Pane switches to that Lane). If the Board doesn't draw it (filtered out, closed beyond Done, in another Project) the click opens its detail beside the Lane view, headed `project#id` when it is another Project's, and Esc goes back to the card you came from, then to the Lane view and the Board. `^` selects the parent's card the same way, or leaves "<id> has no parent." when there is none.
 - An open card with a deadline or a scheduled date shows one **Date badge** in its id row, after the priority badge and before the Relationship tags, for the most pressing date, read as the Today, Upcoming and Deadlines Collections read it and compared as days in the Pane calendar. In order:
 
   | Date | Badge | Tone |
