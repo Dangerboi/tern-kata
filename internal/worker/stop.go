@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 )
 
 // errStopping is why every admission is refused once a stop was asked.
@@ -50,19 +51,65 @@ func (w *Worker) isStopping() bool {
 	return w.stopping != ""
 }
 
-// inFlightLocked counts the runs a goroutine is driving and the accepted, non-held runs a transient kata failure
-// left owing reports or settlement; a held run is neither. mu is held.
+// inFlightLocked counts the runs a goroutine is driving, the slots reserved for runs not yet bound to one, the
+// accepted, non-held runs a transient kata failure left owing reports or settlement, and the journals of the last
+// worker that recovery has not yet handed on; a held run is none of these. mu is held.
 func (w *Worker) inFlightLocked() int {
 	n := 0
 	for _, ps := range w.projects {
-		n += len(ps.running)
+		n += len(ps.running) + ps.pending
 		for uid := range ps.owing {
 			if !ps.running[uid] {
 				n++
 			}
 		}
 	}
+	for uid := range w.owed {
+		if !w.drivenLocked(uid) {
+			n++
+		}
+	}
 	return n
+}
+
+func (w *Worker) drivenLocked(uid string) bool {
+	for _, ps := range w.projects {
+		if ps.running[uid] || ps.owing[uid] {
+			return true
+		}
+	}
+	return false
+}
+
+// noteOwed records the unsettled, non-held journals of this executor in the Projects this worker serves, before the
+// control socket opens: until recovery hands each to spawn or settles it, an idle stop waits for it.
+func (w *Worker) noteOwed() {
+	journals, _, err := w.store.Scan()
+	if err != nil {
+		return
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, j := range journals {
+		if j.Executor != w.opt.Config.Executor || j.Phase == PhaseSettled || j.Outcome != nil && j.Outcome.Hold != "" {
+			continue
+		}
+		if !slices.ContainsFunc(w.projects, func(ps *projectState) bool { return ps.cfg.Name == j.ProjectName }) {
+			continue
+		}
+		if w.owed == nil {
+			w.owed = map[string]bool{}
+		}
+		w.owed[j.RunUID] = true
+	}
+}
+
+// handedOn drops uid from the journals noted at start: recovery has handed it on or it is settled.
+func (w *Worker) handedOn(uid string) {
+	w.mu.Lock()
+	delete(w.owed, uid)
+	w.mu.Unlock()
+	w.finishDrain()
 }
 
 // finishDrain ends the worker once a stop is due: a stop now, or a drain with no run left in flight. The control

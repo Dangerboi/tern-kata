@@ -281,11 +281,12 @@ func (w *Worker) follow(ctx context.Context, ps *projectState) {
 
 // Slots (ADR-0007). A slot is reserved before a run is prepared and held while its process may be alive.
 
-// reserve takes a slot for ps, false when the Project or the worker is full. The caller binds it to a uid or gives it back.
+// reserve takes a slot for ps, false when the Project or the worker is full or a stop was asked. The caller binds it to
+// a uid or gives it back.
 func (w *Worker) reserve(ps *projectState) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if len(ps.held)+ps.pending >= ps.cfg.Capacity {
+	if w.stopping != "" || len(ps.held)+ps.pending >= ps.cfg.Capacity {
 		return false
 	}
 	if max := w.opt.Config.Limits.MaxActiveRuns; max > 0 && w.slotsInUse() >= max {
@@ -311,10 +312,12 @@ func (w *Worker) bind(ps *projectState, uid, jobUID string) {
 	ps.held[uid] = jobUID
 }
 
+// unreserve gives a reservation back; a drain that was waiting on it may now be done.
 func (w *Worker) unreserve(ps *projectState) {
 	w.mu.Lock()
-	defer w.mu.Unlock()
 	ps.pending = max(ps.pending-1, 0)
+	w.mu.Unlock()
+	w.finishDrain()
 }
 
 // release frees the run's slot.
@@ -394,10 +397,15 @@ func (w *Worker) recoverProject(ctx context.Context, ps *projectState) {
 	}
 	for _, j := range mine {
 		if j.Phase == PhaseSettled {
+			w.handedOn(j.RunUID)
 			continue
 		}
 		w.runs.Add(1)
-		go func() { defer w.runs.Done(); w.recoverRun(ctx, ps, j.RunUID) }()
+		go func() {
+			defer w.runs.Done()
+			defer w.handedOn(j.RunUID) // after recoverRun spawned it, so the run is always counted in one place
+			w.recoverRun(ctx, ps, j.RunUID)
+		}()
 	}
 }
 
