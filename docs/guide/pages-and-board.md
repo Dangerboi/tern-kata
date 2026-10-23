@@ -53,7 +53,7 @@ The Issue detail's Activity tabs are described in [Compared with `kata tui`](kat
 
 Columns, left to right: **No lane** (open Issues with none of the Lane labels, always shown), one **Lane** per label of the Lane list, and **Done** (Issues closed in the last 14 days, at most 20 of them, newest closed first; the header says "Done 20 of 192" when more qualify; both numbers are per Project, see [the Lanes card](#the-lanes-card)).
 
-Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relationships line selects that card; an Issue the Board doesn't draw, like this one in another Project, opens in the detail, and Esc goes back. The detail heads another Project's Issue with its qualified id, `acme-infra#c6sy`, as the Relationships line does.
+Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relationships line selects that card; an Issue the Board doesn't draw, like this one in another Project, opens in the detail, and Esc goes back. The detail heads another Project's Issue with its qualified id, `acme-infra#59yd`, as the Relationships line does.
 
 ![The Ready for agent Lane beside the detail of a related Issue in the acme-infra Project](../images/related-detail.png)
 
