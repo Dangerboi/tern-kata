@@ -26,7 +26,9 @@ func (s attachmentStore) dir() string { return filepath.Join(s.root, attachmentS
 func (s attachmentStore) issueDir(uid string) string { return filepath.Join(s.dir(), uid) }
 
 // ensure makes the Issue's folder and writes the store's .gitignore with "*" when it is missing or empty; a non-empty one is the
-// user's and stays. The file is renamed into place, so a failed write never leaves an empty .gitignore behind.
+// user's and stays. The file is renamed into place, so a failed write never leaves an empty .gitignore behind. Two attaches that
+// start together both find it missing; Windows refuses the second rename while the first holds the file, and that attach goes
+// on once the .gitignore the other wrote is there.
 func (s attachmentStore) ensure(uid string) error {
 	if err := os.MkdirAll(s.issueDir(uid), 0o755); err != nil {
 		return err
@@ -47,6 +49,9 @@ func (s attachmentStore) ensure(uid string) error {
 	}
 	if err != nil {
 		_ = os.Remove(tmp.Name())
+		if info, serr := os.Stat(ignore); serr == nil && info.Size() > 0 {
+			return nil
+		}
 	}
 	return err
 }
