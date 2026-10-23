@@ -29,14 +29,17 @@ type workerEnv struct {
 }
 
 // newWorkerEnv is the production environment: tern-kata's user folders and kata's own discovery.
-func newWorkerEnv() (workerEnv, error) {
+// Only `worker init` and `worker add` read the working directory, so the other forms work from a removed one.
+func newWorkerEnv(plan LaunchPlan) (workerEnv, error) {
 	dirs, err := worker.DefaultDirs()
 	if err != nil {
 		return workerEnv{}, subcommandError{err}
 	}
-	dir, err := os.Getwd()
-	if err != nil {
-		return workerEnv{}, subcommandError{err}
+	var dir string
+	if plan.Subcommand == "worker" && len(plan.Operands) == 1 && (plan.Operands[0] == "init" || plan.Operands[0] == "add") {
+		if dir, err = os.Getwd(); err != nil {
+			return workerEnv{}, subcommandError{err}
+		}
 	}
 	host, _ := os.Hostname()
 	return workerEnv{Dirs: dirs, Locate: data.LocateWithKata, Log: os.Stderr, Version: buildVersion(), Supervisor: os.Getenv("TERN_KATA_SUPERVISOR"), Dir: dir, Hostname: host}, nil

@@ -20,6 +20,9 @@ local RUN_LIMIT_MS = 7 * 24 * 3600 * 1000
 local running = false
 local delay = MIN_DELAY
 local next_start = 0
+-- worker.toml's text when the worker was last started: a different text on disk means the wait no longer applies.
+local started_text: string? = nil
+local CONFIG_MAX_BYTES = 1024 * 1024
 local handle: TimerHandle? = nil
 
 local function join(...: string): string
@@ -107,10 +110,14 @@ local function worker_path(): string
     return table.concat(dirs, path_sep)
 end
 
-local function enabled(): boolean
+-- The text of worker.toml when the host half should keep a worker running, nil when supervision is off.
+local function enabled_config(): string?
     local dir = config_dir()
-    if dir == nil then return false end
-    return tern.fs.exists(join(dir, "worker.toml")) and not tern.fs.exists(join(dir, "worker.manual"))
+    if dir == nil then return nil end
+    local path = join(dir, "worker.toml")
+    if not tern.fs.exists(path) or tern.fs.exists(join(dir, "worker.manual")) then return nil end
+    local ok, text = pcall(tern.fs.read, path, CONFIG_MAX_BYTES)
+    return ok and text or ""
 end
 
 local start
@@ -132,9 +139,16 @@ end
 -- Called by the timer: starts the worker when it is wanted and not running, else looks again later.
 function start()
     if running then return arm(POLL_MS) end
-    if not enabled() then return arm(POLL_MS) end
+    local config = enabled_config()
+    if config == nil or (started_text ~= nil and config ~= started_text) then
+        delay = MIN_DELAY
+        next_start = 0
+        started_text = nil
+    end
+    if config == nil then return arm(POLL_MS) end
     local wait = next_start - tern.now()
     if wait > 0 then return arm(math.min(wait, POLL_MS)) end
+    started_text = config
     local binary = find_binary()
     if binary == nil then
         tern.log.warn("tern-kata: the worker is configured but tern-kata is not installed on the daemon's PATH or in a known folder; trying again in " .. delay // 1000 .. " s")

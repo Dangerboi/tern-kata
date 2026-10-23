@@ -146,4 +146,17 @@ run_job 3
 alive "$third" && kill -9 "$third"
 wait_new_worker "$third" 100
 run_job 4
-printf 'Supervision smoke passed: no config = nothing, worker started and run with no window, quick crashes back off, worker back after a daemon restart and when the worker it left behind ends\n'
+# A crash loop on a broken worker.toml grows the wait past one poll (10 s); fixing the file starts a worker within a poll.
+good_config=$(<"$XDG_CONFIG_HOME/tern-kata/worker.toml")
+fifth=$(worker_pid)
+printf 'this is = = not toml\n' >"$XDG_CONFIG_HOME/tern-kata/worker.toml"
+log_from=$(( $(wc -l <"$STENCIL_LOG_DIR/tern-daemon.log") + 1 ))
+kill -9 "$fifth"
+for ((i = 0; i < 1200; i++)); do
+  if tail -n +"$log_from" "$STENCIL_LOG_DIR/tern-daemon.log" | grep -Eq 'restarting in ([2-9][0-9]|1[1-9]) s'; then break; fi
+  sleep 0.1
+done
+tail -n +"$log_from" "$STENCIL_LOG_DIR/tern-daemon.log" | grep -Eq 'restarting in ([2-9][0-9]|1[1-9]) s' || { echo "the broken config never grew the wait past 10 s" >&2; exit 1; }
+printf '%s\n' "$good_config" >"$XDG_CONFIG_HOME/tern-kata/worker.toml"
+wait_new_worker "$fifth" 13 || { echo "fixing worker.toml did not start a worker within one poll" >&2; exit 1; }
+printf 'Supervision smoke passed: no config = nothing, worker started and run with no window, quick crashes back off, worker back after a daemon restart and when the worker it left behind ends, fixing a broken worker.toml drops the wait\n'

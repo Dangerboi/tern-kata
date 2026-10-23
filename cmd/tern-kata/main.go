@@ -48,7 +48,7 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	if isWorkerCommand(plan) {
-		env, err := newWorkerEnv()
+		env, err := newWorkerEnv(plan)
 		if err != nil {
 			return err
 		}
