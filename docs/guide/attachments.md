@@ -10,7 +10,7 @@ Attach a screenshot, log or any other file to an Issue so whoever picks it up se
 - `U` lists the Issue's Attachments by name: `down` and `up` move and `enter` removes the one chosen, with no further confirmation, and a notice says what happened to the file. `U` on an Issue with none says so.
 - Both keys explain why when this directory is not bound to the Issue's Project.
 
-The Attachments tab of the Issue detail lists the Issue's `attachment.*` meta keys by name: a file held on this machine is a link to it, and one held on another machine reads `<name> on <host>`.
+The Attachments tab of the Issue detail lists the Issue's `tern-kata.attachment.*` meta keys by name: a file held on this machine is a link to it, and one held on another machine reads `<name> on <host>`.
 
 ## From a shell or for an agent
 
@@ -35,10 +35,12 @@ The copy goes to `.kata-attachments/<Issue ULID>/<name>` at the root of the Proj
 The pointer agents read is one kata meta key per Attachment, visible in `kata show`, `kata show --json` and kata's MCP show tool:
 
 ```json
-{"attachment.shot.png": {"host": "my-laptop", "path": "/home/me/repo/.kata-attachments/01J.../shot.png"}}
+{"tern-kata.attachment.shot.png": {"host": "my-laptop", "path": "/home/me/repo/.kata-attachments/01J.../shot.png"}}
 ```
 
 `host` is the OS host name of the machine that holds the copy and `path` is the absolute native path there.
+
+The key has its own prefix because kata's native attachments use `attachment.<id>` with a different value. Pointers written by tern-kata 0.3 sit under `attachment.<name>` with just `host` and `path`; tern-kata moves them to the new key by itself, once per Project and kata daemon on each machine, when a Pane for the Project starts or `tern-kata attach` or `detach` runs. Only a value that is exactly a `{"host", "path"}` object of strings moves, and the files stay where they are. A name already taken under the new key becomes `name-2.ext`. If some Issue can't be converted, the next start tries again.
 
 `detach` clears the key, then deletes the copy only if `host` is this machine; otherwise it says the file was left on that host, or was already gone. If the pointer is cleared but the copy can't be deleted, `detach` still prints `Removed <name>; could not delete <path>: <reason>` and exits non-zero, and `U` shows the same line as its notice. A pointer that changed while it was being removed is left alone and nothing is deleted.
 

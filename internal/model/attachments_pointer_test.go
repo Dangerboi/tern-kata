@@ -13,7 +13,7 @@ func TestAttachmentPointerRoundTripsThroughMeta(t *testing.T) {
 	if got := model.Attachments(meta); !reflect.DeepEqual(got, []model.Attachment{want}) {
 		t.Fatalf("got %v", got)
 	}
-	if !reflect.DeepEqual(meta["attachment.a.png"], map[string]any{"host": "box", "path": "/s/a.png"}) {
+	if !reflect.DeepEqual(meta["tern-kata.attachment.a.png"], map[string]any{"host": "box", "path": "/s/a.png"}) {
 		t.Fatalf("meta %v", meta)
 	}
 }

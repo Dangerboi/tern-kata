@@ -31,7 +31,7 @@ expect_tree "[data-id='main.notice']" ".ok and .count == 1 and (.nodes[0].text =
 expect_tree "$at_tab" '.ok and (.nodes[0].text | contains("Attachments (1)"))'
 expect_tree "[data-id='main.columns.detail.viewport.content.activity']" ".ok and (.nodes[0] | $at_text | contains(\"shot.png\"))"
 kata --workspace "$at_dir" show "$at_uid" --json >"$tmp/attachments-shown.json"
-at_shot=$(jq -r '.issue.metadata["attachment.shot.png"].path' "$tmp/attachments-shown.json")
+at_shot=$(jq -r '.issue.metadata["tern-kata.attachment.shot.png"].path' "$tmp/attachments-shown.json")
 [[ $at_shot == "$at_dir/.kata-attachments/$at_uid/shot.png" && -f $at_shot ]]
 
 # The command line adds one while the Pane is open.
@@ -59,6 +59,21 @@ expect_tree "$at_tab" '.ok and (.nodes[0].text | contains("Attachments (0)"))'
 ctl key U
 expect_tree "[data-id='main.notice']" '.ok and .count == 1 and (.nodes[0].text | contains("no attachments"))'
 expect_tree "[data-id='layer.fields']" '.ok and .count == 0'
+
+# A pointer written under the old key moves to tern-kata.attachment.<name> when `tern-kata attach` runs on a Project this
+# machine has not converted yet (the marker is removed to stand in for one); a native-shaped attachment.<id> value stays.
+kata --workspace "$at_dir" create "Smoke old pointer Issue" --json >"$tmp/old-pointer.json"
+old_uid=$(jq -r '.issue.uid' "$tmp/old-pointer.json")
+old_short=$(jq -r '.issue.short_id' "$tmp/old-pointer.json")
+printf 'old\n' >"$tmp/attach-src/old.txt"
+kata --workspace "$at_dir" meta set "$old_short" attachment.old.txt "{\"host\":\"elsewhere\",\"path\":\"$tmp/attach-src/old.txt\"}" --json-value --as smoke-shell >/dev/null
+kata --workspace "$at_dir" meta set "$old_short" attachment.01JSMOKE0000000000000000 '{"name":"n.png","media_type":"image/png","size":1,"docbank_version":1}' --json-value --as smoke-shell >/dev/null
+rm -rf "$XDG_STATE_HOME/tern-kata/attachment-pointers"
+(cd "$at_dir" && "$tmp/tern-kata" attach "$at_short" "$tmp/attach-src/live.log" --as smoke-shell) >/dev/null
+kata --workspace "$at_dir" show "$old_uid" --json >"$tmp/old-pointer-shown.json"
+jq -e --arg p "$tmp/attach-src/old.txt" '.issue.metadata | .["tern-kata.attachment.old.txt"] == {host: "elsewhere", path: $p} and (has("attachment.old.txt") | not) and .["attachment.01JSMOKE0000000000000000"].docbank_version == 1' "$tmp/old-pointer-shown.json" >/dev/null
+kata --workspace "$at_dir" delete "$old_uid" --force --confirm "DELETE smoke#$old_short" --json >/dev/null
+(cd "$at_dir" && "$tmp/tern-kata" detach "$at_short" live.log --as smoke-shell) >/dev/null
 
 kata --workspace "$at_dir" delete "$at_uid" --force --confirm "DELETE smoke#$at_short" --json >/dev/null
 expect_tree "[data-id='main.columns.list.issues.$at_uid']" '.ok and .count == 0'

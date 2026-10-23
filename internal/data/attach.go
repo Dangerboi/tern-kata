@@ -143,7 +143,7 @@ func (c *Client) requireBinding(ctx context.Context, t attachTarget) error {
 	return model.AttachRefusal(t.binding, t.issue.ProjectID, t.issue.ShortID, names[t.issue.ProjectID])
 }
 
-// patchAttachment sets (pointer non-nil) or clears the attachment.<name> key. A set applies only while the key is absent; a
+// patchAttachment sets (pointer non-nil) or clears the tern-kata.attachment.<name> key. A set applies only while the key is absent; a
 // clear only while the key still holds the JSON text clearIf.
 func (c *Client) patchAttachment(ctx context.Context, t attachTarget, actor, name string, pointer map[string]any, clearIf string) error {
 	key := model.AttachmentKey(name)

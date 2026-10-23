@@ -41,10 +41,23 @@ type Gateway struct {
 	// workerDirs locates this machine's worker; runTern runs the tern program. Both are the real ones unless a test replaces them.
 	workerDirs func() (worker.Dirs, error)
 	runTern    func(context.Context, []string) ([]byte, error)
+
+	// convertMu serializes the passes that move old Attachment pointers; converted holds the instance/Project pairs this process
+	// has finished. startMu guards convertStarted, the workspaces whose Pane start has begun a pass. The passes run on
+	// backgroundCtx, which Close ends, and background counts them.
+	convertMu        sync.Mutex
+	converted        map[string]bool
+	startMu          sync.Mutex
+	convertStarted   map[string]bool
+	background       sync.WaitGroup
+	backgroundCtx    context.Context
+	backgroundCancel context.CancelFunc
 }
 
 func NewGateway(locate Locator) *Gateway {
-	return &Gateway{locate: locate, deadline: connectDeadline, clients: map[string]*Client{}, now: time.Now, wakePoll: time.Minute, workerDirs: worker.DefaultDirs, runTern: execTern}
+	backgroundCtx, backgroundCancel := context.WithCancel(context.Background())
+	return &Gateway{locate: locate, deadline: connectDeadline, clients: map[string]*Client{}, now: time.Now, wakePoll: time.Minute, workerDirs: worker.DefaultDirs, runTern: execTern,
+		converted: map[string]bool{}, convertStarted: map[string]bool{}, backgroundCtx: backgroundCtx, backgroundCancel: backgroundCancel}
 }
 
 // WithHost sets this machine's host name, the one every Attachment pointer is written with and compared against.
@@ -53,8 +66,12 @@ func (g *Gateway) WithHost(host string) *Gateway {
 	return g
 }
 
-// Close ends the running stream and drops the cached clients.
+// Close ends the running stream and any pointer pass still running, and drops the cached clients.
 func (g *Gateway) Close() {
+	if g.backgroundCancel != nil {
+		g.backgroundCancel()
+	}
+	g.background.Wait()
 	g.streamMu.Lock()
 	if g.streamCancel != nil {
 		g.streamCancel()
@@ -99,6 +116,17 @@ func (g *Gateway) Run(ctx context.Context, cmd model.Cmd, messages chan<- model.
 		result = g.saveWorkerEdit(cmd)
 	case model.StopWorker:
 		result = g.stopWorker(ctx, cmd)
+	case model.LoadProject:
+		result = g.do(ctx, cmd)
+		if loaded, ok := result.(model.ProjectLoaded); ok && loaded.Project.UID != "" {
+			g.startPointerMove(cmd.Workspace, cmd.Actor)
+		}
+	case model.AttachFile:
+		g.convertPointers(ctx, cmd.Workspace, cmd.Actor)
+		result = g.do(ctx, cmd)
+	case model.DetachFile:
+		g.convertPointers(ctx, cmd.Workspace, cmd.Actor)
+		result = g.do(ctx, cmd)
 	case model.SetWorkerSupervision:
 		result = g.setWorkerSupervision(ctx, cmd)
 	case model.LoadLocalRun:

@@ -133,7 +133,7 @@ kata close <ref> --done ... --dry                    # validate without mutating
 
 ## Attachments
 
-An Issue's `attachment.<name>` meta keys are files attached through tern-kata: to read one, or to attach a screenshot, log or other file, use the `tern-kata` skill.
+An Issue's `tern-kata.attachment.<name>` meta keys are files attached through tern-kata: to read one, or to attach a screenshot, log or other file, use the `tern-kata` skill.
 
 ## Relationships
 

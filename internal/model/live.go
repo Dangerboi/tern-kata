@@ -128,7 +128,7 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 		if m.Err != nil && !m.Loading {
 			m.Err = nil
 			m.Loading = true
-			return m, []Cmd{LoadProject{Workspace: m.Workspace}}
+			return m, []Cmd{LoadProject{Workspace: m.Workspace, Actor: m.Actor}}
 		}
 	}
 	return m, nil

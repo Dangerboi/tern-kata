@@ -48,8 +48,8 @@ func TestAttachmentsIsTheFourthTabAndCycles(t *testing.T) {
 
 func TestAttachmentRowsAreSortedByNameAndIgnoreOtherMeta(t *testing.T) {
 	m := attached(map[string]any{
-		"attachment.b.png": pointer("box", "/b.png"), "attachment.a.png": pointer("elsewhere", "/a.png"),
-		"attachment.bad": "not a pointer", "scheduled_on": "2026-10-20", "other.x": pointer("box", "/x"),
+		"tern-kata.attachment.b.png": pointer("box", "/b.png"), "tern-kata.attachment.a.png": pointer("elsewhere", "/a.png"),
+		"tern-kata.attachment.bad": "not a pointer", "scheduled_on": "2026-10-20", "other.x": pointer("box", "/x"),
 	})
 	if got := attachmentKeys(m); !slices.Equal(got, []string{model.AttachmentRowKey("a.png"), model.AttachmentRowKey("b.png")}) {
 		t.Fatalf("rows %v", got)
@@ -64,7 +64,7 @@ func TestAttachmentRowsAreSortedByNameAndIgnoreOtherMeta(t *testing.T) {
 }
 
 func TestAttachmentFileURLEscapesAndHandlesWindowsPaths(t *testing.T) {
-	m := attached(map[string]any{"attachment.w": pointer("BOX", `C:\a b\x.png`), "attachment.u": pointer("box", "/a b/x.png")})
+	m := attached(map[string]any{"tern-kata.attachment.w": pointer("BOX", `C:\a b\x.png`), "tern-kata.attachment.u": pointer("box", "/a b/x.png")})
 	rows := m.DetailRows()
 	if rows[0].Activity.URL != "file:///a%20b/x.png" || rows[1].Activity.URL != "file:///C:/a%20b/x.png" {
 		t.Fatalf("urls %q %q", rows[0].Activity.URL, rows[1].Activity.URL)
@@ -72,14 +72,14 @@ func TestAttachmentFileURLEscapesAndHandlesWindowsPaths(t *testing.T) {
 }
 
 func TestAttachmentFileURLOfANetworkShareHasTheServerAsHost(t *testing.T) {
-	m := attached(map[string]any{"attachment.a": pointer("box", `\\srv\share\a b\x#1%.png`)})
+	m := attached(map[string]any{"tern-kata.attachment.a": pointer("box", `\\srv\share\a b\x#1%.png`)})
 	if got := m.DetailRows()[0].Activity.URL; got != "file://srv/share/a%20b/x%231%25.png" {
 		t.Fatalf("url %q", got)
 	}
 }
 
 func TestAttachmentFileURLKeepsABackslashInAUnixName(t *testing.T) {
-	m := attached(map[string]any{"attachment.a": pointer("box", `/a/b\c.png`)})
+	m := attached(map[string]any{"tern-kata.attachment.a": pointer("box", `/a/b\c.png`)})
 	rows := m.DetailRows()
 	if rows[0].Activity.URL != "file:///a/b%5Cc.png" {
 		t.Fatalf("url %q", rows[0].Activity.URL)
@@ -87,11 +87,11 @@ func TestAttachmentFileURLKeepsABackslashInAUnixName(t *testing.T) {
 }
 
 func TestAttachmentCursorStaysOnItsNameAcrossARefreshThatAddsOne(t *testing.T) {
-	m := attached(map[string]any{"attachment.b": pointer("box", "/b")})
+	m := attached(map[string]any{"tern-kata.attachment.b": pointer("box", "/b")})
 	m, _ = model.Update(m, model.KeyMsg{Chord: "j"})
 	m, cmds := model.Update(m, model.StreamEvent{ID: 1, Type: "issue.updated"})
 	refresh := cmds[0].(model.ReadSnapshot)
-	issue := model.Issue{UID: "a", Metadata: map[string]any{"attachment.a": pointer("box", "/a"), "attachment.b": pointer("box", "/b")}}
+	issue := model.Issue{UID: "a", Metadata: map[string]any{"tern-kata.attachment.a": pointer("box", "/a"), "tern-kata.attachment.b": pointer("box", "/b")}}
 	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: model.Snapshot{Cursor: 1, Issues: []model.Issue{issue}}, Selected: &model.IssueDetailData{Issue: &issue}})
 	if got := cursorKey(m); got != model.AttachmentRowKey("b") {
 		t.Fatalf("cursor on %q", got)
@@ -110,7 +110,7 @@ func TestAttachmentRowKeysAreUniqueAndDotFree(t *testing.T) {
 }
 
 func TestEnterOnAnAttachmentRowDoesNothing(t *testing.T) {
-	m := attached(map[string]any{"attachment.a": pointer("box", "/a")})
+	m := attached(map[string]any{"tern-kata.attachment.a": pointer("box", "/a")})
 	next, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
 	if len(cmds) != 0 || next.SelectedUID != "a" || next.ActiveTab() != model.TabAttachments || cursorKey(next) != model.AttachmentRowKey("a") || next.Focus != model.ColumnDetail {
 		t.Fatalf("enter changed state: cmds %v selected %q tab %v", cmds, next.SelectedUID, next.ActiveTab())
@@ -118,10 +118,10 @@ func TestEnterOnAnAttachmentRowDoesNothing(t *testing.T) {
 }
 
 func TestAttachmentRowsFollowLiveRefreshes(t *testing.T) {
-	m := attached(map[string]any{"attachment.a": pointer("box", "/a"), "attachment.b": pointer("box", "/b")})
+	m := attached(map[string]any{"tern-kata.attachment.a": pointer("box", "/a"), "tern-kata.attachment.b": pointer("box", "/b")})
 	m, cmds := model.Update(m, model.StreamEvent{ID: 1, Type: "issue.updated"})
 	refresh := cmds[0].(model.ReadSnapshot)
-	issue := model.Issue{UID: "a", Metadata: map[string]any{"attachment.b": pointer("box", "/b"), "attachment.c": pointer("box", "/c")}}
+	issue := model.Issue{UID: "a", Metadata: map[string]any{"tern-kata.attachment.b": pointer("box", "/b"), "tern-kata.attachment.c": pointer("box", "/c")}}
 	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: model.Snapshot{Cursor: 1, Issues: []model.Issue{issue}}, Selected: &model.IssueDetailData{Issue: &issue}})
 	if got := attachmentKeys(m); !slices.Equal(got, []string{model.AttachmentRowKey("b"), model.AttachmentRowKey("c")}) {
 		t.Fatalf("rows after the refresh %v", got)

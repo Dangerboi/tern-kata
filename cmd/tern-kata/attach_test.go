@@ -16,6 +16,7 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"go.kenn.io/kata"
 	"go.kenn.io/kata/pkg/client"
+	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 const testHost = "TestBox"
@@ -32,6 +33,8 @@ func newSubcommandFixture(t *testing.T) subcommandFixture {
 	t.Setenv("KATA_HOME", t.TempDir())
 	t.Setenv("KATA_SERVER", "")
 	t.Setenv("KATA_AUTH_TOKEN", "")
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	service, err := kata.New(context.Background(), kata.Config{
 		DSN:  filepath.Join(t.TempDir(), "kata.db"),
 		Auth: kata.AuthConfig{TrustCallerAuthentication: true},
@@ -158,4 +161,36 @@ func newPingServer(t *testing.T, service http.Handler) *httptest.Server {
 	}))
 	t.Cleanup(server.Close)
 	return server
+}
+
+func TestAttachConvertsOldPointersBeforeAttaching(t *testing.T) {
+	f := newSubcommandFixture(t)
+	target, err := f.locate(context.Background(), f.repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gateway := data.NewGateway(f.locate)
+	defer gateway.Close()
+	project := send(t, gateway, model.LoadProject{Workspace: f.repo}).(model.ProjectLoaded).Project
+	old := map[string]any{"host": testHost, "path": "/elsewhere/old.png"}
+	if _, err := target.Client.PatchIssueMetadataWithResponse(context.Background(), &g.PatchIssueMetadataRequestOptions{
+		PathParams: &g.PatchIssueMetadataPath{ProjectID: project.ID, Ref: f.uid},
+		Body:       &g.PatchIssueMetadataBody{Actor: new("tester"), Patch: map[string]any{"attachment.old.png": old}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.runPlan(t, "attach", writeSource(t, "new.png")); err != nil {
+		t.Fatal(err)
+	}
+	shown, err := target.Client.ShowIssueByUIDWithResponse(context.Background(), &g.ShowIssueByUIDRequestOptions{PathParams: &g.ShowIssueByUIDPath{UID: f.uid}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := model.Attachments(shown.JSON200.Issue.Metadata)
+	if len(list) != 2 || list[0].Name != "new.png" || list[1] != (model.Attachment{Name: "old.png", Host: testHost, Path: "/elsewhere/old.png"}) {
+		t.Fatalf("the Issue lists %v", list)
+	}
+	if _, still := shown.JSON200.Issue.Metadata["attachment.old.png"]; still {
+		t.Fatalf("the old key survived: %v", shown.JSON200.Issue.Metadata)
+	}
 }

@@ -6,8 +6,9 @@ import (
 	"strings"
 )
 
-// attachmentKeyPrefix starts the kata meta key of every Attachment: "attachment." + its stored name.
-const attachmentKeyPrefix = "attachment."
+// attachmentKeyPrefix starts the kata meta key of every Attachment: "tern-kata.attachment." + its stored name. kata's own
+// native attachments claim "attachment.", so tern-kata's pointers live under a prefix of their own.
+const attachmentKeyPrefix = "tern-kata.attachment."
 
 // Attachment is one file attached to an Issue: its stored name and the Attachment pointer its meta key holds, the host that
 // holds the copy and the copy's absolute native path there.
@@ -27,7 +28,7 @@ func (a Attachment) OnHost(host string) bool {
 	return host != "" && a.Host != "" && strings.EqualFold(a.Host, host)
 }
 
-// Attachments are the Issue's Attachments read from its attachment.* meta keys, sorted by name. A value that is not a
+// Attachments are the Issue's Attachments read from its tern-kata.attachment.* meta keys, sorted by name. A value that is not a
 // {"host", "path"} object of strings is not an Attachment.
 func Attachments(metadata map[string]any) []Attachment {
 	var list []Attachment

@@ -1,15 +1,15 @@
 ---
 name: tern-kata
-description: Files attached to kata Issues, recurring Issues, and the tern-kata worker, through tern-kata. Use when an Issue's metadata has `attachment.*` keys, to attach a screenshot, log or other file to an Issue, to make an Issue recur, change or stop its schedule, or print it (`tern-kata recur`), to run a scheduled agent job now (`tern-kata run`), to check what the worker serves and runs (`tern-kata worker status`, `worker doctor`), to set the worker up when the user asks (`tern-kata worker init`, `worker add`, `worker edit`), or to resume or abandon a held worker run (`tern-kata worker resume`, `worker abandon`). Never stop, edit or reconfigure the user's worker unasked.
+description: Files attached to kata Issues, recurring Issues, and the tern-kata worker, through tern-kata. Use when an Issue's metadata has `tern-kata.attachment.*` keys, to attach a screenshot, log or other file to an Issue, to make an Issue recur, change or stop its schedule, or print it (`tern-kata recur`), to run a scheduled agent job now (`tern-kata run`), to check what the worker serves and runs (`tern-kata worker status`, `worker doctor`), to set the worker up when the user asks (`tern-kata worker init`, `worker add`, `worker edit`), or to resume or abandon a held worker run (`tern-kata worker resume`, `worker abandon`). Never stop, edit or reconfigure the user's worker unasked.
 ---
 
-An Attachment is a file copied into the Project's Attachment store, `<primary checkout>/.kata-attachments/<Issue ULID>/<name>`, and pointed to by one `attachment.<name>` meta key on the Issue. The store is gitignored and never committed.
+An Attachment is a file copied into the Project's Attachment store, `<primary checkout>/.kata-attachments/<Issue ULID>/<name>`, and pointed to by one `tern-kata.attachment.<name>` meta key on the Issue. The store is gitignored and never committed. Older Issues may still show `attachment.<name>` with `host` and `path` until a Pane or `tern-kata attach`/`detach` has run once on that machine; those still point at the file, so read them the same way. Never read or write `attachment.<ULID>` keys with other fields: those are kata's own attachments.
 
 ## Read
 
 Reading needs kata and your own file tools, plus SSH for a file on another host.
 
-- `kata show <ref> --json` holds each Attachment at `.issue.metadata["attachment.<name>"]` as a `{"host", "path"}` object; `kata show --agent` and kata's MCP show tool carry the same key. `<name>` is the stored file name.
+- `kata show <ref> --json` holds each Attachment at `.issue.metadata["tern-kata.attachment.<name>"]` as a `{"host", "path"}` object; `kata show --agent` and kata's MCP show tool carry the same key. `<name>` is the stored file name.
 - When `host` matches `hostname` (any case), read `path` directly with your file or image tools. File searches skip the gitignored store: take the path from the pointer.
 - Another host means the file is on that machine, and `host` is its OS host name. A `Host <host>` entry in `~/.ssh/config` can supply the `HostName` and `User` it needs. When `ssh -o BatchMode=yes -o ConnectTimeout=5 <host> exit` succeeds (`exit`, since a Windows host runs PowerShell or cmd, where `true` fails), copy the file to a temporary file outside the repo with `scp -o BatchMode=yes '<host>:<path>' <temp file>` and read the copy. Write a Windows `path` with `/` for each `\` (`C:/Users/...`); scp refuses the backslashes. Only read on that host; the file there stays as it is. When SSH fails (no key, no user, or a host key not yet trusted), tell the user the file is on `host` and that a `Host <host>` entry with its `User`, plus one connection to trust its key, would let you read it; then work without it.
 

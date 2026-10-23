@@ -449,7 +449,7 @@ func attachmentsTab(t *testing.T, host string, metadata map[string]any) shown {
 }
 
 func TestAttachmentsTabIsFourthWithItsCount(t *testing.T) {
-	nodes := attachmentsTab(t, "box", map[string]any{"attachment.a.png": map[string]any{"host": "box", "path": "/a.png"}, "note": "x"})
+	nodes := attachmentsTab(t, "box", map[string]any{"tern-kata.attachment.a.png": map[string]any{"host": "box", "path": "/a.png"}, "note": "x"})
 	if got := text(nodes[view.DetailActivityID+".tabs.tab3"]); got != "[ Attachments (1) ]" {
 		t.Errorf("fourth tab = %q", got)
 	}
@@ -468,7 +468,7 @@ func TestEmptyAttachmentsTabSaysHowToAttach(t *testing.T) {
 func TestAttachmentRowsWithCollidingNamesGetUniqueNodeIDs(t *testing.T) {
 	p := map[string]any{"host": "box", "path": "/x"}
 	issue := alpha
-	issue.Metadata = map[string]any{"attachment.tabs": p, "attachment.empty": p, "attachment.a": p, "attachment.a.row": p}
+	issue.Metadata = map[string]any{"tern-kata.attachment.tabs": p, "tern-kata.attachment.empty": p, "tern-kata.attachment.a": p, "tern-kata.attachment.a.row": p}
 	m := browsing()
 	m.Host = "box"
 	m = apply(m, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &issue}}, model.ActivityTabMsg{Tab: model.TabAttachments})
@@ -505,10 +505,10 @@ func TestAttachmentRowsWithCollidingNamesGetUniqueNodeIDs(t *testing.T) {
 
 func TestAttachmentRowsLinkThisHostAndNameOtherHosts(t *testing.T) {
 	nodes := attachmentsTab(t, "box", map[string]any{
-		"attachment.z.png":  map[string]any{"host": "other", "path": "/z.png"},
-		"attachment.my pic": map[string]any{"host": "box", "path": `C:\a b\x.png`},
-		"attachment.a.png":  map[string]any{"host": "box", "path": "/a/x.png"},
-		"unrelated":         map[string]any{"host": "box", "path": "/u"},
+		"tern-kata.attachment.z.png":  map[string]any{"host": "other", "path": "/z.png"},
+		"tern-kata.attachment.my pic": map[string]any{"host": "box", "path": `C:\a b\x.png`},
+		"tern-kata.attachment.a.png":  map[string]any{"host": "box", "path": "/a/x.png"},
+		"unrelated":                   map[string]any{"host": "box", "path": "/u"},
 	})
 	var order []string
 	for _, c := range nodes[view.DetailActivityID].C {

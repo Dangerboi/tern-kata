@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/Dangerboi/tern-kata/internal/worker"
 	"go.kenn.io/kata"
 	"go.kenn.io/kata/pkg/client"
 )
@@ -31,6 +32,8 @@ import (
 type kataServer struct {
 	*httptest.Server
 	handler http.Handler
+	// intercept, when set, sees every request first; one that answers it returns true.
+	intercept atomic.Pointer[func(http.ResponseWriter, *http.Request) bool]
 }
 
 func startKata(t *testing.T, version string) *kataServer {
@@ -51,17 +54,21 @@ func startKata(t *testing.T, version string) *kataServer {
 
 func serve(t *testing.T, service http.Handler, version string) *kataServer {
 	t.Helper()
+	srv := &kataServer{handler: service}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/ping" {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "service": "kata", "version": version})
 			return
 		}
+		if hook := srv.intercept.Load(); hook != nil && (*hook)(w, r) {
+			return
+		}
 		service.ServeHTTP(w, r)
 	})
-	server := httptest.NewServer(handler)
-	t.Cleanup(server.Close)
-	return &kataServer{Server: server, handler: service}
+	srv.Server = httptest.NewServer(handler)
+	t.Cleanup(srv.Server.Close)
+	return srv
 }
 
 func (s *kataServer) target() Target {
@@ -96,6 +103,8 @@ func (l *locator) locate(context.Context, string) (Target, error) {
 func newGateway(t *testing.T, l *locator) *Gateway {
 	t.Helper()
 	gateway := NewGateway(l.locate)
+	state := t.TempDir()
+	gateway.workerDirs = func() (worker.Dirs, error) { return worker.Dirs{Config: state, State: state}, nil }
 	t.Cleanup(gateway.Close)
 	return gateway
 }

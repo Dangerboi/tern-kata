@@ -40,6 +40,8 @@ type PaneRowsMsg struct{ Rows int }
 
 func (PaneRowsMsg) msg() {}
 
-type LoadProject struct{ Workspace string }
+// LoadProject reads the Project the workspace is bound to. Actor is who the Pane acts as, for the one-time move of old
+// Attachment pointers that a Pane start triggers.
+type LoadProject struct{ Workspace, Actor string }
 
 func (LoadProject) cmd() {}

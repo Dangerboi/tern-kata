@@ -47,6 +47,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Changed
 
+- An Attachment pointer is now the `tern-kata.attachment.<name>` meta key, because kata's native attachments claim `attachment.<id>`; tern-kata moves pointers written under `attachment.<name>` by itself, once per Project and kata daemon on each machine, when a Pane for the Project starts or `tern-kata attach` or `detach` runs, and leaves kata's own `attachment.*` keys and the files alone.
 - The Issue detail's heading is the bare `#id` in a Project Collection, since the top bar names the Project; it names the Project, `project#id`, only in Collections that span Projects (Inbox, Today, All Open and the others).
 - Following a ticket of another Project from a Project Collection switches the Pane to that Project instead of opening the ticket as a stranger in the current one: the Pane keeps its Page and selects the ticket, the top bar reads "Project: <that Project>", and Esc goes back through the jump history to the earlier Collection, Page, Lane view, selection and focus, one step per hop. This covers an id on a Board card's Relationships line, the detail's Links and children rows, `^`, and a `kata://` or `https://kata.invalid/` link; following inside a Project and from Collections that span Projects works as before.
 - The top bar's title ("Project: tern-kata", or the Collection's name) keeps the accent colour whichever column has focus, so following a link into the detail no longer dims it; the columns' borders show focus.

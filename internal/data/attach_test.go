@@ -90,12 +90,12 @@ func (f attachFixture) issue(t *testing.T, uid string) g.ShowIssueOut {
 	return response.JSON200.Issue
 }
 
-// pointers is the Issue's attachment.* meta as kata holds it, by stored name.
+// pointers is the Issue's tern-kata.attachment.* meta as kata holds it, by stored name.
 func (f attachFixture) pointers(t *testing.T, uid string) map[string]map[string]any {
 	t.Helper()
 	pointers := map[string]map[string]any{}
 	for key, value := range f.issue(t, uid).Metadata {
-		if name, ok := strings.CutPrefix(key, "attachment."); ok {
+		if name, ok := strings.CutPrefix(key, "tern-kata.attachment."); ok {
 			pointers[name] = value.(map[string]any)
 		}
 	}
@@ -390,7 +390,7 @@ func TestDetachLeavesAFileOnAnotherHost(t *testing.T) {
 	elsewhere := writeFile(t, t.TempDir(), "theirs.png", "x")
 	_, err := f.kata.target().Client.PatchIssueMetadataWithResponse(context.Background(), &g.PatchIssueMetadataRequestOptions{
 		PathParams: &g.PatchIssueMetadataPath{ProjectID: f.project.ID, Ref: f.uid},
-		Body:       &g.PatchIssueMetadataBody{Actor: new("tester"), Patch: map[string]any{"attachment.theirs.png": map[string]any{"host": "some-other-host", "path": elsewhere}}},
+		Body:       &g.PatchIssueMetadataBody{Actor: new("tester"), Patch: map[string]any{"tern-kata.attachment.theirs.png": map[string]any{"host": "some-other-host", "path": elsewhere}}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -481,7 +481,7 @@ func TestDetachClearsAMalformedPointerAndTouchesNoFile(t *testing.T) {
 	if got.Err != nil || got.Fate != model.FileLeft || !strings.Contains(got.Report(), "no file was touched") {
 		t.Fatalf("got %+v, report %q", got, got.Report())
 	}
-	if _, still := f.issue(t, f.uid).Metadata["attachment.odd"]; still {
+	if _, still := f.issue(t, f.uid).Metadata["tern-kata.attachment.odd"]; still {
 		t.Fatal("the malformed key survived")
 	}
 }
@@ -508,12 +508,12 @@ func TestAttachFailsBeforeCopyingWhenTheStoreCannotBeSetUp(t *testing.T) {
 	}
 }
 
-// setPointer writes the attachment.<name> key of the fixture's Issue as any writer could.
+// setPointer writes the tern-kata.attachment.<name> key of the fixture's Issue as any writer could.
 func setPointer(t *testing.T, f attachFixture, name string, value any) {
 	t.Helper()
 	_, err := f.kata.target().Client.PatchIssueMetadataWithResponse(context.Background(), &g.PatchIssueMetadataRequestOptions{
 		PathParams: &g.PatchIssueMetadataPath{ProjectID: f.project.ID, Ref: f.uid},
-		Body:       &g.PatchIssueMetadataBody{Actor: new("tester"), Patch: map[string]any{"attachment." + name: value}},
+		Body:       &g.PatchIssueMetadataBody{Actor: new("tester"), Patch: map[string]any{"tern-kata.attachment." + name: value}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -527,8 +527,8 @@ func TestAttachWritesExactlyHostAndPathAndDecodesBack(t *testing.T) {
 		t.Fatal(got.Err)
 	}
 	meta := f.issue(t, f.uid).Metadata
-	if want := (map[string]any{"host": f.host, "path": got.Path}); !reflect.DeepEqual(meta["attachment.shot.png"], want) {
-		t.Fatalf("meta value %v, want %v", meta["attachment.shot.png"], want)
+	if want := (map[string]any{"host": f.host, "path": got.Path}); !reflect.DeepEqual(meta["tern-kata.attachment.shot.png"], want) {
+		t.Fatalf("meta value %v, want %v", meta["tern-kata.attachment.shot.png"], want)
 	}
 	if a := model.Attachments(meta); len(a) != 1 || a[0] != (model.Attachment{Name: "shot.png", Host: f.host, Path: got.Path}) {
 		t.Fatalf("decoded %v", a)
@@ -568,14 +568,14 @@ func TestDetachIgnoresHostCaseAndNeverDeletesForAnEmptyHost(t *testing.T) {
 	}
 }
 
-// racingGateway is a gateway whose daemon first runs before when a clear of the key named attachment.<name> arrives.
+// racingGateway is a gateway whose daemon first runs before when a clear of the key named tern-kata.attachment.<name> arrives.
 func (f attachFixture) racingGateway(t *testing.T, name string, before func()) *Gateway {
 	t.Helper()
 	racing := serve(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/metadata") {
 			body, _ := io.ReadAll(r.Body)
 			r.Body = io.NopCloser(bytes.NewReader(body))
-			if bytes.Contains(body, []byte(`"attachment.`+name+`":null`)) {
+			if bytes.Contains(body, []byte(`"tern-kata.attachment.`+name+`":null`)) {
 				before()
 			}
 		}
@@ -584,13 +584,13 @@ func (f attachFixture) racingGateway(t *testing.T, name string, before func()) *
 	return newGateway(t, newLocator(racing.target())).WithHost(f.host)
 }
 
-// setKey writes the attachment.<name> meta key straight to kata, bypassing every guard; nil deletes it.
+// setKey writes the tern-kata.attachment.<name> meta key straight to kata, bypassing every guard; nil deletes it.
 func (f attachFixture) setKey(t *testing.T, name string, value any) {
 	t.Helper()
 	actor := "rival"
 	_, err := f.kata.target().Client.PatchIssueMetadataWithResponse(context.Background(), &g.PatchIssueMetadataRequestOptions{
 		PathParams: &g.PatchIssueMetadataPath{ProjectID: f.project.ID, Ref: f.uid},
-		Body:       &g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{"attachment." + name: value}},
+		Body:       &g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{"tern-kata.attachment." + name: value}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -610,7 +610,7 @@ func TestDetachClearsAKeyWhoseValueHasANonCanonicalNumber(t *testing.T) {
 			if got.Err != nil || !got.Cleared {
 				t.Fatalf("got %+v, want the key cleared", got)
 			}
-			if _, still := f.issue(t, f.uid).Metadata["attachment.odd"]; still {
+			if _, still := f.issue(t, f.uid).Metadata["tern-kata.attachment.odd"]; still {
 				t.Fatal("the key is still set")
 			}
 		})

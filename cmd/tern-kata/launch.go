@@ -317,7 +317,7 @@ Flags:
 Subcommands (only as the first argument; they never open a Pane or need Tern):
   attach <ref> <file>...        copy each file into the Project's Attachment store
                                 (.kata-attachments in the primary checkout) and point
-                                an attachment.<name> meta key of the Issue at it;
+                                a tern-kata.attachment.<name> meta key of the Issue at it;
                                 prints each stored absolute path, stops at the first failure
   detach <ref> <name>           clear that key and delete the copy if it is on this machine
   recur <ref>                   print the Issue's schedule in words and the next Occurrence's

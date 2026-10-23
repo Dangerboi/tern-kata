@@ -206,7 +206,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m = m.openRequested(msg.IssueRef)
 		m.Loading = true
 		m.Err = nil
-		return m, []Cmd{LoadProject{Workspace: msg.Workspace}}
+		return m, []Cmd{LoadProject{Workspace: msg.Workspace, Actor: m.Actor}}
 	case ProjectLoaded:
 		return updateProject(m, msg)
 	case LanesLoaded:

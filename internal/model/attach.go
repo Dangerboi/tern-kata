@@ -6,7 +6,7 @@ import (
 	"io/fs"
 )
 
-// AttachFile copies the file at Path into the Project's Attachment store and points an attachment.<name> meta key of the Issue
+// AttachFile copies the file at Path into the Project's Attachment store and points a tern-kata.attachment.<name> meta key of the Issue
 // Ref names at the copy. Ref is anything kata accepts: a short id in the workspace's Binding, <project>#<short id> or a ULID.
 type AttachFile struct{ Workspace, Ref, Actor, Path string }
 
@@ -20,7 +20,7 @@ type FileAttached struct {
 
 func (FileAttached) msg() {}
 
-// DetachFile clears the attachment.<Name> meta key of the Issue Ref names and deletes the copy it pointed to when the copy is on this machine.
+// DetachFile clears the tern-kata.attachment.<Name> meta key of the Issue Ref names and deletes the copy it pointed to when the copy is on this machine.
 type DetachFile struct{ Workspace, Ref, Actor, Name string }
 
 func (DetachFile) cmd() {}
