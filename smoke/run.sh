@@ -8,6 +8,8 @@ proxy_pid=
 export CGO_ENABLED=0
 export KATA_HOME="$tmp/kata"
 export TERN_CONFIG_DIR="$tmp/config"
+export XDG_CONFIG_HOME="$tmp/xdg-config"
+export XDG_STATE_HOME="$tmp/xdg-state"
 export TERN_DAEMON_SOCKET="$tmp/tern-daemon.sock"
 export STENCIL_LOG_DIR="$tmp/logs"
 unset KATA_SERVER KATA_AUTH_TOKEN KATA_AUTHOR TMUX STY ZELLIJ TERN_TSP
