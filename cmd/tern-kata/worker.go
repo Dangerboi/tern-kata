@@ -99,7 +99,7 @@ func stopWorker(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Writ
 	case a.Mode == worker.StopNow && a.InFlight == 0:
 		_, err = fmt.Fprintf(out, "Stopping now: the worker is ending; %s.", runs)
 	case a.Mode == worker.StopNow:
-		_, err = fmt.Fprintf(out, "Stopping now: the worker is ending and %s; held interrupted, resumable once a worker runs again.", runs)
+		_, err = fmt.Fprintf(out, "Stopping now: the worker ends at once; its %s will be held interrupted and can be resumed once a worker runs again.", runs)
 	case a.InFlight == 0:
 		_, err = fmt.Fprintf(out, "Stopping when idle: %s, so the worker exits now.", runs)
 	default:

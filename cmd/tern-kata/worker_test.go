@@ -459,7 +459,7 @@ func TestWorkerStopSaysTheModeTheRunsInFlightAndWhetherItStartsAgain(t *testing.
 		t.Fatalf("stop printed %q, %v", out, err)
 	}
 	out, err = f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"stop"}, Now: true})
-	if want := "Stopping now: the worker is ending and 1 run in flight; held interrupted, resumable once a worker runs again. The plugin will start a fresh worker.\n"; err != nil || out != want {
+	if want := "Stopping now: the worker ends at once; its 1 run in flight will be held interrupted and can be resumed once a worker runs again. The plugin will start a fresh worker.\n"; err != nil || out != want {
 		t.Fatalf("stop --now printed %q, %v", out, err)
 	}
 	select {
