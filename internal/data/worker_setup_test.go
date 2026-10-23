@@ -123,7 +123,8 @@ func TestSettingUpWritesAWorkerTomlTheWorkerLoadsAndServingAddsTheProject(t *tes
 		cfg.Checkouts["work"] != first || len(cfg.Projects) != 1 || cfg.Projects[0].Name != "work" {
 		t.Fatalf("config %+v", cfg)
 	}
-	if info, err := os.Stat(dirs.ConfigPath()); err != nil || info.Mode().Perm() != 0o600 {
+	// Windows files carry no Unix mode, so only the write itself is checked there.
+	if info, err := os.Stat(dirs.ConfigPath()); err != nil || (info.Mode().Perm() != 0o600 && filepath.Separator == '/') {
 		t.Fatalf("file mode %v err %v, want 0600", info.Mode(), err)
 	}
 
