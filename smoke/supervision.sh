@@ -101,7 +101,15 @@ grep -q 'Supervised by Tern' "$tmp/status.txt" || { echo "worker status does not
 first=$(worker_pid)
 
 run_job() {
-  "$tmp/bin/tern-kata" run "$job" | grep -q accepted
+  # The job forbids overlap: a fresh worker may still be settling the last run (it shows succeeded before kata holds it
+  # settled), so a refusal saying so is retried for a while.
+  local out
+  for ((i = 0; i < 100; i++)); do
+    out=$("$tmp/bin/tern-kata" run "$job" 2>&1) && break
+    grep -q 'is not settled' <<<"$out" || { echo "$out" >&2; return 1; }
+    sleep 0.1
+  done
+  grep -q accepted <<<"$out" || { echo "$out" >&2; return 1; }
   for ((i = 0; i < 100; i++)); do
     "$tmp/bin/tern-kata" worker status >"$tmp/status.txt"
     if [[ $(grep -c '"Supervised smoke job"  succeeded' "$tmp/status.txt") -ge $1 ]]; then return 0; fi
