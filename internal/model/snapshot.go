@@ -128,6 +128,9 @@ func CollectionQuery(c Collection, f Filters) SnapshotQuery {
 // SnapshotQuery is the query the shown Collection answers; a search that names an Issue by short id is answered by that Issue, not by text.
 func (m Model) SnapshotQuery() SnapshotQuery {
 	q := CollectionQuery(m.Collection, m.Filters)
+	if m.OnBoard() {
+		q.Status = nil // the Board's own rule picks open and recently closed Issues; the status filter belongs to the Issues Page
+	}
 	if m.idMatch() != "" {
 		q.Text = nil
 	}

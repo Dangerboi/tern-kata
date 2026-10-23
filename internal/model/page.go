@@ -66,14 +66,25 @@ func showPage(target Page) func(Model) (Model, []Cmd) {
 		if m.Page == target {
 			return m, nil
 		}
-		if leave := pageDefs[m.Page].leave; leave != nil {
-			m = leave(m)
+		before := liveQuery(m)
+		m, cmds := switchPage(m, target)
+		if !sameCollectionQuery(before, liveQuery(m)) { // the Board reads without the status filter, the Issues Page with it
+			var more []Cmd
+			m, more = snapshotChanged(m)
+			cmds = append(cmds, more...)
 		}
-		if enter := pageDefs[target].enter; enter != nil {
-			return enter(m)
-		}
-		return m, nil
+		return m, cmds
 	}
+}
+
+func switchPage(m Model, target Page) (Model, []Cmd) {
+	if leave := pageDefs[m.Page].leave; leave != nil {
+		m = leave(m)
+	}
+	if enter := pageDefs[target].enter; enter != nil {
+		return enter(m)
+	}
+	return m, nil
 }
 
 // pageActions are the Page keys as main-surface entries, so keys, help sheet and click targets come from one place.

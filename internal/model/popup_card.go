@@ -256,6 +256,7 @@ func init() {
 			key:    filterFormKey,
 			fields: FilterFields, focus: func(m *Model) *Field { return &m.FilterForm.Field },
 			locked: func(m Model) bool { return m.FilterForm.Saving },
+			hidden: func(m Model, name Field) bool { return !m.FilterFieldShown(name) },
 			caret: func(m Model) (Field, bool) {
 				return m.FilterForm.Field, !m.FilterForm.Saving && takesText(FilterFields, m.FilterForm.Field)
 			},

@@ -155,7 +155,11 @@ func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 	case PreviousFilterField:
 		cycleField(&m, -1)
 	case ResetFilterForm:
+		status := m.FilterForm.Values.Status
 		m.FilterForm.Values = Filters{}
+		if !m.FilterFieldShown(FilterStatus) {
+			m.FilterForm.Values.Status = status
+		}
 	case DeleteInput, ClearInput:
 		if field := filterTextField(&m.FilterForm); field != nil {
 			*field, _ = editText(*field, &m.FilterForm.Caret, m.FilterForm.Field, Binding{Action: action}, true, KeyMsg{})

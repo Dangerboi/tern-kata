@@ -39,6 +39,9 @@ func filterLayer(m model.Model) tern.Element {
 	}
 	children := make([]tern.Element, 0, len(model.FilterFields)+1)
 	for _, field := range model.FilterFields {
+		if !m.FilterFieldShown(field.Name) {
+			continue
+		}
 		tone := ui.ToneNeutral
 		title := filterTitles[field.Name]
 		prompt := title + ": "

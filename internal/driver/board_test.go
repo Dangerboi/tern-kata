@@ -392,11 +392,11 @@ func TestIssueKeysActOnTheSelectedCardAndEscOpensTheMenu(t *testing.T) {
 }
 
 func TestFiltersNarrowTheBoard(t *testing.T) {
-	open, closed := boardCard("open"), closedAt("shut", time.October, 7)
-	s := boardPane(t, open, closed)
+	mine, other := ownedBy(boardCard("mine"), "me"), closedAt("shut", time.October, 7)
+	s := boardPane(t, mine, boardCard("theirs"), other)
 	wantLane(t, s, 5, "Done", "shut")
-	out := answered(t, s, key("s"), open)
-	wantLane(t, out.State, 0, "No lane", "open")
+	out := answered(t, feed(t, s, key("f"), key("tab"), key("m"), key("e")).State, key("ctrl+o"), mine)
+	wantLane(t, out.State, 0, "No lane", "mine")
 	wantLane(t, out.State, 5, "Done")
 }
 

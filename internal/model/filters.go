@@ -30,6 +30,10 @@ func clearFilters(m Model) (Model, []Cmd) {
 	return snapshotChanged(m)
 }
 
+// FilterFieldShown says the Filter card draws the field: the Board ignores the status filter, so its card has no Status row (the
+// card still carries the value, for Apply and Save as default).
+func (m Model) FilterFieldShown(name Field) bool { return !(name == FilterStatus && m.OnBoard()) }
+
 func openFilterForm(m Model) Model {
 	m.FilterForm = FilterFormState{Open: true, Field: FilterFields[0].Name, Values: m.Filters}
 	return m
@@ -124,7 +128,7 @@ func (m Model) FilterSummary() string {
 	if m.Filters.ProjectUID != "" {
 		parts = append(parts, "project="+m.ProjectFilterName(m.Filters.ProjectUID))
 	}
-	if m.Filters.Status != "" {
+	if m.Filters.Status != "" && !m.OnBoard() {
 		parts = append(parts, "status="+m.Filters.Status)
 	}
 	if m.Filters.Owner != "" {
