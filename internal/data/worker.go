@@ -100,17 +100,9 @@ func (g *Gateway) openRunSession(ctx context.Context, cmd model.OpenRunSession) 
 }
 
 // SessionTabArgs is the tern command line that opens a run's omp session: a new tab in the run's working folder that continues the
-// session. Tern joins the words after -- into one line for the login shell, so each is quoted for it.
+// session. Tern quotes each word after -- for the login shell, so the words go as they are.
 func SessionTabArgs(cmd model.OpenRunSession) []string {
-	argv := []string{"omp", "--resume", cmd.SessionID, "--session-dir", cmd.SessionDir}
-	for i := range argv {
-		argv[i] = shellQuote(argv[i])
-	}
-	return append([]string{"new", "tab", "--cwd", cmd.Cwd, "--"}, argv...)
-}
-
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+	return []string{"new", "tab", "--cwd", cmd.Cwd, "--", "omp", "--resume", cmd.SessionID, "--session-dir", cmd.SessionDir}
 }
 
 // execTern runs the tern program with args, returning its combined output.

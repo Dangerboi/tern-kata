@@ -118,8 +118,9 @@ func TestOpeningASessionRunsTernNewTabInTheRunsFolderWithTheSessionResumed(t *te
 	var ran []string
 	g := NewGateway(nil)
 	g.runTern = func(_ context.Context, args []string) ([]byte, error) { ran = args; return nil, nil }
-	got := as[model.RunSessionOpened](t, run(t, g, model.OpenRunSession{Cwd: "/home/me/my repo", SessionDir: "/state/runs/R1/session", SessionID: "sess-1"}))
-	want := []string{"new", "tab", "--cwd", "/home/me/my repo", "--", "'omp'", "'--resume'", "'sess-1'", "'--session-dir'", "'/state/runs/R1/session'"}
+	got := as[model.RunSessionOpened](t, run(t, g, model.OpenRunSession{Cwd: "/home/me/my repo", SessionDir: "/state/runs/R1/my session", SessionID: "sess-1"}))
+	// Tern quotes each word after -- for the shell itself; quoting them here too made the shell look for a program named 'omp'.
+	want := []string{"new", "tab", "--cwd", "/home/me/my repo", "--", "omp", "--resume", "sess-1", "--session-dir", "/state/runs/R1/my session"}
 	if got.Err != nil || !slices.Equal(ran, want) {
 		t.Fatalf("ran %q (err %v), want %q", ran, got.Err, want)
 	}
