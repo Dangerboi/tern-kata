@@ -9,7 +9,7 @@
 //	--stub-hang            print the session line, then wait for a signal
 //	--stub-log FILE        append one JSON line describing this launch
 //	--stub-hang-first      like --stub-hang, but only when not started with --resume (so a resumed attempt finishes)
-//	--stub-pause MS        after the final assistant message, wait MS milliseconds before ending the turn (a run that has said something and runs on)
+//	--stub-wait-for FILE   after the final assistant message, wait until FILE exists before ending the turn (a run that has said something and runs on until the test releases it)
 //	--stub-linger          after agent_end, keep running until signalled (the process ended its turn but has not exited)
 //	--stub-linger-first    like --stub-linger, but only when not started with --resume (so a resumed attempt exits)
 //	--stub-fail-when T     exit 1 when the prompt contains T
@@ -38,7 +38,7 @@ func main() {
 		hangFirst   bool
 		linger      bool
 		lingerFirst bool
-		pause       int
+		waitFor     string
 		textBytes   int
 		errStatus   int
 		failWhen    string
@@ -73,9 +73,9 @@ func main() {
 			hang = true
 		case "--stub-hang-first":
 			hangFirst = true
-		case "--stub-pause":
+		case "--stub-wait-for":
 			i++
-			pause, _ = strconv.Atoi(args[i])
+			waitFor = args[i]
 		case "--stub-linger-first":
 			lingerFirst = true
 		case "--stub-linger":
@@ -166,7 +166,12 @@ func main() {
 	}
 	message, _ := json.Marshal(msg)
 	fmt.Printf(`{"type":"message_end","message":%s}`+"\n", message)
-	time.Sleep(time.Duration(pause) * time.Millisecond)
+	for waitFor != "" {
+		if _, err := os.Stat(waitFor); err == nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 	if !noEnd {
 		fmt.Printf(`{"type":"agent_end","messages":[{"role":"user","content":[{"type":"text","text":"p"}]},%s],"isTerminal":true,"yielded":true}`+"\n", message)
 	}

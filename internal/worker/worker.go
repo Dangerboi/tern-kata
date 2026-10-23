@@ -88,6 +88,7 @@ type projectState struct {
 	pending int
 	held    map[string]string
 	running map[string]bool // run uids with a goroutine driving them
+	owing   map[string]bool // run uids with no goroutine whose reports or settlement a transient failure left undelivered
 
 	wake chan struct{}
 	// kick asks the Project loop to look at its queued occurrences again; sched is that loop's own schedule state.

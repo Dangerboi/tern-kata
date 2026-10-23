@@ -50,11 +50,17 @@ func (w *Worker) isStopping() bool {
 	return w.stopping != ""
 }
 
-// inFlightLocked counts the runs a goroutine is driving; a held run has none. mu is held.
+// inFlightLocked counts the runs a goroutine is driving and the accepted, non-held runs a transient kata failure
+// left owing reports or settlement; a held run is neither. mu is held.
 func (w *Worker) inFlightLocked() int {
 	n := 0
 	for _, ps := range w.projects {
 		n += len(ps.running)
+		for uid := range ps.owing {
+			if !ps.running[uid] {
+				n++
+			}
+		}
 	}
 	return n
 }

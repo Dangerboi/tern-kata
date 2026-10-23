@@ -39,8 +39,17 @@ func (w *Worker) spawn(ps *projectState, uid string) {
 	go func() {
 		defer w.runs.Done()
 		err := w.advance(w.ctx, ps, uid)
+		owes := w.owesSettlement(uid)
 		w.mu.Lock()
 		delete(ps.running, uid)
+		if owes {
+			if ps.owing == nil {
+				ps.owing = map[string]bool{}
+			}
+			ps.owing[uid] = true
+		} else {
+			delete(ps.owing, uid)
+		}
 		w.mu.Unlock()
 		w.finishDrain()
 		if err != nil && w.ctx.Err() == nil && !w.halted.Load() {
@@ -49,12 +58,28 @@ func (w *Worker) spawn(ps *projectState, uid string) {
 	}()
 }
 
+// owesSettlement is whether an accepted run that is not held still has reports or its settlement to deliver: a
+// transient kata failure stopped it, and retryPending will drive it on. An idle drain waits for such a run.
+func (w *Worker) owesSettlement(uid string) bool {
+	j, err := w.store.Load(uid)
+	if err != nil || j.Phase == PhaseSettled {
+		return false
+	}
+	return j.Outcome == nil || j.Outcome.Hold == ""
+}
+
 // retryPending resumes runs a transient kata failure left half-reported or half-admitted; the Project loop calls it at least every minute.
 func (w *Worker) retryPending(ps *projectState) {
 	journals, _, _ := w.store.Scan()
 	for _, j := range journals {
 		if j.ProjectUID != ps.project.UID || j.Executor != w.opt.Config.Executor {
 			continue
+		}
+		if j.Phase == PhaseSettled || j.Outcome != nil && j.Outcome.Hold != "" {
+			w.mu.Lock()
+			delete(ps.owing, j.RunUID) // settled or held by another path since: nothing left to wait for
+			w.mu.Unlock()
+			w.finishDrain()
 		}
 		switch {
 		case j.Phase == PhasePrepared && !w.holdsSlotOf(ps, j.RunUID):
