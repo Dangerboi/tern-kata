@@ -77,12 +77,16 @@ func (w *Worker) serveControl(ctx context.Context, ln interface {
 		go func() {
 			defer w.runs.Done()
 			defer conn.Close()
-			defer context.AfterFunc(ctx, func() { _ = conn.Close() })() // a client that says nothing must not outlive the worker
+			unhook := context.AfterFunc(ctx, func() { _ = conn.Close() }) // a client that says nothing must not outlive the worker
+			defer unhook()
 			_ = conn.SetDeadline(time.Now().Add(2 * time.Minute))
 			var req Request
 			if err := json.NewDecoder(conn).Decode(&req); err != nil {
 				_ = json.NewEncoder(conn).Encode(Response{Error: "unreadable request"})
 				return
+			}
+			if req.Op == "stop" {
+				unhook() // the last run may end before the answer is written, and that cancels ctx; the deadline still bounds it
 			}
 			_ = json.NewEncoder(conn).Encode(w.handle(ctx, req))
 			if req.Op == "stop" {

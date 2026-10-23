@@ -5,8 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/worker"
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
@@ -113,6 +115,75 @@ func TestAnIdleStopWaitsForARunWhoseReportKataRefusedUntilItIsSettled(t *testing
 	if err != nil || j.Phase != worker.PhaseSettled {
 		t.Fatalf("the worker exited with the run %v (%v)", j.Phase, err)
 	}
+}
+
+// A run request that passed the stopping check but has not reached its run goroutine holds an idle stop.
+func TestAnIdleStopAskedWhileARunIsBeingAdmittedWaitsForThatRun(t *testing.T) {
+	h := newHarness(t)
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "quick", Prompt: "Do it."})
+	atPrepared, proceed := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	r := h.start(worker.Hooks{AfterSave: func(point string, _ *worker.Journal) error {
+		if point == "prepared" {
+			once.Do(func() { close(atPrepared); <-proceed })
+		}
+		return nil
+	}})
+	h.admitting(r)
+	requested := h.askAsync(worker.Request{Op: "run", Job: job.UID})
+	<-atPrepared
+
+	resp := h.ask(worker.Request{Op: "stop"})
+	if !resp.OK || resp.Stop.InFlight != 1 {
+		t.Fatalf("stop: %+v", resp)
+	}
+	select {
+	case <-r.ended:
+		t.Fatal("the idle stop ended the worker while a run was being admitted")
+	case <-time.After(200 * time.Millisecond):
+	}
+	close(proceed)
+	accepted := <-requested
+	if !accepted.resp.OK {
+		t.Fatalf("the run request: %+v", accepted.resp)
+	}
+	if run := h.settled(accepted.resp.Run.RunUID); run.Status != "succeeded" {
+		t.Fatalf("the run ended %q: %q", run.Status, run.Summary)
+	}
+	h.exits(r)
+}
+
+// A run the last worker left owing its report holds an idle stop asked before the Project has even resolved.
+func TestAnIdleStopAskedAtOnceWaitsForTheReportTheLastWorkerOwed(t *testing.T) {
+	h := newHarness(t)
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
+	uid, _ := h.killedAt("finished", job)
+
+	slow := make(chan struct{})
+	h.kata.Intercept(func(q *http.Request) bool {
+		return q.Method == http.MethodGet && strings.HasSuffix(q.URL.Path, "/projects")
+	}, func(w http.ResponseWriter, q *http.Request, next http.Handler) {
+		select {
+		case <-slow:
+			next.ServeHTTP(w, q)
+		case <-q.Context().Done():
+		}
+	})
+	r := h.start(worker.Hooks{})
+	resp := h.ask(worker.Request{Op: "stop"})
+	if !resp.OK || resp.Stop.InFlight != 1 {
+		t.Fatalf("stop: %+v", resp)
+	}
+	select {
+	case <-r.ended:
+		t.Fatal("the idle stop ended the worker with a report still owed")
+	case <-time.After(200 * time.Millisecond):
+	}
+	close(slow)
+	if run := h.settled(uid); run.Status != "succeeded" {
+		t.Fatalf("the owed run ended %q: %q", run.Status, run.Summary)
+	}
+	h.exits(r)
 }
 
 func TestAnIdleStopWithNothingRunningExitsAtOnce(t *testing.T) {

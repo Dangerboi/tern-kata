@@ -56,6 +56,8 @@ type Worker struct {
 	runs     sync.WaitGroup
 	// starting limits how many Projects resolve and recover at the same time (ADR-0004).
 	starting chan struct{}
+	// owed is the run uids of the journals found at start that recovery has not handed on yet; guarded by mu.
+	owed map[string]bool
 	// gates serializes the overlap check with the journal that closes it, per Project and job; runOps gives resume and
 	// abandon one owner per run at a time.
 	gates, runOps keyedMutex
@@ -152,6 +154,7 @@ func (w *Worker) Run(ctx context.Context) error {
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
 	w.ctx, w.cancel, w.started = ctx, stop, w.clock.Now()
+	w.noteOwed()                       // before the socket answers, so an idle stop asked at once still waits for them
 	_ = os.Remove(w.opt.Dirs.Socket()) // the lock is ours, so a socket file is stale
 	ln, err := net.Listen("unix", w.opt.Dirs.Socket())
 	if err != nil {

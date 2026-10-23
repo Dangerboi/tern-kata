@@ -229,6 +229,9 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurre
 		}
 	}
 	if !w.reserve(ps) {
+		if w.isStopping() {
+			return nil, false, errStopping
+		}
 		return nil, false, &busyError{fmt.Sprintf("Project %s is at capacity (%d); try again when a run ends", ps.cfg.Name, ps.cfg.Capacity), true}
 	}
 	bound := false

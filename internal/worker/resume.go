@@ -55,6 +55,9 @@ func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, err
 	}
 	w.release(ps, uid) // its process is proven gone, so a slot kept from before the hold is stale
 	if !w.reserve(ps) {
+		if w.isStopping() {
+			return RunTransition{}, errStopping
+		}
 		return RunTransition{}, fmt.Errorf("run %s cannot be resumed: Project %s is at capacity (%d); try again when a run ends", uid, ps.cfg.Name, ps.cfg.Capacity)
 	}
 	bound := false
