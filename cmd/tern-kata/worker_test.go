@@ -298,15 +298,17 @@ func TestPlanLaunchWorkerSubcommands(t *testing.T) {
 		}
 	}
 	for args, want := range map[string]string{
-		"run":                        "usage: tern-kata run <job-uid>",
-		"run a b":                    "usage: tern-kata run <job-uid>",
-		"worker stop now":            "usage: tern-kata worker",
-		"worker status --now":        "--now applies to `tern-kata worker stop` only",
-		"worker status --takeover":   "--takeover applies to `tern-kata worker` only",
-		"worker resume":              "usage: tern-kata worker",
-		"worker abandon a b":         "usage: tern-kata worker",
-		"worker resume a --takeover": "usage: tern-kata worker",
-		"run x --takeover":           "run: unknown flag --takeover",
+		"run":                            "usage: tern-kata run <job-uid>",
+		"run a b":                        "usage: tern-kata run <job-uid>",
+		"worker stop now":                "usage: tern-kata worker",
+		"worker status --now":            "--now applies to `tern-kata worker stop` only",
+		"worker status --takeover":       "--takeover applies to `tern-kata worker` only",
+		"worker resume":                  "usage: tern-kata worker",
+		"worker abandon a --actor alice": "worker init` only",
+		"worker resume a --now":          "--now applies to `tern-kata worker stop` only",
+		"worker abandon a b":             "usage: tern-kata worker",
+		"worker resume a --takeover":     "usage: tern-kata worker",
+		"run x --takeover":               "run: unknown flag --takeover",
 	} {
 		_, err := PlanLaunch(strings.Fields(args), lookupFrom(nil), "v")
 		if _, is := err.(subcommandError); !is || !strings.Contains(err.Error(), want) {
@@ -474,5 +476,32 @@ func TestWorkerStopWithNoWorkerSaysSo(t *testing.T) {
 	_, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"stop"}})
 	if _, is := err.(subcommandError); !is || !strings.Contains(err.Error(), "no tern-kata worker is running on this machine") {
 		t.Fatalf("error %v", err)
+	}
+}
+
+// Only init and add read the working directory: the other worker commands work from a folder that was removed.
+func TestNewWorkerEnvReadsTheWorkingDirectoryOnlyForInitAndAdd(t *testing.T) {
+	gone := t.TempDir()
+	t.Chdir(gone)
+	if err := os.Remove(gone); err != nil {
+		t.Skipf("cannot remove the working directory: %v", err)
+	}
+	if _, err := os.Getwd(); err == nil {
+		t.Skip("this system still reports a removed working directory")
+	}
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	for _, operands := range [][]string{nil, {"status"}, {"stop"}, {"edit"}, {"doctor"}, {"abandon", "x"}} {
+		if _, err := newWorkerEnv(LaunchPlan{Subcommand: "worker", Operands: operands}); err != nil {
+			t.Errorf("worker %v from a removed folder: %v", operands, err)
+		}
+	}
+	if _, err := newWorkerEnv(LaunchPlan{Subcommand: "run", TargetRef: "x"}); err != nil {
+		t.Errorf("run from a removed folder: %v", err)
+	}
+	for _, verb := range []string{"init", "add"} {
+		if _, err := newWorkerEnv(LaunchPlan{Subcommand: "worker", Operands: []string{verb}}); err == nil {
+			t.Errorf("worker %s from a removed folder succeeded", verb)
+		}
 	}
 }
