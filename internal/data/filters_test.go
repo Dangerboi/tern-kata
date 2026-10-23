@@ -12,8 +12,13 @@ import (
 func writeFiltersFile(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", dir)
-	path := filepath.Join(dir, "tern-kata", "filters.toml")
+	t.Setenv("XDG_CONFIG_HOME", dir) // os.UserConfigDir: XDG on Linux, HOME on macOS, AppData on Windows
+	t.Setenv("HOME", dir)
+	t.Setenv("AppData", dir)
+	path, err := filtersPath()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if content != "" {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)

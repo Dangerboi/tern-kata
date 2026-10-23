@@ -23,6 +23,7 @@ func TestMain(m *testing.M) {
 	}
 	_ = os.Setenv("XDG_STATE_HOME", state)
 	_ = os.Setenv("XDG_CONFIG_HOME", state)
+	_ = os.Setenv("AppData", state) // os.UserConfigDir on Windows
 	code := m.Run()
 	_ = os.RemoveAll(state)
 	os.Exit(code)
