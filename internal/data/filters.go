@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path/filepath"
 
 	"github.com/BurntSushi/toml"
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -29,14 +30,13 @@ type projectFilters struct {
 // filterKeys are the keys of a Project's table that a save owns; any other key is kept.
 var filterKeys = []string{"name", "project", "status", "owner", "label", "relationship"}
 
-func filtersPath() (string, error) { return configPath("filters.toml") }
-
 // loadFilters is the Project's saved default filter. No file or no table means none; an unreadable file is an error naming it.
-func loadFilters(projectUID string) (model.Filters, error) {
-	path, err := filtersPath()
+func (g *Gateway) loadFilters(projectUID string) (model.Filters, error) {
+	folder, err := g.configFolder()
 	if err != nil {
 		return model.Filters{}, err
 	}
+	path := filepath.Join(folder, "filters.toml")
 	var file filtersFile
 	if _, err := toml.DecodeFile(path, &file); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return model.Filters{}, fmt.Errorf("%s: %w", path, err)
@@ -47,15 +47,16 @@ func loadFilters(projectUID string) (model.Filters, error) {
 
 // saveFilters writes the Project's default filter, keeping every other table and every key of this one it doesn't know. It
 // refuses a file it cannot read. shortcut: comments in a hand-edited file are lost on save, and two Panes saving at once race.
-func saveFilters(cmd model.SaveFilters) model.FiltersSaved {
-	return model.FiltersSaved{ProjectUID: cmd.ProjectUID, Default: cmd.Default, Err: writeFilters(cmd)}
+func (g *Gateway) saveFilters(cmd model.SaveFilters) model.FiltersSaved {
+	return model.FiltersSaved{ProjectUID: cmd.ProjectUID, Default: cmd.Default, Err: g.writeFilters(cmd)}
 }
 
-func writeFilters(cmd model.SaveFilters) error {
-	path, err := filtersPath()
+func (g *Gateway) writeFilters(cmd model.SaveFilters) error {
+	folder, err := g.configFolder()
 	if err != nil {
 		return err
 	}
+	path := filepath.Join(folder, "filters.toml")
 	file, err := readRawTables(path)
 	if err != nil {
 		return err

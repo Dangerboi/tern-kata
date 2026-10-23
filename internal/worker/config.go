@@ -20,9 +20,20 @@ type Dirs struct {
 	Config, State string
 }
 
-// DefaultDirs is os.UserConfigDir()/tern-kata and $XDG_STATE_HOME/tern-kata, else ~/.local/state/tern-kata.
-func DefaultDirs() (Dirs, error) {
+// ConfigDir is os.UserConfigDir()/tern-kata: the one rule for tern-kata's config folder, shared by worker.toml and the Pane's
+// lanes.toml and filters.toml. It needs no state folder.
+func ConfigDir() (string, error) {
 	config, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(config, "tern-kata"), nil
+}
+
+// DefaultDirs is ConfigDir and $XDG_STATE_HOME/tern-kata, else ~/.local/state/tern-kata. When only the state folder cannot
+// be found, the error comes back with Config still set, so a caller that needs only the config folder can go on.
+func DefaultDirs() (Dirs, error) {
+	config, err := ConfigDir()
 	if err != nil {
 		return Dirs{}, err
 	}
@@ -30,11 +41,11 @@ func DefaultDirs() (Dirs, error) {
 	if state == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return Dirs{}, err
+			return Dirs{Config: config}, err
 		}
 		state = filepath.Join(home, ".local", "state")
 	}
-	return Dirs{Config: filepath.Join(config, "tern-kata"), State: filepath.Join(state, "tern-kata")}, nil
+	return Dirs{Config: config, State: filepath.Join(state, "tern-kata")}, nil
 }
 
 // ConfigPath is worker.toml.
