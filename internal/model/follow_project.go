@@ -165,7 +165,11 @@ func (m Model) landFollow() Model {
 	}
 	m.pending = ""
 	if follow.restore {
-		return m
+		m = m.keepLane()
+		if m.Focus == ColumnDetail && m.OpenedIssueUID() != "" && m.SelectedUID == m.OpenedIssueUID() {
+			return m
+		}
+		return m.WithVisibleSelection()
 	}
 	return m.placeCard(follow.uid, false)
 }

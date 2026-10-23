@@ -21,6 +21,7 @@ func TestCreateProjectRule(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m := model.Model{Project: model.Project{ID: 7, UID: "bound"}, Collection: model.Collection{View: tc.view, ProjectUID: "bound"}, Issues: []model.Issue{{UID: "existing", ProjectID: 9}}}
+			m.Snapshot.Catalog = []model.CatalogProject{{Project: model.Project{ID: 7, UID: "bound"}}}
 			if tc.selected {
 				m.SelectedUID = "existing"
 			}
@@ -29,6 +30,20 @@ func TestCreateProjectRule(t *testing.T) {
 				t.Fatalf("create: %#v", m.Create)
 			}
 		})
+	}
+}
+
+func TestCreateInAProjectTheCatalogNoLongerListsIsRefused(t *testing.T) {
+	m := model.Model{Project: model.Project{ID: 7, UID: "bound"}, Collection: model.Collection{View: "project", ProjectUID: "gone"}}
+	m, cmds := model.Update(m, model.KeyMsg{Chord: "n"})
+	if m.Create.Err == nil || m.Create.Err.Error() != "Select a Project before creating an Issue." {
+		t.Fatalf("create error %v; want the Select a Project refusal", m.Create.Err)
+	}
+	for _, cmd := range cmds {
+		switch cmd.(type) {
+		case model.LoadFieldLabels, model.CreateIssueCmd:
+			t.Fatalf("command %#v sent", cmd)
+		}
 	}
 }
 

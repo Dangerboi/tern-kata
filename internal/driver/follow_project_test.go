@@ -278,3 +278,43 @@ func TestEscIsLabelledBackWhileItReturnsAcrossProjectsAndMenuOnceTheCardMovesOn(
 		t.Errorf("after moving off the card the footer says %q; want esc Menu", got)
 	}
 }
+
+func TestChoosingTheFirstProjectAgainBeforeTheFollowedOneAnswersDropsTheFollow(t *testing.T) {
+	s := workBoard(t)
+	out := step(t, s, click("", refClick(t, s, "task", "far")))
+	followCmds := out.Cmds
+	out = step(t, out.State, model.CollectionSelected{Collection: model.ProjectCollection("p", "work")})
+	if !readsProject(out.Cmds, "p") {
+		t.Fatalf("choosing work reads no snapshot of it: %#v", out.Cmds)
+	}
+	s = inInfra(t, out.State, followCmds)
+	s = inWork(t, s, out.Cmds)
+	s = step(t, s, model.LanesLoaded{ProjectUID: "q"}).State
+	s = step(t, s, model.LanesLoaded{ProjectUID: "p"}).State
+	if m := s.Model; m.SelectedUID == "far" || m.OpenedIssueUID() == "far" {
+		t.Errorf("selected %q opened %q; the dropped follow still put infra's far on work's Board", m.SelectedUID, m.OpenedIssueUID())
+	}
+}
+
+func TestMovingTheSelectionBeforeTheFollowedLaneListArrivesIsKept(t *testing.T) {
+	s := workBoard(t)
+	out := step(t, s, click("", refClick(t, s, "task", "far")))
+	s = answeredRead(t, out.State, out.Cmds, model.Snapshot{Issues: []model.Issue{infraCard("far"), infraCard("other")}, Links: []model.Link{farLink()}})
+	s = step(t, s, model.SelectMsg{UID: "other"}).State
+	s = step(t, s, model.LanesLoaded{ProjectUID: "q"}).State
+	if m := s.Model; m.SelectedUID != "other" {
+		t.Errorf("selected %q; want other, the card the selection moved to", m.SelectedUID)
+	}
+}
+
+func TestEscBackWithTheLaneListBeforeTheSnapshotSelectsACardTheBoardDraws(t *testing.T) {
+	s := workBoard(t)
+	out := step(t, s, click("", refClick(t, s, "task", "far")))
+	s = step(t, inInfra(t, out.State, out.Cmds), model.LanesLoaded{ProjectUID: "q"}).State
+	back := step(t, s, key("escape"))
+	s = step(t, back.State, model.LanesLoaded{ProjectUID: "p"}).State
+	s = answeredRead(t, s, back.Cmds, model.Snapshot{Issues: []model.Issue{boardCard("other")}})
+	if m := s.Model; m.SelectedUID != "other" {
+		t.Errorf("selected %q; want other, the only card the Board draws", m.SelectedUID)
+	}
+}

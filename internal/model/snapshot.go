@@ -282,14 +282,24 @@ func (m Model) selectAfterCreate(uid string) Model {
 	return m
 }
 
-// cancelPending drops the pending selection when anything but a snapshot moved the cursor, the Collection, the filters or the opened Issue.
+// cancelPending drops the pending selection and the follow waiting for its Project when anything but a snapshot moved the cursor, the Collection, the filters or the opened Issue.
 func (m Model) cancelPending(before Model, msg Msg) Model {
-	if _, snapshot := msg.(SnapshotLoaded); snapshot || before.pending == "" || m.pending != before.pending {
+	if _, snapshot := msg.(SnapshotLoaded); snapshot {
+		return m
+	}
+	pending := before.pending != "" && m.pending == before.pending
+	follow := before.follow != nil && m.follow == before.follow
+	if !pending && !follow {
 		return m
 	}
 	if m.SelectedUID != before.SelectedUID || m.Collection != before.Collection || m.Filters != before.Filters ||
 		m.CollectionCursor != before.CollectionCursor || m.openRef != before.openRef {
-		m.pending = ""
+		if pending {
+			m.pending = ""
+		}
+		if follow {
+			m.follow = nil
+		}
 	}
 	return m
 }

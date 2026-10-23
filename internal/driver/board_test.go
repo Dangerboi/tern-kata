@@ -48,7 +48,7 @@ func projectPane(t *testing.T, cols int, issues ...model.Issue) driver.State {
 	t.Helper()
 	s := feed(t, driver.State{}, model.Start{Workspace: "/repo"}, resize(cols)).State
 	s.Model = loadFirst(s.Model, model.ProjectLoaded{Project: model.Project{ID: 7, UID: "p", Name: "work"}},
-		model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: issues}, LocalDate: boardToday, TimeZone: "UTC"})
+		model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: issues, Catalog: []model.CatalogProject{{Project: model.Project{ID: 7, UID: "p", Name: "work"}}}}, LocalDate: boardToday, TimeZone: "UTC"})
 	return feed(t, s).State
 }
 

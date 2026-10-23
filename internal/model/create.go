@@ -54,6 +54,8 @@ func openCreate(m Model, child bool) (Model, []Cmd) {
 	projectID := m.Project.ID
 	if entry, ok := CatalogEntry(m.Snapshot, m.Collection.ProjectUID); ok {
 		projectID = entry.Project.ID
+	} else if m.Collection.IsProject() {
+		projectID = 0
 	}
 	issue := closeIssue(m)
 	parent := ""
