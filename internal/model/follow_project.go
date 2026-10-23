@@ -128,10 +128,15 @@ func (m Model) restorePlace(entry jumpEntry) (Model, []Cmd) {
 
 // backAcross is Esc with the list focused after a follow landed on a card: back through the jump history.
 func (m Model) backAcross() (Model, []Cmd, bool) {
-	if !m.listJump || len(m.back) == 0 || m.Focus == ColumnDetail || m.SelectedUID != m.landedOn {
+	if !m.EscGoesBack() {
 		return m, nil, false
 	}
 	return m.jumpBack()
+}
+
+// EscGoesBack says Esc would return across Projects: a follow landed on this card or row and nothing has moved since.
+func (m Model) EscGoesBack() bool {
+	return m.listJump && len(m.back) > 0 && m.Focus != ColumnDetail && m.SelectedUID == m.landedOn
 }
 
 // followArrived says the Collection's snapshot is on screen.
