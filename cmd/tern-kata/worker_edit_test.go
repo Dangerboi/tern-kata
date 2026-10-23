@@ -3,23 +3,82 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
 
-// scriptedEditor installs an $EDITOR shell script that runs body with the file as $1, and returns the file where it logs
-// what it was handed (one "---" separated entry per run).
-func scriptedEditor(t *testing.T, body string) string {
+// The scripted editor is this test binary re-run as $EDITOR, so it works the same under `sh -c` and Windows `cmd /c`
+// without a shell script. The mode and log path travel in the environment the editor inherits.
+const (
+	editorModeEnv = "TERN_KATA_TEST_EDITOR_MODE"
+	editorLogEnv  = "TERN_KATA_TEST_EDITOR_LOG"
+)
+
+var executorLine = regexp.MustCompile(`(?m)^executor = .*$`)
+
+// TestScriptedEditorProcess is the editor body. It is a no-op in a normal test run.
+func TestScriptedEditorProcess(t *testing.T) {
+	mode := os.Getenv(editorModeEnv)
+	if mode == "" {
+		return
+	}
+	file := os.Args[len(os.Args)-1]
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		os.Exit(2)
+	}
+	text := string(raw)
+	logf, err := os.OpenFile(os.Getenv(editorLogEnv), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		os.Exit(2)
+	}
+	logf.WriteString(text + "---\n")
+	logf.Close()
+
+	var out string
+	switch mode {
+	case "rename":
+		out = executorLine.ReplaceAllString(text, `executor = "renamed"`)
+	case "unchanged":
+		out = text
+	case "empty":
+		out = ""
+	case "bogus-then-fix":
+		// First run adds an unknown key; the reopened run (it carries the "#! " problem comment) drops it and the comment.
+		if !strings.HasPrefix(text, "#! ") {
+			out = "bogus = 1\n" + text
+			break
+		}
+		var kept []string
+		for _, line := range strings.Split(text, "\n") {
+			if !strings.HasPrefix(line, "#!") && !strings.HasPrefix(line, "bogus") {
+				kept = append(kept, line)
+			}
+		}
+		out = executorLine.ReplaceAllString(strings.Join(kept, "\n"), `executor = "second"`)
+	default:
+		os.Exit(2)
+	}
+	if err := os.WriteFile(file, []byte(out), 0o644); err != nil {
+		os.Exit(2)
+	}
+	os.Exit(0)
+}
+
+// scriptedEditor installs the test binary as $EDITOR in the given mode and returns the file where it logs what it was
+// handed (one "---" separated entry per run).
+func scriptedEditor(t *testing.T, mode string) string {
 	t.Helper()
-	dir := t.TempDir()
-	log := filepath.Join(dir, "seen")
-	script := filepath.Join(dir, "editor.sh")
-	src := "#!/bin/sh\n{ cat \"$1\"; echo ---; } >> '" + log + "'\n" + body + "\n"
-	if err := os.WriteFile(script, []byte(src), 0o755); err != nil {
+	exe, err := os.Executable()
+	if err != nil {
 		t.Fatal(err)
 	}
+	log := filepath.Join(t.TempDir(), "seen")
+	t.Setenv(editorModeEnv, mode)
+	t.Setenv(editorLogEnv, log)
 	t.Setenv("VISUAL", "")
-	t.Setenv("EDITOR", script)
+	t.Setenv("EDITOR", `"`+exe+`" -test.run=^TestScriptedEditorProcess$ --`)
 	return log
 }
 
@@ -34,7 +93,7 @@ func initedEnv(t *testing.T) workerEnv {
 
 func TestWorkerEditWritesAValidEditAndSaysHowToReload(t *testing.T) {
 	env := initedEnv(t)
-	scriptedEditor(t, `sed -i 's/^executor = .*/executor = "renamed"/' "$1"`)
+	scriptedEditor(t, "rename")
 	out, err := runSetup(t, env, "edit")
 	if err != nil {
 		t.Fatal(err)
@@ -52,8 +111,7 @@ func TestWorkerEditWritesAValidEditAndSaysHowToReload(t *testing.T) {
 func TestWorkerEditReopensARefusedEditWithTheProblemAtTheTop(t *testing.T) {
 	env := initedEnv(t)
 	// First run adds an unknown key; second run removes it again, after seeing the problem comment.
-	counter := filepath.Join(t.TempDir(), "n")
-	log := scriptedEditor(t, `if [ -e '`+counter+`' ]; then grep -v '^#!' "$1" | grep -v '^bogus' > "$1.new"; mv "$1.new" "$1"; sed -i 's/^executor = .*/executor = "second"/' "$1"; else : > '`+counter+`'; echo 'bogus = 1' | cat - "$1" > "$1.new"; mv "$1.new" "$1"; fi`)
+	log := scriptedEditor(t, "bogus-then-fix")
 	if _, err := runSetup(t, env, "edit"); err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +129,7 @@ func TestWorkerEditReopensARefusedEditWithTheProblemAtTheTop(t *testing.T) {
 }
 
 func TestWorkerEditCancelsOnAnUnchangedOrEmptyResult(t *testing.T) {
-	for name, body := range map[string]string{"unchanged": ":", "empty": `: > "$1"`} {
+	for name, body := range map[string]string{"unchanged": "unchanged", "empty": "empty"} {
 		t.Run(name, func(t *testing.T) {
 			env := initedEnv(t)
 			before := readConfig(t, env)
@@ -92,7 +150,7 @@ func TestWorkerEditCancelsOnAnUnchangedOrEmptyResult(t *testing.T) {
 
 func TestWorkerEditWithoutAConfigPointsAtInit(t *testing.T) {
 	env := setupEnv(t, t.TempDir())
-	scriptedEditor(t, ":")
+	scriptedEditor(t, "unchanged")
 	if _, err := runSetup(t, env, "edit"); err == nil || !strings.Contains(err.Error(), "worker init") {
 		t.Fatalf("error %v", err)
 	}
@@ -110,7 +168,7 @@ func mustRead(t *testing.T, path string) []byte {
 func TestWorkerEditWithAWorkerRunningSaysStopMakesItReload(t *testing.T) {
 	f := newWorkerFixture(t, "")
 	f.serve(t)
-	scriptedEditor(t, `sed -i 's/^executor = .*/executor = "renamed"/' "$1"`)
+	scriptedEditor(t, "rename")
 	out, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"edit"}})
 	if err != nil {
 		t.Fatal(err)
