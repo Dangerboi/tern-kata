@@ -48,6 +48,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 ### Changed
 
 - The Issue detail's heading names the Project of an Issue that isn't the Project on screen: `acme-infra#c6sy - …` for a related Issue opened from a Board card, and `project#id` in Collections that span Projects (Inbox, Today, All Open and the others). Inside a Project it stays `#id`.
+- The top bar's title ("Project: tern-kata", or the Collection's name) keeps the accent colour whichever column has focus, so following a link into the detail no longer dims it; the columns' borders show focus.
 
 ### Fixed
 

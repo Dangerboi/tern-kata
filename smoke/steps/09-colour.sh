@@ -1,4 +1,4 @@
-# Rows carry theme-toned badges and no label chips, and the focused top bar title is accent.
+# Rows carry theme-toned badges and no label chips, and the top bar title is accent.
 # The fixture is deleted afterwards so later steps see the three seeded Issues.
 kata --workspace "$tmp/workspace" create "Smoke colour Issue" --priority 0 --label colour-chip --json >"$tmp/colour.json"
 colour_uid=$(jq -r '.issue.uid' "$tmp/colour.json")

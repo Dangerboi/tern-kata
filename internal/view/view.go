@@ -241,21 +241,18 @@ func linesIn(m model.Model, px int) ui.ListMax {
 // topBar is the pinned row above the columns: the Collection title with its
 // markers on the left, the counts in the middle, and the Daemon then the Menu button at the right. Clicking the title or the
 // button opens the Menu. When the row is too narrow Tern's flex shrinks and truncates the Daemon first,
-// then the counts; the left cell and the button never shrink.
+// then the counts; the left cell and the button never shrink. The title keeps the accent whichever column has focus: it names
+// what the Pane shows, and the columns' own borders show focus.
 func topBar(m model.Model) tern.Element {
-	tone, style := ui.ToneNeutral, "strong"
-	if m.Focus == model.ColumnList {
-		tone, style = ui.ToneAccent, "accent strong"
-	}
 	title := barTitle(m)
-	heading := []ui.Span{{T: title, S: style}}
+	heading := []ui.Span{{T: title, S: "accent strong"}}
 	if m.Loading {
 		heading = append(heading, loadingMarker)
 	}
 	flexCell := func(key string, tone ui.Tone, shrink float64) ui.Common {
 		return ui.Common{Key: key, Tone: tone, Shrink: &shrink}
 	}
-	headingCell := flexCell("heading", tone, 0)
+	headingCell := flexCell("heading", ui.ToneAccent, 0)
 	headingCell.Title, headingCell.Actions = "Menu", &ui.Actions{Click: MenuClick}
 	rightCell := flexCell("right", ui.ToneNeutral, 100)
 	// The right cell never narrows below "… · Menu", so the Menu button is never pushed off the bar; the Daemon inside gives way first.

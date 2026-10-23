@@ -84,16 +84,21 @@ func TestSelectedRowIsAccent(t *testing.T) {
 	}
 }
 
-func TestFocusedTopBarTitleIsAccent(t *testing.T) {
+// The title names the Project or Collection on screen, so it keeps the accent whichever column has focus; the columns'
+// own borders show focus.
+func TestTopBarTitleIsAccentWhicheverColumnHasFocus(t *testing.T) {
 	m := browsing()
-	heading := render(t, m)["main.topbar.left.heading"]
-	if heading.P["tone"] != "accent" || style(t, heading, m.Collection.Title) != "accent strong" {
-		t.Errorf("focused heading: tone=%v spans=%v", heading.P["tone"], styled(heading))
-	}
-	m = apply(m, model.KeyMsg{Chord: "enter"})
-	heading = render(t, m)["main.topbar.left.heading"]
-	if heading.P["tone"] == "accent" || style(t, heading, m.Collection.Title) != "strong" {
-		t.Errorf("unfocused heading: tone=%v spans=%v", heading.P["tone"], styled(heading))
+	for _, step := range []struct {
+		name string
+		msg  model.Msg
+	}{{"list focused", nil}, {"detail focused", model.KeyMsg{Chord: "enter"}}} {
+		if step.msg != nil {
+			m = apply(m, step.msg)
+		}
+		heading := render(t, m)["main.topbar.left.heading"]
+		if heading.P["tone"] != "accent" || style(t, heading, m.Collection.Title) != "accent strong" {
+			t.Errorf("%s (focus %v): tone=%v spans=%v", step.name, m.Focus, heading.P["tone"], styled(heading))
+		}
 	}
 }
 
