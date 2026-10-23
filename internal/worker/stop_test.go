@@ -210,6 +210,20 @@ func TestStopSaysItWillNotRestartWhenWorkerManualIsBesideTheConfig(t *testing.T)
 	h.exits(r)
 }
 
+// The plugin starts a worker only while worker.toml exists, so a stop after the file was removed promises no restart.
+func TestStopSaysItWillNotRestartOnceWorkerTomlIsRemoved(t *testing.T) {
+	h := newHarness(t)
+	r := h.start(worker.Hooks{}, func(o *worker.Options) { o.Supervisor = worker.SupervisorTern })
+	h.admitting(r)
+	if err := os.Remove(h.dirs.ConfigPath()); err != nil {
+		t.Fatal(err)
+	}
+	if resp := h.ask(worker.Request{Op: "stop"}); !resp.OK || resp.Stop.Restarts {
+		t.Fatalf("stop: %+v", resp)
+	}
+	h.exits(r)
+}
+
 func TestAStopNowHoldsTheRunningRunInterruptedAtTheNextStart(t *testing.T) {
 	h := newHarness(t, "--stub-hang")
 	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "stuck", Prompt: "Do it."})

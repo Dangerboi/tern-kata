@@ -124,11 +124,16 @@ func (w *Worker) finishDrain() {
 }
 
 // restartsAfterStop is whether the plugin's host half starts a fresh worker once this one exits: it supervises this
-// worker and nothing turned supervision off with worker.manual beside worker.toml.
+// worker, worker.toml is still there and nothing turned supervision off with worker.manual beside it, as the host half
+// checks.
 func (w *Worker) restartsAfterStop() bool {
 	if w.opt.Supervisor == "" {
 		return false
 	}
-	_, err := os.Stat(filepath.Join(filepath.Dir(w.opt.Dirs.ConfigPath()), "worker.manual"))
+	config := w.opt.Dirs.ConfigPath()
+	if _, err := os.Stat(config); err != nil {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(filepath.Dir(config), "worker.manual"))
 	return err != nil
 }
