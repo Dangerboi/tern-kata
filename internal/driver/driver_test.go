@@ -84,7 +84,7 @@ func feed(t *testing.T, s driver.State, inputs ...any) driver.Output {
 // browsing is a Pane of the given width on a Project of alpha and beta, alpha's detail loaded.
 func browsing(t *testing.T, cols int) driver.State {
 	t.Helper()
-	return loadedWith(t, cols, model.Project{ID: 7, UID: "p", Name: "work"}, model.Snapshot{Issues: []model.Issue{alpha, beta}}, alphaLoaded())
+	return loadedWith(t, cols, model.Project{ID: 7, UID: "p", Name: "work"}, model.Snapshot{Issues: []model.Issue{alpha, beta}, Catalog: []model.CatalogProject{{Project: model.Project{ID: 7, UID: "p", Name: "work"}}}}, alphaLoaded())
 }
 
 // loadedWith is a Pane of the given width after its first load of the Project and snapshot, then the given messages.
