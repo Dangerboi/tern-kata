@@ -257,7 +257,16 @@ func WriteConfig(path, content string) error {
 		return err
 	}
 	if _, err := LoadConfig(tmp.Name()); err != nil {
-		return fmt.Errorf("the new worker.toml would not load, so nothing was written: %s", strings.ReplaceAll(err.Error(), tmp.Name(), path))
+		return &refusedWrite{err: err, text: "the new worker.toml would not load, so nothing was written: " + strings.ReplaceAll(err.Error(), tmp.Name(), path)}
 	}
 	return os.Rename(tmp.Name(), path)
 }
+
+// refusedWrite is WriteConfig's refusal: the text calls the file worker.toml, and Unwrap keeps the load error (and its FieldError).
+type refusedWrite struct {
+	err  error
+	text string
+}
+
+func (e *refusedWrite) Error() string { return e.text }
+func (e *refusedWrite) Unwrap() error { return e.err }

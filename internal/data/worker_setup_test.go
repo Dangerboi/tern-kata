@@ -144,6 +144,23 @@ func TestSettingUpWritesAWorkerTomlTheWorkerLoadsAndServingAddsTheProject(t *tes
 	}
 }
 
+func TestSavingWorkerSetupNamesTheFieldAtFaultNotJustWordsInTheMessage(t *testing.T) {
+	g, _ := setupGateway(t)
+	folder := boundFolder(t, "work")
+	for name, tt := range map[string]struct {
+		cmd  model.SaveWorkerSetup
+		want model.Field
+	}{
+		"command with executor in its path": {model.SaveWorkerSetup{Executor: "laptop", Command: "tools/executor"}, model.WorkerFieldCommand},
+		"executor with whitespace":          {model.SaveWorkerSetup{Executor: "two words"}, model.WorkerFieldExecutor},
+	} {
+		tt.cmd.Workspace, tt.cmd.Trusted = folder, true
+		if got := as[model.WorkerSetupSaved](t, run(t, g, tt.cmd)); got.Err == nil || got.Field != tt.want {
+			t.Errorf("%s: field %q err %v, want field %q", name, got.Field, got.Err, tt.want)
+		}
+	}
+}
+
 func TestSavingWorkerSetupRefusesWithoutTrustAnExistingFileAnUnboundFolderAndABadExecutor(t *testing.T) {
 	g, dirs := setupGateway(t)
 	folder := boundFolder(t, "work")

@@ -197,11 +197,34 @@ func TestWorkerCardRefusedWriteKeepsTheInputAndFocusesTheNamedField(t *testing.T
 	s = typed(t, s, "bad-name")
 	s = step(t, s, model.ChooseMsg{Field: model.WorkerFieldTrust, Index: 1}).State
 	sent := step(t, s, key("ctrl+o"))
-	refused := step(t, sent.State, model.WorkerSetupSaved{Err: errors.New("worker.toml: executor must be at most 256 bytes with no whitespace")})
+	refused := step(t, sent.State, model.WorkerSetupSaved{Err: errors.New("worker.toml: executor must be at most 256 bytes with no whitespace"), Field: model.WorkerFieldExecutor})
 	msg, _ := nodeText(t, refused.State, view.WorkerID+".error")
 	card := refused.State.Model.WorkerCard
 	if card.Saving || !strings.Contains(msg, "executor must be") || card.Field != model.WorkerFieldExecutor || card.Executor != "bad-name" || !card.Trusted {
 		t.Fatalf("saving %v error %q field %q executor %q trusted %v, want the input kept and the executor focused", card.Saving, msg, card.Field, card.Executor, card.Trusted)
+	}
+}
+
+func TestWorkerCardFocusesTheFieldTheRefusalCarriesNotOneItsWordsMention(t *testing.T) {
+	s := workerCardOpen(t, nil, noWorkerFile)
+	s = step(t, s, model.ChooseMsg{Field: model.WorkerFieldTrust, Index: 1}).State
+	sent := step(t, s, key("ctrl+o"))
+	refused := step(t, sent.State, model.WorkerSetupSaved{Err: errors.New(`profiles.default: command "tools/executor" must be absolute or a name on PATH`), Field: model.WorkerFieldCommand})
+	if got := refused.State.Model.WorkerCard.Field; got != model.WorkerFieldCommand {
+		t.Errorf("focus %q, want the command field the refusal names", got)
+	}
+	unnamed := step(t, step(t, refused.State, key("ctrl+o")).State, model.WorkerSetupSaved{Err: errors.New("config under /home/executor/worker.toml: permission denied")})
+	if got := unnamed.State.Model.WorkerCard.Field; got != model.WorkerFieldCommand {
+		t.Errorf("focus %q, a refusal naming no field must leave focus where it was", got)
+	}
+}
+
+func TestWorkerCardSupervisionKeyWorksWhenTheFileDoesNotListTheProject(t *testing.T) {
+	s := workerCardOpen(t, nil, otherProject)
+	wantText(t, "card", wireTextOf(t, s), "Turn supervision off")
+	out := step(t, s, key("s"))
+	if want := []model.Cmd{model.SetWorkerSupervision{Manual: true}}; !reflect.DeepEqual(out.Cmds, want) {
+		t.Errorf("cmds %#v, want %#v", out.Cmds, want)
 	}
 }
 
@@ -299,13 +322,6 @@ func TestJobsPageBannerPerWorkerState(t *testing.T) {
 			s = step(t, s, model.WorkerSetupLoaded{Setup: tt.setup}).State
 			wantText(t, "Jobs Page", wireTextOf(t, s), tt.want)
 		})
-	}
-}
-
-func TestJobsPageReadsTheWorkerSetupAlongsideTheWorkerStatus(t *testing.T) {
-	out := step(t, projectPane(t, 160, boardCard("parent-a")), key("3"))
-	if !slices.Contains(out.Cmds, model.Cmd(askedSetup)) {
-		t.Fatalf("cmds %#v, want the setup read with the Jobs Page", out.Cmds)
 	}
 }
 

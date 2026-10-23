@@ -92,6 +92,15 @@ func (g *Gateway) saveWorkerSetup(cmd model.SaveWorkerSetup) model.WorkerSetupSa
 			Command: cmd.Command, Model: cmd.Model, Thinking: cmd.Thinking})
 	}
 	saved.Err = err
+	var named *worker.FieldError
+	if errors.As(err, &named) {
+		switch named.Field {
+		case worker.FieldExecutor:
+			saved.Field = model.WorkerFieldExecutor
+		case worker.FieldCommand:
+			saved.Field = model.WorkerFieldCommand
+		}
+	}
 	return saved
 }
 

@@ -118,11 +118,12 @@ type SaveWorkerSetup struct {
 
 func (SaveWorkerSetup) cmd() {}
 
-// WorkerSetupSaved answers SaveWorkerSetup. Err is the refusal, in words that name the field.
+// WorkerSetupSaved answers SaveWorkerSetup. Err is the refusal; Field is the card field it is about, "" when it names none.
 type WorkerSetupSaved struct {
 	Serve   bool
 	Project string
 	Key     string
+	Field   Field
 	Err     error
 }
 
@@ -376,23 +377,6 @@ type workerFieldError struct {
 
 func (e workerFieldError) Error() string { return e.text }
 
-// refusedWorkerField is the field a refusal of the write is about, "" when it names none. The write's own words name the
-// executor and the profile's command.
-func refusedWorkerField(err error) Field {
-	var named workerFieldError
-	if errors.As(err, &named) {
-		return named.field
-	}
-	text := err.Error()
-	switch {
-	case strings.Contains(text, "executor"):
-		return WorkerFieldExecutor
-	case strings.Contains(text, "command"):
-		return WorkerFieldCommand
-	}
-	return ""
-}
-
 func (m Model) workerSaveRefusal() error {
 	f := m.WorkerCard
 	if m.WorkerCardKind() == WorkerSetUp {
@@ -447,8 +431,8 @@ func workerSetupSaved(m Model, msg WorkerSetupSaved) (Model, []Cmd) {
 	f.Saving = false
 	if msg.Err != nil {
 		f.Err = msg.Err
-		if field := refusedWorkerField(msg.Err); field != "" && m.WorkerCardShows(field) {
-			f.Field = field
+		if msg.Field != "" && m.WorkerCardShows(msg.Field) {
+			f.Field = msg.Field
 		}
 		return m, nil
 	}
@@ -580,8 +564,8 @@ func workerCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		bound = false // no file to edit: the key is typed
 	}
 	field := f.at(f.Field)
-	if bound && binding.Action == WorkerSupervision && m.WorkerCardSaves() {
-		bound = false // while fields are drawn, s is typed
+	if bound && binding.Action == WorkerSupervision && field != nil && m.WorkerCardShows(f.Field) {
+		bound = false // in a text field, s is typed
 	}
 	switch {
 	case bound && binding.Action == WorkerSupervision:
