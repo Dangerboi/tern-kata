@@ -264,9 +264,9 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case DetailFailed:
 		m = m.detailFailed(msg)
 	case JumpIssueMsg:
-		return m.jumpTo(msg.UID, nil), nil
+		return m.jumpTo(msg.UID, nil)
 	case ShowCardMsg:
-		return showCard(m, msg.UID), nil
+		return showCard(m, msg.UID)
 	case FocusColumnMsg:
 		if msg.Column <= ColumnDetail {
 			m.Focus = msg.Column
@@ -308,7 +308,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			return openPicker(m), nil
 		}
 	case IssueOpened:
-		m = m.openByReference(msg.Ref, msg.Selected)
+		return m.openByReference(msg.Ref, msg.Selected)
 	case IssueOpenFailed:
 		if msg.Ref == m.OpenIssueRef() {
 			m = m.openFailed(msg.Ref)

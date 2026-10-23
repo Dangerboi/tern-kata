@@ -97,7 +97,14 @@ func lanesLoaded(m Model, msg LanesLoaded) Model {
 		m.Board.Lanes, m.Board.DoneDays, m.Board.DoneCards = nil, 0, 0
 		m.Notice = fmt.Sprintf("Lane list file unreadable, showing the default Lanes: %v", msg.Err)
 	}
-	return m.keepLane().WithVisibleSelection()
+	if m.waitingForFollow() {
+		return m
+	}
+	m = m.landFollow().keepLane()
+	if m.Focus == ColumnDetail && m.OpenedIssueUID() != "" && m.SelectedUID == m.OpenedIssueUID() {
+		return m // the Issue opened beside the Lane view stays shown whichever Lane it is in
+	}
+	return m.WithVisibleSelection()
 }
 
 // answeredBy says msg is the result of this save and not of an earlier one, whose card was cancelled.

@@ -196,11 +196,14 @@ func drillIn(m Model) (Model, []Cmd) {
 func drillOut(m Model) (Model, []Cmd) {
 	switch m.Focus {
 	case ColumnDetail:
-		if back, ok := m.jumpBack(); ok {
-			return back, nil
+		if back, cmds, ok := m.jumpBack(); ok {
+			return back, cmds
 		}
 		m.Focus = ColumnList
 	case ColumnList:
+		if back, cmds, ok := m.backAcross(); ok {
+			return back, cmds
+		}
 		if !m.SidebarShown() {
 			return openPicker(m), nil
 		}

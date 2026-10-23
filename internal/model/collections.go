@@ -37,10 +37,15 @@ func updateCollection(m Model, msg CollectionSelected) (Model, []Cmd) {
 			continue
 		}
 		m.Collection = collection
-		m = m.syncSidebarCursor()
-		m.Loading = true
-		m.Err = nil
-		return collectionSwitched(m)
+		return m.collectionChosen()
 	}
 	return m, nil
+}
+
+// collectionChosen reads the snapshot of the Collection the Pane just switched to.
+func (m Model) collectionChosen() (Model, []Cmd) {
+	m = m.syncSidebarCursor()
+	m.Loading = true
+	m.Err = nil
+	return collectionSwitched(m)
 }

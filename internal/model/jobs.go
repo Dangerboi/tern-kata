@@ -499,5 +499,5 @@ func openJobParent(m Model) Model {
 		m.stale = true
 		return m.focusDetail()
 	}
-	return m.jumpTo(uid, nil)
+	return m.jumpWithin(uid, nil)
 }

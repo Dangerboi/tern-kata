@@ -218,6 +218,7 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 		m.etag, m.etagQuery = msg.ETag, msg.Query
 		m.Cursor = msg.Snapshot.Cursor
 	}
+	m = m.followArrived()
 	if m.StreamGeneration == 0 {
 		// The first snapshot is on screen: follow the daemon from its cursor, and open the Issue the Pane was asked to show.
 		var stream []Cmd
@@ -331,8 +332,8 @@ func (m Model) applyCollection(snapshot Snapshot) Model {
 				break
 			}
 		}
-		if m.pending != "" {
-			return m
+		if m.pending != "" || (m.follow != nil && m.OnBoard()) {
+			return m // a ticket followed onto the Board is placed once the Lane list is in, whether or not the Board draws it
 		}
 	}
 	if m.Focus == ColumnDetail && m.OpenedIssueUID() != "" && m.SelectedUID == m.OpenedIssueUID() {

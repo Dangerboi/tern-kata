@@ -47,7 +47,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Changed
 
-- The Issue detail's heading names the Project of an Issue that isn't the Project on screen: `acme-infra#c6sy - …` for a related Issue opened from a Board card, and `project#id` in Collections that span Projects (Inbox, Today, All Open and the others). Inside a Project it stays `#id`.
+- The Issue detail's heading is the bare `#id` in a Project Collection, since the top bar names the Project; it names the Project, `project#id`, only in Collections that span Projects (Inbox, Today, All Open and the others).
+- Following a ticket of another Project from a Project Collection switches the Pane to that Project instead of opening the ticket as a stranger in the current one: the Pane keeps its Page and selects the ticket, the top bar reads "Project: <that Project>", and Esc goes back through the jump history to the earlier Collection, Page, Lane view, selection and focus, one step per hop. This covers an id on a Board card's Relationships line, the detail's Links and children rows, `^`, and a `kata://` or `https://kata.invalid/` link; following inside a Project and from Collections that span Projects works as before.
 - The top bar's title ("Project: tern-kata", or the Collection's name) keeps the accent colour whichever column has focus, so following a link into the detail no longer dims it; the columns' borders show focus.
 
 ### Fixed

@@ -223,6 +223,9 @@ func (m Model) laneView() Model {
 
 // laneBack is Esc in the Lane view: the Board with the same card selected, or the Menu where there is no Board to go back to.
 func laneBack(m Model) (Model, []Cmd) {
+	if back, cmds, ok := m.backAcross(); ok {
+		return back, cmds
+	}
 	if m.Cols < SideBySideCols {
 		return drillOut(m)
 	}

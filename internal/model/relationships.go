@@ -151,17 +151,30 @@ func (r Relationships) HighlightsOf(uid string) []Highlight {
 
 // showCard selects the Board card of uid, in the Lane view switching to its Lane. An Issue the Board does not draw opens in the
 // detail beside the Lane view as a jump, so Esc comes back to the card.
-func showCard(m Model, uid string) Model {
+func showCard(m Model, uid string) (Model, []Cmd) {
 	if !m.OnBoard() {
-		return m
+		return m, nil
 	}
+	if target, across := m.otherProject(uid); across {
+		return m.crossJump(uid, target, nil)
+	}
+	return m.placeCard(uid, true), nil
+}
+
+// placeCard puts uid's card on screen in the Board's Project. jump is whether an Issue the Board does not draw opens in the
+// detail as a new step of the jump history; a follow across Projects recorded its step already.
+func (m Model) placeCard(uid string, jump bool) Model {
 	columns := m.BoardColumns()
 	col, _ := CardAt(columns, uid)
 	if col < 0 {
 		if m.BoardShown() {
 			m = m.laneView()
 		}
-		return m.jumpTo(uid, nil)
+		if jump {
+			return m.jumpWithin(uid, nil)
+		}
+		m.SelectedUID, m.openedUID, m.landedOn, m.listJump = uid, uid, uid, false
+		return m.focusDetail()
 	}
 	if m.LaneViewShown() {
 		m.Board.Lane = columns[col].Lane
@@ -171,15 +184,15 @@ func showCard(m Model, uid string) Model {
 }
 
 // selectParent is `^`: the selected card's parent's card, or the Notice that it has none.
-func selectParent(m Model) Model {
+func selectParent(m Model) (Model, []Cmd) {
 	issue := m.issueByUID(m.SelectedUID)
 	if issue == nil {
-		return m
+		return m, nil
 	}
 	parent := m.Relationships.Of(issue.UID).Parent
 	if parent == nil {
 		m.Notice = fmt.Sprintf("%s has no parent.", issue.ShortID)
-		return m
+		return m, nil
 	}
 	return showCard(m, parent.UID)
 }

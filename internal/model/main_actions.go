@@ -190,7 +190,7 @@ var mainActions = []actionEntry{
 	{action: PreviousLane, modes: laneModes, keys: keys("left", "←"), help: "previous Lane", sheet: []sheetLine{{sheetBoard, 4, "previous Lane"}}, handle: laneMoving(PreviousLane, -1)},
 	{action: MoveCardLeft, modes: laneModes, keys: keys("<", "<"), help: "previous Lane", sheet: []sheetLine{{sheetBoard, 6, "move card to the previous Lane"}}, handle: cardMoving(-1)},
 	{action: MoveCardRight, modes: laneModes, keys: keys(">", ">"), help: "move card", footer: laneModes, footerKey: "<>", sheet: []sheetLine{{sheetBoard, 7, "move card to the next Lane"}}, handle: cardMoving(1)},
-	{action: SelectParent, modes: laneModes, keys: keys("^", "^", "shift+^", "^"), help: "parent", sheet: []sheetLine{{sheetBoard, 11, "select the parent's card"}}, handle: pure(selectParent)},
+	{action: SelectParent, modes: laneModes, keys: keys("^", "^", "shift+^", "^"), help: "parent", sheet: []sheetLine{{sheetBoard, 11, "select the parent's card"}}, handle: selectParent},
 	{action: OpenLane, modes: []Mode{ModeBoard}, keys: keys("enter", "↵"), help: "open", footer: []Mode{ModeBoard}, sheet: []sheetLine{{sheetBoard, 8, "open the Lane view"}}, handle: pure(openLane)},
 	// Jobs Page: the Project's Cron jobs, with the selected job's inspector beside them.
 	{action: MoveDown, modes: []Mode{ModeJobs}, keys: slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), help: "move", footer: []Mode{ModeJobs}, footerKey: "↑↓", sheet: []sheetLine{{sheetJobs, 1, "next job"}}, handle: pure(func(m Model) Model { return moveJob(m, MoveDown) })},

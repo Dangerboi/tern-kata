@@ -27,6 +27,10 @@ type IssueDetail struct {
 	// recurrenceWanted is the Issue whose recurrence `O` waits for: the detail loads even while hidden, and the Recurrence card
 	// opens once the loaded detail has it.
 	recurrenceWanted string
+	// follow is a ticket of another Project being followed: it waits for that Project's snapshot (and Lane list on the Board).
+	follow *followState
+	// listJump keeps the jump history alive while the list has focus, as on the Board after a follow lands on a card.
+	listJump bool
 }
 
 func (d IssueDetail) DetailAuthority() *IssueDetailData { return d.authority }
@@ -72,7 +76,7 @@ func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 		// The detail scroller keeps its offset across Issues; a different Issue starts at the top.
 		cmds = append(cmds, Scroll{Column: ColumnDetail, By: ScrollToStart})
 	}
-	if m.Focus != ColumnDetail || m.SelectedUID != m.landedOn {
+	if (m.Focus != ColumnDetail && !m.listJump) || m.SelectedUID != m.landedOn {
 		m = m.endJumpHistory()
 	}
 	m = m.settleWantedRecurrence()
@@ -121,7 +125,7 @@ func (m Model) shownIssue() *Issue {
 
 // endJumpHistory is the one way the jump history ends.
 func (m Model) endJumpHistory() Model {
-	m.back, m.landing = nil, nil
+	m.back, m.landing, m.listJump = nil, nil, false
 	return m
 }
 
@@ -226,11 +230,18 @@ func (m Model) snapshotArrived(authority *IssueDetailData, selected string, anch
 
 // openByReference says the Issue named by the reference being opened arrived; the detail shows it even when the Collection
 // does not list it.
-func (m Model) openByReference(ref string, authority *IssueDetailData) Model {
+func (m Model) openByReference(ref string, authority *IssueDetailData) (Model, []Cmd) {
 	if ref != m.openRef || authority == nil || authority.Issue == nil {
-		return m
+		return m, nil
 	}
 	m.openRef = ""
+	if target, across := m.otherProjectNamed(authority.Issue.ProjectName); across {
+		m, cmds := m.crossJump(authority.Issue.UID, target, nil)
+		if !m.OnBoard() {
+			m.uid, m.stale, m.authority, m.loading, m.err = m.SelectedUID, false, authority, false, nil
+		}
+		return m, cmds
+	}
 	m.SelectedUID = authority.Issue.UID
 	m.openedUID = m.SelectedUID
 	m.uid = m.SelectedUID
@@ -241,7 +252,7 @@ func (m Model) openByReference(ref string, authority *IssueDetailData) Model {
 	m.hidden = false
 	m.cursor = 0
 	m.Focus = ColumnDetail
-	return m
+	return m, nil
 }
 
 // openRequested records a reference to open; openFailed drops it.
@@ -265,6 +276,8 @@ type jumpEntry struct {
 	tab    ActivityTab
 	row    rowID
 	hasRow bool
+	// cross is set when the jump left this Issue for another Project: where the Pane stood, so going back returns there.
+	cross *crossPlace
 }
 
 // arrived puts the cursor where a pending landing asks, else keeps it on its row (anchor) by reanchoring. A landing row that is
@@ -289,7 +302,18 @@ func (m Model) arrived(anchor rowID, anchored bool) Model {
 
 // jumpTo shows another Issue and remembers where it came from. A landing, when given, is the tab and row the Issue opens on;
 // without one the Issue opens at its first row on the tab already shown.
-func (m Model) jumpTo(uid string, landing *jumpEntry) Model {
+func (m Model) jumpTo(uid string, landing *jumpEntry) (Model, []Cmd) {
+	if uid == "" || uid == m.SelectedUID {
+		return m, nil
+	}
+	if target, across := m.otherProject(uid); across {
+		return m.crossJump(uid, target, landing)
+	}
+	return m.jumpWithin(uid, landing), nil
+}
+
+// jumpWithin is jumpTo inside the Pane's Collection: the Collection never changes.
+func (m Model) jumpWithin(uid string, landing *jumpEntry) Model {
 	if uid == "" || uid == m.SelectedUID {
 		return m
 	}
@@ -304,16 +328,21 @@ func (m Model) jumpTo(uid string, landing *jumpEntry) Model {
 	return m.focusDetail()
 }
 
-// jumpBack returns to the Issue, tab and row the last jump came from.
-func (m Model) jumpBack() (Model, bool) {
+// jumpBack returns to the Issue, tab and row the last jump came from; a jump across Projects returns to its Project, Page,
+// Lane view and focus too, and reads that Project's snapshot.
+func (m Model) jumpBack() (Model, []Cmd, bool) {
 	if len(m.back) == 0 {
-		return m, false
+		return m, nil, false
 	}
 	entry := m.back[len(m.back)-1]
 	m.back = m.back[:len(m.back)-1]
 	m.SelectedUID, m.landedOn = entry.uid, entry.uid
 	m.tab, m.landing = entry.tab, &entry
-	return m, true
+	if entry.cross != nil {
+		m, cmds := m.restorePlace(entry)
+		return m, cmds, true
+	}
+	return m, nil, true
 }
 
 // chooseTab shows an Activity tab with the cursor on its first row.
@@ -361,7 +390,7 @@ func (m Model) openCursorRow() (Model, []Cmd) {
 		} else if row.Kind == RowComment {
 			landing = &jumpEntry{tab: TabComments}
 		}
-		return m.jumpTo(row.ReferenceUID, landing), nil
+		return m.jumpTo(row.ReferenceUID, landing)
 	}
 	return m, nil
 }
