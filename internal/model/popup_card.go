@@ -228,7 +228,7 @@ func init() {
 		},
 		{
 			card: CardWorker, open: func(m Model) bool { return m.WorkerCard.Open },
-			modes: []Mode{ModeWorkerCard, ModeWorkerRestart, ModeWorkerOff},
+			modes: []Mode{ModeWorkerCard, ModeWorkerRead, ModeWorkerRestart, ModeWorkerOff},
 			mode: func(m Model) Mode {
 				if m.WorkerCard.Restart {
 					return ModeWorkerRestart
@@ -236,7 +236,7 @@ func init() {
 				if m.WorkerCard.AskOff {
 					return ModeWorkerOff
 				}
-				return ModeWorkerCard
+				return m.WorkerCardMode()
 			},
 			key:    workerCardKey,
 			fields: WorkerFields, focus: func(m *Model) *Field { return &m.WorkerCard.Field },

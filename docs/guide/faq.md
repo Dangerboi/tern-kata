@@ -34,11 +34,11 @@ No. Saving writes the Lane list file only and never changes a label in kata. See
 
 ### Where does the worker's configuration live, and how do I create it?
 
-In `worker.toml` in tern-kata's config folder. Run `tern-kata worker init` in a directory bound to a Project, then `tern-kata worker add` in each other Project's directory. See [Set it up](worker.md#set-it-up).
+In `worker.toml` in tern-kata's config folder. Press `W` on the Jobs Page and choose **Set up** (or **Serve this Project** for a further Project), or run `tern-kata worker init` in a directory bound to a Project and `tern-kata worker add` in each other Project's directory. See [Set it up](worker.md#set-it-up).
 
-### I ran `worker add` and nothing changed. Why?
+### I added a Project (or edited `worker.toml`) and nothing changed. Why?
 
-A running worker reads `worker.toml` only at start. End it (`tern-kata worker status` prints its process id) and the plugin starts a fresh one. See [`worker add`](worker.md#tern-kata-worker-add).
+A running worker reads `worker.toml` only at start. Answer the Worker card's restart choice, or run `tern-kata worker stop`; the plugin then starts a fresh worker. See [Restarting and stopping](worker.md#restarting-and-stopping).
 
 ### Is it safe to list a Project in `worker.toml`?
 
@@ -46,7 +46,7 @@ Only if you trust everyone who can write jobs in it. They can run prompts and co
 
 ### No worker runs. Why?
 
-The host half starts the worker when `worker.toml` exists, inside Tern's session daemon. With Tern not running, no worker runs. A `worker.manual` file beside `worker.toml` turns supervision off. `tern-kata worker doctor` checks the setup, and the Jobs Page says whether this machine's worker serves the Project. See [Supervision](worker.md#supervision).
+The host half starts the worker when `worker.toml` exists, inside Tern's session daemon. With Tern not running, no worker runs. A `worker.manual` file beside `worker.toml` turns supervision off; `s` on the Worker card (`W` on the Jobs Page) shows and changes that. `tern-kata worker doctor` checks the setup, and the Jobs Page says whether this machine's worker serves the Project. See [Supervision](worker.md#supervision).
 
 ### A run is stuck as `unknown` or `held`. What do I do?
 

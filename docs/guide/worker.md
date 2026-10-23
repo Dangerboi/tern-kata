@@ -21,44 +21,59 @@ It needs kata v0.19.0 or newer and `omp` on `PATH`. On Windows, workflow command
 
 ## Set it up
 
-`worker.toml` lives in tern-kata's config folder: `~/.config/tern-kata/worker.toml` on Linux (honouring `$XDG_CONFIG_HOME`, beside `lanes.toml`) and `%AppData%\tern-kata\worker.toml` on Windows. Two commands write it for you. Run both in a directory bound to a kata Project, the same Binding the Pane uses (a `.kata.toml` in the directory or a parent up to the git root; `kata init` creates one). The checkout is the directory holding the `.kata.toml` (the Binding's directory), also when you run the command from a subdirectory. Neither command calls the kata daemon.
+Setting up means one file, `worker.toml`, in tern-kata's config folder (`~/.config/tern-kata/worker.toml` on Linux, honouring `$XDG_CONFIG_HOME`, beside `lanes.toml`; `%AppData%\tern-kata\worker.toml` on Windows). The Worker card in the Pane and the `tern-kata worker` commands write it the same way, with the same checks, so use whichever is at hand:
 
-### `tern-kata worker init`
+| | From the Pane | From a shell |
+|---|---|---|
+| First Project | **Set up** | `tern-kata worker init` |
+| Another Project | **Serve this Project** | `tern-kata worker add` |
+| Change anything else | **Edit** (`e`) | `tern-kata worker edit` |
+| Pick up a change | the restart choice | `tern-kata worker stop` |
+| Supervision on or off | `s` | `worker.manual` |
 
-Writes a new `worker.toml`. Five optional flags set values in it: `--executor <name>`, `--actor <actor>`, `--command <cmd>`, `--model <model>` and `--thinking <level>`; one you leave out keeps the value below. A value the worker's loader refuses (an executor with whitespace, say) is refused naming it, and nothing is written. It refuses when the file already exists (use `worker add`) or when the directory is not bound (run `kata init`). The file holds, in this order, with short comments:
+Both need a folder bound to a kata Project, the Binding the Pane uses: a `.kata.toml` in the folder or a parent up to the git root (`kata init` creates one). The **checkout** the worker maps for the Project is the folder holding that `.kata.toml`, also when you start from a subdirectory. Neither calls the kata daemon. What they write, and the checks, are in the [reference](worker-reference.md#writing-workertoml).
 
-1. a header comment with the trust note;
-2. `executor = "<hostname>"`, the machine's hostname lowercased with every character outside `a-z 0-9 _ -` replaced by `-` (or the `--executor` value);
-3. a commented-out `# actor = "..."` showing the default the worker would use (or `actor = "..."` with `--actor`);
-4. a commented `[limits]` example;
-5. a `[[projects]]` block for this Project with `capacity = 1` and `checkouts = ["<key>"]`, so the Project's jobs may use only its own checkout;
-6. `[checkouts]` with `<key> = "<absolute checkout>"`;
-7. `[profiles.default]` with `command = "omp"` (or `--command`), `model` and `thinking` as commented examples (or set by `--model` and `--thinking`) and a commented `args` example;
-8. a commented `[secrets]` example.
+### From the Pane: the Worker card
 
-When it finishes it prints the path written and what was added, one line of the trust note, that the plugin's host half starts the worker within 10 seconds (else run `tern-kata worker`), and that `tern-kata worker doctor` checks the setup.
+`W` on the Jobs Page (from the list or the inspector) opens the Worker card for the Project the Pane's folder is bound to.
 
-### `tern-kata worker edit`
+![The Worker card for the acme-shop Project, with the worker.toml that serves it](../images/worker-card.png)
 
-Opens `worker.toml` in `$VISUAL` (else `$EDITOR`) on a temporary copy. What you save must pass the same strict check the worker applies at start before it replaces the file. When it does not, the editor reopens on your text with the problem as `#!` comment lines at the top (stripped again before the next check) until it loads. Saving the file unchanged, or empty, cancels and leaves `worker.toml` as it was. After a write the command says whether a worker runs and that `tern-kata worker stop` makes it reload. With no `worker.toml` it refuses and points at `worker init`.
+It reads this machine once, asks the worker for its status and shows:
 
-### `tern-kata worker add`
+- whether `worker.toml` exists, whether the worker's loader accepts it (or why not), and whether it lists the Project, with the checkout it maps;
+- whether a worker runs, with its process id, executor and runs in flight;
+- whether the plugin supervises it, or `worker.manual` turned that off.
 
-Adds the current Project to an existing `worker.toml`. It refuses when there is no file (run `tern-kata worker init`), when the directory is not bound, or when the Project is already listed (the message names it). It:
+What the card offers depends on the file:
 
-- appends a `[[projects]]` block for the Project, with the same three keys as `init` writes;
-- puts the checkout line inside the existing `[checkouts]` table, creating the table at the end when absent;
-- leaves every other line and comment byte for byte unchanged.
+- **No `worker.toml`: Set up.** Executor, actor, command, model and thinking, prefilled as `worker init` would.
+- **A file that loads but does not list the Project: Serve this Project.** It does what `worker add` does.
+- **Any file: Edit** (`e`). The file opens in `$EDITOR` as a `.toml` file; the text you save is checked and written like the commands do. A refusal names the problem on the card and keeps your text, so `e` again reopens it rather than the file; an unchanged or empty result changes nothing. Edit can repair a file that does not load, which Set up and Serve never overwrite.
 
-A running worker reads `worker.toml` only at start. After `worker add`, run `tern-kata worker stop` and the plugin starts a fresh one (see [Stopping the worker](#stopping-the-worker)). The Pane does the same from [the Worker card](#the-worker-card).
+Set up and Serve show the checkout and the trust note, and save only when the trust choice is Yes (it starts at No; space, left and right or a click change it). A value the loader refuses is named, with focus on that field, and your input stays. A folder bound to no Project gets a message and no fields. Esc closes the card.
 
-### The checkout key
+After a save or an edit with a worker running, the card asks how to restart it, since it reads `worker.toml` only at start. **When idle** (`i` or enter, the default) and **now** (`n`) are the two [stop modes](#restarting-and-stopping); the card names the runs in flight. Esc leaves the worker running. Its notice then says whether the plugin starts a fresh worker. With no worker running, the card says the plugin starts one within 10 seconds, or, under `worker.manual`, that you start it.
 
-Both commands name the checkout after the Project: the Project name lowercased, every character outside `a-z 0-9 _ -` replaced by `-`. If `[checkouts]` already has that key for another directory, `-2`, `-3` and so on is appended; the same key and directory is reused.
+`s` on the card turns [supervision](#supervision) off or on (when the card draws no fields; otherwise `s` is typed). The Jobs Page banner says per state what is missing (no file, a file that does not load, a Project not listed, no worker running, `worker.manual`) and points at `W`.
 
-### Safe writes
+### From a shell
 
-Both commands write through a temporary file in the same folder, check it with the worker's own strict loader, then rename it into place with mode 0600. A file that would not load is never written, and the error says why.
+Run these in a directory bound to the Project.
+
+```sh
+tern-kata worker init                    # writes worker.toml for this Project
+tern-kata worker init --executor laptop --actor dangerboi --command omp --model anthropic/claude-sonnet-5-5 --thinking medium
+tern-kata worker add                     # in each further Project's directory
+tern-kata worker edit                    # change the file by hand
+tern-kata worker doctor                  # check the result
+```
+
+- **`init`** writes a new file for this Project: its checkout, a `default` profile, capacity 1. The five optional flags set the values the Set up card prefills; one you leave out keeps its default, and a value the loader refuses is refused naming it, with nothing written. It refuses when the file exists (use `add`) or the directory is not bound. It ends by printing the path, a line of the trust note, and that the plugin's host half starts the worker within 10 seconds (else run `tern-kata worker`).
+- **`add`** adds this Project to an existing file, with its checkout, and leaves every other line and comment byte for byte as it was. It refuses when there is no file (use `init`), the directory is not bound, or the Project is already listed.
+- **`edit`** opens the file in `$VISUAL` (else `$EDITOR`) on a temporary copy. A result that does not load reopens the editor on your text with the problem as `#!` comment lines at the top, until it loads; an unchanged or empty result cancels. It refuses with no file and points at `init`.
+
+After any of them, a running worker reads the new file only after `tern-kata worker stop`; `edit` and `add` say so, and whether a worker runs.
 
 ## A two-Project `worker.toml`
 
@@ -88,66 +103,48 @@ capacity  = 1
 checkouts = ["acme-infra"]
 ```
 
-Each `[[projects]]` block lists its own checkout only, so a job in `acme-shop` cannot name the `acme-infra` directory. `worker add` appends its `[[projects]]` block at the end of the file; TOML lets the array of tables sit after other tables, and the `[checkouts]` line is added to the existing table. Every key is described in the [worker reference](worker-reference.md#workertoml).
+Each `[[projects]]` block lists its own checkout only, so a job in `acme-shop` cannot name the `acme-infra` directory. Every key is described in the [worker reference](worker-reference.md#workertoml).
 
-## The Worker card
+## Restarting and stopping
 
-In the Pane, `W` on the Jobs Page (from the list or the inspector) opens the Worker card for the Project the Pane's folder is bound to. It reads this machine once and asks the worker for its status, then shows:
+`tern-kata worker stop` asks the running worker to stop. It is how a change to `worker.toml` takes effect: the plugin then starts a fresh worker that reads the file. The Pane sends the same request from the restart choice.
 
-- whether `worker.toml` exists, whether the worker's own loader accepts it (or why not), and whether it lists the Project, with the checkout it maps (the folder holding `.kata.toml`);
-- whether a worker runs, with its process id, executor and runs in flight;
-- whether the plugin supervises it, or `worker.manual` turned that off.
+- **By default** (when idle) the worker admits nothing new, lets its runs in flight finish and report to kata, and exits with status 0. `tern-kata worker status` says it is stopping and how many runs it waits for.
+- **`--now`** ends it at once. The runs it interrupts are held `interrupted` and resumable, as after a terminate signal. A `--now` during a drain upgrades the drain.
 
-With no `worker.toml` the card offers **Set up**: executor, actor, command, model and thinking, prefilled as `tern-kata worker init` would. With a file that loads but does not list the Project it offers **Serve this Project**, which does what `worker add` does. Both show the checkout and the trust note, and save only when the trust choice is Yes (it starts at No; space, left and right or a click change it). They write through the same checked write as the commands, so a value the loader refuses is named (the card puts focus on that field) and the input stays. A file that does not load is never written over by those saves, but **Edit** can repair it; a folder bound to no Project gets a message and no fields. Esc closes the card.
-
-When `worker.toml` exists (loading or not) the card also offers **Edit** (`e`): the file opens in `$EDITOR` as a `.toml` file, and the text you save is checked by the same strict check and written through the same checked write. A refusal names the problem on the card and keeps your text, so `e` again reopens it rather than the file; an unchanged or empty result changes nothing.
-
-After a save or an edit, with a worker running, the card asks how to restart it, since it reads `worker.toml` only at start: **when idle** (`i` or enter, the default) sends the stop request that refuses new work and exits once the runs in flight finish, and **now** (`n`) ends it at once and holds the runs it interrupts `interrupted`; the card names the runs in flight. Esc leaves the worker running. The plugin then starts a fresh worker when it supervises this one; the card's notice says so, or says that nothing will. With no worker running, the card says the plugin starts one within 10 seconds, or, under `worker.manual`, that you start it.
-
-### Supervision from the card
-
-`s` on the card turns the plugin's supervision off or on (when the card draws no fields; otherwise `s` is typed). **Off** creates `worker.manual` beside `worker.toml`. With no worker running that is all; with one running, the card first asks how it stops: **when idle** (`i` or enter, the default) or **now** (`n`), naming the runs in flight, and esc keeps supervision on. The marker is written before the stop request, so the plugin does not start a new worker in between, and nothing starts the worker again until you turn supervision on or run `tern-kata worker`. **On** removes the marker, and the card says the plugin starts the worker within 10 seconds. The card and the Jobs Page banner show the state: the banner of a running worker adds that supervision is off.
-
-The Jobs Page banner says per state what is missing (no file, a file that does not load, a Project not listed, no worker running, `worker.manual`) and points at `W`.
-
-## Commands
-
-```sh
-tern-kata worker doctor     # checks the file, checkouts, commands, secrets, kata and each Project's lease; says how to fix them
-tern-kata worker            # runs in the foreground; ctrl+c stops it
-tern-kata worker status     # from another shell: what it serves, runs and refuses
-tern-kata worker edit       # edit worker.toml in $EDITOR; the result must load before it is written
-tern-kata worker stop [--now]  # stop the running worker: let its runs finish first, or end at once
-tern-kata run <job-uid>     # run an adapter prompt job now
-tern-kata worker resume <run-uid>    # continue a held run in its omp session
-tern-kata worker abandon <run-uid>   # give up a held run (kata records it cancelled), stop a running one, or settle one whose local state is lost
-```
-
-`tern-kata worker --takeover` moves a Project's lease on purpose (see [state and leases](worker-reference.md#state-and-leases)). `tern-kata --help` lists every command.
-
-## Stopping the worker
-
-`tern-kata worker stop` asks the running worker to stop. By default it stops admitting (scheduled occurrences, `run` requests and resumes are refused with "the worker is stopping"), lets the runs in flight finish and report to kata, and exits with status 0 once none is in flight; held runs do not count. `tern-kata worker status` says the worker is stopping and how many runs it waits for. `tern-kata worker stop --now` ends it at once: the runs it interrupts are held `interrupted` and resumable, as after a terminate signal, and a `--now` during a drain upgrades the drain. Leases are kept.
-
-The command prints the mode, the runs in flight and whether a fresh worker follows: the plugin starts one when it supervises this worker and no `worker.manual` lies beside `worker.toml`; a worker you started by hand stays stopped. That is how a change to `worker.toml` takes effect: stop the worker, and the new one reads the file.
+The command prints the mode, the runs in flight and whether a fresh worker follows: it does when the plugin supervises this worker; a worker you started by hand, or one under `worker.manual`, stays stopped. The [reference](worker-reference.md#stopping-the-worker) has the refusals and what is kept.
 
 ## Supervision
 
-The plugin's host half starts `tern-kata worker` when `worker.toml` exists and keeps it running. It runs in Tern's session daemon, so it needs no window.
+The plugin's host half starts `tern-kata worker` when `worker.toml` exists and keeps it running, inside Tern's session daemon, so no window is needed. You do not start the worker yourself; `tern-kata worker` in a terminal is for a worker you want to watch.
 
 - **Restarts.** It starts the worker again whenever it exits, after 1 second, then 2, 4 and so on up to a minute between tries. A worker that stayed up for a minute starts the count over.
-- **When it starts.** When Tern's daemon starts, which a window does on demand and Tern's "Start at login" setting does at login, the host half starts the worker with it. Nothing starts the daemon at boot or after a quit by itself: with Tern not running, no worker runs.
+- **When it starts.** When Tern's daemon starts, which a window does on demand and Tern's "Start at login" setting does at login. Nothing starts the daemon at boot or after a quit by itself: with Tern not running, no worker runs.
 - **Finding the program.** The host half finds `tern-kata` on the daemon's `PATH` or in the folder the install scripts use (`~/.local/bin`, `%LOCALAPPDATA%\Programs\tern-kata`, `$TERN_KATA_INSTALL_DIR`). It gives the worker the daemon's `PATH` plus those folders, Tern's bundled omp, `~/go/bin` and Homebrew's, so `omp` resolves even when Tern was started from a launcher with a short `PATH`.
 - **Logs.** Its log lines (`tern-kata: worker started`, `the worker exited with status ...`) are in Tern's daemon log. `tern-kata worker status` says whether Tern supervises the worker or you started it by hand.
 
 A worker the daemon left running when it stopped keeps running (Tern does not stop its children), so after a daemon restart the host half's new attempts are refused by `worker.lock` until it ends, and then the next attempt starts a worker.
 
-This is the one supervision path tern-kata ships. A service of your own (a systemd user unit, a launchd agent) also works: create an empty `worker.manual` beside `worker.toml`, and the host half never starts a worker.
+### Turning supervision off
 
-## Turning supervision off
+Create an empty `worker.manual` next to `worker.toml`, or press `s` on the Worker card, which does it for you. The host half then starts no worker and looks again every 10 seconds. Deleting `worker.toml` has the same effect. Use it to run the worker from a service of your own (a systemd user unit, a launchd agent).
 
-Create an empty `worker.manual` next to `worker.toml` (or delete `worker.toml`): the host half starts no worker, and looks again every 10 seconds. It cannot stop a worker that already runs: stop that one yourself with `tern-kata worker stop`. Create the marker first, or the host half starts a new one. Removing the marker turns supervision back on. The Worker card does both from the Pane (`s`), and sends the stop request for you.
+The marker cannot stop a worker that already runs: create it first, or the host half starts a new one, then run `tern-kata worker stop`. The card writes the marker before the stop request and asks how the running worker stops (when idle or now). Removing the marker, or `s` again, turns supervision on, and the plugin starts the worker within 10 seconds. The card and the Jobs Page banner show the state.
 
-`tern plugin remove tern-kata` or disabling the plugin in Tern's settings removes the host half altogether, together with the window half.
+`tern plugin remove tern-kata`, or disabling the plugin in Tern's settings, removes the host half altogether, together with the window half.
+
+## Commands
+
+```sh
+tern-kata worker doctor      # checks the file, checkouts, commands, secrets, kata and each Project's lease; says how to fix them
+tern-kata worker status      # what it serves, runs and refuses; held runs with their reasons
+tern-kata worker             # runs in the foreground; ctrl+c stops it (a supervised worker needs no start)
+tern-kata worker stop [--now]
+tern-kata run <job-uid>      # run an adapter prompt job now
+tern-kata worker resume <run-uid>    # continue a held run in its omp session
+tern-kata worker abandon <run-uid>   # give up a held run (kata records it cancelled), stop a running one, or settle one whose local state is lost
+```
+
+`tern-kata worker --takeover` moves a Project's lease on purpose (see [state and leases](worker-reference.md#state-and-leases)). `tern-kata --help` lists every command.
 
 See also [Jobs](jobs.md) for making jobs, [Runs](runs.md) for watching them, and the [worker reference](worker-reference.md) for held runs, recovery and the complete `worker.toml` key list.

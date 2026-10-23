@@ -61,7 +61,7 @@ func TestWOpensTheWorkerCardOnTheJobsPageAndItsInspector(t *testing.T) {
 			}
 		}
 		out := step(t, from, key("shift+w"))
-		if out.State.Model.TopCard() != model.CardWorker || out.State.Model.CurrentMode() != model.ModeWorkerCard {
+		if out.State.Model.TopCard() != model.CardWorker || out.State.Model.CurrentMode() != model.ModeWorkerRead {
 			t.Errorf("%s: card %v mode %s", name, out.State.Model.TopCard(), out.State.Model.CurrentMode())
 		}
 	}
@@ -197,11 +197,34 @@ func TestWorkerCardRefusedWriteKeepsTheInputAndFocusesTheNamedField(t *testing.T
 	s = typed(t, s, "bad-name")
 	s = step(t, s, model.ChooseMsg{Field: model.WorkerFieldTrust, Index: 1}).State
 	sent := step(t, s, key("ctrl+o"))
-	refused := step(t, sent.State, model.WorkerSetupSaved{Err: errors.New("worker.toml: executor must be at most 256 bytes with no whitespace")})
+	refused := step(t, sent.State, model.WorkerSetupSaved{Err: errors.New("worker.toml: executor must be at most 256 bytes with no whitespace"), Field: model.WorkerFieldExecutor})
 	msg, _ := nodeText(t, refused.State, view.WorkerID+".error")
 	card := refused.State.Model.WorkerCard
 	if card.Saving || !strings.Contains(msg, "executor must be") || card.Field != model.WorkerFieldExecutor || card.Executor != "bad-name" || !card.Trusted {
 		t.Fatalf("saving %v error %q field %q executor %q trusted %v, want the input kept and the executor focused", card.Saving, msg, card.Field, card.Executor, card.Trusted)
+	}
+}
+
+func TestWorkerCardFocusesTheFieldTheRefusalCarriesNotOneItsWordsMention(t *testing.T) {
+	s := workerCardOpen(t, nil, noWorkerFile)
+	s = step(t, s, model.ChooseMsg{Field: model.WorkerFieldTrust, Index: 1}).State
+	sent := step(t, s, key("ctrl+o"))
+	refused := step(t, sent.State, model.WorkerSetupSaved{Err: errors.New(`profiles.default: command "tools/executor" must be absolute or a name on PATH`), Field: model.WorkerFieldCommand})
+	if got := refused.State.Model.WorkerCard.Field; got != model.WorkerFieldCommand {
+		t.Errorf("focus %q, want the command field the refusal names", got)
+	}
+	unnamed := step(t, step(t, refused.State, key("ctrl+o")).State, model.WorkerSetupSaved{Err: errors.New("config under /home/executor/worker.toml: permission denied")})
+	if got := unnamed.State.Model.WorkerCard.Field; got != model.WorkerFieldCommand {
+		t.Errorf("focus %q, a refusal naming no field must leave focus where it was", got)
+	}
+}
+
+func TestWorkerCardSupervisionKeyWorksWhenTheFileDoesNotListTheProject(t *testing.T) {
+	s := workerCardOpen(t, nil, otherProject)
+	wantText(t, "card", wireTextOf(t, s), "Turn supervision off")
+	out := step(t, s, key("s"))
+	if want := []model.Cmd{model.SetWorkerSupervision{Manual: true}}; !reflect.DeepEqual(out.Cmds, want) {
+		t.Errorf("cmds %#v, want %#v", out.Cmds, want)
 	}
 }
 
@@ -220,7 +243,7 @@ func TestWorkerCardAfterASaveWithNoWorkerSaysThePluginStartsOne(t *testing.T) {
 			sent := step(t, s, key("ctrl+o"))
 			done := step(t, sent.State, model.WorkerSetupSaved{Project: "work", Key: "work"})
 			wantText(t, "card", wireTextOf(t, done.State), "worker.toml written (checkout work)", tt.want)
-			if done.State.Model.CurrentMode() != model.ModeWorkerCard || done.State.Model.WorkerCard.Restart {
+			if done.State.Model.CurrentMode() != model.ModeWorkerRead || done.State.Model.WorkerCard.Restart {
 				t.Errorf("mode %s restart %v, want the plain card", done.State.Model.CurrentMode(), done.State.Model.WorkerCard.Restart)
 			}
 			if !slices.Contains(done.Cmds, model.Cmd(askedSetup)) {
@@ -302,13 +325,6 @@ func TestJobsPageBannerPerWorkerState(t *testing.T) {
 	}
 }
 
-func TestJobsPageReadsTheWorkerSetupAlongsideTheWorkerStatus(t *testing.T) {
-	out := step(t, projectPane(t, 160, boardCard("parent-a")), key("3"))
-	if !slices.Contains(out.Cmds, model.Cmd(askedSetup)) {
-		t.Fatalf("cmds %#v, want the setup read with the Jobs Page", out.Cmds)
-	}
-}
-
 func TestWorkerKeysFootersAndHelpAgree(t *testing.T) {
 	s := workerCardOpen(t, supervisedHere, otherProject)
 	card := s
@@ -319,6 +335,7 @@ func TestWorkerKeysFootersAndHelpAgree(t *testing.T) {
 		"card":    card,
 		"restart": restart.State,
 		"off":     step(t, workerCardOpen(t, supervisedHere, listedProject), key("s")).State,
+		"read":    workerCardOpen(t, supervisedHere, listedProject),
 	} {
 		mode := from.Model.CurrentMode()
 		for binding := range model.BindingsForMode(mode, true) {
@@ -346,6 +363,33 @@ func TestWorkerKeysFootersAndHelpAgree(t *testing.T) {
 	}
 	if !slices.Contains(footer, "W") {
 		t.Errorf("the Jobs footer %v lacks W", footer)
+	}
+}
+
+func TestWorkerCardFooterListsOnlyTheKeysThatActInTheState(t *testing.T) {
+	footer := func(s driver.State) []string {
+		var keys []string
+		for b := range model.BindingsForMode(s.Model.CurrentMode(), true) {
+			keys = append(keys, b.Key)
+		}
+		return keys
+	}
+	read := footer(workerCardOpen(t, supervisedHere, listedProject))
+	for _, k := range []string{"tab", "ctrl+o", "right"} {
+		if slices.Contains(read, k) {
+			t.Errorf("read-only footer %v lists %s, which does nothing there", read, k)
+		}
+	}
+	for _, k := range []string{"e", "s", "esc"} {
+		if !slices.Contains(read, k) {
+			t.Errorf("read-only footer %v lacks %s", read, k)
+		}
+	}
+	fields := footer(workerCardOpen(t, nil, noWorkerFile))
+	for _, k := range []string{"tab", "ctrl+o", "right", "esc"} {
+		if !slices.Contains(fields, k) {
+			t.Errorf("field footer %v lacks %s", fields, k)
+		}
 	}
 }
 
@@ -457,7 +501,7 @@ func TestWorkerCardSupervisionOffWithAWorkerRunningAsksHowToStopIt(t *testing.T)
 	wantText(t, "card", wireTextOf(t, refused.State), "worker.manual is created", "The stop was refused: busy")
 
 	kept := step(t, asked.State, key("escape"))
-	if kept.State.Model.TopCard() != model.CardWorker || len(kept.Cmds) != 0 || kept.State.Model.CurrentMode() != model.ModeWorkerCard {
+	if kept.State.Model.TopCard() != model.CardWorker || len(kept.Cmds) != 0 || kept.State.Model.CurrentMode() != model.ModeWorkerRead {
 		t.Errorf("esc: card %v mode %s cmds %v, want the plain card and nothing written", kept.State.Model.TopCard(), kept.State.Model.CurrentMode(), kept.Cmds)
 	}
 }

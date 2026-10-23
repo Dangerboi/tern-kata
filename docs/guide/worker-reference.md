@@ -65,6 +65,34 @@ github-review = { file = "~/.config/tern-kata/github-review" }   # a private (06
 - It refuses a Project whose uid, daemon instance, authenticated actor, actor or executor differs from what it saw at first start (`state/projects/<uid>/pin.json`). A Project whose pin cannot be saved is not served.
 - A secret may not name kata's own credential (`KATA_AUTH_TOKEN`, `KATA_AUTH_TOKEN_FILE`, or a file inside kata's home), and a secret file must be a regular file owned by you with mode 0600.
 
+## Writing `worker.toml`
+
+`worker init`, `worker add`, `worker edit` and the Worker card's Set up, Serve this Project and Edit all write through one checked path, so a file that would not load is never written.
+
+- **Check.** The new text goes to a temporary file in the same folder and is checked with the worker's own strict loader (the one it applies at start). Only a file that loads is renamed into place, with mode 0600; otherwise the error says why and the old file stays.
+- **`init` and Set up** write a new file, refusing when one exists or when the directory is not bound to a Project. Values come from `--executor`, `--actor`, `--command`, `--model` and `--thinking` (or the card's fields); one left out keeps its default; a value the loader refuses is refused naming it. The file holds, in this order, with short comments:
+  1. a header comment with the trust note;
+  2. `executor = "<hostname>"`, the machine's hostname lowercased with every character outside `a-z 0-9 _ -` replaced by `-` (or the `--executor` value);
+  3. a commented-out `# actor = "..."` showing the default the worker would use (or `actor = "..."` when set);
+  4. a commented `[limits]` example;
+  5. a `[[projects]]` block for this Project with `capacity = 1` and `checkouts = ["<key>"]`, so the Project's jobs may use only its own checkout;
+  6. `[checkouts]` with `<key> = "<absolute checkout>"`;
+  7. `[profiles.default]` with `command = "omp"`, `model` and `thinking` as commented examples (or set when given) and a commented `args` example;
+  8. a commented `[secrets]` example.
+- **`add` and Serve this Project** refuse when there is no file, the directory is not bound, or the Project is already listed (the message names it). They append a `[[projects]]` block with the same three keys as `init`, put the checkout line inside the existing `[checkouts]` table (creating the table at the end when absent) and leave every other line and comment byte for byte unchanged.
+- **The checkout key** is the Project name lowercased, every character outside `a-z 0-9 _ -` replaced by `-`. If `[checkouts]` already has that key for another directory, `-2`, `-3` and so on is appended; the same key and directory is reused. The checkout is the directory holding the Binding's `.kata.toml`.
+- **`edit` and Edit** work on a temporary copy opened in `$VISUAL` (else `$EDITOR`; the card opens it as a `.toml` file). The result goes through the same check. A result that does not load reopens the editor on your text with the problem as `#!` comment lines at the top, stripped again before the next check; the card instead names the problem and keeps your text for the next `e`. An unchanged or empty result changes nothing.
+- A running worker reads the file only at start: [stop it](#stopping-the-worker) to apply a change.
+
+## Stopping the worker
+
+`tern-kata worker stop [--now]` and the Worker card's restart choice send one `stop` request over the worker's control socket.
+
+- **When idle (default).** The worker stops admitting: scheduled occurrences, `run` requests and resumes are refused with "the worker is stopping". It lets the runs in flight finish and report to kata, then exits with status 0. Held runs do not count as in flight. `worker status` shows the stopping state and how many runs it waits for.
+- **`--now`.** It ends at once. A run whose agent was running is held `interrupted` and is resumable, exactly as after a terminate signal. Sent during a drain, it upgrades the drain.
+- **Leases.** A stopped worker does not release its Projects' leases; its next start renews them.
+- **A fresh worker.** The command prints the mode, the runs in flight and whether one follows: only the plugin's supervision starts it, so a worker started by hand, or one with `worker.manual` beside `worker.toml`, stays stopped. With no worker running the command says so and exits 1.
+
 ## Route checks
 
 The worker checks its route to each Project when its event stream (re)connects, before each admission and each report (a passing check is reused for 5 seconds) and every 5 minutes.
@@ -82,8 +110,6 @@ State lives in `$XDG_STATE_HOME/tern-kata` (else `~/.local/state/tern-kata`):
 - the control socket;
 - each run's journal (`runs/<run uid>/run.json` with its prompt, session and output);
 - the pins.
-
-`tern-kata worker stop` keeps leases: a stopped worker does not release them, and its next start renews them.
 
 Across machines, the worker holds a lease for each Project in the Project's own kata metadata (`tern_kata.lease`, renewed every 3 minutes, expiring after 10). A Project whose lease another worker holds admits nothing here and `worker status` says which worker owns it. `tern-kata worker --takeover` moves it on purpose.
 

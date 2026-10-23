@@ -191,7 +191,7 @@ kata cron job update <job-uid> --parent <ref> --expected-event-uid <uid> --file 
 
 ### Jobs the tern-kata worker runs
 
-Any other job (`action.kind` `execute`, or `notify` on an existing Issue or an Issue date) is for an adapter; kata never runs it. The user's `tern-kata worker` runs `execute` jobs with a prompt through omp, in a checkout, on the Projects listed in its `worker.toml`. Define one like this (`kata cron job create --file`, without `--parent`):
+Any other job (`action.kind` `execute`, or `notify` on an existing Issue or an Issue date) is for an adapter; kata never runs it. The user's `tern-kata worker` (the tern-kata plugin supervises it once `worker.toml` exists; the user sets it up with `tern-kata worker init` for the first Project and `tern-kata worker add` for each further one, run in a directory bound to it) runs `execute` jobs with a prompt through omp, in a checkout, on the Projects listed in its `worker.toml`. Define one like this (`kata cron job create --file`, without `--parent`):
 ```json
 {"name": "Review open PRs",
  "definition": {"version": 1, "kind": "job", "enabled": true,
@@ -203,6 +203,7 @@ Any other job (`action.kind` `execute`, or `notify` on an existing Issue or an I
   "overlap": "forbid", "catchup": "latest", "timeout_seconds": 3600}}
 ```
 - `checkout_key` and `options.profile` name entries of the user's `worker.toml` (`[checkouts]`, `[profiles.<name>]`; the profile defaults to `default`). Never write a path or a secret into the definition: `secret_refs` maps an environment variable name to a `[secrets]` name the user defined. If the name is not in their `worker.toml`, tell them what to add.
+- `tern-kata worker status` shows the Projects the worker serves and each job it sets aside, with the reason (a profile, checkout or secret its `worker.toml` does not map); `tern-kata worker doctor` checks the file. The names a job may use are the `[checkouts]` and `[profiles.<name>]` entries of `worker.toml`, narrowed by its Project's `[[projects]]` block. Setting the worker up or changing it is the user's call (see the `tern-kata` skill): do not run `worker init`, `worker add`, `worker edit` or `worker stop` unasked.
 - `issue` is either `per-run` (a new Issue per run, titled `<title> — <UTC occurrence>`) or `{"kind": "existing", "uid": "<ULID>"}` (the run only comments on that open Issue).
 - Triggers of an adapter job: `cron`, `interval` (no 60 s floor), `once` (`"at"` a full RFC 3339 instant, with `Z` or an offset), `manual`, and `issue-scheduled` / `issue-deadline` (`"issue_uid"`; a deadline takes `lead_seconds` and fires a `notify` only, never an `execute`). Give `once`, `manual` and Issue-date jobs `catchup` `latest` unless a backlog is wanted.
 - A per-run `issue` may set dates on each run's Issue: `"scheduled_offset_seconds"` and `"deadline_offset_seconds"`, signed seconds from the run (`86400` is a day later, `-3600` an hour earlier).

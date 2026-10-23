@@ -133,12 +133,28 @@ func LoadConfig(path string) (Config, error) {
 	return c, nil
 }
 
+// Config fields a FieldError names.
+const (
+	FieldExecutor = "executor"
+	FieldCommand  = "command"
+)
+
+// FieldError is a validation failure about one worker.toml field: Field is FieldExecutor or FieldCommand, so a caller
+// finds the input at fault without reading the message.
+type FieldError struct {
+	Field string
+	Err   error
+}
+
+func (e *FieldError) Error() string { return e.Err.Error() }
+func (e *FieldError) Unwrap() error { return e.Err }
+
 func (c *Config) validate() error {
 	if c.Executor == "" {
-		return errors.New("executor is required: a unique, stable label for this machine's worker")
+		return &FieldError{FieldExecutor, errors.New("executor is required: a unique, stable label for this machine's worker")}
 	}
 	if len(c.Executor) > 256 || strings.ContainsAny(c.Executor, " \t\r\n") {
-		return errors.New("executor must be at most 256 bytes with no whitespace")
+		return &FieldError{FieldExecutor, errors.New("executor must be at most 256 bytes with no whitespace")}
 	}
 	if c.Limits.MaxActiveRuns < 0 || c.Limits.MaxRunPrompts < 0 || c.Limits.MaxRunPrompts > 100 {
 		return errors.New("limits: max_active_runs must be positive and max_run_prompts 1 to 100")
@@ -159,7 +175,7 @@ func (c *Config) validate() error {
 	}
 	for name, p := range c.Profiles {
 		if p.Command != "" && strings.ContainsAny(p.Command, `/\`) && !filepath.IsAbs(p.Command) {
-			return fmt.Errorf("profiles.%s: command %q must be absolute or a name on PATH", name, p.Command)
+			return &FieldError{FieldCommand, fmt.Errorf("profiles.%s: command %q must be absolute or a name on PATH", name, p.Command)}
 		}
 	}
 	for key, dir := range c.Checkouts {

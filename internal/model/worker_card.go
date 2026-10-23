@@ -18,6 +18,8 @@ const (
 	ModeWorkerCard    Mode = "worker-card"
 	ModeWorkerRestart Mode = "worker-restart"
 	ModeWorkerOff     Mode = "worker-supervision-off"
+	// ModeWorkerRead is the card when it draws no fields: only e, s and esc act.
+	ModeWorkerRead Mode = "worker-card-read"
 )
 
 const (
@@ -118,11 +120,12 @@ type SaveWorkerSetup struct {
 
 func (SaveWorkerSetup) cmd() {}
 
-// WorkerSetupSaved answers SaveWorkerSetup. Err is the refusal, in words that name the field.
+// WorkerSetupSaved answers SaveWorkerSetup. Err is the refusal; Field is the card field it is about, "" when it names none.
 type WorkerSetupSaved struct {
 	Serve   bool
 	Project string
 	Key     string
+	Field   Field
 	Err     error
 }
 
@@ -376,23 +379,6 @@ type workerFieldError struct {
 
 func (e workerFieldError) Error() string { return e.text }
 
-// refusedWorkerField is the field a refusal of the write is about, "" when it names none. The write's own words name the
-// executor and the profile's command.
-func refusedWorkerField(err error) Field {
-	var named workerFieldError
-	if errors.As(err, &named) {
-		return named.field
-	}
-	text := err.Error()
-	switch {
-	case strings.Contains(text, "executor"):
-		return WorkerFieldExecutor
-	case strings.Contains(text, "command"):
-		return WorkerFieldCommand
-	}
-	return ""
-}
-
 func (m Model) workerSaveRefusal() error {
 	f := m.WorkerCard
 	if m.WorkerCardKind() == WorkerSetUp {
@@ -447,8 +433,8 @@ func workerSetupSaved(m Model, msg WorkerSetupSaved) (Model, []Cmd) {
 	f.Saving = false
 	if msg.Err != nil {
 		f.Err = msg.Err
-		if field := refusedWorkerField(msg.Err); field != "" && m.WorkerCardShows(field) {
-			f.Field = field
+		if msg.Field != "" && m.WorkerCardShows(msg.Field) {
+			f.Field = msg.Field
 		}
 		return m, nil
 	}
@@ -572,7 +558,7 @@ func workerCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	if f.AskOff {
 		return workerOffKey(m, msg)
 	}
-	binding, bound := LookupBindingForMode(msg.Chord, ModeWorkerCard)
+	binding, bound := LookupBindingForMode(msg.Chord, m.WorkerCardMode())
 	if bound && binding.Action == WorkerEdit {
 		if m.WorkerCardEdits() {
 			return m, []Cmd{OpenDraftEditor{UID: WorkerDraftUID, Text: m.workerEditStart(), Suffix: ".toml"}}
@@ -580,8 +566,8 @@ func workerCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		bound = false // no file to edit: the key is typed
 	}
 	field := f.at(f.Field)
-	if bound && binding.Action == WorkerSupervision && m.WorkerCardSaves() {
-		bound = false // while fields are drawn, s is typed
+	if bound && binding.Action == WorkerSupervision && field != nil && m.WorkerCardShows(f.Field) {
+		bound = false // in a text field, s is typed
 	}
 	switch {
 	case bound && binding.Action == WorkerSupervision:
@@ -719,4 +705,12 @@ func workerSupervisionSet(m Model, msg WorkerSupervisionSet) (Model, []Cmd) {
 	}
 	m, ask := m.askWorker(workerPollEvery)
 	return m, []Cmd{LoadWorkerSetup{Workspace: m.Workspace}, ask}
+}
+
+// WorkerCardMode is the keymap the card answers to: the field keys while it draws fields, only e, s and esc when it does not.
+func (m Model) WorkerCardMode() Mode {
+	if m.WorkerCardSaves() {
+		return ModeWorkerCard
+	}
+	return ModeWorkerRead
 }
