@@ -8,7 +8,6 @@ import (
 
 const SearchID = "main.columns.list.search"
 
-
 var filterTitles = map[model.Field]string{
 	model.FilterProject:      "Project",
 	model.FilterStatus:       "Status",

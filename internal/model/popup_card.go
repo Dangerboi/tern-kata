@@ -225,7 +225,7 @@ func buildCards() []cardEntry {
 			key:  createCard.key,
 			busy: createBusy, fields: CreateFields, focus: func(m *Model) *Field { return &m.Create.Field },
 			editing: []fieldEditing{{mode: ModeCreate, actions: []Action{NextField, PreviousField}}},
-			target: EditCreateBody, bodyField: CreateBody,
+			target:  EditCreateBody, bodyField: CreateBody,
 			edit: func(m Model, apply func(TextEditor) TextEditor) Model {
 				if !createBusy(m) {
 					m.Create.Editor = apply(m.Create.Editor)

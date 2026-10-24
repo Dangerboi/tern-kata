@@ -124,4 +124,3 @@ func (m Model) WorkflowReading(uid string) (WorkerReading, bool) {
 	r, ok := m.Workflows.readings[uid]
 	return r, ok
 }
-

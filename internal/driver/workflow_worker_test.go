@@ -21,7 +21,7 @@ func workflowText(steps string) string {
 func typeWorkflow(t *testing.T, s driver.State, text string) driver.Output {
 	t.Helper()
 	old := len(s.Model.Workflows.Card.Editor.Text)
-	return step(t, s, &tern.Edit{ID: view.WorkflowEditorID, From: 0, To: old, Text: text, Cursor: len(text), Len: old})
+	return step(t, s, &tern.Edit{ID: view.FieldID(model.CardWorkflow, ""), From: 0, To: old, Text: text, Cursor: len(text), Len: old})
 }
 
 func readingAsk(t *testing.T, out driver.Output) (model.ReadWorkflowText, bool) {
