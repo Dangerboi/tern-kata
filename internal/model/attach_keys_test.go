@@ -27,7 +27,7 @@ func pointers(names ...string) map[string]any {
 
 func TestUAttachesTheTypedPath(t *testing.T) {
 	for _, focus := range []model.Column{model.ColumnList, model.ColumnDetail} {
-		m, _ := model.Update(attachPane(focus, nil, 2), model.KeyMsg{Chord: "u"})
+		m, _ := model.Update(attachPane(focus, nil, 2), model.KeyMsg{Chord: "@"})
 		if !m.FieldForm.Open || m.FieldForm.Action != model.AttachFileAction || m.FieldForm.Err != nil {
 			t.Fatalf("focus %v: u opened %+v", focus, m.FieldForm)
 		}
@@ -55,7 +55,7 @@ func TestUAttachesTheTypedPath(t *testing.T) {
 }
 
 func TestUOnAnEmptyPathAsksForOne(t *testing.T) {
-	m, _ := model.Update(attachPane(model.ColumnList, nil, 2), model.KeyMsg{Chord: "u"})
+	m, _ := model.Update(attachPane(model.ColumnList, nil, 2), model.KeyMsg{Chord: "@"})
 	m, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
 	if len(cmds) != 0 || m.FieldForm.Err == nil {
 		t.Fatalf("empty path sent %#v, err %v", cmds, m.FieldForm.Err)
@@ -98,7 +98,7 @@ func TestShiftUWithNoAttachmentsSaysSoWithoutOpeningAForm(t *testing.T) {
 func TestSubmitTargetsTheFormsIssueWhenTheCursorMoves(t *testing.T) {
 	m := attachPane(model.ColumnList, pointers("a.png"), 2)
 	m.Issues = append([]model.Issue{{UID: "newer", ShortID: "zzzz", ProjectID: 2}}, m.Issues...)
-	m, _ = model.Update(m, model.KeyMsg{Chord: "u"})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "@"})
 	m, _ = model.Update(m, model.FieldValueMsg{Value: "/x"})
 	// A live refresh moves the cursor to another Issue while the form is open.
 	m.SelectedUID = "newer"
@@ -110,7 +110,7 @@ func TestSubmitTargetsTheFormsIssueWhenTheCursorMoves(t *testing.T) {
 }
 
 func TestSubmitWhenTheFormsIssueIsGoneShowsAnError(t *testing.T) {
-	m, _ := model.Update(attachPane(model.ColumnList, nil, 2), model.KeyMsg{Chord: "u"})
+	m, _ := model.Update(attachPane(model.ColumnList, nil, 2), model.KeyMsg{Chord: "@"})
 	m, _ = model.Update(m, model.FieldValueMsg{Value: "/x"})
 	m.Issues = nil
 	m, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
@@ -164,7 +164,7 @@ func TestAttachKeysExplainARefusal(t *testing.T) {
 			`abcd belongs to Project "other", but this workspace is bound to "work". To change its attachments, work from a workspace bound to "other".`},
 	} {
 		pane := tc.pane
-		for _, chord := range []string{"u", "shift+u"} {
+		for _, chord := range []string{"@", "shift+u"} {
 			m, cmds := model.Update(pane, model.KeyMsg{Chord: chord})
 			if !m.FieldForm.Open || m.FieldForm.Err == nil {
 				t.Fatalf("%s %s: no reason shown: %+v", name, chord, m.FieldForm)
@@ -181,7 +181,7 @@ func TestAttachKeysExplainARefusal(t *testing.T) {
 }
 
 func TestAttachKeysAreInTheFooterAndHelpSheet(t *testing.T) {
-	for _, chord := range []string{"u", "shift+u"} {
+	for _, chord := range []string{"@", "shift+u"} {
 		b, ok := model.LookupBindingForMode(chord, model.ModeDetail)
 		if !ok || !b.ShowInFooter {
 			t.Fatalf("%s not in the detail footer: %+v", chord, b)
@@ -194,7 +194,7 @@ func TestAttachKeysAreInTheFooterAndHelpSheet(t *testing.T) {
 		}
 	}
 	all := strings.Join(lines, "\n")
-	for _, want := range []string{"attach file|u", "remove attachment|U"} {
+	for _, want := range []string{"attach file|@", "remove attachment|U"} {
 		if !strings.Contains(all, want) {
 			t.Fatalf("help sheet lacks %q:\n%s", want, all)
 		}

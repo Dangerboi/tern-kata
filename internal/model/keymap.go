@@ -14,6 +14,9 @@ const (
 	ScrollUp                Action = "scroll-up"
 	ScrollDown              Action = "scroll-down"
 	QuitAction              Action = "quit"
+	QuitNowAction           Action = "quit-now"
+	ConfirmQuitAction       Action = "confirm-quit"
+	StayAction              Action = "stay"
 	DrillIn                 Action = "drill-in"
 	DrillOut                Action = "drill-out"
 	MenuBack                Action = "menu-back"
@@ -86,6 +89,7 @@ const (
 	ToggleArchivedWorkflows Action = "toggle-archived-workflows"
 	ShowAttentionPage       Action = "show-attention-page"
 	OpenAttentionRequest    Action = "open-attention-request"
+	ClearAttentionRequest   Action = "clear-attention-request"
 	ReloadAttention         Action = "reload-attention"
 	ShowCredentialsPage     Action = "show-credentials-page"
 	RefreshCredentials      Action = "refresh-credentials"
@@ -93,6 +97,12 @@ const (
 	ShowFederationPage      Action = "show-federation-page"
 	RefreshFederation       Action = "refresh-federation"
 	OpenFederationDetail    Action = "open-federation-detail"
+	StartFederationLeave    Action = "start-federation-leave"
+	ToggleFederationArchive Action = "toggle-federation-archive"
+	ToggleFederationLocal   Action = "toggle-federation-local-only"
+	RunFederationLeave      Action = "run-federation-leave"
+	CancelFederationLeave   Action = "cancel-federation-leave"
+	FederationLeaveDismiss  Action = "dismiss-federation-leave"
 )
 
 // Binding is one chord in one mode, as the lookup, the footer and the help sheet read it. A binding of
@@ -144,7 +154,12 @@ const (
 	ModeWorkflows     Mode = "workflows"
 	ModeAttention     Mode = "attention"
 	ModeCredentials   Mode = "credentials"
-	ModeFederation    Mode = "federation"
+	// ModeQuit is the question "Quit tern-kata? y/n", which takes only its answers.
+	ModeQuit       Mode = "quit"
+	ModeFederation Mode = "federation"
+	// ModeFederationLeave is the Federation Page's leave preview and ModeFederationLeft its result.
+	ModeFederationLeave Mode = "federation-leave"
+	ModeFederationLeft  Mode = "federation-left"
 )
 
 // cardBindings are the keys of the Popup cards. Each card's handler reads them by mode; the
@@ -206,6 +221,16 @@ var cardBindings = []Binding{
 	{Chord: "y", Key: "y", Action: RevokeConfirm, Help: "revoke token", Mode: ModeRevokeToken, ShowInFooter: true},
 	{Chord: "n", Key: "n", Action: RevokeCancel, Help: "keep token", Mode: ModeRevokeToken, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: RevokeCancel, Help: "keep token", Mode: ModeRevokeToken},
+	{Chord: "down", Key: "↓", Action: MoveDown, Help: "next Project", Mode: ModeMoveProject, ShowInFooter: true},
+	{Chord: "up", Key: "↑", Action: MoveUp, Help: "previous Project", Mode: ModeMoveProject, ShowInFooter: true},
+	{Chord: "j", Key: "j", Action: MoveDown, Help: "next Project (empty filter)", Mode: ModeMoveProject},
+	{Chord: "k", Key: "k", Action: MoveUp, Help: "previous Project (empty filter)", Mode: ModeMoveProject},
+	{Chord: "home", Key: "home", Action: MoveFirst, Help: "first Project", Mode: ModeMoveProject},
+	{Chord: "end", Key: "end", Action: MoveLast, Help: "last Project", Mode: ModeMoveProject},
+	{Chord: "enter", Key: "enter", Action: MoveProjectChoose, Help: "preview the move", Mode: ModeMoveProject, ShowInFooter: true},
+	{Chord: "escape", Key: "esc", Action: MoveProjectClose, Help: "cancel", Mode: ModeMoveProject, ShowInFooter: true},
+	{Chord: "enter", Key: "enter", Action: MoveProjectSend, Help: "move", Mode: ModeMoveConfirm, ShowInFooter: true},
+	{Chord: "escape", Key: "esc", Action: MoveProjectBack, Help: "other Project", Mode: ModeMoveConfirm, ShowInFooter: true},
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: RecurrenceSave, Help: "save recurrence", Mode: ModeRecurrenceForm, ShowInFooter: true},
 	{Chord: "meta+o", Key: "meta+o", Action: RecurrenceSave, Help: "save recurrence" + headlessNote, Mode: ModeRecurrenceForm},
 	{Chord: "ctrl+x", Key: "ctrl+x", Action: RecurrenceStop, Help: "stop recurring", Mode: ModeRecurrenceForm, ShowInFooter: true},

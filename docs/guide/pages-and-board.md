@@ -20,13 +20,14 @@ The Board, Jobs, Runs and Workflows Pages act on the Pane's Project: the current
 
 ## Attention Page
 
-`6` opens the Attention Page: every **Attention request** kata holds for your **Inbox address**, in every Project on the daemon, newest Issue update first, as one full-width list. A request is a `notify.<address>` slot on an open Issue. It comes from a Worker run that is held and needs the Issue's owner or author, a notify Cron job, kata's date sweeper, a typed Reply to one of your comments, `kata notify --re` (asking you to answer a comment) or `kata notify --broadcast`. Only open Issues are listed.
+`6`, or `T` from any Page and the Menu, opens the Attention Page: every **Attention request** kata holds for your **Inbox address**, in every Project on the daemon, newest Issue update first, as one full-width list. A request is a `notify.<address>` slot on an open Issue. It comes from a Worker run that is held and needs the Issue's owner or author, a notify Cron job, kata's date sweeper, a typed Reply to one of your comments, `kata notify --re` (asking you to answer a comment) or `kata notify --broadcast`. Only open Issues are listed.
 
 - **Address**: `KATA_INBOX_USER` when it is set and not blank, otherwise the actor the Pane writes as (`--as`, `$KATA_AUTHOR`, `$USER`, git `user.name`). It is read once, when the Pane starts, and trimmed. kata's recipient rules apply: not blank, at most 128 bytes, valid UTF-8, no control or format characters. An address kata would refuse is shown with the reason, and nothing is read.
+- **Page bar**: the entry reads "Attention 3" while three requests wait, and plain "Attention" at zero, on every Page. The Pane asks for the requests again after it connects, on every Issue or Project event of the daemon and after a stream reset, whether or not the Page is shown; a burst of events costs one read in flight and one after it. The count is the last read that succeeded, so a failed read keeps it. The bar's width rules apply to the longer label.
 - **Header**: "for dangerboi · 3 requests", plus "· 1 skipped" when a stored request could not be read the way kata reads it. Such a request is left out and counted, never shown as garbage.
 - **Rows**: `project#id` and the title, then who asked (`actor`, or `actor/teammate`), a tag (`request`, the reply kind `reply`, `confirm`, `refute` or `supersede` for the notice a Reply left, or `broadcast`), the comment handle (`c:abc123`) when the request names a comment, and the first line of the message. The selected row shows the whole message, wrapped.
 - **States**: "No requests for dangerboi" when nothing waits; kata's error line over the rows already read when a read fails; the reason when the address is refused.
-- **Keys**: `↑`/`↓` (or `j`/`k`) move, `Enter` opens the request's Issue on the Issues Page with its detail focused, in whichever Project it lives, and `ctrl+r` reads again. `6` brings the Page back as you left it, with the same request selected.
+- **Keys**: `↑`/`↓` (or `j`/`k`) move, `Enter` opens the request's Issue on the Issues Page with its detail focused, in whichever Project it lives; when the request names a comment, the detail opens on its Comments tab with that comment under the cursor, so `R` answers it (and kata clears the request once the Reply is saved), and a notice left by a Reply opens on that Reply. A comment that is gone leaves the cursor on the first comment, `c` clears the selected request, and `ctrl+r` reads again. `c` clears only if the request still reads as the Page showed it: when it was rewritten meanwhile, "The request changed meanwhile; nothing was cleared" shows and the Page reads again, so the new request is on screen before you decide. While a clear is out, `c` and `Enter` on that row wait. `6` brings the Page back as you left it, with the same request selected.
 
 ## Lettered Pages
 
@@ -48,7 +49,9 @@ The secret goes from kata's answer into the token file, which is created new and
 
 `x` on a token opens "Revoke token <id> (<name>, <actor>)? This cannot be undone."; `y` revokes it and `n` or `esc` keeps it. A token already revoked is not asked about. After a create or a revoke the list is read again.
 
-`F` opens the **Federation Page**: this daemon's spoke federations, the Projects that replicate a Project on a hub. A header reads "Federation for active daemon: <name> <endpoint> instance <uid> auth <auth>", then "N spoke federations" and one card per Project in two lines: the Project, its hub host and actor, then push ("push" or "off"), pending pushes, last sync ("never", "error", or "5m ago") and badges (`insecure`, `quarantine`, `reset`, `violations`, or "-"). Under the list the selected Project's `hub <URL>/project <id> · actor <actor> · credential <status>`. `j`/`k` move the cursor and Enter shows the Project's detail: hub URL, hub Project id and uid, actor, capabilities (`pull`, `push`, `lease`), push enabled, credential, `allow_insecure`, the pull and push cursors, pending push and its high water, pending and live claims, each quarantine, the reset blocker, claim violations, and the last pull, push and sync success and last error in UTC. Esc or backspace leaves the detail, then the Page; `r` reads the status again from the list or a detail. It shows "loading federation status...", "no spoke federation enrollments" and "failed to load federation: <error>" in kata tui's words, a failed read replacing the list until the next read, and it is read only.
+`F` opens the **Federation Page**: this daemon's spoke federations, the Projects that replicate a Project on a hub. A header reads "Federation for active daemon: <name> <endpoint> instance <uid> auth <auth>", then "N spoke federations" and one card per Project in two lines: the Project, its hub host and actor, then push ("push" or "off"), pending pushes, last sync ("never", "error", or "5m ago") and badges (`insecure`, `quarantine`, `reset`, `violations`, or "-"). Under the list the selected Project's `hub <URL>/project <id> · actor <actor> · credential <status>`. `j`/`k` move the cursor and Enter shows the Project's detail: hub URL, hub Project id and uid, actor, capabilities (`pull`, `push`, `lease`), push enabled, credential, `allow_insecure`, the pull and push cursors, pending push and its high water, pending and live claims, each quarantine, the reset blocker, claim violations, and the last pull, push and sync success and last error in UTC. Esc or backspace leaves the detail, then the Page; `r` reads the status again from the list or a detail. It shows "loading federation status...", "no spoke federation enrollments" and "failed to load federation: <error>" in kata tui's words, a failed read replacing the list until the next read.
+
+`x` on a Project, in the list or its detail, opens the leave preview: the local Project, the hub, the hub Project id, what becomes of the local Project and whether the leave is local-only. `d` switches between detaching ("keep (detach) — standalone with all issues") and archiving ("reversible via kata projects restore"), `l` makes the leave local-only (the preview warns that the enrollment token stays valid until manually revoked), Enter runs it and esc or backspace goes back to the list. Running it asks the spoke to check the leave first, then, unless local-only, lists the hub's enrollments and revokes those for this spoke's instance and the hub Project, then leaves. A grant for another instance blocks the leave when none matches ("revoke the right one with `kata federation revoke <id>` on the hub, or retry with local-only"), a grant for this spoke that is not limited to a Project is left active and named on the result, and a hub that cannot be reached or refuses stops the leave with "hub revoke failed: …; retry with local-only to tear down locally, then revoke on the hub later". The hub is the daemon catalog entry whose URL is the Project's hub, with its token; with none the hub is asked without a token. A failure stays under the preview and Enter tries again; a success shows status (detached or archived), Project, hub and what was revoked, and Enter or esc returns to the list, read again.
 
 ## Issues Page
 
@@ -85,17 +88,31 @@ Editing from the Pane:
 | `]`, `[` | Next, previous Comment link (Comments tab); `enter` follows the chosen one |
 | `+`, `-` | Add or remove a label |
 | `a`, `A` | Owner |
-| `!` | Priority |
+| `!` | Priority: `!` then `0`-`4` or `-` sets or clears it at once; any other key closes the field and does what it usually does |
 | `p` | Parent |
 | `b`, `l` | In the Issue detail: add a Blocking link (this Issue blocks the one you name) or a related link; `b` still toggles the Board elsewhere |
 | `t` | In the Issue detail: timed assignment to you, 1m to 24h (see [Compared with `kata tui`](kata-tui.md#timed-assignment)) |
 | `O` | Recurrence (see [Recurring Issues](recur.md)) |
 | `d` | Dates (see [Dates](dates.md)) |
-| `u`, `U` | Attach a file; list and remove Attachments (see [Attachments](attachments.md)) |
+| `M` | Move the Issue to another Project (see [Moving an Issue](#moving-an-issue)) |
+| `@`, `U` | Attach a file; list and remove Attachments (see [Attachments](attachments.md)) |
+| `u` | Undo the last change this Pane made (see [Compared with `kata tui`](kata-tui.md#undo)) |
 | `e` | Edit the Issue body in Tern's editor |
 | `?` | Every key |
 
 The Issue detail's Activity tabs are described in [Compared with `kata tui`](kata-tui.md).
+
+## Moving an Issue
+
+`M` on the selected Issue (in the list, on the Board, in the Lane view and in the Issue detail) opens the **Move card**, as kata web's move does. kata tui has no move key; tern-kata sends kata's move action.
+
+1. The card lists the Projects of the Collection snapshot, without the Issue's own Project and without archived ones. Type to filter the list by name (any case); `↓`/`↑` move, and `esc` closes the card.
+2. `enter` on a Project sends the move as a dry run: kata checks it and changes nothing. The card then reads "#id moves to <project> and gets its new id there": kata assigns the new short id only when it moves the Issue, so a preview cannot name it. When kata refuses (for example "cross-project moves involving a federated project are unsupported", a recurring Issue, or an import mapping that already exists in the target), its reason shows on the card and the list stays for another choice.
+3. `enter` again moves the Issue. `esc` goes back to the list.
+
+The move is a Guarded write: it carries `If-Match` with the revision the card opened with (the preview carries it too). kata moves its revision on owner and status changes only, so a move after such a change is refused; the card stays open, says the Issue changed since it opened and nothing was moved, and `enter` asks for a fresh preview (read at the revision as it stands now) before `enter` moves.
+
+After the move a Notice names the new `project#id` as a link: click it to open the Issue in its new Project. The selection goes to the neighbouring row when the Collection no longer lists the Issue, and an open Issue detail closes to the list. A move cannot be undone: it clears the undo history.
 
 ## Board Page
 
@@ -117,7 +134,7 @@ Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relat
 
 ### Moving around and moving cards
 
-- `↑`/`↓`/`j`/`k` move within a Lane and `←`/`→` to the neighbouring Lane that has cards. A click selects a card. `x` opens the Close card, `r` reopens a closed Issue into its Lane, and `+`, `-`, `a`, `A`, `!`, `p`, `u`, `U`, `e` and `n` act on the selected card as in the list. `esc` opens the Menu.
+- `↑`/`↓`/`j`/`k` move within a Lane and `←`/`→` to the neighbouring Lane that has cards. A click selects a card. `x` opens the Close card, `r` reopens a closed Issue into its Lane, and `+`, `-`, `a`, `A`, `!`, `p`, `u` (undo), `@`, `U`, `e` and `n` act on the selected card as in the list. `esc` opens the Menu.
 - `>` moves the selected card one Lane right and `<` one Lane left, among No lane and the Lanes; a Move never enters or leaves Done (`x` closes, `r` reopens). Leaving No lane adds the first Lane's label; moving into No lane removes the Lane labels and keeps every other label.
 - A Move adds the target label first, then removes the other Lane labels, so a failure halfway leaves the Issue in two Lanes, never none, and a Move of an Issue with two Lane labels leaves it with one. The card shows in its new Lane at once; a failure leaves a Notice with the daemon's reason. Moves are refused while the daemon is disconnected.
 

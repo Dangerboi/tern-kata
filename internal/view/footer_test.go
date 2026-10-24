@@ -68,7 +68,7 @@ func TestWrappedFooterKeepsEachHintWhole(t *testing.T) {
 		var found []string
 		for key, n := range nodes {
 			if strings.HasPrefix(key, id) && strings.HasSuffix(key, ".escape") {
-				found = append(found, text(n))
+				found = append(found, strings.TrimRight(text(n), " ")) // the grid pads a cell to its column's width
 			}
 		}
 		if len(found) != 1 || found[0] != want {

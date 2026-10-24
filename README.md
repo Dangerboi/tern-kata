@@ -18,7 +18,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 **Credentials.** `C` opens the Credentials Page, a Lettered Page (also in the Menu) that lists the daemon's API tokens, refreshes every 30 seconds and returns with esc or backspace; `n` creates a token into a new owner-only file and `x` revokes one after asking. See [Pages and the Board](docs/guide/pages-and-board.md#lettered-pages).
 
-**Federation.** `F` opens the Federation Page, a Lettered Page (also in the Menu) that lists this daemon's spoke federations with hub, actor, push, pending, sync and badges, shows a Project's detail on Enter and reads again with `r`; see [Pages and the Board](docs/guide/pages-and-board.md#lettered-pages).
+**Federation.** `F` opens the Federation Page, a Lettered Page (also in the Menu) that lists this daemon's spoke federations with hub, actor, push, pending, sync and badges, shows a Project's detail on Enter, reads again with `r` and leaves a federation with `x` (preview, hub revoke, result); see [Pages and the Board](docs/guide/pages-and-board.md#lettered-pages).
 
 **Board.** `2` or `b` shows a Project's Issues as cards in Lanes, one per triage label. `<` and `>` move a card by swapping its label in kata, and a selected card tags its related cards; following one of another Project switches the Pane to that Project and Esc comes back. See [Pages and the Board](docs/guide/pages-and-board.md).
 
@@ -38,11 +38,11 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 ![The Workflows Page with a workflow selected and its steps shown](docs/images/workflows.png)
 
-**Attention.** `6` lists the requests kata holds for you, in every Project on the daemon, newest first: who asked, the message, and the comment a request asks you to answer. Enter opens the request's Issue. It reads the Inbox address `KATA_INBOX_USER`, else the actor the Pane writes as. See [Pages and the Board](docs/guide/pages-and-board.md#attention-page).
+**Attention.** `6` lists the requests kata holds for you, in every Project on the daemon, newest first: who asked, the message, and the comment a request asks you to answer. Enter opens the request's Issue, on the comment it names so `R` answers it, and `c` clears it. It reads the Inbox address `KATA_INBOX_USER`, else the actor the Pane writes as. See [Pages and the Board](docs/guide/pages-and-board.md#attention-page).
 
 **The worker.** `tern-kata worker` runs kata's agent prompt jobs and workflows through omp and your shell on your machine and records every run in kata. The plugin starts and supervises it once a `worker.toml` exists. Set it up from the Pane with `W` on the Jobs Page, which opens the Worker card (set up, serve the Project, edit `worker.toml`, restart or stop the worker, turn supervision off and on; the trust choice comes first), or from a shell with `tern-kata worker init` (optional `--executor`, `--actor`, `--command`, `--model`, `--thinking`), `worker add`, `worker edit` and `worker stop [--now]`. Read the trust note first. See [The worker](docs/guide/worker.md).
 
-**Attachments.** `u` attaches a screenshot, log or any other file to an Issue; agents find it through the Issue's kata metadata. See [Attachments](docs/guide/attachments.md).
+**Attachments.** `@` attaches a screenshot, log or any other file to an Issue; agents find it through the Issue's kata metadata. See [Attachments](docs/guide/attachments.md).
 
 ![The Attachments tab of "Add Apple Pay to checkout" listing a screenshot and a log](docs/images/attachments.png)
 
@@ -51,6 +51,8 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 **Dates card.** `d` sets an Issue's scheduled date and deadline, typed as a date, `today`, `tomorrow`, `+3d` or `+1w`. See [Dates](docs/guide/dates.md).
 
 ![The Dates card over the Board, with "+1w" resolving to 2026-10-29](docs/images/dates-card.png)
+
+**Moving an Issue.** `M` opens the Move card on the selected Issue: pick a Project from a filtered list, preview the move (kata checks it and changes nothing), then move it, guarded on the revision the card opened with. A Notice links to the Issue in its new Project. See [Moving an Issue](docs/guide/pages-and-board.md#moving-an-issue).
 
 **kata links.** Links from agents' chat replies open the Issue in tern-kata. See [Agents](docs/guide/agents.md).
 

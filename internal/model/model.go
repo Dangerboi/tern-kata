@@ -46,6 +46,8 @@ type Project struct {
 	Name     string
 	Revision int64
 	UID      string
+	// Archived says kata has archived the Project: Issues cannot move into it.
+	Archived bool
 }
 
 type Model struct {
@@ -75,20 +77,30 @@ type Model struct {
 	Host      string
 	FieldForm FieldFormState
 	// Notice reports a write that has nothing to show in the Issues, and goes at the next key.
-	Notice    string
+	Notice string
+	// NoticeLink is the part of the Notice a click opens as an Issue; it goes with the Notice.
+	NoticeLink *NoticeLink
+	// MoveProject is the Move card, which moves the selected Issue to another Project.
+	MoveProject MoveProjectState
+	// afterMove is the Issue just moved to another Project and its neighbouring row, until a snapshot stops listing it.
+	afterMove *movedIssue
 	Workspace string
 	Project   Project
 	Daemon    Daemon
 	Snapshot  Snapshot
 	// Relationships is every Issue's Relationships, built from Snapshot's links each time a snapshot is applied.
-	Relationships    RelationshipIndex
-	Issues           []Issue
-	SelectedUID      string
-	Loading          bool
-	Err              error
-	Cols             int
-	Rows, RowPx      int
-	Quitting         bool
+	Relationships RelationshipIndex
+	Issues        []Issue
+	SelectedUID   string
+	Loading       bool
+	Err           error
+	Cols          int
+	Rows, RowPx   int
+	Quitting      bool
+	// AskQuit is the question "Quit tern-kata? y/n" while it is on screen.
+	AskQuit bool
+	// QuitAtOnce is kata's [tui].confirm_quit = false, read at launch: q quits without asking.
+	QuitAtOnce       bool
 	Collection       Collection
 	Collections      []Collection
 	CollectionCursor int
@@ -130,6 +142,8 @@ type Model struct {
 	Attention AttentionState
 	// Moving is the Issue whose Move is in flight; further Moves wait for its result.
 	Moving string
+	// Undo is the history of changes `u` takes back.
+	Undo UndoHistory
 	// nonce is the random per-run prefix of every idempotency key and keys counts the keys minted.
 	nonce string
 	keys  int
@@ -137,9 +151,10 @@ type Model struct {
 
 func Update(m Model, msg Msg) (Model, []Cmd) {
 	if _, ok := msg.(KeyMsg); ok {
-		m.Notice = ""
+		m.Notice, m.NoticeLink = "", nil
 	}
 	next, cmds := updateWithDetail(m, msg)
+	next = next.recordWrite(msg).noteWrites(cmds)
 	return next.cancelPending(m, msg), cmds
 }
 
@@ -186,6 +201,12 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return updateRecurrence(m, msg)
 	case DatesResultMsg:
 		return updateDates(m, msg)
+	case ProjectMoveAnswer:
+		return updateMoveProject(m, msg)
+	case MoveTargetSelected:
+		return moveTargetSelected(m, msg.Key)
+	case OpenNoticeLinkMsg:
+		return openNoticeLink(m)
 	}
 	if msg, ok := msg.(PickerSelected); ok {
 		return pickCollectionKey(m, msg.Key)
@@ -204,6 +225,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		}
 	case MoveResultMsg:
 		return updateMove(m, msg)
+	case ChangeUndone:
+		return undoDone(m, msg)
 	case FieldWritten:
 		return fieldWritten(m, msg.UID, "", msg.Err)
 	case FileAttached:

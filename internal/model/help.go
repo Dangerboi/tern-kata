@@ -11,6 +11,9 @@ func (m Model) CurrentMode() Mode {
 	if mode := m.cardMode(); mode != "" {
 		return mode
 	}
+	if m.AskQuit {
+		return ModeQuit
+	}
 	if m.HelpOpen {
 		return ModeHelp
 	}
@@ -44,7 +47,7 @@ func LookupBindingForMode(chord string, mode Mode) (Binding, bool) {
 	if isCard, through := cardLetsThrough(mode, chord); isCard && !through {
 		return Binding{}, false
 	}
-	if inputMode(mode) {
+	if inputMode(mode) || mode == ModeQuit {
 		return Binding{}, false
 	}
 	for _, binding := range Keymap {

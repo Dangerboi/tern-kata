@@ -1,4 +1,4 @@
-# u on the selected Issue asks for a path and attaches the file; the Attachments tab lists it. `tern-kata attach` run from
+# @ on the selected Issue asks for a path and attaches the file; the Attachments tab lists it. `tern-kata attach` run from
 # the shell shows in the open Pane without a reload. U picks an Attachment by name and removes it, and the copy leaves the
 # Attachment store; the notice says what happened to the file. Own Issue and files; it cleans up.
 at_dir="$tmp/workspace"
@@ -14,16 +14,16 @@ expect_tree "[data-id='main.columns.list.issues.$at_uid']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.list.issues.$at_uid']"
 expect_tree "[data-id='main.columns.list.issues.$at_uid']" '.ok and .nodes[0]["aria-selected"] == "true"'
 ctl click "$at_tab"
-expect_tree "[data-id='main.columns.detail.viewport.content.activity']" ".ok and (.nodes[0] | $at_text | contains(\"No attachments, u to attach\"))"
+expect_tree "[data-id='main.columns.detail.viewport.content.activity']" ".ok and (.nodes[0] | $at_text | contains(\"No attachments, @ to attach\"))"
 
-# u opens the path form; an unknown file shows kata's reason in the form, the file is attached once the path is right.
-ctl key u
+# @ opens the path form; an unknown file shows kata's reason in the form, the file is attached once the path is right.
+ctl key '@'
 expect_tree "[data-id='layer.fields.input']" '.ok and .count == 1'
 ctl type '"/no/such/file.png"'
 ctl key enter
 expect_tree "[data-id='layer.fields.error']" '.ok and .count == 1 and (.nodes[0].text | contains("does not exist"))'
 ctl key Escape
-ctl key u
+ctl key '@'
 ctl type "$(jq -rn --arg p "\"$tmp/attach-src/shot.png\"" '$p | @json')"
 ctl key enter
 expect_tree "[data-id='layer.fields']" '.ok and .count == 0'

@@ -28,6 +28,22 @@ func federation(m model.Model, now time.Time) tern.Element {
 	column := func() tern.Element {
 		return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapSM, children)
 	}
+	switch f.Screen {
+	case model.FederationLeavePreview:
+		lines, warning := f.Leave.PreviewLines()
+		children = append(children, federationScreen("Leave Federation", lines, warning)...)
+		if f.Leaving {
+			children = append(children, ui.Text{Common: ui.Common{Key: "running", Tone: ui.TonePending}, Text: "leaving..."})
+		}
+		if f.LeaveErr != nil {
+			children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: f.LeaveErr.Error()})
+		}
+		return column()
+	case model.FederationLeaveDone:
+		lines, warning := f.Left.ResultLines()
+		children = append(children, federationScreen("Leave Result", lines, warning)...)
+		return column()
+	}
 	spoke := m.SelectedSpoke()
 	if f.Screen == model.FederationDetail && spoke != nil {
 		for i, line := range spoke.DetailLines() {
@@ -68,4 +84,17 @@ func federationCard(s model.FederationSpoke, selected bool, now time.Time) tern.
 		tone = ui.ToneWarning
 	}
 	return ui.Card{Common: ui.Common{Key: s.ProjectName, Tone: tone}, Selected: selected, Children: body}
+}
+
+// federationScreen is a leave screen's title and its lines, the one at index warning in the error tone.
+func federationScreen(title string, lines []string, warning int) []tern.Element {
+	out := ui.Nodes(ui.Text{Common: ui.Common{Key: "title", Tone: ui.ToneMuted}, Spans: []ui.Span{{T: title, S: "strong"}}, Wrap: ui.WrapNone})
+	for i, line := range lines {
+		if i == warning {
+			out = append(out, ui.Text{Common: ui.Common{Key: "line" + strconv.Itoa(i), Tone: ui.ToneError}, Text: line})
+			continue
+		}
+		out = append(out, ui.Text{Common: ui.Common{Key: "line" + strconv.Itoa(i)}, Text: line, Wrap: ui.WrapNone})
+	}
+	return out
 }
