@@ -31,7 +31,7 @@ const (
 type BoardState struct {
 	// ProjectUID is the Project the state was filled for; resetPagesForProject empties it when the Pane's Project differs.
 	ProjectUID string
-	Mode BoardMode
+	Mode       BoardMode
 	// Lanes is the Project's Lane list; empty means the default.
 	Lanes []string
 	// DoneDays and DoneCards are the Project's own Done limits; zero means the default.
