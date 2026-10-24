@@ -150,7 +150,7 @@ A run that is not uncertain is never held: a nonzero exit, a timeout and a spawn
 
 ### Abandon
 
-`tern-kata worker abandon <run-uid>` gives up a held run: kata records it `cancelled` with "abandoned by <actor>" and the held reason, the Issue gets a comment, and the run's slot and overlap gate are freed. A hold from before kata saw the run is closed locally. Resume and abandon both take `--as <actor>`. A `launch_unproven` run keeps its slot until it is abandoned, because the worker cannot prove no agent exists.
+`tern-kata worker abandon <run-uid>` gives up a held run: kata records it `cancelled` with "abandoned by <actor>" and the held reason, the Issue gets a comment, and the run's slot and overlap gate are freed. A hold from before kata saw the run is closed locally. Resume and abandon both take `--as <actor>`; an empty value (`--as=` or `--as ""`) is refused with "--as must be non-empty". `worker init --actor` is a separate flag. A `launch_unproven` run keeps its slot until it is abandoned, because the worker cannot prove no agent exists.
 
 `worker abandon` also handles other cases:
 
