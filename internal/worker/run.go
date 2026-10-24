@@ -27,43 +27,28 @@ func (w *Worker) noteHook(err error) {
 // spawn runs the journal's state machine in the background, once per run.
 func (w *Worker) spawn(ps *projectState, uid string) {
 	w.mu.Lock()
-	if ps.running[uid] || w.halted.Load() {
+	if w.flight[uid].driven || w.halted.Load() {
 		w.mu.Unlock()
 		return
 	}
-	if ps.running == nil {
-		ps.running = map[string]bool{}
+	f := w.flight[uid]
+	f.driven = true
+	if w.flight == nil {
+		w.flight = map[string]flight{}
 	}
-	ps.running[uid] = true
+	w.flight[uid] = f
 	w.mu.Unlock()
 	w.runs.Add(1)
 	go func() {
 		defer w.runs.Done()
 		err := w.advance(w.ctx, ps, uid)
-		owes := w.owesSettlement(uid)
-		w.mu.Lock()
-		delete(ps.running, uid)
-		if owes {
-			if ps.owing == nil {
-				ps.owing = map[string]bool{}
-			}
-			ps.owing[uid] = true
-		} else {
-			delete(ps.owing, uid)
-		}
-		w.mu.Unlock()
-		w.finishDrain()
+		j, lerr := w.store.Load(uid)
+		owes := lerr == nil && j.owes() // a transient kata failure stopped it: retryPending will drive it on
+		w.updateFlight(uid, func(f *flight) { f.driven, f.owes = false, owes })
 		if err != nil && w.ctx.Err() == nil && !w.halted.Load() {
 			w.opt.Log("run %s: %v", uid, err)
 		}
 	}()
-}
-
-// owesSettlement is whether an accepted run that is not held still has reports or its settlement to deliver: a
-// transient kata failure stopped it, and retryPending will drive it on. An idle drain waits for such a run.
-func (w *Worker) owesSettlement(uid string) bool {
-	j, err := w.store.Load(uid)
-	return err == nil && j.owes()
 }
 
 // retryPending resumes runs a transient kata failure left half-reported or half-admitted; the Project loop calls it at least every minute.
@@ -73,19 +58,14 @@ func (w *Worker) retryPending(ps *projectState) {
 		if j.ProjectUID != ps.project.UID || j.Executor != w.opt.Config.Executor {
 			continue
 		}
-		if !j.owes() {
-			w.mu.Lock()
-			delete(ps.owing, j.RunUID) // settled or held by another path since: nothing left to wait for
-			w.mu.Unlock()
-			w.finishDrain()
-		}
+		w.settleFlight(j.RunUID, j.owes()) // settled or held by another path since: nothing left to wait for
 		switch {
 		case j.driveStep() == driveAdmit && !w.holdsSlotOf(ps, j.RunUID):
 			// prepare saved this journal but has not bound its slot yet; RequestRun or the scheduler spawns it next
 		case j.retryable():
 			w.spawn(ps, j.RunUID)
-		case j.settled() && !w.life(j).occupiesSlot(j):
-			w.release(ps, j.RunUID) // a held run whose process has since gone no longer takes a slot
+		case j.settled():
+			w.syncSlot(ps, j) // a held run whose process has since gone no longer takes a slot
 		}
 	}
 }
@@ -96,8 +76,8 @@ func (w *Worker) advance(ctx context.Context, ps *projectState, uid string) (err
 	defer func() {
 		w.noteHook(err)
 		w.dropCancelSignal(uid)
-		if j, lerr := w.store.Load(uid); lerr == nil && !w.life(j).occupiesSlot(j) {
-			w.release(ps, uid)
+		if j, lerr := w.store.Load(uid); lerr == nil {
+			w.syncSlot(ps, j)
 		}
 		w.kick(ps) // a slot or an overlap gate may have opened: queued occurrences are due another look
 	}()

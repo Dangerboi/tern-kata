@@ -58,8 +58,8 @@ type Worker struct {
 	runs     sync.WaitGroup
 	// starting limits how many Projects resolve and recover at the same time (ADR-0004).
 	starting chan struct{}
-	// owed is the run uids of the journals found at start that recovery has not handed on yet; guarded by mu.
-	owed map[string]bool
+	// flight is the in-flight record keyed by run uid (see flight); guarded by mu.
+	flight map[string]flight
 	// gates serializes the overlap check with the journal that closes it, per Project and job; runOps gives resume and
 	// abandon one owner per run at a time.
 	gates, runOps keyedMutex
@@ -92,8 +92,6 @@ type projectState struct {
 	// pending counts slots reserved before a uid exists; held maps each slot-holding run uid to its job uid.
 	pending int
 	held    map[string]string
-	running map[string]bool // run uids with a goroutine driving them
-	owing   map[string]bool // run uids with no goroutine whose reports or settlement a transient failure left undelivered
 
 	wake chan struct{}
 	// kick asks the Project loop to look at its queued occurrences again; sched is that loop's own schedule state.
@@ -154,7 +152,7 @@ func (w *Worker) Run(ctx context.Context) error {
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
 	w.ctx, w.cancel, w.started = ctx, stop, w.clock.Now()
-	w.noteOwed()                       // before the socket answers, so an idle stop asked at once still waits for them
+	w.seedFlight()                     // before the socket answers, so an idle stop asked at once still waits for them
 	_ = os.Remove(w.opt.Dirs.Socket()) // the lock is ours, so a socket file is stale
 	ln, err := net.Listen("unix", w.opt.Dirs.Socket())
 	if err != nil {

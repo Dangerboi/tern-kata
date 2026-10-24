@@ -389,7 +389,7 @@ func TestPauseResumeArchiveAndRestoreAreGuardedWritesThatWaitForTheirAnswer(t *t
 	at := now
 	gone.DeletedAt, gone.DefinitionEventUID = &at, "EV4"
 	s = step(t, archiving.State, model.JobWritten{ProjectID: 7, UID: "J1", Op: model.JobArchived, Job: &gone}).State
-	if drawnIDs(t, view.Render(s.Model, now))[view.JobID("J1")] {
+	if namedRowDrawn(t, s.Model, view.JobListID, "Weekly") {
 		t.Error("an archived job is still listed with the archived hidden")
 	}
 
