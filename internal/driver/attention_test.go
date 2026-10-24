@@ -195,8 +195,8 @@ func TestAttentionPageFailedReadShowsKatasErrorAndKeepsTheRows(t *testing.T) {
 
 func TestAttentionPageRefusedAddressShowsTheReasonAndReadsNothing(t *testing.T) {
 	for name, set := range map[string]func(*model.Model){
-		"a blank actor":             func(m *model.Model) { m.Actor = "  " },
-		"an inbox user with a tab":  func(m *model.Model) { m.InboxUser = "da\tna" },
+		"a blank actor":            func(m *model.Model) { m.Actor = "  " },
+		"an inbox user with a tab": func(m *model.Model) { m.InboxUser = "da\tna" },
 		"an inbox user over 128 B": func(m *model.Model) { m.InboxUser = strings.Repeat("a", 129) },
 	} {
 		s := attentionPane(t)

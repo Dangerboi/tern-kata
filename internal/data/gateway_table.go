@@ -475,7 +475,9 @@ func init() {
 		func(ctx context.Context, c *Client, cmd model.LoadAttention) (model.Msg, error) {
 			return ok(c.ListAttention(ctx, cmd))
 		},
-		func(cmd model.LoadAttention, err error) model.Msg { return model.AttentionLoaded{Request: cmd.Request, Err: err} },
+		func(cmd model.LoadAttention, err error) model.Msg {
+			return model.AttentionLoaded{Request: cmd.Request, Err: err}
+		},
 		nil, nil)
 
 	daemonCall(
