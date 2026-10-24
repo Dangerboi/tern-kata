@@ -201,7 +201,7 @@ var jobsRows = []actionEntry{
 	{action: OpenJobParent, modes: []Mode{ModeJobInspector}, keys: keys("enter", "↵"), help: "open parent", footer: []Mode{ModeJobInspector}, sheet: []sheetLine{{sheetJobs, 8, "open a native job's parent Issue"}}, handle: pure(openJobParent)},
 }
 
-// jobsRowsAfterScroll are the Jobs Page's rows from its inspector's back key on, and the Runs Page's own keys that precede its list's movement rows.
+// jobsRowsAfterScroll are the Jobs Page's rows from its inspector's back key on.
 var jobsRowsAfterScroll = []actionEntry{
 	{action: JobInspectorBack, modes: []Mode{ModeJobInspector}, keys: keys("escape", "esc", "tab", "tab", "left", "←"), help: "back", footer: []Mode{ModeJobInspector}, sheet: []sheetLine{{sheetJobs, 10, "back to the job list"}}, handle: pure(inspectorBack)},
 	{action: NewJobAction, modes: jobsModes, keys: keys("n", "n"), help: "new job", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 12, "new job (Job card)"}}, handle: openNewJob},
@@ -211,8 +211,12 @@ var jobsRowsAfterScroll = []actionEntry{
 	{action: NewIssueJobAction, modes: issueModes, keys: keys("shift+j", "J"), help: "job", sheet: []sheetLine{{sheetJobs, 16, "new native job on the selected Issue (Job card)"}}, handle: openIssueJob},
 	{action: RunsOfJob, modes: []Mode{ModeJobs, ModeJobInspector}, keys: keys("r", "r"), help: "runs", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 11, "open the Runs Page on the job's runs"}}, handle: runsOfJob},
 	{action: OpenWorkerCard, modes: jobsModes, keys: keys("shift+w", "W"), help: "worker", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 18, "this machine's worker: set it up or serve the Project (Worker card)"}}, handle: openWorkerCard},
-	// Runs Page: the Project's Runs newest first, with the selected Run's detail beside them.
 	{action: RunJobNowAction, modes: jobsModes, keys: keys("shift+r", "R"), help: "run now", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 17, "run the selected adapter job now on this machine's worker"}}, handle: runJobNow},
+}
+
+// runsRowsBeforeMovement are the Runs Page's session, resume and abandon rows, which read ahead of its movement keys.
+var runsRowsBeforeMovement = []actionEntry{
+	// Runs Page: the Project's Runs newest first, with the selected Run's detail beside them.
 	{action: OpenRunSessionAction, modes: runsModes, keys: keys("o", "o"), help: "session", footer: runsModes, sheet: []sheetLine{{sheetRuns, 13, "open the run's omp session in a new Tern tab (this machine's finished or held runs)"}}, handle: openRunSession},
 	{action: ResumeRunAction, modes: runsModes, keys: keys("u", "u"), help: "resume", footer: runsModes, sheet: []sheetLine{{sheetRuns, 14, "resume the selected held run (this machine's worker)"}}, handle: moveHeldRun(true)},
 	{action: AbandonRunAction, modes: runsModes, keys: keys("shift+a", "A"), help: "abandon", footer: runsModes, sheet: []sheetLine{{sheetRuns, 15, "abandon the selected held run, or cancel a running one (this machine's worker)"}}, handle: moveHeldRun(false)},
