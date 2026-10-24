@@ -178,8 +178,6 @@ type RunsState struct {
 	stale   bool
 	// refresh makes the next read of the newest page join the Runs held.
 	refresh bool
-	// detailHidden is the detail column's hidden flag from before the Runs Page took its place.
-	detailHidden bool
 }
 
 // OnRuns says the Runs Page is current.
@@ -309,38 +307,20 @@ func (m Model) RunFacts(now time.Time) []RunFact {
 	return facts
 }
 
-// enterRunsPage is the Runs Page's entry from its key: the Runs as the Page left them. The jobs page's filter key enters
-// through enterRuns with a filter set after.
-func enterRunsPage(m Model) (Model, []Cmd) {
-	return enterRuns(m)
-}
-
-// enterRuns is the Runs Page's entry on the Pane's Project. The Runs load as soon as the Project's id is known.
+// enterRuns is the Runs Page's own work on entry (see switchPage): the Runs as the Page left them. The Jobs Page's filter key enters
+// here too, with a filter set after. The Runs load as soon as the Project's id is known.
 func enterRuns(m Model) (Model, []Cmd) {
-	m, cmds, ok := enterProjectPage(m, "Runs Page")
-	if !ok {
-		return m, cmds
-	}
-	m.Page = PageRuns
-	m.Runs.detailHidden = m.DetailHidden()
-	m.hidden = true
-	m.Focus = ColumnList
 	// The Page keeps its selection, loaded pages and filter while another Page is shown; the newest page is read again to join
 	// what is held.
 	m.Runs.refresh, m.Runs.stale = m.Runs.ProjectID != 0, true
 	m, ask := m.askWorker(0)
-	return m, append(cmds, ask)
+	return m, []Cmd{ask}
 }
 
-// runsOff leaves the Runs Page for the Issues Page, the keys on the list, and gives the detail column back.
-func (m Model) runsOff() Model {
-	m.Page = PageIssues
-	if m.Focus == ColumnDetail {
-		m.Focus = ColumnList
-	}
-	m.hidden = m.Runs.detailHidden
+// clearRuns drops the Runs Page's loading marker when the Page is left.
+func clearRuns(m Model) Model {
 	m.Runs.Loading = false
-	return m.revealInList(m.SelectedUID).WithVisibleSelection()
+	return m
 }
 
 // settleRuns keeps the Runs Page consistent: it ends without a Project Collection, and it reads the Project's Runs when it has
@@ -350,7 +330,7 @@ func (m Model) settleRuns() (Model, []Cmd) {
 		return m, nil
 	}
 	if !m.Collection.IsProject() {
-		return m.runsOff(), nil
+		return m.leavePage(), nil
 	}
 	id, ok := m.jobsProjectID()
 	if !ok {
@@ -511,8 +491,7 @@ func runsOfJob(m Model) (Model, []Cmd) {
 	if job == nil {
 		return m, nil
 	}
-	m = m.jobsOff()
-	m, cmds := enterRuns(m)
+	m, cmds := switchPage(m, PageRuns)
 	if m.OnRuns() {
 		if m.Runs.JobUID != job.UID {
 			m = m.refilteredRuns()
@@ -534,10 +513,8 @@ func openRunIssue(m Model) Model {
 		return m
 	}
 	uid := run.IssueUID
-	m = m.runsOff()
+	m = m.leavePage()
 	if m.SelectedUID == uid {
-		// The detail was not kept fresh while the Runs Page hid it.
-		m.stale = true
 		return m.focusDetail()
 	}
 	return m.jumpWithin(uid, nil)

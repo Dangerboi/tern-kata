@@ -107,6 +107,8 @@ type Model struct {
 	IDSearch       IDSearch
 	FilterForm     FilterFormState
 	Page           Page
+	// pageDetailHidden is the detail column's hidden flag from before the current Page took its place; leavePage restores it.
+	pageDetailHidden bool
 	Board          BoardState
 	Jobs           JobsState
 	Runs           RunsState
