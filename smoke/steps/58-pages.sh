@@ -20,3 +20,19 @@ ctl key b
 expect_tree "[data-id='main.columns.list.board']" '.count == 1'
 ctl key b
 expect_tree "[data-id='main.columns.list.issues']" '.count == 1'
+# C opens the Credentials Page, a Lettered Page: the Page bar draws it only while it is shown, it takes the Board's place, and esc
+# (then backspace) comes back to the Page shown before.
+ctl key 2
+expect_tree "[data-id='main.columns.list.board']" '.count == 1'
+ctl key C
+expect_tree "[data-id^='main.topbar.left.pages.']" '.ok and .count == 6 and (.nodes[5].text | contains("Credentials"))'
+expect_tree "[data-id='main.columns.list.board']" '.count == 0'
+ctl key escape
+expect_tree "[data-id='main.columns.list.board']" '.count == 1'
+expect_tree "[data-id^='main.topbar.left.pages.']" '.ok and .count == 5'
+ctl key C
+expect_tree "[data-id^='main.topbar.left.pages.']" '.ok and .count == 6'
+ctl key backspace
+expect_tree "[data-id='main.columns.list.board']" '.count == 1'
+ctl key 1
+expect_tree "[data-id='main.columns.list.issues']" '.count == 1'

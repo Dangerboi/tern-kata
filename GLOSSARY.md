@@ -4,7 +4,7 @@
 
 **Page**: One of the Pane's top-level views, chosen from the **Page bar**: Issues (the list and the Issue detail), Board, Jobs, Runs and Workflows. Each Page keeps its own state, such as its selection, loaded runs and filter, while another is shown. Each Page that acts on a Project records the Project its state was filled for, by uid, and one rule resets that state (job filter, archived toggle, selection, held data, Lanes) whenever the Pane's Project differs, on entry and after every step; request counters survive it, so a read asked before the reset is ignored. Each Page declares what its second column is, and one leave rule reads that: the Jobs and Runs Pages' second column is their own inspector, so leaving returns focus from it to the Issue list and gives the Issue detail column back as it was before the Page; the Board and Workflows Pages' second column is the Issue detail, so leaving keeps focus on it when it has focus, and otherwise gives the column back as it was. Every leave also clears the Page's loading markers, scrolls the list to the selection and loads the selected Issue's detail again. _Avoid_: tab (Tern's tabs and the Issue detail's tabs).
 
-**Page bar**: The row in the top bar that names the Pages with their keys (`1` Issues, `2` Board, `3` Jobs, `4` Runs, `5` Workflows); a click on a Page presses its key. _Avoid_: tab bar.
+**Page bar**: The row in the top bar that names the Pages with their keys (`1` Issues, `2` Board, `3` Jobs, `4` Runs, `5` Workflows), and a **Lettered Page** while one is shown (`C` Credentials); a click on a Page presses its key. _Avoid_: tab bar.
 
 **Issue**: One unit of tracked work in kata, as kata defines it.
 
@@ -130,6 +130,10 @@
 **Run**: Kata's record of one execution of a Cron job or **Workflow**, written by the executor that ran it (an adapter, a worker, another machine's): its status (`running`, `succeeded`, `failed`, `cancelled` or `unknown`, the last for one nobody could settle), the job or workflow it names, the Issue it ran for, the executor's label, start and end, and a summary (message and token counts). Kata keeps it as a revisioned observation and lists runs newest first by when each was first observed. The Runs Page lists them. _Avoid_: execution, job run, history entry.
 
 **Runs Page**: The **Page** (`4`) that lists the Pane's Project's **Runs**, with a detail (Enter) and a filter to one Cron job. Its state is Pane state that is not saved. It acts on the Pane's Project like the Board Page.
+
+**Lettered Page**: A **Page** opened by a letter (`C` for Credentials) instead of a number, from any Page and from the Menu, where it is listed. The **Page bar** draws it only while it is shown, esc or backspace returns to the Page shown before, and it does not act on the Pane's Project and has no reset rule. Its state is Pane state that is not saved and is read again on every entry. _Avoid_: admin view, modal.
+
+**Credentials Page**: The **Lettered Page** (`C`) that lists the daemon's API tokens, read only, as kata redacts them: state, id, name, actor, scope (global, or Project and root Issue uid), created, expires, last observed use and revoked, in UTC. It first reads the connection's auth capabilities: an account without token audit read sees "credential audit unavailable for this connection", never an empty list. The list refreshes every 30 seconds while shown, and `r` refreshes it or retries a failed check; the summary reads "N credentials · observed at <time>".
 
 **Workflow**: One of a Project's kata workflows: reusable command and prompt steps, each with a key, optional `after` steps it waits for (earlier steps only) and optional retries (0 to 100). Kata stores it; a Cron job that runs one names it. Archiving one that a live Cron job uses is refused by kata. _Avoid_: pipeline, recipe.
 

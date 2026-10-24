@@ -77,7 +77,7 @@ func pageBar(m model.Model, flexCell func(string, ui.Tone, float64) ui.Common, c
 			tone, style = ui.ToneAccent, "accent strong"
 		}
 		cell := flexCell(entry.ID, tone, 0)
-		cell.Title, cell.Actions = entry.Label+" page", &ui.Actions{Click: KeyClick(entry.Chord)}
+		cell.Title, cell.Actions = entry.Label+" page", &ui.Actions{Click: KeyClick(entry.Press)}
 		spans := []ui.Span{{T: entry.Chord, S: "muted"}}
 		if !compact || entry.Current {
 			spans = []ui.Span{{T: entry.Chord + " ", S: "muted"}, {T: entry.Label, S: style}}
