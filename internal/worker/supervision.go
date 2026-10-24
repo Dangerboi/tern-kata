@@ -17,6 +17,12 @@ const ManualFileName = "worker.manual"
 // SupervisionRule is the rule in one sentence, for texts that explain it (ADR-0012).
 const SupervisionRule = "the plugin starts and restarts the worker exactly when " + ConfigFileName + " exists and " + ManualFileName + " does not"
 
+// SupervisionOnWords names what leaves supervision on, for the sentence `worker stop` prints when nothing will start the worker again.
+const SupervisionOnWords = "a " + ConfigFileName + " without " + ManualFileName + " beside it"
+
+// SupervisionOffWords names what turns supervision off, for the paragraph `worker status` prints about a supervised worker.
+const SupervisionOffWords = ManualFileName + " beside " + ConfigFileName
+
 // ManualPath is the supervision marker.
 func (d Dirs) ManualPath() string { return filepath.Join(d.Config, ManualFileName) }
 
