@@ -84,7 +84,7 @@ func (w *Worker) retryPending(ps *projectState) {
 			// prepare saved this journal but has not bound its slot yet; RequestRun or the scheduler spawns it next
 		case j.retryable():
 			w.spawn(ps, j.RunUID)
-		case j.settled() && !w.life().occupiesSlot(j):
+		case j.settled() && !w.life(j).occupiesSlot(j):
 			w.release(ps, j.RunUID) // a held run whose process has since gone no longer takes a slot
 		}
 	}
@@ -96,7 +96,7 @@ func (w *Worker) advance(ctx context.Context, ps *projectState, uid string) (err
 	defer func() {
 		w.noteHook(err)
 		w.dropCancelSignal(uid)
-		if j, lerr := w.store.Load(uid); lerr == nil && !w.life().occupiesSlot(j) {
+		if j, lerr := w.store.Load(uid); lerr == nil && !w.life(j).occupiesSlot(j) {
 			w.release(ps, uid)
 		}
 		w.kick(ps) // a slot or an overlap gate may have opened: queued occurrences are due another look
@@ -138,7 +138,7 @@ func (w *Worker) recoverRun(ctx context.Context, ps *projectState, uid string) {
 	if err != nil {
 		return
 	}
-	switch r := w.life().recover(j); r.Step {
+	switch r := w.life(j).recover(j); r.Step {
 	case recoverHold:
 		err = w.hold(j, r.Hold, r.Detail)
 	case recoverConcludeCancel:
@@ -532,18 +532,23 @@ func (w *Worker) stopAndWait(ctx context.Context, launch *LaunchRecord, done <-c
 // conclude proves the process group gone and decides the outcome of a run that has an exit record.
 func (w *Worker) conclude(ctx context.Context, j *Journal) error {
 	command := j.activeIsCommand()
-	if command && j.Launch != nil && j.Cancel == nil && !j.Exit.TimedOut && !w.proveGroup(j.Launch).Gone() {
+	var proof GroupProof
+	if j.Launch != nil {
+		proof = w.life(j).Group(j.Launch)
+	}
+	if command && j.Launch != nil && j.Cancel == nil && !j.Exit.TimedOut && !proof.Gone() {
 		// A command that ended by itself leaves a process that is not the worker's to guess about: it may still be doing
 		// what the command began. One the worker stopped (timeout, abandon) is stopped completely below.
-		return w.hold(j, HoldGroupUnproven, fmt.Sprintf("process group %d is still present after the command exited", j.Launch.PGID))
+		return w.hold(j, HoldGroupUnproven, exitedHold("command", j.Launch.PGID, proof))
 	}
-	if j.Launch != nil && !w.proveGroup(j.Launch).Gone() {
+	if j.Launch != nil && !proof.Gone() {
 		proof, err := w.terminateGroup(ctx, j.Launch)
 		if err != nil {
 			return err
 		}
+		w.noteGroup(j.RunUID, j.Launch, proof)
 		if !proof.Gone() {
-			return w.hold(j, HoldGroupUnproven, fmt.Sprintf("process group %d is still present after the agent exited", j.Launch.PGID))
+			return w.hold(j, HoldGroupUnproven, exitedHold("agent", j.Launch.PGID, proof))
 		}
 	}
 	if j.Cancel != nil {
