@@ -44,8 +44,6 @@ type BoardState struct {
 	loaded bool
 	// asked is the Project whose Lane list was last asked for; empty when the Collection is not a Project.
 	asked string
-	// detailHidden is the detail column's hidden flag from before the Board took its place.
-	detailHidden bool
 }
 
 // OnBoard says the Board Page is current.
@@ -169,23 +167,15 @@ func toggleBoard(m Model) (Model, []Cmd) {
 	return showPage(PageBoard)(m)
 }
 
-// enterBoard is the Board Page's entry, on the Pane's Project (see enterProjectPage). A Pane too narrow for the Board opens the
+// enterBoard is the Board Page's own work on entry (see switchPage). A Pane too narrow for the Board opens the
 // Lane view of the selected Issue's Lane.
 func enterBoard(m Model) (Model, []Cmd) {
-	m, cmds, ok := enterProjectPage(m, "Board")
-	if !ok {
-		return m, nil
-	}
-	m.Page = PageBoard
 	m.Board.Mode = BoardColumns
-	m.Board.detailHidden = m.DetailHidden()
-	m.hidden = true
-	m.Focus = ColumnList
 	m = m.WithVisibleSelection()
 	if m.Cols < SideBySideCols {
 		m = m.laneView()
 	}
-	return m, cmds
+	return m, nil
 }
 
 // CardAt is the column and row of the card of uid, -1 and -1 when no column holds it.
@@ -276,13 +266,10 @@ func openLane(m Model) Model {
 	return m.laneView()
 }
 
-// boardOff leaves the Board Page for the Issues Page and gives the detail column back, unless something already focused it.
-func (m Model) boardOff() Model {
-	m.Page, m.Board.Mode = PageIssues, BoardColumns
-	if m.Focus != ColumnDetail {
-		m.hidden = m.Board.detailHidden
-	}
-	return m.revealInList(m.SelectedUID).WithVisibleSelection()
+// clearBoard puts the Board back to its columns when the Page is left.
+func clearBoard(m Model) Model {
+	m.Board.Mode = BoardColumns
+	return m
 }
 
 // settleBoard keeps the Board Page consistent: it ends without a Project Collection, and the Board gives way to the Lane view
@@ -291,11 +278,11 @@ func (m Model) settleBoard() Model {
 	switch {
 	case !m.OnBoard():
 	case !m.Collection.IsProject():
-		return m.boardOff()
+		return m.leavePage()
 	case m.Board.Mode == BoardColumns && m.Cols < SideBySideCols:
 		return m.laneView()
 	case m.Board.Mode == BoardColumns && m.Focus != ColumnList:
-		return m.boardOff()
+		return m.leavePage()
 	}
 	return m
 }
