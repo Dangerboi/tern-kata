@@ -116,10 +116,10 @@ func scrollTarget(m model.Model, c model.Column) string {
 	case model.ColumnDetail:
 		return view.DetailContentID
 	}
-	if m.OnRuns() {
+	switch m.ListNode() {
+	case model.ListNodeRuns:
 		return view.RunListID
-	}
-	if m.OnJobs() {
+	case model.ListNodeJobs:
 		return view.JobListID
 	}
 	return view.IssueListID
