@@ -80,6 +80,8 @@ func (s ActivityTab) EmptyText() string { return tabTable[s].empty }
 // instead; a history row also carries its sentence in parts.
 type DetailRow struct {
 	Key, Type, Author, Time, Body, ReferenceUID string
+	// Creation is a comment row's creation line, empty when kata gave no verification state.
+	Creation string
 	// Ref is the referenced Issue's id as shown (#<short_id> in the detail Issue's Project), and Relation how it relates to the
 	// detail's Issue. RefTitle is that Issue's title when it is loaded.
 	Relation, Ref, RefTitle string
