@@ -8,6 +8,8 @@ tern plugin link .  # use this checkout as the window plugin
 tern plugin reload  # exits 1 if a plugin fails to load; window failures show only as a toast
 ```
 
+Every push to `main` and every pull request runs `.github/workflows/ci.yml`: gofmt, `go vet` for Linux and for Windows, and `go test ./...`. The smoke suite needs Tern and a kata daemon, so it runs only locally.
+
 ## Releases
 
 Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml` (vet, test, then publish), with the tag's `CHANGELOG.md` section as the release notes. Check it locally before tagging:
