@@ -33,7 +33,23 @@ The Board, Jobs, Runs and Workflows Pages act on the Pane's Project: the current
 
 A **Lettered Page** has a letter for its key instead of a number. It opens from any Page and from the Menu, where it is listed, and the Page bar draws it only while it is shown ("1 Issues ... 6 Attention  C Credentials"). Esc or backspace returns to the Page shown before. A Lettered Page does not act on the Pane's Project, and choosing a Collection from the Menu leaves it.
 
-`C` opens the **Credentials Page**: the daemon's API tokens, newest first, one card each with kata tui's fields (state, id, name or "—", actor, scope or "global" with the Project and root Issue uid, created, expires, last observed use, revoked; times in UTC as `2006-01-02 15:04:05Z`) under "N credentials · observed at <time>". It reads the connection's auth capabilities first; an account without token audit read sees "credential audit unavailable for this connection" and why. It refreshes every 30 seconds, `r` refreshes at once (or retries a failed check), and `j`/`k` move the cursor. It shows "loading credential inventory...", "no credentials" and kata's errors in kata tui's words, and it is read only.
+`C` opens the **Credentials Page**: the daemon's API tokens, newest first, one card each with kata tui's fields (state, id, name or "—", actor, scope or "global" with the Project and root Issue uid, created, expires, last observed use, revoked; times in UTC as `2006-01-02 15:04:05Z`) under "N credentials · observed at <time>". It reads the connection's auth capabilities first; an account without token audit read sees "credential audit unavailable for this connection" and why. It refreshes every 30 seconds, `r` refreshes at once (or retries a failed check), and `j`/`k` move the cursor. It shows "loading credential inventory...", "no credentials" and kata's errors in kata tui's words.
+
+`n` on the Credentials Page opens the **Token card**, which makes an API token as `kata tokens create` does. Its fields, with `tab` between them:
+
+- **Actor**: required, prefilled with the Pane's actor.
+- **Name**: optional.
+- **Expires in**: a positive whole-second duration (`720h`, `90m`); optional for an account token, required for an Issue-subtree token.
+- **Scope**: `account` (the default) or `issue`.
+- **Issue**: for scope `issue`, the root Issue as a short id, `#id` or `project#id`. The Pane resolves it to its Project and root Issue; an account token takes none.
+- **Teams**: optional, comma-separated team names or uids, at most 256.
+- **Token file**: the path of a new file for the secret.
+
+The secret goes from kata's answer into the token file, which is created new and readable only by you (mode `600`; on Windows access for your account alone). An existing path, link included, is refused before anything is sent, and a failure after the token exists revokes it and removes the file. The secret is never drawn, logged or kept in the Pane: when the token is made, the card says "Created token <id>" and names the file, and `enter` or `esc` closes it. kata's refusals show on the card with your text kept: identity mode off (`auth.require_token_identity`), `issue_subtree_tokens_unsupported`, `scoped_token_spoke_forbidden`, no permission, an unknown team.
+
+`x` on a token opens "Revoke token <id> (<name>, <actor>)? This cannot be undone."; `y` revokes it and `n` or `esc` keeps it. A token already revoked is not asked about. After a create or a revoke the list is read again.
+
+`D` opens the **Daemons Page**: the daemons named in kata's `config.toml` (`[[daemon]]` entries, read from `$KATA_HOME`, else `~/.kata`), under "N daemons", one row each with kata tui's columns: the daemon, its endpoint ("local" for a local entry, else the url's host), "token" or "no token", and "current" on the daemon this Pane talks to. Under the list the selected daemon's `name · endpoint`, with `· allow_insecure` when the entry sets it. `j`/`k` move the cursor, and it starts on the current daemon. Enter switches this Pane to the selected daemon and leaves the Page: the Pane starts over on it with an empty Collection, no Page, cache, filter or undo history of the old daemon ("nothing to undo: connected to a different daemon"), and follows the new daemon's events. Your workspace's Project is bound again when the new daemon has one by that name, else the Pane starts on the Inbox. A switch changes this Pane only and writes nothing to disk, so other Panes and the CLI stay where they were. A local entry whose daemon is stopped is started first, as in kata tui: `kata daemon start` with `KATA_HOME` set to the entry's `home` (a profile), or in the current home for an entry without one, with `KATA_DSN`, `KATA_DB` and `KATA_SERVER` removed from its environment; this is the one case in which tern-kata starts a daemon. A switch that fails shows `daemon "<name>": <reason>` and keeps the current connection. With no `[[daemon]]` entry the Page says "no named daemons" and names the file to add one to. The top bar names the current daemon by its catalog name and, when the daemon says who you are, the account: "Daemon: work · remote · kata v0.20.0 · as alice".
 
 `F` opens the **Federation Page**: this daemon's spoke federations, the Projects that replicate a Project on a hub. A header reads "Federation for active daemon: <name> <endpoint> instance <uid> auth <auth>", then "N spoke federations" and one card per Project in two lines: the Project, its hub host and actor, then push ("push" or "off"), pending pushes, last sync ("never", "error", or "5m ago") and badges (`insecure`, `quarantine`, `reset`, `violations`, or "-"). Under the list the selected Project's `hub <URL>/project <id> · actor <actor> · credential <status>`. `j`/`k` move the cursor and Enter shows the Project's detail: hub URL, hub Project id and uid, actor, capabilities (`pull`, `push`, `lease`), push enabled, credential, `allow_insecure`, the pull and push cursors, pending push and its high water, pending and live claims, each quarantine, the reset blocker, claim violations, and the last pull, push and sync success and last error in UTC. Esc or backspace leaves the detail, then the Page; `r` reads the status again from the list or a detail. It shows "loading federation status...", "no spoke federation enrollments" and "failed to load federation: <error>" in kata tui's words, a failed read replacing the list until the next read.
 
@@ -94,6 +110,7 @@ Editing from the Pane:
 | `O` | Recurrence (see [Recurring Issues](recur.md)) |
 | `d` | Dates (see [Dates](dates.md)) |
 | `M` | Move the Issue to another Project (see [Moving an Issue](#moving-an-issue)) |
+| `X` | Delete the Issue after typing its id; restore it with `u` or from the Menu (see [Deleting and restoring an Issue](#deleting-and-restoring-an-issue)) |
 | `@`, `U` | Attach a file; list and remove Attachments (see [Attachments](attachments.md)) |
 | `u` | Undo the last change this Pane made (see [Compared with `kata tui`](kata-tui.md#undo)) |
 | `e` | Edit the Issue body in Tern's editor |
@@ -112,6 +129,16 @@ The Issue detail's Activity tabs are described in [Compared with `kata tui`](kat
 The move is a Guarded write: it carries `If-Match` with the revision the card opened with (the preview carries it too). kata moves its revision on owner and status changes only, so a move after such a change is refused; the card stays open, says the Issue changed since it opened and nothing was moved, and `enter` asks for a fresh preview (read at the revision as it stands now) before `enter` moves.
 
 After the move a Notice names the new `project#id` as a link: click it to open the Issue in its new Project. The selection goes to the neighbouring row when the Collection no longer lists the Issue, and an open Issue detail closes to the list. A move cannot be undone: it clears the undo history.
+
+## Deleting and restoring an Issue
+
+`X` on the selected Issue (in the list, on the Board, in the Lane view and in the Issue detail) opens the **Delete card**, which soft-deletes the Issue through kata's delete action, as the CLI's `kata delete` does. kata keeps a deleted Issue and its history, so it can be restored.
+
+1. The card names the Issue's qualified id (`project#id`) and title, says a deleted Issue can be restored, and asks you to type the qualified id. An optional reason goes in the second field (`tab` moves between the two).
+2. `enter` with the typed id matching sends the delete with kata's confirmation, `DELETE <project>#<id>`, and the reason. With anything else typed, the card refuses and sends nothing. kata's own refusals (a federated replica, a changed Issue) show on the card, which stays open. `esc` closes it.
+3. After the delete the Issue leaves the list, the selection goes to the neighbouring row, an open Issue detail closes to the list, and a Notice says "Deleted project#id. Press u to restore it."
+
+`u` right after a delete restores the Issue: the delete enters the undo history like any change, and the restore is refused as "already restored" when kata no longer holds the Issue as deleted. To bring back an Issue deleted earlier or elsewhere, open the Menu and choose **Restore a deleted Issue**. Its one field takes a short id (in the Pane's Project), `project#id` or an Issue's ULID. `enter` reads that Issue with deleted Issues included and shows its title and that it is deleted; `enter` again restores it. An Issue kata holds as not deleted is shown as such, and restoring it reports kata's answer that nothing changed. A restore from the Menu clears the undo history. Purging an Issue, which cannot be undone, stays in the CLI.
 
 ## Board Page
 

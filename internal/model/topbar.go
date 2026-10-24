@@ -5,10 +5,13 @@ import (
 	"strings"
 )
 
-// Daemon is the kata daemon this Pane talks to, read at discovery.
+// Daemon is the kata daemon this Pane talks to, read at discovery. Name is the daemon's name in kata's catalog, empty when the
+// connection is not a catalog entry; Account is the account the daemon says the Pane acts as, empty when it authenticates none.
 type Daemon struct {
+	Name    string
 	Kind    DaemonKind
 	Version string
+	Account string
 }
 
 // DaemonKind is whether the daemon runs on this machine; the zero value means the Daemon has not been read yet.
@@ -25,11 +28,17 @@ const DaemonSeparator = " · "
 // DaemonLine is the top bar's daemon line.
 func (m Model) DaemonLine() string {
 	var parts []string
+	if m.Daemon.Name != "" {
+		parts = append(parts, oneLine(m.Daemon.Name))
+	}
 	if m.Daemon.Kind != "" {
 		parts = append(parts, string(m.Daemon.Kind))
 	}
 	if m.Daemon.Version != "" {
 		parts = append(parts, "kata "+m.Daemon.Version)
+	}
+	if m.Daemon.Account != "" {
+		parts = append(parts, "as "+oneLine(m.Daemon.Account))
 	}
 	return "Daemon: " + strings.Join(parts, DaemonSeparator)
 }

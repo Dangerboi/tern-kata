@@ -203,12 +203,19 @@ func movedToProject(m Model, msg ProjectMoveAnswer) (Model, []Cmd) {
 	m.MoveProject = MoveProjectState{}
 	link := NoticeLink{Text: f.Target.Name + "#" + msg.NewShortID, Ref: f.Target.Name + "/" + msg.NewShortID}
 	m.Notice, m.NoticeLink = fmt.Sprintf("Moved #%s to %s.", f.ShortID, link.Text), &link
-	m.afterMove = &movedIssue{UID: f.UID, Next: m.neighbourRow(f.UID)}
-	if m.OpenedIssueUID() == f.UID || m.uid == f.UID {
+	m = issueGone(m, f.UID)
+	return snapshotChanged(m.issueWritten(f.UID))
+}
+
+// issueGone is an Issue the Collection stops listing, moved away or deleted: the selection goes to the neighbouring row once a
+// snapshot no longer lists it, and its detail is left.
+func issueGone(m Model, uid string) Model {
+	m.afterMove = &movedIssue{UID: uid, Next: m.neighbourRow(uid)}
+	if m.OpenedIssueUID() == uid || m.uid == uid {
 		m.Focus = ColumnList
 		m.openedUID = ""
 	}
-	return snapshotChanged(m.issueWritten(f.UID))
+	return m
 }
 
 // movedIssue is the Issue just moved and the row beside it, which takes the selection when a snapshot no longer lists the Issue.

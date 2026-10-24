@@ -42,12 +42,12 @@ func TestHelpIsAFullPaneSheet(t *testing.T) {
 		at += i + 1
 	}
 	joined := strings.Join(lines, "\n")
-	for _, want := range []string{"?                  help", "q/ctrl+c           quit (q asks y/n first, ctrl+c quits at once)", "j/↓/C-n       down", "pgup/M-v      page up", "I                  inbox", "1/2/3/4/5/6/T/C/F  switch Page", "g/home/C-M-<  first", "G/end/C-M->   last", "↹/C-j", "shift+tab/C-k", "set priority (! then 0-4 or - sets or clears it at once)", "⌫", "expand/collapse all", "toggle flat/nested view", "jump to referenced issue", "new child", "reset filter form", "reply to comment", "cycle reply kind", "make or change recurrence", "set parent", "projects", "menu", "Lettered Pages", "back to the Page shown before", "read the credentials again", "read the federation status again", "show the spoke's detail"} {
+	for _, want := range []string{"?                    help", "q/ctrl+c             quit (q asks y/n first, ctrl+c quits at once)", "j/↓/C-n       down", "pgup/M-v      page up", "I                    inbox", "1/2/3/4/5/6/T/C/F/D  switch Page", "g/home/C-M-<  first", "G/end/C-M->   last", "↹/C-j", "shift+tab/C-k", "set priority (! then 0-4 or - sets or clears it at once)", "⌫", "expand/collapse all", "toggle flat/nested view", "jump to referenced issue", "new child", "reset filter form", "reply to comment", "cycle reply kind", "make or change recurrence", "set parent", "projects", "menu", "Lettered Pages", "back to the Page shown before", "read the credentials again", "read the federation status again", "show the spoke's detail", "switch this Pane to the selected daemon"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("row %q missing in %q", want, lines)
 		}
 	}
-	for _, gone := range []string{"daemons", "Tern headless", "Everywhere", "Issue list", "Menu sidebar"} {
+	for _, gone := range []string{"Tern headless", "Everywhere", "Issue list", "Menu sidebar"} {
 		if strings.Contains(joined, gone) {
 			t.Errorf("%q listed although tern-kata has no such binding", gone)
 		}

@@ -214,6 +214,19 @@ func popupCards() []popupCard {
 			text:     func(m model.Model, f model.Field) string { return m.DatesForm.Value(f) },
 		},
 		{
+			name: "Delete", card: model.CardDelete, textField: model.DeleteReason,
+			tabOrder: []model.Field{model.DeleteID, model.DeleteReason},
+			states:   []cardState{{"", opened("shift+x"), model.ModeDeleteForm}},
+			graft:    func(dst *model.Model, src model.Model) { dst.DeleteForm = src.DeleteForm },
+			field:    func(m model.Model) model.Field { return m.DeleteForm.Field },
+			text: func(m model.Model, f model.Field) string {
+				if f == model.DeleteReason {
+					return m.DeleteForm.Reason
+				}
+				return m.DeleteForm.ID
+			},
+		},
+		{
 			name: "Job", card: model.CardJob, quits: true, textField: model.JobFieldName,
 			tabOrder: []model.Field{model.JobFieldKind, model.JobFieldName, model.JobFieldTrigger, model.JobFieldCron, model.JobFieldZone, model.JobFieldParent, model.JobFieldTitle,
 				model.JobFieldBody, model.JobFieldRecipient, model.JobFieldMessage, model.JobFieldCatchup, model.JobFieldEnabled},

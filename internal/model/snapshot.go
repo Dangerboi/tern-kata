@@ -222,7 +222,8 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 		m.Cursor = msg.Snapshot.Cursor
 	}
 	m = m.followArrived()
-	if m.StreamGeneration == 0 {
+	if m.StreamGeneration == 0 || m.resubscribe {
+		m.resubscribe = false
 		// The first snapshot is on screen: follow the daemon from its cursor, and open the Issue the Pane was asked to show.
 		var stream []Cmd
 		m, stream = startStream(m, 0)

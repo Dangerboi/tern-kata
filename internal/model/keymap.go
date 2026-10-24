@@ -95,6 +95,8 @@ const (
 	RefreshCredentials      Action = "refresh-credentials"
 	LetteredBack            Action = "lettered-back"
 	ShowFederationPage      Action = "show-federation-page"
+	ShowDaemonsPage         Action = "show-daemons-page"
+	SwitchDaemonAction      Action = "switch-daemon"
 	RefreshFederation       Action = "refresh-federation"
 	OpenFederationDetail    Action = "open-federation-detail"
 	StartFederationLeave    Action = "start-federation-leave"
@@ -168,6 +170,7 @@ const (
 	// ModeQuit is the question "Quit tern-kata? y/n", which takes only its answers.
 	ModeQuit       Mode = "quit"
 	ModeFederation Mode = "federation"
+	ModeDaemons    Mode = "daemons"
 	// ModeFederationLeave is the Federation Page's leave preview and ModeFederationResult the result of a leave or an enrollment.
 	ModeFederationLeave  Mode = "federation-leave"
 	ModeFederationResult Mode = "federation-result"
@@ -234,6 +237,15 @@ var cardBindings = []Binding{
 	{Chord: "enter", Key: "enter", Action: DatesSubmit, Help: "save dates", Mode: ModeDatesForm, ShowInFooter: true},
 	{Chord: "ctrl+s", Key: "ctrl+s", Action: DatesSubmit, Help: "save dates", Mode: ModeDatesForm},
 	{Chord: "escape", Key: "esc", Action: DatesCancel, Help: "cancel", Mode: ModeDatesForm, ShowInFooter: true},
+	{Chord: "enter", Key: "enter", Action: DeleteSubmit, Help: "delete", Mode: ModeDeleteForm, ShowInFooter: true},
+	{Chord: "ctrl+s", Key: "ctrl+s", Action: DeleteSubmit, Help: "delete", Mode: ModeDeleteForm},
+	{Chord: "escape", Key: "esc", Action: DeleteCancel, Help: "cancel", Mode: ModeDeleteForm, ShowInFooter: true},
+	{Chord: "enter", Key: "enter", Action: TokenSubmit, Help: "create token", Mode: ModeTokenForm, ShowInFooter: true},
+	{Chord: "ctrl+s", Key: "ctrl+s", Action: TokenSubmit, Help: "create token", Mode: ModeTokenForm},
+	{Chord: "escape", Key: "esc", Action: TokenCancel, Help: "cancel", Mode: ModeTokenForm, ShowInFooter: true},
+	{Chord: "y", Key: "y", Action: RevokeConfirm, Help: "revoke token", Mode: ModeRevokeToken, ShowInFooter: true},
+	{Chord: "n", Key: "n", Action: RevokeCancel, Help: "keep token", Mode: ModeRevokeToken, ShowInFooter: true},
+	{Chord: "escape", Key: "esc", Action: RevokeCancel, Help: "keep token", Mode: ModeRevokeToken},
 	{Chord: "down", Key: "↓", Action: MoveDown, Help: "next Project", Mode: ModeMoveProject, ShowInFooter: true},
 	{Chord: "up", Key: "↑", Action: MoveUp, Help: "previous Project", Mode: ModeMoveProject, ShowInFooter: true},
 	{Chord: "j", Key: "j", Action: MoveDown, Help: "next Project (empty filter)", Mode: ModeMoveProject},
