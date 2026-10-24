@@ -45,12 +45,15 @@ type Gateway struct {
 	runTern    func(context.Context, []string) ([]byte, error)
 
 	// convertMu serializes the passes that move old Attachment pointers; converted holds the instance/Project pairs this process
-	// has finished. startMu guards convertStarted, the workspaces whose Pane start has begun a pass. The passes run on
-	// backgroundCtx, which Close ends, and background counts them.
+	// has finished. startMu guards convertStarted, the workspaces whose Pane start has begun a pass, and connCtx, the context of the
+	// passes of the connection in use: a daemon switch ends it and waits for the passes before it installs the new connection.
+	// background counts the passes. connCtx descends from backgroundCtx, which Close ends.
 	convertMu        sync.Mutex
 	converted        map[string]bool
 	startMu          sync.Mutex
 	convertStarted   map[string]bool
+	connCtx          context.Context
+	connCancel       context.CancelFunc
 	background       sync.WaitGroup
 	backgroundCtx    context.Context
 	backgroundCancel context.CancelFunc
@@ -58,8 +61,9 @@ type Gateway struct {
 
 func NewGateway(locate Locator) *Gateway {
 	backgroundCtx, backgroundCancel := context.WithCancel(context.Background())
+	connCtx, connCancel := context.WithCancel(backgroundCtx)
 	return &Gateway{locate: locate, deadline: connectDeadline, clients: map[string]*Client{}, now: time.Now, wakePoll: time.Minute, workerDirs: worker.DefaultDirs, runTern: execTern,
-		converted: map[string]bool{}, convertStarted: map[string]bool{}, backgroundCtx: backgroundCtx, backgroundCancel: backgroundCancel}
+		converted: map[string]bool{}, convertStarted: map[string]bool{}, connCtx: connCtx, connCancel: connCancel, backgroundCtx: backgroundCtx, backgroundCancel: backgroundCancel}
 }
 
 // WithHost sets this machine's host name, the one every Attachment pointer is written with and compared against.
@@ -172,6 +176,7 @@ func (g *Gateway) connect(ctx context.Context, workspace string) (*Client, error
 	}
 	catalog, _ := ReadCatalog()
 	c.name = g.currentLocked(catalog)
+	c.entry, _ = catalog.Entry(c.name)
 	return c, nil
 }
 

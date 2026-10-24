@@ -42,11 +42,10 @@ func (c *Client) ReadFederation(ctx context.Context, cmd model.LoadFederation) (
 	return loaded, nil
 }
 
-// activeDaemon is the name, endpoint and auth of the daemon this client talks to, worded as kata tui words them. An unreadable
-// catalog leaves the daemon unnamed by it: discovery already read the file and would have refused it.
+// activeDaemon is the name, endpoint and auth of the daemon this client talks to, worded as kata tui words them: the catalog entry
+// the connection was made through, not whichever entry active_daemon names now.
 func (c *Client) activeDaemon(auth g.AuthInfoOut) (name, endpoint, authText string) {
-	catalog, _ := ReadCatalog()
-	entry, named := catalog.Entry(firstNonEmpty(c.name, catalog.Active))
+	entry, named := c.entry, c.entry.Name != ""
 	endpoint = "local"
 	if c.kind == model.DaemonRemote {
 		endpoint = firstNonEmpty(entry.URL, os.Getenv("KATA_SERVER"), "remote")
@@ -61,7 +60,7 @@ func (c *Client) activeDaemon(auth g.AuthInfoOut) (name, endpoint, authText stri
 			name = u.Host
 		}
 	}
-	return name, endpoint, federationAuth(named && entry.TokenEnv != "", auth)
+	return name, endpoint, federationAuth(named && (entry.TokenEnv != "" || entry.InlineToken != ""), auth)
 }
 
 // federationAuth is kata tui's auth display: how the connection authenticates, then who the daemon says it is. configuredToken says
@@ -107,12 +106,12 @@ func translateSpoke(wire g.FederationProjectStatus) model.FederationSpoke {
 	spoke := model.FederationSpoke{
 		ProjectID:                   wire.ProjectID,
 		ProjectName:                 wire.ProjectName,
-		HubURL:                      stringOrEmpty(wire.HubURL),
-		HubProjectUID:               stringOrEmpty(wire.HubProjectUID),
-		BoundActor:                  stringOrEmpty(wire.BoundActor),
-		Capabilities:                displayCapabilities(stringOrEmpty(wire.Capabilities)),
+		HubURL:                      derefString(wire.HubURL),
+		HubProjectUID:               derefString(wire.HubProjectUID),
+		BoundActor:                  derefString(wire.BoundActor),
+		Capabilities:                displayCapabilities(derefString(wire.Capabilities)),
 		PushEnabled:                 wire.PushEnabled,
-		CredentialStatus:            stringOrEmpty(wire.CredentialStatus),
+		CredentialStatus:            derefString(wire.CredentialStatus),
 		PendingPushCount:            wire.PendingPushCount,
 		PendingPushHighWaterEventID: wire.PendingPushHighWaterEventID,
 		PullCursorEventID:           wire.PullCursorEventID,
@@ -120,7 +119,7 @@ func translateSpoke(wire g.FederationProjectStatus) model.FederationSpoke {
 		PendingClaimCount:           wire.PendingClaimCount,
 		LiveClaimCount:              wire.LiveClaimCount,
 		ActiveQuarantineCount:       wire.ActiveQuarantineCount,
-		ResetBlocker:                stringOrEmpty(wire.ResetBlocker),
+		ResetBlocker:                derefString(wire.ResetBlocker),
 		UnresolvedViolationCount:    wire.UnresolvedViolationCount,
 		RecentViolationCount:        wire.RecentViolationCount,
 		LastPullSuccessAt:           timeOrZero(wire.LastPullSuccessAt),
@@ -128,7 +127,7 @@ func translateSpoke(wire g.FederationProjectStatus) model.FederationSpoke {
 		LastSuccessfulSyncAt:        timeOrZero(wire.LastSuccessfulSyncAt),
 		LastErrorAt:                 timeOrZero(wire.LastErrorAt),
 		HasLastError:                wire.LastError != nil,
-		LastError:                   stringOrEmpty(wire.LastError),
+		LastError:                   derefString(wire.LastError),
 	}
 	if wire.AllowInsecure != nil {
 		spoke.AllowInsecure = *wire.AllowInsecure
@@ -141,13 +140,6 @@ func translateSpoke(wire g.FederationProjectStatus) model.FederationSpoke {
 			FirstEventID: q.FirstEventID, LastEventID: q.LastEventID, CreatedAt: q.CreatedAt, Error: q.ErrorData})
 	}
 	return spoke
-}
-
-func stringOrEmpty(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
 }
 
 // displayCapabilities is kata's display spelling of a hub grant's capabilities: pull, push, lease (stored as claim), in that order.

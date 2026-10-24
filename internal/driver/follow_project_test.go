@@ -318,3 +318,27 @@ func TestEscBackWithTheLaneListBeforeTheSnapshotSelectsACardTheBoardDraws(t *tes
 		t.Errorf("selected %q; want other, the only card the Board draws", m.SelectedUID)
 	}
 }
+
+// Backspace goes back wherever esc does outside text fields: across Projects, out of the help sheet and out of a Workflow's steps. At
+// the root of a surface, where esc opens the Menu, it does nothing (kata tui binds backspace only to going back).
+func TestBackspaceGoesBackWhereEscDoesButNeverOpensTheMenu(t *testing.T) {
+	s := workBoard(t)
+	out := step(t, s, click("", refClick(t, s, "task", "far")))
+	s = inInfra(t, out.State, out.Cmds)
+	s = step(t, s, model.LanesLoaded{ProjectUID: "q"}).State
+	if back := step(t, s, key("backspace")); !readsProject(back.Cmds, "p") {
+		t.Errorf("backspace after a follow read nothing of work: %#v", back.Cmds)
+	}
+
+	list := browsing(t, 160)
+	if m := step(t, list, key("backspace")).State.Model; m.Picker.Open || m.Focus != model.ColumnList {
+		t.Errorf("backspace at the list root opened the Menu or moved focus: picker %v focus %v", m.Picker.Open, m.Focus)
+	}
+	help := step(t, list, key("?")).State
+	if !help.Model.HelpOpen {
+		t.Fatal("fixture: help not open")
+	}
+	if step(t, help, key("backspace")).State.Model.HelpOpen {
+		t.Error("backspace did not close the help sheet")
+	}
+}

@@ -81,7 +81,7 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 			return m, nil
 		}
 		m.StreamConnected = true
-		m, cmds := refreshAttention(m)
+		m, cmds := askAttention(m)
 		if m.Stale {
 			m, more := snapshotChanged(m)
 			return m, append(cmds, more...)
@@ -93,7 +93,7 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 		}
 		var asked []Cmd
 		if attentionChangesTheCount(msg.Type) {
-			m, asked = refreshAttention(m)
+			m, asked = askAttention(m)
 		}
 		if msg.Type == "sync.reset_required" {
 			m.Stale = true

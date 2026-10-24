@@ -38,8 +38,6 @@ type popupCard struct {
 	card model.Card // NoCard for Search
 	// states are the keymap modes the card can be in; the first is the plain opened card.
 	states []cardState
-	// quits says ctrl+c quits from the card (the Menu, Close and New Project cards).
-	quits bool
 	// graft puts the card's state on another model, to open several at once.
 	graft func(dst *model.Model, src model.Model)
 	// multiline cards edit a body, not a single-line text field.
@@ -196,7 +194,7 @@ func popupCards() []popupCard {
 			result: func(m model.Model, err error) model.Msg { return model.FieldWritten{UID: m.FieldForm.UID, Err: err} },
 		},
 		{
-			name: "Close", card: model.CardClose, quits: true, textField: model.CloseCommit,
+			name: "Close", card: model.CardClose, textField: model.CloseCommit,
 			tabOrder: []model.Field{model.CloseReason, model.CloseMessage, model.CloseCommit, model.ClosePR, model.CloseTest, model.CloseReviewed, model.CloseExternal, model.CloseReference, model.CloseRationale},
 			states:   []cardState{{"", opened("x"), model.ModeCloseForm}},
 			graft:    func(dst *model.Model, src model.Model) { dst.CloseForm = src.CloseForm },
@@ -227,7 +225,7 @@ func popupCards() []popupCard {
 			},
 		},
 		{
-			name: "Job", card: model.CardJob, quits: true, textField: model.JobFieldName,
+			name: "Job", card: model.CardJob, textField: model.JobFieldName,
 			tabOrder: []model.Field{model.JobFieldKind, model.JobFieldName, model.JobFieldTrigger, model.JobFieldCron, model.JobFieldZone, model.JobFieldParent, model.JobFieldTitle,
 				model.JobFieldBody, model.JobFieldRecipient, model.JobFieldMessage, model.JobFieldCatchup, model.JobFieldEnabled},
 			states: []cardState{{"", func() model.Model {
@@ -242,7 +240,7 @@ func popupCards() []popupCard {
 			result: func(m model.Model, err error) model.Msg { return model.JobWritten{UID: m.JobForm.UID, Err: err} },
 		},
 		{
-			name: "Recurrence", card: model.CardRecurrence, quits: true, textField: model.RecurrenceStart,
+			name: "Recurrence", card: model.CardRecurrence, textField: model.RecurrenceStart,
 			tabOrder: []model.Field{model.RecurrenceFrequency, model.RecurrenceEvery, model.RecurrenceWeekdays, model.RecurrenceStart, model.RecurrenceEnds, model.RecurrenceZone},
 			states:   []cardState{{"", opened("shift+o"), model.ModeRecurrenceForm}},
 			graft:    func(dst *model.Model, src model.Model) { dst.RecurrenceForm = src.RecurrenceForm },
@@ -250,7 +248,7 @@ func popupCards() []popupCard {
 			text:     func(m model.Model, _ model.Field) string { return m.RecurrenceForm.Start },
 		},
 		{
-			name: "New Project", card: model.CardProject, quits: true,
+			name: "New Project", card: model.CardProject,
 			states: []cardState{{"", func() model.Model {
 				m, _ := model.Update(clickAt(model.ColumnList), model.CollectionPointerSelected{Key: model.NewProjectKey})
 				m, _ = clickPress(m, "ctrl+u")
@@ -263,7 +261,7 @@ func popupCards() []popupCard {
 			result: func(_ model.Model, err error) model.Msg { return model.ProjectSaved{Err: err} },
 		},
 		{
-			name: "Federation adoption", card: model.CardFederationAdopt, quits: true,
+			name: "Federation adoption", card: model.CardFederationAdopt,
 			states: []cardState{{"", func() model.Model {
 				m := model.Model{}
 				m.Federation.Adopting, m.Federation.Draft.SpokeProjectName = true, "acme"
@@ -323,7 +321,7 @@ func popupCards() []popupCard {
 			},
 		},
 		{
-			name: "Menu", card: model.CardPicker, quits: true,
+			name: "Menu", card: model.CardPicker,
 			states: []cardState{{"", openedMenu, model.ModePicker}},
 			graft:  func(dst *model.Model, src model.Model) { dst.Picker = src.Picker },
 			field:  func(model.Model) model.Field { return "" },
@@ -447,8 +445,8 @@ func TestPopupCardStates(t *testing.T) {
 				if got := m.TopCard(); got != c.card {
 					t.Fatalf("top card %d, want %d", got, c.card)
 				}
-				if m, _ = clickPress(m, "ctrl+c"); m.Quitting != (c.quits && c.card != model.NoCard) {
-					t.Fatalf("ctrl+c: quitting=%v, want %v", m.Quitting, c.quits)
+				if m, _ = clickPress(m, "ctrl+c"); m.Quitting != (c.card != model.NoCard) {
+					t.Fatalf("ctrl+c: quitting=%v, want %v", m.Quitting, c.card != model.NoCard)
 				}
 			})
 			// A card lists a global key (quit, help) only if pressing it does what it says.
@@ -467,8 +465,8 @@ func TestPopupCardStates(t *testing.T) {
 					}
 					listed = listed || binding.Chord == "ctrl+c"
 				}
-				if listed != c.quits {
-					t.Errorf("%s lists ctrl+c = %v, but it quits = %v", state.mode, listed, c.quits)
+				if !listed {
+					t.Errorf("%s does not list ctrl+c, which quits from every card", state.mode)
 				}
 			})
 		}
@@ -505,7 +503,7 @@ func TestDraftCardsShareDiscardConfirmation(t *testing.T) {
 			}
 		})
 		t.Run(c.name+"/asking swallows other keys and edits", func(t *testing.T) {
-			m, _ := clickPress(typed(asking(c)(), "z"), "ctrl+c", "tab")
+			m, _ := clickPress(typed(asking(c)(), "z"), "tab")
 			m, _ = model.Update(m, model.EditMsg{Target: body.target, From: 0, To: 0, Text: "e", Cursor: 1, Len: 1})
 			if got := body.text(m); got != "x" || m.Quitting || m.CurrentMode() != model.ModeDiscard {
 				t.Fatalf("while asking: text %q quitting=%v mode %s", got, m.Quitting, m.CurrentMode())

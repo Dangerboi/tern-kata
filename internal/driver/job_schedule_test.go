@@ -32,6 +32,8 @@ func TestJobsPageRowsPutTheScheduleInWordsForEveryTriggerKind(t *testing.T) {
 		{cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "5 4 1-15 1,6 *", Timezone: "UTC"}, "cron 5 4 1-15 1,6 * UTC"},
 		{cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 9 * * 7", Timezone: "UTC"}, "every Sun at 09:00 UTC"},
 		{cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 9 * * 5-7", Timezone: "UTC"}, "every Fri, Sat, Sun at 09:00 UTC"},
+		{cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 9 * * 7-7", Timezone: "UTC"}, "every Sun at 09:00 UTC"},
+		{cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 9 * * 7-1", Timezone: "UTC"}, "cron 0 9 * * 7-1 UTC"},
 		{cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 22-2 * * *", Timezone: "UTC"}, "cron 0 22-2 * * * UTC"},
 		{cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 9 * * 5/2", Timezone: "UTC"}, "cron 0 9 * * 5/2 UTC"},
 		{cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 9 * * 6-1", Timezone: "UTC"}, "cron 0 9 * * 6-1 UTC"},

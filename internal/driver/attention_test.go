@@ -238,22 +238,48 @@ func TestAttentionPageKeepsTheSelectionByIssueAcrossReads(t *testing.T) {
 	}
 }
 
-func TestAttentionPageDropsTheAnswerToAnOlderRead(t *testing.T) {
-	s := attentionPane(t)
-	older := step(t, s, key("6"))
-	newer := step(t, older.State, key("ctrl+r"))
-	stale, _ := askedAttention(older.Cmds)
-	fresh, _ := askedAttention(newer.Cmds)
-	if stale.Request == fresh.Request {
-		t.Fatal("two reads share a request number")
+func TestEveryAttentionReadGoesThroughOneInFlightAndOneFollowUp(t *testing.T) {
+	first := step(t, attentionPane(t), key("6"))
+	if _, ok := askedAttention(first.Cmds); !ok {
+		t.Fatal("entering the Page asked for no read")
 	}
-	got := step(t, newer.State, model.AttentionLoaded{Request: stale.Request, Requests: attentionRequests(t)}).State
-	if len(got.Model.Attention.Requests) != 0 {
-		t.Fatalf("the answer to an older read was applied: %d requests", len(got.Model.Attention.Requests))
+	out := first
+	for name, press := range map[string]string{"ctrl+r": "ctrl+r", "leaving and entering the Page": "6"} {
+		in := out.State
+		if press == "6" {
+			in = step(t, in, key("1")).State
+		}
+		if got := step(t, in, key(press)); len(got.Cmds) != 0 {
+			t.Errorf("%s with a read out sent %#v, want it to wait", name, got.Cmds)
+		}
 	}
-	got = step(t, got, model.AttentionLoaded{Request: fresh.Request, Requests: attentionRequests(t)[:1]}).State
-	if len(got.Model.Attention.Requests) != 1 {
-		t.Fatalf("the answer to the latest read was dropped")
+	// The answer to the read out shows, then one more read follows for what was asked meanwhile.
+	queued := step(t, out.State, key("ctrl+r")).State
+	fresh, _ := askedAttention(first.Cmds)
+	answered := step(t, queued, model.AttentionLoaded{Request: fresh.Request, Requests: attentionRequests(t)})
+	if len(answered.State.Model.Attention.Requests) != 3 {
+		t.Fatalf("the read out was not applied: %d requests", len(answered.State.Model.Attention.Requests))
+	}
+	followUp, ok := askedAttention(answered.Cmds)
+	if !ok || followUp.Request == fresh.Request {
+		t.Fatalf("after the answer: %#v, want one follow-up read", answered.Cmds)
+	}
+	if again := step(t, answered.State, model.AttentionLoaded{Request: followUp.Request, Requests: attentionRequests(t)[:1]}); len(again.Cmds) != 0 {
+		t.Errorf("the follow-up answer sent %#v", again.Cmds)
+	}
+}
+
+func TestAClearAnsweredWhileAReadIsOutWaitsForItAndReadsOnce(t *testing.T) {
+	s := attentionPageWith(t, attentionRequests(t), 0)
+	asked := step(t, s, key("ctrl+r"))
+	read, _ := askedAttention(asked.Cmds)
+	cleared := step(t, step(t, asked.State, key("c")).State, model.AttentionCleared{UID: "work-aa11"})
+	if len(cleared.Cmds) != 0 {
+		t.Fatalf("a clear answered with a read out sent %#v, want it to queue", cleared.Cmds)
+	}
+	answered := step(t, cleared.State, model.AttentionLoaded{Request: read.Request, Requests: attentionRequests(t)[1:]})
+	if _, ok := askedAttention(answered.Cmds); !ok {
+		t.Error("the read the clear queued was not sent after the answer")
 	}
 }
 
@@ -685,5 +711,19 @@ func TestEnterOnARequestWithNoCommentKeepsTheTabTheDetailWasOn(t *testing.T) {
 	before := s.Model.ActiveTab()
 	if m := step(t, s, key("enter")).State.Model; m.ActiveTab() != before {
 		t.Errorf("a request without a comment moved the detail from the %v tab to %v", before, m.ActiveTab())
+	}
+}
+
+func TestEnterInTheIssueAlreadyShownReadsItAgainWhenTheNamedCommentIsNotCached(t *testing.T) {
+	s := attentionPane(t)
+	s = step(t, s, model.DetailLoaded{UID: "work-aa11", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "work-aa11"}, Comments: commentsOf("x1", "x3")}}).State
+	s = answerAttention(t, step(t, s, key("6")), attentionRequestsNaming(t, "work", 7, "aa11", namedComment), 0)
+	out := step(t, s, key("enter"))
+	if !slices.ContainsFunc(out.Cmds, func(c model.Cmd) bool { load, ok := c.(model.LoadDetail); return ok && load.UID == "work-aa11" }) {
+		t.Fatalf("enter sent %#v, want the Issue's detail read again", out.Cmds)
+	}
+	m := step(t, out.State, model.DetailLoaded{UID: "work-aa11", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "work-aa11"}, Comments: commentsOf("x1", "x3", namedComment)}}).State.Model
+	if m.ActiveTab() != model.TabComments || detailRowKey(m) != namedComment {
+		t.Fatalf("tab %v row %q, want the comment that arrived with the fresh read", m.ActiveTab(), detailRowKey(m))
 	}
 }

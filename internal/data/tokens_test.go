@@ -1,8 +1,10 @@
 package data
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -164,43 +166,30 @@ func TestGatewayRefusesATeamKataDoesNotKnowAndLeavesNoFile(t *testing.T) {
 	}
 }
 
-// The in-process service cannot turn token identity mode on (kata.Config has no switch for it), so an Issue-subtree token can
-// only be refused there. This answers the create the way a daemon in identity mode does, to pin what the gateway sends and what
-// it does with the answer.
-func TestGatewayCreatesAnIssueSubtreeTokenFromKatasAnswerInIdentityMode(t *testing.T) {
+// The in-process service cannot turn token identity mode on (kata.Config has no switch for it), so a daemon's answer to an
+// Issue-subtree token cannot be driven here. What is checked is the request kata receives at the HTTP boundary, kata's documented
+// contract for the scope: the Issue's Project uid and root Issue uid, the expiry in seconds, the actor and the name.
+func TestGatewaySendsKataTheIssueSubtreeScopeAndExpiry(t *testing.T) {
 	kata := startKata(t, "0.20.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, bound := project(t, gateway, "demo")
 	issue := createIssue(t, gateway, workspace, bound, "subtree root")
-	file := filepath.Join(t.TempDir(), "sub.token")
 
 	var asked g.CreateTokenBody
-	created := time.Now().UTC()
-	answer := func(w http.ResponseWriter, r *http.Request) bool {
-		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/tokens" {
-			return false
+	record := func(_ http.ResponseWriter, r *http.Request) bool {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/tokens" {
+			body, _ := io.ReadAll(r.Body)
+			r.Body = io.NopCloser(bytes.NewReader(body))
+			if err := json.Unmarshal(body, &asked); err != nil {
+				t.Errorf("decode the create: %v", err)
+			}
 		}
-		if err := json.NewDecoder(r.Body).Decode(&asked); err != nil {
-			t.Errorf("decode the create: %v", err)
-		}
-		expires := created.Add(time.Duration(*asked.ExpiresInSeconds) * time.Second)
-		token := g.TokenOut{ID: 41, Actor: asked.Actor, CreatedAt: created, ExpiresAt: &expires, State: "live",
-			Scope: &g.TokenScopeOut{Kind: "issue_subtree", ProjectUID: asked.Scope.ProjectUID, RootIssueUID: asked.Scope.RootIssueUID}}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(g.CreateTokenResponseBody{Plaintext: "fixed-secret-41", Token: token})
-		return true
+		return false
 	}
-	kata.intercept.Store(&answer)
+	kata.intercept.Store(&record)
 
-	done := as[model.TokenCreated](t, run(t, gateway, model.CreateTokenCmd{Workspace: workspace, Actor: "ci-bot", Name: "sub", ExpiresInSeconds: 7200,
-		Subtree: true, ProjectID: bound.ID, ShortID: issue, File: file}))
-	if done.Err != nil || done.ID != 41 || done.File != file {
-		t.Fatalf("created %+v, want token 41 in the file", done)
-	}
-	if secretIn(t, file) != "fixed-secret-41" {
-		t.Error("the file does not hold the secret kata returned")
-	}
-	wantOwnerOnly(t, file)
+	run(t, gateway, model.CreateTokenCmd{Workspace: workspace, Actor: "ci-bot", Name: "sub", ExpiresInSeconds: 7200,
+		Subtree: true, ProjectID: bound.ID, ShortID: issue, File: filepath.Join(t.TempDir(), "sub.token")})
 	if asked.Scope == nil || asked.Scope.RootIssueUID != issue || asked.Scope.ProjectUID != bound.UID ||
 		asked.ExpiresInSeconds == nil || *asked.ExpiresInSeconds != 7200 || asked.Actor != "ci-bot" || asked.Name == nil || *asked.Name != "sub" {
 		t.Errorf("the gateway asked for %+v, want the Issue's Project uid and root uid, 7200 seconds, ci-bot named sub", asked)

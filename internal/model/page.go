@@ -307,8 +307,11 @@ func pageScrollActions(def pageDef) []actionEntry {
 	}
 }
 
-// pageModes are the modes where the Page keys work: wherever the main surface has the keyboard and no text is being typed.
-var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollections, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention, ModeCredentials, ModeFederation, ModeDaemons}
+// pageModes are the modes where the Page keys work: wherever the main surface has the keyboard and no text is being typed, the
+// Federation Page's leave, enrollment, browse and result screens included (the typed adoption confirmation is a card, not a mode
+// of the surface). showPage holds the key back while one of their writes is out.
+var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollections, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention, ModeCredentials,
+	ModeFederation, ModeFederationLeave, ModeFederationResult, ModeFederationPick, ModeFederationBrowse, ModeFederationPreview, ModeFederationRecovery, ModeDaemons}
 
 // PageBarEntry is one entry of the Page bar. Press is the chord a click on it sends.
 type PageBarEntry struct {
@@ -351,10 +354,10 @@ func (m Model) PageBar() []PageBarEntry {
 }
 
 // showPage is a Page's key: it leaves the current Page (back to Issues) and enters the target, and does nothing when the
-// target is already current.
+// target is already current, or while a federation leave or enrollment is out: leaving the Page then would drop its answer.
 func showPage(target Page) func(Model) (Model, []Cmd) {
 	return func(m Model) (Model, []Cmd) {
-		if m.Page == target {
+		if m.Page == target || m.Federation.Leaving || m.Federation.Enrolling {
 			return m, nil
 		}
 		before := liveQuery(m)

@@ -46,13 +46,13 @@ func (c *Client) ListFederationHubs(_ context.Context, cmd model.LoadFederationH
 	}
 	loaded := model.FederationHubsLoaded{Request: cmd.Request}
 	for _, entry := range catalog.Daemons {
-		loaded.Hubs = append(loaded.Hubs, catalogHub(entry, entry.Name == catalog.Active))
+		loaded.Hubs = append(loaded.Hubs, catalogHub(entry, entry.Name == c.name))
 	}
 	return loaded, nil
 }
 
-// hubEntry is the catalog daemon called name when it can be a hub: not the active one and not local.
-func hubEntry(name string) (CatalogEntry, error) {
+// hubEntry is the catalog daemon called name when it can be a hub: not the connected one and not local.
+func (c *Client) hubEntry(name string) (CatalogEntry, error) {
 	catalog, err := ReadCatalog()
 	if err != nil {
 		return CatalogEntry{}, err
@@ -61,7 +61,7 @@ func hubEntry(name string) (CatalogEntry, error) {
 	switch {
 	case !ok:
 		return CatalogEntry{}, fmt.Errorf("daemon %q is not in kata's daemon catalog", name)
-	case entry.Name == catalog.Active:
+	case entry.Name == c.name:
 		return CatalogEntry{}, errors.New("active daemon cannot be selected as hub")
 	case entry.Local:
 		return CatalogEntry{}, errors.New("local hub targets cannot be used for federation enrollment; select a hub daemon with a spoke-reachable URL")
@@ -107,7 +107,7 @@ func readHub(ctx context.Context, hub *client.Client, entry CatalogEntry) (auth,
 // sent (the active daemon, a local entry, a token_env that is unset) answers Early.
 func (c *Client) ReadFederationHubProjects(ctx context.Context, cmd model.LoadFederationHubProjects) (model.FederationHubProjectsLoaded, error) {
 	loaded := model.FederationHubProjectsLoaded{Request: cmd.Request}
-	entry, err := hubEntry(cmd.Hub)
+	entry, err := c.hubEntry(cmd.Hub)
 	if err != nil {
 		loaded.Early, loaded.Err = true, err
 		return loaded, nil
@@ -124,7 +124,7 @@ func (c *Client) ReadFederationHubProjects(ctx context.Context, cmd model.LoadFe
 	return loaded, nil
 }
 
-// BrowseFederationHubs reads the Projects of every catalog daemon that is neither the active one nor local, each with its own token.
+// BrowseFederationHubs reads the Projects of every catalog daemon that is neither the connected one nor local, each with its own token.
 // A hub that cannot be read keeps its failure in its own row.
 func (c *Client) BrowseFederationHubs(ctx context.Context, cmd model.BrowseFederationHubs) (model.FederationBrowsed, error) {
 	catalog, err := ReadCatalog()
@@ -133,7 +133,7 @@ func (c *Client) BrowseFederationHubs(ctx context.Context, cmd model.BrowseFeder
 	}
 	browsed := model.FederationBrowsed{Request: cmd.Request}
 	for _, entry := range catalog.Daemons {
-		if entry.Local || entry.Name == catalog.Active {
+		if entry.Local || entry.Name == c.name {
 			continue
 		}
 		row := model.FederationHubProjects{Hub: catalogHub(entry, false)}
@@ -167,7 +167,7 @@ func (c *Client) EnrollFederation(ctx context.Context, cmd model.EnrollFederatio
 	if strings.TrimSpace(cmd.InstanceUID) == "" {
 		return failed(errors.New("spoke instance UID is not loaded; refresh federation status before enrollment"))
 	}
-	entry, err := hubEntry(d.Hub.Name)
+	entry, err := c.hubEntry(d.Hub.Name)
 	if err != nil {
 		return failed(err)
 	}
@@ -279,7 +279,8 @@ func resolveHubProject(ctx context.Context, hub *client.Client, d model.Federati
 }
 
 // recoveryBase is what finishing an enrollment by hand needs once the hub granted it, before the metadata is read: the join command
-// with the enrollment's token, and the spoke it is for. A remote active daemon's own token goes into the command too, as kata tui does.
+// with the enrollment's token, and the spoke it is for. A remote connected daemon's own token goes into the command too, as kata tui does:
+// the token and allow_insecure of the entry this connection was made through, never another daemon's.
 func (c *Client) recoveryBase(d model.FederationEnrollDraft, hub CatalogEntry, hubURL string, hubProject model.Project, token, actor string) model.FederationEnrollRecovery {
 	name, endpoint, _ := c.activeDaemon(g.AuthInfoOut{})
 	command := model.FederationJoinCommand{HubURL: hubURL, HubProjectID: hubProject.ID, ProjectName: d.SpokeProjectName, Token: token, Actor: actor,
@@ -288,10 +289,9 @@ func (c *Client) recoveryBase(d model.FederationEnrollDraft, hub CatalogEntry, h
 		command.ProjectName = hubProject.Name
 	}
 	if c.kind == model.DaemonRemote {
-		catalog, _ := ReadCatalog()
-		if active, ok := catalog.Entry(catalog.Active); ok {
-			command.SpokeAllowInsecure = active.AllowInsecure
-			command.SpokeToken, _ = active.Token()
+		if c.entry.Name != "" {
+			command.SpokeAllowInsecure = c.entry.AllowInsecure
+			command.SpokeToken, _ = c.entry.Token()
 		}
 		if command.SpokeToken == "" {
 			command.SpokeToken = strings.TrimSpace(os.Getenv("KATA_AUTH_TOKEN"))

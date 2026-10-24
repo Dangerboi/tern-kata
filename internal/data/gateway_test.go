@@ -413,19 +413,6 @@ func TestGatewayWritesBlockingAndRelatedLinksAcrossProjects(t *testing.T) {
 	if written := write(model.AddBlockerAction, first, short(workspace, first)); written.Err == nil {
 		t.Fatal("a link from an Issue to itself was accepted")
 	}
-
-	removed := as[model.LinkRemoved](t, run(t, gateway, model.RemoveLinkCmd{Workspace: workspace, UID: first, ProjectID: demo.ID, Actor: "tester", LinkID: related.ID}))
-	if removed.Err != nil || removed.UID != first || removed.LinkID != related.ID {
-		t.Fatalf("remove %+v", removed)
-	}
-	for _, l := range linksOf(first) {
-		if l.ID == related.ID {
-			t.Fatalf("link %d still present: %+v", related.ID, linksOf(first))
-		}
-	}
-	if len(linksOf(first)) != 1 {
-		t.Fatalf("removing one link changed the others: %+v", linksOf(first))
-	}
 }
 
 func TestGatewayClaimsAnIssueForATimedAssignment(t *testing.T) {
@@ -685,7 +672,6 @@ func TestGatewayFailureShapePerCommand(t *testing.T) {
 		{model.ChangeRecurrenceCmd{UID: "u"}, model.RecurrenceResultMsg{UID: "u", Err: boom}},
 		{model.StopRecurrenceCmd{UID: "u"}, model.RecurrenceResultMsg{UID: "u", Err: boom}},
 		{model.WriteField{UID: "u"}, model.FieldWritten{UID: "u", Err: boom}},
-		{model.RemoveLinkCmd{UID: "u", LinkID: 4}, model.LinkRemoved{UID: "u", LinkID: 4, Err: boom}},
 		{model.LoadFieldLabels{UID: "u"}, model.FieldLabelsLoaded{UID: "u", Err: boom}},
 		{model.CreateProject{}, model.ProjectSaved{Err: boom}},
 		{model.BindProject{}, model.ProjectSaved{Err: boom}},

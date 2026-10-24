@@ -14,19 +14,21 @@ import (
 // shortcut: kata's client cannot connect to a catalog entry by name, so the Locator below builds the connection from the entry itself (a remote one) or from `kata daemon locate` (a local one); delete it once pkg/client does.
 
 // LocateEntry is the Locator for one entry of the daemon catalog, whatever workspace is asked for.
-// A remote entry connects with its url and the token its token_env variable holds, honouring allow_insecure.
+// Every entry connects with the token it carries (inline, or what its token_env variable holds) and its allow_insecure, as kata's
+// own --daemon resolution does. A remote entry connects at its url.
 // A local entry is found with `kata --daemon <name> daemon locate --json`, which never starts a daemon,
 // and connected at the address it prints.
 func LocateEntry(entry CatalogEntry) Locator {
 	return func(ctx context.Context, _ string) (Target, error) {
-		if entry.Local {
-			return locateLocalEntry(ctx, entry)
-		}
 		token, err := entry.Token()
 		if err != nil {
 			return Target{}, err
 		}
-		c, err := client.NewForTarget(ctx, entry.URL, client.TargetAuth{Token: token, AllowInsecure: entry.AllowInsecure})
+		auth := client.TargetAuth{Token: token, AllowInsecure: entry.AllowInsecure}
+		if entry.Local {
+			return locateLocalEntry(ctx, entry, auth)
+		}
+		c, err := client.NewForTarget(ctx, entry.URL, auth)
 		if err != nil {
 			return Target{}, fmt.Errorf("daemon %q: %w", entry.Name, err)
 		}
@@ -34,7 +36,7 @@ func LocateEntry(entry CatalogEntry) Locator {
 	}
 }
 
-func locateLocalEntry(ctx context.Context, entry CatalogEntry) (Target, error) {
+func locateLocalEntry(ctx context.Context, entry CatalogEntry, auth client.TargetAuth) (Target, error) {
 	raw, err := exec.CommandContext(ctx, "kata", "--daemon", entry.Name, "daemon", "locate", "--json").Output()
 	if err != nil {
 		var exit *exec.ExitError
@@ -69,7 +71,7 @@ func locateLocalEntry(ctx context.Context, entry CatalogEntry) (Target, error) {
 			base = "http://" + base
 		}
 	}
-	c, err := client.NewForTarget(ctx, base, client.TargetAuth{})
+	c, err := client.NewForTarget(ctx, base, auth)
 	if err != nil {
 		return Target{}, fmt.Errorf("daemon %q: %w", entry.Name, err)
 	}

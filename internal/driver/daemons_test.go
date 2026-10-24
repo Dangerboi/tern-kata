@@ -228,3 +228,43 @@ func TestASwitchStillOutWhenThePageIsLeftStillChangesTheConnection(t *testing.T)
 		t.Errorf("the answer after leaving gave %#v, daemon %+v", done.Cmds, done.State.Model.Daemon)
 	}
 }
+
+// A switch ends every card the old connection owned: a confirmation opened while the switch was out must not act on the new daemon.
+func TestASuccessfulSwitchClosesEveryCardOfTheOldConnection(t *testing.T) {
+	for card, open := range cardOpeners() {
+		if card == model.CardWorker {
+			continue // the machine's worker is not part of the daemon connection
+		}
+		s := open(t)
+		out := step(t, s, model.DaemonSwitched{Name: "home", Daemon: model.Daemon{Name: "home"}})
+		if got := out.State.Model.TopCard(); got != model.NoCard {
+			t.Errorf("a switch left the %q card open", got.Name())
+		}
+	}
+}
+
+func TestARevokeConfirmedAfterASwitchRevokesNothing(t *testing.T) {
+	s := step(t, tokenList(t), key("x")).State
+	s = step(t, s, model.DaemonSwitched{Name: "home", Daemon: model.Daemon{Name: "home"}}).State
+	for _, chord := range []string{"y", "enter"} {
+		for _, cmd := range step(t, s, key(chord)).Cmds {
+			if revoke, ok := cmd.(model.RevokeTokenCmd); ok {
+				t.Fatalf("%s sent %#v on the new daemon", chord, revoke)
+			}
+		}
+	}
+}
+
+func TestASuccessfulSwitchDropsTheDraftsAndSaysSo(t *testing.T) {
+	s := feed(t, onAlphaDetail(t), key("c"), key("a")).State
+	if len(s.Model.Drafts) != 1 {
+		t.Fatalf("fixture: %d drafts held", len(s.Model.Drafts))
+	}
+	m := step(t, s, model.DaemonSwitched{Name: "home", Daemon: model.Daemon{Name: "home"}}).State.Model
+	if len(m.Drafts) != 0 {
+		t.Errorf("%d drafts survived the switch", len(m.Drafts))
+	}
+	if !strings.Contains(m.Notice, "1 unsent draft dropped") {
+		t.Errorf("notice %q, want it to say the draft was dropped", m.Notice)
+	}
+}

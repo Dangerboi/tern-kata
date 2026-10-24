@@ -317,6 +317,26 @@ func workflowsBack(m Model) (Model, []Cmd) {
 	return drillOut(m)
 }
 
+// backWithoutMenu is backspace on a surface where esc opens the Menu: it goes back across Projects when esc would, and otherwise
+// does nothing, as kata tui binds backspace to going back and never to the Menu.
+func backWithoutMenu(m Model) (Model, []Cmd) {
+	if m.Focus == ColumnList {
+		if back, cmds, ok := m.backAcross(); ok {
+			return back, cmds
+		}
+	}
+	return m, nil
+}
+
+// workflowsBackspace is backspace on the Page: it closes the inspector, and with none open goes back across Projects when esc would.
+func workflowsBackspace(m Model) (Model, []Cmd) {
+	if m.Workflows.Inspecting {
+		m.Workflows.Inspecting = false
+		return m, nil
+	}
+	return backWithoutMenu(m)
+}
+
 func toggleArchivedWorkflows(m Model) Model {
 	row := m.selectedRow()
 	m.Workflows.ShowArchived = !m.Workflows.ShowArchived
@@ -612,6 +632,7 @@ func workflowActions() []actionEntry {
 		{action: RestoreWorkflowAction, modes: workflowModes, keys: keys("r", "r"), help: "restore", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 7, "restore"}}, handle: changeWorkflowState(true)},
 		{action: ToggleArchivedWorkflows, modes: workflowModes, keys: keys("a", "a"), help: "archived", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 8, "show or hide archived workflows"}}, handle: pure(toggleArchivedWorkflows)},
 		{action: DrillOut, modes: workflowModes, keys: keys("escape", "esc"), help: "back", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 9, "close the steps, or go to the Menu"}}, handle: workflowsBack},
+		{action: DrillOut, modes: workflowModes, keys: keys("backspace", "⌫"), help: "back", handle: workflowsBackspace},
 	}
 }
 

@@ -140,7 +140,7 @@ func TestLanesCardHintListsLabelsThatAreNotLanesYet(t *testing.T) {
 
 func TestLanesCardLetsNoGlobalChordThrough(t *testing.T) {
 	s := lanesCard(t)
-	for _, chord := range []string{"ctrl+c", "?", "q"} {
+	for _, chord := range []string{"?", "q"} {
 		out := step(t, s, key(chord))
 		if out.State.Model.Quitting || out.State.Model.HelpOpen || out.State.Model.TopCard() != model.CardLanes {
 			t.Errorf("%s: quitting=%v help=%v card=%v", chord, out.State.Model.Quitting, out.State.Model.HelpOpen, out.State.Model.TopCard())

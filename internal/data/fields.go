@@ -116,19 +116,13 @@ func (c *Client) WriteFieldRecorded(ctx context.Context, cmd model.WriteField) (
 	return done(res, ambiguousWrite(e), func(entry *model.UndoEntry) { entry.Label = cmd.Value }), daemonError(e)
 }
 
-// removeLink is RemoveLink with kata's own error and answer.
-func (c *Client) removeLink(ctx context.Context, cmd model.RemoveLinkCmd) (issueWrite, error) {
-	r, e := c.DeleteLinkWithResponse(ctx, &g.DeleteLinkRequestOptions{PathParams: &g.DeleteLinkPath{ProjectID: cmd.ProjectID, Ref: cmd.UID, LinkID: cmd.LinkID}, Query: &g.DeleteLinkQuery{Actor: cmd.Actor}})
+// removeLink deletes the link with the id from the Issue, with kata's own error and answer.
+func (c *Client) removeLink(ctx context.Context, projectID int64, uid, actor string, linkID int64) (issueWrite, error) {
+	r, e := c.DeleteLinkWithResponse(ctx, &g.DeleteLinkRequestOptions{PathParams: &g.DeleteLinkPath{ProjectID: projectID, Ref: uid, LinkID: linkID}, Query: &g.DeleteLinkQuery{Actor: actor}})
 	if e != nil {
 		return issueWrite{}, e
 	}
 	return written(r.JSON200.Changed, r.JSON200.Issue, nil), nil
-}
-
-// RemoveLink deletes the link with the id from the Issue it is on.
-func (c *Client) RemoveLink(ctx context.Context, cmd model.RemoveLinkCmd) error {
-	_, e := c.removeLink(ctx, cmd)
-	return daemonError(e)
 }
 
 // move adds the label to add, then removes each label to remove, and stops at the first failure. It returns the labels it

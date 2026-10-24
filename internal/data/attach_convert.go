@@ -189,19 +189,20 @@ func safeFileName(name string) bool {
 	return name != "" && name != "." && name != ".." && !strings.ContainsAny(name, `/\:`)
 }
 
-// startPointerMove runs the conversion for a Pane's workspace in the background, once per Gateway and workspace, so the Pane
-// draws without waiting for it; its Issues refresh as kata's events arrive.
+// startPointerMove runs the conversion for a Pane's workspace in the background, once per Gateway connection and workspace, so
+// the Pane draws without waiting for it; its Issues refresh as kata's events arrive. The pass belongs to the connection in use: a
+// daemon switch ends it before the new connection is installed.
 func (g *Gateway) startPointerMove(workspace, actor string) {
 	g.startMu.Lock()
+	defer g.startMu.Unlock()
 	if g.convertStarted[workspace] {
-		g.startMu.Unlock()
 		return
 	}
 	g.convertStarted[workspace] = true
-	g.startMu.Unlock()
 	g.background.Add(1)
+	ctx := g.connCtx
 	go func() {
 		defer g.background.Done()
-		g.convertPointers(g.backgroundCtx, workspace, actor)
+		g.convertPointers(ctx, workspace, actor)
 	}()
 }

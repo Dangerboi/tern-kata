@@ -206,3 +206,11 @@ func inSidebar(s driver.State) driver.State {
 	s.Model.Focus = model.ColumnCollections
 	return s
 }
+
+func TestCtrlCQuitsAtOnceFromEveryCard(t *testing.T) {
+	for card, open := range cardOpeners() {
+		if !driver.Step(open(t), key("ctrl+c"), now).Quit {
+			t.Errorf("ctrl+c did not quit while the %q card was open", card.Name())
+		}
+	}
+}
