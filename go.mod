@@ -5,8 +5,8 @@ go 1.27.3
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/doordash-oss/oapi-codegen-dd/v3 v3.75.5
+	github.com/netresearch/go-cron v0.16.1
 	github.com/oklog/ulid/v2 v2.1.2
-	github.com/robfig/cron/v3 v3.0.1
 	github.com/stencil-hq/tern-sdk/go/tern v0.1.0
 	go.kenn.io/kata v0.20.0
 	go.kenn.io/kit v0.42.0
@@ -54,7 +54,6 @@ require (
 	github.com/mattn/go-runewidth v0.0.31 // indirect
 	github.com/mattn/go-sqlite3 v1.14.52 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
-	github.com/netresearch/go-cron v0.16.1 // indirect
 	github.com/posthog/posthog-go v1.35.1 // indirect
 	github.com/power-devops/perfstat v0.0.0-20260805114148-88456608a4f6 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect

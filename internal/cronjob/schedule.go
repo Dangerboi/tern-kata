@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/robfig/cron/v3"
+	"github.com/netresearch/go-cron"
 )
 
 // MaxIntervalSeconds is the longest interval kata accepts, which a Duration holds without wrapping.
@@ -19,8 +19,8 @@ const HighRatePerDay = 24
 // maxPerWeek stops counting a week's occurrences: a count beyond it only needs to read as large.
 const maxPerWeek = 100_000
 
-// parser is kata's own: five fields and descriptors, never seconds, so an expression parses here as it does there.
-var parser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+// parser is kata's own: five fields, descriptors and crontab's either-day rule, never seconds, so an expression parses here as it does there.
+var parser = cron.MustNewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor | cron.DowOrDom)
 
 // Step is an interval's period; false when it is not positive or longer than kata accepts.
 func Step(seconds int64) (time.Duration, bool) {

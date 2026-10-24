@@ -197,6 +197,25 @@ func TestACronJobRunsInItsTriggerZoneAndEveryIsAnAnchoredInterval(t *testing.T) 
 	}
 }
 
+func TestAnAdapterJobWrittenWithSundayAsSevenFiresAtTheNextSundayNine(t *testing.T) {
+	h := newHarness(t)
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "weekly", Prompt: "Do it.", Trigger: cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 9 * * 7", Timezone: "UTC"}})
+	r := h.start(worker.Hooks{})
+	h.scheduled(r, 1)
+
+	now := h.clock.Now().UTC()
+	want := time.Date(now.Year(), now.Month(), now.Day(), 9, 0, 0, 0, time.UTC)
+	for want.Weekday() != time.Sunday || !want.After(now) {
+		want = want.AddDate(0, 0, 1)
+	}
+	if got := h.fire(r, time.Time{}); !got.Equal(want) {
+		t.Fatalf("next run %s, want the next Sunday 09:00 UTC, %s", got, want)
+	}
+	if got := h.waitRuns(job, 1)[0].OccurrenceKey; got != worker.OccurrenceKey(want) {
+		t.Fatalf("run %s, want %s", got, worker.OccurrenceKey(want))
+	}
+}
+
 func TestAOnceJobRunsOnceAndAManualJobOnlyOnRequest(t *testing.T) {
 	h := newHarness(t)
 	at := h.clock.Now().Add(90 * time.Minute).Truncate(time.Second)
