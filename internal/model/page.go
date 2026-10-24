@@ -24,6 +24,8 @@ const (
 	PageWorkflows
 	// PageAttention is the Attention requests addressed to the Pane's Inbox address, across every Project; its state is Model.Attention.
 	PageAttention
+	// PageCredentials is the Lettered Page of the daemon's API tokens; its state is Model.Credentials.
+	PageCredentials
 )
 
 // SecondColumn says what a Page's second column is. A Page declares it in pageDefs, and the one leave rule reads it.
@@ -55,6 +57,8 @@ const (
 	ListNodeWorkflows
 	// ListNodeAttention is the Attention Page's list node.
 	ListNodeAttention
+	// ListNodeCredentials is the Credentials Page's list node.
+	ListNodeCredentials
 )
 
 // ListNode is the current Page's list node.
@@ -62,9 +66,13 @@ func (m Model) ListNode() ListNode { return pageDefs[m.Page].list }
 
 type pageDef struct {
 	page Page
-	// id names the Page bar's node; label is what it reads; chord is the key, which a click on the label sends too.
-	id, label, chord string
-	action           Action
+	// id names the Page bar's node; label is what it reads; chord is the key as the Page bar and help sheet word it, which a click
+	// on the label sends too (press, when set, is the Tern chord that stands for it: "shift+c" for C).
+	id, label, chord, press string
+	// lettered marks a Lettered Page: it has a letter for its chord and no number, is listed in the Menu, and is drawn in the Page
+	// bar only while shown. It does not act on the Pane's Project and has no reset rule. Its back key returns to the Page shown before.
+	lettered bool
+	action   Action
 	// second is what the Page's second column is; leavePage reads it.
 	second SecondColumn
 	// needs is the Page as the notice words it when the Pane has no Project; "" for the Issues Page, which needs none.
@@ -171,6 +179,10 @@ func init() {
 			mode: func(Model) Mode { return ModeAttention }, update: updateAttention, list: ListNodeAttention,
 			moves:  pageMoves{mode: ModeAttention, noun: "request", move: moveAttention, sheet: [6]sheetLine{{sheetAttention, 1, "next request"}, {sheetAttention, 2, "previous request"}}},
 			keymap: []keySegment{movementKeys, rowsOf(attentionRows)}},
+		{page: PageCredentials, id: "credentials", label: "Credentials", chord: "C", press: "shift+c", lettered: true, action: ShowCredentialsPage, second: SecondInspector, enter: enterCredentials, clear: clearCredentials,
+			mode: credentialsMode, update: updateCredentials, list: ListNodeCredentials,
+			moves:  pageMoves{mode: ModeCredentials, noun: "credential", move: moveCredential, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
+			keymap: []keySegment{movementKeys, rowsOf(credentialsRows)}},
 	}
 	buildKeymap()
 }
@@ -275,19 +287,30 @@ func pageScrollActions(def pageDef) []actionEntry {
 }
 
 // pageModes are the modes where the Page keys work: wherever the main surface has the keyboard and no text is being typed.
-var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollections, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention}
+var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollections, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention, ModeCredentials}
 
-// PageBarEntry is one entry of the Page bar.
+// PageBarEntry is one entry of the Page bar. Press is the chord a click on it sends.
 type PageBarEntry struct {
-	ID, Label, Chord string
-	Current          bool
+	ID, Label, Chord, Press string
+	Current                 bool
 }
 
-// PageBar is the Page bar's entries, left to right.
+// pressed is the Tern chord that stands for the Page's key.
+func (def pageDef) pressed() string {
+	if def.press != "" {
+		return def.press
+	}
+	return def.chord
+}
+
+// PageBar is the Page bar's entries, left to right: every numbered Page, and a Lettered Page only while it is shown.
 func (m Model) PageBar() []PageBarEntry {
-	entries := make([]PageBarEntry, len(pageDefs))
-	for i, def := range pageDefs {
-		entries[i] = PageBarEntry{ID: def.id, Label: def.label, Chord: def.chord, Current: def.page == m.Page}
+	entries := make([]PageBarEntry, 0, len(pageDefs))
+	for _, def := range pageDefs {
+		if def.lettered && def.page != m.Page {
+			continue
+		}
+		entries = append(entries, PageBarEntry{ID: def.id, Label: def.label, Chord: def.chord, Press: def.pressed(), Current: def.page == m.Page})
 	}
 	return entries
 }
@@ -311,12 +334,25 @@ func showPage(target Page) func(Model) (Model, []Cmd) {
 }
 
 // switchPage is the one way onto a Page, the Issues Page included. It leaves the current Page, and for a Page that acts on the
-// Pane's Project (one that names what it needs) it then resolves the Project (see enterProjectPage), makes the Page current with
-// the detail column's hidden flag remembered, the column hidden and focus on the list, and runs the Page's own enter. With no
-// Project it stops on the Issues Page with the Menu's Projects open.
+// Pane's Project it then resolves the Project (see enterProjectPage), makes the Page current with the detail column's hidden
+// flag remembered, the column hidden and focus on the list, and runs the Page's own enter. With no Project it stops on the Issues
+// Page with the Menu's Projects open. A Lettered Page acts on no Project: it remembers the Page it was opened from, which stays
+// the one to return to when another Lettered Page replaces it.
 func switchPage(m Model, target Page) (Model, []Cmd) {
+	from := m.Page
+	if pageDefs[from].lettered {
+		from = m.letteredFrom
+	}
 	m = m.leavePage()
 	def := pageDefs[target]
+	if def.lettered {
+		m.letteredFrom = from
+		m.Page = target
+		m.pageDetailHidden = m.DetailHidden()
+		m.hidden = true
+		m.Focus = ColumnList
+		return def.enter(m)
+	}
 	if def.enter == nil {
 		return m, nil
 	}
@@ -366,7 +402,7 @@ func (m Model) leavePage() Model {
 func pageActions() []actionEntry {
 	entries := make([]actionEntry, len(pageDefs))
 	for i, def := range pageDefs {
-		entries[i] = actionEntry{action: def.action, modes: pageModes, keys: keys(def.chord, def.chord), help: def.label + " page",
+		entries[i] = actionEntry{action: def.action, modes: pageModes, keys: keys(def.pressed(), def.chord), help: def.label + " page",
 			sheet: []sheetLine{{sheetGlobal, 7, "switch Page"}}, handle: showPage(def.page)}
 	}
 	return entries

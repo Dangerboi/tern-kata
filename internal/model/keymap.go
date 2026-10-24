@@ -87,6 +87,9 @@ const (
 	ShowAttentionPage       Action = "show-attention-page"
 	OpenAttentionRequest    Action = "open-attention-request"
 	ReloadAttention         Action = "reload-attention"
+	ShowCredentialsPage     Action = "show-credentials-page"
+	RefreshCredentials      Action = "refresh-credentials"
+	LetteredBack            Action = "lettered-back"
 )
 
 // Binding is one chord in one mode, as the lookup, the footer and the help sheet read it. A binding of
@@ -137,6 +140,7 @@ const (
 	ModeRunInspector  Mode = "run-inspector"
 	ModeWorkflows     Mode = "workflows"
 	ModeAttention     Mode = "attention"
+	ModeCredentials   Mode = "credentials"
 )
 
 // cardBindings are the keys of the Popup cards. Each card's handler reads them by mode; the

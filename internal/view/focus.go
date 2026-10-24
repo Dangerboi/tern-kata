@@ -19,6 +19,12 @@ var listNodes = map[model.ListNode]struct {
 		return JobID(m.Jobs.Selected)
 	}},
 	model.ListNodeWorkflows: {WorkflowListID, func(m model.Model) string { return "" }},
+	model.ListNodeCredentials: {CredentialListID, func(m model.Model) string {
+		if c := m.SelectedCredential(); c != nil {
+			return CredentialID(c.ID)
+		}
+		return ""
+	}},
 	model.ListNodeRuns: {RunListID, func(m model.Model) string {
 		if m.Runs.Selected == "" {
 			return ""
