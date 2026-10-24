@@ -9,19 +9,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// WorkerID is the Worker card's node.
-const WorkerID = "layer.worker"
-
-// WorkerFieldID is the id of the Worker card's field called name.
-func WorkerFieldID(name model.Field) string { return WorkerID + "." + string(name) }
-
-var workerPlaceholders = map[model.Field]string{
-	model.WorkerFieldActor:    "who the runs are attributed to",
-	model.WorkerFieldCommand:  "omp",
-	model.WorkerFieldModel:    "blank: the agent's own default",
-	model.WorkerFieldThinking: "blank: the agent's own default",
-}
-
 // workerLayer is the Worker card: the facts about this machine's worker, then what the machine still needs, as fields to fill in and a
 // save, or the question how to restart the running worker once a save has been made.
 func workerLayer(m model.Model) tern.Element {
@@ -81,7 +68,7 @@ func workerLayer(m model.Model) tern.Element {
 		children = append(children, line("error", ui.ToneError, f.Err.Error()))
 	}
 	children = append(children, gap("gap-actions"), workerActions(m))
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "worker"}, Head: ui.T("Worker"), Modal: true, Size: ui.SizeLG, Children: children})
+	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardWorker)}, Head: ui.T("Worker"), Modal: true, Size: ui.SizeLG, Children: children})
 }
 
 // workerFields are the card's inputs: the setup fields when worker.toml is to be made, the checkout and the trust note, and the trust choice.
@@ -102,7 +89,7 @@ func workerFields(m model.Model) []tern.Element {
 			text := f.Value(spec.Name)
 			children = append(children,
 				ui.Text{Common: ui.Common{Key: string(spec.Name) + "-label", Tone: tone(spec.Name)}, Text: model.WorkerPrompt(spec.Name)},
-				ui.Input{Common: ui.Common{Key: string(spec.Name), Tone: tone(spec.Name), Aria: model.WorkerPrompt(spec.Name)}, Field: ui.Field{Text: text, Cursor: caretAt(f.Caret, spec.Name, text), Mode: "insert", Placeholder: workerPlaceholders[spec.Name], Readonly: f.Saving}})
+				ui.Input{Common: ui.Common{Key: string(spec.Name), Tone: tone(spec.Name), Aria: model.WorkerPrompt(spec.Name)}, Field: ui.Field{Text: text, Cursor: caretAt(f.Caret, spec.Name, text), Mode: "insert", Placeholder: model.WorkerHint(spec.Name), Readonly: f.Saving}})
 		}
 	}
 	verb := "Set up lists"

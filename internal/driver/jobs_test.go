@@ -77,7 +77,7 @@ func askedJobs(cmds []model.Cmd) (model.LoadJobs, bool) {
 // jobCardText is everything the Jobs Page draws under the card of uid.
 func jobCardText(t *testing.T, s driver.State, uid string) string {
 	t.Helper()
-	id := view.JobID(uid)
+	id := jobRow(t, s.Model, uid)
 	var text string
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
 		if n.ID == id || strings.HasPrefix(n.ID, id+".") {
@@ -218,7 +218,7 @@ func TestJobsPageArchivedToggleHidesAndShowsArchivedJobs(t *testing.T) {
 	on := feed(t, s, key("a"))
 	load, _ := askedJobs(on.Cmds)
 	s = step(t, on.State, model.JobsLoaded{Request: load.Request, Jobs: []model.CronJob{promptJob("J1", "Live"), retired}}).State
-	if !drawnIDs(t, view.Render(s.Model, now))[view.JobID("J2")] {
+	if !namedRowDrawn(t, s.Model, view.JobListID, "Retired") {
 		t.Fatal("the archived job is not drawn after the toggle")
 	}
 	off := step(t, s, key("a"))
@@ -227,7 +227,7 @@ func TestJobsPageArchivedToggleHidesAndShowsArchivedJobs(t *testing.T) {
 		t.Fatalf("a again asks for %#v, want a read without the archived", off.Cmds)
 	}
 	s = step(t, off.State, model.JobsLoaded{Request: load.Request, Jobs: []model.CronJob{promptJob("J1", "Live")}}).State
-	if drawnIDs(t, view.Render(s.Model, now))[view.JobID("J2")] {
+	if namedRowDrawn(t, s.Model, view.JobListID, "Retired") {
 		t.Error("the archived job is still drawn after the toggle is off")
 	}
 }
@@ -246,7 +246,7 @@ func TestJobsPageInspectorShowsTheSelectedJobsDefinitionAndParent(t *testing.T) 
 	}
 
 	// A click on a card selects it too.
-	s = step(t, s, click(view.JobID("J1"), view.JobClick("J1"))).State
+	s = step(t, s, click(jobRow(t, s.Model, "J1"), view.JobClick("J1"))).State
 	wantText(t, "inspector after a click", inspectorText(t, s), "Weekly")
 }
 
@@ -256,7 +256,7 @@ func TestJobsPageSelectionMovesWithTheKeysAndIsRevealed(t *testing.T) {
 	if out.State.Model.Jobs.Selected != "J2" {
 		t.Fatalf("selected %q after j, want J2", out.State.Model.Jobs.Selected)
 	}
-	wantOps(t, out, tern.OpReveal(view.JobID("J2"), "nearest"))
+	wantOps(t, out, tern.OpReveal(jobRow(t, out.State.Model, "J2"), "nearest"))
 	if got := feed(t, out.State, tern.Key{Name: "g", Shift: true}).State.Model.Jobs.Selected; got != "J3" {
 		t.Errorf("G selects %q, want J3", got)
 	}
@@ -304,13 +304,15 @@ func TestEnterOnAnAdapterJobsInspectorOpensNothingAndADeletedParentSaysSo(t *tes
 func TestJobsPageNarrowShowsTheListThenTheInspector(t *testing.T) {
 	s := jobsPane(t, 100, nativeJob("J1", "Weekly", jobParent("open", false)))
 	ids := drawnIDs(t, view.Render(s.Model, now))
-	if !ids[view.JobID("J1")] || ids[view.DetailID] {
-		t.Fatalf("narrow list draws the card %v and the inspector %v, want the card only", ids[view.JobID("J1")], ids[view.DetailID])
+	card := namedRowDrawn(t, s.Model, view.JobListID, "Weekly")
+	if !card || ids[view.DetailID] {
+		t.Fatalf("narrow list draws the card %v and the inspector %v, want the card only", card, ids[view.DetailID])
 	}
 	s = feed(t, s, key("enter")).State
 	ids = drawnIDs(t, view.Render(s.Model, now))
-	if ids[view.JobID("J1")] || !ids[view.DetailID] {
-		t.Fatalf("narrow inspector draws the card %v and the inspector %v, want the inspector only", ids[view.JobID("J1")], ids[view.DetailID])
+	card = namedRowDrawn(t, s.Model, view.JobListID, "Weekly")
+	if card || !ids[view.DetailID] {
+		t.Fatalf("narrow inspector draws the card %v and the inspector %v, want the inspector only", card, ids[view.DetailID])
 	}
 }
 
@@ -369,7 +371,7 @@ func TestJobsPageRowsShowTheLatestRunOrChildAndTheInspectorTheRecentOnes(t *test
 		t.Fatalf("the Jobs Page asked %#v, want the jobs read with what each has done lately", out.Cmds)
 	}
 	failed := finishedRun("R2")
-	failed.Status, failed.Message = model.RunFailed, "step build failed"
+	failed.Status, failed.Summary = cronjob.RunFailed, "step build failed"
 	older := finishedRun("R1")
 	load, _ := askedJobs(out.Cmds)
 	s := step(t, out.State, model.JobsLoaded{Request: load.Request,

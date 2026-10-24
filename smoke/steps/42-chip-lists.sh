@@ -24,7 +24,7 @@ expect_tree "[data-id='layer.create']" '.count == 0'
 ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 ctl type '"inb"'
-expect_tree "[data-id='layer.collections.filter']" '.nodes[0].text | contains("inb")'
+expect_tree "[data-id='layer.collections.input']" '.nodes[0].text | contains("inb")'
 expect_tree ".sf-ed-mode" '.ok and .count == 0'
 ctl key esc
 expect_tree "[data-id='layer.collections']" '.count == 0'

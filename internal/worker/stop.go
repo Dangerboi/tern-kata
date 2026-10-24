@@ -49,39 +49,25 @@ func (w *Worker) isStopping() bool {
 	return w.stopping != ""
 }
 
-// inFlightLocked counts the runs a goroutine is driving, the slots reserved for runs not yet bound to one, the
-// accepted, non-held runs a transient kata failure left owing reports or settlement, and the journals of the last
-// worker that recovery has not yet handed on; a held run is none of these. mu is held.
+// flight is one Run's entry in the in-flight record: whether a goroutine drives it and whether its lifecycle says it
+// still owes a report or its settlement. An entry exists only while one of them holds.
+type flight struct{ driven, owes bool }
+
+// inFlightLocked counts the Runs in the in-flight record plus the slots reserved for Runs not yet bound to a uid. A
+// held Run owes nothing, so it is counted only while a goroutine drives it. The stop answer and `worker status` both
+// report this number. mu is held.
 func (w *Worker) inFlightLocked() int {
-	n := 0
+	n := len(w.flight)
 	for _, ps := range w.projects {
-		n += len(ps.running) + ps.pending
-		for uid := range ps.owing {
-			if !ps.running[uid] {
-				n++
-			}
-		}
-	}
-	for uid := range w.owed {
-		if !w.drivenLocked(uid) {
-			n++
-		}
+		n += ps.pending
 	}
 	return n
 }
 
-func (w *Worker) drivenLocked(uid string) bool {
-	for _, ps := range w.projects {
-		if ps.running[uid] || ps.owing[uid] {
-			return true
-		}
-	}
-	return false
-}
-
-// noteOwed records the unsettled, non-held journals of this executor in the Projects this worker serves, before the
-// control socket opens: until recovery hands each to spawn or settles it, an idle stop waits for it.
-func (w *Worker) noteOwed() {
+// seedFlight records the Runs the last worker owed: the Journals of this executor in the Projects this worker serves
+// that the lifecycle says still owe. It runs before the control socket opens, so an idle stop asked at once waits for
+// them until recovery hands each on.
+func (w *Worker) seedFlight() {
 	journals, _, err := w.store.Scan()
 	if err != nil {
 		return
@@ -95,19 +81,42 @@ func (w *Worker) noteOwed() {
 		if !slices.ContainsFunc(w.projects, func(ps *projectState) bool { return ps.cfg.Name == j.ProjectName }) {
 			continue
 		}
-		if w.owed == nil {
-			w.owed = map[string]bool{}
+		if w.flight == nil {
+			w.flight = map[string]flight{}
 		}
-		w.owed[j.RunUID] = true
+		w.flight[j.RunUID] = flight{owes: true}
 	}
 }
 
-// handedOn drops uid from the journals noted at start: recovery has handed it on or it is settled.
-func (w *Worker) handedOn(uid string) {
+// updateFlight applies change to uid's entry, drops the entry when neither a goroutine nor the lifecycle holds it,
+// and asks the drain whether it is done.
+func (w *Worker) updateFlight(uid string, change func(*flight)) {
 	w.mu.Lock()
-	delete(w.owed, uid)
+	f := w.flight[uid]
+	change(&f)
+	if f.driven || f.owes {
+		if w.flight == nil {
+			w.flight = map[string]flight{}
+		}
+		w.flight[uid] = f
+	} else {
+		delete(w.flight, uid)
+	}
 	w.mu.Unlock()
 	w.finishDrain()
+}
+
+// settleFlight clears uid's owing when the lifecycle says the Run no longer owes (settled or held since); it never
+// makes a Run owe, since only the start seed and a goroutine's end do that.
+func (w *Worker) settleFlight(uid string, owes bool) {
+	w.updateFlight(uid, func(f *flight) { f.owes = f.owes && owes })
+}
+
+// handedOn is where recovery has handed uid on: it spawned a goroutine, settled the Run or held it, so the Journal
+// decides whether the Run still owes.
+func (w *Worker) handedOn(uid string) {
+	j, err := w.store.Load(uid)
+	w.settleFlight(uid, err == nil && j.owes())
 }
 
 // finishDrain ends the worker once a stop is due: a stop now, or a drain with no run left in flight. The control

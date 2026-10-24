@@ -309,48 +309,22 @@ func (k *Kata) Jobs(ctx context.Context, projectID int64) ([]cronjob.Job, error)
 	return jobs, nil
 }
 
-// Run is a kata Run observation.
-type Run struct {
-	UID           string
-	Status        string
-	Revision      int64
-	JobUID        string
-	WorkflowUID   string
-	IssueUID      string
-	ExecutorLabel string
-	OccurrenceKey string
-	Summary       string
-	InputTokens   *int64
-	OutputTokens  *int64
-	StartedAt     *time.Time
-	EndedAt       *time.Time
-	// DefinitionEventUID and WorkflowEventUID are the definition versions the run was admitted under.
-	DefinitionEventUID string
-	WorkflowEventUID   string
-}
-
-func runOf(r g.CronRun) Run {
-	return Run{UID: r.UID, Status: r.Status, Revision: r.Revision, JobUID: cronjobclient.Str(r.JobUID), WorkflowUID: cronjobclient.Str(r.WorkflowUID), IssueUID: cronjobclient.Str(r.IssueUID),
-		ExecutorLabel: cronjobclient.Str(r.ExecutorLabel), OccurrenceKey: cronjobclient.Str(r.OccurrenceKey), Summary: cronjobclient.Str(r.Summary.Message), InputTokens: r.Summary.InputTokens, OutputTokens: r.Summary.OutputTokens, StartedAt: r.StartedAt, EndedAt: r.EndedAt,
-		DefinitionEventUID: cronjobclient.Str(r.DefinitionEventUID), WorkflowEventUID: cronjobclient.Str(r.WorkflowDefinitionEventUID)}
-}
-
 // ShowRun reads a Run; ErrNotFound means kata holds no evidence of it.
-func (k *Kata) ShowRun(ctx context.Context, projectID int64, uid string) (Run, error) {
+func (k *Kata) ShowRun(ctx context.Context, projectID int64, uid string) (cronjob.Run, error) {
 	r, err := call(ctx, k, true, func(ctx context.Context) (*g.ShowCronRunResp, error) {
 		return k.c.ShowCronRunWithResponse(ctx, &g.ShowCronRunRequestOptions{PathParams: &g.ShowCronRunPath{ProjectID: projectID, RunUID: uid}})
 	})
 	if err != nil {
-		return Run{}, apiError(err)
+		return cronjob.Run{}, apiError(err)
 	}
 	if r.JSON200 == nil {
-		return Run{}, errors.New("kata daemon returned no Run")
+		return cronjob.Run{}, errors.New("kata daemon returned no Run")
 	}
-	return runOf(r.JSON200.Run), nil
+	return cronjobclient.Run(r.JSON200.Run), nil
 }
 
 // Runs lists the newest runs of the Project (at most 100).
-func (k *Kata) Runs(ctx context.Context, projectID int64) ([]Run, error) {
+func (k *Kata) Runs(ctx context.Context, projectID int64) ([]cronjob.Run, error) {
 	limit := int64(100)
 	r, err := call(ctx, k, true, func(ctx context.Context) (*g.ListCronRunsResp, error) {
 		return k.c.ListCronRunsWithResponse(ctx, &g.ListCronRunsRequestOptions{PathParams: &g.ListCronRunsPath{ProjectID: projectID}, Query: &g.ListCronRunsQuery{Limit: &limit}})
@@ -361,9 +335,9 @@ func (k *Kata) Runs(ctx context.Context, projectID int64) ([]Run, error) {
 	if r.JSON200 == nil {
 		return nil, errors.New("kata daemon returned no Runs")
 	}
-	runs := make([]Run, len(r.JSON200.Runs))
+	runs := make([]cronjob.Run, len(r.JSON200.Runs))
 	for i, run := range r.JSON200.Runs {
-		runs[i] = runOf(run)
+		runs[i] = cronjobclient.Run(run)
 	}
 	return runs, nil
 }
@@ -374,24 +348,24 @@ type Observation struct {
 	RunUID             string
 	JobUID             string
 	DefinitionEventUID string
-	// WorkflowUID and WorkflowEventUID name the workflow a workflow job's run executes; both empty for a prompt job.
-	WorkflowUID      string
-	WorkflowEventUID string
-	OccurrenceKey    string
-	IssueUID         string
-	Executor         string
-	Actor            string
-	Status           string
-	Message          string
-	InputTokens      *int64
-	OutputTokens     *int64
-	StartedAt        time.Time
-	EndedAt          *time.Time
-	ExpectedRevision int64
+	// WorkflowUID and WorkflowDefinitionEventUID name the workflow a workflow job's run executes; both empty for a prompt job.
+	WorkflowUID                string
+	WorkflowDefinitionEventUID string
+	OccurrenceKey              string
+	IssueUID                   string
+	Executor                   string
+	Actor                      string
+	Status                     cronjob.RunStatus
+	Message                    string
+	InputTokens                *int64
+	OutputTokens               *int64
+	StartedAt                  time.Time
+	EndedAt                    *time.Time
+	ExpectedRevision           int64
 }
 
 // Observe sends an observation and returns the stored Run and whether kata replayed an identical one.
-func (k *Kata) Observe(ctx context.Context, projectID int64, o Observation) (Run, bool, error) {
+func (k *Kata) Observe(ctx context.Context, projectID int64, o Observation) (cronjob.Run, bool, error) {
 	msg := o.Message
 	body := &g.ObserveCronRunBody{
 		Actor: &o.Actor, JobUID: &o.JobUID, DefinitionEventUID: &o.DefinitionEventUID, OccurrenceKey: &o.OccurrenceKey,
@@ -400,18 +374,18 @@ func (k *Kata) Observe(ctx context.Context, projectID int64, o Observation) (Run
 		StartedAt: &o.StartedAt, EndedAt: o.EndedAt, ExpectedRevision: o.ExpectedRevision,
 	}
 	if o.WorkflowUID != "" {
-		body.WorkflowUID, body.WorkflowDefinitionEventUID = &o.WorkflowUID, &o.WorkflowEventUID
+		body.WorkflowUID, body.WorkflowDefinitionEventUID = &o.WorkflowUID, &o.WorkflowDefinitionEventUID
 	}
 	r, err := call(ctx, k, false, func(ctx context.Context) (*g.ObserveCronRunResp, error) {
 		return k.c.ObserveCronRunWithResponse(ctx, &g.ObserveCronRunRequestOptions{PathParams: &g.ObserveCronRunPath{ProjectID: projectID, RunUID: o.RunUID}, Body: body})
 	})
 	if err != nil {
-		return Run{}, false, apiError(err)
+		return cronjob.Run{}, false, apiError(err)
 	}
 	if r.JSON200 == nil {
-		return Run{}, false, errors.New("kata daemon returned no Run")
+		return cronjob.Run{}, false, errors.New("kata daemon returned no Run")
 	}
-	return runOf(r.JSON200.Run), r.JSON200.Replayed, nil
+	return cronjobclient.Run(r.JSON200.Run), r.JSON200.Replayed, nil
 }
 
 // Issue is the part of a kata Issue the worker reads.
@@ -632,28 +606,14 @@ func (k *Kata) Stream(ctx context.Context, projectID, after int64, opened func()
 	}
 }
 
-// WorkflowStep is one step of a kata workflow as the worker reads it. Options keeps the step's raw options so the
-// worker can refuse the keys it does not run (ADR-0008).
-type WorkflowStep struct {
-	Key     string
-	Kind    string // "prompt" or "command"
-	Command string
-	Prompt  string
-	After   []string
-	Retries int64
-	Options map[string]any
-}
-
-// Workflow is a kata workflow definition at one version.
+// Workflow is a kata workflow at one version: its identity and the definition the Worker validates and plans from. The
+// definition keeps each step's raw options so the Worker can refuse the keys it does not run (ADR-0008).
 type Workflow struct {
 	UID                string
 	Name               string
 	DefinitionEventUID string
 	Deleted            bool
-	Version            int64
-	About              string
-	Options            map[string]any
-	Steps              []WorkflowStep
+	cronjob.WorkflowDefinition
 }
 
 // Workflow reads one workflow of the Project.
@@ -668,12 +628,7 @@ func (k *Kata) Workflow(ctx context.Context, projectID int64, uid string) (Workf
 		return Workflow{}, errors.New("kata daemon returned no workflow")
 	}
 	w := r.JSON200.Workflow
-	d := w.Definition
-	out := Workflow{UID: w.UID, Name: w.Name, DefinitionEventUID: w.DefinitionEventUID, Deleted: w.DeletedAt != nil, Version: d.Version, About: cronjobclient.Str(d.About), Options: d.Options}
-	for _, s := range d.Steps {
-		out.Steps = append(out.Steps, WorkflowStep{Key: s.Key, Kind: s.Kind, Command: cronjobclient.Str(s.Command), Prompt: cronjobclient.Str(s.Prompt), After: s.After, Retries: cronjobclient.Int(s.Retries), Options: s.Options})
-	}
-	return out, nil
+	return Workflow{UID: w.UID, Name: w.Name, DefinitionEventUID: w.DefinitionEventUID, Deleted: w.DeletedAt != nil, WorkflowDefinition: cronjobclient.WorkflowDefinition(w.Definition)}, nil
 }
 
 // resetPosition is where kata says to resume after a reset frame: the payload's reset_after_id, else the frame's id.

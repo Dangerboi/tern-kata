@@ -134,10 +134,10 @@ func (w *Worker) Status() Status {
 func (w *Worker) runStatus(j *Journal) RunStatus {
 	r := runStatus(j)
 	if j.held() {
-		r.ResumeRefusal = w.life().mayResume(j)
+		r.ResumeRefusal = w.life(j).mayResume(j)
 		r.Resumable = r.ResumeRefusal == ""
 	}
-	r.Abandonable = w.life().mayAbandon(j) == "" // a running run can be asked to stop
+	r.Abandonable = w.life(j).mayAbandon(j) == "" // a running run can be asked to stop
 	return r
 }
 

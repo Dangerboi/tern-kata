@@ -42,14 +42,14 @@ func backfillLayer(m model.Model) tern.Element {
 		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: b.Err.Error()})
 	}
 	if b.Saving {
-		return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "backfill"}, Modal: true, Size: ui.SizeLG, Head: ui.T(head),
+		return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardBackfill)}, Modal: true, Size: ui.SizeLG, Head: ui.T(head),
 			Children: append(children, ui.Text{Common: ui.Common{Key: "pending", Tone: ui.TonePending}, Text: "Switching to latest…"})})
 	}
 	children = append(children, buttonRow(
 		cardButton("create", model.ModeBackfill, model.BackfillCreate, "Create them", false),
 		cardButton("latest", model.ModeBackfill, model.BackfillLatest, latest, true),
 		cardButton("cancel", model.ModeBackfill, model.BackfillCancel, "Cancel", false)))
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "backfill"}, Modal: true, Size: ui.SizeLG, Head: ui.T(head), Children: children})
+	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardBackfill)}, Modal: true, Size: ui.SizeLG, Head: ui.T(head), Children: children})
 }
 
 // missedIssues is how many child Issues a count of missed runs makes: "1 child Issue", "3 child Issues".

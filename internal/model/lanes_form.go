@@ -11,8 +11,6 @@ const (
 	ModeLanesForm Mode   = "lanes-form"
 	LanesSubmit   Action = "lanes-submit"
 	LanesCancel   Action = "lanes-cancel"
-	LanesNext     Action = "lanes-next"
-	LanesPrevious Action = "lanes-previous"
 )
 
 // The Lanes card's fields.
@@ -172,16 +170,12 @@ func updateLanesFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		}
 		form.Saving, form.Err = true, nil
 		return m.SaveLaneList(lanes, days, cards)
-	case bound && binding.Action == LanesNext:
-		cycleField(&m, 1)
-	case bound && binding.Action == LanesPrevious:
-		cycleField(&m, -1)
 	case bound && binding.Action == LanesCancel:
 		m.LanesForm = LanesFormState{}
 	default:
 		text := form.at(form.Field)
 		var edited bool
-		if *text, edited = editText(*text, &form.Caret, form.Field, binding, bound, msg); edited {
+		if *text, edited = editText(*text, &form.Caret, form.Field, bound, msg); edited {
 			form.Err = nil
 		}
 	}

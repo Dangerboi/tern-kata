@@ -27,43 +27,28 @@ func (w *Worker) noteHook(err error) {
 // spawn runs the journal's state machine in the background, once per run.
 func (w *Worker) spawn(ps *projectState, uid string) {
 	w.mu.Lock()
-	if ps.running[uid] || w.halted.Load() {
+	if w.flight[uid].driven || w.halted.Load() {
 		w.mu.Unlock()
 		return
 	}
-	if ps.running == nil {
-		ps.running = map[string]bool{}
+	f := w.flight[uid]
+	f.driven = true
+	if w.flight == nil {
+		w.flight = map[string]flight{}
 	}
-	ps.running[uid] = true
+	w.flight[uid] = f
 	w.mu.Unlock()
 	w.runs.Add(1)
 	go func() {
 		defer w.runs.Done()
 		err := w.advance(w.ctx, ps, uid)
-		owes := w.owesSettlement(uid)
-		w.mu.Lock()
-		delete(ps.running, uid)
-		if owes {
-			if ps.owing == nil {
-				ps.owing = map[string]bool{}
-			}
-			ps.owing[uid] = true
-		} else {
-			delete(ps.owing, uid)
-		}
-		w.mu.Unlock()
-		w.finishDrain()
+		j, lerr := w.store.Load(uid)
+		owes := lerr == nil && j.owes() // a transient kata failure stopped it: retryPending will drive it on
+		w.updateFlight(uid, func(f *flight) { f.driven, f.owes = false, owes })
 		if err != nil && w.ctx.Err() == nil && !w.halted.Load() {
 			w.opt.Log("run %s: %v", uid, err)
 		}
 	}()
-}
-
-// owesSettlement is whether an accepted run that is not held still has reports or its settlement to deliver: a
-// transient kata failure stopped it, and retryPending will drive it on. An idle drain waits for such a run.
-func (w *Worker) owesSettlement(uid string) bool {
-	j, err := w.store.Load(uid)
-	return err == nil && j.owes()
 }
 
 // retryPending resumes runs a transient kata failure left half-reported or half-admitted; the Project loop calls it at least every minute.
@@ -73,19 +58,14 @@ func (w *Worker) retryPending(ps *projectState) {
 		if j.ProjectUID != ps.project.UID || j.Executor != w.opt.Config.Executor {
 			continue
 		}
-		if !j.owes() {
-			w.mu.Lock()
-			delete(ps.owing, j.RunUID) // settled or held by another path since: nothing left to wait for
-			w.mu.Unlock()
-			w.finishDrain()
-		}
+		w.settleFlight(j.RunUID, j.owes()) // settled or held by another path since: nothing left to wait for
 		switch {
 		case j.driveStep() == driveAdmit && !w.holdsSlotOf(ps, j.RunUID):
 			// prepare saved this journal but has not bound its slot yet; RequestRun or the scheduler spawns it next
 		case j.retryable():
 			w.spawn(ps, j.RunUID)
-		case j.settled() && !w.life().occupiesSlot(j):
-			w.release(ps, j.RunUID) // a held run whose process has since gone no longer takes a slot
+		case j.settled():
+			w.syncSlot(ps, j) // a held run whose process has since gone no longer takes a slot
 		}
 	}
 }
@@ -96,8 +76,8 @@ func (w *Worker) advance(ctx context.Context, ps *projectState, uid string) (err
 	defer func() {
 		w.noteHook(err)
 		w.dropCancelSignal(uid)
-		if j, lerr := w.store.Load(uid); lerr == nil && !w.life().occupiesSlot(j) {
-			w.release(ps, uid)
+		if j, lerr := w.store.Load(uid); lerr == nil {
+			w.syncSlot(ps, j)
 		}
 		w.kick(ps) // a slot or an overlap gate may have opened: queued occurrences are due another look
 	}()
@@ -138,7 +118,7 @@ func (w *Worker) recoverRun(ctx context.Context, ps *projectState, uid string) {
 	if err != nil {
 		return
 	}
-	switch r := w.life().recover(j); r.Step {
+	switch r := w.life(j).recover(j); r.Step {
 	case recoverHold:
 		err = w.hold(j, r.Hold, r.Detail)
 	case recoverConcludeCancel:
@@ -157,9 +137,7 @@ func (w *Worker) recoverRun(ctx context.Context, ps *projectState, uid string) {
 // hold records an uncertain outcome: kata will get `unknown` with the reason first (ADR-0005).
 func (w *Worker) hold(j *Journal, reason, detail string) error {
 	_, err := w.store.Update(j.RunUID, "held", func(j *Journal) error {
-		j.Outcome = &Outcome{Status: StatusUnknown, Hold: reason, Summary: reason + ": " + detail, At: w.clock.Now().UTC()}
-		j.Phase = PhaseFinished
-		return nil
+		return j.hold(reason, detail, w.clock.Now().UTC())
 	})
 	return err
 }
@@ -167,9 +145,7 @@ func (w *Worker) hold(j *Journal, reason, detail string) error {
 // preAdmissionHold ends a run before kata saw it: no observation, no Issue write, slot and gate released (ADR-0005).
 func (w *Worker) preAdmissionHold(j *Journal, reason, detail string) error {
 	_, err := w.store.Update(j.RunUID, "held-before-admission", func(j *Journal) error {
-		j.Outcome = &Outcome{Hold: reason, Summary: reason + ": " + detail, At: w.clock.Now().UTC()}
-		j.Phase = PhaseSettled
-		return nil
+		return j.holdBeforeAdmission(reason, detail, w.clock.Now().UTC())
 	})
 	return err
 }
@@ -205,7 +181,7 @@ func (w *Worker) admit(ctx context.Context, ps *projectState, j *Journal) error 
 		}
 		j.Issue = issue
 	}
-	obs := w.observation(j, StatusRunning, "admitted "+j.JournalID, 0)
+	obs := w.observation(j, cronjob.RunRunning, "admitted "+j.JournalID, 0)
 	run, _, err := w.opt.Kata.Observe(ctx, j.ProjectID, obs)
 	switch {
 	case errors.Is(err, ErrConflict):
@@ -213,14 +189,11 @@ func (w *Worker) admit(ctx context.Context, ps *projectState, j *Journal) error 
 	case err != nil:
 		return err
 	}
-	_, err = w.store.Update(j.RunUID, "admitted", func(j *Journal) error { j.Phase, j.Revision = PhaseAdmitted, run.Revision; return nil })
+	_, err = w.store.Update(j.RunUID, "admitted", func(j *Journal) error { return j.admit(run.Revision) })
 	return err
 }
 
-// StatusRunning is kata's status of a run in progress.
-const StatusRunning = "running"
-
-func (w *Worker) observation(j *Journal, status, message string, revision int64) Observation {
+func (w *Worker) observation(j *Journal, status cronjob.RunStatus, message string, revision int64) Observation {
 	o := Observation{
 		RunUID: j.RunUID, JobUID: j.JobUID, DefinitionEventUID: j.DefinitionEventUID, OccurrenceKey: j.OccurrenceKey,
 		Executor: j.Executor, Actor: j.Actor, Status: status, Message: message, StartedAt: j.StartedAt, ExpectedRevision: revision,
@@ -229,7 +202,7 @@ func (w *Worker) observation(j *Journal, status, message string, revision int64)
 		o.IssueUID = j.Issue.UID
 	}
 	if j.Workflow != nil {
-		o.WorkflowUID, o.WorkflowEventUID = j.Workflow.UID, j.Workflow.EventUID
+		o.WorkflowUID, o.WorkflowDefinitionEventUID = j.Workflow.UID, j.Workflow.EventUID
 	}
 	return o
 }
@@ -352,14 +325,12 @@ func (w *Worker) launch(ctx context.Context, ps *projectState, j *Journal) error
 // failAttempt records an attempt that certainly never ran, so the failure is not uncertain: a prompt job's run fails,
 // a workflow step fails (and is retried when it has retries left).
 func (w *Worker) failAttempt(j *Journal, reason string) error {
-	outcome := j.withCarried(&Outcome{Status: StatusFailed, Summary: reason, At: w.clock.Now().UTC()})
+	outcome := j.withCarried(&Outcome{Status: cronjob.RunFailed, Summary: reason})
 	if j.Workflow != nil {
 		return w.concludeStep(j, outcome)
 	}
 	_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
-		j.Outcome = outcome
-		j.Phase = PhaseFinished
-		return nil
+		return j.finish(outcome, w.clock.Now().UTC())
 	})
 	return err
 }
@@ -441,8 +412,7 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 	exit.Unrecorded = lossOf(stdout.file, stderr.file)
 	if _, err := w.store.Update(j.RunUID, "exited", func(j *Journal) error {
 		result.StderrTail = tail
-		j.Exit, j.Result = exit, &result
-		return nil
+		return j.markExited(exit, &result)
 	}); err != nil {
 		return err
 	}
@@ -473,12 +443,7 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 	runtime.LockOSThread() // the parent-death signal follows the thread that started the child
 	defer runtime.UnlockOSThread()
 	if _, err := w.store.Update(j.RunUID, "launching", func(j *Journal) error {
-		if j.Cancel != nil {
-			return errRunCancelled
-		}
-		j.Phase = PhaseLaunching
-		j.Launch = nil // a record of an earlier attempt must not stand for this one's process
-		return nil
+		return j.markLaunching()
 	}); err != nil {
 		return nil, err
 	}
@@ -492,9 +457,7 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 	}
 	launch.SessionDir, launch.SessionID, launch.At = sessionDir, resumeID, w.clock.Now().UTC()
 	if _, err := w.store.Update(j.RunUID, "started", func(j *Journal) error {
-		j.Phase = PhaseStarted
-		j.Launch = launch
-		return nil
+		return j.markStarted(launch)
 	}); err != nil {
 		stopped, stop := context.WithCancel(ctx)
 		stop() // a context that has ended kills the group at once
@@ -546,18 +509,23 @@ func (w *Worker) stopAndWait(ctx context.Context, launch *LaunchRecord, done <-c
 // conclude proves the process group gone and decides the outcome of a run that has an exit record.
 func (w *Worker) conclude(ctx context.Context, j *Journal) error {
 	command := j.activeIsCommand()
-	if command && j.Launch != nil && j.Cancel == nil && !j.Exit.TimedOut && !w.proveGroup(j.Launch).Gone() {
+	var proof GroupProof
+	if j.Launch != nil {
+		proof = w.life(j).Group(j.Launch)
+	}
+	if command && j.Launch != nil && j.Cancel == nil && !j.Exit.TimedOut && !proof.Gone() {
 		// A command that ended by itself leaves a process that is not the worker's to guess about: it may still be doing
 		// what the command began. One the worker stopped (timeout, abandon) is stopped completely below.
-		return w.hold(j, HoldGroupUnproven, fmt.Sprintf("process group %d is still present after the command exited", j.Launch.PGID))
+		return w.hold(j, HoldGroupUnproven, exitedHold("command", j.Launch.PGID, proof))
 	}
-	if j.Launch != nil && !w.proveGroup(j.Launch).Gone() {
+	if j.Launch != nil && !proof.Gone() {
 		proof, err := w.terminateGroup(ctx, j.Launch)
 		if err != nil {
 			return err
 		}
+		w.noteGroup(j.RunUID, j.Launch, proof)
 		if !proof.Gone() {
-			return w.hold(j, HoldGroupUnproven, fmt.Sprintf("process group %d is still present after the agent exited", j.Launch.PGID))
+			return w.hold(j, HoldGroupUnproven, exitedHold("agent", j.Launch.PGID, proof))
 		}
 	}
 	if j.Cancel != nil {
@@ -576,9 +544,7 @@ func (w *Worker) conclude(ctx context.Context, j *Journal) error {
 		return w.concludeStep(j, outcome)
 	}
 	_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
-		outcome.At = w.clock.Now().UTC()
-		j.Outcome, j.Phase = outcome, PhaseFinished
-		return nil
+		return j.finish(outcome, w.clock.Now().UTC())
 	})
 	return err
 }
@@ -619,9 +585,9 @@ func classify(j *Journal) *Outcome {
 	}
 	o := &Outcome{InputTokens: r.InputTokens, OutputTokens: r.OutputTokens}
 	if reason == "" {
-		o.Status, o.Summary = StatusSucceeded, cmp.Or(final, "(the agent gave no final message)")
+		o.Status, o.Summary = cronjob.RunSucceeded, cmp.Or(final, "(the agent gave no final message)")
 	} else {
-		o.Status, o.Summary = StatusFailed, reason
+		o.Status, o.Summary = cronjob.RunFailed, reason
 		if final != "" {
 			o.Summary += "\n\n" + final
 		}
@@ -641,15 +607,15 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 	if len(j.Intents) == 0 {
 		intents := []Intent{{Kind: IntentFinal}}
 		issueOpen := true
-		if j.Outcome.Status == StatusSucceeded && !j.Issue.Existing {
+		if j.Outcome.Status == cronjob.RunSucceeded && !j.Issue.Existing {
 			if issue, err := w.opt.Kata.ShowIssue(ctx, j.ProjectID, j.Issue.UID); err == nil {
 				issueOpen = issue.Open()
 			}
-		} else if j.Outcome.Status == StatusSucceeded {
+		} else if j.Outcome.Status == cronjob.RunSucceeded {
 			issueOpen = false
 		}
 		switch j.Outcome.Status {
-		case StatusSucceeded:
+		case cronjob.RunSucceeded:
 			if quietSuccess(j) {
 				break // every step was a command that exited 0 on an existing Issue: the Run says it all
 			}
@@ -659,12 +625,12 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 					intents = append(intents, Intent{Kind: IntentLabel, Text: "needs-review"})
 				}
 			}
-		case StatusFailed:
+		case cronjob.RunFailed:
 			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("failed"), Text: "The run failed: " + j.Outcome.Summary})
-		case StatusUnknown:
+		case cronjob.RunUnknown:
 			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("held"), Text: "The run is held: " + j.Outcome.Summary + "\n\nResume it with `tern-kata worker resume " + j.RunUID + "` or abandon it with `tern-kata worker abandon " + j.RunUID + "`."})
 			intents = append(intents, Intent{Kind: IntentNotify, Text: heldNotice(j)})
-		case StatusCancelled:
+		case cronjob.RunCancelled:
 			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("cancelled"), Text: "The run was abandoned: " + j.Outcome.Summary})
 		}
 		if j.Notify != nil { // a notify run's only record is the Run itself; the Issue gets no comment, label or request
@@ -716,7 +682,7 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 	for _, why := range j.Inspections() {
 		w.opt.Log("run %s: needs inspection: %s", j.RunUID, why)
 	}
-	_, err := w.store.Update(j.RunUID, "settled", func(j *Journal) error { j.Phase = PhaseSettled; return nil })
+	_, err := w.store.Update(j.RunUID, "settled", func(j *Journal) error { return j.settle() })
 	return err
 }
 
@@ -734,7 +700,7 @@ func quietSuccess(j *Journal) bool {
 	}
 	for i, s := range j.Workflow.Steps {
 		step := j.Steps[i]
-		if s.Kind != "command" || step.State != StepSucceeded || step.Exit == nil || step.Exit.Code != 0 {
+		if s.Kind != cronjob.StepCommand || step.State != StepSucceeded || step.Exit == nil || step.Exit.Code != 0 {
 			return false
 		}
 	}
@@ -916,11 +882,9 @@ func (t *tailSink) close() { _ = t.file.Close() }
 // same words to the same address; before sending, the Issue is read, and a request already there counts as sent
 // (ADR-0006 "read-back"). The run's identity (ADR-0002) already keeps a restart from preparing the occurrence twice.
 func (w *Worker) notify(ctx context.Context, j *Journal) error {
-	finish := func(status, summary string) error {
+	finish := func(status cronjob.RunStatus, summary string) error {
 		_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
-			j.Outcome = &Outcome{Status: status, Summary: truncate(summary, maxSummaryBytes), At: w.clock.Now().UTC()}
-			j.Phase = PhaseFinished
-			return nil
+			return j.finish(&Outcome{Status: status, Summary: truncate(summary, maxSummaryBytes)}, w.clock.Now().UTC())
 		})
 		return err
 	}
@@ -929,7 +893,7 @@ func (w *Worker) notify(ctx context.Context, j *Journal) error {
 		issue, err := w.opt.Kata.ShowIssue(ctx, j.ProjectID, j.Issue.UID)
 		if err != nil {
 			if refused(err) {
-				return finish(StatusFailed, "cannot read the Issue to notify about: "+err.Error())
+				return finish(cronjob.RunFailed, "cannot read the Issue to notify about: "+err.Error())
 			}
 			return err
 		}
@@ -951,15 +915,15 @@ func (w *Worker) notify(ctx context.Context, j *Journal) error {
 		j, notice = saved, saved.Notify.Resolved
 	}
 	if notice.Recipient == "" {
-		return finish(StatusFailed, "the Issue has no owner or author to notify")
+		return finish(cronjob.RunFailed, "the Issue has no owner or author to notify")
 	}
 	if err := w.sendNotice(ctx, j, notice.Recipient, notice.Message); err != nil {
 		if refused(err) {
-			return finish(StatusFailed, "kata refused the notification: "+err.Error())
+			return finish(cronjob.RunFailed, "kata refused the notification: "+err.Error())
 		}
 		return err
 	}
-	return finish(StatusSucceeded, "Notified "+notice.Recipient+": "+notice.Message)
+	return finish(cronjob.RunSucceeded, "Notified "+notice.Recipient+": "+notice.Message)
 }
 
 const (

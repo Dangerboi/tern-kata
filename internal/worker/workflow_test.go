@@ -79,7 +79,10 @@ func TestAWorkflowRunsItsPromptAndCommandStepsInOrderAsOneRun(t *testing.T) {
 	if !resp.OK || resp.Detail == nil || len(resp.Detail.Steps) != 3 {
 		t.Fatalf("run-detail %+v", resp)
 	}
-	for i, want := range []struct{ key, kind string }{{"build", "command"}, {"review", "prompt"}, {"publish", "command"}} {
+	for i, want := range []struct {
+		key  string
+		kind cronjob.StepKind
+	}{{"build", cronjob.StepCommand}, {"review", cronjob.StepPrompt}, {"publish", cronjob.StepCommand}} {
 		s := resp.Detail.Steps[i]
 		if s.Key != want.key || s.Kind != want.kind || s.State != "succeeded" || s.Attempt != 1 || s.ExitCode == nil {
 			t.Errorf("step %d is %+v, want %s %s succeeded in one attempt", i+1, s, want.key, want.kind)
@@ -205,7 +208,7 @@ func TestACrashMidWorkflowHoldsAtThatStepAndResumeContinuesFromIt(t *testing.T) 
 	if resp := h.ask(worker.Request{Op: "resume", Run: uid, Actor: "ann"}); !resp.OK {
 		t.Fatalf("resume refused: %s", resp.Error)
 	}
-	var run worker.Run
+	var run cronjob.Run
 	h.eventually("kata to hold the resumed workflow as succeeded", func() bool {
 		run, _ = h.kata.Kata.ShowRun(context.Background(), h.proj.ID, uid)
 		return run.Status == "succeeded"
@@ -244,7 +247,7 @@ func TestAHeldCommandStepRerunsItsCommandOnResume(t *testing.T) {
 	if resp := h.ask(worker.Request{Op: "resume", Run: uid}); !resp.OK {
 		t.Fatalf("resume refused: %s", resp.Error)
 	}
-	var run worker.Run
+	var run cronjob.Run
 	h.eventually("the resumed workflow to succeed", func() bool {
 		run, _ = h.kata.Kata.ShowRun(context.Background(), h.proj.ID, uid)
 		return run.Status == "succeeded"
@@ -264,11 +267,12 @@ func TestAWorkflowTheWorkerDoesNotRunIsRefusedWithItsReason(t *testing.T) {
 		workertest.Step{Key: "check", Prompt: "Check it.", After: []string{"make"}, Options: map[string]any{"on_fail": "make"}},
 	)
 	park := h.kata.CreateWorkflow(t, h.proj, "park", workertest.Step{Key: "only", Command: "true", Options: map[string]any{"on_failure": "park"}})
+	profiled := h.kata.CreateWorkflow(t, h.proj, "profiled", workertest.Step{Key: "only", Command: "true", Options: map[string]any{"profile": "default"}})
 	many := h.kata.CreateWorkflow(t, h.proj, "many", workertest.Step{Key: "a", Prompt: "A.", Retries: 100})
 	r := h.start(worker.Hooks{})
 	h.admitting(r)
-	for name, want := range map[string]string{"loop": "on_fail", "park": "park", "many": "prompt_budget 101 > 12"} {
-		wf := map[string]worker.Workflow{"loop": loop, "park": park, "many": many}[name]
+	for name, want := range map[string]string{"loop": "on_fail", "park": "park", "profiled": `command step "only" names a profile, which only prompt steps use`, "many": "prompt_budget 101 > 12"} {
+		wf := map[string]worker.Workflow{"loop": loop, "park": park, "profiled": profiled, "many": many}[name]
 		job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: name + " job", Workflow: wf.UID, Checkout: "repo"})
 		resp := h.ask(worker.Request{Op: "run", Job: job.UID})
 		if resp.OK || !strings.Contains(resp.Error, want) {

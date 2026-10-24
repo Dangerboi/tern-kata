@@ -22,7 +22,7 @@ func guarded(uid, name, event string) model.CronJob {
 // set puts text into the Job card's text field, as a click on it, a clear and typing do.
 func set(t *testing.T, s driver.State, field model.Field, text string) driver.State {
 	t.Helper()
-	s = step(t, s, &tern.Focus{ID: view.JobFieldID(field)}).State
+	s = step(t, s, &tern.Focus{ID: view.FieldID(model.CardJob, field)}).State
 	s = step(t, s, key("ctrl+u")).State
 	if text == "" {
 		return s
@@ -77,7 +77,7 @@ func cardText(t *testing.T, s driver.State) string {
 
 func drawn(t *testing.T, s driver.State, field model.Field) bool {
 	t.Helper()
-	return drawnIDs(t, view.Render(s.Model, now))[view.JobFieldID(field)]
+	return drawnIDs(t, view.Render(s.Model, now))[view.FieldID(model.CardJob, field)]
 }
 
 var ulid = regexp.MustCompile(`^[0-7][0-9A-HJKMNP-TV-Z]{25}$`)
@@ -157,7 +157,7 @@ func TestJOnAnIssueOpensTheCardWithThatIssueAsParentFromEveryMainSurface(t *test
 			if !f.Open || f.Change || f.Parent != "alpha" || f.ProjectID != 7 || out.State.Model.CurrentMode() != model.ModeJobForm {
 				t.Fatalf("form %+v mode %s", f, out.State.Model.CurrentMode())
 			}
-			wantOps(t, out, tern.OpFocus(view.JobFieldID(model.JobFieldName)))
+			wantOps(t, out, tern.OpFocus(view.FieldID(model.CardJob, model.JobFieldName)))
 		})
 	}
 }
@@ -212,7 +212,7 @@ func TestJobCardShowsTheFieldsOfItsTriggerOnly(t *testing.T) {
 		t.Error("an interval trigger draws the cron fields or no interval")
 	}
 	// Tab skips the hidden fields: from the trigger it goes to the interval, then the parent.
-	s = step(t, s, &tern.Focus{ID: view.JobFieldID(model.JobFieldTrigger)}).State
+	s = step(t, s, &tern.Focus{ID: view.FieldID(model.CardJob, model.JobFieldTrigger)}).State
 	s = step(t, s, key("tab")).State
 	if got := s.Model.JobForm.Field; got != model.JobFieldInterval {
 		t.Fatalf("tab from the trigger reached %q, want interval", got)
@@ -389,7 +389,7 @@ func TestPauseResumeArchiveAndRestoreAreGuardedWritesThatWaitForTheirAnswer(t *t
 	at := now
 	gone.DeletedAt, gone.DefinitionEventUID = &at, "EV4"
 	s = step(t, archiving.State, model.JobWritten{ProjectID: 7, UID: "J1", Op: model.JobArchived, Job: &gone}).State
-	if drawnIDs(t, view.Render(s.Model, now))[view.JobID("J1")] {
+	if namedRowDrawn(t, s.Model, view.JobListID, "Weekly") {
 		t.Error("an archived job is still listed with the archived hidden")
 	}
 

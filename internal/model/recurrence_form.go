@@ -15,16 +15,12 @@ const (
 )
 
 const (
-	OpenRecurrenceAction     Action = "open-recurrence"
-	RecurrenceNext           Action = "recurrence-next-field"
-	RecurrencePrevious       Action = "recurrence-previous-field"
-	RecurrenceNextChoice     Action = "recurrence-next-choice"
-	RecurrencePreviousChoice Action = "recurrence-previous-choice"
-	RecurrenceSave           Action = "recurrence-save"
-	RecurrenceCancel         Action = "recurrence-cancel"
-	RecurrenceStop           Action = "recurrence-stop"
-	RecurrenceStopConfirm    Action = "recurrence-stop-confirm"
-	RecurrenceStopKeep       Action = "recurrence-stop-keep"
+	OpenRecurrenceAction  Action = "open-recurrence"
+	RecurrenceSave        Action = "recurrence-save"
+	RecurrenceCancel      Action = "recurrence-cancel"
+	RecurrenceStop        Action = "recurrence-stop"
+	RecurrenceStopConfirm Action = "recurrence-stop-confirm"
+	RecurrenceStopKeep    Action = "recurrence-stop-keep"
 )
 
 // The Recurrence card's fields.
@@ -443,28 +439,21 @@ func recurrenceKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case f.Refused && !(bound && binding.Action == RecurrenceCancel):
 	case bound && binding.Action == RecurrenceCancel:
 		f.Open = false
-	case bound && binding.Action == RecurrenceNext:
-		cycleField(&m, 1)
-	case bound && binding.Action == RecurrencePrevious:
-		cycleField(&m, -1)
 	case bound && binding.Action == RecurrenceSave:
 		return submitRecurrence(m)
 	case bound && binding.Action == RecurrenceStop && f.Change:
 		f.StopConfirm, f.Err = true, nil
 	case bound && binding.Action == InputSpace && field == nil && f.Field == RecurrenceWeekdays:
 		f.choose(f.WeekdayAt)
-	case bound && binding.Action == InputSpace && field == nil, bound && binding.Action == RecurrenceNextChoice && field == nil:
+	case bound && binding.Action == InputSpace && field == nil:
 		f.step(false)
-		f.Err = nil
-	case bound && binding.Action == RecurrencePreviousChoice && field == nil:
-		f.step(true)
 		f.Err = nil
 	case field != nil:
 		var edited bool
 		if bound && binding.Action == InputSpace {
 			bound = false // a space in a text field is typed
 		}
-		if *field, edited = editText(*field, &f.Caret, f.Field, binding, bound, msg); edited {
+		if *field, edited = editText(*field, &f.Caret, f.Field, bound, msg); edited {
 			f.Err = nil
 		}
 	}

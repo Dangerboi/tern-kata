@@ -23,21 +23,17 @@ const (
 )
 
 const (
-	OpenWorkerCard       Action = "open-worker-card"
-	WorkerNext           Action = "worker-next-field"
-	WorkerPrevious       Action = "worker-previous-field"
-	WorkerNextChoice     Action = "worker-next-choice"
-	WorkerPreviousChoice Action = "worker-previous-choice"
-	WorkerSave           Action = "worker-save"
-	WorkerCancel         Action = "worker-cancel"
-	WorkerRestartIdle    Action = "worker-restart-idle"
-	WorkerRestartNow     Action = "worker-restart-now"
-	WorkerLeave          Action = "worker-leave"
-	WorkerEdit           Action = "worker-edit"
-	WorkerSupervision    Action = "worker-supervision"
-	WorkerOffIdle        Action = "worker-off-idle"
-	WorkerOffNow         Action = "worker-off-now"
-	WorkerOffCancel      Action = "worker-off-cancel"
+	OpenWorkerCard    Action = "open-worker-card"
+	WorkerSave        Action = "worker-save"
+	WorkerCancel      Action = "worker-cancel"
+	WorkerRestartIdle Action = "worker-restart-idle"
+	WorkerRestartNow  Action = "worker-restart-now"
+	WorkerLeave       Action = "worker-leave"
+	WorkerEdit        Action = "worker-edit"
+	WorkerSupervision Action = "worker-supervision"
+	WorkerOffIdle     Action = "worker-off-idle"
+	WorkerOffNow      Action = "worker-off-now"
+	WorkerOffCancel   Action = "worker-off-cancel"
 )
 
 // WorkerDraftUID is the key of the $EDITOR round trip of worker.toml.
@@ -70,6 +66,16 @@ var workerFieldTitles = map[Field]string{
 
 // WorkerPrompt is the title of the Worker card's field called name.
 func WorkerPrompt(name Field) string { return workerFieldTitles[name] }
+
+var workerHints = map[Field]string{
+	WorkerFieldActor:    "who the runs are attributed to",
+	WorkerFieldCommand:  worker.DefaultCommand,
+	WorkerFieldModel:    "blank: the agent's own default",
+	WorkerFieldThinking: "blank: the agent's own default",
+}
+
+// WorkerHint is the placeholder of the Worker card's field called name: what a blank field stands for.
+func WorkerHint(name Field) string { return workerHints[name] }
 
 // WorkerTrustNote is the warning shown beside the trust choice and written into worker.toml.
 const WorkerTrustNote = worker.TrustNote
@@ -341,11 +347,11 @@ func (m Model) startSentence() string {
 	return "The plugin's host half starts the worker within 10 seconds (else run `tern-kata worker`); `tern-kata worker doctor` checks the setup."
 }
 
-// openWorkerCard is `W` on the Jobs Page. The setup is read again, the status asked again and the card prefilled as `worker init` would.
+// openWorkerCard is `W` on the Jobs Page. The setup is read again and the status asked again; the Command field starts blank.
 func openWorkerCard(m Model) (Model, []Cmd) {
 	m.WorkerCard = WorkerCardState{
 		Open: true, Field: WorkerFieldExecutor,
-		Executor: worker.ExecutorName(m.Host), Actor: m.Actor, Command: "omp",
+		Executor: worker.ExecutorName(m.Host), Actor: m.Actor,
 	}
 	m.Worker.SetupRead, m.Worker.SetupErr = false, nil
 	m, ask := m.askWorker(0)
@@ -421,9 +427,6 @@ func submitWorker(m Model) (Model, []Cmd) {
 			cmd.Actor = actor
 		}
 		cmd.Command, cmd.Model, cmd.Thinking = strings.TrimSpace(f.Command), strings.TrimSpace(f.Model), strings.TrimSpace(f.Thinking)
-		if cmd.Command == "omp" {
-			cmd.Command = ""
-		}
 	}
 	return m, []Cmd{cmd}
 }
@@ -583,13 +586,9 @@ func workerCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		return switchSupervision(m)
 	case bound && binding.Action == WorkerCancel:
 		m.WorkerCard = WorkerCardState{}
-	case bound && binding.Action == WorkerNext:
-		cycleField(&m, 1)
-	case bound && binding.Action == WorkerPrevious:
-		cycleField(&m, -1)
 	case bound && binding.Action == WorkerSave:
 		return submitWorker(m)
-	case field == nil && bound && (binding.Action == InputSpace || binding.Action == WorkerNextChoice || binding.Action == WorkerPreviousChoice):
+	case field == nil && bound && binding.Action == InputSpace:
 		if m.WorkerCardShows(f.Field) {
 			f.Trusted, f.Err = !f.Trusted, nil
 		}
@@ -598,7 +597,7 @@ func workerCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		if bound && binding.Action == InputSpace {
 			bound = false // a space in a text field is typed
 		}
-		if *field, edited = editText(*field, &f.Caret, f.Field, binding, bound, msg); edited {
+		if *field, edited = editText(*field, &f.Caret, f.Field, bound, msg); edited {
 			f.Err = nil
 		}
 	}

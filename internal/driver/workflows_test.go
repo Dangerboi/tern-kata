@@ -67,7 +67,7 @@ func mustShow(t *testing.T, s driver.State, what string, texts ...string) {
 func TestWorkflowsPageListsTheProjectsWorkflowsAndOpensTheirStepsWithDependenciesAndRetries(t *testing.T) {
 	s := workflowsPane(t, 160, reviewFlow(), nightlyFlow())
 	drawn := drawnIDs(t, view.Render(s.Model, now))
-	if !drawn[view.PageBarEntryID("workflows")] || !drawn[view.WorkflowID("W1")] || !drawn[view.WorkflowID("W2")] {
+	if !drawn[view.PageBarEntryID("workflows")] || !workflowRowDrawn(t, s.Model, "W1") || !workflowRowDrawn(t, s.Model, "W2") {
 		t.Fatalf("the Workflows Page draws its Page bar entry and a row per workflow, got %v", drawn)
 	}
 	mustShow(t, s, "list", "Review then test", "2 steps", "1 step")
@@ -76,23 +76,23 @@ func TestWorkflowsPageListsTheProjectsWorkflowsAndOpensTheirStepsWithDependencie
 	mustShow(t, opened, "inspector", "Review a change, then run the tests.", "review", "prompt", "Review the change.", "test", "command", "make test", "after review", "retries 2")
 
 	narrowed := workflowsPane(t, 80, reviewFlow())
-	if drawn := drawnIDs(t, view.Render(narrowed.Model, now)); drawn[view.WorkflowID("W1")] == false {
+	if !workflowRowDrawn(t, narrowed.Model, "W1") {
 		t.Fatal("a narrow Pane draws the list")
 	}
 	narrowOpen := step(t, narrowed, key("enter")).State
-	if drawn := drawnIDs(t, view.Render(narrowOpen.Model, now)); drawn[view.WorkflowID("W1")] {
+	if workflowRowDrawn(t, narrowOpen.Model, "W1") {
 		t.Error("a narrow Pane draws the steps in place of the list, not both")
 	}
 	mustShow(t, narrowOpen, "narrow inspector", "after review")
 	back := step(t, narrowOpen, key("escape")).State
-	if drawn := drawnIDs(t, view.Render(back.Model, now)); !drawn[view.WorkflowID("W1")] {
+	if !workflowRowDrawn(t, back.Model, "W1") {
 		t.Error("esc brings the list back")
 	}
 }
 
 func TestClickingARowSelectsItsWorkflow(t *testing.T) {
 	s := workflowsPane(t, 160, reviewFlow(), nightlyFlow())
-	s = step(t, s, &tern.Select{ID: view.WorkflowListID, Item: view.WorkflowID("W2")}).State
+	s = step(t, s, &tern.Select{ID: view.WorkflowListID, Item: workflowRow(t, s.Model, "W2")}).State
 	if s.Model.Workflows.Selected != "W2" {
 		t.Errorf("selected %q after a click on the second row", s.Model.Workflows.Selected)
 	}
@@ -127,13 +127,13 @@ func TestWorkflowCardEditsTheDefinitionAsJSONAndRefusesAnInvalidOneKeepingTheTex
 	}
 	mustShow(t, s, "card", "Edit workflow Review then test", `\"after\": [`, `make test`)
 	drawn := drawnIDs(t, view.Render(s.Model, now))
-	if !drawn[view.WorkflowEditorID] {
+	if !drawn[view.FieldID(model.CardWorkflow, "")] {
 		t.Fatal("the card draws no text editor")
 	}
 
 	broken := strings.Replace(reviewFlow().Text(), `"review"`, `"test"`, 1)
 	old := len(s.Model.Workflows.Card.Editor.Text)
-	s = step(t, s, &tern.Edit{ID: view.WorkflowEditorID, From: 0, To: old, Text: broken, Cursor: len(broken), Len: old}).State
+	s = step(t, s, &tern.Edit{ID: view.FieldID(model.CardWorkflow, ""), From: 0, To: old, Text: broken, Cursor: len(broken), Len: old}).State
 	refused := step(t, s, key("ctrl+o"))
 	if len(refused.Cmds) != 0 {
 		t.Fatalf("a workflow with duplicate keys was sent: %#v", refused.Cmds)
@@ -155,7 +155,7 @@ func TestWorkflowCardSavesAndShowsAConflictBesideTheKeptText(t *testing.T) {
 	s = step(t, s, key("e")).State
 	edited := strings.Replace(reviewFlow().Text(), "make test", "make check", 1)
 	old := len(s.Model.Workflows.Card.Editor.Text)
-	s = step(t, s, &tern.Edit{ID: view.WorkflowEditorID, From: 0, To: old, Text: edited, Cursor: len(edited), Len: old}).State
+	s = step(t, s, &tern.Edit{ID: view.FieldID(model.CardWorkflow, ""), From: 0, To: old, Text: edited, Cursor: len(edited), Len: old}).State
 	saved := step(t, s, key("ctrl+o"))
 	var save model.SaveWorkflow
 	for _, cmd := range saved.Cmds {
@@ -194,7 +194,7 @@ func TestNewWorkflowStartsFromATemplateAndCreatesWithoutAGuard(t *testing.T) {
 	mustShow(t, s, "template", "New workflow", `\"steps\"`)
 	text := `{"name":"Nightly","definition":{"version":1,"steps":[{"key":"build","kind":"command","command":"make"}]}}`
 	old := len(s.Model.Workflows.Card.Editor.Text)
-	s = step(t, s, &tern.Edit{ID: view.WorkflowEditorID, From: 0, To: old, Text: text, Cursor: len(text), Len: old}).State
+	s = step(t, s, &tern.Edit{ID: view.FieldID(model.CardWorkflow, ""), From: 0, To: old, Text: text, Cursor: len(text), Len: old}).State
 	out := step(t, s, key("ctrl+o"))
 	for _, cmd := range out.Cmds {
 		if c, ok := cmd.(model.SaveWorkflow); ok && c.UID == "" && c.Expected == "" && c.Name == "Nightly" {
@@ -238,7 +238,7 @@ func TestArchivedWorkflowsAreHiddenUntilAskedForAndRestoredFromTheList(t *testin
 	archived := nightlyFlow()
 	archived.Archived = true
 	s := workflowsPane(t, 160, reviewFlow(), archived)
-	if drawn := drawnIDs(t, view.Render(s.Model, now)); drawn[view.WorkflowID("W2")] {
+	if workflowRowDrawn(t, s.Model, "W2") {
 		t.Fatal("an archived workflow is listed before it is asked for")
 	}
 	s = feed(t, s, key("a"), key("j")).State
@@ -276,7 +276,7 @@ func TestWorkflowCardButtonsAreDrawnForEveryState(t *testing.T) {
 	s := workflowsPane(t, 160, reviewFlow())
 	editing := step(t, s, key("e")).State
 	old := len(editing.Model.Workflows.Card.Editor.Text)
-	asking := step(t, step(t, editing, &tern.Edit{ID: view.WorkflowEditorID, From: 0, To: old, Text: "x", Cursor: 1, Len: old}).State, key("escape")).State
+	asking := step(t, step(t, editing, &tern.Edit{ID: view.FieldID(model.CardWorkflow, ""), From: 0, To: old, Text: "x", Cursor: 1, Len: old}).State, key("escape")).State
 	conflict := editing
 	conflict.Model, _ = model.Update(editing.Model, model.KeyMsg{Chord: "ctrl+o"})
 	newer := reviewFlow()

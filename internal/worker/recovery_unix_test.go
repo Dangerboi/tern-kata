@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
 )
@@ -124,7 +125,7 @@ func TestATimedOutCommandStepWhoseChildIgnoresSigtermIsKilledAndTheRunFails(t *t
 	pid := h.stubbornChild()
 
 	h.clock.Advance(2 * time.Hour)
-	var run worker.Run
+	var run cronjob.Run
 	h.eventually("the run to be recorded failed", func() bool { run = h.kataRun(uid); return run.Status == "failed" })
 	if !strings.Contains(run.Summary, "timed out") {
 		t.Fatalf("run %q: %q", run.Status, run.Summary)
@@ -148,7 +149,7 @@ func TestAnAbandonedCommandStepWhoseChildIgnoresSigtermIsKilledAndTheRunIsCancel
 	if resp := h.ask(worker.Request{Op: "abandon", Run: uid, Actor: "ann"}); !resp.OK {
 		t.Fatalf("abandon: %q", resp.Error)
 	}
-	var run worker.Run
+	var run cronjob.Run
 	h.eventually("the run to be recorded cancelled", func() bool { run = h.kataRun(uid); return run.Status == "cancelled" })
 	if !strings.HasPrefix(run.Summary, "abandoned by ann") {
 		t.Fatalf("run %q: %q", run.Status, run.Summary)

@@ -18,7 +18,7 @@ expect_tree "[data-id='main.columns.detail.viewport.content.activity']" ".ok and
 
 # u opens the path form; an unknown file shows kata's reason in the form, the file is attached once the path is right.
 ctl key u
-expect_tree "[data-id='layer.fields.value']" '.ok and .count == 1'
+expect_tree "[data-id='layer.fields.input']" '.ok and .count == 1'
 ctl type '"/no/such/file.png"'
 ctl key enter
 expect_tree "[data-id='layer.fields.error']" '.ok and .count == 1 and (.nodes[0].text | contains("does not exist"))'

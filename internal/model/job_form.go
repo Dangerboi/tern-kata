@@ -30,16 +30,12 @@ const (
 	PauseJobAction    Action = "pause-job"
 	ArchiveJobAction  Action = "archive-job"
 
-	JobNext           Action = "job-next-field"
-	JobPrevious       Action = "job-previous-field"
-	JobNextChoice     Action = "job-next-choice"
-	JobPreviousChoice Action = "job-previous-choice"
-	JobNewline        Action = "job-newline"
-	JobSave           Action = "job-save"
-	JobCancel         Action = "job-cancel"
-	JobOverwrite      Action = "job-overwrite"
-	JobTakeNewer      Action = "job-take-newer"
-	JobDiscard        Action = "job-discard"
+	JobNewline   Action = "job-newline"
+	JobSave      Action = "job-save"
+	JobCancel    Action = "job-cancel"
+	JobOverwrite Action = "job-overwrite"
+	JobTakeNewer Action = "job-take-newer"
+	JobDiscard   Action = "job-discard"
 )
 
 // The Job card's fields.
@@ -854,16 +850,10 @@ func jobFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	switch {
 	case bound && binding.Action == JobCancel:
 		f.Open = false
-	case bound && binding.Action == JobNext:
-		cycleField(&m, 1)
-	case bound && binding.Action == JobPrevious:
-		cycleField(&m, -1)
 	case bound && binding.Action == JobSave:
 		return submitJob(m)
-	case field == nil && bound && (binding.Action == InputSpace || binding.Action == JobNextChoice):
+	case field == nil && bound && binding.Action == InputSpace:
 		f.step(false)
-	case field == nil && bound && binding.Action == JobPreviousChoice:
-		f.step(true)
 	case field != nil && f.Field == JobFieldPrompt && bound && binding.Action == JobNewline:
 		f.insertPrompt(field, "\n")
 	case field != nil && f.Field == JobFieldPrompt && !bound && strings.ContainsAny(msg.Text, "\r\n"):
@@ -873,7 +863,7 @@ func jobFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		if bound && binding.Action == InputSpace {
 			bound = false // a space in a text field is typed
 		}
-		if *field, edited = editText(*field, &f.Caret, f.Field, binding, bound, msg); edited {
+		if *field, edited = editText(*field, &f.Caret, f.Field, bound, msg); edited {
 			f.Err = nil
 		}
 	}

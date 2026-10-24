@@ -134,7 +134,7 @@ func parseSecrets(text string) (map[string]string, error) {
 	for _, entry := range strings.FieldsFunc(text, func(r rune) bool { return r == ',' || unicode.IsSpace(r) }) {
 		env, source, found := strings.Cut(entry, "=")
 		switch {
-		case !found || !portableName(env) || !portableName(source):
+		case !found || !cronjob.PortableName(env) || !cronjob.PortableName(source):
 			return nil, fieldError(JobFieldSecrets, "%q is not ENV=source; names are letters, digits, - _ and . only.", entry)
 		case refs[env] != "":
 			return nil, fieldError(JobFieldSecrets, "%s is listed twice.", env)
@@ -213,9 +213,6 @@ func catchupApplies(trigger cronjob.TriggerKind) bool {
 	return trigger == cronjob.TriggerCron || trigger == cronjob.TriggerInterval || trigger == cronjob.TriggerOnce
 }
 
-// adapterTriggers are the triggers an adapter job may have; a deadline fires a notification only, as kata allows.
-var adapterTriggers = []cronjob.TriggerKind{cronjob.TriggerCron, cronjob.TriggerInterval, cronjob.TriggerOnce, cronjob.TriggerManual, cronjob.TriggerIssueScheduled}
-
 var promptJobKind = executeKind("prompt", "Agent prompt", KindAgentPrompt, false)
 
 var workflowJobKind = executeKind("workflow", "Workflow", KindWorkflow, true)
@@ -223,7 +220,7 @@ var workflowJobKind = executeKind("workflow", "Workflow", KindWorkflow, true)
 // executeKind is the kind of a job a Worker executes: an agent prompt, or a workflow of the Project.
 func executeKind(id, label, kind string, workflow bool) jobKind {
 	return jobKind{
-		id: id, label: label, triggers: adapterTriggers,
+		id: id, label: label, triggers: cronjob.TriggersFor(cronjob.ActionExecute),
 		owns: func(j CronJob) bool { return j.Kind() == kind },
 		shown: func(f JobFormState, name Field) bool {
 			switch name {
@@ -326,7 +323,7 @@ func buildExecute(f JobFormState, workflow bool) (cronjob.Definition, string, er
 	if len(options) > 0 {
 		def.Options = options
 	}
-	if def.CheckoutKey = strings.TrimSpace(f.Checkout); def.CheckoutKey != "" && !portableName(def.CheckoutKey) {
+	if def.CheckoutKey = strings.TrimSpace(f.Checkout); def.CheckoutKey != "" && !cronjob.PortableName(def.CheckoutKey) {
 		return def, "", fieldError(JobFieldCheckout, "%q is not a checkout key; keys are letters, digits, - _ and . only.", def.CheckoutKey)
 	}
 	secrets, err := parseSecrets(f.Secrets)
@@ -383,7 +380,7 @@ func executePolicy(f JobFormState) (*cronjob.IssuePolicy, error) {
 }
 
 var notifyJobKind = jobKind{
-	id: "notify", label: "Notify", triggers: append(slices.Clone(adapterTriggers), cronjob.TriggerIssueDeadline),
+	id: "notify", label: "Notify", triggers: cronjob.TriggersFor(cronjob.ActionNotify),
 	owns: func(j CronJob) bool { return j.Kind() == KindNotify },
 	shown: func(f JobFormState, name Field) bool {
 		switch name {

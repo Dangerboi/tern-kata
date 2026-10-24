@@ -70,7 +70,7 @@ func TestLanesCardTabsToDoneFieldsAndSavesThem(t *testing.T) {
 		t.Fatalf("prefill days %q cards %q", got, s.Model.LanesForm.Cards)
 	}
 	s = step(t, s, key("tab")).State
-	if s.Model.LanesForm.Field != model.LanesDays || !strings.HasPrefix(s.Focus, view.LanesFieldID(model.LanesDays)) {
+	if s.Model.LanesForm.Field != model.LanesDays || !strings.HasPrefix(s.Focus, view.FieldID(model.CardLanes, model.LanesDays)) {
 		t.Fatalf("field %q focus %q", s.Model.LanesForm.Field, s.Focus)
 	}
 	s = typed(t, step(t, s, key("ctrl+u")).State, "7")
@@ -116,7 +116,7 @@ func TestLanesCardRefusesBadDoneLimitsNamingTheField(t *testing.T) {
 				s = step(t, s, key("tab")).State
 			}
 			out := step(t, typed(t, s, tt.text), key("enter"))
-			msg, ok := nodeText(t, out.State, view.LanesID+".error")
+			msg, ok := nodeText(t, out.State, view.LayerID(model.CardLanes)+".error")
 			if len(out.Cmds) != 0 || out.State.Model.TopCard() != model.CardLanes || !ok || !strings.Contains(msg, tt.want) {
 				t.Errorf("cmds %v card %v error %q (drawn %v), want a refusal naming %q", out.Cmds, out.State.Model.TopCard(), msg, ok, tt.want)
 			}

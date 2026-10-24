@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
@@ -15,21 +16,21 @@ import (
 func finishedRun(uid string) model.Run {
 	started := now.Add(-3 * time.Hour)
 	ended := started.Add(95 * time.Second)
-	return model.Run{
-		UID: uid, JobUID: "J1", JobName: "Triage", DefinitionEventUID: "E1", IssueUID: "parent-a", IssueShortID: "pa11", IssueTitle: "Weekly report",
-		Actor: "tester", Teammate: "pip", ExecutorLabel: "laptop", OccurrenceKey: "2026-10-08T09:00:00Z", Status: model.RunSucceeded,
-		Message: "triaged 4 items\nsecond line", InputTokens: ptr(int64(1200)), OutputTokens: ptr(int64(340)), Revision: 2,
+	return model.Run{Run: cronjob.Run{
+		UID: uid, JobUID: "J1", DefinitionEventUID: "E1", IssueUID: "parent-a",
+		Actor: "tester", Teammate: "pip", ExecutorLabel: "laptop", OccurrenceKey: "2026-10-08T09:00:00Z", Status: cronjob.RunSucceeded,
+		Summary: "triaged 4 items\nsecond line", InputTokens: ptr(int64(1200)), OutputTokens: ptr(int64(340)), Revision: 2,
 		CreatedAt: started, UpdatedAt: ended, StartedAt: &started, EndedAt: &ended,
-	}
+	}, JobName: "Triage", IssueShortID: "pa11", IssueTitle: "Weekly report"}
 }
 
 // workflowRun is a Run of a workflow alone, still running on a machine, with no Issue.
 func workflowRun(uid string) model.Run {
 	started := now.Add(-30 * time.Second)
-	return model.Run{
-		UID: uid, WorkflowUID: "W1", WorkflowName: "Nightly build", WorkflowDefinitionEventUID: "WE1", Actor: "worker", Status: model.RunRunning,
+	return model.Run{Run: cronjob.Run{
+		UID: uid, WorkflowUID: "W1", WorkflowDefinitionEventUID: "WE1", Actor: "worker", Status: cronjob.RunRunning,
 		CreatedAt: started, UpdatedAt: started, StartedAt: &started,
-	}
+	}, WorkflowName: "Nightly build"}
 }
 
 // runsPane is a Pane on the Runs Page, the runs read answered with runs.
@@ -59,7 +60,7 @@ func askedRuns(cmds []model.Cmd) (model.LoadRuns, bool) {
 
 func runCardText(t *testing.T, s driver.State, uid string) string {
 	t.Helper()
-	id := view.RunID(uid)
+	id := runRow(t, s.Model, uid)
 	var text string
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
 		if n.ID == id || strings.HasPrefix(n.ID, id+".") {
@@ -126,7 +127,7 @@ func TestEnterShowsTheRunsDetailWithSummaryTokensAndReferences(t *testing.T) {
 
 	// The answer replaces the run held.
 	changed := finishedRun("R1")
-	changed.Message = "triaged 5 items"
+	changed.Summary = "triaged 5 items"
 	s = step(t, out.State, model.RunShown{UID: "R1", Run: changed}).State
 	wantText(t, "run detail after the read", inspectorText(t, s), "triaged 5 items")
 
@@ -233,7 +234,7 @@ func TestSwitchingPagesKeepsEachPagesSelectionLoadedRunsAndFilter(t *testing.T) 
 func TestAPolledRefreshKeepsTheOlderRunsLoadedAndTheSelectedOne(t *testing.T) {
 	running := model.LocalRun{UID: "R3", Project: "work", Job: "Triage", State: "running", Attempt: 1}
 	live := finishedRun("R3")
-	live.Status = model.RunRunning
+	live.Status = cronjob.RunRunning
 	out := step(t, projectPane(t, 160, boardCard("parent-a")), key("4"))
 	out.State = answerRuns(t, out, "cursor-1", live, finishedRun("R2"))
 	out = answerWorker(t, out, servingWorker(running))
@@ -256,7 +257,7 @@ func TestAPolledRefreshKeepsTheOlderRunsLoadedAndTheSelectedOne(t *testing.T) {
 	}
 	done := finishedRun("R3")
 	got := step(t, polled.State, model.RunsLoaded{Request: load.Request, Before: load.Before, Refresh: load.Refresh, Runs: []model.Run{done, finishedRun("R2")}, NextBefore: "cursor-1"}).State.Model.Runs
-	if got.Selected != "R1" || len(got.Runs) != 3 || got.Runs[0].Status != model.RunSucceeded {
+	if got.Selected != "R1" || len(got.Runs) != 3 || got.Runs[0].Status != cronjob.RunSucceeded {
 		t.Fatalf("after the refresh: selected %q, runs %+v, want R1 selected, all three runs and the newest settled", got.Selected, got.Runs)
 	}
 }
@@ -293,8 +294,8 @@ func TestRunsPageSelectionClickAndMoveAreFollowed(t *testing.T) {
 	if moved.State.Model.Runs.Selected != "R2" {
 		t.Fatalf("selected %q after j", moved.State.Model.Runs.Selected)
 	}
-	wantOps(t, moved, tern.OpReveal(view.RunID("R2"), "nearest"))
-	clicked := step(t, s, click(view.RunID("R1"), view.RunClick("R1")))
+	wantOps(t, moved, tern.OpReveal(runRow(t, moved.State.Model, "R2"), "nearest"))
+	clicked := step(t, s, click(runRow(t, s.Model, "R1"), view.RunClick("R1")))
 	if clicked.State.Model.Runs.Selected != "R1" {
 		t.Errorf("selected %q after a click, want R1", clicked.State.Model.Runs.Selected)
 	}
@@ -326,9 +327,9 @@ func TestWorkflowRowAndInspectorShowTheWorkflowsLatestRuns(t *testing.T) {
 		t.Fatalf("the Page asked for runs with %#v, want the Project's newest runs", out.Cmds)
 	}
 	failed := workflowRun("R1")
-	failed.Status = model.RunFailed
+	failed.Status = cronjob.RunFailed
 	failed.WorkflowUID = "W1"
-	failed.Message = "step build failed"
+	failed.Summary = "step build failed"
 	running := workflowRun("R2")
 	running.WorkflowUID = "W1"
 	other := workflowRun("R3")
@@ -356,7 +357,7 @@ func TestAnAnswerToTheRunsPagesReadDoesNotLandOnTheWorkflowsPage(t *testing.T) {
 	running.WorkflowUID = "W1"
 	stray := workflowRun("R9")
 	stray.WorkflowUID = "W1"
-	stray.Status = model.RunFailed
+	stray.Status = cronjob.RunFailed
 	// The Runs Page's own reads are numbered upward; an answer to one of them is not the Workflows Page's.
 	s = step(t, s, model.RunsLoaded{Request: 1, Runs: []model.Run{stray}}).State
 	if _, ok := s.Model.LatestWorkflowRun("W1"); ok {

@@ -50,3 +50,62 @@ func TestJobKeepsAKindKataAddsLater(t *testing.T) {
 		t.Errorf("kinds %q, %q", got.Trigger.Kind, got.Action.Kind)
 	}
 }
+
+func TestWorkflowDefinitionReadsEveryFieldAndMissingValuesAsEmpty(t *testing.T) {
+	about, command, prompt, retries := "nightly", "make", "review", int64(2)
+	got := cronjobclient.WorkflowDefinition(g.CronWorkflowDefinitionResponse{
+		Version: 1, About: &about, Options: map[string]any{"profile": "fast"},
+		Steps: []g.CronWorkflowStepResponse{
+			{Key: "build", Kind: "command", Command: &command, Retries: &retries},
+			{Key: "review", Kind: "prompt", Prompt: &prompt, After: []string{"build"}, Options: map[string]any{"profile": "deep"}},
+		},
+	})
+	if got.Version != 1 || got.About != "nightly" || got.Input != "" || got.Options.(map[string]any)["profile"] != "fast" || len(got.Steps) != 2 {
+		t.Fatalf("definition %+v", got)
+	}
+	build, review := got.Steps[0], got.Steps[1]
+	if build.Kind != cronjob.StepCommand || build.Command != "make" || build.Prompt != "" || build.RetryCount() != 2 || build.Options != nil {
+		t.Errorf("command step %+v", build)
+	}
+	if review.Kind != cronjob.StepPrompt || review.Prompt != "review" || review.Retries != nil || review.After[0] != "build" || review.Options.(map[string]any)["profile"] != "deep" {
+		t.Errorf("prompt step %+v", review)
+	}
+	if problem := cronjob.ValidateWorkflow(got); problem != nil {
+		t.Errorf("the translated definition is refused: %s", problem.Message())
+	}
+}
+
+func TestRunReadsEveryFieldAndMissingValuesAsEmpty(t *testing.T) {
+	created := time.Date(2026, 10, 1, 8, 0, 0, 0, time.UTC)
+	started := created.Add(time.Minute)
+	in, out := int64(20), int64(4)
+	job, def, wf, wfDef, key, issue, label, team, msg := "J", "DE", "W", "WE", "k1", "I", "box", "ann", "done"
+	got := cronjobclient.Run(g.CronRun{
+		UID: "R", JobUID: &job, DefinitionEventUID: &def, WorkflowUID: &wf, WorkflowDefinitionEventUID: &wfDef,
+		OccurrenceKey: &key, IssueUID: &issue, Actor: "me", Teammate: &team, ExecutorLabel: &label, Status: "succeeded",
+		Summary:  g.SummaryResponse{Message: &msg, InputTokens: &in, OutputTokens: &out},
+		Revision: 2, CreatedAt: created, UpdatedAt: started, StartedAt: &started,
+	})
+	if got.UID != "R" || got.JobUID != job || got.DefinitionEventUID != def || got.WorkflowUID != wf || got.WorkflowDefinitionEventUID != wfDef ||
+		got.OccurrenceKey != key || got.IssueUID != issue || got.Actor != "me" || got.Teammate != team || got.ExecutorLabel != label || got.Revision != 2 {
+		t.Errorf("run %+v", got)
+	}
+	if got.Status != cronjob.RunSucceeded || got.Summary != msg || got.InputTokens == nil || *got.InputTokens != 20 || got.OutputTokens == nil || *got.OutputTokens != 4 {
+		t.Errorf("status and summary %+v", got)
+	}
+	if !got.CreatedAt.Equal(created) || got.StartedAt == nil || !got.StartedAt.Equal(started) || got.EndedAt != nil {
+		t.Errorf("times %+v", got)
+	}
+	bare := cronjobclient.Run(g.CronRun{UID: "R2", Status: "running"})
+	if bare.JobUID != "" || bare.WorkflowDefinitionEventUID != "" || bare.Summary != "" || bare.InputTokens != nil || bare.Status != cronjob.RunRunning {
+		t.Errorf("bare run %+v", bare)
+	}
+}
+
+func TestRunReadsAStatusItDoesNotKnowAsUnknown(t *testing.T) {
+	for _, status := range []string{"paused", "", "RUNNING"} {
+		if got := cronjobclient.Run(g.CronRun{UID: "R", Status: status}).Status; got != cronjob.RunUnknown {
+			t.Errorf("status %q read as %q, want unknown", status, got)
+		}
+	}
+}

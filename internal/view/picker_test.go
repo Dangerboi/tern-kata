@@ -123,8 +123,8 @@ func TestRenderPickerFollowsFilterAndShowsEmptyState(t *testing.T) {
 	if got := pickerChildIDs(nodes["layer.collections.list"]); strings.Join(got, ",") != "layer.collections.list.all-open,layer.collections.list.project.alpha-uid" {
 		t.Fatalf("filtered rows = %v", got)
 	}
-	if nodes["layer.collections.filter"].P["text"] != "al" {
-		t.Fatalf("filter box = %v", nodes["layer.collections.filter"].P)
+	if nodes["layer.collections.input"].P["text"] != "al" {
+		t.Fatalf("filter box = %v", nodes["layer.collections.input"].P)
 	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "z", Text: "z"})
 	nodes = pickerNodes(t, m)
@@ -139,8 +139,8 @@ func TestRenderPickerOnlyWhenOpen(t *testing.T) {
 		t.Fatal("closed picker rendered")
 	}
 	m = menuOpened(m)
-	if _, ok := pickerNodes(t, m)["layer.collections"]; !ok || view.PickerFilterID != "layer.collections.filter" {
-		t.Fatalf("open picker: filter id %q", view.PickerFilterID)
+	if _, ok := pickerNodes(t, m)["layer.collections"]; !ok || view.FieldID(model.CardPicker, "") != "layer.collections.input" {
+		t.Fatalf("open picker: filter id %q", view.FieldID(model.CardPicker, ""))
 	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "escape"})
 	if _, ok := pickerNodes(t, m)["layer.collections"]; ok {
@@ -165,7 +165,7 @@ func TestRenderMenuTextsAndButtons(t *testing.T) {
 	if got := nodes["main.topbar.left.heading"].P["title"]; got != "Menu" {
 		t.Fatalf("heading tooltip = %v", got)
 	}
-	if got := nodes["layer.collections.filter"].P["placeholder"]; got != "Filter Menu" {
+	if got := nodes["layer.collections.input"].P["placeholder"]; got != "Filter Menu" {
 		t.Fatalf("filter placeholder = %v", got)
 	}
 }

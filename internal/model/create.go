@@ -10,8 +10,6 @@ import (
 const (
 	NewIssue       Action = "new-issue"
 	NewChild       Action = "new-child"
-	CreateNext     Action = "create-next"
-	CreatePrevious Action = "create-previous"
 	CreateComplete Action = "create-complete"
 	ModeCreate     Mode   = "create"
 	CreateDraftUID        = "create-draft"
@@ -94,8 +92,9 @@ const (
 	CreateDeadline  Field = "deadline"
 )
 
-// CreateFields is the Create card's field list, in tab order; the body is the multi-line editor.
-var CreateFields = []FieldSpec{{CreateTitle, true}, {CreateBody, false}, {CreateLabels, true}, {CreateOwner, true}, {CreatePriority, true}, {CreateScheduled, true}, {CreateDeadline, true}}
+// CreateFields is the Create card's field list, in tab order; the body is the multi-line editor, which takes text like the
+// others and so holds the caret.
+var CreateFields = []FieldSpec{{CreateTitle, true}, {CreateBody, true}, {CreateLabels, true}, {CreateOwner, true}, {CreatePriority, true}, {CreateScheduled, true}, {CreateDeadline, true}}
 
 func createValue(f *CreateState) *string {
 	switch f.Field {
@@ -213,10 +212,6 @@ var createCard = draftCardKeys{
 	},
 	own: func(m Model, b Binding, _ KeyMsg) (Model, []Cmd, bool) {
 		switch b.Action {
-		case CreateNext:
-			cycleField(&m, 1)
-		case CreatePrevious:
-			cycleField(&m, -1)
 		case CreateComplete:
 			if m.Create.Field == CreateLabels {
 				if s := m.CreateSuggestions(); len(s) > 0 {
@@ -242,7 +237,11 @@ var createCard = draftCardKeys{
 			} else if ok && b.Action == FieldPrevious {
 				m.Create.Completion.Suggestion = max(0, m.Create.Completion.Suggestion-1)
 			} else {
-				*value, _ = editText(*value, &m.Create.Caret, m.Create.Field, b, ok, msg)
+				if ok && (b.Action == DeleteInput || b.Action == ClearInput) {
+					*value, _ = eraseText(*value, &m.Create.Caret, m.Create.Field, b.Action)
+				} else {
+					*value, _ = editText(*value, &m.Create.Caret, m.Create.Field, ok, msg)
+				}
 			}
 		}
 		return m

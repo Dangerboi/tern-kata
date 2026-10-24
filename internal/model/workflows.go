@@ -3,6 +3,7 @@ package model
 import (
 	"cmp"
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 )
@@ -42,6 +43,10 @@ type WorkflowsState struct {
 	runsMore  string
 	runsPages int
 	runsAsked bool
+	// readings are the Worker's reading of each stored workflow, by uid, as the last load or save brought it; checkRequest numbers
+	// the card's asks for the reading of its text.
+	readings     map[string]WorkerReading
+	checkRequest int64
 }
 
 // WorkflowCard is the Workflow card: the JSON text of a new workflow or of one being changed, edited in the card or in $EDITOR.
@@ -59,6 +64,12 @@ type WorkflowCard struct {
 	Saving         bool
 	DiscardConfirm bool
 	Err            error
+	// Reading is the Worker's reading of the text as it stands, nil while none has answered or the text is one kata refuses.
+	Reading *WorkerReading
+	// asked, askedText and askNow track the text the Worker was last asked about, and whether the next ask goes out at once.
+	asked     bool
+	askedText string
+	askNow    bool
 }
 
 // WorkflowOp is which write a WorkflowWritten answers.
@@ -83,7 +94,9 @@ func (LoadWorkflows) cmd() {}
 type WorkflowsLoaded struct {
 	ProjectUID string
 	Workflows  []Workflow
-	Err        error
+	// Readings are the Worker's reading of each workflow by uid, as the gateway filled them in.
+	Readings map[string]WorkerReading
+	Err      error
 }
 
 func (WorkflowsLoaded) msg() {}
@@ -121,7 +134,9 @@ type WorkflowWritten struct {
 	UID        string
 	Workflow   *Workflow
 	Current    *Workflow
-	Err        error
+	// Reading is the Worker's reading of the Workflow a save stored.
+	Reading *WorkerReading
+	Err     error
 }
 
 func (WorkflowWritten) msg() {}
@@ -310,7 +325,7 @@ func newWorkflow(m Model) Model {
 	if m.Workflows.ProjectID == 0 {
 		return m
 	}
-	m.Workflows.Card = WorkflowCard{Open: true, Start: NewWorkflowText, Editor: NewTextEditor(NewWorkflowText)}
+	m.Workflows.Card = WorkflowCard{Open: true, Start: NewWorkflowText, Editor: NewTextEditor(NewWorkflowText), askNow: true}
 	return m
 }
 
@@ -322,7 +337,7 @@ func editWorkflow(m Model) Model {
 		m.Notice = w.Name + " is archived: restore it first."
 	default:
 		text := w.Text()
-		m.Workflows.Card = WorkflowCard{Open: true, UID: w.UID, Name: w.Name, Base: w.EventUID, Start: text, Editor: NewTextEditor(text)}
+		m.Workflows.Card = WorkflowCard{Open: true, UID: w.UID, Name: w.Name, Base: w.EventUID, Start: text, Editor: NewTextEditor(text), askNow: true}
 	}
 	return m
 }
@@ -365,6 +380,21 @@ func (s WorkflowsState) withWorkflow(w Workflow) WorkflowsState {
 	return s
 }
 
+// withReading is readings with the reading of uid put in, on a map of its own.
+func withReading(readings map[string]WorkerReading, uid string, reading WorkerReading) map[string]WorkerReading {
+	out := make(map[string]WorkerReading, len(readings)+1)
+	maps.Copy(out, readings)
+	out[uid] = reading
+	return out
+}
+
+// withoutReading is readings without the reading of uid, on a map of its own.
+func withoutReading(readings map[string]WorkerReading, uid string) map[string]WorkerReading {
+	out := maps.Clone(readings)
+	delete(out, uid)
+	return out
+}
+
 // updateWorkflows applies the Workflows Page's results and the $EDITOR round trip of its card.
 func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
@@ -376,11 +406,14 @@ func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 		if msg.Err == nil {
 			row := m.selectedRow()
 			m.Workflows.List = msg.Workflows
+			m.Workflows.readings = msg.Readings
 			m = m.selectWorkflow(row)
 		}
 		return m, nil, true
 	case WorkflowWritten:
 		return workflowWritten(m, msg), nil, true
+	case WorkflowTextRead:
+		return workflowTextRead(m, msg), nil, true
 	case JobsLoaded:
 		if msg.Request >= 0 || msg.Request != m.Workflows.jobsRequest {
 			return m, nil, false
@@ -416,7 +449,7 @@ func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 			return m, nil, false
 		}
 		if c := &m.Workflows.Card; c.Open {
-			c.Err = msg.Err
+			c.Err, c.askNow = msg.Err, true
 			if msg.Err == nil {
 				text := normalizeLineBreaks(msg.Text)
 				c.Editor = c.Editor.ApplyEdit(0, len16(c.Editor.Text), text, len16(text), len16(c.Editor.Text))
@@ -447,14 +480,19 @@ func workflowWritten(m Model, msg WorkflowWritten) Model {
 	case msg.Workflow == nil && msg.Current != nil:
 		if saving {
 			card.Conflict, card.Err = msg.Current, nil
+			m.Workflows.readings = withoutReading(m.Workflows.readings, msg.Current.UID)
 			return m
 		}
 		m.Workflows = m.Workflows.withWorkflow(*msg.Current)
+		m.Workflows.readings = withoutReading(m.Workflows.readings, msg.Current.UID)
 		m.Notice = msg.Current.Name + " changed meanwhile: nothing was written."
 		return m.selectWorkflow(0)
 	case msg.Workflow != nil:
 		row := m.selectedRow()
 		m.Workflows = m.Workflows.withWorkflow(*msg.Workflow)
+		if msg.Reading != nil {
+			m.Workflows.readings = withReading(m.Workflows.readings, msg.Workflow.UID, *msg.Reading)
+		}
 		if saving {
 			m.Workflows.Card = WorkflowCard{}
 			m.Workflows.Selected = msg.Workflow.UID

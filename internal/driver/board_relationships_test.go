@@ -36,7 +36,7 @@ func selectedBoard(t *testing.T, uid string, links []model.Link, issues ...model
 // relationshipsText is the Relationships line drawn on uid's card, its parts joined by spaces, and whether the card draws one.
 func relationshipsText(t *testing.T, s driver.State, uid string) (string, bool) {
 	t.Helper()
-	prefix := view.CardID(s.Model, uid) + ".relationships"
+	prefix := rowOf(t, s.Model, view.BoardID, uid) + ".relationships"
 	var words []string
 	drawn := false
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
@@ -59,7 +59,7 @@ func refClick(t *testing.T, s driver.State, from, to string) string {
 	t.Helper()
 	nodes := wireNodes(t, view.Render(s.Model, now))
 	id := slices.IndexFunc(nodes, func(n tern.WireNode) bool {
-		return strings.HasPrefix(n.ID, view.CardID(s.Model, from)+".relationships.") && strings.HasSuffix(n.ID, "."+to)
+		return strings.HasPrefix(n.ID, rowOf(t, s.Model, view.BoardID, from)+".relationships.") && strings.HasSuffix(n.ID, "."+to)
 	})
 	if id < 0 {
 		t.Fatalf("no clickable id for %s on %s", to, from)
@@ -119,7 +119,7 @@ func TestClickingAnIDSelectsItsCardAndRevealsIt(t *testing.T) {
 	if got := out.State.Model.SelectedUID; got != "par" {
 		t.Fatalf("selected %q after the click, want par", got)
 	}
-	wantOps(t, out, tern.OpReveal(view.CardID(out.State.Model, "par"), "nearest"))
+	wantOps(t, out, tern.OpReveal(rowOf(t, out.State.Model, view.BoardID, "par"), "nearest"))
 }
 
 // opensInTheDetail checks out is the Lane view of task's Lane with uid's detail focused and loading, and no Notice.
@@ -185,7 +185,7 @@ func TestCaretSelectsTheParentOrSaysThereIsNone(t *testing.T) {
 	if got := out.State.Model.SelectedUID; got != "par" {
 		t.Errorf("^ selected %q, want par", got)
 	}
-	wantOps(t, out, tern.OpReveal(view.CardID(out.State.Model, "par"), "nearest"))
+	wantOps(t, out, tern.OpReveal(rowOf(t, out.State.Model, view.BoardID, "par"), "nearest"))
 
 	s = step(t, s, model.SelectMsg{UID: "orphan"}).State
 	out = step(t, s, key("^"))

@@ -9,8 +9,6 @@ const (
 	ModeDatesForm Mode   = "dates-form"
 	DatesSubmit   Action = "dates-submit"
 	DatesCancel   Action = "dates-cancel"
-	DatesNext     Action = "dates-next"
-	DatesPrevious Action = "dates-previous"
 	OpenDates     Action = "open-dates"
 )
 
@@ -256,16 +254,12 @@ func updateDatesFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	switch {
 	case bound && binding.Action == DatesSubmit:
 		return submitDates(m)
-	case bound && binding.Action == DatesNext:
-		cycleField(&m, 1)
-	case bound && binding.Action == DatesPrevious:
-		cycleField(&m, -1)
 	case bound && binding.Action == DatesCancel:
 		m.DatesForm = DatesFormState{}
 	default:
 		text := form.Text.at(form.Field)
 		var edited bool
-		if *text, edited = editText(*text, &form.Caret, form.Field, binding, bound, msg); edited {
+		if *text, edited = editText(*text, &form.Caret, form.Field, bound, msg); edited {
 			form.Err = nil
 		}
 	}

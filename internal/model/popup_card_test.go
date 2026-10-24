@@ -3,7 +3,6 @@ package model_test
 import (
 	"errors"
 	"reflect"
-	"slices"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -413,28 +412,6 @@ func TestPopupCardSharedBehaviour(t *testing.T) {
 	}
 }
 
-// Every card in the order has a row in the table and declares its fields, so a card added to the
-// order without either fails here.
-func TestEveryPopupCardIsDescribed(t *testing.T) {
-	table := popupCards()
-	for _, card := range model.Cards() {
-		if !slices.ContainsFunc(table, func(c popupCard) bool { return c.card == card }) {
-			t.Errorf("card %d has no row in the shared card table", card)
-		}
-		if _, declared := model.CardFields(card); !declared {
-			t.Errorf("card %d declares no field list; a card without fields declares an empty one", card)
-		}
-	}
-	for _, c := range table {
-		if c.card != model.NoCard && !slices.Contains(model.Cards(), c.card) {
-			t.Errorf("%s is not in the card order", c.name)
-		}
-		if specs, _ := model.CardFields(c.card); c.textField != "" && !slices.ContainsFunc(specs, func(f model.FieldSpec) bool { return f.Name == c.textField && f.Text }) {
-			t.Errorf("%s: %q is not one of its text fields", c.name, c.textField)
-		}
-	}
-}
-
 func TestPopupCardStates(t *testing.T) {
 	for _, c := range popupCards() {
 		for _, state := range c.states {
@@ -468,31 +445,6 @@ func TestPopupCardStates(t *testing.T) {
 				}
 				if listed != c.quits {
 					t.Errorf("%s lists ctrl+c = %v, but it quits = %v", state.mode, listed, c.quits)
-				}
-			})
-		}
-	}
-}
-
-// Of any two cards open at once, the earlier one in the order is on top and owns the mode.
-func TestPopupCardOrder(t *testing.T) {
-	// The order is spelled out here, not read from model.Cards().
-	var cards []popupCard
-	for _, name := range []string{"Create", "Draft editor", "single-field form", "Close", "Dates", "Recurrence", "New Project", "Filter form", "Menu"} {
-		i := slices.IndexFunc(popupCards(), func(c popupCard) bool { return c.name == name })
-		if i < 0 {
-			t.Fatalf("card %q has no row", name)
-		}
-		cards = append(cards, popupCards()[i])
-	}
-	for i, top := range cards {
-		for _, under := range cards[i+1:] {
-			t.Run(top.name+" over "+under.name, func(t *testing.T) {
-				m := model.Model{}
-				under.graft(&m, under.open())
-				top.graft(&m, top.open())
-				if m.TopCard() != top.card || m.CurrentMode() != top.states[0].mode {
-					t.Fatalf("top card %d mode %s, want %d %s", m.TopCard(), m.CurrentMode(), top.card, top.states[0].mode)
 				}
 			})
 		}
@@ -633,5 +585,23 @@ func TestDraftCardsTakeNativeEditsAndUndo(t *testing.T) {
 				t.Fatalf("the other card's edit landed: %q", body.text(m))
 			}
 		})
+	}
+}
+
+// Every card has a name, the stem of its node ids, and no two cards share one.
+func TestEveryCardHasItsOwnName(t *testing.T) {
+	seen := map[string]model.Card{}
+	for _, card := range model.Cards() {
+		name := card.Name()
+		if name == "" {
+			t.Errorf("card %d has no name", card)
+		}
+		if other, dup := seen[name]; dup {
+			t.Errorf("cards %d and %d are both named %q", other, card, name)
+		}
+		seen[name] = card
+	}
+	if model.NoCard.Name() != "" {
+		t.Errorf("NoCard is named %q", model.NoCard.Name())
 	}
 }

@@ -113,7 +113,7 @@ func TestTextFocusIsSentOnlyOnChange(t *testing.T) {
 	wantOps(t, out)
 	// Leaving the search restores the Issues, so the selected row is revealed after the caret goes.
 	out = step(t, out.State, key("escape"))
-	wantOps(t, out, tern.OpFocus(""), tern.OpReveal(view.IssueID("alpha"), "nearest"))
+	wantOps(t, out, tern.OpFocus(""), tern.OpReveal(issueRow(t, out.State.Model, view.IssueListID, alpha), "nearest"))
 }
 
 func TestTextFocusIsClearedWhileSavingOrConfirming(t *testing.T) {
@@ -136,26 +136,27 @@ func TestTextFocusIsClearedWhileSavingOrConfirming(t *testing.T) {
 
 func TestOpeningACardFocusesItsField(t *testing.T) {
 	out := step(t, browsing(t, 160), key("n"))
-	wantOps(t, out, tern.OpFocus(view.CreateFieldID(model.CreateTitle)))
-	out = step(t, out.State, &tern.Focus{ID: view.CreateFieldID(model.CreateLabels)})
-	wantOps(t, out, tern.OpFocus(view.CreateFieldID(model.CreateLabels)))
+	wantOps(t, out, tern.OpFocus(view.FieldID(model.CardCreate, model.CreateTitle)))
+	out = step(t, out.State, &tern.Focus{ID: view.FieldID(model.CardCreate, model.CreateLabels)})
+	wantOps(t, out, tern.OpFocus(view.FieldID(model.CardCreate, model.CreateLabels)))
 }
 
 func TestRowIsRevealedOnKeyMovesButNotOnRowClicks(t *testing.T) {
 	s := browsing(t, 160)
 	out := step(t, s, key("j"))
-	wantOps(t, out, tern.OpReveal(view.IssueID("beta"), "nearest"))
+	betaRow := issueRow(t, s.Model, view.IssueListID, beta)
+	wantOps(t, out, tern.OpReveal(betaRow, "nearest"))
 	if !reflect.DeepEqual(out.Cmds, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "beta"}}) {
 		t.Fatalf("commands = %#v", out.Cmds)
 	}
 
-	out = step(t, s, &tern.Select{ID: view.IssueListID, Item: view.IssueID("beta")})
+	out = step(t, s, &tern.Select{ID: view.IssueListID, Item: betaRow})
 	if out.State.Model.SelectedUID != "beta" {
 		t.Fatalf("click did not select: %q", out.State.Model.SelectedUID)
 	}
 	wantOps(t, out)
 
-	out = step(t, s, click(view.IssueID("beta"), view.ToggleClick("beta")))
+	out = step(t, s, click(betaRow, view.ToggleClick("beta")))
 	wantOps(t, out)
 }
 
@@ -171,10 +172,11 @@ func TestRowIsNotRevealedUnlessTheListIsFocusedAndDrawn(t *testing.T) {
 // Every op of every step is checked against the drawn view by step; this sweeps
 // the width tiers, both column focuses and every key that can scroll or reveal.
 func TestNoOpNamesAColumnTheViewDoesNotDraw(t *testing.T) {
+	betaRow := issueRow(t, browsing(t, 160).Model, view.IssueListID, beta)
 	inputs := []any{
 		key("j"), key("k"), key("page_down"), key("page_up"), key("down"), key("up"), key("tab"), key("shift+tab"), key("enter"), key("escape"),
 		click("", view.ActivityTabClick(model.TabEvents)), click("", view.FocusDetailClick),
-		&tern.Select{ID: view.IssueListID, Item: view.IssueID("beta")},
+		&tern.Select{ID: view.IssueListID, Item: betaRow},
 	}
 	for _, cols := range []int{60, 79, 80, 100, 139, 140, 160} {
 		for _, detailFocused := range []bool{false, true} {
@@ -269,7 +271,7 @@ func TestColumnsStayMountedWhileHelpIsOpen(t *testing.T) {
 
 func TestUnknownIDOnATransientNodeIsIgnored(t *testing.T) {
 	s := browsing(t, 160)
-	for _, id := range []string{view.IssueID("beta"), view.SearchID, view.CreateFieldID(model.CreateBody), view.CloseFieldID(model.ClosePR), view.DetailActivityID + ".empty", view.DetailActivityID + ".tabs", view.ProjectInputID, view.BoardID + ".lane1.cards.beta"} {
+	for _, id := range []string{issueRow(t, s.Model, view.IssueListID, beta), view.SearchID, view.FieldID(model.CardCreate, model.CreateBody), view.FieldID(model.CardClose, model.ClosePR), view.DetailActivityID + ".empty", view.DetailActivityID + ".tabs", view.FieldID(model.CardProject, ""), view.BoardID + ".lane1.cards.beta"} {
 		out := driver.Step(s, &tern.ErrorEvent{Msg: "unknown id " + id}, now)
 		if out.Err != nil || out.Quit || out.View != nil || len(out.Ops) != 0 {
 			t.Errorf("unknown id %q: %+v", id, out)
@@ -340,10 +342,10 @@ func TestDifferentIssueScrollsTheDetailToItsStart(t *testing.T) {
 
 func TestMenuAndNewProjectCardTakeTheCaret(t *testing.T) {
 	menu := step(t, browsing(t, 160), openMenu)
-	wantOps(t, menu, tern.OpFocus(view.PickerFilterID))
+	wantOps(t, menu, tern.OpFocus(view.FieldID(model.CardPicker, "")))
 
 	form := feed(t, menu.State, key("end"), key("enter"))
-	wantOps(t, form, tern.OpFocus(view.ProjectInputID))
+	wantOps(t, form, tern.OpFocus(view.FieldID(model.CardProject, "")))
 	if !form.State.Model.ProjectForm.Open {
 		t.Fatal("fixture: the New Project card is closed")
 	}

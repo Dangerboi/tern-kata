@@ -8,9 +8,6 @@ import (
 
 const SearchID = "main.columns.list.search"
 
-// FilterFieldID is the id of the Filter form's field called name.
-func FilterFieldID(name model.Field) string { return "layer.filters." + string(name) }
-
 var filterTitles = map[model.Field]string{
 	model.FilterProject:      "Project",
 	model.FilterStatus:       "Status",
@@ -71,5 +68,5 @@ func filterLayer(m model.Model) tern.Element {
 		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.FilterForm.Err.Error()})
 	}
 	children = append(children, buttonRow(cardButton("apply", model.ModeFilterForm, model.ApplyFilters, "Apply filters", true), cardButton("default", model.ModeFilterForm, model.SaveFilterDefault, "Save as default", false), cardButton("cancel", model.ModeFilterForm, model.CancelFilters, "Cancel", false)))
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "filters"}, Head: ui.T("Filter " + m.Collection.Title), Modal: true, Size: ui.SizeMD, Children: children})
+	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardFilter)}, Head: ui.T("Filter " + m.Collection.Title), Modal: true, Size: ui.SizeMD, Children: children})
 }

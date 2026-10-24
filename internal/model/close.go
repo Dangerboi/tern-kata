@@ -10,13 +10,11 @@ import (
 
 const ModeCloseForm Mode = "close-form"
 const (
-	OpenClose     Action = "close-issue"
-	ReopenAction  Action = "reopen-issue"
-	CloseNext     Action = "close-next"
-	ClosePrevious Action = "close-previous"
-	CloseSave     Action = "close-save"
-	CloseQuick    Action = "close-quick"
-	CloseCancel   Action = "close-cancel"
+	OpenClose    Action = "close-issue"
+	ReopenAction Action = "reopen-issue"
+	CloseSave    Action = "close-save"
+	CloseQuick   Action = "close-quick"
+	CloseCancel  Action = "close-cancel"
 )
 
 // The Close card's fields.
@@ -293,10 +291,6 @@ func closeKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		if !f.Saving {
 			f.Open = false
 		}
-	case bound && binding.Action == CloseNext:
-		cycleField(&m, 1)
-	case bound && binding.Action == ClosePrevious:
-		cycleField(&m, -1)
 	case bound && binding.Action == CloseSave:
 		return submitClose(m, false)
 	case bound && binding.Action == CloseQuick:
@@ -304,7 +298,7 @@ func closeKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case !f.Saving:
 		if value := f.Values.at(f.Field); value != nil {
 			var edited bool
-			if *value, edited = editText(*value, &f.Caret, f.Field, binding, bound, msg); edited {
+			if *value, edited = editText(*value, &f.Caret, f.Field, bound, msg); edited {
 				f.Err = nil
 			}
 		}

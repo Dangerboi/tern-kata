@@ -166,7 +166,7 @@ func (m Model) lastActivity(job CronJob, now time.Time) string {
 // runWords is a Run in a line, as the Jobs Page words it: its status, when it started, and the first line of its summary.
 func (m Model) runWords(r Run, now time.Time) string {
 	words := string(r.Status) + " · " + m.Calendar.Read(r.Started(), now)
-	if first, _, _ := strings.Cut(r.Message, "\n"); strings.TrimSpace(first) != "" {
+	if first, _, _ := strings.Cut(r.Summary, "\n"); strings.TrimSpace(first) != "" {
 		words += " · " + strings.TrimSpace(first)
 	}
 	return words

@@ -9,9 +9,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// RecurrenceFieldID is the id of the Recurrence card's field called name.
-func RecurrenceFieldID(name model.Field) string { return "layer.recurrence." + string(name) }
-
 var recurrenceTitles = map[model.Field]string{
 	model.RecurrenceFrequency: "Frequency",
 	model.RecurrenceWeekdays:  "Weekdays",
@@ -95,7 +92,7 @@ func recurrenceLayer(m model.Model) tern.Element {
 	}
 	children := make([]tern.Element, 0, len(model.RecurrenceFields)+4)
 	if f.Refused {
-		return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "recurrence"}, Modal: true, Size: ui.SizeLG, Head: ui.T("Recurrence"), Children: ui.Nodes(
+		return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardRecurrence)}, Modal: true, Size: ui.SizeLG, Head: ui.T("Recurrence"), Children: ui.Nodes(
 			ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: f.Err.Error()},
 			buttonRow(cardButton("cancel", model.ModeRecurrenceForm, model.RecurrenceCancel, "Close", true)))})
 	}
@@ -143,5 +140,5 @@ func recurrenceLayer(m model.Model) tern.Element {
 	default:
 		children = append(children, buttonRow(cardButton("save", model.ModeRecurrenceForm, model.RecurrenceSave, save, true), cardButton("cancel", model.ModeRecurrenceForm, model.RecurrenceCancel, "Cancel", false)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "recurrence"}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
+	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardRecurrence)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
 }

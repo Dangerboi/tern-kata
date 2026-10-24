@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/Dangerboi/tern-kata/internal/atomicfile"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
@@ -39,16 +40,9 @@ func (s attachmentStore) ensure(uid string) error {
 	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	tmp, err := os.CreateTemp(s.dir(), ".gitignore-*")
-	if err != nil {
-		return err
-	}
-	_, err = tmp.WriteString("*\n")
-	if err = errors.Join(err, tmp.Close()); err == nil {
-		err = os.Rename(tmp.Name(), ignore)
-	}
-	if err != nil {
-		_ = os.Remove(tmp.Name())
+	err := atomicfile.Write(ignore, []byte("*\n"), atomicfile.Options{Mode: 0o600})
+	var lost *atomicfile.RenameError
+	if errors.As(err, &lost) {
 		if info, serr := os.Stat(ignore); serr == nil && info.Size() > 0 {
 			return nil
 		}

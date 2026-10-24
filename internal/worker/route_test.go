@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
 )
@@ -265,7 +266,7 @@ func TestAProjectRemovedFromTheConfigGetsItsSavedReportDeliveredAndItsLeaseOwner
 	}
 	r2 := h.start(worker.Hooks{})
 	h.admitting(r2)
-	var run worker.Run
+	var run cronjob.Run
 	h.eventually("the retired Project's report to be delivered", func() bool {
 		var err error
 		run, err = h.kata.Kata.ShowRun(context.Background(), old.ID, uid)

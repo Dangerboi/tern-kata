@@ -52,3 +52,37 @@ func Job(j g.CronJob) cronjob.Job {
 		ProjectID: j.ProjectID, CreatedAt: j.CreatedAt, UpdatedAt: j.UpdatedAt, DeletedAt: j.DeletedAt, Definition: def,
 	}
 }
+
+// Run is kata's Run as the cronjob package holds it. A status kata adds later reads as cronjob.RunUnknown.
+func Run(w g.CronRun) cronjob.Run {
+	return cronjob.Run{
+		UID: w.UID, JobUID: Str(w.JobUID), DefinitionEventUID: Str(w.DefinitionEventUID),
+		WorkflowUID: Str(w.WorkflowUID), WorkflowDefinitionEventUID: Str(w.WorkflowDefinitionEventUID),
+		OccurrenceKey: Str(w.OccurrenceKey), IssueUID: Str(w.IssueUID),
+		Actor: w.Actor, Teammate: Str(w.Teammate), ExecutorLabel: Str(w.ExecutorLabel),
+		Status: cronjob.ReadRunStatus(w.Status), Summary: Str(w.Summary.Message),
+		InputTokens: w.Summary.InputTokens, OutputTokens: w.Summary.OutputTokens,
+		Revision: w.Revision, CreatedAt: w.CreatedAt, UpdatedAt: w.UpdatedAt, StartedAt: w.StartedAt, EndedAt: w.EndedAt,
+	}
+}
+
+// WorkflowDefinition is kata's Workflow definition as the cronjob package holds it, ready for cronjob.ValidateWorkflow.
+// Options stay nil when kata sends none, so an absent value and an empty object read the same.
+func WorkflowDefinition(d g.CronWorkflowDefinitionResponse) cronjob.WorkflowDefinition {
+	out := cronjob.WorkflowDefinition{Version: d.Version, About: Str(d.About), Input: Str(d.Input), Options: options(d.Options), Steps: make([]cronjob.WorkflowStep, len(d.Steps))}
+	for i, s := range d.Steps {
+		out.Steps[i] = cronjob.WorkflowStep{
+			Key: s.Key, Kind: cronjob.StepKind(s.Kind), Command: Str(s.Command), Prompt: Str(s.Prompt),
+			After: s.After, Retries: s.Retries, Options: options(s.Options),
+		}
+	}
+	return out
+}
+
+// options is a definition's options, nil when kata sends none.
+func options(m map[string]any) any {
+	if m == nil {
+		return nil
+	}
+	return m
+}

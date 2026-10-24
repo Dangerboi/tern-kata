@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
@@ -17,15 +18,15 @@ const RunListID = "main.columns.list.runs"
 func RunID(uid string) string { return itemID(RunListID, uid) }
 
 // runTone is the tone of a Run's status: running blue, succeeded green, failed red, cancelled muted, unknown amber.
-func runTone(status model.RunStatus) ui.Tone {
+func runTone(status cronjob.RunStatus) ui.Tone {
 	switch status {
-	case model.RunRunning:
+	case cronjob.RunRunning:
 		return ui.ToneInfo
-	case model.RunSucceeded:
+	case cronjob.RunSucceeded:
 		return ui.ToneSuccess
-	case model.RunFailed:
+	case cronjob.RunFailed:
 		return ui.ToneError
-	case model.RunCancelled:
+	case cronjob.RunCancelled:
 		return ui.ToneMuted
 	}
 	return ui.ToneWarning
@@ -104,7 +105,7 @@ func runCard(row model.RunRow, selected bool) tern.Element {
 	}
 	body = append(body, ui.Text{Common: ui.Common{Key: "when"}, Spans: []ui.Span{{T: strings.Join(when, " · "), S: "muted"}}})
 	cardTone := ui.ToneNeutral
-	if row.Run.Status == model.RunCancelled {
+	if row.Run.Status == cronjob.RunCancelled {
 		cardTone = ui.ToneMuted
 	}
 	return ui.Card{Common: ui.Common{Key: row.Run.UID, Tone: cardTone, Actions: &ui.Actions{Click: RunClick(row.Run.UID)}}, Selected: selected, Children: body}
@@ -121,7 +122,7 @@ func runInspector(m model.Model, now time.Time) tern.Element {
 		lines[i] = factLine{Label: fact.Label, Value: fact.Value}
 		switch fact.Label {
 		case "Status":
-			lines[i].Style = toneStyle(runTone(model.RunStatus(fact.Value)))
+			lines[i].Style = toneStyle(runTone(cronjob.RunStatus(fact.Value)))
 		case "Held because":
 			lines[i].Style = toneStyle(ui.ToneWarning)
 		}
