@@ -41,3 +41,29 @@ func TestAWorkflowKataTakesIsRefusedOnlyByTheWorkersOwnPolicy(t *testing.T) {
 		t.Error("a budget of 2 took three prompts")
 	}
 }
+
+func TestCheckWorkflowNamesEveryRefusalAndTheUncheckedBudget(t *testing.T) {
+	retries := int64(2)
+	def := cronjob.WorkflowDefinition{Version: 1,
+		Options: map[string]any{"on_failure": "park", "mystery": true},
+		Steps: []cronjob.WorkflowStep{
+			{Key: "a", Kind: cronjob.StepPrompt, Prompt: "p", Retries: &retries, Options: map[string]any{"on_fail": map[string]any{}}},
+			{Key: "b", Kind: cronjob.StepCommand, Command: "true", Options: map[string]any{"profile": "x"}},
+		}}
+	limit := 2
+	got := CheckWorkflow(def, &limit)
+	if len(got.Refusals) != 4 || got.BudgetUnchecked {
+		t.Fatalf("refusals %q, unchecked %v; want park, on_fail, profile and the budget", got.Refusals, got.BudgetUnchecked)
+	}
+	if first := workflowRefusal(Workflow{WorkflowDefinition: def}, limit); first != got.Refusals[0] {
+		t.Errorf("planning refuses with %q, the exported check starts with %q", first, got.Refusals[0])
+	}
+	unknown := CheckWorkflow(def, nil)
+	if len(unknown.Refusals) != 3 || !unknown.BudgetUnchecked {
+		t.Errorf("without a limit: refusals %q, unchecked %v; want the three that need no limit", unknown.Refusals, unknown.BudgetUnchecked)
+	}
+	plain := cronjob.WorkflowDefinition{Version: 1, Options: map[string]any{"mystery": true}, Steps: []cronjob.WorkflowStep{{Key: "a", Kind: cronjob.StepCommand, Command: "true", Options: map[string]any{"other": 1}}}}
+	if got := CheckWorkflow(plain, &limit); len(got.Refusals) != 0 {
+		t.Errorf("unknown option keys refused: %q", got.Refusals)
+	}
+}

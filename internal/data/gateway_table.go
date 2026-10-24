@@ -140,6 +140,9 @@ func init() {
 	local(func(g *Gateway, _ context.Context, cmd model.SaveLanes) model.Msg { return g.saveLanes(cmd) }, nil, nil)
 	local(func(g *Gateway, _ context.Context, cmd model.SaveFilters) model.Msg { return g.saveFilters(cmd) }, nil, nil)
 	local(func(_ *Gateway, _ context.Context, _ model.LoadWorkerPickers) model.Msg { return loadWorkerPickers() }, nil, nil)
+	local(func(g *Gateway, ctx context.Context, cmd model.ReadWorkflowText) model.Msg {
+		return g.readWorkflowText(ctx, cmd)
+	}, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.LoadWorker) model.Msg { return g.loadWorker(ctx, cmd) }, nil, nil)
 	local(func(g *Gateway, _ context.Context, cmd model.LoadWorkerSetup) model.Msg {
 		return g.loadWorkerSetup(cmd)
@@ -424,7 +427,7 @@ func init() {
 		func(cmd model.LoadWorkflows, err error) model.Msg {
 			return model.WorkflowsLoaded{ProjectUID: cmd.ProjectUID, Err: err}
 		},
-		nil, nil)
+		nil, []afterStep{readWorkflowsAfter})
 
 	daemonCall(
 		func(cmd model.LoadJobWorkflows) string { return cmd.Workspace },
@@ -445,7 +448,7 @@ func init() {
 		func(cmd model.SaveWorkflow, err error) model.Msg {
 			return model.WorkflowWritten{ProjectUID: cmd.ProjectUID, Op: model.WorkflowOpSave, UID: cmd.UID, Err: err}
 		},
-		nil, nil)
+		nil, []afterStep{readSavedWorkflowAfter})
 
 	daemonCall(
 		func(cmd model.ArchiveWorkflow) string { return cmd.Workspace },

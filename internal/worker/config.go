@@ -259,7 +259,8 @@ func (c Config) maxTimeout() time.Duration {
 	return d
 }
 
-func (c Config) maxRunPrompts() int {
+// MaxRunPrompts is how many prompts one run may send: the configured max_run_prompts, or the default.
+func (c Config) MaxRunPrompts() int {
 	if c.Limits.MaxRunPrompts == 0 {
 		return DefaultRunPrompts
 	}

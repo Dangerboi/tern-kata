@@ -134,6 +134,9 @@ func workflowInspector(m model.Model, paired bool, now time.Time) tern.Element {
 	if w.Input != "" {
 		parts = append(parts, ui.Text{Common: ui.Common{Key: "input"}, Spans: []ui.Span{{T: "input  ", S: "muted"}, {T: w.Input}}})
 	}
+	if reading, ok := m.WorkflowReading(w.UID); ok {
+		parts = append(parts, workerReading(reading))
+	}
 	parts = append(parts, ui.Text{Common: ui.Common{Key: "steps-title"}, Spans: []ui.Span{{T: "Steps", S: "strong"}, {T: " " + strconv.Itoa(len(w.Steps)), S: "muted"}}})
 	for i, step := range w.Steps {
 		parts = append(parts, workflowStep(i, step))
@@ -146,6 +149,21 @@ func workflowInspector(m model.Model, paired bool, now time.Time) tern.Element {
 		return ui.Card{Common: common, Children: ui.Nodes(body)}
 	}
 	return ui.Col{Common: common, Children: ui.Nodes(body)}
+}
+
+// workerReading is the Worker's reading of a Workflow: what this machine's Worker would refuse and why, or that it would run it.
+// Refusals and a worker.toml that could not be read are drawn as warnings, the rest quietly.
+func workerReading(r model.WorkerReading) tern.Element {
+	lines := r.Lines()
+	children := make([]tern.Element, len(lines))
+	for i, line := range lines {
+		tone := ui.ToneMuted
+		if line.Warn {
+			tone = ui.ToneWarning
+		}
+		children[i] = ui.Text{Common: ui.Common{Key: "line." + strconv.Itoa(i), Tone: tone}, Text: line.Text}
+	}
+	return ui.Col{Common: ui.Common{Key: "worker-reading"}, Children: children}
 }
 
 // workflowStep is one step: its number and key, its kind badge, what it waits for and how often it retries, over its command or
@@ -181,6 +199,9 @@ func workflowLayer(m model.Model) tern.Element {
 	}
 	readonly := c.Saving || c.DiscardConfirm || c.Conflict != nil
 	children := ui.Nodes(TextEditor("body", c.Editor, readonly))
+	if c.Reading != nil && c.Conflict == nil {
+		children = append(children, workerReading(*c.Reading))
+	}
 	if c.Saving {
 		children = append(children, ui.Text{Common: ui.Common{Key: "saving", Tone: ui.TonePending}, Text: "Saving workflow…"})
 	}

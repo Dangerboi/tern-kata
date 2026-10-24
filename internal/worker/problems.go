@@ -116,7 +116,7 @@ func jobProblem(cfg Config, pc ProjectConfig, job cronjob.Job, wf *Workflow, wfE
 	case wf.Deleted:
 		return fmt.Sprintf("it runs workflow %q, which is archived", wf.Name)
 	}
-	if why := workflowRefusal(*wf, cfg.maxRunPrompts()); why != "" {
+	if why := workflowRefusal(*wf, cfg.MaxRunPrompts()); why != "" {
 		return fmt.Sprintf("it runs workflow %q, which the worker does not run: %s", wf.Name, why)
 	}
 	if p, ok := optionMap(wf.Options)["profile"].(string); ok && p != "" && p != profile {
