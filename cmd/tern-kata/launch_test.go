@@ -100,6 +100,32 @@ func TestPlanLaunchActorPrecedence(t *testing.T) {
 	}
 }
 
+func TestPlanLaunchReadsTheInboxUserNextToTheActor(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		env  map[string]string
+		want string
+	}{
+		{"unset", nil, map[string]string{"KATA_AUTHOR": "author"}, ""},
+		{"set", nil, map[string]string{"KATA_AUTHOR": "author", "KATA_INBOX_USER": "coordinator/pip"}, "coordinator/pip"},
+		{"trimmed", nil, map[string]string{"KATA_INBOX_USER": "  pip \t"}, "pip"},
+		{"blank is as unset", nil, map[string]string{"KATA_INBOX_USER": "   "}, ""},
+		{"independent of --as", []string{"--as", "flag"}, map[string]string{"KATA_INBOX_USER": "pip"}, "pip"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			plan, err := PlanLaunch(tt.args, lookupFrom(tt.env), "v")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if plan.InboxUser != tt.want {
+				t.Errorf("InboxUser = %q, want %q", plan.InboxUser, tt.want)
+			}
+		})
+	}
+}
+
 func TestPlanLaunchFallbackAuthor(t *testing.T) {
 	env := map[string]string{"KATA_AUTHOR": "author", "USER": "user"}
 	for args, want := range map[string]string{"--as ann": "ann", "--as=ann": "ann", "": ""} {
@@ -116,7 +142,9 @@ func TestPlanLaunchFallbackAuthor(t *testing.T) {
 func TestPlanLaunchGitLookupOnlyWhenNeeded(t *testing.T) {
 	asked := []string{}
 	lookup := func(key string) (string, bool) {
-		asked = append(asked, key)
+		if key == gitUserNameKey {
+			asked = append(asked, key)
+		}
 		return "", false
 	}
 	if _, err := PlanLaunch([]string{"--as", "flag"}, lookup, "v"); err != nil {
