@@ -12,6 +12,8 @@ var closeLabels = map[model.Field]string{
 	model.CloseCommit:    "Commit SHA (optional)",
 	model.ClosePR:        "PR URL (optional)",
 	model.CloseTest:      "Test command (optional)",
+	model.CloseReviewed:  "Reviewed paths, comma-separated (optional)",
+	model.CloseExternal:  "External account (optional)",
 	model.CloseReference: "Issue reference (duplicate / superseded)",
 	model.CloseRationale: "Rationale (audit-no-change)",
 }

@@ -535,3 +535,23 @@ func TestAttachmentRowsLinkThisHostAndNameOtherHosts(t *testing.T) {
 		t.Errorf("other host row = %q", got)
 	}
 }
+
+func TestDetailShowsCreationLinesForTheIssueAndItsComments(t *testing.T) {
+	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
+	issue := alpha
+	issue.Attribution = model.Attribution{Verification: "verified", Accountable: "alice", Source: "agent", Teammate: "bot"}
+	selected := &model.IssueDetailData{Issue: &issue, Comments: []model.Comment{
+		{UID: "c1", Author: "dana", CreatedAt: at, Body: "first", Attribution: model.Attribution{Verification: "pending", Source: "dana"}},
+		{UID: "c2", Author: "dana", CreatedAt: at, Body: "second"},
+	}}
+	nodes := render(t, apply(withZone(browsing()), model.DetailLoaded{UID: "alpha", Selected: selected}))
+	if got := text(nodes[view.DetailContentID+".properties.creation"]); got != "creation: verified · accountable: alice · source: agent / bot" {
+		t.Errorf("issue creation line %q", got)
+	}
+	if got := text(nodes[view.DetailActivityID+".c1.creation"]); got != "creation: pending · source: dana" {
+		t.Errorf("comment creation line %q", got)
+	}
+	if n, ok := nodes[view.DetailActivityID+".c2.creation"]; ok {
+		t.Errorf("a comment without a verification state shows %q", text(n))
+	}
+}

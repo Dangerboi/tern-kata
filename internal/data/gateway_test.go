@@ -504,6 +504,47 @@ func TestGatewayClosesWithEveryReason(t *testing.T) {
 	}
 }
 
+func TestGatewayStoresReviewedPathsAndExternalEvidenceAndActivityNamesThem(t *testing.T) {
+	kata := startKata(t, "0.20.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	message := "Implemented the requested change and verified the result."
+	for _, tt := range []struct {
+		name     string
+		evidence model.CloseEvidence
+		stored   map[string]any
+		activity string
+	}{
+		{"reviewed paths", model.CloseEvidence{Kind: model.EvidenceReviewed, Value: "src/a.go, src/b.go"}, map[string]any{"type": "reviewed-paths", "paths": []any{"src/a.go", "src/b.go"}}, "reviewed-paths src/a.go, src/b.go"},
+		{"external", model.CloseEvidence{Kind: model.EvidenceExternal, Value: "alice"}, map[string]any{"type": "external", "account": "alice"}, "external alice"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			uid := createIssue(t, gateway, workspace, demo, tt.name)
+			cmd := model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Key: "k-" + tt.name, Reason: "done", Message: message, Evidence: []model.CloseEvidence{tt.evidence}}
+			if closed := as[model.CloseResultMsg](t, run(t, gateway, cmd)); closed.Err != nil {
+				t.Fatalf("close %+v", closed)
+			}
+			if got, _ := closePayload(t, gateway, workspace, uid)["evidence"].([]any); !reflect.DeepEqual(got, []any{tt.stored}) {
+				t.Fatalf("stored evidence %v, want %v", got, tt.stored)
+			}
+			loaded := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid}))
+			m := model.Model{SelectedUID: uid}
+			m, _ = model.Update(m, model.ResizeMsg{Cols: 120})
+			m, _ = model.Update(m, loaded)
+			m, _ = model.Update(m, model.ActivityTabMsg{Tab: model.TabEvents})
+			var bodies []string
+			for _, item := range m.DetailRows() {
+				if item.Kind != model.RowChild {
+					bodies = append(bodies, item.Activity.Body)
+				}
+			}
+			if !slices.ContainsFunc(bodies, func(b string) bool { return strings.Contains(b, "("+tt.activity+")") }) {
+				t.Fatalf("Activity rows %q do not name %q", bodies, tt.activity)
+			}
+		})
+	}
+}
+
 func TestGatewayDraftTextConflicts(t *testing.T) {
 	kata := startKata(t, "0.20.0")
 	gateway := newGateway(t, newLocator(kata.target()))
@@ -1781,5 +1822,49 @@ func TestGatewayCreatesAnIssueWithDateMetadataOnlyForTheDatesSet(t *testing.T) {
 				t.Errorf("%s: %s = %v, want %v", tt.title, k, got[k], v)
 			}
 		}
+	}
+}
+
+func TestGatewayDetailCarriesTheCreationAttribution(t *testing.T) {
+	kata := startKata(t, "0.20.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	uid := createIssue(t, gateway, workspace, demo, "Attributed")
+	detailOf := func() *model.IssueDetailData {
+		return as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected
+	}
+	as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseText: detailOf().Issue.Body, Text: "noted", Comment: true, Actor: "tester"}))
+	d := detailOf()
+	if got := d.Issue.Attribution.Verification; got == "" {
+		t.Errorf("issue attribution %+v", d.Issue.Attribution)
+	}
+	if len(d.Comments) != 1 || d.Comments[0].Attribution.Verification == "" {
+		t.Errorf("comment attribution %+v", d.Comments)
+	}
+}
+
+func TestGatewayCarriesABacklinkFromAReplyOnAnotherIssue(t *testing.T) {
+	kata := startKata(t, "0.20.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	asked := createIssue(t, gateway, workspace, demo, "Asked")
+	answering := createIssue(t, gateway, workspace, demo, "Answering")
+	detailOf := func(uid string) *model.IssueDetailData {
+		return as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected
+	}
+	as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: asked, ProjectID: demo.ID, BaseText: detailOf(asked).Issue.Body, Text: "the question", Comment: true, Actor: "asker"}))
+	question := detailOf(asked).Comments[0]
+	as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: answering, ProjectID: demo.ID, BaseText: detailOf(answering).Issue.Body, Text: "refuted elsewhere: " + strings.Repeat("it does not reproduce. ", 3),
+		Comment: true, Actor: "answerer", ReplyTo: question.UID, ReplyKind: model.ReplyRefute}))
+	reply := detailOf(answering).Comments[0]
+
+	got := detailOf(asked).Comments[0]
+	if len(got.Backlinks) != 1 {
+		t.Fatalf("backlinks %+v, want the one reply", got.Backlinks)
+	}
+	link := got.Backlinks[0]
+	if link.Kind != "refute" || link.UID == nil || *link.UID != reply.UID || link.IssueUID == nil || *link.IssueUID != answering ||
+		link.Author == nil || *link.Author != "answerer" || link.ProjectUID == nil || *link.ProjectUID != demo.UID {
+		t.Errorf("backlink %+v, want the refuting reply on the other Issue", link)
 	}
 }

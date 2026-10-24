@@ -138,6 +138,12 @@ func detailRows(m model.Model) (children []detailChild, activity tern.Nodes) {
 			}
 			head = ui.Spans(spans...)
 		}
+		if row.Creation != "" {
+			parts = append(parts, ui.Text{Common: ui.Common{Key: "creation", Tone: ui.ToneMuted}, Text: row.Creation})
+		}
+		if choice, ok := m.DetailCommentLink(); ok && mark == ui.MarkPick && item.Kind == model.RowComment {
+			parts = append(parts, ui.Text{Common: ui.Common{Key: "link", Tone: ui.ToneAccent}, Text: fmt.Sprintf("link %d/%d: %s", choice.Index, choice.Count, choice.Label)})
+		}
 		if row.Body != "" {
 			parts = append(parts, ui.Md{Common: ui.Common{Key: "body"}, Text: row.Body})
 		}
@@ -272,6 +278,9 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 	for i, r := range rows {
 		key := ui.Text{Common: ui.Common{Key: "k", Shrink: &noShrink}, Text: pad(r.name+":", keyWidth-len(r.name)-1), Wrap: ui.WrapNone}
 		children[i] = ui.Row{Common: ui.Common{Key: strings.ReplaceAll(strings.ToLower(r.name), " ", "-")}, Gap: ui.GapSM, Align: ui.AlignStart, Children: ui.Nodes(key, r.value)}
+	}
+	if line := issue.Attribution.Line(issue.Author); line != "" {
+		children = append(children, ui.Text{Common: ui.Common{Key: "creation", Tone: ui.ToneMuted}, Text: line})
 	}
 	return ui.Col{Common: ui.Common{Key: "properties"}, Gap: ui.GapNone, Children: children}
 }

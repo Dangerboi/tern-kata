@@ -197,7 +197,7 @@ func popupCards() []popupCard {
 		},
 		{
 			name: "Close", card: model.CardClose, quits: true, textField: model.CloseCommit,
-			tabOrder: []model.Field{model.CloseReason, model.CloseMessage, model.CloseCommit, model.ClosePR, model.CloseTest, model.CloseReference, model.CloseRationale},
+			tabOrder: []model.Field{model.CloseReason, model.CloseMessage, model.CloseCommit, model.ClosePR, model.CloseTest, model.CloseReviewed, model.CloseExternal, model.CloseReference, model.CloseRationale},
 			states:   []cardState{{"", opened("x"), model.ModeCloseForm}},
 			graft:    func(dst *model.Model, src model.Model) { dst.CloseForm = src.CloseForm },
 			field:    func(m model.Model) model.Field { return m.CloseForm.Field },

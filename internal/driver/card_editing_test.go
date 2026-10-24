@@ -43,7 +43,7 @@ func editingCards() []editingCard {
 			lap:     []model.Field{model.CreateBody, model.CreateLabels, model.CreateOwner, model.CreatePriority, model.CreateScheduled, model.CreateDeadline, model.CreateTitle}},
 		{name: "Close", card: model.CardClose, open: popupOpener("Close"),
 			focused: func(m model.Model) model.Field { return m.CloseForm.Field },
-			lap:     []model.Field{model.CloseMessage, model.CloseCommit, model.ClosePR, model.CloseTest, model.CloseReference, model.CloseRationale, model.CloseReason}},
+			lap:     []model.Field{model.CloseMessage, model.CloseCommit, model.ClosePR, model.CloseTest, model.CloseReviewed, model.CloseExternal, model.CloseReference, model.CloseRationale, model.CloseReason}},
 		{name: "Dates", card: model.CardDates, open: popupOpener("Dates"),
 			focused: func(m model.Model) model.Field { return m.DatesForm.Field },
 			lap:     []model.Field{model.DatesDeadline, model.DatesScheduled}},

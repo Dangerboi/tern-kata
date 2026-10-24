@@ -36,7 +36,7 @@ func entryText(entry model.PageBarEntry, compact bool) string {
 	if compact && !entry.Current {
 		return entry.Chord
 	}
-	return entry.Chord + " " + entry.Label
+	return entry.Chord + " " + entry.Name()
 }
 
 func entriesWidth(entries []model.PageBarEntry, compact bool) int {
@@ -77,10 +77,10 @@ func pageBar(m model.Model, flexCell func(string, ui.Tone, float64) ui.Common, c
 			tone, style = ui.ToneAccent, "accent strong"
 		}
 		cell := flexCell(entry.ID, tone, 0)
-		cell.Title, cell.Actions = entry.Label+" page", &ui.Actions{Click: KeyClick(entry.Chord)}
+		cell.Title, cell.Actions = entry.Label+" page", &ui.Actions{Click: KeyClick(entry.Press)}
 		spans := []ui.Span{{T: entry.Chord, S: "muted"}}
 		if !compact || entry.Current {
-			spans = []ui.Span{{T: entry.Chord + " ", S: "muted"}, {T: entry.Label, S: style}}
+			spans = []ui.Span{{T: entry.Chord + " ", S: "muted"}, {T: entry.Name(), S: style}}
 		} else {
 			spans[0].S = style
 		}
