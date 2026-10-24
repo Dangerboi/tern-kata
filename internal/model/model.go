@@ -109,9 +109,9 @@ type Model struct {
 	Page           Page
 	// pageDetailHidden is the detail column's hidden flag from before the current Page took its place; leavePage restores it.
 	pageDetailHidden bool
-	Board          BoardState
-	Jobs           JobsState
-	Runs           RunsState
+	Board            BoardState
+	Jobs             JobsState
+	Runs             RunsState
 	// Worker is what the Pane knows of this machine's worker: whether it runs, what it serves and the local state of its runs.
 	Worker    WorkerState
 	Workflows WorkflowsState
