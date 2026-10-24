@@ -84,7 +84,7 @@ func TestWorkerCardStatesAndWhatEachOffers(t *testing.T) {
 		{"file that does not load", nil, brokenFile, []string{"does not load: worker.toml: unknown key bogus"}, false, false},
 		{"file without the Project", nil, otherProject, []string{"loads, and does not list work"}, false, true},
 		{"file with the Project, worker supervised", supervisedHere, listedProject, []string{"loads, lists work with checkout /repo", "process 4242", "the plugin supervises it"}, false, false},
-		{"worker.manual", nil, manual(listedProject), []string{"worker.manual is present: the plugin neither starts nor restarts"}, false, false},
+		{"marker", nil, manual(listedProject), []string{worker.ManualFileName + " is present: the plugin neither starts nor restarts"}, false, false},
 		{"worker started by hand", &model.WorkerStatus{Executor: "laptop", PID: 7}, listedProject, []string{"started by hand"}, false, false},
 		{"folder bound to no Project", nil, unboundFolder, []string{"not bound to a kata Project", "kata init"}, false, false},
 	} {
@@ -236,7 +236,7 @@ func TestWorkerCardAfterASaveWithNoWorkerSaysThePluginStartsOne(t *testing.T) {
 		want  string
 	}{
 		{"supervised", noWorkerFile, "starts the worker within 10 seconds"},
-		{"worker.manual", manual(noWorkerFile), "worker.manual is present, so the plugin does not start the worker"},
+		{"marker", manual(noWorkerFile), worker.ManualFileName + " is present, so the plugin does not start the worker"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			s := workerCardOpen(t, nil, tt.setup)
@@ -312,7 +312,7 @@ func TestJobsPageBannerPerWorkerState(t *testing.T) {
 		{"no file", nil, noWorkerFile, "No worker is set up on this machine: press W to set one up for work"},
 		{"file does not load", nil, brokenFile, "worker.toml does not load, so no worker can start: press W"},
 		{"file without the Project", nil, otherProject, "worker.toml does not list work, so no worker serves it: press W to serve it"},
-		{"manual", nil, manual(listedProject), "worker.manual keeps the plugin from starting one"},
+		{"manual", nil, manual(listedProject), worker.ManualFileName + " keeps the plugin from starting one"},
 		{"plugin starts it", nil, listedProject, "the plugin starts one within 10 seconds (W shows the setup)"},
 		{"running and serving", servingWorker(), listedProject, "running and serving work: 1 of 2 slots in use (W: worker)"},
 		{"running without the Project", &model.WorkerStatus{Executor: "laptop"}, otherProject, "does not serve work; press W to serve it, then restart the worker"},
@@ -502,7 +502,7 @@ func TestWorkerCardSupervisionOffWithNoWorkerWritesTheMarkerAtOnce(t *testing.T)
 		t.Fatalf("s sent %#v, want the marker written with no stop", off.Cmds)
 	}
 	done := step(t, off.State, model.WorkerSupervisionSet{Manual: true})
-	wantText(t, "card", wireTextOf(t, done.State), "Supervision is off: worker.manual is created", "the plugin starts no worker", "Turn supervision on")
+	wantText(t, "card", wireTextOf(t, done.State), "Supervision is off: "+worker.ManualFileName+" is created", "the plugin starts no worker", "Turn supervision on")
 	if !slices.Contains(done.Cmds, model.Cmd(askedSetup)) || done.State.Model.TopCard() != model.CardWorker {
 		t.Errorf("cmds %#v card %v, want the setup read again and the card open", done.Cmds, done.State.Model.TopCard())
 	}
@@ -531,11 +531,11 @@ func TestWorkerCardSupervisionOffWithAWorkerRunningAsksHowToStopIt(t *testing.T)
 	}
 
 	done := step(t, idle.State, model.WorkerSupervisionSet{Manual: true, Stop: &model.WorkerStopped{Mode: "idle", InFlight: 1}})
-	wantText(t, "card", wireTextOf(t, done.State), "worker.manual is created", "finishes its 1 run in flight", "nothing starts it again")
+	wantText(t, "card", wireTextOf(t, done.State), worker.ManualFileName+" is created", "finishes its 1 run in flight", "nothing starts it again")
 	ended := step(t, now.State, model.WorkerSupervisionSet{Manual: true, Stop: &model.WorkerStopped{Mode: "now", InFlight: 1}})
 	wantText(t, "card", wireTextOf(t, ended.State), "ending now", "1 run in flight (Triage)", "held `interrupted`")
 	refused := step(t, idle.State, model.WorkerSupervisionSet{Manual: true, Stop: &model.WorkerStopped{Mode: "idle", Err: errors.New("busy")}})
-	wantText(t, "card", wireTextOf(t, refused.State), "worker.manual is created", "The stop was refused: busy")
+	wantText(t, "card", wireTextOf(t, refused.State), worker.ManualFileName+" is created", "The stop was refused: busy")
 
 	kept := step(t, asked.State, key("escape"))
 	if kept.State.Model.TopCard() != model.CardWorker || len(kept.Cmds) != 0 || kept.State.Model.CurrentMode() != model.ModeWorkerRead {
@@ -545,7 +545,7 @@ func TestWorkerCardSupervisionOffWithAWorkerRunningAsksHowToStopIt(t *testing.T)
 
 func TestWorkerCardSupervisionOnRemovesTheMarkerAndSaysThePluginStartsTheWorker(t *testing.T) {
 	s := workerCardOpen(t, nil, manual(listedProject))
-	wantText(t, "card", wireTextOf(t, s), "Turn supervision on", "worker.manual is present")
+	wantText(t, "card", wireTextOf(t, s), "Turn supervision on", worker.ManualFileName+" is present")
 	on := step(t, s, key("s"))
 	if !reflect.DeepEqual(on.Cmds, []model.Cmd{model.SetWorkerSupervision{Manual: false}}) {
 		t.Fatalf("s sent %#v, want the marker removed", on.Cmds)
@@ -568,5 +568,5 @@ func TestWorkerCardTypesSWhileFieldsAreDrawn(t *testing.T) {
 func TestJobsPageBannerShowsSupervisionOffForARunningWorker(t *testing.T) {
 	s := jobsPaneWithWorker(t, servingWorker(), promptJob("A1", "Triage"))
 	s = step(t, s, model.WorkerSetupLoaded{Setup: manual(listedProject)}).State
-	wantText(t, "Jobs Page", wireTextOf(t, s), "running and serving work", "Supervision is off (worker.manual)")
+	wantText(t, "Jobs Page", wireTextOf(t, s), "running and serving work", "Supervision is off ("+worker.ManualFileName+")")
 }

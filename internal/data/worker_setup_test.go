@@ -70,8 +70,8 @@ main = '` + repo + `'
 		{"file that does not load", "executor = \n", nil, model.WorkerSetup{Exists: true}},
 		{"file listing the Project", listed, nil, model.WorkerSetup{Exists: true, Executor: "laptop", Lists: true, Checkouts: []string{repo}}},
 		{"file listing another Project", strings.ReplaceAll(listed, `"work"`, `"other"`), nil, model.WorkerSetup{Exists: true, Executor: "laptop"}},
-		{"worker.manual beside the file", listed, map[string]string{"worker.manual": ""}, model.WorkerSetup{Exists: true, Executor: "laptop", Lists: true, Checkouts: []string{repo}, Manual: true}},
-		{"worker.manual with no file", "", map[string]string{"worker.manual": ""}, model.WorkerSetup{Manual: true}},
+		{"the marker beside the file", listed, map[string]string{worker.ManualFileName: ""}, model.WorkerSetup{Exists: true, Executor: "laptop", Lists: true, Checkouts: []string{repo}, Manual: true}},
+		{"the marker with no file", "", map[string]string{worker.ManualFileName: ""}, model.WorkerSetup{Manual: true}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			g, dirs := setupGateway(t)
@@ -236,8 +236,7 @@ func TestEditedWorkerTomlIsWrittenOnlyWhenItLoads(t *testing.T) {
 
 func TestSupervisionOffWritesTheMarkerAndOnRemovesIt(t *testing.T) {
 	g, dirs := setupGateway(t)
-	marker := filepath.Join(dirs.Config, "worker.manual")
-	exists := func() bool { _, err := os.Stat(marker); return err == nil }
+	exists := dirs.ManualPresent
 
 	off := as[model.WorkerSupervisionSet](t, run(t, g, model.SetWorkerSupervision{Manual: true}))
 	if off.Err != nil || !off.Manual || off.Stop != nil || !exists() {
@@ -258,8 +257,8 @@ func TestSupervisionOffWritesTheMarkerAndOnRemovesIt(t *testing.T) {
 func TestSupervisionOffWithAStopWritesTheMarkerThenAsksTheWorkerToStop(t *testing.T) {
 	dirs, seen := fakeWorker(t, map[string]worker.Response{"stop": {OK: true, Stop: &worker.StopAnswer{Mode: "now", InFlight: 1}}})
 	got := as[model.WorkerSupervisionSet](t, run(t, workerGateway(dirs), model.SetWorkerSupervision{Manual: true, Stop: "now"}))
-	if _, err := os.Stat(filepath.Join(dirs.Config, "worker.manual")); err != nil {
-		t.Fatalf("no marker: %v", err)
+	if !dirs.ManualPresent() {
+		t.Fatal("no marker")
 	}
 	if got.Err != nil || got.Stop == nil || got.Stop.Mode != "now" || got.Stop.InFlight != 1 || got.Stop.Restarts {
 		t.Fatalf("answer %+v stop %+v", got, got.Stop)
