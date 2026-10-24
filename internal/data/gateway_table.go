@@ -496,7 +496,9 @@ func init() {
 		func(ctx context.Context, c *Client, cmd model.ClearAttention) (model.Msg, error) {
 			return ok(c.ClearAttention(ctx, cmd))
 		},
-		func(cmd model.ClearAttention, err error) model.Msg { return model.AttentionCleared{UID: cmd.UID, Err: err} },
+		func(cmd model.ClearAttention, err error) model.Msg {
+			return model.AttentionCleared{UID: cmd.UID, Err: err}
+		},
 		nil, nil)
 
 	daemonCall(
