@@ -2,11 +2,9 @@ package data
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -26,8 +24,8 @@ type Client struct {
 // Target is a client for the daemon that serves a workspace.
 type Target struct {
 	Client *client.Client
-	// Remote reports whether the daemon is remote; nil means local.
-	Remote func(ctx context.Context) (bool, error)
+	// Remote reports whether the daemon is remote; a client built from an explicit endpoint reads as local.
+	Remote bool
 }
 
 // Locator finds the daemon that serves workspace.
@@ -39,41 +37,17 @@ const connectDeadline = 10 * time.Second
 // noDaemonHint is what tern-kata adds when no daemon answers.
 const noDaemonHint = "start the kata daemon (kata daemon start) or run `kata doctor`"
 
-// LocateWithKata is the production Locator: it uses kata's own discovery for the workspace and the kata CLI for the daemon kind.
-var LocateWithKata = locateWith(daemonIsRemote)
-
-// locateWith is kata's discovery with remote answering whether the daemon is remote.
-func locateWith(remote func(ctx context.Context, workspace string) (bool, error)) Locator {
-	return func(ctx context.Context, workspace string) (Target, error) {
-		c, err := client.Discover(ctx, client.DiscoverOptions{Workspace: workspace})
-		if err != nil {
-			if errors.Is(err, client.ErrDaemonUnavailable) {
-				err = fmt.Errorf("%w\n%s", err, noDaemonHint)
-			}
-			return Target{}, err
-		}
-		return Target{Client: c, Remote: func(ctx context.Context) (bool, error) { return remote(ctx, workspace) }}, nil
-	}
-}
-
-// daemonIsRemote asks the kata CLI which kind of daemon serves workspace.
-// shortcut: kata's client does not expose the daemon kind; delete this once it does.
-func daemonIsRemote(ctx context.Context, workspace string) (bool, error) {
-	raw, err := exec.CommandContext(ctx, "kata", "--workspace", workspace, "daemon", "locate", "--json").Output()
+// LocateWithKata is the production Locator: kata's own discovery for the workspace, which also says whether the daemon is remote.
+func LocateWithKata(ctx context.Context, workspace string) (Target, error) {
+	c, err := client.Discover(ctx, client.DiscoverOptions{Workspace: workspace})
 	if err != nil {
-		var exit *exec.ExitError
-		if errors.As(err, &exit) && len(exit.Stderr) > 0 {
-			return false, errors.New(strings.TrimSpace(string(exit.Stderr)))
+		if errors.Is(err, client.ErrDaemonUnavailable) {
+			err = fmt.Errorf("%w\n%s", err, noDaemonHint)
 		}
-		return false, fmt.Errorf("kata daemon locate: %w", err)
+		return Target{}, err
 	}
-	var located struct {
-		Kind string `json:"kind"`
-	}
-	if err := json.Unmarshal(raw, &located); err != nil {
-		return false, fmt.Errorf("kata daemon locate response: %w", err)
-	}
-	return located.Kind == "remote", nil
+	discovered, _ := c.Discovered()
+	return Target{Client: c, Remote: discovered.Remote}, nil
 }
 
 // connect applies the version gate to target's daemon.
@@ -99,15 +73,9 @@ func connect(ctx context.Context, target Target) (*Client, error) {
 	if semver.Compare(normalized, "v0.19.0") < 0 {
 		return nil, fmt.Errorf("kata daemon %s is too old; tern-kata requires v0.19.0 or newer; upgrade kata", version)
 	}
-	// A failing kind check leaves the kind unknown; it never fails the connection.
 	kind := model.DaemonLocal
-	if target.Remote != nil {
-		switch remote, err := target.Remote(ctx); {
-		case err != nil:
-			kind = model.DaemonKindUnknown
-		case remote:
-			kind = model.DaemonRemote
-		}
+	if target.Remote {
+		kind = model.DaemonRemote
 	}
 	return &Client{Client: c, kind: kind, version: normalized}, nil
 }

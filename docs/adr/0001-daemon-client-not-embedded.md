@@ -6,7 +6,7 @@ Embedding constructs a `kata.Service` that owns its own storage handle. Running 
 
 ## Consequences
 
-- A daemon must be running; tern-kata never starts one. We find it with kata's own `client.Discover` for the workspace, which picks the daemon and its credentials and handles Unix sockets. With no reachable daemon the Pane shows kata's message plus a hint to start the daemon or run `kata doctor`. Whether the daemon is remote still comes from `kata daemon locate --json`, until kata's client exposes it.
+- A daemon must be running; tern-kata never starts one. We find it with kata's own `client.Discover` for the workspace, which picks the daemon and its credentials and handles Unix sockets. With no reachable daemon the Pane shows kata's message plus a hint to start the daemon or run `kata doctor`. The daemon's kind (local or remote) comes from `Client.Discovered()`.
 - The daemon catalog (`active_daemon`, the `[[daemon]]` entries and `[tui].confirm_quit`) is read straight from `<KATA_HOME>/config.toml` by one interim module in the data package, with kata v0.20's defaults and validation, because kata's client does not expose it yet. A missing file is an empty catalog; an unreadable one is an error naming the path. Replace the module once `pkg/client` ships the catalog.
 - Live updates come from the daemon's durable event stream, not in-process callbacks.
 - Upstreaming into kata later swaps only the data layer; model and view stay unchanged.

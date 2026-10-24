@@ -30,7 +30,7 @@ func LocateEntry(entry CatalogEntry) Locator {
 		if err != nil {
 			return Target{}, fmt.Errorf("daemon %q: %w", entry.Name, err)
 		}
-		return Target{Client: c, Remote: func(context.Context) (bool, error) { return true, nil }}, nil
+		return Target{Client: c, Remote: true}, nil
 	}
 }
 
@@ -73,5 +73,5 @@ func locateLocalEntry(ctx context.Context, entry CatalogEntry) (Target, error) {
 	if err != nil {
 		return Target{}, fmt.Errorf("daemon %q: %w", entry.Name, err)
 	}
-	return Target{Client: c, Remote: func(context.Context) (bool, error) { return false, nil }}, nil
+	return Target{Client: c}, nil
 }
