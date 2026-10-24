@@ -189,6 +189,10 @@ func TestAnIntervalCountsFromItsAnchor(t *testing.T) {
 		{"within one step", "2026-10-08T12:10:00Z", "2026-10-08T12:50:00Z", 0},
 		{"an empty range", "2026-10-08T12:00:00Z", "2026-10-08T12:00:00Z", 0},
 		{"a reversed range", "2026-10-08T15:00:00Z", "2026-10-08T12:00:00Z", 0},
+		{"from before the anchor counts only the steps after it", "2026-10-08T06:00:00Z", "2026-10-08T10:00:00Z", 2},
+		{"a range ending at the anchor holds none", "2026-10-08T05:00:00Z", "2026-10-08T08:00:00Z", 0},
+		{"a range wholly before the anchor holds none", "2026-10-08T03:00:00Z", "2026-10-08T06:30:00Z", 0},
+		{"from the zero time", "0001-01-01T00:00:00Z", "2026-10-08T11:00:00Z", 3},
 	}
 	for _, tc := range betweens {
 		t.Run(tc.name, func(t *testing.T) {

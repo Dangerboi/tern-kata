@@ -95,13 +95,22 @@ func (s Schedule) Between(from, to time.Time, limit int) int {
 		return 0
 	}
 	if s.step > 0 {
-		return int(to.Sub(s.anchor)/s.step) - int(from.Sub(s.anchor)/s.step)
+		return s.stepsThrough(to) - s.stepsThrough(from)
 	}
 	count := 0
 	for next := s.Next(from); !next.IsZero() && !next.After(to) && count < limit; next = s.Next(next) {
 		count++
 	}
 	return count
+}
+
+// stepsThrough is how many of an interval's occurrences, one step after its anchor and every step after that, fall at or
+// before t: none before the anchor, where Go's division toward zero would count backwards.
+func (s Schedule) stepsThrough(t time.Time) int {
+	if t.Before(s.anchor) {
+		return 0
+	}
+	return int(t.Sub(s.anchor) / s.step)
 }
 
 // PerDay is about how many Issues a day the trigger makes one of per occurrence, counted over a week from now so a weekday
