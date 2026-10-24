@@ -32,6 +32,22 @@ In the Issue detail, `b` adds a Blocking link and `l` a related link to the Issu
 
 `t` in the Issue detail gives the Issue to you for a set time. The field reads "Assignment duration for #id (1m..24h, e.g. 1h)" and takes a Go duration of whole seconds from 1m to 24h (`90m`, `1h`, `24h`); anything else is refused with kata tui's wording, "duration must be a whole number of seconds from 1m through 24h". kata records the claim for your actor, and the Issue detail shows the owner and "until" the claim ends.
 
+## Quitting
+
+`q` outside text fields asks "Quit tern-kata? y/n": `y` quits, `n` or `esc` stays, and every other key is ignored while the question shows. `ctrl+c` quits at once, asked or not. `q` typed into search or a Popup card stays text. kata's own `[tui] confirm_quit = false` in `<KATA_HOME>/config.toml` (`~/.kata/config.toml` unless `KATA_HOME` is set) makes `q` quit at once in tern-kata too; a config file kata would refuse leaves the question on.
+
+## Key aliases
+
+kata tui's alternative keys work where kata has them:
+
+| Key | Same as |
+|---|---|
+| `ctrl+j`, `ctrl+k` | `tab`, `shift+tab`: the next and previous tab of the Issue detail |
+| `backspace` | `esc` where it goes back outside text fields: the Issue detail, the Lane view, the Menu's Projects level, the Jobs and Runs inspectors and the Lettered Pages |
+| `ctrl+alt+<`, `ctrl+alt+>` | `g`, `G`: the first and last row of every list, the Issue detail and the Menu |
+| `!` then `0`-`4` or `-` | set or clear the priority at once; any other key closes the field and is handled as usual |
+| `T` | open the Attention Page, from any Page and the Menu |
+
 ## Missing keys
 
 tern-kata lacks these kata tui keys:

@@ -71,7 +71,7 @@ func TestLabelCompletionAndPriorityBounds(t *testing.T) {
 	if m.FieldForm.Value != "bug" {
 		t.Fatal("completion not applied")
 	}
-	for _, value := range []string{"-1", "5", "bad", ""} {
+	for _, value := range []string{"-1", "5", "bad"} {
 		p := model.Model{SelectedUID: "i", Issues: []model.Issue{{UID: "i"}}}
 		p, _ = model.Update(p, model.KeyMsg{Chord: "!"})
 		p, _ = model.Update(p, model.FieldValueMsg{Value: value})

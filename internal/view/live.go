@@ -32,6 +32,9 @@ func staleText(m model.Model) string {
 // them and laneMax charges for them, so the two cannot disagree on which are there.
 func footerTexts(m model.Model) []ui.Text {
 	var texts []ui.Text
+	if m.AskQuit {
+		texts = append(texts, ui.Text{Common: ui.Common{Key: "quit", Tone: ui.ToneAccent}, Text: model.QuitQuestion})
+	}
 	if m.Stale && m.Err == nil && !m.FirstLoad() && !m.HelpOpen {
 		texts = append(texts, ui.Text{Common: ui.Common{Key: "stale", Tone: ui.TonePending}, Text: staleText(m)})
 	}

@@ -302,9 +302,9 @@ func TestFreshSurfaceResendsTextFocus(t *testing.T) {
 
 func TestQuitStateEndsTheLoop(t *testing.T) {
 	s := browsing(t, 160)
-	out := driver.Step(s, key("q"), now)
+	out := driver.Step(driver.Step(s, key("q"), now).State, key("y"), now)
 	if !out.Quit || out.Err != nil || out.View != nil || len(out.Ops) != 0 || len(out.Cmds) != 0 {
-		t.Fatalf("q: %+v", out)
+		t.Fatalf("q, y: %+v", out)
 	}
 	out = driver.Step(s, key("ctrl+c"), now)
 	if !out.Quit {

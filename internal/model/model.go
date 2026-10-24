@@ -87,6 +87,10 @@ type Model struct {
 	Cols             int
 	Rows, RowPx      int
 	Quitting         bool
+	// AskQuit is the question "Quit tern-kata? y/n" while it is on screen.
+	AskQuit bool
+	// QuitAtOnce is kata's [tui].confirm_quit = false, read at launch: q quits without asking.
+	QuitAtOnce bool
 	Collection       Collection
 	Collections      []Collection
 	CollectionCursor int

@@ -43,7 +43,9 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-mkdir -p "$tmp/workspace"
+mkdir -p "$tmp/workspace" "$KATA_HOME"
+# q asks "Quit tern-kata? y/n" unless kata's [tui] confirm_quit is false: the steps quit with one key, and the quit step turns it on.
+printf '[tui]\nconfirm_quit = false\n' >"$KATA_HOME/config.toml"
 kata daemon start
 kata --workspace "$tmp/workspace" init --project smoke --json
 kata --workspace "$tmp/workspace" create "Smoke first Issue" --body "First seeded body" --json
