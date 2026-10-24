@@ -9,9 +9,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"go.kenn.io/kit/safefileio"
 	"go.kenn.io/kata/pkg/client"
 )
 
@@ -119,11 +121,8 @@ func readTokenFile(path string, optional bool) (string, error) {
 	if !filepath.IsAbs(resolved) {
 		return fail("must use an absolute path or ~/ path")
 	}
-	f, err := openCredentialFile(resolved)
+	f, err := safefileio.OpenCurrentUserFile(resolved)
 	if err != nil {
-		if errors.Is(err, errWrongOwner) {
-			return fail("must be owned by the daemon user")
-		}
 		return fail("cannot read credential file")
 	}
 	defer func() { _ = f.Close() }()
@@ -131,7 +130,11 @@ func readTokenFile(path string, optional bool) (string, error) {
 	if err != nil || !info.Mode().IsRegular() {
 		return fail("not a readable regular file")
 	}
-	if !privateCredentialFile(info) {
+	if runtime.GOOS == "windows" {
+		if err := safefileio.ValidatePrivateCurrentUserFile(f); err != nil {
+			return fail("must be a private current-user file")
+		}
+	} else if info.Mode().Perm()&0o077 != 0 {
 		return fail("group/world-readable; use chmod 600")
 	}
 	if info.Size() > 64<<10 {

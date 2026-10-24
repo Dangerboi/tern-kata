@@ -159,7 +159,7 @@ func writeCredential(t *testing.T, path, content string) {
 
 func TestALocalCatalogEntryReadsAConfiguredTokenFileAsStrictlyAsKataDoes(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("the stub kata is a shell script, and kata checks Windows files differently")
+		t.Skip("the stub kata is a shell script")
 	}
 	entry := CatalogEntry{Name: "mine", Local: true}
 	for name, c := range map[string]struct {
@@ -173,7 +173,7 @@ func TestALocalCatalogEntryReadsAConfiguredTokenFileAsStrictlyAsKataDoes(t *test
 		"a group-readable file": {func(d string) string { return filepath.Join(d, "token") }, 0o640, "s3cret\n", "group/world-readable; use chmod 600"},
 		"an empty file":         {func(d string) string { return filepath.Join(d, "token") }, 0o600, "\n", "credential file is empty"},
 		"a missing file":        {func(d string) string { return filepath.Join(d, "none") }, 0o600, "", "cannot read credential file"},
-		"a directory":           {func(d string) string { return d }, 0o600, "", "not a readable regular file"},
+		"a directory":           {func(d string) string { return d }, 0o600, "", "cannot read credential file"},
 	} {
 		for _, viaEnv := range []bool{false, true} {
 			home, dir := t.TempDir(), t.TempDir()
