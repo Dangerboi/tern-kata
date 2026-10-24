@@ -47,7 +47,75 @@ func (m Model) issueHierarchy() (map[string]string, map[string][]Issue) {
 			children[parent] = append(children[parent], issue)
 		}
 	}
+	if m.GraphOrder {
+		blocked := m.blockedBy()
+		for parent, kin := range children {
+			children[parent] = blockersFirst(kin, blocked)
+		}
+	}
 	return parents, children
+}
+
+// blockedBy maps each Issue to the Issues it blocks. A blocks link runs from the blocker to the Issue it blocks, a
+// blocked_by link the other way round.
+func (m Model) blockedBy() map[string][]string {
+	blocks := make(map[string][]string)
+	for _, link := range m.Snapshot.Links {
+		switch link.Type {
+		case "blocks":
+			blocks[link.FromIssueUID] = append(blocks[link.FromIssueUID], link.ToIssueUID)
+		case "blocked_by":
+			blocks[link.ToIssueUID] = append(blocks[link.ToIssueUID], link.FromIssueUID)
+		}
+	}
+	return blocks
+}
+
+// blockersFirst orders siblings topologically by blocks, blockers first. Among Issues free to go next the earliest in
+// creation order (the order given) goes first; Issues caught in a blocking cycle follow the rest in creation order.
+func blockersFirst(siblings []Issue, blocks map[string][]string) []Issue {
+	if len(siblings) < 2 {
+		return siblings
+	}
+	index := make(map[string]int, len(siblings))
+	for i, issue := range siblings {
+		index[issue.UID] = i
+	}
+	blocking := make([][]int, len(siblings))
+	waiting := make([]int, len(siblings))
+	for i, issue := range siblings {
+		for _, uid := range blocks[issue.UID] {
+			if j, ok := index[uid]; ok && j != i {
+				blocking[i] = append(blocking[i], j)
+				waiting[j]++
+			}
+		}
+	}
+	ordered := make([]Issue, 0, len(siblings))
+	done := make([]bool, len(siblings))
+	for len(ordered) < len(siblings) {
+		next := -1
+		for i := range siblings {
+			if !done[i] && waiting[i] == 0 {
+				next = i
+				break
+			}
+		}
+		if next < 0 {
+			for i := range siblings {
+				if !done[i] {
+					ordered = append(ordered, siblings[i])
+				}
+			}
+			break
+		}
+		done[next] = true
+		ordered = append(ordered, siblings[next])
+		for _, j := range blocking[next] {
+			waiting[j]--
+		}
+	}
+	return ordered
 }
 
 func (m Model) VisibleRows() []IssueRow {
@@ -115,6 +183,17 @@ func (m Model) WithVisibleSelection() Model {
 }
 
 func updateHierarchy(m Model, action Action) Model {
+	if action == ToggleGraphOrder {
+		if m.Flat {
+			return m
+		}
+		m.GraphOrder = !m.GraphOrder
+		m.Notice = "graph order: temporal"
+		if m.GraphOrder {
+			m.Notice = "graph order: topological"
+		}
+		return m.WithVisibleSelection()
+	}
 	if action == ToggleIssueView {
 		m.Flat = !m.Flat
 		if !m.Flat {
