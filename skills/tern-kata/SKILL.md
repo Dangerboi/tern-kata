@@ -48,7 +48,7 @@ tern-kata recur <ref> --stop                            # stops the Recurrence; 
 
 ## Worker runs
 
-The tern-kata plugin supervises the worker: once `worker.toml` exists, the plugin starts `tern-kata worker` inside Tern's session daemon and starts it again when it exits, so it is not a foreground process the user starts. It runs kata's agent prompt jobs and workflows through omp on their machine and records each run in kata. The commands below that talk to it need it running, say `no tern-kata worker is running on this machine` when it is not, and exit 1 with the reason on stderr when refused.
+The tern-kata plugin supervises the worker: once `worker.toml` exists, the plugin starts `tern-kata worker` inside Tern's session daemon and starts it again when it exits, so it is not a foreground process the user starts. It runs kata's agent prompt jobs and workflows through omp on their machine and records each run in kata. `run`, `status`, `stop`, `resume` and `abandon` need it running and say `no tern-kata worker is running on this machine` when it is not; `edit`, `init`, `add` and `doctor` do not. Any refusal exits 1 with the reason on stderr. Never start `tern-kata worker` yourself: the plugin runs it, and `tern-kata worker --takeover` would claim the Projects' leases from another live worker.
 
 ```bash
 tern-kata run <job-uid>                       # run an adapter prompt job now; prints the run's uid

@@ -37,7 +37,7 @@ kata labels --agent                              # label counts in project
 - `ready`/`next` exclude issues with an open `blocked-by` predecessor, a future `scheduled_on`, or `someday=true`. `list` excludes none of these.
 - Priority is `0..4`, **0 = highest**. `--label` repeats with AND logic; `--no-label` excludes.
 - `--all` on `list`/`ready`/`next` spans every non-archived project.
-- `list` stops at 200 rows (`--include-total` reports the full count). For every match, add `--sort created --json` and repeat with `--cursor <next_cursor>` until `complete` is true; `search --lexical` pages the same way. `--priority-unset` finds unprioritised issues.
+- `list` stops at 200 rows (`--include-total` reports the full count; `--all` has no default limit). For every match, add `--sort created --json` and repeat with `--cursor <next_cursor>` until `complete` is true; `search --lexical` pages the same way. `--priority-unset` finds unprioritised issues.
 
 ## Create
 
@@ -123,7 +123,7 @@ kata close <ref> --audit-no-change --evidence "no-change-audit:<what was checked
 kata close <ref> --done ... --dry                    # validate without mutating
 ```
 
-- A close is a completion claim. `--message` must be issue-specific prose: what changed, how it was verified.
+- A close is a completion claim. `--message` must be issue-specific prose: what changed, how it was verified. Minimum length: 40 characters for `--done` and `--audit-no-change`, 20 for `--duplicate-of` and `--superseded-by`, 60 for `--wontfix`.
 - Evidence is typed: `--commit <sha>`, `--pr <url>`, `--test <cmd>`, `--reviewed <path>`, or raw `--evidence commit:|pr:|test:|reviewed-paths:|external:|no-change-audit:|duplicate-of:|superseded-by:<value>`. `--commit`, `--pr`, `--test`, `--reviewed` and `--evidence` each repeat and every value is recorded (`--test "<cmd>"` once per test); an empty value is refused. `external:<account>` covers done work with no repo artifact. Non-wontfix closes without evidence show up in `kata audit closes --no-evidence`.
 - Close each issue as soon as it is verified, not batched at the end.
 - A parent cannot close while it has open children.
@@ -242,7 +242,7 @@ Ownership rules:
    - `--until closed` (default) | `attention` (any non-ok) | `needs-human` | `stuck` | `reply` (see Attention requests). A close also satisfies attention modes; `results[].reason` says `closed`, `attention` or `reply`.
    - `--all` (default) waits for every ref; `--any` returns on the first.
    - Timeout exits with code **8** and lists `pending`. `--timeout 0` (default) waits forever, so always set one in automation.
-   - `wait` is read-only and needs no dependency edge.
+   - `wait` is read-only and needs no dependency edge. With `--any`, a ref kata can no longer read (a deleted issue) is listed under `abandoned` instead of failing the join; with `--all` it aborts the wait.
 4. Attribution for spawned agents: env vars don't reach omp subagents, so give each its name in the task and have it pass `--teammate <name>` on every kata write (stamps comments / `metadata.teammate` on creates). Its inbox is `kata inbox --for <actor>/<name>`.
 
 ## Attention requests (inbox)
@@ -254,7 +254,7 @@ kata inbox --for <actor>[/<teammate>] --all --agent   # every project on the dae
 kata notify <ref> --to <actor>[/<teammate>] --clear      # after handling
 ```
 
-Reading doesn't clear a request. One request per Issue and recipient; a new `notify` to the same recipient replaces the old one.
+Reading doesn't clear a request. One request per Issue and recipient; a new `notify` to the same recipient replaces the old one. `--message` is required (max 1024 bytes) unless `--clear`. `inbox --for` and `wait --until reply` default to `$KATA_INBOX_USER` (an address, `<actor>` or `<actor>/<teammate>`); an exact address only, so `coordinator` does not see `coordinator/*`.
 
 Ask for an answer to a specific comment, and block until it arrives:
 
@@ -273,7 +273,7 @@ kata wait <ref> --until reply --timeout 30m --agent
 kata digest --since 24h               # changelog grouped by actor
 kata audit closes --since <RFC3339> --no-evidence
 kata events --after <cursor> --limit 100 --json   # poll with a saved cursor; reset cache on reset_required
-kata events --tail --agent                        # stream live
+kata events --tail --agent                        # stream live; --last-event-id <n> resumes
 ```
 
 - Date-driven work can start from `issue.scheduled_reached` events, through hooks or `kata events --tail`.
