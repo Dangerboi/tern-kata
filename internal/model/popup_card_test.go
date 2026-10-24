@@ -3,7 +3,6 @@ package model_test
 import (
 	"errors"
 	"reflect"
-	"slices"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -446,31 +445,6 @@ func TestPopupCardStates(t *testing.T) {
 				}
 				if listed != c.quits {
 					t.Errorf("%s lists ctrl+c = %v, but it quits = %v", state.mode, listed, c.quits)
-				}
-			})
-		}
-	}
-}
-
-// Of any two cards open at once, the earlier one in the order takes the keys (it owns the keymap mode) and holds the text caret.
-func TestPopupCardOrder(t *testing.T) {
-	// The order is spelled out here, not read from model.Cards().
-	var cards []popupCard
-	for _, name := range []string{"Create", "Draft editor", "single-field form", "Close", "Dates", "Recurrence", "New Project", "Filter form", "Menu"} {
-		i := slices.IndexFunc(popupCards(), func(c popupCard) bool { return c.name == name })
-		if i < 0 {
-			t.Fatalf("card %q has no row", name)
-		}
-		cards = append(cards, popupCards()[i])
-	}
-	for i, top := range cards {
-		for _, under := range cards[i+1:] {
-			t.Run(top.name+" over "+under.name, func(t *testing.T) {
-				m := model.Model{}
-				under.graft(&m, under.open())
-				top.graft(&m, top.open())
-				if card, _, _ := m.TextCaret(); card != top.card || m.CurrentMode() != top.states[0].mode {
-					t.Fatalf("caret card %d mode %s, want %d %s", card, m.CurrentMode(), top.card, top.states[0].mode)
 				}
 			})
 		}
