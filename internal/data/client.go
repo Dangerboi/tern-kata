@@ -20,8 +20,12 @@ type Client struct {
 	*client.Client
 	kind    model.DaemonKind
 	version string
-	// name is the daemon's name in kata's catalog, empty when the connection is not a catalog entry.
-	name string
+	// name is the daemon's name in kata's catalog, empty when the connection is not a catalog entry. entry is that catalog entry as
+	// it read when the connection was made, zero when the catalog has none by that name: its token and allow_insecure are the auth
+	// policy of this connection, and everything that names or authenticates the connected daemon reads them here, never the
+	// catalog's active_daemon, which a switch leaves where it was.
+	name  string
+	entry CatalogEntry
 }
 
 // Target is a client for the daemon that serves a workspace.

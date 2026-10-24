@@ -575,3 +575,62 @@ func TestTheStatusReadKeepsEveryBindingWhateverItsRole(t *testing.T) {
 		t.Errorf("the spoke's status %+v, want acme bound as a spoke", spoke)
 	}
 }
+
+// After a switch the connected daemon is the one every hub choice, exclusion and recovery command reads, not the entry
+// active_daemon still names in the file.
+func TestAfterASwitchTheHubStepsAndRecoveryFollowTheConnectedDaemon(t *testing.T) {
+	rig := startEnrollRig(t)
+	t.Setenv("KATA_AUTH_TOKEN", "")
+	gateway := rig.spokeGateway(t)
+	workspace := t.TempDir()
+	if answer := switched(t, gateway, workspace, "hub"); answer.Err != nil {
+		t.Fatal(answer.Err)
+	}
+
+	listed := as[model.FederationHubsLoaded](t, run(t, gateway, model.LoadFederationHubs{Workspace: workspace, Request: 1}))
+	var active []string
+	for _, hub := range listed.Hubs {
+		if hub.Active {
+			active = append(active, hub.Name)
+		}
+	}
+	if !slices.Equal(active, []string{"hub"}) {
+		t.Errorf("hubs marked active after the switch: %v, want the connected daemon only", active)
+	}
+	browsed := as[model.FederationBrowsed](t, run(t, gateway, model.BrowseFederationHubs{Workspace: workspace, Request: 2}))
+	var read []string
+	for _, row := range browsed.Hubs {
+		read = append(read, row.Hub.Name)
+	}
+	if !slices.Equal(read, []string{"spoke"}) {
+		t.Errorf("browsing after the switch read %v, want the previous daemon as a hub and not the connected one", read)
+	}
+	refused := as[model.FederationHubProjectsLoaded](t, run(t, gateway, model.LoadFederationHubProjects{Workspace: workspace, Request: 3, Hub: "hub"}))
+	if !refused.Early || refused.Err == nil || !strings.Contains(refused.Err.Error(), "active daemon cannot be selected as hub") {
+		t.Errorf("the connected daemon as a hub answered %+v, want a refusal", refused)
+	}
+
+	// Enrolling into the previous daemon, the recovery command carries the connected daemon's token, not the file's active entry's.
+	_, acme := project(t, newGateway(t, newLocator(rig.spoke.target())), "acme")
+	watch(rig.spoke, func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, fmt.Sprintf("/projects/%d/federation/metadata", acme.ID)) {
+			refuseWith(http.StatusBadGateway, "hub_says_no", "the hub said no")(w, r)
+			return true
+		}
+		return false
+	})
+	instance, err := rig.hub.target().Client.InstanceWithResponse(context.Background())
+	if err != nil || instance.JSON200 == nil {
+		t.Fatalf("instance: %v", err)
+	}
+	draft := replicaDraft(acme)
+	draft.Hub = model.FederationHub{Name: "spoke"}
+	got := as[model.FederationEnrolled](t, run(t, gateway, model.EnrollFederation{Workspace: workspace, Attempt: 3, InstanceUID: instance.JSON200.InstanceUID, Draft: draft}))
+	if got.Recovery == nil {
+		t.Fatalf("enrollment answered %+v, want a failure with its recovery", got)
+	}
+	command := got.Recovery.Command
+	if got.Recovery.SpokeName != "hub" || command.SpokeToken != "hub-secret" || !command.SpokeAllowInsecure {
+		t.Errorf("recovery for spoke %q with token %q: want the connected daemon hub and its own token", got.Recovery.SpokeName, command.SpokeToken)
+	}
+}

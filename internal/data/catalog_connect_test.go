@@ -95,3 +95,29 @@ func TestLocalCatalogEntryThatKataCannotLocateSaysWhy(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestGatewayConnectsToATokenProtectedLocalCatalogEntryWithItsToken(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stub kata is a shell script")
+	}
+	t.Setenv("KATA_HOME", t.TempDir())
+	t.Setenv("KATA_SERVER", "")
+	t.Setenv("KATA_AUTH_TOKEN", "")
+	t.Setenv("MINE_TOKEN", "s3cret")
+	protected := startTokenKata(t, "s3cret")
+	installStubKata(t, protected.URL, false, "")
+
+	entry := CatalogEntry{Name: "mine", Local: true, TokenEnv: "MINE_TOKEN"}
+	if d := loadsProject(t, LocateEntry(entry)); d.Kind != model.DaemonLocal {
+		t.Fatalf("daemon %+v, want a local one reached with its token", d)
+	}
+	entry = CatalogEntry{Name: "mine", Local: true, InlineToken: "s3cret"}
+	if d := loadsProject(t, LocateEntry(entry)); d.Kind != model.DaemonLocal {
+		t.Fatalf("daemon %+v, want a local one reached with its inline token", d)
+	}
+	t.Setenv("MINE_TOKEN", "")
+	entry = CatalogEntry{Name: "mine", Local: true, TokenEnv: "MINE_TOKEN"}
+	if _, err := LocateEntry(entry)(context.Background(), ""); err == nil || !strings.Contains(err.Error(), "MINE_TOKEN") {
+		t.Fatalf("err = %v, want it to name the unset variable", err)
+	}
+}

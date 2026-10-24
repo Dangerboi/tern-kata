@@ -1,12 +1,15 @@
 package data
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
@@ -335,5 +338,50 @@ func TestStartEnvironmentDropsTheVariablesThatRedirectKata(t *testing.T) {
 	}
 	if got := startEnvironment(env, "/profile"); !slices.Equal(got, []string{"PATH=/bin", "KATA_AUTHOR=me", "KATA_HOME=/profile"}) {
 		t.Errorf("profile home: %v", got)
+	}
+}
+
+func TestGatewaySwitchEndsAndAwaitsTheOldDaemonsPointerPass(t *testing.T) {
+	f := newAttachFixture(t)
+	beta := startKata(t, "0.20.0")
+	writeCatalog(t, remoteEntry("alpha", f.kata)+remoteEntry("beta", beta))
+	f.setMeta(t, f.uid, map[string]any{"attachment.a.png": map[string]any{"host": f.host, "path": "/a.png"}})
+
+	listing, release := make(chan struct{}, 1), make(chan struct{})
+	var open sync.Once
+	t.Cleanup(func() { open.Do(func() { close(release) }) })
+	hold := func(_ http.ResponseWriter, r *http.Request) bool {
+		if !isIssueList(r) {
+			return false
+		}
+		select {
+		case listing <- struct{}{}:
+		default:
+		}
+		select {
+		case <-release:
+			return false
+		case <-r.Context().Done():
+			return true
+		}
+	}
+	f.kata.intercept.Store(&hold)
+
+	as[model.ProjectLoaded](t, run(t, f.gateway, model.LoadProject{Workspace: f.repo, Actor: "tester"}))
+	<-listing // the pass is reading the old daemon's Issues
+
+	if answer := switched(t, f.gateway, f.repo, "beta"); answer.Err != nil {
+		t.Fatal(answer.Err)
+	}
+	ended := make(chan struct{})
+	go func() { f.gateway.background.Wait(); close(ended) }()
+	select {
+	case <-ended:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the switch answered while the old daemon's pointer pass was still running")
+	}
+	open.Do(func() { close(release) })
+	if _, moved := f.issue(t, f.uid).Metadata["tern-kata.attachment.a.png"]; moved {
+		t.Fatal("the old daemon's pointers were rewritten after the switch")
 	}
 }

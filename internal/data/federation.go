@@ -42,11 +42,10 @@ func (c *Client) ReadFederation(ctx context.Context, cmd model.LoadFederation) (
 	return loaded, nil
 }
 
-// activeDaemon is the name, endpoint and auth of the daemon this client talks to, worded as kata tui words them. An unreadable
-// catalog leaves the daemon unnamed by it: discovery already read the file and would have refused it.
+// activeDaemon is the name, endpoint and auth of the daemon this client talks to, worded as kata tui words them: the catalog entry
+// the connection was made through, not whichever entry active_daemon names now.
 func (c *Client) activeDaemon(auth g.AuthInfoOut) (name, endpoint, authText string) {
-	catalog, _ := ReadCatalog()
-	entry, named := catalog.Entry(firstNonEmpty(c.name, catalog.Active))
+	entry, named := c.entry, c.entry.Name != ""
 	endpoint = "local"
 	if c.kind == model.DaemonRemote {
 		endpoint = firstNonEmpty(entry.URL, os.Getenv("KATA_SERVER"), "remote")
@@ -61,7 +60,7 @@ func (c *Client) activeDaemon(auth g.AuthInfoOut) (name, endpoint, authText stri
 			name = u.Host
 		}
 	}
-	return name, endpoint, federationAuth(named && entry.TokenEnv != "", auth)
+	return name, endpoint, federationAuth(named && (entry.TokenEnv != "" || entry.InlineToken != ""), auth)
 }
 
 // federationAuth is kata tui's auth display: how the connection authenticates, then who the daemon says it is. configuredToken says
