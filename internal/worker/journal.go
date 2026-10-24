@@ -244,9 +244,6 @@ type Outcome struct {
 	OutputTokens *int64 `json:"output_tokens,omitempty"`
 }
 
-// Held reports whether the run waits for the user.
-func (j *Journal) Held() bool { return j.Outcome != nil && j.Outcome.Hold != "" }
-
 // Inspections are the reasons the run's reports could not be delivered without a person looking.
 func (j *Journal) Inspections() []string {
 	var out []string
@@ -548,7 +545,7 @@ func (s *Store) Retain(cutoff time.Time) (removed []string, err error) {
 
 // expired reports whether a journal may be removed: settled, nothing unsent, not held, ended before cutoff.
 func expired(j *Journal, cutoff time.Time) bool {
-	if j.Phase != PhaseSettled || j.Held() || j.Outcome == nil || !j.Outcome.At.Before(cutoff) {
+	if !j.settled() || j.held() || j.Outcome == nil || !j.Outcome.At.Before(cutoff) {
 		return false
 	}
 	for _, it := range j.Intents {

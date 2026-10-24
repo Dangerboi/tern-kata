@@ -89,7 +89,7 @@ func (w *Worker) noteOwed() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	for _, j := range journals {
-		if j.Executor != w.opt.Config.Executor || j.Phase == PhaseSettled || j.Outcome != nil && j.Outcome.Hold != "" {
+		if j.Executor != w.opt.Config.Executor || !j.owes() {
 			continue
 		}
 		if !slices.ContainsFunc(w.projects, func(ps *projectState) bool { return ps.cfg.Name == j.ProjectName }) {

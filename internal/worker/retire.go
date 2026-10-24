@@ -74,7 +74,7 @@ func (w *Worker) retire(ctx context.Context, p Project, instance string, journal
 		return false
 	}
 	for _, j := range journals {
-		if j.ProjectUID != p.UID || j.Executor != w.opt.Config.Executor || j.Phase != PhaseFinished {
+		if j.ProjectUID != p.UID || j.Executor != w.opt.Config.Executor || !j.reportDue() {
 			continue
 		}
 		ps := &projectState{cfg: ProjectConfig{Name: p.Name, Capacity: 1}, actor: j.Actor, project: p, resolved: true, held: map[string]string{}, kick: make(chan struct{}, 1)}

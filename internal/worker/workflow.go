@@ -444,8 +444,8 @@ func stepStateText(j *Journal, i int) string {
 		return cmp.Or(r.State, StepPending)
 	}
 	switch {
-	case j.Held():
-		return "held: " + j.Outcome.Hold
+	case j.held():
+		return j.stateName()
 	case j.Outcome != nil && j.Outcome.Status == StatusCancelled:
 		return "cancelled"
 	}

@@ -40,7 +40,7 @@ func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, err
 	if err != nil {
 		return RunTransition{}, err
 	}
-	if reason := w.resumeRefusal(j); reason != "" {
+	if reason := w.life().mayResume(j); reason != "" {
 		return RunTransition{}, fmt.Errorf("run %s cannot be resumed: %s", uid, reason)
 	}
 	if why := w.admitsNothing(ps); why != "" {
@@ -72,7 +72,7 @@ func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, err
 	by = cmp.Or(by, ps.actor)
 	updated, err := w.store.Update(uid, "resume-accepted", func(j *Journal) error {
 		// Checked again under the journal's lock: a request that is not this worker's own cannot slip in between.
-		if reason := w.resumeRefusal(j); reason != "" {
+		if reason := w.life().mayResume(j); reason != "" {
 			return fmt.Errorf("run %s cannot be resumed: %s", uid, reason)
 		}
 		in, out := w.heldTokens(j)
@@ -132,28 +132,29 @@ func (w *Worker) Abandon(ctx context.Context, uid, by string) (RunTransition, er
 		return RunTransition{}, fmt.Errorf("run %s cannot be abandoned: Project %s admits nothing: %s", uid, ps.cfg.Name, why)
 	}
 	by = cmp.Or(by, ps.actor)
-	if !j.Held() {
-		if reason := cancelRefusal(j); reason != "" {
-			return RunTransition{}, fmt.Errorf("run %s cannot be abandoned: %s", uid, reason)
-		}
+	if reason := w.life().mayAbandon(j); reason != "" {
+		return RunTransition{}, fmt.Errorf("run %s cannot be abandoned: %s", uid, reason)
+	}
+	if !j.held() {
 		updated, err := w.cancelRunning(ps, uid, by)
 		if err != nil {
 			return RunTransition{}, err
 		}
 		return transition(updated), nil
 	}
-	if reason := abandonRefusal(j); reason != "" {
-		return RunTransition{}, fmt.Errorf("run %s cannot be abandoned: %s", uid, reason)
-	}
 	updated, err := w.store.Update(uid, "abandoned", func(j *Journal) error {
-		if reason := abandonRefusal(j); reason != "" {
+		if reason := w.life().mayAbandon(j); reason != "" {
 			return fmt.Errorf("run %s cannot be abandoned: %s", uid, reason)
 		}
+		if !j.held() {
+			return fmt.Errorf("run %s cannot be abandoned: it is %s, not held", uid, j.stateName())
+		}
+		beforeAdmission := j.holdClass() == holdBeforeAdmission
 		held := j.Outcome
 		j.Outcome = &Outcome{Status: StatusCancelled, Summary: fmt.Sprintf("abandoned by %s (was held: %s)", by, held.Summary), At: w.clock.Now().UTC()}
 		j.Intents = nil
 		j.Phase = PhaseFinished
-		if held.Status == "" { // held before admission: kata never saw it, so nothing is reported
+		if beforeAdmission { // held before admission: kata never saw it, so nothing is reported
 			j.Phase = PhaseSettled
 		}
 		return nil
@@ -162,14 +163,14 @@ func (w *Worker) Abandon(ctx context.Context, uid, by string) (RunTransition, er
 		w.noteHook(err)
 		return RunTransition{}, err
 	}
-	if updated.Phase == PhaseFinished {
+	if updated.reportDue() {
 		w.spawn(ps, uid)
 	}
 	return transition(updated), nil
 }
 
 func transition(j *Journal) RunTransition {
-	t := RunTransition{RunUID: j.RunUID, Project: j.ProjectName, Job: j.JobName, State: runStatus(j).State}
+	t := RunTransition{RunUID: j.RunUID, Project: j.ProjectName, Job: j.JobName, State: j.stateName()}
 	if j.Issue != nil {
 		t.Issue = j.Issue.Ref
 	}
@@ -209,38 +210,6 @@ func (w *Worker) heldRun(uid string) (*Journal, *projectState, error) {
 		}
 	}
 	return nil, nil, fmt.Errorf("run %s belongs to Project %s, which this worker does not serve right now", uid, j.ProjectName)
-}
-
-// resumeRefusal is why a run cannot be resumed, empty when it can (the lease, Issue and capacity are checked by Resume).
-func (w *Worker) resumeRefusal(j *Journal) string {
-	switch {
-	case !j.Held():
-		return "it is " + runStatus(j).State + ", not held"
-	case j.Outcome.Status != StatusUnknown:
-		return fmt.Sprintf("it was held (%s) before kata saw it and nothing ran, so there is nothing to continue; abandon it", j.Outcome.Hold)
-	case j.Phase != PhaseSettled:
-		return "its hold is still being reported to kata; try again in a moment"
-	case processMayBeAlive(j) && j.Launch == nil:
-		return "the worker cannot prove the agent was never started, so it will not start another on this run; abandon it"
-	case processMayBeAlive(j):
-		return fmt.Sprintf("the agent's process group %d is still present; the worker never stops a process to make a resume possible", j.Launch.PGID)
-	case w.sessionID(j) == "" && !j.activeIsCommand():
-		return fmt.Sprintf("there is no omp session to continue (%s); only abandon remains", j.Outcome.Hold)
-	}
-	return ""
-}
-
-// abandonRefusal is why a run cannot be abandoned, empty when it can.
-func abandonRefusal(j *Journal) string {
-	switch {
-	case !j.Held():
-		return "it is " + runStatus(j).State + ", not held"
-	case j.Phase != PhaseSettled:
-		return "its hold is still being reported to kata; try again in a moment"
-	case j.Launch != nil && processMayBeAlive(j):
-		return fmt.Sprintf("the agent's process group %d is still present; stop it first", j.Launch.PGID)
-	}
-	return ""
 }
 
 // reopen confirms the resumed Run's running observation in kata, keeping the original start time and clearing the end,
