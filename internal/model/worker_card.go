@@ -24,10 +24,6 @@ const (
 
 const (
 	OpenWorkerCard       Action = "open-worker-card"
-	WorkerNext           Action = "worker-next-field"
-	WorkerPrevious       Action = "worker-previous-field"
-	WorkerNextChoice     Action = "worker-next-choice"
-	WorkerPreviousChoice Action = "worker-previous-choice"
 	WorkerSave           Action = "worker-save"
 	WorkerCancel         Action = "worker-cancel"
 	WorkerRestartIdle    Action = "worker-restart-idle"
@@ -583,13 +579,9 @@ func workerCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		return switchSupervision(m)
 	case bound && binding.Action == WorkerCancel:
 		m.WorkerCard = WorkerCardState{}
-	case bound && binding.Action == WorkerNext:
-		cycleField(&m, 1)
-	case bound && binding.Action == WorkerPrevious:
-		cycleField(&m, -1)
 	case bound && binding.Action == WorkerSave:
 		return submitWorker(m)
-	case field == nil && bound && (binding.Action == InputSpace || binding.Action == WorkerNextChoice || binding.Action == WorkerPreviousChoice):
+	case field == nil && bound && binding.Action == InputSpace:
 		if m.WorkerCardShows(f.Field) {
 			f.Trusted, f.Err = !f.Trusted, nil
 		}

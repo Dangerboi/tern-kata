@@ -12,8 +12,6 @@ const ModeCloseForm Mode = "close-form"
 const (
 	OpenClose     Action = "close-issue"
 	ReopenAction  Action = "reopen-issue"
-	CloseNext     Action = "close-next"
-	ClosePrevious Action = "close-previous"
 	CloseSave     Action = "close-save"
 	CloseQuick    Action = "close-quick"
 	CloseCancel   Action = "close-cancel"
@@ -293,10 +291,6 @@ func closeKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		if !f.Saving {
 			f.Open = false
 		}
-	case bound && binding.Action == CloseNext:
-		cycleField(&m, 1)
-	case bound && binding.Action == ClosePrevious:
-		cycleField(&m, -1)
 	case bound && binding.Action == CloseSave:
 		return submitClose(m, false)
 	case bound && binding.Action == CloseQuick:

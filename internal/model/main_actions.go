@@ -314,7 +314,8 @@ var Keymap []Binding
 func init() {
 	mainActions = append(mainActions, workflowActions()...)
 	mainActions = append(mainActions, pageActions()...)
-	Keymap = append([]Binding(nil), cardBindings...)
+	cards = buildCards()
+	Keymap = withFieldEditing(cardBindings)
 	for i := range mainActions {
 		entry := &mainActions[i]
 		for _, mode := range orGlobal(entry.modes) {

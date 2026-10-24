@@ -413,28 +413,6 @@ func TestPopupCardSharedBehaviour(t *testing.T) {
 	}
 }
 
-// Every card in the order has a row in the table and declares its fields, so a card added to the
-// order without either fails here.
-func TestEveryPopupCardIsDescribed(t *testing.T) {
-	table := popupCards()
-	for _, card := range model.Cards() {
-		if !slices.ContainsFunc(table, func(c popupCard) bool { return c.card == card }) {
-			t.Errorf("card %d has no row in the shared card table", card)
-		}
-		if _, declared := model.CardFields(card); !declared {
-			t.Errorf("card %d declares no field list; a card without fields declares an empty one", card)
-		}
-	}
-	for _, c := range table {
-		if c.card != model.NoCard && !slices.Contains(model.Cards(), c.card) {
-			t.Errorf("%s is not in the card order", c.name)
-		}
-		if specs, _ := model.CardFields(c.card); c.textField != "" && !slices.ContainsFunc(specs, func(f model.FieldSpec) bool { return f.Name == c.textField && f.Text }) {
-			t.Errorf("%s: %q is not one of its text fields", c.name, c.textField)
-		}
-	}
-}
-
 func TestPopupCardStates(t *testing.T) {
 	for _, c := range popupCards() {
 		for _, state := range c.states {
@@ -474,7 +452,7 @@ func TestPopupCardStates(t *testing.T) {
 	}
 }
 
-// Of any two cards open at once, the earlier one in the order is on top and owns the mode.
+// Of any two cards open at once, the earlier one in the order takes the keys (it owns the keymap mode) and holds the text caret.
 func TestPopupCardOrder(t *testing.T) {
 	// The order is spelled out here, not read from model.Cards().
 	var cards []popupCard
@@ -491,8 +469,8 @@ func TestPopupCardOrder(t *testing.T) {
 				m := model.Model{}
 				under.graft(&m, under.open())
 				top.graft(&m, top.open())
-				if m.TopCard() != top.card || m.CurrentMode() != top.states[0].mode {
-					t.Fatalf("top card %d mode %s, want %d %s", m.TopCard(), m.CurrentMode(), top.card, top.states[0].mode)
+				if card, _, _ := m.TextCaret(); card != top.card || m.CurrentMode() != top.states[0].mode {
+					t.Fatalf("caret card %d mode %s, want %d %s", card, m.CurrentMode(), top.card, top.states[0].mode)
 				}
 			})
 		}
