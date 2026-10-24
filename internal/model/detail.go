@@ -68,7 +68,7 @@ var tabTable = [TabCount]tabSpec{
 	TabComments:    {"Comments", RowComment, "No comments."},
 	TabEvents:      {"Events", RowEvent, "No events."},
 	TabLinks:       {"Links", RowLink, "No links."},
-	TabAttachments: {"Attachments", RowAttachment, "No attachments, u to attach"},
+	TabAttachments: {"Attachments", RowAttachment, "No attachments, @ to attach"},
 }
 
 func (s ActivityTab) String() string { return tabTable[s].label }

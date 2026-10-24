@@ -85,8 +85,9 @@ type FieldValueMsg struct{ Value string }
 func (FieldValueMsg) msg() {}
 
 type FieldWritten struct {
-	UID string
-	Err error
+	UID    string
+	Err    error
+	Record WriteRecord
 }
 
 func (FieldWritten) msg() {}

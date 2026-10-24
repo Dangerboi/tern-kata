@@ -78,6 +78,8 @@ type CloseFormState struct {
 	Caret        Caret
 	Err          error
 	Keyed
+	// UndoEntry is the Undo history entry whose inverse this card completes, 0 for a plain close.
+	UndoEntry uint64
 }
 type CloseFieldMsg struct {
 	Field Field
@@ -87,8 +89,9 @@ type CloseFieldMsg struct {
 func (CloseFieldMsg) msg() {}
 
 type CloseResultMsg struct {
-	UID string
-	Err error
+	UID    string
+	Err    error
+	Record WriteRecord
 }
 
 func (CloseResultMsg) msg() {}
@@ -207,7 +210,26 @@ func submitClose(m Model, quick bool) (Model, []Cmd) {
 	m, keyed = m.mintKey(f.Keyed, cmd)
 	f.Keyed, cmd.Key = keyed, keyed.Key
 	f.Saving, f.Err = true, nil
+	if f.UndoEntry != 0 {
+		return submitUndoClose(m, cmd, quick)
+	}
 	return m, []Cmd{cmd}
+}
+
+// submitUndoClose sends the close the Close card collected as the inverse of a reopen.
+func submitUndoClose(m Model, cmd CloseIssueCmd, quick bool) (Model, []Cmd) {
+	f := &m.CloseForm
+	entries := m.Undo.Entries
+	switch {
+	case quick || cmd.Reason != ReasonDone:
+		f.Saving, f.Err = false, errors.New("Undo completes the Issue as done, with evidence.")
+	case len(entries) == 0 || entries[len(entries)-1].ID != f.UndoEntry:
+		f.Saving, f.Err = false, errors.New("undo action is no longer available")
+	default:
+		m.Undo.InFlight = true
+		return m, []Cmd{UndoChange{Workspace: m.Workspace, Entry: entries[len(entries)-1], Close: &cmd}}
+	}
+	return m, nil
 }
 
 var closeSHA = regexp.MustCompile(`^[0-9a-fA-F]{7,40}$`)
