@@ -634,3 +634,34 @@ func TestAfterASwitchTheHubStepsAndRecoveryFollowTheConnectedDaemon(t *testing.T
 		t.Errorf("recovery for spoke %q with token %q: want the connected daemon hub and its own token", got.Recovery.SpokeName, command.SpokeToken)
 	}
 }
+
+func TestTheRecoveryCommandOfALocalSpokeNamesTheCatalogEntryItWasReachedThrough(t *testing.T) {
+	for name, c := range map[string]struct {
+		active string
+		want   string
+	}{"a named local entry": {"laptop", "kata --daemon laptop federation join"}, "plain discovery": {"", "kata federation join"}} {
+		rig := startEnrollRig(t)
+		_, acme := project(t, rig.hubGateway(t), "acme")
+		refuse := refuseWith(http.StatusBadGateway, "hub_says_no", "the hub said no")
+		watch(rig.hub, func(w http.ResponseWriter, r *http.Request) bool {
+			if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, fmt.Sprintf("/projects/%d/federation/metadata", acme.ID)) {
+				refuse(w, r)
+				return true
+			}
+			return false
+		})
+		active := ""
+		if c.active != "" {
+			active = fmt.Sprintf("active_daemon = %q\n", c.active)
+		}
+		rig.writeCatalog(t, active+fmt.Sprintf("\n[[daemon]]\nname = \"laptop\"\nlocal = true\n\n[[daemon]]\nname = \"hub\"\nurl = %q\nallow_insecure = true\ntoken_env = \"HUB_TOKEN\"\n", rig.hub.URL))
+		gateway := newGateway(t, newLocator(rig.spoke.target()))
+		got := as[model.FederationEnrolled](t, run(t, gateway, model.EnrollFederation{Workspace: t.TempDir(), Attempt: 3, InstanceUID: rig.spokeInstanceUID(t), Draft: replicaDraft(acme)}))
+		if got.Recovery == nil {
+			t.Fatalf("%s: %+v, want a recovery", name, got)
+		}
+		if line := got.Recovery.Command.String(); !strings.Contains(line, c.want) || strings.Contains(line, "KATA_SERVER") {
+			t.Errorf("%s: command line %q, want it to hold %q", name, line, c.want)
+		}
+	}
+}

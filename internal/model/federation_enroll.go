@@ -196,9 +196,11 @@ type FederationJoinCommand struct {
 	SpokeEndpoint      string
 	SpokeAllowInsecure bool
 	SpokeToken         string
+	// SpokeDaemon is the catalog entry a local active daemon was reached through, empty when it was found by plain discovery.
+	SpokeDaemon string
 }
 
-// String is the command line, with the active daemon's settings in front when it is remote.
+// String is the command line, with the active daemon's settings in front when it is remote and --daemon naming a local daemon's entry.
 func (c FederationJoinCommand) String() string {
 	var parts []string
 	if c.SpokeEndpoint != "" && c.SpokeEndpoint != "local" {
@@ -210,7 +212,11 @@ func (c FederationJoinCommand) String() string {
 			parts = append(parts, "KATA_AUTH_TOKEN="+shellWord(c.SpokeToken))
 		}
 	}
-	parts = append(parts, "kata", "federation", "join",
+	parts = append(parts, "kata")
+	if c.SpokeDaemon != "" && (c.SpokeEndpoint == "" || c.SpokeEndpoint == "local") {
+		parts = append(parts, "--daemon", shellWord(c.SpokeDaemon))
+	}
+	parts = append(parts, "federation", "join",
 		"--hub-url", shellWord(c.HubURL),
 		"--hub-project-id", strconv.FormatInt(c.HubProjectID, 10),
 		"--project", shellWord(c.ProjectName),

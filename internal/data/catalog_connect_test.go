@@ -121,3 +121,38 @@ func TestGatewayConnectsToATokenProtectedLocalCatalogEntryWithItsToken(t *testin
 		t.Fatalf("err = %v, want it to name the unset variable", err)
 	}
 }
+
+func TestALocalCatalogEntryWithNoTokenConnectsWithTheImplicitCredentialsKataWouldUse(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stub kata is a shell script")
+	}
+	profileHome := t.TempDir()
+	for name, c := range map[string]struct {
+		setup func(kataHome string)
+		entry CatalogEntry
+	}{
+		"the environment token":                   {func(string) { t.Setenv("KATA_AUTH_TOKEN", "s3cret") }, CatalogEntry{Name: "mine", Local: true}},
+		"the config auth token":                   {func(home string) { writeCredential(t, filepath.Join(home, "config.toml"), "[auth]\ntoken = \"s3cret\"\n") }, CatalogEntry{Name: "mine", Local: true}},
+		"the persisted owner token":               {func(home string) { writeCredential(t, filepath.Join(home, "auth-token"), "s3cret\n") }, CatalogEntry{Name: "mine", Local: true}},
+		"the persisted owner token of its profile": {func(string) { writeCredential(t, filepath.Join(profileHome, "auth-token"), "s3cret\n") }, CatalogEntry{Name: "mine", Local: true, Home: profileHome}},
+		"its own token over the environment":      {func(string) { t.Setenv("KATA_AUTH_TOKEN", "wrong") }, CatalogEntry{Name: "mine", Local: true, InlineToken: "s3cret"}},
+	} {
+		home := t.TempDir()
+		t.Setenv("KATA_HOME", home)
+		t.Setenv("KATA_SERVER", "")
+		t.Setenv("KATA_AUTH_TOKEN", "")
+		c.setup(home)
+		protected := startTokenKata(t, "s3cret")
+		installStubKata(t, protected.URL, false, "")
+		if d := loadsProject(t, LocateEntry(c.entry)); d.Kind != model.DaemonLocal {
+			t.Errorf("%s: daemon %+v, want a local one", name, d)
+		}
+	}
+}
+
+func writeCredential(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}

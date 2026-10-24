@@ -288,6 +288,9 @@ func (c *Client) recoveryBase(d model.FederationEnrollDraft, hub CatalogEntry, h
 	if command.ProjectName == "" {
 		command.ProjectName = hubProject.Name
 	}
+	if c.kind == model.DaemonLocal {
+		command.SpokeDaemon = c.entry.Name
+	}
 	if c.kind == model.DaemonRemote {
 		if c.entry.Name != "" {
 			command.SpokeAllowInsecure = c.entry.AllowInsecure
