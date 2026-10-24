@@ -114,11 +114,11 @@ type FederationState struct {
 	Bindings []FederationBinding
 	// Draft is the enrollment being chosen, previewed or run. EnrollErr is the last failure of a choice, a browse or a run;
 	// Enrolling says a run is out.
-	Draft      FederationEnrollDraft
-	EnrollErr  error
-	Enrolling  bool
-	Enrolled   FederationEnrollOutcome
-	Recovery   FederationEnrollRecovery
+	Draft                                    FederationEnrollDraft
+	EnrollErr                                error
+	Enrolling                                bool
+	Enrolled                                 FederationEnrollOutcome
+	Recovery                                 FederationEnrollRecovery
 	LocalCursor, HubCursor, HubProjectCursor int
 	// Hubs are the daemons of kata's catalog, read when the hub step opens; HubProjects are the chosen hub's Projects.
 	Hubs               []FederationHub

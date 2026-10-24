@@ -89,14 +89,14 @@ type FederationEnrollDraft struct {
 	// AdoptExisting says the local Project's history is rewritten as snapshots, which asks for a typed confirmation.
 	AdoptExisting bool
 	// Hub is the chosen hub, HubAuth how it words its authentication of the read.
-	Hub                          FederationHub
-	HubAuth                      string
-	HubProjectID                 int64
-	HubProjectName               string
-	RequestedActor               string
-	APICapabilities              string
-	DisplayCapabilities          string
-	PushEnabled, AllowInsecure   bool
+	Hub                        FederationHub
+	HubAuth                    string
+	HubProjectID               int64
+	HubProjectName             string
+	RequestedActor             string
+	APICapabilities            string
+	DisplayCapabilities        string
+	PushEnabled, AllowInsecure bool
 	// BlockedReason is why the enrollment cannot run; the preview names it.
 	BlockedReason string
 }
@@ -256,7 +256,7 @@ func shellWord(s string) string {
 // the replica. Reveal is set by `R`, which is the only thing that shows Command.
 type FederationEnrollRecovery struct {
 	HubName, SpokeName, SpokeEndpoint, Stage string
-	Err                                       error
+	Err                                      error
 	// TokenGuess says the token may be the cause (the failure was a refusal of it, or none was captured), which the screen then says.
 	TokenGuess bool
 	Command    FederationJoinCommand
@@ -450,7 +450,9 @@ type FederationBrowseRow struct {
 }
 
 // Label is the row's text: the Project's id and name.
-func (r FederationBrowseRow) Label() string { return strconv.FormatInt(r.Project.ID, 10) + " " + oneLine(r.Project.Name) }
+func (r FederationBrowseRow) Label() string {
+	return strconv.FormatInt(r.Project.ID, 10) + " " + oneLine(r.Project.Name)
+}
 
 // BrowseRows are the browse's rows across every hub read, in hub order.
 func (f FederationState) BrowseRows() []FederationBrowseRow {

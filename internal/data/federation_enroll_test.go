@@ -504,10 +504,10 @@ func TestARunThatIsRefusedBeforeTheHubGrantedKeepsNoRecoveryAndSendsNothing(t *t
 		uid    string
 		want   string
 	}{
-		"the active daemon as hub":   {func(d *model.FederationEnrollDraft) { d.Hub.Name = "spoke" }, "", "active daemon cannot be selected as hub"},
-		"a local hub":                {func(d *model.FederationEnrollDraft) { d.Hub.Name = "laptop" }, "", "local hub targets cannot be used"},
-		"a hub not in the catalog":   {func(d *model.FederationEnrollDraft) { d.Hub.Name = "nowhere" }, "", `daemon "nowhere" is not in kata's daemon catalog`},
-		"an unknown spoke instance":  {func(*model.FederationEnrollDraft) {}, " ", "spoke instance UID is not loaded; refresh federation status before enrollment"},
+		"the active daemon as hub":  {func(d *model.FederationEnrollDraft) { d.Hub.Name = "spoke" }, "", "active daemon cannot be selected as hub"},
+		"a local hub":               {func(d *model.FederationEnrollDraft) { d.Hub.Name = "laptop" }, "", "local hub targets cannot be used"},
+		"a hub not in the catalog":  {func(d *model.FederationEnrollDraft) { d.Hub.Name = "nowhere" }, "", `daemon "nowhere" is not in kata's daemon catalog`},
+		"an unknown spoke instance": {func(*model.FederationEnrollDraft) {}, " ", "spoke instance UID is not loaded; refresh federation status before enrollment"},
 	} {
 		draft := replicaDraft(acme)
 		c.change(&draft)

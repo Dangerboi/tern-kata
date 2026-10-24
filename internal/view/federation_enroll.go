@@ -10,7 +10,9 @@ import (
 )
 
 // FederationChoiceID is the id of the row at index of the enrollment's choices or of the browse.
-func FederationChoiceID(index int) string { return itemID(FederationListID, "choice"+strconv.Itoa(index)) }
+func FederationChoiceID(index int) string {
+	return itemID(FederationListID, "choice"+strconv.Itoa(index))
+}
 
 // federationEnrollScreen draws the enrollment's screens and the browse, under the Page's heading and header: the choices as a
 // list of cards, the preview, the recovery and the result as lines. It reports false for any other screen.

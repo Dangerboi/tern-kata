@@ -370,7 +370,7 @@ func TestTheNewReplicaPreviewBlocksWhenAProjectOfThatNameOrABindingIsThere(t *te
 		hub     model.Project
 		blocked string
 	}{
-		"a local Project of that name": {model.Project{ID: 8, UID: "H-ACME2", Name: "acme"}, `Blocked: local project "acme" already exists`},
+		"a local Project of that name":           {model.Project{ID: 8, UID: "H-ACME2", Name: "acme"}, `Blocked: local project "acme" already exists`},
 		"a bound local Project of that identity": {hubHubby, `Blocked: local project "hubby" already has federation binding as hub`},
 	} {
 		s := previewed(t, atHubProjectStep(t, enrollPane(t), rowReplica, c.hub))
