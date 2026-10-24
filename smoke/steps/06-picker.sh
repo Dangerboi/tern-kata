@@ -74,7 +74,7 @@ expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: picker-alpha"'
 ctl click "$picker_heading"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
-ctl click "[data-id='layer.collections.filter']"
+ctl click "[data-id='layer.collections.input']"
 ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: picker-alpha"'

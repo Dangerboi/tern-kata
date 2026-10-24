@@ -9,21 +9,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-const DraftEditorID = "layer.editor.body"
-
-// BodyTarget is the body a Tern editor node edits: the Draft editor's or the Create card's, none for any other node.
-func BodyTarget(id string) model.EditTarget {
-	switch id {
-	case DraftEditorID:
-		return model.EditDraftBody
-	case WorkflowEditorID:
-		return model.EditWorkflowBody
-	case CreateFieldID(model.CreateBody):
-		return model.EditCreateBody
-	}
-	return model.NoEditTarget
-}
-
 // TextEditor presents the reusable buffer; the model owns text, selection and undo.
 // caretAt is the caret of the single-line field in UTF-16 units for ui.Field.Cursor.
 func caretAt(c model.Caret, field model.Field, text string) *int {
@@ -47,7 +32,7 @@ func editorLayer(m model.Model) tern.Element {
 	if draft.ReplyTo != "" {
 		title = replyTitle(draft)
 	}
-	children := ui.Nodes(TextEditor("body", draft.Editor, draft.Saving || draft.DiscardConfirm || draft.Conflict != nil))
+	children := ui.Nodes(TextEditor(inputLeaf, draft.Editor, draft.Saving || draft.DiscardConfirm || draft.Conflict != nil))
 	if draft.Saving {
 		children = append(children, ui.Text{Common: ui.Common{Key: "saving", Tone: ui.TonePending}, Text: "Saving Draft…"})
 	}
@@ -76,7 +61,7 @@ func editorLayer(m model.Model) tern.Element {
 		)}, ui.Text{Common: ui.Common{Key: "choice", Tone: ui.ToneWarning}, Text: "o overwrites against the new revision; d discards only your Draft."},
 			buttonRow(cardButton("overwrite", model.ModeConflict, model.OverwriteDraft, "Overwrite", true), cardButton("discard", model.ModeConflict, model.DiscardDraft, "Discard Draft", false)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "editor"}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
+	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardDraft)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
 }
 
 // replyTitle names the kind of a Reply Draft and whose comment it answers, e.g. "Confirm dana's comment".

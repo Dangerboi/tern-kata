@@ -9,12 +9,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// WorkerID is the Worker card's node.
-const WorkerID = "layer.worker"
-
-// WorkerFieldID is the id of the Worker card's field called name.
-func WorkerFieldID(name model.Field) string { return WorkerID + "." + string(name) }
-
 // workerLayer is the Worker card: the facts about this machine's worker, then what the machine still needs, as fields to fill in and a
 // save, or the question how to restart the running worker once a save has been made.
 func workerLayer(m model.Model) tern.Element {
@@ -74,7 +68,7 @@ func workerLayer(m model.Model) tern.Element {
 		children = append(children, line("error", ui.ToneError, f.Err.Error()))
 	}
 	children = append(children, gap("gap-actions"), workerActions(m))
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "worker"}, Head: ui.T("Worker"), Modal: true, Size: ui.SizeLG, Children: children})
+	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardWorker)}, Head: ui.T("Worker"), Modal: true, Size: ui.SizeLG, Children: children})
 }
 
 // workerFields are the card's inputs: the setup fields when worker.toml is to be made, the checkout and the trust note, and the trust choice.

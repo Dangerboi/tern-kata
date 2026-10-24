@@ -6,11 +6,8 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-const (
-	PickerID       = "layer.collections"
-	PickerFilterID = PickerID + ".filter"
-	PickerListID   = PickerID + ".list"
-)
+// PickerListID is the id of the Menu popup's list.
+var PickerListID = LayerID(model.CardPicker) + ".list"
 
 func pickerLayer(m model.Model) tern.Element {
 	if !m.Picker.Open {
@@ -38,8 +35,8 @@ func pickerLayer(m model.Model) tern.Element {
 	if len(m.Collections) == 0 {
 		empty = "Loading Menu…"
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "collections"}, Head: ui.T("Menu"), Modal: true, Size: ui.SizeMD, Children: []tern.Element{
-		ui.Input{Common: ui.Common{Key: "filter", Tone: ui.ToneAccent, Aria: "Filter Menu"}, Field: ui.Field{Text: m.Picker.Filter, Cursor: caretAt(m.Picker.Caret, "", m.Picker.Filter), Mode: "insert", Placeholder: "Filter Menu"}},
+	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardPicker)}, Head: ui.T("Menu"), Modal: true, Size: ui.SizeMD, Children: []tern.Element{
+		ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Filter Menu"}, Field: ui.Field{Text: m.Picker.Filter, Cursor: caretAt(m.Picker.Caret, "", m.Picker.Filter), Mode: "insert", Placeholder: "Filter Menu"}},
 		ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "list"}, Selected: selected, Empty: ui.T(empty), Max: ui.MaxLines(12), Children: items},
 		cardButton("close", model.ModePicker, model.ClosePicker, closeLabel, false),
 	}})

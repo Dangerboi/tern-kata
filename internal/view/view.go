@@ -87,37 +87,7 @@ func Render(m model.Model, now time.Time) tern.View {
 	for _, text := range footerTexts(m) {
 		main = append(main, text)
 	}
-	var layer tern.Element
-	switch m.TopCard() {
-	case model.CardCreate:
-		layer = createLayer(m)
-	case model.CardDraft:
-		layer = editorLayer(m)
-	case model.CardWorkflow:
-		layer = workflowLayer(m)
-	case model.CardField:
-		layer = fieldLayer(m)
-	case model.CardClose:
-		layer = closeLayer(m)
-	case model.CardDates:
-		layer = datesLayer(m)
-	case model.CardRecurrence:
-		layer = recurrenceLayer(m)
-	case model.CardJob:
-		layer = jobLayer(m, now)
-	case model.CardBackfill:
-		layer = backfillLayer(m)
-	case model.CardProject:
-		layer = projectLayer(m)
-	case model.CardLanes:
-		layer = lanesLayer(m)
-	case model.CardWorker:
-		layer = workerLayer(m)
-	case model.CardFilter:
-		layer = filterLayer(m)
-	case model.CardPicker:
-		layer = pickerLayer(m)
-	}
+	layer := topLayer(m, now)
 	if m.CloseForm.Err != nil && !m.CloseForm.Open {
 		main = append(main, ui.Text{Common: ui.Common{Key: "close-error", Tone: ui.ToneError}, Text: m.CloseForm.Err.Error()})
 	}

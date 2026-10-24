@@ -9,9 +9,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// JobFieldID is the id of the Job card's field called name.
-func JobFieldID(name model.Field) string { return "layer.job." + string(name) }
-
 // jobLayer is the Job card: the fields the kind and trigger show, the schedule in words and the next runs under the trigger,
 // and the buttons. After a save found the job changed meanwhile it shows the newer job and asks what to do with the draft.
 func jobLayer(m model.Model, now time.Time) tern.Element {
@@ -24,7 +21,7 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 		title, save, pending = "Edit job", "Save job", "Saving the job…"
 	}
 	if f.Conflict != nil {
-		return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "job"}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: jobConflict(m)})
+		return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardJob)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: jobConflict(m)})
 	}
 	children := make([]tern.Element, 0, len(model.JobFields)+6)
 	if p := f.Opened.Parent; f.Change && p != nil {
@@ -89,7 +86,7 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 	} else {
 		children = append(children, buttonRow(cardButton("save", model.ModeJobForm, model.JobSave, save, true), cardButton("cancel", model.ModeJobForm, model.JobCancel, "Cancel", false)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "job"}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
+	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardJob)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
 }
 
 // jobPreview is the schedule under the trigger: in words and the next runs, or what keeps it from being told yet.

@@ -5,7 +5,7 @@ ctl --file "$tmp/fields-launch.ctl"
 expect_tree "[data-id$='.$hierarchy_parent']" '.count == 1'
 ctl click "[data-id$='.$hierarchy_parent']"
 ctl key +
-expect_tree "[data-id='layer.fields.value']" '.ok and .count == 1'
+expect_tree "[data-id='layer.fields.input']" '.ok and .count == 1'
 ctl key t
 ctl key r
 ctl key i

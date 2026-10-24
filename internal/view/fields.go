@@ -7,14 +7,12 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-const FieldInputID = "layer.fields.value"
-
 func fieldLayer(m model.Model) tern.Nodes {
 	if !m.FieldForm.Open {
 		return nil
 	}
 	title := model.FieldTitle(m.FieldForm.Action)
-	children := []tern.Element{ui.Input{Common: ui.Common{Key: "value", Tone: ui.ToneAccent}, Field: ui.Field{Text: m.FieldForm.Value, Cursor: caretAt(m.FieldForm.Caret, "", m.FieldForm.Value), Mode: "insert", Readonly: m.FieldForm.Saving}}}
+	children := []tern.Element{ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent}, Field: ui.Field{Text: m.FieldForm.Value, Cursor: caretAt(m.FieldForm.Caret, "", m.FieldForm.Value), Mode: "insert", Readonly: m.FieldForm.Saving}}}
 	suggestions := m.FieldSuggestions()
 	for i, label := range suggestions {
 		tone := ui.ToneNeutral
@@ -31,5 +29,5 @@ func fieldLayer(m model.Model) tern.Nodes {
 	} else {
 		children = append(children, buttonRow(cardButton("save", model.ModeFieldForm, model.FieldSubmit, "Save", true), cardButton("cancel", model.ModeFieldForm, model.FieldCancel, "Cancel", false)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "fields"}, Modal: true, Head: ui.T(title), Children: children})
+	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardField)}, Modal: true, Head: ui.T(title), Children: children})
 }

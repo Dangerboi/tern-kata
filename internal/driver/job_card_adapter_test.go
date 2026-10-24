@@ -37,7 +37,7 @@ func adapterCard(t *testing.T, kind int) driver.State {
 // typePrompt types lines into the prompt, Enter between them.
 func typePrompt(t *testing.T, s driver.State, lines ...string) driver.State {
 	t.Helper()
-	s = step(t, s, &tern.Focus{ID: view.JobFieldID(model.JobFieldPrompt)}).State
+	s = step(t, s, &tern.Focus{ID: view.FieldID(model.CardJob, model.JobFieldPrompt)}).State
 	for i, line := range lines {
 		if i > 0 {
 			s = step(t, s, key("enter")).State

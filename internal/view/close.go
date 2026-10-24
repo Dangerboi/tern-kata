@@ -44,8 +44,5 @@ func closeLayer(m model.Model) tern.Element {
 				cardButton("quick", model.ModeCloseForm, model.CloseQuick, "Quick done", false),
 				cardButton("cancel", model.ModeCloseForm, model.CloseCancel, "Cancel", false)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "close"}, Modal: true, Size: ui.SizeLG, Head: ui.T("Close Issue"), Children: children})
+	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardClose)}, Modal: true, Size: ui.SizeLG, Head: ui.T("Close Issue"), Children: children})
 }
-
-// CloseFieldID is the id of the Close card's field called name.
-func CloseFieldID(name model.Field) string { return "layer.close." + string(name) }

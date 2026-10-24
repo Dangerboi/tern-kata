@@ -6,12 +6,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// DatesID is the id of the Dates card's layer.
-const DatesID = "layer.dates"
-
-// DatesFieldID is the id of the Dates card's field called name.
-func DatesFieldID(name model.Field) string { return DatesID + "." + string(name) }
-
 func datesLayer(m model.Model) tern.Element {
 	form := m.DatesForm
 	if !form.Open {
@@ -40,5 +34,5 @@ func datesLayer(m model.Model) tern.Element {
 	} else {
 		children = append(children, buttonRow(cardButton("save", model.ModeDatesForm, model.DatesSubmit, "Save dates", true), cardButton("cancel", model.ModeDatesForm, model.DatesCancel, "Cancel", false)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "dates"}, Head: ui.T("Dates"), Modal: true, Size: ui.SizeLG, Children: children})
+	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardDates)}, Head: ui.T("Dates"), Modal: true, Size: ui.SizeLG, Children: children})
 }
