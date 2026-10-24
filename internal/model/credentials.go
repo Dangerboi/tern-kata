@@ -162,7 +162,7 @@ func updateCredentials(m Model, msg Msg) (Model, []Cmd, bool) {
 		next, cmds := askCredentials(m, credentialsRefreshEvery)
 		return next, cmds, true
 	}
-	return m, nil, false
+	return updateTokens(m, msg)
 }
 
 // moveCredential moves the cursor by action: one row, to either end, or a page.
@@ -256,5 +256,7 @@ func (c Credential) Lines() [4]string {
 // credentialsRows are the Credentials Page's own keys beyond its movement keys.
 var credentialsRows = []actionEntry{
 	{action: RefreshCredentials, modes: []Mode{ModeCredentials}, keys: keys("r", "r"), help: "refresh", footer: []Mode{ModeCredentials}, sheet: []sheetLine{{sheetLettered, 3, "read the credentials again, or retry the check"}}, handle: refreshCredentials},
+	{action: NewToken, modes: []Mode{ModeCredentials}, keys: keys("n", "n"), help: "new token", footer: []Mode{ModeCredentials}, sheet: []sheetLine{{sheetLettered, 20, "create an API token (Token card)"}}, handle: openTokenForm},
+	{action: RevokeToken, modes: []Mode{ModeCredentials}, keys: keys("x", "x"), help: "revoke", footer: []Mode{ModeCredentials}, sheet: []sheetLine{{sheetLettered, 21, "revoke the selected token, after asking"}}, handle: openRevoke},
 	{action: LetteredBack, modes: []Mode{ModeCredentials}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeCredentials}, sheet: []sheetLine{{sheetLettered, 1, "back to the Page shown before"}}, handle: credentialsBack},
 }
