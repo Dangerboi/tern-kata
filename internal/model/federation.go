@@ -55,11 +55,13 @@ type LoadFederation struct {
 func (LoadFederation) cmd() {}
 
 // FederationLoaded answers LoadFederation. Daemon, Endpoint, InstanceUID and Auth are the active daemon as the header names it;
-// Spokes are only the status rows whose role is spoke.
+// Spokes are only the status rows whose role is spoke and Bindings every Project that has a federation role, which an enrollment
+// reads to refuse a Project that is bound already.
 type FederationLoaded struct {
 	Request                             int64
 	Daemon, Endpoint, InstanceUID, Auth string
 	Spokes                              []FederationSpoke
+	Bindings                            []FederationBinding
 	Err                                 error
 }
 
@@ -77,6 +79,18 @@ const (
 	FederationLeavePreview
 	// FederationLeaveDone is the result of a leave.
 	FederationLeaveDone
+	// FederationPickLocal, FederationPickHub and FederationPickHubProject are the enrollment's three choices, in order.
+	FederationPickLocal
+	FederationPickHub
+	FederationPickHubProject
+	// FederationBrowse is the read-only list of the hubs' Projects.
+	FederationBrowse
+	// FederationPreview is the enrollment preview; the typed confirmation of an adoption is a card over it.
+	FederationPreview
+	// FederationRecovery is what a failure after the hub granted the enrollment leaves.
+	FederationRecovery
+	// FederationEnrollDone is the result of an enrollment.
+	FederationEnrollDone
 )
 
 // FederationState is the Federation Page's state. It is not saved and is read again on every entry.
@@ -96,8 +110,33 @@ type FederationState struct {
 	Leaving  bool
 	LeaveErr error
 	Left     FederationLeaveOutcome
-	// request counts the asks and attempt the leaves; an answer to another is dropped.
-	request, attempt int64
+	// Bindings are the Projects with a federation role, of any role, as the last read said.
+	Bindings []FederationBinding
+	// Draft is the enrollment being chosen, previewed or run. EnrollErr is the last failure of a choice, a browse or a run;
+	// Enrolling says a run is out.
+	Draft                                    FederationEnrollDraft
+	EnrollErr                                error
+	Enrolling                                bool
+	Enrolled                                 FederationEnrollOutcome
+	Recovery                                 FederationEnrollRecovery
+	LocalCursor, HubCursor, HubProjectCursor int
+	// Hubs are the daemons of kata's catalog, read when the hub step opens; HubProjects are the chosen hub's Projects.
+	Hubs               []FederationHub
+	HubsLoading        bool
+	HubProjects        []Project
+	HubProjectsLoading bool
+	// Browsed are the hubs' Projects of the browse and BrowseCursor indexes their rows; Browsing says the read is out.
+	Browsed      []FederationHubProjects
+	BrowseCursor int
+	Browsing     bool
+	// Adopting says the card asking to type the local Project's name is open; AdoptErr is why the last try was refused.
+	Adopting   bool
+	AdoptInput string
+	AdoptCaret Caret
+	AdoptErr   error
+	// request counts the asks, attempt the leaves and enrollments, and hubRequest the reads of the catalog and the hubs; an
+	// answer to another is dropped.
+	request, attempt, hubRequest int64
 }
 
 // OnFederation says the Federation Page is current.
@@ -111,21 +150,29 @@ func federationMode(m Model) Mode {
 	switch m.Federation.Screen {
 	case FederationLeavePreview:
 		return ModeFederationLeave
-	case FederationLeaveDone:
-		return ModeFederationLeft
+	case FederationLeaveDone, FederationEnrollDone:
+		return ModeFederationResult
+	case FederationPickLocal, FederationPickHub, FederationPickHubProject:
+		return ModeFederationPick
+	case FederationBrowse:
+		return ModeFederationBrowse
+	case FederationPreview:
+		return ModeFederationPreview
+	case FederationRecovery:
+		return ModeFederationRecovery
 	}
 	return ModeFederation
 }
 
 // enterFederation starts a fresh reading.
 func enterFederation(m Model) (Model, []Cmd) {
-	m.Federation = FederationState{request: m.Federation.request, attempt: m.Federation.attempt + 1}
+	m.Federation = FederationState{request: m.Federation.request, attempt: m.Federation.attempt + 1, hubRequest: m.Federation.hubRequest + 1}
 	return askFederation(m)
 }
 
 // clearFederation drops what the Page held and every ask still out.
 func clearFederation(m Model) Model {
-	m.Federation = FederationState{request: m.Federation.request + 1, attempt: m.Federation.attempt + 1}
+	m.Federation = FederationState{request: m.Federation.request + 1, attempt: m.Federation.attempt + 1, hubRequest: m.Federation.hubRequest + 1}
 	return m
 }
 
@@ -157,26 +204,35 @@ func federationBack(m Model) (Model, []Cmd) {
 }
 
 func updateFederation(m Model, msg Msg) (Model, []Cmd, bool) {
-	if left, ok := msg.(FederationLeft); ok {
-		m, cmds := federationLeft(m, left)
+	switch msg := msg.(type) {
+	case FederationLeft:
+		m, cmds := federationLeft(m, msg)
 		return m, cmds, true
-	}
-	loaded, ok := msg.(FederationLoaded)
-	if !ok {
-		return m, nil, false
-	}
-	f := &m.Federation
-	if loaded.Request != f.request {
+	case FederationHubsLoaded:
+		return federationHubsLoaded(m, msg), nil, true
+	case FederationHubProjectsLoaded:
+		return federationHubProjectsLoaded(m, msg), nil, true
+	case FederationBrowsed:
+		return federationBrowsed(m, msg), nil, true
+	case FederationEnrolled:
+		m, cmds := federationEnrolled(m, msg)
+		return m, cmds, true
+	case FederationLoaded:
+		f := &m.Federation
+		if msg.Request != f.request {
+			return m, nil, true
+		}
+		f.Loading, f.Err = false, msg.Err
+		if msg.Err != nil {
+			return m, nil, true
+		}
+		f.Daemon, f.Endpoint, f.InstanceUID, f.Auth = msg.Daemon, msg.Endpoint, msg.InstanceUID, msg.Auth
+		f.Spokes = slices.Clone(msg.Spokes)
+		f.Bindings = slices.Clone(msg.Bindings)
+		f.Cursor = min(f.Cursor, max(len(f.Spokes)-1, 0))
 		return m, nil, true
 	}
-	f.Loading, f.Err = false, loaded.Err
-	if loaded.Err != nil {
-		return m, nil, true
-	}
-	f.Daemon, f.Endpoint, f.InstanceUID, f.Auth = loaded.Daemon, loaded.Endpoint, loaded.InstanceUID, loaded.Auth
-	f.Spokes = slices.Clone(loaded.Spokes)
-	f.Cursor = min(f.Cursor, max(len(f.Spokes)-1, 0))
-	return m, nil, true
+	return m, nil, false
 }
 
 // moveFederation moves the cursor by action: one row, to either end, or a page. A detail has no cursor to move.
@@ -350,5 +406,7 @@ var federationRows = []actionEntry{
 	{action: OpenFederationDetail, modes: []Mode{ModeFederation}, keys: keys("enter", "↵"), help: "detail", footer: []Mode{ModeFederation}, footerKey: "↵", sheet: []sheetLine{{sheetLettered, 4, "show the spoke's detail"}}, handle: openFederationDetail},
 	{action: StartFederationLeave, modes: []Mode{ModeFederation}, keys: keys("x", "x"), help: "leave", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 6, "leave the selected spoke's federation (preview first)"}}, handle: startFederationLeave},
 	{action: RefreshFederation, modes: []Mode{ModeFederation}, keys: keys("r", "r"), help: "refresh", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 5, "read the federation status again"}}, handle: refreshFederation},
+	{action: StartFederationEnroll, modes: []Mode{ModeFederation}, keys: keys("n", "n"), help: "enroll", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 30, "enroll a Project in a hub's federation (choose, preview, confirm)"}}, handle: startFederationEnroll},
+	{action: StartFederationBrowse, modes: []Mode{ModeFederation}, keys: keys("b", "b"), help: "browse hubs", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 31, "browse the Projects of the catalog's hubs (read only)"}}, handle: startFederationBrowse},
 	{action: LetteredBack, modes: []Mode{ModeFederation}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 1, "back to the Page shown before"}}, handle: federationBack},
 }

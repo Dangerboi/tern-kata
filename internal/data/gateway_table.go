@@ -428,10 +428,13 @@ func init() {
 	daemonCall(
 		func(cmd model.LoadProject) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.LoadProject) (model.Msg, error) {
-			return ok(c.ReadProject(ctx, cmd.Workspace))
+			return ok(c.LoadProject(ctx, cmd.Workspace, cmd.Switched))
 		},
 		func(cmd model.LoadProject, err error) model.Msg { return model.Failed{Err: err} },
 		nil, []afterStep{startPointerMoveAfter, readDefaultFilterAfter})
+
+	local((*Gateway).loadDaemons, nil, nil)
+	local((*Gateway).switchDaemon, nil, nil)
 
 	daemonCall(
 		func(cmd model.LoadDetail) string { return cmd.Workspace },
@@ -513,6 +516,46 @@ func init() {
 		},
 		func(cmd model.LeaveFederation, err error) model.Msg {
 			return model.FederationLeft{Attempt: cmd.Attempt, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.LoadFederationHubs) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LoadFederationHubs) (model.Msg, error) {
+			return ok(c.ListFederationHubs(ctx, cmd))
+		},
+		func(cmd model.LoadFederationHubs, err error) model.Msg {
+			return model.FederationHubsLoaded{Request: cmd.Request, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.LoadFederationHubProjects) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LoadFederationHubProjects) (model.Msg, error) {
+			return ok(c.ReadFederationHubProjects(ctx, cmd))
+		},
+		func(cmd model.LoadFederationHubProjects, err error) model.Msg {
+			return model.FederationHubProjectsLoaded{Request: cmd.Request, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.BrowseFederationHubs) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.BrowseFederationHubs) (model.Msg, error) {
+			return ok(c.BrowseFederationHubs(ctx, cmd))
+		},
+		func(cmd model.BrowseFederationHubs, err error) model.Msg {
+			return model.FederationBrowsed{Request: cmd.Request, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.EnrollFederation) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.EnrollFederation) (model.Msg, error) {
+			return ok(c.EnrollFederation(ctx, cmd))
+		},
+		func(cmd model.EnrollFederation, err error) model.Msg {
+			return model.FederationEnrolled{Attempt: cmd.Attempt, Err: err}
 		},
 		nil, nil)
 

@@ -233,7 +233,7 @@ func TestALeaveThatSucceededShowsTheResultAndReadsTheStatusAgain(t *testing.T) {
 		out := step(t, leavePreviewed(t, leavingPane(t)), key("enter"))
 		leave, _ := askedLeave(out.Cmds)
 		done := step(t, out.State, model.FederationLeft{Attempt: leave.Attempt, Outcome: c.outcome(leave.Draft)})
-		if done.State.Model.Federation.Screen != model.FederationLeaveDone || done.State.Model.CurrentMode() != model.ModeFederationLeft {
+		if done.State.Model.Federation.Screen != model.FederationLeaveDone || done.State.Model.CurrentMode() != model.ModeFederationResult {
 			t.Fatalf("%s: screen %v, mode %q, want the result", name, done.State.Model.Federation.Screen, done.State.Model.CurrentMode())
 		}
 		read, asked := askedFederation(done.Cmds)

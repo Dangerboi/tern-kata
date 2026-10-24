@@ -95,6 +95,8 @@ const (
 	RefreshCredentials      Action = "refresh-credentials"
 	LetteredBack            Action = "lettered-back"
 	ShowFederationPage      Action = "show-federation-page"
+	ShowDaemonsPage         Action = "show-daemons-page"
+	SwitchDaemonAction      Action = "switch-daemon"
 	RefreshFederation       Action = "refresh-federation"
 	OpenFederationDetail    Action = "open-federation-detail"
 	StartFederationLeave    Action = "start-federation-leave"
@@ -103,6 +105,17 @@ const (
 	RunFederationLeave      Action = "run-federation-leave"
 	CancelFederationLeave   Action = "cancel-federation-leave"
 	FederationLeaveDismiss  Action = "dismiss-federation-leave"
+	StartFederationEnroll   Action = "start-federation-enroll"
+	StartFederationBrowse   Action = "start-federation-browse"
+	FederationChoose        Action = "federation-choose"
+	FederationChoiceBack    Action = "federation-choice-back"
+	FederationBrowseBack    Action = "federation-browse-back"
+	RunFederationEnroll     Action = "run-federation-enroll"
+	FederationPreviewBack   Action = "federation-preview-back"
+	FederationAdoptConfirm  Action = "federation-adopt-confirm"
+	FederationAdoptCancel   Action = "federation-adopt-cancel"
+	RevealFederationJoin    Action = "reveal-federation-join"
+	FederationRecoveryBack  Action = "federation-recovery-back"
 )
 
 // Binding is one chord in one mode, as the lookup, the footer and the help sheet read it. A binding of
@@ -157,9 +170,18 @@ const (
 	// ModeQuit is the question "Quit tern-kata? y/n", which takes only its answers.
 	ModeQuit       Mode = "quit"
 	ModeFederation Mode = "federation"
-	// ModeFederationLeave is the Federation Page's leave preview and ModeFederationLeft its result.
-	ModeFederationLeave Mode = "federation-leave"
-	ModeFederationLeft  Mode = "federation-left"
+	ModeDaemons    Mode = "daemons"
+	// ModeFederationLeave is the Federation Page's leave preview and ModeFederationResult the result of a leave or an enrollment.
+	ModeFederationLeave  Mode = "federation-leave"
+	ModeFederationResult Mode = "federation-result"
+	// ModeFederationPick is the enrollment's three choices (local Project, hub, hub Project), ModeFederationBrowse the read-only
+	// browse of the hubs' Projects, ModeFederationPreview the enrollment preview, ModeFederationAdopt the typed confirmation of an
+	// adoption and ModeFederationRecovery the recovery after the hub granted the enrollment.
+	ModeFederationPick     Mode = "federation-pick"
+	ModeFederationBrowse   Mode = "federation-browse"
+	ModeFederationPreview  Mode = "federation-preview"
+	ModeFederationAdopt    Mode = "federation-adopt"
+	ModeFederationRecovery Mode = "federation-recovery"
 )
 
 // cardBindings are the keys of the Popup cards. Each card's handler reads them by mode; the
@@ -234,6 +256,9 @@ var cardBindings = []Binding{
 	{Chord: "escape", Key: "esc", Action: MoveProjectClose, Help: "cancel", Mode: ModeMoveProject, ShowInFooter: true},
 	{Chord: "enter", Key: "enter", Action: MoveProjectSend, Help: "move", Mode: ModeMoveConfirm, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: MoveProjectBack, Help: "other Project", Mode: ModeMoveConfirm, ShowInFooter: true},
+	// Adoption confirmation of the Federation Page's enrollment: one name field, so every other key is typed.
+	{Chord: "enter", Key: "enter", Action: FederationAdoptConfirm, Help: "adopt", Mode: ModeFederationAdopt, ShowInFooter: true},
+	{Chord: "escape", Key: "esc", Action: FederationAdoptCancel, Help: "back", Mode: ModeFederationAdopt, ShowInFooter: true},
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: RecurrenceSave, Help: "save recurrence", Mode: ModeRecurrenceForm, ShowInFooter: true},
 	{Chord: "meta+o", Key: "meta+o", Action: RecurrenceSave, Help: "save recurrence" + headlessNote, Mode: ModeRecurrenceForm},
 	{Chord: "ctrl+x", Key: "ctrl+x", Action: RecurrenceStop, Help: "stop recurring", Mode: ModeRecurrenceForm, ShowInFooter: true},

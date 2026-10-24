@@ -26,8 +26,20 @@ var listNodes = map[model.ListNode]struct {
 		return ""
 	}},
 	model.ListNodeFederation: {FederationListID, func(m model.Model) string {
+		if m.FederationChoosing() {
+			if _, n := m.Position(); n > 0 {
+				return FederationChoiceID(m.FederationChoiceCursor())
+			}
+			return ""
+		}
 		if s := m.SelectedSpoke(); s != nil {
 			return FederationSpokeID(s.ProjectName)
+		}
+		return ""
+	}},
+	model.ListNodeDaemons: {DaemonListID, func(m model.Model) string {
+		if e := m.SelectedDaemon(); e != nil {
+			return DaemonID(e.Name)
 		}
 		return ""
 	}},
@@ -105,7 +117,8 @@ func SelectionRevealID(m model.Model, msg model.Msg, previous string) string {
 
 func listRead(msg model.Msg) bool {
 	switch msg.(type) {
-	case model.JobsLoaded, model.RunsLoaded, model.AttentionLoaded, model.FederationLoaded:
+	case model.JobsLoaded, model.RunsLoaded, model.AttentionLoaded, model.FederationLoaded, model.FederationHubsLoaded, model.FederationHubProjectsLoaded,
+		model.FederationBrowsed:
 		return true
 	}
 	return false

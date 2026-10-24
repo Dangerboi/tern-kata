@@ -31,6 +31,8 @@ const (
 	PageCredentials
 	// PageFederation is the Lettered Page of this daemon's spoke federations; its state is Model.Federation.
 	PageFederation
+	// PageDaemons is the Lettered Page of the daemons kata's configuration names; its state is Model.Daemons.
+	PageDaemons
 )
 
 // SecondColumn says what a Page's second column is. A Page declares it in pageDefs, and the one leave rule reads it.
@@ -66,6 +68,8 @@ const (
 	ListNodeCredentials
 	// ListNodeFederation is the Federation Page's list node.
 	ListNodeFederation
+	// ListNodeDaemons is the Daemons Page's list node.
+	ListNodeDaemons
 )
 
 // ListNode is the current Page's list node.
@@ -195,7 +199,11 @@ func init() {
 		{page: PageFederation, id: "federation", label: "Federation", chord: "F", press: "shift+f", lettered: true, action: ShowFederationPage, second: SecondInspector, enter: enterFederation, clear: clearFederation,
 			mode: federationMode, update: updateFederation, list: ListNodeFederation,
 			moves:  pageMoves{mode: ModeFederation, noun: "spoke", move: moveFederation, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
-			keymap: []keySegment{movementKeys, rowsOf(federationRows), rowsOf(federationLeaveRows)}},
+			keymap: []keySegment{movementKeys, rowsOf(federationRows), rowsOf(federationLeaveRows), federationChoiceMoves, rowsOf(federationEnrollRows)}},
+		{page: PageDaemons, id: "daemons", label: "Daemons", chord: "D", press: "shift+d", lettered: true, action: ShowDaemonsPage, second: SecondInspector, enter: enterDaemons, clear: clearDaemons,
+			mode: daemonsMode, update: updateDaemons, list: ListNodeDaemons,
+			moves:  pageMoves{mode: ModeDaemons, noun: "daemon", move: moveDaemon, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
+			keymap: []keySegment{movementKeys, rowsOf(daemonsRows)}},
 	}
 	buildKeymap()
 }
@@ -300,7 +308,7 @@ func pageScrollActions(def pageDef) []actionEntry {
 }
 
 // pageModes are the modes where the Page keys work: wherever the main surface has the keyboard and no text is being typed.
-var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollections, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention, ModeCredentials, ModeFederation}
+var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollections, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention, ModeCredentials, ModeFederation, ModeDaemons}
 
 // PageBarEntry is one entry of the Page bar. Press is the chord a click on it sends.
 type PageBarEntry struct {

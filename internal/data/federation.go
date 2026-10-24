@@ -32,6 +32,9 @@ func (c *Client) ReadFederation(ctx context.Context, cmd model.LoadFederation) (
 	loaded := model.FederationLoaded{Request: cmd.Request, InstanceUID: instance.JSON200.InstanceUID}
 	loaded.Daemon, loaded.Endpoint, loaded.Auth = c.activeDaemon(instance.JSON200.Auth)
 	for _, wire := range status.JSON200.Statuses {
+		if wire.Role != "" {
+			loaded.Bindings = append(loaded.Bindings, model.FederationBinding{ProjectID: wire.ProjectID, ProjectName: wire.ProjectName, Role: wire.Role})
+		}
 		if wire.Role == "spoke" {
 			loaded.Spokes = append(loaded.Spokes, translateSpoke(wire))
 		}
@@ -43,7 +46,7 @@ func (c *Client) ReadFederation(ctx context.Context, cmd model.LoadFederation) (
 // catalog leaves the daemon unnamed by it: discovery already read the file and would have refused it.
 func (c *Client) activeDaemon(auth g.AuthInfoOut) (name, endpoint, authText string) {
 	catalog, _ := ReadCatalog()
-	entry, named := catalog.Entry(catalog.Active)
+	entry, named := catalog.Entry(firstNonEmpty(c.name, catalog.Active))
 	endpoint = "local"
 	if c.kind == model.DaemonRemote {
 		endpoint = firstNonEmpty(entry.URL, os.Getenv("KATA_SERVER"), "remote")

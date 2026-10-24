@@ -55,6 +55,7 @@ const (
 	CardPicker
 	CardMove
 	CardDelete
+	CardFederationAdopt
 )
 
 // cardEntry is everything the model knows about one popup card. Each card fills in one.
@@ -372,6 +373,17 @@ func buildCards() []cardEntry {
 				}
 				return m
 			},
+		},
+		{
+			card: CardFederationAdopt, name: "federation-adopt", open: func(m Model) bool { return m.Federation.Adopting },
+			modes: []Mode{ModeFederationAdopt}, mode: func(Model) Mode { return ModeFederationAdopt },
+			chords: []string{"ctrl+c"},
+			key:    federationAdoptKey,
+			busy:   func(Model) bool { return false },
+			fields: []FieldSpec{}, input: true,
+			editing: []fieldEditing{{mode: ModeFederationAdopt, actions: []Action{DeleteInput, ClearInput}, clear: "clear name"}},
+			text:    func(m *Model) (*string, *Caret) { return &m.Federation.AdoptInput, &m.Federation.AdoptCaret },
+			erased:  func(m Model, _ bool) Model { m.Federation.AdoptErr = nil; return m },
 		},
 		{
 			card: CardRecurrence, name: "recurrence", open: func(m Model) bool { return m.RecurrenceForm.Open },

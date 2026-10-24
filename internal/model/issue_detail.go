@@ -36,6 +36,9 @@ type IssueDetail struct {
 	listJump bool
 }
 
+// cleared is the detail with nothing shown or remembered but whether the column is hidden.
+func (d IssueDetail) cleared() IssueDetail { return IssueDetail{hidden: d.hidden} }
+
 func (d IssueDetail) DetailAuthority() *IssueDetailData { return d.authority }
 func (d IssueDetail) DetailLoading() bool               { return d.loading }
 func (d IssueDetail) DetailErr() error                  { return d.err }
