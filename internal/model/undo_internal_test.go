@@ -13,7 +13,7 @@ func TestAnUnlistedCmdClearsTheHistoryAndReadsDoNot(t *testing.T) {
 			t.Errorf("%T: clears %v with %q", cmd, clears, reason)
 		}
 	}
-	for _, cmd := range []Cmd{ReadSnapshot{}, LoadDetail{}, WriteField{Action: AddLabelAction}, CloseIssueCmd{}, ReopenIssueCmd{}, MoveIssueCmd{}, SetDatesCmd{}, SaveDraft{}, UndoChange{}} {
+	for _, cmd := range []Cmd{ReadSnapshot{}, LoadDetail{}, LoadAttention{}, LoadAuthCapabilities{}, LoadCredentials{}, LoadFederation{}, WriteField{Action: AddLabelAction}, CloseIssueCmd{}, ReopenIssueCmd{}, MoveIssueCmd{}, SetDatesCmd{}, SaveDraft{}, UndoChange{}} {
 		if reason, clears := undoBoundary(cmd); clears {
 			t.Errorf("%T clears the history with %q", cmd, reason)
 		}
