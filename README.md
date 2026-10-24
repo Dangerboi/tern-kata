@@ -36,7 +36,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 **The worker.** `tern-kata worker` runs kata's agent prompt jobs and workflows through omp and your shell on your machine and records every run in kata. The plugin starts and supervises it once a `worker.toml` exists. Set it up from the Pane with `W` on the Jobs Page, which opens the Worker card (set up, serve the Project, edit `worker.toml`, restart or stop the worker, turn supervision off and on; the trust choice comes first), or from a shell with `tern-kata worker init` (optional `--executor`, `--actor`, `--command`, `--model`, `--thinking`), `worker add`, `worker edit` and `worker stop [--now]`. Read the trust note first. See [The worker](docs/guide/worker.md).
 
-**Attachments.** `u` attaches a screenshot, log or any other file to an Issue; agents find it through the Issue's kata metadata. See [Attachments](docs/guide/attachments.md).
+**Attachments.** `@` attaches a screenshot, log or any other file to an Issue; agents find it through the Issue's kata metadata. See [Attachments](docs/guide/attachments.md).
 
 ![The Attachments tab of "Add Apple Pay to checkout" listing a screenshot and a log](docs/images/attachments.png)
 

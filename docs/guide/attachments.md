@@ -6,7 +6,7 @@ Attach a screenshot, log or any other file to an Issue so whoever picks it up se
 
 ## In a Pane
 
-- `u` on the selected Issue (in the list or the Issue detail) asks for a path, quoted, starting with `~` or relative to the directory, and attaches the file. A refusal or a failure shows in the form.
+- `@` on the selected Issue (in the list or the Issue detail) asks for a path, quoted, starting with `~` or relative to the directory, and attaches the file. A refusal or a failure shows in the form.
 - `U` lists the Issue's Attachments by name: `down` and `up` move and `enter` removes the one chosen, with no further confirmation, and a notice says what happened to the file. `U` on an Issue with none says so.
 - Both keys explain why when this directory is not bound to the Issue's Project.
 

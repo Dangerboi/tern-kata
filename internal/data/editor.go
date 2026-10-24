@@ -24,8 +24,13 @@ func (c *Client) SaveDraft(ctx context.Context, cmd model.SaveDraft) (model.Msg,
 		return c.draftConflict(ctx, cmd.UID)
 	}
 	actor := cmd.Actor
+	var done func(issueWrite, bool, ...func(*model.UndoEntry)) model.WriteRecord
+	if !cmd.Comment {
+		done = c.recorder(ctx, model.UndoBody, cmd.ProjectID, cmd.UID, cmd.Actor)
+	}
 	// shortcut: check-then-write races (kata v0.20 honours no revision precondition on edits or comments); upgrade when it does.
 	var werr error
+	var record model.WriteRecord
 	if cmd.Comment {
 		body := &g.CreateCommentBody{Body: cmd.Text, Actor: &actor}
 		if cmd.ReplyTo != "" {
@@ -37,7 +42,13 @@ func (c *Client) SaveDraft(ctx context.Context, cmd model.SaveDraft) (model.Msg,
 		}
 		_, werr = c.CreateCommentWithResponse(ctx, &g.CreateCommentRequestOptions{PathParams: &g.CreateCommentPath{ProjectID: fmt.Sprint(cmd.ProjectID), Ref: cmd.UID}, Body: body, Header: &g.CreateCommentHeaders{IdempotencyKey: idempotencyKey(cmd.Key)}})
 	} else {
-		_, werr = c.EditIssueWithResponse(ctx, &g.EditIssueRequestOptions{PathParams: &g.EditIssuePath{ProjectID: fmt.Sprint(cmd.ProjectID), Ref: cmd.UID}, Body: &g.EditIssueBody{Body: &cmd.Text, Actor: &actor}})
+		var edited *g.EditIssueResp
+		edited, werr = c.EditIssueWithResponse(ctx, &g.EditIssueRequestOptions{PathParams: &g.EditIssuePath{ProjectID: fmt.Sprint(cmd.ProjectID), Ref: cmd.UID}, Body: &g.EditIssueBody{Body: &cmd.Text, Actor: &actor}})
+		var res issueWrite
+		if werr == nil {
+			res = written(edited.JSON200.Changed, edited.JSON200.Issue, nil)
+		}
+		record = done(res, ambiguousWrite(werr))
 	}
 	if cmd.ReplyTo != "" && daemonCode(werr) == "duplicate_reply" {
 		// kata's hint names the CLI's --force; the card offers Send anyway instead.
@@ -46,9 +57,12 @@ func (c *Client) SaveDraft(ctx context.Context, cmd model.SaveDraft) (model.Msg,
 		return model.DraftFailed{UID: cmd.UID, Err: model.DuplicateReply{Message: daemonError(envelope).Error()}}, nil
 	}
 	if werr != nil {
+		if record.Unknown {
+			return model.DraftFailed{UID: cmd.UID, Err: daemonError(werr), Record: record}, nil
+		}
 		return nil, daemonError(werr)
 	}
-	return model.DraftSaved{UID: cmd.UID}, nil
+	return model.DraftSaved{UID: cmd.UID, Record: record}, nil
 }
 
 func (c *Client) draftConflict(ctx context.Context, uid string) (model.Msg, error) {

@@ -96,7 +96,7 @@ func TestOnlyTheActiveTabsRowsRender(t *testing.T) {
 
 func TestEmptyActivityTabsSaySo(t *testing.T) {
 	for tab := range model.TabCount {
-		want := map[model.ActivityTab]string{model.TabComments: "No comments.", model.TabEvents: "No events.", model.TabLinks: "No links.", model.TabAttachments: "No attachments, u to attach"}[tab]
+		want := map[model.ActivityTab]string{model.TabComments: "No comments.", model.TabEvents: "No events.", model.TabLinks: "No links.", model.TabAttachments: "No attachments, @ to attach"}[tab]
 		nodes := render(t, apply(browsing(), model.ActivityTabMsg{Tab: tab}))
 		if got := text(nodes[view.DetailActivityID+".empty"]); got != want {
 			t.Errorf("tab %v says %q, want %q", tab, got, want)
@@ -460,7 +460,7 @@ func TestAttachmentsTabIsFourthWithItsCount(t *testing.T) {
 
 func TestEmptyAttachmentsTabSaysHowToAttach(t *testing.T) {
 	nodes := attachmentsTab(t, "box", map[string]any{"scheduled_on": "2026-10-20"})
-	if got := text(nodes[view.DetailActivityID+".empty"]); got != "No attachments, u to attach" {
+	if got := text(nodes[view.DetailActivityID+".empty"]); got != "No attachments, @ to attach" {
 		t.Errorf("empty text = %q", got)
 	}
 }

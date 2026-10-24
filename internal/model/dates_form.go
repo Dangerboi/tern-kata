@@ -103,6 +103,7 @@ type DatesResultMsg struct {
 	UID     string
 	Applied []DateChange
 	Err     error
+	Record  WriteRecord
 }
 
 func (DatesResultMsg) msg() {}

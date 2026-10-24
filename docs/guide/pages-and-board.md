@@ -58,7 +58,8 @@ Editing from the Pane:
 | `t` | In the Issue detail: timed assignment to you, 1m to 24h (see [Compared with `kata tui`](kata-tui.md#timed-assignment)) |
 | `O` | Recurrence (see [Recurring Issues](recur.md)) |
 | `d` | Dates (see [Dates](dates.md)) |
-| `u`, `U` | Attach a file; list and remove Attachments (see [Attachments](attachments.md)) |
+| `@`, `U` | Attach a file; list and remove Attachments (see [Attachments](attachments.md)) |
+| `u` | Undo the last change this Pane made (see [Compared with `kata tui`](kata-tui.md#undo)) |
 | `e` | Edit the Issue body in Tern's editor |
 | `?` | Every key |
 
@@ -84,7 +85,7 @@ Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relat
 
 ### Moving around and moving cards
 
-- `↑`/`↓`/`j`/`k` move within a Lane and `←`/`→` to the neighbouring Lane that has cards. A click selects a card. `x` opens the Close card, `r` reopens a closed Issue into its Lane, and `+`, `-`, `a`, `A`, `!`, `p`, `u`, `U`, `e` and `n` act on the selected card as in the list. `esc` opens the Menu.
+- `↑`/`↓`/`j`/`k` move within a Lane and `←`/`→` to the neighbouring Lane that has cards. A click selects a card. `x` opens the Close card, `r` reopens a closed Issue into its Lane, and `+`, `-`, `a`, `A`, `!`, `p`, `u` (undo), `@`, `U`, `e` and `n` act on the selected card as in the list. `esc` opens the Menu.
 - `>` moves the selected card one Lane right and `<` one Lane left, among No lane and the Lanes; a Move never enters or leaves Done (`x` closes, `r` reopens). Leaving No lane adds the first Lane's label; moving into No lane removes the Lane labels and keeps every other label.
 - A Move adds the target label first, then removes the other Lane labels, so a failure halfway leaves the Issue in two Lanes, never none, and a Move of an Issue with two Lane labels leaves it with one. The card shows in its new Lane at once; a failure leaves a Notice with the daemon's reason. Moves are refused while the daemon is disconnected.
 
