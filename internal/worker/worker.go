@@ -13,6 +13,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // Options is everything a Worker needs from outside, so a test runs the whole worker against kata in process with
@@ -80,7 +82,7 @@ type projectState struct {
 	route       routeState
 	instanceUID string
 
-	jobs       map[string]Job
+	jobs       map[string]cronjob.Job
 	jobsErr    string
 	jobsAt     time.Time
 	streamOpen bool

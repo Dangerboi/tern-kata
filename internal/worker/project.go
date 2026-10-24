@@ -7,6 +7,8 @@ import (
 	"math/rand/v2"
 	"strings"
 	"time"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // jitter is a random duration between lo and hi.
@@ -186,7 +188,7 @@ func (w *Worker) refreshEvery(ps *projectState) time.Duration {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	for _, j := range ps.jobs {
-		if !j.IsNative() {
+		if !j.Native() {
 			return jitter(15*time.Minute, 18*time.Minute)
 		}
 	}
@@ -207,7 +209,7 @@ func (w *Worker) refreshJobs(ctx context.Context, ps *projectState) error {
 		ps.jobsErr = err.Error()
 		return fmt.Errorf("listing jobs: %w", err)
 	}
-	ps.jobs = make(map[string]Job, len(jobs))
+	ps.jobs = make(map[string]cronjob.Job, len(jobs))
 	for _, j := range jobs {
 		ps.jobs[j.UID] = j
 	}

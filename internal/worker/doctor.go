@@ -141,7 +141,7 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 		}
 		n := 0
 		for _, j := range jobs {
-			if !j.IsNative() {
+			if !j.Native() {
 				n++
 			}
 		}

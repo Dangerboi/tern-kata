@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
 )
@@ -57,7 +58,7 @@ func (c *crash) wait(t *testing.T) string {
 }
 
 // killedAt starts a worker that dies at point while running a manual run of job, stops it, and returns the run's uid.
-func (h *harness) killedAt(point string, job worker.Job) (uid string, c *crash) {
+func (h *harness) killedAt(point string, job cronjob.Job) (uid string, c *crash) {
 	h.t.Helper()
 	c = newCrash(point)
 	r := h.start(c.hooks())
