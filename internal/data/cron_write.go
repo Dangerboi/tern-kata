@@ -12,6 +12,7 @@ import (
 	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
@@ -28,7 +29,7 @@ func (c *Client) SaveJob(ctx context.Context, cmd model.SaveJobCmd) (model.JobWr
 		if err != nil {
 			return model.JobWritten{}, err
 		}
-		policy := model.CronIssuePolicy{Kind: model.IssuePerRun}
+		policy := cronjob.IssuePolicy{Kind: cronjob.IssuePerRun}
 		if def.Issue != nil {
 			policy = *def.Issue
 		}
@@ -44,14 +45,14 @@ func (c *Client) SaveJob(ctx context.Context, cmd model.SaveJobCmd) (model.JobWr
 		if model.DateTrigger(def.Trigger.Kind) {
 			def.Trigger.IssueUID = issue
 		}
-		if def.Issue != nil && def.Issue.Kind == model.IssueExisting {
+		if def.Issue != nil && def.Issue.Kind == cronjob.IssueExisting {
 			// Kata makes a job that executes report to the Issue its trigger fires on.
 			policy := *def.Issue
 			policy.UID = issue
 			def.Issue = &policy
 		}
 	}
-	if cmd.ReportRef != "" && def.Issue != nil && def.Issue.Kind == model.IssueExisting {
+	if cmd.ReportRef != "" && def.Issue != nil && def.Issue.Kind == cronjob.IssueExisting {
 		issue, err := c.resolveIssue(ctx, cmd.ProjectID, cmd.ReportRef, "Notified Issue")
 		if err != nil {
 			return model.JobWritten{}, err
@@ -175,19 +176,19 @@ func (c *Client) resolveIssue(ctx context.Context, projectID int64, ref, label s
 
 // wireDefinition is the model's definition as kata takes it: version 1 of a job, a field only when it holds something, except
 // the ones whose zero is a value (an Issue-deadline trigger's lead).
-func wireDefinition(d model.CronDefinition) g.CronJobDefinition {
+func wireDefinition(d cronjob.Definition) g.CronJobDefinition {
 	t, a := d.Trigger, d.Action
 	wire := g.CronJobDefinition{
 		Version: 1, Kind: "job", Enabled: d.Enabled, Overlap: d.Overlap, Catchup: d.Catchup,
-		Trigger:      g.Trigger{Kind: t.Kind, Cron: textOrNil(t.Cron), At: textOrNil(t.At), IssueUID: textOrNil(t.IssueUID), Timezone: textOrNil(t.Timezone)},
-		Action:       g.Action{Kind: a.Kind, Message: textOrNil(a.Message), Recipient: textOrNil(a.Recipient), Prompt: textOrNil(a.Prompt), WorkflowUID: textOrNil(a.WorkflowUID)},
+		Trigger:      g.Trigger{Kind: string(t.Kind), Cron: textOrNil(t.Cron), At: textOrNil(t.At), IssueUID: textOrNil(t.IssueUID), Timezone: textOrNil(t.Timezone)},
+		Action:       g.Action{Kind: string(a.Kind), Message: textOrNil(a.Message), Recipient: textOrNil(a.Recipient), Prompt: textOrNil(a.Prompt), WorkflowUID: textOrNil(a.WorkflowUID)},
 		GraceSeconds: positiveOrNil(d.GraceSeconds), TimeoutSeconds: positiveOrNil(d.TimeoutSeconds), CheckoutKey: textOrNil(d.CheckoutKey),
 		Options: d.Options,
 	}
-	if t.Kind == model.TriggerInterval {
+	if t.Kind == cronjob.TriggerInterval {
 		wire.Trigger.IntervalSeconds = &t.IntervalSeconds
 	}
-	if t.Kind == model.TriggerIssueDeadline {
+	if t.Kind == cronjob.TriggerIssueDeadline {
 		wire.Trigger.LeadSeconds = &t.LeadSeconds
 	}
 	if len(d.SecretRefs) > 0 {
@@ -195,7 +196,7 @@ func wireDefinition(d model.CronDefinition) g.CronJobDefinition {
 	}
 	if p := d.Issue; p != nil {
 		wire.Issue = &g.IssuePolicy{
-			Kind: p.Kind, UID: textOrNil(p.UID), ParentUID: textOrNil(p.ParentUID), Title: textOrNil(p.Title), Body: textOrNil(p.Body),
+			Kind: string(p.Kind), UID: textOrNil(p.UID), ParentUID: textOrNil(p.ParentUID), Title: textOrNil(p.Title), Body: textOrNil(p.Body),
 			ScheduledOffsetSeconds: p.ScheduledOffsetSeconds, DeadlineOffsetSeconds: p.DeadlineOffsetSeconds,
 		}
 	}

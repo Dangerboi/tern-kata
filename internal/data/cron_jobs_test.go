@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
@@ -116,7 +117,7 @@ func TestGatewayListsNativeAndAdapterJobsWithTheParentsStatusAndProgress(t *test
 	if p.Progress == nil || p.Progress.Anchor.Before(started.Add(-time.Minute)) || p.Progress.Anchor.After(time.Now()) || !p.Progress.Through.Equal(p.Progress.Anchor) {
 		t.Fatalf("progress %+v: a new job's delivery starts at its creation", p.Progress)
 	}
-	if got := native.Definition.Trigger; got.Kind != model.TriggerInterval || got.IntervalSeconds != 3600 {
+	if got := native.Definition.Trigger; got.Kind != cronjob.TriggerInterval || got.IntervalSeconds != 3600 {
 		t.Fatalf("trigger %+v", got)
 	}
 	if adapter.Native() || adapter.Parent != nil || adapter.Kind() != model.KindAgentPrompt || adapter.Definition.Profile != "fast" {

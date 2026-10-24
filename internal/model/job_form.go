@@ -10,12 +10,12 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/Dangerboi/tern-kata/internal/crontrigger"
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // The Job card is the Popup card that makes a Cron job and edits one. What a card offers depends on the job's kind and trigger,
 // and both are tables: a kind (jobKinds) says which fields it shows, how it loads from a job and builds the rest of the
-// definition, and a trigger (jobTriggers) says its own fields and how they build a CronTrigger. Adding an agent prompt,
+// definition, and a trigger (jobTriggers) says its own fields and how they build a cronjob.Trigger. Adding an agent prompt,
 // workflow or notify kind, or another trigger, is adding an entry to a table and its fields to JobFields.
 
 const (
@@ -157,9 +157,10 @@ var jobCatchups = []struct{ id, label string }{
 
 // jobKind is one kind of job the card can make. The card builds a job of the kind from its fields and reads one back into them.
 type jobKind struct {
-	id, label string
+	id    string
+	label string
 	// triggers lists the trigger ids the kind offers, in choice order; the first is the default.
-	triggers []string
+	triggers []cronjob.TriggerKind
 	// owns says the card can edit the job as this kind.
 	owns func(CronJob) bool
 	// shown says the field beyond the common ones (kind, name, trigger, enabled) and the trigger's own applies to the form.
@@ -167,18 +168,19 @@ type jobKind struct {
 	// load reads the kind's fields from a job it owns.
 	load func(f *JobFormState, job CronJob)
 	// checkTrigger is the kind's limits on a trigger the form built.
-	checkTrigger func(t CronTrigger) error
+	checkTrigger func(t cronjob.Trigger) error
 	// build is the kind's part of the definition (action, Issue policy, overlap, catchup, grace) and, for a new job, the reference
 	// of its parent. Name, trigger and enabled are the card's.
-	build func(f JobFormState) (def CronDefinition, parentRef string, err error)
+	build func(f JobFormState) (def cronjob.Definition, parentRef string, err error)
 }
 
 // jobTrigger is one kind of trigger the card can make, with the fields it adds.
 type jobTrigger struct {
-	id, label string
-	fields    []Field
-	load      func(f *JobFormState, t CronTrigger)
-	build     func(f JobFormState) (CronTrigger, error)
+	id     cronjob.TriggerKind
+	label  string
+	fields []Field
+	load   func(f *JobFormState, t cronjob.Trigger)
+	build  func(f JobFormState) (cronjob.Trigger, error)
 }
 
 var jobKinds = []jobKind{nativeJobKind, promptJobKind, workflowJobKind, notifyJobKind}
@@ -194,7 +196,7 @@ const nativeChildTitleMax = 991
 
 var nativeJobKind = jobKind{
 	id: "native", label: "Recurring child",
-	triggers: []string{TriggerCron, TriggerInterval},
+	triggers: []cronjob.TriggerKind{cronjob.TriggerCron, cronjob.TriggerInterval},
 	owns:     CronJob.Native,
 	shown: func(f JobFormState, name Field) bool {
 		switch name {
@@ -221,15 +223,15 @@ var nativeJobKind = jobKind{
 			f.Grace = strconv.FormatInt(d.GraceSeconds, 10)
 		}
 	},
-	checkTrigger: func(t CronTrigger) error {
-		if t.Kind == TriggerInterval && t.IntervalSeconds < nativeMinInterval {
+	checkTrigger: func(t cronjob.Trigger) error {
+		if t.Kind == cronjob.TriggerInterval && t.IntervalSeconds < nativeMinInterval {
 			return fieldError(JobFieldInterval, "must be at least %d seconds.", nativeMinInterval)
 		}
 		return nil
 	},
-	build: func(f JobFormState) (CronDefinition, string, error) {
-		def := CronDefinition{Overlap: "allow", Catchup: f.Catchup, Action: CronAction{Kind: ActionNotify, Recipient: recipientDefault}}
-		policy := CronIssuePolicy{Kind: IssuePerRun}
+	build: func(f JobFormState) (cronjob.Definition, string, error) {
+		def := cronjob.Definition{Overlap: "allow", Catchup: f.Catchup, Action: cronjob.Action{Kind: cronjob.ActionNotify, Recipient: recipientDefault}}
+		policy := cronjob.IssuePolicy{Kind: cronjob.IssuePerRun}
 		parentRef := ""
 		if f.Change {
 			policy.ParentUID = f.Opened.Definition.Issue.ParentUID
@@ -275,52 +277,52 @@ func exactRecipient(s string) bool {
 }
 
 var cronJobTrigger = jobTrigger{
-	id: TriggerCron, label: "Cron expression", fields: []Field{JobFieldCron, JobFieldZone},
-	load: func(f *JobFormState, t CronTrigger) { f.Zone, f.Cron = t.zoneAndExpression() },
-	build: func(f JobFormState) (CronTrigger, error) {
+	id: cronjob.TriggerCron, label: "Cron expression", fields: []Field{JobFieldCron, JobFieldZone},
+	load: func(f *JobFormState, t cronjob.Trigger) { f.Zone, f.Cron = zoneAndExpression(t) },
+	build: func(f JobFormState) (cronjob.Trigger, error) {
 		expression, zone := strings.TrimSpace(f.Cron), strings.TrimSpace(f.Zone)
 		switch {
 		case expression == "":
-			return CronTrigger{}, fieldError(JobFieldCron, "enter 5 fields like 0 9 * * 1-5, or a descriptor like @daily.")
+			return cronjob.Trigger{}, fieldError(JobFieldCron, "enter 5 fields like 0 9 * * 1-5, or a descriptor like @daily.")
 		case strings.HasPrefix(expression, "TZ=") || strings.HasPrefix(expression, "CRON_TZ="):
-			return CronTrigger{}, fieldError(JobFieldCron, "put the zone in the Time zone field, not in a TZ= prefix.")
+			return cronjob.Trigger{}, fieldError(JobFieldCron, "put the zone in the Time zone field, not in a TZ= prefix.")
 		case strings.HasPrefix(expression, "@every"):
-			return CronTrigger{}, fieldError(JobFieldCron, "use the Interval trigger instead of @every.")
+			return cronjob.Trigger{}, fieldError(JobFieldCron, "use the Interval trigger instead of @every.")
 		}
 		if zone == "" {
 			zone = "UTC"
 		}
 		if _, err := time.LoadLocation(zone); err != nil || zone == "Local" {
-			return CronTrigger{}, fieldError(JobFieldZone, "unknown time zone %q; use an IANA name like Europe/Berlin or UTC.", zone)
+			return cronjob.Trigger{}, fieldError(JobFieldZone, "unknown time zone %q; use an IANA name like Europe/Berlin or UTC.", zone)
 		}
-		t := CronTrigger{Kind: TriggerCron, Cron: expression, Timezone: zone}
-		if !t.validCron() {
-			return CronTrigger{}, fieldError(JobFieldCron, "%q is not a valid expression; use 5 fields like 0 9 * * 1-5, or a descriptor like @daily.", expression)
+		t := cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: expression, Timezone: zone}
+		if !validCron(t) {
+			return cronjob.Trigger{}, fieldError(JobFieldCron, "%q is not a valid expression; use 5 fields like 0 9 * * 1-5, or a descriptor like @daily.", expression)
 		}
 		return t, nil
 	},
 }
 
 var intervalJobTrigger = jobTrigger{
-	id: TriggerInterval, label: "Interval", fields: []Field{JobFieldInterval},
-	load: func(f *JobFormState, t CronTrigger) { f.Interval = strconv.FormatInt(t.IntervalSeconds, 10) },
-	build: func(f JobFormState) (CronTrigger, error) {
+	id: cronjob.TriggerInterval, label: "Interval", fields: []Field{JobFieldInterval},
+	load: func(f *JobFormState, t cronjob.Trigger) { f.Interval = strconv.FormatInt(t.IntervalSeconds, 10) },
+	build: func(f JobFormState) (cronjob.Trigger, error) {
 		text := strings.TrimSpace(f.Interval)
 		seconds, err := strconv.ParseInt(text, 10, 64)
 		if err != nil {
 			d, durationErr := time.ParseDuration(text)
 			if durationErr != nil || d%time.Second != 0 {
-				return CronTrigger{}, fieldError(JobFieldInterval, "enter a whole number of seconds, or a duration like 15m or 2h.")
+				return cronjob.Trigger{}, fieldError(JobFieldInterval, "enter a whole number of seconds, or a duration like 15m or 2h.")
 			}
 			seconds = int64(d / time.Second)
 		}
 		switch {
 		case seconds <= 0:
-			return CronTrigger{}, fieldError(JobFieldInterval, "must be positive.")
+			return cronjob.Trigger{}, fieldError(JobFieldInterval, "must be positive.")
 		case seconds > maxJobSeconds:
-			return CronTrigger{}, fieldError(JobFieldInterval, "is longer than kata accepts.")
+			return cronjob.Trigger{}, fieldError(JobFieldInterval, "is longer than kata accepts.")
 		}
-		return CronTrigger{Kind: TriggerInterval, IntervalSeconds: seconds}, nil
+		return cronjob.Trigger{Kind: cronjob.TriggerInterval, IntervalSeconds: seconds}, nil
 	},
 }
 
@@ -340,7 +342,8 @@ type JobFormState struct {
 	// Conflict is the newer job a save found: nothing was written, the draft stays, and the card asks what to do.
 	Conflict *CronJob
 	// Kind and Trigger are the ids of the kind and the trigger of the job.
-	Kind, Trigger                                              string
+	Kind                                                       string
+	Trigger                                                    cronjob.TriggerKind
 	Name, Cron, Zone, Interval, Parent, Title, Body, Recipient string
 	Message, Grace                                             string
 	// At is a once trigger's instant, Issue the Issue an Issue-date trigger fires on or an existing-Issue policy names (kata makes
@@ -350,9 +353,10 @@ type JobFormState struct {
 	// Prompt, Workflow (a uid), Profile, Checkout and Secrets are an execute job's; Secrets is "ENV=source" pairs.
 	Prompt, Workflow, Profile, Checkout, Secrets string
 	// Policy is the Issue policy's kind, Scheduled and DeadlineOffset the per-run Issue's date offsets, Timeout the run's limit.
-	Policy, Scheduled, DeadlineOffset, Timeout string
-	Overlap, Catchup                           string
-	Enabled                                    bool
+	Policy                             string
+	Scheduled, DeadlineOffset, Timeout string
+	Overlap, Catchup                   string
+	Enabled                            bool
 	// Worker is what this machine's worker config offers; Workflows the Project's workflows, WorkflowsRead says they have been
 	// read, and WorkflowsErr is why a read failed.
 	Worker        WorkerPickers
@@ -509,7 +513,7 @@ func (f JobFormState) options(name Field) []jobOption {
 			opts = append(opts, jobOption{c, c})
 		}
 	case JobFieldPolicy:
-		opts = []jobOption{{IssuePerRun, "A new Issue per run"}, {IssueExisting, "An existing Issue"}}
+		opts = []jobOption{{string(cronjob.IssuePerRun), "A new Issue per run"}, {string(cronjob.IssueExisting), "An existing Issue"}}
 	case JobFieldOverlap:
 		opts = []jobOption{{"forbid", "Wait for the running one"}, {"allow", "Run alongside it"}}
 	case JobFieldCatchup:
@@ -551,7 +555,10 @@ func (f JobFormState) JobChoices(name Field) []JobChoice {
 	return choices
 }
 
-func jobTriggerOf(id string) jobTrigger {
+// policyKind is the Issue policy the form holds.
+func (f JobFormState) policyKind() cronjob.IssuePolicyKind { return cronjob.IssuePolicyKind(f.Policy) }
+
+func jobTriggerOf(id cronjob.TriggerKind) jobTrigger {
 	for _, t := range jobTriggers {
 		if t.id == id {
 			return t
@@ -609,7 +616,7 @@ func newJobForm(m Model, projectID int64, parent string) (Model, []Cmd) {
 	}
 	k := jobKinds[0]
 	m.JobForm = JobFormState{Open: true, Field: JobFieldName, ProjectID: projectID, UID: uid, Kind: k.id, Trigger: k.triggers[0],
-		Cron: "0 9 * * *", Zone: zone, Interval: "3600", Parent: parent, Catchup: CatchupLatest, Policy: IssuePerRun, Overlap: "forbid", Enabled: true}
+		Cron: "0 9 * * *", Zone: zone, Interval: "3600", Parent: parent, Catchup: CatchupLatest, Policy: string(cronjob.IssuePerRun), Overlap: "forbid", Enabled: true}
 	return m, jobChoiceCmds(m, projectID)
 }
 
@@ -621,7 +628,7 @@ func changeJobForm(m Model, projectID int64, job CronJob) (JobFormState, bool) {
 		}
 		f := JobFormState{Open: true, Field: JobFieldName, ProjectID: projectID, UID: job.UID, Change: true, Opened: job, Kind: k.id,
 			Trigger: job.Definition.Trigger.Kind, Name: job.Name, Cron: "0 9 * * *", Zone: "UTC", Interval: "3600",
-			Catchup: CatchupLatest, Policy: IssuePerRun, Overlap: "forbid", Enabled: job.Definition.Enabled}
+			Catchup: CatchupLatest, Policy: string(cronjob.IssuePerRun), Overlap: "forbid", Enabled: job.Definition.Enabled}
 		if !slices.Contains(k.triggers, f.Trigger) {
 			return JobFormState{}, false
 		}
@@ -683,10 +690,10 @@ func openEditJob(m Model) (Model, []Cmd) {
 }
 
 // buildTrigger reads the card's trigger and checks it against the kind's limits.
-func (f JobFormState) buildTrigger() (CronTrigger, error) {
+func (f JobFormState) buildTrigger() (cronjob.Trigger, error) {
 	t, err := f.trigger().build(f)
 	if err != nil {
-		return CronTrigger{}, err
+		return cronjob.Trigger{}, err
 	}
 	if opened := f.Opened.Definition.Trigger; f.Change && t.Timezone == "" && opened.Kind == t.Kind {
 		t.Timezone = opened.Timezone // a zone the card has no field for stays as it was
@@ -699,7 +706,7 @@ func (f JobFormState) buildTrigger() (CronTrigger, error) {
 // ParentRef is the same for a native job's parent.
 type JobTerms struct {
 	Name       string
-	Definition CronDefinition
+	Definition cronjob.Definition
 	ParentRef  string
 	IssueRef   string
 	ReportRef  string
@@ -738,7 +745,7 @@ func (f JobFormState) terms() (JobTerms, error) {
 	}
 	def.Enabled, def.Trigger = f.Enabled, trigger
 	terms := JobTerms{Name: name, Definition: def, ParentRef: parentRef}
-	if DateTrigger(trigger.Kind) || (def.Issue != nil && def.Issue.Kind == IssueExisting) {
+	if DateTrigger(trigger.Kind) || (def.Issue != nil && def.Issue.Kind == cronjob.IssueExisting) {
 		terms.IssueRef = f.issueRef()
 	}
 	if def.Issue != nil && DateTrigger(trigger.Kind) {
@@ -771,23 +778,23 @@ func (f JobFormState) Preview(cal PaneCalendar, now time.Time) JobPreview {
 		}
 	}
 	const layout = "Mon 2006-01-02 15:04 MST"
-	preview := JobPreview{Words: t.Words()}
+	preview := JobPreview{Words: triggerWords(t)}
 	switch t.Kind {
-	case TriggerCron:
-		schedule, _ := crontrigger.Cron(t.Cron, t.Timezone, time.Time{})
-		zone, _ := t.zoneAndExpression()
+	case cronjob.TriggerCron:
+		schedule, _ := cronjob.Cron(t.Cron, t.Timezone, time.Time{})
+		zone, _ := zoneAndExpression(t)
 		loc, _ := time.LoadLocation(zone)
 		for next := schedule.Next(now); len(preview.Runs) < previewRuns && !next.IsZero(); next = schedule.Next(next) {
 			preview.Runs = append(preview.Runs, next.In(loc).Format(layout))
 		}
-	case TriggerInterval:
-		schedule, _ := crontrigger.Interval(t.IntervalSeconds, anchor) // buildTrigger refused any other
+	case cronjob.TriggerInterval:
+		schedule, _ := cronjob.Interval(t.IntervalSeconds, anchor) // buildTrigger refused any other
 		next := schedule.Next(now)
 		for range previewRuns {
 			preview.Runs = append(preview.Runs, cal.in(next).Format(layout))
 			next = schedule.Next(next)
 		}
-	case TriggerOnce:
+	case cronjob.TriggerOnce:
 		if at, err := time.Parse(time.RFC3339, t.At); err == nil && at.After(now) {
 			preview.Runs = append(preview.Runs, cal.in(at).Format(layout))
 		}
@@ -921,7 +928,7 @@ func (m Model) JobConflictFacts() []JobFact {
 	d := job.Definition
 	add("Name", job.Name)
 	add("State", jobState(m, *job))
-	add("Schedule", d.Trigger.Words())
+	add("Schedule", triggerWords(d.Trigger))
 	if d.Issue != nil {
 		add("Child title", d.Issue.Title)
 	}

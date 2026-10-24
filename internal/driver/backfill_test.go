@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
@@ -15,7 +16,7 @@ import (
 // and 12 o'clock, four in all, when it runs again.
 func owing(uid string, parent string, catchup string) model.CronJob {
 	p := jobParent(parent, false)
-	p.Progress = &model.CronProgress{Anchor: jobAnchor, Through: now.Add(-3*time.Hour - 30*time.Minute)}
+	p.Progress = &cronjob.Progress{Anchor: jobAnchor, Through: now.Add(-3*time.Hour - 30*time.Minute)}
 	job := nativeJob(uid, "Weekly "+uid, p)
 	job.DefinitionEventUID = "EV1"
 	job.Definition.Catchup = catchup

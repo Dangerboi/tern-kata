@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
@@ -315,7 +316,7 @@ func TestWorkflowRowAndInspectorNameTheLiveJobsThatUseIt(t *testing.T) {
 		t.Fatalf("the Page asked for jobs with %#v, want the Project's live jobs", out.Cmds)
 	}
 	use := func(uid, name string, enabled bool) model.CronJob {
-		return model.CronJob{UID: uid, Name: name, Definition: model.CronDefinition{Enabled: enabled, Action: model.CronAction{Kind: "execute", WorkflowUID: "W1"}}}
+		return model.CronJob{UID: uid, Name: name, Definition: cronjob.Definition{Enabled: enabled, Action: cronjob.Action{Kind: "execute", WorkflowUID: "W1"}}}
 	}
 	archived := use("J3", "Old review", true)
 	now := time.Now()

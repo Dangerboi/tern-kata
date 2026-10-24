@@ -1,10 +1,10 @@
-package crontrigger_test
+package cronjob_test
 
 import (
 	"testing"
 	"time"
 
-	"github.com/Dangerboi/tern-kata/internal/crontrigger"
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 func at(t *testing.T, s string) time.Time {
@@ -26,12 +26,12 @@ func TestStepAcceptsOnlyPositiveIntervalsKataHolds(t *testing.T) {
 		{"zero", 0, 0, false},
 		{"negative", -1, 0, false},
 		{"one second", 1, time.Second, true},
-		{"the largest accepted", crontrigger.MaxIntervalSeconds, time.Duration(crontrigger.MaxIntervalSeconds) * time.Second, true},
-		{"one past it", crontrigger.MaxIntervalSeconds + 1, 0, false},
+		{"the largest accepted", cronjob.MaxIntervalSeconds, time.Duration(cronjob.MaxIntervalSeconds) * time.Second, true},
+		{"one past it", cronjob.MaxIntervalSeconds + 1, 0, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, ok := crontrigger.Step(tc.seconds)
+			got, ok := cronjob.Step(tc.seconds)
 			if got != tc.want || ok != tc.ok {
 				t.Errorf("Step(%d) = %v, %v; want %v, %v", tc.seconds, got, ok, tc.want, tc.ok)
 			}
@@ -40,12 +40,12 @@ func TestStepAcceptsOnlyPositiveIntervalsKataHolds(t *testing.T) {
 }
 
 func TestIntervalRefusesAStepKataDoesNotAccept(t *testing.T) {
-	for _, seconds := range []int64{0, -5, crontrigger.MaxIntervalSeconds + 1} {
-		if _, err := crontrigger.Interval(seconds, time.Time{}); err == nil {
+	for _, seconds := range []int64{0, -5, cronjob.MaxIntervalSeconds + 1} {
+		if _, err := cronjob.Interval(seconds, time.Time{}); err == nil {
 			t.Errorf("Interval(%d) accepted", seconds)
 		}
 	}
-	if _, err := crontrigger.Interval(crontrigger.MaxIntervalSeconds, time.Time{}); err != nil {
+	if _, err := cronjob.Interval(cronjob.MaxIntervalSeconds, time.Time{}); err != nil {
 		t.Errorf("the largest interval refused: %v", err)
 	}
 }
@@ -65,7 +65,7 @@ func TestZoneTakesTheEmbeddedDirectiveThenTheTimezoneThenUTC(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			zone, bare := crontrigger.Zone(tc.expression, tc.timezone)
+			zone, bare := cronjob.Zone(tc.expression, tc.timezone)
 			if zone != tc.zone || bare != tc.bare {
 				t.Errorf("Zone(%q, %q) = %q, %q; want %q, %q", tc.expression, tc.timezone, zone, bare, tc.zone, tc.bare)
 			}
@@ -84,7 +84,7 @@ func TestCronReadsTheZoneTheDirectiveOrTheTimezoneNames(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			s, err := crontrigger.Cron(tc.expression, tc.timezone, time.Time{})
+			s, err := cronjob.Cron(tc.expression, tc.timezone, time.Time{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -97,18 +97,18 @@ func TestCronReadsTheZoneTheDirectiveOrTheTimezoneNames(t *testing.T) {
 
 func TestCronRefusesWhatKataDoesNot(t *testing.T) {
 	for _, expression := range []string{"every tuesday", "0 0 9 * * *", "", "0 9 * *"} {
-		if _, err := crontrigger.Cron(expression, "", time.Time{}); err == nil {
+		if _, err := cronjob.Cron(expression, "", time.Time{}); err == nil {
 			t.Errorf("%q parsed", expression)
 		}
 	}
-	if _, err := crontrigger.Cron("0 9 * * *", "Mars/Olympus", time.Time{}); err == nil {
+	if _, err := cronjob.Cron("0 9 * * *", "Mars/Olympus", time.Time{}); err == nil {
 		t.Error("an unknown zone parsed")
 	}
 }
 
 func TestCronNextAndBetweenFollowTheZoneAcrossADaylightSavingChange(t *testing.T) {
 	// Berlin moves to summer time on 2026-03-29 at 02:00, so 09:00 there is 08:00 UTC before and 07:00 UTC after.
-	s, err := crontrigger.Cron("0 9 * * *", "Europe/Berlin", time.Time{})
+	s, err := cronjob.Cron("0 9 * * *", "Europe/Berlin", time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestCronNextAndBetweenFollowTheZoneAcrossADaylightSavingChange(t *testing.T
 }
 
 func TestBetweenStopsCountingAtTheLimit(t *testing.T) {
-	s, err := crontrigger.Cron("* * * * *", "UTC", time.Time{})
+	s, err := cronjob.Cron("* * * * *", "UTC", time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestBetweenStopsCountingAtTheLimit(t *testing.T) {
 
 func TestAnIntervalCountsFromItsAnchor(t *testing.T) {
 	anchor := at(t, "2026-10-08T08:00:00Z")
-	s, err := crontrigger.Interval(3600, anchor)
+	s, err := cronjob.Interval(3600, anchor)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,11 +201,11 @@ func TestAnIntervalCountsFromItsAnchor(t *testing.T) {
 
 func TestAnEveryExpressionIsAnchoredAtCreationOrFollowsTheParserWithout(t *testing.T) {
 	created := at(t, "2026-10-08T08:00:00Z")
-	anchored, err := crontrigger.Cron("@every 2h", "", created)
+	anchored, err := cronjob.Cron("@every 2h", "", created)
 	if err != nil {
 		t.Fatal(err)
 	}
-	unanchored, err := crontrigger.Cron("@every 2h", "", time.Time{})
+	unanchored, err := cronjob.Cron("@every 2h", "", time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +245,7 @@ func TestPerDayCountsAScheduleOverAWeekAndRoundsAnInterval(t *testing.T) {
 	}
 	for _, tc := range crons {
 		t.Run(tc.name, func(t *testing.T) {
-			s, err := crontrigger.Cron(tc.expression, "UTC", time.Time{})
+			s, err := cronjob.Cron(tc.expression, "UTC", time.Time{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -273,7 +273,7 @@ func TestPerDayCountsAScheduleOverAWeekAndRoundsAnInterval(t *testing.T) {
 	}
 	for _, tc := range intervals {
 		t.Run("interval "+tc.name, func(t *testing.T) {
-			s, err := crontrigger.Interval(tc.seconds, monday)
+			s, err := cronjob.Interval(tc.seconds, monday)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -295,7 +295,7 @@ func TestHighRateWarningStartsPastTwentyFourIssuesADay(t *testing.T) {
 		{1440, "creates about 1440 Issues a day; consider an existing Issue"},
 	}
 	for _, tc := range cases {
-		if got := crontrigger.HighRateWarning(tc.perDay); got != tc.want {
+		if got := cronjob.HighRateWarning(tc.perDay); got != tc.want {
 			t.Errorf("HighRateWarning(%d) = %q, want %q", tc.perDay, got, tc.want)
 		}
 	}

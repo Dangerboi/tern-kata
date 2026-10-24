@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // The Jobs Page lists one Project's Cron jobs, native and adapter, with the selected job's definition and parent beside them.
@@ -137,7 +139,7 @@ func (m Model) JobRows(now time.Time) []JobRow {
 	rows := make([]JobRow, len(jobs))
 	for i, job := range jobs {
 		pause := job.Pause(m.Jobs.ProjectArchived)
-		row := JobRow{Job: job, Pause: pause, State: pause.StateText(), Kind: job.Kind(), Schedule: job.Definition.Trigger.Words(), Profile: job.Definition.Profile, Unsupported: m.workerUnsupported(job.UID)}
+		row := JobRow{Job: job, Pause: pause, State: pause.StateText(), Kind: job.Kind(), Schedule: triggerWords(job.Definition.Trigger), Profile: job.Definition.Profile, Unsupported: m.workerUnsupported(job.UID)}
 		if next, ok := job.NextRun(now, m.Jobs.ProjectArchived); ok {
 			row.Next = m.Calendar.Read(next, now)
 		}
@@ -218,7 +220,7 @@ func (m Model) JobFacts(now time.Time) []JobFact {
 	add("State", pause.StateText())
 	add("Set aside", m.workerUnsupported(job.UID))
 	add("Kind", job.Kind())
-	add("Schedule", t.Words())
+	add("Schedule", triggerWords(t))
 	if next, ok := job.NextRun(now, m.Jobs.ProjectArchived); ok {
 		add("Next run", m.Calendar.Stamp(next))
 	}
@@ -241,16 +243,16 @@ func (m Model) JobFacts(now time.Time) []JobFact {
 		facts = append(facts, JobFact{Label: label, Value: c.Words() + " · " + m.Calendar.Read(c.When(), now)})
 	}
 	switch t.Kind {
-	case TriggerCron:
-		zone, expression := t.zoneAndExpression()
+	case cronjob.TriggerCron:
+		zone, expression := zoneAndExpression(t)
 		add("Cron", expression)
 		add("Time zone", zone)
-	case TriggerInterval:
+	case cronjob.TriggerInterval:
 		add("Interval", strconv.FormatInt(t.IntervalSeconds, 10)+" s")
 		add("Time zone", t.Timezone)
-	case TriggerOnce:
+	case cronjob.TriggerOnce:
 		add("At", t.At)
-	case TriggerIssueScheduled, TriggerIssueDeadline:
+	case cronjob.TriggerIssueScheduled, cronjob.TriggerIssueDeadline:
 		add("Trigger Issue", t.IssueUID)
 	}
 	add("Prompt", d.Action.Prompt)
@@ -268,7 +270,7 @@ func (m Model) JobFacts(now time.Time) []JobFact {
 		add("Secrets", strings.Join(names, ", "))
 	}
 	if p := d.Issue; p != nil {
-		add("Issue", map[string]string{IssuePerRun: "a new Issue per run", IssueExisting: "an existing Issue"}[p.Kind])
+		add("Issue", map[cronjob.IssuePolicyKind]string{cronjob.IssuePerRun: "a new Issue per run", cronjob.IssueExisting: "an existing Issue"}[p.Kind])
 		add("Existing Issue", p.UID)
 		add("Child title", p.Title)
 		add("Child body", p.Body)

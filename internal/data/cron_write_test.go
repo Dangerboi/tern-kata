@@ -4,16 +4,17 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"go.kenn.io/kata/pkg/client"
 )
 
-func nativeDefinition(title string) model.CronDefinition {
-	return model.CronDefinition{
+func nativeDefinition(title string) cronjob.Definition {
+	return cronjob.Definition{
 		Enabled: true, Overlap: "allow", Catchup: model.CatchupLatest,
-		Trigger: model.CronTrigger{Kind: model.TriggerInterval, IntervalSeconds: 3600},
-		Action:  model.CronAction{Kind: model.ActionNotify, Recipient: "current-owner-or-author"},
-		Issue:   &model.CronIssuePolicy{Kind: model.IssuePerRun, Title: title},
+		Trigger: cronjob.Trigger{Kind: cronjob.TriggerInterval, IntervalSeconds: 3600},
+		Action:  cronjob.Action{Kind: cronjob.ActionNotify, Recipient: "current-owner-or-author"},
+		Issue:   &cronjob.IssuePolicy{Kind: cronjob.IssuePerRun, Title: title},
 	}
 }
 
@@ -81,7 +82,7 @@ func TestGatewayReplacesAJobGuardedOnItsDefinitionEventUID(t *testing.T) {
 	job := f.created(t, "Report", parent)
 
 	def := job.Definition
-	def.Enabled, def.Issue = false, &model.CronIssuePolicy{Kind: model.IssuePerRun, ParentUID: parent, Title: "Retitled"}
+	def.Enabled, def.Issue = false, &cronjob.IssuePolicy{Kind: cronjob.IssuePerRun, ParentUID: parent, Title: "Retitled"}
 	replaced := f.save(t, model.SaveJobCmd{UID: job.UID, ExpectedEventUID: job.DefinitionEventUID, Name: "Report v2", Definition: def})
 	if replaced.Err != nil || replaced.Op != model.JobReplaced || replaced.Job == nil {
 		t.Fatalf("replace %+v", replaced)

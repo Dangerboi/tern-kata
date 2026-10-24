@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dangerboi/tern-kata/internal/crontrigger"
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // What the worker says about the definitions it was given (ADR-0011): a job it sets aside is listed with its reason, and a
@@ -54,7 +54,7 @@ func definitionNotes(ctx context.Context, k *Kata, cfg Config, pc ProjectConfig,
 			aside = append(aside, note)
 			continue
 		}
-		if text := crontrigger.HighRateWarning(issuesPerDay(job, now)); text != "" {
+		if text := cronjob.HighRateWarning(issuesPerDay(job, now)); text != "" {
 			note.Text = text
 			warnings = append(warnings, note)
 		}

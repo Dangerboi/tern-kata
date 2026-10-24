@@ -1,7 +1,4 @@
-// Package crontrigger holds kata's rules for when a cron job fires, so the Pane and the worker read a trigger the same way:
-// the parser kata uses, the zone directive, the anchor an interval or @every counts from, the next occurrences, how many
-// Issues a day a trigger makes, and when that is worth a warning.
-package crontrigger
+package cronjob
 
 import (
 	"cmp"
