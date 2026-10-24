@@ -233,6 +233,8 @@ type ExitRecord struct {
 	Signal   string    `json:"signal,omitempty"`
 	TimedOut bool      `json:"timed_out,omitempty"`
 	At       time.Time `json:"at"`
+	// Unrecorded is why the attempt's output was not recorded in full, empty when it was (ADR-0008).
+	Unrecorded string `json:"unrecorded,omitempty"`
 }
 
 // Outcome is what the run ended as: Status and Summary go to kata, Hold is the reason of a held run.
@@ -272,6 +274,9 @@ type Hooks struct {
 	// GroupHoldsOut, when it returns true for a run's launch, makes the termination policy's group proof answer
 	// present, as a process no signal can end would.
 	GroupHoldsOut func(l *LaunchRecord) bool
+	// CaptureWriteLimit, when it returns true for a capture file's path, lets that many bytes through before every
+	// further write to it fails.
+	CaptureWriteLimit func(path string) (int, bool)
 }
 
 // ErrKilled wraps what a Hooks.AfterSave returned: the worker stops all run work at that point, as a crash would.

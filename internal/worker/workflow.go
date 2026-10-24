@@ -491,10 +491,7 @@ func (w *Worker) runCommand(ctx context.Context, j *Journal, sp attemptSpec) err
 	if attempt := j.attempt(); attempt > 1 && j.Resume != nil {
 		keepAttemptOutput(sp.dir, attempt-1)
 	}
-	out, err := openHeadTail(filepath.Join(sp.dir, "output.log"), commandHead, commandTail)
-	if err != nil {
-		return w.hold(j, HoldExecutionError, err.Error())
-	}
+	out := openHeadTail(w.store.hooks, filepath.Join(sp.dir, "output.log"), commandHead, commandTail)
 	cmd := exec.Command(program, "-c", sp.task)
 	cmd.Dir = cwd
 	cmd.Env = commandEnv(j, runDir, secrets)
@@ -510,12 +507,14 @@ func (w *Worker) runCommand(ctx context.Context, j *Journal, sp attemptSpec) err
 	if err != nil {
 		return err
 	}
+	exit.Unrecorded = out.Loss()
 	if _, err := w.store.Update(j.RunUID, "exited", func(j *Journal) error {
 		j.Exit = exit
 		return nil
 	}); err != nil {
 		return err
 	}
+	w.logUnrecorded(j, exit)
 	j, err = w.store.Load(j.RunUID)
 	if err != nil {
 		return err
@@ -554,10 +553,10 @@ const (
 	commandTail = 256 << 10
 )
 
-// headTail drains a command's output to a file: the first head bytes as they come, then only the last tail bytes,
-// written with a marker when the file is closed.
+// headTail drains a command's output to a capture: the first head bytes as they come, then only the last tail bytes,
+// written with a marker when it is closed.
 type headTail struct {
-	f        *os.File
+	*capture
 	head     int
 	tailMax  int
 	written  int
@@ -566,20 +565,15 @@ type headTail struct {
 	closed   bool
 }
 
-func openHeadTail(path string, head, tail int) (*headTail, error) {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
-	if err != nil {
-		return nil, err
-	}
-	return &headTail{f: f, head: head, tailMax: tail}, nil
+func openHeadTail(hooks Hooks, path string, head, tail int) *headTail {
+	return &headTail{capture: openCapture(hooks, path), head: head, tailMax: tail}
 }
 
-// Write never fails: a full disk must not kill the command it is only recording.
 func (h *headTail) Write(p []byte) (int, error) {
 	n := len(p)
 	if room := h.head - h.written; room > 0 {
 		k := min(room, len(p))
-		_, _ = h.f.Write(p[:k])
+		_, _ = h.capture.Write(p[:k])
 		h.written += k
 		p = p[k:]
 	}
@@ -594,9 +588,9 @@ func (h *headTail) Write(p []byte) (int, error) {
 }
 
 // Close writes the marker and the kept tail when output went past the head, then closes the file.
-func (h *headTail) Close() {
+func (h *headTail) Close() error {
 	if h.closed {
-		return
+		return nil
 	}
 	h.closed = true
 	if h.overflow > 0 {
@@ -605,11 +599,11 @@ func (h *headTail) Close() {
 			tail = tail[len(tail)-h.tailMax:]
 		}
 		if omitted := h.overflow - int64(len(tail)); omitted > 0 {
-			fmt.Fprintf(h.f, "\n[... %d bytes omitted ...]\n", omitted)
+			_, _ = fmt.Fprintf(h.capture, "\n[... %d bytes omitted ...]\n", omitted)
 		}
-		_, _ = h.f.Write(tail)
+		_, _ = h.capture.Write(tail)
 	}
-	_ = h.f.Close()
+	return h.capture.Close()
 }
 
 // commandTail1K is the end of a command step's output, kept in the step's result.

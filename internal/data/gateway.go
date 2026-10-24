@@ -90,61 +90,17 @@ func (g *Gateway) Close() {
 // Run executes cmd and sends each result to messages until ctx ends.
 // A Subscribe replaces the running stream; one older than the running one is ignored.
 func (g *Gateway) Run(ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
-	if subscription, ok := cmd.(model.Subscribe); ok {
-		g.stream(ctx, subscription, messages)
+	d := declarationFor(cmd)
+	if d.kind == longLived {
+		d.stream(g, ctx, cmd, messages)
 		return
 	}
-	if wake, ok := cmd.(model.WakeAt); ok {
-		g.wake(ctx, wake, messages)
-		return
+	for _, step := range d.before {
+		step.run(g, ctx, cmd)
 	}
-	var result model.Msg
-	switch cmd := cmd.(type) {
-	case model.LoadLanes:
-		result = g.loadLanes(cmd)
-	case model.SaveLanes:
-		result = g.saveLanes(cmd)
-	case model.SaveFilters:
-		result = g.saveFilters(cmd)
-	case model.LoadWorkerPickers:
-		result = loadWorkerPickers()
-	case model.LoadWorker:
-		result = g.loadWorker(ctx, cmd)
-	case model.LoadWorkerSetup:
-		result = g.loadWorkerSetup(cmd)
-	case model.SaveWorkerSetup:
-		result = g.saveWorkerSetup(cmd)
-	case model.SaveWorkerEdit:
-		result = g.saveWorkerEdit(cmd)
-	case model.StopWorker:
-		result = g.stopWorker(ctx, cmd)
-	case model.LoadProject:
-		result = g.do(ctx, cmd)
-		if loaded, ok := result.(model.ProjectLoaded); ok && loaded.Project.UID != "" {
-			g.startPointerMove(cmd.Workspace, cmd.Actor)
-			loaded.Default, loaded.DefaultErr = g.loadFilters(loaded.Project.UID)
-			result = loaded
-		}
-	case model.AttachFile:
-		g.convertPointers(ctx, cmd.Workspace, cmd.Actor)
-		result = g.do(ctx, cmd)
-	case model.DetachFile:
-		g.convertPointers(ctx, cmd.Workspace, cmd.Actor)
-		result = g.do(ctx, cmd)
-	case model.SetWorkerSupervision:
-		result = g.setWorkerSupervision(ctx, cmd)
-	case model.LoadLocalRun:
-		result = g.loadLocalRun(ctx, cmd)
-	case model.RunJobNow:
-		result = g.runJobNow(ctx, cmd)
-	case model.ResumeLocalRun:
-		result = g.moveRun(ctx, "resume", cmd.UID)
-	case model.AbandonLocalRun:
-		result = g.moveRun(ctx, "abandon", cmd.UID)
-	case model.OpenRunSession:
-		result = g.openRunSession(ctx, cmd)
-	default:
-		result = g.do(ctx, cmd)
+	result := d.handle(g, ctx, cmd)
+	for _, step := range d.after {
+		result = step.run(g, ctx, cmd, result)
 	}
 	select {
 	case messages <- result:
