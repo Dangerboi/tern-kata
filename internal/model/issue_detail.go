@@ -16,11 +16,11 @@ type IssueDetail struct {
 	err     error
 	// linkOn is the comment `]` and `[` last stepped the link cursor on, and link where it stands; any other comment starts at its first link.
 	linkOn rowID
-	link    int
-	tab     ActivityTab
-	cursor  int // an index into rows.items
-	rows    detailRows
-	back    []jumpEntry
+	link   int
+	tab    ActivityTab
+	cursor int // an index into rows.items
+	rows   detailRows
+	back   []jumpEntry
 	// landing is where the cursor goes once the detail of the Issue it names arrives.
 	landing *jumpEntry
 	// landedOn is the Issue the last jump landed on; the history ends once the detail shows another one.
