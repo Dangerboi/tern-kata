@@ -396,10 +396,13 @@ func init() {
 	daemonCall(
 		func(cmd model.LoadProject) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.LoadProject) (model.Msg, error) {
-			return ok(c.ReadProject(ctx, cmd.Workspace))
+			return ok(c.LoadProject(ctx, cmd.Workspace, cmd.Switched))
 		},
 		func(cmd model.LoadProject, err error) model.Msg { return model.Failed{Err: err} },
 		nil, []afterStep{startPointerMoveAfter, readDefaultFilterAfter})
+
+	local((*Gateway).loadDaemons, nil, nil)
+	local((*Gateway).switchDaemon, nil, nil)
 
 	daemonCall(
 		func(cmd model.LoadDetail) string { return cmd.Workspace },

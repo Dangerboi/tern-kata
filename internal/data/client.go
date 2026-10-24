@@ -20,6 +20,8 @@ type Client struct {
 	*client.Client
 	kind    model.DaemonKind
 	version string
+	// name is the daemon's name in kata's catalog, empty when the connection is not a catalog entry.
+	name string
 }
 
 // Target is a client for the daemon that serves a workspace.

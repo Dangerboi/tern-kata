@@ -154,8 +154,8 @@ func TestPickerEntries(t *testing.T) {
 		filter string
 		want   []string
 	}{
-		{"bound Project is pinned first", true, "", []string{"smoke", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Credentials", "Federation", "Projects", "New Project"}},
-		{"unbound lists no Project inline", false, "", []string{"Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Credentials", "Federation", "Projects", "New Project"}},
+		{"bound Project is pinned first", true, "", []string{"smoke", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Credentials", "Federation", "Daemons", "Projects", "New Project"}},
+		{"unbound lists no Project inline", false, "", []string{"Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Credentials", "Federation", "Daemons", "Projects", "New Project"}},
 		{"filter matches any case and keeps the order", true, "AL", []string{"All Open", "alpha", "Credentials"}},
 		{"filter finds a Lettered Page by title", true, "cred", []string{"Credentials"}},
 		{"filter can drop the pinned Project", true, "alp", []string{"alpha"}},
@@ -184,9 +184,9 @@ func TestPickerCursorMoves(t *testing.T) {
 		{"up from the top stays", []string{"up"}, 0},
 		{"k from the top stays", []string{"k"}, 0},
 		{"down then up", []string{"down", "down", "up"}, 1},
-		{"end", []string{"end"}, 10},
+		{"end", []string{"end"}, 11},
 		{"home", []string{"end", "home"}, 0},
-		{"down stops at the last entry", []string{"end", "down", "j"}, 10},
+		{"down stops at the last entry", []string{"end", "down", "j"}, 11},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m, cmds := menuKeys(pickerStart(120, true), tt.keys...)
@@ -249,7 +249,7 @@ func TestPickerEscapeChangesNothing(t *testing.T) {
 }
 
 func TestPickerTypingFiltersEntries(t *testing.T) {
-	all := []string{"smoke", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Credentials", "Federation", "Projects", "New Project"}
+	all := []string{"smoke", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Credentials", "Federation", "Daemons", "Projects", "New Project"}
 	for _, tt := range []struct {
 		name   string
 		keys   []string
@@ -258,8 +258,8 @@ func TestPickerTypingFiltersEntries(t *testing.T) {
 		cursor int
 	}{
 		{"typing narrows", []string{"a", "l"}, "al", []string{"All Open", "alpha", "Credentials"}, 0},
-		{"typing returns the cursor to the top", []string{"down", "down", "a"}, "a", []string{"Today", "Deadlines", "All Open", "alpha", "Credentials", "Federation"}, 0},
-		{"backspace widens", []string{"a", "l", "backspace"}, "a", []string{"Today", "Deadlines", "All Open", "alpha", "Credentials", "Federation"}, 0},
+		{"typing returns the cursor to the top", []string{"down", "down", "a"}, "a", []string{"Today", "Deadlines", "All Open", "alpha", "Credentials", "Federation", "Daemons"}, 0},
+		{"backspace widens", []string{"a", "l", "backspace"}, "a", []string{"Today", "Deadlines", "All Open", "alpha", "Credentials", "Federation", "Daemons"}, 0},
 		{"ctrl+u clears", []string{"a", "l", "ctrl+u"}, "", all, 0},
 		{"space is typed", []string{"a", "l", "l", "space", "o"}, "all o", []string{"All Open"}, 0},
 		{"j and k move while the filter is empty", []string{"j", "j", "k"}, "", all, 1},
@@ -406,7 +406,7 @@ func TestPickerPicksAProjectFromTheProjectsLevel(t *testing.T) {
 func TestPickerEscapeLeavesTheProjectsLevelBeforeClosing(t *testing.T) {
 	base := projectsLevel(t, true)
 	m, cmds := pickerKeys(base, "escape")
-	if !m.Picker.Open || m.Picker.Projects || len(cmds) != 0 || pickerTitles(m)[9] != "Projects" || m.Picker.Cursor != 9 {
+	if !m.Picker.Open || m.Picker.Projects || len(cmds) != 0 || pickerTitles(m)[10] != "Projects" || m.Picker.Cursor != 10 {
 		t.Fatalf("esc: open=%v projects=%v cursor=%d entries=%q", m.Picker.Open, m.Picker.Projects, m.Picker.Cursor, pickerTitles(m))
 	}
 	if m, _ = pickerKeys(m, "escape"); m.Picker.Open {
@@ -462,7 +462,7 @@ func TestSidebarProjectsLevel(t *testing.T) {
 		return out
 	}
 	top, _ := pickerKeys(pickerStart(120, false), "escape")
-	if got, want := titles(top), []string{"Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Credentials", "Federation", "Projects", "New Project"}; !reflect.DeepEqual(got, want) {
+	if got, want := titles(top), []string{"Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Credentials", "Federation", "Daemons", "Projects", "New Project"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("top level = %q, want %q", got, want)
 	}
 	m, cmds := pickerKeys(top, "end", "up", "enter")

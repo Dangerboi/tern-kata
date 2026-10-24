@@ -95,6 +95,8 @@ const (
 	RefreshCredentials      Action = "refresh-credentials"
 	LetteredBack            Action = "lettered-back"
 	ShowFederationPage      Action = "show-federation-page"
+	ShowDaemonsPage         Action = "show-daemons-page"
+	SwitchDaemonAction      Action = "switch-daemon"
 	RefreshFederation       Action = "refresh-federation"
 	OpenFederationDetail    Action = "open-federation-detail"
 	StartFederationLeave    Action = "start-federation-leave"
@@ -157,6 +159,7 @@ const (
 	// ModeQuit is the question "Quit tern-kata? y/n", which takes only its answers.
 	ModeQuit       Mode = "quit"
 	ModeFederation Mode = "federation"
+	ModeDaemons    Mode = "daemons"
 	// ModeFederationLeave is the Federation Page's leave preview and ModeFederationLeft its result.
 	ModeFederationLeave Mode = "federation-leave"
 	ModeFederationLeft  Mode = "federation-left"

@@ -22,10 +22,16 @@ type CatalogEntry struct {
 	Local         bool
 	Home          string
 	InstanceUID   string
+	// InlineToken is the entry's token key, a bearer token written in the file itself.
+	InlineToken string
 }
 
-// Token returns the bearer token the entry's token_env variable holds; an entry without token_env has none.
+// Token returns the bearer token the entry carries: its inline token, else what its token_env variable holds; an entry with
+// neither has none.
 func (e CatalogEntry) Token() (string, error) {
+	if e.InlineToken != "" {
+		return e.InlineToken, nil
+	}
 	if e.TokenEnv == "" {
 		return "", nil
 	}
@@ -107,7 +113,7 @@ func ReadCatalog() (Catalog, error) {
 	seen := map[string]bool{}
 	for _, d := range f.Daemons {
 		e := CatalogEntry{
-			Name: strings.TrimSpace(d.Name), URL: strings.TrimSpace(d.URL), TokenEnv: strings.TrimSpace(d.TokenEnv),
+			Name: strings.TrimSpace(d.Name), URL: strings.TrimSpace(d.URL), TokenEnv: strings.TrimSpace(d.TokenEnv), InlineToken: strings.TrimSpace(d.Token),
 			AllowInsecure: d.AllowInsecure, Local: d.Local,
 			Home: strings.TrimSpace(d.Home), InstanceUID: strings.TrimSpace(d.InstanceUID),
 		}

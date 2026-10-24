@@ -28,6 +28,10 @@ The Issue detail's Activity tabs are Comments, Events, Links and Attachments, cy
 
 `F` opens kata tui's federation view as a Lettered Page, and the Menu lists it: the spoke federations with their status, a detail on Enter, and `x` to leave one with the hub revoke. Its wording, header and states are kata tui's; see [Pages and the Board](pages-and-board.md#lettered-pages).
 
+## Daemons
+
+`D` opens kata tui's daemons view as a Lettered Page, and the Menu lists it: the daemons kata's `config.toml` names, with kata tui's columns and `Enter` to switch this Pane to one. The switch lives in this Pane only and writes nothing to disk, as in kata tui; the top bar names the daemon by its catalog name and, when the daemon says who you are, the account ("Daemon: work · remote · kata v0.20.0 · as alice"). See [Pages and the Board](pages-and-board.md#lettered-pages).
+
 ## Links
 
 In the Issue detail, `b` adds a Blocking link and `l` a related link to the Issue you name: a short id, `#id` or `project#id`. The field is kata tui's add-link request. kata records a Blocking link from the Issue you add it on, so the field reads "This Issue blocks (Issue id)"; kata tui words the same key "add blocker". When kata refuses the link (an Issue to itself, an archived Project, a Project outside your scope) its reason shows under the field. On the Board and in the Lane view `b` still toggles the Board.
@@ -63,10 +67,3 @@ kata tui's alternative keys work where kata has them:
 | `ctrl+alt+<`, `ctrl+alt+>` | `g`, `G`: the first and last row of every list, the Issue detail and the Menu |
 | `!` then `0`-`4` or `-` | set or clear the priority at once; any other key closes the field and is handled as usual |
 | `T` | open the Attention Page, from any Page and the Menu |
-
-## Missing keys
-
-tern-kata lacks these kata tui keys:
-
-| Key | kata tui action |
-|---|---|
