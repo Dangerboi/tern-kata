@@ -53,6 +53,8 @@ func Render(m model.Model, now time.Time) tern.View {
 				columns = append(columns, Collections(m))
 			case model.ColumnList:
 				switch {
+				case m.OnFederation():
+					columns = append(columns, federation(m, now))
 				case m.OnAttention():
 					columns = append(columns, attention(m))
 				case m.OnCredentials():
