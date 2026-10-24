@@ -16,7 +16,7 @@ func writeConfig(h *harness) error { return os.WriteFile(h.dirs.ConfigPath(), []
 
 func (h *harness) settledAndFree(r *running, uid string) {
 	h.t.Helper()
-	h.settledInKata(r, uid)
+	h.settled(uid)
 	// The run's slot is freed by the worker's goroutine just after its last report; a request made before that is refused as at capacity.
 	h.eventually("the slot of "+uid+" to be free", func() bool { return r.w.Status().Projects[0].InUse == 0 })
 }
@@ -117,6 +117,7 @@ func TestACommandOnlyWorkflowOnAnExistingIssueSucceedsWithoutAComment(t *testing
 	if run := h.settled(quietUID); run.Status != "succeeded" {
 		t.Fatalf("run %q: %s", run.Status, run.Summary)
 	}
+	h.settledInKata(r, quietUID)
 	h.settledAndFree(r, quietUID)
 	if i, _ := h.kata.Kata.ShowIssue(context.Background(), h.proj.ID, issue.UID); len(i.Comments) != 0 {
 		t.Fatalf("an all-command run on an existing Issue commented: %q", i.Comments)
@@ -124,6 +125,7 @@ func TestACommandOnlyWorkflowOnAnExistingIssueSucceedsWithoutAComment(t *testing
 
 	loudUID := h.runWorkflow(r, loudJob)
 	h.settled(loudUID)
+	h.settledInKata(r, loudUID)
 	h.settledAndFree(r, loudUID)
 	if i, _ := h.kata.Kata.ShowIssue(context.Background(), h.proj.ID, issue.UID); len(i.Comments) != 1 {
 		t.Fatalf("a run with a prompt step left %d comments, want one", len(i.Comments))
