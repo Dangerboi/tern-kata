@@ -20,7 +20,7 @@ tern-kata detach <ref> <name>
 ```
 
 - `<ref>` is anything `kata show` takes: a short id in this directory's Project, `<project>#<short id>`, or a ULID.
-- `--as <actor>` names the actor.
+- `--as <actor>` names the actor; without it the actor is `$KATA_AUTHOR`, `$USER`, then `git config user.name` (an empty variable counts as unset). An explicitly empty value (`--as=` or `--as ""`) is refused with "--as must be non-empty" and nothing is written, so a script that expands an unset variable into `--as` never acts as someone else.
 - Both commands run without Tern and never open a Pane; a failure prints kata's message on stderr and exits non-zero.
 - `attach` stops at the first failing file and keeps those already attached.
 - The Issue's Project must be the Project this directory is bound to, and a closed Issue is fine.
