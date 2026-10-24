@@ -44,7 +44,7 @@ type IssueState struct {
 
 // UndoLink is the link a link change created.
 type UndoLink struct {
-	ID                  int64
+	ID                   int64
 	Type, FromUID, ToUID string
 }
 
@@ -133,11 +133,11 @@ const (
 // ChangeUndone answers UndoChange. Conflict is the refusal's reason, Ref the Issue as the daemon names it, and FromRevision and
 // ToRevision the Issue's revision before and after the inverse was written.
 type ChangeUndone struct {
-	EntryID                    uint64
-	Result                     UndoResult
-	Conflict, Ref              string
-	FromRevision, ToRevision   int64
-	Err                        error
+	EntryID                  uint64
+	Result                   UndoResult
+	Conflict, Ref            string
+	FromRevision, ToRevision int64
+	Err                      error
 }
 
 func (ChangeUndone) msg() {}
