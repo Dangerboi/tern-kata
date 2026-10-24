@@ -320,7 +320,7 @@ func (m Model) workerUnsupported(uid string) string {
 func (m Model) WorkerLine() (text string, ok bool) {
 	text, ok = m.workerLine()
 	if w := m.Worker; w.Running && w.Err == nil && w.SetupRead && w.SetupErr == nil && w.Setup.Manual && text != "" {
-		text += " Supervision is off (worker.manual): the plugin does not restart it."
+		text += " Supervision is off (" + manualFile + "): the plugin does not restart it."
 	}
 	return text, ok
 }
@@ -368,7 +368,7 @@ func (m Model) stoppedWorkerLine(project string) string {
 	case !s.Lists:
 		return fmt.Sprintf("worker.toml does not list %s, so no worker serves it: press W to serve it.", project)
 	case s.Manual:
-		return "No worker is running on this machine and worker.manual keeps the plugin from starting one: run `tern-kata worker` (W shows the setup)."
+		return "No worker is running on this machine and " + manualFile + " keeps the plugin from starting one: run `tern-kata worker` (W shows the setup)."
 	}
 	return "No worker is running on this machine yet; the plugin starts one within 10 seconds (W shows the setup)."
 }

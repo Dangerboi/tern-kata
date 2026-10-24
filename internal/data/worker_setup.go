@@ -6,19 +6,15 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"slices"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
-// workerManualFile is the marker beside worker.toml that turns the plugin's supervision of the worker off.
-const workerManualFile = "worker.manual"
-
 // loadWorkerSetup is the one read the Worker card and the Jobs Page banner stand on: the Project the Pane's folder is bound to and
 // its checkout, whether this machine's worker.toml exists, loads (the worker's own parser) and lists that Project with which
-// checkouts, and whether worker.manual is present.
+// checkouts, and whether the supervision marker is present.
 func (g *Gateway) loadWorkerSetup(cmd model.LoadWorkerSetup) model.WorkerSetupLoaded {
 	dirs, err := g.workerDirs()
 	if err != nil {
@@ -28,9 +24,7 @@ func (g *Gateway) loadWorkerSetup(cmd model.LoadWorkerSetup) model.WorkerSetupLo
 	if setup.Project, setup.Checkout, err = ResolveBinding(cmd.Workspace); err != nil {
 		return model.WorkerSetupLoaded{Err: err}
 	}
-	if _, err := os.Stat(filepath.Join(dirs.Config, workerManualFile)); err == nil {
-		setup.Manual = true
-	}
+	setup.Manual = dirs.ManualPresent()
 	if _, err := os.Stat(setup.Path); errors.Is(err, fs.ErrNotExist) {
 		return model.WorkerSetupLoaded{Setup: setup}
 	} else if err != nil {
@@ -132,7 +126,7 @@ func (g *Gateway) saveWorkerEdit(cmd model.SaveWorkerEdit) model.WorkerEdited {
 	return model.WorkerEdited{Text: cmd.Text, Err: worker.ReplaceConfig(dirs.ConfigPath(), cmd.Base, cmd.Text)}
 }
 
-// setWorkerSupervision creates worker.manual beside worker.toml (supervision off) or removes it (on), then, when asked, sends the
+// setWorkerSupervision turns supervision off (the marker is created beside worker.toml) or on (it is removed), then, when asked, sends the
 // stop request: the marker comes first, so the plugin does not start a worker in between.
 func (g *Gateway) setWorkerSupervision(ctx context.Context, cmd model.SetWorkerSupervision) model.WorkerSupervisionSet {
 	done := model.WorkerSupervisionSet{Manual: cmd.Manual}
@@ -141,14 +135,7 @@ func (g *Gateway) setWorkerSupervision(ctx context.Context, cmd model.SetWorkerS
 		done.Err = err
 		return done
 	}
-	marker := filepath.Join(dirs.Config, workerManualFile)
-	if cmd.Manual {
-		if err = os.MkdirAll(dirs.Config, 0o700); err == nil {
-			err = os.WriteFile(marker, nil, 0o600)
-		}
-	} else if err = os.Remove(marker); errors.Is(err, fs.ErrNotExist) {
-		err = nil
-	}
+	err = dirs.SetSupervision(!cmd.Manual)
 	if err != nil {
 		done.Err = err
 		return done

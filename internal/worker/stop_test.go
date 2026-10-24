@@ -199,12 +199,59 @@ func TestAnIdleStopWithNothingRunningExitsAtOnce(t *testing.T) {
 	h.exits(r)
 }
 
-func TestStopSaysItWillNotRestartWhenWorkerManualIsBesideTheConfig(t *testing.T) {
+func TestStopSaysItWillNotRestartWhenTheSupervisionMarkerIsBesideTheConfig(t *testing.T) {
 	h := newHarness(t)
-	if err := os.WriteFile(filepath.Join(h.dirs.Config, "worker.manual"), nil, 0o600); err != nil {
+	if err := os.WriteFile(h.dirs.ManualPath(), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	r := h.start(worker.Hooks{}, func(o *worker.Options) { o.Supervisor = worker.SupervisorTern })
+	h.admitting(r)
+	if resp := h.ask(worker.Request{Op: "stop"}); !resp.OK || resp.Stop.Restarts {
+		t.Fatalf("stop: %+v", resp)
+	}
+	h.exits(r)
+}
+
+// The promise is read at each stop: a marker made or removed between two stops changes the second answer.
+func TestAStopPromisesARestartFromTheSupervisionRuleAtThatMoment(t *testing.T) {
+	gate := filepath.Join(t.TempDir(), "release")
+	h := newHarness(t, "--stub-wait-for", gate)
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "slow", Prompt: "Do it."})
+	r := h.start(worker.Hooks{}, func(o *worker.Options) { o.Supervisor = worker.SupervisorTern })
+	h.admitting(r)
+	uid := h.startedRun(r, job)
+	restarts := func() bool {
+		t.Helper()
+		resp := h.ask(worker.Request{Op: "stop"})
+		if !resp.OK || resp.Stop == nil {
+			t.Fatalf("stop: %+v", resp)
+		}
+		return resp.Stop.Restarts
+	}
+	if !restarts() {
+		t.Fatal("no restart promised with worker.toml present and supervision on")
+	}
+	if err := h.dirs.SetSupervision(false); err != nil {
+		t.Fatal(err)
+	}
+	if restarts() {
+		t.Fatal("a restart promised after the marker was created")
+	}
+	if err := h.dirs.SetSupervision(true); err != nil {
+		t.Fatal(err)
+	}
+	if !restarts() {
+		t.Fatal("no restart promised after the marker was removed")
+	}
+	release(t, gate)
+	h.settled(uid)
+	h.exits(r)
+}
+
+// A worker started by hand has no supervisor, so it promises no restart whatever the files say.
+func TestAStopOfAWorkerStartedByHandPromisesNoRestart(t *testing.T) {
+	h := newHarness(t)
+	r := h.start(worker.Hooks{})
 	h.admitting(r)
 	if resp := h.ask(worker.Request{Op: "stop"}); !resp.OK || resp.Stop.Restarts {
 		t.Fatalf("stop: %+v", resp)

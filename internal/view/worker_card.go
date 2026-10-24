@@ -237,7 +237,7 @@ func supervisionWords(m model.Model) string {
 	w, s := m.Worker, m.Worker.Setup
 	switch {
 	case s.Manual:
-		return "worker.manual is present: the plugin neither starts nor restarts the worker."
+		return model.ManualPresentWords()
 	case w.Running && w.Supervised:
 		return "the plugin supervises it and starts it again when it exits."
 	case w.Running:

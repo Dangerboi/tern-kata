@@ -261,7 +261,7 @@ func (s Status) supervision() string {
 	case "":
 		return "Not supervised: it was started by hand, so nothing starts it again when it exits.\n"
 	case SupervisorTern:
-		return "Supervised by Tern's session daemon (the tern-kata plugin's host half): it starts the worker again when it exits, waiting longer after each quick crash. To turn that off, create worker.manual beside worker.toml.\n"
+		return "Supervised by Tern's session daemon (the tern-kata plugin's host half): it starts the worker again when it exits, waiting longer after each quick crash. To turn that off, create " + ManualFileName + " beside " + ConfigFileName + ".\n"
 	}
 	return fmt.Sprintf("Supervised by %s.\n", s.Supervisor)
 }

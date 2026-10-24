@@ -49,7 +49,7 @@ func DefaultDirs() (Dirs, error) {
 }
 
 // ConfigPath is worker.toml.
-func (d Dirs) ConfigPath() string { return filepath.Join(d.Config, "worker.toml") }
+func (d Dirs) ConfigPath() string { return filepath.Join(d.Config, ConfigFileName) }
 
 // Lock is worker.lock, the one-worker-per-machine lock (ADR-0006).
 func (d Dirs) Lock() string { return filepath.Join(d.State, "worker.lock") }
