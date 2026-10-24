@@ -23,25 +23,25 @@ type FederationQuarantine struct {
 
 // FederationSpoke is one spoke Project's federation status. A time the daemon did not report is the zero time.
 type FederationSpoke struct {
-	ProjectName                              string
-	HubURL, HubProjectUID                    string
-	HubProjectID                             int64
-	BoundActor, Capabilities                 string
-	PushEnabled, AllowInsecure               bool
-	CredentialStatus                         string
-	PendingPushCount                         int64
-	PendingPushHighWaterEventID              int64
-	PullCursorEventID, PushCursorEventID     int64
-	PendingClaimCount, LiveClaimCount        int64
-	ActiveQuarantineCount                    int64
-	ActiveQuarantines                        []FederationQuarantine
-	ResetBlocker                             string
-	UnresolvedViolationCount                 int64
-	RecentViolationCount                     int64
-	LastPullSuccessAt, LastPushSuccessAt     time.Time
-	LastSuccessfulSyncAt, LastErrorAt        time.Time
-	LastError                                string
-	HasLastError                             bool
+	ProjectName                          string
+	HubURL, HubProjectUID                string
+	HubProjectID                         int64
+	BoundActor, Capabilities             string
+	PushEnabled, AllowInsecure           bool
+	CredentialStatus                     string
+	PendingPushCount                     int64
+	PendingPushHighWaterEventID          int64
+	PullCursorEventID, PushCursorEventID int64
+	PendingClaimCount, LiveClaimCount    int64
+	ActiveQuarantineCount                int64
+	ActiveQuarantines                    []FederationQuarantine
+	ResetBlocker                         string
+	UnresolvedViolationCount             int64
+	RecentViolationCount                 int64
+	LastPullSuccessAt, LastPushSuccessAt time.Time
+	LastSuccessfulSyncAt, LastErrorAt    time.Time
+	LastError                            string
+	HasLastError                         bool
 }
 
 // LoadFederation asks for the daemon's instance and federation status. Request numbers the asks: an answer to an older one is
@@ -56,10 +56,10 @@ func (LoadFederation) cmd() {}
 // FederationLoaded answers LoadFederation. Daemon, Endpoint, InstanceUID and Auth are the active daemon as the header names it;
 // Spokes are only the status rows whose role is spoke.
 type FederationLoaded struct {
-	Request                           int64
+	Request                             int64
 	Daemon, Endpoint, InstanceUID, Auth string
-	Spokes                            []FederationSpoke
-	Err                               error
+	Spokes                              []FederationSpoke
+	Err                                 error
 }
 
 func (FederationLoaded) msg() {}
