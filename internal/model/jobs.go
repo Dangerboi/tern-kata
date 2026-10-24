@@ -96,8 +96,6 @@ type JobsState struct {
 	// request counts the reads asked for; stale asks for another.
 	request int64
 	stale   bool
-	// detailHidden is the detail column's hidden flag from before the Jobs Page took its place.
-	detailHidden bool
 	// pick is the job the next read selects: the one an Issue detail's Cron job property opened.
 	pick string
 	// cronRead is what the Issue detail last read the list for; rev counts the answers, for the detail's rows.
@@ -349,32 +347,19 @@ func enterProjectPage(m Model, name string) (Model, []Cmd, bool) {
 	return m.resetPagesForProject(), cmds, true
 }
 
-// enterJobs is the Jobs Page's entry. The jobs load as soon as the Project's id is known.
+// enterJobs is the Jobs Page's own work on entry (see switchPage). The jobs load as soon as the Project's id is known.
 func enterJobs(m Model) (Model, []Cmd) {
-	m, cmds, ok := enterProjectPage(m, "Jobs Page")
-	if !ok {
-		return m, cmds
-	}
-	m.Page = PageJobs
-	m.Jobs.detailHidden = m.DetailHidden()
-	m.hidden = true
-	m.Focus = ColumnList
 	// The Page keeps its selection while another Page is shown; the jobs are read again.
 	m.Jobs.stale = true
 	m, ask := m.askWorker(0)
-	return m, append(cmds, ask, LoadWorkerSetup{Workspace: m.Workspace})
+	return m, []Cmd{ask, LoadWorkerSetup{Workspace: m.Workspace}}
 }
 
-// jobsOff leaves the Jobs Page for the Issues Page, the keys on the list, and gives the detail column back.
-func (m Model) jobsOff() Model {
-	m.Page = PageIssues
-	if m.Focus == ColumnDetail {
-		m.Focus = ColumnList
-	}
-	m.hidden = m.Jobs.detailHidden
+// clearJobs drops the Jobs Page's loading marker and the Issue detail's read of its job list when the Page is left.
+func clearJobs(m Model) Model {
 	m.Jobs.Loading = false
 	m.Jobs.cronRead = cronRead{}
-	return m.revealInList(m.SelectedUID).WithVisibleSelection()
+	return m
 }
 
 // settleJobs keeps the Jobs Page consistent: it ends without a Project Collection, and it reads the Project's jobs when it has
@@ -384,7 +369,7 @@ func (m Model) settleJobs() (Model, []Cmd) {
 		return m, nil
 	}
 	if !m.Collection.IsProject() {
-		return m.jobsOff(), nil
+		return m.leavePage(), nil
 	}
 	id, ok := m.jobsProjectID()
 	if !ok {
@@ -492,10 +477,8 @@ func openJobParent(m Model) Model {
 		return m
 	}
 	uid := job.Parent.UID
-	m = m.jobsOff()
+	m = m.leavePage()
 	if m.SelectedUID == uid {
-		// The detail was not kept fresh while the Jobs Page hid it.
-		m.stale = true
 		return m.focusDetail()
 	}
 	return m.jumpWithin(uid, nil)

@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -421,8 +420,8 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 		})
 		w.noteHook(err)
 	}}
-	stdout := &lineSink{parser: parser, file: openCapped(filepath.Join(sp.dir, "output.jsonl"), 8<<20)}
-	stderr := newTailSink(filepath.Join(sp.dir, "stderr.log"))
+	stdout := &lineSink{parser: parser, file: openCapped(w.store.hooks, filepath.Join(sp.dir, "output.jsonl"), 8<<20)}
+	stderr := newTailSink(w.store.hooks, filepath.Join(sp.dir, "stderr.log"))
 	defer stdout.close()
 	defer stderr.close()
 	cmd.Stdout, cmd.Stderr = stdout, stderr
@@ -437,6 +436,7 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 	stdout.flush()
 	result := parser.Result()
 	tail := stderr.tailText()
+	exit.Unrecorded = lossOf(stdout.file, stderr.file)
 	if _, err := w.store.Update(j.RunUID, "exited", func(j *Journal) error {
 		result.StderrTail = tail
 		j.Exit, j.Result = exit, &result
@@ -444,6 +444,7 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 	}); err != nil {
 		return err
 	}
+	w.logUnrecorded(j, exit)
 	j, err = w.store.Load(j.RunUID)
 	if err != nil {
 		return err
@@ -805,7 +806,7 @@ func (w *Worker) sendNotice(ctx context.Context, j *Journal, recipient, message 
 type lineSink struct {
 	mu       sync.Mutex
 	parser   *agentParser
-	file     io.WriteCloser
+	file     *cappedFile
 	buf      []byte
 	skipping bool
 }
@@ -859,43 +860,35 @@ func (s *lineSink) flush() {
 
 func (s *lineSink) close() { _ = s.file.Close() }
 
-// cappedFile writes the first max bytes and drops the rest, so a chatty agent cannot fill the disk.
+// cappedFile records the first max bytes of a capture and drops the rest, so a chatty agent cannot fill the disk.
 type cappedFile struct {
-	f    *os.File
+	*capture
 	left int
 }
 
-func openCapped(path string, max int) io.WriteCloser {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
-	if err != nil {
-		return nopCloser{io.Discard}
-	}
-	return &cappedFile{f: f, left: max}
+func openCapped(hooks Hooks, path string, max int) *cappedFile {
+	return &cappedFile{capture: openCapture(hooks, path), left: max}
 }
 
 func (c *cappedFile) Write(p []byte) (int, error) {
 	if c.left > 0 {
 		n := min(len(p), c.left)
-		_, _ = c.f.Write(p[:n])
+		_, _ = c.capture.Write(p[:n])
 		c.left -= n
 	}
 	return len(p), nil
 }
 
-func (c *cappedFile) Close() error { return c.f.Close() }
-
-type nopCloser struct{ io.Writer }
-
-func (nopCloser) Close() error { return nil }
-
 // tailSink keeps the first 64 KiB of stderr in a file and its last 2 KiB for failure reasons.
 type tailSink struct {
-	file io.WriteCloser
+	file *cappedFile
 	mu   sync.Mutex
 	tail []byte
 }
 
-func newTailSink(path string) *tailSink { return &tailSink{file: openCapped(path, 64<<10)} }
+func newTailSink(hooks Hooks, path string) *tailSink {
+	return &tailSink{file: openCapped(hooks, path, 64<<10)}
+}
 
 func (t *tailSink) Write(p []byte) (int, error) {
 	_, _ = t.file.Write(p)
