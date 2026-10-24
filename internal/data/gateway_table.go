@@ -476,6 +476,23 @@ func init() {
 		[]beforeStep{pauseBeforeRefresh}, nil)
 
 	daemonCall(
+		func(cmd model.CreateTokenCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.CreateTokenCmd) (model.Msg, error) {
+			return ok(c.CreateToken(ctx, cmd))
+		},
+		func(_ model.CreateTokenCmd, err error) model.Msg { return model.TokenCreated{Err: err} },
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.RevokeTokenCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.RevokeTokenCmd) (model.Msg, error) {
+			_, err := c.RevokeToken(ctx, cmd.ID)
+			return model.TokenRevoked{ID: cmd.ID, Err: err}, nil
+		},
+		func(cmd model.RevokeTokenCmd, err error) model.Msg { return model.TokenRevoked{ID: cmd.ID, Err: err} },
+		nil, nil)
+
+	daemonCall(
 		func(cmd model.LoadFederation) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.LoadFederation) (model.Msg, error) {
 			return ok(c.ReadFederation(ctx, cmd))
