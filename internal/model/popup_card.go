@@ -280,7 +280,12 @@ func buildCards() []cardEntry {
 			text: func(m *Model) (*string, *Caret) {
 				return m.CloseForm.Values.at(m.CloseForm.Field), &m.CloseForm.Caret
 			},
-			erased: func(m Model, changed bool) Model { if changed { m.CloseForm.Err = nil }; return m },
+			erased: func(m Model, changed bool) Model {
+				if changed {
+					m.CloseForm.Err = nil
+				}
+				return m
+			},
 		},
 		{
 			card: CardDates, open: func(m Model) bool { return m.DatesForm.Open },
@@ -292,7 +297,12 @@ func buildCards() []cardEntry {
 			text: func(m *Model) (*string, *Caret) {
 				return m.DatesForm.Text.at(m.DatesForm.Field), &m.DatesForm.Caret
 			},
-			erased: func(m Model, changed bool) Model { if changed { m.DatesForm.Err = nil }; return m },
+			erased: func(m Model, changed bool) Model {
+				if changed {
+					m.DatesForm.Err = nil
+				}
+				return m
+			},
 		},
 		{
 			card: CardRecurrence, open: func(m Model) bool { return m.RecurrenceForm.Open },
@@ -312,7 +322,12 @@ func buildCards() []cardEntry {
 			text: func(m *Model) (*string, *Caret) {
 				return m.RecurrenceForm.text(m.RecurrenceForm.Field), &m.RecurrenceForm.Caret
 			},
-			erased: func(m Model, changed bool) Model { if changed { m.RecurrenceForm.Err = nil }; return m },
+			erased: func(m Model, changed bool) Model {
+				if changed {
+					m.RecurrenceForm.Err = nil
+				}
+				return m
+			},
 			step: func(m Model, back bool) Model {
 				m.RecurrenceForm.step(back)
 				m.RecurrenceForm.Err = nil
@@ -343,8 +358,13 @@ func buildCards() []cardEntry {
 			editing: []fieldEditing{{mode: ModeJobForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, delete: "erase"}},
 			step:    func(m Model, back bool) Model { m.JobForm.step(back); return m },
 			text:    func(m *Model) (*string, *Caret) { return m.JobForm.text(m.JobForm.Field), &m.JobForm.Caret },
-			erased:  func(m Model, changed bool) Model { if changed { m.JobForm.Err = nil }; return m },
-			choose:  func(m Model, i int) Model { m.JobForm.choose(i); return m },
+			erased: func(m Model, changed bool) Model {
+				if changed {
+					m.JobForm.Err = nil
+				}
+				return m
+			},
+			choose: func(m Model, i int) Model { m.JobForm.choose(i); return m },
 		},
 		{
 			card: CardProject, open: func(m Model) bool { return m.ProjectForm.Open },
@@ -355,7 +375,12 @@ func buildCards() []cardEntry {
 			fields: []FieldSpec{}, input: true,
 			editing: []fieldEditing{{mode: ModeProjectForm, actions: []Action{DeleteInput, ClearInput}, clear: "clear name"}},
 			text:    func(m *Model) (*string, *Caret) { return &m.ProjectForm.Name, &m.ProjectForm.Caret },
-			erased:  func(m Model, changed bool) Model { if changed { m.ProjectForm.Err = nil }; return m },
+			erased: func(m Model, changed bool) Model {
+				if changed {
+					m.ProjectForm.Err = nil
+				}
+				return m
+			},
 		},
 		{
 			card: CardLanes, open: func(m Model) bool { return m.LanesForm.Open },
@@ -365,7 +390,12 @@ func buildCards() []cardEntry {
 			fields: LanesFields, focus: func(m *Model) *Field { return &m.LanesForm.Field },
 			editing: []fieldEditing{{mode: ModeLanesForm, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}}},
 			text:    func(m *Model) (*string, *Caret) { return m.LanesForm.at(m.LanesForm.Field), &m.LanesForm.Caret },
-			erased:  func(m Model, changed bool) Model { if changed { m.LanesForm.Err = nil }; return m },
+			erased: func(m Model, changed bool) Model {
+				if changed {
+					m.LanesForm.Err = nil
+				}
+				return m
+			},
 		},
 		{
 			card: CardWorker, open: func(m Model) bool { return m.WorkerCard.Open },
@@ -384,8 +414,13 @@ func buildCards() []cardEntry {
 			fields: WorkerFields, focus: func(m *Model) *Field { return &m.WorkerCard.Field },
 			hidden:  func(m Model, name Field) bool { return !m.WorkerCardShows(name) },
 			editing: []fieldEditing{{mode: ModeWorkerCard, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, delete: "erase", before: WorkerEdit}},
-			text:   func(m *Model) (*string, *Caret) { return m.WorkerCard.at(m.WorkerCard.Field), &m.WorkerCard.Caret },
-			erased: func(m Model, changed bool) Model { if changed { m.WorkerCard.Err = nil }; return m },
+			text:    func(m *Model) (*string, *Caret) { return m.WorkerCard.at(m.WorkerCard.Field), &m.WorkerCard.Caret },
+			erased: func(m Model, changed bool) Model {
+				if changed {
+					m.WorkerCard.Err = nil
+				}
+				return m
+			},
 			step: func(m Model, _ bool) Model {
 				if m.WorkerCardShows(m.WorkerCard.Field) {
 					m.WorkerCard.Trusted, m.WorkerCard.Err = !m.WorkerCard.Trusted, nil

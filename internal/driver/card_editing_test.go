@@ -111,7 +111,9 @@ func (c editingCard) seekField(t *testing.T, s driver.State, field model.Field) 
 	return s
 }
 
-func drawnNodes(t *testing.T, s driver.State) []tern.WireNode { return wireNodes(t, view.Render(s.Model, now)) }
+func drawnNodes(t *testing.T, s driver.State) []tern.WireNode {
+	return wireNodes(t, view.Render(s.Model, now))
+}
 
 // Tab and shift+tab walk the card's fields in order, skip the fields the card hides, and every move sends Tern the focus op for
 // the rendered focused field: its own node when it takes text, none for a choice field.
