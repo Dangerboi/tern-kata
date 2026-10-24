@@ -224,7 +224,7 @@ func TestATypedReplyToTheCommentARequestNamesRemovesItFromTheNextRead(t *testing
 		t.Fatalf("the read request names %q, want the comment %q", named.Slot.Re, question.UID)
 	}
 
-	draft("answerer", "pick the second one", question.UID, model.ReplyConfirm)
+	draft("answerer", "pick the second one: it reproduces on every run I tried and matches the spec.", question.UID, model.ReplyConfirm)
 	after := f.read(t, "answerer").Requests
 	if len(after) != 1 || after[0].IssueUID != other {
 		t.Fatalf("requests after the reply: %+v, want only the request on the other Issue", after)
