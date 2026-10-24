@@ -4,10 +4,10 @@ import "slices"
 
 // Page is one of the Pane's top-level views, chosen from the Page bar. Model.Page is the current one.
 //
-// Adding a Page is one entry in pageDefs (its label, key, what its second column is, entry and clear, its mode, the messages it
-// owns, its list's movement keys and inspector's scroll keys, and its list node), a Page constant, an Action constant, and a state
-// struct on Model for what the Page keeps while another is shown (selection, scroll, filters). The Page bar, the keys,
-// the click targets, the help sheet line, the mode, the message routing and the scroll target all read the table.
+// Adding a Page is one entry in pageDefs (its label, key, what its second column is, entry, clear and reset, its mode, the messages
+// it owns, its list's movement keys and inspector's scroll keys, and its list node), a Page constant, an Action constant, and a
+// state struct on Model for what the Page keeps while another is shown (selection, scroll, filters). The Page bar, the keys,
+// the click targets, the help sheet line, the mode, the message routing, the Project reset and the scroll target all read the table.
 type Page uint8
 
 const (
@@ -75,6 +75,10 @@ type pageDef struct {
 	// update takes the messages the Page owns, whichever Page is current (an answer can land after the Page is left); handled says it
 	// did. nil for a Page that owns none. Update asks every Page in table order, ahead of the shared messages.
 	update func(Model, Msg) (Model, []Cmd, bool)
+	// filledFor is the Project, by uid, the Page's state was filled for; reset empties that state for the Pane's Project when it
+	// differs, and records it. Both nil for a Page with no state of its own per Project.
+	filledFor func(Model) string
+	reset     func(Model, string) Model
 	// moves is the Page's list's six movement keys, generated into the main actions; the zero value binds none.
 	moves pageMoves
 	// scroll is the Page's inspector's four scroll keys, generated into the main actions; the zero value binds none.
@@ -111,17 +115,17 @@ func issueMoves(mode Mode) pageMoves {
 var pageDefs = []pageDef{
 	{page: PageIssues, id: "issues", label: "Issues", chord: "1", action: ShowIssuesPage, moves: issueMoves(ModeList)},
 	{page: PageBoard, id: "board", label: "Board", chord: "2", action: ShowBoardPage, needs: "Board", second: SecondIssueDetail, enter: enterBoard, clear: clearBoard,
-		mode: boardMode, moves: issueMoves(ModeLane)},
+		mode: boardMode, update: updateBoard, moves: issueMoves(ModeLane)},
 	{page: PageJobs, id: "jobs", label: "Jobs", chord: "3", action: ShowJobsPage, needs: "Jobs Page", second: SecondInspector, enter: enterJobs, clear: clearJobs,
-		mode: inspectorMode(ModeJobs, ModeJobInspector), list: ListNodeJobs,
+		filledFor: jobsFilledFor, reset: resetJobs, mode: inspectorMode(ModeJobs, ModeJobInspector), update: updateJobs, list: ListNodeJobs,
 		moves:  pageMoves{mode: ModeJobs, noun: "job", move: moveJob, sheet: [6]sheetLine{{sheetJobs, 1, "next job"}, {sheetJobs, 2, "previous job"}, {sheetJobs, 3, "first job"}, {sheetJobs, 4, "last job"}}},
 		scroll: pageScroll{mode: ModeJobInspector, sheet: sheetLine{sheetJobs, 9, "scroll the inspector"}}},
 	{page: PageRuns, id: "runs", label: "Runs", chord: "4", action: ShowRunsPage, needs: "Runs Page", second: SecondInspector, enter: enterRuns, clear: clearRuns,
-		mode: inspectorMode(ModeRuns, ModeRunInspector), list: ListNodeRuns,
+		filledFor: runsFilledFor, reset: resetRuns, mode: inspectorMode(ModeRuns, ModeRunInspector), update: updateRuns, list: ListNodeRuns,
 		moves:  pageMoves{mode: ModeRuns, noun: "run", move: moveRun, sheet: [6]sheetLine{{sheetRuns, 1, "next run"}, {sheetRuns, 2, "previous run"}, {sheetRuns, 3, "first run"}, {sheetRuns, 4, "last run"}}},
 		scroll: pageScroll{mode: ModeRunInspector, sheet: sheetLine{sheetRuns, 10, "scroll the detail"}}},
 	{page: PageWorkflows, id: "workflows", label: "Workflows", chord: "5", action: ShowWorkflowsPage, needs: "Workflows Page", second: SecondIssueDetail, enter: enterWorkflows, clear: clearWorkflows,
-		mode: workflowsMode, update: updateWorkflows, list: ListNodeWorkflows,
+		filledFor: workflowsFilledFor, reset: resetWorkflows, mode: workflowsMode, update: updateWorkflows, list: ListNodeWorkflows,
 		moves: pageMoves{mode: ModeWorkflows, noun: "workflow", move: moveWorkflow, sheet: [6]sheetLine{{sheetWorkflows, 1, "next workflow"}, {sheetWorkflows, 2, "previous workflow"}}}},
 }
 
