@@ -132,45 +132,45 @@ func (g *Gateway) install(name string, locate Locator, workspace string, c *Clie
 	g.streamMu.Unlock()
 }
 
-// startLocalDaemon starts the local daemon entry names, as kata tui does for a deliberate switch to a stopped one: kata's own
-// `kata daemon start`, with KATA_HOME set to the profile's home when the entry has one and the current home otherwise. The child
-// gets no KATA_DSN, KATA_DB or KATA_SERVER, which would point the command at another database or daemon than the one the entry names.
+// startLocalDaemon starts the local daemon entry names, as kata tui does for a deliberate switch to a stopped one. A pinned profile
+// (an entry with a home) goes through `kata --daemon <name> daemon recover`, which builds the profile's own environment and refuses,
+// with its reason, a profile whose storage is gone or whose instance is not the one the catalog pins, rather than starting an empty
+// database. An entry without a home is the current home: `kata daemon start` with no KATA_DSN, KATA_DB or KATA_SERVER, which would
+// point the command at another database or daemon than the one the entry names.
+//
+// Shortcut: when kata's client library can start a named daemon itself, this helper goes and the switch connects through it.
 func startLocalDaemon(ctx context.Context, entry CatalogEntry) error {
 	ctx, cancel := context.WithTimeout(ctx, startDeadline)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "kata", "daemon", "start")
-	cmd.Env = startEnvironment(os.Environ(), entry.Home)
+	args, label := []string{"daemon", "start"}, "kata daemon start"
+	env := startEnvironment(os.Environ())
+	if entry.Home != "" {
+		args, label, env = []string{"--daemon", entry.Name, "daemon", "recover"}, "kata daemon recover", os.Environ()
+	}
+	cmd := exec.CommandContext(ctx, "kata", args...)
+	cmd.Env = env
 	// The daemon is detached, but a pipe it inherited would hold the output open: give up on it shortly after kata exits.
 	cmd.WaitDelay = 2 * time.Second
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output
 	if err := cmd.Run(); err != nil {
-		if text := strings.TrimSpace(output.String()); text != "" {
-			return fmt.Errorf("kata daemon start: %s", text)
+		if text := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(output.String()), "kata: ")); text != "" {
+			return fmt.Errorf("%s: %s", label, text)
 		}
-		return fmt.Errorf("kata daemon start: %w", err)
+		return fmt.Errorf("%s: %w", label, err)
 	}
 	return nil
 }
 
-// startEnvironment is env without the variables that point kata at another database or daemon, and with KATA_HOME set to home when
-// home is not empty.
-func startEnvironment(env []string, home string) []string {
-	out := make([]string, 0, len(env)+1)
+// startEnvironment is env without the variables that point kata at another database or daemon.
+func startEnvironment(env []string) []string {
+	out := make([]string, 0, len(env))
 	for _, kv := range env {
-		name, _, _ := strings.Cut(kv, "=")
-		switch name {
+		switch name, _, _ := strings.Cut(kv, "="); name {
 		case "KATA_DSN", "KATA_DB", "KATA_SERVER":
 			continue
-		case "KATA_HOME":
-			if home != "" {
-				continue
-			}
 		}
 		out = append(out, kv)
-	}
-	if home != "" {
-		out = append(out, "KATA_HOME="+home)
 	}
 	return out
 }

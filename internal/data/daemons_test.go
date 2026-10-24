@@ -150,7 +150,7 @@ func TestGatewayFailedSwitchKeepsTheCurrentConnection(t *testing.T) {
 }
 
 // stubKata puts a `kata` script first on PATH. locate answers with url when started is set or startsFirst is false, and refuses
-// otherwise; `daemon start` records its environment in the returned file, sets started, and fails with failure when that is not "".
+// otherwise; `daemon start` and `daemon recover` record their environment in the returned file, sets started, and fails with failure when that is not "".
 type stubKata struct {
 	dir, log, env, started string
 }
@@ -172,7 +172,7 @@ func installStubKata(t *testing.T, url string, startsFirst bool, failure string)
 	}
 	script := "#!/bin/sh\necho \"$@\" >> '" + s.log + "'\n" +
 		"case \"$*\" in\n" +
-		"*\"daemon start\"*)\n" + start + ";;\n" +
+		"*\"daemon start\"*|*\"daemon recover\"*)\n" + start + ";;\n" +
 		"*\"daemon locate\"*)\n" +
 		"if " + gate + "; then\n" +
 		"echo '{\"source\":\"daemon_flag\",\"kind\":\"local\",\"network\":\"tcp\",\"scheme\":\"http\",\"address\":\"" + strings.TrimPrefix(url, "http://") + "\",\"request_base_url\":\"" + url + "\"}'\n" +
@@ -198,7 +198,7 @@ func (s stubKata) environment(t *testing.T) map[string]string {
 	t.Helper()
 	raw, err := os.ReadFile(s.env)
 	if err != nil {
-		t.Fatalf("the stub kata never ran `daemon start`: %v", err)
+		t.Fatalf("the stub kata never ran `daemon start` or `daemon recover`: %v", err)
 	}
 	env := map[string]string{}
 	for _, line := range strings.Split(string(raw), "\n") {
@@ -225,50 +225,73 @@ func TestGatewaySwitchesToARunningLocalEntryWithoutStartingIt(t *testing.T) {
 	}
 }
 
-func TestGatewayStartsAStoppedLocalEntryWithAScrubbedEnvironmentThenConnects(t *testing.T) {
+func TestGatewayRecoversAStoppedProfileThroughKatasRecoverThenConnects(t *testing.T) {
 	profileHome := t.TempDir()
-	for name, c := range map[string]struct {
-		entry    string
-		wantHome func(current string) string
-	}{
-		"a profile with a home": {
-			entry:    "[[daemon]]\nname = \"mine\"\nlocal = true\nhome = \"" + profileHome + "\"\ninstance_uid = \"" + profileInstanceUID + "\"\n",
-			wantHome: func(string) string { return profileHome },
-		},
-		"the current home": {
-			entry:    "[[daemon]]\nname = \"mine\"\nlocal = true\n",
-			wantHome: func(current string) string { return current },
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			alpha := startKata(t, "0.20.0")
-			beta := startKata(t, "0.20.0")
-			current := os.Getenv("KATA_HOME")
-			writeCatalog(t, remoteEntry("alpha", alpha)+c.entry)
-			t.Setenv("KATA_DSN", "postgres://elsewhere")
-			t.Setenv("KATA_DB", "/elsewhere.db")
-			t.Setenv("KATA_SERVER", "http://elsewhere.example")
-			stub := installStubKata(t, beta.URL, true, "")
-			gateway := newGateway(t, newLocator(alpha.target()))
+	alpha := startKata(t, "0.20.0")
+	beta := startKata(t, "0.20.0")
+	current := os.Getenv("KATA_HOME")
+	writeCatalog(t, remoteEntry("alpha", alpha)+"[[daemon]]\nname = \"mine\"\nlocal = true\nhome = \""+profileHome+"\"\ninstance_uid = \""+profileInstanceUID+"\"\n")
+	stub := installStubKata(t, beta.URL, true, "")
+	gateway := newGateway(t, newLocator(alpha.target()))
 
-			answer := switched(t, gateway, t.TempDir(), "mine")
-			if answer.Err != nil || answer.Daemon.Name != "mine" || answer.Daemon.Kind != model.DaemonLocal {
-				t.Fatalf("switch answered %+v", answer)
-			}
-			want := []string{"--daemon mine daemon locate --json", "daemon start", "--daemon mine daemon locate --json"}
-			if lines := stub.lines(t); !slices.Equal(lines, want) {
-				t.Fatalf("kata ran %q, want %q", lines, want)
-			}
-			env := stub.environment(t)
-			for _, name := range []string{"KATA_DSN", "KATA_DB", "KATA_SERVER"} {
-				if v, set := env[name]; set {
-					t.Errorf("`kata daemon start` ran with %s=%q", name, v)
-				}
-			}
-			if env["KATA_HOME"] != c.wantHome(current) {
-				t.Errorf("`kata daemon start` ran with KATA_HOME=%q, want %q", env["KATA_HOME"], c.wantHome(current))
-			}
-		})
+	answer := switched(t, gateway, t.TempDir(), "mine")
+	if answer.Err != nil || answer.Daemon.Name != "mine" || answer.Daemon.Kind != model.DaemonLocal {
+		t.Fatalf("switch answered %+v", answer)
+	}
+	want := []string{"--daemon mine daemon locate --json", "--daemon mine daemon recover", "--daemon mine daemon locate --json"}
+	if lines := stub.lines(t); !slices.Equal(lines, want) {
+		t.Fatalf("kata ran %q, want %q", lines, want)
+	}
+	if home := stub.environment(t)["KATA_HOME"]; home != current {
+		t.Errorf("`kata daemon recover` ran with KATA_HOME=%q, want the current %q left alone, not the profile's %q", home, current, profileHome)
+	}
+}
+
+func TestGatewayStartsTheCurrentHomeEntryWithAScrubbedEnvironmentThenConnects(t *testing.T) {
+	alpha := startKata(t, "0.20.0")
+	beta := startKata(t, "0.20.0")
+	current := os.Getenv("KATA_HOME")
+	writeCatalog(t, remoteEntry("alpha", alpha)+"[[daemon]]\nname = \"mine\"\nlocal = true\n")
+	t.Setenv("KATA_DSN", "postgres://elsewhere")
+	t.Setenv("KATA_DB", "/elsewhere.db")
+	t.Setenv("KATA_SERVER", "http://elsewhere.example")
+	stub := installStubKata(t, beta.URL, true, "")
+	gateway := newGateway(t, newLocator(alpha.target()))
+
+	answer := switched(t, gateway, t.TempDir(), "mine")
+	if answer.Err != nil || answer.Daemon.Name != "mine" || answer.Daemon.Kind != model.DaemonLocal {
+		t.Fatalf("switch answered %+v", answer)
+	}
+	want := []string{"--daemon mine daemon locate --json", "daemon start", "--daemon mine daemon locate --json"}
+	if lines := stub.lines(t); !slices.Equal(lines, want) {
+		t.Fatalf("kata ran %q, want %q", lines, want)
+	}
+	env := stub.environment(t)
+	for _, name := range []string{"KATA_DSN", "KATA_DB", "KATA_SERVER"} {
+		if v, set := env[name]; set {
+			t.Errorf("`kata daemon start` ran with %s=%q", name, v)
+		}
+	}
+	if env["KATA_HOME"] != current {
+		t.Errorf("`kata daemon start` ran with KATA_HOME=%q, want %q", env["KATA_HOME"], current)
+	}
+}
+
+func TestGatewayRefusedRecoverKeepsTheCurrentConnectionAndShowsKatasMessage(t *testing.T) {
+	alpha := startKata(t, "0.20.0")
+	beta := startKata(t, "0.20.0")
+	writeCatalog(t, remoteEntry("alpha", alpha)+"[[daemon]]\nname = \"mine\"\nlocal = true\nhome = \""+t.TempDir()+"\"\ninstance_uid = \""+profileInstanceUID+"\"\n")
+	installStubKata(t, beta.URL, true, "kata: missing_profile_storage: restore the profile database")
+	gateway := newGateway(t, newLocator(alpha.target()))
+	workspace, bound := project(t, gateway, "demo")
+
+	answer := switched(t, gateway, workspace, "mine")
+	if answer.Err == nil || answer.Err.Error() != "kata daemon recover: missing_profile_storage: restore the profile database" {
+		t.Fatalf("switch answered %+v, want kata's message", answer)
+	}
+	loaded := as[model.ProjectLoaded](t, run(t, gateway, model.LoadProject{Workspace: workspace}))
+	if loaded.Project.UID != bound.UID {
+		t.Fatalf("the gateway moved off the current daemon: %+v", loaded.Project)
 	}
 }
 
@@ -331,16 +354,6 @@ func TestGatewayDaemonsWithoutACatalogIsEmptyAndNamesTheFile(t *testing.T) {
 	writeCatalog(t, "[[daemon]]\nname = \"broken\"\n")
 	if bad := as[model.DaemonsLoaded](t, run(t, gateway, model.LoadDaemons{Request: 2})); bad.Err == nil || !strings.Contains(bad.Err.Error(), "exactly one of local or url") {
 		t.Fatalf("a catalog kata would refuse answered %+v", bad)
-	}
-}
-
-func TestStartEnvironmentDropsTheVariablesThatRedirectKata(t *testing.T) {
-	env := []string{"PATH=/bin", "KATA_DSN=x", "KATA_DB=y", "KATA_SERVER=z", "KATA_HOME=/current", "KATA_AUTHOR=me"}
-	if got := startEnvironment(env, ""); !slices.Equal(got, []string{"PATH=/bin", "KATA_HOME=/current", "KATA_AUTHOR=me"}) {
-		t.Errorf("current home: %v", got)
-	}
-	if got := startEnvironment(env, "/profile"); !slices.Equal(got, []string{"PATH=/bin", "KATA_AUTHOR=me", "KATA_HOME=/profile"}) {
-		t.Errorf("profile home: %v", got)
 	}
 }
 
