@@ -46,9 +46,10 @@ func detailOf(t *testing.T, issue model.Issue, others []model.Issue, jobs ...mod
 
 func listRowText(t *testing.T, s driver.State, uid string) string {
 	t.Helper()
+	id := rowOf(t, s.Model, view.IssueListID, uid)
 	var text string
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
-		if n.ID == view.IssueID(uid) || strings.HasPrefix(n.ID, view.IssueID(uid)+".") {
+		if n.ID == id || strings.HasPrefix(n.ID, id+".") {
 			text += wireText(n)
 		}
 	}
@@ -64,8 +65,8 @@ func TestCronMadeIssueShowsTheMarkerInTheListAndOnItsBoardCard(t *testing.T) {
 	}
 	board := boardPane(t, child, boardCard("plain"))
 	nodes := wireNodes(t, view.Render(board.Model, now))
-	wantText(t, "the Board card", wireText(node(t, nodes, view.CardID(board.Model, "child")+".title")), "◷ Title of child")
-	if strings.Contains(wireText(node(t, nodes, view.CardID(board.Model, "plain")+".title")), "◷") {
+	wantText(t, "the Board card", wireText(node(t, nodes, rowOf(t, board.Model, view.BoardID, "child")+".title")), "◷ Title of child")
+	if strings.Contains(wireText(node(t, nodes, rowOf(t, board.Model, view.BoardID, "plain")+".title")), "◷") {
 		t.Error("a plain Board card has the cron marker")
 	}
 }

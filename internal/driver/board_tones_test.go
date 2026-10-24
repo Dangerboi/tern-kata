@@ -54,7 +54,7 @@ func TestCardPartsEachDrawInTheirTone(t *testing.T) {
 	s = step(t, s, model.SelectMsg{UID: "open"}).State
 	nodes := wireNodes(t, view.Render(s.Model, now))
 	card := func(uid, part string) tern.WireNode {
-		id := view.CardID(s.Model, uid)
+		id := rowOf(t, s.Model, view.BoardID, uid)
 		if part != "" {
 			id += "." + part
 		}
