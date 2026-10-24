@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -9,8 +10,7 @@ import (
 
 // The Daemon gateway's command table declares, per command type, how the gateway handles it: the named steps that run
 // before its handler, the handler, and the named steps that run after it. Run looks the declaration up and runs it;
-// it never switches on a command's type. A command with no declaration is a daemon call: it falls through to plan,
-// the request builder.
+// it never switches on a command's type. A command with no declaration fails with a message naming its type.
 
 // kind says how Run executes a declaration: a local command or daemon call answers once, a long-lived command sends many
 // results (or none) on its own schedule.
@@ -77,7 +77,7 @@ var (
 	}}
 )
 
-// commands is the table, keyed by the command's type. Daemon calls are not in it yet.
+// commands is the table, keyed by the command's type.
 var commands = map[reflect.Type]declaration{}
 
 func typeOf[C model.Cmd]() reflect.Type { return reflect.TypeFor[C]() }
@@ -94,6 +94,38 @@ func longLivedCommand[C model.Cmd](stream func(g *Gateway, ctx context.Context, 
 		stream: func(g *Gateway, ctx context.Context, cmd model.Cmd, messages chan<- model.Msg) {
 			stream(g, ctx, cmd.(C), messages)
 		}}
+}
+
+// daemonCall declares a command that calls the daemon: how its workspace is found, the call against the client, and the
+// failure its error becomes. The call and the failure both read the command, so a result and its failure share a shape.
+// When no daemon is found the command still gets its declared failure.
+func daemonCall[C model.Cmd](
+	workspace func(C) string,
+	call func(ctx context.Context, c *Client, cmd C) (model.Msg, error),
+	fail func(cmd C, err error) model.Msg,
+	before []beforeStep, after []afterStep,
+) {
+	daemonCallAt(workspace,
+		func(ctx context.Context, _ string, c *Client, cmd C) (model.Msg, error) { return call(ctx, c, cmd) },
+		fail, before, after)
+}
+
+// daemonCallAt is daemonCall for a call that also needs this machine's host name.
+func daemonCallAt[C model.Cmd](
+	workspace func(C) string,
+	call func(ctx context.Context, host string, c *Client, cmd C) (model.Msg, error),
+	fail func(cmd C, err error) model.Msg,
+	before []beforeStep, after []afterStep,
+) {
+	local(func(g *Gateway, ctx context.Context, cmd C) model.Msg {
+		msg, err := g.call(ctx, workspace(cmd), func(ctx context.Context, c *Client) (model.Msg, error) {
+			return call(ctx, g.host, c, cmd)
+		})
+		if err != nil {
+			return fail(cmd, err)
+		}
+		return msg
+	}, before, after)
 }
 
 func init() {
@@ -134,18 +166,324 @@ func init() {
 		return g.openRunSession(ctx, cmd)
 	}, nil, nil)
 
-	// These three still reach the daemon through the request builder; the steps around the call are declared here.
-	viaDaemon := func(g *Gateway, ctx context.Context, cmd model.Cmd) model.Msg { return g.do(ctx, cmd) }
-	commands[typeOf[model.LoadProject]()] = declaration{kind: answersOnce, handle: viaDaemon,
-		after: []afterStep{startPointerMoveAfter, readDefaultFilterAfter}}
-	commands[typeOf[model.AttachFile]()] = declaration{kind: answersOnce, handle: viaDaemon, before: []beforeStep{convertPointersBefore}}
-	commands[typeOf[model.DetachFile]()] = declaration{kind: answersOnce, handle: viaDaemon, before: []beforeStep{convertPointersBefore}}
+	// Daemon calls.
+	daemonCall(
+		func(cmd model.CreateIssueCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.CreateIssueCmd) (model.Msg, error) {
+			return ok(c.CreateIssue(ctx, cmd))
+		},
+		func(cmd model.CreateIssueCmd, err error) model.Msg { return model.IssueCreated{Err: err} },
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.OpenIssue) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.OpenIssue) (model.Msg, error) {
+			return ok(c.OpenIssue(ctx, cmd))
+		},
+		func(cmd model.OpenIssue, err error) model.Msg { return model.IssueOpenFailed{Ref: cmd.Ref, Err: err} },
+		nil, nil)
+
+	// shortcut: any failure counts as no Issue until the query changes (retrying would loop while the daemon is down); the full-text query that follows reports it.
+	daemonCall(
+		func(cmd model.LookupSearchID) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LookupSearchID) (model.Msg, error) {
+			uid, err := c.ResolveIssue(ctx, cmd.ProjectID, cmd.ShortID)
+			return ok(model.SearchIDLooked{Request: cmd.Request, ShortID: cmd.ShortID, UID: uid}, err)
+		},
+		func(cmd model.LookupSearchID, _ error) model.Msg {
+			return model.SearchIDLooked{Request: cmd.Request, ShortID: cmd.ShortID}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.SaveDraft) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.SaveDraft) (model.Msg, error) {
+			return c.SaveDraft(ctx, cmd)
+		},
+		func(cmd model.SaveDraft, err error) model.Msg { return model.DraftFailed{UID: cmd.UID, Err: err} },
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.CloseIssueCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.CloseIssueCmd) (model.Msg, error) {
+			return ok(model.CloseResultMsg{UID: cmd.UID}, c.Close(ctx, cmd))
+		},
+		func(cmd model.CloseIssueCmd, err error) model.Msg {
+			return model.CloseResultMsg{UID: cmd.UID, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.MoveIssueCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.MoveIssueCmd) (model.Msg, error) {
+			return ok(model.MoveResultMsg{UID: cmd.UID}, c.Move(ctx, cmd))
+		},
+		func(cmd model.MoveIssueCmd, err error) model.Msg { return model.MoveResultMsg{UID: cmd.UID, Err: err} },
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.CreateRecurrenceCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.CreateRecurrenceCmd) (model.Msg, error) {
+			return ok(model.RecurrenceResultMsg{UID: cmd.UID}, c.CreateRecurrence(ctx, cmd))
+		},
+		func(cmd model.CreateRecurrenceCmd, err error) model.Msg {
+			return model.RecurrenceResultMsg{UID: cmd.UID, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.ChangeRecurrenceCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.ChangeRecurrenceCmd) (model.Msg, error) {
+			changed, err := c.ChangeRecurrence(ctx, cmd)
+			return ok(model.RecurrenceResultMsg{UID: cmd.UID, Changed: changed}, err)
+		},
+		func(cmd model.ChangeRecurrenceCmd, err error) model.Msg {
+			return model.RecurrenceResultMsg{UID: cmd.UID, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.StopRecurrenceCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.StopRecurrenceCmd) (model.Msg, error) {
+			return ok(model.RecurrenceResultMsg{UID: cmd.UID}, c.StopRecurrence(ctx, cmd))
+		},
+		func(cmd model.StopRecurrenceCmd, err error) model.Msg {
+			return model.RecurrenceResultMsg{UID: cmd.UID, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.LoadRecurTarget) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LoadRecurTarget) (model.Msg, error) {
+			return ok(c.ReadRecurTarget(ctx, cmd))
+		},
+		func(cmd model.LoadRecurTarget, err error) model.Msg { return model.RecurTarget{Ref: cmd.Ref, Err: err} },
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.ReopenIssueCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.ReopenIssueCmd) (model.Msg, error) {
+			return ok(model.CloseResultMsg{UID: cmd.UID}, c.Reopen(ctx, cmd))
+		},
+		func(cmd model.ReopenIssueCmd, err error) model.Msg {
+			return model.CloseResultMsg{UID: cmd.UID, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.WriteField) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.WriteField) (model.Msg, error) {
+			return ok(model.FieldWritten{UID: cmd.UID}, c.WriteField(ctx, cmd))
+		},
+		func(cmd model.WriteField, err error) model.Msg { return model.FieldWritten{UID: cmd.UID, Err: err} },
+		nil, nil)
+
+	// A write has landed: the result and its error travel together, and nothing is retried.
+	daemonCall(
+		func(cmd model.SetDatesCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.SetDatesCmd) (model.Msg, error) {
+			applied, err := c.SetDates(ctx, cmd)
+			if len(applied) > 0 {
+				return model.DatesResultMsg{UID: cmd.UID, Applied: applied, Err: err}, nil
+			}
+			return ok(model.DatesResultMsg{UID: cmd.UID}, err)
+		},
+		func(cmd model.SetDatesCmd, err error) model.Msg { return model.DatesResultMsg{UID: cmd.UID, Err: err} },
+		nil, nil)
+
+	daemonCallAt(
+		func(cmd model.AttachFile) string { return cmd.Workspace },
+		func(ctx context.Context, host string, c *Client, cmd model.AttachFile) (model.Msg, error) {
+			return ok(c.AttachFile(ctx, host, cmd))
+		},
+		func(cmd model.AttachFile, err error) model.Msg { return model.FileAttached{Ref: cmd.Ref, Err: err} },
+		[]beforeStep{convertPointersBefore}, nil)
+
+	// Cleared is final: the result and its error travel together, and nothing is retried.
+	daemonCallAt(
+		func(cmd model.DetachFile) string { return cmd.Workspace },
+		func(ctx context.Context, host string, c *Client, cmd model.DetachFile) (model.Msg, error) {
+			detached, err := c.DetachFile(ctx, host, cmd)
+			if detached.Cleared {
+				detached.Err = err
+				return detached, nil
+			}
+			return ok(detached, err)
+		},
+		func(cmd model.DetachFile, err error) model.Msg {
+			return model.FileDetached{Ref: cmd.Ref, Name: cmd.Name, Err: err}
+		},
+		[]beforeStep{convertPointersBefore}, nil)
+
+	daemonCall(
+		func(cmd model.LoadFieldLabels) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LoadFieldLabels) (model.Msg, error) {
+			return ok(c.FieldLabels(ctx, cmd))
+		},
+		func(cmd model.LoadFieldLabels, err error) model.Msg {
+			return model.FieldLabelsLoaded{UID: cmd.UID, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.CreateProject) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.CreateProject) (model.Msg, error) {
+			project, err := c.CreateProject(ctx, cmd)
+			return ok(model.ProjectSaved{Project: project}, err)
+		},
+		func(cmd model.CreateProject, err error) model.Msg { return model.ProjectSaved{Err: err} },
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.BindProject) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.BindProject) (model.Msg, error) {
+			project, err := c.BindProject(ctx, cmd)
+			return ok(model.ProjectSaved{Project: project}, err)
+		},
+		func(cmd model.BindProject, err error) model.Msg { return model.ProjectSaved{Err: err} },
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.LoadProject) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LoadProject) (model.Msg, error) {
+			return ok(c.ReadProject(ctx, cmd.Workspace))
+		},
+		func(cmd model.LoadProject, err error) model.Msg { return model.Failed{Err: err} },
+		nil, []afterStep{startPointerMoveAfter, readDefaultFilterAfter})
+
+	daemonCall(
+		func(cmd model.LoadDetail) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LoadDetail) (model.Msg, error) {
+			return ok(c.ReadDetail(ctx, cmd.UID))
+		},
+		func(cmd model.LoadDetail, err error) model.Msg { return model.DetailFailed{UID: cmd.UID, Err: err} },
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.LoadJobs) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LoadJobs) (model.Msg, error) {
+			return ok(c.ListJobs(ctx, cmd))
+		},
+		func(cmd model.LoadJobs, err error) model.Msg { return model.JobsLoaded{Request: cmd.Request, Err: err} },
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.LoadRuns) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LoadRuns) (model.Msg, error) {
+			return ok(c.ListRuns(ctx, cmd))
+		},
+		func(cmd model.LoadRuns, err error) model.Msg {
+			return model.RunsLoaded{Request: cmd.Request, Before: cmd.Before, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.ShowRun) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.ShowRun) (model.Msg, error) {
+			return ok(c.ShowRun(ctx, cmd))
+		},
+		func(cmd model.ShowRun, err error) model.Msg { return model.RunShown{UID: cmd.UID, Err: err} },
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.SaveJobCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.SaveJobCmd) (model.Msg, error) {
+			return ok(c.SaveJob(ctx, cmd))
+		},
+		func(cmd model.SaveJobCmd, err error) model.Msg {
+			return model.JobWritten{ProjectID: cmd.ProjectID, UID: cmd.UID, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.ArchiveJobCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.ArchiveJobCmd) (model.Msg, error) {
+			return ok(c.ArchiveJob(ctx, cmd))
+		},
+		func(cmd model.ArchiveJobCmd, err error) model.Msg {
+			return model.JobWritten{ProjectID: cmd.ProjectID, UID: cmd.UID, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.RestoreJobCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.RestoreJobCmd) (model.Msg, error) {
+			return ok(c.RestoreJob(ctx, cmd))
+		},
+		func(cmd model.RestoreJobCmd, err error) model.Msg {
+			return model.JobWritten{ProjectID: cmd.ProjectID, UID: cmd.UID, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.LoadWorkflows) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LoadWorkflows) (model.Msg, error) {
+			workflows, err := c.ListWorkflows(ctx, cmd.ProjectID)
+			return ok(model.WorkflowsLoaded{ProjectUID: cmd.ProjectUID, Workflows: workflows}, err)
+		},
+		func(cmd model.LoadWorkflows, err error) model.Msg {
+			return model.WorkflowsLoaded{ProjectUID: cmd.ProjectUID, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.LoadJobWorkflows) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LoadJobWorkflows) (model.Msg, error) {
+			workflows, err := c.ListWorkflows(ctx, cmd.ProjectID)
+			return ok(model.JobWorkflowsLoaded{ProjectID: cmd.ProjectID, Workflows: workflows}, err)
+		},
+		func(cmd model.LoadJobWorkflows, err error) model.Msg {
+			return model.JobWorkflowsLoaded{ProjectID: cmd.ProjectID, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.SaveWorkflow) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.SaveWorkflow) (model.Msg, error) {
+			return ok(c.SaveWorkflow(ctx, cmd))
+		},
+		func(cmd model.SaveWorkflow, err error) model.Msg {
+			return model.WorkflowWritten{ProjectUID: cmd.ProjectUID, Op: model.WorkflowOpSave, UID: cmd.UID, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.ArchiveWorkflow) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.ArchiveWorkflow) (model.Msg, error) {
+			return ok(c.ArchiveWorkflow(ctx, cmd))
+		},
+		func(cmd model.ArchiveWorkflow, err error) model.Msg {
+			return model.WorkflowWritten{ProjectUID: cmd.ProjectUID, Op: model.WorkflowOpArchive, UID: cmd.UID, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.RestoreWorkflow) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.RestoreWorkflow) (model.Msg, error) {
+			return ok(c.RestoreWorkflow(ctx, cmd))
+		},
+		func(cmd model.RestoreWorkflow, err error) model.Msg {
+			return model.WorkflowWritten{ProjectUID: cmd.ProjectUID, Op: model.WorkflowOpRestore, UID: cmd.UID, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.ReadSnapshot) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.ReadSnapshot) (model.Msg, error) {
+			return ok(c.ReadSnapshot(ctx, cmd))
+		},
+		func(cmd model.ReadSnapshot, err error) model.Msg {
+			return model.SnapshotFailed{Request: cmd.Request, Err: err}
+		},
+		nil, nil)
 }
 
-// declarationFor is the declaration of cmd; a command without one is a daemon call.
+// declarationFor is the declaration of cmd; a command without one fails with a message naming its type.
 func declarationFor(cmd model.Cmd) declaration {
 	if d, ok := commands[reflect.TypeOf(cmd)]; ok {
 		return d
 	}
-	return declaration{kind: answersOnce, handle: func(g *Gateway, ctx context.Context, cmd model.Cmd) model.Msg { return g.do(ctx, cmd) }}
+	return declaration{kind: answersOnce, handle: func(_ *Gateway, _ context.Context, cmd model.Cmd) model.Msg {
+		return model.Failed{Err: fmt.Errorf("tern-kata: unknown command %T", cmd)}
+	}}
 }
