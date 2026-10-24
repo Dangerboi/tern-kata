@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjobclient"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	g "go.kenn.io/kata/pkg/client/generated"
 )
@@ -146,25 +147,12 @@ func conflictingWorkflow(err error) (model.Workflow, bool) {
 }
 
 func translateWorkflow(w g.CronWorkflow) model.Workflow {
+	def := cronjobclient.WorkflowDefinition(w.Definition)
 	out := model.Workflow{UID: w.UID, Name: w.Name, Author: w.Author, EventUID: w.DefinitionEventUID, Revision: w.Revision, Archived: w.DeletedAt != nil,
-		Options: rawOptions(w.Definition.Options), Steps: make([]model.WorkflowStep, len(w.Definition.Steps))}
-	if w.Definition.About != nil {
-		out.About = *w.Definition.About
-	}
-	if w.Definition.Input != nil {
-		out.Input = *w.Definition.Input
-	}
-	for i, step := range w.Definition.Steps {
-		out.Steps[i] = model.WorkflowStep{Key: step.Key, Kind: step.Kind, After: step.After, Options: rawOptions(step.Options)}
-		if step.Command != nil {
-			out.Steps[i].Command = *step.Command
-		}
-		if step.Prompt != nil {
-			out.Steps[i].Prompt = *step.Prompt
-		}
-		if step.Retries != nil {
-			out.Steps[i].Retries = int(*step.Retries)
-		}
+		About: def.About, Input: def.Input, Options: rawOptions(w.Definition.Options), Steps: make([]model.WorkflowStep, len(def.Steps))}
+	for i, step := range def.Steps {
+		out.Steps[i] = model.WorkflowStep{Key: step.Key, Kind: string(step.Kind), Command: step.Command, Prompt: step.Prompt, After: step.After,
+			Retries: int(step.RetryCount()), Options: rawOptions(w.Definition.Steps[i].Options)}
 	}
 	return out
 }

@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // RunDetail is everything a Pane needs to show one run, held or not: its status line, why it is held, its steps and
@@ -30,9 +32,9 @@ type RunDetail struct {
 
 // StepDetail is one step of a run as the journal knows it.
 type StepDetail struct {
-	Index   int    // 1-based
-	Kind    string // "prompt" or "command"
-	Key     string // a workflow step's key; empty for a prompt job's one step
+	Index   int              // 1-based
+	Kind    cronjob.StepKind // prompt or command
+	Key     string           // a workflow step's key; empty for a prompt job's one step
 	Attempt int
 	// Summary is what the step said or why it ended as it did; empty while it runs.
 	Summary string
@@ -54,7 +56,7 @@ const OutputTailBytes = 4 << 10
 // reached showing as pending.
 func stepsOf(j *Journal) []StepDetail {
 	if j.Workflow == nil {
-		st := StepDetail{Index: 1, Kind: "prompt", Attempt: j.attempt(), State: j.stateName()}
+		st := StepDetail{Index: 1, Kind: cronjob.StepPrompt, Attempt: j.attempt(), State: j.stateName()}
 		if l := j.Launch; l != nil {
 			st.PID, st.SessionID, st.StartedAt = l.PID, l.SessionID, l.At
 		}
@@ -124,7 +126,7 @@ func (w *Worker) sessionOf(j *Journal) (folder, id string) {
 	active := j.activeStep()
 	for i := len(j.Steps) - 1; i >= 0; i-- {
 		r := j.Steps[i]
-		if j.Workflow.Steps[i].Kind != "prompt" || r.Dir == "" {
+		if j.Workflow.Steps[i].Kind != cronjob.StepPrompt || r.Dir == "" {
 			continue
 		}
 		launch := r.Launch

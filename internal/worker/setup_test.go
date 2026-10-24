@@ -8,6 +8,23 @@ import (
 	"testing"
 )
 
+func TestProfileDefaultAndStarterConfigShareTheDefaultCommand(t *testing.T) {
+	if got := (Profile{}).command(); got != DefaultCommand {
+		t.Fatalf("profile default = %q, want %q", got, DefaultCommand)
+	}
+	path := filepath.Join(t.TempDir(), "worker.toml")
+	if _, err := InitConfig(path, Setup{Binding: Binding{Project: "work", Checkout: t.TempDir()}, Executor: "box"}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Profiles["default"].Command; got != DefaultCommand {
+		t.Fatalf("starter config command = %q, want %q", got, DefaultCommand)
+	}
+}
+
 func TestAddProjectPutsTheCheckoutInsideAQuotedCheckoutsTable(t *testing.T) {
 	for _, header := range []string{`["checkouts"]`, `['checkouts']`} {
 		t.Run(header, func(t *testing.T) {

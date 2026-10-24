@@ -157,9 +157,7 @@ func (w *Worker) recoverRun(ctx context.Context, ps *projectState, uid string) {
 // hold records an uncertain outcome: kata will get `unknown` with the reason first (ADR-0005).
 func (w *Worker) hold(j *Journal, reason, detail string) error {
 	_, err := w.store.Update(j.RunUID, "held", func(j *Journal) error {
-		j.Outcome = &Outcome{Status: StatusUnknown, Hold: reason, Summary: reason + ": " + detail, At: w.clock.Now().UTC()}
-		j.Phase = PhaseFinished
-		return nil
+		return j.hold(reason, detail, w.clock.Now().UTC())
 	})
 	return err
 }
@@ -167,9 +165,7 @@ func (w *Worker) hold(j *Journal, reason, detail string) error {
 // preAdmissionHold ends a run before kata saw it: no observation, no Issue write, slot and gate released (ADR-0005).
 func (w *Worker) preAdmissionHold(j *Journal, reason, detail string) error {
 	_, err := w.store.Update(j.RunUID, "held-before-admission", func(j *Journal) error {
-		j.Outcome = &Outcome{Hold: reason, Summary: reason + ": " + detail, At: w.clock.Now().UTC()}
-		j.Phase = PhaseSettled
-		return nil
+		return j.holdBeforeAdmission(reason, detail, w.clock.Now().UTC())
 	})
 	return err
 }
@@ -213,7 +209,7 @@ func (w *Worker) admit(ctx context.Context, ps *projectState, j *Journal) error 
 	case err != nil:
 		return err
 	}
-	_, err = w.store.Update(j.RunUID, "admitted", func(j *Journal) error { j.Phase, j.Revision = PhaseAdmitted, run.Revision; return nil })
+	_, err = w.store.Update(j.RunUID, "admitted", func(j *Journal) error { return j.admit(run.Revision) })
 	return err
 }
 
@@ -352,14 +348,12 @@ func (w *Worker) launch(ctx context.Context, ps *projectState, j *Journal) error
 // failAttempt records an attempt that certainly never ran, so the failure is not uncertain: a prompt job's run fails,
 // a workflow step fails (and is retried when it has retries left).
 func (w *Worker) failAttempt(j *Journal, reason string) error {
-	outcome := j.withCarried(&Outcome{Status: StatusFailed, Summary: reason, At: w.clock.Now().UTC()})
+	outcome := j.withCarried(&Outcome{Status: StatusFailed, Summary: reason})
 	if j.Workflow != nil {
 		return w.concludeStep(j, outcome)
 	}
 	_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
-		j.Outcome = outcome
-		j.Phase = PhaseFinished
-		return nil
+		return j.finish(outcome, w.clock.Now().UTC())
 	})
 	return err
 }
@@ -441,8 +435,7 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 	exit.Unrecorded = lossOf(stdout.file, stderr.file)
 	if _, err := w.store.Update(j.RunUID, "exited", func(j *Journal) error {
 		result.StderrTail = tail
-		j.Exit, j.Result = exit, &result
-		return nil
+		return j.markExited(exit, &result)
 	}); err != nil {
 		return err
 	}
@@ -473,12 +466,7 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 	runtime.LockOSThread() // the parent-death signal follows the thread that started the child
 	defer runtime.UnlockOSThread()
 	if _, err := w.store.Update(j.RunUID, "launching", func(j *Journal) error {
-		if j.Cancel != nil {
-			return errRunCancelled
-		}
-		j.Phase = PhaseLaunching
-		j.Launch = nil // a record of an earlier attempt must not stand for this one's process
-		return nil
+		return j.markLaunching()
 	}); err != nil {
 		return nil, err
 	}
@@ -492,9 +480,7 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 	}
 	launch.SessionDir, launch.SessionID, launch.At = sessionDir, resumeID, w.clock.Now().UTC()
 	if _, err := w.store.Update(j.RunUID, "started", func(j *Journal) error {
-		j.Phase = PhaseStarted
-		j.Launch = launch
-		return nil
+		return j.markStarted(launch)
 	}); err != nil {
 		stopped, stop := context.WithCancel(ctx)
 		stop() // a context that has ended kills the group at once
@@ -576,9 +562,7 @@ func (w *Worker) conclude(ctx context.Context, j *Journal) error {
 		return w.concludeStep(j, outcome)
 	}
 	_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
-		outcome.At = w.clock.Now().UTC()
-		j.Outcome, j.Phase = outcome, PhaseFinished
-		return nil
+		return j.finish(outcome, w.clock.Now().UTC())
 	})
 	return err
 }
@@ -716,7 +700,7 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 	for _, why := range j.Inspections() {
 		w.opt.Log("run %s: needs inspection: %s", j.RunUID, why)
 	}
-	_, err := w.store.Update(j.RunUID, "settled", func(j *Journal) error { j.Phase = PhaseSettled; return nil })
+	_, err := w.store.Update(j.RunUID, "settled", func(j *Journal) error { return j.settle() })
 	return err
 }
 
@@ -734,7 +718,7 @@ func quietSuccess(j *Journal) bool {
 	}
 	for i, s := range j.Workflow.Steps {
 		step := j.Steps[i]
-		if s.Kind != "command" || step.State != StepSucceeded || step.Exit == nil || step.Exit.Code != 0 {
+		if s.Kind != cronjob.StepCommand || step.State != StepSucceeded || step.Exit == nil || step.Exit.Code != 0 {
 			return false
 		}
 	}
@@ -918,9 +902,7 @@ func (t *tailSink) close() { _ = t.file.Close() }
 func (w *Worker) notify(ctx context.Context, j *Journal) error {
 	finish := func(status, summary string) error {
 		_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
-			j.Outcome = &Outcome{Status: status, Summary: truncate(summary, maxSummaryBytes), At: w.clock.Now().UTC()}
-			j.Phase = PhaseFinished
-			return nil
+			return j.finish(&Outcome{Status: status, Summary: truncate(summary, maxSummaryBytes)}, w.clock.Now().UTC())
 		})
 		return err
 	}
