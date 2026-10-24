@@ -140,7 +140,7 @@ func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 		if filterTextField(&m.FilterForm) != nil {
 			return updateFilterText(m, KeyMsg{Text: " "})
 		}
-		return updateFilterForm(m, NextFilterChoice)
+		return filterStep(m, false), nil
 	case SaveFilterDefault:
 		return saveFilterDefault(m)
 	case ApplyFilters:
@@ -150,10 +150,6 @@ func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 		return snapshotChanged(m)
 	case CancelFilters:
 		m.FilterForm = FilterFormState{}
-	case NextFilterField:
-		cycleField(&m, 1)
-	case PreviousFilterField:
-		cycleField(&m, -1)
 	case ResetFilterForm:
 		status := m.FilterForm.Values.Status
 		m.FilterForm.Values = Filters{}
@@ -166,24 +162,28 @@ func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 		} else if choice := m.FilterForm.Values.value(m.FilterForm.Field); choice != nil {
 			*choice = ""
 		}
-	case NextFilterChoice, PreviousFilterChoice:
-		choices := m.FilterChoices(m.FilterForm.Field)
-		if choices == nil {
-			return m, nil
-		}
-		field := m.FilterForm.Values.value(m.FilterForm.Field)
-		index := 0
-		for i, value := range choices {
-			if value == *field {
-				index = i
-				break
-			}
-		}
-		step := 1
-		if action == PreviousFilterChoice {
-			step = len(choices) - 1
-		}
-		*field = choices[(index+step)%len(choices)]
 	}
 	return m, nil
+}
+
+// filterStep moves the focused choice field to its next choice, or the previous one when back, wrapping around; a text field has none.
+func filterStep(m Model, back bool) Model {
+	choices := m.FilterChoices(m.FilterForm.Field)
+	if choices == nil {
+		return m
+	}
+	field := m.FilterForm.Values.value(m.FilterForm.Field)
+	index := 0
+	for i, value := range choices {
+		if value == *field {
+			index = i
+			break
+		}
+	}
+	step := 1
+	if back {
+		step = len(choices) - 1
+	}
+	*field = choices[(index+step)%len(choices)]
+	return m
 }
