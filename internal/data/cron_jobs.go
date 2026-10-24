@@ -5,16 +5,14 @@ import (
 	"errors"
 	"net/http"
 	"slices"
-	"time"
 
 	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
+	"github.com/Dangerboi/tern-kata/internal/cronjobclient"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
-
-// progressKeyPrefix starts the metadata key of a native job's delivery state on its parent: cron.progress.<job uid>.
-const progressKeyPrefix = "cron.progress."
 
 // ListJobs reads the Cron jobs of the Project, the archived ones too when asked, each native one with its parent. Kata answers no
 // job of an archived Project, so there the answer is the Project's own state: ProjectArchived and no jobs.
@@ -144,10 +142,10 @@ type parentReader struct {
 	read      map[string]readParent
 }
 
-// translate is the one place kata's Cron job becomes the model's. A native job comes with its parent: its status and the job's
-// own progress key.
+// translate is kata's Cron job as the model holds it. A native job comes with its parent: its status and the job's own
+// progress key.
 func (p *parentReader) translate(ctx context.Context, wire g.CronJob) (model.CronJob, error) {
-	job := translateJob(wire)
+	job := model.CronJob{Job: cronjobclient.Job(wire)}
 	if !job.Native() {
 		return job, nil
 	}
@@ -156,7 +154,9 @@ func (p *parentReader) translate(ctx context.Context, wire g.CronJob) (model.Cro
 		return model.CronJob{}, err
 	}
 	job.Parent = &issue.parent
-	job.Parent.Progress = progressOf(issue.metadata[progressKeyPrefix+job.UID])
+	if progress, ok := cronjob.ReadProgress(issue.metadata[cronjob.ProgressKeyPrefix+job.UID]); ok {
+		job.Parent.Progress = &progress
+	}
 	return job, nil
 }
 
@@ -213,70 +213,4 @@ func cronChildren(wire []g.IssueOut) map[string][]model.CronChild {
 		slices.SortStableFunc(children, func(a, b model.CronChild) int { return b.When().Compare(a.When()) })
 	}
 	return byJob
-}
-
-// translateJob is kata's Cron job as the model holds it, without the parent.
-func translateJob(j g.CronJob) model.CronJob {
-	d := j.Definition
-	def := model.CronDefinition{
-		Enabled: d.Enabled,
-		Trigger: model.CronTrigger{
-			Kind: d.Trigger.Kind, Cron: orEmpty(d.Trigger.Cron), IntervalSeconds: orZero(d.Trigger.IntervalSeconds), At: orEmpty(d.Trigger.At),
-			IssueUID: orEmpty(d.Trigger.IssueUID), LeadSeconds: orZero(d.Trigger.LeadSeconds), Timezone: orEmpty(d.Trigger.Timezone),
-		},
-		Action: model.CronAction{
-			Kind: d.Action.Kind, Message: orEmpty(d.Action.Message), Recipient: orEmpty(d.Action.Recipient),
-			Prompt: orEmpty(d.Action.Prompt), WorkflowUID: orEmpty(d.Action.WorkflowUID),
-		},
-		Overlap: d.Overlap, Catchup: d.Catchup, GraceSeconds: orZero(d.GraceSeconds), TimeoutSeconds: orZero(d.TimeoutSeconds),
-		CheckoutKey: orEmpty(d.CheckoutKey), SecretRefs: d.SecretRefs, Options: d.Options,
-	}
-	def.Profile, _ = d.Options["profile"].(string)
-	if i := d.Issue; i != nil {
-		def.Issue = &model.CronIssuePolicy{
-			Kind: i.Kind, UID: orEmpty(i.UID), ParentUID: orEmpty(i.ParentUID), Title: orEmpty(i.Title), Body: orEmpty(i.Body),
-			ScheduledOffsetSeconds: i.ScheduledOffsetSeconds, DeadlineOffsetSeconds: i.DeadlineOffsetSeconds,
-		}
-	}
-	return model.CronJob{
-		UID: j.UID, Name: j.Name, Author: j.Author, Revision: j.Revision, DefinitionEventUID: j.DefinitionEventUID,
-		CreatedAt: j.CreatedAt, UpdatedAt: j.UpdatedAt, DeletedAt: j.DeletedAt, Definition: def,
-	}
-}
-
-// progressOf reads a cron.progress.<job uid> value. It reads only the anchor and through members, which kata may extend; nil
-// when the value is missing or malformed.
-func progressOf(value any) *model.CronProgress {
-	fields, ok := value.(map[string]any)
-	if !ok {
-		return nil
-	}
-	anchor, err := time.Parse(time.RFC3339Nano, stringOf(fields["anchor"]))
-	if err != nil {
-		return nil
-	}
-	through, err := time.Parse(time.RFC3339Nano, stringOf(fields["through"]))
-	if err != nil {
-		return nil
-	}
-	return &model.CronProgress{Anchor: anchor, Through: through}
-}
-
-func stringOf(v any) string {
-	s, _ := v.(string)
-	return s
-}
-
-func orEmpty(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
-}
-
-func orZero(n *int64) int64 {
-	if n == nil {
-		return 0
-	}
-	return *n
 }

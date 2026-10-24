@@ -7,11 +7,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"go.kenn.io/kata/pkg/client"
 )
 
-func (f *jobsFixture) create(t *testing.T, name string, def model.CronDefinition, triggerRef, reportRef string) model.JobWritten {
+func (f *jobsFixture) create(t *testing.T, name string, def cronjob.Definition, triggerRef, reportRef string) model.JobWritten {
 	t.Helper()
 	uid, err := client.NewCronUID()
 	if err != nil {
@@ -29,67 +30,67 @@ func TestGatewayCreatesAdapterJobsKataAcceptsAndEachRoundTrips(t *testing.T) {
 		t.Fatal("no workflow to run")
 	}
 
-	prompt := model.CronDefinition{
+	prompt := cronjob.Definition{
 		Enabled: true, Overlap: "forbid", Catchup: model.CatchupSkip, GraceSeconds: 300, TimeoutSeconds: 1800,
-		Trigger:     model.CronTrigger{Kind: model.TriggerCron, Cron: "0 9 * * 1-5", Timezone: "Europe/Berlin"},
-		Action:      model.CronAction{Kind: model.ActionExecute, Prompt: "triage the inbox\nthen report"},
-		Issue:       &model.CronIssuePolicy{Kind: model.IssuePerRun, Title: "Triage", Body: "Look at everything new", ScheduledOffsetSeconds: new(int64(86400)), DeadlineOffsetSeconds: new(int64(-3600))},
+		Trigger:     cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 9 * * 1-5", Timezone: "Europe/Berlin"},
+		Action:      cronjob.Action{Kind: cronjob.ActionExecute, Prompt: "triage the inbox\nthen report"},
+		Issue:       &cronjob.IssuePolicy{Kind: cronjob.IssuePerRun, Title: "Triage", Body: "Look at everything new", ScheduledOffsetSeconds: new(int64(86400)), DeadlineOffsetSeconds: new(int64(-3600))},
 		CheckoutKey: "repo", SecretRefs: map[string]string{"GH_TOKEN": "github"}, Options: map[string]any{"profile": "fast", "effort": "high"}, Profile: "fast",
 	}
-	byWorkflow := model.CronDefinition{
+	byWorkflow := cronjob.Definition{
 		Enabled: false, Overlap: "allow", Catchup: model.CatchupLatest,
-		Trigger: model.CronTrigger{Kind: model.TriggerOnce, At: "2026-11-01T09:00:00+01:00"},
-		Action:  model.CronAction{Kind: model.ActionExecute, WorkflowUID: workflow.UID},
-		Issue:   &model.CronIssuePolicy{Kind: model.IssueExisting},
+		Trigger: cronjob.Trigger{Kind: cronjob.TriggerOnce, At: "2026-11-01T09:00:00+01:00"},
+		Action:  cronjob.Action{Kind: cronjob.ActionExecute, WorkflowUID: workflow.UID},
+		Issue:   &cronjob.IssuePolicy{Kind: cronjob.IssueExisting},
 	}
-	notify := model.CronDefinition{
+	notify := cronjob.Definition{
 		Enabled: true, Overlap: "allow", Catchup: model.CatchupAll,
-		Trigger: model.CronTrigger{Kind: model.TriggerInterval, IntervalSeconds: 30},
-		Action:  model.CronAction{Kind: model.ActionNotify, Recipient: "alice/reviewer", Message: "The report is due"},
-		Issue:   &model.CronIssuePolicy{Kind: model.IssueExisting},
+		Trigger: cronjob.Trigger{Kind: cronjob.TriggerInterval, IntervalSeconds: 30},
+		Action:  cronjob.Action{Kind: cronjob.ActionNotify, Recipient: "alice/reviewer", Message: "The report is due"},
+		Issue:   &cronjob.IssuePolicy{Kind: cronjob.IssueExisting},
 	}
-	deadline := model.CronDefinition{
+	deadline := cronjob.Definition{
 		Enabled: true, Overlap: "allow", Catchup: model.CatchupLatest,
-		Trigger: model.CronTrigger{Kind: model.TriggerIssueDeadline, LeadSeconds: 7200},
-		Action:  model.CronAction{Kind: model.ActionNotify, Recipient: "current-owner-or-author"},
+		Trigger: cronjob.Trigger{Kind: cronjob.TriggerIssueDeadline, LeadSeconds: 7200},
+		Action:  cronjob.Action{Kind: cronjob.ActionNotify, Recipient: "current-owner-or-author"},
 	}
-	scheduled := model.CronDefinition{
+	scheduled := cronjob.Definition{
 		Enabled: true, Overlap: "forbid", Catchup: model.CatchupLatest,
-		Trigger: model.CronTrigger{Kind: model.TriggerIssueScheduled},
-		Action:  model.CronAction{Kind: model.ActionExecute, Prompt: "start on the day"},
-		Issue:   &model.CronIssuePolicy{Kind: model.IssueExisting},
+		Trigger: cronjob.Trigger{Kind: cronjob.TriggerIssueScheduled},
+		Action:  cronjob.Action{Kind: cronjob.ActionExecute, Prompt: "start on the day"},
+		Issue:   &cronjob.IssuePolicy{Kind: cronjob.IssueExisting},
 	}
-	notifyOther := model.CronDefinition{
+	notifyOther := cronjob.Definition{
 		Enabled: true, Overlap: "allow", Catchup: model.CatchupLatest,
-		Trigger: model.CronTrigger{Kind: model.TriggerIssueDeadline},
-		Action:  model.CronAction{Kind: model.ActionNotify, Recipient: "current-owner-or-author"},
-		Issue:   &model.CronIssuePolicy{Kind: model.IssueExisting},
+		Trigger: cronjob.Trigger{Kind: cronjob.TriggerIssueDeadline},
+		Action:  cronjob.Action{Kind: cronjob.ActionNotify, Recipient: "current-owner-or-author"},
+		Issue:   &cronjob.IssuePolicy{Kind: cronjob.IssueExisting},
 	}
-	manual := model.CronDefinition{
+	manual := cronjob.Definition{
 		Enabled: true, Overlap: "forbid", Catchup: model.CatchupLatest,
-		Trigger: model.CronTrigger{Kind: model.TriggerManual},
-		Action:  model.CronAction{Kind: model.ActionExecute, Prompt: "on demand"},
-		Issue:   &model.CronIssuePolicy{Kind: model.IssuePerRun, Title: "On demand"},
+		Trigger: cronjob.Trigger{Kind: cronjob.TriggerManual},
+		Action:  cronjob.Action{Kind: cronjob.ActionExecute, Prompt: "on demand"},
+		Issue:   &cronjob.IssuePolicy{Kind: cronjob.IssuePerRun, Title: "On demand"},
 	}
 
 	for _, tt := range []struct {
 		name string
-		def  model.CronDefinition
+		def  cronjob.Definition
 		// ref is the Issue the trigger or the policy names; report is a notify job's own Issue when its trigger fires on another's.
 		ref, report string
 		kind        string
-		wantD       func(model.CronDefinition) model.CronDefinition
+		wantD       func(cronjob.Definition) cronjob.Definition
 	}{
 		{"prompt", prompt, "", "", model.KindAgentPrompt, nil},
-		{"workflow", byWorkflow, issue, "", model.KindWorkflow, func(d model.CronDefinition) model.CronDefinition { d.Issue.UID = issue; return d }},
-		{"notify", notify, issue, "", model.KindNotify, func(d model.CronDefinition) model.CronDefinition { d.Issue.UID = issue; return d }},
-		{"deadline", deadline, issue, "", model.KindNotify, func(d model.CronDefinition) model.CronDefinition { d.Trigger.IssueUID = issue; return d }},
-		{"scheduled", scheduled, issue, "", model.KindAgentPrompt, func(d model.CronDefinition) model.CronDefinition {
+		{"workflow", byWorkflow, issue, "", model.KindWorkflow, func(d cronjob.Definition) cronjob.Definition { d.Issue.UID = issue; return d }},
+		{"notify", notify, issue, "", model.KindNotify, func(d cronjob.Definition) cronjob.Definition { d.Issue.UID = issue; return d }},
+		{"deadline", deadline, issue, "", model.KindNotify, func(d cronjob.Definition) cronjob.Definition { d.Trigger.IssueUID = issue; return d }},
+		{"scheduled", scheduled, issue, "", model.KindAgentPrompt, func(d cronjob.Definition) cronjob.Definition {
 			d.Trigger.IssueUID = issue
 			d.Issue.UID = issue
 			return d
 		}},
-		{"deadline of one Issue notifying another", notifyOther, issue, other, model.KindNotify, func(d model.CronDefinition) model.CronDefinition {
+		{"deadline of one Issue notifying another", notifyOther, issue, other, model.KindNotify, func(d cronjob.Definition) cronjob.Definition {
 			d.Trigger.IssueUID = issue
 			d.Issue.UID = other
 			return d
@@ -122,7 +123,7 @@ func TestGatewayCreatesAdapterJobsKataAcceptsAndEachRoundTrips(t *testing.T) {
 	}
 }
 
-func copyDefinition(d model.CronDefinition) model.CronDefinition {
+func copyDefinition(d cronjob.Definition) cronjob.Definition {
 	if d.Issue != nil {
 		p := *d.Issue
 		d.Issue = &p
@@ -134,16 +135,16 @@ func TestGatewayRefusesAnAdapterJobKataRejectsAndNamesTheIssueThatDoesNotExist(t
 	f := newJobsFixture(t)
 	issue := createIssue(t, f.gateway, f.workspace, f.demo, "Release 1.0")
 
-	execute := model.CronDefinition{
+	execute := cronjob.Definition{
 		Enabled: true, Overlap: "forbid", Catchup: model.CatchupLatest,
-		Trigger: model.CronTrigger{Kind: model.TriggerIssueDeadline},
-		Action:  model.CronAction{Kind: model.ActionExecute, Prompt: "run"},
-		Issue:   &model.CronIssuePolicy{Kind: model.IssueExisting},
+		Trigger: cronjob.Trigger{Kind: cronjob.TriggerIssueDeadline},
+		Action:  cronjob.Action{Kind: cronjob.ActionExecute, Prompt: "run"},
+		Issue:   &cronjob.IssuePolicy{Kind: cronjob.IssueExisting},
 	}
 	if refused := f.create(t, "Deadline run", execute, issue, ""); refused.Err == nil || !strings.Contains(refused.Err.Error(), "notification-only") {
 		t.Fatalf("an executing deadline job: %+v", refused)
 	}
-	execute.Trigger = model.CronTrigger{Kind: model.TriggerIssueScheduled}
+	execute.Trigger = cronjob.Trigger{Kind: cronjob.TriggerIssueScheduled}
 	if refused := f.create(t, "Scheduled run", execute, "zzzz", ""); refused.Err == nil || !strings.Contains(refused.Err.Error(), `Target Issue: no Issue "zzzz"`) {
 		t.Fatalf("an Issue that does not exist: %+v", refused)
 	}

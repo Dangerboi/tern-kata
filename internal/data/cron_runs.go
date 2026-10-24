@@ -8,6 +8,7 @@ import (
 	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjobclient"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
@@ -174,11 +175,11 @@ func (n runNames) translate(wire g.CronRun) model.Run {
 // translateRun is kata's Run as the model holds it, without the names its uids resolve to.
 func translateRun(w g.CronRun) model.Run {
 	return model.Run{
-		UID: w.UID, JobUID: orEmpty(w.JobUID), DefinitionEventUID: orEmpty(w.DefinitionEventUID),
-		WorkflowUID: orEmpty(w.WorkflowUID), WorkflowDefinitionEventUID: orEmpty(w.WorkflowDefinitionEventUID),
-		OccurrenceKey: orEmpty(w.OccurrenceKey), IssueUID: orEmpty(w.IssueUID),
-		Actor: w.Actor, Teammate: orEmpty(w.Teammate), ExecutorLabel: orEmpty(w.ExecutorLabel),
-		Status: model.RunStatus(w.Status), Message: orEmpty(w.Summary.Message),
+		UID: w.UID, JobUID: cronjobclient.Str(w.JobUID), DefinitionEventUID: cronjobclient.Str(w.DefinitionEventUID),
+		WorkflowUID: cronjobclient.Str(w.WorkflowUID), WorkflowDefinitionEventUID: cronjobclient.Str(w.WorkflowDefinitionEventUID),
+		OccurrenceKey: cronjobclient.Str(w.OccurrenceKey), IssueUID: cronjobclient.Str(w.IssueUID),
+		Actor: w.Actor, Teammate: cronjobclient.Str(w.Teammate), ExecutorLabel: cronjobclient.Str(w.ExecutorLabel),
+		Status: model.RunStatus(w.Status), Message: cronjobclient.Str(w.Summary.Message),
 		InputTokens: w.Summary.InputTokens, OutputTokens: w.Summary.OutputTokens,
 		Revision: w.Revision, CreatedAt: w.CreatedAt, UpdatedAt: w.UpdatedAt, StartedAt: w.StartedAt, EndedAt: w.EndedAt,
 	}

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
@@ -149,7 +150,7 @@ func TestJobCardShowsTheFieldsOfEachTriggerAndOffersTheDeadlineToNotifyOnly(t *t
 	}
 	// Moving to a kind that has no deadline takes the trigger to the kind's first.
 	s = choose(t, s, model.JobFieldKind, kindPrompt)
-	if got := s.Model.JobForm.Trigger; got != model.TriggerCron {
+	if got := s.Model.JobForm.Trigger; got != cronjob.TriggerCron {
 		t.Errorf("trigger after leaving notify for a prompt: %q", got)
 	}
 }
@@ -173,12 +174,12 @@ func TestAnAgentPromptJobSavesWithItsMultiLinePromptProfileCheckoutSecretsAndIss
 	if save.Name != "Adapter job" || save.ParentRef != "" || save.IssueRef != "" || save.ExpectedEventUID != "" {
 		t.Fatalf("create %+v", save)
 	}
-	if d.Action != (model.CronAction{Kind: model.ActionExecute, Prompt: "triage the inbox\nthen report"}) || d.Profile != "fast" || d.Options["profile"] != "fast" || d.CheckoutKey != "repo" ||
+	if d.Action != (cronjob.Action{Kind: cronjob.ActionExecute, Prompt: "triage the inbox\nthen report"}) || d.Profile != "fast" || d.Options["profile"] != "fast" || d.CheckoutKey != "repo" ||
 		!maps.Equal(d.SecretRefs, map[string]string{"GH_TOKEN": "github", "NPM": "npm-token"}) || d.Overlap != "allow" || d.Catchup != model.CatchupSkip || d.GraceSeconds != 300 || d.TimeoutSeconds != 1800 ||
-		d.Trigger != (model.CronTrigger{Kind: model.TriggerCron, Cron: "0 9 * * *", Timezone: "UTC"}) || !d.Enabled {
+		d.Trigger != (cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 9 * * *", Timezone: "UTC"}) || !d.Enabled {
 		t.Fatalf("definition %+v", d)
 	}
-	if p := d.Issue; p == nil || p.Kind != model.IssuePerRun || p.Title != "Triage run" || p.Body != "Look at everything new" || p.UID != "" ||
+	if p := d.Issue; p == nil || p.Kind != cronjob.IssuePerRun || p.Title != "Triage run" || p.Body != "Look at everything new" || p.UID != "" ||
 		p.ScheduledOffsetSeconds == nil || *p.ScheduledOffsetSeconds != day || p.DeadlineOffsetSeconds == nil || *p.DeadlineOffsetSeconds != threeDays {
 		t.Fatalf("issue policy %+v", d.Issue)
 	}
@@ -215,7 +216,7 @@ func TestAWorkflowJobPicksFromTheProjectsLiveWorkflows(t *testing.T) {
 	s = choose(t, s, model.JobFieldWorkflow, 1)
 	s = set(t, s, model.JobFieldTitle, "Nightly run")
 	d := saved(t, s).Definition
-	if d.Action != (model.CronAction{Kind: model.ActionExecute, WorkflowUID: "W2"}) {
+	if d.Action != (cronjob.Action{Kind: cronjob.ActionExecute, WorkflowUID: "W2"}) {
 		t.Fatalf("action %+v", d.Action)
 	}
 }
@@ -280,7 +281,7 @@ func TestOnceAndIssueDateTriggersSaveAndPreviewInWords(t *testing.T) {
 	s = set(t, s, model.JobFieldAt, "2026-10-09T09:30:00+02:00")
 	wantText(t, "once preview", cardText(t, s), "once at 2026-10-09 09:30 +02:00", "Fri 2026-10-09 07:30 UTC")
 	d := saved(t, s).Definition
-	if d.Trigger != (model.CronTrigger{Kind: model.TriggerOnce, At: "2026-10-09T09:30:00+02:00"}) {
+	if d.Trigger != (cronjob.Trigger{Kind: cronjob.TriggerOnce, At: "2026-10-09T09:30:00+02:00"}) {
 		t.Fatalf("trigger %+v", d.Trigger)
 	}
 
@@ -289,7 +290,7 @@ func TestOnceAndIssueDateTriggersSaveAndPreviewInWords(t *testing.T) {
 	if strings.Contains(cardText(t, s), "Next runs") {
 		t.Error("a manual trigger lists next runs")
 	}
-	if d := saved(t, s).Definition; d.Trigger != (model.CronTrigger{Kind: model.TriggerManual}) {
+	if d := saved(t, s).Definition; d.Trigger != (cronjob.Trigger{Kind: cronjob.TriggerManual}) {
 		t.Fatalf("trigger %+v", d.Trigger)
 	}
 
@@ -297,7 +298,7 @@ func TestOnceAndIssueDateTriggersSaveAndPreviewInWords(t *testing.T) {
 	s = set(t, s, model.JobFieldIssue, "#ab12")
 	wantText(t, "issue date preview", cardText(t, s), "at the Issue's scheduled date")
 	save := saved(t, s)
-	if save.Definition.Trigger.Kind != model.TriggerIssueScheduled || save.IssueRef != "ab12" || save.Definition.Issue.Kind != model.IssuePerRun {
+	if save.Definition.Trigger.Kind != cronjob.TriggerIssueScheduled || save.IssueRef != "ab12" || save.Definition.Issue.Kind != cronjob.IssuePerRun {
 		t.Fatalf("save %+v", save)
 	}
 
@@ -307,8 +308,8 @@ func TestOnceAndIssueDateTriggersSaveAndPreviewInWords(t *testing.T) {
 	wantText(t, "deadline preview", cardText(t, s), "2 days before the Issue's deadline")
 	save = saved(t, s)
 	d = save.Definition
-	if d.Trigger != (model.CronTrigger{Kind: model.TriggerIssueDeadline, LeadSeconds: 172800}) || save.IssueRef != "ab12" || d.Issue != nil ||
-		d.Action != (model.CronAction{Kind: model.ActionNotify, Recipient: "current-owner-or-author"}) || d.Overlap != "allow" {
+	if d.Trigger != (cronjob.Trigger{Kind: cronjob.TriggerIssueDeadline, LeadSeconds: 172800}) || save.IssueRef != "ab12" || d.Issue != nil ||
+		d.Action != (cronjob.Action{Kind: cronjob.ActionNotify, Recipient: "current-owner-or-author"}) || d.Overlap != "allow" {
 		t.Fatalf("deadline notify %+v ref %q", d, save.IssueRef)
 	}
 }
@@ -320,7 +321,7 @@ func TestAnExistingIssuePolicyNamesTheIssueEveryRunBelongsTo(t *testing.T) {
 	}
 	s = set(t, s, model.JobFieldIssue, "ab12")
 	save := saved(t, s)
-	if save.IssueRef != "ab12" || save.Definition.Issue == nil || save.Definition.Issue.Kind != model.IssueExisting || save.Definition.Issue.Title != "" {
+	if save.IssueRef != "ab12" || save.Definition.Issue == nil || save.Definition.Issue.Kind != cronjob.IssueExisting || save.Definition.Issue.Title != "" {
 		t.Fatalf("save %+v issue %+v", save, save.Definition.Issue)
 	}
 }
@@ -329,7 +330,7 @@ func TestANotifyJobNotifiesAnExistingIssue(t *testing.T) {
 	s := adapterCard(t, kindNotify)
 	s = set(t, s, model.JobFieldIssue, "ab12")
 	d := saved(t, s).Definition
-	if d.Action != (model.CronAction{Kind: model.ActionNotify, Recipient: "current-owner-or-author"}) || d.Issue == nil || d.Issue.Kind != model.IssueExisting ||
+	if d.Action != (cronjob.Action{Kind: cronjob.ActionNotify, Recipient: "current-owner-or-author"}) || d.Issue == nil || d.Issue.Kind != cronjob.IssueExisting ||
 		d.Overlap != "allow" || d.Catchup != model.CatchupLatest || d.CheckoutKey != "" || d.TimeoutSeconds != 0 || d.SecretRefs != nil {
 		t.Fatalf("definition %+v issue %+v", d, d.Issue)
 	}
@@ -466,24 +467,24 @@ func TestEditingAnAgentPromptJobPrefillsEveryFieldAndKeepsTheOptionsItDoesNotEdi
 
 func TestEditingAWorkflowJobAndANotifyJobPrefillsThem(t *testing.T) {
 	workflow := promptJob("J3", "Release")
-	workflow.Definition.Action = model.CronAction{Kind: model.ActionExecute, WorkflowUID: "W1"}
+	workflow.Definition.Action = cronjob.Action{Kind: cronjob.ActionExecute, WorkflowUID: "W1"}
 	if f := editedJob(t, workflow).Model.JobForm; !f.JobChoices(model.JobFieldWorkflow)[0].Chosen {
 		t.Fatalf("the workflow picker does not hold the job's workflow: %+v", f.JobChoices(model.JobFieldWorkflow))
 	}
 	wantText(t, "workflow card", cardText(t, editedJob(t, workflow)), "Workflow", "Release")
 
 	notify := promptJob("J4", "Remind")
-	notify.Definition.Action = model.CronAction{Kind: model.ActionNotify, Recipient: "alice", Message: "Look"}
-	notify.Definition.Issue = &model.CronIssuePolicy{Kind: model.IssueExisting, UID: "ISSUE1"}
+	notify.Definition.Action = cronjob.Action{Kind: cronjob.ActionNotify, Recipient: "alice", Message: "Look"}
+	notify.Definition.Issue = &cronjob.IssuePolicy{Kind: cronjob.IssueExisting, UID: "ISSUE1"}
 	s := editedJob(t, notify)
 	wantText(t, "notify card", cardText(t, s), "Notify", "ISSUE1", "alice", "Look")
-	if save := saved(t, s); save.IssueRef != "ISSUE1" || save.Definition.Issue.Kind != model.IssueExisting || save.ExpectedEventUID != notify.DefinitionEventUID {
+	if save := saved(t, s); save.IssueRef != "ISSUE1" || save.Definition.Issue.Kind != cronjob.IssueExisting || save.ExpectedEventUID != notify.DefinitionEventUID {
 		t.Fatalf("save %+v", save)
 	}
 
 	dated := promptJob("J5", "On the day")
-	dated.Definition.Trigger = model.CronTrigger{Kind: model.TriggerIssueDeadline, IssueUID: "ISSUE2", LeadSeconds: 3600}
-	dated.Definition.Action = model.CronAction{Kind: model.ActionNotify, Recipient: "current-owner-or-author"}
+	dated.Definition.Trigger = cronjob.Trigger{Kind: cronjob.TriggerIssueDeadline, IssueUID: "ISSUE2", LeadSeconds: 3600}
+	dated.Definition.Action = cronjob.Action{Kind: cronjob.ActionNotify, Recipient: "current-owner-or-author"}
 	dated.Definition.Issue = nil
 	s = editedJob(t, dated)
 	wantText(t, "deadline card", cardText(t, s), "ISSUE2", "3600", "1 hour before the Issue's deadline")
@@ -494,13 +495,13 @@ func TestEditingAWorkflowJobAndANotifyJobPrefillsThem(t *testing.T) {
 
 func TestEditingADeadlineNotifyJobThatNotifiesAnotherIssueKeepsBothIssues(t *testing.T) {
 	job := promptJob("J5", "On the day")
-	job.Definition.Trigger = model.CronTrigger{Kind: model.TriggerIssueDeadline, IssueUID: "ISSUE2", LeadSeconds: 3600}
-	job.Definition.Action = model.CronAction{Kind: model.ActionNotify, Recipient: "current-owner-or-author"}
-	job.Definition.Issue = &model.CronIssuePolicy{Kind: model.IssueExisting, UID: "ISSUE3"}
+	job.Definition.Trigger = cronjob.Trigger{Kind: cronjob.TriggerIssueDeadline, IssueUID: "ISSUE2", LeadSeconds: 3600}
+	job.Definition.Action = cronjob.Action{Kind: cronjob.ActionNotify, Recipient: "current-owner-or-author"}
+	job.Definition.Issue = &cronjob.IssuePolicy{Kind: cronjob.IssueExisting, UID: "ISSUE3"}
 	s := editedJob(t, job)
 	wantText(t, "card", cardText(t, s), "ISSUE2", "ISSUE3")
 	save := saved(t, s)
-	if save.IssueRef != "ISSUE2" || save.ReportRef != "ISSUE3" || save.Definition.Issue == nil || save.Definition.Issue.Kind != model.IssueExisting {
+	if save.IssueRef != "ISSUE2" || save.ReportRef != "ISSUE3" || save.Definition.Issue == nil || save.Definition.Issue.Kind != cronjob.IssueExisting {
 		t.Fatalf("save %+v issue %+v, want the trigger's Issue and the notified one kept apart", save, save.Definition.Issue)
 	}
 	// Blank, it falls back to the trigger's own Issue: the policy goes.
@@ -511,7 +512,7 @@ func TestEditingADeadlineNotifyJobThatNotifiesAnotherIssueKeepsBothIssues(t *tes
 
 func TestAWorkflowJobWhoseWorkflowWasArchivedShowsItAndRefusesToSave(t *testing.T) {
 	job := promptJob("J3", "Release")
-	job.Definition.Action = model.CronAction{Kind: model.ActionExecute, WorkflowUID: "W3"}
+	job.Definition.Action = cronjob.Action{Kind: cronjob.ActionExecute, WorkflowUID: "W3"}
 	s := editedJob(t, job)
 	wantText(t, "held workflow", cardText(t, s), "W3 (no such workflow)")
 	out := step(t, s, key("ctrl+o"))
@@ -547,7 +548,7 @@ func TestASavedAdapterJobJoinsTheListAndTheNewerJobKeepsThePickers(t *testing.T)
 func TestAnAdapterIntervalCountsFromTheJobsCreationInTheRowAndThePreview(t *testing.T) {
 	// Created at 08:00, every 90 minutes: ticks at 09:30, 11:00, 12:30 ... and the Pane's clock is 12:00.
 	job := promptJob("J2", "Triage")
-	job.Definition.Trigger = model.CronTrigger{Kind: model.TriggerInterval, IntervalSeconds: 5400}
+	job.Definition.Trigger = cronjob.Trigger{Kind: cronjob.TriggerInterval, IntervalSeconds: 5400}
 	s := jobsPane(t, 160, job)
 	wantText(t, "adapter job row", jobCardText(t, s, "J2"), "every 90 minutes", "next 12:30")
 

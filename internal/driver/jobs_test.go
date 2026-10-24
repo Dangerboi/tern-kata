@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
@@ -15,7 +16,7 @@ var (
 	jobAnchor = time.Date(2026, 10, 8, 8, 0, 0, 0, time.UTC)
 	jobParent = func(status string, deleted bool) *model.CronJobParent {
 		return &model.CronJobParent{UID: "parent-a", ShortID: "pa11", Title: "Weekly report", Status: status, Deleted: deleted,
-			Progress: &model.CronProgress{Anchor: jobAnchor, Through: now}}
+			Progress: &cronjob.Progress{Anchor: jobAnchor, Through: now}}
 	}
 )
 
@@ -23,11 +24,11 @@ var (
 func nativeJob(uid, name string, parent *model.CronJobParent) model.CronJob {
 	return model.CronJob{
 		UID: uid, Name: name, Author: "tester", Revision: 2, CreatedAt: jobAnchor, UpdatedAt: jobAnchor,
-		Definition: model.CronDefinition{
+		Definition: cronjob.Definition{
 			Enabled: true, Overlap: "allow", Catchup: "all",
-			Trigger: model.CronTrigger{Kind: model.TriggerInterval, IntervalSeconds: 3600},
-			Action:  model.CronAction{Kind: model.ActionNotify, Recipient: "current-owner-or-author"},
-			Issue:   &model.CronIssuePolicy{Kind: model.IssuePerRun, ParentUID: "parent-a", Title: "Tick", Body: "Write the report"},
+			Trigger: cronjob.Trigger{Kind: cronjob.TriggerInterval, IntervalSeconds: 3600},
+			Action:  cronjob.Action{Kind: cronjob.ActionNotify, Recipient: "current-owner-or-author"},
+			Issue:   &cronjob.IssuePolicy{Kind: cronjob.IssuePerRun, ParentUID: "parent-a", Title: "Tick", Body: "Write the report"},
 		},
 		Parent: parent,
 	}
@@ -37,11 +38,11 @@ func nativeJob(uid, name string, parent *model.CronJobParent) model.CronJob {
 func promptJob(uid, name string) model.CronJob {
 	return model.CronJob{
 		UID: uid, Name: name, Author: "tester", Revision: 1, CreatedAt: jobAnchor, UpdatedAt: jobAnchor,
-		Definition: model.CronDefinition{
+		Definition: cronjob.Definition{
 			Enabled: true, Overlap: "forbid", Catchup: "skip", GraceSeconds: 60, Profile: "fast",
-			Trigger: model.CronTrigger{Kind: model.TriggerCron, Cron: "0 9 * * 1-5", Timezone: "Europe/Berlin"},
-			Action:  model.CronAction{Kind: model.ActionExecute, Prompt: "triage the inbox\nthen report"},
-			Issue:   &model.CronIssuePolicy{Kind: model.IssuePerRun, Title: "Triage"},
+			Trigger: cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 9 * * 1-5", Timezone: "Europe/Berlin"},
+			Action:  cronjob.Action{Kind: cronjob.ActionExecute, Prompt: "triage the inbox\nthen report"},
+			Issue:   &cronjob.IssuePolicy{Kind: cronjob.IssuePerRun, Title: "Triage"},
 		},
 	}
 }
@@ -142,7 +143,7 @@ func TestJobsPageRowsShowStateNameKindScheduleProfileAndNextRun(t *testing.T) {
 
 func TestJobsPageLeavesOutWhatItCannotWorkOut(t *testing.T) {
 	odd := promptJob("J3", "Odd")
-	odd.Definition.Trigger = model.CronTrigger{Kind: model.TriggerCron, Cron: "not a schedule"}
+	odd.Definition.Trigger = cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "not a schedule"}
 	odd.Definition.Profile = ""
 	text := jobCardText(t, jobsPane(t, 160, odd), "J3")
 	for _, left := range []string{"next", "profile", "every", "Europe"} {
@@ -393,14 +394,14 @@ func TestJobsPageRowsShowTheLatestRunOrChildAndTheInspectorTheRecentOnes(t *test
 
 func TestJobsPageWarnsOfAnAdapterJobMakingMoreThanADayOfIssuesPerDay(t *testing.T) {
 	everyMinute := promptJob("J1", "Chatty")
-	everyMinute.Definition.Trigger = model.CronTrigger{Kind: model.TriggerInterval, IntervalSeconds: 60}
+	everyMinute.Definition.Trigger = cronjob.Trigger{Kind: cronjob.TriggerInterval, IntervalSeconds: 60}
 	existing := promptJob("J4", "Reports to one Issue")
-	existing.Definition.Trigger = model.CronTrigger{Kind: model.TriggerInterval, IntervalSeconds: 60}
-	existing.Definition.Issue = &model.CronIssuePolicy{Kind: model.IssueExisting, UID: "parent-a"}
+	existing.Definition.Trigger = cronjob.Trigger{Kind: cronjob.TriggerInterval, IntervalSeconds: 60}
+	existing.Definition.Issue = &cronjob.IssuePolicy{Kind: cronjob.IssueExisting, UID: "parent-a"}
 	native := nativeJob("N1", "Native", jobParent("open", false))
-	native.Definition.Trigger = model.CronTrigger{Kind: model.TriggerInterval, IntervalSeconds: 60}
+	native.Definition.Trigger = cronjob.Trigger{Kind: cronjob.TriggerInterval, IntervalSeconds: 60}
 	disabled := promptJob("J5", "Switched off")
-	disabled.Definition.Trigger = model.CronTrigger{Kind: model.TriggerInterval, IntervalSeconds: 60}
+	disabled.Definition.Trigger = cronjob.Trigger{Kind: cronjob.TriggerInterval, IntervalSeconds: 60}
 	disabled.Definition.Enabled = false
 
 	s := jobsPane(t, 160, everyMinute, existing, native, disabled)

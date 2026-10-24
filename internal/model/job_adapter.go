@@ -10,7 +10,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/Dangerboi/tern-kata/internal/crontrigger"
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // The adapter side of the Job card: the kinds that a Worker runs (an agent prompt, a workflow) or that notify an existing Issue,
@@ -95,7 +95,7 @@ func (f JobFormState) WorkflowsNote() string {
 }
 
 // maxJobSeconds is the longest span kata accepts for an interval, a lead, an offset, a grace or a timeout.
-const maxJobSeconds = crontrigger.MaxIntervalSeconds
+const maxJobSeconds = cronjob.MaxIntervalSeconds
 
 // parseSeconds reads a span as whole seconds: a number, a Go duration like 90m, or days like 2d. Negative spans read too.
 func parseSeconds(text string) (int64, bool) {
@@ -157,62 +157,64 @@ func formatSecrets(refs map[string]string) string {
 }
 
 // DateTrigger says the trigger fires on a date of an Issue.
-func DateTrigger(kind string) bool {
-	return kind == TriggerIssueScheduled || kind == TriggerIssueDeadline
+func DateTrigger(kind cronjob.TriggerKind) bool {
+	return kind == cronjob.TriggerIssueScheduled || kind == cronjob.TriggerIssueDeadline
 }
 
-func dateName(kind string) string {
-	if kind == TriggerIssueDeadline {
+func dateName(kind cronjob.TriggerKind) string {
+	if kind == cronjob.TriggerIssueDeadline {
 		return "deadline"
 	}
 	return "scheduled date"
 }
 
 var onceJobTrigger = jobTrigger{
-	id: TriggerOnce, label: "Once", fields: []Field{JobFieldAt},
-	load: func(f *JobFormState, t CronTrigger) { f.At = t.At },
-	build: func(f JobFormState) (CronTrigger, error) {
+	id: cronjob.TriggerOnce, label: "Once", fields: []Field{JobFieldAt},
+	load: func(f *JobFormState, t cronjob.Trigger) { f.At = t.At },
+	build: func(f JobFormState) (cronjob.Trigger, error) {
 		at := strings.TrimSpace(f.At)
 		if _, err := time.Parse(time.RFC3339, at); err != nil {
-			return CronTrigger{}, fieldError(JobFieldAt, "enter a full instant with its offset, like 2026-11-01T09:00:00+01:00 or 2026-11-01T08:00:00Z.")
+			return cronjob.Trigger{}, fieldError(JobFieldAt, "enter a full instant with its offset, like 2026-11-01T09:00:00+01:00 or 2026-11-01T08:00:00Z.")
 		}
-		return CronTrigger{Kind: TriggerOnce, At: at}, nil
+		return cronjob.Trigger{Kind: cronjob.TriggerOnce, At: at}, nil
 	},
 }
 
 var manualJobTrigger = jobTrigger{
-	id: TriggerManual, label: "Manual",
-	load:  func(*JobFormState, CronTrigger) {},
-	build: func(JobFormState) (CronTrigger, error) { return CronTrigger{Kind: TriggerManual}, nil },
+	id: cronjob.TriggerManual, label: "Manual",
+	load:  func(*JobFormState, cronjob.Trigger) {},
+	build: func(JobFormState) (cronjob.Trigger, error) { return cronjob.Trigger{Kind: cronjob.TriggerManual}, nil },
 }
 
 var issueScheduledJobTrigger = jobTrigger{
-	id: TriggerIssueScheduled, label: "Issue's scheduled date", fields: []Field{JobFieldIssue},
-	load:  func(f *JobFormState, t CronTrigger) { f.Issue = t.IssueUID },
-	build: func(JobFormState) (CronTrigger, error) { return CronTrigger{Kind: TriggerIssueScheduled}, nil },
+	id: cronjob.TriggerIssueScheduled, label: "Issue's scheduled date", fields: []Field{JobFieldIssue},
+	load: func(f *JobFormState, t cronjob.Trigger) { f.Issue = t.IssueUID },
+	build: func(JobFormState) (cronjob.Trigger, error) {
+		return cronjob.Trigger{Kind: cronjob.TriggerIssueScheduled}, nil
+	},
 }
 
 var issueDeadlineJobTrigger = jobTrigger{
-	id: TriggerIssueDeadline, label: "Issue's deadline", fields: []Field{JobFieldIssue, JobFieldLead},
-	load: func(f *JobFormState, t CronTrigger) {
+	id: cronjob.TriggerIssueDeadline, label: "Issue's deadline", fields: []Field{JobFieldIssue, JobFieldLead},
+	load: func(f *JobFormState, t cronjob.Trigger) {
 		f.Issue = t.IssueUID
 		if t.LeadSeconds > 0 {
 			f.Lead = strconv.FormatInt(t.LeadSeconds, 10)
 		}
 	},
-	build: func(f JobFormState) (CronTrigger, error) {
+	build: func(f JobFormState) (cronjob.Trigger, error) {
 		lead, err := seconds(JobFieldLead, f.Lead, 0)
-		return CronTrigger{Kind: TriggerIssueDeadline, LeadSeconds: lead}, err
+		return cronjob.Trigger{Kind: cronjob.TriggerIssueDeadline, LeadSeconds: lead}, err
 	},
 }
 
 // catchupApplies says the trigger can fall due while nothing runs it, so a catch-up policy means something.
-func catchupApplies(trigger string) bool {
-	return trigger == TriggerCron || trigger == TriggerInterval || trigger == TriggerOnce
+func catchupApplies(trigger cronjob.TriggerKind) bool {
+	return trigger == cronjob.TriggerCron || trigger == cronjob.TriggerInterval || trigger == cronjob.TriggerOnce
 }
 
 // adapterTriggers are the triggers an adapter job may have; a deadline fires a notification only, as kata allows.
-var adapterTriggers = []string{TriggerCron, TriggerInterval, TriggerOnce, TriggerManual, TriggerIssueScheduled}
+var adapterTriggers = []cronjob.TriggerKind{cronjob.TriggerCron, cronjob.TriggerInterval, cronjob.TriggerOnce, cronjob.TriggerManual, cronjob.TriggerIssueScheduled}
 
 var promptJobKind = executeKind("prompt", "Agent prompt", KindAgentPrompt, false)
 
@@ -236,15 +238,15 @@ func executeKind(id, label, kind string, workflow bool) jobKind {
 			case JobFieldSecrets, JobFieldPolicy, JobFieldOverlap, JobFieldTimeout:
 				return true
 			case JobFieldIssue:
-				return f.Policy == IssueExisting
+				return f.policyKind() == cronjob.IssueExisting
 			case JobFieldTitle, JobFieldBody, JobFieldScheduled, JobFieldDeadline:
-				return f.Policy != IssueExisting
+				return f.policyKind() != cronjob.IssueExisting
 			}
 			return adapterCatchupShown(f, name)
 		},
 		load:         loadExecute,
-		checkTrigger: func(CronTrigger) error { return nil },
-		build:        func(f JobFormState) (CronDefinition, string, error) { return buildExecute(f, workflow) },
+		checkTrigger: func(cronjob.Trigger) error { return nil },
+		build:        func(f JobFormState) (cronjob.Definition, string, error) { return buildExecute(f, workflow) },
 	}
 }
 
@@ -273,8 +275,8 @@ func loadExecute(f *JobFormState, job CronJob) {
 	if p == nil {
 		return
 	}
-	f.Policy = p.Kind
-	if p.Kind == IssueExisting {
+	f.Policy = string(p.Kind)
+	if p.Kind == cronjob.IssueExisting {
 		f.Issue = cmp.Or(f.Issue, p.UID)
 		return
 	}
@@ -291,8 +293,8 @@ func loadExecute(f *JobFormState, job CronJob) {
 
 // buildExecute is the definition of an agent prompt or workflow job: the action, its profile, checkout and secrets, the Issue
 // policy, overlap, catch-up and timeout.
-func buildExecute(f JobFormState, workflow bool) (CronDefinition, string, error) {
-	def := CronDefinition{Overlap: f.Overlap, Catchup: f.Catchup, Action: CronAction{Kind: ActionExecute}}
+func buildExecute(f JobFormState, workflow bool) (cronjob.Definition, string, error) {
+	def := cronjob.Definition{Overlap: f.Overlap, Catchup: f.Catchup, Action: cronjob.Action{Kind: cronjob.ActionExecute}}
 	if workflow {
 		switch {
 		case f.Workflow == "" && f.WorkflowsRead && len(f.options(JobFieldWorkflow)) == 0:
@@ -352,14 +354,14 @@ func adapterGrace(f JobFormState) (int64, error) {
 
 // executePolicy is the Issue policy of a job that executes: a new Issue per run with its title, body and date offsets, or the
 // existing Issue the card names.
-func executePolicy(f JobFormState) (*CronIssuePolicy, error) {
-	if f.Policy == IssueExisting {
+func executePolicy(f JobFormState) (*cronjob.IssuePolicy, error) {
+	if f.policyKind() == cronjob.IssueExisting {
 		if f.issueRef() == "" {
 			return nil, fieldError(JobFieldIssue, "name the Issue every run belongs to, by its short id.")
 		}
-		return &CronIssuePolicy{Kind: IssueExisting}, nil
+		return &cronjob.IssuePolicy{Kind: cronjob.IssueExisting}, nil
 	}
-	policy := CronIssuePolicy{Kind: IssuePerRun, Title: strings.TrimSpace(f.Title), Body: strings.TrimSpace(f.Body)}
+	policy := cronjob.IssuePolicy{Kind: cronjob.IssuePerRun, Title: strings.TrimSpace(f.Title), Body: strings.TrimSpace(f.Body)}
 	if policy.Title == "" {
 		return nil, fieldError(JobFieldTitle, "must not be blank.")
 	}
@@ -381,7 +383,7 @@ func executePolicy(f JobFormState) (*CronIssuePolicy, error) {
 }
 
 var notifyJobKind = jobKind{
-	id: "notify", label: "Notify", triggers: append(slices.Clone(adapterTriggers), TriggerIssueDeadline),
+	id: "notify", label: "Notify", triggers: append(slices.Clone(adapterTriggers), cronjob.TriggerIssueDeadline),
 	owns: func(j CronJob) bool { return j.Kind() == KindNotify },
 	shown: func(f JobFormState, name Field) bool {
 		switch name {
@@ -410,9 +412,9 @@ var notifyJobKind = jobKind{
 			f.Issue = d.Issue.UID
 		}
 	},
-	checkTrigger: func(CronTrigger) error { return nil },
-	build: func(f JobFormState) (CronDefinition, string, error) {
-		def := CronDefinition{Overlap: "allow", Catchup: f.Catchup, Action: CronAction{Kind: ActionNotify, Recipient: recipientDefault}}
+	checkTrigger: func(cronjob.Trigger) error { return nil },
+	build: func(f JobFormState) (cronjob.Definition, string, error) {
+		def := cronjob.Definition{Overlap: "allow", Catchup: f.Catchup, Action: cronjob.Action{Kind: cronjob.ActionNotify, Recipient: recipientDefault}}
 		if err := notification(f, &def, true); err != nil {
 			return def, "", err
 		}
@@ -421,9 +423,9 @@ var notifyJobKind = jobKind{
 			if f.issueRef() == "" {
 				return def, "", fieldError(JobFieldIssue, "name the Issue to notify about, by its short id.")
 			}
-			def.Issue = &CronIssuePolicy{Kind: IssueExisting}
+			def.Issue = &cronjob.IssuePolicy{Kind: cronjob.IssueExisting}
 		case f.reportRef() != "":
-			def.Issue = &CronIssuePolicy{Kind: IssueExisting}
+			def.Issue = &cronjob.IssuePolicy{Kind: cronjob.IssueExisting}
 		}
 		grace, err := adapterGrace(f)
 		def.GraceSeconds = grace
@@ -433,7 +435,7 @@ var notifyJobKind = jobKind{
 
 // notification fills the notify action's recipient and message from the card and checks them as kata does. needsMessage says a
 // named recipient must come with a message: kata asks that of an adapter's notify job, and not of a native one.
-func notification(f JobFormState, def *CronDefinition, needsMessage bool) error {
+func notification(f JobFormState, def *cronjob.Definition, needsMessage bool) error {
 	if recipient := strings.TrimSpace(f.Recipient); recipient != "" {
 		if !exactRecipient(recipient) {
 			return fieldError(JobFieldRecipient, "use an exact address like alice or alice/reviewer, or leave it blank for the current owner or author.")

@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // CronOccurrence says which Cron job made an Issue and for which run: kata's `cron.occurrence` metadata, which only its daemon
@@ -13,16 +15,13 @@ type CronOccurrence struct {
 	ScheduledAt                time.Time
 }
 
-// cronProgressPrefix starts the metadata key a native job keeps its delivery state under on its parent.
-const cronProgressPrefix = "cron.progress."
-
 // CronMade says a Cron job made the Issue.
 func (i Issue) CronMade() bool { return i.CronOccurrence != nil }
 
 // cronParent says the Issue carries a native job's delivery state, so some Cron job makes children of it.
 func (i Issue) cronParent() bool {
 	for key := range i.Metadata {
-		if strings.HasPrefix(key, cronProgressPrefix) {
+		if strings.HasPrefix(key, cronjob.ProgressKeyPrefix) {
 			return true
 		}
 	}
@@ -78,7 +77,7 @@ func (m Model) cronItems() []DetailItem {
 		}
 		pause := m.parentPause(job, issue)
 		items = append(items, DetailItem{Kind: RowCron, Key: "cron-jobs:" + job.UID, JobUID: job.UID,
-			Cron: CronRow{Property: cronJobsProperty, Name: job.Name, State: pause.StateText(), Schedule: job.Definition.Trigger.Words()}})
+			Cron: CronRow{Property: cronJobsProperty, Name: job.Name, State: pause.StateText(), Schedule: triggerWords(job.Definition.Trigger)}})
 	}
 	return items
 }

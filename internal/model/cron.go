@@ -6,86 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dangerboi/tern-kata/internal/crontrigger"
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // A Cron job is kata's recurring or scheduled definition, one per Project. The gateway translates kata's wire shape into the
-// types here; the Jobs Page, the Job card, the cron markers on Issues and the Runs Page read them.
-
-// Trigger kinds, as kata names them.
-const (
-	TriggerManual         = "manual"
-	TriggerCron           = "cron"
-	TriggerInterval       = "interval"
-	TriggerOnce           = "once"
-	TriggerIssueScheduled = "issue-scheduled"
-	TriggerIssueDeadline  = "issue-deadline"
-)
-
-// Action kinds and Issue policy kinds, as kata names them.
-const (
-	ActionNotify  = "notify"
-	ActionExecute = "execute"
-	IssuePerRun   = "per-run"
-	IssueExisting = "existing"
-)
-
-// CronTrigger says when a Cron job fires. Only the fields of Kind are set; Timezone may be set for any Kind.
-type CronTrigger struct {
-	Kind string
-	// Cron is the 5-field expression or descriptor of a cron trigger.
-	Cron string
-	// IntervalSeconds is an interval trigger's period.
-	IntervalSeconds int64
-	// At is a once trigger's RFC3339 instant.
-	At string
-	// IssueUID names the Issue whose scheduled date or deadline fires an Issue-date trigger.
-	IssueUID string
-	// LeadSeconds is how long before the deadline an issue-deadline trigger fires.
-	LeadSeconds int64
-	Timezone    string
-}
-
-// CronAction is what a Cron job does when it fires.
-type CronAction struct {
-	Kind string
-	// Message and Recipient belong to a notify action, Prompt or WorkflowUID to an execute action.
-	Message, Recipient, Prompt, WorkflowUID string
-}
-
-// CronIssuePolicy is which Issue a Cron job's run or notification belongs to: a fresh one per run, or an existing one.
-type CronIssuePolicy struct {
-	Kind string
-	// UID is the existing Issue; ParentUID the parent of a native job's children.
-	UID, ParentUID string
-	// Title and Body make a per-run Issue; the offsets, in seconds, set its dates relative to the run.
-	Title, Body                                   string
-	ScheduledOffsetSeconds, DeadlineOffsetSeconds *int64
-}
-
-// CronDefinition is the part of a Cron job a Job card edits.
-type CronDefinition struct {
-	Enabled bool
-	Trigger CronTrigger
-	Action  CronAction
-	// Issue is nil for a notify action with an Issue-date trigger.
-	Issue *CronIssuePolicy
-	// Overlap is "allow" or "forbid", Catchup "skip", "latest" or "all".
-	Overlap, Catchup string
-	GraceSeconds     int64
-	TimeoutSeconds   int64
-	CheckoutKey      string
-	// SecretRefs maps an environment name to the worker's source name.
-	SecretRefs map[string]string
-	// Options is the adapter's opaque object, kept whole; Profile is its options.profile.
-	Options map[string]any
-	Profile string
-}
-
-// CronProgress is a native job's delivery state, kept by kata's daemon in the parent's cron.progress.<job uid> metadata.
-// Occurrences are delivered strictly after Anchor, the job's creation; Through is how far delivery has got, the daemon's
-// clock at its last pass, so it stops advancing while the job is paused.
-type CronProgress struct{ Anchor, Through time.Time }
+// cronjob package's value; the model adds what only the Pane reads. The Jobs Page, the Job card, the cron markers on Issues
+// and the Runs Page read it.
 
 // CronJobParent is a native job's parent Issue as the gateway read it with the job.
 type CronJobParent struct {
@@ -94,39 +20,14 @@ type CronJobParent struct {
 	Status  string
 	Deleted bool
 	// Progress is nil when the parent carries no readable progress for the job.
-	Progress *CronProgress
+	Progress *cronjob.Progress
 }
 
 // CronJob is a Cron job with, for a native one, its parent.
 type CronJob struct {
-	UID, Name, Author string
-	Revision          int64
-	// DefinitionEventUID guards every write to the job: it names the version this value holds.
-	DefinitionEventUID   string
-	CreatedAt, UpdatedAt time.Time
-	// DeletedAt is set on an archived job.
-	DeletedAt  *time.Time
-	Definition CronDefinition
+	cronjob.Job
 	// Parent is set on a native job.
 	Parent *CronJobParent
-}
-
-// Native says kata's own daemon delivers the job: it notifies with a fresh Issue per run. Every other job belongs to an
-// adapter, which kata never runs.
-func (j CronJob) Native() bool {
-	d := j.Definition
-	return d.Action.Kind == ActionNotify && d.Issue != nil && d.Issue.Kind == IssuePerRun
-}
-
-// Archived says the job is archived (kata calls it deleted), which stops it until restored.
-func (j CronJob) Archived() bool { return j.DeletedAt != nil }
-
-// ParentUID is the Issue a native job's children hang from, empty for an adapter job.
-func (j CronJob) ParentUID() string {
-	if j.Native() {
-		return j.Definition.Issue.ParentUID
-	}
-	return ""
 }
 
 // Job kinds as the Jobs Page words them.
@@ -143,9 +44,9 @@ func (j CronJob) Kind() string {
 	switch {
 	case j.Native():
 		return KindRecurringChild
-	case j.Definition.Action.Kind == ActionNotify:
+	case j.Notifies():
 		return KindNotify
-	case j.Definition.Action.WorkflowUID != "":
+	case j.RunsWorkflow():
 		return KindWorkflow
 	}
 	return KindAgentPrompt
@@ -218,7 +119,7 @@ func (j CronJob) NextRun(now time.Time, projectArchived bool) (time.Time, bool) 
 	if j.Pause(projectArchived) != NotPaused {
 		return time.Time{}, false
 	}
-	if t := j.Definition.Trigger; t.Kind == TriggerOnce {
+	if t := j.Definition.Trigger; t.Kind == cronjob.TriggerOnce {
 		at, err := time.Parse(time.RFC3339, t.At)
 		return at, err == nil && at.After(now)
 	}
@@ -230,95 +131,56 @@ func (j CronJob) NextRun(now time.Time, projectArchived bool) (time.Time, bool) 
 	return next, !next.IsZero()
 }
 
-// schedule is the occurrences of a cron or interval trigger. An adapter job counts an interval and an @every from its
-// creation, as the worker does; a native job's interval from kata's delivery anchor on its parent. False for any other kind
-// of trigger, an expression that does not parse, and an interval with no anchor known.
-func (j CronJob) schedule() (crontrigger.Schedule, bool) {
-	t := j.Definition.Trigger
-	var created time.Time
-	if !j.Native() {
-		created = j.CreatedAt
-	}
-	switch t.Kind {
-	case TriggerCron:
-		schedule, err := crontrigger.Cron(t.Cron, t.Timezone, created)
-		return schedule, err == nil
-	case TriggerInterval:
-		anchor, anchored := j.intervalAnchor()
-		if !anchored {
-			return crontrigger.Schedule{}, false
-		}
-		schedule, err := crontrigger.Interval(t.IntervalSeconds, anchor)
-		return schedule, err == nil
-	}
-	return crontrigger.Schedule{}, false
-}
+// schedule is the occurrences of the job's trigger, by the rule of the cronjob package; the delivery anchor is the one this
+// Pane read from the parent.
+func (j CronJob) schedule() (cronjob.Schedule, bool) { return j.Job.Schedule(j.deliveryAnchor()) }
 
-// intervalAnchor is the instant an interval trigger counts from: a native job's, kata's delivery anchor on its parent; an
-// adapter job's, its creation, as the worker anchors it. False when that is not known.
-func (j CronJob) intervalAnchor() (time.Time, bool) {
-	if j.Native() {
-		if j.Parent == nil || j.Parent.Progress == nil {
-			return time.Time{}, false
-		}
-		return j.Parent.Progress.Anchor, true
-	}
-	return j.CreatedAt, !j.CreatedAt.IsZero()
-}
+// intervalAnchor is the instant an interval trigger of the job counts from.
+func (j CronJob) intervalAnchor() (time.Time, bool) { return j.Job.IntervalAnchor(j.deliveryAnchor()) }
 
-// IssuesPerDay is about how many Issues a day an enabled job that makes one per run creates. It is zero for a job that makes
-// none: a disabled or native job (its children are what it is for), one that reports to an existing Issue or only notifies,
-// and a trigger without a rate.
-func (j CronJob) IssuesPerDay(now time.Time) int {
-	d := j.Definition
-	if j.Native() || !d.Enabled || d.Action.Kind != ActionExecute || d.Issue == nil || d.Issue.Kind != IssuePerRun {
-		return 0
+// deliveryAnchor is the delivery anchor on a native job's parent, the zero time when the Pane has none.
+func (j CronJob) deliveryAnchor() time.Time {
+	if j.Parent == nil || j.Parent.Progress == nil {
+		return time.Time{}
 	}
-	if k := d.Trigger.Kind; k != TriggerCron && k != TriggerInterval {
-		return 0
-	}
-	schedule, ok := j.schedule()
-	if !ok {
-		return 0
-	}
-	return schedule.PerDay(now)
+	return j.Parent.Progress.Anchor
 }
 
 // HighRateWarning is the line the Jobs Page shows for a job that makes more than 24 Issues a day, "" for any other.
 func (j CronJob) HighRateWarning(now time.Time) string {
-	return crontrigger.HighRateWarning(j.IssuesPerDay(now))
+	return cronjob.HighRateWarning(j.IssuesPerDay(now))
 }
 
 // zoneAndExpression splits a cron trigger into its zone and bare expression.
-func (t CronTrigger) zoneAndExpression() (zone, expression string) {
-	return crontrigger.Zone(t.Cron, t.Timezone)
+func zoneAndExpression(t cronjob.Trigger) (zone, expression string) {
+	return cronjob.Zone(t.Cron, t.Timezone)
 }
 
 // validCron reports whether the cron trigger parses.
-func (t CronTrigger) validCron() bool {
-	_, err := crontrigger.Cron(t.Cron, t.Timezone, time.Time{})
+func validCron(t cronjob.Trigger) bool {
+	_, err := cronjob.Cron(t.Cron, t.Timezone, time.Time{})
 	return err == nil
 }
 
 // Words reads the trigger as a phrase: "every day at 09:00 Europe/Berlin", "every 15 minutes", "once at 2026-11-01 09:00 UTC",
 // "manual", "at the Issue's scheduled date", "2 days before the Issue's deadline". It is empty where the trigger can't be read:
 // an expression that does not parse, a once trigger without a valid instant.
-func (t CronTrigger) Words() string {
+func triggerWords(t cronjob.Trigger) string {
 	switch t.Kind {
-	case TriggerManual:
+	case cronjob.TriggerManual:
 		return "manual"
-	case TriggerCron:
-		if !t.validCron() {
+	case cronjob.TriggerCron:
+		if !validCron(t) {
 			return ""
 		}
-		zone, expression := t.zoneAndExpression()
+		zone, expression := zoneAndExpression(t)
 		return cronWords(expression) + " " + zone
-	case TriggerInterval:
+	case cronjob.TriggerInterval:
 		if t.IntervalSeconds <= 0 {
 			return ""
 		}
 		return "every " + durationWords(t.IntervalSeconds, true)
-	case TriggerOnce:
+	case cronjob.TriggerOnce:
 		at, err := time.Parse(time.RFC3339, t.At)
 		if err != nil {
 			return ""
@@ -334,9 +196,9 @@ func (t CronTrigger) Words() string {
 			zone = at.Format("-07:00")
 		}
 		return "once at " + at.Format("2006-01-02 15:04") + " " + zone
-	case TriggerIssueScheduled:
+	case cronjob.TriggerIssueScheduled:
 		return "at the Issue's scheduled date"
-	case TriggerIssueDeadline:
+	case cronjob.TriggerIssueDeadline:
 		if t.LeadSeconds <= 0 {
 			return "at the Issue's deadline"
 		}

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
@@ -91,11 +92,11 @@ func TestNewJobFromTheJobsPageSendsAGuardlessCreateAtAMintedUID(t *testing.T) {
 	if !ulid.MatchString(save.UID) || save.ExpectedEventUID != "" || save.ParentRef != "parent-a" || save.ProjectID != 7 || save.Name != "Report" {
 		t.Fatalf("create %+v", save)
 	}
-	want := model.CronDefinition{
+	want := cronjob.Definition{
 		Enabled: true, Overlap: "allow", Catchup: model.CatchupLatest,
-		Trigger: model.CronTrigger{Kind: model.TriggerCron, Cron: "0 9 * * *", Timezone: "UTC"},
-		Action:  model.CronAction{Kind: model.ActionNotify, Recipient: "current-owner-or-author"},
-		Issue:   &model.CronIssuePolicy{Kind: model.IssuePerRun, Title: "Report time"},
+		Trigger: cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 9 * * *", Timezone: "UTC"},
+		Action:  cronjob.Action{Kind: cronjob.ActionNotify, Recipient: "current-owner-or-author"},
+		Issue:   &cronjob.IssuePolicy{Kind: cronjob.IssuePerRun, Title: "Report time"},
 	}
 	if got := save.Definition; got.Trigger != want.Trigger || got.Action != want.Action || *got.Issue != *want.Issue || got.Enabled != want.Enabled || got.Overlap != want.Overlap || got.Catchup != want.Catchup || got.GraceSeconds != 0 {
 		t.Fatalf("definition %+v issue %+v, want %+v", got, got.Issue, want)
@@ -178,7 +179,7 @@ func TestEditOpensTheCardPrefilledAndSavesAGuardedReplaceKeepingTheParent(t *tes
 	if !ok || save.UID != "J1" || save.ExpectedEventUID != "EV1" || save.Name != "Weekly digest" || save.ParentRef != "" || save.Definition.Issue.ParentUID != "parent-a" {
 		t.Fatalf("replace %+v", save)
 	}
-	if got := save.Definition.Trigger; got.Kind != model.TriggerInterval || got.IntervalSeconds != 3600 {
+	if got := save.Definition.Trigger; got.Kind != cronjob.TriggerInterval || got.IntervalSeconds != 3600 {
 		t.Errorf("trigger %+v", got)
 	}
 }
@@ -302,7 +303,7 @@ func TestAnEveryMinuteIntervalAndAnAddressedRecipientSaveAsTyped(t *testing.T) {
 		t.Fatal("a valid card sent nothing")
 	}
 	d := save.Definition
-	if d.Trigger != (model.CronTrigger{Kind: model.TriggerInterval, IntervalSeconds: 60}) || d.Action.Recipient != "alice/reviewer" || d.Action.Message != "Time for the report" ||
+	if d.Trigger != (cronjob.Trigger{Kind: cronjob.TriggerInterval, IntervalSeconds: 60}) || d.Action.Recipient != "alice/reviewer" || d.Action.Message != "Time for the report" ||
 		d.Catchup != model.CatchupSkip || d.GraceSeconds != 300 || d.Enabled {
 		t.Fatalf("definition %+v", d)
 	}

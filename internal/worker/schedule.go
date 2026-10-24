@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dangerboi/tern-kata/internal/crontrigger"
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // Scheduling (ADR-0004, ADR-0007, ADR-0011). Each Project loop keeps, for every enabled adapter `execute` job with a
@@ -37,8 +37,8 @@ type trigger interface {
 	next(t time.Time) time.Time
 }
 
-// scheduled is a cron expression or an interval, read by the rules the Pane shares (internal/crontrigger).
-type scheduled struct{ crontrigger.Schedule }
+// scheduled is a cron expression or an interval, read by the rules the Pane shares (internal/cronjob).
+type scheduled struct{ cronjob.Schedule }
 
 func (s scheduled) next(t time.Time) time.Time { return s.Next(t) }
 
@@ -62,13 +62,13 @@ func newTrigger(job Job, date time.Time) (trigger, error) {
 	t := job.Definition.Trigger
 	switch t.Kind {
 	case "cron":
-		schedule, err := crontrigger.Cron(t.Cron, t.Timezone, job.CreatedAt)
+		schedule, err := cronjob.Cron(t.Cron, t.Timezone, job.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
 		return scheduled{schedule}, nil
 	case "interval":
-		schedule, err := crontrigger.Interval(t.IntervalSeconds, job.CreatedAt)
+		schedule, err := cronjob.Interval(t.IntervalSeconds, job.CreatedAt)
 		if err != nil {
 			return nil, err
 		}

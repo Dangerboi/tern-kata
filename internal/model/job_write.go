@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/oklog/ulid/v2"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // The writes of a Cron job: the Job card's save, and the keys on the Jobs Page that pause, resume, archive and restore. Each is
@@ -33,7 +35,7 @@ type SaveJobCmd struct {
 	// ExpectedEventUID is the version of the job the write replaces.
 	ExpectedEventUID string
 	Name             string
-	Definition       CronDefinition
+	Definition       cronjob.Definition
 	// ParentRef names the Issue a new native job hangs from, by short id or uid; the Daemon gateway resolves it to the full uid
 	// that Definition.Issue.ParentUID takes. Empty on a replace, which keeps the parent.
 	ParentRef string
