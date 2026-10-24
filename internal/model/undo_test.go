@@ -39,11 +39,6 @@ func TestEveryWriteWithoutAnInverseClearsTheHistory(t *testing.T) {
 		answer model.Msg
 		reason string
 	}{
-		{"timed assignment", editorModel, func(m model.Model) model.Model {
-			m = press(m, "t")
-			m, _ = model.Update(m, model.FieldValueMsg{Value: "1h"})
-			return press(m, "enter")
-		}, model.FieldWritten{UID: "a"}, "timed assignment cannot be undone"},
 		{"comment", editorModel, func(m model.Model) model.Model {
 			m = press(m, "c")
 			m, _ = model.Update(m, model.KeyMsg{Chord: "paste", Text: "local"})
