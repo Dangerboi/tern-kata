@@ -194,9 +194,9 @@ func TestOccupiesSlot(t *testing.T) {
 
 func TestMayResume(t *testing.T) {
 	const (
-		still  = "the agent's process group 10 is still present; the worker never stops a process to make a resume possible"
+		still     = "the agent's process group 10 is still present; the worker never stops a process to make a resume possible"
 		unchecked = "the agent's process group 10 cannot be checked: the job could not be opened; the worker keeps the run's slot until the check succeeds and will not free capacity it cannot prove empty, so it cannot be resumed until then"
-		noProc = "the worker cannot prove the agent was never started, so it will not start another on this run; abandon it"
+		noProc    = "the worker cannot prove the agent was never started, so it will not start another on this run; abandon it"
 	)
 	cases := []struct {
 		name    string
