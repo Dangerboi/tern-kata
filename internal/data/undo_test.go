@@ -219,6 +219,58 @@ func TestUndoPutsALaneMoveBack(t *testing.T) {
 	}
 }
 
+func TestUndoOfALaneMoveRefusesWhenAnotherActorMovedTheCardOn(t *testing.T) {
+	f := newUndoFixture(t)
+	uid := f.issue("On the Board")
+	f.field(uid, model.AddLabelAction, "lane:todo")
+	moved := as[model.MoveResultMsg](t, run(t, f.gateway, model.MoveIssueCmd{Workspace: f.workspace, UID: uid, ProjectID: f.project.ID, Actor: "tester", Add: "lane:doing", Remove: []string{"lane:todo"}}))
+	e := f.entry(moved.Record)
+	f.rivalField(uid, model.RemoveLabelAction, "lane:doing")
+	f.rivalField(uid, model.AddLabelAction, "lane:review")
+	f.refuses(uid, e, "issue changed since the Lane move")
+	if labels := f.detail(uid).Issue.Labels; slices.Contains(labels, "lane:todo") || !slices.Contains(labels, "lane:review") {
+		t.Fatalf("labels %v, want the rival's Lane kept", labels)
+	}
+}
+
+func TestUndoOfDatesCompletesAfterTheSecondWriteFailed(t *testing.T) {
+	f := newUndoFixture(t)
+	uid := f.issue("Calendar entry")
+	set := func(changes ...model.DateChange) model.DatesResultMsg {
+		return as[model.DatesResultMsg](t, run(t, f.gateway, model.SetDatesCmd{Workspace: f.workspace, UID: uid, ProjectID: f.project.ID, Actor: "tester", Changes: changes}))
+	}
+	scheduled := model.DateChange{Key: model.ScheduledKey, Label: "Scheduled", Value: "2026-10-12"}
+	deadline := model.DateChange{Key: model.DeadlineKey, Label: "Deadline", Value: "2026-10-30"}
+	e := f.entry(set(scheduled, deadline).Record)
+
+	patches := 0
+	hook := func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/metadata") {
+			return false
+		}
+		if patches++; patches != 2 {
+			return false
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"status":422,"error":{"code":"x","message":"no"}}`))
+		return true
+	}
+	f.kata.intercept.Store(&hook)
+	if got := f.undo(e); got.Err == nil {
+		t.Fatalf("undo %+v, want the second date write to fail", got)
+	}
+	f.kata.intercept.Store(nil)
+	meta := f.detail(uid).Issue.Metadata
+	if _, still := meta[model.ScheduledKey]; still || meta[model.DeadlineKey] != "2026-10-30" {
+		t.Fatalf("dates %v, want only the first one restored", meta)
+	}
+	f.restores(e)
+	if meta := f.detail(uid).Issue.Metadata; meta[model.ScheduledKey] != nil || meta[model.DeadlineKey] != nil {
+		t.Fatalf("dates %v, want both cleared", meta)
+	}
+}
+
 func TestUndoPutsBothDatesBack(t *testing.T) {
 	f := newUndoFixture(t)
 	uid := f.issue("Calendar entry")
