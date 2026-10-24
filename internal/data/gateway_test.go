@@ -209,7 +209,7 @@ func TestGatewayResolvesTheBindingTheSameForBothDaemonKinds(t *testing.T) {
 		kind := map[bool]string{false: "local", true: "remote"}[remote]
 		kata := startKata(t, "0.19.0")
 		target := kata.target()
-		target.Remote = func(context.Context) (bool, error) { return remote, nil }
+		target.Remote = remote
 		gateway := newGateway(t, newLocator(target))
 		load := func(workspace string) (model.ProjectLoaded, error) {
 			t.Helper()
@@ -341,7 +341,7 @@ func TestGatewayReadsAndWritesIssues(t *testing.T) {
 	}
 
 	if got := l.calls.Load(); got != 1 {
-		t.Fatalf("daemon located %d times for a whole session of commands, want once", got)
+		t.Fatalf("daemon looked up %d times for a whole session of commands, want once", got)
 	}
 }
 
@@ -568,7 +568,7 @@ func TestGatewayFailureShapePerCommand(t *testing.T) {
 func TestGatewayLocatorFailureIsRetriedOnTheNextCommand(t *testing.T) {
 	kata := startKata(t, "0.19.0")
 	l := newLocator(kata.target())
-	boom := errors.New("kata daemon locate: no daemon")
+	boom := errors.New("no daemon")
 	l.err.Store(&boom)
 	gateway := newGateway(t, l)
 
@@ -588,7 +588,7 @@ func TestGatewayLocatorFailureIsRetriedOnTheNextCommand(t *testing.T) {
 func TestGatewayDiscoversTheDaemonTheServerVariableNames(t *testing.T) {
 	kata := startKata(t, "0.19.0")
 	t.Setenv("KATA_SERVER", kata.URL)
-	gateway := NewGateway(locateWith(func(context.Context, string) (bool, error) { return false, nil }))
+	gateway := NewGateway(LocateWithKata)
 	t.Cleanup(gateway.Close)
 	workspace, demo := project(t, gateway, "demo")
 	uid := createIssue(t, gateway, workspace, demo, "Found by discovery")
@@ -1433,19 +1433,7 @@ func TestGatewayStopsTheRecurrenceAndReportsOneAlreadyStopped(t *testing.T) {
 	}
 }
 
-func TestGatewayKindCheckFailureLeavesTheKindUnknown(t *testing.T) {
-	kata := startKata(t, "0.19.0")
-	target := kata.target()
-	target.Remote = func(context.Context) (bool, error) { return false, errors.New("kata: not found") }
-	gateway := newGateway(t, newLocator(target))
-	workspace, _ := project(t, gateway, "demo")
-	loaded := as[model.ProjectLoaded](t, run(t, gateway, model.LoadProject{Workspace: workspace}))
-	if loaded.Daemon.Kind != model.DaemonKindUnknown || loaded.Daemon.Version != "v0.19.0" {
-		t.Fatalf("daemon %+v, want the version with no kind", loaded.Daemon)
-	}
-}
-
-func TestGatewayWithoutTheKataBinaryStillLoadsWithoutAKind(t *testing.T) {
+func TestGatewayReadsAServerVariableDaemonAsRemoteWithoutTheKataBinary(t *testing.T) {
 	kata := startKata(t, "0.19.0")
 	t.Setenv("KATA_SERVER", kata.URL)
 	t.Setenv("PATH", t.TempDir())
@@ -1453,22 +1441,8 @@ func TestGatewayWithoutTheKataBinaryStillLoadsWithoutAKind(t *testing.T) {
 	t.Cleanup(gateway.Close)
 	workspace, _ := project(t, gateway, "demo")
 	loaded := as[model.ProjectLoaded](t, run(t, gateway, model.LoadProject{Workspace: workspace}))
-	if loaded.Daemon.Kind != model.DaemonKindUnknown || loaded.Daemon.Version != "v0.19.0" {
-		t.Fatalf("daemon %+v, want the version with no kind", loaded.Daemon)
-	}
-}
-
-func TestGatewayHungKindCheckStillConnects(t *testing.T) {
-	kata := startKata(t, "0.19.0")
-	target := kata.target()
-	target.Remote = func(ctx context.Context) (bool, error) { <-ctx.Done(); return false, ctx.Err() }
-	l := newLocator(target)
-	gateway := newGateway(t, l)
-	gateway.deadline = 50 * time.Millisecond
-	workspace := t.TempDir()
-	loaded := as[model.ProjectLoaded](t, run(t, gateway, model.LoadProject{Workspace: workspace}))
-	if loaded.Daemon.Kind != model.DaemonKindUnknown || loaded.Daemon.Version != "v0.19.0" {
-		t.Fatalf("daemon %+v, want the version with no kind", loaded.Daemon)
+	if loaded.Daemon.Kind != model.DaemonRemote || loaded.Daemon.Version != "v0.19.0" {
+		t.Fatalf("daemon %+v, want remote with its version", loaded.Daemon)
 	}
 }
 
