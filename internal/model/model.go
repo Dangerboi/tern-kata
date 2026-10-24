@@ -59,6 +59,8 @@ type Model struct {
 	etagQuery      SnapshotQuery
 	CloseForm      CloseFormState
 	DatesForm      DatesFormState
+	TokenForm      TokenFormState
+	RevokeCard     RevokeState
 	RecurrenceForm RecurrenceFormState
 	JobForm        JobFormState
 	// Backfill is the card that asks whether the runs a native job missed are created before the job runs again.

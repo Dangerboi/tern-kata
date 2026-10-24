@@ -43,6 +43,8 @@ const (
 	CardField
 	CardClose
 	CardDates
+	CardToken
+	CardRevoke
 	CardRecurrence
 	CardJob
 	CardBackfill
@@ -316,6 +318,29 @@ func buildCards() []cardEntry {
 				}
 				return m
 			},
+		},
+		{
+			card: CardToken, name: "token", open: func(m Model) bool { return m.TokenForm.Open },
+			modes: []Mode{ModeTokenForm}, mode: func(Model) Mode { return ModeTokenForm },
+			key:    updateTokenFormKey,
+			busy:   func(m Model) bool { return m.TokenForm.Saving || m.TokenForm.Done },
+			fields: TokenFields, focus: func(m *Model) *Field { return &m.TokenForm.Field },
+			editing: []fieldEditing{{mode: ModeTokenForm, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}}},
+			text: func(m *Model) (*string, *Caret) {
+				return m.TokenForm.Values.at(m.TokenForm.Field), &m.TokenForm.Caret
+			},
+			erased: func(m Model, changed bool) Model {
+				if changed {
+					m.TokenForm.Err = nil
+				}
+				return m
+			},
+		},
+		{
+			card: CardRevoke, name: "revoke", open: func(m Model) bool { return m.RevokeCard.Open },
+			modes: []Mode{ModeRevokeToken}, mode: func(Model) Mode { return ModeRevokeToken },
+			key:  updateRevokeKey,
+			busy: func(m Model) bool { return m.RevokeCard.Saving }, fields: []FieldSpec{},
 		},
 		{
 			card: CardRecurrence, name: "recurrence", open: func(m Model) bool { return m.RecurrenceForm.Open },

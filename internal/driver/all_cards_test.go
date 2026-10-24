@@ -18,6 +18,8 @@ func cardOpeners() map[model.Card]func(*testing.T) driver.State {
 		model.CardField:      popupOpener("single-field form"),
 		model.CardClose:      popupOpener("Close"),
 		model.CardDates:      popupOpener("Dates"),
+		model.CardToken:      func(t *testing.T) driver.State { return tokenCard(t) },
+		model.CardRevoke:     func(t *testing.T) driver.State { return step(t, tokenList(t), key("x")).State },
 		model.CardRecurrence: popupOpener("Recurrence"),
 		model.CardJob:        popupOpener("Job"),
 		model.CardProject:    popupOpener("New Project"),
