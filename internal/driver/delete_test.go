@@ -334,3 +334,23 @@ func TestARestoreFromTheMenuClearsTheUndoHistory(t *testing.T) {
 		t.Fatalf("u says %q", got)
 	}
 }
+
+func TestErasingTheRestoreFieldForgetsTheIssueFoundForIt(t *testing.T) {
+	for _, chord := range []string{"backspace", "ctrl+u"} {
+		s := menuRestore(t, movePane(t, movable("a")))
+		asked := step(t, typed(t, s, "a"), key("enter"))
+		found := step(t, asked.State, model.DeletedLooked{Ref: "a", Issue: model.DeletedIssue{UID: "x", ProjectID: 7, ShortID: "a", Title: "Gone", Deleted: true}})
+		if found.State.Model.FieldForm.Found == nil {
+			t.Fatal("fixture: no Issue found")
+		}
+		erased := step(t, found.State, key(chord))
+		if erased.State.Model.FieldForm.Found != nil {
+			t.Errorf("%s left the Issue found for the old text", chord)
+		}
+		for _, cmd := range step(t, erased.State, key("enter")).Cmds {
+			if restore, ok := cmd.(model.RestoreIssueCmd); ok {
+				t.Fatalf("%s then Enter restored %+v from an erased field", chord, restore)
+			}
+		}
+	}
+}

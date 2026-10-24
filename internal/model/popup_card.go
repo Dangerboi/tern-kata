@@ -282,7 +282,13 @@ func buildCards() []cardEntry {
 			fields: []FieldSpec{}, input: true,
 			editing: []fieldEditing{{mode: ModeFieldForm, actions: []Action{DeleteInput, ClearInput}, delete: "erase", clear: "clear input"}},
 			text:    func(m *Model) (*string, *Caret) { return &m.FieldForm.Value, &m.FieldForm.Caret },
-			erased:  func(m Model, _ bool) Model { m.FieldForm.Err = nil; return m },
+			erased: func(m Model, changed bool) Model {
+				m.FieldForm.Err = nil
+				if changed {
+					m.FieldForm.Found = nil
+				}
+				return m
+			},
 		},
 		{
 			card: CardClose, name: "close", open: func(m Model) bool { return m.CloseForm.Open },
