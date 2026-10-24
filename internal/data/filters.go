@@ -83,5 +83,5 @@ func (g *Gateway) writeFilters(cmd model.SaveFilters) error {
 	} else {
 		file[cmd.ProjectUID] = table
 	}
-	return writeTables(path, "filters-*.toml", file)
+	return writeTables(path, file)
 }

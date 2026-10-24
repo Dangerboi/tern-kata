@@ -2,6 +2,7 @@ package data
 
 import (
 	"os"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -111,4 +112,30 @@ func TestTheConfigFolderIsFoundWithoutTheStateFolder(t *testing.T) {
 func f2(t *testing.T, g *Gateway) model.LanesLoaded {
 	t.Helper()
 	return as[model.LanesLoaded](t, run(t, g, model.LoadLanes{ProjectUID: "p"}))
+}
+
+func TestASaveThatCannotCompleteLeavesTheLaneListAndDefaultFilterFilesAsTheyWere(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs a folder this user cannot write to")
+	}
+	f := newConfigFixture(t)
+	lanes := f.write(t, "lanes.toml", "[\"p\"]\nname = \"old\"\nlabels = [\"a\"]\n")
+	filters := f.write(t, "filters.toml", "[\"p\"]\nname = \"old\"\nstatus = \"open\"\n")
+	if err := os.Chmod(f.folder, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(f.folder, 0o755) })
+	savedLanes := as[model.LanesSaved](t, run(t, f.gateway, model.SaveLanes{ProjectUID: "p", ProjectName: "new", Lanes: []string{"b"}}))
+	savedFilters := f.saveFilters(t, "p", "new", model.Filters{Status: "closed"})
+	if savedLanes.Err == nil || savedFilters.Err == nil {
+		t.Fatalf("errors: lanes %v, filters %v", savedLanes.Err, savedFilters.Err)
+	}
+	for path, want := range map[string]string{lanes: "[\"p\"]\nname = \"old\"\nlabels = [\"a\"]\n", filters: "[\"p\"]\nname = \"old\"\nstatus = \"open\"\n"} {
+		if raw, _ := os.ReadFile(path); string(raw) != want {
+			t.Errorf("%s holds %q", path, raw)
+		}
+	}
+	if left, _ := os.ReadDir(f.folder); len(left) != 2 {
+		t.Errorf("stray files %v", left)
+	}
 }
