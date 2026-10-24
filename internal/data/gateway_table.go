@@ -341,6 +341,38 @@ func init() {
 		func(cmd model.SetDatesCmd, err error) model.Msg { return model.DatesResultMsg{UID: cmd.UID, Err: err} },
 		nil, nil)
 
+	daemonCall(
+		func(cmd model.DeleteIssueCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.DeleteIssueCmd) (model.Msg, error) {
+			rec, err := c.DeleteRecorded(ctx, cmd)
+			if err != nil && !rec.Unknown {
+				return nil, err
+			}
+			return model.IssueDeleted{UID: cmd.UID, Err: err, Record: rec}, nil
+		},
+		func(cmd model.DeleteIssueCmd, err error) model.Msg { return model.IssueDeleted{UID: cmd.UID, Err: err} },
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.LookupDeleted) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LookupDeleted) (model.Msg, error) {
+			return ok(c.LookupDeleted(ctx, cmd))
+		},
+		func(cmd model.LookupDeleted, err error) model.Msg {
+			return model.DeletedLooked{Ref: cmd.Typed, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.RestoreIssueCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.RestoreIssueCmd) (model.Msg, error) {
+			return ok(c.RestoreIssue(ctx, cmd))
+		},
+		func(cmd model.RestoreIssueCmd, err error) model.Msg {
+			return model.IssueRestored{UID: cmd.UID, Err: err}
+		},
+		nil, nil)
+
 	daemonCallAt(
 		func(cmd model.AttachFile) string { return cmd.Workspace },
 		func(ctx context.Context, host string, c *Client, cmd model.AttachFile) (model.Msg, error) {

@@ -21,6 +21,7 @@ func cardOpeners() map[model.Card]func(*testing.T) driver.State {
 		model.CardToken:      func(t *testing.T) driver.State { return tokenCard(t) },
 		model.CardRevoke:     func(t *testing.T) driver.State { return step(t, tokenList(t), key("x")).State },
 		model.CardMove:       popupOpener("Move"),
+		model.CardDelete:     popupOpener("Delete"),
 		model.CardRecurrence: popupOpener("Recurrence"),
 		model.CardJob:        popupOpener("Job"),
 		model.CardProject:    popupOpener("New Project"),
