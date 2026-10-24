@@ -18,6 +18,7 @@ func cardOpeners() map[model.Card]func(*testing.T) driver.State {
 		model.CardField:      popupOpener("single-field form"),
 		model.CardClose:      popupOpener("Close"),
 		model.CardDates:      popupOpener("Dates"),
+		model.CardMove:       popupOpener("Move"),
 		model.CardRecurrence: popupOpener("Recurrence"),
 		model.CardJob:        popupOpener("Job"),
 		model.CardProject:    popupOpener("New Project"),

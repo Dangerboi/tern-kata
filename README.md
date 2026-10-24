@@ -46,6 +46,8 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 ![The Dates card over the Board, with "+1w" resolving to 2026-10-29](docs/images/dates-card.png)
 
+**Moving an Issue.** `M` opens the Move card on the selected Issue: pick a Project from a filtered list, preview the move (kata checks it and changes nothing), then move it, guarded on the revision the card opened with. A Notice links to the Issue in its new Project. See [Moving an Issue](docs/guide/pages-and-board.md#moving-an-issue).
+
 **kata links.** Links from agents' chat replies open the Issue in tern-kata. See [Agents](docs/guide/agents.md).
 
 ## Requirements

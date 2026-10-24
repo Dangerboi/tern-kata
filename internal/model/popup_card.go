@@ -51,6 +51,7 @@ const (
 	CardWorker
 	CardFilter
 	CardPicker
+	CardMove
 )
 
 // cardEntry is everything the model knows about one popup card. Each card fills in one.
@@ -316,6 +317,18 @@ func buildCards() []cardEntry {
 				}
 				return m
 			},
+		},
+		{
+			card: CardMove, name: "move", open: func(m Model) bool { return m.MoveProject.Open },
+			modes: []Mode{ModeMoveProject, ModeMoveConfirm}, mode: Model.MoveCardMode,
+			chords: []string{"ctrl+c"},
+			key:    moveProjectKey,
+			// The card holds no caret once a Project is chosen or while a request is out.
+			busy:   func(m Model) bool { return m.MoveProject.Sending || m.MoveProject.Target.UID != "" },
+			fields: []FieldSpec{}, input: true,
+			editing: []fieldEditing{{mode: ModeMoveProject, actions: []Action{DeleteInput, ClearInput}, clear: "clear filter"}},
+			text:    func(m *Model) (*string, *Caret) { return &m.MoveProject.Filter, &m.MoveProject.Caret },
+			erased:  func(m Model, _ bool) Model { m.MoveProject.Cursor, m.MoveProject.Err = 0, nil; return m },
 		},
 		{
 			card: CardRecurrence, name: "recurrence", open: func(m Model) bool { return m.RecurrenceForm.Open },

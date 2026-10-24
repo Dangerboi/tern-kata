@@ -44,6 +44,8 @@ type Project struct {
 	Name     string
 	Revision int64
 	UID      string
+	// Archived says kata has archived the Project: Issues cannot move into it.
+	Archived bool
 }
 
 type Model struct {
@@ -69,7 +71,13 @@ type Model struct {
 	Host      string
 	FieldForm FieldFormState
 	// Notice reports a write that has nothing to show in the Issues, and goes at the next key.
-	Notice    string
+	Notice string
+	// NoticeLink is the part of the Notice a click opens as an Issue; it goes with the Notice.
+	NoticeLink *NoticeLink
+	// MoveProject is the Move card, which moves the selected Issue to another Project.
+	MoveProject MoveProjectState
+	// afterMove is the Issue just moved to another Project and its neighbouring row, until a snapshot stops listing it.
+	afterMove *movedIssue
 	Workspace string
 	Project   Project
 	Daemon    Daemon
@@ -125,7 +133,7 @@ type Model struct {
 
 func Update(m Model, msg Msg) (Model, []Cmd) {
 	if _, ok := msg.(KeyMsg); ok {
-		m.Notice = ""
+		m.Notice, m.NoticeLink = "", nil
 	}
 	next, cmds := updateWithDetail(m, msg)
 	return next.cancelPending(m, msg), cmds
@@ -174,6 +182,12 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return updateRecurrence(m, msg)
 	case DatesResultMsg:
 		return updateDates(m, msg)
+	case ProjectMoveAnswer:
+		return updateMoveProject(m, msg)
+	case MoveTargetSelected:
+		return moveTargetSelected(m, msg.Key)
+	case OpenNoticeLinkMsg:
+		return openNoticeLink(m)
 	}
 	if msg, ok := msg.(PickerSelected); ok {
 		return pickCollectionKey(m, msg.Key)

@@ -58,11 +58,24 @@ Editing from the Pane:
 | `t` | In the Issue detail: timed assignment to you, 1m to 24h (see [Compared with `kata tui`](kata-tui.md#timed-assignment)) |
 | `O` | Recurrence (see [Recurring Issues](recur.md)) |
 | `d` | Dates (see [Dates](dates.md)) |
+| `M` | Move the Issue to another Project (see [Moving an Issue](#moving-an-issue)) |
 | `u`, `U` | Attach a file; list and remove Attachments (see [Attachments](attachments.md)) |
 | `e` | Edit the Issue body in Tern's editor |
 | `?` | Every key |
 
 The Issue detail's Activity tabs are described in [Compared with `kata tui`](kata-tui.md).
+
+## Moving an Issue
+
+`M` on the selected Issue (in the list, on the Board, in the Lane view and in the Issue detail) opens the **Move card**, as kata web's move does. kata tui has no move key; tern-kata sends kata's move action.
+
+1. The card lists the Projects of the Collection snapshot, without the Issue's own Project and without archived ones. Type to filter the list by name (any case); `↓`/`↑` move, and `esc` closes the card.
+2. `enter` on a Project sends the move as a dry run: kata checks it and changes nothing. The card then reads "#id moves to <project> and gets its new id there": kata assigns the new short id only when it moves the Issue, so a preview cannot name it. When kata refuses (for example "cross-project moves involving a federated project are unsupported", a recurring Issue, or an import mapping that already exists in the target), its reason shows on the card and the list stays for another choice.
+3. `enter` again moves the Issue. `esc` goes back to the list.
+
+The move is a Guarded write: it carries `If-Match` with the revision the card opened with (the preview carries it too). kata moves its revision on owner and status changes only, so a move after such a change is refused; the card stays open, says the Issue changed since it opened and nothing was moved, and `enter` asks for a fresh preview (read at the revision as it stands now) before `enter` moves.
+
+After the move a Notice names the new `project#id` as a link: click it to open the Issue in its new Project. The selection goes to the neighbouring row when the Collection no longer lists the Issue, and an open Issue detail closes to the list. A move cannot be undone: it clears the undo history.
 
 ## Board Page
 

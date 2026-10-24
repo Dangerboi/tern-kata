@@ -336,6 +336,7 @@ func (m Model) applyCollection(snapshot Snapshot) Model {
 		m.Issues = append(m.Issues, group.Issues...)
 	}
 	m = m.syncSidebarCursor()
+	m = m.afterMoveSelection()
 	if m.pending != "" {
 		m.SelectedUID = m.pending
 		for _, issue := range m.Issues {
