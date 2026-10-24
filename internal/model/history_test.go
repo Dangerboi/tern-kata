@@ -60,6 +60,20 @@ func TestHistoryReadsAsOneSentencePerEvent(t *testing.T) {
 		{"deadline", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"deadline_on":{"from":null,"to":"2026-12-31"}}}`}, "dana set deadline to 2026-12-31", "", ""},
 		{"deadline cleared", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"deadline_on":{"from":"2026-12-31","to":null}}}`}, "dana cleared deadline", "", ""},
 		{"other metadata", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"zeta":{"from":null,"to":1},"alpha":{"from":null,"to":2}}}`}, "dana updated metadata: alpha, zeta", "", ""},
+		{"request", slotEvent(map[string]string{"bob": `{"from":"dana","message":"please look\nat this"}`}), "dana asked bob: please look at this", "", ""},
+		{"reply notice", slotEvent(map[string]string{"bob": `{"from":"dana","message":"m","kind":"reply","re":"c:abc123"}`}), "dana told bob about a reply", "", ""},
+		{"confirm notice", slotEvent(map[string]string{"bob": `{"from":"dana","message":"m","kind":"confirm"}`}), "dana told bob about a confirm", "", ""},
+		{"refute notice", slotEvent(map[string]string{"bob": `{"from":"dana","message":"m","kind":"refute"}`}), "dana told bob about a refute", "", ""},
+		{"supersede notice", slotEvent(map[string]string{"bob": `{"from":"dana","message":"m","kind":"supersede"}`}), "dana told bob about a supersede", "", ""},
+		{"request cleared", slotEvent(map[string]string{"bob": "null"}), "dana cleared bob's request", "", ""},
+		{"broadcast to five", slotEvent(map[string]string{"e": same, "a": same, "d": same, "b": same, "c": same}), "dana asked a, b, c +2: all hands", "", ""},
+		{"broadcast to three", slotEvent(map[string]string{"c": same, "a": same, "b": same}), "dana asked a, b, c: all hands", "", ""},
+		{"teammate address", slotEvent(map[string]string{"alice/rev": `{"from":"dana","message":"m"}`}), "dana asked alice/rev: m", "", ""},
+		{"malformed optional fields dropped", slotEvent(map[string]string{"bob": `{"from":"dana","message":"m","kind":5,"re":[],"broadcast":"x","teammate":"bad handle"}`}), "dana asked bob: m", "", ""},
+		{"undecodable key", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"notify.!!":{"from":null,"to":{"from":"dana","message":"m"}}}}`}, "dana updated metadata: notify.!!", "", ""},
+		{"slot with unreadable value", slotEvent(map[string]string{"bob": `{"from":"dana","message":" "}`}), "dana updated metadata: bob", "", ""},
+		{"mixed diff", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"zeta":{"from":null,"to":1},"` + model.NotificationKey("bob") + `":{"from":null,"to":{"from":"dana","message":"m"}}}}`}, "dana updated metadata: bob, zeta", "", ""},
+		{"scheduled date reached", model.Event{Type: "issue.scheduled_reached", Payload: `{"field":"scheduled_on","value":"2026-12-01","timezone":"UTC","instant":"2026-12-01T00:00:00Z"}`}, "dana reached the scheduled date 2026-12-01", "", ""},
 		{"moved", model.Event{Type: "issue.moved", ProjectName: "other", Payload: `{"from_short_id":"aaaa","to_short_id":"bbbb","to_project_uid":"p"}`}, "dana moved to other as bbbb", "", ""},
 		{"deleted", model.Event{Type: "issue.soft_deleted", Payload: `{}`}, "dana deleted", "", ""},
 		{"restored", model.Event{Type: "issue.restored", Payload: `{}`}, "dana restored", "", ""},
@@ -82,6 +96,17 @@ func TestHistoryReadsAsOneSentencePerEvent(t *testing.T) {
 			}
 		})
 	}
+}
+
+const same = `{"from":"dana","message":"all hands","broadcast":true}`
+
+// slotEvent is an issue.metadata_updated event that sets (or, for null, clears) the slots of the given addresses.
+func slotEvent(slots map[string]string) model.Event {
+	var parts []string
+	for address, value := range slots {
+		parts = append(parts, `"`+model.NotificationKey(address)+`":{"from":null,"to":`+value+`}`)
+	}
+	return model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{` + strings.Join(parts, ",") + `}}`}
 }
 
 // sentence is the event as one line, author first, the way a reader takes it in.
