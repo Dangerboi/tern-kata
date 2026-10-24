@@ -411,6 +411,16 @@ func init() {
 		[]beforeStep{pauseBeforeRefresh}, nil)
 
 	daemonCall(
+		func(cmd model.LoadFederation) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LoadFederation) (model.Msg, error) {
+			return ok(c.ReadFederation(ctx, cmd))
+		},
+		func(cmd model.LoadFederation, err error) model.Msg {
+			return model.FederationLoaded{Request: cmd.Request, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
 		func(cmd model.ShowRun) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.ShowRun) (model.Msg, error) {
 			return ok(c.ShowRun(ctx, cmd))

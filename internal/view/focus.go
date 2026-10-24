@@ -25,6 +25,12 @@ var listNodes = map[model.ListNode]struct {
 		}
 		return ""
 	}},
+	model.ListNodeFederation: {FederationListID, func(m model.Model) string {
+		if s := m.SelectedSpoke(); s != nil {
+			return FederationSpokeID(s.ProjectName)
+		}
+		return ""
+	}},
 	model.ListNodeRuns: {RunListID, func(m model.Model) string {
 		if m.Runs.Selected == "" {
 			return ""

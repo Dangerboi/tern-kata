@@ -24,6 +24,8 @@ const (
 	PageWorkflows
 	// PageCredentials is the Lettered Page of the daemon's API tokens; its state is Model.Credentials.
 	PageCredentials
+	// PageFederation is the Lettered Page of this daemon's spoke federations; its state is Model.Federation.
+	PageFederation
 )
 
 // SecondColumn says what a Page's second column is. A Page declares it in pageDefs, and the one leave rule reads it.
@@ -55,6 +57,8 @@ const (
 	ListNodeWorkflows
 	// ListNodeCredentials is the Credentials Page's list node.
 	ListNodeCredentials
+	// ListNodeFederation is the Federation Page's list node.
+	ListNodeFederation
 )
 
 // ListNode is the current Page's list node.
@@ -175,6 +179,10 @@ func init() {
 			mode: credentialsMode, update: updateCredentials, list: ListNodeCredentials,
 			moves:  pageMoves{mode: ModeCredentials, noun: "credential", move: moveCredential, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
 			keymap: []keySegment{movementKeys, rowsOf(credentialsRows)}},
+		{page: PageFederation, id: "federation", label: "Federation", chord: "F", press: "shift+f", lettered: true, action: ShowFederationPage, second: SecondInspector, enter: enterFederation, clear: clearFederation,
+			mode: federationMode, update: updateFederation, list: ListNodeFederation,
+			moves:  pageMoves{mode: ModeFederation, noun: "spoke", move: moveFederation, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
+			keymap: []keySegment{movementKeys, rowsOf(federationRows)}},
 	}
 	buildKeymap()
 }
@@ -279,7 +287,7 @@ func pageScrollActions(def pageDef) []actionEntry {
 }
 
 // pageModes are the modes where the Page keys work: wherever the main surface has the keyboard and no text is being typed.
-var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollections, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeCredentials}
+var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollections, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeCredentials, ModeFederation}
 
 // PageBarEntry is one entry of the Page bar. Press is the chord a click on it sends.
 type PageBarEntry struct {
