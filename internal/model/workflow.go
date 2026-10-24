@@ -30,18 +30,13 @@ type Workflow struct {
 // WorkflowStep is one step of a Workflow. A command step carries Command, a prompt step Prompt; After names the earlier
 // steps it waits for; Retries is how often a failing step runs again.
 type WorkflowStep struct {
-	Key, Kind       string
+	Key             string
+	Kind            cronjob.StepKind
 	Command, Prompt string
 	After           []string
 	Retries         int
 	Options         json.RawMessage
 }
-
-// Workflow step kinds, as the Pane's text holds them.
-const (
-	StepCommand = string(cronjob.StepCommand)
-	StepPrompt  = string(cronjob.StepPrompt)
-)
 
 // The limits of the document the Pane sends; the definition's own rules live in package cronjob.
 const (
@@ -65,13 +60,13 @@ type workflowDefinition struct {
 }
 
 type workflowStep struct {
-	Key     string          `json:"key"`
-	Kind    string          `json:"kind"`
-	Command string          `json:"command,omitempty"`
-	Prompt  string          `json:"prompt,omitempty"`
-	After   []string        `json:"after,omitempty"`
-	Retries *int64          `json:"retries,omitempty"`
-	Options json.RawMessage `json:"options,omitempty"`
+	Key     string           `json:"key"`
+	Kind    cronjob.StepKind `json:"kind"`
+	Command string           `json:"command,omitempty"`
+	Prompt  string           `json:"prompt,omitempty"`
+	After   []string         `json:"after,omitempty"`
+	Retries *int64           `json:"retries,omitempty"`
+	Options json.RawMessage  `json:"options,omitempty"`
 }
 
 // NewWorkflowText is the text a new workflow starts from: one prompt step to fill in.
@@ -158,15 +153,21 @@ func (f workflowFile) check() error {
 func (d workflowDefinition) shape() cronjob.WorkflowDefinition {
 	out := cronjob.WorkflowDefinition{Version: d.Version, About: d.About, Input: d.Input, Options: decodeOptions(d.Options), Steps: make([]cronjob.WorkflowStep, len(d.Steps))}
 	for i, s := range d.Steps {
-		out.Steps[i] = cronjob.WorkflowStep{Key: s.Key, Kind: cronjob.StepKind(s.Kind), Command: s.Command, Prompt: s.Prompt, After: s.After, Retries: s.Retries, Options: decodeOptions(s.Options)}
+		out.Steps[i] = cronjob.WorkflowStep{Key: s.Key, Kind: s.Kind, Command: s.Command, Prompt: s.Prompt, After: s.After, Retries: s.Retries, Options: decodeOptions(s.Options)}
 	}
 	return out
 }
+
+// explicitNull stands for an options value written as `null`: present, so kata's rule that options are an object refuses it.
+type explicitNull struct{}
 
 func decodeOptions(raw json.RawMessage) any {
 	var options any
 	if len(raw) > 0 {
 		_ = json.Unmarshal(raw, &options)
+		if options == nil {
+			return explicitNull{}
+		}
 	}
 	return options
 }

@@ -7,7 +7,6 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
-	"github.com/Dangerboi/tern-kata/internal/view"
 )
 
 // createCard opens the Create card with a title typed and the cursor on the Scheduled field, five tabs on.
@@ -20,12 +19,10 @@ func createCard(t *testing.T) driver.State {
 	return s
 }
 
-func createField(t *testing.T, s driver.State, name model.Field) string {
+// createField is the text of the Create card's field labelled label.
+func createField(t *testing.T, s driver.State, label string) string {
 	t.Helper()
-	text, ok := nodeText(t, s, view.FieldID(model.CardCreate, name))
-	if !ok {
-		t.Fatalf("the Create card draws no %s field", name)
-	}
+	text, _ := nodeText(t, s, fieldLabeled(t, s.Model, label))
 	return text
 }
 
@@ -72,7 +69,7 @@ func TestCreateCardPreviewsEachDateAgainstThePaneCalendar(t *testing.T) {
 		if got, _ := nodeText(t, s, "layer.create.scheduled-preview"); got != tt.want {
 			t.Errorf("Scheduled %q previews %q, want %q", tt.input, got, tt.want)
 		}
-		if got := createField(t, s, model.CreateScheduled); got != tt.input {
+		if got := createField(t, s, "Scheduled (optional, YYYY-MM-DD, today, tomorrow, +Nd or +Nw)"); got != tt.input {
 			t.Errorf("Scheduled field holds %q, want %q", got, tt.input)
 		}
 	}

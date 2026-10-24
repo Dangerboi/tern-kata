@@ -5,13 +5,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
 func reviewFlow() model.Workflow {
 	return model.Workflow{UID: "W1", Name: "Review then test", EventUID: "E1", Revision: 1, Steps: []model.WorkflowStep{
-		{Key: "review", Kind: model.StepPrompt, Prompt: "Review the change."},
-		{Key: "test", Kind: model.StepCommand, Command: "make test", After: []string{"review"}, Retries: 1},
+		{Key: "review", Kind: cronjob.StepPrompt, Prompt: "Review the change."},
+		{Key: "test", Kind: cronjob.StepCommand, Command: "make test", After: []string{"review"}, Retries: 1},
 	}}
 }
 

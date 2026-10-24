@@ -151,7 +151,7 @@ func translateWorkflow(w g.CronWorkflow) model.Workflow {
 	out := model.Workflow{UID: w.UID, Name: w.Name, Author: w.Author, EventUID: w.DefinitionEventUID, Revision: w.Revision, Archived: w.DeletedAt != nil,
 		About: def.About, Input: def.Input, Options: rawOptions(w.Definition.Options), Steps: make([]model.WorkflowStep, len(def.Steps))}
 	for i, step := range def.Steps {
-		out.Steps[i] = model.WorkflowStep{Key: step.Key, Kind: string(step.Kind), Command: step.Command, Prompt: step.Prompt, After: step.After,
+		out.Steps[i] = model.WorkflowStep{Key: step.Key, Kind: step.Kind, Command: step.Command, Prompt: step.Prompt, After: step.After,
 			Retries: int(step.RetryCount()), Options: rawOptions(w.Definition.Steps[i].Options)}
 	}
 	return out

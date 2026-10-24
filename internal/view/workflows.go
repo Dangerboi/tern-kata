@@ -1,11 +1,13 @@
 package view
 
 import (
+	"cmp"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
@@ -167,12 +169,12 @@ func workerReading(r model.WorkerReading) tern.Element {
 // prompt.
 func workflowStep(i int, step model.WorkflowStep) tern.Element {
 	tone, text := commandTone, step.Command
-	if step.Kind == model.StepPrompt {
+	if step.Kind == cronjob.StepPrompt {
 		tone, text = promptTone, step.Prompt
 	}
 	head := ui.Nodes(
 		ui.Text{Common: ui.Common{Key: "key"}, Spans: []ui.Span{{T: strconv.Itoa(i+1) + "  ", S: "muted"}, {T: step.Key, S: "accent strong"}}, Wrap: ui.WrapNone},
-		ui.Badge{Common: ui.Common{Key: "kind", Tone: tone}, Text: step.Kind},
+		ui.Badge{Common: ui.Common{Key: "kind", Tone: tone}, Text: string(step.Kind)},
 	)
 	if len(step.After) > 0 {
 		head = append(head, ui.Text{Common: ui.Common{Key: "after"}, Spans: []ui.Span{{T: "after " + strings.Join(step.After, ", "), S: toneStyle(afterTone)}}, Wrap: ui.WrapNone})
@@ -202,8 +204,8 @@ func workflowLayer(m model.Model) tern.Element {
 	if c.Saving {
 		children = append(children, ui.Text{Common: ui.Common{Key: "saving", Tone: ui.TonePending}, Text: "Saving workflow…"})
 	}
-	if c.Err != nil {
-		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: c.Err.Error()})
+	if problem := cmp.Or(c.Err, c.Problem); problem != nil {
+		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: problem.Error()})
 	}
 	switch {
 	case c.Conflict != nil:

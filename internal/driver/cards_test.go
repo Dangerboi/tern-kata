@@ -6,19 +6,19 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
-	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
 // popup is one popup card for the precedence test: how to open it, how to put its state on another
 // model, the mode it owns, the id of its layer, and what typing into it changed.
 type popup struct {
-	name   string
-	open   func(*testing.T, driver.State) model.Model
-	graft  func(dst *model.Model, src model.Model)
-	mode   model.Mode
-	prefix string
-	typed  func(model.Model) string
+	name  string
+	open  func(*testing.T, driver.State) model.Model
+	graft func(dst *model.Model, src model.Model)
+	mode  model.Mode
+	// head is the title the card draws on its layer.
+	head  string
+	typed func(model.Model) string
 }
 
 func keyOpen(chords ...string) func(*testing.T, driver.State) model.Model {
@@ -36,43 +36,43 @@ func keyOpen(chords ...string) func(*testing.T, driver.State) model.Model {
 func popups() []popup {
 	return []popup{
 		{"Create", keyOpen("n"), func(dst *model.Model, src model.Model) { dst.Create = src.Create },
-			model.ModeCreate, "layer.create", func(m model.Model) string { return m.Create.Title }},
+			model.ModeCreate, "Create Issue", func(m model.Model) string { return m.Create.Title }},
 		{"Draft editor", keyOpen("e"), func(dst *model.Model, src model.Model) { dst.Drafts, dst.EditorUID = src.Drafts, src.EditorUID },
-			model.ModeEditor, "layer.editor", func(m model.Model) string { d, _ := m.ActiveDraft(); return d.Editor.Text }},
+			model.ModeEditor, "Edit Issue body", func(m model.Model) string { d, _ := m.ActiveDraft(); return d.Editor.Text }},
 		{"single-field form", keyOpen("+"), func(dst *model.Model, src model.Model) { dst.FieldForm = src.FieldForm },
-			model.ModeFieldForm, "layer.fields", func(m model.Model) string { return m.FieldForm.Value }},
+			model.ModeFieldForm, "Add label", func(m model.Model) string { return m.FieldForm.Value }},
 		{"Close", keyOpen("x"), func(dst *model.Model, src model.Model) { dst.CloseForm = src.CloseForm },
-			model.ModeCloseForm, "layer.close", func(m model.Model) string {
+			model.ModeCloseForm, "Close Issue", func(m model.Model) string {
 				values := m.CloseForm.Values
 				return values.Reason + values.Message + values.Commit + values.PR + values.Test + values.Reference + values.Rationale
 			}},
 		{"Dates", keyOpen("d"), func(dst *model.Model, src model.Model) { dst.DatesForm = src.DatesForm },
-			model.ModeDatesForm, view.LayerID(model.CardDates), func(m model.Model) string { return m.DatesForm.Text.Scheduled }},
+			model.ModeDatesForm, "Dates", func(m model.Model) string { return m.DatesForm.Text.Scheduled }},
 		{"Recurrence", func(t *testing.T, s driver.State) model.Model {
 			m := keyOpen("shift+o")(t, s)
 			m.RecurrenceForm.Field = model.RecurrenceZone // a text field
 			return m
 		}, func(dst *model.Model, src model.Model) { dst.RecurrenceForm = src.RecurrenceForm },
-			model.ModeRecurrenceForm, "layer.recurrence", func(m model.Model) string { return m.RecurrenceForm.Zone }},
+			model.ModeRecurrenceForm, "Make recurring", func(m model.Model) string { return m.RecurrenceForm.Zone }},
 		{"Job", keyOpen("shift+j"), func(dst *model.Model, src model.Model) { dst.JobForm = src.JobForm },
-			model.ModeJobForm, "layer.job", func(m model.Model) string { return m.JobForm.Name }},
+			model.ModeJobForm, "New job", func(m model.Model) string { return m.JobForm.Name }},
 		{"New Project", func(t *testing.T, s driver.State) model.Model {
 			return step(t, s, model.CollectionPointerSelected{Key: model.NewProjectKey}).State.Model
 		}, func(dst *model.Model, src model.Model) { dst.ProjectForm = src.ProjectForm },
-			model.ModeProjectForm, view.LayerID(model.CardProject), func(m model.Model) string { return m.ProjectForm.Name }},
+			model.ModeProjectForm, "New Project", func(m model.Model) string { return m.ProjectForm.Name }},
 		{"Lanes", func(t *testing.T, s driver.State) model.Model {
 			return feed(t, s, key("b"), model.LanesLoaded{ProjectUID: "p"}, key("shift+b")).State.Model
 		}, func(dst *model.Model, src model.Model) { dst.LanesForm = src.LanesForm },
-			model.ModeLanesForm, view.LayerID(model.CardLanes), func(m model.Model) string { return m.LanesForm.Text }},
+			model.ModeLanesForm, "Lanes", func(m model.Model) string { return m.LanesForm.Text }},
 		{"Filter form", func(t *testing.T, s driver.State) model.Model {
 			m := keyOpen("f")(t, s)
 			m.FilterForm.Field = model.FilterOwner // a text field
 			return m
 		}, func(dst *model.Model, src model.Model) { dst.FilterForm = src.FilterForm },
-			model.ModeFilterForm, "layer.filters", func(m model.Model) string { return m.FilterForm.Values.Owner }},
+			model.ModeFilterForm, "Filter work", func(m model.Model) string { return m.FilterForm.Values.Owner }},
 		{"Menu", func(t *testing.T, s driver.State) model.Model { return step(t, s, openMenu).State.Model },
 			func(dst *model.Model, src model.Model) { dst.Picker = src.Picker },
-			model.ModePicker, view.LayerID(model.CardPicker), func(m model.Model) string { return m.Picker.Filter }},
+			model.ModePicker, "Menu", func(m model.Model) string { return m.Picker.Filter }},
 	}
 }
 
@@ -100,15 +100,16 @@ func TestPopupCardPrecedenceIsOneOrder(t *testing.T) {
 				if got := out.State.Model.CurrentMode(); got != top.mode {
 					t.Errorf("mode %s, want %s", got, top.mode)
 				}
-				if !strings.HasPrefix(out.State.Focus, top.prefix) {
-					t.Errorf("text focus %q is not on %s (%s)", out.State.Focus, top.name, top.prefix)
+				layer := layerTitled(t, out.State.Model, top.head)
+				if !strings.HasPrefix(out.State.Focus, layer) {
+					t.Errorf("text focus %q is not on %s (%s)", out.State.Focus, top.name, layer)
 				}
 				drawn := drawnIDs(t, *out.View)
 				var layers []string
 				for id := range drawn {
 					if strings.HasPrefix(id, "layer.") {
 						layers = append(layers, id)
-						if id != top.prefix && !strings.HasPrefix(id, top.prefix+".") {
+						if id != layer && !strings.HasPrefix(id, layer+".") {
 							t.Errorf("drew %q, which is not part of %s", id, top.name)
 						}
 					}
@@ -127,7 +128,9 @@ func TestPopupCardPrecedenceIsOneOrder(t *testing.T) {
 
 // Tern names a body editor by node id; the model hears which card's body it is.
 func TestBodyEditsAndUndoReachTheirCard(t *testing.T) {
-	create := feed(t, browsing(t, 160), key("n"), &tern.Focus{ID: view.FieldID(model.CardCreate, model.CreateBody)})
+	create := feed(t, browsing(t, 160), key("n"))
+	createBody := fieldLabeled(t, create.State.Model, "Body (optional)")
+	create = step(t, create.State, &tern.Focus{ID: createBody})
 	draft := feed(t, browsing(t, 160), key("e"))
 	for _, tt := range []struct {
 		name string
@@ -135,8 +138,8 @@ func TestBodyEditsAndUndoReachTheirCard(t *testing.T) {
 		id   string
 		text func(model.Model) string
 	}{
-		{"Create", create.State, view.FieldID(model.CardCreate, model.CreateBody), func(m model.Model) string { return m.Create.Editor.Text }},
-		{"Draft editor", draft.State, view.FieldID(model.CardDraft, ""), func(m model.Model) string { d, _ := m.ActiveDraft(); return d.Editor.Text }},
+		{"Create", create.State, createBody, func(m model.Model) string { return m.Create.Editor.Text }},
+		{"Draft editor", draft.State, cardInput(t, draft.State.Model), func(m model.Model) string { d, _ := m.ActiveDraft(); return d.Editor.Text }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			edited := step(t, tt.s, &tern.Edit{ID: tt.id, Text: "hi", Cursor: 2})

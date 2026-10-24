@@ -77,7 +77,7 @@ func (WorkflowTextRead) msg() {}
 func (w Workflow) Definition() cronjob.WorkflowDefinition {
 	out := cronjob.WorkflowDefinition{Version: 1, About: w.About, Input: w.Input, Options: decodeOptions(w.Options), Steps: make([]cronjob.WorkflowStep, len(w.Steps))}
 	for i, s := range w.Steps {
-		step := cronjob.WorkflowStep{Key: s.Key, Kind: cronjob.StepKind(s.Kind), Command: s.Command, Prompt: s.Prompt, After: s.After, Options: decodeOptions(s.Options)}
+		step := cronjob.WorkflowStep{Key: s.Key, Kind: s.Kind, Command: s.Command, Prompt: s.Prompt, After: s.After, Options: decodeOptions(s.Options)}
 		if s.Retries != 0 {
 			retries := int64(s.Retries)
 			step.Retries = &retries
@@ -89,11 +89,11 @@ func (w Workflow) Definition() cronjob.WorkflowDefinition {
 
 // settleWorkflowReading asks for the Worker's reading when the open card's text is one it has not asked about: at once when the
 // card just opened or its text came back from $EDITOR, after a pause while the text is being typed. Text kata refuses gets no
-// ask, and any answer still on its way is dropped by numbering the ask all the same.
+// ask and its problem is kept on the card, and any answer still on its way is dropped by numbering the ask all the same.
 func (m Model) settleWorkflowReading() (Model, []Cmd) {
 	w := &m.Workflows
 	c := &w.Card
-	if !c.Open || c.Conflict != nil || (c.asked && c.askedText == c.Editor.Text) {
+	if !c.Open || c.Conflict != nil || (c.asked && c.askedText == c.Editor.Text && !c.askNow) {
 		return m, nil
 	}
 	after := workflowReadingDelay
@@ -103,6 +103,7 @@ func (m Model) settleWorkflowReading() (Model, []Cmd) {
 	c.asked, c.askedText, c.askNow, c.Reading = true, c.Editor.Text, false, nil
 	w.checkRequest++
 	doc, err := ParseWorkflow(c.Editor.Text)
+	c.Problem = err
 	if err != nil {
 		return m, nil
 	}

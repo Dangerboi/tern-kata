@@ -224,8 +224,15 @@ func buildCards() []cardEntry {
 			},
 			key:  createCard.key,
 			busy: createBusy, fields: CreateFields, focus: func(m *Model) *Field { return &m.Create.Field },
-			editing: []fieldEditing{{mode: ModeCreate, actions: []Action{NextField, PreviousField}}},
-			target:  EditCreateBody, bodyField: CreateBody,
+			editing: []fieldEditing{{mode: ModeCreate, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}}},
+			text: func(m *Model) (*string, *Caret) {
+				if value := createValue(&m.Create); value != nil {
+					return value, &m.Create.Caret
+				}
+				return nil, nil
+			},
+			erased: func(m Model, _ bool) Model { m.Create.Err = nil; return m },
+			target: EditCreateBody, bodyField: CreateBody,
 			edit: func(m Model, apply func(TextEditor) TextEditor) Model {
 				if !createBusy(m) {
 					m.Create.Editor = apply(m.Create.Editor)
@@ -428,9 +435,7 @@ func buildCards() []cardEntry {
 				return m
 			},
 			step: func(m Model, _ bool) Model {
-				if m.WorkerCardShows(m.WorkerCard.Field) {
-					m.WorkerCard.Trusted, m.WorkerCard.Err = !m.WorkerCard.Trusted, nil
-				}
+				m.WorkerCard.toggleTrust(m)
 				return m
 			},
 			choose: func(m Model, i int) Model { m.WorkerCard.choose(i); return m },

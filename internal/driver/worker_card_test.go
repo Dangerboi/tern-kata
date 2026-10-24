@@ -11,7 +11,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/Dangerboi/tern-kata/internal/worker"
-	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
 // The Worker card: W on the Jobs Page opens it; it tells what this machine's worker is and, where something is missing, sets
@@ -42,12 +41,13 @@ func workerCardOpen(t *testing.T, status *model.WorkerStatus, setup model.Worker
 	return answerWorker(t, out, status).State
 }
 
-func workerField(t *testing.T, s driver.State, name model.Field) string {
+// workerField is the text of the Worker card's field labelled label.
+func workerField(t *testing.T, s driver.State, label string) string {
 	t.Helper()
-	text, ok := nodeText(t, s, view.FieldID(model.CardWorker, name))
-	if !ok {
-		t.Fatalf("the Worker card draws no %s field", name)
+	if !fieldDrawn(t, s.Model, label) {
+		t.Fatalf("the Worker card draws no %s field", label)
 	}
+	text, _ := nodeText(t, s, fieldLabeled(t, s.Model, label))
 	return text
 }
 
@@ -91,12 +91,10 @@ func TestWorkerCardStatesAndWhatEachOffers(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := workerCardOpen(t, tt.status, tt.setup)
 			wantText(t, "card", wireTextOf(t, s), tt.want...)
-			_, executor := nodeText(t, s, view.FieldID(model.CardWorker, model.WorkerFieldExecutor))
-			if executor != tt.field {
+			if executor := fieldDrawn(t, s.Model, "Executor"); executor != tt.field {
 				t.Errorf("setup fields drawn = %v, want %v", executor, tt.field)
 			}
-			trust := slices.ContainsFunc(wireNodes(t, view.Render(s.Model, now)), func(n tern.WireNode) bool { return n.ID == view.FieldID(model.CardWorker, model.WorkerFieldTrust) })
-			if trust != tt.trust {
+			if trust := fieldDrawn(t, s.Model, "Trust"); trust != tt.trust {
 				t.Errorf("trust choice drawn = %v, want %v", trust, tt.trust)
 			}
 		})
@@ -105,15 +103,12 @@ func TestWorkerCardStatesAndWhatEachOffers(t *testing.T) {
 
 func TestWorkerCardSetUpFieldsStartAsWorkerInitWouldAndCommandStartsBlank(t *testing.T) {
 	s := workerCardOpen(t, nil, noWorkerFile)
-	for field, want := range map[model.Field]string{
-		model.WorkerFieldExecutor: "laptop-local", model.WorkerFieldActor: "dana", model.WorkerFieldCommand: "",
-		model.WorkerFieldModel: "", model.WorkerFieldThinking: "",
-	} {
+	for field, want := range map[string]string{"Executor": "laptop-local", "Actor": "dana", "Command": "", "Model": "", "Thinking": ""} {
 		if got := workerField(t, s, field); got != want {
 			t.Errorf("%s = %q, want %q", field, got, want)
 		}
 	}
-	if !strings.HasPrefix(s.Focus, view.LayerID(model.CardWorker)) {
+	if !strings.HasPrefix(s.Focus, layerTitled(t, s.Model, "Worker")) {
 		t.Errorf("text focus %q is not on the Worker card", s.Focus)
 	}
 	wantText(t, "card", wireTextOf(t, s), "checkout /repo", "Anyone who can write jobs")
@@ -122,7 +117,7 @@ func TestWorkerCardSetUpFieldsStartAsWorkerInitWouldAndCommandStartsBlank(t *tes
 func TestWorkerCardCommandFieldShowsTheDefaultAsItsPlaceholder(t *testing.T) {
 	s := workerCardOpen(t, nil, noWorkerFile)
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
-		if n.ID == view.FieldID(model.CardWorker, model.WorkerFieldCommand) {
+		if n.ID == fieldLabeled(t, s.Model, "Command") {
 			if got := n.P["placeholder"]; got != worker.DefaultCommand {
 				t.Fatalf("placeholder = %v, want %q", got, worker.DefaultCommand)
 			}
@@ -153,11 +148,11 @@ func TestWorkerCardSaveIsRefusedUntilTheTrustChoiceIsYesAndKeepsTheInput(t *test
 	if len(refused.Cmds) != 0 || refused.State.Model.TopCard() != model.CardWorker {
 		t.Fatalf("cmds %v card %v, want a refusal with the card open", refused.Cmds, refused.State.Model.TopCard())
 	}
-	msg, ok := nodeText(t, refused.State, view.LayerID(model.CardWorker)+".error")
+	msg, ok := errorOnCard(t, refused.State.Model)
 	if !ok || !strings.Contains(msg, "Trust") {
 		t.Errorf("error = %q (drawn %v), want it to name Trust", msg, ok)
 	}
-	if got := workerField(t, refused.State, model.WorkerFieldExecutor); got != "laptop-localx" {
+	if got := workerField(t, refused.State, "Executor"); got != "laptop-localx" {
 		t.Errorf("a refusal changed the executor to %q", got)
 	}
 	if refused.State.Model.WorkerCard.Field != model.WorkerFieldTrust {
@@ -197,7 +192,7 @@ func TestWorkerCardRefusesABlankExecutorNamingTheField(t *testing.T) {
 	s = step(t, s, model.FocusFieldMsg{Field: model.WorkerFieldExecutor}).State
 	s = step(t, s, key("ctrl+u")).State
 	out := step(t, s, key("ctrl+o"))
-	msg, _ := nodeText(t, out.State, view.LayerID(model.CardWorker)+".error")
+	msg, _ := errorOnCard(t, out.State.Model)
 	if len(out.Cmds) != 0 || !strings.Contains(msg, "Executor") || out.State.Model.WorkerCard.Field != model.WorkerFieldExecutor {
 		t.Fatalf("cmds %v error %q field %q, want a refusal naming Executor with focus there", out.Cmds, msg, out.State.Model.WorkerCard.Field)
 	}
@@ -226,7 +221,7 @@ func TestWorkerCardRefusedWriteKeepsTheInputAndFocusesTheNamedField(t *testing.T
 	s = step(t, s, model.ChooseMsg{Field: model.WorkerFieldTrust, Index: 1}).State
 	sent := step(t, s, key("ctrl+o"))
 	refused := step(t, sent.State, model.WorkerSetupSaved{Err: errors.New("worker.toml: executor must be at most 256 bytes with no whitespace"), Field: model.WorkerFieldExecutor})
-	msg, _ := nodeText(t, refused.State, view.LayerID(model.CardWorker)+".error")
+	msg, _ := errorOnCard(t, refused.State.Model)
 	card := refused.State.Model.WorkerCard
 	if card.Saving || !strings.Contains(msg, "executor must be") || card.Field != model.WorkerFieldExecutor || card.Executor != "bad-name" || !card.Trusted {
 		t.Fatalf("saving %v error %q field %q executor %q trusted %v, want the input kept and the executor focused", card.Saving, msg, card.Field, card.Executor, card.Trusted)
@@ -454,7 +449,7 @@ func TestWorkerCardRefusedEditKeepsTheTextAndNamesTheProblem(t *testing.T) {
 	bad := "executor = \"laptop\"\nbogus = 1\n"
 	sent := step(t, opened.State, model.DraftEditorClosed{UID: model.WorkerDraftUID, Text: bad})
 	refused := step(t, sent.State, model.WorkerEdited{Text: bad, Err: errors.New("worker.toml: unknown key bogus")})
-	msg, _ := nodeText(t, refused.State, view.LayerID(model.CardWorker)+".error")
+	msg, _ := errorOnCard(t, refused.State.Model)
 	if refused.State.Model.TopCard() != model.CardWorker || !strings.Contains(msg, "unknown key bogus") || !strings.Contains(msg, "not saved") {
 		t.Fatalf("card %v error %q, want the card kept with the problem named", refused.State.Model.TopCard(), msg)
 	}
@@ -481,7 +476,7 @@ func TestWorkerCardEditOfAFileThatChangedKeepsTheTextReadsTheSetupAgainAndSaysSo
 	mine := "executor = \"mine\"\n"
 	sent := step(t, opened.State, model.DraftEditorClosed{UID: model.WorkerDraftUID, Text: mine})
 	refused := step(t, sent.State, model.WorkerEdited{Text: mine, Err: worker.ErrConfigChanged})
-	msg, _ := nodeText(t, refused.State, view.LayerID(model.CardWorker)+".error")
+	msg, _ := errorOnCard(t, refused.State.Model)
 	for _, want := range []string{"changed", "lacks that change"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("error %q lacks %q", msg, want)
@@ -517,7 +512,7 @@ func TestWorkerCardEditKeyIsOnlyOfferedWhereAFileIsThere(t *testing.T) {
 	if out.Editor != nil {
 		t.Errorf("e opened the editor with no worker.toml")
 	}
-	if got := workerField(t, out.State, model.WorkerFieldExecutor); !strings.HasSuffix(got, "e") {
+	if got := workerField(t, out.State, "Executor"); !strings.HasSuffix(got, "e") {
 		t.Errorf("e was not typed into the executor field: %q", got)
 	}
 }

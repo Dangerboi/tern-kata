@@ -242,16 +242,16 @@ func TestLayerClicksEndWhereTheirKeysEnd(t *testing.T) {
 	for _, tt := range []struct {
 		name  string
 		open  string
-		click *tern.Focus
+		label string // what the card draws for the field clicked
 		keys  []string
 	}{
-		{"filters field", "f", &tern.Focus{ID: view.FieldID(model.CardFilter, model.FilterOwner)}, []string{"tab", "tab"}},
-		{"create field", "n", &tern.Focus{ID: view.FieldID(model.CardCreate, model.CreateOwner)}, []string{"tab", "tab", "tab"}},
-		{"close field", "x", &tern.Focus{ID: view.FieldID(model.CardClose, model.ClosePR)}, []string{"tab", "tab", "tab"}},
+		{"filters field", "f", "Owner", []string{"tab", "tab"}},
+		{"create field", "n", "Owner (optional)", []string{"tab", "tab", "tab"}},
+		{"close field", "x", "PR URL (optional)", []string{"tab", "tab", "tab"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			open := pressed(clickAt(model.ColumnList), tt.open)
-			pointer, clickCmds := clicked(open, tt.click)
+			pointer, clickCmds := clicked(open, &tern.Focus{ID: fieldLabeled(t, open.Model, tt.label)})
 			keyboard, keyCmds := keys(tt.keys...)(open)
 			sameAs(t, "click and keys diverge", pointer, clickCmds, keyboard, keyCmds)
 		})
@@ -289,7 +289,7 @@ func cardButtonsOf(t *testing.T, s driver.State) (map[string]string, map[string]
 	for _, node := range wireNodes(t, *out.View) {
 		actions, _ := node.P["actions"].(map[string]any)
 		clickAct, _ := actions["click"].(string)
-		if strings.HasPrefix(clickAct, view.KeyClick("")) && (strings.HasPrefix(node.ID, "layer.") || strings.HasPrefix(node.ID, view.LayerID(model.CardPicker))) {
+		if strings.HasPrefix(clickAct, view.KeyClick("")) && strings.HasPrefix(node.ID, "layer.") {
 			found[node.ID] = clickAct
 			labels[node.ID], _ = node.P["text"].(string)
 		}

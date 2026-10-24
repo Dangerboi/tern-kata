@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
@@ -60,7 +61,7 @@ func TestWorkflowsAreCreatedListedAndEditedAsTheirTextShows(t *testing.T) {
 		t.Fatalf("created workflow %+v", w)
 	}
 	test := w.Steps[1]
-	if test.Key != "test" || test.Kind != model.StepCommand || test.Command != "make test" || test.Retries != 2 || len(test.After) != 1 || test.After[0] != "review" {
+	if test.Key != "test" || test.Kind != cronjob.StepCommand || test.Command != "make test" || test.Retries != 2 || len(test.After) != 1 || test.After[0] != "review" {
 		t.Errorf("second step %+v, want the command step after review with 2 retries", test)
 	}
 	if listed := loadWorkflows(t, gateway, workspace, bound); len(listed) != 1 || listed[0].UID != w.UID || listed[0].EventUID != w.EventUID {
@@ -94,6 +95,9 @@ func TestSavingAWorkflowChangedMeanwhileWritesNothingAndReturnsTheCurrentOne(t *
 	}
 	if mine.Current.EventUID != someoneElse.EventUID || mine.Current.Steps[0].Prompt != "Review it twice." {
 		t.Errorf("current workflow %+v, want the other writer's version", mine.Current)
+	}
+	if mine.Reading == nil {
+		t.Error("the refused save carries no Worker reading of the current version")
 	}
 	if listed := loadWorkflows(t, gateway, workspace, bound); listed[0].EventUID != someoneElse.EventUID || listed[0].Steps[1].Command != "make test" {
 		t.Errorf("after the refused save the workflow is %+v, want the other writer's, untouched", listed[0])

@@ -589,9 +589,7 @@ func workerCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case bound && binding.Action == WorkerSave:
 		return submitWorker(m)
 	case field == nil && bound && binding.Action == InputSpace:
-		if m.WorkerCardShows(f.Field) {
-			f.Trusted, f.Err = !f.Trusted, nil
-		}
+		m.WorkerCard.toggleTrust(m)
 	case field != nil && m.WorkerCardShows(f.Field):
 		var edited bool
 		if bound && binding.Action == InputSpace {
@@ -602,6 +600,13 @@ func workerCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		}
 	}
 	return m, nil
+}
+
+// toggleTrust flips the trust choice while the field is on show.
+func (f *WorkerCardState) toggleTrust(m Model) {
+	if m.WorkerCardShows(f.Field) {
+		f.Trusted, f.Err = !f.Trusted, nil
+	}
 }
 
 // choose gives the trust field its choice at index i: 0 is No, 1 is Yes.

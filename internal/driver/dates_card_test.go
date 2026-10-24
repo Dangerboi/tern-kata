@@ -8,7 +8,6 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
-	"github.com/Dangerboi/tern-kata/internal/view"
 )
 
 func withDates(uid, scheduled, deadline string) model.Issue {
@@ -24,19 +23,17 @@ func withDates(uid, scheduled, deadline string) model.Issue {
 	return issue
 }
 
-func datesField(t *testing.T, s driver.State, name model.Field) string {
+// datesField is the text of the Dates card's field labelled label.
+func datesField(t *testing.T, s driver.State, label string) string {
 	t.Helper()
-	text, ok := nodeText(t, s, view.FieldID(model.CardDates, name))
-	if !ok {
-		t.Fatalf("the Dates card draws no %s field", name)
-	}
+	text, _ := nodeText(t, s, fieldLabeled(t, s.Model, label))
 	return text
 }
 
-func datesPreview(t *testing.T, s driver.State, name model.Field) string {
+// datesPreview is the line the Dates card draws under its field labelled label: "no date" or the day the text resolves to.
+func datesPreview(t *testing.T, s driver.State, label string) string {
 	t.Helper()
-	text, _ := nodeText(t, s, view.LayerID(model.CardDates)+"."+string(name)+"-preview")
-	return text
+	return textAfterField(t, s.Model, label)
 }
 
 // emptied clears the focused field of the open card.
@@ -58,13 +55,13 @@ func TestDOpensTheDatesCardPrefilledInEveryModeAndEscClosesItUnchanged(t *testin
 			if m.CurrentMode() != model.ModeDatesForm || m.TopCard() != model.CardDates || len(open.Cmds) != 0 {
 				t.Fatalf("mode %s card %v cmds %v", m.CurrentMode(), m.TopCard(), open.Cmds)
 			}
-			if got := datesField(t, open.State, model.DatesScheduled); got != "2026-10-12" {
+			if got := datesField(t, open.State, "Scheduled"); got != "2026-10-12" {
 				t.Errorf("Scheduled = %q", got)
 			}
-			if got := datesField(t, open.State, model.DatesDeadline); got != "2026-11-02T17:30:00" {
+			if got := datesField(t, open.State, "Deadline"); got != "2026-11-02T17:30:00" {
 				t.Errorf("Deadline = %q, want the value as kata holds it", got)
 			}
-			if !strings.HasPrefix(open.State.Focus, view.LayerID(model.CardDates)) {
+			if !strings.HasPrefix(open.State.Focus, layerTitled(t, open.State.Model, "Dates")) {
 				t.Errorf("text focus %q is not on the Dates card", open.State.Focus)
 			}
 			typedIn := typed(t, open.State, "x")
@@ -88,12 +85,12 @@ func TestDatesCardResolvesEachFormAgainstThePaneCalendarAndPreviewsIt(t *testing
 	} {
 		s := emptied(t, step(t, projectPane(t, 160, withDates("a", "2026-10-12", "")), key("d")).State)
 		s = typed(t, s, tt.input)
-		if got := datesPreview(t, s, model.DatesScheduled); got != tt.want {
+		if got := datesPreview(t, s, "Scheduled"); got != tt.want {
 			t.Errorf("%q previews %q, want %q", tt.input, got, tt.want)
 		}
 	}
 	s := typed(t, emptied(t, step(t, projectPane(t, 160, withDates("a", "", "")), key("d")).State), "someday")
-	if got := datesPreview(t, s, model.DatesScheduled); got != "" {
+	if got := datesPreview(t, s, "Scheduled"); got != "" {
 		t.Errorf("invalid input previews %q", got)
 	}
 }
@@ -146,7 +143,7 @@ func TestDatesCardRefusesInvalidInputNamingTheField(t *testing.T) {
 		t.Fatalf("cmds %v open %v err %v", out.Cmds, f.Open, f.Err)
 	}
 	// The refusal is drawn, and the next edit takes it away.
-	if text, ok := nodeText(t, out.State, view.LayerID(model.CardDates)+".error"); !ok || !strings.HasPrefix(text, "Deadline") {
+	if text, ok := errorOnCard(t, out.State.Model); !ok || !strings.HasPrefix(text, "Deadline") {
 		t.Errorf("drawn error %q %v", text, ok)
 	}
 	if step(t, out.State, key("x")).State.Model.DatesForm.Err != nil {
@@ -185,7 +182,7 @@ func TestDatesCardReportsAChangedKeyAndKeepsTheCardOpen(t *testing.T) {
 	if _, ok := snapshotFor(failed.Cmds); !ok {
 		t.Errorf("the written Scheduled was not read back: %v", failed.Cmds)
 	}
-	if got := datesField(t, failed.State, model.DatesDeadline); got != "+2d" {
+	if got := datesField(t, failed.State, "Deadline"); got != "+2d" {
 		t.Errorf("Deadline text %q lost", got)
 	}
 	// Saving again writes only what is still unwritten, guarded on what is held now.

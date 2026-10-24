@@ -587,21 +587,3 @@ func TestDraftCardsTakeNativeEditsAndUndo(t *testing.T) {
 		})
 	}
 }
-
-// Every card has a name, the stem of its node ids, and no two cards share one.
-func TestEveryCardHasItsOwnName(t *testing.T) {
-	seen := map[string]model.Card{}
-	for _, card := range model.Cards() {
-		name := card.Name()
-		if name == "" {
-			t.Errorf("card %d has no name", card)
-		}
-		if other, dup := seen[name]; dup {
-			t.Errorf("cards %d and %d are both named %q", other, card, name)
-		}
-		seen[name] = card
-	}
-	if model.NoCard.Name() != "" {
-		t.Errorf("NoCard is named %q", model.NoCard.Name())
-	}
-}

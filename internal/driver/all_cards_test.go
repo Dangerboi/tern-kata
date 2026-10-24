@@ -1,11 +1,11 @@
 package driver_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
-	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
@@ -34,14 +34,15 @@ func cardOpeners() map[model.Card]func(*testing.T) driver.State {
 	}
 }
 
-// Every card of the model's card table, opened by its own key, is drawn as a layer named from the table, and Tern's focus
-// input on each field node it draws moves the card's own focus to that field.
+// Every card of the model's card table, opened by its own key, is drawn as a layer of its own, and Tern's focus input on each
+// field node it draws moves the card's own focus to a field of its list, a different one for each node.
 func TestEveryCardIsDrawnAndItsFieldNodesMoveItsFocus(t *testing.T) {
 	openers := cardOpeners()
 	focused := map[model.Card]func(model.Model) model.Field{}
 	for _, c := range editingCards() {
 		focused[c.card] = c.focused
 	}
+	layers := map[string]string{}
 	for _, card := range model.Cards() {
 		open, ok := openers[card]
 		if !ok {
@@ -52,43 +53,39 @@ func TestEveryCardIsDrawnAndItsFieldNodesMoveItsFocus(t *testing.T) {
 			if got := s.Model.TopCard(); got != card {
 				t.Fatalf("opened card %q, want %q", got.Name(), card.Name())
 			}
-			drawn := drawnIDs(t, view.Render(s.Model, now))
-			if id := view.LayerID(card); !drawn[id] {
-				t.Fatalf("no layer %q drawn", id)
+			layer := cardLayerID(t, s.Model)
+			if other, dup := layers[layer]; dup {
+				t.Fatalf("cards %q and %q are both drawn as %q", other, card.Name(), layer)
 			}
-			fields, _ := model.CardFields(card)
+			layers[layer] = card.Name()
+			specs, _ := model.CardFields(card)
 			if model.CardInput(card) {
-				id := view.FieldID(card, "")
-				if !drawn[id] {
-					t.Errorf("the card's one input %q is not drawn", id)
-				}
-				if got, field, ok := view.FieldFromID(id); !ok || got != card || field != "" {
-					t.Errorf("node %q maps back to %q field %q (%v)", id, got.Name(), field, ok)
-				}
+				cardInput(t, s.Model)
 			}
-			if len(fields) > 0 && focused[card] == nil {
+			nodes := cardFields(t, s.Model)
+			if len(specs) > 0 && len(nodes) == 0 {
+				t.Fatalf("none of the card's fields %v is drawn", specs)
+			}
+			if len(specs) > 0 && focused[card] == nil {
 				t.Fatalf("card %q has fields and no way to read its focused field here", card.Name())
 			}
-			seen := 0
-			for _, f := range fields {
-				id := view.FieldID(card, f.Name)
-				if !drawn[id] {
-					continue // a field the card does not show as it stands has no node to focus
+			reached := map[model.Field]string{}
+			for _, n := range nodes {
+				if len(specs) == 0 {
+					break // the one input of a card without a field list has no focus to move
 				}
-				seen++
-				if got, field, ok := view.FieldFromID(id); !ok || got != card || field != f.Name {
-					t.Errorf("node %q maps back to %q field %q (%v)", id, got.Name(), field, ok)
+				out := step(t, s, &tern.Focus{ID: n.ID})
+				got := focused[card](out.State.Model)
+				if !slices.ContainsFunc(specs, func(f model.FieldSpec) bool { return f.Name == got }) {
+					t.Errorf("focus input on %q left field %q, which the card does not list", n.ID, got)
 				}
-				out := step(t, s, &tern.Focus{ID: id})
-				if got := focused[card](out.State.Model); got != f.Name {
-					t.Errorf("focus input on %q left field %q, want %q", id, got, f.Name)
+				if other, dup := reached[got]; dup {
+					t.Errorf("focus input on %q and on %q both left field %q", other, n.ID, got)
 				}
+				reached[got] = n.ID
 				if out.State.Model.TopCard() != card {
-					t.Errorf("focus input on %q changed the card on top to %q", id, out.State.Model.TopCard().Name())
+					t.Errorf("focus input on %q changed the card on top to %q", n.ID, out.State.Model.TopCard().Name())
 				}
-			}
-			if len(fields) > 0 && seen == 0 {
-				t.Errorf("none of the card's fields %v is drawn", fields)
 			}
 		})
 	}

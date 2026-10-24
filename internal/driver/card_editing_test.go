@@ -1,6 +1,7 @@
 package driver_test
 
 import (
+	"errors"
 	"reflect"
 	"slices"
 	"testing"
@@ -68,21 +69,6 @@ func editingCards() []editingCard {
 	}
 }
 
-// takesText says the card's field is a single-line text field.
-func (c editingCard) takesText(field model.Field) bool {
-	specs, _ := model.CardFields(c.card)
-	return slices.ContainsFunc(specs, func(f model.FieldSpec) bool { return f.Name == field && f.Text })
-}
-
-// caretID is the node Tern is told to focus while the card has field focused: the field's own when it takes text, none for a
-// choice field.
-func (c editingCard) caretID(field model.Field) string {
-	if c.takesText(field) {
-		return view.FieldID(c.card, field)
-	}
-	return ""
-}
-
 // wantFocusOps is what one key sends Tern: the focus op when the focused node changed, nothing otherwise.
 func wantFocusOps(from, to driver.State) []tern.Op {
 	if from.Focus == to.Focus {
@@ -122,8 +108,8 @@ func TestTabMovesTheFocusedFieldAndSendsTheFocusOp(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			s := c.open(t)
 			start := c.focused(s.Model)
-			if s.Focus != c.caretID(start) {
-				t.Fatalf("opened with focus %q, want %q", s.Focus, c.caretID(start))
+			if want := caretNode(t, s.Model); s.Focus != want {
+				t.Fatalf("opened with focus %q, want %q", s.Focus, want)
 			}
 			for _, want := range c.lap {
 				out := step(t, s, key("tab"))
@@ -133,11 +119,11 @@ func TestTabMovesTheFocusedFieldAndSendsTheFocusOp(t *testing.T) {
 				if slices.Contains(c.hidden, want) {
 					t.Fatalf("tab reached the hidden field %s", want)
 				}
-				if out.State.Focus != c.caretID(want) {
-					t.Fatalf("on %s the focus is %q, want %q", want, out.State.Focus, c.caretID(want))
+				if node := caretNode(t, out.State.Model); out.State.Focus != node {
+					t.Fatalf("on %s the focus is %q, want %q", want, out.State.Focus, node)
 				}
-				if got, want := opsOf(out), wantFocusOps(s, out.State); !reflect.DeepEqual(got, want) {
-					t.Fatalf("tab onto %s sent %v, want %v", want, got, want)
+				if got, wantOps := opsOf(out), wantFocusOps(s, out.State); !reflect.DeepEqual(got, wantOps) {
+					t.Fatalf("tab onto %s sent %v, want %v", want, got, wantOps)
 				}
 				s = out.State
 			}
@@ -153,8 +139,8 @@ func TestTabMovesTheFocusedFieldAndSendsTheFocusOp(t *testing.T) {
 				if got := c.focused(out.State.Model); got != want {
 					t.Fatalf("shift+tab from %s reached %s, want %s", c.focused(s.Model), got, want)
 				}
-				if out.State.Focus != c.caretID(want) {
-					t.Fatalf("on %s the focus is %q, want %q", want, out.State.Focus, c.caretID(want))
+				if node := caretNode(t, out.State.Model); out.State.Focus != node {
+					t.Fatalf("on %s the focus is %q, want %q", want, out.State.Focus, node)
 				}
 				if got, wantOps := opsOf(out), wantFocusOps(s, out.State); !reflect.DeepEqual(got, wantOps) {
 					t.Fatalf("shift+tab onto %s sent %v, want %v", want, got, wantOps)
@@ -169,12 +155,13 @@ func TestTabMovesTheFocusedFieldAndSendsTheFocusOp(t *testing.T) {
 func TestTextKeysEditTheRenderedFocusedField(t *testing.T) {
 	for _, c := range editingCards() {
 		for _, field := range append([]model.Field{c.focused(c.open(t).Model)}, c.lap...) {
-			if !c.takesText(field) || (c.card == model.CardCreate && field == model.CreateBody) {
-				continue
+			at := c.seekField(t, c.open(t), field)
+			if node := focusedField(t, at.Model); !hasCursor(node) || node.P["maxLines"] != nil {
+				continue // a choice field, or a multi-line body that takes Enter and its own editing keys
 			}
 			t.Run(c.name+"/"+string(field), func(t *testing.T) {
 				s := c.seekField(t, c.open(t), field)
-				id := view.FieldID(c.card, field)
+				id := focusedField(t, s.Model).ID
 				steps := []struct {
 					key  string
 					want string
@@ -199,7 +186,7 @@ func TestTextKeysEditTheRenderedFocusedField(t *testing.T) {
 func TestChoiceKeysStepTheRenderedChoice(t *testing.T) {
 	for _, c := range editingCards() {
 		for _, field := range c.lap {
-			if c.takesText(field) {
+			if hasCursor(focusedField(t, c.seekField(t, c.open(t), field).Model)) {
 				continue
 			}
 			t.Run(c.name+"/"+string(field), func(t *testing.T) {
@@ -235,5 +222,110 @@ func TestChoiceKeysStepTheRenderedChoice(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// A card that is busy (saving, asking to discard, showing a conflict or refusing) takes none of the field-editing keys: what it
+// draws is unchanged, nothing is sent and no text field holds the caret.
+func TestBusyCardsIgnoreFieldEditingKeys(t *testing.T) {
+	cases := []struct {
+		card, busy string
+		make       func(model.Model) model.Model
+	}{
+		{"Create", "saving", func(m model.Model) model.Model { m.Create.Saving = true; return m }},
+		{"Create", "asking to discard", func(m model.Model) model.Model { m.Create.DiscardConfirm = true; return m }},
+		{"Close", "saving", func(m model.Model) model.Model { m.CloseForm.Saving = true; return m }},
+		{"Dates", "saving", func(m model.Model) model.Model { m.DatesForm.Saving = true; return m }},
+		{"Recurrence", "saving", func(m model.Model) model.Model { m.RecurrenceForm.Saving = true; return m }},
+		{"Recurrence", "asking to stop", func(m model.Model) model.Model { m.RecurrenceForm.StopConfirm = true; return m }},
+		{"Recurrence", "refused", func(m model.Model) model.Model {
+			m.RecurrenceForm.Refused, m.RecurrenceForm.Err = true, errors.New("stopped here")
+			return m
+		}},
+		{"Job", "saving", func(m model.Model) model.Model { m.JobForm.Saving = true; return m }},
+		{"Job", "showing a conflict", func(m model.Model) model.Model { m.JobForm.Conflict = &model.CronJob{UID: "J"}; return m }},
+		{"Lanes", "saving", func(m model.Model) model.Model { m.LanesForm.Saving = true; return m }},
+		{"Worker", "saving", func(m model.Model) model.Model { m.WorkerCard.Saving = true; return m }},
+		{"Worker", "stopping", func(m model.Model) model.Model { m.WorkerCard.Stopping = true; return m }},
+		{"Worker", "switching supervision", func(m model.Model) model.Model { m.WorkerCard.Switching = true; return m }},
+		{"Worker", "asking how to restart", func(m model.Model) model.Model { m.WorkerCard.Restart = true; return m }},
+		{"Worker", "asking how to stop", func(m model.Model) model.Model { m.WorkerCard.AskOff = true; return m }},
+		{"Filter", "saving", func(m model.Model) model.Model { m.FilterForm.Saving = true; return m }},
+	}
+	for _, tt := range cases {
+		t.Run(tt.card+" "+tt.busy, func(t *testing.T) {
+			var c editingCard
+			for _, candidate := range editingCards() {
+				if candidate.name == tt.card {
+					c = candidate
+				}
+			}
+			open := c.open(t)
+			for !hasCursor(focusedField(t, open.Model)) { // a card that opens on a choice goes to its first text field
+				open = step(t, open, key("tab")).State
+			}
+			busy := step(t, driver.State{Model: tt.make(open.Model), Focus: open.Focus}, resize(160)).State
+			if busy.Focus != "" {
+				t.Fatalf("a busy card holds the text caret on %q", busy.Focus)
+			}
+			want := drawnNodes(t, busy)
+			for _, k := range []string{"tab", "shift+tab", "right", "left", "space", "backspace", "ctrl+u"} {
+				out := step(t, busy, key(k))
+				if len(out.Cmds) != 0 || out.State.Focus != "" || !reflect.DeepEqual(drawnNodes(t, out.State), want) {
+					t.Errorf("%s changed the busy card, moved the caret to %q or sent %+v", k, out.State.Focus, out.Cmds)
+				}
+			}
+		})
+	}
+}
+
+// A card with no text input holds no caret.
+func TestACardWithNoTextInputHoldsNoCaret(t *testing.T) {
+	s := cardOpeners()[model.CardBackfill](t)
+	if s.Focus != "" || len(cardFields(t, s.Model)) != 0 {
+		t.Errorf("the Backfill card holds the caret on %q with fields %v", s.Focus, cardFields(t, s.Model))
+	}
+}
+
+// In a text field right and left move the caret and space is typed, and they leave a neighbouring choice alone.
+func TestArrowKeysMoveTheCaretInATextFieldAndSpaceIsTyped(t *testing.T) {
+	for _, c := range editingCards() {
+		switch c.name {
+		case "Recurrence":
+			s := c.seekField(t, c.open(t), model.RecurrenceEvery)
+			before := s.Model.RecurrenceForm.Frequency
+			s = feed(t, s, key("a"), key("b"), key("left"), key("right"), key("space")).State
+			if text, _ := nodeText(t, s, fieldLabeled(t, s.Model, "Every (weeks)")); text != "1ab " || s.Model.RecurrenceForm.Frequency != before {
+				t.Errorf("Recurrence Every draws %q (frequency %q, was %q), want \"1ab \" and the frequency kept", text, s.Model.RecurrenceForm.Frequency, before)
+			}
+		case "Filter":
+			s := c.seekField(t, c.open(t), model.FilterOwner)
+			s = feed(t, s, key("a"), key("b"), key("left"), key("x")).State
+			if text, _ := nodeText(t, s, fieldLabeled(t, s.Model, "Owner")); text != "axb" {
+				t.Errorf("Filter Owner draws %q, want axb", text)
+			}
+		}
+	}
+}
+
+// In the Filter form backspace clears the status choice, and enter is next field there and nowhere else.
+func TestFilterFormBackspaceClearsAChoiceAndEnterMovesToTheNextField(t *testing.T) {
+	var c editingCard
+	for _, candidate := range editingCards() {
+		if candidate.name == "Filter" {
+			c = candidate
+		}
+	}
+	s := c.seekField(t, c.open(t), model.FilterStatus)
+	s = step(t, s, key("right")).State
+	if s.Model.FilterForm.Values.Status == "" {
+		t.Fatal("right left the status unset")
+	}
+	if cleared := step(t, s, key("backspace")).State; cleared.Model.FilterForm.Values.Status != "" {
+		t.Errorf("backspace on a choice left the status %q", cleared.Model.FilterForm.Values.Status)
+	}
+	s = c.seekField(t, c.open(t), model.FilterOwner)
+	if got := step(t, s, key("enter")).State; got.Model.FilterForm.Field != model.FilterLabel || got.Model.TopCard() != model.CardFilter {
+		t.Errorf("enter reached %q on card %q, want the next field of the open Filter form", got.Model.FilterForm.Field, got.Model.TopCard().Name())
 	}
 }

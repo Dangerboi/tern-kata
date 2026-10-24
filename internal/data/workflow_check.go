@@ -76,13 +76,21 @@ var readWorkflowsAfter = afterStep{"read the Worker's reading of each Workflow",
 	return loaded
 }}
 
-// readSavedWorkflowAfter puts the Worker's reading of the stored Workflow into a successful save.
-var readSavedWorkflowAfter = afterStep{"read the Worker's reading of the saved Workflow", func(g *Gateway, _ context.Context, _ model.Cmd, result model.Msg) model.Msg {
+// readWrittenWorkflowAfter puts the Worker's reading of the stored Workflow into a write: the version a write stored, or the
+// version a refused write found.
+var readWrittenWorkflowAfter = afterStep{"read the Worker's reading of the written Workflow", func(g *Gateway, _ context.Context, _ model.Cmd, result model.Msg) model.Msg {
 	written, ok := result.(model.WorkflowWritten)
-	if !ok || written.Err != nil || written.Workflow == nil {
+	if !ok || written.Err != nil {
 		return result
 	}
-	reading := g.readPromptBudget().reading(written.Workflow.Definition())
+	stored := written.Workflow
+	if stored == nil {
+		stored = written.Current
+	}
+	if stored == nil {
+		return result
+	}
+	reading := g.readPromptBudget().reading(stored.Definition())
 	written.Reading = &reading
 	return written
 }}

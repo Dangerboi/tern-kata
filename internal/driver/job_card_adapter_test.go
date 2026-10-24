@@ -8,7 +8,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
-	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
@@ -37,7 +36,7 @@ func adapterCard(t *testing.T, kind int) driver.State {
 // typePrompt types lines into the prompt, Enter between them.
 func typePrompt(t *testing.T, s driver.State, lines ...string) driver.State {
 	t.Helper()
-	s = step(t, s, &tern.Focus{ID: view.FieldID(model.CardJob, model.JobFieldPrompt)}).State
+	s = step(t, s, &tern.Focus{ID: fieldLabeled(t, s.Model, model.JobPrompt(model.JobFieldPrompt))}).State
 	for i, line := range lines {
 		if i > 0 {
 			s = step(t, s, key("enter")).State

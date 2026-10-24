@@ -448,7 +448,7 @@ func init() {
 		func(cmd model.SaveWorkflow, err error) model.Msg {
 			return model.WorkflowWritten{ProjectUID: cmd.ProjectUID, Op: model.WorkflowOpSave, UID: cmd.UID, Err: err}
 		},
-		nil, []afterStep{readSavedWorkflowAfter})
+		nil, []afterStep{readWrittenWorkflowAfter})
 
 	daemonCall(
 		func(cmd model.ArchiveWorkflow) string { return cmd.Workspace },
@@ -458,7 +458,7 @@ func init() {
 		func(cmd model.ArchiveWorkflow, err error) model.Msg {
 			return model.WorkflowWritten{ProjectUID: cmd.ProjectUID, Op: model.WorkflowOpArchive, UID: cmd.UID, Err: err}
 		},
-		nil, nil)
+		nil, []afterStep{readWrittenWorkflowAfter})
 
 	daemonCall(
 		func(cmd model.RestoreWorkflow) string { return cmd.Workspace },
@@ -468,7 +468,7 @@ func init() {
 		func(cmd model.RestoreWorkflow, err error) model.Msg {
 			return model.WorkflowWritten{ProjectUID: cmd.ProjectUID, Op: model.WorkflowOpRestore, UID: cmd.UID, Err: err}
 		},
-		nil, nil)
+		nil, []afterStep{readWrittenWorkflowAfter})
 
 	daemonCall(
 		func(cmd model.ReadSnapshot) string { return cmd.Workspace },

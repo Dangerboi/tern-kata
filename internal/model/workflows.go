@@ -64,6 +64,8 @@ type WorkflowCard struct {
 	Saving         bool
 	DiscardConfirm bool
 	Err            error
+	// Problem is what kata would refuse of the text as it stands, nil while the text is fine.
+	Problem error
 	// Reading is the Worker's reading of the text as it stands, nil while none has answered or the text is one kata refuses.
 	Reading *WorkerReading
 	// asked, askedText and askNow track the text the Worker was last asked about, and whether the next ask goes out at once.
@@ -134,7 +136,7 @@ type WorkflowWritten struct {
 	UID        string
 	Workflow   *Workflow
 	Current    *Workflow
-	// Reading is the Worker's reading of the Workflow a save stored.
+	// Reading is the Worker's reading of the Workflow a write stored, or of Current when the guard refused.
 	Reading *WorkerReading
 	Err     error
 }
@@ -388,6 +390,14 @@ func withReading(readings map[string]WorkerReading, uid string, reading WorkerRe
 	return out
 }
 
+// readingOf keeps the reading that came with a stored version of the workflow, and drops the old one when none came.
+func readingOf(readings map[string]WorkerReading, uid string, reading *WorkerReading) map[string]WorkerReading {
+	if reading == nil {
+		return withoutReading(readings, uid)
+	}
+	return withReading(readings, uid, *reading)
+}
+
 // withoutReading is readings without the reading of uid, on a map of its own.
 func withoutReading(readings map[string]WorkerReading, uid string) map[string]WorkerReading {
 	out := maps.Clone(readings)
@@ -480,11 +490,11 @@ func workflowWritten(m Model, msg WorkflowWritten) Model {
 	case msg.Workflow == nil && msg.Current != nil:
 		if saving {
 			card.Conflict, card.Err = msg.Current, nil
-			m.Workflows.readings = withoutReading(m.Workflows.readings, msg.Current.UID)
+			m.Workflows.readings = readingOf(m.Workflows.readings, msg.Current.UID, msg.Reading)
 			return m
 		}
 		m.Workflows = m.Workflows.withWorkflow(*msg.Current)
-		m.Workflows.readings = withoutReading(m.Workflows.readings, msg.Current.UID)
+		m.Workflows.readings = readingOf(m.Workflows.readings, msg.Current.UID, msg.Reading)
 		m.Notice = msg.Current.Name + " changed meanwhile: nothing was written."
 		return m.selectWorkflow(0)
 	case msg.Workflow != nil:

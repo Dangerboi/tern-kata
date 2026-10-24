@@ -136,19 +136,20 @@ func TestClickingAFieldMakesItTheFieldTheKeysEdit(t *testing.T) {
 	for _, tt := range []struct {
 		name  string
 		open  string
-		card  model.Card
-		field model.Field // the field three tabs from the first
+		label string      // what the card draws for the field three tabs from the first
+		field model.Field // the same field, as the card names it
 		keys  []string
 		read  func(model.Model) model.Field
 	}{
-		{"Create", "n", model.CardCreate, model.CreateOwner, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.Create.Field }},
-		{"Close", "x", model.CardClose, model.ClosePR, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.CloseForm.Field }},
-		{"Recurrence", "shift+o", model.CardRecurrence, model.RecurrenceStart, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.RecurrenceForm.Field }},
-		{"Filters", "f", model.CardFilter, model.FilterLabel, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.FilterForm.Field }},
+		{"Create", "n", "Owner (optional)", model.CreateOwner, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.Create.Field }},
+		{"Close", "x", "PR URL (optional)", model.ClosePR, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.CloseForm.Field }},
+		{"Recurrence", "shift+o", "Start date (YYYY-MM-DD)", model.RecurrenceStart, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.RecurrenceForm.Field }},
+		{"Filters", "f", "Label (comma-separated, any match)", model.FilterLabel, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.FilterForm.Field }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			opened := feed(t, browsing(t, 160), key(tt.open)).State
-			clicked := step(t, opened, &tern.Focus{ID: view.FieldID(tt.card, tt.field)})
+			id := fieldLabeled(t, opened.Model, tt.label)
+			clicked := step(t, opened, &tern.Focus{ID: id})
 			var keys []any
 			for _, chord := range tt.keys {
 				keys = append(keys, key(chord))
@@ -157,7 +158,7 @@ func TestClickingAFieldMakesItTheFieldTheKeysEdit(t *testing.T) {
 			if tt.read(clicked.State.Model) != tt.field || !reflect.DeepEqual(clicked.State.Model, typed.State.Model) {
 				t.Fatalf("click on %q left field %q, keys left %q", tt.field, tt.read(clicked.State.Model), tt.read(typed.State.Model))
 			}
-			wantOps(t, clicked, tern.OpFocus(view.FieldID(tt.card, tt.field)))
+			wantOps(t, clicked, tern.OpFocus(id))
 		})
 	}
 }
@@ -173,40 +174,42 @@ func TestClickingAChoiceIsTheKeysThatReachIt(t *testing.T) {
 		return append(keys, "space")
 	}
 	for _, tt := range []struct {
-		name, open, id string
-		keys           func(driver.State) []string
+		name, open, field, choice string
+		keys                      func(driver.State) []string
 	}{
-		{"Recurrence frequency", "shift+o", view.FieldID(model.CardRecurrence, model.RecurrenceFrequency) + ".choices.2", func(driver.State) []string { return []string{"right"} }}, // Weekly to Monthly
-		{"Recurrence weekday", "shift+o", view.FieldID(model.CardRecurrence, model.RecurrenceWeekdays) + ".choices.4", weekdays},                                                    // Friday
-		{"Filter status", "f", view.FieldID(model.CardFilter, model.FilterStatus) + ".choices.1", func(driver.State) []string { return []string{"tab", "right"} }},                  // open
+		{"Recurrence frequency", "shift+o", "Frequency", "Monthly", func(driver.State) []string { return []string{"right"} }}, // Weekly to Monthly
+		{"Recurrence weekday", "shift+o", "Weekdays", "Fri", weekdays},                                                        // Friday
+		{"Filter status", "f", "Status", "open", func(driver.State) []string { return []string{"tab", "right"} }},             // open
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			opened := feed(t, browsing(t, 160), key(tt.open)).State
+			id := choiceShowing(t, opened.Model, tt.field, tt.choice)
 			var action string
 			for _, node := range wireNodes(t, view.Render(opened.Model, now)) {
-				if node.ID == tt.id {
+				if node.ID == id {
 					actions, _ := node.P["actions"].(map[string]any)
 					action, _ = actions["click"].(string)
 				}
 			}
 			if action == "" {
-				t.Fatalf("no click drawn on %s", tt.id)
+				t.Fatalf("no click drawn on %s", id)
 			}
-			clicked := step(t, opened, click(tt.id, action))
+			clicked := step(t, opened, click(id, action))
 			var keys []any
 			for _, chord := range tt.keys(opened) {
 				keys = append(keys, key(chord))
 			}
 			typed := feed(t, opened, keys...)
 			if !reflect.DeepEqual(clicked.State.Model, typed.State.Model) {
-				t.Fatalf("click on %s left\n%+v\nkeys left\n%+v", tt.id, clicked.State.Model.RecurrenceForm, typed.State.Model.RecurrenceForm)
+				t.Fatalf("click on %s left\n%+v\nkeys left\n%+v", id, clicked.State.Model.RecurrenceForm, typed.State.Model.RecurrenceForm)
 			}
 		})
 	}
 }
 
 func TestTextTypedAfterClickingACloseFieldGoesToThatField(t *testing.T) {
-	s := feed(t, browsing(t, 160), key("x"), &tern.Focus{ID: view.FieldID(model.CardClose, model.CloseCommit)}, key("a")).State
+	opened := feed(t, browsing(t, 160), key("x")).State
+	s := feed(t, opened, &tern.Focus{ID: fieldLabeled(t, opened.Model, "Commit SHA (optional)")}, key("a")).State
 	if values := s.Model.CloseForm.Values; values.Commit != "a" || values.Message != "" {
 		t.Fatalf("values = %+v", values)
 	}
