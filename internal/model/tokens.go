@@ -132,6 +132,7 @@ func (r RevokeState) Question() string {
 // Issue is ShortID in the Project ProjectID; the gateway resolves it to the Project uid and root Issue uid. File is where the
 // secret goes, a path that must not exist yet.
 type CreateTokenCmd struct {
+	Connection int
 	Workspace, Actor, Name string
 	// ExpiresInSeconds is 0 for a token that does not expire.
 	ExpiresInSeconds int64
@@ -146,6 +147,7 @@ func (CreateTokenCmd) cmd() {}
 
 // TokenCreated answers CreateTokenCmd. It never carries the secret: File holds it.
 type TokenCreated struct {
+	Connection int
 	ID   int64
 	File string
 	Err  error
@@ -247,7 +249,7 @@ func (m Model) tokenIssue(ref string) (projectID int64, shortID string, err erro
 // tokenRequest reads the card into the token to make, or says what is wrong with it.
 func (m Model) tokenRequest() (CreateTokenCmd, error) {
 	v := m.TokenForm.Values
-	cmd := CreateTokenCmd{Workspace: m.Workspace, Actor: strings.TrimSpace(v.Actor), Name: strings.TrimSpace(v.Name), File: strings.TrimSpace(v.File)}
+	cmd := CreateTokenCmd{Connection: m.Connection, Workspace: m.Workspace, Actor: strings.TrimSpace(v.Actor), Name: strings.TrimSpace(v.Name), File: strings.TrimSpace(v.File)}
 	if cmd.Actor == "" {
 		return cmd, errors.New("actor is required")
 	}
