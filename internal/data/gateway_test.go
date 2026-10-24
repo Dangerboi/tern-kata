@@ -1824,3 +1824,21 @@ func TestGatewayCreatesAnIssueWithDateMetadataOnlyForTheDatesSet(t *testing.T) {
 		}
 	}
 }
+
+func TestGatewayDetailCarriesTheCreationAttribution(t *testing.T) {
+	kata := startKata(t, "0.20.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	uid := createIssue(t, gateway, workspace, demo, "Attributed")
+	detailOf := func() *model.IssueDetailData {
+		return as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected
+	}
+	as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: uid, ProjectID: demo.ID, BaseText: detailOf().Issue.Body, Text: "noted", Comment: true, Actor: "tester"}))
+	d := detailOf()
+	if got := d.Issue.Attribution.Verification; got == "" {
+		t.Errorf("issue attribution %+v", d.Issue.Attribution)
+	}
+	if len(d.Comments) != 1 || d.Comments[0].Attribution.Verification == "" {
+		t.Errorf("comment attribution %+v", d.Comments)
+	}
+}

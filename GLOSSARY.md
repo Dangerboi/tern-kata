@@ -36,6 +36,8 @@
 
 **Collection snapshot**: What the daemon says the shown Collection holds for the current Collection and filters. One path loads it for the first load, a Collection switch, a filter change, an id search and a live refresh; a result is applied only if it answers the current query.
 
+**Creation line**: The line kata tui shows for who created an Issue or a comment, built from the attribution kata returns: "creation: verified|pending|legacy" (an unknown state reads legacy), "accountable: <actor>" only when verified and set, and "source: <source actor or author>" with " / <teammate>" when there is one, joined by " · ". The Issue detail shows it under its properties and each comment on its row; nothing is shown when kata returns no verification state.
+
 **Reply**: A comment that answers another comment, with a kind: reply, confirm, refute or supersede.
 
 **Recurrence**: kata's schedule that creates the next Occurrence of an Issue when the current one closes as done. Stopping it creates no further Occurrences and leaves the existing ones as they are.

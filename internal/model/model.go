@@ -8,6 +8,8 @@ import (
 // Issue is an Issue as the Pane shows it. The gateway translates it from kata's wire shape.
 type Issue struct {
 	AssignmentExpiresOn *time.Time
+	// Attribution is kata's creation attribution of the Issue.
+	Attribution Attribution
 	Author              string
 	Body                string
 	ClosedAt            *time.Time

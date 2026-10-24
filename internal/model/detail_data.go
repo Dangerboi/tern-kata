@@ -19,6 +19,8 @@ type IssueDetailData struct {
 type Comment struct {
 	UID       string
 	Author    string
+	// Attribution is kata's creation attribution of the comment.
+	Attribution Attribution
 	Body      string
 	CreatedAt time.Time
 	ReplyKind *string
