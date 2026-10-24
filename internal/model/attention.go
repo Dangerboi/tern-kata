@@ -195,8 +195,13 @@ func (m Model) attentionIndex() int {
 	return slices.IndexFunc(m.Attention.Requests, func(r AttentionRequest) bool { return r.IssueUID == m.Attention.Selected })
 }
 
-// askAttention reads the requests again. A refused address reads nothing.
+// askAttention reads the requests again, whatever asked (entering the Page, ctrl+r, a clear's answer, a daemon change, the stream
+// opening): at most one read is out, and a request meanwhile costs one more read after its answer. A refused address reads nothing.
 func askAttention(m Model) (Model, []Cmd) {
+	if m.Attention.Loading {
+		m.Attention.queued = true
+		return m, nil
+	}
 	address, err := m.InboxAddress()
 	if err != nil {
 		return m, nil
@@ -204,16 +209,6 @@ func askAttention(m Model) (Model, []Cmd) {
 	m.Attention.request++
 	m.Attention.Loading, m.Attention.queued = true, false
 	return m, []Cmd{LoadAttention{Workspace: m.Workspace, Address: address, Request: m.Attention.request}}
-}
-
-// refreshAttention asks for a read because the daemon changed, whether or not the Page is shown: at most one read is out, and
-// changes arriving meanwhile cost one more read after its answer.
-func refreshAttention(m Model) (Model, []Cmd) {
-	if m.Attention.Loading {
-		m.Attention.queued = true
-		return m, nil
-	}
-	return askAttention(m)
 }
 
 // attentionChangesTheCount says a stream event of this type can add, change or clear a request: any Issue or Project event, and
@@ -239,7 +234,7 @@ func attentionLoaded(m Model, msg AttentionLoaded) (Model, []Cmd) {
 		m = m.settleAttentionSelection(row)
 	}
 	if m.Attention.queued {
-		return refreshAttention(m)
+		return askAttention(m)
 	}
 	return m, nil
 }
@@ -338,17 +333,28 @@ func openAttention(m Model) (Model, []Cmd) {
 	return m.jumpWithin(request.IssueUID, landing), nil
 }
 
-// landHere puts the cursor on a landing in the Issue already selected: at once when its detail is shown, else when it arrives.
+// landHere puts the cursor on a landing in the Issue already selected: at once when its detail is shown and holds the landing's
+// row, else when the Issue arrives. A row the shown detail lacks may have been added since it was read, so the landing stays
+// pending through a fresh read, which alone decides that the row is gone.
 func (m Model) landHere(landing *jumpEntry) Model {
 	if landing == nil {
 		return m
 	}
 	landing.uid, m.landedOn = m.SelectedUID, m.SelectedUID
 	m.tab, m.landing = landing.tab, landing
-	if m.DetailIssueUID() == m.SelectedUID {
-		m = m.arrived(rowID{}, false)
+	if m.DetailIssueUID() != m.SelectedUID {
+		return m
 	}
-	return m
+	if landing.hasRow && !m.withRows().hasRow(landing.row) {
+		m.stale = true
+		return m
+	}
+	return m.arrived(rowID{}, false)
+}
+
+// hasRow says the detail's rows on the current tab include the row.
+func (m Model) hasRow(id rowID) bool {
+	return slices.ContainsFunc(m.rows.items, func(r DetailItem) bool { return r.Kind == id.kind && r.Key == id.key })
 }
 
 // catalogProject is the catalog's entry for the Project with id.
