@@ -88,7 +88,7 @@ func run() error {
 	}
 	host := data.HostName()
 	size := paneSize(term.Caps().Cols, term.Caps().Cell)
-	state := driver.State{Model: model.Model{Cols: size.Cols, Rows: size.Rows, RowPx: size.RowPx, Actor: plan.Actor, Host: host}}
+	state := driver.State{Model: model.Model{Cols: size.Cols, Rows: size.Rows, RowPx: size.RowPx, Actor: plan.Actor, InboxUser: plan.InboxUser, Host: host}}
 	results := make(chan model.Msg)
 	gateway := data.NewGateway(data.LocateWithKata).WithHost(host)
 	defer gateway.Close()

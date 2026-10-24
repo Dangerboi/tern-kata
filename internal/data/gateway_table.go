@@ -401,6 +401,36 @@ func init() {
 		nil, nil)
 
 	daemonCall(
+		func(cmd model.LoadAuthCapabilities) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LoadAuthCapabilities) (model.Msg, error) {
+			return ok(c.ReadAuthCapabilities(ctx, cmd))
+		},
+		func(cmd model.LoadAuthCapabilities, err error) model.Msg {
+			return model.AuthCapabilitiesLoaded{Request: cmd.Request, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.LoadCredentials) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LoadCredentials) (model.Msg, error) {
+			return ok(c.ListCredentials(ctx, cmd))
+		},
+		func(cmd model.LoadCredentials, err error) model.Msg {
+			return model.CredentialsLoaded{Request: cmd.Request, Err: err}
+		},
+		[]beforeStep{pauseBeforeRefresh}, nil)
+
+	daemonCall(
+		func(cmd model.LoadFederation) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LoadFederation) (model.Msg, error) {
+			return ok(c.ReadFederation(ctx, cmd))
+		},
+		func(cmd model.LoadFederation, err error) model.Msg {
+			return model.FederationLoaded{Request: cmd.Request, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
 		func(cmd model.ShowRun) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.ShowRun) (model.Msg, error) {
 			return ok(c.ShowRun(ctx, cmd))
@@ -457,6 +487,27 @@ func init() {
 		},
 		func(cmd model.LoadJobWorkflows, err error) model.Msg {
 			return model.JobWorkflowsLoaded{ProjectID: cmd.ProjectID, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.LoadAttention) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LoadAttention) (model.Msg, error) {
+			return ok(c.ListAttention(ctx, cmd))
+		},
+		func(cmd model.LoadAttention, err error) model.Msg {
+			return model.AttentionLoaded{Request: cmd.Request, Err: err}
+		},
+		nil, nil)
+
+	// A write has landed: the result and its error travel together, and nothing is retried.
+	daemonCall(
+		func(cmd model.ClearAttention) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.ClearAttention) (model.Msg, error) {
+			return ok(c.ClearAttention(ctx, cmd))
+		},
+		func(cmd model.ClearAttention, err error) model.Msg {
+			return model.AttentionCleared{UID: cmd.UID, Err: err}
 		},
 		nil, nil)
 

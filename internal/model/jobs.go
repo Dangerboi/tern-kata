@@ -184,6 +184,21 @@ func (m Model) SelectedJob() *CronJob {
 
 // CurrentSelection is the uid of the selected row of the current Page's list: a job on the Jobs Page, else an Issue.
 func (m Model) CurrentSelection() string {
+	if m.OnFederation() {
+		if s := m.SelectedSpoke(); s != nil {
+			return s.ProjectName
+		}
+		return ""
+	}
+	if m.OnAttention() {
+		return m.Attention.Selected
+	}
+	if m.OnCredentials() {
+		if c := m.SelectedCredential(); c != nil {
+			return strconv.FormatInt(c.ID, 10)
+		}
+		return ""
+	}
 	if m.OnRuns() {
 		return m.Runs.Selected
 	}

@@ -18,6 +18,16 @@ The Issue detail's Activity tabs are Comments, Events, Links and Attachments, cy
 
 `R` on a comment in the Issue detail's Comments tab replies to it; `ctrl+r` in the card cycles reply, confirm, refute and supersede.
 
+`]` and `[` on a comment in the Comments tab step through its Comment links, wrapping around: the comment it answers (if any), then the Replies to it on any Issue, as kata returns them with the Issue detail. The comment under the cursor shows "link 2/3: fay refutes in #bbbb" for the chosen link (the first until you step), and `enter` jumps to it, across Issues and Projects, landing on that comment. A comment without Comment links keeps `enter` as it was.
+
+## Credentials
+
+`C` opens kata tui's Credentials view as a Lettered Page, and the Menu lists it. Its wording, fields and 30-second refresh are kata tui's; see [Pages and the Board](pages-and-board.md#lettered-pages).
+
+## Federation
+
+`F` opens kata tui's federation view as a Lettered Page, and the Menu lists it: the spoke federations with their status, and a detail on Enter. Its wording, header and states are kata tui's; see [Pages and the Board](pages-and-board.md#lettered-pages).
+
 ## Links
 
 In the Issue detail, `b` adds a Blocking link and `l` a related link to the Issue you name: a short id, `#id` or `project#id`. The field is kata tui's add-link request. kata records a Blocking link from the Issue you add it on, so the field reads "This Issue blocks (Issue id)"; kata tui words the same key "add blocker". When kata refuses the link (an Issue to itself, an archived Project, a Project outside your scope) its reason shows under the field. On the Board and in the Lane view `b` still toggles the Board.
@@ -37,4 +47,3 @@ tern-kata lacks these kata tui keys:
 | Key | kata tui action |
 |---|---|
 | `u` | undo the last change |
-| `[` and `]` | previous and next comment link |

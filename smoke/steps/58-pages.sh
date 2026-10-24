@@ -1,6 +1,6 @@
 # The Page bar in the top bar switches between the Issues and Board Pages by key and by click; the Board Page opens the Lane view
 # on Enter and Esc comes back to the Board, as Board mode did.
-expect_tree "[data-id^='main.topbar.left.pages.']" '.ok and .count == 5 and (.nodes[0].text | contains("Issues")) and (.nodes[1].text | contains("Board")) and (.nodes[2].text | contains("Jobs")) and (.nodes[3].text | contains("Runs")) and (.nodes[4].text | contains("Workflows"))'
+expect_tree "[data-id^='main.topbar.left.pages.']" '.ok and .count == 6 and (.nodes[0].text | contains("Issues")) and (.nodes[1].text | contains("Board")) and (.nodes[2].text | contains("Jobs")) and (.nodes[3].text | contains("Runs")) and (.nodes[4].text | contains("Workflows")) and (.nodes[5].text | contains("Attention"))'
 expect_tree "[data-id='main.columns.list.issues']" '.count == 1'
 ctl key 2
 expect_tree "[data-id='main.columns.list.board']" '.count == 1'
@@ -19,4 +19,20 @@ expect_tree "[data-id='main.columns.list.issues']" '.count == 1'
 ctl key b
 expect_tree "[data-id='main.columns.list.board']" '.count == 1'
 ctl key b
+expect_tree "[data-id='main.columns.list.issues']" '.count == 1'
+# C opens the Credentials Page, a Lettered Page: the Page bar draws it only while it is shown, it takes the Board's place, and esc
+# (then backspace) comes back to the Page shown before.
+ctl key 2
+expect_tree "[data-id='main.columns.list.board']" '.count == 1'
+ctl key C
+expect_tree "[data-id^='main.topbar.left.pages.']" '.ok and .count == 6 and (.nodes[5].text | contains("Credentials"))'
+expect_tree "[data-id='main.columns.list.board']" '.count == 0'
+ctl key escape
+expect_tree "[data-id='main.columns.list.board']" '.count == 1'
+expect_tree "[data-id^='main.topbar.left.pages.']" '.ok and .count == 5'
+ctl key C
+expect_tree "[data-id^='main.topbar.left.pages.']" '.ok and .count == 6'
+ctl key backspace
+expect_tree "[data-id='main.columns.list.board']" '.count == 1'
+ctl key 1
 expect_tree "[data-id='main.columns.list.issues']" '.count == 1'

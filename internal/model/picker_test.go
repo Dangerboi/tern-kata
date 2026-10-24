@@ -154,9 +154,10 @@ func TestPickerEntries(t *testing.T) {
 		filter string
 		want   []string
 	}{
-		{"bound Project is pinned first", true, "", []string{"smoke", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Projects", "New Project"}},
-		{"unbound lists no Project inline", false, "", []string{"Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Projects", "New Project"}},
-		{"filter matches any case and keeps the order", true, "AL", []string{"All Open", "alpha"}},
+		{"bound Project is pinned first", true, "", []string{"smoke", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Credentials", "Federation", "Projects", "New Project"}},
+		{"unbound lists no Project inline", false, "", []string{"Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Credentials", "Federation", "Projects", "New Project"}},
+		{"filter matches any case and keeps the order", true, "AL", []string{"All Open", "alpha", "Credentials"}},
+		{"filter finds a Lettered Page by title", true, "cred", []string{"Credentials"}},
 		{"filter can drop the pinned Project", true, "alp", []string{"alpha"}},
 		{"filter finds the Projects entry and New Project by title", true, "PROJ", []string{"Projects", "New Project"}},
 		{"filter without a match lists nothing", true, "zzz", []string{}},
@@ -183,9 +184,9 @@ func TestPickerCursorMoves(t *testing.T) {
 		{"up from the top stays", []string{"up"}, 0},
 		{"k from the top stays", []string{"k"}, 0},
 		{"down then up", []string{"down", "down", "up"}, 1},
-		{"end", []string{"end"}, 8},
+		{"end", []string{"end"}, 10},
 		{"home", []string{"end", "home"}, 0},
-		{"down stops at the last entry", []string{"end", "down", "j"}, 8},
+		{"down stops at the last entry", []string{"end", "down", "j"}, 10},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m, cmds := menuKeys(pickerStart(120, true), tt.keys...)
@@ -248,7 +249,7 @@ func TestPickerEscapeChangesNothing(t *testing.T) {
 }
 
 func TestPickerTypingFiltersEntries(t *testing.T) {
-	all := []string{"smoke", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Projects", "New Project"}
+	all := []string{"smoke", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Credentials", "Federation", "Projects", "New Project"}
 	for _, tt := range []struct {
 		name   string
 		keys   []string
@@ -256,9 +257,9 @@ func TestPickerTypingFiltersEntries(t *testing.T) {
 		titles []string
 		cursor int
 	}{
-		{"typing narrows", []string{"a", "l"}, "al", []string{"All Open", "alpha"}, 0},
-		{"typing returns the cursor to the top", []string{"down", "down", "a"}, "a", []string{"Today", "Deadlines", "All Open", "alpha"}, 0},
-		{"backspace widens", []string{"a", "l", "backspace"}, "a", []string{"Today", "Deadlines", "All Open", "alpha"}, 0},
+		{"typing narrows", []string{"a", "l"}, "al", []string{"All Open", "alpha", "Credentials"}, 0},
+		{"typing returns the cursor to the top", []string{"down", "down", "a"}, "a", []string{"Today", "Deadlines", "All Open", "alpha", "Credentials", "Federation"}, 0},
+		{"backspace widens", []string{"a", "l", "backspace"}, "a", []string{"Today", "Deadlines", "All Open", "alpha", "Credentials", "Federation"}, 0},
 		{"ctrl+u clears", []string{"a", "l", "ctrl+u"}, "", all, 0},
 		{"space is typed", []string{"a", "l", "l", "space", "o"}, "all o", []string{"All Open"}, 0},
 		{"j and k move while the filter is empty", []string{"j", "j", "k"}, "", all, 1},
@@ -405,7 +406,7 @@ func TestPickerPicksAProjectFromTheProjectsLevel(t *testing.T) {
 func TestPickerEscapeLeavesTheProjectsLevelBeforeClosing(t *testing.T) {
 	base := projectsLevel(t, true)
 	m, cmds := pickerKeys(base, "escape")
-	if !m.Picker.Open || m.Picker.Projects || len(cmds) != 0 || pickerTitles(m)[7] != "Projects" || m.Picker.Cursor != 7 {
+	if !m.Picker.Open || m.Picker.Projects || len(cmds) != 0 || pickerTitles(m)[9] != "Projects" || m.Picker.Cursor != 9 {
 		t.Fatalf("esc: open=%v projects=%v cursor=%d entries=%q", m.Picker.Open, m.Picker.Projects, m.Picker.Cursor, pickerTitles(m))
 	}
 	if m, _ = pickerKeys(m, "escape"); m.Picker.Open {
@@ -438,7 +439,7 @@ func TestPickerFilterMatchesAcrossLevels(t *testing.T) {
 		projectsLevel(t, true),
 	} {
 		m, _ = pickerKeys(m, "a", "l")
-		if got, want := pickerTitles(m), []string{"All Open", "alpha"}; !reflect.DeepEqual(got, want) {
+		if got, want := pickerTitles(m), []string{"All Open", "alpha", "Credentials"}; !reflect.DeepEqual(got, want) {
 			t.Fatalf("filter from projects=%v: %q, want %q", m.Picker.Projects, got, want)
 		}
 	}
@@ -461,7 +462,7 @@ func TestSidebarProjectsLevel(t *testing.T) {
 		return out
 	}
 	top, _ := pickerKeys(pickerStart(120, false), "escape")
-	if got, want := titles(top), []string{"Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Projects", "New Project"}; !reflect.DeepEqual(got, want) {
+	if got, want := titles(top), []string{"Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Credentials", "Federation", "Projects", "New Project"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("top level = %q, want %q", got, want)
 	}
 	m, cmds := pickerKeys(top, "end", "up", "enter")
