@@ -154,7 +154,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	if next, cmds, handled := updateCreate(m, msg); handled {
 		return next, cmds
 	}
-	if next, cmds, handled := updateWorkflows(m, msg); handled {
+	if next, cmds, handled := updatePages(m, msg); handled {
 		return next, cmds
 	}
 	if next, cmds, handled := workerEditorClosedMsg(m, msg); handled {
