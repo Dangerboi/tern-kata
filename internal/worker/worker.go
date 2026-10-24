@@ -134,9 +134,6 @@ func New(opts Options) (*Worker, error) {
 // Ready closes once the worker holds its lock and answers on its control socket.
 func (w *Worker) Ready() <-chan struct{} { return w.ready }
 
-// Store is the worker's journals, for tests and for tools that read them.
-func (w *Worker) Store() *Store { return w.store }
-
 // Run serves until ctx ends. It refuses to start while another worker holds the machine's lock. A stop leaves the
 // lease and any started run's journal as they are: the next start continues them (ADR-0003, ADR-0006).
 func (w *Worker) Run(ctx context.Context) error {

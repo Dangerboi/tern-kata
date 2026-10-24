@@ -14,13 +14,10 @@ import (
 
 func writeConfig(h *harness) error { return os.WriteFile(h.dirs.ConfigPath(), []byte(h.config), 0o600) }
 
-func (h *harness) settledOnDisk(r *running, uid string) {
+func (h *harness) settledAndFree(r *running, uid string) {
 	h.t.Helper()
-	h.eventually("the journal of "+uid+" to settle", func() bool {
-		j, err := r.w.Store().Load(uid)
-		return err == nil && j.Phase == worker.PhaseSettled
-	})
-	// The run's slot is freed by the worker's goroutine just after the journal settles; a request made before that is refused as at capacity.
+	h.settled(uid)
+	// The run's slot is freed by the worker's goroutine just after its last report; a request made before that is refused as at capacity.
 	h.eventually("the slot of "+uid+" to be free", func() bool { return r.w.Status().Projects[0].InUse == 0 })
 }
 
@@ -45,7 +42,7 @@ func TestAFinalObservationNeverOverwritesANewerObservationBySomeoneElse(t *testi
 	}})
 	h.admitting(r)
 	uid := h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID
-	h.settledOnDisk(r, uid)
+	h.settledAndFree(r, uid)
 
 	run, err := h.kata.Kata.ShowRun(context.Background(), h.proj.ID, uid)
 	if err != nil || run.Status != "unknown" || run.Summary != "carol is checking this by hand" {
@@ -120,14 +117,16 @@ func TestACommandOnlyWorkflowOnAnExistingIssueSucceedsWithoutAComment(t *testing
 	if run := h.settled(quietUID); run.Status != "succeeded" {
 		t.Fatalf("run %q: %s", run.Status, run.Summary)
 	}
-	h.settledOnDisk(r, quietUID)
+	h.settledInKata(r, quietUID)
+	h.settledAndFree(r, quietUID)
 	if i, _ := h.kata.Kata.ShowIssue(context.Background(), h.proj.ID, issue.UID); len(i.Comments) != 0 {
 		t.Fatalf("an all-command run on an existing Issue commented: %q", i.Comments)
 	}
 
 	loudUID := h.runWorkflow(r, loudJob)
 	h.settled(loudUID)
-	h.settledOnDisk(r, loudUID)
+	h.settledInKata(r, loudUID)
+	h.settledAndFree(r, loudUID)
 	if i, _ := h.kata.Kata.ShowIssue(context.Background(), h.proj.ID, issue.UID); len(i.Comments) != 1 {
 		t.Fatalf("a run with a prompt step left %d comments, want one", len(i.Comments))
 	}
