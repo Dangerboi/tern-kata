@@ -93,7 +93,7 @@ func translateCommentLink(l *g.CommentLink) *model.CommentLink {
 		return nil
 	}
 	return &model.CommentLink{
-		UID: l.UID, Kind: l.Kind, Author: l.Author, IssueUID: l.IssueUID, IssueShortID: l.IssueShortID,
+		UID: l.UID, Kind: l.Kind, Author: l.Author, IssueUID: l.IssueUID, IssueShortID: l.IssueShortID, ProjectUID: l.ProjectUID,
 	}
 }
 

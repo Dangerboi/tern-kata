@@ -14,6 +14,9 @@ type IssueDetail struct {
 	stale   bool
 	loading bool
 	err     error
+	// linkOn is the comment `]` and `[` last stepped the link cursor on, and link where it stands; any other comment starts at its first link.
+	linkOn rowID
+	link    int
 	tab     ActivityTab
 	cursor  int // an index into rows.items
 	rows    detailRows
@@ -382,6 +385,11 @@ func (m Model) openCursorRow() (Model, []Cmd) {
 		if row.Kind == RowCron {
 			return openJob(m, row.JobUID)
 		}
+		if row.Kind == RowComment {
+			if moved, cmds, ok := m.openCommentLink(row); ok {
+				return moved, cmds
+			}
+		}
 		if i := slices.IndexFunc(m.rows.items, func(r DetailItem) bool { return row.ReplyKey != "" && r.Key == row.ReplyKey }); i >= 0 {
 			m.cursor = i
 			return m, nil
@@ -399,6 +407,7 @@ func (m Model) openCursorRow() (Model, []Cmd) {
 
 // moveCursor walks the cursor over the children and the active tab's rows.
 func (m Model) moveCursor(action Action) Model {
+	m.linkOn = rowID{}
 	m = m.withRows()
 	count := len(m.rows.items)
 	if count == 0 {
