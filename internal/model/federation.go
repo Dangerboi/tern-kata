@@ -23,6 +23,7 @@ type FederationQuarantine struct {
 
 // FederationSpoke is one spoke Project's federation status. A time the daemon did not report is the zero time.
 type FederationSpoke struct {
+	ProjectID                            int64
 	ProjectName                          string
 	HubURL, HubProjectUID                string
 	HubProjectID                         int64
@@ -72,6 +73,10 @@ const (
 	FederationList FederationScreen = iota
 	// FederationDetail is one spoke's detail.
 	FederationDetail
+	// FederationLeavePreview is the preview of leaving one spoke's federation.
+	FederationLeavePreview
+	// FederationLeaveDone is the result of a leave.
+	FederationLeaveDone
 )
 
 // FederationState is the Federation Page's state. It is not saved and is read again on every entry.
@@ -85,8 +90,14 @@ type FederationState struct {
 	Spokes                              []FederationSpoke
 	// Cursor indexes Spokes.
 	Cursor int
-	// request counts the asks; an answer to another is dropped.
-	request int64
+	// Leave is the leave being previewed or run; Leaving says it runs, LeaveErr is why the last run failed and Left is the result of
+	// the last one that succeeded.
+	Leave    FederationLeaveDraft
+	Leaving  bool
+	LeaveErr error
+	Left     FederationLeaveOutcome
+	// request counts the asks and attempt the leaves; an answer to another is dropped.
+	request, attempt int64
 }
 
 // OnFederation says the Federation Page is current.
@@ -97,18 +108,24 @@ func federationMode(m Model) Mode {
 	if m.Focus == ColumnCollections {
 		return ""
 	}
+	switch m.Federation.Screen {
+	case FederationLeavePreview:
+		return ModeFederationLeave
+	case FederationLeaveDone:
+		return ModeFederationLeft
+	}
 	return ModeFederation
 }
 
 // enterFederation starts a fresh reading.
 func enterFederation(m Model) (Model, []Cmd) {
-	m.Federation = FederationState{request: m.Federation.request}
+	m.Federation = FederationState{request: m.Federation.request, attempt: m.Federation.attempt + 1}
 	return askFederation(m)
 }
 
 // clearFederation drops what the Page held and every ask still out.
 func clearFederation(m Model) Model {
-	m.Federation = FederationState{request: m.Federation.request + 1}
+	m.Federation = FederationState{request: m.Federation.request + 1, attempt: m.Federation.attempt + 1}
 	return m
 }
 
@@ -140,6 +157,10 @@ func federationBack(m Model) (Model, []Cmd) {
 }
 
 func updateFederation(m Model, msg Msg) (Model, []Cmd, bool) {
+	if left, ok := msg.(FederationLeft); ok {
+		m, cmds := federationLeft(m, left)
+		return m, cmds, true
+	}
 	loaded, ok := msg.(FederationLoaded)
 	if !ok {
 		return m, nil, false
@@ -327,6 +348,7 @@ func (s FederationSpoke) DetailLines() []string {
 // federationRows are the Federation Page's own keys beyond its movement keys.
 var federationRows = []actionEntry{
 	{action: OpenFederationDetail, modes: []Mode{ModeFederation}, keys: keys("enter", "↵"), help: "detail", footer: []Mode{ModeFederation}, footerKey: "↵", sheet: []sheetLine{{sheetLettered, 4, "show the spoke's detail"}}, handle: openFederationDetail},
+	{action: StartFederationLeave, modes: []Mode{ModeFederation}, keys: keys("x", "x"), help: "leave", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 6, "leave the selected spoke's federation (preview first)"}}, handle: startFederationLeave},
 	{action: RefreshFederation, modes: []Mode{ModeFederation}, keys: keys("r", "r"), help: "refresh", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 5, "read the federation status again"}}, handle: refreshFederation},
 	{action: LetteredBack, modes: []Mode{ModeFederation}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 1, "back to the Page shown before"}}, handle: federationBack},
 }

@@ -458,6 +458,16 @@ func init() {
 		nil, nil)
 
 	daemonCall(
+		func(cmd model.LeaveFederation) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LeaveFederation) (model.Msg, error) {
+			return ok(c.LeaveFederation(ctx, cmd))
+		},
+		func(cmd model.LeaveFederation, err error) model.Msg {
+			return model.FederationLeft{Attempt: cmd.Attempt, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
 		func(cmd model.ShowRun) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.ShowRun) (model.Msg, error) {
 			return ok(c.ShowRun(ctx, cmd))

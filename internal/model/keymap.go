@@ -97,6 +97,12 @@ const (
 	ShowFederationPage      Action = "show-federation-page"
 	RefreshFederation       Action = "refresh-federation"
 	OpenFederationDetail    Action = "open-federation-detail"
+	StartFederationLeave    Action = "start-federation-leave"
+	ToggleFederationArchive Action = "toggle-federation-archive"
+	ToggleFederationLocal   Action = "toggle-federation-local-only"
+	RunFederationLeave      Action = "run-federation-leave"
+	CancelFederationLeave   Action = "cancel-federation-leave"
+	FederationLeaveDismiss  Action = "dismiss-federation-leave"
 )
 
 // Binding is one chord in one mode, as the lookup, the footer and the help sheet read it. A binding of
@@ -151,6 +157,9 @@ const (
 	// ModeQuit is the question "Quit tern-kata? y/n", which takes only its answers.
 	ModeQuit       Mode = "quit"
 	ModeFederation Mode = "federation"
+	// ModeFederationLeave is the Federation Page's leave preview and ModeFederationLeft its result.
+	ModeFederationLeave Mode = "federation-leave"
+	ModeFederationLeft  Mode = "federation-left"
 )
 
 // cardBindings are the keys of the Popup cards. Each card's handler reads them by mode; the
