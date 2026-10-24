@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // RunTransition is what a resume or an abandon answers once the run's journal records it.
@@ -72,20 +71,7 @@ func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, err
 	by = cmp.Or(by, ps.actor)
 	updated, err := w.store.Update(uid, "resume-accepted", func(j *Journal) error {
 		// Checked again under the journal's lock: a request that is not this worker's own cannot slip in between.
-		if reason := w.life().mayResume(j); reason != "" {
-			return fmt.Errorf("run %s cannot be resumed: %s", uid, reason)
-		}
-		in, out := w.heldTokens(j)
-		j.CarriedInput, j.CarriedOutput = addTokens(j.CarriedInput, in), addTokens(j.CarriedOutput, out)
-		j.Attempt = j.attempt() + 1
-		j.Resume = &ResumeRecord{Attempt: j.Attempt, SessionID: w.sessionID(j), By: by, At: w.clock.Now().UTC(), Hold: j.Outcome.Hold, Detail: j.Outcome.Summary}
-		j.Generation = generation
-		if j.Workflow != nil { // one fresh expiry from the frozen timeout, from the moment the resume is accepted
-			j.ExpiresAt = w.clock.Now().UTC().Add(time.Duration(j.TimeoutSeconds) * time.Second)
-		}
-		j.Outcome, j.Exit, j.Result, j.Intents = nil, nil, nil, nil
-		j.Phase = PhaseResuming
-		return nil
+		return w.life().acceptResume(j, resumeTerms{By: by, Generation: generation, At: w.clock.Now().UTC(), Tokens: w.heldTokens, SessionID: w.sessionID})
 	})
 	if err != nil {
 		w.noteHook(err)
@@ -143,21 +129,7 @@ func (w *Worker) Abandon(ctx context.Context, uid, by string) (RunTransition, er
 		return transition(updated), nil
 	}
 	updated, err := w.store.Update(uid, "abandoned", func(j *Journal) error {
-		if reason := w.life().mayAbandon(j); reason != "" {
-			return fmt.Errorf("run %s cannot be abandoned: %s", uid, reason)
-		}
-		if !j.held() {
-			return fmt.Errorf("run %s cannot be abandoned: it is %s, not held", uid, j.stateName())
-		}
-		beforeAdmission := j.holdClass() == holdBeforeAdmission
-		held := j.Outcome
-		j.Outcome = &Outcome{Status: StatusCancelled, Summary: fmt.Sprintf("abandoned by %s (was held: %s)", by, held.Summary), At: w.clock.Now().UTC()}
-		j.Intents = nil
-		j.Phase = PhaseFinished
-		if beforeAdmission { // held before admission: kata never saw it, so nothing is reported
-			j.Phase = PhaseSettled
-		}
-		return nil
+		return w.life().abandon(j, by, w.clock.Now().UTC())
 	})
 	if err != nil {
 		w.noteHook(err)
@@ -238,8 +210,7 @@ func (w *Worker) reopen(ctx context.Context, ps *projectState, j *Journal) error
 		}
 	}
 	_, err = w.store.Update(j.RunUID, "resumed", func(j *Journal) error {
-		j.Phase, j.Revision = PhaseAdmitted, stored.Revision
-		return nil
+		return j.reopen(stored.Revision)
 	})
 	return err
 }

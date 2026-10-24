@@ -103,10 +103,10 @@ func TestWorkerCardStatesAndWhatEachOffers(t *testing.T) {
 	}
 }
 
-func TestWorkerCardSetUpFieldsArePrefilledAsWorkerInitWould(t *testing.T) {
+func TestWorkerCardSetUpFieldsStartAsWorkerInitWouldAndCommandStartsBlank(t *testing.T) {
 	s := workerCardOpen(t, nil, noWorkerFile)
 	for field, want := range map[model.Field]string{
-		model.WorkerFieldExecutor: "laptop-local", model.WorkerFieldActor: "dana", model.WorkerFieldCommand: "omp",
+		model.WorkerFieldExecutor: "laptop-local", model.WorkerFieldActor: "dana", model.WorkerFieldCommand: "",
 		model.WorkerFieldModel: "", model.WorkerFieldThinking: "",
 	} {
 		if got := workerField(t, s, field); got != want {
@@ -117,6 +117,33 @@ func TestWorkerCardSetUpFieldsArePrefilledAsWorkerInitWould(t *testing.T) {
 		t.Errorf("text focus %q is not on the Worker card", s.Focus)
 	}
 	wantText(t, "card", wireTextOf(t, s), "checkout /repo", "Anyone who can write jobs")
+}
+
+func TestWorkerCardCommandFieldShowsTheDefaultAsItsPlaceholder(t *testing.T) {
+	s := workerCardOpen(t, nil, noWorkerFile)
+	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
+		if n.ID == view.WorkerFieldID(model.WorkerFieldCommand) {
+			if got := n.P["placeholder"]; got != worker.DefaultCommand {
+				t.Fatalf("placeholder = %v, want %q", got, worker.DefaultCommand)
+			}
+			return
+		}
+	}
+	t.Fatal("the Worker card draws no command field")
+}
+
+func TestWorkerCardSendsTheCommandAsTypedIncludingTheDefaultsOwnText(t *testing.T) {
+	for _, command := range []string{"my-agent", worker.DefaultCommand} {
+		s := workerCardOpen(t, nil, noWorkerFile)
+		s = step(t, s, model.ChooseMsg{Field: model.WorkerFieldTrust, Index: 1}).State
+		s = step(t, s, model.FocusFieldMsg{Field: model.WorkerFieldCommand}).State
+		s = typed(t, s, command)
+		out := step(t, s, key("ctrl+o"))
+		want := model.SaveWorkerSetup{Workspace: "/repo", Trusted: true, Executor: "laptop-local", DefaultActor: "dana", Command: command}
+		if !reflect.DeepEqual(out.Cmds, []model.Cmd{want}) {
+			t.Fatalf("typed %q: cmds %#v, want exactly %#v", command, out.Cmds, want)
+		}
+	}
 }
 
 func TestWorkerCardSaveIsRefusedUntilTheTrustChoiceIsYesAndKeepsTheInput(t *testing.T) {

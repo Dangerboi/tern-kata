@@ -632,28 +632,14 @@ func (k *Kata) Stream(ctx context.Context, projectID, after int64, opened func()
 	}
 }
 
-// WorkflowStep is one step of a kata workflow as the worker reads it. Options keeps the step's raw options so the
-// worker can refuse the keys it does not run (ADR-0008).
-type WorkflowStep struct {
-	Key     string
-	Kind    string // "prompt" or "command"
-	Command string
-	Prompt  string
-	After   []string
-	Retries int64
-	Options map[string]any
-}
-
-// Workflow is a kata workflow definition at one version.
+// Workflow is a kata workflow at one version: its identity and the definition the Worker validates and plans from. The
+// definition keeps each step's raw options so the Worker can refuse the keys it does not run (ADR-0008).
 type Workflow struct {
 	UID                string
 	Name               string
 	DefinitionEventUID string
 	Deleted            bool
-	Version            int64
-	About              string
-	Options            map[string]any
-	Steps              []WorkflowStep
+	cronjob.WorkflowDefinition
 }
 
 // Workflow reads one workflow of the Project.
@@ -668,12 +654,7 @@ func (k *Kata) Workflow(ctx context.Context, projectID int64, uid string) (Workf
 		return Workflow{}, errors.New("kata daemon returned no workflow")
 	}
 	w := r.JSON200.Workflow
-	d := w.Definition
-	out := Workflow{UID: w.UID, Name: w.Name, DefinitionEventUID: w.DefinitionEventUID, Deleted: w.DeletedAt != nil, Version: d.Version, About: cronjobclient.Str(d.About), Options: d.Options}
-	for _, s := range d.Steps {
-		out.Steps = append(out.Steps, WorkflowStep{Key: s.Key, Kind: s.Kind, Command: cronjobclient.Str(s.Command), Prompt: cronjobclient.Str(s.Prompt), After: s.After, Retries: cronjobclient.Int(s.Retries), Options: s.Options})
-	}
-	return out, nil
+	return Workflow{UID: w.UID, Name: w.Name, DefinitionEventUID: w.DefinitionEventUID, Deleted: w.DeletedAt != nil, WorkflowDefinition: cronjobclient.WorkflowDefinition(w.Definition)}, nil
 }
 
 // resetPosition is where kata says to resume after a reset frame: the payload's reset_after_id, else the frame's id.

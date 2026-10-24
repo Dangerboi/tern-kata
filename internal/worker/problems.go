@@ -129,15 +129,15 @@ func jobProblem(cfg Config, pc ProjectConfig, job cronjob.Job, wf *Workflow, wfE
 	if why := workflowRefusal(*wf, cfg.maxRunPrompts()); why != "" {
 		return fmt.Sprintf("it runs workflow %q, which the worker does not run: %s", wf.Name, why)
 	}
-	if p, ok := wf.Options["profile"].(string); ok && p != "" && p != profile {
+	if p, ok := optionMap(wf.Options)["profile"].(string); ok && p != "" && p != profile {
 		return fmt.Sprintf("it runs workflow %q, which names profile %q where the job runs with %q", wf.Name, p, profile)
 	}
 	for _, s := range wf.Steps {
-		if s.Kind != "prompt" {
+		if s.Kind != cronjob.StepPrompt {
 			continue
 		}
 		name := profile
-		if p, ok := s.Options["profile"].(string); ok && p != "" {
+		if p, ok := optionMap(s.Options)["profile"].(string); ok && p != "" {
 			name = p
 		}
 		if _, ok := cfg.Profiles[name]; !ok || !pc.allowsProfile(name) {

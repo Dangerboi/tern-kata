@@ -137,7 +137,7 @@ func translateRunDetail(d worker.RunDetail) model.LocalRunDetail {
 	out := model.LocalRunDetail{LocalRun: translateLocalRun(d.RunStatus), Summary: d.Summary, OutputTail: d.OutputTail, StderrTail: d.StderrTail,
 		Cwd: d.Cwd, SessionDir: d.SessionDir, SessionID: d.SessionID}
 	for _, s := range d.Steps {
-		out.Steps = append(out.Steps, model.LocalStep{Index: s.Index, Kind: s.Kind, Attempt: s.Attempt, State: s.State, SessionID: s.SessionID,
+		out.Steps = append(out.Steps, model.LocalStep{Index: s.Index, Kind: string(s.Kind), Attempt: s.Attempt, State: s.State, SessionID: s.SessionID,
 			ExitCode: s.ExitCode, Signal: s.Signal, TimedOut: s.TimedOut})
 	}
 	return out
