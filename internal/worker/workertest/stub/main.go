@@ -15,6 +15,7 @@
 //	--stub-fail-when T     exit 1 when the prompt contains T
 //	--stub-fail-once-when T  like --stub-fail-when, but not on a retry (a prompt with a "# Retry" section)
 //	--stub-hang-when T     like --stub-hang-first for a prompt that contains T: hang unless resumed
+//	--stub-leave-child FILE  before exiting, start a sleeping descendant in the agent's group and write its pid to FILE
 //	--stub-error-status N  end the turn with a provider failure: stopReason error, errorStatus N, exit 1
 package main
 
@@ -22,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -44,6 +46,7 @@ func main() {
 		failWhen    string
 		failOnce    string
 		hangWhen    string
+		leaveChild  string
 		logPath     string
 		sessionIn   string
 		resume      string
@@ -69,6 +72,9 @@ func main() {
 			logPath = args[i]
 		case "--stub-no-end":
 			noEnd = true
+		case "--stub-leave-child":
+			i++
+			leaveChild = args[i]
 		case "--stub-hang":
 			hang = true
 		case "--stub-hang-first":
@@ -177,6 +183,12 @@ func main() {
 	}
 	if linger || (lingerFirst && resume == "") {
 		time.Sleep(time.Hour)
+	}
+	if leaveChild != "" {
+		child := exec.Command("sleep", "300")
+		if err := child.Start(); err == nil {
+			_ = os.WriteFile(leaveChild, []byte(strconv.Itoa(child.Process.Pid)), 0o644)
+		}
 	}
 	os.Exit(exit)
 }

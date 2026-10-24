@@ -162,23 +162,24 @@ func signalGroup(l *LaunchRecord, _ bool) {
 	_ = windows.TerminateJobObject(h, terminatedExitCode)
 }
 
-// groupAlive reports whether any process of the run's job is still there or it cannot be checked. Once the worker sees
-// its job empty it closes its handle, and the job and its name go.
-func groupAlive(l *LaunchRecord) bool {
+// checkGroup is the group proof: gone when the job is gone or empty, present while it has processes, unchecked (with
+// the reason) when opening or querying the job fails for any other reason. Once the worker sees its job empty it closes
+// its handle, and the job and its name go.
+func checkGroup(l *LaunchRecord) GroupProof {
 	h, release, ok, err := job(l, jobObjectQuery)
 	if err != nil {
-		return true
+		return GroupProof{State: GroupUnchecked, Reason: "the Job Object cannot be opened: " + err.Error()}
 	}
 	if !ok {
-		return false
+		return GroupProof{State: GroupGone}
 	}
 	defer release()
 	var info basicAccounting
 	if err := windows.QueryInformationJobObject(h, windows.JobObjectBasicAccountingInformation, uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info)), nil); err != nil {
-		return true
+		return GroupProof{State: GroupUnchecked, Reason: "the Job Object cannot be queried: " + err.Error()}
 	}
 	if info.ActiveProcesses > 0 {
-		return true
+		return GroupProof{State: GroupPresent}
 	}
 	jobs.Lock()
 	if held, have := jobs.held[jobName(l)]; have && held == h {
@@ -186,7 +187,7 @@ func groupAlive(l *LaunchRecord) bool {
 		windows.CloseHandle(held)
 	}
 	jobs.Unlock()
-	return false
+	return GroupProof{State: GroupGone}
 }
 
 // exitSignal is empty: Windows processes end with an exit code only.
