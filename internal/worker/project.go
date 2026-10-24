@@ -356,7 +356,7 @@ func processMayBeAlive(j *Journal) bool {
 	if j.Launch == nil {
 		return j.Phase == PhaseLaunching || (j.Outcome != nil && j.Outcome.Hold == HoldLaunchUnproven)
 	}
-	return groupAlive(j.Launch)
+	return !checkGroup(j.Launch).Gone()
 }
 
 // gateClosed reports whether a job's overlap gate is closed: an earlier run is unsettled, or held for the user (ADR-0007).

@@ -1,11 +1,9 @@
 package worker
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 )
 
 // errRunCancelled stops an attempt that was about to start: a cancel request was saved first, so nothing is started.
@@ -108,21 +106,4 @@ func (w *Worker) concludeCancel(j *Journal) error {
 		return nil
 	})
 	return err
-}
-
-// terminateGroup signals the process group SIGTERM, then SIGKILL after 10 s, and waits for the process to end.
-// waitErr is what the process answered; an error means the worker stopped first (the journal stays `started`).
-func (w *Worker) terminateGroup(ctx context.Context, launch *LaunchRecord, done <-chan error) (waitErr error, err error) {
-	signalGroup(launch, false)
-	select {
-	case waitErr = <-done:
-	case <-ctx.Done():
-		signalGroup(launch, true)
-		<-done
-		return nil, ctx.Err()
-	case <-w.clock.After(10 * time.Second):
-		signalGroup(launch, true)
-		waitErr = <-done
-	}
-	return waitErr, nil
 }

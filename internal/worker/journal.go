@@ -267,6 +267,9 @@ type Hooks struct {
 	AfterSave func(point string, j *Journal) error
 	// FailDirSync, when it returns an error for a save point, makes that save's folder sync fail with it.
 	FailDirSync func(point string) error
+	// GroupHoldsOut, when it returns true for a run's launch, makes the termination policy's group proof answer
+	// present, as a process no signal can end would.
+	GroupHoldsOut func(l *LaunchRecord) bool
 }
 
 // ErrKilled wraps what a Hooks.AfterSave returned: the worker stops all run work at that point, as a crash would.
