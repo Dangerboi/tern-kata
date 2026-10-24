@@ -334,3 +334,11 @@ func TestARestoreFromTheMenuClearsTheUndoHistory(t *testing.T) {
 		t.Fatalf("u says %q", got)
 	}
 }
+
+func TestCtrlUClearsTheDeleteCardsConfirmation(t *testing.T) {
+	s := typed(t, deleting(t), "work#wrong")
+	s = step(t, s, key("ctrl+u")).State
+	if got := s.Model.DeleteForm.ID; got != "" {
+		t.Fatalf("ctrl+u left %q in the confirmation", got)
+	}
+}
