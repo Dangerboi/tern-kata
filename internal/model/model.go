@@ -119,6 +119,7 @@ type Model struct {
 	Runs             RunsState
 	// Credentials is the Credentials Page's state; letteredFrom is the Page a Lettered Page was opened from, which its back key returns to.
 	Credentials  CredentialsState
+	Federation   FederationState
 	letteredFrom Page
 	// Worker is what the Pane knows of this machine's worker: whether it runs, what it serves and the local state of its runs.
 	Worker    WorkerState
