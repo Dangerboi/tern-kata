@@ -24,7 +24,7 @@ func (c *Client) SaveDraft(ctx context.Context, cmd model.SaveDraft) (model.Msg,
 		return c.draftConflict(ctx, cmd.UID)
 	}
 	actor := cmd.Actor
-	// shortcut: check-then-write races (kata v0.19 honours no revision precondition on edits or comments); upgrade when it does.
+	// shortcut: check-then-write races (kata v0.20 honours no revision precondition on edits or comments); upgrade when it does.
 	var werr error
 	if cmd.Comment {
 		body := &g.CreateCommentBody{Body: cmd.Text, Actor: &actor}

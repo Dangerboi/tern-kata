@@ -43,7 +43,7 @@ type attachFixture struct {
 
 func newAttachFixture(t *testing.T) attachFixture {
 	t.Helper()
-	kata := startKata(t, "0.19.0")
+	kata := startKata(t, "0.20.0")
 	const host = "TestBox"
 	gateway := newGateway(t, newLocator(kata.target())).WithHost(host)
 	repo := t.TempDir()
@@ -580,7 +580,7 @@ func (f attachFixture) racingGateway(t *testing.T, name string, before func()) *
 			}
 		}
 		f.kata.handler.ServeHTTP(w, r)
-	}), "0.19.0")
+	}), "0.20.0")
 	return newGateway(t, newLocator(racing.target())).WithHost(f.host)
 }
 

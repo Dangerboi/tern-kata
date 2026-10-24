@@ -10,7 +10,7 @@
 
 ### What do I need installed?
 
-kata v0.19.0 or newer and a Tern that supports the Surface Protocol. For the worker, also omp, and on Windows Git for Windows. See [Install](../../README.md#install).
+kata v0.20.0 or newer and a Tern that supports the Surface Protocol. For the worker, also omp, and on Windows Git for Windows. See [Install](../../README.md#install).
 
 ### Which machine gets which part?
 

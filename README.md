@@ -50,7 +50,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 ## Requirements
 
-- kata v0.19.0 or newer.
+- kata v0.20.0 or newer.
 - A Tern that supports the Surface Protocol.
 - For the worker: [omp](https://github.com/can1357/oh-my-pi) on `PATH`. On Windows also [Git for Windows](https://gitforwindows.org/), whose `sh` runs workflow command steps. The Pane itself needs no Git Bash.
 

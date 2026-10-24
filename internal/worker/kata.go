@@ -160,8 +160,8 @@ func refused(err error) bool {
 	return ok && e.Refused()
 }
 
-// MinKataVersion is the oldest daemon with the cron API the worker needs.
-const MinKataVersion = "v0.19.0"
+// MinKataVersion is the oldest kata daemon the Pane and the Worker accept: kata v0.20 requires cron peers to upgrade together and does not support v0.19 beside it.
+const MinKataVersion = "v0.20.0"
 
 // Ping returns the daemon's version, refusing one older than MinKataVersion.
 func (k *Kata) Ping(ctx context.Context) (string, error) {

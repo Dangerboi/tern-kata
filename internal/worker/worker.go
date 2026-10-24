@@ -220,7 +220,7 @@ func (w *Worker) resolve(ctx context.Context, ps *projectState) (blocked string,
 		return "", err
 	}
 	if !caps.Has("cron_v1") {
-		return "the kata daemon does not advertise cron_v1; upgrade kata to v0.19.0 or newer", nil
+		return "the kata daemon does not advertise cron_v1; upgrade kata to " + MinKataVersion + " or newer", nil
 	}
 	if caps.ProjectUID != p.UID {
 		return fmt.Sprintf("the kata daemon answers for Project %s where %q resolves to %s", caps.ProjectUID, p.Name, p.UID), nil
