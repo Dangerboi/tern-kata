@@ -480,7 +480,7 @@ func (w *Worker) timeLeft(j *Journal) time.Duration {
 }
 
 // supervise starts cmd and waits for it: the `launching` mark, the start record, the wait with the run's expiry (SIGTERM,
-// then SIGKILL after 10 s) and the exit record's contents. A worker stop kills the group and leaves the journal
+// then SIGKILL after 10 s, ADR-0006) and the exit record's contents. A worker stop kills the group and leaves the journal
 // `started`, which the next start finds interrupted. The caller saves the returned exit record.
 func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessionDir, resumeID string) (*ExitRecord, error) {
 	runtime.LockOSThread() // the parent-death signal follows the thread that started the child
@@ -509,7 +509,9 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 		j.Launch = launch
 		return nil
 	}); err != nil {
-		signalGroup(launch, true)
+		stopped, stop := context.WithCancel(ctx)
+		stop() // a context that has ended kills the group at once
+		_, _ = w.terminateGroup(stopped, launch)
 		_ = cmd.Wait()
 		return nil, err
 	}
@@ -521,16 +523,16 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 	select {
 	case waitErr = <-done:
 	case <-ctx.Done():
-		signalGroup(launch, true)
+		_, _ = w.terminateGroup(ctx, launch) // kills at once: ctx has ended
 		<-done
 		return nil, ctx.Err() // the journal stays started: the next start finds it interrupted
 	case <-cancel.ch:
-		if waitErr, err = w.terminateGroup(ctx, launch, done); err != nil {
+		if waitErr, err = w.stopAndWait(ctx, launch, done); err != nil {
 			return nil, err
 		}
 	case <-w.clock.After(w.timeLeft(j)):
 		timedOut = true
-		if waitErr, err = w.terminateGroup(ctx, launch, done); err != nil {
+		if waitErr, err = w.stopAndWait(ctx, launch, done); err != nil {
 			return nil, err
 		}
 	}
@@ -543,25 +545,31 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 	return exit, nil
 }
 
+// stopAndWait stops the run's group by the termination policy and returns what the process answered. An error means
+// the worker stopped first (the journal stays `started`).
+func (w *Worker) stopAndWait(ctx context.Context, launch *LaunchRecord, done <-chan error) (waitErr error, err error) {
+	_, err = w.terminateGroup(ctx, launch)
+	waitErr = <-done
+	if err != nil {
+		return nil, err
+	}
+	return waitErr, nil
+}
+
 // conclude proves the process group gone and decides the outcome of a run that has an exit record.
 func (w *Worker) conclude(ctx context.Context, j *Journal) error {
 	command := j.activeIsCommand()
-	if command && j.Launch != nil && j.Cancel == nil && !j.Exit.TimedOut && groupAlive(j.Launch) {
+	if command && j.Launch != nil && j.Cancel == nil && !j.Exit.TimedOut && !w.proveGroup(j.Launch).Gone() {
 		// A command that ended by itself leaves a process that is not the worker's to guess about: it may still be doing
 		// what the command began. One the worker stopped (timeout, abandon) is stopped completely below.
 		return w.hold(j, HoldGroupUnproven, fmt.Sprintf("process group %d is still present after the command exited", j.Launch.PGID))
 	}
-	if j.Launch != nil && groupAlive(j.Launch) {
-		signalGroup(j.Launch, false)
-		for i := 0; i < 150 && groupAlive(j.Launch); i++ {
-			if i == 50 {
-				signalGroup(j.Launch, true)
-			}
-			if !w.sleep(ctx, 200*time.Millisecond) {
-				return ctx.Err()
-			}
+	if j.Launch != nil && !w.proveGroup(j.Launch).Gone() {
+		proof, err := w.terminateGroup(ctx, j.Launch)
+		if err != nil {
+			return err
 		}
-		if groupAlive(j.Launch) {
+		if !proof.Gone() {
 			return w.hold(j, HoldGroupUnproven, fmt.Sprintf("process group %d is still present after the agent exited", j.Launch.PGID))
 		}
 	}

@@ -333,10 +333,10 @@ func (m Model) WorkerRestartPrompt() (when, now string) {
 		"Restart now: the worker exits at once; " + m.workerInFlightWords() + " is interrupted and held `interrupted`, to resume later."
 }
 
-// startSentence is what happens next when no worker runs: the plugin starts one, or nothing does under worker.manual.
+// startSentence is what happens next when no worker runs: the plugin starts one, or nothing does under the supervision marker.
 func (m Model) startSentence() string {
 	if m.Worker.Setup.Manual {
-		return "worker.manual is present, so the plugin does not start the worker: run `tern-kata worker`."
+		return manualFile + " is present, so the plugin does not start the worker: run `tern-kata worker`."
 	}
 	return "The plugin's host half starts the worker within 10 seconds (else run `tern-kata worker`); `tern-kata worker doctor` checks the setup."
 }
@@ -695,22 +695,22 @@ func workerSupervisionSet(m Model, msg WorkerSupervisionSet) (Model, []Cmd) {
 	m.Worker.Setup.Manual = msg.Manual
 	switch stop := msg.Stop; {
 	case !msg.Manual && m.workerRunning():
-		f.Supervision = "Supervision is on: worker.manual is removed. The running worker stays; the plugin starts it again whenever it exits."
+		f.Supervision = "Supervision is on: " + manualFile + " is removed. The running worker stays; the plugin starts it again whenever it exits."
 	case !msg.Manual:
-		f.Supervision = "Supervision is on: worker.manual is removed. The plugin starts the worker within 10 seconds."
+		f.Supervision = "Supervision is on: " + manualFile + " is removed. The plugin starts the worker within 10 seconds."
 	case stop == nil:
-		f.Supervision = "Supervision is off: worker.manual is created, so the plugin starts no worker. Run `tern-kata worker` to start one by hand."
+		f.Supervision = "Supervision is off: " + manualFile + " is created, so the plugin starts no worker. Run `tern-kata worker` to start one by hand."
 	case stop.Err != nil:
-		f.Supervision = "Supervision is off: worker.manual is created, so the plugin starts no new worker."
+		f.Supervision = "Supervision is off: " + manualFile + " is created, so the plugin starts no new worker."
 		f.Err = fmt.Errorf("The stop was refused: %w", stop.Err)
 	case stop.Gone:
-		f.Supervision = "Supervision is off: worker.manual is created. No worker is running now, and the plugin starts none."
+		f.Supervision = "Supervision is off: " + manualFile + " is created. No worker is running now, and the plugin starts none."
 	case stop.Mode == worker.StopNow:
-		f.Supervision = "Supervision is off: worker.manual is created. The worker is ending now (" + flight + "; held `interrupted`), and nothing starts it again."
+		f.Supervision = "Supervision is off: " + manualFile + " is created. The worker is ending now (" + flight + "; held `interrupted`), and nothing starts it again."
 	case stop.InFlight > 0:
-		f.Supervision = fmt.Sprintf("Supervision is off: worker.manual is created. The worker finishes its %d run%s in flight, then exits, and nothing starts it again.", stop.InFlight, plural(stop.InFlight))
+		f.Supervision = fmt.Sprintf("Supervision is off: "+manualFile+" is created. The worker finishes its %d run%s in flight, then exits, and nothing starts it again.", stop.InFlight, plural(stop.InFlight))
 	default:
-		f.Supervision = "Supervision is off: worker.manual is created. The worker is exiting, and nothing starts it again."
+		f.Supervision = "Supervision is off: " + manualFile + " is created. The worker is exiting, and nothing starts it again."
 	}
 	m, ask := m.askWorker(workerPollEvery)
 	return m, []Cmd{LoadWorkerSetup{Workspace: m.Workspace}, ask}
@@ -722,4 +722,12 @@ func (m Model) WorkerCardMode() Mode {
 		return ModeWorkerCard
 	}
 	return ModeWorkerRead
+}
+
+// manualFile is the supervision marker's name, from the one rule.
+const manualFile = worker.ManualFileName
+
+// ManualPresentWords is the Worker card's sentence for a present supervision marker; the view shows it as the model words it.
+func ManualPresentWords() string {
+	return manualFile + " is present: the plugin neither starts nor restarts the worker."
 }
