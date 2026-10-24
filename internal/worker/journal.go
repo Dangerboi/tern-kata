@@ -259,9 +259,9 @@ type Hooks struct {
 	AfterSave func(point string, j *Journal) error
 	// FailDirSync, when it returns an error for a save point, makes that save's folder sync fail with it.
 	FailDirSync func(point string) error
-	// GroupHoldsOut, when it returns true for a run's launch, makes the termination policy's group proof answer
-	// present, as a process no signal can end would.
-	GroupHoldsOut func(l *LaunchRecord) bool
+	// GroupProof, when it returns true for a run's launch, supplies the group proof in place of the platform's: present
+	// as a process no signal can end would answer, gone, or a group that cannot be checked.
+	GroupProof func(l *LaunchRecord) (GroupProof, bool)
 	// CaptureWriteLimit, when it returns true for a capture file's path, lets that many bytes through before every
 	// further write to it fails.
 	CaptureWriteLimit func(path string) (int, bool)

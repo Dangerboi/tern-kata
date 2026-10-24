@@ -67,7 +67,7 @@ func (j Job) TriggerError() error {
 
 // ActionProblem is why the job's action cannot run as defined, "" when it can: a Native job, which an adapter never runs; a
 // notify job with no Issue and recipient to notify; an execute job with neither a prompt nor a Workflow, or with no Issue
-// policy. It is worded to follow "it", so the caller may quote it after a job's name.
+// policy; an action of a kind kata added later. It is worded to follow "it", so the caller may quote it after a job's name.
 func (j Job) ActionProblem() string {
 	d := j.Definition
 	switch d.Action.Kind {
@@ -89,6 +89,8 @@ func (j Job) ActionProblem() string {
 		case d.Issue == nil:
 			return "has no Issue policy"
 		}
+	default:
+		return "has an action kind this worker does not know"
 	}
 	return ""
 }

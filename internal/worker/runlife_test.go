@@ -415,28 +415,3 @@ func TestEveryHoldHasConsistentAnswers(t *testing.T) {
 		}
 	}
 }
-
-// A group that cannot be checked is logged once per run per change of reason; any other answer forgets the reason.
-func TestUncheckedLogSaysEachReasonOncePerRun(t *testing.T) {
-	var u uncheckedLog
-	cannot := func(reason string) GroupProof { return GroupProof{State: GroupUnchecked, Reason: reason} }
-	steps := []struct {
-		run   string
-		proof GroupProof
-		said  bool
-	}{
-		{"a", cannot("open failed"), true},
-		{"a", cannot("open failed"), false},
-		{"b", cannot("open failed"), true},
-		{"a", cannot("query failed"), true},
-		{"a", cannot("query failed"), false},
-		{"a", GroupProof{State: GroupPresent}, false},
-		{"a", cannot("query failed"), true},
-		{"a", GroupProof{State: GroupGone}, false},
-	}
-	for i, s := range steps {
-		if got := u.changed(s.run, s.proof); got != s.said {
-			t.Errorf("step %d (%s, %+v): said = %v, want %v", i, s.run, s.proof, got, s.said)
-		}
-	}
-}

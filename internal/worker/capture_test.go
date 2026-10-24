@@ -122,7 +122,7 @@ func TestACommandStepWhoseOutputLogCannotBeWrittenIsNotHeldAndSettlesFromItsExit
 			h.admitting(r)
 			uid := h.runWorkflow(r, job)
 			run := h.settled(uid)
-			if run.Status != "succeeded" || (!writeFails && strings.Contains(run.Summary, "noisy")) {
+			if run.Status != "succeeded" || strings.Contains(run.Summary, "noisy") {
 				t.Fatalf("run is %q: %q", run.Status, run.Summary)
 			}
 			if got := h.lines("made.txt"); len(got) != 1 {
@@ -131,6 +131,56 @@ func TestACommandStepWhoseOutputLogCannotBeWrittenIsNotHeldAndSettlesFromItsExit
 			h.wantUnrecorded(r, uid, log)
 		})
 	}
+}
+
+// A step that lost its capture is named in status and the run detail for as long as the run shows, whether a later step
+// is still running or has recorded fine.
+func TestAnEarlierStepsLostCaptureStaysShownWhileAndAfterALaterStepRecords(t *testing.T) {
+	h := newHarness(t)
+	_, job := h.workflowJob("build",
+		workertest.Step{Key: "first", Command: "echo noisy"},
+		workertest.Step{Key: "second", After: []string{"first"}, Command: "while [ ! -f go.txt ]; do sleep 0.1; done; echo fine"})
+	spoiled := false
+	r := h.start(worker.Hooks{AfterSave: func(point string, j *worker.Journal) error {
+		if point == "step-started" && !spoiled {
+			spoiled = true
+			dir := filepath.Join(h.dirs.Runs(), j.RunUID, j.Steps[0].Dir)
+			spoil(t, filepath.Join(dir, "output.log"))
+		}
+		return nil
+	}})
+	h.admitting(r)
+	uid := h.runWorkflow(r, job)
+
+	shown := func(when string) {
+		t.Helper()
+		status, _ := h.runStatus(r, uid)
+		if !strings.Contains(status.Unrecorded, `step "first"`) || strings.Contains(status.Unrecorded, `step "second"`) {
+			t.Errorf("%s: run status says %q", when, status.Unrecorded)
+		}
+		if text := r.w.Status().String(); !strings.Contains(text, "output not recorded: "+status.Unrecorded) {
+			t.Errorf("%s: worker status does not say it:\n%s", when, text)
+		}
+		detail, err := r.w.RunDetail(uid)
+		if err != nil || !strings.Contains(detail.OutputTail, "output not recorded: "+status.Unrecorded) {
+			t.Errorf("%s: run detail says %q (%v)", when, detail.OutputTail, err)
+		}
+		if len(detail.Steps) != 2 || detail.Steps[0].Unrecorded == "" || detail.Steps[1].Unrecorded != "" {
+			t.Errorf("%s: the steps show %+v", when, detail.Steps)
+		}
+	}
+	h.within("the second step to run", func() bool {
+		d, err := r.w.RunDetail(uid)
+		return err == nil && len(d.Steps) == 2 && d.Steps[1].State == "running"
+	})
+	shown("while the later step runs")
+	if err := os.WriteFile(filepath.Join(h.repo, "go.txt"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if run := h.settled(uid); run.Status != "succeeded" {
+		t.Fatalf("run is %q: %q", run.Status, run.Summary)
+	}
+	shown("after the later step recorded")
 }
 
 func TestARunWithNoCaptureTroubleShowsNoNote(t *testing.T) {
