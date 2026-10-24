@@ -342,9 +342,106 @@ func TestAttentionPageHelpSheetListsItsKeys(t *testing.T) {
 			}
 		}
 	}
-	for _, want := range []string{"next request", "previous request", "open the request's Issue, in any Project", "read the requests again"} {
+	for _, want := range []string{"next request", "previous request", "open the request's Issue, in any Project", "clear the request, if it still reads as shown", "read the requests again"} {
 		if !slices.Contains(lines, want) {
 			t.Errorf("the Attention help group lacks %q: %v", want, lines)
 		}
+	}
+}
+
+func askedClear(cmds []model.Cmd) []model.ClearAttention {
+	var clears []model.ClearAttention
+	for _, cmd := range cmds {
+		if clear, ok := cmd.(model.ClearAttention); ok {
+			clears = append(clears, clear)
+		}
+	}
+	return clears
+}
+
+func TestCSendsOneGuardedClearAndKeysOnTheRowWaitUntilItIsAnswered(t *testing.T) {
+	requests := attentionRequests(t)
+	s := attentionPageWith(t, requests, 0)
+	out := step(t, s, key("c"))
+	clears := askedClear(out.Cmds)
+	want := model.ClearAttention{Workspace: "/repo", ProjectID: 7, UID: "work-aa11", Key: model.NotificationKey("dana"), Seen: requests[0].Slot.Raw, Actor: "dana"}
+	if len(clears) != 1 || clears[0] != want {
+		t.Fatalf("cmds %#v, want exactly the guarded clear %+v", out.Cmds, want)
+	}
+	if want.Seen == "" {
+		t.Fatal("the guard holds no value")
+	}
+
+	// A second c or an Enter on the row waits.
+	again := step(t, out.State, key("c"))
+	if len(askedClear(again.Cmds)) != 0 {
+		t.Errorf("a second c sent another clear: %#v", again.Cmds)
+	}
+	waiting := step(t, again.State, key("enter"))
+	if waiting.State.Model.Page != model.PageAttention {
+		t.Errorf("enter on the row being cleared left the Page for %v", waiting.State.Model.Page)
+	}
+
+	// Another row is not waiting.
+	other := step(t, out.State, key("down"))
+	if clears := askedClear(step(t, other.State, key("c")).Cmds); len(clears) != 1 || clears[0].UID != "other-bb22" {
+		t.Errorf("c on another row sent %#v", clears)
+	}
+}
+
+func TestAClearedRequestLeavesTheListAndThePageReadsAgain(t *testing.T) {
+	s := attentionPageWith(t, attentionRequests(t), 0)
+	cleared := step(t, step(t, s, key("c")).State, model.AttentionCleared{UID: "work-aa11"})
+	m := cleared.State.Model
+	if len(m.Attention.Requests) != 2 || m.Attention.Selected != "other-bb22" {
+		t.Fatalf("requests %d selected %q, want the row gone and the next one selected", len(m.Attention.Requests), m.Attention.Selected)
+	}
+	if strings.Contains(wireTextOf(t, cleared.State), "work#aa11") {
+		t.Error("the cleared request is still drawn")
+	}
+	wantText(t, "header", wireTextOf(t, cleared.State), "for dana · 2 requests")
+	if _, ok := askedAttention(cleared.Cmds); !ok {
+		t.Error("no read asked for to confirm the clear")
+	}
+	// The row is free again if the same request comes back.
+	back := answerAttention(t, cleared, attentionRequests(t), 0)
+	if len(askedClear(step(t, back, key("c")).Cmds)) != 1 {
+		t.Error("c waits after the clear was answered")
+	}
+}
+
+func TestAClearThatFindsTheRequestChangedSaysSoAndReadsAgain(t *testing.T) {
+	s := attentionPageWith(t, attentionRequests(t), 0)
+	out := step(t, step(t, s, key("c")).State, model.AttentionCleared{UID: "work-aa11", Changed: true})
+	m := out.State.Model
+	if m.Notice != "The request changed meanwhile; nothing was cleared" {
+		t.Fatalf("notice %q", m.Notice)
+	}
+	if len(m.Attention.Requests) != 3 {
+		t.Errorf("%d requests, want the row kept until the read shows the new value", len(m.Attention.Requests))
+	}
+	wantText(t, "page", wireTextOf(t, out.State), "nothing was cleared")
+	if _, ok := askedAttention(out.Cmds); !ok {
+		t.Error("no reload asked for")
+	}
+	fresh := attentionRequest(t, 7, "work", "aa11", "Deploy the fix", `{"from":"bob","message":"The new ask"}`, 1)
+	done := answerAttention(t, out, append([]model.AttentionRequest{fresh}, attentionRequests(t)[1:]...), 0)
+	wantText(t, "reloaded row", attentionCardText(t, done, "work-aa11"), "The new ask")
+}
+
+func TestAClearThatFailsShowsTheDaemonsErrorAndKeepsTheRow(t *testing.T) {
+	s := attentionPageWith(t, attentionRequests(t), 0)
+	out := step(t, step(t, s, key("c")).State, model.AttentionCleared{UID: "work-aa11", Err: errors.New("the daemon refused")})
+	if out.State.Model.Notice != "the daemon refused" || len(out.State.Model.Attention.Requests) != 3 {
+		t.Fatalf("notice %q, %d requests", out.State.Model.Notice, len(out.State.Model.Attention.Requests))
+	}
+	if len(askedClear(step(t, out.State, key("c")).Cmds)) != 1 {
+		t.Error("c still waits after the failure was answered")
+	}
+}
+
+func TestCOnAnEmptyAttentionPageSendsNothing(t *testing.T) {
+	if len(askedClear(step(t, attentionPageWith(t, nil, 0), key("c")).Cmds)) != 0 {
+		t.Error("c sent a clear with no request")
 	}
 }

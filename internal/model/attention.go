@@ -101,6 +101,32 @@ type AttentionLoaded struct {
 
 func (AttentionLoaded) msg() {}
 
+// ClearAttention clears the request held at Key on an Issue, guarded on the slot still holding Seen, the value the Page showed.
+// The write is attributed to Actor.
+type ClearAttention struct {
+	Workspace string
+	ProjectID int64
+	UID       string
+	Key       string
+	Seen      string
+	Actor     string
+}
+
+func (ClearAttention) cmd() {}
+
+// AttentionCleared answers ClearAttention for the Issue with UID. Changed says the slot no longer held what the Page showed, so
+// nothing was cleared.
+type AttentionCleared struct {
+	UID     string
+	Changed bool
+	Err     error
+}
+
+func (AttentionCleared) msg() {}
+
+// AttentionChangedNotice is the Notice for a request rewritten between the Page's read and the clear.
+const AttentionChangedNotice = "The request changed meanwhile; nothing was cleared"
+
 // AttentionSelectMsg is a click on a request's row; UID is its Issue's.
 type AttentionSelectMsg struct{ UID string }
 
@@ -117,6 +143,8 @@ type AttentionState struct {
 	// Selected is the Issue uid of the selected request.
 	Selected string
 	Loading  bool
+	// Clearing holds the Issue uids of the requests whose clear is out; keys on those rows wait.
+	Clearing []string
 	// request counts the reads asked for.
 	request int64
 }
@@ -231,13 +259,46 @@ func moveAttention(m Model, action Action) Model {
 	return m
 }
 
+// clearAttention is c: the selected request is cleared, guarded on the value the Page shows, unless its clear is already out.
+func clearAttention(m Model) (Model, []Cmd) {
+	request, ok := m.SelectedAttention()
+	address, err := m.InboxAddress()
+	if !ok || err != nil || m.attentionClearing(request.IssueUID) {
+		return m, nil
+	}
+	m.Attention.Clearing = slices.Concat(m.Attention.Clearing, []string{request.IssueUID})
+	return m, []Cmd{ClearAttention{Workspace: m.Workspace, ProjectID: request.ProjectID, UID: request.IssueUID, Key: NotificationKey(address), Seen: request.Slot.Raw, Actor: m.Actor}}
+}
+
+func (m Model) attentionClearing(uid string) bool { return slices.Contains(m.Attention.Clearing, uid) }
+
+// attentionCleared applies the answer to a clear. Success takes the row off the list; a request changed meanwhile, or a failure,
+// says so in a Notice. All but success read again, which shows what is held now, and so does success, to confirm.
+func attentionCleared(m Model, msg AttentionCleared) (Model, []Cmd) {
+	m.Attention.Clearing = slices.DeleteFunc(slices.Clone(m.Attention.Clearing), func(uid string) bool { return uid == msg.UID })
+	switch {
+	case msg.Err != nil:
+		m.Notice = msg.Err.Error()
+	case msg.Changed:
+		m.Notice = AttentionChangedNotice
+	default:
+		row := max(m.attentionIndex(), 0)
+		m.Attention.Requests = slices.DeleteFunc(slices.Clone(m.Attention.Requests), func(r AttentionRequest) bool { return r.IssueUID == msg.UID })
+		if m.Attention.Selected == msg.UID {
+			m.Attention.Selected = ""
+		}
+		m = m.settleAttentionSelection(row)
+	}
+	return askAttention(m)
+}
+
 // reloadAttention is ctrl+r.
 func reloadAttention(m Model) (Model, []Cmd) { return askAttention(m) }
 
 // openAttention is enter: the request's Issue opens on the Issues Page with its detail focused, in whichever Project it is.
 func openAttention(m Model) (Model, []Cmd) {
 	request, ok := m.SelectedAttention()
-	if !ok {
+	if !ok || m.attentionClearing(request.IssueUID) {
 		return m, nil
 	}
 	m = m.leavePage()
@@ -265,6 +326,9 @@ func updateAttention(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
 	case AttentionLoaded:
 		return attentionLoaded(m, msg), nil, true
+	case AttentionCleared:
+		next, cmds := attentionCleared(m, msg)
+		return next, cmds, true
 	case AttentionSelectMsg:
 		m.Attention.Selected, m.Focus = msg.UID, ColumnList
 		return m, nil, true
@@ -275,5 +339,6 @@ func updateAttention(m Model, msg Msg) (Model, []Cmd, bool) {
 // attentionRows are the Attention Page's rows outside its generated movement rows.
 var attentionRows = []actionEntry{
 	{action: OpenAttentionRequest, modes: []Mode{ModeAttention}, keys: keys("enter", "↵"), help: "open", footer: []Mode{ModeAttention}, footerKey: "↵", sheet: []sheetLine{{sheetAttention, 3, "open the request's Issue, in any Project"}}, handle: openAttention},
-	{action: ReloadAttention, modes: []Mode{ModeAttention}, keys: keys("ctrl+r", "ctrl+r", "meta+r", ""), help: "reload", sheet: []sheetLine{{sheetAttention, 4, "read the requests again"}}, handle: reloadAttention},
+	{action: ClearAttentionRequest, modes: []Mode{ModeAttention}, keys: keys("c", "c"), help: "clear", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 4, "clear the request, if it still reads as shown"}}, handle: clearAttention},
+	{action: ReloadAttention, modes: []Mode{ModeAttention}, keys: keys("ctrl+r", "ctrl+r", "meta+r", ""), help: "reload", sheet: []sheetLine{{sheetAttention, 5, "read the requests again"}}, handle: reloadAttention},
 }

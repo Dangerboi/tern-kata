@@ -86,6 +86,7 @@ const (
 	ToggleArchivedWorkflows Action = "toggle-archived-workflows"
 	ShowAttentionPage       Action = "show-attention-page"
 	OpenAttentionRequest    Action = "open-attention-request"
+	ClearAttentionRequest   Action = "clear-attention-request"
 	ReloadAttention         Action = "reload-attention"
 	ShowCredentialsPage     Action = "show-credentials-page"
 	RefreshCredentials      Action = "refresh-credentials"

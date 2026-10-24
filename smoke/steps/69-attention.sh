@@ -1,5 +1,5 @@
 # The Attention Page (6) lists the requests kata holds for the Pane's Inbox address, across Projects. A request seeded with
-# `kata notify --to` shows as a row, and Enter opens its Issue on the Issues Page. The Pane runs as its own actor so the address is known.
+# `kata notify --to` shows as a row, Enter opens its Issue on the Issues Page, and `c` clears it. The Pane runs as its own actor so the address is known.
 quit_app
 at_dir="$tmp/workspace"
 kata --workspace "$at_dir" create "Smoke attention Issue" --body "Issue with a request" --json >"$tmp/attention-issue.json"
@@ -18,7 +18,13 @@ expect_tree "[data-id='main.columns.list.issues']" '.count == 1'
 expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Smoke attention Issue")))'
 ctl key 6
 expect_tree "[data-id='main.columns.list.attention.$at_issue']" '.ok and .count == 1'
+kata --workspace "$at_dir" inbox --for smoke-attention --all | grep -q "Smoke attention Issue"
+ctl key c
+expect_tree "[data-id='main.columns.list.attention.$at_issue']" '.ok and .count == 0'
+if kata --workspace "$at_dir" inbox --for smoke-attention --all | grep -q "Smoke attention Issue"; then
+  printf 'The cleared request is still in kata inbox\n' >&2
+  return 1
+fi
 ctl key 1
 quit_app
-kata --as smoke-asker --workspace "$at_dir" notify "$at_short" --to smoke-attention --clear --json >/dev/null
 ctl --file "$tmp/launch.ctl"
