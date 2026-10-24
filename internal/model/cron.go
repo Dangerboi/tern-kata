@@ -296,12 +296,13 @@ func cronWords(expression string) string {
 }
 
 // weekdayList reads a cron day-of-week field of numbers, names, ranges and lists as "Mon, Wed" or, for Monday to Friday,
-// "weekday".
+// "weekday". Day 7 is Sunday, so a range keeps its numeric bounds (0-7 is every day, 7-7 only Sunday, 7-1 wraps and is refused)
+// and only the days inside it fold onto 0 to 6.
 func weekdayList(field string) (string, bool) {
 	var set [7]bool
 	day := func(s string) (int, bool) {
 		if n, err := strconv.Atoi(s); err == nil && n >= 0 && n <= 7 {
-			return n % 7, true
+			return n, true
 		}
 		for i, name := range weekdayNames {
 			if strings.EqualFold(s, name) {
@@ -318,11 +319,8 @@ func weekdayList(field string) (string, bool) {
 		}
 		b := a
 		if isRange {
-			if b, ok = day(to); !ok || b < a && to != "7" {
+			if b, ok = day(to); !ok || b < a {
 				return "", false
-			}
-			if to == "7" {
-				b = 7
 			}
 		}
 		for d := a; d <= b; d++ {
