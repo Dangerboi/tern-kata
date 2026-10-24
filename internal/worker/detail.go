@@ -104,6 +104,9 @@ func (w *Worker) RunDetail(uid string) (RunDetail, error) {
 	if d.OutputTail == "" { // a command step's output is its own log
 		d.OutputTail = fileTail(filepath.Join(dir, "output.log"), OutputTailBytes)
 	}
+	if note := j.outputLoss(); note != "" { // the tail is what was recorded; say why it may be short or empty
+		d.OutputTail = strings.TrimSpace(outputNote(note) + "\n\n" + d.OutputTail)
+	}
 	if j.Outcome != nil {
 		d.Summary = j.Outcome.Summary
 	}
