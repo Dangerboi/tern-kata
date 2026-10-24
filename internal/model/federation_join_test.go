@@ -29,6 +29,8 @@ func TestTheJoinCommandIsKatasWithTheSpokesSettingsOnlyWhenItIsRemote(t *testing
 			"--hub-project-id 12 --project acme --token tok --actor erin --capabilities claim,pull,push"},
 		"a spoke called local has no server": {func() model.FederationJoinCommand { c := base; c.SpokeEndpoint = "local"; return c }(),
 			"kata federation join --hub-url https://hub.example:7474 --hub-project-id 12 --project acme --token tok --actor erin --capabilities claim,pull,push"},
+		"a local spoke reached through a named entry": {func() model.FederationJoinCommand { c := base; c.SpokeEndpoint, c.SpokeDaemon = "local", "my laptop"; return c }(),
+			"kata --daemon 'my laptop' federation join --hub-url https://hub.example:7474 --hub-project-id 12 --project acme --token tok --actor erin --capabilities claim,pull,push"},
 		"words that need quoting": {func() model.FederationJoinCommand {
 			c := base
 			c.ProjectName, c.Token, c.Actor = "my project", "it's", ""
