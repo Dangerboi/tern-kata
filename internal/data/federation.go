@@ -107,12 +107,12 @@ func translateSpoke(wire g.FederationProjectStatus) model.FederationSpoke {
 	spoke := model.FederationSpoke{
 		ProjectID:                   wire.ProjectID,
 		ProjectName:                 wire.ProjectName,
-		HubURL:                      stringOrEmpty(wire.HubURL),
-		HubProjectUID:               stringOrEmpty(wire.HubProjectUID),
-		BoundActor:                  stringOrEmpty(wire.BoundActor),
-		Capabilities:                displayCapabilities(stringOrEmpty(wire.Capabilities)),
+		HubURL:                      derefString(wire.HubURL),
+		HubProjectUID:               derefString(wire.HubProjectUID),
+		BoundActor:                  derefString(wire.BoundActor),
+		Capabilities:                displayCapabilities(derefString(wire.Capabilities)),
 		PushEnabled:                 wire.PushEnabled,
-		CredentialStatus:            stringOrEmpty(wire.CredentialStatus),
+		CredentialStatus:            derefString(wire.CredentialStatus),
 		PendingPushCount:            wire.PendingPushCount,
 		PendingPushHighWaterEventID: wire.PendingPushHighWaterEventID,
 		PullCursorEventID:           wire.PullCursorEventID,
@@ -120,7 +120,7 @@ func translateSpoke(wire g.FederationProjectStatus) model.FederationSpoke {
 		PendingClaimCount:           wire.PendingClaimCount,
 		LiveClaimCount:              wire.LiveClaimCount,
 		ActiveQuarantineCount:       wire.ActiveQuarantineCount,
-		ResetBlocker:                stringOrEmpty(wire.ResetBlocker),
+		ResetBlocker:                derefString(wire.ResetBlocker),
 		UnresolvedViolationCount:    wire.UnresolvedViolationCount,
 		RecentViolationCount:        wire.RecentViolationCount,
 		LastPullSuccessAt:           timeOrZero(wire.LastPullSuccessAt),
@@ -128,7 +128,7 @@ func translateSpoke(wire g.FederationProjectStatus) model.FederationSpoke {
 		LastSuccessfulSyncAt:        timeOrZero(wire.LastSuccessfulSyncAt),
 		LastErrorAt:                 timeOrZero(wire.LastErrorAt),
 		HasLastError:                wire.LastError != nil,
-		LastError:                   stringOrEmpty(wire.LastError),
+		LastError:                   derefString(wire.LastError),
 	}
 	if wire.AllowInsecure != nil {
 		spoke.AllowInsecure = *wire.AllowInsecure
@@ -141,13 +141,6 @@ func translateSpoke(wire g.FederationProjectStatus) model.FederationSpoke {
 			FirstEventID: q.FirstEventID, LastEventID: q.LastEventID, CreatedAt: q.CreatedAt, Error: q.ErrorData})
 	}
 	return spoke
-}
-
-func stringOrEmpty(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
 }
 
 // displayCapabilities is kata's display spelling of a hub grant's capabilities: pull, push, lease (stored as claim), in that order.

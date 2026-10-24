@@ -387,7 +387,7 @@ func (c *Client) invert(ctx context.Context, cmd model.UndoChange, account daemo
 		field.Action, field.Value = model.AddLabelAction, e.Label
 		return c.writeField(ctx, field)
 	case model.UndoLinkAdd:
-		return c.removeLink(ctx, model.RemoveLinkCmd{UID: e.UID, ProjectID: e.ProjectID, Actor: e.Actor, LinkID: e.Link.ID})
+		return c.removeLink(ctx, e.ProjectID, e.UID, e.Actor, e.Link.ID)
 	case model.UndoLaneMove:
 		var last issueWrite
 		for _, step := range slices.Concat(laneSteps(model.RemoveLabelAction, e.Added), laneSteps(model.AddLabelAction, e.Removed)) {

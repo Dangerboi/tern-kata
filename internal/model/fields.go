@@ -50,23 +50,6 @@ type WriteField struct {
 
 func (WriteField) cmd() {}
 
-// RemoveLinkCmd deletes the link LinkID from the Issue UID.
-type RemoveLinkCmd struct {
-	Workspace, UID, Actor string
-	ProjectID, LinkID     int64
-}
-
-func (RemoveLinkCmd) cmd() {}
-
-// LinkRemoved answers RemoveLinkCmd.
-type LinkRemoved struct {
-	UID    string
-	LinkID int64
-	Err    error
-}
-
-func (LinkRemoved) msg() {}
-
 type LoadFieldLabels struct {
 	Workspace, UID string
 	ProjectID      int64
