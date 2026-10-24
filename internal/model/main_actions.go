@@ -154,6 +154,9 @@ var (
 	pageDownKeys = keys("page_down", "pgdn", "ctrl+v", "C-v", "meta+v", "")
 	emacsDown    = keys("ctrl+n", "C-n", "meta+n", "")
 	emacsUp      = keys("ctrl+p", "C-p", "meta+p", "")
+	// firstRowKeys and lastRowKeys are kata's Emacs-style first and last row; the unlabelled chords are the forms a terminal may send them as.
+	firstRowKeys = keys("ctrl+alt+<", "C-M-<", "ctrl+alt+shift+<", "", "ctrl+alt+shift+,", "", "ctrl+meta+<", "", "ctrl+shift+meta+,", "")
+	lastRowKeys  = keys("ctrl+alt+>", "C-M->", "ctrl+alt+shift+>", "", "ctrl+alt+shift+.", "", "ctrl+meta+>", "", "ctrl+shift+meta+.", "")
 )
 
 // global is the one mode an entry without modes binds in; footer: global puts the entry in every footer it is bound in.
@@ -203,7 +206,7 @@ var jobsRows = []actionEntry{
 
 // jobsRowsAfterScroll are the Jobs Page's rows from its inspector's back key on.
 var jobsRowsAfterScroll = []actionEntry{
-	{action: JobInspectorBack, modes: []Mode{ModeJobInspector}, keys: keys("escape", "esc", "tab", "tab", "left", "←"), help: "back", footer: []Mode{ModeJobInspector}, sheet: []sheetLine{{sheetJobs, 10, "back to the job list"}}, handle: pure(inspectorBack)},
+	{action: JobInspectorBack, modes: []Mode{ModeJobInspector}, keys: keys("escape", "esc", "tab", "tab", "left", "←", "backspace", "⌫"), help: "back", footer: []Mode{ModeJobInspector}, sheet: []sheetLine{{sheetJobs, 10, "back to the job list"}}, handle: pure(inspectorBack)},
 	{action: NewJobAction, modes: jobsModes, keys: keys("n", "n"), help: "new job", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 12, "new job (Job card)"}}, handle: openNewJob},
 	{action: EditJobAction, modes: jobsModes, keys: keys("e", "e"), help: "edit job", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 13, "edit the selected job (Job card)"}}, handle: openEditJob},
 	{action: PauseJobAction, modes: jobsModes, keys: keys("p", "p"), help: "pause or resume", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 14, "pause or resume the selected job"}}, handle: toggleJob},
@@ -233,28 +236,28 @@ var runsRows = []actionEntry{
 
 // mainRows are the Runs inspector's back key and every row after the Runs Page's; the Runs Page declares them.
 var mainRows = []actionEntry{
-	{action: RunInspectorBack, modes: []Mode{ModeRunInspector}, keys: keys("escape", "esc", "tab", "tab", "left", "←"), help: "back", footer: []Mode{ModeRunInspector}, sheet: []sheetLine{{sheetRuns, 11, "back to the run list"}}, handle: pure(runInspectorBack)},
+	{action: RunInspectorBack, modes: []Mode{ModeRunInspector}, keys: keys("escape", "esc", "tab", "tab", "left", "←", "backspace", "⌫"), help: "back", footer: []Mode{ModeRunInspector}, sheet: []sheetLine{{sheetRuns, 11, "back to the run list"}}, handle: pure(runInspectorBack)},
 	// Moving and opening in the Issue detail.
 	{action: ScrollDown, modes: []Mode{ModeDetail}, keys: keys("down", "↓"), help: "scroll", footer: []Mode{ModeDetail}, footerKey: "↑↓", sheet: []sheetLine{{sheetChildren, 5, "scroll detail viewport"}}, handle: scrolling(ColumnDetail, ScrollLineDown)},
 	{action: ScrollUp, modes: []Mode{ModeDetail}, keys: keys("up", "↑"), help: "scroll up", sheet: []sheetLine{{sheetChildren, 4, "scroll detail viewport"}}, handle: scrolling(ColumnDetail, ScrollLineUp)},
 	{action: MoveDown, modes: []Mode{ModeDetail}, keys: slices.Concat(keys("j", "j/k"), emacsDown), help: "row", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetChildren, 2, "move child cursor"}}, handle: cursorMoving(MoveDown)},
 	{action: MoveUp, modes: []Mode{ModeDetail}, keys: slices.Concat(keys("k", "k"), emacsUp), help: "previous row", sheet: []sheetLine{{sheetChildren, 3, "move child cursor"}}, handle: cursorMoving(MoveUp)},
-	{action: NextActivityTab, modes: []Mode{ModeDetail}, keys: keys("tab", "↹"), help: "tab", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 1, "next tab"}}, handle: pure(func(m Model) Model { return m.cycleTab(true) })},
-	{action: PreviousActivityTab, modes: []Mode{ModeDetail}, keys: keys("shift+tab", "shift+tab"), help: "previous tab", sheet: []sheetLine{{sheetDetail, 2, "prev tab"}}, handle: pure(func(m Model) Model { return m.cycleTab(false) })},
+	{action: NextActivityTab, modes: []Mode{ModeDetail}, keys: keys("tab", "↹", "ctrl+j", "C-j", "meta+j", ""), help: "tab", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 1, "next tab"}}, handle: pure(func(m Model) Model { return m.cycleTab(true) })},
+	{action: PreviousActivityTab, modes: []Mode{ModeDetail}, keys: keys("shift+tab", "shift+tab", "ctrl+k", "C-k", "meta+k", ""), help: "previous tab", sheet: []sheetLine{{sheetDetail, 2, "prev tab"}}, handle: pure(func(m Model) Model { return m.cycleTab(false) })},
 	{action: DrillIn, modes: []Mode{ModeDetail}, keys: keys("enter", "↵"), help: "open", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 3, "jump to referenced issue or open the Cron job"}, {sheetChildren, 6, "open child"}}, handle: drillIn},
 	{action: PageUp, modes: []Mode{ModeDetail}, keys: pageUpKeys, help: "scroll page up", handle: scrolling(ColumnDetail, ScrollPageUp)},
 	{action: PageDown, modes: []Mode{ModeDetail}, keys: pageDownKeys, help: "page", footer: []Mode{ModeDetail}, footerKey: "pgup/pgdn", handle: scrolling(ColumnDetail, ScrollPageDown)},
-	{action: MoveFirst, modes: []Mode{ModeDetail}, keys: keys("g", "g", "home", "home"), help: "first row", handle: cursorMoving(MoveFirst)},
-	{action: MoveLast, modes: []Mode{ModeDetail}, keys: keys("shift+g", "G", "end", "end"), help: "last row", handle: cursorMoving(MoveLast)},
+	{action: MoveFirst, modes: []Mode{ModeDetail}, keys: slices.Concat(keys("g", "g", "home", "home"), firstRowKeys), help: "first row", handle: cursorMoving(MoveFirst)},
+	{action: MoveLast, modes: []Mode{ModeDetail}, keys: slices.Concat(keys("shift+g", "G", "end", "end"), lastRowKeys), help: "last row", handle: cursorMoving(MoveLast)},
 	// Moving and opening in the Menu sidebar.
 	{action: MoveDown, modes: []Mode{ModeCollections}, keys: slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), help: "next Collection", footer: []Mode{ModeCollections}, handle: sidebarMoving(MoveDown)},
 	{action: MoveUp, modes: []Mode{ModeCollections}, keys: slices.Concat(keys("k", "k/↑", "up", "↑"), emacsUp), help: "previous Collection", footer: []Mode{ModeCollections}, handle: sidebarMoving(MoveUp)},
-	{action: MoveFirst, modes: []Mode{ModeCollections}, keys: keys("g", "g", "home", "home"), help: "first Collection", handle: sidebarMoving(MoveFirst)},
-	{action: MoveLast, modes: []Mode{ModeCollections}, keys: keys("shift+g", "G", "end", "end"), help: "last Collection", handle: sidebarMoving(MoveLast)},
+	{action: MoveFirst, modes: []Mode{ModeCollections}, keys: slices.Concat(keys("g", "g", "home", "home"), firstRowKeys), help: "first Collection", handle: sidebarMoving(MoveFirst)},
+	{action: MoveLast, modes: []Mode{ModeCollections}, keys: slices.Concat(keys("shift+g", "G", "end", "end"), lastRowKeys), help: "last Collection", handle: sidebarMoving(MoveLast)},
 	{action: PageUp, modes: []Mode{ModeCollections}, keys: pageUpKeys, help: "page up", handle: scrolling(ColumnCollections, ScrollPageUp)},
 	{action: PageDown, modes: []Mode{ModeCollections}, keys: pageDownKeys, help: "page down", handle: scrolling(ColumnCollections, ScrollPageDown)},
 	{action: DrillIn, modes: []Mode{ModeCollections}, keys: keys("enter", "enter"), help: "open Collection", footer: []Mode{ModeCollections}, handle: sidebarOpen},
-	{action: MenuBack, modes: []Mode{ModeCollections}, keys: keys("escape", "esc"), help: "back", footer: []Mode{ModeCollections}, handle: pure(menuBack)},
+	{action: MenuBack, modes: []Mode{ModeCollections}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeCollections}, handle: pure(menuBack)},
 	// Searching.
 	{action: SearchEnter, modes: []Mode{ModeSearch}, keys: keys("enter", "enter"), help: "results", footer: []Mode{ModeSearch}, handle: pure(searchEnter)},
 	{action: SearchBack, modes: []Mode{ModeSearch}, keys: keys("escape", "esc"), help: "cancel search", footer: []Mode{ModeSearch}, handle: searchBack},
@@ -295,21 +298,26 @@ var mainRows = []actionEntry{
 	{action: TimedAssignAction, modes: []Mode{ModeDetail}, keys: keys("t", "t"), help: "timed assignment", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 20, "assign to yourself for a set time (1m..24h)"}}, handle: fieldFor(TimedAssignAction)},
 	{action: AddBlockerAction, modes: []Mode{ModeDetail}, keys: keys("b", "b"), help: "blocks", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 18, "add a Blocking link: this Issue blocks the one you name"}}, handle: fieldFor(AddBlockerAction)},
 	{action: AddRelatedAction, modes: []Mode{ModeDetail}, keys: keys("l", "l"), help: "related", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 19, "add a related link"}}, handle: fieldFor(AddRelatedAction)},
-	{action: PriorityAction, modes: issueModes, keys: keys("!", "!"), help: "priority", footer: issueModes, sheet: []sheetLine{{sheetDetail, 14, "set priority"}}, handle: fieldFor(PriorityAction)},
+	{action: PriorityAction, modes: issueModes, keys: keys("!", "!"), help: "priority", footer: issueModes, sheet: []sheetLine{{sheetDetail, 14, "set priority (! then 0-4 or - sets or clears it at once)"}}, handle: fieldFor(PriorityAction)},
 	{action: OpenDates, modes: issueModes, keys: keys("d", "d"), help: "dates", footer: issueModes, sheet: []sheetLine{{sheetDetail, 17, "set scheduled date and deadline (Dates card)"}}, handle: pure(openDates)},
 	{action: OpenRecurrenceAction, modes: issueModes, keys: keys("shift+o", "O"), help: "make or change recurrence", sheet: []sheetLine{{sheetDetail, 16, "make or change recurrence"}}, handle: pure(openRecurrence)},
 	{action: NewChild, modes: issueModes, keys: keys("shift+n", "N"), help: "child", footer: issueModes, sheet: []sheetLine{{sheetChildren, 1, "new child"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, true) }},
 	// Layout, back, help and quit.
 	{action: ToggleDetail, modes: []Mode{ModeList, ModeLane, ModeDetail}, keys: keys("shift+l", "L"), help: "layout", footer: []Mode{ModeList, ModeLane, ModeDetail}, sheet: []sheetLine{{sheetGlobal, 6, "toggle layout"}}, handle: pure(Model.toggleDetail)},
 	{action: DrillOut, modes: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}, keys: keys("escape", "esc"), help: "Menu", footer: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}, sheet: []sheetLine{{sheetGlobal, 5, "menu"}}, handle: drillOut},
-	{action: DrillOut, modes: []Mode{ModeLane}, keys: keys("escape", "esc"), help: "back", footer: []Mode{ModeLane}, sheet: []sheetLine{{sheetBoard, 10, "back to the Board, or the Menu in a narrow Pane"}}, handle: laneBack},
-	{action: DrillOut, modes: []Mode{ModeDetail}, keys: keys("escape", "esc", "left", "←"), help: "back", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 4, "back"}}, handle: drillOut},
+	{action: DrillOut, modes: []Mode{ModeLane}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeLane}, sheet: []sheetLine{{sheetBoard, 10, "back to the Board, or the Menu in a narrow Pane"}}, handle: laneBack},
+	{action: DrillOut, modes: []Mode{ModeDetail}, keys: keys("escape", "esc", "left", "←", "backspace", "⌫"), help: "back", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 4, "back"}}, handle: drillOut},
 	{action: OpenProjects, modes: []Mode{ModeCollections, ModeList, ModeBoard, ModeLane, ModeDetail, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention, ModeCredentials, ModeFederation}, keys: keys("shift+p", "P"), help: "projects", sheet: []sheetLine{{sheetGlobal, 4, "projects"}}, handle: pure(openProjects)},
 	{action: OpenInbox, modes: []Mode{ModeCollections, ModeList, ModeBoard, ModeLane, ModeDetail, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention, ModeCredentials, ModeFederation}, keys: keys("shift+i", "I"), help: "inbox", sheet: []sheetLine{{sheetGlobal, 3, "inbox"}}, handle: openInbox},
 	{action: RetryAction, modes: []Mode{ModeError}, keys: keys("ctrl+r", "ctrl+r"), help: "retry daemon", footer: []Mode{ModeError}, handle: func(m Model) (Model, []Cmd) { return updateLive(m, Retry{}) }},
 	{action: CloseHelp, modes: []Mode{ModeHelp}, keys: keys("escape", "esc"), help: "close help", footer: []Mode{ModeHelp}, handle: pure(func(m Model) Model { m.HelpOpen = false; return m })},
 	{action: ToggleHelp, keys: keys("?", "?", "shift+?", "?"), help: "help", footer: global, sheet: []sheetLine{{sheetGlobal, 1, "help"}}, handle: pure(func(m Model) Model { m.HelpOpen = !m.HelpOpen; return m })},
-	{action: QuitAction, keys: keys("q", "q", "ctrl+c", "ctrl+c"), help: "quit", footer: global, sheet: []sheetLine{{sheetGlobal, 2, "quit"}}, handle: pure(func(m Model) Model { m.Quitting = true; return m })},
+	{action: QuitAction, keys: keys("q", "q"), help: "quit", footer: global, sheet: []sheetLine{{sheetGlobal, 2, "quit (q asks y/n first, ctrl+c quits at once)"}}, handle: pure(askQuit)},
+	{action: QuitNowAction, keys: keys("ctrl+c", "ctrl+c", "meta+c", ""), help: "quit at once", sheet: []sheetLine{{sheetGlobal, 2, "quit (q asks y/n first, ctrl+c quits at once)"}}, handle: pure(quitNow)},
+	// The question "Quit tern-kata? y/n".
+	{action: ConfirmQuitAction, modes: []Mode{ModeQuit}, keys: keys("y", "y"), help: "quit", footer: []Mode{ModeQuit}, handle: pure(quitNow)},
+	{action: QuitNowAction, modes: []Mode{ModeQuit}, keys: keys("ctrl+c", "ctrl+c", "meta+c", ""), help: "quit at once", handle: pure(quitNow)},
+	{action: StayAction, modes: []Mode{ModeQuit}, keys: keys("n", "n", "escape", "esc"), help: "stay", footer: []Mode{ModeQuit}, handle: pure(func(m Model) Model { m.AskQuit = false; return m })},
 }
 
 // Keymap is every binding: the Popup cards' keys, then the main-surface actions' keys, expanded from
@@ -345,6 +353,23 @@ func orGlobal(list []Mode) []Mode {
 	}
 	return list
 }
+
+func quitNow(m Model) Model {
+	m.Quitting, m.AskQuit = true, false
+	return m
+}
+
+// askQuit is q: it asks "Quit tern-kata? y/n", or quits at once when kata's [tui].confirm_quit is false.
+func askQuit(m Model) Model {
+	if m.QuitAtOnce {
+		return quitNow(m)
+	}
+	m.AskQuit, m.HelpOpen = true, false
+	return m
+}
+
+// QuitQuestion is the question asked before q quits.
+const QuitQuestion = "Quit tern-kata? y/n"
 
 // openInbox is `I`: it opens the Inbox Collection wherever the Menu is, like picking it in the sidebar.
 func openInbox(m Model) (Model, []Cmd) {

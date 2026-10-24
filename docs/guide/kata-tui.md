@@ -44,6 +44,22 @@ Before it writes, `u` checks, with kata tui's words, that it is still the same d
 
 Every other change to an Issue clears the history, and the next `u` says "nothing to undo: <reason>": creating an Issue, a comment or Reply, a timed assignment, a Recurrence change or stop, attaching or detaching a file, and every Cron job or Workflow change. A change whose outcome is unknown (a timeout) clears it too. `u` never undoes an older change across one of these.
 
+## Quitting
+
+`q` outside text fields asks "Quit tern-kata? y/n": `y` quits, `n` or `esc` stays, and every other key is ignored while the question shows. `ctrl+c` quits at once, asked or not. `q` typed into search or a Popup card stays text. kata's own `[tui] confirm_quit = false` in `<KATA_HOME>/config.toml` (`~/.kata/config.toml` unless `KATA_HOME` is set) makes `q` quit at once in tern-kata too; a config file kata would refuse leaves the question on.
+
+## Key aliases
+
+kata tui's alternative keys work where kata has them:
+
+| Key | Same as |
+|---|---|
+| `ctrl+j`, `ctrl+k` | `tab`, `shift+tab`: the next and previous tab of the Issue detail |
+| `backspace` | `esc` where it goes back outside text fields: the Issue detail, the Lane view, the Menu's Projects level, the Jobs and Runs inspectors and the Lettered Pages |
+| `ctrl+alt+<`, `ctrl+alt+>` | `g`, `G`: the first and last row of every list, the Issue detail and the Menu |
+| `!` then `0`-`4` or `-` | set or clear the priority at once; any other key closes the field and is handled as usual |
+| `T` | open the Attention Page, from any Page and the Menu |
+
 ## Missing keys
 
 tern-kata lacks these kata tui keys:

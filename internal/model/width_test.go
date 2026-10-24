@@ -70,6 +70,9 @@ func TestQuitStillWorksBelowMinimumWidth(t *testing.T) {
 	for _, chord := range []string{"q", "ctrl+c"} {
 		t.Run(chord, func(t *testing.T) {
 			m, _ := model.Update(pickerStart(60, true), model.KeyMsg{Chord: chord, Text: chord})
+			if chord == "q" {
+				m, _ = model.Update(m, model.KeyMsg{Chord: "y", Text: "y"})
+			}
 			if !m.Quitting {
 				t.Fatalf("%s did not quit below 80 columns", chord)
 			}

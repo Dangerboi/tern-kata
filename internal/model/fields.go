@@ -323,6 +323,17 @@ func updateFieldKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	if m.FieldForm.Saving {
 		return m, nil
 	}
+	if m.FieldForm.Action == PriorityAction && m.FieldForm.Value == "" {
+		if slices.Contains([]string{"0", "1", "2", "3", "4", "-"}, msg.Chord) {
+			m.FieldForm.Value = msg.Chord
+			return submitField(m)
+		}
+		if msg.Chord != "escape" {
+			// Any other key closes the field and is handled as if it had been pressed with no field open.
+			m.FieldForm = FieldFormState{}
+			return update(m, msg)
+		}
+	}
 	binding, ok := LookupBindingForMode(msg.Chord, ModeFieldForm)
 	if ok && binding.Mode == ModeFieldForm {
 		switch binding.Action {

@@ -14,6 +14,9 @@ const (
 	ScrollUp                Action = "scroll-up"
 	ScrollDown              Action = "scroll-down"
 	QuitAction              Action = "quit"
+	QuitNowAction           Action = "quit-now"
+	ConfirmQuitAction       Action = "confirm-quit"
+	StayAction              Action = "stay"
 	DrillIn                 Action = "drill-in"
 	DrillOut                Action = "drill-out"
 	MenuBack                Action = "menu-back"
@@ -145,6 +148,8 @@ const (
 	ModeWorkflows     Mode = "workflows"
 	ModeAttention     Mode = "attention"
 	ModeCredentials   Mode = "credentials"
+	// ModeQuit is the question "Quit tern-kata? y/n", which takes only its answers.
+	ModeQuit Mode = "quit"
 	ModeFederation    Mode = "federation"
 )
 

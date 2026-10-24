@@ -79,7 +79,9 @@ type pageDef struct {
 	// lettered marks a Lettered Page: it has a letter for its chord and no number, is listed in the Menu, and is drawn in the Page
 	// bar only while shown. It does not act on the Pane's Project and has no reset rule. Its back key returns to the Page shown before.
 	lettered bool
-	action   Action
+	// also are further keys that open the Page, as kata's T for the Attention Page.
+	also   []Key
+	action Action
 	// second is what the Page's second column is; leavePage reads it.
 	second SecondColumn
 	// needs is the Page as the notice words it when the Pane has no Project; "" for the Issues Page, which needs none.
@@ -182,7 +184,7 @@ func init() {
 			filledFor: workflowsFilledFor, reset: resetWorkflows, mode: workflowsMode, update: updateWorkflows, list: ListNodeWorkflows,
 			moves:  pageMoves{mode: ModeWorkflows, noun: "workflow", move: moveWorkflow, sheet: [6]sheetLine{{sheetWorkflows, 1, "next workflow"}, {sheetWorkflows, 2, "previous workflow"}}},
 			keymap: []keySegment{movementKeys, rowsOf(workflowActions())}},
-		{page: PageAttention, id: "attention", label: "Attention", chord: "6", action: ShowAttentionPage, second: SecondInspector, enter: enterAttention,
+		{page: PageAttention, id: "attention", label: "Attention", chord: "6", action: ShowAttentionPage, also: keys("shift+t", "T"), second: SecondInspector, enter: enterAttention,
 			mode: func(Model) Mode { return ModeAttention }, update: updateAttention, list: ListNodeAttention,
 			moves:  pageMoves{mode: ModeAttention, noun: "request", move: moveAttention, sheet: [6]sheetLine{{sheetAttention, 1, "next request"}, {sheetAttention, 2, "previous request"}}},
 			keymap: []keySegment{movementKeys, rowsOf(attentionRows)}},
@@ -261,8 +263,8 @@ func pageMoveActions(def pageDef) []actionEntry {
 	}{
 		{MoveDown, slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), "move"},
 		{MoveUp, slices.Concat(keys("k", "k/↑", "up", "↑"), emacsUp), "previous " + p.noun},
-		{MoveFirst, keys("g", "g", "home", "home"), "first " + p.noun},
-		{MoveLast, keys("shift+g", "G", "end", "end"), "last " + p.noun},
+		{MoveFirst, slices.Concat(keys("g", "g", "home", "home"), firstRowKeys), "first " + p.noun},
+		{MoveLast, slices.Concat(keys("shift+g", "G", "end", "end"), lastRowKeys), "last " + p.noun},
 		{PageUp, pageUpKeys, "page up"},
 		{PageDown, pageDownKeys, "page down"},
 	}
@@ -427,7 +429,7 @@ func (m Model) leavePage() Model {
 func pageActions() []actionEntry {
 	entries := make([]actionEntry, len(pageDefs))
 	for i, def := range pageDefs {
-		entries[i] = actionEntry{action: def.action, modes: pageModes, keys: keys(def.pressed(), def.chord), help: def.label + " page",
+		entries[i] = actionEntry{action: def.action, modes: pageModes, keys: slices.Concat(keys(def.pressed(), def.chord), def.also), help: def.label + " page",
 			sheet: []sheetLine{{sheetGlobal, 7, "switch Page"}}, handle: showPage(def.page)}
 	}
 	return entries

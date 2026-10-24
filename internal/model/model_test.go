@@ -33,7 +33,9 @@ func TestIssueNavigation(t *testing.T) {
 		{"upper boundary", []string{"k", "k"}, "uid-a", false},
 		{"lower boundary", []string{"shift+g", "j"}, "uid-c", false},
 		{"unknown key", []string{"z"}, "uid-a", false},
-		{"quit", []string{"q"}, "uid-a", true},
+		{"q asks first", []string{"q"}, "uid-a", false},
+		{"y answers the question", []string{"q", "y"}, "uid-a", true},
+		{"n answers the question", []string{"q", "n"}, "uid-a", false},
 		{"interrupt", []string{"ctrl+c"}, "uid-a", true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
