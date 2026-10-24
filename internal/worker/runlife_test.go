@@ -195,6 +195,7 @@ func TestOccupiesSlot(t *testing.T) {
 func TestMayResume(t *testing.T) {
 	const (
 		still  = "the agent's process group 10 is still present; the worker never stops a process to make a resume possible"
+		unchecked = "the agent's process group 10 cannot be checked: the job could not be opened; the worker keeps the run's slot until the check succeeds and will not free capacity it cannot prove empty, so it cannot be resumed until then"
 		noProc = "the worker cannot prove the agent was never started, so it will not start another on this run; abandon it"
 	)
 	cases := []struct {
@@ -216,7 +217,7 @@ func TestMayResume(t *testing.T) {
 			"its hold is still being reported to kata; try again in a moment"},
 		{"launch unproven with no start record", journalAt(PhaseSettled, HoldLaunchUnproven), GroupGone, true, noProc},
 		{"interrupted, group present", journalAt(PhaseSettled, HoldInterrupted, launched), GroupPresent, true, still},
-		{"no receipt, group cannot be checked", journalAt(PhaseSettled, HoldNoReceipt, launched), GroupUnchecked, true, still},
+		{"no receipt, group cannot be checked", journalAt(PhaseSettled, HoldNoReceipt, launched), GroupUnchecked, true, unchecked},
 		{"group unproven, group present", journalAt(PhaseSettled, HoldGroupUnproven, launched), GroupPresent, true, still},
 		{"interrupted, group gone, session kept", journalAt(PhaseSettled, HoldInterrupted, launched), GroupGone, true, ""},
 		{"group unproven, group gone, session kept", journalAt(PhaseSettled, HoldGroupUnproven, launched), GroupGone, true, ""},
@@ -239,6 +240,7 @@ func TestMayResume(t *testing.T) {
 
 func TestMayAbandon(t *testing.T) {
 	const stillPresent = "the agent's process group 10 is still present; stop it first"
+	const unchecked = "the agent's process group 10 cannot be checked: the job could not be opened; the worker keeps the run's slot until the check succeeds and will not free capacity it cannot prove empty, so it cannot be abandoned until then"
 	const reporting = "its hold is still being reported to kata; try again in a moment"
 	cases := []struct {
 		name    string
@@ -251,7 +253,8 @@ func TestMayAbandon(t *testing.T) {
 		{"hold still being reported", journalAt(PhaseFinished, HoldInterrupted, launched), GroupGone, reporting},
 		{"interrupted, group gone", journalAt(PhaseSettled, HoldInterrupted, launched), GroupGone, ""},
 		{"interrupted, group present", journalAt(PhaseSettled, HoldInterrupted, launched), GroupPresent, stillPresent},
-		{"no receipt, group cannot be checked", journalAt(PhaseSettled, HoldNoReceipt, launched), GroupUnchecked, stillPresent},
+		{"no receipt, group cannot be checked", journalAt(PhaseSettled, HoldNoReceipt, launched), GroupUnchecked, unchecked},
+		{"group unproven, group cannot be checked", journalAt(PhaseSettled, HoldGroupUnproven, launched), GroupUnchecked, unchecked},
 		{"group unproven, group present", journalAt(PhaseSettled, HoldGroupUnproven, launched), GroupPresent, stillPresent},
 		{"launch unproven with no start record", journalAt(PhaseSettled, HoldLaunchUnproven), GroupGone, ""},
 		{"running is asked to stop", journalAt(PhaseStarted, "", launched), GroupPresent, ""},
@@ -366,11 +369,11 @@ func TestRecover(t *testing.T) {
 		{"cancel in flight, group present", journalAt(PhaseStarted, "", launched, cancelled), GroupPresent, false,
 			recovery{recoverHold, HoldGroupUnproven, "the agent's process group 10 is still present"}},
 		{"cancel in flight, group cannot be checked", journalAt(PhaseStarted, "", launched, cancelled), GroupUnchecked, false,
-			recovery{recoverHold, HoldGroupUnproven, "the agent's process group 10 is still present"}},
+			recovery{recoverHold, HoldGroupUnproven, "the agent's process group 10 cannot be checked: the job could not be opened; the worker keeps the run's slot until the check succeeds and will not free capacity it cannot prove empty"}},
 		{"started, group present", journalAt(PhaseStarted, "", launched), GroupPresent, true,
 			recovery{recoverHold, HoldGroupUnproven, "the agent's process group 10 is still present"}},
 		{"started, group cannot be checked", journalAt(PhaseStarted, "", launched), GroupUnchecked, false,
-			recovery{recoverHold, HoldGroupUnproven, "the agent's process group 10 is still present"}},
+			recovery{recoverHold, HoldGroupUnproven, "the agent's process group 10 cannot be checked: the job could not be opened; the worker keeps the run's slot until the check succeeds and will not free capacity it cannot prove empty"}},
 		{"started, gone, turn finished", journalAt(PhaseStarted, "", launched), GroupGone, true,
 			recovery{recoverHold, HoldNoReceipt, "the agent finished its turn and its process is gone, but the worker saved no exit status"}},
 		{"started, gone, turn unfinished", journalAt(PhaseStarted, "", launched), GroupGone, false, recovery{recoverHold, HoldInterrupted, agentRan}},
@@ -405,6 +408,31 @@ func TestEveryHoldHasConsistentAnswers(t *testing.T) {
 					t.Errorf("%s: an uncertainty hold frees its gate", hold)
 				}
 			}
+		}
+	}
+}
+
+// A group that cannot be checked is logged once per run per change of reason; any other answer forgets the reason.
+func TestUncheckedLogSaysEachReasonOncePerRun(t *testing.T) {
+	var u uncheckedLog
+	cannot := func(reason string) GroupProof { return GroupProof{State: GroupUnchecked, Reason: reason} }
+	steps := []struct {
+		run   string
+		proof GroupProof
+		said  bool
+	}{
+		{"a", cannot("open failed"), true},
+		{"a", cannot("open failed"), false},
+		{"b", cannot("open failed"), true},
+		{"a", cannot("query failed"), true},
+		{"a", cannot("query failed"), false},
+		{"a", GroupProof{State: GroupPresent}, false},
+		{"a", cannot("query failed"), true},
+		{"a", GroupProof{State: GroupGone}, false},
+	}
+	for i, s := range steps {
+		if got := u.changed(s.run, s.proof); got != s.said {
+			t.Errorf("step %d (%s, %+v): said = %v, want %v", i, s.run, s.proof, got, s.said)
 		}
 	}
 }

@@ -39,7 +39,7 @@ func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, err
 	if err != nil {
 		return RunTransition{}, err
 	}
-	if reason := w.life().mayResume(j); reason != "" {
+	if reason := w.life(j).mayResume(j); reason != "" {
 		return RunTransition{}, fmt.Errorf("run %s cannot be resumed: %s", uid, reason)
 	}
 	if why := w.admitsNothing(ps); why != "" {
@@ -71,7 +71,7 @@ func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, err
 	by = cmp.Or(by, ps.actor)
 	updated, err := w.store.Update(uid, "resume-accepted", func(j *Journal) error {
 		// Checked again under the journal's lock: a request that is not this worker's own cannot slip in between.
-		return w.life().acceptResume(j, resumeTerms{By: by, Generation: generation, At: w.clock.Now().UTC(), Tokens: w.heldTokens, SessionID: w.sessionID})
+		return w.life(j).acceptResume(j, resumeTerms{By: by, Generation: generation, At: w.clock.Now().UTC(), Tokens: w.heldTokens, SessionID: w.sessionID})
 	})
 	if err != nil {
 		w.noteHook(err)
@@ -118,7 +118,7 @@ func (w *Worker) Abandon(ctx context.Context, uid, by string) (RunTransition, er
 		return RunTransition{}, fmt.Errorf("run %s cannot be abandoned: Project %s admits nothing: %s", uid, ps.cfg.Name, why)
 	}
 	by = cmp.Or(by, ps.actor)
-	if reason := w.life().mayAbandon(j); reason != "" {
+	if reason := w.life(j).mayAbandon(j); reason != "" {
 		return RunTransition{}, fmt.Errorf("run %s cannot be abandoned: %s", uid, reason)
 	}
 	if !j.held() {
@@ -129,7 +129,7 @@ func (w *Worker) Abandon(ctx context.Context, uid, by string) (RunTransition, er
 		return transition(updated), nil
 	}
 	updated, err := w.store.Update(uid, "abandoned", func(j *Journal) error {
-		return w.life().abandon(j, by, w.clock.Now().UTC())
+		return w.life(j).abandon(j, by, w.clock.Now().UTC())
 	})
 	if err != nil {
 		w.noteHook(err)

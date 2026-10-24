@@ -363,7 +363,7 @@ func (w *Worker) recoverProject(ctx context.Context, ps *projectState) {
 	for _, j := range journals {
 		if j.ProjectUID == ps.project.UID && j.Executor == w.opt.Config.Executor {
 			mine = append(mine, j)
-			if w.life().occupiesSlot(j) {
+			if w.life(j).occupiesSlot(j) {
 				w.mu.Lock()
 				ps.held[j.RunUID] = j.JobUID
 				w.mu.Unlock()

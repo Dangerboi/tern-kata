@@ -63,6 +63,7 @@ type Worker struct {
 	// gates serializes the overlap check with the journal that closes it, per Project and job; runOps gives resume and
 	// abandon one owner per run at a time.
 	gates, runOps keyedMutex
+	unchecked     uncheckedLog             // the last reason each run group could not be checked, so the log says it once
 	cancels       map[string]*cancelSignal // guarded by mu: wakes the goroutine supervising a run that was asked to stop
 }
 
