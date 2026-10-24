@@ -22,7 +22,7 @@ The Issue detail's Activity tabs are Comments, Events, Links and Attachments, cy
 
 ## Credentials
 
-`C` opens kata tui's Credentials view as a Lettered Page, and the Menu lists it. Its wording, fields and 30-second refresh are kata tui's; see [Pages and the Board](pages-and-board.md#lettered-pages).
+`C` opens kata tui's Credentials view as a Lettered Page, and the Menu lists it. Its wording, fields and 30-second refresh are kata tui's; see [Pages and the Board](pages-and-board.md#lettered-pages). `n` creates an API token and `x` revokes the selected one after asking, as `kata tokens create` and `kata tokens revoke` do (kata tui itself only lists tokens); the secret goes to a new owner-only file you name and is never shown. The Token card and its rules are in [Pages and the Board](pages-and-board.md#lettered-pages).
 
 ## Federation
 
@@ -44,9 +44,13 @@ In the Issue detail, `b` adds a Blocking link and `l` a related link to the Issu
 
 kata tui has no key for moving an Issue to another Project; kata web and the CLI do. `M` in tern-kata opens the Move card, which sends kata's move (see [Moving an Issue](pages-and-board.md#moving-an-issue)). It is not a row of the table below, which lists kata tui keys only.
 
+## Deleting and restoring an Issue
+
+kata tui has no key for deleting an Issue; the CLI does. `X` in tern-kata opens the Delete card, which sends kata's delete with the confirmation `kata delete` asks for: the typed qualified id, as `DELETE <project>#<id>` in the confirmation header. The Menu's **Restore a deleted Issue** brings one back. See [Deleting and restoring an Issue](pages-and-board.md#deleting-and-restoring-an-issue). Neither is a row of the table below, which lists kata tui keys only; purge stays in the CLI.
+
 ## Undo
 
-`u` in the list, on the Board, in the Lane view and in the Issue detail takes back the newest change this Pane made, as in kata tui. The Pane remembers the last 20 completed changes, across Issues, and undoes the newest first. It undoes a close (reopens), a reopen (closes as done, opening the Close card first when kata requires evidence), an owner or priority change, a label added or removed, a body edit, a link added (the link is removed, found by type and its two ends), a Lane Move (its label changes reversed) and a Dates card change (both dates put back, each guarded on the value the change wrote).
+`u` in the list, on the Board, in the Lane view and in the Issue detail takes back the newest change this Pane made, as in kata tui. The Pane remembers the last 20 completed changes, across Issues, and undoes the newest first. It undoes a close (reopens), a reopen (closes as done, opening the Close card first when kata requires evidence), an owner or priority change, a label added or removed, a body edit, a link added (the link is removed, found by type and its two ends), a Lane Move (its label changes reversed), a Dates card change (both dates put back, each guarded on the value the change wrote) and a delete (the Issue is restored; "already restored" when kata no longer holds it as deleted).
 
 Before it writes, `u` checks, with kata tui's words, that it is still the same daemon and account ("daemon instance changed", "daemon principal changed"), the same Issue ("issue identity changed") and that nobody changed the Issue since: the revision the change produced for owner, priority, label, body and link ("issue owner changed since the action" and the like), the dates the change wrote for a Dates card change ("issue dates changed since the action"). A refusal drops that change and says so; the one after it can still be undone. An Issue already as the undo would leave it reads "already restored". A second `u` while one is out says "undo already in progress".
 

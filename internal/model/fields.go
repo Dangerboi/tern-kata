@@ -38,7 +38,9 @@ type FieldFormState struct {
 	Labels       []string
 	Suggestion   int
 	Caret        Caret
-	Err          error
+	// Found is the Issue a restore read, shown until the reference is edited.
+	Found *DeletedIssue
+	Err   error
 }
 type WriteField struct {
 	Workspace, UID, Actor, Value string
@@ -152,17 +154,18 @@ type fieldSpec struct {
 }
 
 var fieldSpecs = map[Action]fieldSpec{
-	AddLabelAction:    {title: "Add label", needsValue: true, open: openProjectLabels, send: sendFieldWrite},
-	RemoveLabelAction: {title: "Remove label", needsValue: true, open: openIssueLabels, send: sendFieldWrite},
-	AssignOwnerAction: {title: "Assign owner", needsValue: true, send: sendFieldWrite},
-	ClearOwnerAction:  {title: "Clear owner", open: openImmediate, send: sendFieldWrite},
-	PriorityAction:    {title: "Priority (0-4, or - to clear)", check: checkPriority, send: sendFieldWrite},
-	SetParentAction:   {title: "Set parent (Issue id)", needsValue: true, clean: trimHash, send: sendFieldWrite},
-	TimedAssignAction: {title: "Assignment duration (1m..24h, e.g. 1h)", needsValue: true, check: checkAssignmentDuration, send: sendTimedAssignment},
-	AddBlockerAction:  {title: "This Issue blocks (Issue id)", needsValue: true, clean: trimHash, send: sendFieldWrite},
-	AddRelatedAction:  {title: "Related to (Issue id)", needsValue: true, clean: trimHash, send: sendFieldWrite},
-	AttachFileAction:  {title: "Attach a file (path)", needsValue: true, refuse: true, send: sendAttach},
-	DetachFileAction:  {title: "Remove attachment", open: openAttachments, refuse: true, send: sendDetach},
+	AddLabelAction:       {title: "Add label", needsValue: true, open: openProjectLabels, send: sendFieldWrite},
+	RemoveLabelAction:    {title: "Remove label", needsValue: true, open: openIssueLabels, send: sendFieldWrite},
+	AssignOwnerAction:    {title: "Assign owner", needsValue: true, send: sendFieldWrite},
+	ClearOwnerAction:     {title: "Clear owner", open: openImmediate, send: sendFieldWrite},
+	PriorityAction:       {title: "Priority (0-4, or - to clear)", check: checkPriority, send: sendFieldWrite},
+	SetParentAction:      {title: "Set parent (Issue id)", needsValue: true, clean: trimHash, send: sendFieldWrite},
+	TimedAssignAction:    {title: "Assignment duration (1m..24h, e.g. 1h)", needsValue: true, check: checkAssignmentDuration, send: sendTimedAssignment},
+	AddBlockerAction:     {title: "This Issue blocks (Issue id)", needsValue: true, clean: trimHash, send: sendFieldWrite},
+	AddRelatedAction:     {title: "Related to (Issue id)", needsValue: true, clean: trimHash, send: sendFieldWrite},
+	AttachFileAction:     {title: "Attach a file (path)", needsValue: true, refuse: true, send: sendAttach},
+	DetachFileAction:     {title: "Remove attachment", open: openAttachments, refuse: true, send: sendDetach},
+	RestoreDeletedAction: {title: RestoreTitle + " (short id, project#id or ULID)", needsValue: true, send: sendRestore},
 }
 
 // FieldTitle is the title of the form of an action.
@@ -354,7 +357,10 @@ func updateFieldKey(m Model, msg KeyMsg) (Model, []Cmd) {
 			}
 		}
 	} else {
-		m.FieldForm.Value, _ = editText(m.FieldForm.Value, &m.FieldForm.Caret, "", false, msg)
+		var edited bool
+		if m.FieldForm.Value, edited = editText(m.FieldForm.Value, &m.FieldForm.Caret, "", false, msg); edited {
+			m.FieldForm.Found = nil
+		}
 	}
 	m.FieldForm.Err = nil
 	return m, nil

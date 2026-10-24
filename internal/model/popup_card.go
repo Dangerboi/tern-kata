@@ -43,6 +43,8 @@ const (
 	CardField
 	CardClose
 	CardDates
+	CardToken
+	CardRevoke
 	CardRecurrence
 	CardJob
 	CardBackfill
@@ -52,6 +54,7 @@ const (
 	CardFilter
 	CardPicker
 	CardMove
+	CardDelete
 )
 
 // cardEntry is everything the model knows about one popup card. Each card fills in one.
@@ -319,6 +322,29 @@ func buildCards() []cardEntry {
 			},
 		},
 		{
+			card: CardToken, name: "token", open: func(m Model) bool { return m.TokenForm.Open },
+			modes: []Mode{ModeTokenForm}, mode: func(Model) Mode { return ModeTokenForm },
+			key:    updateTokenFormKey,
+			busy:   func(m Model) bool { return m.TokenForm.Saving || m.TokenForm.Done },
+			fields: TokenFields, focus: func(m *Model) *Field { return &m.TokenForm.Field },
+			editing: []fieldEditing{{mode: ModeTokenForm, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}}},
+			text: func(m *Model) (*string, *Caret) {
+				return m.TokenForm.Values.at(m.TokenForm.Field), &m.TokenForm.Caret
+			},
+			erased: func(m Model, changed bool) Model {
+				if changed {
+					m.TokenForm.Err = nil
+				}
+				return m
+			},
+		},
+		{
+			card: CardRevoke, name: "revoke", open: func(m Model) bool { return m.RevokeCard.Open },
+			modes: []Mode{ModeRevokeToken}, mode: func(Model) Mode { return ModeRevokeToken },
+			key:  updateRevokeKey,
+			busy: func(m Model) bool { return m.RevokeCard.Saving }, fields: []FieldSpec{},
+		},
+		{
 			card: CardMove, name: "move", open: func(m Model) bool { return m.MoveProject.Open },
 			modes: []Mode{ModeMoveProject, ModeMoveConfirm}, mode: Model.MoveCardMode,
 			chords: []string{"ctrl+c"},
@@ -329,6 +355,23 @@ func buildCards() []cardEntry {
 			editing: []fieldEditing{{mode: ModeMoveProject, actions: []Action{DeleteInput, ClearInput}, clear: "clear filter"}},
 			text:    func(m *Model) (*string, *Caret) { return &m.MoveProject.Filter, &m.MoveProject.Caret },
 			erased:  func(m Model, _ bool) Model { m.MoveProject.Cursor, m.MoveProject.Err = 0, nil; return m },
+		},
+		{
+			card: CardDelete, name: "delete", open: func(m Model) bool { return m.DeleteForm.Open },
+			modes: []Mode{ModeDeleteForm}, mode: func(Model) Mode { return ModeDeleteForm },
+			key:    updateDeleteFormKey,
+			busy:   func(m Model) bool { return m.DeleteForm.Saving },
+			fields: DeleteFields, focus: func(m *Model) *Field { return &m.DeleteForm.Field },
+			editing: []fieldEditing{{mode: ModeDeleteForm, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}}},
+			text: func(m *Model) (*string, *Caret) {
+				return m.DeleteForm.at(m.DeleteForm.Field), &m.DeleteForm.Caret
+			},
+			erased: func(m Model, changed bool) Model {
+				if changed {
+					m.DeleteForm.Err = nil
+				}
+				return m
+			},
 		},
 		{
 			card: CardRecurrence, name: "recurrence", open: func(m Model) bool { return m.RecurrenceForm.Open },

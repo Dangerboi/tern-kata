@@ -16,7 +16,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 **Issue list and detail.** A Project's Issues nested under their parents, with priority, status, child counts and age, beside the Issue detail with its Markdown body, properties and Activity tabs. Changes made anywhere, by you or an agent, show up live. Collections (Inbox, Today, Upcoming, Deadlines, All Open, Logbook and every Project), search and filters, and editing from the Pane are in [Pages and the Board](docs/guide/pages-and-board.md).
 
-**Credentials.** `C` opens the Credentials Page, a Lettered Page (also in the Menu) that lists the daemon's API tokens read only, refreshes every 30 seconds and returns with esc or backspace; see [Pages and the Board](docs/guide/pages-and-board.md#lettered-pages).
+**Credentials.** `C` opens the Credentials Page, a Lettered Page (also in the Menu) that lists the daemon's API tokens, refreshes every 30 seconds and returns with esc or backspace; `n` creates a token into a new owner-only file and `x` revokes one after asking. See [Pages and the Board](docs/guide/pages-and-board.md#lettered-pages).
 
 **Daemons.** `D` opens the Daemons Page, a Lettered Page (also in the Menu) that lists the daemons kata's `config.toml` names with kata tui's columns; Enter switches this Pane to one, starting a stopped local daemon first as kata tui does, and nothing is written to disk. The top bar names the current daemon and the account the daemon says you are; see [Pages and the Board](docs/guide/pages-and-board.md#lettered-pages).
 
@@ -55,6 +55,8 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 ![The Dates card over the Board, with "+1w" resolving to 2026-10-29](docs/images/dates-card.png)
 
 **Moving an Issue.** `M` opens the Move card on the selected Issue: pick a Project from a filtered list, preview the move (kata checks it and changes nothing), then move it, guarded on the revision the card opened with. A Notice links to the Issue in its new Project. See [Moving an Issue](docs/guide/pages-and-board.md#moving-an-issue).
+
+**Deleting and restoring an Issue.** `X` opens the Delete card on the selected Issue: type its `project#id` to confirm, add a reason if you like, and kata deletes it (soft: it keeps the Issue and its history). `u` right after restores it, and the Menu's "Restore a deleted Issue" brings back an earlier one by short id, `project#id` or ULID. See [Deleting and restoring an Issue](docs/guide/pages-and-board.md#deleting-and-restoring-an-issue).
 
 **kata links.** Links from agents' chat replies open the Issue in tern-kata. See [Agents](docs/guide/agents.md).
 

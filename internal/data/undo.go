@@ -177,6 +177,8 @@ func restored(e model.UndoEntry, shown *g.ShowIssueResponseBody) bool {
 	switch e.Kind {
 	case model.UndoClose, model.UndoReopen:
 		return sameStatus(i, e.Before)
+	case model.UndoDelete:
+		return i.DeletedAt == nil
 	case model.UndoOwner:
 		return equalPtr(i.Owner, e.Before.Owner)
 	case model.UndoPriority:
@@ -294,7 +296,7 @@ func (c *Client) Undo(ctx context.Context, cmd model.UndoChange) model.ChangeUnd
 	if account.principal != e.Principal {
 		return conflict("daemon principal changed")
 	}
-	shown, err := c.showIssue(ctx, e.ProjectID, e.UID)
+	shown, err := c.showForEntry(ctx, e)
 	if err != nil {
 		out.Err = daemonError(err)
 		return out
@@ -324,7 +326,7 @@ func (c *Client) Undo(ctx context.Context, cmd model.UndoChange) model.ChangeUnd
 		return out
 	}
 	if !res.Changed {
-		after, err := c.showIssue(ctx, e.ProjectID, e.UID)
+		after, err := c.showForEntry(ctx, e)
 		switch {
 		case err != nil:
 			out.Err = daemonError(err)
@@ -351,6 +353,8 @@ func (c *Client) invert(ctx context.Context, cmd model.UndoChange, account daemo
 	switch e.Kind {
 	case model.UndoClose:
 		return c.reopenRaw(ctx, model.ReopenIssueCmd{UID: e.UID, ProjectID: e.ProjectID, Actor: e.Actor})
+	case model.UndoDelete:
+		return c.restoreRaw(ctx, e.ProjectID, e.UID, e.Actor)
 	case model.UndoReopen:
 		closing := model.CloseIssueCmd{UID: e.UID, ProjectID: e.ProjectID, Actor: e.Actor, Quick: true, Reason: model.ReasonDone,
 			Key: fmt.Sprintf("undo-%s-%d", e.UID, shown.Issue.Revision)}

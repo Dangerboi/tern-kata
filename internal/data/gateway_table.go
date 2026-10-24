@@ -341,6 +341,38 @@ func init() {
 		func(cmd model.SetDatesCmd, err error) model.Msg { return model.DatesResultMsg{UID: cmd.UID, Err: err} },
 		nil, nil)
 
+	daemonCall(
+		func(cmd model.DeleteIssueCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.DeleteIssueCmd) (model.Msg, error) {
+			rec, err := c.DeleteRecorded(ctx, cmd)
+			if err != nil && !rec.Unknown {
+				return nil, err
+			}
+			return model.IssueDeleted{UID: cmd.UID, Err: err, Record: rec}, nil
+		},
+		func(cmd model.DeleteIssueCmd, err error) model.Msg { return model.IssueDeleted{UID: cmd.UID, Err: err} },
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.LookupDeleted) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LookupDeleted) (model.Msg, error) {
+			return ok(c.LookupDeleted(ctx, cmd))
+		},
+		func(cmd model.LookupDeleted, err error) model.Msg {
+			return model.DeletedLooked{Ref: cmd.Typed, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.RestoreIssueCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.RestoreIssueCmd) (model.Msg, error) {
+			return ok(c.RestoreIssue(ctx, cmd))
+		},
+		func(cmd model.RestoreIssueCmd, err error) model.Msg {
+			return model.IssueRestored{UID: cmd.UID, Err: err}
+		},
+		nil, nil)
+
 	daemonCallAt(
 		func(cmd model.AttachFile) string { return cmd.Workspace },
 		func(ctx context.Context, host string, c *Client, cmd model.AttachFile) (model.Msg, error) {
@@ -449,6 +481,23 @@ func init() {
 			return model.CredentialsLoaded{Request: cmd.Request, Err: err}
 		},
 		[]beforeStep{pauseBeforeRefresh}, nil)
+
+	daemonCall(
+		func(cmd model.CreateTokenCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.CreateTokenCmd) (model.Msg, error) {
+			return ok(c.CreateToken(ctx, cmd))
+		},
+		func(_ model.CreateTokenCmd, err error) model.Msg { return model.TokenCreated{Err: err} },
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.RevokeTokenCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.RevokeTokenCmd) (model.Msg, error) {
+			_, err := c.RevokeToken(ctx, cmd.ID)
+			return model.TokenRevoked{ID: cmd.ID, Err: err}, nil
+		},
+		func(cmd model.RevokeTokenCmd, err error) model.Msg { return model.TokenRevoked{ID: cmd.ID, Err: err} },
+		nil, nil)
 
 	daemonCall(
 		func(cmd model.LoadFederation) string { return cmd.Workspace },
