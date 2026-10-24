@@ -52,7 +52,7 @@ func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, err
 	if !issue.Open() {
 		return RunTransition{}, fmt.Errorf("run %s cannot be resumed: its Issue %s is closed; reopen it first, or abandon the run", uid, j.Issue.Ref)
 	}
-	w.release(ps, uid) // its process is proven gone, so a slot kept from before the hold is stale
+	w.syncSlot(ps, j) // its process is proven gone, so a slot kept from before the hold is stale
 	if !w.reserve(ps) {
 		if w.isStopping() {
 			return RunTransition{}, errStopping
@@ -77,7 +77,7 @@ func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, err
 		w.noteHook(err)
 		return RunTransition{}, err
 	}
-	w.bind(ps, uid, j.JobUID)
+	w.bind(ps, updated)
 	bound = true
 	w.spawn(ps, uid)
 	return transition(updated), nil
