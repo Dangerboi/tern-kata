@@ -1,8 +1,9 @@
 // Package driver is the Pane driver: one pure step from a Tern input or a
 // daemon result to the next state, the view to draw, the Tern ops to send and
-// the daemon commands to run. It alone decides which focus, reveal and scroll
-// ops are safe to send, because Tern answers an op on a node it does not draw
-// with an error event that ends the program.
+// the daemon commands to run. It decodes, calls the model, renders and routes;
+// the view decides which focus, reveal and scroll targets are safe to name,
+// because Tern answers an op on a node it does not draw with an error event
+// that ends the program.
 package driver
 
 import (
@@ -53,7 +54,7 @@ func Step(s State, in any, now time.Time) Output {
 		msg = in
 	case *tern.ErrorEvent:
 		// The SDK queues raw focus/reveal ops even when a later Render replaces their nodes.
-		if id, ok := strings.CutPrefix(in.Msg, "unknown id "); ok && transientTarget(id) {
+		if id, ok := strings.CutPrefix(in.Msg, "unknown id "); ok && view.ExpectedUnknownID(id) {
 			return Output{State: s}
 		}
 		return Output{State: s, Err: fmt.Errorf("Tern surface: %s", in.Msg)}
@@ -74,11 +75,11 @@ func Step(s State, in any, now time.Time) Output {
 	v := view.Render(m, now)
 	out := Output{State: s, View: &v}
 
-	if target := textFocusID(m); target != s.Focus {
+	if target := view.TextFocusID(m); target != s.Focus {
 		out.Ops = append(out.Ops, tern.OpFocus(target))
 		out.State.Focus = target
 	}
-	if reveal := view.SelectedRowID(m); reveal != "" && !rowClick(msg) && !listRead(msg) && !m.Loading && m.Focus == model.ColumnList && m.Shows(model.ColumnList) && m.CurrentSelection() != "" && m.CurrentSelection() != previousSelection {
+	if reveal := view.SelectionRevealID(m, msg, previousSelection); reveal != "" {
 		out.Ops = append(out.Ops, tern.OpReveal(reveal, "nearest"))
 	}
 	out.route(m, cmds)
@@ -90,16 +91,12 @@ func (out *Output) route(m model.Model, cmds []model.Cmd) {
 	for _, cmd := range cmds {
 		switch cmd := cmd.(type) {
 		case model.Scroll:
-			// A column drawn again later starts at its top, so a dropped scroll loses nothing. The detail column draws its
-			// scroller only while it holds an Issue, not while it shows a placeholder or an error line.
-			if m.Shows(cmd.Column) && (cmd.Column != model.ColumnDetail || m.DetailDrawn()) {
-				out.Ops = append(out.Ops, tern.OpScroll(scrollTarget(m, cmd.Column), string(cmd.By)))
+			if target := view.ScrollTarget(m, cmd.Column); target != "" {
+				out.Ops = append(out.Ops, tern.OpScroll(target, string(cmd.By)))
 			}
 		case model.RevealActivityTab:
-			if m.DetailDrawn() {
-				for _, id := range view.ActivityRevealIDs(m) {
-					out.Ops = append(out.Ops, tern.OpReveal(id, "nearest"))
-				}
+			for _, id := range view.ActivityReveals(m) {
+				out.Ops = append(out.Ops, tern.OpReveal(id, "nearest"))
 			}
 		case model.OpenDraftEditor:
 			out.Editor = &cmd
@@ -107,42 +104,4 @@ func (out *Output) route(m model.Model, cmds []model.Cmd) {
 			out.Cmds = append(out.Cmds, cmd)
 		}
 	}
-}
-
-func scrollTarget(m model.Model, c model.Column) string {
-	switch c {
-	case model.ColumnCollections:
-		return view.CollectionsID
-	case model.ColumnDetail:
-		return view.DetailContentID
-	}
-	switch m.ListNode() {
-	case model.ListNodeRuns:
-		return view.RunListID
-	case model.ListNodeJobs:
-		return view.JobListID
-	}
-	return view.IssueListID
-}
-
-// listRead reports the answer to a read of the jobs or the Runs. A card it adds is new to Tern and a reveal naming it ends the
-// Pane with an unknown id, so the selection it settles on is not revealed.
-func listRead(msg model.Msg) bool {
-	switch msg.(type) {
-	case model.JobsLoaded, model.RunsLoaded:
-		return true
-	}
-	return false
-}
-
-// rowClick reports a click on an Issue row. Tern has already put that row under
-// the pointer, so revealing it again would scroll the list from under it.
-func rowClick(msg model.Msg) bool {
-	switch msg := msg.(type) {
-	case model.SelectMsg, model.JobSelectMsg, model.RunSelectMsg:
-		return true
-	case model.ActionMsg:
-		return msg.Action == model.ToggleExpansion
-	}
-	return false
 }

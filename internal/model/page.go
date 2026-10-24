@@ -43,12 +43,14 @@ func (m Model) SecondColumn() SecondColumn { return pageDefs[m.Page].second }
 type ListNode uint8
 
 const (
-	// ListNodeIssues is the Issue list's node, which the Board and Workflows Pages scroll too.
+	// ListNodeIssues is the Issue list's node, which the Lane view scrolls too.
 	ListNodeIssues ListNode = iota
 	// ListNodeJobs is the Jobs Page's list node.
 	ListNodeJobs
 	// ListNodeRuns is the Runs Page's list node.
 	ListNodeRuns
+	// ListNodeWorkflows is the Workflows Page's list node.
+	ListNodeWorkflows
 )
 
 // ListNode is the current Page's list node.
@@ -119,7 +121,7 @@ var pageDefs = []pageDef{
 		moves:  pageMoves{mode: ModeRuns, noun: "run", move: moveRun, sheet: [6]sheetLine{{sheetRuns, 1, "next run"}, {sheetRuns, 2, "previous run"}, {sheetRuns, 3, "first run"}, {sheetRuns, 4, "last run"}}},
 		scroll: pageScroll{mode: ModeRunInspector, sheet: sheetLine{sheetRuns, 10, "scroll the detail"}}},
 	{page: PageWorkflows, id: "workflows", label: "Workflows", chord: "5", action: ShowWorkflowsPage, needs: "Workflows Page", second: SecondIssueDetail, enter: enterWorkflows, clear: clearWorkflows,
-		mode: workflowsMode, update: updateWorkflows,
+		mode: workflowsMode, update: updateWorkflows, list: ListNodeWorkflows,
 		moves: pageMoves{mode: ModeWorkflows, noun: "workflow", move: moveWorkflow, sheet: [6]sheetLine{{sheetWorkflows, 1, "next workflow"}, {sheetWorkflows, 2, "previous workflow"}}}},
 }
 
