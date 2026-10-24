@@ -442,6 +442,9 @@ func (w *Worker) timeLeft(j *Journal) time.Duration {
 func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessionDir, resumeID string) (*ExitRecord, error) {
 	runtime.LockOSThread() // the parent-death signal follows the thread that started the child
 	defer runtime.UnlockOSThread()
+	// The expiry counts from before the agent is launched, not from when its start record is saved: starting a process
+	// and saving that record can take long, and the run shows as running from the `launching` mark on.
+	deadline := w.clock.Now().Add(w.timeLeft(j))
 	if _, err := w.store.Update(j.RunUID, "launching", func(j *Journal) error {
 		return j.markLaunching()
 	}); err != nil {
@@ -480,7 +483,7 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 		if waitErr, err = w.stopAndWait(ctx, launch, done); err != nil {
 			return nil, err
 		}
-	case <-w.clock.After(w.timeLeft(j)):
+	case <-w.clock.After(deadline.Sub(w.clock.Now())):
 		timedOut = true
 		if waitErr, err = w.stopAndWait(ctx, launch, done); err != nil {
 			return nil, err
