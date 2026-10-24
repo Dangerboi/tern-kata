@@ -59,6 +59,8 @@ func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 	m = m.settleWorkflows().resetPagesForProject()
 	m, flowRuns := m.settleWorkflowRuns()
 	cmds = append(cmds, flowRuns...)
+	m, reading := m.settleWorkflowReading()
+	cmds = append(cmds, reading...)
 	m, load := m.lanesLoad(boardWasOn)
 	cmds = append(cmds, load...)
 	m, jobs := m.settleJobs()

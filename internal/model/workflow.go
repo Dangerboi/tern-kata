@@ -114,6 +114,8 @@ func (w Workflow) Text() string {
 type WorkflowDocument struct {
 	Name       string
 	Definition string
+	// Shape is the same definition decoded, for the Worker's check.
+	Shape cronjob.WorkflowDefinition
 }
 
 // ParseWorkflow checks text, the JSON document of a workflow, against kata's rules and returns what to send. The error says
@@ -138,7 +140,7 @@ func ParseWorkflow(text string) (WorkflowDocument, error) {
 	if len(definition) > maxWorkflowDefinition {
 		return WorkflowDocument{}, errors.New("The workflow definition is over kata's 256 KiB limit.")
 	}
-	return WorkflowDocument{Name: strings.TrimSpace(file.Name), Definition: string(definition)}, nil
+	return WorkflowDocument{Name: strings.TrimSpace(file.Name), Definition: string(definition), Shape: file.Definition.shape()}, nil
 }
 
 // check is the document rules in kata's order: the name first, then the definition against the shared validator.

@@ -104,31 +104,53 @@ func (w *Worker) attemptDir(j *Journal) string {
 
 // workflowRefusal is why the worker does not run a workflow, empty when it does. A worker must not trust a definition it
 // did not validate, so kata's own rules come first, through the validator the Workflow card uses and in its canonical words;
-// then ADR-0008's refusals, the herdr-kata extensions this design rejects, which are refused rather than ignored because
-// ignoring one changes what the author asked for; then the prompt budget.
+// then CheckWorkflow's refusals, the first of them.
 func workflowRefusal(wf Workflow, maxPrompts int) string {
 	if problem := cronjob.ValidateWorkflow(wf.WorkflowDefinition); problem != nil {
 		return problem.Message()
 	}
-	if why := unsupportedOption(wf.Options); why != "" {
-		return why
+	if check := CheckWorkflow(wf.WorkflowDefinition, &maxPrompts); len(check.Refusals) > 0 {
+		return check.Refusals[0]
+	}
+	return ""
+}
+
+// WorkflowCheck is the worker's reading of a definition kata accepts: why it would not run it, in the order it decides, and
+// whether the prompt budget could not be checked.
+type WorkflowCheck struct {
+	Refusals        []string
+	BudgetUnchecked bool
+}
+
+// CheckWorkflow is ADR-0008's refusals of a definition, then the prompt budget: the herdr-kata extensions this design rejects
+// (on_fail, on_failure "park", a profile on a command step), which are refused rather than ignored because ignoring one changes
+// what the author asked for, and a count of prompts its prompt steps and their retries may send above maxPrompts. A nil
+// maxPrompts is a limit nobody could read (no worker.toml): the budget is left unchecked and the check says so. The definition
+// is taken to have passed cronjob.ValidateWorkflow. The planning of a run and the job problem report use this same function.
+func CheckWorkflow(d cronjob.WorkflowDefinition, maxPrompts *int) WorkflowCheck {
+	var check WorkflowCheck
+	if why := unsupportedOption(d.Options); why != "" {
+		check.Refusals = append(check.Refusals, why)
 	}
 	prompts := 0
-	for _, s := range wf.Steps {
+	for _, s := range d.Steps {
 		if why := unsupportedOption(s.Options); why != "" {
-			return fmt.Sprintf("step %q: %s", s.Key, why)
+			check.Refusals = append(check.Refusals, fmt.Sprintf("step %q: %s", s.Key, why))
 		}
 		if _, ok := optionMap(s.Options)["profile"]; ok && s.Kind == cronjob.StepCommand {
-			return fmt.Sprintf("command step %q names a profile, which only prompt steps use", s.Key)
+			check.Refusals = append(check.Refusals, fmt.Sprintf("command step %q names a profile, which only prompt steps use", s.Key))
 		}
 		if s.Kind == cronjob.StepPrompt {
 			prompts += 1 + int(s.RetryCount())
 		}
 	}
-	if prompts > maxPrompts {
-		return fmt.Sprintf("prompt_budget %d > %d: its prompt steps and their retries may send more prompts than max_run_prompts allows", prompts, maxPrompts)
+	switch {
+	case maxPrompts == nil:
+		check.BudgetUnchecked = true
+	case prompts > *maxPrompts:
+		check.Refusals = append(check.Refusals, fmt.Sprintf("prompt_budget %d > %d: its prompt steps and their retries may send more prompts than max_run_prompts allows", prompts, *maxPrompts))
 	}
-	return ""
+	return check
 }
 
 // optionMap is a definition's options as an object, nil when there are none.
@@ -165,7 +187,7 @@ func (w *Worker) planWorkflow(ctx context.Context, ps *projectState, job cronjob
 	refuse := func(why string) error {
 		return fmt.Errorf("job %q runs workflow %q, which the worker does not run: %s", job.Name, wf.Name, why)
 	}
-	if why := workflowRefusal(wf, w.opt.Config.maxRunPrompts()); why != "" {
+	if why := workflowRefusal(wf, w.opt.Config.MaxRunPrompts()); why != "" {
 		return nil, refuse(why)
 	}
 	if p, ok := optionMap(wf.Options)["profile"].(string); ok && p != "" && p != jobProfile {

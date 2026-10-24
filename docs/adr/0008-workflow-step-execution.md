@@ -18,6 +18,7 @@ Sources: herdr-kata definitions.md "Workflows", agent-contract.md "Command resul
 - **Maker/checker loops (`options.on_fail`): reject.** They add a backward edge, saved verdicts, a finding comment chain, typed replies, notes, four hold reasons and a resume target per reason, and the spec has no story for them. The spec left the door open "unless the design review adopts them"; this review does not. A workflow that declares `on_fail` is shown as unsupported with that reason and does not run, so no checker step silently runs once as an ordinary step.
 - **Park on failure (`options.on_failure: "park"`): reject.** It holds a failed step for a resume. The spec's resume covers uncertainty only, and a failed run records `failed` with its summary and comments the Issue. The key is shown as unsupported with a reason, not ignored, because ignoring it changes what the author asked for.
 - **Other unknown option keys: adopt herdr-kata's rule.** Unknown keys warn and are ignored.
+- **The Workflow card tells, and never blocks.** The card saves any Workflow kata accepts, including one this machine's Worker refuses by the decisions above, because the Workflow may be meant for another machine's Worker. Under the text it says what this machine's Worker would refuse and why, from the Worker's own check (the one its planning and `worker status` use) and the prompt budget of this machine's `worker.toml`; the Workflows Page inspector says the same of the stored Workflow. When `worker.toml` cannot be read the note says the budget was not checked.
 
 ## Consequences
 
