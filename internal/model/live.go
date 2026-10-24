@@ -79,25 +79,34 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 			return m, nil
 		}
 		m.StreamConnected = true
+		m, cmds := refreshAttention(m)
 		if m.Stale {
-			return snapshotChanged(m)
+			m, more := snapshotChanged(m)
+			return m, append(cmds, more...)
 		}
+		return m, cmds
 	case StreamEvent:
 		if msg.Generation != m.StreamGeneration {
 			return m, nil
+		}
+		var asked []Cmd
+		if attentionChangesTheCount(msg.Type) {
+			m, asked = refreshAttention(m)
 		}
 		if msg.Type == "sync.reset_required" {
 			m.Stale = true
 			m.Resetting = true
 			m.StreamConnected = false
 			m.Refreshing = false
-			return snapshotChanged(m)
+			m, more := snapshotChanged(m)
+			return m, append(asked, more...)
 		}
 		if msg.ID <= m.Cursor {
-			return m, nil
+			return m, asked
 		}
 		m.PendingCursor = max(m.PendingCursor, msg.ID)
-		return snapshotChanged(m)
+		m, more := snapshotChanged(m)
+		return m, append(asked, more...)
 	case SearchIDLooked:
 		if msg.Request != m.RefreshRequest {
 			return m, nil

@@ -142,3 +142,91 @@ func TestLoadAttentionWithNoDaemonAnswersWithTheRequestNumberAndTheError(t *test
 		t.Fatalf("got %#v", got)
 	}
 }
+
+func (f attentionFixture) clear(t *testing.T, project model.Project, uid, address, seen string) model.AttentionCleared {
+	t.Helper()
+	return as[model.AttentionCleared](t, run(t, f.gateway, model.ClearAttention{
+		Workspace: f.work, ProjectID: project.ID, UID: uid, Key: model.NotificationKey(address), Seen: seen, Actor: "dana",
+	}))
+}
+
+func TestClearAttentionWithTheSeenValueRemovesTheSlot(t *testing.T) {
+	f := newAttentionFixture(t)
+	ours := createIssue(t, f.gateway, f.work, f.workP, "Ours")
+	kept := createIssue(t, f.gateway, f.work, f.workP, "Kept")
+	f.put(t, f.workP, ours, "dana", map[string]any{"from": "bob", "message": "look at this"})
+	f.put(t, f.workP, kept, "dana", map[string]any{"from": "bob", "message": "and at this"})
+	seen := ""
+	for _, r := range f.read(t, "dana").Requests {
+		if r.IssueUID == ours {
+			seen = r.Slot.Raw
+		}
+	}
+	if got := f.clear(t, f.workP, ours, "dana", seen); got.Err != nil || got.Changed || got.UID != ours {
+		t.Fatalf("clear: %+v", got)
+	}
+	if left := f.read(t, "dana").Requests; len(left) != 1 || left[0].IssueUID != kept {
+		t.Fatalf("requests after the clear: %+v, want only the other Issue's", left)
+	}
+}
+
+func TestClearAttentionAfterTheSlotChangedReportsItAndLeavesTheNewValue(t *testing.T) {
+	f := newAttentionFixture(t)
+	ours := createIssue(t, f.gateway, f.work, f.workP, "Ours")
+	f.put(t, f.workP, ours, "dana", map[string]any{"from": "bob", "message": "first ask"})
+	seen := f.read(t, "dana").Requests[0].Slot.Raw
+	f.put(t, f.workP, ours, "dana", map[string]any{"from": "bob", "message": "a newer ask"})
+
+	if got := f.clear(t, f.workP, ours, "dana", seen); got.Err != nil || !got.Changed {
+		t.Fatalf("clear: %+v, want the conflict reported", got)
+	}
+	left := f.read(t, "dana").Requests
+	if len(left) != 1 || left[0].Slot.Message != "a newer ask" {
+		t.Fatalf("requests after the refused clear: %+v, want the new request kept", left)
+	}
+}
+
+func TestClearAttentionOfAnUnknownIssueAnswersWithTheDaemonsError(t *testing.T) {
+	f := newAttentionFixture(t)
+	got := f.clear(t, f.workP, "01JZZZZZZZZZZZZZZZZZZZZZZZ", "dana", `{"from":"bob","message":"m"}`)
+	if got.Err == nil || got.Changed {
+		t.Fatalf("clear: %+v, want an error", got)
+	}
+}
+
+func TestATypedReplyToTheCommentARequestNamesRemovesItFromTheNextRead(t *testing.T) {
+	f := newAttentionFixture(t)
+	uid := createIssue(t, f.gateway, f.work, f.workP, "Discuss")
+	other := createIssue(t, f.gateway, f.work, f.workP, "Elsewhere")
+	detail := func() *model.IssueDetailData {
+		return as[model.DetailLoaded](t, run(t, f.gateway, model.LoadDetail{Workspace: f.work, UID: uid})).Selected
+	}
+	draft := func(actor, text, replyTo string, kind model.ReplyKind) {
+		t.Helper()
+		as[model.DraftSaved](t, run(t, f.gateway, model.SaveDraft{Workspace: f.work, UID: uid, ProjectID: f.workP.ID, BaseText: detail().Issue.Body, Text: text, Comment: true, Actor: actor, ReplyTo: replyTo, ReplyKind: kind}))
+	}
+	draft("asker", "which one should I pick?", "", model.ReplyPlain)
+	question := detail().Comments[0]
+	f.put(t, f.workP, uid, "answerer", map[string]any{"from": "asker", "message": "please answer the question", "re": question.UID})
+	f.put(t, f.workP, other, "answerer", map[string]any{"from": "asker", "message": "a request on another Issue"})
+
+	before := f.read(t, "answerer")
+	if len(before.Requests) != 2 {
+		t.Fatalf("requests before the reply: %+v", before.Requests)
+	}
+	var named model.AttentionRequest
+	for _, r := range before.Requests {
+		if r.IssueUID == uid {
+			named = r
+		}
+	}
+	if named.Slot.Re != question.UID {
+		t.Fatalf("the read request names %q, want the comment %q", named.Slot.Re, question.UID)
+	}
+
+	draft("answerer", "pick the second one: it reproduces on every run I tried and matches the spec.", question.UID, model.ReplyConfirm)
+	after := f.read(t, "answerer").Requests
+	if len(after) != 1 || after[0].IssueUID != other {
+		t.Fatalf("requests after the reply: %+v, want only the request on the other Issue", after)
+	}
+}

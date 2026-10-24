@@ -148,24 +148,29 @@ func (c *Client) requireBinding(ctx context.Context, t attachTarget) error {
 func (c *Client) patchAttachment(ctx context.Context, t attachTarget, actor, name string, pointer map[string]any, clearIf string) error {
 	key := model.AttachmentKey(name)
 	if pointer != nil {
-		return c.patchMetadataKey(ctx, t.issue.ProjectID, t.issue.UID, actor, key, pointer, nil)
+		_, err := c.patchMetadataKey(ctx, t.issue.ProjectID, t.issue.UID, actor, key, pointer, nil)
+		return err
 	}
-	return c.patchMetadataKey(ctx, t.issue.ProjectID, t.issue.UID, actor, key, nil, &clearIf)
+	_, err := c.patchMetadataKey(ctx, t.issue.ProjectID, t.issue.UID, actor, key, nil, &clearIf)
+	return err
 }
 
 // patchMetadataKey writes one metadata key of an Issue, a null value clearing it, guarded on the key still holding the JSON
 // text ifValue, or on its being absent when ifValue is nil.
-func (c *Client) patchMetadataKey(ctx context.Context, projectID int64, uid, actor, key string, value any, ifValue *string) error {
+func (c *Client) patchMetadataKey(ctx context.Context, projectID int64, uid, actor, key string, value any, ifValue *string) (issueWrite, error) {
 	body := g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{key: value}}
 	either := runtime.NewEitherFromB[g.MetadataPatchGuard_OneOf_0, g.MetadataPatchGuard_OneOf_1](g.MetadataPatchGuard_OneOf_1{Key: key, IfAbsent: g.True})
 	if ifValue != nil {
 		either = runtime.NewEitherFromA[g.MetadataPatchGuard_OneOf_0, g.MetadataPatchGuard_OneOf_1](g.MetadataPatchGuard_OneOf_0{Key: key, IfValue: *ifValue})
 	}
 	body.Guard = &g.MetadataPatchGuard{MetadataPatchGuard_OneOf: &g.MetadataPatchGuard_OneOf{Either: either}}
-	_, err := c.PatchIssueMetadataWithResponse(ctx, &g.PatchIssueMetadataRequestOptions{
+	r, err := c.PatchIssueMetadataWithResponse(ctx, &g.PatchIssueMetadataRequestOptions{
 		PathParams: &g.PatchIssueMetadataPath{ProjectID: projectID, Ref: uid}, Body: &body,
 	})
-	return err
+	if err != nil {
+		return issueWrite{}, err
+	}
+	return written(r.JSON200.Changed, r.JSON200.Issue, nil), nil
 }
 
 // AttachFile is the one shared Attach write. The copy is made before the pointer so a pointer never names a missing file, and

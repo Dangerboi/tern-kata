@@ -61,3 +61,16 @@ func (c *Client) ListAttention(ctx context.Context, cmd model.LoadAttention) (mo
 	model.OrderAttention(out.Requests)
 	return out, nil
 }
+
+// ClearAttention clears the request at cmd.Key through the guarded metadata patch the Dates card uses, guarded on the value the
+// Page showed, as the Pane's actor. A slot that no longer holds that value is left alone and reported as changed.
+func (c *Client) ClearAttention(ctx context.Context, cmd model.ClearAttention) (model.AttentionCleared, error) {
+	seen := cmd.Seen
+	if _, err := c.patchMetadataKey(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, cmd.Key, nil, &seen); err != nil {
+		if daemonCode(err) == "metadata_guard_failed" {
+			return model.AttentionCleared{UID: cmd.UID, Changed: true}, nil
+		}
+		return model.AttentionCleared{UID: cmd.UID}, daemonError(err)
+	}
+	return model.AttentionCleared{UID: cmd.UID}, nil
+}

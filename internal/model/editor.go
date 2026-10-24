@@ -105,13 +105,17 @@ type UndoMsg struct{ Target EditTarget }
 
 func (UndoMsg) msg() {}
 
-type DraftSaved struct{ UID string }
+type DraftSaved struct {
+	UID    string
+	Record WriteRecord
+}
 
 func (DraftSaved) msg() {}
 
 type DraftFailed struct {
-	UID string
-	Err error
+	UID    string
+	Err    error
+	Record WriteRecord
 }
 
 func (DraftFailed) msg() {}

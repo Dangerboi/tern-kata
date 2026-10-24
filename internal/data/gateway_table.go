@@ -209,7 +209,11 @@ func init() {
 	daemonCall(
 		func(cmd model.CloseIssueCmd) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.CloseIssueCmd) (model.Msg, error) {
-			return ok(model.CloseResultMsg{UID: cmd.UID}, c.Close(ctx, cmd))
+			rec, err := c.CloseRecorded(ctx, cmd)
+			if err != nil && !rec.Unknown {
+				return nil, err
+			}
+			return model.CloseResultMsg{UID: cmd.UID, Err: err, Record: rec}, nil
 		},
 		func(cmd model.CloseIssueCmd, err error) model.Msg {
 			return model.CloseResultMsg{UID: cmd.UID, Err: err}
@@ -219,7 +223,11 @@ func init() {
 	daemonCall(
 		func(cmd model.MoveIssueCmd) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.MoveIssueCmd) (model.Msg, error) {
-			return ok(model.MoveResultMsg{UID: cmd.UID}, c.Move(ctx, cmd))
+			rec, err := c.MoveRecorded(ctx, cmd)
+			if err != nil && !rec.Unknown && rec.Entry == nil {
+				return nil, err
+			}
+			return model.MoveResultMsg{UID: cmd.UID, Err: err, Record: rec}, nil
 		},
 		func(cmd model.MoveIssueCmd, err error) model.Msg { return model.MoveResultMsg{UID: cmd.UID, Err: err} },
 		nil, nil)
@@ -266,7 +274,11 @@ func init() {
 	daemonCall(
 		func(cmd model.ReopenIssueCmd) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.ReopenIssueCmd) (model.Msg, error) {
-			return ok(model.CloseResultMsg{UID: cmd.UID}, c.Reopen(ctx, cmd))
+			rec, err := c.ReopenRecorded(ctx, cmd)
+			if err != nil && !rec.Unknown {
+				return nil, err
+			}
+			return model.CloseResultMsg{UID: cmd.UID, Err: err, Record: rec}, nil
 		},
 		func(cmd model.ReopenIssueCmd, err error) model.Msg {
 			return model.CloseResultMsg{UID: cmd.UID, Err: err}
@@ -276,9 +288,24 @@ func init() {
 	daemonCall(
 		func(cmd model.WriteField) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.WriteField) (model.Msg, error) {
-			return ok(model.FieldWritten{UID: cmd.UID}, c.WriteField(ctx, cmd))
+			rec, err := c.WriteFieldRecorded(ctx, cmd)
+			if err != nil && !rec.Unknown {
+				return nil, err
+			}
+			return model.FieldWritten{UID: cmd.UID, Err: err, Record: rec}, nil
 		},
 		func(cmd model.WriteField, err error) model.Msg { return model.FieldWritten{UID: cmd.UID, Err: err} },
+		nil, nil)
+
+	// An undo's answer carries its own failure: the Issue changed or it did not, and a retry could write twice.
+	daemonCall(
+		func(cmd model.UndoChange) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.UndoChange) (model.Msg, error) {
+			return c.Undo(ctx, cmd), nil
+		},
+		func(cmd model.UndoChange, err error) model.Msg {
+			return model.ChangeUndone{EntryID: cmd.Entry.ID, Result: model.UndoFailed, Err: err}
+		},
 		nil, nil)
 
 	daemonCall(
@@ -295,9 +322,9 @@ func init() {
 	daemonCall(
 		func(cmd model.SetDatesCmd) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.SetDatesCmd) (model.Msg, error) {
-			applied, err := c.SetDates(ctx, cmd)
-			if len(applied) > 0 {
-				return model.DatesResultMsg{UID: cmd.UID, Applied: applied, Err: err}, nil
+			applied, rec, err := c.SetDatesRecorded(ctx, cmd)
+			if len(applied) > 0 || rec.Unknown {
+				return model.DatesResultMsg{UID: cmd.UID, Applied: applied, Err: err, Record: rec}, nil
 			}
 			return ok(model.DatesResultMsg{UID: cmd.UID}, err)
 		},
@@ -497,6 +524,17 @@ func init() {
 		},
 		func(cmd model.LoadAttention, err error) model.Msg {
 			return model.AttentionLoaded{Request: cmd.Request, Err: err}
+		},
+		nil, nil)
+
+	// A write has landed: the result and its error travel together, and nothing is retried.
+	daemonCall(
+		func(cmd model.ClearAttention) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.ClearAttention) (model.Msg, error) {
+			return ok(c.ClearAttention(ctx, cmd))
+		},
+		func(cmd model.ClearAttention, err error) model.Msg {
+			return model.AttentionCleared{UID: cmd.UID, Err: err}
 		},
 		nil, nil)
 

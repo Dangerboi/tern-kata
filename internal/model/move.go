@@ -24,8 +24,9 @@ func (MoveIssueCmd) cmd() {}
 
 // MoveResultMsg is the one answer to a MoveIssueCmd.
 type MoveResultMsg struct {
-	UID string
-	Err error
+	UID    string
+	Err    error
+	Record WriteRecord
 }
 
 func (MoveResultMsg) msg() {}

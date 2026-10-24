@@ -342,9 +342,348 @@ func TestAttentionPageHelpSheetListsItsKeys(t *testing.T) {
 			}
 		}
 	}
-	for _, want := range []string{"next request", "previous request", "open the request's Issue, in any Project", "read the requests again"} {
+	for _, want := range []string{"next request", "previous request", "open the request's Issue, in any Project", "clear the request, if it still reads as shown", "read the requests again"} {
 		if !slices.Contains(lines, want) {
 			t.Errorf("the Attention help group lacks %q: %v", want, lines)
 		}
+	}
+}
+
+func askedClear(cmds []model.Cmd) []model.ClearAttention {
+	var clears []model.ClearAttention
+	for _, cmd := range cmds {
+		if clear, ok := cmd.(model.ClearAttention); ok {
+			clears = append(clears, clear)
+		}
+	}
+	return clears
+}
+
+func TestCSendsOneGuardedClearAndKeysOnTheRowWaitUntilItIsAnswered(t *testing.T) {
+	requests := attentionRequests(t)
+	s := attentionPageWith(t, requests, 0)
+	out := step(t, s, key("c"))
+	clears := askedClear(out.Cmds)
+	want := model.ClearAttention{Workspace: "/repo", ProjectID: 7, UID: "work-aa11", Key: model.NotificationKey("dana"), Seen: requests[0].Slot.Raw, Actor: "dana"}
+	if len(clears) != 1 || clears[0] != want {
+		t.Fatalf("cmds %#v, want exactly the guarded clear %+v", out.Cmds, want)
+	}
+	if want.Seen == "" {
+		t.Fatal("the guard holds no value")
+	}
+
+	// A second c or an Enter on the row waits.
+	again := step(t, out.State, key("c"))
+	if len(askedClear(again.Cmds)) != 0 {
+		t.Errorf("a second c sent another clear: %#v", again.Cmds)
+	}
+	waiting := step(t, again.State, key("enter"))
+	if waiting.State.Model.Page != model.PageAttention {
+		t.Errorf("enter on the row being cleared left the Page for %v", waiting.State.Model.Page)
+	}
+
+	// Another row is not waiting.
+	other := step(t, out.State, key("down"))
+	if clears := askedClear(step(t, other.State, key("c")).Cmds); len(clears) != 1 || clears[0].UID != "other-bb22" {
+		t.Errorf("c on another row sent %#v", clears)
+	}
+}
+
+func TestAClearedRequestLeavesTheListAndThePageReadsAgain(t *testing.T) {
+	s := attentionPageWith(t, attentionRequests(t), 0)
+	cleared := step(t, step(t, s, key("c")).State, model.AttentionCleared{UID: "work-aa11"})
+	m := cleared.State.Model
+	if len(m.Attention.Requests) != 2 || m.Attention.Selected != "other-bb22" {
+		t.Fatalf("requests %d selected %q, want the row gone and the next one selected", len(m.Attention.Requests), m.Attention.Selected)
+	}
+	if strings.Contains(wireTextOf(t, cleared.State), "work#aa11") {
+		t.Error("the cleared request is still drawn")
+	}
+	wantText(t, "header", wireTextOf(t, cleared.State), "for dana · 2 requests")
+	if _, ok := askedAttention(cleared.Cmds); !ok {
+		t.Error("no read asked for to confirm the clear")
+	}
+	// The row is free again if the same request comes back.
+	back := answerAttention(t, cleared, attentionRequests(t), 0)
+	if len(askedClear(step(t, back, key("c")).Cmds)) != 1 {
+		t.Error("c waits after the clear was answered")
+	}
+}
+
+func TestAClearThatFindsTheRequestChangedSaysSoAndReadsAgain(t *testing.T) {
+	s := attentionPageWith(t, attentionRequests(t), 0)
+	out := step(t, step(t, s, key("c")).State, model.AttentionCleared{UID: "work-aa11", Changed: true})
+	m := out.State.Model
+	if m.Notice != "The request changed meanwhile; nothing was cleared" {
+		t.Fatalf("notice %q", m.Notice)
+	}
+	if len(m.Attention.Requests) != 3 {
+		t.Errorf("%d requests, want the row kept until the read shows the new value", len(m.Attention.Requests))
+	}
+	wantText(t, "page", wireTextOf(t, out.State), "nothing was cleared")
+	if _, ok := askedAttention(out.Cmds); !ok {
+		t.Error("no reload asked for")
+	}
+	fresh := attentionRequest(t, 7, "work", "aa11", "Deploy the fix", `{"from":"bob","message":"The new ask"}`, 1)
+	done := answerAttention(t, out, append([]model.AttentionRequest{fresh}, attentionRequests(t)[1:]...), 0)
+	wantText(t, "reloaded row", attentionCardText(t, done, "work-aa11"), "The new ask")
+}
+
+func TestAClearThatFailsShowsTheDaemonsErrorAndKeepsTheRow(t *testing.T) {
+	s := attentionPageWith(t, attentionRequests(t), 0)
+	out := step(t, step(t, s, key("c")).State, model.AttentionCleared{UID: "work-aa11", Err: errors.New("the daemon refused")})
+	if out.State.Model.Notice != "the daemon refused" || len(out.State.Model.Attention.Requests) != 3 {
+		t.Fatalf("notice %q, %d requests", out.State.Model.Notice, len(out.State.Model.Attention.Requests))
+	}
+	if len(askedClear(step(t, out.State, key("c")).Cmds)) != 1 {
+		t.Error("c still waits after the failure was answered")
+	}
+}
+
+func TestCOnAnEmptyAttentionPageSendsNothing(t *testing.T) {
+	if len(askedClear(step(t, attentionPageWith(t, nil, 0), key("c")).Cmds)) != 0 {
+		t.Error("c sent a clear with no request")
+	}
+}
+
+// attentionEvent is a stream event of kind on the Pane's current stream.
+func attentionEvent(s driver.State, kind string) model.StreamEvent {
+	return model.StreamEvent{Generation: s.Model.StreamGeneration, ID: nextEvent(), Type: kind}
+}
+
+// attentionEntryText is what the Page bar draws for the Attention entry.
+func attentionEntryText(t *testing.T, s driver.State) string {
+	t.Helper()
+	return pageBarTexts(t, s)["attention"]
+}
+
+func countedReads(cmds []model.Cmd) int {
+	n := 0
+	for _, cmd := range cmds {
+		if _, ok := cmd.(model.LoadAttention); ok {
+			n++
+		}
+	}
+	return n
+}
+
+func TestTheAttentionReadIsAskedWhenTheStreamOpensAndTheCountShowsOnAnyPage(t *testing.T) {
+	s := attentionPane(t)
+	if text := attentionEntryText(t, s); !strings.Contains(text, `"t":"Attention"`) || strings.Contains(text, "Attention 0") {
+		t.Fatalf("Page bar entry %s before any read, want plain Attention", text)
+	}
+	out := step(t, s, model.StreamOpened{Generation: s.Model.StreamGeneration})
+	if countedReads(out.Cmds) != 1 {
+		t.Fatalf("cmds %#v, want one Attention read when the stream opens", out.Cmds)
+	}
+	if out.State.Model.Page != model.PageIssues {
+		t.Fatalf("page %v, want the Issues Page", out.State.Model.Page)
+	}
+	done := answerAttention(t, out, attentionRequests(t), 0)
+	if text := attentionEntryText(t, done); !strings.Contains(text, `"t":"Attention 3"`) {
+		t.Errorf("Page bar entry %s, want Attention 3 from the Issues Page", text)
+	}
+	if text := attentionEntryText(t, done); strings.Contains(text, "request") {
+		t.Errorf("Page bar entry %s", text)
+	}
+
+	// Another stream's opening is not this Pane's.
+	if _, asked := askedAttention(step(t, s, model.StreamOpened{Generation: s.Model.StreamGeneration + 5}).Cmds); asked {
+		t.Error("an old stream's opening asked for a read")
+	}
+}
+
+func TestThePageBarEntryIsPlainAtZeroAndFollowsEachGoodRead(t *testing.T) {
+	s := answerAttention(t, step(t, attentionPane(t), model.StreamOpened{Generation: attentionPane(t).Model.StreamGeneration}), attentionRequests(t), 0)
+	out := step(t, s, attentionEvent(s, "issue.metadata_updated"))
+	s = answerAttention(t, out, attentionRequests(t)[:1], 0)
+	if text := attentionEntryText(t, s); !strings.Contains(text, `"t":"Attention 1"`) {
+		t.Fatalf("Page bar entry %s, want Attention 1", text)
+	}
+	s = answerAttention(t, step(t, s, attentionEvent(s, "issue.updated")), nil, 0)
+	if text := attentionEntryText(t, s); !strings.Contains(text, `"t":"Attention"`) || strings.Contains(text, "Attention 0") {
+		t.Fatalf("Page bar entry %s, want plain Attention at zero", text)
+	}
+}
+
+func TestAFailedReadKeepsThePageBarCount(t *testing.T) {
+	s := answerAttention(t, step(t, attentionPane(t), model.StreamOpened{Generation: attentionPane(t).Model.StreamGeneration}), attentionRequests(t), 0)
+	out := step(t, s, attentionEvent(s, "project.updated"))
+	load, ok := askedAttention(out.Cmds)
+	if !ok {
+		t.Fatal("a project event asked for no read")
+	}
+	failed := step(t, out.State, model.AttentionLoaded{Request: load.Request, Err: errors.New("the daemon hiccuped")}).State
+	if text := attentionEntryText(t, failed); !strings.Contains(text, `"t":"Attention 3"`) {
+		t.Errorf("Page bar entry %s after a failed read, want Attention 3", text)
+	}
+}
+
+func TestABurstOfEventsCostsOneReadInFlightAndOneAfterIt(t *testing.T) {
+	s := attentionPane(t)
+	first := step(t, s, attentionEvent(s, "issue.created"))
+	if countedReads(first.Cmds) != 1 {
+		t.Fatalf("the first event asked for %d reads, want 1", countedReads(first.Cmds))
+	}
+	load, _ := askedAttention(first.Cmds)
+
+	state := first.State
+	for _, kind := range []string{"issue.updated", "issue.commented", "project.updated", "sync.reset_required"} {
+		out := step(t, state, attentionEvent(state, kind))
+		if countedReads(out.Cmds) != 0 {
+			t.Fatalf("%s asked for another read while one is out: %#v", kind, out.Cmds)
+		}
+		state = out.State
+		if kind == "sync.reset_required" {
+			state.Model.StreamGeneration = s.Model.StreamGeneration // the reset ends the stream; the test goes on with the same one
+		}
+	}
+
+	answered := step(t, state, model.AttentionLoaded{Request: load.Request, Requests: attentionRequests(t)})
+	if countedReads(answered.Cmds) != 1 {
+		t.Fatalf("answer asked for %d reads, want the one follow-up", countedReads(answered.Cmds))
+	}
+	followUp, _ := askedAttention(answered.Cmds)
+	if followUp.Request == load.Request {
+		t.Fatal("the follow-up repeats the first request number")
+	}
+	last := step(t, answered.State, model.AttentionLoaded{Request: followUp.Request, Requests: attentionRequests(t)[:2]})
+	if countedReads(last.Cmds) != 0 {
+		t.Fatalf("the follow-up's answer asked for more: %#v", last.Cmds)
+	}
+	if len(last.State.Model.Attention.Requests) != 2 {
+		t.Errorf("requests %d, want the follow-up's two", len(last.State.Model.Attention.Requests))
+	}
+}
+
+func TestEventsThatCannotTouchARequestAskForNoRead(t *testing.T) {
+	s := attentionPane(t)
+	if out := step(t, s, attentionEvent(s, "cron.run.observed")); countedReads(out.Cmds) != 0 {
+		t.Errorf("a run event asked for a read: %#v", out.Cmds)
+	}
+}
+
+func TestAnIssueEventAsksForAReadWhileAnotherPageIsShown(t *testing.T) {
+	s := step(t, attentionPane(t), key("4")).State // the Runs Page
+	if out := step(t, s, attentionEvent(s, "issue.closed")); countedReads(out.Cmds) != 1 {
+		t.Errorf("an event on the Runs Page asked for %d Attention reads, want 1", countedReads(out.Cmds))
+	}
+}
+
+func TestThePageBarWithACountStillFitsTheWidthRules(t *testing.T) {
+	long := model.Project{ID: 7, UID: "p", Name: "a-rather-long-project-name-for-the-top-bar"}
+	for _, tt := range []struct {
+		cols    int
+		compact bool
+		ownLine bool
+	}{
+		{200, false, false},
+		{100, true, false},
+		{80, true, true},
+	} {
+		s := loadedWith(t, tt.cols, long, model.Snapshot{Issues: []model.Issue{alpha}})
+		s.Model.Attention.Requests = attentionRequests(t)
+		texts := pageBarTexts(t, s)
+		if got := strings.Contains(texts["attention"], `"t":"Attention 3"`); got == tt.compact {
+			t.Errorf("%d columns: Attention entry %s, compact %v", tt.cols, texts["attention"], tt.compact)
+		}
+		_, own := drawnIDs(t, view.Render(s.Model, now))["main.pagebar"]
+		if own != tt.ownLine {
+			t.Errorf("%d columns: Page bar on its own line = %v, want %v", tt.cols, own, tt.ownLine)
+		}
+	}
+}
+
+const namedComment = "01JABCDEFGHJKMNPQRSTVWXYZ0"
+
+// commentsOf are the comments of an Issue as its detail reads them.
+func commentsOf(uids ...string) []model.Comment {
+	comments := make([]model.Comment, len(uids))
+	for i, uid := range uids {
+		comments[i] = model.Comment{UID: uid, Author: "bob", CreatedAt: now.Add(time.Duration(i) * time.Minute), Body: "comment " + uid}
+	}
+	return comments
+}
+
+// detailRowKey is the key of the row under the Issue detail's cursor.
+func detailRowKey(m model.Model) string {
+	rows := m.DetailRows()
+	if i := m.DetailIndex(); i >= 0 && i < len(rows) {
+		return rows[i].Key
+	}
+	return ""
+}
+
+func attentionRequestsNaming(t *testing.T, project string, id int64, short, re string) []model.AttentionRequest {
+	return []model.AttentionRequest{attentionRequest(t, id, project, short, "Needs an answer", `{"from":"pip","message":"Which one?","re":"`+re+`"}`, 1)}
+}
+
+func TestEnterOnARequestNamingACommentOpensTheCommentsTabOnThatComment(t *testing.T) {
+	s := attentionPageWith(t, attentionRequestsNaming(t, "work", 7, "aa11", namedComment), 0)
+	out := step(t, s, key("enter"))
+	s = step(t, out.State, model.DetailLoaded{UID: "work-aa11", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "work-aa11"}, Comments: commentsOf("x1", namedComment, "x3")}}).State
+	m := s.Model
+	if m.Page != model.PageIssues || m.SelectedUID != "work-aa11" || m.Focus != model.ColumnDetail {
+		t.Fatalf("page %v selected %q focus %v", m.Page, m.SelectedUID, m.Focus)
+	}
+	if m.ActiveTab() != model.TabComments || detailRowKey(m) != namedComment {
+		t.Fatalf("tab %v row %q, want the Comments tab on %s", m.ActiveTab(), detailRowKey(m), namedComment)
+	}
+	// R replies to the comment under the cursor.
+	if draft, ok := step(t, s, key("shift+r")).State.Model.ActiveDraft(); !ok || draft.ReplyTo != namedComment {
+		t.Errorf("R starts a draft replying to %q (open %v), want %q", draft.ReplyTo, ok, namedComment)
+	}
+	// 6 returns with the state as it was.
+	back := step(t, s, key("6")).State.Model
+	if back.Page != model.PageAttention || back.Attention.Selected != "work-aa11" || len(back.Attention.Requests) != 1 {
+		t.Errorf("6 gave page %v with %+v", back.Page, back.Attention)
+	}
+}
+
+func TestEnterOnARequestInTheIssueAlreadyShownLandsOnItsComment(t *testing.T) {
+	s := attentionPane(t)
+	s = step(t, s, model.DetailLoaded{UID: "work-aa11", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "work-aa11"}, Comments: commentsOf("x1", namedComment, "x3")}}).State
+	s = answerAttention(t, step(t, s, key("6")), attentionRequestsNaming(t, "work", 7, "aa11", namedComment), 0)
+	m := step(t, s, key("enter")).State.Model
+	if m.ActiveTab() != model.TabComments || detailRowKey(m) != namedComment || m.Focus != model.ColumnDetail {
+		t.Fatalf("tab %v row %q focus %v, want the named comment on the Comments tab", m.ActiveTab(), detailRowKey(m), m.Focus)
+	}
+}
+
+func TestEnterOnARequestInAnotherProjectLandsOnItsNamedComment(t *testing.T) {
+	s := attentionPageWith(t, attentionRequestsNaming(t, "other", 8, "bb22", namedComment), 0)
+	out := step(t, s, key("enter"))
+	s = step(t, out.State, model.DetailLoaded{UID: "other-bb22", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "other-bb22"}, Comments: commentsOf("y1", "y2", namedComment)}}).State
+	m := s.Model
+	if m.SelectedUID != "other-bb22" || m.Collection != model.ProjectCollection("p2", "other") {
+		t.Fatalf("selected %q in %+v", m.SelectedUID, m.Collection)
+	}
+	if m.ActiveTab() != model.TabComments || detailRowKey(m) != namedComment {
+		t.Fatalf("tab %v row %q, want the named comment", m.ActiveTab(), detailRowKey(m))
+	}
+}
+
+func TestEnterOnAReplyNoticeLandsOnTheReplyLeftForTheUser(t *testing.T) {
+	notice := attentionRequest(t, 7, "work", "aa11", "Answered", `{"from":"pip","message":"pip replied","kind":"reply","re":"`+namedComment+`"}`, 1)
+	s := attentionPageWith(t, []model.AttentionRequest{notice}, 0)
+	s = step(t, step(t, s, key("enter")).State, model.DetailLoaded{UID: "work-aa11", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "work-aa11"}, Comments: commentsOf(namedComment, "x2")}}).State
+	if m := s.Model; m.ActiveTab() != model.TabComments || detailRowKey(m) != namedComment {
+		t.Fatalf("tab %v row %q, want the reply", m.ActiveTab(), detailRowKey(m))
+	}
+}
+
+func TestEnterOnARequestNamingAMissingCommentLandsOnTheFirstComment(t *testing.T) {
+	s := attentionPageWith(t, attentionRequestsNaming(t, "work", 7, "aa11", namedComment), 0)
+	s = step(t, step(t, s, key("enter")).State, model.DetailLoaded{UID: "work-aa11", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "work-aa11"}, Comments: commentsOf("x1", "x2")}}).State
+	if m := s.Model; m.ActiveTab() != model.TabComments || detailRowKey(m) != "x1" {
+		t.Fatalf("tab %v row %q, want the first comment", m.ActiveTab(), detailRowKey(m))
+	}
+}
+
+func TestEnterOnARequestWithNoCommentKeepsTheTabTheDetailWasOn(t *testing.T) {
+	s := attentionPageWith(t, attentionRequests(t)[:1], 0)
+	before := s.Model.ActiveTab()
+	if m := step(t, s, key("enter")).State.Model; m.ActiveTab() != before {
+		t.Errorf("a request without a comment moved the detail from the %v tab to %v", before, m.ActiveTab())
 	}
 }
