@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
@@ -78,11 +79,11 @@ func TestGatewayListsObservedRunsNewestFirstWithNamesIssueAndSummary(t *testing.
 		t.Fatalf("runs %+v, want the workflow-only run then the job's", runs)
 	}
 	flow := runs[0]
-	if flow.Name() != "Nightly build" || flow.WorkflowUID != workflow.UID || flow.JobUID != "" || flow.Status != model.RunRunning || flow.IssueUID != "" {
+	if flow.Name() != "Nightly build" || flow.WorkflowUID != workflow.UID || flow.JobUID != "" || flow.Status != cronjob.RunRunning || flow.IssueUID != "" {
 		t.Errorf("workflow run %+v", flow)
 	}
 	got := runs[1]
-	if got.Name() != "Triage" || got.JobUID != job.UID || got.DefinitionEventUID != job.DefinitionEventUID || got.Status != model.RunSucceeded {
+	if got.Name() != "Triage" || got.JobUID != job.UID || got.DefinitionEventUID != job.DefinitionEventUID || got.Status != cronjob.RunSucceeded {
 		t.Errorf("job run %+v", got)
 	}
 	if got.IssueUID != issue || got.IssueTitle != "Triage the inbox" || got.IssueShortID == "" || got.IssueRef() != "#"+got.IssueShortID+" Triage the inbox" {
@@ -91,7 +92,7 @@ func TestGatewayListsObservedRunsNewestFirstWithNamesIssueAndSummary(t *testing.
 	if got.Executor() != "laptop" || got.Actor != "tester" || got.Teammate != "pip" || got.OccurrenceKey != "2026-10-08T09:00:00Z" || got.Revision != 1 {
 		t.Errorf("who ran it %+v", got)
 	}
-	if got.Message != "triaged 4 items" || got.InputTokens == nil || *got.InputTokens != 1200 || got.OutputTokens == nil || *got.OutputTokens != 340 {
+	if got.Summary != "triaged 4 items" || got.InputTokens == nil || *got.InputTokens != 1200 || got.OutputTokens == nil || *got.OutputTokens != 340 {
 		t.Errorf("summary %+v", got)
 	}
 	if d, ok := got.Duration(time.Now()); !ok || d != 95*time.Second || !got.Started().Equal(started) {
@@ -108,7 +109,7 @@ func TestGatewayJobFilterListsOnlyThatJobsRuns(t *testing.T) {
 	f.observe(t, g.ObserveCronRunBody{WorkflowUID: &workflow.UID, WorkflowDefinitionEventUID: &workflow.DefinitionEventUID, Status: "unknown", Summary: g.Summary{Version: 1}})
 
 	runs := f.runs(t, model.LoadRuns{JobUID: triage.UID}).Runs
-	if len(runs) != 1 || runs[0].UID != want || runs[0].Status != model.RunFailed {
+	if len(runs) != 1 || runs[0].UID != want || runs[0].Status != cronjob.RunFailed {
 		t.Fatalf("runs %+v, want only the Triage run", runs)
 	}
 	if all := f.runs(t, model.LoadRuns{}).Runs; len(all) != 3 {
@@ -142,7 +143,7 @@ func TestGatewayShowsOneRunByUID(t *testing.T) {
 	uid := f.observe(t, g.ObserveCronRunBody{JobUID: &job.UID, DefinitionEventUID: &job.DefinitionEventUID, Status: "cancelled", Summary: g.Summary{Version: 1, Message: new("abandoned")}})
 
 	shown := as[model.RunShown](t, run(t, f.gateway, model.ShowRun{Workspace: f.workspace, ProjectID: f.demo.ID, UID: uid}))
-	if shown.Err != nil || shown.Run.UID != uid || shown.Run.Name() != "Triage" || shown.Run.Status != model.RunCancelled || shown.Run.Message != "abandoned" {
+	if shown.Err != nil || shown.Run.UID != uid || shown.Run.Name() != "Triage" || shown.Run.Status != cronjob.RunCancelled || shown.Run.Summary != "abandoned" {
 		t.Fatalf("shown %+v", shown)
 	}
 }
@@ -172,7 +173,7 @@ func TestGatewayJobsReadWithActivityCarryEachAdapterJobsNewestRuns(t *testing.T)
 	if len(got) != model.JobActivityShown || got[0].UID != uids[len(uids)-1] || got[1].UID != uids[len(uids)-2] {
 		t.Fatalf("busy job's runs %d, first %q, want its %d newest", len(got), got[0].UID, model.JobActivityShown)
 	}
-	if runs := loaded.Activity[quiet.UID].Runs; len(runs) != 1 || runs[0].Status != model.RunFailed {
+	if runs := loaded.Activity[quiet.UID].Runs; len(runs) != 1 || runs[0].Status != cronjob.RunFailed {
 		t.Fatalf("quiet job's runs %+v, want its failed run", runs)
 	}
 }

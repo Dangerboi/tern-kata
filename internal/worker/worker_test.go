@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
 )
@@ -135,9 +136,9 @@ func (h *harness) ask(req worker.Request) worker.Response {
 }
 
 // settled waits for kata to hold the run in a final status and returns it.
-func (h *harness) settled(uid string) worker.Run {
+func (h *harness) settled(uid string) cronjob.Run {
 	h.t.Helper()
-	var run worker.Run
+	var run cronjob.Run
 	h.eventually("run "+uid+" to settle", func() bool {
 		var err error
 		run, err = h.kata.Kata.ShowRun(context.Background(), h.proj.ID, uid)
@@ -153,7 +154,7 @@ func (h *harness) isRunning(r *running, uid string) bool {
 }
 
 // settledInKata waits until kata holds the run in a final status and Worker.Status shows nothing pending for it.
-func (h *harness) settledInKata(r *running, uid string) worker.Run {
+func (h *harness) settledInKata(r *running, uid string) cronjob.Run {
 	h.t.Helper()
 	run := h.settled(uid)
 	h.eventually("nothing to be pending for "+uid, func() bool {
@@ -184,7 +185,7 @@ func (h *harness) launches() []map[string]any {
 func TestARunIsRecordedRunningThenSucceededWithItsPerRunIssue(t *testing.T) {
 	h := newHarness(t, "--stub-text", "Reviewed 3 pull requests.")
 	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Review the open pull requests.", Checkout: "repo", IssueTitle: "PR review"})
-	var sawRunning worker.Run
+	var sawRunning cronjob.Run
 	hooks := worker.Hooks{AfterSave: func(point string, j *worker.Journal) error {
 		if point == "admitted" {
 			sawRunning, _ = h.kata.Kata.ShowRun(context.Background(), j.ProjectID, j.RunUID)

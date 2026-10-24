@@ -70,7 +70,7 @@ func (c *Client) ShowRun(ctx context.Context, cmd model.ShowRun) (model.RunShown
 // What kata no longer answers for stays unnamed.
 func (c *Client) readOneRunNames(ctx context.Context, projectID int64, wire g.CronRun) (runNames, error) {
 	names := runNames{jobs: map[string]string{}, workflows: map[string]string{}, issues: map[string]model.Run{}}
-	run := translateRun(wire)
+	run := cronjobclient.Run(wire)
 	if run.JobUID != "" {
 		response, err := c.ShowCronJobWithResponse(ctx, &g.ShowCronJobRequestOptions{PathParams: &g.ShowCronJobPath{ProjectID: projectID, CronUID: run.JobUID}})
 		switch {
@@ -165,22 +165,9 @@ func (c *Client) readRunNames(ctx context.Context, projectID int64) (runNames, e
 }
 
 func (n runNames) translate(wire g.CronRun) model.Run {
-	run := translateRun(wire)
+	run := model.Run{Run: cronjobclient.Run(wire)}
 	run.JobName, run.WorkflowName = n.jobs[run.JobUID], n.workflows[run.WorkflowUID]
 	issue := n.issues[run.IssueUID]
 	run.IssueShortID, run.IssueTitle = issue.IssueShortID, issue.IssueTitle
 	return run
-}
-
-// translateRun is kata's Run as the model holds it, without the names its uids resolve to.
-func translateRun(w g.CronRun) model.Run {
-	return model.Run{
-		UID: w.UID, JobUID: cronjobclient.Str(w.JobUID), DefinitionEventUID: cronjobclient.Str(w.DefinitionEventUID),
-		WorkflowUID: cronjobclient.Str(w.WorkflowUID), WorkflowDefinitionEventUID: cronjobclient.Str(w.WorkflowDefinitionEventUID),
-		OccurrenceKey: cronjobclient.Str(w.OccurrenceKey), IssueUID: cronjobclient.Str(w.IssueUID),
-		Actor: w.Actor, Teammate: cronjobclient.Str(w.Teammate), ExecutorLabel: cronjobclient.Str(w.ExecutorLabel),
-		Status: model.RunStatus(w.Status), Message: cronjobclient.Str(w.Summary.Message),
-		InputTokens: w.Summary.InputTokens, OutputTokens: w.Summary.OutputTokens,
-		Revision: w.Revision, CreatedAt: w.CreatedAt, UpdatedAt: w.UpdatedAt, StartedAt: w.StartedAt, EndedAt: w.EndedAt,
-	}
 }

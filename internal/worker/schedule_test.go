@@ -45,25 +45,25 @@ func (h *harness) fire(r *running, prev time.Time) time.Time {
 }
 
 // jobRuns is what kata holds of the job's runs, oldest occurrence first.
-func (h *harness) jobRuns(job cronjob.Job) []worker.Run {
+func (h *harness) jobRuns(job cronjob.Job) []cronjob.Run {
 	h.t.Helper()
 	runs, err := h.kata.Kata.Runs(context.Background(), h.proj.ID)
 	if err != nil {
 		h.t.Fatal(err)
 	}
-	var out []worker.Run
+	var out []cronjob.Run
 	for _, run := range runs {
 		if run.JobUID == job.UID {
 			out = append(out, run)
 		}
 	}
-	slices.SortFunc(out, func(a, b worker.Run) int { return strings.Compare(a.OccurrenceKey, b.OccurrenceKey) })
+	slices.SortFunc(out, func(a, b cronjob.Run) int { return strings.Compare(a.OccurrenceKey, b.OccurrenceKey) })
 	return out
 }
 
-func (h *harness) waitRuns(job cronjob.Job, n int) []worker.Run {
+func (h *harness) waitRuns(job cronjob.Job, n int) []cronjob.Run {
 	h.t.Helper()
-	var runs []worker.Run
+	var runs []cronjob.Run
 	h.eventually("kata to hold the runs of "+job.Name, func() bool {
 		runs = h.jobRuns(job)
 		return len(runs) >= n
@@ -74,7 +74,7 @@ func (h *harness) waitRuns(job cronjob.Job, n int) []worker.Run {
 	return runs
 }
 
-func occurrenceKeys(runs []worker.Run) []string {
+func occurrenceKeys(runs []cronjob.Run) []string {
 	var keys []string
 	for _, r := range runs {
 		keys = append(keys, r.OccurrenceKey)

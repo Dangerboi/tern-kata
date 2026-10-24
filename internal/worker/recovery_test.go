@@ -79,7 +79,7 @@ func (h *harness) runStatus(r *running, uid string) (worker.RunStatus, bool) {
 }
 
 // issueOf is the run's per-run Issue as kata holds it.
-func (h *harness) issueOf(run worker.Run) worker.Issue {
+func (h *harness) issueOf(run cronjob.Run) worker.Issue {
 	h.t.Helper()
 	i, err := h.kata.Kata.ShowIssue(context.Background(), h.proj.ID, run.IssueUID)
 	if err != nil {
@@ -103,9 +103,10 @@ func count(list []string, containing string) int {
 // reporting each write to kata once.
 func TestAWorkerKilledAtAnyJournalPointNeverSendsThePromptAgain(t *testing.T) {
 	type want struct {
-		status, summary string // kata's final status and the start of its summary
-		launches        int    // agent processes started by both workers together, -1 for "at most one"
-		stub            []string
+		status   cronjob.RunStatus // kata's final status
+		summary  string            // the start of its summary
+		launches int               // agent processes started by both workers together, -1 for "at most one"
+		stub     []string
 	}
 	done := want{status: "succeeded", summary: "done", launches: 1}
 	cases := map[string]want{
@@ -252,7 +253,7 @@ func TestResumeContinuesTheOmpSessionAndRecordsTheOutcome(t *testing.T) {
 	if again := h.ask(worker.Request{Op: "resume", Run: uid}); again.OK {
 		t.Fatal("a second resume of the same hold was accepted")
 	}
-	var run worker.Run
+	var run cronjob.Run
 	h.eventually("kata to hold the resumed run as succeeded", func() bool {
 		run, _ = h.kata.Kata.ShowRun(context.Background(), h.proj.ID, uid)
 		return run.Status == "succeeded"
@@ -354,7 +355,7 @@ func TestAbandonRecordsCancelledAndFreesTheGate(t *testing.T) {
 	if !resp.OK || resp.Transition == nil {
 		t.Fatalf("abandon: %+v", resp)
 	}
-	var run worker.Run
+	var run cronjob.Run
 	h.eventually("kata to hold the run as cancelled", func() bool {
 		run, _ = h.kata.Kata.ShowRun(context.Background(), h.proj.ID, uid)
 		return run.Status == "cancelled"

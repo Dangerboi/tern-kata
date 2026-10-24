@@ -74,3 +74,38 @@ func TestWorkflowDefinitionReadsEveryFieldAndMissingValuesAsEmpty(t *testing.T) 
 		t.Errorf("the translated definition is refused: %s", problem.Message())
 	}
 }
+
+func TestRunReadsEveryFieldAndMissingValuesAsEmpty(t *testing.T) {
+	created := time.Date(2026, 10, 1, 8, 0, 0, 0, time.UTC)
+	started := created.Add(time.Minute)
+	in, out := int64(20), int64(4)
+	job, def, wf, wfDef, key, issue, label, team, msg := "J", "DE", "W", "WE", "k1", "I", "box", "ann", "done"
+	got := cronjobclient.Run(g.CronRun{
+		UID: "R", JobUID: &job, DefinitionEventUID: &def, WorkflowUID: &wf, WorkflowDefinitionEventUID: &wfDef,
+		OccurrenceKey: &key, IssueUID: &issue, Actor: "me", Teammate: &team, ExecutorLabel: &label, Status: "succeeded",
+		Summary:  g.SummaryResponse{Message: &msg, InputTokens: &in, OutputTokens: &out},
+		Revision: 2, CreatedAt: created, UpdatedAt: started, StartedAt: &started,
+	})
+	if got.UID != "R" || got.JobUID != job || got.DefinitionEventUID != def || got.WorkflowUID != wf || got.WorkflowDefinitionEventUID != wfDef ||
+		got.OccurrenceKey != key || got.IssueUID != issue || got.Actor != "me" || got.Teammate != team || got.ExecutorLabel != label || got.Revision != 2 {
+		t.Errorf("run %+v", got)
+	}
+	if got.Status != cronjob.RunSucceeded || got.Summary != msg || got.InputTokens == nil || *got.InputTokens != 20 || got.OutputTokens == nil || *got.OutputTokens != 4 {
+		t.Errorf("status and summary %+v", got)
+	}
+	if !got.CreatedAt.Equal(created) || got.StartedAt == nil || !got.StartedAt.Equal(started) || got.EndedAt != nil {
+		t.Errorf("times %+v", got)
+	}
+	bare := cronjobclient.Run(g.CronRun{UID: "R2", Status: "running"})
+	if bare.JobUID != "" || bare.WorkflowDefinitionEventUID != "" || bare.Summary != "" || bare.InputTokens != nil || bare.Status != cronjob.RunRunning {
+		t.Errorf("bare run %+v", bare)
+	}
+}
+
+func TestRunReadsAStatusItDoesNotKnowAsUnknown(t *testing.T) {
+	for _, status := range []string{"paused", "", "RUNNING"} {
+		if got := cronjobclient.Run(g.CronRun{UID: "R", Status: status}).Status; got != cronjob.RunUnknown {
+			t.Errorf("status %q read as %q, want unknown", status, got)
+		}
+	}
+}

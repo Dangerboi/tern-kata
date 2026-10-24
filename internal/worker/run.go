@@ -181,7 +181,7 @@ func (w *Worker) admit(ctx context.Context, ps *projectState, j *Journal) error 
 		}
 		j.Issue = issue
 	}
-	obs := w.observation(j, StatusRunning, "admitted "+j.JournalID, 0)
+	obs := w.observation(j, cronjob.RunRunning, "admitted "+j.JournalID, 0)
 	run, _, err := w.opt.Kata.Observe(ctx, j.ProjectID, obs)
 	switch {
 	case errors.Is(err, ErrConflict):
@@ -193,10 +193,7 @@ func (w *Worker) admit(ctx context.Context, ps *projectState, j *Journal) error 
 	return err
 }
 
-// StatusRunning is kata's status of a run in progress.
-const StatusRunning = "running"
-
-func (w *Worker) observation(j *Journal, status, message string, revision int64) Observation {
+func (w *Worker) observation(j *Journal, status cronjob.RunStatus, message string, revision int64) Observation {
 	o := Observation{
 		RunUID: j.RunUID, JobUID: j.JobUID, DefinitionEventUID: j.DefinitionEventUID, OccurrenceKey: j.OccurrenceKey,
 		Executor: j.Executor, Actor: j.Actor, Status: status, Message: message, StartedAt: j.StartedAt, ExpectedRevision: revision,
@@ -205,7 +202,7 @@ func (w *Worker) observation(j *Journal, status, message string, revision int64)
 		o.IssueUID = j.Issue.UID
 	}
 	if j.Workflow != nil {
-		o.WorkflowUID, o.WorkflowEventUID = j.Workflow.UID, j.Workflow.EventUID
+		o.WorkflowUID, o.WorkflowDefinitionEventUID = j.Workflow.UID, j.Workflow.EventUID
 	}
 	return o
 }
@@ -328,7 +325,7 @@ func (w *Worker) launch(ctx context.Context, ps *projectState, j *Journal) error
 // failAttempt records an attempt that certainly never ran, so the failure is not uncertain: a prompt job's run fails,
 // a workflow step fails (and is retried when it has retries left).
 func (w *Worker) failAttempt(j *Journal, reason string) error {
-	outcome := j.withCarried(&Outcome{Status: StatusFailed, Summary: reason})
+	outcome := j.withCarried(&Outcome{Status: cronjob.RunFailed, Summary: reason})
 	if j.Workflow != nil {
 		return w.concludeStep(j, outcome)
 	}
@@ -588,9 +585,9 @@ func classify(j *Journal) *Outcome {
 	}
 	o := &Outcome{InputTokens: r.InputTokens, OutputTokens: r.OutputTokens}
 	if reason == "" {
-		o.Status, o.Summary = StatusSucceeded, cmp.Or(final, "(the agent gave no final message)")
+		o.Status, o.Summary = cronjob.RunSucceeded, cmp.Or(final, "(the agent gave no final message)")
 	} else {
-		o.Status, o.Summary = StatusFailed, reason
+		o.Status, o.Summary = cronjob.RunFailed, reason
 		if final != "" {
 			o.Summary += "\n\n" + final
 		}
@@ -610,15 +607,15 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 	if len(j.Intents) == 0 {
 		intents := []Intent{{Kind: IntentFinal}}
 		issueOpen := true
-		if j.Outcome.Status == StatusSucceeded && !j.Issue.Existing {
+		if j.Outcome.Status == cronjob.RunSucceeded && !j.Issue.Existing {
 			if issue, err := w.opt.Kata.ShowIssue(ctx, j.ProjectID, j.Issue.UID); err == nil {
 				issueOpen = issue.Open()
 			}
-		} else if j.Outcome.Status == StatusSucceeded {
+		} else if j.Outcome.Status == cronjob.RunSucceeded {
 			issueOpen = false
 		}
 		switch j.Outcome.Status {
-		case StatusSucceeded:
+		case cronjob.RunSucceeded:
 			if quietSuccess(j) {
 				break // every step was a command that exited 0 on an existing Issue: the Run says it all
 			}
@@ -628,12 +625,12 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 					intents = append(intents, Intent{Kind: IntentLabel, Text: "needs-review"})
 				}
 			}
-		case StatusFailed:
+		case cronjob.RunFailed:
 			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("failed"), Text: "The run failed: " + j.Outcome.Summary})
-		case StatusUnknown:
+		case cronjob.RunUnknown:
 			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("held"), Text: "The run is held: " + j.Outcome.Summary + "\n\nResume it with `tern-kata worker resume " + j.RunUID + "` or abandon it with `tern-kata worker abandon " + j.RunUID + "`."})
 			intents = append(intents, Intent{Kind: IntentNotify, Text: heldNotice(j)})
-		case StatusCancelled:
+		case cronjob.RunCancelled:
 			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("cancelled"), Text: "The run was abandoned: " + j.Outcome.Summary})
 		}
 		if j.Notify != nil { // a notify run's only record is the Run itself; the Issue gets no comment, label or request
@@ -885,7 +882,7 @@ func (t *tailSink) close() { _ = t.file.Close() }
 // same words to the same address; before sending, the Issue is read, and a request already there counts as sent
 // (ADR-0006 "read-back"). The run's identity (ADR-0002) already keeps a restart from preparing the occurrence twice.
 func (w *Worker) notify(ctx context.Context, j *Journal) error {
-	finish := func(status, summary string) error {
+	finish := func(status cronjob.RunStatus, summary string) error {
 		_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
 			return j.finish(&Outcome{Status: status, Summary: truncate(summary, maxSummaryBytes)}, w.clock.Now().UTC())
 		})
@@ -896,7 +893,7 @@ func (w *Worker) notify(ctx context.Context, j *Journal) error {
 		issue, err := w.opt.Kata.ShowIssue(ctx, j.ProjectID, j.Issue.UID)
 		if err != nil {
 			if refused(err) {
-				return finish(StatusFailed, "cannot read the Issue to notify about: "+err.Error())
+				return finish(cronjob.RunFailed, "cannot read the Issue to notify about: "+err.Error())
 			}
 			return err
 		}
@@ -918,15 +915,15 @@ func (w *Worker) notify(ctx context.Context, j *Journal) error {
 		j, notice = saved, saved.Notify.Resolved
 	}
 	if notice.Recipient == "" {
-		return finish(StatusFailed, "the Issue has no owner or author to notify")
+		return finish(cronjob.RunFailed, "the Issue has no owner or author to notify")
 	}
 	if err := w.sendNotice(ctx, j, notice.Recipient, notice.Message); err != nil {
 		if refused(err) {
-			return finish(StatusFailed, "kata refused the notification: "+err.Error())
+			return finish(cronjob.RunFailed, "kata refused the notification: "+err.Error())
 		}
 		return err
 	}
-	return finish(StatusSucceeded, "Notified "+notice.Recipient+": "+notice.Message)
+	return finish(cronjob.RunSucceeded, "Notified "+notice.Recipient+": "+notice.Message)
 }
 
 const (
