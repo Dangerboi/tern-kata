@@ -2,6 +2,7 @@ package worker
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -118,20 +119,28 @@ func lossOf(caps ...interface{ Loss() string }) string {
 // outputNote is the words that say a run's output was not recorded and why.
 func outputNote(reason string) string { return "output not recorded: " + reason }
 
-// outputLoss is why the run's latest attempt's output was not recorded; empty when it was, or no attempt has ended.
+// outputLoss is why attempts' output was not recorded, empty when it all was: a prompt job's attempt, or every ended
+// step of a workflow that lost its capture, each named by its key, whatever later steps recorded. An attempt in flight
+// has no exit yet, so a resumed attempt's note is gone until it ends.
 func (j *Journal) outputLoss() string {
-	if j.Exit != nil {
-		return j.Exit.Unrecorded
-	}
-	if j.activeStep() >= 0 { // an attempt in flight has no exit yet
+	if j.Workflow == nil {
+		if j.Exit != nil {
+			return j.Exit.Unrecorded
+		}
 		return ""
 	}
-	for i := len(j.Steps) - 1; i >= 0; i-- {
-		if e := j.Steps[i].Exit; e != nil {
-			return e.Unrecorded
+	var notes []string
+	active := j.activeStep()
+	for i, r := range j.Steps {
+		exit := r.Exit
+		if i == active {
+			exit = j.Exit
+		}
+		if exit != nil && exit.Unrecorded != "" {
+			notes = append(notes, fmt.Sprintf("step %q: %s", r.Key, exit.Unrecorded))
 		}
 	}
-	return ""
+	return strings.Join(notes, "; ")
 }
 
 // logUnrecorded tells the Worker's log once that an attempt's output was not recorded.

@@ -47,6 +47,8 @@ type StepDetail struct {
 	ExitCode  *int
 	Signal    string
 	TimedOut  bool
+	// Unrecorded is why the step's output was not recorded, empty when it was.
+	Unrecorded string
 }
 
 // OutputTailBytes bounds RunDetail.OutputTail.
@@ -62,7 +64,7 @@ func stepsOf(j *Journal) []StepDetail {
 		}
 		if e := j.Exit; e != nil {
 			code := e.Code
-			st.ExitCode, st.Signal, st.TimedOut, st.EndedAt = &code, e.Signal, e.TimedOut, e.At
+			st.ExitCode, st.Signal, st.TimedOut, st.EndedAt, st.Unrecorded = &code, e.Signal, e.TimedOut, e.At, e.Unrecorded
 		}
 		return []StepDetail{st}
 	}
@@ -79,7 +81,7 @@ func stepsOf(j *Journal) []StepDetail {
 		}
 		if exit != nil {
 			code := exit.Code
-			st.ExitCode, st.Signal, st.TimedOut, st.EndedAt = &code, exit.Signal, exit.TimedOut, exit.At
+			st.ExitCode, st.Signal, st.TimedOut, st.EndedAt, st.Unrecorded = &code, exit.Signal, exit.TimedOut, exit.At, exit.Unrecorded
 		}
 		steps[i] = st
 	}

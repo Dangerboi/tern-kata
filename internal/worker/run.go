@@ -536,7 +536,11 @@ func (w *Worker) conclude(ctx context.Context, j *Journal) error {
 	}
 	var outcome *Outcome
 	if command {
-		outcome = classifyCommand(j, commandTail1K(w.attemptDir(j)))
+		var tail string // a log that lost output has no tail to put in a summary (ADR-0008)
+		if j.Exit.Unrecorded == "" {
+			tail = commandTail1K(w.attemptDir(j))
+		}
+		outcome = classifyCommand(j, tail)
 	} else {
 		outcome = j.withCarried(classify(j))
 	}
