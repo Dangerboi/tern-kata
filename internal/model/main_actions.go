@@ -280,6 +280,8 @@ var mainRows = []actionEntry{
 	{action: EditBody, modes: issueModes, keys: keys("e", "e"), help: "edit", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 5, "edit body"}}, handle: pure(func(m Model) Model { return startDraft(m, false) })},
 	{action: AddComment, modes: []Mode{ModeDetail}, keys: keys("c", "c"), help: "comment", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 6, "new comment"}}, handle: pure(func(m Model) Model { return startDraft(m, true) })},
 	{action: ReplyAction, modes: []Mode{ModeDetail}, keys: keys("shift+r", "R"), help: "reply to comment", sheet: []sheetLine{{sheetDetail, 15, "reply to comment"}}, handle: pure(startReply)},
+	{action: NextCommentLink, modes: []Mode{ModeDetail}, keys: keys("]", "]"), footerKey: "[/]", help: "comment links", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 21, "next comment link (Comments tab)"}}, handle: pure(stepCommentLink(true))},
+	{action: PrevCommentLink, modes: []Mode{ModeDetail}, keys: keys("[", "["), help: "previous comment link", sheet: []sheetLine{{sheetDetail, 22, "previous comment link (Comments tab)"}}, handle: pure(stepCommentLink(false))},
 	{action: AddLabelAction, modes: issueModes, keys: keys("+", "+"), help: "label", footer: boardAndDetail, sheet: []sheetLine{{sheetDetail, 8, "add label"}}, handle: fieldFor(AddLabelAction)},
 	{action: RemoveLabelAction, modes: issueModes, keys: keys("-", "-"), help: "unlabel", footer: boardAndDetail, sheet: []sheetLine{{sheetDetail, 9, "remove label"}}, handle: fieldFor(RemoveLabelAction)},
 	{action: AttachFileAction, modes: issueModes, keys: keys("u", "u"), help: "attach", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 10, "attach file"}}, handle: fieldFor(AttachFileAction)},

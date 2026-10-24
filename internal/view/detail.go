@@ -141,6 +141,9 @@ func detailRows(m model.Model) (children []detailChild, activity tern.Nodes) {
 		if row.Creation != "" {
 			parts = append(parts, ui.Text{Common: ui.Common{Key: "creation", Tone: ui.ToneMuted}, Text: row.Creation})
 		}
+		if choice, ok := m.DetailCommentLink(); ok && mark == ui.MarkPick && item.Kind == model.RowComment {
+			parts = append(parts, ui.Text{Common: ui.Common{Key: "link", Tone: ui.ToneAccent}, Text: fmt.Sprintf("link %d/%d: %s", choice.Index, choice.Count, choice.Label)})
+		}
 		if row.Body != "" {
 			parts = append(parts, ui.Md{Common: ui.Common{Key: "body"}, Text: row.Body})
 		}

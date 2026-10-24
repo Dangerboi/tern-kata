@@ -56,6 +56,7 @@ Editing from the Pane:
 | `n`, `N` | Create an Issue; `N` makes a child |
 | `x`, `r` | Close; reopen |
 | `c`, `R` | Comment (in the detail); reply to a comment |
+| `]`, `[` | Next, previous Comment link (Comments tab); `enter` follows the chosen one |
 | `+`, `-` | Add or remove a label |
 | `a`, `A` | Owner |
 | `!` | Priority |

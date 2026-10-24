@@ -35,6 +35,8 @@ type CommentLink struct {
 	Author       *string
 	IssueUID     *string
 	IssueShortID *string
+	// ProjectUID is the Project of the comment's Issue, when kata names it.
+	ProjectUID *string
 }
 
 // Event is one history event; Payload is kata's JSON text of it, which historyRow turns into a sentence.

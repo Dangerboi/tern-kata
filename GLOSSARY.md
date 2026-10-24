@@ -40,6 +40,8 @@
 
 **Reply**: A comment that answers another comment, with a kind: reply, confirm, refute or supersede.
 
+**Comment link**: One end of a Reply as seen from a comment on the Issue detail's Comments tab: the comment it answers (if any), then the Replies to it on any Issue. `]` and `[` choose one, wrapping around, and `enter` jumps to it, across Projects.
+
 **Recurrence**: kata's schedule that creates the next Occurrence of an Issue when the current one closes as done. Stopping it creates no further Occurrences and leaves the existing ones as they are.
 
 **Occurrence**: An Issue a Recurrence created, or the Issue that was made the first one.
