@@ -18,6 +18,8 @@ type LaunchPlan struct {
 	// IssueRef is the Issue reference (<project>/<short_id>) the Pane opens first; empty for none.
 	IssueRef string
 	Actor    string
+	// InboxUser is KATA_INBOX_USER, trimmed: the address the Attention Page reads when not blank, else the actor's.
+	InboxUser string
 	// Version is non-empty when --version was given: main prints it and exits.
 	Version string
 	// Help is true when --help or -h was given: main prints usage and exits.
@@ -108,6 +110,9 @@ func PlanLaunch(args []string, lookup func(string) (string, bool), version strin
 		plan.FallbackArgs = append(plan.FallbackArgs, "--project", project, project+"#"+shortID)
 	}
 	plan.Actor = resolveActor(plan.fallbackAuthor, lookup)
+	if inbox, ok := lookup("KATA_INBOX_USER"); ok {
+		plan.InboxUser = strings.TrimSpace(inbox)
+	}
 	return plan, nil
 }
 
@@ -374,7 +379,7 @@ Inside Tern, it opens a Pane. Outside Tern, it runs ` + "`kata tui`" + ` instead
 In a directory bound to a kata Project (a .kata.toml in it or a parent), it opens
 that Project's Issues; elsewhere it opens Inbox.
 
-Environment: KATA_AUTHOR, USER (actor), EDITOR (external Draft editing), TZ (time zone).
+Environment: KATA_AUTHOR, USER (actor), KATA_INBOX_USER (the Inbox address the Attention Page reads, else the actor), EDITOR (external Draft editing), TZ (time zone).
 
 Docs: https://github.com/Dangerboi/tern-kata#readme
 `

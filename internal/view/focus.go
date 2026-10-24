@@ -37,6 +37,12 @@ var listNodes = map[model.ListNode]struct {
 		}
 		return RunID(m.Runs.Selected)
 	}},
+	model.ListNodeAttention: {AttentionListID, func(m model.Model) string {
+		if m.Attention.Selected == "" {
+			return ""
+		}
+		return AttentionID(m.Attention.Selected)
+	}},
 }
 
 // TextFocusID is the node that should hold Tern's caret, "" for none.
@@ -99,7 +105,7 @@ func SelectionRevealID(m model.Model, msg model.Msg, previous string) string {
 
 func listRead(msg model.Msg) bool {
 	switch msg.(type) {
-	case model.JobsLoaded, model.RunsLoaded:
+	case model.JobsLoaded, model.RunsLoaded, model.AttentionLoaded:
 		return true
 	}
 	return false
@@ -107,7 +113,7 @@ func listRead(msg model.Msg) bool {
 
 func rowClick(msg model.Msg) bool {
 	switch msg := msg.(type) {
-	case model.SelectMsg, model.JobSelectMsg, model.RunSelectMsg:
+	case model.SelectMsg, model.JobSelectMsg, model.RunSelectMsg, model.AttentionSelectMsg:
 		return true
 	case model.ActionMsg:
 		return msg.Action == model.ToggleExpansion

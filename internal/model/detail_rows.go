@@ -162,7 +162,8 @@ func (m Model) withRows() Model {
 
 // commentItem is a comment row; a reply opens the comment it answers, here or in another Issue.
 func (m Model) commentItem(comment Comment) DetailItem {
-	row := DetailRow{Key: comment.UID, Author: comment.Author, Time: m.DetailTime(comment.CreatedAt), Body: comment.Body}
+	row := DetailRow{Key: comment.UID, Author: comment.Author, Time: m.DetailTime(comment.CreatedAt), Body: comment.Body,
+		Creation: comment.Attribution.Line(comment.Author)}
 	item := DetailItem{Kind: RowComment, Key: row.Key}
 	if n := len(comment.Backlinks); n == 1 {
 		row.Replies = "1 reply"

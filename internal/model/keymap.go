@@ -84,6 +84,9 @@ const (
 	ArchiveWorkflowAction   Action = "archive-workflow"
 	RestoreWorkflowAction   Action = "restore-workflow"
 	ToggleArchivedWorkflows Action = "toggle-archived-workflows"
+	ShowAttentionPage       Action = "show-attention-page"
+	OpenAttentionRequest    Action = "open-attention-request"
+	ReloadAttention         Action = "reload-attention"
 	ShowCredentialsPage     Action = "show-credentials-page"
 	RefreshCredentials      Action = "refresh-credentials"
 	LetteredBack            Action = "lettered-back"
@@ -139,6 +142,7 @@ const (
 	ModeRuns          Mode = "runs"
 	ModeRunInspector  Mode = "run-inspector"
 	ModeWorkflows     Mode = "workflows"
+	ModeAttention     Mode = "attention"
 	ModeCredentials   Mode = "credentials"
 	ModeFederation    Mode = "federation"
 )

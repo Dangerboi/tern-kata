@@ -22,6 +22,8 @@ const (
 	PageRuns
 	// PageWorkflows is the Project's kata workflows beside an inspector; its state is Model.Workflows.
 	PageWorkflows
+	// PageAttention is the Attention requests addressed to the Pane's Inbox address, across every Project; its state is Model.Attention.
+	PageAttention
 	// PageCredentials is the Lettered Page of the daemon's API tokens; its state is Model.Credentials.
 	PageCredentials
 	// PageFederation is the Lettered Page of this daemon's spoke federations; its state is Model.Federation.
@@ -55,6 +57,8 @@ const (
 	ListNodeRuns
 	// ListNodeWorkflows is the Workflows Page's list node.
 	ListNodeWorkflows
+	// ListNodeAttention is the Attention Page's list node.
+	ListNodeAttention
 	// ListNodeCredentials is the Credentials Page's list node.
 	ListNodeCredentials
 	// ListNodeFederation is the Federation Page's list node.
@@ -175,6 +179,10 @@ func init() {
 			filledFor: workflowsFilledFor, reset: resetWorkflows, mode: workflowsMode, update: updateWorkflows, list: ListNodeWorkflows,
 			moves:  pageMoves{mode: ModeWorkflows, noun: "workflow", move: moveWorkflow, sheet: [6]sheetLine{{sheetWorkflows, 1, "next workflow"}, {sheetWorkflows, 2, "previous workflow"}}},
 			keymap: []keySegment{movementKeys, rowsOf(workflowActions())}},
+		{page: PageAttention, id: "attention", label: "Attention", chord: "6", action: ShowAttentionPage, second: SecondInspector, enter: enterAttention,
+			mode: func(Model) Mode { return ModeAttention }, update: updateAttention, list: ListNodeAttention,
+			moves:  pageMoves{mode: ModeAttention, noun: "request", move: moveAttention, sheet: [6]sheetLine{{sheetAttention, 1, "next request"}, {sheetAttention, 2, "previous request"}}},
+			keymap: []keySegment{movementKeys, rowsOf(attentionRows)}},
 		{page: PageCredentials, id: "credentials", label: "Credentials", chord: "C", press: "shift+c", lettered: true, action: ShowCredentialsPage, second: SecondInspector, enter: enterCredentials, clear: clearCredentials,
 			mode: credentialsMode, update: updateCredentials, list: ListNodeCredentials,
 			moves:  pageMoves{mode: ModeCredentials, noun: "credential", move: moveCredential, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
@@ -287,7 +295,7 @@ func pageScrollActions(def pageDef) []actionEntry {
 }
 
 // pageModes are the modes where the Page keys work: wherever the main surface has the keyboard and no text is being typed.
-var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollections, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeCredentials, ModeFederation}
+var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollections, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention, ModeCredentials, ModeFederation}
 
 // PageBarEntry is one entry of the Page bar. Press is the chord a click on it sends.
 type PageBarEntry struct {
@@ -356,9 +364,12 @@ func switchPage(m Model, target Page) (Model, []Cmd) {
 	if def.enter == nil {
 		return m, nil
 	}
-	m, cmds, ok := enterProjectPage(m, def.needs)
-	if !ok {
-		return m, nil
+	var cmds []Cmd
+	if def.needs != "" {
+		var ok bool
+		if m, cmds, ok = enterProjectPage(m, def.needs); !ok {
+			return m, nil
+		}
 	}
 	m.Page = target
 	m.pageDetailHidden = m.DetailHidden()

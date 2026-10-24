@@ -39,7 +39,8 @@ func translateDetail(s *g.UISelectedAuthority, scoped bool) *model.IssueDetailDa
 	for _, c := range s.Comments {
 		comment := model.Comment{
 			UID: c.UID, Author: c.Author, Body: c.Body, CreatedAt: c.CreatedAt,
-			ReplyKind: c.ReplyKind, Reply: translateCommentLink(c.Reply),
+			Attribution: translateAttribution(c.Verification, c.AccountableActor, c.SourceActor, c.Teammate),
+			ReplyKind:   c.ReplyKind, Reply: translateCommentLink(c.Reply),
 		}
 		for i := range c.Backlinks {
 			comment.Backlinks = append(comment.Backlinks, *translateCommentLink(&c.Backlinks[i]))
@@ -94,4 +95,18 @@ func translateCommentLink(l *g.CommentLink) *model.CommentLink {
 	return &model.CommentLink{
 		UID: l.UID, Kind: l.Kind, Author: l.Author, IssueUID: l.IssueUID, IssueShortID: l.IssueShortID,
 	}
+}
+
+// translateAttribution carries kata's creation attribution fields; a missing verification state stays empty.
+func translateAttribution[V ~string](verification *V, accountable, source, teammate *string) model.Attribution {
+	var a model.Attribution
+	if verification != nil {
+		a.Verification = string(*verification)
+	}
+	for dst, src := range map[*string]*string{&a.Accountable: accountable, &a.Source: source, &a.Teammate: teammate} {
+		if src != nil {
+			*dst = *src
+		}
+	}
+	return a
 }

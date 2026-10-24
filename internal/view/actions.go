@@ -23,6 +23,7 @@ const (
 	refAct         = "ref"
 	jobAct         = "job"
 	runAct         = "run"
+	attentionAct   = "attention"
 	openJobAct     = "open-job"
 )
 
@@ -53,6 +54,9 @@ func JobClick(uid string) string { return click(jobAct, uid) }
 
 // RunClick selects the Run's card on the Runs Page.
 func RunClick(uid string) string { return click(runAct, uid) }
+
+// AttentionClick selects the request on the Issue with uid on the Attention Page.
+func AttentionClick(uid string) string { return click(attentionAct, uid) }
 
 // OpenJobClick opens the Cron job on the Jobs Page.
 func OpenJobClick(uid string) string { return click(openJobAct, uid) }
@@ -115,6 +119,8 @@ func DecodeAction(id, act, value string) model.Msg {
 		return model.ShowCardMsg{UID: value}
 	case runAct:
 		return model.RunSelectMsg{UID: value}
+	case attentionAct:
+		return model.AttentionSelectMsg{UID: value}
 	case openJobAct:
 		return model.OpenJobMsg{UID: value}
 	case jobAct:
