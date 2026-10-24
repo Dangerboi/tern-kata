@@ -18,6 +18,8 @@ The Issue detail's Activity tabs are Comments, Events, Links and Attachments, cy
 
 `R` on a comment in the Issue detail's Comments tab replies to it; `ctrl+r` in the card cycles reply, confirm, refute and supersede.
 
+`]` and `[` on a comment in the Comments tab step through its Comment links, wrapping around: the comment it answers (if any), then the Replies to it on any Issue, as kata returns them with the Issue detail. The comment under the cursor shows "link 2/3: fay refutes in #bbbb" for the chosen link (the first until you step), and `enter` jumps to it, across Issues and Projects, landing on that comment. A comment without Comment links keeps `enter` as it was.
+
 ## Credentials
 
 `C` opens kata tui's Credentials view as a Lettered Page, and the Menu lists it. Its wording, fields and 30-second refresh are kata tui's; see [Pages and the Board](pages-and-board.md#lettered-pages).
@@ -41,4 +43,3 @@ tern-kata lacks these kata tui keys:
 | Key | kata tui action |
 |---|---|
 | `u` | undo the last change |
-| `[` and `]` | previous and next comment link |

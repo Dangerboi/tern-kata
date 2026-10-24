@@ -1842,3 +1842,29 @@ func TestGatewayDetailCarriesTheCreationAttribution(t *testing.T) {
 		t.Errorf("comment attribution %+v", d.Comments)
 	}
 }
+
+func TestGatewayCarriesABacklinkFromAReplyOnAnotherIssue(t *testing.T) {
+	kata := startKata(t, "0.20.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	asked := createIssue(t, gateway, workspace, demo, "Asked")
+	answering := createIssue(t, gateway, workspace, demo, "Answering")
+	detailOf := func(uid string) *model.IssueDetailData {
+		return as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected
+	}
+	as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: asked, ProjectID: demo.ID, BaseText: detailOf(asked).Issue.Body, Text: "the question", Comment: true, Actor: "asker"}))
+	question := detailOf(asked).Comments[0]
+	as[model.DraftSaved](t, run(t, gateway, model.SaveDraft{Workspace: workspace, UID: answering, ProjectID: demo.ID, BaseText: detailOf(answering).Issue.Body, Text: "refuted elsewhere: " + strings.Repeat("it does not reproduce. ", 3),
+		Comment: true, Actor: "answerer", ReplyTo: question.UID, ReplyKind: model.ReplyRefute}))
+	reply := detailOf(answering).Comments[0]
+
+	got := detailOf(asked).Comments[0]
+	if len(got.Backlinks) != 1 {
+		t.Fatalf("backlinks %+v, want the one reply", got.Backlinks)
+	}
+	link := got.Backlinks[0]
+	if link.Kind != "refute" || link.UID == nil || *link.UID != reply.UID || link.IssueUID == nil || *link.IssueUID != answering ||
+		link.Author == nil || *link.Author != "answerer" || link.ProjectUID == nil || *link.ProjectUID != demo.UID {
+		t.Errorf("backlink %+v, want the refuting reply on the other Issue", link)
+	}
+}
