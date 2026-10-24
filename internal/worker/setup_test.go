@@ -74,3 +74,22 @@ func TestReplaceConfigRefusesAFileThatChangedSinceTheBase(t *testing.T) {
 		t.Errorf("file:\n%s", got)
 	}
 }
+
+func TestReplaceConfigRefusesTextThatWouldNotLoadAndKeepsTheOldFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "worker.toml")
+	old := "executor = \"laptop\"\n\n[profiles.default]\n"
+	if err := os.WriteFile(path, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := ReplaceConfig(path, old, "this is [not toml")
+	if err == nil || !strings.Contains(err.Error(), "would not load") || !strings.Contains(err.Error(), path) {
+		t.Fatalf("error %v, want a refusal naming worker.toml's path", err)
+	}
+	if got, _ := os.ReadFile(path); string(got) != old {
+		t.Errorf("the old file changed:\n%s", got)
+	}
+	entries, _ := os.ReadDir(filepath.Dir(path))
+	if len(entries) != 1 {
+		t.Errorf("the folder holds %d entries after a refused write, want only worker.toml", len(entries))
+	}
+}

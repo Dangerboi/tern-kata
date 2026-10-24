@@ -1,6 +1,7 @@
 package data
 
 import (
+	"errors"
 	"os"
 	"runtime"
 	"slices"
@@ -86,32 +87,22 @@ func TestAnUnreadableLanesFileIsRefusedAndNotOverwritten(t *testing.T) {
 	}
 }
 
-func TestTheConfigFolderIsFoundWithoutTheStateFolder(t *testing.T) {
+func TestLanesSaveAndLoadWhenOnlyTheStateFolderCannotBeFound(t *testing.T) {
 	config := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", config)
-	t.Setenv("XDG_STATE_HOME", "")
-	t.Setenv("HOME", "")
-	folder, err := worker.ConfigDir()
-	if err != nil || !strings.HasPrefix(folder, config) {
-		t.Fatalf("config folder %q, %v", folder, err)
+	newOne := func() *Gateway {
+		g := NewGateway(newLocator(Target{}).locate)
+		g.workerDirs = func() (worker.Dirs, error) {
+			return worker.Dirs{Config: config}, errors.New("no state folder")
+		}
+		t.Cleanup(g.Close)
+		return g
 	}
-	dirs, err := worker.DefaultDirs()
-	if err == nil || dirs.Config != folder {
-		t.Fatalf("DefaultDirs gave %+v, %v; want the config folder and the state folder's error", dirs, err)
-	}
-	g := NewGateway(newLocator(Target{}).locate)
-	t.Cleanup(g.Close)
-	if saved := as[model.LanesSaved](t, run(t, g, model.SaveLanes{ProjectUID: "p", ProjectName: "work", Lanes: []string{"a"}})); saved.Err != nil {
+	if saved := as[model.LanesSaved](t, run(t, newOne(), model.SaveLanes{ProjectUID: "p", ProjectName: "work", Lanes: []string{"a"}})); saved.Err != nil {
 		t.Fatal(saved.Err)
 	}
-	if got := f2(t, g); !slices.Equal(got.Lanes, []string{"a"}) {
+	if got := as[model.LanesLoaded](t, run(t, newOne(), model.LoadLanes{ProjectUID: "p"})); got.Err != nil || !slices.Equal(got.Lanes, []string{"a"}) {
 		t.Errorf("loaded %+v", got)
 	}
-}
-
-func f2(t *testing.T, g *Gateway) model.LanesLoaded {
-	t.Helper()
-	return as[model.LanesLoaded](t, run(t, g, model.LoadLanes{ProjectUID: "p"}))
 }
 
 func TestASaveThatCannotCompleteLeavesTheLaneListAndDefaultFilterFilesAsTheyWere(t *testing.T) {
