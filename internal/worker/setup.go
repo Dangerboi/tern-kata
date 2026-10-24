@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/Dangerboi/tern-kata/internal/atomicfile"
 )
 
 // TrustNote is the warning printed and written wherever a config lists a Project.
@@ -244,39 +246,21 @@ func WriteConfig(path, content string) error { return writeConfig(path, content,
 func ReplaceConfig(path, base, content string) error { return writeConfig(path, content, &base) }
 
 func writeConfig(path, content string, base *string) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(dir, ".worker-*.toml")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if err := tmp.Chmod(0o600); err != nil && filepath.Separator == '/' {
-		tmp.Close()
-		return err
-	}
-	if _, err := tmp.WriteString(content); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if _, err := LoadConfig(tmp.Name()); err != nil {
-		return &refusedWrite{err: err, text: "the new worker.toml would not load, so nothing was written: " + strings.ReplaceAll(err.Error(), tmp.Name(), path)}
-	}
-	if base != nil {
-		disk, err := os.ReadFile(path)
-		if err != nil {
-			return err
+	return atomicfile.Write(path, []byte(content), atomicfile.Options{Mode: 0o600, DirMode: 0o700, Check: func(tmp string) error {
+		if _, err := LoadConfig(tmp); err != nil {
+			return &refusedWrite{err: err, text: "the new worker.toml would not load, so nothing was written: " + strings.ReplaceAll(err.Error(), tmp, path)}
 		}
-		if string(disk) != *base {
-			return ErrConfigChanged
+		if base != nil {
+			disk, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			if string(disk) != *base {
+				return ErrConfigChanged
+			}
 		}
-	}
-	return os.Rename(tmp.Name(), path)
+		return nil
+	}})
 }
 
 // refusedWrite is WriteConfig's refusal: the text calls the file worker.toml, and Unwrap keeps the load error (and its FieldError).
