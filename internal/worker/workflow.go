@@ -343,7 +343,7 @@ func (w *Worker) finishWorkflow(j *Journal) error {
 
 // workflowSummary is the run's summary in kata: the workflow's result, then one entry per step with what it ended as
 // and the first of what it said (a failed step gets more room, since that is what the reader needs).
-func workflowSummary(j *Journal, status string) string {
+func workflowSummary(j *Journal, status cronjob.RunStatus) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Workflow %q %s", j.Workflow.Name, status)
 	done := 0
@@ -388,7 +388,7 @@ func stepStateText(j *Journal, i int) string {
 	switch {
 	case j.held():
 		return j.stateName()
-	case j.Outcome != nil && j.Outcome.Status == StatusCancelled:
+	case j.Outcome != nil && j.Outcome.Status == cronjob.RunCancelled:
 		return "cancelled"
 	}
 	return StepRunning
@@ -475,9 +475,9 @@ func classifyCommand(j *Journal, tail string) *Outcome {
 	}
 	o := &Outcome{}
 	if reason == "" {
-		o.Status, o.Summary = StatusSucceeded, "the command exited with status 0"
+		o.Status, o.Summary = cronjob.RunSucceeded, "the command exited with status 0"
 	} else {
-		o.Status, o.Summary = StatusFailed, reason
+		o.Status, o.Summary = cronjob.RunFailed, reason
 	}
 	if tail != "" {
 		o.Summary += "\n\n" + tail

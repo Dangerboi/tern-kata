@@ -1,6 +1,10 @@
 package worker
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
+)
 
 // The tables below pin the Run lifecycle's answers over Journals (ADR-0005, ADR-0006, ADR-0007); they reach it only
 // through its interface.
@@ -10,7 +14,7 @@ import "testing"
 func journalAt(phase Phase, hold string, edit ...func(*Journal)) *Journal {
 	j := &Journal{RunUID: "run", Phase: phase}
 	if hold != "" {
-		j.Outcome = &Outcome{Status: StatusUnknown, Hold: hold, Summary: hold + ": why"}
+		j.Outcome = &Outcome{Status: cronjob.RunUnknown, Hold: hold, Summary: hold + ": why"}
 		if hold == HoldAdmissionRejected || hold == HoldCreateRejected {
 			j.Outcome.Status = ""
 		}
@@ -29,7 +33,7 @@ func onCommandStep(j *Journal) {
 func launched(j *Journal)  { j.Launch = &LaunchRecord{PID: 10, PGID: 10} }
 func exited(j *Journal)    { j.Exit = &ExitRecord{} }
 func cancelled(j *Journal) { j.Cancel = &CancelRecord{By: "ann"} }
-func ended(status string) func(*Journal) {
+func ended(status cronjob.RunStatus) func(*Journal) {
 	return func(j *Journal) { j.Outcome = &Outcome{Status: status, Summary: "done"} }
 }
 
@@ -60,8 +64,8 @@ func TestSettledHeldAndHoldClass(t *testing.T) {
 	}{
 		{"prepared", journalAt(PhasePrepared, ""), false, notHeld},
 		{"started", journalAt(PhaseStarted, ""), false, notHeld},
-		{"finished", journalAt(PhaseFinished, "", ended(StatusSucceeded)), false, notHeld},
-		{"settled", journalAt(PhaseSettled, "", ended(StatusSucceeded)), true, notHeld},
+		{"finished", journalAt(PhaseFinished, "", ended(cronjob.RunSucceeded)), false, notHeld},
+		{"settled", journalAt(PhaseSettled, "", ended(cronjob.RunSucceeded)), true, notHeld},
 		{"settled without outcome", journalAt(PhaseSettled, ""), true, notHeld},
 		{"admission rejected", journalAt(PhaseSettled, HoldAdmissionRejected), true, holdBeforeAdmission},
 		{"create rejected", journalAt(PhaseSettled, HoldCreateRejected), true, holdBeforeAdmission},
@@ -95,8 +99,8 @@ func TestOwes(t *testing.T) {
 		{"resuming", journalAt(PhaseResuming, ""), true},
 		{"launching", journalAt(PhaseLaunching, ""), true},
 		{"started", journalAt(PhaseStarted, ""), true},
-		{"finished and unreported", journalAt(PhaseFinished, "", ended(StatusFailed)), true},
-		{"settled", journalAt(PhaseSettled, "", ended(StatusFailed)), false},
+		{"finished and unreported", journalAt(PhaseFinished, "", ended(cronjob.RunFailed)), true},
+		{"settled", journalAt(PhaseSettled, "", ended(cronjob.RunFailed)), false},
 		{"held while its hold is reported", journalAt(PhaseFinished, HoldInterrupted), false},
 		{"held and reported", journalAt(PhaseSettled, HoldInterrupted), false},
 		{"held before admission", journalAt(PhaseSettled, HoldAdmissionRejected), false},
@@ -118,9 +122,9 @@ func TestClosesGate(t *testing.T) {
 	}{
 		{"prepared", journalAt(PhasePrepared, ""), true},
 		{"started", journalAt(PhaseStarted, ""), true},
-		{"finished", journalAt(PhaseFinished, "", ended(StatusSucceeded)), true},
-		{"settled closes none", journalAt(PhaseSettled, "", ended(StatusSucceeded)), false},
-		{"settled cancelled closes none", journalAt(PhaseSettled, "", ended(StatusCancelled)), false},
+		{"finished", journalAt(PhaseFinished, "", ended(cronjob.RunSucceeded)), true},
+		{"settled closes none", journalAt(PhaseSettled, "", ended(cronjob.RunSucceeded)), false},
+		{"settled cancelled closes none", journalAt(PhaseSettled, "", ended(cronjob.RunCancelled)), false},
 		{"pre-admission hold frees the gate at once", journalAt(PhaseSettled, HoldAdmissionRejected), false},
 		{"create rejected frees the gate at once", journalAt(PhaseSettled, HoldCreateRejected), false},
 		{"secret hold keeps it", journalAt(PhaseSettled, HoldSecretUnavailable), true},
@@ -156,8 +160,8 @@ func TestOccupiesSlot(t *testing.T) {
 		{"resuming", journalAt(PhaseResuming, "", launched), gone, true},
 		{"launching with no start record", journalAt(PhaseLaunching, ""), gone, true},
 		{"started, group gone", journalAt(PhaseStarted, "", launched), gone, true},
-		{"finished and unreported", journalAt(PhaseFinished, "", ended(StatusSucceeded)), gone, true},
-		{"settled", journalAt(PhaseSettled, "", ended(StatusSucceeded)), present, false},
+		{"finished and unreported", journalAt(PhaseFinished, "", ended(cronjob.RunSucceeded)), gone, true},
+		{"settled", journalAt(PhaseSettled, "", ended(cronjob.RunSucceeded)), present, false},
 
 		{"pre-admission hold frees the slot", journalAt(PhaseSettled, HoldAdmissionRejected), present, false},
 		{"create rejected frees the slot", journalAt(PhaseSettled, HoldCreateRejected), present, false},
@@ -194,9 +198,9 @@ func TestOccupiesSlot(t *testing.T) {
 
 func TestMayResume(t *testing.T) {
 	const (
-		still  = "the agent's process group 10 is still present; the worker never stops a process to make a resume possible"
+		still     = "the agent's process group 10 is still present; the worker never stops a process to make a resume possible"
 		unchecked = "the agent's process group 10 cannot be checked: the job could not be opened; the worker keeps the run's slot until the check succeeds and will not free capacity it cannot prove empty, so it cannot be resumed until then"
-		noProc = "the worker cannot prove the agent was never started, so it will not start another on this run; abandon it"
+		noProc    = "the worker cannot prove the agent was never started, so it will not start another on this run; abandon it"
 	)
 	cases := []struct {
 		name    string
@@ -207,7 +211,7 @@ func TestMayResume(t *testing.T) {
 	}{
 		{"running", journalAt(PhaseStarted, ""), GroupGone, true, "it is running, not held"},
 		{"cancelling", journalAt(PhaseStarted, "", cancelled), GroupGone, true, "it is cancelling, not held"},
-		{"settled succeeded", journalAt(PhaseSettled, "", ended(StatusSucceeded)), GroupGone, true, "it is succeeded, not held"},
+		{"settled succeeded", journalAt(PhaseSettled, "", ended(cronjob.RunSucceeded)), GroupGone, true, "it is succeeded, not held"},
 		{"prepared", journalAt(PhasePrepared, ""), GroupGone, true, "it is prepared, not held"},
 		{"held before admission", journalAt(PhaseSettled, HoldAdmissionRejected), GroupGone, true,
 			"it was held (admission_rejected) before kata saw it and nothing ran, so there is nothing to continue; abandon it"},
@@ -258,7 +262,7 @@ func TestMayAbandon(t *testing.T) {
 		{"group unproven, group present", journalAt(PhaseSettled, HoldGroupUnproven, launched), GroupPresent, stillPresent},
 		{"launch unproven with no start record", journalAt(PhaseSettled, HoldLaunchUnproven), GroupGone, ""},
 		{"running is asked to stop", journalAt(PhaseStarted, "", launched), GroupPresent, ""},
-		{"settled", journalAt(PhaseSettled, "", ended(StatusFailed)), GroupGone, "it is failed, not held"},
+		{"settled", journalAt(PhaseSettled, "", ended(cronjob.RunFailed)), GroupGone, "it is failed, not held"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -279,8 +283,8 @@ func TestMayCancel(t *testing.T) {
 		{"admitted", journalAt(PhaseAdmitted, ""), ""},
 		{"launching", journalAt(PhaseLaunching, ""), ""},
 		{"already asked", journalAt(PhaseStarted, "", launched, cancelled), "ann already asked to cancel it"},
-		{"settled", journalAt(PhaseSettled, "", ended(StatusSucceeded)), "it is succeeded, not held"},
-		{"finished", journalAt(PhaseFinished, "", ended(StatusFailed)), "it is failed, not held"},
+		{"settled", journalAt(PhaseSettled, "", ended(cronjob.RunSucceeded)), "it is succeeded, not held"},
+		{"finished", journalAt(PhaseFinished, "", ended(cronjob.RunFailed)), "it is failed, not held"},
 		{"notify job", journalAt(PhaseAdmitted, "", func(j *Journal) { j.Notify = &NotifySpec{} }), "its notification is being sent and it ends in a moment"},
 		{"prepared", journalAt(PhasePrepared, ""), "it is still being admitted; try again in a moment"},
 		{"resuming", journalAt(PhaseResuming, ""), "its resume is still being confirmed; try again in a moment"},
@@ -307,9 +311,9 @@ func TestStateName(t *testing.T) {
 		{"launching", journalAt(PhaseLaunching, ""), "running"},
 		{"started", journalAt(PhaseStarted, ""), "running"},
 		{"cancelling", journalAt(PhaseStarted, "", cancelled), "cancelling"},
-		{"finished with an outcome", journalAt(PhaseFinished, "", ended(StatusFailed)), "failed"},
-		{"settled", journalAt(PhaseSettled, "", ended(StatusSucceeded)), "succeeded"},
-		{"cancelled", journalAt(PhaseSettled, "", ended(StatusCancelled)), "cancelled"},
+		{"finished with an outcome", journalAt(PhaseFinished, "", ended(cronjob.RunFailed)), "failed"},
+		{"settled", journalAt(PhaseSettled, "", ended(cronjob.RunSucceeded)), "succeeded"},
+		{"cancelled", journalAt(PhaseSettled, "", ended(cronjob.RunCancelled)), "cancelled"},
 		{"held", journalAt(PhaseSettled, HoldNoReceipt), "held: no_receipt"},
 		{"held before admission", journalAt(PhaseSettled, HoldAdmissionRejected), "held: admission_rejected"},
 		{"held, cancel recorded", journalAt(PhaseFinished, HoldInterrupted, cancelled), "held: interrupted"},
@@ -360,7 +364,7 @@ func TestRecover(t *testing.T) {
 		{"prepared continues", journalAt(PhasePrepared, ""), GroupGone, false, recovery{Step: recoverContinue}},
 		{"admitted continues", journalAt(PhaseAdmitted, ""), GroupGone, false, recovery{Step: recoverContinue}},
 		{"resuming continues", journalAt(PhaseResuming, ""), GroupGone, false, recovery{Step: recoverContinue}},
-		{"finished continues", journalAt(PhaseFinished, "", ended(StatusSucceeded)), GroupGone, false, recovery{Step: recoverContinue}},
+		{"finished continues", journalAt(PhaseFinished, "", ended(cronjob.RunSucceeded)), GroupGone, false, recovery{Step: recoverContinue}},
 		{"launching is held launch unproven", journalAt(PhaseLaunching, ""), GroupGone, false,
 			recovery{recoverHold, HoldLaunchUnproven, "the worker stopped while starting the agent, so it may have started"}},
 		{"launching a command", journalAt(PhaseLaunching, "", onCommandStep), GroupGone, false, recovery{recoverHold, HoldLaunchUnproven, "the worker stopped while starting the command, so it may have started"}},

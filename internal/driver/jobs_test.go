@@ -369,7 +369,7 @@ func TestJobsPageRowsShowTheLatestRunOrChildAndTheInspectorTheRecentOnes(t *test
 		t.Fatalf("the Jobs Page asked %#v, want the jobs read with what each has done lately", out.Cmds)
 	}
 	failed := finishedRun("R2")
-	failed.Status, failed.Message = model.RunFailed, "step build failed"
+	failed.Status, failed.Summary = cronjob.RunFailed, "step build failed"
 	older := finishedRun("R1")
 	load, _ := askedJobs(out.Cmds)
 	s := step(t, out.State, model.JobsLoaded{Request: load.Request,

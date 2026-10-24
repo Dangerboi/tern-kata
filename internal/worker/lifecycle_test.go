@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
 )
@@ -218,7 +219,7 @@ func (h *harness) within(what string, cond func() bool) {
 	h.t.Fatalf("timed out waiting for %s", what)
 }
 
-func (h *harness) kataRun(uid string) worker.Run {
+func (h *harness) kataRun(uid string) cronjob.Run {
 	run, _ := h.kata.Kata.ShowRun(context.Background(), h.proj.ID, uid)
 	return run
 }

@@ -208,7 +208,7 @@ func TestACrashMidWorkflowHoldsAtThatStepAndResumeContinuesFromIt(t *testing.T) 
 	if resp := h.ask(worker.Request{Op: "resume", Run: uid, Actor: "ann"}); !resp.OK {
 		t.Fatalf("resume refused: %s", resp.Error)
 	}
-	var run worker.Run
+	var run cronjob.Run
 	h.eventually("kata to hold the resumed workflow as succeeded", func() bool {
 		run, _ = h.kata.Kata.ShowRun(context.Background(), h.proj.ID, uid)
 		return run.Status == "succeeded"
@@ -247,7 +247,7 @@ func TestAHeldCommandStepRerunsItsCommandOnResume(t *testing.T) {
 	if resp := h.ask(worker.Request{Op: "resume", Run: uid}); !resp.OK {
 		t.Fatalf("resume refused: %s", resp.Error)
 	}
-	var run worker.Run
+	var run cronjob.Run
 	h.eventually("the resumed workflow to succeed", func() bool {
 		run, _ = h.kata.Kata.ShowRun(context.Background(), h.proj.ID, uid)
 		return run.Status == "succeeded"

@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // This machine's worker is a separate process the Pane reaches over its control socket. The Pane asks it for its status, for the
@@ -235,7 +237,7 @@ func (m Model) runsRunning() bool {
 			return true
 		}
 	}
-	return slices.ContainsFunc(m.Runs.Runs, func(r Run) bool { return r.Status == RunRunning && m.IsLocalRun(r) })
+	return slices.ContainsFunc(m.Runs.Runs, func(r Run) bool { return r.Status == cronjob.RunRunning && m.IsLocalRun(r) })
 }
 
 // IsLocalRun says the Run was executed by this machine's worker.
@@ -545,7 +547,7 @@ func (m Model) localFacts(run Run) (hold []RunFact, rest []RunFact) {
 		add(&rest, "Step "+strconv.Itoa(s.Index), stepWords(s))
 	}
 	add(&rest, "Output", strings.TrimSpace(d.OutputTail))
-	if !local.Settled() || local.Held || d.StderrTail != "" && run.Status != RunSucceeded {
+	if !local.Settled() || local.Held || d.StderrTail != "" && run.Status != cronjob.RunSucceeded {
 		add(&rest, "Stderr", strings.TrimSpace(d.StderrTail))
 	}
 	if d.SessionID != "" {

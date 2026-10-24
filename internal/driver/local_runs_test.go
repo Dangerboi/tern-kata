@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
@@ -131,7 +132,7 @@ func localRunsPane(t *testing.T, status *model.WorkerStatus, runs ...model.Run) 
 
 func heldKataRun(uid string) model.Run {
 	r := finishedRun(uid)
-	r.Status, r.EndedAt, r.Message = model.RunUnknown, nil, ""
+	r.Status, r.EndedAt, r.Summary = cronjob.RunUnknown, nil, ""
 	return r
 }
 
@@ -180,7 +181,7 @@ func TestRunDetailShowsTheHeldReasonStepsAndTheOutputTail(t *testing.T) {
 func TestRunsPageFollowsARunningRunUntilItSettles(t *testing.T) {
 	running := model.LocalRun{UID: "R1", Project: "work", Job: "Triage", State: "running", Attempt: 1}
 	live := heldKataRun("R1")
-	live.Status = model.RunRunning
+	live.Status = cronjob.RunRunning
 	out := localRunsPane(t, servingWorker(running), live)
 	poll, ok := askedWorker(out.Cmds)
 	if !ok || poll.After <= 0 {
@@ -202,7 +203,7 @@ func TestRunsPageFollowsARunningRunUntilItSettles(t *testing.T) {
 	settled := running
 	settled.State = "succeeded"
 	finished := live
-	finished.Status = model.RunSucceeded
+	finished.Status = cronjob.RunSucceeded
 	s = step(t, next.State, model.RunsLoaded{Request: runsRequest(next.Cmds), Runs: []model.Run{finished}, Refresh: true}).State
 	done := step(t, s, model.WorkerLoaded{Request: nextRequest(next.Cmds), Running: true, Status: *servingWorker(settled)})
 	if _, ok := askedWorker(done.Cmds); ok {

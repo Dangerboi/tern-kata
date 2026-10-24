@@ -35,15 +35,6 @@ const (
 	PhaseSettled Phase = "settled"
 )
 
-// Status values of an Outcome, as kata records them.
-const (
-	StatusSucceeded = "succeeded"
-	StatusFailed    = "failed"
-	StatusCancelled = "cancelled"
-	// StatusUnknown is a held run's status (ADR-0005).
-	StatusUnknown = "unknown"
-)
-
 // Hold reasons the tracer can reach (ADR-0005). Later tickets add the rest.
 const (
 	HoldAdmissionRejected = "admission_rejected"
@@ -239,10 +230,10 @@ type ExitRecord struct {
 
 // Outcome is what the run ended as: Status and Summary go to kata, Hold is the reason of a held run.
 type Outcome struct {
-	Status  string    `json:"status"`
-	Summary string    `json:"summary"`
-	Hold    string    `json:"hold,omitempty"`
-	At      time.Time `json:"at"`
+	Status  cronjob.RunStatus `json:"status"`
+	Summary string            `json:"summary"`
+	Hold    string            `json:"hold,omitempty"`
+	At      time.Time         `json:"at"`
 	// Tokens come from omp's JSON output; nil when it reported none.
 	InputTokens  *int64 `json:"input_tokens,omitempty"`
 	OutputTokens *int64 `json:"output_tokens,omitempty"`

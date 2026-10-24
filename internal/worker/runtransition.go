@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"slices"
 	"time"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // The Run lifecycle's transitions (ADR-0005, ADR-0006): the only code that writes a Journal's Phase or its Outcome.
@@ -41,7 +43,7 @@ func (j *Journal) hold(reason, detail string, at time.Time) error {
 	if err := j.needs("be held", inFlight...); err != nil {
 		return err
 	}
-	j.Outcome = &Outcome{Status: StatusUnknown, Hold: reason, Summary: reason + ": " + detail, At: at}
+	j.Outcome = &Outcome{Status: cronjob.RunUnknown, Hold: reason, Summary: reason + ": " + detail, At: at}
 	j.Phase = PhaseFinished
 	return nil
 }
@@ -146,7 +148,7 @@ func (j *Journal) concludeCancel(at time.Time) error {
 	if j.Cancel == nil {
 		return errors.New("no cancel request is saved")
 	}
-	o := &Outcome{Status: StatusCancelled, Summary: fmt.Sprintf("abandoned by %s (was running)", j.Cancel.By), At: at}
+	o := &Outcome{Status: cronjob.RunCancelled, Summary: fmt.Sprintf("abandoned by %s (was running)", j.Cancel.By), At: at}
 	if j.Result != nil {
 		o.InputTokens, o.OutputTokens = j.Result.InputTokens, j.Result.OutputTokens
 	}
@@ -185,7 +187,7 @@ func (j *Journal) concludeStep(outcome *Outcome, at time.Time) error {
 	r.InputTokens, r.OutputTokens = addTokens(r.InputTokens, outcome.InputTokens), addTokens(r.OutputTokens, outcome.OutputTokens)
 	timedOut := j.Exit != nil && j.Exit.TimedOut
 	switch {
-	case outcome.Status == StatusSucceeded:
+	case outcome.Status == cronjob.RunSucceeded:
 		r.State, r.LastFailure = StepSucceeded, ""
 	case timedOut:
 		// The expiry is the run's, shared by all steps and retries: nothing else would get time to run.
@@ -211,10 +213,10 @@ func (j *Journal) finishWorkflow(at time.Time) error {
 	if err := j.needs("finish a workflow", PhaseAdmitted); err != nil {
 		return err
 	}
-	status := StatusSucceeded
+	status := cronjob.RunSucceeded
 	for _, r := range j.Steps {
 		if r.State == StepFailed {
-			status = StatusFailed
+			status = cronjob.RunFailed
 		}
 	}
 	o := &Outcome{Status: status, Summary: truncate(workflowSummary(j, status), maxSummaryBytes), At: at}
@@ -235,8 +237,8 @@ func (j *Journal) timeOutWorkflow(at time.Time) error {
 		}
 	}
 	reason := fmt.Sprintf("timed out after %s", time.Duration(j.TimeoutSeconds)*time.Second)
-	o := &Outcome{Status: StatusFailed, At: at}
-	o.Summary = truncate(reason+"\n\n"+workflowSummary(j, StatusFailed), maxSummaryBytes)
+	o := &Outcome{Status: cronjob.RunFailed, At: at}
+	o.Summary = truncate(reason+"\n\n"+workflowSummary(j, cronjob.RunFailed), maxSummaryBytes)
 	o.InputTokens, o.OutputTokens = sumStepTokens(j.Steps)
 	j.Outcome, j.Phase = o, PhaseFinished
 	return nil
@@ -282,7 +284,7 @@ func (l lifecycle) abandon(j *Journal, by string, at time.Time) error {
 	}
 	beforeAdmission := j.holdClass() == holdBeforeAdmission
 	held := j.Outcome
-	j.Outcome = &Outcome{Status: StatusCancelled, Summary: fmt.Sprintf("abandoned by %s (was held: %s)", by, held.Summary), At: at}
+	j.Outcome = &Outcome{Status: cronjob.RunCancelled, Summary: fmt.Sprintf("abandoned by %s (was held: %s)", by, held.Summary), At: at}
 	j.Intents = nil
 	j.Phase = PhaseFinished
 	if beforeAdmission {

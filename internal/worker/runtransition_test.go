@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // The table below pins every transition of the Run lifecycle from every Phase: a legal one produces the expected
@@ -32,7 +34,7 @@ func TestTransitionsFromEveryPhase(t *testing.T) {
 	}{
 		{name: "hold", legal: inFlight, do: func(j *Journal) error { return j.hold(HoldInterrupted, "why", at) }, want: PhaseFinished,
 			check: func(t *testing.T, j *Journal) {
-				if j.Outcome.Status != StatusUnknown || j.Outcome.Hold != HoldInterrupted || j.Outcome.Summary != HoldInterrupted+": why" || !j.Outcome.At.Equal(at) {
+				if j.Outcome.Status != cronjob.RunUnknown || j.Outcome.Hold != HoldInterrupted || j.Outcome.Summary != HoldInterrupted+": why" || !j.Outcome.At.Equal(at) {
 					t.Errorf("outcome = %+v", j.Outcome)
 				}
 			}},
@@ -72,21 +74,21 @@ func TestTransitionsFromEveryPhase(t *testing.T) {
 					t.Errorf("exit = %+v result = %+v", j.Exit, j.Result)
 				}
 			}},
-		{name: "finish", legal: inFlight, do: func(j *Journal) error { return j.finish(&Outcome{Status: StatusSucceeded, Summary: "done"}, at) }, want: PhaseFinished,
+		{name: "finish", legal: inFlight, do: func(j *Journal) error { return j.finish(&Outcome{Status: cronjob.RunSucceeded, Summary: "done"}, at) }, want: PhaseFinished,
 			check: func(t *testing.T, j *Journal) {
-				if j.Outcome.Status != StatusSucceeded || !j.Outcome.At.Equal(at) {
+				if j.Outcome.Status != cronjob.RunSucceeded || !j.Outcome.At.Equal(at) {
 					t.Errorf("outcome = %+v", j.Outcome)
 				}
 			}},
-		{name: "settle", legal: []Phase{PhaseFinished}, edit: []func(*Journal){ended(StatusSucceeded)}, do: func(j *Journal) error { return j.settle() }, want: PhaseSettled},
+		{name: "settle", legal: []Phase{PhaseFinished}, edit: []func(*Journal){ended(cronjob.RunSucceeded)}, do: func(j *Journal) error { return j.settle() }, want: PhaseSettled},
 		{name: "concludeCancel", legal: []Phase{PhaseAdmitted, PhaseStarted}, edit: []func(*Journal){cancelled}, do: func(j *Journal) error { return j.concludeCancel(at) }, want: PhaseFinished,
 			check: func(t *testing.T, j *Journal) {
-				if j.Outcome.Status != StatusCancelled || j.Outcome.Summary != "abandoned by ann (was running)" {
+				if j.Outcome.Status != cronjob.RunCancelled || j.Outcome.Summary != "abandoned by ann (was running)" {
 					t.Errorf("outcome = %+v", j.Outcome)
 				}
 			}},
 		{name: "concludeStep", legal: inFlight, edit: []func(*Journal){step}, do: func(j *Journal) error {
-			return j.concludeStep(&Outcome{Status: StatusSucceeded, Summary: "ok"}, at)
+			return j.concludeStep(&Outcome{Status: cronjob.RunSucceeded, Summary: "ok"}, at)
 		}, want: PhaseAdmitted,
 			check: func(t *testing.T, j *Journal) {
 				if j.Steps[0].State != StepSucceeded || j.Steps[0].Summary != "ok" {
@@ -99,7 +101,7 @@ func TestTransitionsFromEveryPhase(t *testing.T) {
 			j.Workflow.Name = "w"
 		}}, do: func(j *Journal) error { return j.finishWorkflow(at) }, want: PhaseFinished,
 			check: func(t *testing.T, j *Journal) {
-				if j.Outcome.Status != StatusSucceeded {
+				if j.Outcome.Status != cronjob.RunSucceeded {
 					t.Errorf("outcome = %+v", j.Outcome)
 				}
 			}},
@@ -110,7 +112,7 @@ func TestTransitionsFromEveryPhase(t *testing.T) {
 			j.TimeoutSeconds = 60
 		}}, do: func(j *Journal) error { return j.timeOutWorkflow(at) }, want: PhaseFinished,
 			check: func(t *testing.T, j *Journal) {
-				if j.Outcome.Status != StatusFailed || j.Steps[0].State != StepSkipped {
+				if j.Outcome.Status != cronjob.RunFailed || j.Steps[0].State != StepSkipped {
 					t.Errorf("outcome = %+v steps = %+v", j.Outcome, j.Steps)
 				}
 			}},
@@ -228,14 +230,14 @@ func TestAbandonFromEveryPhase(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || j.Phase != PhaseFinished || j.Outcome.Status != StatusCancelled || j.Outcome.Summary != "abandoned by ann (was held: interrupted: why)" {
+			if err != nil || j.Phase != PhaseFinished || j.Outcome.Status != cronjob.RunCancelled || j.Outcome.Summary != "abandoned by ann (was held: interrupted: why)" {
 				t.Fatalf("err = %v, journal = %+v outcome = %+v", err, *j, j.Outcome)
 			}
 		})
 	}
 	t.Run("held before admission settles at once", func(t *testing.T) {
 		j := journalAt(PhaseSettled, HoldCreateRejected)
-		if err := life.abandon(j, "ann", at); err != nil || j.Phase != PhaseSettled || j.Outcome.Status != StatusCancelled {
+		if err := life.abandon(j, "ann", at); err != nil || j.Phase != PhaseSettled || j.Outcome.Status != cronjob.RunCancelled {
 			t.Fatalf("err = %v, journal = %+v", err, *j)
 		}
 	})

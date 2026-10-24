@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // RunTransition is what a resume or an abandon answers once the run's journal records it.
@@ -196,11 +198,11 @@ func (w *Worker) reopen(ctx context.Context, ps *projectState, j *Journal) error
 	if err != nil {
 		return err
 	}
-	if !(stored.Status == StatusRunning && stored.Summary == msg) {
-		stored, _, err = w.opt.Kata.Observe(ctx, j.ProjectID, w.observation(j, StatusRunning, msg, stored.Revision))
+	if !(stored.Status == cronjob.RunRunning && stored.Summary == msg) {
+		stored, _, err = w.opt.Kata.Observe(ctx, j.ProjectID, w.observation(j, cronjob.RunRunning, msg, stored.Revision))
 		if errors.Is(err, ErrConflict) {
 			current, serr := w.opt.Kata.ShowRun(ctx, j.ProjectID, j.RunUID)
-			if serr != nil || current.Status != StatusRunning || current.Summary != msg {
+			if serr != nil || current.Status != cronjob.RunRunning || current.Summary != msg {
 				return err
 			}
 			stored, err = current, nil
