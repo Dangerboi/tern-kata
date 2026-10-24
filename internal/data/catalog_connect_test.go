@@ -156,3 +156,57 @@ func writeCredential(t *testing.T, path, content string) {
 		t.Fatal(err)
 	}
 }
+
+func TestALocalCatalogEntryReadsAConfiguredTokenFileAsStrictlyAsKataDoes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stub kata is a shell script, and kata checks Windows files differently")
+	}
+	entry := CatalogEntry{Name: "mine", Local: true}
+	for name, c := range map[string]struct {
+		file    func(dir string) string
+		mode    os.FileMode
+		content string
+		want    string
+	}{
+		"a private file":        {func(d string) string { return filepath.Join(d, "token") }, 0o600, "s3cret\n", ""},
+		"a relative path":       {func(string) string { return "token" }, 0o600, "s3cret\n", "must use an absolute path or ~/ path"},
+		"a group-readable file": {func(d string) string { return filepath.Join(d, "token") }, 0o640, "s3cret\n", "group/world-readable; use chmod 600"},
+		"an empty file":         {func(d string) string { return filepath.Join(d, "token") }, 0o600, "\n", "credential file is empty"},
+		"a missing file":        {func(d string) string { return filepath.Join(d, "none") }, 0o600, "", "cannot read credential file"},
+		"a directory":           {func(d string) string { return d }, 0o600, "", "not a readable regular file"},
+	} {
+		for _, viaEnv := range []bool{false, true} {
+			home, dir := t.TempDir(), t.TempDir()
+			t.Setenv("KATA_HOME", home)
+			t.Setenv("KATA_SERVER", "")
+			t.Setenv("KATA_AUTH_TOKEN", "")
+			t.Setenv("KATA_AUTH_TOKEN_FILE", "")
+			path := c.file(dir)
+			if c.content != "" {
+				if err := os.WriteFile(filepath.Join(dir, "token"), []byte(c.content), c.mode); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Chmod(filepath.Join(dir, "token"), c.mode); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if viaEnv {
+				t.Setenv("KATA_AUTH_TOKEN_FILE", path)
+			} else {
+				writeCredential(t, filepath.Join(home, "config.toml"), "[auth]\ntoken_file = \""+path+"\"\n")
+			}
+			protected := startTokenKata(t, "s3cret")
+			installStubKata(t, protected.URL, false, "")
+			if c.want == "" {
+				if d := loadsProject(t, LocateEntry(entry)); d.Kind != model.DaemonLocal {
+					t.Errorf("%s: daemon %+v, want a local one", name, d)
+				}
+				continue
+			}
+			_, err := LocateEntry(entry)(context.Background(), "")
+			if err == nil || !strings.Contains(err.Error(), "selected credential is unavailable: file:"+path+": "+c.want) {
+				t.Errorf("%s (env %v): err = %v, want kata's refusal %q", name, viaEnv, err, c.want)
+			}
+		}
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -47,7 +48,7 @@ func LocateEntry(entry CatalogEntry) Locator {
 }
 
 // implicitLocalToken is the token kata's resolver uses for a local daemon whose entry carries none: KATA_AUTH_TOKEN, else the first of
-// [auth].token, token_file and token_env in <KATA_HOME>/config.toml, else the owner token in the entry's home (KATA_HOME without one),
+// [auth].token, token_file (KATA_AUTH_TOKEN_FILE overrides it) and token_env in <KATA_HOME>/config.toml, else the owner token in the entry's home (KATA_HOME without one),
 // which exists only when the daemon persists its auth (kata knows that from the daemon's runtime record, which is not read here: no file means none). It is empty when there is none.
 func implicitLocalToken(entry CatalogEntry) (string, error) {
 	if token := strings.TrimSpace(os.Getenv("KATA_AUTH_TOKEN")); token != "" {
@@ -76,8 +77,11 @@ func implicitLocalToken(entry CatalogEntry) (string, error) {
 	if token := strings.TrimSpace(f.Auth.Token); token != "" {
 		return token, nil
 	}
+	if file := strings.TrimSpace(os.Getenv("KATA_AUTH_TOKEN_FILE")); file != "" {
+		f.Auth.TokenFile = file
+	}
 	if file := strings.TrimSpace(f.Auth.TokenFile); file != "" {
-		return readTokenFile(entry.Name, file)
+		return readTokenFile(file, false)
 	}
 	if name := strings.TrimSpace(f.Auth.TokenEnv); name != "" {
 		token := strings.TrimSpace(os.Getenv(name))
@@ -89,19 +93,59 @@ func implicitLocalToken(entry CatalogEntry) (string, error) {
 	if entry.Home != "" {
 		home = entry.Home
 	}
-	return readTokenFile(entry.Name, filepath.Join(home, "auth-token"))
+	return readTokenFile(filepath.Join(home, "auth-token"), true)
 }
 
-// readTokenFile is the trimmed content of a credential file; a missing file holds no token.
-func readTokenFile(daemon, path string) (string, error) {
-	raw, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return "", nil
+// readTokenFile is the token in a credential file, checked as kata checks one: an absolute (or ~/) path, owned by the current user,
+// a regular file closed to group and others, at most 64 KiB, not empty. A failure is worded as kata words it. With optional set, a
+// file that does not exist holds no token.
+func readTokenFile(path string, optional bool) (string, error) {
+	if optional {
+		if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
 	}
+	fail := func(why string) (string, error) {
+		return "", fmt.Errorf("selected credential is unavailable: file:%s: %s", path, why)
+	}
+	resolved := path
+	if resolved == "~" || strings.HasPrefix(resolved, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fail("cannot resolve home")
+		}
+		resolved = filepath.Join(home, strings.TrimPrefix(strings.TrimPrefix(resolved, "~"), "/"))
+	}
+	if !filepath.IsAbs(resolved) {
+		return fail("must use an absolute path or ~/ path")
+	}
+	f, err := openCredentialFile(resolved)
 	if err != nil {
-		return "", fmt.Errorf("daemon %q: read token file: %w", daemon, err)
+		if errors.Is(err, errWrongOwner) {
+			return fail("must be owned by the daemon user")
+		}
+		return fail("cannot read credential file")
 	}
-	return strings.TrimSpace(string(raw)), nil
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return fail("not a readable regular file")
+	}
+	if !privateCredentialFile(info) {
+		return fail("group/world-readable; use chmod 600")
+	}
+	if info.Size() > 64<<10 {
+		return fail("exceeds 64 KiB")
+	}
+	data, err := io.ReadAll(io.LimitReader(f, 64<<10+1))
+	if err != nil || len(data) > 64<<10 {
+		return fail("cannot read credential file")
+	}
+	token := strings.TrimSpace(string(data))
+	if token == "" {
+		return fail("credential file is empty")
+	}
+	return token, nil
 }
 
 func locateLocalEntry(ctx context.Context, entry CatalogEntry, auth client.TargetAuth) (Target, error) {
