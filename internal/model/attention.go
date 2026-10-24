@@ -323,13 +323,32 @@ func openAttention(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	m = m.leavePage()
+	// A request that names a comment opens on its Comments tab with that comment under the cursor, the landing a Reply's
+	// reference to its parent comment uses: a comment that is gone leaves the cursor on the first comment.
+	var landing *jumpEntry
+	if request.Slot.Re != "" {
+		landing = &jumpEntry{tab: TabComments, row: rowID{RowComment, request.Slot.Re}, hasRow: true}
+	}
 	if m.SelectedUID == request.IssueUID {
-		return m.focusDetail(), nil
+		return m.landHere(landing).focusDetail(), nil
 	}
 	if target, listed := m.catalogProject(request.ProjectID); listed && !(m.Collection.IsProject() && m.Collection.ProjectUID == target.Project.UID) {
-		return m.crossJump(request.IssueUID, target, nil)
+		return m.crossJump(request.IssueUID, target, landing)
 	}
-	return m.jumpWithin(request.IssueUID, nil), nil
+	return m.jumpWithin(request.IssueUID, landing), nil
+}
+
+// landHere puts the cursor on a landing in the Issue already selected: at once when its detail is shown, else when it arrives.
+func (m Model) landHere(landing *jumpEntry) Model {
+	if landing == nil {
+		return m
+	}
+	landing.uid, m.landedOn = m.SelectedUID, m.SelectedUID
+	m.tab, m.landing = landing.tab, landing
+	if m.DetailIssueUID() == m.SelectedUID {
+		m = m.arrived(rowID{}, false)
+	}
+	return m
 }
 
 // catalogProject is the catalog's entry for the Project with id.

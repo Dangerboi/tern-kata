@@ -593,3 +593,97 @@ func TestThePageBarWithACountStillFitsTheWidthRules(t *testing.T) {
 		}
 	}
 }
+
+const namedComment = "01JABCDEFGHJKMNPQRSTVWXYZ0"
+
+// commentsOf are the comments of an Issue as its detail reads them.
+func commentsOf(uids ...string) []model.Comment {
+	comments := make([]model.Comment, len(uids))
+	for i, uid := range uids {
+		comments[i] = model.Comment{UID: uid, Author: "bob", CreatedAt: now.Add(time.Duration(i) * time.Minute), Body: "comment " + uid}
+	}
+	return comments
+}
+
+// detailRowKey is the key of the row under the Issue detail's cursor.
+func detailRowKey(m model.Model) string {
+	rows := m.DetailRows()
+	if i := m.DetailIndex(); i >= 0 && i < len(rows) {
+		return rows[i].Key
+	}
+	return ""
+}
+
+func attentionRequestsNaming(t *testing.T, project string, id int64, short, re string) []model.AttentionRequest {
+	return []model.AttentionRequest{attentionRequest(t, id, project, short, "Needs an answer", `{"from":"pip","message":"Which one?","re":"`+re+`"}`, 1)}
+}
+
+func TestEnterOnARequestNamingACommentOpensTheCommentsTabOnThatComment(t *testing.T) {
+	s := attentionPageWith(t, attentionRequestsNaming(t, "work", 7, "aa11", namedComment), 0)
+	out := step(t, s, key("enter"))
+	s = step(t, out.State, model.DetailLoaded{UID: "work-aa11", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "work-aa11"}, Comments: commentsOf("x1", namedComment, "x3")}}).State
+	m := s.Model
+	if m.Page != model.PageIssues || m.SelectedUID != "work-aa11" || m.Focus != model.ColumnDetail {
+		t.Fatalf("page %v selected %q focus %v", m.Page, m.SelectedUID, m.Focus)
+	}
+	if m.ActiveTab() != model.TabComments || detailRowKey(m) != namedComment {
+		t.Fatalf("tab %v row %q, want the Comments tab on %s", m.ActiveTab(), detailRowKey(m), namedComment)
+	}
+	// R replies to the comment under the cursor.
+	if draft, ok := step(t, s, key("shift+r")).State.Model.ActiveDraft(); !ok || draft.ReplyTo != namedComment {
+		t.Errorf("R starts a draft replying to %q (open %v), want %q", draft.ReplyTo, ok, namedComment)
+	}
+	// 6 returns with the state as it was.
+	back := step(t, s, key("6")).State.Model
+	if back.Page != model.PageAttention || back.Attention.Selected != "work-aa11" || len(back.Attention.Requests) != 1 {
+		t.Errorf("6 gave page %v with %+v", back.Page, back.Attention)
+	}
+}
+
+func TestEnterOnARequestInTheIssueAlreadyShownLandsOnItsComment(t *testing.T) {
+	s := attentionPane(t)
+	s = step(t, s, model.DetailLoaded{UID: "work-aa11", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "work-aa11"}, Comments: commentsOf("x1", namedComment, "x3")}}).State
+	s = answerAttention(t, step(t, s, key("6")), attentionRequestsNaming(t, "work", 7, "aa11", namedComment), 0)
+	m := step(t, s, key("enter")).State.Model
+	if m.ActiveTab() != model.TabComments || detailRowKey(m) != namedComment || m.Focus != model.ColumnDetail {
+		t.Fatalf("tab %v row %q focus %v, want the named comment on the Comments tab", m.ActiveTab(), detailRowKey(m), m.Focus)
+	}
+}
+
+func TestEnterOnARequestInAnotherProjectLandsOnItsNamedComment(t *testing.T) {
+	s := attentionPageWith(t, attentionRequestsNaming(t, "other", 8, "bb22", namedComment), 0)
+	out := step(t, s, key("enter"))
+	s = step(t, out.State, model.DetailLoaded{UID: "other-bb22", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "other-bb22"}, Comments: commentsOf("y1", "y2", namedComment)}}).State
+	m := s.Model
+	if m.SelectedUID != "other-bb22" || m.Collection != model.ProjectCollection("p2", "other") {
+		t.Fatalf("selected %q in %+v", m.SelectedUID, m.Collection)
+	}
+	if m.ActiveTab() != model.TabComments || detailRowKey(m) != namedComment {
+		t.Fatalf("tab %v row %q, want the named comment", m.ActiveTab(), detailRowKey(m))
+	}
+}
+
+func TestEnterOnAReplyNoticeLandsOnTheReplyLeftForTheUser(t *testing.T) {
+	notice := attentionRequest(t, 7, "work", "aa11", "Answered", `{"from":"pip","message":"pip replied","kind":"reply","re":"`+namedComment+`"}`, 1)
+	s := attentionPageWith(t, []model.AttentionRequest{notice}, 0)
+	s = step(t, step(t, s, key("enter")).State, model.DetailLoaded{UID: "work-aa11", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "work-aa11"}, Comments: commentsOf(namedComment, "x2")}}).State
+	if m := s.Model; m.ActiveTab() != model.TabComments || detailRowKey(m) != namedComment {
+		t.Fatalf("tab %v row %q, want the reply", m.ActiveTab(), detailRowKey(m))
+	}
+}
+
+func TestEnterOnARequestNamingAMissingCommentLandsOnTheFirstComment(t *testing.T) {
+	s := attentionPageWith(t, attentionRequestsNaming(t, "work", 7, "aa11", namedComment), 0)
+	s = step(t, step(t, s, key("enter")).State, model.DetailLoaded{UID: "work-aa11", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "work-aa11"}, Comments: commentsOf("x1", "x2")}}).State
+	if m := s.Model; m.ActiveTab() != model.TabComments || detailRowKey(m) != "x1" {
+		t.Fatalf("tab %v row %q, want the first comment", m.ActiveTab(), detailRowKey(m))
+	}
+}
+
+func TestEnterOnARequestWithNoCommentKeepsTheTabTheDetailWasOn(t *testing.T) {
+	s := attentionPageWith(t, attentionRequests(t)[:1], 0)
+	before := s.Model.ActiveTab()
+	if m := step(t, s, key("enter")).State.Model; m.ActiveTab() != before {
+		t.Errorf("a request without a comment moved the detail from the %v tab to %v", before, m.ActiveTab())
+	}
+}

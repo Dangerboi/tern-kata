@@ -193,3 +193,40 @@ func TestClearAttentionOfAnUnknownIssueAnswersWithTheDaemonsError(t *testing.T) 
 		t.Fatalf("clear: %+v, want an error", got)
 	}
 }
+
+func TestATypedReplyToTheCommentARequestNamesRemovesItFromTheNextRead(t *testing.T) {
+	f := newAttentionFixture(t)
+	uid := createIssue(t, f.gateway, f.work, f.workP, "Discuss")
+	other := createIssue(t, f.gateway, f.work, f.workP, "Elsewhere")
+	detail := func() *model.IssueDetailData {
+		return as[model.DetailLoaded](t, run(t, f.gateway, model.LoadDetail{Workspace: f.work, UID: uid})).Selected
+	}
+	draft := func(actor, text, replyTo string, kind model.ReplyKind) {
+		t.Helper()
+		as[model.DraftSaved](t, run(t, f.gateway, model.SaveDraft{Workspace: f.work, UID: uid, ProjectID: f.workP.ID, BaseText: detail().Issue.Body, Text: text, Comment: true, Actor: actor, ReplyTo: replyTo, ReplyKind: kind}))
+	}
+	draft("asker", "which one should I pick?", "", model.ReplyPlain)
+	question := detail().Comments[0]
+	f.put(t, f.workP, uid, "answerer", map[string]any{"from": "asker", "message": "please answer the question", "re": question.UID})
+	f.put(t, f.workP, other, "answerer", map[string]any{"from": "asker", "message": "a request on another Issue"})
+
+	before := f.read(t, "answerer")
+	if len(before.Requests) != 2 {
+		t.Fatalf("requests before the reply: %+v", before.Requests)
+	}
+	var named model.AttentionRequest
+	for _, r := range before.Requests {
+		if r.IssueUID == uid {
+			named = r
+		}
+	}
+	if named.Slot.Re != question.UID {
+		t.Fatalf("the read request names %q, want the comment %q", named.Slot.Re, question.UID)
+	}
+
+	draft("answerer", "pick the second one", question.UID, model.ReplyConfirm)
+	after := f.read(t, "answerer").Requests
+	if len(after) != 1 || after[0].IssueUID != other {
+		t.Fatalf("requests after the reply: %+v, want only the request on the other Issue", after)
+	}
+}

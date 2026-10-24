@@ -29,6 +29,22 @@ if kata --workspace "$at_dir" inbox --for smoke-attention --all | grep -q "Smoke
   return 1
 fi
 expect_tree "$at_bar" '.ok and (.nodes[0].text | contains("Attention") and (contains("Attention 1") | not))'
+# A request naming a comment opens the Issue on that comment, so R answers it and the answer clears the request.
+at_comment=$(kata --as smoke-asker --workspace "$at_dir" comment "$at_short" -m "Which option do you pick?" --json | jq -r '.comment.uid')
+at_handle=$(kata --workspace "$at_dir" show "$at_short" --json | jq -r --arg uid "$at_comment" '.comments[] | select(.uid == $uid) | .handle')
+kata --as smoke-asker --workspace "$at_dir" notify "$at_short" --to smoke-attention --re "$at_handle" --message "Answer this comment" --json >/dev/null
+expect_tree "[data-id='main.columns.list.attention.$at_issue']" '.ok and .count == 1 and (.nodes[0].text | contains("Answer this comment") and contains("c:"))'
+expect_tree "$at_bar" '.ok and (.nodes[0].text | contains("Attention 1"))'
+ctl key enter
+expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Which option do you pick?")))'
+ctl key R
+expect_tree "[data-id='layer.editor.input']" '.ok and .count == 1'
+ctl type '"I pick the second option"'
+ctl key Ctrl+o
+expect_tree "[data-id='layer.editor']" '.ok and .count == 0'
+ctl key 6
+expect_tree "[data-id='main.columns.list.attention.$at_issue']" '.ok and .count == 0'
+expect_tree "$at_bar" '.ok and (.nodes[0].text | contains("Attention") and (contains("Attention 1") | not))'
 ctl key 1
 quit_app
 ctl --file "$tmp/launch.ctl"
