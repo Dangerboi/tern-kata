@@ -24,7 +24,7 @@ tern-kata detach <ref> <name> [--as <actor>]      # clears the pointer, deletes 
 
 - Attach the evidence behind a bug report, a finding or a close, then cite the printed path in the comment or close message.
 - Run from a checkout of the Issue's own Project; linked worktrees share the primary checkout's store. Anywhere else is refused, and the message names the Project to work from. Closed Issues take attachments.
-- `<ref>` is a short id in this checkout's Project, `<project>#<short id>`, or a ULID. `--as` defaults to `$KATA_AUTHOR`, `$USER`, then `git config user.name`.
+- `<ref>` is a short id in this checkout's Project, `<project>#<short id>`, or a ULID. `--as` defaults to `$KATA_AUTHOR`, `$USER`, then `git config user.name`; an empty `--as` (`--as=` or `--as ""`) is refused with "--as must be non-empty", so never pass `--as "$VAR"` with a variable that may be unset.
 - A name the Issue already uses is stored as `<stem>-2<ext>`, then `-3`: cite the printed path, not the original name. `attach` stops at the first failing file and keeps those already attached; any failure exits non-zero with the reason on stderr.
 - The file must be on this machine. With a Windows Tern window and a Linux session host, a file on the Windows side has to be copied over first.
 - Change attachments only through these two commands, which keep the copy and its pointer together (`kata meta unset` would strand the copy).

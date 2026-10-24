@@ -112,18 +112,23 @@ func PlanLaunch(args []string, lookup func(string) (string, bool), version strin
 }
 
 // parseAs reads --as <actor> or --as=<actor> at args[*i], moving *i past a separate value; matched is false for any other argument.
+// An explicitly empty actor is refused.
 func parseAs(args []string, i *int) (actor string, matched bool, err error) {
-	if value, ok := strings.CutPrefix(args[*i], "--as="); ok {
-		return value, true, nil
+	value, ok := strings.CutPrefix(args[*i], "--as=")
+	if !ok {
+		if args[*i] != "--as" {
+			return "", false, nil
+		}
+		*i++
+		if *i == len(args) || strings.HasPrefix(args[*i], "--") {
+			return "", true, fmt.Errorf("--as requires an actor")
+		}
+		value = args[*i]
 	}
-	if args[*i] != "--as" {
-		return "", false, nil
+	if value == "" {
+		return "", true, fmt.Errorf("--as must be non-empty")
 	}
-	*i++
-	if *i == len(args) || strings.HasPrefix(args[*i], "--") {
-		return "", true, fmt.Errorf("--as requires an actor")
-	}
-	return args[*i], true, nil
+	return value, true, nil
 }
 
 // resolveActor is flag, else the first set of KATA_AUTHOR, USER and the gitUserNameKey lookup, else "anonymous".
@@ -309,8 +314,8 @@ Usage:
 
 Flags:
   --issue <project>/<short_id>  open this Issue first
-  --as <actor>                  author for edits (default: $KATA_AUTHOR, $USER,
-                                git config user.name, then "anonymous")
+  --as <actor>                  author for edits; an empty value is refused (default:
+                                $KATA_AUTHOR, $USER, git config user.name, then "anonymous")
   --version                     print the version and exit
   -h, --help                    print this help and exit
 
