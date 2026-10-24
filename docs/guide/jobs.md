@@ -186,4 +186,4 @@ When that count is above zero the card names it, job by job (a parent can have s
 | `l` | **switch to latest and resume** ("restore" or "reopen" for those keys): first replaces the job's catch-up with `latest` as a Guarded write, then goes on |
 | `esc` | **cancel**: changes nothing |
 
-A job that catches up with `latest` or `skip`, one with nothing missed and one that would stay paused for another reason (the parent is still closed, the job disabled) ask nothing. `r` reads the parent's jobs afresh first, since its progress stopped when it closed. A job changed meanwhile is not written; the list shows it and a Notice says so. tern-kata offers no Issue restore, so for a parent only reopening applies.
+A job that catches up with `latest` or `skip`, one with nothing missed and one that would stay paused for another reason (the parent is still closed, the job disabled) ask nothing. `r` reads the parent's jobs afresh first, since its progress stopped when it closed. A job changed meanwhile is not written; the list shows it and a Notice says so. Restoring a deleted parent from the Menu asks no Backfill; only reopening a closed parent does.

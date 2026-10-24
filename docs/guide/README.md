@@ -14,6 +14,6 @@ Back to the [overview](../../README.md).
 | [Recurring Issues](recur.md) | The Recurrence card and `tern-kata recur` |
 | [Dates](dates.md) | The Dates card |
 | [Agents](agents.md) | Clickable ticket links and the agent skills |
-| [Compared with `kata tui`](kata-tui.md) | Shared and missing keys |
+| [Compared with `kata tui`](kata-tui.md) | Shared keys, undo, quit, aliases and the keys kata tui lacks |
 | [FAQ and known issues](faq.md) | Known issues and common questions |
 | [Development](development.md) | Building, testing, releasing, type-checking |
