@@ -1,0 +1,144 @@
+package data
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/Dangerboi/tern-kata/internal/model"
+	g "go.kenn.io/kata/pkg/client/generated"
+)
+
+// attentionFixture is an in-process daemon with two Projects, each bound to its own workspace.
+type attentionFixture struct {
+	kata    *kataServer
+	gateway *Gateway
+	work    string
+	other   string
+	workP   model.Project
+	otherP  model.Project
+}
+
+func newAttentionFixture(t *testing.T) attentionFixture {
+	t.Helper()
+	kata := startKata(t, "0.20.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	work, workP := project(t, gateway, "work")
+	other, otherP := project(t, gateway, "other")
+	return attentionFixture{kata, gateway, work, other, workP, otherP}
+}
+
+// put writes value under the notification slot of address on an Issue.
+func (f attentionFixture) put(t *testing.T, project model.Project, uid, address string, value any) {
+	t.Helper()
+	_, err := f.kata.target().Client.PatchIssueMetadataWithResponse(context.Background(), &g.PatchIssueMetadataRequestOptions{
+		PathParams: &g.PatchIssueMetadataPath{ProjectID: project.ID, Ref: uid},
+		Body:       &g.PatchIssueMetadataBody{Actor: new("tester"), Patch: map[string]any{model.NotificationKey(address): value}},
+	})
+	if err != nil {
+		t.Fatalf("writing the slot of %s: %v", address, err)
+	}
+}
+
+func (f attentionFixture) read(t *testing.T, address string) model.AttentionLoaded {
+	t.Helper()
+	return as[model.AttentionLoaded](t, run(t, f.gateway, model.LoadAttention{Workspace: f.work, Address: address, Request: 5}))
+}
+
+func TestLoadAttentionReturnsOnlyOpenIssuesHoldingTheAddressesSlotAcrossProjects(t *testing.T) {
+	f := newAttentionFixture(t)
+	ours := createIssue(t, f.gateway, f.work, f.workP, "Ours")
+	theirs := createIssue(t, f.gateway, f.other, f.otherP, "Theirs")
+	closed := createIssue(t, f.gateway, f.work, f.workP, "Closed")
+	someoneElses := createIssue(t, f.gateway, f.work, f.workP, "For someone else")
+	createIssue(t, f.gateway, f.other, f.otherP, "No slot")
+	f.put(t, f.workP, ours, "dana", map[string]any{"from": "bob", "message": "look at this\nsecond line"})
+	f.put(t, f.otherP, theirs, "dana", map[string]any{"from": "pip", "teammate": "scout", "message": "reply please", "re": "01JABCDEFGHJKMNPQRSTVWXYZ0", "broadcast": true})
+	f.put(t, f.workP, closed, "dana", map[string]any{"from": "bob", "message": "stale"})
+	f.put(t, f.workP, someoneElses, "erin", map[string]any{"from": "bob", "message": "not for dana"})
+	if done := as[model.CloseResultMsg](t, run(t, f.gateway, model.CloseIssueCmd{Workspace: f.work, UID: closed, ProjectID: f.workP.ID, Actor: "tester", Quick: true, Key: "k-attention-closed"})); done.Err != nil {
+		t.Fatal(done.Err)
+	}
+
+	got := f.read(t, "dana")
+	if got.Err != nil || got.Request != 5 || got.Skipped != 0 || len(got.Requests) != 2 {
+		t.Fatalf("answer %+v, want two requests of two Projects and the request number echoed", got)
+	}
+	byUID := map[string]model.AttentionRequest{}
+	for _, r := range got.Requests {
+		byUID[r.IssueUID] = r
+	}
+	a, b := byUID[ours], byUID[theirs]
+	if a.ProjectName != "work" || a.ProjectID != f.workP.ID || a.Title != "Ours" || a.ShortID == "" || a.Updated.IsZero() ||
+		a.Slot.From != "bob" || a.Slot.Message != "look at this\nsecond line" || a.Slot.Address != "dana" || !strings.Contains(a.Slot.Raw, `"look at this`) {
+		t.Errorf("work request %+v", a)
+	}
+	if b.ProjectName != "other" || b.ProjectID != f.otherP.ID || b.Sender() != "pip/scout" || !b.Slot.Broadcast || b.CommentHandle() != "c:vwxyz0" {
+		t.Errorf("other request %+v", b)
+	}
+	if got.Requests[0].IssueUID != theirs {
+		t.Errorf("the Issue written last is not first: %v then %v", got.Requests[0].QualifiedID(), got.Requests[1].QualifiedID())
+	}
+	if none := f.read(t, "nobody"); none.Err != nil || len(none.Requests) != 0 || none.Skipped != 0 {
+		t.Errorf("an address with no slot: %+v", none)
+	}
+}
+
+func TestLoadAttentionCountsASlotThatDoesNotReadAsSkipped(t *testing.T) {
+	f := newAttentionFixture(t)
+	good := createIssue(t, f.gateway, f.work, f.workP, "Good")
+	noSender := createIssue(t, f.gateway, f.other, f.otherP, "No sender")
+	notObject := createIssue(t, f.gateway, f.other, f.otherP, "Not an object")
+	f.put(t, f.workP, good, "dana", map[string]any{"from": "bob", "message": "fine", "kind": 3})
+	f.put(t, f.otherP, noSender, "dana", map[string]any{"message": "who sent this"})
+	f.put(t, f.otherP, notObject, "dana", "just text")
+
+	got := f.read(t, "dana")
+	if got.Err != nil || got.Skipped != 2 || len(got.Requests) != 1 || got.Requests[0].IssueUID != good {
+		t.Fatalf("answer %+v, want the good request and two skipped", got)
+	}
+	if got.Requests[0].Tag() != "request" {
+		t.Errorf("a malformed optional field kept in the tag: %q", got.Requests[0].Tag())
+	}
+}
+
+func TestLoadAttentionOrdersNewestIssueUpdateFirst(t *testing.T) {
+	f := newAttentionFixture(t)
+	first := createIssue(t, f.gateway, f.work, f.workP, "First")
+	second := createIssue(t, f.gateway, f.other, f.otherP, "Second")
+	f.put(t, f.workP, first, "dana", map[string]any{"from": "bob", "message": "one"})
+	f.put(t, f.otherP, second, "dana", map[string]any{"from": "bob", "message": "two"})
+	if got := f.read(t, "dana"); len(got.Requests) != 2 || got.Requests[0].IssueUID != second {
+		t.Fatalf("order %+v, want the later write first", got.Requests)
+	}
+	// Rewriting the older request moves its Issue's update time, so it comes first.
+	f.put(t, f.workP, first, "dana", map[string]any{"from": "bob", "message": "one again"})
+	if got := f.read(t, "dana"); len(got.Requests) != 2 || got.Requests[0].IssueUID != first {
+		t.Fatalf("order %+v, want the rewritten request first", got.Requests)
+	}
+}
+
+func TestLoadAttentionFailureCarriesTheRequestNumberAndTheDaemonsMessage(t *testing.T) {
+	failing := serve(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"status":500,"error":{"code":"internal","message":"the daemon hiccuped"}}`))
+	}), "0.20.0")
+	gateway := newGateway(t, newLocator(failing.target()))
+	got := as[model.AttentionLoaded](t, run(t, gateway, model.LoadAttention{Workspace: t.TempDir(), Address: "dana", Request: 9}))
+	if got.Request != 9 || got.Err == nil || got.Err.Error() != "the daemon hiccuped" || len(got.Requests) != 0 {
+		t.Fatalf("answer %+v, want request 9 failing with the daemon's message", got)
+	}
+}
+
+func TestLoadAttentionWithNoDaemonAnswersWithTheRequestNumberAndTheError(t *testing.T) {
+	boom := errors.New("boom")
+	l := newLocator(Target{})
+	l.err.Store(&boom)
+	if got := run(t, newGateway(t, l), model.LoadAttention{Request: 4}); !reflect.DeepEqual(got, model.AttentionLoaded{Request: 4, Err: boom}) {
+		t.Fatalf("got %#v", got)
+	}
+}

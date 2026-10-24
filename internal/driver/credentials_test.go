@@ -99,11 +99,11 @@ func TestMenuListsTheLetteredPageAndFiltersIt(t *testing.T) {
 
 func TestPageBarDrawsAnLetteredPageOnlyWhileItIsShown(t *testing.T) {
 	s := projectPane(t, 160, boardCard("a"))
-	if pageBarDrawn(t, s.Model, "C") || len(s.Model.PageBar()) != 5 {
+	if pageBarDrawn(t, s.Model, "C") || len(s.Model.PageBar()) != 6 {
 		t.Fatalf("the Page bar on the Issues Page has %d entries and draws C: %v", len(s.Model.PageBar()), pageBarDrawn(t, s.Model, "C"))
 	}
 	on := credentialsOpened(t, s).State
-	if len(on.Model.PageBar()) != 6 || !pageBarDrawn(t, on.Model, "C") {
+	if len(on.Model.PageBar()) != 7 || !pageBarDrawn(t, on.Model, "C") {
 		t.Fatalf("the Credentials Page's Page bar has %d entries, draws C %v", len(on.Model.PageBar()), pageBarDrawn(t, on.Model, "C"))
 	}
 	back := step(t, on, key("escape")).State

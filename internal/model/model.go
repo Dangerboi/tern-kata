@@ -67,6 +67,8 @@ type Model struct {
 	// time, as the runs a job missed, counts against this.
 	Now   time.Time
 	Actor string
+	// InboxUser is KATA_INBOX_USER as read at launch: the Inbox address when not blank, else the actor is.
+	InboxUser string
 	// Host is this machine's host name, which tells an Attachment held here from one held elsewhere.
 	Host      string
 	FieldForm FieldFormState
@@ -121,6 +123,8 @@ type Model struct {
 	// Worker is what the Pane knows of this machine's worker: whether it runs, what it serves and the local state of its runs.
 	Worker    WorkerState
 	Workflows WorkflowsState
+	// Attention is the Attention Page's state, which no Project or Collection change resets.
+	Attention AttentionState
 	// Moving is the Issue whose Move is in flight; further Moves wait for its result.
 	Moving string
 	// nonce is the random per-run prefix of every idempotency key and keys counts the keys minted.
