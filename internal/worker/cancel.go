@@ -36,31 +36,11 @@ func (w *Worker) dropCancelSignal(uid string) {
 	w.mu.Unlock()
 }
 
-// cancelRefusal is why a run that is not held cannot be cancelled now, empty when it can: it is admitted or running
-// with its process not yet reported over, and nobody asked yet.
-func cancelRefusal(j *Journal) string {
-	switch {
-	case j.Cancel != nil:
-		return fmt.Sprintf("%s already asked to cancel it", j.Cancel.By)
-	case j.Outcome != nil || j.Phase == PhaseFinished || j.Phase == PhaseSettled:
-		return "it is " + runStatus(j).State + ", not held"
-	case j.Notify != nil:
-		return "its notification is being sent and it ends in a moment"
-	case j.Phase == PhasePrepared:
-		return "it is still being admitted; try again in a moment"
-	case j.Phase == PhaseResuming:
-		return "its resume is still being confirmed; try again in a moment"
-	case j.Exit != nil:
-		return "its process has already ended and its outcome is being decided"
-	}
-	return ""
-}
-
 // cancelRunning asks a running run to stop (ADR-0008 "Cancellation"): the request is saved first, then the process
 // group gets SIGTERM and SIGKILL after 10 s, and the run ends `cancelled` once the group is proven gone.
 func (w *Worker) cancelRunning(ps *projectState, uid, by string) (*Journal, error) {
 	updated, err := w.store.Update(uid, "cancel-requested", func(j *Journal) error {
-		if reason := cancelRefusal(j); reason != "" {
+		if reason := j.mayCancel(); reason != "" {
 			return fmt.Errorf("run %s cannot be abandoned: %s", uid, reason)
 		}
 		j.Cancel = &CancelRecord{By: by, At: w.clock.Now().UTC()}

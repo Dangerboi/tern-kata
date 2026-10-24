@@ -23,26 +23,8 @@ func (m Model) CurrentMode() Mode {
 	if m.Err != nil {
 		return ModeError
 	}
-	if m.OnJobs() {
-		if m.Focus == ColumnDetail {
-			return ModeJobInspector
-		}
-		return ModeJobs
-	}
-	if m.OnRuns() {
-		if m.Focus == ColumnDetail {
-			return ModeRunInspector
-		}
-		return ModeRuns
-	}
-	if m.BoardShown() {
-		return ModeBoard
-	}
-	if m.OnWorkflows() && m.Focus == ColumnList {
-		return ModeWorkflows
-	}
-	if m.LaneViewShown() && m.Focus != ColumnDetail {
-		return ModeLane
+	if mode := pageMode(m); mode != "" {
+		return mode
 	}
 	switch m.Focus {
 	case ColumnDetail:

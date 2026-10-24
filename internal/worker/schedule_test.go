@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
 )
@@ -44,7 +45,7 @@ func (h *harness) fire(r *running, prev time.Time) time.Time {
 }
 
 // jobRuns is what kata holds of the job's runs, oldest occurrence first.
-func (h *harness) jobRuns(job worker.Job) []worker.Run {
+func (h *harness) jobRuns(job cronjob.Job) []worker.Run {
 	h.t.Helper()
 	runs, err := h.kata.Kata.Runs(context.Background(), h.proj.ID)
 	if err != nil {
@@ -60,7 +61,7 @@ func (h *harness) jobRuns(job worker.Job) []worker.Run {
 	return out
 }
 
-func (h *harness) waitRuns(job worker.Job, n int) []worker.Run {
+func (h *harness) waitRuns(job cronjob.Job, n int) []worker.Run {
 	h.t.Helper()
 	var runs []worker.Run
 	h.eventually("kata to hold the runs of "+job.Name, func() bool {
@@ -82,7 +83,7 @@ func occurrenceKeys(runs []worker.Run) []string {
 }
 
 // quiet fails when more runs of the job than want exist after the worker had every chance to start them.
-func (h *harness) quiet(job worker.Job, want int) {
+func (h *harness) quiet(job cronjob.Job, want int) {
 	h.t.Helper()
 	time.Sleep(300 * time.Millisecond)
 	h.clock.Advance(time.Millisecond) // wakes anything still waiting on the clock
@@ -109,7 +110,7 @@ func (h *harness) scheduled(r *running, n int) {
 }
 
 // started waits for n agents of the job to be running.
-func (h *harness) started(r *running, job worker.Job, n int) {
+func (h *harness) started(r *running, job cronjob.Job, n int) {
 	h.t.Helper()
 	h.eventually("agents of the job to run", func() bool {
 		count := 0
@@ -123,8 +124,8 @@ func (h *harness) started(r *running, job worker.Job, n int) {
 	time.Sleep(100 * time.Millisecond) // the run's timeout timer is set just after its start is saved
 }
 
-func interval(seconds int64) worker.Trigger {
-	return worker.Trigger{Kind: "interval", IntervalSeconds: seconds}
+func interval(seconds int64) cronjob.Trigger {
+	return cronjob.Trigger{Kind: cronjob.TriggerInterval, IntervalSeconds: seconds}
 }
 
 func TestAnIntervalJobRunsAtEachOccurrenceAnchoredAtItsCreation(t *testing.T) {
@@ -159,8 +160,8 @@ func TestACronJobRunsInItsTriggerZoneAndEveryIsAnAnchoredInterval(t *testing.T) 
 	if err != nil {
 		t.Skip("no time zone data")
 	}
-	cron := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "morning", Prompt: "Do it.", Trigger: worker.Trigger{Kind: "cron", Cron: "0 9 * * *", Timezone: "Europe/Berlin"}})
-	every := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "every", Prompt: "Do it.", Trigger: worker.Trigger{Kind: "cron", Cron: "@every 2h"}})
+	cron := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "morning", Prompt: "Do it.", Trigger: cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 9 * * *", Timezone: "Europe/Berlin"}})
+	every := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "every", Prompt: "Do it.", Trigger: cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "@every 2h"}})
 	r := h.start(worker.Hooks{})
 	h.scheduled(r, 2)
 
@@ -199,7 +200,7 @@ func TestACronJobRunsInItsTriggerZoneAndEveryIsAnAnchoredInterval(t *testing.T) 
 func TestAOnceJobRunsOnceAndAManualJobOnlyOnRequest(t *testing.T) {
 	h := newHarness(t)
 	at := h.clock.Now().Add(90 * time.Minute).Truncate(time.Second)
-	once := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "once", Prompt: "Do it.", Trigger: worker.Trigger{Kind: "once", At: at.Format(time.RFC3339)}})
+	once := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "once", Prompt: "Do it.", Trigger: cronjob.Trigger{Kind: cronjob.TriggerOnce, At: at.Format(time.RFC3339)}})
 	manual := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "manual", Prompt: "Do it."})
 	r := h.start(worker.Hooks{})
 	h.scheduled(r, 1)

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
 )
@@ -22,7 +23,7 @@ func TestAnIssueScheduledJobRunsOncePerDateAtTheIssuesInstantAndMovesWithIt(t *t
 	issue := h.kata.Issue(t, h.proj, "Ship it")
 	first := h.minuteIn(time.Hour)
 	h.kata.SetIssueDate(t, h.proj, issue.UID, "scheduled_on", first)
-	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "on date", Prompt: "Do it.", ExistingUID: issue.UID, Trigger: worker.Trigger{Kind: "issue-scheduled", IssueUID: issue.UID}})
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "on date", Prompt: "Do it.", ExistingUID: issue.UID, Trigger: cronjob.Trigger{Kind: cronjob.TriggerIssueScheduled, IssueUID: issue.UID}})
 	r := h.start(worker.Hooks{})
 	h.scheduled(r, 1)
 
@@ -58,7 +59,7 @@ func TestAChangedDateBeforeItFiresReplacesTheOldInstant(t *testing.T) {
 	issue := h.kata.Issue(t, h.proj, "Moved")
 	old := h.minuteIn(time.Hour)
 	h.kata.SetIssueDate(t, h.proj, issue.UID, "scheduled_on", old)
-	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "on date", Prompt: "Do it.", ExistingUID: issue.UID, Trigger: worker.Trigger{Kind: "issue-scheduled", IssueUID: issue.UID}})
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "on date", Prompt: "Do it.", ExistingUID: issue.UID, Trigger: cronjob.Trigger{Kind: cronjob.TriggerIssueScheduled, IssueUID: issue.UID}})
 	r := h.start(worker.Hooks{})
 	h.scheduled(r, 1)
 	if at := h.nextRun(r, time.Time{}); !at.Equal(old) {
@@ -83,10 +84,10 @@ func TestAnIssueDeadlineNotifyJobSendsItsRequestLeadSecondsBeforeTheDeadline(t *
 	deadline := h.minuteIn(2 * time.Hour)
 	h.kata.SetIssueDate(t, h.proj, issue.UID, "deadline_on", deadline)
 	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "remind", Notify: &workertest.Notify{Recipient: "bob", Message: "Due in ten minutes"},
-		Trigger: worker.Trigger{Kind: "issue-deadline", IssueUID: issue.UID, LeadSeconds: 600}})
+		Trigger: cronjob.Trigger{Kind: cronjob.TriggerIssueDeadline, IssueUID: issue.UID, LeadSeconds: 600}})
 	// Kata's own date sweeper already notifies a zero-lead current-owner-or-author job, so the worker leaves it alone.
 	h.kata.CreateJob(t, h.proj, workertest.Job{Name: "swept", Notify: &workertest.Notify{Recipient: "current-owner-or-author"},
-		Trigger: worker.Trigger{Kind: "issue-deadline", IssueUID: issue.UID}})
+		Trigger: cronjob.Trigger{Kind: cronjob.TriggerIssueDeadline, IssueUID: issue.UID}})
 	r := h.start(worker.Hooks{})
 	h.scheduled(r, 1)
 
@@ -150,7 +151,7 @@ func TestADateSetAfterTheJobWasFirstSeenIsCaughtUpUnderTheJobsCatchup(t *testing
 				h := newHarness(t)
 				issue := h.kata.Issue(t, h.proj, "Late date")
 				job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "on date", Prompt: "Do it.", ExistingUID: issue.UID,
-					Trigger: worker.Trigger{Kind: "issue-scheduled", IssueUID: issue.UID}, Catchup: tc.catchup, GraceSeconds: workertest.Seconds(tc.grace)})
+					Trigger: cronjob.Trigger{Kind: cronjob.TriggerIssueScheduled, IssueUID: issue.UID}, Catchup: tc.catchup, GraceSeconds: workertest.Seconds(tc.grace)})
 				r := h.start(worker.Hooks{})
 				h.admitting(r)
 				h.quiet(job, 0) // the job is seen once while its Issue has no date
@@ -191,7 +192,7 @@ func TestADateReadThatFailedAtFirstSightDoesNotMakeAnOldDateAChange(t *testing.T
 		http.Error(w, "unavailable", http.StatusServiceUnavailable)
 	})
 	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "on date", Prompt: "Do it.", ExistingUID: issue.UID,
-		Trigger: worker.Trigger{Kind: "issue-scheduled", IssueUID: issue.UID}, Catchup: "all"})
+		Trigger: cronjob.Trigger{Kind: cronjob.TriggerIssueScheduled, IssueUID: issue.UID}, Catchup: "all"})
 	r := h.start(worker.Hooks{})
 	h.admitting(r)
 	h.eventually("the first date read to fail", func() bool { return h.kata.Requests("planning-dates") > 0 })
