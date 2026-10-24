@@ -8,8 +8,8 @@ import (
 	"io"
 	"reflect"
 	"strings"
-	"unicode"
-	"unicode/utf8"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // Workflow is one of a Project's kata workflows: reusable command and prompt steps with dependencies. EventUID names the
@@ -37,17 +37,15 @@ type WorkflowStep struct {
 	Options         json.RawMessage
 }
 
-// Workflow step kinds.
+// Workflow step kinds, as the Pane's text holds them.
 const (
-	StepCommand = "command"
-	StepPrompt  = "prompt"
+	StepCommand = string(cronjob.StepCommand)
+	StepPrompt  = string(cronjob.StepPrompt)
 )
 
-// Kata's limits on a workflow, mirrored for the local check.
+// The limits of the document the Pane sends; the definition's own rules live in package cronjob.
 const (
-	maxWorkflowRetries    = 100
 	maxWorkflowNameBytes  = 256
-	maxWorkflowKeyBytes   = 256
 	maxWorkflowDefinition = 256 << 10
 )
 
@@ -143,106 +141,32 @@ func ParseWorkflow(text string) (WorkflowDocument, error) {
 	return WorkflowDocument{Name: strings.TrimSpace(file.Name), Definition: string(definition)}, nil
 }
 
-// check is kata's workflow rules in kata's order: the name, the version, then each step in turn.
+// check is the document rules in kata's order: the name first, then the definition against the shared validator.
 func (f workflowFile) check() error {
 	if name := strings.TrimSpace(f.Name); name == "" || len(name) > maxWorkflowNameBytes {
 		return errors.New(`"name" must be 1 to 256 characters.`)
 	}
-	d := f.Definition
-	if d.Version != 1 {
-		return errors.New(`"version" must be 1.`)
-	}
-	if len(d.Steps) == 0 {
-		return errors.New(`"steps" needs at least one step.`)
-	}
-	earlier := map[string]bool{}
-	for i, step := range d.Steps {
-		label := fmt.Sprintf("Step %d", i+1)
-		if step.Key != "" {
-			label = fmt.Sprintf("Step %q", step.Key)
-		}
-		switch {
-		case !portableName(step.Key):
-			return fmt.Errorf(`%s: "key" must be a name of letters, digits, "-", "_" or "." (not "." or ".."), at most 256 bytes.`, label)
-		case earlier[step.Key]:
-			return fmt.Errorf(`%s: "key" is used by an earlier step; keys must be unique.`, label)
-		}
-		if step.Retries != nil && (*step.Retries < 0 || *step.Retries > maxWorkflowRetries) {
-			return fmt.Errorf(`%s: "retries" must be between 0 and 100.`, label)
-		}
-		for _, after := range step.After {
-			if !earlier[after] {
-				return fmt.Errorf(`%s: "after" names %q, which is not an earlier step; list steps in the order they run.`, label, after)
-			}
-		}
-		switch step.Kind {
-		case StepCommand:
-			if strings.TrimSpace(step.Command) == "" || step.Prompt != "" {
-				return fmt.Errorf(`%s: a command step needs "command" and no "prompt".`, label)
-			}
-		case StepPrompt:
-			if strings.TrimSpace(step.Prompt) == "" || step.Command != "" {
-				return fmt.Errorf(`%s: a prompt step needs "prompt" and no "command".`, label)
-			}
-		default:
-			return fmt.Errorf(`%s: "kind" must be "command" or "prompt".`, label)
-		}
-		if err := checkOptions(step.Options); err != nil {
-			return fmt.Errorf("%s: %w", label, err)
-		}
-		earlier[step.Key] = true
-	}
-	return checkOptions(d.Options)
-}
-
-// portableName is kata's rule for a step key: 1 to 256 bytes of letters, digits and "-", "_", ".", not "." or "..".
-func portableName(s string) bool {
-	if s == "" || len(s) > maxWorkflowKeyBytes || s == "." || s == ".." || !utf8.ValidString(s) {
-		return false
-	}
-	for _, r := range s {
-		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && !strings.ContainsRune("-_.", r) {
-			return false
-		}
-	}
-	return true
-}
-
-// checkOptions is kata's rule for adapter options: an object that carries no credential or local path under any key.
-func checkOptions(raw json.RawMessage) error {
-	if len(raw) == 0 {
-		return nil
-	}
-	var object map[string]any
-	if err := json.Unmarshal(raw, &object); err != nil || object == nil {
-		return errors.New(`"options" must be an object.`)
-	}
-	var walk func(any) bool
-	walk = func(value any) bool {
-		switch v := value.(type) {
-		case map[string]any:
-			for key, entry := range v {
-				switch strings.ToLower(key) {
-				case "token", "api_token", "api_key", "password", "secret", "credentials", "authorization", "cwd", "path", "checkout_path", "local_path":
-					return false
-				}
-				if !walk(entry) {
-					return false
-				}
-			}
-		case []any:
-			for _, entry := range v {
-				if !walk(entry) {
-					return false
-				}
-			}
-		}
-		return true
-	}
-	if !walk(object) {
-		return errors.New(`"options" cannot contain credentials or local paths.`)
+	if problem := cronjob.ValidateWorkflow(f.Definition.shape()); problem != nil {
+		return problem
 	}
 	return nil
+}
+
+// shape is the decoded definition the shared validator reads. The options are valid JSON already, so they decode.
+func (d workflowDefinition) shape() cronjob.WorkflowDefinition {
+	out := cronjob.WorkflowDefinition{Version: d.Version, About: d.About, Input: d.Input, Options: decodeOptions(d.Options), Steps: make([]cronjob.WorkflowStep, len(d.Steps))}
+	for i, s := range d.Steps {
+		out.Steps[i] = cronjob.WorkflowStep{Key: s.Key, Kind: cronjob.StepKind(s.Kind), Command: s.Command, Prompt: s.Prompt, After: s.After, Retries: s.Retries, Options: decodeOptions(s.Options)}
+	}
+	return out
+}
+
+func decodeOptions(raw json.RawMessage) any {
+	var options any
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &options)
+	}
+	return options
 }
 
 // describeJSONError says what is wrong with text in words that point at the place: the line of a syntax error, the field of
