@@ -3,7 +3,7 @@ name: kata
 description: "Kata issue tracker CLI. Use when a repo has `.kata.toml` or names Kata as its tracker: finding, creating, claiming, commenting, replying, labelling or closing issues (tickets), making work recur, scheduling agent jobs, being run by a tern-kata worker, or coordinating subagents through issues."
 ---
 
-Kata is a daemon-backed issue ledger shared by humans and agents. Written against kata v0.19; `kata <cmd> --help` is the source of truth for flags, `kata quickstart --format contract` for upstream agent policy. Repo specifics (project name, extra labels, human gates) live in that repo's `AGENTS.md`.
+Kata is a daemon-backed issue ledger shared by humans and agents. Written against kata v0.20; `kata <cmd> --help` is the source of truth for flags, `kata quickstart --format contract` for upstream agent policy. Repo specifics (project name, extra labels, human gates) live in that repo's `AGENTS.md`.
 
 ## Output mode
 
@@ -88,7 +88,7 @@ kata show <ref> --inbound=<actor> --agent     # replies to <actor>'s comments on
 - In `show --agent`, a `reply - kind=…` row under a comment names the comment it answers; `backlink - kind=…` rows name the replies it received.
 - A second reply of the same kind to the same comment fails (exit 5) and names the existing one; `--force` only for a deliberate second assertion.
 - `--inbound` takes its value with `=`; `--inbound alice` reads `alice` as a second argument and fails.
-- Replies don't reach the inbox in v0.19.0 (kata's docs describe that as planned). To find answers to your findings, run `show --inbound`.
+- A typed reply notifies the answered comment's author by itself, so don't send a second `kata notify` for it. To list answers to your findings, run `show --inbound`.
 
 ## Claim and live state
 
@@ -109,7 +109,7 @@ kata meta unset <ref> <key>
 - End every session with either a close or a truthful `work.attention`; stale `ok` on abandoned work misleads coordinators.
 - `meta set` values are strings; add `--json-value` for raw JSON (`kata meta set <ref> someday true --json-value`). Conditional writes: `--if-absent`, `--if-value <v>`.
 - Prefer `--ttl` for queue work: if the session dies, the issue returns to `ready`/`next` when the claim expires. `kata status <ref> --agent` shows `assignment_expires_on`; `kata assign <ref> <you>` makes the claim permanent.
-- `kata whoami` shows the resolved actor (`$KATA_AUTHOR` > `$USER` > git). `--as <actor>` overrides per call.
+- `kata whoami` shows the resolved actor (`$KATA_AUTHOR` > `$USER` > git). `--as <actor>` overrides per call; `--as ""` is refused (exit 3).
 
 ## Close
 
@@ -124,7 +124,7 @@ kata close <ref> --done ... --dry                    # validate without mutating
 ```
 
 - A close is a completion claim. `--message` must be issue-specific prose: what changed, how it was verified.
-- Evidence is typed: `--commit <sha>`, `--pr <url>`, `--test <cmd>`, `--reviewed <path>`, or raw `--evidence commit:|pr:|test:|reviewed-paths:|external:|no-change-audit:|duplicate-of:|superseded-by:<value>`. Only `--evidence` and `--reviewed` repeat: a second `--commit`/`--pr`/`--test` silently replaces the first, so cite several tests as one `--evidence "test:<cmd>"` each. `external:<account>` covers done work with no repo artifact. Non-wontfix closes without evidence show up in `kata audit closes --no-evidence`.
+- Evidence is typed: `--commit <sha>`, `--pr <url>`, `--test <cmd>`, `--reviewed <path>`, or raw `--evidence commit:|pr:|test:|reviewed-paths:|external:|no-change-audit:|duplicate-of:|superseded-by:<value>`. `--commit`, `--pr`, `--test`, `--reviewed` and `--evidence` each repeat and every value is recorded (`--test "<cmd>"` once per test); an empty value is refused. `external:<account>` covers done work with no repo artifact. Non-wontfix closes without evidence show up in `kata audit closes --no-evidence`.
 - Close each issue as soon as it is verified, not batched at the end.
 - A parent cannot close while it has open children.
 - Only `--done` makes a recurring issue's next occurrence (see Recurring work).
@@ -239,7 +239,7 @@ Ownership rules:
    ```bash
    kata wait <ref1> <ref2> --until attention --any --timeout 300s --json
    ```
-   - `--until closed` (default) | `attention` (any non-ok) | `needs-human` | `stuck`. A close also satisfies attention modes; `results[].reason` says `closed` or `attention`.
+   - `--until closed` (default) | `attention` (any non-ok) | `needs-human` | `stuck` | `reply` (see Attention requests). A close also satisfies attention modes; `results[].reason` says `closed`, `attention` or `reply`.
    - `--all` (default) waits for every ref; `--any` returns on the first.
    - Timeout exits with code **8** and lists `pending`. `--timeout 0` (default) waits forever, so always set one in automation.
    - `wait` is read-only and needs no dependency edge.
@@ -254,7 +254,18 @@ kata inbox --for <actor>[/<teammate>] --all --agent   # every project on the dae
 kata notify <ref> --to <actor>[/<teammate>] --clear      # after handling
 ```
 
-Reading doesn't clear a request.
+Reading doesn't clear a request. One request per Issue and recipient; a new `notify` to the same recipient replaces the old one.
+
+Ask for an answer to a specific comment, and block until it arrives:
+
+```bash
+kata notify <ref> --to <actor>[/<teammate>] --re <comment-handle> --message "<what you need answered>" --agent
+kata wait <ref> --until reply --timeout 30m --agent
+```
+
+- `--re` takes the comment handle (`c:<suffix>`, as in Replies). The addressee's typed answer (`comment --reply`, `--confirm`, `--refute` or `--supersede`) clears the request and notifies you on this Issue; `wait --until reply` returns then (`results[].reason` is `reply`). It watches your own inbox slot, and existing requests are the baseline. Always set `--timeout` (exit 8 on expiry).
+- A typed reply notifies the answered comment's author by itself; don't send a second `notify` for it.
+- Broadcast: `kata notify <ref> --broadcast [--teammates] --message "<why>" --agent` reaches the participants of the Issue and of its open children (at most 50 recipients, rate-limited); `--teammates` adds their teammate inboxes. It replaces `--to`. Use it only when all of them need to know.
 
 ## History and audit
 
@@ -262,7 +273,10 @@ Reading doesn't clear a request.
 kata digest --since 24h               # changelog grouped by actor
 kata audit closes --since <RFC3339> --no-evidence
 kata events --after <cursor> --limit 100 --json   # poll with a saved cursor; reset cache on reset_required
+kata events --tail --agent                        # stream live
 ```
+
+- Date-driven work can start from `issue.scheduled_reached` events, through hooks or `kata events --tail`.
 
 ## Setup (rare)
 
