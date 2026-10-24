@@ -189,11 +189,11 @@ func (o FederationLeaveOutcome) ResultLines() (lines []string, warning int) {
 // federationHub is a hub as the leave screens show it: the host of its URL, else the URL, "-" when there is none.
 func federationHub(raw string) string { return FederationSpoke{HubURL: raw}.HubHost() }
 
-// federationLeaveRows are the leave preview's and its result's keys.
+// federationLeaveRows are the leave preview's keys and the keys of the result screens, which a leave and an enrollment share.
 var federationLeaveRows = []actionEntry{
 	{action: RunFederationLeave, modes: []Mode{ModeFederationLeave}, keys: keys("enter", "↵"), help: "confirm", footer: []Mode{ModeFederationLeave}, footerKey: "↵", sheet: []sheetLine{{sheetLettered, 7, "run the leave in its preview"}}, handle: runFederationLeave},
 	{action: ToggleFederationArchive, modes: []Mode{ModeFederationLeave}, keys: keys("d", "d"), help: "keep / archive", footer: []Mode{ModeFederationLeave}, sheet: []sheetLine{{sheetLettered, 8, "switch the leave between detaching and archiving"}}, handle: toggleFederationArchive},
 	{action: ToggleFederationLocal, modes: []Mode{ModeFederationLeave}, keys: keys("l", "l"), help: "local-only", footer: []Mode{ModeFederationLeave}, sheet: []sheetLine{{sheetLettered, 9, "leave without revoking on the hub"}}, handle: toggleFederationLocalOnly},
 	{action: CancelFederationLeave, modes: []Mode{ModeFederationLeave}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeFederationLeave}, handle: cancelFederationLeave},
-	{action: FederationLeaveDismiss, modes: []Mode{ModeFederationLeft}, keys: keys("enter", "↵", "escape", "esc", "backspace", "⌫"), help: "list", footer: []Mode{ModeFederationLeft}, footerKey: "↵", handle: dismissFederationLeave},
+	{action: FederationLeaveDismiss, modes: []Mode{ModeFederationResult}, keys: keys("enter", "↵", "escape", "esc", "backspace", "⌫"), help: "list", footer: []Mode{ModeFederationResult}, footerKey: "↵", handle: dismissFederationLeave},
 }

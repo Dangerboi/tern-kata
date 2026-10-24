@@ -92,7 +92,8 @@ func (m Model) Position() (selected, total int) {
 		return min(m.Daemons.Cursor+1, len(m.Daemons.Entries)), len(m.Daemons.Entries)
 	}
 	if m.OnFederation() {
-		return min(m.Federation.Cursor+1, len(m.Federation.Spokes)), len(m.Federation.Spokes)
+		cursor, n := m.federationCursorCount()
+		return min(cursor+1, n), n
 	}
 	if m.OnAttention() {
 		return m.attentionIndex() + 1, len(m.Attention.Requests)

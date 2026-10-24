@@ -44,6 +44,10 @@ func federation(m model.Model, now time.Time) tern.Element {
 		children = append(children, federationScreen("Leave Result", lines, warning)...)
 		return column()
 	}
+	if more, shown := federationEnrollScreen(m); shown {
+		children = append(children, more...)
+		return column()
+	}
 	spoke := m.SelectedSpoke()
 	if f.Screen == model.FederationDetail && spoke != nil {
 		for i, line := range spoke.DetailLines() {
@@ -89,6 +93,12 @@ func federationCard(s model.FederationSpoke, selected bool, now time.Time) tern.
 // federationScreen is a leave screen's title and its lines, the one at index warning in the error tone.
 func federationScreen(title string, lines []string, warning int) []tern.Element {
 	out := ui.Nodes(ui.Text{Common: ui.Common{Key: "title", Tone: ui.ToneMuted}, Spans: []ui.Span{{T: title, S: "strong"}}, Wrap: ui.WrapNone})
+	return append(out, federationLines(lines, warning)...)
+}
+
+// federationLines are a screen's lines, the one at index warning in the error tone; "" is a blank line.
+func federationLines(lines []string, warning int) []tern.Element {
+	var out []tern.Element
 	for i, line := range lines {
 		if i == warning {
 			out = append(out, ui.Text{Common: ui.Common{Key: "line" + strconv.Itoa(i), Tone: ui.ToneError}, Text: line})

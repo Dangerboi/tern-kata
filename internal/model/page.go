@@ -199,7 +199,7 @@ func init() {
 		{page: PageFederation, id: "federation", label: "Federation", chord: "F", press: "shift+f", lettered: true, action: ShowFederationPage, second: SecondInspector, enter: enterFederation, clear: clearFederation,
 			mode: federationMode, update: updateFederation, list: ListNodeFederation,
 			moves:  pageMoves{mode: ModeFederation, noun: "spoke", move: moveFederation, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
-			keymap: []keySegment{movementKeys, rowsOf(federationRows), rowsOf(federationLeaveRows)}},
+			keymap: []keySegment{movementKeys, rowsOf(federationRows), rowsOf(federationLeaveRows), federationChoiceMoves, rowsOf(federationEnrollRows)}},
 		{page: PageDaemons, id: "daemons", label: "Daemons", chord: "D", press: "shift+d", lettered: true, action: ShowDaemonsPage, second: SecondInspector, enter: enterDaemons, clear: clearDaemons,
 			mode: daemonsMode, update: updateDaemons, list: ListNodeDaemons,
 			moves:  pageMoves{mode: ModeDaemons, noun: "daemon", move: moveDaemon, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},

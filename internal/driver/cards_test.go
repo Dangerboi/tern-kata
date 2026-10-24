@@ -52,6 +52,9 @@ func popups() []popup {
 			model.ModeMoveProject, "Move #aaaa to another Project", func(m model.Model) string { return m.MoveProject.Filter }},
 		{"Delete", keyOpen("shift+x"), func(dst *model.Model, src model.Model) { dst.DeleteForm = src.DeleteForm },
 			model.ModeDeleteForm, "Delete #aaaa", func(m model.Model) string { return m.DeleteForm.ID }},
+		{"Federation adoption", func(t *testing.T, _ driver.State) model.Model { return confirming(t).Model },
+			func(dst *model.Model, src model.Model) { dst.Federation = src.Federation },
+			model.ModeFederationAdopt, "Confirm Adoption", func(m model.Model) string { return m.Federation.AdoptInput }},
 		{"Recurrence", func(t *testing.T, s driver.State) model.Model {
 			m := keyOpen("shift+o")(t, s)
 			m.RecurrenceForm.Field = model.RecurrenceZone // a text field
