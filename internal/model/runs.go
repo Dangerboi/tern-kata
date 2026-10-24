@@ -493,3 +493,28 @@ func openRunIssue(m Model) Model {
 	}
 	return m.jumpWithin(uid, nil)
 }
+
+// updateRuns applies the Runs Page's results and selections. A read numbered below zero is the Workflows Page's, which that Page
+// takes.
+func updateRuns(m Model, msg Msg) (Model, []Cmd, bool) {
+	switch msg := msg.(type) {
+	case RunsLoaded:
+		if msg.Request < 0 {
+			return m, nil, false
+		}
+		m = runsLoaded(m, msg)
+		if m.OnRuns() && !m.Worker.inflight && m.runsRunning() {
+			next, cmd := m.askWorker(workerPollEvery)
+			return next, []Cmd{cmd}, true
+		}
+		return m, nil, true
+	case RunShown:
+		return runShown(m, msg), nil, true
+	case RunSessionOpened:
+		return runSessionOpened(m, msg), nil, true
+	case RunSelectMsg:
+		m.Runs.Selected, m.Focus = msg.UID, ColumnList
+		return m, nil, true
+	}
+	return m, nil, false
+}

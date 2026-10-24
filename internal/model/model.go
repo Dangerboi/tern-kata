@@ -215,34 +215,6 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return updateProject(m, msg)
 	case FiltersSaved:
 		return filtersSaved(m, msg)
-	case LanesLoaded:
-		m = lanesLoaded(m, msg)
-	case LanesSaved:
-		m = lanesSaved(m, msg)
-	case JobsLoaded:
-		m = jobsLoaded(m, msg)
-		return backfillJobsRead(m, msg)
-	case JobWritten:
-		if next, cmds, ok := backfillWritten(m, msg); ok {
-			return next, cmds
-		}
-		m = jobWritten(m, msg)
-	case WorkerPickersLoaded:
-		m = workerPickersLoaded(m, msg)
-	case JobWorkflowsLoaded:
-		m = jobWorkflowsLoaded(m, msg)
-	case OpenJobMsg:
-		return openJob(m, msg.UID)
-	case JobSelectMsg:
-		m.Jobs.Selected, m.Focus = msg.UID, ColumnList
-	case RunsLoaded:
-		m = runsLoaded(m, msg)
-		if m.OnRuns() && !m.Worker.inflight && m.runsRunning() {
-			next, cmd := m.askWorker(workerPollEvery)
-			return next, []Cmd{cmd}
-		}
-	case RunShown:
-		m = runShown(m, msg)
 	case WorkerLoaded:
 		return workerLoaded(m, msg)
 	case WorkerSetupLoaded:
@@ -261,10 +233,6 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return jobRunRequested(m, msg)
 	case LocalRunMoved:
 		return localRunMoved(m, msg)
-	case RunSessionOpened:
-		m = runSessionOpened(m, msg)
-	case RunSelectMsg:
-		m.Runs.Selected, m.Focus = msg.UID, ColumnList
 	case DetailLoaded:
 		m = m.detailLoaded(msg)
 	case DetailFailed:

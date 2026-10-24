@@ -49,6 +49,7 @@ func TestProblem(t *testing.T) {
 		{"a notify job with no recipient", job(cronjob.ActionNotify, existingIssue(), hourly), "does not name an Issue and a recipient to notify", false},
 		{"a Native job", notifying(job(cronjob.ActionNotify, perRun(), hourly), "alice"), "creates an Issue per run: kata's daemon delivers it, the worker never runs it", false},
 		{"a Native job's bad trigger is not its problem", notifying(job(cronjob.ActionNotify, perRun(), cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "nope"}), "alice"), "creates an Issue per run: kata's daemon delivers it, the worker never runs it", false},
+		{"an action of a kind kata added later", job("page", perRun(), hourly), "it has an action kind this worker does not know", false},
 		{"the trigger is reported before the action", job(cronjob.ActionExecute, nil, cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "nope"}), unschedulable, true},
 	}
 	for _, tc := range cases {

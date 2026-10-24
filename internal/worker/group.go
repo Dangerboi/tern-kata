@@ -38,10 +38,12 @@ const (
 	groupPoll = 200 * time.Millisecond
 )
 
-// proveGroup is the group proof of a launch: the platform adapter's answer, unless a test hook says the group holds out.
+// proveGroup is the group proof of a launch: the platform adapter's answer, unless a test hook supplies one.
 func (w *Worker) proveGroup(l *LaunchRecord) GroupProof {
-	if hold := w.opt.Hooks.GroupHoldsOut; hold != nil && hold(l) {
-		return GroupProof{State: GroupPresent}
+	if hook := w.opt.Hooks.GroupProof; hook != nil {
+		if proof, ok := hook(l); ok {
+			return proof
+		}
 	}
 	return checkGroup(l)
 }

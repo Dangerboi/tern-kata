@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -126,7 +127,9 @@ func TestAnAgentThatExitsLeavingADescendantHasItStoppedAndTheRunSettles(t *testi
 func TestADescendantThatSurvivesTheBoundedWindowHoldsTheRunGroupUnproven(t *testing.T) {
 	h, pidFile := leaverHarness(t)
 	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
-	r := h.start(worker.Hooks{GroupHoldsOut: func(*worker.LaunchRecord) bool { return true }})
+	r := h.start(worker.Hooks{GroupProof: func(*worker.LaunchRecord) (worker.GroupProof, bool) {
+		return worker.GroupProof{State: worker.GroupPresent}, true
+	}})
 	h.admitting(r)
 	uid := h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID
 	leftover(t, h, pidFile)
@@ -134,5 +137,75 @@ func TestADescendantThatSurvivesTheBoundedWindowHoldsTheRunGroupUnproven(t *test
 	run := h.settled(uid)
 	if run.Status != "unknown" || !strings.Contains(run.Summary, "still present after the agent exited") {
 		t.Fatalf("run %q: %q", run.Status, run.Summary)
+	}
+}
+
+// A group the platform cannot check holds the run and is said once per run per change of reason: the log, `worker status`
+// and the resume and abandon refusals name the reason, and an answer that is not "cannot be checked" makes the next
+// such answer be said again.
+func TestAGroupThatCannotBeCheckedIsSaidOncePerReasonAndNamedInStatusAndRefusals(t *testing.T) {
+	h, pidFile := leaverHarness(t)
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
+	var answer atomic.Pointer[worker.GroupProof]
+	answers := func(state worker.GroupState, reason string) {
+		answer.Store(&worker.GroupProof{State: state, Reason: reason})
+	}
+	answers(worker.GroupUnchecked, "open failed")
+	var log logLines
+	r := h.start(worker.Hooks{GroupProof: func(*worker.LaunchRecord) (worker.GroupProof, bool) { return *answer.Load(), true }},
+		func(o *worker.Options) { o.Log = log.add })
+	h.admitting(r)
+	uid := h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID
+	leftover(t, h, pidFile)
+	run := h.settled(uid)
+	if run.Status != "unknown" || !strings.Contains(run.Summary, "cannot be checked after the agent exited: open failed") {
+		t.Fatalf("run %q: %q", run.Status, run.Summary)
+	}
+
+	reported := func() {
+		t.Helper()
+		h.eventually("the hold to be reported to kata", func() bool {
+			s, ok := h.runStatus(r, uid)
+			return ok && s.Held && s.Pending == "" && s.ResumeRefusal != "" && !strings.Contains(s.ResumeRefusal, "being reported")
+		})
+	}
+
+	// look asks what status, resume and abandon say now; each asks the group again.
+	look := func() (status, resume, abandon string) {
+		reported()
+		s, _ := h.runStatus(r, uid)
+		return s.ResumeRefusal, h.ask(worker.Request{Op: "resume", Run: uid}).Error, h.ask(worker.Request{Op: "abandon", Run: uid, Actor: "ann"}).Error
+	}
+	said := func(reason string) int { return log.count("cannot be checked: " + reason) }
+
+	status, resume, abandon := look()
+	for what, text := range map[string]string{"status": status, "resume": resume, "abandon": abandon} {
+		if !strings.Contains(text, "cannot be checked: open failed") {
+			t.Errorf("%s does not name the reason: %q", what, text)
+		}
+	}
+	look()
+	if n := said("open failed"); n != 1 {
+		t.Errorf("the reason was said %d times for repeated answers, want once", n)
+	}
+
+	answers(worker.GroupUnchecked, "query failed")
+	status, resume, abandon = look()
+	if !strings.Contains(status, "query failed") || !strings.Contains(resume, "query failed") || !strings.Contains(abandon, "query failed") {
+		t.Errorf("a changed reason is not named: %q / %q / %q", status, resume, abandon)
+	}
+	look()
+	if said("query failed") != 1 || said("open failed") != 1 {
+		t.Errorf("after the change: open failed said %d times, query failed %d; want once each", said("open failed"), said("query failed"))
+	}
+
+	answers(worker.GroupPresent, "")
+	if _, resume, _ := look(); !strings.Contains(resume, "still present") {
+		t.Errorf("a present group is refused as %q", resume)
+	}
+	answers(worker.GroupUnchecked, "query failed")
+	look()
+	if n := said("query failed"); n != 2 {
+		t.Errorf("the reason was said %d times after an answer in between, want again once (2 in all)", n)
 	}
 }

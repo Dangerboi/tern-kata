@@ -483,3 +483,32 @@ func openJobParent(m Model) Model {
 	}
 	return m.jumpWithin(uid, nil)
 }
+
+// updateJobs applies the Jobs Page's results and selections, and those of its card. A read numbered below zero is the Workflows
+// Page's, which that Page takes.
+func updateJobs(m Model, msg Msg) (Model, []Cmd, bool) {
+	switch msg := msg.(type) {
+	case JobsLoaded:
+		if msg.Request < 0 {
+			return m, nil, false
+		}
+		next, cmds := backfillJobsRead(jobsLoaded(m, msg), msg)
+		return next, cmds, true
+	case JobWritten:
+		if next, cmds, ok := backfillWritten(m, msg); ok {
+			return next, cmds, true
+		}
+		return jobWritten(m, msg), nil, true
+	case WorkerPickersLoaded:
+		return workerPickersLoaded(m, msg), nil, true
+	case JobWorkflowsLoaded:
+		return jobWorkflowsLoaded(m, msg), nil, true
+	case OpenJobMsg:
+		next, cmds := openJob(m, msg.UID)
+		return next, cmds, true
+	case JobSelectMsg:
+		m.Jobs.Selected, m.Focus = msg.UID, ColumnList
+		return m, nil, true
+	}
+	return m, nil, false
+}

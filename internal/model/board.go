@@ -29,9 +29,7 @@ const (
 // BoardState is the Board Page's state. It is not saved: a Pane starts on the Issues Page. Mode is only meaningful while the
 // Board Page is current; every way off the Board Page resets it to BoardColumns.
 type BoardState struct {
-	// ProjectUID is the Project the state was filled for; resetPagesForProject empties it when the Pane's Project differs.
-	ProjectUID string
-	Mode       BoardMode
+	Mode BoardMode
 	// Lanes is the Project's Lane list; empty means the default.
 	Lanes []string
 	// DoneDays and DoneCards are the Project's own Done limits; zero means the default.
@@ -324,4 +322,15 @@ func moveOnBoard(m Model, action Action) Model {
 	}
 	m.SelectedUID = columns[col].Cards[row].Issue.UID
 	return m
+}
+
+// updateBoard applies the Board Page's results: the Project's Lane list and Done limits, read and saved.
+func updateBoard(m Model, msg Msg) (Model, []Cmd, bool) {
+	switch msg := msg.(type) {
+	case LanesLoaded:
+		return lanesLoaded(m, msg), nil, true
+	case LanesSaved:
+		return lanesSaved(m, msg), nil, true
+	}
+	return m, nil, false
 }

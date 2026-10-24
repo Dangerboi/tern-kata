@@ -1,6 +1,7 @@
 package driver_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/driver"
@@ -155,5 +156,48 @@ func TestAReadAskedBeforeAProjectChangeDoesNotAppear(t *testing.T) {
 	s = step(t, s, model.RunsLoaded{Request: oldRuns.Request, Runs: []model.Run{finishedRun("R1")}}).State
 	if got := s.Model.Runs.Runs; len(got) != 0 {
 		t.Fatalf("Runs %v, want the late answer ignored", got)
+	}
+}
+
+func TestAProjectInboxProjectRoundTripKeepsEachPagesState(t *testing.T) {
+	s := twoProjectPane(t)
+	s = answerJobs(t, step(t, s, key("3")), promptJob("J1", "Triage"), promptJob("J2", "Other"))
+	s = feed(t, s, key("j")).State
+	s = answerRuns(t, step(t, s, key("r")), "", finishedRun("R1"))
+	s = step(t, s, key("1")).State
+
+	s = step(t, s, model.CollectionSelected{Collection: model.InboxCollection()}).State
+	s = step(t, s, model.CollectionSelected{Collection: model.ProjectCollection("p", "work")}).State
+
+	jobs := step(t, s, key("3"))
+	if got := jobs.State.Model.Jobs; got.Selected != "J2" || len(got.Jobs) != 2 {
+		t.Fatalf("Jobs %+v, want selection and jobs kept across the Inbox", got)
+	}
+	runs := step(t, step(t, jobs.State, key("1")).State, key("4"))
+	if got := runs.State.Model.Runs; got.JobUID != "J2" || len(got.Runs) != 1 {
+		t.Fatalf("Runs %+v, want the filter and Run kept across the Inbox", got)
+	}
+}
+
+func TestAReadingAskedBeforeAProjectChangeIsNotTakenForTheNewCardsAsk(t *testing.T) {
+	five := 5
+	text := workflowText(`{"key":"a","kind":"prompt","prompt":"p","options":{"on_fail":{}}}`)
+	s := step(t, step(t, twoProjectPane(t), key("5")).State, key("n")).State
+	typed := typeWorkflow(t, s, text)
+	older, ok := readingAsk(t, typed)
+	if !ok {
+		t.Fatalf("typing sent %#v, want an ask", typed.Cmds)
+	}
+
+	s = chooseInfra(t, typed.State).State
+	s = step(t, step(t, s, key("5")).State, key("n")).State
+	typed = typeWorkflow(t, s, text)
+	newer, ok := readingAsk(t, typed)
+	if !ok || newer.Request == older.Request {
+		t.Fatalf("asks %d then %d (found %v), want distinct numbers across the Project change", older.Request, newer.Request, ok)
+	}
+	late := step(t, typed.State, workersAnswer(older, &five, "", false)).State
+	if strings.Contains(screen(t, late), "Worker") {
+		t.Error("the answer for the other Project's text was drawn")
 	}
 }
