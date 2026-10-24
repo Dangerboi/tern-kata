@@ -17,15 +17,15 @@ type IssueDetailData struct {
 // Comment is one comment; ReplyKind is set when it replies to another, Reply is the answered comment and
 // Backlinks are the comments replying to this one.
 type Comment struct {
-	UID       string
-	Author    string
+	UID    string
+	Author string
 	// Attribution is kata's creation attribution of the comment.
 	Attribution Attribution
-	Body      string
-	CreatedAt time.Time
-	ReplyKind *string
-	Reply     *CommentLink
-	Backlinks []CommentLink
+	Body        string
+	CreatedAt   time.Time
+	ReplyKind   *string
+	Reply       *CommentLink
+	Backlinks   []CommentLink
 }
 
 // CommentLink is a comment on the other end of a reply; Kind is the reply's kind.

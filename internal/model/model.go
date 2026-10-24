@@ -9,12 +9,12 @@ import (
 type Issue struct {
 	AssignmentExpiresOn *time.Time
 	// Attribution is kata's creation attribution of the Issue.
-	Attribution Attribution
-	Author              string
-	Body                string
-	ClosedAt            *time.Time
-	ClosedReason        *string
-	CreatedAt           time.Time
+	Attribution  Attribution
+	Author       string
+	Body         string
+	ClosedAt     *time.Time
+	ClosedReason *string
+	CreatedAt    time.Time
 	// CronOccurrence is set on an Issue a Cron job made.
 	CronOccurrence  *CronOccurrence
 	DeadlineOnDate  *string

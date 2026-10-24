@@ -76,7 +76,7 @@ func wireQuery(q model.SnapshotQuery) g.ReadUISnapshotQuery {
 
 func translateIssue(i *g.UIIssue) model.Issue {
 	return model.Issue{
-		Attribution: translateAttribution(i.Verification, i.AccountableActor, i.SourceActor, i.Teammate),
+		Attribution:    translateAttribution(i.Verification, i.AccountableActor, i.SourceActor, i.Teammate),
 		CronOccurrence: translateOccurrence(i.Metadata), AssignmentExpiresOn: i.AssignmentExpiresOn, Author: i.Author, Body: i.Body, ClosedAt: i.ClosedAt, ClosedReason: i.ClosedReason,
 		CreatedAt: i.CreatedAt, DeadlineOnDate: i.DeadlineOnDate, ID: i.ID, Labels: i.Labels, Metadata: i.Metadata, Owner: i.Owner,
 		Priority: i.Priority, ProjectID: i.ProjectID, ProjectName: i.ProjectName, ProjectUID: i.ProjectUID, QualifiedID: i.QualifiedID,

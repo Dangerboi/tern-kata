@@ -40,7 +40,7 @@ func translateDetail(s *g.UISelectedAuthority, scoped bool) *model.IssueDetailDa
 		comment := model.Comment{
 			UID: c.UID, Author: c.Author, Body: c.Body, CreatedAt: c.CreatedAt,
 			Attribution: translateAttribution(c.Verification, c.AccountableActor, c.SourceActor, c.Teammate),
-			ReplyKind: c.ReplyKind, Reply: translateCommentLink(c.Reply),
+			ReplyKind:   c.ReplyKind, Reply: translateCommentLink(c.Reply),
 		}
 		for i := range c.Backlinks {
 			comment.Backlinks = append(comment.Backlinks, *translateCommentLink(&c.Backlinks[i]))
