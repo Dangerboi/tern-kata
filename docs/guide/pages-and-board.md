@@ -55,6 +55,7 @@ Editing from the Pane:
 | `!` | Priority |
 | `p` | Parent |
 | `b`, `l` | In the Issue detail: add a Blocking link (this Issue blocks the one you name) or a related link; `b` still toggles the Board elsewhere |
+| `t` | In the Issue detail: timed assignment to you, 1m to 24h (see [Compared with `kata tui`](kata-tui.md#timed-assignment)) |
 | `O` | Recurrence (see [Recurring Issues](recur.md)) |
 | `d` | Dates (see [Dates](dates.md)) |
 | `u`, `U` | Attach a file; list and remove Attachments (see [Attachments](attachments.md)) |

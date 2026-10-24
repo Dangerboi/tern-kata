@@ -19,6 +19,13 @@ func (c *Client) WriteField(ctx context.Context, cmd model.WriteField) error {
 	case model.AssignOwnerAction:
 		_, e := c.AssignIssueWithResponse(ctx, &g.AssignIssueRequestOptions{PathParams: &g.AssignIssuePath{ProjectID: cmd.ProjectID, Ref: cmd.UID}, Body: &g.AssignIssueBody{Actor: actor, Owner: cmd.Value}})
 		return daemonError(e)
+	case model.TimedAssignAction:
+		seconds, e := strconv.ParseInt(cmd.Value, 10, 64)
+		if e != nil {
+			return e
+		}
+		_, e = c.ClaimIssueWithResponse(ctx, &g.ClaimIssueRequestOptions{PathParams: &g.ClaimIssuePath{ProjectID: cmd.ProjectID, Ref: cmd.UID}, Body: &g.ClaimIssueBody{Actor: actor, TTLSeconds: &seconds}})
+		return daemonError(e)
 	case model.ClearOwnerAction:
 		_, e := c.UnassignIssueWithResponse(ctx, &g.UnassignIssueRequestOptions{PathParams: &g.UnassignIssuePath{ProjectID: cmd.ProjectID, Ref: cmd.UID}, Body: &g.UnassignIssueBody{Actor: actor}})
 		return daemonError(e)

@@ -428,6 +428,32 @@ func TestGatewayWritesBlockingAndRelatedLinksAcrossProjects(t *testing.T) {
 	}
 }
 
+func TestGatewayClaimsAnIssueForATimedAssignment(t *testing.T) {
+	kata := startKata(t, "0.20.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	uid := createIssue(t, gateway, workspace, demo, "Timed")
+	write := func(seconds string) model.FieldWritten {
+		return as[model.FieldWritten](t, run(t, gateway, model.WriteField{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Action: model.TimedAssignAction, Value: seconds}))
+	}
+
+	before := time.Now()
+	if written := write("5400"); written.Err != nil || written.UID != uid {
+		t.Fatalf("claim %+v", written)
+	}
+	got := as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected.Issue
+	if got.Owner == nil || *got.Owner != "tester" || got.AssignmentExpiresOn == nil {
+		t.Fatalf("claim not stored: %+v", got)
+	}
+	if ahead := got.AssignmentExpiresOn.Sub(before); ahead < 89*time.Minute || ahead > 91*time.Minute {
+		t.Fatalf("expires %v ahead, want about 90m", ahead)
+	}
+
+	if written := write("30"); written.Err == nil {
+		t.Fatal("a 30 second assignment was accepted")
+	}
+}
+
 func TestGatewayClosesWithEveryReason(t *testing.T) {
 	kata := startKata(t, "0.20.0")
 	gateway := newGateway(t, newLocator(kata.target()))

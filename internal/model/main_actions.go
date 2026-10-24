@@ -289,6 +289,7 @@ var mainRows = []actionEntry{
 	{action: OpenClose, modes: issueModes, keys: keys("x", "x"), help: "close", footer: issueModes, sheet: []sheetLine{{sheetGraph, 14, "close"}}, handle: pure(openClose)},
 	{action: ReopenAction, modes: issueModes, keys: keys("r", "r"), help: "reopen", footer: issueModes, sheet: []sheetLine{{sheetGraph, 15, "reopen"}}, handle: reopenIssue},
 	{action: SetParentAction, modes: issueModes, keys: keys("p", "p"), help: "parent", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 7, "set parent"}}, handle: fieldFor(SetParentAction)},
+	{action: TimedAssignAction, modes: []Mode{ModeDetail}, keys: keys("t", "t"), help: "timed assignment", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 20, "assign to yourself for a set time (1m..24h)"}}, handle: fieldFor(TimedAssignAction)},
 	{action: AddBlockerAction, modes: []Mode{ModeDetail}, keys: keys("b", "b"), help: "blocks", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 18, "add a Blocking link: this Issue blocks the one you name"}}, handle: fieldFor(AddBlockerAction)},
 	{action: AddRelatedAction, modes: []Mode{ModeDetail}, keys: keys("l", "l"), help: "related", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 19, "add a related link"}}, handle: fieldFor(AddRelatedAction)},
 	{action: PriorityAction, modes: issueModes, keys: keys("!", "!"), help: "priority", footer: issueModes, sheet: []sheetLine{{sheetDetail, 14, "set priority"}}, handle: fieldFor(PriorityAction)},
