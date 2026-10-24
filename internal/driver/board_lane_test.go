@@ -26,9 +26,15 @@ func laneHeader(t *testing.T, s driver.State) string {
 // laneRows are the uids of the Issue rows the Lane view draws, in drawn order.
 func laneRows(t *testing.T, s driver.State) []string {
 	t.Helper()
+	byID := map[string]string{}
+	for _, issue := range s.Model.Issues {
+		if found := issueRows(t, s.Model, view.IssueListID, issue); len(found) == 1 {
+			byID[found[0]] = issue.UID
+		}
+	}
 	rows := []string{}
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
-		if uid, ok := strings.CutPrefix(n.ID, view.IssueID("")); ok && !strings.Contains(uid, ".") {
+		if uid, ok := byID[n.ID]; ok {
 			rows = append(rows, uid)
 		}
 	}
@@ -83,7 +89,7 @@ func TestEnterOnACardOpensItsLaneViewBesideTheDetail(t *testing.T) {
 
 func TestDoubleClickingACardOpensItsLaneView(t *testing.T) {
 	s := laneBoard(t, 160)
-	out := step(t, s, click(view.CardID(s.Model, "h1"), view.OpenRowClick("h1")))
+	out := step(t, s, click(rowOf(t, s.Model, view.BoardID, "h1"), view.OpenRowClick("h1")))
 	if !strings.Contains(laneHeader(t, out.State), "Ready for human") || out.State.Model.SelectedUID != "h1" {
 		t.Errorf("header %s, selected %q", laneHeader(t, out.State), out.State.Model.SelectedUID)
 	}
@@ -123,7 +129,7 @@ func TestLaneViewWorksLikeTheList(t *testing.T) {
 		t.Errorf("j selects %q", got)
 	}
 	out := step(t, s, key("j"))
-	wantOps(t, out, tern.OpReveal(view.IssueID("t2"), "nearest"))
+	wantOps(t, out, tern.OpReveal(rowOf(t, out.State.Model, view.IssueListID, "t2"), "nearest"))
 	tabbed := step(t, s, key("tab")).State
 	if tabbed.Model.Focus != model.ColumnDetail {
 		t.Fatalf("tab focus = %v", tabbed.Model.Focus)

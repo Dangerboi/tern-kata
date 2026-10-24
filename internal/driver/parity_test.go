@@ -3,7 +3,9 @@ package driver_test
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -155,44 +157,50 @@ var jumpPath = detailPath(model.TabLinks, "enter")
 var linksTab = click("", view.ActivityTabClick(model.TabLinks))
 
 func TestEveryClickTargetEndsWhereItsKeysEnd(t *testing.T) {
-	today := "today"
-	toggle := click(view.IssueID("parent"), view.ToggleClick("parent"))
+	toggle := func(t *testing.T, m model.Model) any { return click(rowOf(t, m, view.IssueListID, "parent"), view.ToggleClick("parent")) }
+	selectRow := func(uid string) func(*testing.T, model.Model) any {
+		return func(t *testing.T, m model.Model) any { return &tern.Select{ID: view.IssueListID, Item: rowOf(t, m, view.IssueListID, uid)} }
+	}
+	selectCollection := func(t *testing.T, m model.Model) any {
+		return &tern.Select{ID: view.CollectionsID, Item: rowShowing(t, m, view.CollectionsID, "Today")}
+	}
+	plain := func(in any) func(*testing.T, model.Model) any { return func(*testing.T, model.Model) any { return in } }
 	for _, tt := range []struct {
 		name     string
 		from     model.Column
 		listKeys []string
-		click    any
+		click    func(*testing.T, model.Model) any
 		// The keyboard user starts here, and then presses keyboard.
 		keyFrom  model.Column
 		keyboard path
 		// before is clicked ahead of click on the pointer side.
 		before any
 	}{
-		{"leaf row from list", model.ColumnList, nil, &tern.Select{ID: view.IssueListID, Item: view.IssueID("leaf")}, model.ColumnList, keys("j"), nil},
-		{"leaf row from detail", model.ColumnDetail, nil, &tern.Select{ID: view.IssueListID, Item: view.IssueID("leaf")}, model.ColumnDetail, keys("escape", "j"), nil},
-		{"leaf row from Collections", model.ColumnCollections, nil, &tern.Select{ID: view.IssueListID, Item: view.IssueID("leaf")}, model.ColumnList, keys("j"), nil},
-		{"nested child row", model.ColumnList, []string{"space"}, &tern.Select{ID: view.IssueListID, Item: view.IssueID("child")}, model.ColumnList, keys("j"), nil},
+		{"leaf row from list", model.ColumnList, nil, selectRow("leaf"), model.ColumnList, keys("j"), nil},
+		{"leaf row from detail", model.ColumnDetail, nil, selectRow("leaf"), model.ColumnDetail, keys("escape", "j"), nil},
+		{"leaf row from Collections", model.ColumnCollections, nil, selectRow("leaf"), model.ColumnList, keys("j"), nil},
+		{"nested child row", model.ColumnList, []string{"space"}, selectRow("child"), model.ColumnList, keys("j"), nil},
 		{"parent row from list", model.ColumnList, []string{"shift+g"}, toggle, model.ColumnList, keys("g", "space"), nil},
 		{"parent row from detail", model.ColumnDetail, nil, toggle, model.ColumnDetail, keys("escape", "space"), nil},
 		{"parent row from Collections", model.ColumnCollections, nil, toggle, model.ColumnList, keys("space"), nil},
 		{"parent row collapses an expanded parent", model.ColumnCollections, []string{"space"}, toggle, model.ColumnList, keys("space"), nil},
-		{"top bar title from list", model.ColumnList, nil, click("", view.MenuClick), model.ColumnList, inputs(openMenu), nil},
-		{"top bar title from detail", model.ColumnDetail, nil, click("", view.MenuClick), model.ColumnDetail, inputs(openMenu), nil},
-		{"detail title from list", model.ColumnList, nil, click("", view.FocusDetailClick), model.ColumnList, keys("enter"), nil},
-		{"Activity tab", model.ColumnList, nil, click("", view.ActivityTabClick(model.TabLinks)), model.ColumnList, detailPath(model.TabLinks), nil},
-		{"detail row", model.ColumnDetail, nil, click("", view.DetailItemClick(model.TabLinks, "1")), model.ColumnDetail, detailPath(model.TabLinks), nil},
-		{"referenced Issue from detail", model.ColumnDetail, nil, click("", view.JumpClick("other")), model.ColumnDetail, jumpPath, linksTab},
-		{"referenced Issue from list", model.ColumnList, nil, click("", view.JumpClick("other")), model.ColumnList, jumpPath, linksTab},
-		{"Collection from Collections", model.ColumnCollections, nil, &tern.Select{ID: view.CollectionsID, Item: view.CollectionItemID(today)}, model.ColumnCollections, keys("j", "enter"), nil},
-		{"Collection from list", model.ColumnList, nil, &tern.Select{ID: view.CollectionsID, Item: view.CollectionItemID(today)}, model.ColumnList, keys("escape", "j", "enter"), nil},
-		{"Collection from detail", model.ColumnDetail, nil, &tern.Select{ID: view.CollectionsID, Item: view.CollectionItemID(today)}, model.ColumnDetail, keys("escape", "escape", "j", "enter"), nil},
+		{"top bar title from list", model.ColumnList, nil, plain(click("", view.MenuClick)), model.ColumnList, inputs(openMenu), nil},
+		{"top bar title from detail", model.ColumnDetail, nil, plain(click("", view.MenuClick)), model.ColumnDetail, inputs(openMenu), nil},
+		{"detail title from list", model.ColumnList, nil, plain(click("", view.FocusDetailClick)), model.ColumnList, keys("enter"), nil},
+		{"Activity tab", model.ColumnList, nil, plain(click("", view.ActivityTabClick(model.TabLinks))), model.ColumnList, detailPath(model.TabLinks), nil},
+		{"detail row", model.ColumnDetail, nil, plain(click("", view.DetailItemClick(model.TabLinks, "1"))), model.ColumnDetail, detailPath(model.TabLinks), nil},
+		{"referenced Issue from detail", model.ColumnDetail, nil, plain(click("", view.JumpClick("other"))), model.ColumnDetail, jumpPath, linksTab},
+		{"referenced Issue from list", model.ColumnList, nil, plain(click("", view.JumpClick("other"))), model.ColumnList, jumpPath, linksTab},
+		{"Collection from Collections", model.ColumnCollections, nil, selectCollection, model.ColumnCollections, keys("j", "enter"), nil},
+		{"Collection from list", model.ColumnList, nil, selectCollection, model.ColumnList, keys("escape", "j", "enter"), nil},
+		{"Collection from detail", model.ColumnDetail, nil, selectCollection, model.ColumnDetail, keys("escape", "escape", "j", "enter"), nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			pointer := clickAt(tt.from, tt.listKeys...)
 			if tt.before != nil {
 				pointer, _ = clicked(pointer, tt.before)
 			}
-			pointer, pointerCmds := clicked(pointer, tt.click)
+			pointer, pointerCmds := clicked(pointer, tt.click(t, pointer.Model))
 			keyboard, keyboardCmds := tt.keyboard(clickAt(tt.keyFrom, tt.listKeys...))
 			sameAs(t, "click and keys diverge", pointer, pointerCmds, keyboard, keyboardCmds)
 			afterClick, clickCmds := keys("escape")(pointer)
@@ -377,6 +385,46 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 				if want := " (" + strings.Join(labelKeys, " / ") + ")"; !strings.HasSuffix(labels[id], want) || labels[id] == want {
 					t.Errorf("%s label %q is not words followed by %q", id, labels[id], want)
 				}
+			}
+		})
+	}
+}
+
+// Clicking a button of the Close, Create, Draft editor or Filter card is pressing the chord its label names: the same state
+// and the same daemon commands. Each card draws exactly the buttons its Step offers.
+func TestCardButtonsOfTheCommonCardsClickLikeTheChordTheyName(t *testing.T) {
+	issue := driver.State{Model: model.Model{Actor: "reviewer", SelectedUID: "issue", Issues: []model.Issue{{UID: "issue", ProjectID: 2, Labels: []string{"bug"}}}}}
+	titled, _ := inputs(chord("n"), tern.Key{Text: "title"})(driver.State{Model: model.Model{Project: model.Project{ID: 7}}})
+	draftModel := withDetail(model.Model{Workspace: "/repo", SelectedUID: "a"}, &model.IssueDetailData{Issue: &model.Issue{UID: "a", ProjectID: 2, Body: "a😀b", Revision: 7}})
+	for _, tt := range []struct {
+		name    string
+		start   driver.State
+		mode    model.Mode
+		buttons []string
+	}{
+		{"Close", pressed(issue, "x"), model.ModeCloseForm, []string{"layer.close.actions.save", "layer.close.actions.quick", "layer.close.actions.cancel"}},
+		{"Create", titled, model.ModeCreate, []string{"layer.create.actions.save", "layer.create.actions.cancel"}},
+		{"Draft editor", pressed(driver.State{Model: draftModel}, "enter", "e"), model.ModeEditor, []string{"layer.editor.actions.save", "layer.editor.actions.editor", "layer.editor.actions.discard"}},
+		{"Filter", pressed(issue, "f"), model.ModeFilterForm, []string{"layer.filters.actions.apply", "layer.filters.actions.default", "layer.filters.actions.cancel"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.start.Model.CurrentMode(); got != tt.mode {
+				t.Fatalf("mode %s, want %s", got, tt.mode)
+			}
+			buttons, labels := cardButtonsOf(t, tt.start)
+			drawn := slices.Sorted(maps.Keys(buttons))
+			if want := slices.Sorted(slices.Values(tt.buttons)); !slices.Equal(drawn, want) {
+				t.Fatalf("buttons drawn %v, want %v", drawn, want)
+			}
+			for _, id := range drawn {
+				chord := strings.TrimPrefix(buttons[id], view.KeyClick(""))
+				binding, ok := model.LookupBindingForMode(chord, tt.mode)
+				if !ok || !strings.Contains(labels[id], binding.Key) {
+					t.Errorf("%s sends %q, which its label %q does not name", id, chord, labels[id])
+				}
+				keyboard, keyCmds := keys(chord)(tt.start)
+				pointer, clickCmds := clicked(tt.start, click(id, buttons[id]))
+				sameAs(t, id+" differs from its chord", pointer, clickCmds, keyboard, keyCmds)
 			}
 		})
 	}

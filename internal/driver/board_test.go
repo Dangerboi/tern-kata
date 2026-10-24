@@ -111,7 +111,7 @@ func lanes(t *testing.T, s driver.State) (heads []string, cards [][]string) {
 
 func cardNode(t *testing.T, s driver.State, uid string) tern.WireNode {
 	t.Helper()
-	id := view.CardID(s.Model, uid)
+	id := rowOf(t, s.Model, view.BoardID, uid)
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
 		if n.ID == id {
 			return n
@@ -260,7 +260,7 @@ func keyList(chords []string) []any {
 
 func TestClickingACardSelectsIt(t *testing.T) {
 	s := boardPane(t, updatedAt(boardCard("a"), 9), boardCard("b", "needs-info"))
-	out := step(t, s, click(view.CardID(s.Model, "b"), view.CardClick("b")))
+	out := step(t, s, click(rowOf(t, s.Model, view.BoardID, "b"), view.CardClick("b")))
 	if out.State.Model.SelectedUID != "b" {
 		t.Fatalf("selected %q", out.State.Model.SelectedUID)
 	}
@@ -270,7 +270,7 @@ func TestClickingACardSelectsIt(t *testing.T) {
 func TestKeyMovesRevealTheSelectedCard(t *testing.T) {
 	s := boardPane(t, updatedAt(boardCard("a"), 9), boardCard("b"))
 	out := step(t, s, key("j"))
-	wantOps(t, out, tern.OpReveal(view.CardID(out.State.Model, "b"), "nearest"))
+	wantOps(t, out, tern.OpReveal(rowOf(t, out.State.Model, view.BoardID, "b"), "nearest"))
 }
 
 func TestBoardSwitchesOnAndBackKeepingTheSelection(t *testing.T) {
@@ -287,7 +287,7 @@ func TestBoardSwitchesOnAndBackKeepingTheSelection(t *testing.T) {
 	if heads, _ := lanes(t, off.State); len(heads) != 0 || off.State.Model.SelectedUID != "b" {
 		t.Fatalf("the list did not come back with b selected: %d columns, selected %q", len(heads), off.State.Model.SelectedUID)
 	}
-	if !drawnIDs(t, *off.View)[view.IssueID("b")] {
+	if !rowOfDrawn(t, off.State.Model, view.IssueListID, "b") {
 		t.Error("the list does not draw the selected Issue")
 	}
 }

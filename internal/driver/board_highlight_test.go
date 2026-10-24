@@ -33,7 +33,7 @@ func highlightBoard(t *testing.T) driver.State {
 func highlight(t *testing.T, s driver.State, uid string) (tags []string, tone string) {
 	t.Helper()
 	nodes := wireNodes(t, view.Render(s.Model, now))
-	card := view.CardID(s.Model, uid)
+	card := rowOf(t, s.Model, view.BoardID, uid)
 	n := node(t, nodes, card)
 	if _, ok := n.P["head"]; ok {
 		t.Errorf("%s draws a head, the tags are badges in the id row", uid)
@@ -82,7 +82,7 @@ func TestTheSelectedCardKeepsItsRingAndDoneCardsStayMuted(t *testing.T) {
 	if tags, _ := highlight(t, s, "sel"); len(tags) != 0 {
 		t.Errorf("the selected card is tagged %q", tags)
 	}
-	n := node(t, wireNodes(t, view.Render(s.Model, now)), view.CardID(s.Model, "sel"))
+	n := node(t, wireNodes(t, view.Render(s.Model, now)), rowOf(t, s.Model, view.BoardID, "sel"))
 	if n.P["selected"] != true {
 		t.Errorf("the selected card lost its selected ring")
 	}
