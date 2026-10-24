@@ -42,8 +42,6 @@ type WorkflowsState struct {
 	runsMore  string
 	runsPages int
 	runsAsked bool
-	// detailHidden is the detail column's hidden flag from before the Page took its place.
-	detailHidden bool
 }
 
 // WorkflowCard is the Workflow card: the JSON text of a new workflow or of one being changed, edited in the card or in $EDITOR.
@@ -202,33 +200,24 @@ func (m Model) collectionProjectID() int64 {
 	return 0
 }
 
-// enterWorkflows is the Workflows Page's entry: the Project's workflows are read again each time, and the ones held stay on
+// enterWorkflows is the Workflows Page's own work on entry (see switchPage): the Project's workflows are read again each time, and the ones held stay on
 // screen until they answer.
 func enterWorkflows(m Model) (Model, []Cmd) {
-	m, cmds, ok := enterProjectPage(m, "Workflows Page")
-	if !ok {
-		return m, cmds
-	}
 	w := &m.Workflows
 	w.ProjectID = m.collectionProjectID()
-	w.detailHidden = m.DetailHidden()
-	w.Inspecting = false
-	m.Page = PageWorkflows
-	m.hidden = true
-	m.Focus = ColumnList
 	if w.ProjectID == 0 {
 		w.Err = errors.New("kata has not told this Pane the Project's id yet; open the Page again in a moment.")
-		return m, cmds
+		return m, nil
 	}
 	w.Err = nil
 	w.Loading = true
 	w.jobsRequest--
 	w.runsRequest--
 	w.runsMore, w.runsPages, w.runsAsked = "", 0, true
-	return m, append(cmds,
+	return m, []Cmd{
 		LoadWorkflows{Workspace: m.Workspace, ProjectID: w.ProjectID, ProjectUID: w.ProjectUID},
 		LoadJobs{Workspace: m.Workspace, ProjectID: w.ProjectID, Request: w.jobsRequest},
-		LoadRuns{Workspace: m.Workspace, ProjectID: w.ProjectID, Request: w.runsRequest})
+		LoadRuns{Workspace: m.Workspace, ProjectID: w.ProjectID, Request: w.runsRequest}}
 }
 
 // settleWorkflowRuns reads the next older page of the Project's Runs while a workflow still lacks its latest Run or the selected
@@ -249,14 +238,11 @@ func (m Model) settleWorkflowRuns() (Model, []Cmd) {
 	return m, []Cmd{LoadRuns{Workspace: m.Workspace, ProjectID: w.ProjectID, Before: w.runsMore, Request: w.runsRequest}}
 }
 
-// workflowsOff leaves the Workflows Page for the Issues Page and gives the detail column back, unless something already focused it.
-func (m Model) workflowsOff() Model {
-	m.Page = PageIssues
+// clearWorkflows closes the Workflows Page's inspector and drops its loading marker when the Page is left.
+func clearWorkflows(m Model) Model {
 	m.Workflows.Inspecting = false
-	if m.Focus != ColumnDetail {
-		m.hidden = m.Workflows.detailHidden
-	}
-	return m.revealInList(m.SelectedUID).WithVisibleSelection()
+	m.Workflows.Loading = false
+	return m
 }
 
 // settleWorkflows ends the Page when the Pane no longer shows its Project or the list lost focus to the Menu.
@@ -265,7 +251,7 @@ func (m Model) settleWorkflows() Model {
 		return m
 	}
 	if !m.Collection.IsProject() || m.Collection.ProjectUID != m.Workflows.ProjectUID || m.Focus != ColumnList {
-		return m.workflowsOff()
+		return m.leavePage()
 	}
 	return m
 }
