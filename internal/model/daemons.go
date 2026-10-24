@@ -135,9 +135,11 @@ func updateDaemons(m Model, msg Msg) (Model, []Cmd, bool) {
 }
 
 // daemonSwitched ends a switch. A failure says why and changes nothing else. A success starts the Pane over on the new daemon: what
-// it held of the old one (the Collection and Pages, every cache, the Undo history, the event stream) goes, and the Project is read
-// again, which reads the first snapshot and follows the new daemon's events. Every request counter steps, so an answer asked of the
-// old daemon is dropped when it arrives.
+// it held of the old one (the Collection and Pages, every cache, every card and form, the Drafts, the Undo history, the event
+// stream) goes, and the Project is read again, which reads the first snapshot and follows the new daemon's events. Every request
+// counter steps, so an answer asked of the old daemon is dropped when it arrives. Drafts live in memory only and are keyed by an
+// Issue's uid, which a replica shares with its hub, so one kept would send the old daemon's text to the new one: they are dropped,
+// and the Notice says how many.
 func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	if msg.Request != m.Daemons.switchRequest {
 		return m, nil
@@ -151,6 +153,9 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	m.Create, m.pending, m.etag, m.etagQuery = CreateState{}, "", "", SnapshotQuery{}
 	m.CloseForm, m.DatesForm, m.RecurrenceForm, m.JobForm, m.Backfill = CloseFormState{}, DatesFormState{}, RecurrenceFormState{}, JobFormState{}, BackfillState{}
 	m.FieldForm, m.MoveProject, m.afterMove, m.Moving = FieldFormState{}, MoveProjectState{}, nil, ""
+	m.DeleteForm, m.TokenForm, m.RevokeCard = DeleteFormState{}, TokenFormState{}, RevokeState{}
+	dropped := len(m.Drafts)
+	m.Drafts = nil
 	m.Project, m.Bound, m.Daemon = Project{}, false, msg.Daemon
 	m.Snapshot, m.Relationships, m.Issues, m.SelectedUID, m.Groups, m.ExpandedUIDs = Snapshot{}, nil, nil, "", nil, nil
 	m.Loading, m.Err = true, nil
@@ -173,6 +178,13 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 		wakeGeneration: m.wakeGeneration, resubscribe: true,
 	}
 	m.Notice = `daemon "` + msg.Name + `": connected`
+	switch dropped {
+	case 0:
+	case 1:
+		m.Notice += "; 1 unsent draft dropped"
+	default:
+		m.Notice += "; " + strconv.Itoa(dropped) + " unsent drafts dropped"
+	}
 	return m, []Cmd{LoadProject{Workspace: m.Workspace, Actor: m.Actor, Switched: true}}
 }
 
