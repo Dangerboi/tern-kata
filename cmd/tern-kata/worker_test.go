@@ -204,7 +204,7 @@ func TestWorkerStatusSaysHowItIsSupervised(t *testing.T) {
 		if err != nil || !strings.Contains(out, tc.want) {
 			t.Errorf("supervisor %q: want %q in:\n%s (err %v)", tc.supervisor, tc.want, out, err)
 		}
-		if tc.supervisor != "" && !strings.Contains(out, "worker.manual") {
+		if tc.supervisor != "" && !strings.Contains(out, "create "+worker.SupervisionOffWords+".") {
 			t.Errorf("supervised status does not say how to turn supervision off:\n%s", out)
 		}
 	}
@@ -468,6 +468,21 @@ func TestWorkerStopSaysTheModeTheRunsInFlightAndWhetherItStartsAgain(t *testing.
 	case <-stopped:
 	case <-time.After(10 * time.Second):
 		t.Fatal("the worker did not exit")
+	}
+}
+
+func TestWorkerStopSaysNothingWillStartItAgainInTheSupervisionRulesWords(t *testing.T) {
+	f := newWorkerFixture(t, "")
+	stop := f.serveUntilStopped(t)
+	defer stop()
+
+	out, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"stop"}})
+	want := "Stopping when idle: 0 runs in flight, so the worker exits now. Nothing will start it again: start one with `tern-kata worker`, or let the plugin (" + worker.SupervisionOnWords + ").\n"
+	if err != nil || out != want {
+		t.Fatalf("stop printed %q, %v; want %q", out, err, want)
+	}
+	if !strings.Contains(worker.SupervisionOnWords, worker.ConfigFileName) || !strings.Contains(worker.SupervisionOnWords, worker.ManualFileName) {
+		t.Errorf("the rule's words %q do not name %s and %s", worker.SupervisionOnWords, worker.ConfigFileName, worker.ManualFileName)
 	}
 }
 
