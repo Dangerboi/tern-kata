@@ -11,12 +11,12 @@ expect_tree "[data-id='main.columns.collections']" '.ok and .count == 0'
 expect_tree "[data-id='main.columns.detail']" '.ok and .count == 1'
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 
-# The Menu button opens the Menu at its top level: the bound Project first and marked current, the fixed Collections, then Projects and New Project. No other Project is listed inline.
+# The Menu button opens the Menu at its top level: the bound Project first and marked current, the fixed Collections, the Lettered Pages (Credentials, Federation), then Projects and New Project. No other Project is listed inline.
 picker_projects_entry="[data-id='layer.collections.list.projects']"
 ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
-expect_tree "$picker_items" '.ok and .count == 9 and .nodes[0].text == "smokecurrent" and .nodes[0]["aria-selected"] == "true" and .nodes[1].text == "Inbox" and .nodes[-1].text == "New Project"'
-expect_tree "$picker_items" '.nodes[-2].text == "Projects"'
+expect_tree "$picker_items" '.ok and .count == 11 and .nodes[0].text == "smokecurrent" and .nodes[0]["aria-selected"] == "true" and .nodes[1].text == "Inbox" and .nodes[-1].text == "New Project"'
+expect_tree "$picker_items" '.nodes[-2].text == "Projects" and .nodes[-3].text == "Federation" and .nodes[-4].text == "Credentials"'
 expect_tree "[data-id^='layer.collections.list.project.']" '.ok and .count == 1'
 expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("enter open Collection") and contains("esc close"))'
 ctl key End
