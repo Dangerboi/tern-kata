@@ -13,8 +13,8 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"go.kenn.io/kit/safefileio"
 	"go.kenn.io/kata/pkg/client"
+	"go.kenn.io/kit/safefileio"
 )
 
 // shortcut: kata's client cannot connect to a catalog entry by name, so the Locator below builds the connection from the entry itself (a remote one) or from `kata daemon locate` (a local one); delete it once pkg/client does.

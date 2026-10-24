@@ -131,11 +131,13 @@ func TestALocalCatalogEntryWithNoTokenConnectsWithTheImplicitCredentialsKataWoul
 		setup func(kataHome string)
 		entry CatalogEntry
 	}{
-		"the environment token":                   {func(string) { t.Setenv("KATA_AUTH_TOKEN", "s3cret") }, CatalogEntry{Name: "mine", Local: true}},
-		"the config auth token":                   {func(home string) { writeCredential(t, filepath.Join(home, "config.toml"), "[auth]\ntoken = \"s3cret\"\n") }, CatalogEntry{Name: "mine", Local: true}},
-		"the persisted owner token":               {func(home string) { writeCredential(t, filepath.Join(home, "auth-token"), "s3cret\n") }, CatalogEntry{Name: "mine", Local: true}},
+		"the environment token": {func(string) { t.Setenv("KATA_AUTH_TOKEN", "s3cret") }, CatalogEntry{Name: "mine", Local: true}},
+		"the config auth token": {func(home string) {
+			writeCredential(t, filepath.Join(home, "config.toml"), "[auth]\ntoken = \"s3cret\"\n")
+		}, CatalogEntry{Name: "mine", Local: true}},
+		"the persisted owner token":                {func(home string) { writeCredential(t, filepath.Join(home, "auth-token"), "s3cret\n") }, CatalogEntry{Name: "mine", Local: true}},
 		"the persisted owner token of its profile": {func(string) { writeCredential(t, filepath.Join(profileHome, "auth-token"), "s3cret\n") }, CatalogEntry{Name: "mine", Local: true, Home: profileHome}},
-		"its own token over the environment":      {func(string) { t.Setenv("KATA_AUTH_TOKEN", "wrong") }, CatalogEntry{Name: "mine", Local: true, InlineToken: "s3cret"}},
+		"its own token over the environment":       {func(string) { t.Setenv("KATA_AUTH_TOKEN", "wrong") }, CatalogEntry{Name: "mine", Local: true, InlineToken: "s3cret"}},
 	} {
 		home := t.TempDir()
 		t.Setenv("KATA_HOME", home)
