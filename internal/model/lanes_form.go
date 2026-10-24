@@ -175,7 +175,7 @@ func updateLanesFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	default:
 		text := form.at(form.Field)
 		var edited bool
-		if *text, edited = editText(*text, &form.Caret, form.Field, binding, bound, msg); edited {
+		if *text, edited = editText(*text, &form.Caret, form.Field, bound, msg); edited {
 			form.Err = nil
 		}
 	}

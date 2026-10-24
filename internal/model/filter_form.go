@@ -156,10 +156,8 @@ func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 		if !m.FilterFieldShown(FilterStatus) {
 			m.FilterForm.Values.Status = status
 		}
-	case DeleteInput, ClearInput:
-		if field := filterTextField(&m.FilterForm); field != nil {
-			*field, _ = editText(*field, &m.FilterForm.Caret, m.FilterForm.Field, Binding{Action: action}, true, KeyMsg{})
-		} else if choice := m.FilterForm.Values.value(m.FilterForm.Field); choice != nil {
+	case DeleteInput, ClearInput: // the shared step took them in a text field
+		if choice := m.FilterForm.Values.value(m.FilterForm.Field); choice != nil && filterTextField(&m.FilterForm) == nil {
 			*choice = ""
 		}
 	}

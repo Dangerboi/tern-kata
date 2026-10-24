@@ -17,7 +17,7 @@ func TestRecurringCardsStartTheirTitleWithTheRecurrenceMark(t *testing.T) {
 	nodes := wireNodes(t, view.Render(s.Model, now))
 
 	for uid, want := range map[string]string{"open": "↻ Title of open", "done": "↻ Title of done", "plain": "Title of plain"} {
-		n := node(t, nodes, view.CardID(s.Model, uid)+".title")
+		n := node(t, nodes, rowOf(t, s.Model, view.BoardID, uid)+".title")
 		spans, _ := n.P["spans"].([]any)
 		if got, _ := spans[0].(map[string]any)["t"].(string); got != want {
 			t.Errorf("%s card title = %q, want %q", uid, got, want)

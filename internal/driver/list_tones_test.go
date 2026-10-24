@@ -13,7 +13,7 @@ import (
 // listCell is the style of the span of Issue uid's list row whose text contains text, with the detail folded so the owner shows.
 func listCell(t *testing.T, s driver.State, uid, text string) string {
 	t.Helper()
-	row := node(t, wireNodes(t, view.Render(s.Model, now)), view.IssueID(uid))
+	row := node(t, wireNodes(t, view.Render(s.Model, now)), rowOf(t, s.Model, view.IssueListID, uid))
 	for _, part := range []string{"label", "value"} {
 		spans, _ := row.P[part].([]any)
 		for _, sp := range spans {

@@ -76,8 +76,9 @@ func popups() []popup {
 	}
 }
 
-// Every pair of cards that can be open at once agrees on which one is on top: the mode, the card
-// that takes the keys, the card drawn and the card holding the text caret.
+// Every pair of cards that can be open at once agrees on which one is on top, seen only through Step: the mode, the card
+// that takes the keys, the card whose layer is drawn (no other card's layer is drawn above it or at all) and the card holding
+// the text caret.
 func TestPopupCardPrecedenceIsOneOrder(t *testing.T) {
 	cards := popups()
 	base := browsing(t, 160)

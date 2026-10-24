@@ -118,15 +118,15 @@ func TestEveryClickTheViewDrawsDecodesToAMessage(t *testing.T) {
 // Issue rows and the Menu list send Select inputs; Tern puts the item id of the row in them.
 func TestSelectInputsDecodeForTheListAndBothMenus(t *testing.T) {
 	s := browsing(t, 160)
-	if got := driver.Step(s, &tern.Select{ID: view.IssueListID, Item: view.IssueID("beta")}, now).State.Model.SelectedUID; got != "beta" {
+	if got := driver.Step(s, &tern.Select{ID: view.IssueListID, Item: issueRow(t, s.Model, view.IssueListID, beta)}, now).State.Model.SelectedUID; got != "beta" {
 		t.Errorf("Issue row select picked %q", got)
 	}
 	unbound := loadedWith(t, 160, model.Project{}, model.Snapshot{Issues: []model.Issue{alpha}})
-	if out := driver.Step(unbound, &tern.Select{ID: view.CollectionsID, Item: view.CollectionItemID("today")}, now); len(out.Cmds) != 1 {
+	if out := driver.Step(unbound, &tern.Select{ID: view.CollectionsID, Item: rowShowing(t, unbound.Model, view.CollectionsID, "Today")}, now); len(out.Cmds) != 1 {
 		t.Errorf("sidebar select commands = %#v", out.Cmds)
 	}
 	menu := feed(t, s, openMenu).State
-	if out := driver.Step(menu, &tern.Select{ID: view.PickerListID, Item: view.PickerItemID("today")}, now); out.State.Model.Picker.Open {
+	if out := driver.Step(menu, &tern.Select{ID: view.PickerListID, Item: rowShowing(t, menu.Model, view.PickerListID, "Today")}, now); out.State.Model.Picker.Open {
 		t.Error("Menu select left the Menu open")
 	}
 }

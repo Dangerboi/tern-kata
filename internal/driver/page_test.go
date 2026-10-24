@@ -55,7 +55,7 @@ func TestEachPageKeepsItsSelectionWhileAnotherIsShown(t *testing.T) {
 		t.Errorf("the Board Page selects %q, want c", board.Model.SelectedUID)
 	}
 	back := feed(t, board, key("1")).State
-	if back.Model.SelectedUID != "c" || !drawnIDs(t, view.Render(back.Model, now))[view.IssueID("c")] {
+	if back.Model.SelectedUID != "c" || !rowOfDrawn(t, back.Model, view.IssueListID, "c") {
 		t.Errorf("the Issues Page selects %q and does not draw it", back.Model.SelectedUID)
 	}
 }

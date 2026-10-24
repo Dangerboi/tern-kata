@@ -126,7 +126,7 @@ func updateProjectFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		m.ProjectForm = ProjectFormState{}
 	default:
 		var edited bool
-		if form.Name, edited = editText(form.Name, &form.Caret, "", binding, bound, msg); edited {
+		if form.Name, edited = editText(form.Name, &form.Caret, "", bound, msg); edited {
 			form.Err = nil
 		}
 	}

@@ -59,7 +59,7 @@ func askedRuns(cmds []model.Cmd) (model.LoadRuns, bool) {
 
 func runCardText(t *testing.T, s driver.State, uid string) string {
 	t.Helper()
-	id := view.RunID(uid)
+	id := runRow(t, s.Model, uid)
 	var text string
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
 		if n.ID == id || strings.HasPrefix(n.ID, id+".") {
@@ -293,8 +293,8 @@ func TestRunsPageSelectionClickAndMoveAreFollowed(t *testing.T) {
 	if moved.State.Model.Runs.Selected != "R2" {
 		t.Fatalf("selected %q after j", moved.State.Model.Runs.Selected)
 	}
-	wantOps(t, moved, tern.OpReveal(view.RunID("R2"), "nearest"))
-	clicked := step(t, s, click(view.RunID("R1"), view.RunClick("R1")))
+	wantOps(t, moved, tern.OpReveal(runRow(t, moved.State.Model, "R2"), "nearest"))
+	clicked := step(t, s, click(runRow(t, s.Model, "R1"), view.RunClick("R1")))
 	if clicked.State.Model.Runs.Selected != "R1" {
 		t.Errorf("selected %q after a click, want R1", clicked.State.Model.Runs.Selected)
 	}
