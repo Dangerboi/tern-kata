@@ -61,6 +61,7 @@ type Model struct {
 	etagQuery      SnapshotQuery
 	CloseForm      CloseFormState
 	DatesForm      DatesFormState
+	DeleteForm     DeleteFormState
 	RecurrenceForm RecurrenceFormState
 	JobForm        JobFormState
 	// Backfill is the card that asks whether the runs a native job missed are created before the job runs again.
@@ -199,6 +200,12 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return updateRecurrence(m, msg)
 	case DatesResultMsg:
 		return updateDates(m, msg)
+	case IssueDeleted:
+		return updateDelete(m, msg)
+	case DeletedLooked:
+		return deletedLooked(m, msg), nil
+	case IssueRestored:
+		return issueRestored(m, msg)
 	case ProjectMoveAnswer:
 		return updateMoveProject(m, msg)
 	case MoveTargetSelected:
@@ -215,6 +222,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			m.FieldForm.Value = msg.Value
 			m.FieldForm.Err = nil
 			m.FieldForm.Suggestion = 0
+			m.FieldForm.Found = nil
 		}
 	case FieldLabelsLoaded:
 		if m.FieldForm.Open && m.FieldForm.UID == msg.UID {

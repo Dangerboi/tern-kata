@@ -30,6 +30,7 @@ const (
 	UndoLinkAdd     UndoKind = "link.add"
 	UndoLaneMove    UndoKind = "lane.move"
 	UndoDates       UndoKind = "dates.set"
+	UndoDelete      UndoKind = "delete"
 )
 
 // IssueState is the part of an Issue an undo compares and restores.
@@ -157,10 +158,12 @@ func undoBoundary(cmd Cmd) (string, bool) {
 		LoadJobWorkflows, LoadJobs, LoadRuns, ShowRun, LoadRecurTarget, LoadFieldLabels, LoadProject, ReadSnapshot, Subscribe,
 		WakeAt, OpenIssue, LookupSearchID, LoadWorkflows, ReadWorkflowText, LoadWorker, LoadWorkerSetup, SaveWorkerSetup,
 		SaveWorkerEdit, StopWorker, SetWorkerSupervision, LoadLocalRun, RunJobNow, ResumeLocalRun, AbandonLocalRun,
-		OpenRunSession, CreateProject, BindProject:
+		OpenRunSession, CreateProject, BindProject, LookupDeleted:
 		return "", false
-	case CloseIssueCmd, ReopenIssueCmd, MoveIssueCmd, SetDatesCmd, UndoChange:
+	case CloseIssueCmd, ReopenIssueCmd, MoveIssueCmd, SetDatesCmd, DeleteIssueCmd, UndoChange:
 		return "", false
+	case RestoreIssueCmd:
+		return "restoring an Issue cannot be undone", true
 	case MoveToProjectCmd:
 		if cmd.DryRun {
 			return "", false
@@ -221,6 +224,8 @@ func (m Model) recordWrite(msg Msg) Model {
 	case DraftSaved:
 		record = msg.Record
 	case DraftFailed:
+		record = msg.Record
+	case IssueDeleted:
 		record = msg.Record
 	default:
 		return m

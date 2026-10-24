@@ -49,7 +49,7 @@ const (
 // the Projects level, New Project, a Lettered Page (Page names it), or Back, which leaves the Projects level.
 type PickerEntry struct {
 	Collection
-	NewProject, Projects, Back, Lettered bool
+	NewProject, Projects, Back, Lettered, Restore bool
 	Page                                 Page
 }
 
@@ -58,6 +58,8 @@ func (e PickerEntry) Key() string {
 	switch {
 	case e.Lettered:
 		return "page." + pageDefs[e.Page].id
+	case e.Restore:
+		return RestoreKey
 	case e.NewProject:
 		return NewProjectKey
 	case e.Projects:
@@ -102,6 +104,9 @@ func (m Model) menuEntries(projects bool, filter string) []PickerEntry {
 			entries = append(entries, PickerEntry{Collection: Collection{Title: def.label}, Lettered: true, Page: def.page})
 		}
 	}
+	if match(RestoreTitle) {
+		entries = append(entries, PickerEntry{Collection: Collection{Title: RestoreTitle}, Restore: true})
+	}
 	if match(ProjectsTitle) {
 		entries = append(entries, PickerEntry{Collection: Collection{Title: ProjectsTitle}, Projects: true})
 	}
@@ -126,7 +131,7 @@ func entryIndex(entries []PickerEntry, key string) int {
 // syncSidebarCursor puts the sidebar cursor on the current Collection when the level shows it.
 func (m Model) syncSidebarCursor() Model {
 	for i, entry := range m.SidebarEntries() {
-		if entry.Collection == m.Collection && !entry.Projects && !entry.Back && !entry.NewProject && !entry.Lettered {
+		if entry.Collection == m.Collection && !entry.Projects && !entry.Back && !entry.NewProject && !entry.Lettered && !entry.Restore {
 			m.CollectionCursor = i
 		}
 	}
@@ -184,6 +189,12 @@ func openEntry(m Model, entry PickerEntry, popup bool) (Model, []Cmd) {
 			m = setMenuLevel(m, false, false)
 		}
 		return showPage(entry.Page)(m)
+	case entry.Restore:
+		m.Picker, m.Focus = PickerState{}, ColumnList
+		if m.SidebarProjects {
+			m = setMenuLevel(m, false, false)
+		}
+		return openRestore(m), nil
 	case entry.NewProject:
 		return openProjectForm(m), nil
 	case entry.Projects:
