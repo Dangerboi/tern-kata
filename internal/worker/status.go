@@ -57,6 +57,8 @@ type RunStatus struct {
 	Issue   string
 	State   string // running, resuming, held: <reason>, succeeded, failed, cancelled, ...
 	Pending string // what is still unreported
+	// Unrecorded is why the latest attempt's output was not recorded, empty when it was.
+	Unrecorded string
 	// Inspect names each report kata holds something newer than, so it was not sent: the run needs a person to look.
 	Inspect []string
 	// Attempt is the current attempt of the run's prompt step, 1 for a run never resumed.
@@ -170,6 +172,7 @@ func runStatus(j *Journal) RunStatus {
 	}
 	r.Pending = strings.Join(pending, ", ")
 	r.Inspect = j.Inspections()
+	r.Unrecorded = j.outputLoss()
 	return r
 }
 
@@ -232,6 +235,9 @@ func (s Status) String() string {
 		}
 		if r.Pending != "" {
 			fmt.Fprintf(&b, "  (not yet reported: %s)", r.Pending)
+		}
+		if r.Unrecorded != "" {
+			fmt.Fprintf(&b, "  (%s)", outputNote(r.Unrecorded))
 		}
 		for _, why := range r.Inspect {
 			b.WriteString("\n    needs inspection: " + why)
