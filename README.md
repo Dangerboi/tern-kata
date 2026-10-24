@@ -40,7 +40,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 ![The Workflows Page with a workflow selected and its steps shown](docs/images/workflows.png)
 
-**Attention.** `6` lists the requests kata holds for you, in every Project on the daemon, newest first: who asked, the message, and the comment a request asks you to answer. Enter opens the request's Issue, on the comment it names so `R` answers it, and `c` clears it. It reads the Inbox address `KATA_INBOX_USER`, else the actor the Pane writes as. See [Pages and the Board](docs/guide/pages-and-board.md#attention-page).
+**Attention.** `6`, or `T` from any Page and the Menu, lists the requests kata holds for you, in every Project on the daemon, newest first: who asked, the message, and the comment a request asks you to answer. Enter opens the request's Issue, on the comment it names so `R` answers it, and `c` clears it. It reads the Inbox address `KATA_INBOX_USER`, else the actor the Pane writes as. See [Pages and the Board](docs/guide/pages-and-board.md#attention-page).
 
 **The worker.** `tern-kata worker` runs kata's agent prompt jobs and workflows through omp and your shell on your machine and records every run in kata. The plugin starts and supervises it once a `worker.toml` exists. Set it up from the Pane with `W` on the Jobs Page, which opens the Worker card (set up, serve the Project, edit `worker.toml`, restart or stop the worker, turn supervision off and on; the trust choice comes first), or from a shell with `tern-kata worker init` (optional `--executor`, `--actor`, `--command`, `--model`, `--thinking`), `worker add`, `worker edit` and `worker stop [--now]`. Read the trust note first. See [The worker](docs/guide/worker.md).
 
@@ -52,13 +52,15 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 **Dates card.** `d` sets an Issue's scheduled date and deadline, typed as a date, `today`, `tomorrow`, `+3d` or `+1w`. See [Dates](docs/guide/dates.md).
 
-![The Dates card over the Board, with "+1w" resolving to 2026-10-29](docs/images/dates-card.png)
+![The Dates card over the Board, with "+1w" resolving to 2026-11-01](docs/images/dates-card.png)
 
 **Moving an Issue.** `M` opens the Move card on the selected Issue: pick a Project from a filtered list, preview the move (kata checks it and changes nothing), then move it, guarded on the revision the card opened with. A Notice links to the Issue in its new Project. See [Moving an Issue](docs/guide/pages-and-board.md#moving-an-issue).
 
 **Deleting and restoring an Issue.** `X` opens the Delete card on the selected Issue: type its `project#id` to confirm, add a reason if you like, and kata deletes it (soft: it keeps the Issue and its history). `u` right after restores it, and the Menu's "Restore a deleted Issue" brings back an earlier one by short id, `project#id` or ULID. See [Deleting and restoring an Issue](docs/guide/pages-and-board.md#deleting-and-restoring-an-issue).
 
 **kata links.** Links from agents' chat replies open the Issue in tern-kata. See [Agents](docs/guide/agents.md).
+
+**kata tui's keys.** `u` undoes the last change the Pane made (up to 20), `q` asks "Quit tern-kata? y/n" first (kata's `[tui] confirm_quit = false` turns that off), `b` and `l` add a Blocking or related link, `t` gives an Issue to you for a set time, `]` and `[` step through a comment's links, `o` switches the nested list's sibling order, `!` then `0`-`4` sets the priority at once, and `ctrl+j`/`ctrl+k`, backspace and `ctrl+alt+<`/`ctrl+alt+>` work as in kata tui. See [Compared with `kata tui`](docs/guide/kata-tui.md).
 
 ## Requirements
 
@@ -102,7 +104,7 @@ Agents: follow these steps only when the user has asked you to install tern-kata
    irm https://raw.githubusercontent.com/Dangerboi/tern-kata/main/install.ps1 | iex
    ```
 
-   They install the latest release to `~/.local/bin` (`%LOCALAPPDATA%\Programs\tern-kata` on Windows, added to your user `PATH`), verify its checksum, and also install the window plugin when `tern` is on `PATH`. Run in a terminal with `npx` available, they then offer to install the [agent skills](docs/guide/agents.md#agent-skills). Once the plugin is installed, the **Install tern-kata** palette command runs the same one-liner in a new Pane. `tern-kata --help` lists the flags.
+   They install the latest release to `~/.local/bin` (`%LOCALAPPDATA%\Programs\tern-kata` on Windows, added to your user `PATH`), verify its checksum, and also install the window plugin when `tern` is on `PATH`. Run in a terminal with `npx` (or `bunx`) available, they then offer to install the [agent skills](docs/guide/agents.md#agent-skills). Once the plugin is installed, the **Install tern-kata** palette command runs the same one-liner in a new Pane. `tern-kata --help` lists every subcommand and flag.
 
    Alternatively, with Go 1.27+:
 

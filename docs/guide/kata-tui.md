@@ -8,7 +8,8 @@ tern-kata takes kata tui's movement keys:
 - `ctrl+n`/`ctrl+p` to move a row;
 - `pgup`/`pgdn` and `alt+v`/`ctrl+v` to page;
 - `g`/`G`;
-- `I` to open the Inbox (from the list, the Issue detail, the Jobs, Runs and Workflows Pages and the Menu sidebar; tern-kata opens it, where kata tui toggles it).
+- `I` to open the Inbox (from every Page, the Issue detail and the Menu sidebar; tern-kata opens it, where kata tui toggles it);
+- `o` in the nested Issue list to switch siblings between creation order and blocking order (blockers first; creation order breaks ties and cycles), which it answers with "graph order: topological" or "graph order: temporal". The choice lasts for the Pane and is not saved; `o` on the Runs Page still opens the session.
 
 `?` lists every key. The Emacs keys and `I` are plain text in search and in Popup cards.
 
@@ -42,11 +43,11 @@ In the Issue detail, `b` adds a Blocking link and `l` a related link to the Issu
 
 ## Moving an Issue
 
-kata tui has no key for moving an Issue to another Project; kata web and the CLI do. `M` in tern-kata opens the Move card, which sends kata's move (see [Moving an Issue](pages-and-board.md#moving-an-issue)). It is not a row of the table below, which lists kata tui keys only.
+kata tui has no key for moving an Issue to another Project; kata web and the CLI do. `M` in tern-kata opens the Move card, which sends kata's move (see [Moving an Issue](pages-and-board.md#moving-an-issue)).
 
 ## Deleting and restoring an Issue
 
-kata tui has no key for deleting an Issue; the CLI does. `X` in tern-kata opens the Delete card, which sends kata's delete with the confirmation `kata delete` asks for: the typed qualified id, as `DELETE <project>#<id>` in the confirmation header. The Menu's **Restore a deleted Issue** brings one back. See [Deleting and restoring an Issue](pages-and-board.md#deleting-and-restoring-an-issue). Neither is a row of the table below, which lists kata tui keys only; purge stays in the CLI.
+kata tui has no key for deleting an Issue; the CLI does. `X` in tern-kata opens the Delete card, which sends kata's delete with the confirmation `kata delete` asks for: the typed qualified id, as `DELETE <project>#<id>` in the confirmation header. The Menu's **Restore a deleted Issue** brings one back. See [Deleting and restoring an Issue](pages-and-board.md#deleting-and-restoring-an-issue). Purge stays in the CLI.
 
 ## Undo
 

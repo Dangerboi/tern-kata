@@ -113,6 +113,8 @@ Editing from the Pane:
 | `X` | Delete the Issue after typing its id; restore it with `u` or from the Menu (see [Deleting and restoring an Issue](#deleting-and-restoring-an-issue)) |
 | `@`, `U` | Attach a file; list and remove Attachments (see [Attachments](attachments.md)) |
 | `u` | Undo the last change this Pane made (see [Compared with `kata tui`](kata-tui.md#undo)) |
+| `o` | In the nested Issue list: switch siblings between creation and blocking order (see [Compared with `kata tui`](kata-tui.md)) |
+| `q` | Quit, after "Quit tern-kata? y/n" (see [Compared with `kata tui`](kata-tui.md#quitting)) |
 | `e` | Edit the Issue body in Tern's editor |
 | `?` | Every key |
 
