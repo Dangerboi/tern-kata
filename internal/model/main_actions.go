@@ -296,7 +296,7 @@ var mainRows = []actionEntry{
 	{action: AddRelatedAction, modes: []Mode{ModeDetail}, keys: keys("l", "l"), help: "related", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 19, "add a related link"}}, handle: fieldFor(AddRelatedAction)},
 	{action: PriorityAction, modes: issueModes, keys: keys("!", "!"), help: "priority", footer: issueModes, sheet: []sheetLine{{sheetDetail, 14, "set priority"}}, handle: fieldFor(PriorityAction)},
 	{action: OpenDates, modes: issueModes, keys: keys("d", "d"), help: "dates", footer: issueModes, sheet: []sheetLine{{sheetDetail, 17, "set scheduled date and deadline (Dates card)"}}, handle: pure(openDates)},
-	{action: OpenMoveProject, modes: issueModes, keys: keys("shift+m", "M"), help: "to Project", footer: issueModes, sheet: []sheetLine{{sheetDetail, 21, "move the Issue to another Project (Move card)"}}, handle: pure(openMoveProject)},
+	{action: OpenMoveProject, modes: issueModes, keys: keys("shift+m", "M"), help: "to Project", footer: issueModes, sheet: []sheetLine{{sheetDetail, 30, "move the Issue to another Project (Move card)"}}, handle: pure(openMoveProject)},
 	{action: OpenRecurrenceAction, modes: issueModes, keys: keys("shift+o", "O"), help: "make or change recurrence", sheet: []sheetLine{{sheetDetail, 16, "make or change recurrence"}}, handle: pure(openRecurrence)},
 	{action: NewChild, modes: issueModes, keys: keys("shift+n", "N"), help: "child", footer: issueModes, sheet: []sheetLine{{sheetChildren, 1, "new child"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, true) }},
 	// Layout, back, help and quit.
