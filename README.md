@@ -52,7 +52,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 **Dates card.** `d` sets an Issue's scheduled date and deadline, typed as a date, `today`, `tomorrow`, `+3d` or `+1w`. See [Dates](docs/guide/dates.md).
 
-![The Dates card over the Board, with "+1w" resolving to 2026-10-29](docs/images/dates-card.png)
+![The Dates card over the Board, with "+1w" resolving to 2026-11-01](docs/images/dates-card.png)
 
 **Moving an Issue.** `M` opens the Move card on the selected Issue: pick a Project from a filtered list, preview the move (kata checks it and changes nothing), then move it, guarded on the revision the card opened with. A Notice links to the Issue in its new Project. See [Moving an Issue](docs/guide/pages-and-board.md#moving-an-issue).
 
