@@ -56,3 +56,23 @@ func TestFooterWrapsItsHintsOntoMoreLinesInsteadOfHidingThem(t *testing.T) {
 		}
 	}
 }
+
+// Wrapped onto several lines, every hint is still a node of its own that reads key and label together, the last one
+// included, so a footer longer than the tree's text cut-off is checked by its hint and not by the joined lines.
+func TestWrappedFooterKeepsEachHintWhole(t *testing.T) {
+	nodes := render(t, apply(browsing(), model.ResizeMsg{Cols: model.MinCols}))
+	if len(footerLines(t, model.MinCols)) < 2 {
+		t.Fatal("the footer did not wrap")
+	}
+	for id, want := range map[string]string{"dock.hints.grid.": "esc Menu"} {
+		var found []string
+		for key, n := range nodes {
+			if strings.HasPrefix(key, id) && strings.HasSuffix(key, ".escape") {
+				found = append(found, text(n))
+			}
+		}
+		if len(found) != 1 || found[0] != want {
+			t.Errorf("%s…escape nodes read %q, want [%q]", id, found, want)
+		}
+	}
+}
