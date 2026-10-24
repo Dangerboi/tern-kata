@@ -89,10 +89,14 @@ const (
 	ToggleArchivedWorkflows Action = "toggle-archived-workflows"
 	ShowAttentionPage       Action = "show-attention-page"
 	OpenAttentionRequest    Action = "open-attention-request"
+	ClearAttentionRequest   Action = "clear-attention-request"
 	ReloadAttention         Action = "reload-attention"
 	ShowCredentialsPage     Action = "show-credentials-page"
 	RefreshCredentials      Action = "refresh-credentials"
 	LetteredBack            Action = "lettered-back"
+	ShowFederationPage      Action = "show-federation-page"
+	RefreshFederation       Action = "refresh-federation"
+	OpenFederationDetail    Action = "open-federation-detail"
 )
 
 // Binding is one chord in one mode, as the lookup, the footer and the help sheet read it. A binding of
@@ -146,6 +150,7 @@ const (
 	ModeCredentials   Mode = "credentials"
 	// ModeQuit is the question "Quit tern-kata? y/n", which takes only its answers.
 	ModeQuit Mode = "quit"
+	ModeFederation    Mode = "federation"
 )
 
 // cardBindings are the keys of the Popup cards. Each card's handler reads them by mode; the

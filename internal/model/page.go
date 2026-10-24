@@ -1,6 +1,9 @@
 package model
 
-import "slices"
+import (
+	"slices"
+	"strconv"
+)
 
 // Page is one of the Pane's top-level views, chosen from the Page bar. Model.Page is the current one.
 //
@@ -26,6 +29,8 @@ const (
 	PageAttention
 	// PageCredentials is the Lettered Page of the daemon's API tokens; its state is Model.Credentials.
 	PageCredentials
+	// PageFederation is the Lettered Page of this daemon's spoke federations; its state is Model.Federation.
+	PageFederation
 )
 
 // SecondColumn says what a Page's second column is. A Page declares it in pageDefs, and the one leave rule reads it.
@@ -59,6 +64,8 @@ const (
 	ListNodeAttention
 	// ListNodeCredentials is the Credentials Page's list node.
 	ListNodeCredentials
+	// ListNodeFederation is the Federation Page's list node.
+	ListNodeFederation
 )
 
 // ListNode is the current Page's list node.
@@ -185,6 +192,10 @@ func init() {
 			mode: credentialsMode, update: updateCredentials, list: ListNodeCredentials,
 			moves:  pageMoves{mode: ModeCredentials, noun: "credential", move: moveCredential, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
 			keymap: []keySegment{movementKeys, rowsOf(credentialsRows)}},
+		{page: PageFederation, id: "federation", label: "Federation", chord: "F", press: "shift+f", lettered: true, action: ShowFederationPage, second: SecondInspector, enter: enterFederation, clear: clearFederation,
+			mode: federationMode, update: updateFederation, list: ListNodeFederation,
+			moves:  pageMoves{mode: ModeFederation, noun: "spoke", move: moveFederation, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
+			keymap: []keySegment{movementKeys, rowsOf(federationRows)}},
 	}
 	buildKeymap()
 }
@@ -289,12 +300,22 @@ func pageScrollActions(def pageDef) []actionEntry {
 }
 
 // pageModes are the modes where the Page keys work: wherever the main surface has the keyboard and no text is being typed.
-var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollections, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention, ModeCredentials}
+var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollections, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention, ModeCredentials, ModeFederation}
 
 // PageBarEntry is one entry of the Page bar. Press is the chord a click on it sends.
 type PageBarEntry struct {
 	ID, Label, Chord, Press string
 	Current                 bool
+	// Count is how many things wait on the Page, drawn after the label when above zero.
+	Count int
+}
+
+// Name is the entry's label, with its Count when it has one: "Attention 3".
+func (e PageBarEntry) Name() string {
+	if e.Count > 0 {
+		return e.Label + " " + strconv.Itoa(e.Count)
+	}
+	return e.Label
 }
 
 // pressed is the Tern chord that stands for the Page's key.
@@ -312,7 +333,11 @@ func (m Model) PageBar() []PageBarEntry {
 		if def.lettered && def.page != m.Page {
 			continue
 		}
-		entries = append(entries, PageBarEntry{ID: def.id, Label: def.label, Chord: def.chord, Press: def.pressed(), Current: def.page == m.Page})
+		entry := PageBarEntry{ID: def.id, Label: def.label, Chord: def.chord, Press: def.pressed(), Current: def.page == m.Page}
+		if def.page == PageAttention {
+			entry.Count = len(m.Attention.Requests)
+		}
+		entries = append(entries, entry)
 	}
 	return entries
 }

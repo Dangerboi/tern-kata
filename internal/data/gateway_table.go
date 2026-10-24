@@ -411,6 +411,16 @@ func init() {
 		[]beforeStep{pauseBeforeRefresh}, nil)
 
 	daemonCall(
+		func(cmd model.LoadFederation) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LoadFederation) (model.Msg, error) {
+			return ok(c.ReadFederation(ctx, cmd))
+		},
+		func(cmd model.LoadFederation, err error) model.Msg {
+			return model.FederationLoaded{Request: cmd.Request, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
 		func(cmd model.ShowRun) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.ShowRun) (model.Msg, error) {
 			return ok(c.ShowRun(ctx, cmd))
@@ -477,6 +487,17 @@ func init() {
 		},
 		func(cmd model.LoadAttention, err error) model.Msg {
 			return model.AttentionLoaded{Request: cmd.Request, Err: err}
+		},
+		nil, nil)
+
+	// A write has landed: the result and its error travel together, and nothing is retried.
+	daemonCall(
+		func(cmd model.ClearAttention) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.ClearAttention) (model.Msg, error) {
+			return ok(c.ClearAttention(ctx, cmd))
+		},
+		func(cmd model.ClearAttention, err error) model.Msg {
+			return model.AttentionCleared{UID: cmd.UID, Err: err}
 		},
 		nil, nil)
 
