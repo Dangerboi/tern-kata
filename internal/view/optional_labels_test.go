@@ -41,11 +41,13 @@ func TestRenderCloseLabelsAboveEveryInput(t *testing.T) {
 		"Commit SHA (optional)",
 		"PR URL (optional)",
 		"Test command (optional)",
+		"Reviewed paths, comma-separated (optional)",
+		"External account (optional)",
 		"Issue reference (duplicate / superseded)",
 		"Rationale (audit-no-change)",
 	}
 	m, _ := model.Update(selectedFirst(), model.KeyMsg{Chord: "x", Text: "x"})
-	got := labelTexts(t, m, "layer.close", []string{"reason", "message", "commit", "pr", "test", "reference", "rationale"})
+	got := labelTexts(t, m, "layer.close", []string{"reason", "message", "commit", "pr", "test", "reviewed", "external", "reference", "rationale"})
 	for i := range want {
 		if got[i] != want[i] {
 			t.Errorf("label %d = %v, want %v", i, got[i], want[i])

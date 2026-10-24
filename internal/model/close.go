@@ -26,13 +26,15 @@ const (
 	CloseTest      Field = "test"
 	CloseReference Field = "reference"
 	CloseRationale Field = "rationale"
+	CloseReviewed  Field = "reviewed"
+	CloseExternal  Field = "external"
 )
 
 // CloseFields is the Close card's field list, in tab order.
-var CloseFields = []FieldSpec{{CloseReason, true}, {CloseMessage, true}, {CloseCommit, true}, {ClosePR, true}, {CloseTest, true}, {CloseReference, true}, {CloseRationale, true}}
+var CloseFields = []FieldSpec{{CloseReason, true}, {CloseMessage, true}, {CloseCommit, true}, {ClosePR, true}, {CloseTest, true}, {CloseReviewed, true}, {CloseExternal, true}, {CloseReference, true}, {CloseRationale, true}}
 
 // CloseValues holds what each Close field has been typed.
-type CloseValues struct{ Reason, Message, Commit, PR, Test, Reference, Rationale string }
+type CloseValues struct{ Reason, Message, Commit, PR, Test, Reviewed, External, Reference, Rationale string }
 
 // at is the value the field called name holds, nil for a name that is not a Close field.
 func (v *CloseValues) at(name Field) *string {
@@ -47,6 +49,10 @@ func (v *CloseValues) at(name Field) *string {
 		return &v.PR
 	case CloseTest:
 		return &v.Test
+	case CloseReviewed:
+		return &v.Reviewed
+	case CloseExternal:
+		return &v.External
 	case CloseReference:
 		return &v.Reference
 	case CloseRationale:
@@ -108,9 +114,11 @@ const (
 	EvidenceDuplicateOf  CloseEvidenceKind = "duplicate-of"
 	EvidenceSupersededBy CloseEvidenceKind = "superseded-by"
 	EvidenceAudit        CloseEvidenceKind = "no-change-audit"
+	EvidenceReviewed     CloseEvidenceKind = "reviewed-paths"
+	EvidenceExternal     CloseEvidenceKind = "external"
 )
 
-// CloseEvidence is one trimmed evidence entry: a SHA, URL, test command, Issue reference or audit rationale.
+// CloseEvidence is one trimmed evidence entry: a SHA, URL, test command, comma-separated reviewed paths, external account, Issue reference or audit rationale.
 type CloseEvidence struct {
 	Kind  CloseEvidenceKind
 	Value string
@@ -181,6 +189,8 @@ func submitClose(m Model, quick bool) (Model, []Cmd) {
 			{EvidenceCommit, f.Values.Commit},
 			{EvidencePR, f.Values.PR},
 			{EvidenceTest, f.Values.Test},
+			{EvidenceReviewed, f.Values.Reviewed},
+			{EvidenceExternal, f.Values.External},
 			{referenceKind(cmd.Reason), f.Values.Reference},
 			{EvidenceAudit, f.Values.Rationale},
 		} {
@@ -229,6 +239,9 @@ func validateClose(cmd CloseIssueCmd) error {
 		if e.Kind == EvidenceCommit && !closeSHA.MatchString(e.Value) {
 			return errors.New("Commit must be a 7–40 character hexadecimal SHA.")
 		}
+		if e.Kind == EvidenceReviewed && len(ReviewedPaths(e.Value)) == 0 {
+			return errors.New("Reviewed paths need at least one path.")
+		}
 	}
 	kinds := map[CloseEvidenceKind]int{}
 	for _, e := range cmd.Evidence {
@@ -236,11 +249,11 @@ func validateClose(cmd CloseIssueCmd) error {
 	}
 	switch reason {
 	case ReasonDone:
-		if kinds[EvidenceCommit]+kinds[EvidencePR]+kinds[EvidenceTest] == 0 {
-			return errors.New("Done requires commit, PR, or test evidence; use Quick done for owner-local interactive closing.")
+		if kinds[EvidenceCommit]+kinds[EvidencePR]+kinds[EvidenceTest]+kinds[EvidenceReviewed]+kinds[EvidenceExternal] == 0 {
+			return errors.New("Done requires commit, PR, test, reviewed paths, or external evidence; use Quick done for owner-local interactive closing.")
 		}
 		if kinds[EvidenceDuplicateOf]+kinds[EvidenceAudit] > 0 {
-			return errors.New("Done accepts commit, PR, or test evidence, not reference or audit evidence.")
+			return errors.New("Done accepts commit, PR, test, reviewed paths, or external evidence, not reference or audit evidence.")
 		}
 	case ReasonDuplicate, ReasonSuperseded:
 		kind := referenceKind(reason)
@@ -248,8 +261,8 @@ func validateClose(cmd CloseIssueCmd) error {
 			return errors.New("Duplicate/superseded requires exactly one Issue reference and no other evidence.")
 		}
 	case ReasonAuditNoChange:
-		if len(cmd.Evidence) != 1 || kinds[EvidenceAudit] != 1 {
-			return errors.New("Audit requires an audit rationale and no other evidence.")
+		if len(cmd.Evidence) != 1+kinds[EvidenceReviewed] || kinds[EvidenceAudit] != 1 {
+			return errors.New("Audit requires an audit rationale, optionally with reviewed paths, and no other evidence.")
 		}
 	case "wontfix":
 		if kinds[EvidenceDuplicateOf]+kinds[EvidenceAudit] > 0 {
@@ -257,6 +270,17 @@ func validateClose(cmd CloseIssueCmd) error {
 		}
 	}
 	return nil
+}
+
+// ReviewedPaths splits a reviewed-paths value on commas into its trimmed, non-empty paths.
+func ReviewedPaths(value string) []string {
+	var paths []string
+	for _, p := range strings.Split(value, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			paths = append(paths, p)
+		}
+	}
+	return paths
 }
 
 func updateClose(m Model, msg Msg) (Model, []Cmd) {
