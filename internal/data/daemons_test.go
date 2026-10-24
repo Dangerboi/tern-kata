@@ -69,7 +69,10 @@ func TestGatewaySwitchesBetweenTwoInProcessDaemons(t *testing.T) {
 	}
 	<-done // the old daemon's event stream ended
 
-	loaded := as[model.ProjectLoaded](t, run(t, gateway, model.LoadProject{Workspace: workspace, Switched: true}))
+	loaded := as[model.ProjectLoaded](t, run(t, gateway, model.LoadProject{Workspace: workspace, Switched: true, Connection: 4}))
+	if loaded.Connection != 4 {
+		t.Fatalf("the answer echoed connection %d, want 4", loaded.Connection)
+	}
 	if loaded.Project.UID != betaProject.UID || loaded.Daemon.Name != "beta" {
 		t.Fatalf("the workspace resolves to %+v on %+v, want beta's Project", loaded.Project, loaded.Daemon)
 	}

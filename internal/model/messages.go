@@ -10,8 +10,10 @@ func (Start) msg() {}
 
 // ProjectLoaded is the Project the workspace resolves to; its first Collection snapshot is read next.
 type ProjectLoaded struct {
-	Project Project
-	Daemon  Daemon
+	// Connection is the number of the connection LoadProject was asked on.
+	Connection int
+	Project    Project
+	Daemon     Daemon
 	// Default is the Project's saved default filter, read with the Project so the first snapshot read carries it. DefaultErr
 	// is why the file could not be read: the Pane starts unfiltered and says so.
 	Default    Filters
@@ -51,6 +53,7 @@ func (PaneRowsMsg) msg() {}
 // not a failure, and the Pane starts on its Inbox.
 type LoadProject struct {
 	Workspace, Actor string
+	Connection       int
 	Switched         bool
 }
 

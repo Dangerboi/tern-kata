@@ -104,12 +104,13 @@ func (AttentionLoaded) msg() {}
 // ClearAttention clears the request held at Key on an Issue, guarded on the slot still holding Seen, the value the Page showed.
 // The write is attributed to Actor.
 type ClearAttention struct {
-	Workspace string
-	ProjectID int64
-	UID       string
-	Key       string
-	Seen      string
-	Actor     string
+	Connection int
+	Workspace  string
+	ProjectID  int64
+	UID        string
+	Key        string
+	Seen       string
+	Actor      string
 }
 
 func (ClearAttention) cmd() {}
@@ -117,9 +118,10 @@ func (ClearAttention) cmd() {}
 // AttentionCleared answers ClearAttention for the Issue with UID. Changed says the slot no longer held what the Page showed, so
 // nothing was cleared.
 type AttentionCleared struct {
-	UID     string
-	Changed bool
-	Err     error
+	Connection int
+	UID        string
+	Changed    bool
+	Err        error
 }
 
 func (AttentionCleared) msg() {}
@@ -283,7 +285,7 @@ func clearAttention(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	m.Attention.Clearing = slices.Concat(m.Attention.Clearing, []string{request.IssueUID})
-	return m, []Cmd{ClearAttention{Workspace: m.Workspace, ProjectID: request.ProjectID, UID: request.IssueUID, Key: NotificationKey(address), Seen: request.Slot.Raw, Actor: m.Actor}}
+	return m, []Cmd{ClearAttention{Workspace: m.Workspace, ProjectID: request.ProjectID, UID: request.IssueUID, Key: NotificationKey(address), Seen: request.Slot.Raw, Actor: m.Actor, Connection: m.Connection}}
 }
 
 func (m Model) attentionClearing(uid string) bool { return slices.Contains(m.Attention.Clearing, uid) }

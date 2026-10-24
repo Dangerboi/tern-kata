@@ -51,6 +51,8 @@ type Project struct {
 }
 
 type Model struct {
+	// Connection is the number of the daemon connection the Pane holds, stepped by each successful switch. Answers to ProjectLoaded, ClearAttention and token creation echo the number they were asked on, and an older one is dropped.
+	Connection int
 	LiveState
 	IssueDetail
 	Create CreateState
@@ -152,12 +154,28 @@ type Model struct {
 }
 
 func Update(m Model, msg Msg) (Model, []Cmd) {
+	if staleConnection(m, msg) {
+		return m, nil
+	}
 	if _, ok := msg.(KeyMsg); ok {
 		m.Notice, m.NoticeLink = "", nil
 	}
 	next, cmds := updateWithDetail(m, msg)
 	next = next.recordWrite(msg).noteWrites(cmds)
 	return next.cancelPending(m, msg), cmds
+}
+
+// staleConnection reports an answer asked of a daemon the Pane has since switched away from: it changes nothing.
+func staleConnection(m Model, msg Msg) bool {
+	switch msg := msg.(type) {
+	case ProjectLoaded:
+		return msg.Connection != m.Connection
+	case AttentionCleared:
+		return msg.Connection != m.Connection
+	case TokenCreated:
+		return msg.Connection != m.Connection
+	}
+	return false
 }
 
 func update(m Model, msg Msg) (Model, []Cmd) {

@@ -149,6 +149,7 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 		m.Notice = `daemon "` + msg.Name + `": ` + oneLine(msg.Err.Error())
 		return m, nil
 	}
+	m.Connection++
 	m = m.leavePage()
 	m.Create, m.pending, m.etag, m.etagQuery = CreateState{}, "", "", SnapshotQuery{}
 	m.CloseForm, m.DatesForm, m.RecurrenceForm, m.JobForm, m.Backfill = CloseFormState{}, DatesFormState{}, RecurrenceFormState{}, JobFormState{}, BackfillState{}
@@ -185,7 +186,7 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	default:
 		m.Notice += "; " + strconv.Itoa(dropped) + " unsent drafts dropped"
 	}
-	return m, []Cmd{LoadProject{Workspace: m.Workspace, Actor: m.Actor, Switched: true}}
+	return m, []Cmd{LoadProject{Workspace: m.Workspace, Actor: m.Actor, Switched: true, Connection: m.Connection}}
 }
 
 // moveDaemon moves the cursor by action: one row, to either end, or a page.
