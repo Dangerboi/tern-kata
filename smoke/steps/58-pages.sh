@@ -25,13 +25,13 @@ expect_tree "[data-id='main.columns.list.issues']" '.count == 1'
 ctl key 2
 expect_tree "[data-id='main.columns.list.board']" '.count == 1'
 ctl key C
-expect_tree "[data-id^='main.topbar.left.pages.']" '.ok and .count == 6 and (.nodes[5].text | contains("Credentials"))'
+expect_tree "[data-id^='main.topbar.left.pages.']" '.ok and .count == 7 and (.nodes[6].text | contains("Credentials"))'
 expect_tree "[data-id='main.columns.list.board']" '.count == 0'
 ctl key escape
 expect_tree "[data-id='main.columns.list.board']" '.count == 1'
-expect_tree "[data-id^='main.topbar.left.pages.']" '.ok and .count == 5'
-ctl key C
 expect_tree "[data-id^='main.topbar.left.pages.']" '.ok and .count == 6'
+ctl key C
+expect_tree "[data-id^='main.topbar.left.pages.']" '.ok and .count == 7'
 ctl key backspace
 expect_tree "[data-id='main.columns.list.board']" '.count == 1'
 ctl key 1
