@@ -11,7 +11,7 @@ func fieldLayer(m model.Model) tern.Nodes {
 	if !m.FieldForm.Open {
 		return nil
 	}
-	title := model.FieldTitle(m.FieldForm.Action)
+	title := m.FieldFormTitle()
 	children := []tern.Element{ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent}, Field: ui.Field{Text: m.FieldForm.Value, Cursor: caretAt(m.FieldForm.Caret, "", m.FieldForm.Value), Mode: "insert", Readonly: m.FieldForm.Saving}}}
 	suggestions := m.FieldSuggestions()
 	for i, label := range suggestions {
