@@ -154,7 +154,7 @@ func newPingServer(t *testing.T, service http.Handler) *httptest.Server {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/ping" {
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "service": "kata", "version": "0.19.0"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "service": "kata", "version": "0.20.0"})
 			return
 		}
 		service.ServeHTTP(w, r)
