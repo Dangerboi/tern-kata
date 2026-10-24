@@ -176,19 +176,27 @@ func errorOnCard(t *testing.T, m model.Model) (string, bool) {
 	return "", false
 }
 
-// pageBarEntry is the id of the Page bar's entry that draws label.
-func pageBarEntry(t *testing.T, m model.Model, label string) string {
+// pageBarEntryAt is the id of the Page bar's entry that draws chord as its key, wherever the bar sits, and whether one is drawn.
+func pageBarEntryAt(t *testing.T, m model.Model, chord string) (string, bool) {
 	t.Helper()
-	var found []string
 	for _, n := range wireNodes(t, view.Render(m, now)) {
-		if strings.Contains(n.ID, ".pages.") && strings.Count(n.ID[strings.Index(n.ID, ".pages.")+len(".pages."):], ".") == 0 && slices.Contains(drawnPieces(n), label) {
-			found = append(found, n.ID)
+		for _, bar := range []string{".pages.", ".pagebar."} {
+			if i := strings.Index(n.ID, bar); i >= 0 && !strings.Contains(n.ID[i+len(bar):], ".") && slices.Contains(drawnPieces(n), chord) {
+				return n.ID, true
+			}
 		}
 	}
-	if len(found) != 1 {
-		t.Fatalf("Page bar entries drawing %q = %v, want exactly one", label, found)
+	return "", false
+}
+
+// pageBarEntry is pageBarEntryAt that fails the test when the Page bar draws no such entry.
+func pageBarEntry(t *testing.T, m model.Model, chord string) string {
+	t.Helper()
+	id, ok := pageBarEntryAt(t, m, chord)
+	if !ok {
+		t.Fatalf("the Page bar draws no entry for key %q", chord)
 	}
-	return found[0]
+	return id
 }
 
 // choiceShowing is the id of the choice that the field labelled label draws as choice, whether or not it is the chosen one
@@ -240,4 +248,11 @@ func textAfterField(t *testing.T, m model.Model, label string) string {
 		}
 	}
 	return ""
+}
+
+// pageBarDrawn says whether the Page bar draws an entry for key chord.
+func pageBarDrawn(t *testing.T, m model.Model, chord string) bool {
+	t.Helper()
+	_, ok := pageBarEntryAt(t, m, chord)
+	return ok
 }

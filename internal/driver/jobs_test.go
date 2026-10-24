@@ -120,10 +120,11 @@ func TestJobsPageKeyAsksForTheProjectsJobsAndThePageBarShowsTheCurrentPage(t *te
 	if out.State.Model.Page != model.PageJobs {
 		t.Fatalf("page %v", out.State.Model.Page)
 	}
-	if !drawnIDs(t, view.Render(out.State.Model, now))[view.PageBarEntryID("jobs")] {
+	jobsEntry, drawn := pageBarEntryAt(t, out.State.Model, "3")
+	if !drawn {
 		t.Error("the Page bar draws no Jobs Page bar entry")
 	}
-	clicked := step(t, s, click(view.PageBarEntryID("jobs"), view.KeyClick("3")))
+	clicked := step(t, s, click(jobsEntry, view.KeyClick("3")))
 	if _, ok := askedJobs(clicked.Cmds); !ok {
 		t.Error("clicking the Jobs Page bar entry asks for no jobs")
 	}

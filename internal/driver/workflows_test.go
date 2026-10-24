@@ -66,7 +66,7 @@ func mustShow(t *testing.T, s driver.State, what string, texts ...string) {
 
 func TestWorkflowsPageListsTheProjectsWorkflowsAndOpensTheirStepsWithDependenciesAndRetries(t *testing.T) {
 	s := workflowsPane(t, 160, reviewFlow(), nightlyFlow())
-	pageBarEntry(t, s.Model, "Workflows") // fails the test when the Page bar draws none
+	pageBarEntry(t, s.Model, "5") // fails the test when the Page bar draws none
 	if !workflowRowDrawn(t, s.Model, "W1") || !workflowRowDrawn(t, s.Model, "W2") {
 		t.Fatalf("the Workflows Page draws a row per workflow, got %v", drawnIDs(t, view.Render(s.Model, now)))
 	}

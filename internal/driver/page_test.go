@@ -11,10 +11,9 @@ import (
 
 func TestPageBarShowsIssuesAndBoardAndKeysAndClicksSwitchPages(t *testing.T) {
 	s := projectPane(t, 160, boardCard("a"), boardCard("b"))
-	drawn := drawnIDs(t, view.Render(s.Model, now))
-	for _, id := range []string{"issues", "board"} {
-		if !drawn[view.PageBarEntryID(id)] {
-			t.Errorf("the Page bar draws no %s entry", id)
+	for _, entry := range []struct{ name, chord string }{{"issues", "1"}, {"board", "2"}} {
+		if _, ok := pageBarEntryAt(t, s.Model, entry.chord); !ok {
+			t.Errorf("the Page bar draws no %s entry", entry.name)
 		}
 	}
 	for name, to := range map[string]func(driver.State) driver.State{
@@ -22,7 +21,7 @@ func TestPageBarShowsIssuesAndBoardAndKeysAndClicksSwitchPages(t *testing.T) {
 			return feed(t, s, key("2"), model.LanesLoaded{ProjectUID: "p"}).State
 		},
 		"click": func(s driver.State) driver.State {
-			return feed(t, s, click(view.PageBarEntryID("board"), view.KeyClick("2")), model.LanesLoaded{ProjectUID: "p"}).State
+			return feed(t, s, click(pageBarEntry(t, s.Model, "2"), view.KeyClick("2")), model.LanesLoaded{ProjectUID: "p"}).State
 		},
 		"b": func(s driver.State) driver.State {
 			return feed(t, s, key("b"), model.LanesLoaded{ProjectUID: "p"}).State
@@ -35,7 +34,7 @@ func TestPageBarShowsIssuesAndBoardAndKeysAndClicksSwitchPages(t *testing.T) {
 		if heads, _ := lanes(t, board); len(heads) == 0 {
 			t.Errorf("%s: the Board is not drawn", name)
 		}
-		for back, press := range map[string]any{"1": key("1"), "b": key("b"), "click": click(view.PageBarEntryID("issues"), view.KeyClick("1"))} {
+		for back, press := range map[string]any{"1": key("1"), "b": key("b"), "click": click(pageBarEntry(t, board.Model, "1"), view.KeyClick("1"))} {
 			issues := step(t, board, press).State
 			if issues.Model.Page != model.PageIssues {
 				t.Errorf("%s then %s: page %v, want the Issues Page", name, back, issues.Model.Page)
@@ -88,7 +87,7 @@ func TestEveryPageBarEntryClicksLikeItsKey(t *testing.T) {
 		s := clickAt(focus)
 		for _, entry := range s.Model.PageBar() {
 			keyboard, keyCmds := keys(entry.Chord)(s)
-			pointer, clickCmds := clicked(s, click(view.PageBarEntryID(entry.ID), view.KeyClick(entry.Chord)))
+			pointer, clickCmds := clicked(s, click(pageBarEntry(t, s.Model, entry.Chord), view.KeyClick(entry.Chord)))
 			sameAs(t, entry.Label+" entry differs from its key", pointer, clickCmds, keyboard, keyCmds)
 		}
 	}
@@ -100,7 +99,7 @@ func pageBarTexts(t *testing.T, s driver.State) map[string]string {
 	texts := map[string]string{}
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
 		for _, entry := range s.Model.PageBar() {
-			if n.ID == view.PageBarEntryID(entry.ID) || n.ID == "main.pagebar."+entry.ID {
+			if id, ok := pageBarEntryAt(t, s.Model, entry.Chord); ok && n.ID == id {
 				texts[entry.ID] = wireText(n)
 			}
 		}

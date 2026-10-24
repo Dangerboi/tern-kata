@@ -80,10 +80,10 @@ func TestRunsPageKeyAsksForTheProjectsRunsAndThePageBarShowsThePage(t *testing.T
 	if !ok || load.ProjectID != 7 || load.JobUID != "" || load.Before != "" || load.Workspace != "/repo" {
 		t.Fatalf("cmds %#v, want a read of the Project's newest runs", out.Cmds)
 	}
-	if out.State.Model.Page != model.PageRuns || !drawnIDs(t, view.Render(out.State.Model, now))[view.PageBarEntryID("runs")] {
+	if out.State.Model.Page != model.PageRuns || !pageBarDrawn(t, out.State.Model, "4") {
 		t.Fatalf("page %v, want the Runs Page with its Page bar entry", out.State.Model.Page)
 	}
-	if _, ok := askedRuns(step(t, s, click(view.PageBarEntryID("runs"), view.KeyClick("4"))).Cmds); !ok {
+	if _, ok := askedRuns(step(t, s, click(pageBarEntry(t, out.State.Model, "4"), view.KeyClick("4"))).Cmds); !ok {
 		t.Error("clicking the Runs entry asks for no runs")
 	}
 	if back := step(t, out.State, key("1")); back.State.Model.Page != model.PageIssues {
