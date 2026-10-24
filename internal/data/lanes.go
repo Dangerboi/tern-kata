@@ -1,14 +1,15 @@
 package data
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"slices"
 
 	"github.com/BurntSushi/toml"
+	"github.com/Dangerboi/tern-kata/internal/atomicfile"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
@@ -124,24 +125,14 @@ func (g *Gateway) writeLanes(cmd model.SaveLanes) error {
 		}
 		file[cmd.ProjectUID] = table
 	}
-	return writeTables(path, "lanes-*.toml", file)
+	return writeTables(path, file)
 }
 
-// writeTables renames a temporary file holding file into place at path, so a failed write leaves the old file.
-func writeTables(path, pattern string, file map[string]any) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+// writeTables encodes file and replaces path with it, so a failed write leaves the old file.
+func writeTables(path string, file map[string]any) error {
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(file); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), pattern)
-	if err != nil {
-		return err
-	}
-	err = toml.NewEncoder(tmp).Encode(file)
-	if err = errors.Join(err, tmp.Close()); err == nil {
-		err = os.Rename(tmp.Name(), path)
-	}
-	if err != nil {
-		_ = os.Remove(tmp.Name())
-	}
-	return err
+	return atomicfile.Write(path, buf.Bytes(), atomicfile.Options{Mode: 0o600, DirMode: 0o755})
 }
