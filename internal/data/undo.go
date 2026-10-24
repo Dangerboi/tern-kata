@@ -248,7 +248,14 @@ func moved(e model.UndoEntry, shown *g.ShowIssueResponseBody) string {
 			return "issue changed since the label edit"
 		}
 	case model.UndoLaneMove:
-		if !atRevision {
+		laneIntact := atRevision
+		for _, label := range e.Added {
+			laneIntact = laneIntact && slices.Contains(i.Labels, label)
+		}
+		for _, label := range e.Removed {
+			laneIntact = laneIntact && !slices.Contains(i.Labels, label)
+		}
+		if !laneIntact {
 			return "issue changed since the Lane move"
 		}
 	case model.UndoLinkAdd:
@@ -268,7 +275,7 @@ func moved(e model.UndoEntry, shown *g.ShowIssueResponseBody) string {
 		}
 	case model.UndoDates:
 		for _, d := range e.Dates {
-			if dateOf(i, d.Key) != d.Value {
+			if now := dateOf(i, d.Key); now != d.Value && now != d.Was {
 				return "issue dates changed since the action"
 			}
 		}
@@ -402,9 +409,11 @@ func (c *Client) invert(ctx context.Context, cmd model.UndoChange, account daemo
 		}
 		return last, nil
 	case model.UndoDates:
-		changes := make([]model.DateChange, len(e.Dates))
-		for n, d := range e.Dates {
-			changes[n] = model.DateChange{Key: d.Key, Label: d.Label, Value: d.Was, Was: d.Value}
+		var changes []model.DateChange
+		for _, d := range e.Dates {
+			if dateOf(shown.Issue, d.Key) != d.Was {
+				changes = append(changes, model.DateChange{Key: d.Key, Label: d.Label, Value: d.Was, Was: d.Value})
+			}
 		}
 		_, changed, last, ambiguous, err := c.setDates(ctx, model.SetDatesCmd{UID: e.UID, ProjectID: e.ProjectID, Actor: e.Actor, Changes: changes})
 		last.Changed = len(changed) > 0
