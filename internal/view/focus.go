@@ -104,7 +104,7 @@ func ActivityReveals(m model.Model) []string {
 
 // SelectionRevealID is the node to reveal after msg moved the selection from previous, "" when none is. A reveal is sent only when
 // the list is focused, drawn, settled and the selection changed; not on a click on a row, which Tern has already put under the
-// pointer, and not for the answer to a read of the jobs, the Runs or the federation status, whose new cards are unknown to Tern until the next render.
+// pointer, and not for the answer to a read of the jobs, the Runs the credentials, the daemon catalog or the federation status, whose new cards are unknown to Tern until the next render.
 func SelectionRevealID(m model.Model, msg model.Msg, previous string) string {
 	if rowClick(msg) || listRead(msg) || m.Loading || m.Focus != model.ColumnList || !m.Shows(model.ColumnList) {
 		return ""
@@ -117,7 +117,7 @@ func SelectionRevealID(m model.Model, msg model.Msg, previous string) string {
 
 func listRead(msg model.Msg) bool {
 	switch msg.(type) {
-	case model.JobsLoaded, model.RunsLoaded, model.AttentionLoaded, model.FederationLoaded, model.FederationHubsLoaded, model.FederationHubProjectsLoaded,
+	case model.JobsLoaded, model.RunsLoaded, model.AttentionLoaded, model.CredentialsLoaded, model.DaemonsLoaded, model.FederationLoaded, model.FederationHubsLoaded, model.FederationHubProjectsLoaded,
 		model.FederationBrowsed:
 		return true
 	}

@@ -159,7 +159,7 @@ func TestASuccessfulSwitchResetsThePaneAndFollowsTheNewDaemonsEvents(t *testing.
 	}
 
 	// The new daemon's Project and first snapshot arrive: the Pane follows its events from the snapshot's cursor.
-	loaded := step(t, out.State, model.ProjectLoaded{Daemon: model.Daemon{Name: "home", Kind: model.DaemonLocal, Version: "0.20.0", Account: "alice"}})
+	loaded := step(t, out.State, model.ProjectLoaded{Connection: out.State.Model.Connection, Daemon: model.Daemon{Name: "home", Kind: model.DaemonLocal, Version: "0.20.0", Account: "alice"}})
 	read, found := snapshotFor(loaded.Cmds, boardCard("z"))
 	if !found {
 		t.Fatalf("the new Project asked for no snapshot: %#v", loaded.Cmds)

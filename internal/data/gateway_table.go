@@ -418,7 +418,9 @@ func init() {
 	daemonCall(
 		func(cmd model.LoadProject) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.LoadProject) (model.Msg, error) {
-			return ok(c.LoadProject(ctx, cmd.Workspace, cmd.Switched))
+			loaded, err := c.LoadProject(ctx, cmd.Workspace, cmd.Switched)
+			loaded.Connection = cmd.Connection
+			return ok(loaded, err)
 		},
 		func(cmd model.LoadProject, err error) model.Msg { return model.Failed{Err: err} },
 		nil, []afterStep{startPointerMoveAfter, readDefaultFilterAfter})
@@ -475,9 +477,13 @@ func init() {
 	daemonCall(
 		func(cmd model.CreateTokenCmd) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.CreateTokenCmd) (model.Msg, error) {
-			return ok(c.CreateToken(ctx, cmd))
+			done, err := c.CreateToken(ctx, cmd)
+			done.Connection = cmd.Connection
+			return ok(done, err)
 		},
-		func(_ model.CreateTokenCmd, err error) model.Msg { return model.TokenCreated{Err: err} },
+		func(cmd model.CreateTokenCmd, err error) model.Msg {
+			return model.TokenCreated{Connection: cmd.Connection, Err: err}
+		},
 		nil, nil)
 
 	daemonCall(
@@ -623,10 +629,12 @@ func init() {
 	daemonCall(
 		func(cmd model.ClearAttention) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.ClearAttention) (model.Msg, error) {
-			return ok(c.ClearAttention(ctx, cmd))
+			cleared, err := c.ClearAttention(ctx, cmd)
+			cleared.Connection = cmd.Connection
+			return ok(cleared, err)
 		},
 		func(cmd model.ClearAttention, err error) model.Msg {
-			return model.AttentionCleared{UID: cmd.UID, Err: err}
+			return model.AttentionCleared{Connection: cmd.Connection, UID: cmd.UID, Err: err}
 		},
 		nil, nil)
 
