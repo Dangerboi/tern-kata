@@ -110,6 +110,10 @@ The window machine needs only the window plugin; kata and tern-kata run on the s
 
 In a directory bound to a kata Project, `tern-kata` opens that Project's Issues; anywhere else it opens Inbox. [How it works](docs/guide/pages-and-board.md#how-it-works) explains the three parts of the plugin.
 
+## Troubleshooting
+
+If the Pane cannot find a local kata daemon whose storage is PostgreSQL, check the storage DSN: when it uses routing options (the `host`, `port`, `dbname`, `service` or `servicefile` query options, or `PG*` environment variables filling in missing parts), discovery fails because the lean kata client cannot resolve them. Set `KATA_SERVER` to the address `kata daemon locate` prints.
+
 ## Guides
 
 The [guide index](docs/guide/README.md) lists every page:

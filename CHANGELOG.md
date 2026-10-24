@@ -59,6 +59,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 ### Changed
 
 - An explicitly empty `--as` (`--as=` or `--as ""`) is refused with "--as must be non-empty" for the Pane launch, `attach`, `detach`, `recur`, `run`, `worker resume` and `worker abandon`, where it used to act as the fallback actor. Without `--as` the actor is still `$KATA_AUTHOR`, `$USER`, git `user.name`, then "anonymous", and an empty variable still counts as unset; `worker init --actor` is unchanged.
+- tern-kata builds against kata v0.20.0 and its lean Go client, so the install is about 40% smaller (about 18 MB instead of about 32 MB).
+- The top bar names a local or remote daemon without `kata` on `PATH`: the kind comes from kata's own discovery, and connecting starts no `kata` process.
 - `worker status` reasons for a Workflow that breaks kata's own rules (version, step keys, retries, `after`, step shape, options) now use the Workflow card's wording, and the worker also applies the step-key and options rules (no credentials or local paths) to the Workflow it reads.
 - Field filters (project, status, owner, label, relationship) now keep the Collection's grouping and headings, so Today with a status filter still shows Overdue and Today; only a text search shows the flat Results list.
 - An Attachment pointer is now the `tern-kata.attachment.<name>` meta key, because kata's native attachments claim `attachment.<id>`; tern-kata moves pointers written under `attachment.<name>` by itself, once per Project and kata daemon on each machine, when a Pane for the Project starts or `tern-kata attach` or `detach` runs, and leaves kata's own `attachment.*` keys and the files alone.
