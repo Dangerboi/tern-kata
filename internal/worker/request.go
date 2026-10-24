@@ -291,7 +291,7 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 		w.noteHook(err)
 		return nil, false, err
 	}
-	w.bind(ps, uid, job.UID)
+	w.bind(ps, j)
 	bound = true
 	if _, err := os.Stat(w.store.RunDir(uid)); err != nil {
 		return nil, false, err
