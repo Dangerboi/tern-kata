@@ -13,6 +13,7 @@ import (
 	"golang.org/x/mod/semver"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
 type Client struct {
@@ -68,10 +69,10 @@ func connect(ctx context.Context, target Target) (*Client, error) {
 	version := ping.JSON200.Version
 	normalized := "v" + strings.TrimPrefix(version, "v")
 	if !semver.IsValid(normalized) {
-		return nil, fmt.Errorf("cannot verify kata daemon version %q; tern-kata requires v0.19.0 or newer", version)
+		return nil, fmt.Errorf("cannot verify kata daemon version %q; tern-kata requires %s or newer", version, worker.MinKataVersion)
 	}
-	if semver.Compare(normalized, "v0.19.0") < 0 {
-		return nil, fmt.Errorf("kata daemon %s is too old; tern-kata requires v0.19.0 or newer; upgrade kata", version)
+	if semver.Compare(normalized, worker.MinKataVersion) < 0 {
+		return nil, fmt.Errorf("kata daemon %s is too old; tern-kata requires %s or newer; upgrade kata", version, worker.MinKataVersion)
 	}
 	kind := model.DaemonLocal
 	if target.Remote {

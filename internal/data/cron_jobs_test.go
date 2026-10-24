@@ -21,7 +21,7 @@ type jobsFixture struct {
 
 func newJobsFixture(t *testing.T) *jobsFixture {
 	t.Helper()
-	kata := startKata(t, "0.19.0")
+	kata := startKata(t, "0.20.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
 	return &jobsFixture{gateway: gateway, client: kata.target().Client, workspace: workspace, demo: demo}
