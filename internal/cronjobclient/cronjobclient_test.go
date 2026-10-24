@@ -50,3 +50,27 @@ func TestJobKeepsAKindKataAddsLater(t *testing.T) {
 		t.Errorf("kinds %q, %q", got.Trigger.Kind, got.Action.Kind)
 	}
 }
+
+func TestWorkflowDefinitionReadsEveryFieldAndMissingValuesAsEmpty(t *testing.T) {
+	about, command, prompt, retries := "nightly", "make", "review", int64(2)
+	got := cronjobclient.WorkflowDefinition(g.CronWorkflowDefinitionResponse{
+		Version: 1, About: &about, Options: map[string]any{"profile": "fast"},
+		Steps: []g.CronWorkflowStepResponse{
+			{Key: "build", Kind: "command", Command: &command, Retries: &retries},
+			{Key: "review", Kind: "prompt", Prompt: &prompt, After: []string{"build"}, Options: map[string]any{"profile": "deep"}},
+		},
+	})
+	if got.Version != 1 || got.About != "nightly" || got.Input != "" || got.Options.(map[string]any)["profile"] != "fast" || len(got.Steps) != 2 {
+		t.Fatalf("definition %+v", got)
+	}
+	build, review := got.Steps[0], got.Steps[1]
+	if build.Kind != cronjob.StepCommand || build.Command != "make" || build.Prompt != "" || build.RetryCount() != 2 || build.Options != nil {
+		t.Errorf("command step %+v", build)
+	}
+	if review.Kind != cronjob.StepPrompt || review.Prompt != "review" || review.Retries != nil || review.After[0] != "build" || review.Options.(map[string]any)["profile"] != "deep" {
+		t.Errorf("prompt step %+v", review)
+	}
+	if problem := cronjob.ValidateWorkflow(got); problem != nil {
+		t.Errorf("the translated definition is refused: %s", problem.Message())
+	}
+}

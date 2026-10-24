@@ -134,7 +134,7 @@ func parseSecrets(text string) (map[string]string, error) {
 	for _, entry := range strings.FieldsFunc(text, func(r rune) bool { return r == ',' || unicode.IsSpace(r) }) {
 		env, source, found := strings.Cut(entry, "=")
 		switch {
-		case !found || !portableName(env) || !portableName(source):
+		case !found || !cronjob.PortableName(env) || !cronjob.PortableName(source):
 			return nil, fieldError(JobFieldSecrets, "%q is not ENV=source; names are letters, digits, - _ and . only.", entry)
 		case refs[env] != "":
 			return nil, fieldError(JobFieldSecrets, "%s is listed twice.", env)
@@ -326,7 +326,7 @@ func buildExecute(f JobFormState, workflow bool) (cronjob.Definition, string, er
 	if len(options) > 0 {
 		def.Options = options
 	}
-	if def.CheckoutKey = strings.TrimSpace(f.Checkout); def.CheckoutKey != "" && !portableName(def.CheckoutKey) {
+	if def.CheckoutKey = strings.TrimSpace(f.Checkout); def.CheckoutKey != "" && !cronjob.PortableName(def.CheckoutKey) {
 		return def, "", fieldError(JobFieldCheckout, "%q is not a checkout key; keys are letters, digits, - _ and . only.", def.CheckoutKey)
 	}
 	secrets, err := parseSecrets(f.Secrets)

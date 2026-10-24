@@ -718,7 +718,7 @@ func quietSuccess(j *Journal) bool {
 	}
 	for i, s := range j.Workflow.Steps {
 		step := j.Steps[i]
-		if s.Kind != "command" || step.State != StepSucceeded || step.Exit == nil || step.Exit.Code != 0 {
+		if s.Kind != cronjob.StepCommand || step.State != StepSucceeded || step.Exit == nil || step.Exit.Code != 0 {
 			return false
 		}
 	}

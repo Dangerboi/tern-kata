@@ -36,14 +36,14 @@ type WorkflowPlan struct {
 
 // PlanStep is one step of the plan. A prompt step carries the profile its omp process is started with.
 type PlanStep struct {
-	Key         string   `json:"key"`
-	Kind        string   `json:"kind"`
-	Command     string   `json:"command,omitempty"`
-	Prompt      string   `json:"prompt,omitempty"`
-	After       []string `json:"after,omitempty"`
-	Retries     int      `json:"retries,omitempty"`
-	ProfileName string   `json:"profile_name,omitempty"`
-	Profile     Profile  `json:"profile,omitempty"`
+	Key         string           `json:"key"`
+	Kind        cronjob.StepKind `json:"kind"`
+	Command     string           `json:"command,omitempty"`
+	Prompt      string           `json:"prompt,omitempty"`
+	After       []string         `json:"after,omitempty"`
+	Retries     int              `json:"retries,omitempty"`
+	ProfileName string           `json:"profile_name,omitempty"`
+	Profile     Profile          `json:"profile,omitempty"`
 }
 
 // StepRecord is what the journal knows of one step. Launch and Exit are the start record and receipt of the step's
@@ -82,7 +82,7 @@ func (j *Journal) activeStep() int {
 // activeIsCommand reports whether the run's current attempt is a command step's, which has no session to continue.
 func (j *Journal) activeIsCommand() bool {
 	i := j.activeStep()
-	return i >= 0 && j.Workflow.Steps[i].Kind == "command"
+	return i >= 0 && j.Workflow.Steps[i].Kind == cronjob.StepCommand
 }
 
 // attemptDir is the folder of the run's current (or last) attempt: the run's own for a prompt job, the step's for a workflow.
@@ -102,47 +102,27 @@ func (w *Worker) attemptDir(j *Journal) string {
 	return dir
 }
 
-// workflowRefusal is why the worker does not run a workflow, empty when it does (ADR-0008). Order, retries and the
-// shape of a step are kata's own rules, checked again here because a worker must not trust a definition it did not
-// validate; the rest are the herdr-kata extensions this design rejects, which are refused rather than ignored because
-// ignoring one changes what the author asked for.
+// workflowRefusal is why the worker does not run a workflow, empty when it does. A worker must not trust a definition it
+// did not validate, so kata's own rules come first, through the validator the Workflow card uses and in its canonical words;
+// then ADR-0008's refusals, the herdr-kata extensions this design rejects, which are refused rather than ignored because
+// ignoring one changes what the author asked for; then the prompt budget.
 func workflowRefusal(wf Workflow, maxPrompts int) string {
-	if wf.Version != 1 {
-		return fmt.Sprintf("it is workflow version %d, which this worker does not know", wf.Version)
-	}
-	if len(wf.Steps) == 0 {
-		return "it has no steps"
+	if problem := cronjob.ValidateWorkflow(wf.WorkflowDefinition); problem != nil {
+		return problem.Message()
 	}
 	if why := unsupportedOption(wf.Options); why != "" {
 		return why
 	}
-	seen := map[string]bool{}
 	prompts := 0
 	for _, s := range wf.Steps {
-		switch {
-		case seen[s.Key]:
-			return fmt.Sprintf("step key %q is used twice", s.Key)
-		case s.Retries < 0 || s.Retries > 100:
-			return fmt.Sprintf("step %q has retries %d, outside 0 to 100", s.Key, s.Retries)
-		case s.Kind == "command" && (strings.TrimSpace(s.Command) == "" || s.Prompt != ""), s.Kind == "prompt" && (strings.TrimSpace(s.Prompt) == "" || s.Command != ""):
-			return fmt.Sprintf("step %q must be a %s step with only its %s", s.Key, s.Kind, s.Kind)
-		case s.Kind != "command" && s.Kind != "prompt":
-			return fmt.Sprintf("step %q has kind %q, neither prompt nor command", s.Key, s.Kind)
-		}
-		for _, dep := range s.After {
-			if !seen[dep] {
-				return fmt.Sprintf("step %q runs after %q, which is not an earlier step", s.Key, dep)
-			}
-		}
 		if why := unsupportedOption(s.Options); why != "" {
 			return fmt.Sprintf("step %q: %s", s.Key, why)
 		}
-		if _, ok := s.Options["profile"]; ok && s.Kind == "command" {
+		if _, ok := optionMap(s.Options)["profile"]; ok && s.Kind == cronjob.StepCommand {
 			return fmt.Sprintf("command step %q names a profile, which only prompt steps use", s.Key)
 		}
-		seen[s.Key] = true
-		if s.Kind == "prompt" {
-			prompts += 1 + int(s.Retries)
+		if s.Kind == cronjob.StepPrompt {
+			prompts += 1 + int(s.RetryCount())
 		}
 	}
 	if prompts > maxPrompts {
@@ -151,12 +131,19 @@ func workflowRefusal(wf Workflow, maxPrompts int) string {
 	return ""
 }
 
+// optionMap is a definition's options as an object, nil when there are none.
+func optionMap(options any) map[string]any {
+	object, _ := options.(map[string]any)
+	return object
+}
+
 // unsupportedOption names the options of a workflow or step that the worker refuses to run.
-func unsupportedOption(options map[string]any) string {
-	if _, ok := options["on_fail"]; ok {
+func unsupportedOption(options any) string {
+	object := optionMap(options)
+	if _, ok := object["on_fail"]; ok {
 		return "options.on_fail (maker/checker loops) is not supported"
 	}
-	if v, ok := options["on_failure"].(string); ok && v == "park" {
+	if v, ok := object["on_failure"].(string); ok && v == "park" {
 		return `options.on_failure "park" is not supported: a failed step fails the run`
 	}
 	return ""
@@ -181,15 +168,15 @@ func (w *Worker) planWorkflow(ctx context.Context, ps *projectState, job cronjob
 	if why := workflowRefusal(wf, w.opt.Config.maxRunPrompts()); why != "" {
 		return nil, refuse(why)
 	}
-	if p, ok := wf.Options["profile"].(string); ok && p != "" && p != jobProfile {
+	if p, ok := optionMap(wf.Options)["profile"].(string); ok && p != "" && p != jobProfile {
 		return nil, refuse(fmt.Sprintf("it names profile %q but the job runs with %q", p, jobProfile))
 	}
 	plan := &WorkflowPlan{UID: wf.UID, EventUID: wf.DefinitionEventUID, Name: wf.Name, About: wf.About}
 	for _, s := range wf.Steps {
-		step := PlanStep{Key: s.Key, Kind: s.Kind, Command: s.Command, Prompt: s.Prompt, After: s.After, Retries: int(s.Retries)}
-		if s.Kind == "prompt" {
+		step := PlanStep{Key: s.Key, Kind: s.Kind, Command: s.Command, Prompt: s.Prompt, After: s.After, Retries: int(s.RetryCount())}
+		if s.Kind == cronjob.StepPrompt {
 			step.ProfileName = jobProfile
-			if p, ok := s.Options["profile"].(string); ok && p != "" {
+			if p, ok := optionMap(s.Options)["profile"].(string); ok && p != "" {
 				step.ProfileName = p
 			}
 			profile, ok := w.opt.Config.Profiles[step.ProfileName]
@@ -266,7 +253,7 @@ func (w *Worker) workflowStep(ctx context.Context, j *Journal) error {
 	if err := os.MkdirAll(sp.dir, 0o700); err != nil {
 		return w.hold(j, HoldExecutionError, err.Error())
 	}
-	if plan.Kind == "command" {
+	if plan.Kind == cronjob.StepCommand {
 		sp.task = plan.Command
 		return w.runCommand(ctx, j, sp)
 	}
