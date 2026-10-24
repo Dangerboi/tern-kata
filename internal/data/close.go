@@ -53,6 +53,10 @@ func closeBody(cmd model.CloseIssueCmd) g.CloseIssueBody {
 			evidence.Command = &value
 		case model.EvidenceAudit:
 			evidence.Rationale = &value
+		case model.EvidenceReviewed:
+			evidence.Paths = model.ReviewedPaths(value)
+		case model.EvidenceExternal:
+			evidence.Account = &value
 		default:
 			evidence.IssueRef = &value
 		}
