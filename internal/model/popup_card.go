@@ -69,11 +69,8 @@ type cardEntry struct {
 	// modes is every keymap mode the card can be in; mode picks the current one from its state.
 	modes []Mode
 	mode  func(Model) Mode
-	// chords lists the global chords the card lets through to their global binding; every other
-	// global chord is the card's to swallow or type. ctrl+c quits from the Menu, Close and New
-	// Project cards and is swallowed by the others.
-	chords []string
-	key    func(Model, KeyMsg) (Model, []Cmd)
+	// key handles a key for the card; every global chord but ctrl+c, which quits at once from any card, is the card's to swallow or type.
+	key func(Model, KeyMsg) (Model, []Cmd)
 	// busy is the card's one busy condition: it is saving, asking to discard, showing a conflict or
 	// otherwise answering something, so no focus moves and no text field holds the caret. Every
 	// other rule about focus and the caret derives from it.
@@ -290,7 +287,6 @@ func buildCards() []cardEntry {
 		{
 			card: CardClose, name: "close", open: func(m Model) bool { return m.CloseForm.Open },
 			modes: []Mode{ModeCloseForm}, mode: func(Model) Mode { return ModeCloseForm },
-			chords: []string{"ctrl+c"},
 			key:    closeKey,
 			busy:   func(m Model) bool { return m.CloseForm.Saving },
 			fields: CloseFields, focus: func(m *Model) *Field { return &m.CloseForm.Field },
@@ -348,7 +344,6 @@ func buildCards() []cardEntry {
 		{
 			card: CardMove, name: "move", open: func(m Model) bool { return m.MoveProject.Open },
 			modes: []Mode{ModeMoveProject, ModeMoveConfirm}, mode: Model.MoveCardMode,
-			chords: []string{"ctrl+c"},
 			key:    moveProjectKey,
 			// The card holds no caret once a Project is chosen or while a request is out.
 			busy:   func(m Model) bool { return m.MoveProject.Sending || m.MoveProject.Target.UID != "" },
@@ -377,7 +372,6 @@ func buildCards() []cardEntry {
 		{
 			card: CardFederationAdopt, name: "federation-adopt", open: func(m Model) bool { return m.Federation.Adopting },
 			modes: []Mode{ModeFederationAdopt}, mode: func(Model) Mode { return ModeFederationAdopt },
-			chords: []string{"ctrl+c"},
 			key:    federationAdoptKey,
 			busy:   func(Model) bool { return false },
 			fields: []FieldSpec{}, input: true,
@@ -394,7 +388,6 @@ func buildCards() []cardEntry {
 				}
 				return ModeRecurrenceForm
 			},
-			chords: []string{"ctrl+c"},
 			key:    recurrenceKey,
 			busy:   recurrenceBusy,
 			fields: RecurrenceFields, focus: func(m *Model) *Field { return &m.RecurrenceForm.Field },
@@ -431,7 +424,6 @@ func buildCards() []cardEntry {
 				}
 				return ModeJobForm
 			},
-			chords: []string{"ctrl+c"},
 			key:    jobFormKey,
 			busy:   jobBusy,
 			fields: JobFields, focus: func(m *Model) *Field { return &m.JobForm.Field },
@@ -450,7 +442,6 @@ func buildCards() []cardEntry {
 		{
 			card: CardProject, name: "project", open: func(m Model) bool { return m.ProjectForm.Open },
 			modes: []Mode{ModeProjectForm}, mode: func(Model) Mode { return ModeProjectForm },
-			chords: []string{"ctrl+c"},
 			key:    updateProjectFormKey,
 			busy:   func(m Model) bool { return m.ProjectForm.Saving },
 			fields: []FieldSpec{}, input: true,
@@ -524,7 +515,6 @@ func buildCards() []cardEntry {
 		{
 			card: CardPicker, name: "collections", open: func(m Model) bool { return m.Picker.Open },
 			modes: []Mode{ModePicker}, mode: func(Model) Mode { return ModePicker },
-			chords: []string{"ctrl+c"},
 			key:    updatePicker,
 			busy:   func(Model) bool { return false },
 			fields: []FieldSpec{}, input: true,
@@ -637,12 +627,15 @@ func (m Model) cardMode() Mode {
 	return ""
 }
 
+// quitChord is the one global chord every popup card lets through, in every state, busy ones included: ctrl+c quits at once.
+const quitChord = "ctrl+c"
+
 // cardLetsThrough reports whether mode belongs to a popup card and, if so, whether the card lets
 // chord through to its global binding.
 func cardLetsThrough(mode Mode, chord string) (isCard, through bool) {
 	for _, entry := range cards {
 		if slices.Contains(entry.modes, mode) {
-			return true, slices.Contains(entry.chords, chord)
+			return true, chord == quitChord
 		}
 	}
 	return false, false
@@ -651,7 +644,7 @@ func cardLetsThrough(mode Mode, chord string) (isCard, through bool) {
 // updateTopCardKey gives a key to the card on top; it reports false when no card is open.
 func updateTopCardKey(m Model, msg KeyMsg) (Model, []Cmd, bool) {
 	entry, ok := m.topEntry()
-	if !ok || slices.Contains(entry.chords, msg.Chord) {
+	if !ok || msg.Chord == quitChord {
 		return m, nil, false
 	}
 	if m, ok := entry.editFields(m, msg); ok {
