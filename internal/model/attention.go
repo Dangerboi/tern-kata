@@ -105,12 +105,12 @@ func (AttentionLoaded) msg() {}
 // The write is attributed to Actor.
 type ClearAttention struct {
 	Connection int
-	Workspace string
-	ProjectID int64
-	UID       string
-	Key       string
-	Seen      string
-	Actor     string
+	Workspace  string
+	ProjectID  int64
+	UID        string
+	Key        string
+	Seen       string
+	Actor      string
 }
 
 func (ClearAttention) cmd() {}
@@ -119,9 +119,9 @@ func (ClearAttention) cmd() {}
 // nothing was cleared.
 type AttentionCleared struct {
 	Connection int
-	UID     string
-	Changed bool
-	Err     error
+	UID        string
+	Changed    bool
+	Err        error
 }
 
 func (AttentionCleared) msg() {}

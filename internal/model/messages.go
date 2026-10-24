@@ -12,8 +12,8 @@ func (Start) msg() {}
 type ProjectLoaded struct {
 	// Connection is the number of the connection LoadProject was asked on.
 	Connection int
-	Project Project
-	Daemon  Daemon
+	Project    Project
+	Daemon     Daemon
 	// Default is the Project's saved default filter, read with the Project so the first snapshot read carries it. DefaultErr
 	// is why the file could not be read: the Pane starts unfiltered and says so.
 	Default    Filters

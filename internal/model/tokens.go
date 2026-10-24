@@ -132,7 +132,7 @@ func (r RevokeState) Question() string {
 // Issue is ShortID in the Project ProjectID; the gateway resolves it to the Project uid and root Issue uid. File is where the
 // secret goes, a path that must not exist yet.
 type CreateTokenCmd struct {
-	Connection int
+	Connection             int
 	Workspace, Actor, Name string
 	// ExpiresInSeconds is 0 for a token that does not expire.
 	ExpiresInSeconds int64
@@ -148,9 +148,9 @@ func (CreateTokenCmd) cmd() {}
 // TokenCreated answers CreateTokenCmd. It never carries the secret: File holds it.
 type TokenCreated struct {
 	Connection int
-	ID   int64
-	File string
-	Err  error
+	ID         int64
+	File       string
+	Err        error
 }
 
 func (TokenCreated) msg() {}
