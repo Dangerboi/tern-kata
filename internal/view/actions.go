@@ -32,6 +32,8 @@ const (
 	FocusDetailClick = string(model.FocusDetail)
 	RetryClick       = string(model.RetryAction)
 	MenuClick        = string(model.OpenPicker)
+	// NoticeLinkClick opens the Issue the Notice names.
+	NoticeLinkClick = "notice-link"
 )
 
 func click(act, value string) string { return act + "=" + value }
@@ -97,6 +99,8 @@ func DecodeAction(id, act, value string) model.Msg {
 		if id == RetryID {
 			return model.Retry{}
 		}
+	case NoticeLinkClick:
+		return model.OpenNoticeLinkMsg{}
 	case activityTabAct:
 		if tab, ok := parseTab(value); ok {
 			return model.ActivityTabMsg{Tab: tab}
@@ -157,6 +161,8 @@ func DecodeSelect(id, item string) model.Msg {
 		return model.CollectionPointerSelected{Key: itemKey(CollectionsID, item)}
 	case PickerListID:
 		return model.PickerSelected{Key: itemKey(PickerListID, item)}
+	case MoveListID:
+		return model.MoveTargetSelected{Key: itemKey(MoveListID, item)}
 	}
 	return nil
 }

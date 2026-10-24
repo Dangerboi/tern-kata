@@ -36,6 +36,10 @@ In the Issue detail, `b` adds a Blocking link and `l` a related link to the Issu
 
 `t` in the Issue detail gives the Issue to you for a set time. The field reads "Assignment duration for #id (1m..24h, e.g. 1h)" and takes a Go duration of whole seconds from 1m to 24h (`90m`, `1h`, `24h`); anything else is refused with kata tui's wording, "duration must be a whole number of seconds from 1m through 24h". kata records the claim for your actor, and the Issue detail shows the owner and "until" the claim ends.
 
+## Moving an Issue
+
+kata tui has no key for moving an Issue to another Project; kata web and the CLI do. `M` in tern-kata opens the Move card, which sends kata's move (see [Moving an Issue](pages-and-board.md#moving-an-issue)). It is not a row of the table below, which lists kata tui keys only.
+
 ## Undo
 
 `u` in the list, on the Board, in the Lane view and in the Issue detail takes back the newest change this Pane made, as in kata tui. The Pane remembers the last 20 completed changes, across Issues, and undoes the newest first. It undoes a close (reopens), a reopen (closes as done, opening the Close card first when kata requires evidence), an owner or priority change, a label added or removed, a body edit, a link added (the link is removed, found by type and its two ends), a Lane Move (its label changes reversed) and a Dates card change (both dates put back, each guarded on the value the change wrote).

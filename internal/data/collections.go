@@ -86,5 +86,5 @@ func translateIssue(i *g.UIIssue) model.Issue {
 }
 
 func translateProject(p g.ProjectOut) model.Project {
-	return model.Project{ID: p.ID, Name: p.Name, Revision: p.Revision, UID: p.UID}
+	return model.Project{ID: p.ID, Name: p.Name, Revision: p.Revision, UID: p.UID, Archived: !p.Active}
 }

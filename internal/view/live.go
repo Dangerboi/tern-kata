@@ -39,7 +39,15 @@ func footerTexts(m model.Model) []ui.Text {
 		texts = append(texts, ui.Text{Common: ui.Common{Key: "stale", Tone: ui.TonePending}, Text: staleText(m)})
 	}
 	if m.Notice != "" && !m.HelpOpen {
-		texts = append(texts, ui.Text{Common: ui.Common{Key: "notice", Tone: ui.ToneAccent}, Text: m.Notice})
+		notice := ui.Text{Common: ui.Common{Key: "notice", Tone: ui.ToneAccent}, Text: m.Notice}
+		// The link is the Issue's name inside the sentence; a click anywhere on the Notice opens the Issue.
+		if link := m.NoticeLink; link != nil {
+			if before, after, found := strings.Cut(m.Notice, link.Text); found {
+				notice.Actions = &ui.Actions{Click: NoticeLinkClick}
+				notice.Spans = []ui.Span{{T: before}, {T: link.Text, S: "accent link"}, {T: after}}
+			}
+		}
+		texts = append(texts, notice)
 	}
 	return texts
 }

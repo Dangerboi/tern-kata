@@ -233,6 +233,16 @@ func init() {
 		nil, nil)
 
 	daemonCall(
+		func(cmd model.MoveToProjectCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.MoveToProjectCmd) (model.Msg, error) {
+			return ok(c.MoveToProject(ctx, cmd))
+		},
+		func(cmd model.MoveToProjectCmd, err error) model.Msg {
+			return model.ProjectMoveAnswer{UID: cmd.UID, ToProjectUID: cmd.ToProjectUID, DryRun: cmd.DryRun, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
 		func(cmd model.CreateRecurrenceCmd) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.CreateRecurrenceCmd) (model.Msg, error) {
 			return ok(model.RecurrenceResultMsg{UID: cmd.UID}, c.CreateRecurrence(ctx, cmd))

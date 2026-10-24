@@ -161,6 +161,11 @@ func undoBoundary(cmd Cmd) (string, bool) {
 		return "", false
 	case CloseIssueCmd, ReopenIssueCmd, MoveIssueCmd, SetDatesCmd, UndoChange:
 		return "", false
+	case MoveToProjectCmd:
+		if cmd.DryRun {
+			return "", false
+		}
+		return "moving an Issue cannot be undone", true
 	case WriteField:
 		if cmd.Action == TimedAssignAction {
 			return "timed assignment cannot be undone", true
