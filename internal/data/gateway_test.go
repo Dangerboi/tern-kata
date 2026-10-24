@@ -363,6 +363,71 @@ func TestGatewayWritesAParentLink(t *testing.T) {
 	}
 }
 
+func TestGatewayWritesBlockingAndRelatedLinksAcrossProjects(t *testing.T) {
+	kata := startKata(t, "0.20.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	otherSpace, other := project(t, gateway, "other")
+	first := createIssue(t, gateway, workspace, demo, "First")
+	second := createIssue(t, gateway, workspace, demo, "Second")
+	abroad := createIssue(t, gateway, otherSpace, other, "Abroad")
+	short := func(workspace, uid string) string {
+		return as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected.Issue.ShortID
+	}
+	linksOf := func(uid string) []model.Link {
+		return as[model.DetailLoaded](t, run(t, gateway, model.LoadDetail{Workspace: workspace, UID: uid})).Selected.Links
+	}
+	write := func(action model.Action, uid, ref string) model.FieldWritten {
+		return as[model.FieldWritten](t, run(t, gateway, model.WriteField{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Action: action, Value: ref}))
+	}
+
+	if written := write(model.AddBlockerAction, first, short(workspace, second)); written.Err != nil {
+		t.Fatalf("blocker: %+v", written)
+	}
+	links := linksOf(first)
+	if len(links) != 1 || links[0].Type != "blocks" || links[0].FromIssueUID != first || links[0].ToIssueUID != second {
+		t.Fatalf("links %+v, want a blocks link stored from %s (the Issue the link was added on) to %s", links, first, second)
+	}
+
+	if written := write(model.AddRelatedAction, first, "other#"+short(otherSpace, abroad)); written.Err != nil {
+		t.Fatalf("related across Projects: %+v", written)
+	}
+	if written := write(model.AddBlockerAction, second, "other#"+short(otherSpace, abroad)); written.Err != nil {
+		t.Fatalf("blocker across Projects: %+v", written)
+	}
+	var related, across model.Link
+	for _, l := range linksOf(first) {
+		if l.Type == "related" {
+			related = l
+		}
+	}
+	for _, l := range linksOf(second) {
+		if l.Type == "blocks" && l.ToIssueUID == abroad {
+			across = l
+		}
+	}
+	if related.ID == 0 || related.ToIssueUID != abroad || across.ID == 0 {
+		t.Fatalf("cross Project links: related %+v, blocks %+v", related, across)
+	}
+
+	if written := write(model.AddBlockerAction, first, short(workspace, first)); written.Err == nil {
+		t.Fatal("a link from an Issue to itself was accepted")
+	}
+
+	removed := as[model.LinkRemoved](t, run(t, gateway, model.RemoveLinkCmd{Workspace: workspace, UID: first, ProjectID: demo.ID, Actor: "tester", LinkID: related.ID}))
+	if removed.Err != nil || removed.UID != first || removed.LinkID != related.ID {
+		t.Fatalf("remove %+v", removed)
+	}
+	for _, l := range linksOf(first) {
+		if l.ID == related.ID {
+			t.Fatalf("link %d still present: %+v", related.ID, linksOf(first))
+		}
+	}
+	if len(linksOf(first)) != 1 {
+		t.Fatalf("removing one link changed the others: %+v", linksOf(first))
+	}
+}
+
 func TestGatewayClosesWithEveryReason(t *testing.T) {
 	kata := startKata(t, "0.20.0")
 	gateway := newGateway(t, newLocator(kata.target()))
@@ -552,6 +617,7 @@ func TestGatewayFailureShapePerCommand(t *testing.T) {
 		{model.ChangeRecurrenceCmd{UID: "u"}, model.RecurrenceResultMsg{UID: "u", Err: boom}},
 		{model.StopRecurrenceCmd{UID: "u"}, model.RecurrenceResultMsg{UID: "u", Err: boom}},
 		{model.WriteField{UID: "u"}, model.FieldWritten{UID: "u", Err: boom}},
+		{model.RemoveLinkCmd{UID: "u", LinkID: 4}, model.LinkRemoved{UID: "u", LinkID: 4, Err: boom}},
 		{model.LoadFieldLabels{UID: "u"}, model.FieldLabelsLoaded{UID: "u", Err: boom}},
 		{model.CreateProject{}, model.ProjectSaved{Err: boom}},
 		{model.BindProject{}, model.ProjectSaved{Err: boom}},
