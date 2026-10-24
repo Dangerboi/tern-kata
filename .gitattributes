@@ -1,0 +1,2 @@
+# Golden files are compared byte for byte: keep LF on Windows checkouts too (core.autocrlf=true would add CRs).
+*.golden text eol=lf
