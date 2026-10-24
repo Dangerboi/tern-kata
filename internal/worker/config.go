@@ -97,7 +97,10 @@ type ProjectConfig struct {
 	Profiles  []string `toml:"profiles"`
 }
 
-// Profile is a named agent command line. Command defaults to "omp".
+// DefaultCommand is the agent program a Profile runs when its Command is blank, and the one `worker init` writes.
+const DefaultCommand = "omp"
+
+// Profile is a named agent command line. Command defaults to DefaultCommand.
 type Profile struct {
 	Command  string   `toml:"command"`
 	Model    string   `toml:"model"`
@@ -285,10 +288,10 @@ func (p ProjectConfig) allowsProfile(name string) bool {
 	return len(p.Profiles) == 0 || slices.Contains(p.Profiles, name)
 }
 
-// command is the profile's program, "omp" when unset.
+// command is the profile's program, DefaultCommand when unset.
 func (p Profile) command() string {
 	if p.Command == "" {
-		return "omp"
+		return DefaultCommand
 	}
 	return p.Command
 }

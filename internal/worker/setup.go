@@ -37,7 +37,7 @@ type Binding struct {
 }
 
 // Setup is what a starter worker.toml is built from. Executor is required; every other empty field keeps today's value:
-// the actor stays a comment showing DefaultActor, the command is "omp", model and thinking stay commented examples.
+// the actor stays a comment showing DefaultActor, the command is DefaultCommand, model and thinking stay commented examples.
 type Setup struct {
 	Binding
 	Executor     string
@@ -144,7 +144,7 @@ func starterConfig(s Setup, key string) string {
 	}
 	command := s.Command
 	if command == "" {
-		command = "omp"
+		command = DefaultCommand
 	}
 	model := "# model = \"anthropic/claude-sonnet-4-5\""
 	if s.Model != "" {

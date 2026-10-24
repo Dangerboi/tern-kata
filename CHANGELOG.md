@@ -48,6 +48,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Changed
 
+- The Worker card's Command field starts blank and shows the default command as a placeholder; a blank field is saved as the default, and a typed value, even the default's own text, is saved as typed.
 - Field filters (project, status, owner, label, relationship) now keep the Collection's grouping and headings, so Today with a status filter still shows Overdue and Today; only a text search shows the flat Results list.
 - An Attachment pointer is now the `tern-kata.attachment.<name>` meta key, because kata's native attachments claim `attachment.<id>`; tern-kata moves pointers written under `attachment.<name>` by itself, once per Project and kata daemon on each machine, when a Pane for the Project starts or `tern-kata attach` or `detach` runs, and leaves kata's own `attachment.*` keys and the files alone.
 - The Issue detail's heading is the bare `#id` in a Project Collection, since the top bar names the Project; it names the Project, `project#id`, only in Collections that span Projects (Inbox, Today, All Open and the others).
