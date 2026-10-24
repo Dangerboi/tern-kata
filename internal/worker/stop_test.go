@@ -1,6 +1,7 @@
 package worker_test
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,8 +20,7 @@ func (h *harness) startedRun(r *running, job worker.Job) string {
 	h.t.Helper()
 	uid := h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID
 	h.eventually("the agent to start", func() bool {
-		j, err := r.w.Store().Load(uid)
-		return err == nil && j.Phase == worker.PhaseStarted
+		return h.isRunning(r, uid)
 	})
 	return uid
 }
@@ -103,17 +103,19 @@ func TestAnIdleStopWaitsForARunWhoseReportKataRefusedUntilItIsSettled(t *testing
 		t.Fatal("the drain ended while kata did not hold the run settled")
 	default:
 	}
-	if j, err := r.w.Store().Load(uid); err != nil || j.Phase == worker.PhaseSettled {
-		t.Fatalf("journal %v, %v", j, err)
+	if rs, ok := h.runStatus(r, uid); !ok || rs.Pending == "" {
+		t.Fatalf("the run shows %+v (shown %v), want a report still pending", rs, ok)
+	}
+	if run, err := h.kata.Kata.ShowRun(context.Background(), h.proj.ID, uid); err != nil || run.Status != "running" {
+		t.Fatalf("kata holds the run %q (%v), want running while its report is refused", run.Status, err)
 	}
 	restore()
 	if run := h.settled(uid); run.Status != "succeeded" {
 		t.Fatalf("the run ended %q: %q", run.Status, run.Summary)
 	}
 	h.exits(r)
-	j, err := r.w.Store().Load(uid)
-	if err != nil || j.Phase != worker.PhaseSettled {
-		t.Fatalf("the worker exited with the run %v (%v)", j.Phase, err)
+	if run, err := h.kata.Kata.ShowRun(context.Background(), h.proj.ID, uid); err != nil || run.Status != "succeeded" {
+		t.Fatalf("the worker exited with kata holding the run %q (%v)", run.Status, err)
 	}
 }
 

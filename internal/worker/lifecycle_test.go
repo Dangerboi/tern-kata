@@ -75,8 +75,9 @@ func TestRunNowIsRefusedWhenTheProjectsJobsCannotBeRefreshed(t *testing.T) {
 	if resp.OK || !strings.Contains(resp.Error, "refresh") {
 		t.Fatalf("run with an unreadable job list: ok=%v %q", resp.OK, resp.Error)
 	}
-	if journals, _, _ := r.w.Store().Scan(); len(journals) != 0 || len(h.launches()) != 0 {
-		t.Fatalf("a refused request left %d journals and %d launches", len(journals), len(h.launches()))
+	runs, err := h.kata.Kata.Runs(context.Background(), h.proj.ID)
+	if shown := r.w.Status().Runs; err != nil || len(shown) != 0 || len(runs) != 0 || len(h.launches()) != 0 {
+		t.Fatalf("a refused request left %d runs shown, %d in kata (%v) and %d launches", len(shown), len(runs), err, len(h.launches()))
 	}
 }
 
@@ -127,8 +128,10 @@ func TestTwoRequestsForAJobThatForbidsOverlapAdmitOne(t *testing.T) {
 	if a.resp.OK == b.resp.OK {
 		t.Fatalf("both answered ok=%v: %q %q", a.resp.OK, a.resp.Error, b.resp.Error)
 	}
-	if journals, _, _ := r.w.Store().Scan(); len(journals) != 1 {
-		t.Fatalf("%d runs prepared, want 1", len(journals))
+	h.eventually("the one run to start", func() bool { return len(h.launches()) == 1 })
+	runs, err := h.kata.Kata.Runs(context.Background(), h.proj.ID)
+	if shown := r.w.Status().Runs; err != nil || len(shown) != 1 || len(runs) != 1 || len(h.launches()) != 1 {
+		t.Fatalf("%d runs shown, %d in kata (%v) and %d launches, want one run", len(shown), len(runs), err, len(h.launches()))
 	}
 }
 

@@ -112,10 +112,9 @@ func (h *harness) scheduled(r *running, n int) {
 func (h *harness) started(r *running, job worker.Job, n int) {
 	h.t.Helper()
 	h.eventually("agents of the job to run", func() bool {
-		journals, _, _ := r.w.Store().Scan()
 		count := 0
-		for _, j := range journals {
-			if j.JobUID == job.UID && j.Phase == worker.PhaseStarted {
+		for _, rs := range r.w.Status().Runs {
+			if rs.Job == job.Name && rs.State == "running" {
 				count++
 			}
 		}
@@ -408,15 +407,20 @@ func TestAPerRunIssueGetsItsDateOffsetsFromTheOccurrence(t *testing.T) {
 	h.admitting(r)
 	uid := h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID
 	run := h.settled(uid)
-	journal, err := r.w.Store().Load(uid)
+	issue, err := h.kata.Kata.ShowIssue(context.Background(), h.proj.ID, run.IssueUID)
 	if err != nil {
 		t.Fatal(err)
 	}
+	_, stamp, _ := strings.Cut(issue.Title, " — ")
+	occurrence, err := time.Parse(time.RFC3339Nano, stamp)
+	if err != nil {
+		t.Fatalf("the Issue title %q does not end in the occurrence: %v", issue.Title, err)
+	}
 	scheduled, deadline := h.kata.PlanningDates(t, h.proj, run.IssueUID)
-	if want := journal.Occurrence.Add(-2 * time.Minute).Truncate(time.Second); !scheduled.Equal(want) {
+	if want := occurrence.Add(-2 * time.Minute).Truncate(time.Second); !scheduled.Equal(want) {
 		t.Errorf("scheduled %s, want two minutes before the occurrence, %s", scheduled, want)
 	}
-	if want := journal.Occurrence.Add(48 * time.Hour).Truncate(time.Second); !deadline.Equal(want) {
+	if want := occurrence.Add(48 * time.Hour).Truncate(time.Second); !deadline.Equal(want) {
 		t.Errorf("deadline %s, want two days after the occurrence, %s", deadline, want)
 	}
 

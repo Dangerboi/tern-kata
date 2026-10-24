@@ -146,6 +146,23 @@ func (h *harness) settled(uid string) worker.Run {
 	return run
 }
 
+// isRunning reports whether Worker.Status shows the run as running.
+func (h *harness) isRunning(r *running, uid string) bool {
+	rs, ok := h.runStatus(r, uid)
+	return ok && rs.State == "running"
+}
+
+// settledInKata waits until kata holds the run in a final status and Worker.Status shows nothing pending for it.
+func (h *harness) settledInKata(r *running, uid string) worker.Run {
+	h.t.Helper()
+	run := h.settled(uid)
+	h.eventually("nothing to be pending for "+uid, func() bool {
+		rs, ok := h.runStatus(r, uid)
+		return !ok || rs.Pending == ""
+	})
+	return run
+}
+
 func (h *harness) launches() []map[string]any {
 	raw, err := os.ReadFile(h.log)
 	if errors.Is(err, os.ErrNotExist) {
@@ -416,8 +433,7 @@ func TestARunThatExceedsItsTimeoutIsStoppedAndFailed(t *testing.T) {
 	h.admitting(r)
 	uid := h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID
 	h.eventually("the agent to start", func() bool {
-		j, err := r.w.Store().Load(uid)
-		return err == nil && j.Phase == worker.PhaseStarted
+		return h.isRunning(r, uid)
 	})
 	h.clock.Advance(61 * time.Second)
 	run := h.settled(uid)
