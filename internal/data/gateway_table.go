@@ -109,18 +109,30 @@ func init() {
 	local(func(g *Gateway, _ context.Context, cmd model.SaveFilters) model.Msg { return g.saveFilters(cmd) }, nil, nil)
 	local(func(_ *Gateway, _ context.Context, _ model.LoadWorkerPickers) model.Msg { return loadWorkerPickers() }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.LoadWorker) model.Msg { return g.loadWorker(ctx, cmd) }, nil, nil)
-	local(func(g *Gateway, _ context.Context, cmd model.LoadWorkerSetup) model.Msg { return g.loadWorkerSetup(cmd) }, nil, nil)
-	local(func(g *Gateway, _ context.Context, cmd model.SaveWorkerSetup) model.Msg { return g.saveWorkerSetup(cmd) }, nil, nil)
+	local(func(g *Gateway, _ context.Context, cmd model.LoadWorkerSetup) model.Msg {
+		return g.loadWorkerSetup(cmd)
+	}, nil, nil)
+	local(func(g *Gateway, _ context.Context, cmd model.SaveWorkerSetup) model.Msg {
+		return g.saveWorkerSetup(cmd)
+	}, nil, nil)
 	local(func(g *Gateway, _ context.Context, cmd model.SaveWorkerEdit) model.Msg { return g.saveWorkerEdit(cmd) }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.StopWorker) model.Msg { return g.stopWorker(ctx, cmd) }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.SetWorkerSupervision) model.Msg {
 		return g.setWorkerSupervision(ctx, cmd)
 	}, nil, nil)
-	local(func(g *Gateway, ctx context.Context, cmd model.LoadLocalRun) model.Msg { return g.loadLocalRun(ctx, cmd) }, nil, nil)
+	local(func(g *Gateway, ctx context.Context, cmd model.LoadLocalRun) model.Msg {
+		return g.loadLocalRun(ctx, cmd)
+	}, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.RunJobNow) model.Msg { return g.runJobNow(ctx, cmd) }, nil, nil)
-	local(func(g *Gateway, ctx context.Context, cmd model.ResumeLocalRun) model.Msg { return g.moveRun(ctx, "resume", cmd.UID) }, nil, nil)
-	local(func(g *Gateway, ctx context.Context, cmd model.AbandonLocalRun) model.Msg { return g.moveRun(ctx, "abandon", cmd.UID) }, nil, nil)
-	local(func(g *Gateway, ctx context.Context, cmd model.OpenRunSession) model.Msg { return g.openRunSession(ctx, cmd) }, nil, nil)
+	local(func(g *Gateway, ctx context.Context, cmd model.ResumeLocalRun) model.Msg {
+		return g.moveRun(ctx, "resume", cmd.UID)
+	}, nil, nil)
+	local(func(g *Gateway, ctx context.Context, cmd model.AbandonLocalRun) model.Msg {
+		return g.moveRun(ctx, "abandon", cmd.UID)
+	}, nil, nil)
+	local(func(g *Gateway, ctx context.Context, cmd model.OpenRunSession) model.Msg {
+		return g.openRunSession(ctx, cmd)
+	}, nil, nil)
 
 	// These three still reach the daemon through the request builder; the steps around the call are declared here.
 	viaDaemon := func(g *Gateway, ctx context.Context, cmd model.Cmd) model.Msg { return g.do(ctx, cmd) }

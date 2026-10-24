@@ -902,7 +902,9 @@ type tailSink struct {
 	tail []byte
 }
 
-func newTailSink(hooks Hooks, path string) *tailSink { return &tailSink{file: openCapped(hooks, path, 64<<10)} }
+func newTailSink(hooks Hooks, path string) *tailSink {
+	return &tailSink{file: openCapped(hooks, path, 64<<10)}
+}
 
 func (t *tailSink) Write(p []byte) (int, error) {
 	_, _ = t.file.Write(p)
