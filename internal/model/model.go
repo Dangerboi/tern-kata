@@ -61,6 +61,7 @@ type Model struct {
 	etagQuery      SnapshotQuery
 	CloseForm      CloseFormState
 	DatesForm      DatesFormState
+	DeleteForm     DeleteFormState
 	TokenForm      TokenFormState
 	RevokeCard     RevokeState
 	RecurrenceForm RecurrenceFormState
@@ -201,6 +202,12 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return updateRecurrence(m, msg)
 	case DatesResultMsg:
 		return updateDates(m, msg)
+	case IssueDeleted:
+		return updateDelete(m, msg)
+	case DeletedLooked:
+		return deletedLooked(m, msg), nil
+	case IssueRestored:
+		return issueRestored(m, msg)
 	case ProjectMoveAnswer:
 		return updateMoveProject(m, msg)
 	case MoveTargetSelected:
@@ -217,6 +224,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			m.FieldForm.Value = msg.Value
 			m.FieldForm.Err = nil
 			m.FieldForm.Suggestion = 0
+			m.FieldForm.Found = nil
 		}
 	case FieldLabelsLoaded:
 		if m.FieldForm.Open && m.FieldForm.UID == msg.UID {

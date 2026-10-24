@@ -17,7 +17,7 @@ func pickerLayer(m model.Model) tern.Element {
 	items := make([]tern.Element, 0, len(entries))
 	for _, entry := range entries {
 		item := ui.Item{Common: ui.Common{Key: entry.Key()}, Label: ui.T(entry.Title)}
-		if entry.Lettered && entry.Page == m.Page || !entry.NewProject && !entry.Lettered && entry.Collection == m.Collection {
+		if entry.Lettered && entry.Page == m.Page || !entry.NewProject && !entry.Lettered && !entry.Restore && entry.Collection == m.Collection {
 			item.Value = ui.T("current")
 		}
 		items = append(items, item)

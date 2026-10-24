@@ -38,6 +38,8 @@ type FieldFormState struct {
 	Labels       []string
 	Suggestion   int
 	Caret        Caret
+	// Found is the Issue a restore read, shown until the reference is edited.
+	Found *DeletedIssue
 	Err          error
 }
 type WriteField struct {
@@ -163,6 +165,7 @@ var fieldSpecs = map[Action]fieldSpec{
 	AddRelatedAction:  {title: "Related to (Issue id)", needsValue: true, clean: trimHash, send: sendFieldWrite},
 	AttachFileAction:  {title: "Attach a file (path)", needsValue: true, refuse: true, send: sendAttach},
 	DetachFileAction:  {title: "Remove attachment", open: openAttachments, refuse: true, send: sendDetach},
+	RestoreDeletedAction: {title: RestoreTitle + " (short id, project#id or ULID)", needsValue: true, send: sendRestore},
 }
 
 // FieldTitle is the title of the form of an action.
@@ -354,7 +357,10 @@ func updateFieldKey(m Model, msg KeyMsg) (Model, []Cmd) {
 			}
 		}
 	} else {
-		m.FieldForm.Value, _ = editText(m.FieldForm.Value, &m.FieldForm.Caret, "", false, msg)
+		var edited bool
+		if m.FieldForm.Value, edited = editText(m.FieldForm.Value, &m.FieldForm.Caret, "", false, msg); edited {
+			m.FieldForm.Found = nil
+		}
 	}
 	m.FieldForm.Err = nil
 	return m, nil
