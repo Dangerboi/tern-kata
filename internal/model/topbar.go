@@ -11,13 +11,12 @@ type Daemon struct {
 	Version string
 }
 
-// DaemonKind is whether the daemon runs on this machine; the zero value means the kind check did not answer.
+// DaemonKind is whether the daemon runs on this machine; the zero value means the Daemon has not been read yet.
 type DaemonKind string
 
 const (
-	DaemonKindUnknown DaemonKind = ""
-	DaemonLocal       DaemonKind = "local"
-	DaemonRemote      DaemonKind = "remote"
+	DaemonLocal  DaemonKind = "local"
+	DaemonRemote DaemonKind = "remote"
 )
 
 // DaemonSeparator divides the top bar's daemon line and its Menu button.
@@ -26,7 +25,7 @@ const DaemonSeparator = " · "
 // DaemonLine is the top bar's daemon line.
 func (m Model) DaemonLine() string {
 	var parts []string
-	if m.Daemon.Kind != DaemonKindUnknown {
+	if m.Daemon.Kind != "" {
 		parts = append(parts, string(m.Daemon.Kind))
 	}
 	if m.Daemon.Version != "" {

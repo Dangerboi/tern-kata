@@ -343,3 +343,17 @@ func TestAProjectRemovedFromTheConfigIsNotRetiredWhileItsPinnedInstanceIsNotTheD
 		return err == nil && run.Status == "succeeded"
 	})
 }
+
+func TestTheWorkerRefusesAKataV019DaemonAndNamesTheMinimum(t *testing.T) {
+	d := workertest.StartKata(t)
+	d.Intercept(func(r *http.Request) bool { return r.URL.Path == "/api/v1/ping" },
+		func(w http.ResponseWriter, r *http.Request, _ http.Handler) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "service": "kata", "version": "0.19.0"})
+		})
+	_, err := d.Kata.Ping(context.Background())
+	want := "kata daemon 0.19.0 is too old; the worker requires v0.20.0 or newer; upgrade kata"
+	if err == nil || err.Error() != want {
+		t.Fatalf("got %v, want %q", err, want)
+	}
+}

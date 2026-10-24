@@ -77,7 +77,7 @@ func newMarkedJobsFixture(t *testing.T) (*jobsFixture, *marked) {
 	}
 	t.Cleanup(func() { _ = service.Close() })
 	marks := &marked{}
-	server := serve(t, marks.wrap(service.Handler()), "0.19.0")
+	server := serve(t, marks.wrap(service.Handler()), "0.20.0")
 	gateway := newGateway(t, newLocator(server.target()))
 	workspace, demo := project(t, gateway, "demo")
 	return &jobsFixture{gateway: gateway, client: server.target().Client, workspace: workspace, demo: demo}, marks

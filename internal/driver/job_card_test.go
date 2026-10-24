@@ -263,6 +263,7 @@ func TestJobCardRefusesInvalidInputNamingTheFieldAndSendsNothing(t *testing.T) {
 		want   string
 	}{
 		{"cron expression", func(t *testing.T, s driver.State) driver.State { return set(t, s, model.JobFieldCron, "nonsense") }, model.JobFieldCron, "Cron expression"},
+		{"cron step as large as its range", func(t *testing.T, s driver.State) driver.State { return set(t, s, model.JobFieldCron, "0 */24 * * *") }, model.JobFieldCron, "Cron expression"},
 		{"time zone", func(t *testing.T, s driver.State) driver.State { return set(t, s, model.JobFieldZone, "Mars/Olympus") }, model.JobFieldZone, "Time zone"},
 		{"interval under a minute", func(t *testing.T, s driver.State) driver.State {
 			return set(t, choose(t, s, model.JobFieldTrigger, 1), model.JobFieldInterval, "30")

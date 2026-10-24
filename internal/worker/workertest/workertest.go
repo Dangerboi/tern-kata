@@ -106,7 +106,7 @@ type rule struct {
 	handle func(w http.ResponseWriter, r *http.Request, next http.Handler)
 }
 
-// StartKata starts kata and points kata's discovery variables away from the real daemon. Its ping reports 0.19.0,
+// StartKata starts kata and points kata's discovery variables away from the real daemon. Its ping reports 0.20.0,
 // as the in-process service reports no version.
 func StartKata(t *testing.T) *Daemon {
 	t.Helper()
@@ -126,7 +126,7 @@ func StartKata(t *testing.T) *Daemon {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/ping" {
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "service": "kata", "version": "0.19.0"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "service": "kata", "version": "0.20.0"})
 			return
 		}
 		if d.intercept(w, r) {

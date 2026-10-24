@@ -48,7 +48,7 @@ func loadWorkflows(t *testing.T, gateway *Gateway, workspace string, project mod
 }
 
 func TestWorkflowsAreCreatedListedAndEditedAsTheirTextShows(t *testing.T) {
-	kata := startKata(t, "0.19.0")
+	kata := startKata(t, "0.20.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, bound := project(t, gateway, "demo")
 
@@ -82,7 +82,7 @@ func TestWorkflowsAreCreatedListedAndEditedAsTheirTextShows(t *testing.T) {
 }
 
 func TestSavingAWorkflowChangedMeanwhileWritesNothingAndReturnsTheCurrentOne(t *testing.T) {
-	kata := startKata(t, "0.19.0")
+	kata := startKata(t, "0.20.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, bound := project(t, gateway, "demo")
 	original := saveWorkflow(t, gateway, workspace, bound, "", "", reviewThenTest).Workflow
@@ -111,7 +111,7 @@ func TestSavingAWorkflowChangedMeanwhileWritesNothingAndReturnsTheCurrentOne(t *
 }
 
 func TestWorkflowsAreArchivedAndRestoredGuardedOnTheirVersion(t *testing.T) {
-	kata := startKata(t, "0.19.0")
+	kata := startKata(t, "0.20.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, bound := project(t, gateway, "demo")
 	w := *saveWorkflow(t, gateway, workspace, bound, "", "", reviewThenTest).Workflow
@@ -136,7 +136,7 @@ func TestWorkflowsAreArchivedAndRestoredGuardedOnTheirVersion(t *testing.T) {
 }
 
 func TestArchivingAWorkflowALiveJobUsesIsRefusedWithKatasMessage(t *testing.T) {
-	kata := startKata(t, "0.19.0")
+	kata := startKata(t, "0.20.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, bound := project(t, gateway, "demo")
 	w := *saveWorkflow(t, gateway, workspace, bound, "", "", reviewThenTest).Workflow

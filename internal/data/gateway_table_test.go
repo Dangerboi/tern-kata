@@ -10,7 +10,7 @@ import (
 )
 
 func TestALoadThatFindsNoProjectStartsNoPointerMoveAndReadsNoDefaultFilter(t *testing.T) {
-	kata := startKata(t, "0.19.0")
+	kata := startKata(t, "0.20.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	state := t.TempDir()
 	gateway.workerDirs = func() (worker.Dirs, error) { return worker.Dirs{Config: t.TempDir(), State: state}, nil }

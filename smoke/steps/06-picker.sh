@@ -87,7 +87,7 @@ expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
 ctl key enter
 expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 and (.nodes[0].text | contains("esc back"))'
 ctl key esc
-expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("esc Menu"))'
+expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 and (.nodes[0].text | contains("esc Menu"))'
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'

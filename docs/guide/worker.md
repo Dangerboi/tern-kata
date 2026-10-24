@@ -13,7 +13,7 @@ What it never does:
 - run native jobs (a recurring child kata's daemon delivers);
 - send a prompt twice: a run whose outcome is uncertain after a crash is held.
 
-It needs kata v0.19.0 or newer and `omp` on `PATH`. On Windows, workflow command steps also need `sh`, which [Git for Windows](https://gitforwindows.org/) provides.
+It needs kata v0.20.0 or newer and `omp` on `PATH`. On Windows, workflow command steps also need `sh`, which [Git for Windows](https://gitforwindows.org/) provides.
 
 ## Trust
 

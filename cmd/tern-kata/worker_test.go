@@ -224,7 +224,7 @@ func TestWorkerDoctorReportsAGoodSetupAndSuggestsUnservedProjects(t *testing.T) 
 		"note  worker: not running on this machine",
 		"ok    checkout repo: ",
 		"ok    profile default: ",
-		"ok    kata: daemon v0.19.0",
+		"ok    kata: daemon v0.20.0",
 		"ok    Project demo: the lease is free",
 		"note  Project elsewhere: has 1 adapter job and is not served",
 		"[[projects]]\n        name = \"elsewhere\"",
