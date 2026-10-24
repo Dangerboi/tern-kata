@@ -5,7 +5,7 @@ kata projects create workspace-archived --json >/dev/null
 kata projects remove workspace-archived --force --json >/dev/null
 np_heading="[data-id='main.topbar.left.heading']"
 np_form="[data-id='layer.project']"
-np_input="[data-id='layer.project.name']"
+np_input="[data-id='layer.project.input']"
 np_error="[data-id='layer.project.error']"
 np_picker_rows="[data-id^='layer.collections.list.']"
 np_sidebar_rows="[data-id^='main.columns.collections.']"

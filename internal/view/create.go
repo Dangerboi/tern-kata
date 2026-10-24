@@ -7,9 +7,6 @@ import (
 	"strings"
 )
 
-// CreateFieldID is the id of the Create card's field called name.
-func CreateFieldID(name model.Field) string { return "layer.create." + string(name) }
-
 var createLabels = map[model.Field]string{
 	model.CreateTitle:     "Title",
 	model.CreateBody:      "Body (optional)",
@@ -60,5 +57,5 @@ func createLayer(m model.Model) tern.Element {
 	default:
 		children = append(children, buttonRow(cardButton("save", model.ModeCreate, model.SaveDraftAction, title, true), cardButton("cancel", model.ModeCreate, model.CancelDraft, "Cancel", false)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "create"}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
+	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardCreate)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
 }

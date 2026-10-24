@@ -26,7 +26,7 @@ func withDates(uid, scheduled, deadline string) model.Issue {
 
 func datesField(t *testing.T, s driver.State, name model.Field) string {
 	t.Helper()
-	text, ok := nodeText(t, s, view.DatesFieldID(name))
+	text, ok := nodeText(t, s, view.FieldID(model.CardDates, name))
 	if !ok {
 		t.Fatalf("the Dates card draws no %s field", name)
 	}
@@ -35,7 +35,7 @@ func datesField(t *testing.T, s driver.State, name model.Field) string {
 
 func datesPreview(t *testing.T, s driver.State, name model.Field) string {
 	t.Helper()
-	text, _ := nodeText(t, s, view.DatesID+"."+string(name)+"-preview")
+	text, _ := nodeText(t, s, view.LayerID(model.CardDates)+"."+string(name)+"-preview")
 	return text
 }
 
@@ -64,7 +64,7 @@ func TestDOpensTheDatesCardPrefilledInEveryModeAndEscClosesItUnchanged(t *testin
 			if got := datesField(t, open.State, model.DatesDeadline); got != "2026-11-02T17:30:00" {
 				t.Errorf("Deadline = %q, want the value as kata holds it", got)
 			}
-			if !strings.HasPrefix(open.State.Focus, view.DatesID) {
+			if !strings.HasPrefix(open.State.Focus, view.LayerID(model.CardDates)) {
 				t.Errorf("text focus %q is not on the Dates card", open.State.Focus)
 			}
 			typedIn := typed(t, open.State, "x")
@@ -146,7 +146,7 @@ func TestDatesCardRefusesInvalidInputNamingTheField(t *testing.T) {
 		t.Fatalf("cmds %v open %v err %v", out.Cmds, f.Open, f.Err)
 	}
 	// The refusal is drawn, and the next edit takes it away.
-	if text, ok := nodeText(t, out.State, view.DatesID+".error"); !ok || !strings.HasPrefix(text, "Deadline") {
+	if text, ok := nodeText(t, out.State, view.LayerID(model.CardDates)+".error"); !ok || !strings.HasPrefix(text, "Deadline") {
 		t.Errorf("drawn error %q %v", text, ok)
 	}
 	if step(t, out.State, key("x")).State.Model.DatesForm.Err != nil {

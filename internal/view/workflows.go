@@ -17,9 +17,6 @@ const WorkflowListID = "main.columns.list.page.names.rows"
 // WorkflowID is the id of the Workflows Page's row for uid.
 func WorkflowID(uid string) string { return itemID(WorkflowListID, uid) }
 
-// WorkflowEditorID is the Workflow card's text.
-const WorkflowEditorID = "layer.workflow.body"
-
 // Tones the Workflows Page gives what it names: a workflow's steps by kind, its retries and its waits.
 const (
 	commandTone  = ui.ToneInfo
@@ -180,7 +177,7 @@ func workflowLayer(m model.Model) tern.Element {
 		title = "Edit workflow " + c.Name
 	}
 	readonly := c.Saving || c.DiscardConfirm || c.Conflict != nil
-	children := ui.Nodes(TextEditor("body", c.Editor, readonly))
+	children := ui.Nodes(TextEditor(inputLeaf, c.Editor, readonly))
 	if c.Saving {
 		children = append(children, ui.Text{Common: ui.Common{Key: "saving", Tone: ui.TonePending}, Text: "Saving workflow…"})
 	}
@@ -203,7 +200,7 @@ func workflowLayer(m model.Model) tern.Element {
 			cardButton("editor", model.ModeEditor, model.ExternalEditorAction, "$EDITOR", false),
 			cardButton("discard", model.ModeEditor, model.CancelDraft, "Discard", false)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "workflow"}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
+	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardWorkflow)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
 }
 
 // workflowRuns is the inspector's Runs section: the workflow's latest runs among those the Page read, newest first, each with its

@@ -22,7 +22,7 @@ func createCard(t *testing.T) driver.State {
 
 func createField(t *testing.T, s driver.State, name model.Field) string {
 	t.Helper()
-	text, ok := nodeText(t, s, view.CreateFieldID(name))
+	text, ok := nodeText(t, s, view.FieldID(model.CardCreate, name))
 	if !ok {
 		t.Fatalf("the Create card draws no %s field", name)
 	}

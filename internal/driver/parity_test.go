@@ -245,9 +245,9 @@ func TestLayerClicksEndWhereTheirKeysEnd(t *testing.T) {
 		click *tern.Focus
 		keys  []string
 	}{
-		{"filters field", "f", &tern.Focus{ID: view.FilterFieldID(model.FilterOwner)}, []string{"tab", "tab"}},
-		{"create field", "n", &tern.Focus{ID: view.CreateFieldID(model.CreateOwner)}, []string{"tab", "tab", "tab"}},
-		{"close field", "x", &tern.Focus{ID: view.CloseFieldID(model.ClosePR)}, []string{"tab", "tab", "tab"}},
+		{"filters field", "f", &tern.Focus{ID: view.FieldID(model.CardFilter, model.FilterOwner)}, []string{"tab", "tab"}},
+		{"create field", "n", &tern.Focus{ID: view.FieldID(model.CardCreate, model.CreateOwner)}, []string{"tab", "tab", "tab"}},
+		{"close field", "x", &tern.Focus{ID: view.FieldID(model.CardClose, model.ClosePR)}, []string{"tab", "tab", "tab"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			open := pressed(clickAt(model.ColumnList), tt.open)
@@ -289,7 +289,7 @@ func cardButtonsOf(t *testing.T, s driver.State) (map[string]string, map[string]
 	for _, node := range wireNodes(t, *out.View) {
 		actions, _ := node.P["actions"].(map[string]any)
 		clickAct, _ := actions["click"].(string)
-		if strings.HasPrefix(clickAct, view.KeyClick("")) && (strings.HasPrefix(node.ID, "layer.") || strings.HasPrefix(node.ID, view.PickerID)) {
+		if strings.HasPrefix(clickAct, view.KeyClick("")) && (strings.HasPrefix(node.ID, "layer.") || strings.HasPrefix(node.ID, view.LayerID(model.CardPicker))) {
 			found[node.ID] = clickAct
 			labels[node.ID], _ = node.P["text"].(string)
 		}

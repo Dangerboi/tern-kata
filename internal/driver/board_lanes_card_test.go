@@ -44,7 +44,7 @@ func nodeText(t *testing.T, s driver.State, id string) (string, bool) {
 func lanesField(t *testing.T, s driver.State) string {
 	t.Helper()
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
-		if n.ID == view.LanesInputID {
+		if n.ID == view.FieldID(model.CardLanes, model.LanesNames) {
 			text, _ := n.P["text"].(string)
 			return text
 		}
@@ -63,7 +63,7 @@ func TestBOpensTheLanesCardPrefilledAndEscClosesItUnchanged(t *testing.T) {
 	if got := lanesField(t, open.State); got != "in-review, shipping" {
 		t.Errorf("field = %q, want the current Lane list", got)
 	}
-	if !strings.HasPrefix(open.State.Focus, view.LanesID) {
+	if !strings.HasPrefix(open.State.Focus, view.LayerID(model.CardLanes)) {
 		t.Errorf("text focus %q is not on the Lanes card", open.State.Focus)
 	}
 	edited := typed(t, open.State, "x")
@@ -112,7 +112,7 @@ func TestLanesCardRefusesBadNamesNamingTheEntry(t *testing.T) {
 			if len(out.Cmds) != 0 || out.State.Model.TopCard() != model.CardLanes {
 				t.Fatalf("cmds %v card %v, want a refusal with the card open", out.Cmds, out.State.Model.TopCard())
 			}
-			msg, ok := nodeText(t, out.State, view.LanesID+".error")
+			msg, ok := nodeText(t, out.State, view.LayerID(model.CardLanes)+".error")
 			if !ok || !strings.Contains(msg, tt.want) {
 				t.Errorf("error = %q (drawn %v), want it to name %q", msg, ok, tt.want)
 			}
@@ -134,12 +134,12 @@ func TestEmptyLanesFieldSavesNoLanesWhichRestoresTheDefault(t *testing.T) {
 
 func TestLanesCardHintListsLabelsThatAreNotLanesYet(t *testing.T) {
 	s := lanesCard(t, boardCard("a", "needs-triage", "bug"), boardCard("b", "docs", "bug"))
-	hint, ok := nodeText(t, s, view.LanesID+".unused")
+	hint, ok := nodeText(t, s, view.LayerID(model.CardLanes)+".unused")
 	if !ok || !strings.Contains(hint, "bug, docs") || strings.Contains(hint, "needs-triage") {
 		t.Fatalf("hint = %q (drawn %v), want bug and docs only", hint, ok)
 	}
 	s = step(t, lanesCard(t, boardCard("a", "needs-triage")), key("a")).State
-	if _, ok := nodeText(t, s, view.LanesID+".unused"); ok {
+	if _, ok := nodeText(t, s, view.LayerID(model.CardLanes)+".unused"); ok {
 		t.Error("the hint is drawn although every label is a Lane")
 	}
 }
@@ -225,7 +225,7 @@ func TestLanesCardSavingKeepsTheCardLockedWithoutACaret(t *testing.T) {
 
 func TestAFailedLanesSaveKeepsTheCardWithTextAndError(t *testing.T) {
 	s := step(t, savingLanesCard(t), model.LanesSaved{ProjectUID: "p", Lanes: []string{"wip", "shipping"}, Err: errors.New("disk full")}).State
-	msg, ok := nodeText(t, s, view.LanesID+".error")
+	msg, ok := nodeText(t, s, view.LayerID(model.CardLanes)+".error")
 	if s.Model.TopCard() != model.CardLanes || !ok || !strings.Contains(msg, "disk full") || lanesField(t, s) != "wip, shipping" {
 		t.Fatalf("card %v error %q (drawn %v) field %q", s.Model.TopCard(), msg, ok, lanesField(t, s))
 	}
@@ -268,7 +268,7 @@ func TestLanesCardRefusesDoneLimitsAboveTheMaximumNamingTheField(t *testing.T) {
 			s = step(t, s, key("tab")).State
 		}
 		out := step(t, typed(t, s, tt.text), key("enter"))
-		msg, ok := nodeText(t, out.State, view.LanesID+".error")
+		msg, ok := nodeText(t, out.State, view.LayerID(model.CardLanes)+".error")
 		if len(out.Cmds) != 0 || !ok || !strings.Contains(msg, tt.want) {
 			t.Errorf("%s: cmds %v error %q, want a refusal naming %q", tt.text, out.Cmds, msg, tt.want)
 		}
@@ -283,7 +283,7 @@ func TestALoadedDoneLimitAboveTheMaximumCountsAsUnset(t *testing.T) {
 	s := step(t, boardPane(t, boardCard("a")), model.LanesLoaded{ProjectUID: "p", DoneDays: 99999, DoneCards: 501}).State
 	s = step(t, s, key("shift+b")).State
 	for _, name := range []model.Field{model.LanesDays, model.LanesCards} {
-		if text, _ := nodeText(t, s, view.LanesFieldID(name)); text != "" {
+		if text, _ := nodeText(t, s, view.FieldID(model.CardLanes, name)); text != "" {
 			t.Errorf("%s = %q, want blank (the default)", name, text)
 		}
 	}
@@ -317,7 +317,7 @@ func TestALoadedDoneLimitAtTheMaximumStaysSet(t *testing.T) {
 	}
 	s = step(t, s, key("shift+b")).State
 	for name, want := range map[model.Field]string{model.LanesDays: "3650", model.LanesCards: "500"} {
-		if text, _ := nodeText(t, s, view.LanesFieldID(name)); text != want {
+		if text, _ := nodeText(t, s, view.FieldID(model.CardLanes, name)); text != want {
 			t.Errorf("%s = %q, want %q", name, text, want)
 		}
 	}

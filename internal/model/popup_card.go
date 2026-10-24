@@ -56,6 +56,10 @@ const (
 // cardEntry is everything the model knows about one popup card. Each card fills in one.
 type cardEntry struct {
 	card Card
+	// name is the stem of the card's node ids: its layer is "layer." + name and each of its fields' nodes is the layer's id
+	// and the field's name; the one input of a card without fields is the layer's id and "input". The view adds nothing
+	// else, so a card whose ids cannot follow that says so here.
+	name string
 	open func(Model) bool
 	// modes is every keymap mode the card can be in; mode picks the current one from its state.
 	modes []Mode
@@ -87,7 +91,9 @@ type cardEntry struct {
 	// target names the card's multi-line body for native edits, and edit applies one to it; both
 	// are zero for a card without a body. edit is called only while the card is not busy.
 	target EditTarget
-	edit   func(Model, func(TextEditor) TextEditor) Model
+	// bodyField is the field the target body is, "" when it is the card's one input.
+	bodyField Field
+	edit      func(Model, func(TextEditor) TextEditor) Model
 	// choose gives the focused choice field its choice at an index; nil for a card without choice fields.
 	choose func(Model, int) Model
 	// text reaches the text and caret of the focused field for the shared delete and clear actions; the text is nil when the
@@ -208,7 +214,7 @@ func workerBusy(m Model) bool {
 func buildCards() []cardEntry {
 	return []cardEntry{
 		{
-			card: CardCreate, open: func(m Model) bool { return m.Create.Open },
+			card: CardCreate, name: "create", open: func(m Model) bool { return m.Create.Open },
 			modes: []Mode{ModeCreate, ModeDiscard},
 			mode: func(m Model) Mode {
 				if m.Create.DiscardConfirm {
@@ -219,7 +225,7 @@ func buildCards() []cardEntry {
 			key:  createCard.key,
 			busy: createBusy, fields: CreateFields, focus: func(m *Model) *Field { return &m.Create.Field },
 			editing: []fieldEditing{{mode: ModeCreate, actions: []Action{NextField, PreviousField}}},
-			target:  EditCreateBody,
+			target: EditCreateBody, bodyField: CreateBody,
 			edit: func(m Model, apply func(TextEditor) TextEditor) Model {
 				if !createBusy(m) {
 					m.Create.Editor = apply(m.Create.Editor)
@@ -228,7 +234,7 @@ func buildCards() []cardEntry {
 			},
 		},
 		{
-			card: CardDraft, open: func(m Model) bool { _, ok := m.ActiveDraft(); return ok },
+			card: CardDraft, name: "editor", open: func(m Model) bool { _, ok := m.ActiveDraft(); return ok },
 			modes:  []Mode{ModeEditor, ModeDiscard, ModeConflict},
 			mode:   Model.EditorMode,
 			key:    draftCard.key,
@@ -245,7 +251,7 @@ func buildCards() []cardEntry {
 			},
 		},
 		{
-			card: CardWorkflow, open: func(m Model) bool { return m.Workflows.Card.Open },
+			card: CardWorkflow, name: "workflow", open: func(m Model) bool { return m.Workflows.Card.Open },
 			modes:  []Mode{ModeEditor, ModeDiscard, ModeConflict},
 			mode:   workflowMode,
 			key:    workflowCardKey,
@@ -260,7 +266,7 @@ func buildCards() []cardEntry {
 			},
 		},
 		{
-			card: CardField, open: func(m Model) bool { return m.FieldForm.Open },
+			card: CardField, name: "fields", open: func(m Model) bool { return m.FieldForm.Open },
 			modes: []Mode{ModeFieldForm}, mode: func(Model) Mode { return ModeFieldForm },
 			key:    updateFieldKey,
 			busy:   func(m Model) bool { return m.FieldForm.Saving },
@@ -270,7 +276,7 @@ func buildCards() []cardEntry {
 			erased:  func(m Model, _ bool) Model { m.FieldForm.Err = nil; return m },
 		},
 		{
-			card: CardClose, open: func(m Model) bool { return m.CloseForm.Open },
+			card: CardClose, name: "close", open: func(m Model) bool { return m.CloseForm.Open },
 			modes: []Mode{ModeCloseForm}, mode: func(Model) Mode { return ModeCloseForm },
 			chords: []string{"ctrl+c"},
 			key:    closeKey,
@@ -288,7 +294,7 @@ func buildCards() []cardEntry {
 			},
 		},
 		{
-			card: CardDates, open: func(m Model) bool { return m.DatesForm.Open },
+			card: CardDates, name: "dates", open: func(m Model) bool { return m.DatesForm.Open },
 			modes: []Mode{ModeDatesForm}, mode: func(Model) Mode { return ModeDatesForm },
 			key:    updateDatesFormKey,
 			busy:   func(m Model) bool { return m.DatesForm.Saving },
@@ -305,7 +311,7 @@ func buildCards() []cardEntry {
 			},
 		},
 		{
-			card: CardRecurrence, open: func(m Model) bool { return m.RecurrenceForm.Open },
+			card: CardRecurrence, name: "recurrence", open: func(m Model) bool { return m.RecurrenceForm.Open },
 			modes: []Mode{ModeRecurrenceForm, ModeRecurrenceStop},
 			mode: func(m Model) Mode {
 				if m.RecurrenceForm.StopConfirm {
@@ -336,13 +342,13 @@ func buildCards() []cardEntry {
 			choose: func(m Model, i int) Model { m.RecurrenceForm.choose(i); return m },
 		},
 		{
-			card: CardBackfill, open: func(m Model) bool { return m.Backfill.Open },
+			card: CardBackfill, name: "backfill", open: func(m Model) bool { return m.Backfill.Open },
 			modes: []Mode{ModeBackfill}, mode: func(Model) Mode { return ModeBackfill },
 			key:  backfillKey,
 			busy: func(Model) bool { return false }, fields: []FieldSpec{},
 		},
 		{
-			card: CardJob, open: func(m Model) bool { return m.JobForm.Open },
+			card: CardJob, name: "job", open: func(m Model) bool { return m.JobForm.Open },
 			modes: []Mode{ModeJobForm, ModeJobConflict},
 			mode: func(m Model) Mode {
 				if m.JobForm.Conflict != nil {
@@ -367,7 +373,7 @@ func buildCards() []cardEntry {
 			choose: func(m Model, i int) Model { m.JobForm.choose(i); return m },
 		},
 		{
-			card: CardProject, open: func(m Model) bool { return m.ProjectForm.Open },
+			card: CardProject, name: "project", open: func(m Model) bool { return m.ProjectForm.Open },
 			modes: []Mode{ModeProjectForm}, mode: func(Model) Mode { return ModeProjectForm },
 			chords: []string{"ctrl+c"},
 			key:    updateProjectFormKey,
@@ -383,7 +389,7 @@ func buildCards() []cardEntry {
 			},
 		},
 		{
-			card: CardLanes, open: func(m Model) bool { return m.LanesForm.Open },
+			card: CardLanes, name: "lanes", open: func(m Model) bool { return m.LanesForm.Open },
 			modes: []Mode{ModeLanesForm}, mode: func(Model) Mode { return ModeLanesForm },
 			key:    updateLanesFormKey,
 			busy:   func(m Model) bool { return m.LanesForm.Saving },
@@ -398,7 +404,7 @@ func buildCards() []cardEntry {
 			},
 		},
 		{
-			card: CardWorker, open: func(m Model) bool { return m.WorkerCard.Open },
+			card: CardWorker, name: "worker", open: func(m Model) bool { return m.WorkerCard.Open },
 			modes: []Mode{ModeWorkerCard, ModeWorkerRead, ModeWorkerRestart, ModeWorkerOff},
 			mode: func(m Model) Mode {
 				if m.WorkerCard.Restart {
@@ -430,7 +436,7 @@ func buildCards() []cardEntry {
 			choose: func(m Model, i int) Model { m.WorkerCard.choose(i); return m },
 		},
 		{
-			card: CardFilter, open: func(m Model) bool { return m.FilterForm.Open },
+			card: CardFilter, name: "filters", open: func(m Model) bool { return m.FilterForm.Open },
 			modes: []Mode{ModeFilterForm}, mode: func(Model) Mode { return ModeFilterForm },
 			key:    filterFormKey,
 			busy:   func(m Model) bool { return m.FilterForm.Saving },
@@ -443,7 +449,7 @@ func buildCards() []cardEntry {
 			choose:   chooseFilter,
 		},
 		{
-			card: CardPicker, open: func(m Model) bool { return m.Picker.Open },
+			card: CardPicker, name: "collections", open: func(m Model) bool { return m.Picker.Open },
 			modes: []Mode{ModePicker}, mode: func(Model) Mode { return ModePicker },
 			chords: []string{"ctrl+c"},
 			key:    updatePicker,
@@ -474,6 +480,37 @@ func CardFields(card Card) (fields []FieldSpec, declared bool) {
 		}
 	}
 	return nil, false
+}
+
+// Name is the stem of the card's node ids, "" for NoCard.
+func (c Card) Name() string {
+	for _, entry := range cards {
+		if entry.card == c {
+			return entry.name
+		}
+	}
+	return ""
+}
+
+// CardInput reports whether the card has one text input without a field: its Draft, Workflow, value, name or filter.
+func CardInput(card Card) bool {
+	for _, entry := range cards {
+		if entry.card == card {
+			return entry.input
+		}
+	}
+	return false
+}
+
+// CardBody is the multi-line body a native edit of the card reaches, and the field of the card that holds it ("" for the card's
+// one input). The target is NoEditTarget for a card without a body.
+func CardBody(card Card) (EditTarget, Field) {
+	for _, entry := range cards {
+		if entry.card == card {
+			return entry.target, entry.bodyField
+		}
+	}
+	return NoEditTarget, ""
 }
 
 // topEntry is the entry of the card on top, false when none is.

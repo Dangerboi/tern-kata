@@ -136,9 +136,9 @@ func TestTextFocusIsClearedWhileSavingOrConfirming(t *testing.T) {
 
 func TestOpeningACardFocusesItsField(t *testing.T) {
 	out := step(t, browsing(t, 160), key("n"))
-	wantOps(t, out, tern.OpFocus(view.CreateFieldID(model.CreateTitle)))
-	out = step(t, out.State, &tern.Focus{ID: view.CreateFieldID(model.CreateLabels)})
-	wantOps(t, out, tern.OpFocus(view.CreateFieldID(model.CreateLabels)))
+	wantOps(t, out, tern.OpFocus(view.FieldID(model.CardCreate, model.CreateTitle)))
+	out = step(t, out.State, &tern.Focus{ID: view.FieldID(model.CardCreate, model.CreateLabels)})
+	wantOps(t, out, tern.OpFocus(view.FieldID(model.CardCreate, model.CreateLabels)))
 }
 
 func TestRowIsRevealedOnKeyMovesButNotOnRowClicks(t *testing.T) {
@@ -271,7 +271,7 @@ func TestColumnsStayMountedWhileHelpIsOpen(t *testing.T) {
 
 func TestUnknownIDOnATransientNodeIsIgnored(t *testing.T) {
 	s := browsing(t, 160)
-	for _, id := range []string{issueRow(t, s.Model, view.IssueListID, beta), view.SearchID, view.CreateFieldID(model.CreateBody), view.CloseFieldID(model.ClosePR), view.DetailActivityID + ".empty", view.DetailActivityID + ".tabs", view.ProjectInputID, view.BoardID + ".lane1.cards.beta"} {
+	for _, id := range []string{issueRow(t, s.Model, view.IssueListID, beta), view.SearchID, view.FieldID(model.CardCreate, model.CreateBody), view.FieldID(model.CardClose, model.ClosePR), view.DetailActivityID + ".empty", view.DetailActivityID + ".tabs", view.FieldID(model.CardProject, ""), view.BoardID + ".lane1.cards.beta"} {
 		out := driver.Step(s, &tern.ErrorEvent{Msg: "unknown id " + id}, now)
 		if out.Err != nil || out.Quit || out.View != nil || len(out.Ops) != 0 {
 			t.Errorf("unknown id %q: %+v", id, out)
@@ -342,10 +342,10 @@ func TestDifferentIssueScrollsTheDetailToItsStart(t *testing.T) {
 
 func TestMenuAndNewProjectCardTakeTheCaret(t *testing.T) {
 	menu := step(t, browsing(t, 160), openMenu)
-	wantOps(t, menu, tern.OpFocus(view.PickerFilterID))
+	wantOps(t, menu, tern.OpFocus(view.FieldID(model.CardPicker, "")))
 
 	form := feed(t, menu.State, key("end"), key("enter"))
-	wantOps(t, form, tern.OpFocus(view.ProjectInputID))
+	wantOps(t, form, tern.OpFocus(view.FieldID(model.CardProject, "")))
 	if !form.State.Model.ProjectForm.Open {
 		t.Fatal("fixture: the New Project card is closed")
 	}

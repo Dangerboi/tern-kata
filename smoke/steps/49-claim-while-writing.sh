@@ -15,7 +15,7 @@ ctl click "[data-id='main.columns.list.issues.$claim_draft']"
 expect_tree "[data-id='main.columns.list.issues.$claim_draft']" '.ok and .nodes[0]["aria-selected"] == "true"'
 ctl key enter
 ctl key e
-expect_tree "[data-id='layer.editor.body']" '.ok and .count == 1'
+expect_tree "[data-id='layer.editor.input']" '.ok and .count == 1'
 ctl key End
 ctl type '" + saved after a claim"'
 kata --workspace "$tmp/workspace" claim "$claim_draft" --if-unowned --json >/dev/null

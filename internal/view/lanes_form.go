@@ -8,14 +8,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-const (
-	LanesID      = "layer.lanes"
-	LanesInputID = LanesID + ".names"
-)
-
-// LanesFieldID is the id of the Lanes card's field called name.
-func LanesFieldID(name model.Field) string { return LanesID + "." + string(name) }
-
 var lanesDoneLabels = map[model.Field]string{
 	model.LanesDays:  "Days back",
 	model.LanesCards: "Most cards",
@@ -61,7 +53,7 @@ func lanesLayer(m model.Model) tern.Element {
 		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: form.Err.Error()})
 	}
 	children = append(children, gap("gap-actions"), buttonRow(cardButton("save", model.ModeLanesForm, model.LanesSubmit, "Save Lanes", true), cardButton("cancel", model.ModeLanesForm, model.LanesCancel, "Cancel", false)))
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "lanes"}, Head: ui.T("Lanes"), Modal: true, Size: ui.SizeLG, Children: children})
+	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardLanes)}, Head: ui.T("Lanes"), Modal: true, Size: ui.SizeLG, Children: children})
 }
 
 func fieldTone(form model.LanesFormState, name model.Field) ui.Tone {

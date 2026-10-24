@@ -6,11 +6,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-const (
-	ProjectID      = "layer.project"
-	ProjectInputID = ProjectID + ".name"
-)
-
 func projectLayer(m model.Model) tern.Element {
 	form := m.ProjectForm
 	if !form.Open {
@@ -21,7 +16,7 @@ func projectLayer(m model.Model) tern.Element {
 		note = "Creates the Project. This directory stays bound to " + m.Project.Name + "."
 	}
 	children := []tern.Element{
-		ui.Input{Common: ui.Common{Key: "name", Tone: ui.ToneAccent, Aria: "Project name"}, Field: ui.Field{Text: form.Name, Cursor: caretAt(form.Caret, "", form.Name), Mode: "insert", Placeholder: "Project name", Readonly: form.Saving}},
+		ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Project name"}, Field: ui.Field{Text: form.Name, Cursor: caretAt(form.Caret, "", form.Name), Mode: "insert", Placeholder: "Project name", Readonly: form.Saving}},
 		ui.Text{Common: ui.Common{Key: "note", Tone: ui.ToneMuted}, Text: note},
 	}
 	if form.Err != nil {
@@ -32,5 +27,5 @@ func projectLayer(m model.Model) tern.Element {
 	} else {
 		children = append(children, buttonRow(cardButton("create", model.ModeProjectForm, model.ProjectSubmit, "Create Project", true), cardButton("cancel", model.ModeProjectForm, model.ProjectCancel, "Cancel", false)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: "project"}, Head: ui.T(model.NewProjectTitle), Modal: true, Size: ui.SizeMD, Children: children})
+	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardProject)}, Head: ui.T(model.NewProjectTitle), Modal: true, Size: ui.SizeMD, Children: children})
 }

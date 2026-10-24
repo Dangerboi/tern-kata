@@ -70,26 +70,26 @@ func TestRenderNewProjectFormFollowsTheModel(t *testing.T) {
 	if _, ok := nodes[newProjectIDPrefix]; !ok {
 		t.Fatal("form not rendered")
 	}
-	if view.ProjectInputID != newProjectIDPrefix+".name" {
-		t.Fatalf("name input id %q", view.ProjectInputID)
+	if view.FieldID(model.CardProject, "") != newProjectIDPrefix+".input" {
+		t.Fatalf("name input id %q", view.FieldID(model.CardProject, ""))
 	}
-	if nodes[view.ProjectInputID].P["text"] != "my-repo" {
-		t.Fatalf("name input = %v", nodes[view.ProjectInputID].P)
+	if nodes[view.FieldID(model.CardProject, "")].P["text"] != "my-repo" {
+		t.Fatalf("name input = %v", nodes[view.FieldID(model.CardProject, "")].P)
 	}
 
 	// A rejection shows kata's message and keeps the input.
 	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
 	m, _ = model.Update(m, model.ProjectSaved{Err: errors.New("project with this name was archived")})
 	nodes = pickerNodes(t, m)
-	if nodes[newProjectIDPrefix+".error"].P["text"] != "project with this name was archived" || nodes[view.ProjectInputID].P["text"] != "my-repo" {
-		t.Fatalf("rejected form: error=%v input=%v", nodes[newProjectIDPrefix+".error"].P, nodes[view.ProjectInputID].P)
+	if nodes[newProjectIDPrefix+".error"].P["text"] != "project with this name was archived" || nodes[view.FieldID(model.CardProject, "")].P["text"] != "my-repo" {
+		t.Fatalf("rejected form: error=%v input=%v", nodes[newProjectIDPrefix+".error"].P, nodes[view.FieldID(model.CardProject, "")].P)
 	}
 
 	// While the daemon works the input is read-only.
 	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
 	nodes = pickerNodes(t, m)
-	if nodes[view.ProjectInputID].P["readonly"] != true {
-		t.Fatalf("saving form: input=%v", nodes[view.ProjectInputID].P)
+	if nodes[view.FieldID(model.CardProject, "")].P["readonly"] != true {
+		t.Fatalf("saving form: input=%v", nodes[view.FieldID(model.CardProject, "")].P)
 	}
 	if _, ok := nodes[newProjectIDPrefix+".saving"]; !ok {
 		t.Fatal("no saving marker")

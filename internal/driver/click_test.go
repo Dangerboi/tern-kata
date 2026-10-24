@@ -136,19 +136,19 @@ func TestClickingAFieldMakesItTheFieldTheKeysEdit(t *testing.T) {
 	for _, tt := range []struct {
 		name  string
 		open  string
-		id    func(model.Field) string
+		card  model.Card
 		field model.Field // the field three tabs from the first
 		keys  []string
 		read  func(model.Model) model.Field
 	}{
-		{"Create", "n", view.CreateFieldID, model.CreateOwner, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.Create.Field }},
-		{"Close", "x", view.CloseFieldID, model.ClosePR, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.CloseForm.Field }},
-		{"Recurrence", "shift+o", view.RecurrenceFieldID, model.RecurrenceStart, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.RecurrenceForm.Field }},
-		{"Filters", "f", view.FilterFieldID, model.FilterLabel, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.FilterForm.Field }},
+		{"Create", "n", model.CardCreate, model.CreateOwner, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.Create.Field }},
+		{"Close", "x", model.CardClose, model.ClosePR, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.CloseForm.Field }},
+		{"Recurrence", "shift+o", model.CardRecurrence, model.RecurrenceStart, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.RecurrenceForm.Field }},
+		{"Filters", "f", model.CardFilter, model.FilterLabel, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.FilterForm.Field }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			opened := feed(t, browsing(t, 160), key(tt.open)).State
-			clicked := step(t, opened, &tern.Focus{ID: tt.id(tt.field)})
+			clicked := step(t, opened, &tern.Focus{ID: view.FieldID(tt.card, tt.field)})
 			var keys []any
 			for _, chord := range tt.keys {
 				keys = append(keys, key(chord))
@@ -157,7 +157,7 @@ func TestClickingAFieldMakesItTheFieldTheKeysEdit(t *testing.T) {
 			if tt.read(clicked.State.Model) != tt.field || !reflect.DeepEqual(clicked.State.Model, typed.State.Model) {
 				t.Fatalf("click on %q left field %q, keys left %q", tt.field, tt.read(clicked.State.Model), tt.read(typed.State.Model))
 			}
-			wantOps(t, clicked, tern.OpFocus(tt.id(tt.field)))
+			wantOps(t, clicked, tern.OpFocus(view.FieldID(tt.card, tt.field)))
 		})
 	}
 }
@@ -176,9 +176,9 @@ func TestClickingAChoiceIsTheKeysThatReachIt(t *testing.T) {
 		name, open, id string
 		keys           func(driver.State) []string
 	}{
-		{"Recurrence frequency", "shift+o", view.RecurrenceFieldID(model.RecurrenceFrequency) + ".choices.2", func(driver.State) []string { return []string{"right"} }}, // Weekly to Monthly
-		{"Recurrence weekday", "shift+o", view.RecurrenceFieldID(model.RecurrenceWeekdays) + ".choices.4", weekdays},                                                    // Friday
-		{"Filter status", "f", view.FilterFieldID(model.FilterStatus) + ".choices.1", func(driver.State) []string { return []string{"tab", "right"} }},                  // open
+		{"Recurrence frequency", "shift+o", view.FieldID(model.CardRecurrence, model.RecurrenceFrequency) + ".choices.2", func(driver.State) []string { return []string{"right"} }}, // Weekly to Monthly
+		{"Recurrence weekday", "shift+o", view.FieldID(model.CardRecurrence, model.RecurrenceWeekdays) + ".choices.4", weekdays},                                                    // Friday
+		{"Filter status", "f", view.FieldID(model.CardFilter, model.FilterStatus) + ".choices.1", func(driver.State) []string { return []string{"tab", "right"} }},                  // open
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			opened := feed(t, browsing(t, 160), key(tt.open)).State
@@ -206,7 +206,7 @@ func TestClickingAChoiceIsTheKeysThatReachIt(t *testing.T) {
 }
 
 func TestTextTypedAfterClickingACloseFieldGoesToThatField(t *testing.T) {
-	s := feed(t, browsing(t, 160), key("x"), &tern.Focus{ID: view.CloseFieldID(model.CloseCommit)}, key("a")).State
+	s := feed(t, browsing(t, 160), key("x"), &tern.Focus{ID: view.FieldID(model.CardClose, model.CloseCommit)}, key("a")).State
 	if values := s.Model.CloseForm.Values; values.Commit != "a" || values.Message != "" {
 		t.Fatalf("values = %+v", values)
 	}
