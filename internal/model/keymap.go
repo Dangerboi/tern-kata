@@ -29,6 +29,7 @@ const (
 	CollapseIssue           Action = "collapse"
 	ToggleAllExpansion      Action = "toggle-all-expansion"
 	ToggleIssueView         Action = "toggle-issue-view"
+	ToggleGraphOrder        Action = "toggle-graph-order"
 	RetryAction             Action = "retry"
 	SelectIssueAction       Action = "select-issue"
 	SearchIssues            Action = "search"

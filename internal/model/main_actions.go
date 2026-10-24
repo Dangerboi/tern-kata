@@ -275,6 +275,7 @@ var mainRows = []actionEntry{
 	{action: OpenFilterForm, modes: listAndBoard, keys: keys("f", "f"), help: "filter", footer: listAndBoard, sheet: []sheetLine{{sheetFilters, 3, "filter (form)"}}, handle: pure(openFilterForm)},
 	{action: CycleStatus, modes: []Mode{ModeList}, keys: keys("s", "s"), help: "status", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetFilters, 2, "cycle status filter"}}, handle: cycleStatus},
 	{action: ToggleIssueView, modes: []Mode{ModeList}, keys: keys("v", "v"), help: "view", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetGraph, 13, "toggle flat/nested view"}}, handle: hierarchy(ToggleIssueView)},
+	{action: ToggleGraphOrder, modes: []Mode{ModeList}, keys: keys("o", "o"), help: "order", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetGraph, 16, "toggle graph order (blocking or creation order of siblings)"}}, handle: hierarchy(ToggleGraphOrder)},
 	{action: ClearFilters, modes: listAndBoard, keys: keys("c", "c"), help: "clear", footer: listAndBoard, sheet: []sheetLine{{sheetFilters, 4, "clear filters"}}, handle: clearFilters},
 	{action: EditBody, modes: issueModes, keys: keys("e", "e"), help: "edit", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 5, "edit body"}}, handle: pure(func(m Model) Model { return startDraft(m, false) })},
 	{action: AddComment, modes: []Mode{ModeDetail}, keys: keys("c", "c"), help: "comment", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 6, "new comment"}}, handle: pure(func(m Model) Model { return startDraft(m, true) })},
