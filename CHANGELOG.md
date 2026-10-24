@@ -6,6 +6,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Added
 
+- `o` in the nested Issue list switches siblings between creation order and blocking order (blockers first; creation order breaks ties and cycles), as in kata tui, and says "graph order: topological" or "graph order: temporal". The choice lasts for the Pane and is not saved; the help sheet and the list footer list it, and `o` on the Runs Page still opens the session.
 - Activity names who was asked, told or cleared: a notification request reads "asked bob: <message>", the notice a Reply left "told bob about a confirm" (reply, confirm, refute or supersede), a cleared request "cleared bob's request", and a request sent to several people one line naming three of them and counting the rest; a metadata change that mixes notifications with other keys names each recipient instead of the encoded key. When kata reaches an Issue's scheduled date, Activity says "reached the scheduled date <date>".
 - The kata skill covers kata v0.20: reply requests (`notify --re`), `wait --until reply`, broadcasts (`notify --broadcast`) and repeatable close evidence (`--commit`, `--pr`, `--test`), and no longer carries the v0.19 workarounds.
 - tern-kata requires the kata v0.20.0 daemon, for the Pane and the Worker alike: kata v0.20 says cron peers must upgrade together and does not support v0.19 beside it. Against an older daemon the Pane refuses to connect and says to upgrade, and the Worker and `worker doctor` name v0.20.0.

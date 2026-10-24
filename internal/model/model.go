@@ -97,6 +97,7 @@ type Model struct {
 	Calendar         PaneCalendar
 	HelpOpen         bool
 	Flat             bool
+	GraphOrder       bool // nested siblings in blocking order, not creation order; Pane state, never saved
 	ExpandedUIDs     map[string]bool
 	Drafts           map[string]Draft
 	EditorUID        string
