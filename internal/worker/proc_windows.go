@@ -163,7 +163,9 @@ func signalGroup(l *LaunchRecord, _ bool) {
 }
 
 // checkGroup is the group proof: gone when the job is gone or empty, present while it has processes, unchecked (with
-// the reason) when opening or querying the job fails for any other reason. Once the worker sees its job empty it closes
+// the reason) when opening or querying the job fails for any other reason. Answering unchecked rather than gone is
+// deliberate and conservative (ADR-0005): the worker keeps the run's slot and gate, and says it cannot check the job
+// instead of claiming the processes are present. Once the worker sees its job empty it closes
 // its handle, and the job and its name go.
 func checkGroup(l *LaunchRecord) GroupProof {
 	h, release, ok, err := job(l, jobObjectQuery)

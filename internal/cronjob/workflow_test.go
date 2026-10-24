@@ -94,7 +94,7 @@ func TestValidateWorkflowTakesWhatKataTakes(t *testing.T) {
 		"portable keys":        definition(command("build-1"), command("test_2"), command("v1.0"), command("Ünï")),
 		"after earlier steps": definition(command("a"), command("b"),
 			with(command("c"), func(s *cronjob.WorkflowStep) { s.After = []string{"a", "b"} })),
-		"prompt step": definition(cronjob.WorkflowStep{Key: "a", Kind: cronjob.StepPrompt, Prompt: "p", Options: map[string]any{"profile": "fast"}}),
+		"prompt step":         definition(cronjob.WorkflowStep{Key: "a", Kind: cronjob.StepPrompt, Prompt: "p", Options: map[string]any{"profile": "fast"}}),
 		"unknown option keys": {Version: 1, Steps: []cronjob.WorkflowStep{command("a")}, Options: map[string]any{"mystery": 1.0}},
 		"typed nil options":   {Version: 1, Steps: []cronjob.WorkflowStep{command("a")}, Options: map[string]any(nil)},
 	} {

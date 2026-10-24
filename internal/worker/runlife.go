@@ -134,10 +134,14 @@ type lifecycle struct {
 	FinishedTurn func(*Journal) bool
 }
 
-// life is the lifecycle with the Worker's own probes.
-func (w *Worker) life() lifecycle {
+// life is the lifecycle with the Worker's own probes, for Run j: its group answers are logged once per change of reason.
+func (w *Worker) life(j *Journal) lifecycle {
 	return lifecycle{
-		Group:        w.proveGroup,
+		Group: func(l *LaunchRecord) GroupProof {
+			proof := w.proveGroup(l)
+			w.noteGroup(j.RunUID, l, proof)
+			return proof
+		},
 		SessionKnown: func(j *Journal) bool { return w.sessionID(j) != "" },
 		FinishedTurn: w.finishedItsTurn,
 	}
@@ -147,11 +151,50 @@ func (w *Worker) life() lifecycle {
 // (ADR-0006). With no start record the process cannot be ruled out when the Run was launching or the hold says the
 // launch is unproven.
 func (l lifecycle) mayBeAlive(j *Journal) bool {
-	if j.Launch == nil {
-		return j.Phase == PhaseLaunching || (j.Outcome != nil && j.Outcome.Hold == HoldLaunchUnproven)
-	}
-	return !l.Group(j.Launch).Gone()
+	alive, _ := l.groupAnswer(j)
+	return alive
 }
+
+// groupAnswer is mayBeAlive with the group proof it rests on: a Run with no start record has no proof to show (the
+// zero GroupProof), a started one has the platform's answer, which may be that the group cannot be checked.
+func (l lifecycle) groupAnswer(j *Journal) (alive bool, proof GroupProof) {
+	if j.Launch == nil {
+		return j.Phase == PhaseLaunching || (j.Outcome != nil && j.Outcome.Hold == HoldLaunchUnproven), GroupProof{}
+	}
+	proof = l.Group(j.Launch)
+	return !proof.Gone(), proof
+}
+
+// groupLine says why a Run's group is not proven gone, for the sentence a refusal or hold detail builds around it:
+// "process group N is still present" or "process group N cannot be checked: <reason>". A group that cannot be checked
+// is never called present: the Worker does not know, and says what it does about not knowing (ADR-0005).
+func groupLine(who string, pgid int, proof GroupProof) string {
+	if proof.State == GroupUnchecked {
+		return fmt.Sprintf("%s's process group %d cannot be checked: %s", who, pgid, proof.Reason)
+	}
+	return fmt.Sprintf("%s's process group %d is still present", who, pgid)
+}
+
+// holdLine is groupLine as a hold detail: for a group that cannot be checked it adds what the Worker keeps.
+func holdLine(who string, pgid int, proof GroupProof) string {
+	line := groupLine(who, pgid, proof)
+	if proof.State == GroupUnchecked {
+		line += "; " + uncheckedKeeps
+	}
+	return line
+}
+
+// exitedHold is the hold detail of a group not proven gone after its process ended.
+func exitedHold(what string, pgid int, proof GroupProof) string {
+	if proof.State == GroupUnchecked {
+		return fmt.Sprintf("process group %d cannot be checked after the %s exited: %s; %s", pgid, what, proof.Reason, uncheckedKeeps)
+	}
+	return fmt.Sprintf("process group %d is still present after the %s exited", pgid, what)
+}
+
+// uncheckedKeeps is what the Worker does while a group cannot be checked, appended to every refusal and hold detail
+// that names one.
+const uncheckedKeeps = "the worker keeps the run's slot until the check succeeds and will not free capacity it cannot prove empty"
 
 // occupiesSlot is whether the Run still takes one of its Project's slots (ADR-0007): it is in flight, or it is a held
 // Run of a class whose process may be alive and its group is not proven gone. A hold from before admission and a
@@ -180,9 +223,12 @@ func (l lifecycle) mayResume(j *Journal) string {
 	case !j.settled():
 		return "its hold is still being reported to kata; try again in a moment"
 	}
-	if l.mayBeAlive(j) {
-		if j.Launch == nil {
+	if alive, proof := l.groupAnswer(j); alive {
+		switch {
+		case j.Launch == nil:
 			return "the worker cannot prove the agent was never started, so it will not start another on this run; abandon it"
+		case proof.State == GroupUnchecked:
+			return groupLine("the agent", j.Launch.PGID, proof) + "; " + uncheckedKeeps + ", so it cannot be resumed until then"
 		}
 		return fmt.Sprintf("the agent's process group %d is still present; the worker never stops a process to make a resume possible", j.Launch.PGID)
 	}
@@ -198,10 +244,16 @@ func (l lifecycle) mayAbandon(j *Journal) string {
 	if !j.held() {
 		return j.mayCancel()
 	}
-	switch {
-	case !j.settled():
+	if !j.settled() {
 		return "its hold is still being reported to kata; try again in a moment"
-	case j.Launch != nil && l.mayBeAlive(j):
+	}
+	if j.Launch == nil {
+		return ""
+	}
+	if alive, proof := l.groupAnswer(j); alive {
+		if proof.State == GroupUnchecked {
+			return groupLine("the agent", j.Launch.PGID, proof) + "; " + uncheckedKeeps + ", so it cannot be abandoned until then"
+		}
 		return fmt.Sprintf("the agent's process group %d is still present; stop it first", j.Launch.PGID)
 	}
 	return ""
@@ -244,12 +296,12 @@ func (l lifecycle) recover(j *Journal) recovery {
 	case j.Exit != nil:
 		return recovery{Step: recoverConclude}
 	}
-	alive := l.mayBeAlive(j)
+	alive, proof := l.groupAnswer(j)
 	switch {
 	case j.Cancel != nil && !alive:
 		return recovery{Step: recoverConcludeCancel}
 	case alive:
-		return recovery{recoverHold, HoldGroupUnproven, fmt.Sprintf("the %s's process group %d is still present", what, j.Launch.PGID)}
+		return recovery{recoverHold, HoldGroupUnproven, holdLine("the "+what, j.Launch.PGID, proof)}
 	case what == "agent" && l.FinishedTurn(j):
 		return recovery{recoverHold, HoldNoReceipt, "the agent finished its turn and its process is gone, but the worker saved no exit status"}
 	}

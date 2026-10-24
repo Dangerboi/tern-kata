@@ -308,7 +308,7 @@ func (w *Worker) slotsInUse() int {
 
 // bind turns a pending reservation into the run's slot: the slot map takes the Run its journal says occupies one.
 func (w *Worker) bind(ps *projectState, j *Journal) {
-	occupies := w.life().occupiesSlot(j)
+	occupies := w.life(j).occupiesSlot(j)
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	ps.pending = max(ps.pending-1, 0)
@@ -325,7 +325,7 @@ func (w *Worker) unreserve(ps *projectState) {
 
 // syncSlot puts the Run in the slot map or takes it out as the lifecycle says it occupies a slot of ps.
 func (w *Worker) syncSlot(ps *projectState, j *Journal) {
-	occupies := w.life().occupiesSlot(j)
+	occupies := w.life(j).occupiesSlot(j)
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	ps.setSlot(j, occupies)
