@@ -157,9 +157,13 @@ var jumpPath = detailPath(model.TabLinks, "enter")
 var linksTab = click("", view.ActivityTabClick(model.TabLinks))
 
 func TestEveryClickTargetEndsWhereItsKeysEnd(t *testing.T) {
-	toggle := func(t *testing.T, m model.Model) any { return click(rowOf(t, m, view.IssueListID, "parent"), view.ToggleClick("parent")) }
+	toggle := func(t *testing.T, m model.Model) any {
+		return click(rowOf(t, m, view.IssueListID, "parent"), view.ToggleClick("parent"))
+	}
 	selectRow := func(uid string) func(*testing.T, model.Model) any {
-		return func(t *testing.T, m model.Model) any { return &tern.Select{ID: view.IssueListID, Item: rowOf(t, m, view.IssueListID, uid)} }
+		return func(t *testing.T, m model.Model) any {
+			return &tern.Select{ID: view.IssueListID, Item: rowOf(t, m, view.IssueListID, uid)}
+		}
 	}
 	selectCollection := func(t *testing.T, m model.Model) any {
 		return &tern.Select{ID: view.CollectionsID, Item: rowShowing(t, m, view.CollectionsID, "Today")}
