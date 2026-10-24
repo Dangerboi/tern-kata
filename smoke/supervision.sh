@@ -146,17 +146,8 @@ run_job 3
 alive "$third" && kill -9 "$third"
 wait_new_worker "$third" 100
 run_job 4
-# worker.manual beside worker.toml turns supervision off (the rule the worker package owns, whose one other copy is the host
-# half): a worker that exits is not started again; removing the file starts one within a few polls.
-manual_worker=$(worker_pid)
-: >"$XDG_CONFIG_HOME/tern-kata/worker.manual"
-kill -9 "$manual_worker"
-sleep 13
-[[ -z "$(worker_pid)" ]] || ! alive "$(worker_pid)" || { echo "a worker started although worker.manual is present" >&2; exit 1; }
-rm "$XDG_CONFIG_HOME/tern-kata/worker.manual"
-wait_new_worker "$manual_worker" 40 || { echo "removing worker.manual did not start a worker" >&2; exit 1; }
-# A crash loop on a broken worker.toml grows the wait past one poll (10 s); fixing the file starts a worker within a poll.
 good_config=$(<"$XDG_CONFIG_HOME/tern-kata/worker.toml")
+# A crash loop on a broken worker.toml grows the wait past one poll (10 s); fixing the file starts a worker within a poll.
 fifth=$(worker_pid)
 printf 'this is = = not toml\n' >"$XDG_CONFIG_HOME/tern-kata/worker.toml"
 log_from=$(( $(wc -l <"$STENCIL_LOG_DIR/tern-daemon.log") + 1 ))
@@ -168,4 +159,56 @@ done
 tail -n +"$log_from" "$STENCIL_LOG_DIR/tern-daemon.log" | grep -Eq 'restarting in ([2-9][0-9]|1[1-9]) s' || { echo "the broken config never grew the wait past 10 s" >&2; exit 1; }
 printf '%s\n' "$good_config" >"$XDG_CONFIG_HOME/tern-kata/worker.toml"
 wait_new_worker "$fifth" 13 || { echo "fixing worker.toml did not start a worker within one poll" >&2; exit 1; }
-printf 'Supervision smoke passed: no config = nothing, worker started and run with no window, quick crashes back off, worker back after a daemon restart and when the worker it left behind ends, worker.manual keeps it down until removed, fixing a broken worker.toml drops the wait\n'
+# The supervision rule has two copies, the Go one (worker.SupervisionOn, whose config folder is worker.ConfigDir) and the
+# host half's (host.luau): they must agree on the same files. The Go copy answers `worker stop` ("a fresh worker" or
+# "nothing will start it again"); the host half either starts a worker within a poll (10 s) or does not. Both read the
+# config folder this script sets through XDG_CONFIG_HOME, so a disagreement about the folder fails here too.
+config="$XDG_CONFIG_HOME/tern-kata"
+wait_gone() { # $1 the pid
+  for ((i = 0; i < 300; i++)); do alive "$1" || return 0; sleep 0.1; done
+  echo "worker $1 did not exit after worker stop" >&2
+  return 1
+}
+# stop_expecting <fresh|none>: `worker stop` the running worker and check what it promises.
+stop_expecting() {
+  local pid out
+  pid=$(worker_pid)
+  out=$("$tmp/bin/tern-kata" worker stop 2>&1) || { echo "worker stop failed: $out" >&2; return 1; }
+  case "$1" in
+    fresh) grep -q 'The plugin will start a fresh worker' <<<"$out" || { echo "worker stop did not promise a fresh worker: $out" >&2; return 1; } ;;
+    none) grep -q 'Nothing will start it again' <<<"$out" || { echo "worker stop did not say nothing will start it again: $out" >&2; return 1; } ;;
+  esac
+  wait_gone "$pid"
+}
+# wait_started <old pid> <seconds>: wait_new_worker, asking the daemon something every second. Left idle with no worker running
+# the session daemon exits after about 12 s, and with it the host half under test.
+wait_started() {
+  local k
+  for ((k = 0; k < $2; k++)); do
+    tern plugin list >/dev/null 2>&1
+    wait_new_worker "$1" 1 2>/dev/null && return 0
+  done
+  return 1
+}
+# no_worker_within <seconds> <reason>: the host half starts none (one poll is 10 s, so 13 s covers one), the daemon kept busy.
+no_worker_within() {
+  for ((k = 0; k < $1; k++)); do sleep 1; tern plugin list >/dev/null 2>&1; done
+  [[ -z "$(worker_pid)" ]] || ! alive "$(worker_pid)" || { echo "a worker started although $2" >&2; return 1; }
+}
+# worker.manual beside worker.toml: stop promises nothing follows, and the host half starts none.
+: >"$config/worker.manual"
+stop_expecting none
+no_worker_within 13 "worker.manual is present"
+# Removing worker.manual: the host half starts a worker within a poll, and stop promises a fresh one, which comes.
+rm "$config/worker.manual"
+wait_started "" 13 || { echo "removing worker.manual did not start a worker within one poll" >&2; exit 1; }
+manual_worker=$(worker_pid)
+stop_expecting fresh
+wait_started "$manual_worker" 40 || { echo "the host half did not start the fresh worker stop promised" >&2; exit 1; }
+# No worker.toml: stop promises nothing follows, and the host half starts none. Restoring it starts one within a poll.
+rm "$config/worker.toml"
+stop_expecting none
+no_worker_within 13 "worker.toml is absent"
+printf '%s\n' "$good_config" >"$config/worker.toml"
+wait_started "" 13 || { echo "restoring worker.toml did not start a worker within one poll" >&2; exit 1; }
+printf 'Supervision smoke passed: no config = nothing, worker started and run with no window, quick crashes back off, worker back after a daemon restart and when the worker it left behind ends, host half and `worker stop` agree on worker.manual and worker.toml (marker, no marker, no config) over the same config folder, fixing a broken worker.toml drops the wait\n'

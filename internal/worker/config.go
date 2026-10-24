@@ -21,7 +21,8 @@ type Dirs struct {
 }
 
 // ConfigDir is os.UserConfigDir()/tern-kata: the one rule for tern-kata's config folder, shared by worker.toml and the Pane's
-// lanes.toml and filters.toml. It needs no state folder.
+// lanes.toml and filters.toml. It needs no state folder. The Luau host half (host.luau) keeps the one other copy of the rule;
+// the supervision smoke step (smoke/supervision.sh) pins the two to the same folder.
 func ConfigDir() (string, error) {
 	config, err := os.UserConfigDir()
 	if err != nil {

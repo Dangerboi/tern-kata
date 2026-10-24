@@ -14,7 +14,8 @@ const ConfigFileName = "worker.toml"
 // is built from it. The Luau host half keeps the one other copy of the rule, pinned by the supervision smoke step.
 const ManualFileName = "worker.manual"
 
-// SupervisionRule is the rule in one sentence, for texts that explain it (ADR-0012).
+// SupervisionRule is the rule in one sentence, for texts that explain it (ADR-0012). The Luau host half (host.luau) applies
+// it with its own copy; the supervision smoke step (smoke/supervision.sh) checks both against the same files.
 const SupervisionRule = "the plugin starts and restarts the worker exactly when " + ConfigFileName + " exists and " + ManualFileName + " does not"
 
 // SupervisionOnWords names what leaves supervision on, for the sentence `worker stop` prints when nothing will start the worker again.
@@ -32,7 +33,8 @@ func (d Dirs) ManualPresent() bool {
 	return err == nil
 }
 
-// SupervisionOn is whether the plugin starts and restarts the worker: worker.toml exists and the marker does not.
+// SupervisionOn is whether the plugin starts and restarts the worker: worker.toml exists and the marker does not. The host
+// half (host.luau) decides the same from the same files; the supervision smoke step (smoke/supervision.sh) pins them.
 func (d Dirs) SupervisionOn() bool {
 	if _, err := os.Stat(d.ConfigPath()); err != nil {
 		return false

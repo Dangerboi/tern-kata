@@ -3,6 +3,9 @@
 -- The host half runs in Tern's session daemon, with or without a window. It keeps `tern-kata worker` running: it starts
 -- the worker when worker.toml exists, and starts it again, backing off, whenever it exits. With no worker.toml it does nothing.
 -- Turning it off: create worker.manual beside worker.toml (see docs/guide/worker.md).
+-- The rule (worker.toml exists and worker.manual does not) and the config folder (os.UserConfigDir plus tern-kata) are
+-- the Go worker package's: worker.SupervisionOn in internal/worker/supervision.go and worker.ConfigDir in
+-- internal/worker/config.go. This file holds the one other copy, and smoke/supervision.sh pins the two to the same files.
 
 local os_name = tern.runtime.os
 local windows = os_name == "windows"
@@ -35,7 +38,7 @@ local function env(name: string): string?
     return value
 end
 
--- The folder os.UserConfigDir gives the binary, plus tern-kata.
+-- The folder os.UserConfigDir gives the binary, plus tern-kata: worker.ConfigDir's rule, pinned by smoke/supervision.sh.
 local function config_dir(): string?
     local base: string?
     if windows then
@@ -110,7 +113,8 @@ local function worker_path(): string
     return table.concat(dirs, path_sep)
 end
 
--- The text of worker.toml when the host half should keep a worker running, nil when supervision is off.
+-- The text of worker.toml when the host half should keep a worker running, nil when supervision is off: worker.SupervisionOn's
+-- rule, pinned by smoke/supervision.sh.
 local function enabled_config(): string?
     local dir = config_dir()
     if dir == nil then return nil end
