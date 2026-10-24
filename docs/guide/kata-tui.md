@@ -18,6 +18,10 @@ The Issue detail's Activity tabs are Comments, Events, Links and Attachments, cy
 
 `R` on a comment in the Issue detail's Comments tab replies to it; `ctrl+r` in the card cycles reply, confirm, refute and supersede.
 
+## Credentials
+
+`C` opens kata tui's Credentials view as a Lettered Page, and the Menu lists it. Its wording, fields and 30-second refresh are kata tui's; see [Pages and the Board](pages-and-board.md#lettered-pages).
+
 ## Missing keys
 
 tern-kata lacks these kata tui keys:

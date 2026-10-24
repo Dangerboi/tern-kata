@@ -32,6 +32,9 @@ type CollectionPointerSelected struct{ Key string }
 func (CollectionPointerSelected) msg() {}
 
 func updateCollection(m Model, msg CollectionSelected) (Model, []Cmd) {
+	if pageDefs[m.Page].lettered {
+		m = m.leavePage() // a Lettered Page shows no Collection: choosing one goes to the Issues
+	}
 	for _, collection := range m.Collections {
 		if collection != msg.Collection {
 			continue

@@ -381,6 +381,26 @@ func init() {
 		nil, nil)
 
 	daemonCall(
+		func(cmd model.LoadAuthCapabilities) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LoadAuthCapabilities) (model.Msg, error) {
+			return ok(c.ReadAuthCapabilities(ctx, cmd))
+		},
+		func(cmd model.LoadAuthCapabilities, err error) model.Msg {
+			return model.AuthCapabilitiesLoaded{Request: cmd.Request, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.LoadCredentials) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LoadCredentials) (model.Msg, error) {
+			return ok(c.ListCredentials(ctx, cmd))
+		},
+		func(cmd model.LoadCredentials, err error) model.Msg {
+			return model.CredentialsLoaded{Request: cmd.Request, Err: err}
+		},
+		[]beforeStep{pauseBeforeRefresh}, nil)
+
+	daemonCall(
 		func(cmd model.ShowRun) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.ShowRun) (model.Msg, error) {
 			return ok(c.ShowRun(ctx, cmd))

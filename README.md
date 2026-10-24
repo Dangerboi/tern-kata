@@ -16,6 +16,8 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 **Issue list and detail.** A Project's Issues nested under their parents, with priority, status, child counts and age, beside the Issue detail with its Markdown body, properties and Activity tabs. Changes made anywhere, by you or an agent, show up live. Collections (Inbox, Today, Upcoming, Deadlines, All Open, Logbook and every Project), search and filters, and editing from the Pane are in [Pages and the Board](docs/guide/pages-and-board.md).
 
+**Credentials.** `C` opens the Credentials Page, a Lettered Page (also in the Menu) that lists the daemon's API tokens read only, refreshes every 30 seconds and returns with esc or backspace; see [Pages and the Board](docs/guide/pages-and-board.md#lettered-pages).
+
 **Board.** `2` or `b` shows a Project's Issues as cards in Lanes, one per triage label. `<` and `>` move a card by swapping its label in kata, and a selected card tags its related cards; following one of another Project switches the Pane to that Project and Esc comes back. See [Pages and the Board](docs/guide/pages-and-board.md).
 
 ![The acme-shop Board with "Add Apple Pay to checkout" selected, its parent and blocker tagged](docs/images/board.png)
