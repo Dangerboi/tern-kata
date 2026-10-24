@@ -89,7 +89,8 @@ const pageRows = 10
 // and the number of rows: what the footer shows at its right.
 func (m Model) Position() (selected, total int) {
 	if m.OnFederation() {
-		return min(m.Federation.Cursor+1, len(m.Federation.Spokes)), len(m.Federation.Spokes)
+		cursor, n := m.federationCursorCount()
+		return min(cursor+1, n), n
 	}
 	if m.OnAttention() {
 		return m.attentionIndex() + 1, len(m.Attention.Requests)

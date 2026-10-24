@@ -250,6 +250,17 @@ func popupCards() []popupCard {
 			result: func(_ model.Model, err error) model.Msg { return model.ProjectSaved{Err: err} },
 		},
 		{
+			name: "Federation adoption", card: model.CardFederationAdopt, quits: true,
+			states: []cardState{{"", func() model.Model {
+				m := model.Model{}
+				m.Federation.Adopting, m.Federation.Draft.SpokeProjectName = true, "acme"
+				return m
+			}, model.ModeFederationAdopt}},
+			graft: func(dst *model.Model, src model.Model) { dst.Federation = src.Federation },
+			field: func(model.Model) model.Field { return "" },
+			text:  func(m model.Model, _ model.Field) string { return m.Federation.AdoptInput },
+		},
+		{
 			name: "Backfill", card: model.CardBackfill, multiline: true,
 			states: []cardState{{"", func() model.Model {
 				return model.Model{Backfill: model.BackfillState{Open: true, For: model.BackfillResume, Jobs: []model.BackfillJob{{Job: model.CronJob{UID: "J", Name: "Weekly"}, Missed: 3}}}}

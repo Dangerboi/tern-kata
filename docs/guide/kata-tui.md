@@ -26,7 +26,7 @@ The Issue detail's Activity tabs are Comments, Events, Links and Attachments, cy
 
 ## Federation
 
-`F` opens kata tui's federation view as a Lettered Page, and the Menu lists it: the spoke federations with their status, a detail on Enter, and `x` to leave one with the hub revoke. Its wording, header and states are kata tui's; see [Pages and the Board](pages-and-board.md#lettered-pages).
+`F` opens kata tui's federation view as a Lettered Page, and the Menu lists it: the spoke federations with their status, a detail on Enter, `x` to leave one with the hub revoke, `b` to browse the hubs' Projects (read only) and `n` to enroll a Project in a hub's federation. Its wording, header, states and the order of the enrollment's steps are kata tui's; the hubs are the entries of kata's daemon catalog, each used with its own token. See [Pages and the Board](pages-and-board.md#lettered-pages).
 
 ## Links
 

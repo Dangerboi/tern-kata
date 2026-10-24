@@ -50,6 +50,9 @@ func popups() []popup {
 			model.ModeDatesForm, "Dates", func(m model.Model) string { return m.DatesForm.Text.Scheduled }},
 		{"Move", keyOpen("shift+m"), func(dst *model.Model, src model.Model) { dst.MoveProject = src.MoveProject },
 			model.ModeMoveProject, "Move #aaaa to another Project", func(m model.Model) string { return m.MoveProject.Filter }},
+		{"Federation adoption", func(t *testing.T, _ driver.State) model.Model { return confirming(t).Model },
+			func(dst *model.Model, src model.Model) { dst.Federation = src.Federation },
+			model.ModeFederationAdopt, "Confirm Adoption", func(m model.Model) string { return m.Federation.AdoptInput }},
 		{"Recurrence", func(t *testing.T, s driver.State) model.Model {
 			m := keyOpen("shift+o")(t, s)
 			m.RecurrenceForm.Field = model.RecurrenceZone // a text field

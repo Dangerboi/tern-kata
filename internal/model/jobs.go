@@ -185,6 +185,21 @@ func (m Model) SelectedJob() *CronJob {
 // CurrentSelection is the uid of the selected row of the current Page's list: a job on the Jobs Page, else an Issue.
 func (m Model) CurrentSelection() string {
 	if m.OnFederation() {
+		switch m.Federation.Screen {
+		case FederationPreview, FederationRecovery, FederationEnrollDone:
+			// These screens draw no row of a list.
+			return ""
+		}
+		if m.FederationChoosing() {
+			if _, n := m.federationCursorCount(); n > 0 {
+				return "choice" + strconv.Itoa(m.FederationChoiceCursor())
+			}
+			return ""
+		}
+		if _, noticed := m.Federation.Notice(); noticed && m.Federation.Screen == FederationList {
+			// The list is not drawn while a notice stands in its place.
+			return ""
+		}
 		if s := m.SelectedSpoke(); s != nil {
 			return s.ProjectName
 		}

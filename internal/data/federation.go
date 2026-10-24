@@ -32,6 +32,9 @@ func (c *Client) ReadFederation(ctx context.Context, cmd model.LoadFederation) (
 	loaded := model.FederationLoaded{Request: cmd.Request, InstanceUID: instance.JSON200.InstanceUID}
 	loaded.Daemon, loaded.Endpoint, loaded.Auth = c.activeDaemon(instance.JSON200.Auth)
 	for _, wire := range status.JSON200.Statuses {
+		if wire.Role != "" {
+			loaded.Bindings = append(loaded.Bindings, model.FederationBinding{ProjectID: wire.ProjectID, ProjectName: wire.ProjectName, Role: wire.Role})
+		}
 		if wire.Role == "spoke" {
 			loaded.Spokes = append(loaded.Spokes, translateSpoke(wire))
 		}
