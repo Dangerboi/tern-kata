@@ -84,6 +84,9 @@ const (
 	ArchiveWorkflowAction   Action = "archive-workflow"
 	RestoreWorkflowAction   Action = "restore-workflow"
 	ToggleArchivedWorkflows Action = "toggle-archived-workflows"
+	ShowAttentionPage       Action = "show-attention-page"
+	OpenAttentionRequest    Action = "open-attention-request"
+	ReloadAttention         Action = "reload-attention"
 )
 
 // Binding is one chord in one mode, as the lookup, the footer and the help sheet read it. A binding of
@@ -133,6 +136,7 @@ const (
 	ModeRuns          Mode = "runs"
 	ModeRunInspector  Mode = "run-inspector"
 	ModeWorkflows     Mode = "workflows"
+	ModeAttention     Mode = "attention"
 )
 
 // cardBindings are the keys of the Popup cards. Each card's handler reads them by mode; the

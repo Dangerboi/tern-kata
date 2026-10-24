@@ -36,6 +36,9 @@ func updateCollection(m Model, msg CollectionSelected) (Model, []Cmd) {
 		if collection != msg.Collection {
 			continue
 		}
+		if m.OnAttention() { // the Page reads every Project, so a chosen Collection is what the user wants to see; its state is kept
+			m = m.leavePage()
+		}
 		m.Collection = collection
 		return m.collectionChosen()
 	}

@@ -88,9 +88,10 @@ const (
 	sheetJobs
 	sheetWorkflows
 	sheetRuns
+	sheetAttention
 )
 
-var sheetTitles = [...]string{"Global", "Graph", "Detail", "Children", "Forms", "Filters", "Board", "Jobs", "Workflows", "Runs"}
+var sheetTitles = [...]string{"Global", "Graph", "Detail", "Children", "Forms", "Filters", "Board", "Jobs", "Workflows", "Runs", "Attention"}
 
 // sheetLine places an entry's keys on one line of the help sheet. Rank orders the lines of a group; entries that
 // share a group and text share the line, their keys in rank order.

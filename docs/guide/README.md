@@ -4,7 +4,7 @@ Back to the [overview](../../README.md).
 
 | Guide | Covers |
 |---|---|
-| [Pages and the Board](pages-and-board.md) | How the plugin works, the Page bar, the Issues Page, the Board, Lanes and the Lane list file |
+| [Pages and the Board](pages-and-board.md) | How the plugin works, the Page bar, the Issues Page, the Board, Lanes and the Lane list file, the Attention Page |
 | [Jobs](jobs.md) | The Jobs Page, the Job card and the Backfill card |
 | [Runs](runs.md) | The Runs Page, held runs, opening sessions |
 | [Workflows](workflows.md) | The Workflows Page and the Workflow card |

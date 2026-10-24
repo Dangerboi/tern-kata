@@ -53,6 +53,8 @@ func Render(m model.Model, now time.Time) tern.View {
 				columns = append(columns, Collections(m))
 			case model.ColumnList:
 				switch {
+				case m.OnAttention():
+					columns = append(columns, attention(m))
 				case m.OnRuns():
 					columns = append(columns, runs(m, now))
 				case m.OnJobs():

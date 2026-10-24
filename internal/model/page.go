@@ -22,6 +22,8 @@ const (
 	PageRuns
 	// PageWorkflows is the Project's kata workflows beside an inspector; its state is Model.Workflows.
 	PageWorkflows
+	// PageAttention is the Attention requests addressed to the Pane's Inbox address, across every Project; its state is Model.Attention.
+	PageAttention
 )
 
 // SecondColumn says what a Page's second column is. A Page declares it in pageDefs, and the one leave rule reads it.
@@ -51,6 +53,8 @@ const (
 	ListNodeRuns
 	// ListNodeWorkflows is the Workflows Page's list node.
 	ListNodeWorkflows
+	// ListNodeAttention is the Attention Page's list node.
+	ListNodeAttention
 )
 
 // ListNode is the current Page's list node.
@@ -163,6 +167,10 @@ func init() {
 			filledFor: workflowsFilledFor, reset: resetWorkflows, mode: workflowsMode, update: updateWorkflows, list: ListNodeWorkflows,
 			moves:  pageMoves{mode: ModeWorkflows, noun: "workflow", move: moveWorkflow, sheet: [6]sheetLine{{sheetWorkflows, 1, "next workflow"}, {sheetWorkflows, 2, "previous workflow"}}},
 			keymap: []keySegment{movementKeys, rowsOf(workflowActions())}},
+		{page: PageAttention, id: "attention", label: "Attention", chord: "6", action: ShowAttentionPage, second: SecondInspector, enter: enterAttention,
+			mode: func(Model) Mode { return ModeAttention }, update: updateAttention, list: ListNodeAttention,
+			moves:  pageMoves{mode: ModeAttention, noun: "request", move: moveAttention, sheet: [6]sheetLine{{sheetAttention, 1, "next request"}, {sheetAttention, 2, "previous request"}}},
+			keymap: []keySegment{movementKeys, rowsOf(attentionRows)}},
 	}
 	buildKeymap()
 }
@@ -267,7 +275,7 @@ func pageScrollActions(def pageDef) []actionEntry {
 }
 
 // pageModes are the modes where the Page keys work: wherever the main surface has the keyboard and no text is being typed.
-var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollections, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows}
+var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollections, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention}
 
 // PageBarEntry is one entry of the Page bar.
 type PageBarEntry struct {
@@ -303,18 +311,21 @@ func showPage(target Page) func(Model) (Model, []Cmd) {
 }
 
 // switchPage is the one way onto a Page, the Issues Page included. It leaves the current Page, and for a Page that acts on the
-// Pane's Project it then resolves the Project (see enterProjectPage), makes the Page current with the detail column's hidden
-// flag remembered, the column hidden and focus on the list, and runs the Page's own enter. With no Project it stops on the Issues
-// Page with the Menu's Projects open.
+// Pane's Project (one that names what it needs) it then resolves the Project (see enterProjectPage), makes the Page current with
+// the detail column's hidden flag remembered, the column hidden and focus on the list, and runs the Page's own enter. With no
+// Project it stops on the Issues Page with the Menu's Projects open.
 func switchPage(m Model, target Page) (Model, []Cmd) {
 	m = m.leavePage()
 	def := pageDefs[target]
 	if def.enter == nil {
 		return m, nil
 	}
-	m, cmds, ok := enterProjectPage(m, def.needs)
-	if !ok {
-		return m, nil
+	var cmds []Cmd
+	if def.needs != "" {
+		var ok bool
+		if m, cmds, ok = enterProjectPage(m, def.needs); !ok {
+			return m, nil
+		}
 	}
 	m.Page = target
 	m.pageDetailHidden = m.DetailHidden()
