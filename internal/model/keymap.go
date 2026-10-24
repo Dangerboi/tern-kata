@@ -149,8 +149,8 @@ const (
 	ModeAttention     Mode = "attention"
 	ModeCredentials   Mode = "credentials"
 	// ModeQuit is the question "Quit tern-kata? y/n", which takes only its answers.
-	ModeQuit Mode = "quit"
-	ModeFederation    Mode = "federation"
+	ModeQuit       Mode = "quit"
+	ModeFederation Mode = "federation"
 )
 
 // cardBindings are the keys of the Popup cards. Each card's handler reads them by mode; the

@@ -79,18 +79,18 @@ type Model struct {
 	Daemon    Daemon
 	Snapshot  Snapshot
 	// Relationships is every Issue's Relationships, built from Snapshot's links each time a snapshot is applied.
-	Relationships    RelationshipIndex
-	Issues           []Issue
-	SelectedUID      string
-	Loading          bool
-	Err              error
-	Cols             int
-	Rows, RowPx      int
-	Quitting         bool
+	Relationships RelationshipIndex
+	Issues        []Issue
+	SelectedUID   string
+	Loading       bool
+	Err           error
+	Cols          int
+	Rows, RowPx   int
+	Quitting      bool
 	// AskQuit is the question "Quit tern-kata? y/n" while it is on screen.
 	AskQuit bool
 	// QuitAtOnce is kata's [tui].confirm_quit = false, read at launch: q quits without asking.
-	QuitAtOnce bool
+	QuitAtOnce       bool
 	Collection       Collection
 	Collections      []Collection
 	CollectionCursor int
