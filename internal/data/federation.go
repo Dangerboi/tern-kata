@@ -102,6 +102,7 @@ func firstNonEmpty(values ...string) string {
 
 func translateSpoke(wire g.FederationProjectStatus) model.FederationSpoke {
 	spoke := model.FederationSpoke{
+		ProjectID:                   wire.ProjectID,
 		ProjectName:                 wire.ProjectName,
 		HubURL:                      stringOrEmpty(wire.HubURL),
 		HubProjectUID:               stringOrEmpty(wire.HubProjectUID),

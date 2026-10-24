@@ -190,7 +190,7 @@ func init() {
 		{page: PageFederation, id: "federation", label: "Federation", chord: "F", press: "shift+f", lettered: true, action: ShowFederationPage, second: SecondInspector, enter: enterFederation, clear: clearFederation,
 			mode: federationMode, update: updateFederation, list: ListNodeFederation,
 			moves:  pageMoves{mode: ModeFederation, noun: "spoke", move: moveFederation, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
-			keymap: []keySegment{movementKeys, rowsOf(federationRows)}},
+			keymap: []keySegment{movementKeys, rowsOf(federationRows), rowsOf(federationLeaveRows)}},
 	}
 	buildKeymap()
 }

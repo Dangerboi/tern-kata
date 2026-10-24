@@ -18,7 +18,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 **Credentials.** `C` opens the Credentials Page, a Lettered Page (also in the Menu) that lists the daemon's API tokens read only, refreshes every 30 seconds and returns with esc or backspace; see [Pages and the Board](docs/guide/pages-and-board.md#lettered-pages).
 
-**Federation.** `F` opens the Federation Page, a Lettered Page (also in the Menu) that lists this daemon's spoke federations with hub, actor, push, pending, sync and badges, shows a Project's detail on Enter and reads again with `r`; see [Pages and the Board](docs/guide/pages-and-board.md#lettered-pages).
+**Federation.** `F` opens the Federation Page, a Lettered Page (also in the Menu) that lists this daemon's spoke federations with hub, actor, push, pending, sync and badges, shows a Project's detail on Enter, reads again with `r` and leaves a federation with `x` (preview, hub revoke, result); see [Pages and the Board](docs/guide/pages-and-board.md#lettered-pages).
 
 **Board.** `2` or `b` shows a Project's Issues as cards in Lanes, one per triage label. `<` and `>` move a card by swapping its label in kata, and a selected card tags its related cards; following one of another Project switches the Pane to that Project and Esc comes back. See [Pages and the Board](docs/guide/pages-and-board.md).
 
