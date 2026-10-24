@@ -350,7 +350,7 @@ func buildCards() []cardEntry {
 		{
 			card: CardMove, name: "move", open: func(m Model) bool { return m.MoveProject.Open },
 			modes: []Mode{ModeMoveProject, ModeMoveConfirm}, mode: Model.MoveCardMode,
-			key:    moveProjectKey,
+			key: moveProjectKey,
 			// The card holds no caret once a Project is chosen or while a request is out.
 			busy:   func(m Model) bool { return m.MoveProject.Sending || m.MoveProject.Target.UID != "" },
 			fields: []FieldSpec{}, input: true,

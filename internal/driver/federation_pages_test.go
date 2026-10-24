@@ -17,13 +17,13 @@ func TestPageKeysWorkFromEveryFederationScreenButNotWhileAWriteIsOut(t *testing.
 	done := step(t, enrolled, model.FederationEnrolled{Attempt: run.Attempt}).State
 
 	idle := map[string]driver.State{
-		"leave preview":    leavePreviewed(t, leavingPane(t)),
-		"local choice":     step(t, enrollPane(t), key("n")).State,
-		"hub choice":       atHubStep(t, enrollPane(t), rowReplica),
-		"hub Project":      atHubProjectStep(t, enrollPane(t), rowReplica, hubBeta),
-		"enroll preview":   previewed(t, atHubProjectStep(t, enrollPane(t), rowReplica, hubBeta)),
-		"browse":           browsing.State,
-		"recovery":         recovered,
+		"leave preview":     leavePreviewed(t, leavingPane(t)),
+		"local choice":      step(t, enrollPane(t), key("n")).State,
+		"hub choice":        atHubStep(t, enrollPane(t), rowReplica),
+		"hub Project":       atHubProjectStep(t, enrollPane(t), rowReplica, hubBeta),
+		"enroll preview":    previewed(t, atHubProjectStep(t, enrollPane(t), rowReplica, hubBeta)),
+		"browse":            browsing.State,
+		"recovery":          recovered,
 		"enrollment result": done,
 	}
 	for name, s := range idle {
