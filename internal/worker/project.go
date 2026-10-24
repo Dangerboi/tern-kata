@@ -7,6 +7,8 @@ import (
 	"math/rand/v2"
 	"strings"
 	"time"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // jitter is a random duration between lo and hi.
@@ -186,7 +188,7 @@ func (w *Worker) refreshEvery(ps *projectState) time.Duration {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	for _, j := range ps.jobs {
-		if !j.IsNative() {
+		if !j.Native() {
 			return jitter(15*time.Minute, 18*time.Minute)
 		}
 	}
@@ -207,7 +209,7 @@ func (w *Worker) refreshJobs(ctx context.Context, ps *projectState) error {
 		ps.jobsErr = err.Error()
 		return fmt.Errorf("listing jobs: %w", err)
 	}
-	ps.jobs = make(map[string]Job, len(jobs))
+	ps.jobs = make(map[string]cronjob.Job, len(jobs))
 	for _, j := range jobs {
 		ps.jobs[j.UID] = j
 	}
@@ -335,38 +337,11 @@ func (w *Worker) holdsSlotOf(ps *projectState, uid string) bool {
 	return ok
 }
 
-// holdsSlot reports whether the journal's run still occupies a slot: it is in flight, or its process may be alive.
-func holdsSlot(j *Journal) bool {
-	switch j.Phase {
-	case PhasePrepared, PhaseAdmitted, PhaseResuming, PhaseLaunching, PhaseStarted:
-		return true
-	}
-	if j.Outcome != nil {
-		switch j.Outcome.Hold {
-		case HoldLaunchUnproven, HoldInterrupted, HoldNoReceipt, HoldGroupUnproven:
-			return processMayBeAlive(j)
-		}
-	}
-	return j.Phase != PhaseSettled
-}
-
-// processMayBeAlive is the settlement proof for a run the worker spawned: its recorded process group (a Job Object on
-// Windows) is gone. With no start record the process cannot be ruled out.
-func processMayBeAlive(j *Journal) bool {
-	if j.Launch == nil {
-		return j.Phase == PhaseLaunching || (j.Outcome != nil && j.Outcome.Hold == HoldLaunchUnproven)
-	}
-	return !checkGroup(j.Launch).Gone()
-}
-
-// gateClosed reports whether a job's overlap gate is closed: an earlier run is unsettled, or held for the user (ADR-0007).
+// gateClosed reports whether a job's overlap gate is closed, and by which run (ADR-0007).
 func (w *Worker) gateClosed(jobUID, projectUID string) (runUID string) {
 	journals, _, _ := w.store.Scan()
 	for _, j := range journals {
-		if j.JobUID != jobUID || j.ProjectUID != projectUID {
-			continue
-		}
-		if j.Phase != PhaseSettled || (j.Outcome != nil && j.Outcome.Hold != "" && j.Outcome.Status == StatusUnknown) {
+		if j.JobUID == jobUID && j.ProjectUID == projectUID && j.closesGate() {
 			return j.RunUID
 		}
 	}
@@ -388,7 +363,7 @@ func (w *Worker) recoverProject(ctx context.Context, ps *projectState) {
 	for _, j := range journals {
 		if j.ProjectUID == ps.project.UID && j.Executor == w.opt.Config.Executor {
 			mine = append(mine, j)
-			if holdsSlot(j) {
+			if w.life().occupiesSlot(j) {
 				w.mu.Lock()
 				ps.held[j.RunUID] = j.JobUID
 				w.mu.Unlock()
@@ -396,7 +371,7 @@ func (w *Worker) recoverProject(ctx context.Context, ps *projectState) {
 		}
 	}
 	for _, j := range mine {
-		if j.Phase == PhaseSettled {
+		if j.settled() {
 			w.handedOn(j.RunUID)
 			continue
 		}

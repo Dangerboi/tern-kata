@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 	"go.kenn.io/kata"
 	"go.kenn.io/kata/pkg/client"
@@ -232,7 +233,7 @@ type Job struct {
 	Timeout     int64
 	Secrets     map[string]string
 	// Trigger defaults to manual.
-	Trigger worker.Trigger
+	Trigger cronjob.Trigger
 	// Catchup defaults to skip; GraceSeconds to 60.
 	Catchup      string
 	GraceSeconds *int64
@@ -264,14 +265,14 @@ func (j Job) definition() g.CronJobDefinition {
 	if j.ExistingUID != "" {
 		policy = &g.IssuePolicy{Kind: "existing", UID: &j.ExistingUID}
 	}
-	trigger := g.Trigger{Kind: cmp.Or(j.Trigger.Kind, "manual")}
-	if t := j.Trigger; t.Kind != "" && t.Kind != "manual" {
+	trigger := g.Trigger{Kind: cmp.Or(string(j.Trigger.Kind), "manual")}
+	if t := j.Trigger; t.Kind != "" && t.Kind != cronjob.TriggerManual {
 		trigger.Cron, trigger.At, trigger.Timezone = optional(t.Cron), optional(t.At), optional(t.Timezone)
 		if t.IntervalSeconds != 0 {
 			trigger.IntervalSeconds = &t.IntervalSeconds
 		}
 		trigger.IssueUID = optional(t.IssueUID)
-		if t.Kind == "issue-deadline" {
+		if t.Kind == cronjob.TriggerIssueDeadline {
 			trigger.LeadSeconds = &t.LeadSeconds
 		}
 	}
@@ -310,7 +311,7 @@ func optional(s string) *string {
 }
 
 // CreateJob creates an adapter prompt job in the Project.
-func (d *Daemon) CreateJob(t *testing.T, p worker.Project, j Job) worker.Job {
+func (d *Daemon) CreateJob(t *testing.T, p worker.Project, j Job) cronjob.Job {
 	t.Helper()
 	actor := "tester"
 	if _, err := d.Client.CreateCronJobWithResponse(context.Background(), &g.CreateCronJobRequestOptions{
@@ -322,7 +323,7 @@ func (d *Daemon) CreateJob(t *testing.T, p worker.Project, j Job) worker.Job {
 }
 
 // ReplaceJob edits a job the way the Jobs Page does: the whole definition is replaced by j's, on the version found.
-func (d *Daemon) ReplaceJob(t *testing.T, p worker.Project, found worker.Job, j Job) worker.Job {
+func (d *Daemon) ReplaceJob(t *testing.T, p worker.Project, found cronjob.Job, j Job) cronjob.Job {
 	t.Helper()
 	actor := "tester"
 	if _, err := d.Client.ReplaceCronJobWithResponse(context.Background(), &g.ReplaceCronJobRequestOptions{
@@ -334,7 +335,7 @@ func (d *Daemon) ReplaceJob(t *testing.T, p worker.Project, found worker.Job, j 
 	return d.findJob(t, p, found.Name)
 }
 
-func (d *Daemon) findJob(t *testing.T, p worker.Project, name string) worker.Job {
+func (d *Daemon) findJob(t *testing.T, p worker.Project, name string) cronjob.Job {
 	t.Helper()
 	jobs, err := d.Kata.Jobs(context.Background(), p.ID)
 	if err != nil {
@@ -346,7 +347,7 @@ func (d *Daemon) findJob(t *testing.T, p worker.Project, name string) worker.Job
 		}
 	}
 	t.Fatalf("job %s not listed", name)
-	return worker.Job{}
+	return cronjob.Job{}
 }
 
 // PlanningDates reads an Issue's scheduled and deadline instants; a date the Issue lacks is the zero time.
@@ -404,7 +405,7 @@ func (d *Daemon) InboxRequest(t *testing.T, p worker.Project, issueUID, recipien
 }
 
 // CreateNativeJob creates a recurring-child job under parent, which kata's daemon delivers and the worker never runs.
-func (d *Daemon) CreateNativeJob(t *testing.T, p worker.Project, name, parentUID string) worker.Job {
+func (d *Daemon) CreateNativeJob(t *testing.T, p worker.Project, name, parentUID string) cronjob.Job {
 	t.Helper()
 	actor := "tester"
 	def := g.CronJobDefinition{

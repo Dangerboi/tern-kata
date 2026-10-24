@@ -13,6 +13,7 @@ herdr-kata (state.md "Slots and overlap", run-lifecycle.md "Held capacity") keep
 - **Limits: adapt.** Per-Project `capacity` defaults to 1 (spec; herdr-kata defaults to 2 globally). A worker-wide `max_active_runs`, unset by default, caps all Projects together. Both apply and held runs count against both. A job's `timeout_seconds` overrides `default_timeout` (2 h), capped by `max_timeout` (8 h); a job over the cap is unsupported with a reason naming both values.
 - **Queue order: not specified by herdr-kata; ours.** Due occurrences of one Project admit oldest first.
 - **Bound on queued work: adopt.** Catch-up keeps at most 7 days and 100 pending occurrences per job; the oldest overflow is dropped and the decision logged (ADR-0011).
+- **Who decides: the Run lifecycle.** Which runs occupy a slot and which close their job's gate are the Run lifecycle's answers (`internal/worker/runlife.go`: `occupiesSlot`, `closesGate`), asked from the journal and the group proof; slot rebuilding at start, the retry pass, the release after a run and the overlap check at request time all ask it. A hold from before admission frees both at once; the secret, prompt and command holds free the slot and keep the gate; the launch-unproven, interrupted, no-receipt and group-unproven holds keep the slot while the group is not proven gone, and with no start record that cannot be proven.
 
 ## Consequences
 

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
@@ -166,8 +167,8 @@ func TestWorkerStatusAndDoctorListSetAsideJobsAndTheHighRateWarning(t *testing.T
 	f := newWorkerFixture(t, "")
 	f.kata.CreateJob(t, f.proj, workertest.Job{Name: "fine", Prompt: "Do it."})
 	f.kata.CreateJob(t, f.proj, workertest.Job{Name: "mapped nowhere", Prompt: "Do it.", Profile: "nope"})
-	f.kata.CreateJob(t, f.proj, workertest.Job{Name: "chatty", Prompt: "Do it.", Trigger: worker.Trigger{Kind: "interval", IntervalSeconds: 600}})
-	f.kata.CreateJob(t, f.proj, workertest.Job{Name: "chatty but off", Prompt: "Do it.", Disabled: true, Trigger: worker.Trigger{Kind: "interval", IntervalSeconds: 600}})
+	f.kata.CreateJob(t, f.proj, workertest.Job{Name: "chatty", Prompt: "Do it.", Trigger: cronjob.Trigger{Kind: cronjob.TriggerInterval, IntervalSeconds: 600}})
+	f.kata.CreateJob(t, f.proj, workertest.Job{Name: "chatty but off", Prompt: "Do it.", Disabled: true, Trigger: cronjob.Trigger{Kind: cronjob.TriggerInterval, IntervalSeconds: 600}})
 	f.serve(t)
 	setAside := `Job "mapped nowhere" is set aside: it names profile "nope", which is not available to Project demo in worker.toml`
 	chatty := `Job "chatty" creates about 144 Issues a day; consider an existing Issue`
@@ -204,7 +205,7 @@ func TestWorkerStatusSaysHowItIsSupervised(t *testing.T) {
 		if err != nil || !strings.Contains(out, tc.want) {
 			t.Errorf("supervisor %q: want %q in:\n%s (err %v)", tc.supervisor, tc.want, out, err)
 		}
-		if tc.supervisor != "" && !strings.Contains(out, "worker.manual") {
+		if tc.supervisor != "" && !strings.Contains(out, "create "+worker.SupervisionOffWords+".") {
 			t.Errorf("supervised status does not say how to turn supervision off:\n%s", out)
 		}
 	}
@@ -323,7 +324,7 @@ func TestPlanLaunchWorkerSubcommands(t *testing.T) {
 }
 
 // runJob asks the worker to run job now and returns the run's uid.
-func (f workerFixture) runJob(t *testing.T, job worker.Job) string {
+func (f workerFixture) runJob(t *testing.T, job cronjob.Job) string {
 	t.Helper()
 	out, err := f.run(t, LaunchPlan{Subcommand: "run", TargetRef: job.UID})
 	if err != nil {
@@ -468,6 +469,21 @@ func TestWorkerStopSaysTheModeTheRunsInFlightAndWhetherItStartsAgain(t *testing.
 	case <-stopped:
 	case <-time.After(10 * time.Second):
 		t.Fatal("the worker did not exit")
+	}
+}
+
+func TestWorkerStopSaysNothingWillStartItAgainInTheSupervisionRulesWords(t *testing.T) {
+	f := newWorkerFixture(t, "")
+	stop := f.serveUntilStopped(t)
+	defer stop()
+
+	out, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"stop"}})
+	want := "Stopping when idle: 0 runs in flight, so the worker exits now. Nothing will start it again: start one with `tern-kata worker`, or let the plugin (" + worker.SupervisionOnWords + ").\n"
+	if err != nil || out != want {
+		t.Fatalf("stop printed %q, %v; want %q", out, err, want)
+	}
+	if !strings.Contains(worker.SupervisionOnWords, worker.ConfigFileName) || !strings.Contains(worker.SupervisionOnWords, worker.ManualFileName) {
+		t.Errorf("the rule's words %q do not name %s and %s", worker.SupervisionOnWords, worker.ConfigFileName, worker.ManualFileName)
 	}
 }
 

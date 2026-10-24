@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
 )
@@ -22,14 +23,14 @@ func (h *harness) lines(name string) []string {
 }
 
 // startWorkflow creates a job that runs the workflow in the checkout and starts a manual run of it.
-func (h *harness) workflowJob(name string, steps ...workertest.Step) (worker.Workflow, worker.Job) {
+func (h *harness) workflowJob(name string, steps ...workertest.Step) (worker.Workflow, cronjob.Job) {
 	h.t.Helper()
 	wf := h.kata.CreateWorkflow(h.t, h.proj, name, steps...)
 	job := h.kata.CreateJob(h.t, h.proj, workertest.Job{Name: name + " job", Workflow: wf.UID, Checkout: "repo"})
 	return wf, job
 }
 
-func (h *harness) runWorkflow(r *running, job worker.Job) string {
+func (h *harness) runWorkflow(r *running, job cronjob.Job) string {
 	h.t.Helper()
 	resp := h.ask(worker.Request{Op: "run", Job: job.UID})
 	if !resp.OK || resp.Run == nil {

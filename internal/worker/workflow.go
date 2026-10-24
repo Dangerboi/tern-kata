@@ -11,6 +11,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // Step states, as the journal records them. A step nobody has started is pending (the empty string).
@@ -162,12 +164,12 @@ func unsupportedOption(options map[string]any) string {
 
 // planWorkflow reads the job's workflow and freezes it with each prompt step's profile resolved against worker.toml.
 // An error is a refusal: the run is not prepared.
-func (w *Worker) planWorkflow(ctx context.Context, ps *projectState, job Job, jobProfile string) (*WorkflowPlan, error) {
+func (w *Worker) planWorkflow(ctx context.Context, ps *projectState, job cronjob.Job, jobProfile string) (*WorkflowPlan, error) {
 	d := job.Definition
-	wf, err := w.opt.Kata.Workflow(ctx, ps.project.ID, d.WorkflowUID)
+	wf, err := w.opt.Kata.Workflow(ctx, ps.project.ID, d.Action.WorkflowUID)
 	switch {
 	case errors.Is(err, ErrNotFound):
-		return nil, fmt.Errorf("job %q runs workflow %s, which kata does not hold", job.Name, d.WorkflowUID)
+		return nil, fmt.Errorf("job %q runs workflow %s, which kata does not hold", job.Name, d.Action.WorkflowUID)
 	case err != nil:
 		return nil, fmt.Errorf("job %q: its workflow could not be read: %w", job.Name, err)
 	case wf.Deleted:
@@ -444,8 +446,8 @@ func stepStateText(j *Journal, i int) string {
 		return cmp.Or(r.State, StepPending)
 	}
 	switch {
-	case j.Held():
-		return "held: " + j.Outcome.Hold
+	case j.held():
+		return j.stateName()
 	case j.Outcome != nil && j.Outcome.Status == StatusCancelled:
 		return "cancelled"
 	}

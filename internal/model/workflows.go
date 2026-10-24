@@ -275,15 +275,13 @@ func (m Model) selectedRow() int {
 }
 
 // moveWorkflow moves the selection by a row, a page or to either end.
-func moveWorkflow(action Action) func(Model) (Model, []Cmd) {
-	return pure(func(m Model) Model {
-		visible := m.VisibleWorkflows()
-		if len(visible) == 0 {
-			return m
-		}
-		m.Workflows.Selected = visible[movedIndex(m.selectedRow(), len(visible), max(m.Rows-2, 1), action)].UID
+func moveWorkflow(m Model, action Action) Model {
+	visible := m.VisibleWorkflows()
+	if len(visible) == 0 {
 		return m
-	})
+	}
+	m.Workflows.Selected = visible[movedIndex(m.selectedRow(), len(visible), max(m.Rows-2, 1), action)].UID
+	return m
 }
 
 func inspectWorkflow(m Model) Model {
@@ -559,12 +557,6 @@ var workflowModes = []Mode{ModeWorkflows}
 // workflowActions are the Workflows Page's main-surface actions.
 func workflowActions() []actionEntry {
 	return []actionEntry{
-		{action: MoveDown, modes: workflowModes, keys: slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), help: "move", footer: workflowModes, footerKey: "↑↓", sheet: []sheetLine{{sheetWorkflows, 1, "next workflow"}}, handle: moveWorkflow(MoveDown)},
-		{action: MoveUp, modes: workflowModes, keys: slices.Concat(keys("k", "k/↑", "up", "↑"), emacsUp), help: "previous workflow", sheet: []sheetLine{{sheetWorkflows, 2, "previous workflow"}}, handle: moveWorkflow(MoveUp)},
-		{action: MoveFirst, modes: workflowModes, keys: keys("g", "g", "home", "home"), help: "first workflow", handle: moveWorkflow(MoveFirst)},
-		{action: MoveLast, modes: workflowModes, keys: keys("shift+g", "G", "end", "end"), help: "last workflow", handle: moveWorkflow(MoveLast)},
-		{action: PageUp, modes: workflowModes, keys: pageUpKeys, help: "page up", handle: moveWorkflow(PageUp)},
-		{action: PageDown, modes: workflowModes, keys: pageDownKeys, help: "page down", handle: moveWorkflow(PageDown)},
 		{action: OpenWorkflow, modes: workflowModes, keys: keys("enter", "↵"), help: "steps", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 3, "show the steps"}}, handle: pure(inspectWorkflow)},
 		{action: NewWorkflow, modes: workflowModes, keys: keys("n", "n"), help: "new", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 4, "new workflow (Workflow card)"}}, handle: pure(newWorkflow)},
 		{action: EditWorkflow, modes: workflowModes, keys: keys("e", "e"), help: "edit", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 5, "edit the workflow (Workflow card)"}}, handle: pure(editWorkflow)},

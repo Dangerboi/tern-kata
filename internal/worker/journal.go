@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // Phase is how far a Run has got. The journal is saved before each side effect of the next phase (ADR-0006), so a
@@ -100,16 +102,16 @@ type Journal struct {
 	ProjectName string `json:"project_name"`
 
 	// The job as it was when the run was prepared; later edits never change a prepared run.
-	JobUID             string            `json:"job_uid"`
-	JobName            string            `json:"job_name"`
-	DefinitionEventUID string            `json:"definition_event_uid"`
-	Prompt             string            `json:"prompt"`
-	IssuePolicy        IssuePolicy       `json:"issue_policy"`
-	SecretRefs         map[string]string `json:"secret_refs,omitempty"`
-	ProfileName        string            `json:"profile_name"`
-	Profile            Profile           `json:"profile"`
-	Checkout           string            `json:"checkout,omitempty"`
-	TimeoutSeconds     int64             `json:"timeout_seconds"`
+	JobUID             string              `json:"job_uid"`
+	JobName            string              `json:"job_name"`
+	DefinitionEventUID string              `json:"definition_event_uid"`
+	Prompt             string              `json:"prompt"`
+	IssuePolicy        cronjob.IssuePolicy `json:"issue_policy"`
+	SecretRefs         map[string]string   `json:"secret_refs,omitempty"`
+	ProfileName        string              `json:"profile_name"`
+	Profile            Profile             `json:"profile"`
+	Checkout           string              `json:"checkout,omitempty"`
+	TimeoutSeconds     int64               `json:"timeout_seconds"`
 	// Notify is set for a notify job's run instead of a prompt: the inbox request it sends and nothing else.
 	Notify *NotifySpec `json:"notify,omitempty"`
 	// Workflow is set for a workflow job's run instead of a prompt: the definition as it was when the run was prepared,
@@ -245,9 +247,6 @@ type Outcome struct {
 	InputTokens  *int64 `json:"input_tokens,omitempty"`
 	OutputTokens *int64 `json:"output_tokens,omitempty"`
 }
-
-// Held reports whether the run waits for the user.
-func (j *Journal) Held() bool { return j.Outcome != nil && j.Outcome.Hold != "" }
 
 // Inspections are the reasons the run's reports could not be delivered without a person looking.
 func (j *Journal) Inspections() []string {
@@ -553,7 +552,7 @@ func (s *Store) Retain(cutoff time.Time) (removed []string, err error) {
 
 // expired reports whether a journal may be removed: settled, nothing unsent, not held, ended before cutoff.
 func expired(j *Journal, cutoff time.Time) bool {
-	if j.Phase != PhaseSettled || j.Held() || j.Outcome == nil || !j.Outcome.At.Before(cutoff) {
+	if !j.settled() || j.held() || j.Outcome == nil || !j.Outcome.At.Before(cutoff) {
 		return false
 	}
 	for _, it := range j.Intents {

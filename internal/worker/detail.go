@@ -54,7 +54,7 @@ const OutputTailBytes = 4 << 10
 // reached showing as pending.
 func stepsOf(j *Journal) []StepDetail {
 	if j.Workflow == nil {
-		st := StepDetail{Index: 1, Kind: "prompt", Attempt: j.attempt(), State: runStatus(j).State}
+		st := StepDetail{Index: 1, Kind: "prompt", Attempt: j.attempt(), State: j.stateName()}
 		if l := j.Launch; l != nil {
 			st.PID, st.SessionID, st.StartedAt = l.PID, l.SessionID, l.At
 		}

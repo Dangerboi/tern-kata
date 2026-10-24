@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
 )
@@ -171,7 +172,7 @@ func TestStatusAndDoctorListEachJobTheWorkerSetsAsideAndWarnOfManyIssuesADay(t *
 	h.kata.CreateJob(t, h.proj, workertest.Job{Name: "too long", Prompt: "Do it.", Timeout: 24 * 3600})
 	loop := h.kata.CreateWorkflow(t, h.proj, "loop", workertest.Step{Key: "make", Prompt: "Make."}, workertest.Step{Key: "check", Prompt: "Check.", After: []string{"make"}, Options: map[string]any{"on_fail": "make"}})
 	h.kata.CreateJob(t, h.proj, workertest.Job{Name: "looping", Workflow: loop.UID})
-	h.kata.CreateJob(t, h.proj, workertest.Job{Name: "frequent", Prompt: "Do it.", Trigger: worker.Trigger{Kind: "interval", IntervalSeconds: 3600 * 24 / 100}})
+	h.kata.CreateJob(t, h.proj, workertest.Job{Name: "frequent", Prompt: "Do it.", Trigger: cronjob.Trigger{Kind: cronjob.TriggerInterval, IntervalSeconds: 3600 * 24 / 100}})
 	r := h.start(worker.Hooks{})
 	h.admitting(r)
 	h.eventually("the definitions to be read", func() bool { return len(r.w.Status().Projects[0].Aside) == 4 })

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // RunAccepted is what a run request answers once the run's journal is durable (ADR-0002): the caller sees the uid only then.
@@ -63,7 +65,7 @@ func (w *Worker) RunOccurrence(ctx context.Context, project, jobUID string, occu
 	if ps == nil {
 		return "", false, fmt.Errorf("Project %q is not served by this worker", project)
 	}
-	lookup := func() (Job, bool) {
+	lookup := func() (cronjob.Job, bool) {
 		w.mu.Lock()
 		defer w.mu.Unlock()
 		job, ok := ps.jobs[jobUID]
@@ -89,8 +91,8 @@ func (w *Worker) RunOccurrence(ctx context.Context, project, jobUID string, occu
 
 // findJob locates the job in a served Project, refreshing the definitions once before giving up. When it belongs to
 // a Project this worker doesn't serve it says so, because unserved Projects never run.
-func (w *Worker) findJob(ctx context.Context, jobUID string) (*projectState, Job, error) {
-	lookup := func() (*projectState, Job, bool) {
+func (w *Worker) findJob(ctx context.Context, jobUID string) (*projectState, cronjob.Job, error) {
+	lookup := func() (*projectState, cronjob.Job, bool) {
 		w.mu.Lock()
 		defer w.mu.Unlock()
 		for _, ps := range w.projects {
@@ -98,7 +100,7 @@ func (w *Worker) findJob(ctx context.Context, jobUID string) (*projectState, Job
 				return ps, j, true
 			}
 		}
-		return nil, Job{}, false
+		return nil, cronjob.Job{}, false
 	}
 	if ps, j, ok := lookup(); ok {
 		return ps, j, nil
@@ -121,7 +123,7 @@ func (w *Worker) findJob(ctx context.Context, jobUID string) (*projectState, Job
 			if jobs, err := w.opt.Kata.Jobs(ctx, p.ID); err == nil {
 				for _, j := range jobs {
 					if j.UID == jobUID {
-						return nil, Job{}, fmt.Errorf("job %s (%s) belongs to Project %s, which this worker does not serve; list it in worker.toml to serve it", jobUID, j.Name, p.Name)
+						return nil, cronjob.Job{}, fmt.Errorf("job %s (%s) belongs to Project %s, which this worker does not serve; list it in worker.toml to serve it", jobUID, j.Name, p.Name)
 					}
 				}
 			}
@@ -136,7 +138,7 @@ func (w *Worker) findJob(ctx context.Context, jobUID string) (*projectState, Job
 	if len(notes) > 0 {
 		msg += " (" + strings.Join(notes, "; ") + ")"
 	}
-	return nil, Job{}, errors.New(msg)
+	return nil, cronjob.Job{}, errors.New(msg)
 }
 
 // admitsNothing is why a Project can't start runs right now, empty when it can.
@@ -166,27 +168,27 @@ func newJournalID() string {
 
 // prepare checks a job can run, reserves a slot, applies ADR-0002's veto and saves the run's journal. occurrenceKey is
 // empty for a manual run. It returns the existing journal, with created false, when the occurrence was prepared before.
-func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurrence time.Time, occurrenceKey string) (*Journal, bool, error) {
+func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job, occurrence time.Time, occurrenceKey string) (*Journal, bool, error) {
 	if why := w.admitsNothing(ps); why != "" {
 		return nil, false, fmt.Errorf("Project %s admits nothing: %s", ps.cfg.Name, why)
 	}
-	if job.IsNative() {
+	if job.Native() {
 		return nil, false, fmt.Errorf("job %q is a native job: kata's daemon delivers it, the worker never runs it", job.Name)
 	}
 	d := job.Definition
 	var notify *NotifySpec
-	var issuePolicy IssuePolicy
+	var issuePolicy cronjob.IssuePolicy
 	var profileName, checkout string
 	var profile Profile
 	var timeout time.Duration
-	if d.ActionKind == "notify" {
+	if d.Action.Kind == cronjob.ActionNotify {
 		var err error
 		if notify, issuePolicy, err = notifyPlan(job); err != nil {
 			return nil, false, err
 		}
 	} else {
 		switch {
-		case d.WorkflowUID == "" && strings.TrimSpace(d.Prompt) == "":
+		case d.Action.WorkflowUID == "" && strings.TrimSpace(d.Action.Prompt) == "":
 			return nil, false, fmt.Errorf("job %q has neither a prompt nor a workflow", job.Name)
 		case d.Issue == nil:
 			return nil, false, fmt.Errorf("job %q has no Issue policy", job.Name)
@@ -240,17 +242,17 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurre
 			w.unreserve(ps)
 		}
 	}()
-	if issuePolicy.Kind == "existing" {
+	if issuePolicy.Kind == cronjob.IssueExisting {
 		issue, err := w.opt.Kata.ShowIssue(ctx, ps.project.ID, issuePolicy.UID)
 		if err != nil {
 			return nil, false, fmt.Errorf("job %q: its Issue could not be read: %w", job.Name, err)
 		}
-		if !issue.Open() && d.ActionKind != "notify" { // a notify job has no readiness requirement
+		if !issue.Open() && d.Action.Kind != cronjob.ActionNotify { // a notify job has no readiness requirement
 			return nil, false, fmt.Errorf("job %q reports to Issue %s, which is closed; reopen it first", job.Name, issue.ShortID)
 		}
 	}
 	var workflow *WorkflowPlan
-	if d.ActionKind != "notify" && d.WorkflowUID != "" {
+	if d.Action.Kind != cronjob.ActionNotify && d.Action.WorkflowUID != "" {
 		var err error
 		if workflow, err = w.planWorkflow(ctx, ps, job, profileName); err != nil {
 			return nil, false, err
@@ -278,7 +280,7 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurre
 	j := &Journal{
 		Version: 1, RunUID: uid, JournalID: newJournalID(), Executor: w.opt.Config.Executor, Actor: ps.actor, Generation: generation,
 		ProjectUID: ps.project.UID, ProjectID: ps.project.ID, ProjectName: ps.project.Name,
-		JobUID: job.UID, JobName: job.Name, DefinitionEventUID: job.DefinitionEventUID, Prompt: d.Prompt, IssuePolicy: issuePolicy, Notify: notify, Workflow: workflow,
+		JobUID: job.UID, JobName: job.Name, DefinitionEventUID: job.DefinitionEventUID, Prompt: d.Action.Prompt, IssuePolicy: issuePolicy, Notify: notify, Workflow: workflow,
 		SecretRefs: d.SecretRefs, ProfileName: profileName, Profile: profile, Checkout: checkout, TimeoutSeconds: int64(timeout / time.Second),
 		OccurrenceKey: occurrenceKey, Occurrence: occurrence.UTC(), Manual: manual,
 		Steps:     stepsFor(workflow),
@@ -299,17 +301,17 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job Job, occurre
 
 // notifyPlan is what a notify job asks of the worker: the request to send and the existing Issue it goes to. The
 // Issue is the job's own `existing` policy, else the one its Issue-date trigger watches.
-func notifyPlan(job Job) (*NotifySpec, IssuePolicy, error) {
+func notifyPlan(job cronjob.Job) (*NotifySpec, cronjob.IssuePolicy, error) {
 	d := job.Definition
 	uid := d.Trigger.IssueUID
 	if d.Issue != nil {
-		if d.Issue.Kind != "existing" {
-			return nil, IssuePolicy{}, fmt.Errorf("job %q creates an Issue per run: kata's daemon delivers it, the worker never runs it", job.Name)
+		if d.Issue.Kind != cronjob.IssueExisting {
+			return nil, cronjob.IssuePolicy{}, fmt.Errorf("job %q creates an Issue per run: kata's daemon delivers it, the worker never runs it", job.Name)
 		}
 		uid = d.Issue.UID
 	}
-	if uid == "" || d.Recipient == "" {
-		return nil, IssuePolicy{}, fmt.Errorf("job %q does not name an Issue and a recipient to notify", job.Name)
+	if uid == "" || d.Action.Recipient == "" {
+		return nil, cronjob.IssuePolicy{}, fmt.Errorf("job %q does not name an Issue and a recipient to notify", job.Name)
 	}
-	return &NotifySpec{Recipient: d.Recipient, Message: d.Message}, IssuePolicy{Kind: "existing", UID: uid}, nil
+	return &NotifySpec{Recipient: d.Action.Recipient, Message: d.Action.Message}, cronjob.IssuePolicy{Kind: cronjob.IssueExisting, UID: uid}, nil
 }

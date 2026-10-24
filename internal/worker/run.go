@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // noteHook halts the worker's run machinery when a test's save hook "killed" it, as a crash would: nothing after the
@@ -61,10 +63,7 @@ func (w *Worker) spawn(ps *projectState, uid string) {
 // transient kata failure stopped it, and retryPending will drive it on. An idle drain waits for such a run.
 func (w *Worker) owesSettlement(uid string) bool {
 	j, err := w.store.Load(uid)
-	if err != nil || j.Phase == PhaseSettled {
-		return false
-	}
-	return j.Outcome == nil || j.Outcome.Hold == ""
+	return err == nil && j.owes()
 }
 
 // retryPending resumes runs a transient kata failure left half-reported or half-admitted; the Project loop calls it at least every minute.
@@ -74,18 +73,18 @@ func (w *Worker) retryPending(ps *projectState) {
 		if j.ProjectUID != ps.project.UID || j.Executor != w.opt.Config.Executor {
 			continue
 		}
-		if j.Phase == PhaseSettled || j.Outcome != nil && j.Outcome.Hold != "" {
+		if !j.owes() {
 			w.mu.Lock()
 			delete(ps.owing, j.RunUID) // settled or held by another path since: nothing left to wait for
 			w.mu.Unlock()
 			w.finishDrain()
 		}
 		switch {
-		case j.Phase == PhasePrepared && !w.holdsSlotOf(ps, j.RunUID):
+		case j.driveStep() == driveAdmit && !w.holdsSlotOf(ps, j.RunUID):
 			// prepare saved this journal but has not bound its slot yet; RequestRun or the scheduler spawns it next
-		case j.Phase == PhasePrepared || j.Phase == PhaseAdmitted || j.Phase == PhaseResuming || j.Phase == PhaseFinished:
+		case j.retryable():
 			w.spawn(ps, j.RunUID)
-		case j.Phase == PhaseSettled && !holdsSlot(j):
+		case j.settled() && !w.life().occupiesSlot(j):
 			w.release(ps, j.RunUID) // a held run whose process has since gone no longer takes a slot
 		}
 	}
@@ -97,7 +96,7 @@ func (w *Worker) advance(ctx context.Context, ps *projectState, uid string) (err
 	defer func() {
 		w.noteHook(err)
 		w.dropCancelSignal(uid)
-		if j, lerr := w.store.Load(uid); lerr == nil && !holdsSlot(j) {
+		if j, lerr := w.store.Load(uid); lerr == nil && !w.life().occupiesSlot(j) {
 			w.release(ps, uid)
 		}
 		w.kick(ps) // a slot or an overlap gate may have opened: queued occurrences are due another look
@@ -107,16 +106,16 @@ func (w *Worker) advance(ctx context.Context, ps *projectState, uid string) (err
 		if err != nil {
 			return err
 		}
-		switch j.Phase {
-		case PhasePrepared:
+		switch j.driveStep() {
+		case driveAdmit:
 			err = w.admit(ctx, ps, j)
-		case PhaseResuming:
+		case driveReopen:
 			err = w.reopen(ctx, ps, j)
-		case PhaseAdmitted:
+		case driveLaunch:
 			err = w.launch(ctx, ps, j)
-		case PhaseFinished:
+		case driveReport:
 			err = w.report(ctx, ps, j)
-		case PhaseSettled:
+		case driveNone:
 			return nil
 		default:
 			return fmt.Errorf("run is %s; recovery classifies that first", j.Phase)
@@ -139,25 +138,12 @@ func (w *Worker) recoverRun(ctx context.Context, ps *projectState, uid string) {
 	if err != nil {
 		return
 	}
-	what := "agent"
-	if j.activeIsCommand() {
-		what = "command"
-	}
-	switch {
-	case j.Phase == PhaseLaunching:
-		err = w.hold(j, HoldLaunchUnproven, "the worker stopped while starting the "+what+", so it may have started")
-	case j.Phase == PhaseStarted && j.Exit == nil && j.Cancel != nil && !processMayBeAlive(j):
+	switch r := w.life().recover(j); r.Step {
+	case recoverHold:
+		err = w.hold(j, r.Hold, r.Detail)
+	case recoverConcludeCancel:
 		err = w.concludeCancel(j) // asked to stop and its process is provably gone
-	case j.Phase == PhaseStarted && j.Exit == nil:
-		switch {
-		case processMayBeAlive(j):
-			err = w.hold(j, HoldGroupUnproven, fmt.Sprintf("the %s's process group %d is still present", what, j.Launch.PGID))
-		case what == "agent" && w.finishedItsTurn(j):
-			err = w.hold(j, HoldNoReceipt, "the agent finished its turn and its process is gone, but the worker saved no exit status")
-		default:
-			err = w.hold(j, HoldInterrupted, "the worker stopped while the "+what+" ran")
-		}
-	case j.Phase == PhaseStarted:
+	case recoverConclude:
 		err = w.conclude(ctx, j)
 	}
 	w.noteHook(err)
@@ -251,7 +237,7 @@ func (w *Worker) observation(j *Journal, status, message string, revision int64)
 // resolveIssue creates the per-run Issue with the idempotency key tern-kata:<run uid>, force_new and the run marker, or reads the job's existing one.
 func (w *Worker) resolveIssue(ctx context.Context, j *Journal) (*JournalIssue, error) {
 	p := j.IssuePolicy
-	if p.Kind == "existing" {
+	if p.Kind == cronjob.IssueExisting {
 		issue, err := w.opt.Kata.ShowIssue(ctx, j.ProjectID, p.UID)
 		if err != nil {
 			return nil, err

@@ -114,7 +114,7 @@ func stopWorker(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Writ
 	if a.Restarts {
 		_, err = fmt.Fprintln(out, " The plugin will start a fresh worker.")
 	} else {
-		_, err = fmt.Fprintln(out, " Nothing will start it again: start one with `tern-kata worker`, or let the plugin (a worker.toml without worker.manual beside it).")
+		_, err = fmt.Fprintln(out, " Nothing will start it again: start one with `tern-kata worker`, or let the plugin ("+worker.SupervisionOnWords+").")
 	}
 	return err
 }

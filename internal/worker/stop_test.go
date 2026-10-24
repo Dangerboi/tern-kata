@@ -11,12 +11,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
 )
 
 // startedRun requests job and waits until its agent runs.
-func (h *harness) startedRun(r *running, job worker.Job) string {
+func (h *harness) startedRun(r *running, job cronjob.Job) string {
 	h.t.Helper()
 	uid := h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID
 	h.eventually("the agent to start", func() bool {

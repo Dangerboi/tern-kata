@@ -99,7 +99,7 @@ func (w *Worker) Status() Status {
 		}
 		p.Scheduled, p.Queued, p.NextRun = ps.scheduled, ps.queued, ps.nextRun
 		for _, j := range ps.jobs {
-			if j.IsNative() {
+			if j.Native() {
 				p.NativeJobs++
 			} else {
 				p.AdapterJobs++
@@ -120,7 +120,7 @@ func (w *Worker) Status() Status {
 		if j.Executor != w.opt.Config.Executor {
 			continue
 		}
-		if j.Phase == PhaseSettled && !j.Held() && len(j.Inspections()) == 0 {
+		if j.settled() && !j.held() && len(j.Inspections()) == 0 {
 			if settled++; settled > 5 {
 				continue
 			}
@@ -133,13 +133,11 @@ func (w *Worker) Status() Status {
 // runStatus is runStatus plus what depends on this worker: whether a resume or an abandon would be accepted.
 func (w *Worker) runStatus(j *Journal) RunStatus {
 	r := runStatus(j)
-	if j.Held() {
-		r.ResumeRefusal = w.resumeRefusal(j)
+	if j.held() {
+		r.ResumeRefusal = w.life().mayResume(j)
 		r.Resumable = r.ResumeRefusal == ""
-		r.Abandonable = abandonRefusal(j) == ""
-	} else {
-		r.Abandonable = cancelRefusal(j) == "" // a running run can be asked to stop
 	}
+	r.Abandonable = w.life().mayAbandon(j) == "" // a running run can be asked to stop
 	return r
 }
 
@@ -148,18 +146,9 @@ func runStatus(j *Journal) RunStatus {
 	if j.Issue != nil {
 		r.Issue = j.Issue.Ref
 	}
-	switch {
-	case j.Held():
-		r.State = "held: " + j.Outcome.Hold
+	r.State = j.stateName()
+	if j.held() {
 		r.Held, r.Hold, r.Detail = true, j.Outcome.Hold, j.Outcome.Summary
-	case j.Outcome != nil:
-		r.State = j.Outcome.Status
-	case j.Cancel != nil:
-		r.State = "cancelling"
-	case j.Phase == PhaseStarted, j.Phase == PhaseLaunching:
-		r.State = "running"
-	default:
-		r.State = string(j.Phase)
 	}
 	if j.Outcome != nil {
 		r.EndedAt = j.Outcome.At
@@ -267,7 +256,7 @@ func (s Status) supervision() string {
 	case "":
 		return "Not supervised: it was started by hand, so nothing starts it again when it exits.\n"
 	case SupervisorTern:
-		return "Supervised by Tern's session daemon (the tern-kata plugin's host half): it starts the worker again when it exits, waiting longer after each quick crash. To turn that off, create " + ManualFileName + " beside " + ConfigFileName + ".\n"
+		return "Supervised by Tern's session daemon (the tern-kata plugin's host half): it starts the worker again when it exits, waiting longer after each quick crash. To turn that off, create " + SupervisionOffWords + ".\n"
 	}
 	return fmt.Sprintf("Supervised by %s.\n", s.Supervisor)
 }
