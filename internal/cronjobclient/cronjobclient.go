@@ -53,6 +53,19 @@ func Job(j g.CronJob) cronjob.Job {
 	}
 }
 
+// Run is kata's Run as the cronjob package holds it. A status kata adds later reads as cronjob.RunUnknown.
+func Run(w g.CronRun) cronjob.Run {
+	return cronjob.Run{
+		UID: w.UID, JobUID: Str(w.JobUID), DefinitionEventUID: Str(w.DefinitionEventUID),
+		WorkflowUID: Str(w.WorkflowUID), WorkflowDefinitionEventUID: Str(w.WorkflowDefinitionEventUID),
+		OccurrenceKey: Str(w.OccurrenceKey), IssueUID: Str(w.IssueUID),
+		Actor: w.Actor, Teammate: Str(w.Teammate), ExecutorLabel: Str(w.ExecutorLabel),
+		Status: cronjob.ReadRunStatus(w.Status), Summary: Str(w.Summary.Message),
+		InputTokens: w.Summary.InputTokens, OutputTokens: w.Summary.OutputTokens,
+		Revision: w.Revision, CreatedAt: w.CreatedAt, UpdatedAt: w.UpdatedAt, StartedAt: w.StartedAt, EndedAt: w.EndedAt,
+	}
+}
+
 // WorkflowDefinition is kata's Workflow definition as the cronjob package holds it, ready for cronjob.ValidateWorkflow.
 // Options stay nil when kata sends none, so an absent value and an empty object read the same.
 func WorkflowDefinition(d g.CronWorkflowDefinitionResponse) cronjob.WorkflowDefinition {

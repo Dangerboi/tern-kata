@@ -84,7 +84,7 @@ func (c *Client) jobActivity(ctx context.Context, projectID int64, jobs []model.
 			return nil, errors.New("kata daemon returned no Runs")
 		}
 		for _, wire := range response.JSON200.Runs {
-			if run := translateRun(wire); run.JobUID != "" && !isNativeJob(jobs, run.JobUID) {
+			if run := (model.Run{Run: cronjobclient.Run(wire)}); run.JobUID != "" && !isNativeJob(jobs, run.JobUID) {
 				if held := activity[run.JobUID]; len(held.Runs) < model.JobActivityShown {
 					held.Runs = append(held.Runs, run)
 					activity[run.JobUID] = held

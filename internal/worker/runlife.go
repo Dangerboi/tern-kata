@@ -96,7 +96,7 @@ func (j *Journal) stateName() string {
 	case j.held():
 		return "held: " + j.Outcome.Hold
 	case j.Outcome != nil:
-		return j.Outcome.Status
+		return string(j.Outcome.Status)
 	case j.Cancel != nil:
 		return "cancelling"
 	case j.Phase == PhaseStarted, j.Phase == PhaseLaunching:

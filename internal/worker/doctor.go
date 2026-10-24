@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // Check is one line of `worker doctor`.
@@ -207,7 +209,7 @@ func (o DoctorOptions) checkProject(ctx context.Context, cfg Config, pc ProjectC
 		return
 	}
 	for _, run := range runs {
-		if run.Status != StatusRunning || run.ExecutorLabel != cfg.Executor {
+		if run.Status != cronjob.RunRunning || run.ExecutorLabel != cfg.Executor {
 			continue
 		}
 		if _, err := store.Load(run.UID); errors.Is(err, ErrNoJournal) && !store.IsQuarantined(run.UID) {

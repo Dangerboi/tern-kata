@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // The Runs Page lists one Project's Runs, newest first, with the selected Run's detail beside them. It takes the list column's
@@ -13,40 +15,12 @@ import (
 // A Run is kata's record of one execution of a Cron job or workflow, written by whichever executor ran it: an adapter, this
 // machine's worker or another machine's. The Pane shows what kata holds.
 
-// RunStatus is where a Run stands, as kata records it.
-type RunStatus string
-
-const (
-	RunRunning   RunStatus = "running"
-	RunSucceeded RunStatus = "succeeded"
-	RunFailed    RunStatus = "failed"
-	RunCancelled RunStatus = "cancelled"
-	// RunUnknown is a Run an executor could not settle: held, or lost track of.
-	RunUnknown RunStatus = "unknown"
-)
-
-// Run is one kata run observation as the model holds it. A Run names a Cron job, a workflow or both, and the Issue it ran for.
-// JobName, WorkflowName and the Issue's short id and title are what the Daemon gateway could resolve from the uids; each is
-// empty when kata no longer answers for it.
+// Run is the cronjob package's Run with what only the Pane reads: the names the Daemon gateway could resolve from its uids (the
+// job's, the workflow's, and the Issue's short id and title), each empty when kata no longer answers for it.
 type Run struct {
-	UID string
-	// JobUID and WorkflowUID are what the Run belongs to; DefinitionEventUID and WorkflowDefinitionEventUID are the versions of
-	// them it ran.
-	JobUID, JobName                    string
-	DefinitionEventUID                 string
-	WorkflowUID, WorkflowName          string
-	WorkflowDefinitionEventUID         string
-	OccurrenceKey                      string
-	IssueUID, IssueShortID, IssueTitle string
-	// Actor is who observed the Run first; Teammate and ExecutorLabel say which agent and machine did.
-	Actor, Teammate, ExecutorLabel string
-	Status                         RunStatus
-	// Message and the token counts are the summary. A count kata does not hold is nil.
-	Message                   string
-	InputTokens, OutputTokens *int64
-	Revision                  int64
-	CreatedAt, UpdatedAt      time.Time
-	StartedAt, EndedAt        *time.Time
+	cronjob.Run
+	JobName, WorkflowName    string
+	IssueShortID, IssueTitle string
 }
 
 // Name is what the Run ran: the job's name, else the workflow's, else the uid of whichever kata holds.
@@ -86,7 +60,7 @@ func (r Run) Duration(now time.Time) (time.Duration, bool) {
 	end := now
 	if r.EndedAt != nil {
 		end = *r.EndedAt
-	} else if r.Status != RunRunning {
+	} else if r.Status != cronjob.RunRunning {
 		return 0, false
 	}
 	return max(0, end.Sub(*r.StartedAt)), true
@@ -211,7 +185,7 @@ func (m Model) RunRows(now time.Time) []RunRow {
 		if d, ok := run.Duration(now); ok {
 			row.Duration = ShortDuration(d)
 		}
-		row.Summary, _, _ = strings.Cut(strings.TrimSpace(run.Message), "\n")
+		row.Summary, _, _ = strings.Cut(strings.TrimSpace(run.Summary), "\n")
 		rows[i] = row
 	}
 	return rows
@@ -290,7 +264,7 @@ func (m Model) RunFacts(now time.Time) []RunFact {
 	if d, ok := run.Duration(now); ok {
 		add("Duration", ShortDuration(d))
 	}
-	add("Summary", strings.TrimSpace(run.Message))
+	add("Summary", strings.TrimSpace(run.Summary))
 	facts = append(facts, local...)
 	add("Input tokens", count(run.InputTokens))
 	add("Output tokens", count(run.OutputTokens))
