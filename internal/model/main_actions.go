@@ -161,7 +161,7 @@ var global = []Mode{""}
 
 // mainActions lists the main-surface actions. A mode's footer shows its entries in this order, after kata tui's footers:
 // moving and opening first, then what acts on the Issues, then layout, back, help and quit. The Pages' movement and scroll
-// rows are generated from the Page table and spliced in where their Page's rows begin (see init).
+// rows are generated from the Page table, which lists each Page's rows in footer order (see keymapRows).
 var mainActions []actionEntry
 
 // listRows are the Issue list's and the Board's rows outside the generated movement rows.
@@ -227,7 +227,7 @@ var runsRows = []actionEntry{
 	{action: ReloadRuns, modes: []Mode{ModeRuns, ModeRunInspector}, keys: keys("ctrl+r", "ctrl+r", "meta+r", ""), help: "reload", sheet: []sheetLine{{sheetRuns, 9, "read the runs again"}}, handle: reloadRuns},
 }
 
-// mainRows are the Runs inspector's back key and every row after the Runs Page's.
+// mainRows are the Runs inspector's back key and every row after the Runs Page's; the Runs Page declares them.
 var mainRows = []actionEntry{
 	{action: RunInspectorBack, modes: []Mode{ModeRunInspector}, keys: keys("escape", "esc", "tab", "tab", "left", "←"), help: "back", footer: []Mode{ModeRunInspector}, sheet: []sheetLine{{sheetRuns, 11, "back to the run list"}}, handle: pure(runInspectorBack)},
 	// Moving and opening in the Issue detail.
@@ -305,13 +305,9 @@ var mainRows = []actionEntry{
 // mainActions. Empty Mode is global; otherwise the binding is active only in that mode.
 var Keymap []Binding
 
-func init() {
-	mainActions = slices.Concat(
-		pageMoveActions(PageIssues), pageMoveActions(PageBoard), listRows,
-		pageMoveActions(PageJobs), jobsRows, pageScrollActions(PageJobs), jobsRowsAfterScroll,
-		pageMoveActions(PageRuns), runsRows, pageScrollActions(PageRuns), mainRows,
-		pageMoveActions(PageWorkflows), workflowActions(), pageActions(),
-	)
+// buildKeymap expands the main actions into the Keymap. The Page table calls it from its init, once the table exists.
+func buildKeymap() {
+	mainActions = slices.Concat(keymapRows(), pageActions())
 	cards = buildCards()
 	Keymap = withFieldEditing(cardBindings)
 	for i := range mainActions {

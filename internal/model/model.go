@@ -233,8 +233,6 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return jobRunRequested(m, msg)
 	case LocalRunMoved:
 		return localRunMoved(m, msg)
-	case OpenJobMsg:
-		return openJob(m, msg.UID)
 	case DetailLoaded:
 		m = m.detailLoaded(msg)
 	case DetailFailed:

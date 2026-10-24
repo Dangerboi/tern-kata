@@ -503,6 +503,9 @@ func updateJobs(m Model, msg Msg) (Model, []Cmd, bool) {
 		return workerPickersLoaded(m, msg), nil, true
 	case JobWorkflowsLoaded:
 		return jobWorkflowsLoaded(m, msg), nil, true
+	case OpenJobMsg:
+		next, cmds := openJob(m, msg.UID)
+		return next, cmds, true
 	case JobSelectMsg:
 		m.Jobs.Selected, m.Focus = msg.UID, ColumnList
 		return m, nil, true
