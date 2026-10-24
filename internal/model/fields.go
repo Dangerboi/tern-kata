@@ -267,8 +267,6 @@ func updateFieldKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		case FieldCancel:
 			m.FieldForm = FieldFormState{}
 			return m, nil
-		case DeleteInput, ClearInput:
-			m.FieldForm.Value, _ = editText(m.FieldForm.Value, &m.FieldForm.Caret, "", binding, true, msg)
 		case FieldNext:
 			m.FieldForm.Suggestion++
 		case FieldPrevious:
@@ -281,7 +279,7 @@ func updateFieldKey(m Model, msg KeyMsg) (Model, []Cmd) {
 			}
 		}
 	} else {
-		m.FieldForm.Value, _ = editText(m.FieldForm.Value, &m.FieldForm.Caret, "", binding, false, msg)
+		m.FieldForm.Value, _ = editText(m.FieldForm.Value, &m.FieldForm.Caret, "", false, msg)
 	}
 	m.FieldForm.Err = nil
 	return m, nil
