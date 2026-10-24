@@ -17,6 +17,9 @@ import (
 	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
 	"golang.org/x/mod/semver"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
+	"github.com/Dangerboi/tern-kata/internal/cronjobclient"
 )
 
 // Limits on the worker's calls (ADR-0004): at most four one-shot kata calls at once across Projects, each with a
@@ -285,117 +288,11 @@ func (k *Kata) Instance(ctx context.Context) (Instance, error) {
 	if r.JSON200 == nil {
 		return Instance{}, errors.New("kata daemon returned no instance")
 	}
-	return Instance{UID: r.JSON200.InstanceUID, Actor: deref(r.JSON200.Auth.Actor)}, nil
-}
-
-// Trigger, IssuePolicy and JobDefinition are the parts of a kata job definition the worker reads.
-type Trigger struct {
-	Kind            string
-	Cron, At        string
-	IntervalSeconds int64
-	IssueUID        string
-	LeadSeconds     int64
-	Timezone        string
-}
-
-type IssuePolicy struct {
-	Kind      string // "per-run" or "existing"
-	Title     string
-	Body      string
-	UID       string
-	ParentUID string
-	// ScheduledOffsetSeconds and DeadlineOffsetSeconds are the per-run Issue's planning dates, relative to the run's
-	// occurrence; nil leaves the date unset (zero is the occurrence itself).
-	ScheduledOffsetSeconds *int64
-	DeadlineOffsetSeconds  *int64
-}
-
-type JobDefinition struct {
-	Enabled        bool
-	Trigger        Trigger
-	ActionKind     string // "execute" or "notify"
-	Prompt         string
-	WorkflowUID    string
-	Issue          *IssuePolicy
-	Overlap        string
-	Catchup        string
-	GraceSeconds   int64
-	TimeoutSeconds int64
-	CheckoutKey    string
-	SecretRefs     map[string]string
-	Profile        string // options.profile
-	// Recipient and Message are a notify action's inbox address (or "current-owner-or-author") and text.
-	Recipient string
-	Message   string
-}
-
-// Job is a kata cron job.
-type Job struct {
-	UID                string
-	Name               string
-	Revision           int64
-	DefinitionEventUID string
-	Deleted            bool
-	ProjectID          int64
-	// CreatedAt anchors interval triggers.
-	CreatedAt  time.Time
-	Definition JobDefinition
-}
-
-// IsNative is kata's own predicate: a notify action with a per-run Issue is delivered by kata's daemon, never by an
-// adapter, even while disabled.
-func (j Job) IsNative() bool {
-	d := j.Definition
-	return d.ActionKind == "notify" && d.Issue != nil && d.Issue.Kind == "per-run"
-}
-
-func jobOf(j g.CronJob) Job {
-	d := j.Definition
-	def := JobDefinition{
-		Enabled:        d.Enabled,
-		ActionKind:     d.Action.Kind,
-		Prompt:         deref(d.Action.Prompt),
-		WorkflowUID:    deref(d.Action.WorkflowUID),
-		Overlap:        d.Overlap,
-		Catchup:        d.Catchup,
-		GraceSeconds:   derefInt(d.GraceSeconds),
-		TimeoutSeconds: derefInt(d.TimeoutSeconds),
-		CheckoutKey:    deref(d.CheckoutKey),
-		SecretRefs:     d.SecretRefs,
-		Recipient:      deref(d.Action.Recipient),
-		Message:        deref(d.Action.Message),
-		Trigger: Trigger{
-			Kind: d.Trigger.Kind, Cron: deref(d.Trigger.Cron), At: deref(d.Trigger.At),
-			IntervalSeconds: derefInt(d.Trigger.IntervalSeconds), IssueUID: deref(d.Trigger.IssueUID),
-			LeadSeconds: derefInt(d.Trigger.LeadSeconds), Timezone: deref(d.Trigger.Timezone),
-		},
-	}
-	if p, ok := d.Options["profile"].(string); ok {
-		def.Profile = p
-	}
-	if d.Issue != nil {
-		def.Issue = &IssuePolicy{Kind: d.Issue.Kind, Title: deref(d.Issue.Title), Body: deref(d.Issue.Body), UID: deref(d.Issue.UID), ParentUID: deref(d.Issue.ParentUID),
-			ScheduledOffsetSeconds: d.Issue.ScheduledOffsetSeconds, DeadlineOffsetSeconds: d.Issue.DeadlineOffsetSeconds}
-	}
-	return Job{UID: j.UID, Name: j.Name, Revision: j.Revision, DefinitionEventUID: j.DefinitionEventUID, Deleted: j.DeletedAt != nil, ProjectID: j.ProjectID, CreatedAt: j.CreatedAt.UTC(), Definition: def}
-}
-
-func deref(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
-}
-
-func derefInt(n *int64) int64 {
-	if n == nil {
-		return 0
-	}
-	return *n
+	return Instance{UID: r.JSON200.InstanceUID, Actor: cronjobclient.Str(r.JSON200.Auth.Actor)}, nil
 }
 
 // Jobs lists the Project's live jobs.
-func (k *Kata) Jobs(ctx context.Context, projectID int64) ([]Job, error) {
+func (k *Kata) Jobs(ctx context.Context, projectID int64) ([]cronjob.Job, error) {
 	r, err := call(ctx, k, true, func(ctx context.Context) (*g.ListCronJobsResp, error) {
 		return k.c.ListCronJobsWithResponse(ctx, &g.ListCronJobsRequestOptions{PathParams: &g.ListCronJobsPath{ProjectID: projectID}})
 	})
@@ -405,9 +302,9 @@ func (k *Kata) Jobs(ctx context.Context, projectID int64) ([]Job, error) {
 	if r.JSON200 == nil {
 		return nil, errors.New("kata daemon returned no jobs")
 	}
-	jobs := make([]Job, len(r.JSON200.Jobs))
+	jobs := make([]cronjob.Job, len(r.JSON200.Jobs))
 	for i, j := range r.JSON200.Jobs {
-		jobs[i] = jobOf(j)
+		jobs[i] = cronjobclient.Job(j)
 	}
 	return jobs, nil
 }
@@ -433,9 +330,9 @@ type Run struct {
 }
 
 func runOf(r g.CronRun) Run {
-	return Run{UID: r.UID, Status: r.Status, Revision: r.Revision, JobUID: deref(r.JobUID), WorkflowUID: deref(r.WorkflowUID), IssueUID: deref(r.IssueUID),
-		ExecutorLabel: deref(r.ExecutorLabel), OccurrenceKey: deref(r.OccurrenceKey), Summary: deref(r.Summary.Message), InputTokens: r.Summary.InputTokens, OutputTokens: r.Summary.OutputTokens, StartedAt: r.StartedAt, EndedAt: r.EndedAt,
-		DefinitionEventUID: deref(r.DefinitionEventUID), WorkflowEventUID: deref(r.WorkflowDefinitionEventUID)}
+	return Run{UID: r.UID, Status: r.Status, Revision: r.Revision, JobUID: cronjobclient.Str(r.JobUID), WorkflowUID: cronjobclient.Str(r.WorkflowUID), IssueUID: cronjobclient.Str(r.IssueUID),
+		ExecutorLabel: cronjobclient.Str(r.ExecutorLabel), OccurrenceKey: cronjobclient.Str(r.OccurrenceKey), Summary: cronjobclient.Str(r.Summary.Message), InputTokens: r.Summary.InputTokens, OutputTokens: r.Summary.OutputTokens, StartedAt: r.StartedAt, EndedAt: r.EndedAt,
+		DefinitionEventUID: cronjobclient.Str(r.DefinitionEventUID), WorkflowEventUID: cronjobclient.Str(r.WorkflowDefinitionEventUID)}
 }
 
 // ShowRun reads a Run; ErrNotFound means kata holds no evidence of it.
@@ -569,7 +466,7 @@ func (k *Kata) ShowIssue(ctx context.Context, projectID int64, uid string) (Issu
 		return Issue{}, errors.New("kata daemon returned no Issue")
 	}
 	i := r.JSON200.Issue
-	issue := Issue{ID: i.ID, UID: i.UID, ShortID: i.ShortID, Title: i.Title, Body: i.Body, Status: i.Status, ProjectID: i.ProjectID, Labels: i.Labels, Owner: deref(i.Owner), Author: i.Author, Metadata: i.Metadata}
+	issue := Issue{ID: i.ID, UID: i.UID, ShortID: i.ShortID, Title: i.Title, Body: i.Body, Status: i.Status, ProjectID: i.ProjectID, Labels: i.Labels, Owner: cronjobclient.Str(i.Owner), Author: i.Author, Metadata: i.Metadata}
 	for _, c := range r.JSON200.Comments {
 		issue.Comments = append(issue.Comments, c.Body)
 	}
@@ -772,9 +669,9 @@ func (k *Kata) Workflow(ctx context.Context, projectID int64, uid string) (Workf
 	}
 	w := r.JSON200.Workflow
 	d := w.Definition
-	out := Workflow{UID: w.UID, Name: w.Name, DefinitionEventUID: w.DefinitionEventUID, Deleted: w.DeletedAt != nil, Version: d.Version, About: deref(d.About), Options: d.Options}
+	out := Workflow{UID: w.UID, Name: w.Name, DefinitionEventUID: w.DefinitionEventUID, Deleted: w.DeletedAt != nil, Version: d.Version, About: cronjobclient.Str(d.About), Options: d.Options}
 	for _, s := range d.Steps {
-		out.Steps = append(out.Steps, WorkflowStep{Key: s.Key, Kind: s.Kind, Command: deref(s.Command), Prompt: deref(s.Prompt), After: s.After, Retries: derefInt(s.Retries), Options: s.Options})
+		out.Steps = append(out.Steps, WorkflowStep{Key: s.Key, Kind: s.Kind, Command: cronjobclient.Str(s.Command), Prompt: cronjobclient.Str(s.Prompt), After: s.After, Retries: cronjobclient.Int(s.Retries), Options: s.Options})
 	}
 	return out, nil
 }

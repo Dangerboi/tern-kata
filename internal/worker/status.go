@@ -99,7 +99,7 @@ func (w *Worker) Status() Status {
 		}
 		p.Scheduled, p.Queued, p.NextRun = ps.scheduled, ps.queued, ps.nextRun
 		for _, j := range ps.jobs {
-			if j.IsNative() {
+			if j.Native() {
 				p.NativeJobs++
 			} else {
 				p.AdapterJobs++

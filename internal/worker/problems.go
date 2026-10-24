@@ -25,36 +25,36 @@ type JobNote struct {
 
 // definitionNotes reads the Project's adapter jobs against the worker's config: the jobs it sets aside with their
 // reason and the warnings. A workflow a job runs is read from kata, so a failure to read it is itself the reason.
-func definitionNotes(ctx context.Context, k *Kata, cfg Config, pc ProjectConfig, projectID int64, jobs []Job, now time.Time) (aside, warnings []JobNote) {
+func definitionNotes(ctx context.Context, k *Kata, cfg Config, pc ProjectConfig, projectID int64, jobs []cronjob.Job, now time.Time) (aside, warnings []JobNote) {
 	workflows := map[string]*Workflow{}
 	workflowErrs := map[string]error{}
 	for _, job := range jobs {
 		d := job.Definition
-		if job.Deleted || job.IsNative() || d.ActionKind != "execute" || d.WorkflowUID == "" {
+		if job.Archived() || job.Native() || d.Action.Kind != cronjob.ActionExecute || d.Action.WorkflowUID == "" {
 			continue
 		}
-		if _, done := workflows[d.WorkflowUID]; done || workflowErrs[d.WorkflowUID] != nil {
+		if _, done := workflows[d.Action.WorkflowUID]; done || workflowErrs[d.Action.WorkflowUID] != nil {
 			continue
 		}
-		wf, err := k.Workflow(ctx, projectID, d.WorkflowUID)
+		wf, err := k.Workflow(ctx, projectID, d.Action.WorkflowUID)
 		if err != nil {
-			workflowErrs[d.WorkflowUID] = err
+			workflowErrs[d.Action.WorkflowUID] = err
 			continue
 		}
-		workflows[d.WorkflowUID] = &wf
+		workflows[d.Action.WorkflowUID] = &wf
 	}
 	for _, job := range jobs {
-		if job.Deleted || job.IsNative() {
+		if job.Archived() || job.Native() {
 			continue
 		}
 		note := JobNote{UID: job.UID, Name: job.Name}
-		wf, wfErr := workflows[job.Definition.WorkflowUID], workflowErrs[job.Definition.WorkflowUID]
+		wf, wfErr := workflows[job.Definition.Action.WorkflowUID], workflowErrs[job.Definition.Action.WorkflowUID]
 		if why := jobProblem(cfg, pc, job, wf, wfErr); why != "" {
 			note.Text = why
 			aside = append(aside, note)
 			continue
 		}
-		if text := cronjob.HighRateWarning(issuesPerDay(job, now)); text != "" {
+		if text := cronjob.HighRateWarning(job.IssuesPerDay(now)); text != "" {
 			note.Text = text
 			warnings = append(warnings, note)
 		}
@@ -68,25 +68,25 @@ func definitionNotes(ctx context.Context, k *Kata, cfg Config, pc ProjectConfig,
 // jobProblem is why the worker will not run an adapter job as defined, empty when it will: a trigger it cannot schedule,
 // a profile, checkout or secret worker.toml does not map, a timeout or prompt over its bound, a workflow it does not run
 // (ADR-0008) or `issue-deadline` on an execute job. wf is the job's workflow when it runs one, wfErr why it was not read.
-func jobProblem(cfg Config, pc ProjectConfig, job Job, wf *Workflow, wfErr error) string {
+func jobProblem(cfg Config, pc ProjectConfig, job cronjob.Job, wf *Workflow, wfErr error) string {
 	d := job.Definition
 	if _, err := newTrigger(job, time.Time{}); err != nil {
 		return "its trigger cannot be scheduled: " + err.Error()
 	}
-	if d.ActionKind == "notify" {
+	if d.Action.Kind == cronjob.ActionNotify {
 		if _, _, err := notifyPlan(job); err != nil {
 			return strings.TrimPrefix(err.Error(), fmt.Sprintf("job %q ", job.Name))
 		}
 		return ""
 	}
 	switch {
-	case d.Trigger.Kind == "issue-deadline":
+	case d.Trigger.Kind == cronjob.TriggerIssueDeadline:
 		return "issue-deadline triggers only notify jobs; an execute job needs issue-scheduled"
-	case d.WorkflowUID == "" && strings.TrimSpace(d.Prompt) == "":
+	case d.Action.WorkflowUID == "" && strings.TrimSpace(d.Action.Prompt) == "":
 		return "it has neither a prompt nor a workflow"
 	case d.Issue == nil:
 		return "it has no Issue policy"
-	case len(d.Prompt) > MaxPromptBytes:
+	case len(d.Action.Prompt) > MaxPromptBytes:
 		return fmt.Sprintf("its prompt is over %d KiB", MaxPromptBytes>>10)
 	}
 	profile := cmp.Or(d.Profile, "default")
@@ -113,12 +113,12 @@ func jobProblem(cfg Config, pc ProjectConfig, job Job, wf *Workflow, wfErr error
 	if timeout > cfg.maxTimeout() {
 		return fmt.Sprintf("it asks for a timeout of %s, over max_timeout %s", timeout, cfg.maxTimeout())
 	}
-	if d.WorkflowUID == "" {
+	if d.Action.WorkflowUID == "" {
 		return ""
 	}
 	switch {
 	case errors.Is(wfErr, ErrNotFound):
-		return fmt.Sprintf("it runs workflow %s, which kata does not hold", d.WorkflowUID)
+		return fmt.Sprintf("it runs workflow %s, which kata does not hold", d.Action.WorkflowUID)
 	case wfErr != nil:
 		return "its workflow could not be read: " + wfErr.Error()
 	case wf == nil:
@@ -145,21 +145,4 @@ func jobProblem(cfg Config, pc ProjectConfig, job Job, wf *Workflow, wfErr error
 		}
 	}
 	return ""
-}
-
-// issuesPerDay is about how many Issues a scheduled per-run Issue job creates a day, 0 for a job that creates them only
-// on request or at one date. A cron expression is counted over a week, so a weekly one is not mistaken for a daily one.
-func issuesPerDay(job Job, now time.Time) int {
-	d := job.Definition
-	if !d.Enabled || d.ActionKind != "execute" || d.Issue == nil || d.Issue.Kind != "per-run" {
-		return 0
-	}
-	trig, err := newTrigger(job, time.Time{})
-	if err != nil {
-		return 0
-	}
-	if schedule, ok := trig.(scheduled); ok {
-		return schedule.PerDay(now)
-	}
-	return 0
 }

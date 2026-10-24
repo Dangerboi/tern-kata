@@ -53,33 +53,30 @@ func (o onceTrigger) next(t time.Time) time.Time {
 }
 
 // isIssueDate reports whether the trigger fires on an Issue's planning date.
-func (t Trigger) isIssueDate() bool { return t.Kind == "issue-scheduled" || t.Kind == "issue-deadline" }
+func isIssueDate(t cronjob.Trigger) bool {
+	return t.Kind == cronjob.TriggerIssueScheduled || t.Kind == cronjob.TriggerIssueDeadline
+}
 
 // newTrigger builds the job's trigger. date is the instant an Issue-date trigger fires at (see Worker.issueDate). A nil
 // trigger with no error means the job schedules nothing here: a manual job runs only on request, and an Issue-date job
-// waits while its Issue has no such date.
-func newTrigger(job Job, date time.Time) (trigger, error) {
+// waits while its Issue has no such date. A cron or interval trigger is the module's schedule; the worker never builds one
+// for a Native job, so it never passes a delivery anchor.
+func newTrigger(job cronjob.Job, date time.Time) (trigger, error) {
 	t := job.Definition.Trigger
 	switch t.Kind {
-	case "cron":
-		schedule, err := cronjob.Cron(t.Cron, t.Timezone, job.CreatedAt)
-		if err != nil {
-			return nil, err
+	case cronjob.TriggerCron, cronjob.TriggerInterval:
+		schedule, ok := job.Schedule(time.Time{})
+		if !ok {
+			return nil, unschedulable(t)
 		}
 		return scheduled{schedule}, nil
-	case "interval":
-		schedule, err := cronjob.Interval(t.IntervalSeconds, job.CreatedAt)
-		if err != nil {
-			return nil, err
-		}
-		return scheduled{schedule}, nil
-	case "once":
+	case cronjob.TriggerOnce:
 		at, err := time.Parse(time.RFC3339, t.At)
 		if err != nil {
 			return nil, errors.New("once requires an RFC3339 instant")
 		}
 		return onceTrigger{at.UTC()}, nil
-	case "issue-scheduled", "issue-deadline":
+	case cronjob.TriggerIssueScheduled, cronjob.TriggerIssueDeadline:
 		if date.IsZero() {
 			return nil, nil
 		}
@@ -88,19 +85,30 @@ func newTrigger(job Job, date time.Time) (trigger, error) {
 	return nil, nil
 }
 
+// unschedulable is why the module read no schedule from a cron or interval trigger: the parser's own complaint.
+func unschedulable(t cronjob.Trigger) error {
+	var err error
+	if t.Kind == cronjob.TriggerCron {
+		_, err = cronjob.Cron(t.Cron, t.Timezone, time.Time{})
+	} else {
+		_, err = cronjob.Interval(t.IntervalSeconds, time.Time{})
+	}
+	return cmp.Or(err, errors.New("it has no creation time to count from"))
+}
+
 // schedulable reports whether the worker plans occurrences for the job. Native jobs belong to kata's daemon, disabled
-// and deleted jobs schedule nothing, and so does the one notify job kata's own date sweeper already delivers: a
+// and archived jobs schedule nothing, and so does the one notify job kata's own date sweeper already delivers: a
 // zero-lead `current-owner-or-author` notification on an Issue date (ADR-0011).
-func schedulable(job Job) bool {
+func schedulable(job cronjob.Job) bool {
 	d := job.Definition
-	if job.Deleted || job.IsNative() || !d.Enabled {
+	if job.Archived() || job.Native() || !d.Enabled {
 		return false
 	}
-	switch d.ActionKind {
-	case "execute":
+	switch d.Action.Kind {
+	case cronjob.ActionExecute:
 		return true
-	case "notify":
-		return !(d.Trigger.isIssueDate() && d.Trigger.LeadSeconds == 0 && d.Recipient == currentOwnerOrAuthor)
+	case cronjob.ActionNotify:
+		return !(isIssueDate(d.Trigger) && d.Trigger.LeadSeconds == 0 && d.Action.Recipient == currentOwnerOrAuthor)
 	}
 	return false
 }
@@ -211,7 +219,7 @@ func selectOccurrences(cands []time.Time, now time.Time, catchup string, grace t
 
 // plan brings one job's state up to now: rebuild it when the definition changed, collect the occurrences that became
 // due, and apply the catchup policy to them and to those still waiting.
-func (w *Worker) plan(ps *projectState, job Job, now time.Time) {
+func (w *Worker) plan(ps *projectState, job cronjob.Job, now time.Time) {
 	st := ps.sched[job.UID]
 	if st == nil {
 		st = &jobSchedule{}
@@ -227,7 +235,7 @@ func (w *Worker) plan(ps *projectState, job Job, now time.Time) {
 		st.through, changed = maxTime(now, job.CreatedAt), true
 	}
 	dateChanged := false
-	if job.Definition.Trigger.isIssueDate() {
+	if isIssueDate(job.Definition.Trigger) {
 		at, known := w.issueDate(ps, job)
 		if known && !st.dateSeen {
 			// The first successful read is the baseline, never a change: a read that failed before it must not make a
@@ -347,7 +355,7 @@ func (w *Worker) tick(ctx context.Context, ps *projectState) time.Time {
 func (w *Worker) planAll(ps *projectState, now time.Time) bool {
 	w.mu.Lock()
 	loaded := !ps.jobsAt.IsZero()
-	var jobs []Job
+	var jobs []cronjob.Job
 	for _, j := range ps.jobs {
 		if schedulable(j) {
 			jobs = append(jobs, j)
@@ -439,13 +447,13 @@ const datesStale = 5 * time.Minute
 
 // issueDate is the instant an Issue-date job fires at: the Issue's scheduled date, or its deadline less the trigger's
 // lead. known is false until the worker has read the Issue's dates; a date the Issue lacks is known and zero.
-func (w *Worker) issueDate(ps *projectState, job Job) (at time.Time, known bool) {
+func (w *Worker) issueDate(ps *projectState, job cronjob.Job) (at time.Time, known bool) {
 	t := job.Definition.Trigger
 	d, ok := ps.dates[t.IssueUID]
 	if !ok {
 		return time.Time{}, false
 	}
-	if t.Kind == "issue-scheduled" {
+	if t.Kind == cronjob.TriggerIssueScheduled {
 		return d.scheduled, true
 	}
 	if d.deadline.IsZero() {
@@ -461,7 +469,7 @@ func (w *Worker) refreshDates(ctx context.Context, ps *projectState) {
 	w.mu.Lock()
 	var issues []string
 	for _, j := range ps.jobs {
-		if schedulable(j) && j.Definition.Trigger.isIssueDate() && !slices.Contains(issues, j.Definition.Trigger.IssueUID) {
+		if schedulable(j) && isIssueDate(j.Definition.Trigger) && !slices.Contains(issues, j.Definition.Trigger.IssueUID) {
 			issues = append(issues, j.Definition.Trigger.IssueUID)
 		}
 	}

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // Phase is how far a Run has got. The journal is saved before each side effect of the next phase (ADR-0006), so a
@@ -100,16 +102,16 @@ type Journal struct {
 	ProjectName string `json:"project_name"`
 
 	// The job as it was when the run was prepared; later edits never change a prepared run.
-	JobUID             string            `json:"job_uid"`
-	JobName            string            `json:"job_name"`
-	DefinitionEventUID string            `json:"definition_event_uid"`
-	Prompt             string            `json:"prompt"`
-	IssuePolicy        IssuePolicy       `json:"issue_policy"`
-	SecretRefs         map[string]string `json:"secret_refs,omitempty"`
-	ProfileName        string            `json:"profile_name"`
-	Profile            Profile           `json:"profile"`
-	Checkout           string            `json:"checkout,omitempty"`
-	TimeoutSeconds     int64             `json:"timeout_seconds"`
+	JobUID             string              `json:"job_uid"`
+	JobName            string              `json:"job_name"`
+	DefinitionEventUID string              `json:"definition_event_uid"`
+	Prompt             string              `json:"prompt"`
+	IssuePolicy        cronjob.IssuePolicy `json:"issue_policy"`
+	SecretRefs         map[string]string   `json:"secret_refs,omitempty"`
+	ProfileName        string              `json:"profile_name"`
+	Profile            Profile             `json:"profile"`
+	Checkout           string              `json:"checkout,omitempty"`
+	TimeoutSeconds     int64               `json:"timeout_seconds"`
 	// Notify is set for a notify job's run instead of a prompt: the inbox request it sends and nothing else.
 	Notify *NotifySpec `json:"notify,omitempty"`
 	// Workflow is set for a workflow job's run instead of a prompt: the definition as it was when the run was prepared,

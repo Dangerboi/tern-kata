@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
 // noteHook halts the worker's run machinery when a test's save hook "killed" it, as a crash would: nothing after the
@@ -235,7 +237,7 @@ func (w *Worker) observation(j *Journal, status, message string, revision int64)
 // resolveIssue creates the per-run Issue with the idempotency key tern-kata:<run uid>, force_new and the run marker, or reads the job's existing one.
 func (w *Worker) resolveIssue(ctx context.Context, j *Journal) (*JournalIssue, error) {
 	p := j.IssuePolicy
-	if p.Kind == "existing" {
+	if p.Kind == cronjob.IssueExisting {
 		issue, err := w.opt.Kata.ShowIssue(ctx, j.ProjectID, p.UID)
 		if err != nil {
 			return nil, err
