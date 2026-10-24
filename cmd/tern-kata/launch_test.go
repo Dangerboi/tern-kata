@@ -33,6 +33,9 @@ func TestPlanLaunch(t *testing.T) {
 		{name: "as followed by issue", args: []string{"--as", "--issue", "x"}, err: "--as requires an actor"},
 		{name: "issue followed by as equals", args: []string{"--issue", "--as=bob"}, err: "--issue requires <project>/<short_id>"},
 		{name: "as missing value", args: []string{"--as"}, err: "--as requires an actor"},
+		{name: "as equals empty", args: []string{"--as="}, err: "--as must be non-empty"},
+		{name: "as empty separate value", args: []string{"--as", ""}, err: "--as must be non-empty"},
+		{name: "as empty after issue", args: []string{"--issue=p/1", "--as="}, err: "--as must be non-empty"},
 		{name: "malformed issue ref", args: []string{"--issue", "noslash"}, err: `Issue reference must be <project>/<short_id>: "noslash"`},
 		{name: "empty issue equals value", args: []string{"--issue="}, err: `Issue reference must be <project>/<short_id>: ""`},
 		{name: "unknown arguments pass through", args: []string{"--as", "ann", "--foo", "bar", "--issue=p/1", "-x"}, issueRef: "p/1", fallbackArgs: []string{"--foo", "bar", "-x", "--project", "p", "p#1"}},
@@ -82,7 +85,7 @@ func TestPlanLaunchActorPrecedence(t *testing.T) {
 		{"USER next", nil, without("KATA_AUTHOR"), "user"},
 		{"git user.name next", nil, without("KATA_AUTHOR", "USER"), "git"},
 		{"anonymous last", nil, nil, "anonymous"},
-		{"empty values are unset", []string{"--as="}, map[string]string{"KATA_AUTHOR": "", "USER": "user"}, "user"},
+		{"empty environment values are unset", nil, map[string]string{"KATA_AUTHOR": "", "USER": "user"}, "user"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -99,7 +102,7 @@ func TestPlanLaunchActorPrecedence(t *testing.T) {
 
 func TestPlanLaunchFallbackAuthor(t *testing.T) {
 	env := map[string]string{"KATA_AUTHOR": "author", "USER": "user"}
-	for args, want := range map[string]string{"--as ann": "ann", "--as=ann": "ann", "": "", "--as=": ""} {
+	for args, want := range map[string]string{"--as ann": "ann", "--as=ann": "ann", "": ""} {
 		plan, err := PlanLaunch(strings.Fields(args), lookupFrom(env), "v")
 		if err != nil {
 			t.Fatal(err)
@@ -217,6 +220,30 @@ func TestPlanLaunchSubcommands(t *testing.T) {
 				t.Errorf("plan = %+v, want %s %s %q as %s", plan, tt.sub, tt.ref, tt.operands, tt.actor)
 			}
 		})
+	}
+}
+
+func TestPlanLaunchRefusesEmptyAsForEverySubcommand(t *testing.T) {
+	commands := [][]string{
+		{"attach", "ab12", "a.png"},
+		{"detach", "ab12", "a.png"},
+		{"recur", "ab12"},
+		{"run", "01M5J9AAAAAAAAAAAAAAAAAAAA"},
+		{"worker", "resume", "01M5J9AAAAAAAAAAAAAAAAAAAA"},
+		{"worker", "abandon", "01M5J9AAAAAAAAAAAAAAAAAAAA"},
+	}
+	for _, command := range commands {
+		for _, as := range [][]string{{"--as="}, {"--as", ""}} {
+			t.Run(strings.Join(append(slices.Clone(command), as...), " "), func(t *testing.T) {
+				_, err := PlanLaunch(append(slices.Clone(command), as...), lookupFrom(map[string]string{"KATA_AUTHOR": "env"}), "v")
+				if err == nil || err.Error() != "--as must be non-empty" {
+					t.Fatalf("error = %v, want %q", err, "--as must be non-empty")
+				}
+				if _, ok := errors.AsType[subcommandError](err); !ok {
+					t.Fatalf("error %T would not take the exit path of --as requires an actor", err)
+				}
+			})
+		}
 	}
 }
 

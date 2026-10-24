@@ -62,6 +62,8 @@ func (m Model) historyRow(event Event) DetailRow {
 		verb, object = linksChanged(payload)
 	case "issue.metadata_updated":
 		verb, object = metadataChanged(payload)
+	case "issue.scheduled_reached":
+		verb, object = "reached", "the scheduled date "+oneLine(payload.text("value"))
 	case "issue.moved":
 		verb, object = "moved", movedTo(event, payload)
 	case "issue.soft_deleted":
@@ -244,6 +246,9 @@ func linksChanged(p payloadMap) (verb, object string) {
 // of any other metadata diff.
 func metadataChanged(p payloadMap) (verb, object string) {
 	diff, _ := p["diff"].(map[string]any)
+	if changes, ok := slotDiff(diff); ok {
+		return notificationSentence(changes)
+	}
 	if len(diff) == 1 {
 		for key, change := range diff {
 			to := ""
@@ -267,6 +272,11 @@ func metadataChanged(p payloadMap) (verb, object string) {
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
+	for i, key := range keys {
+		if address, ok := NotificationAddress(key); ok {
+			keys[i] = address
+		}
+	}
 	return "updated metadata:", strings.Join(keys, ", ")
 }
 
