@@ -67,15 +67,15 @@ func newTrigger(job cronjob.Job, date time.Time) (trigger, error) {
 	case cronjob.TriggerCron, cronjob.TriggerInterval:
 		schedule, ok := job.Schedule(time.Time{})
 		if !ok {
-			return nil, unschedulable(t)
+			return nil, job.TriggerError()
 		}
 		return scheduled{schedule}, nil
 	case cronjob.TriggerOnce:
-		at, err := time.Parse(time.RFC3339, t.At)
+		at, err := cronjob.OnceAt(t)
 		if err != nil {
-			return nil, errors.New("once requires an RFC3339 instant")
+			return nil, err
 		}
-		return onceTrigger{at.UTC()}, nil
+		return onceTrigger{at}, nil
 	case cronjob.TriggerIssueScheduled, cronjob.TriggerIssueDeadline:
 		if date.IsZero() {
 			return nil, nil
@@ -83,17 +83,6 @@ func newTrigger(job cronjob.Job, date time.Time) (trigger, error) {
 		return onceTrigger{date}, nil // an Issue date is one instant; a changed date is a new trigger
 	}
 	return nil, nil
-}
-
-// unschedulable is why the module read no schedule from a cron or interval trigger: the parser's own complaint.
-func unschedulable(t cronjob.Trigger) error {
-	var err error
-	if t.Kind == cronjob.TriggerCron {
-		_, err = cronjob.Cron(t.Cron, t.Timezone, time.Time{})
-	} else {
-		_, err = cronjob.Interval(t.IntervalSeconds, time.Time{})
-	}
-	return cmp.Or(err, errors.New("it has no creation time to count from"))
 }
 
 // schedulable reports whether the worker plans occurrences for the job. Native jobs belong to kata's daemon, disabled
