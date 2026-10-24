@@ -48,7 +48,7 @@ func TestDateBadgeWordsAndTonesFollowTheSixRules(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s := boardPane(t, dated("a", c.scheduled, c.deadline))
-			n := node(t, wireNodes(t, view.Render(s.Model, now)), view.CardID(s.Model, "a")+".id.date")
+			n := node(t, wireNodes(t, view.Render(s.Model, now)), rowOf(t, s.Model, view.BoardID, "a")+".id.date")
 			if n.P["text"] != c.text || n.P["tone"] != c.tone {
 				t.Errorf("badge = %v (%v), want %s (%s)", n.P["text"], n.P["tone"], c.text, c.tone)
 			}
@@ -71,7 +71,7 @@ func TestDateBadgePrecedenceDecidesEveryPairing(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s := boardPane(t, dated("a", c.scheduled, c.deadline))
-			n := node(t, wireNodes(t, view.Render(s.Model, now)), view.CardID(s.Model, "a")+".id.date")
+			n := node(t, wireNodes(t, view.Render(s.Model, now)), rowOf(t, s.Model, view.BoardID, "a")+".id.date")
 			if n.P["text"] != c.text {
 				t.Errorf("badge = %v, want %s", n.P["text"], c.text)
 			}
@@ -88,11 +88,11 @@ func TestDateBadgeIsAbsentOnDoneAndUndatedCardsAndReadsMetadataDates(t *testing.
 	s := boardPane(t, done, boardCard("plain"), meta)
 	nodes := wireNodes(t, view.Render(s.Model, now))
 	for _, uid := range []string{"done", "plain"} {
-		if hasNode(nodes, view.CardID(s.Model, uid)+".id.date") {
+		if hasNode(nodes, rowOf(t, s.Model, view.BoardID, uid)+".id.date") {
 			t.Errorf("card %s draws a Date badge", uid)
 		}
 	}
-	if got := node(t, nodes, view.CardID(s.Model, "meta")+".id.date").P["text"]; got != "due 10-20" {
+	if got := node(t, nodes, rowOf(t, s.Model, view.BoardID, "meta")+".id.date").P["text"]; got != "due 10-20" {
 		t.Errorf("metadata-only deadline badge = %v, want due 10-20", got)
 	}
 }
@@ -102,12 +102,12 @@ func TestDateBadgeSitsAfterThePriorityBadgeAndBeforeRelationshipTags(t *testing.
 	p := int64(1)
 	issue.Priority = &p
 	s := boardPane(t, issue)
-	row := node(t, wireNodes(t, view.Render(s.Model, now)), view.CardID(s.Model, "a")+".id")
+	row := node(t, wireNodes(t, view.Render(s.Model, now)), rowOf(t, s.Model, view.BoardID, "a")+".id")
 	var keys []string
 	for _, c := range row.C {
 		keys = append(keys, c.ID)
 	}
-	prefix := view.CardID(s.Model, "a") + ".id."
+	prefix := rowOf(t, s.Model, view.BoardID, "a") + ".id."
 	want := []string{prefix + "short", prefix + "prio", prefix + "date"}
 	if len(keys) != 3 || keys[0] != want[0] || keys[1] != want[1] || keys[2] != want[2] {
 		t.Errorf("id row = %v, want %v", keys, want)
@@ -125,7 +125,7 @@ func TestBeforeThePaneCalendarIsKnownTheBadgeShowsTheEarlierDatePlainlyMuted(t *
 		t.Run(c.name, func(t *testing.T) {
 			s := boardPane(t, dated("a", c.scheduled, c.deadline))
 			s.Model.Calendar = model.PaneCalendar{}
-			n := node(t, wireNodes(t, view.Render(s.Model, now)), view.CardID(s.Model, "a")+".id.date")
+			n := node(t, wireNodes(t, view.Render(s.Model, now)), rowOf(t, s.Model, view.BoardID, "a")+".id.date")
 			if n.P["text"] != c.text || n.P["tone"] != "muted" {
 				t.Errorf("badge = %v (%v), want %s (muted)", n.P["text"], n.P["tone"], c.text)
 			}
@@ -136,7 +136,7 @@ func TestBeforeThePaneCalendarIsKnownTheBadgeShowsTheEarlierDatePlainlyMuted(t *
 func TestAMidnightSnapshotTurnsDueTodayIntoOverdueWithoutAKey(t *testing.T) {
 	s := boardPane(t, dated("a", "", boardToday))
 	text := func(s model.Model) any {
-		return node(t, wireNodes(t, view.Render(s, now)), view.CardID(s, "a")+".id.date").P["text"]
+		return node(t, wireNodes(t, view.Render(s, now)), rowOf(t, s, view.BoardID, "a")+".id.date").P["text"]
 	}
 	if got := text(s.Model); got != "due today" {
 		t.Fatalf("before midnight = %v", got)
@@ -166,7 +166,7 @@ func TestSelectedCardShowsTheDatesLine(t *testing.T) {
 			s := boardPane(t, dated("a", c.scheduled, c.deadline), dated("b", "2026-10-28", "2026-11-02"))
 			s = step(t, s, model.SelectMsg{UID: "a"}).State
 			nodes := wireNodes(t, view.Render(s.Model, now))
-			id := view.CardID(s.Model, "a") + ".dates"
+			id := rowOf(t, s.Model, view.BoardID, "a") + ".dates"
 			if c.line == "" {
 				if hasNode(nodes, id) {
 					t.Errorf("a card without dates draws a Dates line")
@@ -174,7 +174,7 @@ func TestSelectedCardShowsTheDatesLine(t *testing.T) {
 			} else if got := spanText(t, node(t, nodes, id)); got != c.line {
 				t.Errorf("Dates line = %q, want %q", got, c.line)
 			}
-			if hasNode(nodes, view.CardID(s.Model, "b")+".dates") {
+			if hasNode(nodes, rowOf(t, s.Model, view.BoardID, "b")+".dates") {
 				t.Errorf("an unselected card draws a Dates line")
 			}
 		})

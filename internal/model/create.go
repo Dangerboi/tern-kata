@@ -237,7 +237,11 @@ var createCard = draftCardKeys{
 			} else if ok && b.Action == FieldPrevious {
 				m.Create.Completion.Suggestion = max(0, m.Create.Completion.Suggestion-1)
 			} else {
-				*value, _ = editText(*value, &m.Create.Caret, m.Create.Field, b, ok, msg)
+				if ok && (b.Action == DeleteInput || b.Action == ClearInput) {
+					*value, _ = eraseText(*value, &m.Create.Caret, m.Create.Field, b.Action)
+				} else {
+					*value, _ = editText(*value, &m.Create.Caret, m.Create.Field, ok, msg)
+				}
 			}
 		}
 		return m

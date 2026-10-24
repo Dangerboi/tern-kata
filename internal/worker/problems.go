@@ -65,28 +65,18 @@ func definitionNotes(ctx context.Context, k *Kata, cfg Config, pc ProjectConfig,
 	return aside, warnings
 }
 
-// jobProblem is why the worker will not run an adapter job as defined, empty when it will: a trigger it cannot schedule,
-// a profile, checkout or secret worker.toml does not map, a timeout or prompt over its bound, a workflow it does not run
-// (ADR-0008) or `issue-deadline` on an execute job. wf is the job's workflow when it runs one, wfErr why it was not read.
+// jobProblem is why the worker will not run an adapter job as defined, empty when it will: a definition problem of the
+// module, a profile, checkout or secret worker.toml does not map, a timeout or prompt over its bound, or a workflow it
+// does not run (ADR-0008). wf is the job's workflow when it runs one, wfErr why it was not read.
 func jobProblem(cfg Config, pc ProjectConfig, job cronjob.Job, wf *Workflow, wfErr error) string {
 	d := job.Definition
-	if _, err := newTrigger(job, time.Time{}); err != nil {
-		return "its trigger cannot be scheduled: " + err.Error()
+	if why := job.Problem(); why != "" {
+		return why
 	}
 	if d.Action.Kind == cronjob.ActionNotify {
-		if _, _, err := notifyPlan(job); err != nil {
-			return strings.TrimPrefix(err.Error(), fmt.Sprintf("job %q ", job.Name))
-		}
 		return ""
 	}
-	switch {
-	case d.Trigger.Kind == cronjob.TriggerIssueDeadline:
-		return "issue-deadline triggers only notify jobs; an execute job needs issue-scheduled"
-	case d.Action.WorkflowUID == "" && strings.TrimSpace(d.Action.Prompt) == "":
-		return "it has neither a prompt nor a workflow"
-	case d.Issue == nil:
-		return "it has no Issue policy"
-	case len(d.Action.Prompt) > MaxPromptBytes:
+	if len(d.Action.Prompt) > MaxPromptBytes {
 		return fmt.Sprintf("its prompt is over %d KiB", MaxPromptBytes>>10)
 	}
 	profile := cmp.Or(d.Profile, "default")

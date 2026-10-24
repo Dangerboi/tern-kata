@@ -88,7 +88,7 @@ func searchBack(m Model) (Model, []Cmd) {
 // searchErasing is the handler of the key that deletes before the caret or clears the query.
 func searchErasing(action Action) func(Model) (Model, []Cmd) {
 	return func(m Model) (Model, []Cmd) {
-		text, edited := editText(m.Filters.Search, &m.Search.Caret, "", Binding{Action: action}, true, KeyMsg{})
+		text, edited := eraseText(m.Filters.Search, &m.Search.Caret, "", action)
 		if !edited || text == m.Filters.Search {
 			return m, nil
 		}
@@ -109,11 +109,11 @@ func updateFilterText(m Model, msg KeyMsg) (Model, []Cmd) {
 	}
 	if m.FilterForm.Open {
 		if field := filterTextField(&m.FilterForm); field != nil {
-			*field, _ = editText(*field, &m.FilterForm.Caret, m.FilterForm.Field, Binding{}, false, msg)
+			*field, _ = editText(*field, &m.FilterForm.Caret, m.FilterForm.Field, false, msg)
 		}
 		return m, nil
 	}
-	text, edited := editText(m.Filters.Search, &m.Search.Caret, "", Binding{}, false, msg)
+	text, edited := editText(m.Filters.Search, &m.Search.Caret, "", false, msg)
 	if !edited { // the caret may still have moved
 		return m, nil
 	}

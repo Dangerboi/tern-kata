@@ -90,6 +90,11 @@ type cardEntry struct {
 	edit   func(Model, func(TextEditor) TextEditor) Model
 	// choose gives the focused choice field its choice at an index; nil for a card without choice fields.
 	choose func(Model, int) Model
+	// text reaches the text and caret of the focused field for the shared delete and clear actions; the text is nil when the
+	// focused field takes none. Nil for a card whose keys never delete or clear text.
+	text func(*Model) (*string, *Caret)
+	// erased runs after the shared delete or clear acted on the text, with whether it changed: the card's side effect of an edit.
+	erased func(m Model, changed bool) Model
 }
 
 // fieldEditing is one keymap mode's declaration of the shared field-editing actions: NextField, PreviousField, NextChoice,
@@ -261,6 +266,8 @@ func buildCards() []cardEntry {
 			busy:   func(m Model) bool { return m.FieldForm.Saving },
 			fields: []FieldSpec{}, input: true,
 			editing: []fieldEditing{{mode: ModeFieldForm, actions: []Action{DeleteInput, ClearInput}, delete: "erase", clear: "clear input"}},
+			text:    func(m *Model) (*string, *Caret) { return &m.FieldForm.Value, &m.FieldForm.Caret },
+			erased:  func(m Model, _ bool) Model { m.FieldForm.Err = nil; return m },
 		},
 		{
 			card: CardClose, open: func(m Model) bool { return m.CloseForm.Open },
@@ -270,6 +277,15 @@ func buildCards() []cardEntry {
 			busy:   func(m Model) bool { return m.CloseForm.Saving },
 			fields: CloseFields, focus: func(m *Model) *Field { return &m.CloseForm.Field },
 			editing: []fieldEditing{{mode: ModeCloseForm, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}, delete: "erase"}},
+			text: func(m *Model) (*string, *Caret) {
+				return m.CloseForm.Values.at(m.CloseForm.Field), &m.CloseForm.Caret
+			},
+			erased: func(m Model, changed bool) Model {
+				if changed {
+					m.CloseForm.Err = nil
+				}
+				return m
+			},
 		},
 		{
 			card: CardDates, open: func(m Model) bool { return m.DatesForm.Open },
@@ -278,6 +294,15 @@ func buildCards() []cardEntry {
 			busy:   func(m Model) bool { return m.DatesForm.Saving },
 			fields: DatesFields, focus: func(m *Model) *Field { return &m.DatesForm.Field },
 			editing: []fieldEditing{{mode: ModeDatesForm, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}}},
+			text: func(m *Model) (*string, *Caret) {
+				return m.DatesForm.Text.at(m.DatesForm.Field), &m.DatesForm.Caret
+			},
+			erased: func(m Model, changed bool) Model {
+				if changed {
+					m.DatesForm.Err = nil
+				}
+				return m
+			},
 		},
 		{
 			card: CardRecurrence, open: func(m Model) bool { return m.RecurrenceForm.Open },
@@ -294,6 +319,15 @@ func buildCards() []cardEntry {
 			fields: RecurrenceFields, focus: func(m *Model) *Field { return &m.RecurrenceForm.Field },
 			hidden:  func(m Model, name Field) bool { return !m.RecurrenceForm.Shows(name) },
 			editing: []fieldEditing{{mode: ModeRecurrenceForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, delete: "erase"}},
+			text: func(m *Model) (*string, *Caret) {
+				return m.RecurrenceForm.text(m.RecurrenceForm.Field), &m.RecurrenceForm.Caret
+			},
+			erased: func(m Model, changed bool) Model {
+				if changed {
+					m.RecurrenceForm.Err = nil
+				}
+				return m
+			},
 			step: func(m Model, back bool) Model {
 				m.RecurrenceForm.step(back)
 				m.RecurrenceForm.Err = nil
@@ -323,7 +357,14 @@ func buildCards() []cardEntry {
 			hidden:  func(m Model, name Field) bool { return !m.JobForm.Shows(name) },
 			editing: []fieldEditing{{mode: ModeJobForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, delete: "erase"}},
 			step:    func(m Model, back bool) Model { m.JobForm.step(back); return m },
-			choose:  func(m Model, i int) Model { m.JobForm.choose(i); return m },
+			text:    func(m *Model) (*string, *Caret) { return m.JobForm.text(m.JobForm.Field), &m.JobForm.Caret },
+			erased: func(m Model, changed bool) Model {
+				if changed {
+					m.JobForm.Err = nil
+				}
+				return m
+			},
+			choose: func(m Model, i int) Model { m.JobForm.choose(i); return m },
 		},
 		{
 			card: CardProject, open: func(m Model) bool { return m.ProjectForm.Open },
@@ -333,6 +374,13 @@ func buildCards() []cardEntry {
 			busy:   func(m Model) bool { return m.ProjectForm.Saving },
 			fields: []FieldSpec{}, input: true,
 			editing: []fieldEditing{{mode: ModeProjectForm, actions: []Action{DeleteInput, ClearInput}, clear: "clear name"}},
+			text:    func(m *Model) (*string, *Caret) { return &m.ProjectForm.Name, &m.ProjectForm.Caret },
+			erased: func(m Model, changed bool) Model {
+				if changed {
+					m.ProjectForm.Err = nil
+				}
+				return m
+			},
 		},
 		{
 			card: CardLanes, open: func(m Model) bool { return m.LanesForm.Open },
@@ -341,6 +389,13 @@ func buildCards() []cardEntry {
 			busy:   func(m Model) bool { return m.LanesForm.Saving },
 			fields: LanesFields, focus: func(m *Model) *Field { return &m.LanesForm.Field },
 			editing: []fieldEditing{{mode: ModeLanesForm, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}}},
+			text:    func(m *Model) (*string, *Caret) { return m.LanesForm.at(m.LanesForm.Field), &m.LanesForm.Caret },
+			erased: func(m Model, changed bool) Model {
+				if changed {
+					m.LanesForm.Err = nil
+				}
+				return m
+			},
 		},
 		{
 			card: CardWorker, open: func(m Model) bool { return m.WorkerCard.Open },
@@ -359,6 +414,13 @@ func buildCards() []cardEntry {
 			fields: WorkerFields, focus: func(m *Model) *Field { return &m.WorkerCard.Field },
 			hidden:  func(m Model, name Field) bool { return !m.WorkerCardShows(name) },
 			editing: []fieldEditing{{mode: ModeWorkerCard, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, delete: "erase", before: WorkerEdit}},
+			text:    func(m *Model) (*string, *Caret) { return m.WorkerCard.at(m.WorkerCard.Field), &m.WorkerCard.Caret },
+			erased: func(m Model, changed bool) Model {
+				if changed {
+					m.WorkerCard.Err = nil
+				}
+				return m
+			},
 			step: func(m Model, _ bool) Model {
 				if m.WorkerCardShows(m.WorkerCard.Field) {
 					m.WorkerCard.Trusted, m.WorkerCard.Err = !m.WorkerCard.Trusted, nil
@@ -377,6 +439,7 @@ func buildCards() []cardEntry {
 			editing:  []fieldEditing{{mode: ModeFilterForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, nextAlso: []string{"enter"}, before: ResetFilterForm}},
 			step:     filterStep,
 			clearErr: func(m Model) Model { m.FilterForm.Err = nil; return m },
+			text:     func(m *Model) (*string, *Caret) { return filterTextField(&m.FilterForm), &m.FilterForm.Caret },
 			choose:   chooseFilter,
 		},
 		{
@@ -387,6 +450,8 @@ func buildCards() []cardEntry {
 			busy:   func(Model) bool { return false },
 			fields: []FieldSpec{}, input: true,
 			editing: []fieldEditing{{mode: ModePicker, actions: []Action{DeleteInput, ClearInput}, clear: "clear filter"}},
+			text:    func(m *Model) (*string, *Caret) { return &m.Picker.Filter, &m.Picker.Caret },
+			erased:  func(m Model, _ bool) Model { m.Picker.Cursor = 0; return m },
 		},
 	}
 }
@@ -630,11 +695,12 @@ func takesText(list []FieldSpec, name Field) bool {
 }
 
 // editFields is the one step that applies the shared field-editing actions before the card's own key handler: a bound
-// NextField, PreviousField, NextChoice or PreviousChoice the card offers in its current mode. A busy card takes none
-// of them, and a choice action on a text field is left to the card, whose text takes it (left and right move the caret).
-// It reports whether it took the key.
+// NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput or ClearInput the card offers in its current mode. A busy
+// card takes none of them, and a choice action on a text field is left to the card, whose text takes it (left and right move
+// the caret). Delete and clear on a field that takes no text, or that the card hides, are left to the card. It reports whether
+// it took the key.
 func (e cardEntry) editFields(m Model, msg KeyMsg) (Model, bool) {
-	if e.focus == nil || e.busy(m) {
+	if e.busy(m) {
 		return m, false
 	}
 	mode := e.mode(m)
@@ -644,6 +710,9 @@ func (e cardEntry) editFields(m Model, msg KeyMsg) (Model, bool) {
 	}
 	switch binding.Action {
 	case NextField, PreviousField:
+		if e.focus == nil {
+			return m, false
+		}
 		step := 1
 		if binding.Action == PreviousField {
 			step = -1
@@ -659,10 +728,29 @@ func (e cardEntry) editFields(m Model, msg KeyMsg) (Model, bool) {
 			}
 		}
 	case NextChoice, PreviousChoice:
-		if e.step == nil || takesText(e.fields, *e.focus(&m)) {
+		if e.focus == nil || e.step == nil || takesText(e.fields, *e.focus(&m)) {
 			return m, false
 		}
 		m = e.step(m, binding.Action == PreviousChoice)
+	case DeleteInput, ClearInput:
+		if e.text == nil {
+			return m, false
+		}
+		var field Field
+		if e.focus != nil {
+			if field = *e.focus(&m); e.hidden != nil && e.hidden(m, field) {
+				return m, false
+			}
+		}
+		value, caret := e.text(&m)
+		if value == nil {
+			return m, false
+		}
+		var changed bool
+		*value, changed = eraseText(*value, caret, field, binding.Action)
+		if e.erased != nil {
+			m = e.erased(m, changed)
+		}
 	default:
 		return m, false
 	}
@@ -704,25 +792,34 @@ func isCaretChord(chord string) bool {
 	return false
 }
 
-// editText applies one key to a single-line text field called field, whose caret is c. Backspace deletes the rune before
-// the caret and ctrl+u clears the field, both through the card's DeleteInput and ClearInput bindings; the caret chords move
+// eraseText applies DeleteInput or ClearInput to a single-line text field called field, whose caret is c: delete removes the
+// rune before the caret and clear empties the field. It reports whether the text changed; delete at the start does not change it.
+func eraseText(value string, c *Caret, field Field, action Action) (string, bool) {
+	runes := []rune(value)
+	n := len(runes)
+	at := n - c.back(field, n)
+	*c = Caret{field, n - at}
+	if action == ClearInput {
+		*c = Caret{}
+		return "", true
+	}
+	if at == 0 {
+		return value, false
+	}
+	return string(slices.Delete(runes, at-1, at)), true
+}
+
+// editText applies one key to a single-line text field called field, whose caret is c. The caret chords move
 // it or delete after it whatever else they are bound to, since a card calls this only for keys its text field takes; a
 // key bound to anything else is not text; a key with no binding inserts its character, a space, or pasted text with its
-// line breaks flattened at the caret. It reports whether the text changed; Backspace at the start does not change it.
-func editText(value string, c *Caret, field Field, binding Binding, bound bool, msg KeyMsg) (string, bool) {
+// line breaks flattened at the caret. It reports whether the text changed. Backspace and ctrl+u are the shared
+// DeleteInput and ClearInput actions, which eraseText applies.
+func editText(value string, c *Caret, field Field, bound bool, msg KeyMsg) (string, bool) {
 	runes := []rune(value)
 	n := len(runes)
 	at := n - c.back(field, n)
 	*c = Caret{field, n - at}
 	switch {
-	case bound && binding.Action == ClearInput:
-		*c = Caret{}
-		return "", true
-	case bound && binding.Action == DeleteInput:
-		if at == 0 {
-			return value, false
-		}
-		return string(slices.Delete(runes, at-1, at)), true
 	case msg.Chord == "delete":
 		if at == n {
 			return value, false

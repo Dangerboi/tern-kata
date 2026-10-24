@@ -24,7 +24,7 @@ func TestCardShowsItsPriorityAsABadgeToneLikeTheList(t *testing.T) {
 	nodes := wireNodes(t, view.Render(s.Model, now))
 
 	for p, tone := range []string{"error", "warning", "info", "muted", "muted"} {
-		n := node(t, nodes, view.CardID(s.Model, fmt.Sprintf("p%d", p))+".id.prio")
+		n := node(t, nodes, rowOf(t, s.Model, view.BoardID, fmt.Sprintf("p%d", p))+".id.prio")
 		if got := n.P["text"]; got != fmt.Sprintf("P%d", p) {
 			t.Errorf("P%d card badge text = %v", p, got)
 		}
@@ -32,10 +32,10 @@ func TestCardShowsItsPriorityAsABadgeToneLikeTheList(t *testing.T) {
 			t.Errorf("P%d badge tone = %v, want %s", p, got, tone)
 		}
 	}
-	if got := node(t, nodes, view.CardID(s.Model, "done")+".id.prio").P["text"]; got != "P2" {
+	if got := node(t, nodes, rowOf(t, s.Model, view.BoardID, "done")+".id.prio").P["text"]; got != "P2" {
 		t.Errorf("a Done card's priority badge = %v, want P2", got)
 	}
-	noPrio := view.CardID(s.Model, "none") + ".id.prio"
+	noPrio := rowOf(t, s.Model, view.BoardID, "none") + ".id.prio"
 	for _, n := range nodes {
 		if n.ID == noPrio {
 			t.Errorf("a card without a priority draws a priority badge")

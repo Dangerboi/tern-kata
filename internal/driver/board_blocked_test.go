@@ -39,7 +39,7 @@ func refreshed(t *testing.T, s driver.State, links []model.Link, issues []model.
 // blockedText is the Blocked marker drawn on uid's card, "" when it draws none.
 func blockedText(t *testing.T, s driver.State, uid string) string {
 	t.Helper()
-	id := view.CardID(s.Model, uid) + ".blocked"
+	id := rowOf(t, s.Model, view.BoardID, uid) + ".blocked"
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
 		if n.ID == id {
 			spans, _ := n.P["spans"].([]any)
@@ -52,7 +52,7 @@ func blockedText(t *testing.T, s driver.State, uid string) string {
 
 func blockedNode(t *testing.T, s driver.State, uid string) tern.WireNode {
 	t.Helper()
-	return node(t, wireNodes(t, view.Render(s.Model, now)), view.CardID(s.Model, uid)+".blocked")
+	return node(t, wireNodes(t, view.Render(s.Model, now)), rowOf(t, s.Model, view.BoardID, uid)+".blocked")
 }
 
 func TestAnOpenBlockerGivesTheCardABlockedMarkerInTheWarningTone(t *testing.T) {

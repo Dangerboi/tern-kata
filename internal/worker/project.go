@@ -306,12 +306,13 @@ func (w *Worker) slotsInUse() int {
 	return n
 }
 
-// bind turns a pending reservation into the run's slot.
-func (w *Worker) bind(ps *projectState, uid, jobUID string) {
+// bind turns a pending reservation into the run's slot: the slot map takes the Run its journal says occupies one.
+func (w *Worker) bind(ps *projectState, j *Journal) {
+	occupies := w.life(j).occupiesSlot(j)
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	ps.pending = max(ps.pending-1, 0)
-	ps.held[uid] = jobUID
+	ps.setSlot(j, occupies)
 }
 
 // unreserve gives a reservation back; a drain that was waiting on it may now be done.
@@ -322,11 +323,21 @@ func (w *Worker) unreserve(ps *projectState) {
 	w.finishDrain()
 }
 
-// release frees the run's slot.
-func (w *Worker) release(ps *projectState, uid string) {
+// syncSlot puts the Run in the slot map or takes it out as the lifecycle says it occupies a slot of ps.
+func (w *Worker) syncSlot(ps *projectState, j *Journal) {
+	occupies := w.life(j).occupiesSlot(j)
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	delete(ps.held, uid)
+	ps.setSlot(j, occupies)
+}
+
+// setSlot is the slot map's only writer; the caller holds Worker.mu and passes lifecycle.occupiesSlot's answer.
+func (ps *projectState) setSlot(j *Journal, occupies bool) {
+	if occupies {
+		ps.held[j.RunUID] = j.JobUID
+	} else {
+		delete(ps.held, j.RunUID)
+	}
 }
 
 // holdsSlotOf reports whether uid is bound to a slot of ps.
@@ -363,11 +374,7 @@ func (w *Worker) recoverProject(ctx context.Context, ps *projectState) {
 	for _, j := range journals {
 		if j.ProjectUID == ps.project.UID && j.Executor == w.opt.Config.Executor {
 			mine = append(mine, j)
-			if w.life(j).occupiesSlot(j) {
-				w.mu.Lock()
-				ps.held[j.RunUID] = j.JobUID
-				w.mu.Unlock()
-			}
+			w.syncSlot(ps, j)
 		}
 	}
 	for _, j := range mine {

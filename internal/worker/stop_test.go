@@ -94,7 +94,7 @@ func TestAnIdleStopWaitsForARunWhoseReportKataRefusedUntilItIsSettled(t *testing
 		refused.Add(1)
 		http.Error(w, "unavailable", http.StatusServiceUnavailable)
 	})
-	if resp := h.ask(worker.Request{Op: "stop"}); !resp.OK || resp.Stop.InFlight != 1 {
+	if resp := h.ask(worker.Request{Op: "stop"}); !resp.OK || resp.Stop.InFlight != 1 || !strings.Contains(r.w.Status().String(), "waiting for 1 run") {
 		t.Fatalf("stop: %+v", resp)
 	}
 	release(t, gate)
@@ -137,7 +137,7 @@ func TestAnIdleStopAskedWhileARunIsBeingAdmittedWaitsForThatRun(t *testing.T) {
 	<-atPrepared
 
 	resp := h.ask(worker.Request{Op: "stop"})
-	if !resp.OK || resp.Stop.InFlight != 1 {
+	if !resp.OK || resp.Stop.InFlight != 1 || !strings.Contains(r.w.Status().String(), "waiting for 1 run") {
 		t.Fatalf("stop: %+v", resp)
 	}
 	select {
@@ -174,7 +174,7 @@ func TestAnIdleStopAskedAtOnceWaitsForTheReportTheLastWorkerOwed(t *testing.T) {
 	})
 	r := h.start(worker.Hooks{})
 	resp := h.ask(worker.Request{Op: "stop"})
-	if !resp.OK || resp.Stop.InFlight != 1 {
+	if !resp.OK || resp.Stop.InFlight != 1 || !strings.Contains(r.w.Status().String(), "waiting for 1 run") {
 		t.Fatalf("stop: %+v", resp)
 	}
 	select {
@@ -293,6 +293,35 @@ func TestAStopNowHoldsTheRunningRunInterruptedAtTheNextStart(t *testing.T) {
 	if held.Status != "unknown" || !strings.HasPrefix(held.Summary, "interrupted: ") {
 		t.Fatalf("run is %q: %q; want unknown, interrupted first", held.Status, held.Summary)
 	}
+}
+
+// A held run whose hold kata has not yet been told is retried by the Project loop, but an idle stop does not wait.
+func TestAnIdleStopDoesNotWaitForAHeldRunWhoseHoldIsStillBeingReported(t *testing.T) {
+	h := newHarness(t, "--stub-hang")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "stuck", Prompt: "Do it."})
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	uid := h.startedRun(r, job)
+	if resp := h.ask(worker.Request{Op: "stop", Mode: "now"}); !resp.OK {
+		t.Fatalf("stop now: %+v", resp)
+	}
+	h.exits(r)
+
+	h.kata.Intercept(func(q *http.Request) bool {
+		return q.Method != http.MethodGet && strings.Contains(q.URL.Path, "/cron/runs/")
+	}, func(w http.ResponseWriter, _ *http.Request, _ http.Handler) {
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+	})
+	restarted := h.start(worker.Hooks{})
+	h.eventually("the run to be held with its hold unreported", func() bool {
+		rs, ok := h.runStatus(restarted, uid)
+		return ok && rs.Held && rs.Pending != ""
+	})
+	// A retry pass may be driving the report at this instant; that goroutine ends, and nothing else holds the drain.
+	if resp := h.ask(worker.Request{Op: "stop"}); !resp.OK || resp.Stop.InFlight > 1 {
+		t.Fatalf("stop: %+v", resp)
+	}
+	h.exits(restarted)
 }
 
 func TestAStopNowDuringAnIdleDrainEndsItAtOnce(t *testing.T) {

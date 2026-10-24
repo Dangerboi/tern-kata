@@ -213,9 +213,6 @@ func catchupApplies(trigger cronjob.TriggerKind) bool {
 	return trigger == cronjob.TriggerCron || trigger == cronjob.TriggerInterval || trigger == cronjob.TriggerOnce
 }
 
-// adapterTriggers are the triggers an adapter job may have; a deadline fires a notification only, as kata allows.
-var adapterTriggers = []cronjob.TriggerKind{cronjob.TriggerCron, cronjob.TriggerInterval, cronjob.TriggerOnce, cronjob.TriggerManual, cronjob.TriggerIssueScheduled}
-
 var promptJobKind = executeKind("prompt", "Agent prompt", KindAgentPrompt, false)
 
 var workflowJobKind = executeKind("workflow", "Workflow", KindWorkflow, true)
@@ -223,7 +220,7 @@ var workflowJobKind = executeKind("workflow", "Workflow", KindWorkflow, true)
 // executeKind is the kind of a job a Worker executes: an agent prompt, or a workflow of the Project.
 func executeKind(id, label, kind string, workflow bool) jobKind {
 	return jobKind{
-		id: id, label: label, triggers: adapterTriggers,
+		id: id, label: label, triggers: cronjob.TriggersFor(cronjob.ActionExecute),
 		owns: func(j CronJob) bool { return j.Kind() == kind },
 		shown: func(f JobFormState, name Field) bool {
 			switch name {
@@ -383,7 +380,7 @@ func executePolicy(f JobFormState) (*cronjob.IssuePolicy, error) {
 }
 
 var notifyJobKind = jobKind{
-	id: "notify", label: "Notify", triggers: append(slices.Clone(adapterTriggers), cronjob.TriggerIssueDeadline),
+	id: "notify", label: "Notify", triggers: cronjob.TriggersFor(cronjob.ActionNotify),
 	owns: func(j CronJob) bool { return j.Kind() == KindNotify },
 	shown: func(f JobFormState, name Field) bool {
 		switch name {

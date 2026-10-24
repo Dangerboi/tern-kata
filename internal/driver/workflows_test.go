@@ -67,7 +67,7 @@ func mustShow(t *testing.T, s driver.State, what string, texts ...string) {
 func TestWorkflowsPageListsTheProjectsWorkflowsAndOpensTheirStepsWithDependenciesAndRetries(t *testing.T) {
 	s := workflowsPane(t, 160, reviewFlow(), nightlyFlow())
 	drawn := drawnIDs(t, view.Render(s.Model, now))
-	if !drawn[view.PageBarEntryID("workflows")] || !drawn[view.WorkflowID("W1")] || !drawn[view.WorkflowID("W2")] {
+	if !drawn[view.PageBarEntryID("workflows")] || !workflowRowDrawn(t, s.Model, "W1") || !workflowRowDrawn(t, s.Model, "W2") {
 		t.Fatalf("the Workflows Page draws its Page bar entry and a row per workflow, got %v", drawn)
 	}
 	mustShow(t, s, "list", "Review then test", "2 steps", "1 step")
@@ -76,23 +76,23 @@ func TestWorkflowsPageListsTheProjectsWorkflowsAndOpensTheirStepsWithDependencie
 	mustShow(t, opened, "inspector", "Review a change, then run the tests.", "review", "prompt", "Review the change.", "test", "command", "make test", "after review", "retries 2")
 
 	narrowed := workflowsPane(t, 80, reviewFlow())
-	if drawn := drawnIDs(t, view.Render(narrowed.Model, now)); drawn[view.WorkflowID("W1")] == false {
+	if !workflowRowDrawn(t, narrowed.Model, "W1") {
 		t.Fatal("a narrow Pane draws the list")
 	}
 	narrowOpen := step(t, narrowed, key("enter")).State
-	if drawn := drawnIDs(t, view.Render(narrowOpen.Model, now)); drawn[view.WorkflowID("W1")] {
+	if workflowRowDrawn(t, narrowOpen.Model, "W1") {
 		t.Error("a narrow Pane draws the steps in place of the list, not both")
 	}
 	mustShow(t, narrowOpen, "narrow inspector", "after review")
 	back := step(t, narrowOpen, key("escape")).State
-	if drawn := drawnIDs(t, view.Render(back.Model, now)); !drawn[view.WorkflowID("W1")] {
+	if !workflowRowDrawn(t, back.Model, "W1") {
 		t.Error("esc brings the list back")
 	}
 }
 
 func TestClickingARowSelectsItsWorkflow(t *testing.T) {
 	s := workflowsPane(t, 160, reviewFlow(), nightlyFlow())
-	s = step(t, s, &tern.Select{ID: view.WorkflowListID, Item: view.WorkflowID("W2")}).State
+	s = step(t, s, &tern.Select{ID: view.WorkflowListID, Item: workflowRow(t, s.Model, "W2")}).State
 	if s.Model.Workflows.Selected != "W2" {
 		t.Errorf("selected %q after a click on the second row", s.Model.Workflows.Selected)
 	}
@@ -238,7 +238,7 @@ func TestArchivedWorkflowsAreHiddenUntilAskedForAndRestoredFromTheList(t *testin
 	archived := nightlyFlow()
 	archived.Archived = true
 	s := workflowsPane(t, 160, reviewFlow(), archived)
-	if drawn := drawnIDs(t, view.Render(s.Model, now)); drawn[view.WorkflowID("W2")] {
+	if workflowRowDrawn(t, s.Model, "W2") {
 		t.Fatal("an archived workflow is listed before it is asked for")
 	}
 	s = feed(t, s, key("a"), key("j")).State

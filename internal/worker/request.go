@@ -187,11 +187,8 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 			return nil, false, err
 		}
 	} else {
-		switch {
-		case d.Action.WorkflowUID == "" && strings.TrimSpace(d.Action.Prompt) == "":
-			return nil, false, fmt.Errorf("job %q has neither a prompt nor a workflow", job.Name)
-		case d.Issue == nil:
-			return nil, false, fmt.Errorf("job %q has no Issue policy", job.Name)
+		if why := job.ActionProblem(); why != "" {
+			return nil, false, fmt.Errorf("job %q %s", job.Name, why)
 		}
 		issuePolicy = *d.Issue
 		profileName = cmp.Or(d.Profile, "default")
@@ -291,7 +288,7 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 		w.noteHook(err)
 		return nil, false, err
 	}
-	w.bind(ps, uid, job.UID)
+	w.bind(ps, j)
 	bound = true
 	if _, err := os.Stat(w.store.RunDir(uid)); err != nil {
 		return nil, false, err
@@ -302,16 +299,13 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 // notifyPlan is what a notify job asks of the worker: the request to send and the existing Issue it goes to. The
 // Issue is the job's own `existing` policy, else the one its Issue-date trigger watches.
 func notifyPlan(job cronjob.Job) (*NotifySpec, cronjob.IssuePolicy, error) {
+	if why := job.ActionProblem(); why != "" {
+		return nil, cronjob.IssuePolicy{}, fmt.Errorf("job %q %s", job.Name, why)
+	}
 	d := job.Definition
 	uid := d.Trigger.IssueUID
 	if d.Issue != nil {
-		if d.Issue.Kind != cronjob.IssueExisting {
-			return nil, cronjob.IssuePolicy{}, fmt.Errorf("job %q creates an Issue per run: kata's daemon delivers it, the worker never runs it", job.Name)
-		}
 		uid = d.Issue.UID
-	}
-	if uid == "" || d.Action.Recipient == "" {
-		return nil, cronjob.IssuePolicy{}, fmt.Errorf("job %q does not name an Issue and a recipient to notify", job.Name)
 	}
 	return &NotifySpec{Recipient: d.Action.Recipient, Message: d.Action.Message}, cronjob.IssuePolicy{Kind: cronjob.IssueExisting, UID: uid}, nil
 }
