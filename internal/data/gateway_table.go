@@ -490,6 +490,15 @@ func init() {
 		},
 		nil, nil)
 
+	// A write has landed: the result and its error travel together, and nothing is retried.
+	daemonCall(
+		func(cmd model.ClearAttention) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.ClearAttention) (model.Msg, error) {
+			return ok(c.ClearAttention(ctx, cmd))
+		},
+		func(cmd model.ClearAttention, err error) model.Msg { return model.AttentionCleared{UID: cmd.UID, Err: err} },
+		nil, nil)
+
 	daemonCall(
 		func(cmd model.SaveWorkflow) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.SaveWorkflow) (model.Msg, error) {

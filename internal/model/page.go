@@ -1,6 +1,9 @@
 package model
 
-import "slices"
+import (
+	"slices"
+	"strconv"
+)
 
 // Page is one of the Pane's top-level views, chosen from the Page bar. Model.Page is the current one.
 //
@@ -301,6 +304,16 @@ var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollection
 type PageBarEntry struct {
 	ID, Label, Chord, Press string
 	Current                 bool
+	// Count is how many things wait on the Page, drawn after the label when above zero.
+	Count int
+}
+
+// Name is the entry's label, with its Count when it has one: "Attention 3".
+func (e PageBarEntry) Name() string {
+	if e.Count > 0 {
+		return e.Label + " " + strconv.Itoa(e.Count)
+	}
+	return e.Label
 }
 
 // pressed is the Tern chord that stands for the Page's key.
@@ -318,7 +331,11 @@ func (m Model) PageBar() []PageBarEntry {
 		if def.lettered && def.page != m.Page {
 			continue
 		}
-		entries = append(entries, PageBarEntry{ID: def.id, Label: def.label, Chord: def.chord, Press: def.pressed(), Current: def.page == m.Page})
+		entry := PageBarEntry{ID: def.id, Label: def.label, Chord: def.chord, Press: def.pressed(), Current: def.page == m.Page}
+		if def.page == PageAttention {
+			entry.Count = len(m.Attention.Requests)
+		}
+		entries = append(entries, entry)
 	}
 	return entries
 }
