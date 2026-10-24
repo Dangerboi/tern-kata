@@ -703,6 +703,29 @@ func TestGatewayUnknownCommandFails(t *testing.T) {
 	}
 }
 
+func TestGatewayAnswersCommandsOfEveryKindInARowWithOneResultEach(t *testing.T) {
+	boom := errors.New("boom")
+	l := newLocator(Target{})
+	l.err.Store(&boom)
+	gateway := newGateway(t, l)
+	messages := make(chan model.Msg, 8)
+	for _, cmd := range []model.Cmd{
+		model.LoadDetail{UID: "u"},
+		model.LoadWorkerPickers{},
+		model.Scroll{},
+		model.WakeAt{Day: "d", At: time.Unix(100, 0), Generation: 1},
+		model.ReadSnapshot{Request: 1},
+	} {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		gateway.Run(ctx, cmd, messages)
+		cancel()
+		if got := len(messages); got != 1 {
+			t.Fatalf("%T left %d results, want 1", cmd, got)
+		}
+		<-messages
+	}
+}
+
 func receive(t *testing.T, messages <-chan model.Msg) model.Msg {
 	t.Helper()
 	select {
