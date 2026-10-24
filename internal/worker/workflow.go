@@ -310,35 +310,7 @@ func (w *Worker) skipBlocked(j *Journal) (*Journal, error) {
 // failure, or the end of the run. The attempt's start record and receipt move into the step's record.
 func (w *Worker) concludeStep(j *Journal, outcome *Outcome) error {
 	_, err := w.store.Update(j.RunUID, "step-concluded", func(j *Journal) error {
-		i := j.activeStep()
-		if i < 0 {
-			return errors.New("no step is running")
-		}
-		r, plan := &j.Steps[i], j.Workflow.Steps[i]
-		r.Launch, r.Exit, r.Summary, r.EndedAt = j.Launch, j.Exit, outcome.Summary, w.clock.Now().UTC()
-		// A retried step keeps what its earlier attempts used; outcome already carries what a resume continued.
-		r.InputTokens, r.OutputTokens = addTokens(r.InputTokens, outcome.InputTokens), addTokens(r.OutputTokens, outcome.OutputTokens)
-		timedOut := j.Exit != nil && j.Exit.TimedOut
-		switch {
-		case outcome.Status == StatusSucceeded:
-			r.State, r.LastFailure = StepSucceeded, ""
-		case timedOut:
-			// The expiry is the run's, shared by all steps and retries: nothing else would get time to run.
-			r.State = StepFailed
-			for k := i + 1; k < len(j.Steps); k++ {
-				if !terminalStep(j.Steps[k].State) {
-					j.Steps[k].State, j.Steps[k].Summary = StepSkipped, "skipped: the run timed out"
-				}
-			}
-		case r.Tries <= plan.Retries:
-			r.State, r.LastFailure = StepPending, outcome.Summary
-		default:
-			r.State = StepFailed
-		}
-		j.Launch, j.Exit, j.Result, j.Resume = nil, nil, nil, nil
-		j.CarriedInput, j.CarriedOutput = nil, nil
-		j.Phase = PhaseAdmitted
-		return nil
+		return j.concludeStep(outcome, w.clock.Now().UTC())
 	})
 	return err
 }
@@ -347,17 +319,7 @@ func (w *Worker) concludeStep(j *Journal, outcome *Outcome) error {
 // and the run fails as timed out, with no process started.
 func (w *Worker) timeOutWorkflow(j *Journal) error {
 	_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
-		for i := range j.Steps {
-			if !terminalStep(j.Steps[i].State) {
-				j.Steps[i].State, j.Steps[i].Summary = StepSkipped, "skipped: the run timed out"
-			}
-		}
-		reason := fmt.Sprintf("timed out after %s", time.Duration(j.TimeoutSeconds)*time.Second)
-		o := &Outcome{Status: StatusFailed, At: w.clock.Now().UTC()}
-		o.Summary = truncate(reason+"\n\n"+workflowSummary(j, StatusFailed), maxSummaryBytes)
-		o.InputTokens, o.OutputTokens = sumStepTokens(j.Steps)
-		j.Outcome, j.Phase = o, PhaseFinished
-		return nil
+		return j.timeOutWorkflow(w.clock.Now().UTC())
 	})
 	return err
 }
@@ -386,17 +348,8 @@ func sumStepTokens(steps []StepRecord) (in, out *int64) {
 
 // finishWorkflow decides the run's outcome once every step is succeeded, failed or skipped: failed when any step failed.
 func (w *Worker) finishWorkflow(j *Journal) error {
-	status := StatusSucceeded
-	for _, r := range j.Steps {
-		if r.State == StepFailed {
-			status = StatusFailed
-		}
-	}
-	o := &Outcome{Status: status, Summary: truncate(workflowSummary(j, status), maxSummaryBytes), At: w.clock.Now().UTC()}
-	o.InputTokens, o.OutputTokens = sumStepTokens(j.Steps)
 	_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
-		j.Outcome, j.Phase = o, PhaseFinished
-		return nil
+		return j.finishWorkflow(w.clock.Now().UTC())
 	})
 	return err
 }
@@ -509,8 +462,7 @@ func (w *Worker) runCommand(ctx context.Context, j *Journal, sp attemptSpec) err
 	}
 	exit.Unrecorded = out.Loss()
 	if _, err := w.store.Update(j.RunUID, "exited", func(j *Journal) error {
-		j.Exit = exit
-		return nil
+		return j.markExited(exit, nil)
 	}); err != nil {
 		return err
 	}

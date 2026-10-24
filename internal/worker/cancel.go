@@ -2,7 +2,6 @@ package worker
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 )
 
@@ -40,11 +39,7 @@ func (w *Worker) dropCancelSignal(uid string) {
 // group gets SIGTERM and SIGKILL after 10 s, and the run ends `cancelled` once the group is proven gone.
 func (w *Worker) cancelRunning(ps *projectState, uid, by string) (*Journal, error) {
 	updated, err := w.store.Update(uid, "cancel-requested", func(j *Journal) error {
-		if reason := j.mayCancel(); reason != "" {
-			return fmt.Errorf("run %s cannot be abandoned: %s", uid, reason)
-		}
-		j.Cancel = &CancelRecord{By: by, At: w.clock.Now().UTC()}
-		return nil
+		return j.requestCancel(by, w.clock.Now().UTC())
 	})
 	if err != nil {
 		w.noteHook(err)
@@ -59,31 +54,7 @@ func (w *Worker) cancelRunning(ps *projectState, uid, by string) (*Journal, erro
 // tokens the stopped attempt and its resumed predecessors used are kept.
 func (w *Worker) concludeCancel(j *Journal) error {
 	_, err := w.store.Update(j.RunUID, "cancelled", func(j *Journal) error {
-		if j.Cancel == nil {
-			return errors.New("no cancel request is saved")
-		}
-		now := w.clock.Now().UTC()
-		o := &Outcome{Status: StatusCancelled, Summary: fmt.Sprintf("abandoned by %s (was running)", j.Cancel.By), At: now}
-		if j.Result != nil {
-			o.InputTokens, o.OutputTokens = j.Result.InputTokens, j.Result.OutputTokens
-		}
-		j.withCarried(o)
-		if j.Workflow != nil {
-			for i := range j.Steps {
-				switch r := &j.Steps[i]; {
-				case r.State == StepRunning:
-					r.State, r.Summary, r.EndedAt = StepFailed, "cancelled by "+j.Cancel.By, now
-					r.Launch, r.Exit = j.Launch, j.Exit
-					r.InputTokens, r.OutputTokens = addTokens(r.InputTokens, o.InputTokens), addTokens(r.OutputTokens, o.OutputTokens)
-				case !terminalStep(r.State):
-					r.State, r.Summary = StepSkipped, "skipped: the run was cancelled"
-				}
-			}
-			o.InputTokens, o.OutputTokens = sumStepTokens(j.Steps)
-		}
-		j.CarriedInput, j.CarriedOutput = nil, nil
-		j.Outcome, j.Phase = o, PhaseFinished
-		return nil
+		return j.concludeCancel(w.clock.Now().UTC())
 	})
 	return err
 }
