@@ -8,6 +8,7 @@ ud_peer_uid=$(jq -r '.issue.uid' "$tmp/undo-peer.json")
 ud_peer=$(jq -r '.issue.short_id' "$tmp/undo-peer.json")
 ud_notice="[data-id='main.notice']"
 expect_tree "[data-id='main.columns.list.issues.$ud_uid']" '.ok and .count == 1'
+expect_tree "[data-id='main.columns.list.issues.$ud_peer_uid']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.list.issues.$ud_uid']"
 expect_tree "[data-id='main.columns.list.issues.$ud_uid']" '.ok and .nodes[0]["aria-selected"] == "true"'
 ctl key enter

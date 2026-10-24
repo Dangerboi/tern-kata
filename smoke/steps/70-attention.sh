@@ -18,13 +18,13 @@ expect_tree "[data-id='main.columns.list.attention']" '.ok and .count == 1'
 expect_tree "[data-id='main.columns.list.issues']" '.count == 0'
 ctl key enter
 expect_tree "[data-id='main.columns.list.issues']" '.count == 1'
-expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Smoke attention Issue")))'
+expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[] | (.text // "")] | any(contains("Smoke attention Issue")))'
 ctl key 6
 expect_tree "[data-id='main.columns.list.attention.$at_issue']" '.ok and .count == 1'
-kata --workspace "$at_dir" inbox --for smoke-attention --all | grep -q "Smoke attention Issue"
+kata inbox --for smoke-attention --all | grep -q "Smoke attention Issue"
 ctl key c
 expect_tree "[data-id='main.columns.list.attention.$at_issue']" '.ok and .count == 0'
-if kata --workspace "$at_dir" inbox --for smoke-attention --all | grep -q "Smoke attention Issue"; then
+if kata inbox --for smoke-attention --all | grep -q "Smoke attention Issue"; then
   printf 'The cleared request is still in kata inbox\n' >&2
   return 1
 fi
@@ -36,7 +36,7 @@ kata --as smoke-asker --workspace "$at_dir" notify "$at_short" --to smoke-attent
 expect_tree "[data-id='main.columns.list.attention.$at_issue']" '.ok and .count == 1 and (.nodes[0].text | contains("Answer this comment") and contains("c:"))'
 expect_tree "$at_bar" '.ok and (.nodes[0].text | contains("Attention 1"))'
 ctl key enter
-expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Which option do you pick?")))'
+expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[] | (.text // "")] | any(contains("Which option do you pick?")))'
 ctl key R
 expect_tree "[data-id='layer.editor.input']" '.ok and .count == 1'
 ctl type '"I pick the second option"'

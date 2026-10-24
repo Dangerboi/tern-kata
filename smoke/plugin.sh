@@ -86,6 +86,7 @@ printf 'export PATH=%q:%q:"$PATH"\n' "$tmp/pane-bin" "$tmp/bin" >"$tmp/.zshenv"
 printf 'export PATH=%q:%q:"$PATH"\n' "$tmp/pane-bin" "$tmp/bin" >"$tmp/.bashrc"
 export PATH="$tmp/bin:/usr/bin:/bin"
 # q asks "Quit tern-kata? y/n" unless kata's [tui] confirm_quit is false: the steps quit with one key.
+mkdir -p "$KATA_HOME"
 printf '[tui]\nconfirm_quit = false\n' >"$KATA_HOME/config.toml"
 kata daemon start
 kata --workspace "$tmp/workspace" init --project smoke --json

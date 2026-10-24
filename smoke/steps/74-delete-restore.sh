@@ -23,7 +23,7 @@ kata --workspace "$dl_dir" show "$dl_uid" --json | jq -e '.issue.deleted_at == n
 expect_tree "$dl_row" '.ok and .count == 1'
 
 # The exact id, and a reason in the second field, delete it.
-ctl key ctrl+u
+for _ in {1..11}; do ctl key Backspace; done
 ctl type "\"$dl_ref\""
 ctl key tab
 ctl type '"smoke duplicate"'

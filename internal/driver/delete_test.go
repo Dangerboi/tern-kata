@@ -354,3 +354,11 @@ func TestErasingTheRestoreFieldForgetsTheIssueFoundForIt(t *testing.T) {
 		}
 	}
 }
+
+func TestCtrlUClearsTheDeleteCardsConfirmation(t *testing.T) {
+	s := typed(t, deleting(t), "work#wrong")
+	s = step(t, s, key("ctrl+u")).State
+	if got := s.Model.DeleteForm.ID; got != "" {
+		t.Fatalf("ctrl+u left %q in the confirmation", got)
+	}
+}
