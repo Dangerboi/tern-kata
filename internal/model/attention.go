@@ -147,6 +147,8 @@ type AttentionState struct {
 	Clearing []string
 	// request counts the reads asked for.
 	request int64
+	// queued says events arrived while a read was out, so one more read follows its answer.
+	queued bool
 }
 
 // OnAttention says the Attention Page is current.
@@ -200,8 +202,24 @@ func askAttention(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	m.Attention.request++
-	m.Attention.Loading = true
+	m.Attention.Loading, m.Attention.queued = true, false
 	return m, []Cmd{LoadAttention{Workspace: m.Workspace, Address: address, Request: m.Attention.request}}
+}
+
+// refreshAttention asks for a read because the daemon changed, whether or not the Page is shown: at most one read is out, and
+// changes arriving meanwhile cost one more read after its answer.
+func refreshAttention(m Model) (Model, []Cmd) {
+	if m.Attention.Loading {
+		m.Attention.queued = true
+		return m, nil
+	}
+	return askAttention(m)
+}
+
+// attentionChangesTheCount says a stream event of this type can add, change or clear a request: any Issue or Project event, and
+// the stream's reset.
+func attentionChangesTheCount(eventType string) bool {
+	return strings.HasPrefix(eventType, "issue.") || strings.HasPrefix(eventType, "project.") || eventType == "sync.reset_required"
 }
 
 // enterAttention is the Attention Page's own work on entry (see switchPage): the state as the Page left it, read again.
@@ -209,18 +227,21 @@ func enterAttention(m Model) (Model, []Cmd) { return askAttention(m) }
 
 // attentionLoaded applies the answer to the latest read. A failed read keeps the requests held; a good one replaces them and
 // keeps the selection on the same Issue, else on the row now at its place.
-func attentionLoaded(m Model, msg AttentionLoaded) Model {
+func attentionLoaded(m Model, msg AttentionLoaded) (Model, []Cmd) {
 	if msg.Request != m.Attention.request {
-		return m
+		return m, nil
 	}
 	m.Attention.Loading = false
 	m.Attention.Err = msg.Err
-	if msg.Err != nil {
-		return m
+	if msg.Err == nil {
+		row := max(m.attentionIndex(), 0)
+		m.Attention.Requests, m.Attention.Skipped, m.Attention.Loaded = msg.Requests, msg.Skipped, true
+		m = m.settleAttentionSelection(row)
 	}
-	row := max(m.attentionIndex(), 0)
-	m.Attention.Requests, m.Attention.Skipped, m.Attention.Loaded = msg.Requests, msg.Skipped, true
-	return m.settleAttentionSelection(row)
+	if m.Attention.queued {
+		return refreshAttention(m)
+	}
+	return m, nil
 }
 
 // settleAttentionSelection keeps the selection on a listed request: the one selected, else the one now at row, else the last.
@@ -325,7 +346,8 @@ func (m Model) catalogProject(id int64) (CatalogProject, bool) {
 func updateAttention(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
 	case AttentionLoaded:
-		return attentionLoaded(m, msg), nil, true
+		next, cmds := attentionLoaded(m, msg)
+		return next, cmds, true
 	case AttentionCleared:
 		next, cmds := attentionCleared(m, msg)
 		return next, cmds, true

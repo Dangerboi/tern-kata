@@ -445,3 +445,151 @@ func TestCOnAnEmptyAttentionPageSendsNothing(t *testing.T) {
 		t.Error("c sent a clear with no request")
 	}
 }
+
+// attentionEvent is a stream event of kind on the Pane's current stream.
+func attentionEvent(s driver.State, kind string) model.StreamEvent {
+	return model.StreamEvent{Generation: s.Model.StreamGeneration, ID: nextEvent(), Type: kind}
+}
+
+// attentionEntryText is what the Page bar draws for the Attention entry.
+func attentionEntryText(t *testing.T, s driver.State) string {
+	t.Helper()
+	return pageBarTexts(t, s)["attention"]
+}
+
+func countedReads(cmds []model.Cmd) int {
+	n := 0
+	for _, cmd := range cmds {
+		if _, ok := cmd.(model.LoadAttention); ok {
+			n++
+		}
+	}
+	return n
+}
+
+func TestTheAttentionReadIsAskedWhenTheStreamOpensAndTheCountShowsOnAnyPage(t *testing.T) {
+	s := attentionPane(t)
+	if text := attentionEntryText(t, s); !strings.Contains(text, `"t":"Attention"`) || strings.Contains(text, "Attention 0") {
+		t.Fatalf("Page bar entry %s before any read, want plain Attention", text)
+	}
+	out := step(t, s, model.StreamOpened{Generation: s.Model.StreamGeneration})
+	if countedReads(out.Cmds) != 1 {
+		t.Fatalf("cmds %#v, want one Attention read when the stream opens", out.Cmds)
+	}
+	if out.State.Model.Page != model.PageIssues {
+		t.Fatalf("page %v, want the Issues Page", out.State.Model.Page)
+	}
+	done := answerAttention(t, out, attentionRequests(t), 0)
+	if text := attentionEntryText(t, done); !strings.Contains(text, `"t":"Attention 3"`) {
+		t.Errorf("Page bar entry %s, want Attention 3 from the Issues Page", text)
+	}
+	if text := attentionEntryText(t, done); strings.Contains(text, "request") {
+		t.Errorf("Page bar entry %s", text)
+	}
+
+	// Another stream's opening is not this Pane's.
+	if _, asked := askedAttention(step(t, s, model.StreamOpened{Generation: s.Model.StreamGeneration + 5}).Cmds); asked {
+		t.Error("an old stream's opening asked for a read")
+	}
+}
+
+func TestThePageBarEntryIsPlainAtZeroAndFollowsEachGoodRead(t *testing.T) {
+	s := answerAttention(t, step(t, attentionPane(t), model.StreamOpened{Generation: attentionPane(t).Model.StreamGeneration}), attentionRequests(t), 0)
+	out := step(t, s, attentionEvent(s, "issue.metadata_updated"))
+	s = answerAttention(t, out, attentionRequests(t)[:1], 0)
+	if text := attentionEntryText(t, s); !strings.Contains(text, `"t":"Attention 1"`) {
+		t.Fatalf("Page bar entry %s, want Attention 1", text)
+	}
+	s = answerAttention(t, step(t, s, attentionEvent(s, "issue.updated")), nil, 0)
+	if text := attentionEntryText(t, s); !strings.Contains(text, `"t":"Attention"`) || strings.Contains(text, "Attention 0") {
+		t.Fatalf("Page bar entry %s, want plain Attention at zero", text)
+	}
+}
+
+func TestAFailedReadKeepsThePageBarCount(t *testing.T) {
+	s := answerAttention(t, step(t, attentionPane(t), model.StreamOpened{Generation: attentionPane(t).Model.StreamGeneration}), attentionRequests(t), 0)
+	out := step(t, s, attentionEvent(s, "project.updated"))
+	load, ok := askedAttention(out.Cmds)
+	if !ok {
+		t.Fatal("a project event asked for no read")
+	}
+	failed := step(t, out.State, model.AttentionLoaded{Request: load.Request, Err: errors.New("the daemon hiccuped")}).State
+	if text := attentionEntryText(t, failed); !strings.Contains(text, `"t":"Attention 3"`) {
+		t.Errorf("Page bar entry %s after a failed read, want Attention 3", text)
+	}
+}
+
+func TestABurstOfEventsCostsOneReadInFlightAndOneAfterIt(t *testing.T) {
+	s := attentionPane(t)
+	first := step(t, s, attentionEvent(s, "issue.created"))
+	if countedReads(first.Cmds) != 1 {
+		t.Fatalf("the first event asked for %d reads, want 1", countedReads(first.Cmds))
+	}
+	load, _ := askedAttention(first.Cmds)
+
+	state := first.State
+	for _, kind := range []string{"issue.updated", "issue.commented", "project.updated", "sync.reset_required"} {
+		out := step(t, state, attentionEvent(state, kind))
+		if countedReads(out.Cmds) != 0 {
+			t.Fatalf("%s asked for another read while one is out: %#v", kind, out.Cmds)
+		}
+		state = out.State
+		if kind == "sync.reset_required" {
+			state.Model.StreamGeneration = s.Model.StreamGeneration // the reset ends the stream; the test goes on with the same one
+		}
+	}
+
+	answered := step(t, state, model.AttentionLoaded{Request: load.Request, Requests: attentionRequests(t)})
+	if countedReads(answered.Cmds) != 1 {
+		t.Fatalf("answer asked for %d reads, want the one follow-up", countedReads(answered.Cmds))
+	}
+	followUp, _ := askedAttention(answered.Cmds)
+	if followUp.Request == load.Request {
+		t.Fatal("the follow-up repeats the first request number")
+	}
+	last := step(t, answered.State, model.AttentionLoaded{Request: followUp.Request, Requests: attentionRequests(t)[:2]})
+	if countedReads(last.Cmds) != 0 {
+		t.Fatalf("the follow-up's answer asked for more: %#v", last.Cmds)
+	}
+	if len(last.State.Model.Attention.Requests) != 2 {
+		t.Errorf("requests %d, want the follow-up's two", len(last.State.Model.Attention.Requests))
+	}
+}
+
+func TestEventsThatCannotTouchARequestAskForNoRead(t *testing.T) {
+	s := attentionPane(t)
+	if out := step(t, s, attentionEvent(s, "cron.run.observed")); countedReads(out.Cmds) != 0 {
+		t.Errorf("a run event asked for a read: %#v", out.Cmds)
+	}
+}
+
+func TestAnIssueEventAsksForAReadWhileAnotherPageIsShown(t *testing.T) {
+	s := step(t, attentionPane(t), key("4")).State // the Runs Page
+	if out := step(t, s, attentionEvent(s, "issue.closed")); countedReads(out.Cmds) != 1 {
+		t.Errorf("an event on the Runs Page asked for %d Attention reads, want 1", countedReads(out.Cmds))
+	}
+}
+
+func TestThePageBarWithACountStillFitsTheWidthRules(t *testing.T) {
+	long := model.Project{ID: 7, UID: "p", Name: "a-rather-long-project-name-for-the-top-bar"}
+	for _, tt := range []struct {
+		cols    int
+		compact bool
+		ownLine bool
+	}{
+		{200, false, false},
+		{100, true, false},
+		{80, true, true},
+	} {
+		s := loadedWith(t, tt.cols, long, model.Snapshot{Issues: []model.Issue{alpha}})
+		s.Model.Attention.Requests = attentionRequests(t)
+		texts := pageBarTexts(t, s)
+		if got := strings.Contains(texts["attention"], `"t":"Attention 3"`); got == tt.compact {
+			t.Errorf("%d columns: Attention entry %s, compact %v", tt.cols, texts["attention"], tt.compact)
+		}
+		_, own := drawnIDs(t, view.Render(s.Model, now))["main.pagebar"]
+		if own != tt.ownLine {
+			t.Errorf("%d columns: Page bar on its own line = %v, want %v", tt.cols, own, tt.ownLine)
+		}
+	}
+}
