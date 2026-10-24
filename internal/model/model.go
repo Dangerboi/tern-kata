@@ -136,6 +136,8 @@ type Model struct {
 	Attention AttentionState
 	// Moving is the Issue whose Move is in flight; further Moves wait for its result.
 	Moving string
+	// Undo is the history of changes `u` takes back.
+	Undo UndoHistory
 	// nonce is the random per-run prefix of every idempotency key and keys counts the keys minted.
 	nonce string
 	keys  int
@@ -146,6 +148,7 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 		m.Notice, m.NoticeLink = "", nil
 	}
 	next, cmds := updateWithDetail(m, msg)
+	next = next.recordWrite(msg).noteWrites(cmds)
 	return next.cancelPending(m, msg), cmds
 }
 
@@ -216,6 +219,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		}
 	case MoveResultMsg:
 		return updateMove(m, msg)
+	case ChangeUndone:
+		return undoDone(m, msg)
 	case FieldWritten:
 		return fieldWritten(m, msg.UID, "", msg.Err)
 	case FileAttached:

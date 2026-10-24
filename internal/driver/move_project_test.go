@@ -302,3 +302,28 @@ func TestMoveCardEscStepsBackFromThePreviewToTheList(t *testing.T) {
 		t.Errorf("lists %v", got)
 	}
 }
+
+func TestMoveClearsTheUndoHistoryOnlyWhenTheIssueMoves(t *testing.T) {
+	s := movePane(t, movable("a"), movable("b"))
+	entry := undoEntry(2)
+	entry.UID, entry.ProjectID = "a", 7
+	s = feed(t, s, model.FieldWritten{UID: "a", Record: model.WriteRecord{Entry: &entry}}).State
+	if len(s.Model.Undo.Entries) != 1 {
+		t.Fatalf("history %+v, want the change recorded", s.Model.Undo)
+	}
+
+	preview := moving(t, s, "shop")
+	previewed := step(t, preview.State, model.ProjectMoveAnswer{UID: "a", ToProjectUID: "s", DryRun: true, Revision: 3}).State
+	if len(previewed.Model.Undo.Entries) != 1 {
+		t.Fatalf("a preview left history %+v, want it kept", previewed.Model.Undo)
+	}
+
+	sent := step(t, previewed, key("enter"))
+	done := step(t, sent.State, model.ProjectMoveAnswer{UID: "a", ToProjectUID: "s", NewShortID: "n3w1"}).State
+	if len(sent.State.Model.Undo.Entries) != 0 || len(done.Model.Undo.Entries) != 0 {
+		t.Fatalf("history after the move %+v, want it cleared", done.Model.Undo)
+	}
+	if got := pressU(t, done).State.Model.Notice; got != "nothing to undo: moving an Issue cannot be undone" {
+		t.Errorf("u says %q", got)
+	}
+}
