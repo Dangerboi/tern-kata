@@ -31,6 +31,12 @@ var listNodes = map[model.ListNode]struct {
 		}
 		return ""
 	}},
+	model.ListNodeDaemons: {DaemonListID, func(m model.Model) string {
+		if e := m.SelectedDaemon(); e != nil {
+			return DaemonID(e.Name)
+		}
+		return ""
+	}},
 	model.ListNodeRuns: {RunListID, func(m model.Model) string {
 		if m.Runs.Selected == "" {
 			return ""

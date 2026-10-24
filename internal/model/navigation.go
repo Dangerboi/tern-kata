@@ -88,6 +88,9 @@ const pageRows = 10
 // Position is the place of the selected row in the current Page's list, counted from one and zero when nothing is selected,
 // and the number of rows: what the footer shows at its right.
 func (m Model) Position() (selected, total int) {
+	if m.OnDaemons() {
+		return min(m.Daemons.Cursor+1, len(m.Daemons.Entries)), len(m.Daemons.Entries)
+	}
 	if m.OnFederation() {
 		return min(m.Federation.Cursor+1, len(m.Federation.Spokes)), len(m.Federation.Spokes)
 	}

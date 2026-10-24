@@ -27,6 +27,8 @@ type Gateway struct {
 
 	mu      sync.Mutex
 	clients map[string]*Client
+	// current is the catalog name of the daemon the Pane last switched to; empty until it does.
+	current string
 
 	streamMu         sync.Mutex
 	streamCancel     context.CancelFunc
@@ -164,7 +166,13 @@ func (g *Gateway) connect(ctx context.Context, workspace string) (*Client, error
 	if err != nil {
 		return nil, err
 	}
-	return connect(ctx, target)
+	c, err := connect(ctx, target)
+	if err != nil {
+		return nil, err
+	}
+	catalog, _ := ReadCatalog()
+	c.name = g.currentLocked(catalog)
+	return c, nil
 }
 
 func (g *Gateway) forget(workspace string, c *Client) {

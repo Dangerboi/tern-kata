@@ -17,6 +17,8 @@ type LiveState struct {
 	Resetting        bool
 	dayInFlight      bool // the end-of-day wake fired while a read was in flight; a result still dated that day reads again
 	wakeGeneration   int64
+	// resubscribe says the next snapshot starts a new event stream: the Pane switched to another daemon, whose events the old stream does not carry.
+	resubscribe bool
 }
 
 // WakeAt asks for one wake at At, the end of the local day Day. Generation numbers the asks; a wake replaces an older one

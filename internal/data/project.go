@@ -20,6 +20,21 @@ import (
 )
 
 func (c *Client) ReadProject(ctx context.Context, workspace string) (model.ProjectLoaded, error) {
+	return c.readProject(ctx, workspace, false)
+}
+
+// LoadProject is what the Pane's start and a daemon switch ask: ReadProject, with the Daemon naming its account. After a switch
+// (switched) a Project the workspace is bound to that the new daemon does not know is not a failure, the Pane starts on the Inbox.
+func (c *Client) LoadProject(ctx context.Context, workspace string, switched bool) (model.ProjectLoaded, error) {
+	loaded, err := c.readProject(ctx, workspace, switched)
+	if err == nil {
+		loaded.Daemon = c.describe(ctx)
+	}
+	return loaded, err
+}
+
+// readProject resolves the workspace's Project. With missingOK a bound Project the daemon has not initialised is left unresolved.
+func (c *Client) readProject(ctx context.Context, workspace string, missingOK bool) (model.ProjectLoaded, error) {
 	request, err := projectRequest(ctx, workspace)
 	if err != nil {
 		return model.ProjectLoaded{}, err
@@ -28,7 +43,7 @@ func (c *Client) ReadProject(ctx context.Context, workspace string) (model.Proje
 	if request != nil {
 		response, err := c.ResolveProjectWithResponse(ctx, &g.ResolveProjectRequestOptions{Body: request})
 		if err != nil {
-			if daemonCode(err) != "project_not_initialized" || request.Name != nil {
+			if daemonCode(err) != "project_not_initialized" || (request.Name != nil && !missingOK) {
 				return model.ProjectLoaded{}, daemonError(err)
 			}
 		} else {
@@ -38,7 +53,7 @@ func (c *Client) ReadProject(ctx context.Context, workspace string) (model.Proje
 			project = translateProject(response.JSON200.Project)
 		}
 	}
-	return model.ProjectLoaded{Project: project, Daemon: model.Daemon{Kind: c.kind, Version: c.version}}, nil
+	return model.ProjectLoaded{Project: project, Daemon: model.Daemon{Name: c.name, Kind: c.kind, Version: c.version}}, nil
 }
 
 func projectRequest(ctx context.Context, workspace string) (*g.ResolveProjectBody, error) {
