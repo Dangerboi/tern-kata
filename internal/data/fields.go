@@ -36,8 +36,21 @@ func (c *Client) WriteField(ctx context.Context, cmd model.WriteField) error {
 	case model.SetParentAction:
 		_, e := c.CreateLinkWithResponse(ctx, &g.CreateLinkRequestOptions{PathParams: &g.CreateLinkPath{ProjectID: cmd.ProjectID, Ref: cmd.UID}, Body: &g.CreateLinkBody{Actor: actor, Type: g.CreateLinkRequestBodyTypeParent, ToRef: cmd.Value}})
 		return daemonError(e)
+	case model.AddBlockerAction, model.AddRelatedAction:
+		linkType := g.CreateLinkRequestBodyTypeBlocks
+		if cmd.Action == model.AddRelatedAction {
+			linkType = g.CreateLinkRequestBodyTypeRelated
+		}
+		_, e := c.CreateLinkWithResponse(ctx, &g.CreateLinkRequestOptions{PathParams: &g.CreateLinkPath{ProjectID: cmd.ProjectID, Ref: cmd.UID}, Body: &g.CreateLinkBody{Actor: actor, Type: linkType, ToRef: cmd.Value}})
+		return daemonError(e)
 	}
 	return nil
+}
+
+// RemoveLink deletes the link with the id from the Issue it is on.
+func (c *Client) RemoveLink(ctx context.Context, cmd model.RemoveLinkCmd) error {
+	_, e := c.DeleteLinkWithResponse(ctx, &g.DeleteLinkRequestOptions{PathParams: &g.DeleteLinkPath{ProjectID: cmd.ProjectID, Ref: cmd.UID, LinkID: cmd.LinkID}, Query: &g.DeleteLinkQuery{Actor: cmd.Actor}})
+	return daemonError(e)
 }
 
 // Move adds the label to add, then removes each label to remove, and stops at the first failure.

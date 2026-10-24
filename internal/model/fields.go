@@ -16,6 +16,8 @@ const (
 	ClearOwnerAction  Action = "clear-owner"
 	PriorityAction    Action = "priority"
 	SetParentAction   Action = "set-parent"
+	AddBlockerAction  Action = "add-blocker"
+	AddRelatedAction  Action = "add-related"
 	AttachFileAction  Action = "attach-file"
 	DetachFileAction  Action = "detach-file"
 	FieldSubmit       Action = "field-submit"
@@ -43,6 +45,23 @@ type WriteField struct {
 }
 
 func (WriteField) cmd() {}
+
+// RemoveLinkCmd deletes the link LinkID from the Issue UID.
+type RemoveLinkCmd struct {
+	Workspace, UID, Actor string
+	ProjectID, LinkID     int64
+}
+
+func (RemoveLinkCmd) cmd() {}
+
+// LinkRemoved answers RemoveLinkCmd.
+type LinkRemoved struct {
+	UID    string
+	LinkID int64
+	Err    error
+}
+
+func (LinkRemoved) msg() {}
 
 type LoadFieldLabels struct {
 	Workspace, UID string
@@ -135,13 +154,18 @@ var fieldSpecs = map[Action]fieldSpec{
 	AssignOwnerAction: {title: "Assign owner", needsValue: true, send: sendFieldWrite},
 	ClearOwnerAction:  {title: "Clear owner", open: openImmediate, send: sendFieldWrite},
 	PriorityAction:    {title: "Priority (0-4, or - to clear)", check: checkPriority, send: sendFieldWrite},
-	SetParentAction:   {title: "Set parent (Issue id)", needsValue: true, clean: func(v string) string { return strings.TrimPrefix(v, "#") }, send: sendFieldWrite},
+	SetParentAction:   {title: "Set parent (Issue id)", needsValue: true, clean: trimHash, send: sendFieldWrite},
+	AddBlockerAction:  {title: "This Issue blocks (Issue id)", needsValue: true, clean: trimHash, send: sendFieldWrite},
+	AddRelatedAction:  {title: "Related to (Issue id)", needsValue: true, clean: trimHash, send: sendFieldWrite},
 	AttachFileAction:  {title: "Attach a file (path)", needsValue: true, refuse: true, send: sendAttach},
 	DetachFileAction:  {title: "Remove attachment", open: openAttachments, refuse: true, send: sendDetach},
 }
 
 // FieldTitle is the title of the form of an action.
 func FieldTitle(action Action) string { return fieldSpecs[action].title }
+
+// trimHash drops the "#" of a reference typed as #id.
+func trimHash(v string) string { return strings.TrimPrefix(v, "#") }
 
 func checkPriority(v string) error {
 	if n, err := strconv.Atoi(v); v != "-" && (err != nil || n < 0 || n > 4) {

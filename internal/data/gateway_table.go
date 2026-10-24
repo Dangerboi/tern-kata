@@ -281,6 +281,16 @@ func init() {
 		func(cmd model.WriteField, err error) model.Msg { return model.FieldWritten{UID: cmd.UID, Err: err} },
 		nil, nil)
 
+	daemonCall(
+		func(cmd model.RemoveLinkCmd) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.RemoveLinkCmd) (model.Msg, error) {
+			return ok(model.LinkRemoved{UID: cmd.UID, LinkID: cmd.LinkID}, c.RemoveLink(ctx, cmd))
+		},
+		func(cmd model.RemoveLinkCmd, err error) model.Msg {
+			return model.LinkRemoved{UID: cmd.UID, LinkID: cmd.LinkID, Err: err}
+		},
+		nil, nil)
+
 	// A write has landed: the result and its error travel together, and nothing is retried.
 	daemonCall(
 		func(cmd model.SetDatesCmd) string { return cmd.Workspace },
