@@ -20,5 +20,5 @@ herdr-kata (kata-adapter.md "Transport and events", architecture.md) arrived at 
 
 ## Consequences
 
-- The worker needs kata 0.19.0 or later; `worker doctor` says so and names the missing capability.
+- The worker needs kata v0.20.0 or later (kata v0.20 requires cron peers to upgrade together and does not support v0.19 beside it); `worker doctor` says so and names the missing capability.
 - An hour of lost events is repaired by the next reconciliation, never by replaying the stream.

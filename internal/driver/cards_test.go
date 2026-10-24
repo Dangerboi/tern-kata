@@ -44,7 +44,7 @@ func popups() []popup {
 		{"Close", keyOpen("x"), func(dst *model.Model, src model.Model) { dst.CloseForm = src.CloseForm },
 			model.ModeCloseForm, "Close Issue", func(m model.Model) string {
 				values := m.CloseForm.Values
-				return values.Reason + values.Message + values.Commit + values.PR + values.Test + values.Reference + values.Rationale
+				return values.Reason + values.Message + values.Commit + values.PR + values.Test + values.Reviewed + values.External + values.Reference + values.Rationale
 			}},
 		{"Dates", keyOpen("d"), func(dst *model.Model, src model.Model) { dst.DatesForm = src.DatesForm },
 			model.ModeDatesForm, "Dates", func(m model.Model) string { return m.DatesForm.Text.Scheduled }},

@@ -52,7 +52,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 ## Requirements
 
-- kata v0.19.0 or newer.
+- kata v0.20.0 or newer.
 - A Tern that supports the Surface Protocol.
 - For the worker: [omp](https://github.com/can1357/oh-my-pi) on `PATH`. On Windows also [Git for Windows](https://gitforwindows.org/), whose `sh` runs workflow command steps. The Pane itself needs no Git Bash.
 
@@ -111,6 +111,10 @@ Agents: follow these steps only when the user has asked you to install tern-kata
 The window machine needs only the window plugin; kata and tern-kata run on the session host. For example, with a Tern window on Windows 11 and Panes on an Ubuntu host, install the window plugin on Windows and kata and tern-kata on Ubuntu. If the session host and the window are the same machine, do both steps on it.
 
 In a directory bound to a kata Project, `tern-kata` opens that Project's Issues; anywhere else it opens Inbox. [How it works](docs/guide/pages-and-board.md#how-it-works) explains the three parts of the plugin.
+
+## Troubleshooting
+
+If the Pane cannot find a local kata daemon whose storage is PostgreSQL, check the storage DSN: when it uses routing options (the `host`, `port`, `dbname`, `service` or `servicefile` query options, or `PG*` environment variables filling in missing parts), discovery fails because the lean kata client cannot resolve them. Set `KATA_SERVER` to the address `kata daemon locate` prints.
 
 ## Guides
 

@@ -1,6 +1,8 @@
 package cronjob_test
 
 import (
+	"cmp"
+	"strings"
 	"testing"
 	"time"
 
@@ -302,5 +304,53 @@ func TestHighRateWarningStartsPastTwentyFourIssuesADay(t *testing.T) {
 		if got := cronjob.HighRateWarning(tc.perDay); got != tc.want {
 			t.Errorf("HighRateWarning(%d) = %q, want %q", tc.perDay, got, tc.want)
 		}
+	}
+}
+
+// Expressions read as kata's own parser reads them, from 2026-10-24 12:00 UTC unless the row names a start.
+func TestCronReadsExpressionsAsKataDoes(t *testing.T) {
+	const noon = "2026-10-24T12:00:00Z"
+	for _, tc := range []struct {
+		expression string
+		from       string
+		refused    bool
+		want       []string
+	}{
+		{expression: "0 9 * * 7", want: []string{"2026-10-25T09:00:00Z", "2026-11-01T09:00:00Z"}},
+		{expression: "0 9 * * 5-7", want: []string{"2026-10-25T09:00:00Z", "2026-10-30T09:00:00Z", "2026-10-31T09:00:00Z", "2026-11-01T09:00:00Z"}},
+		{expression: "0 9 * * 5/2", want: []string{"2026-10-25T09:00:00Z", "2026-10-30T09:00:00Z", "2026-11-01T09:00:00Z"}},
+		{expression: "0 22-2 * * *", want: []string{"2026-10-24T22:00:00Z", "2026-10-24T23:00:00Z", "2026-10-25T00:00:00Z", "2026-10-25T01:00:00Z", "2026-10-25T02:00:00Z", "2026-10-25T22:00:00Z"}},
+		{expression: "0 */24 * * *", refused: true},
+		{expression: "*/60 * * * *", refused: true},
+		{expression: "@every 0s", refused: true},
+		{expression: "CRON_TZ=Europe/Berlin", refused: true},
+		{expression: "CRON_TZ=America/New_York 30 2 * * *", from: "2026-03-07T12:00:00Z", want: []string{"2026-03-08T07:30:00Z", "2026-03-09T06:30:00Z"}},
+		{expression: "0 9 15 * 1", want: []string{"2026-10-26T09:00:00Z", "2026-11-02T09:00:00Z"}},
+		{expression: "@daily", want: []string{"2026-10-25T00:00:00Z", "2026-10-26T00:00:00Z"}},
+		{expression: "@every 90m", want: []string{"2026-10-24T13:30:00Z", "2026-10-24T15:00:00Z"}},
+		{expression: "0 9 * * MON-FRI", want: []string{"2026-10-26T09:00:00Z", "2026-10-27T09:00:00Z"}},
+	} {
+		t.Run(tc.expression, func(t *testing.T) {
+			s, err := cronjob.Cron(tc.expression, "", time.Time{})
+			if tc.refused {
+				if err == nil {
+					t.Fatal("parsed")
+				}
+				if !strings.HasPrefix(err.Error(), "invalid cron expression") {
+					t.Errorf("error %q lacks the module's prefix", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			cursor := at(t, cmp.Or(tc.from, noon))
+			for _, want := range tc.want {
+				cursor = s.Next(cursor)
+				if !cursor.Equal(at(t, want)) || cursor.Location() != time.UTC {
+					t.Fatalf("next = %s, want %s in UTC", cursor, want)
+				}
+			}
+		})
 	}
 }

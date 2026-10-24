@@ -20,9 +20,8 @@ func TestTopBarDaemonAndCounts(t *testing.T) {
 	if got := m.DaemonLine(); got != "Daemon: remote · kata v0.18.0" {
 		t.Fatalf("daemon line %q", got)
 	}
-	m.Daemon.Kind = model.DaemonKindUnknown
-	if got := m.DaemonLine(); got != "Daemon: kata v0.18.0" {
-		t.Fatalf("daemon line with an unknown kind %q", got)
+	if got := (model.Model{}).DaemonLine(); got != "Daemon: " {
+		t.Fatalf("daemon line before the Daemon is read %q", got)
 	}
 	if got := m.CountsLine(); got != "open: 5 · closed: 7 · all: 12" {
 		t.Fatalf("catalog counts %q", got)

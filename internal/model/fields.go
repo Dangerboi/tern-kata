@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -16,6 +17,9 @@ const (
 	ClearOwnerAction  Action = "clear-owner"
 	PriorityAction    Action = "priority"
 	SetParentAction   Action = "set-parent"
+	TimedAssignAction Action = "timed-assign"
+	AddBlockerAction  Action = "add-blocker"
+	AddRelatedAction  Action = "add-related"
 	AttachFileAction  Action = "attach-file"
 	DetachFileAction  Action = "detach-file"
 	FieldSubmit       Action = "field-submit"
@@ -43,6 +47,23 @@ type WriteField struct {
 }
 
 func (WriteField) cmd() {}
+
+// RemoveLinkCmd deletes the link LinkID from the Issue UID.
+type RemoveLinkCmd struct {
+	Workspace, UID, Actor string
+	ProjectID, LinkID     int64
+}
+
+func (RemoveLinkCmd) cmd() {}
+
+// LinkRemoved answers RemoveLinkCmd.
+type LinkRemoved struct {
+	UID    string
+	LinkID int64
+	Err    error
+}
+
+func (LinkRemoved) msg() {}
 
 type LoadFieldLabels struct {
 	Workspace, UID string
@@ -135,13 +156,55 @@ var fieldSpecs = map[Action]fieldSpec{
 	AssignOwnerAction: {title: "Assign owner", needsValue: true, send: sendFieldWrite},
 	ClearOwnerAction:  {title: "Clear owner", open: openImmediate, send: sendFieldWrite},
 	PriorityAction:    {title: "Priority (0-4, or - to clear)", check: checkPriority, send: sendFieldWrite},
-	SetParentAction:   {title: "Set parent (Issue id)", needsValue: true, clean: func(v string) string { return strings.TrimPrefix(v, "#") }, send: sendFieldWrite},
+	SetParentAction:   {title: "Set parent (Issue id)", needsValue: true, clean: trimHash, send: sendFieldWrite},
+	TimedAssignAction: {title: "Assignment duration (1m..24h, e.g. 1h)", needsValue: true, check: checkAssignmentDuration, send: sendTimedAssignment},
+	AddBlockerAction:  {title: "This Issue blocks (Issue id)", needsValue: true, clean: trimHash, send: sendFieldWrite},
+	AddRelatedAction:  {title: "Related to (Issue id)", needsValue: true, clean: trimHash, send: sendFieldWrite},
 	AttachFileAction:  {title: "Attach a file (path)", needsValue: true, refuse: true, send: sendAttach},
 	DetachFileAction:  {title: "Remove attachment", open: openAttachments, refuse: true, send: sendDetach},
 }
 
 // FieldTitle is the title of the form of an action.
 func FieldTitle(action Action) string { return fieldSpecs[action].title }
+
+// FieldFormTitle is the title of the open form: FieldTitle, with the Issue named where kata tui names it.
+func (m Model) FieldFormTitle() string {
+	f := m.FieldForm
+	if f.Action == TimedAssignAction {
+		if issue := m.issueByUID(f.UID); issue != nil {
+			return fmt.Sprintf("Assignment duration for #%s (1m..24h, e.g. 1h)", issue.ShortID)
+		}
+	}
+	return FieldTitle(f.Action)
+}
+
+// assignmentSeconds reads a timed assignment's duration: a Go duration of whole seconds from 1m to 24h.
+func assignmentSeconds(v string) (int64, error) {
+	d, err := time.ParseDuration(strings.TrimSpace(v))
+	if err != nil || d < time.Minute || d > 24*time.Hour || d%time.Second != 0 {
+		return 0, errors.New("duration must be a whole number of seconds from 1m through 24h")
+	}
+	return int64(d / time.Second), nil
+}
+
+func checkAssignmentDuration(v string) error {
+	_, err := assignmentSeconds(v)
+	return err
+}
+
+// sendTimedAssignment sends the duration as seconds, the unit kata's claim action takes.
+func sendTimedAssignment(m Model) (Model, []Cmd) {
+	seconds, err := assignmentSeconds(m.FieldForm.Value)
+	if err != nil {
+		m.FieldForm.Err = err
+		return m, nil
+	}
+	m.FieldForm.Value = strconv.FormatInt(seconds, 10)
+	return sendFieldWrite(m)
+}
+
+// trimHash drops the "#" of a reference typed as #id.
+func trimHash(v string) string { return strings.TrimPrefix(v, "#") }
 
 func checkPriority(v string) error {
 	if n, err := strconv.Atoi(v); v != "-" && (err != nil || n < 0 || n > 4) {
