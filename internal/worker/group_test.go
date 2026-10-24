@@ -162,10 +162,17 @@ func TestAGroupThatCannotBeCheckedIsSaidOncePerReasonAndNamedInStatusAndRefusals
 		t.Fatalf("run %q: %q", run.Status, run.Summary)
 	}
 
-	h.eventually("the hold to be reported", func() bool { s, ok := h.runStatus(r, uid); return ok && s.Held && s.Pending == "" })
+	reported := func() {
+		t.Helper()
+		h.eventually("the hold to be reported to kata", func() bool {
+			s, ok := h.runStatus(r, uid)
+			return ok && s.Held && s.Pending == "" && s.ResumeRefusal != "" && !strings.Contains(s.ResumeRefusal, "being reported")
+		})
+	}
 
 	// look asks what status, resume and abandon say now; each asks the group again.
 	look := func() (status, resume, abandon string) {
+		reported()
 		s, _ := h.runStatus(r, uid)
 		return s.ResumeRefusal, h.ask(worker.Request{Op: "resume", Run: uid}).Error, h.ask(worker.Request{Op: "abandon", Run: uid, Actor: "ann"}).Error
 	}
