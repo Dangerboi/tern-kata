@@ -333,8 +333,8 @@ func weekdayList(field string) (string, bool) {
 		return "weekday", true
 	}
 	var names []string
-	for i, on := range set {
-		if on {
+	for _, i := range []int{1, 2, 3, 4, 5, 6, 0} { // Monday first, so a weekend reads "Sat, Sun"
+		if set[i] {
 			names = append(names, weekdayNames[i])
 		}
 	}
