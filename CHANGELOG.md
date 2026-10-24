@@ -95,6 +95,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - Backspace with the caret at the start of the Search field does nothing; it no longer resets the selection and runs the search again.
 - Scrolling the Issue detail (`↑`, `↓`, Page Up, Page Down) while it shows an error line or an Issue that is no longer available does nothing instead of ending the Pane with "Tern surface: unknown id main.columns.detail.viewport.content".
 - On Windows, two attaches that start at the same moment in a checkout with no Attachments yet both succeed; one used to fail with "Access is denied" while the other wrote `.kata-attachments/.gitignore`.
+- Switching daemons on the Daemons Page closes every card and form of the old daemon (Delete, Token and Revoke included) and drops its unsent drafts, the Notice saying how many; a Revoke confirmed after a switch no longer reaches the new daemon. Federation hub choices, the recovery command's token and a local entry's token follow the daemon the Pane is connected to, not the entry `active_daemon` names.
+- `ctrl+c` quits at once from every Popup card, `C`, `D`, `F`, `T` and the digits work on every non-text Federation screen (not while a leave or enrollment is out), erasing the Restore field forgets the Issue it found, and a Cron schedule of `7-7` reads as Sundays.
+- Backspace closes the help sheet and goes back across Projects where `esc` does, without opening the Menu; opening Pages or reloading Attention no longer clears the undo history.
 
 ## [0.3.0] - 2026-10-20
 
