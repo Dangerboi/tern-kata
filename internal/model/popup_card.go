@@ -257,9 +257,9 @@ func buildCards() []cardEntry {
 		{
 			card: CardField, open: func(m Model) bool { return m.FieldForm.Open },
 			modes: []Mode{ModeFieldForm}, mode: func(Model) Mode { return ModeFieldForm },
-			key:     updateFieldKey,
-			busy:    func(m Model) bool { return m.FieldForm.Saving },
-			fields:  []FieldSpec{}, input: true,
+			key:    updateFieldKey,
+			busy:   func(m Model) bool { return m.FieldForm.Saving },
+			fields: []FieldSpec{}, input: true,
 			editing: []fieldEditing{{mode: ModeFieldForm, actions: []Action{DeleteInput, ClearInput}, delete: "erase", clear: "clear input"}},
 		},
 		{

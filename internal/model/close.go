@@ -10,11 +10,11 @@ import (
 
 const ModeCloseForm Mode = "close-form"
 const (
-	OpenClose     Action = "close-issue"
-	ReopenAction  Action = "reopen-issue"
-	CloseSave     Action = "close-save"
-	CloseQuick    Action = "close-quick"
-	CloseCancel   Action = "close-cancel"
+	OpenClose    Action = "close-issue"
+	ReopenAction Action = "reopen-issue"
+	CloseSave    Action = "close-save"
+	CloseQuick   Action = "close-quick"
+	CloseCancel  Action = "close-cancel"
 )
 
 // The Close card's fields.

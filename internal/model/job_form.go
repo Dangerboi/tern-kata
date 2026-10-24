@@ -30,12 +30,12 @@ const (
 	PauseJobAction    Action = "pause-job"
 	ArchiveJobAction  Action = "archive-job"
 
-	JobNewline        Action = "job-newline"
-	JobSave           Action = "job-save"
-	JobCancel         Action = "job-cancel"
-	JobOverwrite      Action = "job-overwrite"
-	JobTakeNewer      Action = "job-take-newer"
-	JobDiscard        Action = "job-discard"
+	JobNewline   Action = "job-newline"
+	JobSave      Action = "job-save"
+	JobCancel    Action = "job-cancel"
+	JobOverwrite Action = "job-overwrite"
+	JobTakeNewer Action = "job-take-newer"
+	JobDiscard   Action = "job-discard"
 )
 
 // The Job card's fields.

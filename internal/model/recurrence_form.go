@@ -15,12 +15,12 @@ const (
 )
 
 const (
-	OpenRecurrenceAction     Action = "open-recurrence"
-	RecurrenceSave           Action = "recurrence-save"
-	RecurrenceCancel         Action = "recurrence-cancel"
-	RecurrenceStop           Action = "recurrence-stop"
-	RecurrenceStopConfirm    Action = "recurrence-stop-confirm"
-	RecurrenceStopKeep       Action = "recurrence-stop-keep"
+	OpenRecurrenceAction  Action = "open-recurrence"
+	RecurrenceSave        Action = "recurrence-save"
+	RecurrenceCancel      Action = "recurrence-cancel"
+	RecurrenceStop        Action = "recurrence-stop"
+	RecurrenceStopConfirm Action = "recurrence-stop-confirm"
+	RecurrenceStopKeep    Action = "recurrence-stop-keep"
 )
 
 // The Recurrence card's fields.

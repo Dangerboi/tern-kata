@@ -23,17 +23,17 @@ const (
 )
 
 const (
-	OpenWorkerCard       Action = "open-worker-card"
-	WorkerSave           Action = "worker-save"
-	WorkerCancel         Action = "worker-cancel"
-	WorkerRestartIdle    Action = "worker-restart-idle"
-	WorkerRestartNow     Action = "worker-restart-now"
-	WorkerLeave          Action = "worker-leave"
-	WorkerEdit           Action = "worker-edit"
-	WorkerSupervision    Action = "worker-supervision"
-	WorkerOffIdle        Action = "worker-off-idle"
-	WorkerOffNow         Action = "worker-off-now"
-	WorkerOffCancel      Action = "worker-off-cancel"
+	OpenWorkerCard    Action = "open-worker-card"
+	WorkerSave        Action = "worker-save"
+	WorkerCancel      Action = "worker-cancel"
+	WorkerRestartIdle Action = "worker-restart-idle"
+	WorkerRestartNow  Action = "worker-restart-now"
+	WorkerLeave       Action = "worker-leave"
+	WorkerEdit        Action = "worker-edit"
+	WorkerSupervision Action = "worker-supervision"
+	WorkerOffIdle     Action = "worker-off-idle"
+	WorkerOffNow      Action = "worker-off-now"
+	WorkerOffCancel   Action = "worker-off-cancel"
 )
 
 // WorkerDraftUID is the key of the $EDITOR round trip of worker.toml.
