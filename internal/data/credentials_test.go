@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	g "go.kenn.io/kata/pkg/client/generated"
 	"go.kenn.io/kata"
+	g "go.kenn.io/kata/pkg/client/generated"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 )

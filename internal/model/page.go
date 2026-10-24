@@ -68,7 +68,7 @@ type pageDef struct {
 	// lettered marks a Lettered Page: it has a letter for its chord and no number, is listed in the Menu, and is drawn in the Page
 	// bar only while shown. It does not act on the Pane's Project and has no reset rule. Its back key returns to the Page shown before.
 	lettered bool
-	action Action
+	action   Action
 	// second is what the Page's second column is; leavePage reads it.
 	second SecondColumn
 	// needs is the Page as the notice words it when the Pane has no Project; "" for the Issues Page, which needs none.
