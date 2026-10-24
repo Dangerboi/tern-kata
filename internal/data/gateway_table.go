@@ -358,7 +358,9 @@ func init() {
 		func(ctx context.Context, c *Client, cmd model.LookupDeleted) (model.Msg, error) {
 			return ok(c.LookupDeleted(ctx, cmd))
 		},
-		func(cmd model.LookupDeleted, err error) model.Msg { return model.DeletedLooked{Ref: cmd.Typed, Err: err} },
+		func(cmd model.LookupDeleted, err error) model.Msg {
+			return model.DeletedLooked{Ref: cmd.Typed, Err: err}
+		},
 		nil, nil)
 
 	daemonCall(
@@ -366,7 +368,9 @@ func init() {
 		func(ctx context.Context, c *Client, cmd model.RestoreIssueCmd) (model.Msg, error) {
 			return ok(c.RestoreIssue(ctx, cmd))
 		},
-		func(cmd model.RestoreIssueCmd, err error) model.Msg { return model.IssueRestored{UID: cmd.UID, Err: err} },
+		func(cmd model.RestoreIssueCmd, err error) model.Msg {
+			return model.IssueRestored{UID: cmd.UID, Err: err}
+		},
 		nil, nil)
 
 	daemonCallAt(

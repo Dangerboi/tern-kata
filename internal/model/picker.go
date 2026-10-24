@@ -50,7 +50,7 @@ const (
 type PickerEntry struct {
 	Collection
 	NewProject, Projects, Back, Lettered, Restore bool
-	Page                                 Page
+	Page                                          Page
 }
 
 // Key names the row, as Collection.Key names a Collection's.
