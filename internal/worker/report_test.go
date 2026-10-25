@@ -80,7 +80,7 @@ func TestANotifyRunSendsTheRequestItJournaledNotOneRecomputedAfterARestart(t *te
 
 func TestAHeldRunTellsTheIssuesOwnerAndTheRequestSurvivesACrash(t *testing.T) {
 	h := newHarness(t)
-	h.config += "[secrets]\ntoken = { env = \"TK_NEVER_SET\" }\n"
+	h.config = strings.Replace(h.config, "name = \"demo\"\n", "name = \"demo\"\nsecrets = [\"token\"]\n", 1) + "[secrets]\ntoken = { env = \"TK_NEVER_SET\" }\n"
 	if err := writeConfig(h); err != nil {
 		t.Fatal(err)
 	}

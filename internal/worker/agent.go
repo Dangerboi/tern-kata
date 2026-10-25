@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -206,8 +207,9 @@ func BuildPrompt(in PromptInput) (string, error) {
 	var b strings.Builder
 	b.WriteString("# This run\n\n")
 	fmt.Fprintf(&b, "Issue: %s", in.IssueRef)
-	if in.IssueTitle != "" {
-		fmt.Fprintf(&b, " - %s", in.IssueTitle)
+	// A title can hold newlines that would fake a prompt section, so it goes on the line as one run of words.
+	if title := strings.Join(strings.FieldsFunc(in.IssueTitle, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }), " "); title != "" {
+		fmt.Fprintf(&b, " - %s", title)
 	}
 	b.WriteString("\n")
 	if in.ExistingIssue {

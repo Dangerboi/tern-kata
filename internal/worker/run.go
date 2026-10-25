@@ -238,9 +238,13 @@ func (w *Worker) resolveIssue(ctx context.Context, j *Journal) (*JournalIssue, e
 // is never written to kata or the journal (ADR-0009).
 func (w *Worker) secrets(j *Journal) (map[string]string, error) {
 	out := map[string]string{}
+	pc, served := w.opt.Config.project(j.ProjectName)
 	for env, name := range j.SecretRefs {
 		if strings.HasPrefix(env, "KATA_") || strings.HasPrefix(env, "TERN_KATA_") {
 			return nil, fmt.Errorf("secret %q would set %s, a reserved name", name, env)
+		}
+		if !served || !pc.allowsSecret(name) {
+			return nil, fmt.Errorf("secret %q is not available to Project %s in worker.toml", name, j.ProjectName)
 		}
 		value, err := w.opt.Config.readSecret(name)
 		if err != nil {

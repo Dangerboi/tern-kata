@@ -30,6 +30,7 @@ func TestWorkerConfigIsStrict(t *testing.T) {
 		{"no default profile", "executor = \"laptop\"\n", "profiles.default is required"},
 		{"a relative checkout", base + "[checkouts]\nrepo = \"code/repo\"\n", "not an absolute directory"},
 		{"an allowlist naming a missing checkout", base + "[[projects]]\nname = \"demo\"\ncheckouts = [\"nope\"]\n", "not in [checkouts]"},
+		{"a Project listing an undefined secret", base + "[[projects]]\nname = \"demo\"\nsecrets = [\"nope\"]\n", "not in [secrets]"},
 		{"a literal secret", base + "[secrets]\nkey = { value = \"hunter2\" }\n", "unknown key"},
 		{"a secret with two sources", base + "[secrets]\nkey = { env = \"A\", file = \"/b\" }\n", "exactly one"},
 		{"max_timeout under default_timeout", base + "[limits]\ndefault_timeout = \"2h\"\nmax_timeout = \"1h\"\n", "max_timeout"},

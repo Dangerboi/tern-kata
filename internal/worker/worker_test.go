@@ -46,6 +46,7 @@ func newHarness(t *testing.T, stubArgs ...string) *harness {
 actor = "robot"
 [[projects]]
 name = "demo"
+commands = true
 [checkouts]
 repo = ` + quote(h.repo) + `
 [profiles.default]
@@ -502,7 +503,7 @@ func sameDir(a, b string) bool {
 func TestSecretsReachTheAgentButNeitherKataNorTheJournal(t *testing.T) {
 	h := newHarness(t)
 	t.Setenv("TK_TEST_SECRET", "s3cret-value")
-	h.config += "[secrets]\ntoken = { env = \"TK_TEST_SECRET\" }\n"
+	h.config = strings.Replace(h.config, "name = \"demo\"\n", "name = \"demo\"\nsecrets = [\"token\"]\n", 1) + "[secrets]\ntoken = { env = \"TK_TEST_SECRET\" }\n"
 	if err := os.WriteFile(h.dirs.ConfigPath(), []byte(h.config), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -528,13 +529,29 @@ func TestSecretsReachTheAgentButNeitherKataNorTheJournal(t *testing.T) {
 
 func TestAMissingSecretHoldsTheRunBeforeAnythingStarts(t *testing.T) {
 	h := newHarness(t)
-	h.config += "[secrets]\ntoken = { env = \"TK_NEVER_SET\" }\n"
+	h.config = strings.Replace(h.config, "name = \"demo\"\n", "name = \"demo\"\nsecrets = [\"token\"]\n", 1) + "[secrets]\ntoken = { env = \"TK_NEVER_SET\" }\n"
 	_ = os.WriteFile(h.dirs.ConfigPath(), []byte(h.config), 0o600)
 	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "needs secret", Prompt: "Do it.", Secrets: map[string]string{"STUB_SECRET": "token"}})
 	r := h.start(worker.Hooks{})
 	h.admitting(r)
 	run := h.settled(h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID)
 	if run.Status != "unknown" || !strings.HasPrefix(run.Summary, "secret_unavailable: ") || len(h.launches()) != 0 {
+		t.Fatalf("run is %q: %q; launches %d", run.Status, run.Summary, len(h.launches()))
+	}
+}
+
+func TestASecretTheProjectDoesNotListIsSetAsideAndHeldIfRunAnyway(t *testing.T) {
+	h := newHarness(t)
+	t.Setenv("TK_TEST_SECRET", "s3cret-value")
+	h.config += "[secrets]\ntoken = { env = \"TK_TEST_SECRET\" }\n"
+	if err := os.WriteFile(h.dirs.ConfigPath(), []byte(h.config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "needs secret", Prompt: "Do it.", Secrets: map[string]string{"STUB_SECRET": "token"}})
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	run := h.settled(h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID)
+	if run.Status != "unknown" || !strings.HasPrefix(run.Summary, "secret_unavailable: ") || !strings.Contains(run.Summary, "not available to Project demo") || len(h.launches()) != 0 {
 		t.Fatalf("run is %q: %q; launches %d", run.Status, run.Summary, len(h.launches()))
 	}
 }

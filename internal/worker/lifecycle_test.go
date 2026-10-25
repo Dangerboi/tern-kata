@@ -361,7 +361,7 @@ func TestTokenUsageSumsTheRetriesOfAWorkflowStep(t *testing.T) {
 // Old settled, fully reported runs are removed daily; held runs and recent ones stay.
 func TestSettledRunsOlderThanTwoWeeksAreRemovedAndHeldOnesStay(t *testing.T) {
 	h := newHarness(t)
-	h.config += "[secrets]\ntoken = { env = \"TK_NEVER_SET\" }\n"
+	h.config = strings.Replace(h.config, "name = \"demo\"\n", "name = \"demo\"\nsecrets = [\"token\"]\n", 1) + "[secrets]\ntoken = { env = \"TK_NEVER_SET\" }\n"
 	_ = os.WriteFile(h.dirs.ConfigPath(), []byte(h.config), 0o600)
 	h.capacity("3")
 	ok := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "fine", Prompt: "Do it.", Checkout: "repo"})

@@ -17,7 +17,7 @@ It needs kata v0.20.0 or newer and `omp` on `PATH`. On Windows, workflow command
 
 ## Trust
 
-> **Trust.** Anyone who can write jobs in a Project you list in `worker.toml` can run prompts and commands on this machine, as your user, with your files and credentials, and the agent runs unattended (`--approval-mode yolo`) in the checkout the job names. There are no command allowlists and no sandbox. List only Projects whose writers you trust, and keep secrets out of the checkouts a job can name.
+> **Trust.** Anyone who can write jobs in a Project you list in `worker.toml` can run prompts on this machine, as your user, with your files and credentials, and the agent runs unattended (`--approval-mode yolo`) in the checkout the job names. Workflow command steps run only for a Project with `commands = true`, and a job can use only the secrets its Project lists in `secrets`; both are off until you list them. There is no sandbox. List only Projects whose writers you trust, and keep secrets out of the checkouts a job can name.
 
 ## Set it up
 

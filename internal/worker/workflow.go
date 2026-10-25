@@ -196,6 +196,9 @@ func (w *Worker) planWorkflow(ctx context.Context, ps *projectState, job cronjob
 	plan := &WorkflowPlan{UID: wf.UID, EventUID: wf.DefinitionEventUID, Name: wf.Name, About: wf.About}
 	for _, s := range wf.Steps {
 		step := PlanStep{Key: s.Key, Kind: s.Kind, Command: s.Command, Prompt: s.Prompt, After: s.After, Retries: int(s.RetryCount())}
+		if s.Kind == cronjob.StepCommand && !ps.cfg.Commands {
+			return nil, refuse(fmt.Sprintf("step %q is a command, and Project %s does not allow command steps in worker.toml (commands = true)", s.Key, ps.cfg.Name))
+		}
 		if s.Kind == cronjob.StepPrompt {
 			step.ProfileName = jobProfile
 			if p, ok := optionMap(s.Options)["profile"].(string); ok && p != "" {

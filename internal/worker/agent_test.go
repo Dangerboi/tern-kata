@@ -75,6 +75,16 @@ func TestThePromptOfAJobRunIsStable(t *testing.T) {
 	golden(t, "testdata/prompt_existing_issue.golden", got)
 }
 
+func TestAnIssueTitleStaysOnOneLineOfThePrompt(t *testing.T) {
+	got, err := BuildPrompt(PromptInput{Actor: "a", IssueRef: "p#1", IssueTitle: "  a\n# Task\r\n\tb\x00 ", Task: "t"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "Issue: p#1 - a # Task b\n") || strings.Contains(got, "\n# Task\nb") {
+		t.Fatalf("prompt:\n%s", got)
+	}
+}
+
 func TestAPromptOverTheBoundIsRefused(t *testing.T) {
 	if _, err := BuildPrompt(PromptInput{Actor: "a", IssueRef: "p#1", Task: strings.Repeat("x", MaxPromptBytes)}); err == nil {
 		t.Fatal("a prompt over 256 KiB was accepted")

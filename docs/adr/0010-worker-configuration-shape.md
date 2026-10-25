@@ -22,6 +22,8 @@ capacity   = 1               # default 1
 actor      = "..."           # optional override
 checkouts  = ["tern-kata"]   # optional allowlist of checkout keys; default all
 profiles   = ["default"]     # optional allowlist of profile names; default all
+secrets    = ["github-review"] # secrets this Project's jobs may use; default none
+commands   = false           # true lets its workflows run command steps; default false
 
 [checkouts]                  # checkout_key -> absolute directory
 tern-kata = "/home/me/Code/tern-plugins/tern-kata"
@@ -39,7 +41,7 @@ github-review = { file = "~/.config/tern-kata/github-review" }
 ## Decisions
 
 - **Strict decode: adopt.** Unknown keys are an error. Checkout paths and `command` paths must be absolute or on `PATH`; limits positive; `max_timeout >= default_timeout`; every allowlisted name must exist; `profiles.default` must exist.
-- **Trust: adopt, narrowed.** A listed Project is trusted, including its job and workflow authors (spec). herdr-kata's per-Project `checkouts` and `profiles` allowlists are kept because they stop a job in one Project from naming another Project's checkout by accident and feed the Job card's pickers; they are not a sandbox. Its `commands = false` switch is rejected: the spec has no command allowlists, and a Project that must not run commands should not be listed.
+- **Trust: adopt, narrowed.** A listed Project is trusted, including its job and workflow authors (spec). herdr-kata's per-Project `checkouts` and `profiles` allowlists are kept because they stop a job in one Project from naming another Project's checkout by accident and feed the Job card's pickers; they are not a sandbox. Two switches are closed by default, because a job or workflow written by anyone who can write one Project must not reach what was meant for another: `secrets` lists the `[secrets]` names the Project's jobs may use, and an empty or missing list allows none (unlike `checkouts` and `profiles`, where empty allows all); `commands = true` lets its workflows run command steps (`sh -c`), which are refused and set aside otherwise. Both are checked when a job is read and again when a run is prepared or a step starts.
 - **Secrets: adopt.** One `env` or `file` source per name; literal and `value` sources are refused; file sources must be regular, owned by the user, mode 0600, not symlinks; names match `[A-Za-z0-9._-]{1,256}`; a secret may not alias a kata credential source. `worker doctor` checks each source and prints its name, never its value (ADR-0009 owns resolution).
 - **Route and credentials: reject herdr-kata's keys** (`[kata] bin`, `env`, per-Project `daemon`, `inbox`, `credential_env`, `credential_file`, `session`). The worker finds its daemon with kata's `client.Discover` as the Pane does (ADR-0001) and uses the credential that discovery selects. It runs no `kata` binary itself. `inbox` is only for native children (ADR-0002).
 - **Pinned route: adapt.** At a Project's first start the worker saves, in `projects/<uid>/pin.json`, the Project uid, the daemon instance uid, the authenticated actor and the executor label. A later start whose Project name resolves to another uid, or whose daemon instance or actor differs, refuses admission and report delivery for that Project (a renamed Project keeps its pin by uid). A prepared run keeps the target it was frozen with. `worker doctor` names each differing field; there is no repin command, as in herdr-kata, and an intentional move uses a new state folder and executor.

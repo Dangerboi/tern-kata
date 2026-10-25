@@ -206,7 +206,7 @@ func TestOnlyTwoProjectsStartAtATime(t *testing.T) {
 	h := newHarness(t)
 	h.kata.Project(t, "second")
 	h.kata.Project(t, "third")
-	h.config = strings.Replace(h.config, "[[projects]]\nname = \"demo\"\n", "[[projects]]\nname = \"demo\"\n[[projects]]\nname = \"second\"\n[[projects]]\nname = \"third\"\n", 1)
+	h.config = strings.Replace(h.config, "[[projects]]\nname = \"demo\"\ncommands = true\n", "[[projects]]\nname = \"demo\"\ncommands = true\n[[projects]]\nname = \"second\"\n[[projects]]\nname = \"third\"\n", 1)
 	if err := os.WriteFile(h.dirs.ConfigPath(), []byte(h.config), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +240,7 @@ func TestAProjectRemovedFromTheConfigGetsItsSavedReportDeliveredAndItsLeaseOwner
 	h := newHarness(t)
 	old := h.kata.Project(t, "old")
 	job := h.kata.CreateJob(t, old, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
-	h.config = strings.Replace(h.config, "[[projects]]\nname = \"demo\"\n", "[[projects]]\nname = \"demo\"\n[[projects]]\nname = \"old\"\n", 1)
+	h.config = strings.Replace(h.config, "[[projects]]\nname = \"demo\"\ncommands = true\n", "[[projects]]\nname = \"demo\"\ncommands = true\n[[projects]]\nname = \"old\"\n", 1)
 	if err := os.WriteFile(h.dirs.ConfigPath(), []byte(h.config), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -284,7 +284,7 @@ func TestAProjectRemovedFromTheConfigIsNotRetiredWhileItsPinnedInstanceIsNotTheD
 	h := newHarness(t)
 	old := h.kata.Project(t, "old")
 	job := h.kata.CreateJob(t, old, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
-	h.config = strings.Replace(h.config, "[[projects]]\nname = \"demo\"\n", "[[projects]]\nname = \"demo\"\n[[projects]]\nname = \"old\"\n", 1)
+	h.config = strings.Replace(h.config, "[[projects]]\nname = \"demo\"\ncommands = true\n", "[[projects]]\nname = \"demo\"\ncommands = true\n[[projects]]\nname = \"old\"\n", 1)
 	if err := os.WriteFile(h.dirs.ConfigPath(), []byte(h.config), 0o600); err != nil {
 		t.Fatal(err)
 	}

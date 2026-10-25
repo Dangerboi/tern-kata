@@ -284,6 +284,22 @@ func TestAWorkflowTheWorkerDoesNotRunIsRefusedWithItsReason(t *testing.T) {
 	}
 }
 
+func TestACommandStepNeedsTheProjectsCommandsSwitch(t *testing.T) {
+	h := newHarness(t)
+	h.config = strings.Replace(h.config, "commands = true\n", "", 1)
+	if err := os.WriteFile(h.dirs.ConfigPath(), []byte(h.config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	wf := h.kata.CreateWorkflow(t, h.proj, "plain", workertest.Step{Key: "build", Command: "echo hi"})
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "plain job", Workflow: wf.UID, Checkout: "repo"})
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	resp := h.ask(worker.Request{Op: "run", Job: job.UID})
+	if resp.OK || !strings.Contains(resp.Error, `step "build" is a command`) || !strings.Contains(resp.Error, "commands = true") {
+		t.Fatalf("ok=%v %q, want a refusal naming the commands switch", resp.OK, resp.Error)
+	}
+}
+
 func TestACommandStepKeepsTheStartAndEndOfItsOutputWithAMarkerBetween(t *testing.T) {
 	h := newHarness(t)
 	_, job := h.workflowJob("chatty", workertest.Step{Key: "noise", Command: "echo START; head -c 2000000 /dev/zero | tr '\\0' x; echo; echo END"})

@@ -94,6 +94,8 @@ func jobProblem(cfg Config, pc ProjectConfig, job cronjob.Job, wf *Workflow, wfE
 			return fmt.Sprintf("secret %q would set %s, a reserved name", name, env)
 		case !ok:
 			return fmt.Sprintf("it names secret %q, which is not defined in worker.toml", name)
+		case !pc.allowsSecret(name):
+			return fmt.Sprintf("it names secret %q, which is not available to Project %s in worker.toml", name, pc.Name)
 		}
 	}
 	timeout := cfg.defaultTimeout()
@@ -123,6 +125,9 @@ func jobProblem(cfg Config, pc ProjectConfig, job cronjob.Job, wf *Workflow, wfE
 		return fmt.Sprintf("it runs workflow %q, which names profile %q where the job runs with %q", wf.Name, p, profile)
 	}
 	for _, s := range wf.Steps {
+		if s.Kind == cronjob.StepCommand && !pc.Commands {
+			return fmt.Sprintf("it runs workflow %q, whose step %q is a command, and Project %s does not allow command steps in worker.toml (commands = true)", wf.Name, s.Key, pc.Name)
+		}
 		if s.Kind != cronjob.StepPrompt {
 			continue
 		}

@@ -16,6 +16,14 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - Ctrl+c, a terminate or a hangup stops a subcommand cleanly and it exits 128 plus the signal's number (130 for ctrl+c); a second one ends it at once. A terminate or hangup closes the Pane cleanly, and the foreground worker stops on a hangup as on ctrl+c.
 - After a lone `--`, `--help` and `--version` are names, not flags, so `tern-kata attach <ref> -- --help` attaches a file called `--help`.
 - The Pane responds faster in large Projects. Moving the selection in the list, the Issue detail or the Board reuses the rows already worked out instead of rebuilding them on every key, and a live refresh builds them once. The Jobs Page counts each cron job's "about N Issues a day" warning once per job revision when the jobs are read, instead of on every key, which kept it slow with a job that fires every minute. The Collection and Issue detail reads from a local daemon over its Unix socket now arrive uncompressed, so neither the daemon nor the Pane spends time on gzip for each refresh.
+- A worker serving several Projects keeps each one's secrets to itself: a Project's jobs may use only the `[secrets]` names its `[[projects]]` table lists in `secrets = [...]`, and an empty or missing list allows none. A job naming an unlisted secret is set aside, and is held `secret_unavailable` if run anyway. A `worker.toml` whose jobs use secrets needs the list added.
+- Workflow command steps (`sh -c`) run only for a Project with `commands = true` in `worker.toml`; without it, a job whose workflow has a command step is set aside with that reason. A `worker.toml` whose workflows run commands needs the switch added.
+- The worker writes an Issue's title into the agent's prompt as one line, so a title with line breaks cannot pass for another section of the prompt.
+- The worker's control socket answers only its own user: the socket is mode 0600, a state folder open to others is narrowed to 0700 and one that is a symlink or someone else's is refused, and on Linux and macOS a connection from another user is closed. A run or Project uid that is not a ULID is refused before it names a file.
+- Attaching and detaching refuse an Issue uid from kata that is not a ULID, so a daemon's answer cannot point the Attachment store outside its folder.
+- The live event stream fails, and reconnects, on a line or an event over 1 MiB, instead of holding however much a daemon sends.
+- Subcommands and the foreground worker show control characters in text from kata (titles, attachment names, a daemon's error message) as `�`, so an escape sequence in it cannot reach the terminal.
+- Leaving a federated Project sends the hub's token over plain HTTP only when your own catalog entry for the hub sets `allow_insecure`; the binding's flag, which the spoke's daemon reports, no longer counts.
 
 ## [0.4.0] - 2026-10-25
 

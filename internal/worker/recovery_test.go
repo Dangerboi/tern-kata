@@ -164,7 +164,7 @@ func TestAWorkerKilledAtAnyJournalPointNeverSendsThePromptAgain(t *testing.T) {
 // reports it, and the agent that was never started stays unstarted.
 func TestAHoldKilledBeforeItIsReportedIsStillReportedAfterARestart(t *testing.T) {
 	h := newHarness(t)
-	h.config += "[secrets]\ntoken = { env = \"TK_NEVER_SET\" }\n"
+	h.config = strings.Replace(h.config, "name = \"demo\"\n", "name = \"demo\"\nsecrets = [\"token\"]\n", 1) + "[secrets]\ntoken = { env = \"TK_NEVER_SET\" }\n"
 	_ = os.WriteFile(h.dirs.ConfigPath(), []byte(h.config), 0o600)
 	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "needs secret", Prompt: "Do it.", Secrets: map[string]string{"STUB_SECRET": "token"}})
 	uid, _ := h.killedAt("held", job)

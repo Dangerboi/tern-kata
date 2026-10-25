@@ -19,6 +19,8 @@ The file is decoded strictly (an unknown key is an error) and read once at start
 | `[[projects]]` `actor` | Optional. Overrides the worker's `actor` for this Project; the order is Project `actor`, then top-level `actor`, then the default. |
 | `[[projects]]` `checkouts` | Optional allowlist of checkout keys; default all. |
 | `[[projects]]` `profiles` | Optional allowlist of profile names; default all. |
+| `[[projects]]` `secrets` | The `[secrets]` names this Project's jobs may use. Unlike `checkouts` and `profiles`, an empty or missing list allows none; a job naming an unlisted secret is set aside, and a name `[secrets]` does not define is refused at load. |
+| `[[projects]]` `commands` | `true` lets the Project's workflows run command steps (`sh -c`); default `false`. A job whose workflow has a command step is set aside without it. |
 | `[checkouts]` | A job's `checkout_key` mapped to an absolute directory. |
 | `[profiles.<name>]` | A job's `options.profile` (default `default`); `default` is required. Keys: `command`, `model`, `thinking`, `args`. |
 | `[secrets]` | A job's `secret_refs` name mapped to where the value lives; never a literal. |
@@ -42,6 +44,8 @@ capacity  = 1                  # runs at once; default 1
 actor     = "dangerboi"        # optional: overrides the worker's actor for this Project
 checkouts = ["tern-kata"]      # optional allowlist of checkout keys; default all
 profiles  = ["default"]        # optional allowlist of profile names; default all
+secrets   = ["github-review"]  # secrets its jobs may use; default none
+commands  = false              # true lets its workflows run command steps; default false
 
 [checkouts]                    # a job's checkout_key -> absolute directory
 tern-kata = "/home/me/Code/tern-kata"

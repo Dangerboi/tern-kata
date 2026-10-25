@@ -96,6 +96,11 @@ type ProjectConfig struct {
 	Actor     string   `toml:"actor"`
 	Checkouts []string `toml:"checkouts"`
 	Profiles  []string `toml:"profiles"`
+	// Secrets names the [secrets] entries this Project's jobs may use. Unlike the other lists an empty one allows
+	// nothing: a job written for one Project must not reach a secret meant for another.
+	Secrets []string `toml:"secrets"`
+	// Commands lets this Project's workflows run command steps (sh -c); off unless set.
+	Commands bool `toml:"commands"`
 }
 
 // DefaultCommand is the agent program a Profile runs when its Command is blank, and the one `worker init` writes.
@@ -234,6 +239,11 @@ func (c *Config) validate() error {
 				return fmt.Errorf("projects.%s: profile %q is not in [profiles]", p.Name, name)
 			}
 		}
+		for _, name := range p.Secrets {
+			if _, ok := c.Secrets[name]; !ok {
+				return fmt.Errorf("projects.%s: secret %q is not in [secrets]", p.Name, name)
+			}
+		}
 	}
 	return nil
 }
@@ -288,6 +298,11 @@ func (p ProjectConfig) allowsCheckout(key string) bool {
 
 func (p ProjectConfig) allowsProfile(name string) bool {
 	return len(p.Profiles) == 0 || slices.Contains(p.Profiles, name)
+}
+
+// allowsSecret is true only for a secret the Project lists; an empty list allows none.
+func (p ProjectConfig) allowsSecret(name string) bool {
+	return slices.Contains(p.Secrets, name)
 }
 
 // command is the profile's program, DefaultCommand when unset.
