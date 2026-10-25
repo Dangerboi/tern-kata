@@ -13,6 +13,7 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/atomicfile"
 	"github.com/Dangerboi/tern-kata/internal/model"
+	oklogulid "github.com/oklog/ulid/v2"
 )
 
 // attachmentStoreName is the Attachment store's folder in the primary checkout.
@@ -24,14 +25,25 @@ type attachmentStore struct{ root string }
 
 func (s attachmentStore) dir() string { return filepath.Join(s.root, attachmentStoreName) }
 
-func (s attachmentStore) issueDir(uid string) string { return filepath.Join(s.dir(), uid) }
+// issueDir is the Issue's folder. The UID comes from the daemon's answer and becomes a path, so only a ULID is taken: anything
+// else could name a folder outside the store.
+func (s attachmentStore) issueDir(uid string) (string, error) {
+	if _, err := oklogulid.ParseStrict(uid); err != nil {
+		return "", fmt.Errorf("kata answered with Issue UID %q, which is not a ULID; nothing was copied or deleted", uid)
+	}
+	return filepath.Join(s.dir(), uid), nil
+}
 
 // ensure makes the Issue's folder and writes the store's .gitignore with "*" when it is missing or empty; a non-empty one is the
 // user's and stays. The file is renamed into place, so a failed write never leaves an empty .gitignore behind. Two attaches that
 // start together both find it missing; Windows refuses the second rename while the first holds the file, and that attach goes
 // on once the .gitignore the other wrote is there.
 func (s attachmentStore) ensure(uid string) error {
-	if err := os.MkdirAll(s.issueDir(uid), 0o755); err != nil { //nolint:gosec // G301: attachments live in the checkout, readable as it is
+	folder, err := s.issueDir(uid)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(folder, 0o755); err != nil { //nolint:gosec // G301: attachments live in the checkout, readable as it is
 		return err
 	}
 	ignore := filepath.Join(s.dir(), ".gitignore")
@@ -40,7 +52,7 @@ func (s attachmentStore) ensure(uid string) error {
 	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	err := atomicfile.Write(ignore, []byte("*\n"), atomicfile.Options{Mode: 0o600})
+	err = atomicfile.Write(ignore, []byte("*\n"), atomicfile.Options{Mode: 0o600})
 	var lost *atomicfile.RenameError
 	if errors.As(err, &lost) {
 		if info, serr := os.Stat(ignore); serr == nil && info.Size() > 0 {
@@ -53,6 +65,10 @@ func (s attachmentStore) ensure(uid string) error {
 // put copies source into the Issue's folder under the lowest free name for base that is not in taken, never overwriting a file,
 // and returns that name and the copy's path. A failed copy leaves nothing behind.
 func (s attachmentStore) put(ctx context.Context, uid, source, base string, taken []string) (name, path string, err error) {
+	folder, err := s.issueDir(uid)
+	if err != nil {
+		return "", "", err
+	}
 	if err := s.ensure(uid); err != nil {
 		return "", "", err
 	}
@@ -64,7 +80,7 @@ func (s attachmentStore) put(ctx context.Context, uid, source, base string, take
 		if slices.Contains(taken, name) {
 			continue
 		}
-		path = filepath.Join(s.issueDir(uid), name)
+		path = filepath.Join(folder, name)
 		if err := copyNew(source, path); errors.Is(err, fs.ErrExist) {
 			continue
 		} else if err != nil {
@@ -77,7 +93,11 @@ func (s attachmentStore) put(ctx context.Context, uid, source, base string, take
 // remove deletes the copy at path, saying what became of it. Only a file inside this Issue's folder is touched, since a
 // pointer is data any writer can set; anything else is left.
 func (s attachmentStore) remove(uid, path string) (model.FileFate, error) {
-	rel, err := filepath.Rel(s.issueDir(uid), path)
+	folder, err := s.issueDir(uid)
+	if err != nil {
+		return model.FileLeft, err
+	}
+	rel, err := filepath.Rel(folder, path)
 	if err != nil || !filepath.IsAbs(path) || rel == "." || !filepath.IsLocal(rel) {
 		return model.FileLeft, nil //nolint:nilerr // a path outside the Issue's folder is left, not a failure, as the doc says
 	}
