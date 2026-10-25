@@ -28,6 +28,17 @@ func TestExitStatusFollowsTheCommandLineContract(t *testing.T) {
 	}
 }
 
+func TestKataTextReachesTheTerminalWithoutControlSequences(t *testing.T) {
+	var out bytes.Buffer
+	text := "Fix \x1b]0;owned\x07title\x1b[2J é \u009b31m\tdone\n"
+	if _, err := fmt.Fprint(printableWriter{&out}, text); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := out.String(), "Fix \ufffd]0;owned\ufffdtitle\ufffd[2J é \ufffd31m\tdone\n"; got != want {
+		t.Fatalf("printed %q, want %q", got, want)
+	}
+}
+
 // complete is what bash offers for the words of a tern-kata command line, the last one being completed.
 func complete(t *testing.T, words ...string) []string {
 	t.Helper()

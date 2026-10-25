@@ -20,7 +20,7 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "tern-kata:", err)
+		fmt.Fprintln(os.Stderr, "tern-kata:", printable(err.Error()))
 		os.Exit(exitStatus(err))
 	}
 }
@@ -167,14 +167,16 @@ func lookupEnv(key string) (string, bool) {
 	return strings.TrimSpace(string(out)), true
 }
 
-// runCommand runs one of the subcommands, which need no Tern.
+// runCommand runs one of the subcommands, which need no Tern. What they print goes through printable: it holds text kata
+// answered.
 func runCommand(ctx context.Context, plan LaunchPlan) error {
+	out := printableWriter{os.Stdout}
 	if isWorkerCommand(plan) {
 		env, err := newWorkerEnv(plan)
 		if err != nil {
 			return err
 		}
-		return runWorkerCommand(ctx, plan, env, os.Stdout)
+		return runWorkerCommand(ctx, plan, env, out)
 	}
-	return runSubcommand(ctx, plan, data.NewGateway(data.LocateWithKata).WithHost(data.HostName()), os.Stdout)
+	return runSubcommand(ctx, plan, data.NewGateway(data.LocateWithKata).WithHost(data.HostName()), out)
 }

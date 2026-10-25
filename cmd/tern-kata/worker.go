@@ -41,7 +41,7 @@ func newWorkerEnv(plan LaunchPlan) (workerEnv, error) {
 		}
 	}
 	host, _ := os.Hostname()
-	return workerEnv{Dirs: dirs, Locate: data.LocateWithKata, Log: os.Stderr, Version: buildVersion(), Supervisor: os.Getenv("TERN_KATA_SUPERVISOR"), Dir: dir, Hostname: host}, nil
+	return workerEnv{Dirs: dirs, Locate: data.LocateWithKata, Log: printableWriter{os.Stderr}, Version: buildVersion(), Supervisor: os.Getenv("TERN_KATA_SUPERVISOR"), Dir: dir, Hostname: host}, nil
 }
 
 // isWorkerCommand reports whether the plan is `run` or one of the `worker` forms, which need no workspace or gateway.
