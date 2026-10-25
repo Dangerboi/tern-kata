@@ -123,7 +123,7 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 		add("FAIL", "kata Projects", err.Error(), "")
 		return r
 	}
-	served := map[string]bool{}
+	served, upgrade := map[string]bool{}, false
 	for _, pc := range cfg.Projects {
 		served[pc.Name] = true
 		i := slices.IndexFunc(projects, func(p Project) bool { return p.Name == pc.Name })
@@ -131,7 +131,7 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 			add("FAIL", "Project "+pc.Name, "kata has no such Project", "Create it, or fix the name in worker.toml.")
 			continue
 		}
-		o.checkProject(ctx, cfg, pc, projects[i], add)
+		upgrade = o.checkProject(ctx, cfg, pc, projects[i], add) || upgrade
 	}
 	for _, p := range projects {
 		if served[p.Name] {
@@ -148,13 +148,17 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 			}
 		}
 		if n > 0 {
-			add("note", "Project "+p.Name, fmt.Sprintf("has %d adapter %s and is not served", n, plural(n, "job", "jobs")), "To serve it (anyone who can write its jobs can then run prompts and commands here), add to worker.toml:\n[[projects]]\nname = "+fmt.Sprintf("%q", p.Name))
+			add("note", "Project "+p.Name, fmt.Sprintf("has %d adapter %s and is not served", n, plural(n, "job", "jobs")), "To serve it (anyone who can write its jobs can then run prompts here, and commands once it has commands = true), add to worker.toml:\n[[projects]]\nname = "+fmt.Sprintf("%q", p.Name))
 		}
+	}
+	if upgrade {
+		add("note", "upgrade", "some jobs are set aside only because worker.toml does not list their secrets or allow command steps; `tern-kata worker upgrade` adds what they use.", "")
 	}
 	return r
 }
 
-func (o DoctorOptions) checkProject(ctx context.Context, cfg Config, pc ProjectConfig, p Project, add func(level, subject, detail, fix string)) {
+// checkProject reports whether it set a job aside only for something `worker upgrade` can add.
+func (o DoctorOptions) checkProject(ctx context.Context, cfg Config, pc ProjectConfig, p Project, add func(level, subject, detail, fix string)) (upgrade bool) {
 	subject := "Project " + pc.Name
 	caps, err := o.Kata.Capabilities(ctx, p.ID)
 	switch {
@@ -197,6 +201,7 @@ func (o DoctorOptions) checkProject(ctx context.Context, cfg Config, pc ProjectC
 		aside, warnings := definitionNotes(ctx, o.Kata, cfg, pc, p.ID, jobs, o.Clock.Now())
 		for _, n := range aside {
 			add("FAIL", subject, fmt.Sprintf("job %q is set aside: %s", n.Name, n.Text), "Edit the job, or worker.toml, so the worker can run it.")
+			upgrade = upgrade || n.Upgrade
 		}
 		for _, n := range warnings {
 			add("note", subject, fmt.Sprintf("job %q %s", n.Name, n.Text), "")
@@ -237,6 +242,7 @@ func (o DoctorOptions) checkProject(ctx context.Context, cfg Config, pc ProjectC
 			add("FAIL", subject, fmt.Sprintf("run %s needs inspection: %s", j.RunUID, why), "Read the run in kata (`kata cron run show`) and decide what it should say; the worker never overwrites it.")
 		}
 	}
+	return upgrade
 }
 
 func errString(err error) string {

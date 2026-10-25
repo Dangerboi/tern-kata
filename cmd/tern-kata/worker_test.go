@@ -293,7 +293,7 @@ func TestPlanLaunchWorkerSubcommands(t *testing.T) {
 	if err != nil || plan.Subcommand != "worker" || !plan.Takeover || len(plan.Operands) != 0 || plan.Actor != "bo" {
 		t.Fatalf("worker: %+v, %v", plan, err)
 	}
-	for _, args := range [][]string{{"worker", "status"}, {"worker", "doctor"}} {
+	for _, args := range [][]string{{"worker", "status"}, {"worker", "doctor"}, {"worker", "upgrade"}} {
 		if plan, err := PlanLaunch(args, lookupFrom(nil), "v"); err != nil || plan.Subcommand != "worker" || plan.Operands[0] != args[1] {
 			t.Fatalf("%v: %+v, %v", args, plan, err)
 		}
@@ -311,6 +311,8 @@ func TestPlanLaunchWorkerSubcommands(t *testing.T) {
 		"run":                            "usage: tern-kata run <job-uid>",
 		"run a b":                        "usage: tern-kata run <job-uid>",
 		"worker stop now":                "usage: tern-kata worker",
+		"worker upgrade now":             "usage: tern-kata worker",
+		"worker upgrade --now":           "--now applies to `tern-kata worker stop` only",
 		"worker status --now":            "--now applies to `tern-kata worker stop` only",
 		"worker status --takeover":       "--takeover applies to `tern-kata worker` only",
 		"worker resume":                  "usage: tern-kata worker",
@@ -325,10 +327,42 @@ func TestPlanLaunchWorkerSubcommands(t *testing.T) {
 			t.Errorf("%q: %v, want a refused command line (exit 2) saying %q", args, err, want)
 		}
 	}
-	for _, line := range []string{"tern-kata run <job-uid>", "tern-kata worker status", "tern-kata worker stop [--now]", "tern-kata worker doctor", "tern-kata worker [--takeover]", "tern-kata worker resume <run-uid>", "tern-kata worker abandon <run-uid>"} {
+	for _, line := range []string{"tern-kata run <job-uid>", "tern-kata worker status", "tern-kata worker stop [--now]", "tern-kata worker doctor", "tern-kata worker upgrade", "tern-kata worker [--takeover]", "tern-kata worker resume <run-uid>", "tern-kata worker abandon <run-uid>"} {
 		if !strings.Contains(usage, line) {
 			t.Errorf("--help lacks %q", line)
 		}
+	}
+}
+
+func TestWorkerUpgradeAddsWhatTheJobsUseAndSaysSoOnceOnly(t *testing.T) {
+	f := newWorkerFixture(t, "[secrets]\ntoken = { env = \"TK_UPGRADE_TOKEN\" }\n")
+	wf := f.kata.CreateWorkflow(t, f.proj, "build", workertest.Step{Key: "make", Command: "make"})
+	f.kata.CreateJob(t, f.proj, workertest.Job{Name: "uses secret", Prompt: "Do it.", Secrets: map[string]string{"TOKEN": "token"}})
+	f.kata.CreateJob(t, f.proj, workertest.Job{Name: "builds", Workflow: wf.UID, Checkout: "repo"})
+	before, err := os.ReadFile(f.env.Dirs.ConfigPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"upgrade"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "Project demo: added secrets = [\"token\"], commands = true\n"
+	if !strings.HasPrefix(out, want) || !strings.Contains(out, "Wrote "+f.env.Dirs.ConfigPath()) {
+		t.Fatalf("upgrade printed %q, want %q then a note that worker.toml was written", out, want)
+	}
+	after, err := os.ReadFile(f.env.Dirs.ConfigPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wantText := strings.Replace(string(before), "name = \"demo\"\n", "name = \"demo\"\nsecrets = [\"token\"]\ncommands = true\n", 1); string(after) != wantText {
+		t.Fatalf("worker.toml is now\n%s\nwant\n%s", after, wantText)
+	}
+
+	out, err = f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"upgrade"}})
+	if err != nil || out != "worker.toml is unchanged.\n" {
+		t.Fatalf("second upgrade printed %q, %v", out, err)
 	}
 }
 
@@ -516,7 +550,7 @@ func TestNewWorkerEnvReadsTheWorkingDirectoryOnlyForInitAndAdd(t *testing.T) {
 	}
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	for _, operands := range [][]string{nil, {"status"}, {"stop"}, {"edit"}, {"doctor"}, {"abandon", "x"}} {
+	for _, operands := range [][]string{nil, {"status"}, {"stop"}, {"edit"}, {"upgrade"}, {"doctor"}, {"abandon", "x"}} {
 		if _, err := newWorkerEnv(LaunchPlan{Subcommand: "worker", Operands: operands}); err != nil {
 			t.Errorf("worker %v from a removed folder: %v", operands, err)
 		}

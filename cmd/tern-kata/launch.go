@@ -245,8 +245,8 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 		return LaunchPlan{}, fmt.Errorf("recur: --stop takes no schedule flags")
 	case plan.Subcommand == "run" && len(operands) != 1:
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata run <job-uid>")
-	case plan.Subcommand == "worker" && !settlesHeldRun(operands, plan.Takeover) && (len(operands) > 1 || len(operands) == 1 && !slices.Contains([]string{"status", "doctor", "init", "add", "edit", "stop"}, operands[0])):
-		return LaunchPlan{}, fmt.Errorf("usage: tern-kata worker [--takeover] | tern-kata worker init | tern-kata worker add | tern-kata worker edit | tern-kata worker status [--json] | tern-kata worker stop [--now] | tern-kata worker doctor | tern-kata worker resume <run-uid> | tern-kata worker abandon <run-uid>")
+	case plan.Subcommand == "worker" && !settlesHeldRun(operands, plan.Takeover) && (len(operands) > 1 || len(operands) == 1 && !slices.Contains([]string{"status", "doctor", "init", "add", "edit", "upgrade", "stop"}, operands[0])):
+		return LaunchPlan{}, fmt.Errorf("usage: tern-kata worker [--takeover] | tern-kata worker init | tern-kata worker add | tern-kata worker edit | tern-kata worker upgrade | tern-kata worker status [--json] | tern-kata worker stop [--now] | tern-kata worker doctor | tern-kata worker resume <run-uid> | tern-kata worker abandon <run-uid>")
 	case plan.Subcommand == "worker" && plan.Now && !slices.Equal(operands, []string{"stop"}):
 		return LaunchPlan{}, fmt.Errorf("worker: --now applies to `tern-kata worker stop` only")
 	case len(plan.InitFlags) > 0 && !slices.Equal(operands, []string{"init"}):
@@ -346,6 +346,7 @@ Usage:
                         [--model <model>] [--thinking <level>]
   tern-kata worker add
   tern-kata worker edit
+  tern-kata worker upgrade
   tern-kata worker status [--json]
   tern-kata worker stop [--now]
   tern-kata worker doctor
@@ -395,6 +396,12 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 replaces the file, else the editor reopens with the problem as a comment
                                 at the top; an unchanged or empty result cancels. Says whether a worker
                                 runs and that ` + "`tern-kata worker stop`" + ` makes it reload
+  worker upgrade                give the jobs that exist today what they had before a Project had to list
+                                its secrets and allow command steps: add secrets = [...] (the secrets its
+                                jobs use) and commands = true (a workflow has a command step) to each
+                                [[projects]] table that lacks the key, leaving every other line and any
+                                key you wrote as it is. Says what it added and what it could not, and
+                                that a running worker reloads with ` + "`tern-kata worker stop`" + `
   worker status [--json]        say what the running worker serves, runs and refuses; --json prints
                                 the status as the worker's control socket answers it
   worker stop [--now]           stop the running worker: it admits nothing new, lets its runs in flight

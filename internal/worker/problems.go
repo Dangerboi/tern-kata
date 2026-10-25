@@ -21,6 +21,9 @@ type JobNote struct {
 	UID  string
 	Name string
 	Text string
+	// Upgrade is set when the job is set aside only for a secret its Project does not list or a command step its
+	// Project does not allow, which `worker upgrade` can add.
+	Upgrade bool
 }
 
 // definitionNotes reads the Project's adapter jobs against the worker's config: the jobs it sets aside with their
@@ -49,8 +52,8 @@ func definitionNotes(ctx context.Context, k *Kata, cfg Config, pc ProjectConfig,
 		}
 		note := JobNote{UID: job.UID, Name: job.Name}
 		wf, wfErr := workflows[job.Definition.Action.WorkflowUID], workflowErrs[job.Definition.Action.WorkflowUID]
-		if why := jobProblem(cfg, pc, job, wf, wfErr); why != "" {
-			note.Text = why
+		if why, upgrade := jobProblem(cfg, pc, job, wf, wfErr); why != "" {
+			note.Text, note.Upgrade = why, upgrade
 			aside = append(aside, note)
 			continue
 		}
@@ -68,34 +71,34 @@ func definitionNotes(ctx context.Context, k *Kata, cfg Config, pc ProjectConfig,
 // jobProblem is why the worker will not run an adapter job as defined, empty when it will: a definition problem of the
 // module, a profile, checkout or secret worker.toml does not map, a timeout or prompt over its bound, or a workflow it
 // does not run (ADR-0008). wf is the job's workflow when it runs one, wfErr why it was not read.
-func jobProblem(cfg Config, pc ProjectConfig, job cronjob.Job, wf *Workflow, wfErr error) string {
+func jobProblem(cfg Config, pc ProjectConfig, job cronjob.Job, wf *Workflow, wfErr error) (why string, upgrade bool) {
 	d := job.Definition
 	if why := job.Problem(); why != "" {
-		return why
+		return why, false
 	}
 	if d.Action.Kind == cronjob.ActionNotify {
-		return ""
+		return "", false
 	}
 	if len(d.Action.Prompt) > MaxPromptBytes {
-		return fmt.Sprintf("its prompt is over %d KiB", MaxPromptBytes>>10)
+		return fmt.Sprintf("its prompt is over %d KiB", MaxPromptBytes>>10), false
 	}
 	profile := cmp.Or(d.Profile, "default")
 	if _, ok := cfg.Profiles[profile]; !ok || !pc.allowsProfile(profile) {
-		return fmt.Sprintf("it names profile %q, which is not available to Project %s in worker.toml", profile, pc.Name)
+		return fmt.Sprintf("it names profile %q, which is not available to Project %s in worker.toml", profile, pc.Name), false
 	}
 	if key := d.CheckoutKey; key != "" {
 		if _, ok := cfg.Checkouts[key]; !ok || !pc.allowsCheckout(key) {
-			return fmt.Sprintf("it names checkout %q, which is not available to Project %s in worker.toml", key, pc.Name)
+			return fmt.Sprintf("it names checkout %q, which is not available to Project %s in worker.toml", key, pc.Name), false
 		}
 	}
 	for env, name := range d.SecretRefs {
 		switch _, ok := cfg.Secrets[name]; {
 		case strings.HasPrefix(env, "KATA_") || strings.HasPrefix(env, "TERN_KATA_"):
-			return fmt.Sprintf("secret %q would set %s, a reserved name", name, env)
+			return fmt.Sprintf("secret %q would set %s, a reserved name", name, env), false
 		case !ok:
-			return fmt.Sprintf("it names secret %q, which is not defined in worker.toml", name)
+			return fmt.Sprintf("it names secret %q, which is not defined in worker.toml", name), false
 		case !pc.allowsSecret(name):
-			return fmt.Sprintf("it names secret %q, which is not available to Project %s in worker.toml", name, pc.Name)
+			return fmt.Sprintf("it names secret %q, which is not available to Project %s in worker.toml", name, pc.Name), true
 		}
 	}
 	timeout := cfg.defaultTimeout()
@@ -103,30 +106,30 @@ func jobProblem(cfg Config, pc ProjectConfig, job cronjob.Job, wf *Workflow, wfE
 		timeout = time.Duration(d.TimeoutSeconds) * time.Second
 	}
 	if timeout > cfg.maxTimeout() {
-		return fmt.Sprintf("it asks for a timeout of %s, over max_timeout %s", timeout, cfg.maxTimeout())
+		return fmt.Sprintf("it asks for a timeout of %s, over max_timeout %s", timeout, cfg.maxTimeout()), false
 	}
 	if d.Action.WorkflowUID == "" {
-		return ""
+		return "", false
 	}
 	switch {
 	case errors.Is(wfErr, ErrNotFound):
-		return fmt.Sprintf("it runs workflow %s, which kata does not hold", d.Action.WorkflowUID)
+		return fmt.Sprintf("it runs workflow %s, which kata does not hold", d.Action.WorkflowUID), false
 	case wfErr != nil:
-		return "its workflow could not be read: " + wfErr.Error()
+		return "its workflow could not be read: " + wfErr.Error(), false
 	case wf == nil:
-		return ""
+		return "", false
 	case wf.Deleted:
-		return fmt.Sprintf("it runs workflow %q, which is archived", wf.Name)
+		return fmt.Sprintf("it runs workflow %q, which is archived", wf.Name), false
 	}
 	if why := workflowRefusal(*wf, cfg.MaxRunPrompts()); why != "" {
-		return fmt.Sprintf("it runs workflow %q, which the worker does not run: %s", wf.Name, why)
+		return fmt.Sprintf("it runs workflow %q, which the worker does not run: %s", wf.Name, why), false
 	}
 	if p, ok := optionMap(wf.Options)["profile"].(string); ok && p != "" && p != profile {
-		return fmt.Sprintf("it runs workflow %q, which names profile %q where the job runs with %q", wf.Name, p, profile)
+		return fmt.Sprintf("it runs workflow %q, which names profile %q where the job runs with %q", wf.Name, p, profile), false
 	}
 	for _, s := range wf.Steps {
 		if s.Kind == cronjob.StepCommand && !pc.Commands {
-			return fmt.Sprintf("it runs workflow %q, whose step %q is a command, and Project %s does not allow command steps in worker.toml (commands = true)", wf.Name, s.Key, pc.Name)
+			return fmt.Sprintf("it runs workflow %q, whose step %q is a command, and Project %s does not allow command steps in worker.toml (commands = true)", wf.Name, s.Key, pc.Name), true
 		}
 		if s.Kind != cronjob.StepPrompt {
 			continue
@@ -136,8 +139,8 @@ func jobProblem(cfg Config, pc ProjectConfig, job cronjob.Job, wf *Workflow, wfE
 			name = p
 		}
 		if _, ok := cfg.Profiles[name]; !ok || !pc.allowsProfile(name) {
-			return fmt.Sprintf("it runs workflow %q, whose step %q names profile %q, which is not available to Project %s in worker.toml", wf.Name, s.Key, name, pc.Name)
+			return fmt.Sprintf("it runs workflow %q, whose step %q names profile %q, which is not available to Project %s in worker.toml", wf.Name, s.Key, name, pc.Name), false
 		}
 	}
-	return ""
+	return "", false
 }

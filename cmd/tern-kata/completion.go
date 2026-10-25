@@ -9,7 +9,7 @@ import (
 )
 
 // workerForms are the operands `tern-kata worker` takes first.
-var workerForms = []string{"init", "add", "edit", "status", "stop", "doctor", "resume", "abandon"}
+var workerForms = []string{"init", "add", "edit", "upgrade", "status", "stop", "doctor", "resume", "abandon"}
 
 // writeCompletion is `tern-kata completion <shell>`: the script that completes tern-kata's subcommands, worker forms and
 // flags in that shell. Where nothing fits (attach's files) the shell completes file names.
@@ -47,7 +47,7 @@ _tern_kata() {
 				init) words="%[5]s" ;;
 				status) words="--json" ;;
 				stop) words="--now" ;;
-				resume | abandon) [[ $cur == -* ]] && words="--as" ;;
+				resume | abandon | upgrade) [[ $cur == -* ]] && words="--as" ;;
 				esac
 			fi
 			;;

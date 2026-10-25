@@ -17,7 +17,7 @@ It needs kata v0.20.0 or newer and `omp` on `PATH`. On Windows, workflow command
 
 ## Trust
 
-> **Trust.** Anyone who can write jobs in a Project you list in `worker.toml` can run prompts on this machine, as your user, with your files and credentials, and the agent runs unattended (`--approval-mode yolo`) in the checkout the job names. Workflow command steps run only for a Project with `commands = true`, and a job can use only the secrets its Project lists in `secrets`; both are off until you list them. There is no sandbox. List only Projects whose writers you trust, and keep secrets out of the checkouts a job can name.
+> **Trust.** Anyone who can write jobs in a Project you list in `worker.toml` can run prompts on this machine, as your user, with your files and credentials, and the agent runs unattended (`--approval-mode yolo`) in the checkout the job names. Workflow command steps run only for a Project with `commands = true`, and a job can use only the secrets its Project lists in `secrets`; both are off until you list them (for a `worker.toml` from before this, `tern-kata worker upgrade` lists what the existing jobs use). There is no sandbox. List only Projects whose writers you trust, and keep secrets out of the checkouts a job can name.
 
 ## Set it up
 
@@ -66,6 +66,7 @@ tern-kata worker init                    # writes worker.toml for this Project
 tern-kata worker init --executor laptop --actor dangerboi --command omp --model anthropic/claude-sonnet-5-5 --thinking medium
 tern-kata worker add                     # in each further Project's directory
 tern-kata worker edit                    # change the file by hand
+tern-kata worker upgrade                 # list the secrets and command steps existing jobs use
 tern-kata worker doctor                  # check the result
 ```
 
@@ -80,8 +81,8 @@ After any of them, a running worker reads the new file only after `tern-kata wor
 After `worker init` in the `acme-shop` checkout and `worker add` in the `acme-infra` checkout, the file reads (comments abridged):
 
 ```toml
-# Anyone who can write jobs in a listed Project can run prompts and commands
-# on this machine as you.
+# Anyone who can write jobs in a listed Project can run prompts on this machine as you,
+# and commands too in a Project you give commands = true.
 executor = "laptop"
 # actor = "dangerboi"
 

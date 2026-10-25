@@ -58,6 +58,8 @@ func runWorkerCommand(ctx context.Context, plan LaunchPlan, env workerEnv, out i
 		return setupWorkerConfig(plan.Operands[0] == "add", plan, env, out)
 	case len(plan.Operands) == 1 && plan.Operands[0] == "edit":
 		return editWorkerConfig(ctx, env, out)
+	case len(plan.Operands) == 1 && plan.Operands[0] == "upgrade":
+		return upgradeWorkerConfig(ctx, env, out)
 	case len(plan.Operands) == 1 && plan.Operands[0] == "status":
 		resp, err := worker.Ask(ctx, env.Dirs, worker.Request{Op: "status"})
 		if err != nil {
@@ -162,6 +164,44 @@ func runJobNow(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Write
 	}
 	_, err = fmt.Fprintf(out, "Run %s of job %q in Project %s accepted; follow it with `tern-kata worker status`.\n", resp.Run.RunUID, resp.Run.JobName, resp.Run.Project)
 	return err
+}
+
+// upgradeWorkerConfig is `worker upgrade`: it adds the secrets and commands keys the Projects' jobs need to worker.toml,
+// all or nothing, and says what it added and what it could not.
+func upgradeWorkerConfig(ctx context.Context, env workerEnv, out io.Writer) error {
+	path := env.Dirs.ConfigPath()
+	raw, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return subcommandError{fmt.Errorf("no worker config at %s; run `tern-kata worker init` first", path)}
+	}
+	if err != nil {
+		return subcommandError{err}
+	}
+	cfg, err := worker.LoadConfig(path)
+	if err != nil {
+		return subcommandError{err}
+	}
+	target, err := env.Locate(ctx, "")
+	if err != nil {
+		return subcommandError{err}
+	}
+	text, report, err := worker.Upgrade(ctx, worker.NewKata(target.Client), cfg, string(raw))
+	if err != nil {
+		return subcommandError{err}
+	}
+	for _, line := range report {
+		if _, err := fmt.Fprintln(out, line); err != nil {
+			return err
+		}
+	}
+	if text == string(raw) {
+		_, err = fmt.Fprintln(out, "worker.toml is unchanged.")
+		return err
+	}
+	if err := worker.ReplaceConfig(path, string(raw), text); err != nil {
+		return subcommandError{err}
+	}
+	return reportEdit(ctx, env, path, out)
 }
 
 func runDoctor(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Writer) error {

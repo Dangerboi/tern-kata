@@ -19,8 +19,8 @@ The file is decoded strictly (an unknown key is an error) and read once at start
 | `[[projects]]` `actor` | Optional. Overrides the worker's `actor` for this Project; the order is Project `actor`, then top-level `actor`, then the default. |
 | `[[projects]]` `checkouts` | Optional allowlist of checkout keys; default all. |
 | `[[projects]]` `profiles` | Optional allowlist of profile names; default all. |
-| `[[projects]]` `secrets` | The `[secrets]` names this Project's jobs may use. Unlike `checkouts` and `profiles`, an empty or missing list allows none; a job naming an unlisted secret is set aside, and a name `[secrets]` does not define is refused at load. |
-| `[[projects]]` `commands` | `true` lets the Project's workflows run command steps (`sh -c`); default `false`. A job whose workflow has a command step is set aside without it. |
+| `[[projects]]` `secrets` | The `[secrets]` names this Project's jobs may use. Unlike `checkouts` and `profiles`, an empty or missing list allows none; a job naming an unlisted secret is set aside, and a name `[secrets]` does not define is refused at load. `tern-kata worker upgrade` adds the names the Project's jobs use (see [Upgrading](#upgrading-an-existing-worker-config)). |
+| `[[projects]]` `commands` | `true` lets the Project's workflows run command steps (`sh -c`); default `false`. A job whose workflow has a command step is set aside without it. `tern-kata worker upgrade` adds it when a workflow has one. |
 | `[checkouts]` | A job's `checkout_key` mapped to an absolute directory. |
 | `[profiles.<name>]` | A job's `options.profile` (default `default`); `default` is required. Keys: `command`, `model`, `thinking`, `args`. |
 | `[secrets]` | A job's `secret_refs` name mapped to where the value lives; never a literal. |
@@ -87,6 +87,14 @@ github-review = { file = "~/.config/tern-kata/github-review" }   # a private (06
 - **The checkout key** is the Project name lowercased, every character outside `a-z 0-9 _ -` replaced by `-`. If `[checkouts]` already has that key for another directory, `-2`, `-3` and so on is appended; the same key and directory is reused. The checkout is the directory holding the Binding's `.kata.toml`.
 - **`edit` and Edit** work on a temporary copy: the command opens it in `$VISUAL` (else `$EDITOR`), the card in `$EDITOR` as a `.toml` file. The result goes through the same check, and is refused when `worker.toml` changed while you edited it: the command names the file holding your edit, the card keeps the text, reads the file again and says it lacks that change, so `e` and a further save replace the file deliberately. A result that does not load reopens the editor on your text with the problem as `#!` comment lines at the top, stripped again before the next check; the card instead names the problem and keeps your text for the next `e`. An unchanged (line endings aside) or empty result changes nothing.
 - A running worker reads the file only at start: [stop it](#stopping-the-worker) to apply a change.
+
+### Upgrading an existing worker config
+
+`secrets` and `commands` are closed by default, so a `worker.toml` written before they existed sets aside every job that uses a secret or a command step. `tern-kata worker doctor` ends with a note suggesting the fix when that is the reason a job is set aside. `tern-kata worker upgrade` (no operands) gives those jobs what they had before:
+
+- For each `[[projects]]` table it reads the Project's jobs and the workflows they run from the kata daemon. A table with no `secrets` key gets `secrets = [...]`, the sorted names the jobs use that `[secrets]` defines; a table with no `commands` key gets `commands = true` when a workflow has a command step. A key you wrote is never changed, even `secrets = []` or `commands = false`: what the jobs need beyond it is printed instead, as is a secret a job names that `[secrets]` does not define (it is not added, since the file would not load).
+- Every other line of the file stays byte for byte. The new lines go after the last key of the table. A file that lists Projects some other way than `[[projects]]` tables (an inline `projects = [...]`) is refused with a request to edit it by hand.
+- It is all or nothing: if any listed Project is missing from kata or its jobs or workflows cannot be read, the error names it and nothing is written. The result goes through the same check and atomic write as `worker edit`. It prints one line per Project changed, one per need it could not meet, and then that `worker.toml` is unchanged, or that it was written (a running worker reads it only at start: `tern-kata worker stop` makes it reload).
 
 ## Stopping the worker
 
