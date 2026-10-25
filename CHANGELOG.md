@@ -4,6 +4,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-25
+
 ### Added
 
 - `tern-kata completion bash|zsh|fish` prints a shell completion script for the subcommands, the worker forms and their flags: `source <(tern-kata completion bash)` (or `zsh`), or `tern-kata completion fish | source`.
@@ -168,7 +170,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `install.ps1` parses, keeps `%VAR%` entries in `PATH` and says when it changes `PATH`, so programs started from Explorer, such as Tern, see it.
 - **Open kata**, `F9` and kata links open tern-kata in a new tab, in the focused Pane's directory, when Tern can't split the focused Pane, instead of doing nothing.
 
-[Unreleased]: https://github.com/Dangerboi/tern-kata/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Dangerboi/tern-kata/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Dangerboi/tern-kata/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Dangerboi/tern-kata/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Dangerboi/tern-kata/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Dangerboi/tern-kata/compare/v0.1.1...v0.2.0
