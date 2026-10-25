@@ -94,6 +94,25 @@ func (p federatedPair) spokes(t *testing.T) []model.FederationSpoke {
 	return as[model.FederationLoaded](t, run(t, newGateway(t, newLocator(p.spoke.target())), model.LoadFederation{Workspace: t.TempDir(), Request: 1})).Spokes
 }
 
+// The hub token goes in plaintext only when the user's own catalog entry allows it: the binding's allow_insecure is the spoke
+// daemon's report and does not count once the user's token is sent.
+func TestTheHubTokenFollowsTheCatalogEntrysAllowInsecure(t *testing.T) {
+	for _, tc := range []struct {
+		entry string
+		ok    bool
+	}{{"", false}, {"allow_insecure = true\n", true}} {
+		t.Setenv("KATA_HOME", t.TempDir())
+		t.Setenv("HUB_TOKEN", "hub-token")
+		config := "[[daemon]]\nname = \"hub\"\nurl = \"http://hub.example\"\ntoken_env = \"HUB_TOKEN\"\n" + tc.entry
+		if err := os.WriteFile(filepath.Join(os.Getenv("KATA_HOME"), "config.toml"), []byte(config), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := hubAdminClient(context.Background(), "http://hub.example/", true); (err == nil) != tc.ok {
+			t.Errorf("entry %q: %v, want ok %v with the binding insecure", tc.entry, err, tc.ok)
+		}
+	}
+}
+
 func TestLeaveRevokesTheSpokesGrantOnTheHubThenDetachesTheReplica(t *testing.T) {
 	pair := startPair(t)
 	left := pair.leave(t, pair.draft())
