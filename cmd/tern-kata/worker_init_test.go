@@ -79,7 +79,7 @@ func TestWorkerInitWritesALoadableFileForTheBoundProject(t *testing.T) {
 	if info, _ := os.Stat(env.Dirs.ConfigPath()); info.Mode().Perm() != 0o600 && filepath.Separator == '/' {
 		t.Errorf("mode %v", info.Mode())
 	}
-	for _, want := range []string{env.Dirs.ConfigPath(), "worker doctor", "10 seconds", "run prompts and commands on this machine as you"} {
+	for _, want := range []string{env.Dirs.ConfigPath(), "worker doctor", "10 seconds", "run prompts on this machine as you"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}

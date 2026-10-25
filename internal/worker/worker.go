@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"os"
 	"path/filepath"
@@ -189,28 +190,44 @@ func (w *Worker) Run(ctx context.Context) error {
 	return nil
 }
 
-// secureStateDir creates the state folder and refuses one the worker cannot trust: a symlink, a file, or a folder
-// owned by another user. A folder of its own with group or other access is tightened to 0700 (not on Windows, where
-// mode bits mean nothing). The control socket and the run journals live inside it.
+// secureStateDir creates the state folder and refuses one the worker cannot trust: a file, a folder owned by another
+// user, or a symbolic link that dangles or leads to something that is not a folder. A link is followed and the checks
+// apply to the real folder it leads to. A folder of its own with group or other access is tightened to 0700 (not on
+// Windows, where mode bits mean nothing). The control socket and the run journals live inside it.
 func secureStateDir(dir string) error {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
+	if _, err := os.Lstat(dir); err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return err
+		}
 	}
-	info, err := os.Lstat(dir)
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		target, linkErr := os.Readlink(dir)
+		if linkErr != nil {
+			return err
+		}
+		return fmt.Errorf("the state folder %s is a symbolic link to %s, which is not a reachable folder: %w; make it lead to a folder of your own, or remove it (the state folder is $XDG_STATE_HOME/tern-kata, else ~/.local/state/tern-kata)", dir, target, err)
+	}
+	info, err := os.Stat(resolved)
 	if err != nil {
 		return err
 	}
+	where := dir
+	if resolved != dir {
+		where = dir + " (which leads to " + resolved + ")"
+	}
 	switch {
-	case info.Mode()&os.ModeSymlink != 0:
-		return fmt.Errorf("the state folder %s is a symbolic link; point the state folder in worker.toml at the real folder", dir)
 	case !info.IsDir():
-		return fmt.Errorf("the state folder %s is not a folder", dir)
+		return fmt.Errorf("the state folder %s is not a folder; make it a folder of your own (the state folder is $XDG_STATE_HOME/tern-kata, else ~/.local/state/tern-kata)", where)
 	case foreignOwned(info):
-		return fmt.Errorf("the state folder %s belongs to another user; use a folder of your own", dir)
+		return fmt.Errorf("the state folder %s belongs to another user; use a folder of your own (the state folder is $XDG_STATE_HOME/tern-kata, else ~/.local/state/tern-kata)", where)
 	}
 	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
-		if err := os.Chmod(dir, 0o700); err != nil { //nolint:gosec // G302: a folder needs its search bit; 0o700 is owner-only
-			return fmt.Errorf("the state folder %s is open to other users and cannot be restricted: %w", dir, err)
+		if err := os.Chmod(resolved, 0o700); err != nil { //nolint:gosec // G302: a folder needs its search bit; 0o700 is owner-only
+			return fmt.Errorf("the state folder %s is open to other users and cannot be restricted: %w", where, err)
 		}
 	}
 	return nil

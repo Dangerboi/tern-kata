@@ -70,7 +70,7 @@ Only when the user asks. In a directory bound to the Project (a `.kata.toml`):
 - A running worker reads `worker.toml` only at start. `tern-kata worker stop` (default: its runs finish first; `--now` ends it and holds the runs it interrupts `interrupted`) makes the plugin start a fresh one, unless supervision is off (a `worker.manual` file beside `worker.toml`).
 - The Pane does all of this from the Worker card (`W` on the Jobs Page): Set up, Serve this Project, Edit (`e`), the restart choice, and `s` for supervision. Leave the card to people.
 
-Anyone who can write jobs in a listed Project can run prompts and commands on the machine as the user, so listing a Project is the user's decision, with the trust note read.
+Anyone who can write jobs in a listed Project can run prompts on the machine as the user, and commands too in a Project with `commands = true`, so listing a Project is the user's decision, with the trust note read.
 
 **Never stop, edit, reconfigure or restart the user's worker, turn its supervision off or on (`worker.manual`), or list a Project in `worker.toml` unless the user asked you to.** It may be running other runs for them, and a stop ends or interrupts those. If a change is needed, say what and let them decide. Guide: https://github.com/Dangerboi/tern-kata/blob/main/docs/guide/worker.md
 

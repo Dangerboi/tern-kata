@@ -16,7 +16,7 @@ import (
 )
 
 // TrustNote is the warning printed and written wherever a config lists a Project.
-const TrustNote = "Anyone who can write jobs in a listed Project can run prompts and commands on this machine as you."
+const TrustNote = "Anyone who can write jobs in a listed Project can run prompts on this machine as you, and commands too in a Project you give commands = true."
 
 var (
 	// ErrConfigExists is InitConfig refusing to overwrite a worker.toml.
@@ -133,7 +133,9 @@ func ExecutorName(host string) string {
 }
 
 func projectBlock(project, key string) string {
-	return "[[projects]]\nname = " + tomlString(project) + "\ncapacity = 1\ncheckouts = [" + tomlString(key) + "]\n"
+	return "[[projects]]\nname = " + tomlString(project) + "\ncapacity = 1\ncheckouts = [" + tomlString(key) + "]\n" +
+		"# secrets = []       # the [secrets] names this Project's jobs may use; none unless listed\n" +
+		"# commands = false   # true lets its workflows run command steps (sh -c)\n"
 }
 
 // starterConfig is the worker.toml `worker init` writes; a value the Setup leaves empty keeps its commented default.
@@ -182,6 +184,7 @@ command = ` + tomlString(command) + `
 # args = []
 
 # Named secrets a job may ask for; this file holds no value, only where to read it.
+# A Project can use a secret only when its secrets list names it.
 # [secrets]
 # GITHUB_TOKEN = { env = "GITHUB_TOKEN" }
 `

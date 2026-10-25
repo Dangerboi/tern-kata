@@ -25,6 +25,31 @@ func TestProfileDefaultAndStarterConfigShareTheDefaultCommand(t *testing.T) {
 	}
 }
 
+func TestInitAndAddWriteTheClosedByDefaultKeysAsComments(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "worker.toml")
+	if _, err := InitConfig(path, Setup{Binding: Binding{Project: "work", Checkout: t.TempDir()}, Executor: "box"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddProject(path, Binding{Project: "demo", Checkout: t.TempDir()}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(path)
+	for _, want := range []string{"# secrets = []", "# commands = false"} {
+		if n := strings.Count(string(got), want); n != 2 {
+			t.Errorf("%q appears %d times, want once per Project:\n%s", want, n, got)
+		}
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("the file does not load: %v\n%s", err, got)
+	}
+	for _, p := range cfg.Projects {
+		if len(p.Secrets) != 0 || p.Commands {
+			t.Errorf("Project %s opened by a comment: %+v", p.Name, p)
+		}
+	}
+}
+
 func TestAddProjectPutsTheCheckoutInsideAQuotedCheckoutsTable(t *testing.T) {
 	for _, header := range []string{`["checkouts"]`, `['checkouts']`} {
 		t.Run(header, func(t *testing.T) {

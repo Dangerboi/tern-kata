@@ -30,12 +30,37 @@ func TestStartingTightensTheStateFolderAndTheSocket(t *testing.T) {
 	}
 }
 
-// A state folder that is a symbolic link is refused before anything is listened on.
-func TestAStateFolderThatIsASymlinkIsRefused(t *testing.T) {
+// A state folder that is a symbolic link to a folder of the user's own is followed: the folder it leads to is
+// tightened and holds the control socket.
+func TestAStateFolderThatIsASymlinkIsFollowedAndTightened(t *testing.T) {
 	h := newHarness(t)
-	real := t.TempDir()
+	target := filepath.Join(t.TempDir(), "real-state")
+	if err := os.Mkdir(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	link := filepath.Join(t.TempDir(), "state")
-	if err := os.Symlink(real, link); err != nil {
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	h.start(worker.Hooks{}, func(o *worker.Options) { o.Dirs.State = link })
+	if info, err := os.Stat(target); err != nil || info.Mode().Perm() != 0o700 {
+		t.Fatalf("target folder mode = %v, %v; want 0700", info.Mode().Perm(), err)
+	}
+	if info, err := os.Stat(filepath.Join(target, "worker.sock")); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("socket mode = %v, %v; want 0600", info.Mode().Perm(), err)
+	}
+}
+
+// A state folder that is a symbolic link to nothing is refused, naming the link and its target, before anything is
+// listened on.
+func TestAStateFolderThatIsADanglingSymlinkIsRefused(t *testing.T) {
+	h := newHarness(t)
+	target := filepath.Join(t.TempDir(), "gone")
+	link := filepath.Join(t.TempDir(), "state")
+	if err := os.Symlink(target, link); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := worker.LoadConfig(h.dirs.ConfigPath())
@@ -49,11 +74,11 @@ func TestAStateFolderThatIsASymlinkIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = w.Run(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "symbolic link") {
-		t.Fatalf("Run = %v; want a symbolic link refusal", err)
+	if err == nil || !strings.Contains(err.Error(), link) || !strings.Contains(err.Error(), target) {
+		t.Fatalf("Run = %v; want a refusal naming %s and %s", err, link, target)
 	}
-	if _, err := os.Stat(filepath.Join(real, "worker.sock")); err == nil {
-		t.Fatal("a socket was created behind the link")
+	if _, err := os.Lstat(target); err == nil {
+		t.Fatal("the folder behind the dangling link was created")
 	}
 }
 

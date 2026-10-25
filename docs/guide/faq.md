@@ -42,7 +42,7 @@ A running worker reads `worker.toml` only at start. Answer the Worker card's res
 
 ### Is it safe to list a Project in `worker.toml`?
 
-Only if you trust everyone who can write jobs in it. They can run prompts and commands on your machine as your user, unattended, in the checkout the job names. There is no sandbox. See [Trust](worker.md#trust).
+Only if you trust everyone who can write jobs in it. They can run prompts on your machine as your user, and commands too in a Project with `commands = true`, unattended, in the checkout the job names. A job can use only the secrets its Project lists in `secrets`. There is no sandbox. See [Trust](worker.md#trust).
 
 ### No worker runs. Why?
 
