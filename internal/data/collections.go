@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"go.kenn.io/kata/pkg/client"
@@ -23,7 +24,7 @@ func (c *Client) ReadSnapshot(ctx context.Context, cmd model.ReadSnapshot) (mode
 	if cmd.ETag != "" {
 		options.Header = &g.ReadUISnapshotHeaders{IfNoneMatch: &cmd.ETag}
 	}
-	response, err := c.ReadUISnapshotWithResponse(ctx, options)
+	response, err := c.ReadUISnapshotWithResponse(ctx, options, plainOverSocket)
 	if client.StatusCode(err) == http.StatusNotModified {
 		result.NotModified = true
 		return result, nil
@@ -45,7 +46,7 @@ func (c *Client) ReadSnapshot(ctx context.Context, cmd model.ReadSnapshot) (mode
 // translateSnapshot is the one place kata's snapshot body becomes the model's Collection snapshot; its links carry each
 // end's status, so the model counts children from them.
 func translateSnapshot(s *g.UISnapshotResponseBody) model.Snapshot {
-	snapshot := model.Snapshot{Cursor: s.Cursor}
+	snapshot := model.Snapshot{Cursor: s.Cursor, Issues: slices.Grow([]model.Issue(nil), len(s.Collection)), Links: slices.Grow([]model.Link(nil), len(s.CollectionLinks))}
 	for i := range s.Collection {
 		snapshot.Issues = append(snapshot.Issues, translateIssue(&s.Collection[i]))
 	}

@@ -113,14 +113,14 @@ func TestFailedSnapshotShowsAnErrorWhileLoadingAndGoesStaleOtherwise(t *testing.
 	m, _ := model.Update(model.Model{Workspace: "/repo"}, model.Start{Workspace: "/repo"})
 	m, cmds := model.Update(m, model.ProjectLoaded{Project: workProject})
 	read := readIn(t, cmds)
-	if m, _ = model.Update(m, model.SnapshotFailed{Request: read.Request, Err: boom}); m.Loading || m.Err != boom || m.Stale {
+	if m, _ = model.Update(m, model.SnapshotFailed{Request: read.Request, Err: boom}); m.Loading || !errors.Is(m.Err, boom) || m.Stale {
 		t.Fatalf("first load failed: loading=%v err=%v stale=%v", m.Loading, m.Err, m.Stale)
 	}
 
 	m = loadedWork(t)
 	m, cmds = model.Update(m, model.StreamEvent{Generation: m.StreamGeneration, ID: m.Cursor + 1, Type: "issue.updated"})
 	read = readIn(t, cmds)
-	if m, _ = model.Update(m, model.SnapshotFailed{Request: read.Request, Err: boom}); m.Err != nil || !m.Stale || m.StreamErr != boom {
+	if m, _ = model.Update(m, model.SnapshotFailed{Request: read.Request, Err: boom}); m.Err != nil || !m.Stale || !errors.Is(m.StreamErr, boom) {
 		t.Fatalf("refresh failed: err=%v stale=%v stream err=%v", m.Err, m.Stale, m.StreamErr)
 	}
 }

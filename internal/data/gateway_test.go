@@ -36,7 +36,7 @@ type kataServer struct {
 	intercept atomic.Pointer[func(http.ResponseWriter, *http.Request) bool]
 }
 
-func startKata(t *testing.T, version string) *kataServer {
+func startKata(t testing.TB, version string) *kataServer {
 	t.Helper()
 	t.Setenv("KATA_HOME", t.TempDir())
 	t.Setenv("KATA_SERVER", "")
@@ -52,7 +52,7 @@ func startKata(t *testing.T, version string) *kataServer {
 	return serve(t, service.Handler(), version)
 }
 
-func serve(t *testing.T, service http.Handler, version string) *kataServer {
+func serve(t testing.TB, service http.Handler, version string) *kataServer {
 	t.Helper()
 	srv := &kataServer{handler: service}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -100,7 +100,7 @@ func (l *locator) locate(context.Context, string) (Target, error) {
 	return *l.target.Load(), nil
 }
 
-func newGateway(t *testing.T, l *locator) *Gateway {
+func newGateway(t testing.TB, l *locator) *Gateway {
 	t.Helper()
 	gateway := NewGateway(l.locate)
 	state := t.TempDir()
@@ -109,7 +109,7 @@ func newGateway(t *testing.T, l *locator) *Gateway {
 	return gateway
 }
 
-func run(t *testing.T, gateway *Gateway, cmd model.Cmd) model.Msg {
+func run(t testing.TB, gateway *Gateway, cmd model.Cmd) model.Msg {
 	t.Helper()
 	messages := make(chan model.Msg, 1)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -124,7 +124,7 @@ func run(t *testing.T, gateway *Gateway, cmd model.Cmd) model.Msg {
 	}
 }
 
-func as[T model.Msg](t *testing.T, msg model.Msg) T {
+func as[T model.Msg](t testing.TB, msg model.Msg) T {
 	t.Helper()
 	got, ok := msg.(T)
 	if !ok {
@@ -134,7 +134,7 @@ func as[T model.Msg](t *testing.T, msg model.Msg) T {
 }
 
 // project binds a fresh workspace to a Project on the daemon behind gateway.
-func project(t *testing.T, gateway *Gateway, name string) (string, model.Project) {
+func project(t testing.TB, gateway *Gateway, name string) (string, model.Project) {
 	t.Helper()
 	workspace := t.TempDir()
 	saved := as[model.ProjectSaved](t, run(t, gateway, model.BindProject{Workspace: workspace, Actor: "tester", Name: name}))
@@ -692,7 +692,7 @@ func TestGatewayLocatorFailureIsRetriedOnTheNextCommand(t *testing.T) {
 	l.err.Store(&boom)
 	gateway := newGateway(t, l)
 
-	if got := as[model.SnapshotFailed](t, run(t, gateway, model.ReadSnapshot{Request: 1})); got.Err != boom {
+	if got := as[model.SnapshotFailed](t, run(t, gateway, model.ReadSnapshot{Request: 1})); !errors.Is(got.Err, boom) {
 		t.Fatalf("got %v, want the locator's error", got.Err)
 	}
 	l.err.Store(nil)
@@ -978,7 +978,7 @@ func TestGatewayStreamDropReportsAnUnreachableDaemon(t *testing.T) {
 	gateway := newGateway(t, l)
 
 	messages, done := stream(t, gateway, model.Subscribe{Generation: 1})
-	if dropped := as[model.StreamDropped](t, receive(t, messages)); dropped.Generation != 1 || dropped.Err != boom {
+	if dropped := as[model.StreamDropped](t, receive(t, messages)); dropped.Generation != 1 || !errors.Is(dropped.Err, boom) {
 		t.Fatalf("dropped %+v", dropped)
 	}
 	<-done

@@ -165,15 +165,15 @@ func TestAttachKeysExplainARefusal(t *testing.T) {
 	} {
 		pane := tc.pane
 		for _, chord := range []string{"@", "shift+u"} {
-			m, cmds := model.Update(pane, model.KeyMsg{Chord: chord})
+			m, _ := model.Update(pane, model.KeyMsg{Chord: chord})
 			if !m.FieldForm.Open || m.FieldForm.Err == nil {
 				t.Fatalf("%s %s: no reason shown: %+v", name, chord, m.FieldForm)
 			}
 			if m.FieldForm.Err.Error() != tc.want {
 				t.Fatalf("%s %s: reason %q", name, chord, m.FieldForm.Err)
 			}
-			m, cmds = model.Update(m, model.FieldValueMsg{Value: "a.png"})
-			if _, cmds = model.Update(m, model.KeyMsg{Chord: "enter"}); len(cmds) != 0 {
+			m, _ = model.Update(m, model.FieldValueMsg{Value: "a.png"})
+			if _, cmds := model.Update(m, model.KeyMsg{Chord: "enter"}); len(cmds) != 0 {
 				t.Fatalf("%s %s: refused key still sent %#v", name, chord, cmds)
 			}
 		}

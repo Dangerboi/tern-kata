@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -99,7 +100,7 @@ func TestAttachPrintsEachStoredPathAndStopsAtTheFirstFailure(t *testing.T) {
 	a, b := writeSource(t, "a.png"), writeSource(t, "b.png")
 	out, err := f.runPlan(t, "attach", a, filepath.Join(t.TempDir(), "missing.png"), b)
 	store := filepath.Join(f.repo, ".kata-attachments", f.uid)
-	if _, is := err.(subcommandError); !is || out != filepath.Join(store, "a.png")+"\n" {
+	if !errors.As(err, new(subcommandError)) || out != filepath.Join(store, "a.png")+"\n" {
 		t.Fatalf("stdout %q, err %v; want a's stored path then the failure on the missing file", out, err)
 	}
 	if _, statErr := os.Stat(filepath.Join(store, "b.png")); statErr == nil {
@@ -135,7 +136,7 @@ func TestAPartialDetachPrintsItsReportAndFails(t *testing.T) {
 		t.Skip("a read-only folder is not enforced here")
 	}
 	out, err := f.runPlan(t, "detach", "a.png")
-	if _, is := err.(subcommandError); !is || !strings.HasPrefix(out, "Removed a.png; could not delete "+stored+": ") {
+	if !errors.As(err, new(subcommandError)) || !strings.HasPrefix(out, "Removed a.png; could not delete "+stored+": ") {
 		t.Fatalf("stdout %q, err %v; want the partial report and an error", out, err)
 	}
 }
@@ -143,7 +144,7 @@ func TestAPartialDetachPrintsItsReportAndFails(t *testing.T) {
 func TestARefusedDetachPrintsNothing(t *testing.T) {
 	f := newSubcommandFixture(t)
 	out, err := f.runPlan(t, "detach", "nope.png")
-	if _, is := err.(subcommandError); !is || out != "" {
+	if !errors.As(err, new(subcommandError)) || out != "" {
 		t.Fatalf("stdout %q, err %v", out, err)
 	}
 }

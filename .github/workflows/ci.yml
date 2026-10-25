@@ -19,4 +19,15 @@ jobs:
       - run: test -z "$(gofmt -l cmd internal)" || { gofmt -l cmd internal; exit 1; }
       - run: go vet ./...
       - run: GOOS=windows go vet ./...
+      # Built with the job's Go: a golangci-lint built with an older Go fails to load a newer toolchain's standard library.
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.15.0
+          install-mode: goinstall
+      - uses: golangci/golangci-lint-action@v9
+        env:
+          GOOS: windows
+        with:
+          version: v2.15.0
+          install-mode: goinstall
       - run: go test ./...

@@ -171,7 +171,7 @@ func (m Model) putJob(projectID int64, job CronJob) Model {
 		return strings.Compare(a.UID, b.UID)
 	})
 	m.Jobs.Jobs = jobs
-	return m.settleJobSelection()
+	return m.withRates().settleJobSelection()
 }
 
 // jobWritten applies the answer to a job write: to the Job card when it is the write the card is waiting on, else to the

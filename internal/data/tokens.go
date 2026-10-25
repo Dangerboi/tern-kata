@@ -136,6 +136,7 @@ func (c *Client) withdraw(ctx context.Context, id int64, cause error) error {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
 	if _, err := c.RevokeToken(ctx, id); err != nil {
+		//nolint:errorlint // only cause stays matchable: the revoke failure is told in the text, never mistaken for why creation failed
 		return fmt.Errorf("token delivery failed and token %d could not be revoked (%v): %w", id, err, cause)
 	}
 	return fmt.Errorf("token delivery failed; token %d was revoked: %w", id, cause)

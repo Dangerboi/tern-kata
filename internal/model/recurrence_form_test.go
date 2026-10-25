@@ -297,7 +297,7 @@ func TestOOnARecurringIssueWhoseRecurrenceKataWithholdsSaysSo(t *testing.T) {
 func TestRecurrenceCardClosesWhenSavedAndKeepsItselfOnAFailure(t *testing.T) {
 	m, _ := saveRecurrence(openRecurrenceCard(recurrenceBase()))
 	failed, _ := model.Update(m, model.RecurrenceResultMsg{UID: "parent", Err: errBoom})
-	if failed.TopCard() != model.CardRecurrence || failed.RecurrenceForm.Saving || failed.RecurrenceForm.Err != errBoom {
+	if failed.TopCard() != model.CardRecurrence || failed.RecurrenceForm.Saving || !errors.Is(failed.RecurrenceForm.Err, errBoom) {
 		t.Fatalf("after a failure: card %d, form %+v", failed.TopCard(), failed.RecurrenceForm)
 	}
 	saved, _ := model.Update(m, model.RecurrenceResultMsg{UID: "parent"})

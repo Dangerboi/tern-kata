@@ -2,7 +2,6 @@ package driver_test
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/driver"
@@ -75,7 +74,7 @@ func TestTheHistoryHoldsTwentyChangesAndUndoesNewestFirst(t *testing.T) {
 			t.Fatalf("undid change %d, want %d", cmd.Entry.Revision, want)
 		}
 		s = feed(t, out.State, model.ChangeUndone{EntryID: cmd.Entry.ID, Result: model.UndoChanged}).State
-		if got, want := s.Model.Notice, fmt.Sprintf("undid priority.set on #aaaa"); got != want {
+		if got, want := s.Model.Notice, "undid priority.set on #aaaa"; got != want {
 			t.Fatalf("notice %q, want %q", got, want)
 		}
 	}

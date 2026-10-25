@@ -26,7 +26,11 @@ type LaunchPlan struct {
 	Help bool
 	// FallbackArgs are the arguments for `kata tui` when Tern is unsupported.
 	FallbackArgs []string
-	// Subcommand is "attach", "detach", "recur", "run" or "worker" when it was the first argument; main runs it without Tern.
+	// TUIArgs are the arguments only `kata tui` takes (FallbackArgs without the --issue translation); inside Tern nothing reads
+	// them, so main refuses them there instead of dropping them unseen.
+	TUIArgs []string
+	// Subcommand is "attach", "detach", "recur", "run", "worker" or "completion" when it was the first argument; main runs it
+	// without Tern.
 	Subcommand string
 	// TargetRef is the Issue as attach, detach and recur take it (what `kata show` takes: a short id, <project>#<short id> or a ULID),
 	// unlike IssueRef; Operands are the files to attach, or the Attachment name to detach.
@@ -39,6 +43,8 @@ type LaunchPlan struct {
 	Takeover bool
 	// Now is `worker stop --now`: end the worker at once instead of letting its runs in flight finish.
 	Now bool
+	// JSON is `worker status --json`: the status as the worker's control socket answers it, instead of the text.
+	JSON bool
 	// InitFlags are `worker init`'s --executor, --actor, --command, --model and --thinking by name without dashes, as typed; unset ones are absent.
 	InitFlags map[string]string
 	// fallbackAuthor is the --as actor exported to `kata tui`; empty leaves the environment untouched.
@@ -65,21 +71,41 @@ func resolveVersion(linker string, buildInfo func() (*debug.BuildInfo, bool)) st
 // buildVersion is this binary's version.
 func buildVersion() string { return resolveVersion(version, debug.ReadBuildInfo) }
 
-// PlanLaunch parses args (without the program name). --version anywhere wins over everything else, then --help or -h. Unknown arguments pass through to `kata tui`.
+// usageError is a command line tern-kata refuses before doing anything: main exits 2, the Unix status for bad usage.
+type usageError struct{ error }
+
+func (e usageError) Unwrap() error { return e.error }
+
+// subcommands are the first arguments that name a command run without Tern.
+var subcommands = []string{"attach", "detach", "recur", "run", "worker", "completion"}
+
+// completionShells are the shells `tern-kata completion` writes a script for.
+var completionShells = []string{"bash", "zsh", "fish"}
+
+// PlanLaunch parses args (without the program name). --version before a lone -- wins over everything else, then --help or -h
+// before it. Unknown arguments are kept for `kata tui`. Every refusal is a usageError.
 // The actor is the first non-empty of --as, KATA_AUTHOR, USER, the gitUserNameKey lookup, then "anonymous".
 func PlanLaunch(args []string, lookup func(string) (string, bool), version string) (LaunchPlan, error) {
-	if slices.Contains(args, "--version") {
+	plan, err := planLaunch(args, lookup, version)
+	if err != nil {
+		return LaunchPlan{}, usageError{err}
+	}
+	return plan, nil
+}
+
+func planLaunch(args []string, lookup func(string) (string, bool), version string) (LaunchPlan, error) {
+	flags := args
+	if end := slices.Index(args, "--"); end >= 0 {
+		flags = args[:end] // after a lone --, --help and --version are names, such as a file to attach
+	}
+	if slices.Contains(flags, "--version") {
 		return LaunchPlan{Version: version}, nil
 	}
-	if slices.Contains(args, "--help") || slices.Contains(args, "-h") {
+	if slices.Contains(flags, "--help") || slices.Contains(flags, "-h") {
 		return LaunchPlan{Help: true}, nil
 	}
-	if len(args) > 0 && (args[0] == "attach" || args[0] == "detach" || args[0] == "recur" || args[0] == "run" || args[0] == "worker") {
-		plan, err := planSubcommand(args, lookup)
-		if err != nil {
-			err = subcommandError{err}
-		}
-		return plan, err
+	if len(args) > 0 && slices.Contains(subcommands, args[0]) {
+		return planSubcommand(args, lookup)
 	}
 	var plan LaunchPlan
 	plan.FallbackArgs = make([]string, 0, len(args))
@@ -99,9 +125,10 @@ func PlanLaunch(args []string, lookup func(string) (string, bool), version strin
 		} else if value, ok := strings.CutPrefix(arg, "--issue="); ok {
 			issueSet, plan.IssueRef = true, value
 		} else {
-			plan.FallbackArgs = append(plan.FallbackArgs, arg)
+			plan.TUIArgs = append(plan.TUIArgs, arg)
 		}
 	}
+	plan.FallbackArgs = append(plan.FallbackArgs, plan.TUIArgs...)
 	if issueSet {
 		project, shortID, err := model.ParseIssueRef(plan.IssueRef)
 		if err != nil {
@@ -153,9 +180,8 @@ func resolveActor(flag string, lookup func(string) (string, bool)) string {
 	return actor
 }
 
-// planSubcommand parses `attach <ref> <file>...`, `detach <ref> <name>` and `recur <ref> [flags]` (args[0] is the subcommand). --as may stand anywhere;
-// a lone -- ends the flags, so a file may be named like one. --version, --help and -h are caught anywhere first, so a file
-// cannot be named exactly that.
+// planSubcommand parses the subcommands (args[0] is the subcommand). --as may stand anywhere; a lone -- ends the flags, so a
+// file may be named like one, even --help.
 func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPlan, error) {
 	plan := LaunchPlan{Subcommand: args[0]}
 	var operands []string
@@ -178,6 +204,10 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 			plan.Now = true
 			continue
 		}
+		if plan.Subcommand == "worker" && arg == "--json" {
+			plan.JSON = true
+			continue
+		}
 		if plan.Subcommand == "worker" {
 			if matched, err := parseInitFlag(args, &i, &plan); err != nil {
 				return LaunchPlan{}, err
@@ -191,6 +221,9 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 			} else if matched {
 				continue
 			}
+		}
+		if plan.Subcommand == "completion" {
+			return LaunchPlan{}, fmt.Errorf("completion: unknown flag %s", arg) // the script is the same for every actor
 		}
 		actor, matched, err := parseAs(args, &i)
 		if err != nil {
@@ -213,16 +246,20 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 	case plan.Subcommand == "run" && len(operands) != 1:
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata run <job-uid>")
 	case plan.Subcommand == "worker" && !settlesHeldRun(operands, plan.Takeover) && (len(operands) > 1 || len(operands) == 1 && !slices.Contains([]string{"status", "doctor", "init", "add", "edit", "stop"}, operands[0])):
-		return LaunchPlan{}, fmt.Errorf("usage: tern-kata worker [--takeover] | tern-kata worker init | tern-kata worker add | tern-kata worker edit | tern-kata worker status | tern-kata worker stop [--now] | tern-kata worker doctor | tern-kata worker resume <run-uid> | tern-kata worker abandon <run-uid>")
+		return LaunchPlan{}, fmt.Errorf("usage: tern-kata worker [--takeover] | tern-kata worker init | tern-kata worker add | tern-kata worker edit | tern-kata worker status [--json] | tern-kata worker stop [--now] | tern-kata worker doctor | tern-kata worker resume <run-uid> | tern-kata worker abandon <run-uid>")
 	case plan.Subcommand == "worker" && plan.Now && !slices.Equal(operands, []string{"stop"}):
 		return LaunchPlan{}, fmt.Errorf("worker: --now applies to `tern-kata worker stop` only")
 	case len(plan.InitFlags) > 0 && !slices.Equal(operands, []string{"init"}):
 		return LaunchPlan{}, fmt.Errorf("worker: --executor, --actor, --command, --model and --thinking apply to `tern-kata worker init` only")
+	case plan.Subcommand == "worker" && plan.JSON && !slices.Equal(operands, []string{"status"}):
+		return LaunchPlan{}, fmt.Errorf("worker: --json applies to `tern-kata worker status` only")
 	case plan.Subcommand == "worker" && len(operands) >= 1 && plan.Takeover:
 		return LaunchPlan{}, fmt.Errorf("worker: --takeover applies to `tern-kata worker` only")
+	case plan.Subcommand == "completion" && (len(operands) != 1 || !slices.Contains(completionShells, operands[0])):
+		return LaunchPlan{}, fmt.Errorf("usage: tern-kata completion bash|zsh|fish")
 	}
 	plan.Actor = resolveActor(plan.fallbackAuthor, lookup)
-	if plan.Subcommand == "worker" {
+	if plan.Subcommand == "worker" || plan.Subcommand == "completion" {
 		plan.Operands = operands
 		return plan, nil
 	}
@@ -309,11 +346,12 @@ Usage:
                         [--model <model>] [--thinking <level>]
   tern-kata worker add
   tern-kata worker edit
-  tern-kata worker status
+  tern-kata worker status [--json]
   tern-kata worker stop [--now]
   tern-kata worker doctor
   tern-kata worker resume <run-uid> [--as <actor>]
   tern-kata worker abandon <run-uid> [--as <actor>]
+  tern-kata completion bash|zsh|fish
   tern-kata --version
   tern-kata --help
 
@@ -323,6 +361,7 @@ Flags:
                                 $KATA_AUTHOR, $USER, git config user.name, then "anonymous")
   --version                     print the version and exit
   -h, --help                    print this help and exit
+  --                            end the flags: a file after it may be named like one, even --help
 
 Subcommands (only as the first argument; they never open a Pane or need Tern):
   attach <ref> <file>...        copy each file into the Project's Attachment store
@@ -356,7 +395,8 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 replaces the file, else the editor reopens with the problem as a comment
                                 at the top; an unchanged or empty result cancels. Says whether a worker
                                 runs and that ` + "`tern-kata worker stop`" + ` makes it reload
-  worker status                 say what the running worker serves, runs and refuses
+  worker status [--json]        say what the running worker serves, runs and refuses; --json prints
+                                the status as the worker's control socket answers it
   worker stop [--now]           stop the running worker: it admits nothing new, lets its runs in flight
                                 finish and report, then exits 0; --now ends it at once and the runs it
                                 interrupts are held interrupted and resumable. Says whether the plugin
@@ -370,10 +410,16 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 and the run's slot and overlap gate are freed. A running run is stopped
                                 first (SIGTERM, SIGKILL after 10 s); a run this machine lost the state of
                                 is recorded unknown ("local state lost"), a quarantined one acknowledged
+  completion <shell>            print the completion script for bash, zsh or fish; load it with
+                                source <(tern-kata completion bash) (or zsh), or
+                                tern-kata completion fish | source
 <ref> is a short id in this workspace's Project, <project>#<short id>, or a ULID.
 The Issue's Project must be this workspace's Binding.
 
-Any other argument is passed to ` + "`kata tui`" + ` when Tern is unavailable.
+Any other argument is passed to ` + "`kata tui`" + ` when Tern is unavailable; inside Tern it is refused.
+
+Exit status: 0 on success, 1 when a subcommand fails, 2 for a command line it refuses, 3 when the Pane
+fails, and 128 plus the signal's number when a signal stops a subcommand (130 for ctrl+c).
 
 Inside Tern, it opens a Pane. Outside Tern, it runs ` + "`kata tui`" + ` instead.
 In a directory bound to a kata Project (a .kata.toml in it or a parent), it opens

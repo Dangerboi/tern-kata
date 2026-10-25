@@ -1,5 +1,7 @@
 package model
 
+import "slices"
+
 type IssueRow struct {
 	Issue
 	Depth       int
@@ -10,7 +12,9 @@ type IssueRow struct {
 	TotalKids   int
 }
 
-func (m Model) issueHierarchy() (map[string]string, map[string][]Issue) {
+// issueHierarchy is each loaded Issue's loaded parent, and each parent's loaded children as indexes into m.Issues, in list
+// order or, under GraphOrder, blockers first.
+func (m Model) issueHierarchy() (map[string]string, map[string][]int) {
 	loaded := make(map[string]bool, len(m.Issues))
 	for _, issue := range m.Issues {
 		loaded[issue.UID] = true
@@ -41,16 +45,16 @@ func (m Model) issueHierarchy() (map[string]string, map[string][]Issue) {
 	for _, issue := range m.Issues {
 		visit(issue.UID)
 	}
-	children := make(map[string][]Issue)
-	for _, issue := range m.Issues {
+	children := make(map[string][]int)
+	for i, issue := range m.Issues {
 		if parent := parents[issue.UID]; parent != "" {
-			children[parent] = append(children[parent], issue)
+			children[parent] = append(children[parent], i)
 		}
 	}
 	if m.GraphOrder {
 		blocked := m.blockedBy()
 		for parent, kin := range children {
-			children[parent] = blockersFirst(kin, blocked)
+			children[parent] = blockersFirst(m.Issues, kin, blocked)
 		}
 	}
 	return parents, children
@@ -71,27 +75,27 @@ func (m Model) blockedBy() map[string][]string {
 	return blocks
 }
 
-// blockersFirst orders siblings topologically by blocks, blockers first. Among Issues free to go next the earliest in
-// creation order (the order given) goes first; Issues caught in a blocking cycle follow the rest in creation order.
-func blockersFirst(siblings []Issue, blocks map[string][]string) []Issue {
+// blockersFirst orders siblings, indexes into issues, topologically by blocks, blockers first. Among Issues free to go next the
+// earliest in creation order (the order given) goes first; Issues caught in a blocking cycle follow the rest in creation order.
+func blockersFirst(issues []Issue, siblings []int, blocks map[string][]string) []int {
 	if len(siblings) < 2 {
 		return siblings
 	}
 	index := make(map[string]int, len(siblings))
-	for i, issue := range siblings {
-		index[issue.UID] = i
+	for i, at := range siblings {
+		index[issues[at].UID] = i
 	}
 	blocking := make([][]int, len(siblings))
 	waiting := make([]int, len(siblings))
-	for i, issue := range siblings {
-		for _, uid := range blocks[issue.UID] {
+	for i, at := range siblings {
+		for _, uid := range blocks[issues[at].UID] {
 			if j, ok := index[uid]; ok && j != i {
 				blocking[i] = append(blocking[i], j)
 				waiting[j]++
 			}
 		}
 	}
-	ordered := make([]Issue, 0, len(siblings))
+	ordered := make([]int, 0, len(siblings))
 	done := make([]bool, len(siblings))
 	for len(ordered) < len(siblings) {
 		next := -1
@@ -118,12 +122,21 @@ func blockersFirst(siblings []Issue, blocks map[string][]string) []Issue {
 	return ordered
 }
 
+// VisibleRows are the rows the selection moves over: the Board's cards on the Board Page, else the list's rows, nested unless
+// Flat. The slice is shared with the kept rows; see collectionRows.
 func (m Model) VisibleRows() []IssueRow {
+	if m.collection.answers(m) {
+		return m.collection.rows
+	}
 	if m.OnBoard() {
 		return m.boardRows()
 	}
+	return m.listRows()
+}
+
+// listRows are the list's rows worked out afresh.
+func (m Model) listRows() []IssueRow {
 	rows := make([]IssueRow, 0, len(m.Issues))
-	parents, children := m.issueHierarchy()
 	counts := childCountsByParent(m.Snapshot.Links)
 	kids := func(row IssueRow) IssueRow {
 		c := counts[row.UID]
@@ -136,32 +149,39 @@ func (m Model) VisibleRows() []IssueRow {
 		}
 		return rows
 	}
+	parents, children := m.issueHierarchy()
 	// guide is this row's connector; indent is what its children's guides start with.
-	var appendIssue func(issue Issue, depth int, guide, indent string)
-	appendIssue = func(issue Issue, depth int, guide, indent string) {
+	var appendIssue func(issue *Issue, depth int, guide, indent string)
+	appendIssue = func(issue *Issue, depth int, guide, indent string) {
 		expanded := m.ExpandedUIDs[issue.UID]
-		rows = append(rows, kids(IssueRow{Issue: issue, Depth: depth, Guide: guide, HasChildren: len(children[issue.UID]) > 0, Expanded: expanded}))
+		rows = append(rows, kids(IssueRow{Issue: *issue, Depth: depth, Guide: guide, HasChildren: len(children[issue.UID]) > 0, Expanded: expanded}))
 		if expanded {
 			kin := children[issue.UID]
 			for i, child := range kin {
 				if i == len(kin)-1 {
-					appendIssue(child, depth+1, indent+"└─\u00a0", indent+"\u00a0\u00a0\u00a0")
+					appendIssue(&m.Issues[child], depth+1, indent+"└─\u00a0", indent+"\u00a0\u00a0\u00a0")
 				} else {
-					appendIssue(child, depth+1, indent+"├─\u00a0", indent+"│\u00a0\u00a0")
+					appendIssue(&m.Issues[child], depth+1, indent+"├─\u00a0", indent+"│\u00a0\u00a0")
 				}
 			}
 		}
 	}
-	for _, issue := range m.Issues {
-		if parents[issue.UID] == "" {
-			appendIssue(issue, 0, "", "")
+	for i := range m.Issues {
+		if parents[m.Issues[i].UID] == "" {
+			appendIssue(&m.Issues[i], 0, "", "")
 		}
 	}
 	return rows
 }
 
+// WithVisibleSelection keeps the selection on a visible row: the selected Issue, else its nearest visible ancestor, else the
+// first row. It keeps the rows it works out, so the rest of the step reads them again for free.
 func (m Model) WithVisibleSelection() Model {
+	m = m.withCollectionRows()
 	rows := m.VisibleRows()
+	if m.SelectedUID != "" && slices.ContainsFunc(rows, func(row IssueRow) bool { return row.UID == m.SelectedUID }) {
+		return m
+	}
 	visible := make(map[string]bool, len(rows))
 	for _, row := range rows {
 		visible[row.UID] = true

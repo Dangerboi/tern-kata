@@ -59,7 +59,7 @@ func TestCommentResendsReuseTheKeyUntilTheDraftChanges(t *testing.T) {
 	}
 	m, _ = model.Update(m, model.DraftFailed{UID: "a", Err: errTest})
 	m = typed(m, " edited")
-	m, cmds = clickPress(m, "meta+o")
+	_, cmds = clickPress(m, "meta+o")
 	if got := keyOf(t, cmds); got == first {
 		t.Fatalf("edited resend reused key %q", got)
 	}

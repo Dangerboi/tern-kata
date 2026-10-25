@@ -35,7 +35,7 @@ func TestScriptedEditorProcess(t *testing.T) {
 	if err != nil {
 		os.Exit(2)
 	}
-	logf.WriteString(text + "---\n")
+	_, _ = logf.WriteString(text + "---\n") // a lost log line fails the test that reads it
 	logf.Close()
 
 	var out string
@@ -48,9 +48,9 @@ func TestScriptedEditorProcess(t *testing.T) {
 		config := os.Getenv(editorConfigEnv)
 		os.Remove(config)
 		if mode == "break" {
-			os.Mkdir(config, 0o700)
+			_ = os.Mkdir(config, 0o700) // a failure leaves the write possible, which the test then catches
 		} else {
-			os.WriteFile(config, []byte(executorLine.ReplaceAllString(text, `executor = "theirs"`)), 0o600)
+			_ = os.WriteFile(config, []byte(executorLine.ReplaceAllString(text, `executor = "theirs"`)), 0o600) // as above
 		}
 	case "unchanged":
 		out = text

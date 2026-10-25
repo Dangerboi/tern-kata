@@ -477,6 +477,7 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 	case waitErr = <-done:
 	case <-ctx.Done():
 		_, _ = w.terminateGroup(ctx, launch) // kills at once: ctx has ended
+		//nolint:errcheck // waits for the exit; the run's error is ctx's
 		<-done
 		return nil, ctx.Err() // the journal stays started: the next start finds it interrupted
 	case <-cancel.ch:

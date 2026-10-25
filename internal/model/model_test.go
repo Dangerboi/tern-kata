@@ -80,7 +80,7 @@ func TestPointerSelection(t *testing.T) {
 func TestDaemonFailureEndsLoading(t *testing.T) {
 	want := errors.New("kata daemon v0.17.0 is too old; requires v0.18.0")
 	m, _ := model.Update(model.Model{Loading: true}, model.Failed{Err: want})
-	if m.Loading || m.Err != want {
+	if m.Loading || !errors.Is(m.Err, want) {
 		t.Fatalf("daemon error state: %+v", m)
 	}
 }

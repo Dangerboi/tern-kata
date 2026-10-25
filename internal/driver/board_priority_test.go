@@ -11,7 +11,7 @@ import (
 
 func TestCardShowsItsPriorityAsABadgeToneLikeTheList(t *testing.T) {
 	var issues []model.Issue
-	for p := int64(0); p <= 4; p++ {
+	for p := range int64(5) {
 		issue := boardCard(fmt.Sprintf("p%d", p))
 		issue.Priority = &p
 		issues = append(issues, issue)

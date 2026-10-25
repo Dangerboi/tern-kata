@@ -137,7 +137,7 @@ func TestGatewayReportsAFederationReadFailureInTheAskingMessage(t *testing.T) {
 	l.err.Store(&boom)
 	gateway := newGateway(t, l)
 	got := as[model.FederationLoaded](t, run(t, gateway, model.LoadFederation{Request: 5}))
-	if got.Request != 5 || got.Err != boom {
+	if got.Request != 5 || !errors.Is(got.Err, boom) {
 		t.Errorf("failure %#v, want request 5 and the daemon's error", got)
 	}
 

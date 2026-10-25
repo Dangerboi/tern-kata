@@ -93,6 +93,9 @@ func (h *harness) stubbornChild() int {
 	var pid int
 	h.eventually("the command's child to record its pid", func() bool {
 		raw, err := os.ReadFile(filepath.Join(h.repo, "child.pid"))
+		if err != nil {
+			return false
+		}
 		pid, err = strconv.Atoi(strings.TrimSpace(string(raw)))
 		return err == nil && pid > 0
 	})

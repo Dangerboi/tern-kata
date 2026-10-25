@@ -86,7 +86,7 @@ var JobFields = []FieldSpec{
 }
 
 // jobFieldTitles are the prompts of the fields. The part before the first " (" is the field's name in a message.
-var jobFieldTitles = map[Field]string{
+var jobFieldTitles = map[Field]string{ //nolint:gosec // G101: field prompts ("Secrets (ENV=source, ...)"), not credentials
 	JobFieldKind:         "Kind",
 	JobFieldName:         "Name",
 	JobFieldTrigger:      "Trigger",

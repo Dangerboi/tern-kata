@@ -65,7 +65,7 @@ func (c *Client) BindProject(ctx context.Context, cmd model.BindProject) (model.
 	dest := cmp.Or(workspaceRoot, gitRoot, start)
 	if bound != project.Name {
 		body := fmt.Sprintf("version = 1\n\n[project]\nname = %q\n", project.Name)
-		if err := os.WriteFile(filepath.Join(dest, ".kata.toml"), []byte(body), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dest, ".kata.toml"), []byte(body), 0o644); err != nil { //nolint:gosec // G306: a checked-in file
 			return model.Project{}, fmt.Errorf("write .kata.toml: %w", err)
 		}
 	}
@@ -101,7 +101,7 @@ func ignoreLocalConfig(dir string) error {
 	if len(existing) > 0 && !bytes.HasSuffix(existing, []byte("\n")) {
 		line = "\n" + line
 	}
-	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644) //nolint:gosec // G302: .gitignore is a checked-in file
 	if err != nil {
 		return err
 	}

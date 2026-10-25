@@ -2,12 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/worker"
@@ -66,6 +65,9 @@ func runWorkerCommand(ctx context.Context, plan LaunchPlan, env workerEnv, out i
 		}
 		if !resp.OK {
 			return subcommandError{errors.New(resp.Error)}
+		}
+		if plan.JSON {
+			return writeJSON(out, resp.Status)
 		}
 		_, err = fmt.Fprint(out, resp.Status.String())
 		return err
@@ -179,7 +181,7 @@ func runDoctor(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Write
 	return nil
 }
 
-// runForeground is `tern-kata worker`: it serves until ctx ends (an interrupt or a terminate signal in main).
+// runForeground is `tern-kata worker`: it serves until ctx ends (an interrupt, a terminate or a hangup, see stopSignals).
 func runForeground(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Writer) error {
 	cfg, err := worker.LoadConfig(env.Dirs.ConfigPath())
 	if err != nil {
@@ -208,9 +210,11 @@ func runForeground(ctx context.Context, plan LaunchPlan, env workerEnv, out io.W
 	return nil
 }
 
-// workerContext ends on an interrupt or a terminate signal.
-func workerContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	return signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+// writeJSON writes v as indented JSON, in the shape the worker's control socket sends it.
+func writeJSON(out io.Writer, v any) error {
+	encoder := json.NewEncoder(out)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(v)
 }
 
 func plural(n int, one, many string) string {

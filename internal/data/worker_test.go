@@ -16,13 +16,13 @@ import (
 // fakeWorker answers the control socket of dirs the way the worker does, from answers keyed by op, and records the requests.
 func fakeWorker(t *testing.T, answers map[string]worker.Response) (worker.Dirs, *[]worker.Request) {
 	t.Helper()
-	root, err := os.MkdirTemp("", "tk")
+	root, err := os.MkdirTemp("", "tk") //nolint:usetesting // t.TempDir's path is too long for a unix socket
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(root) })
 	dirs := worker.Dirs{Config: root, State: root}
-	ln, err := net.Listen("unix", dirs.Socket())
+	ln, err := new(net.ListenConfig).Listen(t.Context(), "unix", dirs.Socket())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestWorkerStatusReachesThePaneAndNoWorkerIsNotAnError(t *testing.T) {
 		t.Fatalf("runs %+v", r)
 	}
 
-	empty, err := os.MkdirTemp("", "tk")
+	empty, err := os.MkdirTemp("", "tk") //nolint:usetesting // a short path, like the fake worker's
 	if err != nil {
 		t.Fatal(err)
 	}

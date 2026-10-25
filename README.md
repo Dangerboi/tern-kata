@@ -104,7 +104,7 @@ Agents: follow these steps only when the user has asked you to install tern-kata
    irm https://raw.githubusercontent.com/Dangerboi/tern-kata/main/install.ps1 | iex
    ```
 
-   They install the latest release to `~/.local/bin` (`%LOCALAPPDATA%\Programs\tern-kata` on Windows, added to your user `PATH`), verify its checksum, and also install the window plugin when `tern` is on `PATH`. Run in a terminal with `npx` (or `bunx`) available, they then offer to install the [agent skills](docs/guide/agents.md#agent-skills). Once the plugin is installed, the **Install tern-kata** palette command runs the same one-liner in a new Pane. `tern-kata --help` lists every subcommand and flag.
+   They install the latest release to `~/.local/bin` (`%LOCALAPPDATA%\Programs\tern-kata` on Windows, added to your user `PATH`), verify its checksum, and also install the window plugin when `tern` is on `PATH`. Run in a terminal with `npx` (or `bunx`) available, they then offer to install the [agent skills](docs/guide/agents.md#agent-skills). Once the plugin is installed, the **Install tern-kata** palette command runs the same one-liner in a new Pane. `tern-kata --help` lists every subcommand and flag, and `tern-kata completion bash|zsh|fish` prints a completion script (`source <(tern-kata completion bash)`, or `tern-kata completion fish | source`).
 
    Alternatively, with Go 1.27+:
 

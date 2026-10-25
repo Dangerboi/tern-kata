@@ -1,7 +1,6 @@
 package view_test
 
 import (
-	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
@@ -79,13 +78,4 @@ func TestHelpClosesWithQuestionMarkAndEscape(t *testing.T) {
 			t.Errorf("%s moved focus or selection", chord)
 		}
 	}
-}
-
-func mustJSON(t *testing.T, v any) []byte {
-	t.Helper()
-	b, err := json.Marshal(v)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return b
 }

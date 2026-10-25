@@ -70,7 +70,7 @@ func (c *Client) jobActivity(ctx context.Context, projectID int64, jobs []model.
 		return activity, nil
 	}
 	before := ""
-	for page := 0; page < jobActivityPages; page++ {
+	for range jobActivityPages {
 		limit := int64(runsPageSize)
 		query := &g.ListCronRunsQuery{Limit: &limit}
 		if before != "" {

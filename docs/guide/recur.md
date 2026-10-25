@@ -28,6 +28,6 @@ tern-kata recur <ref> --stop                                  # existing Occurre
 ## Behaviour
 
 - Refs, `--as` and the Binding rule are those of `attach`, including the refusal of an empty `--as` (see [Attachments](attachments.md#from-a-shell-or-for-an-agent)).
-- Success prints one line and a failure prints the reason on stderr and exits 1.
+- Success prints one line and a failure prints the reason on stderr and exits 1; a command line it refuses (a missing ref, an unknown flag) exits 2.
 - Invalid input is refused with the card's message and nothing is sent.
 - A schedule changed by someone else while the command ran is not overwritten but printed, and the command exits 1.

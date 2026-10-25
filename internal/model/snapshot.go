@@ -332,7 +332,11 @@ func (m Model) applyCollection(snapshot Snapshot) Model {
 	for i := range m.Groups {
 		m.Groups[i].Heading = m.Collection.Def().Headings
 	}
-	m.Issues = nil
+	total := 0
+	for _, group := range m.Groups {
+		total += len(group.Issues)
+	}
+	m.Issues = slices.Grow([]Issue(nil), total)
 	for _, group := range m.Groups {
 		m.Issues = append(m.Issues, group.Issues...)
 	}

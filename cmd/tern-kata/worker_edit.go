@@ -80,7 +80,7 @@ func editWorkerConfig(ctx context.Context, env workerEnv, out io.Writer) error {
 		if err := worker.ReplaceConfig(path, original, text); err != nil {
 			// The temp file holds the edit, with any problem comment gone, and stays for the user.
 			if werr := os.WriteFile(tmp.Name(), []byte(text), 0o600); werr != nil {
-				return subcommandError{fmt.Errorf("%w; the edit could not be kept: %v", err, werr)}
+				return subcommandError{fmt.Errorf("%w; the edit could not be kept: %w", err, werr)}
 			}
 			kept = true
 			return subcommandError{fmt.Errorf("%w; your edit is kept in %s", err, tmp.Name())}

@@ -80,7 +80,8 @@ func (s Schedule) Next(t time.Time) time.Time {
 		if t.Before(s.anchor) {
 			return s.anchor.Add(s.step)
 		}
-		return s.anchor.Add((t.Sub(s.anchor)/s.step + 1) * s.step)
+		steps := int64(t.Sub(s.anchor)/s.step) + 1
+		return s.anchor.Add(time.Duration(steps) * s.step)
 	}
 	if next := s.cron.Next(t); !next.IsZero() {
 		return next.UTC()

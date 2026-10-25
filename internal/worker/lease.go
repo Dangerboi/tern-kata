@@ -64,7 +64,7 @@ func leaseOf(p Project) (v leaseValue, present bool, err error) {
 // own. takeover writes the next generation over another executor's live lease (ADR-0003 `--takeover`). A lost
 // conditional write is read again and retried, as any writer of the metadata may have got in between.
 func claimLease(ctx context.Context, k *Kata, clock Clock, executor, actor string, projectID int64, takeover bool) LeaseState {
-	for attempt := 0; attempt < 3; attempt++ {
+	for range 3 {
 		p, err := k.Project(ctx, projectID)
 		if err != nil {
 			return LeaseState{Unknown: true, Reason: "the Project's lease could not be read: " + err.Error()}

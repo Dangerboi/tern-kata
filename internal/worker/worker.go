@@ -87,7 +87,6 @@ type projectState struct {
 	jobsErr    string
 	jobsAt     time.Time
 	streamOpen bool
-	cursor     int64
 
 	// pending counts slots reserved before a uid exists; held maps each slot-holding run uid to its job uid.
 	pending int
@@ -145,7 +144,7 @@ func (w *Worker) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer lock.Release()
+	defer lock.Release() //nolint:errcheck // the process is ending: a lock it cannot release is released with it
 	if _, err := w.opt.Kata.Ping(ctx); err != nil {
 		return err
 	}
@@ -154,7 +153,7 @@ func (w *Worker) Run(ctx context.Context) error {
 	w.ctx, w.cancel, w.started = ctx, stop, w.clock.Now()
 	w.seedFlight()                     // before the socket answers, so an idle stop asked at once still waits for them
 	_ = os.Remove(w.opt.Dirs.Socket()) // the lock is ours, so a socket file is stale
-	ln, err := net.Listen("unix", w.opt.Dirs.Socket())
+	ln, err := new(net.ListenConfig).Listen(ctx, "unix", w.opt.Dirs.Socket())
 	if err != nil {
 		return fmt.Errorf("control socket: %w", err)
 	}

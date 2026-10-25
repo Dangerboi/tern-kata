@@ -42,7 +42,7 @@ local function deliver(cx: WindowCx, pane: number)
 end
 
 -- Startup-failure rule, the plugin's half of the contract with cmd/tern-kata: a kata Pane failing within 2 s with
--- status 2 (Go panic) or 3 (the binary's own error) means tern-kata ran and failed. Status 1 can be either: it is
+-- status 2 (a Go panic, or a command line tern-kata refused) or 3 (the binary's own error) means tern-kata ran and failed. Status 1 can be either: it is
 -- PowerShell's not-found code, and on Windows Tern reports every failing launch as 1, so tern-kata's 3 never arrives.
 -- Any other failing status is the shell's own not-found code (127, 9009), so it is not installed or not on PATH.
 local function exitedRightAway(cx: WindowCx, pane: number, status: number)

@@ -461,7 +461,7 @@ func TestBoardLaneListsScrollInsideTheirLanesAndLanesShrink(t *testing.T) {
 	s := boardPane(t, ownedBy(closedAt("d", 10, 5, "needs-triage"), "someone-with-a-long-name"), boardCard("a"))
 	s = feed(t, s, key("right"), key("right")).State // the selected card draws its owner
 	nodes := wireNodes(t, view.Render(s.Model, now))
-	for col := 0; col < 6; col++ {
+	for col := range 6 {
 		id := view.BoardID + ".lane" + fmt.Sprint(col)
 		for _, n := range nodes {
 			switch n.ID {

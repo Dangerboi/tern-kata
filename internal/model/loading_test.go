@@ -76,7 +76,7 @@ func TestDetailStaysOnScreenUntilTheSelectedIssueArrives(t *testing.T) {
 			for _, msg := range tt.msgs {
 				m, cmds = step(m, msg)
 			}
-			if m.DetailIssueUID() != tt.onScreen || m.DetailLoading() != tt.loading || m.DetailErr() != tt.err || !reflect.DeepEqual(cmds, tt.wantCmds) {
+			if m.DetailIssueUID() != tt.onScreen || m.DetailLoading() != tt.loading || !errors.Is(m.DetailErr(), tt.err) || !reflect.DeepEqual(cmds, tt.wantCmds) {
 				t.Fatalf("detail=%q loading=%v err=%v cmds=%#v", m.DetailIssueUID(), m.DetailLoading(), m.DetailErr(), cmds)
 			}
 		})

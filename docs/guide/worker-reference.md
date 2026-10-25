@@ -101,6 +101,7 @@ The worker checks its route to each Project when its event stream (re)connects, 
 - The worker makes at most four kata calls at once, each with a 60-second deadline, and resolves two Projects at a time at start.
 - A Project you remove from `worker.toml` has its saved reports delivered and its lease released at the next start.
 - `worker status` and `worker doctor` list each job the worker sets aside, with its reason (an unmapped profile, checkout or secret, a timeout over `max_timeout`, a workflow it does not run, a trigger it cannot schedule), and warn of a per-run Issue job that creates more than 24 Issues a day. Neither stops any other job.
+- `worker status --json` prints the status as the worker's control socket answers it, for scripts: the same fields as the text, named as in the worker's Go `Status` type (`Executor`, `Projects`, `Runs`, ...).
 
 ## State and leases
 

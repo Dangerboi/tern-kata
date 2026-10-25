@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"path/filepath"
 	"sync/atomic"
@@ -100,7 +101,7 @@ func TestGatewayReportsAFailedCapabilityCheckAndTokenReadInTheAskingMessage(t *t
 	if got := run(t, gateway, model.LoadAuthCapabilities{Request: 3}); got != (model.AuthCapabilitiesLoaded{Request: 3, Err: boom}) {
 		t.Errorf("capabilities failure %#v", got)
 	}
-	if got := run(t, gateway, model.LoadCredentials{Request: 4}); got.(model.CredentialsLoaded).Request != 4 || got.(model.CredentialsLoaded).Err != boom {
+	if got := run(t, gateway, model.LoadCredentials{Request: 4}); got.(model.CredentialsLoaded).Request != 4 || !errors.Is(got.(model.CredentialsLoaded).Err, boom) {
 		t.Errorf("token list failure %#v", got)
 	}
 }

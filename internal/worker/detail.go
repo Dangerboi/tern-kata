@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"cmp"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -92,9 +93,9 @@ func stepsOf(j *Journal) []StepDetail {
 func (w *Worker) RunDetail(uid string) (RunDetail, error) {
 	j, err := w.store.Load(uid)
 	switch {
-	case err == ErrNoJournal && w.store.IsQuarantined(uid):
+	case errors.Is(err, ErrNoJournal) && w.store.IsQuarantined(uid):
 		return RunDetail{}, fmt.Errorf("run %s has a damaged journal, set aside in quarantine; run `tern-kata worker doctor`", uid)
-	case err == ErrNoJournal:
+	case errors.Is(err, ErrNoJournal):
 		return RunDetail{}, fmt.Errorf("this worker has no run %s", uid)
 	case err != nil:
 		return RunDetail{}, err

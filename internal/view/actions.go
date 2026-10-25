@@ -83,7 +83,10 @@ func ChooseClick(name model.Field, index int) string {
 
 func parseTab(text string) (model.ActivityTab, bool) {
 	tab, err := strconv.Atoi(text)
-	return model.ActivityTab(tab), err == nil && tab >= 0 && tab < int(model.TabCount)
+	if err != nil || tab < 0 || tab >= int(model.TabCount) {
+		return 0, false
+	}
+	return model.ActivityTab(tab), true
 }
 
 // DecodeAction is the message for an Action input from node id, nil for one the Pane does not use.

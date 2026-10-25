@@ -92,7 +92,7 @@ const (
 	ClearAttentionRequest   Action = "clear-attention-request"
 	ReloadAttention         Action = "reload-attention"
 	ShowCredentialsPage     Action = "show-credentials-page"
-	RefreshCredentials      Action = "refresh-credentials"
+	RefreshCredentials      Action = "refresh-credentials" //nolint:gosec // G101: an action name, not a credential
 	LetteredBack            Action = "lettered-back"
 	ShowFederationPage      Action = "show-federation-page"
 	ShowDaemonsPage         Action = "show-daemons-page"

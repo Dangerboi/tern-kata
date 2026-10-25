@@ -151,6 +151,8 @@ type Model struct {
 	// nonce is the random per-run prefix of every idempotency key and keys counts the keys minted.
 	nonce string
 	keys  int
+	// collection keeps the rows and columns worked out from Issues and the snapshot; see collectionRows.
+	collection collectionRows
 }
 
 func Update(m Model, msg Msg) (Model, []Cmd) {
@@ -162,7 +164,7 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 	}
 	next, cmds := updateWithDetail(m, msg)
 	next = next.recordWrite(msg).noteWrites(cmds)
-	return next.cancelPending(m, msg), cmds
+	return next.cancelPending(m, msg).withCollectionRows(), cmds
 }
 
 // staleConnection reports an answer asked of a daemon the Pane has since switched away from: it changes nothing.

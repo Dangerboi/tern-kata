@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"reflect"
 	"runtime/debug"
 	"slices"
@@ -23,6 +22,7 @@ func TestPlanLaunch(t *testing.T) {
 		env          map[string]string
 		issueRef     string
 		fallbackArgs []string
+		tuiArgs      []string
 		err          string
 	}{
 		{name: "no arguments", fallbackArgs: []string{}},
@@ -38,7 +38,8 @@ func TestPlanLaunch(t *testing.T) {
 		{name: "as empty after issue", args: []string{"--issue=p/1", "--as="}, err: "--as must be non-empty"},
 		{name: "malformed issue ref", args: []string{"--issue", "noslash"}, err: `Issue reference must be <project>/<short_id>: "noslash"`},
 		{name: "empty issue equals value", args: []string{"--issue="}, err: `Issue reference must be <project>/<short_id>: ""`},
-		{name: "unknown arguments pass through", args: []string{"--as", "ann", "--foo", "bar", "--issue=p/1", "-x"}, issueRef: "p/1", fallbackArgs: []string{"--foo", "bar", "-x", "--project", "p", "p#1"}},
+		{name: "unknown arguments pass through", args: []string{"--as", "ann", "--foo", "bar", "--issue=p/1", "-x"}, issueRef: "p/1", fallbackArgs: []string{"--foo", "bar", "-x", "--project", "p", "p#1"}, tuiArgs: []string{"--foo", "bar", "-x"}},
+		{name: "help after a double dash is kata tui's", args: []string{"--", "--help"}, fallbackArgs: []string{"--", "--help"}, tuiArgs: []string{"--", "--help"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -46,6 +47,9 @@ func TestPlanLaunch(t *testing.T) {
 			if tt.err != "" {
 				if err == nil || err.Error() != tt.err {
 					t.Fatalf("error = %v, want %q", err, tt.err)
+				}
+				if exitStatus(err) != 2 {
+					t.Fatalf("refused command line exits %d, want 2", exitStatus(err))
 				}
 				return
 			}
@@ -57,6 +61,9 @@ func TestPlanLaunch(t *testing.T) {
 			}
 			if !reflect.DeepEqual(plan.FallbackArgs, tt.fallbackArgs) {
 				t.Errorf("FallbackArgs = %q, want %q", plan.FallbackArgs, tt.fallbackArgs)
+			}
+			if !slices.Equal(plan.TUIArgs, tt.tuiArgs) {
+				t.Errorf("TUIArgs = %q, want %q (what Tern refuses)", plan.TUIArgs, tt.tuiArgs)
 			}
 		})
 	}
@@ -222,6 +229,12 @@ func TestPlanLaunchSubcommands(t *testing.T) {
 		{name: "as before and after", args: []string{"attach", "--as", "bob", "ab12", "a.png", "--as=amy"}, sub: "attach", ref: "ab12", operands: []string{"a.png"}, actor: "amy"},
 		{name: "actor falls back like the Pane", args: []string{"detach", "ab12", "a.png"}, env: map[string]string{"KATA_AUTHOR": "env-actor", "USER": "u"}, sub: "detach", ref: "ab12", operands: []string{"a.png"}, actor: "env-actor"},
 		{name: "double dash ends flags", args: []string{"attach", "ab12", "--", "--odd.png"}, sub: "attach", ref: "ab12", operands: []string{"--odd.png"}, actor: "anonymous"},
+		{name: "help after a double dash is a file", args: []string{"attach", "ab12", "--", "--help", "--version"}, sub: "attach", ref: "ab12", operands: []string{"--help", "--version"}, actor: "anonymous"},
+		{name: "status as JSON", args: []string{"worker", "status", "--json"}, sub: "worker", operands: []string{"status"}, actor: "anonymous"},
+		{name: "json elsewhere", args: []string{"worker", "doctor", "--json"}, err: "worker: --json applies to `tern-kata worker status` only"},
+		{name: "completion", args: []string{"completion", "fish"}, sub: "completion", operands: []string{"fish"}, actor: "anonymous"},
+		{name: "completion for an unknown shell", args: []string{"completion", "tcsh"}, err: "usage: tern-kata completion bash|zsh|fish"},
+		{name: "completion takes no flags", args: []string{"completion", "bash", "--as", "bob"}, err: "completion: unknown flag --as"},
 		{name: "attach without a file", args: []string{"attach", "ab12"}, err: "usage: tern-kata attach <ref> <file>..."},
 		{name: "attach without anything", args: []string{"attach"}, err: "usage: tern-kata attach <ref> <file>..."},
 		{name: "detach without a name", args: []string{"detach", "ab12"}, err: "usage: tern-kata detach <ref> <name>"},
@@ -236,8 +249,8 @@ func TestPlanLaunchSubcommands(t *testing.T) {
 				if err == nil || err.Error() != tt.err {
 					t.Fatalf("error = %v, want %q", err, tt.err)
 				}
-				if _, ok := errors.AsType[subcommandError](err); !ok {
-					t.Fatalf("error %T would not exit 1 like every other attach or detach failure", err)
+				if exitStatus(err) != 2 {
+					t.Fatalf("error %T exits %d, want 2 like every refused command line", err, exitStatus(err))
 				}
 				return
 			}
@@ -267,8 +280,8 @@ func TestPlanLaunchRefusesEmptyAsForEverySubcommand(t *testing.T) {
 				if err == nil || err.Error() != "--as must be non-empty" {
 					t.Fatalf("error = %v, want %q", err, "--as must be non-empty")
 				}
-				if _, ok := errors.AsType[subcommandError](err); !ok {
-					t.Fatalf("error %T would not take the exit path of --as requires an actor", err)
+				if exitStatus(err) != 2 {
+					t.Fatalf("error %T exits %d, want 2 like --as requires an actor", err, exitStatus(err))
 				}
 			})
 		}

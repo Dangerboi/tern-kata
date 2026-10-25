@@ -42,7 +42,7 @@ func catalogHub(entry CatalogEntry, active bool) model.FederationHub {
 func (c *Client) ListFederationHubs(_ context.Context, cmd model.LoadFederationHubs) (model.FederationHubsLoaded, error) {
 	catalog, err := ReadCatalog()
 	if err != nil {
-		return model.FederationHubsLoaded{Request: cmd.Request, Err: err}, nil
+		return model.FederationHubsLoaded{Request: cmd.Request, Err: err}, nil //nolint:nilerr // the answer carries the failure, as its doc says
 	}
 	loaded := model.FederationHubsLoaded{Request: cmd.Request}
 	for _, entry := range catalog.Daemons {
@@ -129,7 +129,7 @@ func (c *Client) ReadFederationHubProjects(ctx context.Context, cmd model.LoadFe
 func (c *Client) BrowseFederationHubs(ctx context.Context, cmd model.BrowseFederationHubs) (model.FederationBrowsed, error) {
 	catalog, err := ReadCatalog()
 	if err != nil {
-		return model.FederationBrowsed{Request: cmd.Request, Err: err}, nil
+		return model.FederationBrowsed{Request: cmd.Request, Err: err}, nil //nolint:nilerr // the answer carries the failure for the Page to show
 	}
 	browsed := model.FederationBrowsed{Request: cmd.Request}
 	for _, entry := range catalog.Daemons {

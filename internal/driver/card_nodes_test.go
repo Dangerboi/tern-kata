@@ -136,22 +136,6 @@ func caretNode(t *testing.T, m model.Model) string {
 	return ""
 }
 
-// buttonOnCard is the id of the button of the card on top whose text starts with text.
-func buttonOnCard(t *testing.T, m model.Model, text string) string {
-	t.Helper()
-	layer := cardLayerID(t, m)
-	var found []string
-	for _, n := range wireNodes(t, view.Render(m, now)) {
-		if label, _ := n.P["text"].(string); strings.HasPrefix(n.ID, layer+".") && n.P["tag"] == "button" && strings.HasPrefix(label, text) {
-			found = append(found, n.ID)
-		}
-	}
-	if len(found) != 1 {
-		t.Fatalf("buttons of the card on top starting %q = %v, want exactly one", text, found)
-	}
-	return found[0]
-}
-
 // textOnCard is the text of the node of the card on top that draws a text starting with prefix, and whether one does.
 func textOnCard(t *testing.T, m model.Model, prefix string) (string, bool) {
 	t.Helper()

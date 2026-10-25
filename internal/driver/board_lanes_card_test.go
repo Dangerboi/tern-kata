@@ -258,7 +258,7 @@ func TestLanesCardRefusesDoneLimitsAboveTheMaximumNamingTheField(t *testing.T) {
 		text, want string
 	}{{1, "3651", "Done days"}, {2, "501", "Done cards"}} {
 		s := lanesCard(t)
-		for i := 0; i < tt.tabs; i++ {
+		for range tt.tabs {
 			s = step(t, s, key("tab")).State
 		}
 		out := step(t, typed(t, s, tt.text), key("enter"))

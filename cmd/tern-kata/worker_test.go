@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -65,7 +66,7 @@ func (f workerFixture) serveUntilStopped(t *testing.T) (stop func()) {
 		once.Do(func() {
 			cancel()
 			select {
-			case <-done:
+			case <-done: //nolint:errcheck // the test asks only that the worker stops
 			case <-time.After(10 * time.Second):
 				t.Error("the worker did not stop")
 			}
@@ -131,7 +132,7 @@ func TestRunRefusalsSayWhy(t *testing.T) {
 	foreign := f.kata.CreateJob(t, other, workertest.Job{Name: "foreign", Prompt: "x"})
 	f.serve(t)
 	_, err := f.run(t, LaunchPlan{Subcommand: "run", TargetRef: foreign.UID})
-	if _, is := err.(subcommandError); !is || !strings.Contains(err.Error(), "belongs to Project elsewhere, which this worker does not serve") {
+	if !errors.As(err, new(subcommandError)) || !strings.Contains(err.Error(), "belongs to Project elsewhere, which this worker does not serve") {
 		t.Fatalf("job of an unserved Project: %v", err)
 	}
 	if _, err := f.run(t, LaunchPlan{Subcommand: "run", TargetRef: "01M5J9AAAAAAAAAAAAAAAAAAAA"}); err == nil || !strings.Contains(err.Error(), "no job 01M5J9AAAAAAAAAAAAAAAAAAAA in a Project this worker serves") {
@@ -142,7 +143,7 @@ func TestRunRefusalsSayWhy(t *testing.T) {
 func TestWorkerStatusWithNoWorkerSaysSo(t *testing.T) {
 	f := newWorkerFixture(t, "")
 	_, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}})
-	if _, is := err.(subcommandError); !is || !strings.Contains(err.Error(), "no tern-kata worker is running on this machine") {
+	if !errors.As(err, new(subcommandError)) || !strings.Contains(err.Error(), "no tern-kata worker is running on this machine") {
 		t.Fatalf("error %v", err)
 	}
 }
@@ -160,6 +161,14 @@ func TestWorkerStatusSaysWhatItServes(t *testing.T) {
 	out, _ := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}})
 	if !strings.HasPrefix(out, `Worker "laptop" running as robot (process `) || !strings.Contains(out, "No runs on this machine yet.") {
 		t.Fatalf("status:\n%s", out)
+	}
+	raw, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}, JSON: true})
+	var status worker.Status
+	if err != nil || json.Unmarshal([]byte(raw), &status) != nil {
+		t.Fatalf("status --json = %q, %v; want the status as JSON", raw, err)
+	}
+	if status.Executor != "laptop" || len(status.Projects) != 1 || status.Projects[0].Name != "demo" || status.Projects[0].AdapterJobs != 1 {
+		t.Fatalf("status --json = %+v", status)
 	}
 }
 
@@ -240,7 +249,7 @@ func TestWorkerDoctorFailsOnWhatIsBroken(t *testing.T) {
 	f := newWorkerFixture(t, "[profiles.broken]\ncommand = \"no-such-agent-program\"\n")
 	f.kata.Project(t, "unused")
 	out, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"doctor"}, Actor: "robot"})
-	if _, is := err.(subcommandError); !is || err.Error() != "worker doctor found 1 problem" {
+	if !errors.As(err, new(subcommandError)) || err.Error() != "worker doctor found 1 problem" {
 		t.Fatalf("error %v\n%s", err, out)
 	}
 	if want := `FAIL  profile broken: command "no-such-agent-program" was not found`; !strings.Contains(out, want) {
@@ -312,8 +321,8 @@ func TestPlanLaunchWorkerSubcommands(t *testing.T) {
 		"run x --takeover":               "run: unknown flag --takeover",
 	} {
 		_, err := PlanLaunch(strings.Fields(args), lookupFrom(nil), "v")
-		if _, is := err.(subcommandError); !is || !strings.Contains(err.Error(), want) {
-			t.Errorf("%q: %v, want a subcommand error saying %q", args, err, want)
+		if exitStatus(err) != 2 || !strings.Contains(err.Error(), want) {
+			t.Errorf("%q: %v, want a refused command line (exit 2) saying %q", args, err, want)
 		}
 	}
 	for _, line := range []string{"tern-kata run <job-uid>", "tern-kata worker status", "tern-kata worker stop [--now]", "tern-kata worker doctor", "tern-kata worker [--takeover]", "tern-kata worker resume <run-uid>", "tern-kata worker abandon <run-uid>"} {
@@ -403,7 +412,7 @@ func TestWorkerResumeAndAbandonSettleRunsHeldByARestart(t *testing.T) {
 		{Subcommand: "worker", Operands: []string{"resume", "01M5J9AAAAAAAAAAAAAAAAAAAA"}},
 	} {
 		_, err := f.run(t, plan)
-		if _, is := err.(subcommandError); !is {
+		if !errors.As(err, new(subcommandError)) {
 			t.Errorf("%v: %v, want a refusal", plan.Operands, err)
 		}
 	}
@@ -415,7 +424,7 @@ func TestWorkerResumeAndAbandonSettleRunsHeldByARestart(t *testing.T) {
 func TestWorkerResumeWithNoWorkerSaysSo(t *testing.T) {
 	f := newWorkerFixture(t, "")
 	_, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"abandon", "01M5J9AAAAAAAAAAAAAAAAAAAA"}})
-	if _, is := err.(subcommandError); !is || !strings.Contains(err.Error(), "no tern-kata worker is running on this machine") {
+	if !errors.As(err, new(subcommandError)) || !strings.Contains(err.Error(), "no tern-kata worker is running on this machine") {
 		t.Fatalf("error %v", err)
 	}
 }
@@ -490,7 +499,7 @@ func TestWorkerStopSaysNothingWillStartItAgainInTheSupervisionRulesWords(t *test
 func TestWorkerStopWithNoWorkerSaysSo(t *testing.T) {
 	f := newWorkerFixture(t, "")
 	_, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"stop"}})
-	if _, is := err.(subcommandError); !is || !strings.Contains(err.Error(), "no tern-kata worker is running on this machine") {
+	if !errors.As(err, new(subcommandError)) || !strings.Contains(err.Error(), "no tern-kata worker is running on this machine") {
 		t.Fatalf("error %v", err)
 	}
 }

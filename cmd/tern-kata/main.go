@@ -21,15 +21,26 @@ import (
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "tern-kata:", err)
-		// attach and detach never open a Pane, so every failure of theirs exits 1.
-		if _, ok := errors.AsType[subcommandError](err); ok {
-			os.Exit(1)
-		}
-		// Pane contract with window.luau: the Pane title is `tern-kata` (set in run) and this binary's own failures
-		// exit 3; Go exits 2 on a panic. The plugin reads 2 and 3 as "failed to start", 1 as either (Windows reports every
-		// failing launch as 1), and any other early failing status as "not installed", so a Pane failure must never exit 1.
-		os.Exit(3)
+		os.Exit(exitStatus(err))
 	}
+}
+
+// exitStatus is the status main exits with after err: 2 for a command line refused before anything ran, 128 plus the signal
+// for a command a signal stopped, 1 for any other failure of a subcommand (which never opens a Pane), else 3.
+// Pane contract with window.luau: the Pane title is `tern-kata` (set in run), the Pane's own failures exit 3 and a refused
+// command line 2, as a Go panic does. The plugin reads 2 and 3 as "failed to start", 1 as either (Windows reports every
+// failing launch as 1), and any other early failing status as "not installed", so a Pane failure must never exit 1.
+func exitStatus(err error) int {
+	if stopped, ok := errors.AsType[interrupted](err); ok {
+		return stopped.status()
+	}
+	if _, ok := errors.AsType[usageError](err); ok {
+		return 2
+	}
+	if _, ok := errors.AsType[subcommandError](err); ok {
+		return 1
+	}
+	return 3
 }
 
 func run() error {
@@ -45,20 +56,21 @@ func run() error {
 		_, err := fmt.Fprint(os.Stdout, usage)
 		return err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	if isWorkerCommand(plan) {
-		env, err := newWorkerEnv(plan)
-		if err != nil {
-			return err
-		}
-		ctx, stop := workerContext(ctx)
-		defer stop()
-		return runWorkerCommand(ctx, plan, env, os.Stdout)
+	if plan.Subcommand == "completion" {
+		return writeCompletion(plan.Operands[0], os.Stdout)
 	}
 	if plan.Subcommand != "" {
-		return runSubcommand(ctx, plan, data.NewGateway(data.LocateWithKata).WithHost(data.HostName()), os.Stdout)
+		ctx, received, stop := withSignals(context.Background(), stopSignals...)
+		defer stop()
+		err := runCommand(ctx, plan)
+		if s := received(); s != nil && err != nil {
+			return interrupted{s, err}
+		}
+		return err
 	}
+	// A terminate or a hangup ends the Pane cleanly: the loop returns, so the surface and the gateway close.
+	ctx, _, stop := withSignals(context.Background(), paneStopSignals...)
+	defer stop()
 	session, err := tern.Connect(ctx, editorOptions())
 	if errors.Is(err, tern.ErrUnsupported) {
 		kata, err := exec.LookPath("kata")
@@ -69,6 +81,10 @@ func run() error {
 	}
 	if err != nil {
 		return err
+	}
+	if len(plan.TUIArgs) > 0 {
+		session.Close()
+		return usageError{fmt.Errorf("%s: only kata tui takes these, and inside Tern tern-kata opens a Pane instead", strings.Join(plan.TUIArgs, " "))}
 	}
 	// Pane contract with window.luau: this title identifies a kata Pane.
 	if _, err := fmt.Fprint(os.Stdout, "\x1b]0;tern-kata\x07"); err != nil {
@@ -133,6 +149,8 @@ func run() error {
 				return nil
 			}
 			return err
+		case <-ctx.Done():
+			return nil
 		}
 	}
 }
@@ -147,4 +165,16 @@ func lookupEnv(key string) (string, bool) {
 		return "", false
 	}
 	return strings.TrimSpace(string(out)), true
+}
+
+// runCommand runs one of the subcommands, which need no Tern.
+func runCommand(ctx context.Context, plan LaunchPlan) error {
+	if isWorkerCommand(plan) {
+		env, err := newWorkerEnv(plan)
+		if err != nil {
+			return err
+		}
+		return runWorkerCommand(ctx, plan, env, os.Stdout)
+	}
+	return runSubcommand(ctx, plan, data.NewGateway(data.LocateWithKata).WithHost(data.HostName()), os.Stdout)
 }

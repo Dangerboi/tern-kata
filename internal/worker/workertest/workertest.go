@@ -531,7 +531,7 @@ func WriteConfig(t *testing.T, toml string) worker.Dirs {
 // shortTemp is a folder whose path is short enough for a unix socket.
 func shortTemp(t *testing.T) string {
 	t.Helper()
-	dir, err := os.MkdirTemp("", "tk")
+	dir, err := os.MkdirTemp("", "tk") //nolint:usetesting // t.TempDir's path is too long for a unix socket
 	if err != nil {
 		t.Fatal(err)
 	}

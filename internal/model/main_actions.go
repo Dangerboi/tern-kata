@@ -28,8 +28,8 @@ type actionEntry struct {
 
 func keys(chordAndLabel ...string) []Key {
 	list := make([]Key, 0, len(chordAndLabel)/2)
-	for i := 0; i < len(chordAndLabel); i += 2 {
-		list = append(list, Key{chordAndLabel[i], chordAndLabel[i+1]})
+	for pair := range slices.Chunk(chordAndLabel, 2) {
+		list = append(list, Key{pair[0], pair[1]}) // an odd list is a typo in the table: it panics at init, which every test runs
 	}
 	return list
 }
@@ -61,10 +61,6 @@ func cardMoving(dir int) func(Model) (Model, []Cmd) {
 		}
 		return MoveCard(m, m.SelectedUID, dir)
 	}
-}
-
-func selection(action Action) func(Model) (Model, []Cmd) {
-	return pure(func(m Model) Model { return moveSelection(m, action) })
 }
 
 func searchMoving(action Action) func(Model) (Model, []Cmd) {

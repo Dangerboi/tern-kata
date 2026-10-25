@@ -4,6 +4,19 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+- `tern-kata completion bash|zsh|fish` prints a shell completion script for the subcommands, the worker forms and their flags: `source <(tern-kata completion bash)` (or `zsh`), or `tern-kata completion fish | source`.
+- `tern-kata worker status --json` prints the worker's status as JSON for scripts, in the shape the worker's control socket answers it.
+
+### Changed
+
+- A command line tern-kata refuses exits 2, as Unix tools do: a subcommand's usage error (a missing ref, an unknown flag) no longer exits 1, and the Pane's own refusals no longer exit 3. A subcommand that fails while running still exits 1.
+- Inside Tern, `tern-kata` refuses arguments only `kata tui` takes, naming them, instead of opening the Pane as if they weren't there; outside Tern they still go to `kata tui`.
+- Ctrl+c, a terminate or a hangup stops a subcommand cleanly and it exits 128 plus the signal's number (130 for ctrl+c); a second one ends it at once. A terminate or hangup closes the Pane cleanly, and the foreground worker stops on a hangup as on ctrl+c.
+- After a lone `--`, `--help` and `--version` are names, not flags, so `tern-kata attach <ref> -- --help` attaches a file called `--help`.
+- The Pane responds faster in large Projects. Moving the selection in the list, the Issue detail or the Board reuses the rows already worked out instead of rebuilding them on every key, and a live refresh builds them once. The Jobs Page counts each cron job's "about N Issues a day" warning once per job revision when the jobs are read, instead of on every key, which kept it slow with a job that fires every minute. The Collection and Issue detail reads from a local daemon over its Unix socket now arrive uncompressed, so neither the daemon nor the Pane spends time on gzip for each refresh.
+
 ## [0.4.0] - 2026-10-25
 
 ### Added

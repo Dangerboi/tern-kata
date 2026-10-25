@@ -139,6 +139,7 @@ func enrollmentIDs(ids []int64) string {
 // leaveHubError words a failure on the hub's side as kata tui does. It carries the text only: nothing was sent to the spoke's daemon
 // for the failure to be about, so the gateway must not take it for a failed dial there and run the leave again.
 func leaveHubError(err error) error {
+	//nolint:errorlint // text only, as the comment above says: wrapping would let the gateway match a failed hub dial and retry
 	return fmt.Errorf("hub revoke failed: %s; retry with local-only to tear down locally, then revoke on the hub later", err)
 }
 

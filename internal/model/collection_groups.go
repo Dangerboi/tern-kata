@@ -20,9 +20,10 @@ func IssueDate(projected *string, metadata map[string]any, key string) string {
 func GroupIssues(collection Collection, issues []Issue, cal PaneCalendar) []IssueGroup {
 	grouping := collection.Def().Grouping
 	today := cal.Date
-	groups := map[string][]Issue{}
+	// members are each group's Issues as indexes into issues: sorted as ints and copied once, not moved about while sorting.
+	members := map[string][]int{}
 	titles := map[string]string{}
-	for _, issue := range issues {
+	for i, issue := range issues {
 		id := collection.View
 		title := collection.Title
 		schedule := IssueDate(issue.ScheduledOnDate, issue.Metadata, ScheduledKey)
@@ -66,12 +67,13 @@ func GroupIssues(collection Collection, issues []Issue, cal PaneCalendar) []Issu
 				id = issue.ProjectName + "/" + *issue.ProjectUID
 			}
 		}
-		groups[id] = append(groups[id], issue)
+		members[id] = append(members[id], i)
 		titles[id] = title
 	}
-	result := make([]IssueGroup, 0, len(groups))
-	for id, items := range groups {
-		slices.SortStableFunc(items, func(a, b Issue) int {
+	result := make([]IssueGroup, 0, len(members))
+	for id, at := range members {
+		slices.SortStableFunc(at, func(i, j int) int {
+			a, b := &issues[i], &issues[j]
 			if grouping == GroupDeadline && (id == "0-overdue" || id == "1-today") {
 				if c := cmp.Compare(IssueDate(a.DeadlineOnDate, a.Metadata, DeadlineKey), IssueDate(b.DeadlineOnDate, b.Metadata, DeadlineKey)); c != 0 {
 					return c
@@ -82,6 +84,10 @@ func GroupIssues(collection Collection, issues []Issue, cal PaneCalendar) []Issu
 			}
 			return cmp.Compare(a.UID, b.UID)
 		})
+		items := make([]Issue, len(at))
+		for k, i := range at {
+			items[k] = issues[i]
+		}
 		result = append(result, IssueGroup{ID: id, Title: titles[id], Issues: items})
 	}
 	slices.SortFunc(result, func(a, b IssueGroup) int {

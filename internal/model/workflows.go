@@ -612,13 +612,6 @@ func workflowMode(m Model) Mode {
 	return ModeEditor
 }
 
-func workflowCardEdit(m Model, apply func(TextEditor) TextEditor) Model {
-	if c := m.Workflows.Card; !c.Saving && !c.DiscardConfirm && c.Conflict == nil {
-		m.Workflows.Card.Editor = apply(c.Editor)
-	}
-	return m
-}
-
 // workflowModes is where the Page's keys are bound.
 var workflowModes = []Mode{ModeWorkflows}
 

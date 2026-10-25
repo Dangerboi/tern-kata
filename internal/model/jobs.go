@@ -101,6 +101,41 @@ type JobsState struct {
 	// cronRead is what the Issue detail last read the list for; rev counts the answers, for the detail's rows.
 	cronRead cronRead
 	rev      int64
+	// rates are the listed jobs' IssuesPerDay, counted once per job revision. A cron trigger's count walks every occurrence
+	// of a week (a minutely job's 10,080 take about 17ms), too slow for every draw of the Page; see withRates.
+	rates map[jobRevision]int
+}
+
+// jobRevision is one revision of a job: what its rate is counted for.
+type jobRevision struct {
+	uid      string
+	revision int64
+}
+
+// withRates counts the rate of every listed job whose revision has none yet, at m.Now, and forgets the rest. A rate counted
+// over the week from an earlier read stays: the Page says "about" so many Issues a day, which a few hours do not move.
+func (m Model) withRates() Model {
+	rates := make(map[jobRevision]int, len(m.Jobs.Jobs))
+	for _, job := range m.Jobs.Jobs {
+		key := jobRevision{job.UID, job.Revision}
+		if perDay, ok := m.Jobs.rates[key]; ok {
+			rates[key] = perDay
+		} else {
+			rates[key] = job.IssuesPerDay(m.Now)
+		}
+	}
+	m.Jobs.rates = rates
+	return m
+}
+
+// highRateWarning is the line the Jobs Page shows for a job that makes more than 24 Issues a day, "" for any other. A job
+// withRates has not counted is counted from now.
+func (m Model) highRateWarning(job CronJob, now time.Time) string {
+	perDay, ok := m.Jobs.rates[jobRevision{job.UID, job.Revision}]
+	if !ok {
+		perDay = job.IssuesPerDay(now)
+	}
+	return cronjob.HighRateWarning(perDay)
 }
 
 // OnJobs says the Jobs Page is current.
@@ -143,7 +178,7 @@ func (m Model) JobRows(now time.Time) []JobRow {
 		}
 		row.Last = m.lastActivity(job, now)
 		if !job.Archived() {
-			row.Warning = job.HighRateWarning(now)
+			row.Warning = m.highRateWarning(job, now)
 		}
 		rows[i] = row
 	}
@@ -259,7 +294,7 @@ func (m Model) JobFacts(now time.Time) []JobFact {
 		add("Next run", m.Calendar.Stamp(next))
 	}
 	if !job.Archived() {
-		add("Warning", job.HighRateWarning(now))
+		add("Warning", m.highRateWarning(*job, now))
 	}
 	activity := m.Jobs.Activity[job.UID]
 	for i, r := range activity.Runs[:min(len(activity.Runs), JobActivityShown)] {
@@ -438,6 +473,7 @@ func jobsLoaded(m Model, msg JobsLoaded) Model {
 	m.Jobs.ProjectArchived = msg.ProjectArchived
 	if !msg.ProjectArchived {
 		m.Jobs.Jobs = msg.Jobs
+		m = m.withRates()
 		if msg.Activity != nil {
 			m.Jobs.Activity = msg.Activity
 		}

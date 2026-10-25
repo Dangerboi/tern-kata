@@ -13,7 +13,7 @@ func (c *Client) ReadDetail(ctx context.Context, uid string) (model.DetailLoaded
 	view, history := model.DetailDaemonView(), true
 	response, err := c.ReadUISnapshotWithResponse(ctx, &g.ReadUISnapshotRequestOptions{
 		Query: &g.ReadUISnapshotQuery{View: &view, SelectedIssueUID: &uid, IncludeHistory: &history},
-	})
+	}, plainOverSocket)
 	if err != nil {
 		return model.DetailLoaded{}, daemonError(err)
 	}

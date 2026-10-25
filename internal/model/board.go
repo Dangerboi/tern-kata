@@ -97,7 +97,16 @@ type BoardColumn struct {
 
 // BoardColumns are the Board's columns, left to right: No lane, one per Lane, Done. Cards follow the list's order, Done's
 // newest closed first. Done holds only Issues closed in the last DoneLimits days of the Pane calendar, at most DoneLimits cards.
+// On the Board Page the slice is shared with the kept columns; see collectionRows.
 func (m Model) BoardColumns() []BoardColumn {
+	if m.OnBoard() && m.collection.answers(m) {
+		return m.collection.columns
+	}
+	return m.boardColumns()
+}
+
+// boardColumns are the Board's columns worked out afresh.
+func (m Model) boardColumns() []BoardColumn {
 	lanes := m.LaneList()
 	doneDays, doneCards := m.DoneLimits()
 	keys := append([]string{LaneNone}, lanes...)
@@ -144,9 +153,12 @@ func (c PaneCalendar) closedWithin(issue Issue, days int) bool {
 }
 
 // boardRows are the Board's cards in reading order, or the Lane view's Lane's cards: the rows the selection moves over while the Board Page is shown.
-func (m Model) boardRows() []IssueRow {
+func (m Model) boardRows() []IssueRow { return m.boardRowsOf(m.BoardColumns()) }
+
+// boardRowsOf are boardRows read from columns.
+func (m Model) boardRowsOf(columns []BoardColumn) []IssueRow {
 	var rows []IssueRow
-	for _, column := range m.BoardColumns() {
+	for _, column := range columns {
 		if m.Board.Mode == BoardLane && column.Lane != m.Board.Lane {
 			continue
 		}

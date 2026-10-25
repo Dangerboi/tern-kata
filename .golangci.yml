@@ -1,0 +1,72 @@
+version: "2"
+
+run:
+  concurrency: 4
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose # unclosed HTTP response bodies
+    - copyloopvar # loop variable copies made redundant by Go 1.22
+    - durationcheck # time.Duration multiplied by time.Duration
+    - errorlint # errors.Is/As and %w instead of ==, type assertions and %v
+    - gosec # security: file permissions, subprocesses, path handling
+    - intrange # range over an integer instead of a counting loop
+    - misspell # misspelled English in comments and strings
+    - nilerr # returning a nil error after checking a non-nil one
+    - noctx # network and exec calls without a context
+    - nolintlint # every //nolint names its linter and says why
+    - usetesting # t.TempDir, t.Setenv and t.Context over their os and context counterparts
+  settings:
+    errcheck:
+      exclude-functions:
+        # Closing a Windows handle on cleanup, the way std-error-handling lets Close go unchecked.
+        - golang.org/x/sys/windows.CloseHandle
+    gosec:
+      excludes:
+        # errcheck owns unchecked errors.
+        - G104
+        # A local, single-user tool: it reads and writes the user's own config, state and checkout at paths it works out
+        # itself (G304, G703), and launching kata, $EDITOR and the configured agents is what it is for (G204).
+        - G204
+        - G304
+        - G703
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    staticcheck:
+      checks:
+        - all
+        # The Pane shows error text to the user as a sentence ("Could not save the filter."), so capitals and full stops are
+        # the house style, not a mistake.
+        - -ST1005
+        # Package comments, naming of initialisms and receiver names are left to review.
+        - -ST1000
+        - -ST1003
+        - -ST1016
+        # Quick-fix suggestions that restyle working conditions and selectors; they are not defects.
+        - -QF1001
+        - -QF1008
+  exclusions:
+    presets:
+      # Close, Remove, Flush and print errors that almost every program ignores, as this one does on cleanup paths.
+      - std-error-handling
+    rules:
+      # Tests and their helper programs build throwaway fixtures, with whatever permissions and commands the case needs.
+      - path: (_test\.go|internal/worker/workertest/)
+        linters:
+          - gosec
+      # Processes are stopped on purpose, not on a context: the worker signals an agent's whole process group and waits out a
+      # grace period (exec.CommandContext would kill only the leader, at once), and the editor and kata tui run in the foreground.
+      - linters:
+          - noctx
+        text: os/exec.Command must not be called
+      # The Job Object code calls Win32 through pointers (G103) and passes process ids, which Windows keeps in 32 bits (G115).
+      - path: internal/worker/proc_windows\.go
+        linters:
+          - gosec
+        text: G103|G115
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

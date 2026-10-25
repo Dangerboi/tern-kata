@@ -146,11 +146,6 @@ func (j CronJob) deliveryAnchor() time.Time {
 	return j.Parent.Progress.Anchor
 }
 
-// HighRateWarning is the line the Jobs Page shows for a job that makes more than 24 Issues a day, "" for any other.
-func (j CronJob) HighRateWarning(now time.Time) string {
-	return cronjob.HighRateWarning(j.IssuesPerDay(now))
-}
-
 // zoneAndExpression splits a cron trigger into its zone and bare expression.
 func zoneAndExpression(t cronjob.Trigger) (zone, expression string) {
 	return cronjob.Zone(t.Cron, t.Timezone)

@@ -16,7 +16,7 @@ func jitter(lo, hi time.Duration) time.Duration {
 	if hi <= lo {
 		return lo
 	}
-	return lo + rand.N(hi-lo)
+	return lo + rand.N(hi-lo) //nolint:gosec // G404: spreads refresh times, nothing to guess
 }
 
 // sleep waits d on the worker's clock; false means ctx ended first.

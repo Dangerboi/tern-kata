@@ -13,5 +13,5 @@ func execKata(kata string, args, environ []string, actor string) error {
 }
 
 func editorCommand(editor, file string) *exec.Cmd {
-	return exec.Command("sh", "-c", editor+" \"$1\"", "tern-kata-editor", file)
+	return exec.Command("sh", "-c", editor+" \"$1\"", "tern-kata-editor", file) //nolint:gosec // G702: $EDITOR is the user's own setting
 }

@@ -268,11 +268,11 @@ func TestProfileAndCheckoutArePickersWhenTheWorkerConfigIsReadAndFreeTextWhenItI
 }
 
 func TestAWorkerConfigThatCannotBeReadLeavesFreeTextAndSaysWhy(t *testing.T) {
-	s := feed(t, promptCard(t), model.WorkerPickersLoaded{Pickers: model.WorkerPickers{Note: "worker.toml: unknown key lmits"}}).State
+	s := feed(t, promptCard(t), model.WorkerPickersLoaded{Pickers: model.WorkerPickers{Note: "worker.toml: unknown key limits"}}).State
 	if !drawn(t, s, model.JobFieldProfile) || drawn(t, s, model.JobFieldProfilePick) {
 		t.Error("an unreadable config does not leave free text")
 	}
-	wantText(t, "note", cardText(t, s), "unknown key lmits")
+	wantText(t, "note", cardText(t, s), "unknown key limits")
 }
 
 func TestOnceAndIssueDateTriggersSaveAndPreviewInWords(t *testing.T) {

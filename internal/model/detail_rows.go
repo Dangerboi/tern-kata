@@ -44,7 +44,7 @@ func (k RowKind) InActivity() bool { return k != RowChild && k != RowCron }
 
 // Tab is the Activity tab that lists rows of the kind; a child row belongs to none and answers the first tab.
 func (k RowKind) Tab() ActivityTab {
-	return ActivityTab(max(slices.IndexFunc(tabTable[:], func(e tabSpec) bool {
+	return ActivityTab(max(slices.IndexFunc(tabTable[:], func(e tabSpec) bool { //nolint:gosec // G115: an index into the few tabs
 		return e.kind == k
 	}), 0))
 }

@@ -193,10 +193,10 @@ name = "demo"
 		t.Fatalf("worker.toml read as %+v", got)
 	}
 
-	if err := os.WriteFile(filepath.Join(folder, "worker.toml"), []byte(config+"lmits = 3\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(folder, "worker.toml"), []byte(config+"limits = 3\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got := askedFor(); got.Read || !strings.Contains(got.Note, "lmits") {
+	if got := askedFor(); got.Read || !strings.Contains(got.Note, "limits") {
 		t.Fatalf("a config the worker would refuse: %+v, want free text and the reason", got)
 	}
 }

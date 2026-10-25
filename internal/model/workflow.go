@@ -130,7 +130,7 @@ func ParseWorkflow(text string) (WorkflowDocument, error) {
 	}
 	definition, err := json.Marshal(file.Definition)
 	if err != nil {
-		return WorkflowDocument{}, fmt.Errorf("Not valid JSON: %v", err)
+		return WorkflowDocument{}, fmt.Errorf("Not valid JSON: %w", err)
 	}
 	if len(definition) > maxWorkflowDefinition {
 		return WorkflowDocument{}, errors.New("The workflow definition is over kata's 256 KiB limit.")
@@ -175,12 +175,14 @@ func decodeOptions(raw json.RawMessage) any {
 // describeJSONError says what is wrong with text in words that point at the place: the line of a syntax error, the field of
 // a value of the wrong type.
 func describeJSONError(text string, err error) error {
-	switch e := err.(type) {
-	case *json.SyntaxError:
-		line := 1 + strings.Count(text[:min(int(e.Offset), len(text))], "\n")
-		return fmt.Errorf("Not valid JSON on line %d: %v.", line, e)
-	case *json.UnmarshalTypeError:
-		return fmt.Errorf("%s must be %s, not %s.", jsonPath(e.Field), jsonKind(e.Type), e.Value)
+	var syntax *json.SyntaxError
+	var typed *json.UnmarshalTypeError
+	switch {
+	case errors.As(err, &syntax):
+		line := 1 + strings.Count(text[:min(int(syntax.Offset), len(text))], "\n")
+		return fmt.Errorf("Not valid JSON on line %d: %w.", line, syntax)
+	case errors.As(err, &typed):
+		return fmt.Errorf("%s must be %s, not %s.", jsonPath(typed.Field), jsonKind(typed.Type), typed.Value)
 	}
 	if errors.Is(err, io.EOF) {
 		return errors.New("Not valid JSON: the document is empty.")
@@ -191,7 +193,7 @@ func describeJSONError(text string, err error) error {
 	if field, ok := strings.CutPrefix(err.Error(), "json: unknown field "); ok {
 		return fmt.Errorf("Unknown field %s; kata takes only name, version, about, input, options and steps (key, kind, command, prompt, after, retries, options).", field)
 	}
-	return fmt.Errorf("Not valid JSON: %v.", err)
+	return fmt.Errorf("Not valid JSON: %w.", err)
 }
 
 func jsonPath(field string) string {

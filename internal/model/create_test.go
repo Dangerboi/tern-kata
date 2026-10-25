@@ -82,7 +82,7 @@ func TestCreateDraft(t *testing.T) {
 	}
 	rejected := errors.New("permission denied\nask owner")
 	m, _ = model.Update(m, model.IssueCreated{Err: rejected})
-	if !m.Create.Open || m.Create.Saving || m.Create.Err != rejected || m.Create.Editor.Text != "Draft body" {
+	if !m.Create.Open || m.Create.Saving || !errors.Is(m.Create.Err, rejected) || m.Create.Editor.Text != "Draft body" {
 		t.Fatal("rejected Draft lost")
 	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "ctrl+o"})

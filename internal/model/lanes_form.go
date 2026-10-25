@@ -106,7 +106,7 @@ func parseLanes(text string) ([]string, error) {
 		}
 		label, err := CheckLabel(entry)
 		if err != nil {
-			return nil, fmt.Errorf("%q %v.", shortEntry(entry), err)
+			return nil, fmt.Errorf("%q %w.", shortEntry(entry), err)
 		}
 		if slices.Contains(lanes, label) {
 			return nil, fmt.Errorf("%q appears twice.", label)
@@ -165,7 +165,7 @@ func updateLanesFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 			return m, nil
 		}
 		if m.Board.fileErr != nil {
-			form.Err = fmt.Errorf("Lanes not saved: %v", m.Board.fileErr)
+			form.Err = fmt.Errorf("Lanes not saved: %w", m.Board.fileErr)
 			return m, nil
 		}
 		form.Saving, form.Err = true, nil

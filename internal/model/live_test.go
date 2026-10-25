@@ -42,7 +42,7 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 			messages: []model.Msg{model.Failed{Err: failure}},
 			check: func(t *testing.T, m model.Model, cmds []model.Cmd) {
 				binding, ok := model.LookupBindingForMode("ctrl+r", m.CurrentMode())
-				if m.Err != failure || m.Loading || m.CurrentMode() != model.ModeError || !ok || binding.Action != model.RetryAction || !binding.ShowInFooter || len(cmds) != 0 {
+				if !errors.Is(m.Err, failure) || m.Loading || m.CurrentMode() != model.ModeError || !ok || binding.Action != model.RetryAction || !binding.ShowInFooter || len(cmds) != 0 {
 					t.Fatalf("daemon error: %+v, %#v", m, cmds)
 				}
 			},
@@ -70,7 +70,7 @@ func TestLiveFailureAndRecovery(t *testing.T) {
 			messages: []model.Msg{model.StreamDropped{Generation: 1, Err: failure}},
 			check: func(t *testing.T, m model.Model, cmds []model.Cmd) {
 				want := model.Subscribe{Workspace: "/repo", AfterID: 10, Generation: 2, Delay: time.Second}
-				if !m.Stale || m.Err != nil || m.StreamErr != failure || m.SelectedUID != "b" || len(m.Issues) != 2 || !reflect.DeepEqual(cmds, []model.Cmd{want}) {
+				if !m.Stale || m.Err != nil || !errors.Is(m.StreamErr, failure) || m.SelectedUID != "b" || len(m.Issues) != 2 || !reflect.DeepEqual(cmds, []model.Cmd{want}) {
 					t.Fatalf("stale mode: %+v, %#v", m, cmds)
 				}
 			},

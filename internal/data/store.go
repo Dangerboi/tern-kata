@@ -31,7 +31,7 @@ func (s attachmentStore) issueDir(uid string) string { return filepath.Join(s.di
 // start together both find it missing; Windows refuses the second rename while the first holds the file, and that attach goes
 // on once the .gitignore the other wrote is there.
 func (s attachmentStore) ensure(uid string) error {
-	if err := os.MkdirAll(s.issueDir(uid), 0o755); err != nil {
+	if err := os.MkdirAll(s.issueDir(uid), 0o755); err != nil { //nolint:gosec // G301: attachments live in the checkout, readable as it is
 		return err
 	}
 	ignore := filepath.Join(s.dir(), ".gitignore")
@@ -79,7 +79,7 @@ func (s attachmentStore) put(ctx context.Context, uid, source, base string, take
 func (s attachmentStore) remove(uid, path string) (model.FileFate, error) {
 	rel, err := filepath.Rel(s.issueDir(uid), path)
 	if err != nil || !filepath.IsAbs(path) || rel == "." || !filepath.IsLocal(rel) {
-		return model.FileLeft, nil
+		return model.FileLeft, nil //nolint:nilerr // a path outside the Issue's folder is left, not a failure, as the doc says
 	}
 	switch err := os.Remove(path); {
 	case err == nil:
@@ -110,7 +110,7 @@ func copyNew(source, dst string) (err error) {
 		return err
 	}
 	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644) //nolint:gosec // G302: an attachment copy in the checkout
 	if err != nil {
 		return err
 	}

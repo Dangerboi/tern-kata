@@ -28,7 +28,7 @@ func doneHead(t *testing.T, s driver.State) string {
 
 func TestDoneShowsTheTwentyNewestClosedAndSaysHowManyQualify(t *testing.T) {
 	var issues []model.Issue
-	for i := 0; i < 25; i++ {
+	for i := range 25 {
 		at := time.Date(2026, 10, 8, 0, i, 0, 0, time.UTC)
 		issue := boardCard(fmt.Sprintf("c%02d", i))
 		issue.Status, issue.ClosedAt = "closed", &at
@@ -111,7 +111,7 @@ func TestLanesCardRefusesBadDoneLimitsNamingTheField(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("%d %s", tt.tabs, tt.text), func(t *testing.T) {
 			s := lanesCard(t)
-			for i := 0; i < tt.tabs; i++ {
+			for range tt.tabs {
 				s = step(t, s, key("tab")).State
 			}
 			out := step(t, typed(t, s, tt.text), key("enter"))

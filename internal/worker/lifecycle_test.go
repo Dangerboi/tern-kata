@@ -192,7 +192,7 @@ func TestAnIdleControlConnectionDoesNotDelayShutdown(t *testing.T) {
 	h := newHarness(t)
 	r := h.start(worker.Hooks{})
 	h.admitting(r)
-	conn, err := net.Dial("unix", h.dirs.Socket())
+	conn, err := new(net.Dialer).DialContext(t.Context(), "unix", h.dirs.Socket())
 	if err != nil {
 		t.Fatal(err)
 	}

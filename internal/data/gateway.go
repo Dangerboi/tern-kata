@@ -108,6 +108,13 @@ func (g *Gateway) Run(ctx context.Context, cmd model.Cmd, messages chan<- model.
 	for _, step := range d.after {
 		result = step.run(g, ctx, cmd, result)
 	}
+	// A receiver that is ready gets the result even once ctx has ended: a subcommand waits on a buffered channel for the one
+	// answer, and a random pick of ctx.Done() there would leave it waiting for good.
+	select {
+	case messages <- result:
+		return
+	default:
+	}
 	select {
 	case messages <- result:
 	case <-ctx.Done():

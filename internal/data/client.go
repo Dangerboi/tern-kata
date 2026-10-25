@@ -87,6 +87,21 @@ func connect(ctx context.Context, target Target) (*Client, error) {
 	return &Client{Client: c, kind: kind, version: normalized}, nil
 }
 
+// unixSocketHost is the host kata's client names in every request it sends over a daemon's Unix socket: a reserved .invalid
+// name, which no network address answers to.
+const unixSocketHost = "kata.invalid"
+
+// plainOverSocket asks for an uncompressed answer when the request goes over a daemon's Unix socket. kata gzips every JSON answer
+// to a client that accepts gzip, and Go's transport accepts it unasked; over a socket that costs the daemon a compress and the
+// Pane a decompress of every snapshot, and a snapshot read takes longer for it. Over TCP, loopback included, gzip stays: there
+// the plain body is the slower read. Should kata name its socket requests differently, every read simply stays compressed.
+func plainOverSocket(_ context.Context, req *http.Request) error {
+	if req.URL.Host == unixSocketHost {
+		req.Header.Set("Accept-Encoding", "identity")
+	}
+	return nil
+}
+
 // daemonError is the text the Pane shows for any daemon failure: kata's message, then its recovery hint on its
 // own line, without the status-and-code prefix kata's error type carries. A kata failure with no message shows the
 // status text, or kata's code when there is no status.
