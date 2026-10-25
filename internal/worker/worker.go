@@ -9,10 +9,13 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/oklog/ulid/v2"
 
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
@@ -137,7 +140,7 @@ func (w *Worker) Ready() <-chan struct{} { return w.ready }
 // Run serves until ctx ends. It refuses to start while another worker holds the machine's lock. A stop leaves the
 // lease and any started run's journal as they are: the next start continues them (ADR-0003, ADR-0006).
 func (w *Worker) Run(ctx context.Context) error {
-	if err := os.MkdirAll(w.opt.Dirs.State, 0o700); err != nil {
+	if err := secureStateDir(w.opt.Dirs.State); err != nil {
 		return err
 	}
 	lock, err := AcquireLock(w.opt.Dirs.Lock())
@@ -156,6 +159,12 @@ func (w *Worker) Run(ctx context.Context) error {
 	ln, err := new(net.ListenConfig).Listen(ctx, "unix", w.opt.Dirs.Socket())
 	if err != nil {
 		return fmt.Errorf("control socket: %w", err)
+	}
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(w.opt.Dirs.Socket(), 0o600); err != nil {
+			_ = ln.Close()
+			return fmt.Errorf("control socket: %w", err)
+		}
 	}
 	defer os.Remove(w.opt.Dirs.Socket())
 	w.runs.Add(1)
@@ -178,6 +187,39 @@ func (w *Worker) Run(ctx context.Context) error {
 	<-ctx.Done()
 	w.runs.Wait()
 	return nil
+}
+
+// secureStateDir creates the state folder and refuses one the worker cannot trust: a symlink, a file, or a folder
+// owned by another user. A folder of its own with group or other access is tightened to 0700 (not on Windows, where
+// mode bits mean nothing). The control socket and the run journals live inside it.
+func secureStateDir(dir string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	switch {
+	case info.Mode()&os.ModeSymlink != 0:
+		return fmt.Errorf("the state folder %s is a symbolic link; point the state folder in worker.toml at the real folder", dir)
+	case !info.IsDir():
+		return fmt.Errorf("the state folder %s is not a folder", dir)
+	case foreignOwned(info):
+		return fmt.Errorf("the state folder %s belongs to another user; use a folder of your own", dir)
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
+		if err := os.Chmod(dir, 0o700); err != nil { //nolint:gosec // G302: a folder needs its search bit; 0o700 is owner-only
+			return fmt.Errorf("the state folder %s is open to other users and cannot be restricted: %w", dir, err)
+		}
+	}
+	return nil
+}
+
+// validUID reports whether uid is a ULID, the only form that is safe to use as a folder name.
+func validUID(uid string) bool {
+	_, err := ulid.ParseStrict(uid)
+	return err == nil
 }
 
 // projectNamed is the served Project called name.
@@ -214,6 +256,9 @@ func (w *Worker) resolve(ctx context.Context, ps *projectState) (blocked string,
 		return fmt.Sprintf("Project %q does not exist in kata", ps.cfg.Name), nil
 	}
 	p := projects[i]
+	if !validUID(p.UID) {
+		return fmt.Sprintf("the kata daemon gave Project %q the uid %q, which is not a valid uid; refusing to build a state folder from it", p.Name, p.UID), nil
+	}
 	caps, err := w.opt.Kata.Capabilities(ctx, p.ID)
 	if err != nil {
 		return "", err

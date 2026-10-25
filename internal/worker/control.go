@@ -5,8 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"time"
+
+	"github.com/oklog/ulid/v2"
 )
 
 // The control socket (ADR-0004): one JSON request per connection, one JSON reply. It replaces polling of request
@@ -73,6 +76,10 @@ func (w *Worker) serveControl(ctx context.Context, ln interface {
 		if err != nil {
 			return
 		}
+		if !peerAllowed(conn) {
+			_ = conn.Close()
+			continue
+		}
 		w.runs.Add(1)
 		go func() {
 			defer w.runs.Done()
@@ -97,6 +104,12 @@ func (w *Worker) serveControl(ctx context.Context, ln interface {
 }
 
 func (w *Worker) handle(ctx context.Context, req Request) Response {
+	switch req.Op {
+	case "run-detail", "resume", "abandon":
+		if _, err := ulid.ParseStrict(req.Run); err != nil {
+			return Response{Error: fmt.Sprintf("%q is not a run uid", req.Run)}
+		}
+	}
 	switch req.Op {
 	case "status":
 		s := w.Status()
