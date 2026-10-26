@@ -49,7 +49,8 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 	if !ok {
 		return
 	}
-	defer starting()
+	held := true
+	defer func() { starting() }()
 	for ctx.Err() == nil {
 		now := w.clock.Now()
 		if !ps.resolved {
@@ -65,6 +66,7 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 			w.mu.Unlock()
 			if !ps.resolved {
 				starting() // a Project kata cannot answer for yet waits without holding a start-up place
+				held = false
 				wait := jitter(retry/2, retry)
 				if err == nil {
 					wait = jitter(2*time.Minute+30*time.Second, 5*time.Minute)
@@ -76,6 +78,13 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 				continue
 			}
 			retry = 10 * time.Second
+		}
+		if !now.Before(nextLease) && !recovered && !held {
+			// The place given back while the Project could not resolve is taken again before it recovers.
+			if starting, ok = w.beginStarting(ctx); !ok {
+				return
+			}
+			held = true
 		}
 		if !now.Before(nextLease) {
 			state := claimLease(ctx, w.opt.Kata, w.clock, w.opt.Config.Executor, ps.actor, ps.project.ID, takeover)
@@ -99,6 +108,7 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 				w.recoverProject(ctx, ps)
 			}
 			starting()
+			held = false
 		}
 		if ps.resolved {
 			if nextRoute.IsZero() {

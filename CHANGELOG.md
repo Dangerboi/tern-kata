@@ -14,6 +14,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A run or command step that exits 0 while a process it started in the background still holds its output is recorded by its real exit status, not `failed` with "exited with status -1".
 - A run's final report no longer counts as delivered when kata already holds the same status with another summary; the run is left for inspection instead.
 - A run's Stderr in the Pane shows the end of a long stderr, for prompt jobs and concluded workflow steps alike, instead of text from its first 64 KiB.
+- `worker resume` renews the Project's lease first and refuses when another machine has taken the Project over, instead of starting the agent on a lease that may be gone.
 
 ## [0.5.0] - 2026-10-25
 

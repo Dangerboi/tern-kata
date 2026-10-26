@@ -67,9 +67,15 @@ func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, err
 			w.unreserve(ps)
 		}
 	}()
+	// The lease is renewed right before the agent may start (ADR-0003); the cached one can predate another machine's takeover.
+	state := claimLease(ctx, w.opt.Kata, w.clock, w.opt.Config.Executor, ps.actor, j.ProjectID, false)
 	w.mu.Lock()
-	generation := ps.lease.Generation
+	ps.lease = state
 	w.mu.Unlock()
+	if !state.Held {
+		return RunTransition{}, fmt.Errorf("run %s cannot be resumed: Project %s's lease is not held: %s", uid, ps.cfg.Name, state.Why())
+	}
+	generation := state.Generation
 	by = cmp.Or(by, ps.actor)
 	updated, err := w.store.Update(uid, "resume-accepted", func(j *Journal) error {
 		// Checked again under the journal's lock: a request that is not this worker's own cannot slip in between.
