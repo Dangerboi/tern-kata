@@ -138,7 +138,16 @@ func planLaunch(args []string, lookup func(string) (string, bool), version strin
 		if err != nil {
 			return LaunchPlan{}, err
 		}
-		plan.FallbackArgs = append(plan.FallbackArgs, "--project", project, project+"#"+shortID)
+		// kata tui takes one positional: the ref, so a name after -- would be a second.
+		dash := slices.Index(plan.FallbackArgs, "--")
+		if dash >= 0 && dash < len(plan.FallbackArgs)-1 {
+			return LaunchPlan{}, fmt.Errorf("--issue cannot be combined with an argument after --")
+		}
+		translated := []string{"--project", project, project + "#" + shortID}
+		if dash < 0 {
+			dash = len(plan.FallbackArgs)
+		}
+		plan.FallbackArgs = slices.Insert(plan.FallbackArgs, dash, translated...)
 	}
 	plan.Actor = resolveActor(plan.fallbackAuthor, lookup)
 	if inbox, ok := lookup("KATA_INBOX_USER"); ok {

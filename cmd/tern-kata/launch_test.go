@@ -41,7 +41,9 @@ func TestPlanLaunch(t *testing.T) {
 		{name: "unknown arguments pass through", args: []string{"--as", "ann", "--foo", "bar", "--issue=p/1", "-x"}, issueRef: "p/1", fallbackArgs: []string{"--foo", "bar", "-x", "--project", "p", "p#1"}, tuiArgs: []string{"--foo", "bar", "-x"}},
 		{name: "help after a double dash is kata tui's", args: []string{"--", "--help"}, fallbackArgs: []string{"--", "--help"}, tuiArgs: []string{"--", "--help"}},
 		{name: "flags after a double dash are kata tui's", args: []string{"--", "--issue", "proj/abcd"}, fallbackArgs: []string{"--", "--issue", "proj/abcd"}, tuiArgs: []string{"--", "--issue", "proj/abcd"}},
-		{name: "flags before a double dash still parse", args: []string{"--issue=p/1", "--", "--as", "x"}, issueRef: "p/1", fallbackArgs: []string{"--", "--as", "x", "--project", "p", "p#1"}, tuiArgs: []string{"--", "--as", "x"}},
+		{name: "issue with a bare double dash keeps the flags before it", args: []string{"--issue=p/1", "--"}, issueRef: "p/1", fallbackArgs: []string{"--project", "p", "p#1", "--"}, tuiArgs: []string{"--"}},
+		{name: "issue with a name after a double dash is refused", args: []string{"--issue=p/1", "--", "name"}, err: "--issue cannot be combined with an argument after --"},
+		{name: "issue with flags after a double dash is refused", args: []string{"--issue=p/1", "--", "--as", "x"}, err: "--issue cannot be combined with an argument after --"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

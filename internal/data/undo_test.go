@@ -263,6 +263,19 @@ func TestUndoOfALaneMoveRefusesWhenAnotherActorMovedTheCardOn(t *testing.T) {
 	}
 }
 
+func TestUndoOfALaneMoveFromNoLaneRefusesWhenAnotherActorMovedTheCardOn(t *testing.T) {
+	f := newUndoFixture(t)
+	uid := f.issue("On the Board")
+	moved := as[model.MoveResultMsg](t, run(t, f.gateway, model.MoveIssueCmd{Workspace: f.workspace, UID: uid, ProjectID: f.project.ID, Actor: "tester", Add: "lane:doing"}))
+	e := f.entry(moved.Record)
+	f.rivalField(uid, model.RemoveLabelAction, "lane:doing")
+	f.rivalField(uid, model.AddLabelAction, "lane:done")
+	f.refuses(uid, e, "issue changed since the Lane move")
+	if labels := f.detail(uid).Issue.Labels; !slices.Equal(labels, []string{"lane:done"}) {
+		t.Fatalf("labels %v, want the rival's Lane kept", labels)
+	}
+}
+
 func TestUndoOfDatesCompletesAfterTheSecondWriteFailed(t *testing.T) {
 	f := newUndoFixture(t)
 	uid := f.issue("Calendar entry")

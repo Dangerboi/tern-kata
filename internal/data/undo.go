@@ -106,6 +106,9 @@ func (c *Client) recorder(ctx context.Context, kind model.UndoKind, projectID in
 			ShortID: before.Issue.ShortID, Actor: actor, InstanceUID: account.instanceUID, Principal: account.principal,
 			Before: stateOfShown(before.Issue), After: stateOfIssue(*res.Issue), Revision: res.Issue.Revision,
 		}
+		if kind == model.UndoLaneMove {
+			entry.Labels = before.Issue.Labels
+		}
 		if kind == model.UndoLinkAdd {
 			entry.Link = &model.UndoLink{ID: res.Link.ID, Type: res.Link.Type, FromUID: res.Link.From.UID, ToUID: res.Link.To.UID}
 		}
@@ -197,6 +200,9 @@ func restored(e model.UndoEntry, shown *g.ShowIssueResponseBody) bool {
 		}
 		return e.Link != nil && (e.Link.Type != "parent" || shown.Parent == nil)
 	case model.UndoLaneMove:
+		if e.Labels != nil {
+			return sameLabelSet(i.Labels, undoneLabels(e))
+		}
 		for _, label := range e.Added {
 			if slices.Contains(i.Labels, label) {
 				return false
@@ -217,6 +223,42 @@ func restored(e model.UndoEntry, shown *g.ShowIssueResponseBody) bool {
 		return true
 	}
 	return false
+}
+
+// undoneLabels is the label set a Lane Move's undo leaves: the set the move left, without the labels it added and with the
+// ones it removed.
+func undoneLabels(e model.UndoEntry) []string {
+	out := slices.DeleteFunc(slices.Clone(e.Labels), func(l string) bool { return slices.Contains(e.Added, l) })
+	for _, l := range e.Removed {
+		if !slices.Contains(out, l) {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+func sameLabelSet(a, b []string) bool {
+	return len(a) == len(b) && !slices.ContainsFunc(a, func(l string) bool { return !slices.Contains(b, l) })
+}
+
+// laneMoveReachable says the labels are the set the move left or a state its inverse passes through: the old labels added
+// back first, then the new ones removed. Anything else was written by someone else.
+func laneMoveReachable(e model.UndoEntry, labels []string) bool {
+	for _, l := range labels {
+		if !slices.Contains(e.Labels, l) && !slices.Contains(e.Removed, l) {
+			return false
+		}
+	}
+	backAll := true
+	for _, l := range e.Removed {
+		backAll = backAll && slices.Contains(labels, l)
+	}
+	for _, l := range e.Labels {
+		if !slices.Contains(labels, l) && (!backAll || !slices.Contains(e.Added, l)) {
+			return false
+		}
+	}
+	return true
 }
 
 // moved is the refusal when the Issue is no longer as the entry's change left it, "" when it is.
@@ -252,6 +294,12 @@ func moved(e model.UndoEntry, shown *g.ShowIssueResponseBody) string {
 		// card with its old Lane labels back and the new ones still on (the inverse adds before it removes), so a retry is accepted
 		// from there. A Lane label gone with the old ones not all back is not a state the inverse passes through: someone else
 		// moved the card on.
+		if e.Labels != nil {
+			if !atRevision || !laneMoveReachable(e, i.Labels) {
+				return "issue changed since the Lane move"
+			}
+			break
+		}
 		restoredBack, removedNow := 0, 0
 		for _, label := range e.Removed {
 			if slices.Contains(i.Labels, label) {

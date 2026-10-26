@@ -148,7 +148,10 @@ func changeRecurrenceForm(m Model, issue *Issue, rec Recurrence) RecurrenceFormS
 	started := *issue
 	started.ScheduledOnDate = &rec.Start
 	f := newRecurrenceForm(m, &started)
-	f.Change, f.Opened, f.Zone = true, rec, rec.TimeZone
+	f.Change, f.Opened = true, rec
+	if rec.TimeZone != "Local" { // kata read "Local" in the daemon's zone; keep the Pane's (a real zone) as the editable one
+		f.Zone = rec.TimeZone
+	}
 	s := rec.Schedule()
 	if s.IsRaw() {
 		f.Raw = s.Raw

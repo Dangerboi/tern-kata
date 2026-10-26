@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -439,4 +440,87 @@ func TestGatewaySwitchEndsAndAwaitsTheOldDaemonsPointerPass(t *testing.T) {
 	if _, moved := f.issue(t, f.uid).Metadata["tern-kata.attachment.a.png"]; moved {
 		t.Fatal("the old daemon's pointers were rewritten after the switch")
 	}
+}
+
+func TestWorkspacePinFollowsKatasRules(t *testing.T) {
+	t.Setenv("KATA_SERVER", "")
+	write := func(dir, text string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, ".kata.local.toml"), []byte(text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const pin = "version = 1\n[server]\ndaemon = \"beta\"\n"
+	git := func(dir string, args ...string) {
+		t.Helper()
+		if out, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	t.Run("a pin above the workspace boundary is ignored", func(t *testing.T) {
+		parent := t.TempDir()
+		write(parent, pin)
+		workspace := filepath.Join(parent, "ws")
+		if err := os.MkdirAll(workspace, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(workspace, ".kata.toml"), []byte("version = 1\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := workspacePin(workspace); err != nil || got.Daemon != "" || got.URL != "" {
+			t.Fatalf("pin %+v err %v, want none from above the boundary", got, err)
+		}
+	})
+	t.Run("a pin at the boundary is read", func(t *testing.T) {
+		workspace := t.TempDir()
+		if err := os.WriteFile(filepath.Join(workspace, ".kata.toml"), []byte("version = 1\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		write(workspace, pin)
+		if got, err := workspacePin(workspace); err != nil || got.Daemon != "beta" {
+			t.Fatalf("pin %+v err %v, want beta", got, err)
+		}
+	})
+	t.Run("a git-tracked pin is ignored", func(t *testing.T) {
+		repo := t.TempDir()
+		git(repo, "init", "-q")
+		write(repo, pin)
+		if got, err := workspacePin(repo); err != nil || got.Daemon != "beta" {
+			t.Fatalf("untracked pin %+v err %v, want beta", got, err)
+		}
+		git(repo, "add", "-f", ".kata.local.toml")
+		git(repo, "commit", "-q", "-m", "x")
+		if got, err := workspacePin(repo); err != nil || got.Daemon != "" || got.URL != "" {
+			t.Fatalf("tracked pin %+v err %v, want none", got, err)
+		}
+	})
+	t.Run("a malformed pin is an error that names no daemon", func(t *testing.T) {
+		workspace := t.TempDir()
+		if err := os.WriteFile(filepath.Join(workspace, ".kata.toml"), []byte("version = 1\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		write(workspace, "version = 1\n[server\n")
+		if _, err := workspacePin(workspace); err == nil {
+			t.Fatal("malformed pin read without error")
+		}
+		catalog := Catalog{Active: "alpha", Daemons: []CatalogEntry{{Name: "alpha", URL: "https://alpha.example.com"}}}
+		if name, _ := (&Gateway{}).resolvedEntry(workspace, catalog); name != "" {
+			t.Fatalf("named %q, want the active alpha never chosen for a pin kata would refuse", name)
+		}
+	})
+	t.Run("urls match in kata's canonical form", func(t *testing.T) {
+		workspace := t.TempDir()
+		if err := os.WriteFile(filepath.Join(workspace, ".kata.toml"), []byte("version = 1\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		write(workspace, "version = 1\n[server]\nurl = \"HTTPS://Beta.Example.com:443/\"\n")
+		catalog := Catalog{Active: "alpha", Daemons: []CatalogEntry{
+			{Name: "alpha", URL: "https://alpha.example.com"},
+			{Name: "beta", URL: "https://beta.example.com"},
+		}}
+		if name, _ := (&Gateway{}).resolvedEntry(workspace, catalog); name != "beta" {
+			t.Fatalf("named %q, want beta", name)
+		}
+	})
 }

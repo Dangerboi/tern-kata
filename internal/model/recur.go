@@ -100,7 +100,10 @@ func (t RecurTarget) Terms(flags map[string]string) (RecurrenceTerms, error) {
 	zone := t.Zone
 	switch {
 	case t.Recurring() != nil:
-		issue.ScheduledOnDate, zone = &t.Recurring().Start, t.Recurring().TimeZone
+		issue.ScheduledOnDate = &t.Recurring().Start
+		if t.Recurring().TimeZone != "Local" { // "Local" is not a zone the card accepts; keep the Pane's
+			zone = t.Recurring().TimeZone
+		}
 	case t.ScheduledOnDate != "":
 		issue.ScheduledOnDate = &t.ScheduledOnDate
 	}

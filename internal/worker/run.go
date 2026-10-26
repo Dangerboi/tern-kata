@@ -9,10 +9,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
@@ -913,10 +915,22 @@ func (t *tailSink) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// ansiSeq matches the escape sequences a colored stderr carries: CSI, OSC and two-byte escapes.
+var ansiSeq = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b[@-Z\\-_]`)
+
+// tailText is the kept end of stderr as plain text: escape sequences and other control bytes would cost up to six
+// bytes each as JSON escapes in the journal, which is bounded.
 func (t *tailSink) tailText() string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return strings.TrimSpace(strings.ToValidUTF8(string(t.tail), ""))
+	s := ansiSeq.ReplaceAllString(strings.ToValidUTF8(string(t.tail), ""), "")
+	s = strings.Map(func(r rune) rune {
+		if r != '\n' && r != '\t' && unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, s)
+	return strings.TrimSpace(s)
 }
 
 func (t *tailSink) close() { _ = t.file.Close() }

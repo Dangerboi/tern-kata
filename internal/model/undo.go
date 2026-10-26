@@ -65,6 +65,8 @@ type UndoEntry struct {
 	Link     *UndoLink
 	// Added and Removed are the labels a Lane Move added and removed.
 	Added, Removed []string
+	// Labels is the Issue's full label set right after a Lane Move, nil when not recorded.
+	Labels []string
 	// Dates are the date keys a Dates card change wrote, as written.
 	Dates []DateChange
 }

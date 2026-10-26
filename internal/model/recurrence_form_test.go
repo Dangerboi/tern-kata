@@ -104,6 +104,27 @@ func TestRecurTermsRefuseTheLocalZone(t *testing.T) {
 	}
 }
 
+func TestChangingAStoredLocalRecurrenceSavesWithARealZone(t *testing.T) {
+	recurrence := int64(4)
+	rec := &model.Recurrence{UID: "rec-uid", RecurrenceTerms: model.RecurrenceTerms{Rule: "FREQ=DAILY;INTERVAL=1", Start: "2026-10-19", TimeZone: "Local"}, Revision: 3, Next: "2026-10-26"}
+	m, _ := model.Update(recurrenceBase(), model.DetailLoaded{UID: "parent", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "parent", RecurrenceID: &recurrence}, Recurrence: rec}})
+	m = openRecurrenceCard(m)
+	if m.RecurrenceForm.Zone != "Europe/Zurich" || m.RecurrenceForm.Opened.TimeZone != "Local" {
+		t.Fatalf("zone %q, opened zone %q", m.RecurrenceForm.Zone, m.RecurrenceForm.Opened.TimeZone)
+	}
+	m = choose(m, model.RecurrenceFrequency, frequency(model.Weekly))
+	if m, cmds := saveRecurrence(m); len(cmds) != 1 || m.RecurrenceForm.Err != nil {
+		t.Fatalf("saving sent %#v, error %v", cmds, m.RecurrenceForm.Err)
+	}
+}
+
+func TestRecurTermsOfAStoredLocalRecurrenceUseThePaneZone(t *testing.T) {
+	target := model.RecurTarget{UID: "parent", Today: "2026-10-21", Zone: "Europe/Zurich", Recurrence: &model.Recurrence{RecurrenceTerms: model.RecurrenceTerms{Rule: "FREQ=DAILY", Start: "2026-10-19", TimeZone: "Local"}}}
+	if terms, err := target.Terms(map[string]string{"frequency": "weekly"}); err != nil || terms.TimeZone != "Europe/Zurich" {
+		t.Fatalf("Terms gave %+v, %v", terms, err)
+	}
+}
+
 func TestRecurrenceCardStartsOnTheIssuesScheduledDateAndFallsBackToUTC(t *testing.T) {
 	m := recurrenceBase()
 	m.Calendar = model.PaneCalendar{Date: m.Calendar.Date}

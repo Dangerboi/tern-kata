@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -196,7 +198,8 @@ func (g *Gateway) connect(ctx context.Context, workspace string) (*Client, error
 
 // resolvedEntry names the catalog entry the located daemon is, as kata's discovery picked it: the entry the Pane switched to, else
 // KATA_SERVER (no entry), else the workspace's .kata.local.toml pin ([server].daemon by name, [server].url by address), else
-// active_daemon. A pin that matches no entry leaves the connection unnamed, so no entry's token is ever sent to another daemon.
+// active_daemon. A pin that matches no entry, or that kata would refuse to resolve, leaves the connection unnamed, so no entry's token
+// is ever sent to another daemon.
 // The caller holds g.mu.
 func (g *Gateway) resolvedEntry(workspace string, catalog Catalog) (string, CatalogEntry) {
 	if g.current != "" || os.Getenv("KATA_SERVER") != "" {
@@ -204,9 +207,13 @@ func (g *Gateway) resolvedEntry(workspace string, catalog Catalog) (string, Cata
 		entry, _ := catalog.Entry(name)
 		return name, entry
 	}
-	if pin, ok := workspacePin(workspace); ok && (pin.Daemon != "" || pin.URL != "") {
+	pin, err := workspacePin(workspace)
+	if err != nil {
+		return "", CatalogEntry{}
+	}
+	if pin.Daemon != "" || pin.URL != "" {
 		for _, e := range catalog.Daemons {
-			if pin.Daemon != "" && e.Name == pin.Daemon || pin.Daemon == "" && e.URL != "" && strings.TrimRight(e.URL, "/") == strings.TrimRight(pin.URL, "/") {
+			if pin.Daemon != "" && e.Name == pin.Daemon || pin.Daemon == "" && e.URL != "" && sameOrigin(e.URL, pin.URL) {
 				return e.Name, e
 			}
 		}
@@ -216,34 +223,133 @@ func (g *Gateway) resolvedEntry(workspace string, catalog Catalog) (string, Cata
 	return catalog.Active, entry
 }
 
-// workspacePin reads [server] of the nearest .kata.local.toml at or above workspace (the working directory when empty).
-// shortcut: kata's discovery does not say which daemon it chose, so the pin is read again here; it skips kata's refusal of a
-// git-tracked file.
-func workspacePin(workspace string) (pin struct{ URL, Daemon string }, ok bool) {
+// workspacePin reads [server] of the .kata.local.toml kata honours for workspace (the working directory when empty), by kata's
+// rules: the file counts only at or below the nearest directory holding .kata.toml or .git, never when git tracks it, and a file
+// that does not parse (or names both url and daemon) is an error, as it aborts kata's own resolution.
+// shortcut: kata's public client does not say which daemon it chose, so the pin is read again here; delete it once it does.
+func workspacePin(workspace string) (pin struct{ URL, Daemon string }, err error) {
 	dir := workspace
 	if dir == "" {
-		var err error
 		if dir, err = os.Getwd(); err != nil {
-			return pin, false
+			return pin, err
 		}
 	}
+	root := ""
 	for {
-		var file struct {
-			Server struct {
-				URL    string `toml:"url"`
-				Daemon string `toml:"daemon"`
-			} `toml:"server"`
+		if root == "" {
+			if _, statErr := os.Stat(filepath.Join(dir, ".kata.local.toml")); statErr == nil {
+				root = dir
+			}
 		}
-		if _, err := toml.DecodeFile(filepath.Join(dir, ".kata.local.toml"), &file); err == nil {
-			pin.URL, pin.Daemon = strings.TrimSpace(file.Server.URL), strings.TrimSpace(file.Server.Daemon)
-			return pin, true
+		if hasMarker(dir, ".kata.toml") || hasMarker(dir, ".git") {
+			break
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return pin, false
+			return pin, nil
 		}
 		dir = parent
 	}
+	if root == "" {
+		return pin, nil
+	}
+	file := filepath.Join(root, ".kata.local.toml")
+	tracked, determined := localConfigTracked(root)
+	switch {
+	case determined && tracked:
+		return pin, nil
+	case !determined && gitWorktreePresent(root):
+		return pin, fmt.Errorf("cannot verify the git-tracked status of %s", file)
+	}
+	var cfg struct {
+		Version int `toml:"version"`
+		Server  struct {
+			URL    string `toml:"url"`
+			Daemon string `toml:"daemon"`
+		} `toml:"server"`
+	}
+	if _, err := toml.DecodeFile(file, &cfg); err != nil {
+		return pin, err
+	}
+	pin.URL, pin.Daemon = strings.TrimSpace(cfg.Server.URL), strings.TrimSpace(cfg.Server.Daemon)
+	if cfg.Version != 1 || pin.URL != "" && pin.Daemon != "" {
+		return pin, fmt.Errorf("%s: unsupported version or both server.url and server.daemon", file)
+	}
+	return pin, nil
+}
+
+func hasMarker(dir, name string) bool {
+	_, err := os.Stat(filepath.Join(dir, name))
+	return err == nil
+}
+
+// localConfigTracked asks git whether root's .kata.local.toml is committed, as kata does: a case-insensitive pathspec scoped to
+// the one file, with no inherited GIT_* variables. determined is false when git could not answer.
+func localConfigTracked(root string) (tracked, determined bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "-C", root, "ls-files", "-z", "--", ":(icase).kata.local.toml")
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "GIT_") {
+			cmd.Env = append(cmd.Env, kv)
+		}
+	}
+	out, err := cmd.Output()
+	if err != nil {
+		return false, false
+	}
+	for entry := range strings.SplitSeq(string(out), "\x00") {
+		if entry != "" && strings.EqualFold(entry[strings.LastIndex(entry, "/")+1:], ".kata.local.toml") {
+			return true, true
+		}
+	}
+	return false, true
+}
+
+// gitWorktreePresent reports whether dir sits in a git worktree by walking for .git, on both the lexical and symlink-resolved path;
+// an unresolvable path counts as inside one.
+func gitWorktreePresent(dir string) bool {
+	if dotGitInAncestors(dir) {
+		return true
+	}
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return true
+	}
+	return resolved != dir && dotGitInAncestors(resolved)
+}
+
+func dotGitInAncestors(dir string) bool {
+	for {
+		if hasMarker(dir, ".git") {
+			return true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return false
+		}
+		dir = parent
+	}
+}
+
+// sameOrigin compares two URLs by the canonical scheme://host[:port] form kata matches remotes on.
+func sameOrigin(a, b string) bool {
+	ua, err := url.Parse(strings.TrimSpace(a))
+	if err != nil {
+		return false
+	}
+	ub, err := url.Parse(strings.TrimSpace(b))
+	if err != nil {
+		return false
+	}
+	canon := func(u *url.URL) string {
+		host, port := strings.ToLower(u.Hostname()), u.Port()
+		if port == "" || port == map[string]string{"http": "80", "https": "443"}[strings.ToLower(u.Scheme)] {
+			return strings.ToLower(u.Scheme) + "://" + host
+		}
+		return strings.ToLower(u.Scheme) + "://" + net.JoinHostPort(host, port)
+	}
+	return ua.Host != "" && ub.Host != "" && canon(ua) == canon(ub)
 }
 
 func (g *Gateway) forget(workspace string, c *Client) {

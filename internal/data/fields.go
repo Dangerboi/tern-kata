@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	g "go.kenn.io/kata/pkg/client/generated"
+	"slices"
 	"strconv"
 )
 
@@ -167,7 +168,17 @@ func (c *Client) Move(ctx context.Context, cmd model.MoveIssueCmd) error {
 func (c *Client) MoveRecorded(ctx context.Context, cmd model.MoveIssueCmd) (model.WriteRecord, error) {
 	done := c.recorder(ctx, model.UndoLaneMove, cmd.ProjectID, cmd.UID, cmd.Actor)
 	added, removed, last, err := c.move(ctx, cmd)
-	return done(last, ambiguousWrite(err), func(e *model.UndoEntry) { e.Added, e.Removed = added, removed }), daemonError(err)
+	return done(last, ambiguousWrite(err), func(e *model.UndoEntry) {
+		e.Added, e.Removed = added, removed
+		// The recorder left the labels from before the move; the write answers carry none, so the after-set is derived.
+		after := slices.DeleteFunc(slices.Clone(e.Labels), func(l string) bool { return slices.Contains(removed, l) })
+		for _, l := range added {
+			if !slices.Contains(after, l) {
+				after = append(after, l)
+			}
+		}
+		e.Labels = append([]string{}, after...)
+	}), daemonError(err)
 }
 
 func (c *Client) FieldLabels(ctx context.Context, cmd model.LoadFieldLabels) (model.FieldLabelsLoaded, error) {
