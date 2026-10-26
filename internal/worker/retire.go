@@ -28,7 +28,10 @@ func (w *Worker) retireUnserved(ctx context.Context) {
 
 // retireOnce retires every unserved Project it knows and reports whether none is left to retry.
 func (w *Worker) retireOnce(ctx context.Context, served map[string]bool) (done bool) {
-	journals, _, _ := w.store.Scan()
+	journals, _, err := w.store.Scan()
+	if err != nil {
+		return false // unreadable journals may hold reports still owed; try again
+	}
 	known := map[string]string{}     // Project uid -> the name it was served under
 	instances := map[string]string{} // Project uid -> the daemon instance its pin records
 	pins, _ := filepath.Glob(filepath.Join(w.opt.Dirs.State, "projects", "*", "pin.json"))

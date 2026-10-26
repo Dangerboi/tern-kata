@@ -293,6 +293,10 @@ func (s *Store) lock(uid string) *sync.Mutex { return s.locks.get(uid) }
 // ErrNoJournal means the run has no journal here.
 var ErrNoJournal = errors.New("no journal")
 
+// errDamagedJournal marks a journal that was read but is not a valid one; a read failure is not damage and must not
+// quarantine a healthy run.
+var errDamagedJournal = errors.New("damaged journal")
+
 // Load reads a run's journal.
 func (s *Store) Load(uid string) (*Journal, error) {
 	raw, err := readFile(s.path(uid))
@@ -304,10 +308,10 @@ func (s *Store) Load(uid string) (*Journal, error) {
 	}
 	var j Journal
 	if err := json.Unmarshal(raw, &j); err != nil {
-		return nil, fmt.Errorf("journal of run %s: %w", uid, err)
+		return nil, fmt.Errorf("journal of run %s: %w: %w", uid, errDamagedJournal, err)
 	}
 	if j.Version != 1 || j.RunUID != uid {
-		return nil, fmt.Errorf("journal of run %s: unsupported version or uid", uid)
+		return nil, fmt.Errorf("journal of run %s: %w: unsupported version or uid", uid, errDamagedJournal)
 	}
 	return &j, nil
 }
@@ -440,6 +444,9 @@ func (s *Store) Scan() (journals []*Journal, quarantined []string, err error) {
 		}
 		if errors.Is(lerr, ErrNoJournal) {
 			continue
+		}
+		if !errors.Is(lerr, errDamagedJournal) {
+			return nil, nil, lerr // a read problem may pass; quarantine would veto the run forever
 		}
 		if mkerr := os.MkdirAll(filepath.Dir(s.Quarantined(e.Name())), 0o700); mkerr != nil {
 			return nil, nil, mkerr

@@ -223,7 +223,11 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 		gate := w.overlapGate(ps.project.UID, job.UID)
 		gate.Lock()
 		defer gate.Unlock()
-		if earlier := w.gateClosed(job.UID, ps.project.UID); earlier != "" {
+		earlier, err := w.gateClosed(job.UID, ps.project.UID)
+		if err != nil {
+			return nil, false, &busyError{fmt.Sprintf("job %q forbids overlap and its runs cannot be read: %v", job.Name, err), false}
+		}
+		if earlier != "" {
 			return nil, false, &busyError{fmt.Sprintf("job %q forbids overlap and run %s is not settled", job.Name, earlier), false}
 		}
 	}

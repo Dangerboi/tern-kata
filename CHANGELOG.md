@@ -9,6 +9,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A worker run whose agent finished its turn is no longer recorded `failed` with "no agent_end" when omp's output carries a message the worker does not read, such as a late LSP diagnostic: the worker now reads the turn's end and final message past it.
 - A run that finished while the worker was stopped is held `no_receipt`, not `interrupted`, when its output passed 8 MiB: the saved `output.jsonl` keeps omp's `agent_end` line past the cap.
 - A long run whose agent finished its turn is no longer recorded `failed` with "no agent_end" when omp's final `agent_end` line passes 8 MiB; lines up to 64 MiB are read.
+- A run journal the worker cannot read for a passing reason, such as too many open files, is no longer quarantined for good; only a journal that does not decode is. While journals cannot be read, a job that forbids overlap refuses to start a new run.
 
 ## [0.5.0] - 2026-10-25
 

@@ -136,6 +136,30 @@ func TestTwoRequestsForAJobThatForbidsOverlapAdmitOne(t *testing.T) {
 	}
 }
 
+// When the runs folder cannot be scanned an unsettled run may be hidden in it, so the overlap gate of a job that
+// forbids overlap reads closed and the refusal says the runs cannot be read.
+func TestTheOverlapGateReadsClosedWhenTheRunsCannotBeScanned(t *testing.T) {
+	h := newHarness(t)
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo", Overlap: "forbid"})
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	h.eventually("the job to be known", func() bool { return r.w.Status().Projects[0].AdapterJobs == 1 })
+
+	if err := os.RemoveAll(h.dirs.Runs()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(h.dirs.Runs(), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	resp := h.ask(worker.Request{Op: "run", Job: job.UID})
+	if resp.OK || !strings.Contains(resp.Error, "cannot be read") {
+		t.Fatalf("response %+v, want a refusal because the runs cannot be read", resp)
+	}
+	if n := len(h.launches()); n != 0 {
+		t.Fatalf("%d launches, want none", n)
+	}
+}
+
 // Two resumes of one hold arriving together accept one; the one that lost never gives back the slot the winner took.
 func TestTwoResumesOfOneHoldLeaveTheWinnersSlotAlone(t *testing.T) {
 	h := newHarness(t, "--stub-hang")

@@ -348,15 +348,19 @@ func (w *Worker) holdsSlotOf(ps *projectState, uid string) bool {
 	return ok
 }
 
-// gateClosed reports whether a job's overlap gate is closed, and by which run (ADR-0007).
-func (w *Worker) gateClosed(jobUID, projectUID string) (runUID string) {
-	journals, _, _ := w.store.Scan()
+// gateClosed reports whether a job's overlap gate is closed, and by which run (ADR-0007). When the journals cannot be
+// scanned an unsettled run may be among them, so the gate reads closed and err says why.
+func (w *Worker) gateClosed(jobUID, projectUID string) (runUID string, err error) {
+	journals, _, err := w.store.Scan()
+	if err != nil {
+		return "", err
+	}
 	for _, j := range journals {
 		if j.JobUID == jobUID && j.ProjectUID == projectUID && j.closesGate() {
-			return j.RunUID
+			return j.RunUID, nil
 		}
 	}
-	return ""
+	return "", nil
 }
 
 // recoverProject continues the Project's journals after the lease decision (ADR-0006 "Recovery order"): rebuild the

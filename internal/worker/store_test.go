@@ -1,6 +1,9 @@
 package worker_test
 
 import (
+	"os"
+	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/worker"
@@ -34,5 +37,44 @@ func TestAJournalReadWhileItIsReplacedIsNeverQuarantined(t *testing.T) {
 		if err != nil || len(quarantined) > 0 || len(journals) != 1 {
 			t.Fatalf("scan read %d journals, quarantined %v: %v", len(journals), quarantined, err)
 		}
+	}
+}
+
+// A journal that cannot be read (here run.json is a folder) is not damaged: Scan fails and leaves the run in place,
+// while one that reads but is not valid goes to quarantine.
+func TestScanQuarantinesOnlyDamagedJournals(t *testing.T) {
+	dirs := worker.Dirs{Config: t.TempDir(), State: t.TempDir()}
+	store := worker.NewStore(dirs, worker.Hooks{})
+	const unreadable, badJSON, badVersion = "01M5JESXAK1NBYS6N2ZD9RTM9A", "01M5JESXAK1NBYS6N2ZD9RTM9B", "01M5JESXAK1NBYS6N2ZD9RTM9C"
+	write := func(uid, body string) {
+		if err := os.MkdirAll(store.RunDir(uid), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(store.RunDir(uid), "run.json"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(store.RunDir(unreadable), "run.json"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.Scan(); err == nil {
+		t.Fatal("scan of an unreadable journal must fail")
+	}
+	if _, err := os.Stat(store.RunDir(unreadable)); err != nil {
+		t.Fatalf("an unreadable journal must stay in place: %v", err)
+	}
+	if q := store.Quarantine(); len(q) != 0 {
+		t.Fatalf("quarantined %v", q)
+	}
+
+	if err := os.RemoveAll(store.RunDir(unreadable)); err != nil {
+		t.Fatal(err)
+	}
+	write(badJSON, "{not json")
+	write(badVersion, `{"version":2,"run_uid":"`+badVersion+`"}`)
+	_, quarantined, err := store.Scan()
+	slices.Sort(quarantined)
+	if err != nil || !slices.Equal(quarantined, []string{badJSON, badVersion}) {
+		t.Fatalf("quarantined %v, err %v", quarantined, err)
 	}
 }
