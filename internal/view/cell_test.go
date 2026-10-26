@@ -48,3 +48,21 @@ func TestOwnerCellIsABoxOfTheColumnWidthWhateverItsGlyphs(t *testing.T) {
 		}
 	}
 }
+
+// A column wider than the widest box rule would have no box, so it is held to that width and its cells are cut to it.
+func TestColumnsStopAtTheWidestBoxAndCutTheirCells(t *testing.T) {
+	cols := listColumns{ownerShown: true, id: 1, owner: ownerWidth}
+	cols.fit(maxBoxWidth+30, maxBoxWidth+30)
+	if cols.id != maxBoxWidth || cols.owner != maxBoxWidth {
+		t.Fatalf("columns id %d, owner %d, want both %d", cols.id, cols.owner, maxBoxWidth)
+	}
+	for _, token := range strings.Fields(cols.role())[1:] {
+		if !strings.Contains(CSS, "[data-role~='"+token+"']") {
+			t.Errorf("CSS has no rule for role token %q", token)
+		}
+	}
+	long := strings.Repeat("田", maxBoxWidth)
+	if got := displayWidth(cut(long+" until 22:30", cols.owner)); got > maxBoxWidth {
+		t.Errorf("owner cell is %d cells wide, want at most %d", got, maxBoxWidth)
+	}
+}

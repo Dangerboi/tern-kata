@@ -239,7 +239,7 @@ func (s Status) String() string {
 		}
 	}
 	if s.JournalError != "" {
-		fmt.Fprintf(&b, "Some runs are not listed: their journals could not be read (%s); run `tern-kata worker doctor`.\n", s.JournalError)
+		fmt.Fprintf(&b, "Some runs are not listed: their journals could not be read (%s). Fix the permissions of the named run folder, or move it out of the runs folder if the run is gone; the worker recovers on its next pass. `tern-kata worker doctor` names each one.\n", s.JournalError)
 	}
 	for _, q := range s.Quarantined {
 		fmt.Fprintf(&b, "Quarantined run %s: its journal could not be read; run `tern-kata worker doctor`.\n", q)

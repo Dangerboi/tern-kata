@@ -45,7 +45,7 @@ const SelectedCSS = `.sf-item.sel[data-id^='` + IssueListID + `.'] { background-
 // cellEm is a character's advance in em: the surface CSS has no ch unit, and the Pane's monospace font advances 0.6em.
 const cellEm = 0.6
 
-// maxBoxWidth is the widest id or owner column cellBoxCSS has a rule for; a wider one is drawn unboxed.
+// maxBoxWidth is the widest id or owner column cellBoxCSS has a rule for; listColumns.fit holds the columns to it.
 const maxBoxWidth = 80
 
 // cellBoxCSS gives each cell of an Issue list row a box as wide as its column. Tern draws a glyph the font lacks, such as

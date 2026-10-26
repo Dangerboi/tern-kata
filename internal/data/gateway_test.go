@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -1941,5 +1942,54 @@ func TestGatewayConnectRacingCloseCachesNothing(t *testing.T) {
 	defer gateway.mu.Unlock()
 	if len(gateway.clients) != 0 {
 		t.Fatalf("%d clients cached after Close, want none", len(gateway.clients))
+	}
+}
+
+// A caller whose context ends during the pin read must not leave an unnamed client for the daemon's later callers.
+func TestGatewayDialNamesTheEntryWhenTheFirstCallersContextEndsDuringThePinRead(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stand-in git is a shell script")
+	}
+	real, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git unavailable")
+	}
+	beta := startKata(t, "0.20.0")
+	writeCatalog(t, "[[daemon]]\nname = \"beta\"\nurl = \""+beta.URL+"\"\nallow_insecure = true\n")
+	bin, marker := t.TempDir(), filepath.Join(t.TempDir(), "asked")
+	script := "#!/bin/sh\ncase \" $* \" in *\" ls-files \"*) : > '" + marker + "'; sleep 1; exit 0;; esac\nexec '" + real + "' \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	workspace := t.TempDir()
+	for name, body := range map[string]string{".kata.local.toml": "version = 1\n[server]\ndaemon = \"beta\"\n", ".git": ""} {
+		path := filepath.Join(workspace, name)
+		if name == ".git" {
+			if err := os.Mkdir(path, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	gateway := newGateway(t, newLocator(beta.target()))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+			if _, err := os.Stat(marker); err == nil {
+				break
+			}
+		}
+		cancel()
+	}()
+	c, err := gateway.dial(ctx, context.Background(), newLocator(beta.target()).locate, "", workspace)
+	if err != nil || c.name != "beta" {
+		t.Fatalf("dial = %+v, %v; want the connection named beta though the first caller's context ended during the pin read", c, err)
 	}
 }

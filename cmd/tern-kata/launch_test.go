@@ -296,6 +296,19 @@ func TestPlanLaunchRefusesEmptyAsForEverySubcommand(t *testing.T) {
 	}
 }
 
+func TestPlanLaunchHelpIsJudgedByTheSubcommandParsers(t *testing.T) {
+	for _, args := range [][]string{{"worker", "init", "--command", "-h"}, {"recur", "ab12", "--rule", "--help"}} {
+		plan, err := PlanLaunch(args, lookupFrom(nil), "v")
+		if err != nil || plan.Help {
+			t.Errorf("PlanLaunch(%q) = %+v, %v; want the word taken as the flag's value", args, plan, err)
+		}
+	}
+	_, err := PlanLaunch([]string{"attach", "ab12", "a.png", "--issue", "-h"}, lookupFrom(nil), "v")
+	if err == nil || !strings.Contains(err.Error(), "attach: unknown flag --issue") {
+		t.Errorf("err = %v, want the unknown-flag error before help", err)
+	}
+}
+
 func TestSubcommandsAreOnlyTakenOverAsTheFirstArgument(t *testing.T) {
 	plan, err := PlanLaunch([]string{"--as", "ann", "attach", "x"}, lookupFrom(nil), "v")
 	if err != nil || plan.Subcommand != "" || !slices.Equal(plan.FallbackArgs, []string{"attach", "x"}) {

@@ -93,17 +93,53 @@ func PlanLaunch(args []string, lookup func(string) (string, bool), version strin
 	return plan, nil
 }
 
-// scanFlags reports whether flag appears in flags outside the value --as or --issue takes (a separate value not starting with --, as
-// the parsers read it), so `--as -h` is judged by --as and never taken for help.
+// scanFlags reports whether flag appears in flags at a flag position, not as the value of a flag. Inside a subcommand it runs the
+// subcommand's own flag parsers to find those values (so `worker init --command -h` is judged by --command), and stops at the
+// first flag the subcommand does not know (--issue there), so the unknown-flag error wins over a later -h. At the top level it
+// skips the value --as or --issue takes (a separate value not starting with --), so `--as -h` is judged by --as.
 func scanFlags(flags []string, flag string) bool {
-	subcommand := len(flags) > 0 && slices.Contains(subcommands, flags[0])
+	subcommand := ""
+	if len(flags) > 0 && slices.Contains(subcommands, flags[0]) {
+		subcommand = flags[0]
+	}
+	var scratch LaunchPlan // the parsers record into it; only the position they stop at matters
 	for i := 0; i < len(flags); i++ {
-		if flags[i] == flag {
+		arg := flags[i]
+		if arg == flag {
 			return true
 		}
-		if (flags[i] == "--as" || (flags[i] == "--issue" && !subcommand)) && i+1 < len(flags) && !strings.HasPrefix(flags[i+1], "--") {
-			i++
+		if subcommand == "" {
+			if (arg == "--as" || arg == "--issue") && i+1 < len(flags) && !strings.HasPrefix(flags[i+1], "--") {
+				i++
+			}
+			continue
 		}
+		if i == 0 || !strings.HasPrefix(arg, "--") || arg == "--help" || arg == "--version" {
+			continue
+		}
+		if subcommand == "worker" {
+			if arg == "--takeover" || arg == "--now" || arg == "--json" {
+				continue
+			}
+			if matched, _ := parseInitFlag(flags, &i, &scratch); matched {
+				continue
+			}
+		}
+		if subcommand == "recur" {
+			if matched, _ := parseRecurFlag(flags, &i, &scratch); matched {
+				continue
+			}
+		}
+		if subcommand != "completion" {
+			start := i
+			if _, matched, err := parseAs(flags, &i); matched {
+				if err != nil && i == start+1 && i < len(flags) && strings.HasPrefix(flags[i], "--") {
+					i-- // parseAs refused a value starting with --: that word is judged on its own
+				}
+				continue
+			}
+		}
+		return false // unknown flag: planSubcommand refuses it
 	}
 	return false
 }

@@ -111,8 +111,7 @@ func issues(m model.Model, now time.Time) tern.Element {
 	rows := m.VisibleRows()
 	cols := listColumns{ownerShown: !(slices.Contains(columns, model.ColumnList) && slices.Contains(columns, model.ColumnDetail)), id: 1, owner: ownerWidth}
 	for _, row := range rows {
-		cols.id = max(cols.id, utf8.RuneCountInString(idCell(row)))
-		cols.owner = max(cols.owner, displayWidth(listOwner(m, row, now)))
+		cols.fit(utf8.RuneCountInString(idCell(row)), displayWidth(listOwner(m, row, now)))
 	}
 	items := make([]tern.Element, 0, len(rows)+len(m.Groups))
 	groups := make(map[string]model.IssueGroup, len(m.Issues))
@@ -326,6 +325,13 @@ func stripeRole(i int) string {
 type listColumns struct {
 	ownerShown bool
 	id, owner  int
+}
+
+// fit widens the columns to a row's id and owner widths, up to maxBoxWidth: a wider column would have no box rule, so its
+// cells are cut to the cap instead (rightCells and issueRow cut to the column's width).
+func (c *listColumns) fit(id, owner int) {
+	c.id = min(max(c.id, id), maxBoxWidth)
+	c.owner = min(max(c.owner, owner), maxBoxWidth)
 }
 
 // issueRow is one Issue: the id, prio, status and title on the left, the

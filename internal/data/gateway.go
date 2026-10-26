@@ -207,7 +207,21 @@ func (g *Gateway) client(ctx context.Context, workspace string) (*Client, error)
 		g.connecting[workspace] = done
 		g.mu.Unlock()
 
-		c, err := g.dial(ctx, connectCtx, locate, current, workspace)
+		// A dial that panics must still release the entry, or every later caller waits out its deadline.
+		panicked := true
+		var err error
+		func() {
+			defer func() {
+				if panicked {
+					g.mu.Lock()
+					delete(g.connecting, workspace)
+					close(done)
+					g.mu.Unlock()
+				}
+			}()
+			c, err = g.dial(ctx, connectCtx, locate, current, workspace)
+			panicked = false
+		}()
 
 		g.mu.Lock()
 		delete(g.connecting, workspace)
@@ -233,7 +247,9 @@ func (g *Gateway) client(ctx context.Context, workspace string) (*Client, error)
 // dial resolves the entry and connects, outside g.mu: the pin read runs git, so a slow one holds up this workspace only.
 func (g *Gateway) dial(ctx, connectCtx context.Context, locate Locator, current, workspace string) (*Client, error) {
 	catalog, _ := ReadCatalog()
-	name, entry := resolveEntry(ctx, g.deadline, workspace, catalog, current)
+	// The pin read serves every caller waiting on this dial and its result is cached: one caller's cancellation must not
+	// leave an unnamed client behind. resolveEntry bounds it by the deadline.
+	name, entry := resolveEntry(context.WithoutCancel(ctx), g.deadline, workspace, catalog, current)
 	c, err := connectLocated(connectCtx, locate, workspace)
 	if err != nil {
 		return nil, err

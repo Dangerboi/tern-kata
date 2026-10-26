@@ -231,8 +231,15 @@ func (o DoctorOptions) checkProject(ctx context.Context, cfg Config, pc ProjectC
 	}
 	runDirs, _ := os.ReadDir(o.Dirs.Runs())
 	for _, e := range runDirs {
+		if !e.IsDir() {
+			continue
+		}
 		j, err := store.Load(e.Name())
 		if err != nil {
+			// A read failure is not damage, so the worker keeps the run in place and admits nothing until it can read it.
+			if !errors.Is(err, ErrNoJournal) && !errors.Is(err, errDamagedJournal) {
+				add("FAIL", subject, fmt.Sprintf("run %s: its journal cannot be read (%s), so the worker admits nothing", e.Name(), err), "Fix its permissions, or move the folder out of "+o.Dirs.Runs()+" if the run is gone; the worker recovers on its next pass.")
+			}
 			continue
 		}
 		if j.ProjectUID != p.UID || j.Executor != cfg.Executor {
