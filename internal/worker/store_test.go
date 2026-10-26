@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/worker"
@@ -57,8 +58,16 @@ func TestScanQuarantinesOnlyDamagedJournals(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(store.RunDir(unreadable), "run.json"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := store.Scan(); err == nil {
-		t.Fatal("scan of an unreadable journal must fail")
+	const healthy = "01M5JESXAK1NBYS6N2ZD9RTM9D"
+	if err := store.Create(&worker.Journal{Version: 1, RunUID: healthy}, "prepared"); err != nil {
+		t.Fatal(err)
+	}
+	journals, _, err := store.Scan()
+	if err == nil || !strings.Contains(err.Error(), unreadable) {
+		t.Fatalf("scan of an unreadable journal must name the run in its error, got %v", err)
+	}
+	if len(journals) != 1 || journals[0].RunUID != healthy {
+		t.Fatalf("scan must still return the readable journals, got %d", len(journals))
 	}
 	if _, err := os.Stat(store.RunDir(unreadable)); err != nil {
 		t.Fatalf("an unreadable journal must stay in place: %v", err)

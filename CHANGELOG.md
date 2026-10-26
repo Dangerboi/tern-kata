@@ -9,11 +9,11 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A worker run whose agent finished its turn is no longer recorded `failed` with "no agent_end" when omp's output carries a message the worker does not read, such as a late LSP diagnostic: the worker now reads the turn's end and final message past it.
 - A run that finished while the worker was stopped is held `no_receipt`, not `interrupted`, when its output passed 8 MiB: the saved `output.jsonl` keeps omp's `agent_end` line past the cap.
 - A long run whose agent finished its turn is no longer recorded `failed` with "no agent_end" when omp's final `agent_end` line passes 8 MiB; lines up to 64 MiB are read.
-- A run journal the worker cannot read for a passing reason, such as too many open files, is no longer quarantined for good; only a journal that does not decode is. While journals cannot be read, a job that forbids overlap refuses to start a new run.
+- A run journal the worker cannot read for a passing reason, such as too many open files, is no longer quarantined for good; only a journal that does not decode is. The other runs carry on, a Project whose recovery could not read every journal tries again at its next lease renewal, `worker status` names the unreadable runs, and a job that forbids overlap refuses to start a new run until they read again.
 - A run whose agent's last message cannot be read is recorded `failed` with no stop reason instead of taking an earlier turn's result.
 - A run or command step that exits 0 while a process it started in the background still holds its output is recorded by its real exit status, not `failed` with "exited with status -1".
 - A run's final report no longer counts as delivered when kata already holds the same status with another summary; the run is left for inspection instead.
-- A run's Stderr in the Pane shows the end of a long stderr as plain text, for prompt jobs and concluded workflow steps alike, instead of text from its first 64 KiB.
+- A run's Stderr in the Pane shows the end of a long stderr as plain text, for prompt jobs and concluded workflow steps alike, instead of text from its first 64 KiB; a retried step shows its current attempt's stderr, not the previous one's.
 - `worker resume` renews the Project's lease first and refuses when another machine has taken the Project over, instead of starting the agent on a lease that may be gone.
 - Attaching a file keeps the stored copy when kata's answer to the pointer write is lost, so the Issue never points at a deleted file.
 - Undoing a Lane move whose second label write was refused can be retried to completion instead of reporting a conflict forever, and an undo refuses when another actor moved or relabelled the card since, including a card that had no Lane before the move.
@@ -21,14 +21,16 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - Switching daemons or loading a Project no longer hangs when the daemon answers but stalls reading its instance; it gives up after the connect deadline.
 - An absolute `TZ` path such as `:/etc/localtime` gives the Pane its local date instead of UTC.
 - Saving a new adapter job again after its first answer was lost reports it created, not changed.
-- A Workflow conflict whose current version another actor archived offers only Discard Draft; Overwrite would have silently restored it. An archive or restore conflict keeps the selection at its row.
+- A Workflow conflict whose current version another actor archived offers only Discard Draft, in the card and its key hints; Overwrite would have silently restored it. The conflict's choices sit above the two texts, so they stay visible in a short window, and an archive or restore conflict keeps the selection at its row.
 - Restore notices name an Issue of a Project the Pane's catalog does not list by its short id, not `#abcd`.
 - Recurrences refuse the zone `Local`, which kata would evaluate in the daemon's zone; a new recurrence, or an existing one stored as `Local`, opens on the Pane's zone, or UTC when that is `Local` too, and the card and `tern-kata recur` say when saving replaces a stored `Local`.
 - Relative ages read "0s ago" instead of a negative age when the daemon's clock runs ahead.
 - Searching by short id resolves in the bound Project when a saved filter names a Project the catalog no longer lists.
 - A change you make while the Pane is reading its list, such as moving a card, is read again once that read lands, so the card does not stay where it was when no change event follows (for example while the event stream is down).
 - A foreground `tern-kata worker` stopped by ctrl+c or a signal exits with 128 plus the signal number instead of 0.
-- A lone `--` ends tern-kata's own flags: what follows, such as `--issue`, goes to kata's TUI as plain arguments; `--issue` together with an argument after `--` is refused, as kata's TUI takes one.
+- A lone `--` ends tern-kata's own flags: what follows, such as `--issue`, goes to kata's TUI as plain arguments; `--issue` together with another argument for kata's TUI is refused, as it takes one.
+- Issue and Children lists keep their owner column aligned for names in CJK or emoji, which Tern draws two cells wide.
+- The Pane ends cleanly when it is told to stop while it is still connecting or while an editor it opened is running.
 
 ## [0.5.0] - 2026-10-25
 

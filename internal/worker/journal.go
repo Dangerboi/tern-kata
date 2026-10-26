@@ -424,15 +424,17 @@ func renameInDir(dir, from, to string) error {
 }
 
 // Scan reads every journal. A journal that cannot be read moves whole to quarantine/runs/<uid>, which vetoes that
-// uid from then on (ADR-0006); the uids moved are returned.
+// uid from then on (ADR-0006); the uids moved are returned. A run that fails for any other reason stays in place and
+// is named in err, but the journals that could be read are still returned: one bad run must not blind every caller.
 func (s *Store) Scan() (journals []*Journal, quarantined []string, err error) {
-	entries, err := os.ReadDir(s.dirs.Runs())
-	if errors.Is(err, fs.ErrNotExist) {
+	entries, rerr := os.ReadDir(s.dirs.Runs())
+	if errors.Is(rerr, fs.ErrNotExist) {
 		return nil, nil, nil
 	}
-	if err != nil {
-		return nil, nil, err
+	if rerr != nil {
+		return nil, nil, rerr
 	}
+	var failed []error
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -446,17 +448,20 @@ func (s *Store) Scan() (journals []*Journal, quarantined []string, err error) {
 			continue
 		}
 		if !errors.Is(lerr, errDamagedJournal) {
-			return nil, nil, lerr // a read problem may pass; quarantine would veto the run forever
+			failed = append(failed, fmt.Errorf("run %s: %w", e.Name(), lerr)) // a read problem may pass; quarantine would veto the run forever
+			continue
 		}
 		if mkerr := os.MkdirAll(filepath.Dir(s.Quarantined(e.Name())), 0o700); mkerr != nil {
-			return nil, nil, mkerr
+			failed = append(failed, fmt.Errorf("run %s: %w", e.Name(), mkerr))
+			continue
 		}
 		if rerr := os.Rename(s.RunDir(e.Name()), s.Quarantined(e.Name())); rerr != nil {
-			return nil, nil, rerr
+			failed = append(failed, fmt.Errorf("run %s: %w", e.Name(), rerr))
+			continue
 		}
 		quarantined = append(quarantined, e.Name())
 	}
-	return journals, quarantined, nil
+	return journals, quarantined, errors.Join(failed...)
 }
 
 // Quarantined is where a damaged journal of uid lives.

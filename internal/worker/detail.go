@@ -131,8 +131,9 @@ func shownStderrTail(j *Journal) string {
 	if j.Workflow == nil {
 		return ""
 	}
+	// A running step's stored tail is an earlier attempt's; the live stderr.log shows this one.
 	if i := j.activeStep(); i >= 0 && j.Steps[i].Dir != "" {
-		return j.Steps[i].StderrTail
+		return ""
 	}
 	for i := len(j.Steps) - 1; i >= 0; i-- {
 		if j.Steps[i].Dir != "" {
@@ -227,7 +228,7 @@ func stderrFallback(path string) string {
 		return ""
 	}
 	if len(raw) > 2048 {
-		raw = dropPartialLine(raw[len(raw)-2048:])
+		raw = dropPartialLine(raw[len(raw)-2048:], raw[len(raw)-2049] == '\n')
 	}
 	return plainText(string(raw))
 }

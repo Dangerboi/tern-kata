@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -618,5 +619,79 @@ func TestResolvedEntryReadsTheGitCheckedPinOnItsOwnDeadline(t *testing.T) {
 	stop()
 	if name, _ := (&Gateway{deadline: 10 * time.Second}).resolvedEntry(ended, repo, catalog); name != "" {
 		t.Fatalf("named %q after the caller ended, want the pin read to give up unnamed", name)
+	}
+}
+
+func TestCurrentDaemonBeforeAnyConnectionFollowsThePinAndThePlainLocalRule(t *testing.T) {
+	t.Setenv("KATA_SERVER", "")
+	beta := startKata(t, "0.20.0")
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, ".kata.toml"), []byte("version = 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gateway := &Gateway{deadline: 10 * time.Second, clients: map[string]*Client{}}
+	catalog := Catalog{Active: "alpha", Daemons: []CatalogEntry{{Name: "alpha", URL: "https://alpha.example.com"}, {Name: "beta", URL: beta.URL}}}
+	if got := gateway.currentDaemon(context.Background(), catalog, workspace); got != "alpha" {
+		t.Fatalf("no pin: current %q, want the active alpha", got)
+	}
+	pin := filepath.Join(workspace, ".kata.local.toml")
+	if err := os.WriteFile(pin, []byte("version = 1\n[server]\ndaemon = \"beta\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := gateway.currentDaemon(context.Background(), catalog, workspace); got != "beta" {
+		t.Fatalf("pinned: current %q, want the pinned beta, not the active alpha", got)
+	}
+	if err := os.Remove(pin); err != nil {
+		t.Fatal(err)
+	}
+	catalog = Catalog{Active: "mine", Daemons: []CatalogEntry{{Name: "mine", Local: true}}}
+	if got := gateway.currentDaemon(context.Background(), catalog, workspace); got != "" {
+		t.Fatalf("plain local active: current %q, want none, as the Pane connects to the default local daemon", got)
+	}
+}
+
+func TestClientConnectsWithoutHoldingTheGatewayLockAndSharesOneClientPerWorkspace(t *testing.T) {
+	kata := startKata(t, "0.20.0")
+	var gateway *Gateway
+	var entered sync.WaitGroup
+	entered.Add(2)
+	var locked, arrived atomic.Int32
+	gateway = NewGateway(func(ctx context.Context, _ string) (Target, error) {
+		if !gateway.mu.TryLock() {
+			locked.Add(1)
+		} else {
+			gateway.mu.Unlock()
+		}
+		arrived.Add(1)
+		entered.Done()
+		// Both callers must be inside the locator at once: a held lock would keep the second out.
+		done := make(chan struct{})
+		go func() { entered.Wait(); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+		}
+		return kata.target(), nil
+	})
+	t.Cleanup(gateway.Close)
+	clients := make([]*Client, 2)
+	var wg sync.WaitGroup
+	for i := range clients {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c, err := gateway.client(context.Background(), "w")
+			if err != nil {
+				t.Error(err)
+			}
+			clients[i] = c
+		}()
+	}
+	wg.Wait()
+	if locked.Load() != 0 || arrived.Load() != 2 {
+		t.Fatalf("gateway lock held in %d of %d locates, want it free and both calls locating at once", locked.Load(), arrived.Load())
+	}
+	if clients[0] == nil || clients[0] != clients[1] {
+		t.Fatalf("clients %p and %p, want one shared client for the workspace", clients[0], clients[1])
 	}
 }

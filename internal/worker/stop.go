@@ -68,10 +68,7 @@ func (w *Worker) inFlightLocked() int {
 // that the lifecycle says still owe. It runs before the control socket opens, so an idle stop asked at once waits for
 // them until recovery hands each on.
 func (w *Worker) seedFlight() {
-	journals, _, err := w.store.Scan()
-	if err != nil {
-		return
-	}
+	journals, _, _ := w.store.Scan() // the readable journals still seed; an unreadable one cannot be known to owe
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	for _, j := range journals {

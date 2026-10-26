@@ -33,6 +33,8 @@ type Gateway struct {
 	clients map[string]*Client
 	// current is the catalog name of the daemon the Pane last switched to; empty until it does.
 	current string
+	// epoch counts daemon switches, so a connect that raced one is dropped rather than cached against the new daemon.
+	epoch uint64
 
 	streamMu         sync.Mutex
 	streamCancel     context.CancelFunc
@@ -162,54 +164,69 @@ func (g *Gateway) client(ctx context.Context, workspace string) (*Client, error)
 	// The deadline counts from the call, so a command queued behind another's connect gives up after one deadline in all.
 	connectCtx, cancel := context.WithTimeout(ctx, g.deadline)
 	defer cancel()
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	if c := g.clients[workspace]; c != nil {
+	for {
+		g.mu.Lock()
+		c, locate, current, epoch := g.clients[workspace], g.locate, g.current, g.epoch
+		g.mu.Unlock()
+		if c != nil {
+			return c, nil
+		}
+		// The pin read runs git, so it stays outside g.mu: a slow one holds up this workspace only.
+		catalog, _ := ReadCatalog()
+		name, entry := resolveEntry(ctx, g.deadline, workspace, catalog, current)
+		c, err := connectLocated(connectCtx, locate, workspace)
+		if err != nil {
+			if connectCtx.Err() != nil && ctx.Err() == nil {
+				err = fmt.Errorf("%w\n%s", client.ErrDaemonUnavailable, noDaemonHint)
+			}
+			return nil, err
+		}
+		c.name, c.entry, c.deadline = name, entry, g.deadline
+		g.mu.Lock()
+		switch {
+		case g.epoch != epoch:
+			// A switch landed while this connected: start over against the new daemon.
+			g.mu.Unlock()
+			continue
+		case g.clients[workspace] != nil:
+			// A concurrent call for this workspace connected first; use its client.
+			c = g.clients[workspace]
+		default:
+			g.clients[workspace] = c
+		}
+		g.mu.Unlock()
 		return c, nil
 	}
-	// shortcut: the lock is held while connecting, so one hung daemon holds up other workspaces until the deadline.
-	c, err := g.connect(connectCtx, ctx, workspace)
-	if err != nil {
-		if connectCtx.Err() != nil && ctx.Err() == nil {
-			err = fmt.Errorf("%w\n%s", client.ErrDaemonUnavailable, noDaemonHint)
-		}
-		return nil, err
-	}
-	g.clients[workspace] = c
-	return c, nil
 }
 
-// connect dials with ctx; caller is the command's own context, from which the pin read gets a fresh deadline.
-func (g *Gateway) connect(ctx, caller context.Context, workspace string) (*Client, error) {
-	target, err := g.locate(ctx, workspace)
+// connect locates the daemon for workspace with ctx and dials it.
+func connectLocated(ctx context.Context, locate Locator, workspace string) (*Client, error) {
+	target, err := locate(ctx, workspace)
 	if err != nil {
 		return nil, err
 	}
-	c, err := connect(ctx, target)
-	if err != nil {
-		return nil, err
-	}
-	catalog, _ := ReadCatalog()
-	c.name, c.entry = g.resolvedEntry(caller, workspace, catalog)
-	c.deadline = g.deadline
-	return c, nil
+	return connect(ctx, target)
 }
 
-// resolvedEntry names the catalog entry the located daemon is, as kata's discovery picked it: the entry the Pane switched to, else
-// KATA_SERVER (no entry), else the workspace's .kata.local.toml pin, else active_daemon. A [server].daemon pin names its entry; a
-// [server].url pin stays unnamed, as kata reaches it with the global token and never an entry's. active_daemon counts for a remote
-// or a local profile (home and instance_uid); a plain `local = true` entry falls through to the default local daemon, so stays
-// unnamed. A pin kata would refuse to resolve leaves the connection unnamed, so no entry's token is ever sent to another daemon.
-// The caller holds g.mu.
+// resolvedEntry is resolveEntry for the Gateway's own switch state. The caller holds g.mu, or no other goroutine uses g.
 func (g *Gateway) resolvedEntry(ctx context.Context, workspace string, catalog Catalog) (string, CatalogEntry) {
-	if g.current != "" || os.Getenv("KATA_SERVER") != "" {
-		name := g.currentLocked(catalog)
-		entry, _ := catalog.Entry(name)
-		return name, entry
+	return resolveEntry(ctx, g.deadline, workspace, catalog, g.current)
+}
+
+// resolveEntry names the catalog entry the located daemon is, as kata's discovery picked it: the entry the Pane switched to
+// (current), else KATA_SERVER (no entry), else the workspace's .kata.local.toml pin, else active_daemon. A [server].daemon pin names
+// its entry; a [server].url pin stays unnamed, as kata reaches it with the global token and never an entry's. active_daemon counts
+// for a remote or a local profile (home and instance_uid); a plain `local = true` entry falls through to the default local daemon,
+// so stays unnamed. A pin kata would refuse to resolve leaves the connection unnamed, so no entry's token is ever sent to another
+// daemon. It takes no lock: the pin read runs git.
+func resolveEntry(ctx context.Context, deadline time.Duration, workspace string, catalog Catalog, current string) (string, CatalogEntry) {
+	if current != "" || os.Getenv("KATA_SERVER") != "" {
+		entry, _ := catalog.Entry(current)
+		return current, entry
 	}
 	// Its own bounded context: the remainder of the connect's after locate and dial may be too short for git, and a failed
 	// tracked-file check inside a worktree would leave a valid pin unnamed.
-	pinCtx, cancel := context.WithTimeout(ctx, g.deadline)
+	pinCtx, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 	pin, err := workspacePin(pinCtx, workspace)
 	if err != nil || pin.URL != "" {

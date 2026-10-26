@@ -55,8 +55,9 @@ type Worker struct {
 	cancel context.CancelFunc // set by Run: ends ctx, which a stop now and a finished drain do
 	// stopping is "" while serving, "idle" while draining and "now" once a stop now was asked; guarded by mu.
 	stopping string
-	halted   atomic.Bool // set when a test hook killed the worker: no run work happens after it
-	mu       sync.Mutex  // guards every projectState field and pendingTotal
+	halted   atomic.Bool            // set when a test hook killed the worker: no run work happens after it
+	scanErr  atomic.Pointer[string] // the last journal scan error retryPending logged, so an unchanged one is logged once
+	mu       sync.Mutex             // guards every projectState field and pendingTotal
 	// pendingTotal counts slots reserved across Projects (worker-wide max_active_runs).
 	projects []*projectState
 	runs     sync.WaitGroup

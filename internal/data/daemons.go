@@ -19,31 +19,23 @@ import (
 const startDeadline = 30 * time.Second
 
 // currentDaemon is the catalog name of the daemon workspace talks to: the entry the Gateway last switched to, else the name its live
-// connection was resolved to (a workspace pin can differ from active_daemon, and a url pin names no entry), else the catalog's
-// active_daemon, which kata's own discovery honours unless KATA_SERVER names a daemon. "" when the connection is not a catalog entry.
-func (g *Gateway) currentDaemon(catalog Catalog, workspace string) string {
+// connection was resolved to (a workspace pin can differ from active_daemon, and a url pin names no entry), else what a connection
+// would resolve to now: KATA_SERVER names no entry, otherwise the workspace pin or active_daemon by the same rules the Pane's own
+// connection follows. "" when the connection is not a catalog entry.
+func (g *Gateway) currentDaemon(ctx context.Context, catalog Catalog, workspace string) string {
 	g.mu.Lock()
-	defer g.mu.Unlock()
-	if g.current == "" && os.Getenv("KATA_SERVER") == "" {
-		if c := g.clients[workspace]; c != nil {
-			return c.name
-		}
+	current, c := g.current, g.clients[workspace]
+	g.mu.Unlock()
+	if current == "" && os.Getenv("KATA_SERVER") == "" && c != nil {
+		return c.name
 	}
-	return g.currentLocked(catalog)
-}
-
-func (g *Gateway) currentLocked(catalog Catalog) string {
-	if g.current != "" {
-		return g.current
-	}
-	if os.Getenv("KATA_SERVER") != "" {
-		return ""
-	}
-	return catalog.Active
+	// The pin read runs git, so it stays outside g.mu.
+	name, _ := resolveEntry(ctx, g.deadline, workspace, catalog, current)
+	return name
 }
 
 // loadDaemons reads the catalog for the Daemons Page.
-func (g *Gateway) loadDaemons(_ context.Context, cmd model.LoadDaemons) model.Msg {
+func (g *Gateway) loadDaemons(ctx context.Context, cmd model.LoadDaemons) model.Msg {
 	home, err := kataHome()
 	if err != nil {
 		return model.DaemonsLoaded{Request: cmd.Request, Err: err}
@@ -52,7 +44,7 @@ func (g *Gateway) loadDaemons(_ context.Context, cmd model.LoadDaemons) model.Ms
 	if err != nil {
 		return model.DaemonsLoaded{Request: cmd.Request, Err: err}
 	}
-	current := g.currentDaemon(catalog, cmd.Workspace)
+	current := g.currentDaemon(ctx, catalog, cmd.Workspace)
 	loaded := model.DaemonsLoaded{Request: cmd.Request, ConfigPath: filepath.Join(home, "config.toml")}
 	for _, e := range catalog.Daemons {
 		loaded.Entries = append(loaded.Entries, model.DaemonEntry{
@@ -125,6 +117,7 @@ func (g *Gateway) install(name string, locate Locator, workspace string, c *Clie
 	g.background.Wait()
 	g.mu.Lock()
 	g.locate, g.current = locate, name
+	g.epoch++
 	clear(g.clients)
 	g.clients[workspace] = c
 	g.mu.Unlock()

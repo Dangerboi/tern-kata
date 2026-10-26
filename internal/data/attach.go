@@ -207,7 +207,8 @@ func (c *Client) AttachFile(ctx context.Context, host string, cmd model.AttachFi
 		if err == nil {
 			return model.FileAttached{Ref: cmd.Ref, Name: name, Path: stored}, nil
 		}
-		// An answer lost after kata may have stored the pointer leaves the copy: deleting it could strand the Issue on a missing file.
+		// An answer lost after kata may have stored the pointer leaves the copy: deleting it could strand the Issue on a missing
+		// file. If the pointer never landed the kept copy is orphaned; that disk cost is the accepted trade-off.
 		if !ambiguousWrite(err) {
 			_, _ = store.remove(target.issue.UID, stored)
 		}

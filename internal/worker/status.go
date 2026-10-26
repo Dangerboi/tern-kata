@@ -24,6 +24,8 @@ type Status struct {
 	Projects    []ProjectStatus
 	Runs        []RunStatus
 	Quarantined []string
+	// JournalError names the runs whose journals could not be read this time; the others are listed in Runs.
+	JournalError string
 	// Stopping is "idle" while the worker drains toward an exit, "now" once it was told to end at once; InFlight is the runs a drain waits for.
 	Stopping string
 	InFlight int
@@ -109,7 +111,10 @@ func (w *Worker) Status() Status {
 		s.Projects = append(s.Projects, p)
 	}
 	w.mu.Unlock()
-	journals, quarantined, _ := w.store.Scan()
+	journals, quarantined, scanErr := w.store.Scan()
+	if scanErr != nil {
+		s.JournalError = scanErr.Error()
+	}
 	s.Quarantined = append(quarantined, w.store.Quarantine()...)
 	slices.Sort(s.Quarantined)
 	s.Quarantined = slices.Compact(s.Quarantined)

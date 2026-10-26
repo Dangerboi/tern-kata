@@ -69,9 +69,11 @@ func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, err
 	}()
 	// The lease is renewed right before the agent may start (ADR-0003); the cached one can predate another machine's takeover.
 	state := claimLease(ctx, w.opt.Kata, w.clock, w.opt.Config.Executor, ps.actor, j.ProjectID, false)
-	w.mu.Lock()
-	ps.lease = state
-	w.mu.Unlock()
+	if !state.Unknown { // a transient kata failure says nothing about the lease; keep what the loop knew
+		w.mu.Lock()
+		ps.lease = state
+		w.mu.Unlock()
+	}
 	if !state.Held {
 		return RunTransition{}, fmt.Errorf("run %s cannot be resumed: Project %s's lease is not held: %s", uid, ps.cfg.Name, state.Why())
 	}

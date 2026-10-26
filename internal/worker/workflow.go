@@ -263,7 +263,7 @@ func (w *Worker) workflowStep(ctx context.Context, j *Journal) error {
 	if rec.State != StepRunning {
 		j, err = w.store.Update(j.RunUID, "step-started", func(j *Journal) error {
 			r := &j.Steps[i]
-			r.State, r.Tries = StepRunning, r.Tries+1
+			r.State, r.Tries, r.StderrTail = StepRunning, r.Tries+1, "" // the earlier attempt's tail is not this one's
 			r.Dir = fmt.Sprintf("steps/%d-%d", i+1, r.Tries)
 			if r.StartedAt.IsZero() {
 				r.StartedAt = w.clock.Now().UTC()

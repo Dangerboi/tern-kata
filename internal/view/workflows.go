@@ -210,10 +210,11 @@ func workflowLayer(m model.Model) tern.Element {
 	switch {
 	case c.Conflict != nil:
 		title = "Workflow changed: your text is kept"
-		children = append(ui.Nodes(ui.Row{Common: ui.Common{Key: "versions"}, Gap: ui.GapMD, Wrap: true, Children: ui.Nodes(
+		// The choice comes first: the card has a fixed height, and the two texts below can run past its end.
+		children = append(conflictChoice(c.Conflict), ui.Row{Common: ui.Common{Key: "versions"}, Gap: ui.GapMD, Wrap: true, Children: ui.Nodes(
 			ui.Col{Common: ui.Common{Key: "draft", Grow: 1, Basis: ui.BasisFrac(0.5)}, Children: ui.Nodes(ui.Text{Text: "Your text"}, TextEditor("body", c.Editor, true))},
 			ui.Col{Common: ui.Common{Key: "current", Grow: 1, Basis: ui.BasisFrac(0.5)}, Children: ui.Nodes(ui.Text{Text: fmt.Sprintf("As it stands now (revision %d)", c.Conflict.Revision)}, TextEditor("now", model.NewTextEditor(c.Conflict.Text()), true))},
-		)}), conflictChoice(c.Conflict)...)
+		)})
 	case c.DiscardConfirm:
 		children = append(children, ui.Text{Common: ui.Common{Key: "discard", Tone: ui.ToneWarning}, Text: "Discard this text? y discards; n or esc keeps editing."}, discardButtons())
 	case !c.Saving:

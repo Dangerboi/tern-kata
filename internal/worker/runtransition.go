@@ -271,6 +271,9 @@ func (l lifecycle) acceptResume(j *Journal, t resumeTerms) error {
 	if j.Workflow != nil { // one fresh expiry from the frozen timeout, from the moment the resume is accepted
 		j.ExpiresAt = t.At.Add(time.Duration(j.TimeoutSeconds) * time.Second)
 	}
+	if i := j.activeStep(); i >= 0 {
+		j.Steps[i].StderrTail = "" // the resumed attempt writes its own
+	}
 	j.Outcome, j.Exit, j.Result, j.Intents = nil, nil, nil, nil
 	j.Phase = PhaseResuming
 	return nil

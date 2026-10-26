@@ -34,6 +34,53 @@ func TestAnExitWithADescendantHoldingTheOutputIsRecordedByItsOwnStatus(t *testin
 	}
 }
 
+// The window is cut at a line start or mid-line; only a mid-line start loses its first line, and a window with no
+// complete line left is empty rather than a fragment.
+func TestDropPartialLineKeepsAWindowThatStartsAtALineStart(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		in          string
+		atLineStart bool
+		want        string
+	}{
+		{"at a line start", "one\ntwo\n", true, "one\ntwo\n"},
+		{"mid-line", "rt\ntwo\n", false, "two\n"},
+		{"newline is the last byte", "fragment\n", false, ""},
+		{"no newline", "fragment", false, ""},
+		{"at a line start without newline", "one", true, "one"},
+	} {
+		if got := string(dropPartialLine([]byte(tc.in), tc.atLineStart)); got != tc.want {
+			t.Errorf("%s: dropPartialLine(%q, %v) = %q, want %q", tc.name, tc.in, tc.atLineStart, got, tc.want)
+		}
+	}
+}
+
+func TestTheStderrTailKeepsAFirstLineThatStartsExactlyAtTheWindow(t *testing.T) {
+	s := newTailSink(Hooks{}, filepath.Join(t.TempDir(), "stderr.log"))
+	defer s.close()
+	first := "FIRST" + strings.Repeat("x", 2042) + "\n" // 2048 bytes with the newline
+	_, _ = s.Write([]byte("older line\n" + first))
+	if got := s.tailText(); !strings.HasPrefix(got, "FIRST") {
+		t.Fatalf("tail starts %q, want the line that begins at the window kept", got[:min(len(got), 10)])
+	}
+}
+
+// A retried step's stored tail belongs to the earlier attempt: while the step runs it must not stand in for the
+// new attempt's stderr.
+func TestARunningStepDoesNotShowTheEarlierAttemptsStderrTail(t *testing.T) {
+	j := &Journal{
+		Workflow: &WorkflowPlan{Steps: []PlanStep{{Kind: "command"}}},
+		Steps:    []StepRecord{{State: StepRunning, Tries: 2, Dir: "steps/1-2", StderrTail: "attempt one failed"}},
+	}
+	if got := shownStderrTail(j); got != "" {
+		t.Fatalf("running step shows %q, want nothing from the earlier attempt", got)
+	}
+	j.Steps[0].State = StepFailed
+	if got := shownStderrTail(j); got != "attempt one failed" {
+		t.Fatalf("concluded step shows %q, want its stored tail", got)
+	}
+}
+
 // stderr.log keeps only the first bytes, so once it is full it holds no end: the fallback shows nothing, not the middle.
 func TestTheStderrFallbackIsEmptyOnceTheFileReachedItsCap(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "stderr.log")

@@ -327,6 +327,48 @@ func TestUndoOfALaneMoveRefusesWhenAnotherActorMovedTheCardOnBeforeTheAfterMoveR
 	}
 }
 
+func TestUndoOfALaneMoveWorksWhenTheAfterMoveReadFailsAfterARivalChangedAnotherLabel(t *testing.T) {
+	f := newUndoFixture(t)
+	uid := f.issue("On the Board")
+	f.field(uid, model.AddLabelAction, "lane:todo")
+	f.field(uid, model.AddLabelAction, "stale")
+	var once, failed atomic.Bool
+	var writes atomic.Int32
+	var hook func(w http.ResponseWriter, r *http.Request) bool
+	hook = func(w http.ResponseWriter, r *http.Request) bool {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/labels") && once.CompareAndSwap(false, true):
+			// An unrelated label goes after the move's pre-read and before its first write.
+			f.kata.intercept.Store(nil)
+			f.rivalField(uid, model.RemoveLabelAction, "stale")
+			f.kata.intercept.Store(&hook)
+			writes.Add(1)
+		case (r.Method == http.MethodPost || r.Method == http.MethodDelete) && strings.Contains(r.URL.Path, "/labels"):
+			writes.Add(1)
+		case r.Method == http.MethodGet && writes.Load() >= 2 && failed.CompareAndSwap(false, true):
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"status":500,"error":{"code":"x","message":"no"}}`))
+			return true
+		}
+		return false
+	}
+	f.kata.intercept.Store(&hook)
+	moved := as[model.MoveResultMsg](t, run(t, f.gateway, model.MoveIssueCmd{Workspace: f.workspace, UID: uid, ProjectID: f.project.ID, Actor: "tester", Add: "lane:doing", Remove: []string{"lane:todo"}}))
+	f.kata.intercept.Store(nil)
+	if !once.Load() || !failed.Load() {
+		t.Fatal("the rival change or the failed read never ran")
+	}
+	e := f.entry(moved.Record)
+	if e.Labels != nil {
+		t.Fatalf("entry labels %v, want none after a failed read", e.Labels)
+	}
+	f.restores(e)
+	if labels := f.detail(uid).Issue.Labels; !slices.Contains(labels, "lane:todo") || slices.Contains(labels, "lane:doing") {
+		t.Fatalf("labels %v, want the card back in todo", labels)
+	}
+}
+
 func TestSameLabelSetComparesMultisets(t *testing.T) {
 	if sameLabelSet([]string{"x", "x", "y"}, []string{"x", "y", "y"}) {
 		t.Fatal("[x x y] equals [x y y]")

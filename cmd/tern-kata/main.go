@@ -86,6 +86,9 @@ func run() error {
 		return execKata(kata, plan.FallbackArgs, os.Environ(), plan.fallbackAuthor)
 	}
 	if err != nil {
+		if ctx.Err() != nil { // a stop signal during the connect ends the Pane cleanly
+			return nil
+		}
 		return err
 	}
 	if len(plan.TUIArgs) > 0 {
@@ -118,6 +121,9 @@ func run() error {
 	defer gateway.Close()
 	input := any(model.Start{Workspace: workspace, IssueRef: plan.IssueRef, Nonce: rand.Text()})
 	for {
+		if ctx.Err() != nil { // a stop signal that arrived while an editor ran
+			return nil
+		}
 		out := driver.Step(state, input, time.Now())
 		state = out.State
 		if out.Err != nil {

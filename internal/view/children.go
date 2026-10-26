@@ -23,7 +23,7 @@ func childrenTable(m model.Model, children []detailChild, now time.Time) tern.El
 		w := utf8.RuneCountInString(label)
 		for i, child := range children {
 			if child.Loaded {
-				w = max(w, utf8.RuneCountInString(text(cells[i])))
+				w = max(w, displayWidth(text(cells[i])))
 			}
 		}
 		return w
@@ -41,7 +41,7 @@ func childrenTable(m model.Model, children []detailChild, now time.Time) tern.El
 		keys := [4]string{"status", "title", "owner", "updated"}
 		cells := ui.Nodes(ref)
 		for i, key := range keys {
-			cell := ui.Text{Common: ui.Common{Key: key, Actions: follow, Shrink: &fixedShrink}, Spans: []ui.Span{{T: pad(texts[i], widths[i]-utf8.RuneCountInString(texts[i])), S: styles[i]}}, Wrap: ui.WrapNone}
+			cell := ui.Text{Common: ui.Common{Key: key, Actions: follow, Shrink: &fixedShrink}, Spans: []ui.Span{{T: pad(texts[i], widths[i]-displayWidth(texts[i])), S: styles[i]}}, Wrap: ui.WrapNone}
 			if key == "title" {
 				cell.Grow, cell.Shrink = 1, &titleShrink
 			}

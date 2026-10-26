@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/mattn/go-runewidth"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 	"go.kenn.io/kit/tui/helplayout"
@@ -111,7 +112,7 @@ func issues(m model.Model, now time.Time) tern.Element {
 	cols := listColumns{ownerShown: !(slices.Contains(columns, model.ColumnList) && slices.Contains(columns, model.ColumnDetail)), id: 1, owner: ownerWidth}
 	for _, row := range rows {
 		cols.id = max(cols.id, utf8.RuneCountInString(idCell(row)))
-		cols.owner = max(cols.owner, utf8.RuneCountInString(listOwner(m, row, now)))
+		cols.owner = max(cols.owner, displayWidth(listOwner(m, row, now)))
 	}
 	items := make([]tern.Element, 0, len(rows)+len(m.Groups))
 	groups := make(map[string]model.IssueGroup, len(m.Issues))
@@ -293,14 +294,20 @@ func idCell(row model.IssueRow) string {
 	return row.Guide + disclosure + row.ShortID
 }
 
-// cell is text padded with spaces to width characters, or cut to it with an ellipsis.
+// cell is text padded with spaces to width terminal cells, or cut to it with an ellipsis.
 func cell(text string, width int) string {
-	n := utf8.RuneCountInString(text)
+	n := displayWidth(text)
 	if n > width {
-		return string([]rune(text)[:width-1]) + "…"
+		text = displayCondition.Truncate(text, width, "…")
+		n = displayWidth(text)
 	}
-	return text + strings.Repeat(" ", width-n)
+	return text + strings.Repeat(" ", max(width-n, 0))
 }
+
+// displayCondition measures text in terminal cells, wide characters two, whatever the locale: Tern draws them so.
+var displayCondition = &runewidth.Condition{StrictEmojiNeutral: true}
+
+func displayWidth(text string) int { return displayCondition.StringWidth(text) }
 
 // stripeRole is the role of the drawn row at index i: every other row is shaded.
 func stripeRole(i int) string {
@@ -375,6 +382,9 @@ func footerGrid(m model.Model) (grid [][]helplayout.HelpItem, chords []string, p
 		if binding.Action == model.FocusDetail && !m.CanFocusDetail() {
 			continue
 		}
+		if binding.Action == model.OverwriteDraft && m.TopCard() == model.CardWorkflow && m.Workflows.Card.Conflict != nil && m.Workflows.Card.Conflict.Archived {
+			continue
+		}
 		if binding.Action == model.MenuBack && !m.SidebarProjects {
 			continue
 		}
@@ -436,7 +446,7 @@ func headerRow(cols listColumns) tern.Element {
 // listOwner is the owner cell text: the name cut to ownerWidth as before, then " until …" whole when the claim expires.
 func listOwner(m model.Model, row model.IssueRow, now time.Time) string {
 	owner := m.OwnerText(row.Owner, row.AssignmentExpiresOn, now)
-	if utf8.RuneCountInString(owner.Name) <= ownerWidth {
+	if displayWidth(owner.Name) <= ownerWidth {
 		return owner.String()
 	}
 	return cell(owner.Name, ownerWidth) + owner.Until

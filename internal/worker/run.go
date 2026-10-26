@@ -56,7 +56,15 @@ func (w *Worker) spawn(ps *projectState, uid string) {
 
 // retryPending resumes runs a transient kata failure left half-reported or half-admitted; the Project loop calls it at least every minute.
 func (w *Worker) retryPending(ps *projectState) {
-	journals, _, _ := w.store.Scan()
+	journals, _, err := w.store.Scan()
+	if err != nil { // the readable journals are still driven; the unreadable runs are retried by the next scan
+		if msg := err.Error(); w.scanErr.Load() == nil || *w.scanErr.Load() != msg {
+			w.scanErr.Store(&msg)
+			w.opt.Log("journals: %v", err)
+		}
+	} else if w.scanErr.Load() != nil {
+		w.scanErr.Store(nil)
+	}
 	for _, j := range journals {
 		if j.ProjectUID != ps.project.UID || j.Executor != w.opt.Config.Executor {
 			continue
@@ -162,9 +170,11 @@ func (w *Worker) admit(ctx context.Context, ps *projectState, j *Journal) error 
 		return fmt.Errorf("cannot confirm the kata route: %w", err)
 	}
 	state := claimLease(ctx, w.opt.Kata, w.clock, w.opt.Config.Executor, ps.actor, j.ProjectID, false)
-	w.mu.Lock()
-	ps.lease = state
-	w.mu.Unlock()
+	if !state.Unknown { // a transient kata failure says nothing about the lease; keep what the loop knew
+		w.mu.Lock()
+		ps.lease = state
+		w.mu.Unlock()
+	}
 	if state.Unknown {
 		return errors.New(state.Why())
 	}
@@ -901,7 +911,9 @@ type tailSink struct {
 	file *cappedFile
 	mu   sync.Mutex
 	tail []byte
-	cut  bool // the stream was longer than tail, so tail starts mid-line
+	cut  bool // the stream was longer than tail, so tail may start mid-line
+	// cutAtLine is whether the byte just before tail is a newline, so tail starts at a line start.
+	cutAtLine bool
 }
 
 func newTailSink(hooks Hooks, path string) *tailSink {
@@ -913,6 +925,7 @@ func (t *tailSink) Write(p []byte) (int, error) {
 	t.mu.Lock()
 	t.tail = append(t.tail, p...)
 	if len(t.tail) > 2048 {
+		t.cutAtLine = t.tail[len(t.tail)-2049] == '\n'
 		t.tail = t.tail[len(t.tail)-2048:]
 		t.cut = true
 	}
@@ -937,13 +950,17 @@ func plainText(s string) string {
 	return strings.TrimSpace(s)
 }
 
-// dropPartialLine drops the first line of a window that cut the stream, as it is partial and may start inside an
-// escape sequence, unless nothing else remains.
-func dropPartialLine(raw []byte) []byte {
-	if i := bytes.IndexByte(raw, '\n'); i >= 0 && i+1 < len(raw) {
+// dropPartialLine drops the first line of a window that cut the stream mid-line, as it is partial and may start
+// inside an escape sequence. A window with no complete line left is empty. atLineStart means the window began at a
+// line start, so nothing is dropped.
+func dropPartialLine(raw []byte, atLineStart bool) []byte {
+	if atLineStart {
+		return raw
+	}
+	if i := bytes.IndexByte(raw, '\n'); i >= 0 {
 		return raw[i+1:]
 	}
-	return raw
+	return nil
 }
 
 // tailText is the kept end of stderr as plain text.
@@ -952,7 +969,7 @@ func (t *tailSink) tailText() string {
 	defer t.mu.Unlock()
 	raw := t.tail
 	if t.cut {
-		raw = dropPartialLine(raw)
+		raw = dropPartialLine(raw, t.cutAtLine)
 	}
 	return plainText(string(raw))
 }

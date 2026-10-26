@@ -41,9 +41,11 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 		refreshed time.Time
 		dirty     bool
 		recovered bool
-		started   bool
-		takeover  = w.opt.Takeover
-		nextRoute time.Time
+		// recoveredRuns outlives a pass that could not read every journal, so the next one only picks up what is left.
+		recoveredRuns = map[string]bool{}
+		started       bool
+		takeover      = w.opt.Takeover
+		nextRoute     time.Time
 	)
 	starting, ok := w.beginStarting(ctx)
 	if !ok {
@@ -104,8 +106,7 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 				w.opt.Log("Project %s: %s", ps.cfg.Name, state.Why())
 			}
 			if !recovered && !state.Unknown {
-				recovered = true
-				w.recoverProject(ctx, ps)
+				recovered = w.recoverProject(ctx, ps, recoveredRuns)
 			}
 			starting()
 			held = false
@@ -358,36 +359,35 @@ func (w *Worker) holdsSlotOf(ps *projectState, uid string) bool {
 	return ok
 }
 
-// gateClosed reports whether a job's overlap gate is closed, and by which run (ADR-0007). When the journals cannot be
-// scanned an unsettled run may be among them, so the gate reads closed and err says why.
+// gateClosed reports whether a job's overlap gate is closed, and by which run (ADR-0007). When a journal cannot be
+// read an unsettled run of this job may be among them and there is no way to tell which job it belongs to, so the
+// gate reads closed and err says why; a closing run among the readable ones is still named.
 func (w *Worker) gateClosed(jobUID, projectUID string) (runUID string, err error) {
 	journals, _, err := w.store.Scan()
-	if err != nil {
-		return "", err
-	}
 	for _, j := range journals {
 		if j.JobUID == jobUID && j.ProjectUID == projectUID && j.closesGate() {
 			return j.RunUID, nil
 		}
 	}
-	return "", nil
+	return "", err
 }
 
 // recoverProject continues the Project's journals after the lease decision (ADR-0006 "Recovery order"): rebuild the
-// slots first, then settle or continue each run.
-func (w *Worker) recoverProject(ctx context.Context, ps *projectState) {
+// slots first, then settle or continue each run. done holds the runs already continued, so a later pass after an
+// incomplete one never recovers a run twice. False means some journal could not be read and the caller tries again.
+func (w *Worker) recoverProject(ctx context.Context, ps *projectState, done map[string]bool) bool {
 	journals, quarantined, err := w.store.Scan()
 	if err != nil {
 		w.opt.Log("journals: %v", err)
-		return
 	}
 	for _, uid := range quarantined {
 		w.opt.Log("run %s: its journal could not be read and was moved to quarantine", uid)
 	}
 	var mine []*Journal
 	for _, j := range journals {
-		if j.ProjectUID == ps.project.UID && j.Executor == w.opt.Config.Executor {
+		if j.ProjectUID == ps.project.UID && j.Executor == w.opt.Config.Executor && !done[j.RunUID] {
 			mine = append(mine, j)
+			done[j.RunUID] = true
 			w.syncSlot(ps, j)
 		}
 	}
@@ -403,6 +403,7 @@ func (w *Worker) recoverProject(ctx context.Context, ps *projectState) {
 			w.recoverRun(ctx, ps, j.RunUID)
 		}()
 	}
+	return err == nil
 }
 
 // leaseHeld reports whether this worker holds the Project's lease.

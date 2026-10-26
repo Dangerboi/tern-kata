@@ -141,7 +141,16 @@ func planLaunch(args []string, lookup func(string) (string, bool), version strin
 		// kata tui takes one positional: the ref, so a name after -- would be a second.
 		dash := slices.Index(plan.FallbackArgs, "--")
 		if dash >= 0 && dash < len(plan.FallbackArgs)-1 {
-			return LaunchPlan{}, fmt.Errorf("--issue cannot be combined with an argument after --")
+			return LaunchPlan{}, fmt.Errorf("--issue cannot be combined with another argument for kata tui")
+		}
+		// A bare word is a positional unless the flag before it may take it as a value (kata tui's flags are unknown here).
+		for j, arg := range plan.TUIArgs {
+			if arg == "--" {
+				break
+			}
+			if !strings.HasPrefix(arg, "-") && (j == 0 || !strings.HasPrefix(plan.TUIArgs[j-1], "-")) {
+				return LaunchPlan{}, fmt.Errorf("--issue cannot be combined with another argument for kata tui")
+			}
 		}
 		translated := []string{"--project", project, project + "#" + shortID}
 		if dash < 0 {
