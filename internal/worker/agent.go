@@ -73,13 +73,14 @@ func (p *agentParser) Line(line []byte) {
 	if len(line) == 0 || line[0] != '{' {
 		return
 	}
+	// Messages stay raw until the role is known: omp's other roles (a `custom` message's content is a string) need
+	// not fit ompMessage, and one of them must not cost the whole agent_end.
 	var event struct {
-		Type       string          `json:"type"`
-		ID         string          `json:"id"`
-		Message    *ompMessage     `json:"message"`
-		Messages   []ompMessage    `json:"messages"`
-		IsTerminal *bool           `json:"isTerminal"`
-		Raw        json.RawMessage `json:"-"`
+		Type       string            `json:"type"`
+		ID         string            `json:"id"`
+		Message    json.RawMessage   `json:"message"`
+		Messages   []json.RawMessage `json:"messages"`
+		IsTerminal *bool             `json:"isTerminal"`
 	}
 	if json.Unmarshal(line, &event) != nil {
 		return
@@ -93,27 +94,37 @@ func (p *agentParser) Line(line []byte) {
 			}
 		}
 	case "message_end":
-		if event.Message == nil || event.Message.Role != "assistant" {
+		m, ok := assistantMessage(event.Message)
+		if !ok {
 			return
 		}
-		if u := event.Message.Usage; u != nil {
+		if u := m.Usage; u != nil {
 			p.sawUsage = true
 			p.in += u.Input + u.CacheRead + u.CacheWrite // omp's `input` leaves cached prompt tokens out
 			p.out += u.Output
 		}
-		p.final(*event.Message)
+		p.final(m)
 	case "agent_end":
 		if event.IsTerminal != nil && !*event.IsTerminal {
 			return
 		}
 		p.res.Terminal = true
 		for i := len(event.Messages) - 1; i >= 0; i-- {
-			if event.Messages[i].Role == "assistant" {
-				p.final(event.Messages[i])
+			if m, ok := assistantMessage(event.Messages[i]); ok {
+				p.final(m)
 				break
 			}
 		}
 	}
+}
+
+// assistantMessage decodes raw as an assistant message; any other role, or a shape that does not decode, is not one.
+func assistantMessage(raw json.RawMessage) (ompMessage, bool) {
+	var m ompMessage
+	if len(raw) == 0 || json.Unmarshal(raw, &m) != nil || m.Role != "assistant" {
+		return ompMessage{}, false
+	}
+	return m, true
 }
 
 func (p *agentParser) final(m ompMessage) {

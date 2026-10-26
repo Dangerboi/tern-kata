@@ -36,6 +36,7 @@ func TestOmpOutputIsReadByItsEventsNotItsText(t *testing.T) {
 		{"a non-terminal end is not an end", []string{`{"type":"message_end","message":` + assistant("retrying", "error", 0, 0) + `}`, `{"type":"agent_end","messages":[` + assistant("retrying", "error", 0, 0) + `],"isTerminal":false}`}, "retrying", "error", false, [2]int64{0, 0}, ""},
 		{"cached prompt tokens count as input", []string{`{"type":"message_end","message":{"role":"assistant","content":[],"stopReason":"stop","usage":{"input":3,"output":114,"cacheRead":100,"cacheWrite":11660}}}`}, "", "stop", false, [2]int64{11763, 114}, ""},
 		{"garbage and unknown events are skipped", []string{`not json`, ``, `{"type":"mystery","x":1}`, `{"type":"message_end","message":{"role":"user","content":[]}}`}, "", "", false, [2]int64{}, ""},
+		{"a message of another shape does not hide the end", []string{`{"type":"message_end","message":{"role":"custom","customType":"lsp-late-diagnostic","content":"<system-notification>2 warnings</system-notification>"}}`, `{"type":"agent_end","messages":[{"role":"user","content":"go"},` + assistant("done", "stop", 4, 1) + `,{"role":"custom","customType":"lsp-late-diagnostic","content":"<system-notification>2 warnings</system-notification>"},` + assistant("final", "stop", 4, 1) + `],"isTerminal":true}`}, "final", "stop", true, [2]int64{}, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
