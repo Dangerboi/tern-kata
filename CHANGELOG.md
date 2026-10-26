@@ -23,6 +23,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - Saving a new adapter job again after its first answer was lost reports it created, not changed.
 - A Workflow conflict whose current version another actor archived offers only Discard Draft; Overwrite would have silently restored it. An archive or restore conflict keeps the selection at its row.
 - Restore notices name an Issue of a Project the Pane's catalog does not list by its short id, not `#abcd`.
+- Recurrences refuse the zone `Local`, which kata would evaluate in the daemon's zone; a Pane whose zone is `Local` opens the card on UTC, as the job card does.
+- Relative ages read "0s ago" instead of a negative age when the daemon's clock runs ahead.
+- Searching by short id resolves in the bound Project when a saved filter names a Project the catalog no longer lists.
 
 ## [0.5.0] - 2026-10-25
 

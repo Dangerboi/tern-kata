@@ -28,7 +28,7 @@ func RelativeTime(t, now time.Time) string {
 	if t.IsZero() {
 		return "-"
 	}
-	d := now.Sub(t)
+	d := max(now.Sub(t), 0)
 	switch {
 	case d < time.Minute:
 		return fmt.Sprintf("%ds ago", int(d.Seconds()))

@@ -136,7 +136,7 @@ func (f RecurrenceFormState) rawTerms(rule string) (RecurrenceTerms, error) {
 	if _, err := time.Parse(time.DateOnly, start); err != nil {
 		return RecurrenceTerms{}, errStartDate
 	}
-	if _, err := time.LoadLocation(zone); err != nil || zone == "" {
+	if _, err := time.LoadLocation(zone); err != nil || zone == "" || zone == "Local" {
 		return RecurrenceTerms{}, fmt.Errorf("Unknown time zone %q.", zone)
 	}
 	return RecurrenceTerms{Rule: rule, Start: start, TimeZone: zone}, nil

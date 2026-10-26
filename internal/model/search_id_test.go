@@ -200,6 +200,15 @@ func TestSearchByIDInCollections(t *testing.T) {
 	}
 }
 
+func TestSearchByIDSkipsAProjectTheCatalogDoesNotKnow(t *testing.T) {
+	m := idSearching(idDeadlines, "4kxn")
+	m.Filters.ProjectUID = "gone"
+	_, cmds := model.Update(m, model.KeyMsg{Text: "n"})
+	if lookup := cmdOf[model.LookupSearchID](t, cmds); lookup.ProjectID != 7 {
+		t.Fatalf("a stale filter Project hid the bound one: %+v", lookup)
+	}
+}
+
 func TestIDResultKeepsSearchKeysAndLiveRefresh(t *testing.T) {
 	m := idSearching(idCollection, "4kxn")
 	m, cmds := model.Update(m, model.KeyMsg{Text: "n"})

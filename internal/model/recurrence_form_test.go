@@ -77,6 +77,33 @@ func TestRecurrenceCardOpensWithWeeklyDefaults(t *testing.T) {
 	}
 }
 
+func TestRecurrenceCardOpensValidWhenThePaneZoneIsLocal(t *testing.T) {
+	m := recurrenceBase()
+	m.Calendar = model.NewPaneCalendar("2026-10-21", "Local", "")
+	m = openRecurrenceCard(m)
+	if m.RecurrenceForm.Zone == "Local" {
+		t.Fatal("the card opened on the zone Local")
+	}
+	if _, cmds := saveRecurrence(m); len(cmds) != 1 {
+		t.Fatalf("saving the defaults sent %#v", cmds)
+	}
+}
+
+func TestRecurTermsRefuseTheLocalZone(t *testing.T) {
+	target := model.RecurTarget{UID: "parent", Today: "2026-10-21", Zone: "Europe/Zurich"}
+	for _, flags := range []map[string]string{
+		{"zone": "Local", "frequency": "daily"},
+		{"zone": "Local", "rule": "FREQ=DAILY"},
+	} {
+		if _, err := target.Terms(flags); err == nil || err.Error() != `Unknown time zone "Local".` {
+			t.Fatalf("Terms(%v) error = %v", flags, err)
+		}
+	}
+	if terms, err := (model.RecurTarget{UID: "parent", Today: "2026-10-21", Zone: "Local"}).Terms(map[string]string{"frequency": "daily"}); err != nil || terms.TimeZone == "Local" {
+		t.Fatalf("a Local Pane zone gave %+v, %v", terms, err)
+	}
+}
+
 func TestRecurrenceCardStartsOnTheIssuesScheduledDateAndFallsBackToUTC(t *testing.T) {
 	m := recurrenceBase()
 	m.Calendar = model.PaneCalendar{Date: m.Calendar.Date}
@@ -171,6 +198,7 @@ func TestRecurrenceCardRefusesAnInvalidScheduleAndSendsNothing(t *testing.T) {
 		{"start not a date", func(m model.Model) model.Model { return fillField(m, model.RecurrenceStart, "tomorrow") }, "Start date must be a date like"},
 		{"unknown zone", func(m model.Model) model.Model { return fillField(m, model.RecurrenceZone, "Mars/Base") }, `Unknown time zone "Mars/Base".`},
 		{"empty zone", func(m model.Model) model.Model { return fillField(m, model.RecurrenceZone, "") }, `Unknown time zone "".`},
+		{"Local zone", func(m model.Model) model.Model { return fillField(m, model.RecurrenceZone, "Local") }, `Unknown time zone "Local".`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m, cmds := saveRecurrence(tt.set(openRecurrenceCard(recurrenceBase())))

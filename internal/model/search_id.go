@@ -51,9 +51,11 @@ func (m Model) idLookup() (LookupSearchID, bool) {
 		return LookupSearchID{}, false
 	}
 	for _, uid := range []string{m.Collection.ProjectUID, m.Filters.ProjectUID, m.Project.UID} {
-		if uid != "" {
-			entry, ok := CatalogEntry(m.Snapshot, uid)
-			return LookupSearchID{Workspace: m.Workspace, ProjectID: entry.Project.ID, ShortID: id}, ok
+		if uid == "" {
+			continue
+		}
+		if entry, ok := CatalogEntry(m.Snapshot, uid); ok {
+			return LookupSearchID{Workspace: m.Workspace, ProjectID: entry.Project.ID, ShortID: id}, true
 		}
 	}
 	return LookupSearchID{}, false

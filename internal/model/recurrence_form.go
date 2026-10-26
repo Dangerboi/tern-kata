@@ -119,6 +119,9 @@ func (f *RecurrenceFormState) text(name Field) *string {
 func newRecurrenceForm(m Model, issue *Issue) RecurrenceFormState {
 	f := RecurrenceFormState{Open: true, Field: RecurrenceFields[0].Name, UID: issue.UID, ProjectID: issue.ProjectID, Frequency: Weekly, Every: "1", Month: 1,
 		Start: m.Calendar.Date, Zone: m.Calendar.Zone()}
+	if f.Zone == "Local" { // kata would read "Local" in the daemon's zone, not the Pane's
+		f.Zone = "UTC"
+	}
 	if issue.ScheduledOnDate != nil && *issue.ScheduledOnDate != "" {
 		f.Start = *issue.ScheduledOnDate
 	}
@@ -276,7 +279,7 @@ func (f RecurrenceFormState) terms() (RecurrenceTerms, error) {
 		}
 		s.Until = until.Format(time.DateOnly)
 	}
-	if _, err := time.LoadLocation(zone); err != nil || zone == "" {
+	if _, err := time.LoadLocation(zone); err != nil || zone == "" || zone == "Local" {
 		return RecurrenceTerms{}, fmt.Errorf("Unknown time zone %q.", zone)
 	}
 	return RecurrenceTerms{Rule: s.RRULE(), Start: start, TimeZone: zone}, nil
