@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"errors"
@@ -791,7 +792,9 @@ type lineSink struct {
 	skipping bool
 }
 
-const maxLine = 8 << 20
+// shortcut: a line past this is skipped by the live parser, so an agent_end longer than 64 MiB leaves a finished run
+// recorded failed ("no agent_end").
+const maxLine = 64 << 20
 
 func (s *lineSink) Write(p []byte) (int, error) {
 	s.mu.Lock()
@@ -799,7 +802,7 @@ func (s *lineSink) Write(p []byte) (int, error) {
 	n := len(p)
 	_, _ = s.file.Write(p)
 	for len(p) > 0 {
-		i := indexByte(p, '\n')
+		i := bytes.IndexByte(p, '\n')
 		if i < 0 {
 			if !s.skipping {
 				s.buf = append(s.buf, p...)
@@ -811,7 +814,7 @@ func (s *lineSink) Write(p []byte) (int, error) {
 		}
 		if !s.skipping {
 			s.buf = append(s.buf, p[:i]...)
-			s.parser.Line(s.buf)
+			s.line(s.buf)
 		}
 		s.buf, s.skipping = s.buf[:0], false
 		p = p[i+1:]
@@ -819,13 +822,13 @@ func (s *lineSink) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-func indexByte(p []byte, c byte) int {
-	for i, b := range p {
-		if b == c {
-			return i
-		}
+// line hands one complete line to the parser. omp's last line is agent_end; the cap must not lose it, or a long run
+// reads as unfinished, so it is kept past the cap.
+func (s *lineSink) line(l []byte) {
+	s.parser.Line(l)
+	if t := bytes.TrimSpace(l); bytes.HasPrefix(t, []byte(`{"type":"agent_end"`)) {
+		s.file.keep(t)
 	}
-	return -1
 }
 
 // flush parses a last line that had no newline.
@@ -833,7 +836,7 @@ func (s *lineSink) flush() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if len(s.buf) > 0 && !s.skipping {
-		s.parser.Line(s.buf)
+		s.line(s.buf)
 	}
 	s.buf = nil
 }
@@ -844,19 +847,37 @@ func (s *lineSink) close() { _ = s.file.Close() }
 type cappedFile struct {
 	*capture
 	left int
+	cut  bool // bytes were dropped
+	last byte // the last byte written; a newline while the file is empty
 }
 
 func openCapped(hooks Hooks, path string, max int) *cappedFile {
-	return &cappedFile{capture: openCapture(hooks, path), left: max}
+	return &cappedFile{capture: openCapture(hooks, path), left: max, last: '\n'}
 }
 
 func (c *cappedFile) Write(p []byte) (int, error) {
-	if c.left > 0 {
-		n := min(len(p), c.left)
+	n := min(len(p), c.left)
+	if n > 0 {
 		_, _ = c.capture.Write(p[:n])
 		c.left -= n
+		c.last = p[n-1]
 	}
+	c.cut = c.cut || n < len(p)
 	return len(p), nil
+}
+
+// keep writes line past the cap when the cap has dropped bytes; a cut that fell mid-line leaves that partial line
+// to stand alone, which readers skip as garbage. It is the only write allowed past the cap.
+func (c *cappedFile) keep(line []byte) {
+	if !c.cut {
+		return
+	}
+	if c.last != '\n' {
+		_, _ = c.capture.Write([]byte{'\n'})
+	}
+	_, _ = c.capture.Write(line)
+	_, _ = c.capture.Write([]byte{'\n'})
+	c.last = '\n'
 }
 
 // tailSink keeps the first 64 KiB of stderr in a file and its last 2 KiB for failure reasons.
