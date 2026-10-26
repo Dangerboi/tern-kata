@@ -100,7 +100,7 @@ func jobCard(row model.JobRow, selected bool) tern.Element {
 	if row.Pause == model.PauseDisabled || row.Pause == model.PauseArchived {
 		cardTone = ui.ToneMuted
 	}
-	return ui.Card{Common: ui.Common{Key: row.Job.UID, Tone: cardTone, Actions: &ui.Actions{Click: JobClick(row.Job.UID)}}, Selected: selected, Children: body}
+	return ui.Card{Common: ui.Common{Key: row.Job.UID, Tone: cardTone, Actions: &ui.Actions{Click: JobClick(row.Job.UID), DblClick: JobOpenClick(row.Job.UID)}}, Selected: selected, Children: body}
 }
 
 // inspector is the Jobs Page's second column: the selected job's definition and, for a native job, its parent, which Enter opens.

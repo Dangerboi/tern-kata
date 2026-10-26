@@ -19,8 +19,31 @@ expect_tree "[data-id='main.columns.list.issues']" '.count == 0'
 ctl key enter
 expect_tree "[data-id='main.columns.list.issues']" '.count == 1'
 expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[] | (.text // "")] | any(contains("Smoke attention Issue")))'
+# A double click on a request card that is not selected does what selecting it and pressing Enter does: its Issue opens on
+# the Issues Page with the keys in its detail. Own second Issue and request.
+kata --workspace "$at_dir" create "Zebra quartz lantern" --body "Unrelated second body" --json >"$tmp/attention-second.json"
+at_second=$(jq -r '.issue.uid' "$tmp/attention-second.json")
+at_second_short=$(jq -r '.issue.short_id' "$tmp/attention-second.json")
+kata --as smoke-asker --workspace "$at_dir" notify "$at_second_short" --to smoke-attention --message "Second request" --json >/dev/null
+ctl key 6
+expect_tree "[data-id='main.columns.list.attention.$at_second']" '.ok and .count == 1'
+expect_tree "[data-id='main.columns.list.attention.$at_issue']" '.ok and .count == 1'
+ctl click "[data-id='main.columns.list.attention.$at_issue']"
+expect_tree "[data-id='main.columns.list.attention.$at_issue']" '.ok and (.nodes[0].class | contains("selected"))'
+expect_tree "[data-id='main.columns.list.issues']" '.count == 0'
+ctl dblclick "[data-id='main.columns.list.attention.$at_second']"
+expect_tree "[data-id='main.columns.list.issues']" '.count == 1'
+expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[] | (.text // "")] | any(contains("Zebra quartz lantern")))'
+hint_expect_mode detail
+ctl key 6
+expect_tree "[data-id='main.columns.list.attention.$at_second']" '.ok and .count == 1'
+ctl click "[data-id='main.columns.list.attention.$at_second']"
+ctl key c
+expect_tree "[data-id='main.columns.list.attention.$at_second']" '.ok and .count == 0'
+kata --workspace "$at_dir" delete "$at_second" --force --confirm "DELETE smoke#$at_second_short" --json >/dev/null
 ctl key 6
 expect_tree "[data-id='main.columns.list.attention.$at_issue']" '.ok and .count == 1'
+ctl click "[data-id='main.columns.list.attention.$at_issue']"
 kata inbox --for smoke-attention --all | grep -q "Smoke attention Issue"
 ctl key c
 expect_tree "[data-id='main.columns.list.attention.$at_issue']" '.ok and .count == 0'

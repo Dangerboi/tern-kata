@@ -130,6 +130,11 @@ type RunSelectMsg struct{ UID string }
 
 func (RunSelectMsg) msg() {}
 
+// RunOpenMsg is a double click on a Run's row.
+type RunOpenMsg struct{ UID string }
+
+func (RunOpenMsg) msg() {}
+
 // RunsState is the Runs Page's state. It is not saved: a Pane starts on the Issues Page.
 type RunsState struct {
 	// ProjectUID is the Project the state was filled for; resetPagesForProject empties it when the Pane's Project differs.
@@ -514,6 +519,13 @@ func updateRuns(m Model, msg Msg) (Model, []Cmd, bool) {
 		return runSessionOpened(m, msg), nil, true
 	case RunSelectMsg:
 		m.Runs.Selected, m.Focus = msg.UID, ColumnList
+		return m, nil, true
+	case RunOpenMsg:
+		if mode := m.CurrentMode(); (mode == ModeRuns || mode == ModeRunInspector) && slices.ContainsFunc(m.Runs.Runs, func(r Run) bool { return r.UID == msg.UID }) {
+			m.Runs.Selected, m.Focus = msg.UID, ColumnList
+			next, cmds := inspectRun(m)
+			return next, cmds, true
+		}
 		return m, nil, true
 	}
 	return m, nil, false

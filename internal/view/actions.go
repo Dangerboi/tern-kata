@@ -14,17 +14,21 @@ import (
 //
 // The Luau window hook keeps its own copy of the Issue list id and the select-issue action.
 const (
-	keyAct         = "key"
-	jumpAct        = "jump"
-	activityTabAct = "activity-tab"
-	detailItemAct  = "detail-item"
-	chooseAct      = "choose"
-	cardAct        = "card"
-	refAct         = "ref"
-	jobAct         = "job"
-	runAct         = "run"
-	attentionAct   = "attention"
-	openJobAct     = "open-job"
+	keyAct           = "key"
+	jumpAct          = "jump"
+	activityTabAct   = "activity-tab"
+	detailItemAct    = "detail-item"
+	chooseAct        = "choose"
+	cardAct          = "card"
+	refAct           = "ref"
+	jobAct           = "job"
+	runAct           = "run"
+	attentionAct     = "attention"
+	openJobAct       = "open-job"
+	jobOpenAct       = "job-open"
+	runOpenAct       = "run-open"
+	attentionOpenAct = "attention-open"
+	workflowOpenAct  = "workflow-open"
 )
 
 // FocusDetailClick, RetryClick and MenuClick carry no value.
@@ -62,6 +66,13 @@ func AttentionClick(uid string) string { return click(attentionAct, uid) }
 
 // OpenJobClick opens the Cron job on the Jobs Page.
 func OpenJobClick(uid string) string { return click(openJobAct, uid) }
+
+// JobOpenClick is the double click of a Jobs Page card: select it and press Enter. RunOpenClick, AttentionOpenClick and
+// WorkflowOpenClick do the same on the Runs, Attention and Workflows Pages.
+func JobOpenClick(uid string) string       { return click(jobOpenAct, uid) }
+func RunOpenClick(uid string) string       { return click(runOpenAct, uid) }
+func AttentionOpenClick(uid string) string { return click(attentionOpenAct, uid) }
+func WorkflowOpenClick(uid string) string  { return click(workflowOpenAct, uid) }
 
 // RefClick selects the Board card of a related Issue, revealing it in its Lane, or opens its detail when the Board does not draw it.
 func RefClick(uid string) string { return click(refAct, uid) }
@@ -132,6 +143,14 @@ func DecodeAction(id, act, value string) model.Msg {
 		return model.OpenJobMsg{UID: value}
 	case jobAct:
 		return model.JobSelectMsg{UID: value}
+	case jobOpenAct:
+		return model.JobOpenMsg{UID: value}
+	case runOpenAct:
+		return model.RunOpenMsg{UID: value}
+	case attentionOpenAct:
+		return model.AttentionOpenMsg{UID: value}
+	case workflowOpenAct:
+		return model.WorkflowOpenMsg{UID: value}
 	}
 	return nil
 }

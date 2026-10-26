@@ -22,9 +22,34 @@ ctl key enter
 expect_tree "[data-id='main.columns.list.issues']" '.count == 1'
 expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Smoke jobs parent")))'
 
+# A double click on a job that is not selected does what selecting it and pressing Enter does: the keys move to its
+# inspector (the footer offers its parent) and Esc gives them back to the list.
+jq '.name = "Smoke second report"' "$tmp/jobs-job.json" >"$tmp/jobs-second.json"
+kata --workspace "$jb_dir" cron job create --parent "$jb_short" --file "$tmp/jobs-second.json" --json >"$tmp/jobs-second-created.json"
+jb_second=$(jq -r '.job.uid' "$tmp/jobs-second-created.json")
+jb_second_event=$(jq -r '.job.definition_event_uid' "$tmp/jobs-second-created.json")
+ctl key 3
+expect_tree "[data-id='main.columns.list.jobs.$jb_second']" '.ok and .count == 1'
+ctl click "[data-id='main.columns.list.jobs.$jb_job']"
+expect_tree "[data-id='main.columns.list.jobs.$jb_job']" '.ok and (.nodes[0].class | contains("selected"))'
+expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("open parent") | not)'
+ctl dblclick "[data-id='main.columns.list.jobs.$jb_second']"
+expect_tree "[data-id='main.columns.list.jobs.$jb_second']" '.ok and (.nodes[0].class | contains("selected"))'
+expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("open parent"))'
+expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Smoke second report")))'
+ctl key escape
+expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("open parent") | not)'
+# A double click on the job already selected does the same.
+ctl dblclick "[data-id='main.columns.list.jobs.$jb_second']"
+expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("open parent"))'
+ctl key escape
+expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("open parent") | not)'
+ctl click "[data-id='main.columns.list.jobs.$jb_job']"
+
 # Archived jobs stay out of the list until `a`.
 ctl key 3
 kata --workspace "$jb_dir" cron job delete "$jb_job" --expected-event-uid "$jb_event" --json >/dev/null
+kata --workspace "$jb_dir" cron job delete "$jb_second" --expected-event-uid "$jb_second_event" --json >/dev/null
 expect_tree "[data-id='main.columns.list.jobs.$jb_job']" '.count == 0'
 ctl key a
 expect_tree "[data-id='main.columns.list.jobs.$jb_job']" '.ok and .count == 1 and (.nodes[0].text | contains("archived"))'

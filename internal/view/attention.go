@@ -67,5 +67,5 @@ func attentionCard(request model.AttentionRequest, selected bool) tern.Element {
 	} else {
 		body = append(body, ui.Text{Common: ui.Common{Key: "message"}, Spans: []ui.Span{{T: request.FirstLine(), S: "muted"}}, Wrap: ui.WrapNone})
 	}
-	return ui.Card{Common: ui.Common{Key: request.IssueUID, Actions: &ui.Actions{Click: AttentionClick(request.IssueUID)}}, Selected: selected, Children: body}
+	return ui.Card{Common: ui.Common{Key: request.IssueUID, Actions: &ui.Actions{Click: AttentionClick(request.IssueUID), DblClick: AttentionOpenClick(request.IssueUID)}}, Selected: selected, Children: body}
 }

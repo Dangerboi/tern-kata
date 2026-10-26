@@ -4,6 +4,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+- A double click on a card of the Jobs, Runs, Workflows or Attention Page opens it as Enter does: the job's inspector, the run's detail, the workflow's steps, or the request's Issue.
+
 ### Fixed
 
 - A worker run whose agent finished its turn is no longer recorded `failed` with "no agent_end" when omp's output carries a message the worker does not read, such as a late LSP diagnostic: the worker now reads the turn's end and final message past it.

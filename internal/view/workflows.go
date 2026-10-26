@@ -75,7 +75,7 @@ func workflowList(m model.Model, paired bool) tern.Element {
 		if run, ok := m.LatestWorkflowRun(w.UID); ok {
 			value = append(value, ui.Span{T: "  " + string(run.Status) + " " + m.Calendar.Stamp(run.Started()), S: toneStyle(runTone(run.Status))})
 		}
-		items[i] = ui.Item{Common: ui.Common{Key: w.UID, Role: stripeRole(i), Tone: tone}, Label: ui.Spans(label...), Detail: ui.T(" "), Value: ui.Spans(value...)}
+		items[i] = ui.Item{Common: ui.Common{Key: w.UID, Role: stripeRole(i), Tone: tone, Actions: &ui.Actions{DblClick: WorkflowOpenClick(w.UID)}}, Label: ui.Spans(label...), Detail: ui.T(" "), Value: ui.Spans(value...)}
 	}
 	empty := "No workflows in " + m.Collection.Title + ". Press n to write one."
 	switch {

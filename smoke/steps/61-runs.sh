@@ -20,11 +20,32 @@ cat >"$tmp/runs-observation.json" <<JSON
  "summary":{"version":1,"message":"triaged four items","input_tokens":1200,"output_tokens":340}}
 JSON
 kata --workspace "$rn_dir" cron run observe "$rn_run" --json-input "$tmp/runs-observation.json" --json >/dev/null
+rn_second=01H5MK0000000000000000R002
+cat >"$tmp/runs-second.json" <<JSON
+{"job_uid":"$rn_job","definition_event_uid":"$rn_event","issue_uid":"$rn_issue","executor_label":"smoke-laptop",
+ "status":"succeeded","started_at":"2026-10-08T10:00:00Z","ended_at":"2026-10-08T10:02:00Z","expected_revision":0,
+ "summary":{"version":1,"message":"triaged nine items","input_tokens":777,"output_tokens":55}}
+JSON
+kata --workspace "$rn_dir" cron run observe "$rn_second" --json-input "$tmp/runs-second.json" --json >/dev/null
 
 ctl key 4
 expect_tree "[data-id='main.columns.list.runs.$rn_run']" '.ok and .count == 1 and (.nodes[0].text | contains("succeeded") and contains("Smoke triage job") and contains("Smoke run Issue") and contains("smoke-laptop") and contains("1m 35s") and contains("triaged four items"))'
+ctl click "[data-id='main.columns.list.runs.$rn_run']"
 ctl key enter
 expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Input tokens1200"))) and ([.nodes[].text] | any(. == "340")) and ([.nodes[].text] | any(. == "'"$rn_job"'"))'
+# A double click on a run that is not selected does what selecting it and pressing Enter does: the keys move to its
+# detail, which shows that run, and Esc gives them back to the list.
+ctl key escape
+expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("back") | not)'
+expect_tree "[data-id='main.columns.list.runs.$rn_second']" '.ok and .count == 1 and (.nodes[0].text | contains("triaged nine items"))'
+ctl click "[data-id='main.columns.list.runs.$rn_run']"
+expect_tree "[data-id='main.columns.list.runs.$rn_run']" '.ok and (.nodes[0].class | contains("selected"))'
+ctl dblclick "[data-id='main.columns.list.runs.$rn_second']"
+expect_tree "[data-id='main.columns.list.runs.$rn_second']" '.ok and (.nodes[0].class | contains("selected"))'
+expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("back"))'
+expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Input tokens777"))) and ([.nodes[].text] | any(. == "55"))'
+ctl key escape
+expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("back") | not)'
 ctl key i
 expect_tree "[data-id='main.columns.list.issues']" '.count == 1'
 expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Smoke run Issue")))'

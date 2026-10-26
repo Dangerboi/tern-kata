@@ -134,6 +134,11 @@ type AttentionSelectMsg struct{ UID string }
 
 func (AttentionSelectMsg) msg() {}
 
+// AttentionOpenMsg is a double click on a request's row; UID is its Issue's.
+type AttentionOpenMsg struct{ UID string }
+
+func (AttentionOpenMsg) msg() {}
+
 // AttentionState is the Attention Page's state. It is not saved: a Pane starts on the Issues Page.
 type AttentionState struct {
 	// Requests are the requests of the last good read, newest first.
@@ -380,6 +385,13 @@ func updateAttention(m Model, msg Msg) (Model, []Cmd, bool) {
 		return next, cmds, true
 	case AttentionSelectMsg:
 		m.Attention.Selected, m.Focus = msg.UID, ColumnList
+		return m, nil, true
+	case AttentionOpenMsg:
+		if m.CurrentMode() == ModeAttention && slices.ContainsFunc(m.Attention.Requests, func(r AttentionRequest) bool { return r.IssueUID == msg.UID }) {
+			m.Attention.Selected, m.Focus = msg.UID, ColumnList
+			next, cmds := openAttention(m)
+			return next, cmds, true
+		}
 		return m, nil, true
 	}
 	return m, nil, false

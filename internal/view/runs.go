@@ -108,7 +108,7 @@ func runCard(row model.RunRow, selected bool) tern.Element {
 	if row.Run.Status == cronjob.RunCancelled {
 		cardTone = ui.ToneMuted
 	}
-	return ui.Card{Common: ui.Common{Key: row.Run.UID, Tone: cardTone, Actions: &ui.Actions{Click: RunClick(row.Run.UID)}}, Selected: selected, Children: body}
+	return ui.Card{Common: ui.Common{Key: row.Run.UID, Tone: cardTone, Actions: &ui.Actions{Click: RunClick(row.Run.UID), DblClick: RunOpenClick(row.Run.UID)}}, Selected: selected, Children: body}
 }
 
 // runInspector is the Runs Page's second column: the selected Run's detail.

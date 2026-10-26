@@ -73,6 +73,11 @@ type JobSelectMsg struct{ UID string }
 
 func (JobSelectMsg) msg() {}
 
+// JobOpenMsg is a double click on a job's row.
+type JobOpenMsg struct{ UID string }
+
+func (JobOpenMsg) msg() {}
+
 // JobsState is the Jobs Page's state. It is not saved: a Pane starts on the Issues Page.
 type JobsState struct {
 	// ProjectUID is the Project the state was filled for; resetPagesForProject empties it when the Pane's Project differs.
@@ -580,6 +585,12 @@ func updateJobs(m Model, msg Msg) (Model, []Cmd, bool) {
 		return next, cmds, true
 	case JobSelectMsg:
 		m.Jobs.Selected, m.Focus = msg.UID, ColumnList
+		return m, nil, true
+	case JobOpenMsg:
+		if mode := m.CurrentMode(); (mode == ModeJobs || mode == ModeJobInspector) && slices.ContainsFunc(m.visibleJobs(), func(j CronJob) bool { return j.UID == msg.UID }) {
+			m.Jobs.Selected, m.Focus = msg.UID, ColumnList
+			m = focusInspector(m)
+		}
 		return m, nil, true
 	}
 	return m, nil, false

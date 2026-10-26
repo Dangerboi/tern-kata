@@ -474,6 +474,12 @@ func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 			m.Workflows.Selected = msg.UID
 		}
 		return m, nil, true
+	case WorkflowOpenMsg:
+		if m.CurrentMode() == ModeWorkflows && slices.ContainsFunc(m.VisibleWorkflows(), func(w Workflow) bool { return w.UID == msg.UID }) {
+			m.Workflows.Selected = msg.UID
+			m = inspectWorkflow(m)
+		}
+		return m, nil, true
 	case DraftEditorClosed:
 		if msg.UID != WorkflowDraftUID {
 			return m, nil, false
@@ -637,3 +643,8 @@ func workflowActions() []actionEntry {
 type WorkflowSelectMsg struct{ UID string }
 
 func (WorkflowSelectMsg) msg() {}
+
+// WorkflowOpenMsg is a double click on a workflow's row.
+type WorkflowOpenMsg struct{ UID string }
+
+func (WorkflowOpenMsg) msg() {}
