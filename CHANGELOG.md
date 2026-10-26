@@ -17,7 +17,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `worker resume` renews the Project's lease first and refuses when another machine has taken the Project over, instead of starting the agent on a lease that may be gone.
 - Attaching a file keeps the stored copy when kata's answer to the pointer write is lost, so the Issue never points at a deleted file.
 - Undoing a Lane move whose second label write was refused can be retried to completion instead of reporting a conflict forever, and an undo refuses when another actor moved or relabelled the card since, including a card that had no Lane before the move.
-- A workspace pinned to a daemon in `.kata.local.toml` is labelled with that daemon, and federation enrolment uses its credentials, not the active daemon's; the Pane follows kata's rules for the pin (within the workspace, not when git tracks it, a `url` pin with no catalog credentials) within the connect deadline.
+- A workspace pinned to a daemon in `.kata.local.toml` is labelled with that daemon, marked Current on the Daemons page, and federation enrolment uses its credentials, not the active daemon's; the Pane follows kata's rules for the pin (within the workspace, not when git tracks it, a `url` pin with no catalog credentials) on a deadline of its own.
 - Switching daemons or loading a Project no longer hangs when the daemon answers but stalls reading its instance; it gives up after the connect deadline.
 - An absolute `TZ` path such as `:/etc/localtime` gives the Pane its local date instead of UTC.
 - Saving a new adapter job again after its first answer was lost reports it created, not changed.

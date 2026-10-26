@@ -893,6 +893,9 @@ func (c *cappedFile) keep(line []byte) {
 	c.last = '\n'
 }
 
+// stderrFileCap is how much of stderr's start stderr.log keeps.
+const stderrFileCap = 64 << 10
+
 // tailSink keeps the first 64 KiB of stderr in a file and its last 2 KiB for failure reasons.
 type tailSink struct {
 	file *cappedFile
@@ -902,7 +905,7 @@ type tailSink struct {
 }
 
 func newTailSink(hooks Hooks, path string) *tailSink {
-	return &tailSink{file: openCapped(hooks, path, 64<<10)}
+	return &tailSink{file: openCapped(hooks, path, stderrFileCap)}
 }
 
 func (t *tailSink) Write(p []byte) (int, error) {
@@ -934,16 +937,22 @@ func plainText(s string) string {
 	return strings.TrimSpace(s)
 }
 
-// tailText is the kept end of stderr as plain text. When the window cut the stream, its first line is partial and may
-// start inside an escape sequence, so it is dropped unless nothing else remains.
+// dropPartialLine drops the first line of a window that cut the stream, as it is partial and may start inside an
+// escape sequence, unless nothing else remains.
+func dropPartialLine(raw []byte) []byte {
+	if i := bytes.IndexByte(raw, '\n'); i >= 0 && i+1 < len(raw) {
+		return raw[i+1:]
+	}
+	return raw
+}
+
+// tailText is the kept end of stderr as plain text.
 func (t *tailSink) tailText() string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	raw := t.tail
 	if t.cut {
-		if i := bytes.IndexByte(raw, '\n'); i >= 0 && i+1 < len(raw) {
-			raw = raw[i+1:]
-		}
+		raw = dropPartialLine(raw)
 	}
 	return plainText(string(raw))
 }

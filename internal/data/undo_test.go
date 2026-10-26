@@ -294,6 +294,39 @@ func TestUndoOfALaneMoveKeepsALabelAnotherActorAddedDuringTheMove(t *testing.T) 
 	}
 }
 
+func TestUndoOfALaneMoveRefusesWhenAnotherActorMovedTheCardOnBeforeTheAfterMoveRead(t *testing.T) {
+	f := newUndoFixture(t)
+	uid := f.issue("On the Board")
+	f.field(uid, model.AddLabelAction, "lane:todo")
+	var once atomic.Bool
+	// Land the rival's Lane change after the last label write and before the move's own read of the Issue.
+	var writes atomic.Int32
+	hook := func(w http.ResponseWriter, r *http.Request) bool {
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/labels"):
+			writes.Add(1)
+		case r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/labels"):
+			writes.Add(1)
+		case r.Method == http.MethodGet && writes.Load() >= 2 && once.CompareAndSwap(false, true):
+			f.kata.intercept.Store(nil)
+			f.rivalField(uid, model.RemoveLabelAction, "lane:doing")
+			f.rivalField(uid, model.AddLabelAction, "lane:review")
+		}
+		return false
+	}
+	f.kata.intercept.Store(&hook)
+	moved := as[model.MoveResultMsg](t, run(t, f.gateway, model.MoveIssueCmd{Workspace: f.workspace, UID: uid, ProjectID: f.project.ID, Actor: "tester", Add: "lane:doing", Remove: []string{"lane:todo"}}))
+	f.kata.intercept.Store(nil)
+	if !once.Load() {
+		t.Fatal("the rival change never ran")
+	}
+	e := f.entry(moved.Record)
+	f.refuses(uid, e, "issue changed since the Lane move")
+	if labels := f.detail(uid).Issue.Labels; slices.Contains(labels, "lane:todo") || !slices.Contains(labels, "lane:review") {
+		t.Fatalf("labels %v, want the rival's Lane kept", labels)
+	}
+}
+
 func TestSameLabelSetComparesMultisets(t *testing.T) {
 	if sameLabelSet([]string{"x", "x", "y"}, []string{"x", "y", "y"}) {
 		t.Fatal("[x x y] equals [x y y]")

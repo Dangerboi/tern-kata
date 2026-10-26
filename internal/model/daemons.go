@@ -21,8 +21,12 @@ type DaemonEntry struct {
 	Current bool
 }
 
-// LoadDaemons asks for the catalog. Request numbers the asks: an answer to an older one is dropped.
-type LoadDaemons struct{ Request int64 }
+// LoadDaemons asks for the catalog. Request numbers the asks: an answer to an older one is dropped. Workspace is the one whose
+// connection the Page marks Current.
+type LoadDaemons struct {
+	Request   int64
+	Workspace string
+}
 
 func (LoadDaemons) cmd() {}
 
@@ -88,7 +92,7 @@ func daemonsMode(m Model) Mode {
 func enterDaemons(m Model) (Model, []Cmd) {
 	d := m.Daemons
 	m.Daemons = DaemonsState{request: d.request + 1, Loading: true, Switching: d.Switching, switchRequest: d.switchRequest}
-	return m, []Cmd{LoadDaemons{Request: m.Daemons.request}}
+	return m, []Cmd{LoadDaemons{Request: m.Daemons.request, Workspace: m.Workspace}}
 }
 
 // clearDaemons drops what the Page held and every list read still out; a switch still out is kept.

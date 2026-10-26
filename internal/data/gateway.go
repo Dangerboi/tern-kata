@@ -168,7 +168,7 @@ func (g *Gateway) client(ctx context.Context, workspace string) (*Client, error)
 		return c, nil
 	}
 	// shortcut: the lock is held while connecting, so one hung daemon holds up other workspaces until the deadline.
-	c, err := g.connect(connectCtx, workspace)
+	c, err := g.connect(connectCtx, ctx, workspace)
 	if err != nil {
 		if connectCtx.Err() != nil && ctx.Err() == nil {
 			err = fmt.Errorf("%w\n%s", client.ErrDaemonUnavailable, noDaemonHint)
@@ -179,7 +179,8 @@ func (g *Gateway) client(ctx context.Context, workspace string) (*Client, error)
 	return c, nil
 }
 
-func (g *Gateway) connect(ctx context.Context, workspace string) (*Client, error) {
+// connect dials with ctx; caller is the command's own context, from which the pin read gets a fresh deadline.
+func (g *Gateway) connect(ctx, caller context.Context, workspace string) (*Client, error) {
 	target, err := g.locate(ctx, workspace)
 	if err != nil {
 		return nil, err
@@ -189,7 +190,7 @@ func (g *Gateway) connect(ctx context.Context, workspace string) (*Client, error
 		return nil, err
 	}
 	catalog, _ := ReadCatalog()
-	c.name, c.entry = g.resolvedEntry(ctx, workspace, catalog)
+	c.name, c.entry = g.resolvedEntry(caller, workspace, catalog)
 	c.deadline = g.deadline
 	return c, nil
 }
@@ -206,7 +207,11 @@ func (g *Gateway) resolvedEntry(ctx context.Context, workspace string, catalog C
 		entry, _ := catalog.Entry(name)
 		return name, entry
 	}
-	pin, err := workspacePin(ctx, workspace)
+	// Its own bounded context: the remainder of the connect's after locate and dial may be too short for git, and a failed
+	// tracked-file check inside a worktree would leave a valid pin unnamed.
+	pinCtx, cancel := context.WithTimeout(ctx, g.deadline)
+	defer cancel()
+	pin, err := workspacePin(pinCtx, workspace)
 	if err != nil || pin.URL != "" {
 		return "", CatalogEntry{}
 	}

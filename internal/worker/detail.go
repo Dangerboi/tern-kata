@@ -104,7 +104,7 @@ func (w *Worker) RunDetail(uid string) (RunDetail, error) {
 	}
 	dir := w.attemptDir(j) // a workflow shows its latest step's output
 	d := RunDetail{RunStatus: w.runStatus(j), Steps: stepsOf(j), OutputTail: outputTail(filepath.Join(dir, "output.jsonl"), OutputTailBytes)}
-	d.StderrTail = plainText(fileTail(filepath.Join(dir, "stderr.log"), 2048))
+	d.StderrTail = stderrFallback(filepath.Join(dir, "stderr.log"))
 	if t := shownStderrTail(j); t != "" { // stderr.log keeps only the first bytes; the journal holds the real end
 		d.StderrTail = t
 	}
@@ -217,4 +217,17 @@ func fileTail(path string, max int) string {
 		raw = raw[len(raw)-max:]
 	}
 	return strings.TrimSpace(strings.ToValidUTF8(string(raw), ""))
+}
+
+// stderrFallback is the end of stderr.log as plain text for a run with no journal tail yet. The file keeps only the
+// first stderrFileCap bytes, so a file at the cap holds no end and shows nothing rather than text from the middle.
+func stderrFallback(path string) string {
+	raw, err := os.ReadFile(path)
+	if err != nil || len(raw) >= stderrFileCap {
+		return ""
+	}
+	if len(raw) > 2048 {
+		raw = dropPartialLine(raw[len(raw)-2048:])
+	}
+	return plainText(string(raw))
 }

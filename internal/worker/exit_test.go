@@ -2,6 +2,8 @@ package worker
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -29,6 +31,38 @@ func TestAnExitWithADescendantHoldingTheOutputIsRecordedByItsOwnStatus(t *testin
 				t.Fatalf("exit = %d %q, want %d (wait error %v)", code, signal, tc.want, err)
 			}
 		})
+	}
+}
+
+// stderr.log keeps only the first bytes, so once it is full it holds no end: the fallback shows nothing, not the middle.
+func TestTheStderrFallbackIsEmptyOnceTheFileReachedItsCap(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "stderr.log")
+	if err := os.WriteFile(path, []byte(strings.Repeat("middle of a long stream\n", stderrFileCap/24+1)[:stderrFileCap]), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := stderrFallback(path); got != "" {
+		t.Fatalf("fallback = %q, want empty", got)
+	}
+}
+
+// A window that starts inside a line leaves no fragment of it.
+func TestTheStderrFallbackDropsThePartialFirstLine(t *testing.T) {
+	var in strings.Builder
+	for i := range 300 {
+		fmt.Fprintf(&in, "%09d\n", i)
+	}
+	path := filepath.Join(t.TempDir(), "stderr.log")
+	if err := os.WriteFile(path, []byte(in.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := stderrFallback(path)
+	for _, l := range strings.Split(got, "\n") {
+		if len(l) != 9 {
+			t.Fatalf("line %q is a fragment in %q", l, got)
+		}
+	}
+	if !strings.HasSuffix(got, "000000299") {
+		t.Fatalf("fallback %q does not end at the file's end", got)
 	}
 }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -128,6 +129,63 @@ func TestAScheduleChangedMeanwhileIsNotOverwrittenAndIsPrinted(t *testing.T) {
 	}
 	if now, _ := f.recur(t); !strings.Contains(now, "Every 5 days") {
 		t.Fatalf("the schedule is %q; the change overwrote the other one", now)
+	}
+}
+
+// localRecurFake serves a stored Local recurrence, answers the change with written, and counts the writes. After a
+// successful write the load gives the recurrence in Europe/Oslo.
+func localRecurFake(t *testing.T, written model.RecurrenceResultMsg) (func(model.Cmd) model.Msg, *int) {
+	t.Helper()
+	stored := model.Recurrence{UID: "rec1", RecurrenceTerms: model.RecurrenceTerms{Rule: "FREQ=DAILY", Start: "2026-11-02", TimeZone: "Local"}}
+	target := model.RecurTarget{Ref: "ab12", UID: "uid1", ShortID: "ab12", ProjectID: 1, Recurrence: &stored, Today: "2026-11-02", Zone: "UTC"}
+	writes := 0
+	send := func(cmd model.Cmd) model.Msg {
+		switch cmd.(type) {
+		case model.LoadRecurTarget:
+			return target
+		case model.ChangeRecurrenceCmd:
+			writes++
+			if written.Err == nil {
+				moved := stored
+				moved.TimeZone = "Europe/Oslo"
+				target.Recurrence = &moved
+			}
+			return written
+		}
+		t.Fatalf("unexpected command %T", cmd)
+		return nil
+	}
+	return send, &writes
+}
+
+func planLocalRecur(t *testing.T) LaunchPlan {
+	t.Helper()
+	plan, err := PlanLaunch([]string{"recur", "ab12", "--frequency", "daily", "--zone", "Europe/Oslo"}, func(string) (string, bool) { return "tester", true }, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return plan
+}
+
+func TestAChangedLocalZoneNoteIsPrintedAfterTheWriteBeforeTheReport(t *testing.T) {
+	send, writes := localRecurFake(t, model.RecurrenceResultMsg{})
+	var out bytes.Buffer
+	if err := runRecur(planLocalRecur(t), "/ws", send, &out); err != nil {
+		t.Fatal(err)
+	}
+	note := strings.Index(out.String(), "saving sets Europe/Oslo.")
+	report := strings.Index(out.String(), "recurs:")
+	if *writes != 1 || note < 0 || report < note {
+		t.Fatalf("writes %d, stdout %q; want the note naming Europe/Oslo, then the report", *writes, out.String())
+	}
+}
+
+func TestAFailedWriteOfALocalRecurrencePrintsNoZoneNote(t *testing.T) {
+	send, writes := localRecurFake(t, model.RecurrenceResultMsg{Err: errors.New("kata refused")})
+	var out bytes.Buffer
+	err := runRecur(planLocalRecur(t), "/ws", send, &out)
+	if err == nil || !strings.Contains(err.Error(), "kata refused") || out.Len() != 0 || *writes != 1 {
+		t.Fatalf("writes %d, stdout %q, err %v; want the error and nothing printed", *writes, out.String(), err)
 	}
 }
 

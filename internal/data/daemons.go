@@ -18,11 +18,17 @@ import (
 // startDeadline is how long starting a stopped local daemon may take; kata itself waits up to five seconds for the daemon to answer.
 const startDeadline = 30 * time.Second
 
-// currentDaemon is the catalog name of the daemon this Gateway talks to: the entry it last switched to, else the catalog's
+// currentDaemon is the catalog name of the daemon workspace talks to: the entry the Gateway last switched to, else the name its live
+// connection was resolved to (a workspace pin can differ from active_daemon, and a url pin names no entry), else the catalog's
 // active_daemon, which kata's own discovery honours unless KATA_SERVER names a daemon. "" when the connection is not a catalog entry.
-func (g *Gateway) currentDaemon(catalog Catalog) string {
+func (g *Gateway) currentDaemon(catalog Catalog, workspace string) string {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.current == "" && os.Getenv("KATA_SERVER") == "" {
+		if c := g.clients[workspace]; c != nil {
+			return c.name
+		}
+	}
 	return g.currentLocked(catalog)
 }
 
@@ -46,7 +52,7 @@ func (g *Gateway) loadDaemons(_ context.Context, cmd model.LoadDaemons) model.Ms
 	if err != nil {
 		return model.DaemonsLoaded{Request: cmd.Request, Err: err}
 	}
-	current := g.currentDaemon(catalog)
+	current := g.currentDaemon(catalog, cmd.Workspace)
 	loaded := model.DaemonsLoaded{Request: cmd.Request, ConfigPath: filepath.Join(home, "config.toml")}
 	for _, e := range catalog.Daemons {
 		loaded.Entries = append(loaded.Entries, model.DaemonEntry{

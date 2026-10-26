@@ -93,11 +93,6 @@ func runRecur(plan LaunchPlan, workspace string, send func(model.Cmd) model.Msg,
 	if err != nil {
 		return subcommandError{err}
 	}
-	if note := target.ZoneNote(plan.RecurFlags); note != "" {
-		if err := say(note); err != nil {
-			return subcommandError{err}
-		}
-	}
 	var written model.RecurrenceResultMsg
 	if current := target.Recurring(); current != nil {
 		written = send(model.ChangeRecurrenceCmd{Workspace: workspace, UID: target.UID, ProjectID: target.ProjectID, Actor: plan.Actor,
@@ -113,6 +108,12 @@ func runRecur(plan LaunchPlan, workspace string, send func(model.Cmd) model.Msg,
 			return subcommandError{err}
 		}
 		return subcommandError{model.ErrRecurrenceMovedMeanwhile}
+	}
+	// Said once the write landed: a refused save must not read as if the stored Local zone was replaced.
+	if note := target.ZoneNote(plan.RecurFlags); note != "" {
+		if err := say(note); err != nil {
+			return subcommandError{err}
+		}
 	}
 	target, err = load()
 	if err != nil {

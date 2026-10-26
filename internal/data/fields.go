@@ -170,12 +170,7 @@ func (c *Client) MoveRecorded(ctx context.Context, cmd model.MoveIssueCmd) (mode
 	added, removed, last, err := c.move(ctx, cmd)
 	return done(last, ambiguousWrite(err), func(entry *model.UndoEntry) {
 		entry.Added, entry.Removed = added, removed
-		// The write answers carry no labels: read the Issue after the move so a label another actor added since the pre-move read
-		// is kept. Only if that read fails is the set derived, applying the steps in the order move writes them.
-		if now, e := c.showIssue(ctx, cmd.ProjectID, cmd.UID); e == nil {
-			entry.Labels = append([]string{}, now.Issue.Labels...)
-			return
-		}
+		// The move's steps applied in order to the pre-move labels.
 		after := slices.Clone(entry.Labels)
 		for _, l := range added {
 			if !slices.Contains(after, l) {
@@ -183,6 +178,14 @@ func (c *Client) MoveRecorded(ctx context.Context, cmd model.MoveIssueCmd) (mode
 			}
 		}
 		after = slices.DeleteFunc(after, func(l string) bool { return slices.Contains(removed, l) })
+		// The write answers carry no labels: read the Issue after the move so a label another actor added since the pre-move read
+		// is kept. A read that does not show the move's own result (a rival changed the Lane since the last write) is not the
+		// move's outcome, so the derived set stands and undo refuses.
+		if now, e := c.showIssue(ctx, cmd.ProjectID, cmd.UID); e == nil && now.Issue.UID == entry.UID && now.Issue.ProjectID == cmd.ProjectID &&
+			!slices.ContainsFunc(added, func(l string) bool { return !slices.Contains(now.Issue.Labels, l) }) &&
+			!slices.ContainsFunc(removed, func(l string) bool { return slices.Contains(now.Issue.Labels, l) }) {
+			after = now.Issue.Labels
+		}
 		entry.Labels = append([]string{}, after...)
 	}), daemonError(err)
 }
