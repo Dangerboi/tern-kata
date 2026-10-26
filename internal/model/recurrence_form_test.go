@@ -125,6 +125,32 @@ func TestRecurTermsOfAStoredLocalRecurrenceUseThePaneZone(t *testing.T) {
 	}
 }
 
+func TestStoredLocalZoneIsNotedAndOtherZonesAreNot(t *testing.T) {
+	recurrence := int64(4)
+	open := func(zone string) model.Model {
+		rec := &model.Recurrence{UID: "rec-uid", RecurrenceTerms: model.RecurrenceTerms{Rule: "FREQ=DAILY;INTERVAL=1", Start: "2026-10-19", TimeZone: zone}, Revision: 3}
+		m, _ := model.Update(recurrenceBase(), model.DetailLoaded{UID: "parent", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "parent", RecurrenceID: &recurrence}, Recurrence: rec}})
+		return openRecurrenceCard(m)
+	}
+	want := "The stored time zone is Local (the daemon's own zone); saving sets Europe/Zurich."
+	if got := open("Local").RecurrenceForm.ZoneNote(); got != want {
+		t.Fatalf("note %q, want %q", got, want)
+	}
+	if got := open("Asia/Tokyo").RecurrenceForm.ZoneNote(); got != "" {
+		t.Fatalf("a real zone gave note %q", got)
+	}
+	stored := func(zone string) model.RecurTarget {
+		return model.RecurTarget{UID: "parent", Today: "2026-10-21", Zone: "Europe/Zurich", Recurrence: &model.Recurrence{RecurrenceTerms: model.RecurrenceTerms{Rule: "FREQ=DAILY", Start: "2026-10-19", TimeZone: zone}}}
+	}
+	flags := map[string]string{"frequency": "weekly"}
+	if got := stored("Local").ZoneNote(flags); got != want {
+		t.Fatalf("CLI note %q, want %q", got, want)
+	}
+	if got := stored("Asia/Tokyo").ZoneNote(flags); got != "" {
+		t.Fatalf("CLI note for a real zone %q", got)
+	}
+}
+
 func TestRecurrenceCardStartsOnTheIssuesScheduledDateAndFallsBackToUTC(t *testing.T) {
 	m := recurrenceBase()
 	m.Calendar = model.PaneCalendar{Date: m.Calendar.Date}

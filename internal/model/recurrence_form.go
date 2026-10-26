@@ -71,6 +71,22 @@ type RecurrenceFormState struct {
 	Err                                    error
 }
 
+// localZoneNote says a stored Local zone, which the card cannot save, is replaced by zone on saving; "" for any other zone.
+func localZoneNote(stored, zone string) string {
+	if stored != "Local" || zone == "" {
+		return ""
+	}
+	return "The stored time zone is Local (the daemon's own zone); saving sets " + zone + "."
+}
+
+// ZoneNote is the note the card shows when it opened a recurrence stored with the Local zone; it follows the Zone field.
+func (f RecurrenceFormState) ZoneNote() string {
+	if !f.Change {
+		return ""
+	}
+	return localZoneNote(f.Opened.TimeZone, strings.TrimSpace(f.Zone))
+}
+
 // Shows says the field applies to the card as it stands; the others are hidden and tab skips them.
 func (f RecurrenceFormState) Shows(name Field) bool {
 	switch name {

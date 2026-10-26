@@ -51,3 +51,22 @@ func TestTheStderrTailIsPlainTextSmallInTheJournal(t *testing.T) {
 		t.Fatalf("json size %d for %d bytes (%v), want about the byte length", len(b), len(got), err)
 	}
 }
+
+func TestTheStderrTailKeepsTextAroundBrokenEscapes(t *testing.T) {
+	cut := "\x1b" + "[31m" + strings.Repeat("x", 43) + "\n" + strings.Repeat("ok line\n", 250)
+	for _, tc := range []struct{ name, in, want string }{
+		{"unterminated OSC", "\x1b]0;title no end\nerror: disk full\n", "error: disk full"},
+		{"charset escape", "\x1b(Bok", "ok"},
+		{"save cursor", "\x1b7a\x1b8b\x1bc", "ab"},
+		{"window starts inside CSI", cut, strings.TrimSpace(strings.Repeat("ok line\n", 250))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newTailSink(Hooks{}, filepath.Join(t.TempDir(), "stderr.log"))
+			defer s.close()
+			_, _ = s.Write([]byte(tc.in))
+			if got := s.tailText(); got != tc.want {
+				t.Fatalf("tail = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

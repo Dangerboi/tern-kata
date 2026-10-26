@@ -129,6 +129,20 @@ func (t RecurTarget) Terms(flags map[string]string) (RecurrenceTerms, error) {
 	return f.terms()
 }
 
+// ZoneNote is the note `recur` prints when the stored zone is Local and the terms Terms gives set a real one instead; "" when
+// the stored zone is not Local or Terms refuses.
+func (t RecurTarget) ZoneNote(flags map[string]string) string {
+	rec := t.Recurring()
+	if rec == nil {
+		return ""
+	}
+	terms, err := t.Terms(flags)
+	if err != nil {
+		return ""
+	}
+	return localZoneNote(rec.TimeZone, terms.TimeZone)
+}
+
 // rawTerms is a rule given as text: it goes to kata as written, with the card's checks of the start date and the zone.
 func (f RecurrenceFormState) rawTerms(rule string) (RecurrenceTerms, error) {
 	rule = strings.TrimSpace(rule)

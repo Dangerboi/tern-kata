@@ -93,6 +93,11 @@ func runRecur(plan LaunchPlan, workspace string, send func(model.Cmd) model.Msg,
 	if err != nil {
 		return subcommandError{err}
 	}
+	if note := target.ZoneNote(plan.RecurFlags); note != "" {
+		if err := say(note); err != nil {
+			return subcommandError{err}
+		}
+	}
 	var written model.RecurrenceResultMsg
 	if current := target.Recurring(); current != nil {
 		written = send(model.ChangeRecurrenceCmd{Workspace: workspace, UID: target.UID, ProjectID: target.ProjectID, Actor: plan.Actor,

@@ -370,8 +370,8 @@ func TestGatewayNamesTheDaemonAWorkspacePinSelectsNotTheActiveOne(t *testing.T) 
 		gateway.mu.Unlock()
 		loaded := as[model.ProjectLoaded](t, run(t, gateway, model.LoadProject{Workspace: workspace}))
 		want := "beta"
-		if name == "other" {
-			want = "" // the pin matches no entry, so no entry's token may follow it
+		if name != "daemon" {
+			want = "" // a url pin is reached with the global token, and an unmatched one has no entry: no entry's token may follow
 		}
 		if loaded.Daemon.Name != want {
 			t.Fatalf("%s pin: loaded %+v, want the connection named %q, never the active alpha", name, loaded, want)
@@ -468,7 +468,7 @@ func TestWorkspacePinFollowsKatasRules(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(workspace, ".kata.toml"), []byte("version = 1\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if got, err := workspacePin(workspace); err != nil || got.Daemon != "" || got.URL != "" {
+		if got, err := workspacePin(context.Background(), workspace); err != nil || got.Daemon != "" || got.URL != "" {
 			t.Fatalf("pin %+v err %v, want none from above the boundary", got, err)
 		}
 	})
@@ -478,7 +478,7 @@ func TestWorkspacePinFollowsKatasRules(t *testing.T) {
 			t.Fatal(err)
 		}
 		write(workspace, pin)
-		if got, err := workspacePin(workspace); err != nil || got.Daemon != "beta" {
+		if got, err := workspacePin(context.Background(), workspace); err != nil || got.Daemon != "beta" {
 			t.Fatalf("pin %+v err %v, want beta", got, err)
 		}
 	})
@@ -486,12 +486,12 @@ func TestWorkspacePinFollowsKatasRules(t *testing.T) {
 		repo := t.TempDir()
 		git(repo, "init", "-q")
 		write(repo, pin)
-		if got, err := workspacePin(repo); err != nil || got.Daemon != "beta" {
+		if got, err := workspacePin(context.Background(), repo); err != nil || got.Daemon != "beta" {
 			t.Fatalf("untracked pin %+v err %v, want beta", got, err)
 		}
 		git(repo, "add", "-f", ".kata.local.toml")
 		git(repo, "commit", "-q", "-m", "x")
-		if got, err := workspacePin(repo); err != nil || got.Daemon != "" || got.URL != "" {
+		if got, err := workspacePin(context.Background(), repo); err != nil || got.Daemon != "" || got.URL != "" {
 			t.Fatalf("tracked pin %+v err %v, want none", got, err)
 		}
 	})
@@ -501,15 +501,16 @@ func TestWorkspacePinFollowsKatasRules(t *testing.T) {
 			t.Fatal(err)
 		}
 		write(workspace, "version = 1\n[server\n")
-		if _, err := workspacePin(workspace); err == nil {
+		if _, err := workspacePin(context.Background(), workspace); err == nil {
 			t.Fatal("malformed pin read without error")
 		}
 		catalog := Catalog{Active: "alpha", Daemons: []CatalogEntry{{Name: "alpha", URL: "https://alpha.example.com"}}}
-		if name, _ := (&Gateway{}).resolvedEntry(workspace, catalog); name != "" {
+		if name, _ := (&Gateway{}).resolvedEntry(context.Background(), workspace, catalog); name != "" {
 			t.Fatalf("named %q, want the active alpha never chosen for a pin kata would refuse", name)
 		}
 	})
-	t.Run("urls match in kata's canonical form", func(t *testing.T) {
+	t.Run("a url pin is unnamed and carries no entry's token", func(t *testing.T) {
+		// kata reaches a [server].url pin with the global token, so even an entry at the same origin must not be attached.
 		workspace := t.TempDir()
 		if err := os.WriteFile(filepath.Join(workspace, ".kata.toml"), []byte("version = 1\n"), 0o600); err != nil {
 			t.Fatal(err)
@@ -517,10 +518,38 @@ func TestWorkspacePinFollowsKatasRules(t *testing.T) {
 		write(workspace, "version = 1\n[server]\nurl = \"HTTPS://Beta.Example.com:443/\"\n")
 		catalog := Catalog{Active: "alpha", Daemons: []CatalogEntry{
 			{Name: "alpha", URL: "https://alpha.example.com"},
-			{Name: "beta", URL: "https://beta.example.com"},
+			{Name: "beta", URL: "https://beta.example.com", TokenEnv: "BETA_TOKEN", InlineToken: ""},
 		}}
-		if name, _ := (&Gateway{}).resolvedEntry(workspace, catalog); name != "beta" {
-			t.Fatalf("named %q, want beta", name)
+		if name, entry := (&Gateway{}).resolvedEntry(context.Background(), workspace, catalog); name != "" || entry.Name != "" || entry.TokenEnv != "" {
+			t.Fatalf("named %q with entry %+v, want an unnamed connection", name, entry)
+		}
+	})
+	t.Run("a local profile as active_daemon is not selected", func(t *testing.T) {
+		// kata honours active_daemon only for a remote; a local profile falls through to the default local daemon.
+		workspace := t.TempDir()
+		catalog := Catalog{Active: "mine", Daemons: []CatalogEntry{{Name: "mine", Local: true}}}
+		if name, entry := (&Gateway{}).resolvedEntry(context.Background(), workspace, catalog); name != "" || entry.Name != "" {
+			t.Fatalf("named %q with entry %+v, want unnamed", name, entry)
+		}
+		catalog = Catalog{Active: "prof", Daemons: []CatalogEntry{{Name: "prof", Local: true, Home: "/h", InstanceUID: profileInstanceUID}}}
+		if name, _ := (&Gateway{}).resolvedEntry(context.Background(), workspace, catalog); name != "prof" {
+			t.Fatalf("named %q, want the local profile kata connects to", name)
+		}
+		catalog = Catalog{Active: "far", Daemons: []CatalogEntry{{Name: "far", URL: "https://far.example.com"}}}
+		if name, _ := (&Gateway{}).resolvedEntry(context.Background(), workspace, catalog); name != "far" {
+			t.Fatalf("named %q, want the remote active daemon far", name)
+		}
+	})
+	t.Run("an ended context makes the pin read return at once", func(t *testing.T) {
+		repo := t.TempDir()
+		git(repo, "init", "-q")
+		write(repo, pin)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		start := time.Now()
+		_, err := workspacePin(ctx, repo)
+		if err == nil || time.Since(start) > 2*time.Second {
+			t.Fatalf("err %v after %v, want an unverifiable-pin error without waiting on git", err, time.Since(start))
 		}
 	})
 }

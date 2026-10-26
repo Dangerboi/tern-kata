@@ -168,16 +168,22 @@ func (c *Client) Move(ctx context.Context, cmd model.MoveIssueCmd) error {
 func (c *Client) MoveRecorded(ctx context.Context, cmd model.MoveIssueCmd) (model.WriteRecord, error) {
 	done := c.recorder(ctx, model.UndoLaneMove, cmd.ProjectID, cmd.UID, cmd.Actor)
 	added, removed, last, err := c.move(ctx, cmd)
-	return done(last, ambiguousWrite(err), func(e *model.UndoEntry) {
-		e.Added, e.Removed = added, removed
-		// The recorder left the labels from before the move; the write answers carry none, so the after-set is derived.
-		after := slices.DeleteFunc(slices.Clone(e.Labels), func(l string) bool { return slices.Contains(removed, l) })
+	return done(last, ambiguousWrite(err), func(entry *model.UndoEntry) {
+		entry.Added, entry.Removed = added, removed
+		// The write answers carry no labels: read the Issue after the move so a label another actor added since the pre-move read
+		// is kept. Only if that read fails is the set derived, applying the steps in the order move writes them.
+		if now, e := c.showIssue(ctx, cmd.ProjectID, cmd.UID); e == nil {
+			entry.Labels = append([]string{}, now.Issue.Labels...)
+			return
+		}
+		after := slices.Clone(entry.Labels)
 		for _, l := range added {
 			if !slices.Contains(after, l) {
 				after = append(after, l)
 			}
 		}
-		e.Labels = append([]string{}, after...)
+		after = slices.DeleteFunc(after, func(l string) bool { return slices.Contains(removed, l) })
+		entry.Labels = append([]string{}, after...)
 	}), daemonError(err)
 }
 

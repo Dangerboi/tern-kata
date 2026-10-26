@@ -104,7 +104,7 @@ func (w *Worker) RunDetail(uid string) (RunDetail, error) {
 	}
 	dir := w.attemptDir(j) // a workflow shows its latest step's output
 	d := RunDetail{RunStatus: w.runStatus(j), Steps: stepsOf(j), OutputTail: outputTail(filepath.Join(dir, "output.jsonl"), OutputTailBytes)}
-	d.StderrTail = fileTail(filepath.Join(dir, "stderr.log"), 2048)
+	d.StderrTail = plainText(fileTail(filepath.Join(dir, "stderr.log"), 2048))
 	if t := shownStderrTail(j); t != "" { // stderr.log keeps only the first bytes; the journal holds the real end
 		d.StderrTail = t
 	}

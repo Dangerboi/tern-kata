@@ -636,10 +636,16 @@ func TestAfterASwitchTheHubStepsAndRecoveryFollowTheConnectedDaemon(t *testing.T
 }
 
 func TestTheRecoveryCommandOfALocalSpokeNamesTheCatalogEntryItWasReachedThrough(t *testing.T) {
+	// A plain `local = true` entry (no home/instance_uid) is never connected through active_daemon: kata falls through to the default
+	// local daemon. Only a switch in the Pane (or a pin) reaches it by name.
 	for name, c := range map[string]struct {
-		active string
-		want   string
-	}{"a named local entry": {"laptop", "kata --daemon laptop federation join"}, "plain discovery": {"", "kata federation join"}} {
+		active, switched string
+		want             string
+	}{
+		"a local entry the Pane switched to":   {"", "laptop", "kata --daemon laptop federation join"},
+		"a plain local entry as active_daemon": {"laptop", "", "kata federation join"},
+		"plain discovery":                      {"", "", "kata federation join"},
+	} {
 		rig := startEnrollRig(t)
 		_, acme := project(t, rig.hubGateway(t), "acme")
 		refuse := refuseWith(http.StatusBadGateway, "hub_says_no", "the hub said no")
@@ -656,6 +662,9 @@ func TestTheRecoveryCommandOfALocalSpokeNamesTheCatalogEntryItWasReachedThrough(
 		}
 		rig.writeCatalog(t, active+fmt.Sprintf("\n[[daemon]]\nname = \"laptop\"\nlocal = true\n\n[[daemon]]\nname = \"hub\"\nurl = %q\nallow_insecure = true\ntoken_env = \"HUB_TOKEN\"\n", rig.hub.URL))
 		gateway := newGateway(t, newLocator(rig.spoke.target()))
+		gateway.mu.Lock()
+		gateway.current = c.switched
+		gateway.mu.Unlock()
 		got := as[model.FederationEnrolled](t, run(t, gateway, model.EnrollFederation{Workspace: t.TempDir(), Attempt: 3, InstanceUID: rig.spokeInstanceUID(t), Draft: replicaDraft(acme)}))
 		if got.Recovery == nil {
 			t.Fatalf("%s: %+v, want a recovery", name, got)

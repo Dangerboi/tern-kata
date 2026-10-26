@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -260,6 +261,45 @@ func TestUndoOfALaneMoveRefusesWhenAnotherActorMovedTheCardOn(t *testing.T) {
 	f.refuses(uid, e, "issue changed since the Lane move")
 	if labels := f.detail(uid).Issue.Labels; slices.Contains(labels, "lane:todo") || !slices.Contains(labels, "lane:review") {
 		t.Fatalf("labels %v, want the rival's Lane kept", labels)
+	}
+}
+
+func TestUndoOfALaneMoveKeepsALabelAnotherActorAddedDuringTheMove(t *testing.T) {
+	f := newUndoFixture(t)
+	uid := f.issue("On the Board")
+	f.field(uid, model.AddLabelAction, "lane:todo")
+	var once atomic.Bool
+	hook := func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method != http.MethodPost || !strings.Contains(r.URL.Path, "/labels") || !once.CompareAndSwap(false, true) {
+			return false
+		}
+		// Land the rival's label after the move's pre-read and before its first write.
+		f.kata.intercept.Store(nil)
+		f.rivalField(uid, model.AddLabelAction, "extra")
+		return false
+	}
+	f.kata.intercept.Store(&hook)
+	moved := as[model.MoveResultMsg](t, run(t, f.gateway, model.MoveIssueCmd{Workspace: f.workspace, UID: uid, ProjectID: f.project.ID, Actor: "tester", Add: "lane:doing", Remove: []string{"lane:todo"}}))
+	f.kata.intercept.Store(nil)
+	if !once.Load() {
+		t.Fatal("the rival label was never added")
+	}
+	e := f.entry(moved.Record)
+	if !slices.Contains(e.Labels, "extra") {
+		t.Fatalf("entry labels %v, want the rival's label kept", e.Labels)
+	}
+	f.restores(e)
+	if labels := f.detail(uid).Issue.Labels; !slices.Contains(labels, "lane:todo") || slices.Contains(labels, "lane:doing") {
+		t.Fatalf("labels %v, want the card back in todo", labels)
+	}
+}
+
+func TestSameLabelSetComparesMultisets(t *testing.T) {
+	if sameLabelSet([]string{"x", "x", "y"}, []string{"x", "y", "y"}) {
+		t.Fatal("[x x y] equals [x y y]")
+	}
+	if !sameLabelSet([]string{"y", "x"}, []string{"x", "y"}) {
+		t.Fatal("order must not matter")
 	}
 }
 

@@ -17,13 +17,13 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `worker resume` renews the Project's lease first and refuses when another machine has taken the Project over, instead of starting the agent on a lease that may be gone.
 - Attaching a file keeps the stored copy when kata's answer to the pointer write is lost, so the Issue never points at a deleted file.
 - Undoing a Lane move whose second label write was refused can be retried to completion instead of reporting a conflict forever, and an undo refuses when another actor moved or relabelled the card since, including a card that had no Lane before the move.
-- A workspace pinned to a daemon in `.kata.local.toml` is labelled with that daemon, and federation enrolment uses its credentials, not the active daemon's; the Pane honours the pin by kata's rules (within the workspace, not when git tracks it).
+- A workspace pinned to a daemon in `.kata.local.toml` is labelled with that daemon, and federation enrolment uses its credentials, not the active daemon's; the Pane follows kata's rules for the pin (within the workspace, not when git tracks it, a `url` pin with no catalog credentials) within the connect deadline.
 - Switching daemons or loading a Project no longer hangs when the daemon answers but stalls reading its instance; it gives up after the connect deadline.
 - An absolute `TZ` path such as `:/etc/localtime` gives the Pane its local date instead of UTC.
 - Saving a new adapter job again after its first answer was lost reports it created, not changed.
 - A Workflow conflict whose current version another actor archived offers only Discard Draft; Overwrite would have silently restored it. An archive or restore conflict keeps the selection at its row.
 - Restore notices name an Issue of a Project the Pane's catalog does not list by its short id, not `#abcd`.
-- Recurrences refuse the zone `Local`, which kata would evaluate in the daemon's zone; a new recurrence, or an existing one stored as `Local`, opens on the Pane's zone, or UTC when that is `Local` too.
+- Recurrences refuse the zone `Local`, which kata would evaluate in the daemon's zone; a new recurrence, or an existing one stored as `Local`, opens on the Pane's zone, or UTC when that is `Local` too, and the card and `tern-kata recur` say when saving replaces a stored `Local`.
 - Relative ages read "0s ago" instead of a negative age when the daemon's clock runs ahead.
 - Searching by short id resolves in the bound Project when a saved filter names a Project the catalog no longer lists.
 - A change you make while the Pane is reading its list, such as moving a card, is read again once that read lands, so the card does not stay where it was when no change event follows (for example while the event stream is down).

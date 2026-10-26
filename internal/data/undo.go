@@ -238,7 +238,11 @@ func undoneLabels(e model.UndoEntry) []string {
 }
 
 func sameLabelSet(a, b []string) bool {
-	return len(a) == len(b) && !slices.ContainsFunc(a, func(l string) bool { return !slices.Contains(b, l) })
+	// Sorted copies, so a repeated label cannot stand in for a missing one.
+	a, b = slices.Clone(a), slices.Clone(b)
+	slices.Sort(a)
+	slices.Sort(b)
+	return slices.Equal(a, b)
 }
 
 // laneMoveReachable says the labels are the set the move left or a state its inverse passes through: the old labels added

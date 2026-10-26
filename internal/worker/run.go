@@ -898,6 +898,7 @@ type tailSink struct {
 	file *cappedFile
 	mu   sync.Mutex
 	tail []byte
+	cut  bool // the stream was longer than tail, so tail starts mid-line
 }
 
 func newTailSink(hooks Hooks, path string) *tailSink {
@@ -910,20 +911,20 @@ func (t *tailSink) Write(p []byte) (int, error) {
 	t.tail = append(t.tail, p...)
 	if len(t.tail) > 2048 {
 		t.tail = t.tail[len(t.tail)-2048:]
+		t.cut = true
 	}
 	t.mu.Unlock()
 	return len(p), nil
 }
 
-// ansiSeq matches the escape sequences a colored stderr carries: CSI, OSC and two-byte escapes.
-var ansiSeq = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b[@-Z\\-_]`)
+// ansiSeq matches the escape sequences a colored stderr carries: CSI, OSC and any other ESC, intermediates, final
+// escape. An OSC body stops at newline, so an unterminated one cannot swallow the text after it.
+var ansiSeq = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b\n]*(?:\x07|\x1b\\)?|\x1b[ -/]*[0-~]`)
 
-// tailText is the kept end of stderr as plain text: escape sequences and other control bytes would cost up to six
-// bytes each as JSON escapes in the journal, which is bounded.
-func (t *tailSink) tailText() string {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	s := ansiSeq.ReplaceAllString(strings.ToValidUTF8(string(t.tail), ""), "")
+// plainText strips escape sequences and control bytes: they would cost up to six bytes each as JSON escapes in the
+// journal, which is bounded.
+func plainText(s string) string {
+	s = ansiSeq.ReplaceAllString(strings.ToValidUTF8(s, ""), "")
 	s = strings.Map(func(r rune) rune {
 		if r != '\n' && r != '\t' && unicode.IsControl(r) {
 			return -1
@@ -931,6 +932,20 @@ func (t *tailSink) tailText() string {
 		return r
 	}, s)
 	return strings.TrimSpace(s)
+}
+
+// tailText is the kept end of stderr as plain text. When the window cut the stream, its first line is partial and may
+// start inside an escape sequence, so it is dropped unless nothing else remains.
+func (t *tailSink) tailText() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	raw := t.tail
+	if t.cut {
+		if i := bytes.IndexByte(raw, '\n'); i >= 0 && i+1 < len(raw) {
+			raw = raw[i+1:]
+		}
+	}
+	return plainText(string(raw))
 }
 
 func (t *tailSink) close() { _ = t.file.Close() }

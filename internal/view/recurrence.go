@@ -99,6 +99,9 @@ func recurrenceLayer(m model.Model) tern.Element {
 	if f.Raw != "" {
 		children = append(children, ui.Text{Common: ui.Common{Key: "raw", Tone: ui.ToneWarning}, Text: "Current rule, set elsewhere: " + f.Raw + "\nSaving the form replaces it."})
 	}
+	if note := f.ZoneNote(); note != "" {
+		children = append(children, ui.Text{Common: ui.Common{Key: "zone-note", Tone: ui.ToneWarning}, Text: note})
+	}
 	for _, field := range model.RecurrenceFields {
 		if !f.Shows(field.Name) {
 			continue
