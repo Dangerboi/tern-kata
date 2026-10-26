@@ -248,14 +248,22 @@ func moved(e model.UndoEntry, shown *g.ShowIssueResponseBody) string {
 			return "issue changed since the label edit"
 		}
 	case model.UndoLaneMove:
-		laneIntact := atRevision
-		for _, label := range e.Added {
-			laneIntact = laneIntact && slices.Contains(i.Labels, label)
-		}
+		// Label edits do not move the revision, so any other write does. An undo whose second label write was refused leaves the
+		// card with its old Lane labels back and the new ones still on (the inverse adds before it removes), so a retry is accepted
+		// from there. A Lane label gone with the old ones not all back is not a state the inverse passes through: someone else
+		// moved the card on.
+		restoredBack, removedNow := 0, 0
 		for _, label := range e.Removed {
-			laneIntact = laneIntact && !slices.Contains(i.Labels, label)
+			if slices.Contains(i.Labels, label) {
+				restoredBack++
+			}
 		}
-		if !laneIntact {
+		for _, label := range e.Added {
+			if !slices.Contains(i.Labels, label) {
+				removedNow++
+			}
+		}
+		if !atRevision || (removedNow > 0 && restoredBack < len(e.Removed)) {
 			return "issue changed since the Lane move"
 		}
 	case model.UndoLinkAdd:
@@ -397,7 +405,11 @@ func (c *Client) invert(ctx context.Context, cmd model.UndoChange, account daemo
 		return c.removeLink(ctx, e.ProjectID, e.UID, e.Actor, e.Link.ID)
 	case model.UndoLaneMove:
 		var last issueWrite
-		for _, step := range slices.Concat(laneSteps(model.RemoveLabelAction, e.Added), laneSteps(model.AddLabelAction, e.Removed)) {
+		for _, step := range slices.Concat(laneSteps(model.AddLabelAction, e.Removed), laneSteps(model.RemoveLabelAction, e.Added)) {
+			// A retry after a partial undo: the label is already where the step would put it.
+			if slices.Contains(shown.Issue.Labels, step.label) != (step.action == model.RemoveLabelAction) {
+				continue
+			}
 			field.Action, field.Value = step.action, step.label
 			res, err := c.writeField(ctx, field)
 			if err != nil {

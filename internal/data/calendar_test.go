@@ -61,6 +61,12 @@ func TestCalendarToday(t *testing.T) {
 			}
 		}, "2026-10-13", "Asia/Tokyo", ""},
 		{"unloadable", "Nowhere/Land", func(*testing.T, string) {}, "2026-10-12", "UTC", `time zone "Nowhere/Land" not found, using UTC`},
+		{"TZ zone file path", ":/usr/share/zoneinfo/Asia/Tokyo", func(*testing.T, string) {}, "2026-10-13", "Asia/Tokyo", ""},
+		{"TZ localtime path falls to the system zone", ":/etc/localtime", func(t *testing.T, root string) {
+			zoneFile(t, root, "usr/share", "America/New_York")
+			link(t, root, "etc/localtime", "../usr/share/zoneinfo/America/New_York")
+		}, "2026-10-12", "America/New_York", ""},
+		{"TZ path with no zone anywhere", "/etc/localtime", func(*testing.T, string) {}, "2026-10-12", "UTC", "time zone unknown, using UTC"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

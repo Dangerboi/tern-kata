@@ -77,7 +77,7 @@ func (c *Client) SaveJob(ctx context.Context, cmd model.SaveJobCmd) (model.JobWr
 			return model.JobWritten{}, readErr
 		case !found:
 			return model.JobWritten{}, daemonError(err)
-		case op == model.JobCreated && current.Name == cmd.Name && reflect.DeepEqual(current.Definition, def):
+		case op == model.JobCreated && current.Name == cmd.Name && reflect.DeepEqual(withoutEmptyMaps(current.Definition), withoutEmptyMaps(def)):
 			// The same create, sent again after the first one landed.
 			return model.JobWritten{ProjectID: cmd.ProjectID, UID: cmd.UID, Op: op, Job: &current}, nil
 		}
@@ -201,6 +201,18 @@ func wireDefinition(d cronjob.Definition) g.CronJobDefinition {
 		}
 	}
 	return wire
+}
+
+// withoutEmptyMaps is d with an empty SecretRefs or Options as nil, how kata hands them back: it omits an empty object, so a
+// definition sent with one reads back with none.
+func withoutEmptyMaps(d cronjob.Definition) cronjob.Definition {
+	if len(d.SecretRefs) == 0 {
+		d.SecretRefs = nil
+	}
+	if len(d.Options) == 0 {
+		d.Options = nil
+	}
+	return d
 }
 
 func textOrNil(s string) *string {

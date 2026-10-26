@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
 )
 
@@ -330,19 +329,14 @@ func TestAttachCopiesWhatASymlinkPointsTo(t *testing.T) {
 
 func TestAFailedPointerWriteLeavesNoCopy(t *testing.T) {
 	f := newAttachFixture(t)
-	broken := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPatch && strings.HasSuffix(r.URL.Path, "/metadata") {
-			http.Error(w, `{"status":500,"error":{"code":"internal","message":"disk full"}}`, http.StatusInternalServerError)
+	broken := serve(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/metadata") {
+			http.Error(w, `{"status":422,"error":{"code":"validation","message":"refused"}}`, http.StatusUnprocessableEntity)
 			return
 		}
 		f.kata.handler.ServeHTTP(w, r)
-	}))
-	t.Cleanup(broken.Close)
-	c, err := client.New(broken.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	gateway := newGateway(t, newLocator(Target{Client: c})).WithHost("TestBox")
+	}), "0.20.0")
+	gateway := newGateway(t, newLocator(broken.target())).WithHost("TestBox")
 	got := as[model.FileAttached](t, run(t, gateway, model.AttachFile{Workspace: f.repo, Ref: f.uid, Actor: "tester", Path: writeFile(t, t.TempDir(), "shot.png", "x")}))
 	if got.Err == nil {
 		t.Fatalf("got %+v, want the pointer write's failure", got)
@@ -350,6 +344,30 @@ func TestAFailedPointerWriteLeavesNoCopy(t *testing.T) {
 	left, _ := filepath.Glob(filepath.Join(f.repo, ".kata-attachments", f.uid, "*"))
 	if len(left) != 0 {
 		t.Fatalf("copies left behind: %v", left)
+	}
+}
+
+func TestALostPointerAnswerKeepsTheCopy(t *testing.T) {
+	f := newAttachFixture(t)
+	lossy := serve(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/metadata") {
+			f.kata.handler.ServeHTTP(httptest.NewRecorder(), r) // kata commits the pointer; the answer never arrives
+			http.Error(w, `{"status":502,"error":{"code":"bad_gateway","message":"upstream"}}`, http.StatusBadGateway)
+			return
+		}
+		f.kata.handler.ServeHTTP(w, r)
+	}), "0.20.0")
+	gateway := newGateway(t, newLocator(lossy.target())).WithHost("TestBox")
+	got := as[model.FileAttached](t, run(t, gateway, model.AttachFile{Workspace: f.repo, Ref: f.uid, Actor: "tester", Path: writeFile(t, t.TempDir(), "shot.png", "x")}))
+	if got.Err == nil {
+		t.Fatalf("got %+v, want the pointer write's failure", got)
+	}
+	kept, _ := filepath.Glob(filepath.Join(f.repo, ".kata-attachments", f.uid, "*"))
+	if len(kept) != 1 {
+		t.Fatalf("copies %v, want the one the committed pointer names", kept)
+	}
+	if len(f.pointers(t, f.uid)) != 1 {
+		t.Fatal("kata did not commit the pointer")
 	}
 }
 

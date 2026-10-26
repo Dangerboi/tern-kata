@@ -195,7 +195,7 @@ func safeFileName(name string) bool {
 func (g *Gateway) startPointerMove(workspace, actor string) {
 	g.startMu.Lock()
 	defer g.startMu.Unlock()
-	if g.convertStarted[workspace] {
+	if g.backgroundCtx.Err() != nil || g.convertStarted[workspace] {
 		return
 	}
 	g.convertStarted[workspace] = true

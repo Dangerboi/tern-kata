@@ -15,6 +15,12 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A run's final report no longer counts as delivered when kata already holds the same status with another summary; the run is left for inspection instead.
 - A run's Stderr in the Pane shows the end of a long stderr, for prompt jobs and concluded workflow steps alike, instead of text from its first 64 KiB.
 - `worker resume` renews the Project's lease first and refuses when another machine has taken the Project over, instead of starting the agent on a lease that may be gone.
+- Attaching a file keeps the stored copy when kata's answer to the pointer write is lost, so the Issue never points at a deleted file.
+- Undoing a Lane move whose second label write was refused can be retried to completion instead of reporting a conflict forever.
+- A workspace pinned to a daemon in `.kata.local.toml` is labelled with that daemon, and federation enrolment uses its credentials, not the active daemon's.
+- Switching daemons or loading a Project no longer hangs when the daemon answers but stalls reading its instance; it gives up after the connect deadline.
+- An absolute `TZ` path such as `:/etc/localtime` gives the Pane its local date instead of UTC.
+- Saving a new adapter job again after its first answer was lost reports it created, not changed.
 
 ## [0.5.0] - 2026-10-25
 

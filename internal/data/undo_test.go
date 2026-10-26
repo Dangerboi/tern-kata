@@ -219,6 +219,36 @@ func TestUndoPutsALaneMoveBack(t *testing.T) {
 	}
 }
 
+func TestUndoOfALaneMoveCompletesAfterTheSecondLabelWriteFailed(t *testing.T) {
+	f := newUndoFixture(t)
+	uid := f.issue("On the Board")
+	f.field(uid, model.AddLabelAction, "lane:todo")
+	moved := as[model.MoveResultMsg](t, run(t, f.gateway, model.MoveIssueCmd{Workspace: f.workspace, UID: uid, ProjectID: f.project.ID, Actor: "tester", Add: "lane:doing", Remove: []string{"lane:todo"}}))
+	e := f.entry(moved.Record)
+
+	hook := func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method != http.MethodDelete || !strings.Contains(r.URL.Path, "/labels/") {
+			return false
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"status":422,"error":{"code":"x","message":"no"}}`))
+		return true
+	}
+	f.kata.intercept.Store(&hook)
+	if got := f.undo(e); got.Result != model.UndoFailed || got.Err == nil {
+		t.Fatalf("undo %+v, want the second label write to fail", got)
+	}
+	f.kata.intercept.Store(nil)
+	if labels := f.detail(uid).Issue.Labels; !slices.Contains(labels, "lane:doing") || !slices.Contains(labels, "lane:todo") {
+		t.Fatalf("labels %v, want only the first label write applied", labels)
+	}
+	f.restores(e)
+	if labels := f.detail(uid).Issue.Labels; !slices.Contains(labels, "lane:todo") || slices.Contains(labels, "lane:doing") {
+		t.Fatalf("labels %v, want the card back in todo", labels)
+	}
+}
+
 func TestUndoOfALaneMoveRefusesWhenAnotherActorMovedTheCardOn(t *testing.T) {
 	f := newUndoFixture(t)
 	uid := f.issue("On the Board")

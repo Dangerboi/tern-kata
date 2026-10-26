@@ -76,6 +76,24 @@ func TestGatewayAResentCreateThatLandedIsTheSameJobNotAConflict(t *testing.T) {
 	}
 }
 
+func TestGatewayAResentAdapterCreateWithAnEmptySecretRefsMapIsStillTheSameJob(t *testing.T) {
+	f := newJobsFixture(t)
+	uid, _ := client.NewCronUID()
+	def := cronjob.Definition{
+		Enabled: true, Overlap: "allow", Catchup: model.CatchupLatest,
+		Trigger:    cronjob.Trigger{Kind: cronjob.TriggerManual},
+		Action:     cronjob.Action{Kind: cronjob.ActionExecute, Prompt: "on demand"},
+		Issue:      &cronjob.IssuePolicy{Kind: cronjob.IssuePerRun, Title: "On demand"},
+		SecretRefs: map[string]string{},
+	}
+	cmd := model.SaveJobCmd{UID: uid, Name: "Adapter", Definition: def}
+	first := f.save(t, cmd)
+	again := f.save(t, cmd)
+	if first.Err != nil || again.Err != nil || again.Changed != nil || again.Job == nil || again.Op != model.JobCreated || again.Job.DefinitionEventUID != first.Job.DefinitionEventUID {
+		t.Fatalf("first %+v again %+v, want the resend to answer the job the first made", first, again)
+	}
+}
+
 func TestGatewayReplacesAJobGuardedOnItsDefinitionEventUID(t *testing.T) {
 	f := newJobsFixture(t)
 	parent := createIssue(t, f.gateway, f.workspace, f.demo, "Weekly report")

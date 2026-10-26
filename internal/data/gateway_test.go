@@ -1596,6 +1596,29 @@ func TestGatewayHungLocatorOrPingReadsAsAnUnreachableDaemonAndIsLocatedAgain(t *
 	}
 }
 
+func TestGatewayLoadProjectAnswersWithinTheDeadlineWhenTheInstanceReadStalls(t *testing.T) {
+	kata := startKata(t, "0.20.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	gateway.deadline = 50 * time.Millisecond
+	workspace, _ := project(t, gateway, "demo")
+	stall := func(w http.ResponseWriter, r *http.Request) bool {
+		if r.URL.Path != "/api/v1/instance" {
+			return false
+		}
+		<-r.Context().Done()
+		return true
+	}
+	kata.intercept.Store(&stall)
+	start := time.Now()
+	loaded := as[model.ProjectLoaded](t, run(t, gateway, model.LoadProject{Workspace: workspace}))
+	if loaded.Daemon.Version != "v0.20.0" || loaded.Daemon.Account != "" {
+		t.Fatalf("loaded %+v, want the daemon without an account", loaded)
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("load took %v with a stalled instance read, want about the %v deadline", elapsed, gateway.deadline)
+	}
+}
+
 func TestGatewayWakeFiresOnTheWallClockEvenIfTheMonotonicClockLagged(t *testing.T) {
 	gateway := newGateway(t, newLocator(Target{}))
 	gateway.wakePoll = 5 * time.Millisecond

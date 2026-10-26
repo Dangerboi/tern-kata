@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -339,6 +340,44 @@ func TestGatewayDaemonsListsTheCatalogInKataTuisColumns(t *testing.T) {
 	for _, e := range as[model.DaemonsLoaded](t, run(t, gateway, model.LoadDaemons{Request: 5})).Entries {
 		if e.Current {
 			t.Errorf("%s is current although KATA_SERVER names another daemon", e.Name)
+		}
+	}
+}
+
+func TestGatewayNamesTheDaemonAWorkspacePinSelectsNotTheActiveOne(t *testing.T) {
+	beta := startKata(t, "0.20.0")
+	t.Setenv("ALPHA_TOKEN", "alpha-secret")
+	writeCatalog(t, "active_daemon = \"alpha\"\n\n"+
+		"[[daemon]]\nname = \"alpha\"\nurl = \"https://alpha.example.com\"\ntoken_env = \"ALPHA_TOKEN\"\n\n"+
+		"[[daemon]]\nname = \"beta\"\nurl = \""+beta.URL+"\"\nallow_insecure = true\n")
+	gateway := newGateway(t, newLocator(beta.target()))
+	workspace, _ := project(t, gateway, "demo")
+	gateway.mu.Lock()
+	clear(gateway.clients)
+	gateway.mu.Unlock()
+	for name, pin := range map[string]string{
+		"daemon": "daemon = \"beta\"",
+		"url":    "url = \"" + beta.URL + "/\"",
+		"other":  "url = \"https://elsewhere.example.com\"",
+	} {
+		pinned := "version = 1\n[server]\n" + pin + "\n"
+		if err := os.WriteFile(filepath.Join(workspace, ".kata.local.toml"), []byte(pinned), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		gateway.mu.Lock()
+		clear(gateway.clients)
+		gateway.mu.Unlock()
+		loaded := as[model.ProjectLoaded](t, run(t, gateway, model.LoadProject{Workspace: workspace}))
+		want := "beta"
+		if name == "other" {
+			want = "" // the pin matches no entry, so no entry's token may follow it
+		}
+		if loaded.Daemon.Name != want {
+			t.Fatalf("%s pin: loaded %+v, want the connection named %q, never the active alpha", name, loaded, want)
+		}
+		c, err := gateway.client(context.Background(), workspace)
+		if err != nil || c.entry.Name != want || c.entry.TokenEnv != "" {
+			t.Fatalf("%s pin: entry %+v err %v, want %q's entry", name, c.entry, err, want)
 		}
 	}
 }

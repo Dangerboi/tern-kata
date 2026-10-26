@@ -304,3 +304,17 @@ func TestAPaneStartingOnAProjectConvertsItsOldPointers(t *testing.T) {
 		t.Fatalf("meta %v", f.issue(t, f.uid).Metadata)
 	}
 }
+
+func TestAClosedGatewayStartsNoPointerPass(t *testing.T) {
+	f := newAttachFixture(t)
+	f.setMeta(t, f.uid, map[string]any{"attachment.a.png": map[string]any{"host": f.host, "path": "/a.png"}})
+	f.gateway.Close()
+	f.gateway.startPointerMove(f.repo, "tester")
+	f.gateway.background.Wait()
+	if len(f.gateway.convertStarted) != 0 {
+		t.Fatalf("a pass started after Close: %v", f.gateway.convertStarted)
+	}
+	if _, moved := f.issue(t, f.uid).Metadata["tern-kata.attachment.a.png"]; moved {
+		t.Fatal("the pointer was converted after Close")
+	}
+}

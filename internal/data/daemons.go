@@ -105,7 +105,7 @@ func (g *Gateway) switchDaemon(ctx context.Context, cmd model.SwitchDaemon) mode
 	if err != nil {
 		return fail(err)
 	}
-	c.name, c.entry = entry.Name, entry
+	c.name, c.entry, c.deadline = entry.Name, entry, g.deadline
 	g.install(entry.Name, locate, cmd.Workspace, c)
 	return model.DaemonSwitched{Request: cmd.Request, Name: entry.Name, Daemon: c.describe(ctx)}
 }
@@ -179,6 +179,12 @@ func startEnvironment(env []string) []string {
 // the Pane acts as. The account is best effort: a daemon that does not say leaves it empty.
 func (c *Client) describe(ctx context.Context) model.Daemon {
 	daemon := model.Daemon{Name: c.name, Kind: c.kind, Version: c.version}
+	deadline := c.deadline
+	if deadline == 0 {
+		deadline = connectDeadline
+	}
+	ctx, cancel := context.WithTimeout(ctx, deadline)
+	defer cancel()
 	if instance, err := c.InstanceWithResponse(ctx); err == nil && instance.JSON200 != nil {
 		if actor := instance.JSON200.Auth.Actor; actor != nil {
 			daemon.Account = strings.TrimSpace(*actor)

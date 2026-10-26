@@ -5,9 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"go.kenn.io/kata/pkg/client"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -74,9 +78,12 @@ func (g *Gateway) WithHost(host string) *Gateway {
 
 // Close ends the running stream and any pointer pass still running, and drops the cached clients.
 func (g *Gateway) Close() {
+	// Under startMu so a pass start either counts before Wait or sees the cancel and starts nothing.
+	g.startMu.Lock()
 	if g.backgroundCancel != nil {
 		g.backgroundCancel()
 	}
+	g.startMu.Unlock()
 	g.background.Wait()
 	g.streamMu.Lock()
 	if g.streamCancel != nil {
@@ -182,9 +189,61 @@ func (g *Gateway) connect(ctx context.Context, workspace string) (*Client, error
 		return nil, err
 	}
 	catalog, _ := ReadCatalog()
-	c.name = g.currentLocked(catalog)
-	c.entry, _ = catalog.Entry(c.name)
+	c.name, c.entry = g.resolvedEntry(workspace, catalog)
+	c.deadline = g.deadline
 	return c, nil
+}
+
+// resolvedEntry names the catalog entry the located daemon is, as kata's discovery picked it: the entry the Pane switched to, else
+// KATA_SERVER (no entry), else the workspace's .kata.local.toml pin ([server].daemon by name, [server].url by address), else
+// active_daemon. A pin that matches no entry leaves the connection unnamed, so no entry's token is ever sent to another daemon.
+// The caller holds g.mu.
+func (g *Gateway) resolvedEntry(workspace string, catalog Catalog) (string, CatalogEntry) {
+	if g.current != "" || os.Getenv("KATA_SERVER") != "" {
+		name := g.currentLocked(catalog)
+		entry, _ := catalog.Entry(name)
+		return name, entry
+	}
+	if pin, ok := workspacePin(workspace); ok && (pin.Daemon != "" || pin.URL != "") {
+		for _, e := range catalog.Daemons {
+			if pin.Daemon != "" && e.Name == pin.Daemon || pin.Daemon == "" && e.URL != "" && strings.TrimRight(e.URL, "/") == strings.TrimRight(pin.URL, "/") {
+				return e.Name, e
+			}
+		}
+		return "", CatalogEntry{}
+	}
+	entry, _ := catalog.Entry(catalog.Active)
+	return catalog.Active, entry
+}
+
+// workspacePin reads [server] of the nearest .kata.local.toml at or above workspace (the working directory when empty).
+// shortcut: kata's discovery does not say which daemon it chose, so the pin is read again here; it skips kata's refusal of a
+// git-tracked file.
+func workspacePin(workspace string) (pin struct{ URL, Daemon string }, ok bool) {
+	dir := workspace
+	if dir == "" {
+		var err error
+		if dir, err = os.Getwd(); err != nil {
+			return pin, false
+		}
+	}
+	for {
+		var file struct {
+			Server struct {
+				URL    string `toml:"url"`
+				Daemon string `toml:"daemon"`
+			} `toml:"server"`
+		}
+		if _, err := toml.DecodeFile(filepath.Join(dir, ".kata.local.toml"), &file); err == nil {
+			pin.URL, pin.Daemon = strings.TrimSpace(file.Server.URL), strings.TrimSpace(file.Server.Daemon)
+			return pin, true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return pin, false
+		}
+		dir = parent
+	}
 }
 
 func (g *Gateway) forget(workspace string, c *Client) {

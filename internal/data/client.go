@@ -26,6 +26,9 @@ type Client struct {
 	// catalog's active_daemon, which a switch leaves where it was.
 	name  string
 	entry CatalogEntry
+	// deadline bounds the instance read that names the daemon's account; the data client has no HTTP timeout of its own. Zero reads
+	// as connectDeadline.
+	deadline time.Duration
 }
 
 // Target is a client for the daemon that serves a workspace.

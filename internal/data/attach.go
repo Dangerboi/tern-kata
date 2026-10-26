@@ -207,7 +207,10 @@ func (c *Client) AttachFile(ctx context.Context, host string, cmd model.AttachFi
 		if err == nil {
 			return model.FileAttached{Ref: cmd.Ref, Name: name, Path: stored}, nil
 		}
-		_, _ = store.remove(target.issue.UID, stored)
+		// An answer lost after kata may have stored the pointer leaves the copy: deleting it could strand the Issue on a missing file.
+		if !ambiguousWrite(err) {
+			_, _ = store.remove(target.issue.UID, stored)
+		}
 		// Another attach took the key since the Issue was read: ask the store for the next name.
 		if daemonCode(err) != "metadata_guard_failed" {
 			return model.FileAttached{}, daemonError(err)
