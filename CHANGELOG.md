@@ -11,6 +11,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A long run whose agent finished its turn is no longer recorded `failed` with "no agent_end" when omp's final `agent_end` line passes 8 MiB; lines up to 64 MiB are read.
 - A run journal the worker cannot read for a passing reason, such as too many open files, is no longer quarantined for good; only a journal that does not decode is. While journals cannot be read, a job that forbids overlap refuses to start a new run.
 - A run whose agent's last message cannot be read is recorded `failed` with no stop reason instead of taking an earlier turn's result.
+- A run or command step that exits 0 while a process it started in the background still holds its output is recorded by its real exit status, not `failed` with "exited with status -1".
+- A run's final report no longer counts as delivered when kata already holds the same status with another summary; the run is left for inspection instead.
+- A run's Stderr in the Pane shows the end of a long stderr, for prompt jobs and concluded workflow steps alike, instead of text from its first 64 KiB.
 
 ## [0.5.0] - 2026-10-25
 

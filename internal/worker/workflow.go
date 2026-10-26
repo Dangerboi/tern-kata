@@ -58,13 +58,15 @@ type StepRecord struct {
 	Dir     string `json:"dir,omitempty"`
 	Summary string `json:"summary,omitempty"`
 	// LastFailure is why the previous attempt failed, kept for the retry's prompt.
-	LastFailure  string        `json:"last_failure,omitempty"`
-	StartedAt    time.Time     `json:"started_at,omitzero"`
-	EndedAt      time.Time     `json:"ended_at,omitzero"`
-	Launch       *LaunchRecord `json:"launch,omitempty"`
-	Exit         *ExitRecord   `json:"exit,omitempty"`
-	InputTokens  *int64        `json:"input_tokens,omitempty"`
-	OutputTokens *int64        `json:"output_tokens,omitempty"`
+	LastFailure string        `json:"last_failure,omitempty"`
+	StartedAt   time.Time     `json:"started_at,omitzero"`
+	EndedAt     time.Time     `json:"ended_at,omitzero"`
+	Launch      *LaunchRecord `json:"launch,omitempty"`
+	Exit        *ExitRecord   `json:"exit,omitempty"`
+	// StderrTail is the end of the last attempt's stderr, kept when the step concludes: stderr.log holds only its start.
+	StderrTail   string `json:"stderr_tail,omitempty"`
+	InputTokens  *int64 `json:"input_tokens,omitempty"`
+	OutputTokens *int64 `json:"output_tokens,omitempty"`
 }
 
 func terminalStep(state string) bool {

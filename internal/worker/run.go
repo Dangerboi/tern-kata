@@ -496,12 +496,23 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 		}
 	}
 	exit := &ExitRecord{At: w.clock.Now().UTC(), TimedOut: timedOut}
-	if ee, ok := errors.AsType[*exec.ExitError](waitErr); ok {
-		exit.Code, exit.Signal = ee.ExitCode(), exitSignal(ee.ProcessState)
-	} else if waitErr != nil {
-		exit.Code = -1
-	}
+	exit.Code, exit.Signal = exitStatus(cmd, waitErr)
 	return exit, nil
+}
+
+// exitStatus is the code and signal the process ended with. Wait returns ErrWaitDelay when the process exited but a
+// descendant kept its output pipes open: that is the process's own exit, not a failure to wait.
+func exitStatus(cmd *exec.Cmd, waitErr error) (code int, signal string) {
+	if ee, ok := errors.AsType[*exec.ExitError](waitErr); ok {
+		return ee.ExitCode(), exitSignal(ee.ProcessState)
+	}
+	if errors.Is(waitErr, exec.ErrWaitDelay) && cmd.ProcessState != nil {
+		return cmd.ProcessState.ExitCode(), exitSignal(cmd.ProcessState)
+	}
+	if waitErr != nil {
+		return -1, ""
+	}
+	return 0, ""
 }
 
 // stopAndWait stops the run's group by the termination policy and returns what the process answered. An error means
@@ -764,7 +775,7 @@ func (w *Worker) send(ctx context.Context, j *Journal, it Intent) (int64, error)
 	if serr != nil {
 		return 0, err
 	}
-	if current.Status == j.Outcome.Status {
+	if current.Status == j.Outcome.Status && current.Summary == j.Outcome.Summary {
 		return current.Revision, nil
 	}
 	return 0, &inspectError{fmt.Sprintf("kata holds this run as %s at revision %d, not at the revision %d this worker last wrote; the final %s observation was not sent over it", current.Status, current.Revision, j.Revision, j.Outcome.Status)}

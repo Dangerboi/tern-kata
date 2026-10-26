@@ -103,7 +103,11 @@ func (w *Worker) RunDetail(uid string) (RunDetail, error) {
 		return RunDetail{}, fmt.Errorf("run %s belongs to worker %q, not %q", uid, j.Executor, w.opt.Config.Executor)
 	}
 	dir := w.attemptDir(j) // a workflow shows its latest step's output
-	d := RunDetail{RunStatus: w.runStatus(j), Steps: stepsOf(j), OutputTail: outputTail(filepath.Join(dir, "output.jsonl"), OutputTailBytes), StderrTail: fileTail(filepath.Join(dir, "stderr.log"), 2048)}
+	d := RunDetail{RunStatus: w.runStatus(j), Steps: stepsOf(j), OutputTail: outputTail(filepath.Join(dir, "output.jsonl"), OutputTailBytes)}
+	d.StderrTail = fileTail(filepath.Join(dir, "stderr.log"), 2048)
+	if t := shownStderrTail(j); t != "" { // stderr.log keeps only the first bytes; the journal holds the real end
+		d.StderrTail = t
+	}
 	d.Cwd = cmp.Or(j.Checkout, w.store.RunDir(uid))
 	d.SessionDir, d.SessionID = w.sessionOf(j)
 	if d.OutputTail == "" { // a command step's output is its own log
@@ -116,6 +120,26 @@ func (w *Worker) RunDetail(uid string) (RunDetail, error) {
 		d.Summary = j.Outcome.Summary
 	}
 	return d, nil
+}
+
+// shownStderrTail is the journal's stderr tail for the attempt RunDetail shows: the run's own for a prompt job or an
+// attempt in flight, else the step attemptDir picks (the active one, else the latest with a folder).
+func shownStderrTail(j *Journal) string {
+	if j.Result != nil && j.Result.StderrTail != "" {
+		return j.Result.StderrTail
+	}
+	if j.Workflow == nil {
+		return ""
+	}
+	if i := j.activeStep(); i >= 0 && j.Steps[i].Dir != "" {
+		return j.Steps[i].StderrTail
+	}
+	for i := len(j.Steps) - 1; i >= 0; i-- {
+		if j.Steps[i].Dir != "" {
+			return j.Steps[i].StderrTail
+		}
+	}
+	return ""
 }
 
 // sessionOf is the omp session a Pane opens for the run and the folder holding it: a prompt job's, or for a workflow

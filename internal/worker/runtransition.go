@@ -183,6 +183,9 @@ func (j *Journal) concludeStep(outcome *Outcome, at time.Time) error {
 	}
 	r, plan := &j.Steps[i], j.Workflow.Steps[i]
 	r.Launch, r.Exit, r.Summary, r.EndedAt = j.Launch, j.Exit, outcome.Summary, at
+	if j.Result != nil {
+		r.StderrTail = j.Result.StderrTail
+	}
 	// A retried step keeps what its earlier attempts used; outcome already carries what a resume continued.
 	r.InputTokens, r.OutputTokens = addTokens(r.InputTokens, outcome.InputTokens), addTokens(r.OutputTokens, outcome.OutputTokens)
 	timedOut := j.Exit != nil && j.Exit.TimedOut

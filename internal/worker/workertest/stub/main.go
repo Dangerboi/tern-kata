@@ -16,6 +16,7 @@
 //	--stub-fail-once-when T  like --stub-fail-when, but not on a retry (a prompt with a "# Retry" section)
 //	--stub-hang-when T     like --stub-hang-first for a prompt that contains T: hang unless resumed
 //	--stub-leave-child FILE  before exiting, start a sleeping descendant in the agent's group and write its pid to FILE
+//	--stub-stderr-bytes N  before exiting, write N filler bytes then a closing line REAL-END-OF-STDERR to stderr
 //	--stub-error-status N  end the turn with a provider failure: stopReason error, errorStatus N, exit 1
 package main
 
@@ -43,6 +44,7 @@ func main() {
 		waitFor     string
 		textBytes   int
 		errStatus   int
+		stderrBytes int
 		failWhen    string
 		failOnce    string
 		hangWhen    string
@@ -95,6 +97,9 @@ func main() {
 		case "--stub-hang-when":
 			i++
 			hangWhen = args[i]
+		case "--stub-stderr-bytes":
+			i++
+			stderrBytes, _ = strconv.Atoi(args[i])
 		case "--stub-error-status":
 			i++
 			errStatus, _ = strconv.Atoi(args[i])
@@ -189,6 +194,9 @@ func main() {
 		if err := child.Start(); err == nil {
 			_ = os.WriteFile(leaveChild, []byte(strconv.Itoa(child.Process.Pid)), 0o644)
 		}
+	}
+	if stderrBytes > 0 {
+		fmt.Fprintln(os.Stderr, strings.Repeat("x", stderrBytes)+"\nREAL-END-OF-STDERR")
 	}
 	os.Exit(exit)
 }
