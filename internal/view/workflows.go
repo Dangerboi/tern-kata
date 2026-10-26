@@ -210,11 +210,10 @@ func workflowLayer(m model.Model) tern.Element {
 	switch {
 	case c.Conflict != nil:
 		title = "Workflow changed: your text is kept"
-		children = ui.Nodes(ui.Row{Common: ui.Common{Key: "versions"}, Gap: ui.GapMD, Wrap: true, Children: ui.Nodes(
+		children = append(ui.Nodes(ui.Row{Common: ui.Common{Key: "versions"}, Gap: ui.GapMD, Wrap: true, Children: ui.Nodes(
 			ui.Col{Common: ui.Common{Key: "draft", Grow: 1, Basis: ui.BasisFrac(0.5)}, Children: ui.Nodes(ui.Text{Text: "Your text"}, TextEditor("body", c.Editor, true))},
 			ui.Col{Common: ui.Common{Key: "current", Grow: 1, Basis: ui.BasisFrac(0.5)}, Children: ui.Nodes(ui.Text{Text: fmt.Sprintf("As it stands now (revision %d)", c.Conflict.Revision)}, TextEditor("now", model.NewTextEditor(c.Conflict.Text()), true))},
-		)}, ui.Text{Common: ui.Common{Key: "choice", Tone: ui.ToneWarning}, Text: "o saves your text over the new version; d discards only your text."},
-			buttonRow(cardButton("overwrite", model.ModeConflict, model.OverwriteDraft, "Overwrite", true), cardButton("discard", model.ModeConflict, model.DiscardDraft, "Discard Draft", false)))
+		)}), conflictChoice(c.Conflict)...)
 	case c.DiscardConfirm:
 		children = append(children, ui.Text{Common: ui.Common{Key: "discard", Tone: ui.ToneWarning}, Text: "Discard this text? y discards; n or esc keeps editing."}, discardButtons())
 	case !c.Saving:
@@ -224,6 +223,17 @@ func workflowLayer(m model.Model) tern.Element {
 			cardButton("discard", model.ModeEditor, model.CancelDraft, "Discard", false)))
 	}
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardWorkflow)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
+}
+
+// conflictChoice is the conflict card's ask: Overwrite and Discard Draft, or only Discard Draft when the current version is
+// archived, since a save would bring it back.
+func conflictChoice(current *model.Workflow) []tern.Element {
+	discard := cardButton("discard", model.ModeConflict, model.DiscardDraft, "Discard Draft", current.Archived)
+	if current.Archived {
+		return ui.Nodes(ui.Text{Common: ui.Common{Key: "choice", Tone: ui.ToneWarning}, Text: "This workflow was archived meanwhile, so your text cannot be saved over it; d discards only your text."}, buttonRow(discard))
+	}
+	return ui.Nodes(ui.Text{Common: ui.Common{Key: "choice", Tone: ui.ToneWarning}, Text: "o saves your text over the new version; d discards only your text."},
+		buttonRow(cardButton("overwrite", model.ModeConflict, model.OverwriteDraft, "Overwrite", true), discard))
 }
 
 // workflowRuns is the inspector's Runs section: the workflow's latest runs among those the Page read, newest first, each with its

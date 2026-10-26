@@ -236,6 +236,17 @@ func TestTheMenuOffersToRestoreADeletedIssueThroughOneField(t *testing.T) {
 	}
 }
 
+func TestRestoringAnIssueOfAProjectOutsideTheCatalogNamesItByShortIdAlone(t *testing.T) {
+	s := menuRestore(t, movePane(t, movable("a")))
+	asked := step(t, typed(t, s, "a"), key("enter"))
+	found := step(t, asked.State, model.DeletedLooked{Ref: "a", Issue: model.DeletedIssue{UID: "x", ProjectID: 99, ShortID: "abcd", Title: "Gone", Deleted: true}})
+	restoring := step(t, found.State, key("enter"))
+	done := step(t, restoring.State, model.IssueRestored{UID: "x", Changed: true})
+	if got := done.State.Model.Notice; got != "Restored abcd." {
+		t.Errorf("notice %q, want no bare leading #", got)
+	}
+}
+
 func onlyCmd[C model.Cmd](t *testing.T, cmds []model.Cmd) C {
 	t.Helper()
 	var found []C

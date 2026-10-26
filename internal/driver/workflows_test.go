@@ -185,6 +185,22 @@ func TestWorkflowCardSavesAndShowsAConflictBesideTheKeptText(t *testing.T) {
 	}
 }
 
+func TestWorkflowConflictOnAnArchivedWorkflowOffersNoOverwrite(t *testing.T) {
+	s := workflowsPane(t, 160, reviewFlow())
+	s = step(t, s, key("e")).State
+	edited := strings.Replace(reviewFlow().Text(), "make test", "make check", 1)
+	old := len(s.Model.Workflows.Card.Editor.Text)
+	s = step(t, s, &tern.Edit{ID: cardInput(t, s.Model), From: 0, To: old, Text: edited, Cursor: len(edited), Len: old}).State
+	s = step(t, s, key("ctrl+o")).State
+	gone := reviewFlow()
+	gone.EventUID, gone.Revision, gone.Archived = "E2", 4, true
+	conflict := step(t, s, model.WorkflowWritten{ProjectUID: "p", Op: model.WorkflowOpSave, UID: "W1", Current: &gone}).State
+	mustShow(t, conflict, "archived conflict", "Workflow changed: your text is kept", "archived", "Discard Draft")
+	if drawn := screen(t, conflict); strings.Contains(drawn, "Overwrite") {
+		t.Errorf("the archived conflict still draws Overwrite:\n%s", drawn)
+	}
+}
+
 func TestNewWorkflowStartsFromATemplateAndCreatesWithoutAGuard(t *testing.T) {
 	s := workflowsPane(t, 160)
 	s = step(t, s, key("n")).State

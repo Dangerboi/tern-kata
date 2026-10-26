@@ -21,6 +21,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - Switching daemons or loading a Project no longer hangs when the daemon answers but stalls reading its instance; it gives up after the connect deadline.
 - An absolute `TZ` path such as `:/etc/localtime` gives the Pane its local date instead of UTC.
 - Saving a new adapter job again after its first answer was lost reports it created, not changed.
+- A Workflow conflict whose current version another actor archived offers only Discard Draft; Overwrite would have silently restored it. An archive or restore conflict keeps the selection at its row.
+- Restore notices name an Issue of a Project the Pane's catalog does not list by its short id, not `#abcd`.
 
 ## [0.5.0] - 2026-10-25
 

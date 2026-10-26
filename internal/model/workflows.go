@@ -491,6 +491,7 @@ func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 }
 
 func workflowWritten(m Model, msg WorkflowWritten) Model {
+	row := m.selectedRow()
 	card := &m.Workflows.Card
 	saving := msg.Op == WorkflowOpSave && card.Open && card.Saving
 	if saving {
@@ -516,9 +517,8 @@ func workflowWritten(m Model, msg WorkflowWritten) Model {
 		m.Workflows = m.Workflows.withWorkflow(*msg.Current)
 		m.Workflows.readings = readingOf(m.Workflows.readings, msg.Current.UID, msg.Reading)
 		m.Notice = msg.Current.Name + " changed meanwhile: nothing was written."
-		return m.selectWorkflow(0)
+		return m.selectWorkflow(row)
 	case msg.Workflow != nil:
-		row := m.selectedRow()
 		m.Workflows = m.Workflows.withWorkflow(*msg.Workflow)
 		if msg.Reading != nil {
 			m.Workflows.readings = withReading(m.Workflows.readings, msg.Workflow.UID, *msg.Reading)
@@ -544,6 +544,10 @@ func workflowCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	switch {
 	case c.Conflict != nil:
 		switch {
+		case ok && binding.Action == OverwriteDraft && c.Conflict.Archived:
+			// kata would save onto the tombstone and restore it.
+			m.Notice = c.Conflict.Name + " was archived meanwhile: it cannot be overwritten."
+			return m, nil
 		case ok && binding.Action == OverwriteDraft:
 			c.Base, c.Conflict = c.Conflict.EventUID, nil
 			m.Workflows.Card = c

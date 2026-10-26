@@ -250,6 +250,37 @@ func TestAnArchiveOrRestoreOfAChangedWorkflowWritesNothingAndShowsTheCurrentOne(
 	}
 }
 
+func TestAnArchiveConflictThatHidesTheRowKeepsTheSelectionAtItsRow(t *testing.T) {
+	var flows []model.Workflow
+	for _, uid := range []string{"WA", "WB", "WC"} {
+		w := reviewFlow()
+		w.UID, w.Name = uid, uid
+		flows = append(flows, w)
+	}
+	m := onWorkflows(t, flows...)
+	m, _ = model.Update(m, model.KeyMsg{Chord: "j"})
+	gone := flows[1]
+	gone.EventUID, gone.Archived = "E2", true
+	m, _ = model.Update(m, model.WorkflowWritten{ProjectUID: "p", Op: model.WorkflowOpArchive, UID: "WB", Current: &gone})
+	if got, _ := m.SelectedWorkflow(); got.UID != "WC" {
+		t.Errorf("selected %q, want WC: the row now at the old position", got.UID)
+	}
+}
+
+func TestAConflictWhoseCurrentVersionIsArchivedCannotBeOverwritten(t *testing.T) {
+	m := onWorkflows(t, reviewFlow())
+	m, _ = model.Update(m, model.KeyMsg{Chord: "e"})
+	m = typedText(m, strings.Replace(m.Workflows.Card.Editor.Text, "make test", "make check", 1))
+	m, _ = model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
+	gone := reviewFlow()
+	gone.EventUID, gone.Revision, gone.Archived = "E2", 2, true
+	m, _ = model.Update(m, model.WorkflowWritten{ProjectUID: "p", Op: model.WorkflowOpSave, UID: "W1", Current: &gone})
+	m, cmds := model.Update(m, model.KeyMsg{Chord: "o"})
+	if _, sent := firstCmd[model.SaveWorkflow](cmds); sent || m.Workflows.Card.Conflict == nil || !strings.Contains(m.Notice, "archived") {
+		t.Errorf("overwrite sent %#v, conflict kept %v, notice %q", cmds, m.Workflows.Card.Conflict != nil, m.Notice)
+	}
+}
+
 func TestEnterOpensTheStepsAndEscClosesThemBeforeLeavingTheMenu(t *testing.T) {
 	m := onWorkflows(t, reviewFlow())
 	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})

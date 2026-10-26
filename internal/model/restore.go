@@ -150,7 +150,10 @@ func deletedLooked(m Model, msg DeletedLooked) Model {
 		return m
 	}
 	found := msg.Issue
-	found.QualifiedID = m.projectName(found.ProjectID) + "#" + found.ShortID
+	found.QualifiedID = found.ShortID
+	if name := m.projectName(found.ProjectID); name != "" {
+		found.QualifiedID = name + "#" + found.ShortID
+	}
 	f.Found = &found
 	return m
 }
