@@ -181,6 +181,7 @@ func (m Model) issueWritten(uid string) Model {
 	if uid == m.uid {
 		m.stale = true
 	}
+	m.readOwed = m.readOwed || m.Refreshing
 	return m
 }
 

@@ -26,6 +26,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - Recurrences refuse the zone `Local`, which kata would evaluate in the daemon's zone; a Pane whose zone is `Local` opens the card on UTC, as the job card does.
 - Relative ages read "0s ago" instead of a negative age when the daemon's clock runs ahead.
 - Searching by short id resolves in the bound Project when a saved filter names a Project the catalog no longer lists.
+- A change you make while the Pane is reading its list, such as moving a card, is read again once that read lands, so the card does not stay where it was when no change event follows (for example while the event stream is down).
 
 ## [0.5.0] - 2026-10-25
 

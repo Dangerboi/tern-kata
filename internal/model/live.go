@@ -16,6 +16,7 @@ type LiveState struct {
 	PendingCursor    int64
 	Resetting        bool
 	dayInFlight      bool // the end-of-day wake fired while a read was in flight; a result still dated that day reads again
+	readOwed         bool // an Issue was written while a read was in flight; that read may predate the write, so its result is followed by another
 	wakeGeneration   int64
 	// resubscribe says the next snapshot starts a new event stream: the Pane switched to another daemon, whose events the old stream does not carry.
 	resubscribe bool

@@ -164,6 +164,7 @@ func snapshotChanged(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	m.Refreshing = true
+	m.readOwed = false
 	m.RefreshRequest++
 	if lookup, ok := m.idLookup(); ok {
 		lookup.Request = m.RefreshRequest
@@ -191,6 +192,7 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 		return m, nil
 	}
 	m.Refreshing = false
+	owed := m.readOwed
 	rereadForDay := m.dayInFlight
 	m.dayInFlight = false
 	if !sameCollectionQuery(liveQuery(m), msg.Query) {
@@ -253,7 +255,10 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 		m.StreamErr = nil
 		m.ReconnectAttempt = 0
 	}
-	if _, lookup := m.idLookup(); lookup || m.PendingCursor > m.Cursor {
+	if _, lookup := m.idLookup(); lookup || owed || m.PendingCursor > m.Cursor {
+		if owed {
+			m.etag = "" // a 304 would answer for the snapshot the write may have outdated
+		}
 		// A short id the lookup has not answered, or events newer than this snapshot.
 		var next []Cmd
 		m, next = snapshotChanged(m)

@@ -195,3 +195,64 @@ func TestPendingSelectionAfterCreate(t *testing.T) {
 		})
 	}
 }
+
+// A write that lands while a read sent before it is in flight cannot be answered by that read: once it lands, one more read follows.
+func TestWriteDuringReadReadsOnceMoreAfterIt(t *testing.T) {
+	m0 := loadedWork(t)
+	m, cmds := model.Update(m0, model.StreamEvent{Generation: m0.StreamGeneration, ID: 1, Type: "issue.updated"})
+	inFlight := readIn(t, cmds)
+	snap1 := workSnapshot("first", "second")
+	snap1.Cursor = 1
+	m, cmds = model.Update(m, model.MoveResultMsg{UID: "first"})
+	if hasRead(cmds) {
+		t.Fatalf("a write during a read sent a read of its own: %#v", cmds)
+	}
+	m, cmds = model.Update(m, model.SnapshotLoaded{Request: inFlight.Request, Query: inFlight.Query, Snapshot: snap1, ETag: "stale"})
+	follow := readIn(t, cmds)
+	if follow.Request == inFlight.Request || follow.ETag != "" {
+		t.Fatalf("follow-up read: %+v after %+v", follow, inFlight)
+	}
+	_, cmds = model.Update(m, model.SnapshotLoaded{Request: follow.Request, Query: follow.Query, Snapshot: snap1, ETag: "fresh"})
+	for _, cmd := range cmds {
+		if _, ok := cmd.(model.ReadSnapshot); ok {
+			t.Fatalf("the follow-up read was followed by another: %#v", cmds)
+		}
+	}
+}
+
+func TestReadWithNoWriteDuringItIsNotFollowedByAnother(t *testing.T) {
+	m0 := loadedWork(t)
+	m, cmds := model.Update(m0, model.StreamEvent{Generation: m0.StreamGeneration, ID: 1, Type: "issue.updated"})
+	inFlight := readIn(t, cmds)
+	snap1 := workSnapshot("first", "second")
+	snap1.Cursor = 1
+	_, cmds = model.Update(m, model.SnapshotLoaded{Request: inFlight.Request, Query: inFlight.Query, Snapshot: snap1, ETag: "e"})
+	for _, cmd := range cmds {
+		if _, ok := cmd.(model.ReadSnapshot); ok {
+			t.Fatalf("a read followed a read nothing changed during: %#v", cmds)
+		}
+	}
+}
+
+func TestCreateDuringReadReadsOnceMoreAfterIt(t *testing.T) {
+	m := loadedWork(t)
+	m, _ = model.Update(m, model.KeyMsg{Chord: "n"})
+	m, _ = model.Update(m, model.KeyMsg{Text: "New"})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
+	if !m.Create.Saving {
+		t.Fatalf("create not submitted: %+v", m.Create)
+	}
+	m0 := m
+	m, cmds := model.Update(m, model.StreamEvent{Generation: m0.StreamGeneration, ID: 1, Type: "issue.updated"})
+	inFlight := readIn(t, cmds)
+	m, cmds = model.Update(m, model.IssueCreated{UID: "created"})
+	if hasRead(cmds) {
+		t.Fatalf("a create during a read sent a read of its own: %#v", cmds)
+	}
+	snap := workSnapshot("first", "second")
+	snap.Cursor = 1
+	_, cmds = model.Update(m, model.SnapshotLoaded{Request: inFlight.Request, Query: inFlight.Query, Snapshot: snap, ETag: "stale"})
+	if follow := readIn(t, cmds); follow.Request == inFlight.Request || follow.ETag != "" {
+		t.Fatalf("follow-up read: %+v after %+v", follow, inFlight)
+	}
+}

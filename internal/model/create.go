@@ -187,7 +187,7 @@ func updateCreate(m Model, msg Msg) (Model, []Cmd, bool) {
 		}
 		m.Create = CreateState{}
 		m.Focus = ColumnList
-		next, cmds := snapshotChanged(m)
+		next, cmds := snapshotChanged(m.issueWritten(msg.UID))
 		return next, cmds, true
 	case FieldLabelsLoaded:
 		if msg.UID == CreateDraftUID && m.Create.Open {
