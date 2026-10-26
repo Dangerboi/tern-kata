@@ -110,15 +110,23 @@ func (p *agentParser) Line(line []byte) {
 		}
 		p.res.Terminal = true
 		for i := len(event.Messages) - 1; i >= 0; i-- {
-			if m, ok := assistantMessage(event.Messages[i]); ok {
-				p.final(m)
-				break
+			var head struct {
+				Role string `json:"role"`
 			}
+			if json.Unmarshal(event.Messages[i], &head) != nil || head.Role != "assistant" {
+				continue
+			}
+			// The last assistant turn decides the run even when it does not decode: falling back to an earlier
+			// turn's stop would pass a failed run, so the zero message clears what message_end recorded.
+			m, _ := assistantMessage(event.Messages[i])
+			p.final(m)
+			break
 		}
 	}
 }
 
-// assistantMessage decodes raw as an assistant message; any other role, or a shape that does not decode, is not one.
+// assistantMessage decodes raw as an assistant message; any other role, or a shape that does not decode, is not one
+// (the zero message comes back with false).
 func assistantMessage(raw json.RawMessage) (ompMessage, bool) {
 	var m ompMessage
 	if len(raw) == 0 || json.Unmarshal(raw, &m) != nil || m.Role != "assistant" {

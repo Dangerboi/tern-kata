@@ -161,12 +161,14 @@ func outputTail(path string, max int) string {
 		line, err := r.ReadBytes('\n')
 		if line = bytes.TrimSpace(line); len(line) > 0 && line[0] == '{' {
 			var ev struct {
-				Type    string      `json:"type"`
-				Message *ompMessage `json:"message"`
+				Type    string          `json:"type"`
+				Message json.RawMessage `json:"message"`
 			}
-			if json.Unmarshal(line, &ev) == nil && ev.Type == "message_end" && ev.Message != nil && ev.Message.Role == "assistant" {
-				if t := strings.TrimSpace(ev.Message.text()); t != "" {
-					texts = append(texts, t)
+			if json.Unmarshal(line, &ev) == nil && ev.Type == "message_end" {
+				if m, ok := assistantMessage(ev.Message); ok {
+					if t := strings.TrimSpace(m.text()); t != "" {
+						texts = append(texts, t)
+					}
 				}
 			}
 		}
