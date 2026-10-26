@@ -12,9 +12,9 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
 )
 
-// A Project whose recovery could not scan the journals tries again on its next lease pass instead of leaving its
-// started runs orphaned until the worker restarts.
-func TestAProjectWhoseFirstRecoveryCouldNotScanRecoversOnALaterPass(t *testing.T) {
+// A Project whose recovery could not scan the journals admits nothing, because a run it cannot see may hold a slot,
+// and recovers on its next pass, without waiting for a lease renewal.
+func TestAProjectWhoseFirstRecoveryCouldNotScanAdmitsNothingUntilALaterPassRecovers(t *testing.T) {
 	h := newHarness(t, "--stub-hang")
 	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
 	uid, _ := h.killedAt("session", job)
@@ -28,7 +28,13 @@ func TestAProjectWhoseFirstRecoveryCouldNotScanRecoversOnALaterPass(t *testing.T
 		t.Fatal(err)
 	}
 	r := h.start(worker.Hooks{})
-	h.admitting(r)
+	h.eventually("the Project to refuse for its unrecovered runs", func() bool {
+		s := r.w.Status()
+		return len(s.Projects) == 1 && !s.Projects[0].Admitting && strings.Contains(s.Projects[0].Why, "not all recovered yet")
+	})
+	if resp := h.ask(worker.Request{Op: "run", Job: job.UID}); resp.OK || !strings.Contains(resp.Error, "not all recovered yet") {
+		t.Fatalf("a manual run was not refused for the recovery: %+v", resp)
+	}
 	if s, ok := h.runStatus(r, uid); ok {
 		t.Fatalf("the run is visible while the journals cannot be listed: %+v", s)
 	}
@@ -39,11 +45,22 @@ func TestAProjectWhoseFirstRecoveryCouldNotScanRecoversOnALaterPass(t *testing.T
 	if err := os.Rename(aside, runs); err != nil {
 		t.Fatal(err)
 	}
-	h.clock.Advance(worker.LeaseRenew + time.Minute)
+	h.clock.Advance(15 * time.Second) // well short of a lease renewal
 	h.eventually("the orphaned run to be recovered into a hold", func() bool {
 		s, ok := h.runStatus(r, uid)
 		return ok && s.Held
 	})
+	h.admitting(r)
+}
+
+func TestStatusTextNamesTheJournalsThatCouldNotBeRead(t *testing.T) {
+	text := worker.Status{JournalError: "run abc: bad json"}.String()
+	if !strings.Contains(text, "run abc: bad json") {
+		t.Fatalf("worker status does not print the journal error:\n%s", text)
+	}
+	if strings.Contains(worker.Status{}.String(), "could not be read") {
+		t.Fatal("worker status names unreadable journals when there are none")
+	}
 }
 
 // A transient kata failure while a resume renews the lease says nothing about the lease: the cached one stays held, so

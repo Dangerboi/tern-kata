@@ -1878,3 +1878,68 @@ func TestGatewayCarriesABacklinkFromAReplyOnAnotherIssue(t *testing.T) {
 		t.Errorf("backlink %+v, want the refuting reply on the other Issue", link)
 	}
 }
+
+func TestGatewayConcurrentFirstCallsDialOnce(t *testing.T) {
+	kata := startKata(t, "0.20.0")
+	target := kata.target()
+	var dials atomic.Int32
+	release := make(chan struct{})
+	gateway := NewGateway(func(context.Context, string) (Target, error) {
+		dials.Add(1)
+		<-release
+		return target, nil
+	})
+	t.Cleanup(gateway.Close)
+	const callers = 6
+	got := make(chan *Client, callers)
+	for range callers {
+		go func() {
+			c, err := gateway.client(context.Background(), "/ws")
+			if err != nil {
+				t.Error(err)
+			}
+			got <- c
+		}()
+	}
+	for dials.Load() == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	time.Sleep(50 * time.Millisecond) // give the other callers time to wrongly start a second dial
+	close(release)
+	first := <-got
+	for range callers - 1 {
+		if c := <-got; c != first {
+			t.Fatalf("callers got different clients %p and %p, want one shared", c, first)
+		}
+	}
+	if n := dials.Load(); n != 1 {
+		t.Fatalf("%d dials for one workspace, want 1", n)
+	}
+}
+
+func TestGatewayConnectRacingCloseCachesNothing(t *testing.T) {
+	kata := startKata(t, "0.20.0")
+	target := kata.target()
+	entered, release := make(chan struct{}), make(chan struct{})
+	gateway := NewGateway(func(context.Context, string) (Target, error) {
+		close(entered)
+		<-release
+		return target, nil
+	})
+	errc := make(chan error, 1)
+	go func() {
+		_, err := gateway.client(context.Background(), "/ws")
+		errc <- err
+	}()
+	<-entered
+	gateway.Close()
+	close(release)
+	if err := <-errc; err == nil {
+		t.Fatal("client returned no error after Close")
+	}
+	gateway.mu.Lock()
+	defer gateway.mu.Unlock()
+	if len(gateway.clients) != 0 {
+		t.Fatalf("%d clients cached after Close, want none", len(gateway.clients))
+	}
+}

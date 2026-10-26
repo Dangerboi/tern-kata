@@ -93,15 +93,30 @@ func PlanLaunch(args []string, lookup func(string) (string, bool), version strin
 	return plan, nil
 }
 
+// scanFlags reports whether flag appears in flags outside the value --as or --issue takes (a separate value not starting with --, as
+// the parsers read it), so `--as -h` is judged by --as and never taken for help.
+func scanFlags(flags []string, flag string) bool {
+	subcommand := len(flags) > 0 && slices.Contains(subcommands, flags[0])
+	for i := 0; i < len(flags); i++ {
+		if flags[i] == flag {
+			return true
+		}
+		if (flags[i] == "--as" || (flags[i] == "--issue" && !subcommand)) && i+1 < len(flags) && !strings.HasPrefix(flags[i+1], "--") {
+			i++
+		}
+	}
+	return false
+}
+
 func planLaunch(args []string, lookup func(string) (string, bool), version string) (LaunchPlan, error) {
 	flags := args
 	if end := slices.Index(args, "--"); end >= 0 {
 		flags = args[:end] // after a lone --, --help and --version are names, such as a file to attach
 	}
-	if slices.Contains(flags, "--version") {
+	if scanFlags(flags, "--version") {
 		return LaunchPlan{Version: version}, nil
 	}
-	if slices.Contains(flags, "--help") || slices.Contains(flags, "-h") {
+	if scanFlags(flags, "--help") || scanFlags(flags, "-h") {
 		return LaunchPlan{Help: true}, nil
 	}
 	if len(args) > 0 && slices.Contains(subcommands, args[0]) {

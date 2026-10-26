@@ -31,6 +31,10 @@ type Gateway struct {
 
 	mu      sync.Mutex
 	clients map[string]*Client
+	// connecting holds, per workspace, a channel closed when the dial in flight for it ends.
+	connecting map[string]chan struct{}
+	// closed is set by Close, so a connect in flight caches nothing after it.
+	closed bool
 	// current is the catalog name of the daemon the Pane last switched to; empty until it does.
 	current string
 	// epoch counts daemon switches, so a connect that raced one is dropped rather than cached against the new daemon.
@@ -68,7 +72,7 @@ type Gateway struct {
 func NewGateway(locate Locator) *Gateway {
 	backgroundCtx, backgroundCancel := context.WithCancel(context.Background())
 	connCtx, connCancel := context.WithCancel(backgroundCtx)
-	return &Gateway{locate: locate, deadline: connectDeadline, clients: map[string]*Client{}, now: time.Now, wakePoll: time.Minute, workerDirs: worker.DefaultDirs, runTern: execTern,
+	return &Gateway{locate: locate, deadline: connectDeadline, clients: map[string]*Client{}, connecting: map[string]chan struct{}{}, now: time.Now, wakePoll: time.Minute, workerDirs: worker.DefaultDirs, runTern: execTern,
 		converted: map[string]bool{}, convertStarted: map[string]bool{}, connCtx: connCtx, connCancel: connCancel, backgroundCtx: backgroundCtx, backgroundCancel: backgroundCancel}
 }
 
@@ -99,6 +103,7 @@ func (g *Gateway) Close() {
 	g.wakeMu.Unlock()
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	g.closed = true
 	clear(g.clients)
 }
 
@@ -160,43 +165,81 @@ func unreachable(err error) bool {
 	return errors.As(err, &op) && op.Op == "dial"
 }
 
+// errGatewayClosed is what a call gets once Close has run: no connection may be cached after it.
+var errGatewayClosed = errors.New("gateway closed")
+
 func (g *Gateway) client(ctx context.Context, workspace string) (*Client, error) {
 	// The deadline counts from the call, so a command queued behind another's connect gives up after one deadline in all.
 	connectCtx, cancel := context.WithTimeout(ctx, g.deadline)
 	defer cancel()
+	unavailable := func(err error) error {
+		if connectCtx.Err() != nil && ctx.Err() == nil {
+			return fmt.Errorf("%w\n%s", client.ErrDaemonUnavailable, noDaemonHint)
+		}
+		return err
+	}
 	for {
 		g.mu.Lock()
+		if g.closed {
+			g.mu.Unlock()
+			return nil, errGatewayClosed
+		}
 		c, locate, current, epoch := g.clients[workspace], g.locate, g.current, g.epoch
-		g.mu.Unlock()
 		if c != nil {
+			g.mu.Unlock()
 			return c, nil
 		}
-		// The pin read runs git, so it stays outside g.mu: a slow one holds up this workspace only.
-		catalog, _ := ReadCatalog()
-		name, entry := resolveEntry(ctx, g.deadline, workspace, catalog, current)
-		c, err := connectLocated(connectCtx, locate, workspace)
-		if err != nil {
-			if connectCtx.Err() != nil && ctx.Err() == nil {
-				err = fmt.Errorf("%w\n%s", client.ErrDaemonUnavailable, noDaemonHint)
+		// One dial per workspace: kata's client offers no way to release the connection of a duplicate, so a second
+		// caller waits for the first and then reads its client (or retries when that dial failed).
+		if wait := g.connecting[workspace]; wait != nil {
+			g.mu.Unlock()
+			select {
+			case <-wait:
+				continue
+			case <-connectCtx.Done():
+				return nil, unavailable(connectCtx.Err())
 			}
-			return nil, err
 		}
-		c.name, c.entry, c.deadline = name, entry, g.deadline
+		done := make(chan struct{})
+		if g.connecting == nil {
+			g.connecting = map[string]chan struct{}{}
+		}
+		g.connecting[workspace] = done
+		g.mu.Unlock()
+
+		c, err := g.dial(ctx, connectCtx, locate, current, workspace)
+
 		g.mu.Lock()
+		delete(g.connecting, workspace)
+		close(done)
 		switch {
+		case err != nil:
+			g.mu.Unlock()
+			return nil, unavailable(err)
+		case g.closed:
+			g.mu.Unlock()
+			return nil, errGatewayClosed
 		case g.epoch != epoch:
 			// A switch landed while this connected: start over against the new daemon.
 			g.mu.Unlock()
 			continue
-		case g.clients[workspace] != nil:
-			// A concurrent call for this workspace connected first; use its client.
-			c = g.clients[workspace]
-		default:
-			g.clients[workspace] = c
 		}
+		g.clients[workspace] = c
 		g.mu.Unlock()
 		return c, nil
 	}
+}
+
+// dial resolves the entry and connects, outside g.mu: the pin read runs git, so a slow one holds up this workspace only.
+func (g *Gateway) dial(ctx, connectCtx context.Context, locate Locator, current, workspace string) (*Client, error) {
+	catalog, _ := ReadCatalog()
+	name, entry := resolveEntry(ctx, g.deadline, workspace, catalog, current)
+	c, err := connectLocated(connectCtx, locate, workspace)
+	if err != nil {
+		return nil, err
+	}
+	c.name, c.entry, c.deadline = name, entry, g.deadline
+	return c, nil
 }
 
 // connect locates the daemon for workspace with ctx and dials it.
@@ -206,11 +249,6 @@ func connectLocated(ctx context.Context, locate Locator, workspace string) (*Cli
 		return nil, err
 	}
 	return connect(ctx, target)
-}
-
-// resolvedEntry is resolveEntry for the Gateway's own switch state. The caller holds g.mu, or no other goroutine uses g.
-func (g *Gateway) resolvedEntry(ctx context.Context, workspace string, catalog Catalog) (string, CatalogEntry) {
-	return resolveEntry(ctx, g.deadline, workspace, catalog, g.current)
 }
 
 // resolveEntry names the catalog entry the located daemon is, as kata's discovery picked it: the entry the Pane switched to

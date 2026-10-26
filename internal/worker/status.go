@@ -85,18 +85,7 @@ func (w *Worker) Status() Status {
 	s.Stopping, s.InFlight = w.stopping, w.inFlightLocked()
 	for _, ps := range w.projects {
 		p := ProjectStatus{Name: ps.cfg.Name, Capacity: ps.cfg.Capacity, InUse: len(ps.held) + ps.pending, Following: ps.streamOpen}
-		switch {
-		case w.stopping != "":
-			p.Why = errStopping.Error()
-		case ps.blocked != "":
-			p.Why = ps.blocked
-		case !ps.resolved:
-			p.Why = "not resolved yet"
-		case !ps.lease.Held:
-			p.Why = ps.lease.Why()
-		case ps.route.err != "":
-			p.Why = "the kata route is not confirmed: " + ps.route.err
-		default:
+		if p.Why = w.admitsNothingLocked(ps); p.Why == "" {
 			p.Admitting = true
 		}
 		p.Scheduled, p.Queued, p.NextRun = ps.scheduled, ps.queued, ps.nextRun
@@ -248,6 +237,9 @@ func (s Status) String() string {
 				fmt.Fprintf(&b, "    It cannot be resumed or abandoned yet: %s.\n", r.ResumeRefusal)
 			}
 		}
+	}
+	if s.JournalError != "" {
+		fmt.Fprintf(&b, "Some runs are not listed: their journals could not be read (%s); run `tern-kata worker doctor`.\n", s.JournalError)
 	}
 	for _, q := range s.Quarantined {
 		fmt.Fprintf(&b, "Quarantined run %s: its journal could not be read; run `tern-kata worker doctor`.\n", q)

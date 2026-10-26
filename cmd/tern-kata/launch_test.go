@@ -46,6 +46,8 @@ func TestPlanLaunch(t *testing.T) {
 		{name: "issue with flags after a double dash is refused", args: []string{"--issue=p/1", "--", "--as", "x"}, err: "--issue cannot be combined with another argument for kata tui"},
 		{name: "issue with a bare name before it is refused", args: []string{"foo", "--issue=p/1"}, err: "--issue cannot be combined with another argument for kata tui"},
 		{name: "issue with a bare name before a double dash is refused", args: []string{"--issue=p/1", "foo", "--"}, err: "--issue cannot be combined with another argument for kata tui"},
+		{name: "as takes a dash h value instead of help", args: []string{"--as", "-h"}, issueRef: "", fallbackArgs: []string{}, tuiArgs: nil},
+		{name: "issue takes a dash h value instead of help", args: []string{"--issue", "-h"}, err: `Issue reference must be <project>/<short_id>: "-h"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

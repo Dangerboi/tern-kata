@@ -25,7 +25,7 @@ func striped(nodes shown) []bool {
 	var out []bool
 	for _, row := range drawnRows(nodes) {
 		role, _ := row.P["role"].(string)
-		out = append(out, role == view.StripeRole)
+		out = append(out, strings.Contains(role, view.StripeRole))
 	}
 	return out
 }
@@ -99,7 +99,7 @@ func TestEveryOtherDrawnRowIsShadedAndStaysSoAfterFoldAndFilter(t *testing.T) {
 func TestHeaderIsNotShadedAndRowsShowNoLabels(t *testing.T) {
 	m := stripedProject()
 	nodes := render(t, m)
-	if role := nodes["main.columns.list.header"].P["role"]; role != nil {
+	if role, _ := nodes["main.columns.list.header"].P["role"].(string); strings.Contains(role, view.StripeRole) {
 		t.Errorf("header carries role %v", role)
 	}
 	for _, row := range drawnRows(nodes) {

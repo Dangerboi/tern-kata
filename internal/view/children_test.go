@@ -1,6 +1,7 @@
 package view_test
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -81,7 +82,7 @@ func TestChildRowsShowReferenceStatusTitleOwnerAndUpdatedInTheListsOrder(t *test
 	}
 	for row, want := range map[string][5]string{
 		kidRow:  {"#kid\u00a0\u00a0", "open\u00a0\u00a0", "Open kid", "dana until 13:00", "38m ago"},
-		doneRow: {"#done\u00a0", "closed", "Closed kid", strings.Repeat("\u00a0", 16), "3h ago\u00a0"},
+		doneRow: {"#done\u00a0", "closed", "Closed kid", "\u00a0", "3h ago\u00a0"},
 	} {
 		for i, cell := range []string{"jump", "status", "title", "owner", "updated"} {
 			if got := text(nodes[row+"."+cell]); got != want[i] {
@@ -110,7 +111,7 @@ func TestChildCellsRunTicketStatusTitleOwnerUpdatedUnderALabelledHeader(t *testi
 	if ids, _ := order(kidRow); !slices.Equal(ids, []string{"jump", "status", "title", "owner", "updated"}) {
 		t.Errorf("row cells = %v", ids)
 	}
-	for _, cell := range []string{"jump", "status", "owner", "updated"} {
+	for _, cell := range []string{"jump", "status", "updated"} {
 		h, r := text(nodes[childrenID+".header."+cell]), text(nodes[kidRow+"."+cell])
 		if utf8.RuneCountInString(h) != utf8.RuneCountInString(r) {
 			t.Errorf("%s header %q and row %q differ in width", cell, h, r)
@@ -134,12 +135,29 @@ func TestChildRowsAlternateTheListsShadingBelowAnUnshadedHeader(t *testing.T) {
 func TestChildCellsArePaddedToTheWidestRowAndNeverWrap(t *testing.T) {
 	nodes := render(t, parenting(model.TabComments))
 	for _, cell := range []string{"jump", "status", "owner", "updated"} {
-		a, b := text(nodes[kidRow+"."+cell]), text(nodes[doneRow+"."+cell])
-		if utf8.RuneCountInString(a) != utf8.RuneCountInString(b) {
-			t.Errorf("%s widths differ: %q vs %q", cell, a, b)
+		if cell != "owner" { // the owner is not padded: its box gives it the width
+			a, b := text(nodes[kidRow+"."+cell]), text(nodes[doneRow+"."+cell])
+			if utf8.RuneCountInString(a) != utf8.RuneCountInString(b) {
+				t.Errorf("%s widths differ: %q vs %q", cell, a, b)
+			}
 		}
 		if nodes[kidRow+"."+cell].P["wrap"] != "none" {
 			t.Errorf("%s wraps: %v", cell, nodes[kidRow+"."+cell].P["wrap"])
+		}
+	}
+}
+
+// Tern draws a glyph the font lacks from a fallback font whose advance is not the character cell's, so the owner of a row
+// with CJK in it would start off the "owner" header if its width came from padding; every cell of a column has the
+// column's width as its least width instead.
+func TestChildCellsOfAColumnShareTheColumnsBox(t *testing.T) {
+	nodes := render(t, parenting(model.TabComments))
+	for cell, width := range map[string]string{"jump": "6ch", "status": "6ch", "owner": "16ch", "updated": "7ch"} {
+		want := map[string]any{"w": width}
+		for _, row := range []string{childrenID + ".header", kidRow, doneRow} {
+			if got := nodes[row+"."+cell].P["min"]; !reflect.DeepEqual(got, want) {
+				t.Errorf("%s %s min = %v, want %v", row, cell, got, want)
+			}
 		}
 	}
 }

@@ -55,6 +55,7 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 	defer func() { starting() }()
 	for ctx.Err() == nil {
 		now := w.clock.Now()
+		tried := false
 		if !ps.resolved {
 			blocked, err := w.resolve(ctx, ps)
 			w.mu.Lock()
@@ -106,10 +107,13 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 				w.opt.Log("Project %s: %s", ps.cfg.Name, state.Why())
 			}
 			if !recovered && !state.Unknown {
-				recovered = w.recoverProject(ctx, ps, recoveredRuns)
+				recovered, tried = w.recoverProject(ctx, ps, recoveredRuns), true
 			}
 			starting()
 			held = false
+		}
+		if !recovered && !tried && w.leaseHeld(ps) { // a failed recovery is retried on every pass, not only at lease renewal
+			recovered = w.recoverProject(ctx, ps, recoveredRuns)
 		}
 		if ps.resolved {
 			if nextRoute.IsZero() {
@@ -155,6 +159,9 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 			w.retryPending(ps)
 		}
 		wake := minTime(now.Add(time.Minute), nextLease)
+		if !recovered && w.leaseHeld(ps) {
+			wake = minTime(wake, now.Add(10*time.Second))
+		}
 		if w.leaseHeld(ps) {
 			if next := w.tick(ctx, ps); !next.IsZero() {
 				wake = minTime(wake, next)
@@ -378,7 +385,12 @@ func (w *Worker) gateClosed(jobUID, projectUID string) (runUID string, err error
 func (w *Worker) recoverProject(ctx context.Context, ps *projectState, done map[string]bool) bool {
 	journals, quarantined, err := w.store.Scan()
 	if err != nil {
-		w.opt.Log("journals: %v", err)
+		if msg := err.Error(); msg != ps.loggedScanErr { // a scan that keeps failing is said once
+			ps.loggedScanErr = msg
+			w.opt.Log("journals: %v", err)
+		}
+	} else {
+		ps.loggedScanErr = ""
 	}
 	for _, uid := range quarantined {
 		w.opt.Log("run %s: its journal could not be read and was moved to quarantine", uid)
@@ -391,6 +403,12 @@ func (w *Worker) recoverProject(ctx context.Context, ps *projectState, done map[
 			w.syncSlot(ps, j)
 		}
 	}
+	w.mu.Lock()
+	ps.recovered, ps.recoverErr = err == nil, ""
+	if err != nil {
+		ps.recoverErr = err.Error()
+	}
+	w.mu.Unlock()
 	for _, j := range mine {
 		if j.settled() {
 			w.handedOn(j.RunUID)

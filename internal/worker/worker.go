@@ -82,6 +82,13 @@ type projectState struct {
 	// blocked is why the Project admits nothing for a reason other than its lease: not found, route pinned elsewhere,
 	// no cron API. Empty when fine.
 	blocked string
+	// recovered is set once every journal of the Project was read and its runs continued; recoverErr says why not yet.
+	// Until then slots may be missing from held, so nothing is admitted (guarded by Worker.mu). loggedScanErr is the
+	// scan error recoverProject last logged (the Project loop's own).
+	recovered     bool
+	recoverErr    string
+	loggedScanErr string
+
 	lease   LeaseState
 	leaseAt time.Time
 	// route is the last route check; instanceUID is the daemon instance the Project is pinned to.

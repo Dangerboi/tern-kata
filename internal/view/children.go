@@ -41,9 +41,17 @@ func childrenTable(m model.Model, children []detailChild, now time.Time) tern.El
 		keys := [4]string{"status", "title", "owner", "updated"}
 		cells := ui.Nodes(ref)
 		for i, key := range keys {
-			cell := ui.Text{Common: ui.Common{Key: key, Actions: follow, Shrink: &fixedShrink}, Spans: []ui.Span{{T: pad(texts[i], widths[i]-displayWidth(texts[i])), S: styles[i]}}, Wrap: ui.WrapNone}
+			text := texts[i]
+			if key != "owner" { // the owner's box is its width; padding it by cell count would overshoot a wide glyph
+				text = pad(text, widths[i]-displayWidth(text))
+			} else if text == "" {
+				text = "\u00a0" // an empty text draws no element, and every row keeps its owner cell
+			}
+			cell := ui.Text{Common: ui.Common{Key: key, Actions: follow, Shrink: &fixedShrink}, Spans: []ui.Span{{T: text, S: styles[i]}}, Wrap: ui.WrapNone}
 			if key == "title" {
 				cell.Grow, cell.Shrink = 1, &titleShrink
+			} else {
+				cell.Min = columnBox(widths[i])
 			}
 			cells = append(cells, cell)
 		}
@@ -51,6 +59,7 @@ func childrenTable(m model.Model, children []detailChild, now time.Time) tern.El
 	}
 	muted := [4]string{"muted", "muted", "muted", "muted"}
 	ticket := ui.Text{Common: ui.Common{Key: "jump", Shrink: &fixedShrink}, Spans: []ui.Span{{T: pad("ticket", refWidth-utf8.RuneCountInString("ticket")), S: "muted"}}, Wrap: ui.WrapNone}
+	ticket.Min = columnBox(refWidth)
 	nodes := ui.Nodes(
 		ui.Text{Common: ui.Common{Key: "heading"}, Spans: []ui.Span{{T: "Children", S: "strong"}}},
 		row(ui.Common{Key: "header", Tone: ui.ToneMuted}, nil, ticket, [4]string{"status", "title", "owner", "updated"}, muted),
@@ -59,6 +68,7 @@ func childrenTable(m model.Model, children []detailChild, now time.Time) tern.El
 		ref := jumpLink(child.UID, child.Ref)
 		ref.Spans = append(ref.Spans, ui.Span{T: pad("", refWidth-utf8.RuneCountInString(child.Ref))})
 		ref.Wrap, ref.Shrink = ui.WrapNone, &fixedShrink
+		ref.Min = columnBox(refWidth)
 		common := ui.Common{Key: child.Key, Role: stripeRole(i), Mark: child.mark}
 		if !child.Loaded {
 			nodes = append(nodes, ui.Row{Common: common, Gap: ui.GapSM, Children: ui.Nodes(ref)})
@@ -72,6 +82,11 @@ func childrenTable(m model.Model, children []detailChild, now time.Time) tern.El
 	}
 	return ui.Col{Common: ui.Common{Key: "children"}, Gap: ui.GapNone, Children: nodes}
 }
+
+// columnBox is the least width that makes a cell as wide as its column. Tern draws a glyph the font lacks, such as CJK,
+// from a fallback font whose advance is not the character cell's, so padded text alone would leave its column narrower than
+// the header's. A cell whose text outgrows the box widens instead of being cut with an ellipsis.
+func columnBox(width int) *ui.Bounds { return &ui.Bounds{W: ui.Ch(float64(width))} }
 
 // pad appends n no-break spaces, which Tern keeps where it collapses edge spaces.
 func pad(text string, n int) string { return text + strings.Repeat("\u00a0", max(n, 0)) }

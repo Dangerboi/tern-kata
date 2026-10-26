@@ -506,7 +506,7 @@ func TestWorkspacePinFollowsKatasRules(t *testing.T) {
 			t.Fatal("malformed pin read without error")
 		}
 		catalog := Catalog{Active: "alpha", Daemons: []CatalogEntry{{Name: "alpha", URL: "https://alpha.example.com"}}}
-		if name, _ := (&Gateway{deadline: time.Second}).resolvedEntry(context.Background(), workspace, catalog); name != "" {
+		if name, _ := resolveEntry(context.Background(), time.Second, workspace, catalog, ""); name != "" {
 			t.Fatalf("named %q, want the active alpha never chosen for a pin kata would refuse", name)
 		}
 	})
@@ -521,7 +521,7 @@ func TestWorkspacePinFollowsKatasRules(t *testing.T) {
 			{Name: "alpha", URL: "https://alpha.example.com"},
 			{Name: "beta", URL: "https://beta.example.com", TokenEnv: "BETA_TOKEN", InlineToken: ""},
 		}}
-		if name, entry := (&Gateway{deadline: time.Second}).resolvedEntry(context.Background(), workspace, catalog); name != "" || entry.Name != "" || entry.TokenEnv != "" {
+		if name, entry := resolveEntry(context.Background(), time.Second, workspace, catalog, ""); name != "" || entry.Name != "" || entry.TokenEnv != "" {
 			t.Fatalf("named %q with entry %+v, want an unnamed connection", name, entry)
 		}
 	})
@@ -529,15 +529,15 @@ func TestWorkspacePinFollowsKatasRules(t *testing.T) {
 		// kata honours active_daemon only for a remote; a local profile falls through to the default local daemon.
 		workspace := t.TempDir()
 		catalog := Catalog{Active: "mine", Daemons: []CatalogEntry{{Name: "mine", Local: true}}}
-		if name, entry := (&Gateway{deadline: time.Second}).resolvedEntry(context.Background(), workspace, catalog); name != "" || entry.Name != "" {
+		if name, entry := resolveEntry(context.Background(), time.Second, workspace, catalog, ""); name != "" || entry.Name != "" {
 			t.Fatalf("named %q with entry %+v, want unnamed", name, entry)
 		}
 		catalog = Catalog{Active: "prof", Daemons: []CatalogEntry{{Name: "prof", Local: true, Home: "/h", InstanceUID: profileInstanceUID}}}
-		if name, _ := (&Gateway{deadline: time.Second}).resolvedEntry(context.Background(), workspace, catalog); name != "prof" {
+		if name, _ := resolveEntry(context.Background(), time.Second, workspace, catalog, ""); name != "prof" {
 			t.Fatalf("named %q, want the local profile kata connects to", name)
 		}
 		catalog = Catalog{Active: "far", Daemons: []CatalogEntry{{Name: "far", URL: "https://far.example.com"}}}
-		if name, _ := (&Gateway{deadline: time.Second}).resolvedEntry(context.Background(), workspace, catalog); name != "far" {
+		if name, _ := resolveEntry(context.Background(), time.Second, workspace, catalog, ""); name != "far" {
 			t.Fatalf("named %q, want the remote active daemon far", name)
 		}
 	})
@@ -612,12 +612,12 @@ func TestResolvedEntryReadsTheGitCheckedPinOnItsOwnDeadline(t *testing.T) {
 	// The caller's context is live, but a connect that spent most of its own would leave nothing for git: the pin read gets its own deadline.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	if name, _ := (&Gateway{deadline: 10 * time.Second}).resolvedEntry(ctx, repo, catalog); name != "beta" {
+	if name, _ := resolveEntry(ctx, 10*time.Second, repo, catalog, ""); name != "beta" {
 		t.Fatalf("named %q, want the pinned beta", name)
 	}
 	ended, stop := context.WithCancel(context.Background())
 	stop()
-	if name, _ := (&Gateway{deadline: 10 * time.Second}).resolvedEntry(ended, repo, catalog); name != "" {
+	if name, _ := resolveEntry(ended, 10*time.Second, repo, catalog, ""); name != "" {
 		t.Fatalf("named %q after the caller ended, want the pin read to give up unnamed", name)
 	}
 }
@@ -653,8 +653,6 @@ func TestCurrentDaemonBeforeAnyConnectionFollowsThePinAndThePlainLocalRule(t *te
 func TestClientConnectsWithoutHoldingTheGatewayLockAndSharesOneClientPerWorkspace(t *testing.T) {
 	kata := startKata(t, "0.20.0")
 	var gateway *Gateway
-	var entered sync.WaitGroup
-	entered.Add(2)
 	var locked, arrived atomic.Int32
 	gateway = NewGateway(func(ctx context.Context, _ string) (Target, error) {
 		if !gateway.mu.TryLock() {
@@ -663,14 +661,8 @@ func TestClientConnectsWithoutHoldingTheGatewayLockAndSharesOneClientPerWorkspac
 			gateway.mu.Unlock()
 		}
 		arrived.Add(1)
-		entered.Done()
-		// Both callers must be inside the locator at once: a held lock would keep the second out.
-		done := make(chan struct{})
-		go func() { entered.Wait(); close(done) }()
-		select {
-		case <-done:
-		case <-time.After(5 * time.Second):
-		}
+		// Long enough for the second caller to arrive and wait: it must not start a second locate.
+		time.Sleep(100 * time.Millisecond)
 		return kata.target(), nil
 	})
 	t.Cleanup(gateway.Close)
@@ -688,8 +680,8 @@ func TestClientConnectsWithoutHoldingTheGatewayLockAndSharesOneClientPerWorkspac
 		}()
 	}
 	wg.Wait()
-	if locked.Load() != 0 || arrived.Load() != 2 {
-		t.Fatalf("gateway lock held in %d of %d locates, want it free and both calls locating at once", locked.Load(), arrived.Load())
+	if locked.Load() != 0 || arrived.Load() != 1 {
+		t.Fatalf("gateway lock held in %d of %d locates, want it free and one locate for both calls", locked.Load(), arrived.Load())
 	}
 	if clients[0] == nil || clients[0] != clients[1] {
 		t.Fatalf("clients %p and %p, want one shared client for the workspace", clients[0], clients[1])

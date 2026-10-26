@@ -9,7 +9,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A worker run whose agent finished its turn is no longer recorded `failed` with "no agent_end" when omp's output carries a message the worker does not read, such as a late LSP diagnostic: the worker now reads the turn's end and final message past it.
 - A run that finished while the worker was stopped is held `no_receipt`, not `interrupted`, when its output passed 8 MiB: the saved `output.jsonl` keeps omp's `agent_end` line past the cap.
 - A long run whose agent finished its turn is no longer recorded `failed` with "no agent_end" when omp's final `agent_end` line passes 8 MiB; lines up to 64 MiB are read.
-- A run journal the worker cannot read for a passing reason, such as too many open files, is no longer quarantined for good; only a journal that does not decode is. The other runs carry on, a Project whose recovery could not read every journal tries again at its next lease renewal, `worker status` names the unreadable runs, and a job that forbids overlap refuses to start a new run until they read again.
+- A run journal the worker cannot read for a passing reason, such as too many open files, is no longer quarantined for good; only a journal that does not decode is. The other runs carry on, `worker status` names the unreadable runs, a Project whose recovery could not read every journal admits nothing and tries again on its next pass until it can, and a job that forbids overlap refuses to start a new run until they read again.
 - A run whose agent's last message cannot be read is recorded `failed` with no stop reason instead of taking an earlier turn's result.
 - A run or command step that exits 0 while a process it started in the background still holds its output is recorded by its real exit status, not `failed` with "exited with status -1".
 - A run's final report no longer counts as delivered when kata already holds the same status with another summary; the run is left for inspection instead.
@@ -29,7 +29,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A change you make while the Pane is reading its list, such as moving a card, is read again once that read lands, so the card does not stay where it was when no change event follows (for example while the event stream is down).
 - A foreground `tern-kata worker` stopped by ctrl+c or a signal exits with 128 plus the signal number instead of 0.
 - A lone `--` ends tern-kata's own flags: what follows, such as `--issue`, goes to kata's TUI as plain arguments; `--issue` together with another argument for kata's TUI is refused, as it takes one.
-- Issue and Children lists keep their owner column aligned for names in CJK or emoji, which Tern draws two cells wide.
+- Issue and Children lists keep their owner column aligned for names in CJK or emoji: the columns are fixed-width boxes, so names drawn in another font no longer shift.
 - The Pane ends cleanly when it is told to stop while it is still connecting or while an editor it opened is running.
 
 ## [0.5.0] - 2026-10-25

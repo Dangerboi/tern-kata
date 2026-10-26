@@ -145,6 +145,11 @@ func (w *Worker) findJob(ctx context.Context, jobUID string) (*projectState, cro
 func (w *Worker) admitsNothing(ps *projectState) string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	return w.admitsNothingLocked(ps)
+}
+
+// admitsNothingLocked is admitsNothing with w.mu held.
+func (w *Worker) admitsNothingLocked(ps *projectState) string {
 	switch {
 	case w.stopping != "":
 		return errStopping.Error()
@@ -154,6 +159,12 @@ func (w *Worker) admitsNothing(ps *projectState) string {
 		return "not resolved yet"
 	case !ps.lease.Held:
 		return ps.lease.Why()
+	case !ps.recovered:
+		// ADR-0006 "Recovery order": a run whose journal could not be read may hold a slot, so admit nothing yet.
+		if ps.recoverErr != "" {
+			return "its runs are not all recovered yet: " + ps.recoverErr
+		}
+		return "its runs are not all recovered yet"
 	case ps.route.err != "":
 		return "the kata route is not confirmed: " + ps.route.err
 	}

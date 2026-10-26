@@ -296,12 +296,17 @@ func idCell(row model.IssueRow) string {
 
 // cell is text padded with spaces to width terminal cells, or cut to it with an ellipsis.
 func cell(text string, width int) string {
-	n := displayWidth(text)
-	if n > width {
-		text = displayCondition.Truncate(text, width, "…")
-		n = displayWidth(text)
+	text = cut(text, width)
+	return text + strings.Repeat(" ", max(width-displayWidth(text), 0))
+}
+
+// cut is text cut to width terminal cells with an ellipsis, not padded: the owner cell's box (see cellBoxCSS) gives it its
+// width, and padding it by cell count would overshoot the box when Tern draws a wide glyph a little wider than its cells.
+func cut(text string, width int) string {
+	if displayWidth(text) > width {
+		return displayCondition.Truncate(text, width, "…")
 	}
-	return text + strings.Repeat(" ", max(width-n, 0))
+	return text
 }
 
 // displayCondition measures text in terminal cells, wide characters two, whatever the locale: Tern draws them so.
@@ -355,14 +360,24 @@ func issueRow(m model.Model, row model.IssueRow, selected bool, role string, col
 	if row.HasChildren {
 		actions.Click = ToggleClick(row.UID)
 	}
-	return ui.Item{Common: ui.Common{Key: row.UID, Role: role, Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells(kids, owner, model.RelativeTime(row.UpdatedAt, now), cols, "muted", toneStyle(ownerTone))...)}
+	return ui.Item{Common: ui.Common{Key: row.UID, Role: strings.TrimSpace(role + " " + cols.role()), Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells(kids, owner, model.RelativeTime(row.UpdatedAt, now), cols, "muted", toneStyle(ownerTone))...)}
+}
+
+// role is the row's boxes in role tokens, which the style sheet turns into the columns' widths (see cellBoxCSS): the row
+// kind, the id width and, when the owner shows, the owner width. Their widths are the Issues' own, so they cannot be static.
+func (c listColumns) role() string {
+	role := ListRowRole + " " + ListIDRole + strconv.Itoa(c.id)
+	if c.ownerShown {
+		role += " " + ListOwnerRole + strconv.Itoa(c.owner)
+	}
+	return role
 }
 
 // rightCells are the kids, owner and updated cells, the owner only when shown.
 func rightCells(kids, owner, updated string, cols listColumns, style, ownerStyle string) []ui.Span {
 	spans := []ui.Span{{T: cell(kids, kidsWidth), S: style}}
 	if cols.ownerShown {
-		spans = append(spans, ui.Span{T: cellGap + cell(owner, cols.owner), S: ownerStyle})
+		spans = append(spans, ui.Span{T: cellGap + cut(owner, cols.owner), S: ownerStyle})
 	}
 	return append(spans, ui.Span{T: cellGap + cell(updated, updatedWidth), S: style})
 }
@@ -440,7 +455,7 @@ func headerRow(cols listColumns) tern.Element {
 		{T: cellGap + cell("status", statusWidth), S: "muted"},
 		{T: cellGap + "title", S: "muted"},
 	}
-	return ui.Item{Common: ui.Common{Key: "header", Tone: ui.ToneMuted}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells("kids", "owner", "updated", cols, "muted", "muted")...)}
+	return ui.Item{Common: ui.Common{Key: "header", Role: cols.role(), Tone: ui.ToneMuted}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells("kids", "owner", "updated", cols, "muted", "muted")...)}
 }
 
 // listOwner is the owner cell text: the name cut to ownerWidth as before, then " until …" whole when the claim expires.
