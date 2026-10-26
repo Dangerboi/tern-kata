@@ -40,6 +40,8 @@ func TestPlanLaunch(t *testing.T) {
 		{name: "empty issue equals value", args: []string{"--issue="}, err: `Issue reference must be <project>/<short_id>: ""`},
 		{name: "unknown arguments pass through", args: []string{"--as", "ann", "--foo", "bar", "--issue=p/1", "-x"}, issueRef: "p/1", fallbackArgs: []string{"--foo", "bar", "-x", "--project", "p", "p#1"}, tuiArgs: []string{"--foo", "bar", "-x"}},
 		{name: "help after a double dash is kata tui's", args: []string{"--", "--help"}, fallbackArgs: []string{"--", "--help"}, tuiArgs: []string{"--", "--help"}},
+		{name: "flags after a double dash are kata tui's", args: []string{"--", "--issue", "proj/abcd"}, fallbackArgs: []string{"--", "--issue", "proj/abcd"}, tuiArgs: []string{"--", "--issue", "proj/abcd"}},
+		{name: "flags before a double dash still parse", args: []string{"--issue=p/1", "--", "--as", "x"}, issueRef: "p/1", fallbackArgs: []string{"--", "--as", "x", "--project", "p", "p#1"}, tuiArgs: []string{"--", "--as", "x"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

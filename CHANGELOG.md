@@ -27,6 +27,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - Relative ages read "0s ago" instead of a negative age when the daemon's clock runs ahead.
 - Searching by short id resolves in the bound Project when a saved filter names a Project the catalog no longer lists.
 - A change you make while the Pane is reading its list, such as moving a card, is read again once that read lands, so the card does not stay where it was when no change event follows (for example while the event stream is down).
+- A foreground `tern-kata worker` stopped by ctrl+c or a signal exits with 128 plus the signal number instead of 0.
+- A lone `--` ends tern-kata's own flags: what follows, such as `--issue`, goes to kata's TUI as plain arguments.
 
 ## [0.5.0] - 2026-10-25
 

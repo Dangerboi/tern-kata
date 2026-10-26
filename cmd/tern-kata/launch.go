@@ -112,6 +112,10 @@ func planLaunch(args []string, lookup func(string) (string, bool), version strin
 	issueSet := false
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
+		if arg == "--" { // flags end here: the rest is kata tui's, or a name
+			plan.TUIArgs = append(plan.TUIArgs, args[i:]...)
+			break
+		}
 		if actor, matched, err := parseAs(args, &i); err != nil {
 			return LaunchPlan{}, err
 		} else if matched {

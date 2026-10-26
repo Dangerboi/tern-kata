@@ -43,6 +43,15 @@ func exitStatus(err error) int {
 	return 3
 }
 
+// stoppedBy is err, or interrupted when a signal ended the command: a command that wound down cleanly on it (a worker returns
+// nil) was still stopped by it and exits 128 plus its number.
+func stoppedBy(s os.Signal, err error) error {
+	if s != nil {
+		return interrupted{s, err}
+	}
+	return err
+}
+
 func run() error {
 	plan, err := PlanLaunch(os.Args[1:], lookupEnv, buildVersion())
 	if err != nil {
@@ -63,10 +72,7 @@ func run() error {
 		ctx, received, stop := withSignals(context.Background(), stopSignals...)
 		defer stop()
 		err := runCommand(ctx, plan)
-		if s := received(); s != nil && err != nil {
-			return interrupted{s, err}
-		}
-		return err
+		return stoppedBy(received(), err)
 	}
 	// A terminate or a hangup ends the Pane cleanly: the loop returns, so the surface and the gateway close.
 	ctx, _, stop := withSignals(context.Background(), paneStopSignals...)

@@ -31,3 +31,16 @@ func TestASignalEndsTheCommandsContextAndNamesItself(t *testing.T) {
 		t.Fatalf("exit %d, want 129 (128 + SIGHUP)", status)
 	}
 }
+
+func TestACommandACleanStopEndedStillExitsWithTheSignal(t *testing.T) {
+	if got := stoppedBy(nil, nil); got != nil {
+		t.Fatalf("no signal: %v, want nil", got)
+	}
+	err := stoppedBy(syscall.SIGTERM, nil)
+	if status := exitStatus(err); status != 143 {
+		t.Fatalf("exit %d, want 143 (128 + SIGTERM)", status)
+	}
+	if err.Error() != "terminated" {
+		t.Fatalf("message %q, want %q", err.Error(), "terminated")
+	}
+}

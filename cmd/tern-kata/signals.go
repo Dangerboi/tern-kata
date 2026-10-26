@@ -48,7 +48,12 @@ type interrupted struct {
 	err    error
 }
 
-func (e interrupted) Error() string { return e.signal.String() + ": " + e.err.Error() }
+func (e interrupted) Error() string {
+	if e.err == nil {
+		return e.signal.String()
+	}
+	return e.signal.String() + ": " + e.err.Error()
+}
 
 func (e interrupted) Unwrap() error { return e.err }
 
