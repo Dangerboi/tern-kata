@@ -7,6 +7,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 ### Changed
 
 - **Open kata**, `F9` and kata links need Tern 0.9.7 or newer, which lets plugins split and find a remote host's Pane; they no longer fall back to a new tab when Tern can't split the focused Pane.
+- `install.ps1` says that new Tern tabs and Panes see the `PATH` it changed at once; only shells already open and other programs already running need restarting.
 
 ## [0.6.0] - 2026-10-26
 

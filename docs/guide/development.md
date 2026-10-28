@@ -3,9 +3,9 @@
 ```sh
 CGO_ENABLED=0 go build -o tern-kata ./cmd/tern-kata
 CGO_ENABLED=0 go test ./...
-./smoke/run.sh      # end-to-end against a headless Tern and a throwaway kata daemon
-tern plugin link .  # use this checkout as the window plugin
-tern plugin reload  # exits 1 if a plugin fails to load; window failures show only as a toast
+./smoke/run.sh               # end-to-end against a headless Tern and a throwaway kata daemon
+tern plugin link .           # use this checkout as the window plugin
+tern plugin reload tern-kata # exits 1 if it fails to load; window failures show only as a toast
 ```
 
 Every push to `main` and every pull request runs `.github/workflows/ci.yml`: gofmt, `go vet` for Linux and for Windows, golangci-lint (`.golangci.yml`) for Linux and for Windows, and `go test ./...`. Run `golangci-lint run ./...` locally with a golangci-lint built by Go 1.27 or newer; an older build cannot load this toolchain's standard library. The smoke suite needs Tern and a kata daemon, so it runs only locally.

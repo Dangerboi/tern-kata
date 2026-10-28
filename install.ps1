@@ -57,7 +57,7 @@ function Install-TernKata {
     if (-not ($entries | Where-Object { $_.TrimEnd('\') -eq $dir.TrimEnd('\') })) {
         Set-ItemProperty -Path 'HKCU:\Environment' -Name Path -Value (($entries + $dir) -join ';') -Type ExpandString
         $env:Path = "$env:Path;$dir"
-        Write-Host "Added $dir to your user PATH; programs already running, such as Tern and its session daemon, need restarting to see it."
+        Write-Host "Added $dir to your user PATH. New Tern tabs and Panes see it at once; shells already open and other programs already running need restarting to see it."
     }
     # Explorer, which starts Tern from the Start menu or taskbar, rereads the user PATH only when told it changed.
     # Sent on every run, so a rerun also fixes a PATH written before this broadcast was added.
