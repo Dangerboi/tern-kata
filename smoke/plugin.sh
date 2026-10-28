@@ -191,6 +191,28 @@ expect_panes 2
 ctl key q
 expect_panes 1
 expect_no_kata_toast
+# A remote host's Pane ids carry its host tag above bit 44, which Tern 0.9.4 dropped for plugins, so they could not split
+# or find such a Pane. A link there opens a kata split and selects its Issue; a second link reuses that Pane.
+ctl remote loopback loop
+ctl ready
+remote_pane=$(ctl state | jq -r '.focused.id')
+(( remote_pane >= 1 << 44 )) || { echo "remote Pane id $remote_pane carries no host tag" >&2; exit 1; }
+click_issue_link "kata://smoke/$first"
+ctl plugins expect '"Plugin first body"'
+ctl state >"$tmp/remote-open.json"
+remote_kata=$(jq -r '.focused.id' "$tmp/remote-open.json")
+jq -e '(.tabs | length) == 2 and .tabs[1].active and .tabs[1].panes == 2' "$tmp/remote-open.json" >/dev/null
+[[ $remote_kata != "$remote_pane" ]]
+ctl focus left
+click_issue_link "https://kata.invalid/smoke/$second"
+ctl plugins expect '"Plugin second body"'
+ctl state >"$tmp/remote-focus.json"
+jq -e '.tabs[1].panes == 2' "$tmp/remote-focus.json" >/dev/null
+[[ $(jq -r '.focused.id' "$tmp/remote-focus.json") == "$remote_kata" ]]
+ctl key q
+for ((attempt=0; attempt<100; attempt++)); do [[ $(ctl state | jq '.tabs[1].panes') == 1 ]] && break; sleep 0.1; done
+ctl remote disconnect loop
+ctl state | jq -e '(.tabs | length) == 1 and .tabs[0].active' >/dev/null
 # A Pane started by hand is a kata Pane when its title is `tern-kata` or its program's file name is tern-kata or
 # tern-kata.exe, whatever the path: a link then focuses it and opens no second Pane. The stand-in never sets the title, so
 # only its program name can identify it; the real binary (through its wrapper script) sets the title. The wrapper under
@@ -328,4 +350,4 @@ ctl expect Press
 ctl key Enter
 expect_panes 1
 jq -Rse 'contains("plugin window halves loaded count=1") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
-printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, links reuse only the current tab'"'"'s kata Pane, shell-syntax Project link, quick quit without toast, links into Panes started by full path, backslash path and title alone, a longer name not matched, startup-failure and not-installed toasts by exit status\n'
+printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, links reuse only the current tab'"'"'s kata Pane, shell-syntax Project link, links on a remote host'"'"'s Pane, quick quit without toast, links into Panes started by full path, backslash path and title alone, a longer name not matched, startup-failure and not-installed toasts by exit status\n'

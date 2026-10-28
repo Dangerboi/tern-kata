@@ -4,6 +4,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Changed
+
+- **Open kata**, `F9` and kata links need Tern 0.9.7 or newer, which lets plugins split and find a remote host's Pane; they no longer fall back to a new tab when Tern can't split the focused Pane.
+
 ## [0.6.0] - 2026-10-26
 
 ### Added
