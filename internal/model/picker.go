@@ -57,44 +57,55 @@ const (
 	BackTitle     = "Back"
 )
 
+// EntryKind is what a Menu row is.
+type EntryKind int
+
+const (
+	EntryCollection EntryKind = iota // a fixed Collection or a Project
+	EntryNewProject
+	EntryProjects // opens the Projects level
+	EntryViews    // opens the Views level
+	EntryBack     // leaves a level
+	EntryLettered // a Lettered Page, named by PickerEntry.Page
+	EntryRestore
+	EntryNewView   // opens the View card
+	EntrySavedView // a saved view: Title is its name and Index its place in SavedViews
+)
+
 // PickerEntry is a row of the Menu: a Collection, a saved view, the Views or Projects entry that opens
 // that level, New Project, New view, a Lettered Page (Page names it), or Back, which leaves a level.
 type PickerEntry struct {
 	Collection
-	NewProject, Projects, Views, Back, Lettered, Restore bool
-	// NewView is the row that opens the View card; Saved is a saved view's row, Title its name and Index its place in SavedViews.
-	NewView, Saved bool
-	Index          int
-	Page           Page
+	Kind  EntryKind
+	Index int
+	Page  Page
 }
 
 // Key names the row, as Collection.Key names a Collection's.
 func (e PickerEntry) Key() string {
-	switch {
-	case e.Lettered:
+	switch e.Kind {
+	case EntryLettered:
 		return "page." + pageDefs[e.Page].id
-	case e.Restore:
+	case EntryRestore:
 		return RestoreKey
-	case e.NewView:
+	case EntryNewView:
 		return NewViewKey
-	case e.Saved:
+	case EntrySavedView:
 		return viewKeyPrefix + strconv.Itoa(e.Index)
-	case e.NewProject:
+	case EntryNewProject:
 		return NewProjectKey
-	case e.Projects:
+	case EntryProjects:
 		return ProjectsKey
-	case e.Views:
+	case EntryViews:
 		return ViewsKey
-	case e.Back:
+	case EntryBack:
 		return BackKey
 	}
 	return e.Collection.Key()
 }
 
 // IsCollection reports whether the row is a Collection, not a level, a saved view, a Page or an action.
-func (e PickerEntry) IsCollection() bool {
-	return !e.NewProject && !e.Projects && !e.Views && !e.Back && !e.Lettered && !e.Restore && !e.NewView && !e.Saved
-}
+func (e PickerEntry) IsCollection() bool { return e.Kind == EntryCollection }
 
 // menuEntries are the Menu's rows. The top level is the bound Project pinned first,
 // then Views, Projects, the Lettered Pages, Restore and New Project; the Views level
@@ -108,7 +119,7 @@ func (m Model) menuEntries(level MenuLevel, filter string) []PickerEntry {
 	match := func(title string) bool { return strings.Contains(strings.ToLower(title), filter) }
 	entries := make([]PickerEntry, 0, len(m.Collections)+8)
 	if level != MenuTop && filter == "" {
-		entries = append(entries, PickerEntry{Collection: Collection{Title: BackTitle}, Back: true})
+		entries = append(entries, PickerEntry{Collection: Collection{Title: BackTitle}, Kind: EntryBack})
 		for _, c := range m.Collections {
 			if c.IsProject() == (level == MenuProjects) {
 				entries = append(entries, PickerEntry{Collection: c})
@@ -116,7 +127,7 @@ func (m Model) menuEntries(level MenuLevel, filter string) []PickerEntry {
 		}
 		if level == MenuViews {
 			entries = append(entries, m.savedViewEntries(func(string) bool { return true })...)
-			entries = append(entries, PickerEntry{Collection: Collection{Title: NewViewTitle}, NewView: true})
+			entries = append(entries, PickerEntry{Collection: Collection{Title: NewViewTitle}, Kind: EntryNewView})
 		}
 		return entries
 	}
@@ -133,24 +144,24 @@ func (m Model) menuEntries(level MenuLevel, filter string) []PickerEntry {
 		entries = append(entries, m.savedViewEntries(match)...)
 	}
 	if match(ViewsTitle) {
-		entries = append(entries, PickerEntry{Collection: Collection{Title: ViewsTitle}, Views: true})
+		entries = append(entries, PickerEntry{Collection: Collection{Title: ViewsTitle}, Kind: EntryViews})
 	}
 	if match(ProjectsTitle) {
-		entries = append(entries, PickerEntry{Collection: Collection{Title: ProjectsTitle}, Projects: true})
+		entries = append(entries, PickerEntry{Collection: Collection{Title: ProjectsTitle}, Kind: EntryProjects})
 	}
 	for _, def := range pageDefs {
 		if def.lettered && match(def.label) {
-			entries = append(entries, PickerEntry{Collection: Collection{Title: def.label}, Lettered: true, Page: def.page})
+			entries = append(entries, PickerEntry{Collection: Collection{Title: def.label}, Kind: EntryLettered, Page: def.page})
 		}
 	}
 	if match(RestoreTitle) {
-		entries = append(entries, PickerEntry{Collection: Collection{Title: RestoreTitle}, Restore: true})
+		entries = append(entries, PickerEntry{Collection: Collection{Title: RestoreTitle}, Kind: EntryRestore})
 	}
 	if match(NewProjectTitle) {
-		entries = append(entries, PickerEntry{Collection: Collection{Title: NewProjectTitle}, NewProject: true})
+		entries = append(entries, PickerEntry{Collection: Collection{Title: NewProjectTitle}, Kind: EntryNewProject})
 	}
 	if filter != "" && match(NewViewTitle) {
-		entries = append(entries, PickerEntry{Collection: Collection{Title: NewViewTitle}, NewView: true})
+		entries = append(entries, PickerEntry{Collection: Collection{Title: NewViewTitle}, Kind: EntryNewView})
 	}
 	return entries
 }
@@ -160,7 +171,7 @@ func (m Model) savedViewEntries(match func(string) bool) []PickerEntry {
 	var entries []PickerEntry
 	for i, v := range m.SavedViews() {
 		if match(v.Name) {
-			entries = append(entries, PickerEntry{Collection: Collection{Title: v.Name}, Saved: true, Index: i})
+			entries = append(entries, PickerEntry{Collection: Collection{Title: v.Name}, Kind: EntrySavedView, Index: i})
 		}
 	}
 	return entries
@@ -259,30 +270,30 @@ func leaveSidebarLevel(m Model) Model {
 // current and takes the list's keys; Views, Projects and Back change the level; New Project opens its
 // form, leaving the Menu behind it.
 func openEntry(m Model, entry PickerEntry, popup bool) (Model, []Cmd) {
-	switch {
-	case entry.Lettered:
+	switch entry.Kind {
+	case EntryLettered:
 		m.Picker, m.Focus = PickerState{}, ColumnList
 		m = leaveSidebarLevel(m)
 		return showPage(entry.Page)(m)
-	case entry.Restore:
+	case EntryRestore:
 		m.Picker, m.Focus = PickerState{}, ColumnList
 		m = leaveSidebarLevel(m)
 		return openRestore(m), nil
-	case entry.NewProject:
+	case EntryNewProject:
 		return openProjectForm(m), nil
-	case entry.NewView:
+	case EntryNewView:
 		return openViewForm(m, "", SavedView{Name: "", Base: m.Collection, Filters: m.Filters}), nil
-	case entry.Saved:
+	case EntrySavedView:
 		v, ok := m.savedViewNamed(entry.Title)
 		if !ok {
 			return m, nil
 		}
 		return openSavedView(m, v)
-	case entry.Views:
+	case EntryViews:
 		return setMenuLevel(m, popup, MenuViews), nil
-	case entry.Projects:
+	case EntryProjects:
 		return setMenuLevel(m, popup, MenuProjects), nil
-	case entry.Back:
+	case EntryBack:
 		return setMenuLevel(m, popup, MenuTop), nil
 	}
 	m.Picker, m.Focus = PickerState{}, ColumnList

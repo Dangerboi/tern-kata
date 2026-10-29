@@ -78,7 +78,18 @@ func (r viewRecord) view() model.SavedView {
 }
 
 // owned are the keys a write sets on a [[view]] table; every other line of the table is kept.
-var owned = []string{"name", "base", "project_uid", "project_name", "project", "status", "owner", "label", "relationship", "search"}
+var owned = func() []string {
+	keys := []string{"name", "base", "project_uid", "project_name"}
+	for _, kv := range filterPairs(model.Filters{}) {
+		keys = append(keys, kv[0])
+	}
+	return keys
+}()
+
+// filterPairs are the filter keys of a [[view]] table with the values f gives them, in the order they are written.
+func filterPairs(f model.Filters) [][2]string {
+	return [][2]string{{"project", f.ProjectUID}, {"status", f.Status}, {"owner", f.Owner}, {"label", f.Label}, {"relationship", f.Relationship}, {"search", f.Search}}
+}
 
 // Read reads the file. A missing file is no views. An unreadable one is an error saying why, and no token, so nothing can
 // write to it.
@@ -114,13 +125,13 @@ func (s ViewsStore) Add(token ViewsToken, v model.SavedView) error {
 	})
 }
 
-// Replace puts v in place of the view called old (ignoring case), so v may be a rename or an edit. The view keeps its place in
+// Replace puts v in place of the view called self (ignoring case), so v may be a rename or an edit. The view keeps its place in
 // the file, its comments and the keys this module does not know. A name v takes from another view is refused.
-func (s ViewsStore) Replace(token ViewsToken, old string, v model.SavedView) error {
+func (s ViewsStore) Replace(token ViewsToken, self string, v model.SavedView) error {
 	return s.edit(token, func(p *viewsText) (string, error) {
-		i := p.find(old)
+		i := p.find(self)
 		if i < 0 {
-			return "", fmt.Errorf("%w: %q", ErrViewNotFound, old)
+			return "", fmt.Errorf("%w: %q", ErrViewNotFound, self)
 		}
 		v, err := model.CheckSavedView(v, p.others(i), "")
 		if err != nil {
@@ -175,6 +186,7 @@ type viewsText struct {
 	lines   []string
 	records []viewRecord
 	blocks  [][2]int // [start, end) line numbers of each [[view]] table, the end after its last key line
+	crlf    bool     // the file breaks lines with CRLF; lines are held without it
 }
 
 var (
@@ -194,7 +206,10 @@ func parseViewsText(text string) (viewsText, error) {
 	}
 	p := viewsText{records: doc.View}
 	if text != "" {
-		p.lines = strings.Split(strings.TrimSuffix(text, "\n"), "\n")
+		p.crlf = strings.Contains(text, "\r\n")
+		for _, line := range strings.Split(strings.TrimSuffix(text, "\n"), "\n") {
+			p.lines = append(p.lines, strings.TrimSuffix(line, "\r"))
+		}
 	}
 	for i := 0; i < len(p.lines); i++ {
 		if !viewHeader.MatchString(p.lines[i]) {
@@ -218,7 +233,7 @@ func parseViewsText(text string) (viewsText, error) {
 func (p *viewsText) find(name string) int {
 	name = strings.TrimSpace(name)
 	for i, r := range p.records {
-		if strings.EqualFold(r.Name, name) {
+		if strings.EqualFold(strings.TrimSpace(r.Name), name) {
 			return i
 		}
 	}
@@ -226,22 +241,27 @@ func (p *viewsText) find(name string) int {
 }
 
 // others are the views of the file except the one at skip, for the name check; entries that fail the check count too, since a
-// name is taken either way.
+// name is taken either way. Names are trimmed as Read trims them.
 func (p *viewsText) others(skip int) []model.SavedView {
 	var out []model.SavedView
 	for i, r := range p.records {
 		if i != skip {
-			out = append(out, model.SavedView{Name: r.Name})
+			out = append(out, model.SavedView{Name: strings.TrimSpace(r.Name)})
 		}
 	}
 	return out
 }
 
+// text joins lines with the file's own line break, so a write into a CRLF file stays CRLF throughout.
 func (p *viewsText) text(lines []string) string {
 	if len(lines) == 0 {
 		return ""
 	}
-	return strings.Join(lines, "\n") + "\n"
+	eol := "\n"
+	if p.crlf {
+		eol = "\r\n"
+	}
+	return strings.Join(lines, eol) + eol
 }
 
 func (p *viewsText) insert(v model.SavedView) string {
@@ -300,7 +320,7 @@ func viewLines(v model.SavedView) []string {
 	} else {
 		out = append(out, "base = "+quote(v.Base.View))
 	}
-	for _, kv := range [][2]string{{"project", v.Filters.ProjectUID}, {"status", v.Filters.Status}, {"owner", v.Filters.Owner}, {"label", v.Filters.Label}, {"relationship", v.Filters.Relationship}, {"search", v.Filters.Search}} {
+	for _, kv := range filterPairs(v.Filters) {
 		if kv[1] != "" {
 			out = append(out, kv[0]+" = "+quote(kv[1]))
 		}

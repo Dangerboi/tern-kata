@@ -55,7 +55,7 @@ func (f subcommandFixture) issue(t *testing.T, cmd model.CreateIssueCmd) {
 	}
 }
 
-func TestViewsListsBuiltInsThenSavedViewsAndNotesAGoneProject(t *testing.T) {
+func TestViewsListsFixedCollectionsThenSavedViewsAndNotesAGoneProject(t *testing.T) {
 	f := newSubcommandFixture(t)
 	writeViews(t, `[[view]]
 name = "Mine"
@@ -80,11 +80,24 @@ label = "bug"
 		}
 	}
 	if strings.Index(out, "logbook") > strings.Index(out, "Mine") {
-		t.Errorf("saved views come before the built-ins:\n%s", out)
+		t.Errorf("saved views come before the fixed Collections:\n%s", out)
 	}
 }
 
-func TestViewsListsTheBuiltInsAndReportsAnUnreadableFile(t *testing.T) {
+func TestViewsShowSaysWhyWhenTheBaseProjectIsGone(t *testing.T) {
+	f := newSubcommandFixture(t)
+	writeViews(t, "[[view]]\nname = \"Lost\"\nbase = \"project\"\nproject_uid = \"01GONEGONEGONEGONEGONEGONE\"\nproject_name = \"Vanished\"\n")
+	out, err := f.views(t, "show", "lost")
+	var failed subcommandError
+	if !errors.As(err, &failed) || exitStatus(err) != 1 || !strings.Contains(err.Error(), "Lost") || !strings.Contains(err.Error(), "Vanished) is gone") {
+		t.Fatalf("show of a view whose Project is gone: %q, %v; want exit 1 saying why", out, err)
+	}
+	if out != "" {
+		t.Errorf("printed %q", out)
+	}
+}
+
+func TestViewsListsTheFixedCollectionsAndReportsAnUnreadableFile(t *testing.T) {
 	f := newSubcommandFixture(t)
 	const garbage = "[[view\nname = \n"
 	writeViews(t, garbage)
@@ -94,7 +107,7 @@ func TestViewsListsTheBuiltInsAndReportsAnUnreadableFile(t *testing.T) {
 		t.Fatalf("err = %v, want a refusal naming views.toml", err)
 	}
 	if !strings.Contains(out, "today      Today") {
-		t.Errorf("the built-ins are not listed:\n%s", out)
+		t.Errorf("the fixed Collections are not listed:\n%s", out)
 	}
 	if got, _ := os.ReadFile(viewsFile(t)); string(got) != garbage {
 		t.Errorf("the unreadable file was changed to %q", got)
@@ -106,11 +119,11 @@ func TestViewsListsTheBuiltInsAndReportsAnUnreadableFile(t *testing.T) {
 		t.Errorf("show of a name the unreadable file may hold: %v, want exit 1", err)
 	}
 	if out, err := f.views(t, "show", "all-open"); err != nil || !strings.Contains(out, "Screenshot") {
-		t.Errorf("a built-in Collection shows without views.toml: %q, %v", out, err)
+		t.Errorf("a fixed Collection shows without views.toml: %q, %v", out, err)
 	}
 }
 
-func TestViewsShowPrintsABuiltInCollectionGroupedAsThePane(t *testing.T) {
+func TestViewsShowPrintsAFixedCollectionGroupedAsThePane(t *testing.T) {
 	f := newSubcommandFixture(t)
 	today := time.Now().Format("2006-01-02")
 	f.issue(t, model.CreateIssueCmd{Title: "Plan the week", ScheduledOn: today, Labels: []string{"plan"}})
@@ -238,8 +251,8 @@ func TestViewsAddRefusalsWriteNothing(t *testing.T) {
 	}{
 		{[]string{"add", "  "}, "Name is required"},
 		{[]string{"add", strings.Repeat("x", 65)}, "Name is longer than 64 characters"},
-		{[]string{"add", "today"}, `Name "today" is the built-in Collection Today`},
-		{[]string{"add", "All Open"}, "is the built-in Collection All Open"},
+		{[]string{"add", "today"}, `Name "today" is the fixed Collection Today`},
+		{[]string{"add", "All Open"}, "is the fixed Collection All Open"},
 		{[]string{"add", "taken"}, `a view named "Taken" exists; --replace saves over it`},
 		{[]string{"add", "x", "--base", "nowhere"}, `Base "nowhere" is not a Collection`},
 		{[]string{"add", "x", "--base", "project:ghost"}, `Project "ghost" is not a Project of this daemon; the Projects are demo`},
@@ -298,13 +311,13 @@ func TestViewsAddRefusesAViewsFileChangedMeanwhile(t *testing.T) {
 	}
 }
 
-func TestViewsRemoveRefusesABuiltInAndAnUnknownName(t *testing.T) {
+func TestViewsRemoveRefusesAFixedCollectionAndAnUnknownName(t *testing.T) {
 	f := newSubcommandFixture(t)
 	const kept = "[[view]]\nname = \"Mine\"\nbase = \"today\"\n"
 	writeViews(t, kept)
 	for _, tc := range []struct{ name, want string }{
-		{"today", `"today" is the built-in Collection Today, not a saved view`},
-		{"All Open", "built-in Collection All Open"},
+		{"today", `"today" is the fixed Collection Today, not a saved view`},
+		{"All Open", "fixed Collection All Open"},
 		{"nope", `no saved view named "nope"; the views are`},
 	} {
 		out, err := f.views(t, "rm", tc.name)

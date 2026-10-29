@@ -340,7 +340,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 				if m.Focus != ColumnCollections { // the click enters the Menu as esc does
 					reload = reloadViews()
 				}
-				if entry.Projects || entry.Views || entry.Back {
+				if entry.Kind == EntryProjects || entry.Kind == EntryViews || entry.Kind == EntryBack {
 					m.Focus = ColumnCollections
 				}
 				m, cmds := openEntry(m, entry, false)

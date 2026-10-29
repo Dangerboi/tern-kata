@@ -37,10 +37,10 @@ type ViewsLoaded struct {
 
 func (ViewsLoaded) msg() {}
 
-// SaveView writes View into views.toml: as a new view when Old is empty, else in place of the view called Old (an edit or a
+// SaveView writes View into views.toml: as a new view when Self is empty, else in place of the view called Self (an edit or a
 // rename). Token is the read the write rests on.
 type SaveView struct {
-	Old   string
+	Self  string
 	View  SavedView
 	Token any
 }
@@ -91,7 +91,7 @@ const (
 
 func viewsLoaded(m Model, msg ViewsLoaded) Model {
 	m.Views = ViewsState{List: msg.Views, Token: msg.Token, Err: msg.Err, Problems: msg.Problems, Deleting: m.Views.Deleting}
-	if m.Views.Deleting != "" && !m.hasView(m.Views.Deleting) {
+	if _, ok := m.savedViewNamed(m.Views.Deleting); m.Views.Deleting != "" && !ok {
 		m.Views.Deleting = ""
 	}
 	if msg.Err != nil {
@@ -104,14 +104,10 @@ func viewsLoaded(m Model, msg ViewsLoaded) Model {
 
 // keepActiveView forgets the view this Pane opened once the file no longer has it, so the filter line never names a view that is gone.
 func (m Model) keepActiveView() Model {
-	if m.ActiveView.Name != "" && !m.hasView(m.ActiveView.Name) {
+	if _, ok := m.savedViewNamed(m.ActiveView.Name); m.ActiveView.Name != "" && !ok {
 		m.ActiveView = ActiveView{}
 	}
 	return m
-}
-
-func (m Model) hasView(name string) bool {
-	return slices.ContainsFunc(m.Views.List, func(v SavedView) bool { return strings.EqualFold(v.Name, name) })
 }
 
 // SavedViews are the saved views by name, ignoring case: the order the Menu lists them in.
@@ -124,12 +120,7 @@ func (m Model) SavedViews() []SavedView {
 }
 
 func (m Model) savedViewNamed(name string) (SavedView, bool) {
-	for _, v := range m.Views.List {
-		if strings.EqualFold(v.Name, name) {
-			return v, true
-		}
-	}
-	return SavedView{}, false
+	return SavedViewNamed(m.Views.List, name)
 }
 
 // ViewBaseNote says why the saved view cannot be opened: its base Project is gone from the catalog or archived. "" when the
@@ -150,7 +141,7 @@ func (m Model) ViewBaseNote(v SavedView) string {
 
 // EntryTitle is how a Menu row reads: its title, and for a saved view whose base is missing the reason, in parentheses.
 func (m Model) EntryTitle(e PickerEntry) string {
-	if e.Saved {
+	if e.Kind == EntrySavedView {
 		if v, ok := m.savedViewNamed(e.Title); ok {
 			if note := m.ViewBaseNote(v); note != "" {
 				return e.Title + " (" + note + ")"
@@ -160,16 +151,18 @@ func (m Model) EntryTitle(e PickerEntry) string {
 	return e.Title
 }
 
-// ActiveView is the saved view this Pane opened and the filters it applied (the owner already resolved), so the filter line can
-// say while the filters are still the view's.
+// ActiveView is the saved view this Pane opened, its base and the filters it applied (the owner already resolved), so the filter
+// line can say while the Collection and the filters are still the view's.
 type ActiveView struct {
 	Name    string
+	Base    Collection
 	Filters Filters
 }
 
-// CurrentSavedView is the name of the saved view the Pane opened while the filters still equal it, "" otherwise.
+// CurrentSavedView is the name of the saved view the Pane opened while its base is still the current Collection and the
+// filters still equal it, "" otherwise.
 func (m Model) CurrentSavedView() string {
-	if m.ActiveView.Name != "" && m.Filters == m.ActiveView.Filters {
+	if m.ActiveView.Name != "" && m.Collection == m.ActiveView.Base && m.Filters == m.ActiveView.Filters {
 		return m.ActiveView.Name
 	}
 	return ""
@@ -199,7 +192,7 @@ func openSavedView(m Model, v SavedView) (Model, []Cmd) {
 	m.Picker, m.Focus = PickerState{}, ColumnList
 	m = leaveSidebarLevel(m)
 	m.Filters, m.SelectedUID = filters, ""
-	m.ActiveView = ActiveView{Name: v.Name, Filters: filters}
+	m.ActiveView = ActiveView{Name: v.Name, Base: base, Filters: filters}
 	m, cmds := updateCollection(m, CollectionSelected{Collection: base})
 	return m.cursorOnView(v.Name), cmds
 }
@@ -210,7 +203,7 @@ func (m Model) cursorOnView(name string) Model {
 		return m
 	}
 	for i, e := range m.SidebarEntries() {
-		if e.Saved && strings.EqualFold(e.Title, name) {
+		if e.Kind == EntrySavedView && strings.EqualFold(e.Title, name) {
 			m.CollectionCursor = i
 		}
 	}
@@ -227,7 +220,7 @@ func (m Model) selectedSavedView(popup bool) (SavedView, bool) {
 		return SavedView{}, false
 	}
 	entry := entries[min(cursor, len(entries)-1)]
-	if !entry.Saved {
+	if entry.Kind != EntrySavedView {
 		return SavedView{}, false
 	}
 	return m.savedViewNamed(entry.Title)
@@ -252,7 +245,7 @@ func askDeleteView(m Model, popup bool) Model {
 // DeleteViewQuestion is the question asked before a saved view is deleted.
 func DeleteViewQuestion(name string) string { return "Delete view " + name + "? y/n" }
 
-// confirmDeleteView is y: it sends the delete and keeps the question until the file answers.
+// confirmDeleteView is y: it dismisses the question at once and sends the delete; the file's answer follows as ViewDeleted.
 func confirmDeleteView(m Model) (Model, []Cmd) {
 	name := m.Views.Deleting
 	if name == "" {
@@ -273,7 +266,8 @@ func errText(err error) string {
 	return err.Error()
 }
 
-func keepView(m Model) Model {
+// dismissDeleteQuestion is n or esc: the view stays and the question goes.
+func dismissDeleteQuestion(m Model) Model {
 	m.Views.Deleting = ""
 	return m
 }
@@ -305,7 +299,7 @@ func (m *Model) clampMenuCursors() {
 func viewSaved(m Model, msg ViewSaved) (Model, []Cmd) {
 	m = viewsLoaded(m, msg.Loaded)
 	form := m.ViewForm
-	ours := form.Open && form.Saving && form.Sent.Old == msg.Sent.Old && form.Sent.View == msg.Sent.View
+	ours := form.Open && form.Saving && form.Sent.Self == msg.Sent.Self && form.Sent.View == msg.Sent.View
 	if msg.Err != nil || msg.Changed {
 		if ours {
 			m.ViewForm.Saving = false
@@ -324,7 +318,7 @@ func viewSaved(m Model, msg ViewSaved) (Model, []Cmd) {
 	if !ok {
 		return m, nil
 	}
-	if msg.Sent.Old != "" && m.ActiveView.Name != "" && strings.EqualFold(m.ActiveView.Name, msg.Sent.Old) {
+	if msg.Sent.Self != "" && m.ActiveView.Name != "" && strings.EqualFold(m.ActiveView.Name, msg.Sent.Self) {
 		m.ActiveView = ActiveView{} // an edited view is opened again below, so the line names the new one
 	}
 	return openSavedView(m, saved)

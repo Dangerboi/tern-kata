@@ -188,7 +188,7 @@ func TestViewsWriteChecks(t *testing.T) {
 		t.Errorf("duplicate add: %v", err)
 	}
 	if err := s.Add(r.Token, model.SavedView{Name: "Today", Base: today}); err == nil || !strings.HasPrefix(err.Error(), "Name") {
-		t.Errorf("built-in add: %v", err)
+		t.Errorf("fixed Collection add: %v", err)
 	}
 	if err := s.Replace(r.Token, "Mine", model.SavedView{Name: "work BUGS", Base: today}); err == nil || !strings.HasPrefix(err.Error(), "Name") {
 		t.Errorf("rename onto another: %v", err)
@@ -214,5 +214,38 @@ func TestViewsInvalidEntryIsReportedAndKept(t *testing.T) {
 	}
 	if got := disk(t, s); got != "[[view]]\nname = \"Bad\"\nbase = \"nowhere\"\n" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestViewsNamesAreComparedTrimmedLikeRead(t *testing.T) {
+	s := viewsStore(t, "[[view]]\nname = \" Work \"\nbase = \"today\"\n")
+	r := mustRead(t, s)
+	if len(r.Views) != 1 || r.Views[0].Name != "Work" {
+		t.Fatalf("read %+v", r)
+	}
+	if err := s.Add(r.Token, model.SavedView{Name: "work", Base: model.Collection{View: "today"}}); err == nil || !strings.HasPrefix(err.Error(), "Name") {
+		t.Errorf("add of a name the file already has trimmed: %v", err)
+	}
+	if err := s.Delete(r.Token, "Work"); err != nil {
+		t.Errorf("delete by trimmed name: %v", err)
+	}
+}
+
+func TestViewsWritesKeepCRLFLineEndings(t *testing.T) {
+	s := viewsStore(t, "# mine\r\n[[view]]\r\nname = \"A\"\r\nbase = \"today\"\r\n")
+	r := mustRead(t, s)
+	if err := s.Add(r.Token, model.SavedView{Name: "B", Base: model.Collection{View: "upcoming"}, Filters: model.Filters{Owner: "@me"}}); err != nil {
+		t.Fatal(err)
+	}
+	r = mustRead(t, s)
+	if err := s.Replace(r.Token, "A", model.SavedView{Name: "A2", Base: model.Collection{View: "today"}, Filters: model.Filters{Status: "open"}}); err != nil {
+		t.Fatal(err)
+	}
+	text := disk(t, s)
+	if strings.Contains(strings.ReplaceAll(text, "\r\n", ""), "\n") {
+		t.Errorf("bare LF in a CRLF file: %q", text)
+	}
+	if got := mustRead(t, s).Views; len(got) != 2 || got[0].Name != "A2" || got[1].Name != "B" {
+		t.Errorf("views %+v", got)
 	}
 }

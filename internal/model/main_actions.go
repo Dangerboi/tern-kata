@@ -316,8 +316,8 @@ var mainRows = []actionEntry{
 	{action: QuitAction, keys: keys("q", "q"), help: "quit", footer: global, sheet: []sheetLine{{sheetGlobal, 2, "quit (q asks y/n first, ctrl+c quits at once)"}}, handle: pure(askQuit)},
 	{action: QuitNowAction, keys: keys("ctrl+c", "ctrl+c", "meta+c", ""), help: "quit at once", sheet: []sheetLine{{sheetGlobal, 2, "quit (q asks y/n first, ctrl+c quits at once)"}}, handle: pure(quitNow)},
 	// The question "Delete view <name>? y/n".
-	{action: ConfirmDelView, modes: []Mode{ModeDeleteView}, keys: keys("y", "y"), help: "delete view", footer: []Mode{ModeDeleteView}, handle: confirmDeleteView},
-	{action: KeepViewAction, modes: []Mode{ModeDeleteView}, keys: keys("n", "n", "escape", "esc"), help: "keep view", footer: []Mode{ModeDeleteView}, handle: pure(keepView)},
+	{action: ConfirmDeleteViewAction, modes: []Mode{ModeDeleteView}, keys: keys("y", "y"), help: "delete view", footer: []Mode{ModeDeleteView}, handle: confirmDeleteView},
+	{action: KeepViewAction, modes: []Mode{ModeDeleteView}, keys: keys("n", "n", "escape", "esc"), help: "keep view", footer: []Mode{ModeDeleteView}, handle: pure(dismissDeleteQuestion)},
 	{action: QuitNowAction, modes: []Mode{ModeDeleteView}, keys: keys("ctrl+c", "ctrl+c", "meta+c", ""), help: "quit at once", handle: pure(quitNow)},
 	// The question "Quit tern-kata? y/n".
 	{action: ConfirmQuitAction, modes: []Mode{ModeQuit}, keys: keys("y", "y"), help: "quit", footer: []Mode{ModeQuit}, handle: pure(quitNow)},

@@ -33,10 +33,10 @@ func (g *Gateway) writeView(cmd model.SaveView) model.ViewSaved {
 	if !ok {
 		return model.ViewSaved{Sent: cmd, Err: errors.New("views.toml was not read")}
 	}
-	if cmd.Old == "" {
+	if cmd.Self == "" {
 		err = store.Add(token, cmd.View)
 	} else {
-		err = store.Replace(token, cmd.Old, cmd.View)
+		err = store.Replace(token, cmd.Self, cmd.View)
 	}
 	return model.ViewSaved{Sent: cmd, Changed: errors.Is(err, ErrViewsChanged), Err: err, Loaded: readViewsOf(store)}
 }

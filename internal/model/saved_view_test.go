@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -18,10 +19,10 @@ func TestCheckViewName(t *testing.T) {
 		{"duplicate ignoring case", "mINE", "", "", "already used by another view"},
 		{"own name on edit", "MINE", "mine", "MINE", ""},
 		{"another's name on edit", "bugs", "mine", "", "already used by another view"},
-		{"title", "today", "", "", "built-in Collection Today"},
-		{"title with space", "ALL open", "", "", "built-in Collection All Open"},
-		{"key", "all-open", "", "", "built-in Collection All Open"},
-		{"key upper", "Deadlines", "", "", "built-in Collection Deadlines"},
+		{"title", "today", "", "", "fixed Collection Today"},
+		{"title with space", "ALL open", "", "", "fixed Collection All Open"},
+		{"key", "all-open", "", "", "fixed Collection All Open"},
+		{"key upper", "Deadlines", "", "", "fixed Collection Deadlines"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -101,5 +102,25 @@ func TestFiltersForResolvesMe(t *testing.T) {
 	}
 	if got := (SavedView{Filters: Filters{Owner: "me"}}).FiltersFor("ann"); got.Owner != "me" {
 		t.Fatalf("plain me is not a macro: %+v", got)
+	}
+}
+
+func TestSavedViewRefusalsCarryTheirField(t *testing.T) {
+	good := SavedView{Name: "A", Base: Collection{View: "today"}}
+	for name, tt := range map[string]struct {
+		view SavedView
+		want Field
+	}{
+		"name":         {SavedView{Name: "", Base: good.Base}, ViewName},
+		"base":         {SavedView{Name: "A", Base: Collection{View: "nowhere"}}, ViewBase},
+		"project base": {SavedView{Name: "A", Base: ProjectCollection("", "x")}, ViewBase},
+		"status":       {SavedView{Name: "A", Base: good.Base, Filters: Filters{Status: "done"}}, FilterStatus},
+		"relationship": {SavedView{Name: "A", Base: good.Base, Filters: Filters{Relationship: "friend"}}, FilterRelationship},
+	} {
+		_, err := CheckSavedView(tt.view, nil, "")
+		var refusal ViewFieldError
+		if !errors.As(err, &refusal) || refusal.Field != tt.want {
+			t.Errorf("%s: %v carries field %q, want %q", name, err, refusal.Field, tt.want)
+		}
 	}
 }

@@ -51,7 +51,7 @@ tern-kata recur <ref> --stop                            # stops the Recurrence; 
 `tern-kata views` lists and shows the Collections and saved views of the Pane's Menu, and saves or removes saved views, without Tern. It needs the `tern-kata` binary on `PATH` (check with `command -v tern-kata`; PowerShell: `Get-Command tern-kata`); when it is missing, tell the user and point them to https://github.com/Dangerboi/tern-kata#install.
 
 ```bash
-tern-kata views                                   # built-in Collections by key, then saved views with their base and filters
+tern-kata views                                   # fixed Collections by key, then saved views with their base and filters
 tern-kata views show today                        # the Issues of a Collection (key or title) or a saved view, grouped as the Pane groups them
 tern-kata views show "Work bugs" --json           # one object per group: {id, title, issues: [...]}
 tern-kata views add "Work bugs" --base project:Work --status open --label bug   # saves a view; --replace saves over a name

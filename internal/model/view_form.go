@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"errors"
 	"slices"
-	"strings"
 )
 
 // The View card's fields beyond the Filter card's own.
@@ -22,17 +21,17 @@ var ViewFields = []FieldSpec{
 }
 
 const (
-	ModeViewForm   Mode   = "view-form"
-	ModeDeleteView Mode   = "delete-view"
-	SaveViewForm   Action = "save-view-form"
-	CancelViewForm Action = "cancel-view-form"
-	EditViewAction Action = "edit-view"
-	AskDeleteView  Action = "ask-delete-view"
-	ConfirmDelView Action = "confirm-delete-view"
-	KeepViewAction Action = "keep-view"
+	ModeViewForm            Mode   = "view-form"
+	ModeDeleteView          Mode   = "delete-view"
+	SaveViewForm            Action = "save-view-form"
+	CancelViewForm          Action = "cancel-view-form"
+	EditViewAction          Action = "edit-view"
+	AskDeleteView           Action = "ask-delete-view"
+	ConfirmDeleteViewAction Action = "confirm-delete-view"
+	KeepViewAction          Action = "keep-view"
 )
 
-// ViewFormState is the View card: a saved view being made (Self is "") or edited (Self is its name). Its Filter fields are the
+// ViewFormState is the View card: a saved view being made (Self is "") or edited (Self is the name it had when the card opened). Its Filter fields are the
 // Filter card's, held in Values with the search text.
 type ViewFormState struct {
 	Open, Saving bool
@@ -89,10 +88,7 @@ func (m Model) ViewChoices(name Field) []string {
 		}
 		return keys
 	case FilterProject:
-		values := []string{""}
-		for _, entry := range m.Snapshot.Catalog {
-			values = append(values, entry.Project.UID)
-		}
+		values := m.projectChoices("")
 		if uid := m.ViewForm.Values.ProjectUID; uid != "" && !slices.Contains(values, uid) {
 			values = append(values, uid)
 		}
@@ -188,30 +184,16 @@ func saveViewForm(m Model) (Model, []Cmd) {
 	checked, err := CheckSavedView(SavedView{Name: f.Name, Base: f.Base, Filters: f.Values}, m.Views.List, f.Self)
 	if err != nil {
 		m.ViewForm.Err = err
-		m.ViewForm.Field = cmp.Or(fieldOfRefusal(err), m.ViewForm.Field)
+		if refusal, ok := errors.AsType[ViewFieldError](err); ok {
+			m.ViewForm.Field = refusal.Field
+		}
 		return m, nil
 	}
 	if m.Views.Token == nil {
 		m.ViewForm.Err = errors.New("Saved views cannot be written: " + cmp.Or(errText(m.Views.Err), "views.toml has not been read"))
 		return m, nil
 	}
-	send := SaveView{Old: f.Self, View: checked, Token: m.Views.Token}
+	send := SaveView{Self: f.Self, View: checked, Token: m.Views.Token}
 	m.ViewForm.Saving, m.ViewForm.Err, m.ViewForm.Sent = true, nil, send
 	return m, []Cmd{send}
-}
-
-// fieldOfRefusal is the field a check's message starts with, "" when it names none.
-func fieldOfRefusal(err error) Field {
-	word, _, _ := strings.Cut(err.Error(), " ")
-	switch strings.ToLower(word) {
-	case "name":
-		return ViewName
-	case "base":
-		return ViewBase
-	case "status":
-		return FilterStatus
-	case "relationship":
-		return FilterRelationship
-	}
-	return ""
 }

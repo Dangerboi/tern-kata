@@ -2,6 +2,7 @@ package driver_test
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/driver"
@@ -192,5 +193,142 @@ func TestUnboundSidebarShowsTheViewsLevel(t *testing.T) {
 	}
 	if back := pressed(projects, "home", "enter"); back.Model.SidebarLevel != model.MenuTop {
 		t.Fatalf("Back on the Projects level: %v", back.Model.SidebarLevel)
+	}
+}
+
+var mineView = model.SavedView{Name: "Mine", Base: model.Collection{View: "today", Title: "Today"}, Filters: model.Filters{Status: "open"}}
+
+// withSavedViews is s after the Pane read views.toml holding views.
+func withSavedViews(t *testing.T, s driver.State, views ...model.SavedView) driver.State {
+	t.Helper()
+	return step(t, s, model.ViewsLoaded{Views: views, Token: "read-1"}).State
+}
+
+// savedViewsMenu is boundMenu with three saved views, on its Views level.
+func savedViewsMenu(t *testing.T) driver.State {
+	t.Helper()
+	views := []model.SavedView{
+		{Name: "work bugs", Base: model.ProjectCollection("p", "work"), Filters: model.Filters{Label: "bug"}},
+		mineView,
+		{Name: "Lost", Base: model.ProjectCollection("gone-uid", "gone")},
+	}
+	return pressed(withSavedViews(t, boundMenu(t), views...), "down", "enter")
+}
+
+// menuCursorOn moves the Menu cursor down to the row titled title.
+func menuCursorOn(t *testing.T, s driver.State, title string) driver.State {
+	t.Helper()
+	for range 40 {
+		if cursorTitle(s) == title {
+			return s
+		}
+		s = pressed(s, "down")
+	}
+	t.Fatalf("no Menu row %q in %q", title, menuTitles(s))
+	return s
+}
+
+func savedRowID(t *testing.T, m model.Model, name string) string {
+	t.Helper()
+	for _, e := range m.PickerEntries() {
+		if e.Kind == model.EntrySavedView && e.Title == name {
+			return view.PickerItemID(e.Key())
+		}
+	}
+	t.Fatalf("no saved view row %q", name)
+	return ""
+}
+
+func TestMenuViewsLevelListsSavedViewsByNameAfterTheFixedCollectionsAndNamesAGoneProject(t *testing.T) {
+	s := savedViewsMenu(t)
+	want := append(append([]string{"Back"}, fixedCollections...), "Lost", "Mine", "work bugs", model.NewViewTitle)
+	if got := menuTitles(s); !slices.Equal(got, want) {
+		t.Fatalf("Views level = %q, want %q", got, want)
+	}
+	rowShowing(t, s.Model, view.PickerListID, "Lost (Project gone)")
+	rowShowing(t, s.Model, view.PickerListID, "Mine")
+	if got := rowsShowing(t, s.Model, view.PickerListID, "work bugs (Project gone)"); len(got) != 0 {
+		t.Errorf("a live Project's view says it is gone: %v", got)
+	}
+}
+
+func TestMenuF2EditsTheSavedViewUnderTheCursor(t *testing.T) {
+	s := menuCursorOn(t, savedViewsMenu(t), "Mine")
+	edit := step(t, s, key("f2")).State
+	form := edit.Model.ViewForm
+	if !form.Open || form.Self != "Mine" || form.Name != "Mine" || form.Base.View != "today" || form.Values.Status != "open" {
+		t.Fatalf("f2 opened %+v", form)
+	}
+	if !drawnIDs(t, view.Render(edit.Model, now))[view.LayerID(model.CardView)] {
+		t.Error("the View card is not drawn")
+	}
+	onFixed := step(t, menuCursorOn(t, savedViewsMenu(t), "Today"), key("f2")).State
+	if onFixed.Model.ViewForm.Open {
+		t.Error("f2 on a fixed Collection opened the View card")
+	}
+}
+
+func TestMenuCtrlDAsksBeforeDeletingAndOnlyYSendsTheDelete(t *testing.T) {
+	asked := step(t, menuCursorOn(t, savedViewsMenu(t), "Mine"), key("ctrl+d")).State
+	if asked.Model.Views.Deleting != "Mine" {
+		t.Fatalf("ctrl+d asked about %q", asked.Model.Views.Deleting)
+	}
+	question := ""
+	for id := range drawnIDs(t, view.Render(asked.Model, now)) {
+		if strings.HasSuffix(id, "delete-view") {
+			question = id
+		}
+	}
+	if question == "" {
+		t.Error("the delete question is not drawn")
+	}
+	for _, chord := range []string{"n", "escape"} {
+		out := step(t, asked, key(chord))
+		if out.State.Model.Views.Deleting != "" || len(out.Cmds) != 0 || !out.State.Model.Picker.Open {
+			t.Errorf("%s: asked %q, cmds %v, menu open %v", chord, out.State.Model.Views.Deleting, out.Cmds, out.State.Model.Picker.Open)
+		}
+	}
+	if other := step(t, asked, key("x")); other.State.Model.Views.Deleting != "Mine" || len(other.Cmds) != 0 {
+		t.Errorf("another key answered the question: %q, %v", other.State.Model.Views.Deleting, other.Cmds)
+	}
+	yes := step(t, asked, key("y"))
+	if len(yes.Cmds) != 1 || yes.Cmds[0] != (model.DeleteView{Name: "Mine", Token: "read-1"}) {
+		t.Fatalf("y sent %#v", yes.Cmds)
+	}
+	fixed := step(t, menuCursorOn(t, savedViewsMenu(t), "Today"), key("ctrl+d")).State
+	if fixed.Model.Views.Deleting != "" {
+		t.Error("ctrl+d on a fixed Collection asked to delete")
+	}
+}
+
+func TestMenuViewsRowNamesTheOpenedSavedViewUntilAnotherCollectionIsChosen(t *testing.T) {
+	opened := pressed(menuCursorOn(t, savedViewsMenu(t), "Mine"), "enter")
+	if opened.Model.Picker.Open || opened.Model.Collection.View != "today" || opened.Model.Filters.Status != "open" {
+		t.Fatalf("opening Mine: menu open %v, Collection %+v, filters %+v", opened.Model.Picker.Open, opened.Model.Collection, opened.Model.Filters)
+	}
+	reopened := step(t, opened, openMenu).State
+	if got := rowValue(t, reopened.Model, view.PickerListID+".views"); got != "Mine" {
+		t.Errorf("Views row = %q, want the saved view Mine", got)
+	}
+	inViews := pressed(reopened, "enter")
+	if got := rowValue(t, inViews.Model, savedRowID(t, inViews.Model, "Mine")); got != "current" {
+		t.Errorf("Mine row value = %q, want current", got)
+	}
+
+	// Inbox is one row above Today, the Collection the view opened, and the filters stay.
+	inbox := pressed(inViews, "up", "enter")
+	if inbox.Model.Collection != model.InboxCollection() || inbox.Model.Filters.Status != "open" {
+		t.Fatalf("fixture: Collection %+v, filters %+v", inbox.Model.Collection, inbox.Model.Filters)
+	}
+	if strings.Contains(inbox.Model.FilterSummary(), "Mine") {
+		t.Errorf("filter line %q still names the view", inbox.Model.FilterSummary())
+	}
+	again := step(t, inbox, openMenu).State
+	if got := rowValue(t, again.Model, view.PickerListID+".views"); got != "Inbox" {
+		t.Errorf("Views row = %q after choosing Inbox, want the fixed Collection Inbox", got)
+	}
+	back := pressed(again, "enter")
+	if got := rowValue(t, back.Model, savedRowID(t, back.Model, "Mine")); got != "" {
+		t.Errorf("Mine row value = %q after choosing Inbox, want none", got)
 	}
 }

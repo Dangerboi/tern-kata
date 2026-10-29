@@ -3,9 +3,20 @@ package model
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
+
+// ViewFieldError is a refusal of one field of a saved view, so a caller finds the input at fault without reading the message.
+// The message starts with the field's label, as the View card and the CLI show it.
+type ViewFieldError struct {
+	Field Field
+	Err   error
+}
+
+func (e ViewFieldError) Error() string { return e.Err.Error() }
+func (e ViewFieldError) Unwrap() error { return e.Err }
 
 // MaxViewNameLen is the longest a saved view's name may be, in characters.
 const MaxViewNameLen = 64
@@ -47,13 +58,23 @@ func ResolveViewName(name string, views []SavedView) (ViewRef, bool) {
 	if c, ok := FixedCollectionNamed(name); ok {
 		return ViewRef{Collection: &c}, true
 	}
-	name = strings.TrimSpace(name)
-	for i := range views {
-		if strings.EqualFold(views[i].Name, name) {
-			return ViewRef{View: &views[i]}, true
-		}
+	if i := viewIndex(views, name); i >= 0 {
+		return ViewRef{View: &views[i]}, true
 	}
 	return ViewRef{}, false
+}
+
+// SavedViewNamed is the saved view called name, ignoring case and surrounding space.
+func SavedViewNamed(views []SavedView, name string) (SavedView, bool) {
+	if i := viewIndex(views, name); i >= 0 {
+		return views[i], true
+	}
+	return SavedView{}, false
+}
+
+func viewIndex(views []SavedView, name string) int {
+	name = strings.TrimSpace(name)
+	return slices.IndexFunc(views, func(v SavedView) bool { return strings.EqualFold(v.Name, name) })
 }
 
 // CheckViewName trims name and says why it cannot name a saved view. others are the saved views already kept; self is the name
@@ -62,19 +83,19 @@ func CheckViewName(name string, others []SavedView, self string) (string, error)
 	name = strings.TrimSpace(name)
 	switch {
 	case name == "":
-		return "", errors.New("Name is required")
+		return "", ViewFieldError{ViewName, errors.New("Name is required")}
 	case utf8.RuneCountInString(name) > MaxViewNameLen:
-		return "", fmt.Errorf("Name is longer than %d characters", MaxViewNameLen)
+		return "", ViewFieldError{ViewName, fmt.Errorf("Name is longer than %d characters", MaxViewNameLen)}
 	}
 	if c, ok := FixedCollectionNamed(name); ok {
-		return "", fmt.Errorf("Name %q is the built-in Collection %s", name, c.Title)
+		return "", ViewFieldError{ViewName, fmt.Errorf("Name %q is the fixed Collection %s", name, c.Title)}
 	}
 	for _, other := range others {
 		if self != "" && strings.EqualFold(other.Name, self) {
 			continue
 		}
 		if strings.EqualFold(other.Name, name) {
-			return "", fmt.Errorf("Name %q is already used by another view", name)
+			return "", ViewFieldError{ViewName, fmt.Errorf("Name %q is already used by another view", name)}
 		}
 	}
 	return name, nil
@@ -87,10 +108,10 @@ func CheckViewFilters(f Filters) (Filters, error) {
 	f.Label = strings.TrimSpace(f.Label)
 	f.Search = strings.TrimSpace(f.Search)
 	if !hasChoice(FilterStatuses, f.Status) {
-		return f, fmt.Errorf("Status %q must be open or closed, or empty for all", f.Status)
+		return f, ViewFieldError{FilterStatus, fmt.Errorf("Status %q must be open or closed, or empty for all", f.Status)}
 	}
 	if !hasChoice(FilterRelationships, f.Relationship) {
-		return f, fmt.Errorf("Relationship %q must be one of parent, child, blocks, blocked_by or related", f.Relationship)
+		return f, ViewFieldError{FilterRelationship, fmt.Errorf("Relationship %q must be one of parent, child, blocks, blocked_by or related", f.Relationship)}
 	}
 	return f, nil
 }
@@ -109,13 +130,13 @@ func CheckViewBase(c Collection) (Collection, error) {
 	if c.IsProject() {
 		c.ProjectUID = strings.TrimSpace(c.ProjectUID)
 		if c.ProjectUID == "" {
-			return c, errors.New("Base needs a Project")
+			return c, ViewFieldError{ViewBase, errors.New("Base needs a Project")}
 		}
 		return c, nil
 	}
 	fixed, ok := FixedCollectionNamed(c.View)
 	if !ok || !strings.EqualFold(fixed.View, c.View) {
-		return c, fmt.Errorf("Base %q is not a Collection or a Project", c.View)
+		return c, ViewFieldError{ViewBase, fmt.Errorf("Base %q is not a Collection or a Project", c.View)}
 	}
 	return fixed, nil
 }

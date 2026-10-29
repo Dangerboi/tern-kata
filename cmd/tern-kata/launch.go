@@ -376,7 +376,7 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 
 // validViewsForm reports whether operands are one of the forms of `tern-kata views`: none, or show, add or rm with one name.
 func validViewsForm(operands []string) bool {
-	return len(operands) == 0 || len(operands) == 2 && slices.Contains([]string{"show", "add", "rm"}, operands[0])
+	return len(operands) == 0 || len(operands) == 2 && slices.Contains(viewsForms, operands[0])
 }
 
 // viewFlagNames are the flags of `views add` that set a field of the saved view.
@@ -385,8 +385,14 @@ var viewFlagNames = []string{"base", "project", "status", "owner", "label", "rel
 // parseViewFlag reads one of viewFlagNames as --name value or --name=value at args[*i], moving *i past a separate value;
 // matched is false for any other argument. A value may be empty and is then judged by the view's checks.
 func parseViewFlag(args []string, i *int, plan *LaunchPlan) (matched bool, err error) {
+	return parseValueFlag(args, i, viewFlagNames, &plan.ViewFlags, false)
+}
+
+// parseValueFlag reads one of names as --name value or --name=value at args[*i], moving *i past a separate value, and records
+// it in *given; matched is false for any other argument. A flag may be given once. An empty value is refused when nonEmpty.
+func parseValueFlag(args []string, i *int, names []string, given *map[string]string, nonEmpty bool) (matched bool, err error) {
 	name, value, hasValue := strings.Cut(strings.TrimPrefix(args[*i], "--"), "=")
-	if !slices.Contains(viewFlagNames, name) {
+	if !slices.Contains(names, name) {
 		return false, nil
 	}
 	if !hasValue {
@@ -396,13 +402,16 @@ func parseViewFlag(args []string, i *int, plan *LaunchPlan) (matched bool, err e
 		*i++
 		value = args[*i]
 	}
-	if _, given := plan.ViewFlags[name]; given {
+	if nonEmpty && value == "" {
+		return true, fmt.Errorf("--%s requires a value", name)
+	}
+	if _, twice := (*given)[name]; twice {
 		return true, fmt.Errorf("--%s given twice", name)
 	}
-	if plan.ViewFlags == nil {
-		plan.ViewFlags = map[string]string{}
+	if *given == nil {
+		*given = map[string]string{}
 	}
-	plan.ViewFlags[name] = value
+	(*given)[name] = value
 	return true, nil
 }
 
@@ -417,56 +426,17 @@ var initFlagNames = []string{"executor", "actor", "command", "model", "thinking"
 // parseInitFlag reads one of initFlagNames as --name value or --name=value at args[*i], moving *i past a separate value;
 // matched is false for any other argument. The value must not be empty.
 func parseInitFlag(args []string, i *int, plan *LaunchPlan) (matched bool, err error) {
-	name, value, hasValue := strings.Cut(strings.TrimPrefix(args[*i], "--"), "=")
-	if !slices.Contains(initFlagNames, name) {
-		return false, nil
-	}
-	if !hasValue {
-		if *i+1 == len(args) {
-			return true, fmt.Errorf("--%s requires a value", name)
-		}
-		*i++
-		value = args[*i]
-	}
-	if value == "" {
-		return true, fmt.Errorf("--%s requires a value", name)
-	}
-	if _, given := plan.InitFlags[name]; given {
-		return true, fmt.Errorf("--%s given twice", name)
-	}
-	if plan.InitFlags == nil {
-		plan.InitFlags = map[string]string{}
-	}
-	plan.InitFlags[name] = value
-	return true, nil
+	return parseValueFlag(args, i, initFlagNames, &plan.InitFlags, true)
 }
 
 // parseRecurFlag reads --stop, or one of recur's schedule flags as --name value or --name=value, at args[*i], moving *i past a
 // separate value; matched is false for any other argument. A value may be empty (--on "") and is then refused by the schedule model.
 func parseRecurFlag(args []string, i *int, plan *LaunchPlan) (matched bool, err error) {
-	name, value, hasValue := strings.Cut(strings.TrimPrefix(args[*i], "--"), "=")
-	if name == "stop" && !hasValue {
+	if args[*i] == "--stop" {
 		plan.Stop = true
 		return true, nil
 	}
-	if !slices.Contains(model.RecurFlagNames, name) {
-		return false, nil
-	}
-	if !hasValue {
-		if *i+1 == len(args) {
-			return true, fmt.Errorf("--%s requires a value", name)
-		}
-		*i++
-		value = args[*i]
-	}
-	if _, given := plan.RecurFlags[name]; given {
-		return true, fmt.Errorf("--%s given twice", name)
-	}
-	if plan.RecurFlags == nil {
-		plan.RecurFlags = map[string]string{}
-	}
-	plan.RecurFlags[name] = value
-	return true, nil
+	return parseValueFlag(args, i, model.RecurFlagNames, &plan.RecurFlags, false)
 }
 
 // usage is the --help text.
@@ -525,11 +495,11 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
   recur <ref> --stop            stop the Recurrence; existing Occurrences stay
   run <job-uid>                 ask this machine's worker to run an adapter prompt job now,
                                 prints the new run's uid once the worker has saved it
-  views                         list the built-in Collections (inbox, today, upcoming, deadlines,
+  views                         list the fixed Collections (inbox, today, upcoming, deadlines,
                                 all-open, logbook), then the saved views with their base and the
                                 filters they set; a view whose base Project is gone or archived says
-                                so, and an unreadable views.toml is reported after the built-ins
-  views show <name>             print the Issues of a built-in Collection (by key or title) or a saved
+                                so, and an unreadable views.toml is reported after the fixed Collections
+  views show <name>             print the Issues of a fixed Collection (by key or title) or a saved
                                 view, ignoring case, as the Pane groups them: "Overdue", "Today", one
                                 heading per Project, and so on. One line per Issue: <project>#<id>,
                                 status, priority, the dates of a dated Collection, title. @me in a
@@ -548,7 +518,7 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 --search are the Filter card's fields. A Project is looked up by name
                                 in the daemon and saved by its uid. Refuses a name that is taken,
                                 unless --replace saves over it, and a views.toml changed meanwhile
-  views rm <name>               delete a saved view without asking; a built-in Collection or an
+  views rm <name>               delete a saved view without asking; a fixed Collection or an
                                 unknown name is refused
   worker                        run the worker in the foreground: it runs the adapter jobs of the
                                 Projects listed in worker.toml (tern-kata's config folder) through

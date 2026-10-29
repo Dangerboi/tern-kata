@@ -84,15 +84,21 @@ func filterTextField(form *FilterFormState) *string {
 // field.
 func (m Model) FilterChoices(name Field) []string {
 	if name == FilterProject {
-		values := []string{""}
-		for _, project := range m.Snapshot.Catalog {
-			if m.Collection.ProjectUID == "" || m.Collection.ProjectUID == project.Project.UID {
-				values = append(values, project.Project.UID)
-			}
-		}
-		return values
+		return m.projectChoices(m.Collection.ProjectUID)
 	}
 	return fixedFilterChoices(name)
+}
+
+// projectChoices is the Project field's values: empty for no Project, then the UID of every Project in the catalog, or only
+// only's when it is not empty.
+func (m Model) projectChoices(only string) []string {
+	values := []string{""}
+	for _, project := range m.Snapshot.Catalog {
+		if only == "" || only == project.Project.UID {
+			values = append(values, project.Project.UID)
+		}
+	}
+	return values
 }
 
 // fixedFilterChoices is the values of the choice fields whose list is fixed (Status and Relationship); nil for any other field.

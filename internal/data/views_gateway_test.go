@@ -31,7 +31,7 @@ func TestGatewayViewCommandsRoundTripThroughViewsToml(t *testing.T) {
 	}
 	renamed := view
 	renamed.Name = "Mine!"
-	edit := as[model.ViewSaved](t, run(t, f.gateway, model.SaveView{Old: "Mine", View: renamed, Token: again.Token}))
+	edit := as[model.ViewSaved](t, run(t, f.gateway, model.SaveView{Self: "Mine", View: renamed, Token: again.Token}))
 	if edit.Err != nil || edit.Loaded.Views[0].Name != "Mine!" {
 		t.Fatalf("edit = %+v", edit)
 	}

@@ -67,7 +67,7 @@ func TestSavedViewRowSaysWhenItsProjectIsGoneOrArchived(t *testing.T) {
 
 func findView(m model.Model, name string) (model.PickerEntry, bool) {
 	for _, e := range m.SidebarEntries() {
-		if e.Saved && e.Title == name {
+		if e.Kind == model.EntrySavedView && e.Title == name {
 			return e, true
 		}
 	}
@@ -248,7 +248,7 @@ func TestEditOpensThePrefilledCardAndARenameNamesTheOldView(t *testing.T) {
 	m = typeText(m, "!")
 	_, cmds := model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
 	got := cmds[0].(model.SaveView)
-	if got.Old != "work bugs" || got.View.Name != "work bugs!" {
+	if got.Self != "work bugs" || got.View.Name != "work bugs!" {
 		t.Fatalf("save = %+v", got)
 	}
 	// keeping its own name ignoring case is not a clash
@@ -347,7 +347,7 @@ func containsCmd(cmds []model.Cmd, want model.Cmd) bool {
 	return false
 }
 
-func TestAnUnreadableFileIsReportedAndTheBuiltInsStillOpen(t *testing.T) {
+func TestAnUnreadableFileIsReportedAndTheFixedCollectionsStillOpen(t *testing.T) {
 	m := pickerStart(120, true)
 	m, _ = model.Update(m, model.ViewsLoaded{Err: errors.New("/x/views.toml: expected a table")})
 	if !strings.Contains(m.Notice, "views.toml") || m.Views.Err == nil {
@@ -379,5 +379,25 @@ func TestEditAndDeleteKeysAreOnTheHelpSheetAndInBothFooters(t *testing.T) {
 		if !slices.Contains(actions, model.EditViewAction) || !slices.Contains(actions, model.AskDeleteView) {
 			t.Errorf("footer of %s lacks the view keys: %v", mode, actions)
 		}
+	}
+}
+
+func TestSwitchingCollectionAfterOpeningASavedViewStopsNamingIt(t *testing.T) {
+	m := viewsPane()
+	e, _ := findView(m, "Mine")
+	opened, _ := openRow(m, e)
+	other, _ := model.Update(opened, model.CollectionSelected{Collection: model.InboxCollection()})
+	if other.Filters != opened.Filters {
+		t.Fatalf("fixture: filters %+v changed with the Collection", other.Filters)
+	}
+	if got := other.CurrentSavedView(); got != "" {
+		t.Errorf("CurrentSavedView = %q after moving to Inbox", got)
+	}
+	if got := other.FilterSummary(); strings.Contains(got, "Mine") {
+		t.Errorf("filter line = %q still names the view", got)
+	}
+	back, _ := model.Update(other, model.CollectionSelected{Collection: opened.Collection})
+	if got := back.CurrentSavedView(); got != "Mine" {
+		t.Errorf("back on the view's base the view is %q, want Mine", got)
 	}
 }

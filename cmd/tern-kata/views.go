@@ -6,6 +6,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -21,7 +22,7 @@ type viewsEnv struct {
 }
 
 // runViews is `tern-kata views`: list the views, show one, add one or remove one. It needs no Binding, since views span Projects.
-// A name that is no view is a usageError (exit 2); every other refusal is a subcommandError (exit 1).
+// A name that is no view is a usageError (exit 2) for `show`; every other refusal is a subcommandError (exit 1).
 func runViews(plan LaunchPlan, workspace string, store func() (data.ViewsStore, error), send func(model.Cmd) model.Msg, out io.Writer) error {
 	e := viewsEnv{plan: plan, workspace: workspace, store: store, send: send, out: out}
 	if len(plan.Operands) == 0 {
@@ -73,7 +74,7 @@ func (e viewsEnv) snapshot(c model.Collection, f model.Filters) (model.SnapshotL
 	}
 }
 
-// names lists the built-in keys and the saved views' names, for the message of an unknown name.
+// names lists the fixed Collections' keys and the saved views' names, for the message of an unknown name.
 func names(views []model.SavedView) string {
 	var all []string
 	for _, c := range model.FixedCollections() {
@@ -128,7 +129,7 @@ func describeBase(c model.Collection, catalog []model.CatalogProject, known bool
 	return text
 }
 
-// list prints the built-in Collections, then the saved views. An unreadable views.toml is reported after the built-ins.
+// list prints the fixed Collections, then the saved views. An unreadable views.toml is reported after the fixed Collections.
 func (e viewsEnv) list() error {
 	_, read, readErr := e.read()
 	needsCatalog := slices.ContainsFunc(read.Views, func(v model.SavedView) bool { return v.Base.IsProject() || v.Filters.ProjectUID != "" })
@@ -148,12 +149,12 @@ func (e viewsEnv) list() error {
 	}
 	width := 0
 	for _, c := range model.FixedCollections() {
-		width = max(width, len(c.View))
+		width = max(width, utf8.RuneCountInString(c.View))
 	}
 	for _, v := range read.Views {
-		width = max(width, len(v.Name))
+		width = max(width, utf8.RuneCountInString(v.Name))
 	}
-	if err := e.say("Built-in Collections:"); err != nil {
+	if err := e.say("Fixed Collections:"); err != nil {
 		return err
 	}
 	for _, c := range model.FixedCollections() {
@@ -214,7 +215,7 @@ func dayOrNil(day string) *string {
 	return &day
 }
 
-// show prints the Issues of a built-in Collection or saved view, grouped as the Pane groups them.
+// show prints the Issues of a fixed Collection or saved view, grouped as the Pane groups them.
 func (e viewsEnv) show(name string) error {
 	_, read, readErr := e.read()
 	ref, ok := model.ResolveViewName(name, read.Views)
@@ -229,6 +230,9 @@ func (e viewsEnv) show(name string) error {
 		collection = *ref.Collection
 	} else {
 		collection, filters = ref.View.Base, ref.View.FiltersFor(e.plan.Actor)
+		if err := e.checkBase(*ref.View); err != nil {
+			return subcommandError{err}
+		}
 	}
 	loaded, err := e.snapshot(collection, filters)
 	if err != nil {
@@ -283,7 +287,7 @@ func (e viewsEnv) show(name string) error {
 					words = append(words, "deadline "+deadline)
 				}
 			}
-			if issue.ClosedAt != nil && collection.View == "logbook" {
+			if issue.ClosedAt != nil && collection.Def().Grouping == model.GroupClosedDate {
 				words = append(words, "closed "+cal.DayOf(*issue.ClosedAt))
 			}
 			words = append(words, issue.Title)
@@ -291,6 +295,24 @@ func (e viewsEnv) show(name string) error {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+// checkBase says why a saved view on a Project cannot be shown: the daemon no longer lists the Project, or it is archived.
+func (e viewsEnv) checkBase(v model.SavedView) error {
+	if !v.Base.IsProject() {
+		return nil
+	}
+	catalog, err := e.catalog()
+	if err != nil {
+		return err
+	}
+	switch entry, ok := model.CatalogEntry(model.Snapshot{Catalog: catalog}, v.Base.ProjectUID); {
+	case !ok:
+		return fmt.Errorf("view %q: its Project (%s) is gone", v.Name, v.Base.Title)
+	case entry.Project.Archived:
+		return fmt.Errorf("view %q: its Project (%s) is archived", v.Name, entry.Project.Name)
 	}
 	return nil
 }
@@ -370,11 +392,9 @@ func (e viewsEnv) add(name string) error {
 	if err != nil {
 		return subcommandError{err}
 	}
-	existing := ""
-	for _, v := range read.Views {
-		if strings.EqualFold(v.Name, strings.TrimSpace(name)) {
-			existing = v.Name
-		}
+	var existing string
+	if v, ok := model.SavedViewNamed(read.Views, name); ok {
+		existing = v.Name
 	}
 	if existing != "" && !e.plan.Replace {
 		return subcommandError{fmt.Errorf("a view named %q exists; --replace saves over it", existing)}
@@ -412,7 +432,7 @@ func (e viewsEnv) remove(name string) error {
 	case !ok:
 		return subcommandError{fmt.Errorf("no saved view named %q; the views are %s", strings.TrimSpace(name), names(read.Views))}
 	case ref.Collection != nil:
-		return subcommandError{fmt.Errorf("%q is the built-in Collection %s, not a saved view", strings.TrimSpace(name), ref.Collection.Title)}
+		return subcommandError{fmt.Errorf("%q is the fixed Collection %s, not a saved view", strings.TrimSpace(name), ref.Collection.Title)}
 	}
 	if err := store.Delete(read.Token, ref.View.Name); err != nil {
 		return subcommandError{err}
