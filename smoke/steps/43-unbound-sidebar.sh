@@ -8,7 +8,7 @@ printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u S
 ctl --file "$tmp/sidebar-unbound.ctl"
 expect_tree "$us_sidebar" '.ok and .count == 1'
 expect_tree "$us_heading" '.ok and .nodes[0].text == "Inbox"'
-expect_tree "[data-id^='main.columns.collections.']" '.ok and .count == 7 and .nodes[0].text == "Back" and .nodes[1].text == "Inbox" and .nodes[-1].text == "Logbook"'
+expect_tree "[data-id^='main.columns.collections.']" '.ok and .count == 8 and .nodes[0].text == "Back" and .nodes[1].text == "Inbox" and .nodes[-2].text == "Logbook" and .nodes[-1].text == "New view"'
 expect_tree "[data-id='main.columns.collections.projects']" '.ok and .count == 0'
 
 # Back leaves the Views level for the top, with the cursor on Views; Views opens it again.

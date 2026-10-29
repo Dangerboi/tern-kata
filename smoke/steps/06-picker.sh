@@ -69,7 +69,7 @@ picker_views_entry="[data-id='layer.collections.list.views']"
 ctl click "[data-id='main.topbar.right.menu']"
 ctl key Down
 ctl key enter
-expect_tree "$picker_items" '.ok and .count == 7 and .nodes[0].text == "Back" and .nodes[0]["aria-selected"] == "true" and .nodes[1].text == "Inbox" and .nodes[2].text == "Today" and .nodes[3].text == "Upcoming" and .nodes[4].text == "Deadlines" and .nodes[5].text == "All Open" and .nodes[6].text == "Logbook"'
+expect_tree "$picker_items" '.ok and .count == 8 and .nodes[0].text == "Back" and .nodes[0]["aria-selected"] == "true" and .nodes[1].text == "Inbox" and .nodes[2].text == "Today" and .nodes[3].text == "Upcoming" and .nodes[4].text == "Deadlines" and .nodes[5].text == "All Open" and .nodes[6].text == "Logbook" and .nodes[7].text == "New view"'
 expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 and (.nodes[0].text | contains("esc back"))'
 ctl key esc
 expect_tree "$picker_views_entry" '.ok and .nodes[0]["aria-selected"] == "true"'
