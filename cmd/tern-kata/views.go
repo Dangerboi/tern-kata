@@ -398,7 +398,7 @@ func (e viewsEnv) add(name string) error {
 	if existing != "" {
 		verb = "Replaced"
 	}
-	return e.say(strings.TrimSpace(fmt.Sprintf("%s view %q: %s  %s", verb, v.Name, v.Base.Title, describeFilters(v.Filters, func(string) string { return filterProject }))))
+	return e.say(strings.TrimSpace(fmt.Sprintf("%s view %q: %s  %s", verb, v.Name, describeBase(v.Base, nil, false), describeFilters(v.Filters, func(string) string { return filterProject }))))
 }
 
 // remove deletes a saved view without asking.
