@@ -77,7 +77,7 @@ func fieldLabeled(t *testing.T, m model.Model, label string) string {
 			if !strings.HasPrefix(n.ID, layer+".") {
 				continue
 			}
-			if text, _ := n.P["text"].(string); text == label && n.P["tag"] == nil {
+			if text := nodeTextOf(n); text == label && n.P["tag"] == nil {
 				labelled = true
 				continue
 			}
@@ -141,11 +141,25 @@ func textOnCard(t *testing.T, m model.Model, prefix string) (string, bool) {
 	t.Helper()
 	layer := cardLayerID(t, m)
 	for _, n := range wireNodes(t, view.Render(m, now)) {
-		if text, _ := n.P["text"].(string); strings.HasPrefix(n.ID, layer+".") && n.P["tag"] == nil && !hasCursor(n) && strings.HasPrefix(text, prefix) {
+		if text := nodeTextOf(n); strings.HasPrefix(n.ID, layer+".") && n.P["tag"] == nil && !hasCursor(n) && strings.HasPrefix(text, prefix) {
 			return text, true
 		}
 	}
 	return "", false
+}
+
+// nodeTextOf is the text a node draws: its text, or its spans' text joined when it is drawn as spans.
+func nodeTextOf(n tern.WireNode) string {
+	if text, ok := n.P["text"].(string); ok {
+		return text
+	}
+	var text strings.Builder
+	spans, _ := n.P["spans"].([]any)
+	for _, span := range spans {
+		t, _ := span.(map[string]any)["t"].(string)
+		text.WriteString(t)
+	}
+	return text.String()
 }
 
 // errorOnCard is the problem the card on top draws, and whether it draws one.
@@ -153,7 +167,7 @@ func errorOnCard(t *testing.T, m model.Model) (string, bool) {
 	t.Helper()
 	layer := cardLayerID(t, m)
 	for _, n := range wireNodes(t, view.Render(m, now)) {
-		if text, _ := n.P["text"].(string); strings.HasPrefix(n.ID, layer+".") && n.P["tone"] == "error" {
+		if text := nodeTextOf(n); strings.HasPrefix(n.ID, layer+".") && n.P["tone"] == "error" {
 			return text, true
 		}
 	}
@@ -227,8 +241,7 @@ func textAfterField(t *testing.T, m model.Model, label string) string {
 			if hasCursor(n) || n.P["aria"] != nil || n.P["tag"] != nil {
 				return ""
 			}
-			text, _ := n.P["text"].(string)
-			return text
+			return nodeTextOf(n)
 		}
 	}
 	return ""

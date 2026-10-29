@@ -43,9 +43,10 @@ func cardButton(key string, mode model.Mode, action model.Action, words string, 
 		}
 		chord, text = bindings[0].Chord, words+" ("+strings.Join(labels, " / ")+")"
 	}
-	button := el.Button{Common: ui.Common{Key: key, Actions: &ui.Actions{Click: KeyClick(chord)}}, Text: text}
+	button := el.Button{Common: ui.Common{Key: key, Actions: &ui.Actions{Click: KeyClick(chord)}}, Class: "tk-button", Text: text}
 	if primary {
 		button.Tone = ui.ToneAccent
+		button.Class = "tk-button tk-button-primary"
 	}
 	return button
 }

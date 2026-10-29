@@ -16,8 +16,14 @@ const (
 	ListOwnerRole = "tern-kata.ow"
 )
 
-// CSS is the plugin's whole style sheet: StripeCSS, SelectedCSS, ModeChipCSS, OrderedListCSS, then cellBoxCSS.
-var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + cellBoxCSS
+// CSS is the plugin's whole style sheet: StripeCSS, SelectedCSS, ModeChipCSS, OrderedListCSS, ButtonCSS, then cellBoxCSS.
+var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ButtonCSS + "\n" + cellBoxCSS
+
+// ButtonCSS draws a card's buttons as bordered buttons, the primary one in the accent colour.
+const ButtonCSS = `button.tk-button { border: 1px solid color-mix(in srgb, var(--t1) 30%, transparent) !important; border-radius: 4px !important; padding: 2px 10px !important; background-color: color-mix(in srgb, var(--t1) 6%, transparent) !important; color: var(--t1) !important; cursor: pointer !important; }
+button.tk-button:hover { background-color: color-mix(in srgb, var(--t1) 14%, transparent) !important; }
+button.tk-button.tk-button-primary { border-color: var(--accent) !important; color: var(--accent) !important; font-weight: bold !important; }
+button.tk-button.tk-button-primary:hover { background-color: color-mix(in srgb, var(--accent) 16%, transparent) !important; }`
 
 // ModeChipCSS hides the mode label Tern draws at the end of an input. Every
 // single-line input sets a mode so Tern's native editing stays off (the model

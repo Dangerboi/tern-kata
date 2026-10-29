@@ -160,7 +160,7 @@ func workerReading(r model.WorkerReading) tern.Element {
 		if line.Warn {
 			tone = ui.ToneWarning
 		}
-		children[i] = ui.Text{Common: ui.Common{Key: "line." + strconv.Itoa(i), Tone: tone}, Text: line.Text}
+		children[i] = toneText("line."+strconv.Itoa(i), tone, line.Text)
 	}
 	return ui.Col{Common: ui.Common{Key: "worker-reading"}, Children: children}
 }
@@ -202,10 +202,10 @@ func workflowLayer(m model.Model) tern.Element {
 		children = append(children, workerReading(*c.Reading))
 	}
 	if c.Saving {
-		children = append(children, ui.Text{Common: ui.Common{Key: "saving", Tone: ui.TonePending}, Text: "Saving workflow…"})
+		children = append(children, toneText("saving", ui.TonePending, "Saving workflow…"))
 	}
 	if problem := cmp.Or(c.Err, c.Problem); problem != nil {
-		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: problem.Error()})
+		children = append(children, toneText("error", ui.ToneError, problem.Error()))
 	}
 	switch {
 	case c.Conflict != nil:
@@ -216,7 +216,7 @@ func workflowLayer(m model.Model) tern.Element {
 			ui.Col{Common: ui.Common{Key: "current", Grow: 1, Basis: ui.BasisFrac(0.5)}, Children: ui.Nodes(ui.Text{Text: fmt.Sprintf("As it stands now (revision %d)", c.Conflict.Revision)}, TextEditor("now", model.NewTextEditor(c.Conflict.Text()), true))},
 		)})
 	case c.DiscardConfirm:
-		children = append(children, ui.Text{Common: ui.Common{Key: "discard", Tone: ui.ToneWarning}, Text: "Discard this text? y discards; n or esc keeps editing."}, discardButtons())
+		children = append(children, toneText("discard", ui.ToneWarning, "Discard this text? y discards; n or esc keeps editing."), discardButtons())
 	case !c.Saving:
 		children = append(children, buttonRow(
 			cardButton("save", model.ModeEditor, model.SaveDraftAction, "Save", true),
@@ -231,9 +231,9 @@ func workflowLayer(m model.Model) tern.Element {
 func conflictChoice(current *model.Workflow) []tern.Element {
 	discard := cardButton("discard", model.ModeConflict, model.DiscardDraft, "Discard Draft", current.Archived)
 	if current.Archived {
-		return ui.Nodes(ui.Text{Common: ui.Common{Key: "choice", Tone: ui.ToneWarning}, Text: "This workflow was archived meanwhile, so your text cannot be saved over it; d discards only your text."}, buttonRow(discard))
+		return ui.Nodes(toneText("choice", ui.ToneWarning, "This workflow was archived meanwhile, so your text cannot be saved over it; d discards only your text."), buttonRow(discard))
 	}
-	return ui.Nodes(ui.Text{Common: ui.Common{Key: "choice", Tone: ui.ToneWarning}, Text: "o saves your text over the new version; d discards only your text."},
+	return ui.Nodes(toneText("choice", ui.ToneWarning, "o saves your text over the new version; d discards only your text."),
 		buttonRow(cardButton("overwrite", model.ModeConflict, model.OverwriteDraft, "Overwrite", true), discard))
 }
 

@@ -17,13 +17,13 @@ func projectLayer(m model.Model) tern.Element {
 	}
 	children := []tern.Element{
 		ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Project name"}, Field: ui.Field{Text: form.Name, Cursor: caretAt(form.Caret, "", form.Name), Mode: "insert", Placeholder: "Project name", Readonly: form.Saving}},
-		ui.Text{Common: ui.Common{Key: "note", Tone: ui.ToneMuted}, Text: note},
+		toneText("note", ui.ToneMuted, note),
 	}
 	if form.Err != nil {
-		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: form.Err.Error()})
+		children = append(children, toneText("error", ui.ToneError, form.Err.Error()))
 	}
 	if form.Saving {
-		children = append(children, ui.Text{Common: ui.Common{Key: "saving", Tone: ui.TonePending}, Text: "Creating Project…"})
+		children = append(children, toneText("saving", ui.TonePending, "Creating Project…"))
 	} else {
 		children = append(children, buttonRow(cardButton("create", model.ModeProjectForm, model.ProjectSubmit, "Create Project", true), cardButton("cancel", model.ModeProjectForm, model.ProjectCancel, "Cancel", false)))
 	}

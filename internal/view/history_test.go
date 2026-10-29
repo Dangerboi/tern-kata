@@ -7,6 +7,7 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
+	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
 // spansOf is the (text, style) runs of a node's spans.
@@ -19,6 +20,15 @@ func spansOf(n map[string]any) [][2]string {
 		runs = append(runs, [2]string{fields["t"].(string), style})
 	}
 	return runs
+}
+
+// joinedSpans is the text of a node's spans, run after run.
+func joinedSpans(n tern.WireNode) string {
+	var text string
+	for _, run := range spansOf(n.P) {
+		text += run[0]
+	}
+	return text
 }
 
 func TestHistoryRendersSentencesWithTonedVerbs(t *testing.T) {

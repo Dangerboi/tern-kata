@@ -17,30 +17,27 @@ func workerLayer(m model.Model) tern.Element {
 	if !f.Open {
 		return nil
 	}
-	line := func(key string, tone ui.Tone, text string) tern.Element {
-		return ui.Text{Common: ui.Common{Key: key, Tone: tone}, Text: text}
-	}
 	gap := func(key string) tern.Element { return ui.Spacer{Common: ui.Common{Key: key}, Size: ui.GapMD} }
 	var children []tern.Element
 
 	switch m.WorkerCardKind() {
 	case model.WorkerLoading:
-		children = append(children, line("loading", ui.TonePending, "Reading this machine's worker setup…"))
+		children = append(children, toneText("loading", ui.TonePending, "Reading this machine's worker setup…"))
 	case model.WorkerUnreadable:
-		children = append(children, line("unreadable", ui.ToneError, "Cannot read the worker setup: "+m.Worker.SetupErr.Error()))
+		children = append(children, toneText("unreadable", ui.ToneError, "Cannot read the worker setup: "+m.Worker.SetupErr.Error()))
 	case model.WorkerUnbound:
-		children = append(children, line("unbound", ui.ToneWarning, "This folder is not bound to a kata Project, so there is no Project to serve. Run `kata init` here, then open the card again."))
+		children = append(children, toneText("unbound", ui.ToneWarning, "This folder is not bound to a kata Project, so there is no Project to serve. Run `kata init` here, then open the card again."))
 	default:
 		children = append(children, workerFacts(m))
 	}
 
 	switch {
 	case f.Saved != "":
-		children = append(children, gap("gap-saved"), line("saved", ui.ToneSuccess, f.Saved), line("trust-note", ui.ToneWarning, model.WorkerTrustNote))
+		children = append(children, gap("gap-saved"), toneText("saved", ui.ToneSuccess, f.Saved), toneText("trust-note", ui.ToneWarning, model.WorkerTrustNote))
 		if f.Restart {
 			children = append(children, gap("gap-restart"), stopChoices(m, "restart", f.Next, "Restart when idle", "Restart now"))
 		} else {
-			children = append(children, line("next", ui.ToneNeutral, f.Next))
+			children = append(children, toneText("next", ui.ToneNeutral, f.Next))
 		}
 	case f.AskOff:
 		children = append(children, gap("gap-off"), stopChoices(m, "off", model.WorkerOffQuestion, "Stop when idle", "Stop now"))
@@ -48,19 +45,19 @@ func workerLayer(m model.Model) tern.Element {
 		children = append(append(children, gap("gap-fields")), workerFields(m)...)
 	}
 	if f.Supervision != "" {
-		children = append(children, gap("gap-supervision"), line("supervision-done", ui.ToneSuccess, f.Supervision))
+		children = append(children, gap("gap-supervision"), toneText("supervision-done", ui.ToneSuccess, f.Supervision))
 	}
 	if f.Switching {
-		children = append(children, line("pending", ui.TonePending, "Changing supervision…"))
+		children = append(children, toneText("pending", ui.TonePending, "Changing supervision…"))
 	}
 	if f.Saving {
-		children = append(children, line("pending", ui.TonePending, "Writing worker.toml…"))
+		children = append(children, toneText("pending", ui.TonePending, "Writing worker.toml…"))
 	}
 	if f.Stopping {
-		children = append(children, line("pending", ui.TonePending, "Asking the worker to stop…"))
+		children = append(children, toneText("pending", ui.TonePending, "Asking the worker to stop…"))
 	}
 	if f.Err != nil {
-		children = append(children, line("error", ui.ToneError, f.Err.Error()))
+		children = append(children, toneText("error", ui.ToneError, f.Err.Error()))
 	}
 	children = append(children, gap("gap-actions"), workerActions(m))
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardWorker)}, Head: ui.T("Worker"), Modal: true, Size: ui.SizeLG, Children: children})
@@ -115,7 +112,7 @@ func workerFields(m model.Model) []tern.Element {
 			}
 			text := f.Value(spec.Name)
 			children = append(children,
-				ui.Text{Common: ui.Common{Key: string(spec.Name) + "-label", Tone: tone(spec.Name)}, Text: model.WorkerPrompt(spec.Name)},
+				toneText(string(spec.Name)+"-label", tone(spec.Name), model.WorkerPrompt(spec.Name)),
 				ui.Input{Common: ui.Common{Key: string(spec.Name), Tone: tone(spec.Name), Aria: model.WorkerPrompt(spec.Name)}, Field: ui.Field{Text: text, Cursor: caretAt(f.Caret, spec.Name, text), Mode: "insert", Placeholder: model.WorkerHint(spec.Name), Readonly: f.Saving}})
 		}
 	}
@@ -124,8 +121,8 @@ func workerFields(m model.Model) []tern.Element {
 		verb = "Serving lists"
 	}
 	children = append(children,
-		ui.Text{Common: ui.Common{Key: "checkout", Tone: ui.ToneInfo}, Text: verb + " " + m.Worker.Setup.Project + " with checkout " + m.Worker.Setup.Checkout + "."},
-		ui.Text{Common: ui.Common{Key: "trust-note", Tone: ui.ToneWarning}, Text: model.WorkerTrustNote},
+		toneText("checkout", ui.ToneInfo, verb+" "+m.Worker.Setup.Project+" with checkout "+m.Worker.Setup.Checkout+"."),
+		toneText("trust-note", ui.ToneWarning, model.WorkerTrustNote),
 		choiceField(model.WorkerFieldTrust, tone(model.WorkerFieldTrust), "Trust", prefixIf(f.Field == model.WorkerFieldTrust, "Trust this Project's job authors: "), []string{"No", "Yes"}, func(i int) bool { return (i == 1) == f.Trusted }, -1))
 	return children
 }

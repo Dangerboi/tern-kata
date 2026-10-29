@@ -34,14 +34,14 @@ func editorLayer(m model.Model) tern.Element {
 	}
 	children := ui.Nodes(TextEditor(inputLeaf, draft.Editor, draft.Saving || draft.DiscardConfirm || draft.Conflict != nil))
 	if draft.Saving {
-		children = append(children, ui.Text{Common: ui.Common{Key: "saving", Tone: ui.TonePending}, Text: "Saving Draft…"})
+		children = append(children, toneText("saving", ui.TonePending, "Saving Draft…"))
 	}
 	if draft.Err != nil {
-		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: draft.Err.Error()})
+		children = append(children, toneText("error", ui.ToneError, draft.Err.Error()))
 	}
 	switch {
 	case draft.DiscardConfirm:
-		children = append(children, ui.Text{Common: ui.Common{Key: "discard", Tone: ui.ToneWarning}, Text: "Discard this Draft? y discards; n or esc keeps editing."}, discardButtons())
+		children = append(children, toneText("discard", ui.ToneWarning, "Discard this Draft? y discards; n or esc keeps editing."), discardButtons())
 	case !draft.Saving && draft.Conflict == nil:
 		buttons := []tern.Element{cardButton("save", model.ModeEditor, model.SaveDraftAction, "Save", true)}
 		if draft.Duplicate() {
@@ -58,7 +58,7 @@ func editorLayer(m model.Model) tern.Element {
 		children = ui.Nodes(ui.Row{Common: ui.Common{Key: "versions"}, Gap: ui.GapMD, Wrap: true, Children: ui.Nodes(
 			ui.Col{Common: ui.Common{Key: "draft", Grow: 1, Basis: ui.BasisFrac(0.5)}, Children: ui.Nodes(ui.Text{Text: fmt.Sprintf("Your Draft (base revision %d)", draft.BaseRevision)}, TextEditor("body", draft.Editor, true))},
 			ui.Col{Common: ui.Common{Key: "current", Grow: 1, Basis: ui.BasisFrac(0.5)}, Children: ui.Nodes(ui.Text{Text: fmt.Sprintf("New version (revision %d)", draft.Conflict.Revision)}, ui.Md{Text: draft.Conflict.Body})},
-		)}, ui.Text{Common: ui.Common{Key: "choice", Tone: ui.ToneWarning}, Text: "o overwrites against the new revision; d discards only your Draft."},
+		)}, toneText("choice", ui.ToneWarning, "o overwrites against the new revision; d discards only your Draft."),
 			buttonRow(cardButton("overwrite", model.ModeConflict, model.OverwriteDraft, "Overwrite", true), cardButton("discard", model.ModeConflict, model.DiscardDraft, "Discard Draft", false)))
 	}
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardDraft)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})

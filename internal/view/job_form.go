@@ -29,7 +29,7 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 		if p.ShortID != "" {
 			ref = "#" + p.ShortID + " " + p.Title
 		}
-		children = append(children, ui.Text{Common: ui.Common{Key: "parent-fixed", Tone: ui.ToneMuted}, Text: "Parent: " + ref + " (a job keeps its parent)"})
+		children = append(children, toneText("parent-fixed", ui.ToneMuted, "Parent: "+ref+" (a job keeps its parent)"))
 	}
 	previewed := false
 	for _, field := range model.JobFields {
@@ -54,12 +54,12 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 			}
 			children = append(children, choiceField(field.Name, tone, model.JobPrompt(field.Name), prompt, labels, func(i int) bool { return choices[i].Chosen }, -1))
 			if note := f.WorkflowsNote(); field.Name == model.JobFieldWorkflow && note != "" {
-				children = append(children, ui.Text{Common: ui.Common{Key: "workflow-note", Tone: ui.ToneMuted}, Text: note})
+				children = append(children, toneText("workflow-note", ui.ToneMuted, note))
 			}
 			continue
 		}
 		if field.Name == model.JobFieldProfile && f.Worker.Note != "" {
-			children = append(children, ui.Text{Common: ui.Common{Key: "worker-note", Tone: ui.ToneWarning}, Text: "The worker's config could not be read, so profile and checkout are free text: " + f.Worker.Note})
+			children = append(children, toneText("worker-note", ui.ToneWarning, "The worker's config could not be read, so profile and checkout are free text: "+f.Worker.Note))
 		}
 		text := f.Text(field.Name)
 		if field.Name == model.JobFieldPrompt {
@@ -79,10 +79,10 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 		children = append(children, jobPreview(f, m.Calendar, now))
 	}
 	if f.Err != nil {
-		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: f.Err.Error()})
+		children = append(children, toneText("error", ui.ToneError, f.Err.Error()))
 	}
 	if f.Saving {
-		children = append(children, ui.Text{Common: ui.Common{Key: "pending", Tone: ui.TonePending}, Text: pending})
+		children = append(children, toneText("pending", ui.TonePending, pending))
 	} else {
 		children = append(children, buttonRow(cardButton("save", model.ModeJobForm, model.JobSave, save, true), cardButton("cancel", model.ModeJobForm, model.JobCancel, "Cancel", false)))
 	}
@@ -93,18 +93,18 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 func jobPreview(f model.JobFormState, cal model.PaneCalendar, now time.Time) tern.Element {
 	preview := f.Preview(cal, now)
 	if preview.Err != nil {
-		return ui.Text{Common: ui.Common{Key: "preview", Tone: ui.ToneWarning}, Text: "Schedule: not yet; " + preview.Err.Error()}
+		return toneText("preview", ui.ToneWarning, "Schedule: not yet; "+preview.Err.Error())
 	}
-	lines := []tern.Element{ui.Text{Common: ui.Common{Key: "words", Tone: ui.ToneInfo}, Text: "Schedule: " + preview.Words}}
+	lines := []tern.Element{toneText("words", ui.ToneInfo, "Schedule: "+preview.Words)}
 	if len(preview.Runs) > 0 {
-		lines = append(lines, ui.Text{Common: ui.Common{Key: "runs", Tone: ui.ToneMuted}, Text: "Next runs: " + strings.Join(preview.Runs, " · ")})
+		lines = append(lines, toneText("runs", ui.ToneMuted, "Next runs: "+strings.Join(preview.Runs, " · ")))
 	}
 	return ui.Col{Common: ui.Common{Key: "preview"}, Children: ui.Nodes(lines...)}
 }
 
 // jobConflict is the card after a save found the job changed: the newer job, the draft kept, and the three ways out.
 func jobConflict(m model.Model) []tern.Element {
-	rows := []tern.Element{ui.Text{Common: ui.Common{Key: "conflict", Tone: ui.ToneWarning}, Text: "The job changed meanwhile; nothing was written. Your draft is kept. The newer job:"}}
+	rows := []tern.Element{toneText("conflict", ui.ToneWarning, "The job changed meanwhile; nothing was written. Your draft is kept. The newer job:")}
 	for i, fact := range m.JobConflictFacts() {
 		label := ui.Text{Common: ui.Common{Key: "label", Shrink: new(float64), Min: &ui.Bounds{W: ui.Ch(14)}}, Spans: []ui.Span{{T: fact.Label, S: "muted"}}, Wrap: ui.WrapNone}
 		value := ui.Text{Common: ui.Common{Key: "value", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}, Text: fact.Value}

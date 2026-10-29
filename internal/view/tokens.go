@@ -18,7 +18,7 @@ func tokenLayer(m model.Model) tern.Element {
 	children := make([]tern.Element, 0, 3*len(model.TokenFields)+4)
 	if form.Done {
 		children = append(children,
-			ui.Text{Common: ui.Common{Key: "done", Tone: ui.ToneSuccess}, Text: "Created token " + strconv.FormatInt(form.DoneID, 10) + "."},
+			toneText("done", ui.ToneSuccess, "Created token "+strconv.FormatInt(form.DoneID, 10)+"."),
 			ui.Text{Common: ui.Common{Key: "file"}, Text: "Its secret is in " + form.DoneFile + ", readable by you alone. It is not shown anywhere and cannot be read from kata again."},
 			buttonRow(cardButton("close", model.ModeTokenForm, model.TokenSubmit, "Close", true)))
 		return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardToken)}, Head: ui.T("Token created"), Modal: true, Size: ui.SizeLG, Children: children})
@@ -32,15 +32,15 @@ func tokenLayer(m model.Model) tern.Element {
 		label := model.TokenLabel(name)
 		text := form.Values.Value(name)
 		children = append(children,
-			ui.Text{Common: ui.Common{Key: string(name) + "-label", Tone: tone}, Text: label},
+			toneText(string(name)+"-label", tone, label),
 			ui.Input{Common: ui.Common{Key: string(name), Tone: tone, Aria: label}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Readonly: form.Saving}})
 	}
-	children = append(children, ui.Text{Common: ui.Common{Key: "note", Tone: ui.ToneMuted}, Text: "The secret is written to a new file only you can read, and is never shown. The file must not exist yet."})
+	children = append(children, toneText("note", ui.ToneMuted, "The secret is written to a new file only you can read, and is never shown. The file must not exist yet."))
 	if form.Err != nil {
-		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: form.Err.Error()})
+		children = append(children, toneText("error", ui.ToneError, form.Err.Error()))
 	}
 	if form.Saving {
-		children = append(children, ui.Text{Common: ui.Common{Key: "pending", Tone: ui.TonePending}, Text: "Creating token…"})
+		children = append(children, toneText("pending", ui.TonePending, "Creating token…"))
 	} else {
 		children = append(children, buttonRow(cardButton("save", model.ModeTokenForm, model.TokenSubmit, "Create token", true), cardButton("cancel", model.ModeTokenForm, model.TokenCancel, "Cancel", false)))
 	}
@@ -53,12 +53,12 @@ func revokeLayer(m model.Model) tern.Element {
 	if !r.Open {
 		return nil
 	}
-	children := []tern.Element{ui.Text{Common: ui.Common{Key: "question", Tone: ui.ToneWarning}, Text: r.Question()}}
+	children := []tern.Element{toneText("question", ui.ToneWarning, r.Question())}
 	if r.Err != nil {
-		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: r.Err.Error()})
+		children = append(children, toneText("error", ui.ToneError, r.Err.Error()))
 	}
 	if r.Saving {
-		children = append(children, ui.Text{Common: ui.Common{Key: "pending", Tone: ui.TonePending}, Text: "Revoking token…"})
+		children = append(children, toneText("pending", ui.TonePending, "Revoking token…"))
 	} else {
 		children = append(children, buttonRow(cardButton("revoke", model.ModeRevokeToken, model.RevokeConfirm, "Revoke", false), cardButton("keep", model.ModeRevokeToken, model.RevokeCancel, "Keep", true)))
 	}

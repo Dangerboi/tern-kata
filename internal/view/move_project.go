@@ -46,7 +46,7 @@ func moveChoosing(m model.Model) []tern.Element {
 		ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "list"}, Selected: selected, Empty: ui.T("No other Projects match."), Max: ui.MaxLines(12), Children: items},
 	}
 	if f.Err != nil {
-		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: f.Err.Error()})
+		children = append(children, toneText("error", ui.ToneError, f.Err.Error()))
 	}
 	return append(children, buttonRow(cardButton("cancel", model.ModeMoveProject, model.MoveProjectClose, "Cancel", false)))
 }
@@ -54,17 +54,17 @@ func moveChoosing(m model.Model) []tern.Element {
 // moveConfirming is the card once a Project is chosen: the preview kata accepted, the conflict, or kata's refusal of the move.
 func moveConfirming(m model.Model) []tern.Element {
 	f := m.MoveProject
-	children := []tern.Element{ui.Text{Common: ui.Common{Key: "target", Tone: ui.ToneAccent}, Text: "To " + f.Target.Name}}
+	children := []tern.Element{toneText("target", ui.ToneAccent, "To "+f.Target.Name)}
 	switch {
 	case f.Sending && f.Previewed:
-		children = append(children, ui.Text{Common: ui.Common{Key: "pending", Tone: ui.TonePending}, Text: "Moving Issue…"})
+		children = append(children, toneText("pending", ui.TonePending, "Moving Issue…"))
 	case f.Sending:
-		children = append(children, ui.Text{Common: ui.Common{Key: "pending", Tone: ui.TonePending}, Text: "Asking kata what the move would do…"})
+		children = append(children, toneText("pending", ui.TonePending, "Asking kata what the move would do…"))
 	default:
 		children = append(children, ui.Text{Common: ui.Common{Key: "preview"}, Text: m.MovePreview()})
 	}
 	if f.Err != nil {
-		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: f.Err.Error()})
+		children = append(children, toneText("error", ui.ToneError, f.Err.Error()))
 	}
 	if f.Sending {
 		return children

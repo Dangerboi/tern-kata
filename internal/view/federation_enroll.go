@@ -155,12 +155,12 @@ func federationAdoptLayer(m model.Model) tern.Element {
 	name, hub := f.Draft.SpokeProjectName, f.Draft.HubProjectName
 	children := []tern.Element{
 		ui.Text{Common: ui.Common{Key: "question"}, Text: fmt.Sprintf("federate local project %q INTO hub project %q?", name, hub)},
-		ui.Text{Common: ui.Common{Key: "consequence", Tone: ui.ToneMuted}, Text: fmt.Sprintf("%q's issues will be adopted into the hub project and its local event history rewritten as snapshots", name)},
+		toneText("consequence", ui.ToneMuted, fmt.Sprintf("%q's issues will be adopted into the hub project and its local event history rewritten as snapshots", name)),
 		ui.Text{Common: ui.Common{Key: "prompt"}, Text: fmt.Sprintf("type %q to confirm:", name)},
 		ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Local Project name"}, Field: ui.Field{Text: f.AdoptInput, Cursor: caretAt(f.AdoptCaret, "", f.AdoptInput), Mode: "insert", Placeholder: "Project name"}},
 	}
 	if f.AdoptErr != nil {
-		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: f.AdoptErr.Error()})
+		children = append(children, toneText("error", ui.ToneError, f.AdoptErr.Error()))
 	}
 	children = append(children, buttonRow(
 		cardButton("adopt", model.ModeFederationAdopt, model.FederationAdoptConfirm, "Adopt", true),

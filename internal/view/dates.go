@@ -21,16 +21,16 @@ func datesLayer(m model.Model) tern.Element {
 		label := model.DatesLabel(name)
 		text := form.Value(name)
 		children = append(children,
-			ui.Text{Common: ui.Common{Key: string(name) + "-label", Tone: tone}, Text: label},
+			toneText(string(name)+"-label", tone, label),
 			ui.Input{Common: ui.Common{Key: string(name), Tone: tone, Aria: label}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Placeholder: "none", Readonly: form.Saving}},
-			ui.Text{Common: ui.Common{Key: string(name) + "-preview", Tone: ui.ToneMuted}, Text: m.DatesPreview(name)})
+			toneText(string(name)+"-preview", ui.ToneMuted, m.DatesPreview(name)))
 	}
-	children = append(children, ui.Text{Common: ui.Common{Key: "note", Tone: ui.ToneMuted}, Text: "Type " + model.DateInputHint + ". Leave a field blank to clear it."})
+	children = append(children, toneText("note", ui.ToneMuted, "Type "+model.DateInputHint+". Leave a field blank to clear it."))
 	if form.Err != nil {
-		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: form.Err.Error()})
+		children = append(children, toneText("error", ui.ToneError, form.Err.Error()))
 	}
 	if form.Saving {
-		children = append(children, ui.Text{Common: ui.Common{Key: "pending", Tone: ui.TonePending}, Text: "Saving dates…"})
+		children = append(children, toneText("pending", ui.TonePending, "Saving dates…"))
 	} else {
 		children = append(children, buttonRow(cardButton("save", model.ModeDatesForm, model.DatesSubmit, "Save dates", true), cardButton("cancel", model.ModeDatesForm, model.DatesCancel, "Cancel", false)))
 	}

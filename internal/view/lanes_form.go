@@ -25,11 +25,11 @@ func lanesLayer(m model.Model) tern.Element {
 		return nil
 	}
 	muted := func(key, text string) tern.Element {
-		return ui.Text{Common: ui.Common{Key: key, Tone: ui.ToneMuted}, Text: text}
+		return toneText(key, ui.ToneMuted, text)
 	}
 	gap := func(key string) tern.Element { return ui.Spacer{Common: ui.Common{Key: key}, Size: ui.GapMD} }
 	children := []tern.Element{
-		ui.Text{Common: ui.Common{Key: "names-label", Tone: fieldTone(form, model.LanesNames)}, Text: "Lane list"},
+		toneText("names-label", fieldTone(form, model.LanesNames), "Lane list"),
 		ui.Input{Common: ui.Common{Key: "names", Tone: fieldTone(form, model.LanesNames), Aria: "Lane list"}, Field: ui.Field{Text: form.Text, Cursor: caretAt(form.Caret, model.LanesNames, form.Text), Mode: "insert", Placeholder: "Lane names, comma separated", Readonly: form.Saving}},
 		muted("note", "Names in order, comma separated. Empty restores the default list. Saving never changes a label in kata."),
 	}
@@ -43,14 +43,14 @@ func lanesLayer(m model.Model) tern.Element {
 	for _, name := range []model.Field{model.LanesDays, model.LanesCards} {
 		text := form.Value(name)
 		children = append(children,
-			ui.Text{Common: ui.Common{Key: string(name) + "-label", Tone: fieldTone(form, name)}, Text: lanesDoneLabels[name]},
+			toneText(string(name)+"-label", fieldTone(form, name), lanesDoneLabels[name]),
 			ui.Input{Common: ui.Common{Key: string(name), Tone: fieldTone(form, name), Aria: lanesDoneLabels[name]}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Placeholder: lanesDonePlaceholders[name], Readonly: form.Saving}})
 	}
 	if form.Saving {
-		children = append(children, ui.Text{Common: ui.Common{Key: "pending", Tone: ui.TonePending}, Text: "Saving Lanes…"})
+		children = append(children, toneText("pending", ui.TonePending, "Saving Lanes…"))
 	}
 	if form.Err != nil {
-		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: form.Err.Error()})
+		children = append(children, toneText("error", ui.ToneError, form.Err.Error()))
 	}
 	children = append(children, gap("gap-actions"), buttonRow(cardButton("save", model.ModeLanesForm, model.LanesSubmit, "Save Lanes", true), cardButton("cancel", model.ModeLanesForm, model.LanesCancel, "Cancel", false)))
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardLanes)}, Head: ui.T("Lanes"), Modal: true, Size: ui.SizeLG, Children: children})

@@ -2,10 +2,12 @@ package driver_test
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
@@ -90,6 +92,56 @@ func TestEveryCardIsDrawnAndItsFieldNodesMoveItsFocus(t *testing.T) {
 				reached[got] = n.ID
 				if out.State.Model.TopCard() != card {
 					t.Errorf("focus input on %q changed the card on top to %q", n.ID, out.State.Model.TopCard().Name())
+				}
+			}
+		})
+	}
+}
+
+// tonedSpanStyle is the span style each text tone is drawn in; neutral has none and draws plain.
+var tonedSpanStyle = map[string]string{
+	"error": "error", "warning": "warning", "pending": "warning", "success": "success",
+	"info": "info", "muted": "muted", "accent": "accent", "user": "accent",
+}
+
+// Every card of the model's card table draws each toned text line as spans in its tone's colour, as a text node's own tone
+// draws nothing, and draws each of its buttons with the button class.
+func TestEveryCardDrawsItsTonedLinesInTheirToneColour(t *testing.T) {
+	openers := cardOpeners()
+	for _, card := range model.Cards() {
+		open, ok := openers[card]
+		if !ok {
+			t.Fatalf("card %q has no opener in this test", card.Name())
+		}
+		t.Run(card.Name(), func(t *testing.T) {
+			s := open(t)
+			layer := cardLayerID(t, s.Model)
+			for _, n := range wireNodes(t, view.Render(s.Model, now)) {
+				if n.ID != layer && !strings.HasPrefix(n.ID, layer+".") {
+					continue
+				}
+				if n.K == "el" && n.P["tag"] == "button" {
+					if class, _ := n.P["class"].(string); !slices.Contains(strings.Fields(class), "tk-button") {
+						t.Errorf("button %s has class %q, want tk-button", n.ID, class)
+					}
+				}
+				tone, _ := n.P["tone"].(string)
+				if n.K != "text" || tone == "" || tone == "neutral" {
+					continue
+				}
+				if _, plain := n.P["text"]; plain {
+					t.Errorf("%s is a %s line drawn as plain text, which Tern draws in the text colour", n.ID, tone)
+					continue
+				}
+				spans, _ := n.P["spans"].([]any)
+				if len(spans) == 0 {
+					t.Errorf("%s is a %s line with no spans", n.ID, tone)
+				}
+				for _, span := range spans {
+					style, _ := span.(map[string]any)["s"].(string)
+					if !slices.Contains(strings.Fields(style), tonedSpanStyle[tone]) {
+						t.Errorf("%s is a %s line with a span styled %q, want %s", n.ID, tone, style, tonedSpanStyle[tone])
+					}
 				}
 			}
 		})

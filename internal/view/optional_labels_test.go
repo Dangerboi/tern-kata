@@ -15,7 +15,7 @@ func labelTexts(t *testing.T, m model.Model, layer string, keys []string) []any 
 		if !ok {
 			t.Fatalf("missing %s.%s-label", layer, key)
 		}
-		got = append(got, node.P["text"])
+		got = append(got, text(node))
 	}
 	return got
 }

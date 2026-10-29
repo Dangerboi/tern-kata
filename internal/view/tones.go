@@ -80,3 +80,9 @@ func toneStyle(tone ui.Tone) string {
 	}
 	return string(tone)
 }
+
+// toneText is a line of text drawn in tone. Tern draws a text node's Common.Tone only as chrome, which text has none of, so
+// the text is one span in toneStyle(tone); Common.Tone still marks the line's role for tests.
+func toneText(key string, tone ui.Tone, text string) ui.Text {
+	return ui.Text{Common: ui.Common{Key: key, Tone: tone}, Spans: []ui.Span{{T: text, S: toneStyle(tone)}}}
+}

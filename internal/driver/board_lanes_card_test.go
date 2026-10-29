@@ -34,8 +34,7 @@ func nodeText(t *testing.T, s driver.State, id string) (string, bool) {
 	t.Helper()
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
 		if n.ID == id {
-			text, _ := n.P["text"].(string)
-			return text, true
+			return nodeTextOf(n), true
 		}
 	}
 	return "", false

@@ -93,14 +93,14 @@ func recurrenceLayer(m model.Model) tern.Element {
 	children := make([]tern.Element, 0, len(model.RecurrenceFields)+4)
 	if f.Refused {
 		return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardRecurrence)}, Modal: true, Size: ui.SizeLG, Head: ui.T("Recurrence"), Children: ui.Nodes(
-			ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: f.Err.Error()},
+			toneText("error", ui.ToneError, f.Err.Error()),
 			buttonRow(cardButton("cancel", model.ModeRecurrenceForm, model.RecurrenceCancel, "Close", true)))})
 	}
 	if f.Raw != "" {
-		children = append(children, ui.Text{Common: ui.Common{Key: "raw", Tone: ui.ToneWarning}, Text: "Current rule, set elsewhere: " + f.Raw + "\nSaving the form replaces it."})
+		children = append(children, toneText("raw", ui.ToneWarning, "Current rule, set elsewhere: "+f.Raw+"\nSaving the form replaces it."))
 	}
 	if note := f.ZoneNote(); note != "" {
-		children = append(children, ui.Text{Common: ui.Common{Key: "zone-note", Tone: ui.ToneWarning}, Text: note})
+		children = append(children, toneText("zone-note", ui.ToneWarning, note))
 	}
 	for _, field := range model.RecurrenceFields {
 		if !f.Shows(field.Name) {
@@ -124,7 +124,7 @@ func recurrenceLayer(m model.Model) tern.Element {
 		})
 	}
 	if f.Err != nil {
-		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: f.Err.Error()})
+		children = append(children, toneText("error", ui.ToneError, f.Err.Error()))
 	}
 	title, save, pending := "Make recurring", "Make recurring", "Making Issue recur…"
 	if f.Change {
@@ -132,11 +132,11 @@ func recurrenceLayer(m model.Model) tern.Element {
 	}
 	switch {
 	case f.Saving && f.Stopping:
-		children = append(children, ui.Text{Common: ui.Common{Key: "pending", Tone: ui.TonePending}, Text: "Stopping the recurrence…"})
+		children = append(children, toneText("pending", ui.TonePending, "Stopping the recurrence…"))
 	case f.Saving:
-		children = append(children, ui.Text{Common: ui.Common{Key: "pending", Tone: ui.TonePending}, Text: pending})
+		children = append(children, toneText("pending", ui.TonePending, pending))
 	case f.StopConfirm:
-		children = append(children, ui.Text{Common: ui.Common{Key: "stop", Tone: ui.ToneWarning}, Text: "Stop this Issue recurring? Existing occurrences stay. y stops; n or esc keeps editing."},
+		children = append(children, toneText("stop", ui.ToneWarning, "Stop this Issue recurring? Existing occurrences stay. y stops; n or esc keeps editing."),
 			buttonRow(cardButton("stop-yes", model.ModeRecurrenceStop, model.RecurrenceStopConfirm, "Stop recurring", false), cardButton("stop-keep", model.ModeRecurrenceStop, model.RecurrenceStopKeep, "Keep editing", true)))
 	case f.Change:
 		children = append(children, buttonRow(cardButton("save", model.ModeRecurrenceForm, model.RecurrenceSave, save, true), cardButton("stop", model.ModeRecurrenceForm, model.RecurrenceStop, "Stop recurring", false), cardButton("cancel", model.ModeRecurrenceForm, model.RecurrenceCancel, "Cancel", false)))

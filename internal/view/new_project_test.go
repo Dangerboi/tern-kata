@@ -81,7 +81,7 @@ func TestRenderNewProjectFormFollowsTheModel(t *testing.T) {
 	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
 	m, _ = model.Update(m, model.ProjectSaved{Err: errors.New("project with this name was archived")})
 	nodes = pickerNodes(t, m)
-	if nodes[newProjectIDPrefix+".error"].P["text"] != "project with this name was archived" || nodes[view.FieldID(model.CardProject, "")].P["text"] != "my-repo" {
+	if joinedSpans(nodes[newProjectIDPrefix+".error"]) != "project with this name was archived" || nodes[view.FieldID(model.CardProject, "")].P["text"] != "my-repo" {
 		t.Fatalf("rejected form: error=%v input=%v", nodes[newProjectIDPrefix+".error"].P, nodes[view.FieldID(model.CardProject, "")].P)
 	}
 

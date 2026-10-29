@@ -19,7 +19,7 @@ func fieldLayer(m model.Model) tern.Nodes {
 		if i == m.FieldForm.Suggestion%max(len(suggestions), 1) {
 			tone = ui.ToneAccent
 		}
-		children = append(children, ui.Text{Common: ui.Common{Key: fmt.Sprint("label", i), Tone: tone}, Text: label})
+		children = append(children, toneText(fmt.Sprint("label", i), tone, label))
 	}
 	if found := m.FieldForm.Found; found != nil {
 		status, tone := "This Issue is deleted. Enter restores it.", ui.ToneMuted
@@ -27,14 +27,14 @@ func fieldLayer(m model.Model) tern.Nodes {
 			status, tone = "This Issue is not deleted.", ui.ToneError
 		}
 		children = append(children,
-			ui.Text{Common: ui.Common{Key: "found", Tone: ui.ToneAccent}, Text: found.QualifiedID + " " + found.Title},
-			ui.Text{Common: ui.Common{Key: "found-state", Tone: tone}, Text: status})
+			toneText("found", ui.ToneAccent, found.QualifiedID+" "+found.Title),
+			toneText("found-state", tone, status))
 	}
 	if m.FieldForm.Err != nil {
-		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.FieldForm.Err.Error()})
+		children = append(children, toneText("error", ui.ToneError, m.FieldForm.Err.Error()))
 	}
 	if m.FieldForm.Saving {
-		children = append(children, ui.Text{Common: ui.Common{Key: "saving", Tone: ui.TonePending}, Text: "Saving…"})
+		children = append(children, toneText("saving", ui.TonePending, "Saving…"))
 	} else {
 		children = append(children, buttonRow(cardButton("save", model.ModeFieldForm, model.FieldSubmit, saveLabel(m), true), cardButton("cancel", model.ModeFieldForm, model.FieldCancel, "Cancel", false)))
 	}

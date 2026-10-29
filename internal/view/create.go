@@ -32,7 +32,7 @@ func createLayer(m model.Model) tern.Element {
 		if field.Name == f.Field {
 			tone = ui.ToneAccent
 		}
-		children = append(children, ui.Text{Common: ui.Common{Key: key + "-label", Tone: tone}, Text: label})
+		children = append(children, toneText(key+"-label", tone, label))
 		readonly := f.Saving || f.DiscardConfirm
 		if field.Name == model.CreateBody {
 			children = append(children, TextEditor(key, f.Editor, readonly))
@@ -40,20 +40,20 @@ func createLayer(m model.Model) tern.Element {
 			children = append(children, ui.Input{Common: ui.Common{Key: key, Tone: tone, Aria: label}, Field: ui.Field{Text: values[field.Name], Cursor: caretAt(f.Caret, field.Name, values[field.Name]), Mode: "insert", Readonly: readonly}})
 		}
 		if field.Name == model.CreateScheduled || field.Name == model.CreateDeadline {
-			children = append(children, ui.Text{Common: ui.Common{Key: key + "-preview", Tone: ui.ToneMuted}, Text: m.CreatePreview(field.Name)})
+			children = append(children, toneText(key+"-preview", ui.ToneMuted, m.CreatePreview(field.Name)))
 		}
 	}
 	if f.Field == model.CreateLabels {
-		children = append(children, ui.Text{Common: ui.Common{Key: "completion", Tone: ui.ToneMuted}, Text: strings.Join(m.CreateSuggestions(), ", ")})
+		children = append(children, toneText("completion", ui.ToneMuted, strings.Join(m.CreateSuggestions(), ", ")))
 	}
 	if f.Err != nil {
-		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: f.Err.Error()})
+		children = append(children, toneText("error", ui.ToneError, f.Err.Error()))
 	}
 	switch {
 	case f.Saving:
-		children = append(children, ui.Text{Common: ui.Common{Key: "saving", Tone: ui.TonePending}, Text: "Creating Issue…"})
+		children = append(children, toneText("saving", ui.TonePending, "Creating Issue…"))
 	case f.DiscardConfirm:
-		children = append(children, ui.Text{Common: ui.Common{Key: "discard", Tone: ui.ToneWarning}, Text: "Discard this Draft? y discards; n or esc keeps editing."}, discardButtons())
+		children = append(children, toneText("discard", ui.ToneWarning, "Discard this Draft? y discards; n or esc keeps editing."), discardButtons())
 	default:
 		children = append(children, buttonRow(cardButton("save", model.ModeCreate, model.SaveDraftAction, title, true), cardButton("cancel", model.ModeCreate, model.CancelDraft, "Cancel", false)))
 	}

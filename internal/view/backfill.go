@@ -31,19 +31,21 @@ func backfillLayer(m model.Model) tern.Element {
 		subject = fmt.Sprintf("job %q", b.Jobs[0].Job.Name)
 	}
 	children := []tern.Element{
-		ui.Text{Common: ui.Common{Key: "warning", Tone: ui.ToneWarning}, Text: fmt.Sprintf("%s %s would create %s at once: its catch-up is every missed run.", step, subject, missedIssues(b.Total()))},
+		toneText("warning", ui.ToneWarning, fmt.Sprintf("%s %s would create %s at once: its catch-up is every missed run.", step, subject, missedIssues(b.Total()))),
 	}
 	for i, j := range b.Jobs {
 		name := ui.Text{Common: ui.Common{Key: "name", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}, Text: j.Job.Name}
-		count := ui.Text{Common: ui.Common{Key: "count", Shrink: new(float64), Tone: ui.ToneInfo}, Text: model.MissedWords(j.Missed), Wrap: ui.WrapNone}
+		count := toneText("count", ui.ToneInfo, model.MissedWords(j.Missed))
+		count.Shrink = new(float64)
+		count.Wrap = ui.WrapNone
 		children = append(children, ui.Row{Common: ui.Common{Key: fmt.Sprintf("job%d", i)}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(name, count)})
 	}
 	if b.Err != nil {
-		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: b.Err.Error()})
+		children = append(children, toneText("error", ui.ToneError, b.Err.Error()))
 	}
 	if b.Saving {
 		return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardBackfill)}, Modal: true, Size: ui.SizeLG, Head: ui.T(head),
-			Children: append(children, ui.Text{Common: ui.Common{Key: "pending", Tone: ui.TonePending}, Text: "Switching to latest…"})})
+			Children: append(children, toneText("pending", ui.TonePending, "Switching to latest…"))})
 	}
 	children = append(children, buttonRow(
 		cardButton("create", model.ModeBackfill, model.BackfillCreate, "Create them", false),
