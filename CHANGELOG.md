@@ -8,6 +8,13 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - **Open kata**, `F9` and kata links need Tern 0.9.7 or newer, which lets plugins split and find a remote host's Pane; they no longer fall back to a new tab when Tern can't split the focused Pane.
 - `install.ps1` says that new Tern tabs and Panes see the `PATH` it changed at once; only shells already open and other programs already running need restarting.
+- The Worker card lists its facts (Project, Checkout, `worker.toml`, Worker, Supervision) as an aligned grid, each value leading with its state in that state's colour, and names the checkouts `worker.toml` maps only when they differ from the Checkout row.
+- The Worker card's restart and supervision-off questions list **when idle** and **now** each beside what it does to the runs in flight, and no longer say a run is held `interrupted` when none is in flight.
+- `e` on the Worker card, `ctrl+e` in the Draft editor and the Workflow card, and `tern-kata worker edit` open `$VISUAL`, else `$EDITOR`, else `vi`, as kata's own TUI does.
+
+### Fixed
+
+- `e` on the Worker card and `ctrl+e` no longer only blink when neither `$VISUAL` nor `$EDITOR` is set, as in a Pane started by **Open kata**: they open `vi`, and with no `vi` either the card says to set one without leaving the Pane.
 
 ## [0.6.0] - 2026-10-26
 

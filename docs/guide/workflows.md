@@ -15,7 +15,7 @@ Each row names the live Cron jobs that run the workflow and shows the workflow's
 | Enter | Open the inspector for the selected workflow |
 | `n` | New workflow (opens the Workflow card) |
 | `e` | Edit the selected workflow |
-| `ctrl+e` | In the card, edit the JSON in `$EDITOR` |
+| `ctrl+e` | In the card, edit the JSON in `$VISUAL`, else `$EDITOR`, else `vi` |
 | `ctrl+o` | In the card, save |
 | `x` | Archive the selected workflow |
 | `r` | Restore an archived workflow |
@@ -33,7 +33,7 @@ Each row names the live Cron jobs that run the workflow and shows the workflow's
 {"name": "...", "definition": {"version": 1, "steps": [{"key": "review", "kind": "prompt", "prompt": "..."}, {"key": "test", "kind": "command", "command": "make test", "after": ["review"], "retries": 1}]}}
 ```
 
-Edit it in the card or press `ctrl+e` for `$EDITOR`; `ctrl+o` saves.
+Edit it in the card or press `ctrl+e` for your editor; `ctrl+o` saves.
 
 Saving checks the text first, and nothing is sent while it fails. The check requires:
 

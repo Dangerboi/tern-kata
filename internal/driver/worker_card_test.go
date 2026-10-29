@@ -17,13 +17,14 @@ import (
 // the worker up or serves the Project.
 
 var (
-	noWorkerFile   = model.WorkerSetup{Project: "work", Checkout: "/repo", Path: "/cfg/tern-kata/worker.toml"}
-	brokenFile     = model.WorkerSetup{Project: "work", Checkout: "/repo", Path: "/cfg/tern-kata/worker.toml", Exists: true, LoadErr: `worker.toml: unknown key bogus`}
-	otherProject   = model.WorkerSetup{Project: "work", Checkout: "/repo", Path: "/cfg/tern-kata/worker.toml", Exists: true, Executor: "laptop"}
-	listedProject  = model.WorkerSetup{Project: "work", Checkout: "/repo", Path: "/cfg/tern-kata/worker.toml", Exists: true, Executor: "laptop", Lists: true, Checkouts: []string{"/repo"}}
-	unboundFolder  = model.WorkerSetup{Path: "/cfg/tern-kata/worker.toml"}
-	askedSetup     = model.LoadWorkerSetup{Workspace: "/repo"}
-	supervisedHere = &model.WorkerStatus{Executor: "laptop", PID: 4242, Supervised: true, Projects: []model.WorkerProject{{Name: "work", Admitting: true, Capacity: 1}}}
+	noWorkerFile    = model.WorkerSetup{Project: "work", Checkout: "/repo", Path: "/cfg/tern-kata/worker.toml"}
+	brokenFile      = model.WorkerSetup{Project: "work", Checkout: "/repo", Path: "/cfg/tern-kata/worker.toml", Exists: true, LoadErr: `worker.toml: unknown key bogus`}
+	otherProject    = model.WorkerSetup{Project: "work", Checkout: "/repo", Path: "/cfg/tern-kata/worker.toml", Exists: true, Executor: "laptop"}
+	listedProject   = model.WorkerSetup{Project: "work", Checkout: "/repo", Path: "/cfg/tern-kata/worker.toml", Exists: true, Executor: "laptop", Lists: true, Checkouts: []string{"/repo"}}
+	mappedElsewhere = model.WorkerSetup{Project: "work", Checkout: "/repo", Path: "/cfg/tern-kata/worker.toml", Exists: true, Executor: "laptop", Lists: true, Checkouts: []string{"/elsewhere"}}
+	unboundFolder   = model.WorkerSetup{Path: "/cfg/tern-kata/worker.toml"}
+	askedSetup      = model.LoadWorkerSetup{Workspace: "/repo"}
+	supervisedHere  = &model.WorkerStatus{Executor: "laptop", PID: 4242, Supervised: true, Projects: []model.WorkerProject{{Name: "work", Admitting: true, Capacity: 1}}}
 )
 
 func manual(s model.WorkerSetup) model.WorkerSetup { s.Manual = true; return s }
@@ -83,7 +84,8 @@ func TestWorkerCardStatesAndWhatEachOffers(t *testing.T) {
 		{"no file", nil, noWorkerFile, []string{"none yet", "Project: work", "checkout /repo", "not running", "the plugin starts a worker once a worker.toml loads"}, true, true},
 		{"file that does not load", nil, brokenFile, []string{"does not load: worker.toml: unknown key bogus"}, false, false},
 		{"file without the Project", nil, otherProject, []string{"loads, and does not list work"}, false, true},
-		{"file with the Project, worker supervised", supervisedHere, listedProject, []string{"loads, lists work with checkout /repo", "process 4242", "the plugin supervises it"}, false, false},
+		{"file with the Project, worker supervised", supervisedHere, listedProject, []string{"loads, lists work", "process 4242", "the plugin starts it again when it exits"}, false, false},
+		{"file with the Project at another checkout", supervisedHere, mappedElsewhere, []string{"loads, lists work with checkout /elsewhere"}, false, false},
 		{"marker", nil, manual(listedProject), []string{worker.ManualFileName + " is present: the plugin neither starts nor restarts"}, false, false},
 		{"worker started by hand", &model.WorkerStatus{Executor: "laptop", PID: 7}, listedProject, []string{"started by hand"}, false, false},
 		{"folder bound to no Project", nil, unboundFolder, []string{"not bound to a kata Project", "kata init"}, false, false},
@@ -563,6 +565,20 @@ func TestWorkerCardSupervisionOffWithAWorkerRunningAsksHowToStopIt(t *testing.T)
 	if kept.State.Model.TopCard() != model.CardWorker || len(kept.Cmds) != 0 || kept.State.Model.CurrentMode() != model.ModeWorkerRead {
 		t.Errorf("esc: card %v mode %s cmds %v, want the plain card and nothing written", kept.State.Model.TopCard(), kept.State.Model.CurrentMode(), kept.Cmds)
 	}
+}
+
+// With no run in flight neither the question nor the answer claims a run is held `interrupted`.
+func TestWorkerCardSupervisionOffWithNoRunInFlightPromisesNoHeldRun(t *testing.T) {
+	asked := step(t, workerCardOpen(t, supervisedHere, listedProject), key("s")).State
+	now := step(t, asked, key("n")).State
+	ended := step(t, now, model.WorkerSupervisionSet{Manual: true, Stop: &model.WorkerStopped{Mode: "now"}}).State
+	for name, s := range map[string]driver.State{"question": asked, "answer": ended} {
+		if text := wireTextOf(t, s); strings.Contains(text, "held `interrupted`") {
+			t.Errorf("%s says a run is held: %s", name, text)
+		}
+	}
+	wantText(t, "question", wireTextOf(t, asked), "no run is in flight")
+	wantText(t, "answer", wireTextOf(t, ended), "ending now")
 }
 
 func TestWorkerCardSupervisionOnRemovesTheMarkerAndSaysThePluginStartsTheWorker(t *testing.T) {

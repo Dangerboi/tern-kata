@@ -9,7 +9,8 @@ ctl key 3
 expect_tree "[data-id='main.columns.list.jobs']" '.ok and .count == 1'
 expect_tree "[data-id='main.columns.list.worker']" '.ok and .count == 1 and (.nodes[0].text | contains("press W to set one up"))'
 ctl key W
-expect_tree "[data-id='layer.worker']" '.ok and .count == 1 and (.nodes[0] | [.. | objects | .text? // empty] | join(" ") | contains("none yet") and contains("Project: smoke"))'
+expect_tree "[data-id='layer.worker']" '.ok and .count == 1 and (.nodes[0] | [.. | objects | .text? // empty] | join(" ") | contains("none yet"))'
+expect_tree "[data-id='layer.worker.facts.project.value']" '.ok and .count == 1 and .nodes[0].text == "smoke"'
 expect_tree "[data-id='layer.worker.executor']" '.ok and .count == 1 and (.nodes[0].text | length > 0)'
 expect_tree "[data-id='layer.worker.command']" '.ok and .count == 1 and (.nodes[0].text | startswith("omp"))'
 

@@ -307,10 +307,12 @@ func (m Model) WorkerInFlight() []LocalRun {
 	return runs
 }
 
-// workerInFlightWords is the runs in flight in words: how many, and which jobs.
-func (m Model) workerInFlightWords() string {
-	runs := m.WorkerInFlight()
-	n := max(len(runs), m.Worker.InFlight)
+// WorkerInFlightCount is how many runs the worker has in flight: those it lists, or its own count when that is higher.
+func (m Model) WorkerInFlightCount() int { return max(len(m.WorkerInFlight()), m.Worker.InFlight) }
+
+// WorkerInFlightWords is the runs in flight in words: how many, and which jobs.
+func (m Model) WorkerInFlightWords() string {
+	runs, n := m.WorkerInFlight(), m.WorkerInFlightCount()
 	if n == 0 {
 		return "no run in flight"
 	}
@@ -333,10 +335,19 @@ func (m Model) workerInFlightWords() string {
 	return text
 }
 
-// WorkerRestartPrompt is what the card says when it asks how to restart the running worker.
-func (m Model) WorkerRestartPrompt() (when, now string) {
-	return "Restart when idle: the worker takes no new run, finishes " + m.workerInFlightWords() + " and exits.",
-		"Restart now: the worker exits at once; " + m.workerInFlightWords() + " is interrupted and held `interrupted`, to resume later."
+// WorkerStopWords are what the two stops do to the running worker, for the card's restart and supervision questions: when
+// idle it finishes its runs in flight first, now it interrupts them.
+func (m Model) WorkerStopWords() (idle, now string) {
+	n := m.WorkerInFlightCount()
+	if n == 0 {
+		return "Takes no new run and exits; no run is in flight.", "Exits at once; no run is in flight, so none is interrupted."
+	}
+	runs, verb := m.WorkerInFlightWords(), "is"
+	if n != 1 {
+		verb = "are"
+	}
+	return "Takes no new run, finishes its " + runs + ", then exits.",
+		"Exits at once; its " + runs + " " + verb + " interrupted and held `interrupted`, to resume later."
 }
 
 // startSentence is what happens next when no worker runs: the plugin starts one, or nothing does under the supervision marker.
@@ -458,7 +469,7 @@ func (m Model) workerWritten(saved string) (Model, []Cmd) {
 	f.Saved = saved
 	f.Restart = m.Worker.Running
 	if f.Restart {
-		f.Next = "The running worker reads worker.toml only at start."
+		f.Next = "The running worker reads worker.toml only at start. How should it restart?"
 	} else {
 		f.Next = m.startSentence()
 	}
@@ -656,11 +667,8 @@ func switchSupervision(m Model) (Model, []Cmd) {
 	return m, []Cmd{SetWorkerSupervision{Manual: !m.Worker.Setup.Manual}}
 }
 
-// WorkerOffPrompt is what the card says when it asks how to stop the running worker as supervision goes off.
-func (m Model) WorkerOffPrompt() (when, now string) {
-	return "Stop when idle: the worker takes no new run, finishes " + m.workerInFlightWords() + " and exits; the plugin starts no new one.",
-		"Stop now: the worker exits at once; " + m.workerInFlightWords() + " is interrupted and held `interrupted`, to resume later; the plugin starts no new one."
-}
+// WorkerOffQuestion is what the card asks when supervision goes off with a worker running.
+const WorkerOffQuestion = "Turn supervision off: the plugin starts no new worker. How should the running one stop?"
 
 // workerOffKey is one key while the card asks how to stop the worker: when idle (the default), now, or not at all.
 func workerOffKey(m Model, msg KeyMsg) (Model, []Cmd) {
@@ -676,7 +684,9 @@ func workerOffKey(m Model, msg KeyMsg) (Model, []Cmd) {
 			mode = worker.StopNow
 		}
 		f.AskOff, f.Switching = false, true
-		f.Supervision = m.workerInFlightWords() // named in the answer: the status read after the stop no longer lists them
+		if m.WorkerInFlightCount() > 0 {
+			f.Supervision = m.WorkerInFlightWords() // named in the answer: the status read after the stop no longer lists them
+		}
 		return m, []Cmd{SetWorkerSupervision{Manual: true, Stop: mode}}
 	case WorkerOffCancel:
 		f.AskOff = false
@@ -709,8 +719,10 @@ func workerSupervisionSet(m Model, msg WorkerSupervisionSet) (Model, []Cmd) {
 		f.Err = fmt.Errorf("The stop was refused: %w", stop.Err)
 	case stop.Gone:
 		f.Supervision = "Supervision is off: " + manualFile + " is created. No worker is running now, and the plugin starts none."
-	case stop.Mode == worker.StopNow:
+	case stop.Mode == worker.StopNow && flight != "":
 		f.Supervision = "Supervision is off: " + manualFile + " is created. The worker is ending now (" + flight + "; held `interrupted`), and nothing starts it again."
+	case stop.Mode == worker.StopNow:
+		f.Supervision = "Supervision is off: " + manualFile + " is created. The worker is ending now, and nothing starts it again."
 	case stop.InFlight > 0:
 		f.Supervision = fmt.Sprintf("Supervision is off: "+manualFile+" is created. The worker finishes its %d run%s in flight, then exits, and nothing starts it again.", stop.InFlight, plural(stop.InFlight))
 	default:
@@ -731,7 +743,7 @@ func (m Model) WorkerCardMode() Mode {
 // manualFile is the supervision marker's name, from the one rule.
 const manualFile = worker.ManualFileName
 
-// ManualPresentWords is the Worker card's sentence for a present supervision marker; the view shows it as the model words it.
+// ManualPresentWords is the Worker card's words for a present supervision marker; the view shows them as the model words them.
 func ManualPresentWords() string {
-	return manualFile + " is present: the plugin neither starts nor restarts the worker."
+	return manualFile + " is present: the plugin neither starts nor restarts the worker"
 }

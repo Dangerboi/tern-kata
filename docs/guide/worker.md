@@ -39,21 +39,21 @@ Both need a folder bound to a kata Project, the Binding the Pane uses: a `.kata.
 
 ![The Worker card for the acme-shop Project, with the worker.toml that serves it](../images/worker-card.png)
 
-It reads this machine once, asks the worker for its status and shows:
+It reads this machine once, asks the worker for its status and shows, one fact per row:
 
-- whether `worker.toml` exists, whether the worker's loader accepts it (or why not), and whether it lists the Project, with the checkout it maps;
-- whether a worker runs, with its process id, executor and runs in flight;
-- whether the plugin supervises it, or `worker.manual` turned that off.
+- **worker.toml**: whether it exists, whether the worker's loader accepts it (or why not), and whether it lists the Project; the checkouts it maps are named when they differ from the card's Checkout row;
+- **Worker**: whether a worker runs, with its executor, process id and runs in flight;
+- **Supervision**: whether the plugin supervises it, or `worker.manual` turned that off.
 
 What the card offers depends on the file:
 
 - **No `worker.toml`: Set up.** Executor, actor, command, model and thinking, prefilled as `worker init` would.
 - **A file that loads but does not list the Project: Serve this Project.** It does what `worker add` does.
-- **Any file: Edit** (`e`). The file opens in `$EDITOR` as a `.toml` file; the text you save is checked and written like the commands do, unless `worker.toml` changed while you edited. Then nothing is written, the card says so, reads the file again and keeps your text, which lacks that change: `e` and a save replace the file with it deliberately. A refusal names the problem on the card and keeps your text, so `e` again reopens it rather than the file; an unchanged or empty result changes nothing. Edit can repair a file that does not load, which Set up and Serve never overwrite.
+- **Any file: Edit** (`e`). The file opens in `$VISUAL`, else `$EDITOR`, else `vi`, as a `.toml` file; the text you save is checked and written like the commands do, unless `worker.toml` changed while you edited. Then nothing is written, the card says so, reads the file again and keeps your text, which lacks that change: `e` and a save replace the file with it deliberately. A refusal names the problem on the card and keeps your text, so `e` again reopens it rather than the file; an unchanged or empty result changes nothing. Edit can repair a file that does not load, which Set up and Serve never overwrite.
 
 Set up and Serve show the checkout and the trust note, and save only when the trust choice is Yes (it starts at No; space, left and right or a click change it). A value the loader refuses is named, with focus on that field, and your input stays. A folder bound to no Project gets a message and no fields. Esc closes the card.
 
-After a save or an edit with a worker running, the card asks how to restart it, since it reads `worker.toml` only at start. **When idle** (`i` or enter, the default) and **now** (`n`) are the two [stop modes](#restarting-and-stopping); the card names the runs in flight. Esc leaves the worker running. Its notice then says whether the plugin starts a fresh worker. With no worker running, the card says the plugin starts one within 10 seconds, or, under `worker.manual`, that you start it.
+After a save or an edit with a worker running, the card asks how to restart it, since it reads `worker.toml` only at start. **When idle** (`i` or enter, the default) and **now** (`n`) are the two [stop modes](#restarting-and-stopping), each listed beside what it does to the runs in flight, which the card names. Esc leaves the worker running. Its notice then says whether the plugin starts a fresh worker. With no worker running, the card says the plugin starts one within 10 seconds, or, under `worker.manual`, that you start it.
 
 `s` on the card turns [supervision](#supervision) off or on (when the card draws no fields; otherwise `s` is typed). The Jobs Page banner says per state what is missing (no file, a file that does not load, a Project not listed, no worker running, `worker.manual`) and points at `W`.
 
@@ -72,7 +72,7 @@ tern-kata worker doctor                  # check the result
 
 - **`init`** writes a new file for this Project: its checkout, a `default` profile, capacity 1. The five optional flags set the values the Set up card prefills; one you leave out keeps its default, and a value the loader refuses is refused naming it, with nothing written. It refuses when the file exists (use `add`) or the directory is not bound. It ends by printing the path, a line of the trust note, and that the plugin's host half starts the worker within 10 seconds (else run `tern-kata worker`).
 - **`add`** adds this Project to an existing file, with its checkout, and leaves every other line and comment byte for byte as it was. It refuses when there is no file (use `init`), the directory is not bound, or the Project is already listed.
-- **`edit`** opens the file in `$VISUAL` (else `$EDITOR`) on a temporary copy. A result that does not load reopens the editor on your text with the problem as `#!` comment lines at the top, until it loads; an unchanged or empty result cancels. If `worker.toml` changed while you edited, nothing is written and the error names the temporary file that keeps your edit. It refuses with no file and points at `init`.
+- **`edit`** opens the file in `$VISUAL`, else `$EDITOR`, else `vi`, on a temporary copy. A result that does not load reopens the editor on your text with the problem as `#!` comment lines at the top, until it loads; an unchanged or empty result cancels. If `worker.toml` changed while you edited, nothing is written and the error names the temporary file that keeps your edit. It refuses with no file and points at `init`.
 
 After any of them, a running worker reads the new file only after `tern-kata worker stop`; `edit` and `add` say so, and whether a worker runs.
 

@@ -28,21 +28,18 @@ func TestEditDraft(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
-		editor  string
 		script  string
 		want    string
 		wantErr string
 	}{
-		{"edit replaces text", "x", `printf edited > "$1"`, "edited", ""},
-		{"failing editor keeps original", "x", `exit 3`, "original", "$EDITOR"},
-		{"unset editor", "", `printf edited > "$1"`, "original", "$EDITOR"},
+		{"edit replaces text", `printf edited > "$1"`, "edited", ""},
+		{"failing editor keeps original", `exit 3`, "original", "editor x"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tmp := t.TempDir()
 			t.Setenv("TMPDIR", tmp)
-			t.Setenv("EDITOR", tt.editor)
-			got, kept := editDraft(model.OpenDraftEditor{Text: "original"}, fakeEditor(tt.script))
+			got, kept := editDraft(model.OpenDraftEditor{Text: "original"}, "x", fakeEditor(tt.script))
 			if kept != "" {
 				os.Remove(kept)
 			}
@@ -59,14 +56,64 @@ func TestEditDraft(t *testing.T) {
 	}
 }
 
+// The editor is $VISUAL, else $EDITOR, else vi; with none of them the Pane is never handed over, so it does not blink.
+func TestEditInTerminalPicksVisualThenEditorThenVi(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake editors use sh")
+	}
+	withVi := t.TempDir()
+	if err := os.WriteFile(filepath.Join(withVi, "vi"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name, visual, editor, path, want string
+	}{
+		{"VISUAL first", "v", "e", withVi, "v"},
+		{"then EDITOR", "", "e", withVi, "e"},
+		{"then vi", "", "", withVi, "vi"},
+		{"none", "", "", t.TempDir(), ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("TMPDIR", t.TempDir())
+			t.Setenv("VISUAL", tt.visual)
+			t.Setenv("EDITOR", tt.editor)
+			t.Setenv("PATH", tt.path)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			suspended := false
+			resume := func(context.Context) (paneSession, paneSurface, error) {
+				suspended = true
+				return stubSession{}, stubSurface{}, nil
+			}
+			var ran string
+			build := func(editor, file string) *exec.Cmd {
+				ran = editor
+				return exec.Command("/bin/sh", "-c", `printf edited > "$1"`, "fake", file)
+			}
+			got, err := editInTerminal(newTerminal(ctx, stubSession{}, stubSurface{}, resume), model.OpenDraftEditor{UID: "w", Text: "original"}, build)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tt.want == "" {
+				if suspended || got.Err == nil || !strings.Contains(got.Err.Error(), "$VISUAL or $EDITOR") || got.Text != "original" || got.UID != "w" {
+					t.Errorf("suspended %v, result %#v; want the Pane kept and a refusal naming $VISUAL and $EDITOR", suspended, got)
+				}
+				return
+			}
+			if ran != tt.want || got.Text != "edited" || !suspended {
+				t.Errorf("ran %q (text %q, suspended %v), want %q", ran, got.Text, suspended, tt.want)
+			}
+		})
+	}
+}
+
 func TestEditDraftGivesTheEditorAFileWithTheRequestedExtension(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fake editors use sh")
 	}
 	t.Setenv("TMPDIR", t.TempDir())
-	t.Setenv("EDITOR", "x")
 	for suffix, want := range map[string]string{"": ".md", ".json": ".json"} {
-		got, kept := editDraft(model.OpenDraftEditor{Text: "original", Suffix: suffix}, fakeEditor(`printf '%s' "$1" > "$1"`))
+		got, kept := editDraft(model.OpenDraftEditor{Text: "original", Suffix: suffix}, "x", fakeEditor(`printf '%s' "$1" > "$1"`))
 		os.Remove(kept)
 		if got.Err != nil || !strings.HasSuffix(got.Text, want) {
 			t.Errorf("suffix %q: editor was given %q (err %v), want a %s file", suffix, got.Text, got.Err, want)
@@ -83,8 +130,7 @@ func TestEditDraftSpacedTempPathThroughShell(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("TMPDIR", tmp)
-	t.Setenv("EDITOR", `sh -c 'test $# -eq 1 && printf one > "$1"' editor`)
-	got, kept := editDraft(model.OpenDraftEditor{Text: "original"}, editorCommand)
+	got, kept := editDraft(model.OpenDraftEditor{Text: "original"}, `sh -c 'test $# -eq 1 && printf one > "$1"' editor`, editorCommand)
 	os.Remove(kept)
 	if got.Err != nil || got.Text != "one" {
 		t.Errorf("got text %q err %v", got.Text, got.Err)

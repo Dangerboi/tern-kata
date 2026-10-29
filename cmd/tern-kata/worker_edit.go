@@ -1,7 +1,6 @@
 package main
 
 import (
-	"cmp"
 	"errors"
 	"fmt"
 	"io"
@@ -17,7 +16,7 @@ import (
 // stripped before the file is checked again.
 const problemPrefix = "#! "
 
-// editWorkerConfig is `worker edit`: worker.toml goes through $VISUAL or $EDITOR in a temporary file, and the result
+// editWorkerConfig is `worker edit`: worker.toml goes through the editor (resolveEditor) in a temporary file, and the result
 // replaces it only when the shared strict check accepts it. A refusal reopens the text with the problem at the top;
 // an unchanged or empty result leaves the file as it was, and so does a file that changed while the editor was open. Whenever
 // the write fails, the edited copy stays in its temporary file, whose path the error names.
@@ -30,9 +29,9 @@ func editWorkerConfig(ctx context.Context, env workerEnv, out io.Writer) error {
 	if err != nil {
 		return subcommandError{err}
 	}
-	editor := cmp.Or(os.Getenv("VISUAL"), os.Getenv("EDITOR"))
-	if editor == "" {
-		return subcommandError{errors.New("set $VISUAL or $EDITOR to edit worker.toml")}
+	editor, err := resolveEditor()
+	if err != nil {
+		return subcommandError{err}
 	}
 	tmp, err := os.CreateTemp("", "tern-kata-worker-*.toml")
 	if err != nil {
