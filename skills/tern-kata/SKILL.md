@@ -1,6 +1,6 @@
 ---
 name: tern-kata
-description: Files attached to kata Issues, recurring Issues, and the tern-kata worker, through tern-kata. Use when an Issue's metadata has `tern-kata.attachment.*` keys, to attach a screenshot, log or other file to an Issue, to make an Issue recur, change or stop its schedule, or print it (`tern-kata recur`), to run a scheduled agent job now (`tern-kata run`), to check what the worker serves and runs (`tern-kata worker status`, `worker doctor`), to set the worker up when the user asks (`tern-kata worker init`, `worker add`, `worker edit`), or to resume or abandon a held worker run (`tern-kata worker resume`, `worker abandon`). Never stop, edit or reconfigure the user's worker unasked.
+description: Files attached to kata Issues, recurring Issues, and the tern-kata worker, through tern-kata. Use when an Issue's metadata has `tern-kata.attachment.*` keys, to attach a screenshot, log or other file to an Issue, to make an Issue recur, change or stop its schedule, or print it (`tern-kata recur`), to list or show the views (Today, All Open, a saved view) or save one (`tern-kata views`), to run a scheduled agent job now (`tern-kata run`), to check what the worker serves and runs (`tern-kata worker status`, `worker doctor`), to set the worker up when the user asks (`tern-kata worker init`, `worker add`, `worker edit`), or to resume or abandon a held worker run (`tern-kata worker resume`, `worker abandon`). Never stop, edit or reconfigure the user's worker unasked.
 ---
 
 An Attachment is a file copied into the Project's Attachment store, `<primary checkout>/.kata-attachments/<Issue ULID>/<name>`, and pointed to by one `tern-kata.attachment.<name>` meta key on the Issue. The store is gitignored and never committed. Older Issues may still show `attachment.<name>` with `host` and `path` until a Pane or `tern-kata attach`/`detach` has run once on that machine; those still point at the file, so read them the same way. Never read or write `attachment.<ULID>` keys with other fields: those are kata's own attachments.
@@ -45,6 +45,25 @@ tern-kata recur <ref> --stop                            # stops the Recurrence; 
 - Same refs, `--as`, Binding rule and exit codes as `attach`: run from a checkout of the Issue's own Project; one result line on success, the reason on stderr and exit 1 on failure. Invalid input is refused and nothing is sent.
 - Changing a schedule someone else changed meanwhile writes nothing: it prints the current schedule and exits 1. Changing or stopping an Issue that never recurred or whose Recurrence was stopped is refused; kata won't make a stopped Issue recur again.
 - Leave the `O` card and `kata ui` to people.
+
+## Views
+
+`tern-kata views` lists and shows the Collections and saved views of the Pane's Menu, and saves or removes saved views, without Tern. It needs the `tern-kata` binary on `PATH` (check with `command -v tern-kata`; PowerShell: `Get-Command tern-kata`); when it is missing, tell the user and point them to https://github.com/Dangerboi/tern-kata#install.
+
+```bash
+tern-kata views                                   # built-in Collections by key, then saved views with their base and filters
+tern-kata views show today                        # the Issues of a Collection (key or title) or a saved view, grouped as the Pane groups them
+tern-kata views show "Work bugs" --json           # one object per group: {id, title, issues: [...]}
+tern-kata views add "Work bugs" --base project:Work --status open --label bug   # saves a view; --replace saves over a name
+tern-kata views rm "Work bugs"                    # deletes a saved view without asking
+```
+
+- Text lines are `<project>#<id>  status  priority  [dates]  title`, under a heading per group. `--json` prints an array of groups, each `{"id", "title", "issues": [{"ref": "<project>#<id>", "uid", "title", "status", "priority", "owner", "labels", "scheduled_on", "deadline_on", "closed_on"}]}`; priority, owner and the dates are `null` when unset, labels is `[]`, dates are `YYYY-MM-DD` in this machine's time zone. Prefer `--json` when you will read the result.
+- Names are matched ignoring case. `@me` in a view's owner means the `--as` actor, else `$KATA_AUTHOR`, `$USER`, `git config user.name`; an empty `--as` is refused, so never pass `--as "$VAR"` with a variable that may be unset.
+- Views span Projects, so no Binding is needed; `show` needs the kata daemon.
+- `add` flags: `--base <collection>|project:<name>` (default `all-open`), `--project <name>`, `--status open|closed|all`, `--owner <actor>|@me`, `--label`, `--relationship parent|child|blocks|blocked_by|related`, `--search`, `--replace`. Name checks are the View card's; an existing name is refused without `--replace`, and a `views.toml` changed meanwhile is refused.
+- Exit 0 on success, 1 on a refusal or daemon failure (reason on stderr), 2 on a bad command line, including a name that is no view (the message lists the names).
+- Saved views are in `views.toml` on this machine only. Add or remove views only when the user asks; leave the Menu's View card to people.
 
 ## Worker runs
 

@@ -240,6 +240,16 @@ func TestPlanLaunchSubcommands(t *testing.T) {
 		{name: "help after a double dash is a file", args: []string{"attach", "ab12", "--", "--help", "--version"}, sub: "attach", ref: "ab12", operands: []string{"--help", "--version"}, actor: "anonymous"},
 		{name: "status as JSON", args: []string{"worker", "status", "--json"}, sub: "worker", operands: []string{"status"}, actor: "anonymous"},
 		{name: "json elsewhere", args: []string{"worker", "doctor", "--json"}, err: "worker: --json applies to `tern-kata worker status` only"},
+		{name: "views lists", args: []string{"views"}, sub: "views", actor: "anonymous"},
+		{name: "views show as JSON", args: []string{"views", "show", "Work bugs", "--json"}, sub: "views", operands: []string{"show", "Work bugs"}, actor: "anonymous"},
+		{name: "views add with flags anywhere", args: []string{"views", "add", "--search=a b", "x", "--replace", "--as", "amy"}, sub: "views", operands: []string{"add", "x"}, actor: "amy"},
+		{name: "views rm", args: []string{"views", "rm", "x"}, sub: "views", operands: []string{"rm", "x"}, actor: "anonymous"},
+		{name: "views show needs a name", args: []string{"views", "show"}, err: "usage: tern-kata views | tern-kata views show <name> [--json] | tern-kata views add <name> [--base <collection>|project:<name>] [--project <name>] [--status open|closed|all] [--owner <actor>|@me] [--label <label>] [--relationship <kind>] [--search <text>] [--replace] | tern-kata views rm <name>"},
+		{name: "views with an unknown form", args: []string{"views", "edit", "x"}, err: "usage: tern-kata views | tern-kata views show <name> [--json] | tern-kata views add <name> [--base <collection>|project:<name>] [--project <name>] [--status open|closed|all] [--owner <actor>|@me] [--label <label>] [--relationship <kind>] [--search <text>] [--replace] | tern-kata views rm <name>"},
+		{name: "views json elsewhere", args: []string{"views", "--json"}, err: "views: --json applies to `tern-kata views show` only"},
+		{name: "views add flags elsewhere", args: []string{"views", "show", "x", "--replace"}, err: "views: --base, --project, --status, --owner, --label, --relationship, --search and --replace apply to `tern-kata views add` only"},
+		{name: "views flag given twice", args: []string{"views", "add", "x", "--label", "a", "--label=b"}, err: "--label given twice"},
+		{name: "views flag without a value", args: []string{"views", "add", "x", "--label"}, err: "--label requires a value"},
 		{name: "completion", args: []string{"completion", "fish"}, sub: "completion", operands: []string{"fish"}, actor: "anonymous"},
 		{name: "completion for an unknown shell", args: []string{"completion", "tcsh"}, err: "usage: tern-kata completion bash|zsh|fish"},
 		{name: "completion takes no flags", args: []string{"completion", "bash", "--as", "bob"}, err: "completion: unknown flag --as"},
@@ -277,6 +287,7 @@ func TestPlanLaunchRefusesEmptyAsForEverySubcommand(t *testing.T) {
 		{"attach", "ab12", "a.png"},
 		{"detach", "ab12", "a.png"},
 		{"recur", "ab12"},
+		{"views", "show", "x"},
 		{"run", "01M5J9AAAAAAAAAAAAAAAAAAAA"},
 		{"worker", "resume", "01M5J9AAAAAAAAAAAAAAAAAAAA"},
 		{"worker", "abandon", "01M5J9AAAAAAAAAAAAAAAAAAAA"},
@@ -297,7 +308,7 @@ func TestPlanLaunchRefusesEmptyAsForEverySubcommand(t *testing.T) {
 }
 
 func TestPlanLaunchHelpIsJudgedByTheSubcommandParsers(t *testing.T) {
-	for _, args := range [][]string{{"worker", "init", "--command", "-h"}, {"recur", "ab12", "--rule", "--help"}} {
+	for _, args := range [][]string{{"worker", "init", "--command", "-h"}, {"recur", "ab12", "--rule", "--help"}, {"views", "add", "x", "--search", "-h"}, {"views", "add", "x", "--search", "--help"}} {
 		plan, err := PlanLaunch(args, lookupFrom(nil), "v")
 		if err != nil || plan.Help {
 			t.Errorf("PlanLaunch(%q) = %+v, %v; want the word taken as the flag's value", args, plan, err)

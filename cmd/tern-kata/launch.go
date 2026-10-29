@@ -29,7 +29,7 @@ type LaunchPlan struct {
 	// TUIArgs are the arguments only `kata tui` takes (FallbackArgs without the --issue translation); inside Tern nothing reads
 	// them, so main refuses them there instead of dropping them unseen.
 	TUIArgs []string
-	// Subcommand is "attach", "detach", "recur", "run", "worker" or "completion" when it was the first argument; main runs it
+	// Subcommand is "attach", "detach", "recur", "run", "views", "worker" or "completion" when it was the first argument; main runs it
 	// without Tern.
 	Subcommand string
 	// TargetRef is the Issue as attach, detach and recur take it (what `kata show` takes: a short id, <project>#<short id> or a ULID),
@@ -43,8 +43,13 @@ type LaunchPlan struct {
 	Takeover bool
 	// Now is `worker stop --now`: end the worker at once instead of letting its runs in flight finish.
 	Now bool
-	// JSON is `worker status --json`: the status as the worker's control socket answers it, instead of the text.
+	// JSON is `worker status --json` or `views show --json`: the status as the worker's control socket answers it, or the groups of
+	// Issues, instead of the text.
 	JSON bool
+	// ViewFlags are `views add`'s --base, --project, --status, --owner, --label, --relationship and --search by name without dashes, as typed;
+	// unset ones are absent. Replace is `views add --replace`.
+	ViewFlags map[string]string
+	Replace   bool
 	// InitFlags are `worker init`'s --executor, --actor, --command, --model and --thinking by name without dashes, as typed; unset ones are absent.
 	InitFlags map[string]string
 	// fallbackAuthor is the --as actor exported to `kata tui`; empty leaves the environment untouched.
@@ -77,7 +82,7 @@ type usageError struct{ error }
 func (e usageError) Unwrap() error { return e.error }
 
 // subcommands are the first arguments that name a command run without Tern.
-var subcommands = []string{"attach", "detach", "recur", "run", "worker", "completion"}
+var subcommands = []string{"attach", "detach", "recur", "run", "views", "worker", "completion"}
 
 // completionShells are the shells `tern-kata completion` writes a script for.
 var completionShells = []string{"bash", "zsh", "fish"}
@@ -127,6 +132,14 @@ func scanFlags(flags []string, flag string) bool {
 		}
 		if subcommand == "recur" {
 			if matched, _ := parseRecurFlag(flags, &i, &scratch); matched {
+				continue
+			}
+		}
+		if subcommand == "views" {
+			if arg == "--json" || arg == "--replace" {
+				continue
+			}
+			if matched, _ := parseViewFlag(flags, &i, &scratch); matched {
 				continue
 			}
 		}
@@ -295,6 +308,21 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 				continue
 			}
 		}
+		if plan.Subcommand == "views" {
+			if arg == "--json" {
+				plan.JSON = true
+				continue
+			}
+			if arg == "--replace" {
+				plan.Replace = true
+				continue
+			}
+			if matched, err := parseViewFlag(args, &i, &plan); err != nil {
+				return LaunchPlan{}, err
+			} else if matched {
+				continue
+			}
+		}
 		if plan.Subcommand == "completion" {
 			return LaunchPlan{}, fmt.Errorf("completion: unknown flag %s", arg) // the script is the same for every actor
 		}
@@ -328,16 +356,54 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 		return LaunchPlan{}, fmt.Errorf("worker: --json applies to `tern-kata worker status` only")
 	case plan.Subcommand == "worker" && len(operands) >= 1 && plan.Takeover:
 		return LaunchPlan{}, fmt.Errorf("worker: --takeover applies to `tern-kata worker` only")
+	case plan.Subcommand == "views" && !validViewsForm(operands):
+		return LaunchPlan{}, fmt.Errorf("usage: tern-kata views | tern-kata views show <name> [--json] | tern-kata views add <name> [--base <collection>|project:<name>] [--project <name>] [--status open|closed|all] [--owner <actor>|@me] [--label <label>] [--relationship <kind>] [--search <text>] [--replace] | tern-kata views rm <name>")
+	case plan.Subcommand == "views" && plan.JSON && !(len(operands) > 0 && operands[0] == "show"):
+		return LaunchPlan{}, fmt.Errorf("views: --json applies to `tern-kata views show` only")
+	case plan.Subcommand == "views" && (plan.Replace || len(plan.ViewFlags) > 0) && !(len(operands) > 0 && operands[0] == "add"):
+		return LaunchPlan{}, fmt.Errorf("views: --base, --project, --status, --owner, --label, --relationship, --search and --replace apply to `tern-kata views add` only")
 	case plan.Subcommand == "completion" && (len(operands) != 1 || !slices.Contains(completionShells, operands[0])):
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata completion bash|zsh|fish")
 	}
 	plan.Actor = resolveActor(plan.fallbackAuthor, lookup)
-	if plan.Subcommand == "worker" || plan.Subcommand == "completion" {
+	if plan.Subcommand == "worker" || plan.Subcommand == "completion" || plan.Subcommand == "views" {
 		plan.Operands = operands
 		return plan, nil
 	}
 	plan.TargetRef, plan.Operands = operands[0], operands[1:]
 	return plan, nil
+}
+
+// validViewsForm reports whether operands are one of the forms of `tern-kata views`: none, or show, add or rm with one name.
+func validViewsForm(operands []string) bool {
+	return len(operands) == 0 || len(operands) == 2 && slices.Contains([]string{"show", "add", "rm"}, operands[0])
+}
+
+// viewFlagNames are the flags of `views add` that set a field of the saved view.
+var viewFlagNames = []string{"base", "project", "status", "owner", "label", "relationship", "search"}
+
+// parseViewFlag reads one of viewFlagNames as --name value or --name=value at args[*i], moving *i past a separate value;
+// matched is false for any other argument. A value may be empty and is then judged by the view's checks.
+func parseViewFlag(args []string, i *int, plan *LaunchPlan) (matched bool, err error) {
+	name, value, hasValue := strings.Cut(strings.TrimPrefix(args[*i], "--"), "=")
+	if !slices.Contains(viewFlagNames, name) {
+		return false, nil
+	}
+	if !hasValue {
+		if *i+1 == len(args) {
+			return true, fmt.Errorf("--%s requires a value", name)
+		}
+		*i++
+		value = args[*i]
+	}
+	if _, given := plan.ViewFlags[name]; given {
+		return true, fmt.Errorf("--%s given twice", name)
+	}
+	if plan.ViewFlags == nil {
+		plan.ViewFlags = map[string]string{}
+	}
+	plan.ViewFlags[name] = value
+	return true, nil
 }
 
 // settlesHeldRun reports whether operands are `resume <run-uid>` or `abandon <run-uid>`, a form that takes no --takeover.
@@ -414,6 +480,12 @@ Usage:
                    [--day 15|last|"2nd tue"] [--month 1-12] [--until DATE | --count N]
                    | --rule <rrule>] [--start DATE] [--zone <iana>] [--stop] [--as <actor>]
   tern-kata run <job-uid> [--as <actor>]
+  tern-kata views [--as <actor>]
+  tern-kata views show <name> [--json] [--as <actor>]
+  tern-kata views add <name> [--base <collection>|project:<name>] [--project <name>]
+                   [--status open|closed|all] [--owner <actor>|@me] [--label <label>]
+                   [--relationship <kind>] [--search <text>] [--replace] [--as <actor>]
+  tern-kata views rm <name>
   tern-kata worker [--takeover]
   tern-kata worker init [--executor <name>] [--actor <actor>] [--command <cmd>]
                         [--model <model>] [--thinking <level>]
@@ -453,6 +525,31 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
   recur <ref> --stop            stop the Recurrence; existing Occurrences stay
   run <job-uid>                 ask this machine's worker to run an adapter prompt job now,
                                 prints the new run's uid once the worker has saved it
+  views                         list the built-in Collections (inbox, today, upcoming, deadlines,
+                                all-open, logbook), then the saved views with their base and the
+                                filters they set; a view whose base Project is gone or archived says
+                                so, and an unreadable views.toml is reported after the built-ins
+  views show <name>             print the Issues of a built-in Collection (by key or title) or a saved
+                                view, ignoring case, as the Pane groups them: "Overdue", "Today", one
+                                heading per Project, and so on. One line per Issue: <project>#<id>,
+                                status, priority, the dates of a dated Collection, title. @me in a
+                                view's owner is the --as actor. Needs no Binding. An unknown name
+                                exits 2 and lists the names
+  views show <name> --json      print a JSON array with one object per group:
+                                  {"id", "title", "issues": [{"ref": "<project>#<id>", "uid", "title",
+                                  "status", "priority", "owner", "labels": [...], "scheduled_on",
+                                  "deadline_on", "closed_on"}]}
+                                priority, owner and the three dates are null when unset, labels is
+                                [] when there are none; the dates are YYYY-MM-DD in this machine's zone
+  views add <name> ...          save a view in views.toml (this machine only): --base is a Collection
+                                key or title or project:<name> (default all-open); --project, --status
+                                (open, closed or all), --owner (an actor or @me), --label,
+                                --relationship (parent, child, blocks, blocked_by or related) and
+                                --search are the Filter card's fields. A Project is looked up by name
+                                in the daemon and saved by its uid. Refuses a name that is taken,
+                                unless --replace saves over it, and a views.toml changed meanwhile
+  views rm <name>               delete a saved view without asking; a built-in Collection or an
+                                unknown name is refused
   worker                        run the worker in the foreground: it runs the adapter jobs of the
                                 Projects listed in worker.toml (tern-kata's config folder) through
                                 omp and records each run in kata; --takeover claims the Projects'
@@ -494,7 +591,7 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 source <(tern-kata completion bash) (or zsh), or
                                 tern-kata completion fish | source
 <ref> is a short id in this workspace's Project, <project>#<short id>, or a ULID.
-The Issue's Project must be this workspace's Binding.
+The Issue's Project must be this workspace's Binding (views is the exception: it spans Projects).
 
 Any other argument is passed to ` + "`kata tui`" + ` when Tern is unavailable; inside Tern it is refused.
 

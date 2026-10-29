@@ -11,6 +11,9 @@ import (
 // workerForms are the operands `tern-kata worker` takes first.
 var workerForms = []string{"init", "add", "edit", "upgrade", "status", "stop", "doctor", "resume", "abandon"}
 
+// viewsForms are the operands `tern-kata views` takes first.
+var viewsForms = []string{"show", "add", "rm"}
+
 // writeCompletion is `tern-kata completion <shell>`: the script that completes tern-kata's subcommands, worker forms and
 // flags in that shell. Where nothing fits (attach's files) the shell completes file names.
 func writeCompletion(shell string, out io.Writer) error {
@@ -38,6 +41,17 @@ _tern_kata() {
 		case ${COMP_WORDS[1]} in
 		attach | detach | run) [[ $cur == -* ]] && words="--as" ;;
 		recur) [[ $cur == -* ]] && words="%[2]s --stop --as" ;;
+		views)
+			if [[ $COMP_CWORD -eq 2 ]]; then
+				words="%[6]s --as"
+			else
+				case ${COMP_WORDS[2]} in
+				show) [[ $cur == -* ]] && words="--json --as" ;;
+				add) [[ $cur == -* ]] && words="%[7]s --replace --as" ;;
+				rm) [[ $cur == -* ]] && words="--as" ;;
+				esac
+			fi
+			;;
 		completion) [[ $COMP_CWORD -eq 2 ]] && words="%[3]s" ;;
 		worker)
 			if [[ $COMP_CWORD -eq 2 ]]; then
@@ -59,7 +73,7 @@ _tern_kata() {
 	fi
 }
 complete -o default -F _tern_kata tern-kata
-`, strings.Join(subcommands, " "), dashed(model.RecurFlagNames), strings.Join(completionShells, " "), strings.Join(workerForms, " "), dashed(initFlagNames))
+`, strings.Join(subcommands, " "), dashed(model.RecurFlagNames), strings.Join(completionShells, " "), strings.Join(workerForms, " "), dashed(initFlagNames), strings.Join(viewsForms, " "), dashed(viewFlagNames))
 }
 
 // zshCompletion is the bash script run through zsh's bash completion layer, so the two shells offer the same words.
@@ -79,7 +93,7 @@ func fishCompletion() string {
 	line("-l as -r -d 'author for edits'")
 	line("-l version -d 'print the version and exit'")
 	line("-s h -l help -d 'print the help and exit'")
-	line("-n '__fish_seen_subcommand_from detach recur run completion worker' -f")
+	line("-n '__fish_seen_subcommand_from detach recur run views completion worker' -f")
 	line("-n '__fish_seen_subcommand_from completion' -a '%s'", strings.Join(completionShells, " "))
 	for _, name := range model.RecurFlagNames {
 		line("-n '__fish_seen_subcommand_from recur' -l %s -r", name)
@@ -90,7 +104,12 @@ func fishCompletion() string {
 	for _, name := range initFlagNames {
 		line("-n '__fish_seen_subcommand_from init' -l %s -r", name)
 	}
-	line("-n '__fish_seen_subcommand_from status' -l json -d 'the status as JSON'")
+	line("-n '__fish_seen_subcommand_from views; and not __fish_seen_subcommand_from %[1]s' -a '%[1]s'", strings.Join(viewsForms, " "))
+	for _, name := range viewFlagNames {
+		line("-n '__fish_seen_subcommand_from views' -l %s -r", name)
+	}
+	line("-n '__fish_seen_subcommand_from views' -l replace -d 'save over a view of that name'")
+	line("-n '__fish_seen_subcommand_from status show' -l json -d 'the status or the Issues as JSON'")
 	line("-n '__fish_seen_subcommand_from stop' -l now -d 'end the worker at once'")
 	return b.String()
 }

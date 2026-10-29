@@ -134,7 +134,7 @@ The [guide index](docs/guide/README.md) lists every page:
 
 - [Pages and the Board](docs/guide/pages-and-board.md), [Jobs](docs/guide/jobs.md), [Runs](docs/guide/runs.md), [Workflows](docs/guide/workflows.md)
 - [The worker](docs/guide/worker.md) and its [reference](docs/guide/worker-reference.md)
-- [Attachments](docs/guide/attachments.md), [Recurring Issues](docs/guide/recur.md), [Dates](docs/guide/dates.md)
+- [Attachments](docs/guide/attachments.md), [Recurring Issues](docs/guide/recur.md), [Views from a shell](docs/guide/views.md), [Dates](docs/guide/dates.md)
 - [Agents](docs/guide/agents.md), [Compared with `kata tui`](docs/guide/kata-tui.md), [FAQ](docs/guide/faq.md), [Development](docs/guide/development.md)
 
 ## Credits
