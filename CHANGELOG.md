@@ -6,6 +6,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Added
 
+- `tern-kata views` lists the built-in Collections and the saved views with their base and filters, `views show <name>` prints a view's Issues grouped as the Pane groups them (`--json` for one object per group, `@me` from `--as`), `views add <name>` saves a view and `views rm <name>` deletes one, without Tern and with the View card's checks and messages. See [Views from a shell](docs/guide/views.md).
 - A kata Pane's icon in Tern's tab bar is kata's mark, the katakana カ, in place of the terminal icon, tinted like the icons beside it.
 
 ### Changed

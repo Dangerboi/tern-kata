@@ -321,22 +321,11 @@ func (m Model) applyCollection(snapshot Snapshot) Model {
 	for _, p := range snapshot.Catalog {
 		m.Collections = append(m.Collections, ProjectCollection(p.Project.UID, p.Project.Name))
 	}
-	groupCollection := m.Collection
-	if m.Filters.Search != "" {
-		groupCollection = ResultsCollection()
-	}
 	issues := snapshot.Issues
 	if uid := m.idMatch(); uid != "" {
 		issues = slices.DeleteFunc(slices.Clone(issues), func(issue Issue) bool { return issue.UID != uid })
 	}
-	// Snapshot accepts one Project UID; incompatible Project scopes intersect to empty.
-	if m.Collection.ProjectUID != "" && m.Filters.ProjectUID != "" && m.Collection.ProjectUID != m.Filters.ProjectUID {
-		issues = nil
-	}
-	m.Groups = GroupIssues(groupCollection, issues, m.Calendar)
-	for i := range m.Groups {
-		m.Groups[i].Heading = m.Collection.Def().Headings
-	}
+	m.Groups = GroupCollection(m.Collection, m.Filters, issues, m.Calendar)
 	total := 0
 	for _, group := range m.Groups {
 		total += len(group.Issues)

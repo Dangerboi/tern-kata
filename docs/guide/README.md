@@ -12,6 +12,7 @@ Back to the [overview](../../README.md).
 | [Worker reference](worker-reference.md) | Every `worker.toml` key, route checks, state, recovery, resume and abandon, workflow runs, Windows |
 | [Attachments](attachments.md) | Attaching files from a Pane or a shell |
 | [Recurring Issues](recur.md) | The Recurrence card and `tern-kata recur` |
+| [Views from a shell](views.md) | `tern-kata views`: list, show, add and remove saved views |
 | [Dates](dates.md) | The Dates card |
 | [Agents](agents.md) | Clickable ticket links and the agent skills |
 | [Compared with `kata tui`](kata-tui.md) | Shared keys, undo, quit, aliases and the keys kata tui lacks |

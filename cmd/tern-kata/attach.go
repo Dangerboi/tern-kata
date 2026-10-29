@@ -28,6 +28,9 @@ func runSubcommand(ctx context.Context, plan LaunchPlan, gateway *data.Gateway, 
 		gateway.Run(ctx, cmd, results)
 		return <-results
 	}
+	if plan.Subcommand == "views" {
+		return runViews(plan, workspace, gateway.ViewsStore, send, out)
+	}
 	if plan.Subcommand == "recur" {
 		return runRecur(plan, workspace, send, out)
 	}

@@ -73,6 +73,10 @@ func TestBashCompletionOffersSubcommandsWorkerFormsAndFlags(t *testing.T) {
 		{[]string{"worker", "init", "--ex"}, "--executor"},
 		{[]string{"worker", "status", "--"}, "--json"},
 		{[]string{"recur", "ab12", "--fr"}, "--frequency"},
+		{[]string{"vi"}, "views"},
+		{[]string{"views", "a"}, "add"},
+		{[]string{"views", "show", "x", "--"}, "--json --as"},
+		{[]string{"views", "add", "x", "--re"}, "--relationship --replace"},
 		{[]string{"completion", "z"}, "zsh"},
 		{[]string{"attach", "ab12", "a"}, ""}, // files are the shell's own completion
 	} {
