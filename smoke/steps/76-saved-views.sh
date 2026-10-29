@@ -64,7 +64,7 @@ grep -q 'name = "openbugs"' "$sv_file"
 ctl key Ctrl+d
 ctl key y
 expect_tree "$sv_items" '.ok and .count == 0'
-! grep -q '\[\[view\]\]' "$sv_file"
+if grep -q '\[\[view\]\]' "$sv_file"; then printf 'views.toml still holds a view after the delete\n' >&2; return 1; fi
 ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 
@@ -78,7 +78,7 @@ ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 (cd "$tmp/workspace" && "$tmp/tern-kata" views show shellview --json) | jq -e 'type == "array"' >/dev/null
 (cd "$tmp/workspace" && "$tmp/tern-kata" views rm shellview)
-! grep -q '\[\[view\]\]' "$sv_file"
+if grep -q '\[\[view\]\]' "$sv_file"; then printf 'views.toml still holds a view after views rm\n' >&2; return 1; fi
 ctl click "[data-id='main.topbar.right.menu']"
 for letter in s h e l l v i e w; do ctl key "$letter"; done
 expect_tree "$sv_items" '.ok and .count == 0'
