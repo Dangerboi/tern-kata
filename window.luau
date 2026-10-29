@@ -18,6 +18,42 @@ local function isKata(info: PaneInfo?): boolean
     return info ~= nil and info.exited == nil and (info.title == "tern-kata" or isKataProgram(info.program))
 end
 
+-- kata's mark, the katakana ka from kata's favicon, replaces the terminal icon on kata Panes' tab faces. Tern's program icons
+-- take only its built-in names, and a terminal running tern-kata has no program key for a `data-program` rule, so the
+-- stylesheet names each kata Pane by id. The mark is drawn black and tinted to the face's colour (dim, focused or a
+-- state's) by Tern's monochrome filter, as Tern's own glyph faces are.
+local MARK = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='1.25 2.5 26 26' fill='none' "
+    .. "stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'>"
+    .. "<path d='M6.5 11.5 H22.5 V20.5 Q22.5 25 18 25.5'/><path d='M13.5 5.5 C13.5 14 10.5 20.5 6 25.5'/></svg>\")"
+local marked: { [number]: boolean } = {}
+local markCss = ""
+
+local function restyleMarks()
+    local faces: { string } = {}
+    for pane in marked do table.insert(faces, string.format(".tn-face[data-pane='%d']", pane)) end
+    table.sort(faces)
+    local css = ""
+    if #faces > 0 then
+        local children: { string } = {}
+        for i, face in faces do children[i] = face .. " > *" end
+        css = table.concat(children, ",\n") .. " {\n\tdisplay: none;\n}\n"
+            .. table.concat(faces, ",\n") .. " {\n\tbackground-image: " .. MARK .. ";\n"
+            .. "\tbackground-size: contain;\n\tbackground-repeat: no-repeat;\n\tbackground-position: center;\n"
+            .. "\tfilter: monochrome(currentColor 1 1px);\n}\n"
+    end
+    if css ~= markCss then
+        markCss = css
+        tern.css("mark", css)
+    end
+end
+
+local function markIf(cx: WindowCx, pane: number)
+    local kata = isKata(cx.session:pane(pane))
+    if kata == (marked[pane] == true) then return end
+    if kata then marked[pane] = true else marked[pane] = nil end
+    restyleMarks()
+end
+
 -- Links reuse a kata Pane only in the focused Pane's tab; a parked Pane has no tab.
 local function existingPane(cx: WindowCx): number?
     local focused = cx.session:focused()
@@ -114,6 +150,29 @@ end
 tern.on("pane_closed", function(ev, cx)
     launched[ev.pane] = nil
     pending[ev.pane] = nil
+    if marked[ev.pane] then
+        marked[ev.pane] = nil
+        restyleMarks()
+    end
+end)
+
+local function markAll(cx: WindowCx)
+    for _, info in cx.session:panes() do
+        if isKata(info) then marked[info.pane] = true end
+    end
+    restyleMarks()
+end
+
+-- The kata Panes already open: at window start, and after a plugin reload, which runs this file again but not window_start.
+tern.on("window_start", markAll)
+tern.timer(1, function(cx)
+    if cx then markAll(cx) end
+end)
+
+-- tern-kata sets its title as it starts, so a title event finds a kata Pane started from any shell; other titles, such as an
+-- agent's spinner, cost no lookup.
+tern.on("title", function(ev, cx)
+    if ev.title == "tern-kata" or marked[ev.pane] then markIf(cx, ev.pane) end
 end)
 
 tern.command({
