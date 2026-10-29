@@ -72,6 +72,9 @@ func editingCards() []editingCard {
 		{name: "Filter", card: model.CardFilter, open: popupOpener("Filter form"),
 			focused: func(m model.Model) model.Field { return m.FilterForm.Field },
 			lap:     []model.Field{model.FilterLabel, model.FilterRelationship, model.FilterProject, model.FilterStatus, model.FilterOwner}},
+		{name: "View", card: model.CardView, open: popupOpener("View"),
+			focused: func(m model.Model) model.Field { return m.ViewForm.Field },
+			lap:     []model.Field{model.ViewBase, model.FilterProject, model.FilterStatus, model.FilterOwner, model.FilterLabel, model.FilterRelationship, model.FilterSearch, model.ViewName}},
 	}
 }
 

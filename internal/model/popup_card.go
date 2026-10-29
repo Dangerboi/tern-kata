@@ -56,6 +56,7 @@ const (
 	CardMove
 	CardDelete
 	CardFederationAdopt
+	CardView
 )
 
 // cardEntry is everything the model knows about one popup card. Each card fills in one.
@@ -519,8 +520,25 @@ func buildCards() []cardEntry {
 			choose:   chooseFilter,
 		},
 		{
+			card: CardView, name: "view", open: func(m Model) bool { return m.ViewForm.Open },
+			modes: []Mode{ModeViewForm}, mode: func(Model) Mode { return ModeViewForm },
+			key:    viewFormKey,
+			busy:   func(m Model) bool { return m.ViewForm.Saving },
+			fields: ViewFields, focus: func(m *Model) *Field { return &m.ViewForm.Field },
+			editing:  []fieldEditing{{mode: ModeViewForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, nextAlso: []string{"enter"}, before: SaveViewForm}},
+			step:     viewStep,
+			clearErr: func(m Model) Model { m.ViewForm.Err = nil; return m },
+			text:     func(m *Model) (*string, *Caret) { return viewTextField(&m.ViewForm), &m.ViewForm.Caret },
+			choose:   chooseView,
+		},
+		{
 			card: CardPicker, name: "collections", open: func(m Model) bool { return m.Picker.Open },
-			modes: []Mode{ModePicker}, mode: func(Model) Mode { return ModePicker },
+			modes: []Mode{ModePicker, ModeDeleteView}, mode: func(m Model) Mode {
+				if m.Views.Deleting != "" {
+					return ModeDeleteView
+				}
+				return ModePicker
+			},
 			key:    updatePicker,
 			busy:   func(Model) bool { return false },
 			fields: []FieldSpec{}, input: true,

@@ -77,6 +77,10 @@ func popups() []popup {
 			return m
 		}, func(dst *model.Model, src model.Model) { dst.FilterForm = src.FilterForm },
 			model.ModeFilterForm, "Filter work", func(m model.Model) string { return m.FilterForm.Values.Owner }},
+		{"View", func(t *testing.T, s driver.State) model.Model {
+			return feed(t, s, openMenu, key("down"), key("enter"), key("end"), key("enter")).State.Model
+		}, func(dst *model.Model, src model.Model) { dst.ViewForm = src.ViewForm },
+			model.ModeViewForm, "New view", func(m model.Model) string { return m.ViewForm.Name }},
 		{"Menu", func(t *testing.T, s driver.State) model.Model { return step(t, s, openMenu).State.Model },
 			func(dst *model.Model, src model.Model) { dst.Picker = src.Picker },
 			model.ModePicker, "Menu", func(m model.Model) string { return m.Picker.Filter }},

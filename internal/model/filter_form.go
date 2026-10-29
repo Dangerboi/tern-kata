@@ -9,6 +9,8 @@ const (
 	FilterOwner        Field = "owner"
 	FilterLabel        Field = "label"
 	FilterRelationship Field = "relationship"
+	// FilterSearch is the search text, a field of the View card only; the Filter card edits it in the search input.
+	FilterSearch Field = "search"
 )
 
 // FilterFields is the Filter form's field list, in tab order.
@@ -57,6 +59,8 @@ func (f *Filters) value(name Field) *string {
 		return &f.Label
 	case FilterRelationship:
 		return &f.Relationship
+	case FilterSearch:
+		return &f.Search
 	}
 	return nil
 }
@@ -79,9 +83,7 @@ func filterTextField(form *FilterFormState) *string {
 // FilterChoices is the values the choice field called name cycles through, in the order the form shows them; nil for a text
 // field.
 func (m Model) FilterChoices(name Field) []string {
-	var choices []FilterChoice
-	switch name {
-	case FilterProject:
+	if name == FilterProject {
 		values := []string{""}
 		for _, project := range m.Snapshot.Catalog {
 			if m.Collection.ProjectUID == "" || m.Collection.ProjectUID == project.Project.UID {
@@ -89,6 +91,14 @@ func (m Model) FilterChoices(name Field) []string {
 			}
 		}
 		return values
+	}
+	return fixedFilterChoices(name)
+}
+
+// fixedFilterChoices is the values of the choice fields whose list is fixed (Status and Relationship); nil for any other field.
+func fixedFilterChoices(name Field) []string {
+	var choices []FilterChoice
+	switch name {
 	case FilterStatus:
 		choices = FilterStatuses
 	case FilterRelationship:

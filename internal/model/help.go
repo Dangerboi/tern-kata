@@ -14,6 +14,9 @@ func (m Model) CurrentMode() Mode {
 	if m.AskQuit {
 		return ModeQuit
 	}
+	if m.Views.Deleting != "" {
+		return ModeDeleteView
+	}
 	if m.HelpOpen {
 		return ModeHelp
 	}
@@ -47,7 +50,7 @@ func LookupBindingForMode(chord string, mode Mode) (Binding, bool) {
 	if isCard, through := cardLetsThrough(mode, chord); isCard && !through {
 		return Binding{}, false
 	}
-	if inputMode(mode) || mode == ModeQuit {
+	if inputMode(mode) || mode == ModeQuit || mode == ModeDeleteView {
 		return Binding{}, false
 	}
 	for _, binding := range Keymap {

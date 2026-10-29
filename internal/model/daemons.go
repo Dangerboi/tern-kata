@@ -166,6 +166,7 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	m.Loading, m.Err = true, nil
 	m.Collection, m.Collections, m.CollectionCursor, m.SidebarLevel = InboxCollection(), nil, 0, MenuViews
 	m.Picker, m.ProjectForm, m.LanesForm = PickerState{}, ProjectFormState{}, LanesFormState{}
+	m.ViewForm, m.ActiveView, m.Views.Deleting = ViewFormState{}, ActiveView{}, "" // views.toml is the machine's, not the daemon's
 	m.Focus, m.HelpOpen, m.EditorUID = ColumnList, false, ""
 	m.Filters, m.DefaultFilters, m.Search, m.IDSearch, m.FilterForm = Filters{}, Filters{}, SearchState{}, IDSearch{}, FilterFormState{}
 	m.IssueDetail = m.IssueDetail.cleared()

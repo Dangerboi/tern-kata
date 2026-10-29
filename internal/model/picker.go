@@ -2,6 +2,7 @@ package model
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -56,12 +57,15 @@ const (
 	BackTitle     = "Back"
 )
 
-// PickerEntry is a row of the Menu: a Collection, the Views or Projects entry that opens
-// that level, New Project, a Lettered Page (Page names it), or Back, which leaves a level.
+// PickerEntry is a row of the Menu: a Collection, a saved view, the Views or Projects entry that opens
+// that level, New Project, New view, a Lettered Page (Page names it), or Back, which leaves a level.
 type PickerEntry struct {
 	Collection
 	NewProject, Projects, Views, Back, Lettered, Restore bool
-	Page                                                 Page
+	// NewView is the row that opens the View card; Saved is a saved view's row, Title its name and Index its place in SavedViews.
+	NewView, Saved bool
+	Index          int
+	Page           Page
 }
 
 // Key names the row, as Collection.Key names a Collection's.
@@ -71,6 +75,10 @@ func (e PickerEntry) Key() string {
 		return "page." + pageDefs[e.Page].id
 	case e.Restore:
 		return RestoreKey
+	case e.NewView:
+		return NewViewKey
+	case e.Saved:
+		return viewKeyPrefix + strconv.Itoa(e.Index)
 	case e.NewProject:
 		return NewProjectKey
 	case e.Projects:
@@ -83,14 +91,14 @@ func (e PickerEntry) Key() string {
 	return e.Collection.Key()
 }
 
-// IsCollection reports whether the row is a Collection, not a level, a Page or an action.
+// IsCollection reports whether the row is a Collection, not a level, a saved view, a Page or an action.
 func (e PickerEntry) IsCollection() bool {
-	return !e.NewProject && !e.Projects && !e.Views && !e.Back && !e.Lettered && !e.Restore
+	return !e.NewProject && !e.Projects && !e.Views && !e.Back && !e.Lettered && !e.Restore && !e.NewView && !e.Saved
 }
 
 // menuEntries are the Menu's rows. The top level is the bound Project pinned first,
 // then Views, Projects, the Lettered Pages, Restore and New Project; the Views level
-// is Back and the fixed Collections; the Projects level is Back and every Project.
+// is Back, the fixed Collections, the saved views by name and New view; the Projects level is Back and every Project.
 // A filter ignores the level and lists every matching title flat (any case).
 func (m Model) menuEntries(level MenuLevel, filter string) []PickerEntry {
 	if len(m.Collections) == 0 {
@@ -106,6 +114,10 @@ func (m Model) menuEntries(level MenuLevel, filter string) []PickerEntry {
 				entries = append(entries, PickerEntry{Collection: c})
 			}
 		}
+		if level == MenuViews {
+			entries = append(entries, m.savedViewEntries(func(string) bool { return true })...)
+			entries = append(entries, PickerEntry{Collection: Collection{Title: NewViewTitle}, NewView: true})
+		}
 		return entries
 	}
 	pinned := func(c Collection) bool { return m.Bound && c.IsProject() && c.ProjectUID == m.Project.UID }
@@ -116,6 +128,9 @@ func (m Model) menuEntries(level MenuLevel, filter string) []PickerEntry {
 				entries = append(entries, PickerEntry{Collection: c})
 			}
 		}
+	}
+	if filter != "" {
+		entries = append(entries, m.savedViewEntries(match)...)
 	}
 	if match(ViewsTitle) {
 		entries = append(entries, PickerEntry{Collection: Collection{Title: ViewsTitle}, Views: true})
@@ -133,6 +148,20 @@ func (m Model) menuEntries(level MenuLevel, filter string) []PickerEntry {
 	}
 	if match(NewProjectTitle) {
 		entries = append(entries, PickerEntry{Collection: Collection{Title: NewProjectTitle}, NewProject: true})
+	}
+	if filter != "" && match(NewViewTitle) {
+		entries = append(entries, PickerEntry{Collection: Collection{Title: NewViewTitle}, NewView: true})
+	}
+	return entries
+}
+
+// savedViewEntries are the rows of the saved views whose name match accepts, by name.
+func (m Model) savedViewEntries(match func(string) bool) []PickerEntry {
+	var entries []PickerEntry
+	for i, v := range m.SavedViews() {
+		if match(v.Name) {
+			entries = append(entries, PickerEntry{Collection: Collection{Title: v.Name}, Saved: true, Index: i})
+		}
 	}
 	return entries
 }
@@ -180,15 +209,15 @@ func openPicker(m Model) Model {
 }
 
 // openProjects is kata's P: the Menu's Projects level, in the sidebar while it shows, else in the popup.
-func openProjects(m Model) Model {
+func openProjects(m Model) (Model, []Cmd) {
 	if m.SidebarShown() {
 		m.Picker, m.Focus = PickerState{}, ColumnCollections
-		return setMenuLevel(m, false, MenuProjects)
+		return setMenuLevel(m, false, MenuProjects), reloadViews()
 	}
 	if m = openPicker(m); m.Picker.Open {
-		m = setMenuLevel(m, true, MenuProjects)
+		return setMenuLevel(m, true, MenuProjects), reloadViews()
 	}
-	return m
+	return m, nil
 }
 
 // setMenuLevel moves the popup (when popup) or the sidebar to a level. The cursor lands on the
@@ -241,6 +270,14 @@ func openEntry(m Model, entry PickerEntry, popup bool) (Model, []Cmd) {
 		return openRestore(m), nil
 	case entry.NewProject:
 		return openProjectForm(m), nil
+	case entry.NewView:
+		return openViewForm(m, "", SavedView{Name: "", Base: m.Collection, Filters: m.Filters}), nil
+	case entry.Saved:
+		v, ok := m.savedViewNamed(entry.Title)
+		if !ok {
+			return m, nil
+		}
+		return openSavedView(m, v)
 	case entry.Views:
 		return setMenuLevel(m, popup, MenuViews), nil
 	case entry.Projects:
@@ -275,6 +312,12 @@ func pickCollectionKey(m Model, key string) (Model, []Cmd) {
 }
 
 func updatePicker(m Model, msg KeyMsg) (Model, []Cmd) {
+	if m.Views.Deleting != "" { // the question takes only its answers
+		if binding, ok := LookupBindingForMode(msg.Chord, ModeDeleteView); ok && binding.entry != nil {
+			return binding.entry.handle(m)
+		}
+		return m, nil
+	}
 	binding, ok := LookupBindingForMode(msg.Chord, ModePicker)
 	// Once the filter has text, single characters (j, k) belong to it.
 	if ok && m.Picker.Filter != "" && utf8.RuneCountInString(binding.Chord) == 1 {
@@ -295,6 +338,10 @@ func updatePicker(m Model, msg KeyMsg) (Model, []Cmd) {
 		m.Picker = PickerState{}
 	case PickCollection:
 		return pickCollection(m)
+	case EditViewAction:
+		return editSavedView(m, true), nil
+	case AskDeleteView:
+		return askDeleteView(m, true), nil
 	case MoveDown:
 		m.Picker.Cursor = max(0, min(m.Picker.Cursor+1, last))
 	case MoveUp:

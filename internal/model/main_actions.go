@@ -254,6 +254,8 @@ var mainRows = []actionEntry{
 	{action: PageDown, modes: []Mode{ModeCollections}, keys: pageDownKeys, help: "page down", handle: scrolling(ColumnCollections, ScrollPageDown)},
 	{action: DrillIn, modes: []Mode{ModeCollections}, keys: keys("enter", "enter"), help: "open Collection", footer: []Mode{ModeCollections}, handle: sidebarOpen},
 	{action: MenuBack, modes: []Mode{ModeCollections}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeCollections}, handle: pure(menuBack)},
+	{action: EditViewAction, modes: []Mode{ModeCollections}, keys: keys("f2", "f2"), help: "edit view", footer: []Mode{ModeCollections}, sheet: []sheetLine{{sheetGlobal, 8, "edit the saved view under the Menu cursor"}}, handle: pure(func(m Model) Model { return editSavedView(m, false) })},
+	{action: AskDeleteView, modes: []Mode{ModeCollections}, keys: keys("ctrl+d", "ctrl+d", "meta+d", ""), help: "delete view", footer: []Mode{ModeCollections}, sheet: []sheetLine{{sheetGlobal, 9, "delete the saved view under the Menu cursor (asks y/n)"}}, handle: pure(func(m Model) Model { return askDeleteView(m, false) })},
 	// Searching.
 	{action: SearchEnter, modes: []Mode{ModeSearch}, keys: keys("enter", "enter"), help: "results", footer: []Mode{ModeSearch}, handle: pure(searchEnter)},
 	{action: SearchBack, modes: []Mode{ModeSearch}, keys: keys("escape", "esc"), help: "cancel search", footer: []Mode{ModeSearch}, handle: searchBack},
@@ -306,13 +308,17 @@ var mainRows = []actionEntry{
 	{action: DrillOut, modes: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}, keys: keys("backspace", "⌫"), help: "back", handle: backWithoutMenu},
 	{action: DrillOut, modes: []Mode{ModeLane}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeLane}, sheet: []sheetLine{{sheetBoard, 10, "back to the Board, or the Menu in a narrow Pane"}}, handle: laneBack},
 	{action: DrillOut, modes: []Mode{ModeDetail}, keys: keys("escape", "esc", "left", "←", "backspace", "⌫"), help: "back", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 4, "back"}}, handle: drillOut},
-	{action: OpenProjects, modes: []Mode{ModeCollections, ModeList, ModeBoard, ModeLane, ModeDetail, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention, ModeCredentials, ModeFederation, ModeDaemons}, keys: keys("shift+p", "P"), help: "projects", sheet: []sheetLine{{sheetGlobal, 4, "projects"}}, handle: pure(openProjects)},
+	{action: OpenProjects, modes: []Mode{ModeCollections, ModeList, ModeBoard, ModeLane, ModeDetail, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention, ModeCredentials, ModeFederation, ModeDaemons}, keys: keys("shift+p", "P"), help: "projects", sheet: []sheetLine{{sheetGlobal, 4, "projects"}}, handle: openProjects},
 	{action: OpenInbox, modes: []Mode{ModeCollections, ModeList, ModeBoard, ModeLane, ModeDetail, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention, ModeCredentials, ModeFederation, ModeDaemons}, keys: keys("shift+i", "I"), help: "inbox", sheet: []sheetLine{{sheetGlobal, 3, "inbox"}}, handle: openInbox},
 	{action: RetryAction, modes: []Mode{ModeError}, keys: keys("ctrl+r", "ctrl+r"), help: "retry daemon", footer: []Mode{ModeError}, handle: func(m Model) (Model, []Cmd) { return updateLive(m, Retry{}) }},
 	{action: CloseHelp, modes: []Mode{ModeHelp}, keys: keys("escape", "esc", "backspace", "⌫"), help: "close help", footer: []Mode{ModeHelp}, handle: pure(func(m Model) Model { m.HelpOpen = false; return m })},
 	{action: ToggleHelp, keys: keys("?", "?", "shift+?", "?"), help: "help", footer: global, sheet: []sheetLine{{sheetGlobal, 1, "help"}}, handle: pure(func(m Model) Model { m.HelpOpen = !m.HelpOpen; return m })},
 	{action: QuitAction, keys: keys("q", "q"), help: "quit", footer: global, sheet: []sheetLine{{sheetGlobal, 2, "quit (q asks y/n first, ctrl+c quits at once)"}}, handle: pure(askQuit)},
 	{action: QuitNowAction, keys: keys("ctrl+c", "ctrl+c", "meta+c", ""), help: "quit at once", sheet: []sheetLine{{sheetGlobal, 2, "quit (q asks y/n first, ctrl+c quits at once)"}}, handle: pure(quitNow)},
+	// The question "Delete view <name>? y/n".
+	{action: ConfirmDelView, modes: []Mode{ModeDeleteView}, keys: keys("y", "y"), help: "delete view", footer: []Mode{ModeDeleteView}, handle: confirmDeleteView},
+	{action: KeepViewAction, modes: []Mode{ModeDeleteView}, keys: keys("n", "n", "escape", "esc"), help: "keep view", footer: []Mode{ModeDeleteView}, handle: pure(keepView)},
+	{action: QuitNowAction, modes: []Mode{ModeDeleteView}, keys: keys("ctrl+c", "ctrl+c", "meta+c", ""), help: "quit at once", handle: pure(quitNow)},
 	// The question "Quit tern-kata? y/n".
 	{action: ConfirmQuitAction, modes: []Mode{ModeQuit}, keys: keys("y", "y"), help: "quit", footer: []Mode{ModeQuit}, handle: pure(quitNow)},
 	{action: QuitNowAction, modes: []Mode{ModeQuit}, keys: keys("ctrl+c", "ctrl+c", "meta+c", ""), help: "quit at once", handle: pure(quitNow)},

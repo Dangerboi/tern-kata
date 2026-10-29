@@ -199,7 +199,7 @@ func TestRenderSidebarListsProjectsOnlyAtItsProjectsLevel(t *testing.T) {
 		}
 		return strings.Join(rows, ",")
 	}
-	if got := ids(m); got != "back,inbox,today,upcoming,deadlines,all-open,logbook" {
+	if got := ids(m); got != "back,inbox,today,upcoming,deadlines,all-open,logbook,new-view" {
 		t.Fatalf("sidebar Views level = %s", got)
 	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "escape"})
@@ -246,7 +246,7 @@ func TestRenderMenuViewsLevelListsTheFixedCollectionsAndMarksCurrent(t *testing.
 	for _, id := range pickerChildIDs(nodes["layer.collections.list"]) {
 		got = append(got, strings.TrimPrefix(id, "layer.collections.list."))
 	}
-	if strings.Join(got, ",") != "back,inbox,today,upcoming,deadlines,all-open,logbook" {
+	if strings.Join(got, ",") != "back,inbox,today,upcoming,deadlines,all-open,logbook,new-view" {
 		t.Fatalf("Views level rows = %v", got)
 	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "down"})
@@ -264,5 +264,33 @@ func TestRenderMenuViewsLevelListsTheFixedCollectionsAndMarksCurrent(t *testing.
 	nodes = pickerNodes(t, m)
 	if nodes["layer.collections.list.today"].P["value"] != "current" {
 		t.Fatal("the Views level does not mark the current Collection")
+	}
+}
+
+func TestRenderSavedViewsRowsNotesAndTheViewCard(t *testing.T) {
+	m := pickerLoaded(true)
+	m, _ = model.Update(m, model.ViewsLoaded{Token: 1, Views: []model.SavedView{
+		{Name: "Mine", Base: model.Collection{View: "today", Title: "Today"}},
+		{Name: "Lost", Base: model.ProjectCollection("gone-uid", "gone")},
+	}})
+	m = menuOpened(m)
+	for _, key := range []string{"down", "enter"} {
+		m, _ = model.Update(m, model.KeyMsg{Chord: key})
+	}
+	nodes := pickerNodes(t, m)
+	var got []string
+	for _, id := range pickerChildIDs(nodes["layer.collections.list"]) {
+		got = append(got, strings.TrimPrefix(id, "layer.collections.list."))
+	}
+	if strings.Join(got, ",") != "back,inbox,today,upcoming,deadlines,all-open,logbook,view.0,view.1,new-view" {
+		t.Fatalf("rows = %v", got)
+	}
+	m, _ = model.Update(m, model.KeyMsg{Chord: "end"})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
+	card := pickerNodes(t, m)
+	for _, id := range []string{"layer.view", "layer.view.name", "layer.view.base", "layer.view.project", "layer.view.status", "layer.view.owner", "layer.view.label", "layer.view.relationship", "layer.view.search"} {
+		if _, ok := card[id]; !ok {
+			t.Errorf("the View card draws no %s", id)
+		}
 	}
 }

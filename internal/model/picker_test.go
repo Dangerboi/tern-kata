@@ -98,7 +98,7 @@ func TestShiftPOpensTheProjectsLevel(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m, _ := pickerKeys(tt.start(), tt.keys...)
 			opened, cmds := pickerKeys(m, "shift+p")
-			if len(cmds) != 0 || opened.Focus != tt.focus || opened.Picker.Open != tt.popup || (opened.Picker.Level == model.MenuProjects) != tt.popup || (opened.SidebarLevel == model.MenuProjects) == tt.popup {
+			if !reflect.DeepEqual(cmds, []model.Cmd{model.LoadViews{}}) || opened.Focus != tt.focus || opened.Picker.Open != tt.popup || (opened.Picker.Level == model.MenuProjects) != tt.popup || (opened.SidebarLevel == model.MenuProjects) == tt.popup {
 				t.Fatalf("after P: popup=%v level=%v sidebar level=%v focus=%v cmds=%#v", opened.Picker.Open, opened.Picker.Level, opened.SidebarLevel, opened.Focus, cmds)
 			}
 			if tt.popup && opened.CurrentMode() != model.ModePicker {
@@ -127,7 +127,7 @@ func TestEscapeUnwindsDetailListThenPickerWhenBound(t *testing.T) {
 	} {
 		var cmds []model.Cmd
 		m, cmds = pickerKeys(m, "escape")
-		if m.CurrentMode() != want.mode || m.Focus != want.focus || m.Picker.Open != want.picker || len(cmds) != 0 {
+		if m.CurrentMode() != want.mode || m.Focus != want.focus || m.Picker.Open != want.picker || len(cmds) > 1 {
 			t.Fatalf("escape %d: mode=%s focus=%v picker=%v cmds=%#v", i+1, m.CurrentMode(), m.Focus, m.Picker.Open, cmds)
 		}
 	}
@@ -158,7 +158,7 @@ func TestPickerEntries(t *testing.T) {
 		{"bound Project is pinned first", true, "", []string{"smoke", "Views", "Projects", "Credentials", "Federation", "Daemons", "Restore a deleted Issue", "New Project"}},
 		{"unbound lists no Project inline", false, "", []string{"Views", "Projects", "Credentials", "Federation", "Daemons", "Restore a deleted Issue", "New Project"}},
 		{"filter finds a fixed Collection from the top", true, "tod", []string{"Today"}},
-		{"filter finds the Views entry by title", true, "view", []string{"Views"}},
+		{"filter finds the Views entry and New view by title", true, "view", []string{"Views", "New view"}},
 		{"filter finds the restore entry by title", true, "restore", []string{"Restore a deleted Issue"}},
 		{"filter matches any case and keeps the order", true, "AL", []string{"All Open", "alpha", "Credentials"}},
 		{"filter finds a Lettered Page by title", true, "cred", []string{"Credentials"}},
@@ -468,7 +468,7 @@ func TestSidebarStartsOnTheViewsLevel(t *testing.T) {
 	for _, entry := range m.SidebarEntries() {
 		got = append(got, entry.Title)
 	}
-	if want := []string{"Back", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook"}; m.SidebarLevel != model.MenuViews || !reflect.DeepEqual(got, want) {
+	if want := []string{"Back", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "New view"}; m.SidebarLevel != model.MenuViews || !reflect.DeepEqual(got, want) {
 		t.Fatalf("unbound sidebar: level %v entries %q, want the Views level %q", m.SidebarLevel, got, want)
 	}
 }
@@ -547,11 +547,11 @@ func viewsLevel(t *testing.T) model.Model {
 
 func TestPickerViewsLevelListsBackAndTheFixedCollections(t *testing.T) {
 	m := viewsLevel(t)
-	want := []string{"Back", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook"}
+	want := []string{"Back", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "New view"}
 	if got := pickerTitles(m); !reflect.DeepEqual(got, want) || m.Picker.Cursor != 0 {
 		t.Fatalf("Views level = %q cursor %d, want %q on Back", got, m.Picker.Cursor, want)
 	}
-	for i, title := range want[1:] {
+	for i, title := range want[1 : len(want)-1] {
 		opened, cmds := pickerKeys(m, slices.Repeat([]string{"down"}, i+1)...)
 		opened, cmds = pickerKeys(opened, "enter")
 		if opened.Picker.Open || opened.Collection.Title != title || opened.Collection.IsProject() || opened.Focus != model.ColumnList || !readsCollection(cmds, opened, "") {

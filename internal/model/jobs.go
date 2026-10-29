@@ -418,7 +418,8 @@ func enterProjectPage(m Model, name string) (Model, []Cmd, bool) {
 		m, cmds = collectionSwitched(m)
 	default:
 		m.Notice = "The " + name + " needs a Project: choose one in the Menu."
-		return openProjects(m), nil, false
+		m, cmds = openProjects(m)
+		return m, cmds, false
 	}
 	return m.resetPagesForProject(), cmds, true
 }

@@ -30,6 +30,7 @@ func cardOpeners() map[model.Card]func(*testing.T) driver.State {
 		model.CardProject:         popupOpener("New Project"),
 		model.CardLanes:           popupOpener("Lanes"),
 		model.CardFilter:          popupOpener("Filter form"),
+		model.CardView:            popupOpener("View"),
 		model.CardPicker:          popupOpener("Menu"),
 		model.CardWorkflow: func(t *testing.T) driver.State {
 			return step(t, workflowsPane(t, 160, reviewFlow()), key("e")).State

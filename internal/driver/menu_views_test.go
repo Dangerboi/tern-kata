@@ -60,7 +60,7 @@ func TestMenuTopLevelListsTheProjectViewsProjectsPagesRestoreAndNewProject(t *te
 
 func TestMenuViewsOpensBackAndTheSixCollectionsByEnterAndClick(t *testing.T) {
 	top := boundMenu(t)
-	want := append([]string{"Back"}, fixedCollections...)
+	want := append(append([]string{"Back"}, fixedCollections...), model.NewViewTitle)
 	byEnter := pressed(top, "down", "enter")
 	byClick := step(t, top, &tern.Select{ID: view.PickerListID, Item: rowShowing(t, top.Model, view.PickerListID, "Views")}).State
 	for name, s := range map[string]driver.State{"enter": byEnter, "click": byClick} {
@@ -175,7 +175,7 @@ func TestUnboundSidebarShowsTheViewsLevel(t *testing.T) {
 	for _, entry := range s.Model.SidebarEntries() {
 		titles = append(titles, entry.Title)
 	}
-	if want := append([]string{"Back"}, fixedCollections...); !slices.Equal(titles, want) {
+	if want := append(append([]string{"Back"}, fixedCollections...), model.NewViewTitle); !slices.Equal(titles, want) {
 		t.Fatalf("sidebar rows = %q, want %q", titles, want)
 	}
 	for _, title := range append([]string{"Back"}, fixedCollections...) {

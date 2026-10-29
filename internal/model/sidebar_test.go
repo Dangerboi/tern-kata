@@ -57,7 +57,7 @@ func TestEscapeOpensTheMenuPopupWhileTheSidebarIsHidden(t *testing.T) {
 	m := pickerStart(160, false)
 	m, _ = model.Update(m, model.CollectionSelected{Collection: projectCollection(m, "alpha")})
 	m, cmds := pickerKeys(m, "escape")
-	if !m.Picker.Open || m.CurrentMode() != model.ModePicker || m.Focus != model.ColumnList || len(cmds) != 0 {
+	if !m.Picker.Open || m.CurrentMode() != model.ModePicker || m.Focus != model.ColumnList || len(cmds) > 1 {
 		t.Fatalf("escape: picker=%v mode=%s focus=%v cmds=%#v", m.Picker.Open, m.CurrentMode(), m.Focus, cmds)
 	}
 }

@@ -122,7 +122,7 @@ func TestSelectInputsDecodeForTheListAndBothMenus(t *testing.T) {
 		t.Errorf("Issue row select picked %q", got)
 	}
 	unbound := loadedWith(t, 160, model.Project{}, model.Snapshot{Issues: []model.Issue{alpha}})
-	if out := driver.Step(unbound, &tern.Select{ID: view.CollectionsID, Item: rowShowing(t, unbound.Model, view.CollectionsID, "Today")}, now); len(out.Cmds) != 1 {
+	if out := driver.Step(unbound, &tern.Select{ID: view.CollectionsID, Item: rowShowing(t, unbound.Model, view.CollectionsID, "Today")}, now); len(out.Cmds) != 2 { // the views read that entering the Menu asks, and the Collection's snapshot
 		t.Errorf("sidebar select commands = %#v", out.Cmds)
 	}
 	menu := pressed(feed(t, s, openMenu).State, "down", "enter")

@@ -25,7 +25,7 @@ func inputMode(mode Mode) bool {
 }
 
 func clearFilters(m Model) (Model, []Cmd) {
-	m.Filters = Filters{}
+	m.Filters, m.ActiveView = Filters{}, ActiveView{}
 	m.SelectedUID = ""
 	return snapshotChanged(m)
 }
@@ -144,6 +144,9 @@ func (m Model) FilterSummary() string {
 		parts = append(parts, "search="+m.Filters.Search)
 	}
 	summary := strings.Join(parts, " · ")
+	if name := m.CurrentSavedView(); name != "" {
+		return strings.TrimSpace(summary + " (" + name + ")")
+	}
 	if summary != "" && m.Filters == m.DefaultFilters {
 		summary += " (default)"
 	}

@@ -12,7 +12,7 @@ func Collections(m model.Model) tern.Element {
 	entries := m.SidebarEntries()
 	items := make([]tern.Element, 0, len(entries))
 	for _, entry := range entries {
-		items = append(items, ui.Item{Common: ui.Common{Key: entry.Key()}, Label: ui.T(entry.Title)})
+		items = append(items, ui.Item{Common: ui.Common{Key: entry.Key()}, Label: ui.T(m.EntryTitle(entry))})
 	}
 	selected := ""
 	if len(entries) > 0 {

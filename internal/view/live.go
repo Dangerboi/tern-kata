@@ -35,6 +35,9 @@ func footerTexts(m model.Model) []ui.Text {
 	if m.AskQuit {
 		texts = append(texts, ui.Text{Common: ui.Common{Key: "quit", Tone: ui.ToneAccent}, Text: model.QuitQuestion})
 	}
+	if m.Views.Deleting != "" {
+		texts = append(texts, ui.Text{Common: ui.Common{Key: "delete-view", Tone: ui.ToneAccent}, Text: model.DeleteViewQuestion(m.Views.Deleting)})
+	}
 	if m.Stale && m.Err == nil && !m.FirstLoad() && !m.HelpOpen {
 		texts = append(texts, ui.Text{Common: ui.Common{Key: "stale", Tone: ui.TonePending}, Text: staleText(m)})
 	}

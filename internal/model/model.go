@@ -110,19 +110,23 @@ type Model struct {
 	SidebarLevel     MenuLevel
 	Bound            bool
 	Picker           PickerState
-	ProjectForm      ProjectFormState
-	LanesForm        LanesFormState
-	WorkerCard       WorkerCardState
-	Focus            Column
-	Groups           []IssueGroup
-	Calendar         PaneCalendar
-	HelpOpen         bool
-	Flat             bool
-	GraphOrder       bool // nested siblings in blocking order, not creation order; Pane state, never saved
-	ExpandedUIDs     map[string]bool
-	Drafts           map[string]Draft
-	EditorUID        string
-	Filters          Filters
+	// Views is views.toml as the Pane last read it; ViewForm is the View card; ActiveView is the saved view this Pane opened.
+	Views        ViewsState
+	ViewForm     ViewFormState
+	ActiveView   ActiveView
+	ProjectForm  ProjectFormState
+	LanesForm    LanesFormState
+	WorkerCard   WorkerCardState
+	Focus        Column
+	Groups       []IssueGroup
+	Calendar     PaneCalendar
+	HelpOpen     bool
+	Flat         bool
+	GraphOrder   bool // nested siblings in blocking order, not creation order; Pane state, never saved
+	ExpandedUIDs map[string]bool
+	Drafts       map[string]Draft
+	EditorUID    string
+	Filters      Filters
 	// DefaultFilters is the bound Project's saved default filter, empty when it has none.
 	DefaultFilters Filters
 	Search         SearchState
@@ -275,11 +279,17 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m = m.openRequested(msg.IssueRef)
 		m.Loading = true
 		m.Err = nil
-		return m, []Cmd{LoadProject{Workspace: msg.Workspace, Actor: m.Actor}}
+		return m, []Cmd{LoadProject{Workspace: msg.Workspace, Actor: m.Actor}, LoadViews{}}
 	case ProjectLoaded:
 		return updateProject(m, msg)
 	case FiltersSaved:
 		return filtersSaved(m, msg)
+	case ViewsLoaded:
+		return viewsLoaded(m, msg), nil
+	case ViewSaved:
+		return viewSaved(m, msg)
+	case ViewDeleted:
+		return viewDeleted(m, msg)
 	case WorkerLoaded:
 		return workerLoaded(m, msg)
 	case WorkerSetupLoaded:
@@ -326,10 +336,15 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case CollectionPointerSelected:
 		for _, entry := range m.SidebarEntries() {
 			if msg.Key == entry.Key() {
+				var reload []Cmd
+				if m.Focus != ColumnCollections { // the click enters the Menu as esc does
+					reload = reloadViews()
+				}
 				if entry.Projects || entry.Views || entry.Back {
 					m.Focus = ColumnCollections
 				}
-				return openEntry(m, entry, false)
+				m, cmds := openEntry(m, entry, false)
+				return m, append(reload, cmds...)
 			}
 		}
 	case Failed:
@@ -344,7 +359,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		case OpenRow:
 			return openRow(m, msg.Value)
 		case OpenPicker:
-			return openPicker(m), nil
+			return openPicker(m), reloadViews()
 		}
 	case IssueOpened:
 		return m.openByReference(msg.Ref, msg.Selected)

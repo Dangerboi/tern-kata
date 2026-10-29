@@ -139,6 +139,9 @@ func init() {
 	local(func(g *Gateway, _ context.Context, cmd model.LoadLanes) model.Msg { return g.loadLanes(cmd) }, nil, nil)
 	local(func(g *Gateway, _ context.Context, cmd model.SaveLanes) model.Msg { return g.saveLanes(cmd) }, nil, nil)
 	local(func(g *Gateway, _ context.Context, cmd model.SaveFilters) model.Msg { return g.saveFilters(cmd) }, nil, nil)
+	local(func(g *Gateway, _ context.Context, _ model.LoadViews) model.Msg { return g.readViews() }, nil, nil)
+	local(func(g *Gateway, _ context.Context, cmd model.SaveView) model.Msg { return g.writeView(cmd) }, nil, nil)
+	local(func(g *Gateway, _ context.Context, cmd model.DeleteView) model.Msg { return g.removeView(cmd) }, nil, nil)
 	local(func(_ *Gateway, _ context.Context, _ model.LoadWorkerPickers) model.Msg { return loadWorkerPickers() }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.ReadWorkflowText) model.Msg {
 		return g.readWorkflowText(ctx, cmd)

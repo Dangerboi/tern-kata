@@ -207,9 +207,10 @@ func drillOut(m Model) (Model, []Cmd) {
 			return back, cmds
 		}
 		if !m.SidebarShown() {
-			return openPicker(m), nil
+			return openPicker(m), reloadViews()
 		}
 		m.Focus = ColumnCollections
+		return m, reloadViews()
 	}
 	return m, nil
 }
