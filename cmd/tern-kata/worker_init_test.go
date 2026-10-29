@@ -66,7 +66,7 @@ func TestWorkerInitWritesALoadableFileForTheBoundProject(t *testing.T) {
 	if cfg.Executor != "my-laptop-local" {
 		t.Errorf("executor %q", cfg.Executor)
 	}
-	if len(cfg.Projects) != 1 || cfg.Projects[0].Name != "Acme Shop" || cfg.Projects[0].Capacity != 1 ||
+	if len(cfg.Projects) != 1 || cfg.Projects[0].Name != "Acme Shop" || cfg.Projects[0].Capacity != 3 ||
 		len(cfg.Projects[0].Checkouts) != 1 || cfg.Projects[0].Checkouts[0] != "acme-shop" {
 		t.Errorf("projects %+v", cfg.Projects)
 	}
@@ -132,7 +132,7 @@ func TestWorkerAddAppendsASecondProjectAndKeepsTheRestByteForByte(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.Projects) != 2 || cfg.Projects[1].Name != "Beta" || cfg.Projects[1].Checkouts[0] != "beta" || cfg.Checkouts["beta"] != second || cfg.Checkouts["alpha"] != first {
+	if len(cfg.Projects) != 2 || cfg.Projects[1].Name != "Beta" || cfg.Projects[1].Capacity != 3 || cfg.Projects[1].Checkouts[0] != "beta" || cfg.Checkouts["beta"] != second || cfg.Checkouts["alpha"] != first {
 		t.Fatalf("config %+v", cfg)
 	}
 	// Every original line is still there, in order, with the checkout line inside [checkouts].

@@ -156,7 +156,7 @@ func TestWorkerStatusSaysWhatItServes(t *testing.T) {
 	f.serve(t)
 	eventually(t, "the jobs to be counted", func() bool {
 		out, _ := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}})
-		return strings.Contains(out, "Project demo: admitting, 0 of 1 slots in use, 1 adapter job (1 native, left to kata)")
+		return strings.Contains(out, "Project demo: admitting, 0 of 3 slots in use, 1 adapter job (1 native, left to kata)")
 	})
 	out, _ := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}})
 	if !strings.HasPrefix(out, `Worker "laptop" running as robot (process `) || !strings.Contains(out, "No runs on this machine yet.") {
@@ -403,7 +403,7 @@ func TestWorkerResumeAndAbandonSettleRunsHeldByARestart(t *testing.T) {
 	stop = f.serveUntilStopped(t)
 	eventually(t, "the first run to be held and its slot free", func() bool {
 		out, _ := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}})
-		return strings.Contains(out, "Run "+uidA) && strings.Contains(out, "tern-kata worker resume "+uidA) && strings.Contains(out, "0 of 1 slots in use")
+		return strings.Contains(out, "Run "+uidA) && strings.Contains(out, "tern-kata worker resume "+uidA) && strings.Contains(out, "0 of 3 slots in use")
 	})
 	uidB := f.runJob(t, doomed)
 	f.startedRun(t, uidB)
@@ -414,7 +414,7 @@ func TestWorkerResumeAndAbandonSettleRunsHeldByARestart(t *testing.T) {
 	// The slot of a run found held at start is freed only once its hold is reported to kata, after status first offers it.
 	eventually(t, "status to offer both held runs with their slots free", func() bool {
 		status, _ = f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}})
-		return strings.Contains(status, "tern-kata worker resume "+uidA) && strings.Contains(status, "tern-kata worker resume "+uidB) && strings.Contains(status, "0 of 1 slots in use")
+		return strings.Contains(status, "tern-kata worker resume "+uidA) && strings.Contains(status, "tern-kata worker resume "+uidB) && strings.Contains(status, "0 of 3 slots in use")
 	})
 	for _, want := range []string{"Run " + uidA, "held: interrupted", "or abandon it with `tern-kata worker abandon " + uidA + "`"} {
 		if !strings.Contains(status, want) {

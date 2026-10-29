@@ -271,6 +271,7 @@ func BuildPrompt(in PromptInput) (string, error) {
 	}
 	b.WriteString("- If the task failed or needs a person, say so plainly in your final message. Never pad or invent evidence.\n")
 	b.WriteString("- Your final message is recorded as this run's summary: make it say what happened.\n")
+	b.WriteString("- Other runs may be working in this checkout at the same time: don't switch branches, reset, stash or clean it unless your task says to. If your task needs a tree of its own, make a git worktree.\n")
 	out := b.String()
 	if len(out) > MaxPromptBytes {
 		return "", fmt.Errorf("the prompt is %d bytes, over the %d limit", len(out), MaxPromptBytes)

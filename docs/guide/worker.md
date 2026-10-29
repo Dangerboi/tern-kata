@@ -70,7 +70,7 @@ tern-kata worker upgrade                 # list the secrets and command steps ex
 tern-kata worker doctor                  # check the result
 ```
 
-- **`init`** writes a new file for this Project: its checkout, a `default` profile, capacity 1. The five optional flags set the values the Set up card prefills; one you leave out keeps its default, and a value the loader refuses is refused naming it, with nothing written. It refuses when the file exists (use `add`) or the directory is not bound. It ends by printing the path, a line of the trust note, and that the plugin's host half starts the worker within 10 seconds (else run `tern-kata worker`).
+- **`init`** writes a new file for this Project: its checkout, a `default` profile, capacity 3. The five optional flags set the values the Set up card prefills; one you leave out keeps its default, and a value the loader refuses is refused naming it, with nothing written. It refuses when the file exists (use `add`) or the directory is not bound. It ends by printing the path, a line of the trust note, and that the plugin's host half starts the worker within 10 seconds (else run `tern-kata worker`).
 - **`add`** adds this Project to an existing file, with its checkout, and leaves every other line and comment byte for byte as it was. It refuses when there is no file (use `init`), the directory is not bound, or the Project is already listed.
 - **`edit`** opens the file in `$VISUAL`, else `$EDITOR`, else `vi`, on a temporary copy. A result that does not load reopens the editor on your text with the problem as `#!` comment lines at the top, until it loads; an unchanged or empty result cancels. If `worker.toml` changed while you edited, nothing is written and the error names the temporary file that keeps your edit. It refuses with no file and points at `init`.
 
@@ -88,7 +88,7 @@ executor = "laptop"
 
 [[projects]]
 name      = "acme-shop"
-capacity  = 1
+capacity  = 3
 checkouts = ["acme-shop"]
 
 [checkouts]
@@ -100,7 +100,7 @@ command = "omp"
 
 [[projects]]
 name      = "acme-infra"
-capacity  = 1
+capacity  = 3
 checkouts = ["acme-infra"]
 ```
 

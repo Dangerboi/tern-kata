@@ -11,6 +11,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The Worker card lists its facts (Project, Checkout, `worker.toml`, Worker, Supervision) as an aligned grid, each value leading with its state in that state's colour, and names the checkouts `worker.toml` maps only when they differ from the Checkout row.
 - The Worker card's restart and supervision-off questions list **when idle** and **now** each beside what it does to the runs in flight, and no longer say a run is held `interrupted` when none is in flight.
 - `e` on the Worker card, `ctrl+e` in the Draft editor and the Workflow card, and `tern-kata worker edit` open `$VISUAL`, else `$EDITOR`, else `vi`, as kata's own TUI does.
+- A Project's `capacity` defaults to 3, so one hung run no longer holds its only slot until its timeout. `worker init`, `worker add` and the Worker card's Set up and Serve this Project write `capacity = 3`; a `worker.toml` that says `capacity = 1` keeps it, and one with no `capacity` line gets 3 after the upgrade. Every run's contract now tells the agent that other runs may be working in its checkout, and to make a git worktree when it needs a tree of its own.
 
 ### Fixed
 

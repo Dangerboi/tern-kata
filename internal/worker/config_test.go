@@ -74,3 +74,25 @@ func TestAMissingWorkerConfigSaysWhereItBelongs(t *testing.T) {
 		t.Fatalf("error %v", err)
 	}
 }
+
+func TestAProjectWithoutCapacityGetsThreeSlotsAndAnExplicitOneIsKept(t *testing.T) {
+	const base = "executor = \"laptop\"\n[profiles.default]\n"
+	for _, c := range []struct {
+		name, project string
+		want          int
+	}{
+		{"no capacity line", "[[projects]]\nname = \"demo\"\n", 3},
+		{"capacity one", "[[projects]]\nname = \"demo\"\ncapacity = 1\n", 1},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			cfg, err := load(t, base+c.project)
+			if err != nil {
+				t.Fatal(err)
+			}
+			p, ok := cfg.project("demo")
+			if !ok || p.Capacity != c.want {
+				t.Fatalf("project %+v, ok %v; want capacity %d", p, ok, c.want)
+			}
+		})
+	}
+}

@@ -278,6 +278,9 @@ func (c Config) MaxRunPrompts() int {
 	return c.Limits.MaxRunPrompts
 }
 
+// defaultCapacity is the slots a Project gets when its entry has no capacity line.
+const defaultCapacity = 3
+
 // project is the entry for name.
 func (c Config) project(name string) (ProjectConfig, bool) {
 	i := slices.IndexFunc(c.Projects, func(p ProjectConfig) bool { return p.Name == name })
@@ -286,7 +289,7 @@ func (c Config) project(name string) (ProjectConfig, bool) {
 	}
 	p := c.Projects[i]
 	if p.Capacity == 0 {
-		p.Capacity = 1
+		p.Capacity = defaultCapacity
 	}
 	return p, true
 }

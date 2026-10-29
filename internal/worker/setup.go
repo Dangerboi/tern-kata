@@ -133,7 +133,7 @@ func ExecutorName(host string) string {
 }
 
 func projectBlock(project, key string) string {
-	return "[[projects]]\nname = " + tomlString(project) + "\ncapacity = 1\ncheckouts = [" + tomlString(key) + "]\n" +
+	return "[[projects]]\nname = " + tomlString(project) + "\ncapacity = 3\ncheckouts = [" + tomlString(key) + "]\n" +
 		"# secrets = []       # the [secrets] names this Project's jobs may use; none unless listed\n" +
 		"# commands = false   # true lets its workflows run command steps (sh -c)\n"
 }

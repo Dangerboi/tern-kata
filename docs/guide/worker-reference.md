@@ -15,7 +15,7 @@ The file is decoded strictly (an unknown key is an error) and read once at start
 | `[limits]` `max_run_prompts` | Optional. The most prompts one run may send, 1 to 100; default 12. It is frozen into a run when the run is prepared. A workflow that could send more (prompt steps plus their retries) is refused. The cap is global: a profile has none of its own. |
 | `[limits]` `max_timeout` | Optional. The longest timeout a job may ask for; a job over it is set aside. |
 | `[[projects]]` `name` | A kata Project; listing it trusts it. |
-| `[[projects]]` `capacity` | Runs at once for the Project; default 1. |
+| `[[projects]]` `capacity` | Runs at once for the Project; default 3. |
 | `[[projects]]` `actor` | Optional. Overrides the worker's `actor` for this Project; the order is Project `actor`, then top-level `actor`, then the default. |
 | `[[projects]]` `checkouts` | Optional allowlist of checkout keys; default all. |
 | `[[projects]]` `profiles` | Optional allowlist of profile names; default all. |
@@ -40,7 +40,7 @@ max_run_prompts = 12           # most prompts one run may send; 1 to 100, defaul
 
 [[projects]]
 name      = "tern-kata"        # a kata Project; it is trusted
-capacity  = 1                  # runs at once; default 1
+capacity  = 3                  # runs at once; default 3
 actor     = "dangerboi"        # optional: overrides the worker's actor for this Project
 checkouts = ["tern-kata"]      # optional allowlist of checkout keys; default all
 profiles  = ["default"]        # optional allowlist of profile names; default all
@@ -79,7 +79,7 @@ github-review = { file = "~/.config/tern-kata/github-review" }   # a private (06
   2. `executor = "<hostname>"`, the machine's hostname lowercased with every character outside `a-z 0-9 _ -` replaced by `-` (or the `--executor` value);
   3. a commented-out `# actor = "..."` showing the default the worker would use (or `actor = "..."` when set);
   4. a commented `[limits]` example;
-  5. a `[[projects]]` block for this Project with `capacity = 1` and `checkouts = ["<key>"]`, so the Project's jobs may use only its own checkout;
+  5. a `[[projects]]` block for this Project with `capacity = 3` and `checkouts = ["<key>"]`, so the Project's jobs may use only its own checkout;
   6. `[checkouts]` with `<key> = "<absolute checkout>"`;
   7. `[profiles.default]` with `command = "omp"`, `model` and `thinking` as commented examples (or set when given) and a commented `args` example;
   8. a commented `[secrets]` example.

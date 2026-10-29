@@ -367,6 +367,7 @@ func TestCatchupAcrossADowntimeGap(t *testing.T) {
 
 func TestCatchupKeepsAtMostAWeekAndAHundredOccurrences(t *testing.T) {
 	h := newHarness(t, "--stub-hang")
+	h.capacity("1")
 	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "minutely", Prompt: "Do it.", Trigger: interval(60), Catchup: "all", Timeout: 3600})
 	r := h.start(worker.Hooks{})
 	h.scheduled(r, 1)
