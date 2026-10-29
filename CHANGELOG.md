@@ -6,6 +6,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Added
 
+- Saved views: the Menu's Views level lists your saved views by name after the built-in Collections and ends with **New view**, which opens the View card (name, base Collection or Project, the Filter card's fields and search). Opening a view makes its base current with its filters applied (`@me` is the Pane's actor) and the filter line ends with its name; `f2` edits the view under the cursor, `ctrl+d` deletes it after "Delete view <name>? y/n", and a view whose Project is gone or archived says so. Views live in `views.toml` beside `filters.toml`; the Pane reads it at start and each time the Menu opens. See [Pages and the Board](docs/guide/pages-and-board.md#saved-views).
 - `tern-kata views` lists the built-in Collections and the saved views with their base and filters, `views show <name>` prints a view's Issues grouped as the Pane groups them (`--json` for one object per group, `@me` from `--as`), `views add <name>` saves a view and `views rm <name>` deletes one, without Tern and with the View card's checks and messages. See [Views from a shell](docs/guide/views.md).
 - A kata Pane's icon in Tern's tab bar is kata's mark, the katakana カ, in place of the terminal icon, tinted like the icons beside it.
 
