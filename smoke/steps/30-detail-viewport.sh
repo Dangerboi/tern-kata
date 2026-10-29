@@ -34,6 +34,8 @@ kata --workspace "$vp_dir" comment "$(jq -r '.issue.short_id' "$tmp/viewport-lon
 quit_app
 printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$tmp/viewport-unbound" "$KATA_HOME" "$tmp" >"$tmp/viewport-launch.ctl"
 ctl --file "$tmp/viewport-launch.ctl"
+ctl click "[data-id='main.columns.collections.back']"
+expect_tree "[data-id='main.columns.collections.projects']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.projects']"
 expect_tree "[data-id='main.columns.collections.project.$vp_project']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.project.$vp_project']"

@@ -32,7 +32,7 @@ func TestUnboundSidebarGoesWhenAProjectIsEntered(t *testing.T) {
 	}
 
 	// A fixed Collection picked again, from the popup, brings it back.
-	reopened, _ := menuKeys(entered, "home", "enter")
+	reopened, _ := menuKeys(entered, "enter", "down", "enter")
 	if reopened.Collection.View != "inbox" || reopened.Picker.Open || !reflect.DeepEqual(reopened.VisibleColumns(), sidebarShown) {
 		t.Fatalf("fixed Collection again: %+v columns %v", reopened.Collection, reopened.VisibleColumns())
 	}

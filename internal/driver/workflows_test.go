@@ -101,8 +101,8 @@ func TestClickingARowSelectsItsWorkflow(t *testing.T) {
 func TestWorkflowsPageWithoutAProjectSaysSoAndOpensTheMenusProjects(t *testing.T) {
 	s := loadedWith(t, 160, model.Project{}, model.Snapshot{Issues: []model.Issue{alpha}})
 	m := step(t, s, key("5")).State.Model
-	if m.Page != model.PageIssues || !strings.Contains(m.Notice, "Project") || m.Focus != model.ColumnCollections || !m.SidebarProjects {
-		t.Errorf("page %v, notice %q, focus %v, Projects level %v", m.Page, m.Notice, m.Focus, m.SidebarProjects)
+	if m.Page != model.PageIssues || !strings.Contains(m.Notice, "Project") || m.Focus != model.ColumnCollections || m.SidebarLevel != model.MenuProjects {
+		t.Errorf("page %v, notice %q, focus %v, Projects level %v", m.Page, m.Notice, m.Focus, m.SidebarLevel == model.MenuProjects)
 	}
 }
 

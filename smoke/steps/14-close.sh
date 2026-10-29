@@ -25,6 +25,8 @@ ctl click "[data-id='layer.close.actions.quick']"
 expect_tree "[data-id='layer.close']" '.ok and .count == 0'
 ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
+ctl click "[data-id='layer.collections.list.views']"
+expect_tree "[data-id='layer.collections.list.logbook']" '.ok and .count == 1'
 ctl click "[data-id='layer.collections.list.logbook']"
 expect_tree "[data-id$='.$close_uid']" '.ok and .count == 1 and (.nodes[0].text | contains("closed"))'
 ctl click "[data-id$='.$close_uid']"
@@ -32,6 +34,7 @@ expect_tree "[data-id$='.$close_uid']" '.ok and .nodes[0]["aria-selected"] == "t
 ctl key r
 expect_tree "[data-id$='.$close_uid']" '.ok and .count == 0'
 ctl click "[data-id='main.topbar.right.menu']"
+ctl key Home
 ctl key enter
 expect_tree "[data-id$='.$close_uid']" '.ok and .count == 1 and (.nodes[0].text | contains("open"))'
 

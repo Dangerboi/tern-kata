@@ -107,7 +107,7 @@ type Model struct {
 	Collection       Collection
 	Collections      []Collection
 	CollectionCursor int
-	SidebarProjects  bool
+	SidebarLevel     MenuLevel
 	Bound            bool
 	Picker           PickerState
 	ProjectForm      ProjectFormState
@@ -326,7 +326,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case CollectionPointerSelected:
 		for _, entry := range m.SidebarEntries() {
 			if msg.Key == entry.Key() {
-				if entry.Projects || entry.Back {
+				if entry.Projects || entry.Views || entry.Back {
 					m.Focus = ColumnCollections
 				}
 				return openEntry(m, entry, false)

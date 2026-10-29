@@ -34,8 +34,8 @@ ctl key End
 expect_tree "[data-id^='main.columns.collections.']" '.nodes[-1]["aria-selected"] == "true"'
 ctl key Up
 expect_tree "[data-id^='main.columns.collections.']" '.nodes[-2]["aria-selected"] == "true"'
-ctl key End
-ctl key Up
+ctl key Escape
+ctl key Down
 ctl key Enter
 ctl key End
 ctl key Enter

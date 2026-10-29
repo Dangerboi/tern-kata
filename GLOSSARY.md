@@ -14,7 +14,9 @@
 
 **Collection**: A named set of issues the user browses: Inbox, Today, Upcoming, Deadlines, All Open, Logbook, or one project. "Inbox" names this Collection (the Inbox Project's open Issues) and nothing else; the requests addressed to a person are **Attention requests**.
 
-**Menu**: The popup inside the Pane that switches the current Collection: a type-to-filter list of the fixed Collections, the bound Project pinned first, a **Projects** entry that opens the list of kata Projects, and New Project, with the current Collection marked. It stands in for the Menu sidebar, which only an unbound directory shows, and only while a fixed Collection is current. _Avoid_: palette (Tern's own command palette).
+**Menu**: The popup inside the Pane that switches the current Collection, with a type-to-filter box that searches every level and lists the matches flat. Its top level holds the bound Project pinned first and marked current, **Views**, **Projects**, the Lettered Pages, Restore a deleted Issue and New Project; Views and Projects open a level of their own. While a fixed Collection is current, the Views row names it on the right. It stands in for the Menu sidebar, which only an unbound directory shows, and only while a fixed Collection is current; the sidebar rests on the Views level. _Avoid_: palette (Tern's own command palette).
+
+**Views level**: The Menu level `Views` opens: Back, then the fixed Collections (Inbox, Today, Upcoming, Deadlines, All Open, Logbook). Back, esc or backspace return to the Menu's top level with the cursor on Views, as the **Projects** level (Back, then every kata Project, opened by `Projects` or `P`) does with the cursor on Projects. Every Collection one can open from an unbound directory's sidebar is a view, so its sidebar shows this level. _Avoid_: preset, saved search.
 
 **Blocking link**: kata's `blocks` / `blocked_by` relationship between two issues. _Avoid_: block, blocker.
 

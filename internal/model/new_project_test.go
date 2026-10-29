@@ -26,9 +26,9 @@ func newProjectStart(bound bool) model.Model {
 
 func TestSidebarEndsWithNewProject(t *testing.T) {
 	for name, keys := range map[string][]string{
-		"the last row":                          {"escape", "end", "enter"},
-		"down reaches it from the last Project": {"escape", "end", "up", "down", "enter"},
-		"it ends the list":                      {"escape", "end", "down", "down", "enter"},
+		"the last row":                       {"escape", "escape", "end", "enter"},
+		"down reaches it from the row above": {"escape", "escape", "end", "up", "down", "enter"},
+		"it ends the list":                   {"escape", "escape", "end", "down", "down", "enter"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			m, cmds := pickerKeys(newProjectStart(false), keys...)
@@ -41,7 +41,7 @@ func TestSidebarEndsWithNewProject(t *testing.T) {
 
 func TestSidebarProjectAboveNewProjectStillSwitches(t *testing.T) {
 	smoke := model.Collection{View: "project", ProjectUID: "smoke-uid", Title: "smoke"}
-	m, cmds := pickerKeys(newProjectStart(false), "escape", "end", "up", "enter", "down", "down", "enter")
+	m, cmds := pickerKeys(newProjectStart(false), "escape", "escape", "down", "enter", "down", "down", "enter")
 	if m.ProjectForm.Open || m.Collection != smoke || !readsCollection(cmds, m, "") {
 		t.Fatalf("form open=%v collection=%+v cmds=%#v", m.ProjectForm.Open, m.Collection, cmds)
 	}
@@ -57,7 +57,7 @@ func TestNewProjectFormStartsWithTheDirectoryName(t *testing.T) {
 }
 
 func TestNewProjectFromTheSidebarCreatesAndBinds(t *testing.T) {
-	m, cmds := pickerKeys(newProjectStart(false), "escape", "end", "enter", "enter")
+	m, cmds := pickerKeys(newProjectStart(false), "escape", "escape", "end", "enter", "enter")
 	want := []model.Cmd{model.BindProject{Workspace: newProjectWorkspace, Actor: "alice", Name: "my-repo"}}
 	if !reflect.DeepEqual(cmds, want) || !m.ProjectForm.Open || !m.ProjectForm.Saving {
 		t.Fatalf("submit: cmds=%#v form=%+v", cmds, m.ProjectForm)
@@ -71,12 +71,12 @@ func newProjectOpened(bound bool) model.Model {
 		m, _ := menuKeys(newProjectStart(true), "end", "enter")
 		return m
 	}
-	m, _ := pickerKeys(newProjectStart(false), "escape", "end", "enter")
+	m, _ := pickerKeys(newProjectStart(false), "escape", "escape", "end", "enter")
 	return m
 }
 
 func TestNewProjectEscapeCancelsTheForm(t *testing.T) {
-	base, _ := pickerKeys(newProjectStart(false), "escape", "end")
+	base, _ := pickerKeys(newProjectStart(false), "escape", "escape", "end")
 	got, cmds := pickerKeys(base, "enter", "x", "escape")
 	if !reflect.DeepEqual(got, base) || len(cmds) != 0 {
 		t.Fatalf("cancel left %+v, cmds %#v", got.ProjectForm, cmds)
@@ -188,7 +188,7 @@ func TestNewProjectBindOpensTheProjectFirst(t *testing.T) {
 	// The snapshot that arrives lists the Project, which is now the pinned entry.
 	snapshot := model.Snapshot{Catalog: append(pickerCatalog(), model.CatalogProject{Project: created})}
 	loaded, _ := model.Update(got, model.SnapshotLoaded{Request: got.RefreshRequest, Query: got.SnapshotQuery(), Snapshot: snapshot})
-	if loaded.Loading || !reflect.DeepEqual(pickerTitles(loaded)[:2], []string{"my-repo", "Inbox"}) {
+	if loaded.Loading || !reflect.DeepEqual(pickerTitles(loaded)[:2], []string{"my-repo", "Views"}) {
 		t.Fatalf("loaded: loading=%v entries=%q", loaded.Loading, pickerTitles(loaded))
 	}
 }
@@ -249,8 +249,8 @@ func TestPickerNewProjectOnlyCreates(t *testing.T) {
 }
 
 func TestNewProjectPointerEqualsKeyboard(t *testing.T) {
-	unbound := newProjectStart(false)
-	wantSidebar, wantCmds := pickerKeys(unbound, "escape", "end", "enter")
+	unbound, _ := pickerKeys(newProjectStart(false), "escape", "escape")
+	wantSidebar, wantCmds := pickerKeys(unbound, "end", "enter")
 	gotSidebar, gotCmds := model.Update(unbound, model.CollectionPointerSelected{Key: "new-project"})
 	if !wantSidebar.ProjectForm.Open || !reflect.DeepEqual(gotSidebar, wantSidebar) || !reflect.DeepEqual(gotCmds, wantCmds) {
 		t.Fatalf("sidebar click differs from the keyboard: %+v vs %+v", gotSidebar.ProjectForm, wantSidebar.ProjectForm)

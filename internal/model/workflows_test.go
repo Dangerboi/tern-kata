@@ -45,8 +45,8 @@ func hasCmd(cmds []model.Cmd, want model.Cmd) bool {
 func TestWorkflowsPageNeedsAProject(t *testing.T) {
 	m, _ := loadFirst(model.Model{Cols: 160}, model.ProjectLoaded{}, model.SnapshotLoaded{})
 	m, _ = model.Update(m, model.KeyMsg{Chord: "5"})
-	if m.Page != model.PageIssues || !strings.Contains(m.Notice, "Project") || !m.SidebarProjects {
-		t.Errorf("page %v, notice %q, Projects level %v; want the Issues Page, a notice and the Menu's Projects", m.Page, m.Notice, m.SidebarProjects)
+	if m.Page != model.PageIssues || !strings.Contains(m.Notice, "Project") || m.SidebarLevel != model.MenuProjects {
+		t.Errorf("page %v, notice %q, Projects level %v; want the Issues Page, a notice and the Menu's Projects", m.Page, m.Notice, m.SidebarLevel == model.MenuProjects)
 	}
 }
 

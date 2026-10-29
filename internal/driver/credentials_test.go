@@ -276,7 +276,7 @@ func TestRRefreshesTheListAtOnceAndRetriesAFailedCheck(t *testing.T) {
 
 func TestCredentialsPageKeysKeepThePageKeysAndTheMenu(t *testing.T) {
 	audited, _ := credentialsAudited(t)
-	if got := step(t, audited, key("shift+p")).State.Model; !got.Picker.Open && !got.SidebarProjects {
+	if got := step(t, audited, key("shift+p")).State.Model; !got.Picker.Open && got.SidebarLevel != model.MenuProjects {
 		t.Error("P opens no Menu Projects level")
 	}
 	if got := step(t, audited, key("shift+i")).State.Model; got.Page != model.PageIssues || got.Collection != model.InboxCollection() {

@@ -74,7 +74,7 @@ The Issues Page is the list and the Issue detail.
 
 - **List**: a Project's Issues nested under their parents, with priority, status, child counts and age.
 - **Detail**: the Issue's Markdown body, its properties and the Activity tabs (Comments, Events, Links, Attachments). Changes made anywhere, by you or an agent, show up live.
-- **Collections and the Menu**: Inbox, Today, Upcoming, Deadlines, All Open, Logbook and every kata Project, plus a search (`/`) and filters (`f`, `s`, `c`) over any of them.
+- **Collections and the Menu**: the Menu (the top bar's Menu button, or `esc` from the list) opens on the bound Project, **Views**, **Projects**, the Lettered Pages (Credentials, Federation, Daemons), Restore a deleted Issue and New Project. **Views** opens a level of Back, Inbox, Today, Upcoming, Deadlines, All Open and Logbook; **Projects** (or `P`) opens a level of Back and every kata Project, and `I` opens the Inbox from anywhere. `esc`, `backspace` or Back leave a level for the top, with the cursor on the row that led there; while a fixed Collection is current, the top level's Views row names it on the right and the Menu opens with the cursor on Views. Typing in the Menu filters every level at once: "tod" finds Today, "alp" finds the Project alpha. In a directory bound to no Project the Menu sidebar shows the Views level. Beside the Collections, `/` searches and `f`, `s`, `c` filter any of them.
 
 ### Filters
 

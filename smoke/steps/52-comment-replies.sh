@@ -13,6 +13,8 @@ kata --workspace "$cr_dir" comment "$cr_short" -m "an answer" --reply "$cr_first
 quit_app
 printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$tmp/replies-unbound" "$KATA_HOME" "$tmp" >"$tmp/replies-launch.ctl"
 ctl --file "$tmp/replies-launch.ctl"
+ctl click "[data-id='main.columns.collections.back']"
+expect_tree "[data-id='main.columns.collections.projects']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.projects']"
 expect_tree "[data-id='main.columns.collections.project.$cr_project']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.project.$cr_project']"

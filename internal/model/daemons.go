@@ -164,7 +164,7 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	m.Project, m.Bound, m.Daemon = Project{}, false, msg.Daemon
 	m.Snapshot, m.Relationships, m.Issues, m.SelectedUID, m.Groups, m.ExpandedUIDs = Snapshot{}, nil, nil, "", nil, nil
 	m.Loading, m.Err = true, nil
-	m.Collection, m.Collections, m.CollectionCursor, m.SidebarProjects = InboxCollection(), nil, 0, false
+	m.Collection, m.Collections, m.CollectionCursor, m.SidebarLevel = InboxCollection(), nil, 0, MenuViews
 	m.Picker, m.ProjectForm, m.LanesForm = PickerState{}, ProjectFormState{}, LanesFormState{}
 	m.Focus, m.HelpOpen, m.EditorUID = ColumnList, false, ""
 	m.Filters, m.DefaultFilters, m.Search, m.IDSearch, m.FilterForm = Filters{}, Filters{}, SearchState{}, IDSearch{}, FilterFormState{}

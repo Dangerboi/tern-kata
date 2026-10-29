@@ -50,6 +50,8 @@ quit_app
 printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$tmp/stuck-unbound" "$KATA_HOME" "$tmp" >"$tmp/stuck-launch.ctl"
 ctl --file "$tmp/stuck-launch.ctl"
 read -r stuck_width stuck_height < <(ctl stats | jq -r '.viewport[0:2] | @tsv')
+ctl click "[data-id='main.columns.collections.back']"
+expect_tree "[data-id='main.columns.collections.projects']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.projects']"
 expect_tree "[data-id='main.columns.collections.project.$stuck_project']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.project.$stuck_project']"
@@ -84,8 +86,12 @@ ctl key esc
 
 # Collection switches. Inside a Project the sidebar is gone and esc opens the popup; a fixed Collection picked there brings the sidebar back.
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
+ctl click "[data-id='layer.collections.list.views']"
+expect_tree "[data-id='layer.collections.list.all-open']" '.ok and .count == 1'
 ctl click "[data-id='layer.collections.list.all-open']"
 expect_tree "[data-id='main.columns.collections.all-open']" '.ok and .count == 1'
+ctl click "[data-id='main.columns.collections.back']"
+expect_tree "[data-id='main.columns.collections.projects']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.projects']"
 expect_tree "[data-id='main.columns.collections.project.$stuck_project']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.project.$stuck_project']"

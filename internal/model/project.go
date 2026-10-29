@@ -4,7 +4,7 @@ import "fmt"
 
 func updateProject(m Model, msg ProjectLoaded) (Model, []Cmd) {
 	m.Project = msg.Project
-	m.Bound = msg.Project.UID != ""
+	m.Bound, m.SidebarLevel = msg.Project.UID != "", MenuViews
 	m.Collection = InboxCollection()
 	if msg.Project.UID != "" {
 		m.Collection = ProjectCollection(msg.Project.UID, msg.Project.Name)

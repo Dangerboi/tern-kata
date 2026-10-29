@@ -294,7 +294,7 @@ func TestLeavingTheFederationPageDropsAnswersStillOutAndReadsAgainOnReturn(t *te
 
 func TestFederationPageKeepsThePageKeysAndTheMenu(t *testing.T) {
 	s := federationListed(t, healthySpoke("acme"))
-	if got := step(t, s, key("shift+p")).State.Model; !got.Picker.Open && !got.SidebarProjects {
+	if got := step(t, s, key("shift+p")).State.Model; !got.Picker.Open && got.SidebarLevel != model.MenuProjects {
 		t.Error("P opens no Menu Projects level")
 	}
 	if got := step(t, s, key("shift+i")).State.Model; got.Page != model.PageIssues || got.Collection != model.InboxCollection() {

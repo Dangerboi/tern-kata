@@ -22,7 +22,7 @@ func newProjectModel(bound bool, keys ...string) model.Model {
 }
 
 func TestRenderSidebarEndsWithNewProjectWhenUnbound(t *testing.T) {
-	m := newProjectModel(false)
+	m := newProjectModel(false, "escape", "escape")
 	list := pickerNodes(t, m)[view.CollectionsID]
 	ids := pickerChildIDs(list)
 	if len(ids) == 0 || ids[len(ids)-1] != view.CollectionsID+".new-project" {
@@ -37,7 +37,7 @@ func TestRenderSidebarEndsWithNewProjectWhenUnbound(t *testing.T) {
 		t.Fatal("a bound directory rendered the sidebar's New Project row")
 	}
 
-	m = newProjectModel(false, "escape", "end")
+	m = newProjectModel(false, "escape", "escape", "end")
 	nodes := pickerNodes(t, m)
 	if nodes[view.CollectionsID].P["selected"] != view.CollectionsID+".new-project" || nodes[view.CollectionsID+".new-project"].P["label"] != "New Project" {
 		t.Fatalf("selected row = %v, label = %v", nodes[view.CollectionsID].P["selected"], nodes[view.CollectionsID+".new-project"].P["label"])
@@ -60,12 +60,12 @@ func TestRenderPickerRowForNewProject(t *testing.T) {
 }
 
 func TestRenderNewProjectFormFollowsTheModel(t *testing.T) {
-	closed := newProjectModel(false, "escape", "end")
+	closed := newProjectModel(false, "escape", "escape", "end")
 	if _, ok := pickerNodes(t, closed)[newProjectIDPrefix]; ok {
 		t.Fatal("a closed form rendered")
 	}
 
-	m := newProjectModel(false, "escape", "end", "enter")
+	m := newProjectModel(false, "escape", "escape", "end", "enter")
 	nodes := pickerNodes(t, m)
 	if _, ok := nodes[newProjectIDPrefix]; !ok {
 		t.Fatal("form not rendered")

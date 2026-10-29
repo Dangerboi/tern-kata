@@ -94,7 +94,7 @@ func TestRenderPickerListsPinnedProjectFirstAndMarksCurrent(t *testing.T) {
 		t.Fatal("picker list not rendered")
 	}
 	prefix := "layer.collections.list."
-	want := []string{"project.smoke-uid", "inbox", "today", "upcoming", "deadlines", "all-open", "logbook", "page.credentials", "page.federation", "page.daemons", "restore", "projects", "new-project"}
+	want := []string{"project.smoke-uid", "views", "projects", "page.credentials", "page.federation", "page.daemons", "restore", "new-project"}
 	var got []string
 	for _, id := range pickerChildIDs(list) {
 		got = append(got, strings.TrimPrefix(id, prefix))
@@ -102,7 +102,7 @@ func TestRenderPickerListsPinnedProjectFirstAndMarksCurrent(t *testing.T) {
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("picker rows = %v, want %v", got, want)
 	}
-	if list.P["selected"] != prefix+"inbox" {
+	if list.P["selected"] != prefix+"views" {
 		t.Fatalf("selected row = %v, want the cursor entry", list.P["selected"])
 	}
 	for _, id := range pickerChildIDs(list) {
@@ -172,7 +172,7 @@ func TestRenderMenuTextsAndButtons(t *testing.T) {
 
 func TestRenderMenuProjectsLevelListsProjectsAndMarksCurrent(t *testing.T) {
 	m := menuOpened(pickerLoaded(true))
-	for _, key := range []string{"end", "up", "enter"} {
+	for _, key := range []string{"down", "down", "enter"} {
 		m, _ = model.Update(m, model.KeyMsg{Chord: key, Text: key})
 	}
 	nodes := pickerNodes(t, m)
@@ -199,7 +199,11 @@ func TestRenderSidebarListsProjectsOnlyAtItsProjectsLevel(t *testing.T) {
 		}
 		return strings.Join(rows, ",")
 	}
-	if got := ids(m); got != "inbox,today,upcoming,deadlines,all-open,logbook,page.credentials,page.federation,page.daemons,restore,projects,new-project" {
+	if got := ids(m); got != "back,inbox,today,upcoming,deadlines,all-open,logbook" {
+		t.Fatalf("sidebar Views level = %s", got)
+	}
+	m, _ = model.Update(m, model.KeyMsg{Chord: "escape"})
+	if got := ids(m); got != "views,projects,page.credentials,page.federation,page.daemons,restore,new-project" {
 		t.Fatalf("sidebar top level = %s", got)
 	}
 	m, _ = model.Update(m, model.CollectionPointerSelected{Key: "projects"})
@@ -213,13 +217,52 @@ func TestMenuButtonSaysBackOnTheProjectsLevel(t *testing.T) {
 	if got := text(pickerNodes(t, m)["layer.collections.close"]); !strings.HasPrefix(got, "Close") {
 		t.Fatalf("top level button = %q, want it to say Close", got)
 	}
-	m, _ = model.Update(m, model.KeyMsg{Chord: "end"})
-	m, _ = model.Update(m, model.KeyMsg{Chord: "up"})
+	views, _ := model.Update(m, model.KeyMsg{Chord: "down"})
+	views, _ = model.Update(views, model.KeyMsg{Chord: "enter"})
+	if views.Picker.Level != model.MenuViews {
+		t.Fatal("fixture: not on the Views level")
+	}
+	if got := text(pickerNodes(t, views)["layer.collections.close"]); !strings.HasPrefix(got, "Back") {
+		t.Fatalf("Views level button = %q, want it to say Back", got)
+	}
+	m, _ = model.Update(m, model.KeyMsg{Chord: "down"})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "down"})
 	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
-	if !m.Picker.Projects {
+	if m.Picker.Level != model.MenuProjects {
 		t.Fatal("fixture: not on the Projects level")
 	}
 	if got := text(pickerNodes(t, m)["layer.collections.close"]); !strings.HasPrefix(got, "Back") {
 		t.Fatalf("Projects level button = %q, want it to say Back", got)
+	}
+}
+
+func TestRenderMenuViewsLevelListsTheFixedCollectionsAndMarksCurrent(t *testing.T) {
+	m := menuOpened(pickerLoaded(true))
+	for _, key := range []string{"down", "enter"} {
+		m, _ = model.Update(m, model.KeyMsg{Chord: key})
+	}
+	nodes := pickerNodes(t, m)
+	var got []string
+	for _, id := range pickerChildIDs(nodes["layer.collections.list"]) {
+		got = append(got, strings.TrimPrefix(id, "layer.collections.list."))
+	}
+	if strings.Join(got, ",") != "back,inbox,today,upcoming,deadlines,all-open,logbook" {
+		t.Fatalf("Views level rows = %v", got)
+	}
+	m, _ = model.Update(m, model.KeyMsg{Chord: "down"})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "down"})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"}) // Today
+	m = menuOpened(m)
+	nodes = pickerNodes(t, m)
+	if v := nodes["layer.collections.list.views"].P["value"]; v != "Today" {
+		t.Fatalf("Views row value = %v, want the current Collection's title", v)
+	}
+	if nodes["layer.collections.list"].P["selected"] != "layer.collections.list.views" {
+		t.Fatalf("cursor row = %v, want Views", nodes["layer.collections.list"].P["selected"])
+	}
+	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
+	nodes = pickerNodes(t, m)
+	if nodes["layer.collections.list.today"].P["value"] != "current" {
+		t.Fatal("the Views level does not mark the current Collection")
 	}
 }

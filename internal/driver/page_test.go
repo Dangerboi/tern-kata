@@ -76,8 +76,8 @@ func TestBoardPageWithoutAProjectSaysSoAndOpensTheMenusProjects(t *testing.T) {
 	s := loadedWith(t, 160, model.Project{}, model.Snapshot{Issues: []model.Issue{alpha}})
 	for _, press := range []string{"2", "b"} {
 		m := step(t, s, key(press)).State.Model
-		if m.Page != model.PageIssues || !strings.Contains(m.Notice, "Project") || m.Focus != model.ColumnCollections || !m.SidebarProjects {
-			t.Errorf("%s: page %v, notice %q, focus %v, Projects level %v", press, m.Page, m.Notice, m.Focus, m.SidebarProjects)
+		if m.Page != model.PageIssues || !strings.Contains(m.Notice, "Project") || m.Focus != model.ColumnCollections || m.SidebarLevel != model.MenuProjects {
+			t.Errorf("%s: page %v, notice %q, focus %v, Projects level %v", press, m.Page, m.Notice, m.Focus, m.SidebarLevel == model.MenuProjects)
 		}
 	}
 }

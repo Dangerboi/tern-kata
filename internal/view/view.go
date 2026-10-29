@@ -406,11 +406,11 @@ func footerGrid(m model.Model) (grid [][]helplayout.HelpItem, chords []string, p
 		if binding.Action == model.OverwriteDraft && m.TopCard() == model.CardWorkflow && m.Workflows.Card.Conflict != nil && m.Workflows.Card.Conflict.Archived {
 			continue
 		}
-		if binding.Action == model.MenuBack && !m.SidebarProjects {
+		if binding.Action == model.MenuBack && m.SidebarLevel == model.MenuTop {
 			continue
 		}
 		help := binding.Help
-		if binding.Action == model.ClosePicker && m.Picker.Projects && m.Picker.Filter == "" {
+		if binding.Action == model.ClosePicker && m.Picker.Level != model.MenuTop && m.Picker.Filter == "" {
 			help = "back"
 		}
 		if binding.Action == model.DrillOut && m.EscGoesBack() {

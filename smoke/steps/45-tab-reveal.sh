@@ -36,6 +36,8 @@ for n in 1 2 3 4; do kata --workspace "$tr_dir" comment "$tr_short" --body "Reve
 quit_app
 printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$tmp/reveal-unbound" "$KATA_HOME" "$tmp" >"$tmp/reveal-launch.ctl"
 ctl --file "$tmp/reveal-launch.ctl"
+ctl click "[data-id='main.columns.collections.back']"
+expect_tree "[data-id='main.columns.collections.projects']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.projects']"
 expect_tree "[data-id='main.columns.collections.project.$tr_project']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.project.$tr_project']"

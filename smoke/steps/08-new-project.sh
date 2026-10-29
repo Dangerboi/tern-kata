@@ -68,6 +68,7 @@ quit_app
 mkdir -p "$tmp/np-unbound"
 np_launch "$tmp/np-unbound"
 expect_tree "[data-id='main.columns.collections']" '.ok and .count == 1'
+ctl click "[data-id='main.columns.collections.back']"
 expect_tree "$np_sidebar_rows" '.ok and .nodes[-1].text == "New Project"'
 ctl click "[data-id='main.columns.collections.new-project']"
 expect_tree "$np_form" '.ok and .count == 1'

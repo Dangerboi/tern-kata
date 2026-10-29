@@ -278,7 +278,7 @@ func newProject() driver.State {
 		Catalog: pickerCatalog(),
 		Issues:  []model.Issue{{UID: "a", ShortID: "aaaa", Title: "First"}},
 	}})
-	return pressed(driver.State{Model: m}, "escape", "end", "enter")
+	return pressed(driver.State{Model: m}, "escape", "escape", "end", "enter")
 }
 
 // cardButtonsOf are the buttons the card on top of s draws, by node id: every key click under a layer or the Menu.

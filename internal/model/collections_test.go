@@ -67,9 +67,9 @@ func TestCollectionKeyboardSwitching(t *testing.T) {
 		keys []string
 		view string
 	}{
-		{"Inbox", []string{"escape", "g", "enter"}, "inbox"},
-		{"Today", []string{"escape", "g", "j", "enter"}, "today"},
-		{"Logbook", []string{"escape", "g", "j", "j", "j", "j", "j", "enter"}, "logbook"},
+		{"Inbox", []string{"escape", "g", "j", "enter"}, "inbox"},
+		{"Today", []string{"escape", "g", "j", "j", "enter"}, "today"},
+		{"Logbook", []string{"escape", "g", "j", "j", "j", "j", "j", "j", "enter"}, "logbook"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m, _ := loadFirst(model.Model{}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{Catalog: []model.CatalogProject{{Project: model.Project{UID: "p", Name: "Work"}}}}})

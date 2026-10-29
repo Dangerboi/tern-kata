@@ -11,12 +11,12 @@ expect_tree "[data-id='main.columns.collections']" '.ok and .count == 0'
 expect_tree "[data-id='main.columns.detail']" '.ok and .count == 1'
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 
-# The Menu button opens the Menu at its top level: the bound Project first and marked current, the fixed Collections, the Lettered Pages (Credentials, Federation), Daemons, Restore a deleted Issue, then Projects and New Project. No other Project is listed inline.
+# The Menu button opens the Menu at its top level: the bound Project first and marked current, then Views, Projects, the Lettered Pages (Credentials, Federation, Daemons), Restore a deleted Issue and New Project. No Collection and no other Project is listed inline.
 picker_projects_entry="[data-id='layer.collections.list.projects']"
 ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
-expect_tree "$picker_items" '.ok and .count == 13 and .nodes[0].text == "smokecurrent" and .nodes[0]["aria-selected"] == "true" and .nodes[1].text == "Inbox" and .nodes[-1].text == "New Project"'
-expect_tree "$picker_items" '.nodes[-2].text == "Projects" and .nodes[-3].text == "Restore a deleted Issue" and .nodes[-4].text == "Daemons" and .nodes[-5].text == "Federation" and .nodes[-6].text == "Credentials"'
+expect_tree "$picker_items" '.ok and .count == 8 and .nodes[0].text == "smokecurrent" and .nodes[0]["aria-selected"] == "true" and .nodes[1].text == "Views" and .nodes[2].text == "Projects" and .nodes[-1].text == "New Project"'
+expect_tree "$picker_items" '.nodes[-2].text == "Restore a deleted Issue" and .nodes[-3].text == "Daemons" and .nodes[-4].text == "Federation" and .nodes[-5].text == "Credentials"'
 expect_tree "[data-id^='layer.collections.list.project.']" '.ok and .count == 1'
 expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("enter open Collection") and contains("esc close"))'
 ctl key End
@@ -49,8 +49,8 @@ ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "$picker_items" '.ok and .nodes[0].text == "smoke" and .nodes[0]["aria-selected"] == "true"'
 expect_tree "[data-id='layer.collections.list.project.$picker_alpha_uid']" '.ok and .count == 0'
 # enter on Projects lists every Project with the current one marked and the cursor on it; esc returns to the top level, still open.
-ctl key End
-ctl key Up
+ctl key Down
+ctl key Down
 expect_tree "$picker_projects_entry" '.ok and .nodes[0]["aria-selected"] == "true"'
 ctl key enter
 expect_tree "$picker_items" '.ok and .nodes[0].text == "Back" and (.nodes | map(.text) | index("picker-alphacurrent") != null)'
@@ -59,6 +59,34 @@ expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 an
 ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 expect_tree "$picker_projects_entry" '.ok and .nodes[0]["aria-selected"] == "true"'
+ctl key Home
+ctl key enter
+expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: smoke"'
+expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
+
+# enter on Views lists Back and the six Collections with the cursor on Back; esc and backspace return to the top on Views, still open.
+picker_views_entry="[data-id='layer.collections.list.views']"
+ctl click "[data-id='main.topbar.right.menu']"
+ctl key Down
+ctl key enter
+expect_tree "$picker_items" '.ok and .count == 7 and .nodes[0].text == "Back" and .nodes[0]["aria-selected"] == "true" and .nodes[1].text == "Inbox" and .nodes[2].text == "Today" and .nodes[3].text == "Upcoming" and .nodes[4].text == "Deadlines" and .nodes[5].text == "All Open" and .nodes[6].text == "Logbook"'
+expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 and (.nodes[0].text | contains("esc back"))'
+ctl key esc
+expect_tree "$picker_views_entry" '.ok and .nodes[0]["aria-selected"] == "true"'
+ctl key enter
+ctl key backspace
+expect_tree "$picker_views_entry" '.ok and .nodes[0]["aria-selected"] == "true"'
+ctl key esc
+expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
+
+# Typing at the top finds a Collection flat; its Views row then names it on the right, and the cursor opens on Views.
+ctl click "[data-id='main.topbar.right.menu']"
+for letter in t o d; do ctl key "$letter"; done
+expect_tree "$picker_items" '.ok and .count == 1 and .nodes[0].text == "Today"'
+ctl key enter
+expect_tree "$picker_heading" '.ok and .nodes[0].text == "Today"'
+ctl click "[data-id='main.topbar.right.menu']"
+expect_tree "$picker_views_entry" '.ok and .nodes[0].text == "ViewsToday" and .nodes[0]["aria-selected"] == "true"'
 ctl key Home
 ctl key enter
 expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: smoke"'
@@ -107,7 +135,7 @@ expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 ctl resize "$picker_width" "$picker_height"
 expect_tree "[data-id='main.columns.detail']" '.ok and .count == 1'
 
-# An unbound directory keeps the sidebar, starting on Inbox, and esc from the list still focuses it.
+# An unbound directory keeps the sidebar on the Views level, starting on Inbox, and esc from the list still focuses it.
 quit_app
 mkdir -p "$tmp/picker-unbound"
 printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$tmp/picker-unbound" "$KATA_HOME" "$tmp" >"$tmp/picker-unbound.ctl"

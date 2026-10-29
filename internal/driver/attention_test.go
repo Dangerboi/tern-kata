@@ -351,8 +351,8 @@ func TestAttentionPageEscOpensTheMenuAndPAndIKeepWorking(t *testing.T) {
 	if got := step(t, s, key("escape")).State.Model; !got.Picker.Open {
 		t.Error("esc on the Attention Page left the Menu closed")
 	}
-	if got := step(t, s, key("shift+p")).State.Model; !got.Picker.Open || !got.Picker.Projects {
-		t.Errorf("P gave Menu open %v, Projects level %v", got.Picker.Open, got.Picker.Projects)
+	if got := step(t, s, key("shift+p")).State.Model; !got.Picker.Open || got.Picker.Level != model.MenuProjects {
+		t.Errorf("P gave Menu open %v, Projects level %v", got.Picker.Open, got.Picker.Level == model.MenuProjects)
 	}
 	if got := step(t, s, key("shift+i")).State.Model; got.Collection != model.InboxCollection() || got.Page != model.PageIssues {
 		t.Errorf("I gave Collection %+v on Page %v", got.Collection, got.Page)

@@ -75,7 +75,7 @@ func TestFieldFormEndsInButtons(t *testing.T) {
 }
 
 func TestNewProjectEndsInButtons(t *testing.T) {
-	m := newProjectModel(false, "escape", "end", "enter")
+	m := newProjectModel(false, "escape", "escape", "end", "enter")
 	cardButtons(t, m, "layer.project.actions", []button{{"create", "Create Project"}, {"cancel", "Cancel"}}, "create")
 	m = press(m, "enter")
 	noButtons(t, m, "layer.project", "actions", "actions.create", "actions.cancel")

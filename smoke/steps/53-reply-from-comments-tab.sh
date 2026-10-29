@@ -12,6 +12,8 @@ rp_first=$(kata --workspace "$rp_dir" comment "$rp_short" -m "the claim" --json 
 quit_app
 printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$tmp/reply-post-unbound" "$KATA_HOME" "$tmp" >"$tmp/reply-post-launch.ctl"
 ctl --file "$tmp/reply-post-launch.ctl"
+ctl click "[data-id='main.columns.collections.back']"
+expect_tree "[data-id='main.columns.collections.projects']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.projects']"
 expect_tree "[data-id='main.columns.collections.project.$rp_project']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.collections.project.$rp_project']"

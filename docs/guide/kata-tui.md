@@ -68,7 +68,7 @@ kata tui's alternative keys work where kata has them:
 | Key | Same as |
 |---|---|
 | `ctrl+j`, `ctrl+k` | `tab`, `shift+tab`: the next and previous tab of the Issue detail |
-| `backspace` | `esc` where it goes back outside text fields: the Issue detail, the Lane view, the Menu's Projects level, the Jobs and Runs inspectors and the Lettered Pages |
+| `backspace` | `esc` where it goes back outside text fields: the Issue detail, the Lane view, the Menu's Views and Projects levels, the Jobs and Runs inspectors and the Lettered Pages |
 | `ctrl+alt+<`, `ctrl+alt+>` | `g`, `G`: the first and last row of every list, the Issue detail and the Menu |
 | `!` then `0`-`4` or `-` | set or clear the priority at once; any other key closes the field and is handled as usual |
 | `T` | open the Attention Page, from any Page and the Menu |

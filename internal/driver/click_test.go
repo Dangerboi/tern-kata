@@ -125,7 +125,7 @@ func TestSelectInputsDecodeForTheListAndBothMenus(t *testing.T) {
 	if out := driver.Step(unbound, &tern.Select{ID: view.CollectionsID, Item: rowShowing(t, unbound.Model, view.CollectionsID, "Today")}, now); len(out.Cmds) != 1 {
 		t.Errorf("sidebar select commands = %#v", out.Cmds)
 	}
-	menu := feed(t, s, openMenu).State
+	menu := pressed(feed(t, s, openMenu).State, "down", "enter")
 	if out := driver.Step(menu, &tern.Select{ID: view.PickerListID, Item: rowShowing(t, menu.Model, view.PickerListID, "Today")}, now); out.State.Model.Picker.Open {
 		t.Error("Menu select left the Menu open")
 	}

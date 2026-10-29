@@ -526,7 +526,14 @@ func buildCards() []cardEntry {
 			fields: []FieldSpec{}, input: true,
 			editing: []fieldEditing{{mode: ModePicker, actions: []Action{DeleteInput, ClearInput}, clear: "clear filter"}},
 			text:    func(m *Model) (*string, *Caret) { return &m.Picker.Filter, &m.Picker.Caret },
-			erased:  func(m Model, _ bool) Model { m.Picker.Cursor = 0; return m },
+			erased: func(m Model, changed bool) Model {
+				// Backspace with nothing to delete leaves a Views or Projects level, like esc.
+				if !changed && m.Picker.Filter == "" && m.Picker.Level != MenuTop {
+					return setMenuLevel(m, true, MenuTop)
+				}
+				m.Picker.Cursor = 0
+				return m
+			},
 		},
 	}
 }

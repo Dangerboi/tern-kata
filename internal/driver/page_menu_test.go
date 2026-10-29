@@ -51,8 +51,8 @@ func TestEscOnAPageListOpensTheMenuAndInAnInspectorGoesBackToTheListFirst(t *tes
 func TestPAndIOnAPageOpenTheMenusProjectsAndTheInbox(t *testing.T) {
 	for _, p := range menuPages(t) {
 		for where, s := range map[string]driver.State{"list": p.list, "inspector": p.inspector} {
-			if got := step(t, s, key("shift+p")).State.Model; !got.Picker.Open || !got.Picker.Projects {
-				t.Errorf("%s %s: P gave Menu open %v, Projects level %v", p.name, where, got.Picker.Open, got.Picker.Projects)
+			if got := step(t, s, key("shift+p")).State.Model; !got.Picker.Open || got.Picker.Level != model.MenuProjects {
+				t.Errorf("%s %s: P gave Menu open %v, Projects level %v", p.name, where, got.Picker.Open, got.Picker.Level == model.MenuProjects)
 			}
 			if got := step(t, s, key("shift+i")).State.Model; got.Collection != model.InboxCollection() || got.Page != model.PageIssues {
 				t.Errorf("%s %s: I gave Collection %+v on Page %v, want the Inbox", p.name, where, got.Collection, got.Page)

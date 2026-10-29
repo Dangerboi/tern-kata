@@ -17,8 +17,11 @@ func pickerLayer(m model.Model) tern.Element {
 	items := make([]tern.Element, 0, len(entries))
 	for _, entry := range entries {
 		item := ui.Item{Common: ui.Common{Key: entry.Key()}, Label: ui.T(entry.Title)}
-		if entry.Lettered && entry.Page == m.Page || !entry.NewProject && !entry.Lettered && !entry.Restore && entry.Collection == m.Collection {
+		if entry.Lettered && entry.Page == m.Page || entry.IsCollection() && entry.Collection == m.Collection {
 			item.Value = ui.T("current")
+		}
+		if entry.Views && m.CurrentView() != "" {
+			item.Value = ui.T(m.CurrentView())
 		}
 		items = append(items, item)
 	}
@@ -26,9 +29,9 @@ func pickerLayer(m model.Model) tern.Element {
 	if len(entries) > 0 {
 		selected = PickerItemID(entries[min(m.Picker.Cursor, len(entries)-1)].Key())
 	}
-	// esc goes Back on the Projects level, so the button says so, as the footer does.
+	// esc goes Back on the Views and Projects levels, so the button says so, as the footer does.
 	closeLabel := "Close"
-	if m.Picker.Projects && m.Picker.Filter == "" {
+	if m.Picker.Level != model.MenuTop && m.Picker.Filter == "" {
 		closeLabel = "Back"
 	}
 	empty := "No Menu entries match."
