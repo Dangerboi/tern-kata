@@ -67,3 +67,20 @@ expect_tree "$sv_items" '.ok and .count == 0'
 ! grep -q '\[\[view\]\]' "$sv_file"
 ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
+
+# A view added from the shell is listed the next time the Menu opens, shows as JSON groups, and is gone after views rm.
+(cd "$tmp/workspace" && "$tmp/tern-kata" views add shellview --base today --owner @me)
+grep -q 'name = "shellview"' "$sv_file"
+ctl click "[data-id='main.topbar.right.menu']"
+for letter in s h e l l v i e w; do ctl key "$letter"; done
+expect_tree "$sv_items" '.ok and .count == 1 and .nodes[0].text == "shellview"'
+ctl key esc
+expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
+(cd "$tmp/workspace" && "$tmp/tern-kata" views show shellview --json) | jq -e 'type == "array"' >/dev/null
+(cd "$tmp/workspace" && "$tmp/tern-kata" views rm shellview)
+! grep -q '\[\[view\]\]' "$sv_file"
+ctl click "[data-id='main.topbar.right.menu']"
+for letter in s h e l l v i e w; do ctl key "$letter"; done
+expect_tree "$sv_items" '.ok and .count == 0'
+ctl key esc
+expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
