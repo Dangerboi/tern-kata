@@ -647,6 +647,26 @@ func init() {
 		nil, nil)
 
 	daemonCall(
+		func(cmd model.RaiseAgentAttention) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.RaiseAgentAttention) (model.Msg, error) {
+			return ok(model.AgentAttentionWritten{UID: cmd.UID}, c.RaiseAgentAttention(ctx, cmd))
+		},
+		func(cmd model.RaiseAgentAttention, err error) model.Msg {
+			return model.AgentAttentionWritten{UID: cmd.UID, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.ClearAgentAttention) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.ClearAgentAttention) (model.Msg, error) {
+			return ok(model.AgentAttentionWritten{UID: cmd.UID, Clear: true}, c.ClearAgentAttention(ctx, cmd))
+		},
+		func(cmd model.ClearAgentAttention, err error) model.Msg {
+			return model.AgentAttentionWritten{UID: cmd.UID, Clear: true, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
 		func(cmd model.SaveWorkflow) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.SaveWorkflow) (model.Msg, error) {
 			return ok(c.SaveWorkflow(ctx, cmd))

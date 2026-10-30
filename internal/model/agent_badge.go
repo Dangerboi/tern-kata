@@ -7,10 +7,9 @@ import (
 
 // The state words Tern gives an agent block.
 const (
-	agentWaiting = "waiting_input"
-	agentWorking = "working"
-	agentIdle    = "idle"
-	agentExited  = "exited"
+	stateWorking = "working"
+	stateIdle    = "idle"
+	stateExited  = "exited"
 )
 
 // AgentTone is the colour word of an Agent badge, as the view's span styles name it.
@@ -32,13 +31,13 @@ type IssueAgent struct {
 // pressing ranks a state word: lower is more pressing. A word nobody knows ranks with "no state".
 func pressing(state string) int {
 	switch state {
-	case agentWaiting:
+	case agentWaitingInput:
 		return 0
-	case agentWorking:
+	case stateWorking:
 		return 1
-	case agentIdle:
+	case stateIdle:
 		return 2
-	case agentExited:
+	case stateExited:
 		return 3
 	}
 	return 4
@@ -95,13 +94,13 @@ func (m Model) AgentBadgeFor(issueUID string) (AgentBadge, bool) {
 	}
 	badge := AgentBadge{Text: "agent", Tone: AgentToneMuted, Block: best.Block}
 	switch best.State {
-	case agentWaiting:
+	case agentWaitingInput:
 		badge.Text, badge.Tone = "agent waiting for you", AgentToneWarning
-	case agentWorking:
+	case stateWorking:
 		badge.Text, badge.Tone = "agent working", AgentToneAccent
-	case agentIdle:
+	case stateIdle:
 		badge.Text = "agent idle"
-	case agentExited:
+	case stateExited:
 		badge.Text = "agent exited"
 	}
 	if len(agents) > 1 {

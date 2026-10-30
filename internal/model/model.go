@@ -94,9 +94,11 @@ type Model struct {
 	PaneBlock string
 	// AgentMapping is agents.json as this Pane last read or changed it: the agents Panes on this host started.
 	AgentMapping []AgentEntry
-	Project      Project
-	Daemon       Daemon
-	Snapshot     Snapshot
+	// AgentAttention are the Attention requests this Pane raised for waiting agents and has not cleared.
+	AgentAttention []RaisedAttention
+	Project        Project
+	Daemon         Daemon
+	Snapshot       Snapshot
 	// Relationships is every Issue's Relationships, built from Snapshot's links each time a snapshot is applied.
 	Relationships RelationshipIndex
 	Issues        []Issue
@@ -361,9 +363,13 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m.Loading = false
 		m.Err = msg.Err
 	case AgentStatesMsg:
-		return relayAgents(m, msg)
+		m, cmds := relayAgents(m, msg)
+		m, raised := raiseAgentAttention(m)
+		return m, append(cmds, raised...)
+	case AgentAttentionWritten:
+		return agentAttentionWritten(m, msg), nil
 	case AgentJumpMsg:
-		return m, []Cmd{FocusAgent{Block: msg.Block}}
+		return m, []Cmd{FocusAgent(msg)}
 	case AgentFocused:
 		m = agentFocused(m, msg)
 	case AgentsRefreshed:

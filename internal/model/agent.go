@@ -23,8 +23,10 @@ const (
 
 // AgentEntry is one line of agents.json, the Agent mapping: an agent this host's Panes started, found again by its block id.
 type AgentEntry struct {
-	IssueUID  string    `json:"issue_uid"`
-	IssueRef  string    `json:"issue_ref"`
+	IssueUID string `json:"issue_uid"`
+	IssueRef string `json:"issue_ref"`
+	// ProjectID is the Issue's Project, which the Attention request's write needs; 0 in an entry written before it was kept.
+	ProjectID int64     `json:"project_id,omitempty"`
 	Block     string    `json:"block"`
 	StartedAt time.Time `json:"started_at"`
 	// PromptFile is the file the agent was started with; it goes when the entry does.
@@ -41,6 +43,7 @@ type AgentEntry struct {
 type StartAgent struct {
 	Placement                         AgentPlacement
 	IssueUID, IssueRef, IssueTitle    string
+	ProjectID                         int64
 	ProjectName, Workspace, PaneBlock string
 }
 
@@ -83,7 +86,7 @@ func startAgent(placement AgentPlacement) func(Model) (Model, []Cmd) {
 			m.Notice = ClosedIssueRefusal
 			return m, nil
 		}
-		cmd := StartAgent{Placement: placement, IssueUID: issue.UID, IssueRef: issue.QualifiedID, IssueTitle: issue.Title,
+		cmd := StartAgent{Placement: placement, IssueUID: issue.UID, IssueRef: issue.QualifiedID, IssueTitle: issue.Title, ProjectID: issue.ProjectID,
 			ProjectName: issue.ProjectName, PaneBlock: m.PaneBlock}
 		if m.Bound && issue.ProjectID == m.Project.ID {
 			cmd.Workspace = m.Workspace

@@ -12,7 +12,7 @@ func entry(uid, block string, minute int) model.AgentEntry {
 	return model.AgentEntry{IssueUID: uid, Block: block, StartedAt: time.Date(2026, 10, 30, 9, minute, 0, 0, time.UTC)}
 }
 
-func relay(m model.Model, states ...model.AgentState) (model.Model, []model.Cmd) {
+func relayed(m model.Model, states ...model.AgentState) (model.Model, []model.Cmd) {
 	return model.Update(m, model.AgentStatesMsg{States: states})
 }
 
@@ -57,7 +57,7 @@ func TestTheBadgeNamesTheMostPressingAgentWithTheCount(t *testing.T) {
 
 func TestKataPanesInTheRelayNeverMatch(t *testing.T) {
 	m := model.Model{AgentMapping: []model.AgentEntry{entry("a", "7", 1)}}
-	m, _ = relay(m, model.AgentState{Block: "9", State: "working"}, model.AgentState{Block: "7", State: "idle"})
+	m, _ = relayed(m, model.AgentState{Block: "9", State: "working"}, model.AgentState{Block: "7", State: "idle"})
 	if badge, _ := m.AgentBadgeFor("a"); badge.Text != "agent idle" {
 		t.Errorf("badge %q", badge.Text)
 	}
@@ -68,20 +68,20 @@ func TestKataPanesInTheRelayNeverMatch(t *testing.T) {
 
 func TestANewBlockInTheRelayReReadsAgentsJSONOnce(t *testing.T) {
 	m := model.Model{AgentMapping: []model.AgentEntry{entry("a", "7", 1)}}
-	m, cmds := relay(m, model.AgentState{Block: "7", State: "idle"}, model.AgentState{Block: "9", State: "idle"})
+	m, cmds := relayed(m, model.AgentState{Block: "7", State: "idle"}, model.AgentState{Block: "9", State: "idle"})
 	if want := []model.Cmd{model.RefreshAgents{}}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("first relay: %#v, want a re-read for the unmapped block 9", cmds)
 	}
 	// The same list again carries no new block.
-	if _, cmds := relay(m, model.AgentState{Block: "7", State: "working"}, model.AgentState{Block: "9", State: "idle"}); cmds != nil {
+	if _, cmds := relayed(m, model.AgentState{Block: "7", State: "working"}, model.AgentState{Block: "9", State: "idle"}); cmds != nil {
 		t.Errorf("a relay with no new block re-read: %#v", cmds)
 	}
 	// A new block the mapping already holds needs no re-read.
-	if _, cmds := relay(m, model.AgentState{Block: "7", State: "idle"}, model.AgentState{Block: "9", State: "idle"}, model.AgentState{Block: "7", State: "idle"}); cmds != nil {
+	if _, cmds := relayed(m, model.AgentState{Block: "7", State: "idle"}, model.AgentState{Block: "9", State: "idle"}, model.AgentState{Block: "7", State: "idle"}); cmds != nil {
 		t.Errorf("%#v", cmds)
 	}
 	held := model.Model{AgentMapping: []model.AgentEntry{entry("a", "7", 1)}}
-	if _, cmds := relay(held, model.AgentState{Block: "7", State: "idle"}); cmds != nil {
+	if _, cmds := relayed(held, model.AgentState{Block: "7", State: "idle"}); cmds != nil {
 		t.Errorf("a first relay naming only mapped blocks re-read: %#v", cmds)
 	}
 }
@@ -89,20 +89,20 @@ func TestANewBlockInTheRelayReReadsAgentsJSONOnce(t *testing.T) {
 func TestAnEntryIsPrunedOnlyAfterItsBlockWasListedAndThenWasNot(t *testing.T) {
 	m := model.Model{AgentMapping: []model.AgentEntry{entry("a", "7", 1), entry("a", "8", 2)}}
 	// Before any relay nothing is pruned, and a first relay without the blocks prunes nothing: they were never listed.
-	m, cmds := relay(m)
+	m, cmds := relayed(m)
 	for _, c := range cmds {
 		if r, ok := c.(model.RefreshAgents); ok && len(r.Gone) > 0 {
 			t.Fatalf("pruned on the first relay: %#v", cmds)
 		}
 	}
-	m, cmds = relay(m, model.AgentState{Block: "7", State: "idle"})
+	m, cmds = relayed(m, model.AgentState{Block: "7", State: "idle"})
 	for _, c := range cmds {
 		if r, ok := c.(model.RefreshAgents); ok && len(r.Gone) > 0 {
 			t.Fatalf("pruned a block no relay listed: %#v", cmds)
 		}
 	}
 	// 7 was listed; the next relay lacks it: it goes. 8 was never listed: it stays.
-	_, cmds = relay(m)
+	_, cmds = relayed(m)
 	if want := []model.Cmd{model.RefreshAgents{Gone: []string{"7"}}}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("cmds %#v, want %#v", cmds, want)
 	}
