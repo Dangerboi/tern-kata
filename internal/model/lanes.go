@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"slices"
 	"strings"
@@ -42,6 +43,81 @@ func CheckLabel(text string) (string, error) {
 		return "", fmt.Errorf("is longer than %d characters", maxLabelLen)
 	}
 	return label, nil
+}
+
+// SharedLanesKey is the Project metadata key a Project shares its Lane list under, in tern-kata's own namespace: the fields of
+// a lanes.toml table, {"labels": [...], "done_days": N, "done_cards": N}. kata stores it without reading it.
+const SharedLanesKey = "tern.lanes"
+
+// SharedLanes reads a tern.lanes value with the Lane rules: every label one CheckLabel accepts (and tidies), none twice, and
+// each Done limit, when present, a whole number from 1 to its maximum. No labels is the default list and an absent limit
+// the default. Anything else is refused with why.
+func SharedLanes(value any) (lanes []string, doneDays, doneCards int, err error) {
+	object, ok := value.(map[string]any)
+	if !ok {
+		return nil, 0, 0, errors.New("it is not an object")
+	}
+	if raw, held := object["labels"]; held && raw != nil {
+		list, ok := raw.([]any)
+		if !ok {
+			return nil, 0, 0, errors.New("labels is not a list")
+		}
+		for _, entry := range list {
+			text, ok := entry.(string)
+			if !ok {
+				return nil, 0, 0, fmt.Errorf("label %v is not text", entry)
+			}
+			label, err := CheckLabel(text)
+			if err != nil {
+				return nil, 0, 0, fmt.Errorf("label %q %w", shortEntry(text), err)
+			}
+			if slices.Contains(lanes, label) {
+				return nil, 0, 0, fmt.Errorf("label %q appears twice", label)
+			}
+			lanes = append(lanes, label)
+		}
+	}
+	if doneDays, err = sharedLimit(object, "done_days", maxDoneDays); err == nil {
+		doneCards, err = sharedLimit(object, "done_cards", maxDoneCards)
+	}
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	return lanes, doneDays, doneCards, nil
+}
+
+// sharedLimit is the Done limit at key of a tern.lanes value: 0, the default, when absent.
+func sharedLimit(object map[string]any, key string, most int) (int, error) {
+	raw, held := object[key]
+	if !held || raw == nil {
+		return 0, nil
+	}
+	var n float64
+	switch v := raw.(type) {
+	case float64:
+		n = v
+	case int:
+		n = float64(v)
+	default:
+		return 0, fmt.Errorf("%s is not a number", key)
+	}
+	if n != math.Trunc(n) || n < 1 || n > float64(most) {
+		return 0, fmt.Errorf("%s must be a whole number from 1 to %d", key, most)
+	}
+	return int(n), nil
+}
+
+// SharedLanesValue is the tern.lanes value of a Lane list and Done's limits: the labels always, so an empty list shares the
+// default Lanes, and each limit only when it is set.
+func SharedLanesValue(lanes []string, doneDays, doneCards int) map[string]any {
+	value := map[string]any{"labels": append([]string{}, lanes...)}
+	if doneDays > 0 {
+		value["done_days"] = doneDays
+	}
+	if doneCards > 0 {
+		value["done_cards"] = doneCards
+	}
+	return value
 }
 
 // LaneLabels are the Lane labels of issue, in Lane order.

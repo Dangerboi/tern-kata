@@ -64,7 +64,7 @@ func editingCards() []editingCard {
 				model.JobFieldRecipient, model.JobFieldMessage, model.JobFieldCatchup, model.JobFieldEnabled, model.JobFieldKind, model.JobFieldName}},
 		{name: "Lanes", card: model.CardLanes, open: popupOpener("Lanes"),
 			focused: func(m model.Model) model.Field { return m.LanesForm.Field },
-			lap:     []model.Field{model.LanesDays, model.LanesCards, model.LanesNames}},
+			lap:     []model.Field{model.LanesDays, model.LanesCards, model.LanesShare, model.LanesNames}},
 		{name: "Worker", card: model.CardWorker,
 			open:    func(t *testing.T) driver.State { return workerCardOpen(t, nil, noWorkerFile) },
 			focused: func(m model.Model) model.Field { return m.WorkerCard.Field },

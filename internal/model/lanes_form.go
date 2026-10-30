@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -8,9 +9,10 @@ import (
 )
 
 const (
-	ModeLanesForm Mode   = "lanes-form"
-	LanesSubmit   Action = "lanes-submit"
-	LanesCancel   Action = "lanes-cancel"
+	ModeLanesForm    Mode   = "lanes-form"
+	LanesSubmit      Action = "lanes-submit"
+	LanesCancel      Action = "lanes-cancel"
+	LanesStopSharing Action = "lanes-stop-sharing"
 )
 
 // The Lanes card's fields.
@@ -18,25 +20,33 @@ const (
 	LanesNames Field = "names"
 	LanesDays  Field = "days"
 	LanesCards Field = "cards"
+	// LanesShare is where a save writes: this machine's Lane list file or the Project's shared list.
+	LanesShare Field = "share"
 )
 
 // LanesFields is the Lanes card's field list, in tab order.
-var LanesFields = []FieldSpec{{LanesNames, true}, {LanesDays, true}, {LanesCards, true}}
+var LanesFields = []FieldSpec{{LanesNames, true}, {LanesDays, true}, {LanesCards, true}, {LanesShare, false}}
 
-// LanesFormState is the Lanes card: the Lane list typed as comma-separated names, then Done's days and card count. Saving
-// writes the Lane list file only.
+// LanesFormState is the Lanes card: the Lane list typed as comma-separated names, then Done's days and card count, then where
+// a save writes. Saving to this machine writes the Lane list file; sharing writes the Project's tern.lanes metadata.
 type LanesFormState struct {
 	Open, Saving bool
 	Field        Field
 	// Text is the Lane list; Days and Cards are Done's limits, blank for the default.
 	Text, Days, Cards string
 	Caret             Caret
-	Err               error
-	// Sent is the save the card is waiting on, so only its own result closes or fails the card.
-	Sent SaveLanes
+	// Share says a save writes the Project's shared list; it starts on the source in use.
+	Share bool
+	// ProjectID and Revision are the Project as read with the list when the card opened; a shared write is guarded on
+	// Revision, which a conflict moves to the revision read with the Project's list as it stands.
+	ProjectID, Revision int64
+	Err                 error
+	// Sent and SentShare are the write the card is waiting on, so only its own result closes or fails the card.
+	Sent      SaveLanes
+	SentShare ShareLanes
 }
 
-// at is the text of the field called name, nil for a name that is not a Lanes field.
+// at is the text of the field called name, nil for a name that is not a Lanes text field.
 func (f *LanesFormState) at(name Field) *string {
 	switch name {
 	case LanesNames:
@@ -57,17 +67,26 @@ func (f LanesFormState) Value(name Field) string {
 	return ""
 }
 
+// choose gives the Save to field its choice at index i: 0 is this machine, 1 the Project.
+func (f *LanesFormState) choose(i int) {
+	if i == 0 || i == 1 {
+		f.Share, f.Err = i == 1, nil
+	}
+}
+
 // openLanesForm is `B`. It waits for the saved Lane list to load: a card prefilled with the default would overwrite it on save.
+// An unreadable Lane list file keeps it closed unless the Project shares its list, which the card then edits.
 func openLanesForm(m Model) Model {
 	if !m.Board.loaded {
 		m.Notice = "The Lane list is still loading."
 		return m
 	}
-	if m.Board.fileErr != nil {
+	if m.Board.fileErr != nil && !m.Board.Shared {
 		m.Notice = fmt.Sprintf("Lanes not opened: %v", m.Board.fileErr)
 		return m
 	}
-	m.LanesForm = LanesFormState{Open: true, Field: LanesNames, Text: strings.Join(m.LaneList(), ", ")}
+	m.LanesForm = LanesFormState{Open: true, Field: LanesNames, Text: strings.Join(m.LaneList(), ", "), Share: m.Board.Shared,
+		ProjectID: m.Board.projectID, Revision: m.Board.revision}
 	if m.Board.DoneDays > 0 {
 		m.LanesForm.Days = strconv.Itoa(m.Board.DoneDays)
 	}
@@ -75,6 +94,12 @@ func openLanesForm(m Model) Model {
 		m.LanesForm.Cards = strconv.Itoa(m.Board.DoneCards)
 	}
 	return m
+}
+
+// SharesLanes says the Project holds a shared Lane list that stopping sharing would clear: one in use, or a value that is not a
+// Lane list (the Project was read, yet its value left unused).
+func (m Model) SharesLanes() bool {
+	return m.Board.Shared || m.Board.projectID != 0 && m.Board.sharedErr != nil
 }
 
 // UnusedLabels are the labels on the loaded Issues that are not in the Lane list, sorted.
@@ -164,16 +189,34 @@ func updateLanesFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 			form.Err = err
 			return m, nil
 		}
+		if form.Share {
+			return m.shareLaneList(lanes, days, cards, false)
+		}
 		if m.Board.fileErr != nil {
 			form.Err = fmt.Errorf("Lanes not saved: %w", m.Board.fileErr)
 			return m, nil
 		}
 		form.Saving, form.Err = true, nil
 		return m.SaveLaneList(lanes, days, cards)
+	case bound && binding.Action == LanesStopSharing:
+		if !m.SharesLanes() && form.ProjectID != 0 {
+			form.Err = errors.New("The Project shares no Lane list.")
+			return m, nil
+		}
+		return m.shareLaneList(nil, 0, 0, true)
 	case bound && binding.Action == LanesCancel:
 		m.LanesForm = LanesFormState{}
 	default:
 		text := form.at(form.Field)
+		if text == nil { // the Save to field takes no text; space steps its choice
+			if bound && binding.Action == InputSpace {
+				form.Share, form.Err = !form.Share, nil
+			}
+			break
+		}
+		if bound && binding.Action == InputSpace {
+			bound = false // a space in a text field is typed
+		}
 		var edited bool
 		if *text, edited = editText(*text, &form.Caret, form.Field, bound, msg); edited {
 			form.Err = nil

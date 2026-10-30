@@ -474,7 +474,7 @@ func buildCards() []cardEntry {
 			key:    updateLanesFormKey,
 			busy:   func(m Model) bool { return m.LanesForm.Saving },
 			fields: LanesFields, focus: func(m *Model) *Field { return &m.LanesForm.Field },
-			editing: []fieldEditing{{mode: ModeLanesForm, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}}},
+			editing: []fieldEditing{{mode: ModeLanesForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}}},
 			text:    func(m *Model) (*string, *Caret) { return m.LanesForm.at(m.LanesForm.Field), &m.LanesForm.Caret },
 			erased: func(m Model, changed bool) Model {
 				if changed {
@@ -482,6 +482,11 @@ func buildCards() []cardEntry {
 				}
 				return m
 			},
+			step: func(m Model, _ bool) Model {
+				m.LanesForm.Share, m.LanesForm.Err = !m.LanesForm.Share, nil
+				return m
+			},
+			choose: func(m Model, i int) Model { m.LanesForm.choose(i); return m },
 		},
 		{
 			card: CardWorker, name: "worker", open: func(m Model) bool { return m.WorkerCard.Open },

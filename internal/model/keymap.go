@@ -318,10 +318,13 @@ var cardBindings = []Binding{
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: ProjectSubmit, Help: "create Project", Mode: ModeProjectForm},
 	{Chord: "ctrl+s", Key: "ctrl+s", Action: ProjectSubmit, Help: "create Project", Mode: ModeProjectForm},
 	{Chord: "escape", Key: "esc", Action: ProjectCancel, Help: "cancel", Mode: ModeProjectForm, ShowInFooter: true},
-	// Lanes card: one field holding the Lane list, so every other key is typed.
+	// Lanes card: text fields and the Save to choice, so every other key is typed.
 	{Chord: "enter", Key: "enter", Action: LanesSubmit, Help: "save Lanes", Mode: ModeLanesForm, ShowInFooter: true},
 	{Chord: "ctrl+s", Key: "ctrl+s", Action: LanesSubmit, Help: "save Lanes", Mode: ModeLanesForm},
+	{Chord: "ctrl+x", Key: "ctrl+x", Action: LanesStopSharing, Help: "stop sharing", Mode: ModeLanesForm, ShowInFooter: true},
+	{Chord: "meta+x", Key: "meta+x", Action: LanesStopSharing, Help: "stop sharing" + headlessNote, Mode: ModeLanesForm},
 	{Chord: "escape", Key: "esc", Action: LanesCancel, Help: "cancel", Mode: ModeLanesForm, ShowInFooter: true},
+	{Chord: "space", Key: "space", Action: InputSpace, Help: "next choice / space", Mode: ModeLanesForm},
 	// Worker card. Its edit (e) key is added here by the ticket that builds it. s (supervision) is typed while the card draws fields.
 	{Chord: "s", Key: "s", Action: WorkerSupervision, Help: "supervision off / on", Mode: ModeWorkerCard, ShowInFooter: true},
 	{Chord: "e", Key: "e", Action: WorkerEdit, Help: "edit worker.toml", Mode: ModeWorkerCard, ShowInFooter: true},

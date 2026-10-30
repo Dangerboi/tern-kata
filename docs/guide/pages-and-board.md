@@ -178,15 +178,18 @@ Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relat
 
 ### The Lanes card
 
-`B` (on the Board or in the Lane view) opens the **Lanes card**: a field holding the Lane list as comma-separated names, in order (`needs-triage, in review, ready-for-agent`), then **Done days** and **Done cards** (`tab`/`shift+tab` move between the fields).
+`B` (on the Board or in the Lane view) opens the **Lanes card**: a field holding the Lane list as comma-separated names, in order (`needs-triage, in review, ready-for-agent`), then **Done days**, **Done cards** and **Save to** (`tab`/`shift+tab` move between the fields). Its first line names the list in use: shared with the Project, this machine or default.
 
 - A blank Done field restores its default (14 days, 20 cards); anything but a positive whole number is refused with a message naming the field.
-- `enter` saves and `esc` cancels.
+- **Save to** is **This machine** (the [Lane list file](#the-lane-list-file)) or **The Project** (its shared list, for everyone on the daemon); `←`/`→` or `space` change it. It starts on the source in use.
+- `enter` saves to the chosen place and `esc` cancels. `ctrl+x` (or the **Stop sharing** button) removes the Project's shared list, and the Board goes back to this machine's list.
 - Each name is tidied to a label (`In review` reads `in-review`); an empty name, a name over 64 characters and a duplicate are refused with a message naming the entry.
-- Saving an empty field removes the Project's list, which restores the default list.
+- Saving an empty field removes the list, which restores the default list.
 - `B` waits, with a Notice, until the saved list has loaded.
 - A muted line lists the labels on loaded Issues that aren't Lanes yet.
-- Saving writes the Lane list file only and never changes a label in kata, so renaming a Lane just changes which label it shows.
+- Saving never changes a label in kata, so renaming a Lane just changes which label it shows.
+- Sharing is guarded on the Project's revision when the card opened. When the Project changed meanwhile, nothing is written: the card keeps your text and names the list the Project shares now, and `enter` again replaces it. A refusal (a read-only token, a federated spoke) shows kata's reason on the card; **This machine** still saves.
+- Saving to this machine while the Project shares a list writes `lanes.toml` but keeps showing the shared list, with a Notice, until sharing stops.
 
 ### Relationships, blockers and dates on cards
 
@@ -227,7 +230,15 @@ The Board Page needs a Project and ends when you switch to a Collection that is 
 
 ### The Lane list file
 
-A Project's own Lane list lives in `lanes.toml` in `tern-kata` under your user config directory:
+The Board's Lane list comes from the first of these that holds one, and the line over the Lanes ("Lane list: shared with the Project", "this machine" or "default") names which:
+
+1. The Project's **shared list**: the `tern.lanes` key of the Project's metadata in kata, `{"labels": [...], "done_days": N, "done_cards": N}`, the fields of a `lanes.toml` table. Every tern-kata on the same daemon shows it, with nothing to copy between machines. The Lanes card writes it with **Save to: The Project**; kata stores the key without reading it.
+2. This machine's `lanes.toml`, below.
+3. The default Lanes.
+
+A shared value that is not a Lane list (a label kata would refuse or one given twice, a limit that isn't a whole number from 1 to 3650 days or 500 cards) is reported once in a Notice and `lanes.toml` is used; **Stop sharing** clears it. When the daemon can't be read, `lanes.toml` is used too. A change to any Project's metadata, from this Pane or another client, reads the list again, so a shared list another machine saves shows at once.
+
+`lanes.toml` lives in `tern-kata` under your user config directory:
 
 | OS | Path |
 |---|---|
@@ -246,8 +257,8 @@ done_cards = 20
 ```
 
 - `done_days` and `done_cards` are how many days back Done reaches and how many cards it shows at most; a missing or zero value means the default (14 and 20). A table with only `done_days`/`done_cards` and no `labels` keeps the default Lanes.
-- tern-kata reads it each time the Board turns on and when the Project changes while it is on, so an edit shows the next time you press `b`; the Lanes card (`B`) writes it for you.
+- tern-kata reads it each time the Board turns on and when the Project changes while it is on, so an edit shows the next time you press `b`; the Lanes card (`B`) writes it for you with **Save to: This machine**.
 - Saving rewrites only the Project's `name`, `labels`, `done_days` and `done_cards`; other tables and any other keys you add are kept, but comments are lost.
 - Labels are tidied like kata's (`In review` reads `in-review`).
-- A missing file, or no table for the Project, gives the default Lanes. A file that can't be read or parsed gives the default Lanes and a Notice, and tern-kata won't overwrite it.
+- A missing file, or no table for the Project, gives the default Lanes. A file that can't be read or parsed gives the default Lanes and a Notice, and tern-kata won't overwrite it; a shared list still shows over it.
 - Removing a label sends its Issues to No lane, or to their next Lane label; kata isn't touched.

@@ -107,6 +107,9 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 		if msg.ID <= m.Cursor {
 			return m, asked
 		}
+		if msg.Type == "project.metadata_updated" { // it may be the Project's shared Lane list
+			asked = append(asked, m.lanesRefresh()...)
+		}
 		m.PendingCursor = max(m.PendingCursor, msg.ID)
 		m, more := snapshotChanged(m)
 		return m, append(asked, more...)

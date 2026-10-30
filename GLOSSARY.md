@@ -94,9 +94,11 @@
 
 **Results**: The flat list a text search shows in place of the Collection's grouping. Field filters keep the Collection's grouping and headings.
 
-**Lanes card**: The Popup card `B` opens on the Board or in the Lane view. One text field holds the Lane list as comma-separated names; enter saves it to the Lane list file, esc cancels, and an empty field removes the Project's list and so restores the default. It lets no global chord through. Saving never changes a label in kata. _Avoid_: Lane editor, Lanes form.
+**Lanes card**: The Popup card `B` opens on the Board or in the Lane view. Text fields hold the Lane list as comma-separated names and Done's limits, and a **Save to** choice says where enter writes them: this machine (the Lane list file) or the Project (its **Shared Lane list**); it starts on the source in use, which the card names. An empty list field restores the default. `ctrl+x` stops sharing. Esc cancels. It lets no global chord through. Saving never changes a label in kata. _Avoid_: Lane editor, Lanes form.
 
-**Lane list**: A Project's ordered Lane labels. Saved in the **Lane list file**, `lanes.toml` in tern-kata's user config folder, and loaded when the Board Page turns on or the Project changes; until one is loaded, or when none is saved, it is the default: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`.
+**Lane list**: A Project's ordered Lane labels, with Done's limits. Read, in order, from the Project's **Shared Lane list**, else the **Lane list file**, `lanes.toml` in tern-kata's user config folder, else the default: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`. Loaded when the Board Page turns on or the Project changes, and again when any Project's metadata changes. The Board names the source in use.
+
+**Shared Lane list**: A Project's Lane list kept in kata, in the Project's `tern.lanes` metadata key (`{"labels": [...], "done_days": N, "done_cards": N}`), so every tern-kata on that daemon shows it. Written by the Lanes card as one write guarded on the Project revision the card opened with; a value that is not a Lane list is reported once and the Lane list file used. _Avoid_: project lanes, remote lanes.
 
 **No lane**: The column of open Issues with no Lane label. It is always shown. An Issue with several Lane labels shows once, in the first of its Lanes in Lane order, with an "also" note naming the others.
 

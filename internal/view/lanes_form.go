@@ -29,6 +29,7 @@ func lanesLayer(m model.Model) tern.Element {
 	}
 	gap := func(key string) tern.Element { return ui.Spacer{Common: ui.Common{Key: key}, Size: ui.GapMD} }
 	children := []tern.Element{
+		muted("source", "In use: "+m.LaneSource()+"."),
 		toneText("names-label", fieldTone(form, model.LanesNames), "Lane list"),
 		ui.Input{Common: ui.Common{Key: "names", Tone: fieldTone(form, model.LanesNames), Aria: "Lane list"}, Field: ui.Field{Text: form.Text, Cursor: caretAt(form.Caret, model.LanesNames, form.Text), Mode: "insert", Placeholder: "Lane names, comma separated", Readonly: form.Saving}},
 		muted("note", "Names in order, comma separated. Empty restores the default list. Saving never changes a label in kata."),
@@ -46,13 +47,22 @@ func lanesLayer(m model.Model) tern.Element {
 			toneText(string(name)+"-label", fieldTone(form, name), lanesDoneLabels[name]),
 			ui.Input{Common: ui.Common{Key: string(name), Tone: fieldTone(form, name), Aria: lanesDoneLabels[name]}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Placeholder: lanesDonePlaceholders[name], Readonly: form.Saving}})
 	}
+	children = append(children,
+		gap("gap-share"),
+		choiceField(model.LanesShare, fieldTone(form, model.LanesShare), "Save to", "Save to: ", []string{"This machine", "The Project"}, func(i int) bool { return (i == 1) == form.Share }, -1),
+		muted("share-note", "This machine writes lanes.toml, for you alone. The Project writes its tern.lanes metadata for everyone on this daemon, and wins over lanes.toml."))
 	if form.Saving {
 		children = append(children, toneText("pending", ui.TonePending, "Saving Lanes…"))
 	}
 	if form.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, form.Err.Error()))
 	}
-	children = append(children, gap("gap-actions"), buttonRow(cardButton("save", model.ModeLanesForm, model.LanesSubmit, "Save Lanes", true), cardButton("cancel", model.ModeLanesForm, model.LanesCancel, "Cancel", false)))
+	buttons := []tern.Element{cardButton("save", model.ModeLanesForm, model.LanesSubmit, "Save Lanes", true)}
+	if m.SharesLanes() {
+		buttons = append(buttons, cardButton("stop", model.ModeLanesForm, model.LanesStopSharing, "Stop sharing", false))
+	}
+	buttons = append(buttons, cardButton("cancel", model.ModeLanesForm, model.LanesCancel, "Cancel", false))
+	children = append(children, gap("gap-actions"), buttonRow(buttons...))
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardLanes)}, Head: ui.T("Lanes"), Modal: true, Size: ui.SizeLG, Children: children})
 }
 

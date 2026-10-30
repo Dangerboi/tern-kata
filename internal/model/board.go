@@ -34,10 +34,18 @@ type BoardState struct {
 	Lanes []string
 	// DoneDays and DoneCards are the Project's own Done limits; zero means the default.
 	DoneDays, DoneCards int
+	// Shared says Lanes and the limits are the Project's shared list (its tern.lanes metadata), not the Lane list file's.
+	Shared bool
 	// Lane is the key of the Lane the Lane view shows.
 	Lane string
 	// fileErr is why the Lane list file could not be read; while it is set the file is never overwritten.
 	fileErr error
+	// projectID and revision are the Project as read with the list, which a shared write needs; projectID is 0 when it was not
+	// read, and sharedErr then or for a shared value that is not a Lane list says why. reported is the text of the last such
+	// error a Notice gave, so a refresh that finds it unchanged says nothing.
+	projectID, revision int64
+	sharedErr           error
+	reported            string
 	// loaded says the load for the current Project has answered; until then Lanes is the default, not the saved list.
 	loaded bool
 	// asked is the Project whose Lane list was last asked for; empty when the Collection is not a Project.
@@ -71,6 +79,17 @@ func (m Model) LaneList() []string {
 		return DefaultLanes()
 	}
 	return m.Board.Lanes
+}
+
+// LaneSource says where the Lane list in use comes from, as the Board and the Lanes card word it.
+func (m Model) LaneSource() string {
+	switch {
+	case m.Board.Shared:
+		return "shared with the Project"
+	case len(m.Board.Lanes) > 0 || m.Board.DoneDays > 0 || m.Board.DoneCards > 0:
+		return "this machine"
+	}
+	return "default"
 }
 
 // BoardCard is one Issue as a card: what the view draws besides the Issue itself.
@@ -343,6 +362,9 @@ func updateBoard(m Model, msg Msg) (Model, []Cmd, bool) {
 		return lanesLoaded(m, msg), nil, true
 	case LanesSaved:
 		return lanesSaved(m, msg), nil, true
+	case LanesShared:
+		m, cmds := lanesShared(m, msg)
+		return m, cmds, true
 	}
 	return m, nil, false
 }

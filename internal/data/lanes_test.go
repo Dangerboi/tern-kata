@@ -1,15 +1,20 @@
 package data
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"os"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/worker"
+	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 func (f configFixture) loadLanes(t *testing.T, gateway *Gateway, uid string) model.LanesLoaded {
@@ -89,8 +94,9 @@ func TestAnUnreadableLanesFileIsRefusedAndNotOverwritten(t *testing.T) {
 
 func TestLanesSaveAndLoadWhenOnlyTheStateFolderCannotBeFound(t *testing.T) {
 	config := t.TempDir()
+	loc := newLocator(startKata(t, "0.20.0").target())
 	newOne := func() *Gateway {
-		g := NewGateway(newLocator(Target{}).locate)
+		g := NewGateway(loc.locate)
 		g.workerDirs = func() (worker.Dirs, error) {
 			return worker.Dirs{Config: config}, errors.New("no state folder")
 		}
@@ -128,5 +134,156 @@ func TestASaveThatCannotCompleteLeavesTheLaneListAndDefaultFilterFilesAsTheyWere
 	}
 	if left, _ := os.ReadDir(f.folder); len(left) != 2 {
 		t.Errorf("stray files %v", left)
+	}
+}
+
+// lanes reads the Project's Lane list through gateway, as the Pane does.
+func (f configFixture) lanes(t *testing.T, gateway *Gateway) model.LanesLoaded {
+	t.Helper()
+	return as[model.LanesLoaded](t, run(t, gateway, model.LoadLanes{Workspace: f.workspace, ProjectUID: f.project.UID}))
+}
+
+// share is the Lanes card's shared write through gateway, guarded on revision; stop clears the shared list.
+func (f configFixture) share(t *testing.T, gateway *Gateway, revision int64, stop bool, lanes ...string) model.LanesShared {
+	t.Helper()
+	return as[model.LanesShared](t, run(t, gateway, model.ShareLanes{Workspace: f.workspace, Actor: "tester", ProjectUID: f.project.UID,
+		ProjectID: f.project.ID, Revision: revision, Lanes: lanes, Stop: stop}))
+}
+
+// setProjectMeta is another client patching the Project's metadata, unguarded.
+func (f configFixture) setProjectMeta(t *testing.T, patch map[string]any) {
+	t.Helper()
+	_, err := f.kata.target().Client.PatchProjectMetadataWithResponse(context.Background(), &g.PatchProjectMetadataRequestOptions{
+		PathParams: &g.PatchProjectMetadataPath{ProjectID: f.project.ID},
+		Body:       &g.PatchProjectMetadataBody{Actor: "rival", Patch: patch},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (f configFixture) writeOwnList(t *testing.T) {
+	t.Helper()
+	f.write(t, "lanes.toml", fmt.Sprintf("[%q]\nname = \"work\"\nlabels = [\"mine\"]\ndone_days = 3\n", f.project.UID))
+}
+
+func TestTheSharedListComesBeforeTheFileAndTheFileBeforeTheDefault(t *testing.T) {
+	f := newConfigFixture(t)
+	none := f.lanes(t, f.gateway)
+	if none.Err != nil || none.SharedErr != nil || none.Shared || len(none.Lanes) != 0 || none.ProjectID != f.project.ID {
+		t.Fatalf("with neither %+v, want the default and the Project read", none)
+	}
+	f.writeOwnList(t)
+	local := f.lanes(t, f.gateway)
+	if local.Shared || !slices.Equal(local.Lanes, []string{"mine"}) || local.DoneDays != 3 {
+		t.Fatalf("with the file only %+v", local)
+	}
+	shared := f.share(t, f.gateway, local.Revision, false, "triage", "review")
+	if shared.Err != nil || shared.Conflict || shared.Revision <= local.Revision {
+		t.Fatalf("share %+v", shared)
+	}
+	got := f.lanes(t, f.gateway)
+	if !got.Shared || !slices.Equal(got.Lanes, []string{"triage", "review"}) || got.DoneDays != 0 || got.Revision != shared.Revision {
+		t.Fatalf("with both %+v, want the shared list and its default Done limits", got)
+	}
+	// Another machine on the same daemon, with no lanes.toml of its own.
+	elsewhere, folder := f.again(), t.TempDir()
+	elsewhere.workerDirs = func() (worker.Dirs, error) { return worker.Dirs{Config: folder, State: folder}, nil }
+	if other := f.lanes(t, elsewhere); !other.Shared || !slices.Equal(other.Lanes, []string{"triage", "review"}) {
+		t.Errorf("another machine read %+v", other)
+	}
+}
+
+func TestASharedValueThatIsNotALaneListIsReportedAndTheFileUsed(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		value any
+		want  string
+	}{
+		{"not an object", "triage", "not an object"},
+		{"a label that is no label", map[string]any{"labels": []any{"ok", "!!!"}}, `"!!!"`},
+		{"a repeated label", map[string]any{"labels": []any{"ok", "OK"}}, "twice"},
+		{"a zero limit", map[string]any{"labels": []any{"ok"}, "done_days": 0}, "done_days"},
+		{"a fractional limit", map[string]any{"done_cards": 2.5}, "done_cards"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newConfigFixture(t)
+			f.writeOwnList(t)
+			f.setProjectMeta(t, map[string]any{model.SharedLanesKey: tt.value})
+			got := f.lanes(t, f.gateway)
+			if got.Shared || got.SharedErr == nil || !strings.Contains(got.SharedErr.Error(), tt.want) || !slices.Equal(got.Lanes, []string{"mine"}) {
+				t.Fatalf("loaded %+v, want the file's list and an error naming %s", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestASharedWriteOnAStaleRevisionAnswersWithTheListAsItStands(t *testing.T) {
+	f := newConfigFixture(t)
+	opened := f.lanes(t, f.gateway)
+	rival := f.share(t, f.again(), opened.Revision, false, "theirs")
+	if rival.Err != nil || rival.Conflict {
+		t.Fatalf("rival %+v", rival)
+	}
+	mine := f.share(t, f.gateway, opened.Revision, false, "mine")
+	if !mine.Conflict || mine.Err != nil || !mine.Current.Shared || !slices.Equal(mine.Current.Lanes, []string{"theirs"}) || mine.Current.Revision != rival.Revision {
+		t.Fatalf("stale write %+v, want a conflict naming the rival's list at its revision %d", mine, rival.Revision)
+	}
+	if got := f.lanes(t, f.gateway); !slices.Equal(got.Lanes, []string{"theirs"}) {
+		t.Fatalf("the stale write changed the list: %+v", got)
+	}
+	if again := f.share(t, f.gateway, mine.Current.Revision, false, "mine"); again.Err != nil || again.Conflict {
+		t.Fatalf("retry on the current revision %+v", again)
+	}
+	if got := f.lanes(t, f.gateway); !slices.Equal(got.Lanes, []string{"mine"}) {
+		t.Errorf("after the retry %+v", got)
+	}
+}
+
+func TestStopSharingClearsTheKeyAndTheFileListReturns(t *testing.T) {
+	f := newConfigFixture(t)
+	f.writeOwnList(t)
+	shared := f.share(t, f.gateway, f.lanes(t, f.gateway).Revision, false, "ours")
+	if shared.Err != nil {
+		t.Fatal(shared.Err)
+	}
+	if stopped := f.share(t, f.gateway, shared.Revision, true); stopped.Err != nil || stopped.Conflict {
+		t.Fatalf("stop %+v", stopped)
+	}
+	got := f.lanes(t, f.gateway)
+	if got.Shared || got.SharedErr != nil || !slices.Equal(got.Lanes, []string{"mine"}) {
+		t.Fatalf("after stopping %+v, want the file's list", got)
+	}
+	shown, err := f.kata.target().Client.ShowProjectWithResponse(context.Background(), &g.ShowProjectRequestOptions{PathParams: &g.ShowProjectPath{ProjectID: f.project.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, held := shown.JSON200.Project.Metadata[model.SharedLanesKey]; held {
+		t.Errorf("the Project still holds %s: %v", model.SharedLanesKey, shown.JSON200.Project.Metadata)
+	}
+}
+
+func TestARefusedSharedWriteShowsKatasReasonAndTheFileStillSaves(t *testing.T) {
+	f := newConfigFixture(t)
+	metadata := "/api/v1/projects/" + strconv.FormatInt(f.project.ID, 10) + "/metadata"
+	refuse := func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method != http.MethodPost || r.URL.Path != metadata {
+			return false
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"status":403,"error":{"code":"forbidden","message":"this token is read-only"}}`))
+		return true
+	}
+	f.kata.intercept.Store(&refuse)
+	refused := f.share(t, f.gateway, f.lanes(t, f.gateway).Revision, false, "ours")
+	if refused.Err == nil || !strings.Contains(refused.Err.Error(), "this token is read-only") || refused.Conflict {
+		t.Fatalf("refused write %+v, want kata's reason", refused)
+	}
+	if saved := as[model.LanesSaved](t, run(t, f.gateway, model.SaveLanes{ProjectUID: f.project.UID, ProjectName: "work", Lanes: []string{"mine"}})); saved.Err != nil {
+		t.Fatal(saved.Err)
+	}
+	if got := f.lanes(t, f.gateway); got.Shared || !slices.Equal(got.Lanes, []string{"mine"}) {
+		t.Errorf("after the local save %+v", got)
 	}
 }

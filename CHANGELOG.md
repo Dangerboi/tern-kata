@@ -13,6 +13,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A **Background agent** opens beside the Pane when you click its Agent badge, and the Pane that started it moves it back into the hidden "kata agents" session when it works again after waiting for you.
 - While an agent you started waits for you, the Issue holds an **Attention request** for your Inbox address with the agent's last message; it clears when no agent on the Issue waits and when the Pane quits.
 - A kata Pane's icon in Tern's tab bar is kata's mark, the katakana カ, in place of the terminal icon, tinted like the icons beside it.
+- A Project can share its Lane list through kata: **Save to: The Project** on the Lanes card writes it to the Project's `tern.lanes` metadata, every tern-kata on the daemon shows it before its own `lanes.toml`, and a change from another machine reaches an open Board at once. The Board and the Lanes card say whether the list in use is shared, this machine's or the default; `ctrl+x` on the card stops sharing, and a Project changed since the card opened keeps your text and names the list it shares now.
 
 ### Changed
 

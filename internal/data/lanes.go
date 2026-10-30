@@ -2,15 +2,19 @@ package data
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/http"
 	"path/filepath"
 	"slices"
 
 	"github.com/BurntSushi/toml"
 	"github.com/Dangerboi/tern-kata/internal/atomicfile"
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"go.kenn.io/kata/pkg/client"
+	g "go.kenn.io/kata/pkg/client/generated"
 )
 
 // lanesFile is tern-kata's Lane lists: one table per Project UID, named lanes.toml in tern-kata's folder of the user config dir.
@@ -60,17 +64,87 @@ func readRawTables(path string) (map[string]any, error) {
 	return file, nil
 }
 
-// loadLanes is the Project's saved Lane list; labels are normalised and repeated or empty ones dropped. No list means none saved.
-func (g *Gateway) loadLanes(cmd model.LoadLanes) model.LanesLoaded {
-	folder, err := g.configFolder()
-	if err == nil {
-		var file lanesFile
-		if file, err = readLanes(filepath.Join(folder, "lanes.toml")); err == nil {
-			p := file[cmd.ProjectUID]
-			return model.LanesLoaded{ProjectUID: cmd.ProjectUID, Lanes: cleanLanes(p.Labels), DoneDays: max(p.DoneDays, 0), DoneCards: max(p.DoneCards, 0)}
-		}
+// loadLanes is the Project's Lane list in its read order: the Project's shared list (tern.lanes) when it holds a valid one, else
+// the file's, else none, the default. File labels are normalised and repeated or empty ones dropped. The file is read whichever
+// list is used, so its error refuses a save to it. A daemon that cannot be read leaves the file's list with SharedErr saying why.
+func (g *Gateway) loadLanes(ctx context.Context, cmd model.LoadLanes) model.LanesLoaded {
+	msg, err := g.call(ctx, cmd.Workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
+		return ok(c.SharedLanes(ctx, cmd.ProjectUID))
+	})
+	loaded, _ := msg.(model.LanesLoaded)
+	loaded.ProjectUID = cmd.ProjectUID
+	if err != nil {
+		loaded.SharedErr = fmt.Errorf("the Project could not be read: %w", err)
 	}
-	return model.LanesLoaded{ProjectUID: cmd.ProjectUID, Err: err}
+	folder, err := g.configFolder()
+	var file lanesFile
+	if err == nil {
+		file, err = readLanes(filepath.Join(folder, "lanes.toml"))
+	}
+	loaded.Err = err
+	if p := file[cmd.ProjectUID]; err == nil && !loaded.Shared {
+		loaded.Lanes, loaded.DoneDays, loaded.DoneCards = cleanLanes(p.Labels), max(p.DoneDays, 0), max(p.DoneCards, 0)
+	}
+	return loaded
+}
+
+// SharedLanes reads the Project with uid as kata lists it: its id and revision, and its shared Lane list when tern.lanes holds a
+// valid one. A value that is not a Lane list is left unused with SharedErr saying why. A Project kata does not list shares nothing.
+func (c *Client) SharedLanes(ctx context.Context, uid string) (model.LanesLoaded, error) {
+	response, err := c.ListProjectsWithResponse(ctx, &g.ListProjectsRequestOptions{})
+	if err != nil {
+		return model.LanesLoaded{}, daemonError(err)
+	}
+	if response.JSON200 == nil {
+		return model.LanesLoaded{}, errors.New("kata daemon returned no Projects")
+	}
+	for _, p := range response.JSON200.Projects {
+		if p.UID != uid {
+			continue
+		}
+		loaded := model.LanesLoaded{ProjectUID: uid, ProjectID: p.ID, Revision: p.Revision}
+		value, held := p.Metadata[model.SharedLanesKey]
+		if !held || value == nil {
+			return loaded, nil
+		}
+		lanes, days, cards, err := model.SharedLanes(value)
+		if err != nil {
+			loaded.SharedErr = fmt.Errorf("%s is not a Lane list: %w", model.SharedLanesKey, err)
+			return loaded, nil
+		}
+		loaded.Lanes, loaded.DoneDays, loaded.DoneCards, loaded.Shared = lanes, days, cards, true
+		return loaded, nil
+	}
+	return model.LanesLoaded{ProjectUID: uid}, nil
+}
+
+// ShareLanes writes the Project's tern.lanes, or clears it to stop sharing, as one metadata patch of that key alone guarded on
+// the revision the Lanes card opened with. A stale revision reads the Project again and answers with its list as it stands;
+// any other refusal is kata's reason.
+func (c *Client) ShareLanes(ctx context.Context, cmd model.ShareLanes) (model.LanesShared, error) {
+	var value any
+	if !cmd.Stop {
+		value = model.SharedLanesValue(cmd.Lanes, cmd.DoneDays, cmd.DoneCards)
+	}
+	tag := etag(cmd.Revision)
+	response, err := c.PatchProjectMetadataWithResponse(ctx, &g.PatchProjectMetadataRequestOptions{
+		PathParams: &g.PatchProjectMetadataPath{ProjectID: cmd.ProjectID},
+		Header:     &g.PatchProjectMetadataHeaders{IfMatch: &tag},
+		Body:       &g.PatchProjectMetadataBody{Actor: cmd.Actor, Patch: map[string]any{model.SharedLanesKey: value}},
+	})
+	switch {
+	case client.StatusCode(err) == http.StatusPreconditionFailed:
+		current, err := c.SharedLanes(ctx, cmd.ProjectUID)
+		if err != nil {
+			return model.LanesShared{}, fmt.Errorf("the Project changed since this card opened, and reading it again failed: %w", err)
+		}
+		return model.LanesShared{Share: cmd, Conflict: true, Current: current}, nil
+	case err != nil:
+		return model.LanesShared{}, daemonError(err)
+	case response.JSON200 == nil:
+		return model.LanesShared{}, errors.New("kata daemon returned no Project")
+	}
+	return model.LanesShared{Share: cmd, Revision: response.JSON200.Project.Revision}, nil
 }
 
 func cleanLanes(labels []string) []string {

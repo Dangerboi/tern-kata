@@ -14,6 +14,7 @@ import (
 type configFixture struct {
 	gateway   *Gateway
 	again     func() *Gateway
+	kata      *kataServer
 	workspace string
 	project   model.Project
 	folder    string
@@ -21,14 +22,15 @@ type configFixture struct {
 
 func newConfigFixture(t *testing.T) configFixture {
 	t.Helper()
-	loc := newLocator(startKata(t, "0.20.0").target())
+	kata := startKata(t, "0.20.0")
+	loc := newLocator(kata.target())
 	gateway := newGateway(t, loc)
 	dirs, err := gateway.workerDirs()
 	if err != nil {
 		t.Fatal(err)
 	}
 	workspace, bound := project(t, gateway, "work")
-	return configFixture{gateway: gateway, workspace: workspace, project: bound, folder: dirs.Config,
+	return configFixture{gateway: gateway, kata: kata, workspace: workspace, project: bound, folder: dirs.Config,
 		again: func() *Gateway {
 			fresh := newGateway(t, loc)
 			fresh.workerDirs = gateway.workerDirs

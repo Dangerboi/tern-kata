@@ -81,7 +81,9 @@ func board(m model.Model, now time.Time) tern.Element {
 	if m.Search.Open {
 		children = append(children, searchInput(m))
 	}
-	children = append(children, ui.Row{Common: ui.Common{Key: "board", Grow: 1, Basis: ui.BasisFrac(0), Min: &ui.Bounds{H: ui.Lines(0)}}, Gap: ui.GapMD, Align: ui.AlignStretch, Children: lanes})
+	children = append(children,
+		ui.Text{Common: ui.Common{Key: "lane-source"}, Spans: []ui.Span{{T: "Lane list: " + m.LaneSource(), S: "muted"}}, Wrap: ui.WrapNone},
+		ui.Row{Common: ui.Common{Key: "board", Grow: 1, Basis: ui.BasisFrac(0), Min: &ui.Bounds{H: ui.Lines(0)}}, Gap: ui.GapMD, Align: ui.AlignStretch, Children: lanes})
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1}, "", children)
 }
 

@@ -136,8 +136,15 @@ func init() {
 		g.wake(ctx, cmd, messages)
 	})
 
-	local(func(g *Gateway, _ context.Context, cmd model.LoadLanes) model.Msg { return g.loadLanes(cmd) }, nil, nil)
+	local(func(g *Gateway, ctx context.Context, cmd model.LoadLanes) model.Msg { return g.loadLanes(ctx, cmd) }, nil, nil)
 	local(func(g *Gateway, _ context.Context, cmd model.SaveLanes) model.Msg { return g.saveLanes(cmd) }, nil, nil)
+	daemonCall(
+		func(cmd model.ShareLanes) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.ShareLanes) (model.Msg, error) {
+			return ok(c.ShareLanes(ctx, cmd))
+		},
+		func(cmd model.ShareLanes, err error) model.Msg { return model.LanesShared{Share: cmd, Err: err} },
+		nil, nil)
 	local(func(g *Gateway, _ context.Context, cmd model.SaveFilters) model.Msg { return g.saveFilters(cmd) }, nil, nil)
 	local(func(g *Gateway, _ context.Context, _ model.LoadViews) model.Msg { return g.readViews() }, nil, nil)
 	local(func(g *Gateway, _ context.Context, cmd model.SaveView) model.Msg { return g.writeView(cmd) }, nil, nil)
