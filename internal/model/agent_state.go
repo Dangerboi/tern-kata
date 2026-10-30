@@ -13,15 +13,28 @@ const (
 	AgentExited       AgentStateWord = "exited"
 )
 
+// AgentSeen says whether a relayed agent's tab is in the hidden session: a window half that does not say (an older one, or one
+// that could not tell) leaves it unknown, which never changes anything.
+type AgentSeen uint8
+
+// The places a relay can put an agent.
+const (
+	SeenUnknown AgentSeen = iota
+	SeenHidden
+	SeenShown
+)
+
 // AgentState is one agent block as the window half relays it: Block is the block id as decimal text, State is
 // Tern's word for it (idle, working, waiting_input, exited) and LastMessage the agent's last assistant text. Command is the agent
 // block's command line ("" when Tern gives none): a window on another machine numbers panes differently from the session host, so
 // the command, which names the agent's prompt file, is how the Pane finds the agent's entry. Once matched, Block is the entry's block.
+// Hidden says whether the agent's tab is in the hidden session "kata agents".
 type AgentState struct {
 	Block       string
 	State       AgentStateWord
 	LastMessage string
 	Command     string
+	Hidden      AgentSeen
 }
 
 // AgentStatesMsg carries one window half's latest list of the agent blocks it sees in the session, kata Panes included. Several
@@ -55,6 +68,9 @@ type AgentStatesRelay struct {
 	suspects []string
 	// asked holds the prompt files whose unknown agent already made a re-read, so each asks once.
 	asked []string
+	// flagging holds the blocks whose open flag is being written; placing those with an OpenAgent or SendAgentBack out.
+	flagging []string
+	placing  []string
 }
 
 // apply merges msg into the states. mapped says whether a block is in the Agent mapping.
@@ -87,6 +103,11 @@ func (r AgentStatesRelay) trimmed(mapped func(block string) bool) AgentStatesRel
 		return !mapped(s.Block) && !slices.Contains(r.Listed, s.Block)
 	})
 	return r
+}
+
+// listedStates is the states the latest relay listed, as merged.
+func (r AgentStatesRelay) listedStates() []AgentState {
+	return slices.DeleteFunc(slices.Clone(r.States), func(s AgentState) bool { return !slices.Contains(r.Listed, s.Block) })
 }
 
 // entered says the latest relay moved block into state.

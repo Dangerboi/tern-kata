@@ -120,7 +120,7 @@ func (AgentJumpMsg) msg() {}
 func jumpToAgent(m Model, block string) (Model, []Cmd) {
 	for _, e := range m.AgentMapping {
 		if e.Block == block && e.Background && !e.Open {
-			return m, []Cmd{OpenAgent{Block: block, PaneBlock: m.PaneBlock}}
+			return placeAgent(m, block), []Cmd{OpenAgent{Block: block, PaneBlock: m.PaneBlock}}
 		}
 	}
 	return m, []Cmd{FocusAgent{Block: block}}

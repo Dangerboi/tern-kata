@@ -29,6 +29,7 @@ type AgentPlaced struct {
 func (AgentPlaced) msg() {}
 
 func agentPlaced(m Model, msg AgentPlaced) Model {
+	m.Agents.placing = slices.DeleteFunc(slices.Clone(m.Agents.placing), func(b string) bool { return b == msg.Block })
 	if msg.Moved {
 		m.AgentMapping = slices.Clone(m.AgentMapping)
 		for i := range m.AgentMapping {
@@ -61,6 +62,70 @@ func sendAgentsBack(m Model) (Model, []Cmd) {
 		if e.Background && e.Open && e.PaneBlock == m.PaneBlock &&
 			m.Agents.answered(e.Block) {
 			cmds = append(cmds, SendAgentBack{Block: e.Block, IssueRef: e.IssueRef})
+			m = placeAgent(m, e.Block)
+		}
+	}
+	return m, cmds
+}
+
+// placeAgent marks block as being moved by this Pane, so no relay changes its open flag until the move is answered.
+func placeAgent(m Model, block string) Model {
+	m.Agents.placing = append(slices.Clone(m.Agents.placing), block)
+	return m
+}
+
+// SetAgentOpen writes the open flag of an entry as the window half's relay shows it: the agent is out of the hidden session
+// (Open) or back in it, moved there by Tern's own focus or by hand rather than by this Pane.
+type SetAgentOpen struct {
+	Block string
+	Open  bool
+}
+
+func (SetAgentOpen) cmd() {}
+
+// AgentOpenSet answers SetAgentOpen; on Err the entry stays as it was.
+type AgentOpenSet struct {
+	Block string
+	Open  bool
+	Err   error
+}
+
+func (AgentOpenSet) msg() {}
+
+func agentOpenSet(m Model, msg AgentOpenSet) Model {
+	m.Agents.flagging = slices.DeleteFunc(slices.Clone(m.Agents.flagging), func(b string) bool { return b == msg.Block })
+	if msg.Err != nil {
+		m.Notice = "Cannot record where the agent is: " + msg.Err.Error()
+		return m
+	}
+	m.AgentMapping = slices.Clone(m.AgentMapping)
+	for i := range m.AgentMapping {
+		if m.AgentMapping[i].Block == msg.Block {
+			m.AgentMapping[i].Open = msg.Open
+		}
+	}
+	return m
+}
+
+// followAgents makes the open flag of this Pane's background agents follow what the latest relay shows: out of the hidden session
+// marks an entry open, in it marks it not open. The window half opens an agent when Tern focuses it in the hidden session, and the
+// user may move one by hand; this Pane learns of it here. An agent the relay does not place (unknown) changes nothing, and neither
+// does one whose flag is being written or which this Pane is moving itself, so there is at most one write per change.
+func followAgents(m Model, listed []AgentState) (Model, []Cmd) {
+	if m.PaneBlock == "" {
+		return m, nil
+	}
+	var cmds []Cmd
+	for _, s := range listed {
+		if s.Hidden == SeenUnknown || slices.Contains(m.Agents.flagging, s.Block) || slices.Contains(m.Agents.placing, s.Block) {
+			continue
+		}
+		for _, e := range m.AgentMapping {
+			if e.Block != s.Block || !e.Background || e.PaneBlock != m.PaneBlock || e.Open == (s.Hidden == SeenShown) {
+				continue
+			}
+			m.Agents.flagging = append(slices.Clone(m.Agents.flagging), e.Block)
+			cmds = append(cmds, SetAgentOpen{Block: e.Block, Open: s.Hidden == SeenShown})
 		}
 	}
 	return m, cmds

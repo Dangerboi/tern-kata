@@ -379,9 +379,10 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case AgentStatesMsg:
 		m, cmds := relayAgents(m, msg)
 		m, back := sendAgentsBack(m)
+		m, flagged := followAgents(m, m.Agents.listedStates())
 		m, raised := raiseAgentAttention(m)
 		m, ended := closeFinishedAgents(m, closeOnRelay)
-		return m, append(append(append(cmds, back...), raised...), ended...)
+		return m, append(append(append(append(cmds, back...), flagged...), raised...), ended...)
 	case AgentIssueRead:
 		return agentIssueRead(m, msg)
 	case AgentClosed:
@@ -392,6 +393,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return jumpToAgent(m, msg.Block)
 	case AgentPlaced:
 		m = agentPlaced(m, msg)
+	case AgentOpenSet:
+		m = agentOpenSet(m, msg)
 	case AgentFocused:
 		m = agentFocused(m, msg)
 	case AgentsRefreshed:
