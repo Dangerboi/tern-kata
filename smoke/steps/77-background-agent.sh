@@ -1,14 +1,17 @@
 # S on the selected Issue starts the agent in the background: a block in the hidden session "kata agents", its tab named project#id,
-# an agents.json entry marked background and not open, and a second S adds a tab to the session that now exists. A stand-in script
-# from agent.toml's `command` plays omp. The Pane gets its own session daemon (`tern daemon --socket`): the headless `tern serve`
-# window has no session daemon, so `tern ls`, `tern new` and `tern move` fail in its panes without one (checked on Tern 0.9.8).
-# Not driven here, and why:
-#   - Opening beside the Pane and going back need the Pane to be a block of that daemon (TERN_PANE, a window to draw it); a
-#     `tern serve` pane has neither, and the harness has no window to attach to a separate daemon.
-#   - Going back needs the relay's agent states, which come from the window plugin (smoke/plugin.sh links it, but the headless
-#     window there has the same missing daemon), and Tern must detect the stand-in as an agent block (rule not documented; a plain
-#     script may not count).
-# The driver and gateway tests cover both with faked tern output; a manual run in a real window is the check for them.
+# an agents.json entry marked background and not open, and a second S adds a tab to the session that now exists. Then w opens the
+# Agent card and enter opens the agent beside the Pane: the block moves into the Pane's tab and agents.json marks it open.
+# A stand-in script from agent.toml's `command` plays omp. The Pane's blocks live on a session daemon of the step's own
+# (`tern daemon --socket`): the headless `tern serve` window has no session daemon, so `tern ls`, `tern new` and `tern move` fail
+# in its panes without one (checked on Tern 0.9.8). That window is not attached to the daemon either: its Pane is the window's own
+# pane (env has TERN_WINDOW_PANE, no TERN_PANE; `ctl state` lists the one pane, not the daemon's blocks). So the step makes a block
+# on the daemon for the Pane to stand beside and hands its id to the Pane as TERN_PANE, which is how Tern tells a real Pane.
+# Not driven here, and why: going back when a working agent follows a waiting one. The relay's agent states come from the window
+# plugin (window.luau sends `agent-states` to the Pane's surface with cx.session:event from cx.agents:list()), which run.sh does
+# not link, and smoke/plugin.sh's window has no daemon blocks: cx.agents lists the window's own panes, whose ids are never the
+# daemon block ids that `tern split` and `tern move` use. Tern takes a block for an agent from its own detection (omp, and programs
+# speaking OSC 7501, which its notes say show working / waiting / finished); no ctl command or CLI call injects a surface event.
+# The driver and gateway tests cover going back with faked tern output; a manual run in a real window is the check for it.
 ba_dir="$tmp/workspace"
 ba_config="$tmp/ba-config"
 ba_state="$tmp/ba-state"
@@ -34,15 +37,15 @@ for ((attempt = 0; attempt < 100; attempt++)); do
   sleep 0.1
 done
 [[ -S "$ba_sock" ]]
-# The daemon exits once idle: a session of its own keeps it up.
-ba_tern new session ba-keeper --json -- sleep 600 >/dev/null
+# The daemon exits once idle: the block the Pane stands in keeps it up.
+ba_pane=$(ba_tern new session ba-pane --json -- sleep 600 | jq -r '.block')
 
 kata --workspace "$ba_dir" create "Smoke background agent" --body "Started with S" --json >"$tmp/ba-issue.json"
 ba_uid=$(jq -r '.issue.uid' "$tmp/ba-issue.json")
 ba_short=$(jq -r '.issue.short_id' "$tmp/ba-issue.json")
 ba_row="[data-id='main.columns.list.issues.$ba_uid']"
 quit_app
-printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP TERN_DAEMON_SOCKET=%s XDG_CONFIG_HOME=%s XDG_STATE_HOME=%s KATA_HOME=%s %s/tern-kata)"\n' "$ba_dir" "$ba_sock" "$ba_config" "$ba_state" "$KATA_HOME" "$tmp" >"$tmp/ba-launch.ctl"
+printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP TERN_DAEMON_SOCKET=%s TERN_PANE=%s XDG_CONFIG_HOME=%s XDG_STATE_HOME=%s KATA_HOME=%s %s/tern-kata)"\n' "$ba_dir" "$ba_sock" "$ba_pane" "$ba_config" "$ba_state" "$KATA_HOME" "$tmp" >"$tmp/ba-launch.ctl"
 ctl --file "$tmp/ba-launch.ctl"
 expect_tree "$ba_row" '.ok and .count == 1'
 ctl click "$ba_row"
@@ -75,7 +78,25 @@ jq -e --arg block "$ba_block" --arg uid "$ba_uid" '.agents | length == 1 and .[0
 # The Agent badge shows on the row, with no state until the window half relays one.
 expect_tree "$ba_row" '.ok and (.nodes[0].text | contains("agent"))'
 
-# A second S finds the session and adds a tab to it.
+# w on an Issue that has an agent opens the Agent card; enter on the agent moves its block beside the Pane.
+ctl key w
+expect_tree "[data-id^='layer.agent']" '.ok and .count >= 1'
+ctl key Enter
+expect_tree "[data-id^='layer.agent']" '.ok and .count == 0'
+ba_where() { ba_tern ls --json | jq -r --arg b "$1" '[.sessions[] as $s | $s.tabs[] as $t | $t.blocks[] | select(.id == ($b | tonumber)) | "\($s.name)/\($t.id)"][0] // "none"'; }
+ba_pane_tab=$(ba_where "$ba_pane")
+for ((attempt = 0; attempt < 100; attempt++)); do
+  [[ $(ba_where "$ba_block") != "$ba_pane_tab" ]] || break
+  sleep 0.1
+done
+[[ $(ba_where "$ba_block") == "$ba_pane_tab" ]]
+# The tab it left is gone with it, and agents.json says it is open.
+ba_wait_tabs 'length == 0'
+jq -e --arg block "$ba_block" '.agents | length == 1 and .[0].block == $block and .[0].background == true and .[0].open == true' \
+  "$ba_state/tern-kata/agents.json" >/dev/null
+
+# A second S finds the session that is still there and adds a tab to it.
 ctl key S
-ba_wait_tabs 'length == 2'
-jq -e '.agents | length == 2 and all(.[]; .background == true and .open == false)' "$ba_state/tern-kata/agents.json" >/dev/null
+ba_wait_tabs 'length == 1'
+jq -e --arg block "$ba_block" '.agents | length == 2 and all(.[]; .background == true) and ([.[] | select(.open)] | length == 1 and .[0].block == $block)' \
+  "$ba_state/tern-kata/agents.json" >/dev/null
