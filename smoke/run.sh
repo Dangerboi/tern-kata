@@ -127,6 +127,7 @@ for step in "${steps[@]}"; do
     *.ctl) ctl --file "$step" ;;
     *.sh) source "$step" ;;
   esac
+  printf 'Step passed %s\n' "$(basename "$step")"
 done
 quit_app
 "$repo/smoke/plugin.sh" "$tmp/tern-kata"
