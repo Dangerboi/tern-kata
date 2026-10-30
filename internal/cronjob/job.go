@@ -110,7 +110,7 @@ func (j Job) IntervalAnchor(deliveryAnchor time.Time) (time.Time, bool) {
 //   - a Native job's @every stays unanchored on purpose, as kata's own trigger documentation has it: it is the parser's own
 //     schedule.
 //
-// A cron expression is read in its zone, the directive winning. False for any other kind of trigger, an expression that does
+// A cron expression is read in its zone, which a directive naming another zone than the timezone refuses. False for any other kind of trigger, an expression that does
 // not parse, and an interval with no anchor known.
 func (j Job) Schedule(deliveryAnchor time.Time) (Schedule, bool) {
 	t := j.Definition.Trigger

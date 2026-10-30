@@ -102,6 +102,9 @@ func (j Job) Problem() string {
 		return j.ActionProblem()
 	}
 	if err := j.TriggerError(); err != nil {
+		if conflict := (*ZoneConflictError)(nil); errors.As(err, &conflict) {
+			return err.Error()
+		}
 		return "its trigger cannot be scheduled: " + err.Error()
 	}
 	d := j.Definition

@@ -30,9 +30,19 @@ func Step(seconds int64) (time.Duration, bool) {
 	return time.Duration(seconds) * time.Second, true
 }
 
-// Zone splits a cron trigger into its zone and bare expression: an embedded TZ= or CRON_TZ= directive wins as it does in
-// kata's parser, else the trigger's timezone, else UTC.
+// Zone splits a cron trigger into its zone and bare expression: the trigger's timezone, else an embedded TZ= or CRON_TZ=
+// directive, else UTC. A directive naming another zone than a non-empty timezone never wins: Cron refuses that trigger, and
+// this reports the timezone, the zone kata's contract gives a portable cron trigger.
 func Zone(expression, timezone string) (zone, bare string) {
+	directive, bare := directiveOf(expression)
+	if timezone != "" {
+		return timezone, bare
+	}
+	return cmp.Or(directive, "UTC"), bare
+}
+
+// directiveOf splits off an embedded TZ= or CRON_TZ= directive: its zone, "" when there is none, and the bare expression.
+func directiveOf(expression string) (zone, bare string) {
 	expression = strings.TrimSpace(expression)
 	for _, prefix := range []string{"CRON_TZ=", "TZ="} {
 		if rest, ok := strings.CutPrefix(expression, prefix); ok {
@@ -40,7 +50,14 @@ func Zone(expression, timezone string) (zone, bare string) {
 			return zone, strings.TrimSpace(bare)
 		}
 	}
-	return cmp.Or(timezone, "UTC"), expression
+	return "", expression
+}
+
+// ZoneConflictError is a cron expression whose embedded directive names another zone than the trigger's timezone.
+type ZoneConflictError struct{ Directive, Timezone string }
+
+func (e *ZoneConflictError) Error() string {
+	return fmt.Sprintf("its cron expression names zone %s but the trigger's timezone is %s", e.Directive, e.Timezone)
 }
 
 // Schedule yields the occurrences of one trigger: a cron expression in its zone, or an interval counting from an anchor.
@@ -59,10 +76,15 @@ func Interval(seconds int64, anchor time.Time) (Schedule, error) {
 	return Schedule{step: step, anchor: anchor.UTC()}, nil
 }
 
-// Cron reads a cron expression in its zone as kata does. An @every expression is an interval anchored at createdAt, the
+// Cron reads a cron expression in its zone as kata does, except that a directive naming another zone than a non-empty
+// timezone is an error, not a winner: kata's portable cron triggers use the trigger's timezone, and its native recurring jobs
+// require the two to agree. An @every expression is an interval anchored at createdAt, the
 // job's creation, when that is known; with the zero time it stays the parser's own schedule, which a native job's
 // delivery uses.
 func Cron(expression, timezone string, createdAt time.Time) (Schedule, error) {
+	if directive, _ := directiveOf(expression); directive != "" && timezone != "" && directive != timezone {
+		return Schedule{}, &ZoneConflictError{Directive: directive, Timezone: timezone}
+	}
 	zone, bare := Zone(expression, timezone)
 	schedule, err := parser.Parse("CRON_TZ=" + zone + " " + bare)
 	if err != nil {

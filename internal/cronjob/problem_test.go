@@ -38,6 +38,8 @@ func TestProblem(t *testing.T) {
 		{"a clean notify job", notifying(job(cronjob.ActionNotify, existingIssue(), hourly), "alice"), "", false},
 		{"a clean notify job on an Issue date", notifying(job(cronjob.ActionNotify, nil, deadline), "alice"), "", false},
 		{"a cron expression that does not parse", prompt(job(cronjob.ActionExecute, perRun(), cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "nope"})), unschedulable, true},
+		{"a cron directive naming another zone than the timezone", prompt(job(cronjob.ActionExecute, perRun(), cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "CRON_TZ=Asia/Tokyo 0 7 * * *", Timezone: "Europe/Berlin"})), "its cron expression names zone Asia/Tokyo but the trigger's timezone is Europe/Berlin", false},
+		{"a cron directive agreeing with the timezone", prompt(job(cronjob.ActionExecute, perRun(), cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "CRON_TZ=Europe/Berlin 0 7 * * *", Timezone: "Europe/Berlin"})), "", false},
 		{"an interval outside kata's bounds", prompt(job(cronjob.ActionExecute, perRun(), cronjob.Trigger{Kind: cronjob.TriggerInterval})), unschedulable, true},
 		{"an interval with no creation time to count from", withoutCreation(prompt(job(cronjob.ActionExecute, perRun(), cronjob.Trigger{Kind: cronjob.TriggerInterval, IntervalSeconds: 60}))), unschedulable + "it has no creation time to count from", false},
 		{"a once trigger without an RFC3339 instant", prompt(job(cronjob.ActionExecute, perRun(), cronjob.Trigger{Kind: cronjob.TriggerOnce, At: "tomorrow"})), unschedulable + "once requires an RFC3339 instant", false},
