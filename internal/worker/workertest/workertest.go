@@ -410,6 +410,16 @@ func (d *Daemon) patchIssueDate(t *testing.T, p worker.Project, issueUID, field 
 	}
 }
 
+// SetSomeday parks the Issue (someday=true) or, with false, takes it off the shelf.
+func (d *Daemon) SetSomeday(t *testing.T, p worker.Project, issueUID string, someday bool) {
+	t.Helper()
+	if someday {
+		d.patchIssueDate(t, p, issueUID, "someday", true)
+		return
+	}
+	d.patchIssueDate(t, p, issueUID, "someday", nil)
+}
+
 // InboxRequest is the notification an Issue holds for a recipient: its sender and text, ok false when there is none.
 func (d *Daemon) InboxRequest(t *testing.T, p worker.Project, issueUID, recipient string) (from, message string, ok bool) {
 	t.Helper()

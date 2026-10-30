@@ -133,6 +133,7 @@ The agent is told its Issue and how to leave a record: comment what it did, clos
 - Exit status 0 after a finished turn is `succeeded`, anything else `failed`.
 - A run over its timeout is stopped and failed as "timed out".
 - A run whose prompt may have reached the agent when the worker stopped is held (`unknown` in kata, with the reason line first in its summary), never repeated.
+- An `execute` job on an existing Issue starts only while the Issue is open, not `someday` and not scheduled for later. A scheduled occurrence that finds the Issue `someday` or with a `scheduled_on` instant still ahead waits without taking a slot, and starts once `someday` is unset or kata's resolved instant has passed (an Issue change wakes the check, and the worker also wakes at the instant itself); `worker status` lists it as `Job "<name>" is waiting: Issue is someday` or `Issue is scheduled for <instant>`. A past or absent `scheduled_on` is ready, and `deadline_on` never defers. `run` and Run now on such an Issue are refused with the same reason, as for a closed Issue. A notify job has no readiness requirement.
 - A job the worker cannot run (a native job, a workflow it does not support) is refused with the reason.
 
 ## Recovery and held runs

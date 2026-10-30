@@ -32,6 +32,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Fixed
 
+- An `execute` job on an existing Issue no longer starts while the Issue is `someday` or scheduled for later: the scheduled occurrence waits without taking a slot until the Issue is ready, `worker status` says why, and a manual run is refused with the reason; `deadline_on` never defers it.
 - `e` on the Worker card and `ctrl+e` no longer only blink when neither `$VISUAL` nor `$EDITOR` is set, as in a Pane started by **Open kata**: they open `vi`, and with no `vi` either the card says to set one without leaving the Pane.
 - Popup cards draw their error, pending, warning and success lines in the theme's colours instead of the plain text colour, as do the worker notes of a Workflow's inspector, and draw their buttons as separate bordered buttons, the default one in the accent colour, instead of one run of plain text.
 - With Tern 0.9.8 on a high-density display, the Issue list, the detail and the other column lists no longer run past the bottom of the Pane and scroll the top bar away: each list now fills its column and scrolls inside it at any display scale or Pane height.

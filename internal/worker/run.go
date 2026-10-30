@@ -231,6 +231,15 @@ func (w *Worker) resolveIssue(ctx context.Context, j *Journal) (*JournalIssue, e
 		if !issue.Open() && j.Notify == nil { // a notify run has no readiness requirement
 			return nil, &APIError{Status: 409, Message: fmt.Sprintf("Issue %s is closed; reopen it first", issue.ShortID)}
 		}
+		if j.Notify == nil {
+			p, err := w.parked(ctx, issue)
+			if err != nil {
+				return nil, err
+			}
+			if p != nil {
+				return nil, &APIError{Status: 409, Message: fmt.Sprintf("Issue %s is parked (%s)", issue.ShortID, p.reason)}
+			}
+		}
 		return &JournalIssue{UID: issue.UID, Ref: w.qualified(j, issue.ShortID), Title: issue.Title, Body: issue.Body, Existing: true}, nil
 	}
 	title := p.Title + " — " + j.Occurrence.UTC().Format(time.RFC3339Nano)
