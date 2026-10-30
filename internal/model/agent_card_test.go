@@ -141,7 +141,7 @@ func TestSOpensTheAgentCardWithAgentsAndNStartsInTheBackground(t *testing.T) {
 	if start, ok := agentCmd[model.StartAgent](cmds); !ok || start.Placement != model.AgentBackground || m.TopCard() == model.CardAgent {
 		t.Fatalf("S with no agents: card %v, cmds %#v", m.TopCard(), cmds)
 	}
-	opened, cmds := press(cardModel(entry("a", "1", 1)), "shift+s")
+	opened, _ := press(cardModel(entry("a", "1", 1)), "shift+s")
 	if opened.TopCard() != model.CardAgent || opened.AgentCard.Placement != model.AgentBackground {
 		t.Fatalf("S with an agent: card %v, placement %q", opened.TopCard(), opened.AgentCard.Placement)
 	}
