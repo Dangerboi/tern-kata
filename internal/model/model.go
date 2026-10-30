@@ -361,7 +361,13 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m.Loading = false
 		m.Err = msg.Err
 	case AgentStatesMsg:
-		m.Agents = m.Agents.apply(msg)
+		return relayAgents(m, msg)
+	case AgentJumpMsg:
+		return m, []Cmd{FocusAgent{Block: msg.Block}}
+	case AgentFocused:
+		m = agentFocused(m, msg)
+	case AgentsRefreshed:
+		m = agentsRefreshed(m, msg)
 	case ActionMsg:
 		switch msg.Action {
 		case SelectIssueAction:

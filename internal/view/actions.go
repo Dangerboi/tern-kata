@@ -32,6 +32,7 @@ const (
 	runOpenAct       = "run-open"
 	attentionOpenAct = "attention-open"
 	workflowOpenAct  = "workflow-open"
+	agentAct         = "agent"
 )
 
 // FocusDetailClick, RetryClick and MenuClick carry no value.
@@ -54,6 +55,9 @@ func JumpClick(uid string) string { return click(jumpAct, uid) }
 // ToggleClick folds or unfolds the Issue row, and OpenRowClick is its double click.
 func ToggleClick(uid string) string  { return click(string(model.ToggleExpansion), uid) }
 func OpenRowClick(uid string) string { return click(string(model.OpenRow), uid) }
+
+// AgentClick focuses the agent block, given as decimal text.
+func AgentClick(block string) string { return click(agentAct, block) }
 
 // CardClick selects the Board card of the Issue.
 func CardClick(uid string) string { return click(cardAct, uid) }
@@ -136,6 +140,8 @@ func DecodeAction(id, act, value string) model.Msg {
 		}
 	case jumpAct:
 		return model.JumpIssueMsg{UID: value}
+	case agentAct:
+		return model.AgentJumpMsg{Block: value}
 	case cardAct:
 		return model.SelectMsg{UID: value}
 	case refAct:

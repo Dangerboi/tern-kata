@@ -73,3 +73,11 @@ func TestAgentStatesDecodeKeepsBlockIdsExact(t *testing.T) {
 		}
 	}
 }
+
+func TestTheAgentClickDecodesToTheBlockExactly(t *testing.T) {
+	const big = "144115188075855871"
+	act, value, _ := strings.Cut(view.AgentClick(big), "=")
+	if got := view.DecodeAction("", act, value); !reflect.DeepEqual(got, model.AgentJumpMsg{Block: big}) {
+		t.Errorf("got %#v", got)
+	}
+}

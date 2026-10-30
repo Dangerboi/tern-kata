@@ -1,0 +1,22 @@
+package view
+
+import (
+	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/stencil-hq/tern-sdk/go/tern/ui"
+)
+
+var agentTones = map[model.AgentTone]ui.Tone{
+	model.AgentToneAccent:  ui.ToneAccent,
+	model.AgentToneWarning: ui.ToneWarning,
+	model.AgentToneMuted:   ui.ToneMuted,
+}
+
+// agentBadge is the Issue's Agent badge as an element of its own, keyed "agent" in a Board card and "v" in the detail
+// property row; a click focuses the agent it names and nothing else, the Board card's own click included.
+func agentBadge(m model.Model, uid, key string) (ui.Badge, bool) {
+	badge, ok := m.AgentBadgeFor(uid)
+	if !ok {
+		return ui.Badge{}, false
+	}
+	return ui.Badge{Common: ui.Common{Key: key, Tone: agentTones[badge.Tone], Actions: &ui.Actions{Click: AgentClick(badge.Block)}}, Text: badge.Text}, true
+}
