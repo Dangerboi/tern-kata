@@ -52,13 +52,14 @@ func TestIntervalRefusesAStepKataDoesNotAccept(t *testing.T) {
 	}
 }
 
-func TestZoneTakesTheEmbeddedDirectiveThenTheTimezoneThenUTC(t *testing.T) {
+func TestZoneIsTheTimezoneThenTheDirectiveThenUTC(t *testing.T) {
 	cases := []struct {
 		name, expression, timezone string
 		zone, bare                 string
 	}{
-		{"embedded CRON_TZ wins over the timezone", "CRON_TZ=Asia/Tokyo 0 7 * * *", "Europe/Berlin", "Asia/Tokyo", "0 7 * * *"},
-		{"embedded TZ wins over the timezone", "TZ=America/New_York 0 7 * * *", "Europe/Berlin", "America/New_York", "0 7 * * *"},
+		{"a directive naming another zone does not win over the timezone", "CRON_TZ=Asia/Tokyo 0 7 * * *", "Europe/Berlin", "Europe/Berlin", "0 7 * * *"},
+		{"a TZ directive naming another zone does not win either", "TZ=America/New_York 0 7 * * *", "Europe/Berlin", "Europe/Berlin", "0 7 * * *"},
+		{"a directive that agrees with the timezone", "CRON_TZ=Europe/Berlin 0 7 * * *", "Europe/Berlin", "Europe/Berlin", "0 7 * * *"},
 		{"embedded directive with no timezone", "CRON_TZ=Asia/Tokyo @daily", "", "Asia/Tokyo", "@daily"},
 		{"surrounding space is dropped", "  CRON_TZ=Asia/Tokyo   0 7 * * *  ", "", "Asia/Tokyo", "0 7 * * *"},
 		{"the timezone when there is no directive", "0 9 * * *", "Europe/Berlin", "Europe/Berlin", "0 9 * * *"},
@@ -80,7 +81,8 @@ func TestCronReadsTheZoneTheDirectiveOrTheTimezoneNames(t *testing.T) {
 		name, expression, timezone string
 		after, want                string
 	}{
-		{"the directive wins", "CRON_TZ=Asia/Tokyo 0 7 * * *", "Europe/Berlin", "2026-10-08T00:00:00Z", "2026-10-08T22:00:00Z"},
+		{"a directive that agrees with the timezone", "CRON_TZ=Asia/Tokyo 0 7 * * *", "Asia/Tokyo", "2026-10-08T00:00:00Z", "2026-10-08T22:00:00Z"},
+		{"a directive with no timezone", "CRON_TZ=Asia/Tokyo 0 7 * * *", "", "2026-10-08T00:00:00Z", "2026-10-08T22:00:00Z"},
 		{"the timezone is used without a directive", "0 7 * * *", "Asia/Tokyo", "2026-10-08T00:00:00Z", "2026-10-08T22:00:00Z"},
 		{"UTC is the default", "0 7 * * *", "", "2026-10-08T00:00:00Z", "2026-10-08T07:00:00Z"},
 	}
@@ -94,6 +96,18 @@ func TestCronReadsTheZoneTheDirectiveOrTheTimezoneNames(t *testing.T) {
 				t.Errorf("next after %s = %s, want %s", tc.after, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestCronRefusesADirectiveNamingAnotherZoneThanTheTimezone(t *testing.T) {
+	for _, expression := range []string{"CRON_TZ=Asia/Tokyo 0 7 * * *", "TZ=Asia/Tokyo 0 7 * * *"} {
+		_, err := cronjob.Cron(expression, "Europe/Berlin", time.Time{})
+		if err == nil {
+			t.Fatalf("Cron(%q) ran in a zone", expression)
+		}
+		if want := "its cron expression names zone Asia/Tokyo but the trigger's timezone is Europe/Berlin"; err.Error() != want {
+			t.Errorf("error = %q, want %q", err, want)
+		}
 	}
 }
 
