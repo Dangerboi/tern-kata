@@ -143,3 +143,13 @@ func TestReplyDraftNamesItsKindAndOffersTheKindKeyAndSendAnyway(t *testing.T) {
 	m, _ = model.Update(m, model.DraftFailed{UID: "a", Err: model.DuplicateReply{Message: "a reply of this kind already exists"}})
 	cardButtons(t, m, "layer.editor.actions", []button{{"force", "Send anyway"}}, "save")
 }
+
+func TestAgentCardEndsInButtonsAndSaysWhenThereAreNoAgents(t *testing.T) {
+	m := model.Model{Cols: 160, Project: model.Project{ID: 7}, Issues: []model.Issue{{UID: "a", QualifiedID: "work#a", Status: "open"}}, SelectedUID: "a"}
+	m = press(m, "w")
+	cardButtons(t, m, "layer.agent.actions", []button{{"go", "Go to agent"}, {"split", "New in a split"}, {"tab", "New in a tab"},
+		{"new-background", "New in the background"}, {"background", "Send to background"}, {"cancel", "Cancel"}}, "go")
+	if got := text(pickerNodes(t, m)["layer.agent.none"]); got != "No agents on this Issue yet." {
+		t.Errorf("empty card says %q", got)
+	}
+}

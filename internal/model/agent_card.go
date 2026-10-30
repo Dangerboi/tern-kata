@@ -1,26 +1,28 @@
 package model
 
-// The Agent card opens when `w`, `W` or `S` is pressed on an Issue that already has agents: it lists them, goes to one, or starts
-// another where the opening key asked.
+// The Agent card opens when `w` is pressed on an Issue: it lists the Issue's agents, goes to one, sends one to the background, or
+// starts a new agent in a split, a tab or the background.
 
 // ModeAgentCard is the mode of the Agent card.
 const ModeAgentCard Mode = "agent-card"
 
-// The Agent card's own actions; its cursor keys are MoveDown, MoveUp, MoveFirst and MoveLast.
+// The Agent card's own actions; its cursor keys are MoveDown, MoveUp, MoveFirst and MoveLast. The three that start an agent
+// are AgentCardSplit, AgentCardTab and AgentCardNewBackground; AgentCardBackground sends the selected agent to the background.
 const (
-	AgentCardGo         Action = "agent-card-go"
-	AgentCardStart      Action = "agent-card-start"
-	AgentCardBackground Action = "agent-card-background"
-	AgentCardCancel     Action = "agent-card-cancel"
+	AgentCardGo            Action = "agent-card-go"
+	AgentCardSplit         Action = "agent-card-split"
+	AgentCardTab           Action = "agent-card-tab"
+	AgentCardNewBackground Action = "agent-card-new-background"
+	AgentCardBackground    Action = "agent-card-background"
+	AgentCardCancel        Action = "agent-card-cancel"
 )
 
-// AgentCardState is the Agent card. Placement is what the opening key asked, and what `n` starts.
+// AgentCardState is the Agent card.
 type AgentCardState struct {
-	Open      bool
-	IssueUID  string
-	IssueRef  string
-	Placement AgentPlacement
-	Cursor    int
+	Open     bool
+	IssueUID string
+	IssueRef string
+	Cursor   int
 }
 
 // AgentCardRows are the agents the card lists: the Issue's mapped agents, in the mapping's order.
@@ -50,9 +52,9 @@ func AgentWhere(a AgentEntry) string {
 	return name
 }
 
-// openAgentCard opens the card for the Issue with the placement the opening key asked.
-func openAgentCard(m Model, issue Issue, placement AgentPlacement) Model {
-	m.AgentCard = AgentCardState{Open: true, IssueUID: issue.UID, IssueRef: issue.QualifiedID, Placement: placement}
+// openAgentCard opens the card for the Issue.
+func openAgentCard(m Model, issue Issue) Model {
+	m.AgentCard = AgentCardState{Open: true, IssueUID: issue.UID, IssueRef: issue.QualifiedID}
 	return m
 }
 
@@ -78,10 +80,12 @@ func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 			return m, nil
 		}
 		return sendToBackground(m, rows[cursor].AgentEntry)
-	case AgentCardStart:
-		placement := m.AgentCard.Placement
-		m.AgentCard = AgentCardState{}
-		return startAgent(placement)(m)
+	case AgentCardSplit:
+		return startAgent(m, AgentSplit)
+	case AgentCardTab:
+		return startAgent(m, AgentTab)
+	case AgentCardNewBackground:
+		return startAgent(m, AgentBackground)
 	case MoveDown:
 		m.AgentCard.Cursor = min(cursor+1, max(0, len(rows)-1))
 	case MoveUp:

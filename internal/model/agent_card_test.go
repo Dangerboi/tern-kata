@@ -25,37 +25,28 @@ func press(m model.Model, chords ...string) (model.Model, []model.Cmd) {
 	return m, cmds
 }
 
-func TestWOpensTheAgentCardOnlyWhenTheIssueHasAgents(t *testing.T) {
-	for _, chord := range []string{"w", "shift+w"} {
-		m, cmds := press(cardModel(), chord)
-		if _, started := agentCmd[model.StartAgent](cmds); m.TopCard() == model.CardAgent || !started {
-			t.Fatalf("%s with no agents: card %v, cmds %#v; want a start", chord, m.TopCard(), cmds)
-		}
-		m, cmds = press(cardModel(entry("other", "1", 1)), chord)
-		if _, started := agentCmd[model.StartAgent](cmds); m.TopCard() == model.CardAgent || !started {
-			t.Fatalf("%s with an agent on another Issue: card %v, cmds %#v; want a start", chord, m.TopCard(), cmds)
-		}
-		m, cmds = press(cardModel(entry("a", "1", 1)), chord)
-		if m.TopCard() != model.CardAgent || m.CurrentMode() != model.ModeAgentCard {
-			t.Fatalf("%s with an agent: card %v, mode %s; want the Agent card", chord, m.TopCard(), m.CurrentMode())
+func TestWOpensTheAgentCardWithOrWithoutAgents(t *testing.T) {
+	for name, m := range map[string]model.Model{
+		"no agents":                      cardModel(),
+		"an agent on another Issue":      cardModel(entry("other", "1", 1)),
+		"an agent on the selected Issue": cardModel(entry("a", "1", 1)),
+	} {
+		opened, cmds := press(m, "w")
+		if opened.TopCard() != model.CardAgent || opened.CurrentMode() != model.ModeAgentCard || opened.AgentCard.IssueUID != "a" {
+			t.Errorf("%s: card %v, mode %s; want the Agent card on a", name, opened.TopCard(), opened.CurrentMode())
 		}
 		if _, started := agentCmd[model.StartAgent](cmds); started {
-			t.Fatalf("%s with an agent started one: %#v", chord, cmds)
+			t.Errorf("%s: w started an agent: %#v", name, cmds)
 		}
 	}
 }
 
-func TestTheAgentCardKeepsThePlacementTheOpeningKeyAskedAndNStartsThere(t *testing.T) {
-	for chord, want := range map[string]model.AgentPlacement{"w": model.AgentSplit, "shift+w": model.AgentTab} {
-		opened, _ := press(cardModel(entry("a", "1", 1)), chord)
-		if opened.AgentCard.Placement != want {
-			t.Fatalf("%s: placement %q, want %q", chord, opened.AgentCard.Placement, want)
-		}
-		m, cmds := press(opened, "n")
-		start, ok := agentCmd[model.StartAgent](cmds)
-		if !ok || start.Placement != want || start.IssueUID != "a" || m.TopCard() == model.CardAgent {
-			t.Errorf("%s then n: cmds %#v, card %v; want a start %q with the card closed", chord, cmds, m.TopCard(), want)
-		}
+func TestWOnAClosedIssueOpensNoCard(t *testing.T) {
+	m := cardModel()
+	m.Issues[0].Status = "closed"
+	after, cmds := press(m, "w")
+	if _, started := agentCmd[model.StartAgent](cmds); after.TopCard() == model.CardAgent || started || after.Notice != model.ClosedIssueRefusal {
+		t.Errorf("card %v, cmds %#v, notice %q", after.TopCard(), cmds, after.Notice)
 	}
 }
 
@@ -136,18 +127,41 @@ func TestAgentWhereReadsTheStartedPlacementAndDefaultsToASplit(t *testing.T) {
 	}
 }
 
-func TestSOpensTheAgentCardWithAgentsAndNStartsInTheBackground(t *testing.T) {
-	m, cmds := press(cardModel(), "shift+s")
-	if start, ok := agentCmd[model.StartAgent](cmds); !ok || start.Placement != model.AgentBackground || m.TopCard() == model.CardAgent {
-		t.Fatalf("S with no agents: card %v, cmds %#v", m.TopCard(), cmds)
+func TestTheCardsStartKeysStartWhereTheyNameAndCloseTheCard(t *testing.T) {
+	for name, withAgent := range map[string]bool{"no agents": false, "an agent": true} {
+		for chord, want := range map[string]model.AgentPlacement{"s": model.AgentSplit, "t": model.AgentTab, "g": model.AgentBackground} {
+			m := cardModel()
+			if withAgent {
+				m = cardModel(entry("a", "1", 1))
+			}
+			opened, _ := press(m, "w")
+			m, cmds := press(opened, chord)
+			start, ok := agentCmd[model.StartAgent](cmds)
+			if !ok || len(cmds) != 1 || start.Placement != want || start.IssueUID != "a" || start.PaneBlock != "9" || m.TopCard() == model.CardAgent {
+				t.Errorf("%s, w then %s: cmds %#v, card %v; want a start %q with the card closed", name, chord, cmds, m.TopCard(), want)
+			}
+		}
 	}
-	opened, _ := press(cardModel(entry("a", "1", 1)), "shift+s")
-	if opened.TopCard() != model.CardAgent || opened.AgentCard.Placement != model.AgentBackground {
-		t.Fatalf("S with an agent: card %v, placement %q", opened.TopCard(), opened.AgentCard.Placement)
+}
+
+func TestEnterAndBDoNothingOnACardWithNoAgents(t *testing.T) {
+	opened, _ := press(cardModel(), "w")
+	for _, chord := range []string{"enter", "b"} {
+		m, cmds := press(opened, chord)
+		if len(cmds) != 0 || m.TopCard() != model.CardAgent {
+			t.Errorf("%s with no agents: cmds %#v, card %v", chord, cmds, m.TopCard())
+		}
 	}
-	m, cmds = press(opened, "n")
-	if start, ok := agentCmd[model.StartAgent](cmds); !ok || start.Placement != model.AgentBackground || m.TopCard() == model.CardAgent {
-		t.Errorf("S then n: cmds %#v, card %v", cmds, m.TopCard())
+}
+
+func TestShiftWAndShiftSStartNothingAndOpenNoCard(t *testing.T) {
+	for _, chord := range []string{"shift+w", "shift+s"} {
+		for _, m := range []model.Model{cardModel(), cardModel(entry("a", "1", 1))} {
+			after, cmds := press(m, chord)
+			if _, started := agentCmd[model.StartAgent](cmds); started || after.TopCard() == model.CardAgent {
+				t.Errorf("%s: cmds %#v, card %v", chord, cmds, after.TopCard())
+			}
+		}
 	}
 }
 
@@ -187,7 +201,7 @@ func TestBOnAnOpenBackgroundAgentSendsItBackAndOnAClosedOneKeepsItThere(t *testi
 func TestEnterOnAClosedBackgroundAgentOpensItBesideThePane(t *testing.T) {
 	e := entry("a", "1", 1)
 	e.Background = true
-	_, cmds := press(cardModel(e), "shift+s", "enter")
+	_, cmds := press(cardModel(e), "w", "enter")
 	if open, ok := agentCmd[model.OpenAgent](cmds); !ok || open != (model.OpenAgent{Block: "1", PaneBlock: "9"}) {
 		t.Errorf("cmds %#v", cmds)
 	}

@@ -32,11 +32,17 @@ func agentLayer(m model.Model) tern.Element {
 	if len(rows) > 0 {
 		selected = AgentItemID(rows[m.AgentCardCursor()].Block)
 	}
+	list := tern.Element(ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "list"}, Selected: selected, Max: ui.MaxLines(12), Children: items})
+	if len(rows) == 0 {
+		list = ui.Text{Common: ui.Common{Key: "none", Tone: ui.ToneMuted}, Text: "No agents on this Issue yet."}
+	}
 	children := []tern.Element{
-		ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "list"}, Selected: selected, Empty: ui.T("No agents on this Issue."), Max: ui.MaxLines(12), Children: items},
+		list,
 		buttonRow(
 			cardButton("go", model.ModeAgentCard, model.AgentCardGo, "Go to agent", true),
-			cardButton("start", model.ModeAgentCard, model.AgentCardStart, "Start another", false),
+			cardButton("split", model.ModeAgentCard, model.AgentCardSplit, "New in a split", false),
+			cardButton("tab", model.ModeAgentCard, model.AgentCardTab, "New in a tab", false),
+			cardButton("new-background", model.ModeAgentCard, model.AgentCardNewBackground, "New in the background", false),
 			cardButton("background", model.ModeAgentCard, model.AgentCardBackground, "Send to background", false),
 			cardButton("cancel", model.ModeAgentCard, model.AgentCardCancel, "Cancel", false)),
 	}

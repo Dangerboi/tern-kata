@@ -269,7 +269,9 @@ var cardBindings = []Binding{
 	{Chord: "home", Key: "home", Action: MoveFirst, Help: "first agent", Mode: ModeAgentCard},
 	{Chord: "end", Key: "end", Action: MoveLast, Help: "last agent", Mode: ModeAgentCard},
 	{Chord: "enter", Key: "enter", Action: AgentCardGo, Help: "go to agent", Mode: ModeAgentCard, ShowInFooter: true},
-	{Chord: "n", Key: "n", Action: AgentCardStart, Help: "start another", Mode: ModeAgentCard, ShowInFooter: true},
+	{Chord: "s", Key: "s", Action: AgentCardSplit, Help: "new agent in a split", Mode: ModeAgentCard, ShowInFooter: true},
+	{Chord: "t", Key: "t", Action: AgentCardTab, Help: "new agent in a tab", Mode: ModeAgentCard, ShowInFooter: true},
+	{Chord: "g", Key: "g", Action: AgentCardNewBackground, Help: "new agent in the background", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "b", Key: "b", Action: AgentCardBackground, Help: "send to background", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: AgentCardCancel, Help: "cancel", Mode: ModeAgentCard, ShowInFooter: true},
 	// Adoption confirmation of the Federation Page's enrollment: one name field, so every other key is typed.
