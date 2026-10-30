@@ -37,6 +37,7 @@ func agentLayer(m model.Model) tern.Element {
 		buttonRow(
 			cardButton("go", model.ModeAgentCard, model.AgentCardGo, "Go to agent", true),
 			cardButton("start", model.ModeAgentCard, model.AgentCardStart, "Start another", false),
+			cardButton("background", model.ModeAgentCard, model.AgentCardBackground, "Send to background", false),
 			cardButton("cancel", model.ModeAgentCard, model.AgentCardCancel, "Cancel", false)),
 	}
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgent)}, Head: ui.T("Agents on " + card.IssueRef), Modal: true, Size: ui.SizeMD, Children: children})
