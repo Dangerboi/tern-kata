@@ -172,6 +172,9 @@ func init() {
 		return g.openRunSession(ctx, cmd)
 	}, nil, nil)
 
+	local(func(g *Gateway, ctx context.Context, cmd model.StartAgent) model.Msg { return g.startAgent(ctx, cmd) }, nil, nil)
+	local(func(g *Gateway, ctx context.Context, _ model.PruneAgents) model.Msg { return g.pruneAgents(ctx) }, nil, nil)
+
 	// Daemon calls.
 	daemonCall(
 		func(cmd model.CreateIssueCmd) string { return cmd.Workspace },
