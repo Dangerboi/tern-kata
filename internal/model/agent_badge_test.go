@@ -120,7 +120,7 @@ func TestTheRefreshedMappingReplacesTheModelsAndAnErrorKeepsIt(t *testing.T) {
 	}
 }
 
-func TestAClickOnTheBadgeFocusesTheAgent(t *testing.T) {
+func TestAClickOnTheBadgeFocusesAnAgentThatIsNotInTheBackground(t *testing.T) {
 	_, cmds := model.Update(model.Model{}, model.AgentJumpMsg{Block: "7"})
 	if want := []model.Cmd{model.FocusAgent{Block: "7"}}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("cmds %#v", cmds)

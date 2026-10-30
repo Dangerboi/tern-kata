@@ -120,15 +120,21 @@ type AgentJumpMsg struct{ Block string }
 
 func (AgentJumpMsg) msg() {}
 
+// jumpToAgent is the one way to go to an agent (a badge click or the Agent card): a background agent that is not open is opened beside this Pane,
+// any other agent is focused. Opening is only ever the user's act, so nothing but a jump runs it.
+func jumpToAgent(m Model, block string) (Model, []Cmd) {
+	for _, e := range m.AgentMapping {
+		if e.Block == block && e.Background && !e.Open {
+			return m, []Cmd{OpenAgent{Block: block, PaneBlock: m.PaneBlock}}
+		}
+	}
+	return m, []Cmd{FocusAgent{Block: block}}
+}
+
 // FocusAgent asks Tern to show an agent's block.
 type FocusAgent struct{ Block string }
 
 func (FocusAgent) cmd() {}
-
-// jumpToAgent is the one way to an agent, from a badge click or the Agent card.
-func jumpToAgent(m Model, block string) (Model, []Cmd) {
-	return m, []Cmd{FocusAgent{Block: block}}
-}
 
 // AgentFocused answers FocusAgent; Err carries Tern's own words.
 type AgentFocused struct{ Err error }

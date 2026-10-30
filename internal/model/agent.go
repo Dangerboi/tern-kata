@@ -13,12 +13,19 @@ const (
 	AgentSplit AgentPlacement = "split"
 	// AgentTab is `W`: a new tab.
 	AgentTab AgentPlacement = "tab"
+	// AgentBackground is `S`: a tab of the hidden session AgentSession, until the user opens it.
+	AgentBackground AgentPlacement = "background"
 )
+
+// AgentSession is the name of the hidden Tern session background agents live in.
+const AgentSession = "kata agents"
 
 // The keys that start an agent on the selected Issue.
 const (
 	StartAgentSplitAction Action = "start-agent-split"
 	StartAgentTabAction   Action = "start-agent-tab"
+
+	StartAgentBackgroundAction Action = "start-agent-background"
 )
 
 // AgentEntry is one line of agents.json, the Agent mapping: an agent this host's Panes started, found again by its block id.
@@ -56,7 +63,9 @@ type AgentStarted struct {
 	Placement AgentPlacement
 	IssueRef  string
 	Entry     AgentEntry
-	Err       error
+	// Note is a step after the start that failed (naming a background agent's tab); the agent runs.
+	Note string
+	Err  error
 }
 
 func (AgentStarted) msg() {}
@@ -87,7 +96,7 @@ func openAgent(placement AgentPlacement) func(Model) (Model, []Cmd) {
 	}
 }
 
-// startAgent starts an agent on the selected Issue unless the Issue is closed.
+// startAgent is `w`, `W` and `S` when the Issue has no agent card to open: it starts an agent on the selected Issue unless the Issue is closed.
 func startAgent(placement AgentPlacement) func(Model) (Model, []Cmd) {
 	return func(m Model) (Model, []Cmd) {
 		issue := closeIssue(m)
@@ -115,10 +124,16 @@ func agentStarted(m Model, msg AgentStarted) Model {
 	}
 	m.AgentMapping = append(m.AgentMapping, msg.Entry)
 	where := "a split beside this Pane"
-	if msg.Placement == AgentTab {
+	switch msg.Placement {
+	case AgentTab:
 		where = "a new tab"
+	case AgentBackground:
+		where = "the background (open it from its badge)"
 	}
 	m.Notice = fmt.Sprintf("Started an agent on %s in %s.", msg.IssueRef, where)
+	if msg.Note != "" {
+		m.Notice += " But " + msg.Note
+	}
 	return m
 }
 

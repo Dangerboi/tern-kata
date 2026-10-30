@@ -22,7 +22,7 @@ func startedAgent(cmds []model.Cmd) (model.StartAgent, bool) {
 	return model.StartAgent{}, false
 }
 
-// agentPanes are the four modes w and W work in, each with the Issue t1 selected.
+// agentPanes are the four modes w, W and S work in, each with the Issue t1 selected.
 func agentPanes(t *testing.T, issues ...model.Issue) map[string]driver.State {
 	t.Helper()
 	board := boardPane(t, issues...)
@@ -37,9 +37,9 @@ func agentPanes(t *testing.T, issues ...model.Issue) map[string]driver.State {
 	}
 }
 
-func TestWAndShiftWStartAnAgentOnTheSelectedIssueInEveryIssueMode(t *testing.T) {
+func TestWShiftWAndShiftSStartAnAgentOnTheSelectedIssueInEveryIssueMode(t *testing.T) {
 	for name, s := range agentPanes(t, agentIssue("t1")) {
-		for chord, placement := range map[string]model.AgentPlacement{"w": model.AgentSplit, "shift+w": model.AgentTab} {
+		for chord, placement := range map[string]model.AgentPlacement{"w": model.AgentSplit, "shift+w": model.AgentTab, "shift+s": model.AgentBackground} {
 			t.Run(name+" "+chord, func(t *testing.T) {
 				got := step(t, s, key(chord))
 				start, ok := startedAgent(got.Cmds)
@@ -66,7 +66,7 @@ func TestAClosedIssueStartsNoAgentAndSaysToReopenIt(t *testing.T) {
 	closed := closedAt("t1", 10, 1)
 	closed.ProjectID, closed.QualifiedID = 7, "work#t1"
 	for name, s := range agentPanes(t, closed) {
-		for _, chord := range []string{"w", "shift+w"} {
+		for _, chord := range []string{"w", "shift+w", "shift+s"} {
 			got := step(t, s, key(chord))
 			if len(got.Cmds) != 0 || got.State.Model.Notice != "This Issue is closed; reopen it first (r)." {
 				t.Errorf("%s %s: cmds %#v, notice %q", name, chord, got.Cmds, got.State.Model.Notice)
@@ -81,6 +81,10 @@ func TestTheStartAndItsResultsReachTheModel(t *testing.T) {
 	got := step(t, s, model.AgentStarted{Placement: model.AgentTab, IssueRef: "work#t1", Entry: entry})
 	if len(got.State.Model.AgentMapping) != 1 || got.State.Model.AgentMapping[0] != entry || got.State.Model.Notice != "Started an agent on work#t1 in a new tab." {
 		t.Fatalf("agents %+v, notice %q", got.State.Model.AgentMapping, got.State.Model.Notice)
+	}
+	background := step(t, s, model.AgentStarted{Placement: model.AgentBackground, IssueRef: "work#t1", Entry: entry})
+	if background.State.Model.Notice != "Started an agent on work#t1 in the background (open it from its badge)." {
+		t.Fatalf("notice %q", background.State.Model.Notice)
 	}
 	failed := step(t, s, model.AgentStarted{IssueRef: "work#t1", Err: errString("no checkout")})
 	if failed.State.Model.Notice != "Cannot start an agent on work#t1: no checkout" || len(failed.State.Model.AgentMapping) != 0 {
