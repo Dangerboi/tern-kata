@@ -14,11 +14,14 @@ const (
 )
 
 // AgentState is one agent block as the window half relays it: Block is the block id as decimal text, State is
-// Tern's word for it (idle, working, waiting_input, exited) and LastMessage the agent's last assistant text.
+// Tern's word for it (idle, working, waiting_input, exited) and LastMessage the agent's last assistant text. Command is the agent
+// block's command line ("" when Tern gives none): a window on another machine numbers panes differently from the session host, so
+// the command, which names the agent's prompt file, is how the Pane finds the agent's entry. Once matched, Block is the entry's block.
 type AgentState struct {
 	Block       string
 	State       AgentStateWord
 	LastMessage string
+	Command     string
 }
 
 // AgentStatesMsg carries one window half's latest list of the agent blocks it sees in the session, kata Panes included. Several
@@ -50,6 +53,8 @@ type AgentStatesRelay struct {
 	inFlight bool
 	again    bool
 	suspects []string
+	// asked holds the prompt files whose unknown agent already made a re-read, so each asks once.
+	asked []string
 }
 
 // apply merges msg into the states. mapped says whether a block is in the Agent mapping.

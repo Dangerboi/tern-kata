@@ -2,7 +2,9 @@ package model
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
+	"strings"
 )
 
 // AgentTone is the colour word of an Agent badge, as the view's span styles name it.
@@ -179,14 +181,36 @@ func agentsRefreshed(m Model, msg AgentsRefreshed) (Model, []Cmd) {
 	return m, []Cmd{RefreshAgents{Suspects: suspects, PaneBlock: m.PaneBlock}}
 }
 
-// relayAgents takes in a relayed list by merging it into the last known states: a block the relay does not list keeps its state.
-// agents.json is read again, once for the relay, when it lists a block no relay listed before and the mapping does not have
+// promptTail finds the prompt file of a tern-kata agent in a command line: the part from the agent-prompts folder on, "" when
+// the command names none.
+var promptTail = regexp.MustCompile(`agent-prompts[/\\]prompt-\d+-\w+\.md`)
+
+// resolveAgent gives a relayed agent the block of the entry it belongs to: the entry whose prompt file its command names, else the
+// entry whose block is its pane id. A window on another machine numbers panes differently from the session host, so only the
+// command is common to all windows. An agent no entry claims keeps its own id.
+func (m Model) resolveAgent(s AgentState) AgentState {
+	for _, e := range m.AgentMapping {
+		if e.PromptFile != "" && strings.Contains(s.Command, e.PromptFile) {
+			s.Block = e.Block
+			return s
+		}
+	}
+	return s
+}
+
+// relayAgents takes in a relayed list by merging it into the last known states, each agent filed under the block of its entry
+// (see resolveAgent), so every window's relay agrees on one block per agent. A block the relay does not list keeps its state.
+// agents.json is read again, once per prompt file, when a relayed agent's command names a tern-kata prompt file no entry has
 // (another kata Pane on this host may just have started it), or when a mapped block some relay listed before is missing from it.
 // That block is only a suspect: the gateway drops its entry when Tern no longer lists the block. One refresh is out at a time;
 // a relay that wants one meanwhile gets it when the answer is in.
 func relayAgents(m Model, msg AgentStatesMsg) (Model, []Cmd) {
 	before := m.Agents.States
-	m.Agents = m.Agents.apply(msg, m.agentMapped)
+	states := make([]AgentState, len(msg.States))
+	for i, s := range msg.States {
+		states[i] = m.resolveAgent(s)
+	}
+	m.Agents = m.Agents.apply(AgentStatesMsg{States: states}, m.agentMapped)
 	var suspects []string
 	for _, s := range before {
 		if !slices.Contains(m.Agents.Listed, s.Block) && m.agentMapped(s.Block) {
@@ -194,8 +218,12 @@ func relayAgents(m Model, msg AgentStatesMsg) (Model, []Cmd) {
 		}
 	}
 	unmapped := false
-	for _, b := range m.Agents.Listed {
-		if !m.agentMapped(b) && !slices.ContainsFunc(before, func(s AgentState) bool { return s.Block == b }) {
+	for _, s := range states {
+		if m.agentMapped(s.Block) {
+			continue
+		}
+		if tail := promptTail.FindString(s.Command); tail != "" && !slices.Contains(m.Agents.asked, tail) {
+			m.Agents.asked = append(slices.Clone(m.Agents.asked), tail)
 			unmapped = true
 		}
 	}
