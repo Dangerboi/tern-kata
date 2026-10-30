@@ -447,6 +447,35 @@ func (g *Gateway) sendAgentBack(ctx context.Context, cmd model.SendAgentBack) mo
 	return placed
 }
 
+// closeAgent closes the agent's block with `tern close`, then drops its entry and prompt file from agents.json as it stands now.
+// When tern fails the entry stays.
+func (g *Gateway) closeAgent(ctx context.Context, cmd model.CloseAgent) model.AgentClosed {
+	if out, err := g.runTern(ctx, CloseBlockArgs(cmd.Block)); err != nil {
+		return model.AgentClosed{Block: cmd.Block, Err: ternFailure(err, out)}
+	}
+	file, _, err := g.agentStatePaths()
+	if err != nil {
+		return model.AgentClosed{Block: cmd.Block, Err: fmt.Errorf("the block closed but agents.json could not be written: %w", err)}
+	}
+	var gone []model.AgentEntry
+	kept, err := UpdateAgents(file, func(list []model.AgentEntry) []model.AgentEntry {
+		return slices.DeleteFunc(list, func(e model.AgentEntry) bool {
+			if e.Block != cmd.Block {
+				return false
+			}
+			gone = append(gone, e)
+			return true
+		})
+	})
+	if err != nil {
+		return model.AgentClosed{Block: cmd.Block, Err: fmt.Errorf("the block closed but agents.json could not be written: %w", err)}
+	}
+	for _, e := range gone {
+		removePrompt(e.PromptFile)
+	}
+	return model.AgentClosed{Block: cmd.Block, Agents: kept}
+}
+
 // AgentPromptName is the pattern of a prompt file's name for os.CreateTemp. A tab's agent carries the block id of the kata Pane
 // that started it (`prompt-<block>-<random>.md`), which the plugin's window half reads from the new tab's command line to put
 // the tab right of the Pane's; any other agent, or a Pane that cannot name its block, gets `prompt-<random>.md`. A block that

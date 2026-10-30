@@ -660,3 +660,38 @@ func TestPruningKeepsABlockOfTheHiddenSession(t *testing.T) {
 		t.Errorf("agents.json %+v", stored)
 	}
 }
+
+func TestClosingAFinishedAgentClosesItsBlockAndDropsItsEntryAndPrompt(t *testing.T) {
+	g, dirs := agentGateway(t)
+	prompt := writeAgentFile(t, filepath.Join(t.TempDir(), "p.md"), "go")
+	file := seedAgent(t, dirs, model.AgentEntry{Block: "31", Background: true, PromptFile: prompt})
+	seedAgent(t, dirs, model.AgentEntry{Block: "32", Background: true})
+	calls := ternScript(g, map[string]func() ([]byte, error){"close": ternOut(`{"block":31}`)})
+	got := as[model.AgentClosed](t, run(t, g, model.CloseAgent{Block: "31"}))
+	if got.Err != nil || len(got.Agents) != 1 || got.Agents[0].Block != "32" || !reflect.DeepEqual(*calls, [][]string{{"close", "31", "--json"}}) {
+		t.Fatalf("%+v, ran %q", got, *calls)
+	}
+	if stored, _ := ReadAgents(file); len(stored) != 1 || stored[0].Block != "32" {
+		t.Errorf("agents.json %+v", stored)
+	}
+	if _, err := os.Stat(prompt); !os.IsNotExist(err) {
+		t.Errorf("prompt file stays: %v", err)
+	}
+}
+
+func TestAFailedCloseKeepsTheEntryAndThePrompt(t *testing.T) {
+	g, dirs := agentGateway(t)
+	prompt := writeAgentFile(t, filepath.Join(t.TempDir(), "p.md"), "go")
+	file := seedAgent(t, dirs, model.AgentEntry{Block: "31", Background: true, PromptFile: prompt})
+	ternScript(g, map[string]func() ([]byte, error){"close": func() ([]byte, error) { return []byte("no block\n"), errors.New("exit status 1") }})
+	got := as[model.AgentClosed](t, run(t, g, model.CloseAgent{Block: "31"}))
+	if got.Err == nil || got.Err.Error() != "exit status 1: no block" {
+		t.Fatalf("%+v", got)
+	}
+	if stored, _ := ReadAgents(file); len(stored) != 1 {
+		t.Errorf("agents.json %+v", stored)
+	}
+	if _, err := os.Stat(prompt); err != nil {
+		t.Errorf("prompt file: %v", err)
+	}
+}

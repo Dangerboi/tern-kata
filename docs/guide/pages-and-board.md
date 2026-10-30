@@ -126,7 +126,7 @@ Editing from the Pane:
 | `o` | In the nested Issue list: switch siblings between creation and blocking order (see [Compared with `kata tui`](kata-tui.md)) |
 | `q` | Quit, after "Quit tern-kata? y/n" (see [Compared with `kata tui`](kata-tui.md#quitting)) |
 | `e` | Edit the Issue body in Tern's editor |
-| `?` | Every key |
+| `?` | The global keys and the current Page's keys |
 
 The Issue detail's Activity tabs are described in [Compared with `kata tui`](kata-tui.md).
 
