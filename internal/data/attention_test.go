@@ -230,3 +230,33 @@ func TestATypedReplyToTheCommentARequestNamesRemovesItFromTheNextRead(t *testing
 		t.Fatalf("requests after the reply: %+v, want only the request on the other Issue", after)
 	}
 }
+
+func TestAgentAttentionReplacesAnEarlierRequestAndClearsWithoutAGuard(t *testing.T) {
+	f := newAttentionFixture(t)
+	uid := createIssue(t, f.gateway, f.work, f.workP, "Waiting")
+	f.put(t, f.workP, uid, "dana", map[string]any{"from": "bob", "message": "an earlier request"})
+	raise := func(message string) {
+		t.Helper()
+		got := as[model.AgentAttentionWritten](t, run(t, f.gateway, model.RaiseAgentAttention{
+			Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Address: "dana", Message: message,
+		}))
+		if got.Err != nil || got.UID != uid || got.Clear {
+			t.Fatalf("raise: %+v", got)
+		}
+	}
+	raise("which table?")
+	got := f.read(t, "dana").Requests
+	if len(got) != 1 || got[0].Slot.From != "dana-agent" || got[0].Slot.Message != "which table?" {
+		t.Fatalf("requests after the raise: %+v, want the agent's message replacing the earlier one", got)
+	}
+	raise("which table?") // the same value again changes nothing and is no error
+	cleared := as[model.AgentAttentionWritten](t, run(t, f.gateway, model.ClearAgentAttention{
+		Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Address: "dana",
+	}))
+	if cleared.Err != nil || !cleared.Clear || cleared.UID != uid {
+		t.Fatalf("clear: %+v", cleared)
+	}
+	if left := f.read(t, "dana").Requests; len(left) != 0 {
+		t.Fatalf("requests after the clear: %+v", left)
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 	_ "time/tzdata" // zone database for hosts without one, such as Windows
 
@@ -123,52 +124,77 @@ func run() error {
 	gateway := data.NewGateway(data.LocateWithKata).WithHost(host)
 	defer gateway.Close()
 	input := any(model.Start{Workspace: workspace, IssueRef: plan.IssueRef, Nonce: rand.Text()})
-	for {
-		if ctx.Err() != nil { // a stop signal that arrived while an editor ran
-			return nil
-		}
-		out := driver.Step(state, input, time.Now())
-		state = out.State
-		if out.Err != nil {
-			return out.Err
-		}
-		if out.Quit {
-			return nil
-		}
-		if out.View != nil {
-			if err := term.Render(*out.View); err != nil {
-				return err
+	loopErr := func() error {
+		for {
+			if ctx.Err() != nil { // a stop signal that arrived while an editor ran
+				return nil //nolint:nilerr // a stop signal ends the Pane cleanly
 			}
-		}
-		for _, op := range out.Ops {
-			if err := term.Send(op); err != nil {
-				return err
+			out := driver.Step(state, input, time.Now())
+			state = out.State
+			if out.Err != nil {
+				return out.Err
 			}
-		}
-		for _, cmd := range out.Cmds {
-			go gateway.Run(ctx, cmd, results)
-		}
-		if out.Editor != nil {
-			closed, err := editInTerminal(term, *out.Editor, editorCommand)
-			if err != nil {
-				return err
-			}
-			input, state = closed, state.Fresh()
-			continue
-		}
-		select {
-		case input = <-term.Inputs():
-		case input = <-results:
-		case err := <-term.InputErrors():
-			if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
+			if out.Quit {
 				return nil
 			}
-			return err
-		case <-ctx.Done():
-			return nil
+			if out.View != nil {
+				if err := term.Render(*out.View); err != nil {
+					return err
+				}
+			}
+			for _, op := range out.Ops {
+				if err := term.Send(op); err != nil {
+					return err
+				}
+			}
+			for _, cmd := range out.Cmds {
+				go gateway.Run(ctx, cmd, results)
+			}
+			if out.Editor != nil {
+				closed, err := editInTerminal(term, *out.Editor, editorCommand)
+				if err != nil {
+					return err
+				}
+				input, state = closed, state.Fresh()
+				continue
+			}
+			select {
+			case input = <-term.Inputs():
+			case input = <-results:
+			case err := <-term.InputErrors():
+				if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
+					return nil
+				}
+				return err
+			case <-ctx.Done():
+				return nil
+			}
 		}
-	}
+	}()
+	quitAgentAttention(state.Model, gateway)
+	return loopErr
 }
+
+// quitAgentAttention clears the Attention requests the Pane raised for waiting agents. The loop drops the Cmds of a quitting Step
+// and a stop signal has cancelled the Pane's context, so this runs the clears itself, on a context of its own, before the gateway
+// closes; one that does not finish in time is left, as after a kill.
+func quitAgentAttention(m model.Model, gateway *data.Gateway) {
+	cmds := m.QuitAgentAttention()
+	if len(cmds) == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), quitClearDeadline)
+	defer cancel()
+	answers := make(chan model.Msg, len(cmds))
+	var done sync.WaitGroup
+	for _, cmd := range cmds {
+		done.Go(func() { gateway.Run(ctx, cmd, answers) })
+	}
+	done.Wait()
+}
+
+// quitClearDeadline bounds how long a quitting Pane waits for the daemon to take its clears.
+const quitClearDeadline = 3 * time.Second
 
 // lookupEnv reads the environment and answers gitUserNameKey from `git config user.name`.
 func lookupEnv(key string) (string, bool) {
