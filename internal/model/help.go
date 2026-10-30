@@ -120,14 +120,31 @@ type SheetGroup struct {
 	Lines []SheetLine
 }
 
-// HelpSheet is the main-surface lines of the help sheet, read from the action entries and grouped as the sheet shows
-// them. A group no entry lists (Forms) comes back empty, and a line with no key to show is left out.
-func HelpSheet() []SheetGroup {
-	type listing struct {
-		sheetLine
-		keys []string
-	}
-	var listings []listing
+// pageHelpModes are the modes whose keys the help sheet lists for a Page, besides the global ones: the Page's list and inspector
+// modes, and the modes of what opens from them or sits beside them (search and the Menu sidebar on the Issues Page, the Issue
+// detail beside the Board and Workflows Pages).
+var pageHelpModes = map[Page][]Mode{
+	PageIssues:      {ModeList, ModeDetail, ModeCollections, ModeSearch, ModeSearchResults},
+	PageBoard:       {ModeBoard, ModeLane, ModeDetail},
+	PageJobs:        {ModeJobs, ModeJobInspector},
+	PageRuns:        {ModeRuns, ModeRunInspector},
+	PageWorkflows:   {ModeWorkflows, ModeDetail},
+	PageAttention:   {ModeAttention},
+	PageCredentials: {ModeCredentials},
+	PageFederation: {ModeFederation, ModeFederationLeave, ModeFederationResult, ModeFederationPick, ModeFederationBrowse,
+		ModeFederationPreview, ModeFederationAdopt, ModeFederationRecovery},
+	PageDaemons: {ModeDaemons},
+}
+
+// helpListing is one entry's key placed on one sheet line, with the modes the entry is bound in.
+type helpListing struct {
+	sheetLine
+	keys  []string
+	modes []Mode
+}
+
+func helpListings() []helpListing {
+	var listings []helpListing
 	for _, entry := range mainActions {
 		var keys []string
 		for _, key := range entry.keys {
@@ -138,10 +155,28 @@ func HelpSheet() []SheetGroup {
 			}
 		}
 		for _, line := range entry.sheet {
-			listings = append(listings, listing{line, keys})
+			listings = append(listings, helpListing{line, keys, entry.modes})
 		}
 	}
-	slices.SortStableFunc(listings, func(a, b listing) int {
+	return listings
+}
+
+// HelpSheet is the main-surface lines of the help sheet for every Page, read from the action entries and grouped as the
+// sheet shows them. A group no entry lists (Forms) comes back empty, and a line with no key to show is left out.
+func HelpSheet() []SheetGroup { return sheetOf(helpListings()) }
+
+// HelpSheetOn is the help sheet opened over a Page: the lines whose entry is global or bound in one of the Page's modes. The
+// groups keep their places (and so their positions in the full sheet), those left empty come back empty.
+func HelpSheetOn(page Page) []SheetGroup {
+	modes := pageHelpModes[page]
+	listings := slices.DeleteFunc(helpListings(), func(l helpListing) bool {
+		return len(l.modes) > 0 && !slices.ContainsFunc(l.modes, func(mode Mode) bool { return slices.Contains(modes, mode) })
+	})
+	return sheetOf(listings)
+}
+
+func sheetOf(listings []helpListing) []SheetGroup {
+	slices.SortStableFunc(listings, func(a, b helpListing) int {
 		return cmp.Or(cmp.Compare(a.group, b.group), cmp.Compare(a.rank, b.rank))
 	})
 	sheet := make([]SheetGroup, len(sheetTitles))
