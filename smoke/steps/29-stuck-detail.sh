@@ -6,12 +6,26 @@
 # app may send is the Pane driver's tests). Own Project and Issues; it cleans up.
 stuck_y() { ctl tree "[data-id='main.columns.detail.viewport.content.heading']" | jq -r '.nodes[0].rect[1] // empty | floor'; }
 stuck_wheel() { for _ in $(seq "$2"); do ctl wheel 0 "$1" >/dev/null; done; }
+# Waits until the detail stops moving: its heading is at the same place on three reads in a row.
+stuck_settle() {
+  local prev=. cur same=0
+  for ((attempt = 0; attempt < 100; attempt++)); do
+    cur=$(stuck_y)
+    if [[ $cur == "$prev" ]]; then
+      (( ++same < 3 )) || return 0
+    else
+      same=0
+    fi
+    prev=$cur
+    sleep 0.05
+  done
+}
 # The wheel moves the detail down from its top and back up, whatever was clicked before.
 stuck_scrolls() {
   local top y
   ctl hover "[data-id='main.columns.detail.viewport']" >/dev/null
   stuck_wheel -300 8
-  sleep 0.5
+  stuck_settle
   top=$(stuck_y)
   stuck_wheel 300 2
   for ((attempt = 0; attempt < 30; attempt++)); do
@@ -21,7 +35,7 @@ stuck_scrolls() {
   done
   [[ -n $y && $y -le $((top - 100)) ]] || { printf 'The detail did not scroll after %s (top %s, now %s)\n' "$1" "$top" "$y" >&2; return 1; }
   stuck_wheel -300 8
-  sleep 0.5
+  stuck_settle
 }
 # Wheels down until sel is inside the detail's list, so a click on it lands on it. The detail fills its column to a fraction of a
 # pixel that a whole-pixel scroll cannot reach, so the last row may end up to 1px past the list.

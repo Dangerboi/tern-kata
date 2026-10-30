@@ -3,12 +3,15 @@
 ```sh
 CGO_ENABLED=0 go build -o tern-kata ./cmd/tern-kata
 CGO_ENABLED=0 go test ./...
-./smoke/run.sh               # end-to-end against a headless Tern and a throwaway kata daemon
+./smoke/run.sh               # end-to-end against headless Tern servers and throwaway kata daemons
+scripts/check.sh             # everything: static (gofmt, vet, golangci-lint, builds), test or smoke alone with that argument
 tern plugin link .           # use this checkout as the window plugin
 tern plugin reload tern-kata # exits 1 if it fails to load; window failures show only as a toast
 ```
 
 Every push to `main` and every pull request runs `.github/workflows/ci.yml`: gofmt, `go vet` for Linux and for Windows, golangci-lint (`.golangci.yml`) for Linux and for Windows, and `go test ./...`. Run `golangci-lint run ./...` locally with a golangci-lint built by Go 1.27 or newer; an older build cannot load this toolchain's standard library. The smoke suite needs Tern and a kata daemon, so it runs only locally.
+
+`./smoke/run.sh` with no arguments runs the steps as parallel shards, each on its own headless Tern and kata daemon: five runs of consecutive UI steps (cut at 22, 32, 45 and 58), one run each for the steps that wait on kata's daemon clock (51, 60, 62), and `plugin.sh` and `supervision.sh`. A step that needs state left by an earlier step must stay in that step's shard. `./smoke/run.sh STEP…` runs the given steps in order on one server, then `plugin.sh` and `supervision.sh`.
 
 ## Releases
 

@@ -2,6 +2,47 @@
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
+
+# With no argument the suite fans out. The steps wait on kata's daemon clocks (a timed claim's sweep, a job's delivery
+# window), so those steps and the two other scripts run beside the rest on their own headless Tern and kata daemon;
+# a shard is one such run (SMOKE_SHARD set, the steps given as arguments, the binary built once in SMOKE_BIN).
+if [[ -z ${SMOKE_SHARD:-} && $# -eq 0 ]]; then
+  export CGO_ENABLED=0
+  bin_dir=$(mktemp -d)
+  trap 'rm -rf "$bin_dir"; trap - TERM; kill 0' INT TERM
+  (cd "$repo" && go build -o "$bin_dir/tern-kata" ./cmd/tern-kata)
+  (cd "$repo" && GOOS=windows go vet ./...)
+  slow=(51-claim-expiry.sh 60-cron-made-issue.sh 62-job-card.sh)
+  # The rest is cut at steps that start from the freshly launched Pane (each shard has its own seeded Project), so the
+  # five groups run side by side: steps 01-21, 22-31, 32-44, 45-57 and 58-76.
+  groups=("" "" "" "" "")
+  for step in "$repo"/smoke/steps/*; do
+    name=$(basename "$step")
+    [[ " ${slow[*]} " != *" $name "* ]] || continue
+    number=$((10#${name:0:2}))
+    index=0
+    (( number < 22 )) || index=1
+    (( number < 32 )) || index=2
+    (( number < 45 )) || index=3
+    (( number < 58 )) || index=4
+    groups[index]+="$step "
+  done
+  jobs=()
+  export SMOKE_SHARD=1 SMOKE_BIN="$bin_dir/tern-kata"
+  for group in "${groups[@]}"; do
+    "$0" $group & jobs+=($!)
+  done
+  for name in "${slow[@]}"; do "$0" "$repo/smoke/steps/$name" & jobs+=($!); done
+  "$repo/smoke/plugin.sh" "$SMOKE_BIN" & jobs+=($!)
+  "$repo/smoke/supervision.sh" "$SMOKE_BIN" & jobs+=($!)
+  failed=0
+  for job in "${jobs[@]}"; do wait "$job" || failed=1; done
+  rm -rf "$bin_dir"
+  (( failed == 0 )) || { printf 'Smoke failed\n' >&2; exit 1; }
+  printf '\nSmoke passed\n'
+  exit 0
+fi
+
 tmp=$(mktemp -d)
 server_pid=
 proxy_pid=
@@ -51,8 +92,12 @@ kata --workspace "$tmp/workspace" init --project smoke --json
 kata --workspace "$tmp/workspace" create "Smoke first Issue" --body "First seeded body" --json
 kata --workspace "$tmp/workspace" create "Smoke second Issue" --body "Second seeded body" --json
 kata --workspace "$tmp/workspace" create "Smoke third Issue" --body "Third seeded body" --json
-(cd "$repo" && go build -o "$tmp/tern-kata" ./cmd/tern-kata)
-(cd "$repo" && GOOS=windows go vet ./...)
+if [[ -n ${SMOKE_BIN:-} ]]; then
+  cp "$SMOKE_BIN" "$tmp/tern-kata"
+else
+  (cd "$repo" && go build -o "$tmp/tern-kata" ./cmd/tern-kata)
+  (cd "$repo" && GOOS=windows go vet ./...)
+fi
 
 tern serve --control "$tmp/control.sock" --out "$tmp/shots" --dir "$tmp/workspace" >"$tmp/tern.log" 2>&1 &
 server_pid=$!
@@ -68,15 +113,34 @@ done
 printf '* { content-visibility: visible !important; }\n' >"$tmp/visible.css"
 tern ctl --control "$tmp/control.sock" css smoke-visible "$tmp/visible.css"
 
+ctl() {
+  if [[ ${1:-} == --file && $# -eq 2 ]] && grep -q '^run .*tern-kata' "$2"; then
+    ctl_typed "$2"
+  else
+    tern ctl --control "$tmp/control.sock" "$@"
+  fi
+}
+# Tern's `run` types the line and then waits a fixed 1.2 s for it to print, whether or not it has. A launch file's `run`
+# lines that start tern-kata are typed and entered instead, and the wait ends when the program has drawn its columns or
+# an error, which is what the steps' next clicks and keys need. Any other program (kata tui) draws neither and keeps
+# Tern's own wait.
+ctl_typed() {
+  local i
+  sed -E 's/^run (.*)$/type \1\nkey Enter/' "$1" >"$tmp/typed.ctl"
+  tern ctl --control "$tmp/control.sock" --file "$tmp/typed.ctl"
+  for ((i = 0; i < 250; i++)); do
+    tern ctl --control "$tmp/control.sock" tree "[data-id^='main.columns.'], [data-id='main.error']" | jq -e '.count > 0' >/dev/null && return 0
+    sleep 0.05
+  done
+}
 printf 'ready\nrun "env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP EDITOR=%s/smoke/editor.sh KATA_HOME=%s %s/tern-kata"\n' "$repo" "$KATA_HOME" "$tmp" >"$tmp/launch.ctl"
-tern ctl --control "$tmp/control.sock" --file "$tmp/launch.ctl"
+ctl --file "$tmp/launch.ctl"
 
-ctl() { tern ctl --control "$tmp/control.sock" "$@"; }
 expect_tree() {
-  for ((attempt = 0; attempt < 200; attempt++)); do
+  for ((attempt = 0; attempt < 1000; attempt++)); do
     ctl tree "$1" >"$tmp/assert-tree.json"
     if jq -e "$2" "$tmp/assert-tree.json" >/dev/null; then return; fi
-    sleep 0.1
+    sleep 0.02
   done
   cat "$tmp/assert-tree.json" >&2
   printf 'Native tree assertion failed: %s\n' "$2" >&2
@@ -87,9 +151,9 @@ hint_mode() {
   ctl tree "[data-id='dock.hints']" | jq -r '.nodes[0].text | if contains("open Collection") then "collections" elif contains("j/k row") then "detail" elif contains("↑↓ move") then "list" else "other" end'
 }
 hint_expect_mode() {
-  for ((attempt = 0; attempt < 100; attempt++)); do
+  for ((attempt = 0; attempt < 500; attempt++)); do
     [[ $(hint_mode) != "$1" ]] || return 0
-    sleep 0.1
+    sleep 0.02
   done
   printf 'Expected keys in %s, found %s\n' "$1" "$(hint_mode)" >&2
   return 1
@@ -130,6 +194,7 @@ for step in "${steps[@]}"; do
   printf 'Step passed %s\n' "$(basename "$step")"
 done
 quit_app
+[[ -z ${SMOKE_SHARD:-} ]] || exit 0
 "$repo/smoke/plugin.sh" "$tmp/tern-kata"
 "$repo/smoke/supervision.sh" "$tmp/tern-kata"
 printf '\nSmoke passed\n'
