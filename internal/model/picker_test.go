@@ -552,8 +552,8 @@ func TestPickerViewsLevelListsBackAndTheFixedCollections(t *testing.T) {
 		t.Fatalf("Views level = %q cursor %d, want %q on Back", got, m.Picker.Cursor, want)
 	}
 	for i, title := range want[1 : len(want)-1] {
-		opened, cmds := pickerKeys(m, slices.Repeat([]string{"down"}, i+1)...)
-		opened, cmds = pickerKeys(opened, "enter")
+		opened, _ := pickerKeys(m, slices.Repeat([]string{"down"}, i+1)...)
+		opened, cmds := pickerKeys(opened, "enter")
 		if opened.Picker.Open || opened.Collection.Title != title || opened.Collection.IsProject() || opened.Focus != model.ColumnList || !readsCollection(cmds, opened, "") {
 			t.Errorf("%s: open=%v collection=%+v focus=%v cmds=%#v", title, opened.Picker.Open, opened.Collection, opened.Focus, cmds)
 		}
