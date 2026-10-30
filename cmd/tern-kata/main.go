@@ -112,10 +112,10 @@ func run() error {
 		return err
 	}
 	host := data.HostName()
-	size := paneSize(term.Caps().Cols, term.Caps().Cell)
+	size := paneSize(term.Caps().Cols)
 	// A config kata itself would refuse is not this Pane's to report: it keeps asking before it quits.
 	catalog, catalogErr := data.ReadCatalog()
-	state := driver.State{Model: model.Model{Cols: size.Cols, Rows: size.Rows, RowPx: size.RowPx, Actor: plan.Actor, InboxUser: plan.InboxUser, Host: host, QuitAtOnce: catalogErr == nil && !catalog.ConfirmQuit}}
+	state := driver.State{Model: model.Model{Cols: size.Cols, Rows: size.Rows, Actor: plan.Actor, InboxUser: plan.InboxUser, Host: host, QuitAtOnce: catalogErr == nil && !catalog.ConfirmQuit}}
 	results := make(chan model.Msg)
 	gateway := data.NewGateway(data.LocateWithKata).WithHost(host)
 	defer gateway.Close()

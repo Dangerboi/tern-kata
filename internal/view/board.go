@@ -54,7 +54,6 @@ func board(m model.Model, now time.Time) tern.Element {
 		selected = m.Relationships.Of(m.SelectedUID)
 	}
 	lanes := make([]tern.Element, len(columns))
-	listMax := laneMax(m)
 	for i, column := range columns {
 		cards := make([]tern.Element, len(column.Cards))
 		for j, card := range column.Cards {
@@ -74,7 +73,7 @@ func board(m model.Model, now time.Time) tern.Element {
 			Children: ui.Nodes(
 				head,
 				ui.Rule{Common: ui.Common{Key: "rule", Tone: tones[i]}},
-				ui.List{CommonWithoutMax: scrollerCommon("cards"), Max: listMax, Empty: ui.T("No cards"), Children: cards},
+				ui.List{CommonWithoutMax: scrollerCommon("cards"), Max: fillMax, Empty: ui.T("No cards"), Children: cards},
 			),
 		}
 	}
@@ -172,22 +171,6 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 		Selected: selected,
 		Children: body,
 	}
-}
-
-// laneMax caps a Lane's card list at the rows its column has under the Lane header (46px, with the Search field's 24px above the
-// Lanes while it is open), so the list fills the Lane and scrolls inside it; see columnsPx.
-// The cap is worked out once per draw and shared by every Lane.
-// Until Tern says the Pane's size there is nothing to measure and the list takes half the window.
-func laneMax(m model.Model) ui.ListMax {
-	px, ok := columnsPx(m)
-	if !ok {
-		return ui.MaxFrac(0.5)
-	}
-	px -= 46
-	if m.Search.Open {
-		px -= 24
-	}
-	return linesIn(m, px)
 }
 
 // maxRelationshipIDs is how many ids a Blocked marker names before it says "+N".

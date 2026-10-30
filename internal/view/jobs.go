@@ -60,7 +60,7 @@ func jobs(m model.Model, now time.Time) tern.Element {
 	if m.Jobs.Loading {
 		empty = "Loading jobs…"
 	}
-	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("jobs"), Max: scrollMax(m, m.RowPx+6+8), Empty: ui.T(empty), Children: cards})
+	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("jobs"), Max: fillMax, Empty: ui.T(empty), Children: cards})
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapSM, children)
 }
 

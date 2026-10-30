@@ -22,7 +22,7 @@ func factInspector(m model.Model, lines []factLine) tern.Element {
 	for i, line := range lines {
 		rows[i] = factRow("fact"+strconv.Itoa(i), line.Mark, ui.Span{T: line.Label, S: "muted"}, ui.Span{T: line.Value, S: line.Style})
 	}
-	list := ui.List{CommonWithoutMax: scrollerCommon("viewport"), Max: scrollMax(m, 0), Children: ui.Nodes(ui.Col{Common: ui.Common{Key: "content"}, Gap: ui.GapSM, Children: rows})}
+	list := ui.List{CommonWithoutMax: scrollerCommon("viewport"), Max: fillMax, Children: ui.Nodes(ui.Col{Common: ui.Common{Key: "content"}, Gap: ui.GapSM, Children: rows})}
 	return panel(m, model.ColumnDetail, ui.Common{Key: "detail", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapMD, ui.Nodes(list))
 }
 

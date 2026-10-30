@@ -98,7 +98,7 @@ type Model struct {
 	Loading       bool
 	Err           error
 	Cols          int
-	Rows, RowPx   int
+	Rows          int
 	Quitting      bool
 	// AskQuit is the question "Quit tern-kata? y/n" while it is on screen.
 	AskQuit bool
@@ -379,7 +379,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case SelectMsg:
 		return selectRow(m, msg.UID), nil
 	case ResizeMsg:
-		m.Cols, m.Rows, m.RowPx = msg.Cols, msg.Rows, msg.RowPx
+		m.Cols, m.Rows = msg.Cols, msg.Rows
 	case PaneRowsMsg:
 		m.Rows = msg.Rows
 	default:

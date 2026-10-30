@@ -88,7 +88,7 @@ func workflowList(m model.Model, paired bool) tern.Element {
 	if m.Workflows.Selected != "" {
 		selected = WorkflowID(m.Workflows.Selected)
 	}
-	list := ui.List{CommonWithoutMax: scrollerCommon("rows"), Max: scrollMax(m, m.RowPx+6+8), Selected: selected, Empty: ui.T(empty), Children: items}
+	list := ui.List{CommonWithoutMax: scrollerCommon("rows"), Max: fillMax, Selected: selected, Empty: ui.T(empty), Children: items}
 	common := ui.Common{Key: "names", Grow: 1, Basis: ui.BasisFrac(0.4), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}}
 	children := ui.Nodes(list)
 	if m.Workflows.Err != nil {
@@ -143,7 +143,7 @@ func workflowInspector(m model.Model, paired bool, now time.Time) tern.Element {
 	parts = append(parts, workflowJobs(m, w)...)
 	parts = append(parts, workflowRuns(m, w, now)...)
 	parts = append(parts, ui.Text{Common: ui.Common{Key: "by"}, Spans: []ui.Span{{T: fmt.Sprintf("by %s · revision %d", w.Author, w.Revision), S: "muted"}}})
-	body := ui.List{CommonWithoutMax: scrollerCommon("viewport"), Max: scrollMax(m, 0), Children: ui.Nodes(ui.Col{Common: ui.Common{Key: "content"}, Gap: ui.GapSM, Children: parts})}
+	body := ui.List{CommonWithoutMax: scrollerCommon("viewport"), Max: fillMax, Children: ui.Nodes(ui.Col{Common: ui.Common{Key: "content"}, Gap: ui.GapSM, Children: parts})}
 	if paired {
 		return ui.Card{Common: common, Children: ui.Nodes(body)}
 	}

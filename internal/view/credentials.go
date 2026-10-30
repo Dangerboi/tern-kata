@@ -50,7 +50,7 @@ func credentials(m model.Model) tern.Element {
 	for i, token := range c.Tokens {
 		cards[i] = credentialCard(token, i == c.Cursor)
 	}
-	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("credentials"), Max: scrollMax(m, 2*(m.RowPx+6+8)), Children: cards})
+	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("credentials"), Max: fillMax, Children: cards})
 	if failure := c.RefreshError(); failure != "" {
 		children = append(children, ui.Text{Common: ui.Common{Key: "refresh-error", Tone: ui.ToneError}, Text: failure})
 	}

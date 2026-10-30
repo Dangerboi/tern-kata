@@ -46,7 +46,7 @@ func daemons(m model.Model) tern.Element {
 		cards[i] = ui.Card{Common: ui.Common{Key: e.Name, Tone: tone}, Selected: i == d.Cursor,
 			Children: ui.Nodes(ui.Text{Common: ui.Common{Key: "row"}, Text: e.Row(), Wrap: ui.WrapNone})}
 	}
-	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("daemons"), Max: scrollMax(m, m.RowPx+6+8), Children: cards})
+	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("daemons"), Max: fillMax, Children: cards})
 	if entry := m.SelectedDaemon(); entry != nil {
 		children = append(children, ui.Text{Common: ui.Common{Key: "footer", Tone: ui.ToneMuted}, Text: entry.Footer()})
 	}

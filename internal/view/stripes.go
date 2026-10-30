@@ -16,8 +16,25 @@ const (
 	ListOwnerRole = "tern-kata.ow"
 )
 
-// CSS is the plugin's whole style sheet: StripeCSS, SelectedCSS, ModeChipCSS, OrderedListCSS, ButtonCSS, then cellBoxCSS.
-var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ButtonCSS + "\n" + cellBoxCSS
+// CSS is the plugin's whole style sheet: StripeCSS, SelectedCSS, ModeChipCSS, OrderedListCSS, ButtonCSS, ColumnFillCSS, then cellBoxCSS.
+var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ButtonCSS + "\n" + ColumnFillCSS + "\n" + cellBoxCSS
+
+// ColumnRole marks a column's card and FillRole the list that scrolls inside it; ColumnFillCSS reads them.
+const (
+	ColumnRole = "tern-kata.column"
+	FillRole   = "tern-kata.fill"
+)
+
+// ColumnFillCSS makes each column's scrolling list fill its column and scroll inside it, so the Pane has nothing to scroll and
+// the top bar stays put. Tern has no fill for a list, only a cap, and a card's body sizes to its content: the rules stretch a
+// column card's body to the height the columns row gives the card, let its scrolling lists (a Board Lane's too) take the room
+// left, and lift their cap.
+// shortcut: .sf-card-body and .sf-list-scroll are Tern's inner classes; switch to a Tern prop for a list that fills its column
+// if one appears.
+const ColumnFillCSS = `.sf-card[data-role~='` + ColumnRole + `'] { display: flex !important; flex-direction: column !important; }
+.sf-card[data-role~='` + ColumnRole + `'] > .sf-card-body { flex: 1 1 0 !important; min-height: 0 !important; display: flex !important; flex-direction: column !important; }
+.sf-card[data-role~='` + ColumnRole + `'] .sf-list[data-role~='` + FillRole + `'] { flex: 1 1 0 !important; min-height: 0 !important; display: flex !important; flex-direction: column !important; }
+.sf-card[data-role~='` + ColumnRole + `'] .sf-list[data-role~='` + FillRole + `'] > .sf-list-scroll { flex: 1 1 0 !important; min-height: 0 !important; max-height: none !important; }`
 
 // ButtonCSS draws a card's buttons as bordered buttons, the primary one in the accent colour.
 const ButtonCSS = `button.tk-button { border: 1px solid color-mix(in srgb, var(--t1) 30%, transparent) !important; border-radius: 4px !important; padding: 2px 10px !important; background-color: color-mix(in srgb, var(--t1) 6%, transparent) !important; color: var(--t1) !important; cursor: pointer !important; }

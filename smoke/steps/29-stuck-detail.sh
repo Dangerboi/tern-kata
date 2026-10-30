@@ -23,11 +23,12 @@ stuck_scrolls() {
   stuck_wheel -300 8
   sleep 0.5
 }
-# Wheels down until sel is inside the detail's list, so a click on it lands on it.
+# Wheels down until sel is inside the detail's list, so a click on it lands on it. The detail fills its column to a fraction of a
+# pixel that a whole-pixel scroll cannot reach, so the last row may end up to 1px past the list.
 stuck_bring_into_view() {
   ctl hover "[data-id='main.columns.detail.viewport']" >/dev/null
   for ((attempt = 0; attempt < 20; attempt++)); do
-    ctl tree "[data-id='main.columns.detail.viewport'],$1" | jq -e '.nodes as $n | ($n | length) == 2 and ($n[1].rect[1] > $n[0].rect[1]) and ($n[1].rect[1] + $n[1].rect[3] <= $n[0].rect[1] + $n[0].rect[3])' >/dev/null && return 0
+    ctl tree "[data-id='main.columns.detail.viewport'],$1" | jq -e '.nodes as $n | ($n | length) == 2 and ($n[1].rect[1] > $n[0].rect[1]) and ($n[1].rect[1] + $n[1].rect[3] <= $n[0].rect[1] + $n[0].rect[3] + 1)' >/dev/null && return 0
     ctl wheel 0 300 >/dev/null
     sleep 0.2
   done

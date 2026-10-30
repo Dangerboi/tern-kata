@@ -3,12 +3,9 @@ package driver_test
 import (
 	"fmt"
 	"slices"
-	"strconv"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
@@ -87,60 +84,5 @@ func TestCardPartsEachDrawInTheirTone(t *testing.T) {
 	}
 	if got := card("done", "").P["tone"]; got != "muted" {
 		t.Errorf("a Done card's ring tone = %v, want muted", got)
-	}
-}
-
-// laneListLines is the list rows a Lane's card list is capped at.
-func laneListLines(t *testing.T, s driver.State) int {
-	t.Helper()
-	list := node(t, wireNodes(t, view.Render(s.Model, now)), view.BoardID+".lane0.cards")
-	max, _ := list.P["max"].(map[string]any)
-	lines, err := strconv.Atoi(fmt.Sprint(max["lines"]))
-	if err != nil {
-		t.Fatalf("the Lane list is capped at %v, want list rows", list.P["max"])
-	}
-	return lines
-}
-
-func TestLaneListsAreCappedToTheRowsTheirPaneHas(t *testing.T) {
-	s := boardPane(t, boardCard("a"))
-	const rowPx, listRowPx = 16, 22
-	for _, rows := range []int{39, 80} {
-		lines := laneListLines(t, step(t, s, model.ResizeMsg{Cols: 160, Rows: rows, RowPx: rowPx}).State)
-		if px := lines * listRowPx; px <= (rows-12)*rowPx || px > rows*rowPx {
-			t.Errorf("a %d-row Pane caps a Lane list at %d list rows, %dpx of its %dpx", rows, lines, px, rows*rowPx)
-		}
-	}
-}
-
-// Each line under the columns costs its text row and the gap above it.
-func TestLaneListsLeaveRoomForTheNoticeAndTheDisconnectedLine(t *testing.T) {
-	const rowPx = 16
-	pane := func(rows int, notice string, stale bool) int {
-		s := step(t, boardPane(t, boardCard("a")), model.ResizeMsg{Cols: 160, Rows: rows, RowPx: rowPx}).State
-		s.Model.Notice, s.Model.Stale = notice, stale
-		return laneListLines(t, s)
-	}
-	for rows := 44; rows <= 80; rows++ {
-		if got, want := pane(rows, "Lanes not saved", false), pane(rows-2, "", false); got != want {
-			t.Errorf("a %d-row Pane with a Notice caps a Lane list at %d list rows, want the %d of a Pane two rows shorter", rows, got, want)
-		}
-		if got, want := pane(rows, "", true), pane(rows-2, "", false); got != want {
-			t.Errorf("a %d-row Pane while disconnected caps a Lane list at %d list rows, want the %d of a Pane two rows shorter", rows, got, want)
-		}
-		if got, want := pane(rows, "Lanes not saved", true), pane(rows-4, "", false); got != want {
-			t.Errorf("a %d-row Pane with both caps a Lane list at %d list rows, want the %d of a Pane four rows shorter", rows, got, want)
-		}
-	}
-}
-
-func TestAWrappingNoticeLowersTheLaneListCapMoreThanAShortOne(t *testing.T) {
-	s := boardPane(t, boardCard("a"))
-	s = step(t, s, model.ResizeMsg{Cols: 160, Rows: 60, RowPx: 16}).State
-	short, long := s, s
-	short.Model.Notice = "Lanes not saved."
-	long.Model.Notice = strings.Repeat("unreadable lane list ", 40)
-	if shortLines, longLines := laneListLines(t, short), laneListLines(t, long); longLines >= shortLines {
-		t.Errorf("a Notice wrapping over several rows left %d list rows, a one-row Notice %d; want fewer", longLines, shortLines)
 	}
 }

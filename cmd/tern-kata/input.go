@@ -10,11 +10,11 @@ import (
 	"golang.org/x/term"
 )
 
-// paneSize is the Pane's size as a ResizeMsg: its rows from the terminal and its row height from Tern's cell size.
-func paneSize(cols int, cell tern.Cell) model.ResizeMsg {
+// paneSize is the Pane's size as a ResizeMsg: its width from Tern and its rows from the terminal.
+func paneSize(cols int) model.ResizeMsg {
 	msg := model.ResizeMsg{Cols: cols}
 	if _, rows, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
-		msg.Rows, msg.RowPx = rows, int(cell.H)
+		msg.Rows = rows
 	}
 	return msg
 }
@@ -35,7 +35,7 @@ func startInputReader(ctx context.Context, session paneSession, inputs chan<- an
 			}
 			var out any = input
 			if resize, ok := input.(*tern.Resize); ok {
-				out = paneSize(resize.Cols, resize.Cell)
+				out = paneSize(resize.Cols)
 			}
 			select {
 			case inputs <- out:

@@ -143,7 +143,7 @@ func choiceList(m model.Model, labels []string) []tern.Element {
 		cards[i] = ui.Card{Common: ui.Common{Key: "choice" + strconv.Itoa(i)}, Selected: i == cursor,
 			Children: ui.Nodes(ui.Text{Common: ui.Common{Key: "label"}, Text: label, Wrap: ui.WrapNone})}
 	}
-	return ui.Nodes(ui.List{CommonWithoutMax: scrollerCommon("federation"), Max: scrollMax(m, 2*(m.RowPx+6+8)), Children: cards})
+	return ui.Nodes(ui.List{CommonWithoutMax: scrollerCommon("federation"), Max: fillMax, Children: cards})
 }
 
 // federationAdoptLayer is the card asking to type the local Project's name before an adoption.

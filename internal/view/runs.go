@@ -67,7 +67,7 @@ func runs(m model.Model, now time.Time) tern.Element {
 	case m.Runs.JobUID != "":
 		empty = "This job has no runs yet. Press f to see every run."
 	}
-	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("runs"), Max: scrollMax(m, m.RowPx+6+8), Empty: ui.T(empty), Children: cards})
+	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("runs"), Max: fillMax, Empty: ui.T(empty), Children: cards})
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapSM, children)
 }
 

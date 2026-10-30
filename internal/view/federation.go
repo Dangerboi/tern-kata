@@ -69,7 +69,7 @@ func federation(m model.Model, now time.Time) tern.Element {
 	for i, s := range f.Spokes {
 		cards[i] = federationCard(s, i == f.Cursor, now)
 	}
-	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("federation"), Max: scrollMax(m, 2*(m.RowPx+6+8)), Children: cards})
+	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("federation"), Max: fillMax, Children: cards})
 	if spoke != nil {
 		children = append(children, ui.Text{Common: ui.Common{Key: "footer", Tone: ui.ToneMuted}, Text: spoke.Footer()})
 	}

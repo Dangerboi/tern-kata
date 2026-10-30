@@ -43,7 +43,7 @@ func attention(m model.Model) tern.Element {
 	case !m.Attention.Loaded:
 		empty = "Loading requests…"
 	}
-	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("attention"), Max: scrollMax(m, m.RowPx+6+8), Empty: ui.T(empty), Children: cards})
+	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("attention"), Max: fillMax, Empty: ui.T(empty), Children: cards})
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(1)}, ui.GapSM, children)
 }
 
