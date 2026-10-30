@@ -29,7 +29,7 @@ type LaunchPlan struct {
 	// TUIArgs are the arguments only `kata tui` takes (FallbackArgs without the --issue translation); inside Tern nothing reads
 	// them, so main refuses them there instead of dropping them unseen.
 	TUIArgs []string
-	// Subcommand is "attach", "detach", "recur", "run", "views", "worker" or "completion" when it was the first argument; main runs it
+	// Subcommand is "attach", "detach", "recur", "run", "views", "worker", "agent" or "completion" when it was the first argument; main runs it
 	// without Tern.
 	Subcommand string
 	// TargetRef is the Issue as attach, detach and recur take it (what `kata show` takes: a short id, <project>#<short id> or a ULID),
@@ -82,7 +82,7 @@ type usageError struct{ error }
 func (e usageError) Unwrap() error { return e.error }
 
 // subcommands are the first arguments that name a command run without Tern.
-var subcommands = []string{"attach", "detach", "recur", "run", "views", "worker", "completion"}
+var subcommands = []string{"attach", "detach", "recur", "run", "views", "worker", "agent", "completion"}
 
 // completionShells are the shells `tern-kata completion` writes a script for.
 var completionShells = []string{"bash", "zsh", "fish"}
@@ -269,6 +269,9 @@ func resolveActor(flag string, lookup func(string) (string, bool)) string {
 // planSubcommand parses the subcommands (args[0] is the subcommand). --as may stand anywhere; a lone -- ends the flags, so a
 // file may be named like one, even --help.
 func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPlan, error) {
+	if args[0] == "agent" {
+		return planAgent(args)
+	}
 	plan := LaunchPlan{Subcommand: args[0]}
 	var operands []string
 	flagsEnded := false
@@ -467,6 +470,7 @@ Usage:
   tern-kata worker doctor
   tern-kata worker resume <run-uid> [--as <actor>]
   tern-kata worker abandon <run-uid> [--as <actor>]
+  tern-kata agent --as <actor> -- <command> [args...]
   tern-kata completion bash|zsh|fish
   tern-kata --version
   tern-kata --help
@@ -557,6 +561,10 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 and the run's slot and overlap gate are freed. A running run is stopped
                                 first (SIGTERM, SIGKILL after 10 s); a run this machine lost the state of
                                 is recorded unknown ("local state lost"), a quarantined one acknowledged
+  agent --as <actor> -- <command> [args...]
+                                run the command with KATA_AUTHOR set to the actor (replacing
+                                any value), its arguments passed on as typed and its exit
+                                status as ours; both --as and -- are required
   completion <shell>            print the completion script for bash, zsh or fish; load it with
                                 source <(tern-kata completion bash) (or zsh), or
                                 tern-kata completion fish | source

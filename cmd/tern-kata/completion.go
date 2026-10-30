@@ -52,6 +52,7 @@ _tern_kata() {
 				esac
 			fi
 			;;
+		agent) [[ $cur == -* && $COMP_CWORD -lt 4 ]] && words="--as" ;;
 		completion) [[ $COMP_CWORD -eq 2 ]] && words="%[3]s" ;;
 		worker)
 			if [[ $COMP_CWORD -eq 2 ]]; then
@@ -93,7 +94,7 @@ func fishCompletion() string {
 	line("-l as -r -d 'author for edits'")
 	line("-l version -d 'print the version and exit'")
 	line("-s h -l help -d 'print the help and exit'")
-	line("-n '__fish_seen_subcommand_from detach recur run views completion worker' -f")
+	line("-n '__fish_seen_subcommand_from detach recur run views completion worker agent' -f")
 	line("-n '__fish_seen_subcommand_from completion' -a '%s'", strings.Join(completionShells, " "))
 	for _, name := range model.RecurFlagNames {
 		line("-n '__fish_seen_subcommand_from recur' -l %s -r", name)

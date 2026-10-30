@@ -68,6 +68,9 @@ func run() error {
 	if plan.Subcommand == "completion" {
 		return writeCompletion(plan.Operands[0], os.Stdout)
 	}
+	if plan.Subcommand == "agent" {
+		return execAgent(plan.Actor, plan.Operands, os.Environ())
+	}
 	if plan.Subcommand != "" {
 		ctx, received, stop := withSignals(context.Background(), stopSignals...)
 		defer stop()
