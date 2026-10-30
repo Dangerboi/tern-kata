@@ -126,6 +126,35 @@ State lives in `$XDG_STATE_HOME/tern-kata` (else `~/.local/state/tern-kata`):
 
 Across machines, the worker holds a lease for each Project in the Project's own kata metadata (`tern_kata.lease`, renewed every 3 minutes, expiring after 10). A Project whose lease another worker holds admits nothing here and `worker status` says which worker owns it. `tern-kata worker --takeover` moves it on purpose.
 
+## Backing up and restoring
+
+kata's backup and federation do not carry the worker's local state: its activation, checkout paths, secret mappings, run journals and the rest of the state folder stay on the machine. kata's own contract leaves them to the adapter, so this is the backup workflow for tern-kata.
+
+**What to copy**
+
+- `worker.toml` in tern-kata's config folder: the executor, the Projects served, profiles, checkouts and the `[secrets]` mappings (where each value lives, never the value).
+- The state folder (see [State and leases](#state-and-leases)): `runs/`, `quarantine/` and `projects/<project uid>/` with its `pin.json`, `events.cursor` and `schedule/<job uid>.json` schedule checkpoints.
+
+**What to leave out**
+
+- `worker.lock` and the control socket (`worker.sock`): they describe a running process and are recreated at start.
+- Secrets. `worker.toml` holds only where a value comes from, so back up the environment variables and the private files it names with your own secrets workflow; they are not in the state folder.
+- `worker.manual` is not state; keep it only if you want the restored worker to stay unsupervised.
+
+**How to copy**
+
+Copy with the worker stopped, so a journal is not replaced half way through the copy. The plugin starts a fresh worker as soon as one stops, so create `worker.manual` beside `worker.toml` first, run `tern-kata worker stop` (see [Stopping the worker](#stopping-the-worker)) and remove the marker afterwards. Stopping when idle lets the runs in flight finish; `--now` holds them `interrupted`.
+
+**Restoring on another machine**
+
+- **Executor and lease.** The executor labels a worker's runs and its Project leases, and the pin refuses a Project whose executor differs from the one first seen. A worker with another executor does not continue the restored journals: it skips a journal whose executor is not its own. To continue the restored runs, keep the executor and take the Projects over from the old machine with `tern-kata worker --takeover`, with the old worker stopped. To start fresh as a new worker, use a new executor and an empty state folder; `worker doctor` says to restore the old values or use a new state folder and executor, since there is no repin command.
+- **Absolute paths.** The journals hold absolute paths to each run's session and logs, and `worker.toml` holds the checkout and secret file paths. Restore them at the same paths, or edit `worker.toml` for the new ones; a held run refers to its old run folder, so keep that path in place until the run is resumed or abandoned (the same holds when you move the state folder on one machine).
+- **Held runs.** A held run resumes on its saved omp session, which must exist at the recorded path; without it only `abandon` remains.
+- **Pin.** `projects/<project uid>/pin.json` records the Project's uid, daemon instance, authenticated actor, actor and executor. A restore against a different kata daemon instance, or with a changed actor, fails the pin and the Project is not served.
+- **Event cursor and checkpoints.** The cursor is only a hint and kata's events are the evidence; the checkpoints record the handled-through instant of each scheduled job. A restore from an old copy resumes from that older point, so check `worker status` for the occurrences it takes up.
+
+If the state folder is lost instead, see [Recovery and held runs](#recovery-and-held-runs): a run kata shows running with no journal is never rerun, `worker doctor` lists it, and [`abandon`](#abandon) records it `unknown` ("local state lost"). A journal that cannot be read is [quarantined](#quarantine).
+
 ## What a run does
 
 The agent is told its Issue and how to leave a record: comment what it did, close the Issue with evidence when the work is verified. When it exits without closing, the worker comments its final message and labels the Issue `needs-review`.
