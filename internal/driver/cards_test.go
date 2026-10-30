@@ -21,6 +21,9 @@ type popup struct {
 	typed func(model.Model) string
 }
 
+// keysOnlyModes are the cards with no text: typing reaches nobody while one is on top.
+var keysOnlyModes = map[model.Mode]bool{model.ModeAgentCard: true}
+
 func keyOpen(chords ...string) func(*testing.T, driver.State) model.Model {
 	return func(t *testing.T, s driver.State) model.Model {
 		t.Helper()
@@ -50,6 +53,15 @@ func popups() []popup {
 			model.ModeDatesForm, "Dates", func(m model.Model) string { return m.DatesForm.Text.Scheduled }},
 		{"Move", keyOpen("shift+m"), func(dst *model.Model, src model.Model) { dst.MoveProject = src.MoveProject },
 			model.ModeMoveProject, "Move #aaaa to another Project", func(m model.Model) string { return m.MoveProject.Filter }},
+		{"Agent", func(t *testing.T, s driver.State) model.Model {
+			s.Model.AgentMapping = []model.AgentEntry{{IssueUID: "alpha", IssueRef: "work#alpha", Block: "31"}}
+			m := keyOpen("w")(t, s)
+			m.AgentCard.IssueRef = "work#alpha"
+			return m
+		}, func(dst *model.Model, src model.Model) {
+			dst.AgentCard, dst.AgentMapping = src.AgentCard, src.AgentMapping
+		},
+			model.ModeAgentCard, "Agents on work#alpha", func(model.Model) string { return "" }},
 		{"Delete", keyOpen("shift+x"), func(dst *model.Model, src model.Model) { dst.DeleteForm = src.DeleteForm },
 			model.ModeDeleteForm, "Delete #aaaa", func(m model.Model) string { return m.DeleteForm.ID }},
 		{"Federation adoption", func(t *testing.T, _ driver.State) model.Model { return confirming(t).Model },
@@ -112,7 +124,11 @@ func TestPopupCardPrecedenceIsOneOrder(t *testing.T) {
 					t.Errorf("mode %s, want %s", got, top.mode)
 				}
 				layer := layerTitled(t, out.State.Model, top.head)
-				if !strings.HasPrefix(out.State.Focus, layer) {
+				focused := strings.HasPrefix(out.State.Focus, layer)
+				if keysOnlyModes[top.mode] {
+					focused = !strings.HasPrefix(out.State.Focus, "layer.") || focused // no text caret to hold
+				}
+				if !focused {
 					t.Errorf("text focus %q is not on %s (%s)", out.State.Focus, top.name, layer)
 				}
 				drawn := drawnIDs(t, *out.View)
@@ -129,6 +145,12 @@ func TestPopupCardPrecedenceIsOneOrder(t *testing.T) {
 					t.Errorf("%s was not drawn", top.name)
 				}
 				got := step(t, out.State, tern.Key{Name: "z", Text: "z"}).State.Model
+				if keysOnlyModes[top.mode] {
+					if strings.Contains(under.typed(got), "z") {
+						t.Errorf("a key reached %s=%q under %s", under.name, under.typed(got), top.name)
+					}
+					return
+				}
 				if !strings.Contains(top.typed(got), "z") || strings.Contains(under.typed(got), "z") {
 					t.Errorf("a key reached %s=%q, %s=%q; want only the top card", top.name, top.typed(got), under.name, under.typed(got))
 				}

@@ -55,6 +55,7 @@ const (
 	CardPicker
 	CardMove
 	CardDelete
+	CardAgent
 	CardFederationAdopt
 	CardView
 )
@@ -358,6 +359,12 @@ func buildCards() []cardEntry {
 			editing: []fieldEditing{{mode: ModeMoveProject, actions: []Action{DeleteInput, ClearInput}, clear: "clear filter"}},
 			text:    func(m *Model) (*string, *Caret) { return &m.MoveProject.Filter, &m.MoveProject.Caret },
 			erased:  func(m Model, _ bool) Model { m.MoveProject.Cursor, m.MoveProject.Err = 0, nil; return m },
+		},
+		{
+			card: CardAgent, name: "agent", open: func(m Model) bool { return m.AgentCard.Open },
+			modes: []Mode{ModeAgentCard}, mode: func(Model) Mode { return ModeAgentCard },
+			key:  updateAgentCardKey,
+			busy: func(Model) bool { return false }, fields: []FieldSpec{},
 		},
 		{
 			card: CardDelete, name: "delete", open: func(m Model) bool { return m.DeleteForm.Open },

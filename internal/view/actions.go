@@ -194,6 +194,8 @@ func DecodeSelect(id, item string) model.Msg {
 		return model.CollectionPointerSelected{Key: itemKey(CollectionsID, item)}
 	case PickerListID:
 		return model.PickerSelected{Key: itemKey(PickerListID, item)}
+	case AgentListID:
+		return model.AgentCardSelected{Block: itemKey(AgentListID, item)}
 	case MoveListID:
 		return model.MoveTargetSelected{Key: itemKey(MoveListID, item)}
 	}

@@ -36,6 +36,8 @@ type AgentEntry struct {
 	// Background says the agent belongs in the hidden session; Open says it is out of it right now.
 	Background bool `json:"background"`
 	Open       bool `json:"open"`
+	// Placement is where the agent was started, split or tab; "" in an entry written before it was kept, which reads as a split.
+	Placement AgentPlacement `json:"placement,omitempty"`
 }
 
 // StartAgent asks the gateway to start an interactive agent on an Issue. Workspace is the Pane's workspace when the Issue's
@@ -75,7 +77,17 @@ func (AgentsPruned) msg() {}
 // ClosedIssueRefusal is the Notice a start key shows on a closed Issue.
 const ClosedIssueRefusal = "This Issue is closed; reopen it first (r)."
 
-// startAgent is `w` and `W`: it starts an agent on the selected Issue unless the Issue is closed.
+// openAgent is `w` and `W`: the Agent card when the selected Issue has agents, else a new agent.
+func openAgent(placement AgentPlacement) func(Model) (Model, []Cmd) {
+	return func(m Model) (Model, []Cmd) {
+		if issue := closeIssue(m); issue != nil && len(m.IssueAgents(issue.UID)) > 0 {
+			return openAgentCard(m, *issue, placement), nil
+		}
+		return startAgent(placement)(m)
+	}
+}
+
+// startAgent starts an agent on the selected Issue unless the Issue is closed.
 func startAgent(placement AgentPlacement) func(Model) (Model, []Cmd) {
 	return func(m Model) (Model, []Cmd) {
 		issue := closeIssue(m)
