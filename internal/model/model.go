@@ -88,9 +88,13 @@ type Model struct {
 	// afterMove is the Issue just moved to another Project and its neighbouring row, until a snapshot stops listing it.
 	afterMove *movedIssue
 	Workspace string
-	Project   Project
-	Daemon    Daemon
-	Snapshot  Snapshot
+	// PaneBlock is the block id of this kata Pane ($TERN_PANE), "" when Tern did not say; agents split beside it.
+	PaneBlock string
+	// Agents is agents.json as this Pane last read or changed it: the agents Panes on this host started.
+	Agents   []AgentEntry
+	Project  Project
+	Daemon   Daemon
+	Snapshot Snapshot
 	// Relationships is every Issue's Relationships, built from Snapshot's links each time a snapshot is applied.
 	Relationships RelationshipIndex
 	Issues        []Issue
@@ -279,9 +283,13 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m = m.openRequested(msg.IssueRef)
 		m.Loading = true
 		m.Err = nil
-		return m, []Cmd{LoadProject{Workspace: msg.Workspace, Actor: m.Actor}, LoadViews{}}
+		return m, []Cmd{LoadProject{Workspace: msg.Workspace, Actor: m.Actor}, LoadViews{}, PruneAgents{}}
 	case ProjectLoaded:
 		return updateProject(m, msg)
+	case AgentStarted:
+		return agentStarted(m, msg), nil
+	case AgentsPruned:
+		return agentsPruned(m, msg), nil
 	case FiltersSaved:
 		return filtersSaved(m, msg)
 	case ViewsLoaded:

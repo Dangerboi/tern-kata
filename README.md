@@ -58,6 +58,19 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 **Deleting and restoring an Issue.** `X` opens the Delete card on the selected Issue: type its `project#id` to confirm, add a reason if you like, and kata deletes it (soft: it keeps the Issue and its history). `u` right after restores it, and the Menu's "Restore a deleted Issue" brings back an earlier one by short id, `project#id` or ULID. See [Deleting and restoring an Issue](docs/guide/pages-and-board.md#deleting-and-restoring-an-issue).
 
+**Agents on an Issue.** `w` on the selected Issue (list, Board, Lane view or Issue detail) starts an interactive `omp` in a split right of the kata Pane, `W` in a new tab, in the Issue's checkout: the Binding's workspace, else the Project's `checkout` in `agent.toml`, else the first checkout `worker.toml` lists for it, else a Notice says to add one. The agent is told which Issue to work on and how to leave a record (claim it for 24 hours, comment what it did and how it checked, close it with evidence only when done and verified, ask you when it needs a decision, set `work.attention` if it stops without closing). A closed Issue says "This Issue is closed; reopen it first (r)." and starts nothing. `agent.toml`, which you write by hand in tern-kata's config folder beside `lanes.toml` and which is read on every start, sets the actor and command, for every Project or for one:
+
+```toml
+actor = "me-agent"        # optional; without one the agent writes to kata as whoever kata resolves in its shell
+command = ["omp"]         # optional argv; the Pane appends @<prompt file>, so it must accept omp's @file message
+[projects.tern-kata]      # optional, by Project name; overrides the values above
+actor = "..."
+command = ["omp", "--model", "opus"]
+checkout = "/home/me/Code/tern-kata"   # an absolute directory
+```
+
+With an `actor` the agent runs through `tern-kata agent --as <actor> --`, which sets `KATA_AUTHOR`; `tern-kata` must be on the `PATH`. An unknown key, a relative `checkout` or an empty `command` refuses the start and shows the error. The Pane remembers the agents it started in `agents.json` in its state folder and forgets the ones whose block has closed.
+
 **kata links.** Links from agents' chat replies open the Issue in tern-kata. See [Agents](docs/guide/agents.md).
 
 **kata tui's keys.** `u` undoes the last change the Pane made (up to 20), `q` asks "Quit tern-kata? y/n" first (kata's `[tui] confirm_quit = false` turns that off), `b` and `l` add a Blocking or related link, `t` gives an Issue to you for a set time, `]` and `[` step through a comment's links, `o` switches the nested list's sibling order, `!` then `0`-`4` sets the priority at once, and `ctrl+j`/`ctrl+k`, backspace and `ctrl+alt+<`/`ctrl+alt+>` work as in kata tui. See [Compared with `kata tui`](docs/guide/kata-tui.md).
