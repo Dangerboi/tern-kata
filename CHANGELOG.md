@@ -24,6 +24,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The Worker card's restart and supervision-off questions list **when idle** and **now** each beside what it does to the runs in flight, and no longer say a run is held `interrupted` when none is in flight.
 - `e` on the Worker card, `ctrl+e` in the Draft editor and the Workflow card, and `tern-kata worker edit` open `$VISUAL`, else `$EDITOR`, else `vi`, as kata's own TUI does.
 - A Project's `capacity` defaults to 3, so one hung run no longer holds its only slot until its timeout. `worker init`, `worker add` and the Worker card's Set up and Serve this Project write `capacity = 3`; a `worker.toml` that says `capacity = 1` keeps it, and one with no `capacity` line gets 3 after the upgrade. Every run's contract now tells the agent that other runs may be working in its checkout, and to make a git worktree when it needs a tree of its own.
+- Inbox, Upcoming and Deadlines read kata's all-open snapshot and pick their Issues in the Pane, as kata's web does, instead of the daemon's inbox, upcoming and deadlines views that kata keeps only for older web UIs. They list the same Issues in the same groups; a Deadlines row's start date now reads in the Pane's time zone, as it does in every other Collection.
 
 ### Fixed
 

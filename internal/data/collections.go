@@ -12,12 +12,14 @@ import (
 )
 
 // ReadSnapshot is the one read of a Collection snapshot, for the first load, a Collection switch, a filter change and a live
-// refresh, in one daemon request: the snapshot's links carry the child counts. A dated Collection is asked for today's calendar date; the result reports the calendar. A matching ETag answers 304.
+// refresh, in one daemon request: the snapshot's links carry the child counts. A dated Collection is asked for today's calendar
+// date; the result reports the calendar and holds the Collection's part of its daemon view's read. A matching ETag answers 304.
 func (c *Client) ReadSnapshot(ctx context.Context, cmd model.ReadSnapshot) (model.SnapshotLoaded, error) {
 	date, zone, note := systemCalendar.Today()
 	result := model.SnapshotLoaded{Request: cmd.Request, Query: cmd.Query, LocalDate: date, TimeZone: zone, TimeZoneNote: note}
-	query := wireQuery(cmd.Query)
-	if model.DatedView(*query.View) {
+	def := model.Collection{View: *cmd.Query.View}.Def()
+	query := wireQuery(cmd.Query, def.DaemonView)
+	if def.Dated {
 		query.LocalDate, query.TimeZone = &date, &zone
 	}
 	options := &g.ReadUISnapshotRequestOptions{Query: &query}
@@ -35,7 +37,7 @@ func (c *Client) ReadSnapshot(ctx context.Context, cmd model.ReadSnapshot) (mode
 	if response.JSON200 == nil {
 		return result, fmt.Errorf("kata daemon returned no Issue collection")
 	}
-	result.Snapshot = translateSnapshot(response.JSON200)
+	result.Snapshot = def.Keep(translateSnapshot(response.JSON200), date)
 	result.Selected = translateDetail(response.JSON200.Selected, response.JSON200.Capabilities.Scope != nil)
 	if response.Headers200 != nil {
 		result.ETag = response.Headers200.ETag
@@ -63,10 +65,10 @@ func translateSnapshot(s *g.UISnapshotResponseBody) model.Snapshot {
 	return snapshot
 }
 
-// wireQuery is the one place the model's snapshot query becomes kata's.
-func wireQuery(q model.SnapshotQuery) g.ReadUISnapshotQuery {
+// wireQuery is the one place the model's snapshot query becomes kata's, read through the Collection's daemon view.
+func wireQuery(q model.SnapshotQuery, daemonView string) g.ReadUISnapshotQuery {
 	w := g.ReadUISnapshotQuery{
-		View: q.View, ProjectUID: q.ProjectUID, Status: q.Status, Owner: q.Owner, Label: q.Label, Text: q.Text,
+		View: &daemonView, ProjectUID: q.ProjectUID, Status: q.Status, Owner: q.Owner, Label: q.Label, Text: q.Text,
 		SelectedIssueUID: q.SelectedIssueUID, IncludeHistory: q.IncludeHistory,
 	}
 	for _, r := range q.Relationship {
@@ -87,5 +89,5 @@ func translateIssue(i *g.UIIssue) model.Issue {
 }
 
 func translateProject(p g.ProjectOut) model.Project {
-	return model.Project{ID: p.ID, Name: p.Name, Revision: p.Revision, UID: p.UID, Archived: !p.Active}
+	return model.Project{ID: p.ID, Name: p.Name, Revision: p.Revision, UID: p.UID, Archived: !p.Active, Inbox: p.Metadata["role"] == "inbox"}
 }

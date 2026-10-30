@@ -48,6 +48,8 @@ type Project struct {
 	UID      string
 	// Archived says kata has archived the Project: Issues cannot move into it.
 	Archived bool
+	// Inbox says the Project's metadata role is "inbox": the Project capture lands in, whose Issues the Inbox Collection lists.
+	Inbox bool
 }
 
 type Model struct {

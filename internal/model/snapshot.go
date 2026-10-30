@@ -7,8 +7,9 @@ import (
 	"time"
 )
 
-// SnapshotQuery is what picks a snapshot: the Collection and filters, plus the selected Issue's detail riding along. The
-// gateway translates it to kata's wire query and adds the local calendar the dated Collections need.
+// SnapshotQuery is what picks a snapshot: the Collection and filters, plus the selected Issue's detail riding along. View is the
+// Collection's key; the gateway reads it through the Collection's daemon view, adds the local calendar a dated Collection
+// needs and keeps the Collection's part of the read (CollectionDef.Keep).
 type SnapshotQuery struct {
 	View             *string
 	ProjectUID       *string
@@ -99,7 +100,7 @@ func (SnapshotFailed) msg() {}
 
 // CollectionQuery is the snapshot query for a Collection and the filters alone.
 func CollectionQuery(c Collection, f Filters) SnapshotQuery {
-	q := SnapshotQuery{View: new(c.Def().DaemonView)}
+	q := SnapshotQuery{View: new(c.View)}
 	if c.ProjectUID != "" {
 		q.ProjectUID = new(c.ProjectUID)
 	} else if f.ProjectUID != "" {
