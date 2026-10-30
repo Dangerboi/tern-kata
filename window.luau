@@ -185,6 +185,57 @@ local function open(cx: WindowCx, ref: string?)
     watch(pane, 20)
 end
 
+-- `W` starts an agent in a new tab, which Tern appends as the last tab. The agent's prompt file is named
+-- `prompt-<block of the starting kata Pane>-<random>.md` (internal/data), and that name is in the command line Tern reports for
+-- the new tab's Pane: the agent block's `command`, else the running line. A tab found this way is moved right of the starting
+-- Pane's tab; no other tab is reordered, and nothing is kept between events. A tab that shows no such command is polled for
+-- 2 s, since a launch by the session daemon may report it a moment late.
+local PLACE_TRIES = 10
+
+local function starterOf(cx: WindowCx, tab: number): number?
+    local texts: { string } = {}
+    for _, info in cx.session:panes() do
+        if info.tab == tab and info.running then table.insert(texts, info.running.line) end
+    end
+    for _, agent in cx.agents:list() do
+        local info = cx.session:pane(agent.pane)
+        if info and info.tab == tab and agent.command then table.insert(texts, agent.command) end
+    end
+    for _, text in texts do
+        local block = text:match("prompt%-(%d+)%-%w+%.md")
+        if block then return tonumber(block) end
+    end
+    return nil
+end
+
+local function placeAgentTab(cx: WindowCx, tab: number, tries: number)
+    local starter = starterOf(cx, tab)
+    if not starter then
+        if tries > 1 then
+            tern.timer(200, function(cx2)
+                if cx2 then placeAgentTab(cx2, tab, tries - 1) end
+            end)
+        end
+        return
+    end
+    local home = cx.session:pane(starter)
+    if not home or not home.tab or home.tab == tab then return end
+    local starterTab: TabInfo? = nil
+    local newTab: TabInfo? = nil
+    for _, info in cx.session:tabs() do
+        if info.id == home.tab then starterTab = info end
+        if info.id == tab then newTab = info end
+    end
+    if not starterTab or not newTab or starterTab.session ~= newTab.session then return end
+    if newTab.position ~= starterTab.position + 1 then
+        cx.layout:order_tab(tab, starterTab.position + 1)
+    end
+end
+
+tern.on("tab_created", function(ev, cx)
+    placeAgentTab(cx, ev.tab, PLACE_TRIES)
+end)
+
 tern.on("pane_closed", function(ev, cx)
     launched[ev.pane] = nil
     pending[ev.pane] = nil

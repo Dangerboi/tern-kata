@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -224,6 +225,39 @@ func TestStartingAnAgentWritesThePromptRunsTernAndRecordsTheBlock(t *testing.T) 
 	as[model.AgentStarted](t, run(t, g, model.StartAgent{Placement: model.AgentTab, IssueRef: "demo#cd34", ProjectName: "demo", Workspace: "/bound"}))
 	if len(ran) < 8 || !slices.Equal(ran[:7], []string{"new", "tab", "--cwd", "/bound", "--json", "--", "omp"}) {
 		t.Fatalf("W ran %q", ran)
+	}
+}
+
+func TestAgentPromptNameCarriesTheStartingPaneOfATab(t *testing.T) {
+	for _, c := range []struct{ starter, want string }{
+		{"24489903521795", "prompt-24489903521795-*.md"},
+		{"", "prompt-*.md"},
+		{"7/../x", "prompt-*.md"},
+		{"a1", "prompt-*.md"},
+	} {
+		if got := AgentPromptName(c.starter); got != c.want {
+			t.Errorf("AgentPromptName(%q) = %q, want %q", c.starter, got, c.want)
+		}
+	}
+	g, dirs := agentGateway(t)
+	writeAgentFile(t, filepath.Join(dirs.Config, "agent.toml"), "")
+	g.runTern = func(context.Context, []string) ([]byte, error) {
+		return []byte(`{"session":1,"tab":2,"block":31}`), nil
+	}
+	for _, c := range []struct {
+		placement model.AgentPlacement
+		pattern   string
+	}{
+		{model.AgentTab, `^prompt-7-[0-9]+\.md$`},
+		{model.AgentSplit, `^prompt-[0-9]+\.md$`},
+	} {
+		started := as[model.AgentStarted](t, run(t, g, model.StartAgent{Placement: c.placement, IssueRef: "demo#ab12", ProjectName: "demo", Workspace: "/bound", PaneBlock: "7"}))
+		if started.Err != nil {
+			t.Fatal(started.Err)
+		}
+		if name := filepath.Base(started.Entry.PromptFile); !regexp.MustCompile(c.pattern).MatchString(name) {
+			t.Errorf("placement %v: prompt file %q does not match %s", c.placement, name, c.pattern)
+		}
 	}
 }
 

@@ -291,7 +291,11 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 	if err != nil {
 		return failed(err)
 	}
-	promptFile, err := writeAgentPrompt(filepath.Join(dirs.State, AgentPromptsFolder), AgentPrompt(cmd.IssueRef, cmd.IssueTitle))
+	var starter string
+	if cmd.Placement == model.AgentTab {
+		starter = cmd.PaneBlock
+	}
+	promptFile, err := writeAgentPrompt(filepath.Join(dirs.State, AgentPromptsFolder), starter, AgentPrompt(cmd.IssueRef, cmd.IssueTitle))
 	if err != nil {
 		return failed(err)
 	}
@@ -443,12 +447,23 @@ func (g *Gateway) sendAgentBack(ctx context.Context, cmd model.SendAgentBack) mo
 	return placed
 }
 
-// writeAgentPrompt puts text in a new file of folder and returns its path.
-func writeAgentPrompt(folder, text string) (string, error) {
+// AgentPromptName is the pattern of a prompt file's name for os.CreateTemp. A tab's agent carries the block id of the kata Pane
+// that started it (`prompt-<block>-<random>.md`), which the plugin's window half reads from the new tab's command line to put
+// the tab right of the Pane's; any other agent, or a Pane that cannot name its block, gets `prompt-<random>.md`. A block that
+// is not all digits is left out, so the name stays one the window half parses.
+func AgentPromptName(starter string) string {
+	if starter == "" || strings.Trim(starter, "0123456789") != "" {
+		return "prompt-*.md"
+	}
+	return "prompt-" + starter + "-*.md"
+}
+
+// writeAgentPrompt puts text in a new file of folder, named for starter by AgentPromptName, and returns its path.
+func writeAgentPrompt(folder, starter, text string) (string, error) {
 	if err := os.MkdirAll(folder, 0o700); err != nil {
 		return "", err
 	}
-	f, err := os.CreateTemp(folder, "prompt-*.md")
+	f, err := os.CreateTemp(folder, AgentPromptName(starter))
 	if err != nil {
 		return "", err
 	}
