@@ -112,6 +112,38 @@ type busyError struct {
 
 func (e *busyError) Error() string { return e.msg }
 
+// parkedError is a refusal that waiting cures: the job's existing Issue is someday or scheduled for later (ADR-0002).
+// reason is what `worker status` shows; until is the instant the Issue becomes ready by itself, zero for someday.
+type parkedError struct {
+	msg    string
+	reason string
+	until  time.Time
+}
+
+func (e *parkedError) Error() string { return e.msg }
+
+// parkedIssue says why an open Issue is not ready for an ordinary execute job.
+type parkedIssue struct {
+	reason string
+	until  time.Time
+}
+
+// parked reports whether the Issue is someday or scheduled for an instant still ahead, nil when it is ready. The
+// instant is kata's (planning dates), never parsed here; a past or absent date and any deadline_on never defer.
+func (w *Worker) parked(ctx context.Context, issue Issue) (*parkedIssue, error) {
+	if issue.Someday() {
+		return &parkedIssue{reason: "Issue is someday"}, nil
+	}
+	d, err := w.opt.Kata.PlanningDates(ctx, issue.ProjectID, issue.UID)
+	if err != nil {
+		return nil, err
+	}
+	if d.Scheduled.After(w.clock.Now()) {
+		return &parkedIssue{reason: "Issue is scheduled for " + d.Scheduled.Local().Format("2006-01-02 15:04"), until: d.Scheduled}, nil
+	}
+	return nil, nil
+}
+
 // jobSchedule is one job's schedule state, owned by its Project's loop.
 type jobSchedule struct {
 	defEvent string
@@ -125,6 +157,10 @@ type jobSchedule struct {
 	pending  []time.Time // occurrences to run, oldest first
 	next     time.Time
 	lastErr  string
+	// waiting is why the occurrences wait for the job's Issue, empty when they do not; wakeAt is the instant the Issue
+	// becomes ready by itself, the zero time when only an Issue event can change it.
+	waiting string
+	wakeAt  time.Time
 }
 
 // checkpoint is projects/<uid>/schedule/<job uid>.json (ADR-0006): everything decided through a time and the
@@ -324,10 +360,20 @@ func (w *Worker) tick(ctx context.Context, ps *projectState) time.Time {
 		w.planAll(ps, now)
 		w.admitDue(ctx, ps)
 	}
-	var next time.Time
+	var next, wake time.Time
 	queued, scheduled := 0, 0
-	for _, st := range ps.sched {
+	var waiting []JobNote
+	for uid, st := range ps.sched {
 		queued += len(st.pending)
+		if len(st.pending) == 0 {
+			st.waiting, st.wakeAt = "", time.Time{}
+		}
+		if st.waiting != "" {
+			waiting = append(waiting, JobNote{UID: uid, Text: st.waiting})
+			if !st.wakeAt.IsZero() && (wake.IsZero() || st.wakeAt.Before(wake)) {
+				wake = st.wakeAt // the Issue's scheduled instant: look again then, not at the next fallback check
+			}
+		}
 		if st.trig != nil {
 			scheduled++
 		}
@@ -336,8 +382,15 @@ func (w *Worker) tick(ctx context.Context, ps *projectState) time.Time {
 		}
 	}
 	w.mu.Lock()
-	ps.scheduled, ps.queued, ps.nextRun = scheduled, queued, next
+	for i := range waiting {
+		waiting[i].Name = ps.jobs[waiting[i].UID].Name
+	}
+	slices.SortFunc(waiting, func(a, b JobNote) int { return strings.Compare(a.Name, b.Name) })
+	ps.scheduled, ps.queued, ps.nextRun, ps.waiting = scheduled, queued, next, waiting
 	w.mu.Unlock()
+	if !wake.IsZero() && (next.IsZero() || wake.Before(next)) {
+		return wake
+	}
 	return next
 }
 
@@ -406,10 +459,17 @@ func (w *Worker) admitDue(ctx context.Context, ps *projectState) {
 		_, _, err := w.RunOccurrence(ctx, ps.cfg.Name, d.job, d.at)
 		if err == nil {
 			st.pending = slices.DeleteFunc(st.pending, func(t time.Time) bool { return t.Equal(d.at) })
-			st.lastErr = ""
+			st.lastErr, st.waiting, st.wakeAt = "", "", time.Time{}
 			w.saveCheckpoint(ps, d.job, st)
 			continue
 		}
+		var parked *parkedError
+		if errors.As(err, &parked) {
+			blocked[d.job] = true
+			st.waiting, st.wakeAt = parked.reason, parked.until
+			continue
+		}
+		st.waiting, st.wakeAt = "", time.Time{}
 		var busy *busyError
 		if errors.As(err, &busy) {
 			if busy.capacity {

@@ -49,6 +49,8 @@ type ProjectStatus struct {
 	// Aside lists the jobs the worker sets aside with the reason of each; Warnings the per-run Issue jobs that create
 	// many Issues a day. Both are as of the last definition refresh and stop no other job.
 	Aside, Warnings []JobNote
+	// Waiting lists the jobs whose queued occurrences wait for their Issue (someday or scheduled later), with the reason.
+	Waiting []JobNote
 }
 
 // RunStatus is one run of this machine.
@@ -96,7 +98,7 @@ func (w *Worker) Status() Status {
 				p.AdapterJobs++
 			}
 		}
-		p.Aside, p.Warnings = slices.Clone(ps.aside), slices.Clone(ps.warnings)
+		p.Aside, p.Warnings, p.Waiting = slices.Clone(ps.aside), slices.Clone(ps.warnings), slices.Clone(ps.waiting)
 		s.Projects = append(s.Projects, p)
 	}
 	w.mu.Unlock()
@@ -203,6 +205,9 @@ func (s Status) String() string {
 		}
 		for _, n := range p.Aside {
 			fmt.Fprintf(&b, "  Job %q is set aside: %s\n", n.Name, n.Text)
+		}
+		for _, n := range p.Waiting {
+			fmt.Fprintf(&b, "  Job %q is waiting: %s\n", n.Name, n.Text)
 		}
 		for _, n := range p.Warnings {
 			fmt.Fprintf(&b, "  Job %q %s\n", n.Name, n.Text)

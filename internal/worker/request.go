@@ -229,6 +229,28 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 			return j, false, nil
 		}
 	}
+	if issuePolicy.Kind == cronjob.IssueExisting {
+		// Readiness is checked before a slot is reserved: an occurrence that waits for its Issue takes none (ADR-0002).
+		issue, err := w.opt.Kata.ShowIssue(ctx, ps.project.ID, issuePolicy.UID)
+		if err != nil {
+			return nil, false, fmt.Errorf("job %q: its Issue could not be read: %w", job.Name, err)
+		}
+		if d.Action.Kind != cronjob.ActionNotify { // a notify job has no readiness requirement
+			if !issue.Open() {
+				return nil, false, fmt.Errorf("job %q reports to Issue %s, which is closed; reopen it first", job.Name, issue.ShortID)
+			}
+			p, err := w.parked(ctx, issue)
+			if err != nil {
+				return nil, false, fmt.Errorf("job %q: its Issue's planning dates could not be read: %w", job.Name, err)
+			}
+			if p != nil {
+				if manual {
+					return nil, false, &parkedError{reason: p.reason, until: p.until, msg: fmt.Sprintf("job %q reports to Issue %s, which is parked (%s); run it again when the Issue is ready", job.Name, issue.ShortID, p.reason)}
+				}
+				return nil, false, &parkedError{reason: p.reason, until: p.until, msg: fmt.Sprintf("job %q waits: Issue %s is parked (%s)", job.Name, issue.ShortID, p.reason)}
+			}
+		}
+	}
 	if d.Overlap == "forbid" {
 		// Another request for this job must not pass the check before this one's journal closes the gate.
 		gate := w.overlapGate(ps.project.UID, job.UID)
@@ -254,15 +276,6 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 			w.unreserve(ps)
 		}
 	}()
-	if issuePolicy.Kind == cronjob.IssueExisting {
-		issue, err := w.opt.Kata.ShowIssue(ctx, ps.project.ID, issuePolicy.UID)
-		if err != nil {
-			return nil, false, fmt.Errorf("job %q: its Issue could not be read: %w", job.Name, err)
-		}
-		if !issue.Open() && d.Action.Kind != cronjob.ActionNotify { // a notify job has no readiness requirement
-			return nil, false, fmt.Errorf("job %q reports to Issue %s, which is closed; reopen it first", job.Name, issue.ShortID)
-		}
-	}
 	var workflow *WorkflowPlan
 	if d.Action.Kind != cronjob.ActionNotify && d.Action.WorkflowUID != "" {
 		var err error

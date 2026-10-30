@@ -115,6 +115,8 @@ type projectState struct {
 	// scheduled, queued and nextRun summarize sched for Status (guarded by Worker.mu).
 	scheduled, queued int
 	nextRun           time.Time
+	// waiting names the jobs whose occurrences wait for their Issue to be ready, with the reason.
+	waiting []JobNote
 	// aside and warnings are the jobs the worker sets aside with their reasons, and the per-run Issue jobs that create
 	// many Issues a day, as of the last definition refresh (guarded by Worker.mu).
 	aside, warnings []JobNote

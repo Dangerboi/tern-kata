@@ -408,6 +408,12 @@ type Issue struct {
 // Open reports whether the Issue is open.
 func (i Issue) Open() bool { return i.Status == "open" }
 
+// Someday reports whether the Issue is parked with kata's someday metadata.
+func (i Issue) Someday() bool {
+	v, _ := i.Metadata["someday"].(bool)
+	return v
+}
+
 // CreateIssue creates the per-run Issue, always keyed and with force_new (ADR-0002), and says whether kata made a new one.
 func (k *Kata) CreateIssue(ctx context.Context, projectID int64, actor, key, title, body string, metadata map[string]any) (Issue, error) {
 	force := true
