@@ -74,3 +74,24 @@ func (c *Client) ClearAttention(ctx context.Context, cmd model.ClearAttention) (
 	}
 	return model.AttentionCleared{UID: cmd.UID}, nil
 }
+
+// RaiseAgentAttention writes the request for cmd.Address on an Issue as `kata notify` does, as the Pane's actor and without a
+// guard: it replaces an earlier request, which is how a newly waiting agent's message lands.
+func (c *Client) RaiseAgentAttention(ctx context.Context, cmd model.RaiseAgentAttention) error {
+	value := map[string]any{"from": cmd.Actor, "message": cmd.Message}
+	return c.writeAttentionSlot(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, model.NotificationKey(cmd.Address), value)
+}
+
+// ClearAgentAttention removes the request for cmd.Address on an Issue as `kata notify --clear` does, without a guard.
+func (c *Client) ClearAgentAttention(ctx context.Context, cmd model.ClearAgentAttention) error {
+	return c.writeAttentionSlot(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, model.NotificationKey(cmd.Address), nil)
+}
+
+// writeAttentionSlot patches one notify slot, a nil value clearing it, with no guard.
+func (c *Client) writeAttentionSlot(ctx context.Context, projectID int64, uid, actor, key string, value any) error {
+	_, err := c.PatchIssueMetadataWithResponse(ctx, &g.PatchIssueMetadataRequestOptions{
+		PathParams: &g.PatchIssueMetadataPath{ProjectID: projectID, Ref: uid},
+		Body:       &g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{key: value}},
+	})
+	return daemonError(err)
+}

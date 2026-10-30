@@ -43,7 +43,7 @@ func TestWAndShiftWStartAnAgentOnTheSelectedIssueInEveryIssueMode(t *testing.T) 
 			t.Run(name+" "+chord, func(t *testing.T) {
 				got := step(t, s, key(chord))
 				start, ok := startedAgent(got.Cmds)
-				want := model.StartAgent{Placement: placement, IssueUID: "t1", IssueRef: "work#t1", IssueTitle: "Title of t1", ProjectName: "work",
+				want := model.StartAgent{Placement: placement, IssueUID: "t1", IssueRef: "work#t1", IssueTitle: "Title of t1", ProjectID: 7, ProjectName: "work",
 					Workspace: "/repo", PaneBlock: "24489903521795"}
 				if !ok || len(got.Cmds) != 1 || start != want {
 					t.Fatalf("cmds %#v, want %#v", got.Cmds, want)

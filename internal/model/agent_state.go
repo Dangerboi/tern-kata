@@ -16,12 +16,13 @@ type AgentStatesMsg struct {
 func (AgentStatesMsg) msg() {}
 
 // AgentStatesRelay is the latest relayed list, and whether one has arrived: an empty list is "no agents", no
-// relay at all is "no state yet".
+// relay at all is "no state yet". Previous is the list the relay before it carried.
 type AgentStatesRelay struct {
 	Received bool
 	States   []AgentState
+	Previous []AgentState
 }
 
 func (r AgentStatesRelay) apply(msg AgentStatesMsg) AgentStatesRelay {
-	return AgentStatesRelay{Received: true, States: msg.States}
+	return AgentStatesRelay{Received: true, States: msg.States, Previous: r.States}
 }
