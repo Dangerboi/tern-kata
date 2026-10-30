@@ -73,6 +73,9 @@ func definitionNotes(ctx context.Context, k *Kata, cfg Config, pc ProjectConfig,
 // does not run (ADR-0008). wf is the job's workflow when it runs one, wfErr why it was not read.
 func jobProblem(cfg Config, pc ProjectConfig, job cronjob.Job, wf *Workflow, wfErr error) (why string, upgrade bool) {
 	d := job.Definition
+	if why := otherAdapterProblem(job); why != "" {
+		return why, false
+	}
 	if why := job.Problem(); why != "" {
 		return why, false
 	}
@@ -143,4 +146,13 @@ func jobProblem(cfg Config, pc ProjectConfig, job cronjob.Job, wf *Workflow, wfE
 		}
 	}
 	return "", false
+}
+
+// otherAdapterProblem is why the worker leaves a job to another adapter, empty when its options.adapter is absent or names
+// tern-kata.
+func otherAdapterProblem(job cronjob.Job) string {
+	if name := job.OtherAdapter(); name != "" {
+		return fmt.Sprintf("its options.adapter names %q, not %s", name, cronjob.AdapterName)
+	}
+	return ""
 }

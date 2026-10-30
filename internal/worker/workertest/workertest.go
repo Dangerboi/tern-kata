@@ -246,8 +246,10 @@ type Job struct {
 	Name   string
 	Prompt string
 	// Workflow makes the job run the workflow with this uid instead of Prompt.
-	Workflow    string
-	Profile     string
+	Workflow string
+	Profile  string
+	// Adapter is the job's options.adapter, absent when blank.
+	Adapter     string
 	Checkout    string
 	IssueTitle  string
 	ExistingUID string // an Issue the job reports to, instead of a per-run Issue
@@ -313,8 +315,14 @@ func (j Job) definition() g.CronJobDefinition {
 	if j.Workflow != "" {
 		def.Action = g.Action{Kind: "execute", WorkflowUID: &j.Workflow}
 	}
-	if j.Profile != "" {
-		def.Options = map[string]any{"profile": j.Profile}
+	for key, value := range map[string]string{"profile": j.Profile, "adapter": j.Adapter} {
+		if value == "" {
+			continue
+		}
+		if def.Options == nil {
+			def.Options = map[string]any{}
+		}
+		def.Options[key] = value
 	}
 	if j.Checkout != "" {
 		def.CheckoutKey = &j.Checkout

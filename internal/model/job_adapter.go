@@ -232,7 +232,7 @@ func executeKind(id, label, kind string, workflow bool) jobKind {
 				return !f.Worker.Read
 			case JobFieldProfilePick, JobFieldCheckoutPick:
 				return f.Worker.Read
-			case JobFieldSecrets, JobFieldPolicy, JobFieldOverlap, JobFieldTimeout:
+			case JobFieldSecrets, JobFieldAdapter, JobFieldPolicy, JobFieldOverlap, JobFieldTimeout:
 				return true
 			case JobFieldIssue:
 				return f.policyKind() == cronjob.IssueExisting
@@ -261,6 +261,7 @@ func adapterCatchupShown(f JobFormState, name Field) bool {
 func loadExecute(f *JobFormState, job CronJob) {
 	d := job.Definition
 	f.Prompt, f.Workflow, f.Profile, f.Checkout, f.Secrets = d.Action.Prompt, d.Action.WorkflowUID, d.Profile, d.CheckoutKey, formatSecrets(d.SecretRefs)
+	f.Adapter = job.Adapter()
 	f.Overlap, f.Catchup = cmp.Or(d.Overlap, f.Overlap), cmp.Or(d.Catchup, f.Catchup)
 	if d.GraceSeconds > 0 {
 		f.Grace = strconv.FormatInt(d.GraceSeconds, 10)
@@ -311,18 +312,8 @@ func buildExecute(f JobFormState, workflow bool) (cronjob.Definition, string, er
 			return def, "", fieldError(JobFieldPrompt, "must not be blank.")
 		}
 	}
-	options := maps.Clone(f.Opened.Definition.Options)
-	if profile := strings.TrimSpace(f.Profile); profile != "" {
-		if options == nil {
-			options = map[string]any{}
-		}
-		options["profile"], def.Profile = profile, profile
-	} else {
-		delete(options, "profile")
-	}
-	if len(options) > 0 {
-		def.Options = options
-	}
+	def.Profile = strings.TrimSpace(f.Profile)
+	def.Options = adapterOptions(f, map[string]string{"profile": def.Profile})
 	if def.CheckoutKey = strings.TrimSpace(f.Checkout); def.CheckoutKey != "" && !cronjob.PortableName(def.CheckoutKey) {
 		return def, "", fieldError(JobFieldCheckout, "%q is not a checkout key; keys are letters, digits, - _ and . only.", def.CheckoutKey)
 	}
@@ -339,6 +330,27 @@ func buildExecute(f JobFormState, workflow bool) (cronjob.Definition, string, er
 	}
 	def.GraceSeconds, err = adapterGrace(f)
 	return def, "", err
+}
+
+// adapterOptions is the options of an adapter job: the ones the job was opened with, kept whole, with options.adapter set to
+// the card's, or taken out when blank. set puts the card's other keys in. Nil when none is left.
+func adapterOptions(f JobFormState, set map[string]string) map[string]any {
+	options := maps.Clone(f.Opened.Definition.Options)
+	set["adapter"] = strings.TrimSpace(f.Adapter)
+	for key, value := range set {
+		if value == "" {
+			delete(options, key)
+			continue
+		}
+		if options == nil {
+			options = map[string]any{}
+		}
+		options[key] = value
+	}
+	if len(options) == 0 {
+		return nil
+	}
+	return options
 }
 
 // adapterGrace is the grace an adapter job's skip catch-up allows; blank is none, and it counts only where it is shown.
@@ -384,7 +396,7 @@ var notifyJobKind = jobKind{
 	owns: func(j CronJob) bool { return j.Kind() == KindNotify },
 	shown: func(f JobFormState, name Field) bool {
 		switch name {
-		case JobFieldRecipient, JobFieldMessage:
+		case JobFieldRecipient, JobFieldMessage, JobFieldAdapter:
 			return true
 		case JobFieldIssue:
 			return !DateTrigger(f.Trigger)
@@ -398,7 +410,7 @@ var notifyJobKind = jobKind{
 		if d.Action.Recipient != recipientDefault {
 			f.Recipient = d.Action.Recipient
 		}
-		f.Message, f.Catchup = d.Action.Message, cmp.Or(d.Catchup, f.Catchup)
+		f.Message, f.Catchup, f.Adapter = d.Action.Message, cmp.Or(d.Catchup, f.Catchup), job.Adapter()
 		if d.GraceSeconds > 0 {
 			f.Grace = strconv.FormatInt(d.GraceSeconds, 10)
 		}
@@ -426,6 +438,7 @@ var notifyJobKind = jobKind{
 		}
 		grace, err := adapterGrace(f)
 		def.GraceSeconds = grace
+		def.Options = adapterOptions(f, map[string]string{})
 		return def, "", err
 	},
 }

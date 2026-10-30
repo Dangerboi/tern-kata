@@ -186,6 +186,9 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 	if job.Native() {
 		return nil, false, fmt.Errorf("job %q is a native job: kata's daemon delivers it, the worker never runs it", job.Name)
 	}
+	if why := otherAdapterProblem(job); why != "" {
+		return nil, false, fmt.Errorf("job %q: %s", job.Name, why)
+	}
 	d := job.Definition
 	var notify *NotifySpec
 	var issuePolicy cronjob.IssuePolicy

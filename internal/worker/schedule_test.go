@@ -243,6 +243,44 @@ func TestAOnceJobRunsOnceAndAManualJobOnlyOnRequest(t *testing.T) {
 	h.waitRuns(manual, 1)
 }
 
+// A job's options.adapter names the adapter that runs it: tern-kata and no key run, another name is left alone, on a
+// schedule and on request, and worker status says why.
+func TestAJobKeyedToAnotherAdapterIsNeitherScheduledNorRunOnRequest(t *testing.T) {
+	h := newHarness(t)
+	own := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "own", Prompt: "Do it.", Trigger: interval(60), Adapter: "tern-kata"})
+	unkeyed := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "unkeyed", Prompt: "Do it.", Trigger: interval(60)})
+	other := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "other", Prompt: "Do it.", Trigger: interval(60), Adapter: "herdr-kata"})
+	r := h.start(worker.Hooks{})
+	h.scheduled(r, 2)
+
+	first := h.fire(r, time.Time{})
+	h.waitRuns(own, 1)
+	h.waitRuns(unkeyed, 1)
+	h.quiet(other, 0)
+	h.advanceTo(first.Add(time.Minute))
+	h.quiet(other, 0)
+
+	text := r.w.Status().String()
+	if want := `Job "other" is set aside: its options.adapter names "herdr-kata", not tern-kata`; !strings.Contains(text, want) {
+		t.Errorf("worker status lacks %q:\n%s", want, text)
+	}
+	for _, name := range []string{"own", "unkeyed"} {
+		if strings.Contains(text, `Job "`+name+`" is set aside`) {
+			t.Errorf("worker status sets aside %s:\n%s", name, text)
+		}
+	}
+	resp := h.ask(worker.Request{Op: "run", Job: other.UID})
+	if resp.OK || !strings.Contains(resp.Error, `its options.adapter names "herdr-kata", not tern-kata`) {
+		t.Fatalf("run of the other adapter's job: ok=%v %q", resp.OK, resp.Error)
+	}
+	h.quiet(other, 0)
+	for _, job := range []cronjob.Job{own, unkeyed} {
+		if resp := h.ask(worker.Request{Op: "run", Job: job.UID}); !resp.OK {
+			t.Fatalf("run of %s refused: %s", job.Name, resp.Error)
+		}
+	}
+}
+
 func TestForbiddenOverlapHoldsOccurrencesUntilTheEarlierRunSettlesAndTimesOut(t *testing.T) {
 	h := newHarness(t, "--stub-hang")
 	h.capacity("2") // a free slot does not open a forbidding job's gate

@@ -58,6 +58,7 @@ const (
 	JobFieldCheckout     Field = "checkout"
 	JobFieldCheckoutPick Field = "checkout-pick"
 	JobFieldSecrets      Field = "secrets"
+	JobFieldAdapter      Field = "adapter"
 	JobFieldPolicy       Field = "policy"
 	JobFieldTitle        Field = "title"
 	JobFieldBody         Field = "body"
@@ -79,7 +80,7 @@ var JobFields = []FieldSpec{
 	{JobFieldCron, true}, {JobFieldZone, true}, {JobFieldInterval, true}, {JobFieldAt, true}, {JobFieldIssue, true}, {JobFieldReport, true}, {JobFieldLead, true},
 	{JobFieldParent, true},
 	{JobFieldPrompt, true}, {JobFieldWorkflow, false}, {JobFieldProfile, true}, {JobFieldProfilePick, false},
-	{JobFieldCheckout, true}, {JobFieldCheckoutPick, false}, {JobFieldSecrets, true},
+	{JobFieldCheckout, true}, {JobFieldCheckoutPick, false}, {JobFieldSecrets, true}, {JobFieldAdapter, true},
 	{JobFieldPolicy, false}, {JobFieldTitle, true}, {JobFieldBody, true}, {JobFieldScheduled, true}, {JobFieldDeadline, true},
 	{JobFieldRecipient, true}, {JobFieldMessage, true},
 	{JobFieldOverlap, false}, {JobFieldTimeout, true}, {JobFieldCatchup, false}, {JobFieldGrace, true}, {JobFieldEnabled, false},
@@ -105,6 +106,7 @@ var jobFieldTitles = map[Field]string{ //nolint:gosec // G101: field prompts ("S
 	JobFieldCheckout:     "Checkout (key in the worker's config, blank: none)",
 	JobFieldCheckoutPick: "Checkout",
 	JobFieldSecrets:      "Secrets (ENV=source, ...; sources are named in the worker's config)",
+	JobFieldAdapter:      "Adapter (options.adapter; tern-kata runs the job, another name leaves it to that adapter)",
 	JobFieldPolicy:       "Run Issue",
 	JobFieldTitle:        "Child title",
 	JobFieldBody:         "Child body (one line)",
@@ -348,6 +350,8 @@ type JobFormState struct {
 	At, Issue, Report, Lead string
 	// Prompt, Workflow (a uid), Profile, Checkout and Secrets are an execute job's; Secrets is "ENV=source" pairs.
 	Prompt, Workflow, Profile, Checkout, Secrets string
+	// Adapter is the job's options.adapter: the adapter that runs it, blank when the job names none.
+	Adapter string
 	// Policy is the Issue policy's kind, Scheduled and DeadlineOffset the per-run Issue's date offsets, Timeout the run's limit.
 	Policy                             string
 	Scheduled, DeadlineOffset, Timeout string
@@ -421,6 +425,8 @@ func (f *JobFormState) text(name Field) *string {
 		return &f.Checkout
 	case JobFieldSecrets:
 		return &f.Secrets
+	case JobFieldAdapter:
+		return &f.Adapter
 	case JobFieldTitle:
 		return &f.Title
 	case JobFieldBody:
@@ -612,7 +618,7 @@ func newJobForm(m Model, projectID int64, parent string) (Model, []Cmd) {
 	}
 	k := jobKinds[0]
 	m.JobForm = JobFormState{Open: true, Field: JobFieldName, ProjectID: projectID, UID: uid, Kind: k.id, Trigger: k.triggers[0],
-		Cron: "0 9 * * *", Zone: zone, Interval: "3600", Parent: parent, Catchup: CatchupLatest, Policy: string(cronjob.IssuePerRun), Overlap: "forbid", Enabled: true}
+		Cron: "0 9 * * *", Zone: zone, Interval: "3600", Parent: parent, Catchup: CatchupLatest, Policy: string(cronjob.IssuePerRun), Overlap: "forbid", Enabled: true, Adapter: cronjob.AdapterName}
 	return m, jobChoiceCmds(m, projectID)
 }
 
