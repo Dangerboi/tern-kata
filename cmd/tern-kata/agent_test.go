@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"runtime"
@@ -28,7 +29,8 @@ func runAgent(t *testing.T, env []string, args ...string) (stdout string, status
 	var out, errOut strings.Builder
 	cmd.Stdout, cmd.Stderr = &out, &errOut
 	err := cmd.Run()
-	if exit, ok := err.(*exec.ExitError); ok {
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
 		status = exit.ExitCode()
 	} else if err != nil {
 		t.Fatal(err)
@@ -87,7 +89,8 @@ func TestPlanAgent(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			plan, err := PlanLaunch(tc.args, func(string) (string, bool) { return "", false }, "v")
 			if tc.wantErr != "" {
-				if _, ok := err.(usageError); !ok || !strings.Contains(err.Error(), tc.wantErr) {
+				var usage usageError
+				if !errors.As(err, &usage) || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("err = %v, want usage error containing %q", err, tc.wantErr)
 				}
 				return
