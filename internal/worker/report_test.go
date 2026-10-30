@@ -134,7 +134,8 @@ func TestACommandOnlyWorkflowOnAnExistingIssueSucceedsWithoutAComment(t *testing
 }
 
 func TestAProfilesOwnApprovalModeReachesTheAgent(t *testing.T) {
-	own := newHarness(t, "--approval-mode", "write")
+	t.Parallel()
+	own := buildHarness(t, "--approval-mode", "write")
 	job := own.kata.CreateJob(t, own.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
 	r := own.start(worker.Hooks{})
 	own.admitting(r)
@@ -144,7 +145,7 @@ func TestAProfilesOwnApprovalModeReachesTheAgent(t *testing.T) {
 		t.Fatalf("agent started with %s, want the profile's own approval mode", args)
 	}
 
-	def := newHarness(t, "--stub-text", "ok")
+	def := buildHarness(t, "--stub-text", "ok")
 	job = def.kata.CreateJob(t, def.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
 	r = def.start(worker.Hooks{})
 	def.admitting(r)

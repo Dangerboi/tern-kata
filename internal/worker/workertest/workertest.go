@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -106,13 +107,34 @@ type rule struct {
 	handle func(w http.ResponseWriter, r *http.Request, next http.Handler)
 }
 
-// StartKata starts kata and points kata's discovery variables away from the real daemon. Its ping reports 0.20.0,
-// as the in-process service reports no version.
+// stubDir holds the stub agent Main built once for the whole test binary; empty when the binary has no Main.
+var stubDir string
+
+// Main runs a test binary's tests (call it from TestMain as os.Exit(workertest.Main(m))) after pointing kata's
+// discovery variables away from the real daemon, once for the binary, so tests using StartKata can run in parallel.
+// It also builds the stub agent once, for BuildStub, and removes it at the end.
+func Main(m *testing.M) int {
+	dir, err := os.MkdirTemp("", "workertest")
+	if err != nil {
+		panic(err)
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	if err := os.Mkdir(filepath.Join(dir, "kata-home"), 0o700); err != nil {
+		panic(err)
+	}
+	for k, v := range map[string]string{"KATA_HOME": filepath.Join(dir, "kata-home"), "KATA_SERVER": "", "KATA_AUTH_TOKEN": ""} {
+		if err := os.Setenv(k, v); err != nil {
+			panic(err)
+		}
+	}
+	stubDir = dir
+	return m.Run()
+}
+
+// StartKata starts kata in process. Its ping reports 0.20.0, as the in-process service reports no version. The test
+// binary's TestMain must call Main, which keeps kata's discovery variables away from the real daemon.
 func StartKata(t *testing.T) *Daemon {
 	t.Helper()
-	t.Setenv("KATA_HOME", t.TempDir())
-	t.Setenv("KATA_SERVER", "")
-	t.Setenv("KATA_AUTH_TOKEN", "")
 	service, err := kata.New(context.Background(), kata.Config{
 		DSN:  filepath.Join(t.TempDir(), "kata.db"),
 		Auth: kata.AuthConfig{TrustCallerAuthentication: true},
@@ -449,22 +471,33 @@ func (d *Daemon) CloseIssue(t *testing.T, p worker.Project, issueUID string) {
 
 func ptr[T any](v T) *T { return &v }
 
-// BuildStub compiles the stub agent program and returns its path.
+var (
+	stubOnce sync.Once
+	stubPath string
+	stubErr  error
+)
+
+// BuildStub returns the path of the stub agent program, compiled once per test binary.
 func BuildStub(t *testing.T) string {
 	t.Helper()
-	_, file, _, _ := runtime.Caller(0)
-	root := filepath.Join(filepath.Dir(file), "..", "..", "..")
-	out := filepath.Join(t.TempDir(), "stub")
-	if runtime.GOOS == "windows" {
-		out += ".exe"
+	stubOnce.Do(func() {
+		_, file, _, _ := runtime.Caller(0)
+		root := filepath.Join(filepath.Dir(file), "..", "..", "..")
+		stubPath = filepath.Join(stubDir, "stub")
+		if runtime.GOOS == "windows" {
+			stubPath += ".exe"
+		}
+		cmd := exec.Command("go", "build", "-o", stubPath, "./internal/worker/workertest/stub")
+		cmd.Dir = root
+		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
+		if output, err := cmd.CombinedOutput(); err != nil {
+			stubErr = fmt.Errorf("%w\n%s", err, output)
+		}
+	})
+	if stubErr != nil {
+		t.Fatalf("building the stub agent: %v", stubErr)
 	}
-	cmd := exec.Command("go", "build", "-o", out, "./internal/worker/workertest/stub")
-	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("building the stub agent: %v\n%s", err, output)
-	}
-	return out
+	return stubPath
 }
 
 // ManualClock is a Clock a test advances by hand.

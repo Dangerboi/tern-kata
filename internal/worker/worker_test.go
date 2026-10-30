@@ -21,6 +21,8 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
 )
 
+func TestMain(m *testing.M) { os.Exit(workertest.Main(m)) }
+
 // harness is the whole worker against kata in process, with a manual clock and the stub agent.
 type harness struct {
 	t      *testing.T
@@ -34,8 +36,16 @@ type harness struct {
 	config string
 }
 
-// newHarness creates the Project "demo" and the files a worker needs; start launches a worker on them.
+// newHarness is buildHarness for a test that may run beside the others: it marks the test parallel, so it must be the
+// test's only call and the test must change no environment variable.
 func newHarness(t *testing.T, stubArgs ...string) *harness {
+	t.Helper()
+	t.Parallel()
+	return buildHarness(t, stubArgs...)
+}
+
+// buildHarness creates the Project "demo" and the files a worker needs; start launches a worker on them.
+func buildHarness(t *testing.T, stubArgs ...string) *harness {
 	t.Helper()
 	h := &harness{t: t, kata: workertest.StartKata(t), clock: workertest.NewManualClock(), repo: t.TempDir(), stub: workertest.BuildStub(t)}
 	h.log = filepath.Join(t.TempDir(), "launches.jsonl")
@@ -501,7 +511,7 @@ func sameDir(a, b string) bool {
 }
 
 func TestSecretsReachTheAgentButNeitherKataNorTheJournal(t *testing.T) {
-	h := newHarness(t)
+	h := buildHarness(t)
 	t.Setenv("TK_TEST_SECRET", "s3cret-value")
 	h.config = strings.Replace(h.config, "name = \"demo\"\n", "name = \"demo\"\nsecrets = [\"token\"]\n", 1) + "[secrets]\ntoken = { env = \"TK_TEST_SECRET\" }\n"
 	if err := os.WriteFile(h.dirs.ConfigPath(), []byte(h.config), 0o600); err != nil {
@@ -541,7 +551,7 @@ func TestAMissingSecretHoldsTheRunBeforeAnythingStarts(t *testing.T) {
 }
 
 func TestASecretTheProjectDoesNotListIsSetAsideAndHeldIfRunAnyway(t *testing.T) {
-	h := newHarness(t)
+	h := buildHarness(t)
 	t.Setenv("TK_TEST_SECRET", "s3cret-value")
 	h.config += "[secrets]\ntoken = { env = \"TK_TEST_SECRET\" }\n"
 	if err := os.WriteFile(h.dirs.ConfigPath(), []byte(h.config), 0o600); err != nil {

@@ -19,6 +19,8 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
 )
 
+func TestMain(m *testing.M) { os.Exit(workertest.Main(m)) }
+
 // workerFixture is kata in process, a worker.toml serving Project "demo" with the stub agent, and the folders for it.
 type workerFixture struct {
 	kata *workertest.Daemon
