@@ -25,7 +25,7 @@ func relay(t *testing.T, m model.Model, states ...model.AgentState) (model.Model
 	return model.Update(m, model.AgentStatesMsg{States: states})
 }
 
-func st(block, state, last string) model.AgentState {
+func st(block string, state model.AgentStateWord, last string) model.AgentState {
 	return model.AgentState{Block: block, State: state, LastMessage: last}
 }
 

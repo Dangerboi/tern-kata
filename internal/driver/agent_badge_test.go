@@ -50,7 +50,8 @@ func TestTheAgentBadgeIsInTheListAndLaneRowsAsAStyledSpan(t *testing.T) {
 	for _, name := range []string{"list", "lane"} {
 		s := panes[name]
 		for _, c := range []struct {
-			state, text, style string
+			state       model.AgentStateWord
+			text, style string
 		}{
 			{"working", "agent working", "accent"},
 			{"waiting_input", "agent waiting for you", "warning"},

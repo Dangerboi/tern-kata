@@ -55,7 +55,7 @@ func sendAgentsBack(m Model) (Model, []Cmd) {
 	if m.PaneBlock == "" {
 		return m, nil
 	}
-	stateIn := func(states []AgentState, block string) string {
+	stateIn := func(states []AgentState, block string) AgentStateWord {
 		for _, s := range states {
 			if s.Block == block {
 				return s.State
@@ -66,7 +66,7 @@ func sendAgentsBack(m Model) (Model, []Cmd) {
 	var cmds []Cmd
 	for _, e := range m.AgentMapping {
 		if e.Background && e.Open && e.PaneBlock == m.PaneBlock &&
-			stateIn(m.Agents.States, e.Block) == stateWorking && stateIn(m.Agents.Previous, e.Block) == agentWaitingInput {
+			stateIn(m.Agents.States, e.Block) == AgentWorking && stateIn(m.Agents.Previous, e.Block) == AgentWaitingInput {
 			cmds = append(cmds, SendAgentBack{Block: e.Block, IssueRef: e.IssueRef})
 		}
 	}

@@ -73,8 +73,9 @@ end
 local relayed: { [number]: boolean } = {}
 
 -- Every agent block in the session as JSON for the Pane, which matches it against its own agents. The pane id goes as
--- decimal text, because a block id is above what JSON numbers carry exactly in some readers; %.0f prints a whole number
--- without an exponent. A missing last message is the empty string.
+-- decimal text; %.0f prints a whole number without an exponent. Tern's API gives the id only as a Luau number (a double),
+-- so the text is exact only for ids up to 2^53: a larger id is already rounded here and matches no agent of the Pane.
+-- A missing last message is the empty string.
 local function agentStates(cx: WindowCx): string
     local list = tern.json.array({})
     for _, agent in cx.agents:list() do

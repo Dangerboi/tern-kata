@@ -227,7 +227,7 @@ func decodeAgentStates(value string) model.Msg {
 		if !ok {
 			return nil
 		}
-		states = append(states, model.AgentState{Block: block, State: item.State, LastMessage: item.LastMessage})
+		states = append(states, model.AgentState{Block: block, State: model.AgentStateWord(item.State), LastMessage: item.LastMessage})
 	}
 	return model.AgentStatesMsg{States: states}
 }

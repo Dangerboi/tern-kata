@@ -49,14 +49,22 @@ func AgentTabArgs(dir string, commandLine []string) []string {
 	return append([]string{"new", "tab", "--cwd", dir, "--json", "--"}, commandLine...)
 }
 
+// agentNewArgs starts a tern command that makes a tab in the hidden session, or the session itself when it does not exist.
+func agentNewArgs(sessionExists bool) []string {
+	if sessionExists {
+		return []string{"new", "tab", model.AgentSession}
+	}
+	return []string{"new", "session", model.AgentSession}
+}
+
 // AgentBackgroundSessionArgs is the tern command line for `S` when the hidden session does not exist: a new session with the agent.
 func AgentBackgroundSessionArgs(dir string, commandLine []string) []string {
-	return append([]string{"new", "session", model.AgentSession, "--cwd", dir, "--json", "--"}, commandLine...)
+	return append(agentNewArgs(false), append([]string{"--cwd", dir, "--json", "--"}, commandLine...)...)
 }
 
 // AgentBackgroundTabArgs is the tern command line for `S` when the hidden session exists: a new tab in it with the agent.
 func AgentBackgroundTabArgs(dir string, commandLine []string) []string {
-	return append([]string{"new", "tab", model.AgentSession, "--cwd", dir, "--json", "--"}, commandLine...)
+	return append(agentNewArgs(true), append([]string{"--cwd", dir, "--json", "--"}, commandLine...)...)
 }
 
 // RenameAgentArgs names the tab of an agent's block; Tern keeps the name only while the tab lives, so it runs after every move.
@@ -73,17 +81,20 @@ func MoveNewTabArgs(block string) []string { return []string{"move", block, "new
 // AgentShellTabArgs opens a shell (no command) in the hidden session, a new session when it does not exist; it holds the place of
 // an agent that goes back to a session with no block left.
 func AgentShellTabArgs(sessionExists bool) []string {
-	if sessionExists {
-		return []string{"new", "tab", model.AgentSession, "--json"}
-	}
-	return []string{"new", "session", model.AgentSession, "--json"}
+	return append(agentNewArgs(sessionExists), "--json")
 }
 
 // CloseBlockArgs closes a block.
 func CloseBlockArgs(block string) []string { return []string{"close", block, "--json"} }
 
-// agentSessionBlocks reads `tern ls --json` for the hidden session: whether it exists and the ids of its blocks.
-func agentSessionBlocks(out []byte) (exists bool, blocks []string, err error) {
+// ternSession is a session of `tern ls --json`: its name and the ids of its blocks in every tab.
+type ternSession struct {
+	name   string
+	blocks []string
+}
+
+// parseTernLs reads `tern ls --json`. Block ids are kept as written, for they carry a host tag and can pass 2^53.
+func parseTernLs(out []byte) ([]ternSession, error) {
 	var ls struct {
 		Sessions []struct {
 			Name string `json:"name"`
@@ -95,17 +106,31 @@ func agentSessionBlocks(out []byte) (exists bool, blocks []string, err error) {
 		} `json:"sessions"`
 	}
 	if err := json.Unmarshal(out, &ls); err != nil {
-		return false, nil, fmt.Errorf("tern ls --json: %w", err)
+		return nil, fmt.Errorf("tern ls --json: %w", err)
 	}
+	sessions := make([]ternSession, 0, len(ls.Sessions))
 	for _, s := range ls.Sessions {
-		if s.Name != model.AgentSession {
-			continue
-		}
-		exists = true
+		session := ternSession{name: s.Name}
 		for _, t := range s.Tabs {
 			for _, b := range t.Blocks {
-				blocks = append(blocks, b.ID.String())
+				session.blocks = append(session.blocks, b.ID.String())
 			}
+		}
+		sessions = append(sessions, session)
+	}
+	return sessions, nil
+}
+
+// agentSessionBlocks reads `tern ls --json` for the hidden session: whether it exists and the ids of its blocks.
+func agentSessionBlocks(out []byte) (exists bool, blocks []string, err error) {
+	sessions, err := parseTernLs(out)
+	if err != nil {
+		return false, nil, err
+	}
+	for _, s := range sessions {
+		if s.name == model.AgentSession {
+			exists = true
+			blocks = append(blocks, s.blocks...)
 		}
 	}
 	return exists, blocks, nil
@@ -170,31 +195,6 @@ func UpdateAgents(path string, change func([]model.AgentEntry) []model.AgentEntr
 	return next, nil
 }
 
-// ternBlocks is the set of block ids `tern ls --json` lists, in every session.
-func ternBlocks(out []byte) (map[string]bool, error) {
-	var ls struct {
-		Sessions []struct {
-			Tabs []struct {
-				Blocks []struct {
-					ID json.Number `json:"id"`
-				} `json:"blocks"`
-			} `json:"tabs"`
-		} `json:"sessions"`
-	}
-	if err := json.Unmarshal(out, &ls); err != nil {
-		return nil, fmt.Errorf("tern ls --json: %w", err)
-	}
-	blocks := map[string]bool{}
-	for _, s := range ls.Sessions {
-		for _, t := range s.Tabs {
-			for _, b := range t.Blocks {
-				blocks[b.ID.String()] = true
-			}
-		}
-	}
-	return blocks, nil
-}
-
 // agentStatePaths are agents.json and the prompt folder, with the state folder's error when there is none.
 func (g *Gateway) agentStatePaths() (file, prompts string, err error) {
 	dirs, err := g.workerDirs()
@@ -207,28 +207,40 @@ func (g *Gateway) agentStatePaths() (file, prompts string, err error) {
 	return filepath.Join(dirs.State, AgentsFile), filepath.Join(dirs.State, AgentPromptsFolder), nil
 }
 
-// pruneAgents drops the entries whose block `tern ls --json` does not list, with their prompt files. When tern cannot be asked
-// nothing is dropped.
+// pruneAgents drops the entries whose block `tern ls --json` does not list, with their prompt files. Only entries that were in
+// the file before tern was asked can go: one another Pane wrote since was never checked. When tern cannot be asked nothing is
+// dropped.
 func (g *Gateway) pruneAgents(ctx context.Context) model.AgentsPruned {
 	file, _, err := g.agentStatePaths()
 	if err != nil {
 		return model.AgentsPruned{Err: err}
 	}
-	if current, err := ReadAgents(file); err != nil || len(current) == 0 {
+	current, err := ReadAgents(file)
+	if err != nil || len(current) == 0 {
 		return model.AgentsPruned{Agents: current, Err: err}
+	}
+	checked := map[string]bool{}
+	for _, e := range current {
+		checked[e.Block] = true
 	}
 	out, err := g.runTern(ctx, []string{"ls", "--json"})
 	if err != nil {
 		return model.AgentsPruned{Err: ternFailure(err, out)}
 	}
-	alive, err := ternBlocks(out)
+	listing, err := parseTernLs(out)
 	if err != nil {
 		return model.AgentsPruned{Err: err}
+	}
+	alive := map[string]bool{}
+	for _, s := range listing {
+		for _, b := range s.blocks {
+			alive[b] = true
+		}
 	}
 	var gone []model.AgentEntry
 	kept, err := UpdateAgents(file, func(list []model.AgentEntry) []model.AgentEntry {
 		return slices.DeleteFunc(list, func(e model.AgentEntry) bool {
-			if alive[e.Block] {
+			if alive[e.Block] || !checked[e.Block] {
 				return false
 			}
 			gone = append(gone, e)
@@ -321,7 +333,7 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 }
 
 // startBackground starts the agent in the hidden session: a new tab when `tern ls --json` lists the session, a new session when
-// not, and a new tab after all when another Pane made the session in between.
+// not, and a new tab after all when a failed new session leaves `tern ls --json` listing it (another Pane made it in between).
 func (g *Gateway) startBackground(ctx context.Context, dir string, line []string) ([]byte, error) {
 	ls, err := g.runTern(ctx, []string{"ls", "--json"})
 	if err != nil {
@@ -336,10 +348,17 @@ func (g *Gateway) startBackground(ctx context.Context, dir string, line []string
 		return out, ternFailure(err, out)
 	}
 	out, err := g.runTern(ctx, AgentBackgroundSessionArgs(dir, line))
-	if err != nil && strings.Contains(string(out), "is already called") {
-		out, err = g.runTern(ctx, AgentBackgroundTabArgs(dir, line))
+	if err == nil {
+		return out, nil
 	}
-	return out, ternFailure(err, out)
+	failure := ternFailure(err, out)
+	if again, lsErr := g.runTern(ctx, []string{"ls", "--json"}); lsErr == nil {
+		if exists, _, parseErr := agentSessionBlocks(again); parseErr == nil && exists {
+			out, err = g.runTern(ctx, AgentBackgroundTabArgs(dir, line))
+			return out, ternFailure(err, out)
+		}
+	}
+	return out, failure
 }
 
 // setAgentOpen writes the open flag of the entry with block; background also marks it a background agent.

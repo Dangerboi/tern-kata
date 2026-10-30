@@ -75,6 +75,20 @@ func TestAClosedIssueStartsNoAgentAndSaysToReopenIt(t *testing.T) {
 	}
 }
 
+func TestAClosedIssueWithLiveAgentsRefusesTheKeysToo(t *testing.T) {
+	closed := closedAt("t1", 10, 1)
+	closed.ProjectID, closed.QualifiedID = 7, "work#t1"
+	for name, s := range agentPanes(t, closed) {
+		s = withAgentRows(s)
+		for _, chord := range []string{"w", "shift+w", "shift+s"} {
+			got := step(t, s, key(chord))
+			if len(got.Cmds) != 0 || got.State.Model.TopCard() == model.CardAgent || got.State.Model.Notice != "This Issue is closed; reopen it first (r)." {
+				t.Errorf("%s %s: card %v, cmds %#v, notice %q", name, chord, got.State.Model.TopCard(), got.Cmds, got.State.Model.Notice)
+			}
+		}
+	}
+}
+
 func TestTheStartAndItsResultsReachTheModel(t *testing.T) {
 	s := agentPanes(t, agentIssue("t1"))["list"]
 	entry := model.AgentEntry{IssueUID: "t1", IssueRef: "work#t1", Block: "31"}
