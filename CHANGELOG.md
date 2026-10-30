@@ -16,6 +16,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A Project can share its Lane list through kata: **Save to: The Project** on the Lanes card writes it to the Project's `tern.lanes` metadata, every tern-kata on the daemon shows it before its own `lanes.toml`, and a change from another machine reaches an open Board at once. The Board and the Lanes card say whether the list in use is shared, this machine's or the default; `ctrl+x` on the card stops sharing, and a Project changed since the card opened keeps your text and names the list it shares now.
 
 ### Changed
+
+- The help sheet (`?`) lists the global keys and the keys of the Page it is opened over, and shows the agent keys `w/W/S` on one short line.
 - The Menu's top level is short: the bound Project, **Views**, **Projects**, the Lettered Pages, Restore a deleted Issue and New Project. The fixed Collections (Inbox, Today, Upcoming, Deadlines, All Open, Logbook) moved into a **Views** level, which Back, `esc` or `backspace` leave for the top with the cursor on Views. The Views row names the current fixed Collection or saved view, typing still finds every Collection from the top, and an unbound directory's Menu sidebar shows the Views level.
 - **Open kata**, `F9` and kata links need Tern 0.9.7 or newer, which lets plugins split and find a remote host's Pane; they no longer fall back to a new tab when Tern can't split the focused Pane.
 - `install.ps1` says that new Tern tabs and Panes see the `PATH` it changed at once; only shells already open and other programs already running need restarting.
