@@ -92,11 +92,11 @@ type Model struct {
 	Workspace string
 	// PaneBlock is the block id of this kata Pane ($TERN_PANE), "" when Tern did not say; agents split beside it.
 	PaneBlock string
-	// Agents is agents.json as this Pane last read or changed it: the agents Panes on this host started.
-	Agents   []AgentEntry
-	Project  Project
-	Daemon   Daemon
-	Snapshot Snapshot
+	// AgentMapping is agents.json as this Pane last read or changed it: the agents Panes on this host started.
+	AgentMapping []AgentEntry
+	Project      Project
+	Daemon       Daemon
+	Snapshot     Snapshot
 	// Relationships is every Issue's Relationships, built from Snapshot's links each time a snapshot is applied.
 	Relationships RelationshipIndex
 	Issues        []Issue

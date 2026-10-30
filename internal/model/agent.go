@@ -98,7 +98,7 @@ func agentStarted(m Model, msg AgentStarted) Model {
 		m.Notice = fmt.Sprintf("Cannot start an agent on %s: %s", msg.IssueRef, msg.Err)
 		return m
 	}
-	m.Agents = append(m.Agents, msg.Entry)
+	m.AgentMapping = append(m.AgentMapping, msg.Entry)
 	where := "a split beside this Pane"
 	if msg.Placement == AgentTab {
 		where = "a new tab"
@@ -109,7 +109,7 @@ func agentStarted(m Model, msg AgentStarted) Model {
 
 func agentsPruned(m Model, msg AgentsPruned) Model {
 	if msg.Err == nil {
-		m.Agents = msg.Agents
+		m.AgentMapping = msg.Agents
 	}
 	return m
 }

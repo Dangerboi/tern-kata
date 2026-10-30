@@ -79,16 +79,16 @@ func TestTheStartAndItsResultsReachTheModel(t *testing.T) {
 	s := agentPanes(t, agentIssue("t1"))["list"]
 	entry := model.AgentEntry{IssueUID: "t1", IssueRef: "work#t1", Block: "31"}
 	got := step(t, s, model.AgentStarted{Placement: model.AgentTab, IssueRef: "work#t1", Entry: entry})
-	if len(got.State.Model.Agents) != 1 || got.State.Model.Agents[0] != entry || got.State.Model.Notice != "Started an agent on work#t1 in a new tab." {
-		t.Fatalf("agents %+v, notice %q", got.State.Model.Agents, got.State.Model.Notice)
+	if len(got.State.Model.AgentMapping) != 1 || got.State.Model.AgentMapping[0] != entry || got.State.Model.Notice != "Started an agent on work#t1 in a new tab." {
+		t.Fatalf("agents %+v, notice %q", got.State.Model.AgentMapping, got.State.Model.Notice)
 	}
 	failed := step(t, s, model.AgentStarted{IssueRef: "work#t1", Err: errString("no checkout")})
-	if failed.State.Model.Notice != "Cannot start an agent on work#t1: no checkout" || len(failed.State.Model.Agents) != 0 {
+	if failed.State.Model.Notice != "Cannot start an agent on work#t1: no checkout" || len(failed.State.Model.AgentMapping) != 0 {
 		t.Fatalf("notice %q", failed.State.Model.Notice)
 	}
 	pruned := step(t, got.State, model.AgentsPruned{})
-	if len(pruned.State.Model.Agents) != 0 {
-		t.Fatalf("pruned agents %+v", pruned.State.Model.Agents)
+	if len(pruned.State.Model.AgentMapping) != 0 {
+		t.Fatalf("pruned agents %+v", pruned.State.Model.AgentMapping)
 	}
 	if started := step(t, driver.State{}, model.Start{Workspace: "/repo"}); !hasPrune(started.Cmds) {
 		t.Fatalf("start cmds %#v, want the agents pruned", started.Cmds)
