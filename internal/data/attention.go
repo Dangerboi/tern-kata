@@ -95,3 +95,12 @@ func (c *Client) writeAttentionSlot(ctx context.Context, projectID int64, uid, a
 	})
 	return daemonError(err)
 }
+
+// ReadAgentIssue reads the status of the Issue with uid in a Project.
+func (c *Client) ReadAgentIssue(ctx context.Context, cmd model.ReadAgentIssue) (model.AgentIssueRead, error) {
+	shown, err := c.showIssue(ctx, cmd.ProjectID, cmd.UID)
+	if err != nil {
+		return model.AgentIssueRead{}, daemonError(err)
+	}
+	return model.AgentIssueRead{UID: cmd.UID, Status: shown.Issue.Status}, nil
+}

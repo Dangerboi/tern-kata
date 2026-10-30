@@ -443,6 +443,35 @@ func (g *Gateway) sendAgentBack(ctx context.Context, cmd model.SendAgentBack) mo
 	return placed
 }
 
+// closeAgent closes the agent's block with `tern close`, then drops its entry and prompt file from agents.json as it stands now.
+// When tern fails the entry stays.
+func (g *Gateway) closeAgent(ctx context.Context, cmd model.CloseAgent) model.AgentClosed {
+	if out, err := g.runTern(ctx, CloseBlockArgs(cmd.Block)); err != nil {
+		return model.AgentClosed{Block: cmd.Block, Err: ternFailure(err, out)}
+	}
+	file, _, err := g.agentStatePaths()
+	if err != nil {
+		return model.AgentClosed{Block: cmd.Block, Err: fmt.Errorf("the block closed but agents.json could not be written: %w", err)}
+	}
+	var gone []model.AgentEntry
+	kept, err := UpdateAgents(file, func(list []model.AgentEntry) []model.AgentEntry {
+		return slices.DeleteFunc(list, func(e model.AgentEntry) bool {
+			if e.Block != cmd.Block {
+				return false
+			}
+			gone = append(gone, e)
+			return true
+		})
+	})
+	if err != nil {
+		return model.AgentClosed{Block: cmd.Block, Err: fmt.Errorf("the block closed but agents.json could not be written: %w", err)}
+	}
+	for _, e := range gone {
+		removePrompt(e.PromptFile)
+	}
+	return model.AgentClosed{Block: cmd.Block, Agents: kept}
+}
+
 // writeAgentPrompt puts text in a new file of folder and returns its path.
 func writeAgentPrompt(folder, text string) (string, error) {
 	if err := os.MkdirAll(folder, 0o700); err != nil {

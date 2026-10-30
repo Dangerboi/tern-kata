@@ -60,6 +60,8 @@ type Model struct {
 	Create CreateState
 	// Agents is the latest agent state list the window half relayed.
 	Agents AgentStatesRelay
+	// AgentClose is what ending finished Background agents remembers.
+	AgentClose agentCloseState
 	// pending is the Issue Create just made, selected as soon as a snapshot lists it.
 	pending string
 	// etag answers etagQuery: the snapshot on screen.
@@ -179,6 +181,12 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 		m.Notice, m.NoticeLink = "", nil
 	}
 	next, cmds := updateWithDetail(m, msg)
+	switch msg.(type) {
+	case SnapshotLoaded, StreamEvent:
+		var ended []Cmd
+		next, ended = closeFinishedAgents(next, closeOnIssues)
+		cmds = append(cmds, ended...)
+	}
 	next = next.recordWrite(msg).noteWrites(cmds)
 	return next.cancelPending(m, msg).withCollectionRows(), cmds
 }
@@ -372,7 +380,12 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m, cmds := relayAgents(m, msg)
 		m, back := sendAgentsBack(m)
 		m, raised := raiseAgentAttention(m)
-		return m, append(append(cmds, back...), raised...)
+		m, ended := closeFinishedAgents(m, closeOnRelay)
+		return m, append(append(append(cmds, back...), raised...), ended...)
+	case AgentIssueRead:
+		return agentIssueRead(m, msg)
+	case AgentClosed:
+		m = agentClosed(m, msg)
 	case AgentAttentionWritten:
 		return agentAttentionWritten(m, msg), nil
 	case AgentJumpMsg:
