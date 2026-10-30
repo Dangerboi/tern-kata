@@ -60,6 +60,8 @@ func TestAgentStatesDecodeKeepsBlockIdsExact(t *testing.T) {
 			model.AgentStatesMsg{States: []model.AgentState{{Block: big, State: "working", LastMessage: "hi"}}}},
 		{"number pane", `[{"pane":` + big + `,"state":"idle"}]`,
 			model.AgentStatesMsg{States: []model.AgentState{{Block: big, State: "idle"}}}},
+		{"with command", `[{"pane":"7","state":"idle","command":"omp @/s/agent-prompts/prompt-1-2.md"}]`,
+			model.AgentStatesMsg{States: []model.AgentState{{Block: "7", State: "idle", Command: "omp @/s/agent-prompts/prompt-1-2.md"}}}},
 		{"exponent pane", `[{"pane":1e3,"state":"exited"}]`,
 			model.AgentStatesMsg{States: []model.AgentState{{Block: "1000", State: "exited"}}}},
 		{"empty list", `[]`, model.AgentStatesMsg{States: []model.AgentState{}}},

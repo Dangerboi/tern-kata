@@ -75,7 +75,8 @@ local relayed: { [number]: boolean } = {}
 -- Every agent block in the session as JSON for the Pane, which matches it against its own agents. The pane id goes as
 -- decimal text; %.0f prints a whole number without an exponent. Tern's API gives the id only as a Luau number (a double),
 -- so the text is exact only for ids up to 2^53: a larger id is already rounded here and matches no agent of the Pane.
--- A missing last message is the empty string.
+-- A window on another machine numbers panes differently from the session host, so the id may match nothing there; the command
+-- (it names the agent's prompt file) lets the Pane find its agent anyway. A missing last message or command is the empty string.
 local function agentStates(cx: WindowCx): string
     local list = tern.json.array({})
     for _, agent in cx.agents:list() do
@@ -84,6 +85,7 @@ local function agentStates(cx: WindowCx): string
             pane = string.format("%.0f", agent.pane),
             state = agent.state,
             last_message = if type(last) == "string" then last else "",
+            command = if type(agent.command) == "string" then agent.command else "",
         })
     end
     return tern.json.encode(list)
@@ -95,8 +97,12 @@ local function relayStates(cx: WindowCx, pane: number, states: string)
     cx.session:event(pane, {ev = "action", id = "main.columns.list.issues", act = "agent-states", value = states})
 end
 
+-- Places new agent tabs; defined with the tab placement below, and run on every relay pass.
+local placeAgents: (WindowCx) -> ()
+
 -- The states to every live kata Pane, or only to those not sent them yet.
 local function relayAll(cx: WindowCx, onlyNew: boolean)
+    placeAgents(cx)
     local states: string? = nil
     for _, info in cx.session:panes() do
         if isKata(info) and not (onlyNew and relayed[info.pane]) and cx.session:surface(info.pane) then
@@ -186,26 +192,72 @@ local function open(cx: WindowCx, ref: string?)
 end
 
 -- `W` starts an agent in a new tab, which Tern appends as the last tab. The agent's prompt file is named
--- `prompt-<block of the starting kata Pane>-<random>.md` (internal/data), and that name is in the command line Tern reports for
--- the new tab's Pane: the agent block's `command`, else the running line. A tab found this way is moved right of the starting
--- Pane's tab; no other tab is reordered, and nothing is kept between events. A tab that shows no such command is polled for
--- 2 s, since a launch by the session daemon may report it a moment late.
+-- `prompt-<starter>-<random>.md` (internal/data), `<starter>` being the block of the starting kata Pane, and that name is in the
+-- command line Tern reports for the new tab's Pane: the agent block's `command`, else the running line. The tab is moved right of the
+-- starting Pane's tab; no other tab is reordered.
+-- Two ways find a new agent tab. `tab_created` fires for tabs opened on this window's own machine. A window on another machine
+-- gets no `tab_created` for a tab the CLI opens on the session host, and numbers panes differently from the host, so
+-- `<starter>` is no pane id there. Such a window places on `agent_state` and on every relay pass instead: an agent pane whose
+-- command carries the marker is placed once (remembered in `placed` until its pane closes) and then never touched again.
+-- The starter is the kata Pane whose id is `<starter>`, else the focused Pane if it is a kata Pane (the Pane the user just pressed
+-- `W` in), else the window's only kata Pane; with none of these nothing moves.
 local PLACE_TRIES = 10
+local placed: { [number]: boolean } = {}
+
+local function markerOf(text: string?): number?
+    local block = text and text:match("prompt%-(%d+)%-%w+%.md")
+    return block and tonumber(block) or nil
+end
 
 local function starterOf(cx: WindowCx, tab: number): number?
-    local texts: { string } = {}
     for _, info in cx.session:panes() do
-        if info.tab == tab and info.running then table.insert(texts, info.running.line) end
+        if info.tab == tab and info.running then
+            local block = markerOf(info.running.line)
+            if block then return block end
+        end
     end
     for _, agent in cx.agents:list() do
         local info = cx.session:pane(agent.pane)
-        if info and info.tab == tab and agent.command then table.insert(texts, agent.command) end
-    end
-    for _, text in texts do
-        local block = text:match("prompt%-(%d+)%-%w+%.md")
-        if block then return tonumber(block) end
+        if info and info.tab == tab then
+            local block = markerOf(agent.command)
+            if block then return block end
+        end
     end
     return nil
+end
+
+-- The kata Pane an agent started from, as far as this window can tell: see the comment above.
+local function starterPane(cx: WindowCx, starter: number): PaneInfo?
+    local own = cx.session:pane(starter)
+    if isKata(own) then return own end
+    local focused = cx.session:focused()
+    local info = focused and cx.session:pane(focused)
+    if isKata(info) then return info end
+    local only: PaneInfo? = nil
+    for _, candidate in cx.session:panes() do
+        if isKata(candidate) then
+            if only then return nil end
+            only = candidate
+        end
+    end
+    return only
+end
+
+-- Moves `tab` right of the tab of `home`, the starting Pane; false when there is none.
+local function placeTab(cx: WindowCx, tab: number, home: PaneInfo?): boolean
+    if not home then return false end
+    if not home.tab or home.tab == tab then return true end
+    local starterTab: TabInfo? = nil
+    local newTab: TabInfo? = nil
+    for _, info in cx.session:tabs() do
+        if info.id == home.tab then starterTab = info end
+        if info.id == tab then newTab = info end
+    end
+    if not starterTab or not newTab or starterTab.session ~= newTab.session then return true end
+    if newTab.position ~= starterTab.position + 1 then
+        cx.layout:order_tab(tab, starterTab.position + 1)
+    end
+    return true
 end
 
 local function placeAgentTab(cx: WindowCx, tab: number, tries: number)
@@ -218,17 +270,23 @@ local function placeAgentTab(cx: WindowCx, tab: number, tries: number)
         end
         return
     end
-    local home = cx.session:pane(starter)
-    if not home or not home.tab or home.tab == tab then return end
-    local starterTab: TabInfo? = nil
-    local newTab: TabInfo? = nil
-    for _, info in cx.session:tabs() do
-        if info.id == home.tab then starterTab = info end
-        if info.id == tab then newTab = info end
+    -- Here the starter's own id is exact, since the tab is on this window's machine; a starter that is gone leaves the tab last.
+    placeTab(cx, tab, cx.session:pane(starter))
+    for _, info in cx.session:panes() do
+        if info.tab == tab then placed[info.pane] = true end
     end
-    if not starterTab or not newTab or starterTab.session ~= newTab.session then return end
-    if newTab.position ~= starterTab.position + 1 then
-        cx.layout:order_tab(tab, starterTab.position + 1)
+end
+
+-- Agent panes not placed yet whose command carries the marker, each placed once.
+placeAgents = function(cx: WindowCx)
+    for _, agent in cx.agents:list() do
+        if not placed[agent.pane] then
+            local starter = markerOf(agent.command)
+            local info = if starter then cx.session:pane(agent.pane) else nil
+            if starter and info and info.tab and placeTab(cx, info.tab, starterPane(cx, starter)) then
+                placed[agent.pane] = true
+            end
+        end
     end
 end
 
@@ -240,6 +298,7 @@ tern.on("pane_closed", function(ev, cx)
     launched[ev.pane] = nil
     pending[ev.pane] = nil
     relayed[ev.pane] = nil
+    placed[ev.pane] = nil
     if marked[ev.pane] then
         marked[ev.pane] = nil
         restyleMarks()
@@ -251,6 +310,8 @@ local function markAll(cx: WindowCx)
         if isKata(info) then marked[info.pane] = true end
     end
     restyleMarks()
+    -- Agents already there were placed (or put somewhere on purpose) before this run: only later ones are moved.
+    for _, agent in cx.agents:list() do placed[agent.pane] = true end
     relayAll(cx, false)
 end
 

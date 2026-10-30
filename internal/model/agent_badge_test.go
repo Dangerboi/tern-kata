@@ -66,19 +66,22 @@ func TestKataPanesInTheRelayNeverMatch(t *testing.T) {
 	}
 }
 
-func TestANewBlockInTheRelayReReadsAgentsJSONOnce(t *testing.T) {
+func TestAnAgentOfAnUnknownPromptFileInTheRelayReReadsAgentsJSONOnce(t *testing.T) {
 	m := model.Model{AgentMapping: []model.AgentEntry{entry("a", "7", 1)}}
-	m, cmds := relayed(m, model.AgentState{Block: "7", State: "idle"}, model.AgentState{Block: "9", State: "idle"})
+	other := model.AgentState{Block: "9", State: "idle", Command: "omp @/state/agent-prompts/prompt-4-5.md"}
+	m, cmds := relayed(m, model.AgentState{Block: "7", State: "idle"}, other)
 	if want := []model.Cmd{model.RefreshAgents{}}; !reflect.DeepEqual(cmds, want) {
-		t.Fatalf("first relay: %#v, want a re-read for the unmapped block 9", cmds)
+		t.Fatalf("first relay: %#v, want a re-read for the unknown prompt file", cmds)
 	}
-	// The same list again carries no new block.
-	if _, cmds := relayed(m, model.AgentState{Block: "7", State: "working"}, model.AgentState{Block: "9", State: "idle"}); cmds != nil {
-		t.Errorf("a relay with no new block re-read: %#v", cmds)
+	m, _ = model.Update(m, model.AgentsRefreshed{Agents: m.AgentMapping})
+	// The same prompt file again, even under another id, asks nothing.
+	other.Block = "10"
+	if _, cmds := relayed(m, model.AgentState{Block: "7", State: "working"}, other); cmds != nil {
+		t.Errorf("a prompt file that already asked re-read: %#v", cmds)
 	}
-	// A new block the mapping already holds needs no re-read.
-	if _, cmds := relayed(m, model.AgentState{Block: "7", State: "idle"}, model.AgentState{Block: "9", State: "idle"}, model.AgentState{Block: "7", State: "idle"}); cmds != nil {
-		t.Errorf("%#v", cmds)
+	// An unknown id with no prompt file, or a command that names none of tern-kata's, asks nothing.
+	if _, cmds := relayed(m, model.AgentState{Block: "7", State: "idle"}, model.AgentState{Block: "11", State: "idle"}, model.AgentState{Block: "12", State: "idle", Command: "omp"}); cmds != nil {
+		t.Errorf("unknown ids re-read: %#v", cmds)
 	}
 	held := model.Model{AgentMapping: []model.AgentEntry{entry("a", "7", 1)}}
 	if _, cmds := relayed(held, model.AgentState{Block: "7", State: "idle"}); cmds != nil {
