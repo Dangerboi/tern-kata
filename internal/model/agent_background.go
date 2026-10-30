@@ -10,8 +10,8 @@ type OpenAgent struct{ Block, PaneBlock string }
 
 func (OpenAgent) cmd() {}
 
-// SendAgentBack moves an open background agent's block back into its own tab of the hidden session, names that tab IssueRef and
-// clears the entry's open flag.
+// SendAgentBack moves an agent's block back into its own tab of the hidden session, names that tab IssueRef and
+// clears the entry's open flag and marks it background.
 type SendAgentBack struct{ Block, IssueRef string }
 
 func (SendAgentBack) cmd() {}
@@ -34,6 +34,7 @@ func agentPlaced(m Model, msg AgentPlaced) Model {
 		for i := range m.AgentMapping {
 			if m.AgentMapping[i].Block == msg.Block {
 				m.AgentMapping[i].Open = msg.Open
+				m.AgentMapping[i].Background = m.AgentMapping[i].Background || msg.Back
 			}
 		}
 	}

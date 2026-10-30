@@ -1,6 +1,6 @@
 package model
 
-// The Agent card opens when `w` or `W` is pressed on an Issue that already has agents: it lists them, goes to one, or starts
+// The Agent card opens when `w`, `W` or `S` is pressed on an Issue that already has agents: it lists them, goes to one, or starts
 // another where the opening key asked.
 
 // ModeAgentCard is the mode of the Agent card.
@@ -8,9 +8,10 @@ const ModeAgentCard Mode = "agent-card"
 
 // The Agent card's own actions; its cursor keys are MoveDown, MoveUp, MoveFirst and MoveLast.
 const (
-	AgentCardGo     Action = "agent-card-go"
-	AgentCardStart  Action = "agent-card-start"
-	AgentCardCancel Action = "agent-card-cancel"
+	AgentCardGo         Action = "agent-card-go"
+	AgentCardStart      Action = "agent-card-start"
+	AgentCardBackground Action = "agent-card-background"
+	AgentCardCancel     Action = "agent-card-cancel"
 )
 
 // AgentCardState is the Agent card. Placement is what the opening key asked, and what `n` starts.
@@ -35,8 +36,15 @@ func (m Model) AgentCardCursor() int {
 	return max(0, min(m.AgentCard.Cursor, len(m.AgentCardRows())-1))
 }
 
-// AgentWhere says where an agent's block is: "tab" for one started in a tab, "split" otherwise.
+// AgentWhere says where an agent's block is: "open" for a background agent that is out of the hidden session, "background" for one
+// in it, "tab" for one started in a tab, "split" otherwise.
 func AgentWhere(a AgentEntry) string {
+	if a.Background {
+		if a.Open {
+			return "open"
+		}
+		return string(AgentBackground)
+	}
 	if a.Placement == AgentTab {
 		return string(AgentTab)
 	}
@@ -66,6 +74,11 @@ func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		block := rows[cursor].Block
 		m.AgentCard = AgentCardState{}
 		return jumpToAgent(m, block)
+	case AgentCardBackground:
+		if len(rows) == 0 {
+			return m, nil
+		}
+		return sendToBackground(m, rows[cursor].AgentEntry)
 	case AgentCardStart:
 		placement := m.AgentCard.Placement
 		m.AgentCard = AgentCardState{}
@@ -80,6 +93,17 @@ func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		m.AgentCard.Cursor = max(0, len(rows)-1)
 	}
 	return m, nil
+}
+
+// sendToBackground is `b`: an agent in view goes to the hidden session, through the step going back uses. One already in the
+// background and not open stays there; the card closes with a Notice saying so.
+func sendToBackground(m Model, e AgentEntry) (Model, []Cmd) {
+	m.AgentCard = AgentCardState{}
+	if e.Background && !e.Open {
+		m.Notice = "That agent is already in the background."
+		return m, nil
+	}
+	return m, []Cmd{SendAgentBack{Block: e.Block, IssueRef: e.IssueRef}}
 }
 
 // AgentCardSelected is a click on an agent of the card's list; Block is its block id.
