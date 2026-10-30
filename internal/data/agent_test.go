@@ -520,14 +520,14 @@ func TestGoingBackMovesTheAgentIntoTheHiddenSessionAndNamesItsTab(t *testing.T) 
 			{"ls", "--json"}, {"new", "session", "kata agents", "--json"}, {"move", "31", "right-of", "40", "--json"}, {"close", "40", "--json"}, {"rename", "31", "demo#ab12"}}},
 	} {
 		g, dirs := agentGateway(t)
-		file := seedAgent(t, dirs, model.AgentEntry{Block: "31", Background: true, Open: true})
+		file := seedAgent(t, dirs, model.AgentEntry{Block: "31", Open: true, Placement: model.AgentSplit})
 		c.replies["ls"], c.replies["rename"] = ternOut(c.ls), ternOut("")
 		calls := ternScript(g, c.replies)
 		got := as[model.AgentPlaced](t, run(t, g, back))
 		if got.Err != nil || !got.Moved || got.Open || !got.Back || !reflect.DeepEqual(*calls, c.want) {
 			t.Errorf("%s: %+v, ran %q, want %q", name, got, *calls, c.want)
 		}
-		if stored, _ := ReadAgents(file); stored[0].Open {
+		if stored, _ := ReadAgents(file); stored[0].Open || !stored[0].Background {
 			t.Errorf("%s: agents.json %+v", name, stored)
 		}
 	}

@@ -342,8 +342,8 @@ func (g *Gateway) startBackground(ctx context.Context, dir string, line []string
 	return out, ternFailure(err, out)
 }
 
-// setAgentOpen writes the open flag of the entry with block.
-func (g *Gateway) setAgentOpen(block string, open bool) error {
+// setAgentOpen writes the open flag of the entry with block; background also marks it a background agent.
+func (g *Gateway) setAgentOpen(block string, open, background bool) error {
 	file, _, err := g.agentStatePaths()
 	if err != nil {
 		return err
@@ -352,6 +352,7 @@ func (g *Gateway) setAgentOpen(block string, open bool) error {
 		for i := range list {
 			if list[i].Block == block {
 				list[i].Open = open
+				list[i].Background = list[i].Background || background
 			}
 		}
 		return list
@@ -364,13 +365,13 @@ func (g *Gateway) openAgent(ctx context.Context, cmd model.OpenAgent) model.Agen
 	if out, err := g.runTern(ctx, MoveRightOfArgs(cmd.Block, cmd.PaneBlock)); err != nil {
 		return model.AgentPlaced{Block: cmd.Block, Err: ternFailure(err, out)}
 	}
-	if err := g.setAgentOpen(cmd.Block, true); err != nil {
+	if err := g.setAgentOpen(cmd.Block, true, false); err != nil {
 		return model.AgentPlaced{Block: cmd.Block, Err: fmt.Errorf("the agent moved but agents.json could not be written: %w", err)}
 	}
 	return model.AgentPlaced{Block: cmd.Block, Moved: true, Open: true}
 }
 
-// sendAgentBack moves an open background agent into a tab of the hidden session and clears its open flag. It goes right of a block
+// sendAgentBack moves an agent in view (or an open background agent) into a tab of the hidden session and clears its open flag and marks it a background agent. It goes right of a block
 // the session still holds and then into a tab of its own; with none left it goes beside a shell opened for the purpose, which is
 // closed again. The tab is named last, for Tern drops a tab's name when its block moves.
 func (g *Gateway) sendAgentBack(ctx context.Context, cmd model.SendAgentBack) model.AgentPlaced {
@@ -413,7 +414,7 @@ func (g *Gateway) sendAgentBack(ctx context.Context, cmd model.SendAgentBack) mo
 		}
 	}
 	placed := model.AgentPlaced{Block: cmd.Block, Back: true, Moved: true}
-	if err := g.setAgentOpen(cmd.Block, false); err != nil {
+	if err := g.setAgentOpen(cmd.Block, false, true); err != nil {
 		placed.Err = fmt.Errorf("the agent moved but agents.json could not be written: %w", err)
 		return placed
 	}

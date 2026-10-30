@@ -69,3 +69,35 @@ func TestTheAgentCardKeysAndButtonsReachTheGateway(t *testing.T) {
 		t.Errorf("esc: card %v, cmds %#v", esc.State.Model.TopCard(), esc.Cmds)
 	}
 }
+
+func TestSOpensTheAgentCardAndBGoesToTheGateway(t *testing.T) {
+	open := func(chord string) driver.State {
+		return step(t, withAgentRows(agentPanes(t, agentIssue("t1"))["list"]), key(chord)).State
+	}
+	s := open("shift+s")
+	if s.Model.TopCard() != model.CardAgent {
+		t.Fatalf("S: card %v", s.Model.TopCard())
+	}
+	if start, ok := startedAgent(step(t, s, key("n")).Cmds); !ok || start.Placement != model.AgentBackground {
+		t.Errorf("S then n: %#v", start)
+	}
+	got := feed(t, open("w"), key("down"), key("b"))
+	if len(got.Cmds) != 1 || got.Cmds[0] != (model.SendAgentBack{Block: "32", IssueRef: "work#t1"}) || got.State.Model.TopCard() == model.CardAgent {
+		t.Errorf("down, b: cmds %#v", got.Cmds)
+	}
+}
+
+func TestTheAgentCardWhereColumnNamesBackgroundAndOpenAgents(t *testing.T) {
+	s := withAgentRows(agentPanes(t, agentIssue("t1"))["list"])
+	s.Model.AgentMapping[0].Background = true
+	s.Model.AgentMapping[1].Background, s.Model.AgentMapping[1].Open = true, true
+	s = step(t, s, key("shift+s")).State
+	for block, want := range map[string]string{
+		"31": "agent working · started 2026-10-30 09:05 · background",
+		"32": "agent waiting for you · started 2026-10-30 10:05 · open",
+	} {
+		if rows := rowsNamed(t, s.Model, view.AgentListID, want); len(rows) != 1 || rows[0] != view.AgentItemID(block) {
+			t.Errorf("rows reading %q: %v", want, rows)
+		}
+	}
+}

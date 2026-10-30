@@ -135,3 +135,72 @@ func TestAgentWhereReadsTheStartedPlacementAndDefaultsToASplit(t *testing.T) {
 		}
 	}
 }
+
+func TestSOpensTheAgentCardWithAgentsAndNStartsInTheBackground(t *testing.T) {
+	m, cmds := press(cardModel(), "shift+s")
+	if start, ok := agentCmd[model.StartAgent](cmds); !ok || start.Placement != model.AgentBackground || m.TopCard() == model.CardAgent {
+		t.Fatalf("S with no agents: card %v, cmds %#v", m.TopCard(), cmds)
+	}
+	opened, cmds := press(cardModel(entry("a", "1", 1)), "shift+s")
+	if opened.TopCard() != model.CardAgent || opened.AgentCard.Placement != model.AgentBackground {
+		t.Fatalf("S with an agent: card %v, placement %q", opened.TopCard(), opened.AgentCard.Placement)
+	}
+	m, cmds = press(opened, "n")
+	if start, ok := agentCmd[model.StartAgent](cmds); !ok || start.Placement != model.AgentBackground || m.TopCard() == model.CardAgent {
+		t.Errorf("S then n: cmds %#v, card %v", cmds, m.TopCard())
+	}
+}
+
+func TestBSendsTheSelectedAgentInViewToTheBackgroundAndMarksIt(t *testing.T) {
+	first, second := entry("a", "1", 1), entry("a", "2", 2)
+	second.IssueRef = "work#a"
+	opened, _ := press(cardModel(first, second), "w", "down")
+	m, cmds := press(opened, "b")
+	back, ok := agentCmd[model.SendAgentBack](cmds)
+	if !ok || back != (model.SendAgentBack{Block: "2", IssueRef: "work#a"}) || m.TopCard() == model.CardAgent {
+		t.Fatalf("b: cmds %#v, card %v", cmds, m.TopCard())
+	}
+	m, _ = model.Update(m, model.AgentPlaced{Block: "2", Back: true, Moved: true})
+	if got := m.AgentMapping[1]; !got.Background || got.Open || model.AgentWhere(got) != "background" {
+		t.Errorf("entry after b: %+v", got)
+	}
+	if m.AgentMapping[0].Background {
+		t.Errorf("the other agent changed: %+v", m.AgentMapping[0])
+	}
+}
+
+func TestBOnAnOpenBackgroundAgentSendsItBackAndOnAClosedOneKeepsItThere(t *testing.T) {
+	open := entry("a", "1", 1)
+	open.Background, open.Open = true, true
+	_, cmds := press(cardModel(open), "w", "b")
+	if _, ok := agentCmd[model.SendAgentBack](cmds); !ok {
+		t.Errorf("open background agent: cmds %#v", cmds)
+	}
+	closed := entry("a", "1", 1)
+	closed.Background = true
+	m, cmds := press(cardModel(closed), "w", "b")
+	if len(cmds) != 0 || m.TopCard() == model.CardAgent || m.Notice == "" {
+		t.Errorf("background agent: cmds %#v, card %v, notice %q", cmds, m.TopCard(), m.Notice)
+	}
+}
+
+func TestEnterOnAClosedBackgroundAgentOpensItBesideThePane(t *testing.T) {
+	e := entry("a", "1", 1)
+	e.Background = true
+	_, cmds := press(cardModel(e), "shift+s", "enter")
+	if open, ok := agentCmd[model.OpenAgent](cmds); !ok || open != (model.OpenAgent{Block: "1", PaneBlock: "9"}) {
+		t.Errorf("cmds %#v", cmds)
+	}
+}
+
+func TestAgentWhereNamesBackgroundAndOpenAgents(t *testing.T) {
+	for want, e := range map[string]model.AgentEntry{
+		"background": {Background: true, Placement: model.AgentBackground},
+		"open":       {Background: true, Open: true, Placement: model.AgentBackground},
+		"tab":        {Placement: model.AgentTab},
+	} {
+		if got := model.AgentWhere(e); got != want {
+			t.Errorf("%+v: %q, want %q", e, got, want)
+		}
+	}
+}
