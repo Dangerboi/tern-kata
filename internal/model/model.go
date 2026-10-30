@@ -364,12 +364,15 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m.Err = msg.Err
 	case AgentStatesMsg:
 		m, cmds := relayAgents(m, msg)
+		m, back := sendAgentsBack(m)
 		m, raised := raiseAgentAttention(m)
-		return m, append(cmds, raised...)
+		return m, append(append(cmds, back...), raised...)
 	case AgentAttentionWritten:
 		return agentAttentionWritten(m, msg), nil
 	case AgentJumpMsg:
-		return m, []Cmd{FocusAgent(msg)}
+		return jumpToAgent(m, msg.Block)
+	case AgentPlaced:
+		m = agentPlaced(m, msg)
 	case AgentFocused:
 		m = agentFocused(m, msg)
 	case AgentsRefreshed:

@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -356,5 +358,215 @@ func TestFocusingAnAgentRunsTernFocusAndReportsItsOutput(t *testing.T) {
 	}
 	if got := as[model.AgentFocused](t, run(t, g, model.FocusAgent{Block: "1"})); got.Err == nil || got.Err.Error() != "exit status 1: tern: no such block" {
 		t.Errorf("error %v", got.Err)
+	}
+}
+
+func TestTheBackgroundArgvBuilders(t *testing.T) {
+	line := []string{"omp", "@/p.md"}
+	for name, c := range map[string]struct{ got, want []string }{
+		"new session": {AgentBackgroundSessionArgs("/work", line), []string{"new", "session", "kata agents", "--cwd", "/work", "--json", "--", "omp", "@/p.md"}},
+		"new tab":     {AgentBackgroundTabArgs("/work", line), []string{"new", "tab", "kata agents", "--cwd", "/work", "--json", "--", "omp", "@/p.md"}},
+		"rename":      {RenameAgentArgs("31", "demo#ab12"), []string{"rename", "31", "demo#ab12"}},
+		"open":        {MoveRightOfArgs("31", "7"), []string{"move", "31", "right-of", "7", "--json"}},
+		"open focus":  {MoveRightOfArgs("31", ""), []string{"move", "31", "right-of", "@focused", "--json"}},
+		"new-tab":     {MoveNewTabArgs("31"), []string{"move", "31", "new-tab", "--json"}},
+		"shell tab":   {AgentShellTabArgs(true), []string{"new", "tab", "kata agents", "--json"}},
+		"shell sess":  {AgentShellTabArgs(false), []string{"new", "session", "kata agents", "--json"}},
+		"close":       {CloseBlockArgs("40"), []string{"close", "40", "--json"}},
+	} {
+		if !slices.Equal(c.got, c.want) {
+			t.Errorf("%s: %q, want %q", name, c.got, c.want)
+		}
+	}
+}
+
+const lsWithAgents = `{"sessions":[{"id":1,"name":"main","shown":true,"tabs":[{"id":2,"blocks":[{"id":7}]}]},
+{"id":3,"name":"kata agents","shown":false,"tabs":[{"id":4,"name":"x#1","blocks":[{"id":18494129176578},{"id":55}]}]}]}`
+
+const lsWithoutAgents = `{"sessions":[{"id":1,"name":"main","shown":true,"tabs":[{"id":2,"blocks":[{"id":7}]}]}]}`
+
+// ternScript answers each tern call from replies keyed by the first words of the command, and records the calls.
+func ternScript(g *Gateway, replies map[string]func() ([]byte, error)) *[][]string {
+	var calls [][]string
+	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		calls = append(calls, args)
+		for n := min(len(args), 3); n > 0; n-- {
+			if reply, ok := replies[strings.Join(args[:n], " ")]; ok {
+				return reply()
+			}
+		}
+		return nil, fmt.Errorf("unscripted %q", args)
+	}
+	return &calls
+}
+
+func ternOut(out string) func() ([]byte, error) {
+	return func() ([]byte, error) { return []byte(out), nil }
+}
+
+func TestStartingABackgroundAgentUsesTheHiddenSessionAsItIs(t *testing.T) {
+	cmd := model.StartAgent{Placement: model.AgentBackground, IssueUID: "U1", IssueRef: "demo#ab12", ProjectName: "demo", Workspace: "/bound", PaneBlock: "7"}
+	prefix := func(calls [][]string, i int) string { return strings.Join(calls[i][:min(len(calls[i]), 3)], " ") }
+	for name, c := range map[string]struct {
+		ls      string
+		replies map[string]func() ([]byte, error)
+		want    []string
+	}{
+		"session exists": {lsWithAgents, map[string]func() ([]byte, error){"new tab kata agents": ternOut(`{"session":3,"tab":9,"block":31}`)}, []string{"ls --json", "new tab kata agents", "rename 31 demo#ab12"}},
+		"no session":     {lsWithoutAgents, map[string]func() ([]byte, error){"new session kata agents": ternOut(`{"session":3,"tab":9,"block":31}`)}, []string{"ls --json", "new session kata agents", "rename 31 demo#ab12"}},
+		"a race for the session": {lsWithoutAgents, map[string]func() ([]byte, error){
+			"new session kata agents": func() ([]byte, error) {
+				return []byte("tern new: a session is already called `kata agents`\n"), errors.New("exit status 1")
+			},
+			"new tab kata agents": ternOut(`{"session":3,"tab":9,"block":31}`)}, []string{"ls --json", "new session kata agents", "new tab kata agents", "rename 31 demo#ab12"}},
+	} {
+		g, dirs := agentGateway(t)
+		c.replies["ls"] = ternOut(c.ls)
+		c.replies["rename"] = ternOut("")
+		calls := ternScript(g, c.replies)
+		got := as[model.AgentStarted](t, run(t, g, cmd))
+		if got.Err != nil || got.Note != "" || !got.Entry.Background || got.Entry.Open || got.Entry.Block != "31" || got.Entry.PaneBlock != "7" {
+			t.Fatalf("%s: %+v", name, got)
+		}
+		var seen []string
+		for i := range *calls {
+			p := prefix(*calls, i)
+			if p == "rename 31 demo#ab12" || p == "ls --json" {
+				p = strings.Join((*calls)[i], " ")
+			}
+			seen = append(seen, p)
+		}
+		if !slices.Equal(seen, c.want) {
+			t.Errorf("%s: ran %q, want %q", name, seen, c.want)
+		}
+		if stored, _ := ReadAgents(filepath.Join(dirs.State, AgentsFile)); len(stored) != 1 || !stored[0].Background {
+			t.Errorf("%s: agents.json %+v", name, stored)
+		}
+	}
+}
+
+func TestABackgroundAgentThatCannotStartLeavesNothing(t *testing.T) {
+	g, dirs := agentGateway(t)
+	ternScript(g, map[string]func() ([]byte, error){
+		"ls":          ternOut(lsWithAgents),
+		"new tab":     func() ([]byte, error) { return []byte("tern new: boom\n"), errors.New("exit status 1") },
+		"new session": ternOut(""),
+	})
+	got := as[model.AgentStarted](t, run(t, g, model.StartAgent{Placement: model.AgentBackground, IssueRef: "demo#ab12", ProjectName: "demo", Workspace: "/bound"}))
+	if got.Err == nil || got.Err.Error() != "exit status 1: tern new: boom" {
+		t.Fatalf("error %v", got.Err)
+	}
+	if left, _ := os.ReadDir(filepath.Join(dirs.State, AgentPromptsFolder)); len(left) != 0 {
+		t.Errorf("prompt files left: %v", left)
+	}
+	// A tab that cannot be named leaves the agent started and says so.
+	ternScript(g, map[string]func() ([]byte, error){
+		"ls":      ternOut(lsWithAgents),
+		"new tab": ternOut(`{"block":31}`),
+		"rename":  func() ([]byte, error) { return []byte("no block\n"), errors.New("exit status 1") },
+	})
+	named := as[model.AgentStarted](t, run(t, g, model.StartAgent{Placement: model.AgentBackground, IssueRef: "demo#ab12", ProjectName: "demo", Workspace: "/bound"}))
+	if named.Err != nil || named.Note != "cannot name its tab: exit status 1: no block" {
+		t.Errorf("rename failure: %+v", named)
+	}
+}
+
+func seedAgent(t *testing.T, dirs worker.Dirs, e model.AgentEntry) string {
+	t.Helper()
+	file := filepath.Join(dirs.State, AgentsFile)
+	if _, err := UpdateAgents(file, func(l []model.AgentEntry) []model.AgentEntry { return append(l, e) }); err != nil {
+		t.Fatal(err)
+	}
+	return file
+}
+
+func TestOpeningABackgroundAgentMovesItBesideThePaneAndMarksItOpen(t *testing.T) {
+	g, dirs := agentGateway(t)
+	file := seedAgent(t, dirs, model.AgentEntry{Block: "31", Background: true})
+	calls := ternScript(g, map[string]func() ([]byte, error){"move": ternOut(`{"block":31}`)})
+	got := as[model.AgentPlaced](t, run(t, g, model.OpenAgent{Block: "31", PaneBlock: "7"}))
+	if got.Err != nil || !got.Moved || !got.Open || got.Back || !reflect.DeepEqual(*calls, [][]string{{"move", "31", "right-of", "7", "--json"}}) {
+		t.Fatalf("%+v, ran %q", got, *calls)
+	}
+	if stored, _ := ReadAgents(file); !stored[0].Open {
+		t.Errorf("agents.json %+v", stored)
+	}
+	// A refusal moves nothing and writes nothing.
+	seedAgent(t, dirs, model.AgentEntry{Block: "32", Background: true})
+	ternScript(g, map[string]func() ([]byte, error){"move": func() ([]byte, error) { return []byte("no block\n"), errors.New("exit status 1") }})
+	refused := as[model.AgentPlaced](t, run(t, g, model.OpenAgent{Block: "32", PaneBlock: "7"}))
+	if refused.Err == nil || refused.Err.Error() != "exit status 1: no block" || refused.Moved {
+		t.Fatalf("refusal %+v", refused)
+	}
+	if stored, _ := ReadAgents(file); stored[1].Open {
+		t.Errorf("agents.json after a refusal %+v", stored)
+	}
+}
+
+func TestGoingBackMovesTheAgentIntoTheHiddenSessionAndNamesItsTab(t *testing.T) {
+	back := model.SendAgentBack{Block: "31", IssueRef: "demo#ab12"}
+	for name, c := range map[string]struct {
+		ls      string
+		replies map[string]func() ([]byte, error)
+		want    [][]string
+	}{
+		"a block is left": {lsWithAgents, map[string]func() ([]byte, error){"move": ternOut(`{"block":31}`)}, [][]string{
+			{"ls", "--json"}, {"move", "31", "right-of", "18494129176578", "--json"}, {"move", "31", "new-tab", "--json"}, {"rename", "31", "demo#ab12"}}},
+		"the session has no block": {`{"sessions":[{"id":3,"name":"kata agents","tabs":[]}]}`, map[string]func() ([]byte, error){
+			"new tab": ternOut(`{"session":3,"tab":9,"block":40}`), "move": ternOut(`{"block":31}`), "close": ternOut(`{"block":40}`)}, [][]string{
+			{"ls", "--json"}, {"new", "tab", "kata agents", "--json"}, {"move", "31", "right-of", "40", "--json"}, {"close", "40", "--json"}, {"rename", "31", "demo#ab12"}}},
+		"the session is gone": {lsWithoutAgents, map[string]func() ([]byte, error){
+			"new session": ternOut(`{"session":3,"tab":9,"block":40}`), "move": ternOut(`{"block":31}`), "close": ternOut(`{"block":40}`)}, [][]string{
+			{"ls", "--json"}, {"new", "session", "kata agents", "--json"}, {"move", "31", "right-of", "40", "--json"}, {"close", "40", "--json"}, {"rename", "31", "demo#ab12"}}},
+	} {
+		g, dirs := agentGateway(t)
+		file := seedAgent(t, dirs, model.AgentEntry{Block: "31", Background: true, Open: true})
+		c.replies["ls"], c.replies["rename"] = ternOut(c.ls), ternOut("")
+		calls := ternScript(g, c.replies)
+		got := as[model.AgentPlaced](t, run(t, g, back))
+		if got.Err != nil || !got.Moved || got.Open || !got.Back || !reflect.DeepEqual(*calls, c.want) {
+			t.Errorf("%s: %+v, ran %q, want %q", name, got, *calls, c.want)
+		}
+		if stored, _ := ReadAgents(file); stored[0].Open {
+			t.Errorf("%s: agents.json %+v", name, stored)
+		}
+	}
+}
+
+func TestAFailedStepGoingBackShowsTernsWordsAndKeepsTheAgentOpen(t *testing.T) {
+	g, dirs := agentGateway(t)
+	file := seedAgent(t, dirs, model.AgentEntry{Block: "31", Background: true, Open: true})
+	calls := ternScript(g, map[string]func() ([]byte, error){
+		"ls":   ternOut(lsWithAgents),
+		"move": func() ([]byte, error) { return []byte("tern move: no block\n"), errors.New("exit status 1") },
+	})
+	got := as[model.AgentPlaced](t, run(t, g, model.SendAgentBack{Block: "31", IssueRef: "demo#ab12"}))
+	if got.Err == nil || got.Err.Error() != "exit status 1: tern move: no block" || got.Moved || len(*calls) != 2 {
+		t.Fatalf("%+v, ran %q", got, *calls)
+	}
+	if stored, _ := ReadAgents(file); !stored[0].Open {
+		t.Errorf("agents.json %+v", stored)
+	}
+	// A tab that cannot be named: the agent is back, the entry closed, the failure shown.
+	ternScript(g, map[string]func() ([]byte, error){"ls": ternOut(lsWithAgents), "move": ternOut(`{"block":31}`),
+		"rename": func() ([]byte, error) { return []byte("no block\n"), errors.New("exit status 1") }})
+	named := as[model.AgentPlaced](t, run(t, g, model.SendAgentBack{Block: "31", IssueRef: "demo#ab12"}))
+	if named.Err == nil || !named.Moved || named.Open {
+		t.Fatalf("rename failure %+v", named)
+	}
+	if stored, _ := ReadAgents(file); stored[0].Open {
+		t.Errorf("agents.json %+v", stored)
+	}
+}
+
+func TestPruningKeepsABlockOfTheHiddenSession(t *testing.T) {
+	g, dirs := agentGateway(t)
+	file := seedAgent(t, dirs, model.AgentEntry{Block: "18494129176578", Background: true})
+	ternScript(g, map[string]func() ([]byte, error){"ls": ternOut(lsWithAgents)})
+	if got := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{})); got.Err != nil || len(got.Agents) != 1 {
+		t.Fatalf("pruned %+v", got)
+	}
+	if stored, _ := ReadAgents(file); len(stored) != 1 {
+		t.Errorf("agents.json %+v", stored)
 	}
 }

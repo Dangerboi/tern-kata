@@ -49,6 +49,68 @@ func AgentTabArgs(dir string, commandLine []string) []string {
 	return append([]string{"new", "tab", "--cwd", dir, "--json", "--"}, commandLine...)
 }
 
+// AgentBackgroundSessionArgs is the tern command line for `S` when the hidden session does not exist: a new session with the agent.
+func AgentBackgroundSessionArgs(dir string, commandLine []string) []string {
+	return append([]string{"new", "session", model.AgentSession, "--cwd", dir, "--json", "--"}, commandLine...)
+}
+
+// AgentBackgroundTabArgs is the tern command line for `S` when the hidden session exists: a new tab in it with the agent.
+func AgentBackgroundTabArgs(dir string, commandLine []string) []string {
+	return append([]string{"new", "tab", model.AgentSession, "--cwd", dir, "--json", "--"}, commandLine...)
+}
+
+// RenameAgentArgs names the tab of an agent's block; Tern keeps the name only while the tab lives, so it runs after every move.
+func RenameAgentArgs(block, name string) []string { return []string{"rename", block, name} }
+
+// MoveRightOfArgs moves a block right of another (target "" names the focused block, as w does).
+func MoveRightOfArgs(block, target string) []string {
+	return []string{"move", block, "right-of", cmp.Or(target, "@focused"), "--json"}
+}
+
+// MoveNewTabArgs moves a block into a tab of its own in its session.
+func MoveNewTabArgs(block string) []string { return []string{"move", block, "new-tab", "--json"} }
+
+// AgentShellTabArgs opens a shell (no command) in the hidden session, a new session when it does not exist; it holds the place of
+// an agent that goes back to a session with no block left.
+func AgentShellTabArgs(sessionExists bool) []string {
+	if sessionExists {
+		return []string{"new", "tab", model.AgentSession, "--json"}
+	}
+	return []string{"new", "session", model.AgentSession, "--json"}
+}
+
+// CloseBlockArgs closes a block.
+func CloseBlockArgs(block string) []string { return []string{"close", block, "--json"} }
+
+// agentSessionBlocks reads `tern ls --json` for the hidden session: whether it exists and the ids of its blocks.
+func agentSessionBlocks(out []byte) (exists bool, blocks []string, err error) {
+	var ls struct {
+		Sessions []struct {
+			Name string `json:"name"`
+			Tabs []struct {
+				Blocks []struct {
+					ID json.Number `json:"id"`
+				} `json:"blocks"`
+			} `json:"tabs"`
+		} `json:"sessions"`
+	}
+	if err := json.Unmarshal(out, &ls); err != nil {
+		return false, nil, fmt.Errorf("tern ls --json: %w", err)
+	}
+	for _, s := range ls.Sessions {
+		if s.Name != model.AgentSession {
+			continue
+		}
+		exists = true
+		for _, t := range s.Tabs {
+			for _, b := range t.Blocks {
+				blocks = append(blocks, b.ID.String())
+			}
+		}
+	}
+	return exists, blocks, nil
+}
+
 // ParseTernBlock is the block id in what `tern split|new tab --json` printed: {"session": 1, "tab": 2, "block": 3}. Ids carry a
 // host tag and can pass 2^53, so the digits are kept as written.
 func ParseTernBlock(out []byte) (string, error) {
@@ -189,6 +251,9 @@ func removePrompt(path string) {
 }
 
 func ternFailure(err error, out []byte) error {
+	if err == nil {
+		return nil
+	}
 	if text := strings.TrimSpace(string(out)); text != "" {
 		return fmt.Errorf("%w: %s", err, text)
 	}
@@ -219,14 +284,20 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 		return failed(err)
 	}
 	line := AgentCommandLine(settings.Actor, settings.Command, promptFile)
-	args := AgentSplitArgs(cmd.PaneBlock, dir, line)
-	if cmd.Placement == model.AgentTab {
-		args = AgentTabArgs(dir, line)
+	var out []byte
+	switch cmd.Placement {
+	case model.AgentTab:
+		out, err = g.runTern(ctx, AgentTabArgs(dir, line))
+		err = ternFailure(err, out)
+	case model.AgentBackground:
+		out, err = g.startBackground(ctx, dir, line)
+	default:
+		out, err = g.runTern(ctx, AgentSplitArgs(cmd.PaneBlock, dir, line))
+		err = ternFailure(err, out)
 	}
-	out, err := g.runTern(ctx, args)
 	if err != nil {
 		removePrompt(promptFile)
-		return failed(ternFailure(err, out))
+		return failed(err)
 	}
 	block, err := ParseTernBlock(out)
 	if err != nil {
@@ -234,13 +305,122 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 		return failed(err)
 	}
 	entry := model.AgentEntry{IssueUID: cmd.IssueUID, IssueRef: cmd.IssueRef, ProjectID: cmd.ProjectID, Block: block, StartedAt: g.now().UTC().Truncate(time.Second),
-		PromptFile: promptFile, PaneBlock: cmd.PaneBlock}
+		PromptFile: promptFile, PaneBlock: cmd.PaneBlock, Background: cmd.Placement == model.AgentBackground}
 	if _, err := UpdateAgents(filepath.Join(dirs.State, AgentsFile), func(list []model.AgentEntry) []model.AgentEntry {
 		return append(slices.DeleteFunc(list, func(e model.AgentEntry) bool { return e.Block == block }), entry)
 	}); err != nil {
 		return failed(fmt.Errorf("the agent started in block %s but agents.json could not be written: %w", block, err))
 	}
-	return model.AgentStarted{Placement: cmd.Placement, IssueRef: cmd.IssueRef, Entry: entry}
+	started := model.AgentStarted{Placement: cmd.Placement, IssueRef: cmd.IssueRef, Entry: entry}
+	if entry.Background {
+		if out, err := g.runTern(ctx, RenameAgentArgs(block, cmd.IssueRef)); err != nil {
+			started.Note = "cannot name its tab: " + ternFailure(err, out).Error()
+		}
+	}
+	return started
+}
+
+// startBackground starts the agent in the hidden session: a new tab when `tern ls --json` lists the session, a new session when
+// not, and a new tab after all when another Pane made the session in between.
+func (g *Gateway) startBackground(ctx context.Context, dir string, line []string) ([]byte, error) {
+	ls, err := g.runTern(ctx, []string{"ls", "--json"})
+	if err != nil {
+		return nil, ternFailure(err, ls)
+	}
+	exists, _, err := agentSessionBlocks(ls)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		out, err := g.runTern(ctx, AgentBackgroundTabArgs(dir, line))
+		return out, ternFailure(err, out)
+	}
+	out, err := g.runTern(ctx, AgentBackgroundSessionArgs(dir, line))
+	if err != nil && strings.Contains(string(out), "is already called") {
+		out, err = g.runTern(ctx, AgentBackgroundTabArgs(dir, line))
+	}
+	return out, ternFailure(err, out)
+}
+
+// setAgentOpen writes the open flag of the entry with block.
+func (g *Gateway) setAgentOpen(block string, open bool) error {
+	file, _, err := g.agentStatePaths()
+	if err != nil {
+		return err
+	}
+	_, err = UpdateAgents(file, func(list []model.AgentEntry) []model.AgentEntry {
+		for i := range list {
+			if list[i].Block == block {
+				list[i].Open = open
+			}
+		}
+		return list
+	})
+	return err
+}
+
+// openAgent moves a background agent's block beside the Pane and marks it open.
+func (g *Gateway) openAgent(ctx context.Context, cmd model.OpenAgent) model.AgentPlaced {
+	if out, err := g.runTern(ctx, MoveRightOfArgs(cmd.Block, cmd.PaneBlock)); err != nil {
+		return model.AgentPlaced{Block: cmd.Block, Err: ternFailure(err, out)}
+	}
+	if err := g.setAgentOpen(cmd.Block, true); err != nil {
+		return model.AgentPlaced{Block: cmd.Block, Err: fmt.Errorf("the agent moved but agents.json could not be written: %w", err)}
+	}
+	return model.AgentPlaced{Block: cmd.Block, Moved: true, Open: true}
+}
+
+// sendAgentBack moves an open background agent into a tab of the hidden session and clears its open flag. It goes right of a block
+// the session still holds and then into a tab of its own; with none left it goes beside a shell opened for the purpose, which is
+// closed again. The tab is named last, for Tern drops a tab's name when its block moves.
+func (g *Gateway) sendAgentBack(ctx context.Context, cmd model.SendAgentBack) model.AgentPlaced {
+	failed := func(err error) model.AgentPlaced { return model.AgentPlaced{Block: cmd.Block, Back: true, Err: err} }
+	ls, err := g.runTern(ctx, []string{"ls", "--json"})
+	if err != nil {
+		return failed(ternFailure(err, ls))
+	}
+	exists, blocks, err := agentSessionBlocks(ls)
+	if err != nil {
+		return failed(err)
+	}
+	blocks = slices.DeleteFunc(blocks, func(b string) bool { return b == cmd.Block })
+	step := func(args []string) error {
+		out, err := g.runTern(ctx, args)
+		return ternFailure(err, out)
+	}
+	if len(blocks) > 0 {
+		if err := step(MoveRightOfArgs(cmd.Block, blocks[0])); err != nil {
+			return failed(err)
+		}
+		if err := step(MoveNewTabArgs(cmd.Block)); err != nil {
+			return failed(err)
+		}
+	} else {
+		out, err := g.runTern(ctx, AgentShellTabArgs(exists))
+		if err != nil {
+			return failed(ternFailure(err, out))
+		}
+		shell, err := ParseTernBlock(out)
+		if err != nil {
+			return failed(err)
+		}
+		if err := step(MoveRightOfArgs(cmd.Block, shell)); err != nil {
+			_ = step(CloseBlockArgs(shell))
+			return failed(err)
+		}
+		if err := step(CloseBlockArgs(shell)); err != nil {
+			return failed(err)
+		}
+	}
+	placed := model.AgentPlaced{Block: cmd.Block, Back: true, Moved: true}
+	if err := g.setAgentOpen(cmd.Block, false); err != nil {
+		placed.Err = fmt.Errorf("the agent moved but agents.json could not be written: %w", err)
+		return placed
+	}
+	if err := step(RenameAgentArgs(cmd.Block, cmd.IssueRef)); err != nil {
+		placed.Err = fmt.Errorf("cannot name its tab: %w", err)
+	}
+	return placed
 }
 
 // writeAgentPrompt puts text in a new file of folder and returns its path.
