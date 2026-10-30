@@ -1,6 +1,8 @@
 package view
 
 import (
+	"encoding/json"
+	"math/big"
 	"strconv"
 	"strings"
 
@@ -12,7 +14,8 @@ import (
 // act and value. Every action here decodes to the message its matching key produces, and a chord
 // click is that key: it goes through the key path.
 //
-// The Luau window hook keeps its own copy of the Issue list id and the select-issue action.
+// The Luau window hook keeps its own copy of the Issue list id and the select-issue and agent-states actions;
+// agent-states carries the JSON agent list as its value and is not a click.
 const (
 	keyAct           = "key"
 	jumpAct          = "jump"
@@ -105,6 +108,8 @@ func DecodeAction(id, act, value string) model.Msg {
 	switch act {
 	case keyAct:
 		return model.KeyMsg{Chord: value}
+	case string(model.AgentStatesAction):
+		return decodeAgentStates(value)
 	case string(model.SelectIssueAction), string(model.ToggleExpansion), string(model.OpenRow), MenuClick:
 		return model.ActionMsg{Action: model.Action(act), Value: value}
 	case FocusDetailClick:
@@ -195,4 +200,44 @@ func DecodeFocus(id string) model.Msg {
 		return model.FocusFieldMsg{Field: field}
 	}
 	return nil
+}
+
+// decodeAgentStates reads the window half's JSON list of {pane, state, last_message}, nil when it is malformed.
+// pane is decimal text, or a JSON number, kept exact: block ids can exceed what a float holds.
+func decodeAgentStates(value string) model.Msg {
+	var list []struct {
+		Pane        json.RawMessage `json:"pane"`
+		State       string          `json:"state"`
+		LastMessage string          `json:"last_message"`
+	}
+	if err := json.Unmarshal([]byte(value), &list); err != nil {
+		return nil
+	}
+	states := make([]model.AgentState, 0, len(list))
+	for _, item := range list {
+		block, ok := blockID(item.Pane)
+		if !ok {
+			return nil
+		}
+		states = append(states, model.AgentState{Block: block, State: item.State, LastMessage: item.LastMessage})
+	}
+	return model.AgentStatesMsg{States: states}
+}
+
+func blockID(raw json.RawMessage) (string, bool) {
+	var text string
+	if json.Unmarshal(raw, &text) == nil {
+		return text, text != ""
+	}
+	number := string(raw)
+	if _, err := strconv.ParseUint(number, 10, 64); err == nil {
+		return number, true
+	}
+	// An exponent or fraction form of a whole number.
+	f, _, err := big.ParseFloat(number, 10, 128, big.ToNearestEven)
+	if err != nil || !f.IsInt() || f.Sign() < 0 {
+		return "", false
+	}
+	i, _ := f.Int(nil)
+	return i.String(), true
 }

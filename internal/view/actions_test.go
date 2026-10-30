@@ -49,3 +49,27 @@ func TestClicksThePaneDoesNotUseDecodeToNothing(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentStatesDecodeKeepsBlockIdsExact(t *testing.T) {
+	const big = "144115188075855871" // 2^57 - 1: not a float64
+	for _, tt := range []struct {
+		name, value string
+		want        model.Msg
+	}{
+		{"string pane", `[{"pane":"` + big + `","state":"working","last_message":"hi"}]`,
+			model.AgentStatesMsg{States: []model.AgentState{{Block: big, State: "working", LastMessage: "hi"}}}},
+		{"number pane", `[{"pane":` + big + `,"state":"idle"}]`,
+			model.AgentStatesMsg{States: []model.AgentState{{Block: big, State: "idle"}}}},
+		{"exponent pane", `[{"pane":1e3,"state":"exited"}]`,
+			model.AgentStatesMsg{States: []model.AgentState{{Block: "1000", State: "exited"}}}},
+		{"empty list", `[]`, model.AgentStatesMsg{States: []model.AgentState{}}},
+		{"not JSON", `[{`, nil},
+		{"not a list", `{"pane":"1"}`, nil},
+		{"pane missing", `[{"state":"idle"}]`, nil},
+		{"pane fractional", `[{"pane":1.5,"state":"idle"}]`, nil},
+	} {
+		if got := view.DecodeAction("", string(model.AgentStatesAction), tt.value); !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("%s: got %#v, want %#v", tt.name, got, tt.want)
+		}
+	}
+}

@@ -35,6 +35,7 @@ const (
 	ToggleGraphOrder        Action = "toggle-graph-order"
 	RetryAction             Action = "retry"
 	SelectIssueAction       Action = "select-issue"
+	AgentStatesAction       Action = "agent-states"
 	SearchIssues            Action = "search"
 	SearchEnter             Action = "search-enter"
 	SearchBack              Action = "search-back"

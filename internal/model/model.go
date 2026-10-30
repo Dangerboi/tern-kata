@@ -56,6 +56,8 @@ type Model struct {
 	LiveState
 	IssueDetail
 	Create CreateState
+	// Agents is the latest agent state list the window half relayed.
+	Agents AgentStatesRelay
 	// pending is the Issue Create just made, selected as soon as a snapshot lists it.
 	pending string
 	// etag answers etagQuery: the snapshot on screen.
@@ -358,6 +360,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case Failed:
 		m.Loading = false
 		m.Err = msg.Err
+	case AgentStatesMsg:
+		m.Agents = m.Agents.apply(msg)
 	case ActionMsg:
 		switch msg.Action {
 		case SelectIssueAction:

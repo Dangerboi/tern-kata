@@ -69,12 +69,49 @@ local function selectIssue(cx: WindowCx, pane: number, ref: string)
     cx.session:event(pane, {ev = "action", id = "main.columns.list.issues", act = "select-issue", value = ref})
 end
 
+-- kata Panes that have been sent the agent states since their surface went live.
+local relayed: { [number]: boolean } = {}
+
+-- Every agent block in the session as JSON for the Pane, which matches it against its own agents. The pane id goes as
+-- decimal text, because a block id is above what JSON numbers carry exactly in some readers; %.0f prints a whole number
+-- without an exponent. A missing last message is the empty string.
+local function agentStates(cx: WindowCx): string
+    local list = tern.json.array({})
+    for _, agent in cx.agents:list() do
+        local last = agent.last_message
+        table.insert(list, {
+            pane = string.format("%.0f", agent.pane),
+            state = agent.state,
+            last_message = if type(last) == "string" then last else "",
+        })
+    end
+    return tern.json.encode(list)
+end
+
+local function relayStates(cx: WindowCx, pane: number, states: string)
+    if not cx.session:surface(pane) then return end
+    relayed[pane] = true
+    cx.session:event(pane, {ev = "action", id = "main.columns.list.issues", act = "agent-states", value = states})
+end
+
+-- The states to every live kata Pane, or only to those not sent them yet.
+local function relayAll(cx: WindowCx, onlyNew: boolean)
+    local states: string? = nil
+    for _, info in cx.session:panes() do
+        if isKata(info) and not (onlyNew and relayed[info.pane]) and cx.session:surface(info.pane) then
+            if not states then states = agentStates(cx) end
+            relayStates(cx, info.pane, states)
+        end
+    end
+end
+
 local function deliver(cx: WindowCx, pane: number)
     local ref = pending[pane]
     if ref and cx.session:surface(pane) then
         pending[pane] = nil
         selectIssue(cx, pane, ref)
     end
+    if not relayed[pane] then relayAll(cx, true) end
 end
 
 -- Startup-failure rule, the plugin's half of the contract with cmd/tern-kata: a kata Pane failing within 2 s with
@@ -150,6 +187,7 @@ end
 tern.on("pane_closed", function(ev, cx)
     launched[ev.pane] = nil
     pending[ev.pane] = nil
+    relayed[ev.pane] = nil
     if marked[ev.pane] then
         marked[ev.pane] = nil
         restyleMarks()
@@ -161,6 +199,7 @@ local function markAll(cx: WindowCx)
         if isKata(info) then marked[info.pane] = true end
     end
     restyleMarks()
+    relayAll(cx, false)
 end
 
 -- The kata Panes already open: at window start, and after a plugin reload, which runs this file again but not window_start.
@@ -172,7 +211,15 @@ end)
 -- tern-kata sets its title as it starts, so a title event finds a kata Pane started from any shell; other titles, such as an
 -- agent's spinner, cost no lookup.
 tern.on("title", function(ev, cx)
-    if ev.title == "tern-kata" or marked[ev.pane] then markIf(cx, ev.pane) end
+    if ev.title == "tern-kata" or marked[ev.pane] then
+        markIf(cx, ev.pane)
+        if marked[ev.pane] and not relayed[ev.pane] then relayAll(cx, true) end
+    end
+end)
+
+-- Agents' states go to every kata Pane as they change, so its badges follow them.
+tern.on("agent_state", function(ev, cx)
+    relayAll(cx, false)
 end)
 
 tern.command({
