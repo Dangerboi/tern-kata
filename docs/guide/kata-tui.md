@@ -11,7 +11,7 @@ tern-kata takes kata tui's movement keys:
 - `I` to open the Inbox (from every Page, the Issue detail and the Menu sidebar; tern-kata opens it, where kata tui toggles it);
 - `o` in the nested Issue list to switch siblings between creation order and blocking order (blockers first; creation order breaks ties and cycles), which it answers with "graph order: topological" or "graph order: temporal". The choice lasts for the Pane and is not saved; `o` on the Runs Page still opens the session.
 
-`?` lists every key. The Emacs keys and `I` are plain text in search and in Popup cards.
+`?` lists the global keys and the keys of the Page it is opened over. The Emacs keys and `I` are plain text in search and in Popup cards.
 
 ## Activity tabs
 
