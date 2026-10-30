@@ -193,7 +193,7 @@ func TestACrashMidWorkflowHoldsAtThatStepAndResumeContinuesFromIt(t *testing.T) 
 	restarted := h.start(worker.Hooks{})
 	h.admitting(restarted)
 	held := h.settled(uid)
-	if held.Status != "unknown" || !strings.HasPrefix(held.Summary, "interrupted: ") {
+	if held.Status != "unknown" || !strings.HasPrefix(held.Summary, "reason: interrupted\n") {
 		t.Fatalf("held run is %q: %q", held.Status, held.Summary)
 	}
 	h.eventually("the hold to be resumable", func() bool { s, ok := h.runStatus(restarted, uid); return ok && s.Resumable })
@@ -240,7 +240,7 @@ func TestAHeldCommandStepRerunsItsCommandOnResume(t *testing.T) {
 	restarted := h.start(worker.Hooks{})
 	h.admitting(restarted)
 	held := h.settled(uid)
-	if held.Status != "unknown" || !strings.HasPrefix(held.Summary, "interrupted: the worker stopped while the command ran") {
+	if held.Status != "unknown" || !strings.HasPrefix(held.Summary, "reason: interrupted\nthe worker stopped while the command ran") {
 		t.Fatalf("held run is %q: %q", held.Status, held.Summary)
 	}
 	h.eventually("the hold to be resumable", func() bool { s, ok := h.runStatus(restarted, uid); return ok && s.Resumable })

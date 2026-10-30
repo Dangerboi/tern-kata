@@ -113,9 +113,9 @@ func TestAWorkerKilledAtAnyJournalPointNeverSendsThePromptAgain(t *testing.T) {
 		"prepared":                 {status: "succeeded", summary: "done", launches: 1},
 		"issue-resolved":           done,
 		"admitted":                 done,
-		"launching":                {status: "unknown", summary: "launch_unproven: ", launches: 0},
-		"started":                  {status: "unknown", summary: "interrupted: ", launches: -1, stub: []string{"--stub-hang"}},
-		"session":                  {status: "unknown", summary: "interrupted: ", launches: 1, stub: []string{"--stub-hang"}},
+		"launching":                {status: "unknown", summary: "reason: launch_unproven\n", launches: 0},
+		"started":                  {status: "unknown", summary: "reason: interrupted\n", launches: -1, stub: []string{"--stub-hang"}},
+		"session":                  {status: "unknown", summary: "reason: interrupted\n", launches: 1, stub: []string{"--stub-hang"}},
 		"exited":                   done,
 		"finished":                 done,
 		"intents-planned":          done,
@@ -143,7 +143,7 @@ func TestAWorkerKilledAtAnyJournalPointNeverSendsThePromptAgain(t *testing.T) {
 			if w.status == "unknown" {
 				h.eventually("status to show the held run", func() bool {
 					s, ok := h.runStatus(restarted, uid)
-					return ok && s.Held && strings.HasPrefix(s.Detail, strings.TrimSuffix(w.summary, ": "))
+					return ok && s.Held && cronjob.ReasonMessage(s.Hold, s.Detail) == run.Summary
 				})
 				return
 			}
@@ -174,7 +174,7 @@ func TestAHoldKilledBeforeItIsReportedIsStillReportedAfterARestart(t *testing.T)
 	restarted := h.start(worker.Hooks{})
 	h.admitting(restarted)
 	run := h.settled(uid)
-	if run.Status != "unknown" || !strings.HasPrefix(run.Summary, "secret_unavailable: ") || len(h.launches()) != 0 {
+	if run.Status != "unknown" || !strings.HasPrefix(run.Summary, "reason: secret_unavailable\n") || len(h.launches()) != 0 {
 		t.Fatalf("run is %q: %q; launches %d", run.Status, run.Summary, len(h.launches()))
 	}
 }
@@ -232,7 +232,7 @@ func TestResumeContinuesTheOmpSessionAndRecordsTheOutcome(t *testing.T) {
 	restarted := h.start(worker.Hooks{})
 	h.admitting(restarted)
 	held := h.settled(uid)
-	if held.Status != "unknown" || !strings.HasPrefix(held.Summary, "interrupted: ") {
+	if held.Status != "unknown" || !strings.HasPrefix(held.Summary, "reason: interrupted\n") {
 		t.Fatalf("held run is %q: %q", held.Status, held.Summary)
 	}
 	h.eventually("the hold to be resumable", func() bool { s, ok := h.runStatus(restarted, uid); return ok && s.Resumable })
@@ -274,7 +274,7 @@ func TestResumeContinuesTheOmpSessionAndRecordsTheOutcome(t *testing.T) {
 		t.Errorf("resumed agent args %q", args)
 	}
 	prompt := second["prompt"].(string)
-	for _, want := range []string{"Step: 1, attempt 2", "may have partly run", "Review the open pull requests.", "interrupted: "} {
+	for _, want := range []string{"Step: 1, attempt 2", "may have partly run", "Review the open pull requests.", "held (interrupted)", "Why it was held: the worker stopped while the agent ran"} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("continuation prompt lacks %q:\n%s", want, prompt)
 		}
@@ -406,7 +406,7 @@ func TestAFinishedTurnWithNoSavedExitIsHeldAsNoReceipt(t *testing.T) {
 	restarted := h.start(worker.Hooks{})
 	h.admitting(restarted)
 	run := h.settled(uid)
-	if run.Status != "unknown" || !strings.HasPrefix(run.Summary, "no_receipt: ") {
+	if run.Status != "unknown" || !strings.HasPrefix(run.Summary, "reason: no_receipt\n") {
 		t.Fatalf("run is %q: %q", run.Status, run.Summary)
 	}
 	h.eventually("the hold to be resumable", func() bool { s, ok := h.runStatus(restarted, uid); return ok && s.Resumable })
@@ -435,7 +435,7 @@ func TestProviderFailuresHoldForLoginAndQuotaAndResumeHoldsAgainAfterTheSameFail
 				}
 				return
 			}
-			if run.Status != "unknown" || !strings.HasPrefix(run.Summary, want+": the provider answered "+status) {
+			if run.Status != "unknown" || !strings.HasPrefix(run.Summary, "reason: "+want+"\nthe provider answered "+status) {
 				t.Fatalf("run is %q: %q", run.Status, run.Summary)
 			}
 			h.eventually("the hold to be resumable", func() bool { s, ok := h.runStatus(r, uid); return ok && s.Resumable })

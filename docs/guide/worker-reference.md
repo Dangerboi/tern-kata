@@ -132,14 +132,14 @@ The agent is told its Issue and how to leave a record: comment what it did, clos
 
 - Exit status 0 after a finished turn is `succeeded`, anything else `failed`.
 - A run over its timeout is stopped and failed as "timed out".
-- A run whose prompt may have reached the agent when the worker stopped is held (`unknown` in kata, with the reason first in its summary), never repeated.
+- A run whose prompt may have reached the agent when the worker stopped is held (`unknown` in kata, with the reason line first in its summary), never repeated.
 - A job the worker cannot run (a native job, a workflow it does not support) is refused with the reason.
 
 ## Recovery and held runs
 
 The worker saves each run's journal before every step that has a side effect (creating its Issue, telling kata it runs, starting omp, recording the process, recording the exit, each comment and the final status). A worker that is stopped or killed and started again on the same state folder continues from the journal: it finishes what it can prove and never sends a prompt that may have reached the agent a second time.
 
-A run whose agent may have started, and whose outcome the worker cannot prove, becomes a **held run**: kata records it `unknown` with the reason first in its summary, the Issue gets a comment, the run keeps its job's overlap gate closed, and nothing restarts it automatically. `worker status` lists each held run with its reason and how to settle it:
+A run whose agent may have started, and whose outcome the worker cannot prove, becomes a **held run**: kata records it `unknown` with a summary that starts with the line `reason: <code>` and has what the worker knew on the next (kata's convention for a machine-readable cause; a run held by an earlier tern-kata says `<code>: <detail>` on one line), the Issue gets a comment, the run keeps its job's overlap gate closed, and nothing restarts it automatically. `worker status` lists each held run with its reason and how to settle it:
 
 | Reason | What happened |
 |---|---|

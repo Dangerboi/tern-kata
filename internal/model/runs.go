@@ -77,6 +77,20 @@ func (r Run) IssueRef() string {
 	return "#" + r.IssueShortID + " " + r.IssueTitle
 }
 
+// Brief is the Run's summary in one line: its reason code and the first line after it, as "<code>: <line>", else the
+// summary's first line.
+func (r Run) Brief() string {
+	code, detail := r.Reason()
+	first, _, _ := strings.Cut(strings.TrimSpace(detail), "\n")
+	switch {
+	case code == "":
+		return first
+	case first == "":
+		return code
+	}
+	return code + ": " + first
+}
+
 // LoadRuns asks for the Project's Runs, newest first. JobUID narrows them to one Cron job's. Before is the cursor of the page
 // before: empty for the newest page, else the NextBefore of the last answer. Request numbers the asks: an answer to an older
 // one is dropped.
@@ -170,12 +184,15 @@ type RunRow struct {
 	Executor string
 	Start    string
 	Duration string
-	Summary  string
-	// Held says the worker of this machine holds the Run for the user; Hold is why, in words. State is the status the row shows:
-	// "held" for a held Run, else kata's.
-	Held  bool
-	Hold  string
-	State string
+	// Summary is the first line of the summary after its reason line.
+	Summary string
+	// Held says the worker of this machine holds the Run for the user; Hold is why, in words. Reason is the reason code the
+	// summary leads with (kata's `reason: <code>` line, or a hold of tern-kata's from before it), empty for a held Run, which
+	// shows Hold instead. State is the status the row shows: "held" for a held Run, else kata's.
+	Held   bool
+	Hold   string
+	Reason string
+	State  string
 }
 
 // RunRows are the Runs Page's rows, newest first as kata lists them. now is when the start times are worded from and a running
@@ -184,13 +201,16 @@ func (m Model) RunRows(now time.Time) []RunRow {
 	rows := make([]RunRow, len(m.Runs.Runs))
 	for i, run := range m.Runs.Runs {
 		row := RunRow{Run: run, Name: run.Name(), Issue: run.IssueRef(), Executor: run.Executor(), Start: m.Calendar.Read(run.Started(), now), State: string(run.Status)}
+		code, detail := run.Reason()
 		if local, ok := m.LocalRunOf(run.UID); ok && m.IsLocalRun(run) && local.Held {
 			row.Held, row.Hold, row.State = true, holdWords(local.Hold), "held"
+		} else {
+			row.Reason = code
 		}
 		if d, ok := run.Duration(now); ok {
 			row.Duration = ShortDuration(d)
 		}
-		row.Summary, _, _ = strings.Cut(strings.TrimSpace(run.Summary), "\n")
+		row.Summary, _, _ = strings.Cut(strings.TrimSpace(detail), "\n")
 		rows[i] = row
 	}
 	return rows
@@ -230,8 +250,9 @@ func (m Model) SelectedRun() *Run {
 // RunFact is one line of the inspector.
 type RunFact struct{ Label, Value string }
 
-// RunFacts are the inspector's lines for the selected Run: its status, what it ran and for which Issue, who ran it and when,
-// the summary's message and token counts, and the references kata holds. Lines the Run has no value for are left out.
+// RunFacts are the inspector's lines for the selected Run: its status and reason code, what it ran and for which Issue, who ran it
+// and when, the summary's message after its reason line and token counts, and the references kata holds. Lines the Run has no
+// value for are left out.
 func (m Model) RunFacts(now time.Time) []RunFact {
 	run := m.SelectedRun()
 	if run == nil {
@@ -256,6 +277,10 @@ func (m Model) RunFacts(now time.Time) []RunFact {
 		return m.Calendar.Stamp(*t)
 	}
 	add("Status", string(run.Status))
+	code, detail := run.Reason()
+	if l, ok := m.LocalRunOf(run.UID); !ok || !l.Held { // a held Run of this machine says it as "Held because"
+		add("Reason", code)
+	}
 	hold, local := m.localFacts(*run)
 	facts = append(facts, hold...)
 	add("Job", run.JobName)
@@ -269,7 +294,7 @@ func (m Model) RunFacts(now time.Time) []RunFact {
 	if d, ok := run.Duration(now); ok {
 		add("Duration", ShortDuration(d))
 	}
-	add("Summary", strings.TrimSpace(run.Summary))
+	add("Summary", strings.TrimSpace(detail))
 	facts = append(facts, local...)
 	add("Input tokens", count(run.InputTokens))
 	add("Output tokens", count(run.OutputTokens))

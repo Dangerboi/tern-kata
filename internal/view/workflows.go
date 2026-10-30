@@ -250,7 +250,7 @@ func workflowRuns(m model.Model, w model.Workflow, now time.Time) []tern.Element
 		if d, ok := r.Duration(now); ok {
 			spans = append(spans, ui.Span{T: "  " + model.ShortDuration(d), S: "muted"})
 		}
-		if msg, _, _ := strings.Cut(strings.TrimSpace(r.Summary), "\n"); msg != "" {
+		if msg := r.Brief(); msg != "" {
 			spans = append(spans, ui.Span{T: "  " + msg})
 		}
 		parts = append(parts, ui.Text{Common: ui.Common{Key: "run." + r.UID}, Spans: spans})

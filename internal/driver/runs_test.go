@@ -106,6 +106,38 @@ func TestRunsPageRowsShowStatusNameIssueExecutorStartDurationAndSummary(t *testi
 	}
 }
 
+func TestRunsPageShowsTheReasonCodeOfBothSummaryShapes(t *testing.T) {
+	quota, legacy, plain, bad := finishedRun("R1"), finishedRun("R2"), finishedRun("R3"), finishedRun("R4")
+	quota.Status, quota.Summary = cronjob.RunUnknown, "reason: agent_quota\nthe provider answered 429\nmore"
+	legacy.Status, legacy.Summary = cronjob.RunUnknown, "interrupted: the worker stopped while the agent ran"
+	plain.Summary = "note: nothing to do"                 // a colon after a word that is no hold of tern-kata's
+	bad.Summary = "reason: Not A Code\nstill the summary" // outside the code grammar: the whole message is summary
+	s := runsPane(t, 160, quota, legacy, plain, bad)
+
+	for _, c := range []struct{ uid, code, summary string }{
+		{"R1", "agent_quota", "the provider answered 429"},
+		{"R2", "interrupted", "the worker stopped while the agent ran"},
+	} {
+		text := runCardText(t, s, c.uid)
+		wantText(t, c.uid+" row", text, "unknown", "reason: "+c.code, c.summary)
+		if strings.Contains(text, "more") || strings.Contains(text, c.code+": ") {
+			t.Errorf("%s row %q draws more than the code and the detail's first line", c.uid, text)
+		}
+	}
+	if text := runCardText(t, s, "R3"); strings.Contains(text, "reason:") || !strings.Contains(text, "note: nothing to do") {
+		t.Errorf("a summary without a reason line reads as one: %q", text)
+	}
+	if row := s.Model.RunRows(now)[3]; row.Reason != "" || row.Summary != "reason: Not A Code" {
+		t.Errorf("an invalid code reads as a reason: %+v", row)
+	}
+
+	detail := inspectorText(t, step(t, s, key("enter")).State)
+	wantText(t, "detail of a run with a reason", detail, "Reason", "agent_quota", "the provider answered 429")
+	if strings.Contains(detail, "reason: agent_quota") {
+		t.Errorf("the detail's summary keeps the reason line: %q", detail)
+	}
+}
+
 func TestEnterShowsTheRunsDetailWithSummaryTokensAndReferences(t *testing.T) {
 	s := runsPane(t, 160, finishedRun("R1"))
 	out := step(t, s, key("enter"))

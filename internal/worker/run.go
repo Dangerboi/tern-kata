@@ -664,7 +664,7 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 		case cronjob.RunFailed:
 			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("failed"), Text: "The run failed: " + j.Outcome.Summary})
 		case cronjob.RunUnknown:
-			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("held"), Text: "The run is held: " + j.Outcome.Summary + "\n\nResume it with `tern-kata worker resume " + j.RunUID + "` or abandon it with `tern-kata worker abandon " + j.RunUID + "`."})
+			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("held"), Text: "The run is held: " + j.Outcome.holdLine() + "\n\nResume it with `tern-kata worker resume " + j.RunUID + "` or abandon it with `tern-kata worker abandon " + j.RunUID + "`."})
 			intents = append(intents, Intent{Kind: IntentNotify, Text: heldNotice(j)})
 		case cronjob.RunCancelled:
 			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("cancelled"), Text: "The run was abandoned: " + j.Outcome.Summary})
@@ -746,7 +746,7 @@ func quietSuccess(j *Journal) bool {
 // heldNotice is the inbox request for a held run, saved in its intent so a retry sends the same words.
 func heldNotice(j *Journal) string {
 	return truncate(fmt.Sprintf("Run %s of %q on %s is held: %s Resume it with `tern-kata worker resume %s` or abandon it with `tern-kata worker abandon %s`.",
-		j.RunUID, j.JobName, j.Issue.Ref, j.Outcome.Summary, j.RunUID, j.RunUID), maxNotifyBytes)
+		j.RunUID, j.JobName, j.Issue.Ref, j.Outcome.holdLine(), j.RunUID, j.RunUID), maxNotifyBytes)
 }
 
 // resolveRecipient reads the Issue and saves who its owner or author is in the notify intent, once: from then on a

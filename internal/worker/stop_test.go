@@ -290,7 +290,7 @@ func TestAStopNowHoldsTheRunningRunInterruptedAtTheNextStart(t *testing.T) {
 	restarted := h.start(worker.Hooks{})
 	h.admitting(restarted)
 	held := h.settled(uid)
-	if held.Status != "unknown" || !strings.HasPrefix(held.Summary, "interrupted: ") {
+	if held.Status != "unknown" || !strings.HasPrefix(held.Summary, "reason: interrupted\n") {
 		t.Fatalf("run is %q: %q; want unknown, interrupted first", held.Status, held.Summary)
 	}
 }

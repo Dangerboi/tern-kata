@@ -14,7 +14,8 @@ Each card has:
 - the executor (its label, else the actor);
 - when it started;
 - how long it took (so far, while it runs);
-- the first line of its summary.
+- the first line of its summary;
+- the reason code, `reason: <code>`, when the summary leads with kata's `reason: <code>` line (or is a hold an earlier tern-kata wrote as `<code>: <detail>`); the summary shown is then the line after it.
 
 ## Keys
 
@@ -34,7 +35,7 @@ Each card has:
 
 ## Detail
 
-Enter (or Tab) opens the **detail**: status, job and workflow, Issue, executor, actor and teammate, start, end, duration, the summary's whole message, input and output token counts, and the references kata holds (occurrence, job and workflow uids and the version of each the run used, Issue uid, run uid and revision). At 140 columns and wider the detail sits beside the list, narrower only the focused column shows.
+Enter (or Tab) opens the **detail**: status, job and workflow, Issue, executor, actor and teammate, start, end, duration, the reason code, the summary's whole message after its reason line, input and output token counts, and the references kata holds (occurrence, job and workflow uids and the version of each the run used, Issue uid, run uid and revision). At 140 columns and wider the detail sits beside the list, narrower only the focused column shows.
 
 ## Reading and filtering
 

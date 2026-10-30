@@ -72,7 +72,8 @@ func runs(m model.Model, now time.Time) tern.Element {
 }
 
 // runCard is one Run on three lines: its status and what it ran, the Issue and who ran it, then when it started, how long it took
-// and the summary. A part that can't be worked out is left off its line.
+// and the summary. A held Run of this machine adds its hold, and another Run whose summary leads with a reason its code. A part
+// that can't be worked out is left off its line.
 func runCard(row model.RunRow, selected bool) tern.Element {
 	tone := runTone(row.Run.Status)
 	if row.Held {
@@ -93,8 +94,11 @@ func runCard(row model.RunRow, selected bool) tern.Element {
 	if len(who) > 0 {
 		body = append(body, ui.Text{Common: ui.Common{Key: "who"}, Spans: []ui.Span{{T: strings.Join(who, " · "), S: toneStyle(ui.ToneInfo)}}})
 	}
-	if row.Held {
+	switch {
+	case row.Held:
 		body = append(body, ui.Text{Common: ui.Common{Key: "hold", Tone: ui.ToneWarning}, Text: "held: " + row.Hold})
+	case row.Reason != "":
+		body = append(body, ui.Text{Common: ui.Common{Key: "reason", Tone: tone}, Text: "reason: " + row.Reason})
 	}
 	when := []string{"started " + row.Start}
 	if row.Duration != "" {

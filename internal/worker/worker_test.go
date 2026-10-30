@@ -476,7 +476,7 @@ func TestARunInterruptedByACrashIsHeldAndNeverSentAgain(t *testing.T) {
 	restarted := h.start(worker.Hooks{})
 	h.admitting(restarted)
 	run := h.settled(uid)
-	if run.Status != "unknown" || !strings.HasPrefix(run.Summary, "interrupted: ") {
+	if run.Status != "unknown" || !strings.HasPrefix(run.Summary, "reason: interrupted\n") {
 		t.Fatalf("run is %q: %q; want unknown, interrupted first", run.Status, run.Summary)
 	}
 	if n := len(h.launches()); n != 1 {
@@ -545,7 +545,7 @@ func TestAMissingSecretHoldsTheRunBeforeAnythingStarts(t *testing.T) {
 	r := h.start(worker.Hooks{})
 	h.admitting(r)
 	run := h.settled(h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID)
-	if run.Status != "unknown" || !strings.HasPrefix(run.Summary, "secret_unavailable: ") || len(h.launches()) != 0 {
+	if run.Status != "unknown" || !strings.HasPrefix(run.Summary, "reason: secret_unavailable\n") || len(h.launches()) != 0 {
 		t.Fatalf("run is %q: %q; launches %d", run.Status, run.Summary, len(h.launches()))
 	}
 }
@@ -561,7 +561,7 @@ func TestASecretTheProjectDoesNotListIsSetAsideAndHeldIfRunAnyway(t *testing.T) 
 	r := h.start(worker.Hooks{})
 	h.admitting(r)
 	run := h.settled(h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID)
-	if run.Status != "unknown" || !strings.HasPrefix(run.Summary, "secret_unavailable: ") || !strings.Contains(run.Summary, "not available to Project demo") || len(h.launches()) != 0 {
+	if run.Status != "unknown" || !strings.HasPrefix(run.Summary, "reason: secret_unavailable\n") || !strings.Contains(run.Summary, "not available to Project demo") || len(h.launches()) != 0 {
 		t.Fatalf("run is %q: %q; launches %d", run.Status, run.Summary, len(h.launches()))
 	}
 }

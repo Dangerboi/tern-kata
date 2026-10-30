@@ -38,12 +38,13 @@ func (j *Journal) needs(transition string, from ...Phase) error {
 // inFlight are the Phases in which a Run's attempt is live: its outcome may be decided from any of them.
 var inFlight = []Phase{PhaseAdmitted, PhaseLaunching, PhaseStarted}
 
-// hold records an uncertain outcome: kata will get `unknown` with the reason first (ADR-0005).
+// hold records an uncertain outcome: kata will get `unknown` with the summary `reason: <code>` and the detail on the next
+// line (ADR-0005).
 func (j *Journal) hold(reason, detail string, at time.Time) error {
 	if err := j.needs("be held", inFlight...); err != nil {
 		return err
 	}
-	j.Outcome = &Outcome{Status: cronjob.RunUnknown, Hold: reason, Summary: reason + ": " + detail, At: at}
+	j.Outcome = &Outcome{Status: cronjob.RunUnknown, Hold: reason, Summary: cronjob.ReasonMessage(reason, detail), At: at}
 	j.Phase = PhaseFinished
 	return nil
 }
@@ -53,7 +54,7 @@ func (j *Journal) holdBeforeAdmission(reason, detail string, at time.Time) error
 	if err := j.needs("be held before admission", PhasePrepared); err != nil {
 		return err
 	}
-	j.Outcome = &Outcome{Hold: reason, Summary: reason + ": " + detail, At: at}
+	j.Outcome = &Outcome{Hold: reason, Summary: cronjob.ReasonMessage(reason, detail), At: at}
 	j.Phase = PhaseSettled
 	return nil
 }
@@ -266,7 +267,7 @@ func (l lifecycle) acceptResume(j *Journal, t resumeTerms) error {
 	in, out := t.Tokens(j)
 	j.CarriedInput, j.CarriedOutput = addTokens(j.CarriedInput, in), addTokens(j.CarriedOutput, out)
 	j.Attempt = j.attempt() + 1
-	j.Resume = &ResumeRecord{Attempt: j.Attempt, SessionID: t.SessionID(j), By: t.By, At: t.At, Hold: j.Outcome.Hold, Detail: j.Outcome.Summary}
+	j.Resume = &ResumeRecord{Attempt: j.Attempt, SessionID: t.SessionID(j), By: t.By, At: t.At, Hold: j.Outcome.Hold, Detail: j.Outcome.holdDetail()}
 	j.Generation = t.Generation
 	if j.Workflow != nil { // one fresh expiry from the frozen timeout, from the moment the resume is accepted
 		j.ExpiresAt = t.At.Add(time.Duration(j.TimeoutSeconds) * time.Second)
@@ -290,7 +291,7 @@ func (l lifecycle) abandon(j *Journal, by string, at time.Time) error {
 	}
 	beforeAdmission := j.holdClass() == holdBeforeAdmission
 	held := j.Outcome
-	j.Outcome = &Outcome{Status: cronjob.RunCancelled, Summary: fmt.Sprintf("abandoned by %s (was held: %s)", by, held.Summary), At: at}
+	j.Outcome = &Outcome{Status: cronjob.RunCancelled, Summary: fmt.Sprintf("abandoned by %s (was held: %s)", by, held.holdLine()), At: at}
 	j.Intents = nil
 	j.Phase = PhaseFinished
 	if beforeAdmission {

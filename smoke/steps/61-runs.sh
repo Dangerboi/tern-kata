@@ -27,8 +27,24 @@ cat >"$tmp/runs-second.json" <<JSON
  "summary":{"version":1,"message":"triaged nine items","input_tokens":777,"output_tokens":55}}
 JSON
 kata --workspace "$rn_dir" cron run observe "$rn_second" --json-input "$tmp/runs-second.json" --json >/dev/null
+# A summary that leads with kata's `reason: <code>` line shows the code and the line after it; so does a hold an earlier
+# tern-kata wrote as `<code>: <detail>`.
+rn_reason=01H5MK0000000000000000R003
+rn_legacy=01H5MK0000000000000000R004
+rn_held() { # run uid, start hour, message as JSON string text
+  cat >"$tmp/runs-held.json" <<JSON
+{"job_uid":"$rn_job","definition_event_uid":"$rn_event","issue_uid":"$rn_issue","executor_label":"smoke-laptop",
+ "status":"unknown","started_at":"2026-10-08T$2:00:00Z","ended_at":"2026-10-08T$2:01:00Z","expected_revision":0,
+ "summary":{"version":1,"message":"$3"}}
+JSON
+  kata --workspace "$rn_dir" cron run observe "$1" --json-input "$tmp/runs-held.json" --json >/dev/null
+}
+rn_held "$rn_reason" 11 'reason: agent_quota\nthe provider answered 429'
+rn_held "$rn_legacy" 12 'interrupted: the worker stopped while the agent ran'
 
 ctl key 4
+expect_tree "[data-id='main.columns.list.runs.$rn_reason']" '.ok and .count == 1 and (.nodes[0].text | contains("unknown") and contains("reason: agent_quota") and contains("the provider answered 429"))'
+expect_tree "[data-id='main.columns.list.runs.$rn_legacy']" '.ok and .count == 1 and (.nodes[0].text | contains("reason: interrupted") and contains("the worker stopped while the agent ran") and (contains("interrupted: ") | not))'
 expect_tree "[data-id='main.columns.list.runs.$rn_run']" '.ok and .count == 1 and (.nodes[0].text | contains("succeeded") and contains("Smoke triage job") and contains("Smoke run Issue") and contains("smoke-laptop") and contains("1m 35s") and contains("triaged four items"))'
 ctl click "[data-id='main.columns.list.runs.$rn_run']"
 ctl key enter

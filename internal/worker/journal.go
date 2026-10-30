@@ -176,7 +176,7 @@ type ResumeRecord struct {
 	SessionID string    `json:"session_id"`
 	By        string    `json:"by"`
 	At        time.Time `json:"at"`
-	// Hold and Detail are the reason and summary of the hold the resume lifted.
+	// Hold and Detail are the reason of the hold the resume lifted and its summary after the reason.
 	Hold   string `json:"hold"`
 	Detail string `json:"detail"`
 }
@@ -238,6 +238,16 @@ type Outcome struct {
 	InputTokens  *int64 `json:"input_tokens,omitempty"`
 	OutputTokens *int64 `json:"output_tokens,omitempty"`
 }
+
+// holdDetail is what the worker knew when it held the run: the summary after its reason, in either shape it was written in.
+func (o *Outcome) holdDetail() string {
+	_, detail := cronjob.ReadReason(o.Summary)
+	return detail
+}
+
+// holdLine is the hold as one sentence for people, "<reason>: <detail>": the Issue comment, the inbox request and the
+// abandon summary word it so.
+func (o *Outcome) holdLine() string { return o.Hold + ": " + o.holdDetail() }
 
 // Inspections are the reasons the run's reports could not be delivered without a person looking.
 func (j *Journal) Inspections() []string {

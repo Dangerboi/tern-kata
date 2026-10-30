@@ -142,7 +142,7 @@ func runStatus(j *Journal) RunStatus {
 	}
 	r.State = j.stateName()
 	if j.held() {
-		r.Held, r.Hold, r.Detail = true, j.Outcome.Hold, j.Outcome.Summary
+		r.Held, r.Hold, r.Detail = true, j.Outcome.Hold, j.Outcome.holdDetail()
 	}
 	if j.Outcome != nil {
 		r.EndedAt = j.Outcome.At

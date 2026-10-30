@@ -34,13 +34,13 @@ func TestTransitionsFromEveryPhase(t *testing.T) {
 	}{
 		{name: "hold", legal: inFlight, do: func(j *Journal) error { return j.hold(HoldInterrupted, "why", at) }, want: PhaseFinished,
 			check: func(t *testing.T, j *Journal) {
-				if j.Outcome.Status != cronjob.RunUnknown || j.Outcome.Hold != HoldInterrupted || j.Outcome.Summary != HoldInterrupted+": why" || !j.Outcome.At.Equal(at) {
+				if j.Outcome.Status != cronjob.RunUnknown || j.Outcome.Hold != HoldInterrupted || j.Outcome.Summary != "reason: interrupted\nwhy" || !j.Outcome.At.Equal(at) {
 					t.Errorf("outcome = %+v", j.Outcome)
 				}
 			}},
 		{name: "holdBeforeAdmission", legal: []Phase{PhasePrepared}, do: func(j *Journal) error { return j.holdBeforeAdmission(HoldCreateRejected, "why", at) }, want: PhaseSettled,
 			check: func(t *testing.T, j *Journal) {
-				if j.holdClass() != holdBeforeAdmission || j.Outcome.Summary != HoldCreateRejected+": why" {
+				if j.holdClass() != holdBeforeAdmission || j.Outcome.Summary != "reason: create_rejected\nwhy" {
 					t.Errorf("outcome = %+v", j.Outcome)
 				}
 			}},
@@ -146,6 +146,33 @@ func TestTransitionsFromEveryPhase(t *testing.T) {
 					tt.check(t, j)
 				}
 			})
+		}
+	}
+}
+
+// Every hold reason reaches kata as `reason: <code>` with the detail on the next line, and the worker's own words for
+// people (status detail, Issue comment, abandon summary) read the same from that message and from a journal saved in the
+// "<code>: <detail>" shape written before it.
+func TestEveryHoldReasonIsWrittenAsAReasonLine(t *testing.T) {
+	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	for _, reason := range []string{HoldAdmissionRejected, HoldCreateRejected, HoldSecretUnavailable, HoldLaunchUnproven, HoldInterrupted,
+		HoldNoReceipt, HoldGroupUnproven, HoldInvalidPrompt, HoldExecutionError, HoldAgentLogin, HoldAgentQuota} {
+		j := &Journal{RunUID: "run", Phase: PhaseStarted}
+		hold := j.hold
+		if reason == HoldAdmissionRejected || reason == HoldCreateRejected {
+			j.Phase, hold = PhasePrepared, j.holdBeforeAdmission
+		}
+		if err := hold(reason, "it said: no\nsecond line", at); err != nil {
+			t.Fatalf("%s: %v", reason, err)
+		}
+		if want := "reason: " + reason + "\nit said: no\nsecond line"; j.Outcome.Summary != want || j.Outcome.Hold != reason {
+			t.Errorf("%s: outcome %+v, want summary %q", reason, j.Outcome, want)
+		}
+		earlier := &Outcome{Hold: reason, Summary: reason + ": it said: no\nsecond line"}
+		for _, o := range []*Outcome{j.Outcome, earlier} {
+			if o.holdDetail() != "it said: no\nsecond line" || o.holdLine() != reason+": it said: no\nsecond line" {
+				t.Errorf("%s: %q reads as detail %q, line %q", reason, o.Summary, o.holdDetail(), o.holdLine())
+			}
 		}
 	}
 }

@@ -217,7 +217,7 @@ type StepInput struct {
 // ResumeNote says why a resumed attempt exists.
 type ResumeNote struct {
 	Hold   string // the hold reason that was lifted
-	Detail string // the hold's summary
+	Detail string // the hold's summary after its reason
 }
 
 // BuildPrompt is the prompt of a prompt-job run, in ADR-0009's order: the run's Issue, the job and run identity, the
