@@ -210,8 +210,8 @@ func DecodeFocus(id string) model.Msg {
 	return nil
 }
 
-// decodeAgentStates reads the window half's JSON list of {pane, state, last_message, command}, nil when it is malformed; command is
-// absent from an older window half.
+// decodeAgentStates reads the window half's JSON list of {pane, state, last_message, command, hidden}, nil when it is malformed; command and hidden are
+// absent from an older window half, and a missing hidden leaves the agent's place unknown.
 // pane is decimal text, or a JSON number, kept exact: block ids can exceed what a float holds.
 func decodeAgentStates(value string) model.Msg {
 	var list []struct {
@@ -219,6 +219,7 @@ func decodeAgentStates(value string) model.Msg {
 		State       string          `json:"state"`
 		LastMessage string          `json:"last_message"`
 		Command     string          `json:"command"`
+		Hidden      *bool           `json:"hidden"`
 	}
 	if err := json.Unmarshal([]byte(value), &list); err != nil {
 		return nil
@@ -229,7 +230,15 @@ func decodeAgentStates(value string) model.Msg {
 		if !ok {
 			return nil
 		}
-		states = append(states, model.AgentState{Block: block, State: model.AgentStateWord(item.State), LastMessage: item.LastMessage, Command: item.Command})
+		where := model.SeenUnknown
+		switch {
+		case item.Hidden == nil:
+		case *item.Hidden:
+			where = model.SeenHidden
+		default:
+			where = model.SeenShown
+		}
+		states = append(states, model.AgentState{Block: block, State: model.AgentStateWord(item.State), LastMessage: item.LastMessage, Command: item.Command, Hidden: where})
 	}
 	return model.AgentStatesMsg{States: states}
 }

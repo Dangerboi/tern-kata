@@ -100,3 +100,104 @@ func TestAPlacementAnswerMarksTheEntryAndShowsTheFailure(t *testing.T) {
 		t.Fatalf("after a refusal %+v, notice %q", refused.AgentMapping, refused.Notice)
 	}
 }
+
+func at(block string, state model.AgentStateWord, where model.AgentSeen) model.AgentState {
+	return model.AgentState{Block: block, State: state, Hidden: where}
+}
+
+func flagWrites(cmds []model.Cmd) []model.SetAgentOpen {
+	var writes []model.SetAgentOpen
+	for _, c := range cmds {
+		if w, ok := c.(model.SetAgentOpen); ok {
+			writes = append(writes, w)
+		}
+	}
+	return writes
+}
+
+func TestTheOpenFlagFollowsWhereTheRelayShowsAnOwnBackgroundAgent(t *testing.T) {
+	m := model.Model{PaneBlock: "9", AgentMapping: []model.AgentEntry{backgroundEntry("5", "9", false)}}
+	m, cmds := relayed(m, at("5", "waiting_input", model.SeenShown))
+	if want := []model.SetAgentOpen{{Block: "5", Open: true}}; !reflect.DeepEqual(flagWrites(cmds), want) {
+		t.Fatalf("out of the hidden session: %#v", cmds)
+	}
+	// One write per change: a second relay while the first is in flight asks for none.
+	m, cmds = relayed(m, at("5", "waiting_input", model.SeenShown))
+	if len(flagWrites(cmds)) != 0 {
+		t.Fatalf("write repeated while in flight: %#v", cmds)
+	}
+	m, _ = model.Update(m, model.AgentOpenSet{Block: "5", Open: true})
+	if !m.AgentMapping[0].Open {
+		t.Fatalf("mapping %+v", m.AgentMapping)
+	}
+	if _, cmds = relayed(m, at("5", "waiting_input", model.SeenShown)); len(flagWrites(cmds)) != 0 {
+		t.Fatalf("nothing changed, yet %#v", cmds)
+	}
+	// Back in the hidden session clears it.
+	m, cmds = relayed(m, at("5", "waiting_input", model.SeenHidden))
+	if want := []model.SetAgentOpen{{Block: "5", Open: false}}; !reflect.DeepEqual(flagWrites(cmds), want) {
+		t.Fatalf("back in the hidden session: %#v", cmds)
+	}
+	m, _ = model.Update(m, model.AgentOpenSet{Block: "5", Open: false})
+	if m.AgentMapping[0].Open {
+		t.Fatalf("mapping %+v", m.AgentMapping)
+	}
+}
+
+func TestAFailedFlagWriteAsksAgainOnTheNextRelay(t *testing.T) {
+	m := model.Model{PaneBlock: "9", AgentMapping: []model.AgentEntry{backgroundEntry("5", "9", false)}}
+	m, _ = relayed(m, at("5", "waiting_input", model.SeenShown))
+	m, _ = model.Update(m, model.AgentOpenSet{Block: "5", Open: true, Err: errors.New("disk full")})
+	if m.AgentMapping[0].Open || m.Notice == "" {
+		t.Fatalf("open %v, notice %q", m.AgentMapping[0].Open, m.Notice)
+	}
+	if _, cmds := relayed(m, at("5", "waiting_input", model.SeenShown)); len(flagWrites(cmds)) != 1 {
+		t.Fatalf("cmds %#v", cmds)
+	}
+}
+
+func TestTheOpenFlagIsLeftAloneUnlessItIsAnOwnBackgroundAgentWithAKnownPlace(t *testing.T) {
+	split := backgroundEntry("5", "9", false)
+	split.Background = false
+	for name, tt := range []struct {
+		entry model.AgentEntry
+		state model.AgentState
+	}{
+		{split, at("5", "idle", model.SeenShown)},
+		{backgroundEntry("5", "8", false), at("5", "idle", model.SeenShown)},
+		{backgroundEntry("5", "9", false), at("5", "idle", model.SeenUnknown)},
+		{backgroundEntry("5", "9", true), at("5", "idle", model.SeenUnknown)},
+		{backgroundEntry("5", "9", false), at("5", "idle", model.SeenHidden)},
+		{backgroundEntry("5", "9", true), at("5", "idle", model.SeenShown)},
+	} {
+		m := model.Model{PaneBlock: "9", AgentMapping: []model.AgentEntry{tt.entry}}
+		if _, cmds := relayed(m, tt.state); len(flagWrites(cmds)) != 0 {
+			t.Errorf("case %d: %#v", name, cmds)
+		}
+	}
+}
+
+func TestAnAgentSeenOutOfTheHiddenSessionGoesBackWhenItWorksAgain(t *testing.T) {
+	m := model.Model{PaneBlock: "9", AgentMapping: []model.AgentEntry{backgroundEntry("5", "9", false)}}
+	m, _ = relayed(m, at("5", "waiting_input", model.SeenShown))
+	m, _ = model.Update(m, model.AgentOpenSet{Block: "5", Open: true})
+	_, cmds := relayed(m, at("5", "working", model.SeenShown))
+	if want := []model.SendAgentBack{{Block: "5", IssueRef: "demo#ab12"}}; !reflect.DeepEqual(sentBack(cmds), want) {
+		t.Fatalf("cmds %#v", cmds)
+	}
+}
+
+func TestNoFlagIsWrittenWhileThisPaneMovesTheAgent(t *testing.T) {
+	m := model.Model{PaneBlock: "9", AgentMapping: []model.AgentEntry{backgroundEntry("5", "9", false)}}
+	m, cmds := model.Update(m, model.AgentJumpMsg{Block: "5"})
+	if len(cmds) != 1 {
+		t.Fatalf("cmds %#v", cmds)
+	}
+	if _, cmds = relayed(m, at("5", "waiting_input", model.SeenShown)); len(flagWrites(cmds)) != 0 {
+		t.Fatalf("flag written during the move: %#v", cmds)
+	}
+	m, _ = model.Update(m, model.AgentPlaced{Block: "5", Moved: true, Open: true})
+	if _, cmds = relayed(m, at("5", "waiting_input", model.SeenShown)); len(flagWrites(cmds)) != 0 {
+		t.Fatalf("flag already open, yet %#v", cmds)
+	}
+}

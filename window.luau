@@ -72,20 +72,41 @@ end
 -- kata Panes that have been sent the agent states since their surface went live.
 local relayed: { [number]: boolean } = {}
 
+-- Background agents live in a session of this name (internal/model AgentSession), kept out of sight.
+local AGENT_SESSION = "kata agents"
+
+-- The tabs that are in that session, by id.
+local function hiddenTabs(cx: WindowCx): { [number]: boolean }
+    local sessions: { [number]: boolean } = {}
+    for _, session in cx.sessions:list() do
+        if session.name == AGENT_SESSION then sessions[session.id] = true end
+    end
+    local tabs: { [number]: boolean } = {}
+    for _, tab in cx.session:tabs() do
+        if sessions[tab.session] then tabs[tab.id] = true end
+    end
+    return tabs
+end
+
 -- Every agent block in the session as JSON for the Pane, which matches it against its own agents. The pane id goes as
 -- decimal text; %.0f prints a whole number without an exponent. Tern's API gives the id only as a Luau number (a double),
 -- so the text is exact only for ids up to 2^53: a larger id is already rounded here and matches no agent of the Pane.
 -- A window on another machine numbers panes differently from the session host, so the id may match nothing there; the command
 -- (it names the agent's prompt file) lets the Pane find its agent anyway. A missing last message or command is the empty string.
+-- `hidden` says whether the agent's tab is in the hidden session, so the Pane learns when an agent is opened or put away
+-- without it; it is left out when the window cannot place the agent's tab.
 local function agentStates(cx: WindowCx): string
     local list = tern.json.array({})
+    local hidden = hiddenTabs(cx)
     for _, agent in cx.agents:list() do
         local last = agent.last_message
+        local tab = cx.session:tab_of(agent.pane)
         table.insert(list, {
             pane = string.format("%.0f", agent.pane),
             state = agent.state,
             last_message = if type(last) == "string" then last else "",
             command = if type(agent.command) == "string" then agent.command else "",
+            hidden = if tab then hidden[tab] == true else nil,
         })
     end
     return tern.json.encode(list)
@@ -270,6 +291,13 @@ local function placeAgentTab(cx: WindowCx, tab: number, tries: number)
         end
         return
     end
+    -- A background agent's tab is in the hidden session and stays where it is.
+    if hiddenTabs(cx)[tab] then
+        for _, info in cx.session:panes() do
+            if info.tab == tab then placed[info.pane] = true end
+        end
+        return
+    end
     -- Here the starter's own id is exact, since the tab is on this window's machine; a starter that is gone leaves the tab last.
     placeTab(cx, tab, cx.session:pane(starter))
     for _, info in cx.session:panes() do
@@ -277,18 +305,83 @@ local function placeAgentTab(cx: WindowCx, tab: number, tries: number)
     end
 end
 
--- Agent panes not placed yet whose command carries the marker, each placed once.
+-- Agent panes not placed yet whose command carries the marker, each placed once. A background agent's tab is in the hidden
+-- session, which is not ordered by the Pane that started it, so such an agent is never placed.
 placeAgents = function(cx: WindowCx)
+    local hidden: { [number]: boolean }? = nil
     for _, agent in cx.agents:list() do
         if not placed[agent.pane] then
             local starter = markerOf(agent.command)
             local info = if starter then cx.session:pane(agent.pane) else nil
-            if starter and info and info.tab and placeTab(cx, info.tab, starterPane(cx, starter)) then
-                placed[agent.pane] = true
+            if starter and info and info.tab then
+                local tabs = hidden or hiddenTabs(cx)
+                hidden = tabs
+                if tabs[info.tab] then
+                    placed[agent.pane] = true
+                elseif placeTab(cx, info.tab, starterPane(cx, starter)) then
+                    placed[agent.pane] = true
+                end
             end
         end
     end
 end
+
+-- Tern's notification for an agent that waits for the user focuses the agent where it lives, and a background agent lives in
+-- the hidden session, which is meant to stay out of sight: the user would land in a session of nothing but agents. So focus
+-- in that session opens the agent beside a kata Pane, as a click on its Agent badge does, and shows that Pane's session. The
+-- kata Pane is the one the agent's prompt file names (this window's own Pane, when the id is exact), else the one this window
+-- focused last, else its only one; with none the agent stays. The move is itself a focus, but then the agent is out of the
+-- hidden session and nothing happens. The relay that follows tells the Pane at once, so it records the agent as open.
+local lastKata: number? = nil
+
+local function kataPaneFor(cx: WindowCx, starter: number?): PaneInfo?
+    local own = if starter then cx.session:pane(starter) else nil
+    if isKata(own) then return own end
+    local last = if lastKata then cx.session:pane(lastKata) else nil
+    if isKata(last) then return last end
+    local only: PaneInfo? = nil
+    for _, candidate in cx.session:panes() do
+        if isKata(candidate) then
+            if only then return nil end
+            only = candidate
+        end
+    end
+    return only
+end
+
+local function isPromptCommand(command: string?): boolean
+    return command ~= nil and command:find("agent%-prompts[/\\]prompt%-") ~= nil
+end
+
+local openingAgent = false
+
+local function openFocusedAgent(cx: WindowCx, pane: number, tab: number)
+    if openingAgent or not hiddenTabs(cx)[tab] then return end
+    local command: string? = nil
+    for _, agent in cx.agents:list() do
+        if agent.pane == pane then command = agent.command end
+    end
+    if not isPromptCommand(command) then return end
+    local kata = kataPaneFor(cx, markerOf(command))
+    if not kata or not kata.tab then return end
+    openingAgent = true
+    local moved = cx.layout:move(pane, kata.pane, "right")
+    openingAgent = false
+    if not moved then return end
+    for _, info in cx.session:tabs() do
+        if info.id == kata.tab then cx.sessions:switch(info.session) end
+    end
+    cx.layout:focus(pane)
+    relayAll(cx, false)
+end
+
+tern.on("focus", function(ev, cx)
+    if isKata(cx.session:pane(ev.pane)) then
+        lastKata = ev.pane
+        return
+    end
+    openFocusedAgent(cx, ev.pane, ev.tab)
+end)
 
 tern.on("tab_created", function(ev, cx)
     placeAgentTab(cx, ev.tab, PLACE_TRIES)
@@ -299,6 +392,7 @@ tern.on("pane_closed", function(ev, cx)
     pending[ev.pane] = nil
     relayed[ev.pane] = nil
     placed[ev.pane] = nil
+    if lastKata == ev.pane then lastKata = nil end
     if marked[ev.pane] then
         marked[ev.pane] = nil
         restyleMarks()

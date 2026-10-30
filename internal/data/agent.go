@@ -352,8 +352,9 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 	if err != nil {
 		return failed(err)
 	}
+	// A background agent names its starter too: the window half finds the kata Pane to open it beside from the prompt file's name.
 	var starter string
-	if cmd.Placement == model.AgentTab {
+	if cmd.Placement == model.AgentTab || cmd.Placement == model.AgentBackground {
 		starter = cmd.PaneBlock
 	}
 	promptFile, err := writeAgentPrompt(filepath.Join(dirs.State, AgentPromptsFolder), starter, AgentPrompt(cmd.IssueRef, cmd.IssueTitle))
@@ -442,6 +443,11 @@ func (g *Gateway) setAgentOpen(block string, open, background bool) error {
 		return list
 	})
 	return err
+}
+
+// setAgentOpenFlag records where the relay saw an agent: only the open flag changes, read from agents.json as it stands now.
+func (g *Gateway) setAgentOpenFlag(cmd model.SetAgentOpen) model.AgentOpenSet {
+	return model.AgentOpenSet{Block: cmd.Block, Open: cmd.Open, Err: g.setAgentOpen(cmd.Block, cmd.Open, false)}
 }
 
 // openAgent moves a background agent's block beside the Pane and marks it open.
@@ -537,9 +543,9 @@ func (g *Gateway) closeAgent(ctx context.Context, cmd model.CloseAgent) model.Ag
 	return model.AgentClosed{Block: cmd.Block, Agents: kept}
 }
 
-// AgentPromptName is the pattern of a prompt file's name for os.CreateTemp. A tab's agent carries the block id of the kata Pane
+// AgentPromptName is the pattern of a prompt file's name for os.CreateTemp. A tab's or background agent carries the block id of the kata Pane
 // that started it (`prompt-<block>-<random>.md`), which the plugin's window half reads from the new tab's command line to put
-// the tab right of the Pane's; any other agent, or a Pane that cannot name its block, gets `prompt-<random>.md`. A block that
+// the tab right of the Pane's, or to open a background agent beside it; a split agent, or a Pane that cannot name its block, gets `prompt-<random>.md`. A block that
 // is not all digits is left out, so the name stays one the window half parses.
 func AgentPromptName(starter string) string {
 	if starter == "" || strings.Trim(starter, "0123456789") != "" {

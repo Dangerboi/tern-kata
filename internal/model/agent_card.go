@@ -106,7 +106,7 @@ func sendToBackground(m Model, e AgentEntry) (Model, []Cmd) {
 		m.Notice = "That agent is already in the background."
 		return m, nil
 	}
-	return m, []Cmd{SendAgentBack{Block: e.Block, IssueRef: e.IssueRef}}
+	return placeAgent(m, e.Block), []Cmd{SendAgentBack{Block: e.Block, IssueRef: e.IssueRef}}
 }
 
 // AgentCardSelected is a click on an agent of the card's list; Block is its block id.

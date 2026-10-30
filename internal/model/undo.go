@@ -160,7 +160,7 @@ func undoBoundary(cmd Cmd) (string, bool) {
 		LoadJobWorkflows, LoadJobs, LoadRuns, ShowRun, LoadRecurTarget, LoadFieldLabels, LoadProject, ReadSnapshot, Subscribe,
 		WakeAt, OpenIssue, LookupSearchID, LoadWorkflows, ReadWorkflowText, LoadWorker, LoadWorkerSetup, SaveWorkerSetup,
 		SaveWorkerEdit, StopWorker, SetWorkerSupervision, LoadLocalRun, RunJobNow, ResumeLocalRun, AbandonLocalRun,
-		OpenRunSession, StartAgent, PruneAgents, RefreshAgents, FocusAgent, OpenAgent, SendAgentBack, CloseAgent, ReadAgentIssue, RaiseAgentAttention, ClearAgentAttention, CreateProject, BindProject, LookupDeleted, LoadDaemons, SwitchDaemon, LoadAttention, LoadAuthCapabilities,
+		OpenRunSession, StartAgent, PruneAgents, RefreshAgents, FocusAgent, OpenAgent, SendAgentBack, SetAgentOpen, CloseAgent, ReadAgentIssue, RaiseAgentAttention, ClearAgentAttention, CreateProject, BindProject, LookupDeleted, LoadDaemons, SwitchDaemon, LoadAttention, LoadAuthCapabilities,
 		LoadCredentials, LoadFederation, LoadFederationHubs, LoadFederationHubProjects, BrowseFederationHubs:
 		return "", false
 	case CloseIssueCmd, ReopenIssueCmd, MoveIssueCmd, SetDatesCmd, DeleteIssueCmd, UndoChange:

@@ -241,7 +241,10 @@ func TestAgentPromptNameCarriesTheStartingPaneOfATab(t *testing.T) {
 	}
 	g, dirs := agentGateway(t)
 	writeAgentFile(t, filepath.Join(dirs.Config, "agent.toml"), "")
-	g.runTern = func(context.Context, []string) ([]byte, error) {
+	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		if args[0] == "ls" {
+			return []byte(lsWithAgents), nil
+		}
 		return []byte(`{"session":1,"tab":2,"block":31}`), nil
 	}
 	for _, c := range []struct {
@@ -250,6 +253,7 @@ func TestAgentPromptNameCarriesTheStartingPaneOfATab(t *testing.T) {
 	}{
 		{model.AgentTab, `^prompt-7-[0-9]+\.md$`},
 		{model.AgentSplit, `^prompt-[0-9]+\.md$`},
+		{model.AgentBackground, `^prompt-7-[0-9]+\.md$`},
 	} {
 		started := as[model.AgentStarted](t, run(t, g, model.StartAgent{Placement: c.placement, IssueRef: "demo#ab12", ProjectName: "demo", Workspace: "/bound", PaneBlock: "7"}))
 		if started.Err != nil {
@@ -844,5 +848,23 @@ func TestAFailedCloseKeepsTheEntryAndThePrompt(t *testing.T) {
 	}
 	if _, err := os.Stat(prompt); err != nil {
 		t.Errorf("prompt file: %v", err)
+	}
+}
+
+func TestRecordingWhereTheRelaySawAnAgentChangesOnlyItsOpenFlag(t *testing.T) {
+	g, dirs := agentGateway(t)
+	seedAgent(t, dirs, model.AgentEntry{Block: "31", IssueRef: "demo#ab12", Background: true})
+	file := seedAgent(t, dirs, model.AgentEntry{Block: "32", Background: true, Open: true})
+	got := as[model.AgentOpenSet](t, run(t, g, model.SetAgentOpen{Block: "31", Open: true}))
+	if got.Err != nil || got.Block != "31" || !got.Open {
+		t.Fatalf("%+v", got)
+	}
+	got = as[model.AgentOpenSet](t, run(t, g, model.SetAgentOpen{Block: "32", Open: false}))
+	if got.Err != nil || got.Open {
+		t.Fatalf("%+v", got)
+	}
+	stored, _ := ReadAgents(file)
+	if !stored[0].Open || !stored[0].Background || stored[0].IssueRef != "demo#ab12" || stored[1].Open || !stored[1].Background {
+		t.Errorf("agents.json %+v", stored)
 	}
 }
