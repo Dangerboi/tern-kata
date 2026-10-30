@@ -145,6 +145,9 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 			body = append(body, ui.Text{Common: ui.Common{Key: "blocked"}, Spans: []ui.Span{{T: marker, S: "warning"}}})
 		}
 	}
+	if badge, ok := agentBadge(m, issue.UID, "agent"); ok {
+		body = append(body, badge)
+	}
 	if selected {
 		if line := relationshipsLine(card); line != nil {
 			body = append(body, line)

@@ -313,3 +313,48 @@ func TestTheAgentPromptIsStable(t *testing.T) {
 		t.Fatalf("prompt differs from %s (run with -update to rewrite):\n%s", path, got)
 	}
 }
+
+func TestRefreshingDropsTheGoneBlocksAndReadsTheFileAsItIs(t *testing.T) {
+	g, dirs := agentGateway(t)
+	prompts := filepath.Join(dirs.State, AgentPromptsFolder)
+	if err := os.MkdirAll(prompts, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	kept := writeAgentFile(t, filepath.Join(prompts, "kept.md"), "x")
+	dead := writeAgentFile(t, filepath.Join(prompts, "dead.md"), "x")
+	file := filepath.Join(dirs.State, AgentsFile)
+	if _, err := UpdateAgents(file, func(l []model.AgentEntry) []model.AgentEntry {
+		return append(l, model.AgentEntry{Block: "1", PromptFile: kept}, model.AgentEntry{Block: "144115188075855871", PromptFile: dead})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	g.runTern = func(context.Context, []string) ([]byte, error) { t.Error("refreshing ran tern"); return nil, nil }
+	if got := as[model.AgentsRefreshed](t, run(t, g, model.RefreshAgents{})); got.Err != nil || len(got.Agents) != 2 {
+		t.Fatalf("a plain re-read: %+v", got)
+	}
+	got := as[model.AgentsRefreshed](t, run(t, g, model.RefreshAgents{Gone: []string{"144115188075855871", "42"}}))
+	if got.Err != nil || len(got.Agents) != 1 || got.Agents[0].Block != "1" {
+		t.Fatalf("refreshed %+v", got)
+	}
+	if _, err := os.Stat(dead); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the gone entry's prompt stayed: %v", err)
+	}
+	if _, err := os.Stat(kept); err != nil {
+		t.Errorf("a kept entry's prompt went: %v", err)
+	}
+}
+
+func TestFocusingAnAgentRunsTernFocusAndReportsItsOutput(t *testing.T) {
+	g, _ := agentGateway(t)
+	var ran []string
+	g.runTern = func(_ context.Context, args []string) ([]byte, error) { ran = args; return nil, nil }
+	if got := as[model.AgentFocused](t, run(t, g, model.FocusAgent{Block: "144115188075855871"})); got.Err != nil || !slices.Equal(ran, []string{"focus", "144115188075855871"}) {
+		t.Fatalf("ran %q: %+v", ran, got)
+	}
+	g.runTern = func(context.Context, []string) ([]byte, error) {
+		return []byte("tern: no such block\n"), errors.New("exit status 1")
+	}
+	if got := as[model.AgentFocused](t, run(t, g, model.FocusAgent{Block: "1"})); got.Err == nil || got.Err.Error() != "exit status 1: tern: no such block" {
+		t.Errorf("error %v", got.Err)
+	}
+}

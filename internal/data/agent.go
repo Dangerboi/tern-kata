@@ -264,3 +264,45 @@ func writeAgentPrompt(folder, text string) (string, error) {
 	}
 	return name, nil
 }
+
+// refreshAgents reads agents.json again and, first, drops the entries of the gone blocks with their prompt files. The file is
+// read fresh, so an agent another kata Pane started is in the answer.
+func (g *Gateway) refreshAgents(cmd model.RefreshAgents) model.AgentsRefreshed {
+	file, _, err := g.agentStatePaths()
+	if err != nil {
+		return model.AgentsRefreshed{Err: err}
+	}
+	current, err := ReadAgents(file)
+	if err != nil || len(cmd.Gone) == 0 || !slices.ContainsFunc(current, func(e model.AgentEntry) bool { return slices.Contains(cmd.Gone, e.Block) }) {
+		return model.AgentsRefreshed{Agents: current, Err: err}
+	}
+	var gone []model.AgentEntry
+	kept, err := UpdateAgents(file, func(list []model.AgentEntry) []model.AgentEntry {
+		gone = gone[:0]
+		return slices.DeleteFunc(list, func(e model.AgentEntry) bool {
+			if !slices.Contains(cmd.Gone, e.Block) {
+				return false
+			}
+			gone = append(gone, e)
+			return true
+		})
+	})
+	if err != nil {
+		return model.AgentsRefreshed{Err: err}
+	}
+	for _, e := range gone {
+		removePrompt(e.PromptFile)
+	}
+	return model.AgentsRefreshed{Agents: kept}
+}
+
+// focusAgent has Tern show the agent's block.
+func (g *Gateway) focusAgent(ctx context.Context, cmd model.FocusAgent) model.AgentFocused {
+	if out, err := g.runTern(ctx, FocusAgentArgs(cmd.Block)); err != nil {
+		return model.AgentFocused{Err: ternFailure(err, out)}
+	}
+	return model.AgentFocused{}
+}
+
+// FocusAgentArgs is the tern command line that shows a block.
+func FocusAgentArgs(block string) []string { return []string{"focus", block} }

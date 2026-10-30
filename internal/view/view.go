@@ -322,7 +322,12 @@ func issueRow(m model.Model, row model.IssueRow, selected bool, role string, col
 		{T: cell(idCell(row), cols.id), S: toneStyle(issueLaneTone(m, row.Issue))},
 		{T: cellGap + cell(prio, prioWidth), S: prioStyle},
 		{T: cellGap + cell(row.Status, statusWidth), S: statusStyle},
-		{T: cellGap + title},
+	}
+	// The Agent badge is a span: an Item has one click, and Spans have none, so the badge on a row is not clickable.
+	if badge, ok := m.AgentBadgeFor(row.UID); ok {
+		left = append(left, ui.Span{T: cellGap + badge.Text, S: string(badge.Tone)}, ui.Span{T: " " + title})
+	} else {
+		left = append(left, ui.Span{T: cellGap + title})
 	}
 	owner := listOwner(m, row, now)
 	// A parent's click folds it; a double click on any row opens it. Tern sends the two clicks first, so a parent's fold ends where it began.
