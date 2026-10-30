@@ -543,6 +543,8 @@ func TestDetailShowsCreationLinesForTheIssueAndItsComments(t *testing.T) {
 	selected := &model.IssueDetailData{Issue: &issue, Comments: []model.Comment{
 		{UID: "c1", Author: "dana", CreatedAt: at, Body: "first", Attribution: model.Attribution{Verification: "pending", Source: "dana"}},
 		{UID: "c2", Author: "dana", CreatedAt: at, Body: "second"},
+		{UID: "c3", Author: "dana", CreatedAt: at, Body: "third", Attribution: model.Attribution{Verification: "legacy", Source: "dana", Teammate: "bot"}},
+		{UID: "c4", Author: "dana", CreatedAt: at, Body: "fourth", Attribution: model.Attribution{Verification: "legacy", Source: "dana"}},
 	}}
 	nodes := render(t, apply(withZone(browsing()), model.DetailLoaded{UID: "alpha", Selected: selected}))
 	if got := text(nodes[view.DetailContentID+".properties.creation"]); got != "creation: verified · accountable: alice · source: agent / bot" {
@@ -553,5 +555,16 @@ func TestDetailShowsCreationLinesForTheIssueAndItsComments(t *testing.T) {
 	}
 	if n, ok := nodes[view.DetailActivityID+".c2.creation"]; ok {
 		t.Errorf("a comment without a verification state shows %q", text(n))
+	}
+	if got := text(nodes[view.DetailActivityID+".c3.creation"]); got != "source: dana / bot" {
+		t.Errorf("legacy comment with a teammate %q", got)
+	}
+	if n, ok := nodes[view.DetailActivityID+".c4.creation"]; ok {
+		t.Errorf("a legacy comment by its author shows %q", text(n))
+	}
+	issue.Attribution = model.Attribution{Verification: "legacy", Source: issue.Author}
+	nodes = render(t, apply(withZone(browsing()), model.DetailLoaded{UID: "alpha", Selected: selected}))
+	if n, ok := nodes[view.DetailContentID+".properties.creation"]; ok {
+		t.Errorf("a legacy Issue by its author shows %q", text(n))
 	}
 }

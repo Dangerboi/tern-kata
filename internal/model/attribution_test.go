@@ -17,8 +17,12 @@ func TestCreationLine(t *testing.T) {
 		{"verified without teammate", model.Attribution{Verification: "verified", Accountable: "alice", Source: "agent"}, "creation: verified · accountable: alice · source: agent"},
 		{"verified without accountable", model.Attribution{Verification: "verified", Source: "agent"}, "creation: verified · source: agent"},
 		{"pending hides accountable", model.Attribution{Verification: "pending", Accountable: "alice", Source: "agent", Teammate: "bot"}, "creation: pending · source: agent / bot"},
-		{"legacy falls back to the author", model.Attribution{Verification: "legacy"}, "creation: legacy · source: fallback"},
-		{"unknown reads legacy", model.Attribution{Verification: "weird", Accountable: "alice", Source: "agent"}, "creation: legacy · source: agent"},
+		{"legacy without source or teammate is empty", model.Attribution{Verification: "legacy"}, ""},
+		{"legacy by the author is empty", model.Attribution{Verification: "legacy", Source: "fallback"}, ""},
+		{"legacy by the author keeps the teammate", model.Attribution{Verification: "legacy", Source: "fallback", Teammate: "bot"}, "source: fallback / bot"},
+		{"legacy teammate falls back to the author", model.Attribution{Verification: "legacy", Teammate: "bot"}, "source: fallback / bot"},
+		{"legacy by another actor names it", model.Attribution{Verification: "legacy", Accountable: "alice", Source: "agent"}, "source: agent"},
+		{"unknown reads legacy", model.Attribution{Verification: "weird", Source: "fallback"}, ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.a.Line("fallback"); got != tt.want {

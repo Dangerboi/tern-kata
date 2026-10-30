@@ -10,18 +10,22 @@ type Attribution struct {
 	Teammate     string
 }
 
-// Line is kata tui's creation line: "creation: verified|pending|legacy" (an unknown state reads legacy), "accountable: <actor>"
-// only when verified and set, and "source: <source actor or author>" with " / <teammate>" when there is one. It is empty when kata
-// returned no verification state.
+// Line is the creation line under an Issue's properties and on each comment. Verified and pending read as kata tui's
+// "creation: verified|pending", then "accountable: <actor>" only when verified and set, then "source: <source actor or
+// author>" with " / <teammate>" when there is one. A legacy record (an unknown state counts as legacy) drops the state, since
+// every record on an unfederated Project is legacy, and reads "source: …" only when it has a teammate or a source actor other
+// than the author; otherwise it is empty. It is empty when kata returned no verification state.
 func (a Attribution) Line(author string) string {
 	if a.Verification == "" {
 		return ""
 	}
 	state := a.Verification
-	if state != "verified" && state != "pending" {
-		state = "legacy"
+	var fields []string
+	if state == "verified" || state == "pending" {
+		fields = append(fields, "creation: "+state)
+	} else if a.Teammate == "" && (a.Source == "" || a.Source == author) {
+		return ""
 	}
-	fields := []string{"creation: " + state}
 	if state == "verified" && a.Accountable != "" {
 		fields = append(fields, "accountable: "+a.Accountable)
 	}
