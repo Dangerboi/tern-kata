@@ -120,24 +120,26 @@ func TestHelpSheetListsTheGlobalKeysAndTheCurrentPagesKeys(t *testing.T) {
 	}
 }
 
-func TestHelpSheetListsTheAgentKeysOnTheIssuesPageAndTheBoard(t *testing.T) {
+func TestHelpSheetListsTheAgentKeyOnTheIssuesPageAndTheBoard(t *testing.T) {
 	for _, key := range []string{"", "2"} {
 		var found string
 		for _, line := range strings.Split(helpOn(t, key), "\n") {
-			if strings.HasPrefix(line, "w/W/S") {
+			if strings.HasPrefix(line, "w ") {
 				found = line
 			}
 		}
 		if found == "" {
-			t.Errorf("page key %q: no w/W/S line", key)
+			t.Errorf("page key %q: no w line", key)
 		}
 		// The sheet draws its lines unwrapped: a line longer than the Pane's column clips.
 		if n := len([]rune(found)); n > 60 {
 			t.Errorf("page key %q: agent line is %d columns: %q", key, n, found)
 		}
 	}
-	if strings.Contains(helpOn(t, "3"), "w/W/S") {
-		t.Error("the agent keys are listed on the Jobs Page")
+	for _, line := range strings.Split(helpOn(t, "3"), "\n") {
+		if strings.HasPrefix(line, "w ") && strings.Contains(line, "agents") {
+			t.Errorf("the agent key is listed on the Jobs Page: %q", line)
+		}
 	}
 }
 

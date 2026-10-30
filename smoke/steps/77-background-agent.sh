@@ -1,7 +1,7 @@
-# S on the selected Issue starts the agent in the background: a block in the hidden session "kata agents", its tab named project#id,
-# an agents.json entry marked background and not open. Then w opens the
-# Agent card and enter opens the agent beside the Pane: the block moves into the Pane's tab and agents.json marks it open. S then
-# opens the card too, and n there starts another background agent, adding a tab to the session that is still there.
+# w then g on the selected Issue starts the agent in the background: a block in the hidden session "kata agents", its tab named
+# project#id, an agents.json entry marked background and not open. Then w opens the Agent card and enter opens the agent beside
+# the Pane: the block moves into the Pane's tab and agents.json marks it open. w then g again starts another background agent,
+# adding a tab to the session that is still there.
 # A stand-in script from agent.toml's `command` plays omp. The Pane's blocks live on a session daemon of the step's own
 # (`tern daemon --socket`): the headless `tern serve` window has no session daemon, so `tern ls`, `tern new` and `tern move` fail
 # in its panes without one (checked on Tern 0.9.8). That window is not attached to the daemon either: its Pane is the window's own
@@ -41,7 +41,7 @@ done
 # The daemon exits once idle: the block the Pane stands in keeps it up.
 ba_pane=$(ba_tern new session ba-pane --json -- sleep 600 | jq -r '.block')
 
-kata --workspace "$ba_dir" create "Smoke background agent" --body "Started with S" --json >"$tmp/ba-issue.json"
+kata --workspace "$ba_dir" create "Smoke background agent" --body "Started with w then g" --json >"$tmp/ba-issue.json"
 ba_uid=$(jq -r '.issue.uid' "$tmp/ba-issue.json")
 ba_short=$(jq -r '.issue.short_id' "$tmp/ba-issue.json")
 ba_row="[data-id='main.columns.list.issues.$ba_uid']"
@@ -61,7 +61,9 @@ ba_wait_tabs() { # jq arguments: the options, then a predicate on ba_tabs
   printf 'kata agents never matched %s: %s\n' "${*: -1}" "$(ba_tabs)" >&2
   return 1
 }
-ctl key S
+ctl key w
+expect_tree "[data-id^='layer.agent']" '.ok and .count >= 1'
+ctl key g
 expect_tree "[data-id\$='.notice']" '.ok and .count == 1 and (.nodes[0].text | contains("Started an agent on") and contains("background"))'
 ba_wait_tabs --arg n "smoke#$ba_short" '[.[] | select(.name == $n)] | length == 1'
 ba_block=$(ba_tabs | jq -r --arg n "smoke#$ba_short" '.[] | select(.name == $n) | .blocks[0]')
@@ -96,11 +98,11 @@ ba_wait_tabs 'length == 0'
 jq -e --arg block "$ba_block" '.agents | length == 1 and .[0].block == $block and .[0].background == true and .[0].open == true' \
   "$ba_state/tern-kata/agents.json" >/dev/null
 
-# S on an Issue that has an agent opens the card too, and n there starts another in the background: it finds the session that is
+# w on an Issue that has an agent opens the card, and g there starts another in the background: it finds the session that is
 # still there and adds a tab to it.
-ctl key S
+ctl key w
 expect_tree "[data-id^='layer.agent']" '.ok and .count >= 1'
-ctl key n
+ctl key g
 expect_tree "[data-id^='layer.agent']" '.ok and .count == 0'
 ba_wait_tabs 'length == 1'
 jq -e --arg block "$ba_block" '.agents | length == 2 and all(.[]; .background == true) and ([.[] | select(.open)] | length == 1 and .[0].block == $block)' \

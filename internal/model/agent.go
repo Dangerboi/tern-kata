@@ -32,13 +32,8 @@ func (p AgentPlacement) words() (name, notice string) {
 // AgentSession is the name of the hidden Tern session background agents live in.
 const AgentSession = "kata agents"
 
-// The keys that start an agent on the selected Issue.
-const (
-	StartAgentSplitAction Action = "start-agent-split"
-	StartAgentTabAction   Action = "start-agent-tab"
-
-	StartAgentBackgroundAction Action = "start-agent-background"
-)
+// OpenAgentCardAction is `w`: it opens the Agent card on the selected Issue.
+const OpenAgentCardAction Action = "open-agent-card"
 
 // AgentEntry is one line of agents.json, the Agent mapping: an agent this host's Panes started, found again by its block id.
 type AgentEntry struct {
@@ -96,39 +91,41 @@ type AgentsPruned struct {
 
 func (AgentsPruned) msg() {}
 
-// ClosedIssueRefusal is the Notice a start key shows on a closed Issue.
+// ClosedIssueRefusal is the Notice `w` shows on a closed Issue.
 const ClosedIssueRefusal = "This Issue is closed; reopen it first (r)."
 
-// openAgent is `w`, `W` and `S`: the Agent card when the selected Issue has agents, else a new agent; a closed Issue gets the
-// refusal either way.
-func openAgent(placement AgentPlacement) func(Model) (Model, []Cmd) {
-	return func(m Model) (Model, []Cmd) {
-		if issue := closeIssue(m); issue != nil && !IsClosed(*issue) && len(m.IssueAgents(issue.UID)) > 0 {
-			return openAgentCard(m, *issue, placement), nil
-		}
-		return startAgent(placement)(m)
+// openAgent is `w`: the Agent card for the selected Issue, with or without agents; a closed Issue gets the refusal and no card.
+func openAgent(m Model) (Model, []Cmd) {
+	issue := closeIssue(m)
+	if issue == nil {
+		return m, nil
 	}
+	if IsClosed(*issue) {
+		m.Notice = ClosedIssueRefusal
+		return m, nil
+	}
+	return openAgentCard(m, *issue), nil
 }
 
-// startAgent is `w`, `W` and `S` when the Issue has no agent card to open: it starts an agent on the selected Issue unless the Issue is closed.
-func startAgent(placement AgentPlacement) func(Model) (Model, []Cmd) {
-	return func(m Model) (Model, []Cmd) {
-		issue := closeIssue(m)
-		if issue == nil {
-			return m, nil
-		}
-		if IsClosed(*issue) {
-			m.Notice = ClosedIssueRefusal
-			return m, nil
-		}
-		cmd := StartAgent{Placement: placement, IssueUID: issue.UID, IssueRef: issue.QualifiedID, IssueTitle: issue.Title, ProjectID: issue.ProjectID,
-			ProjectName: issue.ProjectName, PaneBlock: m.PaneBlock}
-		if m.Bound && issue.ProjectID == m.Project.ID {
-			cmd.Workspace = m.Workspace
-		}
-		m.Notice = fmt.Sprintf("Starting an agent on %s…", issue.QualifiedID)
-		return m, []Cmd{cmd}
+// startAgent starts an agent on the Agent card's Issue where the card's key says; the card closes first.
+func startAgent(m Model, placement AgentPlacement) (Model, []Cmd) {
+	card := m.AgentCard
+	m.AgentCard = AgentCardState{}
+	issue := m.issueByUID(card.IssueUID)
+	if issue == nil {
+		return m, nil
 	}
+	if IsClosed(*issue) {
+		m.Notice = ClosedIssueRefusal
+		return m, nil
+	}
+	cmd := StartAgent{Placement: placement, IssueUID: issue.UID, IssueRef: issue.QualifiedID, IssueTitle: issue.Title, ProjectID: issue.ProjectID,
+		ProjectName: issue.ProjectName, PaneBlock: m.PaneBlock}
+	if m.Bound && issue.ProjectID == m.Project.ID {
+		cmd.Workspace = m.Workspace
+	}
+	m.Notice = fmt.Sprintf("Starting an agent on %s…", issue.QualifiedID)
+	return m, []Cmd{cmd}
 }
 
 func agentStarted(m Model, msg AgentStarted) Model {

@@ -22,7 +22,7 @@ func startedAgent(cmds []model.Cmd) (model.StartAgent, bool) {
 	return model.StartAgent{}, false
 }
 
-// agentPanes are the four modes w, W and S work in, each with the Issue t1 selected.
+// agentPanes are the four modes w works in, each with the Issue t1 selected.
 func agentPanes(t *testing.T, issues ...model.Issue) map[string]driver.State {
 	t.Helper()
 	board := boardPane(t, issues...)
@@ -37,15 +37,15 @@ func agentPanes(t *testing.T, issues ...model.Issue) map[string]driver.State {
 	}
 }
 
-func TestWShiftWAndShiftSStartAnAgentOnTheSelectedIssueInEveryIssueMode(t *testing.T) {
+func TestTheAgentCardStartsAnAgentOnTheSelectedIssueInEveryIssueMode(t *testing.T) {
 	for name, s := range agentPanes(t, agentIssue("t1")) {
-		for chord, placement := range map[string]model.AgentPlacement{"w": model.AgentSplit, "shift+w": model.AgentTab, "shift+s": model.AgentBackground} {
+		for chord, placement := range map[string]model.AgentPlacement{"s": model.AgentSplit, "t": model.AgentTab, "g": model.AgentBackground} {
 			t.Run(name+" "+chord, func(t *testing.T) {
-				got := step(t, s, key(chord))
+				got := feed(t, s, key("w"), key(chord))
 				start, ok := startedAgent(got.Cmds)
 				want := model.StartAgent{Placement: placement, IssueUID: "t1", IssueRef: "work#t1", IssueTitle: "Title of t1", ProjectID: 7, ProjectName: "work",
 					Workspace: "/repo", PaneBlock: "24489903521795"}
-				if !ok || len(got.Cmds) != 1 || start != want {
+				if !ok || len(got.Cmds) != 1 || start != want || got.State.Model.TopCard() == model.CardAgent {
 					t.Fatalf("cmds %#v, want %#v", got.Cmds, want)
 				}
 			})
@@ -56,35 +56,31 @@ func TestWShiftWAndShiftSStartAnAgentOnTheSelectedIssueInEveryIssueMode(t *testi
 func TestAnIssueOfAnotherProjectStartsAnAgentWithoutTheBindingsWorkspace(t *testing.T) {
 	other := agentIssue("t1")
 	other.ProjectID, other.ProjectName = 9, "elsewhere"
-	got := step(t, agentPanes(t, other)["list"], key("w"))
+	got := feed(t, agentPanes(t, other)["list"], key("w"), key("s"))
 	if start, ok := startedAgent(got.Cmds); !ok || start.Workspace != "" || start.ProjectName != "elsewhere" {
 		t.Fatalf("cmds %#v, want an agent with no workspace for elsewhere", got.Cmds)
 	}
 }
 
-func TestAClosedIssueStartsNoAgentAndSaysToReopenIt(t *testing.T) {
+func TestAClosedIssueOpensNoCardAndSaysToReopenIt(t *testing.T) {
 	closed := closedAt("t1", 10, 1)
 	closed.ProjectID, closed.QualifiedID = 7, "work#t1"
 	for name, s := range agentPanes(t, closed) {
-		for _, chord := range []string{"w", "shift+w", "shift+s"} {
-			got := step(t, s, key(chord))
-			if len(got.Cmds) != 0 || got.State.Model.Notice != "This Issue is closed; reopen it first (r)." {
-				t.Errorf("%s %s: cmds %#v, notice %q", name, chord, got.Cmds, got.State.Model.Notice)
-			}
+		got := step(t, s, key("w"))
+		if len(got.Cmds) != 0 || got.State.Model.TopCard() == model.CardAgent || got.State.Model.Notice != "This Issue is closed; reopen it first (r)." {
+			t.Errorf("%s: card %v, cmds %#v, notice %q", name, got.State.Model.TopCard(), got.Cmds, got.State.Model.Notice)
 		}
 	}
 }
 
-func TestAClosedIssueWithLiveAgentsRefusesTheKeysToo(t *testing.T) {
+func TestAClosedIssueWithLiveAgentsRefusesWToo(t *testing.T) {
 	closed := closedAt("t1", 10, 1)
 	closed.ProjectID, closed.QualifiedID = 7, "work#t1"
 	for name, s := range agentPanes(t, closed) {
 		s = withAgentRows(s)
-		for _, chord := range []string{"w", "shift+w", "shift+s"} {
-			got := step(t, s, key(chord))
-			if len(got.Cmds) != 0 || got.State.Model.TopCard() == model.CardAgent || got.State.Model.Notice != "This Issue is closed; reopen it first (r)." {
-				t.Errorf("%s %s: card %v, cmds %#v, notice %q", name, chord, got.State.Model.TopCard(), got.Cmds, got.State.Model.Notice)
-			}
+		got := step(t, s, key("w"))
+		if len(got.Cmds) != 0 || got.State.Model.TopCard() == model.CardAgent || got.State.Model.Notice != "This Issue is closed; reopen it first (r)." {
+			t.Errorf("%s: card %v, cmds %#v, notice %q", name, got.State.Model.TopCard(), got.Cmds, got.State.Model.Notice)
 		}
 	}
 }
