@@ -62,6 +62,21 @@ func (m Model) IssueAgents(issueUID string) []IssueAgent {
 	return agents
 }
 
+// AgentStateWords is how the badge and the Agent card name an agent's state, and the tone of the words.
+func AgentStateWords(state string) (string, AgentTone) {
+	switch state {
+	case agentWaitingInput:
+		return "agent waiting for you", AgentToneWarning
+	case stateWorking:
+		return "agent working", AgentToneAccent
+	case stateIdle:
+		return "agent idle", AgentToneMuted
+	case stateExited:
+		return "agent exited", AgentToneMuted
+	}
+	return "agent", AgentToneMuted
+}
+
 // AgentBadge is what the Agent badge says about an Issue's agents and the one agent a click on it focuses.
 type AgentBadge struct {
 	Text  string
@@ -92,17 +107,8 @@ func (m Model) AgentBadgeFor(issueUID string) (AgentBadge, bool) {
 	if !ok {
 		return AgentBadge{}, false
 	}
-	badge := AgentBadge{Text: "agent", Tone: AgentToneMuted, Block: best.Block}
-	switch best.State {
-	case agentWaitingInput:
-		badge.Text, badge.Tone = "agent waiting for you", AgentToneWarning
-	case stateWorking:
-		badge.Text, badge.Tone = "agent working", AgentToneAccent
-	case stateIdle:
-		badge.Text = "agent idle"
-	case stateExited:
-		badge.Text = "agent exited"
-	}
+	badge := AgentBadge{Block: best.Block}
+	badge.Text, badge.Tone = AgentStateWords(best.State)
 	if len(agents) > 1 {
 		badge.Text += fmt.Sprintf(" · %d", len(agents))
 	}
@@ -118,6 +124,11 @@ func (AgentJumpMsg) msg() {}
 type FocusAgent struct{ Block string }
 
 func (FocusAgent) cmd() {}
+
+// jumpToAgent is the one way to an agent, from a badge click or the Agent card.
+func jumpToAgent(m Model, block string) (Model, []Cmd) {
+	return m, []Cmd{FocusAgent{Block: block}}
+}
 
 // AgentFocused answers FocusAgent; Err carries Tern's own words.
 type AgentFocused struct{ Err error }

@@ -158,7 +158,7 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	m.Create, m.pending, m.etag, m.etagQuery = CreateState{}, "", "", SnapshotQuery{}
 	m.CloseForm, m.DatesForm, m.RecurrenceForm, m.JobForm, m.Backfill = CloseFormState{}, DatesFormState{}, RecurrenceFormState{}, JobFormState{}, BackfillState{}
 	m.FieldForm, m.MoveProject, m.afterMove, m.Moving = FieldFormState{}, MoveProjectState{}, nil, ""
-	m.DeleteForm, m.TokenForm, m.RevokeCard = DeleteFormState{}, TokenFormState{}, RevokeState{}
+	m.DeleteForm, m.TokenForm, m.RevokeCard, m.AgentCard = DeleteFormState{}, TokenFormState{}, RevokeState{}, AgentCardState{}
 	dropped := len(m.Drafts)
 	m.Drafts = nil
 	m.Project, m.Bound, m.Daemon = Project{}, false, msg.Daemon

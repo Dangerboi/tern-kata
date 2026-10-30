@@ -61,13 +61,15 @@ type Model struct {
 	// pending is the Issue Create just made, selected as soon as a snapshot lists it.
 	pending string
 	// etag answers etagQuery: the snapshot on screen.
-	etag           string
-	etagQuery      SnapshotQuery
-	CloseForm      CloseFormState
-	DatesForm      DatesFormState
-	DeleteForm     DeleteFormState
-	TokenForm      TokenFormState
-	RevokeCard     RevokeState
+	etag       string
+	etagQuery  SnapshotQuery
+	CloseForm  CloseFormState
+	DatesForm  DatesFormState
+	DeleteForm DeleteFormState
+	TokenForm  TokenFormState
+	RevokeCard RevokeState
+	// AgentCard is the Agent card, which lists an Issue's agents.
+	AgentCard      AgentCardState
 	RecurrenceForm RecurrenceFormState
 	JobForm        JobFormState
 	// Backfill is the card that asks whether the runs a native job missed are created before the job runs again.
@@ -243,6 +245,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return issueRestored(m, msg)
 	case ProjectMoveAnswer:
 		return updateMoveProject(m, msg)
+	case AgentCardSelected:
+		return agentCardSelected(m, msg), nil
 	case MoveTargetSelected:
 		return moveTargetSelected(m, msg.Key)
 	case OpenNoticeLinkMsg:
@@ -369,7 +373,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case AgentAttentionWritten:
 		return agentAttentionWritten(m, msg), nil
 	case AgentJumpMsg:
-		return m, []Cmd{FocusAgent(msg)}
+		return jumpToAgent(m, msg.Block)
 	case AgentFocused:
 		m = agentFocused(m, msg)
 	case AgentsRefreshed:
