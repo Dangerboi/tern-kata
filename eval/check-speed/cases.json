@@ -1,0 +1,497 @@
+[
+ {
+  "id": "static/fmt",
+  "tag": "static",
+  "unit": "fmt"
+ },
+ {
+  "id": "static/vet-linux",
+  "tag": "static",
+  "unit": "vet-linux"
+ },
+ {
+  "id": "static/vet-windows",
+  "tag": "static",
+  "unit": "vet-windows"
+ },
+ {
+  "id": "static/lint-linux",
+  "tag": "static",
+  "unit": "lint-linux"
+ },
+ {
+  "id": "static/lint-windows",
+  "tag": "static",
+  "unit": "lint-windows"
+ },
+ {
+  "id": "static/build",
+  "tag": "static",
+  "unit": "build"
+ },
+ {
+  "id": "static/cross-linux-amd64",
+  "tag": "static",
+  "unit": "cross-linux-amd64"
+ },
+ {
+  "id": "static/cross-linux-arm64",
+  "tag": "static",
+  "unit": "cross-linux-arm64"
+ },
+ {
+  "id": "static/cross-darwin-amd64",
+  "tag": "static",
+  "unit": "cross-darwin-amd64"
+ },
+ {
+  "id": "static/cross-darwin-arm64",
+  "tag": "static",
+  "unit": "cross-darwin-arm64"
+ },
+ {
+  "id": "static/cross-windows-amd64",
+  "tag": "static",
+  "unit": "cross-windows-amd64"
+ },
+ {
+  "id": "static/cross-windows-arm64",
+  "tag": "static",
+  "unit": "cross-windows-arm64"
+ },
+ {
+  "id": "gotest/cmd/tern-kata",
+  "tag": "gotest",
+  "unit": "github.com/Dangerboi/tern-kata/cmd/tern-kata"
+ },
+ {
+  "id": "gotest/internal/cronjob",
+  "tag": "gotest",
+  "unit": "github.com/Dangerboi/tern-kata/internal/cronjob"
+ },
+ {
+  "id": "gotest/internal/cronjobclient",
+  "tag": "gotest",
+  "unit": "github.com/Dangerboi/tern-kata/internal/cronjobclient"
+ },
+ {
+  "id": "gotest/internal/data",
+  "tag": "gotest",
+  "unit": "github.com/Dangerboi/tern-kata/internal/data"
+ },
+ {
+  "id": "gotest/internal/driver",
+  "tag": "gotest",
+  "unit": "github.com/Dangerboi/tern-kata/internal/driver"
+ },
+ {
+  "id": "gotest/internal/model",
+  "tag": "gotest",
+  "unit": "github.com/Dangerboi/tern-kata/internal/model"
+ },
+ {
+  "id": "gotest/internal/view",
+  "tag": "gotest",
+  "unit": "github.com/Dangerboi/tern-kata/internal/view"
+ },
+ {
+  "id": "gotest/internal/worker",
+  "tag": "gotest",
+  "unit": "github.com/Dangerboi/tern-kata/internal/worker"
+ },
+ {
+  "id": "smoke/01-tree",
+  "tag": "smoke",
+  "unit": "01-tree.sh"
+ },
+ {
+  "id": "smoke/02-status-all",
+  "tag": "smoke",
+  "unit": "02-status-all.sh"
+ },
+ {
+  "id": "smoke/03-fallback",
+  "tag": "smoke",
+  "unit": "03-fallback.sh"
+ },
+ {
+  "id": "smoke/04-arrows",
+  "tag": "smoke",
+  "unit": "04-arrows.sh"
+ },
+ {
+  "id": "smoke/05-collections",
+  "tag": "smoke",
+  "unit": "05-collections.sh"
+ },
+ {
+  "id": "smoke/06-picker",
+  "tag": "smoke",
+  "unit": "06-picker.sh"
+ },
+ {
+  "id": "smoke/07-detail",
+  "tag": "smoke",
+  "unit": "07-detail.sh"
+ },
+ {
+  "id": "smoke/08-new-project",
+  "tag": "smoke",
+  "unit": "08-new-project.sh"
+ },
+ {
+  "id": "smoke/09-colour",
+  "tag": "smoke",
+  "unit": "09-colour.sh"
+ },
+ {
+  "id": "smoke/10-hierarchy",
+  "tag": "smoke",
+  "unit": "10-hierarchy.sh"
+ },
+ {
+  "id": "smoke/11-columns",
+  "tag": "smoke",
+  "unit": "11-columns.sh"
+ },
+ {
+  "id": "smoke/12-fields",
+  "tag": "smoke",
+  "unit": "12-fields.sh"
+ },
+ {
+  "id": "smoke/13-create",
+  "tag": "smoke",
+  "unit": "13-create.sh"
+ },
+ {
+  "id": "smoke/14-close",
+  "tag": "smoke",
+  "unit": "14-close.sh"
+ },
+ {
+  "id": "smoke/15-detail",
+  "tag": "smoke",
+  "unit": "15-detail.sh"
+ },
+ {
+  "id": "smoke/16-editor",
+  "tag": "smoke",
+  "unit": "16-editor.sh"
+ },
+ {
+  "id": "smoke/17-filters",
+  "tag": "smoke",
+  "unit": "17-filters.sh"
+ },
+ {
+  "id": "smoke/18-pinned",
+  "tag": "smoke",
+  "unit": "18-pinned.sh"
+ },
+ {
+  "id": "smoke/19-stable",
+  "tag": "smoke",
+  "unit": "19-stable.sh"
+ },
+ {
+  "id": "smoke/20-history",
+  "tag": "smoke",
+  "unit": "20-history.sh"
+ },
+ {
+  "id": "smoke/21-live",
+  "tag": "smoke",
+  "unit": "21-live.sh"
+ },
+ {
+  "id": "smoke/22-review-remote",
+  "tag": "smoke",
+  "unit": "22-review-remote.sh"
+ },
+ {
+  "id": "smoke/23-esc-after-click",
+  "tag": "smoke",
+  "unit": "23-esc-after-click.sh"
+ },
+ {
+  "id": "smoke/24-parent",
+  "tag": "smoke",
+  "unit": "24-parent.sh"
+ },
+ {
+  "id": "smoke/25-width-tiers",
+  "tag": "smoke",
+  "unit": "25-width-tiers.sh"
+ },
+ {
+  "id": "smoke/26-panels",
+  "tag": "smoke",
+  "unit": "26-panels.sh"
+ },
+ {
+  "id": "smoke/27-topbar",
+  "tag": "smoke",
+  "unit": "27-topbar.sh"
+ },
+ {
+  "id": "smoke/28-updated-order",
+  "tag": "smoke",
+  "unit": "28-updated-order.sh"
+ },
+ {
+  "id": "smoke/29-stuck-detail",
+  "tag": "smoke",
+  "unit": "29-stuck-detail.sh"
+ },
+ {
+  "id": "smoke/30-detail-viewport",
+  "tag": "smoke",
+  "unit": "30-detail-viewport.sh"
+ },
+ {
+  "id": "smoke/31-activity-tabs",
+  "tag": "smoke",
+  "unit": "31-activity-tabs.sh"
+ },
+ {
+  "id": "smoke/32-link-rows",
+  "tag": "smoke",
+  "unit": "32-link-rows.sh"
+ },
+ {
+  "id": "smoke/33-stripes",
+  "tag": "smoke",
+  "unit": "33-stripes.sh"
+ },
+ {
+  "id": "smoke/34-double-click",
+  "tag": "smoke",
+  "unit": "34-double-click.sh"
+ },
+ {
+  "id": "smoke/35-close",
+  "tag": "smoke",
+  "unit": "35-close.sh"
+ },
+ {
+  "id": "smoke/36-accent",
+  "tag": "smoke",
+  "unit": "36-accent.sh"
+ },
+ {
+  "id": "smoke/37-title-id",
+  "tag": "smoke",
+  "unit": "37-title-id.sh"
+ },
+ {
+  "id": "smoke/38-list-tab",
+  "tag": "smoke",
+  "unit": "38-list-tab.sh"
+ },
+ {
+  "id": "smoke/39-children",
+  "tag": "smoke",
+  "unit": "39-children.sh"
+ },
+ {
+  "id": "smoke/40-id-search",
+  "tag": "smoke",
+  "unit": "40-id-search.sh"
+ },
+ {
+  "id": "smoke/41-parent-section",
+  "tag": "smoke",
+  "unit": "41-parent-section.sh"
+ },
+ {
+  "id": "smoke/42-chip-lists",
+  "tag": "smoke",
+  "unit": "42-chip-lists.sh"
+ },
+ {
+  "id": "smoke/43-unbound-sidebar",
+  "tag": "smoke",
+  "unit": "43-unbound-sidebar.sh"
+ },
+ {
+  "id": "smoke/44-create-button",
+  "tag": "smoke",
+  "unit": "44-create-button.sh"
+ },
+ {
+  "id": "smoke/45-tab-reveal",
+  "tag": "smoke",
+  "unit": "45-tab-reveal.sh"
+ },
+ {
+  "id": "smoke/46-help",
+  "tag": "smoke",
+  "unit": "46-help.sh"
+ },
+ {
+  "id": "smoke/47-help-scroll",
+  "tag": "smoke",
+  "unit": "47-help-scroll.sh"
+ },
+ {
+  "id": "smoke/48-parent-projects",
+  "tag": "smoke",
+  "unit": "48-parent-projects.sh"
+ },
+ {
+  "id": "smoke/49-claim-while-writing",
+  "tag": "smoke",
+  "unit": "49-claim-while-writing.sh"
+ },
+ {
+  "id": "smoke/50-emacs-keys",
+  "tag": "smoke",
+  "unit": "50-emacs-keys.sh"
+ },
+ {
+  "id": "smoke/51-claim-expiry",
+  "tag": "smoke",
+  "unit": "51-claim-expiry.sh"
+ },
+ {
+  "id": "smoke/52-comment-replies",
+  "tag": "smoke",
+  "unit": "52-comment-replies.sh"
+ },
+ {
+  "id": "smoke/53-reply-from-comments-tab",
+  "tag": "smoke",
+  "unit": "53-reply-from-comments-tab.sh"
+ },
+ {
+  "id": "smoke/54-make-recurring",
+  "tag": "smoke",
+  "unit": "54-make-recurring.sh"
+ },
+ {
+  "id": "smoke/55-change-and-stop-recurrence",
+  "tag": "smoke",
+  "unit": "55-change-and-stop-recurrence.sh"
+ },
+ {
+  "id": "smoke/56-attachments",
+  "tag": "smoke",
+  "unit": "56-attachments.sh"
+ },
+ {
+  "id": "smoke/57-recur-from-shell",
+  "tag": "smoke",
+  "unit": "57-recur-from-shell.sh"
+ },
+ {
+  "id": "smoke/58-pages",
+  "tag": "smoke",
+  "unit": "58-pages.sh"
+ },
+ {
+  "id": "smoke/59-jobs",
+  "tag": "smoke",
+  "unit": "59-jobs.sh"
+ },
+ {
+  "id": "smoke/60-cron-made-issue",
+  "tag": "smoke",
+  "unit": "60-cron-made-issue.sh"
+ },
+ {
+  "id": "smoke/61-runs",
+  "tag": "smoke",
+  "unit": "61-runs.sh"
+ },
+ {
+  "id": "smoke/61-workflows",
+  "tag": "smoke",
+  "unit": "61-workflows.sh"
+ },
+ {
+  "id": "smoke/62-job-card",
+  "tag": "smoke",
+  "unit": "62-job-card.sh"
+ },
+ {
+  "id": "smoke/63-run-detail",
+  "tag": "smoke",
+  "unit": "63-run-detail.sh"
+ },
+ {
+  "id": "smoke/64-page-menu",
+  "tag": "smoke",
+  "unit": "64-page-menu.sh"
+ },
+ {
+  "id": "smoke/65-worker-card",
+  "tag": "smoke",
+  "unit": "65-worker-card.sh"
+ },
+ {
+  "id": "smoke/66-follow-project",
+  "tag": "smoke",
+  "unit": "66-follow-project.sh"
+ },
+ {
+  "id": "smoke/67-default-filter",
+  "tag": "smoke",
+  "unit": "67-default-filter.sh"
+ },
+ {
+  "id": "smoke/68-credentials",
+  "tag": "smoke",
+  "unit": "68-credentials.sh"
+ },
+ {
+  "id": "smoke/69-undo",
+  "tag": "smoke",
+  "unit": "69-undo.sh"
+ },
+ {
+  "id": "smoke/70-attention",
+  "tag": "smoke",
+  "unit": "70-attention.sh"
+ },
+ {
+  "id": "smoke/71-federation",
+  "tag": "smoke",
+  "unit": "71-federation.sh"
+ },
+ {
+  "id": "smoke/72-quit",
+  "tag": "smoke",
+  "unit": "72-quit.sh"
+ },
+ {
+  "id": "smoke/73-move-project",
+  "tag": "smoke",
+  "unit": "73-move-project.sh"
+ },
+ {
+  "id": "smoke/74-delete-restore",
+  "tag": "smoke",
+  "unit": "74-delete-restore.sh"
+ },
+ {
+  "id": "smoke/75-daemons",
+  "tag": "smoke",
+  "unit": "75-daemons.sh"
+ },
+ {
+  "id": "smoke/76-saved-views",
+  "tag": "smoke",
+  "unit": "76-saved-views.sh"
+ },
+ {
+  "id": "smoke/plugin",
+  "tag": "smoke",
+  "unit": "plugin.sh"
+ },
+ {
+  "id": "smoke/supervision",
+  "tag": "smoke",
+  "unit": "supervision.sh"
+ }
+]
