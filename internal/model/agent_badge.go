@@ -5,13 +5,6 @@ import (
 	"slices"
 )
 
-// The state words Tern gives an agent block.
-const (
-	stateWorking = "working"
-	stateIdle    = "idle"
-	stateExited  = "exited"
-)
-
 // AgentTone is the colour word of an Agent badge, as the view's span styles name it.
 type AgentTone string
 
@@ -25,19 +18,19 @@ const (
 // no relay has listed the block (no relay yet, no plugin, or the block is not an agent block yet).
 type IssueAgent struct {
 	AgentEntry
-	State string
+	State AgentStateWord
 }
 
 // pressing ranks a state word: lower is more pressing. A word nobody knows ranks with "no state".
-func pressing(state string) int {
+func pressing(state AgentStateWord) int {
 	switch state {
-	case agentWaitingInput:
+	case AgentWaitingInput:
 		return 0
-	case stateWorking:
+	case AgentWorking:
 		return 1
-	case stateIdle:
+	case AgentIdle:
 		return 2
-	case stateExited:
+	case AgentExited:
 		return 3
 	}
 	return 4
@@ -63,15 +56,15 @@ func (m Model) IssueAgents(issueUID string) []IssueAgent {
 }
 
 // AgentStateWords is how the badge and the Agent card name an agent's state, and the tone of the words.
-func AgentStateWords(state string) (string, AgentTone) {
+func AgentStateWords(state AgentStateWord) (string, AgentTone) {
 	switch state {
-	case agentWaitingInput:
+	case AgentWaitingInput:
 		return "agent waiting for you", AgentToneWarning
-	case stateWorking:
+	case AgentWorking:
 		return "agent working", AgentToneAccent
-	case stateIdle:
+	case AgentIdle:
 		return "agent idle", AgentToneMuted
-	case stateExited:
+	case AgentExited:
 		return "agent exited", AgentToneMuted
 	}
 	return "agent", AgentToneMuted

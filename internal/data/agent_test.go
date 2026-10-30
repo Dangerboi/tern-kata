@@ -296,6 +296,33 @@ func TestPruningDropsTheEntriesTernNoLongerListsWithTheirPrompts(t *testing.T) {
 	}
 }
 
+func TestPruningKeepsAnEntryAddedAfterTheEntriesItChecked(t *testing.T) {
+	g, dirs := agentGateway(t)
+	file := filepath.Join(dirs.State, AgentsFile)
+	prompt := writeAgentFile(t, filepath.Join(dirs.State, "new.md"), "x")
+	if _, err := UpdateAgents(file, func(l []model.AgentEntry) []model.AgentEntry {
+		return append(l, model.AgentEntry{Block: "99"})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	g.runTern = func(context.Context, []string) ([]byte, error) {
+		// Another Pane starts an agent while tern ls is answering.
+		if _, err := UpdateAgents(file, func(l []model.AgentEntry) []model.AgentEntry {
+			return append(l, model.AgentEntry{Block: "123", PromptFile: prompt})
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return []byte(`{"sessions":[{"id":1,"tabs":[{"id":5,"blocks":[{"id":7}]}]}]}`), nil
+	}
+	got := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{}))
+	if got.Err != nil || len(got.Agents) != 1 || got.Agents[0].Block != "123" {
+		t.Fatalf("pruned %+v", got)
+	}
+	if _, err := os.Stat(prompt); err != nil {
+		t.Errorf("the new entry's prompt file went: %v", err)
+	}
+}
+
 func TestTheAgentPromptIsStable(t *testing.T) {
 	got := AgentPrompt("demo#ab12", "  Fix the\n# crash\tnow ")
 	path := "testdata/agent_prompt.golden"
@@ -409,19 +436,27 @@ func TestStartingABackgroundAgentUsesTheHiddenSessionAsItIs(t *testing.T) {
 	prefix := func(calls [][]string, i int) string { return strings.Join(calls[i][:min(len(calls[i]), 3)], " ") }
 	for name, c := range map[string]struct {
 		ls      string
+		lsAfter string // what `tern ls --json` lists from its second call on; ls when empty
 		replies map[string]func() ([]byte, error)
 		want    []string
 	}{
-		"session exists": {lsWithAgents, map[string]func() ([]byte, error){"new tab kata agents": ternOut(`{"session":3,"tab":9,"block":31}`)}, []string{"ls --json", "new tab kata agents", "rename 31 demo#ab12"}},
-		"no session":     {lsWithoutAgents, map[string]func() ([]byte, error){"new session kata agents": ternOut(`{"session":3,"tab":9,"block":31}`)}, []string{"ls --json", "new session kata agents", "rename 31 demo#ab12"}},
-		"a race for the session": {lsWithoutAgents, map[string]func() ([]byte, error){
+		"session exists": {lsWithAgents, "", map[string]func() ([]byte, error){"new tab kata agents": ternOut(`{"session":3,"tab":9,"block":31}`)}, []string{"ls --json", "new tab kata agents", "rename 31 demo#ab12"}},
+		"no session":     {lsWithoutAgents, "", map[string]func() ([]byte, error){"new session kata agents": ternOut(`{"session":3,"tab":9,"block":31}`)}, []string{"ls --json", "new session kata agents", "rename 31 demo#ab12"}},
+		"a race for the session": {lsWithoutAgents, lsWithAgents, map[string]func() ([]byte, error){
 			"new session kata agents": func() ([]byte, error) {
 				return []byte("tern new: a session is already called `kata agents`\n"), errors.New("exit status 1")
 			},
-			"new tab kata agents": ternOut(`{"session":3,"tab":9,"block":31}`)}, []string{"ls --json", "new session kata agents", "new tab kata agents", "rename 31 demo#ab12"}},
+			"new tab kata agents": ternOut(`{"session":3,"tab":9,"block":31}`)}, []string{"ls --json", "new session kata agents", "ls --json", "new tab kata agents", "rename 31 demo#ab12"}},
 	} {
 		g, dirs := agentGateway(t)
-		c.replies["ls"] = ternOut(c.ls)
+		lsCalls := 0
+		c.replies["ls"] = func() ([]byte, error) {
+			lsCalls++
+			if lsCalls > 1 && c.lsAfter != "" {
+				return []byte(c.lsAfter), nil
+			}
+			return []byte(c.ls), nil
+		}
 		c.replies["rename"] = ternOut("")
 		calls := ternScript(g, c.replies)
 		got := as[model.AgentStarted](t, run(t, g, cmd))
@@ -478,6 +513,27 @@ func seedAgent(t *testing.T, dirs worker.Dirs, e model.AgentEntry) string {
 		t.Fatal(err)
 	}
 	return file
+}
+
+func TestAFailedNewSessionFallsBackToATabWhenTheSessionExistsNow(t *testing.T) {
+	g, _ := agentGateway(t)
+	lsCalls := 0
+	calls := ternScript(g, map[string]func() ([]byte, error){
+		"ls": func() ([]byte, error) {
+			lsCalls++
+			if lsCalls == 1 {
+				return []byte(lsWithoutAgents), nil
+			}
+			return []byte(lsWithAgents), nil
+		},
+		"new session kata agents": func() ([]byte, error) { return []byte("tern: cannot create it\n"), errors.New("exit status 1") },
+		"new tab kata agents":     ternOut(`{"block":31}`),
+		"rename":                  ternOut(""),
+	})
+	got := as[model.AgentStarted](t, run(t, g, model.StartAgent{Placement: model.AgentBackground, IssueRef: "demo#ab12", ProjectName: "demo", Workspace: "/bound"}))
+	if got.Err != nil || got.Entry.Block != "31" || lsCalls != 2 {
+		t.Fatalf("%+v after %d ls calls, calls %q", got, lsCalls, *calls)
+	}
 }
 
 func TestOpeningABackgroundAgentMovesItBesideThePaneAndMarksItOpen(t *testing.T) {

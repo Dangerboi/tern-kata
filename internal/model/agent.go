@@ -17,6 +17,18 @@ const (
 	AgentBackground AgentPlacement = "background"
 )
 
+// words is the placement's name, as the Agent card's where column writes it, and as a Notice says where the agent went. A
+// placement not kept ("") reads as a split.
+func (p AgentPlacement) words() (name, notice string) {
+	switch p {
+	case AgentTab:
+		return string(AgentTab), "a new tab"
+	case AgentBackground:
+		return string(AgentBackground), "the background (open it from its badge)"
+	}
+	return string(AgentSplit), "a split beside this Pane"
+}
+
 // AgentSession is the name of the hidden Tern session background agents live in.
 const AgentSession = "kata agents"
 
@@ -86,10 +98,11 @@ func (AgentsPruned) msg() {}
 // ClosedIssueRefusal is the Notice a start key shows on a closed Issue.
 const ClosedIssueRefusal = "This Issue is closed; reopen it first (r)."
 
-// openAgent is `w` and `W`: the Agent card when the selected Issue has agents, else a new agent.
+// openAgent is `w`, `W` and `S`: the Agent card when the selected Issue has agents, else a new agent; a closed Issue gets the
+// refusal either way.
 func openAgent(placement AgentPlacement) func(Model) (Model, []Cmd) {
 	return func(m Model) (Model, []Cmd) {
-		if issue := closeIssue(m); issue != nil && len(m.IssueAgents(issue.UID)) > 0 {
+		if issue := closeIssue(m); issue != nil && !IsClosed(*issue) && len(m.IssueAgents(issue.UID)) > 0 {
 			return openAgentCard(m, *issue, placement), nil
 		}
 		return startAgent(placement)(m)
@@ -123,13 +136,7 @@ func agentStarted(m Model, msg AgentStarted) Model {
 		return m
 	}
 	m.AgentMapping = append(m.AgentMapping, msg.Entry)
-	where := "a split beside this Pane"
-	switch msg.Placement {
-	case AgentTab:
-		where = "a new tab"
-	case AgentBackground:
-		where = "the background (open it from its badge)"
-	}
+	_, where := msg.Placement.words()
 	m.Notice = fmt.Sprintf("Started an agent on %s in %s.", msg.IssueRef, where)
 	if msg.Note != "" {
 		m.Notice += " But " + msg.Note

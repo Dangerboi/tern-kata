@@ -9,9 +9,6 @@ import (
 // AgentWaitingMessage is the request's text when the waiting agent said nothing.
 const AgentWaitingMessage = "agent waiting for you"
 
-// agentWaitingInput is Tern's state word for an agent that waits for its user.
-const agentWaitingInput = "waiting_input"
-
 // agentAttentionMaxBytes is the longest message kata notify takes.
 const agentAttentionMaxBytes = 1024
 
@@ -72,7 +69,7 @@ func agentAttentionMessage(last string) string {
 func agentWaiting(states []AgentState, block string) bool {
 	for _, s := range states {
 		if s.Block == block {
-			return s.State == agentWaitingInput
+			return s.State == AgentWaitingInput
 		}
 	}
 	return false

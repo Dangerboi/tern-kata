@@ -39,16 +39,15 @@ func (m Model) AgentCardCursor() int {
 // AgentWhere says where an agent's block is: "open" for a background agent that is out of the hidden session, "background" for one
 // in it, "tab" for one started in a tab, "split" otherwise.
 func AgentWhere(a AgentEntry) string {
+	if a.Background && a.Open {
+		return "open"
+	}
+	placement := a.Placement
 	if a.Background {
-		if a.Open {
-			return "open"
-		}
-		return string(AgentBackground)
+		placement = AgentBackground
 	}
-	if a.Placement == AgentTab {
-		return string(AgentTab)
-	}
-	return string(AgentSplit)
+	name, _ := placement.words()
+	return name
 }
 
 // openAgentCard opens the card for the Issue with the placement the opening key asked.

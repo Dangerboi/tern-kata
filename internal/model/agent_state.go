@@ -1,10 +1,21 @@
 package model
 
+// AgentStateWord is Tern's word for an agent block's state.
+type AgentStateWord string
+
+// The state words Tern gives an agent block.
+const (
+	AgentIdle         AgentStateWord = "idle"
+	AgentWorking      AgentStateWord = "working"
+	AgentWaitingInput AgentStateWord = "waiting_input"
+	AgentExited       AgentStateWord = "exited"
+)
+
 // AgentState is one agent block as the window half relays it: Block is the block id as decimal text, State is
 // Tern's word for it (idle, working, waiting_input, exited) and LastMessage the agent's last assistant text.
 type AgentState struct {
 	Block       string
-	State       string
+	State       AgentStateWord
 	LastMessage string
 }
 
