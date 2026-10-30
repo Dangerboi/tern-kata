@@ -185,3 +185,26 @@ func TestArchived(t *testing.T) {
 		t.Error("a job with a deletion time is not archived")
 	}
 }
+
+func TestOtherAdapter(t *testing.T) {
+	for name, tt := range map[string]struct {
+		options map[string]any
+		want    string
+	}{
+		"no options":   {nil, ""},
+		"no key":       {map[string]any{"profile": "fast"}, ""},
+		"tern-kata":    {map[string]any{"adapter": "tern-kata"}, ""},
+		"blank":        {map[string]any{"adapter": ""}, ""},
+		"another":      {map[string]any{"adapter": "herdr-kata"}, "herdr-kata"},
+		"not a string": {map[string]any{"adapter": 7.0}, "7"},
+		"case matters": {map[string]any{"adapter": "Tern-Kata"}, "Tern-Kata"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			j := job(cronjob.ActionExecute, perRun(), cronjob.Trigger{Kind: cronjob.TriggerManual})
+			j.Definition.Options = tt.options
+			if got := j.OtherAdapter(); got != tt.want {
+				t.Fatalf("OtherAdapter() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

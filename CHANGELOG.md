@@ -18,6 +18,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Changed
 
+- A job can name its adapter in `options.adapter`: the Job card has an **Adapter** field and puts `tern-kata` on new adapter jobs, and the worker neither schedules nor runs a job that names another adapter, listing it in `worker status`, `worker doctor` and the Jobs Page with that reason. A job without the key runs as before.
 - The help sheet (`?`) lists the global keys and the keys of the Page it is opened over, and shows the agent key `w` on one short line.
 - The Menu's top level is short: the bound Project, **Views**, **Projects**, the Lettered Pages, Restore a deleted Issue and New Project. The fixed Collections (Inbox, Today, Upcoming, Deadlines, All Open, Logbook) moved into a **Views** level, which Back, `esc` or `backspace` leave for the top with the cursor on Views. The Views row names the current fixed Collection or saved view, typing still finds every Collection from the top, and an unbound directory's Menu sidebar shows the Views level.
 - **Open kata**, `F9` and kata links need Tern 0.9.7 or newer, which lets plugins split and find a remote host's Pane; they no longer fall back to a new tab when Tern can't split the focused Pane.

@@ -333,6 +333,7 @@ func (m Model) JobFacts(now time.Time) []JobFact {
 	add("Workflow", d.Action.WorkflowUID)
 	add("Recipient", d.Action.Recipient)
 	add("Message", d.Action.Message)
+	add("Adapter", job.Adapter())
 	add("Profile", d.Profile)
 	add("Checkout", d.CheckoutKey)
 	if len(d.SecretRefs) > 0 {

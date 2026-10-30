@@ -184,6 +184,38 @@ func TestAnAgentPromptJobSavesWithItsMultiLinePromptProfileCheckoutSecretsAndIss
 	}
 }
 
+// A new adapter job names tern-kata as its adapter; the card can change it, and a job opened without the key keeps none.
+func TestTheJobCardSetsOptionsAdapterAndNewAdapterJobsGetTernKata(t *testing.T) {
+	for _, kind := range []int{kindPrompt, kindWorkflow, kindNotify} {
+		s := adapterCard(t, kind)
+		if got := s.Model.JobForm.Text(model.JobFieldAdapter); got != "tern-kata" || !drawn(t, s, model.JobFieldAdapter) {
+			t.Errorf("kind %d: adapter field %q", kind, got)
+		}
+	}
+	s := set(t, typePrompt(t, adapterCard(t, kindPrompt), "do it"), model.JobFieldTitle, "Run")
+	if d := saved(t, s).Definition; d.Options["adapter"] != "tern-kata" {
+		t.Fatalf("a new adapter job saved options %v", d.Options)
+	}
+	if d := saved(t, set(t, s, model.JobFieldAdapter, " herdr-kata ")).Definition; d.Options["adapter"] != "herdr-kata" {
+		t.Fatalf("options after naming another adapter %v", d.Options)
+	}
+	if d := saved(t, set(t, s, model.JobFieldAdapter, "")).Definition; d.Options != nil {
+		t.Fatalf("options after clearing the adapter %v", d.Options)
+	}
+	job := promptJob("J2", "Review")
+	job.Definition.Options = map[string]any{"adapter": "herdr-kata", "effort": "high"}
+	edited := editedJob(t, job)
+	if got := edited.Model.JobForm.Text(model.JobFieldAdapter); got != "herdr-kata" {
+		t.Fatalf("edited job shows adapter %q", got)
+	}
+	if d := saved(t, set(t, edited, model.JobFieldAdapter, "tern-kata")).Definition; !maps.Equal(d.Options, map[string]any{"adapter": "tern-kata", "effort": "high", "profile": "fast"}) {
+		t.Fatalf("options after handing the job to tern-kata %v", d.Options)
+	}
+	if got := editedJob(t, promptJob("J3", "Plain")).Model.JobForm.Text(model.JobFieldAdapter); got != "" {
+		t.Fatalf("a job without the key shows adapter %q", got)
+	}
+}
+
 func TestThePromptTakesLineBreaksAtTheCaret(t *testing.T) {
 	s := typePrompt(t, adapterCard(t, kindPrompt), "first", "third")
 	s = feed(t, s, key("up")).State // up is not bound in a field; the caret stays
@@ -262,7 +294,7 @@ func TestProfileAndCheckoutArePickersWhenTheWorkerConfigIsReadAndFreeTextWhenItI
 	}
 	// Leaving them on their first choice sends neither.
 	s = choose(t, choose(t, s, model.JobFieldProfilePick, 0), model.JobFieldCheckoutPick, 0)
-	if d := saved(t, s).Definition; d.Profile != "" || d.Options != nil || d.CheckoutKey != "" {
+	if d := saved(t, s).Definition; d.Profile != "" || !maps.Equal(d.Options, map[string]any{"adapter": "tern-kata"}) || d.CheckoutKey != "" {
 		t.Fatalf("default picks sent profile %q options %v checkout %q", d.Profile, d.Options, d.CheckoutKey)
 	}
 }

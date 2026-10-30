@@ -1,6 +1,12 @@
 package cronjob
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
+
+// AdapterName is the name tern-kata answers to in a job's options.adapter.
+const AdapterName = "tern-kata"
 
 // Trigger says when a Cron job fires. Only the fields of Kind are set; Timezone may be set for any Kind.
 type Trigger struct {
@@ -81,6 +87,27 @@ func (j Job) Notifies() bool { return j.Definition.Action.Kind == ActionNotify }
 func (j Job) RunsWorkflow() bool {
 	a := j.Definition.Action
 	return a.Kind == ActionExecute && a.WorkflowUID != ""
+}
+
+// OtherAdapter is the adapter a job's options.adapter names when it is not tern-kata, "" when the key is absent, blank or
+// names tern-kata. Such a job belongs to that adapter: tern-kata neither schedules nor runs it.
+func (j Job) OtherAdapter() string {
+	if name := j.Adapter(); name != AdapterName {
+		return name
+	}
+	return ""
+}
+
+// Adapter is the text of the job's options.adapter key, "" when it is absent.
+func (j Job) Adapter() string {
+	v, ok := j.Definition.Options["adapter"]
+	if !ok || v == nil {
+		return ""
+	}
+	if s, isString := v.(string); isString {
+		return s
+	}
+	return fmt.Sprint(v)
 }
 
 // Archived says the job is archived, which stops it until restored.
