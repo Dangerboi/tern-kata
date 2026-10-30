@@ -1,6 +1,7 @@
 # S on the selected Issue starts the agent in the background: a block in the hidden session "kata agents", its tab named project#id,
-# an agents.json entry marked background and not open, and a second S adds a tab to the session that now exists. Then w opens the
-# Agent card and enter opens the agent beside the Pane: the block moves into the Pane's tab and agents.json marks it open.
+# an agents.json entry marked background and not open. Then w opens the
+# Agent card and enter opens the agent beside the Pane: the block moves into the Pane's tab and agents.json marks it open. S then
+# opens the card too, and n there starts another background agent, adding a tab to the session that is still there.
 # A stand-in script from agent.toml's `command` plays omp. The Pane's blocks live on a session daemon of the step's own
 # (`tern daemon --socket`): the headless `tern serve` window has no session daemon, so `tern ls`, `tern new` and `tern move` fail
 # in its panes without one (checked on Tern 0.9.8). That window is not attached to the daemon either: its Pane is the window's own
@@ -95,8 +96,12 @@ ba_wait_tabs 'length == 0'
 jq -e --arg block "$ba_block" '.agents | length == 1 and .[0].block == $block and .[0].background == true and .[0].open == true' \
   "$ba_state/tern-kata/agents.json" >/dev/null
 
-# A second S finds the session that is still there and adds a tab to it.
+# S on an Issue that has an agent opens the card too, and n there starts another in the background: it finds the session that is
+# still there and adds a tab to it.
 ctl key S
+expect_tree "[data-id^='layer.agent']" '.ok and .count >= 1'
+ctl key n
+expect_tree "[data-id^='layer.agent']" '.ok and .count == 0'
 ba_wait_tabs 'length == 1'
 jq -e --arg block "$ba_block" '.agents | length == 2 and all(.[]; .background == true) and ([.[] | select(.open)] | length == 1 and .[0].block == $block)' \
   "$ba_state/tern-kata/agents.json" >/dev/null
