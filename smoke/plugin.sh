@@ -74,6 +74,21 @@ if [[ $# -gt 0 ]]; then cp "$1" "$tmp/app/tern-kata"; else (cd "$repo" && go bui
 printf '#!/bin/sh\nexec env KATA_HOME=%q %q "$@"\n' "$KATA_HOME" "$tmp/app/tern-kata" >"$tmp/pane-bin/tern-kata"
 chmod +x "$tmp/pane-bin/tern-kata"
 ln -s "$repo" "$tmp/crates/plugins/fixtures/tern-kata"
+# A second plugin stands in for the Pane's `W`: its commands open a tab through the window's own new-tab path with a command
+# shaped like an agent's (prompt file named for the starting Pane, here the focused one), as `tern new tab` does.
+mkdir -p "$tmp/crates/plugins/fixtures/tab-launcher"
+printf 'schema = 1\nid = "tab-launcher"\nname = "Tab launcher"\nversion = "0.0.1"\ndescription = "Smoke stand-in for W."\nwindow = "window.luau"\n' >"$tmp/crates/plugins/fixtures/tab-launcher/plugin.toml"
+cat >"$tmp/crates/plugins/fixtures/tab-launcher/window.luau" <<'LUAU'
+local function tab(cx: WindowCx, name: string)
+    cx.layout:new_tab({command = "sleep 600 @/state/agent-prompts/" .. name .. ".md"})
+end
+tern.command({id = "agent-tab", title = "Launch agent tab", run = function(cx)
+    local focused = cx.session:focused()
+    tab(cx, string.format("prompt-%.0f-12345", focused or 0))
+end})
+tern.command({id = "plain-tab", title = "Launch plain tab", run = function(cx) tab(cx, "prompt-12345") end})
+tern.command({id = "gone-tab", title = "Launch gone-starter tab", run = function(cx) tab(cx, "prompt-999999-12345") end})
+LUAU
 ln -s "$(command -v kata)" "$tmp/bin/kata"
 ln -s "$(command -v tern)" "$tmp/bin/tern"
 
@@ -213,6 +228,56 @@ ctl key q
 for ((attempt=0; attempt<100; attempt++)); do [[ $(ctl state | jq '.tabs[1].panes') == 1 ]] && break; sleep 0.1; done
 ctl remote disconnect loop
 ctl state | jq -e '(.tabs | length) == 1 and .tabs[0].active' >/dev/null
+# A `W` agent's tab lands right of the tab of the Pane that started it; no other tab moves. Tabs are named by their first
+# Pane's program, so the order is read from the program names: a shell tab is `zsh`/`bash`/..., a launched one is `sleep`.
+tab_order() { ctl state | jq -r '[.tabs[] | if .panes == 1 and (.title | test("sleep")) then "agent" else "shell" end] | join(",")'; }
+wait_tab_order() {
+  for ((attempt=0; attempt<100; attempt++)); do
+    ctl ready >/dev/null
+    [[ $(tab_order) == "$1" ]] && return 0
+    sleep 0.1
+  done
+  echo "expected tab order $1, got $(tab_order): $(ctl state | jq -c '.tabs')" >&2
+  return 1
+}
+ctl state | jq -e '.tabs | length == 1' >/dev/null
+ctl tab new
+ctl ready
+ctl tab new
+ctl ready
+wait_tab_order shell,shell,shell
+# Back in the first tab, the agent tab goes second, ahead of the two tabs already there.
+ctl tab 1
+ctl ready
+ctl plugins run plugin.tab-launcher.agent-tab
+wait_tab_order shell,agent,shell,shell
+# From the last tab it is the new last tab.
+ctl tab 4
+ctl ready
+ctl plugins run plugin.tab-launcher.agent-tab
+wait_tab_order shell,agent,shell,shell,agent
+# A prompt file with no starter or a starter that is gone leaves the tab last.
+ctl tab 1
+ctl ready
+ctl plugins run plugin.tab-launcher.plain-tab
+wait_tab_order shell,agent,shell,shell,agent,agent
+ctl tab 1
+ctl ready
+ctl plugins run plugin.tab-launcher.gone-tab
+wait_tab_order shell,agent,shell,shell,agent,agent,agent
+# Back to one shell tab for what follows: close the launched tabs, then the extra shell tabs.
+while index=$(ctl state | jq -r '[.tabs | to_entries[] | select(.value.title | test("sleep")) | .key + 1] | first // empty') && [[ -n $index ]]; do
+  ctl tab "$index"
+  ctl tab close
+  ctl ready
+done
+while [[ $(ctl state | jq '.tabs | length') -gt 1 ]]; do
+  ctl tab 2
+  ctl tab close
+  ctl ready
+done
+ctl tab 1
+expect_panes 1
 # A Pane started by hand is a kata Pane when its title is `tern-kata` or its program's file name is tern-kata or
 # tern-kata.exe, whatever the path: a link then focuses it and opens no second Pane. The stand-in never sets the title, so
 # only its program name can identify it; the real binary (through its wrapper script) sets the title. The wrapper under
@@ -349,5 +414,5 @@ jq -e '.tabs[0].panes == 2' "$tmp/install-state.json" >/dev/null
 ctl expect Press
 ctl key Enter
 expect_panes 1
-jq -Rse 'contains("plugin window halves loaded count=1") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
-printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, links reuse only the current tab'"'"'s kata Pane, shell-syntax Project link, links on a remote host'"'"'s Pane, quick quit without toast, links into Panes started by full path, backslash path and title alone, a longer name not matched, startup-failure and not-installed toasts by exit status\n'
+jq -Rse 'contains("plugin window halves loaded count=2") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
+printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, links reuse only the current tab'"'"'s kata Pane, shell-syntax Project link, links on a remote host'"'"'s Pane, quick quit without toast, links into Panes started by full path, backslash path and title alone, a longer name not matched, an agent tab opened right of the Pane'"'"'s tab and no other tab moved, startup-failure and not-installed toasts by exit status\n'

@@ -18,6 +18,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Changed
 
+- `W` opens the agent's tab right of the kata Pane's tab, in that Pane's Tern session, instead of last; it needs the plugin's window half, and no other tab moves.
 - The help sheet (`?`) lists the global keys and the keys of the Page it is opened over, and shows the agent keys `w/W/S` on one short line.
 - The Menu's top level is short: the bound Project, **Views**, **Projects**, the Lettered Pages, Restore a deleted Issue and New Project. The fixed Collections (Inbox, Today, Upcoming, Deadlines, All Open, Logbook) moved into a **Views** level, which Back, `esc` or `backspace` leave for the top with the cursor on Views. The Views row names the current fixed Collection or saved view, typing still finds every Collection from the top, and an unbound directory's Menu sidebar shows the Views level.
 - **Open kata**, `F9` and kata links need Tern 0.9.7 or newer, which lets plugins split and find a remote host's Pane; they no longer fall back to a new tab when Tern can't split the focused Pane.
