@@ -185,6 +185,7 @@ func init() {
 	local(func(g *Gateway, ctx context.Context, cmd model.SendAgentBack) model.Msg {
 		return g.sendAgentBack(ctx, cmd)
 	}, nil, nil)
+	local(func(g *Gateway, ctx context.Context, cmd model.CloseAgent) model.Msg { return g.closeAgent(ctx, cmd) }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.FocusAgent) model.Msg { return g.focusAgent(ctx, cmd) }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, _ model.PruneAgents) model.Msg { return g.pruneAgents(ctx) }, nil, nil)
 
@@ -664,6 +665,16 @@ func init() {
 		},
 		func(cmd model.RaiseAgentAttention, err error) model.Msg {
 			return model.AgentAttentionWritten{UID: cmd.UID, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.ReadAgentIssue) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.ReadAgentIssue) (model.Msg, error) {
+			return ok(c.ReadAgentIssue(ctx, cmd))
+		},
+		func(cmd model.ReadAgentIssue, err error) model.Msg {
+			return model.AgentIssueRead{UID: cmd.UID, Err: err}
 		},
 		nil, nil)
 
