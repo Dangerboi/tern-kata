@@ -72,6 +72,9 @@ func TestTextFieldEditingRules(t *testing.T) {
 // does not use the key.
 func TestEveryTextFieldEditsAtTheCaret(t *testing.T) {
 	for _, card := range popups() {
+		if keysOnlyModes[card.mode] {
+			continue // no text field
+		}
 		if card.name == "Draft editor" {
 			continue // a multi-line body with its own editor keys
 		}

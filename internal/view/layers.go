@@ -19,6 +19,7 @@ var layerDraws = map[model.Card]func(model.Model, time.Time) tern.Element{
 	model.CardToken:           func(m model.Model, _ time.Time) tern.Element { return tokenLayer(m) },
 	model.CardRevoke:          func(m model.Model, _ time.Time) tern.Element { return revokeLayer(m) },
 	model.CardMove:            func(m model.Model, _ time.Time) tern.Element { return moveLayer(m) },
+	model.CardAgent:           func(m model.Model, _ time.Time) tern.Element { return agentLayer(m) },
 	model.CardDelete:          func(m model.Model, _ time.Time) tern.Element { return deleteLayer(m) },
 	model.CardFederationAdopt: func(m model.Model, _ time.Time) tern.Element { return federationAdoptLayer(m) },
 	model.CardRecurrence:      func(m model.Model, _ time.Time) tern.Element { return recurrenceLayer(m) },

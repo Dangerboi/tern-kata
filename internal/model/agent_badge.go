@@ -62,6 +62,21 @@ func (m Model) IssueAgents(issueUID string) []IssueAgent {
 	return agents
 }
 
+// AgentStateWords is how the badge and the Agent card name an agent's state, and the tone of the words.
+func AgentStateWords(state string) (string, AgentTone) {
+	switch state {
+	case agentWaitingInput:
+		return "agent waiting for you", AgentToneWarning
+	case stateWorking:
+		return "agent working", AgentToneAccent
+	case stateIdle:
+		return "agent idle", AgentToneMuted
+	case stateExited:
+		return "agent exited", AgentToneMuted
+	}
+	return "agent", AgentToneMuted
+}
+
 // AgentBadge is what the Agent badge says about an Issue's agents and the one agent a click on it focuses.
 type AgentBadge struct {
 	Text  string
@@ -92,17 +107,8 @@ func (m Model) AgentBadgeFor(issueUID string) (AgentBadge, bool) {
 	if !ok {
 		return AgentBadge{}, false
 	}
-	badge := AgentBadge{Text: "agent", Tone: AgentToneMuted, Block: best.Block}
-	switch best.State {
-	case agentWaitingInput:
-		badge.Text, badge.Tone = "agent waiting for you", AgentToneWarning
-	case stateWorking:
-		badge.Text, badge.Tone = "agent working", AgentToneAccent
-	case stateIdle:
-		badge.Text = "agent idle"
-	case stateExited:
-		badge.Text = "agent exited"
-	}
+	badge := AgentBadge{Block: best.Block}
+	badge.Text, badge.Tone = AgentStateWords(best.State)
 	if len(agents) > 1 {
 		badge.Text += fmt.Sprintf(" · %d", len(agents))
 	}
@@ -114,7 +120,7 @@ type AgentJumpMsg struct{ Block string }
 
 func (AgentJumpMsg) msg() {}
 
-// jumpToAgent is the one way to go to an agent (a badge click): a background agent that is not open is opened beside this Pane,
+// jumpToAgent is the one way to go to an agent (a badge click or the Agent card): a background agent that is not open is opened beside this Pane,
 // any other agent is focused. Opening is only ever the user's act, so nothing but a jump runs it.
 func jumpToAgent(m Model, block string) (Model, []Cmd) {
 	for _, e := range m.AgentMapping {
