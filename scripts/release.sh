@@ -21,13 +21,26 @@ dist=$(cd "$dist" && pwd)
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 
+# The six builds run side by side; a failed one fails the script at its wait.
+pids=
+for os in linux darwin windows; do
+	for arch in amd64 arm64; do
+		bin=tern-kata
+		[ "$os" = windows ] && bin=tern-kata.exe
+		mkdir -p "$stage/${os}_$arch"
+		CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags "-X main.version=$tag" -o "$stage/${os}_$arch/$bin" ./cmd/tern-kata &
+		pids="$pids $!"
+	done
+done
+for pid in $pids; do
+	wait "$pid"
+done
+
 for os in linux darwin windows; do
 	for arch in amd64 arm64; do
 		bin=tern-kata
 		[ "$os" = windows ] && bin=tern-kata.exe
 		dir=$stage/${os}_$arch
-		mkdir -p "$dir"
-		CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags "-X main.version=$tag" -o "$dir/$bin" ./cmd/tern-kata
 		cp LICENSE "$dir/"
 		if [ "$os" = windows ]; then
 			(cd "$dir" && zip -q "$dist/tern-kata_${os}_$arch.zip" "$bin" LICENSE)

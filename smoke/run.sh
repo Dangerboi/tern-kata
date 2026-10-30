@@ -11,7 +11,6 @@ if [[ -z ${SMOKE_SHARD:-} && $# -eq 0 ]]; then
   bin_dir=$(mktemp -d)
   trap 'rm -rf "$bin_dir"; trap - TERM; kill 0' INT TERM
   (cd "$repo" && go build -o "$bin_dir/tern-kata" ./cmd/tern-kata)
-  (cd "$repo" && GOOS=windows go vet ./...)
   slow=(51-claim-expiry.sh 60-cron-made-issue.sh 62-job-card.sh)
   # The rest is cut at steps that start from the freshly launched Pane (each shard has its own seeded Project), so the
   # five groups run side by side: steps 01-21, 22-31, 32-44, 45-57 and 58-76.
@@ -96,7 +95,6 @@ if [[ -n ${SMOKE_BIN:-} ]]; then
   cp "$SMOKE_BIN" "$tmp/tern-kata"
 else
   (cd "$repo" && go build -o "$tmp/tern-kata" ./cmd/tern-kata)
-  (cd "$repo" && GOOS=windows go vet ./...)
 fi
 
 tern serve --control "$tmp/control.sock" --out "$tmp/shots" --dir "$tmp/workspace" >"$tmp/tern.log" 2>&1 &

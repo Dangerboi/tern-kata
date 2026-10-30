@@ -1,25 +1,30 @@
 #!/usr/bin/env bash
 # Runs the project's checks: static (gofmt, go vet and golangci-lint for Linux and Windows, the build and the release
 # cross-builds), test (go test) or smoke (smoke/run.sh); no argument runs all three.
-# Each static check prints "CHECK <name> ok" or "CHECK <name> FAIL" when it ends. CHECK_OUT (default: a temporary folder)
-# receives the go test -json stream as gotest.jsonl and the built binaries under bin/.
+# The static checks run side by side; each prints "CHECK <name> ok" or "CHECK <name> FAIL" (after its output) when it ends.
+# CHECK_OUT (default: a temporary folder) receives the go test -json stream as gotest.jsonl, the built binaries under bin/
+# and each static check's output under log/.
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
 cd "$repo"
 export CGO_ENABLED=0
 out=${CHECK_OUT:-$(mktemp -d)}
-mkdir -p "$out/bin"
+mkdir -p "$out/bin" "$out/log"
 
-check() { # check <name> <command...>
+check() { # check <name> <command...>: starts the check in the background and adds it to pids
   local name=$1
   shift
-  if "$@"; then
-    printf 'CHECK %s ok\n' "$name"
-  else
-    printf 'CHECK %s FAIL\n' "$name"
-    return 1
-  fi
+  (
+    if "$@" >"$out/log/$name" 2>&1; then
+      printf 'CHECK %s ok\n' "$name"
+    else
+      cat "$out/log/$name"
+      printf 'CHECK %s FAIL\n' "$name"
+      exit 1
+    fi
+  ) &
+  pids+=($!)
 }
 gofmt_clean() {
   local unformatted
@@ -33,18 +38,20 @@ cross() { # cross <os> <arch>
 }
 
 static() {
-  local status=0
-  check fmt gofmt_clean || status=1
-  check vet-linux go vet ./... || status=1
-  check vet-windows env GOOS=windows go vet ./... || status=1
-  check lint-linux golangci-lint run ./... || status=1
-  check lint-windows env GOOS=windows golangci-lint run ./... || status=1
-  check build go build -o "$out/bin/tern-kata" ./cmd/tern-kata || status=1
+  local status=0 pid pids=()
+  check fmt gofmt_clean
+  check vet-linux go vet ./...
+  check vet-windows env GOOS=windows go vet ./...
+  # The two lints share golangci-lint's cache, which takes concurrent writers; the flag lifts the one-run-at-a-time lock.
+  check lint-linux golangci-lint run --allow-parallel-runners ./...
+  check lint-windows env GOOS=windows golangci-lint run --allow-parallel-runners ./...
+  check build go build -o "$out/bin/tern-kata" ./cmd/tern-kata
   for os in linux darwin windows; do
     for arch in amd64 arm64; do
-      check "cross-$os-$arch" cross "$os" "$arch" || status=1
+      check "cross-$os-$arch" cross "$os" "$arch"
     done
   done
+  for pid in "${pids[@]}"; do wait "$pid" || status=1; done
   return "$status"
 }
 
