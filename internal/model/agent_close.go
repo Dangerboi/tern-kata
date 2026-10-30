@@ -94,7 +94,7 @@ func closeFinishedAgents(m Model, trigger agentCloseTrigger) (Model, []Cmd) {
 			m.AgentClose.tried = append(slices.Clone(m.AgentClose.tried), e.Block)
 			cmds = append(cmds, CloseAgent{Block: e.Block})
 		case listed || e.ProjectID == 0 || slices.Contains(m.AgentClose.reading, e.IssueUID):
-		case status == "" || trigger == closeOnIssues || (trigger == closeOnRelay && !agentFinished(m.Agents.Previous, e.Block)):
+		case status == "" || trigger == closeOnIssues || (trigger == closeOnRelay && m.Agents.enteredFinished(e.Block)):
 			m.AgentClose.reading = append(slices.Clone(m.AgentClose.reading), e.IssueUID)
 			cmds = append(cmds, ReadAgentIssue{Workspace: m.Workspace, ProjectID: e.ProjectID, UID: e.IssueUID})
 		}

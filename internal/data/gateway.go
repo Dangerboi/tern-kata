@@ -54,6 +54,11 @@ type Gateway struct {
 	workerDirs func() (worker.Dirs, error)
 	runTern    func(context.Context, []string) ([]byte, error)
 
+	// lsMu guards lsLive, the blocks the last `tern ls --json` listed, and lsAt, when it was asked.
+	lsMu   sync.Mutex
+	lsLive map[string]bool
+	lsAt   time.Time
+
 	// convertMu serializes the passes that move old Attachment pointers; converted holds the instance/Project pairs this process
 	// has finished. startMu guards convertStarted, the workspaces whose Pane start has begun a pass, and connCtx, the context of the
 	// passes of the connection in use: a daemon switch ends it and waits for the passes before it installs the new connection.

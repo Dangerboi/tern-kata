@@ -301,7 +301,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m = m.openRequested(msg.IssueRef)
 		m.Loading = true
 		m.Err = nil
-		return m, []Cmd{LoadProject{Workspace: msg.Workspace, Actor: m.Actor}, LoadViews{}, PruneAgents{}}
+		return m, []Cmd{LoadProject{Workspace: msg.Workspace, Actor: m.Actor}, LoadViews{}, PruneAgents{PaneBlock: m.PaneBlock}}
 	case ProjectLoaded:
 		return updateProject(m, msg)
 	case AgentStarted:
@@ -395,7 +395,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case AgentFocused:
 		m = agentFocused(m, msg)
 	case AgentsRefreshed:
-		m = agentsRefreshed(m, msg)
+		return agentsRefreshed(m, msg)
 	case ActionMsg:
 		switch msg.Action {
 		case SelectIssueAction:

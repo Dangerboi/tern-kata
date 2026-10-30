@@ -114,7 +114,7 @@ func raiseAgentAttention(m Model) (Model, []Cmd) {
 	}
 	var cmds []Cmd
 	for _, e := range m.AgentMapping {
-		if e.PaneBlock != m.PaneBlock || !agentWaiting(m.Agents.States, e.Block) || agentWaiting(m.Agents.Previous, e.Block) {
+		if e.PaneBlock != m.PaneBlock || !m.Agents.entered(e.Block, AgentWaitingInput) {
 			continue
 		}
 		project := m.projectOf(e)

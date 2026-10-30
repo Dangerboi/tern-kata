@@ -76,9 +76,9 @@ func TestRequestStaysWhileAnyMappedAgentOnTheIssueWaits(t *testing.T) {
 	if len(cmds) != 0 {
 		t.Fatalf("cleared while another Pane's agent waits: %v", cmds)
 	}
-	_, cmds = relay(t, m, st("11", "working", ""))
-	if want := []model.Cmd{model.RefreshAgents{Gone: []string{"12", "21"}}, clearOf("u1", 3)}; !reflect.DeepEqual(cmds, want) {
-		t.Fatalf("cmds %v, want the prune and the clear once the waiting agent is gone from the relay", cmds)
+	_, cmds = relay(t, m, st("11", "working", ""), st("12", "exited", ""), st("21", "working", ""))
+	if want := []model.Cmd{clearOf("u1", 3)}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("cmds %v, want the clear once no mapped agent on the Issue waits", cmds)
 	}
 }
 

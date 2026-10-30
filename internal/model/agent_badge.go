@@ -141,8 +141,14 @@ func agentFocused(m Model, msg AgentFocused) Model {
 	return m
 }
 
-// RefreshAgents asks for agents.json to be read again, first without the entries of the Gone blocks and their prompt files.
-type RefreshAgents struct{ Gone []string }
+// RefreshAgents asks for agents.json to be read again. Suspects are mapped blocks some relay listed before and the latest relay
+// does not list: that is no proof they are gone, for another window may simply not see them, so the gateway drops an entry (and
+// its prompt file) only when `tern ls --json` does not list its block either. PaneBlock is this Pane's block: an entry whose starting Pane is no longer
+// a live block is adopted by it ("" adopts nothing).
+type RefreshAgents struct {
+	Suspects  []string
+	PaneBlock string
+}
 
 func (RefreshAgents) cmd() {}
 
@@ -154,37 +160,57 @@ type AgentsRefreshed struct {
 
 func (AgentsRefreshed) msg() {}
 
-func agentsRefreshed(m Model, msg AgentsRefreshed) Model {
-	if msg.Err == nil {
-		m.AgentMapping = msg.Agents
-	}
-	return m
+func (m Model) agentMapped(block string) bool {
+	return slices.ContainsFunc(m.AgentMapping, func(e AgentEntry) bool { return e.Block == block })
 }
 
-// relayAgents takes in a relayed list. A block the relay before did not list may be an agent another kata Pane on this host just
-// started, so agents.json is read again, once for the relay, and only when the mapping does not have the block. A block the relay
-// before listed and this one does not is gone: its entry and prompt file go. Nothing is pruned for a block no relay has listed,
-// and so nothing before the second relay.
+// agentsRefreshed takes in the mapping and, when a relay wanted a refresh while this one was out, asks for the next.
+func agentsRefreshed(m Model, msg AgentsRefreshed) (Model, []Cmd) {
+	if msg.Err == nil {
+		m.AgentMapping = msg.Agents
+		m.Agents = m.Agents.trimmed(m.agentMapped)
+	}
+	m.Agents.inFlight = false
+	if !m.Agents.again {
+		return m, nil
+	}
+	suspects := slices.DeleteFunc(m.Agents.suspects, func(b string) bool { return !m.agentMapped(b) })
+	m.Agents.again, m.Agents.suspects, m.Agents.inFlight = false, nil, true
+	return m, []Cmd{RefreshAgents{Suspects: suspects, PaneBlock: m.PaneBlock}}
+}
+
+// relayAgents takes in a relayed list by merging it into the last known states: a block the relay does not list keeps its state.
+// agents.json is read again, once for the relay, when it lists a block no relay listed before and the mapping does not have
+// (another kata Pane on this host may just have started it), or when a mapped block some relay listed before is missing from it.
+// That block is only a suspect: the gateway drops its entry when Tern no longer lists the block. One refresh is out at a time;
+// a relay that wants one meanwhile gets it when the answer is in.
 func relayAgents(m Model, msg AgentStatesMsg) (Model, []Cmd) {
-	m.Agents = m.Agents.apply(msg)
-	now := func(block string) func(AgentState) bool { return func(s AgentState) bool { return s.Block == block } }
-	var gone []string
-	for _, s := range m.Agents.Previous {
-		if !slices.ContainsFunc(m.Agents.States, now(s.Block)) {
-			gone = append(gone, s.Block)
+	before := m.Agents.States
+	m.Agents = m.Agents.apply(msg, m.agentMapped)
+	var suspects []string
+	for _, s := range before {
+		if !slices.Contains(m.Agents.Listed, s.Block) && m.agentMapped(s.Block) {
+			suspects = append(suspects, s.Block)
 		}
 	}
 	unmapped := false
-	for _, s := range m.Agents.States {
-		if slices.ContainsFunc(m.Agents.Previous, now(s.Block)) {
-			continue
-		}
-		if !slices.ContainsFunc(m.AgentMapping, func(e AgentEntry) bool { return e.Block == s.Block }) {
+	for _, b := range m.Agents.Listed {
+		if !m.agentMapped(b) && !slices.ContainsFunc(before, func(s AgentState) bool { return s.Block == b }) {
 			unmapped = true
 		}
 	}
-	if len(gone) == 0 && !unmapped {
+	if len(suspects) == 0 && !unmapped {
 		return m, nil
 	}
-	return m, []Cmd{RefreshAgents{Gone: gone}}
+	if m.Agents.inFlight {
+		m.Agents.again = true
+		for _, b := range suspects {
+			if !slices.Contains(m.Agents.suspects, b) {
+				m.Agents.suspects = append(slices.Clone(m.Agents.suspects), b)
+			}
+		}
+		return m, nil
+	}
+	m.Agents.inFlight = true
+	return m, []Cmd{RefreshAgents{Suspects: suspects, PaneBlock: m.PaneBlock}}
 }

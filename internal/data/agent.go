@@ -178,7 +178,7 @@ func ReadAgents(path string) ([]model.AgentEntry, error) {
 
 // UpdateAgents reads agents.json again, lets change return the new list, and writes it with atomicfile. Every change goes
 // through it, so a write never starts from a list read earlier. Panes of the host share the file without a lock: two changes in
-// the same instant can lose one, and the Pane's prune and the relay's cleanup remove entries, never add them back.
+// the same instant can lose one, and the pruning and adoption of a Pane remove entries or take them over, never add them back.
 func UpdateAgents(path string, change func([]model.AgentEntry) []model.AgentEntry) ([]model.AgentEntry, error) {
 	current, err := ReadAgents(path)
 	if err != nil {
@@ -207,53 +207,114 @@ func (g *Gateway) agentStatePaths() (file, prompts string, err error) {
 	return filepath.Join(dirs.State, AgentsFile), filepath.Join(dirs.State, AgentPromptsFolder), nil
 }
 
-// pruneAgents drops the entries whose block `tern ls --json` does not list, with their prompt files. Only entries that were in
-// the file before tern was asked can go: one another Pane wrote since was never checked. When tern cannot be asked nothing is
-// dropped.
-func (g *Gateway) pruneAgents(ctx context.Context) model.AgentsPruned {
-	file, _, err := g.agentStatePaths()
-	if err != nil {
-		return model.AgentsPruned{Err: err}
-	}
-	current, err := ReadAgents(file)
-	if err != nil || len(current) == 0 {
-		return model.AgentsPruned{Agents: current, Err: err}
-	}
-	checked := map[string]bool{}
-	for _, e := range current {
-		checked[e.Block] = true
+// liveBlocksMaxAge is how long a refresh trusts the block set of an earlier `tern ls --json`.
+const liveBlocksMaxAge = 10 * time.Second
+
+// liveBlocks is the set of blocks `tern ls --json` lists. It is cached for liveBlocksMaxAge, read by g.now; fresh asks tern
+// again and replaces the cache. cached says the answer is an earlier one.
+func (g *Gateway) liveBlocks(ctx context.Context, fresh bool) (live map[string]bool, cached bool, err error) {
+	g.lsMu.Lock()
+	defer g.lsMu.Unlock()
+	if !fresh && g.lsLive != nil && g.now().Sub(g.lsAt) < liveBlocksMaxAge {
+		return g.lsLive, true, nil
 	}
 	out, err := g.runTern(ctx, []string{"ls", "--json"})
 	if err != nil {
-		return model.AgentsPruned{Err: ternFailure(err, out)}
+		return nil, false, ternFailure(err, out)
 	}
 	listing, err := parseTernLs(out)
 	if err != nil {
-		return model.AgentsPruned{Err: err}
+		return nil, false, err
 	}
-	alive := map[string]bool{}
+	live = map[string]bool{}
 	for _, s := range listing {
 		for _, b := range s.blocks {
-			alive[b] = true
+			live[b] = true
 		}
+	}
+	g.lsLive, g.lsAt = live, g.now()
+	return live, false, nil
+}
+
+// reconcileAgents is what the Pane does to agents.json once Tern has said which blocks are alive. An entry goes, with its prompt
+// file, when suspect names its block and Tern does not list it; an entry whose starting Pane is not a live block is adopted by
+// paneBlock (never when it is ""). Only entries that were in the file before tern was asked can change: one another Pane wrote
+// since was never checked, and the write adopts an entry only if it still names the Pane it named when read, so two Panes
+// do not both take it. A decision that rests on a cached block set is confirmed with a fresh one first, for a Pane or an agent
+// that started after the cache would look gone. When tern cannot be asked nothing changes: current is the file as read and askErr
+// says why.
+func (g *Gateway) reconcileAgents(ctx context.Context, file, paneBlock string, fresh bool, suspect func(block string) bool) (current []model.AgentEntry, askErr, err error) {
+	current, err = ReadAgents(file)
+	if err != nil || len(current) == 0 {
+		return current, nil, err
+	}
+	if !fresh && paneBlock == "" && !slices.ContainsFunc(current, func(e model.AgentEntry) bool { return suspect(e.Block) }) {
+		return current, nil, nil
+	}
+	read := make(map[string]string, len(current))
+	for _, e := range current {
+		read[e.Block] = e.PaneBlock
+	}
+	var live map[string]bool
+	var cached bool
+	verdict := func(e model.AgentEntry) (drop, adopt bool) {
+		if starter, ok := read[e.Block]; !ok || starter != e.PaneBlock {
+			return false, false
+		}
+		if suspect(e.Block) && !live[e.Block] {
+			return true, false
+		}
+		return false, paneBlock != "" && e.PaneBlock != paneBlock && !live[e.PaneBlock]
+	}
+	changes := func() bool {
+		return slices.ContainsFunc(current, func(e model.AgentEntry) bool { drop, adopt := verdict(e); return drop || adopt })
+	}
+	if live, cached, err = g.liveBlocks(ctx, fresh); err != nil {
+		return current, err, nil
+	}
+	if cached && changes() {
+		if live, _, err = g.liveBlocks(ctx, true); err != nil {
+			return current, err, nil
+		}
+	}
+	if !changes() {
+		return current, nil, nil
 	}
 	var gone []model.AgentEntry
 	kept, err := UpdateAgents(file, func(list []model.AgentEntry) []model.AgentEntry {
-		return slices.DeleteFunc(list, func(e model.AgentEntry) bool {
-			if alive[e.Block] || !checked[e.Block] {
-				return false
+		gone = gone[:0]
+		list = slices.DeleteFunc(list, func(e model.AgentEntry) bool {
+			if drop, _ := verdict(e); drop {
+				gone = append(gone, e)
+				return true
 			}
-			gone = append(gone, e)
-			return true
+			return false
 		})
+		for i, e := range list {
+			if _, adopt := verdict(e); adopt {
+				list[i].PaneBlock = paneBlock
+			}
+		}
+		return list
 	})
 	if err != nil {
-		return model.AgentsPruned{Err: err}
+		return current, nil, err
 	}
 	for _, e := range gone {
 		removePrompt(e.PromptFile)
 	}
-	return model.AgentsPruned{Agents: kept}
+	return kept, nil, nil
+}
+
+// pruneAgents is the Pane's start: it drops the entries whose block `tern ls --json` does not list, with their prompt files, and
+// adopts the entries of a Pane that is gone (reconcileAgents).
+func (g *Gateway) pruneAgents(ctx context.Context, cmd model.PruneAgents) model.AgentsPruned {
+	file, _, err := g.agentStatePaths()
+	if err != nil {
+		return model.AgentsPruned{Err: err}
+	}
+	agents, askErr, err := g.reconcileAgents(ctx, file, cmd.PaneBlock, true, func(string) bool { return true })
+	return model.AgentsPruned{Agents: agents, Err: cmp.Or(askErr, err)}
 }
 
 func removePrompt(path string) {
@@ -509,35 +570,18 @@ func writeAgentPrompt(folder, starter, text string) (string, error) {
 	return name, nil
 }
 
-// refreshAgents reads agents.json again and, first, drops the entries of the gone blocks with their prompt files. The file is
-// read fresh, so an agent another kata Pane started is in the answer.
-func (g *Gateway) refreshAgents(cmd model.RefreshAgents) model.AgentsRefreshed {
+// refreshAgents reads agents.json again, so an agent another kata Pane started is in the answer. The blocks in cmd.Suspects were
+// listed by some relay and are missing from the latest: an entry of theirs goes, with its prompt file, only when `tern ls --json`
+// does not list the block, and an entry whose starting Pane is not a live block is adopted by cmd.PaneBlock (reconcileAgents).
+// Tern's answer is cached for liveBlocksMaxAge, so a stream of relays costs few `tern ls`. When tern cannot be asked the file is
+// returned as it is.
+func (g *Gateway) refreshAgents(ctx context.Context, cmd model.RefreshAgents) model.AgentsRefreshed {
 	file, _, err := g.agentStatePaths()
 	if err != nil {
 		return model.AgentsRefreshed{Err: err}
 	}
-	current, err := ReadAgents(file)
-	if err != nil || len(cmd.Gone) == 0 || !slices.ContainsFunc(current, func(e model.AgentEntry) bool { return slices.Contains(cmd.Gone, e.Block) }) {
-		return model.AgentsRefreshed{Agents: current, Err: err}
-	}
-	var gone []model.AgentEntry
-	kept, err := UpdateAgents(file, func(list []model.AgentEntry) []model.AgentEntry {
-		gone = gone[:0]
-		return slices.DeleteFunc(list, func(e model.AgentEntry) bool {
-			if !slices.Contains(cmd.Gone, e.Block) {
-				return false
-			}
-			gone = append(gone, e)
-			return true
-		})
-	})
-	if err != nil {
-		return model.AgentsRefreshed{Err: err}
-	}
-	for _, e := range gone {
-		removePrompt(e.PromptFile)
-	}
-	return model.AgentsRefreshed{Agents: kept}
+	agents, _, err := g.reconcileAgents(ctx, file, cmd.PaneBlock, false, func(block string) bool { return slices.Contains(cmd.Suspects, block) })
+	return model.AgentsRefreshed{Agents: agents, Err: err}
 }
 
 // focusAgent has Tern show the agent's block.
