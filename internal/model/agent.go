@@ -83,7 +83,8 @@ type AgentStarted struct {
 func (AgentStarted) msg() {}
 
 // PruneAgents asks for agents.json to lose the entries whose block `tern ls --json` no longer lists; the Pane sends it once, at start.
-type PruneAgents struct{}
+// PaneBlock is this Pane's block: an entry whose starting Pane is no longer a live block is adopted by it ("" adopts nothing).
+type PruneAgents struct{ PaneBlock string }
 
 func (PruneAgents) cmd() {}
 
@@ -147,6 +148,7 @@ func agentStarted(m Model, msg AgentStarted) Model {
 func agentsPruned(m Model, msg AgentsPruned) Model {
 	if msg.Err == nil {
 		m.AgentMapping = msg.Agents
+		m.Agents = m.Agents.trimmed(m.agentMapped)
 	}
 	return m
 }

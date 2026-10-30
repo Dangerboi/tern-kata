@@ -180,14 +180,16 @@ func init() {
 	}, nil, nil)
 
 	local(func(g *Gateway, ctx context.Context, cmd model.StartAgent) model.Msg { return g.startAgent(ctx, cmd) }, nil, nil)
-	local(func(g *Gateway, ctx context.Context, cmd model.RefreshAgents) model.Msg { return g.refreshAgents(cmd) }, nil, nil)
+	local(func(g *Gateway, ctx context.Context, cmd model.RefreshAgents) model.Msg {
+		return g.refreshAgents(ctx, cmd)
+	}, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.OpenAgent) model.Msg { return g.openAgent(ctx, cmd) }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.SendAgentBack) model.Msg {
 		return g.sendAgentBack(ctx, cmd)
 	}, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.CloseAgent) model.Msg { return g.closeAgent(ctx, cmd) }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.FocusAgent) model.Msg { return g.focusAgent(ctx, cmd) }, nil, nil)
-	local(func(g *Gateway, ctx context.Context, _ model.PruneAgents) model.Msg { return g.pruneAgents(ctx) }, nil, nil)
+	local(func(g *Gateway, ctx context.Context, cmd model.PruneAgents) model.Msg { return g.pruneAgents(ctx, cmd) }, nil, nil)
 
 	// Daemon calls.
 	daemonCall(

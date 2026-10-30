@@ -86,28 +86,6 @@ func TestANewBlockInTheRelayReReadsAgentsJSONOnce(t *testing.T) {
 	}
 }
 
-func TestAnEntryIsPrunedOnlyAfterItsBlockWasListedAndThenWasNot(t *testing.T) {
-	m := model.Model{AgentMapping: []model.AgentEntry{entry("a", "7", 1), entry("a", "8", 2)}}
-	// Before any relay nothing is pruned, and a first relay without the blocks prunes nothing: they were never listed.
-	m, cmds := relayed(m)
-	for _, c := range cmds {
-		if r, ok := c.(model.RefreshAgents); ok && len(r.Gone) > 0 {
-			t.Fatalf("pruned on the first relay: %#v", cmds)
-		}
-	}
-	m, cmds = relayed(m, model.AgentState{Block: "7", State: "idle"})
-	for _, c := range cmds {
-		if r, ok := c.(model.RefreshAgents); ok && len(r.Gone) > 0 {
-			t.Fatalf("pruned a block no relay listed: %#v", cmds)
-		}
-	}
-	// 7 was listed; the next relay lacks it: it goes. 8 was never listed: it stays.
-	_, cmds = relayed(m)
-	if want := []model.Cmd{model.RefreshAgents{Gone: []string{"7"}}}; !reflect.DeepEqual(cmds, want) {
-		t.Fatalf("cmds %#v, want %#v", cmds, want)
-	}
-}
-
 func TestTheRefreshedMappingReplacesTheModelsAndAnErrorKeepsIt(t *testing.T) {
 	m := model.Model{AgentMapping: []model.AgentEntry{entry("a", "7", 1)}}
 	m, _ = model.Update(m, model.AgentsRefreshed{Agents: []model.AgentEntry{entry("b", "9", 2)}})

@@ -377,33 +377,184 @@ func TestTheAgentPromptIsStable(t *testing.T) {
 	}
 }
 
-func TestRefreshingDropsTheGoneBlocksAndReadsTheFileAsItIs(t *testing.T) {
+func lsOf(blocks ...string) []byte {
+	var list []string
+	for _, b := range blocks {
+		list = append(list, `{"id":`+b+`}`)
+	}
+	return []byte(`{"sessions":[{"id":1,"tabs":[{"id":5,"blocks":[` + strings.Join(list, ",") + `]}]}]}`)
+}
+
+// lsCounter makes runTern answer `tern ls --json` with the blocks in *live and counts the asks.
+func lsCounter(t *testing.T, g *Gateway, live *[]string) *int {
+	t.Helper()
+	asked := 0
+	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		if !slices.Equal(args, []string{"ls", "--json"}) {
+			t.Errorf("ran %q", args)
+		}
+		asked++
+		return lsOf(*live...), nil
+	}
+	return &asked
+}
+
+func putAgents(t *testing.T, file string, entries ...model.AgentEntry) {
+	t.Helper()
+	if _, err := UpdateAgents(file, func(l []model.AgentEntry) []model.AgentEntry { return append(l, entries...) }); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRefreshingReadsTheFileAsItIsAndAsksTernNothingWithoutSuspects(t *testing.T) {
+	g, dirs := agentGateway(t)
+	file := filepath.Join(dirs.State, AgentsFile)
+	putAgents(t, file, model.AgentEntry{Block: "1"}, model.AgentEntry{Block: "2"})
+	g.runTern = func(context.Context, []string) ([]byte, error) { t.Error("refreshing ran tern"); return nil, nil }
+	if got := as[model.AgentsRefreshed](t, run(t, g, model.RefreshAgents{})); got.Err != nil || len(got.Agents) != 2 {
+		t.Fatalf("a plain re-read: %+v", got)
+	}
+}
+
+func TestRefreshingDropsASuspectOnlyWhenTernNoLongerListsItsBlock(t *testing.T) {
 	g, dirs := agentGateway(t)
 	prompts := filepath.Join(dirs.State, AgentPromptsFolder)
 	if err := os.MkdirAll(prompts, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	kept := writeAgentFile(t, filepath.Join(prompts, "kept.md"), "x")
+	listed := writeAgentFile(t, filepath.Join(prompts, "listed.md"), "x")
 	dead := writeAgentFile(t, filepath.Join(prompts, "dead.md"), "x")
+	other := writeAgentFile(t, filepath.Join(prompts, "other.md"), "x")
 	file := filepath.Join(dirs.State, AgentsFile)
-	if _, err := UpdateAgents(file, func(l []model.AgentEntry) []model.AgentEntry {
-		return append(l, model.AgentEntry{Block: "1", PromptFile: kept}, model.AgentEntry{Block: "144115188075855871", PromptFile: dead})
-	}); err != nil {
-		t.Fatal(err)
-	}
-	g.runTern = func(context.Context, []string) ([]byte, error) { t.Error("refreshing ran tern"); return nil, nil }
-	if got := as[model.AgentsRefreshed](t, run(t, g, model.RefreshAgents{})); got.Err != nil || len(got.Agents) != 2 {
-		t.Fatalf("a plain re-read: %+v", got)
-	}
-	got := as[model.AgentsRefreshed](t, run(t, g, model.RefreshAgents{Gone: []string{"144115188075855871", "42"}}))
-	if got.Err != nil || len(got.Agents) != 1 || got.Agents[0].Block != "1" {
+	putAgents(t, file,
+		model.AgentEntry{Block: "1", PaneBlock: "7", PromptFile: listed},
+		model.AgentEntry{Block: "144115188075855871", PaneBlock: "7", PromptFile: dead},
+		model.AgentEntry{Block: "3", PaneBlock: "7", PromptFile: other})
+	live := []string{"1", "7"}
+	asked := lsCounter(t, g, &live)
+	got := as[model.AgentsRefreshed](t, run(t, g, model.RefreshAgents{Suspects: []string{"1", "144115188075855871"}, PaneBlock: "7"}))
+	if got.Err != nil || len(got.Agents) != 2 || got.Agents[0].Block != "1" || got.Agents[1].Block != "3" {
 		t.Fatalf("refreshed %+v", got)
+	}
+	if *asked != 1 {
+		t.Errorf("tern ls ran %d times", *asked)
 	}
 	if _, err := os.Stat(dead); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("the gone entry's prompt stayed: %v", err)
 	}
-	if _, err := os.Stat(kept); err != nil {
-		t.Errorf("a kept entry's prompt went: %v", err)
+	for _, p := range []string{listed, other} {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("a kept entry's prompt went: %v", err)
+		}
+	}
+}
+
+func TestRefreshingKeepsEverythingWhenTernCannotBeAsked(t *testing.T) {
+	g, dirs := agentGateway(t)
+	file := filepath.Join(dirs.State, AgentsFile)
+	putAgents(t, file, model.AgentEntry{Block: "1", PaneBlock: "7"})
+	g.runTern = func(context.Context, []string) ([]byte, error) { return nil, errors.New("exit status 1") }
+	got := as[model.AgentsRefreshed](t, run(t, g, model.RefreshAgents{Suspects: []string{"1"}, PaneBlock: "9"}))
+	if got.Err != nil || len(got.Agents) != 1 || got.Agents[0].PaneBlock != "7" {
+		t.Fatalf("refreshed %+v", got)
+	}
+}
+
+func TestTheLiveBlocksOfTernAreCachedForTenSeconds(t *testing.T) {
+	g, dirs := agentGateway(t)
+	now := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+	g.now = func() time.Time { return now }
+	putAgents(t, filepath.Join(dirs.State, AgentsFile), model.AgentEntry{Block: "1", PaneBlock: "7"})
+	live := []string{"1", "7"}
+	asked := lsCounter(t, g, &live)
+	refresh := model.RefreshAgents{Suspects: []string{"1"}, PaneBlock: "7"}
+	run(t, g, refresh)
+	now = now.Add(9 * time.Second)
+	run(t, g, refresh)
+	if *asked != 1 {
+		t.Fatalf("tern ls ran %d times within 10 s, want 1", *asked)
+	}
+	now = now.Add(2 * time.Second)
+	run(t, g, refresh)
+	if *asked != 2 {
+		t.Fatalf("tern ls ran %d times after 10 s, want 2", *asked)
+	}
+}
+
+func TestACachedBlockSetThatLacksALaterBlockIsNotTrustedToDropOrAdopt(t *testing.T) {
+	g, dirs := agentGateway(t)
+	file := filepath.Join(dirs.State, AgentsFile)
+	putAgents(t, file, model.AgentEntry{Block: "1", PaneBlock: "7"})
+	live := []string{"7"}
+	asked := lsCounter(t, g, &live)
+	run(t, g, model.RefreshAgents{PaneBlock: "7", Suspects: []string{"2"}})
+	// Block 1 started after that answer; its starting Pane 7 is there, and a newer Pane 9 asks.
+	live = []string{"1", "7", "9"}
+	got := as[model.AgentsRefreshed](t, run(t, g, model.RefreshAgents{Suspects: []string{"1"}, PaneBlock: "9"}))
+	if len(got.Agents) != 1 || got.Agents[0].PaneBlock != "7" || *asked != 2 {
+		t.Fatalf("refreshed %+v after %d asks", got.Agents, *asked)
+	}
+	if again := as[model.AgentsRefreshed](t, run(t, g, model.RefreshAgents{Suspects: []string{"1"}, PaneBlock: "9"})); *asked != 2 || len(again.Agents) != 1 {
+		t.Fatalf("the fresh answer was not cached: %d asks", *asked)
+	}
+}
+
+func TestAPaneAdoptsTheAgentsOfAPaneThatIsGoneAtStartAndOnRefresh(t *testing.T) {
+	g, dirs := agentGateway(t)
+	file := filepath.Join(dirs.State, AgentsFile)
+	putAgents(t, file,
+		model.AgentEntry{Block: "1", PaneBlock: "6"},
+		model.AgentEntry{Block: "2", PaneBlock: "7"},
+		model.AgentEntry{Block: "3", PaneBlock: ""})
+	live := []string{"1", "2", "3", "7", "9"}
+	lsCounter(t, g, &live)
+	got := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{PaneBlock: "9"}))
+	if got.Err != nil || len(got.Agents) != 3 || got.Agents[0].PaneBlock != "9" || got.Agents[1].PaneBlock != "7" || got.Agents[2].PaneBlock != "9" {
+		t.Fatalf("pruned %+v", got)
+	}
+	if stored, _ := ReadAgents(file); !slices.Equal(stored, got.Agents) {
+		t.Errorf("stored %+v", stored)
+	}
+	// On refresh: Pane 7 goes away, and Pane 9 takes its agent.
+	live = []string{"1", "2", "3", "9"}
+	g.lsLive = nil
+	refreshed := as[model.AgentsRefreshed](t, run(t, g, model.RefreshAgents{PaneBlock: "9"}))
+	if refreshed.Err != nil || refreshed.Agents[1].PaneBlock != "9" {
+		t.Fatalf("refreshed %+v", refreshed)
+	}
+}
+
+func TestAPaneNeverAdoptsWhileTheStartingPaneIsAliveOrItHasNoBlock(t *testing.T) {
+	g, dirs := agentGateway(t)
+	file := filepath.Join(dirs.State, AgentsFile)
+	putAgents(t, file, model.AgentEntry{Block: "2", PaneBlock: "7"}, model.AgentEntry{Block: "3", PaneBlock: "6"})
+	live := []string{"2", "3", "7", "9"}
+	lsCounter(t, g, &live)
+	got := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{PaneBlock: "9"}))
+	if got.Agents[0].PaneBlock != "7" || got.Agents[1].PaneBlock != "9" {
+		t.Fatalf("pruned %+v", got.Agents)
+	}
+	putAgents(t, file, model.AgentEntry{Block: "4", PaneBlock: "5"})
+	live = append(live, "4")
+	if blind := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{})); blind.Agents[2].PaneBlock != "5" {
+		t.Fatalf("a Pane with no block adopted: %+v", blind.Agents)
+	}
+}
+
+func TestAdoptingLeavesAnEntryAnotherPaneTookInTheMeantime(t *testing.T) {
+	g, dirs := agentGateway(t)
+	file := filepath.Join(dirs.State, AgentsFile)
+	putAgents(t, file, model.AgentEntry{Block: "2", PaneBlock: "6"})
+	g.runTern = func(context.Context, []string) ([]byte, error) {
+		// Pane 8 adopts the entry while this Pane's tern ls is answering; Pane 8 is not in this answer.
+		if _, err := UpdateAgents(file, func(l []model.AgentEntry) []model.AgentEntry { l[0].PaneBlock = "8"; return l }); err != nil {
+			t.Fatal(err)
+		}
+		return lsOf("2", "9"), nil
+	}
+	got := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{PaneBlock: "9"}))
+	if got.Err != nil || len(got.Agents) != 1 || got.Agents[0].PaneBlock != "8" {
+		t.Fatalf("pruned %+v", got)
 	}
 }
 

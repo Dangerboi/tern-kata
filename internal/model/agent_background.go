@@ -49,24 +49,17 @@ func agentPlaced(m Model, msg AgentPlaced) Model {
 }
 
 // sendAgentsBack is the rule for going back: an agent this Pane started that is a background agent and open goes back to the hidden
-// session when the relay shows it working after waiting_input, which means its user answered it. An agent that is idle or has
+// session when a relay moves it from waiting_input to working, which means its user answered it. A second window reporting
+// the same state is no move. An agent that is idle or has
 // exited stays where it is, and so does every other Pane's agent (that Pane sends its own back).
 func sendAgentsBack(m Model) (Model, []Cmd) {
 	if m.PaneBlock == "" {
 		return m, nil
 	}
-	stateIn := func(states []AgentState, block string) AgentStateWord {
-		for _, s := range states {
-			if s.Block == block {
-				return s.State
-			}
-		}
-		return ""
-	}
 	var cmds []Cmd
 	for _, e := range m.AgentMapping {
 		if e.Background && e.Open && e.PaneBlock == m.PaneBlock &&
-			stateIn(m.Agents.States, e.Block) == AgentWorking && stateIn(m.Agents.Previous, e.Block) == AgentWaitingInput {
+			m.Agents.answered(e.Block) {
 			cmds = append(cmds, SendAgentBack{Block: e.Block, IssueRef: e.IssueRef})
 		}
 	}
