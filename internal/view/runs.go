@@ -65,7 +65,7 @@ func runs(m model.Model, now time.Time) tern.Element {
 		empty = emptyState("runs", "No runs for this job", "It has not run yet.", cardButton("all-runs", model.ModeRuns, model.FilterRunsByJob, "Every run", false))
 	}
 	list := ui.List{CommonWithoutMax: scrollerCommon("runs"), Max: fillMax, Empty: ui.T("Loading runs…"), Children: cards}
-	children = append(children, listOrEmpty(list, m.Runs.Loading, empty))
+	children = append(children, listAndEmpty(list, m.Runs.Loading, empty)...)
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapSM, children)
 }
 
