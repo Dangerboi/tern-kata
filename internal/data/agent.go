@@ -516,10 +516,11 @@ func (g *Gateway) sendAgentBack(ctx context.Context, cmd model.SendAgentBack) mo
 }
 
 // closeAgent closes the agent's block with `tern close`, then drops its entry and prompt file from agents.json as it stands now.
-// When tern fails the entry stays, and so does an agent whose entry reads open now: another Pane opened it since this one decided.
+// When tern fails the entry stays, and so does an agent whose entry reads open now (another Pane opened it since this one decided)
+// or is no background agent (this Pane asks about a split or tab agent, which another Pane may have sent to the background).
 func (g *Gateway) closeAgent(ctx context.Context, cmd model.CloseAgent) model.AgentClosed {
 	if file, _, err := g.agentStatePaths(); err == nil {
-		if list, err := ReadAgents(file); err == nil && slices.ContainsFunc(list, func(e model.AgentEntry) bool { return e.Block == cmd.Block && e.Open }) {
+		if list, err := ReadAgents(file); err == nil && slices.ContainsFunc(list, func(e model.AgentEntry) bool { return e.Block == cmd.Block && (e.Open || !e.Background) }) {
 			return model.AgentClosed{Block: cmd.Block, Agents: list, Kept: true}
 		}
 	}

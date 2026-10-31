@@ -21,9 +21,18 @@ func attentionPane() model.Model {
 	}
 }
 
+// relay feeds one relayed list and returns the commands but the re-reads of agents.json and Issue statuses, which these tests are
+// not about.
 func relay(t *testing.T, m model.Model, states ...model.AgentState) (model.Model, []model.Cmd) {
 	t.Helper()
-	return model.Update(m, model.AgentStatesMsg{States: states})
+	m, cmds := model.Update(m, model.AgentStatesMsg{States: states})
+	return m, slices.DeleteFunc(cmds, func(c model.Cmd) bool {
+		switch c.(type) {
+		case model.RefreshAgents, model.ReadAgentIssue:
+			return true
+		}
+		return false
+	})
 }
 
 func st(block string, state model.AgentStateWord, last string) model.AgentState {

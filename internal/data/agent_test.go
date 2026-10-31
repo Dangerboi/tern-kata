@@ -916,6 +916,23 @@ func TestClosingSkipsAnAgentWhoseEntryReadsOpenNow(t *testing.T) {
 	}
 }
 
+func TestClosingKeepsASplitAgentAndClosesOneAnotherPaneSentToTheBackground(t *testing.T) {
+	g, dirs := agentGateway(t)
+	file := seedAgent(t, dirs, model.AgentEntry{Block: "31"})
+	calls := ternScript(g, map[string]func() ([]byte, error){"close": ternOut(`{"block":31}`)})
+	got := as[model.AgentClosed](t, run(t, g, model.CloseAgent{Block: "31"}))
+	if got.Err != nil || !got.Kept || len(got.Agents) != 1 || len(*calls) != 0 {
+		t.Fatalf("split agent: %+v, ran %q", got, *calls)
+	}
+	if _, err := UpdateAgents(file, func(l []model.AgentEntry) []model.AgentEntry { l[0].Background = true; return l }); err != nil {
+		t.Fatal(err)
+	}
+	got = as[model.AgentClosed](t, run(t, g, model.CloseAgent{Block: "31"}))
+	if got.Err != nil || got.Kept || len(got.Agents) != 0 || len(*calls) != 1 {
+		t.Fatalf("background agent: %+v, ran %q", got, *calls)
+	}
+}
+
 func TestRecordingAnAgentInTheHiddenSessionCanMarkItBackground(t *testing.T) {
 	g, dirs := agentGateway(t)
 	file := seedAgent(t, dirs, model.AgentEntry{Block: "31", Open: true})

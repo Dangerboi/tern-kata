@@ -12,8 +12,8 @@ type CloseAgent struct{ Block string }
 func (CloseAgent) cmd() {}
 
 // AgentClosed answers CloseAgent. Agents is agents.json after the entry went; Err carries Tern's words for a close that failed,
-// and then the entry stays. Kept says the entry was open in agents.json as it stands now, so nothing was closed and Agents is
-// the file as read.
+// and then the entry stays. Kept says the entry was open in agents.json as it stands now, or no background agent there, so
+// nothing was closed and Agents is the file as read.
 type AgentClosed struct {
 	Block  string
 	Agents []AgentEntry
@@ -71,17 +71,19 @@ func agentFinished(states []AgentState, block string) bool {
 	return false
 }
 
-// closeFinishedAgents is the rule for ending a Background agent: the Pane that started it closes its block once the agent is in the
-// background and not open (by its entry and by the relay, which shows an agent another Pane opened), its Issue is closed and the relay shows it idle or exited. An Issue the Collection does not list is
-// read through the Daemon by its Project and UID, and only for an agent that just finished, when the Issues change or while its
-// status is not known; never while a read of it is in flight.
+// closeFinishedAgents is the rule for ending a Background agent: the Pane that started it closes its block once the agent is not
+// open (by its entry and, for a background agent, by the relay, which shows an agent another Pane opened), its Issue is closed and
+// the relay shows it idle or exited. A split or tab agent is asked about once too, since another Pane may have sent it to the
+// background without any relay saying so: the gateway reads agents.json and closes only a background agent. An Issue the
+// Collection does not list is read through the Daemon by its Project and UID, and only for an agent that just finished, when the
+// Issues change or while its status is not known; never while a read of it is in flight.
 func closeFinishedAgents(m Model, trigger agentCloseTrigger) (Model, []Cmd) {
 	if m.PaneBlock == "" {
 		return m, nil
 	}
 	var cmds []Cmd
 	for _, e := range m.AgentMapping {
-		if !e.Background || e.Open || m.Agents.seenShown(e.Block) || e.PaneBlock != m.PaneBlock ||
+		if e.Open || (e.Background && m.Agents.seenShown(e.Block)) || e.PaneBlock != m.PaneBlock ||
 			!agentFinished(m.Agents.States, e.Block) || slices.Contains(m.AgentClose.tried, e.Block) {
 			continue
 		}
@@ -123,7 +125,11 @@ func agentClosed(m Model, msg AgentClosed) Model {
 		return m
 	}
 	if msg.Kept {
-		m.AgentClose.tried = slices.DeleteFunc(slices.Clone(m.AgentClose.tried), func(b string) bool { return b == msg.Block })
+		// An agent the file does not call background stays tried: it is asked again when a re-read shows it became one.
+		background := slices.ContainsFunc(msg.Agents, func(e AgentEntry) bool { return e.Block == msg.Block && e.Background })
+		if background {
+			m.AgentClose.tried = slices.DeleteFunc(slices.Clone(m.AgentClose.tried), func(b string) bool { return b == msg.Block })
+		}
 	}
 	m.AgentMapping = msg.Agents
 	return m

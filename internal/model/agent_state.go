@@ -71,6 +71,9 @@ type AgentStatesRelay struct {
 	// flagging holds the blocks whose open flag is being written; placing those with an OpenAgent or SendAgentBack out.
 	flagging []string
 	placing  []string
+	// recheck holds the blocks of this Pane's agents that no entry calls background and whose user answered them: when agents.json
+	// is read again, one that another Pane has since sent to the background goes back at once.
+	recheck []string
 }
 
 // apply merges msg into the states. mapped says whether a block is in the Agent mapping.

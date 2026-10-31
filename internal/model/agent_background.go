@@ -69,6 +69,29 @@ func sendAgentsBack(m Model) (Model, []Cmd) {
 	return m, cmds
 }
 
+// followBackground is what a re-read of agents.json settles for the agents another Pane may have sent to the background, which
+// no relay shows: one whose user answered it (agentStatesRelay.recheck) goes back when it is now a background agent that is open
+// or shown, and ending a finished background agent is decided again. A close that was refused because its agent was no background
+// agent in the file is tried again for one that now is. before is the mapping the file replaced.
+func followBackground(m Model, before []AgentEntry) (Model, []Cmd) {
+	became := func(block string) bool {
+		return slices.ContainsFunc(before, func(e AgentEntry) bool { return e.Block == block && !e.Background }) &&
+			slices.ContainsFunc(m.AgentMapping, func(e AgentEntry) bool { return e.Block == block && e.Background })
+	}
+	m.AgentClose.tried = slices.DeleteFunc(slices.Clone(m.AgentClose.tried), became)
+	var cmds []Cmd
+	for _, e := range m.AgentMapping {
+		if e.Background && (e.Open || m.Agents.seenShown(e.Block)) && e.PaneBlock == m.PaneBlock && m.PaneBlock != "" &&
+			slices.Contains(m.Agents.recheck, e.Block) {
+			cmds = append(cmds, SendAgentBack{Block: e.Block, IssueRef: e.IssueRef})
+			m = placeAgent(m, e.Block)
+		}
+	}
+	m.Agents.recheck = nil
+	m, ended := closeFinishedAgents(m, closeOnRelay)
+	return m, append(cmds, ended...)
+}
+
 // placeAgent marks block as being moved by this Pane, so no relay changes its open flag until the move is answered.
 func placeAgent(m Model, block string) Model {
 	m.Agents.placing = append(slices.Clone(m.Agents.placing), block)
