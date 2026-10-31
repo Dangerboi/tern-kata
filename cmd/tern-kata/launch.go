@@ -349,7 +349,7 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 		return LaunchPlan{}, fmt.Errorf("recur: --stop takes no schedule flags")
 	case plan.Subcommand == "run" && len(operands) != 1:
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata run <job-uid>")
-	case plan.Subcommand == "worker" && !settlesHeldRun(operands, plan.Takeover) && (len(operands) > 1 || len(operands) == 1 && !slices.Contains([]string{"status", "doctor", "init", "add", "edit", "upgrade", "stop", "supervised"}, operands[0])):
+	case plan.Subcommand == "worker" && !settlesHeldRun(operands, plan.Takeover) && (len(operands) > 1 || len(operands) == 1 && (!slices.Contains(workerForms, operands[0]) || slices.Contains(heldRunForms, operands[0]))):
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata worker [--takeover] | tern-kata worker init | tern-kata worker add | tern-kata worker edit | tern-kata worker upgrade | tern-kata worker status [--json] | tern-kata worker stop [--now] | tern-kata worker supervised | tern-kata worker doctor | tern-kata worker resume <run-uid> | tern-kata worker abandon <run-uid>")
 	case plan.Subcommand == "worker" && plan.Now && !slices.Equal(operands, []string{"stop"}):
 		return LaunchPlan{}, fmt.Errorf("worker: --now applies to `tern-kata worker stop` only")
@@ -418,9 +418,12 @@ func parseValueFlag(args []string, i *int, names []string, given *map[string]str
 	return true, nil
 }
 
+// heldRunForms are the worker operands that take a run uid as a second operand; alone they are no command.
+var heldRunForms = []string{"resume", "abandon"}
+
 // settlesHeldRun reports whether operands are `resume <run-uid>` or `abandon <run-uid>`, a form that takes no --takeover.
 func settlesHeldRun(operands []string, takeover bool) bool {
-	return len(operands) == 2 && (operands[0] == "resume" || operands[0] == "abandon") && !takeover
+	return len(operands) == 2 && slices.Contains(heldRunForms, operands[0]) && !takeover
 }
 
 // initFlagNames are the flags of `worker init` that set a value of the written file.

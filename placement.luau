@@ -1,7 +1,7 @@
 --!strict
 
--- Where a background agent's tab goes in a window's tab order, as plain data: no Tern call is made here, so the rule is tested
--- by `luau smoke/placement_test.luau`. window.luau takes one snapshot of the window per relay pass, asks `plan` for the moves
+-- Where an agent's tab goes in a window's tab order, as plain data: no Tern call is made here, so the rule is tested
+-- by `luau test/placement_test.luau`. window.luau takes one snapshot of the window per relay pass, asks `plan` for the moves
 -- and makes them.
 
 export type TabRec = { id: number, session: number, position: number }
@@ -113,10 +113,9 @@ local function applyMove(tabs: { TabRec }, tab: TabRec, position: number)
 end
 
 -- The agents to try in this pass and the tab moves they bring. An agent pane not in `placed` whose command carries the marker
--- is tried once, whatever the result. Its tab moves only when it is not in the hidden session and the run of tabs at the end
--- of its session (candidates, and agent tabs not handled yet: a pane not in `placed` whose running line carries the marker,
--- even if no agent is listed for it) contains it and the tab directly before that run holds no kata Pane: Tern's append
--- already sits right of a kata Pane, possibly placed exactly by the host window. The home is `kataPaneFor` the marker.
+-- is tried once, whatever the result; its tab is a candidate unless it is in the hidden session. `unplacedTabs` picks which
+-- candidates move and `kataPaneFor` the marker gives the home. Reorders `snapshot.tabs` in place as the moves are planned, so
+-- the caller passes records it will not use again.
 function M.plan(snapshot: Snapshot): Plan
     local paneById: { [number]: PaneRec } = {}
     local pending: { [number]: boolean } = {}
@@ -143,12 +142,9 @@ function M.plan(snapshot: Snapshot): Plan
     end
     local moves: { Move } = {}
     if next(candidates) == nil then return {tried = tried, moves = moves} end
-    local tabs: { TabRec } = {}
+    local tabs = snapshot.tabs
     local tabById: { [number]: TabRec } = {}
-    for i, info in snapshot.tabs do
-        tabs[i] = {id = info.id, session = info.session, position = info.position}
-        tabById[info.id] = tabs[i]
-    end
+    for _, info in tabs do tabById[info.id] = info end
     for _, id in unplacedTabs(tabs, candidates, pending, kataTabs) do
         local home = M.kataPaneFor(snapshot.panes, starters[id], snapshot.focused)
         local homeTab = if home and home.tab then tabById[home.tab] else nil
