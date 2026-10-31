@@ -2,14 +2,19 @@
 # Runs the project's checks: static (gofmt, go vet and golangci-lint for Linux and Windows, the build and the release
 # cross-builds), test (go test) or smoke (smoke/run.sh); no argument runs all three.
 # The static checks run side by side; each prints "CHECK <name> ok" or "CHECK <name> FAIL" (after its output) when it ends.
-# CHECK_OUT (default: a temporary folder) receives the go test -json stream as gotest.jsonl, the built binaries under bin/
+# CHECK_OUT (default: a temporary folder, deleted on exit) receives the go test -json stream as gotest.jsonl, the built binaries under bin/
 # and each static check's output under log/.
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
 cd "$repo"
 export CGO_ENABLED=0
-out=${CHECK_OUT:-$(mktemp -d)}
+if [[ -n ${CHECK_OUT:-} ]]; then
+  out=$CHECK_OUT
+else
+  out=$(mktemp -d)
+  trap 'rm -rf "$out"' EXIT
+fi
 mkdir -p "$out/bin" "$out/log"
 
 check() { # check <name> <command...>: starts the check in the background and adds it to pids
@@ -55,8 +60,19 @@ static() {
   return "$status"
 }
 
+# Prints what a failed go test run reported: build errors, then the output of each failed test and package.
+failures='
+  [.[] | select(.Action == "fail") | [.Package, .Test]] as $failed
+  | .[]
+  | select(
+      .Action == "build-output"
+      or (.Action == "output" and ([.Package, .Test] | IN($failed[])))
+      or (.Action == "output" and .Test == null and ([.Package, null] | IN($failed[])))
+    )
+  | .Output
+'
 tests() {
-  go test -json ./... >"$out/gotest.jsonl" || { jq -r 'select(.Action == "fail" and .Test == null) | "FAIL \(.Package)"' "$out/gotest.jsonl"; return 1; }
+  go test -json ./... >"$out/gotest.jsonl" || { jq -js "$failures" "$out/gotest.jsonl"; return 1; }
 }
 
 smoke() { ./smoke/run.sh; }
