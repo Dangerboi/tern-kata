@@ -35,7 +35,7 @@ type CalendarView struct {
 	Cursor, Value, Other, Today string
 }
 
-// CalendarView reports the open calendar of the card on top.
+// ShownCalendar reports the open calendar of the card on top.
 func (m Model) ShownCalendar() (CalendarView, bool) {
 	entry, ok := m.topEntry()
 	if !ok || !m.DateCalendar.Open || m.DateCalendar.Card != entry.card {
