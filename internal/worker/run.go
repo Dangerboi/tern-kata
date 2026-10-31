@@ -400,11 +400,6 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 	if err := os.MkdirAll(sessionFolder(sp.dir), 0o700); err != nil {
 		return w.hold(j, HoldExecutionError, err.Error())
 	}
-	if attempt > 1 && j.Resume != nil {
-		if err := keepAttemptOutput(w.store.hooks, sp.dir, attempt-1); err != nil {
-			return w.hold(j, HoldExecutionError, err.Error())
-		}
-	}
 	cmd := exec.Command(program, agentArgs(sp.profile, sp.dir, promptFile, resumeID)...)
 	cmd.Dir = cwd
 	cmd.Env = childEnv(j.Actor, secrets)

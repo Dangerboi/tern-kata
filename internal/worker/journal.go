@@ -555,9 +555,23 @@ func (s *Store) Scan() (journals []*Journal, quarantined []string, err error) {
 			failed = append(failed, fmt.Errorf("run %s: %w", e.Name(), rerr))
 			continue
 		}
+		s.dropFromGates(e.Name())
 		quarantined = append(quarantined, e.Name())
 	}
 	return journals, quarantined, errors.Join(failed...)
+}
+
+// dropFromGates removes a run from every job's closing set: a quarantined run is vetoed by its own folder, and
+// abandoning it must open its job's gate without a restart (ADR-0007).
+func (s *Store) dropFromGates(uid string) {
+	s.gateMu.Lock()
+	defer s.gateMu.Unlock()
+	for key, set := range s.closing {
+		delete(set, uid)
+		if len(set) == 0 {
+			delete(s.closing, key)
+		}
+	}
 }
 
 // Quarantined is where a damaged journal of uid lives.

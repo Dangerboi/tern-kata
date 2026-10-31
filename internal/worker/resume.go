@@ -80,6 +80,11 @@ func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, err
 	}
 	generation := state.Generation
 	by = cmp.Or(by, ps.actor)
+	// The held attempt's output is set aside before the resume is accepted: a refusal keeps the hold and its reason, and
+	// the new attempt never opens the held output for writing.
+	if err := keepAttemptOutput(w.store.hooks, w.attemptDir(j), j.attempt()); err != nil {
+		return RunTransition{}, fmt.Errorf("run %s cannot be resumed: %w", uid, err)
+	}
 	updated, err := w.store.Update(uid, "resume-accepted", func(j *Journal) error {
 		// Checked again under the journal's lock: a request that is not this worker's own cannot slip in between.
 		return w.life(j).acceptResume(j, resumeTerms{By: by, Generation: generation, At: w.clock.Now().UTC(), Tokens: w.heldTokens, SessionID: w.sessionID})
@@ -100,7 +105,11 @@ func (w *Worker) heldTokens(j *Journal) (in, out *int64) {
 	if r := j.Result; r != nil && (r.InputTokens != nil || r.OutputTokens != nil) {
 		return r.InputTokens, r.OutputTokens
 	}
-	r := readOutput(filepath.Join(w.attemptDir(j), "output.jsonl"))
+	attempt := j.attempt()
+	r := readOutput(filepath.Join(w.attemptDir(j), fmt.Sprintf("output.attempt%d.jsonl", attempt)))
+	if r.InputTokens == nil && r.OutputTokens == nil {
+		r = readOutput(filepath.Join(w.attemptDir(j), "output.jsonl"))
+	}
 	return r.InputTokens, r.OutputTokens
 }
 
