@@ -4,7 +4,7 @@
 
 ![The Dates card over the Board, with "+1w" resolving to 2026-11-01](../images/dates-card.png)
 
-`tab` moves between the fields, `enter` saves and `esc` cancels. A field takes:
+`tab` moves between the fields, `enter` saves and `esc` cancels. `ctrl+d` in a field opens a calendar beside it: the arrow keys move by a day or a week, `enter` or a click picks the date and `esc` closes the calendar. Typing a date works as before. A field takes:
 
 | Input | Meaning |
 |---|---|
@@ -18,7 +18,7 @@ A muted line under the field shows the date it resolves to with its weekday (`20
 
 ## In the Create card
 
-The Create card (`n`, and `N` for a child Issue) has the same two fields after Priority, in tab order, with the same input forms, weekday preview and refusal naming the field (nothing is created). The dates go into the one create request as the new Issue's `scheduled_on` and `deadline_on` metadata; a field left blank sends none. Retrying a failed create reuses its idempotency key, and editing a date makes a new request.
+The Create card (`n`, and `N` for a child Issue) has the same two fields after Priority, in tab order, with the same input forms, the same `ctrl+d` calendar, weekday preview and refusal naming the field (nothing is created). The dates go into the one create request as the new Issue's `scheduled_on` and `deadline_on` metadata; a field left blank sends none. Retrying a failed create reuses its idempotency key, and editing a date makes a new request.
 
 ## Saving
 
