@@ -122,3 +122,22 @@ func TestAnAgentOfAnUnknownSplitPromptFileReReadsAgentsJSONOnceAndEveryNameShape
 		}
 	}
 }
+
+func TestTheBadgeIndexAnswersAsTheBadgePerIssue(t *testing.T) {
+	m := model.Model{
+		AgentMapping: []model.AgentEntry{entry("a", "1", 5), entry("b", "2", 1), entry("a", "3", 1), entry("a", "4", 9), entry("c", "5", 2), entry("b", "6", 3)},
+		Agents: model.AgentStatesRelay{Received: true, States: []model.AgentState{{Block: "1", State: "working"}, {Block: "3", State: "waiting_input"},
+			{Block: "4", State: "working"}, {Block: "2", State: "idle"}, {Block: "6", State: "idle"}}},
+	}
+	index := m.AgentBadges()
+	for _, uid := range []string{"a", "b", "c", "none"} {
+		want, wantOK := m.AgentBadgeFor(uid)
+		got, ok := index.For(uid)
+		if ok != wantOK || got != want {
+			t.Errorf("%s: index %+v (%v), badge %+v (%v)", uid, got, ok, want, wantOK)
+		}
+	}
+	if _, ok := (model.Model{}).AgentBadges().For("a"); ok {
+		t.Error("a badge without a mapping")
+	}
+}

@@ -110,9 +110,12 @@ func issues(m model.Model, now time.Time) tern.Element {
 	columns := m.VisibleColumns()
 	rows := m.VisibleRows()
 	cols := listColumns{ownerShown: !(slices.Contains(columns, model.ColumnList) && slices.Contains(columns, model.ColumnDetail)), id: 1, owner: ownerWidth}
-	for _, row := range rows {
-		cols.fit(utf8.RuneCountInString(idCell(row)), displayWidth(listOwner(m, row, now)))
+	owners := make([]string, len(rows))
+	for i, row := range rows {
+		owners[i] = listOwner(m, row, now)
+		cols.fit(utf8.RuneCountInString(idCell(row)), displayWidth(owners[i]))
 	}
+	lookups := rowLookups{lanes: m.LaneList(), badges: m.AgentBadges()}
 	items := make([]tern.Element, 0, len(rows)+len(m.Groups))
 	groups := make(map[string]model.IssueGroup, len(m.Issues))
 	for _, group := range m.Groups {
@@ -127,7 +130,7 @@ func issues(m model.Model, now time.Time) tern.Element {
 			items = append(items, ui.Text{Common: ui.Common{Key: "group." + group.ID}, Spans: []ui.Span{{T: group.Title, S: "strong"}}})
 			shownGroups[group.ID] = true
 		}
-		items = append(items, issueRow(m, row, row.UID == m.SelectedUID, stripeRole(i), cols, now))
+		items = append(items, issueRow(row, owners[i], lookups, row.UID == m.SelectedUID, stripeRole(i), cols, now))
 	}
 	selected := ""
 	if m.SelectedUID != "" {
@@ -298,10 +301,16 @@ func (c *listColumns) fit(id, owner int) {
 	c.owner = min(max(c.owner, owner), maxBoxWidth)
 }
 
+// rowLookups are what every row of a frame draws from alike, read once: the Lane list and each Issue's Agent badge.
+type rowLookups struct {
+	lanes  []string
+	badges model.AgentBadgeIndex
+}
+
 // issueRow is one Issue: the id, prio, status and title on the left, the
 // title being the cell that gives way, and kids, owner and updated pinned to
 // the right so each column lines up with the header. A blank cell keeps its width.
-func issueRow(m model.Model, row model.IssueRow, selected bool, role string, cols listColumns, now time.Time) tern.Element {
+func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected bool, role string, cols listColumns, now time.Time) tern.Element {
 	tone := ui.ToneNeutral
 	statusStyle := "accent"
 	if model.IsClosed(row.Issue) {
@@ -319,17 +328,16 @@ func issueRow(m model.Model, row model.IssueRow, selected bool, role string, col
 	}
 	title := issueTitle(row.Issue)
 	left := []ui.Span{
-		{T: cell(idCell(row), cols.id), S: toneStyle(issueLaneTone(m, row.Issue))},
+		{T: cell(idCell(row), cols.id), S: toneStyle(issueLaneToneIn(lookups.lanes, row.Issue))},
 		{T: cellGap + cell(prio, prioWidth), S: prioStyle},
 		{T: cellGap + cell(row.Status, statusWidth), S: statusStyle},
 	}
 	// The Agent badge is a span: an Item has one click, and Spans have none, so the badge on a row is not clickable.
-	if badge, ok := m.AgentBadgeFor(row.UID); ok {
+	if badge, ok := lookups.badges.For(row.UID); ok {
 		left = append(left, ui.Span{T: cellGap + badge.Text, S: string(badge.Tone)}, ui.Span{T: " " + title})
 	} else {
 		left = append(left, ui.Span{T: cellGap + title})
 	}
-	owner := listOwner(m, row, now)
 	// A parent's click folds it; a double click on any row opens it. Tern sends the two clicks first, so a parent's fold ends where it began.
 	actions := &ui.Actions{DblClick: OpenRowClick(row.UID)}
 	if row.HasChildren {
