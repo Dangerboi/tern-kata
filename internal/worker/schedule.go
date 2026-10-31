@@ -116,6 +116,13 @@ type busyError struct {
 
 func (e *busyError) Error() string { return e.msg }
 
+// transientError is a refusal that says nothing about the Issue's readiness: a read that failed, a stop, or a Project
+// that admits nothing for now. It leaves a parked occurrence parked.
+type transientError struct{ err error }
+
+func (e *transientError) Error() string { return e.err.Error() }
+func (e *transientError) Unwrap() error { return e.err }
+
 // parkedError is a refusal that waiting cures: the job's existing Issue is someday or scheduled for later (ADR-0002).
 // reason is what `worker status` shows; until is the instant the Issue becomes ready by itself, zero for someday.
 type parkedError struct {
@@ -168,6 +175,8 @@ type jobSchedule struct {
 	// parked is the pending occurrences that last waited for the job's Issue; unlike waiting it survives a restart,
 	// so they are not graced out before admission looks at the Issue again.
 	parked []time.Time
+	// catchup is the policy the last plan applied, which decides how many pending occurrences a park records.
+	catchup string
 }
 
 // checkpoint is projects/<uid>/schedule/<job uid>.json (ADR-0006): everything decided through a time and the
@@ -219,10 +228,12 @@ func (w *Worker) kick(ps *projectState) {
 }
 
 // selectOccurrences applies a job's catchup policy to every occurrence not yet run (ADR-0011). Occurrences within
-// onTimeSlack are never missed. `all` keeps the rest, `latest` only the newest of everything, and `skip` the newest
-// missed one still within grace, plus every missed one in parked, which waits for its Issue and is not graced out.
-// Nothing older than 7 days is kept, and at most 100 (the oldest overflow is dropped).
-func selectOccurrences(cands []time.Time, now time.Time, catchup string, grace time.Duration, parked []time.Time) (keep []time.Time, dropped int) {
+// onTimeSlack are never missed. `all` keeps the rest, `latest` only the newest of everything, and `skip` at most one
+// missed occurrence: the newest one that is still within grace or that waits for its Issue (a parked one is not graced
+// out), so a long park never turns `skip` into `all`. When that one takes over from a parked occurrence it inherits the
+// mark, which is the returned stillParked. Nothing older than 7 days is kept, and at most 100 (the oldest overflow is
+// dropped).
+func selectOccurrences(cands []time.Time, now time.Time, catchup string, grace time.Duration, parked []time.Time) (keep, stillParked []time.Time, dropped int) {
 	var onTime, missed []time.Time
 	for _, c := range cands {
 		switch lateness := now.Sub(c); {
@@ -233,6 +244,7 @@ func selectOccurrences(cands []time.Time, now time.Time, catchup string, grace t
 			missed = append(missed, c)
 		}
 	}
+	inParked := func(t time.Time) bool { return slices.ContainsFunc(parked, t.Equal) }
 	switch catchup {
 	case "all":
 		keep = append(missed, onTime...)
@@ -242,17 +254,28 @@ func selectOccurrences(cands []time.Time, now time.Time, catchup string, grace t
 			keep = keep[len(keep)-1:]
 		}
 	default:
-		for i, m := range missed {
-			if slices.ContainsFunc(parked, m.Equal) || i == len(missed)-1 && now.Sub(m) <= grace {
+		wasParked := slices.ContainsFunc(missed, inParked)
+		for i := len(missed) - 1; i >= 0; i-- {
+			if m := missed[i]; inParked(m) || i == len(missed)-1 && now.Sub(m) <= grace {
 				keep = append(keep, m)
+				if wasParked {
+					stillParked = append(stillParked, m)
+				}
+				break
 			}
 		}
+		stillParked = append(stillParked, slices.DeleteFunc(slices.Clone(parked), func(t time.Time) bool { return !slices.ContainsFunc(onTime, t.Equal) })...)
 		keep = append(keep, onTime...)
 	}
 	if over := len(keep) - catchupMax; over > 0 {
 		keep = keep[over:]
 	}
-	return keep, len(cands) - len(keep)
+	if catchup == "all" || catchup == "latest" {
+		stillParked = slices.DeleteFunc(slices.Clone(parked), func(t time.Time) bool { return !slices.ContainsFunc(keep, t.Equal) })
+	} else {
+		stillParked = slices.DeleteFunc(stillParked, func(t time.Time) bool { return !slices.ContainsFunc(keep, t.Equal) })
+	}
+	return keep, stillParked, len(cands) - len(keep)
 }
 
 // plan brings one job's state up to now: rebuild it when the definition changed, collect the occurrences that became
@@ -336,8 +359,9 @@ func (w *Worker) plan(ps *projectState, job cronjob.Job, now time.Time) {
 		st.through, changed = now, true
 	}
 	d := job.Definition
-	keep, dropped := selectOccurrences(cands, now, d.Catchup, time.Duration(d.GraceSeconds)*time.Second, st.parked)
-	if parked := slices.DeleteFunc(slices.Clone(st.parked), func(t time.Time) bool { return !slices.ContainsFunc(keep, t.Equal) }); !slices.EqualFunc(parked, st.parked, time.Time.Equal) {
+	st.catchup = d.Catchup
+	keep, parked, dropped := selectOccurrences(cands, now, d.Catchup, time.Duration(d.GraceSeconds)*time.Second, st.parked)
+	if !slices.EqualFunc(parked, st.parked, time.Time.Equal) {
 		st.parked, changed = parked, true
 	}
 	if dropped > 0 {
@@ -490,8 +514,12 @@ func (w *Worker) admitDue(ctx context.Context, ps *projectState) {
 		if errors.As(err, &parked) {
 			blocked[d.job] = true
 			st.waiting, st.wakeAt = parked.reason, parked.until
-			if !slices.EqualFunc(st.parked, st.pending, time.Time.Equal) {
-				st.parked = slices.Clone(st.pending)
+			mark := st.pending
+			if st.catchup != "all" && st.catchup != "latest" && len(mark) > 1 { // skip keeps one missed occurrence: the newest
+				mark = mark[len(mark)-1:]
+			}
+			if !slices.EqualFunc(st.parked, mark, time.Time.Equal) {
+				st.parked = slices.Clone(mark)
 				w.saveCheckpoint(ps, d.job, st)
 			}
 			continue
@@ -501,7 +529,8 @@ func (w *Worker) admitDue(ctx context.Context, ps *projectState) {
 		if errors.As(err, &busy) && busy.capacity {
 			return // the Issue is ready and a slot is all it lacks: the parked mark stays so the grace cannot drop it
 		}
-		if len(st.parked) > 0 { // a refusal for another reason is subject to the grace again
+		var transient *transientError
+		if len(st.parked) > 0 && !errors.As(err, &transient) { // a refusal that ends the wait is subject to the grace again
 			st.parked = nil
 			w.saveCheckpoint(ps, d.job, st)
 		}

@@ -181,7 +181,7 @@ func newJournalID() string {
 // empty for a manual run. It returns the existing journal, with created false, when the occurrence was prepared before.
 func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job, occurrence time.Time, occurrenceKey string) (*Journal, bool, error) {
 	if why := w.admitsNothing(ps); why != "" {
-		return nil, false, fmt.Errorf("Project %s admits nothing: %s", ps.cfg.Name, why)
+		return nil, false, &transientError{fmt.Errorf("Project %s admits nothing: %s", ps.cfg.Name, why)}
 	}
 	if job.Native() {
 		return nil, false, fmt.Errorf("job %q is a native job: kata's daemon delivers it, the worker never runs it", job.Name)
@@ -236,7 +236,7 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 		// Readiness is checked before a slot is reserved: an occurrence that waits for its Issue takes none (ADR-0002).
 		issue, err := w.opt.Kata.ShowIssue(ctx, ps.project.ID, issuePolicy.UID)
 		if err != nil {
-			return nil, false, fmt.Errorf("job %q: its Issue could not be read: %w", job.Name, err)
+			return nil, false, &transientError{fmt.Errorf("job %q: its Issue could not be read: %w", job.Name, err)}
 		}
 		if d.Action.Kind != cronjob.ActionNotify { // a notify job has no readiness requirement
 			if !issue.Open() {
@@ -244,7 +244,7 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 			}
 			p, err := w.parked(ctx, issue)
 			if err != nil {
-				return nil, false, fmt.Errorf("job %q: its Issue's planning dates could not be read: %w", job.Name, err)
+				return nil, false, &transientError{fmt.Errorf("job %q: its Issue's planning dates could not be read: %w", job.Name, err)}
 			}
 			if p != nil {
 				if manual {
@@ -261,7 +261,7 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 		defer gate.Unlock()
 		earlier, err := w.gateClosed(job.UID, ps.project.UID)
 		if err != nil {
-			return nil, false, &busyError{fmt.Sprintf("job %q forbids overlap and its runs cannot be read: %v", job.Name, err), false}
+			return nil, false, &transientError{fmt.Errorf("job %q forbids overlap and its runs cannot be read: %w", job.Name, err)}
 		}
 		if earlier != "" {
 			return nil, false, &busyError{fmt.Sprintf("job %q forbids overlap and run %s is not settled", job.Name, earlier), false}
@@ -269,7 +269,7 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 	}
 	if !w.reserve(ps) {
 		if w.isStopping() {
-			return nil, false, errStopping
+			return nil, false, &transientError{errStopping}
 		}
 		return nil, false, &busyError{fmt.Sprintf("Project %s is at capacity (%d); try again when a run ends", ps.cfg.Name, ps.cfg.Capacity), true}
 	}
