@@ -84,6 +84,23 @@ label = "bug"
 	}
 }
 
+func TestViewsListsARenamedBaseProjectByItsCurrentName(t *testing.T) {
+	f := newSubcommandFixture(t)
+	if out, err := f.views(t, "add", "Work", "--base", "project:demo"); err != nil {
+		t.Fatalf("add: %q, %v", out, err)
+	}
+	text, _ := os.ReadFile(viewsFile(t))
+	renamed := strings.Replace(string(text), `project_name = "demo"`, `project_name = "Old name"`, 1)
+	if renamed == string(text) {
+		t.Fatalf("views.toml has no project_name:\n%s", text)
+	}
+	writeViews(t, renamed)
+	out, err := f.views(t)
+	if err != nil || !strings.Contains(out, "project demo") || strings.Contains(out, "Old name") {
+		t.Errorf("list: %q, %v; want the catalog's name", out, err)
+	}
+}
+
 func TestViewsShowSaysWhyWhenTheBaseProjectIsGone(t *testing.T) {
 	f := newSubcommandFixture(t)
 	writeViews(t, "[[view]]\nname = \"Lost\"\nbase = \"project\"\nproject_uid = \"01GONEGONEGONEGONEGONEGONE\"\nproject_name = \"Vanished\"\n")

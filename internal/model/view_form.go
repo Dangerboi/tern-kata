@@ -181,7 +181,7 @@ func updateViewForm(m Model, action Action) (Model, []Cmd) {
 // on. A refusal names its field, focuses it and keeps everything typed.
 func saveViewForm(m Model) (Model, []Cmd) {
 	f := m.ViewForm
-	checked, err := CheckSavedView(SavedView{Name: f.Name, Base: f.Base, Filters: f.Values}, m.Views.List, f.Self)
+	checked, err := CheckSavedViewIn(SavedView{Name: f.Name, Base: f.Base, Filters: f.Values}, m.Views.List, f.Self, m.ProjectFilterName)
 	if err != nil {
 		m.ViewForm.Err = err
 		if refusal, ok := errors.AsType[ViewFieldError](err); ok {

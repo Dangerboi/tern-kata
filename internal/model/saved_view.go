@@ -157,6 +157,20 @@ func CheckSavedView(v SavedView, others []SavedView, self string) (SavedView, er
 	return v, nil
 }
 
+// CheckSavedViewIn is CheckSavedView for a view being written by hand: it also refuses a Project filter that differs from a
+// Project base, which no Issue could match. projectName gives the Project's name for the message, a UID when it knows none.
+// A file already holding such a view still loads, since CheckSavedView alone does not apply the rule.
+func CheckSavedViewIn(v SavedView, others []SavedView, self string, projectName func(uid string) string) (SavedView, error) {
+	v, err := CheckSavedView(v, others, self)
+	if err != nil {
+		return v, err
+	}
+	if v.Base.IsProject() && v.Filters.ProjectUID != "" && v.Filters.ProjectUID != v.Base.ProjectUID {
+		return v, ViewFieldError{FilterProject, fmt.Errorf("Project %q is not the base Project %q, so no Issue would match", projectName(v.Filters.ProjectUID), v.Base.Title)}
+	}
+	return v, nil
+}
+
 // FiltersFor is the view's filters with an owner of @me replaced by actor, which is when the view opens.
 func (v SavedView) FiltersFor(actor string) Filters {
 	f := v.Filters

@@ -186,6 +186,19 @@ func TestViewCardRefusalsNameTheFieldAndKeepTheInput(t *testing.T) {
 	}
 }
 
+func TestViewCardRefusesAProjectFilterThatIsNotTheProjectBase(t *testing.T) {
+	m := newViewCard(t, viewsPane())
+	m.ViewForm.Base = model.ProjectCollection("alpha-uid", "alpha")
+	m.ViewForm.Values.ProjectUID = "beta-uid"
+	m.ViewForm.Field = model.ViewName
+	m = typeText(m, "Fresh")
+	got, cmds := model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
+	const want = `Project "beta-uid" is not the base Project "alpha", so no Issue would match`
+	if len(cmds) != 0 || got.ViewForm.Err == nil || got.ViewForm.Err.Error() != want || got.ViewForm.Field != model.FilterProject || got.ViewForm.Name != "Fresh" {
+		t.Fatalf("cmds=%v err=%v field=%v", cmds, got.ViewForm.Err, got.ViewForm.Field)
+	}
+}
+
 func TestViewCardRefusesAnUnreadFile(t *testing.T) {
 	m := viewsPane()
 	m, _ = model.Update(m, model.ViewsLoaded{Err: errors.New("views.toml: bad")})
