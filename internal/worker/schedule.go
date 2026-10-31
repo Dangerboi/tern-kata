@@ -497,15 +497,15 @@ func (w *Worker) admitDue(ctx context.Context, ps *projectState) {
 			continue
 		}
 		st.waiting, st.wakeAt = "", time.Time{}
-		if len(st.parked) > 0 { // the Issue is ready now; a refusal for another reason is subject to the grace again
+		var busy *busyError
+		if errors.As(err, &busy) && busy.capacity {
+			return // the Issue is ready and a slot is all it lacks: the parked mark stays so the grace cannot drop it
+		}
+		if len(st.parked) > 0 { // a refusal for another reason is subject to the grace again
 			st.parked = nil
 			w.saveCheckpoint(ps, d.job, st)
 		}
-		var busy *busyError
-		if errors.As(err, &busy) {
-			if busy.capacity {
-				return
-			}
+		if busy != nil {
 			blocked[d.job] = true
 			continue
 		}

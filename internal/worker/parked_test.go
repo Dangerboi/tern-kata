@@ -2,6 +2,7 @@ package worker_test
 
 import (
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -129,20 +130,86 @@ func TestAParkedExecuteJobWhoseInstantPassedOnAFullProjectStartsWhenASlotFrees(t
 	instant := h.minuteIn(2 * time.Hour)
 	h.kata.SetIssueDate(t, h.proj, issue.UID, "scheduled_on", instant)
 	busy := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "busy", Prompt: "Do it.", Trigger: interval(2400), Overlap: "allow", Catchup: "all", Timeout: 6000})
-	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "on issue", Prompt: "Do it.", ExistingUID: issue.UID, Trigger: interval(3600), Catchup: "all"})
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "on issue", Prompt: "Do it.", ExistingUID: issue.UID, Trigger: interval(3600)})
 	r := h.start(worker.Hooks{})
 	h.scheduled(r, 2)
 
 	first := h.fire(r, time.Time{}) // the only slot is taken until the run times out
 	h.started(r, busy, 1)
 	startedAt := h.clock.Now()
-	h.fire(r, first) // the occurrence is due and its Issue is not ready
+	parked := h.fire(r, first) // the occurrence is due and its Issue is not ready
 	h.eventually("the occurrence to wait for its Issue", func() bool { return len(h.status(r).Waiting) == 1 })
 	h.advanceTo(instant) // the Issue is ready, the Project is full
 	h.quiet(job, 0)
 
 	h.advanceTo(startedAt.Add(6000*time.Second + 10*time.Second)) // the busy run times out and frees the slot
-	h.waitRuns(job, 1)
+	runs := h.waitRuns(job, 1)
+	if runs[0].OccurrenceKey != worker.OccurrenceKey(parked) {
+		t.Fatalf("the run is for %s, want the parked occurrence %s", runs[0].OccurrenceKey, worker.OccurrenceKey(parked))
+	}
+}
+
+// spinClock counts the waits too short to be anything but a loop with an instant already behind it.
+type spinClock struct {
+	*workertest.ManualClock
+	spins atomic.Int64
+}
+
+func (c *spinClock) After(d time.Duration) <-chan time.Time {
+	if d <= time.Millisecond {
+		c.spins.Add(1)
+	}
+	return c.ManualClock.After(d)
+}
+
+func TestAParkedJobBehindACapacityRefusedJobNeverSpinsTheLoopAndStartsWhenASlotFrees(t *testing.T) {
+	h := newHarness(t, "--stub-hang")
+	h.capacity("1")
+	laterIssue := h.kata.Issue(t, h.proj, "Later")
+	someday := h.kata.Issue(t, h.proj, "Someday")
+	h.kata.SetSomeday(t, h.proj, someday.UID, true)
+	instant := h.minuteIn(5000 * time.Second)
+	h.kata.SetIssueDate(t, h.proj, laterIssue.UID, "scheduled_on", instant)
+	// The holder keeps the only slot until its run times out; its own occurrences wait on the overlap gate, not on capacity.
+	holder := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "holder", Prompt: "Do it.", Trigger: interval(900), Overlap: "forbid", Timeout: 6000})
+	h.kata.CreateJob(t, h.proj, workertest.Job{Name: "ahead", Prompt: "Do it.", ExistingUID: someday.UID, Trigger: interval(1800), Timeout: 60})
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "later", Prompt: "Do it.", ExistingUID: laterIssue.UID, Trigger: interval(3600), Timeout: 60})
+	spin := &spinClock{ManualClock: h.clock}
+	r := h.start(worker.Hooks{}, func(o *worker.Options) { o.Clock = spin })
+	h.scheduled(r, 3)
+
+	first := h.fire(r, time.Time{}) // the only slot is taken until the holder's run times out
+	h.started(r, holder, 1)
+	startedAt := h.clock.Now()
+	// Each jump lands on the occurrences, so none is graced out before its first look.
+	h.advanceTo(first.Add(901 * time.Second)) // the occurrence of "ahead" waits for its Issue
+	h.eventually("the occurrence of ahead to wait", func() bool { return len(h.status(r).Waiting) == 1 })
+	h.advanceTo(first.Add(2701 * time.Second)) // the occurrence of the parked job comes after it
+	h.eventually("both occurrences to wait for their Issues", func() bool { return len(h.status(r).Waiting) == 2 })
+
+	h.kata.SetSomeday(t, h.proj, someday.UID, false) // "ahead" is ready and refused for capacity, ahead of the parked job
+	h.advanceTo(instant.Add(time.Minute))            // the parked job's wake instant is now behind the clock
+	h.eventually("the refused job to stop waiting for its Issue", func() bool { return len(h.status(r).Waiting) <= 1 })
+	time.Sleep(200 * time.Millisecond)
+	before := spin.spins.Load()
+	for range 20 {
+		h.clock.Advance(time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
+	}
+	if n := spin.spins.Load() - before; n != 0 {
+		t.Fatalf("the Project loop woke %d times in a row on an instant already past", n)
+	}
+	h.quiet(job, 0)
+
+	h.advanceTo(startedAt.Add(6000*time.Second + 10*time.Second)) // the holder's run times out and frees the slot
+	// The occurrences ahead run first, each until its 60 s timeout.
+	var runs []cronjob.Run
+	h.within("the parked job to run", func() bool {
+		h.clock.Advance(61 * time.Second)
+		runs = h.jobRuns(job)
+		return len(runs) > 0
+	})
+	h.settled(runs[0].UID)
 }
 
 func TestAManualRunOnAParkedIssueIsRefusedAndTakesNoSlot(t *testing.T) {
