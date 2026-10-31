@@ -21,7 +21,7 @@ func (w *Worker) abandonLost(ctx context.Context, lost *noRunError, by string) (
 	var ps *projectState
 	var unreadable []string
 	for _, cand := range w.projects {
-		if why := w.admitsNothing(cand); why != "" {
+		if why := w.blockedReason(cand); why != "" {
 			unreadable = append(unreadable, fmt.Sprintf("Project %s admits nothing: %s", cand.cfg.Name, why))
 			continue
 		}
