@@ -1,13 +1,9 @@
 package worker
 
 import (
-	"bufio"
-	"bytes"
 	"cmp"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -171,64 +167,4 @@ func (w *Worker) sessionOf(j *Journal) (folder, id string) {
 		}
 	}
 	return "", ""
-}
-
-// outputTail joins the assistant messages of an output.jsonl and keeps the last max bytes.
-func outputTail(path string, max int) string {
-	f, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-	var texts []string
-	r := bufio.NewReaderSize(f, 64<<10)
-	for {
-		line, err := r.ReadBytes('\n')
-		if line = bytes.TrimSpace(line); len(line) > 0 && line[0] == '{' {
-			var ev struct {
-				Type    string          `json:"type"`
-				Message json.RawMessage `json:"message"`
-			}
-			if json.Unmarshal(line, &ev) == nil && ev.Type == "message_end" {
-				if m, ok := assistantMessage(ev.Message); ok {
-					if t := strings.TrimSpace(m.text()); t != "" {
-						texts = append(texts, t)
-					}
-				}
-			}
-		}
-		if err != nil {
-			break
-		}
-	}
-	out := strings.Join(texts, "\n\n")
-	if len(out) > max {
-		out = strings.ToValidUTF8(out[len(out)-max:], "")
-	}
-	return out
-}
-
-// fileTail is the last max bytes of a text file, empty when it cannot be read.
-func fileTail(path string, max int) string {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return ""
-	}
-	if len(raw) > max {
-		raw = raw[len(raw)-max:]
-	}
-	return strings.TrimSpace(strings.ToValidUTF8(string(raw), ""))
-}
-
-// stderrFallback is the end of stderr.log as plain text for a run with no journal tail yet. The file keeps only the
-// first stderrFileCap bytes, so a file at the cap holds no end and shows nothing rather than text from the middle.
-func stderrFallback(path string) string {
-	raw, err := os.ReadFile(path)
-	if err != nil || len(raw) >= stderrFileCap {
-		return ""
-	}
-	if len(raw) > 2048 {
-		raw = dropPartialLine(raw[len(raw)-2048:], raw[len(raw)-2049] == '\n')
-	}
-	return plainText(string(raw))
 }
