@@ -17,19 +17,11 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - run: test -z "$(gofmt -l cmd internal)" || { gofmt -l cmd internal; exit 1; }
-      - run: go vet ./...
-      - run: GOOS=windows go vet ./...
       # Built with the job's Go: a golangci-lint built with an older Go fails to load a newer toolchain's standard library.
-      - uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.15.0
-          install-mode: goinstall
-      # The action builds golangci-lint under the step's env, so GOOS=windows there makes a binary this runner cannot start
-      # (exit 126): build it for the runner, then lint for Windows.
       - run: |
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
-          GOOS=windows "$(go env GOPATH)/bin/golangci-lint" run ./...
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - run: scripts/check.sh static
   test:
     runs-on: ubuntu-latest
     steps:
