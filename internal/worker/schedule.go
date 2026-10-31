@@ -216,8 +216,9 @@ func (w *Worker) kick(ps *projectState) {
 
 // selectOccurrences applies a job's catchup policy to every occurrence not yet run (ADR-0011). Occurrences within
 // onTimeSlack are never missed. `all` keeps the rest, `latest` only the newest of everything, and `skip` the newest
-// missed one still within grace. Nothing older than 7 days is kept, and at most 100 (the oldest overflow is dropped).
-func selectOccurrences(cands []time.Time, now time.Time, catchup string, grace time.Duration) (keep []time.Time, dropped int) {
+// missed one still within grace, plus every missed one in parked, which waits for its Issue and is not graced out.
+// Nothing older than 7 days is kept, and at most 100 (the oldest overflow is dropped).
+func selectOccurrences(cands []time.Time, now time.Time, catchup string, grace time.Duration, parked []time.Time) (keep []time.Time, dropped int) {
 	var onTime, missed []time.Time
 	for _, c := range cands {
 		switch lateness := now.Sub(c); {
@@ -237,8 +238,10 @@ func selectOccurrences(cands []time.Time, now time.Time, catchup string, grace t
 			keep = keep[len(keep)-1:]
 		}
 	default:
-		if n := len(missed); n > 0 && now.Sub(missed[n-1]) <= grace {
-			keep = append(keep, missed[n-1])
+		for i, m := range missed {
+			if slices.ContainsFunc(parked, m.Equal) || i == len(missed)-1 && now.Sub(m) <= grace {
+				keep = append(keep, m)
+			}
 		}
 		keep = append(keep, onTime...)
 	}
@@ -328,7 +331,11 @@ func (w *Worker) plan(ps *projectState, job cronjob.Job, now time.Time) {
 		st.through, changed = now, true
 	}
 	d := job.Definition
-	keep, dropped := selectOccurrences(cands, now, d.Catchup, time.Duration(d.GraceSeconds)*time.Second)
+	var parked []time.Time // occurrences waiting for the job's Issue outlive their grace
+	if st.waiting != "" {
+		parked = st.pending
+	}
+	keep, dropped := selectOccurrences(cands, now, d.Catchup, time.Duration(d.GraceSeconds)*time.Second, parked)
 	if dropped > 0 {
 		w.opt.Log("Project %s: job %s (catchup %s): %d missed occurrence(s) not run", ps.cfg.Name, job.Name, cmp.Or(d.Catchup, "skip"), dropped)
 	}
