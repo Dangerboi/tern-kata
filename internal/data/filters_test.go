@@ -157,7 +157,7 @@ func TestConcurrentDefaultFilterSavesOfDifferentProjectsKeepEach(t *testing.T) {
 	}
 }
 
-func TestADefaultFilterSaveAppliesOnTopOfAnotherPanesSaveOfTheFile(t *testing.T) {
+func TestUpdateTablesAppliesOnTopOfAnotherPanesSaveOfTheFile(t *testing.T) {
 	f := newConfigFixture(t)
 	path := f.write(t, "filters.toml", "[\"a\"]\nname = \"a\"\nstatus = \"open\"\n")
 	var changed bool
@@ -179,7 +179,7 @@ func TestADefaultFilterSaveAppliesOnTopOfAnotherPanesSaveOfTheFile(t *testing.T)
 	}
 }
 
-func TestADefaultFilterSaveOfAFileThatKeepsChangingIsRefusedWithAReason(t *testing.T) {
+func TestUpdateTablesOfAFileThatKeepsChangingIsRefusedWithAReason(t *testing.T) {
 	f := newConfigFixture(t)
 	path := f.write(t, "filters.toml", "[\"a\"]\nname = \"a\"\n")
 	n := 0
