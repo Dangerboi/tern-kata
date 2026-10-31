@@ -2,6 +2,7 @@ package driver_test
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/driver"
@@ -95,26 +96,18 @@ func TestBoardShowsTheDefaultLanesAndANoticeForAnUnreadableFile(t *testing.T) {
 	if s.Model.Notice == "" {
 		t.Error("an unreadable file left no Notice")
 	}
-	var cmds []model.Cmd
-	s.Model.Notice = ""
-	s.Model, cmds = s.Model.SaveLaneList([]string{"x"}, 0, 0)
-	if len(cmds) != 0 || s.Model.Notice == "" {
-		t.Errorf("a save to an unreadable file was not refused with its error: %v, Notice %q", cmds, s.Model.Notice)
-	}
 }
 
-func TestBoardSaveAsksForTheProjectsList(t *testing.T) {
-	s := boardPane(t, boardCard("a"))
-	_, cmds := s.Model.SaveLaneList([]string{"in-review"}, 0, 0)
-	want := model.SaveLanes{ProjectUID: "p", ProjectName: "work", Lanes: []string{"in-review"}}
-	if len(cmds) != 1 || !equalSave(cmds[0], want) {
-		t.Fatalf("save asked %#v, want %#v", cmds, want)
+func TestASaveToAnUnreadableFileFromTheLanesCardIsRefusedWithItsError(t *testing.T) {
+	s := step(t, boardPane(t, boardCard("a")), model.LanesLoaded{ProjectUID: "p", Shared: true, Lanes: []string{"x"}, ProjectID: 7, Revision: 4,
+		Err: errors.New("lanes.toml: bad syntax")}).State
+	s = step(t, s, key("shift+b")).State
+	s = step(t, step(t, step(t, s, key("tab")).State, key("tab")).State, key("tab")).State
+	s = step(t, s, key("left")).State
+	out := step(t, s, key("enter"))
+	if len(out.Cmds) != 0 || out.State.Model.LanesForm.Err == nil || !strings.Contains(out.State.Model.LanesForm.Err.Error(), "bad syntax") {
+		t.Errorf("a save to an unreadable file was not refused with its error: %v, %v", out.Cmds, out.State.Model.LanesForm.Err)
 	}
-}
-
-func equalSave(cmd model.Cmd, want model.SaveLanes) bool {
-	got, ok := cmd.(model.SaveLanes)
-	return ok && got.ProjectUID == want.ProjectUID && got.ProjectName == want.ProjectName && len(got.Lanes) == 1 && got.Lanes[0] == want.Lanes[0]
 }
 
 func TestRemovingALaneLabelMovesItsIssuesWithoutACommand(t *testing.T) {

@@ -197,7 +197,9 @@ func updateLanesFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 			return m, nil
 		}
 		form.Saving, form.Err = true, nil
-		return m.SaveLaneList(lanes, days, cards)
+		save := SaveLanes{ProjectUID: m.Collection.ProjectUID, ProjectName: m.Collection.Title, Lanes: slices.Clone(lanes), DoneDays: days, DoneCards: cards}
+		form.Sent = save
+		return m, []Cmd{save}
 	case bound && binding.Action == LanesStopSharing:
 		if !m.SharesLanes() && form.ProjectID != 0 {
 			form.Err = errors.New("The Project shares no Lane list.")
