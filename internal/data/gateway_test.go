@@ -1864,7 +1864,7 @@ func TestRecurrenceConflictingThroughAllAttemptsSaysSoPlainly(t *testing.T) {
 	if _, err := c.ChangeRecurrence(context.Background(), model.ChangeRecurrenceCmd{RecurrenceUID: "r", RecurrenceTerms: terms, Opened: terms}); err == nil || err.Error() != want {
 		t.Fatalf("change: %v", err)
 	}
-	if _, err := c.StopRecurrence(context.Background(), model.StopRecurrenceCmd{RecurrenceUID: "r", Opened: terms}); err == nil || err.Error() != stopExhausted {
+	if _, err := c.StopRecurrence(context.Background(), model.StopRecurrenceCmd{RecurrenceUID: "r", Opened: terms}); err == nil || err.Error() != "The Recurrence kept changing; nothing was stopped. Try again." {
 		t.Fatalf("stop: %v", err)
 	}
 }

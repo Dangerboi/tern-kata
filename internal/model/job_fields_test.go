@@ -1,6 +1,7 @@
 package model_test
 
 import (
+	"errors"
 	"slices"
 	"testing"
 
@@ -30,5 +31,16 @@ func TestJobCardTabSkipsTheFieldsThatDoNotApplyAndStepsItsChoices(t *testing.T) 
 	m, _ = model.Update(m, model.ChooseMsg{Field: model.JobFieldEnabled, Index: 0})
 	if !m.JobForm.Enabled {
 		t.Fatalf("choosing Yes left Enabled off")
+	}
+}
+
+func TestSteppingAJobChoiceWithNoChoicesKeepsTheError(t *testing.T) {
+	var m model.Model
+	m.JobForm = model.JobFormState{Open: true, Field: model.JobFieldWorkflow, Kind: "workflow", Trigger: cronjob.TriggerCron, Enabled: true,
+		Catchup: model.CatchupLatest, WorkflowsRead: true, Err: errors.New("pick the workflow to run.")}
+	for _, chord := range []string{"space", "left", "right"} {
+		if next, _ := clickPress(m, chord); next.JobForm.Err == nil {
+			t.Errorf("%s on a workflow picker with no workflows dismissed the error", chord)
+		}
 	}
 }

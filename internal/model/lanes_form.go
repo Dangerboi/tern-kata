@@ -36,15 +36,7 @@ var lanesTable = fieldTable[LanesFormState]{
 		textField(LanesNames, func(f *LanesFormState) *string { return &f.Text }),
 		textField(LanesDays, func(f *LanesFormState) *string { return &f.Days }),
 		textField(LanesCards, func(f *LanesFormState) *string { return &f.Cards }),
-		choiceField(LanesShare,
-			func(f *LanesFormState, _ bool) { f.Share = !f.Share },
-			func(f *LanesFormState, i int) bool {
-				if i != 0 && i != 1 {
-					return false
-				}
-				f.Share = i == 1
-				return true
-			}),
+		yesNoField(LanesShare, func(f *LanesFormState) *bool { return &f.Share }),
 	},
 }
 

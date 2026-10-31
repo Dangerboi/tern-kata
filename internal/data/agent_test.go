@@ -1054,6 +1054,33 @@ func writeAgents(t *testing.T, path string, entries ...model.AgentEntry) {
 	}
 }
 
+// watchClock makes g's clock tick 11 s on every read, past what a listing is trusted for, so no caller finds the cache fresh,
+// and sends on the returned channel at each read. liveBlocks reads the clock while it holds its lock, so a caller that has sent
+// is about to join or start the running ask before anything else can finish it. The channel holds every read a test makes.
+func watchClock(g *Gateway) <-chan struct{} {
+	reads := make(chan struct{}, 64)
+	var n atomic.Int64
+	base := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+	g.lsLive = map[string]bool{"stale": true}
+	g.now = func() time.Time {
+		reads <- struct{}{}
+		return base.Add(time.Duration(n.Add(1)) * 11 * time.Second)
+	}
+	return reads
+}
+
+// waitReads waits for n more clock reads. Failing takes its time, so it only counts when a caller never got that far.
+func waitReads(t *testing.T, reads <-chan struct{}, n int) {
+	t.Helper()
+	for range n {
+		select {
+		case <-reads:
+		case <-time.After(10 * time.Second):
+			t.Fatal("a caller never reached the listing")
+		}
+	}
+}
+
 func TestLiveBlocksCallerReturnsAtItsOwnDeadlineWhileAnotherAskRuns(t *testing.T) {
 	g, _ := agentGateway(t)
 	release := make(chan struct{})
@@ -1069,17 +1096,12 @@ func TestLiveBlocksCallerReturnsAtItsOwnDeadlineWhileAnotherAskRuns(t *testing.T
 	slow := make(chan error, 1)
 	go func() { _, _, err := g.liveBlocks(context.Background(), false); slow <- err }()
 	<-started
-	time.AfterFunc(600*time.Millisecond, func() { close(release) })
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	past, cancel := context.WithDeadline(context.Background(), time.Unix(0, 0))
 	defer cancel()
-	begun := time.Now()
-	_, _, err := g.liveBlocks(ctx, false)
-	if !errors.Is(err, context.DeadlineExceeded) {
+	if _, _, err := g.liveBlocks(past, false); !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("the short caller got %v, want its deadline error", err)
 	}
-	if took := time.Since(begun); took > 400*time.Millisecond {
-		t.Errorf("the short caller returned after %v", took)
-	}
+	close(release)
 	if err := <-slow; err != nil {
 		t.Errorf("the slow caller: %v", err)
 	}
@@ -1087,15 +1109,19 @@ func TestLiveBlocksCallerReturnsAtItsOwnDeadlineWhileAnotherAskRuns(t *testing.T
 
 func TestLiveBlocksConcurrentCallersShareOneAsk(t *testing.T) {
 	g, _ := agentGateway(t)
+	reads := watchClock(g)
 	release := make(chan struct{})
+	var once sync.Once
+	t.Cleanup(func() { once.Do(func() { close(release) }) })
 	var asked atomic.Int32
 	g.runTern = func(context.Context, []string) ([]byte, error) {
 		asked.Add(1)
 		<-release
 		return lsOf("1"), nil
 	}
+	const callers = 5
 	var wg sync.WaitGroup
-	for range 5 {
+	for range callers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -1104,10 +1130,109 @@ func TestLiveBlocksConcurrentCallersShareOneAsk(t *testing.T) {
 			}
 		}()
 	}
-	time.Sleep(50 * time.Millisecond)
-	close(release)
+	// Each caller reads the clock once to look at the cache; the one that starts the ask reads it once more. All of them
+	// get there while the ask is still held, or one of them is waiting on a lock the running ask holds.
+	waitReads(t, reads, callers+1)
+	once.Do(func() { close(release) })
 	wg.Wait()
 	if n := asked.Load(); n != 1 {
 		t.Errorf("tern ls ran %d times, want 1", n)
+	}
+}
+
+func TestACallerJoiningARunningAskIsToldItsAnswerMayBeOlderThanItsCall(t *testing.T) {
+	g, _ := agentGateway(t)
+	reads := watchClock(g)
+	release := make(chan struct{})
+	started := make(chan struct{}, 1)
+	g.runTern = func(context.Context, []string) ([]byte, error) {
+		started <- struct{}{}
+		<-release
+		return lsOf("1"), nil
+	}
+	type answer struct {
+		cached bool
+		err    error
+	}
+	first, joiner := make(chan answer, 1), make(chan answer, 1)
+	go func() { _, cached, err := g.liveBlocks(context.Background(), false); first <- answer{cached, err} }()
+	<-started
+	waitReads(t, reads, 2)
+	go func() { _, cached, err := g.liveBlocks(context.Background(), false); joiner <- answer{cached, err} }()
+	waitReads(t, reads, 1)
+	close(release)
+	if got := <-first; got.err != nil || got.cached {
+		t.Errorf("the caller that started the ask: %+v, want its own fresh answer", got)
+	}
+	if got := <-joiner; got.err != nil || !got.cached {
+		t.Errorf("the caller that joined the ask: %+v, want an answer that may be older than its call", got)
+	}
+}
+
+func TestAnAskThatBeganBeforeAnotherAndEndsAfterItDoesNotReplaceItsListing(t *testing.T) {
+	g, _ := agentGateway(t)
+	watchClock(g)
+	release := make(chan struct{})
+	started := make(chan struct{}, 1)
+	var asks atomic.Int32
+	g.runTern = func(context.Context, []string) ([]byte, error) {
+		if asks.Add(1) == 1 {
+			started <- struct{}{}
+			<-release
+			return lsOf("1"), nil
+		}
+		return lsOf("2"), nil
+	}
+	older := make(chan struct{})
+	go func() { g.liveBlocks(context.Background(), false); close(older) }()
+	<-started
+	if live, _, err := g.liveBlocks(context.Background(), true); err != nil || !live["2"] {
+		t.Fatalf("the fresh ask: %v, %v", live, err)
+	}
+	close(release)
+	<-older
+	g.lsMu.Lock()
+	defer g.lsMu.Unlock()
+	if !g.lsLive["2"] || g.lsLive["1"] {
+		t.Errorf("the cached listing is %v, want the one from the ask that began later", g.lsLive)
+	}
+}
+
+func TestRefreshingDoesNotAdoptAnAgentFromAListingThatBeganBeforeItsPaneOpened(t *testing.T) {
+	g, dirs := agentGateway(t)
+	file := filepath.Join(dirs.State, AgentsFile)
+	putAgents(t, file, model.AgentEntry{Block: "1", PaneBlock: "7"})
+	reads := watchClock(g)
+	release := make(chan struct{})
+	started := make(chan struct{}, 1)
+	var asks atomic.Int32
+	g.runTern = func(context.Context, []string) ([]byte, error) {
+		if asks.Add(1) == 1 {
+			started <- struct{}{}
+			<-release
+			return lsOf("1", "7", "9"), nil // listed before Pane 8 opened
+		}
+		return lsOf("1", "2", "7", "8", "9"), nil
+	}
+	first := make(chan struct{})
+	go func() { run(t, g, model.RefreshAgents{PaneBlock: "9"}); close(first) }()
+	<-started
+	waitReads(t, reads, 2)
+	// Pane 8 opens and starts an agent while that listing is still being taken.
+	putAgents(t, file, model.AgentEntry{Block: "2", PaneBlock: "8"})
+	second := make(chan struct{})
+	go func() { run(t, g, model.RefreshAgents{PaneBlock: "9"}); close(second) }()
+	waitReads(t, reads, 1)
+	close(release)
+	<-first
+	<-second
+	stored, err := ReadAgents(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range stored {
+		if e.Block == "2" && e.PaneBlock != "8" {
+			t.Fatalf("Pane 8's agent was adopted by Pane 9: %+v", stored)
+		}
 	}
 }

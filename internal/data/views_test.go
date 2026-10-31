@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Dangerboi/tern-kata/internal/guardedfile"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
@@ -129,8 +130,12 @@ func TestViewsUnreadableFileIsLeftAlone(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), s.Path) {
 		t.Fatalf("read error %v", err)
 	}
-	// A token of the bad text, however a caller got it, still writes nothing.
-	tok := ViewsToken{text: bad}
+	// A token of the bad text, as a raw guardedfile read gives it, still writes nothing.
+	raw, err := guardedfile.Read(s.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tok := ViewsToken{read: raw}
 	for name, write := range map[string]error{
 		"add":     s.Add(tok, model.SavedView{Name: "A", Base: model.Collection{View: "today"}}),
 		"replace": s.Replace(tok, "x", model.SavedView{Name: "A", Base: model.Collection{View: "today"}}),

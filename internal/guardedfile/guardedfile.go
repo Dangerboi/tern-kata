@@ -20,9 +20,6 @@ var ErrChanged = errors.New("file changed since it was read")
 // Token is what a read saw: the file's text, empty for a missing file. Callers treat it as opaque.
 type Token struct{ text string }
 
-// TokenOf is the token of a file holding text.
-func TokenOf(text string) Token { return Token{text: text} }
-
 // Text is the file's text at the read.
 func (t Token) Text() string { return t.text }
 
@@ -69,4 +66,29 @@ func Write(path string, dirMode fs.FileMode, token Token, next []byte) error {
 		}
 		return nil
 	}})
+}
+
+// updateTries bounds how often Update reads the file again and applies its change on top when another writer got in between.
+const updateTries = 20
+
+// Update reads path, lets change return the file's next bytes from what was read, and writes them with Write. When another
+// writer changed the file in between, the whole change runs again on the new read, so change must tolerate being called more
+// than once and must start its own results afresh. A change that returns an error ends Update with it and writes nothing. A
+// file that still changes after updateTries reads is an error wrapping ErrChanged, with the other writer's file left as it
+// is. Failures of the read and the write other than ErrChanged are returned as they are.
+func Update(path string, dirMode fs.FileMode, change func(Token) ([]byte, error)) error {
+	for range updateTries {
+		token, err := Read(path)
+		if err != nil {
+			return err
+		}
+		next, err := change(token)
+		if err != nil {
+			return err
+		}
+		if err := Write(path, dirMode, token, next); !errors.Is(err, ErrChanged) {
+			return err
+		}
+	}
+	return fmt.Errorf("%s kept changing, so nothing was written: %w", path, ErrChanged)
 }

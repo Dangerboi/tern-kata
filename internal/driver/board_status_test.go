@@ -34,7 +34,7 @@ func TestTheBoardReadsWithoutTheStatusFilterAndTheIssuesPageWithIt(t *testing.T)
 	if got := out.State.Model.Filters.Status; got != "open" {
 		t.Errorf("the status filter is %q on the Board, want it kept", got)
 	}
-	board := feed(t, out.State, model.LanesLoaded{ProjectUID: "p"}).State
+	board := feed(t, out.State, newestLanes{ProjectUID: "p"}).State
 	board = step(t, board, model.SnapshotLoaded{Request: read.Request, Query: read.Query, Snapshot: model.Snapshot{Issues: []model.Issue{boardCard("a"), closed}}, LocalDate: boardToday, TimeZone: "UTC"}).State
 	wantLane(t, board, 5, "Done", "done1")
 
@@ -56,7 +56,7 @@ func boardFilterCard(t *testing.T) driver.State {
 	t.Helper()
 	out := step(t, statusDefaultPane(t, boardCard("a")), key("b"))
 	loaded, _ := snapshotFor(out.Cmds, boardCard("a"))
-	return feed(t, out.State, loaded, model.LanesLoaded{ProjectUID: "p"}, key("f")).State
+	return feed(t, out.State, loaded, newestLanes{ProjectUID: "p"}, key("f")).State
 }
 
 func drawsStatusRow(t *testing.T, s driver.State) bool {
@@ -101,7 +101,7 @@ func TestTheBoardsFilterCardHasNoStatusRowButKeepsTheValue(t *testing.T) {
 }
 
 func TestTheBoardsFilterLineOmitsStatusAndKeepsDefault(t *testing.T) {
-	board := feed(t, statusDefaultPane(t, boardCard("a")), key("b"), model.LanesLoaded{ProjectUID: "p"}).State
+	board := feed(t, statusDefaultPane(t, boardCard("a")), key("b"), newestLanes{ProjectUID: "p"}).State
 	if got := filterLineText(t, board); strings.Contains(got, "status") {
 		t.Errorf("the Board's filter line = %q, want no status", got)
 	}
@@ -118,7 +118,7 @@ func TestTheBoardsFilterLineOmitsStatusAndKeepsDefault(t *testing.T) {
 }
 
 func TestSDoesNothingOnTheBoardAndIsNotInItsFooter(t *testing.T) {
-	board := feed(t, statusDefaultPane(t, boardCard("a", "needs-triage")), key("b"), model.LanesLoaded{ProjectUID: "p"}).State
+	board := feed(t, statusDefaultPane(t, boardCard("a", "needs-triage")), key("b"), newestLanes{ProjectUID: "p"}).State
 	lane := feed(t, board, key("right"), key("enter")).State
 	for name, s := range map[string]driver.State{"Board": board, "Lane view": lane} {
 		out := step(t, s, key("s"))

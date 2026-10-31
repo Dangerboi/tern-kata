@@ -335,6 +335,30 @@ func popupCards() []popupCard {
 			},
 		},
 		{
+			name: "Token", card: model.CardToken, textField: model.TokenName,
+			tabOrder: []model.Field{model.TokenActor, model.TokenName, model.TokenExpires, model.TokenScope, model.TokenIssue, model.TokenTeams, model.TokenFile},
+			states: []cardState{{"", func() model.Model {
+				m := model.Model{Cols: 160, Page: model.PageCredentials, Credentials: model.CredentialsState{Available: true}}
+				m, _ = clickPress(m, "n")
+				return m
+			}, model.ModeTokenForm}},
+			graft: func(dst *model.Model, src model.Model) { dst.TokenForm = src.TokenForm },
+			busy:  func(m *model.Model) { m.TokenForm.Saving = true },
+			field: func(m model.Model) model.Field { return m.TokenForm.Field },
+			text:  func(m model.Model, f model.Field) string { return m.TokenForm.Values.Value(f) },
+		},
+		{
+			name: "View", card: model.CardView, textField: model.ViewName,
+			states: []cardState{{"", func() model.Model {
+				m, _ := menuKeys(viewsPane(), "down", "enter", "end", "enter")
+				return m
+			}, model.ModeViewForm}},
+			graft: func(dst *model.Model, src model.Model) { dst.ViewForm = src.ViewForm },
+			busy:  func(m *model.Model) { m.ViewForm.Saving = true },
+			field: func(m model.Model) model.Field { return m.ViewForm.Field },
+			text:  func(m model.Model, _ model.Field) string { return m.ViewForm.Name },
+		},
+		{
 			name: "Menu", card: model.CardPicker,
 			states: []cardState{{"", openedMenu, model.ModePicker}},
 			graft:  func(dst *model.Model, src model.Model) { dst.Picker = src.Picker },

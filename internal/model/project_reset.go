@@ -22,11 +22,9 @@ func (m Model) resetPagesForProject() Model {
 func jobsFilledFor(m Model) string { return m.Jobs.ProjectUID }
 
 func resetJobs(m Model, uid string) Model {
-	reads := m.Jobs.reads
-	reads.Discard()
 	m.Jobs = JobsState{
 		ProjectUID: uid,
-		reads:      reads,
+		reads:      m.Jobs.reads.Discarded(),
 		stale:      true,
 		pick:       m.Jobs.pick,
 		rev:        m.Jobs.rev,
@@ -38,11 +36,9 @@ func resetJobs(m Model, uid string) Model {
 func runsFilledFor(m Model) string { return m.Runs.ProjectUID }
 
 func resetRuns(m Model, uid string) Model {
-	reads := m.Runs.reads
-	reads.Discard()
 	m.Runs = RunsState{
 		ProjectUID: uid,
-		reads:      reads,
+		reads:      m.Runs.reads.Discarded(),
 		stale:      true,
 	}
 	return m

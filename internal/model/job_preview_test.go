@@ -37,9 +37,7 @@ func TestThePreviewOfAnExistingIntervalJobWithAStartPointCountsFromIt(t *testing
 	if len(p.Runs) != 3 || p.Note != "" {
 		t.Fatalf("runs %v, note %q", p.Runs, p.Note)
 	}
-	want, _ := cronjob.Interval(900, created)
-	next := want.Next(now)
-	if got := next.UTC().Format("Mon 2006-01-02 15:04 MST"); p.Runs[0] != got {
-		t.Errorf("first run %q, want %q", p.Runs[0], got)
+	if want := "Thu 2026-10-08 12:10 UTC"; p.Runs[0] != want {
+		t.Errorf("first run %q, want %q", p.Runs[0], want)
 	}
 }

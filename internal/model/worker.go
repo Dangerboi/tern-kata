@@ -202,7 +202,7 @@ func (m Model) askWorker(after time.Duration) (Model, Cmd) {
 // workerLoaded applies the answer to the latest ask. On the Runs Page it asks again while a run is running, and when a pause
 // ended it has the newest Runs read so the Run's own record follows what the worker reports.
 func workerLoaded(m Model, msg WorkerLoaded) (Model, []Cmd) {
-	if current, _ := m.Worker.reads.Answer(msg.Request); !current {
+	if !m.Worker.reads.IsCurrent(msg.Request) {
 		return m, nil
 	}
 	w := &m.Worker

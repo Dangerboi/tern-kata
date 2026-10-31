@@ -55,35 +55,21 @@ func readLanes(path string) (lanesFile, error) {
 	return file, nil
 }
 
-// saveAttempts bounds how often a save reads the file again and applies its change on top when another writer changed it
-// between the read and the write.
-const saveAttempts = 20
-
 // updateTables applies change to the file's untyped tables, so a save can write back keys tern-kata doesn't know, and writes
 // the result only while the file is still the text that was read. A file another Pane changed meanwhile is read again and
-// change applied on top of it, so no save loses another's; a file that keeps changing is refused with saying so. A missing file
+// change applied on top of it, so no save loses another's; a file that keeps changing is refused, saying so. A missing file
 // is an empty one and a file that cannot be read or parsed is never written.
 func updateTables(path string, change func(file map[string]any)) error {
-	for range saveAttempts {
-		token, err := guardedfile.Read(path)
-		if err != nil {
-			return fmt.Errorf("%s: %w", path, err)
-		}
+	return guardedfile.Update(path, 0o755, func(token guardedfile.Token) ([]byte, error) {
 		file := map[string]any{}
 		if _, err := toml.Decode(token.Text(), &file); err != nil {
-			return fmt.Errorf("%s: %w", path, err)
+			return nil, fmt.Errorf("%s: %w", path, err)
 		}
 		change(file)
 		var buf bytes.Buffer
-		if err := toml.NewEncoder(&buf).Encode(file); err != nil {
-			return err
-		}
-		err = guardedfile.Write(path, 0o755, token, buf.Bytes())
-		if !errors.Is(err, guardedfile.ErrChanged) {
-			return err
-		}
-	}
-	return fmt.Errorf("%s kept changing while saving; nothing was written. Try again.", filepath.Base(path))
+		err := toml.NewEncoder(&buf).Encode(file)
+		return buf.Bytes(), err
+	})
 }
 
 // loadLanes is the Project's Lane list in its read order: the Project's shared list (tern.lanes) when it holds a valid one, else

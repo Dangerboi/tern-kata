@@ -27,8 +27,15 @@ local started_text: string? = nil
 -- A `worker supervised` question is out; its answer arms the next look.
 local asking = false
 local warned_missing = false
+local warned_status = false
 local ASK_LIMIT_MS = 10000
 local handle: TimerHandle? = nil
+
+-- The next start comes at once and at the shortest delay, as after a healthy run.
+local function reset_backoff()
+    delay = MIN_DELAY
+    next_start = 0
+end
 
 local function join(...: string): string
     return table.concat({...}, sep)
@@ -150,21 +157,24 @@ local function launch(binary: string, config: string)
 end
 
 -- The answer of `tern-kata worker supervised`: status 0 and worker.toml's text when the supervision rule holds, status 1
--- when it does not. Any other status (a timeout, a binary that cannot run) says nothing about the rule, so the state stays.
+-- when it does not. Any other status (a timeout, a binary that cannot run) says nothing about the rule, so the state stays;
+-- a status that is no timeout is logged once per daemon: an older tern-kata binary exits 2 on `worker supervised`, and then
+-- the worker never starts until the binary is updated.
 local function answered(binary: string, result: ProcessResult)
     asking = false
     if result.status ~= 0 then
         if result.status == 1 and not result.timed_out then
-            delay = MIN_DELAY
-            next_start = 0
+            reset_backoff()
             started_text = nil
+        elseif not result.timed_out and not warned_status then
+            warned_status = true
+            tern.log.warn("tern-kata: `worker supervised` exited with status " .. result.status .. " (" .. last_line(result.stderr) .. "), so the worker is not started; the tern-kata binary is probably older than this plugin: update it (install.sh or install.ps1)")
         end
         return arm(POLL_MS)
     end
     local config = result.stdout
     if started_text ~= nil and config ~= started_text then
-        delay = MIN_DELAY
-        next_start = 0
+        reset_backoff()
         started_text = nil
     end
     launch(binary, config)

@@ -48,7 +48,7 @@ func lanesField(t *testing.T, s driver.State) string {
 
 func TestBOpensTheLanesCardPrefilledAndEscClosesItUnchanged(t *testing.T) {
 	board := boardPane(t, boardCard("a", "needs-triage"))
-	board = step(t, board, model.LanesLoaded{ProjectUID: "p", Lanes: []string{"in-review", "shipping"}}).State
+	board = step(t, board, newestLanes{ProjectUID: "p", Lanes: []string{"in-review", "shipping"}}).State
 	open := step(t, board, key("shift+b"))
 	if open.State.Model.CurrentMode() != model.ModeLanesForm || open.State.Model.TopCard() != model.CardLanes || len(open.Cmds) != 0 {
 		t.Fatalf("mode %s card %v cmds %v", open.State.Model.CurrentMode(), open.State.Model.TopCard(), open.Cmds)
@@ -156,14 +156,14 @@ func TestBWaitsForTheSavedLaneListToLoad(t *testing.T) {
 	if out.State.Model.TopCard() != model.NoCard || out.State.Model.Notice == "" {
 		t.Fatalf("card %v notice %q, want no card and a Notice", out.State.Model.TopCard(), out.State.Model.Notice)
 	}
-	out = step(t, step(t, s, model.LanesLoaded{ProjectUID: "p", Lanes: []string{"in-review"}}).State, key("shift+b"))
+	out = step(t, step(t, s, newestLanes{ProjectUID: "p", Lanes: []string{"in-review"}}).State, key("shift+b"))
 	if out.State.Model.TopCard() != model.CardLanes {
 		t.Fatalf("card %v after the load answered", out.State.Model.TopCard())
 	}
 }
 
 func TestBOpensTheLanesCardInTheLaneViewOfANarrowPane(t *testing.T) {
-	s := feed(t, projectPane(t, 120, boardCard("a", "needs-info")), key("b"), model.LanesLoaded{ProjectUID: "p"}).State
+	s := feed(t, projectPane(t, 120, boardCard("a", "needs-info")), key("b"), newestLanes{ProjectUID: "p"}).State
 	if got := step(t, s, key("shift+b")).State.Model.TopCard(); got != model.CardLanes {
 		t.Fatalf("card %v", got)
 	}
@@ -174,7 +174,7 @@ func TestALoadThatDropsTheNarrowLaneViewsLaneRepicksIt(t *testing.T) {
 	if !strings.Contains(laneHeader(t, s), "Needs info") {
 		t.Fatalf("fixture: header %s", laneHeader(t, s))
 	}
-	s = step(t, s, model.LanesLoaded{ProjectUID: "p", Lanes: []string{"in-review"}}).State
+	s = step(t, s, newestLanes{ProjectUID: "p", Lanes: []string{"in-review"}}).State
 	if got := laneHeader(t, s); !strings.Contains(got, "No lane") || !reflect.DeepEqual(laneRows(t, s), []string{"a"}) {
 		t.Errorf("header %s rows %v, want a under No lane", got, laneRows(t, s))
 	}
@@ -194,7 +194,7 @@ func savingLanesCard(t *testing.T) driver.State {
 }
 
 func TestBWithAnUnreadableFileLeavesANoticeAndNoCard(t *testing.T) {
-	s := step(t, boardPane(t, boardCard("a")), model.LanesLoaded{ProjectUID: "p", Err: errors.New("lanes.toml: bad syntax")}).State
+	s := step(t, boardPane(t, boardCard("a")), newestLanes{ProjectUID: "p", Err: errors.New("lanes.toml: bad syntax")}).State
 	s.Model.Notice = ""
 	out := step(t, s, key("shift+b")).State
 	if out.Model.TopCard() != model.NoCard || !strings.Contains(out.Model.Notice, "bad syntax") {
@@ -273,7 +273,7 @@ func TestLanesCardRefusesDoneLimitsAboveTheMaximumNamingTheField(t *testing.T) {
 }
 
 func TestALoadedDoneLimitAboveTheMaximumCountsAsUnset(t *testing.T) {
-	s := step(t, boardPane(t, boardCard("a")), model.LanesLoaded{ProjectUID: "p", DoneDays: 99999, DoneCards: 501}).State
+	s := step(t, boardPane(t, boardCard("a")), newestLanes{ProjectUID: "p", DoneDays: 99999, DoneCards: 501}).State
 	s = step(t, s, key("shift+b")).State
 	for _, label := range []string{"Days back", "Most cards"} {
 		if text, _ := nodeText(t, s, fieldLabeled(t, s.Model, label)); text != "" {
@@ -304,7 +304,7 @@ func TestAnEarlierCancelledSavesResultLeavesTheNewerCardAlone(t *testing.T) {
 }
 
 func TestALoadedDoneLimitAtTheMaximumStaysSet(t *testing.T) {
-	s := step(t, boardPane(t, boardCard("a")), model.LanesLoaded{ProjectUID: "p", DoneDays: 3650, DoneCards: 500}).State
+	s := step(t, boardPane(t, boardCard("a")), newestLanes{ProjectUID: "p", DoneDays: 3650, DoneCards: 500}).State
 	if s.Model.Board.DoneDays != 3650 || s.Model.Board.DoneCards != 500 {
 		t.Errorf("limits %d days %d cards, want 3650 and 500", s.Model.Board.DoneDays, s.Model.Board.DoneCards)
 	}

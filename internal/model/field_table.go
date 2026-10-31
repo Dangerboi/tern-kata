@@ -32,6 +32,8 @@ type formField[F any] struct {
 	// reach the whole model for a choice whose choices come from it; f is the card's state within m.
 	step   func(m *Model, f *F, back bool)
 	choose func(m *Model, f *F, index int) bool
+	// empty says the choice has no choices right now, so stepping it changes nothing; nil for a choice that always has some.
+	empty func(*F) bool
 	// held reaches the string a choice holds as its value, nil for a choice that holds none as a string.
 	held func(*F) *string
 	// reset sets a choice that can be none to none; nil for a choice that cannot.
@@ -48,6 +50,28 @@ func choiceField[F any](name Field, step func(*F, bool), choose func(*F, int) bo
 	return formField[F]{name: name,
 		step:   func(_ *Model, f *F, back bool) { step(f, back) },
 		choose: func(_ *Model, f *F, index int) bool { return choose(f, index) }}
+}
+
+// cycleIndex is the index after i, or before it when back, in a ring of n.
+func cycleIndex(i, n int, back bool) int {
+	d := 1
+	if back {
+		d = -1
+	}
+	return ((i+d)%n + n) % n
+}
+
+// yesNoField declares a field of two choices, no (index 0) and yes (index 1), that live in the bool at get; stepping flips it.
+func yesNoField[F any](name Field, get func(*F) *bool) formField[F] {
+	return choiceField(name,
+		func(f *F, _ bool) { *get(f) = !*get(f) },
+		func(f *F, i int) bool {
+			if i != 0 && i != 1 {
+				return false
+			}
+			*get(f) = i == 1
+			return true
+		})
 }
 
 // modelChoiceField declares a field of choices that come from the model, such as the Projects of the catalog.
@@ -103,6 +127,9 @@ func (t *fieldTable[F]) stepFocused(m *Model, back bool) bool {
 	field := t.find(*t.focus(f))
 	if field == nil || field.step == nil || (t.hidden != nil && t.hidden(*m, field.name)) {
 		return false
+	}
+	if field.empty != nil && field.empty(f) {
+		return true
 	}
 	field.step(m, f, back)
 	*t.err(f) = nil
