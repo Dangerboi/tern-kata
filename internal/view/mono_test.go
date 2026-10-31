@@ -123,3 +123,17 @@ func TestPropertyKeysShareOneBox(t *testing.T) {
 		}
 	}
 }
+
+// The header's labels over the mono cells are mono as well, so a column's header and rows share one box width in px.
+func TestListHeaderLabelsOverMonoCellsAreMono(t *testing.T) {
+	header := render(t, browsing())["main.columns.list.header"]
+	var monos []string
+	for _, run := range styled(header) {
+		if slices.Contains(strings.Fields(run[1]), "mono") {
+			monos = append(monos, strings.TrimSpace(run[0]))
+		}
+	}
+	if want := []string{"#", "prio", "kids", "updated"}; !slices.Equal(monos, want) {
+		t.Errorf("mono header labels %q, want %q", monos, want)
+	}
+}

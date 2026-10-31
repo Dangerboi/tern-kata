@@ -409,15 +409,16 @@ func footer(m model.Model) tern.Element {
 }
 
 // headerRow labels the Issue rows. It is an Item like the rows, so its cells sit
-// where theirs do, and a node of its own, outside the scrolling list.
+// where theirs do, and a node of its own, outside the scrolling list. The labels over the mono cells (id, prio, kids,
+// updated) take the mono token too: the boxes are in em, so a label in another face would start its column at another x.
 func headerRow(cols listColumns) tern.Element {
 	left := []ui.Span{
-		{T: cell("#", cols.id), S: "muted"},
-		{T: cellGap + cell("prio", prioWidth), S: "muted"},
+		{T: cell("#", cols.id), S: "muted mono"},
+		{T: cellGap + cell("prio", prioWidth), S: "muted mono"},
 		{T: cellGap + cell("status", statusWidth), S: "muted"},
 		{T: cellGap + "title", S: "muted"},
 	}
-	return ui.Item{Common: ui.Common{Key: "header", Role: cols.role(), Tone: ui.ToneMuted}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells("kids", "owner", "updated", cols, "muted", "muted")...)}
+	return ui.Item{Common: ui.Common{Key: "header", Role: cols.role(), Tone: ui.ToneMuted}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells("kids", "owner", "updated", cols, "muted mono", "muted")...)}
 }
 
 // listOwner is the owner cell text: the name cut to ownerWidth as before, then " until …" whole when the claim expires.
