@@ -104,7 +104,7 @@ func (c *Client) SharedLanes(ctx context.Context, uid string) (model.LanesLoaded
 		if p.UID != uid {
 			continue
 		}
-		loaded := model.LanesLoaded{ProjectUID: uid, ProjectID: p.ID, Revision: p.Revision}
+		loaded := model.LanesLoaded{ProjectUID: uid, ProjectID: p.ID, Revision: p.Revision, Archived: !p.Active}
 		value, held := p.Metadata[model.SharedLanesKey]
 		if !held || value == nil {
 			return loaded, nil

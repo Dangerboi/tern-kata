@@ -27,6 +27,8 @@ type LanesLoaded struct {
 	Shared              bool
 	// ProjectID and Revision are the Project as the daemon listed it with the list; ProjectID is 0 when it was not read.
 	ProjectID, Revision int64
+	// Archived says the Project is archived: kata still lists it with its list but refuses any change to its metadata.
+	Archived bool
 	// SharedErr is why the Project's shared list was not used: it could not be read, or its value is not a Lane list.
 	SharedErr error
 	Err       error
@@ -86,7 +88,8 @@ func (s ShareLanes) same(o ShareLanes) bool {
 }
 
 // shareLaneList is how the Lanes card shares or stops sharing: one guarded write of the Project's tern.lanes. It is refused
-// when the Project was not read with the list, since the write needs its id and revision.
+// when the Project was not read with the list, since the write needs its id and revision, and when it is archived, which kata
+// refuses.
 func (m Model) shareLaneList(lanes []string, doneDays, doneCards int, stop bool) (Model, []Cmd) {
 	form := &m.LanesForm
 	if form.ProjectID == 0 {
@@ -94,6 +97,10 @@ func (m Model) shareLaneList(lanes []string, doneDays, doneCards int, stop bool)
 		if m.Board.sharedErr != nil {
 			form.Err = fmt.Errorf("The Project could not be read, so its shared Lane list cannot be written: %w", m.Board.sharedErr)
 		}
+		return m, nil
+	}
+	if m.Board.archived {
+		form.Err = errors.New("An archived Project's shared Lane list can't be changed. Restore the Project first, or save to This machine.")
 		return m, nil
 	}
 	share := ShareLanes{Workspace: m.Workspace, Actor: m.Actor, ProjectUID: m.Collection.ProjectUID, ProjectID: form.ProjectID,
@@ -146,6 +153,7 @@ func lanesLoaded(m Model, msg LanesLoaded) Model {
 		m.Board.DoneCards = 0
 	}
 	m.Board.Shared, m.Board.projectID, m.Board.revision, m.Board.sharedErr = msg.Shared, msg.ProjectID, msg.Revision, msg.SharedErr
+	m.Board.archived = msg.Archived
 	m.Board.fileErr, m.Board.loaded = msg.Err, true
 	var notices []string
 	// A shared list that cannot be used is reported once, not on every read that finds it unchanged.

@@ -182,6 +182,7 @@ Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relat
 
 - A blank Done field restores its default (14 days, 20 cards); anything but a positive whole number is refused with a message naming the field.
 - **Save to** is **This machine** (the [Lane list file](#the-lane-list-file)) or **The Project** (its shared list, for everyone on the daemon); `←`/`→` or `space` change it. It starts on the source in use.
+- An archived Project keeps its shared list on the Board, but kata refuses any change to it: **The Project** and `ctrl+x` are refused on the card with that reason, without asking kata. Restore the Project first, or save to **This machine**.
 - `enter` saves to the chosen place and `esc` cancels. `ctrl+x` (or the **Stop sharing** button) removes the Project's shared list, and the Board goes back to this machine's list.
 - Each name is tidied to a label (`In review` reads `in-review`); an empty name, a name over 64 characters and a duplicate are refused with a message naming the entry.
 - Saving an empty field removes the list, which restores the default list.
