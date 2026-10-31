@@ -51,6 +51,7 @@ const (
 	PreviousField           Action = "previous-field"
 	NextChoice              Action = "next-choice"
 	PreviousChoice          Action = "previous-choice"
+	OpenChoice              Action = "open-choice"
 	ResetFilterForm         Action = "reset-filter-form"
 	ClearFilters            Action = "clear-filters"
 	InputSpace              Action = "input-space"
@@ -192,6 +193,8 @@ var cardBindings = []Binding{
 	{Chord: "meta+o", Key: "meta+o", Action: SaveDraftAction, Help: "create Issue" + headlessNote, Mode: ModeCreate},
 	{Chord: "escape", Key: "esc", Action: CancelDraft, Help: "discard?", Mode: ModeCreate, ShowInFooter: true},
 	{Chord: "ctrl+space", Key: "ctrl+space", Action: CreateComplete, Help: "complete label", Mode: ModeCreate, ShowInFooter: true},
+	{Chord: "ctrl+d", Key: "ctrl+d", Action: OpenDatePicker, Help: "calendar", Mode: ModeCreate, ShowInFooter: true},
+	{Chord: "meta+d", Key: "meta+d", Action: OpenDatePicker, Help: "calendar" + headlessNote, Mode: ModeCreate},
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: SaveDraftAction, Help: "save Draft", Mode: ModeEditor, ShowInFooter: true},
 	{Chord: "meta+o", Key: "meta+o", Action: SaveDraftAction, Help: "save Draft" + headlessNote, Mode: ModeEditor},
 	{Chord: "ctrl+e", Key: "ctrl+e", Action: ExternalEditorAction, Help: "$EDITOR", Mode: ModeEditor, ShowInFooter: true},
@@ -243,6 +246,14 @@ var cardBindings = []Binding{
 	{Chord: "enter", Key: "enter", Action: DatesSubmit, Help: "save dates", Mode: ModeDatesForm, ShowInFooter: true},
 	{Chord: "ctrl+s", Key: "ctrl+s", Action: DatesSubmit, Help: "save dates", Mode: ModeDatesForm},
 	{Chord: "escape", Key: "esc", Action: DatesCancel, Help: "cancel", Mode: ModeDatesForm, ShowInFooter: true},
+	{Chord: "left", Key: "←", Action: DateDayBefore, Help: "previous day", Mode: ModeDatePicker, ShowInFooter: true},
+	{Chord: "right", Key: "→", Action: DateDayAfter, Help: "next day", Mode: ModeDatePicker, ShowInFooter: true},
+	{Chord: "up", Key: "↑", Action: DateWeekBefore, Help: "previous week", Mode: ModeDatePicker, ShowInFooter: true},
+	{Chord: "down", Key: "↓", Action: DateWeekAfter, Help: "next week", Mode: ModeDatePicker, ShowInFooter: true},
+	{Chord: "enter", Key: "enter", Action: PickDate, Help: "pick day", Mode: ModeDatePicker, ShowInFooter: true},
+	{Chord: "escape", Key: "esc", Action: CloseDatePick, Help: "close calendar", Mode: ModeDatePicker, ShowInFooter: true},
+	{Chord: "ctrl+d", Key: "ctrl+d", Action: OpenDatePicker, Help: "calendar", Mode: ModeDatesForm, ShowInFooter: true},
+	{Chord: "meta+d", Key: "meta+d", Action: OpenDatePicker, Help: "calendar" + headlessNote, Mode: ModeDatesForm},
 	{Chord: "enter", Key: "enter", Action: DeleteSubmit, Help: "delete", Mode: ModeDeleteForm, ShowInFooter: true},
 	{Chord: "ctrl+s", Key: "ctrl+s", Action: DeleteSubmit, Help: "delete", Mode: ModeDeleteForm},
 	{Chord: "escape", Key: "esc", Action: DeleteCancel, Help: "cancel", Mode: ModeDeleteForm, ShowInFooter: true},
@@ -280,6 +291,8 @@ var cardBindings = []Binding{
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: RecurrenceSave, Help: "save recurrence", Mode: ModeRecurrenceForm, ShowInFooter: true},
 	{Chord: "meta+o", Key: "meta+o", Action: RecurrenceSave, Help: "save recurrence" + headlessNote, Mode: ModeRecurrenceForm},
 	{Chord: "ctrl+x", Key: "ctrl+x", Action: RecurrenceStop, Help: "stop recurring", Mode: ModeRecurrenceForm, ShowInFooter: true},
+	{Chord: "ctrl+d", Key: "ctrl+d", Action: OpenDatePicker, Help: "calendar", Mode: ModeRecurrenceForm, ShowInFooter: true},
+	{Chord: "meta+d", Key: "meta+d", Action: OpenDatePicker, Help: "calendar" + headlessNote, Mode: ModeRecurrenceForm},
 	{Chord: "meta+x", Key: "meta+x", Action: RecurrenceStop, Help: "stop recurring" + headlessNote, Mode: ModeRecurrenceForm},
 	{Chord: "y", Key: "y", Action: RecurrenceStopConfirm, Help: "stop recurring", Mode: ModeRecurrenceStop, ShowInFooter: true},
 	{Chord: "n", Key: "n", Action: RecurrenceStopKeep, Help: "keep editing", Mode: ModeRecurrenceStop, ShowInFooter: true},

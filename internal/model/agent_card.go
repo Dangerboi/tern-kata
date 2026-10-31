@@ -122,3 +122,27 @@ func agentCardSelected(m Model, msg AgentCardSelected) Model {
 	}
 	return m
 }
+
+// AgentCardUnavailable is why action cannot run on the Agent card now, or "" when it can: the card's own handlers refuse
+// these cases, so a button for it is drawn disabled with the reason.
+func (m Model) AgentCardUnavailable(action Action) string {
+	rows := m.AgentCardRows()
+	switch action {
+	case AgentCardGo:
+		if len(rows) == 0 {
+			return "No agent on this Issue yet"
+		}
+	case AgentCardBackground:
+		if len(rows) == 0 {
+			return "No agent on this Issue yet"
+		}
+		if e := rows[m.AgentCardCursor()]; e.Background && !e.Open {
+			return "That agent is already in the background"
+		}
+	case AgentCardSplit, AgentCardTab, AgentCardNewBackground:
+		if issue := m.issueByUID(m.AgentCard.IssueUID); issue != nil && IsClosed(*issue) {
+			return ClosedIssueRefusal
+		}
+	}
+	return ""
+}

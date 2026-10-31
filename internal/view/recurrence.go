@@ -1,9 +1,6 @@
 package view
 
 import (
-	"strings"
-	"time"
-
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
@@ -21,8 +18,6 @@ var recurrenceTitles = map[model.Field]string{
 
 // everyUnits is what the Every field counts at each frequency.
 var everyUnits = map[model.Frequency]string{model.Daily: "days", model.Weekly: "weeks", model.Monthly: "months", model.Yearly: "years"}
-
-var endLabels = map[model.EndKind]string{model.EndNever: "Never", model.EndUntil: "On a date", model.EndCount: "After a number of occurrences"}
 
 // recurrenceTitle is the label of the field called name as the card stands: Every names what it counts, and the end field
 // asks for a date or a count by the end chosen.
@@ -57,32 +52,16 @@ func recurrenceText(f model.RecurrenceFormState, name model.Field) string {
 
 // recurrenceChoices is the choice field called name: its choices' labels in the order the model picks them by index, which
 // are chosen, and the choice under the keys' cursor, -1 for none.
-func recurrenceChoices(f model.RecurrenceFormState, name model.Field) (labels []string, chosen func(int) bool, cursor int) {
-	switch name {
-	case model.RecurrenceFrequency:
-		for _, frequency := range model.Frequencies {
-			labels = append(labels, strings.ToUpper(string(frequency[:1]))+strings.ToLower(string(frequency[1:])))
-		}
-		return labels, func(i int) bool { return model.Frequencies[i] == f.Frequency }, -1
-	case model.RecurrenceWeekdays:
-		for _, day := range model.MondayFirst {
-			labels = append(labels, day.String()[:3])
-		}
-		cursor = -1
-		if f.Field == name {
-			cursor = f.WeekdayAt
-		}
-		return labels, func(i int) bool { return f.Weekdays[model.MondayFirst[i]] }, cursor
-	case model.RecurrenceMonth:
-		for month := time.January; month <= time.December; month++ {
-			labels = append(labels, month.String()[:3])
-		}
-		return labels, func(i int) bool { return i+1 == f.Month }, -1
+// weekdayChoices are the Weekdays field's words: it takes several values at once, so it stays a row of toggles.
+func weekdayChoices(f model.RecurrenceFormState) (labels []string, chosen func(int) bool, cursor int) {
+	for _, day := range model.MondayFirst {
+		labels = append(labels, day.String()[:3])
 	}
-	for _, kind := range model.RecurrenceEndKinds {
-		labels = append(labels, endLabels[kind])
+	cursor = -1
+	if f.Field == model.RecurrenceWeekdays {
+		cursor = f.WeekdayAt
 	}
-	return labels, func(i int) bool { return model.RecurrenceEndKinds[i] == f.Ends }, -1
+	return labels, func(i int) bool { return f.Weekdays[model.MondayFirst[i]] }, cursor
 }
 
 func recurrenceLayer(m model.Model) tern.Element {
@@ -113,15 +92,22 @@ func recurrenceLayer(m model.Model) tern.Element {
 			tone = ui.ToneAccent
 			prompt = "> " + prompt
 		}
-		if !field.Text {
-			labels, chosen, cursor := recurrenceChoices(f, field.Name)
+		if field.Name == model.RecurrenceWeekdays {
+			labels, chosen, cursor := weekdayChoices(f)
 			children = append(children, choiceField(field.Name, tone, title, prompt, labels, chosen, cursor))
+			continue
+		}
+		if !field.Text {
+			children = append(children, choiceControl(m, model.CardRecurrence, field.Name, title, field.Name == f.Field, "", ""))
 			continue
 		}
 		children = append(children, ui.Input{
 			Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: title},
 			Field:  ui.Field{Text: recurrenceText(f, field.Name), Cursor: caretAt(f.Caret, field.Name, recurrenceText(f, field.Name)), Mode: "insert", Readonly: f.Saving || f.StopConfirm, Prompt: []ui.Span{{T: prompt}}},
 		})
+		if field.Name == f.Field && (field.Name == model.RecurrenceStart || (field.Name == model.RecurrenceEnd && f.Ends == model.EndUntil)) {
+			children = append(children, calendarHint(string(field.Name)))
+		}
 	}
 	if f.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, f.Err.Error()))
@@ -143,5 +129,5 @@ func recurrenceLayer(m model.Model) tern.Element {
 	default:
 		children = append(children, buttonRow(cardButton("save", model.ModeRecurrenceForm, model.RecurrenceSave, save, true), cardButton("cancel", model.ModeRecurrenceForm, model.RecurrenceCancel, "Cancel", false)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardRecurrence)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
+	return withDatePicker(m, model.CardRecurrence, ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardRecurrence)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children}))
 }

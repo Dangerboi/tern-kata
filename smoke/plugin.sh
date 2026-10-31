@@ -218,6 +218,15 @@ ctl state >"$tmp/remote-open.json"
 remote_kata=$(jq -r '.focused.id' "$tmp/remote-open.json")
 jq -e '(.tabs | length) == 2 and .tabs[1].active and .tabs[1].panes == 2' "$tmp/remote-open.json" >/dev/null
 [[ $remote_kata != "$remote_pane" ]]
+# Its tab face carries the kata mark: the face's own id is the one `ctl state` shows, though Lua got it packed, and the mark
+# replaces the face's terminal icon, so the icon is no longer there.
+for ((attempt=0; attempt<100; attempt++)); do
+  ctl --file "$tmp/pump.ctl"
+  [[ $(ctl tree ".tn-face[data-pane='$remote_kata']" | jq '.count') == 1 && $(ctl tree ".tn-face[data-pane='$remote_kata'] > *" | jq '.count') == 0 ]] && break
+  sleep 0.1
+done
+ctl tree ".tn-face[data-pane='$remote_kata']" | jq -e '.count == 1' >/dev/null
+ctl tree ".tn-face[data-pane='$remote_kata'] > *" | jq -e '.count == 0' >/dev/null
 ctl focus left
 click_issue_link "https://kata.invalid/smoke/$second"
 ctl plugins expect '"Plugin second body"'

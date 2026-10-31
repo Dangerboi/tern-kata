@@ -47,15 +47,11 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 			prompt = "> " + prompt
 		}
 		if !field.Text {
-			choices := f.JobChoices(field.Name)
-			labels := make([]string, len(choices))
-			for i, c := range choices {
-				labels[i] = c.Label
+			hint := ""
+			if field.Name == model.JobFieldWorkflow {
+				hint = f.WorkflowsNote()
 			}
-			children = append(children, choiceField(field.Name, tone, model.JobPrompt(field.Name), prompt, labels, func(i int) bool { return choices[i].Chosen }, -1))
-			if note := f.WorkflowsNote(); field.Name == model.JobFieldWorkflow && note != "" {
-				children = append(children, toneText("workflow-note", ui.ToneMuted, note))
-			}
+			children = append(children, choiceControl(m, model.CardJob, field.Name, model.JobPrompt(field.Name), field.Name == f.Field, hint, ""))
 			continue
 		}
 		if field.Name == model.JobFieldProfile && f.Worker.Note != "" {
