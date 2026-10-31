@@ -102,7 +102,7 @@ func TestEveryCardIsDrawnAndItsFieldNodesMoveItsFocus(t *testing.T) {
 
 // tonedSpanStyle is the span style each text tone is drawn in; neutral has none and draws plain.
 var tonedSpanStyle = map[string]string{
-	"error": "error", "warning": "warning", "pending": "warning", "success": "success",
+	"error": "error", "warning": "warning", "pending": "pending", "success": "success",
 	"info": "info", "muted": "muted", "accent": "accent", "user": "accent",
 }
 

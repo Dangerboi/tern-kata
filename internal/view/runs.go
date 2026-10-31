@@ -60,14 +60,12 @@ func runs(m model.Model, now time.Time) tern.Element {
 	if m.Runs.Err != nil {
 		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.Runs.Err.Error()})
 	}
-	empty := "No runs in this Project yet. An executor reports a run to kata when it starts one."
-	switch {
-	case m.Runs.Loading:
-		empty = "Loading runs…"
-	case m.Runs.JobUID != "":
-		empty = "This job has no runs yet. Press f to see every run."
+	empty := emptyState("runs", "No runs", "An executor reports a run to kata when it starts one.")
+	if m.Runs.JobUID != "" {
+		empty = emptyState("runs", "No runs for this job", "It has not run yet.", cardButton("all-runs", model.ModeRuns, model.FilterRunsByJob, "Every run", false))
 	}
-	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("runs"), Max: fillMax, Empty: ui.T(empty), Children: cards})
+	list := ui.List{CommonWithoutMax: scrollerCommon("runs"), Max: fillMax, Empty: ui.T("Loading runs…"), Children: cards}
+	children = append(children, listOrEmpty(list, m.Runs.Loading, empty))
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapSM, children)
 }
 
