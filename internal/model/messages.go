@@ -34,6 +34,11 @@ type SelectMsg struct{ UID string }
 
 func (SelectMsg) msg() {}
 
+// MenuPickMsg is a pick from the context menu of an Issue's row or card: select the Issue, then press Chord as the key does.
+type MenuPickMsg struct{ UID, Chord string }
+
+func (MenuPickMsg) msg() {}
+
 // ResizeMsg is the Pane's new size: its width in columns and its height in rows. Rows is zero when the terminal does not say.
 type ResizeMsg struct{ Cols, Rows int }
 
