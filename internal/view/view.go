@@ -14,9 +14,9 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// Cell widths of an Issue row, in characters. The Pane is monospaced, so a cell
-// padded to its width lines up with the header above it. The title takes the
-// rest of the row and is cut with an ellipsis when it does not fit.
+// Cell widths of an Issue row, in characters. The style sheet gives each cell a box of its column's width (cellBoxCSS), so
+// a cell lines up with the header above it. The title takes the rest of the row and is cut with an ellipsis when it does
+// not fit.
 const (
 	prioWidth    = 4
 	statusWidth  = 6
@@ -140,9 +140,17 @@ func issues(m model.Model, now time.Time) tern.Element {
 	if m.Search.Open {
 		children = append(children, searchInput(m))
 	}
-	empty := emptyState("issues", "No Issues", "This Collection has none. Select another Collection or create one with kata create.")
-	if m.Filters != (model.Filters{}) {
-		empty = emptyState("issues", "No Issues match", "These filters leave none.", cardButton("clear-filters", model.ModeList, model.ClearFilters, "Clear filters", false))
+	empty := emptyState("No Issues", "This Collection has none. Select another Collection or create one with kata create.")
+	// A button presses its key in the mode the Pane is in, and with Search open that mode types the key, so searching shows
+	// no button.
+	switch {
+	case m.Filters != (model.Filters{}):
+		empty = emptyState("No Issues match", "These filters leave none.")
+		if !m.Search.Open {
+			empty.Children = ui.Nodes(cardButton("clear-filters", model.ModeList, model.ClearFilters, "Clear filters", false))
+		}
+	case m.Collection.IsProject() && !m.Search.Open:
+		empty = emptyState("No Issues", "This Collection has none.", cardButton("new", model.ModeList, model.NewIssue, "New Issue", true))
 	}
 	list := ui.List{CommonWithoutMax: scrollerCommon("issues"), Max: fillMax, Selected: selected, Empty: ui.T("Loading Issues…"), Children: items}
 	children = append(children, listAndEmpty(list, m.Loading, empty)...)
@@ -153,7 +161,7 @@ func issues(m model.Model, now time.Time) tern.Element {
 func laneHeader(m model.Model) tern.Element {
 	for _, column := range m.BoardColumns() {
 		if column.Lane == m.Board.Lane {
-			return ui.Text{Common: ui.Common{Key: "lane"}, Spans: []ui.Span{{T: column.Title, S: "strong"}, {T: " " + strconv.Itoa(len(column.Cards)), S: "muted mono"}}}
+			return ui.Text{Common: ui.Common{Key: "lane"}, Spans: []ui.Span{{T: column.Title, S: "strong"}, {T: " " + strconv.Itoa(len(column.Cards)), S: mono("muted")}}}
 		}
 	}
 	return ui.Text{Common: ui.Common{Key: "lane"}, Spans: []ui.Span{{T: model.LaneTitle(m.Board.Lane), S: "strong"}}}
@@ -177,8 +185,8 @@ func scrollerCommon(key string) ui.CommonWithoutMax {
 var fillMax = ui.MaxFrac(1)
 
 // topBar is the pinned row above the columns: the Collection title with its
-// markers on the left, the counts in the middle, and the Daemon then the Menu button at the right. Clicking the title or the
-// button opens the Menu. When the row is too narrow Tern's flex shrinks and truncates the Daemon first,
+// markers on the left, the counts in the middle, and the Daemon then the Menu button at the right. The Menu button opens the
+// Menu. When the row is too narrow Tern's flex shrinks and truncates the Daemon first,
 // then the counts; the left cell and the button never shrink. The title keeps the accent whichever column has focus: it names
 // what the Pane shows, and the columns' own borders show focus.
 func topBar(m model.Model) tern.Element {
@@ -332,7 +340,7 @@ func issueRow(m model.Model, row model.IssueRow, selected bool, role string, col
 	if row.HasChildren {
 		actions.Click = ToggleClick(row.UID)
 	}
-	return ui.Item{Common: ui.Common{Key: row.UID, Role: strings.TrimSpace(role + " " + cols.role()), Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells(kids, owner, model.RelativeTime(row.UpdatedAt, now), cols, "muted mono", toneStyle(ownerTone))...)}
+	return ui.Item{Common: ui.Common{Key: row.UID, Role: strings.TrimSpace(role + " " + cols.role()), Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells(kids, owner, model.RelativeTime(row.UpdatedAt, now), cols, mono("muted"), toneStyle(ownerTone))...)}
 }
 
 // role is the row's boxes in role tokens, which the style sheet turns into the columns' widths (see cellBoxCSS): the row
@@ -356,6 +364,15 @@ func rightCells(kids, owner, updated string, cols listColumns, style, ownerStyle
 
 // footerHint is one key of the current mode's legend: the chord a click presses, the key as drawn and what it does.
 type footerHint struct{ chord, key, description string }
+
+// keycap is the hint's key as the legend draws it. Tern draws a letter keycap in capitals, so a shifted letter ("shift+u")
+// gets a ⇧ and "u" and "shift+u" read differently.
+func keycap(hint footerHint) string {
+	if letter, shifted := strings.CutPrefix(hint.chord, "shift+"); shifted && len(letter) == 1 {
+		return "⇧" + letter
+	}
+	return hint.key
+}
 
 // footerHints are the current mode's hints in reading order, and position is the selected row's place in the list.
 func footerHints(m model.Model) (hints []footerHint, position string) {
@@ -392,11 +409,11 @@ func footer(m model.Model) tern.Element {
 	cells := make([]tern.Element, len(hints))
 	for i, hint := range hints {
 		cells[i] = ui.Text{Common: ui.Common{Key: hint.chord, Actions: &ui.Actions{Click: KeyClick(hint.chord)}},
-			Spans: []ui.Span{{T: hint.key, S: "key"}, {T: " " + hint.description, S: "muted"}}, Wrap: ui.WrapNone}
+			Spans: []ui.Span{{T: keycap(hint), S: "key"}, {T: " " + hint.description, S: "muted"}}, Wrap: ui.WrapNone}
 	}
 	return ui.Nodes(ui.Row{Common: ui.Common{Key: "hints"}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(
 		ui.Row{Common: ui.Common{Key: "grid", Grow: 1}, Gap: ui.GapMD, Wrap: true, Children: cells},
-		ui.Text{Common: ui.Common{Key: "position", Shrink: new(float64), Tone: ui.ToneMuted}, Spans: []ui.Span{{T: position, S: "muted mono"}}, Wrap: ui.WrapNone})})
+		ui.Text{Common: ui.Common{Key: "position", Shrink: new(float64), Tone: ui.ToneMuted}, Spans: []ui.Span{{T: position, S: mono("muted")}}, Wrap: ui.WrapNone})})
 }
 
 // headerRow labels the Issue rows. It is an Item like the rows, so its cells sit

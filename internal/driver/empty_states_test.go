@@ -75,9 +75,26 @@ func TestWorkflowsPageEmptyIsAnEmptyStateWithAKeyButton(t *testing.T) {
 
 func TestIssueListEmptyIsAnEmptyState(t *testing.T) {
 	s := projectPane(t, 160)
-	wantEmpty(t, "no issues", s, view.IssueListID+"-empty", "", "No Issues")
+	wantEmpty(t, "no issues", s, view.IssueListID+"-empty", "", "No Issues", "key=n", `"keys"`, `"k":"button"`)
 	s.Model.Filters = model.Filters{Status: "closed"}
 	wantEmpty(t, "filtered", s, view.IssueListID+"-empty", "", "No Issues match", "key=c", `"keys"`, `"k":"button"`)
+}
+
+// A button presses its key in the mode the Pane is in, and with Search open that mode types the key, so the empty list
+// offers no button while the user searches.
+func TestIssueListEmptyOffersNoButtonWhileSearching(t *testing.T) {
+	for name, s := range map[string]driver.State{
+		"no filters": feed(t, projectPane(t, 160), key("/")).State,
+		"typed":      feed(t, projectPane(t, 160), key("/"), key("z")).State,
+	} {
+		n := emptyNode(t, s, view.IssueListID+"-empty")
+		if n == nil {
+			t.Fatalf("%s: no empty state", name)
+		}
+		if raw := wireText(*n); strings.Contains(raw, `"k":"button"`) || strings.Contains(raw, "key=") {
+			t.Errorf("%s: a button that types into the search: %s", name, raw)
+		}
+	}
 }
 
 func TestDetailWithNoIssueSelectedIsAnEmptyState(t *testing.T) {
