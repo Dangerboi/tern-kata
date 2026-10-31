@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -306,5 +307,28 @@ func TestARefusedSharedWriteShowsKatasReasonAndTheFileStillSaves(t *testing.T) {
 	}
 	if got := f.lanes(t, f.gateway); got.Shared || !slices.Equal(got.Lanes, []string{"mine"}) {
 		t.Errorf("after the local save %+v", got)
+	}
+}
+
+func TestConcurrentLaneSavesOfDifferentProjectsKeepEach(t *testing.T) {
+	f := newConfigFixture(t)
+	const panes = 24
+	var wg sync.WaitGroup
+	for i := range panes {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			saved := as[model.LanesSaved](t, run(t, f.gateway, model.SaveLanes{ProjectUID: fmt.Sprintf("p%02d", i), ProjectName: "work", Lanes: []string{fmt.Sprintf("l%02d", i)}}))
+			if saved.Err != nil {
+				t.Error(saved.Err)
+			}
+		}()
+	}
+	wg.Wait()
+	for i := range panes {
+		uid := fmt.Sprintf("p%02d", i)
+		if got := f.loadLanes(t, f.again(), uid); got.Err != nil || !slices.Equal(got.Lanes, []string{fmt.Sprintf("l%02d", i)}) {
+			t.Errorf("%s: loaded %+v", uid, got)
+		}
 	}
 }
