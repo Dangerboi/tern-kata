@@ -69,7 +69,7 @@ func TestLatestSupersedeDropsTheReadOutAndAsksForAnother(t *testing.T) {
 }
 
 func TestLatestDiscardDropsTheReadOutAndWantsNoneAndAskedSaysSo(t *testing.T) {
-	var l Latest
+	var l model.Latest
 	if l.Asked() {
 		t.Error("a fresh Latest says a read was asked for")
 	}
