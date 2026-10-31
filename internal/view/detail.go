@@ -65,7 +65,7 @@ func detail(m model.Model, now time.Time) tern.Element {
 			body = "No body yet."
 		}
 		parts = append(parts, properties(m, issue, now), ui.Md{Common: ui.Common{Key: "body"}, Text: body})
-		kids, activity := detailRows(m)
+		kids, activity := detailRows(m, now)
 		if len(kids) > 0 {
 			parts = append(parts, ui.Spacer{Common: ui.Common{Key: "gap-children"}, Size: ui.GapMD}, childrenTable(m, kids, now))
 		}
@@ -104,7 +104,7 @@ func activityTabs(m model.Model) tern.Element {
 
 // detailRows draws the model's rows: the children as table rows and the others as Activity cards, the one under the
 // cursor marked.
-func detailRows(m model.Model) (children []detailChild, activity tern.Nodes) {
+func detailRows(m model.Model, now time.Time) (children []detailChild, activity tern.Nodes) {
 	for i, item := range m.DetailRows() {
 		mark := ui.Mark("")
 		if m.Focus == model.ColumnDetail && m.DetailIndex() == i {
@@ -124,13 +124,13 @@ func detailRows(m model.Model) (children []detailChild, activity tern.Nodes) {
 			continue
 		}
 		if item.Kind == model.RowLink {
-			activity = append(activity, ui.Col{Common: ui.Common{Key: row.Key, Mark: mark}, Children: ui.Nodes(linkRow(row, &ui.Actions{Click: action}))})
+			activity = append(activity, ui.Col{Common: ui.Common{Key: row.Key, Mark: mark}, Children: ui.Nodes(linkRow(m, row, &ui.Actions{Click: action}, now))})
 			continue
 		}
 		var parts tern.Nodes
 		var head ui.Rich
 		if item.Kind == model.RowEvent {
-			parts = ui.Nodes(historySentence(row, action))
+			parts = ui.Nodes(historySentence(m, row, action, now))
 		} else {
 			spans := make([]ui.Span, len(row.Head))
 			for i, part := range row.Head {
@@ -267,7 +267,7 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 		add(r.name, r.value)
 	}
 	if link, ok := m.DetailParent(); ok {
-		add("Parent", referenceText("v", link.ReferenceUID, link.Ref, link.RefTitle))
+		add("Parent", referenceText("v", link.ReferenceUID, link.Ref, link.RefTitle, refCard(m, rowFacts(link), now)))
 	}
 	if counts := m.DetailChildCounts(); counts.Total > 0 {
 		add("Children", text(fmt.Sprintf("%d open / %d total", counts.Open, counts.Total)))

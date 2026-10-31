@@ -22,9 +22,9 @@ func childrenTable(m model.Model, children []detailChild, now time.Time) tern.El
 		if child.mark == ui.MarkPick {
 			selected = child.UID
 		}
-		cells := map[string]ui.Cell{"ticket": ui.Spans(ui.Span{T: child.Ref, S: "accent"})}
+		cells := map[string]ui.Cell{"ticket": childTicketCell(m, child, now)}
 		if child.Loaded {
-			cells = loadedChildCells(m.ChildCells(child.ChildRow, now), child)
+			cells = loadedChildCells(m.ChildCells(child.ChildRow, now), child, childTicketCell(m, child, now))
 		}
 		rows[i] = ui.TableRow{ID: child.UID, Cells: cells}
 	}
@@ -46,14 +46,21 @@ func childrenTable(m model.Model, children []detailChild, now time.Time) tern.El
 	)}
 }
 
+// childTicketCell is the reference cell. The table's cells take a tooltip and no hovercard, so the card's facts are its
+// one-line Title.
+func childTicketCell(m model.Model, child detailChild, now time.Time) ui.Cell {
+	facts := refFacts{UID: child.UID, Qualified: firstNonEmpty(child.Qualified, child.Ref), Status: child.Status}
+	return ui.TextCell{Text: ui.Spans(ui.Span{T: child.Ref, S: "accent"}), Title: refTooltip(summarize(m, facts, now))}
+}
+
 // loadedChildCells are the cells of a loaded child; a closed child's status and title are muted, as its owner and updated always are, and an empty owner is left out.
-func loadedChildCells(c model.ChildCells, child detailChild) map[string]ui.Cell {
+func loadedChildCells(c model.ChildCells, child detailChild, ticket ui.Cell) map[string]ui.Cell {
 	title := ""
 	if child.Closed {
 		title = "muted"
 	}
 	cells := map[string]ui.Cell{
-		"ticket":  ui.Spans(ui.Span{T: child.Ref, S: "accent"}),
+		"ticket":  ticket,
 		"status":  ui.TextCell{Text: ui.Spans(ui.Span{T: c.Status, S: title}), Dot: statusTone(child.Status)},
 		"title":   ui.Spans(ui.Span{T: c.Title, S: title}),
 		"updated": ui.Spans(ui.Span{T: c.Updated, S: "muted"}),

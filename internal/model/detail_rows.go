@@ -53,10 +53,12 @@ func (k RowKind) Tab() ActivityTab {
 // row's id never ends in the child's UID as the list row's does. A child that is not loaded has only its UID, Key and Ref.
 type ChildRow struct {
 	Key, UID, Ref, Title, Status string
-	Owner                        *string
-	OwnerExpires                 *time.Time
-	UpdatedAt                    time.Time
-	Loaded, Closed               bool
+	// Qualified is the child's qualified id as its Link carries it.
+	Qualified      string
+	Owner          *string
+	OwnerExpires   *time.Time
+	UpdatedAt      time.Time
+	Loaded, Closed bool
 }
 
 // rowID names a row across refreshes.
@@ -204,10 +206,12 @@ func (m Model) commentItem(comment Comment) DetailItem {
 }
 
 func (m Model) linkRow(link Link) DetailRow {
-	uid, ref := link.ToIssueUID, link.ToQualifiedID
+	uid, ref, status := link.ToIssueUID, link.ToQualifiedID, link.ToStatus
+	qualified := ref
 	relation := link.Type
 	if uid == m.DetailIssueUID() {
-		uid, ref = link.FromIssueUID, link.FromQualifiedID
+		uid, ref, status = link.FromIssueUID, link.FromQualifiedID, link.FromStatus
+		qualified = ref
 		switch relation {
 		case "parent":
 			relation = "child"
@@ -222,7 +226,7 @@ func (m Model) linkRow(link Link) DetailRow {
 	if project, short, ok := strings.Cut(ref, "#"); ok && m.authority.Issue != nil && project == m.authority.Issue.ProjectName {
 		ref = "#" + short
 	}
-	row := DetailRow{Key: fmt.Sprint(link.ID), Relation: relation, Ref: ref, ReferenceUID: uid}
+	row := DetailRow{Key: fmt.Sprint(link.ID), Relation: relation, Ref: ref, ReferenceUID: uid, Qualified: qualified, Status: status}
 	if i := slices.IndexFunc(m.Issues, func(issue Issue) bool { return issue.UID == uid }); i >= 0 {
 		row.RefTitle = m.Issues[i].Title
 	}
@@ -247,12 +251,12 @@ func (m Model) childItems(links []DetailRow) []DetailItem {
 	}
 	for _, issue := range m.Issues {
 		if link, ok := byUID[issue.UID]; ok {
-			add(ChildRow{Key: link.Key, UID: issue.UID, Ref: link.Ref, Title: issue.Title, Status: issue.Status, Owner: issue.Owner, OwnerExpires: issue.AssignmentExpiresOn, UpdatedAt: issue.UpdatedAt, Loaded: true, Closed: IsClosed(issue)})
+			add(ChildRow{Key: link.Key, UID: issue.UID, Ref: link.Ref, Qualified: link.Qualified, Title: issue.Title, Status: issue.Status, Owner: issue.Owner, OwnerExpires: issue.AssignmentExpiresOn, UpdatedAt: issue.UpdatedAt, Loaded: true, Closed: IsClosed(issue)})
 		}
 	}
 	for _, uid := range uids {
 		if link, ok := byUID[uid]; ok {
-			add(ChildRow{Key: link.Key, UID: uid, Ref: link.Ref})
+			add(ChildRow{Key: link.Key, UID: uid, Ref: link.Ref, Qualified: link.Qualified, Status: link.Status})
 		}
 	}
 	return items
