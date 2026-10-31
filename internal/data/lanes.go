@@ -72,7 +72,7 @@ func (g *Gateway) loadLanes(ctx context.Context, cmd model.LoadLanes) model.Lane
 		return ok(c.SharedLanes(ctx, cmd.ProjectUID))
 	})
 	loaded, _ := msg.(model.LanesLoaded)
-	loaded.ProjectUID = cmd.ProjectUID
+	loaded.ProjectUID, loaded.Request = cmd.ProjectUID, cmd.Request
 	if err != nil {
 		loaded.SharedErr = fmt.Errorf("the Project could not be read: %w", err)
 	}

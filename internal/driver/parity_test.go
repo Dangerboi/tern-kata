@@ -39,7 +39,7 @@ func inputs(ins ...any) path {
 	return func(s driver.State) (driver.State, []model.Cmd) {
 		var cmds []model.Cmd
 		for _, in := range ins {
-			out := driver.Step(s, in, now)
+			out := driver.Step(s, answersNewestLanesRead(s, in), now)
 			s, cmds = out.State, append(cmds, out.Cmds...)
 		}
 		return s, cmds

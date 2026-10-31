@@ -105,7 +105,9 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 			return m, append(asked, more...)
 		}
 		if msg.Type == "project.metadata_updated" { // it may be the Project's shared Lane list, even when the snapshot covers the event
-			asked = append(asked, m.lanesRefresh()...)
+			var lanes []Cmd
+			m, lanes = m.lanesRefresh()
+			asked = append(asked, lanes...)
 		}
 		if msg.ID <= m.Cursor {
 			return m, asked

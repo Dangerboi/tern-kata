@@ -119,7 +119,7 @@ func benchPane(b testing.TB, n int, page string) driver.State {
 func benchFeed(b testing.TB, s driver.State, inputs ...any) driver.State {
 	b.Helper()
 	for _, in := range inputs {
-		out := driver.Step(s, in, now)
+		out := driver.Step(s, answersNewestLanesRead(s, in), now)
 		if out.Err != nil {
 			b.Fatalf("%T: %v", in, out.Err)
 		}
