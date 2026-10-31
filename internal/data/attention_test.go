@@ -251,7 +251,7 @@ func TestAgentAttentionReplacesAnEarlierRequestAndClears(t *testing.T) {
 	}
 	raise("which table?") // the same value again changes nothing and is no error
 	cleared := as[model.AgentAttentionWritten](t, run(t, f.gateway, model.ClearAgentAttention{
-		Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Address: "dana", Message: "which table?",
+		Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Address: "dana", Messages: []string{"which table?"},
 	}))
 	if cleared.Err != nil || !cleared.Clear || cleared.UID != uid {
 		t.Fatalf("clear: %+v", cleared)
@@ -270,7 +270,7 @@ func TestAgentAttentionClearLeavesARequestSomeoneElseWroteSince(t *testing.T) {
 	f.put(t, f.workP, uid, "dana", map[string]any{"from": "bob", "message": "a newer ask"})
 	clear := func() model.AgentAttentionWritten {
 		return as[model.AgentAttentionWritten](t, run(t, f.gateway, model.ClearAgentAttention{
-			Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Address: "dana", Message: "which table?",
+			Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Address: "dana", Messages: []string{"which table?"},
 		}))
 	}
 	if got := clear(); got.Err != nil || !got.Clear {
@@ -282,5 +282,34 @@ func TestAgentAttentionClearLeavesARequestSomeoneElseWroteSince(t *testing.T) {
 	f.put(t, f.workP, uid, "dana", nil)
 	if got := clear(); got.Err != nil {
 		t.Fatalf("clear of a slot that is gone: %+v", got)
+	}
+}
+
+func TestAgentAttentionClearTakesAnyMessageAnAgentRaisedAndKeepsAnyOtherRequest(t *testing.T) {
+	f := newAttentionFixture(t)
+	uid := createIssue(t, f.gateway, f.work, f.workP, "Waiting")
+	clear := func() model.AgentAttentionWritten {
+		return as[model.AgentAttentionWritten](t, run(t, f.gateway, model.ClearAgentAttention{
+			Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Address: "dana", Messages: []string{"msgA", "msgB"},
+		}))
+	}
+	// Another Pane's agent on the Issue overwrote this Pane's request with msgB: still a request an agent raised.
+	f.put(t, f.workP, uid, "dana", map[string]any{"from": "dana-agent", "message": "msgB"})
+	if got := clear(); got.Err != nil || !got.Clear {
+		t.Fatalf("clear: %+v", got)
+	}
+	if left := f.read(t, "dana").Requests; len(left) != 0 {
+		t.Fatalf("requests after the clear: %+v, want the leftover request cleared", left)
+	}
+	// Someone else's request, and this actor's with a message no agent raised, both survive.
+	f.put(t, f.workP, uid, "dana", map[string]any{"from": "bob", "message": "msgA"})
+	clear()
+	if left := f.read(t, "dana").Requests; len(left) != 1 || left[0].Slot.From != "bob" {
+		t.Fatalf("requests after the clear: %+v, want another person's request kept", left)
+	}
+	f.put(t, f.workP, uid, "dana", map[string]any{"from": "dana-agent", "message": "typed by hand"})
+	clear()
+	if left := f.read(t, "dana").Requests; len(left) != 1 || left[0].Slot.Message != "typed by hand" {
+		t.Fatalf("requests after the clear: %+v, want a message no agent raised kept", left)
 	}
 }

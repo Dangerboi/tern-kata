@@ -519,17 +519,19 @@ func (g *Gateway) sendAgentBack(ctx context.Context, cmd model.SendAgentBack) mo
 // When tern fails the entry stays, and so does an agent whose entry reads open now (another Pane opened it since this one decided)
 // or is no background agent (this Pane asks about a split or tab agent, which another Pane may have sent to the background).
 func (g *Gateway) closeAgent(ctx context.Context, cmd model.CloseAgent) model.AgentClosed {
-	if file, _, err := g.agentStatePaths(); err == nil {
-		if list, err := ReadAgents(file); err == nil && slices.ContainsFunc(list, func(e model.AgentEntry) bool { return e.Block == cmd.Block && (e.Open || !e.Background) }) {
-			return model.AgentClosed{Block: cmd.Block, Agents: list, Kept: true}
-		}
+	file, _, err := g.agentStatePaths()
+	if err != nil {
+		return model.AgentClosed{Block: cmd.Block, Err: fmt.Errorf("cannot tell whether the agent is a background agent: %w", err)}
+	}
+	list, err := ReadAgents(file)
+	if err != nil {
+		return model.AgentClosed{Block: cmd.Block, Err: fmt.Errorf("cannot tell whether the agent is a background agent: %w", err)}
+	}
+	if slices.ContainsFunc(list, func(e model.AgentEntry) bool { return e.Block == cmd.Block && (e.Open || !e.Background) }) {
+		return model.AgentClosed{Block: cmd.Block, Agents: list, Kept: true}
 	}
 	if out, err := g.runTern(ctx, CloseBlockArgs(cmd.Block)); err != nil {
 		return model.AgentClosed{Block: cmd.Block, Err: ternFailure(err, out)}
-	}
-	file, _, err := g.agentStatePaths()
-	if err != nil {
-		return model.AgentClosed{Block: cmd.Block, Err: fmt.Errorf("the block closed but agents.json could not be written: %w", err)}
 	}
 	var gone []model.AgentEntry
 	kept, err := UpdateAgents(file, func(list []model.AgentEntry) []model.AgentEntry {

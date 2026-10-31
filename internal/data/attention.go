@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"time"
 
 	g "go.kenn.io/kata/pkg/client/generated"
@@ -83,7 +84,7 @@ func (c *Client) RaiseAgentAttention(ctx context.Context, cmd model.RaiseAgentAt
 }
 
 // ClearAgentAttention removes the request for cmd.Address on an Issue as `kata notify --clear` does, but only while it still
-// reads as cmd.Actor wrote it with cmd.Message, and guarded on the value read, so a request someone else wrote since survives. A
+// reads as cmd.Actor wrote it with one of cmd.Messages, and guarded on the value read, so a request someone else wrote since survives. A
 // slot that is gone, someone else's, or rewritten between the read and the write counts as cleared.
 func (c *Client) ClearAgentAttention(ctx context.Context, cmd model.ClearAgentAttention) error {
 	key := model.NotificationKey(cmd.Address)
@@ -105,7 +106,7 @@ func (c *Client) ClearAgentAttention(ctx context.Context, cmd model.ClearAgentAt
 		return nil
 	}
 	// A slot that does not read as a request, or reads as someone else's, is not this Pane's to clear.
-	if slot, err := model.ReadNotificationSlot(key, string(raw)); err == nil && slot.From == cmd.Actor && slot.Message == cmd.Message {
+	if slot, err := model.ReadNotificationSlot(key, string(raw)); err == nil && slot.From == cmd.Actor && slices.Contains(cmd.Messages, slot.Message) {
 		seen := slot.Raw
 		if _, err := c.patchMetadataKey(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, key, nil, &seen); err != nil && daemonCode(err) != "metadata_guard_failed" {
 			return daemonError(err)
