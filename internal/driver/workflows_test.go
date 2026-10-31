@@ -107,10 +107,10 @@ func TestWorkflowsPageWithoutAProjectSaysSoAndOpensTheMenusProjects(t *testing.T
 }
 
 func TestWorkflowsPageSaysWhyItIsEmpty(t *testing.T) {
-	mustShow(t, workflowsPane(t, 160), "no workflows", "Press n to write one")
+	mustShow(t, workflowsPane(t, 160), "no workflows", "No workflows", "New workflow")
 	archived := nightlyFlow()
 	archived.Archived = true
-	mustShow(t, workflowsPane(t, 160, archived), "only archived", "Every workflow here is archived")
+	mustShow(t, workflowsPane(t, 160, archived), "only archived", "Every workflow is archived", "Show archived")
 	failed := step(t, feed(t, projectPane(t, 160, boardCard("a")), key("5")).State, model.WorkflowsLoaded{ProjectUID: "p", Err: errText("kata server not responding")}).State
 	mustShow(t, failed, "load failure", "kata server not responding")
 }

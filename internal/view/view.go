@@ -141,14 +141,12 @@ func issues(m model.Model, now time.Time) tern.Element {
 	if m.Search.Open {
 		children = append(children, searchInput(m))
 	}
-	empty := "No Issues in this Collection. Select another Collection or create one with kata create."
+	empty := emptyState("issues", "No Issues", "This Collection has none. Select another Collection or create one with kata create.")
 	if m.Filters != (model.Filters{}) {
-		empty = "No Issues match these filters. Press c to clear filters."
+		empty = emptyState("issues", "No Issues match", "These filters leave none.", keyButton("clear-filters", "c", "Clear filters (c)"))
 	}
-	if m.Loading {
-		empty = "Loading Issues…"
-	}
-	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("issues"), Max: fillMax, Selected: selected, Empty: ui.T(empty), Children: items})
+	list := ui.List{CommonWithoutMax: scrollerCommon("issues"), Max: fillMax, Selected: selected, Empty: ui.T("Loading Issues…"), Children: items}
+	children = append(children, listOrEmpty(list, m.Loading, empty))
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.4)}, "", children)
 }
 
@@ -186,7 +184,7 @@ var fillMax = ui.MaxFrac(1)
 // what the Pane shows, and the columns' own borders show focus.
 func topBar(m model.Model) tern.Element {
 	title := barTitle(m)
-	heading := []ui.Span{{T: title, S: "accent strong"}}
+	heading := []ui.Span{{T: title, S: "title accent"}}
 	if m.Loading {
 		heading = append(heading, loadingMarker)
 	}

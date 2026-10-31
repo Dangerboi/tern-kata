@@ -77,18 +77,15 @@ func workflowList(m model.Model, paired bool) tern.Element {
 		}
 		items[i] = ui.Item{Common: ui.Common{Key: w.UID, Role: stripeRole(i), Tone: tone, Actions: &ui.Actions{DblClick: WorkflowOpenClick(w.UID)}}, Label: ui.Spans(label...), Detail: ui.T(" "), Value: ui.Spans(value...)}
 	}
-	empty := "No workflows in " + m.Collection.Title + ". Press n to write one."
-	switch {
-	case m.Workflows.Loading:
-		empty = "Loading workflows…"
-	case len(m.Workflows.List) > 0:
-		empty = "Every workflow here is archived. Press a to show them."
+	empty := emptyState("rows", "No workflows", "None in "+m.Collection.Title+" yet.", keyButton("new", "n", "New workflow (n)"))
+	if len(m.Workflows.List) > 0 {
+		empty = emptyState("rows", "Every workflow is archived", "Archived workflows are hidden.", keyButton("show-archived", "a", "Show archived (a)"))
 	}
 	selected := ""
 	if m.Workflows.Selected != "" {
 		selected = WorkflowID(m.Workflows.Selected)
 	}
-	list := ui.List{CommonWithoutMax: scrollerCommon("rows"), Max: fillMax, Selected: selected, Empty: ui.T(empty), Children: items}
+	list := listOrEmpty(ui.List{CommonWithoutMax: scrollerCommon("rows"), Max: fillMax, Selected: selected, Empty: ui.T("Loading workflows…"), Children: items}, m.Workflows.Loading, empty)
 	common := ui.Common{Key: "names", Grow: 1, Basis: ui.BasisFrac(0.4), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}}
 	children := ui.Nodes(list)
 	if m.Workflows.Err != nil {

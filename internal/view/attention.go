@@ -36,14 +36,12 @@ func attention(m model.Model) tern.Element {
 	for i, request := range m.Attention.Requests {
 		cards[i] = attentionCard(request, request.IssueUID == m.Attention.Selected)
 	}
-	empty := "No requests for " + address
-	switch {
-	case !m.Attention.Loaded && m.Attention.Err != nil:
+	empty := "Loading requests…"
+	if m.Attention.Err != nil {
 		empty = "The requests could not be read."
-	case !m.Attention.Loaded:
-		empty = "Loading requests…"
 	}
-	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("attention"), Max: fillMax, Empty: ui.T(empty), Children: cards})
+	list := ui.List{CommonWithoutMax: scrollerCommon("attention"), Max: fillMax, Empty: ui.T(empty), Children: cards}
+	children = append(children, listOrEmpty(list, !m.Attention.Loaded, emptyState("attention", "No requests", "Nothing is waiting on "+address+"; a request shows here when someone asks it.")))
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(1)}, ui.GapSM, children)
 }
 
