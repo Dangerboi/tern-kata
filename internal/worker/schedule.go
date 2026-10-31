@@ -251,6 +251,9 @@ type projectSchedule struct {
 	jobs      map[string]*jobSchedule
 	// paused holds the disabled jobs whose checkpoint already carries the pause mark.
 	paused map[string]bool
+	// resumeChecked holds the enabled jobs whose checkpoint markResumed already looked at, so a refusal that lasts reads
+	// (and reports) it once; a job that is disabled is taken out again.
+	resumeChecked map[string]bool
 }
 
 // save writes the job's state as its checkpoint, which never carries the pause mark: a saved job is scheduled.
@@ -609,6 +612,7 @@ func (s *projectSchedule) markPaused(disabled map[string]bool) {
 	// Work waiting from before is superseded by the enabling write's new definition event.
 	for uid := range disabled {
 		delete(s.jobs, uid)
+		delete(s.resumeChecked, uid)
 	}
 	for uid := range s.paused {
 		if !disabled[uid] {
@@ -630,9 +634,13 @@ func (s *projectSchedule) markPaused(disabled map[string]bool) {
 // markResumed saves the checkpoint of a job that is enabled again but not planned yet as resumed: scheduling starts at
 // now and the first date read is the baseline, exactly as plan would do.
 func (s *projectSchedule) markResumed(job cronjob.Job, now time.Time) {
-	if s.jobs[job.UID] != nil {
+	if s.jobs[job.UID] != nil || s.resumeChecked[job.UID] {
 		return
 	}
+	if s.resumeChecked == nil {
+		s.resumeChecked = map[string]bool{}
+	}
+	s.resumeChecked[job.UID] = true
 	if c, ok := s.store.Load(job.UID); ok && c.Paused {
 		c.Paused, c.Through = false, maxTime(now, job.CreatedAt)
 		c.Date, c.DateSeen = time.Time{}, false
