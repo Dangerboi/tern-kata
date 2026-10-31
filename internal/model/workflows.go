@@ -30,23 +30,23 @@ type WorkflowsState struct {
 	Loading bool
 	Err     error
 	Card    WorkflowCard
-	// jobs are the Project's live Cron jobs as last read, to say which use each workflow; jobsRequest numbers the read (counting down
-	// from zero, so no answer to the Jobs Page's reads can be taken for it).
-	jobs        []CronJob
-	jobsRequest int64
-	// runs are the Project's newest Runs as last read, for each workflow's latest and recent runs; runsRequest numbers the read the
-	// way jobsRequest does.
-	runs        []Run
-	runsRequest int64
+	// jobs are the Project's live Cron jobs as last read, to say which use each workflow; jobsReads numbers the read (below zero on
+	// the wire, see workflowRead, so no answer to the Jobs Page's reads can be taken for it).
+	jobs      []CronJob
+	jobsReads Latest
+	// runs are the Project's newest Runs as last read, for each workflow's latest and recent runs; runsReads numbers the read the
+	// way jobsReads does.
+	runs      []Run
+	runsReads Latest
 	// runsMore is the cursor of the next older page of runs, "" when kata holds no more; runsPages counts the pages read and
 	// runsAsked says a page is in flight.
 	runsMore  string
 	runsPages int
 	runsAsked bool
-	// readings are the Worker's reading of each stored workflow, by uid, as the last load or save brought it; checkRequest numbers
+	// readings are the Worker's reading of each stored workflow, by uid, as the last load or save brought it; checkReads numbers
 	// the card's asks for the reading of its text.
-	readings     map[string]WorkerReading
-	checkRequest int64
+	readings   map[string]WorkerReading
+	checkReads Latest
 }
 
 // WorkflowCard is the Workflow card: the JSON text of a new workflow or of one being changed, edited in the card or in $EDITOR.
@@ -228,13 +228,11 @@ func enterWorkflows(m Model) (Model, []Cmd) {
 	}
 	w.Err = nil
 	w.Loading = true
-	w.jobsRequest--
-	w.runsRequest--
 	w.runsMore, w.runsPages, w.runsAsked = "", 0, true
 	return m, []Cmd{
 		LoadWorkflows{Workspace: m.Workspace, ProjectID: w.ProjectID, ProjectUID: w.ProjectUID},
-		LoadJobs{Workspace: m.Workspace, ProjectID: w.ProjectID, Request: w.jobsRequest},
-		LoadRuns{Workspace: m.Workspace, ProjectID: w.ProjectID, Request: w.runsRequest}}
+		LoadJobs{Workspace: m.Workspace, ProjectID: w.ProjectID, Request: workflowRead(w.jobsReads.Ask())},
+		LoadRuns{Workspace: m.Workspace, ProjectID: w.ProjectID, Request: workflowRead(w.runsReads.Ask())}}
 }
 
 // settleWorkflowRuns reads the next older page of the Project's Runs while a workflow still lacks its latest Run or the selected
@@ -252,7 +250,7 @@ func (m Model) settleWorkflowRuns() (Model, []Cmd) {
 		return m, nil
 	}
 	w.runsAsked = true
-	return m, []Cmd{LoadRuns{Workspace: m.Workspace, ProjectID: w.ProjectID, Before: w.runsMore, Request: w.runsRequest}}
+	return m, []Cmd{LoadRuns{Workspace: m.Workspace, ProjectID: w.ProjectID, Before: w.runsMore, Request: workflowRead(w.runsReads.Newest())}}
 }
 
 // clearWorkflows closes the Workflows Page's inspector and drops its loading marker when the Page is left.
@@ -445,7 +443,7 @@ func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 	case WorkflowTextRead:
 		return workflowTextRead(m, msg), nil, true
 	case JobsLoaded:
-		if msg.Request >= 0 || msg.Request != m.Workflows.jobsRequest {
+		if msg.Request >= 0 || !isNewestRead(&m.Workflows.jobsReads, workflowRead(msg.Request)) {
 			return m, nil, false
 		}
 		if msg.Err == nil && !msg.ProjectArchived {
@@ -453,7 +451,7 @@ func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 		}
 		return m, nil, true
 	case RunsLoaded:
-		if msg.Request >= 0 || msg.Request != m.Workflows.runsRequest {
+		if msg.Request >= 0 || !isNewestRead(&m.Workflows.runsReads, workflowRead(msg.Request)) {
 			return m, nil, false
 		}
 		m.Workflows.runsAsked = false
@@ -648,3 +646,13 @@ func (WorkflowSelectMsg) msg() {}
 type WorkflowOpenMsg struct{ UID string }
 
 func (WorkflowOpenMsg) msg() {}
+
+// workflowRead is the number a read of the Workflows Page carries on the wire: below zero, so that the Jobs and Runs Pages, whose
+// numbers count up from zero, never take its answer for theirs. It is its own inverse.
+func workflowRead(n int64) int64 { return -1 - n }
+
+// isNewestRead says whether n is the number of the newest read of reads, and so its answer is to be applied.
+func isNewestRead(reads *Latest, n int64) bool {
+	ok, _ := reads.Answer(n)
+	return ok
+}

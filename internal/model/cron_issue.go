@@ -103,7 +103,7 @@ func (m Model) CronJobsClosed() bool {
 
 // cronJobsOf are the Cron jobs the Pane holds for the Issue's Project; known is false until they have been read.
 func (m Model) cronJobsOf(issue *Issue) (jobs []CronJob, known bool) {
-	if m.Jobs.ProjectID != issue.ProjectID || m.Jobs.request == 0 || (m.Jobs.Loading && m.Jobs.Jobs == nil) {
+	if m.Jobs.ProjectID != issue.ProjectID || !m.Jobs.reads.Asked() || (m.Jobs.Loading && m.Jobs.Jobs == nil) {
 		return nil, false
 	}
 	return m.Jobs.Jobs, true
@@ -135,8 +135,7 @@ func (m Model) settleCronJobs() (Model, []Cmd) {
 	}
 	m.Jobs.ProjectID, m.Jobs.Err = issue.ProjectID, nil
 	m.Jobs.Loading = true
-	m.Jobs.request++
-	return m, []Cmd{LoadJobs{Workspace: m.Workspace, ProjectID: issue.ProjectID, Archived: true, Request: m.Jobs.request}}
+	return m, []Cmd{LoadJobs{Workspace: m.Workspace, ProjectID: issue.ProjectID, Archived: true, Request: m.Jobs.reads.Ask()}}
 }
 
 // openJob shows the Jobs Page with the job selected, the Pane's Project rule applying as for any Page. A job the Pane holds

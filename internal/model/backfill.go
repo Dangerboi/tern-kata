@@ -41,7 +41,7 @@ type BackfillJob struct {
 	Missed int
 }
 
-// BackfillState is the Backfill card. Issue is the closed parent a reopen is for. While request is not zero the Pane reads the
+// BackfillState is the Backfill card. Issue is the closed parent a reopen is for. While reading is set the Pane reads the
 // parent's jobs to find out whether the reopen owes a Backfill, and the answer to that read decides.
 type BackfillState struct {
 	Open   bool
@@ -52,7 +52,8 @@ type BackfillState struct {
 	Err    error
 	// Save is the Job card's write a BackfillSave holds back.
 	Save *SaveJobCmd
-	// request is the number of the jobs read a reopen waits for.
+	// reading says a reopen waits for a read of the jobs, which request numbers.
+	reading bool
 	request int64
 }
 
@@ -134,9 +135,9 @@ func reopenIssue(m Model) (Model, []Cmd) {
 		m.Jobs.Jobs, m.Jobs.ProjectArchived = nil, false
 	}
 	m.Jobs.ProjectID, m.Jobs.Err, m.Jobs.Loading = issue.ProjectID, nil, true
-	m.Jobs.request++
-	m.Backfill = BackfillState{Issue: issue, request: m.Jobs.request}
-	return m, []Cmd{LoadJobs{Workspace: m.Workspace, ProjectID: issue.ProjectID, Archived: true, Request: m.Jobs.request}}
+	request := m.Jobs.reads.Ask()
+	m.Backfill = BackfillState{Issue: issue, reading: true, request: request}
+	return m, []Cmd{LoadJobs{Workspace: m.Workspace, ProjectID: issue.ProjectID, Archived: true, Request: request}}
 }
 
 func reopenNow(m Model, issue Issue) (Model, []Cmd) {
@@ -147,7 +148,7 @@ func reopenNow(m Model, issue Issue) (Model, []Cmd) {
 // backfillJobsRead goes on with a reopen once the read of the parent's jobs it waited for has answered: it opens the card when
 // reopening would make the jobs catch up, else reopens.
 func backfillJobsRead(m Model, msg JobsLoaded) (Model, []Cmd) {
-	if m.Backfill.Open || m.Backfill.request == 0 || m.Backfill.request != msg.Request {
+	if m.Backfill.Open || !m.Backfill.reading || m.Backfill.request != msg.Request {
 		return m, nil
 	}
 	issue := m.Backfill.Issue

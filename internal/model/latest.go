@@ -41,6 +41,15 @@ func (l *Latest) Supersede() {
 	l.out = false
 }
 
+// Discard makes every read asked for so far stale and wants none: a Page that starts over drops what is out without asking again.
+func (l *Latest) Discard() {
+	l.next++
+	l.out, l.queued = false, false
+}
+
+// Asked says some read has been asked for.
+func (l Latest) Asked() bool { return l.next > 0 }
+
 // Answer says what an answer to read n calls for: current says it is the newest read's answer and is to be applied; again says
 // a fresh read is wanted now, which the Page asks for with Ask or Queue.
 func (l *Latest) Answer(n int64) (current, again bool) {
