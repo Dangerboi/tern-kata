@@ -104,6 +104,10 @@ func TestTheStartAndItsResultsReachTheModel(t *testing.T) {
 	if len(pruned.State.Model.AgentMapping) != 0 {
 		t.Fatalf("pruned agents %+v", pruned.State.Model.AgentMapping)
 	}
+	kept := step(t, s, model.AgentsPruned{Agents: []model.AgentEntry{entry}, Err: errString("tern ls failed")})
+	if len(kept.State.Model.AgentMapping) != 1 || kept.State.Model.AgentMapping[0] != entry {
+		t.Fatalf("agents after a failed tern ls %+v, want the file's entry", kept.State.Model.AgentMapping)
+	}
 	if started := step(t, driver.State{}, model.Start{Workspace: "/repo"}); !hasPrune(started.Cmds) {
 		t.Fatalf("start cmds %#v, want the agents pruned", started.Cmds)
 	}
