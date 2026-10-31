@@ -224,10 +224,10 @@ end
 -- command carries the marker is tried once, whatever the result (remembered in `placed` until its pane closes), and then never
 -- touched again. The starter id is exact only on the session host's machine, so the move is a guess there. In its session the
 -- tab moves only when the run of tabs at the end that are candidates (agents tried in this pass) or agent tabs not handled yet
--- (a pane not in `placed` whose running line or agent command carries the marker, even if Tern lists no agent for it yet)
--- contains it, and the tab directly before that run holds no kata Pane: Tern's append already sits right of a kata Pane,
--- possibly placed exactly by the host window. A tab after the run that is neither, or a kata Pane's tab just before it,
--- leaves the tab where it is. So with no window on the session host, `W` in a kata Pane while another kata Pane's tab is
+-- (a pane not in `placed` whose running line carries the marker, even if Tern lists no agent for it yet) contains it, and
+-- the tab directly before that run holds no kata Pane: Tern's append already sits right of a kata Pane, possibly placed
+-- exactly by the host window. A tab after it that is neither, or a kata Pane's tab just before the run, leaves the tab
+-- where it is. So with no window on the session host, `W` in a kata Pane while another kata Pane's tab is
 -- last does not move the agent tab. The host window's exact placement is the `tab_created` one.
 -- The starter is the kata Pane whose id is `<starter>`, else the focused Pane if it is a kata Pane (the Pane the user just pressed
 -- `W` in), else the window's only kata Pane; with none of these nothing moves.
@@ -257,7 +257,7 @@ local function starterOf(cx: WindowCx, tab: number): number?
 end
 
 -- The tabs of `candidates` to move: those in the run of tabs at the end of their session made only of candidates and agent
--- tabs not handled yet (a pane not in `placed` whose running line or agent command carries the marker), when the tab
+-- tabs not handled yet (a pane not in `placed` whose running line carries the marker), when the tab
 -- directly before that run holds no kata Pane. Highest position first, so tabs moved to the same home keep the order they
 -- were opened in.
 local function unplacedTabs(cx: WindowCx, candidates: { [number]: boolean }): { number }
@@ -270,10 +270,6 @@ local function unplacedTabs(cx: WindowCx, candidates: { [number]: boolean }): { 
                 pending[info.tab] = true
             end
         end
-    end
-    for _, agent in cx.agents:list() do
-        local info = cx.session:pane(agent.pane)
-        if info and info.tab and not placed[agent.pane] and markerOf(agent.command) then pending[info.tab] = true end
     end
     local bySession: { [any]: { TabInfo } } = {}
     for _, info in cx.session:tabs() do
