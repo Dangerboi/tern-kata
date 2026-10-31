@@ -28,9 +28,46 @@ local MARK = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/s
 local marked: { [number]: boolean } = {}
 local markCss = ""
 
+-- A tab face's `data-pane` holds the pane's full id, but Lua gets a remote host's pane ids packed below 2^53 (a double holds no
+-- more): bit 52 set, the host slot in bits 44-51, the id's bits 32-47 in bits 24-39 and its bits 0-23 in bits 0-23 (the
+-- id's bits 24-31 are always zero, which is what makes the packing fit). The face id is host * 2^56 + that id, above 2^53
+-- itself, so it is built as decimal text. A local id (below 2^52) is the face's own.
+local function faceId(pane: number): string
+    if pane < 2 ^ 52 then return string.format("%d", pane) end
+    local host = math.floor(pane / 2 ^ 44) % 256
+    local low = pane % 2 ^ 44
+    -- host * 2^56 + bits 32-47 * 2^32 + bits 0-23 = (host * 2^24 + bits 32-47) * 2^32 + bits 0-23, the first factor under 2^32:
+    -- doubled 32 times in base-10^7 digits (least significant first), then the low bits added.
+    local top = host * 2 ^ 24 + math.floor(low / 2 ^ 24)
+    local digits: { number } = {}
+    while top > 0 do
+        table.insert(digits, top % 1e7)
+        top = math.floor(top / 1e7)
+    end
+    for _ = 1, 32 do
+        local carry = 0
+        for i, digit in digits do
+            local doubled = digit * 2 + carry
+            digits[i] = doubled % 1e7
+            carry = doubled // 1e7
+        end
+        if carry > 0 then table.insert(digits, carry) end
+    end
+    local carry = low % 2 ^ 24
+    for i, digit in digits do
+        local sum = digit + carry
+        digits[i] = sum % 1e7
+        carry = sum // 1e7
+    end
+    if carry > 0 then table.insert(digits, carry) end
+    local text = string.format("%d", digits[#digits])
+    for i = #digits - 1, 1, -1 do text ..= string.format("%07d", digits[i]) end
+    return text
+end
+
 local function restyleMarks()
     local faces: { string } = {}
-    for pane in marked do table.insert(faces, string.format(".tn-face[data-pane='%d']", pane)) end
+    for pane in marked do table.insert(faces, string.format(".tn-face[data-pane='%s']", faceId(pane))) end
     table.sort(faces)
     local css = ""
     if #faces > 0 then
