@@ -218,3 +218,18 @@ func TestAgentWhereNamesBackgroundAndOpenAgents(t *testing.T) {
 		}
 	}
 }
+
+// The card's handlers refuse with the reason its buttons show.
+func TestAgentCardRefusalNoticeIsTheButtonsReason(t *testing.T) {
+	m := model.Model{Cols: 160, Project: model.Project{ID: 7}, Issues: []model.Issue{{UID: "a", QualifiedID: "work#a", Status: "open"}}, SelectedUID: "a"}
+	m, _ = model.Update(m, model.KeyMsg{Chord: "w"})
+	m.AgentCard.IssueUID = "missing"
+	reason := m.AgentCardUnavailable(model.AgentCardTab)
+	if reason == "" {
+		t.Fatal("a start on an Issue the Pane does not hold is available")
+	}
+	after, cmds := model.Update(m, model.KeyMsg{Chord: "t"})
+	if _, started := agentCmd[model.StartAgent](cmds); started || after.Notice != reason || after.TopCard() == model.CardAgent {
+		t.Errorf("notice %q, started %v, card %v; want the button's reason %q and the card closed", after.Notice, started, after.TopCard(), reason)
+	}
+}

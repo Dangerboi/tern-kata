@@ -120,13 +120,14 @@ func issues(m model.Model, now time.Time) tern.Element {
 		}
 	}
 	shownGroups := make(map[string]bool, len(m.Groups))
+	menu := newContextMenuKeys(rowMode(m), model.DrillIn)
 	for i, row := range rows {
 		group := groups[row.UID]
 		if row.Depth == 0 && group.Heading && !shownGroups[group.ID] {
 			items = append(items, ui.Text{Common: ui.Common{Key: "group." + group.ID}, Spans: []ui.Span{{T: group.Title, S: "strong"}}})
 			shownGroups[group.ID] = true
 		}
-		items = append(items, issueRow(m, row, row.UID == m.SelectedUID, stripeRole(i), cols, now))
+		items = append(items, issueRow(m, row, row.UID == m.SelectedUID, stripeRole(i), cols, menu, now))
 	}
 	selected := ""
 	if m.SelectedUID != "" {
@@ -220,7 +221,7 @@ func topBar(m model.Model) tern.Element {
 		ui.Row{Common: rightCell, Gap: ui.GapNone, Children: append(zoneNote, ui.Nodes(
 			ui.Text{Common: flexCell("daemon", ui.ToneMuted, 100), Text: m.DaemonLine(), Wrap: ui.WrapNone},
 			ui.Text{Common: flexCell("sep", ui.ToneMuted, 0), Text: model.DaemonSeparator, Wrap: ui.WrapNone},
-			menuButton(),
+			menuButton(m),
 		)...)},
 	)}
 }
@@ -306,7 +307,7 @@ func (c *listColumns) fit(id, owner int) {
 // issueRow is one Issue: the id, prio, status and title on the left, the
 // title being the cell that gives way, and kids, owner and updated pinned to
 // the right so each column lines up with the header. A blank cell keeps its width.
-func issueRow(m model.Model, row model.IssueRow, selected bool, role string, cols listColumns, now time.Time) tern.Element {
+func issueRow(m model.Model, row model.IssueRow, selected bool, role string, cols listColumns, menu contextMenuKeys, now time.Time) tern.Element {
 	tone := ui.ToneNeutral
 	statusStyle := "accent"
 	if model.IsClosed(row.Issue) {
@@ -336,7 +337,7 @@ func issueRow(m model.Model, row model.IssueRow, selected bool, role string, col
 	}
 	owner := listOwner(m, row, now)
 	// A parent's click folds it; a double click on any row opens it. Tern sends the two clicks first, so a parent's fold ends where it began.
-	actions := &ui.Actions{DblClick: OpenRowClick(row.UID), Menu: issueMenu(rowMode(m), row.Issue, model.DrillIn)}
+	actions := &ui.Actions{DblClick: OpenRowClick(row.UID), Menu: menu.of(row.Issue)}
 	if row.HasChildren {
 		actions.Click = ToggleClick(row.UID)
 	}
@@ -390,7 +391,7 @@ func footerHints(m model.Model) (hints []footerHint, position string) {
 		if binding.Action == model.ClosePicker && m.Picker.Level != model.MenuTop && m.Picker.Filter == "" {
 			help = "back"
 		}
-		if binding.Action == model.DrillOut && m.EscGoesBack() {
+		if (binding.Action == model.DrillOut || binding.Action == model.ShowMenu) && m.EscGoesBack() {
 			help = "back"
 		}
 		if job := m.SelectedJob(); binding.Action == model.ArchiveJobAction && job != nil && job.Archived() {

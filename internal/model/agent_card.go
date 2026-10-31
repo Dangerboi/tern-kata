@@ -69,7 +69,7 @@ func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case AgentCardCancel:
 		m.AgentCard = AgentCardState{}
 	case AgentCardGo:
-		if len(rows) == 0 {
+		if m.AgentCardUnavailable(AgentCardGo) != "" {
 			return m, nil
 		}
 		block := rows[cursor].Block
@@ -81,11 +81,11 @@ func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		}
 		return sendToBackground(m, rows[cursor].AgentEntry)
 	case AgentCardSplit:
-		return startAgent(m, AgentSplit)
+		return startAgent(m, AgentCardSplit, AgentSplit)
 	case AgentCardTab:
-		return startAgent(m, AgentTab)
+		return startAgent(m, AgentCardTab, AgentTab)
 	case AgentCardNewBackground:
-		return startAgent(m, AgentBackground)
+		return startAgent(m, AgentCardNewBackground, AgentBackground)
 	case MoveDown:
 		m.AgentCard.Cursor = min(cursor+1, max(0, len(rows)-1))
 	case MoveUp:
@@ -99,11 +99,12 @@ func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 }
 
 // sendToBackground is `b`: an agent in view goes to the hidden session, through the step going back uses. One already in the
-// background and not open stays there; the card closes with a Notice saying so.
+// background and not open stays there; the card closes with the card's reason as a Notice.
 func sendToBackground(m Model, e AgentEntry) (Model, []Cmd) {
+	reason := m.AgentCardUnavailable(AgentCardBackground)
 	m.AgentCard = AgentCardState{}
-	if e.Background && !e.Open {
-		m.Notice = "That agent is already in the background."
+	if reason != "" {
+		m.Notice = reason
 		return m, nil
 	}
 	return placeAgent(m, e.Block), []Cmd{SendAgentBack{Block: e.Block, IssueRef: e.IssueRef}}
@@ -123,26 +124,31 @@ func agentCardSelected(m Model, msg AgentCardSelected) Model {
 	return m
 }
 
-// AgentCardUnavailable is why action cannot run on the Agent card now, or "" when it can: the card's own handlers refuse
-// these cases, so a button for it is drawn disabled with the reason.
+// AgentCardUnavailable is why action cannot run on the Agent card now, or "" when it can. The card's handlers refuse with this
+// reason as a Notice, and the card's buttons are drawn disabled with it; the one difference is that with no agent listed the card
+// stays open and says nothing.
 func (m Model) AgentCardUnavailable(action Action) string {
 	rows := m.AgentCardRows()
 	switch action {
 	case AgentCardGo:
 		if len(rows) == 0 {
-			return "No agent on this Issue yet"
+			return noAgentReason
 		}
 	case AgentCardBackground:
 		if len(rows) == 0 {
-			return "No agent on this Issue yet"
+			return noAgentReason
 		}
 		if e := rows[m.AgentCardCursor()]; e.Background && !e.Open {
-			return "That agent is already in the background"
+			return "That agent is already in the background."
 		}
 	case AgentCardSplit, AgentCardTab, AgentCardNewBackground:
-		if issue := m.issueByUID(m.AgentCard.IssueUID); issue != nil && IsClosed(*issue) {
-			return ClosedIssueRefusal
+		issue := m.issueByUID(m.AgentCard.IssueUID)
+		if issue == nil {
+			return "That Issue is not loaded."
 		}
+		return IssueRefusal(*issue, action)
 	}
 	return ""
 }
+
+const noAgentReason = "No agent on this Issue yet."

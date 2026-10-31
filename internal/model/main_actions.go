@@ -305,7 +305,7 @@ var mainRows = []actionEntry{
 	{action: NewChild, modes: issueModes, keys: keys("shift+n", "N"), help: "child", footer: issueModes, sheet: []sheetLine{{sheetChildren, 1, "new child"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, true) }},
 	// Layout, back, help and quit.
 	{action: ToggleDetail, modes: []Mode{ModeList, ModeLane, ModeDetail}, keys: keys("shift+l", "L"), help: "layout", footer: []Mode{ModeList, ModeLane, ModeDetail}, sheet: []sheetLine{{sheetGlobal, 6, "toggle layout"}}, handle: pure(Model.toggleDetail)},
-	{action: DrillOut, modes: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}, keys: keys("escape", "esc"), help: "Menu", footer: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}, sheet: []sheetLine{{sheetGlobal, 5, "menu"}}, handle: drillOut},
+	{action: ShowMenu, modes: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}, keys: keys("escape", "esc"), help: "Menu", footer: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}, sheet: []sheetLine{{sheetGlobal, 5, "menu"}}, handle: drillOut},
 	{action: DrillOut, modes: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}, keys: keys("backspace", "⌫"), help: "back", handle: backWithoutMenu},
 	{action: DrillOut, modes: []Mode{ModeLane}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeLane}, sheet: []sheetLine{{sheetBoard, 10, "back to the Board, or the Menu in a narrow Pane"}}, handle: laneBack},
 	{action: DrillOut, modes: []Mode{ModeDetail}, keys: keys("escape", "esc", "left", "←", "backspace", "⌫"), help: "back", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 4, "back"}}, handle: drillOut},

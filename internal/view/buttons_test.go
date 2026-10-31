@@ -193,12 +193,23 @@ func TestMenuButtonShowsTheKeyThatOpensTheMenu(t *testing.T) {
 	}
 }
 
+func TestMenuButtonShowsNoKeycapWhereEscDoesNotOpenTheMenu(t *testing.T) {
+	m := press(selectedFirst(), "enter")
+	if mode := m.CurrentMode(); mode != model.ModeDetail {
+		t.Fatalf("fixture: mode %q, want detail", mode)
+	}
+	node := pickerNodes(t, m)["main.topbar.right.menu"]
+	if keys, _ := node.P["keys"].([]any); len(keys) != 0 {
+		t.Errorf("Menu button keys %v with the detail focused, want none", keys)
+	}
+}
+
 func TestAgentCardDisablesWhatCannotRunWithAReason(t *testing.T) {
 	m := model.Model{Cols: 160, Project: model.Project{ID: 7}, Issues: []model.Issue{{UID: "a", QualifiedID: "work#a", Status: "open"}}, SelectedUID: "a"}
 	nodes := pickerNodes(t, press(m, "w"))
 	for _, id := range []string{"go", "background"} {
 		node := nodes["layer.agent.foot."+id]
-		if node.P["disabled"] != "No agent on this Issue yet" || node.P["variant"] == "primary" {
+		if node.P["disabled"] != "No agent on this Issue yet." || node.P["variant"] == "primary" {
 			t.Errorf("%s: disabled %v, variant %v", id, node.P["disabled"], node.P["variant"])
 		}
 	}

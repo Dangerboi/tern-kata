@@ -91,8 +91,26 @@ type AgentsPruned struct {
 
 func (AgentsPruned) msg() {}
 
-// ClosedIssueRefusal is the Notice `w` shows on a closed Issue.
+// ClosedIssueRefusal is the Notice `w` shows on a closed Issue, and the reason the buttons that start an agent on one are off.
 const ClosedIssueRefusal = "This Issue is closed; reopen it first (r)."
+
+// ClosedAlreadyRefusal is the reason Close is off on a closed Issue.
+const ClosedAlreadyRefusal = "This Issue is already closed."
+
+// IssueRefusal is why action cannot run on issue, or "" when it can: the closed-Issue rules that the handlers' Notices, the Agent
+// card's buttons and the context menu's rows all follow.
+func IssueRefusal(issue Issue, action Action) string {
+	if !IsClosed(issue) {
+		return ""
+	}
+	switch action {
+	case OpenAgentCardAction, AgentCardSplit, AgentCardTab, AgentCardNewBackground:
+		return ClosedIssueRefusal
+	case OpenClose:
+		return ClosedAlreadyRefusal
+	}
+	return ""
+}
 
 // openAgent is `w`: the Agent card for the selected Issue, with or without agents; a closed Issue gets the refusal and no card.
 // agents.json is read again as it opens, since another Pane may have sent an agent to the background since the last relay.
@@ -101,8 +119,8 @@ func openAgent(m Model) (Model, []Cmd) {
 	if issue == nil {
 		return m, nil
 	}
-	if IsClosed(*issue) {
-		m.Notice = ClosedIssueRefusal
+	if reason := IssueRefusal(*issue, OpenAgentCardAction); reason != "" {
+		m.Notice = reason
 		return m, nil
 	}
 	m = openAgentCard(m, *issue)
@@ -114,16 +132,14 @@ func openAgent(m Model) (Model, []Cmd) {
 	return m, []Cmd{RefreshAgents{PaneBlock: m.PaneBlock}}
 }
 
-// startAgent starts an agent on the Agent card's Issue where the card's key says; the card closes first.
-func startAgent(m Model, placement AgentPlacement) (Model, []Cmd) {
-	card := m.AgentCard
+// startAgent starts an agent on the Agent card's Issue where the card's key (action) says; the card closes first, and a refusal
+// of the card's rules is the Notice.
+func startAgent(m Model, action Action, placement AgentPlacement) (Model, []Cmd) {
+	reason := m.AgentCardUnavailable(action)
+	issue := m.issueByUID(m.AgentCard.IssueUID)
 	m.AgentCard = AgentCardState{}
-	issue := m.issueByUID(card.IssueUID)
-	if issue == nil {
-		return m, nil
-	}
-	if IsClosed(*issue) {
-		m.Notice = ClosedIssueRefusal
+	if reason != "" {
+		m.Notice = reason
 		return m, nil
 	}
 	cmd := StartAgent{Placement: placement, IssueUID: issue.UID, IssueRef: issue.QualifiedID, IssueTitle: issue.Title, ProjectID: issue.ProjectID,

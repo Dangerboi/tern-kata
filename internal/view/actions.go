@@ -17,23 +17,23 @@ import (
 // The Luau window hook keeps its own copy of the Issue list id and the select-issue and agent-states actions;
 // agent-states carries the JSON agent list as its value and is not a click.
 const (
-	keyAct           = "key"
-	jumpAct          = "jump"
-	activityTabAct   = "activity-tab"
-	detailItemAct    = "detail-item"
-	chooseAct        = "choose"
-	cardAct          = "card"
-	refAct           = "ref"
-	jobAct           = "job"
-	runAct           = "run"
-	attentionAct     = "attention"
-	openJobAct       = "open-job"
-	jobOpenAct       = "job-open"
-	runOpenAct       = "run-open"
-	attentionOpenAct = "attention-open"
-	workflowOpenAct  = "workflow-open"
-	agentAct         = "agent"
-	menuPickAct      = "pick"
+	keyAct             = "key"
+	jumpAct            = "jump"
+	activityTabAct     = "activity-tab"
+	detailItemAct      = "detail-item"
+	chooseAct          = "choose"
+	cardAct            = "card"
+	refAct             = "ref"
+	jobAct             = "job"
+	runAct             = "run"
+	attentionAct       = "attention"
+	openJobAct         = "open-job"
+	jobOpenAct         = "job-open"
+	runOpenAct         = "run-open"
+	attentionOpenAct   = "attention-open"
+	workflowOpenAct    = "workflow-open"
+	agentAct           = "agent"
+	contextMenuPickAct = "pick"
 )
 
 // FocusDetailClick, RetryClick and MenuClick carry no value.
@@ -63,8 +63,11 @@ func AgentClick(block string) string { return click(agentAct, block) }
 // CardClick selects the Board card of the Issue.
 func CardClick(uid string) string { return click(cardAct, uid) }
 
-// MenuPickClick is the id of a context menu row of the Issue with uid: select it, then press chord.
-func MenuPickClick(uid, chord string) string { return click(menuPickAct, uid+":"+chord) }
+// ContextMenuPickClick is the id of a context menu row of the Issue with uid built for mode: select it, then run what chord is
+// bound to in mode.
+func ContextMenuPickClick(uid string, mode model.Mode, chord string) string {
+	return click(contextMenuPickAct, string(mode)+":"+uid+":"+chord)
+}
 
 // JobClick selects the job's card on the Jobs Page.
 func JobClick(uid string) string { return click(jobAct, uid) }
@@ -148,9 +151,11 @@ func DecodeAction(id, act, value string) model.Msg {
 		return model.AgentJumpMsg{Block: value}
 	case cardAct:
 		return model.SelectMsg{UID: value}
-	case menuPickAct:
-		if uid, chord, found := strings.Cut(value, ":"); found {
-			return model.MenuPickMsg{UID: uid, Chord: chord}
+	case contextMenuPickAct:
+		if mode, rest, found := strings.Cut(value, ":"); found {
+			if uid, chord, found := strings.Cut(rest, ":"); found {
+				return model.ContextMenuPickMsg{UID: uid, Mode: model.Mode(mode), Chord: chord}
+			}
 		}
 	case refAct:
 		return model.ShowCardMsg{UID: value}

@@ -162,15 +162,18 @@ var fieldSpecs = map[Action]fieldSpec{
 // FieldTitle is the title of the form of an action.
 func FieldTitle(action Action) string { return fieldSpecs[action].title }
 
-// FieldFormTitle is the title of the open form: FieldTitle, with the Issue named where kata tui names it.
-func (m Model) FieldFormTitle() string {
-	f := m.FieldForm
-	if f.Action == TimedAssignAction {
+// FieldFormTitle is the title of the open form: what the card is for, FieldTitle.
+func (m Model) FieldFormTitle() string { return FieldTitle(m.FieldForm.Action) }
+
+// FieldFormMeta is the Issue the open form acts on, as "#shortid", where kata tui names it in the title; "" when the form does not
+// name one.
+func (m Model) FieldFormMeta() string {
+	if f := m.FieldForm; f.Action == TimedAssignAction {
 		if issue := m.issueByUID(f.UID); issue != nil {
-			return fmt.Sprintf("Assignment duration for #%s (1m..24h, e.g. 1h)", issue.ShortID)
+			return "#" + issue.ShortID
 		}
 	}
-	return FieldTitle(f.Action)
+	return ""
 }
 
 // assignmentSeconds reads a timed assignment's duration: a Go duration of whole seconds from 1m to 24h.
