@@ -1,10 +1,13 @@
 package view_test
 
 import (
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/Dangerboi/tern-kata/internal/view"
 )
 
 type button struct{ id, text string }
@@ -20,11 +23,14 @@ func cardButtons(t *testing.T, m model.Model, card string, want []button, primar
 			t.Errorf("%s has no %s button", card, b.id)
 			continue
 		}
-		if !strings.HasPrefix(text(node), b.text+" (") {
-			t.Errorf("%s.%s text = %q, want %q and the keys", card, b.id, text(node), b.text)
+		if node.K != "button" || text(node) != b.text {
+			t.Errorf("%s.%s is %s %q, want a button of %q", card, b.id, node.K, text(node), b.text)
 		}
-		if (node.P["tone"] == "accent") != (b.id == primary) {
-			t.Errorf("%s.%s tone = %v, primary is %s", card, b.id, node.P["tone"], primary)
+		if keys, _ := node.P["keys"].([]any); len(keys) == 0 {
+			t.Errorf("%s.%s shows no keycaps", card, b.id)
+		}
+		if (node.P["variant"] == "primary") != (b.id == primary) {
+			t.Errorf("%s.%s variant = %v, primary is %s", card, b.id, node.P["variant"], primary)
 		}
 	}
 }
@@ -106,8 +112,9 @@ func TestCloseAndFiltersEndInButtons(t *testing.T) {
 
 func TestCardButtonNamesEveryKeyOfItsAction(t *testing.T) {
 	m := press(selectedFirst(), "n", "t", "escape")
-	if got := text(pickerNodes(t, m)["layer.create.actions.keep"]); got != "Keep editing (n / esc)" {
-		t.Errorf("keep button = %q", got)
+	node := pickerNodes(t, m)["layer.create.actions.keep"]
+	if keys := node.P["keys"]; !reflect.DeepEqual(keys, []any{"n", "esc"}) || text(node) != "Keep editing" {
+		t.Errorf("keep button = %q with keys %v", text(node), keys)
 	}
 }
 
@@ -148,8 +155,54 @@ func TestAgentCardEndsInButtonsAndSaysWhenThereAreNoAgents(t *testing.T) {
 	m := model.Model{Cols: 160, Project: model.Project{ID: 7}, Issues: []model.Issue{{UID: "a", QualifiedID: "work#a", Status: "open"}}, SelectedUID: "a"}
 	m = press(m, "w")
 	cardButtons(t, m, "layer.agent.actions", []button{{"go", "Go to agent"}, {"split", "New in a split"}, {"tab", "New in a tab"},
-		{"new-background", "New in the background"}, {"background", "Send to background"}, {"cancel", "Cancel"}}, "go")
+		{"new-background", "New in the background"}, {"background", "Send to background"}, {"cancel", "Cancel"}}, "")
 	if got := text(pickerNodes(t, m)["layer.agent.none"]); got != "No agents on this Issue yet." {
 		t.Errorf("empty card says %q", got)
+	}
+}
+
+func TestCardButtonKeycapsAndClickFollowARebind(t *testing.T) {
+	saved := slices.Clone(model.Keymap)
+	t.Cleanup(func() { model.Keymap = saved })
+	for i, b := range model.Keymap {
+		if b.Mode == model.ModeCreate && b.Action == model.CancelDraft && !b.Headless() {
+			model.Keymap[i].Chord, model.Keymap[i].Key = "ctrl+q", "ctrl+q"
+		}
+	}
+	m := press(selectedFirst(), "n", "t")
+	node := pickerNodes(t, m)["layer.create.actions.cancel"]
+	if keys := node.P["keys"]; !reflect.DeepEqual(keys, []any{"ctrl+q"}) {
+		t.Errorf("rebound cancel keycaps = %v", keys)
+	}
+	if click := node.P["actions"].(map[string]any)["click"]; click != view.KeyClick("ctrl+q") {
+		t.Errorf("rebound cancel click = %v, want the key click of ctrl+q", click)
+	}
+}
+
+func TestDestructiveConfirmsAreDangerButtons(t *testing.T) {
+	m := press(selectedFirst(), "n", "t", "escape")
+	if got := pickerNodes(t, m)["layer.create.actions.discard"].P["variant"]; got != "danger" {
+		t.Errorf("discard variant = %v", got)
+	}
+}
+
+func TestMenuButtonShowsTheKeyThatOpensTheMenu(t *testing.T) {
+	node := pickerNodes(t, selectedFirst())["main.topbar.right.menu"]
+	if node.K != "button" || !reflect.DeepEqual(node.P["keys"], []any{"esc"}) || node.P["size"] != nil {
+		t.Errorf("Menu button = %s keys %v size %v, want a default-size button with the esc keycap", node.K, node.P["keys"], node.P["size"])
+	}
+}
+
+func TestAgentCardDisablesWhatCannotRunWithAReason(t *testing.T) {
+	m := model.Model{Cols: 160, Project: model.Project{ID: 7}, Issues: []model.Issue{{UID: "a", QualifiedID: "work#a", Status: "open"}}, SelectedUID: "a"}
+	nodes := pickerNodes(t, press(m, "w"))
+	for _, id := range []string{"go", "background"} {
+		node := nodes["layer.agent.actions."+id]
+		if node.P["disabled"] != "No agent on this Issue yet" || node.P["variant"] == "primary" {
+			t.Errorf("%s: disabled %v, variant %v", id, node.P["disabled"], node.P["variant"])
+		}
+	}
+	if nodes["layer.agent.actions.split"].P["disabled"] != nil || nodes["layer.agent.actions.cancel"].P["disabled"] != nil {
+		t.Error("buttons that can run are disabled")
 	}
 }

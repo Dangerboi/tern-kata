@@ -188,8 +188,6 @@ func TestEveryClickTargetEndsWhereItsKeysEnd(t *testing.T) {
 		{"parent row from detail", model.ColumnDetail, nil, toggle, model.ColumnDetail, keys("escape", "space"), nil},
 		{"parent row from Collections", model.ColumnCollections, nil, toggle, model.ColumnList, keys("space"), nil},
 		{"parent row collapses an expanded parent", model.ColumnCollections, []string{"space"}, toggle, model.ColumnList, keys("space"), nil},
-		{"top bar title from list", model.ColumnList, nil, plain(click("", view.MenuClick)), model.ColumnList, inputs(openMenu), nil},
-		{"top bar title from detail", model.ColumnDetail, nil, plain(click("", view.MenuClick)), model.ColumnDetail, inputs(openMenu), nil},
 		{"detail title from list", model.ColumnList, nil, plain(click("", view.FocusDetailClick)), model.ColumnList, keys("enter"), nil},
 		{"Activity tab", model.ColumnList, nil, plain(click("", view.ActivityTabClick(model.TabLinks))), model.ColumnList, detailPath(model.TabLinks), nil},
 		{"detail row", model.ColumnDetail, nil, plain(click("", view.DetailItemClick(model.TabLinks, "1"))), model.ColumnDetail, detailPath(model.TabLinks), nil},
@@ -291,7 +289,16 @@ func cardButtonsOf(t *testing.T, s driver.State) (map[string]string, map[string]
 		clickAct, _ := actions["click"].(string)
 		if strings.HasPrefix(clickAct, view.KeyClick("")) && strings.HasPrefix(node.ID, "layer.") {
 			found[node.ID] = clickAct
-			labels[node.ID], _ = node.P["text"].(string)
+			words, _ := node.P["text"].(string)
+			keys, _ := node.P["keys"].([]any)
+			labels[node.ID] = words
+			if len(keys) > 0 {
+				names := make([]string, len(keys))
+				for i, k := range keys {
+					names[i], _ = k.(string)
+				}
+				labels[node.ID] += " (" + strings.Join(names, " / ") + ")"
+			}
 		}
 	}
 	return found, labels

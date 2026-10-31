@@ -148,22 +148,11 @@ func TestRenderPickerOnlyWhenOpen(t *testing.T) {
 	}
 }
 
-func TestRenderTopBarTitleOpensPicker(t *testing.T) {
-	heading := pickerNodes(t, pickerLoaded(true))["main.topbar.left.heading"]
-	actions, _ := heading.P["actions"].(map[string]any)
-	if actions["click"] != view.MenuClick {
-		t.Fatalf("heading actions = %v", heading.P["actions"])
-	}
-}
-
 func TestRenderMenuTextsAndButtons(t *testing.T) {
 	m := menuOpened(pickerLoaded(true))
 	nodes := pickerNodes(t, m)
-	if got := nodes["main.topbar.right.menu"]; text(nodes["main.topbar.right.menu.label"]) != "Menu" || got.P["actions"].(map[string]any)["click"] != view.MenuClick {
+	if got := nodes["main.topbar.right.menu"]; text(got) != "Menu" || got.P["actions"].(map[string]any)["click"] != view.MenuClick {
 		t.Fatalf("top bar button = %v", got)
-	}
-	if got := nodes["main.topbar.left.heading"].P["title"]; got != "Menu" {
-		t.Fatalf("heading tooltip = %v", got)
 	}
 	if got := nodes["layer.collections.input"].P["placeholder"]; got != "Filter Menu" {
 		t.Fatalf("filter placeholder = %v", got)

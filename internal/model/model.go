@@ -69,6 +69,7 @@ type Model struct {
 	etagQuery  SnapshotQuery
 	CloseForm  CloseFormState
 	DatesForm  DatesFormState
+	DatePick   DatePickerState
 	DeleteForm DeleteFormState
 	TokenForm  TokenFormState
 	RevokeCard RevokeState
@@ -208,6 +209,11 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	switch msg := msg.(type) {
 	case FocusFieldMsg:
 		return focusField(m, msg.Field), nil
+	case DatePickMsg:
+		if entry, ok := m.topEntry(); ok && datePickerOpen(m, entry) {
+			return pickDay(m, msg.Day), nil
+		}
+		return m, nil
 	case ChooseMsg:
 		return chooseField(m, msg.Field, msg.Index), nil
 	case KeyMsg:
