@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"bytes"
 	"cmp"
 	"context"
 	"errors"
@@ -12,7 +11,6 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 
@@ -815,133 +813,6 @@ func (w *Worker) sendNotice(ctx context.Context, j *Journal, recipient, message 
 	return w.opt.Kata.Notify(ctx, j.ProjectID, j.Actor, j.Issue.UID, recipient, w.opt.Config.Executor, message)
 }
 
-// lineSink feeds omp's stdout, line by line, to the parser and keeps the first bytes in a capped file.
-type lineSink struct {
-	mu       sync.Mutex
-	parser   *agentParser
-	file     *cappedFile
-	buf      []byte
-	skipping bool
-}
-
-// shortcut: a line past this is skipped by the live parser, so an agent_end longer than 64 MiB leaves a finished run
-// recorded failed ("no agent_end").
-const maxLine = 64 << 20
-
-func (s *lineSink) Write(p []byte) (int, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	n := len(p)
-	_, _ = s.file.Write(p)
-	for len(p) > 0 {
-		i := bytes.IndexByte(p, '\n')
-		if i < 0 {
-			if !s.skipping {
-				s.buf = append(s.buf, p...)
-				if len(s.buf) > maxLine {
-					s.buf, s.skipping = nil, true
-				}
-			}
-			break
-		}
-		if !s.skipping {
-			s.buf = append(s.buf, p[:i]...)
-			s.line(s.buf)
-		}
-		s.buf, s.skipping = s.buf[:0], false
-		p = p[i+1:]
-	}
-	return n, nil
-}
-
-// line hands one complete line to the parser. omp's last line is agent_end; the cap must not lose it, or a long run
-// reads as unfinished, so it is kept past the cap.
-func (s *lineSink) line(l []byte) {
-	s.parser.Line(l)
-	if t := bytes.TrimSpace(l); bytes.HasPrefix(t, []byte(`{"type":"agent_end"`)) {
-		s.file.keep(t)
-	}
-}
-
-// flush parses a last line that had no newline.
-func (s *lineSink) flush() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if len(s.buf) > 0 && !s.skipping {
-		s.line(s.buf)
-	}
-	s.buf = nil
-}
-
-func (s *lineSink) close() { _ = s.file.Close() }
-
-// cappedFile records the first max bytes of a capture and drops the rest, so a chatty agent cannot fill the disk.
-type cappedFile struct {
-	*capture
-	left int
-	cut  bool // bytes were dropped
-	last byte // the last byte written; a newline while the file is empty
-}
-
-func openCapped(hooks Hooks, path string, max int) *cappedFile {
-	return &cappedFile{capture: openCapture(hooks, path), left: max, last: '\n'}
-}
-
-func (c *cappedFile) Write(p []byte) (int, error) {
-	n := min(len(p), c.left)
-	if n > 0 {
-		_, _ = c.capture.Write(p[:n])
-		c.left -= n
-		c.last = p[n-1]
-	}
-	c.cut = c.cut || n < len(p)
-	return len(p), nil
-}
-
-// keep writes line past the cap when the cap has dropped bytes; a cut that fell mid-line leaves that partial line
-// to stand alone, which readers skip as garbage. It is the only write allowed past the cap.
-func (c *cappedFile) keep(line []byte) {
-	if !c.cut {
-		return
-	}
-	if c.last != '\n' {
-		_, _ = c.capture.Write([]byte{'\n'})
-	}
-	_, _ = c.capture.Write(line)
-	_, _ = c.capture.Write([]byte{'\n'})
-	c.last = '\n'
-}
-
-// stderrFileCap is how much of stderr's start stderr.log keeps.
-const stderrFileCap = 64 << 10
-
-// tailSink keeps the first 64 KiB of stderr in a file and its last 2 KiB for failure reasons.
-type tailSink struct {
-	file *cappedFile
-	mu   sync.Mutex
-	tail []byte
-	cut  bool // the stream was longer than tail, so tail may start mid-line
-	// cutAtLine is whether the byte just before tail is a newline, so tail starts at a line start.
-	cutAtLine bool
-}
-
-func newTailSink(hooks Hooks, path string) *tailSink {
-	return &tailSink{file: openCapped(hooks, path, stderrFileCap)}
-}
-
-func (t *tailSink) Write(p []byte) (int, error) {
-	_, _ = t.file.Write(p)
-	t.mu.Lock()
-	t.tail = append(t.tail, p...)
-	if len(t.tail) > 2048 {
-		t.cutAtLine = t.tail[len(t.tail)-2049] == '\n'
-		t.tail = t.tail[len(t.tail)-2048:]
-		t.cut = true
-	}
-	t.mu.Unlock()
-	return len(p), nil
-}
-
 // ansiSeq matches the escape sequences a colored stderr carries: CSI, OSC and any other ESC, intermediates, final
 // escape. An OSC body stops at newline, so an unterminated one cannot swallow the text after it.
 var ansiSeq = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b\n]*(?:\x07|\x1b\\)?|\x1b[ -/]*[0-~]`)
@@ -958,32 +829,6 @@ func plainText(s string) string {
 	}, s)
 	return strings.TrimSpace(s)
 }
-
-// dropPartialLine drops the first line of a window that cut the stream mid-line, as it is partial and may start
-// inside an escape sequence. A window with no complete line left is empty. atLineStart means the window began at a
-// line start, so nothing is dropped.
-func dropPartialLine(raw []byte, atLineStart bool) []byte {
-	if atLineStart {
-		return raw
-	}
-	if i := bytes.IndexByte(raw, '\n'); i >= 0 {
-		return raw[i+1:]
-	}
-	return nil
-}
-
-// tailText is the kept end of stderr as plain text.
-func (t *tailSink) tailText() string {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	raw := t.tail
-	if t.cut {
-		raw = dropPartialLine(raw, t.cutAtLine)
-	}
-	return plainText(string(raw))
-}
-
-func (t *tailSink) close() { _ = t.file.Close() }
 
 // notify is a notify run's whole work: send the inbox request to the recipient on the run's Issue and record the
 // outcome. The request is worked out from the Issue once and saved in the journal, so a retry or a restart sends the
