@@ -121,3 +121,24 @@ func TestRemovingALaneLabelMovesItsIssuesWithoutACommand(t *testing.T) {
 	wantLane(t, out.State, 0, "No lane", "only")
 	wantLane(t, out.State, 1, "Needs triage", "both")
 }
+
+func TestALaneListAnswerSentBeforeASaveDoesNotReplaceTheSavedLanes(t *testing.T) {
+	s := projectPane(t, 160, boardCard("a", "in-review"))
+	s = step(t, s, model.LanesLoaded{ProjectUID: "p", Lanes: []string{"in-review"}}).State
+	on := step(t, s, key("b"))
+	late := model.LanesLoaded{ProjectUID: "p", Lanes: []string{"in-review"}, Request: loadCmds(on.Cmds)[0].Request}
+	opened := step(t, on.State, key("shift+b")).State
+	opened = typed(t, step(t, opened, key("ctrl+u")).State, "wip, shipping")
+	saving := step(t, opened, key("enter"))
+	saved := step(t, saving.State, model.LanesSaved{ProjectUID: "p", Lanes: []string{"wip", "shipping"}})
+	if got := saved.State.Model.LaneList(); len(got) != 2 || got[0] != "wip" {
+		t.Fatalf("after the save the Lane list is %v, want wip and shipping", got)
+	}
+	out := step(t, saved.State, late)
+	if got := out.State.Model.LaneList(); len(got) != 2 || got[0] != "wip" || got[1] != "shipping" {
+		t.Errorf("the late answer changed the Lane list to %v, want the saved wip and shipping", got)
+	}
+	if got := loadCmds(out.Cmds); len(got) != 1 {
+		t.Errorf("the late answer asked %v, want one fresh read", got)
+	}
+}

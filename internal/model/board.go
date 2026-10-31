@@ -51,7 +51,12 @@ type BoardState struct {
 	loaded bool
 	// asked is the Project whose Lane list was last asked for; empty when the Collection is not a Project.
 	asked string
+	// reads numbers the Lane list reads, so an answer sent before a save took effect is dropped.
+	reads Latest
 }
+
+// LanesRequest is the number of the newest Lane list read asked for.
+func (m Model) LanesRequest() int64 { return m.Board.reads.Newest() }
 
 // OnBoard says the Board Page is current.
 func (m Model) OnBoard() bool { return m.Page == PageBoard }
@@ -360,7 +365,8 @@ func moveOnBoard(m Model, action Action) Model {
 func updateBoard(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
 	case LanesLoaded:
-		return lanesLoaded(m, msg), nil, true
+		m, cmds := lanesLoaded(m, msg)
+		return m, cmds, true
 	case LanesSaved:
 		return lanesSaved(m, msg), nil, true
 	case LanesShared:
