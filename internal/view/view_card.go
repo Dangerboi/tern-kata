@@ -74,7 +74,7 @@ func viewLayer(m model.Model) tern.Element {
 		}
 		children = append(children, ui.Input{
 			Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: title},
-			Field:  ui.Field{Text: value, Cursor: caretAt(form.Caret, field.Name, value), Mode: "insert", Prompt: []ui.Span{{T: prompt}}, Placeholder: placeholder, Readonly: form.Saving},
+			Field:  ui.Field{Text: value, Cursor: caretAt(form.Caret, field.Name, value), Mode: "insert", Prompt: []ui.Span{{T: prompt}}, Placeholder: ui.T(placeholder), Readonly: form.Saving},
 		})
 	}
 	if form.Saving {

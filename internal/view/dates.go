@@ -22,7 +22,7 @@ func datesLayer(m model.Model) tern.Element {
 		text := form.Value(name)
 		children = append(children,
 			toneText(string(name)+"-label", tone, label),
-			ui.Input{Common: ui.Common{Key: string(name), Tone: tone, Aria: label}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Placeholder: "none", Readonly: form.Saving}},
+			ui.Input{Common: ui.Common{Key: string(name), Tone: tone, Aria: label}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Placeholder: ui.T("none"), Readonly: form.Saving}},
 			toneText(string(name)+"-preview", ui.ToneMuted, m.DatesPreview(name)))
 	}
 	children = append(children, toneText("note", ui.ToneMuted, "Type "+model.DateInputHint+". Leave a field blank to clear it."))

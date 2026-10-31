@@ -27,7 +27,7 @@ func deleteLayer(m model.Model) tern.Element {
 		}
 		children = append(children,
 			toneText(string(name)+"-label", tone, label),
-			ui.Input{Common: ui.Common{Key: string(name), Tone: tone, Aria: label}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Placeholder: placeholder, Readonly: form.Saving}})
+			ui.Input{Common: ui.Common{Key: string(name), Tone: tone, Aria: label}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Placeholder: ui.T(placeholder), Readonly: form.Saving}})
 	}
 	if form.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, form.Err.Error()))

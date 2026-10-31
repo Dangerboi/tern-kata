@@ -165,7 +165,7 @@ func laneHeader(m model.Model) tern.Element {
 // searchInput is the Search field above the Issues, in the list and on the Board.
 func searchInput(m model.Model) tern.Element {
 	placeholder := "Search Issues in " + m.Collection.Title
-	return ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Cursor: caretAt(m.Search.Caret, "", m.Filters.Search), Mode: "insert", Placeholder: placeholder, Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}}
+	return ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Cursor: caretAt(m.Search.Caret, "", m.Filters.Search), Mode: "insert", Placeholder: ui.T(placeholder), Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}}
 }
 
 // scrollerCommon is a list that scrolls its own content inside its column, so
@@ -194,7 +194,6 @@ func topBar(m model.Model) tern.Element {
 		return ui.Common{Key: key, Tone: tone, Shrink: &shrink}
 	}
 	headingCell := flexCell("heading", ui.ToneAccent, 0)
-	headingCell.Title, headingCell.Actions = "Menu", &ui.Actions{Click: MenuClick}
 	rightCell := flexCell("right", ui.ToneNeutral, 100)
 	// The right cell never narrows below "… · Menu", so the Menu button is never pushed off the bar; the Daemon inside gives way first.
 	rightCell.Min = &ui.Bounds{W: ui.Ch(8)}

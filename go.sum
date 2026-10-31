@@ -168,8 +168,8 @@ github.com/sirupsen/logrus v1.9.4 h1:TsZE7l11zFCLZnZ+teH4Umoq5BhEIfIzfRDZ1Uzql2w
 github.com/sirupsen/logrus v1.9.4/go.mod h1:ftWc9WdOfJ0a92nsE2jF5u5ZwH8Bv2zdeOC42RjbV2g=
 github.com/spf13/pathologize v1.1.0 h1:ByNoCEj7iPpZeZ2dUv52ky5TnfJv5IpNLilpaiAAW3I=
 github.com/spf13/pathologize v1.1.0/go.mod h1:CwE+2y5kdp5EBv1kxhXujQo2SrY0s+rYAM02KluGFEs=
-github.com/stencil-hq/tern-sdk/go/tern v0.1.0 h1:FTxvBukWnVL6s45om7UnIeVSGhj3ELdzdLVbDomCNEc=
-github.com/stencil-hq/tern-sdk/go/tern v0.1.0/go.mod h1:A/gAtHLX+wy4UO7jMTOvmo6HrviXmCoYav0P9q+tFro=
+github.com/stencil-hq/tern-sdk/go/tern v0.2.0 h1:LV/D0t4p8TC/ESysTdFNPkjF1+6zD9y8zM0FlGUs820=
+github.com/stencil-hq/tern-sdk/go/tern v0.2.0/go.mod h1:A/gAtHLX+wy4UO7jMTOvmo6HrviXmCoYav0P9q+tFro=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
