@@ -269,6 +269,8 @@ type Hooks struct {
 	AfterSave func(point string, j *Journal) error
 	// FailDirSync, when it returns an error for a save point, makes that save's folder sync fail with it.
 	FailDirSync func(point string) error
+	// FailAsideRename, when it returns an error for an attempt's output file path, makes setting that file aside fail with it.
+	FailAsideRename func(path string) error
 	// GroupProof, when it returns true for a run's launch, supplies the group proof in place of the platform's: present
 	// as a process no signal can end would answer, gone, or a group that cannot be checked.
 	GroupProof func(l *LaunchRecord) (GroupProof, bool)

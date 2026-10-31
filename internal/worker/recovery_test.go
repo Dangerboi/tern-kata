@@ -295,6 +295,40 @@ func TestResumeContinuesTheOmpSessionAndRecordsTheOutcome(t *testing.T) {
 	}
 }
 
+// A resume whose earlier output cannot be set aside holds the run again with the reason and leaves that output as it
+// was, instead of letting the next attempt truncate it.
+func TestAResumeThatCannotSetTheHeldOutputAsideKeepsItAndSaysWhy(t *testing.T) {
+	h := newHarness(t, "--stub-hang-first", "--stub-text", "All checked.")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Review the open pull requests.", Checkout: "repo"})
+	uid, _ := h.killedAt("session", job)
+
+	hooks := worker.Hooks{FailAsideRename: func(string) error { return errors.New("the file is in use") }}
+	restarted := h.start(hooks)
+	h.admitting(restarted)
+	h.settled(uid)
+	h.eventually("the hold to be resumable", func() bool { s, ok := h.runStatus(restarted, uid); return ok && s.Resumable })
+	outputPath := filepath.Join(h.dirs.Runs(), uid, "output.jsonl")
+	before, err := os.ReadFile(outputPath)
+	if err != nil || len(before) == 0 {
+		t.Fatalf("the held attempt left no output to protect: %q, %v", before, err)
+	}
+
+	if resp := h.ask(worker.Request{Op: "resume", Run: uid, Actor: "ann"}); !resp.OK {
+		t.Fatalf("resume: %+v", resp)
+	}
+	h.eventually("the run to be held again with the reason", func() bool {
+		s, ok := h.runStatus(restarted, uid)
+		return ok && s.Held && s.Hold == "execution_error" && strings.Contains(s.Detail, "could not be set aside") && strings.Contains(s.Detail, "the file is in use")
+	})
+	after, err := os.ReadFile(outputPath)
+	if err != nil || string(after) != string(before) {
+		t.Fatalf("the held attempt's output changed: %q, %v (was %q)", after, err, before)
+	}
+	if n := len(h.launches()); n != 1 {
+		t.Fatalf("agent launched %d times, want only the original", n)
+	}
+}
+
 // A resume killed after it was accepted, before the agent starts, neither loses the acceptance nor starts twice.
 func TestAResumeKilledAfterAcceptanceIsContinuedByTheNextStart(t *testing.T) {
 	h := newHarness(t, "--stub-hang-first")
