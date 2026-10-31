@@ -54,10 +54,11 @@ func board(m model.Model, now time.Time) tern.Element {
 		selected = m.Relationships.Of(m.SelectedUID)
 	}
 	lanes := make([]tern.Element, len(columns))
+	menu := newContextMenuKeys(model.ModeBoard, model.OpenLane)
 	for i, column := range columns {
 		cards := make([]tern.Element, len(column.Cards))
 		for j, card := range column.Cards {
-			cards[j] = boardCard(m, card, tones[i], column.Lane == model.LaneDone, selected, now)
+			cards[j] = boardCard(m, card, tones[i], column.Lane == model.LaneDone, selected, menu, now)
 		}
 		count := strconv.Itoa(len(column.Cards))
 		if column.Total > len(column.Cards) {
@@ -65,7 +66,7 @@ func board(m model.Model, now time.Time) tern.Element {
 		}
 		head := ui.Row{Common: ui.Common{Key: "head"}, Gap: ui.GapSM, Children: ui.Nodes(
 			ui.Badge{Common: ui.Common{Key: "title", Tone: tones[i]}, Text: column.Title},
-			ui.Text{Common: ui.Common{Key: "count"}, Spans: []ui.Span{{T: count, S: "muted mono"}}, Wrap: ui.WrapNone},
+			ui.Text{Common: ui.Common{Key: "count"}, Spans: []ui.Span{{T: count, S: mono("muted")}}, Wrap: ui.WrapNone},
 		)}
 		lanes[i] = ui.Col{
 			Common: ui.Common{Key: laneKey(i), Grow: 1, Basis: ui.BasisFrac(0), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}},
@@ -73,7 +74,7 @@ func board(m model.Model, now time.Time) tern.Element {
 			Children: append(ui.Nodes(
 				head,
 				ui.Rule{Common: ui.Common{Key: "rule", Tone: tones[i]}},
-			), listAndEmpty(ui.List{CommonWithoutMax: scrollerCommon("cards"), Max: fillMax, Children: cards}, false, emptyLane("cards", "No cards"))...),
+			), listAndEmpty(ui.List{CommonWithoutMax: scrollerCommon("cards"), Max: fillMax, Children: cards}, false, emptyLane("No cards"))...),
 		}
 	}
 	children := []tern.Element{}
@@ -96,7 +97,7 @@ var dateTones = map[model.DateTone]ui.Tone{
 // boardCard is one Issue: its short id over its title clamped to two lines and its labels that are not Lane labels. The selected card
 // is unclamped and adds the owner and every label. The id is a badge in its Lane's tone; the title is the normal text colour, a Done
 // card's muted. The id row ends with the Date badge of an open card; the selected card adds the Dates line. Labels are info badges, the owner a user badge, "also" warning and the reopen hint muted.
-func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, selectedRels model.Relationships, now time.Time) tern.Element {
+func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, selectedRels model.Relationships, menu contextMenuKeys, now time.Time) tern.Element {
 	issue := card.Issue
 	selected := issue.UID == m.SelectedUID
 	titleStyle := ""
@@ -143,7 +144,7 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 	}
 	if !done {
 		if marker := blockedMarker(card); marker != "" {
-			body = append(body, ui.Text{Common: ui.Common{Key: "blocked", Hovercard: blockedCard(m, card, now)}, Spans: []ui.Span{{T: marker, S: "warning"}}})
+			body = append(body, ui.Text{Common: ui.Common{Key: "blocked", Hovercard: blockedCard(m, card, now)}, Spans: []ui.Span{{T: marker, S: mono("warning")}}})
 		}
 	}
 	if badge, ok := agentBadge(m, issue.UID, "agent"); ok {
@@ -171,7 +172,7 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 	}
 	body = slices.Insert(body, 0, tern.Element(ui.Row{Common: ui.Common{Key: "id"}, Gap: ui.GapSM, Wrap: true, Children: ids}))
 	return ui.Card{
-		Common:   ui.Common{Key: issue.UID, Tone: cardTone, Actions: &ui.Actions{Click: CardClick(issue.UID), DblClick: OpenRowClick(issue.UID), Menu: issueMenu(model.ModeBoard, issue, model.OpenLane)}},
+		Common:   ui.Common{Key: issue.UID, Tone: cardTone, Actions: &ui.Actions{Click: CardClick(issue.UID), DblClick: OpenRowClick(issue.UID), Menu: menu.of(issue)}},
 		Selected: selected,
 		Children: body,
 	}
@@ -241,7 +242,7 @@ func relationshipsLine(m model.Model, card model.BoardCard, now time.Time) tern.
 			items = append(items, ui.Text{Common: ui.Common{Key: ref.UID, Hovercard: refCard(m, relFacts(ref), now), Actions: &ui.Actions{Click: RefClick(ref.UID)}}, Spans: []ui.Span{{T: ref.ID(project), S: "accent link mono"}}})
 		}
 		if more > 0 {
-			items = append(items, ui.Text{Common: ui.Common{Key: "more"}, Spans: []ui.Span{{T: "+" + strconv.Itoa(more), S: "muted mono"}}})
+			items = append(items, ui.Text{Common: ui.Common{Key: "more"}, Spans: []ui.Span{{T: "+" + strconv.Itoa(more), S: mono("muted")}}})
 		}
 		parts = append(parts, ui.Row{Common: ui.Common{Key: key}, Gap: ui.GapSM, Wrap: true, Children: items})
 	}

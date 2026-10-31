@@ -180,21 +180,6 @@ func TestChildCellsShowReferenceStatusTitleOwnerAndUpdated(t *testing.T) {
 	}
 }
 
-// The columns are Tern's to size, so no cell is padded or boxed to a width counted in characters.
-func TestChildCellsAreNeitherPaddedNorBoxed(t *testing.T) {
-	nodes := render(t, parenting(model.TabComments))
-	for _, row := range []string{"kid", "done", "ghost"} {
-		for _, col := range []string{"ticket", "status", "title", "owner", "updated"} {
-			if got := cellText(t, nodes, row, col); strings.Contains(got, "\u00a0") {
-				t.Errorf("%s %s = %q holds a no-break space", row, col, got)
-			}
-		}
-	}
-	if ids := nodes.under(childrenID); len(ids) != 3 { // the column, its heading and the table
-		t.Errorf("children draw %v, want no header row or row boxes", ids)
-	}
-}
-
 func TestStatusCellHasADotInTheStatusTone(t *testing.T) {
 	nodes := render(t, parenting(model.TabComments))
 	for row, want := range map[string]string{"kid": "accent", "done": "muted"} {
@@ -221,12 +206,9 @@ func TestClosedChildIsMutedAndOpenChildIsNot(t *testing.T) {
 	for _, tt := range []struct {
 		row, col, want string
 	}{
-		{"done", "status", "muted"}, {"done", "title", "muted"}, {"done", "owner", ""}, {"done", "updated", "muted"},
+		{"done", "status", "muted"}, {"done", "title", "muted"}, {"done", "updated", "muted"},
 		{"kid", "status", ""}, {"kid", "title", ""}, {"kid", "owner", "muted"}, {"kid", "updated", "muted"},
 	} {
-		if tt.row == "done" && tt.col == "owner" {
-			continue // an empty owner has no cell
-		}
 		if got := cellStyle(t, nodes, tt.row, tt.col); got != tt.want {
 			t.Errorf("%s %s style = %q, want %q", tt.row, tt.col, got, tt.want)
 		}

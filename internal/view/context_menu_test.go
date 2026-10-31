@@ -37,8 +37,6 @@ func menuOf(t *testing.T, nodes shown, id string) []menuRow {
 	return rows
 }
 
-func pick(uid, chord string) string { return view.MenuPickClick(uid, chord) }
-
 func TestIssueRowMenuListsTheKeysActionsAndDisablesWhatCannotRun(t *testing.T) {
 	closed := model.Issue{UID: "gamma", ShortID: "gggg", Title: "Gamma", Status: "closed", ProjectName: "work"}
 	m := apply(model.Model{},
@@ -57,21 +55,21 @@ func TestIssueRowMenuListsTheKeysActionsAndDisablesWhatCannotRun(t *testing.T) {
 		want []menuRow
 	}{
 		{"open", view.IssueID(alpha.UID), alpha.UID, []menuRow{
-			{"Open", pick(alpha.UID, "enter"), "", []string{"↵"}},
-			{"Agent…", pick(alpha.UID, "w"), "", []string{"w"}},
-			{"Close", pick(alpha.UID, "x"), "", []string{"x"}},
-			{"Priority…", pick(alpha.UID, "!"), "", []string{"!"}},
-			{"Dates…", pick(alpha.UID, "d"), "", []string{"d"}},
-			{"Move to Project", pick(alpha.UID, "shift+m"), "", []string{"M"}},
+			{"Open", view.ContextMenuPickClick(alpha.UID, model.ModeList, "enter"), "", []string{"↵"}},
+			{"Agent…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "w"), "", []string{"w"}},
+			{"Close", view.ContextMenuPickClick(alpha.UID, model.ModeList, "x"), "", []string{"x"}},
+			{"Priority…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "!"), "", []string{"!"}},
+			{"Dates…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "d"), "", []string{"d"}},
+			{"Move to Project", view.ContextMenuPickClick(alpha.UID, model.ModeList, "shift+m"), "", []string{"⇧m"}},
 		}},
 		{"closed", view.IssueID(closed.UID), closed.UID, []menuRow{
-			{"Open", pick(closed.UID, "enter"), "", []string{"↵"}},
-			{"Agent…", pick(closed.UID, "w"), "The Issue is closed; reopen it first", []string{"w"}},
-			{"Close", pick(closed.UID, "x"), "The Issue is already closed", []string{"x"}},
-			{"Reopen", pick(closed.UID, "r"), "", []string{"r"}},
-			{"Priority…", pick(closed.UID, "!"), "", []string{"!"}},
-			{"Dates…", pick(closed.UID, "d"), "", []string{"d"}},
-			{"Move to Project", pick(closed.UID, "shift+m"), "", []string{"M"}},
+			{"Open", view.ContextMenuPickClick(closed.UID, model.ModeList, "enter"), "", []string{"↵"}},
+			{"Agent…", view.ContextMenuPickClick(closed.UID, model.ModeList, "w"), model.ClosedIssueRefusal, []string{"w"}},
+			{"Close", view.ContextMenuPickClick(closed.UID, model.ModeList, "x"), model.ClosedAlreadyRefusal, []string{"x"}},
+			{"Reopen", view.ContextMenuPickClick(closed.UID, model.ModeList, "r"), "", []string{"r"}},
+			{"Priority…", view.ContextMenuPickClick(closed.UID, model.ModeList, "!"), "", []string{"!"}},
+			{"Dates…", view.ContextMenuPickClick(closed.UID, model.ModeList, "d"), "", []string{"d"}},
+			{"Move to Project", view.ContextMenuPickClick(closed.UID, model.ModeList, "shift+m"), "", []string{"⇧m"}},
 		}},
 	}
 	for _, tc := range cases {
@@ -90,12 +88,12 @@ func TestBoardCardAndLaneRowMenusPressTheirModesKeys(t *testing.T) {
 	)
 	board := render(t, wide)
 	card := menuOf(t, board, "main.columns.list.board.lane0.cards."+alpha.UID)
-	if len(card) != 6 || card[0].Label != "Open" || card[0].ID != pick(alpha.UID, "enter") || card[5].ID != pick(alpha.UID, "shift+m") {
+	if len(card) != 6 || card[0].Label != "Open" || card[0].ID != view.ContextMenuPickClick(alpha.UID, model.ModeBoard, "enter") || card[5].ID != view.ContextMenuPickClick(alpha.UID, model.ModeBoard, "shift+m") {
 		t.Errorf("Board card menu: %+v", card)
 	}
 	lane := apply(wide, model.KeyMsg{Chord: "enter"})
 	rows := menuOf(t, render(t, lane), view.IssueID(alpha.UID))
-	if len(rows) != 6 || rows[0].ID != pick(alpha.UID, "enter") || rows[2].Label != "Close" {
+	if len(rows) != 6 || rows[0].ID != view.ContextMenuPickClick(alpha.UID, model.ModeLane, "enter") || rows[2].Label != "Close" {
 		t.Errorf("Lane row menu: %+v", rows)
 	}
 }

@@ -14,9 +14,9 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// Cell widths of an Issue row, in characters. The Pane is monospaced, so a cell
-// padded to its width lines up with the header above it. The title takes the
-// rest of the row and is cut with an ellipsis when it does not fit.
+// Cell widths of an Issue row, in characters. The style sheet gives each cell a box of its column's width (cellBoxCSS), so
+// a cell lines up with the header above it. The title takes the rest of the row and is cut with an ellipsis when it does
+// not fit.
 const (
 	prioWidth    = 4
 	statusWidth  = 6
@@ -120,13 +120,14 @@ func issues(m model.Model, now time.Time) tern.Element {
 		}
 	}
 	shownGroups := make(map[string]bool, len(m.Groups))
+	menu := newContextMenuKeys(rowMode(m), model.DrillIn)
 	for i, row := range rows {
 		group := groups[row.UID]
 		if row.Depth == 0 && group.Heading && !shownGroups[group.ID] {
 			items = append(items, ui.Text{Common: ui.Common{Key: "group." + group.ID}, Spans: []ui.Span{{T: group.Title, S: "strong"}}})
 			shownGroups[group.ID] = true
 		}
-		items = append(items, issueRow(m, row, row.UID == m.SelectedUID, stripeRole(i), cols, now))
+		items = append(items, issueRow(m, row, row.UID == m.SelectedUID, stripeRole(i), cols, menu, now))
 	}
 	selected := ""
 	if m.SelectedUID != "" {
@@ -140,9 +141,17 @@ func issues(m model.Model, now time.Time) tern.Element {
 	if m.Search.Open {
 		children = append(children, searchInput(m))
 	}
-	empty := emptyState("issues", "No Issues", "This Collection has none. Select another Collection or create one with kata create.")
-	if m.Filters != (model.Filters{}) {
-		empty = emptyState("issues", "No Issues match", "These filters leave none.", cardButton("clear-filters", model.ModeList, model.ClearFilters, "Clear filters", false))
+	empty := emptyState("No Issues", "This Collection has none. Select another Collection or create one with kata create.")
+	// A button presses its key in the mode the Pane is in, and with Search open that mode types the key, so searching shows
+	// no button.
+	switch {
+	case m.Filters != (model.Filters{}):
+		empty = emptyState("No Issues match", "These filters leave none.")
+		if !m.Search.Open {
+			empty.Children = ui.Nodes(cardButton("clear-filters", model.ModeList, model.ClearFilters, "Clear filters", false))
+		}
+	case m.Collection.IsProject() && !m.Search.Open:
+		empty = emptyState("No Issues", "This Collection has none.", cardButton("new", model.ModeList, model.NewIssue, "New Issue", true))
 	}
 	list := ui.List{CommonWithoutMax: scrollerCommon("issues"), Max: fillMax, Selected: selected, Empty: ui.T("Loading Issues…"), Children: items}
 	children = append(children, listAndEmpty(list, m.Loading, empty)...)
@@ -153,7 +162,7 @@ func issues(m model.Model, now time.Time) tern.Element {
 func laneHeader(m model.Model) tern.Element {
 	for _, column := range m.BoardColumns() {
 		if column.Lane == m.Board.Lane {
-			return ui.Text{Common: ui.Common{Key: "lane"}, Spans: []ui.Span{{T: column.Title, S: "strong"}, {T: " " + strconv.Itoa(len(column.Cards)), S: "muted mono"}}}
+			return ui.Text{Common: ui.Common{Key: "lane"}, Spans: []ui.Span{{T: column.Title, S: "strong"}, {T: " " + strconv.Itoa(len(column.Cards)), S: mono("muted")}}}
 		}
 	}
 	return ui.Text{Common: ui.Common{Key: "lane"}, Spans: []ui.Span{{T: model.LaneTitle(m.Board.Lane), S: "strong"}}}
@@ -177,8 +186,8 @@ func scrollerCommon(key string) ui.CommonWithoutMax {
 var fillMax = ui.MaxFrac(1)
 
 // topBar is the pinned row above the columns: the Collection title with its
-// markers on the left, the counts in the middle, and the Daemon then the Menu button at the right. Clicking the title or the
-// button opens the Menu. When the row is too narrow Tern's flex shrinks and truncates the Daemon first,
+// markers on the left, the counts in the middle, and the Daemon then the Menu button at the right. The Menu button opens the
+// Menu. When the row is too narrow Tern's flex shrinks and truncates the Daemon first,
 // then the counts; the left cell and the button never shrink. The title keeps the accent whichever column has focus: it names
 // what the Pane shows, and the columns' own borders show focus.
 func topBar(m model.Model) tern.Element {
@@ -212,7 +221,7 @@ func topBar(m model.Model) tern.Element {
 		ui.Row{Common: rightCell, Gap: ui.GapNone, Children: append(zoneNote, ui.Nodes(
 			ui.Text{Common: flexCell("daemon", ui.ToneMuted, 100), Text: m.DaemonLine(), Wrap: ui.WrapNone},
 			ui.Text{Common: flexCell("sep", ui.ToneMuted, 0), Text: model.DaemonSeparator, Wrap: ui.WrapNone},
-			menuButton(),
+			menuButton(m),
 		)...)},
 	)}
 }
@@ -298,7 +307,7 @@ func (c *listColumns) fit(id, owner int) {
 // issueRow is one Issue: the id, prio, status and title on the left, the
 // title being the cell that gives way, and kids, owner and updated pinned to
 // the right so each column lines up with the header. A blank cell keeps its width.
-func issueRow(m model.Model, row model.IssueRow, selected bool, role string, cols listColumns, now time.Time) tern.Element {
+func issueRow(m model.Model, row model.IssueRow, selected bool, role string, cols listColumns, menu contextMenuKeys, now time.Time) tern.Element {
 	tone := ui.ToneNeutral
 	statusStyle := "accent"
 	if model.IsClosed(row.Issue) {
@@ -328,11 +337,11 @@ func issueRow(m model.Model, row model.IssueRow, selected bool, role string, col
 	}
 	owner := listOwner(m, row, now)
 	// A parent's click folds it; a double click on any row opens it. Tern sends the two clicks first, so a parent's fold ends where it began.
-	actions := &ui.Actions{DblClick: OpenRowClick(row.UID), Menu: issueMenu(rowMode(m), row.Issue, model.DrillIn)}
+	actions := &ui.Actions{DblClick: OpenRowClick(row.UID), Menu: menu.of(row.Issue)}
 	if row.HasChildren {
 		actions.Click = ToggleClick(row.UID)
 	}
-	return ui.Item{Common: ui.Common{Key: row.UID, Role: strings.TrimSpace(role + " " + cols.role()), Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells(kids, owner, model.RelativeTime(row.UpdatedAt, now), cols, "muted mono", toneStyle(ownerTone))...)}
+	return ui.Item{Common: ui.Common{Key: row.UID, Role: strings.TrimSpace(role + " " + cols.role()), Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells(kids, owner, model.RelativeTime(row.UpdatedAt, now), cols, mono("muted"), toneStyle(ownerTone))...)}
 }
 
 // role is the row's boxes in role tokens, which the style sheet turns into the columns' widths (see cellBoxCSS): the row
@@ -373,7 +382,7 @@ func footerHints(m model.Model) (hints []footerHint, position string) {
 		if binding.Action == model.ClosePicker && m.Picker.Level != model.MenuTop && m.Picker.Filter == "" {
 			help = "back"
 		}
-		if binding.Action == model.DrillOut && m.EscGoesBack() {
+		if (binding.Action == model.DrillOut || binding.Action == model.ShowMenu) && m.EscGoesBack() {
 			help = "back"
 		}
 		if job := m.SelectedJob(); binding.Action == model.ArchiveJobAction && job != nil && job.Archived() {
@@ -392,11 +401,11 @@ func footer(m model.Model) tern.Element {
 	cells := make([]tern.Element, len(hints))
 	for i, hint := range hints {
 		cells[i] = ui.Text{Common: ui.Common{Key: hint.chord, Actions: &ui.Actions{Click: KeyClick(hint.chord)}},
-			Spans: []ui.Span{{T: hint.key, S: "key"}, {T: " " + hint.description, S: "muted"}}, Wrap: ui.WrapNone}
+			Spans: []ui.Span{{T: keycap(hint.chord, hint.key), S: "key"}, {T: " " + hint.description, S: "muted"}}, Wrap: ui.WrapNone}
 	}
 	return ui.Nodes(ui.Row{Common: ui.Common{Key: "hints"}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(
 		ui.Row{Common: ui.Common{Key: "grid", Grow: 1}, Gap: ui.GapMD, Wrap: true, Children: cells},
-		ui.Text{Common: ui.Common{Key: "position", Shrink: new(float64), Tone: ui.ToneMuted}, Spans: []ui.Span{{T: position, S: "muted mono"}}, Wrap: ui.WrapNone})})
+		ui.Text{Common: ui.Common{Key: "position", Shrink: new(float64), Tone: ui.ToneMuted}, Spans: []ui.Span{{T: position, S: mono("muted")}}, Wrap: ui.WrapNone})})
 }
 
 // headerRow labels the Issue rows. It is an Item like the rows, so its cells sit

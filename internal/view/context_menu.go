@@ -5,57 +5,58 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// The reasons a context menu row is off.
-const (
-	closedReason = "The Issue is already closed"
-	agentReason  = "The Issue is closed; reopen it first"
-)
-
-// menuRow is one row of an Issue's context menu: the action whose key it presses, its label and whether it is off.
-type menuRow struct {
-	action   model.Action
-	label    string
-	disabled ui.Disabled
+// contextMenuRow is one row of an Issue's context menu: the action whose key it runs, its label and, from the Pane's keymap, the
+// keycaps and chord it shows and presses.
+type contextMenuRow struct {
+	action model.Action
+	label  string
+	keys   []string
+	chord  string
 }
 
-// issueMenu is the right-click menu of an Issue's row or card in mode: Open, Agent…, Close, Reopen, Priority…, Dates… and Move to
-// Project. Each row's id picks the Issue and presses the chord of the action's first key in mode, as a card button does, and its
-// keycaps are the action's key labels, so a rebind moves both. An action with no key in mode has no row.
-func issueMenu(mode model.Mode, issue model.Issue, open model.Action) []ui.MenuEntry {
-	closed := model.IsClosed(issue)
-	rows := []menuRow{
-		{open, "Open", ui.Disabled{}},
-		{model.OpenAgentCardAction, "Agent…", reasonIf(closed, agentReason)},
-		{model.OpenClose, "Close", reasonIf(closed, closedReason)},
-	}
-	if closed {
-		rows = append(rows, menuRow{model.ReopenAction, "Reopen", ui.Disabled{}})
-	}
-	rows = append(rows,
-		menuRow{model.PriorityAction, "Priority…", ui.Disabled{}},
-		menuRow{model.OpenDates, "Dates…", ui.Disabled{}},
-		menuRow{model.OpenMoveProject, "Move to Project", ui.Disabled{}},
-	)
-	menu := make([]ui.MenuEntry, 0, len(rows))
-	for _, row := range rows {
-		bindings := model.CardKeys(mode, row.action)
-		if len(bindings) == 0 {
-			continue
+// contextMenuKeys are the context menu rows of every Issue shown in mode, with the keys of each worked out once: Open, Agent…, Close,
+// Reopen, Priority…, Dates… and Move to Project. A row's keycaps are its action's key labels, so a rebind moves them; an action with
+// no key in mode has no row.
+type contextMenuKeys struct {
+	mode model.Mode
+	rows []contextMenuRow
+}
+
+// newContextMenuKeys is the menu rows for mode; open is the action that Open runs.
+func newContextMenuKeys(mode model.Mode, open model.Action) contextMenuKeys {
+	menu := contextMenuKeys{mode: mode}
+	for _, row := range []contextMenuRow{
+		{action: open, label: "Open"},
+		{action: model.OpenAgentCardAction, label: "Agent…"},
+		{action: model.OpenClose, label: "Close"},
+		{action: model.ReopenAction, label: "Reopen"},
+		{action: model.PriorityAction, label: "Priority…"},
+		{action: model.OpenDates, label: "Dates…"},
+		{action: model.OpenMoveProject, label: "Move to Project"},
+	} {
+		if row.keys, row.chord = cardKeys(mode, row.action); row.chord != "" {
+			menu.rows = append(menu.rows, row)
 		}
-		keys := make([]string, len(bindings))
-		for i, b := range bindings {
-			keys[i] = b.Key
-		}
-		menu = append(menu, ui.MenuItem{ID: MenuPickClick(issue.UID, bindings[0].Chord), Label: row.label, Keys: keys, Disabled: row.disabled})
 	}
 	return menu
 }
 
-func reasonIf(on bool, reason string) ui.Disabled {
-	if on {
-		return ui.Because(reason)
+// of is the right-click menu of issue's row or card. Each row's id picks the Issue and runs the chord of the action's first key in
+// the menu's mode, and a row the model refuses on this Issue is off with its reason. Reopen is there only on a closed Issue.
+func (k contextMenuKeys) of(issue model.Issue) []ui.MenuEntry {
+	closed := model.IsClosed(issue)
+	menu := make([]ui.MenuEntry, 0, len(k.rows))
+	for _, row := range k.rows {
+		if row.action == model.ReopenAction && !closed {
+			continue
+		}
+		item := ui.MenuItem{ID: ContextMenuPickClick(issue.UID, k.mode, row.chord), Label: row.label, Keys: row.keys}
+		if reason := model.IssueRefusal(issue, row.action); reason != "" {
+			item.Disabled = ui.Because(reason)
+		}
+		menu = append(menu, item)
 	}
-	return ui.Disabled{}
+	return menu
 }
 
 // rowMode is the mode the list's rows are keyed in: the Lane view's or the list's.

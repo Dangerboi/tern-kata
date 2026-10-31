@@ -1,6 +1,7 @@
 package view
 
 import (
+	"cmp"
 	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -24,7 +25,7 @@ func childrenTable(m model.Model, children []detailChild, now time.Time) tern.El
 		}
 		cells := map[string]ui.Cell{"ticket": childTicketCell(m, child, now)}
 		if child.Loaded {
-			cells = loadedChildCells(m.ChildCells(child.ChildRow, now), child, childTicketCell(m, child, now))
+			loadedChildCells(cells, m.ChildCells(child.ChildRow, now), child)
 		}
 		rows[i] = ui.TableRow{ID: child.UID, Cells: cells}
 	}
@@ -49,24 +50,21 @@ func childrenTable(m model.Model, children []detailChild, now time.Time) tern.El
 // childTicketCell is the reference cell. The table's cells take a tooltip and no hovercard, so the card's facts are its
 // one-line Title.
 func childTicketCell(m model.Model, child detailChild, now time.Time) ui.Cell {
-	facts := refFacts{UID: child.UID, Qualified: firstNonEmpty(child.Qualified, child.Ref), Status: child.Status}
+	facts := refFacts{UID: child.UID, Qualified: cmp.Or(child.Qualified, child.Ref), Status: child.Status}
 	return ui.TextCell{Text: ui.Spans(ui.Span{T: child.Ref, S: "accent"}), Title: refTooltip(summarize(m, facts, now))}
 }
 
-// loadedChildCells are the cells of a loaded child; a closed child's status and title are muted, as its owner and updated always are, and an empty owner is left out.
-func loadedChildCells(c model.ChildCells, child detailChild, ticket ui.Cell) map[string]ui.Cell {
-	title := ""
+// loadedChildCells adds a loaded child's other cells to cells; a closed child's status and title are muted, as its owner and
+// updated always are, and an empty owner is left out.
+func loadedChildCells(cells map[string]ui.Cell, c model.ChildCells, child detailChild) {
+	style := ""
 	if child.Closed {
-		title = "muted"
+		style = "muted"
 	}
-	cells := map[string]ui.Cell{
-		"ticket":  ticket,
-		"status":  ui.TextCell{Text: ui.Spans(ui.Span{T: c.Status, S: title}), Dot: statusTone(child.Status)},
-		"title":   ui.Spans(ui.Span{T: c.Title, S: title}),
-		"updated": ui.Spans(ui.Span{T: c.Updated, S: "muted"}),
-	}
+	cells["status"] = ui.TextCell{Text: ui.Spans(ui.Span{T: c.Status, S: style}), Dot: statusTone(child.Status)}
+	cells["title"] = ui.Spans(ui.Span{T: c.Title, S: style})
+	cells["updated"] = ui.Spans(ui.Span{T: c.Updated, S: "muted"})
 	if c.Owner != "" {
 		cells["owner"] = ui.Spans(ui.Span{T: c.Owner, S: "muted"})
 	}
-	return cells
 }

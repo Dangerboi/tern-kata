@@ -185,7 +185,8 @@ func (m Model) commentItem(comment Comment) DetailItem {
 		switch {
 		case target.IssueUID != nil && *target.IssueUID != m.DetailIssueUID():
 			if target.IssueShortID != nil {
-				row.Reply += " in #" + *target.IssueShortID
+				row.Qualified = "#" + *target.IssueShortID
+				row.Reply += " in " + row.Qualified
 			}
 			item.ReferenceUID = *target.IssueUID
 			if target.UID != nil {
@@ -195,7 +196,7 @@ func (m Model) commentItem(comment Comment) DetailItem {
 			item.ReplyKey = *target.UID
 		}
 	}
-	row.Head = []RowSpan{{row.Author, SpanStrong}, {"  ", ""}, {row.Time, SpanMuted}}
+	row.Head = []RowSpan{{row.Author, SpanStrong}, {"  ", ""}, {row.Time, SpanTime}}
 	for _, note := range []string{row.Reply, row.Replies} {
 		if note != "" {
 			row.Head = append(row.Head, RowSpan{"  " + note, SpanAccent})

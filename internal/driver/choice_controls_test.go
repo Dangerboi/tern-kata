@@ -18,7 +18,7 @@ func TestChoiceFieldsDrawTheirControl(t *testing.T) {
 		"Lanes":      {model.LanesShare: "tabs"},
 		"Worker":     {model.WorkerFieldTrust: "switch"},
 		"Filter":     {model.FilterProject: "select", model.FilterStatus: "tabs", model.FilterRelationship: "select"},
-		"View":       {model.ViewBase: "select", model.FilterProject: "select", model.FilterStatus: "tabs", model.FilterRelationship: "select"},
+		"View":       {model.ViewBase: "select", model.FilterProject: "tabs", model.FilterStatus: "tabs", model.FilterRelationship: "select"},
 	}
 	for _, c := range editingCards() {
 		fields := want[c.name]
@@ -42,11 +42,23 @@ func TestChoiceFieldsDrawTheirControl(t *testing.T) {
 			}
 		})
 	}
-	weekdays := editingCards()[5].open(t)
+	var recurrence editingCard
+	for _, c := range editingCards() {
+		if c.card == model.CardRecurrence {
+			recurrence = c
+		}
+	}
+	weekdays := recurrence.open(t)
+	weekdays.Model.RecurrenceForm.Frequency = model.Weekly
+	drawn := false
 	for _, n := range wireNodes(t, view.Render(weekdays.Model, now)) {
+		drawn = drawn || n.ID == view.FieldID(model.CardRecurrence, model.RecurrenceWeekdays)
 		if n.ID == view.FieldID(model.CardRecurrence, model.RecurrenceWeekdays)+".control" {
 			t.Errorf("Weekdays is drawn as a %s control", n.K)
 		}
+	}
+	if !drawn {
+		t.Error("the Weekdays field is not drawn, so its control cannot be checked")
 	}
 }
 
@@ -103,11 +115,11 @@ func TestControlEventsSetTheChoice(t *testing.T) {
 		c := cards["Recurrence"]
 		s := c.open(t)
 		opened := step(t, s, &tern.Toggle{ID: node(c, model.RecurrenceEnds), Open: true}).State
-		if !opened.Model.OpenMenu(model.CardRecurrence, model.RecurrenceEnds).Open || opened.Model.RecurrenceForm.Field != model.RecurrenceEnds {
+		if !opened.Model.OpenDropdown(model.CardRecurrence, model.RecurrenceEnds).Open || opened.Model.RecurrenceForm.Field != model.RecurrenceEnds {
 			t.Fatal("the pointer's open did not open the menu on its field")
 		}
 		closed := step(t, opened, &tern.Toggle{ID: node(c, model.RecurrenceEnds), Open: false}).State
-		if closed.Model.OpenMenu(model.CardRecurrence, model.RecurrenceEnds).Open {
+		if closed.Model.OpenDropdown(model.CardRecurrence, model.RecurrenceEnds).Open {
 			t.Fatal("the pointer's close left the menu open")
 		}
 		if !reflect.DeepEqual(step(t, s, &tern.Toggle{ID: "main.columns", Open: true}).State.Model, s.Model) {
