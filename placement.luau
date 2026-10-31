@@ -114,8 +114,8 @@ end
 
 -- The agents to try in this pass and the tab moves they bring. An agent pane not in `placed` whose command carries the marker
 -- is tried once, whatever the result; its tab is a candidate unless it is in the hidden session. `unplacedTabs` picks which
--- candidates move and `kataPaneFor` the marker gives the home. Reorders `snapshot.tabs` in place as the moves are planned, so
--- the caller passes records it will not use again.
+-- candidates move and `kataPaneFor` the marker gives the home. Rewrites each record's `position` in `snapshot.tabs` as the
+-- moves are planned, so the caller passes records it will not use again.
 function M.plan(snapshot: Snapshot): Plan
     local paneById: { [number]: PaneRec } = {}
     local pending: { [number]: boolean } = {}
