@@ -92,11 +92,11 @@ func (w *Worker) serveControl(ctx context.Context, ln interface {
 				_ = json.NewEncoder(conn).Encode(Response{Error: "unreadable request"})
 				return
 			}
-			if req.Op == "stop" {
+			if req.Op == cmdStop {
 				unhook() // the last run may end before the answer is written, and that cancels ctx; the deadline still bounds it
 			}
 			_ = json.NewEncoder(conn).Encode(w.handle(ctx, req))
-			if req.Op == "stop" {
+			if req.Op == cmdStop {
 				w.finishDrain()
 			}
 		}()
@@ -105,40 +105,42 @@ func (w *Worker) serveControl(ctx context.Context, ln interface {
 
 func (w *Worker) handle(ctx context.Context, req Request) Response {
 	switch req.Op {
-	case "run-detail", "resume", "abandon":
+	case cmdRunDetail, cmdResume, cmdAbandon:
 		if _, err := ulid.ParseStrict(req.Run); err != nil {
 			return Response{Error: fmt.Sprintf("%q is not a run uid", req.Run)}
 		}
 	}
-	switch req.Op {
-	case "status":
-		s := w.Status()
-		return Response{OK: true, Status: &s}
-	case "run":
-		if err := w.stopRefusal(cmdRun); err != nil {
+	if _, known := whileStopping[req.Op]; known {
+		if err := w.stopRefusal(req.Op); err != nil {
 			return Response{Error: err.Error()}
 		}
+	}
+	switch req.Op {
+	case cmdStatus:
+		s := w.Status()
+		return Response{OK: true, Status: &s}
+	case cmdRun:
 		accepted, err := w.RequestRun(ctx, req.Job)
 		if err != nil {
 			return Response{Error: err.Error()}
 		}
 		return Response{OK: true, Run: &accepted}
-	case "stop":
+	case cmdStop:
 		a, err := w.Stop(req.Mode)
 		if err != nil {
 			return Response{Error: err.Error()}
 		}
 		return Response{OK: true, Stop: &a}
-	case "run-detail":
+	case cmdRunDetail:
 		d, err := w.RunDetail(req.Run)
 		if err != nil {
 			return Response{Error: err.Error()}
 		}
 		return Response{OK: true, Detail: &d}
-	case "resume", "abandon":
+	case cmdResume, cmdAbandon:
 		var t RunTransition
 		var err error
-		if req.Op == "resume" {
+		if req.Op == cmdResume {
 			t, err = w.Resume(ctx, req.Run, req.Actor)
 		} else {
 			t, err = w.Abandon(ctx, req.Run, req.Actor)

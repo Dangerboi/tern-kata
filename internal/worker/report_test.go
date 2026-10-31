@@ -283,3 +283,41 @@ func TestAClosedIssueWhoseReadFailedAtReportTimeGetsNoCommentOrLabelOnceTheReadW
 		t.Fatalf("the closed Issue got comments %q and labels %q", i.Comments, i.Labels)
 	}
 }
+
+func TestTheFinalObservationIsSentWhileTheIssueReadFailsAndTheCommentAndLabelFollowOnceItWorks(t *testing.T) {
+	h := newHarness(t, "--stub-text", "All done.")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
+	var once sync.Once
+	var reads atomic.Int32
+	r := h.start(worker.Hooks{AfterSave: func(point string, j *worker.Journal) error {
+		if point != "finished" {
+			return nil
+		}
+		once.Do(func() { // kata cannot be asked about the run's Issue while the run is reported
+			h.kata.Fail(func(req *http.Request) bool {
+				if req.Method == http.MethodGet && strings.HasSuffix(req.URL.Path, "/issues/"+j.Issue.UID) {
+					reads.Add(1)
+					return true
+				}
+				return false
+			})
+		})
+		return nil
+	}})
+	h.admitting(r)
+	uid := h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID
+	h.eventually("the report to try reading the Issue", func() bool { return reads.Load() > 0 })
+	h.eventually("kata to hold the run's result although the Issue cannot be read", func() bool {
+		return h.kataRun(uid).Status == "succeeded"
+	})
+	h.kata.Heal()
+	h.settledAndFree(r, uid)
+
+	i, err := h.kata.Kata.ShowIssue(context.Background(), h.proj.ID, h.settled(uid).IssueUID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(i.Comments) != 1 || !contains(i.Labels, "needs-review") {
+		t.Fatalf("the open Issue got comments %q and labels %q, want the comment and the needs-review label", i.Comments, i.Labels)
+	}
+}

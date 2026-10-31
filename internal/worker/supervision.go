@@ -43,10 +43,10 @@ func (d Dirs) SupervisionOn() bool {
 	return !d.ManualPresent()
 }
 
-// SupervisedConfigMaxBytes bounds the worker.toml text SupervisedConfig returns.
-const SupervisedConfigMaxBytes = 1 << 20
+// supervisedConfigMaxBytes bounds the worker.toml text SupervisedConfig returns.
+const supervisedConfigMaxBytes = 1 << 20
 
-// SupervisedConfig is SupervisionOn together with worker.toml's text (at most SupervisedConfigMaxBytes; empty when it
+// SupervisedConfig is SupervisionOn together with worker.toml's text (at most supervisedConfigMaxBytes; empty when it
 // cannot be read), which the host half compares to see that the file changed since the worker last started.
 func (d Dirs) SupervisedConfig() (text string, on bool) {
 	if !d.SupervisionOn() {
@@ -57,7 +57,7 @@ func (d Dirs) SupervisedConfig() (text string, on bool) {
 		return "", true
 	}
 	defer f.Close()
-	b, _ := io.ReadAll(io.LimitReader(f, SupervisedConfigMaxBytes))
+	b, _ := io.ReadAll(io.LimitReader(f, supervisedConfigMaxBytes))
 	return string(b), true
 }
 

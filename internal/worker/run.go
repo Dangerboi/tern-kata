@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -70,7 +71,7 @@ func (w *Worker) retryPending(ps *projectState) {
 		w.settleFlight(j.RunUID, j.owes()) // settled or held by another path since: nothing left to wait for
 		switch {
 		case j.driveStep() == driveAdmit && !w.holdsSlotOf(ps, j.RunUID):
-			// prepare saved this journal but has not bound its slot yet; RequestRun or the scheduler spawns it next
+			// prepare saved this journal but has not bound its slot yet; RequestRun or the Project schedule spawns it next
 		case j.retryable():
 			w.spawn(ps, j.RunUID)
 		case j.settled():
@@ -649,42 +650,55 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 	if err := w.checkRoute(ctx, ps, false); err != nil {
 		return fmt.Errorf("cannot confirm the kata route: %w", err)
 	}
-	if len(j.Intents) == 0 {
+	var planErr error // why the comment and label could not be planned yet
+	if len(j.Intents) == 0 || j.IntentsPartial {
+		// The final observation is planned first and never waits for an Issue read; the comment and label do.
 		intents := []Intent{{Kind: IntentFinal}}
+		if j.IntentsPartial {
+			intents = slices.Clone(j.Intents)
+		}
 		issueOpen := true
+		readErr := error(nil)
 		if j.Outcome.Status == cronjob.RunSucceeded && !j.Issue.Existing {
-			issue, err := w.opt.Kata.ShowIssue(ctx, j.ProjectID, j.Issue.UID)
-			if err != nil {
-				return fmt.Errorf("cannot tell whether the run's Issue is still open: %w", err) // planned later, once it can be read
+			var issue Issue
+			if issue, readErr = w.opt.Kata.ShowIssue(ctx, j.ProjectID, j.Issue.UID); readErr == nil {
+				issueOpen = issue.Open()
 			}
-			issueOpen = issue.Open()
 		} else if j.Outcome.Status == cronjob.RunSucceeded {
 			issueOpen = false
 		}
-		switch j.Outcome.Status {
-		case cronjob.RunSucceeded:
-			if quietSuccess(j) {
-				break // every step was a command that exited 0 on an existing Issue: the Run says it all
-			}
-			if j.Issue.Existing || issueOpen {
-				intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("succeeded"), Text: j.Outcome.Summary})
-				if !j.Issue.Existing {
-					intents = append(intents, Intent{Kind: IntentLabel, Text: "needs-review"})
+		if readErr == nil {
+			switch j.Outcome.Status {
+			case cronjob.RunSucceeded:
+				if quietSuccess(j) {
+					break // every step was a command that exited 0 on an existing Issue: the Run says it all
 				}
+				if j.Issue.Existing || issueOpen {
+					intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("succeeded"), Text: j.Outcome.Summary})
+					if !j.Issue.Existing {
+						intents = append(intents, Intent{Kind: IntentLabel, Text: "needs-review"})
+					}
+				}
+			case cronjob.RunFailed:
+				intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("failed"), Text: "The run failed: " + j.Outcome.Summary})
+			case cronjob.RunUnknown:
+				intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("held"), Text: "The run is held: " + j.Outcome.holdLine() + "\n\nResume it with `tern-kata worker resume " + j.RunUID + "` or abandon it with `tern-kata worker abandon " + j.RunUID + "`."})
+				intents = append(intents, Intent{Kind: IntentNotify, Text: heldNotice(j)})
+			case cronjob.RunCancelled:
+				intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("cancelled"), Text: "The run was abandoned: " + j.Outcome.Summary})
 			}
-		case cronjob.RunFailed:
-			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("failed"), Text: "The run failed: " + j.Outcome.Summary})
-		case cronjob.RunUnknown:
-			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("held"), Text: "The run is held: " + j.Outcome.holdLine() + "\n\nResume it with `tern-kata worker resume " + j.RunUID + "` or abandon it with `tern-kata worker abandon " + j.RunUID + "`."})
-			intents = append(intents, Intent{Kind: IntentNotify, Text: heldNotice(j)})
-		case cronjob.RunCancelled:
-			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("cancelled"), Text: "The run was abandoned: " + j.Outcome.Summary})
 		}
 		if j.Notify != nil { // a notify run's only record is the Run itself; the Issue gets no comment, label or request
 			intents = intents[:1]
+			readErr = nil
 		}
+		partial := readErr != nil
+		planErr = readErr
 		var err error
-		if j, err = w.store.Update(j.RunUID, "intents-planned", func(j *Journal) error { j.Intents = intents; return nil }); err != nil {
+		if j, err = w.store.Update(j.RunUID, "intents-planned", func(j *Journal) error {
+			j.Intents, j.IntentsPartial = intents, partial
+			return nil
+		}); err != nil {
 			return err
 		}
 	}
@@ -720,6 +734,9 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 		if herr != nil {
 			return herr
 		}
+	}
+	if j.IntentsPartial {
+		return fmt.Errorf("cannot tell whether the run's Issue is still open: %w", planErr)
 	}
 	for _, it := range j.Intents {
 		if !it.Done && it.Inspect == "" {
