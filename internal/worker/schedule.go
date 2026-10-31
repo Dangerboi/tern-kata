@@ -450,11 +450,17 @@ func (s *projectSchedule) plan(job cronjob.Job, now time.Time) {
 // when none is. issueEvent says an Issue event woke the loop. It runs on the Project loop while the Project's lease is
 // held.
 func (w *Worker) tick(ctx context.Context, ps *projectState, issueEvent bool) time.Time {
-	if w.halted.Load() || ctx.Err() != nil || w.admitsNothing(ps) != "" {
+	if w.halted.Load() || ctx.Err() != nil {
 		return time.Time{}
 	}
 	if ps.sched == nil {
 		ps.sched = w.newProjectSchedule(ps)
+	}
+	if w.admitsNothing(ps) != "" {
+		// Nothing is planned or admitted, but a job disabled meanwhile is still noted, so that enabling it again never
+		// runs the time it was off.
+		w.markDisabled(ps)
+		return time.Time{}
 	}
 	now := w.clock.Now()
 	w.refreshDates(ctx, ps)
@@ -539,6 +545,19 @@ func sooner(wake, at, now time.Time) time.Time {
 	return wake
 }
 
+// markDisabled records the Project's disabled jobs in its schedule without planning anything.
+func (w *Worker) markDisabled(ps *projectState) {
+	w.mu.Lock()
+	disabled := map[string]bool{}
+	for _, j := range ps.jobs {
+		if disabledAdapterJob(j) {
+			disabled[j.UID] = true
+		}
+	}
+	w.mu.Unlock()
+	ps.sched.markPaused(disabled)
+}
+
 // planAll is the worker's side of planning: it hands the Project's schedulable jobs to the Project schedule. False means the
 // Project has no definitions yet.
 func (w *Worker) planAll(ps *projectState, now time.Time) bool {
@@ -573,8 +592,16 @@ func (s *projectSchedule) planAll(jobs []cronjob.Job, disabled map[string]bool, 
 			delete(s.jobs, uid)
 		}
 	}
-	// A disabled job's checkpoint is marked so that its return starts from the moment it is enabled, with or without a
-	// restart in between. Work waiting from before is superseded by the enabling write's new definition event.
+	s.markPaused(disabled)
+}
+
+// markPaused forgets the state of the disabled jobs and marks their checkpoints, so that their return starts from the
+// moment they are enabled, with or without a restart in between.
+func (s *projectSchedule) markPaused(disabled map[string]bool) {
+	// Work waiting from before is superseded by the enabling write's new definition event.
+	for uid := range disabled {
+		delete(s.jobs, uid)
+	}
 	for uid := range s.paused {
 		if !disabled[uid] {
 			delete(s.paused, uid)
