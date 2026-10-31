@@ -219,8 +219,11 @@ func buildCards() []cardEntry {
 	return []cardEntry{
 		{
 			card: CardCreate, name: "create", open: func(m Model) bool { return m.Create.Open },
-			modes: []Mode{ModeCreate, ModeDiscard},
+			modes: []Mode{ModeCreate, ModeDiscard, ModeDatePicker},
 			mode: func(m Model) Mode {
+				if m.DatePick.Open && m.DatePick.Card == CardCreate {
+					return ModeDatePicker
+				}
 				if m.Create.DiscardConfirm {
 					return ModeDiscard
 				}
@@ -311,7 +314,12 @@ func buildCards() []cardEntry {
 		},
 		{
 			card: CardDates, name: "dates", open: func(m Model) bool { return m.DatesForm.Open },
-			modes: []Mode{ModeDatesForm}, mode: func(Model) Mode { return ModeDatesForm },
+			modes: []Mode{ModeDatesForm, ModeDatePicker}, mode: func(m Model) Mode {
+				if m.DatePick.Open && m.DatePick.Card == CardDates {
+					return ModeDatePicker
+				}
+				return ModeDatesForm
+			},
 			key:    updateDatesFormKey,
 			busy:   func(m Model) bool { return m.DatesForm.Saving },
 			fields: DatesFields, focus: func(m *Model) *Field { return &m.DatesForm.Field },
@@ -395,8 +403,11 @@ func buildCards() []cardEntry {
 		},
 		{
 			card: CardRecurrence, name: "recurrence", open: func(m Model) bool { return m.RecurrenceForm.Open },
-			modes: []Mode{ModeRecurrenceForm, ModeRecurrenceStop},
+			modes: []Mode{ModeRecurrenceForm, ModeRecurrenceStop, ModeDatePicker},
 			mode: func(m Model) Mode {
+				if m.DatePick.Open && m.DatePick.Card == CardRecurrence {
+					return ModeDatePicker
+				}
 				if m.RecurrenceForm.StopConfirm {
 					return ModeRecurrenceStop
 				}
@@ -689,6 +700,12 @@ func updateTopCardKey(m Model, msg KeyMsg) (Model, []Cmd, bool) {
 	entry, ok := m.topEntry()
 	if !ok || msg.Chord == quitChord {
 		return m, nil, false
+	}
+	if datePickerOpen(m, entry) {
+		return updateDatePickerKey(m, msg), nil, true
+	}
+	if binding, bound := LookupBindingForMode(msg.Chord, entry.mode(m)); bound && binding.Action == OpenDatePicker {
+		return openDatePicker(m, entry), nil, true
 	}
 	if m, ok := entry.editFields(m, msg); ok {
 		return m, nil, true

@@ -8,7 +8,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.31
 	github.com/netresearch/go-cron v0.16.1
 	github.com/oklog/ulid/v2 v2.1.2
-	github.com/stencil-hq/tern-sdk/go/tern v0.1.0
+	github.com/stencil-hq/tern-sdk/go/tern v0.2.0
 	go.kenn.io/kata v0.20.0
 	go.kenn.io/kit v0.42.0
 	golang.org/x/mod v0.42.0

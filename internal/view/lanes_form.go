@@ -31,7 +31,7 @@ func lanesLayer(m model.Model) tern.Element {
 	children := []tern.Element{
 		muted("source", "In use: "+m.LaneSource()+"."),
 		toneText("names-label", fieldTone(form, model.LanesNames), "Lane list"),
-		ui.Input{Common: ui.Common{Key: "names", Tone: fieldTone(form, model.LanesNames), Aria: "Lane list"}, Field: ui.Field{Text: form.Text, Cursor: caretAt(form.Caret, model.LanesNames, form.Text), Mode: "insert", Placeholder: "Lane names, comma separated", Readonly: form.Saving}},
+		ui.Input{Common: ui.Common{Key: "names", Tone: fieldTone(form, model.LanesNames), Aria: "Lane list"}, Field: ui.Field{Text: form.Text, Cursor: caretAt(form.Caret, model.LanesNames, form.Text), Mode: "insert", Placeholder: ui.T("Lane names, comma separated"), Readonly: form.Saving}},
 		muted("note", "Names in order, comma separated. Empty restores the default list. Saving never changes a label in kata."),
 	}
 	if unused := m.UnusedLabels(); len(unused) > 0 {
@@ -45,7 +45,7 @@ func lanesLayer(m model.Model) tern.Element {
 		text := form.Value(name)
 		children = append(children,
 			toneText(string(name)+"-label", fieldTone(form, name), lanesDoneLabels[name]),
-			ui.Input{Common: ui.Common{Key: string(name), Tone: fieldTone(form, name), Aria: lanesDoneLabels[name]}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Placeholder: lanesDonePlaceholders[name], Readonly: form.Saving}})
+			ui.Input{Common: ui.Common{Key: string(name), Tone: fieldTone(form, name), Aria: lanesDoneLabels[name]}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Placeholder: ui.T(lanesDonePlaceholders[name]), Readonly: form.Saving}})
 	}
 	children = append(children,
 		gap("gap-share"),
