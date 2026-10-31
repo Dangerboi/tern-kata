@@ -354,8 +354,9 @@ func (s *projectSchedule) plan(job cronjob.Job, now time.Time) {
 			st.defEvent, st.through, st.date, st.pending = c.DefinitionEventUID, c.Through, c.Date, c.Pending
 			st.parked = c.Parked
 			st.dateSeen = c.DateSeen || !c.Date.IsZero()
-			if c.Paused { // it was disabled: scheduling starts again now, work already waiting keeps its rules
+			if c.Paused { // it was disabled: scheduling starts again now, and the first date read after it is the baseline
 				st.through = maxTime(now, job.CreatedAt)
+				st.date, st.dateSeen = time.Time{}, false
 				resumed = true
 			}
 		}
@@ -377,12 +378,11 @@ func (s *projectSchedule) plan(job cronjob.Job, now time.Time) {
 			}
 		} else if known && !at.Equal(st.date) {
 			// The Issue's date moved: work waiting for the old value is stale, and an earlier date that is already
-			// behind the checkpoint is evaluated again under the catchup policy. On a resume the checkpoint is now and
-			// the date is the baseline: a date that moved into the time off is never caught up.
+			// behind the checkpoint is evaluated again under the catchup policy.
 			if len(st.pending) > 0 {
 				s.log("the date of job %s changed; %d waiting occurrence(s) dropped", job.Name, len(st.pending))
 			}
-			if !at.IsZero() && at.Before(st.through) && !resumed {
+			if !at.IsZero() && at.Before(st.through) {
 				st.through = at.Add(-time.Nanosecond)
 			}
 			st.pending, st.date, changed, dateChanged = nil, at, true, true
@@ -574,7 +574,7 @@ func (s *projectSchedule) planAll(jobs []cronjob.Job, disabled map[string]bool, 
 		}
 	}
 	// A disabled job's checkpoint is marked so that its return starts from the moment it is enabled, with or without a
-	// restart in between; occurrences already waiting keep their rules.
+	// restart in between. Work waiting from before is superseded by the enabling write's new definition event.
 	for uid := range s.paused {
 		if !disabled[uid] {
 			delete(s.paused, uid)
