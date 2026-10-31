@@ -46,7 +46,7 @@ func (g *Gateway) loadFilters(projectUID string) (model.Filters, error) {
 }
 
 // saveFilters writes the Project's default filter, keeping every other table and every key of this one it doesn't know. It
-// refuses a file it cannot read. shortcut: comments in a hand-edited file are lost on save, and two Panes saving at once race.
+// refuses a file it cannot read. A save from another Pane in between is read again and this one applied on top. shortcut: comments in a hand-edited file are lost on save.
 func (g *Gateway) saveFilters(cmd model.SaveFilters) model.FiltersSaved {
 	return model.FiltersSaved{ProjectUID: cmd.ProjectUID, Default: cmd.Default, Err: g.writeFilters(cmd)}
 }
@@ -56,32 +56,28 @@ func (g *Gateway) writeFilters(cmd model.SaveFilters) error {
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(folder, "filters.toml")
-	file, err := readRawTables(path)
-	if err != nil {
-		return err
-	}
-	table, _ := file[cmd.ProjectUID].(map[string]any)
-	if table == nil {
-		table = map[string]any{}
-	}
-	for _, key := range filterKeys {
-		delete(table, key)
-	}
-	fields := map[string]string{"project": cmd.Default.ProjectUID, "status": cmd.Default.Status, "owner": cmd.Default.Owner, "label": cmd.Default.Label, "relationship": cmd.Default.Relationship}
-	set := false
-	for key, value := range fields {
-		if value != "" {
-			table[key], set = value, true
+	return updateTables(filepath.Join(folder, "filters.toml"), func(file map[string]any) {
+		table, _ := file[cmd.ProjectUID].(map[string]any)
+		if table == nil {
+			table = map[string]any{}
 		}
-	}
-	if set {
-		table["name"] = cmd.ProjectName
-	}
-	if !set && len(table) == 0 {
-		delete(file, cmd.ProjectUID)
-	} else {
-		file[cmd.ProjectUID] = table
-	}
-	return writeTables(path, file)
+		for _, key := range filterKeys {
+			delete(table, key)
+		}
+		fields := map[string]string{"project": cmd.Default.ProjectUID, "status": cmd.Default.Status, "owner": cmd.Default.Owner, "label": cmd.Default.Label, "relationship": cmd.Default.Relationship}
+		set := false
+		for key, value := range fields {
+			if value != "" {
+				table[key], set = value, true
+			}
+		}
+		if set {
+			table["name"] = cmd.ProjectName
+		}
+		if !set && len(table) == 0 {
+			delete(file, cmd.ProjectUID)
+		} else {
+			file[cmd.ProjectUID] = table
+		}
+	})
 }

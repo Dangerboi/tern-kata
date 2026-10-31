@@ -12,8 +12,12 @@ import (
 // when it holds a valid one, else tern-kata's user config, else the default. A file that cannot be read is never
 // overwritten.
 
-// LoadLanes asks for the Lane list of the Project with ProjectUID, on the daemon of Workspace.
-type LoadLanes struct{ Workspace, ProjectUID string }
+// LoadLanes asks for the Lane list of the Project with ProjectUID, on the daemon of Workspace. Request numbers the asks: an
+// answer to an older one is dropped.
+type LoadLanes struct {
+	Workspace, ProjectUID string
+	Request               int64
+}
 
 func (LoadLanes) cmd() {}
 
@@ -21,7 +25,9 @@ func (LoadLanes) cmd() {}
 // else they are the file's. Err means the file could not be read or parsed, whichever list is used.
 type LanesLoaded struct {
 	ProjectUID string
-	Lanes      []string
+	// Request is the LoadLanes it answers.
+	Request int64
+	Lanes   []string
 	// DoneDays and DoneCards are the Project's Done limits; zero means the default.
 	DoneDays, DoneCards int
 	Shared              bool
@@ -123,28 +129,44 @@ func (m Model) lanesLoad(boardWasOn bool) (Model, []Cmd) {
 			return m, nil
 		}
 		m.Board.loaded = false
-		return m, []Cmd{LoadLanes{Workspace: m.Workspace, ProjectUID: uid}}
+		return m, []Cmd{m.loadLanesCmd(uid)}
 	}
-	m.Board = BoardState{Mode: m.Board.Mode, Lane: m.Board.Lane, asked: uid}
+	m.Board = BoardState{Mode: m.Board.Mode, Lane: m.Board.Lane, asked: uid, reads: m.Board.reads}
 	if uid == "" {
 		return m, nil
 	}
-	return m, []Cmd{LoadLanes{Workspace: m.Workspace, ProjectUID: uid}}
+	return m, []Cmd{m.loadLanesCmd(uid)}
 }
 
 // lanesRefresh reads the current Project's Lane list again after another client changed a Project's metadata, which may be its
 // shared list. The list already held stays shown until the read answers.
-func (m Model) lanesRefresh() []Cmd {
+func (m Model) lanesRefresh() (Model, []Cmd) {
 	if m.Board.asked == "" {
-		return nil
+		return m, nil
 	}
-	return []Cmd{LoadLanes{Workspace: m.Workspace, ProjectUID: m.Board.asked}}
+	return m, []Cmd{m.loadLanesCmd(m.Board.asked)}
 }
 
-func lanesLoaded(m Model, msg LanesLoaded) Model {
-	if msg.ProjectUID != m.Collection.ProjectUID {
-		return m
+// loadLanesCmd is a numbered read of the Lane list of the Project uid; it supersedes any read still out.
+func (m *Model) loadLanesCmd(uid string) LoadLanes {
+	return LoadLanes{Workspace: m.Workspace, ProjectUID: uid, Request: m.Board.reads.Ask()}
+}
+
+// lanesLoaded applies the answer to the newest read. An older answer, sent before a save took effect, changes nothing and, when
+// that save wanted a fresh read, asks for it.
+func lanesLoaded(m Model, msg LanesLoaded) (Model, []Cmd) {
+	current, again := m.Board.reads.Answer(msg.Request)
+	if again && m.Board.asked != "" {
+		m.Board.loaded = false
+		return m, []Cmd{m.loadLanesCmd(m.Board.asked)}
 	}
+	if !current || msg.ProjectUID != m.Collection.ProjectUID {
+		return m, nil
+	}
+	return applyLanesLoaded(m, msg), nil
+}
+
+func applyLanesLoaded(m Model, msg LanesLoaded) Model {
 	m.Board.Lanes, m.Board.DoneDays, m.Board.DoneCards = msg.Lanes, msg.DoneDays, msg.DoneCards
 	if m.Board.DoneDays > maxDoneDays {
 		m.Board.DoneDays = 0
@@ -201,6 +223,7 @@ func lanesSaved(m Model, msg LanesSaved) Model {
 	if msg.ProjectUID != m.Collection.ProjectUID {
 		return m
 	}
+	m.Board.reads.Supersede()
 	if m.Board.Shared {
 		m.Notice = "Lanes saved on this machine. The Project's shared list stays in use until sharing stops."
 		return m
@@ -233,9 +256,11 @@ func lanesShared(m Model, msg LanesShared) (Model, []Cmd) {
 		return m, nil
 	case msg.Share.ProjectUID != m.Collection.ProjectUID:
 		return m, nil
-	case msg.Share.Stop:
+	}
+	m.Board.reads.Supersede()
+	if msg.Share.Stop {
 		m.Notice = "The Project no longer shares a Lane list."
-		return m, m.lanesRefresh()
+		return m.lanesRefresh()
 	}
 	m.Board.Lanes, m.Board.DoneDays, m.Board.DoneCards = msg.Share.Lanes, msg.Share.DoneDays, msg.Share.DoneCards
 	m.Board.Shared, m.Board.revision, m.Board.sharedErr, m.Board.reported = true, msg.Revision, nil, ""

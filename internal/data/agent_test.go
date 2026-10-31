@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/guardedfile"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
@@ -955,5 +957,72 @@ func TestRecordingAnAgentInTheHiddenSessionCanMarkItBackground(t *testing.T) {
 	}
 	if stored, _ := ReadAgents(file); !stored[0].Background || stored[0].Open {
 		t.Errorf("agents.json %+v", stored)
+	}
+}
+
+func TestAChangeRunsAgainWhenAnotherPaneChangedTheFileUnderIt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agents.json")
+	writeAgents(t, path, model.AgentEntry{Block: "1"})
+	var calls int
+	other := model.AgentEntry{Block: "2", Open: true}
+	got, err := UpdateAgents(path, func(l []model.AgentEntry) []model.AgentEntry {
+		calls++
+		if calls == 1 {
+			// The Pane starting an agent reads; another Pane flags an open agent and appends its own before the write.
+			writeAgents(t, path, other)
+		}
+		return append(l, model.AgentEntry{Block: "3"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 {
+		t.Errorf("change ran %d times, want 2", calls)
+	}
+	var blocks []string
+	for _, e := range got {
+		blocks = append(blocks, e.Block)
+	}
+	if !slices.Equal(blocks, []string{"1", "2", "3"}) {
+		t.Errorf("blocks %v: a change was lost", blocks)
+	}
+	if stored, _ := ReadAgents(path); !slices.Equal(stored, got) {
+		t.Errorf("stored %+v, want %+v", stored, got)
+	}
+}
+
+func TestAChangeThatKeepsFindingTheFileChangedReportsAnError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agents.json")
+	writeAgents(t, path, model.AgentEntry{Block: "1"})
+	var calls int
+	_, err := UpdateAgents(path, func(l []model.AgentEntry) []model.AgentEntry {
+		calls++
+		writeAgents(t, path, model.AgentEntry{Block: "other"})
+		return nil
+	})
+	if !errors.Is(err, guardedfile.ErrChanged) {
+		t.Fatalf("err = %v, want ErrChanged", err)
+	}
+	if calls < 2 {
+		t.Errorf("change ran %d times", calls)
+	}
+	stored, _ := ReadAgents(path)
+	if len(stored) != calls+1 {
+		t.Errorf("stored %+v: the other writer's entries should stand", stored)
+	}
+}
+
+func writeAgents(t *testing.T, path string, entries ...model.AgentEntry) {
+	t.Helper()
+	list, err := ReadAgents(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(agentsDoc{Agents: append(list, entries...)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
