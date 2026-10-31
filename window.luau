@@ -257,8 +257,9 @@ local function starterOf(cx: WindowCx, tab: number): number?
 end
 
 -- The tabs of `candidates` to move: those in the run of tabs at the end of their session made only of candidates and agent
--- tabs not handled yet (a pane not in `placed` whose running line or agent command carries the marker), when the tab directly before that run holds no kata Pane. Highest position
--- first, so tabs moved to the same home keep the order they were opened in.
+-- tabs not handled yet (a pane not in `placed` whose running line or agent command carries the marker), when the tab
+-- directly before that run holds no kata Pane. Highest position first, so tabs moved to the same home keep the order they
+-- were opened in.
 local function unplacedTabs(cx: WindowCx, candidates: { [number]: boolean }): { number }
     local pending: { [number]: boolean } = {}
     local kataTabs: { [number]: boolean } = {}
