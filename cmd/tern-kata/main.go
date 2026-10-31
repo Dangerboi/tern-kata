@@ -104,12 +104,13 @@ func run() error {
 		session.Close()
 		return err
 	}
-	surface, err := openSurface(session)
+	quitAtOnce := quitsAtOnce(data.ReadCatalog())
+	surface, err := openSurface(session, quitAtOnce)
 	if err != nil {
 		session.Close()
 		return err
 	}
-	term := newTerminal(ctx, session, surface, connectPane)
+	term := newTerminal(ctx, session, surface, connectPane(quitAtOnce))
 	defer term.Close()
 	workspace, err := os.Getwd()
 	if err != nil {
@@ -117,9 +118,7 @@ func run() error {
 	}
 	host := data.HostName()
 	size := paneSize(term.Caps().Cols)
-	// A config kata itself would refuse is not this Pane's to report: it keeps asking before it quits.
-	catalog, catalogErr := data.ReadCatalog()
-	state := driver.State{Model: model.Model{Cols: size.Cols, Rows: size.Rows, Actor: plan.Actor, InboxUser: plan.InboxUser, Host: host, PaneBlock: os.Getenv("TERN_PANE"), QuitAtOnce: catalogErr == nil && !catalog.ConfirmQuit}}
+	state := driver.State{Model: model.Model{Cols: size.Cols, Rows: size.Rows, Actor: plan.Actor, InboxUser: plan.InboxUser, Host: host, PaneBlock: os.Getenv("TERN_PANE"), QuitAtOnce: quitAtOnce}}
 	results := make(chan model.Msg)
 	gateway := data.NewGateway(data.LocateWithKata).WithHost(host)
 	defer gateway.Close()
@@ -220,4 +219,10 @@ func runCommand(ctx context.Context, plan LaunchPlan) error {
 		return runWorkerCommand(ctx, plan, env, out)
 	}
 	return runSubcommand(ctx, plan, data.NewGateway(data.LocateWithKata).WithHost(data.HostName()), out)
+}
+
+// quitsAtOnce is kata's [tui].confirm_quit = false. A config kata itself would refuse is not this Pane's to report: it
+// keeps asking before it quits.
+func quitsAtOnce(catalog data.Catalog, err error) bool {
+	return err == nil && !catalog.ConfirmQuit
 }
