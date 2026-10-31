@@ -121,11 +121,13 @@ func describeBase(c model.Collection, catalog []model.CatalogProject, known bool
 	if !known {
 		return text
 	}
-	switch entry, ok := model.CatalogEntry(model.Snapshot{Catalog: catalog}, c.ProjectUID); {
-	case !ok:
+	entry, ok := model.CatalogEntry(model.Snapshot{Catalog: catalog}, c.ProjectUID)
+	if !ok {
 		return text + " (Project gone)"
-	case entry.Project.Archived:
-		return text + " (Project archived)"
+	}
+	text = "project " + entry.Project.Name
+	if entry.Project.Archived {
+		text += " (Project archived)"
 	}
 	return text
 }
@@ -379,9 +381,6 @@ func (e viewsEnv) view(name string) (v model.SavedView, filterProject string, er
 		if err != nil {
 			return v, "", err
 		}
-		if isProjectBase && p.UID != v.Base.ProjectUID {
-			return v, "", fmt.Errorf("Project %q is not the base Project %q, so no Issue would match", p.Name, v.Base.Title)
-		}
 		v.Filters.ProjectUID, filterProject = p.UID, p.Name
 	}
 	return v, filterProject, nil
@@ -404,7 +403,7 @@ func (e viewsEnv) add(name string) error {
 	if err != nil {
 		return subcommandError{err}
 	}
-	if v, err = model.CheckSavedView(v, read.Views, existing); err != nil {
+	if v, err = model.CheckSavedViewIn(v, read.Views, existing, func(string) string { return filterProject }); err != nil {
 		return subcommandError{err}
 	}
 	replaced := false
