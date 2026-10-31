@@ -20,11 +20,14 @@ import (
 	"sync"
 )
 
-// maxLine is the longest line the live parser holds; a longer one is skipped.
-//
-// shortcut: a line past this is skipped by the live parser, so an agent_end longer than 64 MiB leaves a finished run
-// recorded failed ("no agent_end").
+// maxLine is the longest line the live parser holds; a longer one is skipped, except that an agent_end line still
+// marks the turn finished (see lineSink.overlong).
 const maxLine = 64 << 20
+
+const agentEndPrefix = `{"type":"agent_end"`
+
+// agentEndMarker stands for an agent_end line too long to keep: terminal, no messages.
+const agentEndMarker = agentEndPrefix + `}`
 
 // lineSink feeds omp's stdout, line by line, to the parser and keeps the first bytes in a capped file.
 type lineSink struct {
@@ -33,6 +36,17 @@ type lineSink struct {
 	file     *cappedFile
 	buf      []byte
 	skipping bool
+	// skippedEnd is whether the line being skipped is an agent_end, judged from its first bytes.
+	skippedEnd bool
+	// limit is the longest line held; zero means maxLine.
+	limit int
+}
+
+func (s *lineSink) maxLen() int {
+	if s.limit > 0 {
+		return s.limit
+	}
+	return maxLine
 }
 
 func (s *lineSink) Write(p []byte) (int, error) {
@@ -45,27 +59,42 @@ func (s *lineSink) Write(p []byte) (int, error) {
 		if i < 0 {
 			if !s.skipping {
 				s.buf = append(s.buf, p...)
-				if len(s.buf) > maxLine {
-					s.buf, s.skipping = nil, true
+				if len(s.buf) > s.maxLen() {
+					s.overlong()
 				}
 			}
 			break
 		}
 		if !s.skipping {
 			s.buf = append(s.buf, p[:i]...)
+			if len(s.buf) > s.maxLen() {
+				s.overlong()
+			}
+		}
+		if s.skipping {
+			if s.skippedEnd {
+				s.line([]byte(agentEndMarker))
+			}
+		} else {
 			s.line(s.buf)
 		}
-		s.buf, s.skipping = s.buf[:0], false
+		s.buf, s.skipping, s.skippedEnd = s.buf[:0], false, false
 		p = p[i+1:]
 	}
 	return n, nil
+}
+
+// overlong drops the held bytes of a line past the limit, remembering whether it is an agent_end.
+func (s *lineSink) overlong() {
+	s.skippedEnd = bytes.HasPrefix(bytes.TrimSpace(s.buf), []byte(agentEndPrefix))
+	s.buf, s.skipping = nil, true
 }
 
 // line hands one complete line to the parser. omp's last line is agent_end; the cap must not lose it, or a long run
 // reads as unfinished, so it is kept past the cap.
 func (s *lineSink) line(l []byte) {
 	s.parser.Line(l)
-	if t := bytes.TrimSpace(l); bytes.HasPrefix(t, []byte(`{"type":"agent_end"`)) {
+	if t := bytes.TrimSpace(l); bytes.HasPrefix(t, []byte(agentEndPrefix)) {
 		s.file.keep(t)
 	}
 }
@@ -74,10 +103,12 @@ func (s *lineSink) line(l []byte) {
 func (s *lineSink) flush() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(s.buf) > 0 && !s.skipping {
+	if s.skipping && s.skippedEnd {
+		s.line([]byte(agentEndMarker))
+	} else if len(s.buf) > 0 && !s.skipping {
 		s.line(s.buf)
 	}
-	s.buf = nil
+	s.buf, s.skipping, s.skippedEnd = nil, false, false
 }
 
 func (s *lineSink) close() { _ = s.file.Close() }
