@@ -163,8 +163,8 @@ func TestClickingAFieldMakesItTheFieldTheKeysEdit(t *testing.T) {
 	}
 }
 
-// A click on one choice of a card's choice field is the keys that focus that field and reach that choice: the click Tern
-// sends is the one the view draws on it.
+// A click on one choice of a card's choice field is the keys that focus that field and reach that choice: a weekday's click is the
+// one the view draws on it, a pick in a select or a tab is the event Tern sends for the control.
 func TestClickingAChoiceIsTheKeysThatReachIt(t *testing.T) {
 	weekdays := func(s driver.State) []string {
 		keys := []string{"tab", "tab"} // Frequency, Every, Weekdays
@@ -176,32 +176,44 @@ func TestClickingAChoiceIsTheKeysThatReachIt(t *testing.T) {
 	for _, tt := range []struct {
 		name, open, field, choice string
 		keys                      func(driver.State) []string
+		pick                      func(t *testing.T, m model.Model) tern.Event
 	}{
-		{"Recurrence frequency", "shift+o", "Frequency", "Monthly", func(driver.State) []string { return []string{"right"} }}, // Weekly to Monthly
-		{"Recurrence weekday", "shift+o", "Weekdays", "Fri", weekdays},                                                        // Friday
-		{"Filter status", "f", "Status", "open", func(driver.State) []string { return []string{"tab", "right"} }},             // open
+		{"Recurrence frequency", "shift+o", "Frequency", "Monthly", func(driver.State) []string { return []string{"right"} }, // Weekly to Monthly
+			func(t *testing.T, m model.Model) tern.Event {
+				return &tern.Change{ID: fieldLabeled(t, m, "Frequency") + ".control", Value: optionValue(t, m, "Frequency", "Monthly")}
+			}},
+		{"Recurrence weekday", "shift+o", "Weekdays", "Fri", weekdays, nil}, // Friday
+		{"Filter status", "f", "Status", "open", func(driver.State) []string { return []string{"tab", "right"} }, // open
+			func(t *testing.T, m model.Model) tern.Event {
+				return &tern.Select{ID: fieldLabeled(t, m, "Status") + ".control", Item: optionValue(t, m, "Status", "open")}
+			}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			opened := feed(t, browsing(t, 160), key(tt.open)).State
-			id := choiceShowing(t, opened.Model, tt.field, tt.choice)
-			var action string
-			for _, node := range wireNodes(t, view.Render(opened.Model, now)) {
-				if node.ID == id {
-					actions, _ := node.P["actions"].(map[string]any)
-					action, _ = actions["click"].(string)
+			var clicked driver.Output
+			if tt.pick != nil {
+				clicked = step(t, opened, tt.pick(t, opened.Model))
+			} else {
+				id := choiceShowing(t, opened.Model, tt.field, tt.choice)
+				var action string
+				for _, node := range wireNodes(t, view.Render(opened.Model, now)) {
+					if node.ID == id {
+						actions, _ := node.P["actions"].(map[string]any)
+						action, _ = actions["click"].(string)
+					}
 				}
+				if action == "" {
+					t.Fatalf("no click drawn on %s", id)
+				}
+				clicked = step(t, opened, click(id, action))
 			}
-			if action == "" {
-				t.Fatalf("no click drawn on %s", id)
-			}
-			clicked := step(t, opened, click(id, action))
 			var keys []any
 			for _, chord := range tt.keys(opened) {
 				keys = append(keys, key(chord))
 			}
 			typed := feed(t, opened, keys...)
 			if !reflect.DeepEqual(clicked.State.Model, typed.State.Model) {
-				t.Fatalf("click on %s left\n%+v\nkeys left\n%+v", id, clicked.State.Model.RecurrenceForm, typed.State.Model.RecurrenceForm)
+				t.Fatalf("the pick left\n%+v\nkeys left\n%+v", clicked.State.Model.RecurrenceForm, typed.State.Model.RecurrenceForm)
 			}
 		})
 	}

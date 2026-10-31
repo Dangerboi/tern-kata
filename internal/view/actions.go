@@ -201,6 +201,61 @@ func DecodeSelect(id, item string) model.Msg {
 	case ChildrenTableID:
 		return model.JumpIssueMsg{UID: item}
 	}
+	if field, ok := controlField(id); ok {
+		return decodeChoice(field, item)
+	}
+	return nil
+}
+
+// controlField is the choice field whose control node has id: a card field's id and the control's key.
+func controlField(id string) (model.Field, bool) {
+	fieldID, ok := strings.CutSuffix(id, "."+choiceControlKey)
+	if !ok {
+		return "", false
+	}
+	if _, field, found := FieldFromID(fieldID); found && field != "" {
+		return field, true
+	}
+	return "", false
+}
+
+// decodeChoice is the choice a tab or an option sent by its id: the index it names in the order the card shows its choices,
+// which is the last part of an id given as the whole node id.
+func decodeChoice(field model.Field, item string) model.Msg {
+	if index, err := strconv.Atoi(item[strings.LastIndex(item, ".")+1:]); err == nil {
+		return model.ChooseMsg{Field: field, Index: index}
+	}
+	return nil
+}
+
+// DecodeChange is the message for Tern's new value of node id: a day picked on a card's calendar, the option a select picked
+// (as the index it was given) or the state a switch flipped to. It is nil for any other node.
+func DecodeChange(id string, value any) model.Msg {
+	if day, ok := value.(string); ok {
+		for _, card := range model.Cards() {
+			if id == CalendarID(card) {
+				return model.DatePickMsg{Day: day}
+			}
+		}
+	}
+	field, ok := controlField(id)
+	if !ok {
+		return nil
+	}
+	switch value := value.(type) {
+	case string:
+		return decodeChoice(field, value)
+	case bool:
+		return model.SwitchMsg{Field: field, On: value}
+	}
+	return nil
+}
+
+// DecodeToggle is the message for the pointer opening or closing the menu of the select at node id, nil for any other node.
+func DecodeToggle(id string, open bool) model.Msg {
+	if field, ok := controlField(id); ok {
+		return model.MenuToggleMsg{Field: field, Open: open}
+	}
 	return nil
 }
 
@@ -208,20 +263,6 @@ func DecodeSelect(id, item string) model.Msg {
 func DecodeFocus(id string) model.Msg {
 	if _, field, ok := FieldFromID(id); ok && field != "" {
 		return model.FocusFieldMsg{Field: field}
-	}
-	return nil
-}
-
-// DecodeChange is the message for Tern's new value of node id: a day picked on a card's calendar, nil for any other node.
-func DecodeChange(id string, value any) model.Msg {
-	day, ok := value.(string)
-	if !ok {
-		return nil
-	}
-	for _, card := range model.Cards() {
-		if id == CalendarID(card) {
-			return model.DatePickMsg{Day: day}
-		}
 	}
 	return nil
 }

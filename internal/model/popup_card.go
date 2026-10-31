@@ -100,6 +100,9 @@ type cardEntry struct {
 	edit      func(Model, func(TextEditor) TextEditor) Model
 	// choose gives the focused choice field its choice at an index; nil for a card without choice fields.
 	choose func(Model, int) Model
+	// choices is the control, labels and held choice of the choice field called name, false for any other field and for a
+	// choice field the card keeps as a row of words; nil for a card without choice fields.
+	choices func(m Model, name Field) (ChoiceSet, bool)
 	// text reaches the text and caret of the focused field for the shared delete and clear actions; the text is nil when the
 	// focused field takes none. Nil for a card whose keys never delete or clear text.
 	text func(*Model) (*string, *Caret)
@@ -108,7 +111,7 @@ type cardEntry struct {
 }
 
 // fieldEditing is one keymap mode's declaration of the shared field-editing actions: NextField, PreviousField, NextChoice,
-// PreviousChoice, DeleteInput and ClearInput. A card lists the ones it offers; a card with one field lists only DeleteInput and ClearInput.
+// PreviousChoice, OpenChoice, DeleteInput and ClearInput. A card lists the ones it offers; a card with one field lists only DeleteInput and ClearInput.
 type fieldEditing struct {
 	mode    Mode
 	actions []Action
@@ -146,6 +149,9 @@ func (d fieldEditing) editRows() []Binding {
 	}
 	if d.offers(PreviousChoice) {
 		rows = append(rows, Binding{Chord: "left", Key: "left", Action: PreviousChoice, Help: "previous choice", Mode: d.mode})
+	}
+	if d.offers(OpenChoice) {
+		rows = append(rows, Binding{Chord: "down", Key: "down", Action: OpenChoice, Help: "open choices", Mode: d.mode})
 	}
 	if d.offers(DeleteInput) {
 		rows = append(rows, Binding{Chord: "backspace", Key: "backspace", Action: DeleteInput, Help: cmp.Or(d.delete, "delete"), Mode: d.mode})
@@ -417,7 +423,7 @@ func buildCards() []cardEntry {
 			busy:   recurrenceBusy,
 			fields: RecurrenceFields, focus: func(m *Model) *Field { return &m.RecurrenceForm.Field },
 			hidden:  func(m Model, name Field) bool { return !m.RecurrenceForm.Shows(name) },
-			editing: []fieldEditing{{mode: ModeRecurrenceForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, delete: "erase"}},
+			editing: []fieldEditing{{mode: ModeRecurrenceForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, OpenChoice, DeleteInput, ClearInput}, delete: "erase"}},
 			text: func(m *Model) (*string, *Caret) {
 				return m.RecurrenceForm.text(m.RecurrenceForm.Field), &m.RecurrenceForm.Caret
 			},
@@ -432,7 +438,8 @@ func buildCards() []cardEntry {
 				m.RecurrenceForm.Err = nil
 				return m
 			},
-			choose: func(m Model, i int) Model { m.RecurrenceForm.choose(i); return m },
+			choose:  func(m Model, i int) Model { m.RecurrenceForm.choose(i); return m },
+			choices: recurrenceChoiceSet,
 		},
 		{
 			card: CardBackfill, name: "backfill", open: func(m Model) bool { return m.Backfill.Open },
@@ -453,7 +460,7 @@ func buildCards() []cardEntry {
 			busy:   jobBusy,
 			fields: JobFields, focus: func(m *Model) *Field { return &m.JobForm.Field },
 			hidden:  func(m Model, name Field) bool { return !m.JobForm.Shows(name) },
-			editing: []fieldEditing{{mode: ModeJobForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, delete: "erase"}},
+			editing: []fieldEditing{{mode: ModeJobForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, OpenChoice, DeleteInput, ClearInput}, delete: "erase"}},
 			step:    func(m Model, back bool) Model { m.JobForm.step(back); return m },
 			text:    func(m *Model) (*string, *Caret) { return m.JobForm.text(m.JobForm.Field), &m.JobForm.Caret },
 			erased: func(m Model, changed bool) Model {
@@ -462,7 +469,8 @@ func buildCards() []cardEntry {
 				}
 				return m
 			},
-			choose: func(m Model, i int) Model { m.JobForm.choose(i); return m },
+			choose:  func(m Model, i int) Model { m.JobForm.choose(i); return m },
+			choices: jobChoiceSet,
 		},
 		{
 			card: CardProject, name: "project", open: func(m Model) bool { return m.ProjectForm.Open },
@@ -497,7 +505,8 @@ func buildCards() []cardEntry {
 				m.LanesForm.Share, m.LanesForm.Err = !m.LanesForm.Share, nil
 				return m
 			},
-			choose: func(m Model, i int) Model { m.LanesForm.choose(i); return m },
+			choose:  func(m Model, i int) Model { m.LanesForm.choose(i); return m },
+			choices: lanesChoiceSet,
 		},
 		{
 			card: CardWorker, name: "worker", open: func(m Model) bool { return m.WorkerCard.Open },
@@ -527,7 +536,8 @@ func buildCards() []cardEntry {
 				m.WorkerCard.toggleTrust(m)
 				return m
 			},
-			choose: func(m Model, i int) Model { m.WorkerCard.choose(i); return m },
+			choose:  func(m Model, i int) Model { m.WorkerCard.choose(i); return m },
+			choices: workerChoiceSet,
 		},
 		{
 			card: CardFilter, name: "filters", open: func(m Model) bool { return m.FilterForm.Open },
@@ -536,11 +546,12 @@ func buildCards() []cardEntry {
 			busy:   func(m Model) bool { return m.FilterForm.Saving },
 			fields: FilterFields, focus: func(m *Model) *Field { return &m.FilterForm.Field },
 			hidden:   func(m Model, name Field) bool { return !m.FilterFieldShown(name) },
-			editing:  []fieldEditing{{mode: ModeFilterForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, nextAlso: []string{"enter"}, before: ResetFilterForm}},
+			editing:  []fieldEditing{{mode: ModeFilterForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, OpenChoice, DeleteInput, ClearInput}, nextAlso: []string{"enter"}, before: ResetFilterForm}},
 			step:     filterStep,
 			clearErr: func(m Model) Model { m.FilterForm.Err = nil; return m },
 			text:     func(m *Model) (*string, *Caret) { return filterTextField(&m.FilterForm), &m.FilterForm.Caret },
 			choose:   chooseFilter,
+			choices:  filterChoiceSet,
 		},
 		{
 			card: CardView, name: "view", open: func(m Model) bool { return m.ViewForm.Open },
@@ -548,11 +559,12 @@ func buildCards() []cardEntry {
 			key:    viewFormKey,
 			busy:   func(m Model) bool { return m.ViewForm.Saving },
 			fields: ViewFields, focus: func(m *Model) *Field { return &m.ViewForm.Field },
-			editing:  []fieldEditing{{mode: ModeViewForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, nextAlso: []string{"enter"}, before: SaveViewForm}},
+			editing:  []fieldEditing{{mode: ModeViewForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, OpenChoice, DeleteInput, ClearInput}, nextAlso: []string{"enter"}, before: SaveViewForm}},
 			step:     viewStep,
 			clearErr: func(m Model) Model { m.ViewForm.Err = nil; return m },
 			text:     func(m *Model) (*string, *Caret) { return viewTextField(&m.ViewForm), &m.ViewForm.Caret },
 			choose:   chooseView,
+			choices:  viewChoiceSet,
 		},
 		{
 			card: CardPicker, name: "collections", open: func(m Model) bool { return m.Picker.Open },
@@ -707,6 +719,10 @@ func updateTopCardKey(m Model, msg KeyMsg) (Model, []Cmd, bool) {
 	if binding, bound := LookupBindingForMode(msg.Chord, entry.mode(m)); bound && binding.Action == OpenDatePicker {
 		return openDatePicker(m, entry), nil, true
 	}
+	m, taken := entry.menuKey(m, msg)
+	if taken {
+		return m, nil, true
+	}
 	if m, ok := entry.editFields(m, msg); ok {
 		return m, nil, true
 	}
@@ -842,6 +858,9 @@ func focusField(m Model, name Field) Model {
 // field the card hides or a busy card changes nothing.
 func chooseField(m Model, name Field, index int) Model {
 	m = focusField(m, name)
+	if m.Menu.Field == name {
+		m.Menu = ChoiceMenu{}
+	}
 	if entry, ok := m.topEntry(); ok && entry.choose != nil && !entry.busy(m) && *entry.focus(&m) == name && !takesText(entry.fields, name) {
 		m = entry.choose(m, index)
 	}
@@ -889,6 +908,11 @@ func (e cardEntry) editFields(m Model, msg KeyMsg) (Model, bool) {
 				*field = next
 				break
 			}
+		}
+	case OpenChoice:
+		var opened bool
+		if m, opened = e.openChoiceMenu(m); !opened {
+			return m, false
 		}
 	case NextChoice, PreviousChoice:
 		if e.focus == nil || e.step == nil || takesText(e.fields, *e.focus(&m)) {
