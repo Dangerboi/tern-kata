@@ -113,7 +113,7 @@ func jobChoiceSet(m Model, name Field) (ChoiceSet, bool) {
 func recurrenceChoiceSet(m Model, name Field) (ChoiceSet, bool) {
 	f := m.RecurrenceForm
 	var labels []string
-	chosen := -1
+	var chosen int
 	switch name {
 	case RecurrenceFrequency:
 		for _, frequency := range Frequencies {
