@@ -30,7 +30,7 @@ ctl key s
 ctl plugins expect status=open
 ctl key s
 ctl plugins expect status=closed
-expect_tree "[data-id='main.columns.list.issues']" '.nodes[0].text | contains("No Issues match")'
+expect_tree "[data-id='main.columns.list.issues-empty']" '.nodes[0].text | contains("No Issues match")'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.count == 0'
 ctl key s
 expect_tree "[data-id='main.filters']" '.nodes[0].text | contains("status=") | not'

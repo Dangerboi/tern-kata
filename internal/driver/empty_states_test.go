@@ -33,6 +33,19 @@ func wantEmpty(t *testing.T, what string, s driver.State, id, variant string, wo
 	if got, _ := n.P["variant"].(string); got != variant {
 		t.Errorf("%s: variant %q, want %q", what, got, variant)
 	}
+	if list := strings.TrimSuffix(id, "-empty"); list != id {
+		for _, other := range wireNodes(t, view.Render(s.Model, now)) {
+			if other.ID == list {
+				if other.P["hidden"] != true {
+					t.Errorf("%s: the list stays mounted but is not hidden", what)
+				}
+				list = ""
+			}
+		}
+		if list != "" {
+			t.Errorf("%s: the list %s is not mounted beside its empty state", what, list)
+		}
+	}
 	raw := wireText(*n)
 	for _, w := range words {
 		if !strings.Contains(raw, w) {
@@ -42,29 +55,29 @@ func wantEmpty(t *testing.T, what string, s driver.State, id, variant string, wo
 }
 
 func TestAttentionPageEmptyIsAnEmptyState(t *testing.T) {
-	wantEmpty(t, "attention", attentionPageWith(t, nil, 0), "main.columns.list.attention", "", "No requests")
+	wantEmpty(t, "attention", attentionPageWith(t, nil, 0), "main.columns.list.attention"+"-empty", "", "No requests")
 }
 
 func TestRunsPageEmptyIsAnEmptyStateAndOffersEveryRunForAJob(t *testing.T) {
-	wantEmpty(t, "runs", runsPane(t, 160), "main.columns.list.runs", "", "No runs")
+	wantEmpty(t, "runs", runsPane(t, 160), "main.columns.list.runs"+"-empty", "", "No runs")
 	s := runsPane(t, 160)
 	s.Model.Runs.JobUID = "J1"
-	wantEmpty(t, "job runs", s, "main.columns.list.runs", "", "No runs for this job", "key=f", `"keys"`, `"k":"button"`)
+	wantEmpty(t, "job runs", s, "main.columns.list.runs"+"-empty", "", "No runs for this job", "key=f", `"keys"`, `"k":"button"`)
 }
 
 func TestJobsPageEmptyIsAnEmptyState(t *testing.T) {
-	wantEmpty(t, "jobs", jobsPane(t, 160), "main.columns.list.jobs", "", "No Cron jobs")
+	wantEmpty(t, "jobs", jobsPane(t, 160), "main.columns.list.jobs"+"-empty", "", "No Cron jobs")
 }
 
 func TestWorkflowsPageEmptyIsAnEmptyStateWithAKeyButton(t *testing.T) {
-	wantEmpty(t, "workflows", workflowsPane(t, 160), view.WorkflowListID, "", "No workflows", "key=n", `"keys"`, `"k":"button"`)
+	wantEmpty(t, "workflows", workflowsPane(t, 160), view.WorkflowListID+"-empty", "", "No workflows", "key=n", `"keys"`, `"k":"button"`)
 }
 
 func TestIssueListEmptyIsAnEmptyState(t *testing.T) {
 	s := projectPane(t, 160)
-	wantEmpty(t, "no issues", s, view.IssueListID, "", "No Issues")
+	wantEmpty(t, "no issues", s, view.IssueListID+"-empty", "", "No Issues")
 	s.Model.Filters = model.Filters{Status: "closed"}
-	wantEmpty(t, "filtered", s, view.IssueListID, "", "No Issues match", "key=c", `"keys"`, `"k":"button"`)
+	wantEmpty(t, "filtered", s, view.IssueListID+"-empty", "", "No Issues match", "key=c", `"keys"`, `"k":"button"`)
 }
 
 func TestDetailWithNoIssueSelectedIsAnEmptyState(t *testing.T) {
@@ -72,5 +85,5 @@ func TestDetailWithNoIssueSelectedIsAnEmptyState(t *testing.T) {
 }
 
 func TestBoardLaneWithNoCardsIsAnInlineEmptyState(t *testing.T) {
-	wantEmpty(t, "lane", boardPane(t, boardCard("a")), view.BoardID+".lane1.cards", "inline", "No cards")
+	wantEmpty(t, "lane", boardPane(t, boardCard("a")), view.BoardID+".lane1.cards"+"-empty", "inline", "No cards")
 }

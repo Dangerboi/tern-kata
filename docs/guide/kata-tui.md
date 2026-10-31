@@ -59,7 +59,7 @@ Every other change to an Issue clears the history, and the next `u` says "nothin
 
 ## Quitting
 
-`q` outside text fields asks "Quit tern-kata? y/n": `y` quits, `n` or `esc` stays, and every other key is ignored while the question shows. `ctrl+c` quits at once, asked or not. `q` typed into search or a Popup card stays text. kata's own `[tui] confirm_quit = false` in `<KATA_HOME>/config.toml` (`~/.kata/config.toml` unless `KATA_HOME` is set) makes `q` quit at once in tern-kata too; a config file kata would refuse leaves the question on.
+`q` outside text fields asks "Quit tern-kata? y/n": `y` quits, `n` or `esc` stays, and every other key is ignored while the question shows. `ctrl+c` quits at once, asked or not. `q` typed into search or a Popup card stays text. kata's own `[tui] confirm_quit = false` in `<KATA_HOME>/config.toml` (`~/.kata/config.toml` unless `KATA_HOME` is set) makes `q` quit at once in tern-kata too; a config file kata would refuse leaves the question on. Closing a tern-kata Pane (its tab, or Tern's close) follows the same setting as it stands when the Pane starts: Tern closes it without asking only when `confirm_quit = false`, and asks otherwise.
 
 ## Key aliases
 
