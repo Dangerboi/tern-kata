@@ -553,10 +553,11 @@ func TestAQuarantinedAndAbandonedRunOpensTheJobsGateWithoutARestart(t *testing.T
 	h.settledInKata(r, uid) // nothing of the run is still being saved when the journal is damaged
 	h.eventually("the hold to be resumable", func() bool { s, ok := h.runStatus(r, uid); return ok && s.Resumable })
 
-	if err := os.WriteFile(filepath.Join(h.dirs.Runs(), uid, "run.json"), []byte("{damaged"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	h.eventually("the damaged journal to be quarantined", func() bool { return len(r.w.Status().Quarantined) == 1 })
+	// A save of the run still in flight may replace the damaged file, so the damage is repeated until it sticks.
+	h.eventually("the damaged journal to be quarantined", func() bool {
+		_ = os.WriteFile(filepath.Join(h.dirs.Runs(), uid, "run.json"), []byte("{damaged"), 0o600)
+		return len(r.w.Status().Quarantined) == 1
+	})
 	if resp := h.ask(worker.Request{Op: "abandon", Run: uid, Actor: "ann"}); !resp.OK {
 		t.Fatalf("abandon: %q", resp.Error)
 	}
