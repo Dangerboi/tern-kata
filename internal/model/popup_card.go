@@ -205,13 +205,6 @@ func draftBusy(m Model) bool {
 // workflowBusy is the Workflow card's busy condition, the same as the Draft editor's.
 func workflowBusy(m Model) bool { return workflowMode(m) != ModeEditor || m.Workflows.Card.Saving }
 
-func recurrenceBusy(m Model) bool {
-	f := m.RecurrenceForm
-	return f.Saving || f.StopConfirm || f.Refused
-}
-
-func jobBusy(m Model) bool { return m.JobForm.Saving || m.JobForm.Conflict != nil }
-
 func workerBusy(m Model) bool {
 	f := m.WorkerCard
 	return f.Saving || f.Stopping || f.Switching || f.Restart || f.AskOff
@@ -395,26 +388,9 @@ func buildCards() []cardEntry {
 				}
 				return ModeRecurrenceForm
 			},
-			key:    recurrenceKey,
-			busy:   recurrenceBusy,
-			fields: RecurrenceFields, focus: func(m *Model) *Field { return &m.RecurrenceForm.Field },
-			hidden:  func(m Model, name Field) bool { return !m.RecurrenceForm.Shows(name) },
+			key:     recurrenceKey,
+			table:   &recurrenceTable,
 			editing: []fieldEditing{{mode: ModeRecurrenceForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, delete: "erase"}},
-			text: func(m *Model) (*string, *Caret) {
-				return m.RecurrenceForm.text(m.RecurrenceForm.Field), &m.RecurrenceForm.Caret
-			},
-			erased: func(m Model, _ Action, changed bool) Model {
-				if changed {
-					m.RecurrenceForm.Err = nil
-				}
-				return m
-			},
-			step: func(m Model, back bool) Model {
-				m.RecurrenceForm.step(back)
-				m.RecurrenceForm.Err = nil
-				return m
-			},
-			choose: func(m Model, i int) Model { m.RecurrenceForm.choose(i); return m },
 		},
 		{
 			card: CardBackfill, name: "backfill", open: func(m Model) bool { return m.Backfill.Open },
@@ -431,20 +407,9 @@ func buildCards() []cardEntry {
 				}
 				return ModeJobForm
 			},
-			key:    jobFormKey,
-			busy:   jobBusy,
-			fields: JobFields, focus: func(m *Model) *Field { return &m.JobForm.Field },
-			hidden:  func(m Model, name Field) bool { return !m.JobForm.Shows(name) },
+			key:     jobFormKey,
+			table:   &jobTable,
 			editing: []fieldEditing{{mode: ModeJobForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, delete: "erase"}},
-			step:    func(m Model, back bool) Model { m.JobForm.step(back); return m },
-			text:    func(m *Model) (*string, *Caret) { return m.JobForm.text(m.JobForm.Field), &m.JobForm.Caret },
-			erased: func(m Model, _ Action, changed bool) Model {
-				if changed {
-					m.JobForm.Err = nil
-				}
-				return m
-			},
-			choose: func(m Model, i int) Model { m.JobForm.choose(i); return m },
 		},
 		{
 			card: CardProject, name: "project", open: func(m Model) bool { return m.ProjectForm.Open },

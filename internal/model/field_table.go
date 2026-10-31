@@ -11,9 +11,11 @@ type fieldTable[F any] struct {
 	// busy is the card's one busy condition: it is saving or otherwise answering something.
 	busy func(F) bool
 	// focus, caret and err reach the focused field, the caret of the focused text field and the card's error.
-	focus  func(*F) *Field
-	caret  func(*F) *Caret
-	err    func(*F) *error
+	focus func(*F) *Field
+	caret func(*F) *Caret
+	err   func(*F) *error
+	// hidden says a field does not apply to the card as it stands: tab skips it and it holds no caret. Nil when every field always applies.
+	hidden func(F, Field) bool
 	fields []formField[F]
 }
 
@@ -86,6 +88,9 @@ func (t *fieldTable[F]) stepFocused(f *F, back bool) bool {
 func (t *fieldTable[F]) fill(e *cardEntry) {
 	e.fields = t.specs()
 	e.busy = func(m Model) bool { return t.busy(*t.form(&m)) }
+	if t.hidden != nil {
+		e.hidden = func(m Model, name Field) bool { return t.hidden(*t.form(&m), name) }
+	}
 	e.focus = func(m *Model) *Field { return t.focus(t.form(m)) }
 	e.text = func(m *Model) (*string, *Caret) {
 		f := t.form(m)
