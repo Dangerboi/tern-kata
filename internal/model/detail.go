@@ -85,6 +85,8 @@ type DetailRow struct {
 	// Ref is the referenced Issue's id as shown (#<short_id> in the detail Issue's Project), and Relation how it relates to the
 	// detail's Issue. RefTitle is that Issue's title when it is loaded.
 	Relation, Ref, RefTitle string
+	// Qualified and Status are the referenced Issue's qualified id and status as its Link carries them (empty for an event row).
+	Qualified, Status string
 	// File is an Attachment row's Attachment, and URL the file URL of its path, empty when its Host is not this machine.
 	File    Attachment
 	URL     string
