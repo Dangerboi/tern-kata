@@ -19,5 +19,5 @@ func Collections(m model.Model) tern.Element {
 		selected = CollectionItemID(entries[min(m.CollectionCursor, len(entries)-1)].Key())
 	}
 	list := ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "collections"}, Selected: selected, Children: items}
-	return listOrEmpty(list, false, emptyLane("collections", "No Menu yet", "kata has not listed its Collections."))
+	return listOrEmpty(list, false, emptyLane("collections", "No Menu yet"))
 }

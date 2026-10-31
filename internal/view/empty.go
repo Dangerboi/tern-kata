@@ -17,10 +17,12 @@ func emptyState(key, title, text string, actions ...tern.Element) ui.Empty {
 	}
 }
 
-// emptyLane is the narrow variant of emptyState, one row, for a Lane with no cards.
-func emptyLane(key, title, text string) ui.Empty {
-	e := emptyState(key, title, text)
+// emptyLane is the narrow variant of emptyState, one row of just the title, for a column too narrow to hold a line of
+// text. It sits at the top where the rows would start.
+func emptyLane(key, title string) ui.Empty {
+	e := emptyState(key, title, "")
 	e.Variant = ui.EmptyInline
+	e.Grow = 0
 	return e
 }
 
