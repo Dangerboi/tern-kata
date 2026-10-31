@@ -2,9 +2,11 @@ package worker_test
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -243,5 +245,41 @@ func TestAbandoningANotifyRunBeforeItSendsIsRefusedAndTheRunEndsSent(t *testing.
 	}
 	if _, _, ok := h.kata.InboxRequest(t, h.proj, issue.UID, "tester"); !ok {
 		t.Fatal("the inbox request was not delivered")
+	}
+}
+
+func TestAClosedIssueWhoseReadFailedAtReportTimeGetsNoCommentOrLabelOnceTheReadWorks(t *testing.T) {
+	h := newHarness(t, "--stub-text", "All done.")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
+	var once sync.Once
+	var reads atomic.Int32
+	r := h.start(worker.Hooks{AfterSave: func(point string, j *worker.Journal) error {
+		if point != "finished" {
+			return nil
+		}
+		once.Do(func() { // the agent closed its Issue, and kata cannot be asked about it while the run is reported
+			h.kata.CloseIssue(t, h.proj, j.Issue.UID)
+			h.kata.Fail(func(req *http.Request) bool {
+				if req.Method == http.MethodGet && strings.HasSuffix(req.URL.Path, "/issues/"+j.Issue.UID) {
+					reads.Add(1)
+					return true
+				}
+				return false
+			})
+		})
+		return nil
+	}})
+	h.admitting(r)
+	uid := h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID
+	h.eventually("the report to try reading the Issue", func() bool { return reads.Load() > 0 })
+	h.kata.Heal()
+	h.settledAndFree(r, uid)
+
+	i, err := h.kata.Kata.ShowIssue(context.Background(), h.proj.ID, h.settled(uid).IssueUID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(i.Comments) != 0 || contains(i.Labels, "needs-review") {
+		t.Fatalf("the closed Issue got comments %q and labels %q", i.Comments, i.Labels)
 	}
 }

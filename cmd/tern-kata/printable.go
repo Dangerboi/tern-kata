@@ -23,12 +23,14 @@ func printable(s string) string {
 
 func unsafeRune(r rune) bool { return r != '\n' && r != '\t' && unicode.IsControl(r) }
 
-// printableWriter writes through printable. Every subcommand line is one Write, so a character is never split across two.
+// printableWriter is the one writer every subcommand prints through: it writes through printable, and a failed write is a
+// subcommandError (exit 1), not the Pane's start-failure status. Every subcommand line is one Write, so a character is never
+// split across two.
 type printableWriter struct{ w io.Writer }
 
 func (p printableWriter) Write(b []byte) (int, error) {
 	if _, err := io.WriteString(p.w, printable(string(b))); err != nil {
-		return 0, err
+		return 0, subcommandError{err}
 	}
 	return len(b), nil
 }

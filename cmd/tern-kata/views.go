@@ -41,10 +41,8 @@ func runViews(plan LaunchPlan, workspace string, store func() (data.ViewsStore, 
 }
 
 func (e viewsEnv) say(line string) error {
-	if _, err := fmt.Fprintln(e.out, line); err != nil {
-		return subcommandError{err}
-	}
-	return nil
+	_, err := fmt.Fprintln(e.out, line)
+	return err
 }
 
 // read is views.toml's views; an unreadable file is the error, naming the file and why.
