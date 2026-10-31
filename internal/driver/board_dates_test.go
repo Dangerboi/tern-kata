@@ -187,6 +187,10 @@ func spanText(t *testing.T, n tern.WireNode) string {
 	if len(spans) == 0 {
 		t.Fatalf("%s has no spans", n.ID)
 	}
-	text, _ := spans[0].(map[string]any)["t"].(string)
+	var text string
+	for _, span := range spans {
+		part, _ := span.(map[string]any)["t"].(string)
+		text += part
+	}
 	return text
 }

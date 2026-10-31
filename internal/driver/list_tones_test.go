@@ -35,10 +35,10 @@ func TestListIdAndOwnerTakeTheBoardsColours(t *testing.T) {
 	s := step(t, projectPane(t, 160, issues...), key("shift+l")).State
 	s = step(t, s, model.LanesLoaded{ProjectUID: "p", Lanes: []string{"needs-triage", "in-review"}}).State
 	for _, c := range []struct{ uid, owner, id, want string }{
-		{"triage", "ada", "triage", "warning"},
-		{"cust", "bo", "cust", "accent"},
-		{"done", "cy", "done", "success"},
-		{"none", "di", "none", "muted"},
+		{"triage", "ada", "triage", "warning mono"},
+		{"cust", "bo", "cust", "accent mono"},
+		{"done", "cy", "done", "success mono"},
+		{"none", "di", "none", "muted mono"},
 	} {
 		if got := listCell(t, s, c.uid, c.id); got != c.want {
 			t.Errorf("%s id style = %q, want %q", c.uid, got, c.want)
@@ -46,8 +46,8 @@ func TestListIdAndOwnerTakeTheBoardsColours(t *testing.T) {
 		if got := listCell(t, s, c.uid, c.owner); got != "accent" {
 			t.Errorf("%s owner style = %q, want accent, the nearest text colour to the user tone", c.uid, got)
 		}
-		if got := listCell(t, s, c.uid, "ago"); got != "muted" {
-			t.Errorf("%s updated style = %q, want muted", c.uid, got)
+		if got := listCell(t, s, c.uid, "ago"); got != "muted mono" {
+			t.Errorf("%s updated style = %q, want muted mono", c.uid, got)
 		}
 	}
 }

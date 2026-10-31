@@ -47,9 +47,13 @@ func relationshipsText(t *testing.T, s driver.State, uid string) (string, bool) 
 			continue
 		}
 		spans, _ := n.P["spans"].([]any)
+		var word string
 		for _, span := range spans {
 			text, _ := span.(map[string]any)["t"].(string)
-			words = append(words, text)
+			word += text
+		}
+		if len(spans) > 0 {
+			words = append(words, word)
 		}
 	}
 	return strings.Join(words, " "), drawn

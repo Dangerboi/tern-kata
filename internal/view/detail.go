@@ -49,7 +49,7 @@ func detail(m model.Model, now time.Time) tern.Element {
 		children = append(children, ui.Text{Common: ui.Common{Key: "unavailable"}, Text: "This Issue is unavailable or no longer visible."})
 	default:
 		issue := m.DetailAuthority().Issue
-		title := []ui.Span{{T: detailID(m, *issue), S: toneStyle(issueLaneTone(m, *issue))}, {T: " - " + issue.Title, S: "strong"}}
+		title := []ui.Span{{T: detailID(m, *issue), S: mono(toneStyle(issueLaneTone(m, *issue)))}, {T: " - " + issue.Title, S: "strong"}}
 		if m.DetailLoading() {
 			title = append(title, loadingMarker)
 		}
@@ -211,25 +211,28 @@ func statusTone(status string) ui.Tone {
 	return ui.ToneMuted
 }
 
-// properties is one Name: value grid: every row's key sits in a column as wide as the longest key, so the
-// values line up. A row with nothing to show is left out. The status badge is in the heading.
+// properties is one Name: value grid: every row's key sits in a box PropertyKeyCSS gives one width, so the values line up
+// in the mono and the sans face alike. A row with nothing to show is left out. The status badge is in the heading.
 func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 	type row = propertyRow
 	text := func(s string) tern.Element { return ui.Text{Common: ui.Common{Key: "v"}, Text: s} }
+	machine := func(s string) tern.Element {
+		return ui.Text{Common: ui.Common{Key: "v"}, Spans: []ui.Span{{T: s, S: "mono"}}}
+	}
 	var rows []row
 	add := func(name string, value tern.Element) { rows = append(rows, row{name, value}) }
 	if issue.Author != "" {
 		add("Author", text(issue.Author))
 	}
-	add("Created", text(m.DetailTime(issue.CreatedAt)))
-	add("Updated", text(m.DetailTime(issue.UpdatedAt)))
+	add("Created", machine(m.DetailTime(issue.CreatedAt)))
+	add("Updated", machine(m.DetailTime(issue.UpdatedAt)))
 	scheduled, deadline := model.IssueDates(*issue)
 	dateBadge := func(day string, rule func(day, today string) model.DateTone) tern.Element {
 		tone := ui.ToneMuted
 		if issue.Status != "closed" {
 			tone = dateTones[rule(day, m.Calendar.Date)]
 		}
-		return ui.Badge{Common: ui.Common{Key: "v", Tone: tone}, Text: day}
+		return ui.Badge{Common: ui.Common{Key: "v", Tone: tone, Role: MonoRole}, Text: day}
 	}
 	if scheduled != "" {
 		add("Scheduled", dateBadge(scheduled, model.ScheduledTone))
@@ -254,7 +257,7 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 	}
 	if issue.Priority != nil {
 		prio, tone := priorityText(issue.Priority)
-		add("Priority", ui.Badge{Common: ui.Common{Key: "v", Tone: tone}, Text: prio})
+		add("Priority", ui.Badge{Common: ui.Common{Key: "v", Tone: tone, Role: MonoRole}, Text: prio})
 	}
 	if len(issue.Labels) > 0 {
 		chips := make(tern.Nodes, len(issue.Labels))
@@ -270,16 +273,12 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 		add("Parent", referenceText("v", link.ReferenceUID, link.Ref, link.RefTitle, refCard(m, rowFacts(link), now)))
 	}
 	if counts := m.DetailChildCounts(); counts.Total > 0 {
-		add("Children", text(fmt.Sprintf("%d open / %d total", counts.Open, counts.Total)))
-	}
-	keyWidth := 0
-	for _, r := range rows {
-		keyWidth = max(keyWidth, len(r.name)+1)
+		add("Children", ui.Text{Common: ui.Common{Key: "v"}, Spans: monoSpans(fmt.Sprintf("%d open / %d total", counts.Open, counts.Total), "")})
 	}
 	noShrink := 0.0
 	children := make(tern.Nodes, len(rows))
 	for i, r := range rows {
-		key := ui.Text{Common: ui.Common{Key: "k", Shrink: &noShrink}, Text: pad(r.name+":", keyWidth-len(r.name)-1), Wrap: ui.WrapNone}
+		key := ui.Text{Common: ui.Common{Key: "k", Role: PropertyKeyRole, Shrink: &noShrink}, Text: r.name + ":", Wrap: ui.WrapNone}
 		children[i] = ui.Row{Common: ui.Common{Key: strings.ReplaceAll(strings.ToLower(r.name), " ", "-")}, Gap: ui.GapSM, Align: ui.AlignStart, Children: ui.Nodes(key, r.value)}
 	}
 	if line := issue.Attribution.Line(issue.Author); line != "" {
@@ -311,7 +310,7 @@ func cronProperties(m model.Model) []propertyRow {
 		common := ui.Common{Key: item.Key, Mark: mark, Actions: &ui.Actions{Click: OpenJobClick(item.JobUID)}}
 		if item.Cron.Property == "Cron job" {
 			if item.Cron.Scheduled != "" {
-				spans = append(spans, ui.Span{T: " · scheduled " + item.Cron.Scheduled, S: "muted"})
+				spans = append(spans, ui.Span{T: " · scheduled ", S: "muted"}, ui.Span{T: item.Cron.Scheduled, S: "muted mono"})
 			}
 			common.Key = "v"
 			job = ui.Text{Common: common, Spans: spans}
@@ -319,7 +318,7 @@ func cronProperties(m model.Model) []propertyRow {
 		}
 		spans = append(spans, ui.Span{T: " · " + item.Cron.State, S: "muted"})
 		if item.Cron.Schedule != "" {
-			spans = append(spans, ui.Span{T: " · " + item.Cron.Schedule, S: "muted"})
+			spans = append(spans, ui.Span{T: " · ", S: "muted"}, ui.Span{T: item.Cron.Schedule, S: "muted mono"})
 		}
 		jobs = append(jobs, ui.Text{Common: common, Spans: spans})
 	}
@@ -335,6 +334,3 @@ func cronProperties(m model.Model) []propertyRow {
 	}
 	return rows
 }
-
-// pad appends n no-break spaces, which Tern keeps where it collapses edge spaces.
-func pad(text string, n int) string { return text + strings.Repeat("\u00a0", max(n, 0)) }

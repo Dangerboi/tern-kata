@@ -27,7 +27,7 @@ ctl key enter
 expect_tree "$np_form" '.ok and .count == 1'
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 expect_tree "$np_input" '.ok and .count == 1 and (.nodes[0].text | startswith("workspace"))'
-expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("enter create Project") and contains("esc cancel"))'
+expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("create Project") and contains("esc cancel"))'
 
 # kata's rejection stays in the form with the name; editing the name clears it.
 ctl type '"-archived"'

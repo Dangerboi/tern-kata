@@ -12,7 +12,6 @@ import (
 	"github.com/mattn/go-runewidth"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
-	"go.kenn.io/kit/tui/helplayout"
 )
 
 // Cell widths of an Issue row, in characters. The Pane is monospaced, so a cell
@@ -154,7 +153,7 @@ func issues(m model.Model, now time.Time) tern.Element {
 func laneHeader(m model.Model) tern.Element {
 	for _, column := range m.BoardColumns() {
 		if column.Lane == m.Board.Lane {
-			return ui.Text{Common: ui.Common{Key: "lane"}, Spans: []ui.Span{{T: column.Title, S: "strong"}, {T: " " + strconv.Itoa(len(column.Cards)), S: "muted"}}}
+			return ui.Text{Common: ui.Common{Key: "lane"}, Spans: []ui.Span{{T: column.Title, S: "strong"}, {T: " " + strconv.Itoa(len(column.Cards)), S: "muted mono"}}}
 		}
 	}
 	return ui.Text{Common: ui.Common{Key: "lane"}, Spans: []ui.Span{{T: model.LaneTitle(m.Board.Lane), S: "strong"}}}
@@ -209,7 +208,7 @@ func topBar(m model.Model) tern.Element {
 	}
 	return ui.Row{Common: ui.Common{Key: "topbar", Hidden: m.HelpOpen}, Gap: ui.GapMD, Justify: ui.JustifyBetween, Children: ui.Nodes(
 		ui.Row{Common: flexCell("left", ui.ToneNeutral, 0), Gap: ui.GapMD, Children: leftCells},
-		ui.Text{Common: flexCell("counts", ui.ToneMuted, 1), Text: m.CountsLine(), Wrap: ui.WrapNone},
+		ui.Text{Common: flexCell("counts", ui.ToneMuted, 1), Spans: monoSpans(m.CountsLine(), "muted"), Wrap: ui.WrapNone},
 		ui.Row{Common: rightCell, Gap: ui.GapNone, Children: append(zoneNote, ui.Nodes(
 			ui.Text{Common: flexCell("daemon", ui.ToneMuted, 100), Text: m.DaemonLine(), Wrap: ui.WrapNone},
 			ui.Text{Common: flexCell("sep", ui.ToneMuted, 0), Text: model.DaemonSeparator, Wrap: ui.WrapNone},
@@ -317,8 +316,8 @@ func issueRow(m model.Model, row model.IssueRow, selected bool, role string, col
 	}
 	title := issueTitle(row.Issue)
 	left := []ui.Span{
-		{T: cell(idCell(row), cols.id), S: toneStyle(issueLaneTone(m, row.Issue))},
-		{T: cellGap + cell(prio, prioWidth), S: prioStyle},
+		{T: cell(idCell(row), cols.id), S: mono(toneStyle(issueLaneTone(m, row.Issue)))},
+		{T: cellGap + cell(prio, prioWidth), S: mono(prioStyle)},
 		{T: cellGap + cell(row.Status, statusWidth), S: statusStyle},
 	}
 	// The Agent badge is a span: an Item has one click, and Spans have none, so the badge on a row is not clickable.
@@ -333,7 +332,7 @@ func issueRow(m model.Model, row model.IssueRow, selected bool, role string, col
 	if row.HasChildren {
 		actions.Click = ToggleClick(row.UID)
 	}
-	return ui.Item{Common: ui.Common{Key: row.UID, Role: strings.TrimSpace(role + " " + cols.role()), Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells(kids, owner, model.RelativeTime(row.UpdatedAt, now), cols, "muted", toneStyle(ownerTone))...)}
+	return ui.Item{Common: ui.Common{Key: row.UID, Role: strings.TrimSpace(role + " " + cols.role()), Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells(kids, owner, model.RelativeTime(row.UpdatedAt, now), cols, "muted mono", toneStyle(ownerTone))...)}
 }
 
 // role is the row's boxes in role tokens, which the style sheet turns into the columns' widths (see cellBoxCSS): the row
@@ -355,17 +354,11 @@ func rightCells(kids, owner, updated string, cols listColumns, style, ownerStyle
 	return append(spans, ui.Span{T: cellGap + cell(updated, updatedWidth), S: style})
 }
 
-// footerSeparator stands between two columns of footer hints, and footerMargin is the Dock's padding, in columns.
-const (
-	footerSeparator = " ▕ "
-	footerMargin    = 4
-)
+// footerHint is one key of the current mode's legend: the chord a click presses, the key as drawn and what it does.
+type footerHint struct{ chord, key, description string }
 
-// footerGrid is the current mode's hints laid out as kata's TUI lays out its footer: a grid with as many columns as fit the
-// Pane, so a narrow Pane gets more lines instead of losing hints. chords are the hints' chords in reading order, and
-// position is the selected row's place in the list, drawn at the grid's top right.
-func footerGrid(m model.Model) (grid [][]helplayout.HelpItem, chords []string, position string) {
-	var items []helplayout.HelpItem
+// footerHints are the current mode's hints in reading order, and position is the selected row's place in the list.
+func footerHints(m model.Model) (hints []footerHint, position string) {
 	for binding := range model.BindingsForMode(m.CurrentMode(), true) {
 		if binding.Action == model.FocusDetail && !m.CanFocusDetail() {
 			continue
@@ -386,37 +379,24 @@ func footerGrid(m model.Model) (grid [][]helplayout.HelpItem, chords []string, p
 		if job := m.SelectedJob(); binding.Action == model.ArchiveJobAction && job != nil && job.Archived() {
 			help = "restore"
 		}
-		items = append(items, helplayout.HelpItem{Key: binding.Key, Description: help})
-		chords = append(chords, binding.Chord)
+		hints = append(hints, footerHint{chord: binding.Chord, key: binding.Key, description: help})
 	}
 	selected, total := m.Position()
-	position = fmt.Sprintf("%d / %d", selected, total)
-	gap := utf8.RuneCountInString(footerSeparator)
-	grid = helplayout.ReflowRows([][]helplayout.HelpItem{items}, m.Cols-footerMargin-gap-utf8.RuneCountInString(position), gap)
-	return grid, chords, position
+	return hints, fmt.Sprintf("%d / %d", selected, total)
 }
 
+// footer is the key legend: each hint a muted text with a key span, wrapping onto more lines in a narrow Pane instead of
+// losing hints, with the selected row's place in the list at the right.
 func footer(m model.Model) tern.Element {
-	grid, chords, position := footerGrid(m)
-	widths := helplayout.ColumnWidths(grid)
-	lines := make([]tern.Element, len(grid))
-	next := 0
-	for r, row := range grid {
-		cells := make([]tern.Element, 0, 2*len(row))
-		for c, item := range row {
-			if c > 0 {
-				cells = append(cells, ui.Text{Common: ui.Common{Key: "sep" + strconv.Itoa(c)}, Spans: []ui.Span{{T: footerSeparator, S: "muted"}}, Wrap: ui.WrapNone})
-			}
-			chord, pad := chords[next], strings.Repeat(" ", widths[c]-helplayout.ItemWidth(item))
-			next++
-			cells = append(cells, ui.Text{Common: ui.Common{Key: chord, Actions: &ui.Actions{Click: KeyClick(chord)}},
-				Spans: []ui.Span{{T: item.Key, S: "strong"}, {T: " " + item.Description + pad, S: "muted"}}, Wrap: ui.WrapNone})
-		}
-		lines[r] = ui.Row{Common: ui.Common{Key: strconv.Itoa(r)}, Gap: ui.GapNone, Children: cells}
+	hints, position := footerHints(m)
+	cells := make([]tern.Element, len(hints))
+	for i, hint := range hints {
+		cells[i] = ui.Text{Common: ui.Common{Key: hint.chord, Actions: &ui.Actions{Click: KeyClick(hint.chord)}},
+			Spans: []ui.Span{{T: hint.key, S: "key"}, {T: " " + hint.description, S: "muted"}}, Wrap: ui.WrapNone}
 	}
 	return ui.Nodes(ui.Row{Common: ui.Common{Key: "hints"}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(
-		ui.Col{Common: ui.Common{Key: "grid", Grow: 1}, Children: lines},
-		ui.Text{Common: ui.Common{Key: "position", Shrink: new(float64)}, Text: position, Wrap: ui.WrapNone})})
+		ui.Row{Common: ui.Common{Key: "grid", Grow: 1}, Gap: ui.GapMD, Wrap: true, Children: cells},
+		ui.Text{Common: ui.Common{Key: "position", Shrink: new(float64), Tone: ui.ToneMuted}, Spans: []ui.Span{{T: position, S: "muted mono"}}, Wrap: ui.WrapNone})})
 }
 
 // headerRow labels the Issue rows. It is an Item like the rows, so its cells sit

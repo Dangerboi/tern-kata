@@ -56,10 +56,10 @@ func TestRowsToneStatusAndPriority(t *testing.T) {
 		status, badge string
 		style         string
 	}{
-		{urgent, "accent", "P0", "error"},
-		{high, "accent", "P1", "warning"},
-		{normal, "accent", "P2", "info"},
-		{low, "muted", "P3", "muted"},
+		{urgent, "accent", "P0", "error mono"},
+		{high, "accent", "P1", "warning mono"},
+		{normal, "accent", "P2", "info mono"},
+		{low, "muted", "P3", "muted mono"},
 	} {
 		if got := style(t, row(tc.issue), tc.issue.Status); got != tc.status {
 			t.Errorf("%s status style = %q, want %q", tc.issue.Title, got, tc.status)

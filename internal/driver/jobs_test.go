@@ -81,7 +81,7 @@ func jobCardText(t *testing.T, s driver.State, uid string) string {
 	var text string
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
 		if n.ID == id || strings.HasPrefix(n.ID, id+".") {
-			text += wireText(n)
+			text += spansJoined(n)
 		}
 	}
 	if text == "" {
@@ -95,7 +95,7 @@ func inspectorText(t *testing.T, s driver.State) string {
 	var text string
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
 		if n.ID == view.DetailID || strings.HasPrefix(n.ID, view.DetailID+".") {
-			text += wireText(n)
+			text += spansJoined(n)
 		}
 	}
 	return text
