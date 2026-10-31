@@ -497,12 +497,21 @@ func (g *Gateway) sendAgentBack(ctx context.Context, cmd model.SendAgentBack) mo
 		out, err := g.runTern(ctx, args)
 		return ternFailure(err, out)
 	}
+	// moved answers for a block that has left the view and sits in the hidden session, whatever step failed after: the entry is
+	// written with the move, so agents.json, the badge and the card say where the block is, and err still reaches the Pane.
+	moved := func(stepErr error) model.AgentPlaced {
+		placed := model.AgentPlaced{Block: cmd.Block, Back: true, Moved: true, Err: stepErr}
+		if err := g.setAgentOpen(cmd.Block, false, true); err != nil {
+			placed.Err = fmt.Errorf("the agent moved but agents.json could not be written: %w", err)
+		}
+		return placed
+	}
 	if len(blocks) > 0 {
 		if err := step(MoveRightOfArgs(cmd.Block, blocks[0])); err != nil {
 			return failed(err)
 		}
 		if err := step(MoveNewTabArgs(cmd.Block)); err != nil {
-			return failed(err)
+			return moved(err)
 		}
 	} else {
 		out, err := g.runTern(ctx, AgentShellTabArgs(exists))
@@ -518,12 +527,11 @@ func (g *Gateway) sendAgentBack(ctx context.Context, cmd model.SendAgentBack) mo
 			return failed(err)
 		}
 		if err := step(CloseBlockArgs(shell)); err != nil {
-			return failed(err)
+			return moved(err)
 		}
 	}
-	placed := model.AgentPlaced{Block: cmd.Block, Back: true, Moved: true}
-	if err := g.setAgentOpen(cmd.Block, false, true); err != nil {
-		placed.Err = fmt.Errorf("the agent moved but agents.json could not be written: %w", err)
+	placed := moved(nil)
+	if placed.Err != nil {
 		return placed
 	}
 	if err := step(RenameAgentArgs(cmd.Block, cmd.IssueRef)); err != nil {

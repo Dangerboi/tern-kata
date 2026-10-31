@@ -836,6 +836,31 @@ func TestAFailedStepGoingBackShowsTernsWordsAndKeepsTheAgentOpen(t *testing.T) {
 	}
 }
 
+func TestAFailedLaterStepGoingBackRecordsWhereTheBlockIs(t *testing.T) {
+	fail := func() ([]byte, error) { return []byte("tern: refused\n"), errors.New("exit status 1") }
+	for name, c := range map[string]struct {
+		ls      string
+		replies map[string]func() ([]byte, error)
+	}{
+		"the move into its own tab fails": {lsWithAgents, map[string]func() ([]byte, error){
+			"move 31 right-of": ternOut(`{"block":31}`), "move 31 new-tab": fail}},
+		"the shell close fails": {lsWithoutAgents, map[string]func() ([]byte, error){
+			"new session": ternOut(`{"session":3,"tab":9,"block":40}`), "move 31 right-of": ternOut(`{"block":31}`), "close": fail}},
+	} {
+		g, dirs := agentGateway(t)
+		file := seedAgent(t, dirs, model.AgentEntry{Block: "31", Open: true, Placement: model.AgentSplit})
+		c.replies["ls"] = ternOut(c.ls)
+		ternScript(g, c.replies)
+		got := as[model.AgentPlaced](t, run(t, g, model.SendAgentBack{Block: "31", IssueRef: "demo#ab12"}))
+		if got.Err == nil || got.Err.Error() != "exit status 1: tern: refused" || !got.Moved || got.Open || !got.Back {
+			t.Errorf("%s: %+v", name, got)
+		}
+		if stored, _ := ReadAgents(file); stored[0].Open || !stored[0].Background {
+			t.Errorf("%s: agents.json %+v", name, stored)
+		}
+	}
+}
+
 func TestPruningKeepsABlockOfTheHiddenSession(t *testing.T) {
 	g, dirs := agentGateway(t)
 	file := seedAgent(t, dirs, model.AgentEntry{Block: "18494129176578", Background: true})
