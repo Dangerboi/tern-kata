@@ -109,7 +109,7 @@ type SpanStyle string
 
 const (
 	SpanStrong SpanStyle = "strong"
-	SpanMuted  SpanStyle = "muted"
+	SpanTime   SpanStyle = "muted mono"
 	SpanAccent SpanStyle = "accent"
 )
 

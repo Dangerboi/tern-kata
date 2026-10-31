@@ -10,13 +10,17 @@ const (
 // commentLink is one end of a Reply a comment can open: the comment it answers or a comment answering it.
 type commentLink struct {
 	issueUID, commentUID, projectUID, label string
+	// qualified is the other Issue's "#short" id, for a link into another Issue that names it.
+	qualified string
 }
 
 // CommentLinkChoice is the link chosen on the comment under the cursor: its place among the comment's links (1-based), their
-// count and what the chosen one is.
+// count and what the chosen one is. IssueUID and Qualified name the Issue a link into another Issue opens ("" for a link in
+// this Issue), Qualified being its "#short" id when kata gives it.
 type CommentLinkChoice struct {
-	Index, Count int
-	Label        string
+	Index, Count        int
+	Label               string
+	IssueUID, Qualified string
 }
 
 // commentLinks are the links of the comment with the uid: the comment it answers (if any), then its backlinks, as kata returned
@@ -39,14 +43,16 @@ func (m Model) commentLinks(uid string) []commentLink {
 		if l.IssueUID != nil && *l.IssueUID != "" {
 			issue = *l.IssueUID
 		}
+		qualified := ""
 		if issue != m.DetailIssueUID() && l.IssueShortID != nil {
-			label += " in #" + *l.IssueShortID
+			qualified = "#" + *l.IssueShortID
+			label += " in " + qualified
 		}
 		project := ""
 		if l.ProjectUID != nil {
 			project = *l.ProjectUID
 		}
-		links = append(links, commentLink{issue, *l.UID, project, label})
+		links = append(links, commentLink{issue, *l.UID, project, label, qualified})
 	}
 	if comment.Reply != nil && comment.ReplyKind != nil {
 		whose := "a comment"
@@ -96,7 +102,11 @@ func (m Model) DetailCommentLink() (CommentLinkChoice, bool) {
 		return CommentLinkChoice{}, false
 	}
 	i := m.chosenLink(rowID{row.Kind, row.Key}, len(links))
-	return CommentLinkChoice{Index: i + 1, Count: len(links), Label: links[i].label}, true
+	choice := CommentLinkChoice{Index: i + 1, Count: len(links), Label: links[i].label}
+	if links[i].issueUID != m.DetailIssueUID() {
+		choice.IssueUID, choice.Qualified = links[i].issueUID, links[i].qualified
+	}
+	return choice, true
 }
 
 // stepCommentLink is `]` (forward) and `[`: the cursor comment's link cursor moves one link, wrapping around.

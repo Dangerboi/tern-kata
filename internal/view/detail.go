@@ -131,6 +131,7 @@ func detailRows(m model.Model, now time.Time) (children []detailChild, activity 
 		}
 		var parts tern.Nodes
 		var head ui.Rich
+		var headNode tern.Element
 		if item.Kind == model.RowEvent {
 			parts = ui.Nodes(historySentence(m, row, action, now))
 		} else {
@@ -138,18 +139,28 @@ func detailRows(m model.Model, now time.Time) (children []detailChild, activity 
 			for i, part := range row.Head {
 				spans[i] = ui.Span{T: part.Text, S: string(part.Style)}
 			}
-			head = ui.Spans(spans...)
+			if item.ReferenceUID != "" {
+				// a reply to a comment in another Issue: the head names that Issue, and hovering it shows its card
+				facts := refFacts{UID: item.ReferenceUID, Qualified: row.Qualified}
+				headNode = ui.Text{Common: ui.Common{Key: "head", Hovercard: refCard(m, facts, now)}, Spans: spans}
+			} else {
+				head = ui.Spans(spans...)
+			}
 		}
 		if row.Creation != "" {
 			parts = append(parts, ui.Text{Common: ui.Common{Key: "creation", Tone: ui.ToneMuted}, Text: row.Creation})
 		}
 		if choice, ok := m.DetailCommentLink(); ok && mark == ui.MarkPick && item.Kind == model.RowComment {
-			parts = append(parts, ui.Text{Common: ui.Common{Key: "link", Tone: ui.ToneAccent}, Text: fmt.Sprintf("link %d/%d: %s", choice.Index, choice.Count, choice.Label)})
+			link := ui.Text{Common: ui.Common{Key: "link", Tone: ui.ToneAccent}, Text: fmt.Sprintf("link %d/%d: %s", choice.Index, choice.Count, choice.Label)}
+			if choice.IssueUID != "" {
+				link.Hovercard = refCard(m, refFacts{UID: choice.IssueUID, Qualified: choice.Qualified}, now)
+			}
+			parts = append(parts, link)
 		}
 		if row.Body != "" {
 			parts = append(parts, ui.Md{Common: ui.Common{Key: "body"}, Text: row.Body})
 		}
-		activity = append(activity, ui.Card{Common: ui.Common{Key: row.Key, Mark: mark, Actions: &ui.Actions{Click: action}}, Variant: ui.CardBare, Head: head, Children: parts})
+		activity = append(activity, ui.Card{Common: ui.Common{Key: row.Key, Mark: mark, Actions: &ui.Actions{Click: action}}, Variant: ui.CardBare, Head: head, HeadNode: headNode, Children: parts})
 	}
 	return children, activity
 }
@@ -219,7 +230,7 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 	type row = propertyRow
 	text := func(s string) tern.Element { return ui.Text{Common: ui.Common{Key: "v"}, Text: s} }
 	machine := func(s string) tern.Element {
-		return ui.Text{Common: ui.Common{Key: "v"}, Spans: []ui.Span{{T: s, S: "mono"}}}
+		return ui.Text{Common: ui.Common{Key: "v"}, Spans: []ui.Span{{T: s, S: mono("")}}}
 	}
 	var rows []row
 	add := func(name string, value tern.Element) { rows = append(rows, row{name, value}) }
@@ -312,7 +323,7 @@ func cronProperties(m model.Model) []propertyRow {
 		common := ui.Common{Key: item.Key, Mark: mark, Actions: &ui.Actions{Click: OpenJobClick(item.JobUID)}}
 		if item.Cron.Property == "Cron job" {
 			if item.Cron.Scheduled != "" {
-				spans = append(spans, ui.Span{T: " · scheduled ", S: "muted"}, ui.Span{T: item.Cron.Scheduled, S: "muted mono"})
+				spans = append(spans, ui.Span{T: " · scheduled ", S: "muted"}, ui.Span{T: item.Cron.Scheduled, S: mono("muted")})
 			}
 			common.Key = "v"
 			job = ui.Text{Common: common, Spans: spans}
@@ -320,7 +331,7 @@ func cronProperties(m model.Model) []propertyRow {
 		}
 		spans = append(spans, ui.Span{T: " · " + item.Cron.State, S: "muted"})
 		if item.Cron.Schedule != "" {
-			spans = append(spans, ui.Span{T: " · ", S: "muted"}, ui.Span{T: item.Cron.Schedule, S: "muted mono"})
+			spans = append(spans, ui.Span{T: " · ", S: "muted"}, ui.Span{T: item.Cron.Schedule, S: mono("muted")})
 		}
 		jobs = append(jobs, ui.Text{Common: common, Spans: spans})
 	}
