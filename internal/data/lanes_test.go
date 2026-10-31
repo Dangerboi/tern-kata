@@ -230,7 +230,7 @@ func TestAnArchivedProjectsSharedListIsRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := f.lanes(t, f.gateway)
-	if got.SharedErr != nil || !got.Shared || !slices.Equal(got.Lanes, []string{"triage", "review"}) || got.ProjectID != f.project.ID {
+	if got.SharedErr != nil || !got.Shared || !slices.Equal(got.Lanes, []string{"triage", "review"}) || got.ProjectID != f.project.ID || !got.Archived {
 		t.Fatalf("archived Project read %+v, want its shared list", got)
 	}
 	// kata refuses a write to an archived Project; the card shows its reason, not that the Project could not be read.

@@ -45,6 +45,7 @@ type BoardState struct {
 	// error a Notice gave, so a refresh that finds it unchanged says nothing.
 	projectID, revision int64
 	sharedErr           error
+	archived            bool
 	reported            string
 	// loaded says the load for the current Project has answered; until then Lanes is the default, not the saved list.
 	loaded bool

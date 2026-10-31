@@ -181,3 +181,28 @@ func TestAProjectMetadataEventTheSnapshotAlreadyCoversStillReadsTheLaneListAgain
 		t.Errorf("a covered Issue event asked %v", got)
 	}
 }
+
+func TestAnArchivedProjectsSharedListIsRefusedUpFrontAndTheFileStillSaves(t *testing.T) {
+	archived := loadedAt([]string{"triage", "review"}, true)
+	archived.Archived = true
+	s := step(t, boardPane(t, boardCard("a", "triage")), archived).State
+	s = step(t, s, key("shift+b")).State
+	for _, chord := range []string{"enter", "ctrl+x"} {
+		out := step(t, s, key(chord))
+		msg, _ := errorOnCard(t, out.State.Model)
+		if len(out.Cmds) != 0 || !strings.Contains(msg, "archived Project") || !strings.Contains(msg, "Restore the Project") {
+			t.Errorf("%s sent %v with error %q, want the plain refusal and no write", chord, out.Cmds, msg)
+		}
+	}
+	for range 3 {
+		s = step(t, s, key("tab")).State
+	}
+	s = step(t, s, key("left")).State
+	if s.Model.LanesForm.Share {
+		t.Fatalf("← on Save to left %+v", s.Model.LanesForm)
+	}
+	out := step(t, s, key("enter"))
+	if want := []model.Cmd{model.SaveLanes{ProjectUID: "p", ProjectName: "work", Lanes: []string{"triage", "review"}}}; !reflect.DeepEqual(out.Cmds, want) {
+		t.Errorf("saving to this machine sent %#v, want %#v", out.Cmds, want)
+	}
+}
