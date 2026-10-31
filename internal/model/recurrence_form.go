@@ -437,7 +437,7 @@ var recurrenceTable = fieldTable[RecurrenceFormState]{
 	focus:  func(f *RecurrenceFormState) *Field { return &f.Field },
 	caret:  func(f *RecurrenceFormState) *Caret { return &f.Caret },
 	err:    func(f *RecurrenceFormState) *error { return &f.Err },
-	hidden: func(f RecurrenceFormState, name Field) bool { return !f.Shows(name) },
+	hidden: func(m Model, name Field) bool { return !m.RecurrenceForm.Shows(name) },
 	fields: []formField[RecurrenceFormState]{
 		choiceField(RecurrenceFrequency,
 			func(f *RecurrenceFormState, back bool) {
@@ -493,7 +493,7 @@ func recurrenceKey(m Model, msg KeyMsg) (Model, []Cmd) {
 			f.Err = nil
 		}
 	case bound && binding.Action == InputSpace && field == nil:
-		recurrenceTable.stepFocused(f, false)
+		recurrenceTable.stepFocused(&m, false)
 	case field != nil:
 		var edited bool
 		if bound && binding.Action == InputSpace {

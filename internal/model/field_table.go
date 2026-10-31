@@ -14,9 +14,13 @@ type fieldTable[F any] struct {
 	focus func(*F) *Field
 	caret func(*F) *Caret
 	err   func(*F) *error
-	// hidden says a field does not apply to the card as it stands: tab skips it and it holds no caret. Nil when every field always applies.
-	hidden func(F, Field) bool
-	fields []formField[F]
+	// hidden says a field does not apply to the card as it stands: tab skips it, it holds no caret and it takes no step. Nil
+	// when every field always applies.
+	hidden func(Model, Field) bool
+	// dismissErr says every shared field action, a move between fields included, dismisses the card's error, not just an
+	// edit of its text.
+	dismissErr bool
+	fields     []formField[F]
 }
 
 // formField is one field of a fieldTable, in tab order. A field with text takes typed text; a field without it is a
@@ -24,9 +28,14 @@ type fieldTable[F any] struct {
 type formField[F any] struct {
 	name Field
 	text func(*F) *string
-	// step moves the choice on, or back; choose picks the choice at index and says whether the index named one.
-	step   func(f *F, back bool)
-	choose func(f *F, index int) bool
+	// step moves the choice on, or back; choose picks the choice at index and says whether the index named one. They
+	// reach the whole model for a choice whose choices come from it; f is the card's state within m.
+	step   func(m *Model, f *F, back bool)
+	choose func(m *Model, f *F, index int) bool
+	// held reaches the string a choice holds as its value, nil for a choice that holds none as a string.
+	held func(*F) *string
+	// reset sets a choice that can be none to none; nil for a choice that cannot.
+	reset func(f *F)
 }
 
 // textField declares a field holding the text at get.
@@ -34,9 +43,18 @@ func textField[F any](name Field, get func(*F) *string) formField[F] {
 	return formField[F]{name: name, text: get}
 }
 
-// choiceField declares a field of choices.
+// choiceField declares a field of choices that live in the card's own state.
 func choiceField[F any](name Field, step func(*F, bool), choose func(*F, int) bool) formField[F] {
-	return formField[F]{name: name, step: step, choose: choose}
+	return formField[F]{name: name,
+		step:   func(_ *Model, f *F, back bool) { step(f, back) },
+		choose: func(_ *Model, f *F, index int) bool { return choose(f, index) }}
+}
+
+// modelChoiceField declares a field of choices that come from the model, such as the Projects of the catalog.
+func modelChoiceField[F any](name Field, step func(*Model, bool), choose func(*Model, int) bool) formField[F] {
+	return formField[F]{name: name,
+		step:   func(m *Model, _ *F, back bool) { step(m, back) },
+		choose: func(m *Model, _ *F, index int) bool { return choose(m, index) }}
 }
 
 // specs is the field list the model and the view read: each field's name and whether it takes text, in tab order.
@@ -63,24 +81,76 @@ func (t *fieldTable[F]) textAt(f *F, name Field) *string {
 	return nil
 }
 
-// value is the text the field called name holds, "" for a name that is not a text field of the table.
+// value is the text the field called name holds, or the string a choice holds as its value; "" for any other name.
 func (t *fieldTable[F]) value(f F, name Field) string {
-	if text := t.textAt(&f, name); text != nil {
-		return *text
+	field := t.find(name)
+	switch {
+	case field == nil:
+	case field.text != nil:
+		if text := field.text(&f); text != nil {
+			return *text
+		}
+	case field.held != nil:
+		return *field.held(&f)
 	}
 	return ""
 }
 
 // stepFocused moves the focused choice field to its next choice, or the previous one when back, and dismisses the error.
 // It reports whether the focused field is a choice.
-func (t *fieldTable[F]) stepFocused(f *F, back bool) bool {
+func (t *fieldTable[F]) stepFocused(m *Model, back bool) bool {
+	f := t.form(m)
 	field := t.find(*t.focus(f))
-	if field == nil || field.step == nil {
+	if field == nil || field.step == nil || (t.hidden != nil && t.hidden(*m, field.name)) {
 		return false
 	}
-	field.step(f, back)
+	field.step(m, f, back)
 	*t.err(f) = nil
 	return true
+}
+
+// resetFocused sets the focused choice field to none, when it can be none.
+func (t *fieldTable[F]) resetFocused(m *Model) {
+	f := t.form(m)
+	if field := t.find(*t.focus(f)); field != nil && field.reset != nil {
+		field.reset(f)
+	}
+}
+
+// filterFieldList declares the Filter card's fields, in tab order, for a card that holds them as a Filters: the Project,
+// Status, Owner, Label and Relationship. choices gives a choice field its values, which depend on the card.
+func filterFieldList[F any](values func(*F) *Filters, choices func(Model, Field) []string) []formField[F] {
+	text := func(name Field, get func(*Filters) *string) formField[F] {
+		return textField(name, func(f *F) *string { return get(values(f)) })
+	}
+	choice := func(name Field, get func(*Filters) *string) formField[F] {
+		return formField[F]{name: name,
+			step: func(m *Model, f *F, back bool) {
+				value := get(values(f))
+				list := choices(*m, name)
+				if len(list) > 0 {
+					*value = list[cycleIndex(max(slices.Index(list, *value), 0), len(list), back)]
+				}
+			},
+			choose: func(m *Model, f *F, i int) bool {
+				list := choices(*m, name)
+				if i < 0 || i >= len(list) {
+					return false
+				}
+				*get(values(f)) = list[i]
+				return true
+			},
+			held:  func(f *F) *string { return get(values(f)) },
+			reset: func(f *F) { *get(values(f)) = "" },
+		}
+	}
+	return []formField[F]{
+		choice(FilterProject, func(v *Filters) *string { return &v.ProjectUID }),
+		choice(FilterStatus, func(v *Filters) *string { return &v.Status }),
+		text(FilterOwner, func(v *Filters) *string { return &v.Owner }),
+		text(FilterLabel, func(v *Filters) *string { return &v.Label }),
+		choice(FilterRelationship, func(v *Filters) *string { return &v.Relationship }),
+	}
 }
 
 // fill sets on e everything that derives from the table: the field list, busy condition, focus, text and caret for the
@@ -89,7 +159,13 @@ func (t *fieldTable[F]) fill(e *cardEntry) {
 	e.fields = t.specs()
 	e.busy = func(m Model) bool { return t.busy(*t.form(&m)) }
 	if t.hidden != nil {
-		e.hidden = func(m Model, name Field) bool { return t.hidden(*t.form(&m), name) }
+		e.hidden = t.hidden
+	}
+	if t.dismissErr {
+		e.clearErr = func(m Model) Model {
+			*t.err(t.form(&m)) = nil
+			return m
+		}
 	}
 	e.focus = func(m *Model) *Field { return t.focus(t.form(m)) }
 	e.text = func(m *Model) (*string, *Caret) {
@@ -106,12 +182,12 @@ func (t *fieldTable[F]) fill(e *cardEntry) {
 		return
 	}
 	e.step = func(m Model, back bool) Model {
-		t.stepFocused(t.form(&m), back)
+		t.stepFocused(&m, back)
 		return m
 	}
 	e.choose = func(m Model, index int) Model {
 		f := t.form(&m)
-		if field := t.find(*t.focus(f)); field != nil && field.choose != nil && field.choose(f, index) {
+		if field := t.find(*t.focus(f)); field != nil && field.choose != nil && field.choose(&m, f, index) {
 			*t.err(f) = nil
 		}
 		return m

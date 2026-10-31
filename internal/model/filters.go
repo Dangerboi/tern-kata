@@ -108,7 +108,7 @@ func updateFilterText(m Model, msg KeyMsg) (Model, []Cmd) {
 		return m, nil
 	}
 	if m.FilterForm.Open {
-		if field := filterTextField(&m.FilterForm); field != nil {
+		if field := filterTable.textAt(&m.FilterForm, m.FilterForm.Field); field != nil {
 			*field, _ = editText(*field, &m.FilterForm.Caret, m.FilterForm.Field, false, msg)
 		}
 		return m, nil

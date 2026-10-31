@@ -73,8 +73,8 @@ type cardEntry struct {
 	mode  func(Model) Mode
 	// key handles a key for the card; every global chord but ctrl+c, which quits at once from any card, is the card's to swallow or type.
 	key func(Model, KeyMsg) (Model, []Cmd)
-	// table declares the fields of a card that has moved to a field table; fill derives busy, fields, focus, text,
-	// erased, step and choose from it, so such a card sets none of them.
+	// table declares the fields of a card with fields; fill derives busy, fields, focus, hidden, text, erased, clearErr, step
+	// and choose from it, so such a card sets none of them.
 	table interface{ fill(*cardEntry) }
 	// busy is the card's one busy condition: it is saving, asking to discard, showing a conflict or
 	// otherwise answering something, so no focus moves and no text field holds the caret. Every
@@ -93,7 +93,7 @@ type cardEntry struct {
 	editing []fieldEditing
 	// step moves the focused choice field to its next choice, or the previous one when back; nil for a card without choice fields.
 	step func(m Model, back bool) Model
-	// clearErr dismisses the card's error; set only where every key, field moves included, dismisses it (the Filter form).
+	// clearErr dismisses the card's error; set only where every key, field moves included, dismisses it (the Filter and View cards).
 	clearErr func(Model) Model
 	// target names the card's multi-line body for native edits, and edit applies one to it; both
 	// are zero for a card without a body. edit is called only while the card is not busy.
@@ -193,8 +193,8 @@ func withFieldEditing(own []Binding) []Binding {
 // init, through buildCards, because the cards' key handlers read it back through the keymap lookup.
 var cards []cardEntry
 
-// Busy conditions: each card states its own once, and focus, the caret and native edits all derive from it.
-func createBusy(m Model) bool { return m.Create.Saving || m.Create.DiscardConfirm }
+// Busy conditions: each card states its own once, and focus, the caret and native edits all derive from it. A card with
+// fields states it in its field table.
 
 // draftBusy is the Draft editor's busy condition: saving, asking to discard or showing a conflict.
 func draftBusy(m Model) bool {
@@ -204,11 +204,6 @@ func draftBusy(m Model) bool {
 
 // workflowBusy is the Workflow card's busy condition, the same as the Draft editor's.
 func workflowBusy(m Model) bool { return workflowMode(m) != ModeEditor || m.Workflows.Card.Saving }
-
-func workerBusy(m Model) bool {
-	f := m.WorkerCard
-	return f.Saving || f.Stopping || f.Switching || f.Restart || f.AskOff
-}
 
 // buildCards fills in cards.
 func buildCards() []cardEntry {
@@ -222,19 +217,12 @@ func buildCards() []cardEntry {
 				}
 				return ModeCreate
 			},
-			key:  createCard.key,
-			busy: createBusy, fields: CreateFields, focus: func(m *Model) *Field { return &m.Create.Field },
+			key:     createCard.key,
+			table:   &createTable,
 			editing: []fieldEditing{{mode: ModeCreate, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}}},
-			text: func(m *Model) (*string, *Caret) {
-				if value := createValue(&m.Create); value != nil {
-					return value, &m.Create.Caret
-				}
-				return nil, nil
-			},
-			erased: func(m Model, _ Action, _ bool) Model { m.Create.Err = nil; return m },
-			target: EditCreateBody, bodyField: CreateBody,
+			target:  EditCreateBody, bodyField: CreateBody,
 			edit: func(m Model, apply func(TextEditor) TextEditor) Model {
-				if !createBusy(m) {
+				if !createTable.busy(m.Create) {
 					m.Create.Editor = apply(m.Create.Editor)
 				}
 				return m
@@ -298,36 +286,16 @@ func buildCards() []cardEntry {
 		{
 			card: CardDates, name: "dates", open: func(m Model) bool { return m.DatesForm.Open },
 			modes: []Mode{ModeDatesForm}, mode: func(Model) Mode { return ModeDatesForm },
-			key:    updateDatesFormKey,
-			busy:   func(m Model) bool { return m.DatesForm.Saving },
-			fields: DatesFields, focus: func(m *Model) *Field { return &m.DatesForm.Field },
+			key:     updateDatesFormKey,
+			table:   &datesTable,
 			editing: []fieldEditing{{mode: ModeDatesForm, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}}},
-			text: func(m *Model) (*string, *Caret) {
-				return m.DatesForm.Text.at(m.DatesForm.Field), &m.DatesForm.Caret
-			},
-			erased: func(m Model, _ Action, changed bool) Model {
-				if changed {
-					m.DatesForm.Err = nil
-				}
-				return m
-			},
 		},
 		{
 			card: CardToken, name: "token", open: func(m Model) bool { return m.TokenForm.Open },
 			modes: []Mode{ModeTokenForm}, mode: func(Model) Mode { return ModeTokenForm },
-			key:    updateTokenFormKey,
-			busy:   func(m Model) bool { return m.TokenForm.Saving || m.TokenForm.Done },
-			fields: TokenFields, focus: func(m *Model) *Field { return &m.TokenForm.Field },
+			key:     updateTokenFormKey,
+			table:   &tokenTable,
 			editing: []fieldEditing{{mode: ModeTokenForm, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}}},
-			text: func(m *Model) (*string, *Caret) {
-				return m.TokenForm.Values.at(m.TokenForm.Field), &m.TokenForm.Caret
-			},
-			erased: func(m Model, _ Action, changed bool) Model {
-				if changed {
-					m.TokenForm.Err = nil
-				}
-				return m
-			},
 		},
 		{
 			card: CardRevoke, name: "revoke", open: func(m Model) bool { return m.RevokeCard.Open },
@@ -355,19 +323,9 @@ func buildCards() []cardEntry {
 		{
 			card: CardDelete, name: "delete", open: func(m Model) bool { return m.DeleteForm.Open },
 			modes: []Mode{ModeDeleteForm}, mode: func(Model) Mode { return ModeDeleteForm },
-			key:    updateDeleteFormKey,
-			busy:   func(m Model) bool { return m.DeleteForm.Saving },
-			fields: DeleteFields, focus: func(m *Model) *Field { return &m.DeleteForm.Field },
+			key:     updateDeleteFormKey,
+			table:   &deleteTable,
 			editing: []fieldEditing{{mode: ModeDeleteForm, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}}},
-			text: func(m *Model) (*string, *Caret) {
-				return m.DeleteForm.at(m.DeleteForm.Field), &m.DeleteForm.Caret
-			},
-			erased: func(m Model, _ Action, changed bool) Model {
-				if changed {
-					m.DeleteForm.Err = nil
-				}
-				return m
-			},
 		},
 		{
 			card: CardFederationAdopt, name: "federation-adopt", open: func(m Model) bool { return m.Federation.Adopting },
@@ -445,48 +403,23 @@ func buildCards() []cardEntry {
 				}
 				return m.WorkerCardMode()
 			},
-			key:    workerCardKey,
-			busy:   workerBusy,
-			fields: WorkerFields, focus: func(m *Model) *Field { return &m.WorkerCard.Field },
-			hidden:  func(m Model, name Field) bool { return !m.WorkerCardShows(name) },
+			key:     workerCardKey,
+			table:   &workerTable,
 			editing: []fieldEditing{{mode: ModeWorkerCard, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, delete: "erase", before: WorkerEdit}},
-			text:    func(m *Model) (*string, *Caret) { return m.WorkerCard.at(m.WorkerCard.Field), &m.WorkerCard.Caret },
-			erased: func(m Model, _ Action, changed bool) Model {
-				if changed {
-					m.WorkerCard.Err = nil
-				}
-				return m
-			},
-			step: func(m Model, _ bool) Model {
-				m.WorkerCard.toggleTrust(m)
-				return m
-			},
-			choose: func(m Model, i int) Model { m.WorkerCard.choose(i); return m },
 		},
 		{
 			card: CardFilter, name: "filters", open: func(m Model) bool { return m.FilterForm.Open },
 			modes: []Mode{ModeFilterForm}, mode: func(Model) Mode { return ModeFilterForm },
-			key:    filterFormKey,
-			busy:   func(m Model) bool { return m.FilterForm.Saving },
-			fields: FilterFields, focus: func(m *Model) *Field { return &m.FilterForm.Field },
-			hidden:   func(m Model, name Field) bool { return !m.FilterFieldShown(name) },
-			editing:  []fieldEditing{{mode: ModeFilterForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, nextAlso: []string{"enter"}, before: ResetFilterForm}},
-			step:     filterStep,
-			clearErr: func(m Model) Model { m.FilterForm.Err = nil; return m },
-			text:     func(m *Model) (*string, *Caret) { return filterTextField(&m.FilterForm), &m.FilterForm.Caret },
-			choose:   chooseFilter,
+			key:     filterFormKey,
+			table:   &filterTable,
+			editing: []fieldEditing{{mode: ModeFilterForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, nextAlso: []string{"enter"}, before: ResetFilterForm}},
 		},
 		{
 			card: CardView, name: "view", open: func(m Model) bool { return m.ViewForm.Open },
 			modes: []Mode{ModeViewForm}, mode: func(Model) Mode { return ModeViewForm },
-			key:    viewFormKey,
-			busy:   func(m Model) bool { return m.ViewForm.Saving },
-			fields: ViewFields, focus: func(m *Model) *Field { return &m.ViewForm.Field },
-			editing:  []fieldEditing{{mode: ModeViewForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, nextAlso: []string{"enter"}, before: SaveViewForm}},
-			step:     viewStep,
-			clearErr: func(m Model) Model { m.ViewForm.Err = nil; return m },
-			text:     func(m *Model) (*string, *Caret) { return viewTextField(&m.ViewForm), &m.ViewForm.Caret },
-			choose:   chooseView,
+			key:     viewFormKey,
+			table:   &viewTable,
+			editing: []fieldEditing{{mode: ModeViewForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, nextAlso: []string{"enter"}, before: SaveViewForm}},
 		},
 		{
 			card: CardPicker, name: "collections", open: func(m Model) bool { return m.Picker.Open },
