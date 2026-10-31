@@ -168,3 +168,16 @@ func TestAProjectMetadataEventReadsTheLaneListAgain(t *testing.T) {
 		t.Errorf("an Issue event asked %v", got)
 	}
 }
+
+func TestAProjectMetadataEventTheSnapshotAlreadyCoversStillReadsTheLaneListAgain(t *testing.T) {
+	s := boardPane(t)
+	s.Model.Cursor = 5
+	covered := model.StreamEvent{Generation: s.Model.StreamGeneration, ID: 3, Type: "project.metadata_updated"}
+	if got := loadCmds(step(t, s, covered).Cmds); len(got) != 1 || got[0] != (model.LoadLanes{Workspace: "/repo", ProjectUID: "p"}) {
+		t.Errorf("a covered Project metadata event asked %v, want one load", got)
+	}
+	covered.Type = "issue.updated"
+	if got := loadCmds(step(t, s, covered).Cmds); len(got) != 0 {
+		t.Errorf("a covered Issue event asked %v", got)
+	}
+}

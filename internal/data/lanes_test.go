@@ -218,6 +218,27 @@ func TestASharedValueThatIsNotALaneListIsReportedAndTheFileUsed(t *testing.T) {
 	}
 }
 
+func TestAnArchivedProjectsSharedListIsRead(t *testing.T) {
+	f := newConfigFixture(t)
+	opened := f.lanes(t, f.gateway)
+	if shared := f.share(t, f.gateway, opened.Revision, false, "triage", "review"); shared.Err != nil || shared.Conflict {
+		t.Fatalf("share %+v", shared)
+	}
+	if _, err := f.kata.target().Client.RemoveProjectWithResponse(context.Background(), &g.RemoveProjectRequestOptions{
+		PathParams: &g.RemoveProjectPath{ProjectID: f.project.ID}, Query: &g.RemoveProjectQuery{Actor: "tester"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got := f.lanes(t, f.gateway)
+	if got.SharedErr != nil || !got.Shared || !slices.Equal(got.Lanes, []string{"triage", "review"}) || got.ProjectID != f.project.ID {
+		t.Fatalf("archived Project read %+v, want its shared list", got)
+	}
+	// kata refuses a write to an archived Project; the card shows its reason, not that the Project could not be read.
+	if again := f.share(t, f.gateway, got.Revision, false, "mine"); again.Err == nil || again.Conflict || again.Current.ProjectUID != "" {
+		t.Fatalf("share on the archived Project %+v, want kata's refusal", again)
+	}
+}
+
 func TestASharedWriteOnAStaleRevisionAnswersWithTheListAsItStands(t *testing.T) {
 	f := newConfigFixture(t)
 	opened := f.lanes(t, f.gateway)

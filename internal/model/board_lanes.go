@@ -55,18 +55,6 @@ type LanesSaved struct {
 
 func (LanesSaved) msg() {}
 
-// SaveLaneList is how the Lanes card saves: it asks to write lanes (already normalised) as the Project's Lane list, with its Done limits. It is
-// refused with the file's error while the file could not be read, so a hand-edited file is never overwritten.
-func (m Model) SaveLaneList(lanes []string, doneDays, doneCards int) (Model, []Cmd) {
-	if m.Board.fileErr != nil {
-		m.Notice = fmt.Sprintf("Lanes not saved: %v", m.Board.fileErr)
-		return m, nil
-	}
-	save := SaveLanes{ProjectUID: m.Collection.ProjectUID, ProjectName: m.Collection.Title, Lanes: slices.Clone(lanes), DoneDays: doneDays, DoneCards: doneCards}
-	m.LanesForm.Sent = save
-	return m, []Cmd{save}
-}
-
 // ShareLanes asks for Lanes and Done's limits to be written as the Project's tern.lanes metadata, as Actor, guarded on Revision:
 // the Project revision the Lanes card opened with. Stop clears the key instead, so the Project shares no list.
 type ShareLanes struct {
