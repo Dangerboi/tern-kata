@@ -35,8 +35,27 @@ const (
 	TokenFile    Field = "file"
 )
 
+// tokenTable declares the Token card's fields, in tab order, and its busy condition: the card is busy while it saves and
+// once the token is made.
+var tokenTable = fieldTable[TokenFormState]{
+	form:  func(m *Model) *TokenFormState { return &m.TokenForm },
+	busy:  func(f TokenFormState) bool { return f.Saving || f.Done },
+	focus: func(f *TokenFormState) *Field { return &f.Field },
+	caret: func(f *TokenFormState) *Caret { return &f.Caret },
+	err:   func(f *TokenFormState) *error { return &f.Err },
+	fields: []formField[TokenFormState]{
+		textField(TokenActor, func(f *TokenFormState) *string { return &f.Values.Actor }),
+		textField(TokenName, func(f *TokenFormState) *string { return &f.Values.Name }),
+		textField(TokenExpires, func(f *TokenFormState) *string { return &f.Values.Expires }),
+		textField(TokenScope, func(f *TokenFormState) *string { return &f.Values.Scope }),
+		textField(TokenIssue, func(f *TokenFormState) *string { return &f.Values.Issue }),
+		textField(TokenTeams, func(f *TokenFormState) *string { return &f.Values.Teams }),
+		textField(TokenFile, func(f *TokenFormState) *string { return &f.Values.File }),
+	},
+}
+
 // TokenFields is the Token card's field list, in tab order.
-var TokenFields = []FieldSpec{{TokenActor, true}, {TokenName, true}, {TokenExpires, true}, {TokenScope, true}, {TokenIssue, true}, {TokenTeams, true}, {TokenFile, true}}
+var TokenFields = tokenTable.specs()
 
 // The two scopes a token takes, as the Scope field spells them.
 const (
@@ -71,32 +90,9 @@ func TokenLabel(field Field) string {
 // TokenValues holds what each Token field has been typed.
 type TokenValues struct{ Actor, Name, Expires, Scope, Issue, Teams, File string }
 
-func (v *TokenValues) at(name Field) *string {
-	switch name {
-	case TokenActor:
-		return &v.Actor
-	case TokenName:
-		return &v.Name
-	case TokenExpires:
-		return &v.Expires
-	case TokenScope:
-		return &v.Scope
-	case TokenIssue:
-		return &v.Issue
-	case TokenTeams:
-		return &v.Teams
-	case TokenFile:
-		return &v.File
-	}
-	return nil
-}
-
 // Value is what the field called name holds, "" for a name that is not a Token field.
 func (v TokenValues) Value(name Field) string {
-	if value := v.at(name); value != nil {
-		return *value
-	}
-	return ""
+	return tokenTable.value(TokenFormState{Values: v}, name)
 }
 
 // TokenFormState is the Token card. Once a token is made DoneID and DoneFile name it; the secret is in the file alone.
@@ -320,7 +316,7 @@ func updateTokenFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		m.TokenForm = TokenFormState{}
 	case form.Done:
 	default:
-		text := form.Values.at(form.Field)
+		text := tokenTable.textAt(form, form.Field)
 		var edited bool
 		if *text, edited = editText(*text, &form.Caret, form.Field, bound, msg); edited {
 			form.Err = nil

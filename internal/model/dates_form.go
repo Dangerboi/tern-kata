@@ -18,8 +18,21 @@ const (
 	DatesDeadline  Field = "deadline"
 )
 
+// datesTable declares the Dates card's fields, in tab order, and its busy condition. Each field holds the text typed in it.
+var datesTable = fieldTable[DatesFormState]{
+	form:  func(m *Model) *DatesFormState { return &m.DatesForm },
+	busy:  func(f DatesFormState) bool { return f.Saving },
+	focus: func(f *DatesFormState) *Field { return &f.Field },
+	caret: func(f *DatesFormState) *Caret { return &f.Caret },
+	err:   func(f *DatesFormState) *error { return &f.Err },
+	fields: []formField[DatesFormState]{
+		textField(DatesScheduled, func(f *DatesFormState) *string { return &f.Text.Scheduled }),
+		textField(DatesDeadline, func(f *DatesFormState) *string { return &f.Text.Deadline }),
+	},
+}
+
 // DatesFields is the Dates card's field list, in tab order.
-var DatesFields = []FieldSpec{{DatesScheduled, true}, {DatesDeadline, true}}
+var DatesFields = datesTable.specs()
 
 // The metadata keys kata keeps the two dates under.
 const (
@@ -79,7 +92,7 @@ type DatesFormState struct {
 }
 
 // Value is the text the field called name holds.
-func (f DatesFormState) Value(name Field) string { return f.Text.Of(name) }
+func (f DatesFormState) Value(name Field) string { return datesTable.value(f, name) }
 
 // DateChange is one date key a save writes: Value is the new day, "" to clear the key, and Was what the key held when the card
 // opened, "" for absent.
@@ -258,7 +271,7 @@ func updateDatesFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case bound && binding.Action == DatesCancel:
 		m.DatesForm = DatesFormState{}
 	default:
-		text := form.Text.at(form.Field)
+		text := datesTable.textAt(form, form.Field)
 		var edited bool
 		if *text, edited = editText(*text, &form.Caret, form.Field, bound, msg); edited {
 			form.Err = nil

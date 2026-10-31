@@ -13,8 +13,21 @@ const (
 	FilterSearch Field = "search"
 )
 
+// filterTable declares the Filter form's fields, in tab order, and its busy condition. Every key of the form dismisses its
+// error. The Board ignores the status filter, so its card hides that field.
+var filterTable = fieldTable[FilterFormState]{
+	form:       func(m *Model) *FilterFormState { return &m.FilterForm },
+	busy:       func(f FilterFormState) bool { return f.Saving },
+	focus:      func(f *FilterFormState) *Field { return &f.Field },
+	caret:      func(f *FilterFormState) *Caret { return &f.Caret },
+	err:        func(f *FilterFormState) *error { return &f.Err },
+	hidden:     func(m Model, name Field) bool { return !m.FilterFieldShown(name) },
+	dismissErr: true,
+	fields:     filterFieldList(func(f *FilterFormState) *Filters { return &f.Values }, Model.FilterChoices),
+}
+
 // FilterFields is the Filter form's field list, in tab order.
-var FilterFields = []FieldSpec{{FilterProject, false}, {FilterStatus, false}, {FilterOwner, true}, {FilterLabel, true}, {FilterRelationship, false}}
+var FilterFields = filterTable.specs()
 
 // FilterChoice is one value a Filter form choice field cycles through and how the form shows it.
 type FilterChoice struct{ Value, Label string }
@@ -46,38 +59,9 @@ type FilterFormState struct {
 	Sent SaveFilters
 }
 
-// value is the filter value the field called name holds, nil for a name that is not a Filter field.
-func (f *Filters) value(name Field) *string {
-	switch name {
-	case FilterProject:
-		return &f.ProjectUID
-	case FilterStatus:
-		return &f.Status
-	case FilterOwner:
-		return &f.Owner
-	case FilterLabel:
-		return &f.Label
-	case FilterRelationship:
-		return &f.Relationship
-	case FilterSearch:
-		return &f.Search
-	}
-	return nil
-}
-
 // Value is the filter value the field called name holds, "" for a name that is not a Filter field.
 func (f Filters) Value(name Field) string {
-	if value := f.value(name); value != nil {
-		return *value
-	}
-	return ""
-}
-
-func filterTextField(form *FilterFormState) *string {
-	if !takesText(FilterFields, form.Field) {
-		return nil
-	}
-	return form.Values.value(form.Field)
+	return viewTable.value(ViewFormState{Values: f}, name)
 }
 
 // FilterChoices is the values the choice field called name cycles through, in the order the form shows them; nil for a text
@@ -120,18 +104,10 @@ func fixedFilterChoices(name Field) []string {
 	return values
 }
 
-// chooseFilter gives the focused choice field its value at index i in FilterChoices; an index out of range changes nothing.
-func chooseFilter(m Model, i int) Model {
-	if choices := m.FilterChoices(m.FilterForm.Field); i >= 0 && i < len(choices) {
-		*m.FilterForm.Values.value(m.FilterForm.Field) = choices[i]
-	}
-	return m
-}
-
 // filterFormKey is one key for the Filter form on top: a bound chord acts, any other types.
 func filterFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	binding, bound := LookupBindingForMode(msg.Chord, ModeFilterForm)
-	bound = bound && !(isCaretChord(msg.Chord) && filterTextField(&m.FilterForm) != nil)
+	bound = bound && !(isCaretChord(msg.Chord) && filterTable.textAt(&m.FilterForm, m.FilterForm.Field) != nil)
 	if m.FilterForm.Saving && !(bound && binding.Action == CancelFilters) {
 		return m, nil // the save has not answered: the values stay as sent
 	}
@@ -153,10 +129,11 @@ func trimmedFilters(f Filters) Filters {
 func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 	switch action {
 	case InputSpace:
-		if filterTextField(&m.FilterForm) != nil {
+		if filterTable.textAt(&m.FilterForm, m.FilterForm.Field) != nil {
 			return updateFilterText(m, KeyMsg{Text: " "})
 		}
-		return filterStep(m, false), nil
+		filterTable.stepFocused(&m, false)
+		return m, nil
 	case SaveFilterDefault:
 		return saveFilterDefault(m)
 	case ApplyFilters:
@@ -173,31 +150,7 @@ func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 			m.FilterForm.Values.Status = status
 		}
 	case DeleteInput, ClearInput: // the shared step took them in a text field
-		if choice := m.FilterForm.Values.value(m.FilterForm.Field); choice != nil && filterTextField(&m.FilterForm) == nil {
-			*choice = ""
-		}
+		filterTable.resetFocused(&m)
 	}
 	return m, nil
-}
-
-// filterStep moves the focused choice field to its next choice, or the previous one when back, wrapping around; a text field has none.
-func filterStep(m Model, back bool) Model {
-	choices := m.FilterChoices(m.FilterForm.Field)
-	if choices == nil {
-		return m
-	}
-	field := m.FilterForm.Values.value(m.FilterForm.Field)
-	index := 0
-	for i, value := range choices {
-		if value == *field {
-			index = i
-			break
-		}
-	}
-	step := 1
-	if back {
-		step = len(choices) - 1
-	}
-	*field = choices[(index+step)%len(choices)]
-	return m
 }

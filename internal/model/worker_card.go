@@ -49,11 +49,36 @@ const (
 	WorkerFieldTrust    Field = "trust"
 )
 
-// WorkerFields is the Worker card's field list in tab order. Which of them apply to the card as it stands is Model.WorkerCardShows.
-var WorkerFields = []FieldSpec{
-	{WorkerFieldExecutor, true}, {WorkerFieldActor, true}, {WorkerFieldCommand, true}, {WorkerFieldModel, true}, {WorkerFieldThinking, true},
-	{WorkerFieldTrust, false},
+// workerTable declares the Worker card's fields in tab order, and its busy condition: it is saving, stopping the worker,
+// switching supervision or asking a question. Which of the fields apply to the card as it stands is Model.WorkerCardShows;
+// tab skips the others. Trust is a choice: 0 is No, 1 is Yes.
+var workerTable = fieldTable[WorkerCardState]{
+	form:   func(m *Model) *WorkerCardState { return &m.WorkerCard },
+	busy:   func(f WorkerCardState) bool { return f.Saving || f.Stopping || f.Switching || f.Restart || f.AskOff },
+	focus:  func(f *WorkerCardState) *Field { return &f.Field },
+	caret:  func(f *WorkerCardState) *Caret { return &f.Caret },
+	err:    func(f *WorkerCardState) *error { return &f.Err },
+	hidden: func(m Model, name Field) bool { return !m.WorkerCardShows(name) },
+	fields: []formField[WorkerCardState]{
+		textField(WorkerFieldExecutor, func(f *WorkerCardState) *string { return &f.Executor }),
+		textField(WorkerFieldActor, func(f *WorkerCardState) *string { return &f.Actor }),
+		textField(WorkerFieldCommand, func(f *WorkerCardState) *string { return &f.Command }),
+		textField(WorkerFieldModel, func(f *WorkerCardState) *string { return &f.Model }),
+		textField(WorkerFieldThinking, func(f *WorkerCardState) *string { return &f.Thinking }),
+		choiceField(WorkerFieldTrust,
+			func(f *WorkerCardState, _ bool) { f.Trusted = !f.Trusted },
+			func(f *WorkerCardState, i int) bool {
+				if i != 0 && i != 1 {
+					return false
+				}
+				f.Trusted = i == 1
+				return true
+			}),
+	},
 }
+
+// WorkerFields is the Worker card's field list in tab order.
+var WorkerFields = workerTable.specs()
 
 var workerFieldTitles = map[Field]string{
 	WorkerFieldExecutor: "Executor",
@@ -212,29 +237,8 @@ type WorkerCardState struct {
 	EditBase string
 }
 
-func (f *WorkerCardState) at(name Field) *string {
-	switch name {
-	case WorkerFieldExecutor:
-		return &f.Executor
-	case WorkerFieldActor:
-		return &f.Actor
-	case WorkerFieldCommand:
-		return &f.Command
-	case WorkerFieldModel:
-		return &f.Model
-	case WorkerFieldThinking:
-		return &f.Thinking
-	}
-	return nil
-}
-
 // Value is the text the field called name holds.
-func (f WorkerCardState) Value(name Field) string {
-	if text := f.at(name); text != nil {
-		return *text
-	}
-	return ""
-}
+func (f WorkerCardState) Value(name Field) string { return workerTable.value(f, name) }
 
 // WorkerCardKind is what the card offers for the machine as it was read.
 type WorkerCardKind int
@@ -588,7 +592,7 @@ func workerCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		}
 		bound = false // no file to edit: the key is typed
 	}
-	field := f.at(f.Field)
+	field := workerTable.textAt(f, f.Field)
 	if bound && binding.Action == WorkerSupervision && field != nil && m.WorkerCardShows(f.Field) {
 		bound = false // in a text field, s is typed
 	}
@@ -600,7 +604,7 @@ func workerCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case bound && binding.Action == WorkerSave:
 		return submitWorker(m)
 	case field == nil && bound && binding.Action == InputSpace:
-		m.WorkerCard.toggleTrust(m)
+		workerTable.stepFocused(&m, false)
 	case field != nil && m.WorkerCardShows(f.Field):
 		var edited bool
 		if bound && binding.Action == InputSpace {
@@ -611,20 +615,6 @@ func workerCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		}
 	}
 	return m, nil
-}
-
-// toggleTrust flips the trust choice while the field is on show.
-func (f *WorkerCardState) toggleTrust(m Model) {
-	if m.WorkerCardShows(f.Field) {
-		f.Trusted, f.Err = !f.Trusted, nil
-	}
-}
-
-// choose gives the trust field its choice at index i: 0 is No, 1 is Yes.
-func (f *WorkerCardState) choose(i int) {
-	if i == 0 || i == 1 {
-		f.Trusted, f.Err = i == 1, nil
-	}
 }
 
 // workerRestartKey is one key while the card asks how to restart the worker: when idle (the default), now, or not at all.

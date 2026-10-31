@@ -211,7 +211,7 @@ func updateLanesFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		text := lanesTable.textAt(form, form.Field)
 		if text == nil { // the Save to field takes no text; space steps its choice
 			if bound && binding.Action == InputSpace {
-				lanesTable.stepFocused(form, false)
+				lanesTable.stepFocused(&m, false)
 			}
 			break
 		}

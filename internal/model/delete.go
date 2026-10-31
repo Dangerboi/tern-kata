@@ -24,8 +24,21 @@ const (
 	DeleteReason Field = "reason"
 )
 
+// deleteTable declares the Delete card's fields, in tab order, and its busy condition.
+var deleteTable = fieldTable[DeleteFormState]{
+	form:  func(m *Model) *DeleteFormState { return &m.DeleteForm },
+	busy:  func(f DeleteFormState) bool { return f.Saving },
+	focus: func(f *DeleteFormState) *Field { return &f.Field },
+	caret: func(f *DeleteFormState) *Caret { return &f.Caret },
+	err:   func(f *DeleteFormState) *error { return &f.Err },
+	fields: []formField[DeleteFormState]{
+		textField(DeleteID, func(f *DeleteFormState) *string { return &f.ID }),
+		textField(DeleteReason, func(f *DeleteFormState) *string { return &f.Reason }),
+	},
+}
+
 // DeleteFields is the Delete card's field list, in tab order.
-var DeleteFields = []FieldSpec{{DeleteID, true}, {DeleteReason, true}}
+var DeleteFields = deleteTable.specs()
 
 // DeleteFormState is the Delete card. QualifiedID, ShortID and Title are the Issue as the card opened; ID is the confirmation
 // typed.
@@ -40,13 +53,6 @@ type DeleteFormState struct {
 	ID, Reason   string
 	Caret        Caret
 	Err          error
-}
-
-func (f *DeleteFormState) at(field Field) *string {
-	if field == DeleteReason {
-		return &f.Reason
-	}
-	return &f.ID
 }
 
 // DeleteIssueCmd is one request to kata's delete action. QualifiedID is the Issue's project#short id, which the gateway sends
@@ -137,7 +143,7 @@ func updateDeleteFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case bound && binding.Action == DeleteCancel:
 		m.DeleteForm = DeleteFormState{}
 	default:
-		text := form.at(form.Field)
+		text := deleteTable.textAt(form, form.Field)
 		var edited bool
 		if *text, edited = editText(*text, &form.Caret, form.Field, bound, msg); edited {
 			form.Err = nil

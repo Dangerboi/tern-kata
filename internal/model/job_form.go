@@ -395,7 +395,7 @@ var jobTable = fieldTable[JobFormState]{
 	focus:  func(f *JobFormState) *Field { return &f.Field },
 	caret:  func(f *JobFormState) *Caret { return &f.Caret },
 	err:    func(f *JobFormState) *error { return &f.Err },
-	hidden: func(f JobFormState, name Field) bool { return !f.Shows(name) },
+	hidden: func(m Model, name Field) bool { return !m.JobForm.Shows(name) },
 	fields: []formField[JobFormState]{
 		jobChoiceField(JobFieldKind),
 		textField(JobFieldName, func(f *JobFormState) *string { return &f.Name }),
@@ -846,7 +846,7 @@ func jobFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case bound && binding.Action == JobSave:
 		return submitJob(m)
 	case field == nil && bound && binding.Action == InputSpace:
-		jobTable.stepFocused(f, false)
+		jobTable.stepFocused(&m, false)
 	case field != nil && f.Field == JobFieldPrompt && bound && binding.Action == JobNewline:
 		f.insertPrompt(field, "\n")
 	case field != nil && f.Field == JobFieldPrompt && !bound && strings.ContainsAny(msg.Text, "\r\n"):

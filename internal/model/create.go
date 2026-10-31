@@ -92,27 +92,27 @@ const (
 	CreateDeadline  Field = "deadline"
 )
 
-// CreateFields is the Create card's field list, in tab order; the body is the multi-line editor, which takes text like the
-// others and so holds the caret.
-var CreateFields = []FieldSpec{{CreateTitle, true}, {CreateBody, true}, {CreateLabels, true}, {CreateOwner, true}, {CreatePriority, true}, {CreateScheduled, true}, {CreateDeadline, true}}
-
-func createValue(f *CreateState) *string {
-	switch f.Field {
-	case CreateTitle:
-		return &f.Title
-	case CreateLabels:
-		return &f.Labels
-	case CreateOwner:
-		return &f.Owner
-	case CreatePriority:
-		return &f.Priority
-	case CreateScheduled:
-		return &f.Dates.Scheduled
-	case CreateDeadline:
-		return &f.Dates.Deadline
-	}
-	return nil
+// createTable declares the Create card's fields, in tab order, and its busy condition. The body is the multi-line editor:
+// it takes text like the others and so holds the caret, but its text is the Editor's, so the table reaches none.
+var createTable = fieldTable[CreateState]{
+	form:  func(m *Model) *CreateState { return &m.Create },
+	busy:  func(f CreateState) bool { return f.Saving || f.DiscardConfirm },
+	focus: func(f *CreateState) *Field { return &f.Field },
+	caret: func(f *CreateState) *Caret { return &f.Caret },
+	err:   func(f *CreateState) *error { return &f.Err },
+	fields: []formField[CreateState]{
+		textField(CreateTitle, func(f *CreateState) *string { return &f.Title }),
+		textField(CreateBody, func(*CreateState) *string { return nil }),
+		textField(CreateLabels, func(f *CreateState) *string { return &f.Labels }),
+		textField(CreateOwner, func(f *CreateState) *string { return &f.Owner }),
+		textField(CreatePriority, func(f *CreateState) *string { return &f.Priority }),
+		textField(CreateScheduled, func(f *CreateState) *string { return &f.Dates.Scheduled }),
+		textField(CreateDeadline, func(f *CreateState) *string { return &f.Dates.Deadline }),
+	},
 }
+
+// CreateFields is the Create card's field list, in tab order.
+var CreateFields = createTable.specs()
 
 // CreatePreview is the muted line under a date field of the Create card.
 func (m Model) CreatePreview(name Field) string {
@@ -230,7 +230,7 @@ var createCard = draftCardKeys{
 		if m.Create.Field == CreateBody {
 			b, ok := LookupBindingForMode(msg.Chord, ModeEditor)
 			m.Create.Editor = editorKey(m.Create.Editor, b, ok, msg)
-		} else if value := createValue(&m.Create); value != nil {
+		} else if value := createTable.textAt(&m.Create, m.Create.Field); value != nil {
 			b, ok := LookupBindingForMode(msg.Chord, ModeFieldForm)
 			if ok && b.Action == FieldNext {
 				m.Create.Completion.Suggestion++
