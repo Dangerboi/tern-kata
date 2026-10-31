@@ -38,7 +38,7 @@ func fieldLayer(m model.Model) tern.Nodes {
 	} else {
 		children = append(children, buttonRow(cardButton("save", model.ModeFieldForm, model.FieldSubmit, saveLabel(m), true), cardButton("cancel", model.ModeFieldForm, model.FieldCancel, "Cancel", false)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardField)}, Modal: true, Head: ui.T(title), Children: children})
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardField)}, Modal: true, Head: ui.T(title)}, children))
 }
 
 // saveLabel is the word on the form's save button: a restore finds the Issue first, then restores it.

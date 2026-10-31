@@ -32,9 +32,9 @@ expect_tree "[data-id='main.columns.list.issues.$claim_close']" '.ok and .count 
 ctl click "[data-id='main.columns.list.issues.$claim_close']"
 expect_tree "[data-id='main.columns.list.issues.$claim_close']" '.ok and .nodes[0]["aria-selected"] == "true"'
 ctl key x
-expect_tree "[data-id='layer.close.actions.quick']" '.ok and .count == 1'
+expect_tree "[data-id='layer.close.foot.quick']" '.ok and .count == 1'
 kata --workspace "$tmp/workspace" claim "$claim_close" --if-unowned --json >/dev/null
-ctl click "[data-id='layer.close.actions.quick']"
+ctl click "[data-id='layer.close.foot.quick']"
 expect_tree "[data-id='layer.close']" '.ok and .count == 0'
 for ((attempt = 0; attempt < 100; attempt++)); do
   [[ $(kata --workspace "$tmp/workspace" show "$claim_close" --json | jq -r '.issue.status') == closed ]] && break

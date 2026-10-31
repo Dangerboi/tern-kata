@@ -60,5 +60,5 @@ func createLayer(m model.Model) tern.Element {
 	default:
 		children = append(children, buttonRow(cardButton("save", model.ModeCreate, model.SaveDraftAction, title, true), cardButton("cancel", model.ModeCreate, model.CancelDraft, "Cancel", false)))
 	}
-	return withDatePicker(m, model.CardCreate, ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardCreate)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children}))
+	return withDatePicker(m, model.CardCreate, ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardCreate)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Icon: ui.IconPlus}, children)))
 }

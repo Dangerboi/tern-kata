@@ -10,19 +10,19 @@ ctl click "[data-id='main.columns.list.issues.$cs_uid']"
 expect_tree "[data-id='main.columns.list.issues.$cs_uid']" '.ok and .nodes[0]["aria-selected"] == "true"'
 ctl key O
 expect_tree "[data-id='layer.recurrence.frequency']" '.ok and .count == 1'
-ctl click "[data-id='layer.recurrence.actions.save']"
+ctl click "[data-id='layer.recurrence.foot.save']"
 expect_tree "[data-id='layer.recurrence']" '.ok and .count == 0'
 expect_tree "[data-id='main.columns.list.issues.$cs_uid']" '.ok and .count == 1 and (.nodes[0].text | contains("↻"))'
 
 # Change: the card is prefilled from the schedule; every 2 weeks.
 ctl key O
 expect_tree "[data-id='layer.recurrence']" '.ok and .count == 1 and (.nodes[0].text | contains("Change recurrence"))'
-expect_tree "[data-id='layer.recurrence.actions.stop']" '.ok and .count == 1'
+expect_tree "[data-id='layer.recurrence.foot.stop']" '.ok and .count == 1'
 expect_tree "[data-id='layer.recurrence.every']" '.ok and .count == 1 and (.nodes[0].text | contains("Every (weeks): 1"))'
 ctl key Tab
 ctl key Backspace
 ctl type '"2"'
-ctl click "[data-id='layer.recurrence.actions.save']"
+ctl click "[data-id='layer.recurrence.foot.save']"
 expect_tree "[data-id='layer.recurrence']" '.ok and .count == 0'
 expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Every 2 weeks on")))'
 

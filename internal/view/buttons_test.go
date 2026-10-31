@@ -62,57 +62,57 @@ func press(m model.Model, chords ...string) model.Model {
 func TestCreateCardEndsInButtons(t *testing.T) {
 	for chord, title := range map[string]string{"n": "Create Issue", "shift+n": "Create child Issue"} {
 		m := press(selectedFirst(), chord)
-		cardButtons(t, m, "layer.create.actions", []button{{"save", title}, {"cancel", "Cancel"}}, "save")
+		cardButtons(t, m, "layer.create.foot", []button{{"save", title}, {"cancel", "Cancel"}}, "save")
 	}
 	m := press(selectedFirst(), "n", "t")
 	m = press(m, "escape")
-	cardButtons(t, m, "layer.create.actions", []button{{"discard", "Discard"}, {"keep", "Keep editing"}}, "keep")
-	noButtons(t, m, "layer.create", "actions.save", "actions.cancel")
+	cardButtons(t, m, "layer.create.foot", []button{{"discard", "Discard"}, {"keep", "Keep editing"}}, "keep")
+	noButtons(t, m, "layer.create", "foot.save", "foot.cancel")
 	m = model.Model{Cols: 160, Project: model.Project{ID: 7}}
 	m = press(m, "n", "t", "ctrl+o")
-	noButtons(t, m, "layer.create", "actions", "actions.save", "actions.cancel", "actions.discard")
+	noButtons(t, m, "layer.create", "foot", "foot.save", "foot.cancel", "foot.discard")
 }
 
 func TestFieldFormEndsInButtons(t *testing.T) {
 	m := press(selectedFirst(), "+")
-	cardButtons(t, m, "layer.fields.actions", []button{{"save", "Save"}, {"cancel", "Cancel"}}, "save")
+	cardButtons(t, m, "layer.fields.foot", []button{{"save", "Save"}, {"cancel", "Cancel"}}, "save")
 	m = press(m, "b", "u", "g", "enter")
-	noButtons(t, m, "layer.fields", "actions", "actions.save", "actions.cancel")
+	noButtons(t, m, "layer.fields", "foot", "foot.save", "foot.cancel")
 }
 
 func TestNewProjectEndsInButtons(t *testing.T) {
 	m := newProjectModel(false, "escape", "escape", "end", "enter")
-	cardButtons(t, m, "layer.project.actions", []button{{"create", "Create Project"}, {"cancel", "Cancel"}}, "create")
+	cardButtons(t, m, "layer.project.foot", []button{{"create", "Create Project"}, {"cancel", "Cancel"}}, "create")
 	m = press(m, "enter")
-	noButtons(t, m, "layer.project", "actions", "actions.create", "actions.cancel")
+	noButtons(t, m, "layer.project", "foot", "foot.create", "foot.cancel")
 }
 
 func TestDraftEditorEndsInButtons(t *testing.T) {
 	issue := model.Issue{UID: "a", ProjectID: 2, Body: "body", Revision: 1}
 	m, _ := model.Update(selectedFirst(), model.DetailLoaded{UID: "a", Selected: &model.IssueDetailData{Issue: &issue}})
 	m = press(m, "e")
-	cardButtons(t, m, "layer.editor.actions", []button{{"save", "Save"}, {"editor", "$EDITOR"}, {"discard", "Discard"}}, "save")
+	cardButtons(t, m, "layer.editor.foot", []button{{"save", "Save"}, {"editor", "$EDITOR"}, {"discard", "Discard"}}, "save")
 	m, _ = model.Update(m, model.KeyMsg{Chord: "paste", Text: "more"})
 	asking := press(m, "escape")
-	cardButtons(t, asking, "layer.editor.actions", []button{{"discard", "Discard"}, {"keep", "Keep editing"}}, "keep")
-	noButtons(t, asking, "layer.editor", "actions.save", "actions.editor")
+	cardButtons(t, asking, "layer.editor.foot", []button{{"discard", "Discard"}, {"keep", "Keep editing"}}, "keep")
+	noButtons(t, asking, "layer.editor", "foot.save", "foot.editor")
 	saving := press(m, "ctrl+o")
-	noButtons(t, saving, "layer.editor", "actions", "actions.save", "actions.editor", "actions.discard")
+	noButtons(t, saving, "layer.editor", "foot", "foot.save", "foot.editor", "foot.discard")
 }
 
 func TestCloseAndFiltersEndInButtons(t *testing.T) {
 	m := press(selectedFirst(), "x")
-	cardButtons(t, m, "layer.close.actions", []button{{"save", "Close Issue"}, {"quick", "Quick done"}, {"cancel", "Cancel"}}, "save")
+	cardButtons(t, m, "layer.close.foot", []button{{"save", "Close Issue"}, {"quick", "Quick done"}, {"cancel", "Cancel"}}, "save")
 	pending := press(m, "ctrl+d")
-	noButtons(t, pending, "layer.close", "actions", "actions.save", "actions.quick", "actions.cancel")
+	noButtons(t, pending, "layer.close", "foot", "foot.save", "foot.quick", "foot.cancel")
 
 	m = press(selectedFirst(), "f")
-	cardButtons(t, m, "layer.filters.actions", []button{{"apply", "Apply filters"}, {"cancel", "Cancel"}}, "apply")
+	cardButtons(t, m, "layer.filters.foot", []button{{"apply", "Apply filters"}, {"cancel", "Cancel"}}, "apply")
 }
 
 func TestCardButtonNamesEveryKeyOfItsAction(t *testing.T) {
 	m := press(selectedFirst(), "n", "t", "escape")
-	node := pickerNodes(t, m)["layer.create.actions.keep"]
+	node := pickerNodes(t, m)["layer.create.foot.keep"]
 	if keys := node.P["keys"]; !reflect.DeepEqual(keys, []any{"n", "esc"}) || text(node) != "Keep editing" {
 		t.Errorf("keep button = %q with keys %v", text(node), keys)
 	}
@@ -125,7 +125,7 @@ func TestDraftConflictEndsInButtons(t *testing.T) {
 	latest := issue
 	latest.Revision, latest.Body = 2, "Remote body"
 	m, _ = model.Update(m, model.DraftConflict{UID: "a", Issue: latest})
-	cardButtons(t, m, "layer.editor.actions", []button{{"overwrite", "Overwrite"}, {"discard", "Discard Draft"}}, "overwrite")
+	cardButtons(t, m, "layer.editor.foot", []button{{"overwrite", "Overwrite"}, {"discard", "Discard Draft"}}, "overwrite")
 }
 
 func TestReplyDraftNamesItsKindAndOffersTheKindKeyAndSendAnyway(t *testing.T) {
@@ -140,7 +140,7 @@ func TestReplyDraftNamesItsKindAndOffersTheKindKeyAndSendAnyway(t *testing.T) {
 	if got := editor(m); !strings.Contains(got, "Reply to dana's comment") {
 		t.Fatalf("reply title: %q", got)
 	}
-	cardButtons(t, m, "layer.editor.actions", []button{{"save", "Save"}, {"kind", "Kind"}}, "save")
+	cardButtons(t, m, "layer.editor.foot", []button{{"save", "Save"}, {"kind", "Kind"}}, "save")
 	for _, want := range []string{"Confirm dana's comment", "Refute dana's comment", "Supersede dana's comment", "Reply to dana's comment", "Confirm dana's comment"} {
 		m = press(m, "ctrl+r")
 		if got := editor(m); got != want {
@@ -148,13 +148,13 @@ func TestReplyDraftNamesItsKindAndOffersTheKindKeyAndSendAnyway(t *testing.T) {
 		}
 	}
 	m, _ = model.Update(m, model.DraftFailed{UID: "a", Err: model.DuplicateReply{Message: "a reply of this kind already exists"}})
-	cardButtons(t, m, "layer.editor.actions", []button{{"force", "Send anyway"}}, "save")
+	cardButtons(t, m, "layer.editor.foot", []button{{"force", "Send anyway"}}, "save")
 }
 
 func TestAgentCardEndsInButtonsAndSaysWhenThereAreNoAgents(t *testing.T) {
 	m := model.Model{Cols: 160, Project: model.Project{ID: 7}, Issues: []model.Issue{{UID: "a", QualifiedID: "work#a", Status: "open"}}, SelectedUID: "a"}
 	m = press(m, "w")
-	cardButtons(t, m, "layer.agent.actions", []button{{"go", "Go to agent"}, {"split", "New in a split"}, {"tab", "New in a tab"},
+	cardButtons(t, m, "layer.agent.foot", []button{{"go", "Go to agent"}, {"split", "New in a split"}, {"tab", "New in a tab"},
 		{"new-background", "New in the background"}, {"background", "Send to background"}, {"cancel", "Cancel"}}, "")
 	if got := text(pickerNodes(t, m)["layer.agent.none"]); got != "No agents on this Issue yet." {
 		t.Errorf("empty card says %q", got)
@@ -170,7 +170,7 @@ func TestCardButtonKeycapsAndClickFollowARebind(t *testing.T) {
 		}
 	}
 	m := press(selectedFirst(), "n", "t")
-	node := pickerNodes(t, m)["layer.create.actions.cancel"]
+	node := pickerNodes(t, m)["layer.create.foot.cancel"]
 	if keys := node.P["keys"]; !reflect.DeepEqual(keys, []any{"ctrl+q"}) {
 		t.Errorf("rebound cancel keycaps = %v", keys)
 	}
@@ -181,7 +181,7 @@ func TestCardButtonKeycapsAndClickFollowARebind(t *testing.T) {
 
 func TestDestructiveConfirmsAreDangerButtons(t *testing.T) {
 	m := press(selectedFirst(), "n", "t", "escape")
-	if got := pickerNodes(t, m)["layer.create.actions.discard"].P["variant"]; got != "danger" {
+	if got := pickerNodes(t, m)["layer.create.foot.discard"].P["variant"]; got != "danger" {
 		t.Errorf("discard variant = %v", got)
 	}
 }
@@ -197,12 +197,23 @@ func TestAgentCardDisablesWhatCannotRunWithAReason(t *testing.T) {
 	m := model.Model{Cols: 160, Project: model.Project{ID: 7}, Issues: []model.Issue{{UID: "a", QualifiedID: "work#a", Status: "open"}}, SelectedUID: "a"}
 	nodes := pickerNodes(t, press(m, "w"))
 	for _, id := range []string{"go", "background"} {
-		node := nodes["layer.agent.actions."+id]
+		node := nodes["layer.agent.foot."+id]
 		if node.P["disabled"] != "No agent on this Issue yet" || node.P["variant"] == "primary" {
 			t.Errorf("%s: disabled %v, variant %v", id, node.P["disabled"], node.P["variant"])
 		}
 	}
-	if nodes["layer.agent.actions.split"].P["disabled"] != nil || nodes["layer.agent.actions.cancel"].P["disabled"] != nil {
+	if nodes["layer.agent.foot.split"].P["disabled"] != nil || nodes["layer.agent.foot.cancel"].P["disabled"] != nil {
 		t.Error("buttons that can run are disabled")
+	}
+}
+
+func TestAgentCardHeadNamesTheCardAndItsMetaTheIssue(t *testing.T) {
+	m := model.Model{Cols: 160, Project: model.Project{ID: 7}, Issues: []model.Issue{{UID: "a", QualifiedID: "work#a", Status: "open"}}, SelectedUID: "a"}
+	node := pickerNodes(t, press(m, "w"))["layer.agent"]
+	if node.P["head"] != "Agents" || node.P["icon"] != "users" {
+		t.Errorf("head = %v, icon = %v, want Agents and users", node.P["head"], node.P["icon"])
+	}
+	if meta, _ := node.P["meta"].([]any); len(meta) != 1 || meta[0].(map[string]any)["t"] != "work#a" {
+		t.Errorf("meta = %v, want the Issue's reference", node.P["meta"])
 	}
 }

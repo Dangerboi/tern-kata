@@ -107,7 +107,7 @@ var tonedSpanStyle = map[string]string{
 }
 
 // Every card of the model's card table draws each toned text line as spans in its tone's colour, as a text node's own tone
-// draws nothing, and draws each of its buttons as Tern's button with keycaps.
+// draws nothing, and draws each of its buttons as Tern's button with keycaps in the card's footer bar.
 func TestEveryCardDrawsItsTonedLinesInTheirToneColour(t *testing.T) {
 	openers := cardOpeners()
 	for _, card := range model.Cards() {
@@ -124,6 +124,9 @@ func TestEveryCardDrawsItsTonedLinesInTheirToneColour(t *testing.T) {
 				}
 				if n.K == "el" && n.P["tag"] == "button" {
 					t.Errorf("%s is a bare button element, not Tern's button", n.ID)
+				}
+				if n.K == "button" && !strings.HasPrefix(n.ID, layer+".foot.") {
+					t.Errorf("button %s is not in the card's footer bar %s.foot", n.ID, layer)
 				}
 				if keys, _ := n.P["keys"].([]any); n.K == "button" && len(keys) == 0 && n.P["disabled"] == nil {
 					t.Errorf("button %s shows no keycaps", n.ID)

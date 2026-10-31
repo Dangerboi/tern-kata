@@ -1,14 +1,14 @@
 # The Create card ends in buttons that click their keys: Cancel closes the empty card, the primary button creates the Issue.
 ctl key n
 expect_tree "[data-id='layer.create.title']" '.count == 1'
-expect_tree "[data-id='layer.create.actions.save']" '.count == 1 and (.nodes[0].text | startswith("Create Issue") and endswith("ctrl+o"))'
-expect_tree "[data-id='layer.create.actions.cancel']" '.count == 1 and (.nodes[0].text | startswith("Cancel") and endswith("esc"))'
-ctl click "[data-id='layer.create.actions.cancel']"
+expect_tree "[data-id='layer.create.foot.save']" '.count == 1 and (.nodes[0].text | startswith("Create Issue") and endswith("ctrl+o"))'
+expect_tree "[data-id='layer.create.foot.cancel']" '.count == 1 and (.nodes[0].text | startswith("Cancel") and endswith("esc"))'
+ctl click "[data-id='layer.create.foot.cancel']"
 expect_tree "[data-id='layer.create']" '.count == 0'
 ctl key n
 expect_tree "[data-id='layer.create.title']" '.count == 1'
 ctl type '"Smoke button-created Issue"'
-ctl click "[data-id='layer.create.actions.save']"
+ctl click "[data-id='layer.create.foot.save']"
 expect_tree "[data-id='layer.create']" '.count == 0'
 expect_tree "[data-id^='main.columns.list.issues.']" '[.nodes[] | select(.["aria-selected"] == "true") | .. | objects | .text? // empty] | any(contains("Smoke button-created Issue"))'
 kata --workspace "$tmp/workspace" list --json >"$tmp/create-button-fixtures.json"

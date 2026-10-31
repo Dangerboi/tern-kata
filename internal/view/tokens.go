@@ -21,7 +21,7 @@ func tokenLayer(m model.Model) tern.Element {
 			toneText("done", ui.ToneSuccess, "Created token "+strconv.FormatInt(form.DoneID, 10)+"."),
 			ui.Text{Common: ui.Common{Key: "file"}, Text: "Its secret is in " + form.DoneFile + ", readable by you alone. It is not shown anywhere and cannot be read from kata again."},
 			buttonRow(cardButton("close", model.ModeTokenForm, model.TokenSubmit, "Close", true)))
-		return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardToken)}, Head: ui.T("Token created"), Modal: true, Size: ui.SizeLG, Children: children})
+		return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardToken)}, Head: ui.T("Token created"), Icon: ui.IconKey, Modal: true, Size: ui.SizeLG}, children))
 	}
 	for _, spec := range model.TokenFields {
 		name := spec.Name
@@ -44,7 +44,7 @@ func tokenLayer(m model.Model) tern.Element {
 	} else {
 		children = append(children, buttonRow(cardButton("save", model.ModeTokenForm, model.TokenSubmit, "Create token", true), cardButton("cancel", model.ModeTokenForm, model.TokenCancel, "Cancel", false)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardToken)}, Head: ui.T("New token"), Modal: true, Size: ui.SizeLG, Children: children})
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardToken)}, Head: ui.T("New token"), Icon: ui.IconKey, Modal: true, Size: ui.SizeLG}, children))
 }
 
 // revokeLayer is the confirmation before a token is revoked.
@@ -62,5 +62,5 @@ func revokeLayer(m model.Model) tern.Element {
 	} else {
 		children = append(children, buttonRow(destructive(cardButton("revoke", model.ModeRevokeToken, model.RevokeConfirm, "Revoke", false)), cardButton("keep", model.ModeRevokeToken, model.RevokeCancel, "Keep", true)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardRevoke)}, Head: ui.T("Revoke token"), Modal: true, Size: ui.SizeLG, Children: children})
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardRevoke)}, Head: ui.T("Revoke token"), Icon: ui.IconKeyRound, Modal: true, Size: ui.SizeLG}, children))
 }

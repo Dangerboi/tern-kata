@@ -191,9 +191,9 @@ func workflowStep(i int, step model.WorkflowStep) tern.Element {
 // it, and the card's keys. After a save found the workflow changed, the text stays beside the workflow as it stands now.
 func workflowLayer(m model.Model) tern.Element {
 	c := m.Workflows.Card
-	title := "New workflow"
+	title, meta := "New workflow", ui.Rich{}
 	if c.UID != "" {
-		title = "Edit workflow " + c.Name
+		title, meta = "Edit workflow", ui.T(c.Name)
 	}
 	readonly := c.Saving || c.DiscardConfirm || c.Conflict != nil
 	children := ui.Nodes(TextEditor(inputLeaf, c.Editor, readonly))
@@ -208,8 +208,8 @@ func workflowLayer(m model.Model) tern.Element {
 	}
 	switch {
 	case c.Conflict != nil:
-		title = "Workflow changed: your text is kept"
-		// The choice comes first: the card has a fixed height, and the two texts below can run past its end.
+		title, meta = "Workflow changed: your text is kept", ui.Rich{}
+		// The choice comes first, above the two texts, which can run long.
 		children = append(conflictChoice(c.Conflict), ui.Row{Common: ui.Common{Key: "versions"}, Gap: ui.GapMD, Wrap: true, Children: ui.Nodes(
 			ui.Col{Common: ui.Common{Key: "draft", Grow: 1, Basis: ui.BasisFrac(0.5)}, Children: ui.Nodes(ui.Text{Text: "Your text"}, TextEditor("body", c.Editor, true))},
 			ui.Col{Common: ui.Common{Key: "current", Grow: 1, Basis: ui.BasisFrac(0.5)}, Children: ui.Nodes(ui.Text{Text: fmt.Sprintf("As it stands now (revision %d)", c.Conflict.Revision)}, TextEditor("now", model.NewTextEditor(c.Conflict.Text()), true))},
@@ -222,7 +222,7 @@ func workflowLayer(m model.Model) tern.Element {
 			cardButton("editor", model.ModeEditor, model.ExternalEditorAction, "$EDITOR", false),
 			cardButton("discard", model.ModeEditor, model.CancelDraft, "Discard", false)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardWorkflow)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardWorkflow)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Meta: meta, Icon: ui.IconPen}, children))
 }
 
 // conflictChoice is the conflict card's ask: Overwrite and Discard Draft, or only Discard Draft when the current version is

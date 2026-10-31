@@ -46,7 +46,7 @@ func closeLayer(m model.Model) tern.Element {
 				cardButton("quick", model.ModeCloseForm, model.CloseQuick, "Quick done", false),
 				cardButton("cancel", model.ModeCloseForm, model.CloseCancel, "Cancel", false)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardClose)}, Modal: true, Size: ui.SizeLG, Head: ui.T(closeTitle(m)), Children: children})
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardClose)}, Modal: true, Size: ui.SizeLG, Head: ui.T(closeTitle(m)), Icon: ui.IconCheck}, children))
 }
 
 // closeTitle is the Close card's title: an undo's card says what it completes.

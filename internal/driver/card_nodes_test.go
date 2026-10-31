@@ -29,11 +29,19 @@ func cardLayerID(t *testing.T, m model.Model) string {
 	return id
 }
 
-// layerTitled is the id of the card layer whose heading reads head.
+// layerTitled is the id of the card layer whose heading reads head, a muted meta after it joined with a space.
 func layerTitled(t *testing.T, m model.Model, head string) string {
 	t.Helper()
 	for _, n := range wireNodes(t, view.Render(m, now)) {
-		if h, _ := n.P["head"].(string); h == head && strings.HasPrefix(n.ID, "layer.") && strings.Count(n.ID, ".") == 1 {
+		h, _ := n.P["head"].(string)
+		if meta, _ := n.P["meta"].([]any); len(meta) > 0 {
+			for _, span := range meta {
+				h += " " + span.(map[string]any)["t"].(string)
+			}
+		} else if meta, _ := n.P["meta"].(string); meta != "" {
+			h += " " + meta
+		}
+		if h == head && strings.HasPrefix(n.ID, "layer.") && strings.Count(n.ID, ".") == 1 {
 			return n.ID
 		}
 	}

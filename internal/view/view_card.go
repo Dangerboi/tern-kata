@@ -56,9 +56,9 @@ func viewLayer(m model.Model) tern.Element {
 		children = append(children, toneText("error", ui.ToneError, form.Err.Error()))
 	}
 	children = append(children, buttonRow(cardButton("save", model.ModeViewForm, model.SaveViewForm, "Save view", true), cardButton("cancel", model.ModeViewForm, model.CancelViewForm, "Cancel", false)))
-	head := "New view"
+	head, meta := "New view", ui.Rich{}
 	if form.Self != "" {
-		head = "Edit view " + form.Self
+		head, meta = "Edit view", ui.T(form.Self)
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardView)}, Head: ui.T(head), Modal: true, Size: ui.SizeMD, Children: children})
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardView)}, Head: ui.T(head), Meta: meta, Modal: true, Size: ui.SizeMD}, children))
 }

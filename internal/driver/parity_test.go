@@ -413,10 +413,10 @@ func TestCardButtonsOfTheCommonCardsClickLikeTheChordTheyName(t *testing.T) {
 		mode    model.Mode
 		buttons []string
 	}{
-		{"Close", pressed(issue, "x"), model.ModeCloseForm, []string{"layer.close.actions.save", "layer.close.actions.quick", "layer.close.actions.cancel"}},
-		{"Create", titled, model.ModeCreate, []string{"layer.create.actions.save", "layer.create.actions.cancel"}},
-		{"Draft editor", pressed(driver.State{Model: draftModel}, "enter", "e"), model.ModeEditor, []string{"layer.editor.actions.save", "layer.editor.actions.editor", "layer.editor.actions.discard"}},
-		{"Filter", pressed(issue, "f"), model.ModeFilterForm, []string{"layer.filters.actions.apply", "layer.filters.actions.default", "layer.filters.actions.cancel"}},
+		{"Close", pressed(issue, "x"), model.ModeCloseForm, []string{"layer.close.foot.save", "layer.close.foot.quick", "layer.close.foot.cancel"}},
+		{"Create", titled, model.ModeCreate, []string{"layer.create.foot.save", "layer.create.foot.cancel"}},
+		{"Draft editor", pressed(driver.State{Model: draftModel}, "enter", "e"), model.ModeEditor, []string{"layer.editor.foot.save", "layer.editor.foot.editor", "layer.editor.foot.discard"}},
+		{"Filter", pressed(issue, "f"), model.ModeFilterForm, []string{"layer.filters.foot.apply", "layer.filters.foot.default", "layer.filters.foot.cancel"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.start.Model.CurrentMode(); got != tt.mode {

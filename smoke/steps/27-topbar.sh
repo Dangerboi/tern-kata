@@ -56,7 +56,7 @@ expect_tree "[data-id='main.topbar.right.menu']" '.ok and .count == 1 and (.node
 expect_tree "[data-id='main.topbar.left.heading'],[data-id='main.topbar.right.menu']" '.nodes[0].rect[0] < .nodes[1].rect[0]'
 ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
-ctl click "[data-id='layer.collections.close']"
+ctl click "[data-id='layer.collections.foot.close']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 
 quit_app
