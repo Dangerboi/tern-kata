@@ -104,13 +104,12 @@ func (c *Client) ClearAgentAttention(ctx context.Context, cmd model.ClearAgentAt
 	if !held {
 		return nil
 	}
-	slot, err := model.ReadNotificationSlot(key, string(raw))
-	if err != nil || slot.From != cmd.Actor || slot.Message != cmd.Message {
-		return nil
-	}
-	seen := slot.Raw
-	if _, err := c.patchMetadataKey(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, key, nil, &seen); err != nil && daemonCode(err) != "metadata_guard_failed" {
-		return daemonError(err)
+	// A slot that does not read as a request, or reads as someone else's, is not this Pane's to clear.
+	if slot, err := model.ReadNotificationSlot(key, string(raw)); err == nil && slot.From == cmd.Actor && slot.Message == cmd.Message {
+		seen := slot.Raw
+		if _, err := c.patchMetadataKey(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, key, nil, &seen); err != nil && daemonCode(err) != "metadata_guard_failed" {
+			return daemonError(err)
+		}
 	}
 	return nil
 }

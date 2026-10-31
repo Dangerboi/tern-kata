@@ -11,10 +11,7 @@ import (
 
 // execAgent runs command as a child running as actor, with stdio attached, and exits with its status.
 func execAgent(actor string, command, environ []string) error {
-	if err := runChild(command[0], command[1:], childEnv(environ, actor, true)); err != nil {
-		return subcommandError{err}
-	}
-	return nil
+	return subcommandError{runChild(command[0], command[1:], childEnv(environ, actor, true))}
 }
 
 // runChild runs name with stdio attached and exits with its status; it returns only when the child could not be run.
@@ -29,9 +26,8 @@ func runChild(name string, args, env []string) error {
 	if errors.As(err, &exit) {
 		os.Exit(exit.ExitCode())
 	}
-	if err != nil {
-		return err
+	if err == nil {
+		os.Exit(0)
 	}
-	os.Exit(0)
-	return nil
+	return err
 }

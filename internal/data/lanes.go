@@ -88,8 +88,9 @@ func (g *Gateway) loadLanes(ctx context.Context, cmd model.LoadLanes) model.Lane
 	return loaded
 }
 
-// SharedLanes reads the Project with uid as kata lists it, archived Projects included: its id and revision, and its shared Lane list when tern.lanes holds a
-// valid one. A value that is not a Lane list is left unused with SharedErr saying why. A Project kata does not list shares nothing.
+// SharedLanes reads the Project with uid as kata lists it, archived Projects included: its id and revision, and its shared
+// Lane list when tern.lanes holds a valid one. A value that is not a Lane list is left unused with SharedErr saying why. A
+// Project kata does not list shares nothing.
 func (c *Client) SharedLanes(ctx context.Context, uid string) (model.LanesLoaded, error) {
 	include := "archived"
 	response, err := c.ListProjectsWithResponse(ctx, &g.ListProjectsRequestOptions{Query: &g.ListProjectsQuery{Include: &include}})
