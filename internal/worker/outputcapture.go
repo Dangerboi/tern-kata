@@ -13,6 +13,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -436,16 +437,16 @@ func commandTail1K(dir string) string {
 func readTailLine(r *bufio.Reader) ([]byte, error) {
 	chunk, err := r.ReadSlice('\n')
 	if bytes.HasPrefix(bytes.TrimLeft(chunk, " \t"), []byte(agentEndPrefix)) {
-		for err == bufio.ErrBufferFull {
+		for errors.Is(err, bufio.ErrBufferFull) {
 			_, err = r.ReadSlice('\n')
 		}
 		return nil, err
 	}
-	if err != bufio.ErrBufferFull {
+	if !errors.Is(err, bufio.ErrBufferFull) {
 		return chunk, err
 	}
 	line := append([]byte(nil), chunk...)
-	for err == bufio.ErrBufferFull {
+	for errors.Is(err, bufio.ErrBufferFull) {
 		chunk, err = r.ReadSlice('\n')
 		line = append(line, chunk...)
 	}

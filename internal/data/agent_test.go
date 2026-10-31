@@ -1184,7 +1184,7 @@ func TestAnAskThatBeganBeforeAnotherAndEndsAfterItDoesNotReplaceItsListing(t *te
 		return lsOf("2"), nil
 	}
 	older := make(chan struct{})
-	go func() { g.liveBlocks(context.Background(), false); close(older) }()
+	go func() { _, _, _ = g.liveBlocks(context.Background(), false); close(older) }()
 	<-started
 	if live, _, err := g.liveBlocks(context.Background(), true); err != nil || !live["2"] {
 		t.Fatalf("the fresh ask: %v, %v", live, err)
