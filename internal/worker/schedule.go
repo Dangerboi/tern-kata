@@ -230,9 +230,10 @@ func (w *Worker) kick(ps *projectState) {
 // selectOccurrences applies a job's catchup policy to every occurrence not yet run (ADR-0011). Occurrences within
 // onTimeSlack are never missed. `all` keeps the rest, `latest` only the newest of everything, and `skip` at most one
 // missed occurrence: the newest one that is still within grace or that waits for its Issue (a parked one is not graced
-// out), so a long park never turns `skip` into `all`. When that one takes over from a parked occurrence it inherits the
-// mark, which is the returned stillParked. Nothing older than 7 days is kept, and at most 100 (the oldest overflow is
-// dropped).
+// out), so a long park never turns `skip` into `all`. When an occurrence is on time while a parked one waits, the
+// parked one is dropped and the newest on time inherits the mark; a missed one that takes over from it inherits the
+// mark too, which is the returned stillParked. Nothing older than 7 days is kept, and at most 100 (the oldest
+// overflow is dropped).
 func selectOccurrences(cands []time.Time, now time.Time, catchup string, grace time.Duration, parked []time.Time) (keep, stillParked []time.Time, dropped int) {
 	var onTime, missed []time.Time
 	for _, c := range cands {
@@ -255,13 +256,18 @@ func selectOccurrences(cands []time.Time, now time.Time, catchup string, grace t
 		}
 	default:
 		wasParked := slices.ContainsFunc(missed, inParked)
-		for i := len(missed) - 1; i >= 0; i-- {
-			if m := missed[i]; inParked(m) || i == len(missed)-1 && now.Sub(m) <= grace {
-				keep = append(keep, m)
-				if wasParked {
-					stillParked = append(stillParked, m)
+		if wasParked && len(onTime) > 0 {
+			// The wait ended as an occurrence came due: it replaces the missed ones, so the wait runs it once.
+			stillParked = append(stillParked, onTime[len(onTime)-1])
+		} else {
+			for i := len(missed) - 1; i >= 0; i-- {
+				if m := missed[i]; inParked(m) || i == len(missed)-1 && now.Sub(m) <= grace {
+					keep = append(keep, m)
+					if wasParked {
+						stillParked = append(stillParked, m)
+					}
+					break
 				}
-				break
 			}
 		}
 		stillParked = append(stillParked, slices.DeleteFunc(slices.Clone(parked), func(t time.Time) bool { return !slices.ContainsFunc(onTime, t.Equal) })...)

@@ -301,3 +301,62 @@ func TestASkipJobParkedForHoursRunsOnlyTheNewestOccurrenceOnceItsIssueIsReady(t 
 		t.Fatalf("the run is for %s, want the newest occurrence %s", runs[0].OccurrenceKey, worker.OccurrenceKey(at))
 	}
 }
+
+// A failed read of kata's run evidence says nothing about the Issue's readiness either: the occurrence stays parked.
+func TestAParkedOccurrenceSurvivesARunReadFailurePastItsGrace(t *testing.T) {
+	h := newHarness(t)
+	issue := h.kata.Issue(t, h.proj, "Parked")
+	h.kata.SetSomeday(t, h.proj, issue.UID, true)
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "on issue", Prompt: "Do it.", ExistingUID: issue.UID, Trigger: interval(86400)})
+	r := h.start(worker.Hooks{})
+	h.scheduled(r, 1)
+	first := h.fire(r, time.Time{})
+	h.waitsFor(r, "Issue is someday")
+
+	h.kata.Fail(func(req *http.Request) bool {
+		return req.Method == http.MethodGet && strings.Contains(req.URL.Path, "/runs/")
+	})
+	h.kata.SetSomeday(t, h.proj, issue.UID, false) // ready, but the worker cannot tell whether kata holds the run
+	h.advanceTo(first.Add(2 * time.Hour))          // past any grace
+	h.quiet(job, 0)
+	h.quiet(job, 0)
+
+	h.kata.Heal()
+	runs := h.waitRuns(job, 1)
+	if runs[0].OccurrenceKey != worker.OccurrenceKey(first) {
+		t.Fatalf("the run is for %s, want the parked occurrence %s", runs[0].OccurrenceKey, worker.OccurrenceKey(first))
+	}
+	h.settled(runs[0].UID)
+}
+
+// An occurrence that comes due at the very instant the Issue becomes ready replaces the parked one under skip: one run.
+func TestASkipJobWhoseOccurrenceFallsOnTheIssuesInstantRunsOnlyThatOccurrence(t *testing.T) {
+	h := newHarness(t)
+	h.capacity("5")
+	issue := h.kata.Issue(t, h.proj, "Later")
+	h.kata.SetSomeday(t, h.proj, issue.UID, true)
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "on issue", Prompt: "Do it.", ExistingUID: issue.UID, Trigger: cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 * * * *", Timezone: "UTC"}, Overlap: "allow"})
+	r := h.start(worker.Hooks{})
+	h.scheduled(r, 1)
+	first := h.fire(r, time.Time{})
+	h.waitsFor(r, "Issue is someday")
+	instant := first.Add(3 * time.Hour) // exactly an occurrence of the job, which fires on the hour
+	if !instant.Equal(instant.Truncate(time.Minute)) {
+		t.Fatalf("occurrence %s is not minute-aligned", instant)
+	}
+	h.kata.SetIssueDate(t, h.proj, issue.UID, "scheduled_on", instant)
+	h.kata.SetSomeday(t, h.proj, issue.UID, false)
+	h.waitsFor(r, "Issue is scheduled for")
+	at := first
+	for range 2 {
+		at = h.fire(r, at)
+		h.waitsFor(r, "Issue is scheduled for")
+		h.quiet(job, 0)
+	}
+	h.advanceTo(instant)
+	runs := h.waitRuns(job, 1)
+	h.quiet(job, 1)
+	if want := worker.OccurrenceKey(instant); runs[0].OccurrenceKey != want {
+		t.Fatalf("the run is for %s, want the occurrence on the instant %s", runs[0].OccurrenceKey, want)
+	}
+}

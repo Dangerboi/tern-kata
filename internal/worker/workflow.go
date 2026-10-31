@@ -182,7 +182,7 @@ func (w *Worker) planWorkflow(ctx context.Context, ps *projectState, job cronjob
 	case errors.Is(err, ErrNotFound):
 		return nil, fmt.Errorf("job %q runs workflow %s, which kata does not hold", job.Name, d.Action.WorkflowUID)
 	case err != nil:
-		return nil, fmt.Errorf("job %q: its workflow could not be read: %w", job.Name, err)
+		return nil, &transientError{fmt.Errorf("job %q: its workflow could not be read: %w", job.Name, err)}
 	case wf.Deleted:
 		return nil, fmt.Errorf("job %q runs workflow %q, which is archived", job.Name, wf.Name)
 	}

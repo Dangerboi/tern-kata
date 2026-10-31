@@ -300,7 +300,7 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 	if run, err := w.opt.Kata.ShowRun(ctx, ps.project.ID, uid); err == nil {
 		return nil, false, fmt.Errorf("kata already holds run %s (%s); it is not prepared again", uid, run.Status)
 	} else if !errors.Is(err, ErrNotFound) {
-		return nil, false, fmt.Errorf("cannot tell whether kata holds run %s yet: %w", uid, err)
+		return nil, false, &transientError{fmt.Errorf("cannot tell whether kata holds run %s yet: %w", uid, err)}
 	}
 	w.mu.Lock()
 	generation := ps.lease.Generation
