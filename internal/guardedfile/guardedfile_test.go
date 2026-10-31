@@ -15,7 +15,7 @@ func TestWriteRefusesAChangedFile(t *testing.T) {
 	if err != nil || missing.Text() != "" {
 		t.Fatalf("missing file: text %q, err %v", missing.Text(), err)
 	}
-	if err := Write(path, missing, []byte("one\n")); err != nil {
+	if err := Write(path, 0o700, missing, []byte("one\n")); err != nil {
 		t.Fatalf("write to a missing file: %v", err)
 	}
 
@@ -26,7 +26,7 @@ func TestWriteRefusesAChangedFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte("other\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := Write(path, tok, []byte("two\n")); !errors.Is(err, ErrChanged) {
+	if err := Write(path, 0o700, tok, []byte("two\n")); !errors.Is(err, ErrChanged) {
 		t.Fatalf("write after a change = %v, want ErrChanged", err)
 	}
 	if got, _ := os.ReadFile(path); string(got) != "other\n" {
@@ -39,12 +39,12 @@ func TestWriteRefusesAChangedFile(t *testing.T) {
 	if err := os.WriteFile(gone, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := Write(gone, none, []byte("y")); !errors.Is(err, ErrChanged) {
+	if err := Write(gone, 0o700, none, []byte("y")); !errors.Is(err, ErrChanged) {
 		t.Fatalf("write over a new file = %v, want ErrChanged", err)
 	}
 
 	fresh, _ := Read(path)
-	if err := Write(path, fresh, []byte("three\n")); err != nil {
+	if err := Write(path, 0o700, fresh, []byte("three\n")); err != nil {
 		t.Fatalf("write from a fresh read: %v", err)
 	}
 	if got, _ := os.ReadFile(path); string(got) != "three\n" {
@@ -74,7 +74,7 @@ func TestConcurrentWritersLoseNoChange(t *testing.T) {
 						errs <- err
 						return
 					}
-					err = Write(path, tok, []byte(tok.Text()+"x"))
+					err = Write(path, 0o700, tok, []byte(tok.Text()+"x"))
 					if errors.Is(err, ErrChanged) {
 						continue
 					}

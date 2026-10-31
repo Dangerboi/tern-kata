@@ -116,7 +116,7 @@ func longOutput(turns int) [][]byte {
 	var lines [][]byte
 	var all []string
 	lines = append(lines, []byte(`{"type":"session","id":"s1"}`))
-	for i := 0; i < turns; i++ {
+	for range turns {
 		lines = append(lines, []byte(`{"type":"message_end","message":`+msg+`}`))
 		all = append(all, user, msg)
 	}
@@ -126,7 +126,7 @@ func longOutput(turns int) [][]byte {
 func BenchmarkAgentParserLongOutput(b *testing.B) {
 	lines := longOutput(200)
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		p := &agentParser{}
 		for _, l := range lines {
 			p.Line(l)

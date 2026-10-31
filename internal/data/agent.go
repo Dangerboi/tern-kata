@@ -202,7 +202,7 @@ func UpdateAgents(path string, change func([]model.AgentEntry) []model.AgentEntr
 		if err != nil {
 			return nil, err
 		}
-		switch err := guardedfile.Write(path, token, append(raw, '\n')); {
+		switch err := guardedfile.Write(path, 0o700, token, append(raw, '\n')); {
 		case err == nil:
 			return next, nil
 		case !errors.Is(err, guardedfile.ErrChanged):

@@ -1,6 +1,9 @@
 package worker
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 // One table says what every worker command does in every stop mode.
 func TestEveryCommandAgainstEveryStopMode(t *testing.T) {
@@ -24,7 +27,7 @@ func TestEveryCommandAgainstEveryStopMode(t *testing.T) {
 				want = want || m == mode
 			}
 			err := refusedWhileStopping(command, mode)
-			if want != (err != nil) || err != nil && err != errStopping {
+			if want != (err != nil) || err != nil && !errors.Is(err, errStopping) {
 				t.Errorf("%s during mode %q: refused with %v, want refused=%v with %q", command, mode, err, want, errStopping)
 			}
 		}

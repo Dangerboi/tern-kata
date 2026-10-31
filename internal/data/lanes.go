@@ -78,7 +78,7 @@ func updateTables(path string, change func(file map[string]any)) error {
 		if err := toml.NewEncoder(&buf).Encode(file); err != nil {
 			return err
 		}
-		err = guardedfile.Write(path, token, buf.Bytes())
+		err = guardedfile.Write(path, 0o755, token, buf.Bytes())
 		if !errors.Is(err, guardedfile.ErrChanged) {
 			return err
 		}

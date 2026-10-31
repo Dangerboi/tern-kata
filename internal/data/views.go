@@ -168,7 +168,7 @@ func (s ViewsStore) edit(token ViewsToken, change func(*viewsText) (string, erro
 	if _, err := parseViewsText(next); err != nil {
 		return fmt.Errorf("%s: the new file would not read back, so nothing was written: %w", s.Path, err)
 	}
-	err = guardedfile.Write(s.Path, guardedfile.TokenOf(token.text), []byte(next))
+	err = guardedfile.Write(s.Path, 0o755, guardedfile.TokenOf(token.text), []byte(next))
 	if errors.Is(err, guardedfile.ErrChanged) {
 		return ErrViewsChanged
 	}

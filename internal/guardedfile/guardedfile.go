@@ -39,12 +39,12 @@ func Read(path string) (Token, error) {
 // lockWait bounds how long a write waits for another writer's lock before giving up with an error.
 const lockWait = 10 * time.Second
 
-// Write replaces path with next, creating the file and its folder when missing, unless the file is no longer the text the
-// token holds: then it writes nothing and returns ErrChanged. The compare and the rename happen under an exclusive lock on
-// path+".lock", so another process writing through this package cannot slip between them; a lock held longer than lockWait
-// is an error. A writer that bypasses this package is not excluded.
-func Write(path string, token Token, next []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+// Write replaces path with next, creating the file and its folder (with dirMode) when missing, unless the file is no longer
+// the text the token holds: then it writes nothing and returns ErrChanged. The compare and the rename happen under an
+// exclusive lock on path+".lock", so another process writing through this package cannot slip between them; a lock held
+// longer than lockWait is an error. A writer that bypasses this package is not excluded.
+func Write(path string, dirMode fs.FileMode, token Token, next []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), dirMode); err != nil {
 		return err
 	}
 	lock, err := os.OpenFile(path+".lock", os.O_RDWR|os.O_CREATE, 0o600)
@@ -56,7 +56,7 @@ func Write(path string, token Token, next []byte) error {
 		return fmt.Errorf("%s: %w", filepath.Base(path), err)
 	}
 	defer filelock.Unlock(lock)
-	return atomicfile.Write(path, next, atomicfile.Options{Mode: 0o600, DirMode: 0o755, Check: func(string) error {
+	return atomicfile.Write(path, next, atomicfile.Options{Mode: 0o600, DirMode: dirMode, Check: func(string) error {
 		disk, err := os.ReadFile(path)
 		switch {
 		case errors.Is(err, fs.ErrNotExist):
