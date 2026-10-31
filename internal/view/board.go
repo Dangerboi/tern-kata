@@ -143,8 +143,8 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 		}
 	}
 	if !done {
-		if marker := blockedMarker(card); marker != "" {
-			body = append(body, ui.Text{Common: ui.Common{Key: "blocked", Hovercard: blockedCard(m, card, now)}, Spans: []ui.Span{{T: marker, S: mono("warning")}}})
+		if spans := blockedSpans(card); spans != nil {
+			body = append(body, ui.Text{Common: ui.Common{Key: "blocked", Hovercard: blockedCard(m, card, now)}, Spans: spans})
 		}
 	}
 	if badge, ok := agentBadge(m, issue.UID, "agent"); ok {
@@ -181,13 +181,25 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 // maxRelationshipIDs is how many ids a Blocked marker names before it says "+N".
 const maxRelationshipIDs = 3
 
-// blockedMarker is "blocked by 8gm4, other#ab12" for the open Issues that block the card, "" when none do.
-func blockedMarker(card model.BoardCard) string {
+// blockedSpans are "blocked by 8gm4, other#ab12" for the open Issues that block the card, nil when none do: the words are sans, each
+// ref and the "+N" are mono.
+func blockedSpans(card model.BoardCard) []ui.Span {
 	blockers := card.Relationships.OpenBlockers()
 	if len(blockers) == 0 {
-		return ""
+		return nil
 	}
-	return "blocked by " + refList(blockers, card.Issue.ProjectName)
+	shown, more := shownRefs(blockers)
+	spans := []ui.Span{{T: "blocked by ", S: "warning"}}
+	for i, r := range shown {
+		if i > 0 {
+			spans = append(spans, ui.Span{T: ", ", S: "warning"})
+		}
+		spans = append(spans, ui.Span{T: r.ID(card.Issue.ProjectName), S: mono("warning")})
+	}
+	if more > 0 {
+		spans = append(spans, ui.Span{T: " ", S: "warning"}, ui.Span{T: "+" + strconv.Itoa(more), S: mono("warning")})
+	}
+	return spans
 }
 
 // blockedCard is the Blocked marker's hovercard: the card of each Issue the marker names.
@@ -204,20 +216,6 @@ func blockedCard(m model.Model, card model.BoardCard, now time.Time) ui.Hovercar
 func shownRefs(refs []model.RelationshipRef) ([]model.RelationshipRef, int) {
 	shown := min(len(refs), maxRelationshipIDs)
 	return refs[:shown], len(refs) - shown
-}
-
-// refList names refs by id as seen from project, cut to maxRelationshipIDs and "+N".
-func refList(refs []model.RelationshipRef, project string) string {
-	shown, more := shownRefs(refs)
-	ids := make([]string, len(shown))
-	for i, r := range shown {
-		ids[i] = r.ID(project)
-	}
-	list := strings.Join(ids, ", ")
-	if more > 0 {
-		list += " +" + strconv.Itoa(more)
-	}
-	return list
 }
 
 // highlightTone is the tone of a Relationship highlight's tag and ring.

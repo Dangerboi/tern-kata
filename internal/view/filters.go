@@ -49,5 +49,5 @@ func filterLayer(m model.Model) tern.Element {
 		children = append(children, toneText("error", ui.ToneError, m.FilterForm.Err.Error()))
 	}
 	children = append(children, buttonRow(cardButton("apply", model.ModeFilterForm, model.ApplyFilters, "Apply filters", true), cardButton("default", model.ModeFilterForm, model.SaveFilterDefault, "Save as default", false), cardButton("cancel", model.ModeFilterForm, model.CancelFilters, "Cancel", false)))
-	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardFilter)}, Head: ui.T("Filter"), Meta: ui.T(m.Collection.Title), Icon: ui.IconFunnel, Modal: true, Size: ui.SizeMD}, children))
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardFilter)}, Head: ui.T("Filter"), Meta: ui.T(m.Collection.Title), Icon: ui.IconFunnel, Modal: true, Size: ui.SizeLG}, children))
 }
