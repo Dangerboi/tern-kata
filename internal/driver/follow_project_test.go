@@ -86,7 +86,7 @@ func TestFollowingARelatedIdOfAnotherProjectOnTheBoardSwitchesTheProjectAndEscCo
 		t.Fatalf("the follow reads no snapshot of infra: %#v", out.Cmds)
 	}
 	s = inInfra(t, out.State, out.Cmds)
-	s = step(t, s, model.LanesLoaded{ProjectUID: "q"}).State
+	s = step(t, s, newestLanes{ProjectUID: "q"}).State
 	m := s.Model
 	if m.Collection != model.ProjectCollection("q", "infra") || !m.BoardShown() || m.SelectedUID != "far" || m.Focus != model.ColumnList {
 		t.Fatalf("collection %v board %v selected %q focus %v; want infra's Board with far selected", m.Collection, m.BoardShown(), m.SelectedUID, m.Focus)
@@ -100,7 +100,7 @@ func TestFollowingARelatedIdOfAnotherProjectOnTheBoardSwitchesTheProjectAndEscCo
 		t.Fatalf("esc reads no snapshot of work: %#v", back.Cmds)
 	}
 	s = inWork(t, back.State, back.Cmds)
-	s = step(t, s, model.LanesLoaded{ProjectUID: "p"}).State
+	s = step(t, s, newestLanes{ProjectUID: "p"}).State
 	if m := s.Model; m.Collection != model.ProjectCollection("p", "work") || !m.BoardShown() || m.SelectedUID != "task" || m.Focus != model.ColumnList {
 		t.Errorf("after esc: collection %v board %v selected %q focus %v; want work's Board with task selected", m.Collection, m.BoardShown(), m.SelectedUID, m.Focus)
 	}
@@ -112,20 +112,20 @@ func TestFollowingARelatedIdOfAnotherProjectOnTheBoardSwitchesTheProjectAndEscCo
 func TestEscGoesBackOneProjectPerHop(t *testing.T) {
 	s := workBoard(t)
 	out := step(t, s, click("", refClick(t, s, "task", "far")))
-	s = step(t, inInfra(t, out.State, out.Cmds), model.LanesLoaded{ProjectUID: "q"}).State
+	s = step(t, inInfra(t, out.State, out.Cmds), newestLanes{ProjectUID: "q"}).State
 	// far's own card lists task as related: following it goes back to work as a second hop.
 	out = step(t, s, click("", refClick(t, s, "far", "task")))
-	s = step(t, inWork(t, out.State, out.Cmds), model.LanesLoaded{ProjectUID: "p"}).State
+	s = step(t, inWork(t, out.State, out.Cmds), newestLanes{ProjectUID: "p"}).State
 	if m := s.Model; m.Collection.ProjectUID != "p" || m.SelectedUID != "task" {
 		t.Fatalf("second hop: collection %v selected %q", m.Collection, m.SelectedUID)
 	}
 	out = step(t, s, key("escape"))
-	s = step(t, inInfra(t, out.State, out.Cmds), model.LanesLoaded{ProjectUID: "q"}).State
+	s = step(t, inInfra(t, out.State, out.Cmds), newestLanes{ProjectUID: "q"}).State
 	if m := s.Model; m.Collection.ProjectUID != "q" || m.SelectedUID != "far" || !m.BoardShown() {
 		t.Fatalf("first esc: collection %v selected %q", m.Collection, m.SelectedUID)
 	}
 	out = step(t, s, key("escape"))
-	s = step(t, inWork(t, out.State, out.Cmds), model.LanesLoaded{ProjectUID: "p"}).State
+	s = step(t, inWork(t, out.State, out.Cmds), newestLanes{ProjectUID: "p"}).State
 	if m := s.Model; m.Collection.ProjectUID != "p" || m.SelectedUID != "task" || !m.BoardShown() {
 		t.Errorf("second esc: collection %v selected %q", m.Collection, m.SelectedUID)
 	}
@@ -140,12 +140,12 @@ func TestEscAfterAFollowFromTheLaneViewRestoresTheLaneView(t *testing.T) {
 	if m := out.State.Model; m.Collection.ProjectUID != "q" {
 		t.Fatalf("collection %v; the follow did not switch", m.Collection)
 	}
-	s = step(t, inInfra(t, out.State, out.Cmds), model.LanesLoaded{ProjectUID: "q"}).State
+	s = step(t, inInfra(t, out.State, out.Cmds), newestLanes{ProjectUID: "q"}).State
 	if m := s.Model; m.SelectedUID != "far" || m.Board.Mode != model.BoardLane {
 		t.Fatalf("selected %q mode %v; want far in the Lane view", m.SelectedUID, m.Board.Mode)
 	}
 	out = step(t, s, key("escape"))
-	s = step(t, inWork(t, out.State, out.Cmds), model.LanesLoaded{ProjectUID: "p"}).State
+	s = step(t, inWork(t, out.State, out.Cmds), newestLanes{ProjectUID: "p"}).State
 	if m := s.Model; m.Collection.ProjectUID != "p" || m.Board.Mode != model.BoardLane || m.SelectedUID != "task" || m.Focus != model.ColumnList {
 		t.Errorf("after esc: collection %v mode %v selected %q focus %v; want work's Lane view on task", m.Collection, m.Board.Mode, m.SelectedUID, m.Focus)
 	}
@@ -158,12 +158,12 @@ func TestFollowingATicketTheInfraBoardDoesNotDrawOpensItsDetailBesideTheLaneView
 	shut := infraCard("far")
 	shut.Status = "closed"
 	closed := answeredRead(t, out.State, out.Cmds, model.Snapshot{Issues: []model.Issue{shut}})
-	s = step(t, closed, model.LanesLoaded{ProjectUID: "q"}).State
+	s = step(t, closed, newestLanes{ProjectUID: "q"}).State
 	if m := s.Model; m.Collection.ProjectUID != "q" || m.Board.Mode != model.BoardLane || m.SelectedUID != "far" || m.Focus != model.ColumnDetail {
 		t.Errorf("collection %v mode %v selected %q focus %v; want infra's Lane view with far's detail focused", m.Collection, m.Board.Mode, m.SelectedUID, m.Focus)
 	}
 	back := step(t, s, key("escape"))
-	s = step(t, inWork(t, back.State, back.Cmds), model.LanesLoaded{ProjectUID: "p"}).State
+	s = step(t, inWork(t, back.State, back.Cmds), newestLanes{ProjectUID: "p"}).State
 	if m := s.Model; m.Collection.ProjectUID != "p" || !m.BoardShown() || m.SelectedUID != "task" {
 		t.Errorf("after esc: collection %v board %v selected %q; want work's Board with task selected", m.Collection, m.BoardShown(), m.SelectedUID)
 	}
@@ -269,7 +269,7 @@ func TestEscIsLabelledBackWhileItReturnsAcrossProjectsAndMenuOnceTheCardMovesOn(
 	}
 	out := step(t, s, click("", refClick(t, s, "task", "far")))
 	s = answeredRead(t, out.State, out.Cmds, model.Snapshot{Issues: []model.Issue{infraCard("far"), infraCard("other")}, Links: []model.Link{farLink()}})
-	s = step(t, s, model.LanesLoaded{ProjectUID: "q"}).State
+	s = step(t, s, newestLanes{ProjectUID: "q"}).State
 	if got := escHint(t, s); got != "esc back" {
 		t.Errorf("after a follow the footer says %q; want esc back", got)
 	}
@@ -289,8 +289,8 @@ func TestChoosingTheFirstProjectAgainBeforeTheFollowedOneAnswersDropsTheFollow(t
 	}
 	s = inInfra(t, out.State, followCmds)
 	s = inWork(t, s, out.Cmds)
-	s = step(t, s, model.LanesLoaded{ProjectUID: "q"}).State
-	s = step(t, s, model.LanesLoaded{ProjectUID: "p"}).State
+	s = step(t, s, newestLanes{ProjectUID: "q"}).State
+	s = step(t, s, newestLanes{ProjectUID: "p"}).State
 	if m := s.Model; m.SelectedUID == "far" || m.OpenedIssueUID() == "far" {
 		t.Errorf("selected %q opened %q; the dropped follow still put infra's far on work's Board", m.SelectedUID, m.OpenedIssueUID())
 	}
@@ -301,7 +301,7 @@ func TestMovingTheSelectionBeforeTheFollowedLaneListArrivesIsKept(t *testing.T) 
 	out := step(t, s, click("", refClick(t, s, "task", "far")))
 	s = answeredRead(t, out.State, out.Cmds, model.Snapshot{Issues: []model.Issue{infraCard("far"), infraCard("other")}, Links: []model.Link{farLink()}})
 	s = step(t, s, model.SelectMsg{UID: "other"}).State
-	s = step(t, s, model.LanesLoaded{ProjectUID: "q"}).State
+	s = step(t, s, newestLanes{ProjectUID: "q"}).State
 	if m := s.Model; m.SelectedUID != "other" {
 		t.Errorf("selected %q; want other, the card the selection moved to", m.SelectedUID)
 	}
@@ -310,9 +310,9 @@ func TestMovingTheSelectionBeforeTheFollowedLaneListArrivesIsKept(t *testing.T) 
 func TestEscBackWithTheLaneListBeforeTheSnapshotSelectsACardTheBoardDraws(t *testing.T) {
 	s := workBoard(t)
 	out := step(t, s, click("", refClick(t, s, "task", "far")))
-	s = step(t, inInfra(t, out.State, out.Cmds), model.LanesLoaded{ProjectUID: "q"}).State
+	s = step(t, inInfra(t, out.State, out.Cmds), newestLanes{ProjectUID: "q"}).State
 	back := step(t, s, key("escape"))
-	s = step(t, back.State, model.LanesLoaded{ProjectUID: "p"}).State
+	s = step(t, back.State, newestLanes{ProjectUID: "p"}).State
 	s = answeredRead(t, s, back.Cmds, model.Snapshot{Issues: []model.Issue{boardCard("other")}})
 	if m := s.Model; m.SelectedUID != "other" {
 		t.Errorf("selected %q; want other, the only card the Board draws", m.SelectedUID)
@@ -325,7 +325,7 @@ func TestBackspaceGoesBackWhereEscDoesButNeverOpensTheMenu(t *testing.T) {
 	s := workBoard(t)
 	out := step(t, s, click("", refClick(t, s, "task", "far")))
 	s = inInfra(t, out.State, out.Cmds)
-	s = step(t, s, model.LanesLoaded{ProjectUID: "q"}).State
+	s = step(t, s, newestLanes{ProjectUID: "q"}).State
 	if back := step(t, s, key("backspace")); !readsProject(back.Cmds, "p") {
 		t.Errorf("backspace after a follow read nothing of work: %#v", back.Cmds)
 	}

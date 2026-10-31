@@ -454,7 +454,7 @@ func TestRunsPageDropsAnAnswerToAnOlderRead(t *testing.T) {
 		t.Fatalf("an answer to an older read was applied: %+v, loading %v", runs, late.State.Model.Runs.Loading)
 	}
 	fresh := step(t, late.State, model.RunsLoaded{Request: newer.Request, Before: newer.Before, Refresh: newer.Refresh, Runs: []model.Run{finishedRun("R2")}}).State
-	if fresh.Model.Runs.Loading || len(fresh.Model.Runs.Runs) == 0 || fresh.Model.Runs.Runs[0].UID != "R2" && fresh.Model.Runs.Runs[0].UID != "R1" {
+	if fresh.Model.Runs.Loading || len(fresh.Model.Runs.Runs) != 1 || fresh.Model.Runs.Runs[0].UID != "R2" {
 		t.Errorf("the newest answer gave %+v, loading %v", fresh.Model.Runs.Runs, fresh.Model.Runs.Loading)
 	}
 }

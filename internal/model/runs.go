@@ -355,7 +355,7 @@ func (m Model) settleRuns() (Model, []Cmd) {
 // runsLoaded applies the answer to the latest read: an older page is appended to the Runs held, the newest replaces them. A
 // Project that is archived keeps the Runs already held.
 func runsLoaded(m Model, msg RunsLoaded) Model {
-	if current, _ := m.Runs.reads.Answer(msg.Request); !current {
+	if !m.Runs.reads.IsCurrent(msg.Request) {
 		return m
 	}
 	m.Runs.Loading = false

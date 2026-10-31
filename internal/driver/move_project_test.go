@@ -90,7 +90,7 @@ func moving(t *testing.T, s driver.State, name string) driver.Output {
 func TestMOpensTheMoveCardInEveryModeListingOtherActiveProjects(t *testing.T) {
 	issue := movable("a")
 	list := movePane(t, issue, movable("b"))
-	board := feed(t, list, key("b"), model.LanesLoaded{ProjectUID: "p"}).State
+	board := feed(t, list, key("b"), newestLanes{ProjectUID: "p"}).State
 	lane := step(t, board, key("enter")).State
 	detail := step(t, list, key("enter")).State
 	for name, s := range map[string]driver.State{"list": list, "Board": board, "Lane view": lane, "detail": detail} {

@@ -122,7 +122,7 @@ func dismissFederationLeave(m Model) (Model, []Cmd) {
 // status again, which no longer lists the Project.
 func federationLeft(m Model, msg FederationLeft) (Model, []Cmd) {
 	f := &m.Federation
-	if current, _ := f.attempts.Answer(msg.Attempt); !current || !f.Leaving {
+	if !f.attempts.IsCurrent(msg.Attempt) || !f.Leaving {
 		return m, nil
 	}
 	f.Leaving = false
