@@ -9,7 +9,7 @@ import (
 )
 
 // workerForms are the operands `tern-kata worker` takes first.
-var workerForms = []string{"init", "add", "edit", "upgrade", "status", "stop", "doctor", "resume", "abandon"}
+var workerForms = []string{"init", "add", "edit", "upgrade", "status", "stop", "supervised", "doctor", "resume", "abandon"}
 
 // viewsForms are the operands `tern-kata views` takes first.
 var viewsForms = []string{"show", "add", "rm"}

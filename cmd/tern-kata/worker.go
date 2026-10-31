@@ -75,12 +75,27 @@ func runWorkerCommand(ctx context.Context, plan LaunchPlan, env workerEnv, out i
 		return err
 	case len(plan.Operands) == 1 && plan.Operands[0] == "stop":
 		return stopWorker(ctx, plan, env, out)
+	case len(plan.Operands) == 1 && plan.Operands[0] == "supervised":
+		return printSupervised(env, out)
 	case len(plan.Operands) == 2:
 		return settleHeldRun(ctx, plan, env, out)
 	case len(plan.Operands) == 1:
 		return runDoctor(ctx, plan, env, out)
 	}
 	return runForeground(ctx, plan, env, out)
+}
+
+var errSupervisionOff = errors.New("the plugin does not supervise the worker: " + worker.ConfigFileName + " is missing or " + worker.ManualFileName + " is beside it")
+
+// printSupervised is `worker supervised`, the plugin host half's one question: when the Supervision rule holds it prints
+// worker.toml's text and succeeds; otherwise it prints nothing on stdout and exits 1 with errSupervisionOff.
+func printSupervised(env workerEnv, out io.Writer) error {
+	text, on := env.Dirs.SupervisedConfig()
+	if !on {
+		return subcommandError{errSupervisionOff}
+	}
+	_, err := io.WriteString(out, text)
+	return err
 }
 
 // stopWorker is `worker stop [--now]`: it asks the running worker to drain (or, with --now, to end at once) and says what

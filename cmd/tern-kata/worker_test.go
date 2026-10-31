@@ -532,6 +532,35 @@ func TestWorkerStopSaysNothingWillStartItAgainInTheSupervisionRulesWords(t *test
 	}
 }
 
+// The host half starts a worker exactly when `worker supervised` succeeds, and uses the text it prints to see that worker.toml changed.
+func TestWorkerSupervisedAnswersTheSupervisionRule(t *testing.T) {
+	dirs := worker.Dirs{Config: filepath.Join(t.TempDir(), "tern-kata")}
+	env := workerEnv{Dirs: dirs}
+	ask := func() (string, error) {
+		var out strings.Builder
+		err := runWorkerCommand(t.Context(), LaunchPlan{Subcommand: "worker", Operands: []string{"supervised"}}, env, &out)
+		return out.String(), err
+	}
+	if out, err := ask(); !errors.As(err, new(subcommandError)) || out != "" {
+		t.Fatalf("no config: %q, %v; want a failure and no output", out, err)
+	}
+	if err := os.MkdirAll(dirs.Config, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dirs.ConfigPath(), []byte("actor = \"robot\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := ask(); err != nil || out != "actor = \"robot\"\n" {
+		t.Fatalf("config: %q, %v; want its text", out, err)
+	}
+	if err := dirs.SetSupervision(false); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := ask(); !errors.As(err, new(subcommandError)) || out != "" {
+		t.Fatalf("config and %s: %q, %v; want a failure and no output", worker.ManualFileName, out, err)
+	}
+}
+
 func TestWorkerStopWithNoWorkerSaysSo(t *testing.T) {
 	f := newWorkerFixture(t, "")
 	_, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"stop"}})
