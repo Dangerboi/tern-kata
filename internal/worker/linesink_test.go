@@ -63,26 +63,30 @@ func TestACappedOutputFileKeepsItsAgentEnd(t *testing.T) {
 
 func TestAnAgentEndLongerThanTheLineLimitStillFinishesTheTurn(t *testing.T) {
 	const limit, cap = 64, 128
-	long := `{"type":"agent_end","messages":[{"role":"assistant","content":[{"type":"text","text":"` +
-		strings.Repeat("a", 4*limit) + `"}]}],"isTerminal":true}` + "\n"
+	endWith := func(terminal string) string {
+		return `{"type":"agent_end","messages":[{"role":"assistant","content":[{"type":"text","text":"` +
+			strings.Repeat("a", 4*limit) + `"}]}],"isTerminal":` + terminal + "}\n"
+	}
+	long, retry := endWith("true"), endWith("false")
 	noise := `{"type":"x","p":"` + strings.Repeat("b", 200) + `"}` + "\n"
 	cases := []struct {
-		name  string
-		out   string
-		chunk int // zero writes the whole output at once
+		name     string
+		out      string
+		chunk    int // zero writes the whole output at once
+		fileCap  int
+		terminal bool
 	}{
-		{"pipe-sized chunks", noise + long, 7},
-		{"one write with its newline", noise + long, 0},
-		{"within the file cap", long, 7},
+		{"pipe-sized chunks", noise + long, 7, cap, true},
+		{"one write with its newline", noise + long, 0, cap, true},
+		{"within the file cap", long, 7, 1 << 20, true},
+		{"a retry end stays unfinished", noise + retry, 7, cap, false},
+		{"a retry end in one write", noise + retry, 0, cap, false},
+		{"a retry end within the file cap", retry, 7, 1 << 20, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "output.jsonl")
-			size := cap
-			if tc.name == "within the file cap" {
-				size = 1 << 20
-			}
-			sink := &lineSink{parser: &agentParser{}, file: openCapped(Hooks{}, path, size), limit: limit}
+			sink := &lineSink{parser: &agentParser{}, file: openCapped(Hooks{}, path, tc.fileCap), limit: limit}
 			rest := tc.out
 			for rest != "" {
 				n := len(rest)
@@ -93,12 +97,12 @@ func TestAnAgentEndLongerThanTheLineLimitStillFinishesTheTurn(t *testing.T) {
 				rest = rest[n:]
 			}
 			sink.close()
-			if !sink.parser.Result().Terminal {
-				t.Fatal("the live parser missed the long agent_end")
+			if got := sink.parser.Result().Terminal; got != tc.terminal {
+				t.Fatalf("the live parser read Terminal=%v of the long agent_end, want %v", got, tc.terminal)
 			}
-			if !readOutput(path).Terminal {
-				got, _ := os.ReadFile(path)
-				t.Fatalf("saved output lost the long agent_end: %q", got)
+			if got := readOutput(path).Terminal; got != tc.terminal {
+				saved, _ := os.ReadFile(path)
+				t.Fatalf("saved output read Terminal=%v of the long agent_end, want %v: %q", got, tc.terminal, saved)
 			}
 		})
 	}

@@ -692,7 +692,7 @@ func chooseFederationHub(m Model) (Model, []Cmd) {
 
 func federationHubsLoaded(m Model, msg FederationHubsLoaded) Model {
 	f := &m.Federation
-	if current, _ := f.hubReads.Answer(msg.Request); !current || f.Screen != FederationPickHub {
+	if !f.hubReads.IsCurrent(msg.Request) || f.Screen != FederationPickHub {
 		return m
 	}
 	f.HubsLoading, f.EnrollErr = false, msg.Err
@@ -705,7 +705,7 @@ func federationHubsLoaded(m Model, msg FederationHubsLoaded) Model {
 
 func federationHubProjectsLoaded(m Model, msg FederationHubProjectsLoaded) Model {
 	f := &m.Federation
-	if current, _ := f.hubReads.Answer(msg.Request); !current || f.Screen != FederationPickHubProject {
+	if !f.hubReads.IsCurrent(msg.Request) || f.Screen != FederationPickHubProject {
 		return m
 	}
 	f.HubProjectsLoading = false
@@ -730,7 +730,7 @@ func federationHubProjectsLoaded(m Model, msg FederationHubProjectsLoaded) Model
 
 func federationBrowsed(m Model, msg FederationBrowsed) Model {
 	f := &m.Federation
-	if current, _ := f.hubReads.Answer(msg.Request); !current || f.Screen != FederationBrowse {
+	if !f.hubReads.IsCurrent(msg.Request) || f.Screen != FederationBrowse {
 		return m
 	}
 	f.Browsing = false
@@ -915,7 +915,7 @@ func federationAdoptKey(m Model, msg KeyMsg) (Model, []Cmd) {
 // preview with the failure under it. A success shows the result and reads the status again, which now lists the Project.
 func federationEnrolled(m Model, msg FederationEnrolled) (Model, []Cmd) {
 	f := &m.Federation
-	if current, _ := f.attempts.Answer(msg.Attempt); !current || !f.Enrolling {
+	if !f.attempts.IsCurrent(msg.Attempt) || !f.Enrolling {
 		return m, nil
 	}
 	f.Enrolling = false

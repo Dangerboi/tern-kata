@@ -346,7 +346,7 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 			return step(t, s, key("p")).State
 		}(), model.ModeBackfill},
 		{"Lanes", func() driver.State {
-			s, _ := inputs(chord("b"), model.LanesLoaded{ProjectUID: "p"}, chord("shift+b"))(bound)
+			s, _ := inputs(chord("b"), newestLanes{ProjectUID: "p"}, chord("shift+b"))(bound)
 			return s
 		}(), model.ModeLanesForm},
 		{"Worker setup", workerCardOpen(t, nil, noWorkerFile), model.ModeWorkerCard},

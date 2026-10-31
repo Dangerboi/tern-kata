@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -219,26 +220,61 @@ func TestOutputTailIsTheEndOfTheJoinedMessages(t *testing.T) {
 	}
 }
 
-// Reading the tail of an 8 MiB output allocates for the tail and one line at a time, not for the whole output.
+// Reading the tail of an 8 MiB output that ends with an agent_end line allocates for the tail and one line at a time,
+// not for the whole output.
 func BenchmarkOutputTail8MiB(b *testing.B) {
 	path := filepath.Join(b.TempDir(), "output.jsonl")
-	writeOutputJournal(b, path, 8192, 1024)
+	writeOutputJournal(b, path, 4096, 1024)
+	writeEndLine(b, path, 4<<20)
 	b.ReportAllocs()
 	for b.Loop() {
 		outputTail(path, OutputTailBytes)
 	}
 }
 
-// Scanning an 8 MiB output keeps no more than the tail window: the bytes held never pass twice the tail size however
-// much goes through.
-func TestOutputTailMemoryIsBoundedByTheTail(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "output.jsonl")
-	writeOutputJournal(t, path, 8192, 1024)
-	tail := scanOutputTail(path, OutputTailBytes)
-	if tail.total < 8<<20 {
-		t.Fatalf("only %d bytes went through the window, want the whole 8 MiB output", tail.total)
+// writeEndLine appends the agent_end line a real output finishes with: every message of the run, repeated.
+func writeEndLine(t testing.TB, path string, size int) {
+	t.Helper()
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if len(tail.buf) > 2*OutputTailBytes || cap(tail.buf) > 4*OutputTailBytes {
-		t.Fatalf("the scan holds %d bytes (capacity %d) of an 8 MiB output, want at most twice the %d byte tail", len(tail.buf), cap(tail.buf), OutputTailBytes)
+	defer f.Close()
+	line := `{"type":"agent_end","messages":[{"role":"assistant","content":[{"type":"text","text":"` +
+		strings.Repeat("y", size) + `"}]}],"isTerminal":true}` + "\n"
+	if _, err := f.WriteString(line); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// totalAlloc is the bytes allocated while f runs; it counts every allocation, so it does not depend on when the
+// collector runs.
+func totalAlloc(f func()) uint64 {
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	f()
+	runtime.ReadMemStats(&after)
+	return after.TotalAlloc - before.TotalAlloc
+}
+
+// Reading the tail of an output whose last line is 8 MiB, an agent_end line that ends with an agent_end line repeating the messages included, holds
+// the tail and one line, never the agent_end line: the bytes allocated stay far under the size of the output.
+func TestOutputTailMemoryIsBoundedByTheTail(t *testing.T) {
+	for _, withEnd := range []bool{false, true} {
+		t.Run(fmt.Sprintf("agent_end line %v", withEnd), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "output.jsonl")
+			joined := writeOutputJournal(t, path, 64, 1024)
+			if withEnd {
+				writeEndLine(t, path, 8<<20)
+			}
+			var got string
+			alloc := totalAlloc(func() { got = outputTail(path, OutputTailBytes) })
+			if want := joined[len(joined)-OutputTailBytes:]; got != want {
+				t.Fatalf("tail differs: got %d bytes, want %d", len(got), len(want))
+			}
+			if limit := uint64(1 << 20); alloc > limit {
+				t.Fatalf("reading the tail allocated %d bytes, want under %d", alloc, limit)
+			}
+		})
 	}
 }

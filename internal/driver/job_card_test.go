@@ -149,7 +149,7 @@ func TestJOnAnIssueOpensTheCardWithThatIssueAsParentFromEveryMainSurface(t *test
 			if keys != nil {
 				s = feed(t, s, key(keys[0])).State
 				if keys[0] == "b" {
-					s = feed(t, s, model.LanesLoaded{ProjectUID: "p"}).State
+					s = feed(t, s, newestLanes{ProjectUID: "p"}).State
 				}
 			}
 			out := step(t, s, key("shift+j"))

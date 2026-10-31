@@ -80,7 +80,7 @@ func popups() []popup {
 		}, func(dst *model.Model, src model.Model) { dst.ProjectForm = src.ProjectForm },
 			model.ModeProjectForm, "New Project", func(m model.Model) string { return m.ProjectForm.Name }},
 		{"Lanes", func(t *testing.T, s driver.State) model.Model {
-			return feed(t, s, key("b"), model.LanesLoaded{ProjectUID: "p"}, key("shift+b")).State.Model
+			return feed(t, s, key("b"), newestLanes{ProjectUID: "p"}, key("shift+b")).State.Model
 		}, func(dst *model.Model, src model.Model) { dst.LanesForm = src.LanesForm },
 			model.ModeLanesForm, "Lanes", func(m model.Model) string { return m.LanesForm.Text }},
 		{"Filter form", func(t *testing.T, s driver.State) model.Model {

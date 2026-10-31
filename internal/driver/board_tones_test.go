@@ -33,7 +33,7 @@ func spanStyle(t *testing.T, n tern.WireNode) string {
 
 func TestLaneHeadersTakeTheirOwnTonesAndCustomLanesTakeTheRestInTurn(t *testing.T) {
 	s := boardPane(t)
-	s = step(t, s, model.LanesLoaded{ProjectUID: "p", Lanes: []string{"needs-triage", "in-review", "ready-for-human", "qa", "blocked", "ship"}}).State
+	s = step(t, s, newestLanes{ProjectUID: "p", Lanes: []string{"needs-triage", "in-review", "ready-for-human", "qa", "blocked", "ship"}}).State
 	nodes := wireNodes(t, view.Render(s.Model, now))
 	want := []string{"muted", "warning", "accent", "user", "pending", "neutral", "accent", "success"}
 	for i, tone := range want {

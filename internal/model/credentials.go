@@ -92,8 +92,7 @@ func enterCredentials(m Model) (Model, []Cmd) {
 
 // clearCredentials drops what the Page held and every ask still out.
 func clearCredentials(m Model) Model {
-	m.Credentials = CredentialsState{reads: m.Credentials.reads}
-	m.Credentials.reads.Discard()
+	m.Credentials = CredentialsState{reads: m.Credentials.reads.Discarded()}
 	return m
 }
 
@@ -131,7 +130,7 @@ func updateCredentials(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
 	case AuthCapabilitiesLoaded:
 		c := &m.Credentials
-		if current, _ := c.reads.Answer(msg.Request); !current {
+		if !c.reads.IsCurrent(msg.Request) {
 			return m, nil, true
 		}
 		c.Checking, c.Err, c.Available = false, msg.Err, msg.Err == nil && msg.TokenAuditRead
@@ -142,7 +141,7 @@ func updateCredentials(m Model, msg Msg) (Model, []Cmd, bool) {
 		return next, cmds, true
 	case CredentialsLoaded:
 		c := &m.Credentials
-		if current, _ := c.reads.Answer(msg.Request); !current {
+		if !c.reads.IsCurrent(msg.Request) {
 			return m, nil, true
 		}
 		c.Loading, c.Err = false, msg.Err
