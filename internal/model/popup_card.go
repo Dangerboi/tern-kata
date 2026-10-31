@@ -222,13 +222,13 @@ func workerBusy(m Model) bool {
 
 // buildCards fills in cards.
 func buildCards() []cardEntry {
-	return []cardEntry{
+	entries := []cardEntry{
 		{
 			card: CardCreate, name: "create", open: func(m Model) bool { return m.Create.Open },
-			modes: []Mode{ModeCreate, ModeDiscard, ModeDatePicker},
+			modes: []Mode{ModeCreate, ModeDiscard, ModeCalendar},
 			mode: func(m Model) Mode {
-				if m.DatePick.Open && m.DatePick.Card == CardCreate {
-					return ModeDatePicker
+				if m.DateCalendar.Open && m.DateCalendar.Card == CardCreate {
+					return ModeCalendar
 				}
 				if m.Create.DiscardConfirm {
 					return ModeDiscard
@@ -320,9 +320,9 @@ func buildCards() []cardEntry {
 		},
 		{
 			card: CardDates, name: "dates", open: func(m Model) bool { return m.DatesForm.Open },
-			modes: []Mode{ModeDatesForm, ModeDatePicker}, mode: func(m Model) Mode {
-				if m.DatePick.Open && m.DatePick.Card == CardDates {
-					return ModeDatePicker
+			modes: []Mode{ModeDatesForm, ModeCalendar}, mode: func(m Model) Mode {
+				if m.DateCalendar.Open && m.DateCalendar.Card == CardDates {
+					return ModeCalendar
 				}
 				return ModeDatesForm
 			},
@@ -409,10 +409,10 @@ func buildCards() []cardEntry {
 		},
 		{
 			card: CardRecurrence, name: "recurrence", open: func(m Model) bool { return m.RecurrenceForm.Open },
-			modes: []Mode{ModeRecurrenceForm, ModeRecurrenceStop, ModeDatePicker},
+			modes: []Mode{ModeRecurrenceForm, ModeRecurrenceStop, ModeCalendar},
 			mode: func(m Model) Mode {
-				if m.DatePick.Open && m.DatePick.Card == CardRecurrence {
-					return ModeDatePicker
+				if m.DateCalendar.Open && m.DateCalendar.Card == CardRecurrence {
+					return ModeCalendar
 				}
 				if m.RecurrenceForm.StopConfirm {
 					return ModeRecurrenceStop
@@ -589,6 +589,21 @@ func buildCards() []cardEntry {
 			},
 		},
 	}
+	for i := range entries {
+		if entries[i].choices != nil {
+			entries[i].modes = append(entries[i].modes, ModeDropdown)
+		}
+	}
+	return entries
+}
+
+// keyMode is the keymap mode the card is in for the next key: ModeDropdown while a select of the card holds its open dropdown,
+// the card's own mode otherwise.
+func (e cardEntry) keyMode(m Model) Mode {
+	if m.Dropdown.Open && m.Dropdown.Card == e.card && e.choices != nil {
+		return ModeDropdown
+	}
+	return e.mode(m)
 }
 
 // Cards lists every popup card in the order TopCard tries them.
@@ -688,7 +703,7 @@ func (e cardEntry) caretAt(m Model) (field Field, ok bool) {
 // cardMode is the keymap mode of the card on top, "" when there is none.
 func (m Model) cardMode() Mode {
 	if entry, ok := m.topEntry(); ok {
-		return entry.mode(m)
+		return entry.keyMode(m)
 	}
 	return ""
 }
@@ -713,13 +728,16 @@ func updateTopCardKey(m Model, msg KeyMsg) (Model, []Cmd, bool) {
 	if !ok || msg.Chord == quitChord {
 		return m, nil, false
 	}
-	if datePickerOpen(m, entry) {
-		return updateDatePickerKey(m, msg), nil, true
+	if calendarOpen(m, entry) {
+		var run bool
+		if m, run = updateCalendarKey(m, entry, msg); !run {
+			return m, nil, true
+		}
 	}
-	if binding, bound := LookupBindingForMode(msg.Chord, entry.mode(m)); bound && binding.Action == OpenDatePicker {
-		return openDatePicker(m, entry), nil, true
+	if binding, bound := LookupBindingForMode(msg.Chord, entry.keyMode(m)); bound && binding.Action == ShowCalendar {
+		return showCalendar(m, entry), nil, true
 	}
-	m, taken := entry.menuKey(m, msg)
+	m, taken := entry.dropdownKey(m, msg)
 	if taken {
 		return m, nil, true
 	}
@@ -858,8 +876,8 @@ func focusField(m Model, name Field) Model {
 // field the card hides or a busy card changes nothing.
 func chooseField(m Model, name Field, index int) Model {
 	m = focusField(m, name)
-	if m.Menu.Field == name {
-		m.Menu = ChoiceMenu{}
+	if m.Dropdown.Field == name {
+		m.Dropdown = Dropdown{}
 	}
 	if entry, ok := m.topEntry(); ok && entry.choose != nil && !entry.busy(m) && *entry.focus(&m) == name && !takesText(entry.fields, name) {
 		m = entry.choose(m, index)
@@ -885,7 +903,7 @@ func (e cardEntry) editFields(m Model, msg KeyMsg) (Model, bool) {
 	if e.busy(m) {
 		return m, false
 	}
-	mode := e.mode(m)
+	mode := e.keyMode(m)
 	binding, bound := LookupBindingForMode(msg.Chord, mode)
 	if !bound || binding.Mode != mode || !slices.ContainsFunc(e.editing, func(d fieldEditing) bool { return d.mode == mode && d.offers(binding.Action) }) {
 		return m, false
@@ -911,7 +929,7 @@ func (e cardEntry) editFields(m Model, msg KeyMsg) (Model, bool) {
 		}
 	case OpenChoice:
 		var opened bool
-		if m, opened = e.openChoiceMenu(m); !opened {
+		if m, opened = e.openDropdown(m); !opened {
 			return m, false
 		}
 	case NextChoice, PreviousChoice:
