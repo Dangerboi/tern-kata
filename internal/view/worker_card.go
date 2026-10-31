@@ -113,7 +113,7 @@ func workerFields(m model.Model) []tern.Element {
 			text := f.Value(spec.Name)
 			children = append(children,
 				toneText(string(spec.Name)+"-label", tone(spec.Name), model.WorkerPrompt(spec.Name)),
-				ui.Input{Common: ui.Common{Key: string(spec.Name), Tone: tone(spec.Name), Aria: model.WorkerPrompt(spec.Name)}, Field: ui.Field{Text: text, Cursor: caretAt(f.Caret, spec.Name, text), Mode: "insert", Placeholder: model.WorkerHint(spec.Name), Readonly: f.Saving}})
+				ui.Input{Common: ui.Common{Key: string(spec.Name), Tone: tone(spec.Name), Aria: model.WorkerPrompt(spec.Name)}, Field: ui.Field{Text: text, Cursor: caretAt(f.Caret, spec.Name, text), Mode: "insert", Placeholder: ui.T(model.WorkerHint(spec.Name)), Readonly: f.Saving}})
 		}
 	}
 	verb := "Set up lists"
