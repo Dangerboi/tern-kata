@@ -14,8 +14,11 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A **Background agent** opens beside the Pane when you click its Agent badge in any kata Pane or focus it in the hidden "kata agents" session, as Tern's notification for an agent waiting for you does, and the Pane that started it moves it back into the hidden "kata agents" session when it works again after waiting for you, wherever it was opened.
 - A **Background agent** ends once its Issue is closed and it is idle or has exited: the Pane that started it closes its block with `tern close` and drops its entry and prompt file, unless you have it open in any kata Pane; a close that fails shows Tern's words in a Notice and leaves the entry. An agent in a split or tab is closed this way only once a kata Pane has sent it to the background.
 - While an agent you started waits for you, the Issue holds an **Attention request** for your Inbox address with the agent's last message, also when the Pane finds the agent already waiting; it clears when no agent on the Issue waits and when the Pane quits, and a newer request someone else wrote stays.
-- A kata Pane's icon in Tern's tab bar is kata's mark, the katakana カ, in place of the terminal icon, tinted like the icons beside it.
+- A kata Pane's icon in Tern's tab bar is kata's mark, the katakana カ, in place of the terminal icon, tinted like the icons beside it, also in a window attached to the Pane's host from another machine.
 - A Project can share its Lane list through kata: **Save to: The Project** on the Lanes card writes it to the Project's `tern.lanes` metadata, every tern-kata on the daemon shows it before its own `lanes.toml`, and a change from another machine reaches an open Board at once. The Board and the Lanes card say whether the list in use is shared, this machine's or the default; `ctrl+x` on the card stops sharing, and a Project changed since the card opened keeps your text and names the list it shares now. An archived Project's Board shows its shared list, which the card can't change until the Project is restored.
+- Date fields in the Dates, Create and Recurrence cards open a calendar beside the field on `ctrl+d`: the arrows move it by a day or a week, `enter` or a click picks the day and `esc` closes it unchanged. Typed dates, `today`, `tomorrow`, `+Nd` and `+Nw` work as before, and the card's other date is marked on the calendar.
+- A right-click on an Issue row, a Lane row or a Board card opens a menu of Open, Agent…, Close or Reopen, Priority…, Dates… and Move to Project, each showing its key and doing what that key does on that Issue. On a closed Issue, Close and Agent… are disabled and say why.
+- Hovering an Issue reference (the Relationships line, Links and Events rows, the detail's parent and the Blocked marker) shows a card with its ref, title, status, owner with the claim's expiry and updated time; a Children row shows the same facts as a tooltip. A reference that isn't loaded shows only what its link carries.
 
 ### Changed
 
@@ -32,14 +35,25 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A Project's `capacity` defaults to 3, so one hung run no longer holds its only slot until its timeout. `worker init`, `worker add` and the Worker card's Set up and Serve this Project write `capacity = 3`; a `worker.toml` that says `capacity = 1` keeps it, and one with no `capacity` line gets 3 after the upgrade. Every run's contract now tells the agent that other runs may be working in its checkout, and to make a git worktree when it needs a tree of its own.
 - Inbox, Upcoming and Deadlines read kata's all-open snapshot and pick their Issues in the Pane, as kata's web does, instead of the daemon's inbox, upcoming and deadlines views that kata keeps only for older web UIs. They list the same Issues in the same groups; a Deadlines row's start date now reads in the Pane's time zone, as it does in every other Collection.
 - A held run's summary in kata starts with the line `reason: <code>` and has the detail on the next, kata's convention for a machine-readable cause, instead of `<code>: <detail>` on one line. The Runs Page shows `reason: <code>` on the card and a Reason line in the detail for any run whose summary leads with one, another executor's too, and for runs held by an earlier tern-kata; the Jobs Page and a Workflow's inspector word such a run as `<code>: <detail>`.
+- tern-kata needs Tern 0.9.9 or newer, which draws the buttons, tables, selects, calendars, menus and empty states the Pane now uses.
+- The Pane is drawn in Tern's interface face (sans): Issue refs, dates, counts and times stay in mono, the key line at the bottom is a key legend, and the Issue detail's properties line up in either face.
+- Popup card and Menu buttons are Tern's own buttons, with their keys drawn as keycaps that follow your key bindings. A card's buttons sit in a footer bar that stays in view while a tall card scrolls, its head names the card with its subject (the Issue, view or workflow) as muted text after it, a destructive confirm is red, and a button whose action can't run now, such as Go to agent with no agent on the Issue, is disabled with the reason as its tooltip.
+- Choice fields in Popup cards are Tern's controls: a yes/no field such as Worker Trust is a switch, two or three options are segmented tabs, and longer lists are selects (`down` opens one, typing searches a long list, `enter` picks). The arrows and `space` still step a choice, a click picks, and Recurrence weekdays are unchanged.
+- The Issue detail's Children is a table that sizes its columns and drops the least important ones when narrow; a click on a row still goes to that child.
+- Empty Pages and lists (Attention, Runs, Jobs, Workflows, an Issue list with no Issues, the detail with nothing selected, the Menu's Collections and a Lane with no cards) say what is missing and what to do, with a button when one key fills them, and words that wait on someone use Tern's pending colour.
+- Tern closes a kata Pane without asking only when kata's `[tui] confirm_quit = false`, as it stands when the Pane starts; with the default it still asks.
 
 ### Fixed
 
 - A notify job with a zero lead, the current-owner-or-author recipient and an Issue-date trigger is skipped by the worker only when it notifies the trigger's own Issue; one that names another Issue to notify is now sent by the worker to that Issue's owner or author.
 - An `execute` job on an existing Issue no longer starts while the Issue is `someday` or scheduled for later: the scheduled occurrence waits without taking a slot until the Issue is ready, past its catchup grace and across worker restarts (the 7-day catchup window still applies), `worker status` says why, and a manual run is refused with the reason; `deadline_on` never defers it.
 - `e` on the Worker card and `ctrl+e` no longer only blink when neither `$VISUAL` nor `$EDITOR` is set, as in a Pane started by **Open kata**: they open `vi`, and with no `vi` either the card says to set one without leaving the Pane.
-- Popup cards draw their error, pending, warning and success lines in the theme's colours instead of the plain text colour, as do the worker notes of a Workflow's inspector, and draw their buttons as separate bordered buttons, the default one in the accent colour, instead of one run of plain text.
+- Popup cards draw their error, pending, warning and success lines in the theme's colours instead of the plain text colour, as do the worker notes of a Workflow's inspector.
 - With Tern 0.9.8 on a high-density display, the Issue list, the detail and the other column lists no longer run past the bottom of the Pane and scroll the top bar away: each list now fills its column and scrolls inside it at any display scale or Pane height.
+
+### Removed
+
+- A click on the top bar's Project heading no longer opens the Menu; the Menu button and `esc` from the list do.
 
 ## [0.6.0] - 2026-10-26
 
