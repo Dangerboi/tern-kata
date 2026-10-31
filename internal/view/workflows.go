@@ -95,6 +95,7 @@ func workflowList(m model.Model, paired bool) tern.Element {
 		children = ui.Nodes(ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.Workflows.Err.Error()}, list)
 	}
 	if paired {
+		common.Role = ColumnRole
 		return ui.Card{Common: common, Selected: true, Children: children}
 	}
 	return ui.Col{Common: common, Children: children}
@@ -145,6 +146,7 @@ func workflowInspector(m model.Model, paired bool, now time.Time) tern.Element {
 	parts = append(parts, ui.Text{Common: ui.Common{Key: "by"}, Spans: []ui.Span{{T: fmt.Sprintf("by %s · revision %d", w.Author, w.Revision), S: "muted"}}})
 	body := ui.List{CommonWithoutMax: scrollerCommon("viewport"), Max: fillMax, Children: ui.Nodes(ui.Col{Common: ui.Common{Key: "content"}, Gap: ui.GapSM, Children: parts})}
 	if paired {
+		common.Role = ColumnRole
 		return ui.Card{Common: common, Children: ui.Nodes(body)}
 	}
 	return ui.Col{Common: common, Children: ui.Nodes(body)}

@@ -371,3 +371,30 @@ func TestAFailedReadOfTheWorkflowsShowsAsItsOwnLineAboveTheHeldRows(t *testing.T
 		t.Errorf("the read error (node %d) is not its own line above the held rows (node %d)", line, rows)
 	}
 }
+
+// roleOf is the data-role of the node drawn under id.
+func roleOf(t *testing.T, s driver.State, id string) string {
+	t.Helper()
+	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
+		if n.ID == id {
+			role, _ := n.P["role"].(string)
+			return role
+		}
+	}
+	t.Fatalf("the Pane draws no node %q", id)
+	return ""
+}
+
+func TestWorkflowsPageSideBySideCardsAreColumnCardsWhoseListsFillTheColumn(t *testing.T) {
+	s := step(t, workflowsPane(t, 160, reviewFlow(), nightlyFlow()), key("enter")).State
+	for _, id := range []string{"main.columns.list.page.names", "main.columns.list.page.inspector"} {
+		if role := roleOf(t, s, id); !strings.Contains(role, view.ColumnRole) {
+			t.Errorf("%s has role %q, want the column role %q", id, role, view.ColumnRole)
+		}
+	}
+	for _, id := range []string{"main.columns.list.page.names.rows", "main.columns.list.page.inspector.viewport"} {
+		if role := roleOf(t, s, id); !strings.Contains(role, view.FillRole) {
+			t.Errorf("%s has role %q, want the fill role %q", id, role, view.FillRole)
+		}
+	}
+}
