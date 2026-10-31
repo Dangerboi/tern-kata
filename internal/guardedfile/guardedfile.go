@@ -75,7 +75,8 @@ const updateTries = 20
 // writer changed the file in between, the whole change runs again on the new read, so change must tolerate being called more
 // than once and must start its own results afresh. A change that returns an error ends Update with it and writes nothing. A
 // file that still changes after updateTries reads is an error wrapping ErrChanged, with the other writer's file left as it
-// is. Failures of the read and the write other than ErrChanged are returned as they are.
+// is. A failure of the read is returned as it is; a failure of the write other than ErrChanged is returned as Write gives it,
+// a lock that could not be taken carrying the file's name.
 func Update(path string, dirMode fs.FileMode, change func(Token) ([]byte, error)) error {
 	for range updateTries {
 		token, err := Read(path)

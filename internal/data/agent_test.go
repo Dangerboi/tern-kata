@@ -1098,8 +1098,15 @@ func TestLiveBlocksCallerReturnsAtItsOwnDeadlineWhileAnotherAskRuns(t *testing.T
 	<-started
 	past, cancel := context.WithDeadline(context.Background(), time.Unix(0, 0))
 	defer cancel()
-	if _, _, err := g.liveBlocks(past, false); !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("the short caller got %v, want its deadline error", err)
+	short := make(chan error, 1)
+	go func() { _, _, err := g.liveBlocks(past, false); short <- err }()
+	select {
+	case err := <-short:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Errorf("the short caller got %v, want its deadline error", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Error("the short caller never returned at its own deadline")
 	}
 	close(release)
 	if err := <-slow; err != nil {
