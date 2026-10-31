@@ -58,7 +58,7 @@ func filterLayer(m model.Model) tern.Element {
 		}
 		children = append(children, ui.Input{
 			Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: title},
-			Field:  ui.Field{Text: value, Cursor: caretAt(m.FilterForm.Caret, field.Name, value), Mode: "insert", Prompt: []ui.Span{{T: prompt}}, Placeholder: "Any"},
+			Field:  ui.Field{Text: value, Cursor: caretAt(m.FilterForm.Caret, field.Name, value), Mode: "insert", Prompt: []ui.Span{{T: prompt}}, Placeholder: ui.T("Any")},
 		})
 	}
 	if m.FilterForm.Saving {
