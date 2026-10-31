@@ -326,11 +326,16 @@ func TestPruningDropsTheEntriesTernNoLongerListsWithTheirPrompts(t *testing.T) {
 	}
 	// When tern cannot be asked nothing is dropped.
 	g.runTern = func(context.Context, []string) ([]byte, error) { return nil, errors.New("exit status 1") }
-	if failed := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{})); failed.Err == nil {
+	failed := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{}))
+	if failed.Err == nil {
 		t.Error("a failed tern ls pruned without error")
 	}
-	if stored, _ := ReadAgents(file); len(stored) != 1 {
+	stored, _ := ReadAgents(file)
+	if len(stored) != 1 {
 		t.Errorf("entries after a failed ls: %v", stored)
+	}
+	if len(failed.Agents) != 1 || failed.Agents[0].Block != "18494129176578" {
+		t.Errorf("entries answered after a failed ls: %v", failed.Agents)
 	}
 }
 
@@ -471,7 +476,7 @@ func TestTheLiveBlocksOfTernAreCachedForTenSeconds(t *testing.T) {
 	putAgents(t, filepath.Join(dirs.State, AgentsFile), model.AgentEntry{Block: "1", PaneBlock: "7"})
 	live := []string{"1", "7"}
 	asked := lsCounter(t, g, &live)
-	refresh := model.RefreshAgents{Suspects: []string{"1"}, PaneBlock: "7"}
+	refresh := model.RefreshAgents{PaneBlock: "7"}
 	run(t, g, refresh)
 	now = now.Add(9 * time.Second)
 	run(t, g, refresh)
@@ -498,8 +503,33 @@ func TestACachedBlockSetThatLacksALaterBlockIsNotTrustedToDropOrAdopt(t *testing
 	if len(got.Agents) != 1 || got.Agents[0].PaneBlock != "7" || *asked != 2 {
 		t.Fatalf("refreshed %+v after %d asks", got.Agents, *asked)
 	}
-	if again := as[model.AgentsRefreshed](t, run(t, g, model.RefreshAgents{Suspects: []string{"1"}, PaneBlock: "9"})); *asked != 2 || len(again.Agents) != 1 {
+	if again := as[model.AgentsRefreshed](t, run(t, g, model.RefreshAgents{PaneBlock: "9"})); *asked != 2 || len(again.Agents) != 1 {
 		t.Fatalf("the fresh answer was not cached: %d asks", *asked)
+	}
+}
+
+func TestASuspectBlockStillInACachedAnswerIsConfirmedWithAFreshOne(t *testing.T) {
+	g, dirs := agentGateway(t)
+	now := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+	g.now = func() time.Time { return now }
+	file := filepath.Join(dirs.State, AgentsFile)
+	putAgents(t, file, model.AgentEntry{Block: "1", PaneBlock: "7"}, model.AgentEntry{Block: "2", PaneBlock: "7"})
+	live := []string{"1", "2", "7"}
+	asked := lsCounter(t, g, &live)
+	// Agent 1 closes: the answer is cached with agent 2 alive.
+	live = []string{"2", "7"}
+	if got := as[model.AgentsRefreshed](t, run(t, g, model.RefreshAgents{Suspects: []string{"1"}, PaneBlock: "7"})); len(got.Agents) != 1 || got.Agents[0].Block != "2" {
+		t.Fatalf("refreshed %+v", got.Agents)
+	}
+	// Agent 2 closes within 10 s; the cached answer still lists it.
+	live = []string{"7"}
+	now = now.Add(3 * time.Second)
+	got := as[model.AgentsRefreshed](t, run(t, g, model.RefreshAgents{Suspects: []string{"2"}, PaneBlock: "7"}))
+	if got.Err != nil || len(got.Agents) != 0 || *asked != 2 {
+		t.Fatalf("refreshed %+v after %d asks", got.Agents, *asked)
+	}
+	if stored, _ := ReadAgents(file); len(stored) != 0 {
+		t.Errorf("entries after the drop: %v", stored)
 	}
 }
 

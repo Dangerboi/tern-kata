@@ -272,7 +272,8 @@ func (g *Gateway) reconcileAgents(ctx context.Context, file, paneBlock string, f
 	if live, cached, err = g.liveBlocks(ctx, fresh); err != nil {
 		return current, err, nil
 	}
-	if cached && changes() {
+	// A suspect block still in a cached answer may have closed since it: only a fresh answer can say.
+	if cached && (changes() || slices.ContainsFunc(current, func(e model.AgentEntry) bool { return suspect(e.Block) })) {
 		if live, _, err = g.liveBlocks(ctx, true); err != nil {
 			return current, err, nil
 		}
