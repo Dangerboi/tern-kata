@@ -109,24 +109,42 @@ func (p *agentParser) Line(line []byte) {
 		}
 		return
 	}
-	switch event.Type {
+	p.event(event.Type, event.ID, event.IsTerminal,
+		func() (ompMessage, bool) { return derefMessage(event.Message) },
+		func() (ompMessage, bool) {
+			for i := len(event.Messages) - 1; i >= 0; i-- {
+				if event.Messages[i].Role == "assistant" {
+					return event.Messages[i], true
+				}
+			}
+			return ompMessage{}, false
+		})
+}
+
+func derefMessage(m *ompMessage) (ompMessage, bool) {
+	if m == nil {
+		return ompMessage{}, false
+	}
+	return *m, true
+}
+
+// event applies one decoded event. message is the event's message and lastTurn the last assistant turn of an
+// agent_end; the bool says one was found, and a found turn that does not decode is the zero message.
+func (p *agentParser) event(typ, id string, isTerminal *bool, message, lastTurn func() (ompMessage, bool)) {
+	switch typ {
 	case "session":
-		p.session(event.ID)
+		p.session(id)
 	case "message_end":
-		if event.Message == nil {
-			return
+		if m, ok := message(); ok {
+			p.messageEnd(m)
 		}
-		p.messageEnd(*event.Message)
 	case "agent_end":
-		if event.IsTerminal != nil && !*event.IsTerminal {
+		if isTerminal != nil && !*isTerminal {
 			return
 		}
 		p.res.Terminal = true
-		for i := len(event.Messages) - 1; i >= 0; i-- {
-			if event.Messages[i].Role == "assistant" {
-				p.agentEnd(event.Messages[i])
-				break
-			}
+		if m, ok := lastTurn(); ok {
+			p.agentEnd(m)
 		}
 	}
 }
@@ -180,30 +198,21 @@ func (p *agentParser) lineLenient(line []byte) {
 	if json.Unmarshal(line, &event) != nil {
 		return
 	}
-	switch event.Type {
-	case "session":
-		p.session(event.ID)
-	case "message_end":
-		if m, ok := assistantMessage(event.Message); ok {
-			p.messageEnd(m)
-		}
-	case "agent_end":
-		if event.IsTerminal != nil && !*event.IsTerminal {
-			return
-		}
-		p.res.Terminal = true
-		for i := len(event.Messages) - 1; i >= 0; i-- {
-			var head struct {
-				Role string `json:"role"`
+	p.event(event.Type, event.ID, event.IsTerminal,
+		func() (ompMessage, bool) { return assistantMessage(event.Message) },
+		func() (ompMessage, bool) {
+			for i := len(event.Messages) - 1; i >= 0; i-- {
+				var head struct {
+					Role string `json:"role"`
+				}
+				if json.Unmarshal(event.Messages[i], &head) != nil || head.Role != "assistant" {
+					continue
+				}
+				m, _ := assistantMessage(event.Messages[i])
+				return m, true
 			}
-			if json.Unmarshal(event.Messages[i], &head) != nil || head.Role != "assistant" {
-				continue
-			}
-			m, _ := assistantMessage(event.Messages[i])
-			p.agentEnd(m)
-			break
-		}
-	}
+			return ompMessage{}, false
+		})
 }
 
 // assistantMessage decodes raw as an assistant message; any other role, or a shape that does not decode, is not one
