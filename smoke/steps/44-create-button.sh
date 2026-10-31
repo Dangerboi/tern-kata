@@ -1,8 +1,8 @@
 # The Create card ends in buttons that click their keys: Cancel closes the empty card, the primary button creates the Issue.
 ctl key n
 expect_tree "[data-id='layer.create.title']" '.count == 1'
-expect_tree "[data-id='layer.create.actions.save']" '.count == 1 and (.nodes[0].text == "Create Issue (ctrl+o)")'
-expect_tree "[data-id='layer.create.actions.cancel']" '.count == 1 and (.nodes[0].text == "Cancel (esc)")'
+expect_tree "[data-id='layer.create.actions.save']" '.count == 1 and (.nodes[0].text | startswith("Create Issue") and endswith("ctrl+o"))'
+expect_tree "[data-id='layer.create.actions.cancel']" '.count == 1 and (.nodes[0].text | startswith("Cancel") and endswith("esc"))'
 ctl click "[data-id='layer.create.actions.cancel']"
 expect_tree "[data-id='layer.create']" '.count == 0'
 ctl key n

@@ -39,11 +39,11 @@ func agentLayer(m model.Model) tern.Element {
 	children := []tern.Element{
 		list,
 		buttonRow(
-			cardButton("go", model.ModeAgentCard, model.AgentCardGo, "Go to agent", true),
-			cardButton("split", model.ModeAgentCard, model.AgentCardSplit, "New in a split", false),
-			cardButton("tab", model.ModeAgentCard, model.AgentCardTab, "New in a tab", false),
-			cardButton("new-background", model.ModeAgentCard, model.AgentCardNewBackground, "New in the background", false),
-			cardButton("background", model.ModeAgentCard, model.AgentCardBackground, "Send to background", false),
+			unavailable(cardButton("go", model.ModeAgentCard, model.AgentCardGo, "Go to agent", true), m.AgentCardUnavailable(model.AgentCardGo)),
+			unavailable(cardButton("split", model.ModeAgentCard, model.AgentCardSplit, "New in a split", false), m.AgentCardUnavailable(model.AgentCardSplit)),
+			unavailable(cardButton("tab", model.ModeAgentCard, model.AgentCardTab, "New in a tab", false), m.AgentCardUnavailable(model.AgentCardTab)),
+			unavailable(cardButton("new-background", model.ModeAgentCard, model.AgentCardNewBackground, "New in the background", false), m.AgentCardUnavailable(model.AgentCardNewBackground)),
+			unavailable(cardButton("background", model.ModeAgentCard, model.AgentCardBackground, "Send to background", false), m.AgentCardUnavailable(model.AgentCardBackground)),
 			cardButton("cancel", model.ModeAgentCard, model.AgentCardCancel, "Cancel", false)),
 	}
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgent)}, Head: ui.T("Agents on " + card.IssueRef), Modal: true, Size: ui.SizeMD, Children: children})

@@ -289,7 +289,16 @@ func cardButtonsOf(t *testing.T, s driver.State) (map[string]string, map[string]
 		clickAct, _ := actions["click"].(string)
 		if strings.HasPrefix(clickAct, view.KeyClick("")) && strings.HasPrefix(node.ID, "layer.") {
 			found[node.ID] = clickAct
-			labels[node.ID], _ = node.P["text"].(string)
+			words, _ := node.P["text"].(string)
+			keys, _ := node.P["keys"].([]any)
+			labels[node.ID] = words
+			if len(keys) > 0 {
+				names := make([]string, len(keys))
+				for i, k := range keys {
+					names[i], _ = k.(string)
+				}
+				labels[node.ID] += " (" + strings.Join(names, " / ") + ")"
+			}
 		}
 	}
 	return found, labels
