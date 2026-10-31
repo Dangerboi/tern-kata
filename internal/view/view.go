@@ -194,7 +194,6 @@ func topBar(m model.Model) tern.Element {
 		return ui.Common{Key: key, Tone: tone, Shrink: &shrink}
 	}
 	headingCell := flexCell("heading", ui.ToneAccent, 0)
-	headingCell.Title, headingCell.Actions = "Menu", &ui.Actions{Click: MenuClick}
 	rightCell := flexCell("right", ui.ToneNeutral, 100)
 	// The right cell never narrows below "… · Menu", so the Menu button is never pushed off the bar; the Daemon inside gives way first.
 	rightCell.Min = &ui.Bounds{W: ui.Ch(8)}
