@@ -222,10 +222,13 @@ end
 -- gets no `tab_created` for a tab the CLI opens on the session host, and numbers panes differently from the host, so
 -- `<starter>` is no pane id there. Such a window places on `agent_state` and on every relay pass instead: an agent pane whose
 -- command carries the marker is tried once, whatever the result (remembered in `placed` until its pane closes), and then never
--- touched again. The starter id is exact only on the session host's machine, so the move is a guess there: the tab moves
--- only while it is unplaced, that is, every tab after it in its session is an agent tab not handled yet (two agents started
--- in quick succession are both placed, whatever order they are listed in). A tab followed by any other tab was placed by a
--- window that knew the starter, or by the user. The host window's exact placement is the `tab_created` one.
+-- touched again. The starter id is exact only on the session host's machine, so the move is a guess there. In its session the
+-- tab moves only when the run of tabs at the end that are candidates (agents tried in this pass) or agent tabs not handled yet
+-- (a pane not in `placed` whose running line or agent command carries the marker, even if Tern lists no agent for it yet)
+-- contains it, and the tab directly before that run holds no kata Pane: Tern's append already sits right of a kata Pane,
+-- possibly placed exactly by the host window. A tab after the run that is neither, or a kata Pane's tab just before it,
+-- leaves the tab where it is. So with no window on the session host, `W` in a kata Pane while another kata Pane's tab is
+-- last does not move the agent tab. The host window's exact placement is the `tab_created` one.
 -- The starter is the kata Pane whose id is `<starter>`, else the focused Pane if it is a kata Pane (the Pane the user just pressed
 -- `W` in), else the window's only kata Pane; with none of these nothing moves.
 local PLACE_TRIES = 10
@@ -253,22 +256,49 @@ local function starterOf(cx: WindowCx, tab: number): number?
     return nil
 end
 
--- The tabs of `candidates` that are unplaced: every tab after it in its session is also in `candidates`, so only agent tabs
--- Tern appended after it, which no window has handled. A tab followed by any other tab was placed by a window that knew
--- the starter, or by the user. Highest position first, so tabs moved to the same home keep the order they were opened in.
+-- The tabs of `candidates` to move: those in the run of tabs at the end of their session made only of candidates and agent
+-- tabs not handled yet (a pane not in `placed` whose running line or agent command carries the marker), when the tab
+-- directly before that run holds no kata Pane. Highest position first, so tabs moved to the same home keep the order they
+-- were opened in.
 local function unplacedTabs(cx: WindowCx, candidates: { [number]: boolean }): { number }
-    local all = cx.session:tabs()
-    local found: { TabInfo } = {}
-    for _, info in all do
-        if candidates[info.id] then
-            local trailing = true
-            for _, after in all do
-                if after.session == info.session and after.position > info.position and not candidates[after.id] then
-                    trailing = false
-                    break
-                end
+    local pending: { [number]: boolean } = {}
+    local kataTabs: { [number]: boolean } = {}
+    for _, info in cx.session:panes() do
+        if info.tab then
+            if isKata(info) then kataTabs[info.tab] = true end
+            if not placed[info.pane] and (markerOf(info.running and info.running.line) ~= nil) then
+                pending[info.tab] = true
             end
-            if trailing then table.insert(found, info) end
+        end
+    end
+    for _, agent in cx.agents:list() do
+        local info = cx.session:pane(agent.pane)
+        if info and info.tab and not placed[agent.pane] and markerOf(agent.command) then pending[info.tab] = true end
+    end
+    local bySession: { [any]: { TabInfo } } = {}
+    for _, info in cx.session:tabs() do
+        local list = bySession[info.session]
+        if not list then
+            list = {}
+            bySession[info.session] = list
+        end
+        table.insert(list :: { TabInfo }, info)
+    end
+    local found: { TabInfo } = {}
+    for _, list in bySession do
+        table.sort(list, function(a, b) return a.position > b.position end)
+        local run: { TabInfo } = {}
+        local before: TabInfo? = nil
+        for _, info in list do
+            if candidates[info.id] or pending[info.id] then
+                if candidates[info.id] then table.insert(run, info) end
+            else
+                before = info
+                break
+            end
+        end
+        if not (before and kataTabs[before.id]) then
+            for _, info in run do table.insert(found, info) end
         end
     end
     table.sort(found, function(a, b) return a.position > b.position end)
