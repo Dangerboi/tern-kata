@@ -545,17 +545,25 @@ func sooner(wake, at, now time.Time) time.Time {
 	return wake
 }
 
-// markDisabled records the Project's disabled jobs in its schedule without planning anything.
+// markDisabled records the Project's disabled jobs in its schedule without planning anything, and the start of the jobs
+// that were enabled again meanwhile: their time off is not caught up, but the time since they were enabled is.
 func (w *Worker) markDisabled(ps *projectState) {
 	w.mu.Lock()
 	disabled := map[string]bool{}
+	var enabled []cronjob.Job
 	for _, j := range ps.jobs {
 		if disabledAdapterJob(j) {
 			disabled[j.UID] = true
+		} else if schedulable(j) {
+			enabled = append(enabled, j)
 		}
 	}
 	w.mu.Unlock()
 	ps.sched.markPaused(disabled)
+	now := w.clock.Now()
+	for _, j := range enabled {
+		ps.sched.markResumed(j, now)
+	}
 }
 
 // planAll is the worker's side of planning: it hands the Project's schedulable jobs to the Project schedule. False means the
@@ -616,6 +624,19 @@ func (s *projectSchedule) markPaused(disabled map[string]bool) {
 			c.Paused = true
 			s.store.Save(uid, c)
 		}
+	}
+}
+
+// markResumed saves the checkpoint of a job that is enabled again but not planned yet as resumed: scheduling starts at
+// now and the first date read is the baseline, exactly as plan would do.
+func (s *projectSchedule) markResumed(job cronjob.Job, now time.Time) {
+	if s.jobs[job.UID] != nil {
+		return
+	}
+	if c, ok := s.store.Load(job.UID); ok && c.Paused {
+		c.Paused, c.Through = false, maxTime(now, job.CreatedAt)
+		c.Date, c.DateSeen = time.Time{}, false
+		s.store.Save(job.UID, c)
 	}
 }
 
