@@ -44,7 +44,7 @@ func choiceControl(m model.Model, card model.Card, name model.Field, title strin
 	case model.ControlSwitch:
 		field.Children = ui.Nodes(ui.Switch{Common: common, On: set.Chosen == set.OnIndex, Variant: ui.SwitchSegment, Labels: [2]string{"No", "Yes"}})
 	default:
-		menu := m.OpenMenu(card, name)
+		menu := m.OpenDropdown(card, name)
 		sel := ui.Select{Common: common, Value: choiceValue(set.Chosen), Open: menu.Open, Search: set.Search()}
 		shown := make([]int, len(set.Labels))
 		for i := range shown {

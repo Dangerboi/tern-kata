@@ -42,7 +42,7 @@ func createLayer(m model.Model) tern.Element {
 		if field.Name == model.CreateScheduled || field.Name == model.CreateDeadline {
 			children = append(children, toneText(key+"-preview", ui.ToneMuted, m.CreatePreview(field.Name)))
 			if field.Name == f.Field {
-				children = append(children, calendarHint(key))
+				children = append(children, calendarHint(key, model.ModeCreate))
 			}
 		}
 	}
@@ -60,5 +60,5 @@ func createLayer(m model.Model) tern.Element {
 	default:
 		children = append(children, buttonRow(cardButton("save", model.ModeCreate, model.SaveDraftAction, title, true), cardButton("cancel", model.ModeCreate, model.CancelDraft, "Cancel", false)))
 	}
-	return withDatePicker(m, model.CardCreate, ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardCreate)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Icon: ui.IconPlus}, children)))
+	return withCalendar(m, model.CardCreate, ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardCreate)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Icon: ui.IconPlus}, children)))
 }

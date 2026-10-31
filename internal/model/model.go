@@ -65,14 +65,14 @@ type Model struct {
 	// pending is the Issue Create just made, selected as soon as a snapshot lists it.
 	pending string
 	// etag answers etagQuery: the snapshot on screen.
-	etag       string
-	etagQuery  SnapshotQuery
-	CloseForm  CloseFormState
-	DatesForm  DatesFormState
-	DatePick   DatePickerState
-	DeleteForm DeleteFormState
-	TokenForm  TokenFormState
-	RevokeCard RevokeState
+	etag         string
+	etagQuery    SnapshotQuery
+	CloseForm    CloseFormState
+	DatesForm    DatesFormState
+	DateCalendar CalendarState
+	DeleteForm   DeleteFormState
+	TokenForm    TokenFormState
+	RevokeCard   RevokeState
 	// AgentCard is the Agent card, which lists an Issue's agents.
 	AgentCard      AgentCardState
 	RecurrenceForm RecurrenceFormState
@@ -132,8 +132,8 @@ type Model struct {
 	ProjectForm ProjectFormState
 	LanesForm   LanesFormState
 	WorkerCard  WorkerCardState
-	// Menu is the open menu of a popup card's select, if one is open.
-	Menu         ChoiceMenu
+	// Dropdown is the open list of a popup card's select, if one is open.
+	Dropdown     Dropdown
 	Focus        Column
 	Groups       []IssueGroup
 	Calendar     PaneCalendar
@@ -191,7 +191,7 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 		cmds = append(cmds, ended...)
 	}
 	next = next.recordWrite(msg).noteWrites(cmds)
-	return next.cancelPending(m, msg).settleMenu().withCollectionRows(), cmds
+	return next.cancelPending(m, msg).settleDropdown().settleCalendar().withCollectionRows(), cmds
 }
 
 // staleConnection reports an answer asked of a daemon the Pane has since switched away from: it changes nothing.
@@ -211,8 +211,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	switch msg := msg.(type) {
 	case FocusFieldMsg:
 		return focusField(m, msg.Field), nil
-	case DatePickMsg:
-		if entry, ok := m.topEntry(); ok && datePickerOpen(m, entry) {
+	case CalendarDayMsg:
+		if entry, ok := m.topEntry(); ok && calendarOpen(m, entry) {
 			return pickDay(m, msg.Day), nil
 		}
 		return m, nil
@@ -220,8 +220,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return chooseField(m, msg.Field, msg.Index), nil
 	case SwitchMsg:
 		return switchField(m, msg.Field, msg.On), nil
-	case MenuToggleMsg:
-		return toggleMenu(m, msg.Field, msg.Open), nil
+	case DropdownToggleMsg:
+		return toggleDropdown(m, msg.Field, msg.Open), nil
 	case KeyMsg:
 		if next, cmds, handled := updateTopCardKey(m, msg); handled {
 			return next, cmds
