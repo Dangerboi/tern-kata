@@ -8,3 +8,4 @@ skills-lock.json
 tern.d.luau
 /dist
 .omp/
+__pycache__/
