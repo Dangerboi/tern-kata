@@ -756,10 +756,12 @@ func (f JobFormState) terms() (JobTerms, error) {
 	return terms, nil
 }
 
-// JobPreview is the schedule under the trigger: in words and the next runs, or why neither can be told yet.
+// JobPreview is the schedule under the trigger: in words and the next runs, or why neither can be told yet. Note says why a
+// trigger that has words lists no runs.
 type JobPreview struct {
 	Words string
 	Runs  []string
+	Note  string
 	Err   error
 }
 
@@ -767,17 +769,16 @@ type JobPreview struct {
 const previewRuns = 3
 
 // Preview reads the trigger as it stands. A job's interval counts from its anchor: the creation instant, which for a job that
-// does not exist yet is as good as now.
+// does not exist yet is as good as now. An existing job whose anchor is not known lists no runs, as the Cron job module has it.
 func (f JobFormState) Preview(cal PaneCalendar, now time.Time) JobPreview {
 	t, err := f.buildTrigger()
 	if err != nil {
 		return JobPreview{Err: err}
 	}
 	anchor := now
+	anchorKnown := true
 	if f.Change {
-		if opened, ok := f.Opened.intervalAnchor(); ok {
-			anchor = opened
-		}
+		anchor, anchorKnown = f.Opened.intervalAnchor()
 	}
 	const layout = "Mon 2006-01-02 15:04 MST"
 	preview := JobPreview{Words: triggerWords(t)}
@@ -790,6 +791,10 @@ func (f JobFormState) Preview(cal PaneCalendar, now time.Time) JobPreview {
 			preview.Runs = append(preview.Runs, next.In(loc).Format(layout))
 		}
 	case cronjob.TriggerInterval:
+		if !anchorKnown {
+			preview.Note = "Next runs unknown: this job's start point is not known yet."
+			break
+		}
 		schedule, _ := cronjob.Interval(t.IntervalSeconds, anchor) // buildTrigger refused any other
 		next := schedule.Next(now)
 		for range previewRuns {

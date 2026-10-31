@@ -177,6 +177,8 @@ type jobSchedule struct {
 	parked []time.Time
 	// catchup is the policy the last plan applied, which decides how many pending occurrences a park records.
 	catchup string
+	// paused is the checkpoint's pause mark, carried from load until the job is planned again.
+	paused bool
 }
 
 // checkpoint is projects/<uid>/schedule/<job uid>.json (ADR-0006): everything decided through a time and the
@@ -189,6 +191,7 @@ type checkpoint struct {
 	DateSeen           bool        `json:"date_seen,omitempty"`
 	Pending            []time.Time `json:"pending,omitempty"`
 	Parked             []time.Time `json:"parked,omitempty"` // the pending occurrences that waited for the job's Issue
+	Paused             bool        `json:"paused,omitempty"` // the job was disabled: its time off is never caught up
 }
 
 func (w *Worker) checkpointPath(ps *projectState, jobUID string) string {
@@ -209,7 +212,7 @@ func (w *Worker) loadCheckpoint(ps *projectState, jobUID string) (checkpoint, bo
 }
 
 func (w *Worker) saveCheckpoint(ps *projectState, jobUID string, st *jobSchedule) {
-	raw, _ := json.Marshal(checkpoint{Version: 1, DefinitionEventUID: st.defEvent, Through: st.through, Date: st.date, DateSeen: st.dateSeen, Pending: st.pending, Parked: st.parked})
+	raw, _ := json.Marshal(checkpoint{Version: 1, DefinitionEventUID: st.defEvent, Through: st.through, Date: st.date, DateSeen: st.dateSeen, Pending: st.pending, Parked: st.parked, Paused: st.paused})
 	path := w.checkpointPath(ps, jobUID)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err == nil {
 		err = replaceFile(path, raw)
@@ -295,10 +298,17 @@ func (w *Worker) plan(ps *projectState, job cronjob.Job, now time.Time) {
 			st.defEvent, st.through, st.date, st.pending = c.DefinitionEventUID, c.Through, c.Date, c.Pending
 			st.parked = c.Parked
 			st.dateSeen = c.DateSeen || !c.Date.IsZero()
+			if c.Paused { // it was disabled: scheduling starts again now, work already waiting keeps its rules
+				st.through = maxTime(now, job.CreatedAt)
+				st.paused = true
+			}
 		}
 	}
 	changed := false
 	firstSight := st.through.IsZero()
+	if st.paused {
+		st.paused, changed = false, true
+	}
 	if firstSight { // first sight: work starts at the later of now and the job's creation
 		st.through, changed = maxTime(now, job.CreatedAt), true
 	}
@@ -453,9 +463,12 @@ func (w *Worker) planAll(ps *projectState, now time.Time) bool {
 	w.mu.Lock()
 	loaded := !ps.jobsAt.IsZero()
 	var jobs []cronjob.Job
+	disabled := map[string]bool{}
 	for _, j := range ps.jobs {
 		if schedulable(j) {
 			jobs = append(jobs, j)
+		} else if !j.Archived() && !j.Native() && !j.Definition.Enabled {
+			disabled[j.UID] = true
 		}
 	}
 	w.mu.Unlock()
@@ -468,8 +481,27 @@ func (w *Worker) planAll(ps *projectState, now time.Time) bool {
 		w.plan(ps, j, now)
 	}
 	for uid := range ps.sched {
-		if !live[uid] { // disabled or gone: nothing runs, and the checkpoint keeps the pause for its return
+		if !live[uid] { // disabled or gone: nothing runs
 			delete(ps.sched, uid)
+		}
+	}
+	// A disabled job's checkpoint is marked so that its return starts from the moment it is enabled, with or without a
+	// restart in between; occurrences already waiting keep their rules.
+	if ps.paused == nil {
+		ps.paused = map[string]bool{}
+	}
+	for uid := range ps.paused {
+		if !disabled[uid] {
+			delete(ps.paused, uid)
+		}
+	}
+	for uid := range disabled {
+		if ps.paused[uid] {
+			continue
+		}
+		ps.paused[uid] = true
+		if c, ok := w.loadCheckpoint(ps, uid); ok && !c.Paused {
+			w.saveCheckpoint(ps, uid, &jobSchedule{defEvent: c.DefinitionEventUID, through: c.Through, date: c.Date, dateSeen: c.DateSeen, pending: c.Pending, parked: c.Parked, paused: true})
 		}
 	}
 	return true
