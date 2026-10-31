@@ -221,7 +221,8 @@ end
 -- Two ways find a new agent tab. `tab_created` fires for tabs opened on this window's own machine. A window on another machine
 -- gets no `tab_created` for a tab the CLI opens on the session host, and numbers panes differently from the host, so
 -- `<starter>` is no pane id there. Such a window places on `agent_state` and on every relay pass instead: an agent pane whose
--- command carries the marker is placed once (remembered in `placed` until its pane closes) and then never touched again.
+-- command carries the marker is tried once, whatever the result (remembered in `placed` until its pane closes), and then never
+-- touched again, so a window that guesses wrong cannot move a tab another window placed.
 -- The starter is the kata Pane whose id is `<starter>`, else the focused Pane if it is a kata Pane (the Pane the user just pressed
 -- `W` in), else the window's only kata Pane; with none of these nothing moves.
 local PLACE_TRIES = 10
@@ -249,13 +250,13 @@ local function starterOf(cx: WindowCx, tab: number): number?
     return nil
 end
 
--- The kata Pane an agent started from, as far as this window can tell: see the comment above.
-local function starterPane(cx: WindowCx, starter: number): PaneInfo?
-    local own = cx.session:pane(starter)
+-- The kata Pane an agent started from, as far as this window can tell: the Pane whose id is `starter` (exact only on the
+-- session host's machine), else `fallback` if it is a kata Pane, else the window's only kata Pane; nil with none of these.
+local function kataPaneFor(cx: WindowCx, starter: number?, fallback: number?): PaneInfo?
+    local own = if starter then cx.session:pane(starter) else nil
     if isKata(own) then return own end
-    local focused = cx.session:focused()
-    local info = focused and cx.session:pane(focused)
-    if isKata(info) then return info end
+    local other = if fallback then cx.session:pane(fallback) else nil
+    if isKata(other) then return other end
     local only: PaneInfo? = nil
     for _, candidate in cx.session:panes() do
         if isKata(candidate) then
@@ -266,21 +267,19 @@ local function starterPane(cx: WindowCx, starter: number): PaneInfo?
     return only
 end
 
--- Moves `tab` right of the tab of `home`, the starting Pane; false when there is none.
-local function placeTab(cx: WindowCx, tab: number, home: PaneInfo?): boolean
-    if not home then return false end
-    if not home.tab or home.tab == tab then return true end
+-- Moves `tab` right of the tab of `home`, the starting Pane; nothing when there is none.
+local function placeTab(cx: WindowCx, tab: number, home: PaneInfo?)
+    if not home or not home.tab or home.tab == tab then return end
     local starterTab: TabInfo? = nil
     local newTab: TabInfo? = nil
     for _, info in cx.session:tabs() do
         if info.id == home.tab then starterTab = info end
         if info.id == tab then newTab = info end
     end
-    if not starterTab or not newTab or starterTab.session ~= newTab.session then return true end
+    if not starterTab or not newTab or starterTab.session ~= newTab.session then return end
     if newTab.position ~= starterTab.position + 1 then
         cx.layout:order_tab(tab, starterTab.position + 1)
     end
-    return true
 end
 
 local function placeAgentTab(cx: WindowCx, tab: number, tries: number)
@@ -294,14 +293,10 @@ local function placeAgentTab(cx: WindowCx, tab: number, tries: number)
         return
     end
     -- A background agent's tab is in the hidden session and stays where it is.
-    if hiddenTabs(cx)[tab] then
-        for _, info in cx.session:panes() do
-            if info.tab == tab then placed[info.pane] = true end
-        end
-        return
+    if not hiddenTabs(cx)[tab] then
+        -- Here the starter's own id is exact, since the tab is on this window's machine; a starter that is gone leaves the tab last.
+        placeTab(cx, tab, cx.session:pane(starter))
     end
-    -- Here the starter's own id is exact, since the tab is on this window's machine; a starter that is gone leaves the tab last.
-    placeTab(cx, tab, cx.session:pane(starter))
     for _, info in cx.session:panes() do
         if info.tab == tab then placed[info.pane] = true end
     end
@@ -316,12 +311,11 @@ placeAgents = function(cx: WindowCx)
             local starter = markerOf(agent.command)
             local info = if starter then cx.session:pane(agent.pane) else nil
             if starter and info and info.tab then
+                placed[agent.pane] = true
                 local tabs = hidden or hiddenTabs(cx)
                 hidden = tabs
-                if tabs[info.tab] then
-                    placed[agent.pane] = true
-                elseif placeTab(cx, info.tab, starterPane(cx, starter)) then
-                    placed[agent.pane] = true
+                if not tabs[info.tab] then
+                    placeTab(cx, info.tab, kataPaneFor(cx, starter, cx.session:focused()))
                 end
             end
         end
@@ -332,44 +326,24 @@ end
 -- the hidden session, which is meant to stay out of sight: the user would land in a session of nothing but agents. So focus
 -- in that session opens the agent beside a kata Pane, as a click on its Agent badge does, and shows that Pane's session. The
 -- kata Pane is the one the agent's prompt file names (this window's own Pane, when the id is exact), else the one this window
--- focused last, else its only one; with none the agent stays. The move is itself a focus, but then the agent is out of the
--- hidden session and nothing happens. The relay that follows tells the Pane at once, so it records the agent as open.
+-- focused last, else its only one; with none the agent stays. The move leaves the hidden session, so the focus it raises
+-- finds nothing to open. The relay that follows tells the Pane at once, so it records the agent as open.
 local lastKata: number? = nil
-
-local function kataPaneFor(cx: WindowCx, starter: number?): PaneInfo?
-    local own = if starter then cx.session:pane(starter) else nil
-    if isKata(own) then return own end
-    local last = if lastKata then cx.session:pane(lastKata) else nil
-    if isKata(last) then return last end
-    local only: PaneInfo? = nil
-    for _, candidate in cx.session:panes() do
-        if isKata(candidate) then
-            if only then return nil end
-            only = candidate
-        end
-    end
-    return only
-end
 
 local function isPromptCommand(command: string?): boolean
     return command ~= nil and command:find("agent%-prompts[/\\]prompt%-") ~= nil
 end
 
-local openingAgent = false
-
 local function openFocusedAgent(cx: WindowCx, pane: number, tab: number)
-    if openingAgent or not hiddenTabs(cx)[tab] then return end
+    if not hiddenTabs(cx)[tab] then return end
     local command: string? = nil
     for _, agent in cx.agents:list() do
         if agent.pane == pane then command = agent.command end
     end
     if not isPromptCommand(command) then return end
-    local kata = kataPaneFor(cx, markerOf(command))
+    local kata = kataPaneFor(cx, markerOf(command), lastKata)
     if not kata or not kata.tab then return end
-    openingAgent = true
-    local moved = cx.layout:move(pane, kata.pane, "right")
-    openingAgent = false
-    if not moved then return end
+    if not cx.layout:move(pane, kata.pane, "right") then return end
     for _, info in cx.session:tabs() do
         if info.id == kata.tab then cx.sessions:switch(info.session) end
     end
