@@ -349,8 +349,8 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 		return LaunchPlan{}, fmt.Errorf("recur: --stop takes no schedule flags")
 	case plan.Subcommand == "run" && len(operands) != 1:
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata run <job-uid>")
-	case plan.Subcommand == "worker" && !settlesHeldRun(operands, plan.Takeover) && (len(operands) > 1 || len(operands) == 1 && !slices.Contains([]string{"status", "doctor", "init", "add", "edit", "upgrade", "stop"}, operands[0])):
-		return LaunchPlan{}, fmt.Errorf("usage: tern-kata worker [--takeover] | tern-kata worker init | tern-kata worker add | tern-kata worker edit | tern-kata worker upgrade | tern-kata worker status [--json] | tern-kata worker stop [--now] | tern-kata worker doctor | tern-kata worker resume <run-uid> | tern-kata worker abandon <run-uid>")
+	case plan.Subcommand == "worker" && !settlesHeldRun(operands, plan.Takeover) && (len(operands) > 1 || len(operands) == 1 && !slices.Contains([]string{"status", "doctor", "init", "add", "edit", "upgrade", "stop", "supervised"}, operands[0])):
+		return LaunchPlan{}, fmt.Errorf("usage: tern-kata worker [--takeover] | tern-kata worker init | tern-kata worker add | tern-kata worker edit | tern-kata worker upgrade | tern-kata worker status [--json] | tern-kata worker stop [--now] | tern-kata worker supervised | tern-kata worker doctor | tern-kata worker resume <run-uid> | tern-kata worker abandon <run-uid>")
 	case plan.Subcommand == "worker" && plan.Now && !slices.Equal(operands, []string{"stop"}):
 		return LaunchPlan{}, fmt.Errorf("worker: --now applies to `tern-kata worker stop` only")
 	case len(plan.InitFlags) > 0 && !slices.Equal(operands, []string{"init"}):
@@ -467,6 +467,7 @@ Usage:
   tern-kata worker upgrade
   tern-kata worker status [--json]
   tern-kata worker stop [--now]
+  tern-kata worker supervised
   tern-kata worker doctor
   tern-kata worker resume <run-uid> [--as <actor>]
   tern-kata worker abandon <run-uid> [--as <actor>]
@@ -552,6 +553,9 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 finish and report, then exits 0; --now ends it at once and the runs it
                                 interrupts are held interrupted and resumable. Says whether the plugin
                                 starts a fresh worker. Config changes take effect by restarting it
+  worker supervised             exit 0 and print worker.toml's text when the plugin supervises the worker
+                                (worker.toml exists and worker.manual does not), else exit 1 with
+                                nothing on stdout: the plugin's host half asks it
   worker doctor                 check worker.toml, the checkouts, agent commands, secrets, the kata
                                 daemon and each Project's lease, and say how to fix what is missing
   worker resume <run-uid>       continue a held run: the worker starts a new headless omp attempt on

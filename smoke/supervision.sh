@@ -159,10 +159,9 @@ done
 tail -n +"$log_from" "$STENCIL_LOG_DIR/tern-daemon.log" | grep -Eq 'restarting in ([2-9][0-9]|1[1-9]) s' || { echo "the broken config never grew the wait past 10 s" >&2; exit 1; }
 printf '%s\n' "$good_config" >"$XDG_CONFIG_HOME/tern-kata/worker.toml"
 wait_new_worker "$fifth" 13 || { echo "fixing worker.toml did not start a worker within one poll" >&2; exit 1; }
-# The supervision rule has two copies, the Go one (worker.SupervisionOn, whose config folder is worker.ConfigDir) and the
-# host half's (host.luau): they must agree on the same files. The Go copy answers `worker stop` ("a fresh worker" or
-# "nothing will start it again"); the host half either starts a worker within a poll (10 s) or does not. Both read the
-# config folder this script sets through XDG_CONFIG_HOME, so a disagreement about the folder fails here too.
+# The supervision rule lives in Go (worker.SupervisionOn, whose config folder is worker.ConfigDir). It answers `worker stop`
+# ("a fresh worker" or "nothing will start it again") and the host half asks it through `worker supervised`; the host half
+# either starts a worker within a poll (10 s) or does not. This end-to-end step checks the host half acts on the answer.
 config="$XDG_CONFIG_HOME/tern-kata"
 wait_gone() { # $1 the pid
   for ((i = 0; i < 300; i++)); do alive "$1" || return 0; sleep 0.1; done
