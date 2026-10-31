@@ -66,3 +66,36 @@ func TestAJobEnabledAgainWhileTheProjectRefusesWorkCatchesUpFromTheEnableWhenThe
 	h.admitting(r)
 	h.waitRuns(job, 4)
 }
+
+// A corrupt checkpoint of an enabled job is reported once, not on every tick of a refusal.
+func TestACorruptCheckpointIsReportedOnceWhileTheProjectRefusesWork(t *testing.T) {
+	h := newHarness(t)
+	def := workertest.Job{Name: "j", Prompt: "Do it.", Trigger: interval(3600), Catchup: "all"}
+	job := h.kata.CreateJob(t, h.proj, def)
+	r := h.start(worker.Hooks{})
+	h.scheduled(r, 1)
+	r.stop()
+	path := h.dirs.ProjectDir(h.proj.UID) + "/schedule/" + job.UID + ".json"
+	if err := os.WriteFile(path, []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runs := h.dirs.Runs()
+	_ = os.RemoveAll(runs)
+	if err := os.WriteFile(runs, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	log := &logLines{}
+	r = h.start(worker.Hooks{}, func(o *worker.Options) { o.Log = log.add })
+	h.eventually("the Project to refuse", func() bool {
+		s := r.w.Status()
+		return len(s.Projects) == 1 && strings.Contains(s.Projects[0].Why, "not all recovered yet")
+	})
+	h.eventually("the event stream to open", func() bool { return h.status(r).Following })
+	for range 30 { // 7.5 minutes of the fake clock
+		time.Sleep(30 * time.Millisecond)
+		h.clock.Advance(15 * time.Second)
+	}
+	if n := log.count("unreadable"); n > 1 {
+		t.Fatalf("the corrupt checkpoint was reported %d times during the refusal, want once", n)
+	}
+}
