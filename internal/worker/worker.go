@@ -108,6 +108,8 @@ type projectState struct {
 	// kick asks the Project loop to look at its queued occurrences again; sched is that loop's own schedule state.
 	kick  chan struct{}
 	sched map[string]*jobSchedule
+	// paused holds the disabled jobs whose checkpoint already carries the pause mark (the Project loop's own).
+	paused map[string]bool
 	// dates caches the planning dates of the Issues Issue-date jobs watch (the Project loop's own); datesDirty is set
 	// by the event stream when an Issue changed.
 	dates      map[string]issueDates

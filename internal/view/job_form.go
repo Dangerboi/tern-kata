@@ -99,6 +99,9 @@ func jobPreview(f model.JobFormState, cal model.PaneCalendar, now time.Time) ter
 	if len(preview.Runs) > 0 {
 		lines = append(lines, toneText("runs", ui.ToneMuted, "Next runs: "+strings.Join(preview.Runs, " · ")))
 	}
+	if preview.Note != "" {
+		lines = append(lines, toneText("note", ui.ToneMuted, preview.Note))
+	}
 	return ui.Col{Common: ui.Common{Key: "preview"}, Children: ui.Nodes(lines...)}
 }
 

@@ -459,6 +459,48 @@ func TestEditingOrDisablingAJobChangesTheScheduleWithoutARestart(t *testing.T) {
 	h.quiet(job, 1)
 }
 
+func TestReEnablingAJobRunsNothingForTheTimeItWasOff(t *testing.T) {
+	for _, catchup := range []string{"all", "latest", "skip"} {
+		for _, restart := range []bool{false, true} {
+			name := catchup
+			if restart {
+				name += "/restart"
+			}
+			t.Run(name, func(t *testing.T) {
+				h := newHarness(t)
+				grace := workertest.Seconds(3600)
+				def := workertest.Job{Name: "paused", Prompt: "Do it.", Trigger: interval(3600), Catchup: catchup, GraceSeconds: grace}
+				job := h.kata.CreateJob(t, h.proj, def)
+				r := h.start(worker.Hooks{})
+				h.scheduled(r, 1)
+				h.eventually("the event stream to open", func() bool { return h.status(r).Following })
+
+				off := def
+				off.Disabled = true
+				job = h.kata.ReplaceJob(t, h.proj, job, off)
+				h.eventually("the disabled job to leave the schedule", func() bool { return h.status(r).Scheduled == 0 })
+				if restart {
+					r.stop()
+				}
+				h.advanceTo(job.CreatedAt.Add(5*time.Hour + 30*time.Minute))
+				if restart {
+					r = h.start(worker.Hooks{})
+					h.admitting(r)
+				}
+				h.quiet(job, 0)
+
+				job = h.kata.ReplaceJob(t, h.proj, job, def)
+				h.eventually("the re-enabled job to be scheduled", func() bool { return h.status(r).Scheduled == 1 })
+				h.quiet(job, 0)
+				next := h.nextRun(r, time.Time{})
+				if want := job.CreatedAt.Add(6 * time.Hour); !next.Equal(want) {
+					t.Fatalf("next run %s, want %s", next, want)
+				}
+			})
+		}
+	}
+}
+
 func TestAPerRunIssueGetsItsDateOffsetsFromTheOccurrence(t *testing.T) {
 	h := newHarness(t)
 	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "dated", Prompt: "Do it.", ScheduledOffset: workertest.Seconds(-120), DeadlineOffset: workertest.Seconds(2 * 86400)})

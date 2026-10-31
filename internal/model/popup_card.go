@@ -104,7 +104,7 @@ type cardEntry struct {
 	// focused field takes none. Nil for a card whose keys never delete or clear text.
 	text func(*Model) (*string, *Caret)
 	// erased runs after the shared delete or clear acted on the text, with whether it changed: the card's side effect of an edit.
-	erased func(m Model, changed bool) Model
+	erased func(m Model, action Action, changed bool) Model
 }
 
 // fieldEditing is one keymap mode's declaration of the shared field-editing actions: NextField, PreviousField, NextChoice,
@@ -235,7 +235,7 @@ func buildCards() []cardEntry {
 				}
 				return nil, nil
 			},
-			erased: func(m Model, _ bool) Model { m.Create.Err = nil; return m },
+			erased: func(m Model, _ Action, _ bool) Model { m.Create.Err = nil; return m },
 			target: EditCreateBody, bodyField: CreateBody,
 			edit: func(m Model, apply func(TextEditor) TextEditor) Model {
 				if !createBusy(m) {
@@ -284,7 +284,7 @@ func buildCards() []cardEntry {
 			fields: []FieldSpec{}, input: true,
 			editing: []fieldEditing{{mode: ModeFieldForm, actions: []Action{DeleteInput, ClearInput}, delete: "erase", clear: "clear input"}},
 			text:    func(m *Model) (*string, *Caret) { return &m.FieldForm.Value, &m.FieldForm.Caret },
-			erased: func(m Model, changed bool) Model {
+			erased: func(m Model, _ Action, changed bool) Model {
 				m.FieldForm.Err = nil
 				if changed {
 					m.FieldForm.Found = nil
@@ -302,7 +302,7 @@ func buildCards() []cardEntry {
 			text: func(m *Model) (*string, *Caret) {
 				return m.CloseForm.Values.at(m.CloseForm.Field), &m.CloseForm.Caret
 			},
-			erased: func(m Model, changed bool) Model {
+			erased: func(m Model, _ Action, changed bool) Model {
 				if changed {
 					m.CloseForm.Err = nil
 				}
@@ -319,7 +319,7 @@ func buildCards() []cardEntry {
 			text: func(m *Model) (*string, *Caret) {
 				return m.DatesForm.Text.at(m.DatesForm.Field), &m.DatesForm.Caret
 			},
-			erased: func(m Model, changed bool) Model {
+			erased: func(m Model, _ Action, changed bool) Model {
 				if changed {
 					m.DatesForm.Err = nil
 				}
@@ -336,7 +336,7 @@ func buildCards() []cardEntry {
 			text: func(m *Model) (*string, *Caret) {
 				return m.TokenForm.Values.at(m.TokenForm.Field), &m.TokenForm.Caret
 			},
-			erased: func(m Model, changed bool) Model {
+			erased: func(m Model, _ Action, changed bool) Model {
 				if changed {
 					m.TokenForm.Err = nil
 				}
@@ -358,7 +358,7 @@ func buildCards() []cardEntry {
 			fields: []FieldSpec{}, input: true,
 			editing: []fieldEditing{{mode: ModeMoveProject, actions: []Action{DeleteInput, ClearInput}, clear: "clear filter"}},
 			text:    func(m *Model) (*string, *Caret) { return &m.MoveProject.Filter, &m.MoveProject.Caret },
-			erased:  func(m Model, _ bool) Model { m.MoveProject.Cursor, m.MoveProject.Err = 0, nil; return m },
+			erased:  func(m Model, _ Action, _ bool) Model { m.MoveProject.Cursor, m.MoveProject.Err = 0, nil; return m },
 		},
 		{
 			card: CardAgent, name: "agent", open: func(m Model) bool { return m.AgentCard.Open },
@@ -376,7 +376,7 @@ func buildCards() []cardEntry {
 			text: func(m *Model) (*string, *Caret) {
 				return m.DeleteForm.at(m.DeleteForm.Field), &m.DeleteForm.Caret
 			},
-			erased: func(m Model, changed bool) Model {
+			erased: func(m Model, _ Action, changed bool) Model {
 				if changed {
 					m.DeleteForm.Err = nil
 				}
@@ -391,7 +391,7 @@ func buildCards() []cardEntry {
 			fields: []FieldSpec{}, input: true,
 			editing: []fieldEditing{{mode: ModeFederationAdopt, actions: []Action{DeleteInput, ClearInput}, clear: "clear name"}},
 			text:    func(m *Model) (*string, *Caret) { return &m.Federation.AdoptInput, &m.Federation.AdoptCaret },
-			erased:  func(m Model, _ bool) Model { m.Federation.AdoptErr = nil; return m },
+			erased:  func(m Model, _ Action, _ bool) Model { m.Federation.AdoptErr = nil; return m },
 		},
 		{
 			card: CardRecurrence, name: "recurrence", open: func(m Model) bool { return m.RecurrenceForm.Open },
@@ -410,7 +410,7 @@ func buildCards() []cardEntry {
 			text: func(m *Model) (*string, *Caret) {
 				return m.RecurrenceForm.text(m.RecurrenceForm.Field), &m.RecurrenceForm.Caret
 			},
-			erased: func(m Model, changed bool) Model {
+			erased: func(m Model, _ Action, changed bool) Model {
 				if changed {
 					m.RecurrenceForm.Err = nil
 				}
@@ -445,7 +445,7 @@ func buildCards() []cardEntry {
 			editing: []fieldEditing{{mode: ModeJobForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, delete: "erase"}},
 			step:    func(m Model, back bool) Model { m.JobForm.step(back); return m },
 			text:    func(m *Model) (*string, *Caret) { return m.JobForm.text(m.JobForm.Field), &m.JobForm.Caret },
-			erased: func(m Model, changed bool) Model {
+			erased: func(m Model, _ Action, changed bool) Model {
 				if changed {
 					m.JobForm.Err = nil
 				}
@@ -461,7 +461,7 @@ func buildCards() []cardEntry {
 			fields: []FieldSpec{}, input: true,
 			editing: []fieldEditing{{mode: ModeProjectForm, actions: []Action{DeleteInput, ClearInput}, clear: "clear name"}},
 			text:    func(m *Model) (*string, *Caret) { return &m.ProjectForm.Name, &m.ProjectForm.Caret },
-			erased: func(m Model, changed bool) Model {
+			erased: func(m Model, _ Action, changed bool) Model {
 				if changed {
 					m.ProjectForm.Err = nil
 				}
@@ -476,7 +476,7 @@ func buildCards() []cardEntry {
 			fields: LanesFields, focus: func(m *Model) *Field { return &m.LanesForm.Field },
 			editing: []fieldEditing{{mode: ModeLanesForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}}},
 			text:    func(m *Model) (*string, *Caret) { return m.LanesForm.at(m.LanesForm.Field), &m.LanesForm.Caret },
-			erased: func(m Model, changed bool) Model {
+			erased: func(m Model, _ Action, changed bool) Model {
 				if changed {
 					m.LanesForm.Err = nil
 				}
@@ -506,7 +506,7 @@ func buildCards() []cardEntry {
 			hidden:  func(m Model, name Field) bool { return !m.WorkerCardShows(name) },
 			editing: []fieldEditing{{mode: ModeWorkerCard, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, delete: "erase", before: WorkerEdit}},
 			text:    func(m *Model) (*string, *Caret) { return m.WorkerCard.at(m.WorkerCard.Field), &m.WorkerCard.Caret },
-			erased: func(m Model, changed bool) Model {
+			erased: func(m Model, _ Action, changed bool) Model {
 				if changed {
 					m.WorkerCard.Err = nil
 				}
@@ -556,9 +556,9 @@ func buildCards() []cardEntry {
 			fields: []FieldSpec{}, input: true,
 			editing: []fieldEditing{{mode: ModePicker, actions: []Action{DeleteInput, ClearInput}, clear: "clear filter"}},
 			text:    func(m *Model) (*string, *Caret) { return &m.Picker.Filter, &m.Picker.Caret },
-			erased: func(m Model, changed bool) Model {
+			erased: func(m Model, action Action, changed bool) Model {
 				// Backspace with nothing to delete leaves a Views or Projects level, like esc.
-				if !changed && m.Picker.Filter == "" && m.Picker.Level != MenuTop {
+				if action == DeleteInput && !changed && m.Picker.Filter == "" && m.Picker.Level != MenuTop {
 					return setMenuLevel(m, true, MenuTop)
 				}
 				m.Picker.Cursor = 0
@@ -895,7 +895,7 @@ func (e cardEntry) editFields(m Model, msg KeyMsg) (Model, bool) {
 		var changed bool
 		*value, changed = eraseText(*value, caret, field, binding.Action)
 		if e.erased != nil {
-			m = e.erased(m, changed)
+			m = e.erased(m, binding.Action, changed)
 		}
 	default:
 		return m, false
@@ -939,7 +939,7 @@ func isCaretChord(chord string) bool {
 }
 
 // eraseText applies DeleteInput or ClearInput to a single-line text field called field, whose caret is c: delete removes the
-// rune before the caret and clear empties the field. It reports whether the text changed; delete at the start does not change it.
+// rune before the caret and clear empties the field. It reports whether the text changed; delete at the start and clear of an empty field do not change it.
 func eraseText(value string, c *Caret, field Field, action Action) (string, bool) {
 	runes := []rune(value)
 	n := len(runes)
@@ -947,7 +947,7 @@ func eraseText(value string, c *Caret, field Field, action Action) (string, bool
 	*c = Caret{field, n - at}
 	if action == ClearInput {
 		*c = Caret{}
-		return "", true
+		return "", value != ""
 	}
 	if at == 0 {
 		return value, false
