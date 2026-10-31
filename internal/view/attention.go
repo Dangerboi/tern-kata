@@ -41,7 +41,7 @@ func attention(m model.Model) tern.Element {
 		empty = "The requests could not be read."
 	}
 	list := ui.List{CommonWithoutMax: scrollerCommon("attention"), Max: fillMax, Empty: ui.T(empty), Children: cards}
-	children = append(children, listOrEmpty(list, !m.Attention.Loaded, emptyState("attention", "No requests", "Nothing is waiting on "+address+"; a request shows here when someone asks it.")))
+	children = append(children, listAndEmpty(list, !m.Attention.Loaded, emptyState("attention", "No requests", "Nothing is waiting on "+address+"; a request shows here when someone asks it."))...)
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(1)}, ui.GapSM, children)
 }
 

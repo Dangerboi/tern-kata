@@ -25,11 +25,14 @@ func emptyLane(key, title string) ui.Empty {
 	return e
 }
 
-// listOrEmpty is list, or empty when list has no children and nothing is loading. A list that is loading keeps its own
-// Empty text, so the empty state never shows while rows are on their way.
-func listOrEmpty(list ui.List, loading bool, empty ui.Empty) tern.Element {
-	if len(list.Children) == 0 && !loading {
-		return empty
+// listAndEmpty is list, followed by empty when list has no children and nothing is loading. The list stays mounted, hidden,
+// so a Collection switch only adds or removes the empty node and never remounts the list. A list that is loading keeps its
+// own Empty text, so the empty state never shows while rows are on their way.
+func listAndEmpty(list ui.List, loading bool, empty ui.Empty) []tern.Element {
+	if len(list.Children) > 0 || loading {
+		return []tern.Element{list}
 	}
-	return list
+	list.Hidden = true
+	empty.Key += "-empty"
+	return []tern.Element{list, empty}
 }

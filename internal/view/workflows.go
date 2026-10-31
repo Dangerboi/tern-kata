@@ -85,11 +85,11 @@ func workflowList(m model.Model, paired bool) tern.Element {
 	if m.Workflows.Selected != "" {
 		selected = WorkflowID(m.Workflows.Selected)
 	}
-	list := listOrEmpty(ui.List{CommonWithoutMax: scrollerCommon("rows"), Max: fillMax, Selected: selected, Empty: ui.T("Loading workflows…"), Children: items}, m.Workflows.Loading, empty)
+	list := listAndEmpty(ui.List{CommonWithoutMax: scrollerCommon("rows"), Max: fillMax, Selected: selected, Empty: ui.T("Loading workflows…"), Children: items}, m.Workflows.Loading, empty)
 	common := ui.Common{Key: "names", Grow: 1, Basis: ui.BasisFrac(0.4), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}}
-	children := ui.Nodes(list)
+	children := list
 	if m.Workflows.Err != nil {
-		children = ui.Nodes(ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.Workflows.Err.Error()}, list)
+		children = append(ui.Nodes(ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.Workflows.Err.Error()}), list...)
 	}
 	if paired {
 		common.Role = ColumnRole

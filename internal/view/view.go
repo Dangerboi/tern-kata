@@ -146,7 +146,7 @@ func issues(m model.Model, now time.Time) tern.Element {
 		empty = emptyState("issues", "No Issues match", "These filters leave none.", cardButton("clear-filters", model.ModeList, model.ClearFilters, "Clear filters", false))
 	}
 	list := ui.List{CommonWithoutMax: scrollerCommon("issues"), Max: fillMax, Selected: selected, Empty: ui.T("Loading Issues…"), Children: items}
-	children = append(children, listOrEmpty(list, m.Loading, empty))
+	children = append(children, listAndEmpty(list, m.Loading, empty)...)
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.4)}, "", children)
 }
 
