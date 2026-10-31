@@ -385,9 +385,7 @@ func (w *Worker) tick(ctx context.Context, ps *projectState) time.Time {
 		}
 		if st.waiting != "" {
 			waiting = append(waiting, JobNote{UID: uid, Text: st.waiting})
-			if !st.wakeAt.IsZero() && (wake.IsZero() || st.wakeAt.Before(wake)) {
-				wake = st.wakeAt // the Issue's scheduled instant: look again then, not at the next fallback check
-			}
+			wake = sooner(wake, st.wakeAt, now)
 		}
 		if st.trig != nil {
 			scheduled++
@@ -407,6 +405,16 @@ func (w *Worker) tick(ctx context.Context, ps *projectState) time.Time {
 		return wake
 	}
 	return next
+}
+
+// sooner is the earlier of wake and the Issue's scheduled instant at, look again then rather than at the next fallback
+// check. An instant already behind now is skipped: a full Project left that job waiting, and a wake in the past would
+// spin the loop; a run ending or the regular checks look at it again.
+func sooner(wake, at, now time.Time) time.Time {
+	if at.After(now) && (wake.IsZero() || at.Before(wake)) {
+		return at
+	}
+	return wake
 }
 
 // planAll plans every schedulable job in the cache and forgets the state of jobs that went away. False means the

@@ -122,6 +122,29 @@ func TestADeadlineNeverDefersAnExecuteJob(t *testing.T) {
 	h.settled(h.waitRuns(job, 1)[0].UID)
 }
 
+func TestAParkedExecuteJobWhoseInstantPassedOnAFullProjectStartsWhenASlotFrees(t *testing.T) {
+	h := newHarness(t, "--stub-hang")
+	h.capacity("1")
+	issue := h.kata.Issue(t, h.proj, "Later")
+	instant := h.minuteIn(2 * time.Hour)
+	h.kata.SetIssueDate(t, h.proj, issue.UID, "scheduled_on", instant)
+	busy := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "busy", Prompt: "Do it.", Trigger: interval(2400), Overlap: "allow", Catchup: "all", Timeout: 6000})
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "on issue", Prompt: "Do it.", ExistingUID: issue.UID, Trigger: interval(3600), Catchup: "all"})
+	r := h.start(worker.Hooks{})
+	h.scheduled(r, 2)
+
+	first := h.fire(r, time.Time{}) // the only slot is taken until the run times out
+	h.started(r, busy, 1)
+	startedAt := h.clock.Now()
+	h.fire(r, first) // the occurrence is due and its Issue is not ready
+	h.eventually("the occurrence to wait for its Issue", func() bool { return len(h.status(r).Waiting) == 1 })
+	h.advanceTo(instant) // the Issue is ready, the Project is full
+	h.quiet(job, 0)
+
+	h.advanceTo(startedAt.Add(6000*time.Second + 10*time.Second)) // the busy run times out and frees the slot
+	h.waitRuns(job, 1)
+}
+
 func TestAManualRunOnAParkedIssueIsRefusedAndTakesNoSlot(t *testing.T) {
 	h := newHarness(t)
 	issue := h.kata.Issue(t, h.proj, "Parked")
