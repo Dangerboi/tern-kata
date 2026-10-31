@@ -73,7 +73,7 @@ func board(m model.Model, now time.Time) tern.Element {
 			Children: ui.Nodes(
 				head,
 				ui.Rule{Common: ui.Common{Key: "rule", Tone: tones[i]}},
-				ui.List{CommonWithoutMax: scrollerCommon("cards"), Max: fillMax, Empty: ui.T("No cards"), Children: cards},
+				listOrEmpty(ui.List{CommonWithoutMax: scrollerCommon("cards"), Max: fillMax, Children: cards}, false, emptyLane("cards", "No cards")),
 			),
 		}
 	}
@@ -144,14 +144,14 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 	}
 	if !done {
 		if marker := blockedMarker(card); marker != "" {
-			body = append(body, ui.Text{Common: ui.Common{Key: "blocked"}, Spans: []ui.Span{{T: marker, S: "warning"}}})
+			body = append(body, ui.Text{Common: ui.Common{Key: "blocked", Hovercard: blockedCard(m, card, now)}, Spans: []ui.Span{{T: marker, S: "warning"}}})
 		}
 	}
 	if badge, ok := agentBadge(m, issue.UID, "agent"); ok {
 		body = append(body, badge)
 	}
 	if selected {
-		if line := relationshipsLine(card); line != nil {
+		if line := relationshipsLine(m, card, now); line != nil {
 			body = append(body, line)
 		}
 	}
@@ -190,6 +190,16 @@ func blockedMarker(card model.BoardCard) string {
 	return "blocked by " + refList(blockers, card.Issue.ProjectName)
 }
 
+// blockedCard is the Blocked marker's hovercard: the card of each Issue the marker names.
+func blockedCard(m model.Model, card model.BoardCard, now time.Time) ui.Hovercard {
+	shown, _ := shownRefs(card.Relationships.OpenBlockers())
+	facts := make([]refFacts, len(shown))
+	for i, r := range shown {
+		facts[i] = relFacts(r)
+	}
+	return refCards(m, facts, now)
+}
+
 // shownRefs are the refs a list names and how many more it leaves out, cut to maxRelationshipIDs.
 func shownRefs(refs []model.RelationshipRef) ([]model.RelationshipRef, int) {
 	shown := min(len(refs), maxRelationshipIDs)
@@ -222,14 +232,14 @@ var highlightTone = map[model.Highlight]ui.Tone{
 // relationshipsLine is the selected card's Relationships line: "parent zpxs  6 children, 2 open  blocks e000  blocked by 8gm4  related 7x74".
 // The parts are set off by the row gap, so a narrow card wraps between them; empty parts are left out and the line is nil without any.
 // Every id is its own clickable node, so a click selects that Issue's card.
-func relationshipsLine(card model.BoardCard) tern.Element {
+func relationshipsLine(m model.Model, card model.BoardCard, now time.Time) tern.Element {
 	r, project := card.Relationships, card.Issue.ProjectName
 	var parts []tern.Element
 	add := func(key, label string, refs ...model.RelationshipRef) {
 		shown, more := shownRefs(refs)
 		items := ui.Nodes(ui.Text{Common: ui.Common{Key: "label"}, Spans: []ui.Span{{T: label, S: "muted"}}})
 		for _, ref := range shown {
-			items = append(items, ui.Text{Common: ui.Common{Key: ref.UID, Actions: &ui.Actions{Click: RefClick(ref.UID)}}, Spans: []ui.Span{{T: ref.ID(project), S: "accent link"}}})
+			items = append(items, ui.Text{Common: ui.Common{Key: ref.UID, Hovercard: refCard(m, relFacts(ref), now), Actions: &ui.Actions{Click: RefClick(ref.UID)}}, Spans: []ui.Span{{T: ref.ID(project), S: "accent link"}}})
 		}
 		if more > 0 {
 			items = append(items, ui.Text{Common: ui.Common{Key: "more"}, Spans: []ui.Span{{T: "+" + strconv.Itoa(more), S: "muted"}}})

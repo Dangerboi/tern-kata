@@ -114,6 +114,14 @@ func (m Model) issueByUID(uid string) *Issue {
 	return nil
 }
 
+// LoadedIssue is the Issue uid when the Pane holds it, as the detail shows it or as the list holds it.
+func (m Model) LoadedIssue(uid string) (Issue, bool) {
+	if issue := m.issueByUID(uid); issue != nil {
+		return *issue, true
+	}
+	return Issue{}, false
+}
+
 // fieldOpen says how the form of an action opens.
 type fieldOpen int
 
