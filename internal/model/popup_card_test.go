@@ -50,6 +50,9 @@ type popupCard struct {
 	save   []string
 	result func(model.Model, error) model.Msg
 	body   *cardBody
+	// busy puts an opened card in the busy state a plain flag gives it, such as saving; nil when the card's busy states are
+	// all among states or it is never busy.
+	busy func(*model.Model)
 }
 
 func (c popupCard) open() model.Model { return c.states[0].open() }
@@ -107,6 +110,7 @@ func popupCards() []popupCard {
 		tabOrder: []model.Field{model.CreateTitle, model.CreateBody, model.CreateLabels, model.CreateOwner, model.CreatePriority, model.CreateScheduled, model.CreateDeadline},
 		states:   []cardState{{"", openedCreate, model.ModeCreate}},
 		graft:    func(dst *model.Model, src model.Model) { dst.Create = src.Create },
+		busy:     func(m *model.Model) { m.Create.Saving = true },
 		field:    func(m model.Model) model.Field { return m.Create.Field },
 		text:     func(m model.Model, _ model.Field) string { return m.Create.Title },
 		save:     []string{"ctrl+o"},
@@ -188,6 +192,7 @@ func popupCards() []popupCard {
 			name: "single-field form", card: model.CardField,
 			states: []cardState{{"", opened("+"), model.ModeFieldForm}},
 			graft:  func(dst *model.Model, src model.Model) { dst.FieldForm = src.FieldForm },
+			busy:   func(m *model.Model) { m.FieldForm.Saving = true },
 			field:  func(model.Model) model.Field { return "" },
 			text:   func(m model.Model, _ model.Field) string { return m.FieldForm.Value },
 			save:   []string{"enter"},
@@ -198,6 +203,7 @@ func popupCards() []popupCard {
 			tabOrder: []model.Field{model.CloseReason, model.CloseMessage, model.CloseCommit, model.ClosePR, model.CloseTest, model.CloseReviewed, model.CloseExternal, model.CloseReference, model.CloseRationale},
 			states:   []cardState{{"", opened("x"), model.ModeCloseForm}},
 			graft:    func(dst *model.Model, src model.Model) { dst.CloseForm = src.CloseForm },
+			busy:     func(m *model.Model) { m.CloseForm.Saving = true },
 			field:    func(m model.Model) model.Field { return m.CloseForm.Field },
 			text:     func(m model.Model, f model.Field) string { return m.CloseForm.Values.Value(f) },
 			save:     []string{"ctrl+d"},
@@ -208,6 +214,7 @@ func popupCards() []popupCard {
 			tabOrder: []model.Field{model.DatesScheduled, model.DatesDeadline},
 			states:   []cardState{{"", opened("d"), model.ModeDatesForm}},
 			graft:    func(dst *model.Model, src model.Model) { dst.DatesForm = src.DatesForm },
+			busy:     func(m *model.Model) { m.DatesForm.Saving = true },
 			field:    func(m model.Model) model.Field { return m.DatesForm.Field },
 			text:     func(m model.Model, f model.Field) string { return m.DatesForm.Value(f) },
 		},
@@ -216,6 +223,7 @@ func popupCards() []popupCard {
 			tabOrder: []model.Field{model.DeleteID, model.DeleteReason},
 			states:   []cardState{{"", opened("shift+x"), model.ModeDeleteForm}},
 			graft:    func(dst *model.Model, src model.Model) { dst.DeleteForm = src.DeleteForm },
+			busy:     func(m *model.Model) { m.DeleteForm.Saving = true },
 			field:    func(m model.Model) model.Field { return m.DeleteForm.Field },
 			text: func(m model.Model, f model.Field) string {
 				if f == model.DeleteReason {
@@ -234,6 +242,7 @@ func popupCards() []popupCard {
 				return typed(m, "Tick")
 			}, model.ModeJobForm}},
 			graft:  func(dst *model.Model, src model.Model) { dst.JobForm = src.JobForm },
+			busy:   func(m *model.Model) { m.JobForm.Saving = true },
 			field:  func(m model.Model) model.Field { return m.JobForm.Field },
 			text:   func(m model.Model, _ model.Field) string { return m.JobForm.Name },
 			save:   []string{"ctrl+o"},
@@ -244,6 +253,7 @@ func popupCards() []popupCard {
 			tabOrder: []model.Field{model.RecurrenceFrequency, model.RecurrenceEvery, model.RecurrenceWeekdays, model.RecurrenceStart, model.RecurrenceEnds, model.RecurrenceZone},
 			states:   []cardState{{"", opened("shift+o"), model.ModeRecurrenceForm}},
 			graft:    func(dst *model.Model, src model.Model) { dst.RecurrenceForm = src.RecurrenceForm },
+			busy:     func(m *model.Model) { m.RecurrenceForm.Saving = true },
 			field:    func(m model.Model) model.Field { return m.RecurrenceForm.Field },
 			text:     func(m model.Model, _ model.Field) string { return m.RecurrenceForm.Start },
 		},
@@ -255,6 +265,7 @@ func popupCards() []popupCard {
 				return m
 			}, model.ModeProjectForm}},
 			graft:  func(dst *model.Model, src model.Model) { dst.ProjectForm = src.ProjectForm },
+			busy:   func(m *model.Model) { m.ProjectForm.Saving = true },
 			field:  func(model.Model) model.Field { return "" },
 			text:   func(m model.Model, _ model.Field) string { return m.ProjectForm.Name },
 			save:   []string{"enter"},
@@ -290,6 +301,7 @@ func popupCards() []popupCard {
 				return m
 			}, model.ModeLanesForm}},
 			graft: func(dst *model.Model, src model.Model) { dst.LanesForm = src.LanesForm },
+			busy:  func(m *model.Model) { m.LanesForm.Saving = true },
 			field: func(model.Model) model.Field { return "" },
 			text:  func(m model.Model, _ model.Field) string { return m.LanesForm.Text },
 		},
@@ -304,6 +316,7 @@ func popupCards() []popupCard {
 				return m
 			}, model.ModeWorkerCard}},
 			graft: func(dst *model.Model, src model.Model) { dst.WorkerCard, dst.Worker = src.WorkerCard, src.Worker },
+			busy:  func(m *model.Model) { m.WorkerCard.Saving = true },
 			field: func(m model.Model) model.Field { return m.WorkerCard.Field },
 			text:  func(m model.Model, _ model.Field) string { return m.WorkerCard.Executor },
 		},
@@ -312,6 +325,7 @@ func popupCards() []popupCard {
 			tabOrder: []model.Field{model.FilterProject, model.FilterStatus, model.FilterOwner, model.FilterLabel, model.FilterRelationship},
 			states:   []cardState{{"", opened("f"), model.ModeFilterForm}},
 			graft:    func(dst *model.Model, src model.Model) { dst.FilterForm = src.FilterForm },
+			busy:     func(m *model.Model) { m.FilterForm.Saving = true },
 			field:    func(m model.Model) model.Field { return m.FilterForm.Field },
 			text: func(m model.Model, f model.Field) string {
 				if f == model.FilterLabel {
@@ -428,6 +442,56 @@ func TestPopupCardSharedBehaviour(t *testing.T) {
 				m, _ = model.Update(m, c.result(m, errors.New("daemon said no")))
 				if m.CurrentMode() != mode || c.text(m, c.textField) != "keep" {
 					t.Fatalf("after a save error: mode %s text %q", m.CurrentMode(), c.text(m, c.textField))
+				}
+			})
+		}
+	}
+}
+
+// TestBusyCardsTakeNoEditKeysAndHoldNoCaret is the one rule over every card: while it is busy, no edit key changes its text
+// or moves its focus, and no text field holds the caret.
+func TestBusyCardsTakeNoEditKeysAndHoldNoCaret(t *testing.T) {
+	editKeys := []model.KeyMsg{{Chord: "x", Text: "x"}, {Text: "pasted"}, {Chord: "space"}, {Chord: "backspace"}, {Chord: "ctrl+u"}, {Chord: "tab"}, {Chord: "shift+tab"}, {Chord: "left"}, {Chord: "right"}}
+	for _, c := range popupCards() {
+		type busyState struct {
+			name string
+			open func() model.Model
+		}
+		var busy []busyState
+		for _, state := range c.states[1:] {
+			busy = append(busy, busyState{state.name, state.open})
+		}
+		if c.busy != nil {
+			busy = append(busy, busyState{"busy", func() model.Model {
+				m := c.open()
+				c.busy(&m)
+				return m
+			}})
+		}
+		for _, state := range busy {
+			t.Run(c.name+" "+state.name, func(t *testing.T) {
+				m := state.open()
+				if _, _, ok := m.TextCaret(); ok {
+					t.Fatal("the busy card holds the text caret")
+				}
+				read := func(m model.Model) (string, model.Field) {
+					if c.text == nil {
+						return "", c.field(m)
+					}
+					return c.text(m, c.textField), c.field(m)
+				}
+				for _, key := range editKeys {
+					text, field := read(m)
+					next, _ := model.Update(m, key)
+					if next.TopCard() != c.card {
+						continue // the key left the card, which a busy card may let it do
+					}
+					if got, gotField := read(next); got != text || gotField != field {
+						t.Fatalf("key %+v changed text %q -> %q or field %q -> %q", key, text, got, field, gotField)
+					}
+					if _, _, ok := next.TextCaret(); ok {
+						t.Fatalf("key %+v gave the busy card the text caret", key)
+					}
 				}
 			})
 		}
