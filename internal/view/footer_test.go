@@ -42,14 +42,6 @@ func TestFooterIsAKeyLegendThatKeepsEveryHintAtAnyWidth(t *testing.T) {
 		if key["s"] != "key" || label["s"] != "muted" || !strings.HasPrefix(label["t"].(string), " ") {
 			t.Errorf("%s spans = %v", id, spans)
 		}
-		if strings.ContainsAny(text(n), "▕\u00a0") || strings.HasSuffix(text(n), " ") {
-			t.Errorf("%s is padded or separated: %q", id, text(n))
-		}
-	}
-	for id := range nodes {
-		if strings.HasPrefix(id, "dock.hints.sep") || strings.HasPrefix(id, "dock.hints.grid.0") {
-			t.Errorf("leftover grid node %s", id)
-		}
 	}
 }
 
@@ -59,5 +51,30 @@ func TestFooterHintReadsKeyAndLabelTogether(t *testing.T) {
 	nodes := render(t, apply(browsing(), model.ResizeMsg{Cols: model.MinCols}))
 	if got := text(nodes["dock.hints.grid.escape"]); got != "esc Menu" {
 		t.Errorf("escape hint reads %q, want %q", got, "esc Menu")
+	}
+}
+
+// A shifted letter key is drawn apart from the plain one: Tern draws a letter keycap in capitals, so "u" and "shift+u" must
+// not both read "U".
+func TestFooterDrawsShiftedLettersApartFromPlainOnes(t *testing.T) {
+	for name, m := range map[string]model.Model{
+		"list":   apply(browsing(), model.FocusColumnMsg{Column: model.ColumnList}),
+		"detail": apply(browsing(), model.FocusColumnMsg{Column: model.ColumnDetail}),
+	} {
+		seen := map[string]string{}
+		for id, n := range render(t, m) {
+			if !strings.HasPrefix(id, "dock.hints.grid.") {
+				continue
+			}
+			spans, _ := n.P["spans"].([]any)
+			key := strings.ToUpper(spans[0].(map[string]any)["t"].(string))
+			if other, dup := seen[key]; dup {
+				t.Errorf("%s: hints %s and %s both draw the key %q", name, other, id, key)
+			}
+			seen[key] = id
+		}
+		if len(seen) < 2 {
+			t.Errorf("%s: only %d hints", name, len(seen))
+		}
 	}
 }

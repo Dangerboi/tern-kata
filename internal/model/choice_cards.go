@@ -72,7 +72,7 @@ func viewChoiceSet(m Model, name Field) (ChoiceSet, bool) {
 		labels[i] = m.viewChoiceText(name, choice)
 	}
 	control := filterControl(name)
-	if name == ViewBase {
+	if name == ViewBase || name == FilterProject {
 		control = segmentedOrSelect(len(labels))
 	}
 	return newChoices(control, labels, slices.Index(choices, m.ViewForm.choiceValue(name))), true

@@ -67,7 +67,7 @@ const StripeCSS = `.sf-item[data-role~='` + StripeRole + `']:not(.sel):not(:hove
 const SelectedCSS = `.sf-item.sel[data-id^='` + IssueListID + `.'] { background-color: var(--accent-fill) !important; color: #fff !important; }
 .sf-item.sel[data-id^='` + IssueListID + `.'] * { color: #fff !important; }`
 
-// cellEm is a character's advance in em: the surface CSS has no ch unit, and the Pane's monospace font advances 0.6em.
+// cellEm is a column character's width in em: the surface CSS has no ch unit, and the mono face the cells use advances 0.6em.
 const cellEm = 0.6
 
 // maxBoxWidth is the widest id or owner column cellBoxCSS has a rule for; listColumns.fit holds the columns to it.

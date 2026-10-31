@@ -3,19 +3,30 @@ package model
 import (
 	"slices"
 	"strings"
-	"unicode/utf8"
 )
 
 // Control is the kind of control a popup card draws a choice field with.
 type Control int
 
 const (
-	// ControlSelect is a menu: a field that opens a list of the choices, with search past SearchOver of them.
+	// ControlSelect is a field that opens a dropdown list of the choices, with search past SearchOver of them.
 	ControlSelect Control = iota
 	// ControlTabs is a segmented strip of two or three choices.
 	ControlTabs
 	// ControlSwitch is a yes or no setting.
 	ControlSwitch
+)
+
+const (
+	// ModeDropdown is a card with the dropdown of one of its selects open.
+	ModeDropdown     Mode   = "dropdown"
+	DropdownNext     Action = "dropdown-next"
+	DropdownPrevious Action = "dropdown-previous"
+	DropdownPick     Action = "dropdown-pick"
+	DropdownClose    Action = "dropdown-close"
+	// DropdownEraseQuery and DropdownClearQuery edit the search line of a select that has one.
+	DropdownEraseQuery Action = "dropdown-erase-query"
+	DropdownClearQuery Action = "dropdown-clear-query"
 )
 
 // SearchOver is how many choices a select holds before it takes a search line.
@@ -58,9 +69,9 @@ func segmentedOrSelect(n int) Control {
 	return ControlSelect
 }
 
-// ChoiceMenu is the open menu of a select: the card and field it belongs to, the index of the highlighted choice and the search
-// text. The pointer and the keys both drive it; a menu closes when its field loses focus or its card goes.
-type ChoiceMenu struct {
+// Dropdown is the open list of a select: the card and field it belongs to, the index of the highlighted choice and the search
+// text. The pointer and the keys both drive it; a dropdown closes when its field loses focus or its card goes.
+type Dropdown struct {
 	Card   Card
 	Field  Field
 	Open   bool
@@ -79,27 +90,27 @@ func (m Model) CardChoices(card Card, name Field) (ChoiceSet, bool) {
 	return ChoiceSet{}, false
 }
 
-// OpenMenu is the open menu of the select called name of card; its zero value, closed, for any other field.
-func (m Model) OpenMenu(card Card, name Field) ChoiceMenu {
-	if menu := m.Menu; menu.Open && menu.Card == card && menu.Field == name {
-		return menu
+// OpenDropdown is the open dropdown of the select called name of card; its zero value, closed, for any other field.
+func (m Model) OpenDropdown(card Card, name Field) Dropdown {
+	if open := m.Dropdown; open.Open && open.Card == card && open.Field == name {
+		return open
 	}
-	return ChoiceMenu{Card: card, Field: name}
+	return Dropdown{Card: card, Field: name}
 }
 
-// settleMenu closes a menu whose field is no longer the focused select of the card on top.
-func (m Model) settleMenu() Model {
-	if !m.Menu.Open {
+// settleDropdown closes a dropdown whose field is no longer the focused select of the card on top.
+func (m Model) settleDropdown() Model {
+	if !m.Dropdown.Open {
 		return m
 	}
-	if entry, ok := m.topEntry(); ok && entry.card == m.Menu.Card && entry.choices != nil && entry.focus != nil && !entry.busy(m) {
-		if field := *entry.focus(&m); field == m.Menu.Field {
+	if entry, ok := m.topEntry(); ok && entry.card == m.Dropdown.Card && entry.choices != nil && entry.focus != nil && !entry.busy(m) {
+		if field := *entry.focus(&m); field == m.Dropdown.Field {
 			if set, ok := entry.choices(m, field); ok && set.Control == ControlSelect {
 				return m
 			}
 		}
 	}
-	m.Menu = ChoiceMenu{}
+	m.Dropdown = Dropdown{}
 	return m
 }
 
@@ -111,13 +122,13 @@ type SwitchMsg struct {
 
 func (SwitchMsg) msg() {}
 
-// MenuToggleMsg is the pointer opening or closing the menu of the select called Field of the open popup card.
-type MenuToggleMsg struct {
+// DropdownToggleMsg is the pointer opening or closing the dropdown of the select called Field of the open popup card.
+type DropdownToggleMsg struct {
 	Field Field
 	Open  bool
 }
 
-func (MenuToggleMsg) msg() {}
+func (DropdownToggleMsg) msg() {}
 
 // switchField flips the switch field called name to on.
 func switchField(m Model, name Field, on bool) Model {
@@ -132,11 +143,11 @@ func switchField(m Model, name Field, on bool) Model {
 	return chooseField(m, name, index)
 }
 
-// toggleMenu opens or closes the menu of the select called name; opening focuses the field.
-func toggleMenu(m Model, name Field, open bool) Model {
+// toggleDropdown opens or closes the dropdown of the select called name; opening focuses the field.
+func toggleDropdown(m Model, name Field, open bool) Model {
 	if !open {
-		if m.Menu.Field == name {
-			m.Menu = ChoiceMenu{}
+		if m.Dropdown.Field == name {
+			m.Dropdown = Dropdown{}
 		}
 		return m
 	}
@@ -146,7 +157,7 @@ func toggleMenu(m Model, name Field, open bool) Model {
 		return m
 	}
 	if set, ok := entry.choices(m, name); ok && set.Control == ControlSelect {
-		m.Menu = ChoiceMenu{Card: entry.card, Field: name, Open: true, Active: max(set.Chosen, 0)}
+		m.Dropdown = Dropdown{Card: entry.card, Field: name, Open: true, Active: max(set.Chosen, 0)}
 	}
 	return m
 }
@@ -159,8 +170,8 @@ func (m Model) topChoices(name Field) (ChoiceSet, bool) {
 	return ChoiceSet{}, false
 }
 
-// openChoiceMenu opens the menu of the focused field when it is a select; it reports whether it did.
-func (e cardEntry) openChoiceMenu(m Model) (Model, bool) {
+// openDropdown opens the dropdown of the focused field when it is a select; it reports whether it did.
+func (e cardEntry) openDropdown(m Model) (Model, bool) {
 	if e.choices == nil || e.focus == nil {
 		return m, false
 	}
@@ -169,79 +180,67 @@ func (e cardEntry) openChoiceMenu(m Model) (Model, bool) {
 	if !ok || set.Control != ControlSelect {
 		return m, false
 	}
-	m.Menu = ChoiceMenu{Card: e.card, Field: field, Open: true, Active: max(set.Chosen, 0)}
+	m.Dropdown = Dropdown{Card: e.card, Field: field, Open: true, Active: max(set.Chosen, 0)}
 	return m, true
 }
 
-// menuKey is one key for the open menu of the focused select: up and down move the highlight over the choices the search
-// text leaves, enter picks it, escape closes the menu, and a search select takes typed text and backspace. Any other key
-// closes the menu and reaches the card as it would with no menu, which is how left, right and tab move on. It reports whether
-// the menu took the key.
-func (e cardEntry) menuKey(m Model, msg KeyMsg) (Model, bool) {
-	if !m.Menu.Open || e.choices == nil || e.focus == nil || e.busy(m) || m.Menu.Card != e.card {
+// dropdownKey is one key for the open dropdown of the focused select, read through the ModeDropdown bindings: up and down move
+// the highlight over the choices the search text leaves, enter picks it, escape closes the dropdown, and a search select takes
+// typed text, backspace and ctrl+u. Any other key closes the dropdown and reaches the card as it would with none, which is how
+// left, right and tab move on. It reports whether the dropdown took the key.
+func (e cardEntry) dropdownKey(m Model, msg KeyMsg) (Model, bool) {
+	if !m.Dropdown.Open || e.choices == nil || e.focus == nil || e.busy(m) || m.Dropdown.Card != e.card {
 		return m, false
 	}
 	field := *e.focus(&m)
 	set, ok := e.choices(m, field)
-	if !ok || set.Control != ControlSelect || field != m.Menu.Field {
-		m.Menu = ChoiceMenu{}
+	if !ok || set.Control != ControlSelect || field != m.Dropdown.Field {
+		m.Dropdown = Dropdown{}
 		return m, false
 	}
-	menu := &m.Menu
-	matches := set.Matches(menu.Query)
-	at := slices.Index(matches, menu.Active)
+	dropdown := &m.Dropdown
+	matches := set.Matches(dropdown.Query)
+	at := slices.Index(matches, dropdown.Active)
+	binding, bound := LookupBindingForMode(msg.Chord, ModeDropdown)
 	switch {
-	case msg.Chord == "down" || msg.Chord == "up":
+	case bound && (binding.Action == DropdownNext || binding.Action == DropdownPrevious):
 		if len(matches) > 0 {
 			step := 1
-			if msg.Chord == "up" {
+			if binding.Action == DropdownPrevious {
 				step = -1
 			}
-			menu.Active = matches[((max(at, 0)+step)%len(matches)+len(matches))%len(matches)]
+			dropdown.Active = matches[((max(at, 0)+step)%len(matches)+len(matches))%len(matches)]
 		}
-	case msg.Chord == "enter":
+	case bound && binding.Action == DropdownPick:
 		if at >= 0 && e.choose != nil {
-			m = e.choose(m, menu.Active)
+			m = e.choose(m, dropdown.Active)
 			if e.clearErr != nil {
 				m = e.clearErr(m)
 			}
 		}
-		m.Menu = ChoiceMenu{}
-	case msg.Chord == "escape":
-		m.Menu = ChoiceMenu{}
-	case set.Search() && msg.Chord == "backspace":
-		runes := []rune(menu.Query)
-		menu.Query = string(runes[:max(len(runes)-1, 0)])
-		menu.refilter(set)
-	case set.Search() && msg.Chord == "ctrl+u":
-		menu.Query = ""
-		menu.refilter(set)
-	case set.Search() && menuText(msg) != "":
-		menu.Query += menuText(msg)
-		menu.refilter(set)
+		m.Dropdown = Dropdown{}
+	case bound && binding.Action == DropdownClose:
+		m.Dropdown = Dropdown{}
+	case bound && binding.Action == DropdownEraseQuery && set.Search():
+		runes := []rune(dropdown.Query)
+		dropdown.Query = string(runes[:max(len(runes)-1, 0)])
+		dropdown.refilter(set)
+	case bound && binding.Action == DropdownClearQuery && set.Search():
+		dropdown.Query = ""
+		dropdown.refilter(set)
+	case !bound && set.Search() && typedText(msg) != "":
+		dropdown.Query += typedText(msg)
+		dropdown.refilter(set)
 	default:
-		m.Menu = ChoiceMenu{}
+		m.Dropdown = Dropdown{}
 		return m, false
 	}
 	return m, true
 }
 
 // refilter puts the highlight on the first choice the search text leaves.
-func (menu *ChoiceMenu) refilter(set ChoiceSet) {
-	if matches := set.Matches(menu.Query); len(matches) > 0 {
-		menu.Active = matches[0]
+func (d *Dropdown) refilter(set ChoiceSet) {
+	if matches := set.Matches(d.Query); len(matches) > 0 {
+		d.Active = matches[0]
 	}
-}
-
-// menuText is the text a key types into a select's search line: a bare character or a space.
-func menuText(msg KeyMsg) string {
-	switch {
-	case msg.Chord == "space":
-		return " "
-	case msg.Text != "" && (msg.Chord == "paste" || utf8.RuneCountInString(msg.Chord) == 1):
-		return singleLineText(msg.Text)
-	case utf8.RuneCountInString(msg.Chord) == 1:
-		return msg.Chord
-	}
-	return ""
 }
