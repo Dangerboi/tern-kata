@@ -120,6 +120,11 @@ func (r AgentStatesRelay) enteredFinished(block string) bool {
 	return r.entered(block, AgentIdle) || r.entered(block, AgentExited)
 }
 
+// seenShown says the latest relay that listed block put it outside the hidden session.
+func (r AgentStatesRelay) seenShown(block string) bool {
+	return slices.ContainsFunc(r.States, func(s AgentState) bool { return s.Block == block && s.Hidden == SeenShown })
+}
+
 // answered says the latest relay moved block from waiting_input to working: its user answered it.
 func (r AgentStatesRelay) answered(block string) bool {
 	return slices.ContainsFunc(r.Changes, func(c AgentChange) bool {

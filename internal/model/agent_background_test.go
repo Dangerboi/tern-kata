@@ -201,3 +201,34 @@ func TestNoFlagIsWrittenWhileThisPaneMovesTheAgent(t *testing.T) {
 		t.Fatalf("flag already open, yet %#v", cmds)
 	}
 }
+
+func TestAnAgentOpenedFromAnotherPaneGoesBackOnTheFirstAnswer(t *testing.T) {
+	// This Pane's copy says not open and no relay showed it open before the working one.
+	m := model.Model{PaneBlock: "9", AgentMapping: []model.AgentEntry{backgroundEntry("5", "9", false)}}
+	m, _ = relayed(m, at("5", "waiting_input", model.SeenHidden))
+	_, cmds := relayed(m, at("5", "working", model.SeenShown))
+	if want := []model.SendAgentBack{{Block: "5", IssueRef: "demo#ab12"}}; !reflect.DeepEqual(sentBack(cmds), want) {
+		t.Fatalf("cmds %#v", cmds)
+	}
+}
+
+func TestBFromAnotherPaneBringsTheAgentUnderTheStartingPanesBackgroundRules(t *testing.T) {
+	split := backgroundEntry("5", "9", false)
+	split.Background = false
+	m := model.Model{PaneBlock: "9", AgentMapping: []model.AgentEntry{split}}
+	m, _ = relayed(m, at("5", "waiting_input", model.SeenShown))
+	m, cmds := relayed(m, at("5", "waiting_input", model.SeenHidden))
+	if want := []model.SetAgentOpen{{Block: "5", Background: true}}; !reflect.DeepEqual(flagWrites(cmds), want) {
+		t.Fatalf("cmds %#v", cmds)
+	}
+	m, _ = model.Update(m, model.AgentOpenSet{Block: "5", Background: true})
+	if got := m.AgentMapping[0]; !got.Background || got.Open || model.AgentWhere(got) != "background" {
+		t.Fatalf("entry %+v", got)
+	}
+	// It now opens, goes back and is ended like any background agent.
+	m, _ = relayed(m, at("5", "waiting_input", model.SeenShown))
+	m, _ = model.Update(m, model.AgentOpenSet{Block: "5", Open: true})
+	if _, cmds = relayed(m, at("5", "working", model.SeenShown)); len(sentBack(cmds)) != 1 {
+		t.Fatalf("cmds %#v", cmds)
+	}
+}
