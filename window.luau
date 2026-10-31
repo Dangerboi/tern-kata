@@ -222,8 +222,10 @@ end
 -- gets no `tab_created` for a tab the CLI opens on the session host, and numbers panes differently from the host, so
 -- `<starter>` is no pane id there. Such a window places on `agent_state` and on every relay pass instead: an agent pane whose
 -- command carries the marker is tried once, whatever the result (remembered in `placed` until its pane closes), and then never
--- touched again. When `<starter>` is no kata Pane here the home is a guess, and the tab moves only while it is still the last
--- of its session, where Tern appended it: a tab that is not last was placed by a window that knew the starter, or by the user.
+-- touched again. The starter id is exact only on the session host's machine, so the move is a guess there: the tab moves
+-- only while it is unplaced, that is, every tab after it in its session is an agent tab not handled yet (two agents started
+-- in quick succession are both placed, whatever order they are listed in). A tab followed by any other tab was placed by a
+-- window that knew the starter, or by the user. The host window's exact placement is the `tab_created` one.
 -- The starter is the kata Pane whose id is `<starter>`, else the focused Pane if it is a kata Pane (the Pane the user just pressed
 -- `W` in), else the window's only kata Pane; with none of these nothing moves.
 local PLACE_TRIES = 10
@@ -251,17 +253,28 @@ local function starterOf(cx: WindowCx, tab: number): number?
     return nil
 end
 
--- Whether no tab of the same session comes after `tab`.
-local function isLastTab(cx: WindowCx, tab: number): boolean
-    local own: TabInfo? = nil
-    for _, info in cx.session:tabs() do
-        if info.id == tab then own = info end
+-- The tabs of `candidates` that are unplaced: every tab after it in its session is also in `candidates`, so only agent tabs
+-- Tern appended after it, which no window has handled. A tab followed by any other tab was placed by a window that knew
+-- the starter, or by the user. Highest position first, so tabs moved to the same home keep the order they were opened in.
+local function unplacedTabs(cx: WindowCx, candidates: { [number]: boolean }): { number }
+    local all = cx.session:tabs()
+    local found: { TabInfo } = {}
+    for _, info in all do
+        if candidates[info.id] then
+            local trailing = true
+            for _, after in all do
+                if after.session == info.session and after.position > info.position and not candidates[after.id] then
+                    trailing = false
+                    break
+                end
+            end
+            if trailing then table.insert(found, info) end
+        end
     end
-    if not own then return false end
-    for _, info in cx.session:tabs() do
-        if info.session == own.session and info.position > own.position then return false end
-    end
-    return true
+    table.sort(found, function(a, b) return a.position > b.position end)
+    local ids: { number } = {}
+    for _, info in found do table.insert(ids, info.id) end
+    return ids
 end
 
 -- The kata Pane an agent started from, as far as this window can tell: the Pane whose id is `starter` (exact only on the
@@ -316,10 +329,14 @@ local function placeAgentTab(cx: WindowCx, tab: number, tries: number)
     end
 end
 
--- Agent panes not placed yet whose command carries the marker, each placed once. A background agent's tab is in the hidden
--- session, which is not ordered by the Pane that started it, so such an agent is never placed.
+-- Agent panes not placed yet whose command carries the marker, each tried once. A background agent's tab is in the hidden
+-- session, which is not ordered by the Pane that started it, so such an agent is never placed. The starter id is exact only
+-- on the session host's machine, so here it only picks the home; whether to move is `unplacedTabs`, and the host window's
+-- exact placement is `placeAgentTab`.
 placeAgents = function(cx: WindowCx)
     local hidden: { [number]: boolean }? = nil
+    local candidates: { [number]: boolean } = {}
+    local starters: { [number]: number } = {}
     for _, agent in cx.agents:list() do
         if not placed[agent.pane] then
             local starter = markerOf(agent.command)
@@ -329,13 +346,14 @@ placeAgents = function(cx: WindowCx)
                 local tabs = hidden or hiddenTabs(cx)
                 hidden = tabs
                 if not tabs[info.tab] then
-                    local exact = isKata(cx.session:pane(starter))
-                    if exact or isLastTab(cx, info.tab) then
-                        placeTab(cx, info.tab, kataPaneFor(cx, starter, cx.session:focused()))
-                    end
+                    candidates[info.tab] = true
+                    starters[info.tab] = starter
                 end
             end
         end
+    end
+    for _, tab in unplacedTabs(cx, candidates) do
+        placeTab(cx, tab, kataPaneFor(cx, starters[tab], cx.session:focused()))
     end
 end
 
