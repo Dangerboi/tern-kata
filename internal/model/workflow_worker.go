@@ -101,18 +101,18 @@ func (m Model) settleWorkflowReading() (Model, []Cmd) {
 		after = 0
 	}
 	c.asked, c.askedText, c.askNow, c.Reading = true, c.Editor.Text, false, nil
-	w.checkRequest++
+	request := w.checkReads.Ask()
 	doc, err := ParseWorkflow(c.Editor.Text)
 	c.Problem = err
 	if err != nil {
 		return m, nil
 	}
-	return m, []Cmd{ReadWorkflowText{Request: w.checkRequest, Definition: doc.Shape, After: after}}
+	return m, []Cmd{ReadWorkflowText{Request: request, Definition: doc.Shape, After: after}}
 }
 
 // workflowTextRead keeps the answer to the latest ask for the card that is open.
 func workflowTextRead(m Model, msg WorkflowTextRead) Model {
-	if c := &m.Workflows.Card; c.Open && msg.Request == m.Workflows.checkRequest {
+	if c := &m.Workflows.Card; c.Open && isNewestRead(&m.Workflows.checkReads, msg.Request) {
 		reading := msg.Reading
 		c.Reading = &reading
 	}

@@ -439,3 +439,22 @@ func TestWorkflowsPageFollowsRunPagesToFindEachWorkflowsLatestRunAndOlderRuns(t 
 		t.Fatalf("runs of W1 %d, want 5", len(got))
 	}
 }
+
+func TestRunsPageDropsAnAnswerToAnOlderRead(t *testing.T) {
+	s := runsPane(t, 160, finishedRun("R1"))
+	first := step(t, s, key("ctrl+r"))
+	older, _ := askedRuns(first.Cmds)
+	second := step(t, first.State, key("ctrl+r"))
+	newer, _ := askedRuns(second.Cmds)
+	if newer.Request == older.Request {
+		t.Fatal("two reads share a request number")
+	}
+	late := step(t, second.State, model.RunsLoaded{Request: older.Request, Before: older.Before, Refresh: older.Refresh, Runs: []model.Run{finishedRun("R9")}})
+	if runs := late.State.Model.Runs.Runs; len(runs) != 1 || runs[0].UID != "R1" || !late.State.Model.Runs.Loading {
+		t.Fatalf("an answer to an older read was applied: %+v, loading %v", runs, late.State.Model.Runs.Loading)
+	}
+	fresh := step(t, late.State, model.RunsLoaded{Request: newer.Request, Before: newer.Before, Refresh: newer.Refresh, Runs: []model.Run{finishedRun("R2")}}).State
+	if fresh.Model.Runs.Loading || len(fresh.Model.Runs.Runs) == 0 || fresh.Model.Runs.Runs[0].UID != "R2" && fresh.Model.Runs.Runs[0].UID != "R1" {
+		t.Errorf("the newest answer gave %+v, loading %v", fresh.Model.Runs.Runs, fresh.Model.Runs.Loading)
+	}
+}

@@ -86,7 +86,7 @@ func TestAttentionPageKeyReadsTheInboxAddressAndThePageBarShowsThePage(t *testin
 	s := attentionPane(t)
 	out := step(t, s, key("6"))
 	load, ok := askedAttention(out.Cmds)
-	if !ok || load.Address != "dana" || load.Workspace != "/repo" || load.Request == 0 {
+	if !ok || load.Address != "dana" || load.Workspace != "/repo" {
 		t.Fatalf("cmds %#v, want a read of dana's requests", out.Cmds)
 	}
 	m := out.State.Model
@@ -186,7 +186,7 @@ func TestAttentionPageFailedReadShowsKatasErrorAndKeepsTheRows(t *testing.T) {
 	}
 
 	// With nothing read yet, the Page does not claim there is nothing for dana.
-	first := step(t, step(t, attentionPane(t), key("6")).State, model.AttentionLoaded{Request: 1, Err: errors.New("no daemon")}).State
+	first := step(t, step(t, attentionPane(t), key("6")).State, model.AttentionLoaded{Request: 0, Err: errors.New("no daemon")}).State
 	wantText(t, "first read failed", wireTextOf(t, first), "no daemon")
 	if strings.Contains(wireTextOf(t, first), "No requests for dana") {
 		t.Error("a failed first read is drawn as an empty inbox")
@@ -725,5 +725,21 @@ func TestEnterInTheIssueAlreadyShownReadsItAgainWhenTheNamedCommentIsNotCached(t
 	m := step(t, out.State, model.DetailLoaded{UID: "work-aa11", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "work-aa11"}, Comments: commentsOf("x1", "x3", namedComment)}}).State.Model
 	if m.ActiveTab() != model.TabComments || detailRowKey(m) != namedComment {
 		t.Fatalf("tab %v row %q, want the comment that arrived with the fresh read", m.ActiveTab(), detailRowKey(m))
+	}
+}
+
+func TestAttentionPageDropsTheAnswerOfAReadOutWhenTheDaemonChanged(t *testing.T) {
+	out := step(t, attentionPane(t), key("6"))
+	old, ok := askedAttention(out.Cmds)
+	if !ok {
+		t.Fatalf("entering the Page asked for %#v, want a read", out.Cmds)
+	}
+	switched := step(t, out.State, model.DaemonSwitched{Name: "home", Daemon: model.Daemon{Name: "home"}}).State
+	late := step(t, switched, model.AttentionLoaded{Request: old.Request, Requests: attentionRequests(t)})
+	if a := late.State.Model.Attention; len(a.Requests) != 0 || a.Loaded {
+		t.Errorf("the old daemon's answer was applied: %d requests, loaded %v", len(a.Requests), a.Loaded)
+	}
+	if _, ok := askedAttention(late.Cmds); ok {
+		t.Errorf("a dropped answer asked for a read: %#v", late.Cmds)
 	}
 }

@@ -166,9 +166,9 @@ type RunsState struct {
 	Selected string
 	Loading  bool
 	Err      error
-	// request counts the reads asked for; stale asks for another.
-	request int64
-	stale   bool
+	// reads numbers the reads asked for; stale asks for another.
+	reads Latest
+	stale bool
 	// refresh makes the next read of the newest page join the Runs held.
 	refresh bool
 }
@@ -347,16 +347,15 @@ func (m Model) settleRuns() (Model, []Cmd) {
 		return m, nil
 	}
 	m.Runs.stale, m.Runs.Loading = false, true
-	m.Runs.request++
 	refresh := m.Runs.refresh
 	m.Runs.refresh = false
-	return m, []Cmd{LoadRuns{Workspace: m.Workspace, ProjectID: id, JobUID: m.Runs.JobUID, Request: m.Runs.request, Refresh: refresh}}
+	return m, []Cmd{LoadRuns{Workspace: m.Workspace, ProjectID: id, JobUID: m.Runs.JobUID, Request: m.Runs.reads.Ask(), Refresh: refresh}}
 }
 
 // runsLoaded applies the answer to the latest read: an older page is appended to the Runs held, the newest replaces them. A
 // Project that is archived keeps the Runs already held.
 func runsLoaded(m Model, msg RunsLoaded) Model {
-	if msg.Request != m.Runs.request {
+	if current, _ := m.Runs.reads.Answer(msg.Request); !current {
 		return m
 	}
 	m.Runs.Loading = false
@@ -444,8 +443,7 @@ func olderRuns(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	m.Runs.Loading = true
-	m.Runs.request++
-	return m, []Cmd{LoadRuns{Workspace: m.Workspace, ProjectID: m.Runs.ProjectID, JobUID: m.Runs.JobUID, Before: m.Runs.More, Request: m.Runs.request}}
+	return m, []Cmd{LoadRuns{Workspace: m.Workspace, ProjectID: m.Runs.ProjectID, JobUID: m.Runs.JobUID, Before: m.Runs.More, Request: m.Runs.reads.Ask()}}
 }
 
 // inspectRun is enter on the Run list: the inspector takes the keys and the Run is read again for the detail.

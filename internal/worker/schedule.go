@@ -462,11 +462,14 @@ func (w *Worker) tick(ctx context.Context, ps *projectState) time.Time {
 	}
 	if ps.sched.anyPending() {
 		// Scheduled work never starts from a cached definition (ADR-0011): read the jobs again, replan, then admit.
-		if err := w.refreshJobs(ctx, ps); err != nil {
-			w.opt.Log("Project %s: %v", ps.cfg.Name, err)
-			return time.Time{}
+		// A listing younger than the refresh debounce is that read, so a burst of Issue events lists the jobs once.
+		if w.jobsStale(ps) {
+			if err := w.refreshJobs(ctx, ps); err != nil {
+				w.opt.Log("Project %s: %v", ps.cfg.Name, err)
+				return time.Time{}
+			}
+			w.planAll(ps, now)
 		}
-		w.planAll(ps, now)
 		ps.sched.admitDue(ctx)
 	}
 	sum := ps.sched.summary(now)
@@ -481,6 +484,13 @@ func (w *Worker) tick(ctx context.Context, ps *projectState) time.Time {
 		return sum.wake
 	}
 	return sum.next
+}
+
+// jobsStale reports whether the Project's job list is older than the refresh debounce, or was never read.
+func (w *Worker) jobsStale(ps *projectState) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return ps.jobsAt.IsZero() || w.clock.Now().Sub(ps.jobsAt) >= jobRefreshDebounce
 }
 
 // summary is what a tick reports after planning and admission: the queued and scheduled counts, the next occurrence

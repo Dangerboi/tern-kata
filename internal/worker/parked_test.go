@@ -2,6 +2,7 @@ package worker_test
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -359,4 +360,29 @@ func TestASkipJobWhoseOccurrenceFallsOnTheIssuesInstantRunsOnlyThatOccurrence(t 
 	if want := worker.OccurrenceKey(instant); runs[0].OccurrenceKey != want {
 		t.Fatalf("the run is for %s, want the occurrence on the instant %s", runs[0].OccurrenceKey, want)
 	}
+}
+
+func TestABurstOfIssueEventsListsTheCronJobsOncePerDebounceWhileAnOccurrenceWaits(t *testing.T) {
+	h := newHarness(t)
+	issue := h.kata.Issue(t, h.proj, "Parked")
+	h.kata.SetSomeday(t, h.proj, issue.UID, true)
+	job, r, _ := h.hourlyOn(issue.UID)
+	h.waitsFor(r, "Issue is someday")
+	time.Sleep(200 * time.Millisecond)
+
+	listings := func() int {
+		return h.kata.Requests("GET /api/v1/projects/" + strconv.FormatInt(h.proj.ID, 10) + "/cron/jobs")
+	}
+	before := listings()
+	for i := range 40 {
+		h.kata.EditIssue(t, h.proj, issue.UID, "Parked "+strconv.Itoa(i), "")
+	}
+	time.Sleep(500 * time.Millisecond)
+	if n := listings() - before; n > 1 {
+		t.Fatalf("a burst of 40 Issue events listed the Cron jobs %d times inside one debounce interval, want at most 1", n)
+	}
+	h.quiet(job, 0)
+
+	h.kata.SetSomeday(t, h.proj, issue.UID, false) // the Issue is ready: the wait ends without waiting for a listing interval
+	h.settled(h.waitRuns(job, 1)[0].UID)
 }

@@ -67,3 +67,19 @@ func TestLatestSupersedeDropsTheReadOutAndAsksForAnother(t *testing.T) {
 		t.Error("superseding with no read out asked for one")
 	}
 }
+
+func TestLatestDiscardDropsTheReadOutAndWantsNoneAndAskedSaysSo(t *testing.T) {
+	var l model.Latest
+	if l.Asked() {
+		t.Error("a fresh Latest says a read was asked for")
+	}
+	n := l.Ask()
+	if !l.Asked() {
+		t.Error("Asked is false after Ask")
+	}
+	l.Queue()
+	l.Discard()
+	if current, again := l.Answer(n); current || again {
+		t.Errorf("the answer to a discarded read gave current %v again %v", current, again)
+	}
+}
