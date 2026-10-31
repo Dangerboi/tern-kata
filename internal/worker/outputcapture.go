@@ -164,6 +164,17 @@ type tailWindow struct {
 func (w *tailWindow) Write(p []byte) {
 	w.total += int64(len(p))
 	w.buf = append(w.buf, p...)
+	w.trim()
+}
+
+// WriteString is Write for a string, without a byte copy of it.
+func (w *tailWindow) WriteString(s string) {
+	w.total += int64(len(s))
+	w.buf = append(w.buf, s...)
+	w.trim()
+}
+
+func (w *tailWindow) trim() {
 	if len(w.buf) > 2*w.max {
 		at := len(w.buf) - w.max
 		w.startsLine = w.buf[at-1] == '\n'
@@ -293,14 +304,16 @@ func (h *headTail) Close() error {
 	return h.capture.Close()
 }
 
-// outputTail joins the assistant messages of an output.jsonl and keeps the last max bytes.
+// outputTail joins the assistant messages of an output.jsonl and keeps the last max bytes, holding no more than a
+// tail window of them while it scans.
 func outputTail(path string, max int) string {
 	f, err := os.Open(path)
 	if err != nil {
 		return ""
 	}
 	defer f.Close()
-	var texts []string
+	tail := tailWindow{max: max}
+	messages := 0
 	r := bufio.NewReaderSize(f, 64<<10)
 	for {
 		line, err := r.ReadBytes('\n')
@@ -312,7 +325,11 @@ func outputTail(path string, max int) string {
 			if json.Unmarshal(line, &ev) == nil && ev.Type == "message_end" {
 				if m, ok := assistantMessage(ev.Message); ok {
 					if t := strings.TrimSpace(m.text()); t != "" {
-						texts = append(texts, t)
+						if messages > 0 {
+							tail.WriteString("\n\n")
+						}
+						tail.WriteString(t)
+						messages++
 					}
 				}
 			}
@@ -321,11 +338,11 @@ func outputTail(path string, max int) string {
 			break
 		}
 	}
-	out := strings.Join(texts, "\n\n")
-	if len(out) > max {
-		out = strings.ToValidUTF8(out[len(out)-max:], "")
+	kept, _ := tail.Bytes()
+	if int64(len(kept)) < tail.total {
+		return strings.ToValidUTF8(string(kept), "")
 	}
-	return out
+	return string(kept)
 }
 
 // fileTail is the last max bytes of a text file, empty when it cannot be read.

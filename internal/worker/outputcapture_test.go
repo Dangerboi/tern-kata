@@ -4,8 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // numbered is n lines of 10 bytes each ("000000001\n" ...).
@@ -173,5 +177,95 @@ func TestTheFileTailIsTheLastBytesOfTheFile(t *testing.T) {
 	}
 	if got := fileTail(path+".missing", 20); got != "" {
 		t.Fatalf("missing file tail = %q, want empty", got)
+	}
+}
+
+// writeOutputJournal writes an output.jsonl of n assistant messages of size bytes each, numbered so the tail is
+// recognisable, and returns the messages' text joined as the run detail shows it.
+func writeOutputJournal(t testing.TB, path string, n, size int) string {
+	t.Helper()
+	var file, joined strings.Builder
+	for i := 0; i < n; i++ {
+		text := fmt.Sprintf("m%07d ", i) + strings.Repeat("x", size-9)
+		fmt.Fprintf(&file, `{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":%q}],"stopReason":"stop"}}`+"\n", text)
+		if i > 0 {
+			joined.WriteString("\n\n")
+		}
+		joined.WriteString(text)
+	}
+	if err := os.WriteFile(path, []byte(file.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return joined.String()
+}
+
+// The output tail is the last bytes of the joined assistant messages, for a short output and for one far past the tail.
+func TestOutputTailIsTheEndOfTheJoinedMessages(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		n, size int
+	}{
+		{"shorter than the tail", 3, 100},
+		{"a little past the tail", 6, 1000},
+		{"far past the tail", 500, 1000},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "output.jsonl")
+			joined := writeOutputJournal(t, path, c.n, c.size)
+			want := joined
+			if len(want) > OutputTailBytes {
+				want = want[len(want)-OutputTailBytes:]
+			}
+			if got := outputTail(path, OutputTailBytes); got != want {
+				t.Fatalf("tail differs: got %d bytes, want %d", len(got), len(want))
+			}
+		})
+	}
+}
+
+// Reading the tail of an 8 MiB output allocates for the tail and one line at a time, not for the whole output.
+func BenchmarkOutputTail8MiB(b *testing.B) {
+	path := filepath.Join(b.TempDir(), "output.jsonl")
+	writeOutputJournal(b, path, 8192, 1024)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		outputTail(path, OutputTailBytes)
+	}
+}
+
+func TestOutputTailMemoryIsBoundedByTheTail(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "output.jsonl")
+	writeOutputJournal(t, path, 8192, 1024)
+	// With the collector running often, the live heap sampled during the read is what the read keeps alive at once.
+	defer debug.SetGCPercent(debug.SetGCPercent(5))
+	runtime.GC()
+	var base runtime.MemStats
+	runtime.ReadMemStats(&base)
+	var peak atomic.Uint64
+	done := make(chan struct{})
+	sampled := make(chan struct{})
+	go func() {
+		defer close(sampled)
+		var m runtime.MemStats
+		for {
+			runtime.ReadMemStats(&m)
+			if m.HeapAlloc > peak.Load() {
+				peak.Store(m.HeapAlloc)
+			}
+			select {
+			case <-done:
+				return
+			case <-time.After(200 * time.Microsecond):
+			}
+		}
+	}()
+	outputTail(path, OutputTailBytes)
+	close(done)
+	<-sampled
+	grew := int64(peak.Load()) - int64(base.HeapAlloc)
+	t.Logf("8 MiB output: live heap peaked %d bytes above the start", grew)
+	if grew > 4<<20 {
+		t.Fatalf("the live heap grew by %d bytes reading an 8 MiB output, want it bounded by the tail", grew)
 	}
 }
