@@ -13,15 +13,17 @@ ctl --file "$tmp/topbar-launch.ctl"
 expect_tree "[data-id='main.topbar.left.heading']" ".ok and .count == 1 and .nodes[0].text == \"Project: $bar_name\""
 bar_cells="[data-id='main.topbar'],[data-id='main.topbar.left'],[data-id='main.topbar.counts'],[data-id='main.topbar.right'],[data-id='main.topbar.right.menu']"
 
-# Wide: the cells share one line (the bar is no taller than its tallest single-line cell, so a wrapped cell
-# fails; each cell lies inside the bar's vertical range and the text cells are centred on it), the Menu button
-# ends where the bar does, the counts sit between.
+# Wide: the cells share one line (the bar is no taller than its tallest single-line cell, so a wrapped
+# counts cell fails; the left cell is shorter than two lines of counts and the Menu button than 1.75, so a wrapped
+# title or button label fails; each cell lies inside the bar's vertical range and the text cells are centred
+# on it), the Menu button ends where the bar does, the counts sit between.
 expect_tree "$bar_cells" '.ok and .count == 5
   and (.nodes[0].rect as $bar | .nodes[1].rect as $h | .nodes[2].rect as $c | .nodes[4].rect as $d
     | ($bar[1] + $bar[3] / 2) as $mid
     | $bar[3] <= ([$h[3], $d[3]] | max) + 1
       and ([.nodes[1:][].rect | .[1] >= $bar[1] - 1 and .[1] + .[3] <= $bar[1] + $bar[3] + 1] | all)
       and ([$h, $c | (.[1] + .[3] / 2 - $mid) | fabs <= 1] | all)
+      and $h[3] < 2 * $c[3] and $d[3] < 1.75 * $c[3]
       and (($d[0] + $d[2] - $bar[0] - $bar[2]) | fabs) <= 1 and $h[0] + $h[2] < $c[0] and $c[0] + $c[2] < $d[0])
 '
 # The long name and the five-Page Page bar squeeze the Daemon at the default width; a wider Pane shows it whole.

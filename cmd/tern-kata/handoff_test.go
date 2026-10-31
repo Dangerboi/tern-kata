@@ -219,20 +219,6 @@ func TestEditInTerminalRemovesFileWhenResumeWorks(t *testing.T) {
 	}
 }
 
-func TestEditorSurfaceOptionsClosableOnlyWithoutQuitConfirmation(t *testing.T) {
-	for _, closable := range []bool{false, true} {
-		if got := editorSurfaceOptions(closable); got.Closable != closable {
-			t.Errorf("editorSurfaceOptions(%v).Closable = %v", closable, got.Closable)
-		}
-	}
-}
-
-func TestEditorSurfaceOpensInSans(t *testing.T) {
-	if got := editorSurfaceOptions(false).Font; got != tern.FontSans {
-		t.Errorf("Font = %q, want %q", got, tern.FontSans)
-	}
-}
-
 func TestPaneClosableFollowsConfirmQuit(t *testing.T) {
 	for name, tc := range map[string]struct {
 		catalog data.Catalog

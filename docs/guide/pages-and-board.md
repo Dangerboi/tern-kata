@@ -14,15 +14,17 @@ In a directory bound to a kata Project, `tern-kata` opens that Project's Issues.
 
 ## The Page bar
 
-Every Popup card draws its buttons in the card's footer bar, each with its key as a keycap. A choice field is a select, a switch or two or three segmented tabs, whichever fits its choices: `left`/`right` and `space` step through them, `down` opens a select, typing searches a long one, `enter` picks and `esc` closes it, and a click picks.
-
-An Issue row, a Lane row and a Board card open a menu on a right click: Open, Agent…, Close (or Reopen on a closed Issue), Priority…, Dates… and Move to Project, each with its key. Picking an entry selects that Issue first, then does what the key does on it. On a closed Issue, Agent… and Close are disabled and say why. Hovering an Issue reference, such as an id on a Relationships line, shows a card with the Issue's id, title, status, owner and update time.
-
-Views with nothing to show draw an empty state saying so. The top bar's Project heading is only a heading: the Menu button, or `esc` from the list, opens the Menu.
-
-The top bar holds the **Page bar**, "1 Issues  2 Board  3 Jobs  4 Runs  5 Workflows  6 Attention". `1` to `6`, or a click on a Page, switch Pages; `b` toggles between Issues and Board. Each Page keeps its selection while another is shown.
+The top bar holds the **Page bar**, "1 Issues  2 Board  3 Jobs  4 Runs  5 Workflows  6 Attention". `1` to `6`, or a click on a Page, switch Pages; `b` toggles between Issues and Board. Each Page keeps its selection while another is shown. The top bar's Project heading is only a heading: the Menu button, or `esc` from the list, opens the Menu.
 
 The Board, Jobs, Runs and Workflows Pages act on the Pane's Project: the current Project Collection, else the workspace's Binding (from Inbox or another fixed Collection in a bound workspace it switches to the Binding's Project). With neither it says so and opens the Menu's Projects list. The Attention Page acts on no Project: it reads every Project on the daemon, and neither a Project nor a Collection change touches it.
+
+## Cards, menus and hovercards
+
+Every Popup card draws its buttons in the card's footer bar, each with its key as a keycap. A choice field is a select, a switch or two or three segmented tabs, whichever fits its choices: `left`/`right` and `space` step through them, `down` opens a select, typing searches a long one, `enter` picks and `esc` closes it, and a click picks.
+
+An Issue row, a Lane row and a Board card open a menu on a right click: Open, Agent…, Close (or Reopen on a closed Issue), Priority…, Dates… and Move to Project, each with its key. Picking an entry selects that Issue first, then does what the key does on it. On a closed Issue, Agent… and Close are disabled and say why. Hovering an Issue reference, such as an id on a Relationships line or a Comment link, shows a card with the Issue's id, title, status, owner and update time.
+
+Pages and lists with nothing to show draw an empty state saying so.
 
 ## Attention Page
 
@@ -79,7 +81,7 @@ A failure before the hub granted the enrollment stays under the preview, and Ent
 The Issues Page is the list and the Issue detail.
 
 - **List**: a Project's Issues nested under their parents, with priority, status, child counts and age.
-- **Detail**: the Issue's Markdown body, its properties, its Children as a table (a click on a row jumps to that child; hovering a row shows the child's id, title, status, owner and update time) and the Activity tabs (Comments, Events, Links, Attachments). Changes made anywhere, by you or an agent, show up live.
+- **Detail**: the Issue's Markdown body, its properties, its Children as a table (a click on a row jumps to that child; hovering a row's ticket shows the child's id, title, status, owner and update time) and the Activity tabs (Comments, Events, Links, Attachments). Changes made anywhere, by you or an agent, show up live.
 - **Collections and the Menu**: the Menu (the top bar's Menu button, or `esc` from the list) opens on the bound Project, **Views**, **Projects**, the Lettered Pages (Credentials, Federation, Daemons), Restore a deleted Issue and New Project. **Views** opens a level of Back, Inbox, Today, Upcoming, Deadlines, All Open, Logbook, your [saved views](#saved-views) by name and New view; **Projects** (or `P`) opens a level of Back and every kata Project, and `I` opens the Inbox from anywhere. `esc`, `backspace` or Back leave a level for the top, with the cursor on the row that led there; while a fixed Collection is current, the top level's Views row names it on the right (or the saved view, while one is current) and the Menu opens with the cursor on Views. Typing in the Menu filters every level at once: "tod" finds Today, "alp" finds the Project alpha. In a directory bound to no Project the Menu sidebar shows the Views level. Beside the Collections, `/` searches and `f`, `s`, `c` filter any of them.
 
 ### Saved views
