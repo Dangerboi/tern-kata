@@ -25,7 +25,7 @@ func datesLayer(m model.Model) tern.Element {
 			ui.Input{Common: ui.Common{Key: string(name), Tone: tone, Aria: label}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Placeholder: ui.T("none"), Readonly: form.Saving}},
 			toneText(string(name)+"-preview", ui.ToneMuted, m.DatesPreview(name)))
 	}
-	children = append(children, toneText("note", ui.ToneMuted, "Type "+model.DateInputHint+". Leave a field blank to clear it."))
+	children = append(children, toneText("note", ui.ToneMuted, "Type "+model.DateInputHint+", or press ctrl+d for a calendar. Leave a field blank to clear it."))
 	if form.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, form.Err.Error()))
 	}
@@ -34,5 +34,5 @@ func datesLayer(m model.Model) tern.Element {
 	} else {
 		children = append(children, buttonRow(cardButton("save", model.ModeDatesForm, model.DatesSubmit, "Save dates", true), cardButton("cancel", model.ModeDatesForm, model.DatesCancel, "Cancel", false)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardDates)}, Head: ui.T("Dates"), Modal: true, Size: ui.SizeLG, Children: children})
+	return withDatePicker(m, model.CardDates, ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardDates)}, Head: ui.T("Dates"), Modal: true, Size: ui.SizeLG, Children: children}))
 }

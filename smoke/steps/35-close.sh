@@ -1,6 +1,6 @@
 # Closing a Pane that runs tern-kata: Tern asks at once, as it does for kata's own TUI (the reference), also with
 # the live stream open and with the daemon unreachable; once the user confirms no tern-kata process is left;
-# cancelling the prompt leaves tern-kata working; q still quits. Tern raises the prompt itself, so the step pins that
+# cancelling the prompt leaves tern-kata working; q still quits. With confirm_quit off Tern closes the Pane without asking. Tern raises the prompt itself, so the step pins that
 # tern-kata never delays it. Each program runs in a tab of its own, so the Pane the next steps use is untouched.
 # Own Issues; it cleans up.
 pc_now() { date +%s%N; }
@@ -75,6 +75,9 @@ ctl dialog button 0 >/dev/null
 expect_tree "[data-id='main.columns.list']" '.ok and .count == 1'
 [[ $(ctl state | jq '.tabs | length') == "$pc_tabs" ]]
 
+# kata's [tui] confirm_quit is on while Panes start, so Tern asks before closing them; the smoke home's off is put back below.
+printf '[tui]\nconfirm_quit = true\n' >"$KATA_HOME/config.toml"
+
 # tern-kata with its live stream open: an Issue made outside shows in the list, so the stream is up.
 pc_start ""
 expect_tree "[data-id^='main.columns.list.issues.']" '.ok and .count > 0'
@@ -110,6 +113,18 @@ pc_ms=$(pc_prompt_ms)
 printf 'Close prompt: kata tui %s ms, tern-kata waiting on the daemon %s ms\n' "$pc_reference" "$pc_ms"
 (( pc_ms - pc_reference <= 1000 )) || { printf 'The close prompt took %s ms longer than kata tui\n' "$((pc_ms - pc_reference))" >&2; return 1; }
 pc_confirm "$pc_pid"
+
+# With confirm_quit off at the Pane's start Tern closes the Pane without asking and no tern-kata is left.
+printf '[tui]\nconfirm_quit = false\n' >"$KATA_HOME/config.toml"
+pc_start ""
+expect_tree "[data-id^='main.columns.list.issues.']" '.ok and .count > 0'
+pc_closed_start=$(pc_now)
+ctl key "$pc_chord" >/dev/null
+printf 'tern-kata gone %s ms after the close chord\n' "$(pc_gone_ms "$pc_pid" "$pc_closed_start")"
+[[ $(ctl system | jq '.dialogs | length') == 0 ]]
+[[ $(pc_pids) == "$pc_main_pids" ]]
+expect_tree "[data-id='main.columns.list']" '.ok and .count == 1'
+[[ $(ctl state | jq '.tabs | length') == "$pc_tabs" ]]
 
 # q is unchanged: tern-kata ends, the shell is back at its prompt, and closing the idle shell asks nothing.
 pc_start ""
