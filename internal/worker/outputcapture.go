@@ -307,12 +307,23 @@ func (h *headTail) Close() error {
 // outputTail joins the assistant messages of an output.jsonl and keeps the last max bytes, holding no more than a
 // tail window of them while it scans.
 func outputTail(path string, max int) string {
+	tail := scanOutputTail(path, max)
+	kept, _ := tail.Bytes()
+	if int64(len(kept)) < tail.total {
+		return strings.ToValidUTF8(string(kept), "")
+	}
+	return string(kept)
+}
+
+// scanOutputTail feeds the assistant messages of an output.jsonl, joined, through a window of max bytes and returns
+// the window; it is all the scan keeps of the messages.
+func scanOutputTail(path string, max int) *tailWindow {
+	tail := &tailWindow{max: max}
 	f, err := os.Open(path)
 	if err != nil {
-		return ""
+		return tail
 	}
 	defer f.Close()
-	tail := tailWindow{max: max}
 	messages := 0
 	r := bufio.NewReaderSize(f, 64<<10)
 	for {
@@ -339,11 +350,7 @@ func outputTail(path string, max int) string {
 			break
 		}
 	}
-	kept, _ := tail.Bytes()
-	if int64(len(kept)) < tail.total {
-		return strings.ToValidUTF8(string(kept), "")
-	}
-	return string(kept)
+	return tail
 }
 
 // fileTail is the last max bytes of a text file, empty when it cannot be read.

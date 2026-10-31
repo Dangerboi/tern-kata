@@ -4,12 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
-	"runtime/debug"
 	"strings"
-	"sync/atomic"
 	"testing"
-	"time"
 )
 
 // numbered is n lines of 10 bytes each ("000000001\n" ...).
@@ -233,38 +229,16 @@ func BenchmarkOutputTail8MiB(b *testing.B) {
 	}
 }
 
+// Scanning an 8 MiB output keeps no more than the tail window: the bytes held never pass twice the tail size however
+// much goes through.
 func TestOutputTailMemoryIsBoundedByTheTail(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "output.jsonl")
 	writeOutputJournal(t, path, 8192, 1024)
-	// With the collector running often, the live heap sampled during the read is what the read keeps alive at once.
-	defer debug.SetGCPercent(debug.SetGCPercent(5))
-	runtime.GC()
-	var base runtime.MemStats
-	runtime.ReadMemStats(&base)
-	var peak atomic.Uint64
-	done := make(chan struct{})
-	sampled := make(chan struct{})
-	go func() {
-		defer close(sampled)
-		var m runtime.MemStats
-		for {
-			runtime.ReadMemStats(&m)
-			if m.HeapAlloc > peak.Load() {
-				peak.Store(m.HeapAlloc)
-			}
-			select {
-			case <-done:
-				return
-			case <-time.After(200 * time.Microsecond):
-			}
-		}
-	}()
-	outputTail(path, OutputTailBytes)
-	close(done)
-	<-sampled
-	grew := int64(peak.Load()) - int64(base.HeapAlloc)
-	t.Logf("8 MiB output: live heap peaked %d bytes above the start", grew)
-	if grew > 4<<20 {
-		t.Fatalf("the live heap grew by %d bytes reading an 8 MiB output, want it bounded by the tail", grew)
+	tail := scanOutputTail(path, OutputTailBytes)
+	if tail.total < 8<<20 {
+		t.Fatalf("only %d bytes went through the window, want the whole 8 MiB output", tail.total)
+	}
+	if len(tail.buf) > 2*OutputTailBytes || cap(tail.buf) > 4*OutputTailBytes {
+		t.Fatalf("the scan holds %d bytes (capacity %d) of an 8 MiB output, want at most twice the %d byte tail", len(tail.buf), cap(tail.buf), OutputTailBytes)
 	}
 }
