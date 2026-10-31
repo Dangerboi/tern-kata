@@ -38,7 +38,7 @@ func runSubcommand(ctx context.Context, plan LaunchPlan, gateway *data.Gateway, 
 		detached := send(model.DetachFile{Workspace: workspace, Ref: plan.TargetRef, Actor: plan.Actor, Name: plan.Operands[0]}).(model.FileDetached)
 		if detached.Cleared {
 			if _, err := fmt.Fprintln(out, detached.Report()); err != nil {
-				return subcommandError{err}
+				return err
 			}
 		}
 		if detached.Err != nil {
@@ -52,7 +52,7 @@ func runSubcommand(ctx context.Context, plan LaunchPlan, gateway *data.Gateway, 
 			return subcommandError{attached.Err}
 		}
 		if _, err := fmt.Fprintln(out, attached.Path); err != nil {
-			return subcommandError{err}
+			return err
 		}
 	}
 	return nil
