@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1024,5 +1026,63 @@ func writeAgents(t *testing.T, path string, entries ...model.AgentEntry) {
 	}
 	if err := os.WriteFile(path, raw, 0o600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLiveBlocksCallerReturnsAtItsOwnDeadlineWhileAnotherAskRuns(t *testing.T) {
+	g, _ := agentGateway(t)
+	release := make(chan struct{})
+	started := make(chan struct{}, 1)
+	g.runTern = func(ctx context.Context, _ []string) ([]byte, error) {
+		started <- struct{}{}
+		select {
+		case <-release:
+		case <-ctx.Done():
+		}
+		return lsOf("1"), nil
+	}
+	slow := make(chan error, 1)
+	go func() { _, _, err := g.liveBlocks(context.Background(), false); slow <- err }()
+	<-started
+	time.AfterFunc(600*time.Millisecond, func() { close(release) })
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	begun := time.Now()
+	_, _, err := g.liveBlocks(ctx, false)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("the short caller got %v, want its deadline error", err)
+	}
+	if took := time.Since(begun); took > 400*time.Millisecond {
+		t.Errorf("the short caller returned after %v", took)
+	}
+	if err := <-slow; err != nil {
+		t.Errorf("the slow caller: %v", err)
+	}
+}
+
+func TestLiveBlocksConcurrentCallersShareOneAsk(t *testing.T) {
+	g, _ := agentGateway(t)
+	release := make(chan struct{})
+	var asked atomic.Int32
+	g.runTern = func(context.Context, []string) ([]byte, error) {
+		asked.Add(1)
+		<-release
+		return lsOf("1"), nil
+	}
+	var wg sync.WaitGroup
+	for range 5 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if live, _, err := g.liveBlocks(context.Background(), false); err != nil || !live["1"] {
+				t.Errorf("got %v, %v", live, err)
+			}
+		}()
+	}
+	time.Sleep(50 * time.Millisecond)
+	close(release)
+	wg.Wait()
+	if n := asked.Load(); n != 1 {
+		t.Errorf("tern ls ran %d times, want 1", n)
 	}
 }
