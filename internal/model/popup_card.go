@@ -436,8 +436,10 @@ func buildCards() []cardEntry {
 			text:    func(m *Model) (*string, *Caret) { return &m.Picker.Filter, &m.Picker.Caret },
 			erased: func(m Model, action Action, changed bool) Model {
 				// Backspace with nothing to delete leaves a Views or Projects level, like esc.
-				if action == DeleteInput && !changed && m.Picker.Filter == "" && m.Picker.Level != MenuTop {
-					return setMenuLevel(m, true, MenuTop)
+				if action == DeleteInput && !changed && m.Picker.Filter == "" {
+					if up, ok := menuUp(m, true); ok {
+						return up
+					}
 				}
 				m.Picker.Cursor = 0
 				return m

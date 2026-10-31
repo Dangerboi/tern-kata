@@ -459,7 +459,8 @@ func TestRecurrenceCardStopAsksYesOrNoThenStops(t *testing.T) {
 		t.Fatal("another key left the question")
 	}
 	stopping, cmds := model.Update(asked, model.KeyMsg{Chord: "y"})
-	want := model.StopRecurrenceCmd{Workspace: "/repo", UID: "parent", RecurrenceUID: "rec-uid"}
+	want := model.StopRecurrenceCmd{Workspace: "/repo", UID: "parent", RecurrenceUID: "rec-uid",
+		Opened: model.RecurrenceTerms{Rule: "FREQ=DAILY;INTERVAL=1", Start: "2026-10-19", TimeZone: "Europe/Zurich"}}
 	if len(cmds) != 1 || cmds[0] != want || !stopping.RecurrenceForm.Saving {
 		t.Fatalf("y sent %#v (saving %v), want %#v", cmds, stopping.RecurrenceForm.Saving, want)
 	}

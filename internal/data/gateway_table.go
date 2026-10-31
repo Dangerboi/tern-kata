@@ -291,7 +291,8 @@ func init() {
 	daemonCall(
 		func(cmd model.StopRecurrenceCmd) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.StopRecurrenceCmd) (model.Msg, error) {
-			return ok(model.RecurrenceResultMsg{UID: cmd.UID}, c.StopRecurrence(ctx, cmd))
+			changed, err := c.StopRecurrence(ctx, cmd)
+			return ok(model.RecurrenceResultMsg{UID: cmd.UID, Changed: changed}, err)
 		},
 		func(cmd model.StopRecurrenceCmd, err error) model.Msg {
 			return model.RecurrenceResultMsg{UID: cmd.UID, Err: err}

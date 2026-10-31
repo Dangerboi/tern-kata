@@ -100,7 +100,7 @@ github-review = { file = "~/.config/tern-kata/github-review" }   # a private (06
 
 `tern-kata worker stop [--now]` and the Worker card's restart choice send one `stop` request over the worker's control socket.
 
-- **When idle (default).** The worker stops admitting: scheduled occurrences, `run` requests and resumes are refused with "the worker is stopping". It lets the runs in flight finish and report to kata, then exits with status 0. Held runs do not count as in flight. `worker status` shows the stopping state and how many runs it waits for.
+- **When idle (default).** The worker stops admitting: scheduled occurrences, `run` requests and resumes are refused with "the worker is stopping". It lets the runs in flight finish and report to kata, then exits with status 0. Held runs do not count as in flight, and `worker abandon` is still accepted, since it ends a run instead of starting one. `worker status` shows the stopping state and how many runs it waits for.
 - **`--now`.** It ends at once. A run whose agent was running is held `interrupted` and is resumable, exactly as after a terminate signal. Sent during a drain, it upgrades the drain.
 - **Leases.** A stopped worker does not release its Projects' leases; its next start renews them.
 - **A fresh worker.** The command prints the mode, the runs in flight and whether one follows: only the plugin's supervision starts it, so a worker started by hand, or one with `worker.manual` beside `worker.toml`, stays stopped. With no worker running the command says so and exits 1.

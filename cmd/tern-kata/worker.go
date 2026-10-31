@@ -258,7 +258,9 @@ func runForeground(ctx context.Context, plan LaunchPlan, env workerEnv, out io.W
 	if err != nil {
 		return subcommandError{err}
 	}
-	fmt.Fprintf(out, "Worker %q serving %d %s; state in %s. Stop it with ctrl+c.\n", cfg.Executor, len(cfg.Projects), map[bool]string{true: "Project", false: "Projects"}[len(cfg.Projects) == 1], env.Dirs.State)
+	if _, err := fmt.Fprintf(out, "Worker %q serving %d %s; state in %s. Stop it with ctrl+c.\n", cfg.Executor, len(cfg.Projects), map[bool]string{true: "Project", false: "Projects"}[len(cfg.Projects) == 1], env.Dirs.State); err != nil {
+		return err
+	}
 	if err := w.Run(ctx); err != nil {
 		return subcommandError{err}
 	}

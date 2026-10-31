@@ -521,7 +521,7 @@ func answerStop(m Model, msg KeyMsg) (Model, []Cmd) {
 			return m, nil
 		}
 		f.Saving, f.Stopping, f.Err = true, true, nil
-		return m, []Cmd{StopRecurrenceCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, RecurrenceUID: f.Opened.UID}}
+		return m, []Cmd{StopRecurrenceCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, RecurrenceUID: f.Opened.UID, Opened: f.Opened.RecurrenceTerms}}
 	}
 	return m, nil
 }

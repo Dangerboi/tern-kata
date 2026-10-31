@@ -115,8 +115,8 @@ func (w *Worker) handle(ctx context.Context, req Request) Response {
 		s := w.Status()
 		return Response{OK: true, Status: &s}
 	case "run":
-		if w.halted.Load() || w.isStopping() {
-			return Response{Error: errStopping.Error()}
+		if err := w.stopRefusal(cmdRun); err != nil {
+			return Response{Error: err.Error()}
 		}
 		accepted, err := w.RequestRun(ctx, req.Job)
 		if err != nil {

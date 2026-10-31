@@ -43,6 +43,55 @@ func (w *Worker) Stop(mode string) (StopAnswer, error) {
 	return answer, nil
 }
 
+// Worker commands, as the control socket and the CLI name them.
+const (
+	cmdStatus    = "status"
+	cmdRunDetail = "run-detail"
+	cmdStop      = "stop"
+	cmdRun       = "run"
+	cmdResume    = "resume"
+	cmdAbandon   = "abandon"
+)
+
+// whileStopping is the one rule for what each command may do once a stop was asked (ADR-0012), by stop mode: idle
+// drains and refuses what starts work, now ends the worker at once and refuses what changes runs. An abandon is
+// accepted during an idle drain because it ends a run instead of starting one.
+var whileStopping = map[string]struct{ idle, now bool }{
+	cmdStatus:    {idle: true, now: true},
+	cmdRunDetail: {idle: true, now: true},
+	cmdStop:      {idle: true, now: true},
+	cmdRun:       {},
+	cmdResume:    {},
+	cmdAbandon:   {idle: true},
+}
+
+// refusedWhileStopping is errStopping when command may not run in stop mode ("" while serving), nil otherwise.
+func refusedWhileStopping(command, mode string) error {
+	switch mode {
+	case "":
+		return nil
+	case StopIdle:
+		if whileStopping[command].idle {
+			return nil
+		}
+	case StopNow:
+		if whileStopping[command].now {
+			return nil
+		}
+	}
+	return errStopping
+}
+
+// stopRefusal is why command may not run now because the worker is stopping or halted, nil when it may.
+func (w *Worker) stopRefusal(command string) error {
+	if w.halted.Load() {
+		return refusedWhileStopping(command, StopNow)
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return refusedWhileStopping(command, w.stopping)
+}
+
 func (w *Worker) isStopping() bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()

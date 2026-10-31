@@ -288,6 +288,82 @@ type Store struct {
 	dirs  Dirs
 	hooks Hooks
 	locks keyedMutex
+
+	gateMu sync.Mutex
+	// closing holds, per job, the runs that close its overlap gate; seen is every run the index has a state for.
+	closing map[string]map[string]struct{}
+	seen    map[string]struct{}
+}
+
+func gateKey(projectUID, jobUID string) string { return projectUID + "/" + jobUID }
+
+// noteGate records the journal's state in the overlap index. It is called where a journal is saved.
+func (s *Store) noteGate(j *Journal) {
+	s.gateMu.Lock()
+	defer s.gateMu.Unlock()
+	s.noteGateLocked(j)
+}
+
+func (s *Store) noteGateLocked(j *Journal) {
+	if s.seen == nil {
+		s.seen = map[string]struct{}{}
+		s.closing = map[string]map[string]struct{}{}
+	}
+	s.seen[j.RunUID] = struct{}{}
+	key := gateKey(j.ProjectUID, j.JobUID)
+	if j.closesGate() {
+		if s.closing[key] == nil {
+			s.closing[key] = map[string]struct{}{}
+		}
+		s.closing[key][j.RunUID] = struct{}{}
+		return
+	}
+	if set := s.closing[key]; set != nil {
+		delete(set, j.RunUID)
+		if len(set) == 0 {
+			delete(s.closing, key)
+		}
+	}
+}
+
+// SeedGates adds journals read from disk to the overlap index. A run the index already knows keeps its state: a save
+// made since the read is newer than the read.
+func (s *Store) SeedGates(journals []*Journal) {
+	s.gateMu.Lock()
+	defer s.gateMu.Unlock()
+	for _, j := range journals {
+		if _, ok := s.seen[j.RunUID]; !ok {
+			s.noteGateLocked(j)
+		}
+	}
+}
+
+// ClosingRun names a run of the job that closes its overlap gate, empty when none does. It reads no file.
+func (s *Store) ClosingRun(projectUID, jobUID string) string {
+	s.gateMu.Lock()
+	defer s.gateMu.Unlock()
+	var first string
+	for uid := range s.closing[gateKey(projectUID, jobUID)] {
+		if first == "" || uid < first {
+			first = uid
+		}
+	}
+	return first
+}
+
+// RunsReadable says whether the runs folder can be listed; a missing folder holds no runs and reads fine.
+func (s *Store) RunsReadable() error {
+	info, err := os.Stat(s.dirs.Runs())
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%s is not a folder", s.dirs.Runs())
+	}
+	return nil
 }
 
 // NewStore opens the journals under dirs.
@@ -378,6 +454,7 @@ func (s *Store) write(j *Journal, point string) error {
 	if err := replaceFileSyncing(s.path(j.RunUID), raw, sync); err != nil {
 		return err
 	}
+	s.noteGate(j)
 	if s.hooks.AfterSave != nil {
 		if err := s.hooks.AfterSave(point, j); err != nil {
 			return fmt.Errorf("%w at %s: %w", ErrKilled, point, err)
@@ -557,6 +634,7 @@ func (s *Store) Retain(cutoff time.Time) (removed []string, err error) {
 				err = errors.Join(err, rerr)
 			} else {
 				s.locks.retire(e.Name())
+				s.forgetGate(e.Name())
 				removed = append(removed, e.Name())
 			}
 		}
@@ -576,4 +654,11 @@ func expired(j *Journal, cutoff time.Time) bool {
 		}
 	}
 	return true
+}
+
+// forgetGate drops a removed run from the overlap index. Only settled runs are removed, and those close no gate.
+func (s *Store) forgetGate(uid string) {
+	s.gateMu.Lock()
+	defer s.gateMu.Unlock()
+	delete(s.seen, uid)
 }

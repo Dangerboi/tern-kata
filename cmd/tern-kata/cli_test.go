@@ -85,3 +85,28 @@ func TestBashCompletionOffersSubcommandsWorkerFormsAndFlags(t *testing.T) {
 		}
 	}
 }
+
+// fullDisk is stdout redirected to /dev/full: every write fails.
+type fullDisk struct{}
+
+func (fullDisk) Write([]byte) (int, error) { return 0, syscall.ENOSPC }
+
+func TestSubcommandOutputFailuresExitOne(t *testing.T) {
+	for name, plan := range map[string]LaunchPlan{
+		"version":    {Version: "1.2.3"},
+		"help":       {Help: true},
+		"completion": {Subcommand: "completion", Operands: []string{"bash"}},
+	} {
+		handled, err := printInfo(plan, printableWriter{fullDisk{}})
+		if !handled {
+			t.Fatalf("%s: not handled", name)
+		}
+		if got := exitStatus(err); got != 1 {
+			t.Errorf("%s: exit %d for %v, want 1", name, got, err)
+		}
+	}
+	_, err := fmt.Fprintln(printableWriter{fullDisk{}}, "worker status")
+	if got := exitStatus(err); got != 1 {
+		t.Errorf("worker output: exit %d for %v, want 1", got, err)
+	}
+}
