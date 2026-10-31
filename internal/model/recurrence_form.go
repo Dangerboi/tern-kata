@@ -378,15 +378,6 @@ func updateRecurrence(m Model, msg Msg) (Model, []Cmd) {
 	return m, nil
 }
 
-// cycleIndex is the index after i, or before it when back, in a ring of n.
-func cycleIndex(i, n int, back bool) int {
-	d := 1
-	if back {
-		d = -1
-	}
-	return ((i+d)%n + n) % n
-}
-
 // chooseFrequency gives the Frequency field its choice at i, in the order of Frequencies. An index out of range changes nothing.
 func chooseFrequency(f *RecurrenceFormState, i int) bool {
 	if i < 0 || i >= len(Frequencies) {

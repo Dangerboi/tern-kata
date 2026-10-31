@@ -130,11 +130,19 @@ func TestTheBadgeIndexAnswersAsTheBadgePerIssue(t *testing.T) {
 			{Block: "4", State: "working"}, {Block: "2", State: "idle"}, {Block: "6", State: "idle"}}},
 	}
 	index := m.AgentBadges()
-	for _, uid := range []string{"a", "b", "c", "none"} {
-		want, wantOK := m.AgentBadgeFor(uid)
-		got, ok := index.For(uid)
-		if ok != wantOK || got != want {
-			t.Errorf("%s: index %+v (%v), badge %+v (%v)", uid, got, ok, want, wantOK)
+	for _, tt := range []struct {
+		uid  string
+		want model.AgentBadge
+		ok   bool
+	}{
+		{"a", model.AgentBadge{Text: "agent waiting for you · 3", Tone: model.AgentToneWarning, Block: "3"}, true},
+		{"b", model.AgentBadge{Text: "agent idle · 2", Tone: model.AgentToneMuted, Block: "6"}, true},
+		{"c", model.AgentBadge{Text: "agent", Tone: model.AgentToneMuted, Block: "5"}, true},
+		{"none", model.AgentBadge{}, false},
+	} {
+		got, ok := index.For(tt.uid)
+		if ok != tt.ok || got != tt.want {
+			t.Errorf("%s: badge %+v (%v), want %+v (%v)", tt.uid, got, ok, tt.want, tt.ok)
 		}
 	}
 	if _, ok := (model.Model{}).AgentBadges().For("a"); ok {

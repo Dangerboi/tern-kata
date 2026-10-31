@@ -58,15 +58,16 @@ func priorityText(p *int64) (string, ui.Tone) {
 	if p == nil {
 		return "", ui.ToneMuted
 	}
+	text := model.PriorityText(p)
 	switch *p {
 	case 0:
-		return model.PriorityText(p), ui.ToneError
+		return text, ui.ToneError
 	case 1:
-		return model.PriorityText(p), ui.ToneWarning
+		return text, ui.ToneWarning
 	case 2:
-		return model.PriorityText(p), ui.ToneInfo
+		return text, ui.ToneInfo
 	}
-	return model.PriorityText(p), ui.ToneMuted
+	return text, ui.ToneMuted
 }
 
 // toneStyle is the text span style closest to tone. Spans have no user or pending style, so those take the nearest one a

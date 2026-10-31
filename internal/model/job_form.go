@@ -584,9 +584,11 @@ func jobStep(f *JobFormState, name Field, back bool) {
 
 // jobChoiceField declares a choice field of the Job card: JobChoices lists its choices.
 func jobChoiceField(name Field) formField[JobFormState] {
-	return choiceField(name,
+	field := choiceField(name,
 		func(f *JobFormState, back bool) { jobStep(f, name, back) },
 		func(f *JobFormState, i int) bool { return jobPick(f, name, i) })
+	field.empty = func(f *JobFormState) bool { return len(f.JobChoices(name)) == 0 }
+	return field
 }
 
 // newJobForm is the card for a job that does not exist yet: a native job running every day at nine in the Pane's zone,

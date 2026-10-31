@@ -53,7 +53,7 @@ func board(m model.Model, now time.Time) tern.Element {
 	if m.SelectedUID != "" {
 		selected = m.Relationships.Of(m.SelectedUID)
 	}
-	today := model.NewToday(m.Calendar.Date)
+	today := model.NewCalendarDay(m.Calendar.Date)
 	badges := m.AgentBadges()
 	lanes := make([]tern.Element, len(columns))
 	for i, column := range columns {
@@ -99,7 +99,7 @@ var dateTones = map[model.DateTone]ui.Tone{
 // boardCard is one Issue: its short id over its title clamped to two lines and its labels that are not Lane labels. The selected card
 // is unclamped and adds the owner and every label. The id is a badge in its Lane's tone; the title is the normal text colour, a Done
 // card's muted. The id row ends with the Date badge of an open card; the selected card adds the Dates line. Labels are info badges, the owner a user badge, "also" warning and the reopen hint muted.
-func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, selectedRels model.Relationships, today model.Today, badges model.AgentBadgeIndex, now time.Time) tern.Element {
+func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, selectedRels model.Relationships, today model.CalendarDay, badges model.AgentBadgeIndex, now time.Time) tern.Element {
 	issue := card.Issue
 	selected := issue.UID == m.SelectedUID
 	titleStyle := ""
