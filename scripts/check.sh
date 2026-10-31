@@ -2,8 +2,8 @@
 # Runs the project's checks: static (gofmt, go vet and golangci-lint for Linux and Windows, the build and the release
 # cross-builds), test (go test) or smoke (smoke/run.sh); no argument runs all three.
 # The static checks run side by side; each prints "CHECK <name> ok" or "CHECK <name> FAIL" (after its output) when it ends.
-# CHECK_OUT (default: a temporary folder, deleted on exit) receives the go test -json stream as gotest.jsonl, the built binaries under bin/
-# and each static check's output under log/.
+# CHECK_OUT (default: a temporary folder, deleted on exit) receives the go test -json stream as gotest.jsonl, the built
+# binaries under bin/ and each static check's output under log/.
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
@@ -67,7 +67,6 @@ failures='
   | select(
       .Action == "build-output"
       or (.Action == "output" and ([.Package, .Test] | IN($failed[])))
-      or (.Action == "output" and .Test == null and ([.Package, null] | IN($failed[])))
     )
   | .Output
 '
