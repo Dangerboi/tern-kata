@@ -40,7 +40,9 @@ func detail(m model.Model, now time.Time) tern.Element {
 	var children tern.Nodes
 	switch {
 	case m.SelectedUID == "":
-		children = append(children, emptyState("empty", "No Issue selected", "Pick one from the list to read its detail."))
+		noIssue := emptyState("No Issue selected", "Pick one from the list to read its detail.")
+		noIssue.Key = "empty"
+		children = append(children, noIssue)
 	case m.DetailLoading() && m.DetailAuthority() == nil:
 		children = append(children, ui.Text{Common: ui.Common{Key: "loading", Tone: ui.TonePending}, Text: "Loading Issue detail…"})
 	case m.DetailErr() != nil:

@@ -73,7 +73,7 @@ func board(m model.Model, now time.Time) tern.Element {
 			Children: append(ui.Nodes(
 				head,
 				ui.Rule{Common: ui.Common{Key: "rule", Tone: tones[i]}},
-			), listAndEmpty(ui.List{CommonWithoutMax: scrollerCommon("cards"), Max: fillMax, Children: cards}, false, emptyLane("cards", "No cards"))...),
+			), listAndEmpty(ui.List{CommonWithoutMax: scrollerCommon("cards"), Max: fillMax, Children: cards}, false, emptyLane("No cards"))...),
 		}
 	}
 	children := []tern.Element{}

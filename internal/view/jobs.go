@@ -37,7 +37,7 @@ func jobs(m model.Model, now time.Time) tern.Element {
 	if m.Jobs.ShowArchived {
 		archived = "archived shown"
 	}
-	heading := []ui.Span{{T: "Jobs", S: "strong"}, {T: " " + strconv.Itoa(len(rows)), S: "muted mono"}, {T: " · " + archived, S: "muted"}}
+	heading := []ui.Span{{T: "Jobs", S: "strong"}, {T: " " + strconv.Itoa(len(rows)), S: mono("muted")}, {T: " · " + archived, S: "muted"}}
 	if m.Jobs.Loading {
 		heading = append(heading, loadingMarker)
 	}
@@ -56,7 +56,7 @@ func jobs(m model.Model, now time.Time) tern.Element {
 		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.Jobs.Err.Error()})
 	}
 	list := ui.List{CommonWithoutMax: scrollerCommon("jobs"), Max: fillMax, Empty: ui.T("Loading jobs…"), Children: cards}
-	children = append(children, listAndEmpty(list, m.Jobs.Loading, emptyState("jobs", "No Cron jobs", "This Project has none. Create one with kata cron job create."))...)
+	children = append(children, listAndEmpty(list, m.Jobs.Loading, emptyState("No Cron jobs", "This Project has none.", cardButton("new", model.ModeJobs, model.NewJobAction, "New job", true)))...)
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapSM, children)
 }
 
@@ -78,7 +78,7 @@ func jobCard(row model.JobRow, selected bool) tern.Element {
 		if len(meta) > 0 {
 			meta = append(meta, ui.Span{T: " · ", S: "muted"})
 		}
-		meta = append(meta, ui.Span{T: label, S: "muted"}, ui.Span{T: value, S: "muted mono"})
+		meta = append(meta, ui.Span{T: label, S: "muted"}, ui.Span{T: value, S: mono("muted")})
 	}
 	if row.Profile != "" {
 		add("profile ", row.Profile)
