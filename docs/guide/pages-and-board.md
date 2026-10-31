@@ -20,9 +20,9 @@ The Board, Jobs, Runs and Workflows Pages act on the Pane's Project: the current
 
 ## Cards, menus and hovercards
 
-Every Popup card draws its buttons in the card's footer bar, each with its key as a keycap. A choice field is a select, a switch or two or three segmented tabs, whichever fits its choices: `left`/`right` and `space` step through them, `down` opens a select, typing searches a long one, `enter` picks and `esc` closes it, and a click picks.
+Every Popup card draws its buttons in the card's footer bar, each with its key as a keycap. A choice field is a select, a switch or segmented tabs: `left`/`right` and `space` step through them, `down` opens a select, typing searches a long one, `enter` picks and `esc` closes it, and a click picks.
 
-An Issue row, a Lane row and a Board card open a menu on a right click: Open, Agent…, Close (or Reopen on a closed Issue), Priority…, Dates… and Move to Project, each with its key. Picking an entry selects that Issue first, then does what the key does on it. On a closed Issue, Agent… and Close are disabled and say why. Hovering an Issue reference, such as an id on a Relationships line or a Comment link, shows a card with the Issue's id, title, status, owner and update time.
+An Issue row, a Lane row and a Board card open a menu on a right click: Open, Agent…, Close, Priority…, Dates… and Move to Project, plus Reopen on a closed Issue, each with its key. Picking an entry selects that Issue first, then does what the key does on it. On a closed Issue, Agent… and Close are disabled and say why. Hovering an Issue reference, such as an id on a Relationships line or a Comment link, shows a card with the Issue's id, title, status, owner and update time.
 
 Pages and lists with nothing to show draw an empty state saying so.
 
@@ -180,7 +180,7 @@ Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relat
 
 ### Moving around and moving cards
 
-- `↑`/`↓`/`j`/`k` move within a Lane and `←`/`→` to the neighbouring Lane that has cards. A click selects a card. `x` opens the Close card, `r` reopens a closed Issue into its Lane, and `+`, `-`, `a`, `A`, `!`, `p`, `u` (undo), `@`, `U`, `e` and `n` act on the selected card as in the list. `esc` opens the Menu.
+- `↑`/`↓`/`j`/`k` move within a Lane and `←`/`→` to the neighbouring Lane that has cards. A click selects a card. `x` opens the Close card (on a closed Issue it says the Issue is already closed), `r` reopens a closed Issue into its Lane, and `+`, `-`, `a`, `A`, `!`, `p`, `u` (undo), `@`, `U`, `e` and `n` act on the selected card as in the list. `esc` opens the Menu.
 - `>` moves the selected card one Lane right and `<` one Lane left, among No lane and the Lanes; a Move never enters or leaves Done (`x` closes, `r` reopens). Leaving No lane adds the first Lane's label; moving into No lane removes the Lane labels and keeps every other label.
 - A Move adds the target label first, then removes the other Lane labels, so a failure halfway leaves the Issue in two Lanes, never none, and a Move of an Issue with two Lane labels leaves it with one. The card shows in its new Lane at once; a failure leaves a Notice with the daemon's reason. Moves are refused while the daemon is disconnected.
 
