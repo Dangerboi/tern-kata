@@ -46,7 +46,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - Re-enabling a disabled Cron job runs nothing for the time it was off, whatever its `catchup`, with or without a worker restart in between.
 - A succeeded run whose per-run Issue can't be read when the worker reports it sends its final observation and waits to comment and label until the Issue can be read, so a closed Issue no longer gets the final message comment and `needs-review`.
 - During an idle stop, `worker abandon` of a Held run is accepted; `run` and `resume` are still refused while the worker stops.
-- When a resumed run's earlier output can't be set aside, it is kept untouched and the run is held again saying so, instead of the new attempt overwriting it.
+- `worker resume` of a Held run whose output can't be set aside, for example because another program has it open on Windows, is refused with the reason and the run stays held as it was, instead of the new attempt overwriting that output.
 - A finished turn whose `agent_end` line passes 64 MiB is recognised, live and on recovery (`no_receipt`, not `interrupted`), while a non-terminal one still is not; a single write over the line limit that contains a newline is checked too.
 - Stopping a Recurrence from its card or with `tern-kata recur --stop` writes nothing when its rule, start date or time zone changed since you read it and shows the schedule as it stands; a stop that got no answer says the Recurrence may have been stopped.
 - Agent mapping (`agents.json`) changes from two Panes at once no longer lose one, and neither do Lane list (`lanes.toml`) and Default filter (`filters.toml`) saves: a save applies on top of another Pane's save, or is refused with the reason shown on the card.
