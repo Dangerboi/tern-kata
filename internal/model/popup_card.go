@@ -73,6 +73,9 @@ type cardEntry struct {
 	mode  func(Model) Mode
 	// key handles a key for the card; every global chord but ctrl+c, which quits at once from any card, is the card's to swallow or type.
 	key func(Model, KeyMsg) (Model, []Cmd)
+	// table declares the fields of a card that has moved to a field table; fill derives busy, fields, focus, text,
+	// erased, step and choose from it, so such a card sets none of them.
+	table interface{ fill(*cardEntry) }
 	// busy is the card's one busy condition: it is saving, asking to discard, showing a conflict or
 	// otherwise answering something, so no focus moves and no text field holds the caret. Every
 	// other rule about focus and the caret derives from it.
@@ -216,7 +219,7 @@ func workerBusy(m Model) bool {
 
 // buildCards fills in cards.
 func buildCards() []cardEntry {
-	return []cardEntry{
+	list := []cardEntry{
 		{
 			card: CardCreate, name: "create", open: func(m Model) bool { return m.Create.Open },
 			modes: []Mode{ModeCreate, ModeDiscard},
@@ -295,19 +298,9 @@ func buildCards() []cardEntry {
 		{
 			card: CardClose, name: "close", open: func(m Model) bool { return m.CloseForm.Open },
 			modes: []Mode{ModeCloseForm}, mode: func(Model) Mode { return ModeCloseForm },
-			key:    closeKey,
-			busy:   func(m Model) bool { return m.CloseForm.Saving },
-			fields: CloseFields, focus: func(m *Model) *Field { return &m.CloseForm.Field },
+			key:     closeKey,
+			table:   &closeTable,
 			editing: []fieldEditing{{mode: ModeCloseForm, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}, delete: "erase"}},
-			text: func(m *Model) (*string, *Caret) {
-				return m.CloseForm.Values.at(m.CloseForm.Field), &m.CloseForm.Caret
-			},
-			erased: func(m Model, _ Action, changed bool) Model {
-				if changed {
-					m.CloseForm.Err = nil
-				}
-				return m
-			},
 		},
 		{
 			card: CardDates, name: "dates", open: func(m Model) bool { return m.DatesForm.Open },
@@ -471,22 +464,9 @@ func buildCards() []cardEntry {
 		{
 			card: CardLanes, name: "lanes", open: func(m Model) bool { return m.LanesForm.Open },
 			modes: []Mode{ModeLanesForm}, mode: func(Model) Mode { return ModeLanesForm },
-			key:    updateLanesFormKey,
-			busy:   func(m Model) bool { return m.LanesForm.Saving },
-			fields: LanesFields, focus: func(m *Model) *Field { return &m.LanesForm.Field },
+			key:     updateLanesFormKey,
+			table:   &lanesTable,
 			editing: []fieldEditing{{mode: ModeLanesForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}}},
-			text:    func(m *Model) (*string, *Caret) { return m.LanesForm.at(m.LanesForm.Field), &m.LanesForm.Caret },
-			erased: func(m Model, _ Action, changed bool) Model {
-				if changed {
-					m.LanesForm.Err = nil
-				}
-				return m
-			},
-			step: func(m Model, _ bool) Model {
-				m.LanesForm.Share, m.LanesForm.Err = !m.LanesForm.Share, nil
-				return m
-			},
-			choose: func(m Model, i int) Model { m.LanesForm.choose(i); return m },
 		},
 		{
 			card: CardWorker, name: "worker", open: func(m Model) bool { return m.WorkerCard.Open },
@@ -566,6 +546,12 @@ func buildCards() []cardEntry {
 			},
 		},
 	}
+	for i := range list {
+		if list[i].table != nil {
+			list[i].table.fill(&list[i])
+		}
+	}
+	return list
 }
 
 // Cards lists every popup card in the order TopCard tries them.
