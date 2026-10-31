@@ -1,6 +1,7 @@
 package view
 
 import (
+	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
@@ -14,6 +15,15 @@ func emptyState(title, text string, actions ...tern.Element) ui.Empty {
 		Text:               ui.T(text),
 		Children:           actions,
 	}
+}
+
+// emptyButton is the empty state's button for action, drawn only while the Pane's current mode binds action: the click presses
+// that mode's chord, so with Search, the Menu or another column in front a button would do nothing.
+func emptyButton(m model.Model, key string, action model.Action, words string, primary bool) []tern.Element {
+	if len(model.CardKeys(m.CurrentMode(), action)) == 0 {
+		return nil
+	}
+	return ui.Nodes(cardButton(key, m.CurrentMode(), action, words, primary))
 }
 
 // emptyLane is the narrow variant of emptyState, one row of just the title, for a column too narrow to hold a line of

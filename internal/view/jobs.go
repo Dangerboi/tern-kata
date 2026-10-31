@@ -56,7 +56,7 @@ func jobs(m model.Model, now time.Time) tern.Element {
 		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.Jobs.Err.Error()})
 	}
 	list := ui.List{CommonWithoutMax: scrollerCommon("jobs"), Max: fillMax, Empty: ui.T("Loading jobs…"), Children: cards}
-	children = append(children, listAndEmpty(list, m.Jobs.Loading, emptyState("No Cron jobs", "This Project has none.", cardButton("new", model.ModeJobs, model.NewJobAction, "New job", true)))...)
+	children = append(children, listAndEmpty(list, m.Jobs.Loading, emptyState("No Cron jobs", "This Project has none.", emptyButton(m, "new", model.NewJobAction, "New job", true)...))...)
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapSM, children)
 }
 
