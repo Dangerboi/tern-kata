@@ -87,3 +87,39 @@ func TestScanQuarantinesOnlyDamagedJournals(t *testing.T) {
 		t.Fatalf("quarantined %v, err %v", quarantined, err)
 	}
 }
+
+// The overlap index answers from memory: a run that is not settled closes its job's gate, settling it opens the gate,
+// and a new store learns the open runs from the journals it seeds. The runs folder is gone when the index is asked,
+// so no journal can have been read.
+func TestTheOverlapIndexFollowsSavedJournalsWithoutReadingThem(t *testing.T) {
+	dirs := worker.Dirs{Config: t.TempDir(), State: t.TempDir()}
+	store := worker.NewStore(dirs, worker.Hooks{})
+	const uid = "01M5JESXAK1NBYS6N2ZD9RTM9J"
+	if err := store.Create(&worker.Journal{Version: 1, RunUID: uid, ProjectUID: "p", JobUID: "j", Phase: worker.PhasePrepared}, "prepared"); err != nil {
+		t.Fatal(err)
+	}
+	journals, _, err := store.Scan()
+	if err != nil || len(journals) != 1 {
+		t.Fatalf("scan: %d journals, %v", len(journals), err)
+	}
+	restarted := worker.NewStore(dirs, worker.Hooks{})
+	restarted.SeedGates(journals)
+	if err := os.RemoveAll(dirs.Runs()); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.ClosingRun("p", "j"); got != uid {
+		t.Fatalf("saved unsettled run closes the gate: got %q", got)
+	}
+	if got := restarted.ClosingRun("p", "j"); got != uid {
+		t.Fatalf("seeded unsettled run closes the gate: got %q", got)
+	}
+	if got := store.ClosingRun("p", "other"); got != "" {
+		t.Fatalf("another job's gate is closed by %q", got)
+	}
+	if err := store.Create(&worker.Journal{Version: 1, RunUID: uid, ProjectUID: "p", JobUID: "j", Phase: worker.PhaseSettled}, "settled"); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.ClosingRun("p", "j"); got != "" {
+		t.Fatalf("settled run closes the gate: %q", got)
+	}
+}
