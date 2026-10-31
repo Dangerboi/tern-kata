@@ -33,6 +33,7 @@ const (
 	attentionOpenAct = "attention-open"
 	workflowOpenAct  = "workflow-open"
 	agentAct         = "agent"
+	menuPickAct      = "pick"
 )
 
 // FocusDetailClick, RetryClick and MenuClick carry no value.
@@ -61,6 +62,9 @@ func AgentClick(block string) string { return click(agentAct, block) }
 
 // CardClick selects the Board card of the Issue.
 func CardClick(uid string) string { return click(cardAct, uid) }
+
+// MenuPickClick is the id of a context menu row of the Issue with uid: select it, then press chord.
+func MenuPickClick(uid, chord string) string { return click(menuPickAct, uid+":"+chord) }
 
 // JobClick selects the job's card on the Jobs Page.
 func JobClick(uid string) string { return click(jobAct, uid) }
@@ -144,6 +148,10 @@ func DecodeAction(id, act, value string) model.Msg {
 		return model.AgentJumpMsg{Block: value}
 	case cardAct:
 		return model.SelectMsg{UID: value}
+	case menuPickAct:
+		if uid, chord, found := strings.Cut(value, ":"); found {
+			return model.MenuPickMsg{UID: uid, Chord: chord}
+		}
 	case refAct:
 		return model.ShowCardMsg{UID: value}
 	case runAct:

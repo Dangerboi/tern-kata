@@ -330,7 +330,7 @@ func issueRow(m model.Model, row model.IssueRow, selected bool, role string, col
 	}
 	owner := listOwner(m, row, now)
 	// A parent's click folds it; a double click on any row opens it. Tern sends the two clicks first, so a parent's fold ends where it began.
-	actions := &ui.Actions{DblClick: OpenRowClick(row.UID)}
+	actions := &ui.Actions{DblClick: OpenRowClick(row.UID), Menu: issueMenu(rowMode(m), row.Issue, model.DrillIn)}
 	if row.HasChildren {
 		actions.Click = ToggleClick(row.UID)
 	}

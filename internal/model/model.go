@@ -427,6 +427,13 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		}
 	case SelectMsg:
 		return selectRow(m, msg.UID), nil
+	case MenuPickMsg:
+		selected := selectRow(m, msg.UID)
+		if selected.SelectedUID != msg.UID {
+			return m, nil
+		}
+		selected.Notice, selected.NoticeLink = "", nil
+		return update(selected, KeyMsg{Chord: msg.Chord})
 	case ResizeMsg:
 		m.Cols, m.Rows = msg.Cols, msg.Rows
 	case PaneRowsMsg:
