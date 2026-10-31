@@ -653,9 +653,11 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 		intents := []Intent{{Kind: IntentFinal}}
 		issueOpen := true
 		if j.Outcome.Status == cronjob.RunSucceeded && !j.Issue.Existing {
-			if issue, err := w.opt.Kata.ShowIssue(ctx, j.ProjectID, j.Issue.UID); err == nil {
-				issueOpen = issue.Open()
+			issue, err := w.opt.Kata.ShowIssue(ctx, j.ProjectID, j.Issue.UID)
+			if err != nil {
+				return fmt.Errorf("cannot tell whether the run's Issue is still open: %w", err) // planned later, once it can be read
 			}
+			issueOpen = issue.Open()
 		} else if j.Outcome.Status == cronjob.RunSucceeded {
 			issueOpen = false
 		}
