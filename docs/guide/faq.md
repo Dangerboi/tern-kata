@@ -8,7 +8,7 @@
 
 ### What do I need installed?
 
-kata v0.20.0 or newer and Tern 0.9.7 or newer. For the worker, also omp, and on Windows Git for Windows. See [Install](../../README.md#install).
+kata v0.20.0 or newer and Tern 0.9.9 or newer. For the worker, also omp, and on Windows Git for Windows. See [Install](../../README.md#install).
 
 ### Which machine gets which part?
 

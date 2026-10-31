@@ -78,7 +78,7 @@ With an `actor` the agent runs through `tern-kata agent --as <actor> --`, which 
 ## Requirements
 
 - kata v0.20.0 or newer.
-- Tern 0.9.7 or newer.
+- Tern 0.9.9 or newer.
 - For the worker: [omp](https://github.com/can1357/oh-my-pi) on `PATH`. On Windows also [Git for Windows](https://gitforwindows.org/), whose `sh` runs workflow command steps. The Pane itself needs no Git Bash.
 
 ## Install with an agent
