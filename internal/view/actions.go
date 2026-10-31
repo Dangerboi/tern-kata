@@ -18,6 +18,7 @@ import (
 // agent-states carries the JSON agent list as its value and is not a click.
 const (
 	keyAct             = "key"
+	buttonAct          = "press"
 	jumpAct            = "jump"
 	activityTabAct     = "activity-tab"
 	detailItemAct      = "detail-item"
@@ -49,6 +50,10 @@ func click(act, value string) string { return act + "=" + value }
 
 // KeyClick presses chord.
 func KeyClick(chord string) string { return click(keyAct, chord) }
+
+// ButtonClick is the click of a card's button: its chord pressed with the card as it stands, so no overlay of the card (its open
+// calendar or dropdown) takes the chord in place of the button.
+func ButtonClick(chord string) string { return click(buttonAct, chord) }
 
 // JumpClick opens the referenced Issue.
 func JumpClick(uid string) string { return click(jumpAct, uid) }
@@ -119,6 +124,8 @@ func DecodeAction(id, act, value string) model.Msg {
 	switch act {
 	case keyAct:
 		return model.KeyMsg{Chord: value}
+	case buttonAct:
+		return model.ButtonPressMsg{Chord: value}
 	case string(model.AgentStatesAction):
 		return decodeAgentStates(value)
 	case string(model.SelectIssueAction), string(model.ToggleExpansion), string(model.OpenRow), MenuClick:
@@ -264,7 +271,7 @@ func DecodeChange(id string, value any) model.Msg {
 	return nil
 }
 
-// DecodeToggle is the message for the pointer opening or closing the menu of the select at node id, nil for any other node.
+// DecodeToggle is the message for the pointer opening or closing the dropdown of the select at node id, nil for any other node.
 func DecodeToggle(id string, open bool) model.Msg {
 	if field, ok := controlField(id); ok {
 		return model.DropdownToggleMsg{Field: field, Open: open}

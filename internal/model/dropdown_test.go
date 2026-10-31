@@ -185,3 +185,32 @@ func TestTheOpenDropdownHasItsOwnKeyLine(t *testing.T) {
 		t.Errorf("mode %s after esc, want %s", got, model.ModeFilterForm)
 	}
 }
+
+// An open select keeps its highlight on the same choice when a live refresh reorders or grows the choices.
+func TestOpenSelectKeepsItsHighlightedChoiceAcrossALiveRefresh(t *testing.T) {
+	catalog := func(names ...string) []model.CatalogProject {
+		var out []model.CatalogProject
+		for _, n := range names {
+			out = append(out, model.CatalogProject{Project: model.Project{UID: "uid-" + n, Name: n}})
+		}
+		return out
+	}
+	m := model.Model{Collection: model.Collection{View: "all-open"}}
+	m.Snapshot.Catalog = catalog("bravo", "delta", "foxtrot")
+	m = cardKeys(m, "f")
+	m, _ = model.Update(m, model.FocusFieldMsg{Field: model.FilterProject})
+	m = cardKeys(m, "down", "down", "down")
+	m, cmds := model.Update(m, model.StreamEvent{Generation: m.StreamGeneration, ID: 99, Type: "project.created"})
+	for _, cmd := range cmds {
+		if read, ok := cmd.(model.ReadSnapshot); ok {
+			m, _ = model.Update(m, model.SnapshotLoaded{Request: read.Request, Query: read.Query, Snapshot: model.Snapshot{Catalog: catalog("alpha", "bravo", "delta", "foxtrot")}, LocalDate: "2026-10-08", TimeZone: "UTC"})
+		}
+	}
+	if !m.OpenDropdown(model.CardFilter, model.FilterProject).Open {
+		t.Fatal("the refresh closed the dropdown")
+	}
+	m = cardKeys(m, "enter")
+	if got := m.FilterForm.Values.Value(model.FilterProject); got != "uid-delta" {
+		t.Errorf("enter picked %q, want the highlighted delta", got)
+	}
+}

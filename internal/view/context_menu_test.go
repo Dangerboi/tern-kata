@@ -60,7 +60,7 @@ func TestIssueRowMenuListsTheKeysActionsAndDisablesWhatCannotRun(t *testing.T) {
 			{"Close", view.ContextMenuPickClick(alpha.UID, model.ModeList, "x"), "", []string{"x"}},
 			{"Priority…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "!"), "", []string{"!"}},
 			{"Dates…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "d"), "", []string{"d"}},
-			{"Move to Project", view.ContextMenuPickClick(alpha.UID, model.ModeList, "shift+m"), "", []string{"⇧m"}},
+			{"Move to Project", view.ContextMenuPickClick(alpha.UID, model.ModeList, "shift+m"), "", []string{"⇧M"}},
 		}},
 		{"closed", view.IssueID(closed.UID), closed.UID, []menuRow{
 			{"Open", view.ContextMenuPickClick(closed.UID, model.ModeList, "enter"), "", []string{"↵"}},
@@ -69,7 +69,7 @@ func TestIssueRowMenuListsTheKeysActionsAndDisablesWhatCannotRun(t *testing.T) {
 			{"Reopen", view.ContextMenuPickClick(closed.UID, model.ModeList, "r"), "", []string{"r"}},
 			{"Priority…", view.ContextMenuPickClick(closed.UID, model.ModeList, "!"), "", []string{"!"}},
 			{"Dates…", view.ContextMenuPickClick(closed.UID, model.ModeList, "d"), "", []string{"d"}},
-			{"Move to Project", view.ContextMenuPickClick(closed.UID, model.ModeList, "shift+m"), "", []string{"⇧m"}},
+			{"Move to Project", view.ContextMenuPickClick(closed.UID, model.ModeList, "shift+m"), "", []string{"⇧M"}},
 		}},
 	}
 	for _, tc := range cases {

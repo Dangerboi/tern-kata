@@ -77,6 +77,36 @@ type Dropdown struct {
 	Open   bool
 	Active int
 	Query  string
+	// activeLabel is the label the highlight is on, so a refresh that reorders the choices keeps it on the same one.
+	activeLabel string
+}
+
+// openedDropdown is the dropdown of the select called field of card, open on the chosen choice of set.
+func openedDropdown(card Card, field Field, set ChoiceSet) Dropdown {
+	d := Dropdown{Card: card, Field: field, Open: true, Active: max(set.Chosen, 0)}
+	d.hold(set)
+	return d
+}
+
+// hold remembers the label the highlight is on.
+func (d *Dropdown) hold(set ChoiceSet) {
+	d.activeLabel = ""
+	if d.Active >= 0 && d.Active < len(set.Labels) {
+		d.activeLabel = set.Labels[d.Active]
+	}
+}
+
+// follow moves the highlight to the held label's place in set; a label the set no longer has leaves it where it is.
+func (d *Dropdown) follow(set ChoiceSet) {
+	if d.Active >= 0 && d.Active < len(set.Labels) && set.Labels[d.Active] == d.activeLabel {
+		return
+	}
+	if at := slices.Index(set.Labels, d.activeLabel); at >= 0 {
+		d.Active = at
+	} else {
+		d.Active = min(max(d.Active, 0), max(len(set.Labels)-1, 0))
+		d.hold(set)
+	}
 }
 
 // CardChoices is the choice set of the field called name of card, false for a field that is not a choice or one the card keeps
@@ -106,6 +136,7 @@ func (m Model) settleDropdown() Model {
 	if entry, ok := m.topEntry(); ok && entry.card == m.Dropdown.Card && entry.choices != nil && entry.focus != nil && !entry.busy(m) {
 		if field := *entry.focus(&m); field == m.Dropdown.Field {
 			if set, ok := entry.choices(m, field); ok && set.Control == ControlSelect {
+				m.Dropdown.follow(set)
 				return m
 			}
 		}
@@ -157,7 +188,7 @@ func toggleDropdown(m Model, name Field, open bool) Model {
 		return m
 	}
 	if set, ok := entry.choices(m, name); ok && set.Control == ControlSelect {
-		m.Dropdown = Dropdown{Card: entry.card, Field: name, Open: true, Active: max(set.Chosen, 0)}
+		m.Dropdown = openedDropdown(entry.card, name, set)
 	}
 	return m
 }
@@ -180,7 +211,7 @@ func (e cardEntry) openDropdown(m Model) (Model, bool) {
 	if !ok || set.Control != ControlSelect {
 		return m, false
 	}
-	m.Dropdown = Dropdown{Card: e.card, Field: field, Open: true, Active: max(set.Chosen, 0)}
+	m.Dropdown = openedDropdown(e.card, field, set)
 	return m, true
 }
 
@@ -199,6 +230,7 @@ func (e cardEntry) dropdownKey(m Model, msg KeyMsg) (Model, bool) {
 		return m, false
 	}
 	dropdown := &m.Dropdown
+	dropdown.follow(set)
 	matches := set.Matches(dropdown.Query)
 	at := slices.Index(matches, dropdown.Active)
 	binding, bound := LookupBindingForMode(msg.Chord, ModeDropdown)
@@ -210,6 +242,7 @@ func (e cardEntry) dropdownKey(m Model, msg KeyMsg) (Model, bool) {
 				step = -1
 			}
 			dropdown.Active = matches[((max(at, 0)+step)%len(matches)+len(matches))%len(matches)]
+			dropdown.hold(set)
 		}
 	case bound && binding.Action == DropdownPick:
 		if at >= 0 && e.choose != nil {
@@ -242,5 +275,6 @@ func (e cardEntry) dropdownKey(m Model, msg KeyMsg) (Model, bool) {
 func (d *Dropdown) refilter(set ChoiceSet) {
 	if matches := set.Matches(d.Query); len(matches) > 0 {
 		d.Active = matches[0]
+		d.hold(set)
 	}
 }

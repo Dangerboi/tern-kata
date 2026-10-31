@@ -111,16 +111,16 @@ func TestControlEventsSetTheChoice(t *testing.T) {
 			t.Fatal("flipping Enabled off left the job enabled")
 		}
 	})
-	t.Run("pointer opens and closes the menu", func(t *testing.T) {
+	t.Run("pointer opens and closes the dropdown", func(t *testing.T) {
 		c := cards["Recurrence"]
 		s := c.open(t)
 		opened := step(t, s, &tern.Toggle{ID: node(c, model.RecurrenceEnds), Open: true}).State
 		if !opened.Model.OpenDropdown(model.CardRecurrence, model.RecurrenceEnds).Open || opened.Model.RecurrenceForm.Field != model.RecurrenceEnds {
-			t.Fatal("the pointer's open did not open the menu on its field")
+			t.Fatal("the pointer's open did not open the dropdown on its field")
 		}
 		closed := step(t, opened, &tern.Toggle{ID: node(c, model.RecurrenceEnds), Open: false}).State
 		if closed.Model.OpenDropdown(model.CardRecurrence, model.RecurrenceEnds).Open {
-			t.Fatal("the pointer's close left the menu open")
+			t.Fatal("the pointer's close left the dropdown open")
 		}
 		if !reflect.DeepEqual(step(t, s, &tern.Toggle{ID: "main.columns", Open: true}).State.Model, s.Model) {
 			t.Fatal("a toggle on another node changed the model")
