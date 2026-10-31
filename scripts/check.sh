@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Runs the project's checks: static (gofmt, go vet and golangci-lint for Linux and Windows, the build and the release
-# cross-builds), test (go test) or smoke (smoke/run.sh); no argument runs all three.
+# Runs the project's checks: static (gofmt, go vet and golangci-lint for Linux and Windows, the placement tests with the
+# luau command line, the build and the release cross-builds), test (go test) or smoke (smoke/run.sh); no argument runs all three.
 # The static checks run side by side; each prints "CHECK <name> ok" or "CHECK <name> FAIL" (after its output) when it ends.
 # CHECK_OUT (default: a temporary folder, deleted on exit) receives the go test -json stream as gotest.jsonl, the built
 # binaries under bin/ and each static check's output under log/.
@@ -42,6 +42,8 @@ cross() { # cross <os> <arch>
   GOOS=$1 GOARCH=$2 go build -trimpath -o "$out/bin/$1_$2/$bin" ./cmd/tern-kata
 }
 
+placement_tests() { luau test/placement_test.luau; }
+
 static() {
   local status=0 pid pids=()
   check fmt gofmt_clean
@@ -50,6 +52,7 @@ static() {
   # The two lints share golangci-lint's cache, which takes concurrent writers; the flag lifts the one-run-at-a-time lock.
   check lint-linux golangci-lint run --allow-parallel-runners ./...
   check lint-windows env GOOS=windows golangci-lint run --allow-parallel-runners ./...
+  check placement placement_tests
   check build go build -o "$out/bin/tern-kata" ./cmd/tern-kata
   for os in linux darwin windows; do
     for arch in amd64 arm64; do

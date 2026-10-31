@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
+
+	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
 func TestExitStatusFollowsTheCommandLineContract(t *testing.T) {
@@ -105,7 +109,14 @@ func TestSubcommandOutputFailuresExitOne(t *testing.T) {
 			t.Errorf("%s: exit %d for %v, want 1", name, got, err)
 		}
 	}
-	_, err := fmt.Fprintln(printableWriter{fullDisk{}}, "worker status")
+	dirs := worker.Dirs{Config: filepath.Join(t.TempDir(), "tern-kata")}
+	if err := os.MkdirAll(dirs.Config, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dirs.ConfigPath(), []byte("actor = \"robot\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := runWorkerCommand(t.Context(), LaunchPlan{Subcommand: "worker", Operands: []string{"supervised"}}, workerEnv{Dirs: dirs}, printableWriter{fullDisk{}})
 	if got := exitStatus(err); got != 1 {
 		t.Errorf("worker output: exit %d for %v, want 1", got, err)
 	}

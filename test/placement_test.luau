@@ -1,6 +1,6 @@
 --!strict
 
--- Tests of the agent tab placement rule on plain data, outside Tern: `luau smoke/placement_test.luau` (the Luau runtime,
+-- Tests of the agent tab placement rule on plain data, outside Tern: `luau test/placement_test.luau` (the Luau runtime,
 -- https://luau.org; `brew install luau`).
 
 local placement = require("../placement")
@@ -25,7 +25,7 @@ local function same(got: { placement.Move }, want: { { number } })
         .. ", want " .. table.concat(wantText, ","))
 end
 
--- Tabs 1..n in session 1, in order; a pane per tab with the same number plus 100 (so ids differ from tab ids).
+-- Tabs 1..n in session 1, in order. Panes are listed separately by each test.
 local function tabs(n: number): { placement.TabRec }
     local list = {}
     for i = 1, n do table.insert(list, {id = i, session = 1, position = i}) end
@@ -125,10 +125,9 @@ test("an agent is tried once: a pane already placed is skipped", function()
 end)
 
 test("an agent in the hidden session is tried but never moved", function()
-    local list = tabs(3)
-    list[3].session = 2
+    -- The hidden tab shares its home tab's session, so only the hidden rule keeps it where it is.
     local plan = placement.plan(snapshot({
-        tabs = list,
+        tabs = tabs(3),
         panes = {kata(10, 1), plain(20, 2), agent(30, 3, 10)},
         agents = {{pane = 30, marker = 10}},
         hidden = {[3] = true},

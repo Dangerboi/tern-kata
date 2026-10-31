@@ -232,10 +232,7 @@ func (e viewsEnv) show(name string) error {
 					ScheduledOn: dayOrNil(scheduled), DeadlineOn: dayOrNil(deadline), ClosedOn: dayOrNil(closed)}
 			}
 		}
-		if err := writeJSON(e.out, shown); err != nil {
-			return subcommandError{err}
-		}
-		return nil
+		return writeJSON(e.out, shown)
 	}
 	if len(groups) == 0 {
 		return e.say("No issues.")
