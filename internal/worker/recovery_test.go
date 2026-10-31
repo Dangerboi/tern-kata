@@ -565,3 +565,40 @@ func TestAQuarantinedAndAbandonedRunOpensTheJobsGateWithoutARestart(t *testing.T
 		t.Fatalf("the running worker refuses the job after the abandon: %q", resp.Error)
 	}
 }
+
+// A resume refused because stderr.log cannot be set aside, after output.jsonl already moved, leaves the held run's detail as it was.
+func TestAResumeRefusedOverLaterHeldFileKeepsTheHeldRunsOutputTail(t *testing.T) {
+	h := newHarness(t, "--stub-linger-first", "--stub-text", "All checked.")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
+	c := newCrash("session")
+	r := h.start(c.hooks())
+	h.admitting(r)
+	_ = h.ask(worker.Request{Op: "run", Job: job.UID})
+	uid := c.wait(t)
+	h.eventually("the agent to finish its turn", func() bool {
+		raw, _ := os.ReadFile(filepath.Join(h.dirs.Runs(), uid, "output.jsonl"))
+		return strings.Contains(string(raw), `"agent_end"`)
+	})
+	r.stop()
+
+	hooks := worker.Hooks{FailAsideRename: func(p string) error {
+		if filepath.Base(p) == "stderr.log" {
+			return errors.New("the file is in use")
+		}
+		return nil
+	}}
+	restarted := h.start(hooks)
+	h.admitting(restarted)
+	h.eventually("the hold to be resumable", func() bool { s, ok := h.runStatus(restarted, uid); return ok && s.Resumable })
+	before, err := restarted.w.RunDetail(uid)
+	if err != nil || !strings.Contains(before.OutputTail, "All checked.") {
+		t.Fatalf("detail before: %q, %v", before.OutputTail, err)
+	}
+	if resp := h.ask(worker.Request{Op: "resume", Run: uid}); resp.OK {
+		t.Fatalf("resume accepted")
+	}
+	after, err := restarted.w.RunDetail(uid)
+	if err != nil || after.OutputTail != before.OutputTail {
+		t.Fatalf("held run's output tail after the refused resume: %q (was %q), %v", after.OutputTail, before.OutputTail, err)
+	}
+}

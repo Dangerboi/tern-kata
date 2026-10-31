@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
@@ -105,11 +106,7 @@ func (w *Worker) heldTokens(j *Journal) (in, out *int64) {
 	if r := j.Result; r != nil && (r.InputTokens != nil || r.OutputTokens != nil) {
 		return r.InputTokens, r.OutputTokens
 	}
-	attempt := j.attempt()
-	r := readOutput(filepath.Join(w.attemptDir(j), fmt.Sprintf("output.attempt%d.jsonl", attempt)))
-	if r.InputTokens == nil && r.OutputTokens == nil {
-		r = readOutput(filepath.Join(w.attemptDir(j), "output.jsonl"))
-	}
+	r := readOutput(w.heldFile(j, "output.jsonl"))
 	return r.InputTokens, r.OutputTokens
 }
 
@@ -305,14 +302,38 @@ func sessionIn(dir, launched string) string {
 	return name[strings.LastIndexByte(name, '_')+1:]
 }
 
+// asideName is the name a finished attempt's file keeps beside the next attempt's: output.jsonl becomes
+// output.attempt2.jsonl.
+func asideName(name string, attempt int) string {
+	ext := filepath.Ext(name)
+	return fmt.Sprintf("%s.attempt%d%s", strings.TrimSuffix(name, ext), attempt, ext)
+}
+
+// heldFile is the path of the held attempt's file name in its folder: the live file, or, when a resume set it aside
+// and the run is still held, the aside copy.
+func (w *Worker) heldFile(j *Journal, name string) string {
+	dir := w.attemptDir(j)
+	live := filepath.Join(dir, name)
+	if _, err := os.Stat(live); err == nil || !j.held() {
+		return live
+	}
+	aside := filepath.Join(dir, asideName(name, j.attempt()))
+	if _, err := os.Stat(aside); err == nil {
+		return aside
+	}
+	return live
+}
+
 // keepAttemptOutput moves the finished attempt's output and stderr aside so the next attempt writes fresh files and
 // the held attempt's remain readable. An existing aside copy is never replaced. A file that cannot be moved is an
-// error: the next attempt would open it truncating, and the held attempt's evidence would be lost.
+// error: the next attempt would open it truncating, and the held attempt's evidence would be lost. The files already
+// moved go back, so a refused move leaves the folder as it was.
 func keepAttemptOutput(hooks Hooks, runDir string, attempt int) error {
+	type move struct{ from, aside string }
+	var done []move
 	for _, name := range []string{"output.jsonl", "stderr.log", "output.log"} {
-		ext := filepath.Ext(name)
 		from := filepath.Join(runDir, name)
-		aside := filepath.Join(runDir, fmt.Sprintf("%s.attempt%d%s", strings.TrimSuffix(name, ext), attempt, ext))
+		aside := filepath.Join(runDir, asideName(name, attempt))
 		if _, err := os.Stat(aside); err == nil {
 			continue
 		}
@@ -323,7 +344,14 @@ func keepAttemptOutput(hooks Hooks, runDir string, attempt int) error {
 		if err == nil {
 			err = os.Rename(from, aside)
 		}
-		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		if err == nil {
+			done = append(done, move{from, aside})
+			continue
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			for _, m := range slices.Backward(done) {
+				_ = os.Rename(m.aside, m.from)
+			}
 			return fmt.Errorf("the held attempt's %s could not be set aside, so it was left untouched: %w", name, err)
 		}
 	}

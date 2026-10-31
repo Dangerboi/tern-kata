@@ -191,7 +191,7 @@ A run that is not uncertain is never held: a nonzero exit, a timeout and a spawn
 
 - The held attempt's own prompt is never sent again.
 - The run goes back to `running` in kata with its original start time, gets a fresh timeout and ends recorded `succeeded` or `failed` by the new attempt. The held attempt's output stays in the run folder as `output.attempt1.jsonl`.
-- A resume is refused when the run is not held with `unknown`, when no omp session was saved (`launch_unproven`, and the nothing-started reasons: only abandon remains), when its recorded process group is still present, when the Project's lease is not held here, when the Issue is closed or when the Project is at capacity.
+- A resume is refused when the run is not held with `unknown`, when no omp session was saved (`launch_unproven`, and the nothing-started reasons: only abandon remains), when its recorded process group is still present, when the Project's lease is not held here, when the Issue is closed, when the Project is at capacity or when the held attempt's output cannot be set aside (the run stays held with its output untouched).
 
 ### Abandon
 

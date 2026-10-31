@@ -98,16 +98,15 @@ func (w *Worker) RunDetail(uid string) (RunDetail, error) {
 	case j.Executor != w.opt.Config.Executor:
 		return RunDetail{}, fmt.Errorf("run %s belongs to worker %q, not %q", uid, j.Executor, w.opt.Config.Executor)
 	}
-	dir := w.attemptDir(j) // a workflow shows its latest step's output
-	d := RunDetail{RunStatus: w.runStatus(j), Steps: stepsOf(j), OutputTail: outputTail(filepath.Join(dir, "output.jsonl"), OutputTailBytes)}
-	d.StderrTail = stderrFallback(filepath.Join(dir, "stderr.log"))
+	d := RunDetail{RunStatus: w.runStatus(j), Steps: stepsOf(j), OutputTail: outputTail(w.heldFile(j, "output.jsonl"), OutputTailBytes)}
+	d.StderrTail = stderrFallback(w.heldFile(j, "stderr.log"))
 	if t := shownStderrTail(j); t != "" { // stderr.log keeps only the first bytes; the journal holds the real end
 		d.StderrTail = t
 	}
 	d.Cwd = cmp.Or(j.Checkout, w.store.RunDir(uid))
 	d.SessionDir, d.SessionID = w.sessionOf(j)
 	if d.OutputTail == "" { // a command step's output is its own log
-		d.OutputTail = fileTail(filepath.Join(dir, "output.log"), OutputTailBytes)
+		d.OutputTail = fileTail(w.heldFile(j, "output.log"), OutputTailBytes)
 	}
 	if note := j.outputLoss(); note != "" { // the tail is what was recorded; say why it may be short or empty
 		d.OutputTail = strings.TrimSpace(outputNote(note) + "\n\n" + d.OutputTail)
