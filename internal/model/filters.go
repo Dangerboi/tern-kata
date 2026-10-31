@@ -122,28 +122,38 @@ func updateFilterText(m Model, msg KeyMsg) (Model, []Cmd) {
 	return snapshotChanged(m)
 }
 
+// DescribeFilters is the filters that are set as name=value words joined by " · ", empty when none is set. The Pane's
+// filter line and the CLI both word filters this way.
+func DescribeFilters(f Filters, projectName func(uid string) string) string {
+	var parts []string
+	if f.ProjectUID != "" {
+		parts = append(parts, "project="+projectName(f.ProjectUID))
+	}
+	if f.Status != "" {
+		parts = append(parts, "status="+f.Status)
+	}
+	if f.Owner != "" {
+		parts = append(parts, "owner="+f.Owner)
+	}
+	if f.Label != "" {
+		parts = append(parts, "label="+f.Label)
+	}
+	if f.Relationship != "" {
+		parts = append(parts, "relationship="+f.Relationship)
+	}
+	if f.Search != "" {
+		parts = append(parts, "search="+f.Search)
+	}
+	return strings.Join(parts, " · ")
+}
+
 // FilterSummary is the top bar's filter line: the active filters, empty when none is on.
 func (m Model) FilterSummary() string {
-	var parts []string
-	if m.Filters.ProjectUID != "" {
-		parts = append(parts, "project="+m.ProjectFilterName(m.Filters.ProjectUID))
+	shown := m.Filters
+	if m.OnBoard() {
+		shown.Status = ""
 	}
-	if m.Filters.Status != "" && !m.OnBoard() {
-		parts = append(parts, "status="+m.Filters.Status)
-	}
-	if m.Filters.Owner != "" {
-		parts = append(parts, "owner="+m.Filters.Owner)
-	}
-	if m.Filters.Label != "" {
-		parts = append(parts, "label="+m.Filters.Label)
-	}
-	if m.Filters.Relationship != "" {
-		parts = append(parts, "relationship="+m.Filters.Relationship)
-	}
-	if m.Filters.Search != "" {
-		parts = append(parts, "search="+m.Filters.Search)
-	}
-	summary := strings.Join(parts, " · ")
+	summary := DescribeFilters(shown, m.ProjectFilterName)
 	if name := m.CurrentSavedView(); name != "" {
 		return strings.TrimSpace(summary + " (" + name + ")")
 	}

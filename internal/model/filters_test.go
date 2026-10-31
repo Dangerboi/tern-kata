@@ -238,3 +238,25 @@ func TestStatusDefaultsToAll(t *testing.T) {
 		}
 	}
 }
+
+func TestDescribeFiltersSharedWithTheFilterLine(t *testing.T) {
+	f := model.Filters{ProjectUID: "u1", Status: "open", Owner: "ann", Label: "bug", Relationship: "parent", Search: "crash"}
+	name := func(uid string) string { return "Work" }
+	want := "project=Work · status=open · owner=ann · label=bug · relationship=parent · search=crash"
+	if got := model.DescribeFilters(f, name); got != want {
+		t.Errorf("DescribeFilters = %q, want %q", got, want)
+	}
+	if got := model.DescribeFilters(model.Filters{}, name); got != "" {
+		t.Errorf("no filters = %q", got)
+	}
+}
+
+func TestPriorityText(t *testing.T) {
+	two := int64(2)
+	if got := model.PriorityText(&two); got != "P2" {
+		t.Errorf("PriorityText(2) = %q", got)
+	}
+	if got := model.PriorityText(nil); got != "" {
+		t.Errorf("PriorityText(nil) = %q", got)
+	}
+}

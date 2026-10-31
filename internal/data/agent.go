@@ -227,30 +227,73 @@ func (g *Gateway) agentStatePaths() (file, prompts string, err error) {
 // liveBlocksMaxAge is how long a refresh trusts the block set of an earlier `tern ls --json`.
 const liveBlocksMaxAge = 10 * time.Second
 
+// liveBlocksTimeout bounds one shared `tern ls --json`, which runs apart from any single caller's deadline.
+const liveBlocksTimeout = 30 * time.Second
+
+// lsFlight is one running `tern ls --json` that callers wait on; live and err are set before done closes.
+type lsFlight struct {
+	done chan struct{}
+	live map[string]bool
+	err  error
+}
+
 // liveBlocks is the set of blocks `tern ls --json` lists. It is cached for liveBlocksMaxAge, read by g.now; fresh asks tern
-// again and replaces the cache. cached says the answer is an earlier one.
+// again and replaces the cache. cached says the answer is an earlier one. Callers that need an answer while one `tern ls` runs
+// share it, each waiting only until its own ctx ends; a fresh caller never joins a run that began before it asked.
 func (g *Gateway) liveBlocks(ctx context.Context, fresh bool) (live map[string]bool, cached bool, err error) {
 	g.lsMu.Lock()
-	defer g.lsMu.Unlock()
 	if !fresh && g.lsLive != nil && g.now().Sub(g.lsAt) < liveBlocksMaxAge {
-		return g.lsLive, true, nil
+		live = g.lsLive
+		g.lsMu.Unlock()
+		return live, true, nil
 	}
+	f := g.lsFlight
+	if fresh || f == nil {
+		f = &lsFlight{done: make(chan struct{})}
+		g.lsFlight = f
+		go g.runLiveBlocks(context.WithoutCancel(ctx), f)
+	}
+	g.lsMu.Unlock()
+	select {
+	case <-f.done:
+		return f.live, false, f.err
+	case <-ctx.Done():
+		return nil, false, ctx.Err()
+	}
+}
+
+// runLiveBlocks asks tern for the blocks, caches a good answer and wakes the callers waiting on f.
+func (g *Gateway) runLiveBlocks(ctx context.Context, f *lsFlight) {
+	ctx, cancel := context.WithTimeout(ctx, liveBlocksTimeout)
+	defer cancel()
+	f.live, f.err = g.askLiveBlocks(ctx)
+	g.lsMu.Lock()
+	if f.err == nil {
+		g.lsLive, g.lsAt = f.live, g.now()
+	}
+	if g.lsFlight == f {
+		g.lsFlight = nil
+	}
+	g.lsMu.Unlock()
+	close(f.done)
+}
+
+func (g *Gateway) askLiveBlocks(ctx context.Context) (map[string]bool, error) {
 	out, err := g.runTern(ctx, []string{"ls", "--json"})
 	if err != nil {
-		return nil, false, ternFailure(err, out)
+		return nil, ternFailure(err, out)
 	}
 	listing, err := parseTernLs(out)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	live = map[string]bool{}
+	live := map[string]bool{}
 	for _, s := range listing {
 		for _, b := range s.blocks {
 			live[b] = true
 		}
 	}
-	g.lsLive, g.lsAt = live, g.now()
-	return live, false, nil
+	return live, nil
 }
 
 // reconcileAgents is what the Pane does to agents.json once Tern has said which blocks are alive. An entry goes, with its prompt
@@ -497,12 +540,21 @@ func (g *Gateway) sendAgentBack(ctx context.Context, cmd model.SendAgentBack) mo
 		out, err := g.runTern(ctx, args)
 		return ternFailure(err, out)
 	}
+	// moved answers for a block that has left the view and sits in the hidden session, whatever step failed after: the entry is
+	// written with the move, so agents.json, the badge and the card say where the block is, and err still reaches the Pane.
+	moved := func(stepErr error) model.AgentPlaced {
+		placed := model.AgentPlaced{Block: cmd.Block, Back: true, Moved: true, Err: stepErr}
+		if err := g.setAgentOpen(cmd.Block, false, true); err != nil {
+			placed.Err = fmt.Errorf("the agent moved but agents.json could not be written: %w", err)
+		}
+		return placed
+	}
 	if len(blocks) > 0 {
 		if err := step(MoveRightOfArgs(cmd.Block, blocks[0])); err != nil {
 			return failed(err)
 		}
 		if err := step(MoveNewTabArgs(cmd.Block)); err != nil {
-			return failed(err)
+			return moved(err)
 		}
 	} else {
 		out, err := g.runTern(ctx, AgentShellTabArgs(exists))
@@ -518,12 +570,11 @@ func (g *Gateway) sendAgentBack(ctx context.Context, cmd model.SendAgentBack) mo
 			return failed(err)
 		}
 		if err := step(CloseBlockArgs(shell)); err != nil {
-			return failed(err)
+			return moved(err)
 		}
 	}
-	placed := model.AgentPlaced{Block: cmd.Block, Back: true, Moved: true}
-	if err := g.setAgentOpen(cmd.Block, false, true); err != nil {
-		placed.Err = fmt.Errorf("the agent moved but agents.json could not be written: %w", err)
+	placed := moved(nil)
+	if placed.Err != nil {
 		return placed
 	}
 	if err := step(RenameAgentArgs(cmd.Block, cmd.IssueRef)); err != nil {

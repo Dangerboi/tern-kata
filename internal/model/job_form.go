@@ -75,16 +75,7 @@ const (
 
 // JobFields is the Job card's field list in tab order: the fields of every kind and trigger. Which of them apply to the card as
 // it stands is JobFormState.Shows; tab skips the others.
-var JobFields = []FieldSpec{
-	{JobFieldKind, false}, {JobFieldName, true}, {JobFieldTrigger, false},
-	{JobFieldCron, true}, {JobFieldZone, true}, {JobFieldInterval, true}, {JobFieldAt, true}, {JobFieldIssue, true}, {JobFieldReport, true}, {JobFieldLead, true},
-	{JobFieldParent, true},
-	{JobFieldPrompt, true}, {JobFieldWorkflow, false}, {JobFieldProfile, true}, {JobFieldProfilePick, false},
-	{JobFieldCheckout, true}, {JobFieldCheckoutPick, false}, {JobFieldSecrets, true}, {JobFieldAdapter, true},
-	{JobFieldPolicy, false}, {JobFieldTitle, true}, {JobFieldBody, true}, {JobFieldScheduled, true}, {JobFieldDeadline, true},
-	{JobFieldRecipient, true}, {JobFieldMessage, true},
-	{JobFieldOverlap, false}, {JobFieldTimeout, true}, {JobFieldCatchup, false}, {JobFieldGrace, true}, {JobFieldEnabled, false},
-}
+var JobFields = jobTable.specs()
 
 // jobFieldTitles are the prompts of the fields. The part before the first " (" is the field's name in a message.
 var jobFieldTitles = map[Field]string{ //nolint:gosec // G101: field prompts ("Secrets (ENV=source, ...)"), not credentials
@@ -396,64 +387,52 @@ func (f JobFormState) Shows(name Field) bool {
 	return f.kind().shown(f, name) || slices.Contains(f.trigger().fields, name)
 }
 
-// text is the single-line field called name, nil for a choice field.
-func (f *JobFormState) text(name Field) *string {
-	switch name {
-	case JobFieldName:
-		return &f.Name
-	case JobFieldCron:
-		return &f.Cron
-	case JobFieldZone:
-		return &f.Zone
-	case JobFieldInterval:
-		return &f.Interval
-	case JobFieldAt:
-		return &f.At
-	case JobFieldIssue:
-		return &f.Issue
-	case JobFieldReport:
-		return &f.Report
-	case JobFieldLead:
-		return &f.Lead
-	case JobFieldParent:
-		return &f.Parent
-	case JobFieldPrompt:
-		return &f.Prompt
-	case JobFieldProfile:
-		return &f.Profile
-	case JobFieldCheckout:
-		return &f.Checkout
-	case JobFieldSecrets:
-		return &f.Secrets
-	case JobFieldAdapter:
-		return &f.Adapter
-	case JobFieldTitle:
-		return &f.Title
-	case JobFieldBody:
-		return &f.Body
-	case JobFieldScheduled:
-		return &f.Scheduled
-	case JobFieldDeadline:
-		return &f.DeadlineOffset
-	case JobFieldRecipient:
-		return &f.Recipient
-	case JobFieldMessage:
-		return &f.Message
-	case JobFieldTimeout:
-		return &f.Timeout
-	case JobFieldGrace:
-		return &f.Grace
-	}
-	return nil
+// jobTable declares the Job card's fields, in tab order: the fields of every kind and trigger. Which of them apply to the
+// card as it stands is Shows; tab skips the others.
+var jobTable = fieldTable[JobFormState]{
+	form:   func(m *Model) *JobFormState { return &m.JobForm },
+	busy:   func(f JobFormState) bool { return f.Saving || f.Conflict != nil },
+	focus:  func(f *JobFormState) *Field { return &f.Field },
+	caret:  func(f *JobFormState) *Caret { return &f.Caret },
+	err:    func(f *JobFormState) *error { return &f.Err },
+	hidden: func(f JobFormState, name Field) bool { return !f.Shows(name) },
+	fields: []formField[JobFormState]{
+		jobChoiceField(JobFieldKind),
+		textField(JobFieldName, func(f *JobFormState) *string { return &f.Name }),
+		jobChoiceField(JobFieldTrigger),
+		textField(JobFieldCron, func(f *JobFormState) *string { return &f.Cron }),
+		textField(JobFieldZone, func(f *JobFormState) *string { return &f.Zone }),
+		textField(JobFieldInterval, func(f *JobFormState) *string { return &f.Interval }),
+		textField(JobFieldAt, func(f *JobFormState) *string { return &f.At }),
+		textField(JobFieldIssue, func(f *JobFormState) *string { return &f.Issue }),
+		textField(JobFieldReport, func(f *JobFormState) *string { return &f.Report }),
+		textField(JobFieldLead, func(f *JobFormState) *string { return &f.Lead }),
+		textField(JobFieldParent, func(f *JobFormState) *string { return &f.Parent }),
+		textField(JobFieldPrompt, func(f *JobFormState) *string { return &f.Prompt }),
+		jobChoiceField(JobFieldWorkflow),
+		textField(JobFieldProfile, func(f *JobFormState) *string { return &f.Profile }),
+		jobChoiceField(JobFieldProfilePick),
+		textField(JobFieldCheckout, func(f *JobFormState) *string { return &f.Checkout }),
+		jobChoiceField(JobFieldCheckoutPick),
+		textField(JobFieldSecrets, func(f *JobFormState) *string { return &f.Secrets }),
+		textField(JobFieldAdapter, func(f *JobFormState) *string { return &f.Adapter }),
+		jobChoiceField(JobFieldPolicy),
+		textField(JobFieldTitle, func(f *JobFormState) *string { return &f.Title }),
+		textField(JobFieldBody, func(f *JobFormState) *string { return &f.Body }),
+		textField(JobFieldScheduled, func(f *JobFormState) *string { return &f.Scheduled }),
+		textField(JobFieldDeadline, func(f *JobFormState) *string { return &f.DeadlineOffset }),
+		textField(JobFieldRecipient, func(f *JobFormState) *string { return &f.Recipient }),
+		textField(JobFieldMessage, func(f *JobFormState) *string { return &f.Message }),
+		jobChoiceField(JobFieldOverlap),
+		textField(JobFieldTimeout, func(f *JobFormState) *string { return &f.Timeout }),
+		jobChoiceField(JobFieldCatchup),
+		textField(JobFieldGrace, func(f *JobFormState) *string { return &f.Grace }),
+		jobChoiceField(JobFieldEnabled),
+	},
 }
 
 // Text is what the card holds in the text field called name.
-func (f JobFormState) Text(name Field) string {
-	if p := f.text(name); p != nil {
-		return *p
-	}
-	return ""
-}
+func (f JobFormState) Text(name Field) string { return jobTable.value(f, name) }
 
 // JobChoice is one choice of a choice field.
 type JobChoice struct {
@@ -569,13 +548,13 @@ func jobTriggerOf(id cronjob.TriggerKind) jobTrigger {
 	return jobTriggers[0]
 }
 
-// choose gives the focused choice field its choice at index i; an index out of range changes nothing.
-func (f *JobFormState) choose(i int) {
-	choices := f.JobChoices(f.Field)
-	if i < 0 || i >= len(choices) {
-		return
+// jobPick gives the choice field called name its choice at index i; an index out of range changes nothing. It says whether
+// the index named a choice.
+func jobPick(f *JobFormState, name Field, i int) bool {
+	if i < 0 || i >= len(f.JobChoices(name)) {
+		return false
 	}
-	switch f.Field {
+	switch name {
 	case JobFieldKind:
 		f.Kind = f.kinds()[i].id
 		if !slices.Contains(f.kind().triggers, f.Trigger) {
@@ -586,25 +565,28 @@ func (f *JobFormState) choose(i int) {
 	case JobFieldEnabled:
 		f.Enabled = i == 0
 	default:
-		if held := f.optionValue(f.Field); held != nil {
-			*held = f.options(f.Field)[i].value
+		if held := f.optionValue(name); held != nil {
+			*held = f.options(name)[i].value
 		}
 	}
-	f.Err = nil
+	return true
 }
 
-// step moves the focused choice field one choice on; back goes the other way.
-func (f *JobFormState) step(back bool) {
-	choices := f.JobChoices(f.Field)
+// jobStep moves the choice field called name one choice on; back goes the other way.
+func jobStep(f *JobFormState, name Field, back bool) {
+	choices := f.JobChoices(name)
 	if len(choices) == 0 {
 		return
 	}
-	d := 1
-	if back {
-		d = -1
-	}
 	at := slices.IndexFunc(choices, func(c JobChoice) bool { return c.Chosen })
-	f.choose(((at+d)%len(choices) + len(choices)) % len(choices))
+	jobPick(f, name, cycleIndex(at, len(choices), back))
+}
+
+// jobChoiceField declares a choice field of the Job card: JobChoices lists its choices.
+func jobChoiceField(name Field) formField[JobFormState] {
+	return choiceField(name,
+		func(f *JobFormState, back bool) { jobStep(f, name, back) },
+		func(f *JobFormState, i int) bool { return jobPick(f, name, i) })
 }
 
 // newJobForm is the card for a job that does not exist yet: a native job running every day at nine in the Pane's zone,
@@ -857,14 +839,14 @@ func jobFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		return answerJobConflict(m, msg)
 	}
 	binding, bound := LookupBindingForMode(msg.Chord, ModeJobForm)
-	field := f.text(f.Field)
+	field := jobTable.textAt(f, f.Field)
 	switch {
 	case bound && binding.Action == JobCancel:
 		f.Open = false
 	case bound && binding.Action == JobSave:
 		return submitJob(m)
 	case field == nil && bound && binding.Action == InputSpace:
-		f.step(false)
+		jobTable.stepFocused(f, false)
 	case field != nil && f.Field == JobFieldPrompt && bound && binding.Action == JobNewline:
 		f.insertPrompt(field, "\n")
 	case field != nil && f.Field == JobFieldPrompt && !bound && strings.ContainsAny(msg.Text, "\r\n"):
