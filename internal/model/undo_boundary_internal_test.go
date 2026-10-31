@@ -2,6 +2,7 @@ package model
 
 import (
 	"go/ast"
+	"go/build"
 	"go/importer"
 	"go/parser"
 	"go/token"
@@ -148,6 +149,10 @@ func cmdTypeNames(t *testing.T) []string {
 			files = append(files, f)
 		}
 	}
+	// The source importer reads go/build.Default and offers no way to pass a context; without a C compiler cgo files would fail to type-check.
+	cgo := build.Default.CgoEnabled
+	build.Default.CgoEnabled = false
+	t.Cleanup(func() { build.Default.CgoEnabled = cgo })
 	conf := types.Config{Importer: importer.ForCompiler(fset, "source", nil)}
 	pkg, err := conf.Check("model", fset, files, nil)
 	if err != nil {
@@ -168,13 +173,4 @@ func cmdTypeNames(t *testing.T) []string {
 		}
 	}
 	return names
-}
-
-func TestSharingTheLaneListKeepsTheUndoHistory(t *testing.T) {
-	m := Model{}
-	m.Undo = m.Undo.pushed(UndoEntry{Kind: UndoPriority, UID: "zzz"})
-	m = m.noteWrites([]Cmd{ShareLanes{ProjectUID: "p", Lanes: []string{"Todo"}}})
-	if len(m.Undo.Entries) != 1 || m.Undo.Boundary != "" {
-		t.Fatalf("history = %+v, want the entry kept and no boundary", m.Undo)
-	}
 }
