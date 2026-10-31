@@ -176,7 +176,9 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 			m = def.reset(m, "")
 		}
 	}
-	m.Attention = AttentionState{request: m.Attention.request + 1}
+	reads := m.Attention.reads
+	reads.Discard()
+	m.Attention = AttentionState{reads: reads}
 	m = clearCredentials(clearFederation(m))
 	m.Undo = UndoHistory{nextID: m.Undo.nextID}.cleared("connected to a different daemon")
 	m.LiveState = LiveState{
