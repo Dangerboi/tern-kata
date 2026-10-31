@@ -34,6 +34,12 @@ type SelectMsg struct{ UID string }
 
 func (SelectMsg) msg() {}
 
+// ButtonPressMsg is a click on a card's button: Chord is pressed after the card's open calendar and dropdown are closed, so the
+// button does what it says where the same key would first drive the overlay.
+type ButtonPressMsg struct{ Chord string }
+
+func (ButtonPressMsg) msg() {}
+
 // ContextMenuPickMsg is a pick from the context menu of an Issue's row or card: select the Issue, then run what Chord is bound to in
 // Mode, the mode the menu was built for, whatever mode the Pane is in now.
 type ContextMenuPickMsg struct {

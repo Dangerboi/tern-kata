@@ -169,6 +169,10 @@ func openClose(m Model) Model {
 	if issue == nil {
 		return m
 	}
+	if reason := IssueRefusal(*issue, OpenClose); reason != "" {
+		m.Notice = reason
+		return m
+	}
 	m.CloseForm = CloseFormState{Open: true, Field: CloseFields[0].Name, UID: issue.UID, ProjectID: issue.ProjectID}
 	m.CloseForm.Values.Reason = string(ReasonDone)
 	return m

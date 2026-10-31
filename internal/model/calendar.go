@@ -149,9 +149,9 @@ func pickDay(m Model, day string) Model {
 }
 
 // updateCalendarKey is one key while the calendar is open, read through the ModeCalendar bindings: the arrows move its cursor,
-// enter picks and esc closes. Any other key closes the calendar and reaches the card as it would with none, so a footer button's
-// chord still does what its button says; ctrl+d, which opens the calendar, only closes it. It reports whether the card still
-// has the key to handle.
+// enter picks and esc closes. Any other key closes the calendar and reaches the card as it would with none; ctrl+d, which opens
+// the calendar, only closes it. A click on a card's button is not this key: it closes the calendar first (ButtonPressMsg). It
+// reports whether the card still has the key to handle.
 func updateCalendarKey(m Model, entry cardEntry, msg KeyMsg) (Model, bool) {
 	binding, bound := LookupBindingForMode(msg.Chord, ModeCalendar)
 	if !bound {

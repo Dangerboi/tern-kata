@@ -97,8 +97,8 @@ const ClosedIssueRefusal = "This Issue is closed; reopen it first (r)."
 // ClosedAlreadyRefusal is the reason Close is off on a closed Issue.
 const ClosedAlreadyRefusal = "This Issue is already closed."
 
-// IssueRefusal is why action cannot run on issue, or "" when it can: the closed-Issue rules that the handlers' Notices, the Agent
-// card's buttons and the context menu's rows all follow.
+// IssueRefusal is why action cannot run on issue, or "" when it can: the closed-Issue rules that the Notices of `w` and `x`, the
+// Agent card's buttons and the context menu's rows all follow.
 func IssueRefusal(issue Issue, action Action) string {
 	if !IsClosed(issue) {
 		return ""

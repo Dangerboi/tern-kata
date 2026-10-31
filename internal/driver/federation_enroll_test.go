@@ -613,7 +613,7 @@ func TestAFailureAfterTheGrantKeepsARecoveryThatRevealsTheCommandOnlyOnR(t *test
 			t.Errorf("the recovery shows %q before R", secret)
 		}
 	}
-	wantText(t, "the footer", footerText(t, lapsed.State), "⇧r", "reveal recovery command", "back")
+	wantText(t, "the footer", footerText(t, lapsed.State), "⇧R", "reveal recovery command", "back")
 
 	revealed := step(t, lapsed.State, key("shift+r"))
 	if len(revealed.Cmds) != 0 {

@@ -287,7 +287,7 @@ func cardButtonsOf(t *testing.T, s driver.State) (map[string]string, map[string]
 	for _, node := range wireNodes(t, *out.View) {
 		actions, _ := node.P["actions"].(map[string]any)
 		clickAct, _ := actions["click"].(string)
-		if strings.HasPrefix(clickAct, view.KeyClick("")) && strings.HasPrefix(node.ID, "layer.") {
+		if strings.HasPrefix(clickAct, view.ButtonClick("")) && strings.HasPrefix(node.ID, "layer.") {
 			found[node.ID] = clickAct
 			words, _ := node.P["text"].(string)
 			keys, _ := node.P["keys"].([]any)
@@ -380,7 +380,7 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 				t.Fatal("the card draws no buttons")
 			}
 			for id, act := range buttons {
-				chord := strings.TrimPrefix(act, view.KeyClick(""))
+				chord := strings.TrimPrefix(act, view.ButtonClick(""))
 				binding, ok := model.LookupBindingForMode(chord, tt.mode)
 				if !ok || binding.Mode != tt.mode {
 					t.Errorf("%s sends %q, which %s does not bind", id, chord, tt.mode)
@@ -428,7 +428,7 @@ func TestCardButtonsOfTheCommonCardsClickLikeTheChordTheyName(t *testing.T) {
 				t.Fatalf("buttons drawn %v, want %v", drawn, want)
 			}
 			for _, id := range drawn {
-				chord := strings.TrimPrefix(buttons[id], view.KeyClick(""))
+				chord := strings.TrimPrefix(buttons[id], view.ButtonClick(""))
 				binding, ok := model.LookupBindingForMode(chord, tt.mode)
 				if !ok || !strings.Contains(labels[id], binding.Key) {
 					t.Errorf("%s sends %q, which its label %q does not name", id, chord, labels[id])

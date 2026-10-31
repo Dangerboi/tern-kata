@@ -62,7 +62,7 @@ func TestRunsPageEmptyIsAnEmptyStateAndOffersEveryRunForAJob(t *testing.T) {
 	wantEmpty(t, "runs", runsPane(t, 160), "main.columns.list.runs"+"-empty", "", "No runs")
 	s := runsPane(t, 160)
 	s.Model.Runs.JobUID = "J1"
-	wantEmpty(t, "job runs", s, "main.columns.list.runs"+"-empty", "", "No runs for this job", "key=f", `"keys"`, `"k":"button"`)
+	wantEmpty(t, "job runs", s, "main.columns.list.runs"+"-empty", "", "No runs for this job", "press=f", `"keys"`, `"k":"button"`)
 }
 
 func TestJobsPageEmptyIsAnEmptyState(t *testing.T) {
@@ -70,14 +70,14 @@ func TestJobsPageEmptyIsAnEmptyState(t *testing.T) {
 }
 
 func TestWorkflowsPageEmptyIsAnEmptyStateWithAKeyButton(t *testing.T) {
-	wantEmpty(t, "workflows", workflowsPane(t, 160), view.WorkflowListID+"-empty", "", "No workflows", "key=n", `"keys"`, `"k":"button"`)
+	wantEmpty(t, "workflows", workflowsPane(t, 160), view.WorkflowListID+"-empty", "", "No workflows", "press=n", `"keys"`, `"k":"button"`)
 }
 
 func TestIssueListEmptyIsAnEmptyState(t *testing.T) {
 	s := projectPane(t, 160)
-	wantEmpty(t, "no issues", s, view.IssueListID+"-empty", "", "No Issues", "key=n", `"keys"`, `"k":"button"`)
+	wantEmpty(t, "no issues", s, view.IssueListID+"-empty", "", "No Issues", "press=n", `"keys"`, `"k":"button"`)
 	s.Model.Filters = model.Filters{Status: "closed"}
-	wantEmpty(t, "filtered", s, view.IssueListID+"-empty", "", "No Issues match", "key=c", `"keys"`, `"k":"button"`)
+	wantEmpty(t, "filtered", s, view.IssueListID+"-empty", "", "No Issues match", "press=c", `"keys"`, `"k":"button"`)
 }
 
 // A button presses its key in the mode the Pane is in, and with Search open that mode types the key, so the empty list
@@ -91,7 +91,7 @@ func TestIssueListEmptyOffersNoButtonWhileSearching(t *testing.T) {
 		if n == nil {
 			t.Fatalf("%s: no empty state", name)
 		}
-		if raw := wireText(*n); strings.Contains(raw, `"k":"button"`) || strings.Contains(raw, "key=") {
+		if raw := wireText(*n); strings.Contains(raw, `"k":"button"`) || strings.Contains(raw, "press=") {
 			t.Errorf("%s: a button that types into the search: %s", name, raw)
 		}
 	}

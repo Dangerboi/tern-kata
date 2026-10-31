@@ -189,6 +189,10 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 	if staleConnection(m, msg) {
 		return m, nil
 	}
+	if press, ok := msg.(ButtonPressMsg); ok {
+		m.DateCalendar, m.Dropdown = CalendarState{}, Dropdown{}
+		msg = KeyMsg{Chord: press.Chord}
+	}
 	if _, ok := msg.(KeyMsg); ok {
 		m.Notice, m.NoticeLink = "", nil
 	}
