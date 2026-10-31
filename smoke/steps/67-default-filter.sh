@@ -28,4 +28,4 @@ expect_tree "[data-id='layer.filters']" '.count == 1'
 ctl click "[data-id='layer.filters.actions.default']"
 expect_tree "[data-id='layer.filters']" '.count == 0'
 expect_tree "[data-id='main.filters']" '.ok and .count == 0'
-! grep -q 'status' "$XDG_CONFIG_HOME/tern-kata/filters.toml"
+if grep -q 'status' "$XDG_CONFIG_HOME/tern-kata/filters.toml"; then printf 'filters.toml still holds a status filter after Default\n' >&2; return 1; fi
