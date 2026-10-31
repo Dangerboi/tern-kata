@@ -163,7 +163,7 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 			wake = minTime(wake, now.Add(10*time.Second))
 		}
 		if w.leaseHeld(ps) {
-			if next := w.tick(ctx, ps, issueEvent); !next.IsZero() {
+			if next := w.tick(ctx, ps, issueEvent && !dirty); !next.IsZero() {
 				wake = minTime(wake, next)
 			}
 		}

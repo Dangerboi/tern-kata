@@ -377,11 +377,12 @@ func (s *projectSchedule) plan(job cronjob.Job, now time.Time) {
 			}
 		} else if known && !at.Equal(st.date) {
 			// The Issue's date moved: work waiting for the old value is stale, and an earlier date that is already
-			// behind the checkpoint is evaluated again under the catchup policy.
+			// behind the checkpoint is evaluated again under the catchup policy. On a resume the checkpoint is now and
+			// the date is the baseline: a date that moved into the time off is never caught up.
 			if len(st.pending) > 0 {
 				s.log("the date of job %s changed; %d waiting occurrence(s) dropped", job.Name, len(st.pending))
 			}
-			if !at.IsZero() && at.Before(st.through) {
+			if !at.IsZero() && at.Before(st.through) && !resumed {
 				st.through = at.Add(-time.Nanosecond)
 			}
 			st.pending, st.date, changed, dateChanged = nil, at, true, true

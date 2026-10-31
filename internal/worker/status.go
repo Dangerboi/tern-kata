@@ -155,6 +155,9 @@ func runStatus(j *Journal) RunStatus {
 			pending = append(pending, string(it.Kind))
 		}
 	}
+	if j.IntentsPartial { // the Issue read that decides the comment and label failed: both are still owed
+		pending = append(pending, string(IntentComment), string(IntentLabel))
+	}
 	r.Pending = strings.Join(pending, ", ")
 	r.Inspect = j.Inspections()
 	r.Unrecorded = j.outputLoss()

@@ -127,9 +127,9 @@ func newMemSchedule(store checkpointStore) *projectSchedule {
 	}
 }
 
-// A job switched off and on again keeps the occurrences that were waiting before it was switched off, under the rules
-// they had; the time it was off is not caught up.
-func TestAPendingOccurrenceFromBeforeADisableSurvivesTheReEnableButTheTimeOffIsNotCaughtUp(t *testing.T) {
+// Enabling a job again is a definition write like any edit: work waiting before the disable is dropped, and the time
+// the job was off is not caught up.
+func TestReEnablingAJobDropsTheOccurrencesWaitingBeforeTheDisableAndDoesNotCatchUpTheTimeOff(t *testing.T) {
 	created := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	due := created.Add(time.Hour)
 	job := pausedHourlyJob(created, "all")
@@ -138,54 +138,40 @@ func TestAPendingOccurrenceFromBeforeADisableSurvivesTheReEnableButTheTimeOffIsN
 
 	s.planAll([]cronjob.Job{job}, nil, created)
 	s.planAll([]cronjob.Job{job}, nil, due)
+	if got := s.jobs[job.UID].pending; len(got) != 1 || !got[0].Equal(due) {
+		t.Fatalf("pending before the disable is %v, want the occurrence at %s", got, due)
+	}
 	s.planAll(nil, map[string]bool{job.UID: true}, due.Add(time.Minute)) // disabled before the occurrence was admitted
 	if !store.saved[job.UID].Paused {
 		t.Fatal("the disabled job's checkpoint carries no pause mark")
 	}
 
+	job.DefinitionEventUID = "ev2" // kata gives the enabling write a new definition event
 	s.planAll([]cronjob.Job{job}, nil, due.Add(5*time.Hour+30*time.Minute))
-	if got := s.jobs[job.UID].pending; len(got) != 1 || !got[0].Equal(due) {
-		t.Fatalf("pending after the re-enable is %v, want only the occurrence from before the disable (%s)", got, due)
+	if got := s.jobs[job.UID].pending; len(got) != 0 {
+		t.Fatalf("pending after the re-enable is %v, want the work waiting before the disable dropped and the time off not caught up", got)
 	}
 }
 
-func TestAParkedOccurrenceFromBeforeADisableIsNotGracedOutByTheReEnable(t *testing.T) {
+func TestReEnablingAJobDropsAParkedOccurrenceAndAnUnadmittedOne(t *testing.T) {
 	created := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	due := created.Add(time.Hour)
 	job := pausedHourlyJob(created, "skip")
 	job.Definition.GraceSeconds = 0
 	checkpointOf := func(parked []time.Time) checkpoint {
-		return checkpoint{Version: 1, DefinitionEventUID: job.DefinitionEventUID, Through: due, Pending: []time.Time{due}, Parked: parked, Paused: true}
+		return checkpoint{Version: 1, DefinitionEventUID: "ev1", Through: due, Pending: []time.Time{due}, Parked: parked, Paused: true}
 	}
 	reEnabled := due.Add(5 * time.Hour)
-
-	parked := newMemSchedule(&memCheckpoints{saved: map[string]checkpoint{job.UID: checkpointOf([]time.Time{due})}})
-	parked.planAll([]cronjob.Job{job}, nil, reEnabled)
-	if got := parked.jobs[job.UID].pending; len(got) != 1 || !got[0].Equal(due) {
-		t.Fatalf("a parked occurrence is %v after the re-enable, want it kept while its Issue is not ready", got)
-	}
-
-	missed := newMemSchedule(&memCheckpoints{saved: map[string]checkpoint{job.UID: checkpointOf(nil)}})
-	missed.planAll([]cronjob.Job{job}, nil, reEnabled)
-	if got := missed.jobs[job.UID].pending; len(got) != 0 {
-		t.Fatalf("an occurrence that was only pending is %v after the re-enable, want it missed under skip with no grace", got)
-	}
-}
-
-// Edited while off, the job is a new definition: what waited for the old one is superseded, as for any edit.
-func TestOccurrencesWaitingForAnEditedDefinitionAreDroppedAcrossADisableAndReEnable(t *testing.T) {
-	created := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	due := created.Add(time.Hour)
-	job := pausedHourlyJob(created, "all")
-	store := &memCheckpoints{saved: map[string]checkpoint{}}
-	s := newMemSchedule(store)
-	s.planAll([]cronjob.Job{job}, nil, created)
-	s.planAll([]cronjob.Job{job}, nil, due)
-	s.planAll(nil, map[string]bool{job.UID: true}, due.Add(time.Minute))
-
 	job.DefinitionEventUID = "ev2"
-	s.planAll([]cronjob.Job{job}, nil, due.Add(3*time.Hour))
-	if got := s.jobs[job.UID].pending; len(got) != 0 {
-		t.Fatalf("pending after an edit while off is %v, want the old definition's work dropped", got)
+
+	for name, parked := range map[string][]time.Time{"parked": {due}, "pending only": nil} {
+		s := newMemSchedule(&memCheckpoints{saved: map[string]checkpoint{job.UID: checkpointOf(parked)}})
+		s.planAll([]cronjob.Job{job}, nil, reEnabled)
+		if got := s.jobs[job.UID].pending; len(got) != 0 {
+			t.Fatalf("%s occurrence is %v after the re-enable, want it dropped with the old definition", name, got)
+		}
+		if got := s.jobs[job.UID].parked; len(got) != 0 {
+			t.Fatalf("%s: parked is %v after the re-enable, want none", name, got)
+		}
 	}
 }
