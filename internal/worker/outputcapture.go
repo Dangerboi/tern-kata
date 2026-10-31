@@ -324,7 +324,8 @@ func outputTail(path string, max int) string {
 			}
 			if json.Unmarshal(line, &ev) == nil && ev.Type == "message_end" {
 				if m, ok := assistantMessage(ev.Message); ok {
-					if t := strings.TrimSpace(m.text()); t != "" {
+					text, _ := m.text()
+					if t := strings.TrimSpace(text); t != "" {
 						if messages > 0 {
 							tail.WriteString("\n\n")
 						}
