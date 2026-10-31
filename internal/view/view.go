@@ -142,16 +142,11 @@ func issues(m model.Model, now time.Time) tern.Element {
 		children = append(children, searchInput(m))
 	}
 	empty := emptyState("No Issues", "This Collection has none. Select another Collection or create one with kata create.")
-	// A button presses its key in the mode the Pane is in, and with Search open that mode types the key, so searching shows
-	// no button.
 	switch {
 	case m.Filters != (model.Filters{}):
-		empty = emptyState("No Issues match", "These filters leave none.")
-		if !m.Search.Open {
-			empty.Children = ui.Nodes(cardButton("clear-filters", model.ModeList, model.ClearFilters, "Clear filters", false))
-		}
-	case m.Collection.IsProject() && !m.Search.Open:
-		empty = emptyState("No Issues", "This Collection has none.", cardButton("new", model.ModeList, model.NewIssue, "New Issue", true))
+		empty = emptyState("No Issues match", "These filters leave none.", emptyButton(m, "clear-filters", model.ClearFilters, "Clear filters", false)...)
+	case m.Collection.IsProject():
+		empty = emptyState("No Issues", "This Collection has none.", emptyButton(m, "new", model.NewIssue, "New Issue", true)...)
 	}
 	list := ui.List{CommonWithoutMax: scrollerCommon("issues"), Max: fillMax, Selected: selected, Empty: ui.T("Loading Issues…"), Children: items}
 	children = append(children, listAndEmpty(list, m.Loading, empty)...)

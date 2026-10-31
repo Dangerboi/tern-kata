@@ -104,3 +104,61 @@ func TestDetailWithNoIssueSelectedIsAnEmptyState(t *testing.T) {
 func TestBoardLaneWithNoCardsIsAnInlineEmptyState(t *testing.T) {
 	wantEmpty(t, "lane", boardPane(t, boardCard("a")), view.BoardID+".lane1.cards"+"-empty", "inline", "No cards")
 }
+
+// emptyListButton is the id and click of the first button the empty Issue list draws; ok is false when it draws none.
+func emptyListButton(t *testing.T, s driver.State) (id, action string, ok bool) {
+	t.Helper()
+	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
+		if strings.HasPrefix(n.ID, view.IssueListID+"-empty.") && n.K == "button" {
+			actions, _ := n.P["actions"].(map[string]any)
+			action, _ = actions["click"].(string)
+			return n.ID, action, true
+		}
+	}
+	return "", "", false
+}
+
+func TestEmptyIssueListClearFiltersIsNeverDead(t *testing.T) {
+	alice := "alice"
+	issue := model.Issue{UID: "a", ShortID: "aaaa", Title: "A", Status: "open", Owner: &alice}
+	filtered := func() model.Model {
+		m := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{}})
+		m.Filters = model.Filters{Owner: "nobody"}
+		return m
+	}
+	detailFocused := func(t *testing.T) driver.State {
+		m := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{issue}}})
+		m.Filters = model.Filters{Owner: "alice"}
+		s := feed(t, driver.State{Model: m}, model.DetailLoaded{UID: "a", Selected: &model.IssueDetailData{Issue: &issue}}, key("enter")).State
+		ev := step(t, s, model.StreamEvent{Generation: s.Model.StreamGeneration, ID: 1, Type: "issue.updated"})
+		snap, ok := snapshotFor(ev.Cmds)
+		if !ok {
+			t.Fatalf("no snapshot read: %#v", ev.Cmds)
+		}
+		snap.Snapshot.Issues = nil
+		return step(t, ev.State, snap).State
+	}
+	cases := map[string]driver.State{
+		"list focused":    driver.State{Model: filtered()},
+		"sidebar focused": feed(t, driver.State{Model: filtered()}, key("escape")).State,
+		"detail focused":  detailFocused(t),
+	}
+	for name, s := range cases {
+		t.Run(name, func(t *testing.T) {
+			id, act, ok := emptyListButton(t, s)
+			if !ok {
+				return
+			}
+			out := step(t, s, click(id, act))
+			if out.State.Model.Filters != (model.Filters{}) {
+				t.Errorf("Clear filters is drawn but its click left %+v", out.State.Model.Filters)
+			}
+		})
+	}
+	if _, _, ok := emptyListButton(t, cases["list focused"]); !ok {
+		t.Errorf("no Clear filters button with the list focused")
+	}
+	if _, _, ok := emptyListButton(t, cases["sidebar focused"]); ok {
+		t.Errorf("Clear filters is drawn with the sidebar focused")
+	}
+}
