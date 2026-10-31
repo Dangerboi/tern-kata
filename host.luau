@@ -158,15 +158,15 @@ end
 
 -- The answer of `tern-kata worker supervised`: status 0 and worker.toml's text when the supervision rule holds, status 1
 -- when it does not. Any other status (a timeout, a binary that cannot run) says nothing about the rule, so the state stays;
--- a status that is no timeout is logged once per daemon: an older tern-kata binary exits 2 on `worker supervised`, and then
--- the worker never starts until the binary is updated.
+-- a status that is neither a timeout nor -1 (killed by a signal) is logged once per daemon: an older tern-kata binary exits
+-- 2 on `worker supervised`, and then the worker never starts until the binary is updated.
 local function answered(binary: string, result: ProcessResult)
     asking = false
     if result.status ~= 0 then
         if result.status == 1 and not result.timed_out then
             reset_backoff()
             started_text = nil
-        elseif not result.timed_out and not warned_status then
+        elseif not result.timed_out and result.status ~= -1 and not warned_status then
             warned_status = true
             tern.log.warn("tern-kata: `worker supervised` exited with status " .. result.status .. " (" .. last_line(result.stderr) .. "), so the worker is not started; the tern-kata binary is probably older than this plugin: update it (install.sh or install.ps1)")
         end
