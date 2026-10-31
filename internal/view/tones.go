@@ -1,8 +1,6 @@
 package view
 
 import (
-	"fmt"
-
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
@@ -58,13 +56,13 @@ func priorityText(p *int64) (string, ui.Tone) {
 	}
 	switch *p {
 	case 0:
-		return "P0", ui.ToneError
+		return model.PriorityText(p), ui.ToneError
 	case 1:
-		return "P1", ui.ToneWarning
+		return model.PriorityText(p), ui.ToneWarning
 	case 2:
-		return "P2", ui.ToneInfo
+		return model.PriorityText(p), ui.ToneInfo
 	}
-	return fmt.Sprintf("P%d", *p), ui.ToneMuted
+	return model.PriorityText(p), ui.ToneMuted
 }
 
 // toneStyle is the text span style closest to tone. Spans have no user or pending style, so those take the nearest one a

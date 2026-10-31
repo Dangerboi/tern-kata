@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -836,6 +838,31 @@ func TestAFailedStepGoingBackShowsTernsWordsAndKeepsTheAgentOpen(t *testing.T) {
 	}
 }
 
+func TestAFailedLaterStepGoingBackRecordsWhereTheBlockIs(t *testing.T) {
+	fail := func() ([]byte, error) { return []byte("tern: refused\n"), errors.New("exit status 1") }
+	for name, c := range map[string]struct {
+		ls      string
+		replies map[string]func() ([]byte, error)
+	}{
+		"the move into its own tab fails": {lsWithAgents, map[string]func() ([]byte, error){
+			"move 31 right-of": ternOut(`{"block":31}`), "move 31 new-tab": fail}},
+		"the shell close fails": {lsWithoutAgents, map[string]func() ([]byte, error){
+			"new session": ternOut(`{"session":3,"tab":9,"block":40}`), "move 31 right-of": ternOut(`{"block":31}`), "close": fail}},
+	} {
+		g, dirs := agentGateway(t)
+		file := seedAgent(t, dirs, model.AgentEntry{Block: "31", Open: true, Placement: model.AgentSplit})
+		c.replies["ls"] = ternOut(c.ls)
+		ternScript(g, c.replies)
+		got := as[model.AgentPlaced](t, run(t, g, model.SendAgentBack{Block: "31", IssueRef: "demo#ab12"}))
+		if got.Err == nil || got.Err.Error() != "exit status 1: tern: refused" || !got.Moved || got.Open || !got.Back {
+			t.Errorf("%s: %+v", name, got)
+		}
+		if stored, _ := ReadAgents(file); stored[0].Open || !stored[0].Background {
+			t.Errorf("%s: agents.json %+v", name, stored)
+		}
+	}
+}
+
 func TestPruningKeepsABlockOfTheHiddenSession(t *testing.T) {
 	g, dirs := agentGateway(t)
 	file := seedAgent(t, dirs, model.AgentEntry{Block: "18494129176578", Background: true})
@@ -1024,5 +1051,63 @@ func writeAgents(t *testing.T, path string, entries ...model.AgentEntry) {
 	}
 	if err := os.WriteFile(path, raw, 0o600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLiveBlocksCallerReturnsAtItsOwnDeadlineWhileAnotherAskRuns(t *testing.T) {
+	g, _ := agentGateway(t)
+	release := make(chan struct{})
+	started := make(chan struct{}, 1)
+	g.runTern = func(ctx context.Context, _ []string) ([]byte, error) {
+		started <- struct{}{}
+		select {
+		case <-release:
+		case <-ctx.Done():
+		}
+		return lsOf("1"), nil
+	}
+	slow := make(chan error, 1)
+	go func() { _, _, err := g.liveBlocks(context.Background(), false); slow <- err }()
+	<-started
+	time.AfterFunc(600*time.Millisecond, func() { close(release) })
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	begun := time.Now()
+	_, _, err := g.liveBlocks(ctx, false)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("the short caller got %v, want its deadline error", err)
+	}
+	if took := time.Since(begun); took > 400*time.Millisecond {
+		t.Errorf("the short caller returned after %v", took)
+	}
+	if err := <-slow; err != nil {
+		t.Errorf("the slow caller: %v", err)
+	}
+}
+
+func TestLiveBlocksConcurrentCallersShareOneAsk(t *testing.T) {
+	g, _ := agentGateway(t)
+	release := make(chan struct{})
+	var asked atomic.Int32
+	g.runTern = func(context.Context, []string) ([]byte, error) {
+		asked.Add(1)
+		<-release
+		return lsOf("1"), nil
+	}
+	var wg sync.WaitGroup
+	for range 5 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if live, _, err := g.liveBlocks(context.Background(), false); err != nil || !live["1"] {
+				t.Errorf("got %v, %v", live, err)
+			}
+		}()
+	}
+	time.Sleep(50 * time.Millisecond)
+	close(release)
+	wg.Wait()
+	if n := asked.Load(); n != 1 {
+		t.Errorf("tern ls ran %d times, want 1", n)
 	}
 }

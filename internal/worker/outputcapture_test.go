@@ -185,7 +185,7 @@ func TestTheFileTailIsTheLastBytesOfTheFile(t *testing.T) {
 func writeOutputJournal(t testing.TB, path string, n, size int) string {
 	t.Helper()
 	var file, joined strings.Builder
-	for i := 0; i < n; i++ {
+	for i := range n {
 		text := fmt.Sprintf("m%07d ", i) + strings.Repeat("x", size-9)
 		fmt.Fprintf(&file, `{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":%q}],"stopReason":"stop"}}`+"\n", text)
 		if i > 0 {
@@ -228,8 +228,7 @@ func BenchmarkOutputTail8MiB(b *testing.B) {
 	path := filepath.Join(b.TempDir(), "output.jsonl")
 	writeOutputJournal(b, path, 8192, 1024)
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		outputTail(path, OutputTailBytes)
 	}
 }

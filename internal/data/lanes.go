@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"path/filepath"
 	"slices"
-	"sync"
 
 	"github.com/BurntSushi/toml"
 	"github.com/Dangerboi/tern-kata/internal/guardedfile"
@@ -60,18 +59,11 @@ func readLanes(path string) (lanesFile, error) {
 // between the read and the write.
 const saveAttempts = 20
 
-// tablesMu makes this process's saves of lanes.toml and filters.toml take turns.
-var tablesMu sync.Mutex
-
 // updateTables applies change to the file's untyped tables, so a save can write back keys tern-kata doesn't know, and writes
 // the result only while the file is still the text that was read. A file another Pane changed meanwhile is read again and
 // change applied on top of it, so no save loses another's; a file that keeps changing is refused with saying so. A missing file
 // is an empty one and a file that cannot be read or parsed is never written.
 func updateTables(path string, change func(file map[string]any)) error {
-	// The guard's compare and rename are two steps, so saves of this process take turns; another process's save in that
-	// instant is the one gap left.
-	tablesMu.Lock()
-	defer tablesMu.Unlock()
 	for range saveAttempts {
 		token, err := guardedfile.Read(path)
 		if err != nil {

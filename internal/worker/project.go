@@ -142,7 +142,7 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 			default:
 			}
 			due := nextDefs.IsZero() || !now.Before(nextDefs)
-			if dirty && !now.Before(maxTime(dirtyAt.Add(250*time.Millisecond), refreshed.Add(2*time.Second))) {
+			if dirty && !now.Before(maxTime(dirtyAt.Add(250*time.Millisecond), refreshed.Add(jobRefreshDebounce))) {
 				due = true
 			}
 			if due {
@@ -171,7 +171,7 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 			wake = minTime(wake, nextDefs)
 		}
 		if dirty {
-			wake = minTime(wake, maxTime(dirtyAt.Add(250*time.Millisecond), refreshed.Add(2*time.Second)))
+			wake = minTime(wake, maxTime(dirtyAt.Add(250*time.Millisecond), refreshed.Add(jobRefreshDebounce)))
 		}
 		if ps.resolved {
 			wake = minTime(wake, nextRoute)
@@ -186,6 +186,9 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 		}
 	}
 }
+
+// jobRefreshDebounce is the least time between two reads of a Project's job list that events caused.
+const jobRefreshDebounce = 2 * time.Second
 
 func minTime(a, b time.Time) time.Time {
 	if a.Before(b) {
