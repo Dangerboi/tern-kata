@@ -37,6 +37,15 @@ type Issue struct {
 	UpdatedAt       time.Time
 }
 
+// Qualified is the Issue as kata names it across Projects, project#short id: its own qualified id when set, else built from
+// its Project and short id; empty when it has neither.
+func (i Issue) Qualified() string {
+	if i.QualifiedID != "" || i.ProjectName == "" || i.ShortID == "" {
+		return i.QualifiedID
+	}
+	return i.ProjectName + "#" + i.ShortID
+}
+
 // IsClosed says the Issue is closed; any other status counts as open.
 func IsClosed(issue Issue) bool { return issue.Status == "closed" }
 

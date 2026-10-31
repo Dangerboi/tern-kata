@@ -134,3 +134,65 @@ func TestChildTicketCellsCarryTheCardsFactsAsATooltip(t *testing.T) {
 		t.Errorf("unloaded child tooltip = %q, want its qualified ref and status only", got)
 	}
 }
+
+// commenting is relating's Pane on the Comments tab with the cursor on a comment that refutes a comment in the loaded Issue
+// "peer" and is confirmed by one in the unloaded Issue "ghost".
+func commenting() model.Model {
+	main := model.Issue{UID: "main", ShortID: "main", QualifiedID: "work#main", Title: "Main", Status: "open", ProjectName: "work"}
+	peer := model.Issue{UID: "peer", ShortID: "peer", QualifiedID: "work#peer", Title: "Peer title", Status: "open", ProjectName: "work"}
+	comment := model.Comment{UID: "c1", Author: "dana", CreatedAt: testNow.Add(-time.Hour), Body: "claim", ReplyKind: ptr("refute"),
+		Reply:     &model.CommentLink{UID: ptr("p1"), Kind: "refute", Author: ptr("eli"), IssueUID: ptr("peer"), IssueShortID: ptr("peer")},
+		Backlinks: []model.CommentLink{{UID: ptr("g1"), Kind: "confirm", Author: ptr("fay"), IssueUID: ptr("ghost"), IssueShortID: ptr("ghst")}}}
+	return apply(model.Model{},
+		model.Start{Workspace: "/repo"},
+		model.ResizeMsg{Cols: 160},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{main, peer}}}},
+		model.JumpIssueMsg{UID: "main"},
+		model.DetailLoaded{UID: "main", Selected: &model.IssueDetailData{Issue: &main, Comments: []model.Comment{comment}}},
+		model.ActivityTabMsg{Tab: model.TabComments},
+	)
+}
+
+func TestCommentLinksCarryTheIssuesCard(t *testing.T) {
+	m := commenting()
+	nodes := render(t, m)
+	wantCard(t, "comment head", hovercardOf(t, nodes, view.DetailActivityID+".c1.head"), "work#peer", "Peer title")
+	wantCard(t, "chosen link", hovercardOf(t, nodes, view.DetailActivityID+".c1.link"), "work#peer", "Peer title")
+	nodes = render(t, apply(m, model.KeyMsg{Chord: "]"}))
+	wantCard(t, "chosen link to an unloaded Issue", hovercardOf(t, nodes, view.DetailActivityID+".c1.link"), "#ghst")
+}
+
+func TestMachineStringsAreMono(t *testing.T) {
+	spanStyles := func(nodes shown, id string) map[string]string {
+		styles := map[string]string{}
+		for _, span := range cellSpans(map[string]any{"text": nodes[id].P["spans"]}) {
+			styles[span["t"].(string)], _ = span["s"].(string)
+		}
+		return styles
+	}
+	nodes := render(t, commenting())
+	head := spanStyles(nodes, view.DetailActivityID+".c1.head")
+	if got := head[commenting().DetailTime(testNow.Add(-time.Hour))]; got != "muted mono" {
+		t.Errorf("comment time style = %q in %v", got, head)
+	}
+	m, _ := referencing(model.TabEvents)
+	nodes = render(t, m)
+	if got := spanStyles(nodes, view.DetailActivityID+".linked.row.jump")["peer"]; got != "accent link mono" {
+		t.Errorf("event reference style = %q", got)
+	}
+	for _, id := range []string{".linked.row.heading"} {
+		var muted []string
+		for text, style := range spanStyles(nodes, view.DetailActivityID+id) {
+			if style == "muted mono" {
+				muted = append(muted, text)
+			}
+		}
+		if len(muted) != 1 {
+			t.Errorf("event heading has %v in muted mono, want its time alone", muted)
+		}
+	}
+	nodes = render(t, relating())
+	if got := spanStyles(nodes, view.DetailActivityID+".1.row.jump")["#peer"]; got != "accent link mono" {
+		t.Errorf("link reference style = %q", got)
+	}
+}

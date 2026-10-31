@@ -67,14 +67,6 @@ type IssueDeleted struct {
 
 func (IssueDeleted) msg() {}
 
-// qualifiedID is the Issue as kata names it across Projects: project#short id.
-func qualifiedID(i *Issue) string {
-	if i.QualifiedID != "" {
-		return i.QualifiedID
-	}
-	return i.ProjectName + "#" + i.ShortID
-}
-
 // openDelete is `X`: the card for the selected Issue, with the cursor in the confirmation.
 func openDelete(m Model) Model {
 	if m.Stale || m.DeleteForm.Saving {
@@ -84,7 +76,7 @@ func openDelete(m Model) Model {
 	if issue == nil {
 		return m
 	}
-	m.DeleteForm = DeleteFormState{Open: true, Field: DeleteID, UID: issue.UID, ProjectID: issue.ProjectID, QualifiedID: qualifiedID(issue), ShortID: issue.ShortID, Title: issue.Title}
+	m.DeleteForm = DeleteFormState{Open: true, Field: DeleteID, UID: issue.UID, ProjectID: issue.ProjectID, QualifiedID: issue.Qualified(), ShortID: issue.ShortID, Title: issue.Title}
 	return m
 }
 

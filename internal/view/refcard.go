@@ -1,6 +1,7 @@
 package view
 
 import (
+	"cmp"
 	"strings"
 	"time"
 
@@ -19,7 +20,7 @@ type refSummary struct{ Ref, Title, Status, Owner, Updated string }
 func summarize(m model.Model, f refFacts, now time.Time) refSummary {
 	if issue, ok := m.LoadedIssue(f.UID); ok {
 		s := refSummary{
-			Ref: firstNonEmpty(issue.QualifiedID, qualifiedID(issue), f.Qualified), Title: issue.Title, Status: issue.Status,
+			Ref: cmp.Or(issue.Qualified(), f.Qualified), Title: issue.Title, Status: issue.Status,
 			Owner: m.OwnerText(issue.Owner, issue.AssignmentExpiresOn, now).String(),
 		}
 		if !issue.UpdatedAt.IsZero() {
@@ -28,15 +29,6 @@ func summarize(m model.Model, f refFacts, now time.Time) refSummary {
 		return s
 	}
 	return refSummary{Ref: f.Qualified, Status: f.Status}
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
 }
 
 // refCardBody is the card's content: the qualified ref with the status badge in its tone, then the title, the owner and the
@@ -98,13 +90,5 @@ func relFacts(r model.RelationshipRef) refFacts {
 }
 
 func rowFacts(row model.DetailRow) refFacts {
-	return refFacts{UID: row.ReferenceUID, Qualified: firstNonEmpty(row.Qualified, row.Ref), Status: row.Status}
-}
-
-// qualifiedID is the Issue's project#short id, for an Issue whose own qualified id is not set.
-func qualifiedID(issue model.Issue) string {
-	if issue.ProjectName == "" || issue.ShortID == "" {
-		return ""
-	}
-	return issue.ProjectName + "#" + issue.ShortID
+	return refFacts{UID: row.ReferenceUID, Qualified: cmp.Or(row.Qualified, row.Ref), Status: row.Status}
 }

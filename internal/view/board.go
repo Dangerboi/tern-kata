@@ -65,7 +65,7 @@ func board(m model.Model, now time.Time) tern.Element {
 		}
 		head := ui.Row{Common: ui.Common{Key: "head"}, Gap: ui.GapSM, Children: ui.Nodes(
 			ui.Badge{Common: ui.Common{Key: "title", Tone: tones[i]}, Text: column.Title},
-			ui.Text{Common: ui.Common{Key: "count"}, Spans: []ui.Span{{T: count, S: "muted mono"}}, Wrap: ui.WrapNone},
+			ui.Text{Common: ui.Common{Key: "count"}, Spans: []ui.Span{{T: count, S: mono("muted")}}, Wrap: ui.WrapNone},
 		)}
 		lanes[i] = ui.Col{
 			Common: ui.Common{Key: laneKey(i), Grow: 1, Basis: ui.BasisFrac(0), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}},
@@ -143,7 +143,7 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 	}
 	if !done {
 		if marker := blockedMarker(card); marker != "" {
-			body = append(body, ui.Text{Common: ui.Common{Key: "blocked", Hovercard: blockedCard(m, card, now)}, Spans: []ui.Span{{T: marker, S: "warning"}}})
+			body = append(body, ui.Text{Common: ui.Common{Key: "blocked", Hovercard: blockedCard(m, card, now)}, Spans: []ui.Span{{T: marker, S: mono("warning")}}})
 		}
 	}
 	if badge, ok := agentBadge(m, issue.UID, "agent"); ok {
@@ -241,7 +241,7 @@ func relationshipsLine(m model.Model, card model.BoardCard, now time.Time) tern.
 			items = append(items, ui.Text{Common: ui.Common{Key: ref.UID, Hovercard: refCard(m, relFacts(ref), now), Actions: &ui.Actions{Click: RefClick(ref.UID)}}, Spans: []ui.Span{{T: ref.ID(project), S: "accent link mono"}}})
 		}
 		if more > 0 {
-			items = append(items, ui.Text{Common: ui.Common{Key: "more"}, Spans: []ui.Span{{T: "+" + strconv.Itoa(more), S: "muted mono"}}})
+			items = append(items, ui.Text{Common: ui.Common{Key: "more"}, Spans: []ui.Span{{T: "+" + strconv.Itoa(more), S: mono("muted")}}})
 		}
 		parts = append(parts, ui.Row{Common: ui.Common{Key: key}, Gap: ui.GapSM, Wrap: true, Children: items})
 	}
