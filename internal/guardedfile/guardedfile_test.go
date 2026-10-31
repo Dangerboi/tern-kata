@@ -4,6 +4,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -95,5 +97,60 @@ func TestConcurrentWritersLoseNoChange(t *testing.T) {
 	got, _ := os.ReadFile(path)
 	if len(got) != writers*each {
 		t.Errorf("file holds %d changes, want %d", len(got), writers*each)
+	}
+}
+
+func TestUpdateRunsTheChangeAgainOnWhatAnotherWriterLeft(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "f.txt")
+	if err := os.WriteFile(path, []byte("one\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var seen []string
+	err := Update(path, 0o700, func(tok Token) ([]byte, error) {
+		seen = append(seen, tok.Text())
+		if len(seen) == 1 {
+			if err := os.WriteFile(path, []byte("one\ntwo\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return []byte(tok.Text() + "three\n"), nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"one\n", "one\ntwo\n"}; !slices.Equal(seen, want) {
+		t.Errorf("change saw %q, want %q", seen, want)
+	}
+	if got, _ := os.ReadFile(path); string(got) != "one\ntwo\nthree\n" {
+		t.Errorf("file = %q", got)
+	}
+}
+
+func TestUpdateOfAFileThatKeepsChangingGivesUpWrappingErrChanged(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "f.txt")
+	calls := 0
+	err := Update(path, 0o700, func(Token) ([]byte, error) {
+		calls++
+		if err := os.WriteFile(path, []byte(strings.Repeat("x", calls)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return []byte("mine"), nil
+	})
+	if !errors.Is(err, ErrChanged) || !strings.Contains(err.Error(), path) {
+		t.Fatalf("err = %v, want ErrChanged naming the file", err)
+	}
+	if got, _ := os.ReadFile(path); string(got) == "mine" {
+		t.Error("the change was written over the other writer's file")
+	}
+}
+
+func TestUpdateReturnsTheChangesErrorAndWritesNothing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "f.txt")
+	boom := errors.New("boom")
+	if err := Update(path, 0o700, func(Token) ([]byte, error) { return nil, boom }); !errors.Is(err, boom) {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Error("a file was written")
 	}
 }

@@ -287,6 +287,8 @@ func moved(e model.UndoEntry, shown *g.ShowIssueResponseBody) string {
 		}
 	case model.UndoBody:
 		// The body text is what the undo overwrites; a write to another field moves the revision without touching it.
+		// shortcut: check-then-write, so a body edit landing between this check and the write is overwritten (kata v0.20's
+		// edit-issue honours no If-Match); upgrade when it does.
 		if i.Body != e.After.Body {
 			return "issue body changed since the action"
 		}

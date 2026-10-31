@@ -46,7 +46,8 @@ func (g *Gateway) loadFilters(projectUID string) (model.Filters, error) {
 }
 
 // saveFilters writes the Project's default filter, keeping every other table and every key of this one it doesn't know. It
-// refuses a file it cannot read. A save from another Pane in between is read again and this one applied on top. shortcut: comments in a hand-edited file are lost on save.
+// refuses a file it cannot read. A save from another Pane in between is read again and this one applied on top. shortcut:
+// comments in a hand-edited file are lost on save.
 func (g *Gateway) saveFilters(cmd model.SaveFilters) model.FiltersSaved {
 	return model.FiltersSaved{ProjectUID: cmd.ProjectUID, Default: cmd.Default, Err: g.writeFilters(cmd)}
 }

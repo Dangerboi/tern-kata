@@ -14,8 +14,8 @@ const guardedAttempts = 3
 func etag(revision int64) string { return fmt.Sprintf("\"rev-%d\"", revision) }
 
 // recurrenceWrite runs attempt, which reads the target's current revision and writes against it, and runs it again when kata
-// refuses the revision as stale; a revision still refused after guardedAttempts reads as exhausted, the text the Pane shows.
-// attempt returns kata's raw error; the result is the text the Pane shows.
+// refuses the revision as stale; a revision still refused after guardedAttempts reads as exhausted. attempt returns kata's raw
+// error; the result is the text the Pane shows.
 func recurrenceWrite(exhausted string, attempt func() error) error {
 	for n := 1; ; n++ {
 		err := attempt()
