@@ -19,7 +19,7 @@ ctl key Ctrl+o
 expect_tree "[data-id='layer.worker.error']" '.ok and .count == 1 and (.nodes[0].text | contains("Trust"))'
 [[ ! -e "$wc_file" ]]
 
-ctl click "[data-id='layer.worker.trust.choices.1']"
+ctl click "[data-id='layer.worker.trust.control']"
 ctl key Ctrl+o
 expect_tree "[data-id='layer.worker.saved']" '.ok and .count == 1 and (.nodes[0].text | contains("worker.toml written"))'
 expect_tree "[data-id='layer.worker.next']" '.ok and .count == 1 and (.nodes[0].text | contains("starts the worker within"))'

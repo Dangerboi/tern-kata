@@ -27,7 +27,8 @@ expect_tree "[data-id='layer.job.cron']" '.ok and .count == 1'
 expect_tree "[data-id='layer.job.interval']" '.ok and .count == 0'
 ctl type '"Smoke every minute"'
 # An interval under a minute is refused naming the field, and nothing is made.
-ctl click "[data-id='layer.job.trigger.choices.1']"
+ctl click "[data-id='layer.job.trigger.control'] .sf-select-btn"
+ctl click "[data-id='layer.job.trigger.control'] .sf-select-opt:nth-child(2)"
 expect_tree "[data-id='layer.job.interval']" '.ok and .count == 1'
 expect_tree "[data-id='layer.job.cron']" '.ok and .count == 0'
 ctl click "[data-id='layer.job.interval']"

@@ -197,8 +197,8 @@ func pageBarEntry(t *testing.T, m model.Model, chord string) string {
 	return id
 }
 
-// choiceShowing is the id of the choice that the field labelled label draws as choice, whether or not it is the chosen one
-// (the chosen one is drawn in brackets).
+// choiceShowing is the id of the choice that the row-of-words field labelled label draws as choice, whether or not it is the
+// chosen one (the chosen one is drawn in brackets). Only the Weekdays field is still drawn as words.
 func choiceShowing(t *testing.T, m model.Model, label, choice string) string {
 	t.Helper()
 	field := fieldLabeled(t, m, label)
@@ -219,6 +219,45 @@ func choiceShowing(t *testing.T, m model.Model, label, choice string) string {
 		t.Fatalf("choices of %q drawing %q = %v, want exactly one", label, choice, found)
 	}
 	return found[0]
+}
+
+// controlOf is the control node inside the field labelled label.
+func controlOf(t *testing.T, m model.Model, label string) tern.WireNode {
+	t.Helper()
+	id := fieldLabeled(t, m, label) + ".control"
+	for _, n := range wireNodes(t, view.Render(m, now)) {
+		if n.ID == id {
+			return n
+		}
+	}
+	t.Fatalf("the field labelled %q draws no control", label)
+	return tern.WireNode{}
+}
+
+// optionValue is the value a select option or a tab labelled choice carries in the control of the field labelled label.
+func optionValue(t *testing.T, m model.Model, label, choice string) string {
+	t.Helper()
+	control := controlOf(t, m, label)
+	for _, key := range []string{"options", "items"} {
+		list, _ := control.P[key].([]any)
+		for _, item := range list {
+			entry, _ := item.(map[string]any)
+			text, _ := entry["label"].(string)
+			if text == "" {
+				text, _ = entry["value"].(string)
+			}
+			if text != choice {
+				continue
+			}
+			for _, idKey := range []string{"value", "id"} {
+				if v, ok := entry[idKey].(string); ok {
+					return v
+				}
+			}
+		}
+	}
+	t.Fatalf("the control of %q draws no choice %q: %v", label, choice, control.P)
+	return ""
 }
 
 // fieldDrawn says whether the card on top draws a field labelled label.

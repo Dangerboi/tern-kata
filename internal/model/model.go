@@ -126,12 +126,14 @@ type Model struct {
 	Bound            bool
 	Picker           PickerState
 	// Views is views.toml as the Pane last read it; ViewForm is the View card; ActiveView is the saved view this Pane opened.
-	Views        ViewsState
-	ViewForm     ViewFormState
-	ActiveView   ActiveView
-	ProjectForm  ProjectFormState
-	LanesForm    LanesFormState
-	WorkerCard   WorkerCardState
+	Views       ViewsState
+	ViewForm    ViewFormState
+	ActiveView  ActiveView
+	ProjectForm ProjectFormState
+	LanesForm   LanesFormState
+	WorkerCard  WorkerCardState
+	// Menu is the open menu of a popup card's select, if one is open.
+	Menu         ChoiceMenu
 	Focus        Column
 	Groups       []IssueGroup
 	Calendar     PaneCalendar
@@ -189,7 +191,7 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 		cmds = append(cmds, ended...)
 	}
 	next = next.recordWrite(msg).noteWrites(cmds)
-	return next.cancelPending(m, msg).withCollectionRows(), cmds
+	return next.cancelPending(m, msg).settleMenu().withCollectionRows(), cmds
 }
 
 // staleConnection reports an answer asked of a daemon the Pane has since switched away from: it changes nothing.
@@ -216,6 +218,10 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return m, nil
 	case ChooseMsg:
 		return chooseField(m, msg.Field, msg.Index), nil
+	case SwitchMsg:
+		return switchField(m, msg.Field, msg.On), nil
+	case MenuToggleMsg:
+		return toggleMenu(m, msg.Field, msg.Open), nil
 	case KeyMsg:
 		if next, cmds, handled := updateTopCardKey(m, msg); handled {
 			return next, cmds
