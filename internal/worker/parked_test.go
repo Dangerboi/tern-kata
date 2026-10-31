@@ -1,6 +1,7 @@
 package worker_test
 
 import (
+	"net/http"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -243,5 +244,60 @@ func TestANotifyJobOnASomedayIssueStillNotifies(t *testing.T) {
 	}
 	if run := h.settled(resp.Run.RunUID); run.Status != "succeeded" {
 		t.Fatalf("run %+v", run)
+	}
+}
+
+// A failed read of the Issue says nothing about its readiness: the parked occurrence stays parked, so the grace
+// cannot drop it, and it runs once the Issue is ready.
+func TestAParkedOccurrenceSurvivesAnIssueReadFailurePastItsGrace(t *testing.T) {
+	h := newHarness(t)
+	issue := h.kata.Issue(t, h.proj, "Parked")
+	h.kata.SetSomeday(t, h.proj, issue.UID, true)
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "on issue", Prompt: "Do it.", ExistingUID: issue.UID, Trigger: interval(86400)})
+	r := h.start(worker.Hooks{})
+	h.scheduled(r, 1)
+	first := h.fire(r, time.Time{})
+	h.waitsFor(r, "Issue is someday")
+
+	h.kata.Fail(func(req *http.Request) bool {
+		return req.Method == http.MethodGet && strings.HasSuffix(req.URL.Path, "/issues/"+issue.UID)
+	})
+	h.advanceTo(first.Add(2 * time.Hour)) // past any grace while the Issue cannot be read
+	h.quiet(job, 0)
+	h.quiet(job, 0)
+
+	h.kata.Heal()
+	h.kata.SetSomeday(t, h.proj, issue.UID, false)
+	runs := h.waitRuns(job, 1)
+	if runs[0].OccurrenceKey != worker.OccurrenceKey(first) {
+		t.Fatalf("the run is for %s, want the parked occurrence %s", runs[0].OccurrenceKey, worker.OccurrenceKey(first))
+	}
+	h.settled(runs[0].UID)
+}
+
+// Under skip a long park keeps one missed occurrence, the newest, and not every occurrence that came due meanwhile.
+func TestASkipJobParkedForHoursRunsOnlyTheNewestOccurrenceOnceItsIssueIsReady(t *testing.T) {
+	h := newHarness(t)
+	h.capacity("5")
+	issue := h.kata.Issue(t, h.proj, "Parked")
+	h.kata.SetSomeday(t, h.proj, issue.UID, true)
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "on issue", Prompt: "Do it.", ExistingUID: issue.UID, Trigger: interval(3600), Overlap: "allow"})
+	r := h.start(worker.Hooks{})
+	h.scheduled(r, 1)
+	at := h.fire(r, time.Time{})
+	h.waitsFor(r, "Issue is someday")
+	for range 5 {
+		at = h.fire(r, at)
+		h.waitsFor(r, "Issue is someday")
+		h.quiet(job, 0) // the occurrence is marked parked before the next one comes due
+	}
+	h.advanceTo(at.Add(5 * time.Minute)) // the newest occurrence is missed, not on time
+	h.quiet(job, 0)
+
+	h.kata.SetSomeday(t, h.proj, issue.UID, false)
+	runs := h.waitRuns(job, 1)
+	h.quiet(job, 1)
+	if runs[0].OccurrenceKey != worker.OccurrenceKey(at) {
+		t.Fatalf("the run is for %s, want the newest occurrence %s", runs[0].OccurrenceKey, worker.OccurrenceKey(at))
 	}
 }
