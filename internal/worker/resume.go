@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -296,14 +297,26 @@ func sessionIn(dir, launched string) string {
 }
 
 // keepAttemptOutput moves the finished attempt's output and stderr aside so the next attempt writes fresh files and
-// the held attempt's remain readable. An existing aside copy is never replaced.
-func keepAttemptOutput(runDir string, attempt int) {
+// the held attempt's remain readable. An existing aside copy is never replaced. A file that cannot be moved is an
+// error: the next attempt would open it truncating, and the held attempt's evidence would be lost.
+func keepAttemptOutput(hooks Hooks, runDir string, attempt int) error {
 	for _, name := range []string{"output.jsonl", "stderr.log", "output.log"} {
 		ext := filepath.Ext(name)
+		from := filepath.Join(runDir, name)
 		aside := filepath.Join(runDir, fmt.Sprintf("%s.attempt%d%s", strings.TrimSuffix(name, ext), attempt, ext))
 		if _, err := os.Stat(aside); err == nil {
 			continue
 		}
-		_ = os.Rename(filepath.Join(runDir, name), aside)
+		var err error
+		if hooks.FailAsideRename != nil {
+			err = hooks.FailAsideRename(from)
+		}
+		if err == nil {
+			err = os.Rename(from, aside)
+		}
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("the held attempt's %s could not be set aside, so it was left untouched: %w", name, err)
+		}
 	}
+	return nil
 }

@@ -400,7 +400,9 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 		return w.hold(j, HoldExecutionError, err.Error())
 	}
 	if attempt > 1 && j.Resume != nil {
-		keepAttemptOutput(sp.dir, attempt-1)
+		if err := keepAttemptOutput(w.store.hooks, sp.dir, attempt-1); err != nil {
+			return w.hold(j, HoldExecutionError, err.Error())
+		}
 	}
 	cmd := exec.Command(program, agentArgs(sp.profile, sp.dir, promptFile, resumeID)...)
 	cmd.Dir = cwd

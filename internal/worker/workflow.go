@@ -456,7 +456,9 @@ func (w *Worker) runCommand(ctx context.Context, j *Journal, sp attemptSpec) err
 		return w.failAttempt(j, "cannot start the command: "+err.Error())
 	}
 	if attempt := j.attempt(); attempt > 1 && j.Resume != nil {
-		keepAttemptOutput(sp.dir, attempt-1)
+		if err := keepAttemptOutput(w.store.hooks, sp.dir, attempt-1); err != nil {
+			return w.hold(j, HoldExecutionError, err.Error())
+		}
 	}
 	out := openHeadTail(w.store.hooks, filepath.Join(sp.dir, "output.log"), commandHead, commandTail)
 	cmd := exec.Command(program, "-c", sp.task)
