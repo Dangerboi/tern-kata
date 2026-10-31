@@ -493,3 +493,35 @@ func TestRecurrenceCardFillsAnEmptyDayWithTheStartDatesDay(t *testing.T) {
 		t.Fatalf("Day %q after changing the frequency, want 21", m.RecurrenceForm.Day)
 	}
 }
+
+func TestClearingAnEmptyFieldKeepsTheCardError(t *testing.T) {
+	recurrence := func() (model.Model, func(model.Model) error) {
+		m := fillField(openRecurrenceCard(recurrenceBase()), model.RecurrenceZone, "")
+		m.RecurrenceForm.Err = errBoom
+		return m, func(m model.Model) error { return m.RecurrenceForm.Err }
+	}
+	job := func() (model.Model, func(model.Model) error) {
+		m := clickBase()
+		m, _ = model.Update(m, model.KeyMsg{Chord: "shift+j"})
+		m, _ = model.Update(m, model.FocusFieldMsg{Field: model.JobFieldName})
+		m, _ = model.Update(m, model.KeyMsg{Chord: "ctrl+u"})
+		m.JobForm.Err = errBoom
+		return m, func(m model.Model) error { return m.JobForm.Err }
+	}
+	for name, open := range map[string]func() (model.Model, func(model.Model) error){"recurrence": recurrence, "job": job} {
+		t.Run(name, func(t *testing.T) {
+			m, errOf := open()
+			if errOf(m) == nil {
+				t.Fatalf("setup: the card did not keep an error; mode %v", m.CurrentMode())
+			}
+			if got, _ := model.Update(m, model.KeyMsg{Chord: "ctrl+u"}); !errors.Is(errOf(got), errBoom) {
+				t.Fatalf("ctrl+u on an empty field left error %v", errOf(got))
+			}
+			m, _ = model.Update(m, model.KeyMsg{Text: "x"})
+			m.RecurrenceForm.Err, m.JobForm.Err = errBoom, errBoom
+			if got, _ := model.Update(m, model.KeyMsg{Chord: "ctrl+u"}); errOf(got) != nil {
+				t.Fatalf("ctrl+u on a typed field left error %v", errOf(got))
+			}
+		})
+	}
+}
