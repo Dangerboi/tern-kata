@@ -210,6 +210,20 @@ func DecodeFocus(id string) model.Msg {
 	return nil
 }
 
+// DecodeChange is the message for Tern's new value of node id: a day picked on a card's calendar, nil for any other node.
+func DecodeChange(id string, value any) model.Msg {
+	day, ok := value.(string)
+	if !ok {
+		return nil
+	}
+	for _, card := range model.Cards() {
+		if id == CalendarID(card) {
+			return model.DatePickMsg{Day: day}
+		}
+	}
+	return nil
+}
+
 // decodeAgentStates reads the window half's JSON list of {pane, state, last_message, command, hidden}, nil when it is malformed; command and hidden are
 // absent from an older window half, and a missing hidden leaves the agent's place unknown.
 // pane is decimal text, or a JSON number, kept exact: block ids can exceed what a float holds.
