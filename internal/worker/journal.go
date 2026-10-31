@@ -547,17 +547,48 @@ func (s *Store) Scan() (journals []*Journal, quarantined []string, err error) {
 			failed = append(failed, fmt.Errorf("run %s: %w", e.Name(), lerr)) // a read problem may pass; quarantine would veto the run forever
 			continue
 		}
-		if mkerr := os.MkdirAll(filepath.Dir(s.Quarantined(e.Name())), 0o700); mkerr != nil {
-			failed = append(failed, fmt.Errorf("run %s: %w", e.Name(), mkerr))
+		moved, qerr := s.quarantine(e.Name())
+		if qerr != nil {
+			failed = append(failed, fmt.Errorf("run %s: %w", e.Name(), qerr))
 			continue
 		}
-		if rerr := os.Rename(s.RunDir(e.Name()), s.Quarantined(e.Name())); rerr != nil {
-			failed = append(failed, fmt.Errorf("run %s: %w", e.Name(), rerr))
-			continue
+		if moved {
+			quarantined = append(quarantined, e.Name())
 		}
-		quarantined = append(quarantined, e.Name())
 	}
 	return journals, quarantined, errors.Join(failed...)
+}
+
+// quarantine moves a run whose journal is damaged to quarantine, under the run's lock so a save in flight cannot
+// write the run back after it moved. A journal that reads fine again under the lock (a save replaced it) stays.
+func (s *Store) quarantine(uid string) (moved bool, err error) {
+	l := s.lock(uid)
+	l.Lock()
+	defer l.Unlock()
+	if _, lerr := s.Load(uid); !errors.Is(lerr, errDamagedJournal) {
+		return false, nil
+	}
+	if err := os.MkdirAll(filepath.Dir(s.Quarantined(uid)), 0o700); err != nil {
+		return false, err
+	}
+	if err := os.Rename(s.RunDir(uid), s.Quarantined(uid)); err != nil {
+		return false, err
+	}
+	s.dropFromGates(uid)
+	return true, nil
+}
+
+// dropFromGates removes a run from every job's closing set: a quarantined run is vetoed by its own folder, and
+// abandoning it must open its job's gate without a restart (ADR-0007).
+func (s *Store) dropFromGates(uid string) {
+	s.gateMu.Lock()
+	defer s.gateMu.Unlock()
+	for key, set := range s.closing {
+		delete(set, uid)
+		if len(set) == 0 {
+			delete(s.closing, key)
+		}
+	}
 }
 
 // Quarantined is where a damaged journal of uid lives.
