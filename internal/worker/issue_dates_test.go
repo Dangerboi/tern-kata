@@ -201,3 +201,29 @@ func TestADateReadThatFailedAtFirstSightDoesNotMakeAnOldDateAChange(t *testing.T
 	h.eventually("the date to be read again", func() bool { return h.kata.Requests("planning-dates") > failed })
 	h.quiet(job, 0)
 }
+
+// A date that moves while the job is off is the baseline when the job is enabled again, never a change that makes the
+// time off run.
+func TestAnIssueDateMovedIntoTheTimeOffIsNotCaughtUpWhenTheJobIsEnabledAgain(t *testing.T) {
+	h := newHarness(t)
+	issue := h.kata.Issue(t, h.proj, "Dated")
+	h.kata.SetIssueDate(t, h.proj, issue.UID, "scheduled_on", h.minuteIn(3*time.Hour))
+	def := workertest.Job{Name: "on date", Prompt: "Do it.", ExistingUID: issue.UID,
+		Trigger: cronjob.Trigger{Kind: cronjob.TriggerIssueScheduled, IssueUID: issue.UID}, Catchup: "all", GraceSeconds: workertest.Seconds(7200)}
+	job := h.kata.CreateJob(t, h.proj, def)
+	r := h.start(worker.Hooks{})
+	h.scheduled(r, 1)
+	h.eventually("the event stream to open", func() bool { return h.status(r).Following })
+
+	off := def
+	off.Disabled = true
+	job = h.kata.ReplaceJob(t, h.proj, job, off)
+	h.eventually("the disabled job to leave the schedule", func() bool { return h.status(r).Scheduled == 0 })
+	h.advanceTo(h.clock.Now().Add(time.Hour))
+	h.kata.SetIssueDate(t, h.proj, issue.UID, "scheduled_on", h.minuteIn(-10*time.Minute)) // an instant inside the time off
+	h.quiet(job, 0)
+
+	job = h.kata.ReplaceJob(t, h.proj, job, def)
+	h.eventually("the re-enabled job to be scheduled", func() bool { return h.status(r).Scheduled == 1 })
+	h.quiet(job, 0)
+}
