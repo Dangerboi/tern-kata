@@ -119,7 +119,7 @@ The command prints the mode, the runs in flight and whether a fresh worker follo
 
 The plugin's host half starts `tern-kata worker` when `worker.toml` exists and keeps it running, inside Tern's session daemon, so no window is needed. You do not start the worker yourself; `tern-kata worker` in a terminal is for a worker you want to watch.
 
-The host half doesn't read the config folder itself: every 10 seconds it asks `tern-kata worker supervised`, which answers with `worker.toml`'s text when this machine's worker is supervised. The binary and the window plugin are installed separately, so update them together: a tern-kata too old to know `worker supervised` leaves the worker unstarted, and the host half logs this once per daemon with the advice to update tern-kata.
+The host half doesn't read the config folder itself: while no worker runs, it asks `tern-kata worker supervised` every 10 seconds, which answers with `worker.toml`'s text when this machine's worker is supervised. The binary and the window plugin are installed separately, so update them together: a tern-kata too old to know `worker supervised` leaves the worker unstarted, and the host half logs this once per daemon with the advice to update tern-kata.
 
 - **Restarts.** It starts the worker again whenever it exits, after 1 second, then 2, 4 and so on up to a minute between tries. A worker that stayed up for a minute starts the count over.
 - **When it starts.** When Tern's daemon starts, which a window does on demand and Tern's "Start at login" setting does at login. Nothing starts the daemon at boot or after a quit by itself: with Tern not running, no worker runs.
