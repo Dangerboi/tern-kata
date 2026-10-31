@@ -226,9 +226,16 @@ func decodeChoice(field model.Field, item string) model.Msg {
 	return nil
 }
 
-// DecodeChange is the message for a control's new value from node id: the option a select picked, as the index it was given,
-// or the state a switch flipped to. It is nil for a control the Pane does not use.
+// DecodeChange is the message for Tern's new value of node id: a day picked on a card's calendar, the option a select picked
+// (as the index it was given) or the state a switch flipped to. It is nil for any other node.
 func DecodeChange(id string, value any) model.Msg {
+	if day, ok := value.(string); ok {
+		for _, card := range model.Cards() {
+			if id == CalendarID(card) {
+				return model.DatePickMsg{Day: day}
+			}
+		}
+	}
 	field, ok := controlField(id)
 	if !ok {
 		return nil

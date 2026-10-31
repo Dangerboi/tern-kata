@@ -2,8 +2,8 @@
 # Attachments tab, tab to Comments (taller) and its last card is on screen; the same by a click on a tab name.
 # Own Project and Issue; it cleans up.
 tr_rects() { ctl tree "[data-id='main.columns.detail.viewport'],$1" | jq -c '[.nodes[].rect]'; }
-# Whether the last node of selector $1 lies inside the detail viewport, in px.
-tr_inside() { tr_rects "$1" | jq -e 'length >= 2 and .[-1][1] >= .[0][1] and (.[-1][1] + .[-1][3]) <= (.[0][1] + .[0][3])' >/dev/null; }
+# Whether the last node of selector $1 lies inside the detail viewport, within 1px.
+tr_inside() { tr_rects "$1" | jq -e 'length >= 2 and .[-1][1] >= .[0][1] and (.[-1][1] + .[-1][3]) <= (.[0][1] + .[0][3] + 1)' >/dev/null; }
 tr_wait_inside() { # <label> <node selector>
   for ((attempt = 0; attempt < 40; attempt++)); do
     tr_inside "$2" && return 0

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 )
@@ -215,5 +216,29 @@ func TestEditInTerminalRemovesFileWhenResumeWorks(t *testing.T) {
 	}
 	if left, _ := filepath.Glob(filepath.Join(os.TempDir(), "*")); len(left) != 0 {
 		t.Errorf("leftover files: %v", left)
+	}
+}
+
+func TestEditorSurfaceOptionsClosableOnlyWithoutQuitConfirmation(t *testing.T) {
+	for _, closable := range []bool{false, true} {
+		if got := editorSurfaceOptions(closable); got.Closable != closable {
+			t.Errorf("editorSurfaceOptions(%v).Closable = %v", closable, got.Closable)
+		}
+	}
+}
+
+func TestPaneClosableFollowsConfirmQuit(t *testing.T) {
+	for name, tc := range map[string]struct {
+		catalog data.Catalog
+		err     error
+		want    bool
+	}{
+		"confirm_quit false": {data.Catalog{ConfirmQuit: false}, nil, true},
+		"confirm_quit true":  {data.Catalog{ConfirmQuit: true}, nil, false},
+		"unreadable config":  {data.Catalog{}, errors.New("bad"), false},
+	} {
+		if got := editorSurfaceOptions(quitsAtOnce(tc.catalog, tc.err)).Closable; got != tc.want {
+			t.Errorf("%s: Closable = %v, want %v", name, got, tc.want)
+		}
 	}
 }
