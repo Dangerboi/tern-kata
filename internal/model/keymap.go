@@ -51,6 +51,7 @@ const (
 	PreviousField           Action = "previous-field"
 	NextChoice              Action = "next-choice"
 	PreviousChoice          Action = "previous-choice"
+	OpenChoice              Action = "open-choice"
 	ResetFilterForm         Action = "reset-filter-form"
 	ClearFilters            Action = "clear-filters"
 	InputSpace              Action = "input-space"

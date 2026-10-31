@@ -19,25 +19,6 @@ func viewFieldTitle(name model.Field) string {
 	return filterTitles[name]
 }
 
-// viewChoiceLabel is how the View card shows value of the choice field called name.
-func viewChoiceLabel(m model.Model, name model.Field, value string) string {
-	if name != model.ViewBase {
-		if name == model.FilterProject && value == "" {
-			return "Any Project"
-		}
-		return filterChoiceLabel(m, name, value)
-	}
-	for _, base := range m.ViewBases() {
-		if base.Key() == value {
-			if base.IsProject() {
-				return "Project " + base.Title
-			}
-			return base.Title
-		}
-	}
-	return value
-}
-
 func viewLayer(m model.Model) tern.Element {
 	form := m.ViewForm
 	if !form.Open {
@@ -53,16 +34,7 @@ func viewLayer(m model.Model) tern.Element {
 			prompt = "> " + prompt
 		}
 		if !field.Text {
-			choices := m.ViewChoices(field.Name)
-			labels := make([]string, len(choices))
-			for i, choice := range choices {
-				labels[i] = viewChoiceLabel(m, field.Name, choice)
-			}
-			current := form.Values.Value(field.Name)
-			if field.Name == model.ViewBase {
-				current = form.Base.Key()
-			}
-			children = append(children, choiceField(field.Name, tone, title, prompt, labels, func(i int) bool { return choices[i] == current }, -1))
+			children = append(children, choiceControl(m, model.CardView, field.Name, title, field.Name == form.Field, "", ""))
 			continue
 		}
 		value := form.Name

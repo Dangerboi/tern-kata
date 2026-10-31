@@ -122,16 +122,8 @@ func workerFields(m model.Model) []tern.Element {
 	}
 	children = append(children,
 		toneText("checkout", ui.ToneInfo, verb+" "+m.Worker.Setup.Project+" with checkout "+m.Worker.Setup.Checkout+"."),
-		toneText("trust-note", ui.ToneWarning, model.WorkerTrustNote),
-		choiceField(model.WorkerFieldTrust, tone(model.WorkerFieldTrust), "Trust", prefixIf(f.Field == model.WorkerFieldTrust, "Trust this Project's job authors: "), []string{"No", "Yes"}, func(i int) bool { return (i == 1) == f.Trusted }, -1))
+		choiceControl(m, model.CardWorker, model.WorkerFieldTrust, "Trust", f.Field == model.WorkerFieldTrust, "", model.WorkerTrustNote))
 	return children
-}
-
-func prefixIf(on bool, text string) string {
-	if on {
-		return "> " + text
-	}
-	return text
 }
 
 // workerActions is the card's button row. It holds the saves, the restart choice, the edit (e) and supervision.

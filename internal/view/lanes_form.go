@@ -49,8 +49,7 @@ func lanesLayer(m model.Model) tern.Element {
 	}
 	children = append(children,
 		gap("gap-share"),
-		choiceField(model.LanesShare, fieldTone(form, model.LanesShare), "Save to", "Save to: ", []string{"This machine", "The Project"}, func(i int) bool { return (i == 1) == form.Share }, -1),
-		muted("share-note", "This machine writes lanes.toml, for you alone. The Project writes its tern.lanes metadata for everyone on this daemon, and wins over lanes.toml."))
+		choiceControl(m, model.CardLanes, model.LanesShare, "Save to", form.Field == model.LanesShare, "This machine writes lanes.toml, for you alone. The Project writes its tern.lanes metadata for everyone on this daemon, and wins over lanes.toml.", ""))
 	if form.Saving {
 		children = append(children, toneText("pending", ui.TonePending, "Saving Lanes…"))
 	}

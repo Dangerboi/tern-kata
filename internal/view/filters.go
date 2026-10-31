@@ -16,20 +16,6 @@ var filterTitles = map[model.Field]string{
 	model.FilterRelationship: "Relationship",
 }
 
-// filterChoiceLabel is how the Filter form shows value of the choice field called name.
-func filterChoiceLabel(m model.Model, name model.Field, value string) string {
-	switch name {
-	case model.FilterProject:
-		if value != "" {
-			return m.ProjectFilterName(value)
-		}
-		return "Any Project in this Collection"
-	case model.FilterStatus:
-		return model.FilterChoiceLabel(model.FilterStatuses, value)
-	}
-	return model.FilterChoiceLabel(model.FilterRelationships, value)
-}
-
 func filterLayer(m model.Model) tern.Element {
 	if !m.FilterForm.Open {
 		return nil
@@ -48,12 +34,7 @@ func filterLayer(m model.Model) tern.Element {
 		}
 		value := m.FilterForm.Values.Value(field.Name)
 		if !field.Text {
-			choices := m.FilterChoices(field.Name)
-			labels := make([]string, len(choices))
-			for i, choice := range choices {
-				labels[i] = filterChoiceLabel(m, field.Name, choice)
-			}
-			children = append(children, choiceField(field.Name, tone, title, prompt, labels, func(i int) bool { return choices[i] == value }, -1))
+			children = append(children, choiceControl(m, model.CardFilter, field.Name, title, field.Name == m.FilterForm.Field, "", ""))
 			continue
 		}
 		children = append(children, ui.Input{

@@ -14,7 +14,7 @@ expect_tree "[data-id='layer.lanes']" '.count == 1'
 ctl type '", shared-lane"'
 for _ in 1 2 3; do ctl key Tab; done
 ctl key Right
-expect_tree "[data-id='layer.lanes.share']" '.count == 1 and (.nodes[0].text | contains("[ The Project ]"))'
+expect_tree "[data-id='layer.lanes.share.control'] .sf-tab[aria-selected='true']" '.count == 1 and .nodes[0].text == "The Project"'
 ctl key Enter
 expect_tree "[data-id='layer.lanes']" '.count == 0'
 expect_tree "$sl_source" '.count == 1 and (.nodes[0].text | contains("shared with the Project"))'

@@ -7,7 +7,7 @@ ctl key f
 expect_tree "[data-id='layer.filters']" '.count == 1'
 ctl key tab
 ctl key Right
-expect_tree "[data-id='layer.filters.status']" '.ok and (.nodes[0].text | contains("[ open ]"))'
+expect_tree "[data-id='layer.filters.status.control'] .sf-tab[aria-selected='true']" '.ok and .count == 1 and .nodes[0].text == "open"'
 ctl key Ctrl+d
 expect_tree "[data-id='layer.filters']" '.count == 0'
 expect_tree "[data-id='main.filters']" '.nodes[0].text | contains("status=open") and endswith("(default)")'

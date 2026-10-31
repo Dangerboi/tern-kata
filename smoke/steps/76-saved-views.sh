@@ -17,7 +17,7 @@ ctl key Tab
 ctl key Tab
 ctl key Tab
 ctl key Right
-expect_tree "[data-id='layer.view.status']" '.ok and (.nodes[0].text | contains("[ open ]"))'
+expect_tree "[data-id='layer.view.status.control'] .sf-tab[aria-selected='true']" '.ok and .count == 1 and .nodes[0].text == "open"'
 
 # A refusal names the field and keeps the card with its input: a fixed Collection's name is not free.
 for _ in 1 2 3 4 5; do ctl key Tab; done
