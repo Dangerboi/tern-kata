@@ -198,6 +198,8 @@ func DecodeSelect(id, item string) model.Msg {
 		return model.AgentCardSelected{Block: itemKey(AgentListID, item)}
 	case MoveListID:
 		return model.MoveTargetSelected{Key: itemKey(MoveListID, item)}
+	case ChildrenTableID:
+		return model.JumpIssueMsg{UID: item}
 	}
 	return nil
 }

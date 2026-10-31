@@ -1,5 +1,5 @@
 # A parent's detail shows `Children: N open / M total` row in its properties and its children as a table below the
-# body, above Activity: reference, status, title and updated, the closed child muted. A child opens by click, and
+# body, above Activity: reference, status, title, owner and updated, the closed child muted. A child opens by click, and
 # by j/enter from the keys in the detail; esc comes back. Own Project and Issues; it cleans up.
 ch_dir="$tmp/children-workspace"
 mkdir -p "$ch_dir" "$tmp/children-unbound"
@@ -34,37 +34,36 @@ expect_tree "[data-id='$ch_content.heading.title']" '.ok and (.nodes[0].text | c
 expect_tree "[data-id='$ch_content.properties.children.v']" '.ok and .count == 1 and (.nodes[0].text == "2 open / 3 total")'
 expect_tree "[data-id^='$ch_content.properties.parent']" '.ok and .count == 0'
 
-# The table sits below the body and above Activity: a header row, then one row per child with its five cells.
+# The table sits below the body and above Activity: Tern's own table, a header row, then one row per child with its five cells.
+ch_table="$ch_content.children.table"
+ch_rows="[data-id='$ch_table'] .sf-tbl-body .sf-tbl-row"
+ch_heads="[data-id='$ch_table'] .sf-tbl > .sf-tbl-row.head > .sf-tbl-h"
 expect_tree "[data-id='$ch_content.children.heading']" '.ok and .count == 1 and (.nodes[0].text == "Children")'
-expect_tree "[data-id^='$ch_content.children.'][data-id\$='.jump']" '.ok and .count == 4'
-expect_tree "[data-id^='$ch_content.children.'][data-id\$='.status']" '.ok and .count == 4'
-expect_tree "[data-id^='$ch_content.children.'][data-id\$='.owner']" '.ok and .count == 4'
-expect_tree "[data-id^='$ch_content.children.'][data-id\$='.title']" '.ok and .count == 4'
-expect_tree "[data-id^='$ch_content.children.'][data-id\$='.updated']" '.ok and .count == 4 and ([.nodes[].text | select(test(" ago$"))] | length == 3)'
+expect_tree "$ch_heads" '.ok and ([.nodes[].text] == ["ticket", "status", "title", "owner", "updated"])'
+expect_tree "$ch_rows" '.ok and .count == 3'
+expect_tree "$ch_rows > .sf-tbl-c" '.ok and .count == 15'
+expect_tree "$ch_rows > .sf-tbl-c:nth-child(5)" '.ok and .count == 3 and ([.nodes[].text | select(test(" ago$"))] | length == 3)'
 ch_y() { ctl tree "[data-id='$1']" | jq -r ".nodes[0].rect[${2:-1}]"; }
 ch_body=$(ch_y "$ch_content.body")
-ch_table=$(ch_y "$ch_content.children")
+ch_heading=$(ch_y "$ch_content.children.heading")
 ch_activity=$(ch_y "$ch_content.activity")
-awk -v b="$ch_body" -v t="$ch_table" -v a="$ch_activity" 'BEGIN { exit !(b < t && t < a) }' || { printf 'Children table is not between the body and Activity: body y=%s table y=%s activity y=%s\n' "$ch_body" "$ch_table" "$ch_activity" >&2; return 1; }
-# The cells line up: every row's status cell starts at the same x.
-expect_tree "[data-id^='$ch_content.children.'][data-id\$='.status']" '.ok and ([.nodes[].rect[0]] | unique | length == 1)'
-# The reference and status cells are one line high at this width: as high as the one-line Children heading.
-ch_line=$(ch_y "$ch_content.children.heading" 3)
-expect_tree "[data-id^='$ch_content.children.'][data-id\$='.jump'], [data-id^='$ch_content.children.'][data-id\$='.status']" ".ok and .count == 8 and ([.nodes[].rect[3]] | all(. == $ch_line))"
-expect_tree "[data-id^='$ch_content.children.'][data-id\$='.jump']" '.ok and ([.nodes[].rect[0]] | unique | length == 1) and ([.nodes[].rect[2]] | unique | length == 1)'
-expect_tree "[data-id^='$ch_content.children.'][data-id\$='.updated']" '.ok and ([.nodes[].rect[0]] | unique | length == 1) and ([.nodes[].rect[2]] | unique | length == 1)'
-# The closed child's status and title are muted, the open child's are not.
-expect_tree "[data-id='$ch_content.children.${ch_links[0]}'] *" '.ok and ([.nodes[] | select(.class | contains("sf-t-muted")) | .text] | index("closed") != null and index("Children kid 1") != null)'
-expect_tree "[data-id='$ch_content.children.${ch_links[1]}'] *" '.ok and ([.nodes[] | select(.class | contains("sf-t-muted")) | .text] | index("open") == null and index("Children kid 2") == null)'
+awk -v b="$ch_body" -v t="$ch_heading" -v a="$ch_activity" 'BEGIN { exit !(b < t && t < a) }' || { printf 'Children table is not between the body and Activity: body y=%s children y=%s activity y=%s\n' "$ch_body" "$ch_heading" "$ch_activity" >&2; return 1; }
+# The header cells sit over their columns: each header starts at the x of its column's cells and is as wide.
+for ch_col in 1 2 3 4 5; do
+  expect_tree "$ch_heads:nth-child($ch_col), $ch_rows > .sf-tbl-c:nth-child($ch_col)" '.ok and .count == 4 and ([.nodes[].rect[0]] | unique | length == 1) and ([.nodes[].rect[2]] | unique | length == 1)'
+done
+# The closed child's status and title are muted, the open child's are not (the dot has no text).
+expect_tree "$ch_rows:nth-child(1) .sf-t-muted" '.ok and ([.nodes[].text] | index("closed") != null and index("Children kid 1") != null)'
+expect_tree "$ch_rows:nth-child(2) .sf-t-muted, $ch_rows:nth-child(3) .sf-t-muted" '.ok and ([.nodes[].text] | index("open") == null and index("Children kid 2") == null and index("Children kid 3") == null)'
 
 # A click on a child row opens it; esc comes back to the parent.
-ctl click "[data-id='$ch_content.children.${ch_links[1]}.title']"
-expect_tree "[data-id='$ch_content.heading.title']" '.ok and (.nodes[0].text | contains("Children kid 2"))'
+ch_second=$(ctl tree "$ch_rows > .sf-tbl-c:nth-child(3)" | jq -r '.nodes[1].text')
+ctl click "$ch_rows:nth-child(2) > .sf-tbl-c:nth-child(3)"
+expect_tree "[data-id='$ch_content.heading.title']" ".ok and (.nodes[0].text | contains(\"$ch_second\"))"
 ctl key esc
 expect_tree "[data-id='$ch_content.heading.title']" '.ok and (.nodes[0].text | contains("Children parent"))'
 
 # esc leaves the focus in the detail, so j walks the child rows from the first; enter opens the second.
-ch_second=$(ctl tree "[data-id^='$ch_content.children.'][data-id\$='.title']:not([data-id*='.header.'])" | jq -r '.nodes[1].text')
 ctl key j
 ctl key enter
 expect_tree "[data-id='$ch_content.heading.title']" ".ok and (.nodes[0].text | contains(\"$ch_second\"))"

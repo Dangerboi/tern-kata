@@ -335,3 +335,6 @@ func cronProperties(m model.Model) []propertyRow {
 	}
 	return rows
 }
+
+// pad appends n no-break spaces, which Tern keeps where it collapses edge spaces.
+func pad(text string, n int) string { return text + strings.Repeat("\u00a0", max(n, 0)) }
