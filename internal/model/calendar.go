@@ -3,50 +3,50 @@ package model
 import "time"
 
 const (
-	ModeDatePicker Mode   = "date-picker"
-	OpenDatePicker Action = "open-date-picker"
+	ModeCalendar   Mode   = "calendar"
+	ShowCalendar   Action = "show-calendar"
 	PickDate       Action = "pick-date"
-	CloseDatePick  Action = "close-date-picker"
+	HideCalendar   Action = "hide-calendar"
 	DateDayBefore  Action = "date-day-before"
 	DateDayAfter   Action = "date-day-after"
 	DateWeekBefore Action = "date-week-before"
 	DateWeekAfter  Action = "date-week-after"
 )
 
-// DatePickMsg is a click on a day of the open date picker: the day goes into the field and the picker closes.
-type DatePickMsg struct{ Day string }
+// CalendarDayMsg is a click on a day of the open calendar: the day goes into the field and the calendar closes.
+type CalendarDayMsg struct{ Day string }
 
-func (DatePickMsg) msg() {}
+func (CalendarDayMsg) msg() {}
 
-// DatePickerState is the calendar a card shows beside one of its date fields. Card and Field say which field it picks for;
+// CalendarState is the calendar a card shows beside one of its date fields. Card and Field say which field it picks for;
 // Cursor is the day the keys are on.
-type DatePickerState struct {
+type CalendarState struct {
 	Open   bool
 	Card   Card
 	Field  Field
 	Cursor string
 }
 
-// DatePicker is what the view draws of the open date picker: the field it sits beside, the day the keys are on, the day the
+// CalendarView is what the view draws of the open calendar: the field it sits beside, the day the keys are on, the day the
 // field holds now ("" when it holds none that reads), the card's other date ("" for none), and today.
-type DatePicker struct {
+type CalendarView struct {
 	Card                        Card
 	Field                       Field
 	Cursor, Value, Other, Today string
 }
 
-// DatePicker reports the open date picker of the card on top.
-func (m Model) DatePicker() (DatePicker, bool) {
+// CalendarView reports the open calendar of the card on top.
+func (m Model) ShownCalendar() (CalendarView, bool) {
 	entry, ok := m.topEntry()
-	if !ok || !m.DatePick.Open || m.DatePick.Card != entry.card {
-		return DatePicker{}, false
+	if !ok || !m.DateCalendar.Open || m.DateCalendar.Card != entry.card {
+		return CalendarView{}, false
 	}
 	text, other, ok := dateFieldOf(&m, entry.card)
 	if !ok {
-		return DatePicker{}, false
+		return CalendarView{}, false
 	}
 	today := m.paneToday()
-	return DatePicker{Card: entry.card, Field: m.DatePick.Field, Cursor: m.DatePick.Cursor, Value: dayOf(*text, today), Other: dayOf(other, today), Today: today}, true
+	return CalendarView{Card: entry.card, Field: m.DateCalendar.Field, Cursor: m.DateCalendar.Cursor, Value: dayOf(*text, today), Other: dayOf(other, today), Today: today}, true
 }
 
 // paneToday is the Pane calendar's date, or the day of the instant the Pane last stepped at before the first dated snapshot.
@@ -109,8 +109,8 @@ func dateFieldOf(m *Model, card Card) (text *string, other string, ok bool) {
 	return nil, "", false
 }
 
-// openDatePicker puts the calendar beside the focused date field, its cursor on the day the field reads as, else today.
-func openDatePicker(m Model, entry cardEntry) Model {
+// showCalendar puts the calendar beside the focused date field, its cursor on the day the field reads as, else today.
+func showCalendar(m Model, entry cardEntry) Model {
 	if entry.busy(m) {
 		return m
 	}
@@ -126,14 +126,14 @@ func openDatePicker(m Model, entry cardEntry) Model {
 	if cursor == "" {
 		return m
 	}
-	m.DatePick = DatePickerState{Open: true, Card: entry.card, Field: *entry.focus(&m), Cursor: cursor}
+	m.DateCalendar = CalendarState{Open: true, Card: entry.card, Field: *entry.focus(&m), Cursor: cursor}
 	return m
 }
 
-// pickDay writes day into the field the open picker is for and closes it.
+// pickDay writes day into the field the open calendar is for and closes it.
 func pickDay(m Model, day string) Model {
-	picked := m.DatePick
-	m.DatePick = DatePickerState{}
+	picked := m.DateCalendar
+	m.DateCalendar = CalendarState{}
 	if _, err := time.Parse(dayLayout, day); err != nil {
 		return m
 	}
@@ -148,28 +148,34 @@ func pickDay(m Model, day string) Model {
 	return m
 }
 
-// updateDatePickerKey is one key while the picker is open: the arrows move its cursor, enter picks and esc closes. Any other key
-// is swallowed.
-func updateDatePickerKey(m Model, msg KeyMsg) Model {
-	binding, bound := LookupBindingForMode(msg.Chord, ModeDatePicker)
+// updateCalendarKey is one key while the calendar is open, read through the ModeCalendar bindings: the arrows move its cursor,
+// enter picks and esc closes. Any other key closes the calendar and reaches the card as it would with none, so a footer button's
+// chord still does what its button says; ctrl+d, which opens the calendar, only closes it. It reports whether the card still
+// has the key to handle.
+func updateCalendarKey(m Model, entry cardEntry, msg KeyMsg) (Model, bool) {
+	binding, bound := LookupBindingForMode(msg.Chord, ModeCalendar)
 	if !bound {
-		return m
+		m.DateCalendar = CalendarState{}
+		if opens, ok := LookupBindingForMode(msg.Chord, entry.mode(m)); ok && opens.Action == ShowCalendar {
+			return m, false
+		}
+		return m, true
 	}
 	switch binding.Action {
 	case PickDate:
-		return pickDay(m, m.DatePick.Cursor)
-	case CloseDatePick:
-		m.DatePick = DatePickerState{}
+		return pickDay(m, m.DateCalendar.Cursor), false
+	case HideCalendar:
+		m.DateCalendar = CalendarState{}
 	case DateDayBefore:
-		m.DatePick.Cursor = shiftDay(m.DatePick.Cursor, -1)
+		m.DateCalendar.Cursor = shiftDay(m.DateCalendar.Cursor, -1)
 	case DateDayAfter:
-		m.DatePick.Cursor = shiftDay(m.DatePick.Cursor, 1)
+		m.DateCalendar.Cursor = shiftDay(m.DateCalendar.Cursor, 1)
 	case DateWeekBefore:
-		m.DatePick.Cursor = shiftDay(m.DatePick.Cursor, -7)
+		m.DateCalendar.Cursor = shiftDay(m.DateCalendar.Cursor, -7)
 	case DateWeekAfter:
-		m.DatePick.Cursor = shiftDay(m.DatePick.Cursor, 7)
+		m.DateCalendar.Cursor = shiftDay(m.DateCalendar.Cursor, 7)
 	}
-	return m
+	return m, false
 }
 
 func shiftDay(day string, by int) string {
@@ -180,7 +186,21 @@ func shiftDay(day string, by int) string {
 	return t.AddDate(0, 0, by).Format(dayLayout)
 }
 
-// datePickerOpen says the picker is open for the card on top.
-func datePickerOpen(m Model, entry cardEntry) bool {
-	return m.DatePick.Open && m.DatePick.Card == entry.card
+// calendarOpen says the calendar is open for the card on top.
+func calendarOpen(m Model, entry cardEntry) bool {
+	return m.DateCalendar.Open && m.DateCalendar.Card == entry.card
+}
+
+// settleCalendar closes a calendar whose field is no longer the focused date field of the card on top.
+func (m Model) settleCalendar() Model {
+	if !m.DateCalendar.Open {
+		return m
+	}
+	if entry, ok := m.topEntry(); ok && entry.card == m.DateCalendar.Card && entry.focus != nil && !entry.busy(m) && *entry.focus(&m) == m.DateCalendar.Field {
+		if _, _, ok := dateFieldOf(&m, entry.card); ok {
+			return m
+		}
+	}
+	m.DateCalendar = CalendarState{}
+	return m
 }

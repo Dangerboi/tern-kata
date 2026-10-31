@@ -17,13 +17,13 @@ func referenceRow(uid string, lead tern.Element, ref string, card ui.Hovercard, 
 
 // jumpLink is the accent underlined reference whose click jumps to the Issue uid.
 func jumpLink(uid, ref string, card ui.Hovercard) ui.Text {
-	return ui.Text{Common: ui.Common{Key: "jump", Hovercard: card, Actions: &ui.Actions{Click: JumpClick(uid)}}, Spans: []ui.Span{{T: ref, S: "accent link"}}}
+	return ui.Text{Common: ui.Common{Key: "jump", Hovercard: card, Actions: &ui.Actions{Click: JumpClick(uid)}}, Spans: []ui.Span{{T: ref, S: mono("accent link")}}}
 }
 
 // referenceText is the reference as an accent link followed, only when the peer is loaded, by
 // ` - ` and its title, as one text so it wraps word by word; a click anywhere jumps to the peer.
 func referenceText(key, uid, ref, title string, card ui.Hovercard) ui.Text {
-	spans := []ui.Span{{T: ref, S: "accent link"}}
+	spans := []ui.Span{{T: ref, S: mono("accent link")}}
 	if title != "" {
 		spans = append(spans, ui.Span{T: " - " + title})
 	}
@@ -43,7 +43,7 @@ func linkRow(m model.Model, row model.DetailRow, click *ui.Actions, now time.Tim
 func historySentence(m model.Model, row model.DetailRow, action string, now time.Time) tern.Element {
 	sentence := row.History
 	spans := []ui.Span{
-		{T: "[" + row.Type + "]", S: "muted"}, {T: " " + row.Time, S: "muted"}, {T: " "}, {T: row.Author, S: "strong"}, {T: " - "},
+		{T: "[" + row.Type + "]", S: "muted"}, {T: " " + row.Time, S: mono("muted")}, {T: " "}, {T: row.Author, S: "strong"}, {T: " - "},
 		{T: sentence.Verb, S: string(sentence.Tone)},
 	}
 	if object := strings.TrimRight(sentence.Object, " "); object != "" {

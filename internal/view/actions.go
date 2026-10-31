@@ -247,7 +247,7 @@ func DecodeChange(id string, value any) model.Msg {
 	if day, ok := value.(string); ok {
 		for _, card := range model.Cards() {
 			if id == CalendarID(card) {
-				return model.DatePickMsg{Day: day}
+				return model.CalendarDayMsg{Day: day}
 			}
 		}
 	}
@@ -267,7 +267,7 @@ func DecodeChange(id string, value any) model.Msg {
 // DecodeToggle is the message for the pointer opening or closing the menu of the select at node id, nil for any other node.
 func DecodeToggle(id string, open bool) model.Msg {
 	if field, ok := controlField(id); ok {
-		return model.MenuToggleMsg{Field: field, Open: open}
+		return model.DropdownToggleMsg{Field: field, Open: open}
 	}
 	return nil
 }

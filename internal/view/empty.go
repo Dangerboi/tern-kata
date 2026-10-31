@@ -5,11 +5,11 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// emptyState is Tern's empty state under key: what is missing in a few words, one muted line on why or what to do, and the
-// buttons that fill it. It grows to the room its list would have had.
-func emptyState(key, title, text string, actions ...tern.Element) ui.Empty {
+// emptyState is Tern's empty state: what is missing in a few words, one muted line on why or what to do, and the buttons that
+// fill it. It grows to the room its list would have had. listAndEmpty keys it after its list.
+func emptyState(title, text string, actions ...tern.Element) ui.Empty {
 	return ui.Empty{
-		CommonWithoutTitle: ui.CommonWithoutTitle{Key: key, Grow: 1},
+		CommonWithoutTitle: ui.CommonWithoutTitle{Grow: 1},
 		Title:              ui.T(title),
 		Text:               ui.T(text),
 		Children:           actions,
@@ -18,8 +18,8 @@ func emptyState(key, title, text string, actions ...tern.Element) ui.Empty {
 
 // emptyLane is the narrow variant of emptyState, one row of just the title, for a column too narrow to hold a line of
 // text. It sits at the top where the rows would start.
-func emptyLane(key, title string) ui.Empty {
-	e := emptyState(key, title, "")
+func emptyLane(title string) ui.Empty {
+	e := emptyState(title, "")
 	e.Variant = ui.EmptyInline
 	e.Grow = 0
 	return e
@@ -33,6 +33,6 @@ func listAndEmpty(list ui.List, loading bool, empty ui.Empty) []tern.Element {
 		return []tern.Element{list}
 	}
 	list.Hidden = true
-	empty.Key += "-empty"
+	empty.Key = list.Key + "-empty"
 	return []tern.Element{list, empty}
 }

@@ -60,8 +60,8 @@ func TestAnOpenBlockerGivesTheCardABlockedMarkerInTheWarningTone(t *testing.T) {
 	if got := blockedText(t, s, "task"); got != "blocked by gate" {
 		t.Errorf("marker = %q, want %q", got, "blocked by gate")
 	}
-	if got := spanStyle(t, blockedNode(t, s, "task")); got != "warning" {
-		t.Errorf("marker style = %q, want warning", got)
+	if got := spanStyle(t, blockedNode(t, s, "task")); got != "warning mono" {
+		t.Errorf("marker style = %q, want warning mono", got)
 	}
 	if got := blockedText(t, s, "gate"); got != "" {
 		t.Errorf("the blocker draws marker %q, want none", got)

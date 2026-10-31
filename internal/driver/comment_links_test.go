@@ -47,11 +47,11 @@ func TestBracketsStepThroughACommentsLinksAndWrap(t *testing.T) {
 	}
 	at(model.CommentLinkChoice{Index: 1, Count: 2, Label: "eli confirms"})
 	s = feed(t, s, key("]")).State
-	at(model.CommentLinkChoice{Index: 2, Count: 2, Label: "fay refutes in #bbbb"})
+	at(model.CommentLinkChoice{Index: 2, Count: 2, Label: "fay refutes in #bbbb", IssueUID: "beta", Qualified: "#bbbb"})
 	s = feed(t, s, key("]")).State
 	at(model.CommentLinkChoice{Index: 1, Count: 2, Label: "eli confirms"})
 	s = feed(t, s, key("[")).State
-	at(model.CommentLinkChoice{Index: 2, Count: 2, Label: "fay refutes in #bbbb"})
+	at(model.CommentLinkChoice{Index: 2, Count: 2, Label: "fay refutes in #bbbb", IssueUID: "beta", Qualified: "#bbbb"})
 	s = feed(t, s, key("[")).State
 	at(model.CommentLinkChoice{Index: 1, Count: 2, Label: "eli confirms"})
 }

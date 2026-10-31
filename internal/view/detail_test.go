@@ -285,7 +285,7 @@ func TestCommentsAndEventsAreCardsWithTheAuthorAndTheTimeApart(t *testing.T) {
 		if card.K != "card" || card.P["variant"] != "bare" {
 			t.Fatalf("%s is %s %v, want a bare card", tt.key, card.K, card.P["variant"])
 		}
-		want := [][2]string{{"dana", "strong"}, {"  ", ""}, {when, "muted"}}
+		want := [][2]string{{"dana", "strong"}, {"  ", ""}, {when, "muted mono"}}
 		var got [][2]string
 		for _, span := range card.P["head"].([]any) {
 			f := span.(map[string]any)
