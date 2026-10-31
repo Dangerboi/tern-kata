@@ -25,7 +25,7 @@ func TestLiveSearch(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m := model.Model{Collection: model.Collection{View: "project", ProjectUID: "p", Title: "Work"}, SelectedUID: "b"}
-			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a", Title: "Alpha", Status: "open"}, {UID: "b", Title: "Beta", Status: "open"}}}, ETag: "original"})
+			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest(), Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a", Title: "Alpha", Status: "open"}, {UID: "b", Title: "Beta", Status: "open"}}}, ETag: "original"})
 			for _, chord := range tt.keys {
 				var cmds []model.Cmd
 				m, cmds = model.Update(m, model.KeyMsg{Chord: chord})
@@ -173,11 +173,11 @@ func TestCollectionSwitchKeepsFilterIntent(t *testing.T) {
 	if !readsCollection(cmds, m, "") || cmds[0].(model.ReadSnapshot).Query.Text == nil || *cmds[0].(model.ReadSnapshot).Query.Text != "fix" {
 		t.Fatalf("Collection query loses filters: %#v", cmds)
 	}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), LocalDate: "2026-10-08", TimeZone: "UTC", Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a", Status: "open", ScheduledOnDate: new("2026-10-08")}}}})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest(), Query: m.SnapshotQuery(), LocalDate: "2026-10-08", TimeZone: "UTC", Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a", Status: "open", ScheduledOnDate: new("2026-10-08")}}}})
 	if m.Filters != filters || m.SelectedUID != "a" || m.Loading {
 		t.Fatalf("Collection load loses filters: %+v", m)
 	}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: model.CollectionQuery(collection, model.Filters{}), Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "stale"}}}})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest(), Query: model.CollectionQuery(collection, model.Filters{}), Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "stale"}}}})
 	if m.SelectedUID != "a" {
 		t.Fatal("unfiltered Collection snapshot applied")
 	}

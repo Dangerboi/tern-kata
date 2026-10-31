@@ -8,7 +8,7 @@ type snap struct{ model.SnapshotLoaded }
 // step is model.Update, except that a snap answers the snapshot read in flight.
 func step(m model.Model, msg model.Msg) (model.Model, []model.Cmd) {
 	if s, ok := msg.(snap); ok {
-		s.Request, s.Query = m.RefreshRequest, m.SnapshotQuery()
+		s.Request, s.Query = m.RefreshRequest(), m.SnapshotQuery()
 		msg = s.SnapshotLoaded
 	}
 	return model.Update(m, msg)

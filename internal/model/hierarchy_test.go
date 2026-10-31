@@ -270,7 +270,7 @@ func TestKidsAreCountedFromTheSnapshotLinksWhateverTheFilters(t *testing.T) {
 		t.Fatalf("project load: kids %v, want 2/6", got)
 	}
 	m.Collection = model.Collection{View: "all-open", Title: "All Open"}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: snapshot.Issues, Links: childLinks("parent", 1, 5)}})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest(), Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: snapshot.Issues, Links: childLinks("parent", 1, 5)}})
 	if got := kidsOf(t, m); got != [2]int{1, 6} {
 		t.Fatalf("collection load: kids %v, want 1/6", got)
 	}

@@ -289,3 +289,20 @@ func TestCredentialsPageKeysKeepThePageKeysAndTheMenu(t *testing.T) {
 		t.Errorf("clicking the shown entry left page %v", got.State.Model.Page)
 	}
 }
+
+func TestCredentialsListAnswerSentBeforeARefreshIsDropped(t *testing.T) {
+	audited, first := credentialsAudited(t)
+	out := step(t, audited, key("r"))
+	second, ok := askedCredentials(out.Cmds)
+	if !ok || second.Request == first.Request {
+		t.Fatalf("r asked %#v, want a new token read", out.Cmds)
+	}
+	old := step(t, out.State, model.CredentialsLoaded{Request: first.Request, ObservedAt: now, Tokens: []model.Credential{credentialToken(9, "stale", "live", now)}})
+	if got := old.State.Model.Credentials.Tokens; len(got) != 0 {
+		t.Fatalf("the superseded read's answer was applied: %+v", got)
+	}
+	fresh := step(t, old.State, model.CredentialsLoaded{Request: second.Request, ObservedAt: now, Tokens: []model.Credential{credentialToken(3, "laptop", "live", now)}})
+	if got := fresh.State.Model.Credentials.Tokens; len(got) != 1 || got[0].ID != 3 {
+		t.Fatalf("the newest read's answer gave %+v", got)
+	}
+}
