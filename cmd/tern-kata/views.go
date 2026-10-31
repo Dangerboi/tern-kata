@@ -403,7 +403,12 @@ func (e viewsEnv) add(name string) error {
 	if err != nil {
 		return subcommandError{err}
 	}
-	if v, err = model.CheckSavedViewIn(v, read.Views, existing, func(string) string { return filterProject }); err != nil {
+	if v, err = model.CheckSavedViewIn(v, read.Views, existing, func(uid string) string {
+		if uid == v.Filters.ProjectUID {
+			return filterProject
+		}
+		return uid // the base's title already is the catalog's name
+	}); err != nil {
 		return subcommandError{err}
 	}
 	replaced := false

@@ -414,3 +414,38 @@ func TestSwitchingCollectionAfterOpeningASavedViewStopsNamingIt(t *testing.T) {
 		t.Errorf("back on the view's base the view is %q, want Mine", got)
 	}
 }
+
+func TestViewCardRefusalNamesBothProjectsByTheirCatalogNames(t *testing.T) {
+	m := newViewCard(t, viewsPane())
+	m.Snapshot.Catalog = []model.CatalogProject{
+		{Project: model.Project{UID: "alpha-uid", Name: "Job"}},
+		{Project: model.Project{UID: "beta-uid", Name: "Beta"}},
+	}
+	m.ViewForm.Base = model.ProjectCollection("alpha-uid", "Work")
+	m.ViewForm.Values.ProjectUID = "beta-uid"
+	m.ViewForm.Field = model.ViewName
+	m = typeText(m, "Fresh")
+	got, _ := model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
+	const want = `Project "Beta" is not the base Project "Job", so no Issue would match`
+	if got.ViewForm.Err == nil || got.ViewForm.Err.Error() != want {
+		t.Fatalf("err = %v, want %s", got.ViewForm.Err, want)
+	}
+}
+
+func TestDeletingAViewForgetsItWhenALaterDuplicateOfItsNameDiffers(t *testing.T) {
+	a := model.SavedView{Name: "A", Base: model.Collection{View: "today", Title: "Today"}}
+	dup := model.SavedView{Name: "a", Base: model.Collection{View: "upcoming", Title: "Upcoming"}, Filters: model.Filters{Status: "open"}}
+	m := withViews(pickerStart(120, true), a)
+	e, _ := findView(m, "A")
+	opened, _ := openRow(m, e)
+	if opened.CurrentSavedView() != "A" {
+		t.Fatalf("fixture: current view %q", opened.CurrentSavedView())
+	}
+	done, _ := model.Update(opened, model.ViewDeleted{Sent: model.DeleteView{Name: "A", Token: testToken{1}}, Loaded: model.ViewsLoaded{Views: []model.SavedView{dup}, Token: testToken{2}}})
+	if got := done.CurrentSavedView(); got != "" {
+		t.Fatalf("CurrentSavedView = %q after deleting it", got)
+	}
+	if strings.Contains(done.FilterSummary(), "A") {
+		t.Fatalf("filter line = %q", done.FilterSummary())
+	}
+}
