@@ -286,10 +286,10 @@ func TestAnIssueDateMovedIntoTheTimeOffIsNotCaughtUpWhenTheDateReadFailsAtTheReE
 	})
 	before := h.kata.Requests("planning-dates")
 	job = h.kata.ReplaceJob(t, h.proj, job, def)
-	h.eventually("the re-enabled job to be scheduled", func() bool { return h.status(r).Scheduled == 1 })
 	h.eventually("a failed date read", func() bool { return h.kata.Requests("planning-dates") > before })
 	restore()
 	failed := h.kata.Requests("planning-dates")
 	h.eventually("the date to be read again", func() bool { return h.kata.Requests("planning-dates") > failed })
+	h.eventually("the re-enabled job to be scheduled", func() bool { return h.status(r).Scheduled == 1 })
 	h.quiet(job, 0)
 }
