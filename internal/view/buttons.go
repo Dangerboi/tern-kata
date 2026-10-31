@@ -138,7 +138,7 @@ func unavailable(button ui.Button, reason string) ui.Button {
 
 // menuButton is the top bar's Menu button at Tern's default size, the key that opens the Menu as its keycap.
 func menuButton() ui.Button {
-	return ui.Button{Common: ui.Common{Key: "menu", Actions: &ui.Actions{Click: MenuClick}}, Text: "Menu", Keys: model.MenuKeys()}
+	return ui.Button{Common: ui.Common{Key: "menu", Shrink: new(float64), Actions: &ui.Actions{Click: MenuClick}}, Text: "Menu", Keys: model.MenuKeys()}
 }
 
 // buttonRow is the row of buttons that ends a card.

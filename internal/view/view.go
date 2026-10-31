@@ -195,8 +195,9 @@ func topBar(m model.Model) tern.Element {
 	}
 	headingCell := flexCell("heading", ui.ToneAccent, 0)
 	rightCell := flexCell("right", ui.ToneNeutral, 100)
-	// The right cell never narrows below "… · Menu", so the Menu button is never pushed off the bar; the Daemon inside gives way first.
-	rightCell.Min = &ui.Bounds{W: ui.Ch(8)}
+	// The right cell never narrows below "… · Menu" with the Menu button's keycap, so the button is never pushed off the bar; the
+	// Daemon inside gives way first.
+	rightCell.Min = &ui.Bounds{W: ui.Ch(14)}
 	var zoneNote []tern.Element
 	if m.Calendar.Note != "" {
 		zoneNote = ui.Nodes(
