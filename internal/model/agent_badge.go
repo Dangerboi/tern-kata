@@ -182,8 +182,8 @@ func agentsRefreshed(m Model, msg AgentsRefreshed) (Model, []Cmd) {
 }
 
 // promptTail finds the prompt file of a tern-kata agent in a command line: the part from the agent-prompts folder on, "" when
-// the command names none.
-var promptTail = regexp.MustCompile(`agent-prompts[/\\]prompt-\d+-\w+\.md`)
+// the command names none. A tab or background agent's is `prompt-<starter>-<random>.md`, a split agent's `prompt-<random>.md`.
+var promptTail = regexp.MustCompile(`agent-prompts[/\\]prompt-(?:\d+-)?\w+\.md`)
 
 // resolveAgent gives a relayed agent the block of the entry it belongs to: the entry whose prompt file its command names, else the
 // entry whose block is its pane id. A window on another machine numbers panes differently from the session host, so only the
