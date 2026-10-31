@@ -58,15 +58,51 @@ func TestAnExecuteJobWaitsOnASomedayIssueWithoutASlotAndStartsOnceItIsUnset(t *t
 func TestAnExecuteJobWaitsOnAFutureScheduledIssueUntilItsInstant(t *testing.T) {
 	h := newHarness(t)
 	issue := h.kata.Issue(t, h.proj, "Later")
-	instant := h.minuteIn(2 * time.Hour)
+	instant := h.minuteIn(27 * time.Hour)
 	h.kata.SetIssueDate(t, h.proj, issue.UID, "scheduled_on", instant)
-	job, r, _ := h.hourlyOn(issue.UID)
+	// Daily, so the next occurrence lands after the instant: a run can only be the parked one, kept past its grace
+	// under the default catchup `skip`.
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "on issue", Prompt: "Do it.", ExistingUID: issue.UID, Trigger: interval(86400)})
+	r := h.start(worker.Hooks{})
+	h.scheduled(r, 1)
+	first := h.fire(r, time.Time{})
 
 	h.waitsFor(r, "Issue is scheduled for")
 	h.quiet(job, 0)
+	h.advanceTo(first.Add(2 * time.Hour)) // far past any grace, the instant still ahead
+	h.quiet(job, 0)
+	h.waitsFor(r, "Issue is scheduled for")
 
 	h.advanceTo(instant) // the worker wakes at the instant itself, no Issue event involved
 	runs := h.waitRuns(job, 1)
+	if runs[0].OccurrenceKey != worker.OccurrenceKey(first) {
+		t.Fatalf("the run is for %s, want the parked occurrence %s", runs[0].OccurrenceKey, worker.OccurrenceKey(first))
+	}
+	h.settled(runs[0].UID)
+}
+
+func TestAParkedOccurrenceSurvivesAWorkerRestartPastItsGrace(t *testing.T) {
+	h := newHarness(t)
+	issue := h.kata.Issue(t, h.proj, "Parked")
+	h.kata.SetSomeday(t, h.proj, issue.UID, true)
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "on issue", Prompt: "Do it.", ExistingUID: issue.UID, Trigger: interval(86400)})
+	r := h.start(worker.Hooks{})
+	h.scheduled(r, 1)
+	first := h.fire(r, time.Time{})
+	h.waitsFor(r, "Issue is someday")
+	r.stop()
+
+	h.advanceTo(first.Add(2 * time.Hour)) // past any grace while the worker is down
+	restarted := h.start(worker.Hooks{})
+	h.scheduled(restarted, 1)
+	h.waitsFor(restarted, "Issue is someday")
+	h.quiet(job, 0)
+
+	h.kata.SetSomeday(t, h.proj, issue.UID, false)
+	runs := h.waitRuns(job, 1)
+	if runs[0].OccurrenceKey != worker.OccurrenceKey(first) {
+		t.Fatalf("the run is for %s, want the parked occurrence %s", runs[0].OccurrenceKey, worker.OccurrenceKey(first))
+	}
 	h.settled(runs[0].UID)
 }
 
