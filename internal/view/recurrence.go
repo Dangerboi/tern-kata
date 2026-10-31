@@ -122,6 +122,9 @@ func recurrenceLayer(m model.Model) tern.Element {
 			Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: title},
 			Field:  ui.Field{Text: recurrenceText(f, field.Name), Cursor: caretAt(f.Caret, field.Name, recurrenceText(f, field.Name)), Mode: "insert", Readonly: f.Saving || f.StopConfirm, Prompt: []ui.Span{{T: prompt}}},
 		})
+		if field.Name == f.Field && (field.Name == model.RecurrenceStart || (field.Name == model.RecurrenceEnd && f.Ends == model.EndUntil)) {
+			children = append(children, calendarHint(string(field.Name)))
+		}
 	}
 	if f.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, f.Err.Error()))
@@ -143,5 +146,5 @@ func recurrenceLayer(m model.Model) tern.Element {
 	default:
 		children = append(children, buttonRow(cardButton("save", model.ModeRecurrenceForm, model.RecurrenceSave, save, true), cardButton("cancel", model.ModeRecurrenceForm, model.RecurrenceCancel, "Cancel", false)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardRecurrence)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
+	return withDatePicker(m, model.CardRecurrence, ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardRecurrence)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children}))
 }

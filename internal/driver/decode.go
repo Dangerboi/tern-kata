@@ -32,6 +32,8 @@ func decode(input tern.Input) model.Msg {
 		return view.DecodeFocus(input.ID)
 	case *tern.Select:
 		return view.DecodeSelect(input.ID, input.Item)
+	case *tern.Change:
+		return view.DecodeChange(input.ID, input.Value)
 	case *tern.Action:
 		value, _ := input.Value.(string)
 		return view.DecodeAction(input.ID, input.Act, value)
