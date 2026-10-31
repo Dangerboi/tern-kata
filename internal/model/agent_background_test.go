@@ -3,6 +3,7 @@ package model_test
 import (
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -212,23 +213,56 @@ func TestAnAgentOpenedFromAnotherPaneGoesBackOnTheFirstAnswer(t *testing.T) {
 	}
 }
 
-func TestBFromAnotherPaneBringsTheAgentUnderTheStartingPanesBackgroundRules(t *testing.T) {
-	split := backgroundEntry("5", "9", false)
+// sentToBackgroundByAnotherPane is the file after Pane B's b on Pane 9's split agent: no relay follows it.
+func sentToBackgroundByAnotherPane() (split, moved model.AgentEntry) {
+	split = backgroundEntry("5", "9", false)
 	split.Background = false
+	moved = split
+	moved.Background = true
+	return split, moved
+}
+
+func refreshes(cmds []model.Cmd) bool {
+	return slices.ContainsFunc(cmds, func(c model.Cmd) bool { _, ok := c.(model.RefreshAgents); return ok })
+}
+
+func TestAnAnsweredSplitAgentThatAnotherPaneSentToTheBackgroundGoesBackOnceSomeoneOpenedIt(t *testing.T) {
+	split, moved := sentToBackgroundByAnotherPane()
 	m := model.Model{PaneBlock: "9", AgentMapping: []model.AgentEntry{split}}
 	m, _ = relayed(m, at("5", "waiting_input", model.SeenShown))
-	m, cmds := relayed(m, at("5", "waiting_input", model.SeenHidden))
-	if want := []model.SetAgentOpen{{Block: "5", Background: true}}; !reflect.DeepEqual(flagWrites(cmds), want) {
-		t.Fatalf("cmds %#v", cmds)
+	// The user answers it in the hidden session, where it was opened: the relay shows it outside, and this Pane's entry still says split.
+	m, cmds := relayed(m, at("5", "working", model.SeenShown))
+	if len(sentBack(cmds)) != 0 || !refreshes(cmds) {
+		t.Fatalf("answered split agent: cmds %#v, want a re-read of agents.json", cmds)
 	}
-	m, _ = model.Update(m, model.AgentOpenSet{Block: "5", Background: true})
-	if got := m.AgentMapping[0]; !got.Background || got.Open || model.AgentWhere(got) != "background" {
-		t.Fatalf("entry %+v", got)
+	_, cmds = model.Update(m, model.AgentsRefreshed{Agents: []model.AgentEntry{moved}})
+	if want := []model.SendAgentBack{{Block: "5", IssueRef: "demo#ab12"}}; !reflect.DeepEqual(sentBack(cmds), want) {
+		t.Fatalf("after the re-read: cmds %#v", cmds)
 	}
-	// It now opens, goes back and is ended like any background agent.
+}
+
+func TestAnAnsweredSplitAgentTheFileStillCallsSplitStaysWhereItIs(t *testing.T) {
+	split, _ := sentToBackgroundByAnotherPane()
+	m := model.Model{PaneBlock: "9", AgentMapping: []model.AgentEntry{split}}
 	m, _ = relayed(m, at("5", "waiting_input", model.SeenShown))
-	m, _ = model.Update(m, model.AgentOpenSet{Block: "5", Open: true})
-	if _, cmds = relayed(m, at("5", "working", model.SeenShown)); len(sentBack(cmds)) != 1 {
-		t.Fatalf("cmds %#v", cmds)
+	m, _ = relayed(m, at("5", "working", model.SeenShown))
+	if _, cmds := model.Update(m, model.AgentsRefreshed{Agents: []model.AgentEntry{split}}); len(sentBack(cmds)) != 0 {
+		t.Fatalf("a split agent went back: %#v", cmds)
+	}
+}
+
+func TestAFinishedSplitAgentThatAnotherPaneSentToTheBackgroundIsEndedOnceItsIssueIsClosed(t *testing.T) {
+	split, moved := sentToBackgroundByAnotherPane()
+	m := closePane([]model.Issue{closed("a")}, split)
+	m.AgentMapping[0].IssueUID, m.AgentMapping[0].ProjectID = "a", 3
+	moved.IssueUID, moved.ProjectID = "a", 3
+	m, _ = relayed(m, at("5", "working", model.SeenHidden))
+	m, cmds := relayed(m, at("5", "idle", model.SeenHidden))
+	if !refreshes(cmds) {
+		t.Fatalf("finished split agent: cmds %#v, want a re-read of agents.json", cmds)
+	}
+	m, _ = model.Update(m, model.AgentClosed{Block: "5", Agents: []model.AgentEntry{split}, Kept: true})
+	if _, cmds = model.Update(m, model.AgentsRefreshed{Agents: []model.AgentEntry{moved}}); len(closes(cmds)) != 1 {
+		t.Fatalf("after the re-read: cmds %#v", cmds)
 	}
 }

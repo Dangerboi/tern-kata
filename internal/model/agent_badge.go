@@ -168,12 +168,18 @@ func (m Model) agentMapped(block string) bool {
 
 // agentsRefreshed takes in the mapping and, when a relay wanted a refresh while this one was out, asks for the next.
 func agentsRefreshed(m Model, msg AgentsRefreshed) (Model, []Cmd) {
+	before := m.AgentMapping
 	if msg.Err == nil {
 		m.AgentMapping = msg.Agents
 		m.Agents = m.Agents.trimmed(m.agentMapped)
 	}
 	m.Agents.inFlight = false
-	m, raised := raiseAgentAttention(m, false)
+	m, raised := raiseAgentAttention(m, before, false)
+	if msg.Err == nil && !m.Agents.again {
+		var followed []Cmd
+		m, followed = followBackground(m, before)
+		raised = append(raised, followed...)
+	}
 	if !m.Agents.again {
 		return m, raised
 	}
@@ -228,7 +234,19 @@ func relayAgents(m Model, msg AgentStatesMsg) (Model, []Cmd) {
 			unmapped = true
 		}
 	}
-	if len(suspects) == 0 && !unmapped {
+	// A split or tab agent of this Pane that was answered or finished may have been sent to the background by another Pane, which
+	// no relay shows; agents.json says so.
+	moved := false
+	for _, e := range m.AgentMapping {
+		if e.PaneBlock != m.PaneBlock || e.Background || m.PaneBlock == "" {
+			continue
+		}
+		if m.Agents.answered(e.Block) && !slices.Contains(m.Agents.recheck, e.Block) {
+			m.Agents.recheck = append(slices.Clone(m.Agents.recheck), e.Block)
+		}
+		moved = moved || m.Agents.answered(e.Block) || m.Agents.enteredFinished(e.Block)
+	}
+	if len(suspects) == 0 && !unmapped && !moved {
 		return m, nil
 	}
 	if m.Agents.inFlight {

@@ -62,7 +62,6 @@ func TestAnAgentStaysUnlessAllThreeConditionsHold(t *testing.T) {
 		paneID string
 	}{
 		{"an open Issue", finishedEntry("5", "a"), model.Issue{UID: "a", Status: "open"}, idle, "9"},
-		{"a split or tab agent", with(func(e *model.AgentEntry) { e.Background = false }), closed("a"), idle, "9"},
 		{"an open background agent", with(func(e *model.AgentEntry) { e.Open = true }), closed("a"), idle, "9"},
 		{"another Pane's agent", with(func(e *model.AgentEntry) { e.PaneBlock = "8" }), closed("a"), idle, "9"},
 		{"a Pane without a block", with(func(e *model.AgentEntry) { e.PaneBlock = "" }), closed("a"), idle, ""},
@@ -76,6 +75,31 @@ func TestAnAgentStaysUnlessAllThreeConditionsHold(t *testing.T) {
 		if len(closes(cmds)) != 0 || len(reads(cmds)) != 0 {
 			t.Errorf("%s: cmds %#v", tt.name, cmds)
 		}
+	}
+}
+
+func TestASplitAgentOfAClosedIssueIsAskedAboutOnceAndClosedOnlyOnceTheFileCallsItBackground(t *testing.T) {
+	split := finishedEntry("5", "a")
+	split.Background = false
+	m := closePane([]model.Issue{closed("a")}, split)
+	m, cmds := relayed(m, model.AgentState{Block: "5", State: "idle"})
+	if want := []model.CloseAgent{{Block: "5"}}; !reflect.DeepEqual(closes(cmds), want) {
+		t.Fatalf("cmds %#v", cmds)
+	}
+	// The gateway reads agents.json: still a split agent there, so nothing closed and no retry on later relays.
+	m, _ = model.Update(m, model.AgentClosed{Block: "5", Agents: []model.AgentEntry{split}, Kept: true})
+	if _, cmds = relayed(m, model.AgentState{Block: "5", State: "working"}); len(closes(cmds)) != 0 {
+		t.Fatalf("asked again: %#v", cmds)
+	}
+	if _, cmds = relayed(m, model.AgentState{Block: "5", State: "idle"}); len(closes(cmds)) != 0 {
+		t.Fatalf("asked again: %#v", cmds)
+	}
+	// Another Pane's b then shows in a re-read: it is a background agent now and is ended.
+	moved := split
+	moved.Background = true
+	_, cmds = model.Update(m, model.AgentsRefreshed{Agents: []model.AgentEntry{moved}})
+	if want := []model.CloseAgent{{Block: "5"}}; !reflect.DeepEqual(closes(cmds), want) {
+		t.Fatalf("after the re-read: %#v", cmds)
 	}
 }
 

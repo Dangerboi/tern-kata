@@ -2,6 +2,7 @@ package model_test
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -20,9 +21,18 @@ func attentionPane() model.Model {
 	}
 }
 
+// relay feeds one relayed list and returns the commands but the re-reads of agents.json and Issue statuses, which these tests are
+// not about.
 func relay(t *testing.T, m model.Model, states ...model.AgentState) (model.Model, []model.Cmd) {
 	t.Helper()
-	return model.Update(m, model.AgentStatesMsg{States: states})
+	m, cmds := model.Update(m, model.AgentStatesMsg{States: states})
+	return m, slices.DeleteFunc(cmds, func(c model.Cmd) bool {
+		switch c.(type) {
+		case model.RefreshAgents, model.ReadAgentIssue:
+			return true
+		}
+		return false
+	})
 }
 
 func st(block string, state model.AgentStateWord, last string) model.AgentState {
@@ -206,5 +216,29 @@ func TestDroppingAWaitingAgentsEntryClearsItsRequestWithoutAnotherRelay(t *testi
 	}
 	if len(m.AgentAttention) != 0 {
 		t.Fatalf("raised %v", m.AgentAttention)
+	}
+}
+
+func TestTwoAgentsWaitingOnOneIssueInOneRelayRaiseOneRequest(t *testing.T) {
+	m, cmds := relay(t, attentionPane(), st("11", "waiting_input", "a"), st("12", "waiting_input", "b"))
+	if want := []model.Cmd{raise("u1", 3, "b")}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("cmds %v, want one raise carrying the recorded message", cmds)
+	}
+	if want := []model.RaisedAttention{{UID: "u1", ProjectID: 3, Message: "b"}}; !reflect.DeepEqual(m.AgentAttention, want) {
+		t.Fatalf("raised %v, want %v", m.AgentAttention, want)
+	}
+}
+
+func TestAdoptingAnAgentWaitingOnAnIssueTheRequestWasLeftForRecordsWhatTheSlotHolds(t *testing.T) {
+	m, _ := relay(t, attentionPane(), st("11", "waiting_input", "msgA"), st("21", "waiting_input", "msgB"))
+	// The Pane that raised msgB quit, leaving its request for this Pane's waiting agent; this Pane then adopts its agent.
+	adopted := append(slices.Clone(attentionPane().AgentMapping[:2]), model.AgentEntry{IssueUID: "u1", ProjectID: 3, Block: "21", PaneBlock: "10"})
+	m, cmds := model.Update(m, model.AgentsPruned{Agents: adopted})
+	if want := []model.Cmd{raise("u1", 3, "msgB")}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("cmds %v, want the adopted agent's request written as the record", cmds)
+	}
+	_, cmds = relay(t, m, st("11", "working", ""), st("21", "working", ""))
+	if want := []model.Cmd{clearOf("u1", 3, "msgB")}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("cmds %v, want the clear guarded on what the slot holds", cmds)
 	}
 }

@@ -1,6 +1,7 @@
 package driver_test
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -28,7 +29,7 @@ func TestWOpensTheAgentCardInEveryIssueModeWithOrWithoutAgents(t *testing.T) {
 	for name, s := range agentPanes(t, agentIssue("t1")) {
 		for with, state := range map[string]driver.State{"no agents": s, "agents": withAgentRows(s)} {
 			got := step(t, state, key("w"))
-			if got.State.Model.TopCard() != model.CardAgent || len(got.Cmds) != 0 {
+			if want := []model.Cmd{model.RefreshAgents{PaneBlock: got.State.Model.PaneBlock}}; got.State.Model.TopCard() != model.CardAgent || !reflect.DeepEqual(got.Cmds, want) {
 				t.Errorf("%s, %s: card %v, cmds %#v", name, with, got.State.Model.TopCard(), got.Cmds)
 			}
 			// Shift+w and shift+s start nothing on the Issue.

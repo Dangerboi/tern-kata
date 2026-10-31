@@ -95,6 +95,7 @@ func (AgentsPruned) msg() {}
 const ClosedIssueRefusal = "This Issue is closed; reopen it first (r)."
 
 // openAgent is `w`: the Agent card for the selected Issue, with or without agents; a closed Issue gets the refusal and no card.
+// agents.json is read again as it opens, since another Pane may have sent an agent to the background since the last relay.
 func openAgent(m Model) (Model, []Cmd) {
 	issue := closeIssue(m)
 	if issue == nil {
@@ -104,7 +105,13 @@ func openAgent(m Model) (Model, []Cmd) {
 		m.Notice = ClosedIssueRefusal
 		return m, nil
 	}
-	return openAgentCard(m, *issue), nil
+	m = openAgentCard(m, *issue)
+	if m.Agents.inFlight {
+		m.Agents.again = true
+		return m, nil
+	}
+	m.Agents.inFlight = true
+	return m, []Cmd{RefreshAgents{PaneBlock: m.PaneBlock}}
 }
 
 // startAgent starts an agent on the Agent card's Issue where the card's key says; the card closes first.
@@ -144,7 +151,8 @@ func agentStarted(m Model, msg AgentStarted) Model {
 
 // agentsPruned takes in the entries even when tern could not be asked: they are the file as read, as a later refresh keeps them.
 func agentsPruned(m Model, msg AgentsPruned) (Model, []Cmd) {
+	before := m.AgentMapping
 	m.AgentMapping = msg.Agents
 	m.Agents = m.Agents.trimmed(m.agentMapped)
-	return raiseAgentAttention(m, false)
+	return raiseAgentAttention(m, before, false)
 }

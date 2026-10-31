@@ -380,7 +380,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m, cmds := relayAgents(m, msg)
 		m, back := sendAgentsBack(m)
 		m, flagged := followAgents(m, m.Agents.listedStates())
-		m, raised := raiseAgentAttention(m, true)
+		m, raised := raiseAgentAttention(m, m.AgentMapping, true)
 		m, ended := closeFinishedAgents(m, closeOnRelay)
 		return m, append(append(append(append(cmds, back...), flagged...), raised...), ended...)
 	case AgentIssueRead:
