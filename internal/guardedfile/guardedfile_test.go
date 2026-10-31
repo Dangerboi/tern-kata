@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -54,5 +55,45 @@ func TestWriteRefusesAChangedFile(t *testing.T) {
 func TestReadReportsAnUnreadableFile(t *testing.T) {
 	if _, err := Read(t.TempDir()); err == nil {
 		t.Fatal("reading a folder gave no error")
+	}
+}
+
+func TestConcurrentWritersLoseNoChange(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "f.txt")
+	const writers, each = 8, 15
+	var wg sync.WaitGroup
+	errs := make(chan error, writers)
+	for range writers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range each {
+				for {
+					tok, err := Read(path)
+					if err != nil {
+						errs <- err
+						return
+					}
+					err = Write(path, tok, []byte(tok.Text()+"x"))
+					if errors.Is(err, ErrChanged) {
+						continue
+					}
+					if err != nil {
+						errs <- err
+						return
+					}
+					break
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(path)
+	if len(got) != writers*each {
+		t.Errorf("file holds %d changes, want %d", len(got), writers*each)
 	}
 }

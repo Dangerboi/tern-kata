@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+
+	"github.com/Dangerboi/tern-kata/internal/filelock"
 )
 
 // ErrWorkerRunning is what a second worker on the same machine gets (ADR-0006: one worker, one worker.lock).
@@ -23,10 +25,10 @@ func AcquireLock(path string) (*Lock, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := lockFile(file); err != nil {
+	if err := filelock.TryLock(file); err != nil {
 		holder, _ := os.ReadFile(path)
 		_ = file.Close()
-		if errors.Is(err, errLocked) {
+		if errors.Is(err, filelock.ErrLocked) {
 			if len(holder) > 0 {
 				return nil, fmt.Errorf("%w (process %s)", ErrWorkerRunning, string(holder))
 			}
@@ -42,6 +44,6 @@ func AcquireLock(path string) (*Lock, error) {
 
 // Release drops the lock.
 func (l *Lock) Release() error {
-	unlockFile(l.file)
+	filelock.Unlock(l.file)
 	return l.file.Close()
 }
