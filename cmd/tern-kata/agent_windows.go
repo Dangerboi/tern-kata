@@ -11,8 +11,16 @@ import (
 
 // execAgent runs command as a child running as actor, with stdio attached, and exits with its status.
 func execAgent(actor string, command, environ []string) error {
-	cmd := exec.Command(command[0], command[1:]...)
-	cmd.Env = childEnv(environ, actor, true)
+	if err := runChild(command[0], command[1:], childEnv(environ, actor, true)); err != nil {
+		return subcommandError{err}
+	}
+	return nil
+}
+
+// runChild runs name with stdio attached and exits with its status; it returns only when the child could not be run.
+func runChild(name string, args, env []string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Env = env
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	// Keep the parent alive on Ctrl+C/Break so it still exits with the child's status.
 	signal.Notify(make(chan os.Signal, 1), os.Interrupt)
@@ -22,7 +30,7 @@ func execAgent(actor string, command, environ []string) error {
 		os.Exit(exit.ExitCode())
 	}
 	if err != nil {
-		return subcommandError{err}
+		return err
 	}
 	os.Exit(0)
 	return nil
