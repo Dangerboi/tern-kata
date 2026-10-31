@@ -24,7 +24,7 @@ func drawnPieces(n tern.WireNode) []string {
 				}
 			}
 			for key, child := range v {
-				if key != "actions" {
+				if key != "actions" && key != "hovercard" { // a hovercard is shown only while hovered, not drawn
 					collect(child)
 				}
 			}
