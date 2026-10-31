@@ -2,7 +2,6 @@ package view
 
 import (
 	"github.com/stencil-hq/tern-sdk/go/tern"
-	"github.com/stencil-hq/tern-sdk/go/tern/el"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
@@ -24,11 +23,6 @@ func emptyLane(key, title string) ui.Empty {
 	e.Variant = ui.EmptyInline
 	e.Grow = 0
 	return e
-}
-
-// keyButton is a button that presses chord, the key that fills the empty state it sits in; label is its words, with the key.
-func keyButton(key, chord, label string) tern.Element {
-	return el.Button{Common: ui.Common{Key: key, Actions: &ui.Actions{Click: KeyClick(chord)}}, Class: "tk-button", Text: label}
 }
 
 // listOrEmpty is list, or empty when list has no children and nothing is loading. A list that is loading keeps its own

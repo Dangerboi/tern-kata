@@ -62,7 +62,7 @@ func runs(m model.Model, now time.Time) tern.Element {
 	}
 	empty := emptyState("runs", "No runs", "An executor reports a run to kata when it starts one.")
 	if m.Runs.JobUID != "" {
-		empty = emptyState("runs", "No runs for this job", "It has not run yet.", keyButton("all-runs", "f", "Every run (f)"))
+		empty = emptyState("runs", "No runs for this job", "It has not run yet.", cardButton("all-runs", model.ModeRuns, model.FilterRunsByJob, "Every run", false))
 	}
 	list := ui.List{CommonWithoutMax: scrollerCommon("runs"), Max: fillMax, Empty: ui.T("Loading runs…"), Children: cards}
 	children = append(children, listOrEmpty(list, m.Runs.Loading, empty))
