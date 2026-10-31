@@ -87,30 +87,6 @@ func names(views []model.SavedView) string {
 	return strings.Join(all, ", ")
 }
 
-// describeFilters is the filters that are set, as name=value words.
-func describeFilters(f model.Filters, projectName func(uid string) string) string {
-	var words []string
-	if f.ProjectUID != "" {
-		words = append(words, "project="+projectName(f.ProjectUID))
-	}
-	if f.Status != "" {
-		words = append(words, "status="+f.Status)
-	}
-	if f.Owner != "" {
-		words = append(words, "owner="+f.Owner)
-	}
-	if f.Label != "" {
-		words = append(words, "label="+f.Label)
-	}
-	if f.Relationship != "" {
-		words = append(words, "relationship="+f.Relationship)
-	}
-	if f.Search != "" {
-		words = append(words, fmt.Sprintf("search=%q", f.Search))
-	}
-	return strings.Join(words, " ")
-}
-
 // describeBase is a Collection's title, or `project <name>` for a Project, saying when the catalog no longer has it live.
 // A nil catalog says nothing about the Project.
 func describeBase(c model.Collection, catalog []model.CatalogProject, known bool) string {
@@ -175,7 +151,7 @@ func (e viewsEnv) list() error {
 		}
 	}
 	for _, v := range read.Views {
-		line := fmt.Sprintf("  %-*s  %s  %s", width, v.Name, describeBase(v.Base, catalog, known), describeFilters(v.Filters, projectName))
+		line := fmt.Sprintf("  %-*s  %s  %s", width, v.Name, describeBase(v.Base, catalog, known), model.DescribeFilters(v.Filters, projectName))
 		if err := e.say(strings.TrimRight(line, " ")); err != nil {
 			return err
 		}
@@ -276,18 +252,14 @@ func (e viewsEnv) show(name string) error {
 			indent = "  "
 		}
 		for _, issue := range group.Issues {
-			priority := "-"
-			if issue.Priority != nil {
-				priority = fmt.Sprintf("P%d", *issue.Priority)
+			priority := model.PriorityText(issue.Priority)
+			if priority == "" {
+				priority = "-"
 			}
 			words := []string{indent + issue.QualifiedID, issue.Status, priority}
 			if dated {
-				scheduled, deadline := model.IssueDates(issue)
-				if scheduled != "" {
-					words = append(words, "scheduled "+scheduled)
-				}
-				if deadline != "" {
-					words = append(words, "deadline "+deadline)
+				if dates := model.DatesLine(issue); dates != "" {
+					words = append(words, dates)
 				}
 			}
 			if issue.ClosedAt != nil && collection.Def().Grouping == model.GroupClosedDate {
@@ -429,7 +401,7 @@ func (e viewsEnv) add(name string) error {
 	if replaced {
 		verb = "Replaced"
 	}
-	return e.say(strings.TrimSpace(fmt.Sprintf("%s view %q: %s  %s", verb, v.Name, describeBase(v.Base, nil, false), describeFilters(v.Filters, func(string) string { return filterProject }))))
+	return e.say(strings.TrimSpace(fmt.Sprintf("%s view %q: %s  %s", verb, v.Name, describeBase(v.Base, nil, false), model.DescribeFilters(v.Filters, func(string) string { return filterProject }))))
 }
 
 // remove deletes a saved view without asking.
