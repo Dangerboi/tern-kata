@@ -5,7 +5,7 @@ colour_uid=$(jq -r '.issue.uid' "$tmp/colour.json")
 colour_short=$(jq -r '.issue.short_id' "$tmp/colour.json")
 colour_row="[data-id='main.columns.list.issues.$colour_uid']"
 expect_tree "$colour_row" '.ok and .count == 1 and (.nodes[0].text | contains("P0 open"))'
-expect_tree "$colour_row *" '[.nodes[] | select(.text == "open" or .text == "P0") | {(.text): .class}] | add == {"open": "sf-t-accent", "P0": "sf-t-error"}'
+expect_tree "$colour_row *" '[.nodes[] | select(.text == "open" or .text == "P0") | {(.text): .class}] | add == {"open": "sf-t-accent", "P0": "sf-t-error sf-t-mono"}'
 expect_tree "$colour_row" '(.nodes[0].text | contains("colour-chip") | not)'
 expect_tree "[data-id='main.topbar.left.heading'] *" '.nodes[0].class == "sf-t-title sf-t-accent"'
 
