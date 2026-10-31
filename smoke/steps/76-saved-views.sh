@@ -27,7 +27,7 @@ for letter in t o d a y; do ctl key "$letter"; done
 ctl key Ctrl+o
 expect_tree "[data-id='layer.view']" '.ok and .count == 1'
 expect_tree "[data-id='layer.view.error']" '.ok and (.nodes[0].text | startswith("Name"))'
-[[ ! -f "$sv_file" ]] || ! grep -q '\[\[view\]\]' "$sv_file"
+if [[ -f "$sv_file" ]] && grep -q '\[\[view\]\]' "$sv_file"; then printf 'views.toml holds a view after the refused save\n' >&2; return 1; fi
 for _ in 1 2 3 4 5; do ctl key backspace; done
 for letter in o p e n b u g s; do ctl key "$letter"; done
 ctl key Ctrl+o

@@ -26,7 +26,7 @@ expect_tree "[data-id='layer.worker.next']" '.ok and .count == 1 and (.nodes[0].
 [[ -s "$wc_file" ]]
 grep -q 'name = "smoke"' "$wc_file"
 "$tmp/tern-kata" worker doctor >"$tmp/worker-doctor.txt" 2>&1 || true
-! grep -qi 'unknown key\|is required' "$tmp/worker-doctor.txt"
+if grep -qi 'unknown key\|is required' "$tmp/worker-doctor.txt"; then printf 'worker doctor reports an unknown or missing key\n' >&2; return 1; fi
 ctl key Escape
 expect_tree "[data-id='layer.worker']" '.ok and .count == 0'
 
