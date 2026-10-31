@@ -82,9 +82,37 @@ func (c *Client) RaiseAgentAttention(ctx context.Context, cmd model.RaiseAgentAt
 	return c.writeAttentionSlot(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, model.NotificationKey(cmd.Address), value)
 }
 
-// ClearAgentAttention removes the request for cmd.Address on an Issue as `kata notify --clear` does, without a guard.
+// ClearAgentAttention removes the request for cmd.Address on an Issue as `kata notify --clear` does, but only while it still
+// reads as cmd.Actor wrote it with cmd.Message, and guarded on the value read, so a request someone else wrote since survives. A
+// slot that is gone, someone else's, or rewritten between the read and the write counts as cleared.
 func (c *Client) ClearAgentAttention(ctx context.Context, cmd model.ClearAgentAttention) error {
-	return c.writeAttentionSlot(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, model.NotificationKey(cmd.Address), nil)
+	key := model.NotificationKey(cmd.Address)
+	r, err := c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: cmd.ProjectID, Ref: cmd.UID}})
+	if err != nil {
+		return daemonError(err)
+	}
+	// The slot is read from the body as sent, so the guard holds the value kata stores, not a re-encoding of a decoded one.
+	var body struct {
+		Issue struct {
+			Metadata map[string]json.RawMessage `json:"metadata"`
+		} `json:"issue"`
+	}
+	if err := json.Unmarshal(r.Body, &body); err != nil {
+		return err
+	}
+	raw, held := body.Issue.Metadata[key]
+	if !held {
+		return nil
+	}
+	slot, err := model.ReadNotificationSlot(key, string(raw))
+	if err != nil || slot.From != cmd.Actor || slot.Message != cmd.Message {
+		return nil
+	}
+	seen := slot.Raw
+	if _, err := c.patchMetadataKey(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, key, nil, &seen); err != nil && daemonCode(err) != "metadata_guard_failed" {
+		return daemonError(err)
+	}
+	return nil
 }
 
 // writeAttentionSlot patches one notify slot, a nil value clearing it, with no guard.

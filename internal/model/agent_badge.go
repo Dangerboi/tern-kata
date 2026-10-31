@@ -173,12 +173,13 @@ func agentsRefreshed(m Model, msg AgentsRefreshed) (Model, []Cmd) {
 		m.Agents = m.Agents.trimmed(m.agentMapped)
 	}
 	m.Agents.inFlight = false
+	m, raised := raiseAgentAttention(m, false)
 	if !m.Agents.again {
-		return m, nil
+		return m, raised
 	}
 	suspects := slices.DeleteFunc(m.Agents.suspects, func(b string) bool { return !m.agentMapped(b) })
 	m.Agents.again, m.Agents.suspects, m.Agents.inFlight = false, nil, true
-	return m, []Cmd{RefreshAgents{Suspects: suspects, PaneBlock: m.PaneBlock}}
+	return m, append(raised, RefreshAgents{Suspects: suspects, PaneBlock: m.PaneBlock})
 }
 
 // promptTail finds the prompt file of a tern-kata agent in a command line: the part from the agent-prompts folder on, "" when

@@ -142,10 +142,11 @@ func agentStarted(m Model, msg AgentStarted) Model {
 	return m
 }
 
-func agentsPruned(m Model, msg AgentsPruned) Model {
-	if msg.Err == nil {
-		m.AgentMapping = msg.Agents
-		m.Agents = m.Agents.trimmed(m.agentMapped)
+func agentsPruned(m Model, msg AgentsPruned) (Model, []Cmd) {
+	if msg.Err != nil {
+		return m, nil
 	}
-	return m
+	m.AgentMapping = msg.Agents
+	m.Agents = m.Agents.trimmed(m.agentMapped)
+	return raiseAgentAttention(m, false)
 }
