@@ -222,7 +222,8 @@ end
 -- gets no `tab_created` for a tab the CLI opens on the session host, and numbers panes differently from the host, so
 -- `<starter>` is no pane id there. Such a window places on `agent_state` and on every relay pass instead: an agent pane whose
 -- command carries the marker is tried once, whatever the result (remembered in `placed` until its pane closes), and then never
--- touched again, so a window that guesses wrong cannot move a tab another window placed.
+-- touched again. When `<starter>` is no kata Pane here the home is a guess, and the tab moves only while it is still the last
+-- of its session, where Tern appended it: a tab that is not last was placed by a window that knew the starter, or by the user.
 -- The starter is the kata Pane whose id is `<starter>`, else the focused Pane if it is a kata Pane (the Pane the user just pressed
 -- `W` in), else the window's only kata Pane; with none of these nothing moves.
 local PLACE_TRIES = 10
@@ -248,6 +249,19 @@ local function starterOf(cx: WindowCx, tab: number): number?
         end
     end
     return nil
+end
+
+-- Whether no tab of the same session comes after `tab`.
+local function isLastTab(cx: WindowCx, tab: number): boolean
+    local own: TabInfo? = nil
+    for _, info in cx.session:tabs() do
+        if info.id == tab then own = info end
+    end
+    if not own then return false end
+    for _, info in cx.session:tabs() do
+        if info.session == own.session and info.position > own.position then return false end
+    end
+    return true
 end
 
 -- The kata Pane an agent started from, as far as this window can tell: the Pane whose id is `starter` (exact only on the
@@ -315,7 +329,10 @@ placeAgents = function(cx: WindowCx)
                 local tabs = hidden or hiddenTabs(cx)
                 hidden = tabs
                 if not tabs[info.tab] then
-                    placeTab(cx, info.tab, kataPaneFor(cx, starter, cx.session:focused()))
+                    local exact = isKata(cx.session:pane(starter))
+                    if exact or isLastTab(cx, info.tab) then
+                        placeTab(cx, info.tab, kataPaneFor(cx, starter, cx.session:focused()))
+                    end
                 end
             end
         end
