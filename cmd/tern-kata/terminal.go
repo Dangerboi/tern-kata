@@ -72,16 +72,19 @@ func (t *terminal) Suspend(run func()) error {
 	return nil
 }
 
-// connectPane is the production reconnect: Tern's connect plus the Pane's surface.
-func connectPane(ctx context.Context) (paneSession, paneSurface, error) {
-	session, err := tern.Connect(ctx, editorOptions())
-	if err != nil {
-		return nil, nil, err
+// connectPane is the production reconnect: Tern's connect plus the Pane's surface, opened closable or not as the Pane
+// first opened it.
+func connectPane(closable bool) reconnect {
+	return func(ctx context.Context) (paneSession, paneSurface, error) {
+		session, err := tern.Connect(ctx, editorOptions())
+		if err != nil {
+			return nil, nil, err
+		}
+		surface, err := openSurface(session, closable)
+		if err != nil {
+			session.Close()
+			return nil, nil, err
+		}
+		return session, surface, nil
 	}
-	surface, err := openSurface(session)
-	if err != nil {
-		session.Close()
-		return nil, nil, err
-	}
-	return session, surface, nil
 }
