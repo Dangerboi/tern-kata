@@ -165,6 +165,9 @@ type jobSchedule struct {
 	// becomes ready by itself, the zero time when only an Issue event can change it.
 	waiting string
 	wakeAt  time.Time
+	// parked is the pending occurrences that last waited for the job's Issue; unlike waiting it survives a restart,
+	// so they are not graced out before admission looks at the Issue again.
+	parked []time.Time
 }
 
 // checkpoint is projects/<uid>/schedule/<job uid>.json (ADR-0006): everything decided through a time and the
@@ -176,6 +179,7 @@ type checkpoint struct {
 	Date               time.Time   `json:"date,omitzero"` // the Issue-date trigger's instant the pending work belongs to
 	DateSeen           bool        `json:"date_seen,omitempty"`
 	Pending            []time.Time `json:"pending,omitempty"`
+	Parked             []time.Time `json:"parked,omitempty"` // the pending occurrences that waited for the job's Issue
 }
 
 func (w *Worker) checkpointPath(ps *projectState, jobUID string) string {
@@ -196,7 +200,7 @@ func (w *Worker) loadCheckpoint(ps *projectState, jobUID string) (checkpoint, bo
 }
 
 func (w *Worker) saveCheckpoint(ps *projectState, jobUID string, st *jobSchedule) {
-	raw, _ := json.Marshal(checkpoint{Version: 1, DefinitionEventUID: st.defEvent, Through: st.through, Date: st.date, DateSeen: st.dateSeen, Pending: st.pending})
+	raw, _ := json.Marshal(checkpoint{Version: 1, DefinitionEventUID: st.defEvent, Through: st.through, Date: st.date, DateSeen: st.dateSeen, Pending: st.pending, Parked: st.parked})
 	path := w.checkpointPath(ps, jobUID)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err == nil {
 		err = replaceFile(path, raw)
@@ -260,6 +264,7 @@ func (w *Worker) plan(ps *projectState, job cronjob.Job, now time.Time) {
 		ps.sched[job.UID] = st
 		if c, ok := w.loadCheckpoint(ps, job.UID); ok {
 			st.defEvent, st.through, st.date, st.pending = c.DefinitionEventUID, c.Through, c.Date, c.Pending
+			st.parked = c.Parked
 			st.dateSeen = c.DateSeen || !c.Date.IsZero()
 		}
 	}
@@ -331,11 +336,10 @@ func (w *Worker) plan(ps *projectState, job cronjob.Job, now time.Time) {
 		st.through, changed = now, true
 	}
 	d := job.Definition
-	var parked []time.Time // occurrences waiting for the job's Issue outlive their grace
-	if st.waiting != "" {
-		parked = st.pending
+	keep, dropped := selectOccurrences(cands, now, d.Catchup, time.Duration(d.GraceSeconds)*time.Second, st.parked)
+	if parked := slices.DeleteFunc(slices.Clone(st.parked), func(t time.Time) bool { return !slices.ContainsFunc(keep, t.Equal) }); !slices.EqualFunc(parked, st.parked, time.Time.Equal) {
+		st.parked, changed = parked, true
 	}
-	keep, dropped := selectOccurrences(cands, now, d.Catchup, time.Duration(d.GraceSeconds)*time.Second, parked)
 	if dropped > 0 {
 		w.opt.Log("Project %s: job %s (catchup %s): %d missed occurrence(s) not run", ps.cfg.Name, job.Name, cmp.Or(d.Catchup, "skip"), dropped)
 	}
@@ -470,7 +474,7 @@ func (w *Worker) admitDue(ctx context.Context, ps *projectState) {
 		_, _, err := w.RunOccurrence(ctx, ps.cfg.Name, d.job, d.at)
 		if err == nil {
 			st.pending = slices.DeleteFunc(st.pending, func(t time.Time) bool { return t.Equal(d.at) })
-			st.lastErr, st.waiting, st.wakeAt = "", "", time.Time{}
+			st.lastErr, st.waiting, st.wakeAt, st.parked = "", "", time.Time{}, nil
 			w.saveCheckpoint(ps, d.job, st)
 			continue
 		}
@@ -478,9 +482,17 @@ func (w *Worker) admitDue(ctx context.Context, ps *projectState) {
 		if errors.As(err, &parked) {
 			blocked[d.job] = true
 			st.waiting, st.wakeAt = parked.reason, parked.until
+			if !slices.EqualFunc(st.parked, st.pending, time.Time.Equal) {
+				st.parked = slices.Clone(st.pending)
+				w.saveCheckpoint(ps, d.job, st)
+			}
 			continue
 		}
 		st.waiting, st.wakeAt = "", time.Time{}
+		if len(st.parked) > 0 { // the Issue is ready now; a refusal for another reason is subject to the grace again
+			st.parked = nil
+			w.saveCheckpoint(ps, d.job, st)
+		}
 		var busy *busyError
 		if errors.As(err, &busy) {
 			if busy.capacity {

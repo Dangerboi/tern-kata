@@ -81,6 +81,31 @@ func TestAnExecuteJobWaitsOnAFutureScheduledIssueUntilItsInstant(t *testing.T) {
 	h.settled(runs[0].UID)
 }
 
+func TestAParkedOccurrenceSurvivesAWorkerRestartPastItsGrace(t *testing.T) {
+	h := newHarness(t)
+	issue := h.kata.Issue(t, h.proj, "Parked")
+	h.kata.SetSomeday(t, h.proj, issue.UID, true)
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "on issue", Prompt: "Do it.", ExistingUID: issue.UID, Trigger: interval(86400)})
+	r := h.start(worker.Hooks{})
+	h.scheduled(r, 1)
+	first := h.fire(r, time.Time{})
+	h.waitsFor(r, "Issue is someday")
+	r.stop()
+
+	h.advanceTo(first.Add(2 * time.Hour)) // past any grace while the worker is down
+	restarted := h.start(worker.Hooks{})
+	h.scheduled(restarted, 1)
+	h.waitsFor(restarted, "Issue is someday")
+	h.quiet(job, 0)
+
+	h.kata.SetSomeday(t, h.proj, issue.UID, false)
+	runs := h.waitRuns(job, 1)
+	if runs[0].OccurrenceKey != worker.OccurrenceKey(first) {
+		t.Fatalf("the run is for %s, want the parked occurrence %s", runs[0].OccurrenceKey, worker.OccurrenceKey(first))
+	}
+	h.settled(runs[0].UID)
+}
+
 func TestAnExecuteJobStartsWhenTheIssuesScheduledInstantIsPast(t *testing.T) {
 	h := newHarness(t)
 	issue := h.kata.Issue(t, h.proj, "Due")
