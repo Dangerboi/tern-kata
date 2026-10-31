@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
@@ -406,8 +407,14 @@ func (e viewsEnv) add(name string) error {
 	if v, err = model.CheckSavedView(v, read.Views, existing); err != nil {
 		return subcommandError{err}
 	}
-	if existing != "" {
-		err = store.Replace(read.Token, existing, v)
+	replaced := false
+	if e.plan.Replace {
+		// An entry the read left out is still in the file under its name, so --replace reaches it too.
+		err = store.Replace(read.Token, cmp.Or(existing, name), v)
+		replaced = err == nil
+		if errors.Is(err, data.ErrViewNotFound) {
+			err = store.Add(read.Token, v)
+		}
 	} else {
 		err = store.Add(read.Token, v)
 	}
@@ -415,7 +422,7 @@ func (e viewsEnv) add(name string) error {
 		return subcommandError{err}
 	}
 	verb := "Saved"
-	if existing != "" {
+	if replaced {
 		verb = "Replaced"
 	}
 	return e.say(strings.TrimSpace(fmt.Sprintf("%s view %q: %s  %s", verb, v.Name, describeBase(v.Base, nil, false), describeFilters(v.Filters, func(string) string { return filterProject }))))
@@ -429,13 +436,16 @@ func (e viewsEnv) remove(name string) error {
 	}
 	ref, ok := model.ResolveViewName(name, read.Views)
 	switch {
-	case !ok:
-		return subcommandError{fmt.Errorf("no saved view named %q; the views are %s", strings.TrimSpace(name), names(read.Views))}
 	case ref.Collection != nil:
 		return subcommandError{fmt.Errorf("%q is the fixed Collection %s, not a saved view", strings.TrimSpace(name), ref.Collection.Title)}
+	case ok:
+		name = ref.View.Name
 	}
-	if err := store.Delete(read.Token, ref.View.Name); err != nil {
+	// An entry the read left out is still in the file under its name, so it can be removed too.
+	if err := store.Delete(read.Token, name); errors.Is(err, data.ErrViewNotFound) {
+		return subcommandError{fmt.Errorf("no saved view named %q; the views are %s", strings.TrimSpace(name), names(read.Views))}
+	} else if err != nil {
 		return subcommandError{err}
 	}
-	return e.say(fmt.Sprintf("Removed view %q", ref.View.Name))
+	return e.say(fmt.Sprintf("Removed view %q", strings.TrimSpace(name)))
 }

@@ -329,3 +329,23 @@ func TestViewsRemoveRefusesAFixedCollectionAndAnUnknownName(t *testing.T) {
 		t.Errorf("a refused rm changed views.toml:\n%s", got)
 	}
 }
+
+func TestViewsRmAndAddReplaceReachAnEntryLeftOutAsAProblem(t *testing.T) {
+	f := newSubcommandFixture(t)
+	const broken = "[[view]]\nname = \"Bad\"\nstatus = \"Open\"\n"
+	writeViews(t, broken+"\n[[view]]\nname = \"Good\"\nbase = \"today\"\n")
+	if out, err := f.views(t, "rm", "bad"); err != nil || !strings.Contains(out, `Removed view "bad"`) {
+		t.Fatalf("rm: %q, %v", out, err)
+	}
+	if text, _ := os.ReadFile(viewsFile(t)); strings.Contains(string(text), "Bad") || !strings.Contains(string(text), "Good") {
+		t.Errorf("views.toml after rm:\n%s", text)
+	}
+	writeViews(t, broken+"\n[[view]]\nname = \"Good\"\nbase = \"today\"\n")
+	if out, err := f.views(t, "add", "bad", "--base", "Upcoming", "--replace"); err != nil || !strings.Contains(out, `Replaced view "bad"`) {
+		t.Fatalf("replace: %q, %v", out, err)
+	}
+	text, _ := os.ReadFile(viewsFile(t))
+	if strings.Contains(string(text), "Open") || !strings.Contains(string(text), `name = "bad"`) || strings.Count(string(text), "[[view]]") != 2 {
+		t.Errorf("views.toml after replace:\n%s", text)
+	}
+}
