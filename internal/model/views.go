@@ -102,12 +102,25 @@ func viewsLoaded(m Model, msg ViewsLoaded) Model {
 	return m.keepActiveView()
 }
 
-// keepActiveView forgets the view this Pane opened once the file no longer has it, so the filter line never names a view that is gone.
+// keepActiveView forgets the view this Pane opened once the file no longer has it, or lists another view of that name (a
+// duplicate that followed the deleted one) with a different base or filters, so the filter line never names a view that is gone.
 func (m Model) keepActiveView() Model {
-	if _, ok := m.savedViewNamed(m.ActiveView.Name); m.ActiveView.Name != "" && !ok {
+	if m.ActiveView.Name == "" {
+		return m
+	}
+	v, ok := m.savedViewNamed(m.ActiveView.Name)
+	if !ok || !sameBase(v.Base, m.ActiveView.Base) || v.FiltersFor(m.Actor) != m.ActiveView.Filters {
 		m.ActiveView = ActiveView{}
 	}
 	return m
+}
+
+// sameBase is whether two bases are one Collection, a Project base by its UID since its name may have changed.
+func sameBase(a, b Collection) bool {
+	if a.IsProject() || b.IsProject() {
+		return a.IsProject() && b.IsProject() && a.ProjectUID == b.ProjectUID
+	}
+	return a.View == b.View
 }
 
 // SavedViews are the saved views by name, ignoring case: the order the Menu lists them in.
