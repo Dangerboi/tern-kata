@@ -168,12 +168,13 @@ func (m Model) agentMapped(block string) bool {
 
 // agentsRefreshed takes in the mapping and, when a relay wanted a refresh while this one was out, asks for the next.
 func agentsRefreshed(m Model, msg AgentsRefreshed) (Model, []Cmd) {
+	before := m.AgentMapping
 	if msg.Err == nil {
 		m.AgentMapping = msg.Agents
 		m.Agents = m.Agents.trimmed(m.agentMapped)
 	}
 	m.Agents.inFlight = false
-	m, raised := raiseAgentAttention(m, false)
+	m, raised := raiseAgentAttention(m, before, false)
 	if !m.Agents.again {
 		return m, raised
 	}

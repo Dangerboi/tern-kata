@@ -109,11 +109,13 @@ func (m Model) raised(uid string) bool {
 	return false
 }
 
-// raiseAgentAttention applies the relay just received (relayed) or the mapping just reloaded: an agent this Pane started that
-// entered waiting in that relay raises the request with its message, as does one that waits while its Issue holds no request from this Pane (the Pane
-// learned of it late); a request this Pane raised is cleared once no mapped agent on its Issue waits. An Inbox address kata
+// raiseAgentAttention applies the relay just received (relayed) or the mapping just reloaded over before: an agent this Pane
+// started that entered waiting in that relay raises the request with its message, as does one that waits while its Issue holds
+// no request from this Pane (the Pane learned of it late) and one this Pane adopted from another Pane since before (its record
+// must be what the slot holds, or its clear is refused); a request this Pane raised is cleared once no mapped agent on its
+// Issue waits. An Issue gets at most one raise per pass, the last, so the record is what lands in kata. An Inbox address kata
 // refuses writes nothing.
-func raiseAgentAttention(m Model, relayed bool) (Model, []Cmd) {
+func raiseAgentAttention(m Model, before []AgentEntry, relayed bool) (Model, []Cmd) {
 	address, err := m.InboxAddress()
 	if err != nil || m.PaneBlock == "" {
 		return m, nil
@@ -123,7 +125,8 @@ func raiseAgentAttention(m Model, relayed bool) (Model, []Cmd) {
 		if e.PaneBlock != m.PaneBlock || !agentWaiting(m.Agents.States, e.Block) {
 			continue
 		}
-		if !(relayed && m.Agents.entered(e.Block, AgentWaitingInput)) && m.raised(e.IssueUID) {
+		adopted := !slices.ContainsFunc(before, func(b AgentEntry) bool { return b.Block == e.Block && b.PaneBlock == m.PaneBlock })
+		if !(relayed && m.Agents.entered(e.Block, AgentWaitingInput)) && !adopted && m.raised(e.IssueUID) {
 			continue
 		}
 		project := m.projectOf(e)
@@ -144,7 +147,12 @@ func raiseAgentAttention(m Model, relayed bool) (Model, []Cmd) {
 		} else {
 			m.AgentAttention = append(slices.Clone(m.AgentAttention), raised)
 		}
-		cmds = append(cmds, RaiseAgentAttention{Workspace: m.Workspace, ProjectID: project, UID: e.IssueUID, Actor: m.Actor, Address: address, Message: message})
+		raise := RaiseAgentAttention{Workspace: m.Workspace, ProjectID: project, UID: e.IssueUID, Actor: m.Actor, Address: address, Message: message}
+		if i := slices.IndexFunc(cmds, func(c Cmd) bool { r, ok := c.(RaiseAgentAttention); return ok && r.UID == e.IssueUID }); i >= 0 {
+			cmds[i] = raise
+		} else {
+			cmds = append(cmds, raise)
+		}
 	}
 	kept := m.AgentAttention[:0:0]
 	for _, r := range m.AgentAttention {
