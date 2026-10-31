@@ -166,7 +166,7 @@ func snapshotChanged(m Model) (Model, []Cmd) {
 	}
 	m.Refreshing = true
 	m.readOwed = false
-	request := m.reads.Ask()
+	request := m.snapshotReads.Ask()
 	if lookup, ok := m.idLookup(); ok {
 		lookup.Request = request
 		return m, []Cmd{lookup}
@@ -180,7 +180,7 @@ func snapshotChanged(m Model) (Model, []Cmd) {
 }
 
 // RefreshRequest is the number of the newest snapshot or id-lookup read asked for.
-func (m Model) RefreshRequest() int64 { return m.reads.Newest() }
+func (m Model) RefreshRequest() int64 { return m.snapshotReads.Newest() }
 
 // collectionSwitched is a Collection switch: deliberate, so it neither waits for the read of the Collection left behind (that
 // answer is dropped by its Request) nor keeps an id answer for it.
@@ -192,7 +192,7 @@ func collectionSwitched(m Model) (Model, []Cmd) {
 
 // snapshotLoaded applies a result only if it answers the latest read (Request, the in-flight supersede guard) and the current query.
 func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
-	if current, _ := m.reads.Answer(msg.Request); !current {
+	if !m.snapshotReads.IsCurrent(msg.Request) {
 		return m, nil
 	}
 	m.Refreshing = false
@@ -273,7 +273,7 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 
 // snapshotFailed ends the read: on the first load or a Collection switch it is the error shown; otherwise the Pane is stale.
 func snapshotFailed(m Model, msg SnapshotFailed) (Model, []Cmd) {
-	if current, _ := m.reads.Answer(msg.Request); !current {
+	if !m.snapshotReads.IsCurrent(msg.Request) {
 		return m, nil
 	}
 	m.Refreshing = false

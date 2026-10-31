@@ -83,3 +83,28 @@ func TestLatestDiscardDropsTheReadOutAndWantsNoneAndAskedSaysSo(t *testing.T) {
 		t.Errorf("the answer to a discarded read gave current %v again %v", current, again)
 	}
 }
+
+func TestLatestAnswerIsCurrentOnlyForTheLastReadActuallyAsked(t *testing.T) {
+	for name, drop := range map[string]func(*model.Latest){
+		"Supersede": (*model.Latest).Supersede,
+		"Discard":   (*model.Latest).Discard,
+	} {
+		t.Run(name, func(t *testing.T) {
+			var l model.Latest
+			n := l.Ask()
+			drop(&l)
+			if l.Newest() != n {
+				t.Errorf("Newest = %d, want the last read asked for, %d", l.Newest(), n)
+			}
+			if l.IsCurrent(l.Newest() + 1) {
+				t.Error("a number never asked for is current")
+			}
+			if l.IsCurrent(n) {
+				t.Error("the answer to a dropped read is current")
+			}
+			if fresh := l.Ask(); !l.IsCurrent(fresh) {
+				t.Error("the answer to a read asked after the drop is not current")
+			}
+		})
+	}
+}

@@ -54,7 +54,7 @@ func projectPane(t *testing.T, cols int, issues ...model.Issue) driver.State {
 // boardPane is projectPane at 160 columns with the Board on and the Lane list load answered with no saved list.
 func boardPane(t *testing.T, issues ...model.Issue) driver.State {
 	t.Helper()
-	return feed(t, projectPane(t, 160, issues...), key("b"), model.LanesLoaded{ProjectUID: "p"}).State
+	return feed(t, projectPane(t, 160, issues...), key("b"), newestLanes{ProjectUID: "p"}).State
 }
 
 // snapshotFor is the daemon answering the read cmds hold with issues.

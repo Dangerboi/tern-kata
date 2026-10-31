@@ -46,7 +46,7 @@ func TestLanesAreAskedForOnOpeningAProjectAndEachTimeTheBoardTurnsOn(t *testing.
 
 func TestBoardOnPicksUpAChangedLaneListAndKeepsTheHeldOneMeanwhile(t *testing.T) {
 	s := projectPane(t, 160, boardCard("a", "in-review"))
-	s = step(t, s, model.LanesLoaded{ProjectUID: "p", Lanes: []string{"in-review"}}).State
+	s = step(t, s, newestLanes{ProjectUID: "p", Lanes: []string{"in-review"}}).State
 	on := step(t, s, key("b"))
 	if got := loadCmds(on.Cmds); len(got) != 1 {
 		t.Fatalf("b asked %v, want one load", got)
@@ -54,7 +54,7 @@ func TestBoardOnPicksUpAChangedLaneListAndKeepsTheHeldOneMeanwhile(t *testing.T)
 	if got := on.State.Model.LaneList(); len(got) != 1 || got[0] != "in-review" {
 		t.Fatalf("while the reload is out the Lane list is %v, want the held one", got)
 	}
-	s = step(t, on.State, model.LanesLoaded{ProjectUID: "p", Lanes: []string{"in-review", "shipping"}}).State
+	s = step(t, on.State, newestLanes{ProjectUID: "p", Lanes: []string{"in-review", "shipping"}}).State
 	if got := s.Model.LaneList(); len(got) != 2 || got[1] != "shipping" {
 		t.Errorf("after the file changed the Lane list is %v, want in-review and shipping", got)
 	}
@@ -70,7 +70,7 @@ func TestBoardAsksAgainWhenTheProjectChanges(t *testing.T) {
 
 func TestBoardShowsLoadedLanes(t *testing.T) {
 	s := boardPane(t, boardCard("a", "in-review"), boardCard("b", "needs-triage"))
-	s = step(t, s, model.LanesLoaded{ProjectUID: "p", Lanes: []string{"in-review", "shipping"}}).State
+	s = step(t, s, newestLanes{ProjectUID: "p", Lanes: []string{"in-review", "shipping"}}).State
 	heads, _ := lanes(t, s)
 	if len(heads) != 4 {
 		t.Fatalf("the Board draws %d columns, want No lane, 2 Lanes and Done", len(heads))
@@ -82,7 +82,7 @@ func TestBoardShowsLoadedLanes(t *testing.T) {
 
 func TestBoardKeepsTheDefaultLanesWhenTheProjectHasNone(t *testing.T) {
 	s := boardPane(t, boardCard("a", "needs-triage"))
-	s = step(t, s, model.LanesLoaded{ProjectUID: "p"}).State
+	s = step(t, s, newestLanes{ProjectUID: "p"}).State
 	wantLane(t, s, 1, "Needs triage", "a")
 	if s.Model.Notice != "" {
 		t.Errorf("a missing list left the Notice %q", s.Model.Notice)
@@ -91,7 +91,7 @@ func TestBoardKeepsTheDefaultLanesWhenTheProjectHasNone(t *testing.T) {
 
 func TestBoardShowsTheDefaultLanesAndANoticeForAnUnreadableFile(t *testing.T) {
 	s := boardPane(t, boardCard("a", "needs-triage"))
-	s = step(t, s, model.LanesLoaded{ProjectUID: "p", Err: errors.New("lanes.toml: bad syntax")}).State
+	s = step(t, s, newestLanes{ProjectUID: "p", Err: errors.New("lanes.toml: bad syntax")}).State
 	wantLane(t, s, 1, "Needs triage", "a")
 	if s.Model.Notice == "" {
 		t.Error("an unreadable file left no Notice")
@@ -99,7 +99,7 @@ func TestBoardShowsTheDefaultLanesAndANoticeForAnUnreadableFile(t *testing.T) {
 }
 
 func TestASaveToAnUnreadableFileFromTheLanesCardIsRefusedWithItsError(t *testing.T) {
-	s := step(t, boardPane(t, boardCard("a")), model.LanesLoaded{ProjectUID: "p", Shared: true, Lanes: []string{"x"}, ProjectID: 7, Revision: 4,
+	s := step(t, boardPane(t, boardCard("a")), newestLanes{ProjectUID: "p", Shared: true, Lanes: []string{"x"}, ProjectID: 7, Revision: 4,
 		Err: errors.New("lanes.toml: bad syntax")}).State
 	s = step(t, s, key("shift+b")).State
 	s = step(t, step(t, step(t, s, key("tab")).State, key("tab")).State, key("tab")).State
@@ -112,9 +112,9 @@ func TestASaveToAnUnreadableFileFromTheLanesCardIsRefusedWithItsError(t *testing
 
 func TestRemovingALaneLabelMovesItsIssuesWithoutACommand(t *testing.T) {
 	s := boardPane(t, boardCard("only", "in-review"), boardCard("both", "in-review", "needs-triage"))
-	s = step(t, s, model.LanesLoaded{ProjectUID: "p", Lanes: []string{"in-review", "needs-triage"}}).State
+	s = step(t, s, newestLanes{ProjectUID: "p", Lanes: []string{"in-review", "needs-triage"}}).State
 	wantLane(t, s, 1, "In review", "both", "only")
-	out := step(t, s, model.LanesLoaded{ProjectUID: "p", Lanes: []string{"needs-triage"}})
+	out := step(t, s, newestLanes{ProjectUID: "p", Lanes: []string{"needs-triage"}})
 	if len(out.Cmds) != 0 {
 		t.Errorf("removing a Lane asked %#v, want no command", out.Cmds)
 	}
@@ -124,7 +124,7 @@ func TestRemovingALaneLabelMovesItsIssuesWithoutACommand(t *testing.T) {
 
 func TestALaneListAnswerSentBeforeASaveDoesNotReplaceTheSavedLanes(t *testing.T) {
 	s := projectPane(t, 160, boardCard("a", "in-review"))
-	s = step(t, s, model.LanesLoaded{ProjectUID: "p", Lanes: []string{"in-review"}}).State
+	s = step(t, s, newestLanes{ProjectUID: "p", Lanes: []string{"in-review"}}).State
 	on := step(t, s, key("b"))
 	late := model.LanesLoaded{ProjectUID: "p", Lanes: []string{"in-review"}, Request: loadCmds(on.Cmds)[0].Request}
 	opened := step(t, on.State, key("shift+b")).State

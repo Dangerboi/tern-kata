@@ -54,7 +54,7 @@ func deleted(uid string) model.IssueDeleted {
 
 func TestXOpensTheDeleteCardInEveryModeNamingTheIssueAndSayingItCanBeRestored(t *testing.T) {
 	list := movePane(t, movable("a"), movable("b"))
-	board := feed(t, list, key("b"), model.LanesLoaded{ProjectUID: "p"}).State
+	board := feed(t, list, key("b"), newestLanes{ProjectUID: "p"}).State
 	lane := step(t, board, key("enter")).State
 	detail := step(t, list, key("enter")).State
 	for name, s := range map[string]driver.State{"list": list, "Board": board, "Lane view": lane, "detail": detail} {

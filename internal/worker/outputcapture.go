@@ -26,8 +26,15 @@ const maxLine = 64 << 20
 
 const agentEndPrefix = `{"type":"agent_end"`
 
-// agentEndMarker stands for an agent_end line too long to keep: terminal, no messages.
-const agentEndMarker = agentEndPrefix + `}`
+// agentEndMarker stands for an agent_end line too long to keep: terminal, no messages. agentEndRetryMarker is the
+// same for one whose isTerminal is false, which is not a finished turn (ADR-0009).
+const (
+	agentEndMarker      = agentEndPrefix + `}`
+	agentEndRetryMarker = agentEndPrefix + `,"isTerminal":false}`
+)
+
+// endTailBytes is how much of a skipped agent_end's end is kept to read its isTerminal from; omp writes it last.
+const endTailBytes = 256
 
 // lineSink feeds omp's stdout, line by line, to the parser and keeps the first bytes in a capped file.
 type lineSink struct {
@@ -36,8 +43,10 @@ type lineSink struct {
 	file     *cappedFile
 	buf      []byte
 	skipping bool
-	// skippedEnd is whether the line being skipped is an agent_end, judged from its first bytes.
+	// skippedEnd is whether the line being skipped is an agent_end, judged from its first bytes; endTail is the last
+	// bytes of such a line.
 	skippedEnd bool
+	endTail    []byte
 	// limit is the longest line held; zero means maxLine.
 	limit int
 }
@@ -56,25 +65,24 @@ func (s *lineSink) Write(p []byte) (int, error) {
 	_, _ = s.file.Write(p)
 	for len(p) > 0 {
 		i := bytes.IndexByte(p, '\n')
-		if i < 0 {
-			if !s.skipping {
-				s.buf = append(s.buf, p...)
-				if len(s.buf) > s.maxLen() {
-					s.overlong()
-				}
-			}
-			break
+		seg := p
+		if i >= 0 {
+			seg = p[:i]
 		}
-		if !s.skipping {
-			s.buf = append(s.buf, p[:i]...)
+		switch {
+		case s.skipping:
+			s.noteEndTail(seg)
+		default:
+			s.buf = append(s.buf, seg...)
 			if len(s.buf) > s.maxLen() {
 				s.overlong()
 			}
 		}
+		if i < 0 {
+			break
+		}
 		if s.skipping {
-			if s.skippedEnd {
-				s.line([]byte(agentEndMarker))
-			}
+			s.skippedLine()
 		} else {
 			s.line(s.buf)
 		}
@@ -84,10 +92,52 @@ func (s *lineSink) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-// overlong drops the held bytes of a line past the limit, remembering whether it is an agent_end.
+// overlong drops the held bytes of a line past the limit, remembering whether it is an agent_end and, if so, its end.
 func (s *lineSink) overlong() {
 	s.skippedEnd = bytes.HasPrefix(bytes.TrimSpace(s.buf), []byte(agentEndPrefix))
+	s.endTail = s.endTail[:0]
+	if s.skippedEnd {
+		s.noteEndTail(s.buf)
+	}
 	s.buf, s.skipping = nil, true
+}
+
+// noteEndTail keeps the last endTailBytes of a skipped agent_end line.
+func (s *lineSink) noteEndTail(seg []byte) {
+	if !s.skippedEnd {
+		return
+	}
+	seg = seg[max(0, len(seg)-endTailBytes):]
+	s.endTail = append(s.endTail, seg...)
+	if len(s.endTail) > 2*endTailBytes {
+		s.endTail = append(s.endTail[:0], s.endTail[len(s.endTail)-endTailBytes:]...)
+	}
+}
+
+// skippedLine hands the parser a stand-in for a skipped line when it was an agent_end: finished unless its isTerminal
+// says false.
+func (s *lineSink) skippedLine() {
+	if !s.skippedEnd {
+		return
+	}
+	if endsRetry(s.endTail) {
+		s.line([]byte(agentEndRetryMarker))
+		return
+	}
+	s.line([]byte(agentEndMarker))
+}
+
+// endsRetry is whether the last isTerminal in tail is false.
+func endsRetry(tail []byte) bool {
+	i := bytes.LastIndex(tail, []byte(`"isTerminal"`))
+	if i < 0 {
+		return false
+	}
+	rest := bytes.TrimLeft(tail[i+len(`"isTerminal"`):], " \t")
+	if len(rest) == 0 || rest[0] != ':' {
+		return false
+	}
+	return bytes.HasPrefix(bytes.TrimLeft(rest[1:], " \t"), []byte("false"))
 }
 
 // line hands one complete line to the parser. omp's last line is agent_end; the cap must not lose it, or a long run
@@ -103,9 +153,9 @@ func (s *lineSink) line(l []byte) {
 func (s *lineSink) flush() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.skipping && s.skippedEnd {
-		s.line([]byte(agentEndMarker))
-	} else if len(s.buf) > 0 && !s.skipping {
+	if s.skipping {
+		s.skippedLine()
+	} else if len(s.buf) > 0 {
 		s.line(s.buf)
 	}
 	s.buf, s.skipping, s.skippedEnd = nil, false, false
@@ -327,7 +377,7 @@ func scanOutputTail(path string, max int) *tailWindow {
 	messages := 0
 	r := bufio.NewReaderSize(f, 64<<10)
 	for {
-		line, err := r.ReadBytes('\n')
+		line, err := readTailLine(r)
 		if line = bytes.TrimSpace(line); len(line) > 0 && line[0] == '{' {
 			var ev struct {
 				Type    string          `json:"type"`
@@ -377,4 +427,27 @@ func stderrFallback(path string) string {
 // commandTail1K is the end of a command step's output, kept in the step's result.
 func commandTail1K(dir string) string {
 	return fileTail(filepath.Join(dir, "output.log"), 1024)
+}
+
+// readTailLine is the next line of an output for the tail scan. An agent_end line, recognised from its first bytes,
+// comes back empty and is discarded as it is read: it repeats every message of the run and holds no message_end, so
+// holding it would make the scan's memory follow the size of the file. The returned bytes are valid until the next
+// call.
+func readTailLine(r *bufio.Reader) ([]byte, error) {
+	chunk, err := r.ReadSlice('\n')
+	if bytes.HasPrefix(bytes.TrimLeft(chunk, " \t"), []byte(agentEndPrefix)) {
+		for err == bufio.ErrBufferFull {
+			_, err = r.ReadSlice('\n')
+		}
+		return nil, err
+	}
+	if err != bufio.ErrBufferFull {
+		return chunk, err
+	}
+	line := append([]byte(nil), chunk...)
+	for err == bufio.ErrBufferFull {
+		chunk, err = r.ReadSlice('\n')
+		line = append(line, chunk...)
+	}
+	return line, err
 }

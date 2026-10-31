@@ -167,19 +167,14 @@ func federationMode(m Model) Mode {
 // enterFederation starts a fresh reading.
 func enterFederation(m Model) (Model, []Cmd) {
 	f := m.Federation
-	m.Federation = FederationState{reads: f.reads, attempts: f.attempts, hubReads: f.hubReads}
-	m.Federation.attempts.Discard()
-	m.Federation.hubReads.Discard()
+	m.Federation = FederationState{reads: f.reads, attempts: f.attempts.Discarded(), hubReads: f.hubReads.Discarded()}
 	return askFederation(m)
 }
 
 // clearFederation drops what the Page held and every ask still out.
 func clearFederation(m Model) Model {
 	f := m.Federation
-	m.Federation = FederationState{reads: f.reads, attempts: f.attempts, hubReads: f.hubReads}
-	m.Federation.reads.Discard()
-	m.Federation.attempts.Discard()
-	m.Federation.hubReads.Discard()
+	m.Federation = FederationState{reads: f.reads.Discarded(), attempts: f.attempts.Discarded(), hubReads: f.hubReads.Discarded()}
 	return m
 }
 
@@ -225,7 +220,7 @@ func updateFederation(m Model, msg Msg) (Model, []Cmd, bool) {
 		return m, cmds, true
 	case FederationLoaded:
 		f := &m.Federation
-		if current, _ := f.reads.Answer(msg.Request); !current {
+		if !f.reads.IsCurrent(msg.Request) {
 			return m, nil, true
 		}
 		f.Loading, f.Err = false, msg.Err

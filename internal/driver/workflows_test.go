@@ -429,6 +429,13 @@ func TestWorkflowsPageDropsAnAnswerToAnOlderRead(t *testing.T) {
 	if strings.Contains(screen(t, s), "Stale") {
 		t.Error("an answer to an older jobs read was applied")
 	}
+	if runs := s.Model.WorkflowRuns("W1"); len(runs) != 0 {
+		t.Errorf("an answer to an older runs read was applied: %+v", runs)
+	}
 	s = step(t, s, model.JobsLoaded{Request: newerJobs.Request, Jobs: []model.CronJob{use("Fresh")}}).State
 	mustShow(t, s, "the newest jobs answer", "Fresh")
+	s = step(t, s, model.RunsLoaded{Request: newerRuns.Request, Runs: []model.Run{workflowRun("RN")}}).State
+	if runs := s.Model.WorkflowRuns("W1"); len(runs) != 1 || runs[0].UID != "RN" {
+		t.Errorf("the newest runs answer gave %+v, want only RN", runs)
+	}
 }

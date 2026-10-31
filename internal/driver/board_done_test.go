@@ -50,9 +50,9 @@ func TestDoneShowsTheTwentyNewestClosedAndSaysHowManyQualify(t *testing.T) {
 
 func TestSavedDoneLimitsChangeDone(t *testing.T) {
 	s := boardPane(t, closedCards(6)...)
-	s = step(t, s, model.LanesLoaded{ProjectUID: "p", DoneCards: 2}).State
+	s = step(t, s, newestLanes{ProjectUID: "p", DoneCards: 2}).State
 	wantLane(t, s, 5, "Done", "c06", "c05")
-	s = step(t, s, model.LanesLoaded{ProjectUID: "p", DoneDays: 7}).State
+	s = step(t, s, newestLanes{ProjectUID: "p", DoneDays: 7}).State
 	wantLane(t, s, 5, "Done", "c06", "c05", "c04", "c03", "c02", "c01")
 	s = step(t, s, model.LanesSaved{ProjectUID: "p", DoneDays: 2, DoneCards: 1}).State
 	wantLane(t, s, 5, "Done", "c06")
@@ -63,7 +63,7 @@ func TestSavedDoneLimitsChangeDone(t *testing.T) {
 }
 
 func TestLanesCardTabsToDoneFieldsAndSavesThem(t *testing.T) {
-	s := step(t, boardPane(t, closedCards(2)...), model.LanesLoaded{ProjectUID: "p", DoneDays: 30}).State
+	s := step(t, boardPane(t, closedCards(2)...), newestLanes{ProjectUID: "p", DoneDays: 30}).State
 	s = step(t, s, key("shift+b")).State
 	if got := s.Model.LanesForm.Days; got != "30" || s.Model.LanesForm.Cards != "" {
 		t.Fatalf("prefill days %q cards %q", got, s.Model.LanesForm.Cards)
@@ -88,7 +88,7 @@ func TestLanesCardTabsToDoneFieldsAndSavesThem(t *testing.T) {
 }
 
 func TestLanesCardBlankDoneFieldsRestoreTheDefaults(t *testing.T) {
-	s := step(t, boardPane(t), model.LanesLoaded{ProjectUID: "p", DoneDays: 30, DoneCards: 5}).State
+	s := step(t, boardPane(t), newestLanes{ProjectUID: "p", DoneDays: 30, DoneCards: 5}).State
 	s = step(t, s, key("shift+b")).State
 	s = step(t, step(t, s, key("tab")).State, key("ctrl+u")).State
 	s = step(t, step(t, s, key("tab")).State, key("ctrl+u")).State
