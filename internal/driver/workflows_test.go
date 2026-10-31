@@ -312,7 +312,7 @@ func TestWorkflowCardButtonsAreDrawnForEveryState(t *testing.T) {
 				t.Fatal("the card draws no buttons")
 			}
 			for id, act := range buttons {
-				chord := strings.TrimPrefix(act, view.KeyClick(""))
+				chord := strings.TrimPrefix(act, view.ButtonClick(""))
 				if _, ok := model.LookupBindingForMode(chord, tt.mode); !ok {
 					t.Errorf("%s (%q) sends %q, which %s does not bind", id, labels[id], chord, tt.mode)
 				}

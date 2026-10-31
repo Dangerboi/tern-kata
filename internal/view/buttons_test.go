@@ -174,7 +174,7 @@ func TestCardButtonKeycapsAndClickFollowARebind(t *testing.T) {
 	if keys := node.P["keys"]; !reflect.DeepEqual(keys, []any{"ctrl+q"}) {
 		t.Errorf("rebound cancel keycaps = %v", keys)
 	}
-	if click := node.P["actions"].(map[string]any)["click"]; click != view.KeyClick("ctrl+q") {
+	if click := node.P["actions"].(map[string]any)["click"]; click != view.ButtonClick("ctrl+q") {
 		t.Errorf("rebound cancel click = %v, want the key click of ctrl+q", click)
 	}
 }

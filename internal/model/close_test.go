@@ -37,3 +37,14 @@ func TestCloseCardKeepsItsFieldWhileSaving(t *testing.T) {
 		}
 	}
 }
+
+func TestCloseOnAClosedIssueSaysItIsClosedAndOpensNoCard(t *testing.T) {
+	m := model.Model{SelectedUID: "issue", Issues: []model.Issue{{UID: "issue", ProjectID: 2, Status: "closed"}}}
+	m, _ = model.Update(m, model.KeyMsg{Chord: "x"})
+	if m.CloseForm.Open {
+		t.Error("the Close card opened on a closed Issue")
+	}
+	if m.Notice != model.ClosedAlreadyRefusal {
+		t.Errorf("notice %q, want %q", m.Notice, model.ClosedAlreadyRefusal)
+	}
+}
