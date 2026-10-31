@@ -103,8 +103,12 @@ func (s ViewsStore) Read() (ViewsRead, error) {
 		return ViewsRead{}, fmt.Errorf("%s: %w", s.Path, err)
 	}
 	out := ViewsRead{Token: ViewsToken{string(text)}}
+	// Each name is checked against every earlier entry, left-out ones included, as the writes do, so find and the list agree
+	// on the first entry of a name.
+	var earlier []model.SavedView
 	for i, r := range p.records {
-		v, err := model.CheckSavedView(r.view(), out.Views, "")
+		v, err := model.CheckSavedView(r.view(), earlier, "")
+		earlier = append(earlier, model.SavedView{Name: strings.TrimSpace(r.Name)})
 		if err != nil {
 			out.Problems = append(out.Problems, fmt.Errorf("%s: [[view]] %d (%q): %w", s.Path, i+1, r.Name, err))
 			continue
@@ -187,7 +191,10 @@ type viewsText struct {
 	records []viewRecord
 	blocks  [][2]int // [start, end) line numbers of each [[view]] table, the end after its last key line
 	crlf    bool     // the file breaks lines with CRLF; lines are held without it
+	bom     string   // the UTF-8 BOM the file starts with, kept by writes; lines are held without it
 }
+
+const utf8BOM = "\xef\xbb\xbf"
 
 var (
 	viewHeader  = regexp.MustCompile(`^\s*\[\[\s*(?:view|"view"|'view')\s*\]\]\s*(#.*)?$`)
@@ -198,13 +205,17 @@ var (
 // parseViewsText decodes text and locates its [[view]] tables. It fails if text is not TOML, or if a [[view]] is written in a way
 // the line scan cannot find.
 func parseViewsText(text string) (viewsText, error) {
+	bom := ""
+	if strings.HasPrefix(text, utf8BOM) {
+		bom, text = utf8BOM, text[len(utf8BOM):]
+	}
 	var doc struct {
 		View []viewRecord `toml:"view"`
 	}
 	if _, err := toml.Decode(text, &doc); err != nil {
 		return viewsText{}, err
 	}
-	p := viewsText{records: doc.View}
+	p := viewsText{records: doc.View, bom: bom}
 	if text != "" {
 		p.crlf = strings.Contains(text, "\r\n")
 		for _, line := range strings.Split(strings.TrimSuffix(text, "\n"), "\n") {
@@ -240,19 +251,20 @@ func (p *viewsText) find(name string) int {
 	return -1
 }
 
-// others are the views of the file except the one at skip, for the name check; entries that fail the check count too, since a
-// name is taken either way. Names are trimmed as Read trims them.
+// others are the views of the file except the one at skip and the entries of its name, which a read leaves out as its
+// duplicates, for the name check; entries that fail the check count too, since a name is taken either way. Names are trimmed
+// as Read trims them.
 func (p *viewsText) others(skip int) []model.SavedView {
 	var out []model.SavedView
 	for i, r := range p.records {
-		if i != skip {
+		if i != skip && (skip < 0 || !strings.EqualFold(strings.TrimSpace(r.Name), strings.TrimSpace(p.records[skip].Name))) {
 			out = append(out, model.SavedView{Name: strings.TrimSpace(r.Name)})
 		}
 	}
 	return out
 }
 
-// text joins lines with the file's own line break, so a write into a CRLF file stays CRLF throughout.
+// text joins lines with the file's own line break, so a write into a CRLF file stays CRLF throughout, and keeps its BOM.
 func (p *viewsText) text(lines []string) string {
 	if len(lines) == 0 {
 		return ""
@@ -261,7 +273,7 @@ func (p *viewsText) text(lines []string) string {
 	if p.crlf {
 		eol = "\r\n"
 	}
-	return strings.Join(lines, eol) + eol
+	return p.bom + strings.Join(lines, eol) + eol
 }
 
 func (p *viewsText) insert(v model.SavedView) string {

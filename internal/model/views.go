@@ -281,9 +281,6 @@ func viewDeleted(m Model, msg ViewDeleted) (Model, []Cmd) {
 		m.Notice = fmt.Sprintf("View %s not deleted: %v", msg.Sent.Name, msg.Err)
 	default:
 		m.Notice = "Deleted view " + msg.Sent.Name
-		if m.ActiveView.Name != "" && strings.EqualFold(m.ActiveView.Name, msg.Sent.Name) {
-			m.ActiveView = ActiveView{}
-		}
 	}
 	m.clampMenuCursors()
 	return m, nil

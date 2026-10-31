@@ -249,3 +249,49 @@ func TestViewsWritesKeepCRLFLineEndings(t *testing.T) {
 		t.Errorf("views %+v", got)
 	}
 }
+
+func TestViewsFileWithABOMReadsAndTakesWrites(t *testing.T) {
+	const bom = "\xef\xbb\xbf"
+	s := viewsStore(t, bom+"[[view]]\nname = \"A\"\nbase = \"today\"\n")
+	r := mustRead(t, s)
+	if len(r.Views) != 1 || r.Views[0].Name != "A" || len(r.Problems) != 0 {
+		t.Fatalf("read %+v", r)
+	}
+	if err := s.Add(r.Token, model.SavedView{Name: "B", Base: model.Collection{View: "upcoming"}}); err != nil {
+		t.Fatal(err)
+	}
+	r = mustRead(t, s)
+	if err := s.Replace(r.Token, "A", model.SavedView{Name: "A2", Base: model.Collection{View: "today"}}); err != nil {
+		t.Fatal(err)
+	}
+	r = mustRead(t, s)
+	if err := s.Delete(r.Token, "B"); err != nil {
+		t.Fatal(err)
+	}
+	if got := disk(t, s); !strings.HasPrefix(got, bom+"[[view]]\nname = \"A2\"") || strings.Count(got, bom) != 1 || strings.Contains(got, `"B"`) {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestViewsDuplicateNameIsAProblemAndListDeleteEditAgree(t *testing.T) {
+	const text = "[[view]]\nname = \"A\"\nbase = \"today\"\nstatus = \"Open\"\n\n[[view]]\nname = \"a\"\nbase = \"today\"\n"
+	s := viewsStore(t, text)
+	r := mustRead(t, s)
+	if len(r.Views) != 0 || len(r.Problems) != 2 || !strings.Contains(r.Problems[1].Error(), "[[view]] 2") {
+		t.Fatalf("read %+v", r)
+	}
+	if err := s.Replace(r.Token, "A", model.SavedView{Name: "A", Base: model.Collection{View: "today"}}); err != nil {
+		t.Fatalf("edit of the first entry: %v", err)
+	}
+	r = mustRead(t, s)
+	if len(r.Views) != 1 || r.Views[0].Base.View != "today" || len(r.Problems) != 1 {
+		t.Fatalf("read %+v", r)
+	}
+	if err := s.Delete(r.Token, "A"); err != nil {
+		t.Fatal(err)
+	}
+	r = mustRead(t, s)
+	if len(r.Views) != 1 || r.Views[0].Name != "a" || len(r.Problems) != 0 {
+		t.Errorf("after delete %+v", r)
+	}
+}
