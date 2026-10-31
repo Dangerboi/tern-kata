@@ -81,9 +81,15 @@ func runRecur(plan LaunchPlan, workspace string, send func(model.Cmd) model.Msg,
 		case target.Recurring() == nil:
 			return subcommandError{model.RecurStoppedError(target.ShortID)}
 		}
-		stopped := send(model.StopRecurrenceCmd{Workspace: workspace, UID: target.UID, ProjectID: target.ProjectID, Actor: plan.Actor, RecurrenceUID: target.Recurrence.UID}).(model.RecurrenceResultMsg)
+		stopped := send(model.StopRecurrenceCmd{Workspace: workspace, UID: target.UID, ProjectID: target.ProjectID, Actor: plan.Actor, RecurrenceUID: target.Recurrence.UID, Opened: target.Recurrence.RecurrenceTerms}).(model.RecurrenceResultMsg)
 		if stopped.Err != nil {
 			return subcommandError{stopped.Err}
+		}
+		if stopped.Changed != nil {
+			if err := say(target.WithRecurrence(*stopped.Changed).Report()); err != nil {
+				return subcommandError{err}
+			}
+			return subcommandError{model.ErrRecurrenceMovedMeanwhile}
 		}
 		return say(target.StopReport())
 	case len(plan.RecurFlags) == 0:
