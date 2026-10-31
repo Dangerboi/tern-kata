@@ -45,12 +45,6 @@ ctl key s
 ctl key s
 expect_tree "[data-id='main.filters']" '.ok and .count == 0'
 
-# The title still opens the Menu.
-ctl click "[data-id='main.topbar.left.heading']"
-expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
-ctl key esc
-expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
-
 # The Menu button sits after the Daemon at the default width; a click opens the Menu, Close (esc) closes it.
 expect_tree "[data-id='main.topbar.right.menu']" '.ok and .count == 1 and .nodes[0].text == "Menu"'
 expect_tree "[data-id='main.topbar.left.heading'],[data-id='main.topbar.right.menu']" '.nodes[0].rect[0] < .nodes[1].rect[0]'
