@@ -56,6 +56,27 @@ func TestUpgradeAddsWhatTheJobsUseToThatProjectsTableOnly(t *testing.T) {
 	}
 }
 
+func TestUpgradeIgnoresAJobKeyedToAnotherAdapter(t *testing.T) {
+	d := workertest.StartKata(t)
+	demo := d.Project(t, "demo")
+	wf := d.CreateWorkflow(t, demo, "build", workertest.Step{Key: "make", Command: "make"})
+	d.CreateJob(t, demo, workertest.Job{Name: "theirs", Workflow: wf.UID, Adapter: "herdr-kata", Secrets: map[string]string{"OTHER": "other"}})
+	d.CreateJob(t, demo, workertest.Job{Name: "ours", Prompt: "Do it.", Adapter: "tern-kata", Secrets: map[string]string{"TOKEN": "token"}})
+
+	text := "executor = \"laptop\"\n[[projects]]\nname = \"demo\"\n" + upgradeTail + "other = { env = \"TK_UPGRADE_OTHER\" }\n"
+	got, report, err := upgraded(t, d, text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Replace(text, "name = \"demo\"\n", "name = \"demo\"\nsecrets = [\"token\"]\n", 1)
+	if got != want {
+		t.Fatalf("upgraded text\n%s\nwant\n%s", got, want)
+	}
+	if len(report) != 1 || report[0] != `Project demo: added secrets = ["token"]` {
+		t.Fatalf("report %q", report)
+	}
+}
+
 func TestUpgradeLeavesAKeyTheUserWroteAndReportsTheNeed(t *testing.T) {
 	d := workertest.StartKata(t)
 	demo := d.Project(t, "demo")

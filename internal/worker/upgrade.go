@@ -27,8 +27,9 @@ type jobNeeds struct {
 }
 
 // projectNeeds reads the Project's jobs, and the workflows they run, for the secrets and command steps they use. A job
-// the worker sets aside whatever worker.toml says (a reserved variable name, an archived or missing workflow) asks for
-// nothing, since listing it would not make it run. Any read that fails fails the whole call.
+// the worker sets aside whatever worker.toml says (a reserved variable name, an archived or missing workflow, an
+// options.adapter naming another adapter) asks for nothing, since listing it would not make it run. Any read that fails
+// fails the whole call.
 func projectNeeds(ctx context.Context, k *Kata, p Project) (jobNeeds, error) {
 	needs := jobNeeds{secrets: map[string]bool{}}
 	jobs, err := k.Jobs(ctx, p.ID)
@@ -37,7 +38,7 @@ func projectNeeds(ctx context.Context, k *Kata, p Project) (jobNeeds, error) {
 	}
 	workflows := map[string]*Workflow{}
 	for _, job := range jobs {
-		if job.Archived() || job.Native() {
+		if job.Archived() || job.Native() || job.OtherAdapter() != "" {
 			continue
 		}
 		d := job.Definition
