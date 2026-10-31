@@ -7,14 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
-	"github.com/Dangerboi/tern-kata/internal/atomicfile"
+	"github.com/Dangerboi/tern-kata/internal/guardedfile"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
@@ -162,37 +161,55 @@ type agentsDoc struct {
 
 // ReadAgents reads agents.json at path; a missing file is no agents.
 func ReadAgents(path string) ([]model.AgentEntry, error) {
-	raw, err := os.ReadFile(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
+	token, err := guardedfile.Read(path)
 	if err != nil {
 		return nil, err
 	}
+	return parseAgents(path, token)
+}
+
+// parseAgents decodes what a read of agents.json saw; an empty file is no agents.
+func parseAgents(path string, token guardedfile.Token) ([]model.AgentEntry, error) {
+	if token.Text() == "" {
+		return nil, nil
+	}
 	var doc agentsDoc
-	if err := json.Unmarshal(raw, &doc); err != nil {
+	if err := json.Unmarshal([]byte(token.Text()), &doc); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	return doc.Agents, nil
 }
 
-// UpdateAgents reads agents.json again, lets change return the new list, and writes it with atomicfile. Every change goes
-// through it, so a write never starts from a list read earlier. Panes of the host share the file without a lock: two changes in
-// the same instant can lose one, and the pruning and adoption of a Pane remove entries or take them over, never add them back.
+// updateAgentsTries is how many times UpdateAgents reads and changes the file again when another writer got in between.
+const updateAgentsTries = 10
+
+// UpdateAgents reads agents.json again, lets change return the new list, and writes it only while the file is still what was
+// read. When another Pane changed the file in between, the whole change runs again on the new list, so change must tolerate
+// being called more than once and must start its own results afresh. A change that still finds the file changed after
+// updateAgentsTries reads is an error, with the other writer's file left as it is.
 func UpdateAgents(path string, change func([]model.AgentEntry) []model.AgentEntry) ([]model.AgentEntry, error) {
-	current, err := ReadAgents(path)
-	if err != nil {
-		return nil, err
+	for range updateAgentsTries {
+		token, err := guardedfile.Read(path)
+		if err != nil {
+			return nil, err
+		}
+		current, err := parseAgents(path, token)
+		if err != nil {
+			return nil, err
+		}
+		next := change(slices.Clone(current))
+		raw, err := json.MarshalIndent(agentsDoc{Agents: next}, "", "  ")
+		if err != nil {
+			return nil, err
+		}
+		switch err := guardedfile.Write(path, token, append(raw, '\n')); {
+		case err == nil:
+			return next, nil
+		case !errors.Is(err, guardedfile.ErrChanged):
+			return nil, err
+		}
 	}
-	next := change(slices.Clone(current))
-	raw, err := json.MarshalIndent(agentsDoc{Agents: next}, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-	if err := atomicfile.Write(path, append(raw, '\n'), atomicfile.Options{Mode: 0o600, DirMode: 0o700}); err != nil {
-		return nil, err
-	}
-	return next, nil
+	return nil, fmt.Errorf("%s kept changing under this change, so nothing was written: %w", path, guardedfile.ErrChanged)
 }
 
 // agentStatePaths are agents.json and the prompt folder, with the state folder's error when there is none.
@@ -535,6 +552,7 @@ func (g *Gateway) closeAgent(ctx context.Context, cmd model.CloseAgent) model.Ag
 	}
 	var gone []model.AgentEntry
 	kept, err := UpdateAgents(file, func(list []model.AgentEntry) []model.AgentEntry {
+		gone = gone[:0]
 		return slices.DeleteFunc(list, func(e model.AgentEntry) bool {
 			if e.Block != cmd.Block {
 				return false
