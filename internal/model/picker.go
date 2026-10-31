@@ -364,3 +364,14 @@ func updatePicker(m Model, msg KeyMsg) (Model, []Cmd) {
 	}
 	return m, nil
 }
+
+// MenuKeys are the key labels of the binding that opens the Menu from the list, which the top bar's Menu button shows as keycaps.
+func MenuKeys() []string {
+	var keys []string
+	for _, b := range Keymap {
+		if b.Mode == ModeList && b.Action == DrillOut && b.Help == "Menu" {
+			keys = append(keys, b.Key)
+		}
+	}
+	return keys
+}

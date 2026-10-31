@@ -92,7 +92,7 @@ ctl key enter
 expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
 
-# A click on a row switches like enter; the top bar title opens the picker; esc closes it, also after a click inside it.
+# A click on a row switches like enter; the Menu button opens the Menu; esc closes it, also after a click inside it.
 ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 ctl click "$picker_projects_entry"
@@ -100,7 +100,7 @@ expect_tree "[data-id='layer.collections.list.project.$picker_alpha_uid']" '.ok 
 ctl click "[data-id='layer.collections.list.project.$picker_alpha_uid']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: picker-alpha"'
-ctl click "$picker_heading"
+ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 ctl click "[data-id='layer.collections.input']"
 ctl key esc

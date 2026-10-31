@@ -1,26 +1,18 @@
 package view_test
 
 import (
-	"reflect"
+	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
-	"unicode/utf8"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
-	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
 const childrenID = view.DetailContentID + ".children"
-
-// A child row's id ends in its Link's id, never in the child's UID (that is the list row's suffix).
-const (
-	kidRow   = childrenID + ".3"
-	doneRow  = childrenID + ".2"
-	ghostRow = childrenID + ".1"
-)
 
 // parenting is a wide Pane on a parent "alpha" with three children: "kid" (open,
 // owned by dana, updated 38 minutes before testNow), "done" (closed, unowned, 3 hours
@@ -69,133 +61,187 @@ func TestChildrenTableSitsBetweenTheBodyAndActivity(t *testing.T) {
 	}
 }
 
-func TestChildRowsShowReferenceStatusTitleOwnerAndUpdatedInTheListsOrder(t *testing.T) {
+// tableCell is the cell of column col in the row with id, as the wire has it: a string, a span list or a text cell.
+func tableCell(t *testing.T, nodes shown, row, col string) any {
+	t.Helper()
+	for _, r := range nodes[view.ChildrenTableID].P["rows"].([]any) {
+		r := r.(map[string]any)
+		if r["id"] == row {
+			cells, _ := r["cells"].(map[string]any)
+			return cells[col]
+		}
+	}
+	t.Fatalf("no row %q in %v", row, nodes[view.ChildrenTableID].P["rows"])
+	return nil
+}
+
+// cellSpans is a cell's spans: a bare string is one unstyled span, a text cell's text is read the same way.
+func cellSpans(cell any) []map[string]any {
+	switch c := cell.(type) {
+	case string:
+		return []map[string]any{{"t": c}}
+	case map[string]any:
+		return cellSpans(c["text"])
+	case []any:
+		var spans []map[string]any
+		for _, span := range c {
+			spans = append(spans, span.(map[string]any))
+		}
+		return spans
+	}
+	return nil
+}
+
+func cellText(t *testing.T, nodes shown, row, col string) string {
+	t.Helper()
+	var b strings.Builder
+	for _, span := range cellSpans(tableCell(t, nodes, row, col)) {
+		b.WriteString(span["t"].(string))
+	}
+	return b.String()
+}
+
+func cellStyle(t *testing.T, nodes shown, row, col string) string {
+	t.Helper()
+	style := ""
+	for _, span := range cellSpans(tableCell(t, nodes, row, col)) {
+		style, _ = span["s"].(string)
+	}
+	return style
+}
+
+func TestChildrenAreANativeTableWithFiveColumnsInTheListsOrder(t *testing.T) {
 	nodes := render(t, parenting(model.TabComments))
+	if got := nodes[childrenID].C; len(got) != 2 || got[0].ID != childrenID+".heading" || got[1].ID != view.ChildrenTableID || got[1].K != "table" {
+		t.Fatalf("children hold %v, want the heading then the table", got)
+	}
+	table := nodes[view.ChildrenTableID].P
+	if table["selectable"] != true {
+		t.Errorf("selectable = %v", table["selectable"])
+	}
+	type col struct {
+		id, head string
+		priority float64
+	}
+	var cols []col
+	var titlePriority, otherPriority float64
+	for _, c := range table["cols"].([]any) {
+		c := c.(map[string]any)
+		priority := num(c["priority"])
+		head, _ := c["head"].(string)
+		cols = append(cols, col{c["id"].(string), head, priority})
+		switch c["id"] {
+		case "title":
+			titlePriority = priority
+			if num(c["grow"]) != 1 || c["truncate"] != "end" {
+				t.Errorf("title column = %v, want grow 1 and truncate end", c)
+			}
+		case "ticket", "updated":
+			if c["mono"] != true {
+				t.Errorf("%v column is not mono", c["id"])
+			}
+		}
+	}
+	for _, c := range cols {
+		if c.id != "title" {
+			otherPriority = max(otherPriority, c.priority)
+		}
+	}
+	if titlePriority <= otherPriority {
+		t.Errorf("title priority %v is not the highest (others up to %v)", titlePriority, otherPriority)
+	}
+	var ids []string
+	for _, c := range cols {
+		ids = append(ids, c.id+":"+c.head)
+	}
+	if want := []string{"ticket:ticket", "status:status", "title:title", "owner:owner", "updated:updated"}; !slices.Equal(ids, want) {
+		t.Errorf("columns = %v, want %v", ids, want)
+	}
 	var rows []string
-	for _, c := range nodes[childrenID].C {
-		if c.ID != childrenID+".heading" && c.ID != childrenID+".header" {
-			rows = append(rows, c.ID)
-		}
+	for _, r := range table["rows"].([]any) {
+		rows = append(rows, r.(map[string]any)["id"].(string))
 	}
-	if want := []string{kidRow, doneRow, ghostRow}; !slices.Equal(rows, want) {
-		t.Fatalf("rows = %v, want %v", rows, want)
+	if want := []string{"kid", "done", "ghost"}; !slices.Equal(rows, want) {
+		t.Errorf("row ids = %v, want the children's UIDs %v", rows, want)
 	}
+}
+
+func TestChildCellsShowReferenceStatusTitleOwnerAndUpdated(t *testing.T) {
+	nodes := render(t, parenting(model.TabComments))
 	for row, want := range map[string][5]string{
-		kidRow:  {"#kid\u00a0\u00a0", "open\u00a0\u00a0", "Open kid", "dana until 13:00", "38m ago"},
-		doneRow: {"#done\u00a0", "closed", "Closed kid", "\u00a0", "3h ago\u00a0"},
+		"kid":  {"#kid", "open", "Open kid", "dana until 13:00", "38m ago"},
+		"done": {"#done", "closed", "Closed kid", "", "3h ago"},
 	} {
-		for i, cell := range []string{"jump", "status", "title", "owner", "updated"} {
-			if got := text(nodes[row+"."+cell]); got != want[i] {
-				t.Errorf("%s %s = %q, want %q", row, cell, got, want[i])
+		for i, col := range []string{"ticket", "status", "title", "owner", "updated"} {
+			if got := cellText(t, nodes, row, col); got != want[i] {
+				t.Errorf("%s %s = %q, want %q", row, col, got, want[i])
 			}
 		}
 	}
 }
 
-func TestChildCellsRunTicketStatusTitleOwnerUpdatedUnderALabelledHeader(t *testing.T) {
+// The columns are Tern's to size, so no cell is padded or boxed to a width counted in characters.
+func TestChildCellsAreNeitherPaddedNorBoxed(t *testing.T) {
 	nodes := render(t, parenting(model.TabComments))
-	order := func(row string) (ids, labels []string) {
-		for _, c := range nodes[row].C {
-			ids = append(ids, strings.TrimPrefix(c.ID, row+"."))
-			labels = append(labels, strings.TrimRight(text(nodes[c.ID]), "\u00a0"))
-		}
-		return ids, labels
-	}
-	ids, labels := order(childrenID + ".header")
-	if want := []string{"jump", "status", "title", "owner", "updated"}; !slices.Equal(ids, want) {
-		t.Errorf("header cells = %v, want %v", ids, want)
-	}
-	if want := []string{"ticket", "status", "title", "owner", "updated"}; !slices.Equal(labels, want) {
-		t.Errorf("header labels = %v, want %v", labels, want)
-	}
-	if ids, _ := order(kidRow); !slices.Equal(ids, []string{"jump", "status", "title", "owner", "updated"}) {
-		t.Errorf("row cells = %v", ids)
-	}
-	for _, cell := range []string{"jump", "status", "updated"} {
-		h, r := text(nodes[childrenID+".header."+cell]), text(nodes[kidRow+"."+cell])
-		if utf8.RuneCountInString(h) != utf8.RuneCountInString(r) {
-			t.Errorf("%s header %q and row %q differ in width", cell, h, r)
-		}
-	}
-}
-
-// The shading is the Issue list's: the same role on every other drawn row, the first unshaded; the header is not shaded.
-func TestChildRowsAlternateTheListsShadingBelowAnUnshadedHeader(t *testing.T) {
-	nodes := render(t, parenting(model.TabComments))
-	if role := nodes[childrenID+".header"].P["role"]; role != nil {
-		t.Errorf("header role = %v, want none", role)
-	}
-	for row, want := range map[string]any{kidRow: nil, doneRow: view.StripeRole, ghostRow: nil} {
-		if got := nodes[row].P["role"]; got != want {
-			t.Errorf("%s role = %v, want %v", row, got, want)
-		}
-	}
-}
-
-func TestChildCellsArePaddedToTheWidestRowAndNeverWrap(t *testing.T) {
-	nodes := render(t, parenting(model.TabComments))
-	for _, cell := range []string{"jump", "status", "owner", "updated"} {
-		if cell != "owner" { // the owner is not padded: its box gives it the width
-			a, b := text(nodes[kidRow+"."+cell]), text(nodes[doneRow+"."+cell])
-			if utf8.RuneCountInString(a) != utf8.RuneCountInString(b) {
-				t.Errorf("%s widths differ: %q vs %q", cell, a, b)
-			}
-		}
-		if nodes[kidRow+"."+cell].P["wrap"] != "none" {
-			t.Errorf("%s wraps: %v", cell, nodes[kidRow+"."+cell].P["wrap"])
-		}
-	}
-}
-
-// Tern draws a glyph the font lacks from a fallback font whose advance is not the character cell's, so the owner of a row
-// with CJK in it would start off the "owner" header if its width came from padding; every cell of a column has the
-// column's width as its least width instead.
-func TestChildCellsOfAColumnShareTheColumnsBox(t *testing.T) {
-	nodes := render(t, parenting(model.TabComments))
-	for cell, width := range map[string]string{"jump": "6ch", "status": "6ch", "owner": "16ch", "updated": "7ch"} {
-		want := map[string]any{"w": width}
-		for _, row := range []string{childrenID + ".header", kidRow, doneRow} {
-			if got := nodes[row+"."+cell].P["min"]; !reflect.DeepEqual(got, want) {
-				t.Errorf("%s %s min = %v, want %v", row, cell, got, want)
+	for _, row := range []string{"kid", "done", "ghost"} {
+		for _, col := range []string{"ticket", "status", "title", "owner", "updated"} {
+			if got := cellText(t, nodes, row, col); strings.Contains(got, "\u00a0") {
+				t.Errorf("%s %s = %q holds a no-break space", row, col, got)
 			}
 		}
 	}
+	if ids := nodes.under(childrenID); len(ids) != 3 { // the column, its heading and the table
+		t.Errorf("children draw %v, want no header row or row boxes", ids)
+	}
 }
 
-func TestEveryChildCellJumpsToTheChild(t *testing.T) {
+func TestStatusCellHasADotInTheStatusTone(t *testing.T) {
 	nodes := render(t, parenting(model.TabComments))
-	for _, cell := range []string{"jump", "status", "title", "owner", "updated"} {
-		n := nodes[kidRow+"."+cell]
-		if click := n.P["actions"].(map[string]any)["click"]; click != view.JumpClick("kid") {
-			t.Errorf("%s click = %v", cell, click)
+	for row, want := range map[string]string{"kid": "accent", "done": "muted"} {
+		cell, ok := tableCell(t, nodes, row, "status").(map[string]any)
+		if !ok || cell["dot"] != want {
+			t.Errorf("%s status cell = %v, want a text cell with a %s dot", row, tableCell(t, nodes, row, "status"), want)
 		}
 	}
-	assertReference(t, nodes, kidRow+".jump", "#kid", "kid")
+}
+
+func TestSelectingAChildRowJumpsToTheChild(t *testing.T) {
+	for _, uid := range []string{"kid", "done", "ghost"} {
+		if got, want := view.DecodeSelect(view.ChildrenTableID, uid), (model.JumpIssueMsg{UID: uid}); got != want {
+			t.Errorf("select %s = %v, want %v", uid, got, want)
+		}
+	}
+	if got := view.DecodeAction("any", "jump", "kid"); got != (model.JumpIssueMsg{UID: "kid"}) {
+		t.Errorf("jump action = %v", got)
+	}
 }
 
 func TestClosedChildIsMutedAndOpenChildIsNot(t *testing.T) {
 	nodes := render(t, parenting(model.TabComments))
 	for _, tt := range []struct {
-		row, cell, want string
+		row, col, want string
 	}{
-		{doneRow, "status", "muted"}, {doneRow, "title", "muted"}, {doneRow, "owner", "muted"}, {doneRow, "updated", "muted"},
-		{kidRow, "status", "accent"}, {kidRow, "title", ""}, {kidRow, "owner", "muted"}, {kidRow, "updated", "muted"},
+		{"done", "status", "muted"}, {"done", "title", "muted"}, {"done", "owner", ""}, {"done", "updated", "muted"},
+		{"kid", "status", ""}, {"kid", "title", ""}, {"kid", "owner", "muted"}, {"kid", "updated", "muted"},
 	} {
-		got := ""
-		for _, style := range spanStyles(t, nodes[tt.row+"."+tt.cell].P) {
-			got = style
+		if tt.row == "done" && tt.col == "owner" {
+			continue // an empty owner has no cell
 		}
-		if got != tt.want {
-			t.Errorf("%s %s style = %q, want %q", tt.row, tt.cell, got, tt.want)
+		if got := cellStyle(t, nodes, tt.row, tt.col); got != tt.want {
+			t.Errorf("%s %s style = %q, want %q", tt.row, tt.col, got, tt.want)
 		}
 	}
 }
 
 func TestUnloadedChildShowsItsReferenceOnly(t *testing.T) {
 	nodes := render(t, parenting(model.TabComments))
-	assertReference(t, nodes, ghostRow+".jump", "#ghost", "ghost")
-	if ids := nodes.under(ghostRow); len(ids) != 2 { // the row and its reference
-		t.Errorf("unloaded child shows %v", ids)
+	if got := cellText(t, nodes, "ghost", "ticket"); got != "#ghost" {
+		t.Errorf("ticket = %q", got)
+	}
+	for _, r := range nodes[view.ChildrenTableID].P["rows"].([]any) {
+		if r := r.(map[string]any); r["id"] == "ghost" && len(r["cells"].(map[string]any)) != 1 {
+			t.Errorf("unloaded child cells = %v, want the ticket only", r["cells"])
+		}
 	}
 }
 
@@ -209,25 +255,21 @@ func TestNoChildrenTableNorCountsLineWithoutChildren(t *testing.T) {
 }
 
 func TestChildRowUnderTheCursorIsMarkedAndTheActivityRowIsNotWhileItIsOnAChild(t *testing.T) {
-	mark := func(n tern.WireNode) any { return n.P["mark"] }
+	selected := func(nodes shown) any { return nodes[view.ChildrenTableID].P["selected"] }
 	m := apply(parenting(model.TabComments), model.KeyMsg{Chord: "k"}, model.KeyMsg{Chord: "k"}) // from the comment up to the 2nd child; focus is the detail
 	nodes := render(t, m)
-	if mark(nodes[doneRow]) != "pick" || mark(nodes[kidRow]) != nil || mark(nodes[view.DetailActivityID+".c1"]) != nil {
-		t.Errorf("marks: kid=%v done=%v comment=%v", mark(nodes[kidRow]), mark(nodes[doneRow]), mark(nodes[view.DetailActivityID+".c1"]))
+	if selected(nodes) != "done" || nodes[view.DetailActivityID+".c1"].P["mark"] != nil {
+		t.Errorf("selected = %v, comment mark = %v", selected(nodes), nodes[view.DetailActivityID+".c1"].P["mark"])
 	}
 	m = apply(m, model.KeyMsg{Chord: "j"}, model.KeyMsg{Chord: "j"}) // down past the 3 children: the comment
 	nodes = render(t, m)
-	if mark(nodes[view.DetailActivityID+".c1"]) != "pick" || strings.Contains(strings.Join(markedIDs(nodes), ","), "children") {
-		t.Errorf("marked rows = %v", markedIDs(nodes))
+	if selected(nodes) != nil || nodes[view.DetailActivityID+".c1"].P["mark"] != "pick" {
+		t.Errorf("selected = %v, comment mark = %v", selected(nodes), nodes[view.DetailActivityID+".c1"].P["mark"])
 	}
 }
 
-func markedIDs(nodes shown) []string {
-	var ids []string
-	for id, n := range nodes {
-		if n.P["mark"] == "pick" {
-			ids = append(ids, id)
-		}
-	}
-	return ids
+// num reads a numeric prop whatever Go type the wire holds it in.
+func num(v any) float64 {
+	f, _ := strconv.ParseFloat(fmt.Sprint(v), 64)
+	return f
 }

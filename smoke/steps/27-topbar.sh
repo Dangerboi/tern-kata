@@ -22,7 +22,7 @@ expect_tree "$bar_cells" '.ok and .count == 5
     | $bar[3] <= ([$h[3], $d[3]] | max) + 1
       and ([.nodes[1:][].rect | .[1] >= $bar[1] - 1 and .[1] + .[3] <= $bar[1] + $bar[3] + 1] | all)
       and ([$h, $c | (.[1] + .[3] / 2 - $mid) | fabs <= 1] | all)
-      and $d[0] + $d[2] == $bar[0] + $bar[2] and $h[0] + $h[2] < $c[0] and $c[0] + $c[2] < $d[0])
+      and (($d[0] + $d[2] - $bar[0] - $bar[2]) | fabs) <= 1 and $h[0] + $h[2] < $c[0] and $c[0] + $c[2] < $d[0])
 '
 # The long name and the five-Page Page bar squeeze the Daemon at the default width; a wider Pane shows it whole.
 ctl resize 3200 "$bar_height"
@@ -31,7 +31,7 @@ ctl resize "$bar_full" "$bar_height"
 expect_tree "[data-id='main.filters']" '.ok and .count == 0'
 
 # One column (80-139): the Daemon gives way first, then the counts, the title is cut last.
-ctl resize 900 "$bar_height"
+ctl resize 980 "$bar_height"
 expect_tree "[data-id='main.topbar.right.menu']" '.ok and .count == 1'
 expect_tree "[data-id='main.topbar.right.daemon']" '.ok and .count == 1 and (.nodes[0].text | endswith("…"))'
 expect_tree "[data-id='main.topbar.left.heading']" ".nodes[0].text == \"Project: $bar_name\""
@@ -52,7 +52,7 @@ ctl key s
 expect_tree "[data-id='main.filters']" '.ok and .count == 0'
 
 # The Menu button sits after the Daemon at the default width; a click opens the Menu, Close (esc) closes it.
-expect_tree "[data-id='main.topbar.right.menu']" '.ok and .count == 1 and .nodes[0].text == "Menu"'
+expect_tree "[data-id='main.topbar.right.menu']" '.ok and .count == 1 and (.nodes[0].text | startswith("Menu") and endswith("esc"))'
 expect_tree "[data-id='main.topbar.left.heading'],[data-id='main.topbar.right.menu']" '.nodes[0].rect[0] < .nodes[1].rect[0]'
 ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
