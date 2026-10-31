@@ -60,7 +60,7 @@ func revokeLayer(m model.Model) tern.Element {
 	if r.Saving {
 		children = append(children, toneText("pending", ui.TonePending, "Revoking token…"))
 	} else {
-		children = append(children, buttonRow(cardButton("revoke", model.ModeRevokeToken, model.RevokeConfirm, "Revoke", false), cardButton("keep", model.ModeRevokeToken, model.RevokeCancel, "Keep", true)))
+		children = append(children, buttonRow(destructive(cardButton("revoke", model.ModeRevokeToken, model.RevokeConfirm, "Revoke", false)), cardButton("keep", model.ModeRevokeToken, model.RevokeCancel, "Keep", true)))
 	}
 	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardRevoke)}, Head: ui.T("Revoke token"), Modal: true, Size: ui.SizeLG, Children: children})
 }

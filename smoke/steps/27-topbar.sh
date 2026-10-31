@@ -31,7 +31,7 @@ ctl resize "$bar_full" "$bar_height"
 expect_tree "[data-id='main.filters']" '.ok and .count == 0'
 
 # One column (80-139): the Daemon gives way first, then the counts, the title is cut last.
-ctl resize 900 "$bar_height"
+ctl resize 980 "$bar_height"
 expect_tree "[data-id='main.topbar.right.menu']" '.ok and .count == 1'
 expect_tree "[data-id='main.topbar.right.daemon']" '.ok and .count == 1 and (.nodes[0].text | endswith("…"))'
 expect_tree "[data-id='main.topbar.left.heading']" ".nodes[0].text == \"Project: $bar_name\""
@@ -52,7 +52,7 @@ ctl key s
 expect_tree "[data-id='main.filters']" '.ok and .count == 0'
 
 # The Menu button sits after the Daemon at the default width; a click opens the Menu, Close (esc) closes it.
-expect_tree "[data-id='main.topbar.right.menu']" '.ok and .count == 1 and .nodes[0].text == "Menu"'
+expect_tree "[data-id='main.topbar.right.menu']" '.ok and .count == 1 and (.nodes[0].text | startswith("Menu") and endswith("esc"))'
 expect_tree "[data-id='main.topbar.left.heading'],[data-id='main.topbar.right.menu']" '.nodes[0].rect[0] < .nodes[1].rect[0]'
 ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'

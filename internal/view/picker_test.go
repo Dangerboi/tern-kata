@@ -151,7 +151,7 @@ func TestRenderPickerOnlyWhenOpen(t *testing.T) {
 func TestRenderMenuTextsAndButtons(t *testing.T) {
 	m := menuOpened(pickerLoaded(true))
 	nodes := pickerNodes(t, m)
-	if got := nodes["main.topbar.right.menu"]; text(nodes["main.topbar.right.menu.label"]) != "Menu" || got.P["actions"].(map[string]any)["click"] != view.MenuClick {
+	if got := nodes["main.topbar.right.menu"]; text(got) != "Menu" || got.P["actions"].(map[string]any)["click"] != view.MenuClick {
 		t.Fatalf("top bar button = %v", got)
 	}
 	if got := nodes["layer.collections.input"].P["placeholder"]; got != "Filter Menu" {
