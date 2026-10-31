@@ -466,7 +466,7 @@ func (m Model) settleJobs() (Model, []Cmd) {
 // jobsLoaded applies the answer to the latest read. A Project that is archived keeps the jobs already held: they are what is
 // paused.
 func jobsLoaded(m Model, msg JobsLoaded) Model {
-	if current, _ := m.Jobs.reads.Answer(msg.Request); !current {
+	if !m.Jobs.reads.IsCurrent(msg.Request) {
 		return m
 	}
 	m.Jobs.Loading = false

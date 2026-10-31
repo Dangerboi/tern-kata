@@ -117,7 +117,7 @@ func benchPane(b testing.TB, n int, page string) driver.State {
 	s = benchFeed(b, s, model.DetailLoaded{UID: issues[0].UID, Selected: benchDetail(issues[0], links)})
 	switch page {
 	case "board":
-		s = benchFeed(b, s, key("b"), model.LanesLoaded{ProjectUID: "p"})
+		s = benchFeed(b, s, key("b"), newestLanes{ProjectUID: "p"})
 	case "detail":
 		s = benchFeed(b, s, key("tab"))
 	}

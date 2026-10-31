@@ -112,7 +112,7 @@ func (m Model) settleWorkflowReading() (Model, []Cmd) {
 
 // workflowTextRead keeps the answer to the latest ask for the card that is open.
 func workflowTextRead(m Model, msg WorkflowTextRead) Model {
-	if c := &m.Workflows.Card; c.Open && isNewestRead(&m.Workflows.checkReads, msg.Request) {
+	if c := &m.Workflows.Card; c.Open && m.Workflows.checkReads.IsCurrent(msg.Request) {
 		reading := msg.Reading
 		c.Reading = &reading
 	}
