@@ -165,5 +165,5 @@ func federationAdoptLayer(m model.Model) tern.Element {
 	children = append(children, buttonRow(
 		cardButton("adopt", model.ModeFederationAdopt, model.FederationAdoptConfirm, "Adopt", true),
 		cardButton("back", model.ModeFederationAdopt, model.FederationAdoptCancel, "Back", false)))
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardFederationAdopt)}, Head: ui.T("Confirm Adoption"), Modal: true, Size: ui.SizeMD, Children: children})
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardFederationAdopt)}, Head: ui.T("Confirm Adoption"), Modal: true, Size: ui.SizeMD}, children))
 }

@@ -141,12 +141,36 @@ func menuButton() ui.Button {
 	return ui.Button{Common: ui.Common{Key: "menu", Shrink: new(float64), Actions: &ui.Actions{Click: MenuClick}}, Text: "Menu", Keys: model.MenuKeys()}
 }
 
-// buttonRow is the row of buttons that ends a card.
+// footKey is the key of a card's button row while the card is built. Tern keys the footer slot itself, so the buttons' ids are
+// the overlay's id, ".foot" and the button's key.
+const footKey = "foot"
+
+// buttonRow is the row of buttons that ends a card. It is placed anywhere among a card's children; popup moves it to the footer.
 func buttonRow(buttons ...tern.Element) tern.Element {
-	return ui.Row{Common: ui.Common{Key: "actions"}, Gap: ui.GapMD, Wrap: true, Children: buttons}
+	return ui.Row{Common: ui.Common{Key: footKey}, Gap: ui.GapMD, Justify: ui.JustifyEnd, Wrap: true, Children: buttons}
+}
+
+// popup is overlay with children as its body and the card's buttonRow, taken out of them, as its footer bar, which stays in view
+// while the body scrolls.
+func popup(overlay ui.Overlay, children []tern.Element) ui.Overlay {
+	body := make([]tern.Element, 0, len(children))
+	for _, child := range children {
+		if row, ok := child.(ui.Row); ok && row.Key == footKey {
+			overlay.Foot = row
+			continue
+		}
+		body = append(body, child)
+	}
+	overlay.Children = body
+	return overlay
 }
 
 // discardButtons answer the discard prompt of a Draft.
 func discardButtons() tern.Element {
 	return buttonRow(destructive(cardButton("discard", model.ModeDiscard, model.DiscardDraft, "Discard", false)), cardButton("keep", model.ModeDiscard, model.KeepDraft, "Keep editing", true))
+}
+
+// refMeta is a head's muted reference to an Issue or Project, in the mono face.
+func refMeta(ref string) ui.Rich {
+	return ui.Spans(ui.Span{T: ref, S: "mono"})
 }

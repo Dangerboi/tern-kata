@@ -34,5 +34,5 @@ func datesLayer(m model.Model) tern.Element {
 	} else {
 		children = append(children, buttonRow(cardButton("save", model.ModeDatesForm, model.DatesSubmit, "Save dates", true), cardButton("cancel", model.ModeDatesForm, model.DatesCancel, "Cancel", false)))
 	}
-	return withDatePicker(m, model.CardDates, ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardDates)}, Head: ui.T("Dates"), Modal: true, Size: ui.SizeLG, Children: children}))
+	return withDatePicker(m, model.CardDates, ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardDates)}, Head: ui.T("Dates"), Icon: ui.IconClock, Modal: true, Size: ui.SizeLG}, children)))
 }

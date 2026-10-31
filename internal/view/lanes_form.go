@@ -61,8 +61,8 @@ func lanesLayer(m model.Model) tern.Element {
 		buttons = append(buttons, cardButton("stop", model.ModeLanesForm, model.LanesStopSharing, "Stop sharing", false))
 	}
 	buttons = append(buttons, cardButton("cancel", model.ModeLanesForm, model.LanesCancel, "Cancel", false))
-	children = append(children, gap("gap-actions"), buttonRow(buttons...))
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardLanes)}, Head: ui.T("Lanes"), Modal: true, Size: ui.SizeLG, Children: children})
+	children = append(children, buttonRow(buttons...))
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardLanes)}, Head: ui.T("Lanes"), Icon: ui.IconKanban, Modal: true, Size: ui.SizeLG}, children))
 }
 
 func fieldTone(form model.LanesFormState, name model.Field) ui.Tone {

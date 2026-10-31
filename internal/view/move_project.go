@@ -1,8 +1,6 @@
 package view
 
 import (
-	"fmt"
-
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
@@ -19,14 +17,13 @@ func moveLayer(m model.Model) tern.Element {
 	if !f.Open {
 		return nil
 	}
-	head := ui.T(fmt.Sprintf("Move #%s to another Project", f.ShortID))
 	var children []tern.Element
 	if m.MoveCardMode() == model.ModeMoveProject {
 		children = moveChoosing(m)
 	} else {
 		children = moveConfirming(m)
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardMove)}, Head: head, Modal: true, Size: ui.SizeMD, Children: children})
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardMove)}, Head: ui.T("Move to another Project"), Meta: refMeta("#" + f.ShortID), Icon: ui.IconFolderGo, Modal: true, Size: ui.SizeMD}, children))
 }
 
 // moveChoosing is the card while it lists Projects: the filter, the list and kata's refusal of the last preview.

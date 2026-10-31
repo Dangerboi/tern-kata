@@ -37,5 +37,5 @@ func deleteLayer(m model.Model) tern.Element {
 	} else {
 		children = append(children, buttonRow(destructive(cardButton("delete", model.ModeDeleteForm, model.DeleteSubmit, "Delete", false)), cardButton("cancel", model.ModeDeleteForm, model.DeleteCancel, "Cancel", false)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardDelete)}, Head: ui.T("Delete #" + form.ShortID), Modal: true, Size: ui.SizeLG, Children: children})
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardDelete)}, Head: ui.T("Delete"), Meta: refMeta("#" + form.ShortID), Icon: ui.IconTrash, Modal: true, Size: ui.SizeLG}, children))
 }

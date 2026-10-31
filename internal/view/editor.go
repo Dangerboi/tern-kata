@@ -61,7 +61,7 @@ func editorLayer(m model.Model) tern.Element {
 		)}, toneText("choice", ui.ToneWarning, "o overwrites against the new revision; d discards only your Draft."),
 			buttonRow(cardButton("overwrite", model.ModeConflict, model.OverwriteDraft, "Overwrite", true), cardButton("discard", model.ModeConflict, model.DiscardDraft, "Discard Draft", false)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardDraft)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardDraft)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Icon: ui.IconPen}, children))
 }
 
 // replyTitle names the kind of a Reply Draft and whose comment it answers, e.g. "Confirm dana's comment".

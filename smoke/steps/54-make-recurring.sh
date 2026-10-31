@@ -30,7 +30,7 @@ expect_tree "[data-id='layer.recurrence.end']" '.ok and .count == 1 and (.nodes[
 ctl click "[data-id='layer.recurrence.ends.control'] .sf-select-btn"
 ctl click "[data-id='layer.recurrence.ends.control'] .sf-select-opt:nth-child(1)"
 expect_tree "[data-id='layer.recurrence.end']" '.ok and .count == 0'
-ctl click "[data-id='layer.recurrence.actions.save']"
+ctl click "[data-id='layer.recurrence.foot.save']"
 expect_tree "[data-id='layer.recurrence']" '.ok and .count == 0'
 expect_tree "[data-id='main.columns.list.issues.$mr_uid']" '.ok and .count == 1 and (.nodes[0].text | contains("↻"))'
 

@@ -59,8 +59,8 @@ func workerLayer(m model.Model) tern.Element {
 	if f.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, f.Err.Error()))
 	}
-	children = append(children, gap("gap-actions"), workerActions(m))
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardWorker)}, Head: ui.T("Worker"), Modal: true, Size: ui.SizeLG, Children: children})
+	children = append(children, workerActions(m))
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardWorker)}, Head: ui.T("Worker"), Icon: ui.IconCpu, Modal: true, Size: ui.SizeLG}, children))
 }
 
 // workerFacts is the card's fact grid: the Project and its checkout, worker.toml, the worker and its supervision, each value

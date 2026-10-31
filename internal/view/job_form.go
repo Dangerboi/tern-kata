@@ -21,7 +21,7 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 		title, save, pending = "Edit job", "Save job", "Saving the job…"
 	}
 	if f.Conflict != nil {
-		return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardJob)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: jobConflict(m)})
+		return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardJob)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Icon: ui.IconTimer}, jobConflict(m)))
 	}
 	children := make([]tern.Element, 0, len(model.JobFields)+6)
 	if p := f.Opened.Parent; f.Change && p != nil {
@@ -82,7 +82,7 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 	} else {
 		children = append(children, buttonRow(cardButton("save", model.ModeJobForm, model.JobSave, save, true), cardButton("cancel", model.ModeJobForm, model.JobCancel, "Cancel", false)))
 	}
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardJob)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children})
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardJob)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Icon: ui.IconTimer}, children))
 }
 
 // jobPreview is the schedule under the trigger: in words and the next runs, or what keeps it from being told yet.

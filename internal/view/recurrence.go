@@ -71,9 +71,9 @@ func recurrenceLayer(m model.Model) tern.Element {
 	}
 	children := make([]tern.Element, 0, len(model.RecurrenceFields)+4)
 	if f.Refused {
-		return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardRecurrence)}, Modal: true, Size: ui.SizeLG, Head: ui.T("Recurrence"), Children: ui.Nodes(
+		return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardRecurrence)}, Modal: true, Size: ui.SizeLG, Head: ui.T("Recurrence"), Icon: ui.IconRepeat}, ui.Nodes(
 			toneText("error", ui.ToneError, f.Err.Error()),
-			buttonRow(cardButton("cancel", model.ModeRecurrenceForm, model.RecurrenceCancel, "Close", true)))})
+			buttonRow(cardButton("cancel", model.ModeRecurrenceForm, model.RecurrenceCancel, "Close", true)))))
 	}
 	if f.Raw != "" {
 		children = append(children, toneText("raw", ui.ToneWarning, "Current rule, set elsewhere: "+f.Raw+"\nSaving the form replaces it."))
@@ -129,5 +129,5 @@ func recurrenceLayer(m model.Model) tern.Element {
 	default:
 		children = append(children, buttonRow(cardButton("save", model.ModeRecurrenceForm, model.RecurrenceSave, save, true), cardButton("cancel", model.ModeRecurrenceForm, model.RecurrenceCancel, "Cancel", false)))
 	}
-	return withDatePicker(m, model.CardRecurrence, ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardRecurrence)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Children: children}))
+	return withDatePicker(m, model.CardRecurrence, ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardRecurrence)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Icon: ui.IconRepeat}, children)))
 }

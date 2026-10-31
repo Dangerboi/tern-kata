@@ -37,7 +37,7 @@ expect_tree "[data-id='main.filters']" '.nodes[0].text | contains("status=") | n
 expect_tree "[data-id$='.$search_alpha']" '.count == 1'
 
 ctl key f
-expect_tree "[data-id='layer.filters']" '.count == 1 and (.nodes[0].text | contains("Filter smoke"))'
+expect_tree "[data-id='layer.filters']" '.count == 1 and (.nodes[0].text | contains("Filter") and contains("smoke"))'
 ctl key Right
 ctl click "[data-id='layer.filters.status.control'] .sf-tab:nth-child(2)"
 ctl key tab
@@ -46,7 +46,7 @@ ctl key tab
 for letter in f i l t e r - l a b e l; do ctl key "$letter"; done
 ctl key tab
 ctl key Right
-ctl click "[data-id='layer.filters.actions.apply']"
+ctl click "[data-id='layer.filters.foot.apply']"
 expect_tree "[data-id='layer.filters']" '.count == 0'
 expect_tree "[data-id='main.filters']" '.nodes[0].text | contains("project=smoke") and contains("status=open") and contains("owner=filter-owner") and contains("label=filter-label") and contains("relationship=parent")'
 expect_tree "[data-id$='.$search_gamma']" '.count == 1'
@@ -63,8 +63,8 @@ expect_tree "[data-id='main.topbar.left.heading']" '.nodes[0].text == "Project: 
 expect_tree "[data-id='main.filters']" '.ok and .count == 0'
 expect_tree "[data-id$='.$hierarchy_parent']" '.count == 1'
 ctl key f
-expect_tree "[data-id='layer.filters']" '.count == 1 and (.nodes[0].text | contains("Filter smoke"))'
-ctl click "[data-id='layer.filters.actions.cancel']"
+expect_tree "[data-id='layer.filters']" '.count == 1 and (.nodes[0].text | contains("Filter") and contains("smoke"))'
+ctl click "[data-id='layer.filters.foot.cancel']"
 expect_tree "[data-id='layer.filters']" '.count == 0'
 
 # Keep later slices within the native list viewport, without retaining search fixtures.

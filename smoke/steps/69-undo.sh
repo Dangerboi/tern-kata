@@ -29,8 +29,8 @@ expect_tree "[data-id='layer.fields']" '.ok and .count == 0'
 kata --workspace "$ud_dir" show "$ud_uid" --json >"$tmp/undo-linked.json"
 jq -e '(.links | length) == 1 and (.labels | map(.label) | index("undo-me"))' "$tmp/undo-linked.json" >/dev/null
 ctl key x
-expect_tree "[data-id='layer.close.actions.quick']" '.ok and .count == 1'
-ctl click "[data-id='layer.close.actions.quick']"
+expect_tree "[data-id='layer.close.foot.quick']" '.ok and .count == 1'
+ctl click "[data-id='layer.close.foot.quick']"
 expect_tree "[data-id='layer.close']" '.ok and .count == 0'
 kata --workspace "$ud_dir" show "$ud_uid" --json | jq -e '.issue.status == "closed"' >/dev/null
 

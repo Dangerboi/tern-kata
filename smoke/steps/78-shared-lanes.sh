@@ -34,7 +34,7 @@ curl -fsS --unix-socket "$sl_socket" -X POST -H 'Content-Type: application/json'
   -d '{"actor":"rival","patch":{"tern.lanes":{"labels":["triage","from-elsewhere"]}}}' >/dev/null
 expect_tree "$(sl_lane 2)" '.ok and .nodes[0].text == "From elsewhere"'
 ctl key B
-expect_tree "[data-id='layer.lanes.actions.stop']" '.count == 1'
+expect_tree "[data-id='layer.lanes.foot.stop']" '.count == 1'
 ctl key Ctrl+x
 expect_tree "[data-id='layer.lanes']" '.count == 0'
 expect_tree "$sl_source" '.count == 1 and (.nodes[0].text | contains("default"))'

@@ -52,7 +52,7 @@ func popups() []popup {
 		{"Dates", keyOpen("d"), func(dst *model.Model, src model.Model) { dst.DatesForm = src.DatesForm },
 			model.ModeDatesForm, "Dates", func(m model.Model) string { return m.DatesForm.Text.Scheduled }},
 		{"Move", keyOpen("shift+m"), func(dst *model.Model, src model.Model) { dst.MoveProject = src.MoveProject },
-			model.ModeMoveProject, "Move #aaaa to another Project", func(m model.Model) string { return m.MoveProject.Filter }},
+			model.ModeMoveProject, "Move to another Project #aaaa", func(m model.Model) string { return m.MoveProject.Filter }},
 		{"Agent", func(t *testing.T, s driver.State) model.Model {
 			s.Model.AgentMapping = []model.AgentEntry{{IssueUID: "alpha", IssueRef: "work#alpha", Block: "31"}}
 			m := keyOpen("w")(t, s)
@@ -61,7 +61,7 @@ func popups() []popup {
 		}, func(dst *model.Model, src model.Model) {
 			dst.AgentCard, dst.AgentMapping = src.AgentCard, src.AgentMapping
 		},
-			model.ModeAgentCard, "Agents on work#alpha", func(model.Model) string { return "" }},
+			model.ModeAgentCard, "Agents work#alpha", func(model.Model) string { return "" }},
 		{"Delete", keyOpen("shift+x"), func(dst *model.Model, src model.Model) { dst.DeleteForm = src.DeleteForm },
 			model.ModeDeleteForm, "Delete #aaaa", func(m model.Model) string { return m.DeleteForm.ID }},
 		{"Federation adoption", func(t *testing.T, _ driver.State) model.Model { return confirming(t).Model },

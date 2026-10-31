@@ -61,6 +61,6 @@ func pickerLayer(m model.Model) tern.Element {
 		ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "list"}, Selected: selected, Empty: ui.T(empty), Max: ui.MaxLines(12), Children: items},
 	}
 	children = append(children, notes...)
-	children = append(children, cardButton("close", model.ModePicker, model.ClosePicker, closeLabel, false))
-	return ui.Nodes(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardPicker)}, Head: ui.T("Menu"), Modal: true, Size: ui.SizeMD, Children: children})
+	children = append(children, buttonRow(cardButton("close", model.ModePicker, model.ClosePicker, closeLabel, false)))
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardPicker)}, Head: ui.T("Menu"), Modal: true, Size: ui.SizeMD}, children))
 }

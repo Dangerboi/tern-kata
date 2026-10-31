@@ -203,7 +203,7 @@ func TestRenderSidebarListsProjectsOnlyAtItsProjectsLevel(t *testing.T) {
 
 func TestMenuButtonSaysBackOnTheProjectsLevel(t *testing.T) {
 	m := menuOpened(pickerLoaded(true))
-	if got := text(pickerNodes(t, m)["layer.collections.close"]); !strings.HasPrefix(got, "Close") {
+	if got := text(pickerNodes(t, m)["layer.collections.foot.close"]); !strings.HasPrefix(got, "Close") {
 		t.Fatalf("top level button = %q, want it to say Close", got)
 	}
 	views, _ := model.Update(m, model.KeyMsg{Chord: "down"})
@@ -211,7 +211,7 @@ func TestMenuButtonSaysBackOnTheProjectsLevel(t *testing.T) {
 	if views.Picker.Level != model.MenuViews {
 		t.Fatal("fixture: not on the Views level")
 	}
-	if got := text(pickerNodes(t, views)["layer.collections.close"]); !strings.HasPrefix(got, "Back") {
+	if got := text(pickerNodes(t, views)["layer.collections.foot.close"]); !strings.HasPrefix(got, "Back") {
 		t.Fatalf("Views level button = %q, want it to say Back", got)
 	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "down"})
@@ -220,7 +220,7 @@ func TestMenuButtonSaysBackOnTheProjectsLevel(t *testing.T) {
 	if m.Picker.Level != model.MenuProjects {
 		t.Fatal("fixture: not on the Projects level")
 	}
-	if got := text(pickerNodes(t, m)["layer.collections.close"]); !strings.HasPrefix(got, "Back") {
+	if got := text(pickerNodes(t, m)["layer.collections.foot.close"]); !strings.HasPrefix(got, "Back") {
 		t.Fatalf("Projects level button = %q, want it to say Back", got)
 	}
 }
