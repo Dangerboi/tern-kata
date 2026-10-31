@@ -111,17 +111,22 @@ func cardKeys(mode model.Mode, action model.Action) (keys []string, chord string
 	return keycaps(bindings), chord
 }
 
-// keycaps are the keycap texts of bindings. Tern draws letter keycaps in capitals, so a shifted letter is "⇧" and the letter, as the
-// key legend draws it, and never reads the same as the plain letter's.
+// keycaps are the keycap texts of bindings.
 func keycaps(bindings []model.Binding) []string {
 	keys := make([]string, len(bindings))
 	for i, b := range bindings {
-		keys[i] = b.Key
-		if letter, ok := strings.CutPrefix(b.Chord, "shift+"); ok && utf8.RuneCountInString(letter) == 1 && unicode.IsLetter([]rune(letter)[0]) {
-			keys[i] = "⇧" + letter
-		}
+		keys[i] = keycap(b.Chord, b.Key)
 	}
 	return keys
+}
+
+// keycap is the keycap text of a binding's key label. Tern draws letter keycaps in capitals, so a shifted letter is "⇧" and the
+// letter, and never reads the same as the plain letter's.
+func keycap(chord, key string) string {
+	if letter, ok := strings.CutPrefix(chord, "shift+"); ok && utf8.RuneCountInString(letter) == 1 && unicode.IsLetter([]rune(letter)[0]) {
+		return "⇧" + letter
+	}
+	return key
 }
 
 // cardButton is a card's Tern button for action in mode. Its click is the key press of the action's first non-headless chord

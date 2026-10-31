@@ -366,15 +366,6 @@ func rightCells(kids, owner, updated string, cols listColumns, style, ownerStyle
 // footerHint is one key of the current mode's legend: the chord a click presses, the key as drawn and what it does.
 type footerHint struct{ chord, key, description string }
 
-// keycap is the hint's key as the legend draws it. Tern draws a letter keycap in capitals, so a shifted letter ("shift+u")
-// gets a ⇧ and "u" and "shift+u" read differently.
-func keycap(hint footerHint) string {
-	if letter, shifted := strings.CutPrefix(hint.chord, "shift+"); shifted && len(letter) == 1 {
-		return "⇧" + letter
-	}
-	return hint.key
-}
-
 // footerHints are the current mode's hints in reading order, and position is the selected row's place in the list.
 func footerHints(m model.Model) (hints []footerHint, position string) {
 	for binding := range model.BindingsForMode(m.CurrentMode(), true) {
@@ -410,7 +401,7 @@ func footer(m model.Model) tern.Element {
 	cells := make([]tern.Element, len(hints))
 	for i, hint := range hints {
 		cells[i] = ui.Text{Common: ui.Common{Key: hint.chord, Actions: &ui.Actions{Click: KeyClick(hint.chord)}},
-			Spans: []ui.Span{{T: keycap(hint), S: "key"}, {T: " " + hint.description, S: "muted"}}, Wrap: ui.WrapNone}
+			Spans: []ui.Span{{T: keycap(hint.chord, hint.key), S: "key"}, {T: " " + hint.description, S: "muted"}}, Wrap: ui.WrapNone}
 	}
 	return ui.Nodes(ui.Row{Common: ui.Common{Key: "hints"}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(
 		ui.Row{Common: ui.Common{Key: "grid", Grow: 1}, Gap: ui.GapMD, Wrap: true, Children: cells},
