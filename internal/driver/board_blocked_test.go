@@ -43,7 +43,11 @@ func blockedText(t *testing.T, s driver.State, uid string) string {
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
 		if n.ID == id {
 			spans, _ := n.P["spans"].([]any)
-			text, _ := spans[0].(map[string]any)["t"].(string)
+			var text string
+			for _, span := range spans {
+				part, _ := span.(map[string]any)["t"].(string)
+				text += part
+			}
 			return text
 		}
 	}
@@ -60,8 +64,14 @@ func TestAnOpenBlockerGivesTheCardABlockedMarkerInTheWarningTone(t *testing.T) {
 	if got := blockedText(t, s, "task"); got != "blocked by gate" {
 		t.Errorf("marker = %q, want %q", got, "blocked by gate")
 	}
-	if got := spanStyle(t, blockedNode(t, s, "task")); got != "warning mono" {
-		t.Errorf("marker style = %q, want warning mono", got)
+	spans, _ := blockedNode(t, s, "task").P["spans"].([]any)
+	if len(spans) != 2 {
+		t.Fatalf("marker has %d spans, want the words and the ref", len(spans))
+	}
+	for i, want := range []string{"warning", "warning mono"} {
+		if got, _ := spans[i].(map[string]any)["s"].(string); got != want {
+			t.Errorf("marker span %d style = %q, want %q", i, got, want)
+		}
 	}
 	if got := blockedText(t, s, "gate"); got != "" {
 		t.Errorf("the blocker draws marker %q, want none", got)
