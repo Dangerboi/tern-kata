@@ -469,10 +469,6 @@ func TestUndoRefusesWithoutWritingWhenTheIssueMovedOn(t *testing.T) {
 	f.rivalField(uid, model.AssignOwnerAction, "carol")
 	f.refuses(uid, e, "issue owner changed since the action")
 
-	e = f.entry(f.field(uid, model.AddLabelAction, "bug"))
-	f.rivalField(uid, model.AssignOwnerAction, "dave")
-	f.refuses(uid, e, "issue changed since the label edit")
-
 	saved := as[model.DraftSaved](t, run(t, f.gateway, model.SaveDraft{Workspace: f.workspace, UID: uid, ProjectID: f.project.ID, BaseText: "body", Text: "mine", Actor: "tester"}))
 	e = f.entry(saved.Record)
 	f.rival(uid, func(c *Client) {
@@ -502,6 +498,72 @@ func TestUndoRefusesWithoutWritingWhenTheIssueMovedOn(t *testing.T) {
 	identity := f.entry(f.field(uid, model.PriorityAction, "1"))
 	identity.ProjectUID = "01JOTHERPROJECT0000000000"
 	f.refuses(uid, identity, "issue identity changed")
+}
+
+func (f *undoFixture) rivalBody(uid, body string) {
+	f.t.Helper()
+	f.rival(uid, func(c *Client) {
+		if _, err := c.EditIssueWithResponse(context.Background(), &g.EditIssueRequestOptions{PathParams: &g.EditIssuePath{ProjectID: fmt.Sprint(f.project.ID), Ref: uid}, Body: &g.EditIssueBody{Body: &body, Actor: ptr("rival")}}); err != nil {
+			f.t.Fatal(err)
+		}
+	})
+}
+
+func (f *undoFixture) bodyEdit(uid, base, text string) model.UndoEntry {
+	f.t.Helper()
+	saved := as[model.DraftSaved](f.t, run(f.t, f.gateway, model.SaveDraft{Workspace: f.workspace, UID: uid, ProjectID: f.project.ID, BaseText: base, Text: text, Actor: "tester"}))
+	return f.entry(saved.Record)
+}
+
+func TestUndoOfABodyEditIsGuardedByTheBodyText(t *testing.T) {
+	f := newUndoFixture(t)
+	uid := f.issue("Written twice")
+	base := f.detail(uid).Issue.Body
+
+	// Another field changed meanwhile: the body is as the edit left it, so the undo goes through.
+	e := f.bodyEdit(uid, base, "mine")
+	f.rivalField(uid, model.AssignOwnerAction, "carol")
+	f.restores(e)
+	if got := f.detail(uid).Issue.Body; got != base {
+		t.Fatalf("body %q, want %q back", got, base)
+	}
+
+	// The body changed meanwhile: nothing is written, and the reason says so.
+	e = f.bodyEdit(uid, base, "mine again")
+	f.rivalBody(uid, "theirs")
+	f.refuses(uid, e, "issue body changed since the action")
+	if got := f.detail(uid).Issue.Body; got != "theirs" {
+		t.Fatalf("body %q, want the rival's kept", got)
+	}
+}
+
+func TestUndoOfALabelEditIsGuardedByTheLabel(t *testing.T) {
+	f := newUndoFixture(t)
+	uid := f.issue("Tagged")
+
+	// Another field changed meanwhile: the label is as the edit left it, so the undo goes through.
+	e := f.entry(f.field(uid, model.AddLabelAction, "bug"))
+	f.rivalField(uid, model.AssignOwnerAction, "dave")
+	f.restores(e)
+	if labels := f.detail(uid).Issue.Labels; slices.Contains(labels, "bug") {
+		t.Fatalf("labels %v, want bug gone", labels)
+	}
+
+	// The label was changed meanwhile, with a write that moved the revision: the Issue already holds what the undo would leave.
+	e = f.entry(f.field(uid, model.AddLabelAction, "bug"))
+	f.rivalField(uid, model.AssignOwnerAction, "erin")
+	f.rivalField(uid, model.RemoveLabelAction, "bug")
+	if got := f.undo(e); got.Result != model.UndoAlready {
+		t.Fatalf("undo of the label add: %+v, want already restored", got)
+	}
+
+	f.field(uid, model.AddLabelAction, "bug")
+	e = f.entry(f.field(uid, model.RemoveLabelAction, "bug"))
+	f.rivalField(uid, model.AssignOwnerAction, "frank")
+	f.rivalField(uid, model.AddLabelAction, "bug")
+	if got := f.undo(e); got.Result != model.UndoAlready {
+		t.Fatalf("undo of the label remove: %+v, want already restored", got)
+	}
 }
 
 func TestUndoRefusesWhenADateChangedSinceTheAction(t *testing.T) {
