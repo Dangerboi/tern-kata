@@ -9,11 +9,11 @@ import (
 type AgentPlacement string
 
 const (
-	// AgentSplit is `w`: a split right of the kata Pane.
+	// AgentSplit is the Agent card's `s`: a split right of the kata Pane.
 	AgentSplit AgentPlacement = "split"
-	// AgentTab is `W`: a new tab.
+	// AgentTab is the Agent card's `t`: a new tab.
 	AgentTab AgentPlacement = "tab"
-	// AgentBackground is `S`: a tab of the hidden session AgentSession, until the user opens it.
+	// AgentBackground is the Agent card's `g`: a tab of the hidden session AgentSession, until the user opens it.
 	AgentBackground AgentPlacement = "background"
 )
 

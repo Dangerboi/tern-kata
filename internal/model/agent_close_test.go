@@ -169,3 +169,32 @@ func TestAClosedAgentLeavesTheMapping(t *testing.T) {
 		t.Fatalf("mapping %+v, notice %q", m.AgentMapping, m.Notice)
 	}
 }
+
+func TestAnAgentOpenFromAnotherPaneIsNeverEnded(t *testing.T) {
+	m := closePane([]model.Issue{closed("a")}, finishedEntry("5", "a"))
+	// The relay shows it outside the hidden session though this Pane's entry says not open.
+	_, cmds := relayed(m, model.AgentState{Block: "5", State: "idle", Hidden: model.SeenShown})
+	if len(closes(cmds)) != 0 {
+		t.Fatalf("cmds %#v", cmds)
+	}
+}
+
+func TestAnAgentTheGatewayKeptCanBeEndedAgainOnceItIsBack(t *testing.T) {
+	m := closePane([]model.Issue{closed("a")}, finishedEntry("5", "a"))
+	m, cmds := relayed(m, model.AgentState{Block: "5", State: "idle"})
+	if len(closes(cmds)) != 1 {
+		t.Fatalf("cmds %#v", cmds)
+	}
+	open := finishedEntry("5", "a")
+	open.Open = true
+	m, _ = model.Update(m, model.AgentClosed{Block: "5", Agents: []model.AgentEntry{open}, Kept: true})
+	if !m.AgentMapping[0].Open {
+		t.Fatalf("mapping %+v", m.AgentMapping)
+	}
+	back := finishedEntry("5", "a")
+	m, _ = model.Update(m, model.AgentOpenSet{Block: "5", Open: false})
+	m.AgentMapping = []model.AgentEntry{back}
+	if _, cmds = relayed(m, model.AgentState{Block: "5", State: "exited"}); len(closes(cmds)) != 1 {
+		t.Fatalf("cmds %#v", cmds)
+	}
+}

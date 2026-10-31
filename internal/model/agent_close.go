@@ -12,10 +12,12 @@ type CloseAgent struct{ Block string }
 func (CloseAgent) cmd() {}
 
 // AgentClosed answers CloseAgent. Agents is agents.json after the entry went; Err carries Tern's words for a close that failed,
-// and then the entry stays.
+// and then the entry stays. Kept says the entry was open in agents.json as it stands now, so nothing was closed and Agents is
+// the file as read.
 type AgentClosed struct {
 	Block  string
 	Agents []AgentEntry
+	Kept   bool
 	Err    error
 }
 
@@ -70,7 +72,7 @@ func agentFinished(states []AgentState, block string) bool {
 }
 
 // closeFinishedAgents is the rule for ending a Background agent: the Pane that started it closes its block once the agent is in the
-// background and not open, its Issue is closed and the relay shows it idle or exited. An Issue the Collection does not list is
+// background and not open (by its entry and by the relay, which shows an agent another Pane opened), its Issue is closed and the relay shows it idle or exited. An Issue the Collection does not list is
 // read through the Daemon by its Project and UID, and only for an agent that just finished, when the Issues change or while its
 // status is not known; never while a read of it is in flight.
 func closeFinishedAgents(m Model, trigger agentCloseTrigger) (Model, []Cmd) {
@@ -79,7 +81,7 @@ func closeFinishedAgents(m Model, trigger agentCloseTrigger) (Model, []Cmd) {
 	}
 	var cmds []Cmd
 	for _, e := range m.AgentMapping {
-		if !e.Background || e.Open || e.PaneBlock != m.PaneBlock ||
+		if !e.Background || e.Open || m.Agents.seenShown(e.Block) || e.PaneBlock != m.PaneBlock ||
 			!agentFinished(m.Agents.States, e.Block) || slices.Contains(m.AgentClose.tried, e.Block) {
 			continue
 		}
@@ -119,6 +121,9 @@ func agentClosed(m Model, msg AgentClosed) Model {
 	if msg.Err != nil {
 		m.Notice = fmt.Sprintf("Cannot close the agent: %s", msg.Err)
 		return m
+	}
+	if msg.Kept {
+		m.AgentClose.tried = slices.DeleteFunc(slices.Clone(m.AgentClose.tried), func(b string) bool { return b == msg.Block })
 	}
 	m.AgentMapping = msg.Agents
 	return m

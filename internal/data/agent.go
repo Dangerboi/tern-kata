@@ -38,13 +38,13 @@ func AgentCommandLine(actor string, command []string, promptFile string) []strin
 	return append([]string{AgentWrapperProgram, "agent", "--as", actor, "--"}, line...)
 }
 
-// AgentSplitArgs is the tern command line for `w`: a split right of the Pane's block. A Pane that cannot name its block (paneBlock
+// AgentSplitArgs is the tern command line for the Agent card's `s`: a split right of the Pane's block. A Pane that cannot name its block (paneBlock
 // is "") names the focused one. Tern quotes each word after -- for the login shell, so the words go as they are.
 func AgentSplitArgs(paneBlock, dir string, commandLine []string) []string {
 	return append([]string{"split", cmp.Or(paneBlock, "@focused"), "right", "--cwd", dir, "--json", "--"}, commandLine...)
 }
 
-// AgentTabArgs is the tern command line for `W`: a new tab.
+// AgentTabArgs is the tern command line for the Agent card's `t`: a new tab.
 func AgentTabArgs(dir string, commandLine []string) []string {
 	return append([]string{"new", "tab", "--cwd", dir, "--json", "--"}, commandLine...)
 }
@@ -57,12 +57,12 @@ func agentNewArgs(sessionExists bool) []string {
 	return []string{"new", "session", model.AgentSession}
 }
 
-// AgentBackgroundSessionArgs is the tern command line for `S` when the hidden session does not exist: a new session with the agent.
+// AgentBackgroundSessionArgs is the tern command line for the Agent card's `g` when the hidden session does not exist: a new session with the agent.
 func AgentBackgroundSessionArgs(dir string, commandLine []string) []string {
 	return append(agentNewArgs(false), append([]string{"--cwd", dir, "--json", "--"}, commandLine...)...)
 }
 
-// AgentBackgroundTabArgs is the tern command line for `S` when the hidden session exists: a new tab in it with the agent.
+// AgentBackgroundTabArgs is the tern command line for the Agent card's `g` when the hidden session exists: a new tab in it with the agent.
 func AgentBackgroundTabArgs(dir string, commandLine []string) []string {
 	return append(agentNewArgs(true), append([]string{"--cwd", dir, "--json", "--"}, commandLine...)...)
 }
@@ -445,9 +445,9 @@ func (g *Gateway) setAgentOpen(block string, open, background bool) error {
 	return err
 }
 
-// setAgentOpenFlag records where the relay saw an agent: only the open flag changes, read from agents.json as it stands now.
+// setAgentOpenFlag records where the relay saw an agent: the open flag changes (and the background mark when cmd asks), read from agents.json as it stands now.
 func (g *Gateway) setAgentOpenFlag(cmd model.SetAgentOpen) model.AgentOpenSet {
-	return model.AgentOpenSet{Block: cmd.Block, Open: cmd.Open, Err: g.setAgentOpen(cmd.Block, cmd.Open, false)}
+	return model.AgentOpenSet{Block: cmd.Block, Open: cmd.Open, Background: cmd.Background, Err: g.setAgentOpen(cmd.Block, cmd.Open, cmd.Background)}
 }
 
 // openAgent moves a background agent's block beside the Pane and marks it open.
@@ -515,8 +515,13 @@ func (g *Gateway) sendAgentBack(ctx context.Context, cmd model.SendAgentBack) mo
 }
 
 // closeAgent closes the agent's block with `tern close`, then drops its entry and prompt file from agents.json as it stands now.
-// When tern fails the entry stays.
+// When tern fails the entry stays, and so does an agent whose entry reads open now: another Pane opened it since this one decided.
 func (g *Gateway) closeAgent(ctx context.Context, cmd model.CloseAgent) model.AgentClosed {
+	if file, _, err := g.agentStatePaths(); err == nil {
+		if list, err := ReadAgents(file); err == nil && slices.ContainsFunc(list, func(e model.AgentEntry) bool { return e.Block == cmd.Block && e.Open }) {
+			return model.AgentClosed{Block: cmd.Block, Agents: list, Kept: true}
+		}
+	}
 	if out, err := g.runTern(ctx, CloseBlockArgs(cmd.Block)); err != nil {
 		return model.AgentClosed{Block: cmd.Block, Err: ternFailure(err, out)}
 	}

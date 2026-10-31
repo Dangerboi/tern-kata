@@ -868,3 +868,32 @@ func TestRecordingWhereTheRelaySawAnAgentChangesOnlyItsOpenFlag(t *testing.T) {
 		t.Errorf("agents.json %+v", stored)
 	}
 }
+
+func TestClosingSkipsAnAgentWhoseEntryReadsOpenNow(t *testing.T) {
+	g, dirs := agentGateway(t)
+	prompt := writeAgentFile(t, filepath.Join(t.TempDir(), "p.md"), "go")
+	file := seedAgent(t, dirs, model.AgentEntry{Block: "31", Background: true, Open: true, PromptFile: prompt})
+	calls := ternScript(g, map[string]func() ([]byte, error){"close": ternOut(`{"block":31}`)})
+	got := as[model.AgentClosed](t, run(t, g, model.CloseAgent{Block: "31"}))
+	if got.Err != nil || !got.Kept || len(got.Agents) != 1 || !got.Agents[0].Open || len(*calls) != 0 {
+		t.Fatalf("%+v, ran %q", got, *calls)
+	}
+	if stored, _ := ReadAgents(file); len(stored) != 1 {
+		t.Errorf("agents.json %+v", stored)
+	}
+	if _, err := os.Stat(prompt); err != nil {
+		t.Errorf("prompt file: %v", err)
+	}
+}
+
+func TestRecordingAnAgentInTheHiddenSessionCanMarkItBackground(t *testing.T) {
+	g, dirs := agentGateway(t)
+	file := seedAgent(t, dirs, model.AgentEntry{Block: "31", Open: true})
+	got := as[model.AgentOpenSet](t, run(t, g, model.SetAgentOpen{Block: "31", Background: true}))
+	if got.Err != nil || !got.Background {
+		t.Fatalf("%+v", got)
+	}
+	if stored, _ := ReadAgents(file); !stored[0].Background || stored[0].Open {
+		t.Errorf("agents.json %+v", stored)
+	}
+}
