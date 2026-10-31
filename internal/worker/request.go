@@ -150,9 +150,22 @@ func (w *Worker) admitsNothing(ps *projectState) string {
 
 // admitsNothingLocked is admitsNothing with w.mu held.
 func (w *Worker) admitsNothingLocked(ps *projectState) string {
-	switch {
-	case w.stopping != "":
+	if w.stopping != "" {
 		return errStopping.Error()
+	}
+	return blockedReasonLocked(ps)
+}
+
+// blockedReason is admitsNothing without the stop: why the Project cannot act for a reason of its own, empty when it can.
+func (w *Worker) blockedReason(ps *projectState) string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return blockedReasonLocked(ps)
+}
+
+// blockedReasonLocked reads the Project's own state; w.mu is held.
+func blockedReasonLocked(ps *projectState) string {
+	switch {
 	case ps.blocked != "":
 		return ps.blocked
 	case !ps.resolved:
