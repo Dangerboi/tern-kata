@@ -46,7 +46,7 @@ func runs(m model.Model, now time.Time) tern.Element {
 			scope = "job " + m.Runs.JobUID
 		}
 	}
-	heading := []ui.Span{{T: "Runs", S: "strong"}, {T: " " + strconv.Itoa(len(rows)), S: "muted mono"}, {T: " · " + scope, S: "muted"}}
+	heading := []ui.Span{{T: "Runs", S: "strong"}, {T: " " + strconv.Itoa(len(rows)), S: mono("muted")}, {T: " · " + scope, S: "muted"}}
 	if m.Runs.More != "" {
 		heading = append(heading, ui.Span{T: " · older runs: m", S: "muted"})
 	}
@@ -60,9 +60,9 @@ func runs(m model.Model, now time.Time) tern.Element {
 	if m.Runs.Err != nil {
 		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.Runs.Err.Error()})
 	}
-	empty := emptyState("runs", "No runs", "An executor reports a run to kata when it starts one.")
+	empty := emptyState("No runs", "An executor reports a run to kata when it starts one.")
 	if m.Runs.JobUID != "" {
-		empty = emptyState("runs", "No runs for this job", "It has not run yet.", cardButton("all-runs", model.ModeRuns, model.FilterRunsByJob, "Every run", false))
+		empty = emptyState("No runs for this job", "It has not run yet.", cardButton("all-runs", model.ModeRuns, model.FilterRunsByJob, "Every run", false))
 	}
 	list := ui.List{CommonWithoutMax: scrollerCommon("runs"), Max: fillMax, Empty: ui.T("Loading runs…"), Children: cards}
 	children = append(children, listAndEmpty(list, m.Runs.Loading, empty)...)
@@ -98,9 +98,9 @@ func runCard(row model.RunRow, selected bool) tern.Element {
 	case row.Reason != "":
 		body = append(body, ui.Text{Common: ui.Common{Key: "reason", Tone: tone}, Text: "reason: " + row.Reason})
 	}
-	when := []ui.Span{{T: "started ", S: "muted"}, {T: row.Start, S: "muted mono"}}
+	when := []ui.Span{{T: "started ", S: "muted"}, {T: row.Start, S: mono("muted")}}
 	if row.Duration != "" {
-		when = append(when, ui.Span{T: " · ", S: "muted"}, ui.Span{T: row.Duration, S: "muted mono"})
+		when = append(when, ui.Span{T: " · ", S: "muted"}, ui.Span{T: row.Duration, S: mono("muted")})
 	}
 	if row.Summary != "" {
 		when = append(when, ui.Span{T: " · " + row.Summary, S: "muted"})

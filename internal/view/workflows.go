@@ -77,9 +77,9 @@ func workflowList(m model.Model, paired bool) tern.Element {
 		}
 		items[i] = ui.Item{Common: ui.Common{Key: w.UID, Role: stripeRole(i), Tone: tone, Actions: &ui.Actions{DblClick: WorkflowOpenClick(w.UID)}}, Label: ui.Spans(label...), Detail: ui.T(" "), Value: ui.Spans(value...)}
 	}
-	empty := emptyState("rows", "No workflows", "None in "+m.Collection.Title+" yet.", cardButton("new", model.ModeWorkflows, model.NewWorkflow, "New workflow", true))
+	empty := emptyState("No workflows", "None in "+m.Collection.Title+" yet.", cardButton("new", model.ModeWorkflows, model.NewWorkflow, "New workflow", true))
 	if len(m.Workflows.List) > 0 {
-		empty = emptyState("rows", "Every workflow is archived", "Archived workflows are hidden.", cardButton("show-archived", model.ModeWorkflows, model.ToggleArchivedWorkflows, "Show archived", true))
+		empty = emptyState("Every workflow is archived", "Archived workflows are hidden.", cardButton("show-archived", model.ModeWorkflows, model.ToggleArchivedWorkflows, "Show archived", true))
 	}
 	selected := ""
 	if m.Workflows.Selected != "" {
