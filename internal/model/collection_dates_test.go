@@ -37,8 +37,8 @@ func TestCollectionDateGroups(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			collection := model.Collection{View: tt.view, Title: tt.view}
-			m := model.Model{Collection: collection}
-			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), LocalDate: tt.today, TimeZone: "America/Los_Angeles", Snapshot: model.Snapshot{Issues: tt.issues}})
+			m := model.WithSnapshotRead(model.Model{Collection: collection})
+			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest(), Query: m.SnapshotQuery(), LocalDate: tt.today, TimeZone: "America/Los_Angeles", Snapshot: model.Snapshot{Issues: tt.issues}})
 			var headings, uids []string
 			for _, group := range m.Groups {
 				headings = append(headings, group.Title)

@@ -187,7 +187,7 @@ func TestNewProjectBindOpensTheProjectFirst(t *testing.T) {
 
 	// The snapshot that arrives lists the Project, which is now the pinned entry.
 	snapshot := model.Snapshot{Catalog: append(pickerCatalog(), model.CatalogProject{Project: created})}
-	loaded, _ := model.Update(got, model.SnapshotLoaded{Request: got.RefreshRequest, Query: got.SnapshotQuery(), Snapshot: snapshot})
+	loaded, _ := model.Update(got, model.SnapshotLoaded{Request: got.RefreshRequest(), Query: got.SnapshotQuery(), Snapshot: snapshot})
 	if loaded.Loading || !reflect.DeepEqual(pickerTitles(loaded)[:2], []string{"my-repo", "Views"}) {
 		t.Fatalf("loaded: loading=%v entries=%q", loaded.Loading, pickerTitles(loaded))
 	}

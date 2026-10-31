@@ -28,7 +28,8 @@ func idSnapshot(uids ...string) model.Snapshot {
 // idSearching is a Pane browsing collection with a, b and c listed and `typed` all but its last character in the search box.
 func idSearching(collection model.Collection, typed string) model.Model {
 	m := model.Model{Workspace: "/repo", Project: idProject, Collection: collection, Bound: true}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: idSnapshot("a", "b", "c")})
+	m = model.WithSnapshotRead(m)
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest(), Query: m.SnapshotQuery(), Snapshot: idSnapshot("a", "b", "c")})
 	m.Filters.Search = typed[:len(typed)-1]
 	m, _ = model.Update(m, model.KeyMsg{Chord: "/"})
 	return m
@@ -72,7 +73,7 @@ func TestSearchByID(t *testing.T) {
 			m := idSearching(idCollection, typed)
 			m, cmds := model.Update(m, model.KeyMsg{Text: typed[len(typed)-1:]})
 			lookup := cmdOf[model.LookupSearchID](t, cmds)
-			if want := (model.LookupSearchID{Workspace: "/repo", ProjectID: 7, ShortID: "4kxn", Request: m.RefreshRequest}); lookup != want {
+			if want := (model.LookupSearchID{Workspace: "/repo", ProjectID: 7, ShortID: "4kxn", Request: m.RefreshRequest()}); lookup != want {
 				t.Fatalf("lookup: %+v, want %+v", lookup, want)
 			}
 			if !reflect.DeepEqual(listed(m), []string{"a", "b", "c"}) {

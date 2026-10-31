@@ -73,8 +73,8 @@ type DaemonsState struct {
 	// Switching is the daemon being connected to, "" when no switch is out. It outlives leaving the Page, because the answer still
 	// changes the Pane's connection.
 	Switching string
-	// request counts the list reads and switchRequest the switches; an answer to another is dropped.
-	request, switchRequest int64
+	// reads numbers the list reads and switches the switches; an answer to another is dropped.
+	reads, switches Latest
 }
 
 // OnDaemons says the Daemons Page is current.
@@ -91,14 +91,15 @@ func daemonsMode(m Model) Mode {
 // enterDaemons starts a fresh reading of the catalog.
 func enterDaemons(m Model) (Model, []Cmd) {
 	d := m.Daemons
-	m.Daemons = DaemonsState{request: d.request + 1, Loading: true, Switching: d.Switching, switchRequest: d.switchRequest}
-	return m, []Cmd{LoadDaemons{Request: m.Daemons.request, Workspace: m.Workspace}}
+	m.Daemons = DaemonsState{reads: d.reads, Loading: true, Switching: d.Switching, switches: d.switches}
+	return m, []Cmd{LoadDaemons{Request: m.Daemons.reads.Ask(), Workspace: m.Workspace}}
 }
 
 // clearDaemons drops what the Page held and every list read still out; a switch still out is kept.
 func clearDaemons(m Model) Model {
 	d := m.Daemons
-	m.Daemons = DaemonsState{request: d.request + 1, Switching: d.Switching, switchRequest: d.switchRequest}
+	m.Daemons = DaemonsState{reads: d.reads, Switching: d.Switching, switches: d.switches}
+	m.Daemons.reads.Discard()
 	return m
 }
 
@@ -112,16 +113,15 @@ func switchSelectedDaemon(m Model) (Model, []Cmd) {
 	if entry == nil || d.Switching != "" {
 		return m, nil
 	}
-	d.switchRequest++
 	d.Switching = entry.Name
-	return m, []Cmd{SwitchDaemon{Workspace: m.Workspace, Request: d.switchRequest, Name: entry.Name}}
+	return m, []Cmd{SwitchDaemon{Workspace: m.Workspace, Request: d.switches.Ask(), Name: entry.Name}}
 }
 
 func updateDaemons(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
 	case DaemonsLoaded:
 		d := &m.Daemons
-		if msg.Request != d.request {
+		if current, _ := d.reads.Answer(msg.Request); !current {
 			return m, nil, true
 		}
 		d.Loading, d.Err = false, msg.Err
@@ -145,7 +145,7 @@ func updateDaemons(m Model, msg Msg) (Model, []Cmd, bool) {
 // Issue's uid, which a replica shares with its hub, so one kept would send the old daemon's text to the new one: they are dropped,
 // and the Notice says how many.
 func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
-	if msg.Request != m.Daemons.switchRequest {
+	if current, _ := m.Daemons.switches.Answer(msg.Request); !current {
 		return m, nil
 	}
 	m.Daemons.Switching = ""
@@ -181,8 +181,10 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	m.Attention = AttentionState{reads: reads}
 	m = clearCredentials(clearFederation(m))
 	m.Undo = UndoHistory{nextID: m.Undo.nextID}.cleared("connected to a different daemon")
+	reads = m.reads
+	reads.Discard()
 	m.LiveState = LiveState{
-		StreamGeneration: m.StreamGeneration + 1, RefreshRequest: m.RefreshRequest + 1,
+		StreamGeneration: m.StreamGeneration + 1, reads: reads,
 		wakeGeneration: m.wakeGeneration, resubscribe: true,
 	}
 	m.Notice = `daemon "` + msg.Name + `": connected`

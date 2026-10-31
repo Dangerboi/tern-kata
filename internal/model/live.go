@@ -12,12 +12,13 @@ type LiveState struct {
 	StreamErr        error
 	ReconnectAttempt int
 	Refreshing       bool
-	RefreshRequest   int64
 	PendingCursor    int64
 	Resetting        bool
 	dayInFlight      bool // the end-of-day wake fired while a read was in flight; a result still dated that day reads again
 	readOwed         bool // an Issue was written while a read was in flight; that read may predate the write, so its result is followed by another
 	wakeGeneration   int64
+	// reads numbers the snapshot and id-lookup reads; only the answer to the newest is applied.
+	reads Latest
 	// resubscribe says the next snapshot starts a new event stream: the Pane switched to another daemon, whose events the old stream does not carry.
 	resubscribe bool
 }
@@ -116,7 +117,7 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 		m, more := snapshotChanged(m)
 		return m, append(asked, more...)
 	case SearchIDLooked:
-		if msg.Request != m.RefreshRequest {
+		if current, _ := m.reads.Answer(msg.Request); !current {
 			return m, nil
 		}
 		m.Refreshing = false

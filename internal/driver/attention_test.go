@@ -734,7 +734,7 @@ func TestAttentionPageDropsTheAnswerOfAReadOutWhenTheDaemonChanged(t *testing.T)
 	if !ok {
 		t.Fatalf("entering the Page asked for %#v, want a read", out.Cmds)
 	}
-	switched := step(t, out.State, model.DaemonSwitched{Name: "home", Daemon: model.Daemon{Name: "home"}}).State
+	switched := switchedAnswer(t, out.State).State
 	late := step(t, switched, model.AttentionLoaded{Request: old.Request, Requests: attentionRequests(t)})
 	if a := late.State.Model.Attention; len(a.Requests) != 0 || a.Loaded {
 		t.Errorf("the old daemon's answer was applied: %d requests, loaded %v", len(a.Requests), a.Loaded)

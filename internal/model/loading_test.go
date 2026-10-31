@@ -43,7 +43,7 @@ func TestSwitchingCollectionKeepsPreviousIssues(t *testing.T) {
 	if !m.Loading || len(m.Issues) != 2 || m.SelectedUID != "b" || !readsCollection(cmds, m, "") {
 		t.Fatalf("switching Collection: loading=%v issues=%d selected=%q cmds=%#v", m.Loading, len(m.Issues), m.SelectedUID, cmds)
 	}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "c", Status: "open"}}}})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest(), Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "c", Status: "open"}}}})
 	if m.Loading || len(m.Issues) != 1 || m.Issues[0].UID != "c" {
 		t.Fatalf("new Collection did not replace the Issues: loading=%v issues=%+v", m.Loading, m.Issues)
 	}

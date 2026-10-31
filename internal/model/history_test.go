@@ -149,7 +149,7 @@ func TestHistoryEventsKeepTheirIssueReference(t *testing.T) {
 
 // inZone delivers a snapshot in zone, the way the app sets the model zone.
 func inZone(zone string) model.Model {
-	m := model.Model{}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), LocalDate: "2026-10-08", TimeZone: zone})
+	m := model.WithSnapshotRead(model.Model{})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest(), Query: m.SnapshotQuery(), LocalDate: "2026-10-08", TimeZone: zone})
 	return m
 }
