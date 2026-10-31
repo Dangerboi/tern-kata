@@ -98,8 +98,7 @@ func enterDaemons(m Model) (Model, []Cmd) {
 // clearDaemons drops what the Page held and every list read still out; a switch still out is kept.
 func clearDaemons(m Model) Model {
 	d := m.Daemons
-	m.Daemons = DaemonsState{reads: d.reads, Switching: d.Switching, switches: d.switches}
-	m.Daemons.reads.Discard()
+	m.Daemons = DaemonsState{reads: d.reads.Discarded(), Switching: d.Switching, switches: d.switches}
 	return m
 }
 
@@ -121,7 +120,7 @@ func updateDaemons(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
 	case DaemonsLoaded:
 		d := &m.Daemons
-		if current, _ := d.reads.Answer(msg.Request); !current {
+		if !d.reads.IsCurrent(msg.Request) {
 			return m, nil, true
 		}
 		d.Loading, d.Err = false, msg.Err
@@ -145,7 +144,7 @@ func updateDaemons(m Model, msg Msg) (Model, []Cmd, bool) {
 // Issue's uid, which a replica shares with its hub, so one kept would send the old daemon's text to the new one: they are dropped,
 // and the Notice says how many.
 func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
-	if current, _ := m.Daemons.switches.Answer(msg.Request); !current {
+	if !m.Daemons.switches.IsCurrent(msg.Request) {
 		return m, nil
 	}
 	m.Daemons.Switching = ""
@@ -176,15 +175,11 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 			m = def.reset(m, "")
 		}
 	}
-	reads := m.Attention.reads
-	reads.Discard()
-	m.Attention = AttentionState{reads: reads}
+	m.Attention = AttentionState{reads: m.Attention.reads.Discarded()}
 	m = clearCredentials(clearFederation(m))
 	m.Undo = UndoHistory{nextID: m.Undo.nextID}.cleared("connected to a different daemon")
-	reads = m.reads
-	reads.Discard()
 	m.LiveState = LiveState{
-		StreamGeneration: m.StreamGeneration + 1, reads: reads,
+		StreamGeneration: m.StreamGeneration + 1, snapshotReads: m.snapshotReads.Discarded(),
 		wakeGeneration: m.wakeGeneration, resubscribe: true,
 	}
 	m.Notice = `daemon "` + msg.Name + `": connected`

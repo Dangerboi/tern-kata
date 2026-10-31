@@ -8,8 +8,12 @@ package model
 // A Page whose reads are independent uses Ask, which supersedes whatever is out. A change that makes every read out older than
 // its own effect uses Supersede, which drops those answers and asks for one more read.
 type Latest struct {
-	// next is the number the next read gets; the newest read asked for is next-1.
+	// next is the number the next read gets.
 	next int64
+	// last is the number of the newest read asked for.
+	last int64
+	// live says last has not been superseded or discarded, so its answer is the one to apply.
+	live bool
 	// out says the newest read has not answered.
 	out bool
 	// queued says a read is wanted once the one out answers.
@@ -20,6 +24,7 @@ type Latest struct {
 func (l *Latest) Ask() int64 {
 	n := l.next
 	l.next++
+	l.last, l.live = n, true
 	l.out, l.queued = true, false
 	return n
 }
@@ -36,24 +41,37 @@ func (l *Latest) Queue() (n int64, ok bool) {
 
 // Supersede makes every read asked for so far stale. When one is out its answer is dropped and asks for a fresh read.
 func (l *Latest) Supersede() {
-	l.next++
+	l.live = false
 	l.queued = l.queued || l.out
 	l.out = false
 }
 
 // Discard makes every read asked for so far stale and wants none: a Page that starts over drops what is out without asking again.
 func (l *Latest) Discard() {
-	l.next++
+	l.live = false
 	l.out, l.queued = false, false
 }
 
 // Asked says some read has been asked for.
 func (l Latest) Asked() bool { return l.next > 0 }
 
-// Answer says what an answer to read n calls for: current says it is the newest read's answer and is to be applied; again says
+// Discarded is l after Discard, for a Page that keeps its read numbers while it starts over.
+func (l Latest) Discarded() Latest {
+	l.Discard()
+	return l
+}
+
+// IsCurrent says the answer to read n is the newest read's and is to be applied. It settles the read like Answer does.
+func (l *Latest) IsCurrent(n int64) bool {
+	current, _ := l.Answer(n)
+	return current
+}
+
+// Answer says what an answer to read n calls for: current says it is the answer to the last read asked for, if that was not
+// superseded or discarded, and is to be applied; again says
 // a fresh read is wanted now, which the Page asks for with Ask or Queue.
 func (l *Latest) Answer(n int64) (current, again bool) {
-	if l.next > 0 && n == l.next-1 {
+	if l.live && n == l.last {
 		again = l.queued
 		l.out, l.queued = false, false
 		return true, again
@@ -65,5 +83,5 @@ func (l *Latest) Answer(n int64) (current, again bool) {
 	return false, false
 }
 
-// Newest is the number of the newest read asked for; 0 before any.
-func (l Latest) Newest() int64 { return max(l.next-1, 0) }
+// Newest is the number of the newest read asked for, superseded or not; 0 before any.
+func (l Latest) Newest() int64 { return l.last }

@@ -186,7 +186,12 @@ func TestAttentionPageFailedReadShowsKatasErrorAndKeepsTheRows(t *testing.T) {
 	}
 
 	// With nothing read yet, the Page does not claim there is nothing for dana.
-	first := step(t, step(t, attentionPane(t), key("6")).State, model.AttentionLoaded{Request: 0, Err: errors.New("no daemon")}).State
+	opened := step(t, attentionPane(t), key("6"))
+	read, ok := askedAttention(opened.Cmds)
+	if !ok {
+		t.Fatalf("no attention read asked for: %#v", opened.Cmds)
+	}
+	first := step(t, opened.State, model.AttentionLoaded{Request: read.Request, Err: errors.New("no daemon")}).State
 	wantText(t, "first read failed", wireTextOf(t, first), "no daemon")
 	if strings.Contains(wireTextOf(t, first), "No requests for dana") {
 		t.Error("a failed first read is drawn as an empty inbox")

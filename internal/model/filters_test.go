@@ -24,7 +24,7 @@ func TestLiveSearch(t *testing.T) {
 		{"query escape cancels and restores selection", []string{"/", "q", "down", "escape", "escape"}, model.ModeList, "", "b"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			m := model.Model{Collection: model.Collection{View: "project", ProjectUID: "p", Title: "Work"}, SelectedUID: "b"}
+			m := model.WithSnapshotRead(model.Model{Collection: model.Collection{View: "project", ProjectUID: "p", Title: "Work"}, SelectedUID: "b"})
 			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest(), Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a", Title: "Alpha", Status: "open"}, {UID: "b", Title: "Beta", Status: "open"}}}, ETag: "original"})
 			for _, chord := range tt.keys {
 				var cmds []model.Cmd

@@ -443,7 +443,7 @@ func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 	case WorkflowTextRead:
 		return workflowTextRead(m, msg), nil, true
 	case JobsLoaded:
-		if msg.Request >= 0 || !isNewestRead(&m.Workflows.jobsReads, workflowRead(msg.Request)) {
+		if msg.Request >= 0 || !m.Workflows.jobsReads.IsCurrent(workflowRead(msg.Request)) {
 			return m, nil, false
 		}
 		if msg.Err == nil && !msg.ProjectArchived {
@@ -451,7 +451,7 @@ func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 		}
 		return m, nil, true
 	case RunsLoaded:
-		if msg.Request >= 0 || !isNewestRead(&m.Workflows.runsReads, workflowRead(msg.Request)) {
+		if msg.Request >= 0 || !m.Workflows.runsReads.IsCurrent(workflowRead(msg.Request)) {
 			return m, nil, false
 		}
 		m.Workflows.runsAsked = false
@@ -650,9 +650,3 @@ func (WorkflowOpenMsg) msg() {}
 // workflowRead is the number a read of the Workflows Page carries on the wire: below zero, so that the Jobs and Runs Pages, whose
 // numbers count up from zero, never take its answer for theirs. It is its own inverse.
 func workflowRead(n int64) int64 { return -1 - n }
-
-// isNewestRead says whether n is the number of the newest read of reads, and so its answer is to be applied.
-func isNewestRead(reads *Latest, n int64) bool {
-	ok, _ := reads.Answer(n)
-	return ok
-}
