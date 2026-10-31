@@ -39,7 +39,11 @@ func laneTone(lanes []string, lane string) ui.Tone {
 
 // issueLaneTone is the tone of the Lane issue stands in under the Pane's Lane list: Done's for a closed Issue.
 func issueLaneTone(m model.Model, issue model.Issue) ui.Tone {
-	lanes := m.LaneList()
+	return issueLaneToneIn(m.LaneList(), issue)
+}
+
+// issueLaneToneIn is issueLaneTone under the Lane list lanes, for a frame that read the list once.
+func issueLaneToneIn(lanes []string, issue model.Issue) ui.Tone {
 	return laneTone(lanes, model.LaneOf(issue, lanes))
 }
 

@@ -16,7 +16,7 @@ import (
 // benchSizes are the Collection sizes the Pane is measured at: a small Project, a busy one, and a large one.
 var benchSizes = []int{50, 500, 2000}
 
-// benchIssues is a Project of n Issues shaped like a working one: most in a Lane, some with other labels, owners and
+// benchIssues is a Project of n Issues shaped like a working one: most in a Lane, some with other labels, owners (some claims expiring), deadlines and
 // priorities, a tenth closed in the last week, and a body of a few paragraphs.
 func benchIssues(n int) []model.Issue {
 	lanes := model.DefaultLanes()
@@ -44,6 +44,14 @@ func benchIssues(n int) []model.Issue {
 		if i%3 == 1 {
 			owner := "agent"
 			issue.Owner = &owner
+			if i%2 == 0 {
+				expires := time.Date(2026, 10, 8, 18, 0, 0, 0, time.UTC)
+				issue.AssignmentExpiresOn = &expires
+			}
+		}
+		if i%4 == 0 {
+			day := fmt.Sprintf("2026-10-%02d", 1+i%12)
+			issue.DeadlineOnDate = &day
 		}
 		if i%2 == 0 {
 			p := int64(i % 5)
@@ -231,4 +239,40 @@ func BenchmarkStep(b *testing.B) {
 		s := benchFeed(b, out.State, model.JobsLoaded{Request: load.Request, Jobs: benchJobs()})
 		benchMoves(b, s, []tern.Input{key("down"), key("up")})
 	})
+}
+
+// benchAgents maps count agents to the Issues of s, one each on every 25th, in rotating states, as a Pane with agents running.
+func benchAgents(b testing.TB, s driver.State, count int) driver.State {
+	b.Helper()
+	words := []model.AgentStateWord{model.AgentWaitingInput, model.AgentWorking, model.AgentIdle, model.AgentExited}
+	var entries []model.AgentEntry
+	var states []model.AgentState
+	for i := range count {
+		block := fmt.Sprint(100 + i)
+		entries = append(entries, model.AgentEntry{IssueUID: s.Model.Issues[i*25].UID, Block: block, StartedAt: now.Add(-time.Duration(i) * time.Minute)})
+		states = append(states, model.AgentState{Block: block, State: words[i%len(words)]})
+	}
+	return benchFeed(b, s, model.AgentsRefreshed{Agents: entries}, model.AgentStatesMsg{States: states})
+}
+
+// BenchmarkStepAgents is BenchmarkStep's selection move on the list and the Board of 500 Issues with 20 mapped agents.
+func BenchmarkStepAgents(b *testing.B) {
+	for _, page := range []string{"list", "board"} {
+		b.Run("page="+page+"/n=500/agents=20/input=move", func(b *testing.B) {
+			benchMoves(b, benchAgents(b, benchPane(b, 500, page), 20), []tern.Input{key("down"), key("up")})
+		})
+	}
+}
+
+// BenchmarkRenderAgents is view.Render alone on the list and the Board of 500 Issues with 20 mapped agents.
+func BenchmarkRenderAgents(b *testing.B) {
+	for _, page := range []string{"list", "board"} {
+		b.Run("page="+page+"/n=500/agents=20", func(b *testing.B) {
+			s := benchAgents(b, benchPane(b, 500, page), 20)
+			b.ReportAllocs()
+			for b.Loop() {
+				view.Render(s.Model, now)
+			}
+		})
+	}
 }

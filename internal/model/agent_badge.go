@@ -110,6 +110,33 @@ func (m Model) AgentBadgeFor(issueUID string) (AgentBadge, bool) {
 	return badge, true
 }
 
+// AgentBadgeIndex answers AgentBadgeFor for many Issues: one set of the Issues that have an agent, so a row without one
+// costs a lookup rather than a scan of the Agent mapping and the relayed states.
+type AgentBadgeIndex struct {
+	m      Model
+	mapped map[string]struct{}
+}
+
+// AgentBadges indexes the Agent badges of the Issues that have one, for a frame that asks it of every row.
+func (m Model) AgentBadges() AgentBadgeIndex {
+	if len(m.AgentMapping) == 0 {
+		return AgentBadgeIndex{}
+	}
+	mapped := make(map[string]struct{}, len(m.AgentMapping))
+	for _, entry := range m.AgentMapping {
+		mapped[entry.IssueUID] = struct{}{}
+	}
+	return AgentBadgeIndex{m: m, mapped: mapped}
+}
+
+// For is the Agent badge of the Issue, as AgentBadgeFor.
+func (x AgentBadgeIndex) For(issueUID string) (AgentBadge, bool) {
+	if _, ok := x.mapped[issueUID]; !ok {
+		return AgentBadge{}, false
+	}
+	return x.m.AgentBadgeFor(issueUID)
+}
+
 // AgentJumpMsg is a click on an Agent badge: Block is the agent it names, as decimal text.
 type AgentJumpMsg struct{ Block string }
 
