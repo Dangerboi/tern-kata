@@ -3,9 +3,9 @@ package model
 // resetPagesForProject is the one Project-change rule of the Pages that act on a Project: a Page that was filled for another
 // Project than the Pane's starts empty again (its declaration's reset) and records the Pane's. While the Pane browses a fixed
 // Collection, such as the Inbox, no Project is selected and every Page keeps what it holds, so a round trip through the Inbox back
-// to the same Project loses nothing. What each reset keeps is the Page's request counters (stepped, so a read asked before the
-// reset is ignored when it answers). The Project's numeric id is not part of it: each Page resolves that itself, and a missing id
-// waits for the read.
+// to the same Project loses nothing. What each reset keeps is the Page's request counters (kept, with any read in
+// flight discarded, so a read asked before the reset is ignored when it answers). The Project's numeric id is not part of it: each
+// Page resolves that itself, and a missing id waits for the read.
 func (m Model) resetPagesForProject() Model {
 	if !m.Collection.IsProject() {
 		return m
@@ -50,12 +50,9 @@ func resetWorkflows(m Model, uid string) Model {
 	w := m.Workflows
 	m.Workflows = WorkflowsState{
 		ProjectUID: uid,
-		jobsReads:  w.jobsReads,
-		runsReads:  w.runsReads,
-		checkReads: w.checkReads,
+		jobsReads:  w.jobsReads.Discarded(),
+		runsReads:  w.runsReads.Discarded(),
+		checkReads: w.checkReads.Discarded(),
 	}
-	m.Workflows.jobsReads.Discard()
-	m.Workflows.runsReads.Discard()
-	m.Workflows.checkReads.Discard()
 	return m
 }
