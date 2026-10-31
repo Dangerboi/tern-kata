@@ -56,11 +56,8 @@ func jobs(m model.Model, now time.Time) tern.Element {
 	if m.Jobs.Err != nil {
 		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.Jobs.Err.Error()})
 	}
-	empty := "No Cron jobs in this Project. Create one with kata cron job create."
-	if m.Jobs.Loading {
-		empty = "Loading jobs…"
-	}
-	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("jobs"), Max: fillMax, Empty: ui.T(empty), Children: cards})
+	list := ui.List{CommonWithoutMax: scrollerCommon("jobs"), Max: fillMax, Empty: ui.T("Loading jobs…"), Children: cards}
+	children = append(children, listOrEmpty(list, m.Jobs.Loading, emptyState("jobs", "No Cron jobs", "This Project has none. Create one with kata cron job create.")))
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapSM, children)
 }
 

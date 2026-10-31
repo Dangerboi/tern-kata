@@ -164,7 +164,7 @@ func TestAttentionPageMovesTheSelectionWithTheArrowKeys(t *testing.T) {
 
 func TestAttentionPageSaysWhenNoRequestWaits(t *testing.T) {
 	s := attentionPageWith(t, nil, 0)
-	wantText(t, "empty Page", wireTextOf(t, s), "No requests for dana", "for dana · 0 requests")
+	wantText(t, "empty Page", wireTextOf(t, s), "No requests", "Nothing is waiting on dana", "for dana · 0 requests")
 }
 
 func TestAttentionPageFailedReadShowsKatasErrorAndKeepsTheRows(t *testing.T) {
@@ -188,7 +188,7 @@ func TestAttentionPageFailedReadShowsKatasErrorAndKeepsTheRows(t *testing.T) {
 	// With nothing read yet, the Page does not claim there is nothing for dana.
 	first := step(t, step(t, attentionPane(t), key("6")).State, model.AttentionLoaded{Request: 1, Err: errors.New("no daemon")}).State
 	wantText(t, "first read failed", wireTextOf(t, first), "no daemon")
-	if strings.Contains(wireTextOf(t, first), "No requests for dana") {
+	if strings.Contains(wireTextOf(t, first), "Nothing is waiting on dana") {
 		t.Error("a failed first read is drawn as an empty inbox")
 	}
 }
@@ -208,7 +208,7 @@ func TestAttentionPageRefusedAddressShowsTheReasonAndReadsNothing(t *testing.T) 
 			}
 		}
 		wantText(t, name, wireTextOf(t, out.State), "refused")
-		if strings.Contains(wireTextOf(t, out.State), "No requests for") || strings.Contains(wireTextOf(t, out.State), "requests ·") {
+		if strings.Contains(wireTextOf(t, out.State), "Nothing is waiting on") || strings.Contains(wireTextOf(t, out.State), "requests ·") {
 			t.Errorf("%s: the Page draws a header or an empty inbox", name)
 		}
 		if _, asked := askedAttention(step(t, out.State, key("ctrl+r")).Cmds); asked {

@@ -96,7 +96,7 @@ func TestTopBarTitleIsAccentWhicheverColumnHasFocus(t *testing.T) {
 			m = apply(m, step.msg)
 		}
 		heading := render(t, m)["main.topbar.left.heading"]
-		if heading.P["tone"] != "accent" || style(t, heading, m.Collection.Title) != "accent strong" {
+		if heading.P["tone"] != "accent" || style(t, heading, m.Collection.Title) != "title accent" {
 			t.Errorf("%s (focus %v): tone=%v spans=%v", step.name, m.Focus, heading.P["tone"], styled(heading))
 		}
 	}

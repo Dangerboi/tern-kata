@@ -67,14 +67,12 @@ func priorityText(p *int64) (string, ui.Tone) {
 	return fmt.Sprintf("P%d", *p), ui.ToneMuted
 }
 
-// toneStyle is the text span style closest to tone. Spans have no user or pending style, so those take the nearest one a
-// span can draw; neutral is the plain text colour.
+// toneStyle is the text span style closest to tone. Spans have no user style, so it takes the accent; pending is Tern's own
+// span token for words that wait on something; neutral is the plain text colour.
 func toneStyle(tone ui.Tone) string {
 	switch tone {
 	case ui.ToneUser:
 		return string(ui.ToneAccent)
-	case ui.TonePending:
-		return string(ui.ToneWarning)
 	case ui.ToneNeutral:
 		return ""
 	}
