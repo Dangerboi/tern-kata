@@ -59,9 +59,23 @@ type FilterFormState struct {
 	Sent SaveFilters
 }
 
-// Value is the filter value the field called name holds, "" for a name that is not a Filter field.
+// Value is the filter value the field called name holds, "" for a name that is not a Filter field or the search text.
 func (f Filters) Value(name Field) string {
-	return viewTable.value(ViewFormState{Values: f}, name)
+	switch name {
+	case FilterProject:
+		return f.ProjectUID
+	case FilterStatus:
+		return f.Status
+	case FilterOwner:
+		return f.Owner
+	case FilterLabel:
+		return f.Label
+	case FilterRelationship:
+		return f.Relationship
+	case FilterSearch:
+		return f.Search
+	}
+	return ""
 }
 
 // FilterChoices is the values the choice field called name cycles through, in the order the form shows them; nil for a text

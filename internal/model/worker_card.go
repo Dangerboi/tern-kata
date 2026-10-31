@@ -65,15 +65,7 @@ var workerTable = fieldTable[WorkerCardState]{
 		textField(WorkerFieldCommand, func(f *WorkerCardState) *string { return &f.Command }),
 		textField(WorkerFieldModel, func(f *WorkerCardState) *string { return &f.Model }),
 		textField(WorkerFieldThinking, func(f *WorkerCardState) *string { return &f.Thinking }),
-		choiceField(WorkerFieldTrust,
-			func(f *WorkerCardState, _ bool) { f.Trusted = !f.Trusted },
-			func(f *WorkerCardState, i int) bool {
-				if i != 0 && i != 1 {
-					return false
-				}
-				f.Trusted = i == 1
-				return true
-			}),
+		yesNoField(WorkerFieldTrust, func(f *WorkerCardState) *bool { return &f.Trusted }),
 	},
 }
 
