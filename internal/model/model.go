@@ -439,13 +439,16 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		}
 	case SelectMsg:
 		return selectRow(m, msg.UID), nil
-	case MenuPickMsg:
+	case ContextMenuPickMsg:
 		selected := selectRow(m, msg.UID)
 		if selected.SelectedUID != msg.UID {
 			return m, nil
 		}
 		selected.Notice, selected.NoticeLink = "", nil
-		return update(selected, KeyMsg{Chord: msg.Chord})
+		if binding, ok := LookupBindingForMode(msg.Chord, msg.Mode); ok && binding.entry != nil {
+			return binding.entry.handle(selected)
+		}
+		return selected, nil
 	case ResizeMsg:
 		m.Cols, m.Rows = msg.Cols, msg.Rows
 	case PaneRowsMsg:

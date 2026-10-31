@@ -12,8 +12,11 @@ func TestTOpensTheDurationFormNamingTheIssue(t *testing.T) {
 	if !s.Model.FieldForm.Open || s.Model.FieldForm.Action != model.TimedAssignAction || s.Model.FieldForm.UID != "alpha" {
 		t.Fatalf("t opened %+v", s.Model.FieldForm)
 	}
-	if got, want := s.Model.FieldFormTitle(), "Assignment duration for #aaaa (1m..24h, e.g. 1h)"; got != want {
+	if got, want := s.Model.FieldFormTitle(), "Assignment duration (1m..24h, e.g. 1h)"; got != want {
 		t.Fatalf("title %q, want %q", got, want)
+	}
+	if got, want := s.Model.FieldFormMeta(), "#aaaa"; got != want {
+		t.Fatalf("meta %q, want %q", got, want)
 	}
 }
 

@@ -54,10 +54,11 @@ func board(m model.Model, now time.Time) tern.Element {
 		selected = m.Relationships.Of(m.SelectedUID)
 	}
 	lanes := make([]tern.Element, len(columns))
+	menu := newContextMenuKeys(model.ModeBoard, model.OpenLane)
 	for i, column := range columns {
 		cards := make([]tern.Element, len(column.Cards))
 		for j, card := range column.Cards {
-			cards[j] = boardCard(m, card, tones[i], column.Lane == model.LaneDone, selected, now)
+			cards[j] = boardCard(m, card, tones[i], column.Lane == model.LaneDone, selected, menu, now)
 		}
 		count := strconv.Itoa(len(column.Cards))
 		if column.Total > len(column.Cards) {
@@ -96,7 +97,7 @@ var dateTones = map[model.DateTone]ui.Tone{
 // boardCard is one Issue: its short id over its title clamped to two lines and its labels that are not Lane labels. The selected card
 // is unclamped and adds the owner and every label. The id is a badge in its Lane's tone; the title is the normal text colour, a Done
 // card's muted. The id row ends with the Date badge of an open card; the selected card adds the Dates line. Labels are info badges, the owner a user badge, "also" warning and the reopen hint muted.
-func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, selectedRels model.Relationships, now time.Time) tern.Element {
+func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, selectedRels model.Relationships, menu contextMenuKeys, now time.Time) tern.Element {
 	issue := card.Issue
 	selected := issue.UID == m.SelectedUID
 	titleStyle := ""
@@ -171,7 +172,7 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 	}
 	body = slices.Insert(body, 0, tern.Element(ui.Row{Common: ui.Common{Key: "id"}, Gap: ui.GapSM, Wrap: true, Children: ids}))
 	return ui.Card{
-		Common:   ui.Common{Key: issue.UID, Tone: cardTone, Actions: &ui.Actions{Click: CardClick(issue.UID), DblClick: OpenRowClick(issue.UID), Menu: issueMenu(model.ModeBoard, issue, model.OpenLane)}},
+		Common:   ui.Common{Key: issue.UID, Tone: cardTone, Actions: &ui.Actions{Click: CardClick(issue.UID), DblClick: OpenRowClick(issue.UID), Menu: menu.of(issue)}},
 		Selected: selected,
 		Children: body,
 	}

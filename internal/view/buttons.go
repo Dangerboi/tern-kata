@@ -2,6 +2,9 @@ package view
 
 import (
 	"strconv"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
@@ -98,19 +101,34 @@ func choiceField(name model.Field, tone ui.Tone, title, prompt string, labels []
 		ui.Row{Common: ui.Common{Key: "choices", Grow: 1}, Gap: ui.GapMD, Wrap: true, Children: choices})}
 }
 
+// cardKeys are the key labels of action in mode, as keycaps, and the chord of the first: what a click on its button or menu row
+// presses. An action with no binding in mode has no keys and no chord.
+func cardKeys(mode model.Mode, action model.Action) (keys []string, chord string) {
+	bindings := model.CardKeys(mode, action)
+	if len(bindings) > 0 {
+		chord = bindings[0].Chord
+	}
+	return keycaps(bindings), chord
+}
+
+// keycaps are the keycap texts of bindings. Tern draws letter keycaps in capitals, so a shifted letter is "⇧" and the letter, as the
+// key legend draws it, and never reads the same as the plain letter's.
+func keycaps(bindings []model.Binding) []string {
+	keys := make([]string, len(bindings))
+	for i, b := range bindings {
+		keys[i] = b.Key
+		if letter, ok := strings.CutPrefix(b.Chord, "shift+"); ok && utf8.RuneCountInString(letter) == 1 && unicode.IsLetter([]rune(letter)[0]) {
+			keys[i] = "⇧" + letter
+		}
+	}
+	return keys
+}
+
 // cardButton is a card's Tern button for action in mode. Its click is the key press of the action's first non-headless chord
 // and its keycaps are every non-headless key label of the action, so a click and the key never disagree and a rebind moves
 // both. An action with no binding in its mode gets no chord, which the driver's card test fails.
 func cardButton(key string, mode model.Mode, action model.Action, words string, primary bool) ui.Button {
-	bindings := model.CardKeys(mode, action)
-	chord := ""
-	keys := make([]string, len(bindings))
-	for i, b := range bindings {
-		keys[i] = b.Key
-	}
-	if len(bindings) > 0 {
-		chord = bindings[0].Chord
-	}
+	keys, chord := cardKeys(mode, action)
 	button := ui.Button{Common: ui.Common{Key: key, Actions: &ui.Actions{Click: KeyClick(chord)}}, Text: words, Keys: keys}
 	if primary {
 		button.Variant = ui.ButtonPrimary
@@ -137,8 +155,8 @@ func unavailable(button ui.Button, reason string) ui.Button {
 }
 
 // menuButton is the top bar's Menu button at Tern's default size, the key that opens the Menu as its keycap.
-func menuButton() ui.Button {
-	return ui.Button{Common: ui.Common{Key: "menu", Shrink: new(float64), Actions: &ui.Actions{Click: MenuClick}}, Text: "Menu", Keys: model.MenuKeys()}
+func menuButton(m model.Model) ui.Button {
+	return ui.Button{Common: ui.Common{Key: "menu", Shrink: new(float64), Actions: &ui.Actions{Click: MenuClick}}, Text: "Menu", Keys: keycaps(m.MenuKeys())}
 }
 
 // footKey is the key of a card's button row while the card is built. Tern keys the footer slot itself, so the buttons' ids are

@@ -8,8 +8,10 @@ import (
 )
 
 const (
-	ModePicker     Mode   = "picker"
-	OpenPicker     Action = "open-picker"
+	ModePicker Mode   = "picker"
+	OpenPicker Action = "open-picker"
+	// ShowMenu is the key that opens the Menu from the list; a click on the top bar's Menu button is OpenPicker.
+	ShowMenu       Action = "show-menu"
 	OpenProjects   Action = "open-projects"
 	OpenInbox      Action = "open-inbox"
 	ClosePicker    Action = "close-picker"
@@ -365,13 +367,11 @@ func updatePicker(m Model, msg KeyMsg) (Model, []Cmd) {
 	return m, nil
 }
 
-// MenuKeys are the key labels of the binding that opens the Menu from the list, which the top bar's Menu button shows as keycaps.
-func MenuKeys() []string {
-	var keys []string
-	for _, b := range Keymap {
-		if b.Mode == ModeList && b.Action == DrillOut && b.Help == "Menu" {
-			keys = append(keys, b.Key)
-		}
+// MenuKeys are the bindings that open the Menu from where the Pane is now, which the top bar's Menu button shows as keycaps: esc, only
+// where esc opens the Menu rather than going back or to the sidebar. None elsewhere.
+func (m Model) MenuKeys() []Binding {
+	if m.Focus != ColumnList || m.SidebarShown() || m.EscGoesBack() {
+		return nil
 	}
-	return keys
+	return CardKeys(m.CurrentMode(), ShowMenu)
 }
