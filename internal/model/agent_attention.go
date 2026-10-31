@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -16,6 +17,8 @@ const agentAttentionMaxBytes = 1024
 type RaisedAttention struct {
 	UID       string
 	ProjectID int64
+	// Message is the text this Pane last wrote, which its clear is guarded on.
+	Message string
 }
 
 // RaiseAgentAttention writes the Attention request for Address on an Issue, replacing any earlier one, as Actor.
@@ -30,13 +33,15 @@ type RaiseAgentAttention struct {
 
 func (RaiseAgentAttention) cmd() {}
 
-// ClearAgentAttention clears the request for Address on an Issue whatever it holds.
+// ClearAgentAttention clears the request for Address on an Issue when it still reads as Actor wrote it with Message; a request
+// someone else wrote since is left alone.
 type ClearAgentAttention struct {
 	Workspace string
 	ProjectID int64
 	UID       string
 	Actor     string
 	Address   string
+	Message   string
 }
 
 func (ClearAgentAttention) cmd() {}
@@ -104,17 +109,21 @@ func (m Model) raised(uid string) bool {
 	return false
 }
 
-// raiseAgentAttention applies the relay just received: an agent this Pane started that entered waiting raises the request with
-// its message, and a request this Pane raised is cleared once no mapped agent on its Issue waits. An Inbox address kata refuses
-// writes nothing.
-func raiseAgentAttention(m Model) (Model, []Cmd) {
+// raiseAgentAttention applies the relay just received (relayed) or the mapping just reloaded: an agent this Pane started that
+// entered waiting in that relay raises the request with its message, as does one that waits while its Issue holds no request from this Pane (the Pane
+// learned of it late); a request this Pane raised is cleared once no mapped agent on its Issue waits. An Inbox address kata
+// refuses writes nothing.
+func raiseAgentAttention(m Model, relayed bool) (Model, []Cmd) {
 	address, err := m.InboxAddress()
 	if err != nil || m.PaneBlock == "" {
 		return m, nil
 	}
 	var cmds []Cmd
 	for _, e := range m.AgentMapping {
-		if e.PaneBlock != m.PaneBlock || !m.Agents.entered(e.Block, AgentWaitingInput) {
+		if e.PaneBlock != m.PaneBlock || !agentWaiting(m.Agents.States, e.Block) {
+			continue
+		}
+		if !(relayed && m.Agents.entered(e.Block, AgentWaitingInput)) && m.raised(e.IssueUID) {
 			continue
 		}
 		project := m.projectOf(e)
@@ -127,10 +136,15 @@ func raiseAgentAttention(m Model) (Model, []Cmd) {
 				last = s.LastMessage
 			}
 		}
-		if !m.raised(e.IssueUID) {
-			m.AgentAttention = append(m.AgentAttention, RaisedAttention{UID: e.IssueUID, ProjectID: project})
+		message := agentAttentionMessage(last)
+		raised := RaisedAttention{UID: e.IssueUID, ProjectID: project, Message: message}
+		if i := slices.IndexFunc(m.AgentAttention, func(r RaisedAttention) bool { return r.UID == e.IssueUID }); i >= 0 {
+			m.AgentAttention = slices.Clone(m.AgentAttention)
+			m.AgentAttention[i] = raised
+		} else {
+			m.AgentAttention = append(slices.Clone(m.AgentAttention), raised)
 		}
-		cmds = append(cmds, RaiseAgentAttention{Workspace: m.Workspace, ProjectID: project, UID: e.IssueUID, Actor: m.Actor, Address: address, Message: agentAttentionMessage(last)})
+		cmds = append(cmds, RaiseAgentAttention{Workspace: m.Workspace, ProjectID: project, UID: e.IssueUID, Actor: m.Actor, Address: address, Message: message})
 	}
 	kept := m.AgentAttention[:0:0]
 	for _, r := range m.AgentAttention {
@@ -138,10 +152,14 @@ func raiseAgentAttention(m Model) (Model, []Cmd) {
 			kept = append(kept, r)
 			continue
 		}
-		cmds = append(cmds, ClearAgentAttention{Workspace: m.Workspace, ProjectID: r.ProjectID, UID: r.UID, Actor: m.Actor, Address: address})
+		cmds = append(cmds, m.clearOf(r, address))
 	}
 	m.AgentAttention = kept
 	return m, cmds
+}
+
+func (m Model) clearOf(r RaisedAttention, address string) ClearAgentAttention {
+	return ClearAgentAttention{Workspace: m.Workspace, ProjectID: r.ProjectID, UID: r.UID, Actor: m.Actor, Address: address, Message: r.Message}
 }
 
 // QuitAgentAttention is what a quitting Pane still owes: the clears of the requests it raised, except where another Pane's
@@ -154,7 +172,7 @@ func (m Model) QuitAgentAttention() []Cmd {
 	var cmds []Cmd
 	for _, r := range m.AgentAttention {
 		if !m.agentWaitingOnOthers(r.UID) {
-			cmds = append(cmds, ClearAgentAttention{Workspace: m.Workspace, ProjectID: r.ProjectID, UID: r.UID, Actor: m.Actor, Address: address})
+			cmds = append(cmds, m.clearOf(r, address))
 		}
 	}
 	return cmds

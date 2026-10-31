@@ -33,8 +33,8 @@ func raise(uid string, project int64, message string) model.RaiseAgentAttention 
 	return model.RaiseAgentAttention{Workspace: "/w", ProjectID: project, UID: uid, Actor: "dana", Address: "dana", Message: message}
 }
 
-func clearOf(uid string, project int64) model.ClearAgentAttention {
-	return model.ClearAgentAttention{Workspace: "/w", ProjectID: project, UID: uid, Actor: "dana", Address: "dana"}
+func clearOf(uid string, project int64, message string) model.ClearAgentAttention {
+	return model.ClearAgentAttention{Workspace: "/w", ProjectID: project, UID: uid, Actor: "dana", Address: "dana", Message: message}
 }
 
 func TestAgentEnteringWaitingRaisesTheRequestOnce(t *testing.T) {
@@ -77,7 +77,7 @@ func TestRequestStaysWhileAnyMappedAgentOnTheIssueWaits(t *testing.T) {
 		t.Fatalf("cleared while another Pane's agent waits: %v", cmds)
 	}
 	_, cmds = relay(t, m, st("11", "working", ""), st("12", "exited", ""), st("21", "working", ""))
-	if want := []model.Cmd{clearOf("u1", 3)}; !reflect.DeepEqual(cmds, want) {
+	if want := []model.Cmd{clearOf("u1", 3, "b")}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("cmds %v, want the clear once no mapped agent on the Issue waits", cmds)
 	}
 }
@@ -85,21 +85,21 @@ func TestRequestStaysWhileAnyMappedAgentOnTheIssueWaits(t *testing.T) {
 func TestClearsOnlyTheIssueWhoseAgentsStoppedWaiting(t *testing.T) {
 	m, _ := relay(t, attentionPane(), st("11", "waiting_input", "a"), st("13", "waiting_input", "b"))
 	m, cmds := relay(t, m, st("11", "waiting_input", "a"), st("13", "working", ""))
-	if want := []model.Cmd{clearOf("u2", 4)}; !reflect.DeepEqual(cmds, want) {
+	if want := []model.Cmd{clearOf("u2", 4, "b")}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("cmds %v, want %v", cmds, want)
 	}
-	if want := []model.RaisedAttention{{UID: "u1", ProjectID: 3}}; !reflect.DeepEqual(m.AgentAttention, want) {
+	if want := []model.RaisedAttention{{UID: "u1", ProjectID: 3, Message: "a"}}; !reflect.DeepEqual(m.AgentAttention, want) {
 		t.Fatalf("raised %v, want %v", m.AgentAttention, want)
 	}
 }
 
 func TestQuitClearsWhatThePaneRaisedUnlessAnotherPanesAgentWaits(t *testing.T) {
 	m, _ := relay(t, attentionPane(), st("11", "waiting_input", "a"), st("13", "waiting_input", "b"))
-	if want := []model.Cmd{clearOf("u1", 3), clearOf("u2", 4)}; !reflect.DeepEqual(m.QuitAgentAttention(), want) {
+	if want := []model.Cmd{clearOf("u1", 3, "a"), clearOf("u2", 4, "b")}; !reflect.DeepEqual(m.QuitAgentAttention(), want) {
 		t.Fatalf("quit cmds %v, want %v", m.QuitAgentAttention(), want)
 	}
 	m, _ = relay(t, m, st("11", "waiting_input", "a"), st("13", "waiting_input", "b"), st("21", "waiting_input", "c"))
-	if want := []model.Cmd{clearOf("u2", 4)}; !reflect.DeepEqual(m.QuitAgentAttention(), want) {
+	if want := []model.Cmd{clearOf("u2", 4, "b")}; !reflect.DeepEqual(m.QuitAgentAttention(), want) {
 		t.Fatalf("quit cmds %v, want only the Issue no other Pane's agent waits on", m.QuitAgentAttention())
 	}
 	if cmds := attentionPane().QuitAgentAttention(); len(cmds) != 0 {
@@ -150,5 +150,61 @@ func TestEntryWithoutAProjectUsesTheModelsIssue(t *testing.T) {
 	_, cmds = relay(t, m, st("11", "waiting_input", "a"))
 	if want := []model.Cmd{raise("u9", 7, "a")}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("cmds %v, want %v", cmds, want)
+	}
+}
+
+func TestAgentWaitingBeforeItsEntryIsMappedRaisesOneRequestWhenTheMappingArrives(t *testing.T) {
+	pane := attentionPane()
+	mapping := pane.AgentMapping
+	pane.AgentMapping = nil
+	m, cmds := relay(t, pane, st("11", "waiting_input", "which table?"))
+	if len(cmds) != 0 {
+		t.Fatalf("an unmapped agent raised %v", cmds)
+	}
+	m, cmds = model.Update(m, model.AgentsRefreshed{Agents: mapping})
+	if want := []model.Cmd{raise("u1", 3, "which table?")}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("cmds %v, want %v", cmds, want)
+	}
+	if _, cmds = relay(t, m, st("11", "waiting_input", "which table?")); len(cmds) != 0 {
+		t.Fatalf("a second request: %v", cmds)
+	}
+	if _, cmds = model.Update(m, model.AgentsRefreshed{Agents: mapping}); len(cmds) != 0 {
+		t.Fatalf("a reload raised again: %v", cmds)
+	}
+}
+
+func TestAgentWaitingWhenItsEntryIsMappedFirstRaisesOneRequest(t *testing.T) {
+	m, cmds := model.Update(attentionPane(), model.AgentsRefreshed{Agents: attentionPane().AgentMapping})
+	if len(cmds) != 0 {
+		t.Fatalf("no relay yet, yet %v", cmds)
+	}
+	m, cmds = relay(t, m, st("11", "waiting_input", "which table?"))
+	if want := []model.Cmd{raise("u1", 3, "which table?")}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("cmds %v, want %v", cmds, want)
+	}
+	if _, cmds = relay(t, m, st("11", "waiting_input", "which table?")); len(cmds) != 0 {
+		t.Fatalf("a second request: %v", cmds)
+	}
+}
+
+func TestAdoptedWaitingAgentRaisesARequestWhenThePaneAdoptsIt(t *testing.T) {
+	m := attentionPane()
+	m.AgentMapping = []model.AgentEntry{{IssueUID: "u1", ProjectID: 3, Block: "21", PaneBlock: "20"}}
+	m, _ = relay(t, m, st("21", "waiting_input", "q?"))
+	adopted := []model.AgentEntry{{IssueUID: "u1", ProjectID: 3, Block: "21", PaneBlock: "10"}}
+	_, cmds := model.Update(m, model.AgentsPruned{Agents: adopted})
+	if want := []model.Cmd{raise("u1", 3, "q?")}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("cmds %v, want %v", cmds, want)
+	}
+}
+
+func TestDroppingAWaitingAgentsEntryClearsItsRequestWithoutAnotherRelay(t *testing.T) {
+	m, _ := relay(t, attentionPane(), st("13", "waiting_input", "b"))
+	m, cmds := model.Update(m, model.AgentsRefreshed{Agents: attentionPane().AgentMapping[:3]})
+	if want := []model.Cmd{clearOf("u2", 4, "b")}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("cmds %v, want %v", cmds, want)
+	}
+	if len(m.AgentAttention) != 0 {
+		t.Fatalf("raised %v", m.AgentAttention)
 	}
 }

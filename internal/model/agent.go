@@ -143,8 +143,8 @@ func agentStarted(m Model, msg AgentStarted) Model {
 }
 
 // agentsPruned takes in the entries even when tern could not be asked: they are the file as read, as a later refresh keeps them.
-func agentsPruned(m Model, msg AgentsPruned) Model {
+func agentsPruned(m Model, msg AgentsPruned) (Model, []Cmd) {
 	m.AgentMapping = msg.Agents
 	m.Agents = m.Agents.trimmed(m.agentMapped)
-	return m
+	return raiseAgentAttention(m, false)
 }

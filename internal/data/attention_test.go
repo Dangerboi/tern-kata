@@ -231,7 +231,7 @@ func TestATypedReplyToTheCommentARequestNamesRemovesItFromTheNextRead(t *testing
 	}
 }
 
-func TestAgentAttentionReplacesAnEarlierRequestAndClearsWithoutAGuard(t *testing.T) {
+func TestAgentAttentionReplacesAnEarlierRequestAndClears(t *testing.T) {
 	f := newAttentionFixture(t)
 	uid := createIssue(t, f.gateway, f.work, f.workP, "Waiting")
 	f.put(t, f.workP, uid, "dana", map[string]any{"from": "bob", "message": "an earlier request"})
@@ -251,12 +251,36 @@ func TestAgentAttentionReplacesAnEarlierRequestAndClearsWithoutAGuard(t *testing
 	}
 	raise("which table?") // the same value again changes nothing and is no error
 	cleared := as[model.AgentAttentionWritten](t, run(t, f.gateway, model.ClearAgentAttention{
-		Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Address: "dana",
+		Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Address: "dana", Message: "which table?",
 	}))
 	if cleared.Err != nil || !cleared.Clear || cleared.UID != uid {
 		t.Fatalf("clear: %+v", cleared)
 	}
 	if left := f.read(t, "dana").Requests; len(left) != 0 {
 		t.Fatalf("requests after the clear: %+v", left)
+	}
+}
+
+func TestAgentAttentionClearLeavesARequestSomeoneElseWroteSince(t *testing.T) {
+	f := newAttentionFixture(t)
+	uid := createIssue(t, f.gateway, f.work, f.workP, "Waiting")
+	as[model.AgentAttentionWritten](t, run(t, f.gateway, model.RaiseAgentAttention{
+		Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Address: "dana", Message: "which table?",
+	}))
+	f.put(t, f.workP, uid, "dana", map[string]any{"from": "bob", "message": "a newer ask"})
+	clear := func() model.AgentAttentionWritten {
+		return as[model.AgentAttentionWritten](t, run(t, f.gateway, model.ClearAgentAttention{
+			Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Address: "dana", Message: "which table?",
+		}))
+	}
+	if got := clear(); got.Err != nil || !got.Clear {
+		t.Fatalf("clear: %+v, want a refused guard to count as done", got)
+	}
+	if left := f.read(t, "dana").Requests; len(left) != 1 || left[0].Slot.From != "bob" || left[0].Slot.Message != "a newer ask" {
+		t.Fatalf("requests after the clear: %+v, want the newer request kept", left)
+	}
+	f.put(t, f.workP, uid, "dana", nil)
+	if got := clear(); got.Err != nil {
+		t.Fatalf("clear of a slot that is gone: %+v", got)
 	}
 }

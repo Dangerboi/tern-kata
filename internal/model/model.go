@@ -307,7 +307,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case AgentStarted:
 		return agentStarted(m, msg), nil
 	case AgentsPruned:
-		return agentsPruned(m, msg), nil
+		return agentsPruned(m, msg)
 	case FiltersSaved:
 		return filtersSaved(m, msg)
 	case ViewsLoaded:
@@ -380,7 +380,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m, cmds := relayAgents(m, msg)
 		m, back := sendAgentsBack(m)
 		m, flagged := followAgents(m, m.Agents.listedStates())
-		m, raised := raiseAgentAttention(m)
+		m, raised := raiseAgentAttention(m, true)
 		m, ended := closeFinishedAgents(m, closeOnRelay)
 		return m, append(append(append(append(cmds, back...), flagged...), raised...), ended...)
 	case AgentIssueRead:

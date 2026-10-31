@@ -107,3 +107,18 @@ func TestAClickOnTheBadgeFocusesAnAgentThatIsNotInTheBackground(t *testing.T) {
 		t.Fatalf("cmds %#v", cmds)
 	}
 }
+
+func TestAnAgentOfAnUnknownSplitPromptFileReReadsAgentsJSONOnceAndEveryNameShapeMatches(t *testing.T) {
+	for _, name := range []string{"prompt-24734716657667-3836283849.md", "prompt-3836283849.md", "prompt-4-5.md"} {
+		m := model.Model{AgentMapping: []model.AgentEntry{entry("a", "7", 1)}}
+		other := model.AgentState{Block: "9", State: "idle", Command: "omp @/state/agent-prompts/" + name}
+		m, cmds := relayed(m, model.AgentState{Block: "7", State: "idle"}, other)
+		if want := []model.Cmd{model.RefreshAgents{}}; !reflect.DeepEqual(cmds, want) {
+			t.Fatalf("%s: first relay %#v, want a re-read", name, cmds)
+		}
+		m, _ = model.Update(m, model.AgentsRefreshed{Agents: m.AgentMapping})
+		if _, cmds := relayed(m, model.AgentState{Block: "7", State: "working"}, other); cmds != nil {
+			t.Errorf("%s: asked twice: %#v", name, cmds)
+		}
+	}
+}
