@@ -59,7 +59,7 @@ func (w *Worker) overlapGate(projectUID, jobUID string) *sync.Mutex {
 
 // RunOccurrence prepares the run of one scheduled occurrence of a job in a served Project and starts it. The same
 // occurrence always maps to the same run uid; when that run already has a journal, it is returned and created is false.
-// The scheduler uses this entry point.
+// The Project schedule uses this entry point.
 func (w *Worker) RunOccurrence(ctx context.Context, project, jobUID string, occurrence time.Time) (runUID string, created bool, err error) {
 	ps := w.projectNamed(project)
 	if ps == nil {

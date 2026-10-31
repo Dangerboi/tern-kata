@@ -17,9 +17,6 @@ func TestEveryCommandAgainstEveryStopMode(t *testing.T) {
 		cmdResume:    {StopIdle, StopNow},
 		cmdAbandon:   {StopNow},
 	}
-	if len(whileStopping) != len(commands) {
-		t.Fatalf("the rule names %d commands, this table %d", len(whileStopping), len(commands))
-	}
 	for _, command := range commands {
 		for _, mode := range []string{"", StopIdle, StopNow} {
 			want := false

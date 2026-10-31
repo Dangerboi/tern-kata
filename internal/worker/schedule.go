@@ -31,7 +31,7 @@ const (
 )
 
 // trigger yields the occurrences of one job definition. It is the extension point for a new trigger kind: build it in
-// newTrigger and the rest of the scheduler (checkpoints, catchup, overlap, capacity, admission) applies unchanged.
+// newTrigger and the rest of the schedule (checkpoints, catchup, overlap, capacity, admission) applies unchanged.
 type trigger interface {
 	// next is the first occurrence strictly after t, the zero time when there is none.
 	next(t time.Time) time.Time
@@ -85,6 +85,12 @@ func newTrigger(job cronjob.Job, date time.Time) (trigger, error) {
 	return nil, nil
 }
 
+// adapterJob reports whether the job is one the worker may schedule at all: kata's daemon owns native jobs and archived
+// jobs are gone. disabledAdapterJob is such a job that is switched off.
+func adapterJob(job cronjob.Job) bool { return !job.Archived() && !job.Native() }
+
+func disabledAdapterJob(job cronjob.Job) bool { return adapterJob(job) && !job.Definition.Enabled }
+
 // schedulable reports whether the worker plans occurrences for the job. Native jobs belong to kata's daemon, disabled
 // and archived jobs schedule nothing, and so does the one notify job kata's own date sweeper already delivers: a
 // zero-lead `current-owner-or-author` notification of the trigger's own Issue on its date (ADR-0011). A job that notifies
@@ -92,7 +98,7 @@ func newTrigger(job cronjob.Job, date time.Time) (trigger, error) {
 // names another adapter is that adapter's.
 func schedulable(job cronjob.Job) bool {
 	d := job.Definition
-	if job.Archived() || job.Native() || !d.Enabled {
+	if !adapterJob(job) || !d.Enabled {
 		return false
 	}
 	if job.OtherAdapter() != "" {
@@ -177,8 +183,6 @@ type jobSchedule struct {
 	parked []time.Time
 	// catchup is the policy the last plan applied, which decides how many pending occurrences a park records.
 	catchup string
-	// paused is the checkpoint's pause mark, carried from load until the job is planned again.
-	paused bool
 }
 
 // checkpoint is projects/<uid>/schedule/<job uid>.json (ADR-0006): everything decided through a time and the
@@ -194,18 +198,17 @@ type checkpoint struct {
 	Paused             bool        `json:"paused,omitempty"` // the job was disabled: its time off is never caught up
 }
 
-// checkpointStore keeps one checkpoint per job. A save that fails is the store's to report: the scheduler goes on with
+// checkpointStore keeps one checkpoint per job. A save that fails is the store's to report: the schedule goes on with
 // its in-memory state and the next change saves again.
 type checkpointStore interface {
 	Load(jobUID string) (checkpoint, bool)
 	Save(jobUID string, c checkpoint)
 }
 
-// fileCheckpoints is the checkpointStore of one Project's schedule folder.
+// fileCheckpoints is the checkpointStore of one Project's schedule folder; log is the Project's prefixed logger.
 type fileCheckpoints struct {
-	dir     string
-	project string
-	log     func(format string, args ...any)
+	dir string
+	log func(format string, args ...any)
 }
 
 func (f fileCheckpoints) path(jobUID string) string { return filepath.Join(f.dir, jobUID+".json") }
@@ -217,7 +220,7 @@ func (f fileCheckpoints) Load(jobUID string) (checkpoint, bool) {
 	}
 	var c checkpoint
 	if json.Unmarshal(raw, &c) != nil || c.Version != 1 || c.Through.IsZero() {
-		f.log("Project %s: the schedule checkpoint of job %s is unreadable and was ignored", f.project, jobUID)
+		f.log("the schedule checkpoint of job %s is unreadable and was ignored", jobUID)
 		return checkpoint{}, false
 	}
 	return c, true
@@ -230,47 +233,45 @@ func (f fileCheckpoints) Save(jobUID string, c checkpoint) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err == nil {
 		err = replaceFile(path, raw)
 		if err != nil {
-			f.log("Project %s: saving the schedule of job %s: %v", f.project, jobUID, err)
+			f.log("saving the schedule of job %s: %v", jobUID, err)
 		}
 	}
 }
 
-// scheduler is one Project's schedule: it owns the checkpoints, plans what became due and admits waiting occurrences.
-// It reaches the rest of the worker through four seams: the checkpoint store, admit (run preparation: one occurrence
-// is always one run, and a journal that already covers it is returned with created false), issueDate and stopped.
-// It belongs to the Project loop.
-type scheduler struct {
-	project   string
+// projectSchedule is one Project's schedule: it owns the checkpoints, plans what became due and admits waiting
+// occurrences. It reaches the rest of the worker through four seams: the checkpoint store, admit (run preparation: one
+// occurrence is always one run, and a journal that already covers it is returned with created false), issueDate and
+// stopped. log is the Project's own logger, prefixed with its name. It belongs to the Project loop.
+type projectSchedule struct {
 	store     checkpointStore
 	admit     func(ctx context.Context, jobUID string, occurrence time.Time) (runUID string, created bool, err error)
 	issueDate func(job cronjob.Job) (at time.Time, known bool)
 	stopped   func() bool
-	logf      func(format string, args ...any)
+	log       func(format string, args ...any)
 	jobs      map[string]*jobSchedule
 	// paused holds the disabled jobs whose checkpoint already carries the pause mark.
 	paused map[string]bool
 }
 
-func (s *scheduler) log(format string, args ...any) {
-	s.logf("Project %s: "+format, append([]any{s.project}, args...)...)
+// save writes the job's state as its checkpoint, which never carries the pause mark: a saved job is scheduled.
+func (s *projectSchedule) save(jobUID string, st *jobSchedule) {
+	s.store.Save(jobUID, checkpoint{DefinitionEventUID: st.defEvent, Through: st.through, Date: st.date, DateSeen: st.dateSeen, Pending: st.pending, Parked: st.parked})
 }
 
-// save writes the job's state as its checkpoint.
-func (s *scheduler) save(jobUID string, st *jobSchedule) {
-	s.store.Save(jobUID, checkpoint{DefinitionEventUID: st.defEvent, Through: st.through, Date: st.date, DateSeen: st.dateSeen, Pending: st.pending, Parked: st.parked, Paused: st.paused})
-}
-
-// newScheduler builds the schedule of a served Project over the worker's files, run preparation and clock.
-func (w *Worker) newScheduler(ps *projectState) *scheduler {
-	return &scheduler{
-		project: ps.cfg.Name,
-		store:   fileCheckpoints{dir: filepath.Join(w.opt.Dirs.ProjectDir(ps.project.UID), "schedule"), project: ps.cfg.Name, log: w.opt.Log},
+// newProjectSchedule builds the schedule of a served Project over the worker's files, run preparation and clock.
+func (w *Worker) newProjectSchedule(ps *projectState) *projectSchedule {
+	name := ps.cfg.Name
+	log := func(format string, args ...any) {
+		w.opt.Log("Project %s: "+format, append([]any{name}, args...)...)
+	}
+	return &projectSchedule{
+		store: fileCheckpoints{dir: filepath.Join(w.opt.Dirs.ProjectDir(ps.project.UID), "schedule"), log: log},
 		admit: func(ctx context.Context, jobUID string, at time.Time) (string, bool, error) {
-			return w.RunOccurrence(ctx, ps.cfg.Name, jobUID, at)
+			return w.RunOccurrence(ctx, name, jobUID, at)
 		},
 		issueDate: func(job cronjob.Job) (time.Time, bool) { return w.issueDate(ps, job) },
 		stopped:   w.halted.Load,
-		logf:      w.opt.Log,
+		log:       log,
 		jobs:      map[string]*jobSchedule{},
 		paused:    map[string]bool{},
 	}
@@ -343,8 +344,9 @@ func selectOccurrences(cands []time.Time, now time.Time, catchup string, grace t
 
 // plan brings one job's state up to now: rebuild it when the definition changed, collect the occurrences that became
 // due, and apply the catchup policy to them and to those still waiting.
-func (s *scheduler) plan(job cronjob.Job, now time.Time) {
+func (s *projectSchedule) plan(job cronjob.Job, now time.Time) {
 	st := s.jobs[job.UID]
+	resumed := false
 	if st == nil {
 		st = &jobSchedule{}
 		s.jobs[job.UID] = st
@@ -354,15 +356,12 @@ func (s *scheduler) plan(job cronjob.Job, now time.Time) {
 			st.dateSeen = c.DateSeen || !c.Date.IsZero()
 			if c.Paused { // it was disabled: scheduling starts again now, work already waiting keeps its rules
 				st.through = maxTime(now, job.CreatedAt)
-				st.paused = true
+				resumed = true
 			}
 		}
 	}
-	changed := false
+	changed := resumed
 	firstSight := st.through.IsZero()
-	if st.paused {
-		st.paused, changed = false, true
-	}
 	if firstSight { // first sight: work starts at the later of now and the job's creation
 		st.through, changed = maxTime(now, job.CreatedAt), true
 	}
@@ -447,13 +446,14 @@ func (s *scheduler) plan(job cronjob.Job, now time.Time) {
 }
 
 // tick evaluates one Project's schedule and returns when the next occurrence of any of its jobs is due, the zero time
-// when none is. It runs on the Project loop while the Project's lease is held.
-func (w *Worker) tick(ctx context.Context, ps *projectState) time.Time {
+// when none is. issueEvent says an Issue event woke the loop. It runs on the Project loop while the Project's lease is
+// held.
+func (w *Worker) tick(ctx context.Context, ps *projectState, issueEvent bool) time.Time {
 	if w.halted.Load() || ctx.Err() != nil || w.admitsNothing(ps) != "" {
 		return time.Time{}
 	}
 	if ps.sched == nil {
-		ps.sched = w.newScheduler(ps)
+		ps.sched = w.newProjectSchedule(ps)
 	}
 	now := w.clock.Now()
 	w.refreshDates(ctx, ps)
@@ -462,8 +462,9 @@ func (w *Worker) tick(ctx context.Context, ps *projectState) time.Time {
 	}
 	if ps.sched.anyPending() {
 		// Scheduled work never starts from a cached definition (ADR-0011): read the jobs again, replan, then admit.
-		// A listing younger than the refresh debounce is that read, so a burst of Issue events lists the jobs once.
-		if w.jobsStale(ps) {
+		// Only a tick caused by an Issue event reuses a listing younger than the refresh debounce, so a burst of
+		// Issue events lists the jobs once.
+		if w.jobsStale(ps, issueEvent) {
 			if err := w.refreshJobs(ctx, ps); err != nil {
 				w.opt.Log("Project %s: %v", ps.cfg.Name, err)
 				return time.Time{}
@@ -486,11 +487,16 @@ func (w *Worker) tick(ctx context.Context, ps *projectState) time.Time {
 	return sum.next
 }
 
-// jobsStale reports whether the Project's job list is older than the refresh debounce, or was never read.
-func (w *Worker) jobsStale(ps *projectState) bool {
+// jobsStale reports whether the Project's job list must be read again before admission. A listing that failed or was
+// never made always is. Otherwise only a tick that answers an Issue event may reuse a listing younger than the
+// refresh debounce: due-time and freed-slot admission never starts from a cached copy.
+func (w *Worker) jobsStale(ps *projectState, issueEvent bool) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return ps.jobsAt.IsZero() || w.clock.Now().Sub(ps.jobsAt) >= jobRefreshDebounce
+	if ps.jobsAt.IsZero() || ps.jobsErr != "" || !issueEvent {
+		return true
+	}
+	return w.clock.Now().Sub(ps.jobsAt) >= jobRefreshDebounce
 }
 
 // summary is what a tick reports after planning and admission: the queued and scheduled counts, the next occurrence
@@ -501,7 +507,7 @@ type summary struct {
 	waiting           []JobNote
 }
 
-func (s *scheduler) summary(now time.Time) summary {
+func (s *projectSchedule) summary(now time.Time) summary {
 	var sum summary
 	for uid, st := range s.jobs {
 		sum.queued += len(st.pending)
@@ -532,17 +538,17 @@ func sooner(wake, at, now time.Time) time.Time {
 	return wake
 }
 
-// planAll is the worker's side of planning: it hands the Project's schedulable jobs to the scheduler. False means the
+// planAll is the worker's side of planning: it hands the Project's schedulable jobs to the Project schedule. False means the
 // Project has no definitions yet.
 func (w *Worker) planAll(ps *projectState, now time.Time) bool {
 	w.mu.Lock()
-	loaded := !ps.jobsAt.IsZero()
+	loaded := ps.jobs != nil
 	var jobs []cronjob.Job
 	disabled := map[string]bool{}
 	for _, j := range ps.jobs {
 		if schedulable(j) {
 			jobs = append(jobs, j)
-		} else if !j.Archived() && !j.Native() && !j.Definition.Enabled {
+		} else if disabledAdapterJob(j) {
 			disabled[j.UID] = true
 		}
 	}
@@ -555,7 +561,7 @@ func (w *Worker) planAll(ps *projectState, now time.Time) bool {
 }
 
 // planAll plans every given job and forgets the state of jobs that went away.
-func (s *scheduler) planAll(jobs []cronjob.Job, disabled map[string]bool, now time.Time) {
+func (s *projectSchedule) planAll(jobs []cronjob.Job, disabled map[string]bool, now time.Time) {
 	live := map[string]bool{}
 	for _, j := range jobs {
 		live[j.UID] = true
@@ -585,7 +591,7 @@ func (s *scheduler) planAll(jobs []cronjob.Job, disabled map[string]bool, now ti
 	}
 }
 
-func (s *scheduler) anyPending() bool {
+func (s *projectSchedule) anyPending() bool {
 	for _, st := range s.jobs {
 		if len(st.pending) > 0 {
 			return true
@@ -598,7 +604,7 @@ func (s *scheduler) anyPending() bool {
 // only its own job. Whatever stays waiting is looked at again when a run ends and at least every minute. An occurrence
 // leaves the checkpoint only after the journal is admitted, so a crash in between admits it again and the journal that
 // already covers it answers (the same occurrence is always the same run).
-func (s *scheduler) admitDue(ctx context.Context) {
+func (s *projectSchedule) admitDue(ctx context.Context) {
 	type due struct {
 		job string
 		at  time.Time

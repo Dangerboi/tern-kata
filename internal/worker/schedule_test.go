@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -535,4 +536,35 @@ func TestAPerRunIssueGetsItsDateOffsetsFromTheOccurrence(t *testing.T) {
 	if scheduled, deadline := h.kata.PlanningDates(t, h.proj, run.IssueUID); !scheduled.IsZero() || !deadline.IsZero() {
 		t.Errorf("an Issue of a job with no offsets has dates %s and %s", scheduled, deadline)
 	}
+}
+
+// ADR-0011: scheduled work never starts from a cached copy of the definition. The refresh debounce only saves listings
+// for a burst of Issue events; an occurrence that comes due lists the jobs again.
+func TestAJobDisabledJustBeforeItsOccurrenceIsDueDoesNotRunFromTheLastListing(t *testing.T) {
+	h := newHarness(t)
+	def := workertest.Job{Name: "hourly", Prompt: "Do it.", Trigger: interval(3600), GraceSeconds: workertest.Seconds(3600)}
+	job := h.kata.CreateJob(t, h.proj, def)
+	r := h.start(worker.Hooks{})
+	h.scheduled(r, 1)
+	h.eventually("the event stream to open", func() bool { return h.status(r).Following })
+	due := h.nextRun(r, time.Time{})
+
+	listings := func() int {
+		return h.kata.Requests("GET /api/v1/projects/" + strconv.FormatInt(h.proj.ID, 10) + "/cron/jobs")
+	}
+	before := listings()
+	h.advanceTo(due.Add(-1500 * time.Millisecond))
+	h.within("the jobs to be listed 1.5 s before the occurrence", func() bool {
+		h.clock.Advance(time.Millisecond) // wakes a loop whose wait was set just before the jump
+		return listings() > before
+	})
+
+	h.advanceTo(due.Add(-500 * time.Millisecond))
+	off := def
+	off.Disabled = true
+	h.kata.ReplaceJob(t, h.proj, job, off)
+	time.Sleep(300 * time.Millisecond) // the job event reaches the worker, whose debounced listing is not due yet
+
+	h.advanceTo(due)
+	h.quiet(job, 0)
 }

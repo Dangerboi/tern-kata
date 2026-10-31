@@ -134,6 +134,9 @@ type Journal struct {
 	Result  *AgentResult  `json:"result,omitempty"`
 	Outcome *Outcome      `json:"outcome,omitempty"`
 	Intents []Intent      `json:"intents,omitempty"`
+	// IntentsPartial is set while only the final observation is planned: the Issue read that decides the comment and
+	// label failed, so the rest is planned once it succeeds.
+	IntentsPartial bool `json:"intents_partial,omitempty"`
 
 	// Cancel is a request to stop the run, saved before the process is signalled (ADR-0008); the run then ends cancelled.
 	Cancel *CancelRecord `json:"cancel,omitempty"`
@@ -442,19 +445,23 @@ func (s *Store) write(j *Journal, point string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	sync := syncDir
-	if s.hooks.FailDirSync != nil {
-		sync = func(dir string) error {
+	renamed := false // the folder sync runs only once the rename landed
+	sync := func(dir string) error {
+		renamed = true
+		if s.hooks.FailDirSync != nil {
 			if err := s.hooks.FailDirSync(point); err != nil {
 				return err
 			}
-			return syncDir(dir)
 		}
+		return syncDir(dir)
 	}
-	if err := replaceFileSyncing(s.path(j.RunUID), raw, sync); err != nil {
+	err = replaceFileSyncing(s.path(j.RunUID), raw, sync)
+	if renamed {
+		s.noteGate(j) // the file is replaced even when the folder sync failed
+	}
+	if err != nil {
 		return err
 	}
-	s.noteGate(j)
 	if s.hooks.AfterSave != nil {
 		if err := s.hooks.AfterSave(point, j); err != nil {
 			return fmt.Errorf("%w at %s: %w", ErrKilled, point, err)
