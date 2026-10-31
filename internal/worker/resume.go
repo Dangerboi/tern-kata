@@ -32,8 +32,8 @@ type RunTransition struct {
 // expiry before anything starts; the held attempt's prompt is never sent again. by is the actor recorded for the
 // resume. One request owns a run at a time, so two resumes of one hold accept one and the other never touches its slot.
 func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, error) {
-	if w.halted.Load() || w.isStopping() {
-		return RunTransition{}, errStopping
+	if err := w.stopRefusal(cmdResume); err != nil {
+		return RunTransition{}, err
 	}
 	op := w.runOps.get(uid)
 	op.Lock()
@@ -110,10 +110,10 @@ func (w *Worker) heldTokens(j *Journal) (in, out *int64) {
 // SIGTERM, then SIGKILL after 10 s, and the run is recorded cancelled once the group is gone (ADR-0008). A run this
 // machine lost (no journal, or one in quarantine) is recorded `unknown` "local state lost" in kata. It refuses a run
 // that is settled, still being reported, or whose recorded process group is still present, and every Project that
-// admits nothing, as run and resume do.
+// admits nothing apart from stopping, as run and resume do; an idle stop still accepts it.
 func (w *Worker) Abandon(ctx context.Context, uid, by string) (RunTransition, error) {
-	if w.halted.Load() {
-		return RunTransition{}, errors.New("the worker is stopping")
+	if err := w.stopRefusal(cmdAbandon); err != nil {
+		return RunTransition{}, err
 	}
 	op := w.runOps.get(uid)
 	op.Lock()
@@ -125,7 +125,7 @@ func (w *Worker) Abandon(ctx context.Context, uid, by string) (RunTransition, er
 	if err != nil {
 		return RunTransition{}, err
 	}
-	if why := w.admitsNothing(ps); why != "" {
+	if why := w.blockedReason(ps); why != "" {
 		return RunTransition{}, fmt.Errorf("run %s cannot be abandoned: Project %s admits nothing: %s", uid, ps.cfg.Name, why)
 	}
 	by = cmp.Or(by, ps.actor)

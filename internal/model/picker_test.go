@@ -527,6 +527,48 @@ func TestSidebarViewsLevelBacksOutToTheTop(t *testing.T) {
 	}
 }
 
+func TestEveryWayUpFromAMenuLevelLandsOnTheRowThatLedThere(t *testing.T) {
+	sidebarTop, _ := pickerKeys(pickerStart(120, false), "escape", "escape")
+	sidebarViews, _ := pickerKeys(sidebarTop, "enter")
+	sidebarProjects, _ := pickerKeys(sidebarTop, "down", "enter")
+	for _, tt := range []struct {
+		name  string
+		start model.Model
+		popup bool
+		want  string
+	}{
+		{name: "popup Views", start: viewsLevel(t), popup: true, want: "Views"},
+		{name: "popup Projects", start: projectsLevel(t, true), popup: true, want: "Projects"},
+		{name: "sidebar Views", start: sidebarViews, want: "Views"},
+		{name: "sidebar Projects", start: sidebarProjects, want: "Projects"},
+	} {
+		level := func(m model.Model) (model.MenuLevel, string) {
+			if tt.popup {
+				return m.Picker.Level, pickerTitles(m)[m.Picker.Cursor]
+			}
+			entries := m.SidebarEntries()
+			return m.SidebarLevel, entries[m.CollectionCursor].Title
+		}
+		ways := map[string]model.Model{}
+		ways["esc"], _ = pickerKeys(tt.start, "escape")
+		ways["backspace"], _ = pickerKeys(tt.start, "backspace")
+		ways["enter on Back"], _ = pickerKeys(tt.start, "home", "enter")
+		if tt.popup {
+			ways["click on Back"], _ = model.Update(tt.start, model.PickerSelected{Key: "back"})
+		} else {
+			ways["click on Back"], _ = model.Update(tt.start, model.CollectionPointerSelected{Key: "back"})
+		}
+		for name, got := range ways {
+			if lvl, row := level(got); lvl != model.MenuTop || row != tt.want {
+				t.Errorf("%s, %s: level %v cursor on %q, want the top level on %q", tt.name, name, lvl, row, tt.want)
+			}
+			if !reflect.DeepEqual(got, ways["esc"]) {
+				t.Errorf("%s, %s differs from esc", tt.name, name)
+			}
+		}
+	}
+}
+
 func TestPopupPickResetsTheSidebarLevel(t *testing.T) {
 	m, _ := pickerKeys(pickerStart(120, false), "escape", "escape", "down", "enter", "down", "enter")
 	m, _ = menuKeys(m, "down", "enter")

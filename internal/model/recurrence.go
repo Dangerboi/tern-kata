@@ -53,11 +53,13 @@ type ChangeRecurrenceCmd struct {
 
 func (ChangeRecurrenceCmd) cmd() {}
 
-// StopRecurrenceCmd deletes the recurrence at its current revision; the Occurrences stay.
+// StopRecurrenceCmd is a Guarded write: the Daemon gateway deletes the recurrence at its current revision and writes nothing
+// when its terms differ from the Opened ones the card read; the Occurrences stay.
 type StopRecurrenceCmd struct {
 	Workspace, UID, Actor string
 	ProjectID             int64
 	RecurrenceUID         string
+	Opened                RecurrenceTerms
 }
 
 func (StopRecurrenceCmd) cmd() {}

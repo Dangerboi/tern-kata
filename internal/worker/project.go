@@ -369,17 +369,14 @@ func (w *Worker) holdsSlotOf(ps *projectState, uid string) bool {
 	return ok
 }
 
-// gateClosed reports whether a job's overlap gate is closed, and by which run (ADR-0007). When a journal cannot be
-// read an unsettled run of this job may be among them and there is no way to tell which job it belongs to, so the
-// gate reads closed and err says why; a closing run among the readable ones is still named.
+// gateClosed reports whether a job's overlap gate is closed, and by which run (ADR-0007), from the store's index of
+// runs that close their gate; no journal is read. When the runs folder cannot be read an unsettled run of this job may
+// be hidden in it, so the gate reads closed and err says why.
 func (w *Worker) gateClosed(jobUID, projectUID string) (runUID string, err error) {
-	journals, _, err := w.store.Scan()
-	for _, j := range journals {
-		if j.JobUID == jobUID && j.ProjectUID == projectUID && j.closesGate() {
-			return j.RunUID, nil
-		}
+	if err := w.store.RunsReadable(); err != nil {
+		return "", err
 	}
-	return "", err
+	return w.store.ClosingRun(projectUID, jobUID), nil
 }
 
 // recoverProject continues the Project's journals after the lease decision (ADR-0006 "Recovery order"): rebuild the
@@ -398,6 +395,7 @@ func (w *Worker) recoverProject(ctx context.Context, ps *projectState, done map[
 	for _, uid := range quarantined {
 		w.opt.Log("run %s: its journal could not be read and was moved to quarantine", uid)
 	}
+	w.store.SeedGates(journals)
 	var mine []*Journal
 	for _, j := range journals {
 		if j.ProjectUID == ps.project.UID && j.Executor == w.opt.Config.Executor && !done[j.RunUID] {
