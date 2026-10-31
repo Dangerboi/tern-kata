@@ -43,8 +43,8 @@ func raise(uid string, project int64, message string) model.RaiseAgentAttention 
 	return model.RaiseAgentAttention{Workspace: "/w", ProjectID: project, UID: uid, Actor: "dana", Address: "dana", Message: message}
 }
 
-func clearOf(uid string, project int64, message string) model.ClearAgentAttention {
-	return model.ClearAgentAttention{Workspace: "/w", ProjectID: project, UID: uid, Actor: "dana", Address: "dana", Message: message}
+func clearOf(uid string, project int64, messages ...string) model.ClearAgentAttention {
+	return model.ClearAgentAttention{Workspace: "/w", ProjectID: project, UID: uid, Actor: "dana", Address: "dana", Messages: messages}
 }
 
 func TestAgentEnteringWaitingRaisesTheRequestOnce(t *testing.T) {
@@ -87,7 +87,7 @@ func TestRequestStaysWhileAnyMappedAgentOnTheIssueWaits(t *testing.T) {
 		t.Fatalf("cleared while another Pane's agent waits: %v", cmds)
 	}
 	_, cmds = relay(t, m, st("11", "working", ""), st("12", "exited", ""), st("21", "working", ""))
-	if want := []model.Cmd{clearOf("u1", 3, "b")}; !reflect.DeepEqual(cmds, want) {
+	if want := []model.Cmd{clearOf("u1", 3, "b", "a", "c")}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("cmds %v, want the clear once no mapped agent on the Issue waits", cmds)
 	}
 }
@@ -98,7 +98,7 @@ func TestClearsOnlyTheIssueWhoseAgentsStoppedWaiting(t *testing.T) {
 	if want := []model.Cmd{clearOf("u2", 4, "b")}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("cmds %v, want %v", cmds, want)
 	}
-	if want := []model.RaisedAttention{{UID: "u1", ProjectID: 3, Message: "a"}}; !reflect.DeepEqual(m.AgentAttention, want) {
+	if want := []model.RaisedAttention{{UID: "u1", ProjectID: 3, Message: "a", Seen: []string{"a"}}}; !reflect.DeepEqual(m.AgentAttention, want) {
 		t.Fatalf("raised %v, want %v", m.AgentAttention, want)
 	}
 }
@@ -224,21 +224,33 @@ func TestTwoAgentsWaitingOnOneIssueInOneRelayRaiseOneRequest(t *testing.T) {
 	if want := []model.Cmd{raise("u1", 3, "b")}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("cmds %v, want one raise carrying the recorded message", cmds)
 	}
-	if want := []model.RaisedAttention{{UID: "u1", ProjectID: 3, Message: "b"}}; !reflect.DeepEqual(m.AgentAttention, want) {
+	if want := []model.RaisedAttention{{UID: "u1", ProjectID: 3, Message: "b", Seen: []string{"a", "b"}}}; !reflect.DeepEqual(m.AgentAttention, want) {
 		t.Fatalf("raised %v, want %v", m.AgentAttention, want)
 	}
 }
 
-func TestAdoptingAnAgentWaitingOnAnIssueTheRequestWasLeftForRecordsWhatTheSlotHolds(t *testing.T) {
+func TestTheClearTakesTheMessageOfAnotherPanesAgentThatOverwroteTheRequest(t *testing.T) {
 	m, _ := relay(t, attentionPane(), st("11", "waiting_input", "msgA"), st("21", "waiting_input", "msgB"))
-	// The Pane that raised msgB quit, leaving its request for this Pane's waiting agent; this Pane then adopts its agent.
+	m, cmds := relay(t, m, st("21", "working", ""))
+	if len(cmds) != 0 {
+		t.Fatalf("an agent still waits, yet %v", cmds)
+	}
+	// The other Pane's agent was answered before this Pane re-read anything; the slot may hold either message.
+	_, cmds = relay(t, m, st("11", "working", ""))
+	if want := []model.Cmd{clearOf("u1", 3, "msgA", "msgB")}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("cmds %v, want the clear to accept both messages", cmds)
+	}
+}
+
+func TestAdoptingAnAgentWritesNothingOverAnotherRequest(t *testing.T) {
+	m, _ := relay(t, attentionPane(), st("11", "waiting_input", "msgA"), st("21", "waiting_input", "msgB"))
 	adopted := append(slices.Clone(attentionPane().AgentMapping[:2]), model.AgentEntry{IssueUID: "u1", ProjectID: 3, Block: "21", PaneBlock: "10"})
 	m, cmds := model.Update(m, model.AgentsPruned{Agents: adopted})
-	if want := []model.Cmd{raise("u1", 3, "msgB")}; !reflect.DeepEqual(cmds, want) {
-		t.Fatalf("cmds %v, want the adopted agent's request written as the record", cmds)
+	if len(cmds) != 0 {
+		t.Fatalf("cmds %v, want no write", cmds)
 	}
 	_, cmds = relay(t, m, st("11", "working", ""), st("21", "working", ""))
-	if want := []model.Cmd{clearOf("u1", 3, "msgB")}; !reflect.DeepEqual(cmds, want) {
-		t.Fatalf("cmds %v, want the clear guarded on what the slot holds", cmds)
+	if want := []model.Cmd{clearOf("u1", 3, "msgA", "msgB")}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("cmds %v, want %v", cmds, want)
 	}
 }

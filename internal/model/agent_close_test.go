@@ -222,3 +222,32 @@ func TestAnAgentTheGatewayKeptCanBeEndedAgainOnceItIsBack(t *testing.T) {
 		t.Fatalf("cmds %#v", cmds)
 	}
 }
+
+func TestASplitAgentTheGatewayKeptIsAskedAgainWhenAnyPathMakesItBackground(t *testing.T) {
+	for name, apply := range map[string]func(model.Model) model.Model{
+		"placed back": func(m model.Model) model.Model {
+			m, _ = model.Update(m, model.AgentPlaced{Block: "5", Back: true, Moved: true})
+			return m
+		},
+		"flag written": func(m model.Model) model.Model {
+			m, _ = model.Update(m, model.AgentOpenSet{Block: "5", Background: true})
+			return m
+		},
+		"closed answer": func(m model.Model) model.Model {
+			moved := finishedEntry("5", "a")
+			m, _ = model.Update(m, model.AgentClosed{Block: "5", Agents: []model.AgentEntry{moved}, Kept: true})
+			return m
+		},
+	} {
+		split := finishedEntry("5", "a")
+		split.Background = false
+		m := closePane([]model.Issue{closed("a")}, split)
+		m, _ = relayed(m, model.AgentState{Block: "5", State: "idle"})
+		m, _ = model.Update(m, model.AgentClosed{Block: "5", Agents: []model.AgentEntry{split}, Kept: true})
+		m = apply(m)
+		m, _ = relayed(m, model.AgentState{Block: "5", State: "working"})
+		if _, cmds := relayed(m, model.AgentState{Block: "5", State: "idle"}); !reflect.DeepEqual(closes(cmds), []model.CloseAgent{{Block: "5"}}) {
+			t.Errorf("%s: cmds %#v", name, cmds)
+		}
+	}
+}

@@ -45,6 +45,9 @@ func (AgentIssueRead) msg() {}
 type agentCloseState struct {
 	// tried are the blocks whose close is in flight or has failed; none is closed twice.
 	tried []string
+	// refused are the blocks the gateway kept because the file did not call them background agents; one is asked about again
+	// as soon as the mapping shows it as one, by whatever path the mapping changed.
+	refused []string
 	// reading are the Issues (by UID) a status read is in flight for.
 	reading []string
 	// known is the status the last read gave an Issue the Collection does not list.
@@ -84,7 +87,8 @@ func closeFinishedAgents(m Model, trigger agentCloseTrigger) (Model, []Cmd) {
 	var cmds []Cmd
 	for _, e := range m.AgentMapping {
 		if e.Open || (e.Background && m.Agents.seenShown(e.Block)) || e.PaneBlock != m.PaneBlock ||
-			!agentFinished(m.Agents.States, e.Block) || slices.Contains(m.AgentClose.tried, e.Block) {
+			!agentFinished(m.Agents.States, e.Block) || slices.Contains(m.AgentClose.tried, e.Block) ||
+			(!e.Background && slices.Contains(m.AgentClose.refused, e.Block)) {
 			continue
 		}
 		status, listed := "", false
@@ -125,10 +129,11 @@ func agentClosed(m Model, msg AgentClosed) Model {
 		return m
 	}
 	if msg.Kept {
-		// An agent the file does not call background stays tried: it is asked again when a re-read shows it became one.
-		background := slices.ContainsFunc(msg.Agents, func(e AgentEntry) bool { return e.Block == msg.Block && e.Background })
-		if background {
-			m.AgentClose.tried = slices.DeleteFunc(slices.Clone(m.AgentClose.tried), func(b string) bool { return b == msg.Block })
+		// An agent the file does not call background is refused until the mapping shows it as one.
+		m.AgentClose.tried = slices.DeleteFunc(slices.Clone(m.AgentClose.tried), func(b string) bool { return b == msg.Block })
+		if !slices.ContainsFunc(msg.Agents, func(e AgentEntry) bool { return e.Block == msg.Block && e.Background }) &&
+			!slices.Contains(m.AgentClose.refused, msg.Block) {
+			m.AgentClose.refused = append(slices.Clone(m.AgentClose.refused), msg.Block)
 		}
 	}
 	m.AgentMapping = msg.Agents
