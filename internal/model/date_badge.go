@@ -144,3 +144,11 @@ func DatesLine(issue Issue) string {
 	}
 	return line
 }
+
+// PriorityText is "P1" for a priority, empty for none.
+func PriorityText(p *int64) string {
+	if p == nil {
+		return ""
+	}
+	return fmt.Sprintf("P%d", *p)
+}

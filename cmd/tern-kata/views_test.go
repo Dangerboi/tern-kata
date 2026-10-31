@@ -74,7 +74,7 @@ label = "bug"
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"inbox", "all-open   All Open", "logbook", "Saved views:", "Mine       Today  status=open owner=@me", "Lost       project Vanished (Project gone)  label=bug"} {
+	for _, want := range []string{"inbox", "all-open   All Open", "logbook", "Saved views:", "Mine       Today  status=open · owner=@me", "Lost       project Vanished (Project gone)  label=bug"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("list lacks %q:\n%s", want, out)
 		}
@@ -149,7 +149,7 @@ func TestViewsShowPrintsAFixedCollectionGroupedAsThePane(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Overdue\n", "Today\n", "demo#", "open", "scheduled " + today, "Plan the week", "Late report", "scheduled 2020-01-02  deadline 2020-01-05"} {
+	for _, want := range []string{"Overdue\n", "Today\n", "demo#", "open", "scheduled " + today, "Plan the week", "Late report", "scheduled 2020-01-02 · due 2020-01-05"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("show lacks %q:\n%s", want, out)
 		}
@@ -241,7 +241,7 @@ func TestViewsAddSavesAViewAndRemoveDeletesIt(t *testing.T) {
 			t.Errorf("views.toml lacks %q:\n%s", want, text)
 		}
 	}
-	if out, err = f.views(t); err != nil || !strings.Contains(out, "Work bugs  project demo  status=open owner=@me label=bug search=\"crash\"") {
+	if out, err = f.views(t); err != nil || !strings.Contains(out, "Work bugs  project demo  status=open · owner=@me · label=bug · search=crash") {
 		t.Errorf("list: %q, %v", out, err)
 	}
 	if out, err = f.views(t, "add", "Plain", "--project", "demo", "--status", "all"); err != nil {
