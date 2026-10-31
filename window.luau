@@ -71,6 +71,8 @@ end
 
 -- kata Panes that have been sent the agent states since their surface went live.
 local relayed: { [number]: boolean } = {}
+-- kata Panes with a pending wait for their surface (see the title handler).
+local retrying: { [number]: boolean } = {}
 
 -- Background agents live in a session of this name (internal/model AgentSession), kept out of sight.
 local AGENT_SESSION = "kata agents"
@@ -391,6 +393,7 @@ tern.on("pane_closed", function(ev, cx)
     launched[ev.pane] = nil
     pending[ev.pane] = nil
     relayed[ev.pane] = nil
+    retrying[ev.pane] = nil
     placed[ev.pane] = nil
     if lastKata == ev.pane then lastKata = nil end
     if marked[ev.pane] then
@@ -416,11 +419,33 @@ tern.timer(1, function(cx)
 end)
 
 -- tern-kata sets its title as it starts, so a title event finds a kata Pane started from any shell; other titles, such as an
--- agent's spinner, cost no lookup.
+-- agent's spinner, cost no lookup. The title is also set before the surface opens and again on every run in the same pane, so a
+-- new one clears the sent mark, and a Pane without a surface is retried until it has one (10 s at most).
+local RELAY_TRIES = 50
+
+local function relayWhenLive(pane: number, tries: number)
+    retrying[pane] = true
+    tern.timer(200, function(cx)
+        if not cx or not marked[pane] or relayed[pane] then retrying[pane] = nil; return end
+        if cx.session:surface(pane) then
+            retrying[pane] = nil
+            relayAll(cx, true)
+        elseif tries > 1 then
+            relayWhenLive(pane, tries - 1)
+        else
+            retrying[pane] = nil
+        end
+    end)
+end
+
 tern.on("title", function(ev, cx)
     if ev.title == "tern-kata" or marked[ev.pane] then
         markIf(cx, ev.pane)
-        if marked[ev.pane] and not relayed[ev.pane] then relayAll(cx, true) end
+        if not marked[ev.pane] then return end
+        if ev.title == "tern-kata" then relayed[ev.pane] = nil end
+        if relayed[ev.pane] then return end
+        relayAll(cx, true)
+        if not relayed[ev.pane] and not retrying[ev.pane] then relayWhenLive(ev.pane, RELAY_TRIES) end
     end
 end)
 
