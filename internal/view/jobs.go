@@ -2,7 +2,6 @@ package view
 
 import (
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -38,7 +37,7 @@ func jobs(m model.Model, now time.Time) tern.Element {
 	if m.Jobs.ShowArchived {
 		archived = "archived shown"
 	}
-	heading := []ui.Span{{T: "Jobs", S: "strong"}, {T: " " + strconv.Itoa(len(rows)) + " · " + archived, S: "muted"}}
+	heading := []ui.Span{{T: "Jobs", S: "strong"}, {T: " " + strconv.Itoa(len(rows)), S: "muted mono"}, {T: " · " + archived, S: "muted"}}
 	if m.Jobs.Loading {
 		heading = append(heading, loadingMarker)
 	}
@@ -69,20 +68,26 @@ func jobCard(row model.JobRow, selected bool) tern.Element {
 		ui.Badge{Common: ui.Common{Key: "state", Tone: tone}, Text: row.State},
 		ui.Text{Common: ui.Common{Key: "name"}, Spans: []ui.Span{{T: row.Job.Name, S: "strong"}}},
 	)}
-	what := row.Kind
+	what := []ui.Span{{T: row.Kind, S: toneStyle(ui.ToneInfo)}}
 	if row.Schedule != "" {
-		what += " · " + row.Schedule
+		what = append(what, ui.Span{T: " · ", S: toneStyle(ui.ToneInfo)}, ui.Span{T: row.Schedule, S: mono(toneStyle(ui.ToneInfo))})
 	}
-	body := ui.Nodes(head, ui.Text{Common: ui.Common{Key: "what"}, Spans: []ui.Span{{T: what, S: toneStyle(ui.ToneInfo)}}})
-	var meta []string
+	body := ui.Nodes(head, ui.Text{Common: ui.Common{Key: "what"}, Spans: what})
+	var meta []ui.Span
+	add := func(label, value string) {
+		if len(meta) > 0 {
+			meta = append(meta, ui.Span{T: " · ", S: "muted"})
+		}
+		meta = append(meta, ui.Span{T: label, S: "muted"}, ui.Span{T: value, S: "muted mono"})
+	}
 	if row.Profile != "" {
-		meta = append(meta, "profile "+row.Profile)
+		add("profile ", row.Profile)
 	}
 	if row.Next != "" {
-		meta = append(meta, "next "+row.Next)
+		add("next ", row.Next)
 	}
 	if len(meta) > 0 {
-		body = append(body, ui.Text{Common: ui.Common{Key: "meta"}, Spans: []ui.Span{{T: strings.Join(meta, " · "), S: "muted"}}})
+		body = append(body, ui.Text{Common: ui.Common{Key: "meta"}, Spans: meta})
 	}
 	if row.Last != "" {
 		body = append(body, ui.Text{Common: ui.Common{Key: "last"}, Spans: []ui.Span{{T: row.Last, S: "muted"}}})

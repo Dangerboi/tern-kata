@@ -46,7 +46,7 @@ func runs(m model.Model, now time.Time) tern.Element {
 			scope = "job " + m.Runs.JobUID
 		}
 	}
-	heading := []ui.Span{{T: "Runs", S: "strong"}, {T: " " + strconv.Itoa(len(rows)) + " · " + scope, S: "muted"}}
+	heading := []ui.Span{{T: "Runs", S: "strong"}, {T: " " + strconv.Itoa(len(rows)), S: "muted mono"}, {T: " · " + scope, S: "muted"}}
 	if m.Runs.More != "" {
 		heading = append(heading, ui.Span{T: " · older runs: m", S: "muted"})
 	}
@@ -90,7 +90,7 @@ func runCard(row model.RunRow, selected bool) tern.Element {
 		who = append(who, "on "+row.Executor)
 	}
 	if len(who) > 0 {
-		body = append(body, ui.Text{Common: ui.Common{Key: "who"}, Spans: []ui.Span{{T: strings.Join(who, " · "), S: toneStyle(ui.ToneInfo)}}})
+		body = append(body, ui.Text{Common: ui.Common{Key: "who"}, Spans: []ui.Span{{T: strings.Join(who, " · "), S: mono(toneStyle(ui.ToneInfo))}}})
 	}
 	switch {
 	case row.Held:
@@ -98,14 +98,14 @@ func runCard(row model.RunRow, selected bool) tern.Element {
 	case row.Reason != "":
 		body = append(body, ui.Text{Common: ui.Common{Key: "reason", Tone: tone}, Text: "reason: " + row.Reason})
 	}
-	when := []string{"started " + row.Start}
+	when := []ui.Span{{T: "started ", S: "muted"}, {T: row.Start, S: "muted mono"}}
 	if row.Duration != "" {
-		when = append(when, row.Duration)
+		when = append(when, ui.Span{T: " · ", S: "muted"}, ui.Span{T: row.Duration, S: "muted mono"})
 	}
 	if row.Summary != "" {
-		when = append(when, row.Summary)
+		when = append(when, ui.Span{T: " · " + row.Summary, S: "muted"})
 	}
-	body = append(body, ui.Text{Common: ui.Common{Key: "when"}, Spans: []ui.Span{{T: strings.Join(when, " · "), S: "muted"}}})
+	body = append(body, ui.Text{Common: ui.Common{Key: "when"}, Spans: when})
 	cardTone := ui.ToneNeutral
 	if row.Run.Status == cronjob.RunCancelled {
 		cardTone = ui.ToneMuted

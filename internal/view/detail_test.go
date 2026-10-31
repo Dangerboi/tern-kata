@@ -209,9 +209,9 @@ func TestDetailTitleShowsIDInItsLaneToneThenTitleStrong(t *testing.T) {
 		issue model.Issue
 		style string
 	}{
-		{"in a Lane", readyForHuman, "accent"}, // user tone has no span style: the nearest, accent
-		{"closed", closed, "success"},
-		{"no Lane", alpha, "muted"},
+		{"in a Lane", readyForHuman, "accent mono"}, // user tone has no span style: the nearest, accent
+		{"closed", closed, "success mono"},
+		{"no Lane", alpha, "muted mono"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			title := detailNodes(t, tt.issue)[view.DetailID+".viewport.content.heading.title"]
@@ -336,7 +336,7 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	props := nodes[view.DetailContentID+".properties"]
 	var keys []string
 	for _, row := range props.C {
-		keys = append(keys, strings.TrimRight(text(nodes[row.ID+".k"]), "\u00a0"))
+		keys = append(keys, text(nodes[row.ID+".k"]))
 	}
 	want := []string{"Author:", "Created:", "Updated:", "Scheduled:", "Deadline:", "Owner:", "Priority:", "Labels:", "Parent:", "Children:"}
 	if !slices.Equal(keys, want) {
@@ -355,7 +355,7 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	bare := render(t, apply(browsing(), detailOf(model.Issue{UID: "alpha", ShortID: "aaaa", Title: "A", Status: "open", ProjectName: "work", Revision: 2})))
 	keys = nil
 	for _, row := range bare[view.DetailContentID+".properties"].C {
-		keys = append(keys, strings.TrimRight(text(bare[row.ID+".k"]), "\u00a0"))
+		keys = append(keys, text(bare[row.ID+".k"]))
 	}
 	if want := []string{"Created:", "Updated:", "Owner:"}; !slices.Equal(keys, want) {
 		t.Errorf("bare keys %v, want %v", keys, want)

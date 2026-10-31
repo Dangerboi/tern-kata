@@ -65,7 +65,7 @@ func board(m model.Model, now time.Time) tern.Element {
 		}
 		head := ui.Row{Common: ui.Common{Key: "head"}, Gap: ui.GapSM, Children: ui.Nodes(
 			ui.Badge{Common: ui.Common{Key: "title", Tone: tones[i]}, Text: column.Title},
-			ui.Text{Common: ui.Common{Key: "count"}, Spans: []ui.Span{{T: count, S: "muted"}}, Wrap: ui.WrapNone},
+			ui.Text{Common: ui.Common{Key: "count"}, Spans: []ui.Span{{T: count, S: "muted mono"}}, Wrap: ui.WrapNone},
 		)}
 		lanes[i] = ui.Col{
 			Common: ui.Common{Key: laneKey(i), Grow: 1, Basis: ui.BasisFrac(0), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}},
@@ -110,13 +110,13 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 		title.Lines = 0
 		labels = issue.Labels
 	}
-	ids := ui.Nodes(ui.Badge{Common: ui.Common{Key: "short", Tone: tone}, Text: issue.ShortID})
+	ids := ui.Nodes(ui.Badge{Common: ui.Common{Key: "short", Tone: tone, Role: MonoRole}, Text: issue.ShortID})
 	if text, prioTone := priorityText(issue.Priority); text != "" {
-		ids = append(ids, ui.Badge{Common: ui.Common{Key: "prio", Tone: prioTone}, Text: text})
+		ids = append(ids, ui.Badge{Common: ui.Common{Key: "prio", Tone: prioTone, Role: MonoRole}, Text: text})
 	}
 	if !done {
 		if badge, ok := model.ChooseDateBadge(issue, m.Calendar.Date); ok {
-			ids = append(ids, ui.Badge{Common: ui.Common{Key: "date", Tone: dateTones[badge.Tone]}, Text: badge.Text})
+			ids = append(ids, ui.Badge{Common: ui.Common{Key: "date", Tone: dateTones[badge.Tone], Role: MonoRole}, Text: badge.Text})
 		}
 	}
 	body := ui.Nodes(title)
@@ -135,11 +135,11 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 		body = append(body, ui.Row{Common: ui.Common{Key: "labels"}, Gap: ui.GapSM, Wrap: true, Children: chips})
 	}
 	if len(card.Also) > 0 {
-		body = append(body, ui.Text{Common: ui.Common{Key: "also"}, Spans: []ui.Span{{T: "also: " + strings.Join(card.Also, ", "), S: "warning"}}})
+		body = append(body, ui.Text{Common: ui.Common{Key: "also"}, Spans: monoSpans("also: "+strings.Join(card.Also, ", "), "warning")})
 	}
 	if selected {
 		if line := model.DatesLine(issue); line != "" {
-			body = append(body, ui.Text{Common: ui.Common{Key: "dates"}, Spans: []ui.Span{{T: line, S: "muted"}}})
+			body = append(body, ui.Text{Common: ui.Common{Key: "dates"}, Spans: monoSpans(line, "muted")})
 		}
 	}
 	if !done {
@@ -239,10 +239,10 @@ func relationshipsLine(m model.Model, card model.BoardCard, now time.Time) tern.
 		shown, more := shownRefs(refs)
 		items := ui.Nodes(ui.Text{Common: ui.Common{Key: "label"}, Spans: []ui.Span{{T: label, S: "muted"}}})
 		for _, ref := range shown {
-			items = append(items, ui.Text{Common: ui.Common{Key: ref.UID, Hovercard: refCard(m, relFacts(ref), now), Actions: &ui.Actions{Click: RefClick(ref.UID)}}, Spans: []ui.Span{{T: ref.ID(project), S: "accent link"}}})
+			items = append(items, ui.Text{Common: ui.Common{Key: ref.UID, Hovercard: refCard(m, relFacts(ref), now), Actions: &ui.Actions{Click: RefClick(ref.UID)}}, Spans: []ui.Span{{T: ref.ID(project), S: "accent link mono"}}})
 		}
 		if more > 0 {
-			items = append(items, ui.Text{Common: ui.Common{Key: "more"}, Spans: []ui.Span{{T: "+" + strconv.Itoa(more), S: "muted"}}})
+			items = append(items, ui.Text{Common: ui.Common{Key: "more"}, Spans: []ui.Span{{T: "+" + strconv.Itoa(more), S: "muted mono"}}})
 		}
 		parts = append(parts, ui.Row{Common: ui.Common{Key: key}, Gap: ui.GapSM, Wrap: true, Children: items})
 	}
@@ -255,7 +255,7 @@ func relationshipsLine(m model.Model, card model.BoardCard, now time.Time) tern.
 		if len(r.Children) == 1 {
 			noun = "child"
 		}
-		parts = append(parts, ui.Text{Common: ui.Common{Key: "children"}, Spans: []ui.Span{{T: fmt.Sprintf("%d %s, %d open", len(r.Children), noun, open), S: "muted"}}})
+		parts = append(parts, ui.Text{Common: ui.Common{Key: "children"}, Spans: monoSpans(fmt.Sprintf("%d %s, %d open", len(r.Children), noun, open), "muted")})
 	}
 	if blocks := r.OpenBlocked(); len(blocks) > 0 {
 		add("blocks", "blocks", blocks...)

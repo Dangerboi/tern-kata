@@ -16,8 +16,16 @@ const (
 	ListOwnerRole = "tern-kata.ow"
 )
 
-// CSS is the plugin's whole style sheet: StripeCSS, SelectedCSS, ModeChipCSS, OrderedListCSS, ColumnFillCSS, then cellBoxCSS.
-var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ColumnFillCSS + "\n" + cellBoxCSS
+// CSS is the plugin's whole style sheet: StripeCSS, SelectedCSS, ModeChipCSS, OrderedListCSS, ColumnFillCSS, PropertyKeyCSS,
+// MonoCSS, then cellBoxCSS.
+var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ColumnFillCSS + "\n" + PropertyKeyCSS + "\n" + MonoCSS + "\n" + cellBoxCSS
+
+// PropertyKeyRole marks the key cell of a row of the Issue detail's properties; PropertyKeyCSS reads it.
+const PropertyKeyRole = "tern-kata.propkey"
+
+// PropertyKeyCSS gives every property key one box, wide enough for the longest label ("Scheduled:", "Recurring:", "Cron jobs:")
+// in either face, so every value starts at the same x. The box is in em because the label's own width depends on the face.
+const PropertyKeyCSS = `.sf-text[data-role~='` + PropertyKeyRole + `'] { display: inline-block; white-space: pre; min-width: 6.4em; }`
 
 // ColumnRole marks a column's card and FillRole the list that scrolls inside it; ColumnFillCSS reads them.
 const (

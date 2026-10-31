@@ -34,10 +34,11 @@ func editorOptions() tern.Options {
 	return tern.Options{App: "tern-kata", Version: buildVersion(), Features: []string{tern.FeatureEdit, tern.FeatureUndo}}
 }
 
-// editorSurfaceOptions are the Pane's surface options. closable lets Tern close the Pane without asking; it is set only
-// when kata's [tui].confirm_quit is false, so a Pane that asks before q quits is not lost to a close without warning.
+// editorSurfaceOptions are the Pane's surface options: Tern's sans face, in which machine strings take the mono span token.
+// closable lets Tern close the Pane without asking; it is set only when kata's [tui].confirm_quit is false, so a Pane that
+// asks before q quits is not lost to a close without warning.
 func editorSurfaceOptions(closable bool) tern.SurfaceOptions {
-	return tern.SurfaceOptions{ID: "kata", Mode: tern.Screen, Title: "tern-kata", Discard: true, Closable: closable}
+	return tern.SurfaceOptions{ID: "kata", Mode: tern.Screen, Title: "tern-kata", Font: tern.FontSans, Discard: true, Closable: closable}
 }
 
 // openSurface opens the window's surface and installs the plugin's style sheet on it.

@@ -1,7 +1,6 @@
 package view_test
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -10,7 +9,7 @@ import (
 func TestFooterShowsTabDetailOnlyWhenSideBySide(t *testing.T) {
 	tabHint := func(m model.Model) bool {
 		for id := range pickerNodes(t, m) {
-			if strings.HasPrefix(id, "dock.hints.grid.") && strings.HasSuffix(id, ".tab") {
+			if id == "dock.hints.grid.tab" {
 				return true
 			}
 		}

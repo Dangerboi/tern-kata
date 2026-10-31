@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -82,6 +83,15 @@ func wireText(node tern.WireNode) string {
 	raw, _ := json.Marshal(node)
 	return string(raw)
 }
+
+// spansJoined is a node as JSON with each text's spans run together, so a phrase split across spans (a mono span in the
+// middle) still reads whole.
+func spansJoined(node tern.WireNode) string {
+	return adjacentSpans.ReplaceAllString(wireText(node), "")
+}
+
+// adjacentSpans is the seam between two spans of one text in a node's JSON.
+var adjacentSpans = regexp.MustCompile(`"\},\{(?:"s":"[^"]*",)?"t":"`)
 
 // lanes reads the Board as drawn: each column's head text and the uids of its cards, in drawn order.
 func lanes(t *testing.T, s driver.State) (heads []string, cards [][]string) {
@@ -476,5 +486,23 @@ func TestBoardLanesShrinkAndTheirCardsWrap(t *testing.T) {
 				t.Errorf("%s does not wrap: %v", n.ID, n.P)
 			}
 		}
+	}
+}
+
+func TestBoardCardIdAndPriorityBadgesAreMono(t *testing.T) {
+	card := boardCard("a")
+	p := int64(1)
+	card.Priority = &p
+	s := boardPane(t, card)
+	nodes := wireNodes(t, view.Render(s.Model, now))
+	row := rowOf(t, s.Model, view.BoardID, "a")
+	for _, part := range []string{".id.short", ".id.prio"} {
+		n := node(t, nodes, row+part)
+		if role, _ := n.P["role"].(string); !strings.Contains(role, view.MonoRole) {
+			t.Errorf("%s role = %q, want %q", part, role, view.MonoRole)
+		}
+	}
+	if heads, _ := lanes(t, s); len(heads) == 0 || !strings.Contains(heads[0], `mono`) {
+		t.Errorf("a Lane's card count is not mono: %v", heads)
 	}
 }
