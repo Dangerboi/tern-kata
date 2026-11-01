@@ -224,13 +224,31 @@ func topBar(m model.Model) tern.Element {
 	)}
 }
 
-// filterLine lists the active filters under the top bar; nil when none is on.
+// filterLine lists the active filters under the top bar: the Filter card's funnel, a chip per filter and, muted at the end,
+// where they came from (the default or a saved view); nil when it has nothing to show.
 func filterLine(m model.Model) []tern.Element {
-	summary := m.FilterSummary()
-	if summary == "" || m.OnJobs() || m.OnRuns() {
+	terms, note := m.FilterLine()
+	if len(terms) == 0 && note == "" || m.OnJobs() || m.OnRuns() {
 		return nil
 	}
-	return []tern.Element{ui.Text{Common: ui.Common{Key: "filters", Hidden: m.HelpOpen, Tone: ui.ToneMuted}, Text: summary, Wrap: ui.WrapNone}}
+	cells := ui.Nodes(ui.Icon{Common: ui.Common{Key: "icon", Tone: ui.ToneMuted, Aria: "Filters"}, Name: ui.IconFunnel})
+	for _, term := range terms {
+		cells = append(cells, ui.Badge{Common: ui.Common{Key: string(term.Field)}, Text: filterChipText(term)})
+	}
+	if note != "" {
+		cells = append(cells, ui.Text{Common: ui.Common{Key: "note"}, Spans: []ui.Span{{T: note, S: "muted"}}, Wrap: ui.WrapNone})
+	}
+	return ui.Nodes(ui.Row{Common: ui.Common{Key: "filters", Hidden: m.HelpOpen}, Gap: ui.GapSM, Wrap: true, Children: cells})
+}
+
+// filterChipText is a filter as its chip says it, "status open": the field's name and its value, a Relationship in the Filter
+// card's words.
+func filterChipText(term model.FilterTerm) string {
+	value := term.Value
+	if term.Field == model.FilterRelationship {
+		value = strings.ToLower(model.FilterChoiceLabel(model.FilterRelationships, value))
+	}
+	return string(term.Field) + " " + value
 }
 
 // panel is a column's container. With more than one column showing it is a

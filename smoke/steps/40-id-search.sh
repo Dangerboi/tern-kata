@@ -11,7 +11,7 @@ expect_tree "[data-id\$='.$id_mention']" '.ok and .count == 1'
 
 ctl key /
 for ((i = 0; i < ${#id_short}; i++)); do ctl key "${id_short:i:1}"; done
-expect_tree "[data-id='main.filters']" ".nodes[0].text | contains(\"search=$id_short\")"
+expect_tree "[data-id='main.filters.search']" ".nodes[0].text == \"search $id_short\""
 expect_tree "[data-id\$='.$id_target']" '.ok and .count == 1'
 expect_tree "[data-id\$='.$id_mention']" '.ok and .count == 0'
 # The result behaves as any search result: enter focuses it, a second enter commits it, and the Issue stays alone and selected.

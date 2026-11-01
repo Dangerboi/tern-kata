@@ -108,11 +108,11 @@ func TestTheBoardsFilterLineOmitsStatusAndKeepsDefault(t *testing.T) {
 	withOwner := model.Filters{Status: "open", Owner: "me"}
 	pane := board
 	pane.Model.Filters, pane.Model.DefaultFilters = withOwner, withOwner
-	if got := filterLineText(t, pane); got != "owner=me (default)" {
-		t.Errorf("filter line = %q, want %q", got, "owner=me (default)")
+	if got := filterLineText(t, pane); got != "owner me (default)" {
+		t.Errorf("filter line = %q, want %q", got, "owner me (default)")
 	}
 	issues := feed(t, pane, key("b")).State
-	if got := filterLineText(t, issues); got != "status=open · owner=me (default)" {
+	if got := filterLineText(t, issues); got != "status open · owner me (default)" {
 		t.Errorf("the Issues Page's filter line = %q", got)
 	}
 }

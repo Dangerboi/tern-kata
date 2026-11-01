@@ -47,7 +47,7 @@ ctl resize "$bar_full" "$bar_height"
 
 # A filter adds its line; clearing it takes the line away. The title never carries filters.
 ctl key s
-expect_tree "[data-id='main.filters']" '.ok and .count == 1 and .nodes[0].text == "status=open"'
+expect_tree "[data-id^='main.filters.']" '.ok and ([.nodes[] | select(.text) | .text] == ["status open"])'
 expect_tree "[data-id='main.topbar.left.heading']" ".nodes[0].text == \"Project: $bar_name\""
 ctl key s
 ctl key s

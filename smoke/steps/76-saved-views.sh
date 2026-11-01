@@ -33,7 +33,7 @@ for letter in o p e n b u g s; do ctl key "$letter"; done
 ctl key Ctrl+o
 expect_tree "[data-id='layer.view']" '.ok and .count == 0'
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
-expect_tree "[data-id='main.filters']" '.ok and (.nodes[0].text | contains("status=open") and endswith("(openbugs)"))'
+expect_tree "[data-id='main.filters.status'], [data-id='main.filters.note']" '.ok and ([.nodes[].text] == ["status open", "view openbugs"])'
 grep -q 'name = "openbugs"' "$sv_file"
 grep -q 'status = "open"' "$sv_file"
 
@@ -46,7 +46,7 @@ for letter in o p e n b u g s; do ctl key "$letter"; done
 expect_tree "$sv_items" '.ok and .count == 1 and .nodes[0].text == "openbugs"'
 ctl key enter
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
-expect_tree "[data-id='main.filters']" '.ok and (.nodes[0].text | contains("status=open") and endswith("(openbugs)"))'
+expect_tree "[data-id='main.filters.status'], [data-id='main.filters.note']" '.ok and ([.nodes[].text] == ["status open", "view openbugs"])'
 
 # c clears the filters for this Pane only; the view stays in the file.
 ctl key c

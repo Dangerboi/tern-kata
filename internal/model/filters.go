@@ -122,45 +122,57 @@ func updateFilterText(m Model, msg KeyMsg) (Model, []Cmd) {
 	return snapshotChanged(m)
 }
 
-// DescribeFilters is the filters that are set as name=value words joined by " · ", empty when none is set. The Pane's
-// filter line and the CLI both word filters this way.
-func DescribeFilters(f Filters, projectName func(uid string) string) string {
-	var parts []string
+// FilterTerm is one filter that is set: the Filter card field it is and its value, a Project by its name.
+type FilterTerm struct {
+	Field Field
+	Value string
+}
+
+// ActiveFilters is the filters of f that are set, in the Filter card's order with the search text last.
+func ActiveFilters(f Filters, projectName func(uid string) string) []FilterTerm {
+	var terms []FilterTerm
+	add := func(field Field, value string) {
+		if value != "" {
+			terms = append(terms, FilterTerm{Field: field, Value: value})
+		}
+	}
 	if f.ProjectUID != "" {
-		parts = append(parts, "project="+projectName(f.ProjectUID))
+		add(FilterProject, projectName(f.ProjectUID))
 	}
-	if f.Status != "" {
-		parts = append(parts, "status="+f.Status)
-	}
-	if f.Owner != "" {
-		parts = append(parts, "owner="+f.Owner)
-	}
-	if f.Label != "" {
-		parts = append(parts, "label="+f.Label)
-	}
-	if f.Relationship != "" {
-		parts = append(parts, "relationship="+f.Relationship)
-	}
-	if f.Search != "" {
-		parts = append(parts, "search="+f.Search)
+	add(FilterStatus, f.Status)
+	add(FilterOwner, f.Owner)
+	add(FilterLabel, f.Label)
+	add(FilterRelationship, f.Relationship)
+	add(FilterSearch, f.Search)
+	return terms
+}
+
+// DescribeFilters is the filters that are set as name=value words joined by " · ", empty when none is set: how the CLI words them.
+func DescribeFilters(f Filters, projectName func(uid string) string) string {
+	terms := ActiveFilters(f, projectName)
+	parts := make([]string, len(terms))
+	for i, term := range terms {
+		parts[i] = string(term.Field) + "=" + term.Value
 	}
 	return strings.Join(parts, " · ")
 }
 
-// FilterSummary is the top bar's filter line: the active filters, empty when none is on.
-func (m Model) FilterSummary() string {
+// FilterLine is what the filter line under the top bar shows: the active filters, and a note naming where they came from,
+// "view <name>" while they are the saved view's this Pane opened or "default" while they equal the Project's default. The
+// Board leaves the status filter out. With no terms and no note there is no line.
+func (m Model) FilterLine() (terms []FilterTerm, note string) {
 	shown := m.Filters
 	if m.OnBoard() {
 		shown.Status = ""
 	}
-	summary := DescribeFilters(shown, m.ProjectFilterName)
+	terms = ActiveFilters(shown, m.ProjectFilterName)
 	if name := m.CurrentSavedView(); name != "" {
-		return strings.TrimSpace(summary + " (" + name + ")")
+		return terms, "view " + name
 	}
-	if summary != "" && m.Filters == m.DefaultFilters {
-		summary += " (default)"
+	if len(terms) > 0 && m.Filters == m.DefaultFilters {
+		note = "default"
 	}
-	return summary
+	return terms, note
 }
 
 func (m Model) ProjectFilterName(uid string) string {

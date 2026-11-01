@@ -95,17 +95,17 @@ func TestOpeningASavedViewSetsBaseAndFiltersTogetherAndNamesItOnTheFilterLine(t 
 	if read == nil || !reflect.DeepEqual(read.Query.Label, []string{"bug"}) {
 		t.Fatalf("no read with the view's filters: %#v", cmds)
 	}
-	if got := opened.FilterSummary(); got != "status=open · label=bug (work bugs)" {
+	if got := filterLine(opened); got != "status=open · label=bug (view work bugs)" {
 		t.Fatalf("filter line = %q", got)
 	}
 	changed := opened
 	changed.Filters.Label = "other"
-	if strings.Contains(changed.FilterSummary(), "work bugs") {
-		t.Fatalf("line still names the view after the filters moved: %q", changed.FilterSummary())
+	if strings.Contains(filterLine(changed), "work bugs") {
+		t.Fatalf("line still names the view after the filters moved: %q", filterLine(changed))
 	}
 	cleared, _ := model.Update(opened, model.KeyMsg{Chord: "c", Text: "c"})
-	if cleared.Filters != (model.Filters{}) || cleared.CurrentSavedView() != "" || cleared.FilterSummary() != "" {
-		t.Fatalf("c: filters=%+v line=%q", cleared.Filters, cleared.FilterSummary())
+	if cleared.Filters != (model.Filters{}) || cleared.CurrentSavedView() != "" || filterLine(cleared) != "" {
+		t.Fatalf("c: filters=%+v line=%q", cleared.Filters, filterLine(cleared))
 	}
 	if cleared.Views.List[0].Filters != savedViews()[0].Filters {
 		t.Fatal("c changed the saved view")
@@ -119,7 +119,7 @@ func TestAtMeResolvesToThePanesActorWhenTheViewOpens(t *testing.T) {
 	if opened.Filters.Owner != "ann" || opened.Collection.View != "today" {
 		t.Fatalf("opened: %+v %+v", opened.Collection, opened.Filters)
 	}
-	if got := opened.FilterSummary(); got != "owner=ann (Mine)" {
+	if got := filterLine(opened); got != "owner=ann (view Mine)" {
 		t.Fatalf("line = %q", got)
 	}
 	if m.Views.List[1].Filters.Owner != model.OwnerMe {
@@ -406,7 +406,7 @@ func TestSwitchingCollectionAfterOpeningASavedViewStopsNamingIt(t *testing.T) {
 	if got := other.CurrentSavedView(); got != "" {
 		t.Errorf("CurrentSavedView = %q after moving to Inbox", got)
 	}
-	if got := other.FilterSummary(); strings.Contains(got, "Mine") {
+	if got := filterLine(other); strings.Contains(got, "Mine") {
 		t.Errorf("filter line = %q still names the view", got)
 	}
 	back, _ := model.Update(other, model.CollectionSelected{Collection: opened.Collection})
@@ -445,7 +445,7 @@ func TestDeletingAViewForgetsItWhenALaterDuplicateOfItsNameDiffers(t *testing.T)
 	if got := done.CurrentSavedView(); got != "" {
 		t.Fatalf("CurrentSavedView = %q after deleting it", got)
 	}
-	if strings.Contains(done.FilterSummary(), "A") {
-		t.Fatalf("filter line = %q", done.FilterSummary())
+	if strings.Contains(filterLine(done), "A") {
+		t.Fatalf("filter line = %q", filterLine(done))
 	}
 }

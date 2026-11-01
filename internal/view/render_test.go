@@ -199,11 +199,15 @@ func TestFilterLineAppearsOnlyWhenFiltered(t *testing.T) {
 	}
 	m = apply(m, model.KeyMsg{Chord: "s"})
 	nodes := render(t, m)
-	if got := text(nodes["main.filters"]); got != "status=open" {
-		t.Errorf("filter line %q, want status=open", got)
+	if got := text(nodes["main.filters.status"]); got != "status open" {
+		t.Errorf("status chip %q, want status open", got)
 	}
-	if got := text(nodes["main.topbar.left.heading"]); strings.Contains(got, "status=") {
+	if got := text(nodes["main.topbar.left.heading"]); strings.Contains(got, "status") {
 		t.Errorf("title carries the filters: %q", got)
+	}
+	m.Filters.Relationship = "blocked_by"
+	if got := text(render(t, m)["main.filters.relationship"]); got != "relationship blocked by" {
+		t.Errorf("relationship chip %q, want the Filter card's words", got)
 	}
 	if _, ok := nodes["main.topbar.filters"]; ok {
 		t.Error("filter line is inside the one-row top bar")

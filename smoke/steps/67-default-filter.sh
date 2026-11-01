@@ -1,5 +1,5 @@
 # ctrl+d in the Filter card saves the filters as the Project's default; a Pane started afterwards has them applied and its
-# filter line ends with "(default)". The step removes the default again so later steps start unfiltered.
+# filter line ends with the note "default". The step removes the default again so later steps start unfiltered.
 df_workspace="$tmp/workspace"
 expect_tree "[data-id='main.filters']" '.ok and .count == 0'
 
@@ -10,13 +10,13 @@ ctl key Right
 expect_tree "[data-id='layer.filters.status.control'] .sf-tab[aria-selected='true']" '.ok and .count == 1 and .nodes[0].text == "open"'
 ctl key Ctrl+d
 expect_tree "[data-id='layer.filters']" '.count == 0'
-expect_tree "[data-id='main.filters']" '.nodes[0].text | contains("status=open") and endswith("(default)")'
+expect_tree "[data-id='main.filters.status'], [data-id='main.filters.note']" '.ok and ([.nodes[].text] == ["status open", "default"])'
 [[ -f "$XDG_CONFIG_HOME/tern-kata/filters.toml" ]]
 grep -q 'status = "open"' "$XDG_CONFIG_HOME/tern-kata/filters.toml"
 
 quit_app
 ctl --file "$tmp/launch.ctl"
-expect_tree "[data-id='main.filters']" '.ok and (.nodes[0].text | contains("status=open") and endswith("(default)"))'
+expect_tree "[data-id='main.filters.status'], [data-id='main.filters.note']" '.ok and ([.nodes[].text] == ["status open", "default"])'
 
 # c clears the filters for this Pane only.
 ctl key c

@@ -22,10 +22,20 @@ func firstRead(t *testing.T, cmds []model.Cmd) model.ReadSnapshot {
 	return model.ReadSnapshot{}
 }
 
+// filterLineText is what the filter line draws: its chips joined by " · ", then its note in parentheses; "" with no line.
 func filterLineText(t *testing.T, s driver.State) string {
 	t.Helper()
-	text, _ := nodeText(t, s, "main.filters")
-	return text
+	var chips []string
+	note := ""
+	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
+		switch {
+		case n.ID == "main.filters.note":
+			note = " (" + nodeTextOf(n) + ")"
+		case strings.HasPrefix(n.ID, "main.filters.") && nodeTextOf(n) != "":
+			chips = append(chips, nodeTextOf(n))
+		}
+	}
+	return strings.TrimSpace(strings.Join(chips, " · ") + note)
 }
 
 func TestAPaneStartsWithTheProjectsSavedDefaultAndCClearsIt(t *testing.T) {
@@ -38,7 +48,7 @@ func TestAPaneStartsWithTheProjectsSavedDefaultAndCClearsIt(t *testing.T) {
 	}
 	m, _ = model.Update(m, model.SnapshotLoaded{Request: read.Request, Query: read.Query, Snapshot: model.Snapshot{Issues: []model.Issue{alpha}}})
 	s.Model = m
-	if got := filterLineText(t, s); got != "status=open · owner=me (default)" {
+	if got := filterLineText(t, s); got != "status open · owner me (default)" {
 		t.Fatalf("filter line = %q", got)
 	}
 	out := step(t, s, key("c"))
@@ -47,7 +57,7 @@ func TestAPaneStartsWithTheProjectsSavedDefaultAndCClearsIt(t *testing.T) {
 		t.Fatalf("read after c = %#v, want unfiltered", read.Query)
 	}
 	cleared := step(t, out.State, model.SnapshotLoaded{Request: read.Request, Query: read.Query, Snapshot: model.Snapshot{Issues: []model.Issue{alpha}}}).State
-	if got, drawn := nodeText(t, cleared, "main.filters"); drawn && got != "" {
+	if got := filterLineText(t, cleared); got != "" {
 		t.Fatalf("filter line after c = %q, want none", got)
 	}
 }

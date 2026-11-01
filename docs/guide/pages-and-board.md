@@ -89,7 +89,7 @@ The Issues Page is the list and the Issue detail.
 A saved view is a base Collection (a fixed one or a Project) with the Filter card's fields and a search text, saved under a name. They live in `views.toml` in tern-kata's config folder beside `filters.toml`, on this machine for every Project, and [`tern-kata views`](views.md) works on the same file.
 
 - **New view**, the last row of the Menu's Views level, opens the View card: **Name** (required, at most 64 characters, unique ignoring case, and not a fixed Collection's title or key), **Base** (a fixed Collection or a Project, prefilled with the current Collection), the Filter card's fields and **Search**, prefilled with the current filters. `tab` and `shift+tab` move between fields, `←`/`→` change a choice, `ctrl+o` or `ctrl+s` saves and opens the new view, `esc` cancels. A refusal names the field and keeps what you typed; so does a `views.toml` that changed since the Pane read it.
-- Saved views are listed by name after the fixed Collections. Opening one makes its base current with its filters applied, and the filter line under the top bar ends with the view's name while the filters equal it. `c` clears the filters for this Pane only. An owner of `@me` means this Pane's actor when the view opens.
+- Saved views are listed by name after the fixed Collections. Opening one makes its base current with its filters applied, and the filter line under the top bar ends with "view <name>" while the filters equal it. `c` clears the filters for this Pane only. An owner of `@me` means this Pane's actor when the view opens.
 - On a saved view's row `f2` edits it in the View card (a rename keeps its place in the file) and `ctrl+d` asks "Delete view <name>? y/n"; both are in the footer and on the help sheet (`?`). Letters and `ctrl+a`/`ctrl+e` stay with the Menu's filter box.
 - A view whose base Project is gone or archived stays listed with "(Project gone)" or "(archived)"; opening it says so and changes nothing.
 - The Pane reads `views.toml` when it starts and each time the Menu opens, so a view saved by another Pane or by `tern-kata views add` appears without a restart. A file that cannot be read is reported and left untouched, and the fixed Collections still work.
@@ -97,9 +97,10 @@ A saved view is a base Collection (a fixed one or a Project) with the Filter car
 ### Filters
 
 - `s` cycles the status filter (on the Issues Page; the Board ignores status, see [the Board](#lanes-and-cards)), `f` opens the Filter card (project, status, owner, label, relationship; the Board's card has no Status row, and Apply and `ctrl+d` there keep the status filter as it was), `/` searches text and `c` clears every filter for this Pane.
-- Field filters narrow a Collection but keep its grouping and headings: Today with `status=open` still shows Overdue and Today. Only a text search shows the flat **Results** list.
+- The filter line under the top bar shows each active filter as a chip after a funnel: "status open", "owner me", "label bug,ux", "relationship has parent", "search text". It is gone while no filter is on.
+- Field filters narrow a Collection but keep its grouping and headings: Today with status open still shows Overdue and Today. Only a text search shows the flat **Results** list.
 - `ctrl+d` in the Filter card saves the card's values as the **default filter** of the Project the Pane's folder is bound to, and applies them. The card stays open, saving, until the save answers; a failure keeps the card and its values with the error. An empty card removes the default. Search text is never saved, and a folder bound to no Project has no default.
-- A Pane starts with its Project's default already applied, and the filter line under the top bar ends with "(default)" while the active filters equal it. `c` clears the filters for this Pane only; the default returns the next time a Pane starts.
+- A Pane starts with its Project's default already applied, and the filter line under the top bar ends with "default" while the active filters equal it. `c` clears the filters for this Pane only; the default returns the next time a Pane starts.
 - Defaults live in `filters.toml`, beside `lanes.toml` (the paths are in [the Lane list file](#the-lane-list-file)), one table per Project UID with only the filters that are set; other tables and keys you add are kept on save:
 
 ```toml

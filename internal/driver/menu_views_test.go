@@ -320,8 +320,8 @@ func TestMenuViewsRowNamesTheOpenedSavedViewUntilAnotherCollectionIsChosen(t *te
 	if inbox.Model.Collection != model.InboxCollection() || inbox.Model.Filters.Status != "open" {
 		t.Fatalf("fixture: Collection %+v, filters %+v", inbox.Model.Collection, inbox.Model.Filters)
 	}
-	if strings.Contains(inbox.Model.FilterSummary(), "Mine") {
-		t.Errorf("filter line %q still names the view", inbox.Model.FilterSummary())
+	if got := filterLineText(t, inbox); strings.Contains(got, "Mine") {
+		t.Errorf("filter line %q still names the view", got)
 	}
 	again := step(t, inbox, openMenu).State
 	if got := rowValue(t, again.Model, view.PickerListID+".views"); got != "Inbox" {

@@ -2,10 +2,26 @@ package model_test
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
+
+// filterLine is the filter line's terms as name=value words joined by " · ", then its note in parentheses, so a test
+// compares the whole line at once.
+func filterLine(m model.Model) string {
+	terms, note := m.FilterLine()
+	parts := make([]string, len(terms))
+	for i, term := range terms {
+		parts[i] = string(term.Field) + "=" + term.Value
+	}
+	line := strings.Join(parts, " · ")
+	if note != "" {
+		line = strings.TrimSpace(line + " (" + note + ")")
+	}
+	return line
+}
 
 func TestLiveSearch(t *testing.T) {
 	for _, tt := range []struct {
@@ -64,8 +80,8 @@ func TestStatusFilterCycle(t *testing.T) {
 	} {
 		var cmds []model.Cmd
 		m, cmds = model.Update(m, model.KeyMsg{Chord: "s"})
-		if len(cmds) != 1 || m.Filters.Status != tt.status || m.FilterSummary() != tt.header {
-			t.Fatalf("status cycle: %+v, header %q, commands %#v", m.Filters, m.FilterSummary(), cmds)
+		if len(cmds) != 1 || m.Filters.Status != tt.status || filterLine(m) != tt.header {
+			t.Fatalf("status cycle: %+v, header %q, commands %#v", m.Filters, filterLine(m), cmds)
 		}
 		refresh := cmds[0].(model.ReadSnapshot)
 		want := []string(nil)
@@ -109,8 +125,8 @@ func TestFilterForm(t *testing.T) {
 				return
 			}
 			want := model.Filters{ProjectUID: "p", Status: "open", Owner: "q", Label: "bug,ux", Relationship: "parent", Search: "existing"}
-			if m.Filters != want || len(cmds) != 1 || m.FilterSummary() != "project=Work · status=open · owner=q · label=bug,ux · relationship=parent · search=existing" {
-				t.Fatalf("form apply: %+v %q %#v", m.Filters, m.FilterSummary(), cmds)
+			if m.Filters != want || len(cmds) != 1 || filterLine(m) != "project=Work · status=open · owner=q · label=bug,ux · relationship=parent · search=existing" {
+				t.Fatalf("form apply: %+v %q %#v", m.Filters, filterLine(m), cmds)
 			}
 			refresh := cmds[0].(model.ReadSnapshot)
 			q := refresh.Query
@@ -137,7 +153,7 @@ func TestFiltersSurviveRefreshAndClear(t *testing.T) {
 		t.Fatalf("live refresh loses filters/results: %+v", m)
 	}
 	m, cmds = model.Update(m, model.KeyMsg{Chord: "c"})
-	if m.Filters != (model.Filters{}) || m.FilterSummary() != "" || len(cmds) != 1 {
+	if m.Filters != (model.Filters{}) || filterLine(m) != "" || len(cmds) != 1 {
 		t.Fatalf("clear: %+v %#v", m.Filters, cmds)
 	}
 	refresh = cmds[0].(model.ReadSnapshot)
@@ -226,8 +242,8 @@ func TestFilterFormActionsAndProjectScope(t *testing.T) {
 func TestStatusDefaultsToAll(t *testing.T) {
 	for _, c := range []model.Collection{{View: "all-open", Title: "All Open"}, {View: "project", ProjectUID: "p", Title: "Work"}} {
 		m := model.Model{Collection: c}
-		if q := m.SnapshotQuery(); q.Status != nil || m.FilterSummary() != "" {
-			t.Fatalf("%s: status query %v summary %q", c.View, q.Status, m.FilterSummary())
+		if q := m.SnapshotQuery(); q.Status != nil || filterLine(m) != "" {
+			t.Fatalf("%s: status query %v summary %q", c.View, q.Status, filterLine(m))
 		}
 		m, _ = model.Update(m, model.KeyMsg{Chord: "f"})
 		m, _ = model.Update(m, model.KeyMsg{Chord: "tab"})
