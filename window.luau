@@ -1,6 +1,7 @@
 --!strict
 
 local placement = require("./placement")
+local releases = require("./releases")
 
 -- kata Panes this plugin launched, until they close: each is reaped on its own, since every tab may have one.
 local launched: { [number]: boolean } = {}
@@ -473,6 +474,102 @@ end)
 tern.on("agent_state", function(ev, cx)
     relayAll(cx, false)
 end)
+
+-- The release check: window start, then every 24 hours while the window stays open. The decisions are in releases.luau; this
+-- reads the clock, the environment, the store and the network. A failed fetch is a check like any other and stays silent.
+local KV_LAST_CHECK = "release_check.last"
+local KV_TOASTED = "release_check.toasted"
+local KV_OFF = "release_check.off"
+local DEFAULT_RELEASE_BASE = "https://github.com/Dangerboi/tern-kata/releases/latest/download"
+
+local function envOff(): boolean
+    local value = tern.getenv("TERN_KATA_NO_UPDATE_CHECK")
+    return value ~= nil and value ~= ""
+end
+
+local function ownVersion(): string?
+    local ok, toml = pcall(tern.fs.read, tern.plugin.dir .. "/plugin.toml")
+    if not ok or type(toml) ~= "string" then return nil end
+    return releases.pluginVersion(toml)
+end
+
+-- `tern plugin dir`, asked once per load. A failed or raising ask (iOS) leaves nil, which counts the copy as installed.
+local pluginDirAsked = false
+local pluginDir: string? = nil
+local pluginDirWaiting: { () -> () } = {}
+
+local function withPluginDir(fn: () -> ())
+    if pluginDirAsked then fn(); return end
+    table.insert(pluginDirWaiting, fn)
+    if #pluginDirWaiting > 1 then return end
+    local function answer(dir: string?)
+        pluginDirAsked = true
+        pluginDir = dir
+        local waiting = pluginDirWaiting
+        pluginDirWaiting = {}
+        for _, waiter in waiting do waiter() end
+    end
+    local ok = pcall(function()
+        tern.process.run({"tern", "plugin", "dir"}, {timeout_ms = 10000}, function(result)
+            local dir = result.status == 0 and result.stdout:match("^%s*(.-)%s*$") or nil
+            answer(dir ~= "" and dir or nil)
+        end)
+    end)
+    if not ok then answer(nil) end
+end
+
+local function currentCheck(): releases.Check
+    return {
+        envOff = envOff(),
+        linked = releases.isLinked(tern.plugin.dir, pluginDir),
+        toggleOff = tern.kv.get(KV_OFF) == true,
+        now = os.time(),
+        lastCheck = (function(): number?
+            local last = tern.kv.get(KV_LAST_CHECK)
+            return type(last) == "number" and last or nil
+        end)(),
+    }
+end
+
+local function releaseCheck()
+    withPluginDir(function()
+        local check = currentCheck()
+        if releases.shouldCheck(check) then
+            -- Stored before the fetch: a failure counts as a check, and so does a second window starting meanwhile.
+            tern.kv.set(KV_LAST_CHECK, check.now)
+            local base = tern.getenv("TERN_KATA_BASE_URL")
+            if base == nil or base == "" then base = DEFAULT_RELEASE_BASE end
+            tern.fetch((base:gsub("/+$", "")) .. "/version.txt", {timeout_ms = 15000}, function(result, cx2)
+                if not cx2 or result.error ~= nil or result.status ~= 200 then return end
+                local own = ownVersion()
+                if not own then return end
+                local text, version = releases.toast(result.body, own, tern.kv.get(KV_TOASTED) :: string?)
+                if text and version then
+                    tern.kv.set(KV_TOASTED, version)
+                    cx2:toast("info", text)
+                end
+            end)
+        end
+        -- While the window stays open the check comes round again; it fetches only when a day has passed since the last one.
+        -- The variable and a linked plugin hold for the whole load; only the toggle can change meanwhile.
+        local off = releases.offBecause(check)
+        if off == nil or off == "toggle" then tern.timer(releases.DAY * 1000, releaseCheck) end
+    end)
+end
+
+tern.on("window_start", function() releaseCheck() end)
+
+tern.command({
+    id = "update-checks",
+    title = "Turn tern-kata update checks off/on",
+    run = function(cx)
+        withPluginDir(function()
+            local off, text = releases.toggle(currentCheck())
+            tern.kv.set(KV_OFF, off)
+            cx:toast("info", text)
+        end)
+    end,
+})
 
 tern.command({
     id = "open",

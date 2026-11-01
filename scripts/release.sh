@@ -23,7 +23,7 @@ trap 'rm -rf "$stage"' EXIT
 
 # The plugin folder every archive carries; `tern plugin install <dir>` installs it. A require("./name") in a plugin file
 # needs name.luau beside it, or the installed plugin would fail to load.
-plugin_files="plugin.toml window.luau host.luau placement.luau"
+plugin_files="plugin.toml window.luau host.luau placement.luau releases.luau"
 mkdir "$stage/plugin"
 for f in $plugin_files; do
 	cp "$f" "$stage/plugin/"
