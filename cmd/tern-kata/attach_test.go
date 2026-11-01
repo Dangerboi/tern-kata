@@ -170,12 +170,15 @@ func TestAttachConvertsOldPointersBeforeAttaching(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gateway := data.NewGateway(f.locate)
-	defer gateway.Close()
-	project := send(t, gateway, model.LoadProject{Workspace: f.repo}).(model.ProjectLoaded).Project
+	// The Issue is read straight from the daemon: loading the Project through a Gateway would start its background pointer move, which
+	// could finish, and leave its done marker, before the old pointer below is written.
+	created, err := target.Client.ShowIssueByUIDWithResponse(context.Background(), &g.ShowIssueByUIDRequestOptions{PathParams: &g.ShowIssueByUIDPath{UID: f.uid}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	old := map[string]any{"host": testHost, "path": "/elsewhere/old.png"}
 	if _, err := target.Client.PatchIssueMetadataWithResponse(context.Background(), &g.PatchIssueMetadataRequestOptions{
-		PathParams: &g.PatchIssueMetadataPath{ProjectID: project.ID, Ref: f.uid},
+		PathParams: &g.PatchIssueMetadataPath{ProjectID: created.JSON200.Issue.ProjectID, Ref: f.uid},
 		Body:       &g.PatchIssueMetadataBody{Actor: new("tester"), Patch: map[string]any{"attachment.old.png": old}},
 	}); err != nil {
 		t.Fatal(err)
