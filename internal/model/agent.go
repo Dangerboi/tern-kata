@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"maps"
 	"time"
 )
 
@@ -45,6 +46,8 @@ type AgentEntry struct {
 	StartedAt time.Time `json:"started_at"`
 	// PromptFile is the file the agent was started with; it goes when the entry does.
 	PromptFile string `json:"prompt_file"`
+	// Teammate is the agent's name from agent.toml when it started, which its Attention requests carry; "" in an entry written before it was kept.
+	Teammate string `json:"teammate,omitempty"`
 	// PaneBlock is the block id of the kata Pane that started the agent; "" when that Pane could not name itself.
 	PaneBlock string `json:"pane_block"`
 	// Background says the agent belongs in the hidden session; Open says it is out of it right now.
@@ -79,7 +82,11 @@ func (AgentStarted) msg() {}
 
 // PruneAgents asks for agents.json to lose the entries whose block `tern ls --json` no longer lists; the Pane sends it once, at start.
 // PaneBlock is this Pane's block: an entry whose starting Pane is no longer a live block is adopted by it ("" adopts nothing).
-type PruneAgents struct{ PaneBlock string }
+// Seq numbers the request in the order the Pane asked; the answer echoes it.
+type PruneAgents struct {
+	PaneBlock string
+	Seq       int64
+}
 
 func (PruneAgents) cmd() {}
 
@@ -87,6 +94,7 @@ func (PruneAgents) cmd() {}
 type AgentsPruned struct {
 	Agents []AgentEntry
 	Err    error
+	Seq    int64
 }
 
 func (AgentsPruned) msg() {}
@@ -129,7 +137,8 @@ func openAgent(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	m.Agents.inFlight = true
-	return m, []Cmd{RefreshAgents{PaneBlock: m.PaneBlock}}
+	m, ask := m.askRefresh(nil)
+	return m, []Cmd{ask}
 }
 
 // startAgent starts an agent on the Agent card's Issue where the card's key (action) says; the card closes first, and a refusal
@@ -157,6 +166,11 @@ func agentStarted(m Model, msg AgentStarted) Model {
 		return m
 	}
 	m.AgentMapping = append(m.AgentMapping, msg.Entry)
+	m.agentFresh = maps.Clone(m.agentFresh)
+	if m.agentFresh == nil {
+		m.agentFresh = map[string]int64{}
+	}
+	m.agentFresh[msg.Entry.Block] = m.agentAsks
 	_, where := msg.Placement.words()
 	m.Notice = fmt.Sprintf("Started an agent on %s in %s.", msg.IssueRef, where)
 	if msg.Note != "" {
@@ -167,7 +181,8 @@ func agentStarted(m Model, msg AgentStarted) Model {
 
 // agentsPruned takes in the entries even when tern could not be asked: they are the file as read, as a later refresh keeps them.
 func agentsPruned(m Model, msg AgentsPruned) (Model, []Cmd) {
-	m.AgentMapping = msg.Agents
+	next, m := m.keepFresh(msg.Agents, msg.Seq)
+	m.AgentMapping = next
 	m.Agents = m.Agents.trimmed(m.agentMapped)
 	return raiseAgentAttention(m, false)
 }

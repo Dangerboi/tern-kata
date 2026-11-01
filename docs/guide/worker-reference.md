@@ -22,7 +22,7 @@ The file is decoded strictly (an unknown key is an error) and read once at start
 | `[[projects]]` `secrets` | The `[secrets]` names this Project's jobs may use. Unlike `checkouts` and `profiles`, an empty or missing list allows none; a job naming an unlisted secret is set aside, and a name `[secrets]` does not define is refused at load. `tern-kata worker upgrade` adds the names the Project's jobs use (see [Upgrading](#upgrading-an-existing-worker-config)). |
 | `[[projects]]` `commands` | `true` lets the Project's workflows run command steps (`sh -c`); default `false`. A job whose workflow has a command step is set aside without it. `tern-kata worker upgrade` adds it when a workflow has one. |
 | `[checkouts]` | A job's `checkout_key` mapped to an absolute directory. |
-| `[profiles.<name>]` | A job's `options.profile` (default `default`); `default` is required. Keys: `command`, `model`, `thinking`, `args`. |
+| `[profiles.<name>]` | A job's `options.profile` (default `default`); `default` is required. Keys: `command`, `model`, `thinking`, `args`, `extensions`. `extensions` picks the omp extensions a run loads: `"ambient"` (default; omp's own discovery, no flag), `"none"` (`--no-extensions`) or a list of absolute paths (`--trusted-extension` for each; a relative path, an empty list, or a list beside `-e`, `--extension` or `--hook` in `args` is refused at load, naming the profile). With kata-plugin installed, an ambient run gets its todo takeover (issues for each task, up to 3 extra turns from its stop reminder); `worker doctor` warns of it and suggests `extensions = "none"`; it looks where omp does (honouring `OMP_PROFILE`, `PI_PROFILE`, `PI_CONFIG_DIR`, `XDG_DATA_HOME` and a `--profile` in the profile's `args`) and says nothing for a profile whose `args` already hold `--no-extensions` or `--trusted-extension`. |
 | `[secrets]` | A job's `secret_refs` name mapped to where the value lives; never a literal. |
 
 <details>
@@ -55,6 +55,7 @@ command  = "omp"
 model    = "anthropic/claude-sonnet-5-5"
 thinking = "medium"
 args     = []                  # extra arguments, e.g. ["--profile", "worker"] to isolate omp's own state
+# extensions = "none"          # "ambient" (default), "none", or ["/abs/path/ext.ts"]; "none" keeps kata-plugin's todo takeover out of runs
 
 [secrets]                      # a job's secret_refs name -> where the value lives; never a literal
 github-review = { file = "~/.config/tern-kata/github-review" }   # a private (0600) regular file
@@ -159,7 +160,7 @@ If the state folder is lost instead, see [Recovery and held runs](#recovery-and-
 
 ## What a run does
 
-The agent is told its Issue and how to leave a record: comment what it did, close the Issue with evidence when the work is verified. When it exits without closing, the worker comments its final message and labels the Issue `needs-review`.
+The agent is told its Issue and how to leave a record: comment what it did, close the Issue with evidence when the work is verified. When it exits without closing, the worker comments its final message and labels the Issue `needs-review`. For a succeeded run that leaves its per-run Issue open, the worker also sends an Attention request to the Issue's owner, else its author, saying the run needs review. An existing Issue gets none: an Attention request is a `notify.<address>` metadata key on the Issue, i.e. an edit, and a run on an existing Issue leaves it open by design, so every run would notify.
 
 - Exit status 0 after a finished turn is `succeeded`, anything else `failed`.
 - A run over its timeout is stopped and failed as "timed out".
@@ -217,7 +218,7 @@ A workflow run's time limit starts when its run is prepared, and a resume gets o
 
 A job whose action is a workflow runs its steps one at a time, in the order the workflow lists them (kata requires `after` to name earlier steps).
 
-- **Prompt step.** One fresh omp process with the same profile, prompt contract and journal as a prompt job. The prompt names the workflow, its `about`, and the step's place in it. Steps hand work to each other through the checkout and the Issue, since each step starts a new session.
+- **Prompt step.** One fresh omp process with the same profile, prompt contract and journal as a prompt job. Its environment is the worker's without `TERN_KATA_*` and without any `KATA_*` except `KATA_HOME`, `KATA_SERVER`, `KATA_DAEMON`, `KATA_AUTH_TOKEN`, `KATA_AUTH_TOKEN_FILE`, `KATA_TRUST_PRIVATE_NETWORK` and `KATA_ALLOW_INSECURE`, plus `KATA_AUTHOR` set to the run's actor and the job's secrets. An inherited `KATA_REF` or other kata-plugin variable never reaches omp. The prompt names the workflow, its `about`, and the step's place in it. Steps hand work to each other through the checkout and the Issue, since each step starts a new session.
 - **Command step.** `sh -c <command>` in the checkout, in its own process group, as the worker's user, with the job's secrets and `TERN_KATA_RUN`, `TERN_KATA_RUN_DIR` and `KATA_PROJECT` in its environment but not the worker's kata credentials. Its output goes to `output.log`, keeping the first 1 MiB and the last 256 KiB with a marker between. Exit status 0 with nothing left in its process group succeeds; a leftover process, a missing exit status or a worker stop holds the run.
 - **Retries.** A step that fails with a certain nonzero exit is retried up to its `retries` as a new attempt (a retried prompt step is told it is attempt N after a failure and to check the checkout first). A timeout is never retried, because the job's timeout is the whole run's, shared by every step and retry.
 - **Failure.** A step that fails after its retries skips the steps that run after it, steps that do not depend on it still run, and the run is `failed`.

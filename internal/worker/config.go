@@ -112,6 +112,117 @@ type Profile struct {
 	Model    string   `toml:"model"`
 	Thinking string   `toml:"thinking"`
 	Args     []string `toml:"args"`
+	// Extensions picks which omp extensions the profile's runs load: "ambient" (the default: omp's own discovery),
+	// "none" or a list of absolute paths (ADR-0010).
+	Extensions Extensions `toml:"extensions"`
+}
+
+// Extensions modes.
+const (
+	ExtensionsAmbient = "ambient"
+	ExtensionsNone    = "none"
+)
+
+// Extensions is a profile's `extensions` key: the string "ambient" or "none", or a list of absolute extension paths.
+// The zero value is ambient. A form that does not fit is kept in bad and refused when the config is validated, where
+// the profile's name is known.
+type Extensions struct {
+	// Mode is "" or ExtensionsAmbient, ExtensionsNone, or "list" when Paths is set.
+	Mode  string
+	Paths []string
+	bad   string
+}
+
+const extensionsList = "list"
+
+// UnmarshalTOML takes the string or the array of strings the key may hold.
+func (e *Extensions) UnmarshalTOML(data any) error {
+	*e = Extensions{}
+	switch v := data.(type) {
+	case string:
+		if v != ExtensionsAmbient && v != ExtensionsNone {
+			e.bad = fmt.Sprintf("%q is not \"ambient\", \"none\" or a list of absolute paths", v)
+			return nil
+		}
+		e.Mode = v
+	case []any:
+		e.Mode = extensionsList
+		for _, item := range v {
+			path, ok := item.(string)
+			if !ok {
+				e.bad = "a list must hold only paths (strings)"
+				return nil
+			}
+			e.Paths = append(e.Paths, path)
+		}
+	default:
+		e.bad = "must be \"ambient\", \"none\" or a list of absolute paths"
+	}
+	return nil
+}
+
+// validate says what is wrong with the key, empty when it is fine.
+func (e Extensions) validate() string {
+	if e.bad != "" {
+		return e.bad
+	}
+	if e.Mode != extensionsList {
+		return ""
+	}
+	if len(e.Paths) == 0 {
+		return "an empty list loads nothing; use \"none\" for that"
+	}
+	for _, p := range e.Paths {
+		if !filepath.IsAbs(p) {
+			return fmt.Sprintf("path %q must be absolute (omp refuses relative --trusted-extension paths)", p)
+		}
+	}
+	return ""
+}
+
+// Ambient is true when the profile leaves omp to discover its extensions, so kata-plugin's takeover may load.
+func (e Extensions) Ambient() bool { return e.Mode == "" || e.Mode == ExtensionsAmbient }
+
+// args are the omp flags the key stands for.
+func (e Extensions) args() []string {
+	switch e.Mode {
+	case ExtensionsNone:
+		return []string{"--no-extensions"}
+	case extensionsList:
+		var out []string
+		for _, p := range e.Paths {
+			out = append(out, "--trusted-extension", p)
+		}
+		return out
+	}
+	return nil
+}
+
+// hasArg is true when the profile's args hold one of flags, bare or as flag=value.
+func (p Profile) hasArg(flags ...string) bool {
+	return slices.ContainsFunc(p.Args, func(a string) bool {
+		flag, _, _ := strings.Cut(a, "=")
+		return slices.Contains(flags, flag)
+	})
+}
+
+// LoadsAmbientExtensions is true when a run of the profile lets omp discover its extensions: neither the `extensions`
+// key nor the profile's own args (--no-extensions, --trusted-extension) switch discovery off.
+func (p Profile) LoadsAmbientExtensions() bool {
+	return p.Extensions.Ambient() && !p.hasArg("--no-extensions", "--trusted-extension")
+}
+
+// ompProfile is the omp profile the profile's args select with --profile <name> or --profile=<name> (the last wins, as
+// in omp); ok is false when they select none.
+func (p Profile) ompProfile() (name string, ok bool) {
+	for i, a := range p.Args {
+		if value, found := strings.CutPrefix(a, "--profile="); found {
+			name, ok = value, true
+		} else if a == "--profile" && i+1 < len(p.Args) {
+			name, ok = p.Args[i+1], true
+		}
+	}
+	return name, ok
 }
 
 // SecretSource is where a secret's value comes from: an environment variable or a private file.
@@ -194,6 +305,12 @@ func (c *Config) validate() error {
 		return errors.New("profiles.default is required")
 	}
 	for name, p := range c.Profiles {
+		if why := p.Extensions.validate(); why != "" {
+			return fmt.Errorf("profiles.%s: extensions: %s", name, why)
+		}
+		if p.Extensions.Mode == extensionsList && p.hasArg("-e", "--extension", "--hook") {
+			return fmt.Errorf("profiles.%s: extensions: a list cannot be combined with -e, --extension or --hook in args (omp refuses that combination)", name)
+		}
 		if p.Command != "" && strings.ContainsAny(p.Command, `/\`) && !filepath.IsAbs(p.Command) {
 			return &FieldError{FieldCommand, fmt.Errorf("profiles.%s: command %q must be absolute or a name on PATH", name, p.Command)}
 		}

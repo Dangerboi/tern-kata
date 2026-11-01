@@ -2,7 +2,7 @@
 # project#id, an agents.json entry marked background and not open. Then w opens the Agent card and enter opens the agent beside
 # the Pane: the block moves into the Pane's tab and agents.json marks it open. w then g again starts another background agent,
 # adding a tab to the session that is still there.
-# A stand-in script from agent.toml's `command` plays omp. The Pane's blocks live on a session daemon of the step's own
+# A stand-in script from agent.toml's `command` plays omp (only its command line is checked). The Pane's blocks live on a session daemon of the step's own
 # (`tern daemon --socket`): the headless `tern serve` window has no session daemon, so `tern ls`, `tern new` and `tern move` fail
 # in its panes without one (checked on Tern 0.9.8). That window is not attached to the daemon either: its Pane is the window's own
 # pane (env has TERN_WINDOW_PANE, no TERN_PANE; `ctl state` lists the one pane, not the daemon's blocks). So the step makes a block
@@ -20,8 +20,7 @@ ba_sock="$tmp/ba-daemon.sock"
 ba_standin="$tmp/ba-omp"
 mkdir -p "$ba_config/tern-kata" "$ba_state"
 printf 'command = ["%s"]\n' "$ba_standin" >"$ba_config/tern-kata/agent.toml"
-# The stand-in records what it was started with and waits, as an interactive agent does.
-printf '#!/bin/sh\nprintf "%%s\\n" "$@" >%q\nexec sleep 600\n' "$tmp/ba-argv" >"$ba_standin"
+printf '#!/bin/sh\nexec sleep 600\n' >"$ba_standin"
 chmod +x "$ba_standin"
 ba_tern() { TERN_DAEMON_SOCKET="$ba_sock" tern "$@"; }
 ba_daemon_pid=
@@ -69,12 +68,11 @@ ba_wait_tabs --arg n "smoke#$ba_short" '[.[] | select(.name == $n)] | length == 
 ba_block=$(ba_tabs | jq -r --arg n "smoke#$ba_short" '.[] | select(.name == $n) | .blocks[0]')
 # Hidden: the session is not shown, so the block is not beside the Pane.
 ba_tern ls --json | jq -e '[.sessions[] | select(.name == "kata agents")][0].shown == false' >/dev/null
-# The stand-in ran with the Issue's prompt file as omp's first message.
-for ((attempt = 0; attempt < 100; attempt++)); do
-  [[ ! -s "$tmp/ba-argv" ]] || break
-  sleep 0.1
-done
-grep -q '^@.*/agent-prompts/prompt-.*\.md$' "$tmp/ba-argv"
+# With no actor in agent.toml the block's command still runs through `tern-kata agent` with the Issue's ref (and no --as), then the
+# stand-in with the Issue's prompt file as omp's first message. The command is as the daemon lists it; the block's login shell
+# resets PATH, so the wrapper is not run to the stand-in here.
+ba_command=$(ba_tern ls --json | jq -r --arg b "$ba_block" '[.sessions[].tabs[].blocks[] | select(.id == ($b | tonumber)) | .command][0]')
+[[ $ba_command == "tern-kata agent --ref 'smoke#$ba_short' -- $ba_standin @"*"/agent-prompts/prompt-"*".md" ]]
 # agents.json (the Agent mapping) holds the block as a background agent that is not open.
 jq -e --arg block "$ba_block" --arg uid "$ba_uid" '.agents | length == 1 and .[0].block == $block and .[0].issue_uid == $uid and .[0].background == true and .[0].open == false' \
   "$ba_state/tern-kata/agents.json" >/dev/null

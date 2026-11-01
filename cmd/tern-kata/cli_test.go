@@ -82,11 +82,26 @@ func TestBashCompletionOffersSubcommandsWorkerFormsAndFlags(t *testing.T) {
 		{[]string{"views", "show", "x", "--"}, "--json --as"},
 		{[]string{"views", "add", "x", "--re"}, "--relationship --replace"},
 		{[]string{"completion", "z"}, "zsh"},
-		{[]string{"attach", "ab12", "a"}, ""}, // files are the shell's own completion
+		{[]string{"agent", "--"}, "--as --ref"},
+		{[]string{"agent", "--as", "bot", "--re"}, "--ref"},
+		{[]string{"agent", "--as", "bot", "--ref", "demo#ab12", "--"}, "--as --ref"},
+		{[]string{"agent", "--ref", "demo#ab12", "--as", "bot", "--a"}, "--as"},
+		{[]string{"agent", "--as", "bot", "--ref", "demo#ab12", "--", "omp", "--"}, ""}, // after the lone -- the words are the command's
+		{[]string{"attach", "ab12", "a"}, ""},                                           // files are the shell's own completion
 	} {
 		if got := strings.Join(complete(t, tc.words...), " "); got != tc.want {
 			t.Errorf("tern-kata %s<tab> = %q, want %q", strings.Join(tc.words, " "), got, tc.want)
 		}
+	}
+}
+
+func TestFishCompletionOffersTheAgentRef(t *testing.T) {
+	var script bytes.Buffer
+	if err := writeCompletion("fish", &script); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(script.String(), "__fish_seen_subcommand_from agent' -l ref") {
+		t.Errorf("fish completion has no --ref for agent:\n%s", script.String())
 	}
 }
 

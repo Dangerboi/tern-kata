@@ -83,6 +83,7 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 			return m, nil
 		}
 		m.StreamConnected = true
+		m.AgentClose = m.AgentClose.forgetUnreadable()
 		m, cmds := askAttention(m)
 		if m.Stale {
 			m, more := snapshotChanged(m)

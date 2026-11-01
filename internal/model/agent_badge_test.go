@@ -70,7 +70,7 @@ func TestAnAgentOfAnUnknownPromptFileInTheRelayReReadsAgentsJSONOnce(t *testing.
 	m := model.Model{AgentMapping: []model.AgentEntry{entry("a", "7", 1)}}
 	other := model.AgentState{Block: "9", State: "idle", Command: "omp @/state/agent-prompts/prompt-4-5.md"}
 	m, cmds := relayed(m, model.AgentState{Block: "7", State: "idle"}, other)
-	if want := []model.Cmd{model.RefreshAgents{}}; !reflect.DeepEqual(cmds, want) {
+	if want := []model.Cmd{model.RefreshAgents{Seq: 1}}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("first relay: %#v, want a re-read for the unknown prompt file", cmds)
 	}
 	m, _ = model.Update(m, model.AgentsRefreshed{Agents: m.AgentMapping})
@@ -113,7 +113,7 @@ func TestAnAgentOfAnUnknownSplitPromptFileReReadsAgentsJSONOnceAndEveryNameShape
 		m := model.Model{AgentMapping: []model.AgentEntry{entry("a", "7", 1)}}
 		other := model.AgentState{Block: "9", State: "idle", Command: "omp @/state/agent-prompts/" + name}
 		m, cmds := relayed(m, model.AgentState{Block: "7", State: "idle"}, other)
-		if want := []model.Cmd{model.RefreshAgents{}}; !reflect.DeepEqual(cmds, want) {
+		if want := []model.Cmd{model.RefreshAgents{Seq: 1}}; !reflect.DeepEqual(cmds, want) {
 			t.Fatalf("%s: first relay %#v, want a re-read", name, cmds)
 		}
 		m, _ = model.Update(m, model.AgentsRefreshed{Agents: m.AgentMapping})

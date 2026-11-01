@@ -112,9 +112,18 @@ type Model struct {
 	AgentMapping []AgentEntry
 	// AgentAttention are the Attention requests this Pane raised for waiting agents and has not cleared.
 	AgentAttention []RaisedAttention
-	Project        Project
-	Daemon         Daemon
-	Snapshot       Snapshot
+	// AgentGone are the entries of agents this Pane started whose block went (pruned from agents.json) without a relay showing them
+	// exited, until the exit request for their Issue is decided.
+	AgentGone []AgentEntry
+	// agentFresh are the agents started since a request was asked, by block, with the number of the last request asked before the
+	// start: an answer that read the file before the start wrote the entry does not hold it, and that is no sign the agent is gone.
+	// Only an answer to a later request settles it.
+	agentFresh map[string]int64
+	// agentAsks counts the RefreshAgents and PruneAgents the Pane has asked for.
+	agentAsks int64
+	Project   Project
+	Daemon    Daemon
+	Snapshot  Snapshot
 	// Relationships is every Issue's Relationships, built from Snapshot's links each time a snapshot is applied.
 	Relationships RelationshipIndex
 	Issues        []Issue
@@ -199,9 +208,10 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 	next, cmds := updateWithDetail(m, msg)
 	switch msg.(type) {
 	case SnapshotLoaded, StreamEvent:
-		var ended []Cmd
+		var raised, ended []Cmd
+		next, raised = attentionOnIssues(next)
 		next, ended = closeFinishedAgents(next, closeOnIssues)
-		cmds = append(cmds, ended...)
+		cmds = append(append(cmds, raised...), ended...)
 	}
 	next = next.recordWrite(msg).noteWrites(cmds)
 	return next.cancelPending(m, msg).settleDropdown().settleCalendar().withCollectionRows(), cmds
@@ -326,7 +336,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m = m.openRequested(msg.IssueRef)
 		m.Loading = true
 		m.Err = nil
-		return m, []Cmd{LoadProject{Workspace: msg.Workspace, Actor: m.Actor}, LoadViews{}, PruneAgents{PaneBlock: m.PaneBlock}}
+		m.agentAsks++
+		return m, []Cmd{LoadProject{Workspace: msg.Workspace, Actor: m.Actor}, LoadViews{}, PruneAgents{PaneBlock: m.PaneBlock, Seq: m.agentAsks}}
 	case ProjectLoaded:
 		return updateProject(m, msg)
 	case AgentStarted:

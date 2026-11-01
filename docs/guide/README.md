@@ -16,5 +16,5 @@ Back to the [overview](../../README.md).
 | [Dates](dates.md) | The Dates card |
 | [Agents](agents.md) | Clickable ticket links and the agent skills |
 | [Compared with `kata tui`](kata-tui.md) | Shared keys, undo, quit, aliases and the keys kata tui lacks |
-| [FAQ and known issues](faq.md) | Known issues and common questions |
+| [FAQ](faq.md) | Common questions |
 | [Development](development.md) | Building, testing, releasing, type-checking |

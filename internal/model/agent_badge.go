@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -182,6 +183,8 @@ func agentFocused(m Model, msg AgentFocused) Model {
 type RefreshAgents struct {
 	Suspects  []string
 	PaneBlock string
+	// Seq numbers the request in the order the Pane asked; the answer echoes it.
+	Seq int64
 }
 
 func (RefreshAgents) cmd() {}
@@ -190,18 +193,68 @@ func (RefreshAgents) cmd() {}
 type AgentsRefreshed struct {
 	Agents []AgentEntry
 	Err    error
+	Seq    int64
 }
 
 func (AgentsRefreshed) msg() {}
+
+// askRefresh is the RefreshAgents for suspects, numbered after every request asked before it.
+func (m Model) askRefresh(suspects []string) (Model, RefreshAgents) {
+	m.agentAsks++
+	return m, RefreshAgents{Suspects: suspects, PaneBlock: m.PaneBlock, Seq: m.agentAsks}
+}
 
 func (m Model) agentMapped(block string) bool {
 	return slices.ContainsFunc(m.AgentMapping, func(e AgentEntry) bool { return e.Block == block })
 }
 
+// noteGoneAgents files the entries of this Pane's agents that next no longer holds: their block is gone, which for the exit request
+// is an exit like any other (a clean exit closes the block and no exited state ever arrives).
+func (m Model) noteGoneAgents(next []AgentEntry) Model {
+	if m.PaneBlock == "" {
+		return m
+	}
+	for _, e := range m.AgentMapping {
+		if e.PaneBlock == m.PaneBlock && !slices.ContainsFunc(next, func(n AgentEntry) bool { return n.Block == e.Block }) &&
+			!slices.ContainsFunc(m.AgentGone, func(g AgentEntry) bool { return g.Block == e.Block }) {
+			m.AgentGone = append(slices.Clone(m.AgentGone), e)
+		}
+	}
+	return m
+}
+
+// keepFresh is an answer's entries with those of agents started since the request was asked that it lacks added from the current
+// mapping: the answer may have read the file before they were written. An agent started after the request with number seq was asked
+// is settled only by an answer to a request asked after its start, whichever order the answers arrive in.
+func (m Model) keepFresh(answer []AgentEntry, seq int64) ([]AgentEntry, Model) {
+	next := answer
+	settled := false
+	for b, after := range m.agentFresh {
+		if seq > after {
+			settled = true
+			continue
+		}
+		if slices.ContainsFunc(answer, func(e AgentEntry) bool { return e.Block == b }) {
+			continue
+		}
+		if i := slices.IndexFunc(m.AgentMapping, func(e AgentEntry) bool { return e.Block == b }); i >= 0 {
+			next = append(slices.Clip(next), m.AgentMapping[i])
+		}
+	}
+	if settled {
+		m.agentFresh = maps.Clone(m.agentFresh)
+		maps.DeleteFunc(m.agentFresh, func(_ string, after int64) bool { return seq > after })
+	}
+	return next, m
+}
+
 // agentsRefreshed takes in the mapping and, when a relay wanted a refresh while this one was out, asks for the next.
 func agentsRefreshed(m Model, msg AgentsRefreshed) (Model, []Cmd) {
 	if msg.Err == nil {
-		m.AgentMapping = msg.Agents
+		var next []AgentEntry
+		next, m = m.keepFresh(msg.Agents, msg.Seq)
+		m = m.noteGoneAgents(next)
+		m.AgentMapping = next
 		m.Agents = m.Agents.trimmed(m.agentMapped)
 	}
 	m.Agents.inFlight = false
@@ -216,7 +269,8 @@ func agentsRefreshed(m Model, msg AgentsRefreshed) (Model, []Cmd) {
 	}
 	suspects := slices.DeleteFunc(m.Agents.suspects, func(b string) bool { return !m.agentMapped(b) })
 	m.Agents.again, m.Agents.suspects, m.Agents.inFlight = false, nil, true
-	return m, append(raised, RefreshAgents{Suspects: suspects, PaneBlock: m.PaneBlock})
+	m, ask := m.askRefresh(suspects)
+	return m, append(raised, ask)
 }
 
 // promptTail finds the prompt file of a tern-kata agent in a command line: the part from the agent-prompts folder on, "" when
@@ -290,5 +344,6 @@ func relayAgents(m Model, msg AgentStatesMsg) (Model, []Cmd) {
 		return m, nil
 	}
 	m.Agents.inFlight = true
-	return m, []Cmd{RefreshAgents{Suspects: suspects, PaneBlock: m.PaneBlock}}
+	m, ask := m.askRefresh(suspects)
+	return m, []Cmd{ask}
 }

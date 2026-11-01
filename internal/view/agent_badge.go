@@ -25,3 +25,14 @@ func agentBadge(m model.Model, uid, key string) (ui.Badge, bool) {
 func agentBadgeElement(badge model.AgentBadge, key string) ui.Badge {
 	return ui.Badge{Common: ui.Common{Key: key, Tone: agentTones[badge.Tone], Actions: &ui.Actions{Click: AgentClick(badge.Block)}}, Text: badge.Text}
 }
+
+// attentionTone is the colour of an Issue's work attention: stuck is an error, needs-human a warning.
+func attentionTone(w model.WorkAttention) ui.Tone {
+	if w.Stuck {
+		return ui.ToneError
+	}
+	return ui.ToneWarning
+}
+
+// Rows and cards show only the work attention's word, so the Issue's title keeps its room at every width; the Issue detail shows
+// the word with the whole message.

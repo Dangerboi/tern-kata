@@ -50,8 +50,24 @@ type agentCloseState struct {
 	refused []string
 	// reading are the Issues (by UID) a status read is in flight for.
 	reading []string
+	// unreadable are the Issues (by UID) whose last status read failed; none is read again until the event stream reconnects or the Pane
+	// switches Daemon.
+	unreadable []string
 	// known is the status the last read gave an Issue the Collection does not list.
 	known map[string]string
+}
+
+// forgetUnreadable lets the Issues whose status read failed be read again: the Daemon that failed them may be back.
+func (s agentCloseState) forgetUnreadable() agentCloseState {
+	s.unreadable = nil
+	return s
+}
+
+// forDaemon is the state after the Pane connects to a different Daemon: its Issues are not the old Daemon's, so no read in flight,
+// known status or failed read carries over. Which blocks were closed or refused is about agents, not Issues, and stays.
+func (s agentCloseState) forDaemon() agentCloseState {
+	s.reading, s.known = nil, nil
+	return s.forgetUnreadable()
 }
 
 type agentCloseTrigger int
@@ -101,7 +117,7 @@ func closeFinishedAgents(m Model, trigger agentCloseTrigger) (Model, []Cmd) {
 		case status == "closed":
 			m.AgentClose.tried = append(slices.Clone(m.AgentClose.tried), e.Block)
 			cmds = append(cmds, CloseAgent{Block: e.Block})
-		case listed || e.ProjectID == 0 || slices.Contains(m.AgentClose.reading, e.IssueUID):
+		case listed || e.ProjectID == 0 || slices.Contains(m.AgentClose.reading, e.IssueUID) || slices.Contains(m.AgentClose.unreadable, e.IssueUID):
 		case status == "" || trigger == closeOnIssues || (trigger == closeOnRelay && m.Agents.enteredFinished(e.Block)):
 			m.AgentClose.reading = append(slices.Clone(m.AgentClose.reading), e.IssueUID)
 			cmds = append(cmds, ReadAgentIssue{Workspace: m.Workspace, ProjectID: e.ProjectID, UID: e.IssueUID})
@@ -113,6 +129,9 @@ func closeFinishedAgents(m Model, trigger agentCloseTrigger) (Model, []Cmd) {
 func agentIssueRead(m Model, msg AgentIssueRead) (Model, []Cmd) {
 	m.AgentClose.reading = slices.DeleteFunc(slices.Clone(m.AgentClose.reading), func(uid string) bool { return uid == msg.UID })
 	if msg.Err != nil {
+		// An Issue that can't be read is not read again, and nothing is raised for an agent gone from it.
+		m.AgentClose.unreadable = append(slices.Clone(m.AgentClose.unreadable), msg.UID)
+		m.AgentGone = slices.DeleteFunc(slices.Clone(m.AgentGone), func(g AgentEntry) bool { return g.IssueUID == msg.UID })
 		return m, nil
 	}
 	m.AgentClose.known = maps.Clone(m.AgentClose.known)
@@ -120,7 +139,9 @@ func agentIssueRead(m Model, msg AgentIssueRead) (Model, []Cmd) {
 		m.AgentClose.known = map[string]string{}
 	}
 	m.AgentClose.known[msg.UID] = msg.Status
-	return closeFinishedAgents(m, closeOnRead)
+	m, raised := raiseAgentAttention(m, false)
+	m, ended := closeFinishedAgents(m, closeOnRead)
+	return m, append(raised, ended...)
 }
 
 func agentClosed(m Model, msg AgentClosed) Model {

@@ -2,6 +2,7 @@
 
 local placement = require("./placement")
 local releases = require("./releases")
+local panecommands = require("./panecommands")
 
 -- kata Panes this plugin launched, until they close: each is reaped on its own, since every tab may have one.
 local launched: { [number]: boolean } = {}
@@ -283,7 +284,7 @@ local function open(cx: WindowCx, ref: string?)
             return
         end
     end
-    local pane = launch(cx, "tern-kata")
+    local pane = launch(cx, panecommands.KATA)
     if not pane then return end
     launched[pane] = true
     pending[pane] = ref
@@ -458,6 +459,11 @@ tern.on("pane_closed", function(ev, cx)
         marked[ev.pane] = nil
         restyleMarks()
     end
+    -- An agent that quits cleanly closes its block without an agent_state event; the relay that follows leaves the block out, and
+    -- the kata Panes drop its entry when Tern no longer lists it.
+    tern.timer(200, function(cx2)
+        if cx2 then relayAll(cx2, false) end
+    end)
 end)
 
 local function markAll(cx: WindowCx)
@@ -651,14 +657,11 @@ tern.command({
 
 -- The install one-liners per shell family; the session host's OS is not visible from the window, so the user picks.
 -- The trailing read keeps the Pane open to show the script's output (a clean exit closes the Pane).
-local installScripts = "https://raw.githubusercontent.com/Dangerboi/tern-kata/main/"
+local installScripts = panecommands.SCRIPTS
 local installChoices: { PickItem } = {
     {label = "Linux or macOS (sh)", command = "curl -fsSL " .. installScripts .. "install.sh | sh",
         pause = "printf 'Press Enter to close '; read _"},
-    -- Wrapped in powershell so it also works when the Pane's default shell is cmd, where `;` is no separator.
-    {label = "Windows (PowerShell)",
-        command = "powershell -NoProfile -ExecutionPolicy Bypass -Command \"irm " .. installScripts
-            .. "install.ps1 | iex; Read-Host 'Press Enter to close'\""},
+    {label = "Windows (PowerShell)", command = panecommands.INSTALL_WINDOWS},
 }
 for _, choice in installChoices do choice.detail = choice.command end
 
@@ -729,7 +732,7 @@ tern.command({
                 cx2:toast("error", "tern-kata was not updated", "Could not read version.txt of the latest release")
                 return
             end
-            local pane = launch(cx2, "tern-kata update --pause")
+            local pane = launch(cx2, panecommands.UPDATE)
             if pane then
                 changeUpdatePanes(pane, true)
                 watchUpdate(pane, version, remote)

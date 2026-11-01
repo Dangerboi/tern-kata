@@ -23,18 +23,21 @@ const (
 	AgentPromptsFolder = "agent-prompts"
 )
 
-// AgentWrapperProgram is the program that sets the actor around an agent's command. It is found on PATH, as the plugin finds
+// AgentWrapperProgram is the program that sets the actor and Issue ref around an agent's command. It is found on PATH, as the plugin finds
 // tern-kata itself; the running executable's path would go stale (Linux appends " (deleted)") when the binary is replaced.
 const AgentWrapperProgram = "tern-kata"
 
 // AgentCommandLine is the command an agent block runs: command with @promptFile appended (omp reads it as the first message),
-// run through `tern-kata agent --as actor --` when an actor is set and directly otherwise.
-func AgentCommandLine(actor string, command []string, promptFile string) []string {
-	line := append(slices.Clone(command), "@"+promptFile)
-	if actor == "" {
-		return line
+// run through `tern-kata agent [--as actor] --ref ref --`. ref is the Issue's qualified ref, which the wrapper sets as the agent's
+// KATA_REF; --as is left out when no actor is set, so KATA_AUTHOR stays as inherited.
+func AgentCommandLine(actor, ref string, command []string, promptFile string) []string {
+	line := []string{AgentWrapperProgram, "agent"}
+	if actor != "" {
+		line = append(line, "--as", actor)
 	}
-	return append([]string{AgentWrapperProgram, "agent", "--as", actor, "--"}, line...)
+	line = append(line, "--ref", ref, "--")
+	line = append(line, command...)
+	return append(line, "@"+promptFile)
 }
 
 // AgentSplitArgs is the tern command line for the Agent card's `s`: a split right of the Pane's block. A Pane that cannot name its block (paneBlock
@@ -366,10 +369,10 @@ func (g *Gateway) reconcileAgents(ctx context.Context, file, paneBlock string, f
 func (g *Gateway) pruneAgents(ctx context.Context, cmd model.PruneAgents) model.AgentsPruned {
 	file, _, err := g.agentStatePaths()
 	if err != nil {
-		return model.AgentsPruned{Err: err}
+		return model.AgentsPruned{Seq: cmd.Seq, Err: err}
 	}
 	agents, askErr, err := g.reconcileAgents(ctx, file, cmd.PaneBlock, true, func(string) bool { return true })
-	return model.AgentsPruned{Agents: agents, Err: cmp.Or(askErr, err)}
+	return model.AgentsPruned{Seq: cmd.Seq, Agents: agents, Err: cmp.Or(askErr, err)}
 }
 
 func removePrompt(path string) {
@@ -416,7 +419,7 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 	if err != nil {
 		return failed(err)
 	}
-	line := AgentCommandLine(settings.Actor, settings.Command, promptFile)
+	line := AgentCommandLine(settings.Actor, cmd.IssueRef, settings.Command, promptFile)
 	var out []byte
 	switch cmd.Placement {
 	case model.AgentTab:
@@ -438,7 +441,7 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 		return failed(err)
 	}
 	entry := model.AgentEntry{IssueUID: cmd.IssueUID, IssueRef: cmd.IssueRef, ProjectID: cmd.ProjectID, Block: block, StartedAt: g.now().UTC().Truncate(time.Second),
-		PromptFile: promptFile, PaneBlock: cmd.PaneBlock, Placement: cmd.Placement, Background: cmd.Placement == model.AgentBackground}
+		Teammate: settings.Name, PromptFile: promptFile, PaneBlock: cmd.PaneBlock, Placement: cmd.Placement, Background: cmd.Placement == model.AgentBackground}
 	if _, err := UpdateAgents(filepath.Join(dirs.State, AgentsFile), func(list []model.AgentEntry) []model.AgentEntry {
 		return append(slices.DeleteFunc(list, func(e model.AgentEntry) bool { return e.Block == block }), entry)
 	}); err != nil {
@@ -656,10 +659,10 @@ func writeAgentPrompt(folder, starter, text string) (string, error) {
 func (g *Gateway) refreshAgents(ctx context.Context, cmd model.RefreshAgents) model.AgentsRefreshed {
 	file, _, err := g.agentStatePaths()
 	if err != nil {
-		return model.AgentsRefreshed{Err: err}
+		return model.AgentsRefreshed{Seq: cmd.Seq, Err: err}
 	}
 	agents, _, err := g.reconcileAgents(ctx, file, cmd.PaneBlock, false, func(block string) bool { return slices.Contains(cmd.Suspects, block) })
-	return model.AgentsRefreshed{Agents: agents, Err: err}
+	return model.AgentsRefreshed{Seq: cmd.Seq, Agents: agents, Err: err}
 }
 
 // focusAgent has Tern show the agent's block.

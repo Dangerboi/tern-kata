@@ -352,11 +352,17 @@ func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected boo
 		{T: cellGap + cell(row.Status, statusWidth), S: statusStyle},
 	}
 	// The Agent badge is a span: an Item has one click, and Spans have none, so the badge on a row is not clickable.
+	gap := cellGap
 	if badge, ok := lookups.badges.For(row.UID); ok {
-		left = append(left, ui.Span{T: cellGap + badge.Text, S: string(badge.Tone)}, ui.Span{T: " " + title})
-	} else {
-		left = append(left, ui.Span{T: cellGap + title})
+		left = append(left, ui.Span{T: gap + badge.Text, S: string(badge.Tone)})
+		gap = " "
 	}
+	// An agent's hand-off (work.attention) reads beside the badge, whoever wrote it.
+	if w, ok := model.IssueWorkAttention(row.Issue); ok {
+		left = append(left, ui.Span{T: gap + w.Word(), S: string(attentionTone(w))})
+		gap = " "
+	}
+	left = append(left, ui.Span{T: gap + title})
 	// A parent's click folds it; a double click on any row opens it. Tern sends the two clicks first, so a parent's fold ends where it began.
 	actions := &ui.Actions{DblClick: OpenRowClick(row.UID), Menu: menu.of(row.Issue)}
 	if row.HasChildren {

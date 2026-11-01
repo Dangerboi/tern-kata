@@ -76,9 +76,13 @@ func TestPlanAgent(t *testing.T) {
 		command []string
 	}{
 		"ok":                 {[]string{"agent", "--as", "bot", "--", "omp", "--model", "x"}, "", "bot", []string{"omp", "--model", "x"}},
-		"ok with equals":     {[]string{"agent", "--as=bot", "--", "omp"}, "", "bot", []string{"omp"}},
+		"ok with ref":        {[]string{"agent", "--as", "bot", "--ref", "demo#ab12", "--", "omp"}, "", "bot", []string{"omp"}},
+		"ok with equals":     {[]string{"agent", "--as=bot", "--ref=demo#ab12", "--", "omp"}, "", "bot", []string{"omp"}},
+		"missing ref value":  {[]string{"agent", "--as", "bot", "--ref", "--", "omp"}, "--ref requires", "", nil},
+		"empty ref":          {[]string{"agent", "--as", "bot", "--ref=", "--", "omp"}, "--ref must be non-empty", "", nil},
+		"ok with equals as":  {[]string{"agent", "--as=bot", "--", "omp"}, "", "bot", []string{"omp"}},
 		"command takes --as": {[]string{"agent", "--as", "bot", "--", "omp", "--as", "other"}, "", "bot", []string{"omp", "--as", "other"}},
-		"missing --as":       {[]string{"agent", "--", "omp"}, "--as <actor> is required", "", nil},
+		"without --as":       {[]string{"agent", "--ref", "demo#ab12", "--", "omp"}, "", "", []string{"omp"}},
 		"empty actor":        {[]string{"agent", "--as=", "--", "omp"}, "non-empty", "", nil},
 		"missing actor":      {[]string{"agent", "--as", "--", "omp"}, "--as requires an actor", "", nil},
 		"missing --":         {[]string{"agent", "--as", "bot", "omp"}, "must follow --", "", nil},
@@ -102,6 +106,39 @@ func TestPlanAgent(t *testing.T) {
 				t.Errorf("plan = %+v", plan)
 			}
 		})
+	}
+}
+
+func TestPlanAgentCarriesTheRef(t *testing.T) {
+	plan, err := PlanLaunch([]string{"agent", "--as", "bot", "--ref", "demo#ab12", "--", "omp"}, func(string) (string, bool) { return "", false }, "v")
+	if err != nil || plan.AgentRef != "demo#ab12" {
+		t.Errorf("AgentRef = %q, err %v", plan.AgentRef, err)
+	}
+}
+
+func TestAgentEnvironmentHasTheIssueRefAndNoInbox(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sh")
+	}
+	args := []string{"agent", "--as", "claude", "--ref", "demo#ab12", "--", "sh", "-c", `printf '%s|%s|%s|%s' "$KATA_REF" "${KATA_INBOX_USER-unset}" "$KATA_AUTHOR" "$KATA_SESSION_ID"`}
+	out, status, _ := runAgent(t, []string{"KATA_REF=other#zz99", "KATA_INBOX_USER=person", "KATA_SESSION_ID=s1"}, args...)
+	if status != 0 || out != "demo#ab12|unset|claude|s1" {
+		t.Errorf("status %d, output %q", status, out)
+	}
+	out, _, _ = runAgent(t, []string{"KATA_REF=other#zz99"}, shArgs(`printf '%s' "${KATA_REF-unset}"`)...)
+	if out != "unset" {
+		t.Errorf("without --ref KATA_REF = %q, want unset", out)
+	}
+}
+
+func TestAgentWithoutAnActorLeavesTheAuthorAsInherited(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sh")
+	}
+	args := []string{"agent", "--ref", "demo#ab12", "--", "sh", "-c", `printf '%s|%s|%s' "$KATA_REF" "${KATA_INBOX_USER-unset}" "$KATA_AUTHOR"`}
+	out, status, _ := runAgent(t, []string{"KATA_AUTHOR=person", "KATA_INBOX_USER=person"}, args...)
+	if status != 0 || out != "demo#ab12|unset|person" {
+		t.Errorf("status %d, output %q", status, out)
 	}
 }
 

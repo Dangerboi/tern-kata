@@ -53,7 +53,17 @@ _tern_kata() {
 			fi
 			;;
 		update) [[ $cur == -* ]] && words="--force --pause" ;;
-		agent) [[ $cur == -* && $COMP_CWORD -lt 4 ]] && words="--as" ;;
+		agent)
+			if [[ $cur == -* ]]; then
+				words="--as --ref"
+				local i=0 w
+				for w in "${COMP_WORDS[@]}"; do # after the lone -- the words are the command's
+					[[ $i -ge $COMP_CWORD ]] && break
+					[[ $i -ge 2 && $w == -- ]] && words=""
+					i=$((i + 1))
+				done
+			fi
+			;;
 		completion) [[ $COMP_CWORD -eq 2 ]] && words="%[3]s" ;;
 		worker)
 			if [[ $COMP_CWORD -eq 2 ]]; then
@@ -96,6 +106,7 @@ func fishCompletion() string {
 	line("-l version -d 'print the version and exit'")
 	line("-s h -l help -d 'print the help and exit'")
 	line("-n '__fish_seen_subcommand_from detach recur run views completion worker update agent' -f")
+	line("-n '__fish_seen_subcommand_from agent' -l ref -r -d 'the Issue the agent works on'")
 	line("-n '__fish_seen_subcommand_from update' -l force -d 'install even when a check refuses'")
 	line("-n '__fish_seen_subcommand_from update' -l pause -d 'wait for Enter after a success'")
 	line("-n '__fish_seen_subcommand_from completion' -a '%s'", strings.Join(completionShells, " "))
