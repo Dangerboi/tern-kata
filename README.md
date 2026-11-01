@@ -145,6 +145,12 @@ The window machine needs only the window plugin; kata and tern-kata run on the s
 
 In a directory bound to a kata Project, `tern-kata` opens that Project's Issues; anywhere else it opens Inbox. [How it works](docs/guide/pages-and-board.md#how-it-works) explains the three parts of the plugin.
 
+## Updating
+
+Run `tern-kata update` on the session host to bring it to the latest release. It downloads the archive for this OS, checks its SHA-256 against the release's `checksums.txt`, and replaces the running binary; on Windows that works while Panes and the Worker run. It says "up to date" and changes nothing when you already have the latest release, and it never downgrades. Open Panes keep the old version until you reopen them, so it asks you to. `tern-kata update --pause` waits for Enter after a success, so a Pane shows the result before it closes.
+
+Only a release build updates itself. A binary built with `go install` gets the command to run again (`go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest`), and one built from source says to rebuild. To bring the agent skills along, run `npx skills update -g` (or `bunx skills update -g`). Setting `TERN_KATA_BASE_URL` points update, and the install scripts, at another folder holding a release's files (for a rollback, a mirror or a test).
+
 ## Troubleshooting
 
 If the Pane cannot find a local kata daemon whose storage is PostgreSQL, check the storage DSN: when it uses routing options (the `host`, `port`, `dbname`, `service` or `servicefile` query options, or `PG*` environment variables filling in missing parts), discovery fails because the lean kata client cannot resolve them. Set `KATA_SERVER` to the address `kata daemon locate` prints.

@@ -219,6 +219,13 @@ func lookupEnv(key string) (string, bool) {
 // answered.
 func runCommand(ctx context.Context, plan LaunchPlan) error {
 	out := printableWriter{os.Stdout}
+	if plan.Subcommand == "update" {
+		env, err := newUpdateEnv()
+		if err != nil {
+			return err
+		}
+		return runUpdate(ctx, plan, env, out)
+	}
 	if isWorkerCommand(plan) {
 		env, err := newWorkerEnv(plan)
 		if err != nil {
