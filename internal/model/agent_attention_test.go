@@ -254,3 +254,113 @@ func TestAdoptingAnAgentWritesNothingOverAnotherRequest(t *testing.T) {
 		t.Fatalf("cmds %v, want %v", cmds, want)
 	}
 }
+
+func exitedPane(status string) model.Model {
+	m := attentionPane()
+	for i := range m.AgentMapping {
+		m.AgentMapping[i].IssueRef = "kata-" + m.AgentMapping[i].IssueUID
+	}
+	m.Issues = []model.Issue{{UID: "u1", Status: status}, {UID: "u2", Status: "open"}}
+	return m
+}
+
+func TestAgentExitingWithItsIssueOpenRaisesTheRequestOnce(t *testing.T) {
+	m, _ := relay(t, exitedPane("open"), st("11", "working", ""))
+	m, cmds := relay(t, m, st("11", "exited", ""))
+	if want := []model.Cmd{raise("u1", 3, "agent exited without closing kata-u1")}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("cmds %v, want %v", cmds, want)
+	}
+	if _, cmds = relay(t, m, st("11", "exited", "")); len(cmds) != 0 {
+		t.Fatalf("a relay of the same state wrote again: %v", cmds)
+	}
+}
+
+func TestARelayFromASecondWindowDoesNotRaiseTheExitRequestTwice(t *testing.T) {
+	m, _ := relay(t, exitedPane("open"), st("11", "working", ""))
+	m, _ = relay(t, m, st("11", "exited", ""))
+	for range 2 {
+		var cmds []model.Cmd
+		if m, cmds = relay(t, m, st("11", "exited", ""), st("13", "working", "")); len(cmds) != 0 {
+			t.Fatalf("cmds %v", cmds)
+		}
+	}
+}
+
+func TestAgentExitingWithItsIssueClosedRaisesNothing(t *testing.T) {
+	m, _ := relay(t, exitedPane("closed"), st("11", "working", ""))
+	if m, cmds := relay(t, m, st("11", "exited", "")); len(attentionWrites(cmds)) != 0 || len(m.AgentAttention) != 0 {
+		t.Fatalf("cmds %v, raised %v", cmds, m.AgentAttention)
+	}
+}
+
+func TestAnIdleAgentRaisesNoExitRequest(t *testing.T) {
+	m, _ := relay(t, exitedPane("open"), st("11", "working", ""))
+	if m, cmds := relay(t, m, st("11", "idle", "")); len(cmds) != 0 || len(m.AgentAttention) != 0 {
+		t.Fatalf("cmds %v, raised %v", cmds, m.AgentAttention)
+	}
+}
+
+func TestAnotherPanesExitedAgentRaisesNothingHere(t *testing.T) {
+	m, _ := relay(t, exitedPane("open"), st("21", "working", ""))
+	if m, cmds := relay(t, m, st("21", "exited", "")); len(cmds) != 0 || len(m.AgentAttention) != 0 {
+		t.Fatalf("cmds %v, raised %v", cmds, m.AgentAttention)
+	}
+}
+
+func TestClosingTheIssueClearsTheExitRequest(t *testing.T) {
+	m, _ := relay(t, exitedPane("open"), st("11", "exited", ""))
+	if len(m.AgentAttention) != 1 {
+		t.Fatalf("raised %v", m.AgentAttention)
+	}
+	m.Issues = []model.Issue{{UID: "u1", Status: "closed"}}
+	m, cmds := model.Update(m, model.StreamEvent{})
+	want := clearOf("u1", 3, "agent exited without closing kata-u1")
+	if !hasCmd(cmds, want) || len(m.AgentAttention) != 0 {
+		t.Fatalf("cmds %v, raised %v", cmds, m.AgentAttention)
+	}
+}
+
+func TestANewlyWaitingAgentOnTheIssueReplacesTheExitRequest(t *testing.T) {
+	m, _ := relay(t, exitedPane("open"), st("11", "exited", ""), st("12", "working", ""))
+	m, cmds := relay(t, m, st("11", "exited", ""), st("12", "waiting_input", "which table?"))
+	if want := []model.Cmd{raise("u1", 3, "which table?")}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("cmds %v, want %v", cmds, want)
+	}
+	m, cmds = relay(t, m, st("11", "exited", ""), st("12", "working", ""))
+	if want := []model.Cmd{raise("u1", 3, "agent exited without closing kata-u1")}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("once the waiting agent works again: cmds %v, want %v", cmds, want)
+	}
+	if want := []string{"agent exited without closing kata-u1"}; len(m.AgentAttention) != 1 || m.AgentAttention[0].Message != want[0] {
+		t.Fatalf("raised %v", m.AgentAttention)
+	}
+}
+
+func TestAnExitOnAnIssueTheCollectionDoesNotListReadsItsStatusFirst(t *testing.T) {
+	m := exitedPane("open")
+	m.Issues = nil
+	m, cmds := model.Update(m, model.AgentStatesMsg{States: []model.AgentState{st("11", "exited", "")}})
+	if got := reads(cmds); len(got) != 1 || len(m.AgentAttention) != 0 {
+		t.Fatalf("cmds %v, raised %v", cmds, m.AgentAttention)
+	}
+	m, cmds = model.Update(m, model.AgentIssueRead{UID: "u1", Status: "open"})
+	if want := raise("u1", 3, "agent exited without closing kata-u1"); !hasCmd(cmds, want) {
+		t.Fatalf("cmds %v, want %v", cmds, want)
+	}
+}
+
+func TestQuitClearsTheExitRequest(t *testing.T) {
+	m, _ := relay(t, exitedPane("open"), st("11", "exited", ""))
+	if want := []model.Cmd{clearOf("u1", 3, "agent exited without closing kata-u1")}; !reflect.DeepEqual(m.QuitAgentAttention(), want) {
+		t.Fatalf("quit cmds %v, want %v", m.QuitAgentAttention(), want)
+	}
+}
+
+func attentionWrites(cmds []model.Cmd) []model.Cmd {
+	return slices.DeleteFunc(slices.Clone(cmds), func(c model.Cmd) bool {
+		switch c.(type) {
+		case model.RaiseAgentAttention, model.ClearAgentAttention:
+			return false
+		}
+		return true
+	})
+}

@@ -120,7 +120,9 @@ func agentIssueRead(m Model, msg AgentIssueRead) (Model, []Cmd) {
 		m.AgentClose.known = map[string]string{}
 	}
 	m.AgentClose.known[msg.UID] = msg.Status
-	return closeFinishedAgents(m, closeOnRead)
+	m, raised := raiseAgentAttention(m, false)
+	m, ended := closeFinishedAgents(m, closeOnRead)
+	return m, append(raised, ended...)
 }
 
 func agentClosed(m Model, msg AgentClosed) Model {
