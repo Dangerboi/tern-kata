@@ -317,11 +317,28 @@ func (c Config) readSecret(name string) (string, error) {
 	return strings.TrimRight(string(raw), "\r\n"), nil
 }
 
-// childEnv is the worker's environment minus TERN_KATA_ internals, plus the actor and the step's secrets (ADR-0009).
+// promptKeptKata are the kata variables a prompt step keeps: the routing and credential names kata's CLI needs to reach
+// the worker's daemon. Every other KATA_* name (kata-plugin's steering variables among them) is dropped.
+var promptKeptKata = map[string]bool{
+	"KATA_HOME": true, "KATA_SERVER": true, "KATA_DAEMON": true, "KATA_AUTH_TOKEN": true, "KATA_AUTH_TOKEN_FILE": true,
+	"KATA_TRUST_PRIVATE_NETWORK": true, "KATA_ALLOW_INSECURE": true,
+}
+
+// childEnv is the worker's environment for a prompt step (ADR-0009): without TERN_KATA_ internals and every KATA_*
+// except the routing and credential names, plus the actor and the step's secrets.
 func childEnv(actor string, secrets map[string]string) []string {
+	return promptEnv(os.Environ(), actor, secrets, runtime.GOOS == "windows")
+}
+
+// promptEnv filters environ as childEnv does; names compare case-insensitively when caseInsensitive (Windows).
+func promptEnv(environ []string, actor string, secrets map[string]string, caseInsensitive bool) []string {
 	var env []string
-	for _, kv := range os.Environ() {
-		if strings.HasPrefix(kv, "TERN_KATA_") || strings.HasPrefix(kv, "KATA_AUTHOR=") {
+	for _, kv := range environ {
+		name, _, _ := strings.Cut(kv, "=")
+		if caseInsensitive {
+			name = strings.ToUpper(name)
+		}
+		if strings.HasPrefix(name, "TERN_KATA_") || strings.HasPrefix(name, "KATA_") && !promptKeptKata[name] {
 			continue
 		}
 		env = append(env, kv)
