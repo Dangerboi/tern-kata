@@ -3,6 +3,7 @@
 local placement = require("./placement")
 local releases = require("./releases")
 local panecommands = require("./panecommands")
+local waitingtext = require("./waitingtext")
 
 -- kata Panes this plugin launched, until they close: each is reaped on its own, since every tab may have one.
 local launched: { [number]: boolean } = {}
@@ -170,18 +171,26 @@ end
 -- so the text is exact only for ids up to 2^53: a larger id is already rounded here and matches no agent of the Pane.
 -- A window on another machine numbers panes differently from the session host, so the id may match nothing there; the command
 -- (it names the agent's prompt file) lets the Pane find its agent anyway. A missing last message or command is the empty string.
+-- The last message of an agent waiting for you is what it waits on (waitingtext.luau), read from its transcript: Tern's last
+-- message can be a cut-off thinking block. The transcript is read only for a waiting agent, and only its end.
 -- `hidden` says whether the agent's tab is in the hidden session, so the Pane learns when an agent is opened or put away
 -- without it; it is left out when the window cannot place the agent's tab.
+local function waitingMessage(cx: WindowCx, agent: AgentBlock, last: string): string
+    local ok, transcript = pcall(function() return cx.agents:transcript(agent.pane, {last = 2}) end)
+    return waitingtext.of(if ok then transcript else {}, last)
+end
+
 local function agentStates(cx: WindowCx, tabs: { TabInfo }): string
     local list = tern.json.array({})
     local hidden = hiddenTabs(cx, tabs)
     for _, agent in cx.agents:list() do
-        local last = agent.last_message
+        local last = if type(agent.last_message) == "string" then agent.last_message else ""
+        if agent.state == "waiting_input" then last = waitingMessage(cx, agent, last) end
         local tab = cx.session:tab_of(agent.pane)
         table.insert(list, {
             pane = string.format("%.0f", agent.pane),
             state = agent.state,
-            last_message = if type(last) == "string" then last else "",
+            last_message = last,
             command = if type(agent.command) == "string" then agent.command else "",
             hidden = if tab then hidden[tab] == true else nil,
         })
