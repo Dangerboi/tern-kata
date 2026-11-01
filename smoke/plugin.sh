@@ -434,12 +434,13 @@ jq -e '.tabs[0].panes == 2' "$tmp/install-state.json" >/dev/null
 ctl expect Press
 ctl key Enter
 expect_panes 1
+# The stand-in ends only on an empty line (Enter): the plugin sends a link's Issue to a kata Pane it opened as a non-empty line.
 # Update tern-kata on a local session host runs `tern-kata update --pause` in a Pane and no plugin-only step: the binary
 # brings the plugin along itself.
-printf '#!/bin/sh\necho "$@" >%q\nprintf "Press Enter to close "\nread _\n' "$tmp/update-args.txt" >"$tmp/pane-bin/tern-kata"
+printf '#!/bin/bash\necho "$@" >%q\nprintf "Press Enter to close "\nwhile :; do read -t 0.2 line && [[ -z $line ]] && break; done\n' "$tmp/update-args.txt" >"$tmp/pane-bin/tern-kata"
 chmod +x "$tmp/pane-bin/tern-kata"
 # A curl stand-in on the PATH records any plugin-only step (`sh -c "curl … | sh"`), which a local session host never runs.
-printf '#!/bin/sh\necho "$@" >>%q\nexit 1\n' "$tmp/plugin-step.log" >"$tmp/bin/curl"
+printf '#!/bin/sh\necho "$@" >>%q\necho "curl: smoke stand-in refuses" >&2\nexit 1\n' "$tmp/plugin-step.log" >"$tmp/bin/curl"
 chmod +x "$tmp/bin/curl"
 printf 'palette "Update tern-kata"\nkey Enter\n' >"$tmp/update.ctl"
 ctl --file "$tmp/update.ctl"
@@ -451,6 +452,21 @@ done
 [[ $(cat "$tmp/update-args.txt") == "update --pause" ]]
 ctl state | jq -e '.tabs[0].panes == 2' >/dev/null
 ctl expect Press
+# A plugin reload while the update Pane is open (a local update brings the plugin along) must not turn that Pane into a kata
+# Pane: a link opens a new kata Pane instead of focusing the update Pane.
+ctl plugins fixtures
+ctl focus left
+click_issue_link "kata://smoke/$first"
+for ((attempt=0; attempt<100; attempt++)); do
+  ctl --file "$tmp/pump.ctl"
+  [[ $(ctl state | jq -r '.tabs[0].panes') == 3 ]] && break
+  sleep 0.1
+done
+ctl state | jq -e '.tabs[0].panes == 3' >/dev/null
+# The new kata Pane is the stand-in too: Enter ends it, leaving the update Pane to the right.
+ctl key Enter
+expect_panes 2
+ctl focus right
 ctl key Enter
 for ((attempt=0; attempt<100; attempt++)); do
   [[ $(ctl state | jq -r '.tabs[0].panes') == 1 ]] && break
@@ -462,5 +478,25 @@ expect_panes 1
 for ((attempt=0; attempt<30; attempt++)); do ctl --file "$tmp/pump.ctl"; sleep 0.1; done
 [[ ! -e "$tmp/plugin-step.log" ]]
 expect_no_toast 'tern-kata plugin updated'
+# On a remote session host the update also runs the plugin step on this machine; the curl stand-in makes it fail, which toasts
+# the script's last stderr line and leaves no pending key behind.
+rm -f "$tmp/plugin-step.log" "$tmp/update-args.txt"
+ctl remote loopback loop
+ctl ready
+ctl --file "$tmp/update.ctl"
+for ((attempt=0; attempt<100; attempt++)); do
+  [[ -s "$tmp/update-args.txt" ]] && break
+  ctl --file "$tmp/pump.ctl"
+  sleep 0.1
+done
+[[ $(cat "$tmp/update-args.txt") == "update --pause" ]]
+ctl expect Press
+ctl key Enter
+expect_toast 'tern-kata plugin was not updated'
+expect_toast 'curl: smoke stand-in refuses'
+[[ -s "$tmp/plugin-step.log" ]]
+! grep -q 'update.pending' "$TERN_CONFIG_DIR/plugin-data/tern-kata/kv.json" || { echo "update.pending left behind" >&2; exit 1; }
+for ((attempt=0; attempt<100; attempt++)); do [[ $(ctl state | jq '.tabs[1].panes') == 1 ]] && break; sleep 0.1; done
+ctl remote disconnect loop
 jq -Rse 'contains("plugin window halves loaded count=2") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
-printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, links reuse only the current tab'"'"'s kata Pane, shell-syntax Project link, links on a remote host'"'"'s Pane, quick quit without toast, links into Panes started by full path, backslash path and title alone, a longer name not matched, an agent tab opened right of the Pane'"'"'s tab and no other tab moved, startup-failure and not-installed toasts by exit status, Update tern-kata on a local session host running update --pause and no plugin step\n'
+printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, links reuse only the current tab'"'"'s kata Pane, shell-syntax Project link, links on a remote host'"'"'s Pane, quick quit without toast, links into Panes started by full path, backslash path and title alone, a longer name not matched, an agent tab opened right of the Pane'"'"'s tab and no other tab moved, startup-failure and not-installed toasts by exit status, Update tern-kata on a local session host running update --pause and no plugin step, the update Pane not a kata Pane after a plugin reload, a failed plugin step after Update tern-kata on a remote host toasting its last stderr line\n'
