@@ -1,5 +1,20 @@
 # Installs the latest tern-kata release for Windows: irm https://raw.githubusercontent.com/Dangerboi/tern-kata/main/install.ps1 | iex
 # $env:TERN_KATA_BASE_URL replaces the download location (default: the latest GitHub release), $env:TERN_KATA_INSTALL_DIR the install folder.
+# $env:TERN_KATA_PLUGIN_ONLY = '1' installs only the Tern window plugin from the release, for the machine that shows the Tern window.
+
+# Installs the plugin folder $Path with tern; a linked copy, which --force leaves alone, gets a message. Returns $false on any other failure.
+function Install-TernKataPlugin([string]$Path) {
+    $out = (& tern plugin install $Path --force 2>&1 | Out-String).Trim()
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host $out
+    } elseif ($out -like '*is linked*') {
+        Write-Host "The tern-kata window plugin is linked, so it is left as it is: $out"
+    } else {
+        Write-Host $out
+        return $false
+    }
+    return $true
+}
 
 # One function called last, so a download cut short runs nothing; errors throw (not exit) so `| iex` leaves the shell open.
 function Install-TernKata {
@@ -23,6 +38,10 @@ function Install-TernKata {
     $tmp = Join-Path ([IO.Path]::GetTempPath()) ([IO.Path]::GetRandomFileName())
     New-Item -ItemType Directory -Path $tmp | Out-Null
     try {
+        $pluginOnly = $env:TERN_KATA_PLUGIN_ONLY -eq '1'
+        if ($pluginOnly -and -not (Get-Command tern -ErrorAction SilentlyContinue)) {
+            throw "install.ps1: tern is not on PATH: install tern-kata's window plugin on the machine that runs Tern"
+        }
         Write-Host "Downloading $asset"
         Invoke-WebRequest -UseBasicParsing -Uri "$base/$asset" -OutFile (Join-Path $tmp $asset)
         Invoke-WebRequest -UseBasicParsing -Uri "$base/checksums.txt" -OutFile (Join-Path $tmp 'checksums.txt')
@@ -37,6 +56,11 @@ function Install-TernKata {
         if ($got -ne $want) { throw "install.ps1: checksum mismatch for $asset (expected $want, got $got); nothing was installed" }
 
         Expand-Archive -Path (Join-Path $tmp $asset) -DestinationPath $tmp -Force
+        if ($pluginOnly) {
+            Write-Host 'Installing the Tern window plugin (kata links, the Install tern-kata palette command, startup toasts):'
+            if (-not (Install-TernKataPlugin (Join-Path $tmp 'plugin'))) { throw 'install.ps1: could not install the tern-kata window plugin' }
+            return
+        }
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
         $exe = Join-Path $dir 'tern-kata.exe'
         # A running tern-kata.exe cannot be overwritten or deleted but can be renamed away, so upgrading it works.
@@ -52,6 +76,12 @@ function Install-TernKata {
         }
         Move-Item (Join-Path $tmp 'tern-kata.exe') $exe
         Write-Host "Installed $(& $exe --version) to $exe"
+        if (Get-Command tern -ErrorAction SilentlyContinue) {
+            Write-Host 'Installing the Tern window plugin (kata links, the Install tern-kata palette command, startup toasts):'
+            if (-not (Install-TernKataPlugin (Join-Path $tmp 'plugin'))) { Write-Warning 'Could not install the tern-kata window plugin; rerun this script with $env:TERN_KATA_PLUGIN_ONLY = ''1'' set' }
+        } else {
+            Write-Host "tern is not on this machine's PATH: on the machine that shows the Tern window, install the window plugin with the plugin-only one-liner in the README (`$env:TERN_KATA_PLUGIN_ONLY)"
+        }
     } finally {
         Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
@@ -73,14 +103,6 @@ function Install-TernKata {
     $result = [UIntPtr]::Zero
     # HWND_BROADCAST, WM_SETTINGCHANGE "Environment", SMTO_ABORTIFHUNG, 5 s.
     [void][TernKata.Environment]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result)
-
-    if (Get-Command tern -ErrorAction SilentlyContinue) {
-        Write-Host 'Installing the Tern window plugin (kata links, the Install tern-kata palette command, startup toasts):'
-        tern plugin install github.com/Dangerboi/tern-kata --force
-        if ($LASTEXITCODE -ne 0) { Write-Warning 'Could not install the tern-kata window plugin; run: tern plugin install github.com/Dangerboi/tern-kata --force' }
-    } else {
-        Write-Host "tern is not on this machine's PATH: install the window plugin on the machine that shows the Tern window: tern plugin install github.com/Dangerboi/tern-kata"
-    }
 
     # npx is the skills CLI's documented runner; bunx runs it the same way where only Bun is installed. npx.cmd, not npx:
     # the npx.ps1 beside it is refused under the Restricted execution policy Windows starts with.
