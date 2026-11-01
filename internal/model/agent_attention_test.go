@@ -211,6 +211,8 @@ func TestAdoptedWaitingAgentRaisesARequestWhenThePaneAdoptsIt(t *testing.T) {
 func TestDroppingAWaitingAgentsEntryClearsItsRequestWithoutAnotherRelay(t *testing.T) {
 	m, _ := relay(t, attentionPane(), st("13", "waiting_input", "b"))
 	m, cmds := model.Update(m, model.AgentsRefreshed{Agents: attentionPane().AgentMapping[:3]})
+	// The Issue is not in the Collection, so the gone agent's Issue status is read for the exit request.
+	cmds = slices.DeleteFunc(cmds, func(c model.Cmd) bool { _, ok := c.(model.ReadAgentIssue); return ok })
 	if want := []model.Cmd{clearOf("u2", 4, "b")}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("cmds %v, want %v", cmds, want)
 	}
@@ -385,5 +387,83 @@ func TestRaisedRequestNamesTheWaitingAgentAndItsClearIsUnchanged(t *testing.T) {
 	_, cmds = relay(t, m, st("11", "working", ""), st("12", "working", ""))
 	if want := []model.Cmd{clearOf("u1", 3, "which column?", "which table?")}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("cmds %v, want %v", cmds, want)
+	}
+}
+
+// pruned feeds the answer of a refresh that no longer holds the entries of the given blocks.
+func pruned(m model.Model, blocks ...string) (model.Model, []model.Cmd) {
+	var left []model.AgentEntry
+	for _, e := range m.AgentMapping {
+		if !slices.Contains(blocks, e.Block) {
+			left = append(left, e)
+		}
+	}
+	m, cmds := model.Update(m, model.AgentsRefreshed{Agents: left})
+	return m, slices.DeleteFunc(cmds, func(c model.Cmd) bool { _, ok := c.(model.RefreshAgents); return ok })
+}
+
+func TestAgentWhoseBlockIsGoneRaisesTheExitRequestOnce(t *testing.T) {
+	m, _ := relay(t, exitedPane("open"), st("11", "working", ""))
+	m, cmds := pruned(m, "11")
+	if want := []model.Cmd{raise("u1", 3, "agent exited without closing kata-u1")}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("cmds %v, want %v", cmds, want)
+	}
+	if _, cmds = pruned(m, "11"); len(attentionWrites(cmds)) != 0 {
+		t.Fatalf("a second refresh wrote again: %v", cmds)
+	}
+}
+
+func TestAgentWhoseBlockIsGoneWithItsIssueClosedRaisesNothing(t *testing.T) {
+	m, _ := relay(t, exitedPane("closed"), st("11", "working", ""))
+	if m, cmds := pruned(m, "11"); len(attentionWrites(cmds)) != 0 || len(m.AgentAttention) != 0 {
+		t.Fatalf("cmds %v, raised %v", cmds, m.AgentAttention)
+	}
+}
+
+func TestExitRequestSurvivesPruningTheEntryAndClearsWhenTheIssueCloses(t *testing.T) {
+	m, _ := relay(t, exitedPane("open"), st("11", "exited", ""))
+	m, cmds := pruned(m, "11")
+	if len(cmds) != 0 || len(m.AgentAttention) != 1 {
+		t.Fatalf("pruning the entry: cmds %v, raised %v", cmds, m.AgentAttention)
+	}
+	m, cmds = relay(t, m, st("13", "working", ""))
+	if len(attentionWrites(cmds)) != 0 || len(m.AgentAttention) != 1 {
+		t.Fatalf("a later relay: cmds %v, raised %v", cmds, m.AgentAttention)
+	}
+	m.Issues = []model.Issue{{UID: "u1", Status: "closed"}}
+	m, cmds = model.Update(m, model.StreamEvent{})
+	if want := clearOf("u1", 3, "agent exited without closing kata-u1"); !hasCmd(cmds, want) || len(m.AgentAttention) != 0 {
+		t.Fatalf("cmds %v, raised %v", cmds, m.AgentAttention)
+	}
+}
+
+func TestClosingTheIssueAnExitRequestHoldsOutsideTheCollectionIsFoundByReadingIt(t *testing.T) {
+	m, _ := relay(t, exitedPane("open"), st("11", "exited", ""))
+	m, _ = pruned(m, "11")
+	m.Issues = nil
+	m, cmds := model.Update(m, model.StreamEvent{})
+	if got := reads(cmds); len(got) != 1 {
+		t.Fatalf("cmds %v", cmds)
+	}
+	m, cmds = model.Update(m, model.AgentIssueRead{UID: "u1", Status: "closed"})
+	if want := clearOf("u1", 3, "agent exited without closing kata-u1"); !hasCmd(cmds, want) || len(m.AgentAttention) != 0 {
+		t.Fatalf("cmds %v, raised %v", cmds, m.AgentAttention)
+	}
+}
+
+func TestANewlyWaitingAgentReplacesAnExitRequestWhoseEntryIsPruned(t *testing.T) {
+	m, _ := relay(t, exitedPane("open"), st("11", "exited", ""), st("12", "working", ""))
+	m, _ = pruned(m, "11")
+	m, cmds := relay(t, m, st("12", "waiting_input", "which table?"))
+	if want := []model.Cmd{raise("u1", 3, "which table?")}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("cmds %v, want %v", cmds, want)
+	}
+}
+
+func TestQuitClearsAnExitRequestWhoseEntryIsPruned(t *testing.T) {
+	m, _ := relay(t, exitedPane("open"), st("11", "exited", ""))
+	m, _ = pruned(m, "11")
+	if want := []model.Cmd{clearOf("u1", 3, "agent exited without closing kata-u1")}; !reflect.DeepEqual(m.QuitAgentAttention(), want) {
+		t.Fatalf("quit cmds %v, want %v", m.QuitAgentAttention(), want)
 	}
 }
