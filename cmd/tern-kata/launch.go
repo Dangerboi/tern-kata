@@ -52,8 +52,9 @@ type LaunchPlan struct {
 	Replace   bool
 	// InitFlags are `worker init`'s --executor, --actor, --command, --model and --thinking by name without dashes, as typed; unset ones are absent.
 	InitFlags map[string]string
-	// Force and Pause are `update --force` and `update --pause`.
-	Force, Pause bool
+	// Force and Pause are `update --force` and `update --pause`. Preflight is `update --preflight`, the check one release
+	// runs of another; it is not for people, so usage and completion leave it out.
+	Force, Pause, Preflight bool
 	// fallbackAuthor is the --as actor exported to `kata tui`; empty leaves the environment untouched.
 	fallbackAuthor string
 }
@@ -124,7 +125,7 @@ func scanFlags(flags []string, flag string) bool {
 		if i == 0 || !strings.HasPrefix(arg, "--") || arg == "--help" || arg == "--version" {
 			continue
 		}
-		if subcommand == "update" && (arg == "--force" || arg == "--pause") {
+		if subcommand == "update" && (arg == "--force" || arg == "--pause" || arg == "--preflight") {
 			continue
 		}
 		if subcommand == "worker" {
@@ -296,6 +297,10 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 		}
 		if plan.Subcommand == "update" && arg == "--pause" {
 			plan.Pause = true
+			continue
+		}
+		if plan.Subcommand == "update" && arg == "--preflight" {
+			plan.Preflight = true
 			continue
 		}
 		if plan.Subcommand == "worker" && arg == "--takeover" {

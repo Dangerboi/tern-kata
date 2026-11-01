@@ -219,6 +219,13 @@ func lookupEnv(key string) (string, bool) {
 // answered.
 func runCommand(ctx context.Context, plan LaunchPlan) error {
 	out := printableWriter{os.Stdout}
+	if plan.Subcommand == "update" && plan.Preflight {
+		env, err := newPreflightEnv()
+		if err != nil {
+			return err
+		}
+		return runPreflight(ctx, env, os.Stdout)
+	}
 	if plan.Subcommand == "update" {
 		env, err := newUpdateEnv()
 		if err != nil {

@@ -41,6 +41,14 @@ type updateEnv struct {
 	GOOS, GOARCH string
 	// Stdin is what --pause waits on.
 	Stdin io.Reader
+	// PreflightTimeout is how long the new binary may take to check this machine; zero is preflightTimeout.
+	PreflightTimeout time.Duration
+}
+
+// updateOutcome is what a finished update tells the steps that follow the swap.
+type updateOutcome struct {
+	// ForcedConfig is true when --force went past a refusal of worker.toml: the Worker step must not restart the Worker on it.
+	ForcedConfig bool
 }
 
 // newUpdateEnv is the production environment: tern-kata's user folders, this binary and the real network.
@@ -61,7 +69,7 @@ func newUpdateEnv() (updateEnv, error) {
 // add: they run between downloadRelease and swapBinary (checks of this machine, which may refuse) and after it (this
 // machine's plugin and Worker).
 func runUpdate(ctx context.Context, plan LaunchPlan, env updateEnv, out io.Writer) error {
-	if err := updateRelease(ctx, env, out); err != nil {
+	if _, err := updateRelease(ctx, env, plan.Force, out); err != nil {
 		return subcommandError{err} // a failed update ends at once, whatever --pause says
 	}
 	if plan.Pause {
@@ -71,53 +79,57 @@ func runUpdate(ctx context.Context, plan LaunchPlan, env updateEnv, out io.Write
 	return nil
 }
 
-func updateRelease(ctx context.Context, env updateEnv, out io.Writer) error {
+func updateRelease(ctx context.Context, env updateEnv, force bool, out io.Writer) (updateOutcome, error) {
 	if env.Release == "" {
 		if env.Build != "dev" {
-			return fmt.Errorf("this tern-kata was built with go install and is not updated here; update it with: %s", goInstallCommand)
+			return updateOutcome{}, fmt.Errorf("this tern-kata was built with go install and is not updated here; update it with: %s", goInstallCommand)
 		}
-		return errors.New("this is a development build and is not updated here; rebuild it from source")
+		return updateOutcome{}, errors.New("this is a development build and is not updated here; rebuild it from source")
 	}
 	current := env.Release
 	if !semver.IsValid(current) {
-		return fmt.Errorf("this tern-kata's version %q is not a version number, so it cannot be compared with the latest release", current)
+		return updateOutcome{}, fmt.Errorf("this tern-kata's version %q is not a version number, so it cannot be compared with the latest release", current)
 	}
 	unlock, err := lockUpdate(env.Dirs.State)
 	if err != nil {
-		return err
+		return updateOutcome{}, err
 	}
 	defer unlock()
 
 	target, err := env.target()
 	if err != nil {
-		return err
+		return updateOutcome{}, err
 	}
 	latest, err := fetchLatestVersion(ctx, env)
 	if err != nil {
-		return err
+		return updateOutcome{}, err
 	}
 	if semver.Compare(latest, current) <= 0 { // never a downgrade
 		fmt.Fprintf(out, "tern-kata %s is up to date\n", current)
-		return nil
+		return updateOutcome{}, nil
 	}
 
 	work, err := os.MkdirTemp(filepath.Dir(target), ".tern-kata-update-") // beside the binary: the swap's renames stay on one volume
 	if err != nil {
-		return fmt.Errorf("cannot prepare the update next to %s: %w; nothing was installed", target, err)
+		return updateOutcome{}, fmt.Errorf("cannot prepare the update next to %s: %w; nothing was installed", target, err)
 	}
 	defer func() { _ = os.RemoveAll(work) }()
 	release, err := downloadRelease(ctx, env, latest, work)
 	if err != nil {
-		return fmt.Errorf("%w; nothing was installed", err)
+		return updateOutcome{}, fmt.Errorf("%w; nothing was installed", err)
+	}
+	preflight, err := runPreflightOf(ctx, env, release, force, out)
+	if err != nil {
+		return updateOutcome{}, err
 	}
 	if err := swapBinary(target, release.Binary); err != nil {
-		return fmt.Errorf("cannot replace %s: %w; nothing was installed", target, err)
+		return updateOutcome{}, fmt.Errorf("cannot replace %s: %w; nothing was installed", target, err)
 	}
 
 	fmt.Fprintf(out, "Updated tern-kata from %s to %s\n", current, latest)
 	fmt.Fprintf(out, "Reopen tern-kata Panes to use %s\n", latest)
 	fmt.Fprintln(out, "To update the agent skills too, run: npx skills update -g (or bunx skills update -g)")
-	return nil
+	return preflight, nil
 }
 
 // target is the file update replaces: the running binary, with symlinks resolved, so a link to it is left in place.

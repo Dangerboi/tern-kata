@@ -163,7 +163,14 @@ func refused(err error) bool {
 // MinKataVersion is the oldest kata daemon the Pane and the Worker accept: kata v0.20 requires cron peers to upgrade together and does not support v0.19 beside it.
 const MinKataVersion = "v0.20.0"
 
-// Ping returns the daemon's version, refusing one older than MinKataVersion.
+// KataTooOldError is Ping's refusal of a daemon older than MinKataVersion; Version is what the daemon reported.
+type KataTooOldError struct{ Version string }
+
+func (e *KataTooOldError) Error() string {
+	return fmt.Sprintf("kata daemon %s is too old; the worker requires %s or newer; upgrade kata", e.Version, MinKataVersion)
+}
+
+// Ping returns the daemon's version, refusing one older than MinKataVersion with a *KataTooOldError.
 func (k *Kata) Ping(ctx context.Context) (string, error) {
 	r, err := call(ctx, k, true, func(ctx context.Context) (*g.PingResp, error) { return k.c.PingWithResponse(ctx) })
 	if err != nil {
@@ -177,7 +184,7 @@ func (k *Kata) Ping(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("cannot verify kata daemon version %q; the worker requires %s or newer", r.JSON200.Version, MinKataVersion)
 	}
 	if semver.Compare(v, MinKataVersion) < 0 {
-		return "", fmt.Errorf("kata daemon %s is too old; the worker requires %s or newer; upgrade kata", r.JSON200.Version, MinKataVersion)
+		return "", &KataTooOldError{Version: r.JSON200.Version}
 	}
 	return v, nil
 }
