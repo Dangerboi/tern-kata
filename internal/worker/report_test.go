@@ -321,3 +321,45 @@ func TestTheFinalObservationIsSentWhileTheIssueReadFailsAndTheCommentAndLabelFol
 		t.Fatalf("the open Issue got comments %q and labels %q, want the comment and the needs-review label", i.Comments, i.Labels)
 	}
 }
+
+func TestASucceededRunThatLeftItsIssueOpenTellsTheOwnerAfterACrashBetweenLabelAndNotice(t *testing.T) {
+	h := newHarness(t, "--stub-text", "All done.")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
+	uid, _ := h.killedAt("intent-label", job)
+	run, err := h.kata.Kata.ShowRun(context.Background(), h.proj.ID, uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.kata.EditIssue(t, h.proj, run.IssueUID, "", "carol")
+	if _, _, ok := h.kata.InboxRequest(t, h.proj, run.IssueUID, "carol"); ok {
+		t.Fatal("the owner was told before the restart")
+	}
+
+	restarted := h.start(worker.Hooks{})
+	h.admitting(restarted)
+	h.settledAndFree(restarted, uid)
+	from, message, ok := h.kata.InboxRequest(t, h.proj, run.IssueUID, "carol")
+	if !ok || from != "robot" || !strings.Contains(message, uid) || !strings.Contains(message, "needs review") {
+		t.Fatalf("carol's request from %q reads %q (found %v)", from, message, ok)
+	}
+}
+
+func TestASucceededRunThatClosedItsIssueTellsNobody(t *testing.T) {
+	h := newHarness(t, "--stub-text", "All done.")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
+	r := h.start(worker.Hooks{AfterSave: func(point string, j *worker.Journal) error {
+		if point == "finished" {
+			h.kata.CloseIssue(t, h.proj, j.Issue.UID)
+		}
+		return nil
+	}})
+	h.admitting(r)
+	uid := h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID
+	h.settledAndFree(r, uid)
+	issueUID := h.settled(uid).IssueUID
+	for _, who := range []string{"tester", "robot"} {
+		if _, _, ok := h.kata.InboxRequest(t, h.proj, issueUID, who); ok {
+			t.Fatalf("%s was told about a closed Issue", who)
+		}
+	}
+}
