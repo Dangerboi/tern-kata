@@ -35,7 +35,9 @@ parent_expect_drawn() {
   expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']" '.ok and .count == 40'
   expect_tree "[data-id='main.columns.detail.viewport.content.properties.children.v']" '.ok and .count == 1 and (.nodes[0].text == "40 open / 40 total")'
   expect_tree "[data-id^='main.columns.detail.viewport.content.properties.parent']" '.ok and .count == 0'
-  expect_tree "[data-id='main.columns.detail.viewport.content.children.table'] .sf-tbl-body .sf-tbl-row" '.ok and .count == 40'
+  # Tern draws only the table rows near the view, so how many rows are in the tree depends on how far the detail is
+  # scrolled; the body's laid-out height is what holds all 40 children (the body first, then the drawn rows).
+  expect_tree "[data-id='main.columns.detail.viewport.content.children.table'] .sf-tbl-body, [data-id='main.columns.detail.viewport.content.children.table'] .sf-tbl-body .sf-tbl-row" '.ok and .count >= 2 and .count <= 41 and ((.nodes[0].rect[3] - 40 * .nodes[1].rect[3]) | fabs) <= 1'
 }
 
 # j/k onto the collapsed parent: from row 1 down to it, or up from row 2 when it is the first.
