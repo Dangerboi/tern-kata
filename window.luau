@@ -459,6 +459,11 @@ tern.on("pane_closed", function(ev, cx)
         marked[ev.pane] = nil
         restyleMarks()
     end
+    -- An agent that quits cleanly closes its block without an agent_state event; the relay that follows leaves the block out, and
+    -- the kata Panes drop its entry when Tern no longer lists it.
+    tern.timer(200, function(cx2)
+        if cx2 then relayAll(cx2, false) end
+    end)
 end)
 
 local function markAll(cx: WindowCx)

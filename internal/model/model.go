@@ -112,9 +112,12 @@ type Model struct {
 	AgentMapping []AgentEntry
 	// AgentAttention are the Attention requests this Pane raised for waiting agents and has not cleared.
 	AgentAttention []RaisedAttention
-	Project        Project
-	Daemon         Daemon
-	Snapshot       Snapshot
+	// AgentGone are the entries of agents this Pane started whose block went (pruned from agents.json) without a relay showing them
+	// exited, until the exit request for their Issue is decided.
+	AgentGone []AgentEntry
+	Project   Project
+	Daemon    Daemon
+	Snapshot  Snapshot
 	// Relationships is every Issue's Relationships, built from Snapshot's links each time a snapshot is applied.
 	Relationships RelationshipIndex
 	Issues        []Issue
