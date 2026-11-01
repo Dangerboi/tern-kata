@@ -17,7 +17,7 @@ import (
 
 // Check is one line of `worker doctor`.
 type Check struct {
-	// Level is "ok", "FAIL" or "note" (information that needs no fix).
+	// Level is "ok", "FAIL", "warn" (something to fix that stops nothing) or "note" (information that needs no fix).
 	Level   string
 	Subject string
 	Detail  string
@@ -61,6 +61,8 @@ type DoctorOptions struct {
 	KataErr error
 	Clock   Clock
 	Actor   string
+	// Omp is where omp's plugins and extensions are looked for; the zero value skips that check.
+	Omp OmpEnv
 }
 
 // Doctor checks the config, the machine and kata, and says what is missing and how to fix it. It writes nothing.
@@ -93,12 +95,19 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 			add("ok", "checkout "+name, cfg.Checkouts[name], "")
 		}
 	}
+	omp := o.Omp
+	omp.Checkouts = slices.AppendSeq(omp.Checkouts, maps.Values(cfg.Checkouts))
+	kata := omp.kataPlugin()
 	for _, name := range slices.Sorted(maps.Keys(cfg.Profiles)) {
 		command := cfg.Profiles[name].command()
 		if path, err := exec.LookPath(command); err != nil {
 			add("FAIL", "profile "+name, fmt.Sprintf("command %q was not found", command), "Install it, or set the profile's command to an absolute path.")
 		} else {
 			add("ok", "profile "+name, path, "")
+		}
+		if kata != "" && cfg.Profiles[name].Extensions.Ambient() {
+			add("warn", "profile "+name, "kata-plugin's omp extension is installed ("+kata+") and this profile loads omp's extensions, so each headless run gets its todo takeover: an issue for each task and up to 3 extra turns from its stop reminder",
+				"Set extensions = \"none\" under [profiles."+name+"] in worker.toml.")
 		}
 	}
 	for _, name := range slices.Sorted(maps.Keys(cfg.Secrets)) {

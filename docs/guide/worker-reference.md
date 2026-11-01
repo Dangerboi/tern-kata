@@ -22,7 +22,7 @@ The file is decoded strictly (an unknown key is an error) and read once at start
 | `[[projects]]` `secrets` | The `[secrets]` names this Project's jobs may use. Unlike `checkouts` and `profiles`, an empty or missing list allows none; a job naming an unlisted secret is set aside, and a name `[secrets]` does not define is refused at load. `tern-kata worker upgrade` adds the names the Project's jobs use (see [Upgrading](#upgrading-an-existing-worker-config)). |
 | `[[projects]]` `commands` | `true` lets the Project's workflows run command steps (`sh -c`); default `false`. A job whose workflow has a command step is set aside without it. `tern-kata worker upgrade` adds it when a workflow has one. |
 | `[checkouts]` | A job's `checkout_key` mapped to an absolute directory. |
-| `[profiles.<name>]` | A job's `options.profile` (default `default`); `default` is required. Keys: `command`, `model`, `thinking`, `args`. |
+| `[profiles.<name>]` | A job's `options.profile` (default `default`); `default` is required. Keys: `command`, `model`, `thinking`, `args`, `extensions`. `extensions` picks the omp extensions a run loads: `"ambient"` (default; omp's own discovery, no flag), `"none"` (`--no-extensions`) or a list of absolute paths (`--trusted-extension` for each; a relative path or an empty list is refused at load, naming the profile). With kata-plugin installed, an ambient run gets its todo takeover (issues for each task, up to 3 extra turns from its stop reminder); `worker doctor` warns of it and suggests `extensions = "none"`. |
 | `[secrets]` | A job's `secret_refs` name mapped to where the value lives; never a literal. |
 
 <details>
@@ -55,6 +55,7 @@ command  = "omp"
 model    = "anthropic/claude-sonnet-5-5"
 thinking = "medium"
 args     = []                  # extra arguments, e.g. ["--profile", "worker"] to isolate omp's own state
+# extensions = "none"          # "ambient" (default), "none", or ["/abs/path/ext.ts"]; "none" keeps kata-plugin's todo takeover out of runs
 
 [secrets]                      # a job's secret_refs name -> where the value lives; never a literal
 github-review = { file = "~/.config/tern-kata/github-review" }   # a private (0600) regular file
