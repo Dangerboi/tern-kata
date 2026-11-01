@@ -66,7 +66,7 @@ var testRelease = sync.OnceValues(func() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	env := updateEnv{GOOS: runtime.GOOS, GOARCH: runtime.GOARCH}
+	env := updateEnv{}
 	files := map[string][]byte{env.binaryName(): content, "LICENSE": []byte("license"), "plugin/plugin.toml": []byte("version = \"0.0.0\"\n")}
 	var archive bytes.Buffer
 	if runtime.GOOS == "windows" {
@@ -120,7 +120,7 @@ func newUpdateFixture(t *testing.T, current, latest string, spoil func(string) s
 	if err != nil {
 		t.Fatal(err)
 	}
-	env := updateEnv{GOOS: runtime.GOOS, GOARCH: runtime.GOARCH}
+	env := updateEnv{}
 	sum := sha256.Sum256(archive)
 	sums := hex.EncodeToString(sum[:]) + "  " + env.archiveName() + "\n"
 	if spoil != nil {

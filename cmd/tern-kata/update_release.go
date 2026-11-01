@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"golang.org/x/mod/semver"
@@ -24,14 +25,13 @@ const maxDownload = 512 << 20
 // unpackedRelease is a downloaded, checked and unpacked release. Dir holds what the archive holds: the binary, LICENSE and
 // plugin/.
 type unpackedRelease struct {
-	Version string
-	Dir     string
-	Binary  string
+	Dir    string
+	Binary string
 }
 
 // binaryName is the file the archive holds the binary as.
 func (e updateEnv) binaryName() string {
-	if e.GOOS == "windows" {
+	if runtime.GOOS == "windows" {
 		return "tern-kata.exe"
 	}
 	return "tern-kata"
@@ -39,10 +39,10 @@ func (e updateEnv) binaryName() string {
 
 // archiveName is the OS archive, as scripts/release.sh names it.
 func (e updateEnv) archiveName() string {
-	if e.GOOS == "windows" {
-		return "tern-kata_" + e.GOOS + "_" + e.GOARCH + ".zip"
+	if runtime.GOOS == "windows" {
+		return "tern-kata_" + runtime.GOOS + "_" + runtime.GOARCH + ".zip"
 	}
-	return "tern-kata_" + e.GOOS + "_" + e.GOARCH + ".tar.gz"
+	return "tern-kata_" + runtime.GOOS + "_" + runtime.GOARCH + ".tar.gz"
 }
 
 // versionURL is version.txt of the latest release, or of the dist/ TERN_KATA_BASE_URL names.
@@ -97,7 +97,7 @@ func downloadRelease(ctx context.Context, env updateEnv, version, work string) (
 	if info, err := os.Stat(binary); err != nil || !info.Mode().IsRegular() {
 		return unpackedRelease{}, fmt.Errorf("%s holds no %s", name, env.binaryName())
 	}
-	return unpackedRelease{Version: version, Dir: dir, Binary: binary}, nil
+	return unpackedRelease{Dir: dir, Binary: binary}, nil
 }
 
 // download writes the body of url to w, refusing more than limit bytes and any status but 200.

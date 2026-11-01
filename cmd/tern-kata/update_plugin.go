@@ -19,10 +19,10 @@ var pluginTOMLVersion = regexp.MustCompile(`(?m)^version\s*=\s*"([^"\n]+)"`)
 
 // updatePlugin is the plugin step of `update`: it brings this machine's copy of the window plugin to version, the binary's
 // release (with its leading "v"). It acts only on a copy installed from a release whose plugin.toml names another version;
-// no tern, a linked copy and an absent copy are left as they are (the first two with a note). release is the unpacked
-// archive of version when the update already downloaded it, else fetch downloads it, and only when the step needs it. A
-// failure is a warning on out: the binary is current whatever happens here.
-func updatePlugin(ctx context.Context, version string, release *unpackedRelease, fetch func() (unpackedRelease, func(), error), out io.Writer) {
+// no tern, a linked copy and an absent copy are left as they are (the first two with a note). fetch supplies the unpacked
+// archive of version (downloading it, or handing over the one the update already holds) and is called only when the step
+// needs it. A failure is a warning on out: the binary is current whatever happens here.
+func updatePlugin(ctx context.Context, version string, fetch func() (unpackedRelease, func(), error), out io.Writer) {
 	ternPath, err := exec.LookPath("tern")
 	if err != nil {
 		fmt.Fprintln(out, "This machine's tern-kata plugin was not updated: tern is not on PATH. Update it with `tern plugin install <folder> --force`, or run the plugin-only install script.")
@@ -58,15 +58,12 @@ func updatePlugin(ctx context.Context, version string, release *unpackedRelease,
 	if have := string(match[1]); have == want {
 		return
 	}
-	if release == nil {
-		fetched, cleanup, err := fetch()
-		if err != nil {
-			warn("%v", err)
-			return
-		}
-		defer cleanup()
-		release = &fetched
+	release, cleanup, err := fetch()
+	if err != nil {
+		warn("%v", err)
+		return
 	}
+	defer cleanup()
 	if _, err := runTern(ctx, ternPath, "plugin", "install", filepath.Join(release.Dir, "plugin"), "--force"); err != nil {
 		warn("%v", err)
 		return
