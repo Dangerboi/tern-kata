@@ -129,6 +129,16 @@ func (m Model) raised(uid string) bool {
 // An Issue gets at most one raise per pass, the last, so the record is what lands in kata. The record keeps the message of
 // every agent on its Issue seen waiting, which the clear accepts. An Inbox address kata refuses writes nothing.
 func raiseAgentAttention(m Model, relayed bool) (Model, []Cmd) {
+	return attentionPass(m, relayed, false)
+}
+
+// attentionOnIssues is the pass for the Issues changing: the status of an Issue the Collection does not list, last read for an
+// agent that exited, is read again, so closing the Issue clears the request.
+func attentionOnIssues(m Model) (Model, []Cmd) {
+	return attentionPass(m, false, true)
+}
+
+func attentionPass(m Model, relayed, reread bool) (Model, []Cmd) {
 	address, err := m.InboxAddress()
 	if err != nil || m.PaneBlock == "" {
 		return m, nil
@@ -151,25 +161,12 @@ func raiseAgentAttention(m Model, relayed bool) (Model, []Cmd) {
 				last = s.LastMessage
 			}
 		}
-		message := agentAttentionMessage(last)
-		raised := RaisedAttention{UID: e.IssueUID, ProjectID: project, Message: message}
-		if i := slices.IndexFunc(m.AgentAttention, func(r RaisedAttention) bool { return r.UID == e.IssueUID }); i >= 0 {
-			raised.Seen = m.AgentAttention[i].Seen
-			m.AgentAttention = slices.Clone(m.AgentAttention)
-			m.AgentAttention[i] = raised
-		} else {
-			m.AgentAttention = append(slices.Clone(m.AgentAttention), raised)
-		}
-		raise := RaiseAgentAttention{Workspace: m.Workspace, ProjectID: project, UID: e.IssueUID, Actor: m.Actor, Address: address, Message: message}
-		if i := slices.IndexFunc(cmds, func(c Cmd) bool { r, ok := c.(RaiseAgentAttention); return ok && r.UID == e.IssueUID }); i >= 0 {
-			cmds[i] = raise
-		} else {
-			cmds = append(cmds, raise)
-		}
+		m, cmds = putRaise(m, cmds, e.IssueUID, project, address, agentAttentionMessage(last))
 	}
+	m, cmds = raiseExitedAttention(m, cmds, address, reread)
 	kept := m.AgentAttention[:0:0]
 	for _, r := range m.AgentAttention {
-		if m.agentWaitingOn(r.UID) {
+		if m.agentWaitingOn(r.UID) || m.exitedWithIssueOpen(r.UID) {
 			r.Seen = m.seenWaiting(r)
 			kept = append(kept, r)
 			continue
@@ -177,6 +174,87 @@ func raiseAgentAttention(m Model, relayed bool) (Model, []Cmd) {
 		cmds = append(cmds, m.clearOf(r, address))
 	}
 	m.AgentAttention = kept
+	return m, cmds
+}
+
+// putRaise records the request this Pane writes for an Issue, replacing its record, and queues the write; an Issue gets at most one
+// write per pass, the last.
+func putRaise(m Model, cmds []Cmd, uid string, project int64, address, message string) (Model, []Cmd) {
+	raised := RaisedAttention{UID: uid, ProjectID: project, Message: message}
+	if i := slices.IndexFunc(m.AgentAttention, func(r RaisedAttention) bool { return r.UID == uid }); i >= 0 {
+		raised.Seen = m.AgentAttention[i].Seen
+		m.AgentAttention = slices.Clone(m.AgentAttention)
+		m.AgentAttention[i] = raised
+	} else {
+		m.AgentAttention = append(slices.Clone(m.AgentAttention), raised)
+	}
+	raise := RaiseAgentAttention{Workspace: m.Workspace, ProjectID: project, UID: uid, Actor: m.Actor, Address: address, Message: message}
+	if i := slices.IndexFunc(cmds, func(c Cmd) bool { r, ok := c.(RaiseAgentAttention); return ok && r.UID == uid }); i >= 0 {
+		cmds[i] = raise
+	} else {
+		cmds = append(cmds, raise)
+	}
+	return m, cmds
+}
+
+// agentExitedMessage is the request's text for an agent that exited while its Issue is open.
+func agentExitedMessage(ref string) string { return "agent exited without closing " + ref }
+
+// issueStatus is the status of an Issue by UID as the Collection lists it, else as the last read through the Daemon gave it; ""
+// when neither is known.
+func (m Model) issueStatus(uid string) string {
+	if issue := m.issueByUID(uid); issue != nil {
+		return issue.Status
+	}
+	return m.AgentClose.known[uid]
+}
+
+// agentExited reports whether the relay shows the agent block exited; an idle agent is between turns.
+func agentExited(states []AgentState, block string) bool {
+	return slices.ContainsFunc(states, func(s AgentState) bool { return s.Block == block && s.State == AgentExited })
+}
+
+// exitedWithIssueOpen reports whether an agent this Pane started on the Issue has exited and the Issue is known to be open.
+func (m Model) exitedWithIssueOpen(uid string) bool {
+	if m.PaneBlock == "" {
+		return false
+	}
+	status := m.issueStatus(uid)
+	if status == "" || status == "closed" {
+		return false
+	}
+	return slices.ContainsFunc(m.AgentMapping, func(e AgentEntry) bool {
+		return e.IssueUID == uid && e.PaneBlock == m.PaneBlock && agentExited(m.Agents.States, e.Block)
+	})
+}
+
+// raiseExitedAttention raises the request for an agent this Pane started that exited while its Issue is open, unless an agent on
+// the Issue waits (its own request stands) or the record already holds that text, so a second window's relay of the same state
+// writes nothing. An Issue the Collection does not list is read through the Daemon first, as for ending a finished Background
+// agent, and again when the Issues change (reread); the answer runs the pass again.
+func raiseExitedAttention(m Model, cmds []Cmd, address string, reread bool) (Model, []Cmd) {
+	for _, e := range m.AgentMapping {
+		if e.PaneBlock != m.PaneBlock || !agentExited(m.Agents.States, e.Block) || m.agentWaitingOn(e.IssueUID) {
+			continue
+		}
+		project := m.projectOf(e)
+		if project == 0 {
+			continue
+		}
+		status := m.issueStatus(e.IssueUID)
+		if status == "" || (reread && m.issueByUID(e.IssueUID) == nil) {
+			if m.issueByUID(e.IssueUID) == nil && !slices.Contains(m.AgentClose.reading, e.IssueUID) {
+				m.AgentClose.reading = append(slices.Clone(m.AgentClose.reading), e.IssueUID)
+				cmds = append(cmds, ReadAgentIssue{Workspace: m.Workspace, ProjectID: project, UID: e.IssueUID})
+			}
+			continue
+		}
+		message := agentExitedMessage(e.IssueRef)
+		if status == "closed" || slices.ContainsFunc(m.AgentAttention, func(r RaisedAttention) bool { return r.UID == e.IssueUID && r.Message == message }) {
+			continue
+		}
+		m, cmds = putRaise(m, cmds, e.IssueUID, project, address, message)
+	}
 	return m, cmds
 }
 

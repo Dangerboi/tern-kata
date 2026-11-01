@@ -199,9 +199,10 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 	next, cmds := updateWithDetail(m, msg)
 	switch msg.(type) {
 	case SnapshotLoaded, StreamEvent:
-		var ended []Cmd
+		var raised, ended []Cmd
+		next, raised = attentionOnIssues(next)
 		next, ended = closeFinishedAgents(next, closeOnIssues)
-		cmds = append(cmds, ended...)
+		cmds = append(append(cmds, raised...), ended...)
 	}
 	next = next.recordWrite(msg).noteWrites(cmds)
 	return next.cancelPending(m, msg).settleDropdown().settleCalendar().withCollectionRows(), cmds
