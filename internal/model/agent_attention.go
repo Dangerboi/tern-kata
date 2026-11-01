@@ -41,8 +41,10 @@ type RaiseAgentAttention struct {
 	ProjectID int64
 	UID       string
 	Actor     string
-	Address   string
-	Message   string
+	// Teammate is the waiting agent's name, written as the request's teammate; "" writes none.
+	Teammate string
+	Address  string
+	Message  string
 }
 
 func (RaiseAgentAttention) cmd() {}
@@ -160,7 +162,7 @@ func raiseAgentAttention(m Model, relayed bool) (Model, []Cmd) {
 		} else {
 			m.AgentAttention = append(slices.Clone(m.AgentAttention), raised)
 		}
-		raise := RaiseAgentAttention{Workspace: m.Workspace, ProjectID: project, UID: e.IssueUID, Actor: m.Actor, Address: address, Message: message}
+		raise := RaiseAgentAttention{Workspace: m.Workspace, ProjectID: project, UID: e.IssueUID, Actor: m.Actor, Teammate: e.Teammate, Address: address, Message: message}
 		if i := slices.IndexFunc(cmds, func(c Cmd) bool { r, ok := c.(RaiseAgentAttention); return ok && r.UID == e.IssueUID }); i >= 0 {
 			cmds[i] = raise
 		} else {

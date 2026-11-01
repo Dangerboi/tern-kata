@@ -209,7 +209,7 @@ func TestStartingAnAgentWritesThePromptRunsTernAndRecordsTheBlock(t *testing.T) 
 		t.Fatal(got.Err)
 	}
 	e := got.Entry
-	if e.Block != "31" || e.IssueUID != "U1" || e.IssueRef != "demo#ab12" || e.PaneBlock != "7" || e.Background || e.Open ||
+	if e.Block != "31" || e.IssueUID != "U1" || e.IssueRef != "demo#ab12" || e.PaneBlock != "7" || e.Teammate != "omp" || e.Background || e.Open ||
 		!e.StartedAt.Equal(time.Date(2026, 10, 29, 12, 0, 7, 0, time.UTC)) || filepath.Dir(e.PromptFile) != filepath.Join(dirs.State, AgentPromptsFolder) {
 		t.Fatalf("entry %+v", e)
 	}
@@ -1240,6 +1240,49 @@ func TestRefreshingDoesNotAdoptAnAgentFromAListingThatBeganBeforeItsPaneOpened(t
 	for _, e := range stored {
 		if e.Block == "2" && e.PaneBlock != "8" {
 			t.Fatalf("Pane 8's agent was adopted by Pane 9: %+v", stored)
+		}
+	}
+}
+
+func TestAgentTomlNameIsTheTeammateAndDefaultsToTheProgram(t *testing.T) {
+	unset, err := ReadAgentConfig(filepath.Join(t.TempDir(), "missing.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := unset.For("demo").Name; got != "omp" {
+		t.Errorf("unset name %q, want the default program's", got)
+	}
+	path := writeAgentFile(t, filepath.Join(t.TempDir(), "agent.toml"), `
+name = "builder"
+[projects.demo]
+name = "demo-builder"
+[projects.codex]
+command = ["/usr/bin/codex.exe", "--fast"]
+[projects.odd]
+command = ["/opt/my agent"]
+`)
+	cfg, err := ReadAgentConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for project, want := range map[string]string{"other": "builder", "demo": "demo-builder", "codex": "builder"} {
+		if got := cfg.For(project).Name; got != want {
+			t.Errorf("name for %s %q, want %q", project, got, want)
+		}
+	}
+	bare, err := ReadAgentConfig(writeAgentFile(t, filepath.Join(t.TempDir(), "agent.toml"), "[projects.codex]\ncommand = [\"/usr/bin/codex.exe\"]\n[projects.odd]\ncommand = [\"/opt/my agent\"]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := bare.For("codex").Name; got != "codex" {
+		t.Errorf("name from the command %q, want codex", got)
+	}
+	if got := bare.For("odd").Name; got != "" {
+		t.Errorf("name from an unusable program %q, want none", got)
+	}
+	for _, text := range []string{"name = \"two words\"\n", "[projects.demo]\nname = \"\"\n"} {
+		if _, err := ReadAgentConfig(writeAgentFile(t, filepath.Join(t.TempDir(), "agent.toml"), text)); err == nil || !strings.Contains(err.Error(), "teammate name") {
+			t.Errorf("%q: error %v, want one saying the name is no teammate name", text, err)
 		}
 	}
 }
