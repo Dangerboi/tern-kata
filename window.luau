@@ -9,7 +9,26 @@ local fresh: { [number]: boolean } = {}
 -- Issue reference per new kata Pane, sent over TSP once its surface is live, so it never passes through a shell.
 local pending: { [number]: string? } = {}
 -- The Panes `Update tern-kata` launched: they run the tern-kata program but are not a kata to link or mark.
+-- Kept in `tern.kv` too, because a plugin reload (a local update brings the plugin along) empties this table while the
+-- Pane is still open; `pane_closed` removes the id from both.
+local KV_UPDATE_PANES = "update.panes"
 local updatePanes: { [number]: boolean } = {}
+
+local function saveUpdatePanes()
+    local ids: { number } = {}
+    for id in updatePanes do table.insert(ids, id) end
+    table.sort(ids)
+    tern.kv.set(KV_UPDATE_PANES, if #ids > 0 then ids else nil)
+end
+
+do
+    local ok, saved = pcall(tern.kv.get, KV_UPDATE_PANES)
+    if ok and type(saved) == "table" then
+        for _, id in saved :: { any } do
+            if type(id) == "number" then updatePanes[id] = true end
+        end
+    end
+end
 
 -- A kata Pane has the title `tern-kata` (which the binary sets), or a program whose file name is tern-kata or
 -- tern-kata.exe, split on either path separator so Windows paths match. A longer name merely containing it does not.
@@ -415,7 +434,10 @@ end)
 
 tern.on("pane_closed", function(ev, cx)
     launched[ev.pane] = nil
-    updatePanes[ev.pane] = nil
+    if updatePanes[ev.pane] then
+        updatePanes[ev.pane] = nil
+        saveUpdatePanes()
+    end
     pending[ev.pane] = nil
     relayed[ev.pane] = nil
     retrying[ev.pane] = nil
@@ -699,6 +721,7 @@ tern.command({
             local pane = launch(cx2, "tern-kata update --pause")
             if pane then
                 updatePanes[pane] = true
+                saveUpdatePanes()
                 watchUpdate(pane, version, remote)
             end
         end)
