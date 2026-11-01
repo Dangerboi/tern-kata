@@ -193,7 +193,7 @@ func (r *AgentRoute) paneStorage() error {
 
 // paneCredentialEnv is the Pane's values of the credential variables home's config.toml names, as NAME=value lines: every
 // [[daemon]] token_env and [auth].token_env, or only [auth].token_env when all is false (a KATA_SERVER route reaches no catalog entry,
-// so the other entries' tokens stay out of the agent). Unset variables, KATA_ names, and values spanning lines are left out.
+// so the other entries' tokens stay out of the agent). Unset variables, ownedNames, and values spanning lines are left out.
 func paneCredentialEnv(home string, all bool) string {
 	var names []string
 	if all {
@@ -263,7 +263,7 @@ func envTruthy(name string) bool {
 	return v == "1" || strings.EqualFold(v, "true")
 }
 
-// agentTokenSuffix names the token file beside a prompt file; removePrompt removes both.
+// agentTokenSuffix names the token file beside a prompt file; removePrompt removes it with the DSN and env files.
 const agentTokenSuffix = ".token"
 
 // agentDSNSuffix names the DSN file beside a prompt file; removePrompt removes it too.
@@ -272,8 +272,8 @@ const (
 	agentEnvSuffix = ".env"
 )
 
-// withSecretFiles moves route.Token and route.DSN into new private files beside promptFile (created as kata's own credential files
-// are, so they pass its checks on every OS) and names them in route.TokenFile and route.DSNFile. Nothing else changes.
+// withSecretFiles moves route.Token, route.DSN and route.Creds into new private files beside promptFile (created as kata's own credential files
+// are, so they pass its checks on every OS) and names them in route.TokenFile, route.DSNFile and route.EnvFile. Nothing else changes.
 func (r AgentRoute) withSecretFiles(promptFile string) (AgentRoute, error) {
 	var written []string
 	put := func(secret, suffix string, name *string) error {

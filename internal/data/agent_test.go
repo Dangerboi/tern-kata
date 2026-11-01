@@ -1679,12 +1679,11 @@ func TestAgentRouteEnvFileFollowsTheRoute(t *testing.T) {
 
 func TestAgentRouteStorageEnvironment(t *testing.T) {
 	local := catalogHome(t, "[[daemon]]\nname = \"mine\"\nlocal = true\n[[daemon]]\nname = \"profile\"\nlocal = true\nhome = \"/profiles/p\"\ninstance_uid = \"01HZZZZZZZZZZZZZZZZZZZZZZZ\"\n")
-	dsn := tokenFile(t, "postgres://u:pw@h/db\n")
 	for name, tc := range map[string]struct {
 		route AgentRoute
 		set   []string
 	}{
-		"home only":    {AgentRoute{Home: local, DB: "/p.db", Schema: "s", DSNFile: dsn}, []string{"KATA_HOME=" + local, "KATA_DB=/p.db", "KATA_POSTGRES_SCHEMA=s", "KATA_DSN=postgres://u:pw@h/db"}},
+		"home only":    {AgentRoute{Home: local, DB: "/p.db", Schema: "s", DSNFile: "replaced"}, []string{"KATA_HOME=" + local, "KATA_DB=/p.db", "KATA_POSTGRES_SCHEMA=s", "KATA_DSN=postgres://u:pw@h/db"}},
 		"plain local":  {AgentRoute{Home: local, Daemon: "mine", DB: "/p.db"}, []string{"KATA_HOME=" + local, "KATA_DB=/p.db"}},
 		"profile home": {AgentRoute{Home: local, Daemon: "profile", DB: "/p.db", Schema: "s"}, []string{"KATA_HOME=/profiles/p"}},
 		"server route": {AgentRoute{Home: local, Server: "https://s", DB: "/p.db", Schema: "s"}, []string{"KATA_HOME=" + local, "KATA_SERVER=https://s"}},
@@ -1705,7 +1704,6 @@ func TestAgentRouteStorageEnvironment(t *testing.T) {
 			}
 		})
 	}
-	_ = dsn
 }
 
 func TestCredentialNamesAcceptKataTokenVariablesButNotTheOnesTheRouteOwns(t *testing.T) {

@@ -57,7 +57,7 @@ func planAgent(args []string) (LaunchPlan, error) {
 	return plan, nil
 }
 
-// parseAgentRoute reads one of --home, --daemon, --server, --token-file or --allow-insecure from args[*i] into route and advances *i
+// parseAgentRoute reads one of the route flags (--home, --db, --schema, --dsn-file, --env-file, --daemon, --server, --token-file, --auth-file, --allow-insecure, --trust-private-network) from args[*i] into route and advances *i
 // past its value; matched is false for any other flag.
 func parseAgentRoute(args []string, i *int, route *data.AgentRoute) (matched bool, err error) {
 	name, value, hasValue := strings.Cut(args[*i], "=")
