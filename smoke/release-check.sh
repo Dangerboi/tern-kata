@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The window half's release check, with a staged plugin/ folder, told it is installed, whose version is older than a
 # locally served version.txt: one toast at window start, none after a restart, none with TERN_KATA_NO_UPDATE_CHECK, and a
-# linked plugin never checks (the toggle command says so). Own temp state and headless Tern; no kata daemon is needed.
+# linked plugin never checks (the toggle command says so). A plugin reload, which runs the plugin again without a window
+# start, checks again and reports a finished plugin update. Own temp state and headless Tern; no kata daemon is needed.
 # Usage: smoke/release-check.sh
 set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
@@ -103,11 +104,31 @@ expect_no_toast "$out_toast"
 [[ $(fetches) -eq $((fetches_before + 1)) ]]
 stop_tern
 
+# A plugin reload runs the plugin again without a window start: with the stored state gone it checks again.
+start_tern
+clear_kv
+ctl plugins fixtures
+for ((attempt = 0; attempt < 40; attempt++)); do
+  [[ $(fetches) -eq $((fetches_before + 2)) ]] && break
+  printf 'run "true"\n' >"$tmp/pump.ctl"; ctl --file "$tmp/pump.ctl" >/dev/null; sleep 0.1
+done
+[[ $(fetches) -eq $((fetches_before + 2)) ]]
+stop_tern
+
+# A pending key naming this plugin's own version, left behind by the plugin step, toasts after a reload and is cleared.
+start_tern
+kv=$(find "$TERN_CONFIG_DIR" -name kv.json)
+jq -n --argjson at "$(date +%s)" '{"update.pending": {version: "0.0.1", at: $at}, "release_check.last": $at}' >"$kv"
+ctl plugins fixtures
+expect_toast 'tern-kata plugin updated to v0.0.1'
+[[ $(jq 'has("update.pending")' "$kv") == false ]]
+stop_tern
+
 # The variable keeps checks off, though the stored state is gone.
 clear_kv
 TERN_KATA_NO_UPDATE_CHECK=1 start_tern
 expect_no_toast "$out_toast"
-[[ $(fetches) -eq $((fetches_before + 1)) ]]
+[[ $(fetches) -eq $((fetches_before + 2)) ]]
 stop_tern
 
 # A linked plugin never checks, and the toggle command says why.
@@ -115,7 +136,7 @@ plugin_dir="$TERN_CONFIG_DIR/plugins"
 clear_kv
 start_tern
 expect_no_toast "$out_toast"
-[[ $(fetches) -eq $((fetches_before + 1)) ]]
+[[ $(fetches) -eq $((fetches_before + 2)) ]]
 printf 'palette "Turn tern-kata update checks off/on"\nkey Enter\n' >"$tmp/palette.ctl"
 ctl --file "$tmp/palette.ctl"
 expect_toast 'A linked plugin never checks'
