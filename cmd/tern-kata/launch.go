@@ -593,12 +593,16 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 version.txt, downloads this OS's archive and checks its SHA-256
                                 against checksums.txt, then swaps the running binary (on Windows
                                 the old file is renamed aside, so Panes and the worker may keep
-                                running). Says "up to date" and changes nothing when this is the
-                                latest release, and never downgrades. Only a release build updates
-                                itself: a go install or source build prints what to run instead.
-                                TERN_KATA_BASE_URL points it at another dist/ folder. --force is for
-                                the checks that come with later releases; --pause waits for Enter
-                                after a success, so a Pane shows the result before it closes.
+                                running). Says "up to date" and leaves the binary alone when this
+                                is the latest release, and never downgrades; either way it updates
+                                this machine's installed tern-kata plugin copy to match, and after a
+                                swap gives a supervised Worker an idle stop so it comes back as the
+                                new binary. Only a release build updates itself: a go install or
+                                source build prints what to run instead. TERN_KATA_BASE_URL points
+                                it at another dist/ folder. --force installs even when the new
+                                release's pre-flight refuses this machine (a kata daemon too old, a
+                                worker.toml it rejects); --pause waits for Enter after a success,
+                                so a Pane shows the result before it closes.
                                 Exit 0 when the binary is at the latest version, else 1
   agent --as <actor> -- <command> [args...]
                                 run the command with KATA_AUTHOR set to the actor (replacing

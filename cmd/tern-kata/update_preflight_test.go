@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -135,9 +136,8 @@ func TestUpdateStopsOnAPreflightRefusalWithTheBinaryUntouched(t *testing.T) {
 func TestUpdateForceSwapsPastARefusalAndPrintsItAsAWarning(t *testing.T) {
 	f := newUpdateFixture(t, "v0.1.0", "0.2.0", nil)
 	f.preflight(t, refusingKata, 1, "")
-	outcome, err := updateRelease(context.Background(), f.env, true, &f.out)
-	if err != nil || outcome.ForcedConfig {
-		t.Fatalf("err %v, outcome %+v", err, outcome)
+	if err := f.run(LaunchPlan{Subcommand: "update", Force: true}); err != nil {
+		t.Fatal(err)
 	}
 	for _, want := range []string{"warning: a warning\n", "warning: tern-kata v0.2.0 needs kata v0.20.0 or newer", "Updated tern-kata from v0.1.0 to v0.2.0"} {
 		if !strings.Contains(f.out.String(), want) {
@@ -149,22 +149,15 @@ func TestUpdateForceSwapsPastARefusalAndPrintsItAsAWarning(t *testing.T) {
 	}
 }
 
-func TestUpdateRemembersAForcedConfigRefusalForTheWorkerStep(t *testing.T) {
+func TestUpdateStopsOnAConfigRefusalUnlessForced(t *testing.T) {
 	f := newUpdateFixture(t, "v0.1.0", "0.2.0", nil)
 	f.preflight(t, refusingConfig, 1, "")
-	if _, err := updateRelease(context.Background(), f.env, false, &f.out); err == nil {
+	if err := f.run(LaunchPlan{Subcommand: "update"}); err == nil {
 		t.Fatal("a config refusal did not stop the update")
 	}
 	f.unchanged(t)
-	outcome, err := updateRelease(context.Background(), f.env, true, &f.out)
-	if err != nil || !outcome.ForcedConfig {
-		t.Errorf("forced: err %v, outcome %+v", err, outcome)
-	}
-
-	f = newUpdateFixture(t, "v0.1.0", "0.2.0", nil)
-	f.preflight(t, refusingKata, 1, "")
-	if outcome, err := updateRelease(context.Background(), f.env, true, &f.out); err != nil || outcome.ForcedConfig {
-		t.Errorf("a kata refusal forced past: err %v, outcome %+v", err, outcome)
+	if err := f.run(LaunchPlan{Subcommand: "update", Force: true}); err != nil {
+		t.Errorf("forced: %v", err)
 	}
 }
 
@@ -220,4 +213,76 @@ func TestUpdateRefusesWhenTheNewBinaryTakesTooLong(t *testing.T) {
 		t.Error("the update waited for the hung binary")
 	}
 	f.unchanged(t)
+}
+
+func TestPreflightWarnsOfADaemonThatNeverAnswersWellBeforeTheTimeout(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() { // accepts and never answers
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			t.Cleanup(func() { _ = conn.Close() })
+		}
+	}()
+	c, err := client.New("http://" + listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	env := preflightEnv{
+		Locate:      func(context.Context, string) (data.Target, error) { return data.Target{Client: c}, nil },
+		Dirs:        worker.Dirs{Config: t.TempDir(), State: t.TempDir()},
+		Version:     "v0.9.0",
+		KataTimeout: 300 * time.Millisecond,
+	}
+	start := time.Now()
+	err = runPreflight(context.Background(), env, &out)
+	var answer preflightAnswer
+	if jsonErr := json.Unmarshal(out.Bytes(), &answer); jsonErr != nil {
+		t.Fatalf("stdout %q is not JSON: %v", out.String(), jsonErr)
+	}
+	if err != nil || len(answer.Refusals) != 0 || len(answer.Warnings) != 1 || !strings.Contains(answer.Warnings[0], "did not answer within 300ms") {
+		t.Errorf("err %v, answer %+v", err, answer)
+	}
+	if time.Since(start) > 5*time.Second {
+		t.Errorf("the check took %s", time.Since(start))
+	}
+}
+
+func TestUpdateCancelledDuringPreflightIsInterruptedEvenWithForce(t *testing.T) {
+	for _, force := range []bool{false, true} {
+		f := newUpdateFixture(t, "v0.1.0", "0.2.0", nil)
+		t.Setenv("TERN_KATA_TEST_PREFLIGHT_HANG", "1")
+		ctx, cancel := context.WithCancel(context.Background())
+		time.AfterFunc(300*time.Millisecond, cancel)
+		err := updateRelease(ctx, f.env, force, &f.out)
+		if err == nil || !strings.Contains(err.Error(), "interrupted") || !strings.Contains(err.Error(), "nothing was installed") || strings.Contains(err.Error(), "longer than") {
+			t.Errorf("force %v: error %v", force, err)
+		}
+		f.unchanged(t)
+	}
+}
+
+func TestUpdateDoesNotStopTheWorkerAfterForcingPastAPreflightThatCouldNotRun(t *testing.T) {
+	w := newWorkerFixture(t, "")
+	w.env.Supervisor = worker.SupervisorTern
+	w.serve(t)
+	f := updateWithWorker(t, w)
+	f.preflight(t, "not json", 0, "")
+	if err := f.run(LaunchPlan{Subcommand: "update", Force: true}); err != nil {
+		t.Fatal(err)
+	}
+	want := "The worker was not stopped: the new release could not check worker.toml. Check it with `tern-kata worker edit`, then run `tern-kata worker stop`."
+	if !strings.Contains(f.out.String(), want) || strings.Contains(f.out.String(), "Stopping") {
+		t.Errorf("output:\n%s", f.out.String())
+	}
+	if !workerAnswers(f) {
+		t.Error("the worker was stopped")
+	}
 }

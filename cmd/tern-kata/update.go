@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"time"
 
 	"golang.org/x/mod/semver"
@@ -36,19 +35,12 @@ type updateEnv struct {
 	// Executable is the running binary's path; update replaces that file, after resolving symlinks.
 	Executable func() (string, error)
 	// BaseURL is TERN_KATA_BASE_URL: when set, version.txt, the archive and checksums.txt all come from it.
-	BaseURL      string
-	Client       *http.Client
-	GOOS, GOARCH string
+	BaseURL string
+	Client  *http.Client
 	// Stdin is what --pause waits on.
 	Stdin io.Reader
 	// PreflightTimeout is how long the new binary may take to check this machine; zero is preflightTimeout.
 	PreflightTimeout time.Duration
-}
-
-// updateOutcome is what a finished update tells the steps that follow the swap.
-type updateOutcome struct {
-	// ForcedConfig is true when --force went past a refusal of worker.toml: the Worker step must not restart the Worker on it.
-	ForcedConfig bool
 }
 
 // newUpdateEnv is the production environment: tern-kata's user folders, this binary and the real network.
@@ -60,16 +52,17 @@ func newUpdateEnv() (updateEnv, error) {
 	return updateEnv{
 		Dirs: dirs, Release: version, Build: buildVersion(), Executable: os.Executable,
 		BaseURL: os.Getenv("TERN_KATA_BASE_URL"), Client: &http.Client{Timeout: 10 * time.Minute},
-		GOOS: runtime.GOOS, GOARCH: runtime.GOARCH, Stdin: os.Stdin,
+		Stdin: os.Stdin,
 	}, nil
 }
 
 // runUpdate is `tern-kata update`: it brings this binary to the latest release and prints what it did. Every failure is a
-// subcommandError (exit 1), and nothing is changed before the swap. The order is the contract with the steps later releases
-// add: they run between downloadRelease and swapBinary (checks of this machine, which may refuse) and after it (this
-// machine's plugin and Worker).
+// subcommandError (exit 1), and nothing is changed before the swap. The order: read the latest version; when it is
+// newer, download and check the release, run its pre-flight (which may refuse this machine, or be forced past) and swap
+// the binary; then update this machine's plugin copy, which also runs when the binary is already the latest, and give the
+// supervised Worker an idle stop.
 func runUpdate(ctx context.Context, plan LaunchPlan, env updateEnv, out io.Writer) error {
-	if _, err := updateRelease(ctx, env, plan.Force, out); err != nil {
+	if err := updateRelease(ctx, env, plan.Force, out); err != nil {
 		return subcommandError{err} // a failed update ends at once, whatever --pause says
 	}
 	if plan.Pause {
@@ -79,60 +72,59 @@ func runUpdate(ctx context.Context, plan LaunchPlan, env updateEnv, out io.Write
 	return nil
 }
 
-func updateRelease(ctx context.Context, env updateEnv, force bool, out io.Writer) (updateOutcome, error) {
+func updateRelease(ctx context.Context, env updateEnv, force bool, out io.Writer) error {
 	if env.Release == "" {
 		if env.Build != "dev" {
-			return updateOutcome{}, fmt.Errorf("this tern-kata was built with go install and is not updated here; update it with: %s", goInstallCommand)
+			return fmt.Errorf("this tern-kata was built with go install and is not updated here; update it with: %s", goInstallCommand)
 		}
-		return updateOutcome{}, errors.New("this is a development build and is not updated here; rebuild it from source")
+		return errors.New("this is a development build and is not updated here; rebuild it from source")
 	}
 	current := env.Release
 	if !semver.IsValid(current) {
-		return updateOutcome{}, fmt.Errorf("this tern-kata's version %q is not a version number, so it cannot be compared with the latest release", current)
+		return fmt.Errorf("this tern-kata's version %q is not a version number, so it cannot be compared with the latest release", current)
 	}
 	unlock, err := lockUpdate(env.Dirs.State)
 	if err != nil {
-		return updateOutcome{}, err
+		return err
 	}
 	defer unlock()
 
 	target, err := env.target()
 	if err != nil {
-		return updateOutcome{}, err
+		return err
 	}
 	latest, err := fetchLatestVersion(ctx, env)
 	if err != nil {
-		return updateOutcome{}, err
+		return err
 	}
 	if semver.Compare(latest, current) <= 0 { // never a downgrade
 		fmt.Fprintf(out, "tern-kata %s is up to date\n", current)
-		updatePlugin(ctx, current, nil, func() (unpackedRelease, func(), error) { return downloadBesideBinary(ctx, env, target, current) }, out)
-		return updateOutcome{}, nil
+		updatePlugin(ctx, current, func() (unpackedRelease, func(), error) { return downloadBesideBinary(ctx, env, target, current) }, out)
+		return nil
 	}
 
-	work, err := os.MkdirTemp(filepath.Dir(target), ".tern-kata-update-") // beside the binary: the swap's renames stay on one volume
+	release, cleanup, err := downloadBesideBinary(ctx, env, target, latest) // beside the binary: the swap's renames stay on one volume
 	if err != nil {
-		return updateOutcome{}, fmt.Errorf("cannot prepare the update next to %s: %w; nothing was installed", target, err)
+		return fmt.Errorf("%w; nothing was installed", err)
 	}
-	defer func() { _ = os.RemoveAll(work) }()
-	release, err := downloadRelease(ctx, env, latest, work)
+	defer cleanup()
+	hold, err := runPreflightOf(ctx, env, release, force, out)
 	if err != nil {
-		return updateOutcome{}, fmt.Errorf("%w; nothing was installed", err)
+		return err
 	}
-	preflight, err := runPreflightOf(ctx, env, release, force, out)
-	if err != nil {
-		return updateOutcome{}, err
+	if ctx.Err() != nil {
+		return errInterrupted
 	}
 	if err := swapBinary(target, release.Binary); err != nil {
-		return updateOutcome{}, fmt.Errorf("cannot replace %s: %w; nothing was installed", target, err)
+		return fmt.Errorf("cannot replace %s: %w; nothing was installed", target, err)
 	}
 
 	fmt.Fprintf(out, "Updated tern-kata from %s to %s\n", current, latest)
-	updatePlugin(ctx, latest, &release, nil, out)
-	updateWorker(ctx, env, latest, preflight.ForcedConfig, out)
+	updatePlugin(ctx, latest, func() (unpackedRelease, func(), error) { return release, func() {}, nil }, out)
+	updateWorker(ctx, env, latest, hold, out)
 	fmt.Fprintf(out, "Reopen tern-kata Panes to use %s\n", latest)
 	fmt.Fprintln(out, "To update the agent skills too, run: npx skills update -g (or bunx skills update -g)")
-	return preflight, nil
+	return nil
 }
 
 // target is the file update replaces: the running binary, with symlinks resolved, so a link to it is left in place.
