@@ -383,6 +383,7 @@ func removePrompt(path string) {
 		_ = os.Remove(path)
 		_ = os.Remove(path + agentTokenSuffix)
 		_ = os.Remove(path + agentDSNSuffix)
+		_ = os.Remove(path + agentEnvSuffix)
 	}
 }
 
@@ -415,7 +416,7 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 	if err != nil {
 		return failed(err)
 	}
-	route, err := g.CurrentAgentRoute(ctx, cmd.Workspace)
+	route, err := g.CurrentAgentRoute()
 	if err != nil {
 		return failed(err)
 	}

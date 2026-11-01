@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/BurntSushi/toml"
 	"go.kenn.io/kit/safefileio"
@@ -41,6 +40,11 @@ type AgentRoute struct {
 	// values must never mix with another home. A DSN may hold a password, so it travels like the token: DSN is the Pane's copy, which
 	// startAgent moves into DSNFile, a private file the wrapper reads into KATA_DSN and deletes.
 	DB, Schema, DSN, DSNFile string
+	// Creds are the Pane's values of the variables the home's config.toml names as credential sources (each [[daemon]] token_env and
+	// [auth].token_env), as NAME=value lines; startAgent moves them into EnvFile, a private file the wrapper reads, sets under their own
+	// names and deletes. kata then scopes each token to its entry for the agent exactly as for the Pane, in whatever checkout the agent
+	// runs, which a single KATA_AUTH_TOKEN (kata sends it to every remote target) could not do.
+	Creds, EnvFile string
 }
 
 // IsZero reports whether the route changes nothing: the agent starts exactly as it did before routing existed.
@@ -49,7 +53,7 @@ func (r AgentRoute) IsZero() bool { return r == AgentRoute{} }
 // zeroWithoutToken reports whether the route would change nothing but for the credentials the Pane has.
 func (r AgentRoute) zeroWithoutToken() bool {
 	r.Token, r.TokenFile, r.AuthFile, r.TrustPrivate = "", "", "", false
-	r.DB, r.Schema, r.DSN, r.DSNFile = "", "", "", ""
+	r.DB, r.Schema, r.DSN, r.DSNFile, r.Creds, r.EnvFile = "", "", "", "", "", ""
 	return r.IsZero()
 }
 
@@ -80,6 +84,9 @@ func (r AgentRoute) Args() []string {
 	if r.DSNFile != "" {
 		args = append(args, "--dsn-file", r.DSNFile)
 	}
+	if r.EnvFile != "" {
+		args = append(args, "--env-file", r.EnvFile)
+	}
 	if r.AllowInsecure {
 		args = append(args, "--allow-insecure")
 	}
@@ -95,7 +102,7 @@ func (r AgentRoute) Args() []string {
 // Once the route is not zero the agent gets the credential the Pane uses: a switched remote entry's token (its inline token or what its
 // token_env holds in the Pane's environment), else the Pane's KATA_AUTH_TOKEN or KATA_AUTH_TOKEN_FILE. A token_env the Pane
 // cannot resolve is an error, as it is for the Pane's own connection.
-func (g *Gateway) CurrentAgentRoute(ctx context.Context, workspace string) (AgentRoute, error) {
+func (g *Gateway) CurrentAgentRoute() (AgentRoute, error) {
 	g.mu.Lock()
 	current := g.current
 	g.mu.Unlock()
@@ -131,6 +138,7 @@ func (g *Gateway) CurrentAgentRoute(ctx context.Context, workspace string) (Agen
 			if err := route.paneStorage(); err != nil {
 				return AgentRoute{}, err
 			}
+			route.Creds = paneCredentialEnv(route.Home, true)
 		}
 		return route, nil
 	case os.Getenv("KATA_SERVER") != "":
@@ -150,16 +158,10 @@ func (g *Gateway) CurrentAgentRoute(ctx context.Context, workspace string) (Agen
 	}
 	route.TrustPrivate = envTruthy("KATA_TRUST_PRIVATE_NETWORK")
 	route.paneCredential()
+	route.Creds = paneCredentialEnv(route.Home, route.Server == "")
 	if route.Server == "" {
 		if err := route.paneStorage(); err != nil {
 			return AgentRoute{}, err
-		}
-		if route.Token == "" && route.AuthFile == "" {
-			// The Pane's own connection may have resolved a credential that exists only in the Pane's environment: the token_env of the
-			// remote entry active_daemon or the checkout's pin selected, or of [auth].
-			if err := route.connectionCredential(ctx, g.deadline, workspace); err != nil {
-				return AgentRoute{}, err
-			}
 		}
 	}
 	return route, nil
@@ -188,22 +190,53 @@ func (r *AgentRoute) paneStorage() error {
 	return nil
 }
 
-// connectionCredential sets the token the Pane's connection resolved when the Pane has no KATA_AUTH_TOKEN or KATA_AUTH_TOKEN_FILE:
-// the Token of the catalog entry the connection followed (active_daemon or the checkout's pin), else what the home's [auth] token_env
-// holds (when [auth] has no inline token or token_file, which the agent's kata reads itself).
-func (r *AgentRoute) connectionCredential(ctx context.Context, deadline time.Duration, workspace string) error {
-	catalog, err := ReadCatalogAt(r.Home)
-	if err != nil {
-		return err
+// paneCredentialEnv is the Pane's values of the credential variables home's config.toml names, as NAME=value lines: every
+// [[daemon]] token_env and [auth].token_env, or only [auth].token_env when all is false (a KATA_SERVER route reaches no catalog entry,
+// so the other entries' tokens stay out of the agent). Unset variables, KATA_ names, and values spanning lines are left out.
+func paneCredentialEnv(home string, all bool) string {
+	var names []string
+	if all {
+		if catalog, err := ReadCatalogAt(home); err == nil {
+			for _, d := range catalog.Daemons {
+				names = append(names, d.TokenEnv)
+			}
+		}
 	}
-	if _, entry := resolveEntry(ctx, deadline, workspace, catalog, ""); entry.Name != "" && !entry.Local {
-		r.Token, err = entry.Token()
-		return err
+	if raw, err := os.ReadFile(filepath.Join(home, "config.toml")); err == nil {
+		var f struct {
+			Auth struct {
+				TokenEnv string `toml:"token_env"`
+			} `toml:"auth"`
+		}
+		if _, err := toml.Decode(string(raw), &f); err == nil {
+			names = append(names, f.Auth.TokenEnv)
+		}
 	}
-	if name := homeAuthTokenEnv(r.Home); name != "" {
-		r.Token = strings.TrimSpace(os.Getenv(name))
+	var out strings.Builder
+	seen := map[string]bool{}
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		value := strings.TrimSpace(os.Getenv(name))
+		if name == "" || seen[name] || !credentialName(name) || value == "" || strings.ContainsAny(value, "\r\n") {
+			continue
+		}
+		seen[name] = true
+		out.WriteString(name + "=" + value + "\n")
 	}
-	return nil
+	return out.String()
+}
+
+// credentialName reports whether name is an environment variable name the wrapper may set from an env file: plain, and not one of kata's own.
+func credentialName(name string) bool {
+	if strings.HasPrefix(name, "KATA_") {
+		return false
+	}
+	for i, c := range name {
+		if c != '_' && (c < 'A' || c > 'Z') && (c < 'a' || c > 'z') && (i == 0 || c < '0' || c > '9') {
+			return false
+		}
+	}
+	return name != ""
 }
 
 // paneCredential sets the Pane's own bearer credential on the route: its KATA_AUTH_TOKEN, else its KATA_AUTH_TOKEN_FILE.
@@ -223,7 +256,10 @@ func envTruthy(name string) bool {
 const agentTokenSuffix = ".token"
 
 // agentDSNSuffix names the DSN file beside a prompt file; removePrompt removes it too.
-const agentDSNSuffix = ".dsn"
+const (
+	agentDSNSuffix = ".dsn"
+	agentEnvSuffix = ".env"
+)
 
 // withSecretFiles moves route.Token and route.DSN into new private files beside promptFile (created as kata's own credential files
 // are, so they pass its checks on every OS) and names them in route.TokenFile and route.DSNFile. Nothing else changes.
@@ -257,7 +293,11 @@ func (r AgentRoute) withSecretFiles(promptFile string) (AgentRoute, error) {
 		removeAll(written)
 		return r, err
 	}
-	r.Token, r.DSN = "", ""
+	if err := put(r.Creds, agentEnvSuffix, &r.EnvFile); err != nil {
+		removeAll(written)
+		return r, err
+	}
+	r.Token, r.DSN, r.Creds = "", "", ""
 	return r, nil
 }
 
@@ -326,7 +366,21 @@ func (r AgentRoute) resolve(dir string, wrapper bool) (set, unset []string, err 
 			set = append(set, "KATA_DSN="+dsn)
 		}
 	}
+	var creds []string
+	if r.EnvFile != "" && wrapper {
+		text, err := readTokenFile(r.EnvFile, false)
+		if err != nil {
+			return nil, nil, err
+		}
+		_ = os.Remove(r.EnvFile)
+		for _, line := range strings.Split(text, "\n") {
+			if name, _, ok := strings.Cut(line, "="); ok && credentialName(name) {
+				creds = append(creds, line)
+			}
+		}
+	}
 	credential := func() {
+		set = append(set, creds...)
 		if token != "" {
 			set = append(set, "KATA_AUTH_TOKEN="+token)
 		}
@@ -444,24 +498,4 @@ func homeAuthCredential(home string) (string, error) {
 		}
 	}
 	return "", nil
-}
-
-// homeAuthTokenEnv is the variable [auth] token_env names in config.toml of home, "" when it names none or [auth] has an inline token or
-// a token_file, which outrank it.
-func homeAuthTokenEnv(home string) string {
-	raw, err := os.ReadFile(filepath.Join(home, "config.toml"))
-	if err != nil {
-		return ""
-	}
-	var f struct {
-		Auth struct {
-			Token     string `toml:"token"`
-			TokenFile string `toml:"token_file"`
-			TokenEnv  string `toml:"token_env"`
-		} `toml:"auth"`
-	}
-	if _, err := toml.Decode(string(raw), &f); err != nil || strings.TrimSpace(f.Auth.Token) != "" || strings.TrimSpace(f.Auth.TokenFile) != "" || os.Getenv("KATA_AUTH_TOKEN_FILE") != "" {
-		return ""
-	}
-	return strings.TrimSpace(f.Auth.TokenEnv)
 }

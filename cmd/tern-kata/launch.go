@@ -58,7 +58,7 @@ type LaunchPlan struct {
 	Force, Pause, Preflight bool
 	// AgentRef is `agent --ref`: the qualified Issue ref the agent's KATA_REF is set to; empty leaves the agent without one.
 	AgentRef string
-	// AgentRoute is `agent`'s --home, --db, --schema, --dsn-file, --daemon, --server, --token-file, --auth-file, --allow-insecure and --trust-private-network: the Pane's daemon, which the wrapper turns into
+	// AgentRoute is `agent`'s --home, --db, --schema, --dsn-file, --env-file, --daemon, --server, --token-file, --auth-file, --allow-insecure and --trust-private-network: the Pane's daemon, which the wrapper turns into
 	// the agent's kata environment; zero leaves it as inherited.
 	AgentRoute data.AgentRoute
 	// fallbackAuthor is the --as actor exported to `kata tui`; empty leaves the environment untouched.
@@ -508,7 +508,7 @@ Usage:
   tern-kata worker resume <run-uid> [--as <actor>]
   tern-kata worker abandon <run-uid> [--as <actor>]
   tern-kata update [--force] [--pause]
-  tern-kata agent [--as <actor>] [--ref <ref>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
+  tern-kata agent [--as <actor>] [--ref <ref>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
   tern-kata completion bash|zsh|fish
   tern-kata --version
   tern-kata --help
@@ -630,7 +630,9 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 token becomes KATA_AUTH_TOKEN and which is deleted once read;
                                 --auth-file sets KATA_AUTH_TOKEN_FILE; --db and --schema set KATA_DB and
                                 KATA_POSTGRES_SCHEMA, and --dsn-file names a private file whose content
-                                becomes KATA_DSN and which is deleted once read. Any of them first drops
+                                becomes KATA_DSN and which is deleted once read; --env-file names a
+                                private file of NAME=value lines (the Pane's token_env values) set as
+                                they are and deleted once read. Any of them first drops
                                 the inherited KATA_SERVER, KATA_AUTH_TOKEN, KATA_AUTH_TOKEN_FILE,
                                 KATA_ALLOW_INSECURE, KATA_TRUST_PRIVATE_NETWORK, KATA_DSN, KATA_DB and
                                 KATA_POSTGRES_SCHEMA. The Pane passes them so the agent's kata reaches

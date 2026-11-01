@@ -258,3 +258,22 @@ func TestPlanAgentRouteFlags(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentWrapperSetsTheCredentialVariablesUnderTheirOwnNamesAndDeletesTheFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sh")
+	}
+	dir := t.TempDir()
+	envFile := dir + "/creds"
+	if err := os.WriteFile(envFile, []byte("WORK_TOKEN=work-value\nPANE_AUTH=auth-value\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, status, stderr := runAgent(t, []string{"KATA_AUTH_TOKEN=block-token"}, "agent", "--home", dir, "--env-file", envFile, "--", "sh", "-c",
+		`printf '%s|%s|%s' "$WORK_TOKEN" "$PANE_AUTH" "${KATA_AUTH_TOKEN-unset}"`)
+	if status != 0 || out != "work-value|auth-value|unset" {
+		t.Errorf("status %d, output %q, stderr %q", status, out, stderr)
+	}
+	if _, err := os.Stat(envFile); err == nil {
+		t.Error("the env file outlived the agent's start")
+	}
+}

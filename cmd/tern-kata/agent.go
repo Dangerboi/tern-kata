@@ -9,7 +9,7 @@ import (
 )
 
 // agentUsage is what `tern-kata agent` refuses a command line with.
-const agentUsage = "usage: tern-kata agent [--as <actor>] [--ref <qualified ref>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]"
+const agentUsage = "usage: tern-kata agent [--as <actor>] [--ref <qualified ref>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]"
 
 // planAgent parses `tern-kata agent [--as <actor>] [--ref <qualified ref>] -- <command> [args...]` (args[0] is "agent"). --as and --ref
 // come before the lone --, and everything after it is the command and its arguments, verbatim: Operands holds them.
@@ -78,6 +78,8 @@ func parseAgentRoute(args []string, i *int, route *data.AgentRoute) (matched boo
 		field, what = &route.DB, "the Pane's KATA_DB path"
 	case "--schema":
 		field, what = &route.Schema, "the Pane's KATA_POSTGRES_SCHEMA"
+	case "--env-file":
+		field, what = &route.EnvFile, "the private credential env file the Pane wrote"
 	case "--dsn-file":
 		field, what = &route.DSNFile, "the private DSN file the Pane wrote"
 	case "--allow-insecure", "--trust-private-network":

@@ -1327,7 +1327,7 @@ func TestAgentStartedFromAPaneOnAnotherDaemonCarriesThePanesRoute(t *testing.T) 
 		"trust alone is no route":                    {env: map[string]string{"KATA_TRUST_PRIVATE_NETWORK": "1", "KATA_AUTH_TOKEN": "pane-token"}},
 		"insecure is only 1/true":                    {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_ALLOW_INSECURE": "yes"}, want: []string{"--home", "DEFAULT", "--server", "https://kata.example"}},
 		"a switch, token_env":                        {env: map[string]string{"KATA_HOME": home, "WORK_TOKEN": "work-token", "KATA_SERVER": "https://ignored.example"}, current: "work", want: []string{"--home", home, "--daemon", "work", "--token-file", "TOKEN"}, wantToken: "work-token"},
-		"a local entry's own token beats the Pane's": {env: map[string]string{"KATA_HOME": home, "KATA_AUTH_TOKEN": "pane-token", "LOCAL_TOKEN": "entry-token"}, current: "owned", want: []string{"--home", home, "--daemon", "owned", "--token-file", "TOKEN"}, wantToken: "entry-token"},
+		"a local entry's own token beats the Pane's": {env: map[string]string{"KATA_HOME": home, "KATA_AUTH_TOKEN": "pane-token", "LOCAL_TOKEN": "entry-token"}, current: "owned", want: []string{"--home", home, "--daemon", "owned", "--token-file", "TOKEN", "--env-file", "ENV"}, wantToken: "entry-token"},
 		"a switch to a local":                        {env: map[string]string{"KATA_HOME": home}, current: "mine", want: []string{"--home", home, "--daemon", "mine"}},
 		"a local, the Pane's token":                  {env: map[string]string{"KATA_HOME": home, "KATA_AUTH_TOKEN": "pane-token"}, current: "mine", want: []string{"--home", home, "--daemon", "mine", "--token-file", "TOKEN"}, wantToken: "pane-token"},
 		"a local, the Pane's file":                   {env: map[string]string{"KATA_HOME": home, "KATA_AUTH_TOKEN_FILE": "/run/t"}, current: "mine", want: []string{"--home", home, "--daemon", "mine", "--auth-file", "/run/t"}},
@@ -1346,6 +1346,8 @@ func TestAgentStartedFromAPaneOnAnotherDaemonCarriesThePanesRoute(t *testing.T) 
 				switch want[i] {
 				case "TOKEN":
 					want[i] = tokenFile
+				case "ENV":
+					want[i] = got.Entry.PromptFile + ".env"
 				case "DEFAULT":
 					want[i] = filepath.Join(os.Getenv("HOME"), ".kata")
 				}
@@ -1545,11 +1547,11 @@ func TestAgentStartIsRefusedBeforeAnythingIsWrittenWhenTheRouteCannotWork(t *tes
 func TestRouteFromAPaneWithoutKataHomeNamesTheDefaultHomeOnlyWhenRouted(t *testing.T) {
 	routeEnv(t, nil)
 	g := NewGateway(nil)
-	if route, err := g.CurrentAgentRoute(context.Background(), ""); err != nil || !route.IsZero() {
+	if route, err := g.CurrentAgentRoute(); err != nil || !route.IsZero() {
 		t.Errorf("a default Pane's route is %+v, %v; want zero", route, err)
 	}
 	t.Setenv("KATA_SERVER", "https://kata.example")
-	route, err := g.CurrentAgentRoute(context.Background(), "")
+	route, err := g.CurrentAgentRoute()
 	if want := filepath.Join(os.Getenv("HOME"), ".kata"); err != nil || route.Home != want {
 		t.Errorf("a routed Pane's Home = %q, %v; want %q", route.Home, err, want)
 	}
@@ -1603,22 +1605,73 @@ func TestRoutedAgentDoesNotCarryStorageToARemoteRoute(t *testing.T) {
 	}
 }
 
-func TestRoutedAgentCarriesTheCredentialThePanesConnectionResolved(t *testing.T) {
-	for name, config := range map[string]string{
-		"the active remote entry's token_env": "active_daemon = \"work\"\n[[daemon]]\nname = \"work\"\nurl = \"https://kata.example\"\ntoken_env = \"WORK_TOKEN\"\n",
-		"[auth] token_env":                    "[auth]\ntoken_env = \"WORK_TOKEN\"\n",
+func TestRoutedAgentCarriesTheCredentialVariablesTheHomeNamesNotAGlobalToken(t *testing.T) {
+	config := "active_daemon = \"work\"\n[auth]\ntoken_env = \"PANE_AUTH\"\n" +
+		"[[daemon]]\nname = \"work\"\nurl = \"https://kata.example\"\ntoken_env = \"WORK_TOKEN\"\n" +
+		"[[daemon]]\nname = \"p\"\nlocal = true\nhome = \"/profiles/p\"\ninstance_uid = \"01HZZZZZZZZZZZZZZZZZZZZZZZ\"\ntoken_env = \"PROFILE_TOKEN\"\n" +
+		"[[daemon]]\nname = \"unused\"\nurl = \"https://u.example\"\ntoken_env = \"UNSET_TOKEN\"\n"
+	home := catalogHome(t, config)
+	routeEnv(t, map[string]string{"KATA_HOME": home})
+	t.Setenv("PANE_AUTH", "auth-value")
+	t.Setenv("PROFILE_TOKEN", "profile-value")
+	t.Setenv("WORK_TOKEN", "work-value")
+	t.Setenv("UNSET_TOKEN", "")
+	g, dirs := agentGateway(t)
+	ran, got := startRoutedAgent(t, g, dirs, nil)
+	if got.Err != nil {
+		t.Fatal(got.Err)
+	}
+	if strings.Contains(strings.Join(ran, " "), "--token-file") {
+		t.Errorf("a global token is carried for a connection kata scopes by entry: %q", ran)
+	}
+	text, err := readTokenFile(got.Entry.PromptFile+".env", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range []string{"WORK_TOKEN=work-value", "PROFILE_TOKEN=profile-value", "PANE_AUTH=auth-value"} {
+		if !strings.Contains(text, line+"\n") && !strings.HasSuffix(text, line) {
+			t.Errorf("env file %q lacks %s", text, line)
+		}
+	}
+	if strings.Contains(text, "UNSET_TOKEN") {
+		t.Errorf("an unset variable was written: %q", text)
+	}
+	removePrompt(got.Entry.PromptFile)
+	if _, err := os.Stat(got.Entry.PromptFile + ".env"); err == nil {
+		t.Error("the env file outlived its prompt file")
+	}
+	// The route's own environment carries no KATA_AUTH_TOKEN, so a checkout pinned to another url receives none.
+	checkout(t, "version = 1\n[server]\nurl = \"http://127.0.0.1:18777\"\n")
+	envFile := tokenFile(t, "WORK_TOKEN=work-value\nKATA_SERVER=evil\nPATH=/x\n")
+	set, _, err := (AgentRoute{Home: home, EnvFile: envFile}).Env("")
+	if err != nil || slices.Contains(set, "KATA_AUTH_TOKEN=work-value") || !slices.Contains(set, "WORK_TOKEN=work-value") || slices.Contains(set, "KATA_SERVER=evil") {
+		t.Errorf("set %q, err %v", set, err)
+	}
+	if _, err := os.Stat(envFile); err == nil {
+		t.Error("the env file outlived the wrapper's read")
+	}
+}
+
+func TestAgentRouteEnvFileFollowsTheRoute(t *testing.T) {
+	home := catalogHome(t, "[auth]\ntoken_env = \"PANE_AUTH\"\n[[daemon]]\nname = \"mine\"\nlocal = true\n[[daemon]]\nname = \"work\"\nurl = \"https://w.example\"\ntoken_env = \"WORK_TOKEN\"\n")
+	for name, tc := range map[string]struct {
+		env     map[string]string
+		current string
+		want    string
+	}{
+		"a server route sends only [auth]":                {env: map[string]string{"KATA_SERVER": "https://s", "KATA_HOME": home}, want: "PANE_AUTH=a\n"},
+		"a plain local entry (own [auth] token_env)":      {env: map[string]string{"KATA_HOME": home}, current: "mine", want: "WORK_TOKEN=w\nPANE_AUTH=a\n"},
+		"a switched remote entry uses its explicit token": {env: map[string]string{"KATA_HOME": home}, current: "work", want: ""},
 	} {
 		t.Run(name, func(t *testing.T) {
-			home := catalogHome(t, config)
-			routeEnv(t, map[string]string{"KATA_HOME": home, "WORK_TOKEN": "env-only-token"})
-			checkout(t, "")
-			g, dirs := agentGateway(t)
-			_, got := startRoutedAgent(t, g, dirs, nil)
-			if got.Err != nil {
-				t.Fatal(got.Err)
-			}
-			if tok, err := readTokenFile(got.Entry.PromptFile+".token", false); err != nil || tok != "env-only-token" {
-				t.Errorf("token file holds %q, %v", tok, err)
+			routeEnv(t, tc.env)
+			t.Setenv("PANE_AUTH", "a")
+			t.Setenv("WORK_TOKEN", "w")
+			g, _ := agentGateway(t)
+			g.current = tc.current
+			route, err := g.CurrentAgentRoute()
+			if err != nil || route.Creds != tc.want {
+				t.Errorf("Creds %q, %v; want %q", route.Creds, err, tc.want)
 			}
 		})
 	}
