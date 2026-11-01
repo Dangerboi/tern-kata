@@ -11,7 +11,10 @@ if [[ -z ${SMOKE_SHARD:-} && $# -eq 0 ]]; then
   bin_dir=$(mktemp -d)
   trap 'rm -rf "$bin_dir"; trap - TERM; kill 0' INT TERM
   (cd "$repo" && go build -o "$bin_dir/tern-kata" ./cmd/tern-kata)
-  slow=(51-claim-expiry.sh 60-cron-made-issue.sh 62-job-card.sh)
+  # Steps 81 and 82 and supervision.sh serve a release built at the current version; one build serves all three.
+  release_version=$(sed -n 's/^version *= *"\(.*\)"/\1/p' "$repo/plugin.toml")
+  "$repo/scripts/release.sh" "v$release_version" "$bin_dir/dist" >/dev/null
+  slow=(51-claim-expiry.sh 60-cron-made-issue.sh 62-job-card.sh 81-install-from-release.sh 82-update-from-release.sh)
   # The rest is cut at steps that start from the freshly launched Pane (each shard has its own seeded Project), so the
   # five groups run side by side: steps 01-21, 22-31, 32-44, 45-57 and 58-76.
   groups=("" "" "" "" "")
@@ -27,13 +30,14 @@ if [[ -z ${SMOKE_SHARD:-} && $# -eq 0 ]]; then
     groups[index]+="$step "
   done
   jobs=()
-  export SMOKE_SHARD=1 SMOKE_BIN="$bin_dir/tern-kata"
+  export SMOKE_SHARD=1 SMOKE_BIN="$bin_dir/tern-kata" SMOKE_DIST="$bin_dir/dist"
   for group in "${groups[@]}"; do
     "$0" $group & jobs+=($!)
   done
   for name in "${slow[@]}"; do "$0" "$repo/smoke/steps/$name" & jobs+=($!); done
   "$repo/smoke/plugin.sh" "$SMOKE_BIN" & jobs+=($!)
   "$repo/smoke/supervision.sh" "$SMOKE_BIN" & jobs+=($!)
+  "$repo/smoke/release-check.sh" & jobs+=($!)
   failed=0
   for job in "${jobs[@]}"; do wait "$job" || failed=1; done
   rm -rf "$bin_dir"
@@ -45,6 +49,8 @@ fi
 tmp=$(mktemp -d)
 server_pid=
 proxy_pid=
+# HTTP servers the steps start (release dist/ served from a local port): stopped on every exit.
+http_pids=()
 export CGO_ENABLED=0
 export KATA_HOME="$tmp/kata"
 export TERN_CONFIG_DIR="$tmp/config"
@@ -57,6 +63,10 @@ unset KATA_SERVER KATA_AUTH_TOKEN KATA_AUTHOR TMUX STY ZELLIJ TERN_TSP
 cleanup() {
   status=$?
   trap - EXIT
+  for http_pid in ${http_pids[@]+"${http_pids[@]}"}; do
+    kill "$http_pid" 2>/dev/null || true
+    wait "$http_pid" 2>/dev/null || true
+  done
   if [[ -n "$proxy_pid" ]]; then
     kill "$proxy_pid" 2>/dev/null || true
     wait "$proxy_pid" 2>/dev/null || true
@@ -195,4 +205,5 @@ quit_app
 [[ -z ${SMOKE_SHARD:-} ]] || exit 0
 "$repo/smoke/plugin.sh" "$tmp/tern-kata"
 "$repo/smoke/supervision.sh" "$tmp/tern-kata"
+"$repo/smoke/release-check.sh"
 printf '\nSmoke passed\n'

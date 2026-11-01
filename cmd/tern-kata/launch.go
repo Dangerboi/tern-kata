@@ -29,7 +29,7 @@ type LaunchPlan struct {
 	// TUIArgs are the arguments only `kata tui` takes (FallbackArgs without the --issue translation); inside Tern nothing reads
 	// them, so main refuses them there instead of dropping them unseen.
 	TUIArgs []string
-	// Subcommand is "attach", "detach", "recur", "run", "views", "worker", "agent" or "completion" when it was the first argument; main runs it
+	// Subcommand is "attach", "detach", "recur", "run", "views", "worker", "update", "agent" or "completion" when it was the first argument; main runs it
 	// without Tern.
 	Subcommand string
 	// TargetRef is the Issue as attach, detach and recur take it (what `kata show` takes: a short id, <project>#<short id> or a ULID),
@@ -52,6 +52,9 @@ type LaunchPlan struct {
 	Replace   bool
 	// InitFlags are `worker init`'s --executor, --actor, --command, --model and --thinking by name without dashes, as typed; unset ones are absent.
 	InitFlags map[string]string
+	// Force and Pause are `update --force` and `update --pause`. Preflight is `update --preflight`, the check one release
+	// runs of another; it is not for people, so usage and completion leave it out.
+	Force, Pause, Preflight bool
 	// fallbackAuthor is the --as actor exported to `kata tui`; empty leaves the environment untouched.
 	fallbackAuthor string
 }
@@ -82,7 +85,7 @@ type usageError struct{ error }
 func (e usageError) Unwrap() error { return e.error }
 
 // subcommands are the first arguments that name a command run without Tern.
-var subcommands = []string{"attach", "detach", "recur", "run", "views", "worker", "agent", "completion"}
+var subcommands = []string{"attach", "detach", "recur", "run", "views", "worker", "update", "agent", "completion"}
 
 // completionShells are the shells `tern-kata completion` writes a script for.
 var completionShells = []string{"bash", "zsh", "fish"}
@@ -122,6 +125,9 @@ func scanFlags(flags []string, flag string) bool {
 		if i == 0 || !strings.HasPrefix(arg, "--") || arg == "--help" || arg == "--version" {
 			continue
 		}
+		if subcommand == "update" && (arg == "--force" || arg == "--pause" || arg == "--preflight") {
+			continue
+		}
 		if subcommand == "worker" {
 			if arg == "--takeover" || arg == "--now" || arg == "--json" {
 				continue
@@ -143,7 +149,7 @@ func scanFlags(flags []string, flag string) bool {
 				continue
 			}
 		}
-		if subcommand != "completion" {
+		if subcommand != "completion" && subcommand != "update" {
 			start := i
 			if _, matched, err := parseAs(flags, &i); matched {
 				if err != nil && i == start+1 && i < len(flags) && strings.HasPrefix(flags[i], "--") {
@@ -285,6 +291,18 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 			flagsEnded = true
 			continue
 		}
+		if plan.Subcommand == "update" && arg == "--force" {
+			plan.Force = true
+			continue
+		}
+		if plan.Subcommand == "update" && arg == "--pause" {
+			plan.Pause = true
+			continue
+		}
+		if plan.Subcommand == "update" && arg == "--preflight" {
+			plan.Preflight = true
+			continue
+		}
 		if plan.Subcommand == "worker" && arg == "--takeover" {
 			plan.Takeover = true
 			continue
@@ -326,8 +344,8 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 				continue
 			}
 		}
-		if plan.Subcommand == "completion" {
-			return LaunchPlan{}, fmt.Errorf("completion: unknown flag %s", arg) // the script is the same for every actor
+		if plan.Subcommand == "completion" || plan.Subcommand == "update" {
+			return LaunchPlan{}, fmt.Errorf("%s: unknown flag %s", plan.Subcommand, arg) // neither writes as an actor
 		}
 		actor, matched, err := parseAs(args, &i)
 		if err != nil {
@@ -365,11 +383,13 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 		return LaunchPlan{}, fmt.Errorf("views: --json applies to `tern-kata views show` only")
 	case plan.Subcommand == "views" && (plan.Replace || len(plan.ViewFlags) > 0) && !(len(operands) > 0 && operands[0] == "add"):
 		return LaunchPlan{}, fmt.Errorf("views: --base, --project, --status, --owner, --label, --relationship, --search and --replace apply to `tern-kata views add` only")
+	case plan.Subcommand == "update" && len(operands) > 0:
+		return LaunchPlan{}, fmt.Errorf("usage: tern-kata update [--force] [--pause]")
 	case plan.Subcommand == "completion" && (len(operands) != 1 || !slices.Contains(completionShells, operands[0])):
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata completion bash|zsh|fish")
 	}
 	plan.Actor = resolveActor(plan.fallbackAuthor, lookup)
-	if plan.Subcommand == "worker" || plan.Subcommand == "completion" || plan.Subcommand == "views" {
+	if plan.Subcommand == "worker" || plan.Subcommand == "completion" || plan.Subcommand == "views" || plan.Subcommand == "update" {
 		plan.Operands = operands
 		return plan, nil
 	}
@@ -474,6 +494,7 @@ Usage:
   tern-kata worker doctor
   tern-kata worker resume <run-uid> [--as <actor>]
   tern-kata worker abandon <run-uid> [--as <actor>]
+  tern-kata update [--force] [--pause]
   tern-kata agent --as <actor> -- <command> [args...]
   tern-kata completion bash|zsh|fish
   tern-kata --version
@@ -568,6 +589,21 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 and the run's slot and overlap gate are freed. A running run is stopped
                                 first (SIGTERM, SIGKILL after 10 s); a run this machine lost the state of
                                 is recorded unknown ("local state lost"), a quarantined one acknowledged
+  update [--force] [--pause]    bring this machine's tern-kata to the latest release: reads
+                                version.txt, downloads this OS's archive and checks its SHA-256
+                                against checksums.txt, then swaps the running binary (on Windows
+                                the old file is renamed aside, so Panes and the worker may keep
+                                running). Says "up to date" and leaves the binary alone when this
+                                is the latest release, and never downgrades; either way it updates
+                                this machine's installed tern-kata plugin copy to match, and after a
+                                swap gives a supervised Worker an idle stop so it comes back as the
+                                new binary. Only a release build updates itself: a go install or
+                                source build prints what to run instead. TERN_KATA_BASE_URL points
+                                it at another dist/ folder. --force installs even when the new
+                                release's pre-flight refuses this machine (a kata daemon too old, a
+                                worker.toml it rejects); --pause waits for Enter after a success,
+                                so a Pane shows the result before it closes.
+                                Exit 0 when the binary is at the latest version, else 1
   agent --as <actor> -- <command> [args...]
                                 run the command with KATA_AUTHOR set to the actor (replacing
                                 any value), its arguments passed on as typed and its exit

@@ -94,7 +94,7 @@ Agents: follow these steps only when the user has asked you to install tern-kata
 1. Check that `kata` is on `PATH`. If it isn't, stop and tell the user that tern-kata requires kata, which they install themselves: https://katatracker.com/.
 2. Run the install one-liner from [Install](#install) step 1 for this machine's OS.
 3. Run `tern-kata --version`. If it isn't found, pass on the `PATH` instructions the install script printed.
-4. If the script reported that `tern` is not on `PATH`, tell the user to run `tern plugin install github.com/Dangerboi/tern-kata` on the machine that shows the Tern window. Without it, the Open kata command, `F9` and kata links don't work.
+4. If the script reported that `tern` is not on `PATH`, tell the user to run the plugin-only one-liner from [Install](#install) step 2 for the OS of the machine that shows the Tern window. Without the plugin, the Open kata command, `F9` and kata links don't work.
 5. Ask the user whether to add the rule below to your global rules file, the one you load in every repo. The links only work when your chat is shown in Tern with the window plugin installed. Copy the rule block exactly, and skip it if the file already contains it. For OMP the file is `~/.omp/agent/RULES.md`.
 
    ```markdown
@@ -117,7 +117,7 @@ Agents: follow these steps only when the user has asked you to install tern-kata
    irm https://raw.githubusercontent.com/Dangerboi/tern-kata/main/install.ps1 | iex
    ```
 
-   They install the latest release to `~/.local/bin` (`%LOCALAPPDATA%\Programs\tern-kata` on Windows, added to your user `PATH`), verify its checksum, and also install the window plugin when `tern` is on `PATH`. Run in a terminal with `npx` (or `bunx`) available, they then offer to install the [agent skills](docs/guide/agents.md#agent-skills). Once the plugin is installed, the **Install tern-kata** palette command runs the same one-liner in a new Pane. `tern-kata --help` lists every subcommand and flag, and `tern-kata completion bash|zsh|fish` prints a completion script (`source <(tern-kata completion bash)`, or `tern-kata completion fish | source`).
+   They install the latest release to `~/.local/bin` (`%LOCALAPPDATA%\Programs\tern-kata` on Windows, added to your user `PATH`), verify its checksum, and also install the window plugin from the same release when `tern` is on `PATH` (a plugin you linked with `tern plugin link` is left as it is). Run in a terminal with `npx` (or `bunx`) available, they then offer to install the [agent skills](docs/guide/agents.md#agent-skills). Once the plugin is installed, the **Install tern-kata** palette command runs the same one-liner in a new Pane. `tern-kata --help` lists every subcommand and flag, and `tern-kata completion bash|zsh|fish` prints a completion script (`source <(tern-kata completion bash)`, or `tern-kata completion fish | source`).
 
    Alternatively, with Go 1.27+:
 
@@ -127,15 +127,39 @@ Agents: follow these steps only when the user has asked you to install tern-kata
 
    Go puts the binary in `~/go/bin` (`%USERPROFILE%\go\bin` on Windows); it must be on your shell's `PATH`.
 
-2. On the **machine showing the Tern window**, install the window plugin:
+2. On the **machine showing the Tern window**, install the window plugin from the release (needs `tern` on `PATH`; no binary, `PATH` or skills step). On Linux or macOS:
 
    ```sh
-   tern plugin install github.com/Dangerboi/tern-kata
+   curl -fsSL https://raw.githubusercontent.com/Dangerboi/tern-kata/main/install.sh | TERN_KATA_PLUGIN_ONLY=1 sh
    ```
+
+   On Windows, in PowerShell:
+
+   ```powershell
+   $env:TERN_KATA_PLUGIN_ONLY = '1'; irm https://raw.githubusercontent.com/Dangerboi/tern-kata/main/install.ps1 | iex
+   ```
+
+   Run the same line again to update the plugin. It fails when `tern` is not on `PATH`, and leaves a plugin you linked with `tern plugin link` as it is, saying so.
 
 The window machine needs only the window plugin; kata and tern-kata run on the session host. For example, with a Tern window on Windows 11 and Panes on an Ubuntu host, install the window plugin on Windows and kata and tern-kata on Ubuntu. If the session host and the window are the same machine, do both steps on it.
 
 In a directory bound to a kata Project, `tern-kata` opens that Project's Issues; anywhere else it opens Inbox. [How it works](docs/guide/pages-and-board.md#how-it-works) explains the three parts of the plugin.
+
+## Updating
+
+Run `tern-kata update` on the session host to bring it to the latest release. It downloads the archive for this OS, checks its SHA-256 against the release's `checksums.txt`, and replaces the running binary; on Windows that works while Panes and the Worker run. It says "up to date" when you already have the latest release, and it never downgrades. After the swap it also brings this machine's installed copy of the window plugin to the same release (an up-to-date run still does that, leaving a linked copy as it is), and a Worker that the plugin restarts after a stop gets an idle stop, so it comes back as the new binary once its runs finish. Open Panes keep the old version until you reopen them, so it asks you to. `tern-kata update --pause` waits for Enter after a success, so a Pane shows the result before it closes.
+
+Only a release build updates itself. A binary built with `go install` gets the command to run again (`go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest`), and one built from source says to rebuild. To bring the agent skills along, run `npx skills update -g` (or `bunx skills update -g`). Setting `TERN_KATA_BASE_URL` points update, and the install scripts, at another folder holding a release's files (for a rollback, a mirror or a test).
+
+### Update tern-kata
+
+The **Update tern-kata** palette command runs `tern-kata update --pause` in a new Pane on the focused Pane's machine, so the session host is updated first. Press Enter in the Pane to close it after a success; a failure leaves the Pane open so you can read why, and nothing more happens. When that machine is not the one showing the Tern window and the update succeeded, the command then reinstalls the window plugin on the window's machine without a terminal, from the same release's tag, and toasts "tern-kata plugin updated to vX" once the new plugin has loaded (or the install script's last error line if it failed). When the session host is the window's own machine, `tern-kata update` already updated the plugin. On a device that can't run programs (iOS), the toast says the session host was updated but this device's plugin wasn't. `TERN_KATA_BASE_URL`, when set in the window's environment, is used for the plugin's files and for reading `version.txt`.
+
+### Release check
+
+The window plugin looks for a new release once a day. At window start, and every 24 hours while the window stays open, it reads `version.txt` from the latest GitHub release, but only when the last check is over 24 hours old (the time is kept in the plugin's store, so a second window or a restart doesn't ask again). When that release is newer than the plugin, a toast says "tern-kata vX is out (this window's plugin is vY). Run Update tern-kata from the palette." once per version on this machine. A failed request is silent and counts as a check. Nothing but that one small file is fetched, and nothing is installed by the check.
+
+Turn it off with the **Turn tern-kata update checks off/on** palette command, which toasts the new state, or by setting `TERN_KATA_NO_UPDATE_CHECK` to any non-empty value in the window's environment: the variable keeps checks off on that machine whatever the toggle says. A plugin linked with `tern plugin link` never checks, since that is a development machine; the toggle command says so. `TERN_KATA_BASE_URL` points the check at another folder holding `version.txt`, such as a local `dist/`.
 
 ## Troubleshooting
 

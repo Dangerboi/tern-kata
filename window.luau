@@ -1,13 +1,47 @@
 --!strict
 
 local placement = require("./placement")
+local releases = require("./releases")
 
 -- kata Panes this plugin launched, until they close: each is reaped on its own, since every tab may have one.
 local launched: { [number]: boolean } = {}
 local fresh: { [number]: boolean } = {}
 -- Issue reference per new kata Pane, sent over TSP once its surface is live, so it never passes through a shell.
 local pending: { [number]: string? } = {}
+-- The Panes `Update tern-kata` launched: they run the tern-kata program but are not a kata to link or mark.
+-- Kept in `tern.kv` too, because a plugin reload (a local update brings the plugin along) empties this table while the
+-- Pane is still open; `pane_closed` removes the id from both.
+local KV_UPDATE_PANES = "update.panes"
+local UPDATE_PANE_TTL = 24 * 60 * 60
+local updatePanes: { [number]: boolean } = {}
 
+-- `tern.kv` is shared by every window, so the key is read, changed by one id and written back in one step rather than
+-- written from this VM's copy. Entries carry the time they were added; one older than a day is dropped, so an id left
+-- behind by a Pane that ended while no window was open cannot outlive a later Pane that reuses it.
+local function readUpdatePanes(): { { pane: number, at: number } }
+    local entries: { { pane: number, at: number } } = {}
+    local ok, saved = pcall(tern.kv.get, KV_UPDATE_PANES)
+    if not ok or type(saved) ~= "table" then return entries end
+    local now = os.time()
+    for _, e in saved :: { any } do
+        if type(e) == "table" and type(e.pane) == "number" and type(e.at) == "number" and now - e.at < UPDATE_PANE_TTL then
+            table.insert(entries, {pane = e.pane, at = e.at})
+        end
+    end
+    return entries
+end
+
+local function changeUpdatePanes(id: number, add: boolean)
+    local entries = readUpdatePanes()
+    for i = #entries, 1, -1 do
+        if entries[i].pane == id then table.remove(entries, i) end
+    end
+    if add then table.insert(entries, {pane = id, at = os.time()}) end
+    tern.kv.set(KV_UPDATE_PANES, if #entries > 0 then entries else nil)
+    if add then updatePanes[id] = true else updatePanes[id] = nil end
+end
+
+for _, e in readUpdatePanes() do updatePanes[e.pane] = true end
 -- A kata Pane has the title `tern-kata` (which the binary sets), or a program whose file name is tern-kata or
 -- tern-kata.exe, split on either path separator so Windows paths match. A longer name merely containing it does not.
 local function isKataProgram(program: string?): boolean
@@ -17,7 +51,8 @@ local function isKataProgram(program: string?): boolean
 end
 
 local function isKata(info: PaneInfo?): boolean
-    return info ~= nil and info.exited == nil and (info.title == "tern-kata" or isKataProgram(info.program))
+    return info ~= nil and info.exited == nil and not updatePanes[info.pane]
+        and (info.title == "tern-kata" or isKataProgram(info.program))
 end
 
 -- kata's mark, the katakana ka from kata's favicon, replaces the terminal icon on kata Panes' tab faces. Tern's program icons
@@ -193,9 +228,9 @@ local function exitedRightAway(cx: WindowCx, pane: number, status: number)
     fresh[pane] = nil
     if status == 0 then return end
     if status == 2 or status == 3 then
-        cx:toast("error", "tern-kata failed to start", "Run tern-kata in a shell to see why")
+        cx:toast("error", "tern-kata failed to start", "tern-kata may be older than this plugin: run Update tern-kata from the command palette, or run tern-kata in a shell to see why")
     elseif status == 1 then
-        cx:toast("error", "tern-kata didn't start", "If it isn't installed, run Install tern-kata from the command palette (or the install script in the README). Otherwise run tern-kata in a shell to see why")
+        cx:toast("error", "tern-kata didn't start", "It may be older than this plugin: run Update tern-kata; if it isn't installed, run Install tern-kata. Or run tern-kata in a shell to see why")
     else
         cx:toast("error", "tern-kata is not installed or not on PATH", "Run Install tern-kata from the command palette, or the install script in the README")
     end
@@ -411,6 +446,9 @@ end)
 
 tern.on("pane_closed", function(ev, cx)
     launched[ev.pane] = nil
+    if updatePanes[ev.pane] then
+        changeUpdatePanes(ev.pane, false)
+    end
     pending[ev.pane] = nil
     relayed[ev.pane] = nil
     retrying[ev.pane] = nil
@@ -474,6 +512,136 @@ tern.on("agent_state", function(ev, cx)
     relayAll(cx, false)
 end)
 
+-- The release check: window start, then every 24 hours while the window stays open. The decisions are in releases.luau; this
+-- reads the clock, the environment, the store and the network. A failed fetch is a check like any other and stays silent.
+local KV_LAST_CHECK = "release_check.last"
+local KV_TOASTED = "release_check.toasted"
+local KV_OFF = "release_check.off"
+local DEFAULT_RELEASE_BASE = "https://github.com/Dangerboi/tern-kata/releases/latest/download"
+
+local function envOff(): boolean
+    local value = tern.getenv("TERN_KATA_NO_UPDATE_CHECK")
+    return value ~= nil and value ~= ""
+end
+
+local function ownVersion(): string?
+    local ok, toml = pcall(tern.fs.read, tern.plugin.dir .. "/plugin.toml")
+    if not ok or type(toml) ~= "string" then return nil end
+    return releases.pluginVersion(toml)
+end
+
+-- `tern plugin dir`, asked once per load. A failed or raising ask (iOS) leaves nil, which counts the copy as installed.
+local pluginDirAsked = false
+local pluginDir: string? = nil
+local pluginDirWaiting: { () -> () } = {}
+
+local function withPluginDir(fn: () -> ())
+    if pluginDirAsked then fn(); return end
+    table.insert(pluginDirWaiting, fn)
+    if #pluginDirWaiting > 1 then return end
+    local function answer(dir: string?)
+        pluginDirAsked = true
+        pluginDir = dir
+        local waiting = pluginDirWaiting
+        pluginDirWaiting = {}
+        for _, waiter in waiting do waiter() end
+    end
+    local ok = pcall(function()
+        tern.process.run({"tern", "plugin", "dir"}, {timeout_ms = 10000}, function(result)
+            local dir = result.status == 0 and result.stdout:match("^%s*(.-)%s*$") or nil
+            answer(dir ~= "" and dir or nil)
+        end)
+    end)
+    if not ok then answer(nil) end
+end
+
+-- Where `version.txt` is: the user's TERN_KATA_BASE_URL, else the latest GitHub release.
+local function versionTextUrl(): string
+    local configured = tern.getenv("TERN_KATA_BASE_URL")
+    local base: string = (configured ~= nil and configured ~= "") and configured or DEFAULT_RELEASE_BASE
+    return (base:gsub("/+$", "")) .. "/version.txt"
+end
+
+local function currentCheck(): releases.Check
+    return {
+        envOff = envOff(),
+        linked = releases.isLinked(tern.plugin.dir, pluginDir),
+        toggleOff = tern.kv.get(KV_OFF) == true,
+        now = os.time(),
+        lastCheck = (function(): number?
+            local last = tern.kv.get(KV_LAST_CHECK)
+            return type(last) == "number" and last or nil
+        end)(),
+    }
+end
+
+local function releaseCheck()
+    withPluginDir(function()
+        local check = currentCheck()
+        if releases.shouldCheck(check) then
+            -- Stored before the fetch: a failure counts as a check, and so does a second window starting meanwhile.
+            tern.kv.set(KV_LAST_CHECK, check.now)
+            tern.fetch(versionTextUrl(), {timeout_ms = 15000}, function(result, cx2)
+                if not cx2 or result.error ~= nil or result.status ~= 200 then return end
+                local own = ownVersion()
+                if not own then return end
+                local text, version = releases.toast(result.body, own, tern.kv.get(KV_TOASTED) :: string?)
+                if text and version then
+                    tern.kv.set(KV_TOASTED, version)
+                    cx2:toast("info", text)
+                end
+            end)
+        end
+        -- While the window stays open the check comes round again; it fetches only when a day has passed since the last one.
+        -- The variable and a linked plugin hold for the whole load; only the toggle can change meanwhile.
+        local off = releases.offBecause(check)
+        if off == nil or off == "toggle" then tern.timer(releases.DAY * 1000, releaseCheck) end
+    end)
+end
+
+-- The window machine's plugin step of Update tern-kata leaves its pending key behind; the plugin that loads after a
+-- successful install is the version it names. A key of another version waits (the install may still be running) until
+-- it is 10 minutes old.
+local KV_PENDING = "update.pending"
+
+-- Run once per load of this file: at window start, and after a plugin reload, which runs the file again without
+-- window_start (the plugin the install left behind reports its update and carries the daily check on).
+local loaded = false
+
+local function onLoad(cx: WindowCx)
+    if loaded then return end
+    loaded = true
+    local pending = tern.kv.get(KV_PENDING)
+    if pending ~= nil then
+        local own = ownVersion()
+        local outcome = if own then releases.pendingOutcome(pending, own, os.time()) else "wait"
+        if outcome == "updated" then
+            tern.kv.set(KV_PENDING, nil)
+            cx:toast("info", "tern-kata plugin updated to v" .. (pending :: any).version)
+        elseif outcome == "drop" then
+            tern.kv.set(KV_PENDING, nil)
+        end
+    end
+    releaseCheck()
+end
+
+tern.on("window_start", onLoad)
+tern.timer(1, function(cx)
+    if cx then onLoad(cx) end
+end)
+
+tern.command({
+    id = "update-checks",
+    title = "Turn tern-kata update checks off/on",
+    run = function(cx)
+        withPluginDir(function()
+            local off, text = releases.toggle(currentCheck())
+            tern.kv.set(KV_OFF, off)
+            cx:toast("info", text)
+        end)
+    end,
+})
+
 tern.command({
     id = "open",
     title = "Open kata",
@@ -505,6 +673,67 @@ tern.command({
         }):next(function(choice, err, cx2)
             if not choice or not cx2 then return end
             launch(cx2, choice.pause and (choice.command .. "; " .. choice.pause) or choice.command)
+        end)
+    end,
+})
+
+-- Update tern-kata: the session host first, in a Pane on the focused Pane's host. The window machine's plugin follows when
+-- the update ended well and that host is another machine; on the window's own machine the update brought the plugin along.
+local function lastStderrLine(text: string): string
+    local line = ""
+    for l in text:gmatch("[^\r\n]+") do line = l end
+    return line
+end
+
+local function updatePlugin(cx: WindowCx, version: string)
+    tern.kv.set(KV_PENDING, {version = version, at = os.time()})
+    local argv, env = releases.pluginStep(version, tern.runtime.os, tern.getenv("TERN_KATA_BASE_URL"))
+    local ok = pcall(function()
+        tern.process.run(argv, {env = env, timeout_ms = 5 * 60 * 1000}, function(result, cx2)
+            -- Success reloads the plugin, so this callback usually never runs; the new one reports it.
+            if result.status == 0 then return end
+            tern.kv.set(KV_PENDING, nil)
+            if cx2 then
+                local line = lastStderrLine(result.stderr)
+                cx2:toast("error", "tern-kata plugin was not updated", line ~= "" and line or ("the install script exited with status " .. result.status))
+            end
+        end)
+    end)
+    if not ok then
+        tern.kv.set(KV_PENDING, nil)
+        cx:toast("error", "tern-kata was updated on the session host, but this device's plugin wasn't", "Update the plugin on a machine that can run the install script")
+    end
+end
+
+-- Polls once a second until the update's Pane ends: a non-zero exit marks it exited and the Pane stays to be read (a
+-- failure); a Pane that is gone, or marked exited with status 0, is success.
+local function watchUpdate(pane: number, version: string, remote: boolean)
+    tern.timer(1000, function(cx)
+        if not cx then return end
+        local info = cx.session:pane(pane)
+        if info and info.exited ~= nil and info.exited ~= 0 then return end
+        if info and info.exited == nil then return watchUpdate(pane, version, remote) end
+        if remote then updatePlugin(cx, version) end
+    end)
+end
+
+tern.command({
+    id = "update",
+    title = "Update tern-kata",
+    run = function(cx)
+        local remote = cx.hosts:current().kind == "remote"
+        tern.fetch(versionTextUrl(), {timeout_ms = 15000}, function(result, cx2)
+            if not cx2 then return end
+            local version = if result.error == nil and result.status == 200 then releases.release(result.body) else nil
+            if not version then
+                cx2:toast("error", "tern-kata was not updated", "Could not read version.txt of the latest release")
+                return
+            end
+            local pane = launch(cx2, "tern-kata update --pause")
+            if pane then
+                changeUpdatePanes(pane, true)
+                watchUpdate(pane, version, remote)
+            end
         end)
     end,
 })

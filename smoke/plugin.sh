@@ -3,6 +3,7 @@ set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
 tmp=$(mktemp -d)
 pid=
+server_pid=
 export CGO_ENABLED=0 KATA_HOME="$tmp/kata" TERN_CONFIG_DIR="$tmp/config"
 export TERN_DAEMON_SOCKET="$tmp/daemon.sock" STENCIL_LOG_DIR="$tmp/logs"
 # The linked plugin's host half reads worker.toml from the config folder: point it at an empty one.
@@ -26,6 +27,7 @@ cleanup() {
     tern plugin unlink tern-kata --json || status=1
     [[ ! -f "$TERN_CONFIG_DIR/plugins/tern-kata.path" ]] || status=1
   fi
+  [[ -z "$server_pid" ]] || { kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true; }
   kata daemon stop >/dev/null 2>&1 || true
   if [[ $status -eq 0 ]]; then rm -rf "$tmp"; else printf 'Plugin smoke artifacts: %s\n' "$tmp" >&2; fi
   exit "$status"
@@ -55,6 +57,7 @@ not_installed_toast='tern-kata is not installed'
 didnt_start_toast="tern-kata didn't start"
 # Both install hints point to the palette command.
 install_hint='Install tern-kata from the command palette'
+update_hint='run Update tern-kata'
 expect_no_kata_toast() {
   expect_no_toast "$failed_start_toast"
   expect_no_toast "$not_installed_toast"
@@ -100,6 +103,14 @@ export ZDOTDIR="$tmp" BASH_ENV="$tmp/.bashrc" ENV="$tmp/.bashrc"
 printf 'export PATH=%q:%q:"$PATH"\n' "$tmp/pane-bin" "$tmp/bin" >"$tmp/.zshenv"
 printf 'export PATH=%q:%q:"$PATH"\n' "$tmp/pane-bin" "$tmp/bin" >"$tmp/.bashrc"
 export PATH="$tmp/bin:/usr/bin:/bin"
+# Update tern-kata reads version.txt from here.
+mkdir -p "$tmp/dist"
+printf '9.9.9\n' >"$tmp/dist/version.txt"
+update_port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
+python3 -m http.server "$update_port" --bind 127.0.0.1 --directory "$tmp/dist" >"$tmp/http.log" 2>&1 &
+server_pid=$!
+for ((attempt=0; attempt<100; attempt++)); do curl -sf "http://127.0.0.1:$update_port/version.txt" >/dev/null && break; sleep 0.1; done
+export TERN_KATA_BASE_URL="http://127.0.0.1:$update_port" TERN_KATA_NO_UPDATE_CHECK=1
 # q asks "Quit tern-kata? y/n" unless kata's [tui] confirm_quit is false: the steps quit with one key.
 mkdir -p "$KATA_HOME"
 printf '[tui]\nconfirm_quit = false\n' >"$KATA_HOME/config.toml"
@@ -381,12 +392,12 @@ wait_no_kata_toast() {
   echo "kata toast did not clear" >&2
   return 1
 }
-expect_launch_toast() { # $1 the one startup-failure toast that must show, $2 optional text it must also carry
+expect_launch_toast() { # $1 the one startup-failure toast that must show, the rest text it must also carry
   wait_no_kata_toast
   ctl plugins run plugin.tern-kata.open
   ctl focus left
   expect_toast "$1"
-  [[ -z "${2:-}" ]] || toast_shown "$2"
+  for hint in "${@:2}"; do toast_shown "$hint"; done
   for toast in "$failed_start_toast" "$not_installed_toast" "$didnt_start_toast"; do
     [[ $toast == "$1" ]] || expect_no_toast "$toast"
   done
@@ -394,15 +405,15 @@ expect_launch_toast() { # $1 the one startup-failure toast that must show, $2 op
 }
 for status in 2 3; do
   printf '#!/bin/sh\nexit %s\n' "$status" >"$tmp/pane-bin/tern-kata"
-  expect_launch_toast "$failed_start_toast"
+  expect_launch_toast "$failed_start_toast" "$update_hint"
 done
 printf '#!/bin/sh\nexit 1\n' >"$tmp/pane-bin/tern-kata"
-expect_launch_toast "$didnt_start_toast" "$install_hint"
+expect_launch_toast "$didnt_start_toast" 'run Install tern-kata' "$update_hint"
 printf '#!/bin/sh\nexit 127\n' >"$tmp/pane-bin/tern-kata"
 expect_launch_toast "$not_installed_toast" "$install_hint"
 # The real binary failing before it connects exits 3, which reads as a failed start.
 printf '#!/bin/sh\necho start\nexec %q --issue\n' "$tmp/app/tern-kata" >"$tmp/pane-bin/tern-kata"
-expect_launch_toast "$failed_start_toast"
+expect_launch_toast "$failed_start_toast" "$update_hint"
 rm "$tmp/pane-bin/tern-kata"
 expect_launch_toast "$not_installed_toast" "$install_hint"
 # The install command asks first: dismissing the picker opens no Pane, choosing a row opens one running the install one-liner.
@@ -423,5 +434,85 @@ jq -e '.tabs[0].panes == 2' "$tmp/install-state.json" >/dev/null
 ctl expect Press
 ctl key Enter
 expect_panes 1
+# The stand-in ends only on an empty line (Enter): the plugin sends a link's Issue to a kata Pane it opened as a non-empty line.
+# Update tern-kata on a local session host runs `tern-kata update --pause` in a Pane and no plugin-only step: the binary
+# brings the plugin along itself.
+printf '#!/bin/bash\necho "$@" >%q\nprintf "Press Enter to close "\nwhile :; do read -t 0.2 line && [[ -z $line ]] && break; done\n' "$tmp/update-args.txt" >"$tmp/pane-bin/tern-kata"
+chmod +x "$tmp/pane-bin/tern-kata"
+# A curl stand-in on the PATH records any plugin-only step (`sh -c "curl … | sh"`), which a local session host never runs.
+printf '#!/bin/sh\necho "$@" >>%q\necho "curl: smoke stand-in refuses" >&2\nexit 1\n' "$tmp/plugin-step.log" >"$tmp/bin/curl"
+chmod +x "$tmp/bin/curl"
+printf 'palette "Update tern-kata"\nkey Enter\n' >"$tmp/update.ctl"
+ctl --file "$tmp/update.ctl"
+for ((attempt=0; attempt<100; attempt++)); do
+  [[ -s "$tmp/update-args.txt" ]] && break
+  ctl --file "$tmp/pump.ctl"
+  sleep 0.1
+done
+[[ $(cat "$tmp/update-args.txt") == "update --pause" ]]
+ctl state | jq -e '.tabs[0].panes == 2' >/dev/null
+ctl expect Press
+# The local update finishes first, so the checks below exercise the watcher with a local session host.
+ctl key Enter
+for ((attempt=0; attempt<100; attempt++)); do
+  [[ $(ctl state | jq -r '.tabs[0].panes') == 1 ]] && break
+  ctl --file "$tmp/pump.ctl"
+  sleep 0.1
+done
+expect_panes 1
+# The watcher polls once a second: give it time to act on the closed Pane.
+for ((attempt=0; attempt<30; attempt++)); do ctl --file "$tmp/pump.ctl"; sleep 0.1; done
+[[ ! -e "$tmp/plugin-step.log" ]]
+expect_no_toast 'tern-kata plugin updated'
+# A plugin reload while a second update Pane is open (a local update brings the plugin along) must not turn that Pane into a
+# kata Pane: a link opens a new kata Pane instead of focusing the update Pane.
+rm -f "$tmp/update-args.txt"
+ctl --file "$tmp/update.ctl"
+for ((attempt=0; attempt<100; attempt++)); do
+  [[ -s "$tmp/update-args.txt" ]] && break
+  ctl --file "$tmp/pump.ctl"
+  sleep 0.1
+done
+ctl expect Press
+ctl plugins fixtures
+ctl focus left
+click_issue_link "kata://smoke/$first"
+for ((attempt=0; attempt<100; attempt++)); do
+  ctl --file "$tmp/pump.ctl"
+  [[ $(ctl state | jq -r '.tabs[0].panes') == 3 ]] && break
+  sleep 0.1
+done
+ctl state | jq -e '.tabs[0].panes == 3' >/dev/null
+# The new kata Pane is the stand-in too: Enter ends it, leaving the update Pane to the right.
+ctl key Enter
+expect_panes 2
+ctl focus right
+ctl key Enter
+for ((attempt=0; attempt<100; attempt++)); do
+  [[ $(ctl state | jq -r '.tabs[0].panes') == 1 ]] && break
+  ctl --file "$tmp/pump.ctl"
+  sleep 0.1
+done
+expect_panes 1
+# On a remote session host the update also runs the plugin step on this machine; the curl stand-in makes it fail, which toasts
+# the script's last stderr line and leaves no pending key behind.
+rm -f "$tmp/plugin-step.log" "$tmp/update-args.txt"
+ctl remote loopback loop
+ctl ready
+ctl --file "$tmp/update.ctl"
+for ((attempt=0; attempt<100; attempt++)); do
+  [[ -s "$tmp/update-args.txt" ]] && break
+  ctl --file "$tmp/pump.ctl"
+  sleep 0.1
+done
+[[ $(cat "$tmp/update-args.txt") == "update --pause" ]]
+ctl expect Press
+ctl key Enter
+expect_toast 'tern-kata plugin was not updated'
+expect_toast 'curl: smoke stand-in refuses'
+[[ -s "$tmp/plugin-step.log" ]]
+! grep -q 'update.pending' "$TERN_CONFIG_DIR/plugin-data/tern-kata/kv.json" || { echo "update.pending left behind" >&2; exit 1; }
+for ((attempt=0; attempt<100; attempt++)); do [[ $(ctl state | jq '.tabs[1].panes') == 1 ]] && break; sleep 0.1; done
+ctl remote disconnect loop
 jq -Rse 'contains("plugin window halves loaded count=2") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
-printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, links reuse only the current tab'"'"'s kata Pane, shell-syntax Project link, links on a remote host'"'"'s Pane, quick quit without toast, links into Panes started by full path, backslash path and title alone, a longer name not matched, an agent tab opened right of the Pane'"'"'s tab and no other tab moved, startup-failure and not-installed toasts by exit status\n'
+printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, links reuse only the current tab'"'"'s kata Pane, shell-syntax Project link, links on a remote host'"'"'s Pane, quick quit without toast, links into Panes started by full path, backslash path and title alone, a longer name not matched, an agent tab opened right of the Pane'"'"'s tab and no other tab moved, startup-failure and not-installed toasts by exit status, Update tern-kata on a local session host running update --pause and no plugin step, the update Pane not a kata Pane after a plugin reload, a failed plugin step after Update tern-kata on a remote host toasting its last stderr line\n'

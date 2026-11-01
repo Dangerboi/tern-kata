@@ -168,7 +168,7 @@ local function answered(binary: string, result: ProcessResult)
             started_text = nil
         elseif not result.timed_out and result.status ~= -1 and not warned_status then
             warned_status = true
-            tern.log.warn("tern-kata: `worker supervised` exited with status " .. result.status .. " (" .. last_line(result.stderr) .. "), so the worker is not started; the tern-kata binary is probably older than this plugin: update it (install.sh or install.ps1)")
+            tern.log.warn("tern-kata: `worker supervised` exited with status " .. result.status .. " (" .. last_line(result.stderr) .. "), so the worker is not started; the tern-kata binary is probably older than this plugin: run `tern-kata update`")
         end
         return arm(POLL_MS)
     end
