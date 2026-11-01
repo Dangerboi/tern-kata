@@ -537,8 +537,8 @@ local function releaseCheck()
         if releases.shouldCheck(check) then
             -- Stored before the fetch: a failure counts as a check, and so does a second window starting meanwhile.
             tern.kv.set(KV_LAST_CHECK, check.now)
-            local base = tern.getenv("TERN_KATA_BASE_URL")
-            if base == nil or base == "" then base = DEFAULT_RELEASE_BASE end
+            local configured = tern.getenv("TERN_KATA_BASE_URL")
+            local base: string = (configured ~= nil and configured ~= "") and configured or DEFAULT_RELEASE_BASE
             tern.fetch((base:gsub("/+$", "")) .. "/version.txt", {timeout_ms = 15000}, function(result, cx2)
                 if not cx2 or result.error ~= nil or result.status ~= 200 then return end
                 local own = ownVersion()
