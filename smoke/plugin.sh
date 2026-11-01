@@ -452,8 +452,28 @@ done
 [[ $(cat "$tmp/update-args.txt") == "update --pause" ]]
 ctl state | jq -e '.tabs[0].panes == 2' >/dev/null
 ctl expect Press
-# A plugin reload while the update Pane is open (a local update brings the plugin along) must not turn that Pane into a kata
-# Pane: a link opens a new kata Pane instead of focusing the update Pane.
+# The local update finishes first, so the checks below exercise the watcher with a local session host.
+ctl key Enter
+for ((attempt=0; attempt<100; attempt++)); do
+  [[ $(ctl state | jq -r '.tabs[0].panes') == 1 ]] && break
+  ctl --file "$tmp/pump.ctl"
+  sleep 0.1
+done
+expect_panes 1
+# The watcher polls once a second: give it time to act on the closed Pane.
+for ((attempt=0; attempt<30; attempt++)); do ctl --file "$tmp/pump.ctl"; sleep 0.1; done
+[[ ! -e "$tmp/plugin-step.log" ]]
+expect_no_toast 'tern-kata plugin updated'
+# A plugin reload while a second update Pane is open (a local update brings the plugin along) must not turn that Pane into a
+# kata Pane: a link opens a new kata Pane instead of focusing the update Pane.
+rm -f "$tmp/update-args.txt"
+ctl --file "$tmp/update.ctl"
+for ((attempt=0; attempt<100; attempt++)); do
+  [[ -s "$tmp/update-args.txt" ]] && break
+  ctl --file "$tmp/pump.ctl"
+  sleep 0.1
+done
+ctl expect Press
 ctl plugins fixtures
 ctl focus left
 click_issue_link "kata://smoke/$first"
@@ -474,10 +494,6 @@ for ((attempt=0; attempt<100; attempt++)); do
   sleep 0.1
 done
 expect_panes 1
-# The watcher polls once a second: give it time to act on the closed Pane.
-for ((attempt=0; attempt<30; attempt++)); do ctl --file "$tmp/pump.ctl"; sleep 0.1; done
-[[ ! -e "$tmp/plugin-step.log" ]]
-expect_no_toast 'tern-kata plugin updated'
 # On a remote session host the update also runs the plugin step on this machine; the curl stand-in makes it fail, which toasts
 # the script's last stderr line and leaves no pending key behind.
 rm -f "$tmp/plugin-step.log" "$tmp/update-args.txt"
