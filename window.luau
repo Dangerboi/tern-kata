@@ -12,24 +12,36 @@ local pending: { [number]: string? } = {}
 -- Kept in `tern.kv` too, because a plugin reload (a local update brings the plugin along) empties this table while the
 -- Pane is still open; `pane_closed` removes the id from both.
 local KV_UPDATE_PANES = "update.panes"
+local UPDATE_PANE_TTL = 24 * 60 * 60
 local updatePanes: { [number]: boolean } = {}
 
-local function saveUpdatePanes()
-    local ids: { number } = {}
-    for id in updatePanes do table.insert(ids, id) end
-    table.sort(ids)
-    tern.kv.set(KV_UPDATE_PANES, if #ids > 0 then ids else nil)
-end
-
-do
+-- `tern.kv` is shared by every window, so the key is read, changed by one id and written back in one step rather than
+-- written from this VM's copy. Entries carry the time they were added; one older than a day is dropped, so an id left
+-- behind by a Pane that ended while no window was open cannot outlive a later Pane that reuses it.
+local function readUpdatePanes(): { { pane: number, at: number } }
+    local entries: { { pane: number, at: number } } = {}
     local ok, saved = pcall(tern.kv.get, KV_UPDATE_PANES)
-    if ok and type(saved) == "table" then
-        for _, id in saved :: { any } do
-            if type(id) == "number" then updatePanes[id] = true end
+    if not ok or type(saved) ~= "table" then return entries end
+    local now = os.time()
+    for _, e in saved :: { any } do
+        if type(e) == "table" and type(e.pane) == "number" and type(e.at) == "number" and now - e.at < UPDATE_PANE_TTL then
+            table.insert(entries, {pane = e.pane, at = e.at})
         end
     end
+    return entries
 end
 
+local function changeUpdatePanes(id: number, add: boolean)
+    local entries = readUpdatePanes()
+    for i = #entries, 1, -1 do
+        if entries[i].pane == id then table.remove(entries, i) end
+    end
+    if add then table.insert(entries, {pane = id, at = os.time()}) end
+    tern.kv.set(KV_UPDATE_PANES, if #entries > 0 then entries else nil)
+    if add then updatePanes[id] = true else updatePanes[id] = nil end
+end
+
+for _, e in readUpdatePanes() do updatePanes[e.pane] = true end
 -- A kata Pane has the title `tern-kata` (which the binary sets), or a program whose file name is tern-kata or
 -- tern-kata.exe, split on either path separator so Windows paths match. A longer name merely containing it does not.
 local function isKataProgram(program: string?): boolean
@@ -435,8 +447,7 @@ end)
 tern.on("pane_closed", function(ev, cx)
     launched[ev.pane] = nil
     if updatePanes[ev.pane] then
-        updatePanes[ev.pane] = nil
-        saveUpdatePanes()
+        changeUpdatePanes(ev.pane, false)
     end
     pending[ev.pane] = nil
     relayed[ev.pane] = nil
@@ -720,8 +731,7 @@ tern.command({
             end
             local pane = launch(cx2, "tern-kata update --pause")
             if pane then
-                updatePanes[pane] = true
-                saveUpdatePanes()
+                changeUpdatePanes(pane, true)
                 watchUpdate(pane, version, remote)
             end
         end)
