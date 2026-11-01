@@ -18,7 +18,7 @@ import (
 // No flag carries a secret: a token never rides on the command line, which Tern shows as the block's title and a process list shows to
 // everyone. The Pane writes the token it uses to a private file (startAgent) and the route names that file; the wrapper reads it.
 type AgentRoute struct {
-	// Home is the Pane's KATA_HOME; empty when the Pane has none.
+	// Home is the Pane's KATA_HOME, or the default home it resolves to once the route is not zero; empty for a zero route.
 	Home string
 	// Daemon is the catalog entry the Pane switched to on the Daemons Page. It outranks Server, as it does for the Pane.
 	Daemon string
@@ -85,6 +85,10 @@ func (g *Gateway) CurrentAgentRoute() (AgentRoute, error) {
 	route := AgentRoute{Home: os.Getenv("KATA_HOME"), Daemon: current}
 	switch {
 	case current != "":
+		var err error
+		if route.Home, err = kataHome(); err != nil {
+			return AgentRoute{}, err
+		}
 		catalog, err := ReadCatalog()
 		if err != nil {
 			return AgentRoute{}, err
@@ -93,12 +97,11 @@ func (g *Gateway) CurrentAgentRoute() (AgentRoute, error) {
 		if !found {
 			return AgentRoute{}, fmt.Errorf("daemon %q is not in the daemon catalog", current)
 		}
-		if entry.Local {
-			route.paneCredential() // a local entry with no token of its own is reached with the Pane's, as the Pane connects to it
-			return route, nil
-		}
 		if route.Token, err = entry.Token(); err != nil {
 			return AgentRoute{}, err
+		}
+		if entry.Local && route.Token == "" {
+			route.paneCredential() // a local entry with no token of its own is reached with the Pane's, as the Pane connects to it
 		}
 		return route, nil
 	case os.Getenv("KATA_SERVER") != "":
@@ -107,6 +110,14 @@ func (g *Gateway) CurrentAgentRoute() (AgentRoute, error) {
 	}
 	if route.zeroWithoutToken() {
 		return route, nil
+	}
+	// The route always names the Pane's home, so the block's own KATA_HOME (and the [auth] and catalog of that home) never decides
+	// which credential the agent sends or which catalog its daemon resolves in.
+	if route.Home == "" {
+		var err error
+		if route.Home, err = kataHome(); err != nil {
+			return AgentRoute{}, err
+		}
 	}
 	route.TrustPrivate = envTruthy("KATA_TRUST_PRIVATE_NETWORK")
 	route.paneCredential()
@@ -188,11 +199,10 @@ func (r AgentRoute) resolve(dir string, wrapper bool) (set, unset []string, err 
 	}
 	token := r.Token
 	if r.TokenFile != "" && wrapper {
-		token, err = readTokenFile(r.TokenFile, false)
-		_ = os.Remove(r.TokenFile) // the file's job is done: it must not outlive the agent's start
-		if err != nil {
+		if token, err = readTokenFile(r.TokenFile, false); err != nil {
 			return nil, nil, err
 		}
+		_ = os.Remove(r.TokenFile) // the file's job is done: it must not outlive the agent's start
 	}
 	credential := func() {
 		if token != "" {

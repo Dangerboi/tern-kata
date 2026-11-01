@@ -1294,9 +1294,11 @@ command = ["/opt/my agent"]
 // routeEnv sets the Pane's environment for a route test: the kata variables not named in env are empty.
 func routeEnv(t *testing.T, env map[string]string) {
 	t.Helper()
-	for _, name := range []string{"KATA_HOME", "KATA_SERVER", "KATA_AUTH_TOKEN", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE", "KATA_TRUST_PRIVATE_NETWORK", "WORK_TOKEN"} {
+	for _, name := range []string{"KATA_HOME", "KATA_SERVER", "KATA_AUTH_TOKEN", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE", "KATA_TRUST_PRIVATE_NETWORK", "WORK_TOKEN", "LOCAL_TOKEN"} {
 		t.Setenv(name, env[name])
 	}
+	t.Setenv("HOME", t.TempDir()) // the default kata home is <HOME>/.kata
+	t.Setenv("USERPROFILE", os.Getenv("HOME"))
 }
 
 func startRoutedAgent(t *testing.T, g *Gateway, dirs worker.Dirs, ternErr error) (ran []string, got model.AgentStarted) {
@@ -1310,24 +1312,25 @@ func startRoutedAgent(t *testing.T, g *Gateway, dirs worker.Dirs, ternErr error)
 }
 
 func TestAgentStartedFromAPaneOnAnotherDaemonCarriesThePanesRoute(t *testing.T) {
-	home := catalogHome(t, "[[daemon]]\nname = \"work\"\nurl = \"https://kata.example\"\ntoken_env = \"WORK_TOKEN\"\n[[daemon]]\nname = \"mine\"\nlocal = true\n")
+	home := catalogHome(t, "[[daemon]]\nname = \"work\"\nurl = \"https://kata.example\"\ntoken_env = \"WORK_TOKEN\"\n[[daemon]]\nname = \"mine\"\nlocal = true\n[[daemon]]\nname = \"owned\"\nlocal = true\ntoken_env = \"LOCAL_TOKEN\"\n")
 	for name, tc := range map[string]struct {
 		env       map[string]string
 		current   string
 		want      []string // the route flags, with TOKEN standing for the token file the Pane writes
 		wantToken string
 	}{
-		"KATA_HOME":                 {env: map[string]string{"KATA_HOME": "/tmp/h"}, want: []string{"--home", "/tmp/h"}},
-		"KATA_SERVER":               {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_ALLOW_INSECURE": "true"}, want: []string{"--server", "https://kata.example", "--allow-insecure"}},
-		"KATA_SERVER token":         {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_AUTH_TOKEN": "pane-token"}, want: []string{"--server", "https://kata.example", "--token-file", "TOKEN"}, wantToken: "pane-token"},
-		"KATA_SERVER file":          {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_AUTH_TOKEN_FILE": "/run/t"}, want: []string{"--server", "https://kata.example", "--auth-file", "/run/t"}},
-		"private network":           {env: map[string]string{"KATA_SERVER": "http://100.64.0.5:7777", "KATA_AUTH_TOKEN": "pane-token", "KATA_TRUST_PRIVATE_NETWORK": "1"}, want: []string{"--server", "http://100.64.0.5:7777", "--token-file", "TOKEN", "--trust-private-network"}, wantToken: "pane-token"},
-		"trust alone is no route":   {env: map[string]string{"KATA_TRUST_PRIVATE_NETWORK": "1", "KATA_AUTH_TOKEN": "pane-token"}},
-		"insecure is only 1/true":   {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_ALLOW_INSECURE": "yes"}, want: []string{"--server", "https://kata.example"}},
-		"a switch, token_env":       {env: map[string]string{"KATA_HOME": home, "WORK_TOKEN": "work-token", "KATA_SERVER": "https://ignored.example"}, current: "work", want: []string{"--home", home, "--daemon", "work", "--token-file", "TOKEN"}, wantToken: "work-token"},
-		"a switch to a local":       {env: map[string]string{"KATA_HOME": home}, current: "mine", want: []string{"--home", home, "--daemon", "mine"}},
-		"a local, the Pane's token": {env: map[string]string{"KATA_HOME": home, "KATA_AUTH_TOKEN": "pane-token"}, current: "mine", want: []string{"--home", home, "--daemon", "mine", "--token-file", "TOKEN"}, wantToken: "pane-token"},
-		"a local, the Pane's file":  {env: map[string]string{"KATA_HOME": home, "KATA_AUTH_TOKEN_FILE": "/run/t"}, current: "mine", want: []string{"--home", home, "--daemon", "mine", "--auth-file", "/run/t"}},
+		"KATA_HOME":                                  {env: map[string]string{"KATA_HOME": "/tmp/h"}, want: []string{"--home", "/tmp/h"}},
+		"KATA_SERVER":                                {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_ALLOW_INSECURE": "true"}, want: []string{"--home", "DEFAULT", "--server", "https://kata.example", "--allow-insecure"}},
+		"KATA_SERVER token":                          {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_AUTH_TOKEN": "pane-token"}, want: []string{"--home", "DEFAULT", "--server", "https://kata.example", "--token-file", "TOKEN"}, wantToken: "pane-token"},
+		"KATA_SERVER file":                           {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_AUTH_TOKEN_FILE": "/run/t"}, want: []string{"--home", "DEFAULT", "--server", "https://kata.example", "--auth-file", "/run/t"}},
+		"private network":                            {env: map[string]string{"KATA_SERVER": "http://100.64.0.5:7777", "KATA_AUTH_TOKEN": "pane-token", "KATA_TRUST_PRIVATE_NETWORK": "1"}, want: []string{"--home", "DEFAULT", "--server", "http://100.64.0.5:7777", "--token-file", "TOKEN", "--trust-private-network"}, wantToken: "pane-token"},
+		"trust alone is no route":                    {env: map[string]string{"KATA_TRUST_PRIVATE_NETWORK": "1", "KATA_AUTH_TOKEN": "pane-token"}},
+		"insecure is only 1/true":                    {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_ALLOW_INSECURE": "yes"}, want: []string{"--home", "DEFAULT", "--server", "https://kata.example"}},
+		"a switch, token_env":                        {env: map[string]string{"KATA_HOME": home, "WORK_TOKEN": "work-token", "KATA_SERVER": "https://ignored.example"}, current: "work", want: []string{"--home", home, "--daemon", "work", "--token-file", "TOKEN"}, wantToken: "work-token"},
+		"a local entry's own token beats the Pane's": {env: map[string]string{"KATA_HOME": home, "KATA_AUTH_TOKEN": "pane-token", "LOCAL_TOKEN": "entry-token"}, current: "owned", want: []string{"--home", home, "--daemon", "owned", "--token-file", "TOKEN"}, wantToken: "entry-token"},
+		"a switch to a local":                        {env: map[string]string{"KATA_HOME": home}, current: "mine", want: []string{"--home", home, "--daemon", "mine"}},
+		"a local, the Pane's token":                  {env: map[string]string{"KATA_HOME": home, "KATA_AUTH_TOKEN": "pane-token"}, current: "mine", want: []string{"--home", home, "--daemon", "mine", "--token-file", "TOKEN"}, wantToken: "pane-token"},
+		"a local, the Pane's file":                   {env: map[string]string{"KATA_HOME": home, "KATA_AUTH_TOKEN_FILE": "/run/t"}, current: "mine", want: []string{"--home", home, "--daemon", "mine", "--auth-file", "/run/t"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			routeEnv(t, tc.env)
@@ -1340,8 +1343,11 @@ func TestAgentStartedFromAPaneOnAnotherDaemonCarriesThePanesRoute(t *testing.T) 
 			tokenFile := got.Entry.PromptFile + ".token"
 			want := slices.Clone(tc.want)
 			for i := range want {
-				if want[i] == "TOKEN" {
+				switch want[i] {
+				case "TOKEN":
 					want[i] = tokenFile
+				case "DEFAULT":
+					want[i] = filepath.Join(os.Getenv("HOME"), ".kata")
 				}
 			}
 			want = append(append([]string{"new", "tab", "--cwd", "/bound", "--json", "--", "tern-kata", "agent"}, want...), "--ref", "demo#cd34", "--", "omp")
@@ -1533,5 +1539,28 @@ func TestAgentStartIsRefusedBeforeAnythingIsWrittenWhenTheRouteCannotWork(t *tes
 	}
 	if left, _ := filepath.Glob(filepath.Join(dirs.State, AgentPromptsFolder, "*")); len(left) != 0 {
 		t.Errorf("a refused start left %q", left)
+	}
+}
+
+func TestRouteFromAPaneWithoutKataHomeNamesTheDefaultHomeOnlyWhenRouted(t *testing.T) {
+	routeEnv(t, nil)
+	g := NewGateway(nil)
+	if route, err := g.CurrentAgentRoute(); err != nil || !route.IsZero() {
+		t.Errorf("a default Pane's route is %+v, %v; want zero", route, err)
+	}
+	t.Setenv("KATA_SERVER", "https://kata.example")
+	route, err := g.CurrentAgentRoute()
+	if want := filepath.Join(os.Getenv("HOME"), ".kata"); err != nil || route.Home != want {
+		t.Errorf("a routed Pane's Home = %q, %v; want %q", route.Home, err, want)
+	}
+}
+
+func TestTokenFileSurvivesAFailedRead(t *testing.T) {
+	file := tokenFile(t, "")
+	if _, _, err := (AgentRoute{Server: "https://s", TokenFile: file}).Env(""); err == nil {
+		t.Fatal("an empty token file was accepted")
+	}
+	if _, err := os.Stat(file); err != nil {
+		t.Errorf("a file that could not be read was removed: %v", err)
 	}
 }
