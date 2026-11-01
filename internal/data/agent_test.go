@@ -1707,3 +1707,42 @@ func TestAgentRouteStorageEnvironment(t *testing.T) {
 	}
 	_ = dsn
 }
+
+func TestCredentialNamesAcceptKataTokenVariablesButNotTheOnesTheRouteOwns(t *testing.T) {
+	for name, want := range map[string]bool{
+		"KATA_WORK_TOKEN": true, "KATA_SPOKE_TOKEN": true, "WORK_TOKEN": true,
+		"KATA_SERVER": false, "kata_home": false, "KATA_AUTH_TOKEN": false, "KATA_REF": false, "KATA_DSN": false, "": false, "A-B": false, "1X": false,
+	} {
+		if got := credentialName(name); got != want {
+			t.Errorf("credentialName(%q) = %v, want %v", name, got, want)
+		}
+	}
+	home := catalogHome(t, "[[daemon]]\nname = \"w\"\nurl = \"https://w.example\"\ntoken_env = \"KATA_WORK_TOKEN\"\n[[daemon]]\nname = \"mine\"\nlocal = true\n")
+	t.Setenv("KATA_WORK_TOKEN", "kw")
+	if got := paneCredentialEnv(home, true); got != "KATA_WORK_TOKEN=kw\n" {
+		t.Errorf("env = %q", got)
+	}
+	set, _, err := (AgentRoute{Home: home, EnvFile: tokenFile(t, "KATA_WORK_TOKEN=kw\n")}).Env("")
+	if err != nil || !slices.Contains(set, "KATA_WORK_TOKEN=kw") {
+		t.Errorf("set %q, err %v", set, err)
+	}
+}
+
+func TestSwitchedProfileWithItsOwnHomeGetsNoneOfThePanesCredentialVariables(t *testing.T) {
+	home := catalogHome(t, "[[daemon]]\nname = \"p\"\nlocal = true\nhome = \"/profiles/p\"\ninstance_uid = \"01HZZZZZZZZZZZZZZZZZZZZZZZ\"\n")
+	checkout(t, "")
+	envFile := tokenFile(t, "HUB_ADMIN_TOKEN=admin\n")
+	set, _, err := (AgentRoute{Home: home, Daemon: "p", EnvFile: envFile}).Env("")
+	if err != nil || !slices.Equal(set, []string{"KATA_HOME=/profiles/p"}) {
+		t.Errorf("set %q, err %v", set, err)
+	}
+	if _, err := os.Stat(envFile); err == nil {
+		t.Error("the env file was not deleted")
+	}
+	// A pin naming the profile keeps the Pane's home, and with it the Pane's variables.
+	checkout(t, "version = 1\n[server]\ndaemon = \"p\"\n")
+	set, _, err = (AgentRoute{Home: home, Daemon: "p", EnvFile: tokenFile(t, "HUB_ADMIN_TOKEN=admin\n")}).Env("")
+	if err != nil || !slices.Contains(set, "HUB_ADMIN_TOKEN=admin") {
+		t.Errorf("pinned: set %q, err %v", set, err)
+	}
+}

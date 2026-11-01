@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -226,9 +227,19 @@ func paneCredentialEnv(home string, all bool) string {
 	return out.String()
 }
 
-// credentialName reports whether name is an environment variable name the wrapper may set from an env file: plain, and not one of kata's own.
+// ownedNames are the variables the route, the wrapper or kata's own routing and identity settings own (kata v0.20.0 refuses them as a
+// local profile's credential references too); an env file may not set them. Other KATA_ names are legitimate token_env names.
+var ownedNames = []string{
+	"KATA_HOME", "KATA_SERVER", "KATA_AUTH_TOKEN", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE", "KATA_TRUST_PRIVATE_NETWORK",
+	"KATA_DSN", "KATA_DB", "KATA_POSTGRES_SCHEMA", "KATA_POSTGRES_SCHEMA_MODE", "KATA_POSTGRES_SCHEMA_OWNER", "KATA_POSTGRES_ALLOW_INSECURE",
+	"KATA_AUTOSTART", "KATA_AUTOSTART_IDLE_TIMEOUT", "KATA_SKIP_DAEMON_VERSION_CHECK", "KATA_HTTP_TIMEOUT", "KATA_LISTEN",
+	"KATA_AUTHOR", "KATA_TEAMMATE", "KATA_INBOX_USER", "KATA_REF", "KATA_SESSION_ID", "KATA_TRUSTED_ACTOR_HEADER", "KATA_TRUSTED_PROXY_LISTENERS",
+}
+
+// credentialName reports whether name is an environment variable name the wrapper may set from an env file: a plain identifier that is
+// not one of ownedNames (compared case-insensitively).
 func credentialName(name string) bool {
-	if strings.HasPrefix(name, "KATA_") {
+	if name == "" || slices.ContainsFunc(ownedNames, func(owned string) bool { return strings.EqualFold(owned, name) }) {
 		return false
 	}
 	for i, c := range name {
@@ -236,7 +247,7 @@ func credentialName(name string) bool {
 			return false
 		}
 	}
-	return name != ""
+	return true
 }
 
 // paneCredential sets the Pane's own bearer credential on the route: its KATA_AUTH_TOKEN, else its KATA_AUTH_TOKEN_FILE.
@@ -443,6 +454,7 @@ func (r AgentRoute) resolve(dir string, wrapper bool) (set, unset []string, err 
 		return nil, nil, err
 	}
 	if entry.Home != "" && !pinned {
+		creds = nil                               // that home's catalog is the one kata reads, not the Pane's: the Pane's token variables are none of its business
 		set = []string{"KATA_HOME=" + entry.Home} // the entry's own home replaces the Pane's: it holds the daemon's state, and the Pane's storage settings are not its own
 	} else {
 		storage()
