@@ -23,19 +23,21 @@ const (
 	AgentPromptsFolder = "agent-prompts"
 )
 
-// AgentWrapperProgram is the program that sets the actor around an agent's command. It is found on PATH, as the plugin finds
+// AgentWrapperProgram is the program that sets the actor and Issue ref around an agent's command. It is found on PATH, as the plugin finds
 // tern-kata itself; the running executable's path would go stale (Linux appends " (deleted)") when the binary is replaced.
 const AgentWrapperProgram = "tern-kata"
 
 // AgentCommandLine is the command an agent block runs: command with @promptFile appended (omp reads it as the first message),
-// run through `tern-kata agent --as actor --ref ref --` when an actor is set and directly otherwise. ref is the Issue's qualified
-// ref, which the wrapper sets as the agent's KATA_REF.
+// run through `tern-kata agent [--as actor] --ref ref --`. ref is the Issue's qualified ref, which the wrapper sets as the agent's
+// KATA_REF; --as is left out when no actor is set, so KATA_AUTHOR stays as inherited.
 func AgentCommandLine(actor, ref string, command []string, promptFile string) []string {
-	line := append(slices.Clone(command), "@"+promptFile)
-	if actor == "" {
-		return line
+	line := []string{AgentWrapperProgram, "agent"}
+	if actor != "" {
+		line = append(line, "--as", actor)
 	}
-	return append([]string{AgentWrapperProgram, "agent", "--as", actor, "--ref", ref, "--"}, line...)
+	line = append(line, "--ref", ref, "--")
+	line = append(line, command...)
+	return append(line, "@"+promptFile)
 }
 
 // AgentSplitArgs is the tern command line for the Agent card's `s`: a split right of the Pane's block. A Pane that cannot name its block (paneBlock

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -13,48 +14,45 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
+// envWithout returns environ without the entries named in names, in one pass, with room for the two entries the callers add;
+// names compare case-insensitively when caseInsensitive (Windows).
+func envWithout(environ []string, caseInsensitive bool, names ...string) []string {
+	env := make([]string, 0, len(environ)+2)
+	for _, entry := range environ {
+		name, _, _ := strings.Cut(entry, "=")
+		if !slices.ContainsFunc(names, func(dropped string) bool {
+			return name == dropped || caseInsensitive && strings.EqualFold(name, dropped)
+		}) {
+			env = append(env, entry)
+		}
+	}
+	return env
+}
+
 // childEnv returns environ for a child with KATA_AUTHOR set to actor, dropping every existing spelling first;
 // names compare case-insensitively on Windows. An empty actor leaves environ unchanged.
 func childEnv(environ []string, actor string, caseInsensitive bool) []string {
 	if actor == "" {
 		return environ
 	}
-	env := make([]string, 0, len(environ)+1)
-	for _, entry := range environ {
-		name, _, _ := strings.Cut(entry, "=")
-		if name == "KATA_AUTHOR" || caseInsensitive && strings.EqualFold(name, "KATA_AUTHOR") {
-			continue
-		}
-		env = append(env, entry)
-	}
-	return append(env, "KATA_AUTHOR="+actor)
+	return append(envWithout(environ, caseInsensitive, "KATA_AUTHOR"), "KATA_AUTHOR="+actor)
 }
 
-// agentEnv returns environ for an agent: childEnv's KATA_AUTHOR, no inherited KATA_REF or KATA_INBOX_USER (the person's own inbox
-// is not the agent's), and KATA_REF set to ref when it is not empty.
+// agentEnv returns environ for an agent: KATA_AUTHOR set to actor as childEnv does (left as inherited when actor is empty), no
+// inherited KATA_REF or KATA_INBOX_USER (the person's own inbox is not the agent's), and KATA_REF set to ref when it is not empty.
 func agentEnv(environ []string, actor, ref string, caseInsensitive bool) []string {
-	env := childEnv(environ, actor, caseInsensitive)
-	out := make([]string, 0, len(env)+1)
-	for _, entry := range env {
-		name, _, _ := strings.Cut(entry, "=")
-		if dropsFromAgent(name, caseInsensitive) {
-			continue
-		}
-		out = append(out, entry)
+	dropped := []string{"KATA_REF", "KATA_INBOX_USER"}
+	if actor != "" {
+		dropped = append(dropped, "KATA_AUTHOR")
+	}
+	env := envWithout(environ, caseInsensitive, dropped...)
+	if actor != "" {
+		env = append(env, "KATA_AUTHOR="+actor)
 	}
 	if ref != "" {
-		out = append(out, "KATA_REF="+ref)
+		env = append(env, "KATA_REF="+ref)
 	}
-	return out
-}
-
-func dropsFromAgent(name string, caseInsensitive bool) bool {
-	for _, dropped := range [...]string{"KATA_REF", "KATA_INBOX_USER"} {
-		if name == dropped || caseInsensitive && strings.EqualFold(name, dropped) {
-			return true
-		}
-	}
-	return false
+	return env
 }
 
 func editorOptions() tern.Options {

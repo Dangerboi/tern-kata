@@ -26,15 +26,7 @@ func agentBadgeElement(badge model.AgentBadge, key string) ui.Badge {
 	return ui.Badge{Common: ui.Common{Key: key, Tone: agentTones[badge.Tone], Actions: &ui.Actions{Click: AgentClick(badge.Block)}}, Text: badge.Text}
 }
 
-// attentionStyle is the colour word of an Issue's work attention: stuck is an error, needs-human a warning.
-func attentionStyle(w model.WorkAttention) string {
-	if w.Stuck {
-		return string(ui.ToneError)
-	}
-	return string(ui.ToneWarning)
-}
-
-// attentionTone is attentionStyle as an element tone.
+// attentionTone is the colour of an Issue's work attention: stuck is an error, needs-human a warning.
 func attentionTone(w model.WorkAttention) ui.Tone {
 	if w.Stuck {
 		return ui.ToneError

@@ -62,8 +62,10 @@ func ReadAgentConfig(path string) (AgentConfig, error) {
 		}
 		return AgentConfig{}, fmt.Errorf("%s: unknown key %s", path, strings.Join(keys, ", "))
 	}
-	if meta.IsDefined("name") && !model.ValidTeammate(c.Name) {
-		return AgentConfig{}, fmt.Errorf("%s: name: %q is not a teammate name (letters, digits, . _ -; at most 64)", path, c.Name)
+	if meta.IsDefined("name") {
+		if err := checkTeammate(c.Name); err != nil {
+			return AgentConfig{}, fmt.Errorf("%s: name: %w", path, err)
+		}
 	}
 	if meta.IsDefined("command") {
 		if err := checkAgentCommand(c.Command); err != nil {
@@ -72,8 +74,10 @@ func ReadAgentConfig(path string) (AgentConfig, error) {
 	}
 	for _, name := range slices.Sorted(maps.Keys(c.Projects)) {
 		p := c.Projects[name]
-		if meta.IsDefined("projects", name, "name") && !model.ValidTeammate(p.Name) {
-			return AgentConfig{}, fmt.Errorf("%s: projects.%s.name: %q is not a teammate name (letters, digits, . _ -; at most 64)", path, name, p.Name)
+		if meta.IsDefined("projects", name, "name") {
+			if err := checkTeammate(p.Name); err != nil {
+				return AgentConfig{}, fmt.Errorf("%s: projects.%s.name: %w", path, name, err)
+			}
 		}
 		if meta.IsDefined("projects", name, "command") {
 			if err := checkAgentCommand(p.Command); err != nil {
@@ -85,6 +89,14 @@ func ReadAgentConfig(path string) (AgentConfig, error) {
 		}
 	}
 	return c, nil
+}
+
+// checkTeammate refuses a name that is no teammate name; the rule is model.ValidTeammate's.
+func checkTeammate(name string) error {
+	if !model.ValidTeammate(name) {
+		return fmt.Errorf("%q is not a teammate name (letters, digits, . _ -; at most 64)", name)
+	}
+	return nil
 }
 
 func checkAgentCommand(argv []string) error {

@@ -124,7 +124,7 @@ name = "open"
 
 func TestAgentArgvBuilders(t *testing.T) {
 	line := AgentCommandLine("", "demo#ab12", []string{"omp", "--fast"}, "/state/p.md")
-	if want := []string{"omp", "--fast", "@/state/p.md"}; !slices.Equal(line, want) {
+	if want := []string{"tern-kata", "agent", "--ref", "demo#ab12", "--", "omp", "--fast", "@/state/p.md"}; !slices.Equal(line, want) {
 		t.Errorf("without an actor %q, want %q", line, want)
 	}
 	wrapped := AgentCommandLine("me-agent", "demo#ab12", []string{"omp"}, "/state/p.md")
@@ -132,7 +132,7 @@ func TestAgentArgvBuilders(t *testing.T) {
 		t.Errorf("with an actor %q, want %q", wrapped, want)
 	}
 	split := AgentSplitArgs("24489903521795", "/work/my repo", line)
-	if want := []string{"split", "24489903521795", "right", "--cwd", "/work/my repo", "--json", "--", "omp", "--fast", "@/state/p.md"}; !slices.Equal(split, want) {
+	if want := []string{"split", "24489903521795", "right", "--cwd", "/work/my repo", "--json", "--", "tern-kata", "agent", "--ref", "demo#ab12", "--", "omp", "--fast", "@/state/p.md"}; !slices.Equal(split, want) {
 		t.Errorf("split %q, want %q", split, want)
 	}
 	if got := AgentSplitArgs("", "/w", line); got[1] != "@focused" {
@@ -224,10 +224,10 @@ func TestStartingAnAgentWritesThePromptRunsTernAndRecordsTheBlock(t *testing.T) 
 	if stored, err := ReadAgents(filepath.Join(dirs.State, AgentsFile)); err != nil || len(stored) != 1 || stored[0] != e {
 		t.Fatalf("agents.json %+v, %v", stored, err)
 	}
-	// W starts a tab, in the Binding's workspace, and the command runs directly without an actor.
+	// W starts a tab, in the Binding's workspace, and without an actor the command still runs through `tern-kata agent` with the ref.
 	writeAgentFile(t, filepath.Join(dirs.Config, "agent.toml"), "")
 	as[model.AgentStarted](t, run(t, g, model.StartAgent{Placement: model.AgentTab, IssueRef: "demo#cd34", ProjectName: "demo", Workspace: "/bound"}))
-	if len(ran) < 8 || !slices.Equal(ran[:7], []string{"new", "tab", "--cwd", "/bound", "--json", "--", "omp"}) {
+	if len(ran) < 12 || !slices.Equal(ran[:11], []string{"new", "tab", "--cwd", "/bound", "--json", "--", "tern-kata", "agent", "--ref", "demo#cd34", "--"}) || ran[11] != "omp" {
 		t.Fatalf("W ran %q", ran)
 	}
 }

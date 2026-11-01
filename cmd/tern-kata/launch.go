@@ -240,21 +240,28 @@ func planLaunch(args []string, lookup func(string) (string, bool), version strin
 // parseAs reads --as <actor> or --as=<actor> at args[*i], moving *i past a separate value; matched is false for any other argument.
 // An explicitly empty actor is refused.
 func parseAs(args []string, i *int) (actor string, matched bool, err error) {
-	value, ok := strings.CutPrefix(args[*i], "--as=")
+	if name, _, _ := strings.Cut(args[*i], "="); name != "--as" {
+		return "", false, nil
+	}
+	actor, err = parseFlagValue(args, i, "--as", "an actor")
+	return actor, true, err
+}
+
+// parseFlagValue reads the value of flag, as `flag value` or `flag=value`, from args[*i], moving *i past a separate value. A missing
+// value, or one that starts with "--", and an explicitly empty one are refused; what names the value in the first refusal.
+func parseFlagValue(args []string, i *int, flag, what string) (string, error) {
+	value, ok := strings.CutPrefix(args[*i], flag+"=")
 	if !ok {
-		if args[*i] != "--as" {
-			return "", false, nil
-		}
 		*i++
 		if *i == len(args) || strings.HasPrefix(args[*i], "--") {
-			return "", true, fmt.Errorf("--as requires an actor")
+			return "", fmt.Errorf("%s requires %s", flag, what)
 		}
 		value = args[*i]
 	}
 	if value == "" {
-		return "", true, fmt.Errorf("--as must be non-empty")
+		return "", fmt.Errorf("%s must be non-empty", flag)
 	}
-	return value, true, nil
+	return value, nil
 }
 
 // resolveActor is flag, else the first set of KATA_AUTHOR, USER and the gitUserNameKey lookup, else "anonymous".
@@ -497,7 +504,7 @@ Usage:
   tern-kata worker resume <run-uid> [--as <actor>]
   tern-kata worker abandon <run-uid> [--as <actor>]
   tern-kata update [--force] [--pause]
-  tern-kata agent --as <actor> [--ref <ref>] -- <command> [args...]
+  tern-kata agent [--as <actor>] [--ref <ref>] -- <command> [args...]
   tern-kata completion bash|zsh|fish
   tern-kata --version
   tern-kata --help
