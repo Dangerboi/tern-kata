@@ -99,4 +99,42 @@ function M.toggle(check: Check): (boolean, string)
     return off, text
 end
 
+-- The version a `version.txt` names, as "0.7.0"; nil when the text is no version.
+function M.release(text: string): string?
+    local numbers = M.parse(text)
+    if not numbers then return nil end
+    return numbers[1] .. "." .. numbers[2] .. "." .. numbers[3]
+end
+
+-- The window machine's plugin step. Its pending key is `{version, at}`; a plugin loading finds it and says what to do.
+M.PENDING_TTL = 10 * 60
+
+export type Pending = { version: string, at: number }
+
+-- "updated": this plugin is the version the step installed (toast, clear the key). "drop": the key is unusable or over
+-- 10 minutes old (clear it, silently). "wait": an install may still be running (leave the key).
+function M.pendingOutcome(pending: any, own: string, now: number): "updated" | "wait" | "drop"
+    if type(pending) ~= "table" or type(pending.version) ~= "string" or type(pending.at) ~= "number" then return "drop" end
+    if M.compare(pending.version, own) == 0 then return "updated" end
+    if pending.at > now or now - pending.at > M.PENDING_TTL then return "drop" end
+    return "wait"
+end
+
+local RAW = "https://raw.githubusercontent.com/Dangerboi/tern-kata/v"
+local DOWNLOADS = "https://github.com/Dangerboi/tern-kata/releases/download/v"
+
+-- The plugin-only install of `version`, run without a terminal: the command and its added environment. The script comes
+-- from the version's tag; the files it installs come from that version's download folder unless the user set their own.
+function M.pluginStep(version: string, os: string, configuredBase: string?): ({ string }, { [string]: string })
+    local env = {
+        TERN_KATA_PLUGIN_ONLY = "1",
+        TERN_KATA_BASE_URL = if configuredBase ~= nil and configuredBase ~= "" then configuredBase else DOWNLOADS .. version,
+    }
+    if os == "windows" then
+        return {"powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+            "irm " .. RAW .. version .. "/install.ps1 | iex"}, env
+    end
+    return {"sh", "-c", "curl -fsSL " .. RAW .. version .. "/install.sh | sh"}, env
+end
+
 return M

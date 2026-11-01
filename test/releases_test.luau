@@ -115,6 +115,49 @@ test("the toggle flips the stored state and says why it changes nothing", functi
     assert(linked:find("A linked plugin never checks", 1, true), linked)
 end)
 
+test("versions compare by number, not by text", function()
+    assert(releases.compare("0.10.0", "0.9.0") == 1)
+    assert(releases.compare("0.9.0", "0.10.0") == -1)
+    assert(releases.compare("0.9.0", "v0.9.0") == 0)
+    assert(releases.compare("0.9.0", "latest") == nil)
+end)
+
+test("version.txt text is read as a version", function()
+    assert(releases.release("v0.7.0\n") == "0.7.0")
+    assert(releases.release("<html>Not Found</html>") == nil)
+end)
+
+test("a pending key with the plugin's own version means the update worked", function()
+    assert(releases.pendingOutcome({version = "0.7.0", at = NOW - 5}, "0.7.0", NOW) == "updated")
+    assert(releases.pendingOutcome({version = "0.7.0", at = NOW - 3600}, "0.7.0", NOW) == "updated")
+end)
+
+test("a pending key of another version waits while fresh and is dropped after 10 minutes", function()
+    assert(releases.pendingOutcome({version = "0.7.0", at = NOW - 60}, "0.6.0", NOW) == "wait")
+    assert(releases.pendingOutcome({version = "0.7.0", at = NOW - 600}, "0.6.0", NOW) == "wait")
+    assert(releases.pendingOutcome({version = "0.7.0", at = NOW - 601}, "0.6.0", NOW) == "drop")
+    assert(releases.pendingOutcome({version = "0.7.0", at = NOW + 60}, "0.6.0", NOW) == "drop")
+end)
+
+test("a malformed pending key is dropped", function()
+    assert(releases.pendingOutcome("0.7.0", "0.6.0", NOW) == "drop")
+    assert(releases.pendingOutcome({version = "0.7.0"}, "0.6.0", NOW) == "drop")
+end)
+
+test("the plugin step per OS, from the version's tag and download folder", function()
+    local argv, env = releases.pluginStep("0.7.0", "linux", nil)
+    assert(table.concat(argv, " ") == "sh -c curl -fsSL https://raw.githubusercontent.com/Dangerboi/tern-kata/v0.7.0/install.sh | sh")
+    assert(env.TERN_KATA_PLUGIN_ONLY == "1")
+    assert(env.TERN_KATA_BASE_URL == "https://github.com/Dangerboi/tern-kata/releases/download/v0.7.0")
+    local win = releases.pluginStep("0.7.0", "windows", "")
+    assert(win[1] == "powershell" and win[6] == "irm https://raw.githubusercontent.com/Dangerboi/tern-kata/v0.7.0/install.ps1 | iex", win[6])
+end)
+
+test("the user's own TERN_KATA_BASE_URL is kept", function()
+    local _, env = releases.pluginStep("0.7.0", "macos", "http://127.0.0.1:8000")
+    assert(env.TERN_KATA_BASE_URL == "http://127.0.0.1:8000")
+end)
+
 if failures > 0 then
     print(failures .. " failed")
     error("failures")
