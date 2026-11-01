@@ -264,7 +264,7 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 		add("Agent", badge)
 	}
 	if w, ok := model.IssueWorkAttention(*issue); ok {
-		add("Work attention", ui.Badge{Common: ui.Common{Key: "v", Tone: attentionTone(w)}, Text: w.Text()})
+		add("Work attention", workAttention(w))
 	}
 	if issue.RecurrenceID != nil {
 		recurring := "Yes" // kata did not say more: it withholds recurrences from a scoped access
@@ -303,6 +303,20 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 		children = append(children, ui.Text{Common: ui.Common{Key: "creation", Tone: ui.ToneMuted}, Text: line})
 	}
 	return ui.Col{Common: ui.Common{Key: "properties"}, Gap: ui.GapNone, Children: children}
+}
+
+// workAttention is the Work attention value: the word a badge in its tone, then the whole message as wrapping text, so a long
+// message is read to its last word instead of being cut at the edge of a one-line chip.
+func workAttention(w model.WorkAttention) tern.Element {
+	tone := attentionTone(w)
+	if w.Msg == "" {
+		return ui.Badge{Common: ui.Common{Key: "v", Tone: tone}, Text: w.Word()}
+	}
+	noShrink := 0.0
+	return ui.Row{Common: ui.Common{Key: "v"}, Gap: ui.GapSM, Align: ui.AlignStart, Children: ui.Nodes(
+		ui.Badge{Common: ui.Common{Key: "word", Tone: tone, Shrink: &noShrink}, Text: w.Word()},
+		ui.Text{Common: ui.Common{Key: "message"}, Text: w.Msg},
+	)}
 }
 
 // propertyRow is a Name: value row of the properties grid.

@@ -115,12 +115,15 @@ type Model struct {
 	// AgentGone are the entries of agents this Pane started whose block went (pruned from agents.json) without a relay showing them
 	// exited, until the exit request for their Issue is decided.
 	AgentGone []AgentEntry
-	// agentFresh are the blocks of agents started since the last answer that read agents.json: an answer that read the file before
-	// the start wrote its entry does not hold it, and that is no sign the agent is gone.
-	agentFresh []string
-	Project    Project
-	Daemon     Daemon
-	Snapshot   Snapshot
+	// agentFresh are the agents started since a request was asked, by block, with the number of the last request asked before the
+	// start: an answer that read the file before the start wrote the entry does not hold it, and that is no sign the agent is gone.
+	// Only an answer to a later request settles it.
+	agentFresh map[string]int64
+	// agentAsks counts the RefreshAgents and PruneAgents the Pane has asked for.
+	agentAsks int64
+	Project   Project
+	Daemon    Daemon
+	Snapshot  Snapshot
 	// Relationships is every Issue's Relationships, built from Snapshot's links each time a snapshot is applied.
 	Relationships RelationshipIndex
 	Issues        []Issue
@@ -333,7 +336,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m = m.openRequested(msg.IssueRef)
 		m.Loading = true
 		m.Err = nil
-		return m, []Cmd{LoadProject{Workspace: msg.Workspace, Actor: m.Actor}, LoadViews{}, PruneAgents{PaneBlock: m.PaneBlock}}
+		m.agentAsks++
+		return m, []Cmd{LoadProject{Workspace: msg.Workspace, Actor: m.Actor}, LoadViews{}, PruneAgents{PaneBlock: m.PaneBlock, Seq: m.agentAsks}}
 	case ProjectLoaded:
 		return updateProject(m, msg)
 	case AgentStarted:

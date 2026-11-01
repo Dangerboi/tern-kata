@@ -57,7 +57,7 @@ func TestABlockMissingFromARelayIsASuspectNotGoneAndNothingIsSuspectedBeforeItWa
 	}
 	m, _ = relayed(m, model.AgentState{Block: "7", State: "idle"})
 	_, cmds = relayed(m)
-	if want := []model.Cmd{model.RefreshAgents{Suspects: []string{"7"}, PaneBlock: "9"}}; !reflect.DeepEqual(cmds, want) {
+	if want := []model.Cmd{model.RefreshAgents{Suspects: []string{"7"}, PaneBlock: "9", Seq: 1}}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("cmds %#v, want %#v", cmds, want)
 	}
 }
@@ -66,7 +66,7 @@ func TestOnlyOneRefreshIsOutAndTheNextRelayThatNeedsOneGetsItWhenTheAnswerIsIn(t
 	m := model.Model{PaneBlock: "9", AgentMapping: []model.AgentEntry{entry("a", "7", 1), entry("a", "8", 2)}}
 	m, _ = relayed(m, model.AgentState{Block: "7", State: "idle"}, model.AgentState{Block: "8", State: "idle"})
 	m, cmds := relayed(m, model.AgentState{Block: "8", State: "idle"})
-	if want := []model.Cmd{model.RefreshAgents{Suspects: []string{"7"}, PaneBlock: "9"}}; !reflect.DeepEqual(cmds, want) {
+	if want := []model.Cmd{model.RefreshAgents{Suspects: []string{"7"}, PaneBlock: "9", Seq: 1}}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("cmds %#v, want %#v", cmds, want)
 	}
 	m, cmds = relayed(m, model.AgentState{Block: "7", State: "idle"})
@@ -74,7 +74,7 @@ func TestOnlyOneRefreshIsOutAndTheNextRelayThatNeedsOneGetsItWhenTheAnswerIsIn(t
 		t.Fatalf("a second refresh went out while one was in flight: %#v", cmds)
 	}
 	m, cmds = model.Update(m, model.AgentsRefreshed{Agents: m.AgentMapping})
-	if want := []model.Cmd{model.RefreshAgents{Suspects: []string{"8"}, PaneBlock: "9"}}; !reflect.DeepEqual(cmds, want) {
+	if want := []model.Cmd{model.RefreshAgents{Suspects: []string{"8"}, PaneBlock: "9", Seq: 2}}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("after the answer: %#v, want %#v", cmds, want)
 	}
 	m, cmds = model.Update(m, model.AgentsRefreshed{Agents: m.AgentMapping})
@@ -185,7 +185,7 @@ func TestAnAdoptedAgentGetsAttentionGoingBackAndAutoCloseFromThisPane(t *testing
 
 func TestThePruneAtStartCarriesThePanesBlock(t *testing.T) {
 	_, cmds := model.Update(model.Model{PaneBlock: "9"}, model.Start{Workspace: "/repo"})
-	if want := []model.Cmd{model.LoadProject{Workspace: "/repo"}, model.LoadViews{}, model.PruneAgents{PaneBlock: "9"}}; !reflect.DeepEqual(cmds, want) {
+	if want := []model.Cmd{model.LoadProject{Workspace: "/repo"}, model.LoadViews{}, model.PruneAgents{PaneBlock: "9", Seq: 1}}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("cmds %#v", cmds)
 	}
 }

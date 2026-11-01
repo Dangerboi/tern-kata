@@ -369,10 +369,10 @@ func (g *Gateway) reconcileAgents(ctx context.Context, file, paneBlock string, f
 func (g *Gateway) pruneAgents(ctx context.Context, cmd model.PruneAgents) model.AgentsPruned {
 	file, _, err := g.agentStatePaths()
 	if err != nil {
-		return model.AgentsPruned{Err: err}
+		return model.AgentsPruned{Seq: cmd.Seq, Err: err}
 	}
 	agents, askErr, err := g.reconcileAgents(ctx, file, cmd.PaneBlock, true, func(string) bool { return true })
-	return model.AgentsPruned{Agents: agents, Err: cmp.Or(askErr, err)}
+	return model.AgentsPruned{Seq: cmd.Seq, Agents: agents, Err: cmp.Or(askErr, err)}
 }
 
 func removePrompt(path string) {
@@ -659,10 +659,10 @@ func writeAgentPrompt(folder, starter, text string) (string, error) {
 func (g *Gateway) refreshAgents(ctx context.Context, cmd model.RefreshAgents) model.AgentsRefreshed {
 	file, _, err := g.agentStatePaths()
 	if err != nil {
-		return model.AgentsRefreshed{Err: err}
+		return model.AgentsRefreshed{Seq: cmd.Seq, Err: err}
 	}
 	agents, _, err := g.reconcileAgents(ctx, file, cmd.PaneBlock, false, func(block string) bool { return slices.Contains(cmd.Suspects, block) })
-	return model.AgentsRefreshed{Agents: agents, Err: err}
+	return model.AgentsRefreshed{Seq: cmd.Seq, Agents: agents, Err: err}
 }
 
 // focusAgent has Tern show the agent's block.

@@ -50,10 +50,24 @@ type agentCloseState struct {
 	refused []string
 	// reading are the Issues (by UID) a status read is in flight for.
 	reading []string
-	// unreadable are the Issues (by UID) whose last status read failed; none is read again.
+	// unreadable are the Issues (by UID) whose last status read failed; none is read again until the event stream reconnects or the Pane
+	// switches Daemon.
 	unreadable []string
 	// known is the status the last read gave an Issue the Collection does not list.
 	known map[string]string
+}
+
+// forgetUnreadable lets the Issues whose status read failed be read again: the Daemon that failed them may be back.
+func (s agentCloseState) forgetUnreadable() agentCloseState {
+	s.unreadable = nil
+	return s
+}
+
+// forDaemon is the state after the Pane connects to a different Daemon: its Issues are not the old Daemon's, so no read in flight,
+// known status or failed read carries over. Which blocks were closed or refused is about agents, not Issues, and stays.
+func (s agentCloseState) forDaemon() agentCloseState {
+	s.reading, s.known = nil, nil
+	return s.forgetUnreadable()
 }
 
 type agentCloseTrigger int
