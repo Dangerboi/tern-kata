@@ -115,7 +115,12 @@ func stopWorker(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Writ
 	if !resp.OK {
 		return subcommandError{errors.New(resp.Error)}
 	}
-	a := resp.Stop
+	return writeStopAnswer(out, resp.Stop)
+}
+
+// writeStopAnswer says what the worker answered to a stop: the mode, the runs in flight and whether anything starts it again.
+func writeStopAnswer(out io.Writer, a *worker.StopAnswer) error {
+	var err error
 	runs := fmt.Sprintf("%d %s in flight", a.InFlight, plural(a.InFlight, "run", "runs"))
 	switch {
 	case a.Mode == worker.StopNow && a.InFlight == 0:

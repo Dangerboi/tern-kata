@@ -107,6 +107,7 @@ type updateFixture struct {
 	state    string
 	requests *atomic.Int32
 	out      bytes.Buffer
+	ternLog  string
 }
 
 const oldBinaryText = "the installed binary"
@@ -156,6 +157,7 @@ func newUpdateFixture(t *testing.T, current, latest string, spoil func(string) s
 	f.env.Stdin = strings.NewReader("")
 	t.Setenv("TERN_KATA_TEST_BINARY", latest) // the swapped-in binary is a helper process, which answers a pre-flight healthy unless a test says otherwise
 	f.preflight(t, `{"refusals":[],"warnings":[]}`, 0, "")
+	f.fakeTern(t, t.TempDir(), 0) // the plugin step finds an empty plugin folder, never this machine's
 	return f
 }
 

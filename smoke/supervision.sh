@@ -210,4 +210,33 @@ stop_expecting none
 no_worker_within 13 "worker.toml is absent"
 printf '%s\n' "$good_config" >"$config/worker.toml"
 wait_started "" 13 || { echo "restoring worker.toml did not start a worker within one poll" >&2; exit 1; }
-printf 'Supervision smoke passed: no config = nothing, worker started and run with no window, quick crashes back off, worker back after a daemon restart and when the worker it left behind ends, host half and `worker stop` agree on worker.manual and worker.toml (marker, no marker, no config) over the same config folder, fixing a broken worker.toml drops the wait\n'
+# `update` moves a supervised worker to the new binary: a release build older than the dist/ is what the host half starts,
+# `update` against the local dist/ swaps it and stops the worker when idle, and the fresh worker the host half starts
+# reports the new version. The plugin is linked here, so the update leaves it and says so.
+up_version=$(sed -n 's/^version *= *"\(.*\)"/\1/p' "$repo/plugin.toml")
+"$repo/scripts/release.sh" "v$up_version" "$tmp/update-dist" >/dev/null
+python3 -m http.server 0 --bind 127.0.0.1 --directory "$tmp/update-dist" >"$tmp/update-server.log" 2>&1 &
+up_server=$!
+up_url=
+for ((i = 0; i < 100; i++)); do
+  up_url=$(sed -n 's|^Serving HTTP on 127.0.0.1 port \([0-9]*\).*|http://127.0.0.1:\1|p' "$tmp/update-server.log")
+  [[ -z $up_url ]] || break
+  sleep 0.1
+done
+[[ -n $up_url ]]
+(cd "$repo" && go build -ldflags "-X main.version=v0.0.1" -o "$tmp/bin/tern-kata.old" ./cmd/tern-kata)
+mv "$tmp/bin/tern-kata.old" "$tmp/bin/tern-kata"
+old_worker=$(worker_pid)
+stop_expecting fresh
+wait_started "$old_worker" 40 || { echo "no worker started from the older release build" >&2; exit 1; }
+old_worker=$(worker_pid)
+"$tmp/bin/tern-kata" worker status | grep -q 'tern-kata v0.0.1' || { echo "the worker is not the older build" >&2; exit 1; }
+TERN_KATA_BASE_URL="$up_url" "$tmp/bin/tern-kata" update >"$tmp/update.out"
+grep -q 'Stopping when idle' "$tmp/update.out" || { echo "update did not stop the worker" >&2; cat "$tmp/update.out" >&2; exit 1; }
+grep -q 'The plugin will start a fresh worker' "$tmp/update.out"
+grep -q 'tern-kata plugin is linked' "$tmp/update.out"
+wait_gone "$old_worker"
+wait_started "$old_worker" 40 || { echo "the host half did not start a worker after update" >&2; exit 1; }
+"$tmp/bin/tern-kata" worker status | grep -q "tern-kata v$up_version" || { echo "the new worker does not run v$up_version" >&2; exit 1; }
+kill "$up_server" 2>/dev/null || true
+printf 'Supervision smoke passed: no config = nothing, worker started and run with no window, quick crashes back off, worker back after a daemon restart and when the worker it left behind ends, update moves the supervised worker to the new release, host half and `worker stop` agree on worker.manual and worker.toml (marker, no marker, no config) over the same config folder, fixing a broken worker.toml drops the wait\n'

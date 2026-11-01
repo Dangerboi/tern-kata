@@ -106,6 +106,7 @@ func updateRelease(ctx context.Context, env updateEnv, force bool, out io.Writer
 	}
 	if semver.Compare(latest, current) <= 0 { // never a downgrade
 		fmt.Fprintf(out, "tern-kata %s is up to date\n", current)
+		updatePlugin(ctx, current, nil, func() (unpackedRelease, func(), error) { return downloadBesideBinary(ctx, env, target, current) }, out)
 		return updateOutcome{}, nil
 	}
 
@@ -127,6 +128,8 @@ func updateRelease(ctx context.Context, env updateEnv, force bool, out io.Writer
 	}
 
 	fmt.Fprintf(out, "Updated tern-kata from %s to %s\n", current, latest)
+	updatePlugin(ctx, latest, &release, nil, out)
+	updateWorker(ctx, env, latest, preflight.ForcedConfig, out)
 	fmt.Fprintf(out, "Reopen tern-kata Panes to use %s\n", latest)
 	fmt.Fprintln(out, "To update the agent skills too, run: npx skills update -g (or bunx skills update -g)")
 	return preflight, nil
@@ -166,4 +169,20 @@ func lockUpdate(state string) (func(), error) {
 		filelock.Unlock(file)
 		_ = file.Close()
 	}, nil
+}
+
+// downloadBesideBinary downloads and unpacks release version into a folder beside target (the swap's volume, as in a full
+// update); the returned function removes it.
+func downloadBesideBinary(ctx context.Context, env updateEnv, target, version string) (unpackedRelease, func(), error) {
+	work, err := os.MkdirTemp(filepath.Dir(target), ".tern-kata-update-")
+	if err != nil {
+		return unpackedRelease{}, nil, fmt.Errorf("cannot prepare a download next to %s: %w", target, err)
+	}
+	cleanup := func() { _ = os.RemoveAll(work) }
+	release, err := downloadRelease(ctx, env, version, work)
+	if err != nil {
+		cleanup()
+		return unpackedRelease{}, nil, err
+	}
+	return release, cleanup, nil
 }
