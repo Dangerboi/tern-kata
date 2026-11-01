@@ -198,6 +198,33 @@ func (e Extensions) args() []string {
 	return nil
 }
 
+// hasArg is true when the profile's args hold one of flags, bare or as flag=value.
+func (p Profile) hasArg(flags ...string) bool {
+	return slices.ContainsFunc(p.Args, func(a string) bool {
+		flag, _, _ := strings.Cut(a, "=")
+		return slices.Contains(flags, flag)
+	})
+}
+
+// LoadsAmbientExtensions is true when a run of the profile lets omp discover its extensions: neither the `extensions`
+// key nor the profile's own args (--no-extensions, --trusted-extension) switch discovery off.
+func (p Profile) LoadsAmbientExtensions() bool {
+	return p.Extensions.Ambient() && !p.hasArg("--no-extensions", "--trusted-extension")
+}
+
+// ompProfile is the omp profile the profile's args select with --profile <name> or --profile=<name> (the last wins, as
+// in omp); ok is false when they select none.
+func (p Profile) ompProfile() (name string, ok bool) {
+	for i, a := range p.Args {
+		if value, found := strings.CutPrefix(a, "--profile="); found {
+			name, ok = value, true
+		} else if a == "--profile" && i+1 < len(p.Args) {
+			name, ok = p.Args[i+1], true
+		}
+	}
+	return name, ok
+}
+
 // SecretSource is where a secret's value comes from: an environment variable or a private file.
 type SecretSource struct {
 	Env  string `toml:"env"`
@@ -280,6 +307,9 @@ func (c *Config) validate() error {
 	for name, p := range c.Profiles {
 		if why := p.Extensions.validate(); why != "" {
 			return fmt.Errorf("profiles.%s: extensions: %s", name, why)
+		}
+		if p.Extensions.Mode == extensionsList && p.hasArg("-e", "--extension", "--hook") {
+			return fmt.Errorf("profiles.%s: extensions: a list cannot be combined with -e, --extension or --hook in args (omp refuses that combination)", name)
 		}
 		if p.Command != "" && strings.ContainsAny(p.Command, `/\`) && !filepath.IsAbs(p.Command) {
 			return &FieldError{FieldCommand, fmt.Errorf("profiles.%s: command %q must be absolute or a name on PATH", name, p.Command)}
