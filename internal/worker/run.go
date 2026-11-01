@@ -688,7 +688,9 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 				if j.Issue.Existing || issueOpen {
 					intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("succeeded"), Text: j.Outcome.Summary})
 					if !j.Issue.Existing {
-						intents = append(intents, Intent{Kind: IntentLabel, Text: "needs-review"})
+						intents = append(intents,
+							Intent{Kind: IntentLabel, Text: "needs-review"},
+							Intent{Kind: IntentNotify, Text: reviewNotice(j)})
 					}
 				}
 			case cronjob.RunFailed:
@@ -787,6 +789,12 @@ func quietSuccess(j *Journal) bool {
 func heldNotice(j *Journal) string {
 	return truncate(fmt.Sprintf("Run %s of %q on %s is held: %s Resume it with `tern-kata worker resume %s` or abandon it with `tern-kata worker abandon %s`.",
 		j.RunUID, j.JobName, j.Issue.Ref, j.Outcome.holdLine(), j.RunUID, j.RunUID), maxNotifyBytes)
+}
+
+// reviewNotice is the inbox request for a succeeded run that left its Issue open, saved in its intent so a retry sends
+// the same words.
+func reviewNotice(j *Journal) string {
+	return truncate(fmt.Sprintf("Run %s of %q succeeded but left %s open: it needs review.", j.RunUID, j.JobName, j.Issue.Ref), maxNotifyBytes)
 }
 
 // resolveRecipient reads the Issue and saves who its owner or author is in the notify intent, once: from then on a

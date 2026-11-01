@@ -59,7 +59,8 @@ const (
 	IntentComment IntentKind = "comment"
 	IntentLabel   IntentKind = "label"
 	IntentFinal   IntentKind = "final-observation"
-	// IntentNotify is the inbox request a held run owes the Issue's owner or author (ADR-0005). Its Recipient is read
+	// IntentNotify is the inbox request a held run, or a succeeded run that left its Issue open, owes the Issue's owner
+	// or author (ADR-0005, ADR-0009). Its Recipient is read
 	// from the Issue once and saved before the request is sent, so a retry never recomputes it.
 	IntentNotify IntentKind = "notify"
 )

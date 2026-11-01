@@ -1,7 +1,10 @@
 package worker_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -321,3 +324,126 @@ func TestTheFinalObservationIsSentWhileTheIssueReadFailsAndTheCommentAndLabelFol
 		t.Fatalf("the open Issue got comments %q and labels %q, want the comment and the needs-review label", i.Comments, i.Labels)
 	}
 }
+
+func TestASucceededRunThatLeftItsIssueOpenTellsTheOwnerAfterACrashBetweenLabelAndNotice(t *testing.T) {
+	h := newHarness(t, "--stub-text", "All done.")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
+	uid, _ := h.killedAt("intent-label", job)
+	run, err := h.kata.Kata.ShowRun(context.Background(), h.proj.ID, uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.kata.EditIssue(t, h.proj, run.IssueUID, "", "carol")
+	if _, _, ok := h.kata.InboxRequest(t, h.proj, run.IssueUID, "carol"); ok {
+		t.Fatal("the owner was told before the restart")
+	}
+
+	restarted := h.start(worker.Hooks{})
+	h.admitting(restarted)
+	h.settledAndFree(restarted, uid)
+	from, message, ok := h.kata.InboxRequest(t, h.proj, run.IssueUID, "carol")
+	if !ok || from != "robot" || !strings.Contains(message, uid) || !strings.Contains(message, "needs review") {
+		t.Fatalf("carol's request from %q reads %q (found %v)", from, message, ok)
+	}
+}
+
+func TestASucceededRunThatClosedItsIssueTellsNobody(t *testing.T) {
+	h := newHarness(t, "--stub-text", "All done.")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
+	r := h.start(worker.Hooks{AfterSave: func(point string, j *worker.Journal) error {
+		if point == "finished" {
+			h.kata.CloseIssue(t, h.proj, j.Issue.UID)
+		}
+		return nil
+	}})
+	h.admitting(r)
+	uid := h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID
+	h.settledAndFree(r, uid)
+	issueUID := h.settled(uid).IssueUID
+	for _, who := range []string{"tester", "robot"} {
+		if _, _, ok := h.kata.InboxRequest(t, h.proj, issueUID, who); ok {
+			t.Fatalf("%s was told about a closed Issue", who)
+		}
+	}
+}
+
+func TestASucceededRunThatLeftItsIssueOpenWithNobodyToTellStillCommentsAndLabelsIt(t *testing.T) {
+	h := newHarness(t, "--stub-text", "All done.")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
+	var mu sync.Mutex
+	var intents []worker.Intent
+	r := h.start(worker.Hooks{AfterSave: func(point string, j *worker.Journal) error {
+		mu.Lock()
+		defer mu.Unlock()
+		switch point {
+		case "finished":
+			// kata answers every read of the run's Issue as one that names no owner and no author
+			h.kata.Intercept(func(req *http.Request) bool {
+				return req.Method == http.MethodGet && strings.HasSuffix(req.URL.Path, "/issues/"+j.Issue.UID)
+			}, func(w http.ResponseWriter, req *http.Request, next http.Handler) {
+				rec := &captured{header: http.Header{}, status: http.StatusOK}
+				next.ServeHTTP(rec, req)
+				var doc map[string]any
+				if err := json.Unmarshal(rec.body.Bytes(), &doc); err == nil {
+					if issue, ok := doc["issue"].(map[string]any); ok {
+						delete(issue, "owner")
+						issue["author"] = ""
+					}
+					rec.body.Reset()
+					_ = json.NewEncoder(&rec.body).Encode(doc)
+				}
+				for k, v := range rec.header {
+					if k != "Content-Length" {
+						w.Header()[k] = v
+					}
+				}
+				w.WriteHeader(rec.status)
+				_, _ = io.Copy(w, &rec.body)
+			})
+		case "settled":
+			intents = append([]worker.Intent(nil), j.Intents...)
+		}
+		return nil
+	}})
+	h.admitting(r)
+	uid := h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID
+	h.settledAndFree(r, uid)
+
+	if got := h.kataRun(uid).Status; got != "succeeded" {
+		t.Fatalf("the run is %q in kata, want succeeded", got)
+	}
+	i, err := h.kata.Kata.ShowIssue(context.Background(), h.proj.ID, h.settled(uid).IssueUID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(i.Comments) != 1 || !contains(i.Labels, "needs-review") {
+		t.Fatalf("the open Issue got comments %q and labels %q, want the comment and the needs-review label", i.Comments, i.Labels)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	var notify *worker.Intent
+	for k := range intents {
+		if intents[k].Kind == worker.IntentNotify {
+			notify = &intents[k]
+		}
+	}
+	if notify == nil || !notify.Done || notify.Recipient != "" {
+		t.Fatalf("the notify intent is %+v, want one that ended done with no recipient", notify)
+	}
+	for _, who := range []string{"tester", "robot"} {
+		if _, _, ok := h.kata.InboxRequest(t, h.proj, i.UID, who); ok {
+			t.Fatalf("%s was sent a request", who)
+		}
+	}
+}
+
+// captured is a response held back so a test can rewrite it.
+type captured struct {
+	header http.Header
+	body   bytes.Buffer
+	status int
+}
+
+func (c *captured) Header() http.Header         { return c.header }
+func (c *captured) Write(b []byte) (int, error) { return c.body.Write(b) }
+func (c *captured) WriteHeader(code int)        { c.status = code }
