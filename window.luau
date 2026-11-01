@@ -166,6 +166,11 @@ local function hiddenTabs(cx: WindowCx, all: { TabInfo }): { [number]: boolean }
     return tabs
 end
 
+local function waitingMessage(cx: WindowCx, agent: AgentBlock, last: string): string
+    local ok, transcript = pcall(function() return cx.agents:transcript(agent.pane, {last = 2}) end)
+    return waitingtext.of(if ok then transcript else {}, last)
+end
+
 -- Every agent block in the session as JSON for the Pane, which matches it against its own agents. The pane id goes as
 -- decimal text; %.0f prints a whole number without an exponent. Tern's API gives the id only as a Luau number (a double),
 -- so the text is exact only for ids up to 2^53: a larger id is already rounded here and matches no agent of the Pane.
@@ -175,11 +180,6 @@ end
 -- message can be a cut-off thinking block. The transcript is read only for a waiting agent, and only its end.
 -- `hidden` says whether the agent's tab is in the hidden session, so the Pane learns when an agent is opened or put away
 -- without it; it is left out when the window cannot place the agent's tab.
-local function waitingMessage(cx: WindowCx, agent: AgentBlock, last: string): string
-    local ok, transcript = pcall(function() return cx.agents:transcript(agent.pane, {last = 2}) end)
-    return waitingtext.of(if ok then transcript else {}, last)
-end
-
 local function agentStates(cx: WindowCx, tabs: { TabInfo }): string
     local list = tern.json.array({})
     local hidden = hiddenTabs(cx, tabs)
