@@ -123,12 +123,12 @@ name = "open"
 }
 
 func TestAgentArgvBuilders(t *testing.T) {
-	line := AgentCommandLine("", []string{"omp", "--fast"}, "/state/p.md")
+	line := AgentCommandLine("", "demo#ab12", []string{"omp", "--fast"}, "/state/p.md")
 	if want := []string{"omp", "--fast", "@/state/p.md"}; !slices.Equal(line, want) {
 		t.Errorf("without an actor %q, want %q", line, want)
 	}
-	wrapped := AgentCommandLine("me-agent", []string{"omp"}, "/state/p.md")
-	if want := []string{"tern-kata", "agent", "--as", "me-agent", "--", "omp", "@/state/p.md"}; !slices.Equal(wrapped, want) {
+	wrapped := AgentCommandLine("me-agent", "demo#ab12", []string{"omp"}, "/state/p.md")
+	if want := []string{"tern-kata", "agent", "--as", "me-agent", "--ref", "demo#ab12", "--", "omp", "@/state/p.md"}; !slices.Equal(wrapped, want) {
 		t.Errorf("with an actor %q, want %q", wrapped, want)
 	}
 	split := AgentSplitArgs("24489903521795", "/work/my repo", line)
@@ -139,7 +139,7 @@ func TestAgentArgvBuilders(t *testing.T) {
 		t.Errorf("a Pane that cannot name its block splits %q", got[1])
 	}
 	tab := AgentTabArgs("/work", wrapped)
-	if want := []string{"new", "tab", "--cwd", "/work", "--json", "--", "tern-kata", "agent", "--as", "me-agent", "--", "omp", "@/state/p.md"}; !slices.Equal(tab, want) {
+	if want := []string{"new", "tab", "--cwd", "/work", "--json", "--", "tern-kata", "agent", "--as", "me-agent", "--ref", "demo#ab12", "--", "omp", "@/state/p.md"}; !slices.Equal(tab, want) {
 		t.Errorf("tab %q, want %q", tab, want)
 	}
 }
@@ -213,7 +213,7 @@ func TestStartingAnAgentWritesThePromptRunsTernAndRecordsTheBlock(t *testing.T) 
 		!e.StartedAt.Equal(time.Date(2026, 10, 29, 12, 0, 7, 0, time.UTC)) || filepath.Dir(e.PromptFile) != filepath.Join(dirs.State, AgentPromptsFolder) {
 		t.Fatalf("entry %+v", e)
 	}
-	want := []string{"split", "7", "right", "--cwd", "/work/demo", "--json", "--", "tern-kata", "agent", "--as", "me-agent", "--", "omp", "@" + e.PromptFile}
+	want := []string{"split", "7", "right", "--cwd", "/work/demo", "--json", "--", "tern-kata", "agent", "--as", "me-agent", "--ref", "demo#ab12", "--", "omp", "@" + e.PromptFile}
 	if !slices.Equal(ran, want) {
 		t.Fatalf("ran %q, want %q", ran, want)
 	}

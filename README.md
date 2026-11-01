@@ -71,7 +71,7 @@ command = ["omp", "--model", "opus"]
 checkout = "/home/me/Code/tern-kata"   # an absolute directory
 ```
 
-With an `actor` the agent runs through `tern-kata agent --as <actor> --`, which sets `KATA_AUTHOR`; `tern-kata` must be on the `PATH`. An unknown key, a relative `checkout` or an empty `command` refuses the start and shows the error. The Pane remembers the agents it started in `agents.json` in its state folder and forgets the ones whose block has closed.
+With an `actor` the agent runs through `tern-kata agent --as <actor> --ref <qualified ref> --`, which sets `KATA_AUTHOR` and `KATA_REF` (the Issue, so kata-plugin's todo plan hangs under it) and drops an inherited `KATA_REF` and `KATA_INBOX_USER` (your own inbox is not the agent's); `tern-kata` must be on the `PATH`. An unknown key, a relative `checkout` or an empty `command` refuses the start and shows the error. The Pane remembers the agents it started in `agents.json` in its state folder and forgets the ones whose block has closed.
 
 **kata links.** Links from agents' chat replies open the Issue in tern-kata. See [Agents](docs/guide/agents.md).
 
