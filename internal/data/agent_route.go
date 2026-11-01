@@ -8,8 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
+	"go.kenn.io/kit/safefileio"
 )
 
 // AgentRoute is the kata daemon the Pane talks to, as far as it differs from what a block Tern starts would pick by itself. Tern's
@@ -34,6 +36,11 @@ type AgentRoute struct {
 	AuthFile string
 	// Token is the token itself, in the Pane only: Args leaves it out, and startAgent moves it into TokenFile before the route is used.
 	Token string
+	// DB, Schema and DSN are the Pane's KATA_DB (made absolute), KATA_POSTGRES_SCHEMA and KATA_DSN, carried only to a route that keeps the
+	// Pane's own home: kata hashes them into <KATA_HOME>/runtime/<hash> and starts a daemon when none runs there, so the block's own
+	// values must never mix with another home. A DSN may hold a password, so it travels like the token: DSN is the Pane's copy, which
+	// startAgent moves into DSNFile, a private file the wrapper reads into KATA_DSN and deletes.
+	DB, Schema, DSN, DSNFile string
 }
 
 // IsZero reports whether the route changes nothing: the agent starts exactly as it did before routing existed.
@@ -42,6 +49,7 @@ func (r AgentRoute) IsZero() bool { return r == AgentRoute{} }
 // zeroWithoutToken reports whether the route would change nothing but for the credentials the Pane has.
 func (r AgentRoute) zeroWithoutToken() bool {
 	r.Token, r.TokenFile, r.AuthFile, r.TrustPrivate = "", "", "", false
+	r.DB, r.Schema, r.DSN, r.DSNFile = "", "", "", ""
 	return r.IsZero()
 }
 
@@ -63,6 +71,15 @@ func (r AgentRoute) Args() []string {
 	if r.AuthFile != "" {
 		args = append(args, "--auth-file", r.AuthFile)
 	}
+	if r.DB != "" {
+		args = append(args, "--db", r.DB)
+	}
+	if r.Schema != "" {
+		args = append(args, "--schema", r.Schema)
+	}
+	if r.DSNFile != "" {
+		args = append(args, "--dsn-file", r.DSNFile)
+	}
 	if r.AllowInsecure {
 		args = append(args, "--allow-insecure")
 	}
@@ -78,15 +95,22 @@ func (r AgentRoute) Args() []string {
 // Once the route is not zero the agent gets the credential the Pane uses: a switched remote entry's token (its inline token or what its
 // token_env holds in the Pane's environment), else the Pane's KATA_AUTH_TOKEN or KATA_AUTH_TOKEN_FILE. A token_env the Pane
 // cannot resolve is an error, as it is for the Pane's own connection.
-func (g *Gateway) CurrentAgentRoute() (AgentRoute, error) {
+func (g *Gateway) CurrentAgentRoute(ctx context.Context, workspace string) (AgentRoute, error) {
 	g.mu.Lock()
 	current := g.current
 	g.mu.Unlock()
-	route := AgentRoute{Home: os.Getenv("KATA_HOME"), Daemon: current}
+	route := AgentRoute{Daemon: current}
+	if home := os.Getenv("KATA_HOME"); home != "" {
+		// Absolute: the agent's block starts in its checkout, not in the Pane's working directory.
+		var err error
+		if route.Home, err = filepath.Abs(home); err != nil {
+			return AgentRoute{}, fmt.Errorf("resolve KATA_HOME: %w", err)
+		}
+	}
 	switch {
 	case current != "":
 		var err error
-		if route.Home, err = kataHome(); err != nil {
+		if route.Home, err = paneHome(); err != nil {
 			return AgentRoute{}, err
 		}
 		catalog, err := ReadCatalog()
@@ -100,8 +124,13 @@ func (g *Gateway) CurrentAgentRoute() (AgentRoute, error) {
 		if route.Token, err = entry.Token(); err != nil {
 			return AgentRoute{}, err
 		}
-		if entry.Local && route.Token == "" {
-			route.paneCredential() // a local entry with no token of its own is reached with the Pane's, as the Pane connects to it
+		if entry.Local {
+			if route.Token == "" {
+				route.paneCredential() // a local entry with no token of its own is reached with the Pane's, as the Pane connects to it
+			}
+			if err := route.paneStorage(); err != nil {
+				return AgentRoute{}, err
+			}
 		}
 		return route, nil
 	case os.Getenv("KATA_SERVER") != "":
@@ -115,13 +144,66 @@ func (g *Gateway) CurrentAgentRoute() (AgentRoute, error) {
 	// which credential the agent sends or which catalog its daemon resolves in.
 	if route.Home == "" {
 		var err error
-		if route.Home, err = kataHome(); err != nil {
+		if route.Home, err = paneHome(); err != nil {
 			return AgentRoute{}, err
 		}
 	}
 	route.TrustPrivate = envTruthy("KATA_TRUST_PRIVATE_NETWORK")
 	route.paneCredential()
+	if route.Server == "" {
+		if err := route.paneStorage(); err != nil {
+			return AgentRoute{}, err
+		}
+		if route.Token == "" && route.AuthFile == "" {
+			// The Pane's own connection may have resolved a credential that exists only in the Pane's environment: the token_env of the
+			// remote entry active_daemon or the checkout's pin selected, or of [auth].
+			if err := route.connectionCredential(ctx, g.deadline, workspace); err != nil {
+				return AgentRoute{}, err
+			}
+		}
+	}
 	return route, nil
+}
+
+// paneHome is the Pane's KATA_HOME made absolute, else the default home.
+func paneHome() (string, error) {
+	home, err := kataHome()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Abs(home)
+}
+
+// paneStorage sets the Pane's KATA_DB, KATA_POSTGRES_SCHEMA and KATA_DSN on the route.
+func (r *AgentRoute) paneStorage() error {
+	if db := strings.TrimSpace(os.Getenv("KATA_DB")); db != "" {
+		abs, err := filepath.Abs(db)
+		if err != nil {
+			return fmt.Errorf("resolve KATA_DB: %w", err)
+		}
+		r.DB = abs
+	}
+	r.Schema = strings.TrimSpace(os.Getenv("KATA_POSTGRES_SCHEMA"))
+	r.DSN = strings.TrimSpace(os.Getenv("KATA_DSN"))
+	return nil
+}
+
+// connectionCredential sets the token the Pane's connection resolved when the Pane has no KATA_AUTH_TOKEN or KATA_AUTH_TOKEN_FILE:
+// the Token of the catalog entry the connection followed (active_daemon or the checkout's pin), else what the home's [auth] token_env
+// holds (when [auth] has no inline token or token_file, which the agent's kata reads itself).
+func (r *AgentRoute) connectionCredential(ctx context.Context, deadline time.Duration, workspace string) error {
+	catalog, err := ReadCatalogAt(r.Home)
+	if err != nil {
+		return err
+	}
+	if _, entry := resolveEntry(ctx, deadline, workspace, catalog, ""); entry.Name != "" && !entry.Local {
+		r.Token, err = entry.Token()
+		return err
+	}
+	if name := homeAuthTokenEnv(r.Home); name != "" {
+		r.Token = strings.TrimSpace(os.Getenv(name))
+	}
+	return nil
 }
 
 // paneCredential sets the Pane's own bearer credential on the route: its KATA_AUTH_TOKEN, else its KATA_AUTH_TOKEN_FILE.
@@ -140,27 +222,49 @@ func envTruthy(name string) bool {
 // agentTokenSuffix names the token file beside a prompt file; removePrompt removes both.
 const agentTokenSuffix = ".token"
 
-// withTokenFile moves route.Token into a new private file beside promptFile and names it in route.TokenFile. A route with no Token
-// is returned as it is.
-func (r AgentRoute) withTokenFile(promptFile string) (AgentRoute, error) {
-	if r.Token == "" {
-		return r, nil
+// agentDSNSuffix names the DSN file beside a prompt file; removePrompt removes it too.
+const agentDSNSuffix = ".dsn"
+
+// withSecretFiles moves route.Token and route.DSN into new private files beside promptFile (created as kata's own credential files
+// are, so they pass its checks on every OS) and names them in route.TokenFile and route.DSNFile. Nothing else changes.
+func (r AgentRoute) withSecretFiles(promptFile string) (AgentRoute, error) {
+	var written []string
+	put := func(secret, suffix string, name *string) error {
+		if secret == "" {
+			return nil
+		}
+		file := promptFile + suffix
+		f, err := safefileio.CreatePrivateFile(file)
+		if err != nil {
+			return fmt.Errorf("create the agent's private file: %w", err)
+		}
+		written = append(written, file)
+		_, err = f.WriteString(secret + "\n")
+		if closeErr := f.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			return fmt.Errorf("write the agent's private file: %w", err)
+		}
+		*name = file
+		return nil
 	}
-	file := promptFile + agentTokenSuffix
-	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
+	if err := put(r.Token, agentTokenSuffix, &r.TokenFile); err != nil {
+		removeAll(written)
 		return r, err
 	}
-	_, err = f.WriteString(r.Token + "\n")
-	if closeErr := f.Close(); err == nil {
-		err = closeErr
+	if err := put(r.DSN, agentDSNSuffix, &r.DSNFile); err != nil {
+		removeAll(written)
+		return r, err
 	}
-	if err != nil {
-		_ = os.Remove(file)
-		return r, fmt.Errorf("write the agent's token file: %w", err)
-	}
-	r.Token, r.TokenFile = "", file
+	r.Token, r.DSN = "", ""
 	return r, nil
+}
+
+func removeAll(files []string) {
+	for _, f := range files {
+		_ = os.Remove(f)
+	}
 }
 
 // Env resolves the route into what the agent's environment must say: set holds NAME=value entries, and unset the names to drop first.
@@ -193,7 +297,7 @@ func (r AgentRoute) resolve(dir string, wrapper bool) (set, unset []string, err 
 	if r.IsZero() {
 		return nil, nil, nil
 	}
-	unset = []string{"KATA_SERVER", "KATA_AUTH_TOKEN", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE", "KATA_TRUST_PRIVATE_NETWORK"}
+	unset = []string{"KATA_SERVER", "KATA_AUTH_TOKEN", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE", "KATA_TRUST_PRIVATE_NETWORK", "KATA_DSN", "KATA_DB", "KATA_POSTGRES_SCHEMA"}
 	if r.Home != "" {
 		set = append(set, "KATA_HOME="+r.Home)
 	}
@@ -203,6 +307,24 @@ func (r AgentRoute) resolve(dir string, wrapper bool) (set, unset []string, err 
 			return nil, nil, err
 		}
 		_ = os.Remove(r.TokenFile) // the file's job is done: it must not outlive the agent's start
+	}
+	dsn := r.DSN
+	if r.DSNFile != "" && wrapper {
+		if dsn, err = readTokenFile(r.DSNFile, false); err != nil {
+			return nil, nil, err
+		}
+		_ = os.Remove(r.DSNFile)
+	}
+	storage := func() { // only for a route that keeps the Pane's home
+		if r.DB != "" {
+			set = append(set, "KATA_DB="+r.DB)
+		}
+		if r.Schema != "" {
+			set = append(set, "KATA_POSTGRES_SCHEMA="+r.Schema)
+		}
+		if dsn != "" {
+			set = append(set, "KATA_DSN="+dsn)
+		}
 	}
 	credential := func() {
 		if token != "" {
@@ -217,6 +339,9 @@ func (r AgentRoute) resolve(dir string, wrapper bool) (set, unset []string, err 
 			set = append(set, "KATA_SERVER="+r.Server)
 		}
 		credential()
+		if r.Server == "" {
+			storage()
+		}
 		if r.AllowInsecure {
 			set = append(set, "KATA_ALLOW_INSECURE=1")
 		}
@@ -264,7 +389,9 @@ func (r AgentRoute) resolve(dir string, wrapper bool) (set, unset []string, err 
 		return nil, nil, err
 	}
 	if entry.Home != "" && !pinned {
-		set = []string{"KATA_HOME=" + entry.Home} // the entry's own home replaces the Pane's: it holds the daemon's state
+		set = []string{"KATA_HOME=" + entry.Home} // the entry's own home replaces the Pane's: it holds the daemon's state, and the Pane's storage settings are not its own
+	} else {
+		storage()
 	}
 	credential()
 	return set, unset, nil
@@ -317,4 +444,24 @@ func homeAuthCredential(home string) (string, error) {
 		}
 	}
 	return "", nil
+}
+
+// homeAuthTokenEnv is the variable [auth] token_env names in config.toml of home, "" when it names none or [auth] has an inline token or
+// a token_file, which outrank it.
+func homeAuthTokenEnv(home string) string {
+	raw, err := os.ReadFile(filepath.Join(home, "config.toml"))
+	if err != nil {
+		return ""
+	}
+	var f struct {
+		Auth struct {
+			Token     string `toml:"token"`
+			TokenFile string `toml:"token_file"`
+			TokenEnv  string `toml:"token_env"`
+		} `toml:"auth"`
+	}
+	if _, err := toml.Decode(string(raw), &f); err != nil || strings.TrimSpace(f.Auth.Token) != "" || strings.TrimSpace(f.Auth.TokenFile) != "" || os.Getenv("KATA_AUTH_TOKEN_FILE") != "" {
+		return ""
+	}
+	return strings.TrimSpace(f.Auth.TokenEnv)
 }

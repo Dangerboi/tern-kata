@@ -162,7 +162,7 @@ func TestAgentHelpAfterTheCommandIsTheCommands(t *testing.T) {
 func agentEnvOutput(t *testing.T, env []string, flags ...string) (string, int, string) {
 	t.Helper()
 	args := append(append([]string{"agent", "--as", "claude"}, flags...), "--ref", "demo#ab12", "--", "sh", "-c",
-		`printf 'HOME=%s SERVER=%s TOKEN=%s FILE=%s INSECURE=%s TRUST=%s REF=%s' "${KATA_HOME-unset}" "${KATA_SERVER-unset}" "${KATA_AUTH_TOKEN-unset}" "${KATA_AUTH_TOKEN_FILE-unset}" "${KATA_ALLOW_INSECURE-unset}" "${KATA_TRUST_PRIVATE_NETWORK-unset}" "$KATA_REF"`)
+		`printf 'HOME=%s SERVER=%s TOKEN=%s FILE=%s INSECURE=%s TRUST=%s DB=%s DSN=%s SCHEMA=%s REF=%s' "${KATA_HOME-unset}" "${KATA_SERVER-unset}" "${KATA_AUTH_TOKEN-unset}" "${KATA_AUTH_TOKEN_FILE-unset}" "${KATA_ALLOW_INSECURE-unset}" "${KATA_TRUST_PRIVATE_NETWORK-unset}" "${KATA_DB-unset}" "${KATA_DSN-unset}" "${KATA_POSTGRES_SCHEMA-unset}" "$KATA_REF"`)
 	return runAgent(t, env, args...)
 }
 
@@ -174,29 +174,39 @@ func TestAgentWrapperRoutesKataToThePanesDaemon(t *testing.T) {
 	if err := os.WriteFile(home+"/config.toml", []byte("[[daemon]]\nname = \"work\"\nurl = \"https://kata.example\"\ntoken_env = \"WORK_TOKEN\"\nallow_insecure = true\n[[daemon]]\nname = \"bare\"\nurl = \"https://bare.example\"\n[[daemon]]\nname = \"mine\"\nlocal = true\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	dsnFile := home + "/pane-dsn"
 	paneToken := home + "/pane-token" // the wrapper deletes it once read, so each case writes it again
 	// The block's own environment, as Tern's daemon gave it: the default remote, its token (also as a file) and a plaintext opt-in.
-	block := []string{agentBlockEnv + "=KATA_HOME=/default\nKATA_SERVER=https://default.example\nKATA_AUTH_TOKEN=default-token\nKATA_AUTH_TOKEN_FILE=/default/token\nKATA_ALLOW_INSECURE=1\nKATA_TRUST_PRIVATE_NETWORK=1", "WORK_TOKEN=block-work-token"}
+	block := []string{agentBlockEnv + "=KATA_HOME=/default\nKATA_SERVER=https://default.example\nKATA_AUTH_TOKEN=default-token\nKATA_AUTH_TOKEN_FILE=/default/token\nKATA_ALLOW_INSECURE=1\nKATA_TRUST_PRIVATE_NETWORK=1\nKATA_DB=/block/main.db\nKATA_DSN=postgres://block@h/db\nKATA_POSTGRES_SCHEMA=block_schema", "WORK_TOKEN=block-work-token"}
 	want := func(home, server, token, file, insecure, trust string) string {
-		return "HOME=" + home + " SERVER=" + server + " TOKEN=" + token + " FILE=" + file + " INSECURE=" + insecure + " TRUST=" + trust + " REF=demo#ab12"
+		return "HOME=" + home + " SERVER=" + server + " TOKEN=" + token + " FILE=" + file + " INSECURE=" + insecure + " TRUST=" + trust + " DB=unset DSN=unset SCHEMA=unset REF=demo#ab12"
+	}
+	// wantStorage is want for a route that keeps the Pane's home and so carries the Pane's own storage settings.
+	wantStorage := func(home, db, dsn, schema string) string {
+		return "HOME=" + home + " SERVER=unset TOKEN=unset FILE=unset INSECURE=unset TRUST=unset DB=" + db + " DSN=" + dsn + " SCHEMA=" + schema + " REF=demo#ab12"
 	}
 	for name, tc := range map[string]struct {
 		flags []string
 		want  string
 	}{
-		"no route leaves the block as it is":   {nil, want("/default", "https://default.example", "default-token", "/default/token", "1", "1")},
-		"by KATA_HOME alone":                   {[]string{"--home", home}, want(home, "unset", "unset", "unset", "unset", "unset")},
-		"by KATA_SERVER without a token":       {[]string{"--home", home, "--server", "https://pane.example"}, want(home, "https://pane.example", "unset", "unset", "unset", "unset")},
-		"by KATA_SERVER with the Pane's token": {[]string{"--home", home, "--server", "https://pane.example", "--token-file", paneToken, "--allow-insecure"}, want(home, "https://pane.example", "pane-token", "unset", "1", "unset")},
-		"by KATA_SERVER on a private network":  {[]string{"--home", home, "--server", "http://100.64.0.5:7777", "--token-file", paneToken, "--trust-private-network"}, want(home, "http://100.64.0.5:7777", "pane-token", "unset", "unset", "1")},
-		"the Pane's own KATA_AUTH_TOKEN_FILE":  {[]string{"--home", home, "--server", "https://pane.example", "--auth-file", "/pane/token"}, want(home, "https://pane.example", "unset", "/pane/token", "unset", "unset")},
-		"a remote entry, the Pane's token":     {[]string{"--home", home, "--daemon", "work", "--token-file", paneToken}, want(home, "https://kata.example", "pane-token", "unset", "1", "unset")},
-		"a remote entry without a token":       {[]string{"--home", home, "--daemon", "bare"}, want(home, "https://bare.example", "unset", "unset", "unset", "unset")},
-		"the local default":                    {[]string{"--home", home, "--daemon", "mine"}, want(home, "unset", "unset", "unset", "unset", "unset")},
-		"the local default, the Pane's token":  {[]string{"--home", home, "--daemon", "mine", "--token-file", paneToken}, want(home, "unset", "pane-token", "unset", "unset", "unset")},
+		"no route leaves the block as it is":           {nil, "HOME=/default SERVER=https://default.example TOKEN=default-token FILE=/default/token INSECURE=1 TRUST=1 DB=/block/main.db DSN=postgres://block@h/db SCHEMA=block_schema REF=demo#ab12"},
+		"the Pane's own storage replaces the block's":  {[]string{"--home", home, "--db", "/pane/p.db", "--schema", "pane_s", "--dsn-file", dsnFile}, wantStorage(home, "/pane/p.db", "postgres://pane:pw@h/db", "pane_s")},
+		"by KATA_HOME alone":                           {[]string{"--home", home}, want(home, "unset", "unset", "unset", "unset", "unset")},
+		"by KATA_SERVER without a token":               {[]string{"--home", home, "--server", "https://pane.example"}, want(home, "https://pane.example", "unset", "unset", "unset", "unset")},
+		"by KATA_SERVER with the Pane's token":         {[]string{"--home", home, "--server", "https://pane.example", "--token-file", paneToken, "--allow-insecure"}, want(home, "https://pane.example", "pane-token", "unset", "1", "unset")},
+		"by KATA_SERVER on a private network":          {[]string{"--home", home, "--server", "http://100.64.0.5:7777", "--token-file", paneToken, "--trust-private-network"}, want(home, "http://100.64.0.5:7777", "pane-token", "unset", "unset", "1")},
+		"the Pane's own KATA_AUTH_TOKEN_FILE":          {[]string{"--home", home, "--server", "https://pane.example", "--auth-file", "/pane/token"}, want(home, "https://pane.example", "unset", "/pane/token", "unset", "unset")},
+		"a remote entry, the Pane's token":             {[]string{"--home", home, "--daemon", "work", "--token-file", paneToken}, want(home, "https://kata.example", "pane-token", "unset", "1", "unset")},
+		"a remote entry without a token":               {[]string{"--home", home, "--daemon", "bare"}, want(home, "https://bare.example", "unset", "unset", "unset", "unset")},
+		"the local default":                            {[]string{"--home", home, "--daemon", "mine"}, want(home, "unset", "unset", "unset", "unset", "unset")},
+		"a plain local entry keeps the Pane's storage": {[]string{"--home", home, "--daemon", "mine", "--db", "/pane/p.db"}, wantStorage(home, "/pane/p.db", "unset", "unset")},
+		"the local default, the Pane's token":          {[]string{"--home", home, "--daemon", "mine", "--token-file", paneToken}, want(home, "unset", "pane-token", "unset", "unset", "unset")},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if err := os.WriteFile(paneToken, []byte("pane-token\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(dsnFile, []byte("postgres://pane:pw@h/db\n"), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			out, status, stderr := agentEnvOutput(t, block, tc.flags...)

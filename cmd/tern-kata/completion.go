@@ -55,7 +55,7 @@ _tern_kata() {
 		update) [[ $cur == -* ]] && words="--force --pause" ;;
 		agent)
 			if [[ $cur == -* ]]; then
-				words="--as --ref --home --daemon --server --token-file --auth-file --allow-insecure --trust-private-network"
+				words="--as --ref --home --db --schema --dsn-file --daemon --server --token-file --auth-file --allow-insecure --trust-private-network"
 				local i=0 w
 				for w in "${COMP_WORDS[@]}"; do # after the lone -- the words are the command's
 					[[ $i -ge $COMP_CWORD ]] && break

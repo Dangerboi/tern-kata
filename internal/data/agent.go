@@ -377,11 +377,12 @@ func (g *Gateway) pruneAgents(ctx context.Context, cmd model.PruneAgents) model.
 	return model.AgentsPruned{Seq: cmd.Seq, Agents: agents, Err: cmp.Or(askErr, err)}
 }
 
-// removePrompt removes a prompt file and the token file beside it, if the agent was started with one.
+// removePrompt removes a prompt file and the token and DSN files beside it, if the agent was started with them.
 func removePrompt(path string) {
 	if path != "" {
 		_ = os.Remove(path)
 		_ = os.Remove(path + agentTokenSuffix)
+		_ = os.Remove(path + agentDSNSuffix)
 	}
 }
 
@@ -414,7 +415,7 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 	if err != nil {
 		return failed(err)
 	}
-	route, err := g.CurrentAgentRoute()
+	route, err := g.CurrentAgentRoute(ctx, cmd.Workspace)
 	if err != nil {
 		return failed(err)
 	}
@@ -430,7 +431,7 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 	if err != nil {
 		return failed(err)
 	}
-	if route, err = route.withTokenFile(promptFile); err != nil {
+	if route, err = route.withSecretFiles(promptFile); err != nil {
 		removePrompt(promptFile)
 		return failed(err)
 	}
