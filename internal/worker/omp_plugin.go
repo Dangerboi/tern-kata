@@ -39,17 +39,20 @@ func (e OmpEnv) kataPlugin() string {
 	if e.Home == "" {
 		return ""
 	}
-	registries := []string{filepath.Join(e.Home, ".omp", "plugins", "installed_plugins.json")}
+	roots := []string{filepath.Join(e.Home, ".omp", "plugins")}
 	for _, dir := range e.Checkouts {
-		registries = append(registries, filepath.Join(dir, ".omp", "plugins", "installed_plugins.json"))
+		roots = append(roots, filepath.Join(dir, ".omp", "plugins"))
 	}
-	for _, path := range registries {
-		if registryHasKata(path) {
+	for _, root := range roots {
+		if path := filepath.Join(root, "node_modules", "kata-omp", "package.json"); fileExists(path) && !lockDisables(root) {
 			return path
 		}
-	}
-	if path := filepath.Join(e.Home, ".omp", "plugins", "package.json"); fileMentions(path, "\"kata-omp\"") {
-		return path
+		if lockEnables(root) {
+			return filepath.Join(root, "omp-plugins.lock.json")
+		}
+		if path := filepath.Join(root, "installed_plugins.json"); registryHasKata(path) {
+			return path
+		}
 	}
 	if e.AgentDir == "" {
 		return ""
@@ -71,21 +74,62 @@ func (e OmpEnv) kataPlugin() string {
 	return ""
 }
 
-// registryHasKata is true when an installed_plugins.json lists the plugin named kata (id kata@<marketplace>).
+// lockEntry reads root's omp-plugins.lock.json entry for kata-omp: found, and whether it is disabled.
+func lockEntry(root string) (found, disabled bool) {
+	data, err := os.ReadFile(filepath.Join(root, "omp-plugins.lock.json"))
+	if err != nil {
+		return false, false
+	}
+	var lock struct {
+		Plugins map[string]struct {
+			Enabled *bool `json:"enabled"`
+		} `json:"plugins"`
+	}
+	if json.Unmarshal(data, &lock) != nil {
+		return false, false
+	}
+	entry, ok := lock.Plugins["kata-omp"]
+	return ok, ok && entry.Enabled != nil && !*entry.Enabled
+}
+
+// lockEnables is true when the lock lists kata-omp and does not disable it; lockDisables when it disables it.
+func lockEnables(root string) bool {
+	found, disabled := lockEntry(root)
+	return found && !disabled
+}
+
+func lockDisables(root string) bool {
+	_, disabled := lockEntry(root)
+	return disabled
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// registryHasKata is true when an installed_plugins.json has an enabled entry for the plugin named kata (id kata@<marketplace>).
 func registryHasKata(path string) bool {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return false
 	}
 	var reg struct {
-		Plugins map[string]json.RawMessage `json:"plugins"`
+		Plugins map[string][]struct {
+			Enabled *bool `json:"enabled"`
+		} `json:"plugins"`
 	}
 	if json.Unmarshal(data, &reg) != nil {
 		return false
 	}
-	for id := range reg.Plugins {
-		if id == "kata" || strings.HasPrefix(id, "kata@") {
-			return true
+	for id, entries := range reg.Plugins {
+		if id != "kata" && !strings.HasPrefix(id, "kata@") {
+			continue
+		}
+		for _, entry := range entries {
+			if entry.Enabled == nil || *entry.Enabled {
+				return true
+			}
 		}
 	}
 	return false
