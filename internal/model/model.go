@@ -115,9 +115,12 @@ type Model struct {
 	// AgentGone are the entries of agents this Pane started whose block went (pruned from agents.json) without a relay showing them
 	// exited, until the exit request for their Issue is decided.
 	AgentGone []AgentEntry
-	Project   Project
-	Daemon    Daemon
-	Snapshot  Snapshot
+	// agentFresh are the blocks of agents started since the last answer that read agents.json: an answer that read the file before
+	// the start wrote its entry does not hold it, and that is no sign the agent is gone.
+	agentFresh []string
+	Project    Project
+	Daemon     Daemon
+	Snapshot   Snapshot
 	// Relationships is every Issue's Relationships, built from Snapshot's links each time a snapshot is applied.
 	Relationships RelationshipIndex
 	Issues        []Issue

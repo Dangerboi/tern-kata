@@ -34,11 +34,5 @@ func attentionTone(w model.WorkAttention) ui.Tone {
 	return ui.ToneWarning
 }
 
-// attentionRowWidth is the most cells of the message a row or card shows; the detail shows it whole.
-const attentionRowWidth = 60
-
-// attentionShort is the work attention's text as a row or card shows it, the message cut to attentionRowWidth.
-func attentionShort(w model.WorkAttention) string {
-	w.Msg = cut(w.Msg, attentionRowWidth)
-	return w.Text()
-}
+// Rows and cards show only the work attention's word, so the Issue's title keeps its room at every width; the Issue detail shows
+// the word with the whole message.

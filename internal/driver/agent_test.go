@@ -100,7 +100,8 @@ func TestTheStartAndItsResultsReachTheModel(t *testing.T) {
 	if failed.State.Model.Notice != "Cannot start an agent on work#t1: no checkout" || len(failed.State.Model.AgentMapping) != 0 {
 		t.Fatalf("notice %q", failed.State.Model.Notice)
 	}
-	pruned := step(t, got.State, model.AgentsPruned{})
+	// The first answer after a start may have read the file before the entry was written, so it keeps the entry; the next drops it.
+	pruned := step(t, step(t, got.State, model.AgentsPruned{}).State, model.AgentsPruned{})
 	if len(pruned.State.Model.AgentMapping) != 0 {
 		t.Fatalf("pruned agents %+v", pruned.State.Model.AgentMapping)
 	}

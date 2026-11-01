@@ -217,7 +217,10 @@ arm(500)
 -- commands this plugin starts (panecommands.luau) get `-NoProfile`; every other Pane, the user's shells included, starts as
 -- it was. A synchronous filter under a 50 ms budget: pure table work, and any error leaves the spawn as it is.
 if windows then
-    tern.on("spawn", function(spec: any): any?
-        return panecommands.withoutProfile(spec)
+    -- A Tern that rejects the event must not stop the host half (worker supervision) running.
+    pcall(function()
+        tern.on("spawn", function(spec: any): any?
+            return panecommands.withoutProfile(spec)
+        end)
     end)
 end

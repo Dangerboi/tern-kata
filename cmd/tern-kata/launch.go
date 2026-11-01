@@ -613,11 +613,12 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 worker.toml it rejects); --pause waits for Enter after a success,
                                 so a Pane shows the result before it closes.
                                 Exit 0 when the binary is at the latest version, else 1
-  agent --as <actor> [--ref <ref>] -- <command> [args...]
+  agent [--as <actor>] [--ref <ref>] -- <command> [args...]
                                 run the command with KATA_AUTHOR set to the actor (replacing
-                                any value) and KATA_REF to the qualified Issue ref, with no
-                                KATA_INBOX_USER, its arguments passed on as typed and its exit
-                                status as ours; both --as and -- are required
+                                any value; without --as it is left as inherited) and KATA_REF
+                                to the qualified Issue ref, with no KATA_INBOX_USER, its
+                                arguments passed on as typed and its exit status as ours;
+                                -- is required
   completion <shell>            print the completion script for bash, zsh or fish; load it with
                                 source <(tern-kata completion bash) (or zsh), or
                                 tern-kata completion fish | source

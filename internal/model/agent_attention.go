@@ -248,6 +248,10 @@ func raiseExitedAttention(m Model, cmds []Cmd, address string, reread bool) (Mod
 			continue
 		}
 		status := m.issueStatus(e.IssueUID)
+		if status == "" && slices.Contains(m.AgentClose.unreadable, e.IssueUID) {
+			m.AgentGone = m.withoutGone(e)
+			continue
+		}
 		if status == "" || (reread && m.issueByUID(e.IssueUID) == nil) {
 			m, cmds = readIssueStatus(m, cmds, project, e.IssueUID)
 			continue
@@ -263,12 +267,15 @@ func raiseExitedAttention(m Model, cmds []Cmd, address string, reread bool) (Mod
 }
 
 func (m Model) withoutGone(e AgentEntry) []AgentEntry {
+	if !slices.ContainsFunc(m.AgentGone, func(g AgentEntry) bool { return g.Block == e.Block }) {
+		return m.AgentGone
+	}
 	return slices.DeleteFunc(slices.Clone(m.AgentGone), func(g AgentEntry) bool { return g.Block == e.Block })
 }
 
 // readIssueStatus asks the Daemon for the status of an Issue the Collection does not list, unless a read of it is in flight.
 func readIssueStatus(m Model, cmds []Cmd, project int64, uid string) (Model, []Cmd) {
-	if m.issueByUID(uid) == nil && !slices.Contains(m.AgentClose.reading, uid) {
+	if m.issueByUID(uid) == nil && !slices.Contains(m.AgentClose.reading, uid) && !slices.Contains(m.AgentClose.unreadable, uid) {
 		m.AgentClose.reading = append(slices.Clone(m.AgentClose.reading), uid)
 		cmds = append(cmds, ReadAgentIssue{Workspace: m.Workspace, ProjectID: project, UID: uid})
 	}

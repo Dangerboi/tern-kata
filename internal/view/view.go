@@ -359,7 +359,7 @@ func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected boo
 	}
 	// An agent's hand-off (work.attention) reads beside the badge, whoever wrote it.
 	if w, ok := model.IssueWorkAttention(row.Issue); ok {
-		left = append(left, ui.Span{T: gap + attentionShort(w), S: string(attentionTone(w))})
+		left = append(left, ui.Span{T: gap + w.Word(), S: string(attentionTone(w))})
 		gap = " "
 	}
 	left = append(left, ui.Span{T: gap + title})

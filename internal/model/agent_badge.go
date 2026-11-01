@@ -213,11 +213,29 @@ func (m Model) noteGoneAgents(next []AgentEntry) Model {
 	return m
 }
 
+// keepFresh is an answer's entries with those of agents started since the last answer that it lacks added from the current mapping
+// (the answer may have read the file before they were written); the started blocks are settled by this answer either way.
+func (m Model) keepFresh(answer []AgentEntry) ([]AgentEntry, Model) {
+	next := answer
+	for _, b := range m.agentFresh {
+		if slices.ContainsFunc(answer, func(e AgentEntry) bool { return e.Block == b }) {
+			continue
+		}
+		if i := slices.IndexFunc(m.AgentMapping, func(e AgentEntry) bool { return e.Block == b }); i >= 0 {
+			next = append(slices.Clip(next), m.AgentMapping[i])
+		}
+	}
+	m.agentFresh = nil
+	return next, m
+}
+
 // agentsRefreshed takes in the mapping and, when a relay wanted a refresh while this one was out, asks for the next.
 func agentsRefreshed(m Model, msg AgentsRefreshed) (Model, []Cmd) {
 	if msg.Err == nil {
-		m = m.noteGoneAgents(msg.Agents)
-		m.AgentMapping = msg.Agents
+		var next []AgentEntry
+		next, m = m.keepFresh(msg.Agents)
+		m = m.noteGoneAgents(next)
+		m.AgentMapping = next
 		m.Agents = m.Agents.trimmed(m.agentMapped)
 	}
 	m.Agents.inFlight = false
