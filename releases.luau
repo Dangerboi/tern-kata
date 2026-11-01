@@ -41,7 +41,7 @@ end
 
 -- `version = "0.6.0"` of a plugin.toml.
 function M.pluginVersion(toml: string): string?
-    return toml:match('\n?version%s*=%s*"([^"\n]+)"')
+    return toml:match('^version%s*=%s*"([^"\n]+)"') or toml:match('\nversion%s*=%s*"([^"\n]+)"')
 end
 
 -- Path separators and a trailing one do not tell two spellings of a folder apart.
@@ -77,7 +77,8 @@ end
 -- The toast for the release `version.txt` names, and the version to store as toasted; nil when the release is not
 -- newer than this plugin, was toasted before, or is no version. A newer release than the one toasted toasts again.
 function M.toast(releaseText: string, own: string, toasted: string?): (string?, string?)
-    local release = releaseText:match("^%s*v?(.-)%s*$") :: string
+    local release = M.release(releaseText)
+    if not release then return nil, nil end
     if M.compare(release, own) ~= 1 then return nil, nil end
     if toasted ~= nil and M.compare(release, toasted) ~= 1 then return nil, nil end
     local ownText = own:match("^%s*v?(.-)%s*$") :: string
@@ -89,11 +90,9 @@ end
 function M.toggle(check: Check): (boolean, string)
     local off = not check.toggleOff
     local text = off and "tern-kata update checks are off" or "tern-kata update checks are on"
-    local because = M.offBecause({envOff = check.envOff, linked = check.linked, toggleOff = false,
-        now = check.now, lastCheck = check.lastCheck})
-    if because == "variable" then
+    if check.envOff then
         text ..= ". TERN_KATA_NO_UPDATE_CHECK is set, which keeps checks off on this machine"
-    elseif because == "linked" then
+    elseif check.linked then
         text ..= ". A linked plugin never checks"
     end
     return off, text
@@ -108,8 +107,6 @@ end
 
 -- The window machine's plugin step. Its pending key is `{version, at}`; a plugin loading finds it and says what to do.
 M.PENDING_TTL = 10 * 60
-
-export type Pending = { version: string, at: number }
 
 -- "updated": this plugin is the version the step installed (toast, clear the key). "drop": the key is unusable or over
 -- 10 minutes old (clear it, silently). "wait": an install may still be running (leave the key).
@@ -134,7 +131,7 @@ function M.pluginStep(version: string, os: string, configuredBase: string?): ({ 
         return {"powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
             "irm " .. RAW .. version .. "/install.ps1 | iex"}, env
     end
-    return {"sh", "-c", "curl -fsSL " .. RAW .. version .. "/install.sh | sh"}, env
+    return {"sh", "-c", "script=$(curl -fsSL " .. RAW .. version .. "/install.sh) && printf '%s\\n' \"$script\" | sh"}, env
 end
 
 return M

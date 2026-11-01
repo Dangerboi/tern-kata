@@ -8,6 +8,8 @@ local launched: { [number]: boolean } = {}
 local fresh: { [number]: boolean } = {}
 -- Issue reference per new kata Pane, sent over TSP once its surface is live, so it never passes through a shell.
 local pending: { [number]: string? } = {}
+-- The Panes `Update tern-kata` launched: they run the tern-kata program but are not a kata to link or mark.
+local updatePanes: { [number]: boolean } = {}
 
 -- A kata Pane has the title `tern-kata` (which the binary sets), or a program whose file name is tern-kata or
 -- tern-kata.exe, split on either path separator so Windows paths match. A longer name merely containing it does not.
@@ -18,7 +20,8 @@ local function isKataProgram(program: string?): boolean
 end
 
 local function isKata(info: PaneInfo?): boolean
-    return info ~= nil and info.exited == nil and (info.title == "tern-kata" or isKataProgram(info.program))
+    return info ~= nil and info.exited == nil and not updatePanes[info.pane]
+        and (info.title == "tern-kata" or isKataProgram(info.program))
 end
 
 -- kata's mark, the katakana ka from kata's favicon, replaces the terminal icon on kata Panes' tab faces. Tern's program icons
@@ -412,6 +415,7 @@ end)
 
 tern.on("pane_closed", function(ev, cx)
     launched[ev.pane] = nil
+    updatePanes[ev.pane] = nil
     pending[ev.pane] = nil
     relayed[ev.pane] = nil
     retrying[ev.pane] = nil
@@ -567,7 +571,13 @@ end
 -- it is 10 minutes old.
 local KV_PENDING = "update.pending"
 
-tern.on("window_start", function(cx)
+-- Run once per load of this file: at window start, and after a plugin reload, which runs the file again without
+-- window_start (the plugin the install left behind reports its update and carries the daily check on).
+local loaded = false
+
+local function onLoad(cx: WindowCx)
+    if loaded then return end
+    loaded = true
     local pending = tern.kv.get(KV_PENDING)
     if pending ~= nil then
         local own = ownVersion()
@@ -580,6 +590,11 @@ tern.on("window_start", function(cx)
         end
     end
     releaseCheck()
+end
+
+tern.on("window_start", onLoad)
+tern.timer(1, function(cx)
+    if cx then onLoad(cx) end
 end)
 
 tern.command({
@@ -657,13 +672,14 @@ local function updatePlugin(cx: WindowCx, version: string)
     end
 end
 
--- Polls once a second until the update's Pane ends: marked exited is a failure (the Pane stays to be read), closed is success.
+-- Polls once a second until the update's Pane ends: a non-zero exit marks it exited and the Pane stays to be read (a
+-- failure); a Pane that is gone, or marked exited with status 0, is success.
 local function watchUpdate(pane: number, version: string, remote: boolean)
     tern.timer(1000, function(cx)
         if not cx then return end
         local info = cx.session:pane(pane)
-        if info and info.exited ~= nil then return end
-        if info then return watchUpdate(pane, version, remote) end
+        if info and info.exited ~= nil and info.exited ~= 0 then return end
+        if info and info.exited == nil then return watchUpdate(pane, version, remote) end
         if remote then updatePlugin(cx, version) end
     end)
 end
@@ -681,7 +697,10 @@ tern.command({
                 return
             end
             local pane = launch(cx2, "tern-kata update --pause")
-            if pane then watchUpdate(pane, version, remote) end
+            if pane then
+                updatePanes[pane] = true
+                watchUpdate(pane, version, remote)
+            end
         end)
     end,
 })
