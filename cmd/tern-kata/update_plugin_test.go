@@ -10,13 +10,17 @@ import (
 )
 
 // fakeTern puts a `tern` alone on PATH that records its arguments, one line per call, in f.ternLog; `tern plugin dir` prints
-// pluginDir and every other call exits with installStatus. On Windows nothing is put on PATH.
+// pluginDir and every other call exits with installStatus. On Windows it is a tern.bat.
 func (f *updateFixture) fakeTern(t *testing.T, pluginDir string, installStatus int) {
 	t.Helper()
 	bin := t.TempDir()
 	t.Setenv("PATH", bin)
 	f.ternLog = filepath.Join(t.TempDir(), "tern.log")
 	if runtime.GOOS == "windows" {
+		script := "@echo off\r\necho %*>>\"" + f.ternLog + "\"\r\nif \"%1 %2\"==\"plugin dir\" (echo " + pluginDir + "& exit /b 0)\r\necho tern said no 1>&2\r\nexit /b " + strconv.Itoa(installStatus) + "\r\n"
+		if err := os.WriteFile(filepath.Join(bin, "tern.bat"), []byte(script), 0o600); err != nil {
+			t.Fatal(err)
+		}
 		return
 	}
 	script := "#!/bin/sh\necho \"$@\" >> '" + f.ternLog + "'\n" +

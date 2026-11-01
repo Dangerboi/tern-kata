@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -149,16 +150,13 @@ func TestUpdateForceSwapsPastARefusalAndPrintsItAsAWarning(t *testing.T) {
 	}
 }
 
-func TestUpdateStopsOnAConfigRefusalUnlessForced(t *testing.T) {
+func TestUpdateStopsOnAConfigRefusal(t *testing.T) {
 	f := newUpdateFixture(t, "v0.1.0", "0.2.0", nil)
 	f.preflight(t, refusingConfig, 1, "")
 	if err := f.run(LaunchPlan{Subcommand: "update"}); err == nil {
 		t.Fatal("a config refusal did not stop the update")
 	}
 	f.unchanged(t)
-	if err := f.run(LaunchPlan{Subcommand: "update", Force: true}); err != nil {
-		t.Errorf("forced: %v", err)
-	}
 }
 
 func TestUpdatePrintsPreflightWarningsAndSwaps(t *testing.T) {
@@ -202,7 +200,7 @@ func TestUpdateRefusesWhenTheNewBinaryCannotCheckThisMachine(t *testing.T) {
 
 func TestUpdateRefusesWhenTheNewBinaryTakesTooLong(t *testing.T) {
 	f := newUpdateFixture(t, "v0.1.0", "0.2.0", nil)
-	t.Setenv("TERN_KATA_TEST_PREFLIGHT_HANG", "1")
+	t.Setenv("TERN_KATA_TEST_PREFLIGHT_HANG", filepath.Join(t.TempDir(), "started"))
 	f.env.PreflightTimeout = 500 * time.Millisecond
 	start := time.Now()
 	err := f.run(LaunchPlan{Subcommand: "update"})
@@ -258,9 +256,18 @@ func TestPreflightWarnsOfADaemonThatNeverAnswersWellBeforeTheTimeout(t *testing.
 func TestUpdateCancelledDuringPreflightIsInterruptedEvenWithForce(t *testing.T) {
 	for _, force := range []bool{false, true} {
 		f := newUpdateFixture(t, "v0.1.0", "0.2.0", nil)
-		t.Setenv("TERN_KATA_TEST_PREFLIGHT_HANG", "1")
+		marker := filepath.Join(t.TempDir(), "started")
+		t.Setenv("TERN_KATA_TEST_PREFLIGHT_HANG", marker)
 		ctx, cancel := context.WithCancel(context.Background())
-		time.AfterFunc(300*time.Millisecond, cancel)
+		go func() {
+			for {
+				if _, err := os.Stat(marker); err == nil {
+					cancel()
+					return
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+		}()
 		err := updateRelease(ctx, f.env, force, &f.out)
 		if err == nil || !strings.Contains(err.Error(), "interrupted") || !strings.Contains(err.Error(), "nothing was installed") || strings.Contains(err.Error(), "longer than") {
 			t.Errorf("force %v: error %v", force, err)
