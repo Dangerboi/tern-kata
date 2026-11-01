@@ -225,7 +225,7 @@ func upgradeWorkerConfig(ctx context.Context, env workerEnv, out io.Writer) erro
 }
 
 func runDoctor(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Writer) error {
-	opts := worker.DoctorOptions{Dirs: env.Dirs, Clock: env.Clock, Actor: plan.Actor}
+	opts := worker.DoctorOptions{Dirs: env.Dirs, Clock: env.Clock, Actor: plan.Actor, Omp: worker.DefaultOmpEnv()}
 	if target, err := env.Locate(ctx, ""); err != nil {
 		opts.KataErr = err
 	} else {
