@@ -791,7 +791,7 @@ func heldNotice(j *Journal) string {
 		j.RunUID, j.JobName, j.Issue.Ref, j.Outcome.holdLine(), j.RunUID, j.RunUID), maxNotifyBytes)
 }
 
-// reviewNotice is the inbox request for a succeeded run that left its Issue open, saved in its intent so a retry sends
+// reviewNotice is the Attention request for a succeeded run that left its Issue open, saved in its intent so a retry sends
 // the same words.
 func reviewNotice(j *Journal) string {
 	return truncate(fmt.Sprintf("Run %s of %q succeeded but left %s open: it needs review.", j.RunUID, j.JobName, j.Issue.Ref), maxNotifyBytes)

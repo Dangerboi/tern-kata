@@ -4,18 +4,24 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime"
+	"slices"
 	"strings"
 )
 
 // OmpEnv is where omp keeps what the doctor looks at. The zero value means "do not look", so a test never reads the
-// real ~/.omp; the command sets DefaultOmpEnv.
+// real ~/.omp or the real environment; the command sets DefaultOmpEnv.
 type OmpEnv struct {
-	// Home is the user's home folder: omp's plugins live in <Home>/.omp/plugins.
+	// Home is the user's home folder: omp's config root lives in <Home>/.omp.
 	Home string
-	// AgentDir is omp's agent folder, <Home>/.omp/agent unless PI_CODING_AGENT_DIR moves it.
+	// AgentDir is omp's agent folder when PI_CODING_AGENT_DIR moves it; blank means the config root's own agent folder.
 	AgentDir string
-	// Checkouts are folders whose own .omp/plugins/installed_plugins.json omp reads for a run started there.
+	// Checkouts are folders whose own .omp/plugins omp reads for a run started there.
 	Checkouts []string
+	// Lookup reads the environment variables omp's folders depend on (OMP_PROFILE, PI_PROFILE, PI_CONFIG_DIR,
+	// XDG_DATA_HOME); nil reads none.
+	Lookup func(key string) (string, bool)
 }
 
 // DefaultOmpEnv is the running user's omp layout, honouring PI_CODING_AGENT_DIR as omp does.
@@ -24,49 +30,118 @@ func DefaultOmpEnv() OmpEnv {
 	if err != nil {
 		return OmpEnv{}
 	}
-	agent := os.Getenv("PI_CODING_AGENT_DIR")
-	if agent == "" {
-		agent = filepath.Join(home, ".omp", "agent")
-	}
-	return OmpEnv{Home: home, AgentDir: agent}
+	return OmpEnv{Home: home, AgentDir: os.Getenv("PI_CODING_AGENT_DIR"), Lookup: os.LookupEnv}
 }
 
-// kataPlugin says where kata-plugin's omp extension (npm package kata-omp, plugin id kata@kata-plugin) is installed
-// for omp runs, "" when none of the places omp loads from names it. It looks at omp's plugin registries (the user's
-// and each checkout's installed_plugins.json), the plugins' package.json, the ambient extensions folder and the
-// settings' extension list.
-func (e OmpEnv) kataPlugin() string {
+func (e OmpEnv) env(key string) (string, bool) {
+	if e.Lookup == nil {
+		return "", false
+	}
+	return e.Lookup(key)
+}
+
+// profileName is omp's rule for a profile name (utils/src/dirs.ts normalizeProfileName), minus the Windows reserved
+// device names: ok is false for a name omp refuses, "" is the default profile.
+var profileName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
+
+func normalizeProfile(name string) (profile string, ok bool) {
+	name = strings.TrimSpace(name)
+	if name == "" || name == "default" {
+		return "", true
+	}
+	return name, profileName.MatchString(name) && !strings.HasSuffix(name, ".")
+}
+
+// layout is where omp, started with the profile named by a --profile argument (argProfile, when hasArg) or else by
+// OMP_PROFILE / PI_PROFILE, keeps its plugins and its agent folder. ok is false when omp would refuse the profile name.
+func (e OmpEnv) layout(argProfile string, hasArg bool) (plugins, agent string, ok bool) {
+	name := argProfile
+	if !hasArg {
+		var set bool
+		if name, set = e.env("OMP_PROFILE"); !set {
+			name, _ = e.env("PI_PROFILE")
+		}
+	}
+	profile, ok := normalizeProfile(name)
+	if !ok {
+		return "", "", false
+	}
+	dir, _ := e.env("PI_CONFIG_DIR")
+	if dir == "" {
+		dir = ".omp"
+	}
+	root := filepath.Join(e.Home, dir)
+	if profile != "" {
+		root = filepath.Join(root, "profiles", profile)
+	}
+	agent = filepath.Join(root, "agent")
+	plugins = filepath.Join(root, "plugins")
+	if profile == "" && e.AgentDir != "" {
+		agent = filepath.Clean(e.AgentDir)
+	}
+	// On Linux and macOS omp keeps the plugins under $XDG_DATA_HOME/omp once that folder exists, unless the agent
+	// folder was moved; a profile follows only its own folder under it.
+	if xdg, _ := e.env("XDG_DATA_HOME"); xdg != "" && (runtime.GOOS == "linux" || runtime.GOOS == "darwin") && agent == filepath.Join(root, "agent") {
+		app := filepath.Join(xdg, "omp")
+		if profile != "" {
+			app = filepath.Join(app, "profiles", profile)
+		}
+		if info, err := os.Stat(app); err == nil && info.IsDir() {
+			plugins = filepath.Join(app, "plugins")
+		}
+	}
+	return plugins, agent, true
+}
+
+// pluginScan looks for kata-plugin's omp extension, reading each plugins root's lock file at most once.
+type pluginScan struct {
+	env   OmpEnv
+	locks map[string]lockState
+}
+
+type lockState struct{ found, disabled bool }
+
+func (e OmpEnv) scan() *pluginScan { return &pluginScan{env: e, locks: map[string]lockState{}} }
+
+// kataPlugin says where kata-plugin's omp extension (npm package kata-omp) is installed for an omp run with the given
+// --profile argument (argProfile, when hasArg), "" when none of the places omp loads from names it. It looks at the
+// plugins' node_modules and lock file, the ambient extensions folder and the settings' extension list. The
+// marketplace registry (installed_plugins.json) alone loads nothing, so it is not read.
+func (s *pluginScan) kataPlugin(argProfile string, hasArg bool) string {
+	e := s.env
 	if e.Home == "" {
 		return ""
 	}
-	roots := []string{filepath.Join(e.Home, ".omp", "plugins")}
+	plugins, agent, ok := e.layout(argProfile, hasArg)
+	if !ok {
+		return ""
+	}
+	roots := []string{plugins}
 	for _, dir := range e.Checkouts {
 		roots = append(roots, filepath.Join(dir, ".omp", "plugins"))
 	}
-	for _, root := range roots {
-		if path := filepath.Join(root, "node_modules", "kata-omp", "package.json"); fileExists(path) && !lockDisables(root) {
+	for _, root := range slices.Compact(roots) {
+		lock := s.lock(root)
+		if lock.disabled {
+			continue
+		}
+		if path := filepath.Join(root, "node_modules", "kata-omp", "package.json"); fileExists(path) {
 			return path
 		}
-		if lockEnables(root) {
+		if lock.found {
 			return filepath.Join(root, "omp-plugins.lock.json")
 		}
-		if path := filepath.Join(root, "installed_plugins.json"); registryHasKata(path) {
-			return path
-		}
 	}
-	if e.AgentDir == "" {
-		return ""
-	}
-	if entries, err := os.ReadDir(filepath.Join(e.AgentDir, "extensions")); err == nil {
+	if entries, err := os.ReadDir(filepath.Join(agent, "extensions")); err == nil {
 		for _, entry := range entries {
 			name := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
 			if name == "kata" || name == "kata-omp" {
-				return filepath.Join(e.AgentDir, "extensions", entry.Name())
+				return filepath.Join(agent, "extensions", entry.Name())
 			}
 		}
 	}
 	for _, name := range []string{"config.yml", "config.yaml", "settings.json"} {
-		path := filepath.Join(e.AgentDir, name)
+		path := filepath.Join(agent, name)
 		if fileMentions(path, "kata-omp") || fileMentions(path, "kata-plugin") {
 			return path
 		}
@@ -74,65 +149,30 @@ func (e OmpEnv) kataPlugin() string {
 	return ""
 }
 
-// lockEntry reads root's omp-plugins.lock.json entry for kata-omp: found, and whether it is disabled.
-func lockEntry(root string) (found, disabled bool) {
-	data, err := os.ReadFile(filepath.Join(root, "omp-plugins.lock.json"))
-	if err != nil {
-		return false, false
+// lock reads root's omp-plugins.lock.json entry for kata-omp: whether it is listed, and whether it is disabled.
+func (s *pluginScan) lock(root string) lockState {
+	if st, ok := s.locks[root]; ok {
+		return st
 	}
-	var lock struct {
-		Plugins map[string]struct {
-			Enabled *bool `json:"enabled"`
-		} `json:"plugins"`
+	var st lockState
+	if data, err := os.ReadFile(filepath.Join(root, "omp-plugins.lock.json")); err == nil {
+		var lock struct {
+			Plugins map[string]struct {
+				Enabled *bool `json:"enabled"`
+			} `json:"plugins"`
+		}
+		if json.Unmarshal(data, &lock) == nil {
+			entry, found := lock.Plugins["kata-omp"]
+			st = lockState{found, found && entry.Enabled != nil && !*entry.Enabled}
+		}
 	}
-	if json.Unmarshal(data, &lock) != nil {
-		return false, false
-	}
-	entry, ok := lock.Plugins["kata-omp"]
-	return ok, ok && entry.Enabled != nil && !*entry.Enabled
-}
-
-// lockEnables is true when the lock lists kata-omp and does not disable it; lockDisables when it disables it.
-func lockEnables(root string) bool {
-	found, disabled := lockEntry(root)
-	return found && !disabled
-}
-
-func lockDisables(root string) bool {
-	_, disabled := lockEntry(root)
-	return disabled
+	s.locks[root] = st
+	return st
 }
 
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
-}
-
-// registryHasKata is true when an installed_plugins.json has an enabled entry for the plugin named kata (id kata@<marketplace>).
-func registryHasKata(path string) bool {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return false
-	}
-	var reg struct {
-		Plugins map[string][]struct {
-			Enabled *bool `json:"enabled"`
-		} `json:"plugins"`
-	}
-	if json.Unmarshal(data, &reg) != nil {
-		return false
-	}
-	for id, entries := range reg.Plugins {
-		if id != "kata" && !strings.HasPrefix(id, "kata@") {
-			continue
-		}
-		for _, entry := range entries {
-			if entry.Enabled == nil || *entry.Enabled {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func fileMentions(path, text string) bool {

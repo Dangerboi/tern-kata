@@ -198,9 +198,25 @@ func (m Model) agentMapped(block string) bool {
 	return slices.ContainsFunc(m.AgentMapping, func(e AgentEntry) bool { return e.Block == block })
 }
 
+// noteGoneAgents files the entries of this Pane's agents that next no longer holds: their block is gone, which for the exit request
+// is an exit like any other (a clean exit closes the block and no exited state ever arrives).
+func (m Model) noteGoneAgents(next []AgentEntry) Model {
+	if m.PaneBlock == "" {
+		return m
+	}
+	for _, e := range m.AgentMapping {
+		if e.PaneBlock == m.PaneBlock && !slices.ContainsFunc(next, func(n AgentEntry) bool { return n.Block == e.Block }) &&
+			!slices.ContainsFunc(m.AgentGone, func(g AgentEntry) bool { return g.Block == e.Block }) {
+			m.AgentGone = append(slices.Clone(m.AgentGone), e)
+		}
+	}
+	return m
+}
+
 // agentsRefreshed takes in the mapping and, when a relay wanted a refresh while this one was out, asks for the next.
 func agentsRefreshed(m Model, msg AgentsRefreshed) (Model, []Cmd) {
 	if msg.Err == nil {
+		m = m.noteGoneAgents(msg.Agents)
 		m.AgentMapping = msg.Agents
 		m.Agents = m.Agents.trimmed(m.agentMapped)
 	}

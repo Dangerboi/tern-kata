@@ -19,6 +19,10 @@ type RaisedAttention struct {
 	ProjectID int64
 	// Message is the text this Pane last wrote.
 	Message string
+	// Exited says the request is the one for an agent that exited leaving its Issue open. It lives with the Issue, not with the
+	// agent's entry in the mapping: pruning the entry leaves it, and only the Issue closing, another agent on the Issue waiting
+	// (its request replaces this one) or the Pane quitting clears it.
+	Exited bool
 	// Seen are the messages of the agents on the Issue, this Pane's or another Pane's, seen waiting while this Pane held the
 	// record, in the order seen. Another Pane's request may have replaced Message in the slot, and this Pane's clear takes any.
 	Seen []string
@@ -163,12 +167,17 @@ func attentionPass(m Model, relayed, reread bool) (Model, []Cmd) {
 				last = s.LastMessage
 			}
 		}
-		m, cmds = putRaise(m, cmds, e.IssueUID, project, e.Teammate, address, agentAttentionMessage(last))
+		m, cmds = putRaise(m, cmds, e.IssueUID, project, e.Teammate, address, agentAttentionMessage(last), false)
 	}
 	m, cmds = raiseExitedAttention(m, cmds, address, reread)
+	m, cmds = readExitedIssues(m, cmds, reread)
 	kept := m.AgentAttention[:0:0]
 	for _, r := range m.AgentAttention {
-		if m.agentWaitingOn(r.UID) || m.exitedWithIssueOpen(r.UID) {
+		waiting := m.agentWaitingOn(r.UID)
+		if waiting || (r.Exited && m.issueStatus(r.UID) != "closed") {
+			if waiting {
+				r.Exited = false
+			}
 			r.Seen = m.seenWaiting(r)
 			kept = append(kept, r)
 			continue
@@ -181,8 +190,8 @@ func attentionPass(m Model, relayed, reread bool) (Model, []Cmd) {
 
 // putRaise records the request this Pane writes for an Issue, replacing its record, and queues the write; an Issue gets at most one
 // write per pass, the last.
-func putRaise(m Model, cmds []Cmd, uid string, project int64, teammate, address, message string) (Model, []Cmd) {
-	raised := RaisedAttention{UID: uid, ProjectID: project, Message: message}
+func putRaise(m Model, cmds []Cmd, uid string, project int64, teammate, address, message string, exited bool) (Model, []Cmd) {
+	raised := RaisedAttention{UID: uid, ProjectID: project, Message: message, Exited: exited}
 	if i := slices.IndexFunc(m.AgentAttention, func(r RaisedAttention) bool { return r.UID == uid }); i >= 0 {
 		raised.Seen = m.AgentAttention[i].Seen
 		m.AgentAttention = slices.Clone(m.AgentAttention)
@@ -216,46 +225,63 @@ func agentExited(states []AgentState, block string) bool {
 	return slices.ContainsFunc(states, func(s AgentState) bool { return s.Block == block && s.State == AgentExited })
 }
 
-// exitedWithIssueOpen reports whether an agent this Pane started on the Issue has exited and the Issue is known to be open.
-func (m Model) exitedWithIssueOpen(uid string) bool {
-	if m.PaneBlock == "" {
-		return false
-	}
-	status := m.issueStatus(uid)
-	if status == "" || status == "closed" {
-		return false
-	}
-	return slices.ContainsFunc(m.AgentMapping, func(e AgentEntry) bool {
-		return e.IssueUID == uid && e.PaneBlock == m.PaneBlock && agentExited(m.Agents.States, e.Block)
-	})
-}
-
-// raiseExitedAttention raises the request for an agent this Pane started that exited while its Issue is open, unless an agent on
-// the Issue waits (its own request stands) or the record already holds that text, so a second window's relay of the same state
+// raiseExitedAttention raises the request for an agent this Pane started that exited while its Issue is open: one the relay shows
+// exited, or one whose block is gone (AgentGone), which counts as exited though no relay said so. It raises nothing when an agent
+// on the Issue waits (its own request stands) or the record already holds that text, so a second window's relay of the same state
 // writes nothing. An Issue the Collection does not list is read through the Daemon first, as for ending a finished Background
 // agent, and again when the Issues change (reread); the answer runs the pass again.
 func raiseExitedAttention(m Model, cmds []Cmd, address string, reread bool) (Model, []Cmd) {
+	exited := slices.Clone(m.AgentGone)
 	for _, e := range m.AgentMapping {
-		if e.PaneBlock != m.PaneBlock || !agentExited(m.Agents.States, e.Block) || m.agentWaitingOn(e.IssueUID) {
+		if e.PaneBlock == m.PaneBlock && agentExited(m.Agents.States, e.Block) {
+			exited = append(exited, e)
+		}
+	}
+	for _, e := range exited {
+		if m.agentWaitingOn(e.IssueUID) {
+			m.AgentGone = m.withoutGone(e)
 			continue
 		}
 		project := m.projectOf(e)
 		if project == 0 {
+			m.AgentGone = m.withoutGone(e)
 			continue
 		}
 		status := m.issueStatus(e.IssueUID)
 		if status == "" || (reread && m.issueByUID(e.IssueUID) == nil) {
-			if m.issueByUID(e.IssueUID) == nil && !slices.Contains(m.AgentClose.reading, e.IssueUID) {
-				m.AgentClose.reading = append(slices.Clone(m.AgentClose.reading), e.IssueUID)
-				cmds = append(cmds, ReadAgentIssue{Workspace: m.Workspace, ProjectID: project, UID: e.IssueUID})
-			}
+			m, cmds = readIssueStatus(m, cmds, project, e.IssueUID)
 			continue
 		}
+		m.AgentGone = m.withoutGone(e)
 		message := agentExitedMessage(e.IssueRef)
 		if status == "closed" || slices.ContainsFunc(m.AgentAttention, func(r RaisedAttention) bool { return r.UID == e.IssueUID && r.Message == message }) {
 			continue
 		}
-		m, cmds = putRaise(m, cmds, e.IssueUID, project, e.Teammate, address, message)
+		m, cmds = putRaise(m, cmds, e.IssueUID, project, e.Teammate, address, message, true)
+	}
+	return m, cmds
+}
+
+func (m Model) withoutGone(e AgentEntry) []AgentEntry {
+	return slices.DeleteFunc(slices.Clone(m.AgentGone), func(g AgentEntry) bool { return g.Block == e.Block })
+}
+
+// readIssueStatus asks the Daemon for the status of an Issue the Collection does not list, unless a read of it is in flight.
+func readIssueStatus(m Model, cmds []Cmd, project int64, uid string) (Model, []Cmd) {
+	if m.issueByUID(uid) == nil && !slices.Contains(m.AgentClose.reading, uid) {
+		m.AgentClose.reading = append(slices.Clone(m.AgentClose.reading), uid)
+		cmds = append(cmds, ReadAgentIssue{Workspace: m.Workspace, ProjectID: project, UID: uid})
+	}
+	return m, cmds
+}
+
+// readExitedIssues reads again the status of an Issue holding an exit request the Collection does not list (while its status is
+// not known, and when the Issues change), so closing the Issue clears the request though no agent entry is left to ask about it.
+func readExitedIssues(m Model, cmds []Cmd, reread bool) (Model, []Cmd) {
+	for _, r := range m.AgentAttention {
+		if r.Exited && m.issueByUID(r.UID) == nil && (reread || m.issueStatus(r.UID) == "") {
+			m, cmds = readIssueStatus(m, cmds, r.ProjectID, r.UID)
+		}
 	}
 	return m, cmds
 }

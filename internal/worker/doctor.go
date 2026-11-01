@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"os"
 	"os/exec"
@@ -49,7 +50,17 @@ func (r Report) String() string {
 		}
 	}
 	if r.Problems() == 0 {
-		b.WriteString("Nothing is missing.\n")
+		warnings := 0
+		for _, c := range r.Checks {
+			if c.Level == "warn" {
+				warnings++
+			}
+		}
+		if warnings > 0 {
+			fmt.Fprintf(&b, "Nothing is missing; %d %s above, and none stops anything.\n", warnings, plural(warnings, "warning", "warnings"))
+		} else {
+			b.WriteString("Nothing is missing.\n")
+		}
 	}
 	return b.String()
 }
@@ -76,7 +87,11 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 	}
 	cfg, err := LoadConfig(o.Dirs.ConfigPath())
 	if err != nil {
-		add("FAIL", "config", err.Error(), "Create "+o.Dirs.ConfigPath()+" (the README's worker setup shows one).")
+		var fix string
+		if _, statErr := os.Stat(o.Dirs.ConfigPath()); errors.Is(statErr, fs.ErrNotExist) {
+			fix = "Create " + o.Dirs.ConfigPath() + " (the README's worker setup shows one)."
+		}
+		add("FAIL", "config", err.Error(), fix)
 		return r
 	}
 	add("ok", "config", fmt.Sprintf("%s: executor %q, %d %s", o.Dirs.ConfigPath(), cfg.Executor, len(cfg.Projects), plural(len(cfg.Projects), "Project", "Projects")), "")
@@ -96,8 +111,8 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 		}
 	}
 	omp := o.Omp
-	omp.Checkouts = slices.AppendSeq(omp.Checkouts, maps.Values(cfg.Checkouts))
-	kata := omp.kataPlugin()
+	omp.Checkouts = slices.Concat(omp.Checkouts, slices.Sorted(maps.Values(cfg.Checkouts)))
+	scan := omp.scan()
 	for _, name := range slices.Sorted(maps.Keys(cfg.Profiles)) {
 		command := cfg.Profiles[name].command()
 		if path, err := exec.LookPath(command); err != nil {
@@ -105,7 +120,12 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 		} else {
 			add("ok", "profile "+name, path, "")
 		}
-		if kata != "" && cfg.Profiles[name].Extensions.Ambient() {
+		profile := cfg.Profiles[name]
+		if !profile.LoadsAmbientExtensions() {
+			continue
+		}
+		argProfile, hasArg := profile.ompProfile()
+		if kata := scan.kataPlugin(argProfile, hasArg); kata != "" {
 			add("warn", "profile "+name, "kata-plugin's omp extension is installed ("+kata+") and this profile loads omp's extensions, so each headless run gets its todo takeover: an issue for each task and up to 3 extra turns from its stop reminder",
 				"Set extensions = \"none\" under [profiles."+name+"] in worker.toml.")
 		}
