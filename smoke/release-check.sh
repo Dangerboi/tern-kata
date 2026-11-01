@@ -28,7 +28,7 @@ ctl() { tern ctl --control "$tmp/control.sock" "$@"; }
 
 # A staged plugin/ folder as a release carries it, with a version older than any release.
 mkdir -p "$tmp/plugin" "$tmp/dist" "$tmp/workspace" "$tmp/crates/tern/goldens" "$tmp/crates/plugins/fixtures"
-for f in window.luau host.luau placement.luau releases.luau; do cp "$repo/$f" "$tmp/plugin/"; done
+for f in window.luau host.luau placement.luau releases.luau panecommands.luau; do cp "$repo/$f" "$tmp/plugin/"; done
 sed 's/^version = .*/version = "0.0.1"/' "$repo/plugin.toml" >"$tmp/plugin/plugin.toml"
 printf '9.9.9\n' >"$tmp/dist/version.txt"
 export STENCIL_FIXTURE_ROOT="$tmp/crates/tern"
