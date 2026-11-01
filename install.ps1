@@ -4,7 +4,9 @@
 
 # Installs the plugin folder $Path with tern; a linked copy, which --force leaves alone, gets a message. Returns $false on any other failure.
 function Install-TernKataPlugin([string]$Path) {
-    $out = (& tern plugin install $Path --force 2>&1 | Out-String).Trim()
+    # Continue, not the caller's Stop: under Windows PowerShell 5.1 a native command's stderr line is an error record, which Stop throws.
+    $ErrorActionPreference = 'Continue'
+    $out = (& tern plugin install $Path --force 2>&1 | ForEach-Object { "$_" } | Out-String).Trim()
     if ($LASTEXITCODE -eq 0) {
         Write-Host $out
     } elseif ($out -like '*is linked*') {
@@ -56,7 +58,11 @@ function Install-TernKata {
         if ($got -ne $want) { throw "install.ps1: checksum mismatch for $asset (expected $want, got $got); nothing was installed" }
 
         Expand-Archive -Path (Join-Path $tmp $asset) -DestinationPath $tmp -Force
+        # Releases before the window plugin was shipped have no plugin folder.
+        $plugin = Join-Path $tmp 'plugin'
+        $hasPlugin = Test-Path -LiteralPath $plugin -PathType Container
         if ($pluginOnly) {
+            if (-not $hasPlugin) { throw 'install.ps1: this release carries no window plugin: nothing was installed' }
             Write-Host 'Installing the Tern window plugin (kata links, the Install tern-kata palette command, startup toasts):'
             if (-not (Install-TernKataPlugin (Join-Path $tmp 'plugin'))) { throw 'install.ps1: could not install the tern-kata window plugin' }
             return
@@ -76,7 +82,9 @@ function Install-TernKata {
         }
         Move-Item (Join-Path $tmp 'tern-kata.exe') $exe
         Write-Host "Installed $(& $exe --version) to $exe"
-        if (Get-Command tern -ErrorAction SilentlyContinue) {
+        if (-not $hasPlugin) {
+            Write-Host 'This release carries no Tern window plugin, so the plugin was left as it is.'
+        } elseif (Get-Command tern -ErrorAction SilentlyContinue) {
             Write-Host 'Installing the Tern window plugin (kata links, the Install tern-kata palette command, startup toasts):'
             if (-not (Install-TernKataPlugin (Join-Path $tmp 'plugin'))) { Write-Warning 'Could not install the tern-kata window plugin; rerun this script with $env:TERN_KATA_PLUGIN_ONLY = ''1'' set' }
         } else {

@@ -73,15 +73,23 @@ main() {
 	got=$(sha256 "$tmp/$asset")
 	[ "$got" = "$want" ] || die "checksum mismatch for $asset (expected $want, got $got); nothing was installed"
 
+	# Releases before the window plugin was shipped have no plugin/ folder.
+	if tar -tzf "$tmp/$asset" | awk '/^(\.\/)?plugin\// { found = 1 } END { exit !found }'; then
+		has_plugin=1
+		tar -xzf "$tmp/$asset" -C "$tmp" plugin
+	else
+		has_plugin=
+	fi
+
 	if [ "${TERN_KATA_PLUGIN_ONLY:-}" = 1 ]; then
 		command -v tern >/dev/null 2>&1 || die "tern is not on PATH: install tern-kata's window plugin on the machine that runs Tern"
-		tar -xzf "$tmp/$asset" -C "$tmp" plugin
+		[ -n "$has_plugin" ] || die "this release carries no window plugin: nothing was installed"
 		echo "Installing the Tern window plugin (kata links, the Install tern-kata palette command, startup toasts):"
 		install_plugin "$tmp/plugin" || die "could not install the tern-kata window plugin"
 		return 0
 	fi
 
-	tar -xzf "$tmp/$asset" -C "$tmp" tern-kata plugin
+	tar -xzf "$tmp/$asset" -C "$tmp" tern-kata
 	mkdir -p "$dir"
 	# Copy beside the target and rename over it, so upgrading a running tern-kata works.
 	cp "$tmp/tern-kata" "$dir/.tern-kata.new"
@@ -94,7 +102,9 @@ main() {
 	*) echo "Add $dir to your PATH, for example: export PATH=\"$dir:\$PATH\"" ;;
 	esac
 
-	if command -v tern >/dev/null 2>&1; then
+	if [ -z "$has_plugin" ]; then
+		echo "This release carries no Tern window plugin, so the plugin was left as it is."
+	elif command -v tern >/dev/null 2>&1; then
 		echo "Installing the Tern window plugin (kata links, the Install tern-kata palette command, startup toasts):"
 		install_plugin "$tmp/plugin" || echo "Could not install the tern-kata window plugin; rerun this script with TERN_KATA_PLUGIN_ONLY=1 set" >&2
 	else

@@ -58,6 +58,10 @@ The refusal's reason comes from the worker: no worker runs on this machine, it d
 
 Tern draws `kata://` links as plain text, so agents write `https://kata.invalid/...` links, which the window plugin intercepts. Add the rule from [Agents](agents.md#clickable-ticket-links-from-agents) to your agent's global rules.
 
+### How do I update tern-kata?
+
+Run **Update tern-kata** from the palette, or `tern-kata update` on the session host. Both swap in the latest release's binary, bring this machine's window plugin along and give a supervised Worker an idle stop; the palette command also reinstalls the plugin on the machine showing the Tern window. See [Updating](../../README.md#updating).
+
 ### Can an agent see an Attachment I added on another machine?
 
 Only through the pointer in the Issue's kata metadata, which names the host and path. A teammate's agent can open it only if it can SSH to that host. See [Hosts and remote daemons](attachments.md#hosts-and-remote-daemons).
