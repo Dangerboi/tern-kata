@@ -3,11 +3,16 @@
 # TERN_KATA_BASE_URL pointing at it) replaces that binary, which then reports the new version. A second update says it is up to
 # date. The state folder is the run's own (XDG_STATE_HOME), so the update lock never touches the real one.
 up_version=$(sed -n 's/^version *= *"\(.*\)"/\1/p' "$repo/plugin.toml")
-up_dist="$tmp/update-dist"
-"$repo/scripts/release.sh" "v$up_version" "$up_dist"
+if [[ -n ${SMOKE_DIST:-} ]]; then
+  up_dist=$SMOKE_DIST
+else
+  up_dist="$tmp/update-dist"
+  "$repo/scripts/release.sh" "v$up_version" "$up_dist"
+fi
 
 python3 -m http.server 0 --bind 127.0.0.1 --directory "$up_dist" >"$tmp/update-server.log" 2>&1 &
 up_server=$!
+http_pids+=("$up_server")
 up_url=
 for ((attempt = 0; attempt < 100; attempt++)); do
   up_url=$(sed -n 's|^Serving HTTP on 127.0.0.1 port \([0-9]*\).*|http://127.0.0.1:\1|p' "$tmp/update-server.log")
@@ -27,8 +32,8 @@ mkdir -p "$up_old_plugin"
 cp "$repo/plugin.toml" "$repo"/*.luau "$up_old_plugin/" 2>/dev/null || true
 sed -i 's/^version *=.*/version = "0.0.1"/' "$up_old_plugin/plugin.toml"
 export TERN_DAEMON_SOCKET="$tmp/update-dead.sock"
+[[ $(tern plugin dir) == "$TERN_CONFIG_DIR/plugins" ]]
 tern plugin install "$up_old_plugin" --force >/dev/null
-[[ $(tern plugin dir) != "" ]]
 grep -q 'version = "0.0.1"' "$(tern plugin dir)/tern-kata/plugin.toml"
 
 TERN_KATA_BASE_URL="$up_url" "$up_bin" update >"$tmp/update.out"

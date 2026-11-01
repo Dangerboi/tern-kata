@@ -4,8 +4,12 @@
 # TERN_CONFIG_DIR, which moves `tern plugin dir`, so the real plugins folder is never touched; the daemon socket points
 # at a socket nobody listens on, so the installs reload no running window.
 in_version=$(sed -n 's/^version *= *"\(.*\)"/\1/p' "$repo/plugin.toml")
-in_dist="$tmp/install-dist"
-"$repo/scripts/release.sh" "v$in_version" "$in_dist"
+if [[ -n ${SMOKE_DIST:-} ]]; then
+  in_dist=$SMOKE_DIST
+else
+  in_dist="$tmp/install-dist"
+  "$repo/scripts/release.sh" "v$in_version" "$in_dist"
+fi
 [[ $(<"$in_dist/version.txt") == "$in_version" ]]
 in_plugin_files=$(sed -n 's/^plugin_files="\(.*\)"/\1/p' "$repo/scripts/release.sh")
 [[ -n $in_plugin_files ]]
@@ -23,6 +27,7 @@ done
 in_serve() {
   python3 -m http.server 0 --bind 127.0.0.1 --directory "$1" >"$tmp/install-server-$2.log" 2>&1 &
   in_server=$!
+  http_pids+=("$in_server")
   in_url=
   for ((attempt = 0; attempt < 100; attempt++)); do
     in_url=$(sed -n 's|^Serving HTTP on 127.0.0.1 port \([0-9]*\).*|http://127.0.0.1:\1|p' "$tmp/install-server-$2.log")
