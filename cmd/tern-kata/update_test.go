@@ -234,8 +234,8 @@ func TestUpdateSwapsTheBinaryForTheLatestRelease(t *testing.T) {
 
 func TestUpdateRefusesADownloadThatFailsItsChecksum(t *testing.T) {
 	for name, spoil := range map[string]func(string) string{
-		"wrong hash":    func(s string) string { return strings.Repeat("0", 64) + s[64:] },
-		"no line": func(string) string { return "" },
+		"wrong hash": func(s string) string { return strings.Repeat("0", 64) + s[64:] },
+		"no line":    func(string) string { return "" },
 	} {
 		f := newUpdateFixture(t, "v0.1.0", "0.2.0", spoil)
 		err := f.run(LaunchPlan{Subcommand: "update"})
