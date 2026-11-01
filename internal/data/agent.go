@@ -28,13 +28,14 @@ const (
 const AgentWrapperProgram = "tern-kata"
 
 // AgentCommandLine is the command an agent block runs: command with @promptFile appended (omp reads it as the first message),
-// run through `tern-kata agent --as actor --` when an actor is set and directly otherwise.
-func AgentCommandLine(actor string, command []string, promptFile string) []string {
+// run through `tern-kata agent --as actor --ref ref --` when an actor is set and directly otherwise. ref is the Issue's qualified
+// ref, which the wrapper sets as the agent's KATA_REF.
+func AgentCommandLine(actor, ref string, command []string, promptFile string) []string {
 	line := append(slices.Clone(command), "@"+promptFile)
 	if actor == "" {
 		return line
 	}
-	return append([]string{AgentWrapperProgram, "agent", "--as", actor, "--"}, line...)
+	return append([]string{AgentWrapperProgram, "agent", "--as", actor, "--ref", ref, "--"}, line...)
 }
 
 // AgentSplitArgs is the tern command line for the Agent card's `s`: a split right of the Pane's block. A Pane that cannot name its block (paneBlock
@@ -416,7 +417,7 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 	if err != nil {
 		return failed(err)
 	}
-	line := AgentCommandLine(settings.Actor, settings.Command, promptFile)
+	line := AgentCommandLine(settings.Actor, cmd.IssueRef, settings.Command, promptFile)
 	var out []byte
 	switch cmd.Placement {
 	case model.AgentTab:
@@ -438,7 +439,7 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 		return failed(err)
 	}
 	entry := model.AgentEntry{IssueUID: cmd.IssueUID, IssueRef: cmd.IssueRef, ProjectID: cmd.ProjectID, Block: block, StartedAt: g.now().UTC().Truncate(time.Second),
-		PromptFile: promptFile, PaneBlock: cmd.PaneBlock, Placement: cmd.Placement, Background: cmd.Placement == model.AgentBackground}
+		Teammate: settings.Name, PromptFile: promptFile, PaneBlock: cmd.PaneBlock, Placement: cmd.Placement, Background: cmd.Placement == model.AgentBackground}
 	if _, err := UpdateAgents(filepath.Join(dirs.State, AgentsFile), func(list []model.AgentEntry) []model.AgentEntry {
 		return append(slices.DeleteFunc(list, func(e model.AgentEntry) bool { return e.Block == block }), entry)
 	}); err != nil {

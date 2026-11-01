@@ -76,15 +76,18 @@ func (c *Client) ClearAttention(ctx context.Context, cmd model.ClearAttention) (
 	return model.AttentionCleared{UID: cmd.UID}, nil
 }
 
-// RaiseAgentAttention writes the request for cmd.Address on an Issue as `kata notify` does, as the Pane's actor and without a
+// RaiseAgentAttention writes the request for cmd.Address on an Issue as `kata notify` does, as the Pane's actor, naming the waiting agent as teammate when it has a name, and without a
 // guard: it replaces an earlier request, which is how a newly waiting agent's message lands.
 func (c *Client) RaiseAgentAttention(ctx context.Context, cmd model.RaiseAgentAttention) error {
 	value := map[string]any{"from": cmd.Actor, "message": cmd.Message}
+	if cmd.Teammate != "" {
+		value["teammate"] = cmd.Teammate
+	}
 	return c.writeAttentionSlot(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, model.NotificationKey(cmd.Address), value)
 }
 
 // ClearAgentAttention removes the request for cmd.Address on an Issue as `kata notify --clear` does, but only while it still
-// reads as cmd.Actor wrote it with one of cmd.Messages, and guarded on the value read, so a request someone else wrote since survives. A
+// reads as cmd.Actor wrote it (whatever its teammate) with one of cmd.Messages, and guarded on the value read, so a request someone else wrote since survives. A
 // slot that is gone, someone else's, or rewritten between the read and the write counts as cleared.
 func (c *Client) ClearAgentAttention(ctx context.Context, cmd model.ClearAgentAttention) error {
 	key := model.NotificationKey(cmd.Address)

@@ -247,7 +247,7 @@ func (p *agentParser) Result() AgentResult {
 func sessionFolder(runDir string) string { return filepath.Join(runDir, "session") }
 
 // args is the omp command line for a run (ADR-0009): headless JSON, the run's session folder, the profile's model
-// and thinking level, an unattended approval mode unless the profile sets its own, the profile's extra arguments, and
+// and thinking level, its extensions flags, an unattended approval mode unless the profile sets its own, the profile's extra arguments, and
 // the prompt as an @file (one positional is one turn; the file keeps the prompt out of argv's size limit).
 // Checked against omp 18.12: -p --mode json need no TTY, stdin must be /dev/null, and without an approval mode a
 // headless run that needs approval has no one to ask, so the default is `--approval-mode yolo`.
@@ -267,6 +267,7 @@ func agentArgs(p Profile, runDir, promptFile string, resume string) []string {
 	}) {
 		args = append(args, "--approval-mode", "yolo")
 	}
+	args = append(args, p.Extensions.args()...)
 	args = append(args, p.Args...)
 	return append(args, "@"+promptFile)
 }

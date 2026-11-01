@@ -165,6 +165,19 @@ func TestChildEnv(t *testing.T) {
 	}
 }
 
+func TestAgentEnv(t *testing.T) {
+	environ := []string{"PATH=/bin", "KATA_REF=old#1", "KATA_INBOX_USER=me", "KATA_AUTHOR=old", "Kata_Ref=x", "KATA_SESSION_ID=s"}
+	if got, want := agentEnv(environ, "ann", "demo#ab12", false), []string{"PATH=/bin", "Kata_Ref=x", "KATA_SESSION_ID=s", "KATA_AUTHOR=ann", "KATA_REF=demo#ab12"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("sensitive: %q, want %q", got, want)
+	}
+	if got, want := agentEnv(environ, "ann", "demo#ab12", true), []string{"PATH=/bin", "KATA_SESSION_ID=s", "KATA_AUTHOR=ann", "KATA_REF=demo#ab12"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("insensitive: %q, want %q", got, want)
+	}
+	if got, want := agentEnv(environ, "ann", "", false), []string{"PATH=/bin", "Kata_Ref=x", "KATA_SESSION_ID=s", "KATA_AUTHOR=ann"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("no ref: %q, want %q", got, want)
+	}
+}
+
 type stubSession struct{}
 
 func (stubSession) Next(ctx context.Context) (tern.Input, error) { <-ctx.Done(); return nil, ctx.Err() }

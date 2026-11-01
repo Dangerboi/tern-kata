@@ -10,15 +10,18 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
 // AgentConfigFile is agent.toml, beside lanes.toml in tern-kata's config folder. The user writes it by hand; the Pane never does.
 //
 //	actor = "me-agent"
+//	name = "builder"
 //	command = ["omp"]
 //	[projects.tern-kata]
 //	actor = "..."
+//	name = "..."
 //	command = ["omp", "--model", "opus"]
 //	checkout = "/home/me/Code/tern-kata"
 const AgentConfigFile = "agent.toml"
@@ -29,6 +32,7 @@ var DefaultAgentCommand = []string{worker.DefaultCommand}
 // AgentConfig is agent.toml, strictly decoded.
 type AgentConfig struct {
 	Actor    string                  `toml:"actor"`
+	Name     string                  `toml:"name"`
 	Command  []string                `toml:"command"`
 	Projects map[string]AgentProject `toml:"projects"`
 }
@@ -36,6 +40,7 @@ type AgentConfig struct {
 // AgentProject is one [projects.<name>] table; its values override the top-level ones.
 type AgentProject struct {
 	Actor    string   `toml:"actor"`
+	Name     string   `toml:"name"`
 	Command  []string `toml:"command"`
 	Checkout string   `toml:"checkout"`
 }
@@ -57,6 +62,9 @@ func ReadAgentConfig(path string) (AgentConfig, error) {
 		}
 		return AgentConfig{}, fmt.Errorf("%s: unknown key %s", path, strings.Join(keys, ", "))
 	}
+	if meta.IsDefined("name") && !model.ValidTeammate(c.Name) {
+		return AgentConfig{}, fmt.Errorf("%s: name: %q is not a teammate name (letters, digits, . _ -; at most 64)", path, c.Name)
+	}
 	if meta.IsDefined("command") {
 		if err := checkAgentCommand(c.Command); err != nil {
 			return AgentConfig{}, fmt.Errorf("%s: command: %w", path, err)
@@ -64,6 +72,9 @@ func ReadAgentConfig(path string) (AgentConfig, error) {
 	}
 	for _, name := range slices.Sorted(maps.Keys(c.Projects)) {
 		p := c.Projects[name]
+		if meta.IsDefined("projects", name, "name") && !model.ValidTeammate(p.Name) {
+			return AgentConfig{}, fmt.Errorf("%s: projects.%s.name: %q is not a teammate name (letters, digits, . _ -; at most 64)", path, name, p.Name)
+		}
 		if meta.IsDefined("projects", name, "command") {
 			if err := checkAgentCommand(p.Command); err != nil {
 				return AgentConfig{}, fmt.Errorf("%s: projects.%s.command: %w", path, name, err)
@@ -86,7 +97,9 @@ func checkAgentCommand(argv []string) error {
 // AgentSettings are the actor, command and checkout an agent on a Project starts with.
 type AgentSettings struct {
 	// Actor is "" when agents run as whoever kata resolves in the agent's shell.
-	Actor   string
+	Actor string
+	// Name is the teammate the agent's Attention requests carry: the configured name, else the command's program name, "" when that is no valid teammate.
+	Name    string
 	Command []string
 	// Checkout is the Project's table's checkout, "" when it has none.
 	Checkout string
@@ -94,10 +107,13 @@ type AgentSettings struct {
 
 // For is the settings for a Project: its table's values over the top-level ones over the defaults.
 func (c AgentConfig) For(project string) AgentSettings {
-	s := AgentSettings{Actor: c.Actor, Command: c.Command}
+	s := AgentSettings{Actor: c.Actor, Name: c.Name, Command: c.Command}
 	if p, ok := c.Projects[project]; ok {
 		if p.Actor != "" {
 			s.Actor = p.Actor
+		}
+		if p.Name != "" {
+			s.Name = p.Name
 		}
 		if len(p.Command) > 0 {
 			s.Command = p.Command
@@ -106,6 +122,12 @@ func (c AgentConfig) For(project string) AgentSettings {
 	}
 	if len(s.Command) == 0 {
 		s.Command = DefaultAgentCommand
+	}
+	if s.Name == "" {
+		program := filepath.Base(s.Command[0])
+		if name := strings.TrimSuffix(program, filepath.Ext(program)); model.ValidTeammate(name) {
+			s.Name = name
+		}
 	}
 	return s
 }

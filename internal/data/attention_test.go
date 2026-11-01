@@ -313,3 +313,41 @@ func TestAgentAttentionClearTakesAnyMessageAnAgentRaisedAndKeepsAnyOtherRequest(
 		t.Fatalf("requests after the clear: %+v, want a message no agent raised kept", left)
 	}
 }
+
+func TestAgentAttentionRaisedWithATeammateNamesItAndIsClearedWithoutOne(t *testing.T) {
+	f := newAttentionFixture(t)
+	uid := createIssue(t, f.gateway, f.work, f.workP, "Waiting")
+	raise := func(teammate, message string) {
+		t.Helper()
+		got := as[model.AgentAttentionWritten](t, run(t, f.gateway, model.RaiseAgentAttention{
+			Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Teammate: teammate, Address: "dana", Message: message,
+		}))
+		if got.Err != nil {
+			t.Fatalf("raise: %+v", got)
+		}
+	}
+	raise("builder", "which table?")
+	got := f.read(t, "dana").Requests
+	if len(got) != 1 || got[0].Slot.From != "dana-agent" || got[0].Slot.Teammate != "builder" || got[0].Sender() != "dana-agent/builder" {
+		t.Fatalf("requests after the first raise: %+v, want sender dana-agent/builder", got)
+	}
+	raise("reviewer", "which column?")
+	got = f.read(t, "dana").Requests
+	if len(got) != 1 || got[0].Sender() != "dana-agent/reviewer" {
+		t.Fatalf("requests after the second raise: %+v, want sender dana-agent/reviewer", got)
+	}
+	raise("", "which column?")
+	if got = f.read(t, "dana").Requests; len(got) != 1 || got[0].Slot.Teammate != "" || got[0].Sender() != "dana-agent" {
+		t.Fatalf("requests after a raise with no name: %+v, want no teammate", got)
+	}
+	raise("reviewer", "which column?")
+	cleared := as[model.AgentAttentionWritten](t, run(t, f.gateway, model.ClearAgentAttention{
+		Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Address: "dana", Messages: []string{"which column?"},
+	}))
+	if cleared.Err != nil || !cleared.Clear {
+		t.Fatalf("clear: %+v", cleared)
+	}
+	if left := f.read(t, "dana").Requests; len(left) != 0 {
+		t.Fatalf("requests after the clear: %+v, want the request with a teammate cleared", left)
+	}
+}
