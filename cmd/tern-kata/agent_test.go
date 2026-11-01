@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -146,5 +147,77 @@ func TestAgentHelpAfterTheCommandIsTheCommands(t *testing.T) {
 	plan, err := PlanLaunch([]string{"agent", "--as", "bot", "--", "omp", "--help"}, func(string) (string, bool) { return "", false }, "v")
 	if err != nil || plan.Help || !slices.Equal(plan.Operands, []string{"omp", "--help"}) {
 		t.Errorf("plan = %+v, err = %v", plan, err)
+	}
+}
+
+// agentEnvOutput runs the real wrapper with route flags around a command that prints the kata variables the agent would see.
+func agentEnvOutput(t *testing.T, env []string, flags ...string) (string, int, string) {
+	t.Helper()
+	args := append(append([]string{"agent", "--as", "claude"}, flags...), "--ref", "demo#ab12", "--", "sh", "-c",
+		`printf 'HOME=%s SERVER=%s TOKEN=%s FILE=%s INSECURE=%s REF=%s' "${KATA_HOME-unset}" "${KATA_SERVER-unset}" "${KATA_AUTH_TOKEN-unset}" "${KATA_AUTH_TOKEN_FILE-unset}" "${KATA_ALLOW_INSECURE-unset}" "$KATA_REF"`)
+	return runAgent(t, env, args...)
+}
+
+func TestAgentWrapperRoutesKataToThePanesDaemon(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sh")
+	}
+	home := t.TempDir()
+	if err := os.WriteFile(home+"/config.toml", []byte("[[daemon]]\nname = \"work\"\nurl = \"https://kata.example\"\ntoken_env = \"WORK_TOKEN\"\nallow_insecure = true\n[[daemon]]\nname = \"mine\"\nlocal = true\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The environment the agent's block inherits (the test child sets its own KATA_HOME, KATA_SERVER and KATA_AUTH_TOKEN): a route
+	// changes only what it names and leaves the rest as it was.
+	block := []string{"WORK_TOKEN=work-token"}
+	base, status, stderr := agentEnvOutput(t, block)
+	childHome := regexp.MustCompile(`/tmp/workertest\d+`) // each test child gets its own throwaway KATA_HOME
+	norm := func(out string) string { return childHome.ReplaceAllString(out, "/tmp/workertest") }
+	m := regexp.MustCompile(`^HOME=(\S*) SERVER=(\S*) TOKEN=(\S*) `).FindStringSubmatch(norm(base))
+	if status != 0 || m == nil {
+		t.Fatalf("baseline %q: status %d, stderr %q", base, status, stderr)
+	}
+	baseHome, baseServer, baseToken := m[1], m[2], m[3]
+	want := func(home, server, token, file, insecure string) string {
+		return "HOME=" + home + " SERVER=" + server + " TOKEN=" + token + " FILE=" + file + " INSECURE=" + insecure + " REF=demo#ab12"
+	}
+	for name, tc := range map[string]struct {
+		flags []string
+		want  string
+	}{
+		"no route leaves the block as it is":  {nil, want(baseHome, baseServer, baseToken, "unset", "unset")},
+		"by KATA_HOME":                        {[]string{"--home", home}, want(home, baseServer, baseToken, "unset", "unset")},
+		"by KATA_SERVER":                      {[]string{"--server", "https://pane.example", "--token-file", "/run/pane-token", "--allow-insecure"}, want(baseHome, "https://pane.example", "unset", "/run/pane-token", "1")},
+		"after a switch to a remote entry":    {[]string{"--home", home, "--daemon", "work"}, want(home, "https://kata.example", "work-token", "unset", "1")},
+		"after a switch to the local default": {[]string{"--home", home, "--daemon", "mine"}, want(home, "unset", "unset", "unset", "unset")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			out, status, stderr := agentEnvOutput(t, block, tc.flags...)
+			if status != 0 || norm(out) != tc.want {
+				t.Errorf("status %d, output %q, stderr %q; want %q", status, out, stderr, tc.want)
+			}
+		})
+	}
+	t.Run("a token the block lacks refuses the start", func(t *testing.T) {
+		_, status, stderr := agentEnvOutput(t, []string{"WORK_TOKEN="}, "--home", home, "--daemon", "work")
+		if status == 0 || !strings.Contains(stderr, "WORK_TOKEN") {
+			t.Errorf("status %d, stderr %q", status, stderr)
+		}
+	})
+}
+
+func TestPlanAgentRouteFlags(t *testing.T) {
+	lookup := func(string) (string, bool) { return "", false }
+	plan, err := PlanLaunch([]string{"agent", "--home", "/h", "--server=https://s", "--token-file", "/t", "--allow-insecure", "--ref", "demo#ab12", "--", "omp"}, lookup, "v")
+	if err != nil || plan.AgentRoute.Home != "/h" || plan.AgentRoute.Server != "https://s" || plan.AgentRoute.TokenFile != "/t" || !plan.AgentRoute.AllowInsecure || plan.AgentRef != "demo#ab12" {
+		t.Errorf("plan %+v, err %v", plan, err)
+	}
+	for _, args := range [][]string{
+		{"agent", "--daemon", "work", "--server", "https://s", "--", "omp"},
+		{"agent", "--daemon", "--", "omp"},
+		{"agent", "--home=", "--", "omp"},
+	} {
+		if _, err := PlanLaunch(args, lookup, "v"); err == nil {
+			t.Errorf("%q was accepted", args)
+		}
 	}
 }

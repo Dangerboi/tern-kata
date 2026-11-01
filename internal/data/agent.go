@@ -28,13 +28,15 @@ const (
 const AgentWrapperProgram = "tern-kata"
 
 // AgentCommandLine is the command an agent block runs: command with @promptFile appended (omp reads it as the first message),
-// run through `tern-kata agent [--as actor] --ref ref --`. ref is the Issue's qualified ref, which the wrapper sets as the agent's
-// KATA_REF; --as is left out when no actor is set, so KATA_AUTHOR stays as inherited.
-func AgentCommandLine(actor, ref string, command []string, promptFile string) []string {
+// run through `tern-kata agent [--as actor] [route flags] --ref ref --`. ref is the Issue's qualified ref, which the wrapper sets as the agent's
+// KATA_REF; --as is left out when no actor is set, so KATA_AUTHOR stays as inherited. The route flags are what AgentRoute.Args writes: none
+// for a Pane on the default daemon, so that line is the one it always was.
+func AgentCommandLine(actor, ref string, route AgentRoute, command []string, promptFile string) []string {
 	line := []string{AgentWrapperProgram, "agent"}
 	if actor != "" {
 		line = append(line, "--as", actor)
 	}
+	line = append(line, route.Args()...)
 	line = append(line, "--ref", ref, "--")
 	line = append(line, command...)
 	return append(line, "@"+promptFile)
@@ -419,7 +421,7 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 	if err != nil {
 		return failed(err)
 	}
-	line := AgentCommandLine(settings.Actor, cmd.IssueRef, settings.Command, promptFile)
+	line := AgentCommandLine(settings.Actor, cmd.IssueRef, g.CurrentAgentRoute(), settings.Command, promptFile)
 	var out []byte
 	switch cmd.Placement {
 	case model.AgentTab:

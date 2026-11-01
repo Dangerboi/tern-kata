@@ -97,6 +97,11 @@ func ReadCatalog() (Catalog, error) {
 	if err != nil {
 		return Catalog{}, err
 	}
+	return ReadCatalogAt(home)
+}
+
+// ReadCatalogAt is ReadCatalog for the config.toml in home, whatever KATA_HOME says.
+func ReadCatalogAt(home string) (Catalog, error) {
 	path := filepath.Join(home, "config.toml")
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
