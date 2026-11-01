@@ -519,3 +519,37 @@ func TestARefreshThatReadTheFileBeforeAnAgentStartedDoesNotMarkItGone(t *testing
 		t.Fatalf("mapping %v", m.AgentMapping)
 	}
 }
+
+func prunesAsked(t *testing.T, m model.Model) (model.Model, int64) {
+	t.Helper()
+	m, cmds := model.Update(m, model.Start{Workspace: "/repo"})
+	for _, c := range cmds {
+		if p, ok := c.(model.PruneAgents); ok {
+			return m, p.Seq
+		}
+	}
+	t.Fatalf("no PruneAgents asked: %v", cmds)
+	return m, 0
+}
+
+func TestTwoRequestsInFlightBeforeAQuickStartMarkNothingGoneAndALaterOneDoes(t *testing.T) {
+	m := exitedPane("open")
+	m, first := prunesAsked(t, m)
+	m, second := prunesAsked(t, m)
+	started := model.AgentEntry{Block: "14", IssueUID: "u1", IssueRef: "kata-u1", PaneBlock: m.PaneBlock, ProjectID: 3}
+	m, _ = model.Update(m, model.AgentStarted{Placement: model.AgentSplit, IssueRef: "kata-u1", Entry: started})
+	without := slices.DeleteFunc(slices.Clone(m.AgentMapping), func(e model.AgentEntry) bool { return e.Block == "14" })
+	// The answers arrive newest first; neither read the file after the start.
+	for _, seq := range []int64{second, first} {
+		m, _ = model.Update(m, model.AgentsRefreshed{Agents: without, Seq: seq})
+		if len(m.AgentGone) != 0 || !slices.ContainsFunc(m.AgentMapping, func(e model.AgentEntry) bool { return e.Block == "14" }) {
+			t.Fatalf("answer %d: gone %v, mapping %v", seq, m.AgentGone, m.AgentMapping)
+		}
+	}
+	// A request asked after the start that lacks the entry: the agent really is gone.
+	m, third := prunesAsked(t, m)
+	m, _ = model.Update(m, model.AgentsRefreshed{Agents: without, Seq: third})
+	if slices.ContainsFunc(m.AgentMapping, func(e model.AgentEntry) bool { return e.Block == "14" }) {
+		t.Fatalf("later answer: gone %v, mapping %v", m.AgentGone, m.AgentMapping)
+	}
+}

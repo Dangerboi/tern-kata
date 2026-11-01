@@ -218,9 +218,12 @@ arm(500)
 -- it was. A synchronous filter under a 50 ms budget: pure table work, and any error leaves the spawn as it is.
 if windows then
     -- A Tern that rejects the event must not stop the host half (worker supervision) running.
-    pcall(function()
+    local ok, err = pcall(function()
         tern.on("spawn", function(spec: any): any?
             return panecommands.withoutProfile(spec)
         end)
     end)
+    if not ok then
+        tern.log.warn("tern-kata: could not register the spawn filter, so Pane commands load the PowerShell profile: " .. tostring(err))
+    end
 end

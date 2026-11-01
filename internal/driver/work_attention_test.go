@@ -85,15 +85,24 @@ func TestTheIssueDetailHasAWorkAttentionPropertyWithTheWholeMessage(t *testing.T
 	long := strings.Repeat("word ", 30)
 	issue := attentionIssue("t1", map[string]any{"work.attention": "needs-human", "work.attention_msg": long})
 	s := step(t, projectPane(t, 160, issue), model.DetailLoaded{UID: "t1", Selected: &model.IssueDetailData{Issue: &issue}}).State
+	var word, message bool
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
-		if strings.HasSuffix(n.ID, ".properties.work-attention.v") {
-			if n.P["text"] != "needs human: "+strings.TrimSpace(long) || n.P["tone"] != "warning" {
-				t.Errorf("badge %v", n.P)
+		switch {
+		case strings.HasSuffix(n.ID, ".properties.work-attention.v.word"):
+			word = true
+			if n.P["text"] != "needs human" || n.P["tone"] != "warning" {
+				t.Errorf("word %v", n.P)
 			}
-			return
+		case strings.HasSuffix(n.ID, ".properties.work-attention.v.message"):
+			message = true
+			if n.P["text"] != strings.TrimSpace(long) {
+				t.Errorf("message %v", n.P)
+			}
 		}
 	}
-	t.Fatal("the detail has no Work attention property")
+	if !word || !message {
+		t.Fatalf("the detail's Work attention property has the word %v, the message %v", word, message)
+	}
 }
 
 func TestAClosedIssuesLeftoverWorkAttentionShowsNotOnTheDetail(t *testing.T) {
