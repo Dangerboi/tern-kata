@@ -81,17 +81,28 @@ func TestTheBoardCardShowsTheWorkAttention(t *testing.T) {
 	}
 }
 
-func TestTheIssueDetailHasAnAttentionPropertyWithTheWholeMessage(t *testing.T) {
+func TestTheIssueDetailHasAWorkAttentionPropertyWithTheWholeMessage(t *testing.T) {
 	long := strings.Repeat("word ", 30)
 	issue := attentionIssue("t1", map[string]any{"work.attention": "needs-human", "work.attention_msg": long})
 	s := step(t, projectPane(t, 160, issue), model.DetailLoaded{UID: "t1", Selected: &model.IssueDetailData{Issue: &issue}}).State
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
-		if strings.HasSuffix(n.ID, ".properties.attention.v") {
+		if strings.HasSuffix(n.ID, ".properties.work-attention.v") {
 			if n.P["text"] != "needs human: "+strings.TrimSpace(long) || n.P["tone"] != "warning" {
 				t.Errorf("badge %v", n.P)
 			}
 			return
 		}
 	}
-	t.Fatal("the detail has no Attention property")
+	t.Fatal("the detail has no Work attention property")
+}
+
+func TestAClosedIssuesLeftoverWorkAttentionShowsNotOnTheDetail(t *testing.T) {
+	issue := attentionIssue("t1", map[string]any{"work.attention": "stuck", "work.attention_msg": "tests hang"})
+	issue.Status = "closed"
+	s := step(t, projectPane(t, 160, issue), model.DetailLoaded{UID: "t1", Selected: &model.IssueDetailData{Issue: &issue}}).State
+	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
+		if strings.Contains(n.ID, ".properties.work-attention") {
+			t.Errorf("detail: a closed Issue has the property %s", n.ID)
+		}
+	}
 }

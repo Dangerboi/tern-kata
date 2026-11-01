@@ -176,6 +176,9 @@ func TestAgentEnv(t *testing.T) {
 	if got, want := agentEnv(environ, "ann", "", false), []string{"PATH=/bin", "Kata_Ref=x", "KATA_SESSION_ID=s", "KATA_AUTHOR=ann"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("no ref: %q, want %q", got, want)
 	}
+	if got, want := agentEnv(environ, "", "demo#ab12", false), []string{"PATH=/bin", "KATA_AUTHOR=old", "Kata_Ref=x", "KATA_SESSION_ID=s", "KATA_REF=demo#ab12"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("no actor: %q, want %q", got, want)
+	}
 }
 
 type stubSession struct{}

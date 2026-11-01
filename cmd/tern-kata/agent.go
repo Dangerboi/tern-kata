@@ -7,9 +7,9 @@ import (
 )
 
 // agentUsage is what `tern-kata agent` refuses a command line with.
-const agentUsage = "usage: tern-kata agent --as <actor> [--ref <qualified ref>] -- <command> [args...]"
+const agentUsage = "usage: tern-kata agent [--as <actor>] [--ref <qualified ref>] -- <command> [args...]"
 
-// planAgent parses `tern-kata agent --as <actor> [--ref <qualified ref>] -- <command> [args...]` (args[0] is "agent"). --as and --ref
+// planAgent parses `tern-kata agent [--as <actor>] [--ref <qualified ref>] -- <command> [args...]` (args[0] is "agent"). --as and --ref
 // come before the lone --, and everything after it is the command and its arguments, verbatim: Operands holds them.
 func planAgent(args []string) (LaunchPlan, error) {
 	end := slices.Index(args, "--")
@@ -39,9 +39,6 @@ func planAgent(args []string) (LaunchPlan, error) {
 		}
 		plan.fallbackAuthor = actor
 	}
-	if plan.fallbackAuthor == "" {
-		return LaunchPlan{}, fmt.Errorf("agent: --as <actor> is required; %s", agentUsage)
-	}
 	if len(plan.Operands) == 0 {
 		return LaunchPlan{}, fmt.Errorf("agent: no command after --; %s", agentUsage)
 	}
@@ -51,16 +48,9 @@ func planAgent(args []string) (LaunchPlan, error) {
 
 // parseAgentRef reads --ref's value, as `--ref <ref>` or `--ref=<ref>`, from args[*i] and advances *i past it.
 func parseAgentRef(args []string, i *int) (string, error) {
-	value, ok := strings.CutPrefix(args[*i], "--ref=")
-	if !ok {
-		*i++
-		if *i == len(args) || strings.HasPrefix(args[*i], "--") {
-			return "", fmt.Errorf("agent: --ref requires a qualified Issue ref; %s", agentUsage)
-		}
-		value = args[*i]
-	}
-	if value == "" {
-		return "", fmt.Errorf("agent: --ref must be non-empty; %s", agentUsage)
+	value, err := parseFlagValue(args, i, "--ref", "a qualified Issue ref")
+	if err != nil {
+		return "", fmt.Errorf("agent: %w; %s", err, agentUsage)
 	}
 	return value, nil
 }

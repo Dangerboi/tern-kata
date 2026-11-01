@@ -33,8 +33,12 @@ func (w WorkAttention) Text() string {
 	return w.Word() + ": " + w.Msg
 }
 
-// IssueWorkAttention reads the Issue's `work.attention`; ok is false for "ok", an absent key, an unknown value or a value that is not text.
+// IssueWorkAttention reads the Issue's `work.attention`; ok is false for a closed Issue (its leftover signal asks nothing), "ok",
+// an absent key, an unknown value or a value that is not text.
 func IssueWorkAttention(issue Issue) (WorkAttention, bool) {
+	if IsClosed(issue) {
+		return WorkAttention{}, false
+	}
 	value, _ := issue.Metadata[WorkAttentionKey].(string)
 	var w WorkAttention
 	switch value {

@@ -97,7 +97,7 @@ func ReadNotificationSlot(key, raw string) (NotificationSlot, error) {
 	}
 	slot := NotificationSlot{Address: address, From: fields.From, Message: fields.Message, Raw: raw}
 	if len(fields.Teammate) > 0 {
-		if json.Unmarshal(fields.Teammate, &slot.Teammate) != nil || (slot.Teammate != "" && !teammateHandle.MatchString(slot.Teammate)) {
+		if json.Unmarshal(fields.Teammate, &slot.Teammate) != nil || (slot.Teammate != "" && !ValidTeammate(slot.Teammate)) {
 			slot.Teammate = ""
 		}
 	}
