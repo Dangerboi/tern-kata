@@ -9,9 +9,9 @@ import (
 	"os/signal"
 )
 
-// execAgent runs command as a child running as actor, with stdio attached, and exits with its status.
-func execAgent(actor string, command, environ []string) error {
-	return subcommandError{runChild(command[0], command[1:], childEnv(environ, actor, true))}
+// execAgent runs command as a child running as actor on the Issue ref, with stdio attached, and exits with its status.
+func execAgent(actor, ref string, command, environ []string) error {
+	return subcommandError{runChild(command[0], command[1:], agentEnv(environ, actor, ref, true))}
 }
 
 // runChild runs name with stdio attached and exits with its status; it returns only when the child could not be run.

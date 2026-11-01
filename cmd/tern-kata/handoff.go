@@ -30,6 +30,33 @@ func childEnv(environ []string, actor string, caseInsensitive bool) []string {
 	return append(env, "KATA_AUTHOR="+actor)
 }
 
+// agentEnv returns environ for an agent: childEnv's KATA_AUTHOR, no inherited KATA_REF or KATA_INBOX_USER (the person's own inbox
+// is not the agent's), and KATA_REF set to ref when it is not empty.
+func agentEnv(environ []string, actor, ref string, caseInsensitive bool) []string {
+	env := childEnv(environ, actor, caseInsensitive)
+	out := make([]string, 0, len(env)+1)
+	for _, entry := range env {
+		name, _, _ := strings.Cut(entry, "=")
+		if dropsFromAgent(name, caseInsensitive) {
+			continue
+		}
+		out = append(out, entry)
+	}
+	if ref != "" {
+		out = append(out, "KATA_REF="+ref)
+	}
+	return out
+}
+
+func dropsFromAgent(name string, caseInsensitive bool) bool {
+	for _, dropped := range [...]string{"KATA_REF", "KATA_INBOX_USER"} {
+		if name == dropped || caseInsensitive && strings.EqualFold(name, dropped) {
+			return true
+		}
+	}
+	return false
+}
+
 func editorOptions() tern.Options {
 	return tern.Options{App: "tern-kata", Version: buildVersion(), Features: []string{tern.FeatureEdit, tern.FeatureUndo}}
 }

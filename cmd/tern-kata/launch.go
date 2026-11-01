@@ -55,6 +55,8 @@ type LaunchPlan struct {
 	// Force and Pause are `update --force` and `update --pause`. Preflight is `update --preflight`, the check one release
 	// runs of another; it is not for people, so usage and completion leave it out.
 	Force, Pause, Preflight bool
+	// AgentRef is `agent --ref`: the qualified Issue ref the agent's KATA_REF is set to; empty leaves the agent without one.
+	AgentRef string
 	// fallbackAuthor is the --as actor exported to `kata tui`; empty leaves the environment untouched.
 	fallbackAuthor string
 }
@@ -495,7 +497,7 @@ Usage:
   tern-kata worker resume <run-uid> [--as <actor>]
   tern-kata worker abandon <run-uid> [--as <actor>]
   tern-kata update [--force] [--pause]
-  tern-kata agent --as <actor> -- <command> [args...]
+  tern-kata agent --as <actor> [--ref <ref>] -- <command> [args...]
   tern-kata completion bash|zsh|fish
   tern-kata --version
   tern-kata --help
@@ -604,9 +606,10 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 worker.toml it rejects); --pause waits for Enter after a success,
                                 so a Pane shows the result before it closes.
                                 Exit 0 when the binary is at the latest version, else 1
-  agent --as <actor> -- <command> [args...]
+  agent --as <actor> [--ref <ref>] -- <command> [args...]
                                 run the command with KATA_AUTHOR set to the actor (replacing
-                                any value), its arguments passed on as typed and its exit
+                                any value) and KATA_REF to the qualified Issue ref, with no
+                                KATA_INBOX_USER, its arguments passed on as typed and its exit
                                 status as ours; both --as and -- are required
   completion <shell>            print the completion script for bash, zsh or fish; load it with
                                 source <(tern-kata completion bash) (or zsh), or
