@@ -454,7 +454,7 @@ func TestClosingTheIssueAnExitRequestHoldsOutsideTheCollectionIsFoundByReadingIt
 func TestANewlyWaitingAgentReplacesAnExitRequestWhoseEntryIsPruned(t *testing.T) {
 	m, _ := relay(t, exitedPane("open"), st("11", "exited", ""), st("12", "working", ""))
 	m, _ = pruned(m, "11")
-	m, cmds := relay(t, m, st("12", "waiting_input", "which table?"))
+	_, cmds := relay(t, m, st("12", "waiting_input", "which table?"))
 	if want := []model.Cmd{raise("u1", 3, "which table?")}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("cmds %v, want %v", cmds, want)
 	}
