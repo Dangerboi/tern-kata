@@ -633,8 +633,8 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 becomes KATA_DSN and which is deleted once read; --env-file names a
                                 private file of NAME=value lines (the Pane's token_env values) set
                                 as they are, except names the route owns (KATA_HOME, KATA_SERVER ...),
-                                deleted once read and ignored for a switched profile with its own
-                                home. Any of them first drops
+                                deleted once read and ignored for a remote --daemon entry or a
+                                switched profile with its own home. Any of them first drops
                                 the inherited KATA_SERVER, KATA_AUTH_TOKEN, KATA_AUTH_TOKEN_FILE,
                                 KATA_ALLOW_INSECURE, KATA_TRUST_PRIVATE_NETWORK, KATA_DSN, KATA_DB and
                                 KATA_POSTGRES_SCHEMA. The Pane passes them so the agent's kata reaches
