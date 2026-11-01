@@ -63,9 +63,15 @@ function Install-TernKata {
         }
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
         $exe = Join-Path $dir 'tern-kata.exe'
-        # A running tern-kata.exe cannot be overwritten but can be renamed away, so upgrading it works.
+        # A running tern-kata.exe cannot be overwritten or deleted but can be renamed away, so upgrading it works.
+        # An .old still held by a process from an earlier install is renamed aside the same way.
+        Get-ChildItem -LiteralPath $dir -Filter 'tern-kata.exe.old-*' -ErrorAction SilentlyContinue |
+            ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
         if (Test-Path $exe) {
             Remove-Item "$exe.old" -Force -ErrorAction SilentlyContinue
+            if (Test-Path "$exe.old") {
+                Move-Item "$exe.old" "$exe.old-$([DateTime]::UtcNow.Ticks)" -Force
+            }
             Move-Item $exe "$exe.old" -Force
         }
         Move-Item (Join-Path $tmp 'tern-kata.exe') $exe
