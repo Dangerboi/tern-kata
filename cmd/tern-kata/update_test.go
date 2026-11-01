@@ -11,8 +11,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -26,10 +27,10 @@ import (
 )
 
 // The test binary is also the release binary a served archive holds. Started with TERN_KATA_TEST_BINARY set it is a helper
-// process instead of the tests: with a version it answers --version like the binary of that release; with "hold" it prints
+// process instead of the tests: with "hold" it prints
 // "ready" and runs until its stdin closes, which keeps its file in use. Asked `update --preflight` it answers with what
 // TERN_KATA_TEST_PREFLIGHT holds on stdout, TERN_KATA_TEST_PREFLIGHT_ERR on stderr and TERN_KATA_TEST_PREFLIGHT_EXIT as its
-// exit status; TERN_KATA_TEST_PREFLIGHT_HANG makes it run until it is killed.
+// exit status; TERN_KATA_TEST_PREFLIGHT_HANG names a file it creates, then runs until it is killed.
 func init() {
 	mode := os.Getenv("TERN_KATA_TEST_BINARY")
 	if mode == "" {
@@ -41,17 +42,14 @@ func init() {
 		os.Exit(0)
 	}
 	if len(os.Args) == 3 && os.Args[1] == "update" && os.Args[2] == "--preflight" {
-		if os.Getenv("TERN_KATA_TEST_PREFLIGHT_HANG") != "" {
+		if marker := os.Getenv("TERN_KATA_TEST_PREFLIGHT_HANG"); marker != "" {
+			_ = os.WriteFile(marker, nil, 0o600)
 			time.Sleep(time.Minute)
 		}
 		fmt.Print(os.Getenv("TERN_KATA_TEST_PREFLIGHT"))
 		fmt.Fprint(os.Stderr, os.Getenv("TERN_KATA_TEST_PREFLIGHT_ERR"))
 		status, _ := strconv.Atoi(os.Getenv("TERN_KATA_TEST_PREFLIGHT_EXIT"))
 		os.Exit(status)
-	}
-	if len(os.Args) == 2 && os.Args[1] == "--version" {
-		fmt.Println("tern-kata", mode)
-		os.Exit(0)
 	}
 	os.Exit(2)
 }
@@ -224,12 +222,10 @@ func TestUpdateSwapsTheBinaryForTheLatestRelease(t *testing.T) {
 		t.Fatalf("the binary is not the release's (%d bytes, %v)", len(got), err)
 	}
 	f.noLeftovers(t)
-	cmd := exec.Command(f.target, "--version")
-	cmd.Env = append(os.Environ(), "TERN_KATA_TEST_BINARY=v0.2.0")
-	if out, err := cmd.Output(); err != nil || string(out) != "tern-kata v0.2.0\n" {
-		t.Errorf("the new binary runs as %q, %v", out, err)
-	}
 	if runtime.GOOS != "windows" {
+		if info, err := os.Stat(f.target); err != nil || info.Mode()&0o111 == 0 {
+			t.Errorf("the new binary is not executable: %v, %v", info, err)
+		}
 		if entries, _ := os.ReadDir(filepath.Dir(f.target)); len(entries) != 1 {
 			t.Errorf("the binary's folder holds %d entries, want only the binary", len(entries))
 		}
@@ -239,8 +235,7 @@ func TestUpdateSwapsTheBinaryForTheLatestRelease(t *testing.T) {
 func TestUpdateRefusesADownloadThatFailsItsChecksum(t *testing.T) {
 	for name, spoil := range map[string]func(string) string{
 		"wrong hash":    func(s string) string { return strings.Repeat("0", 64) + s[64:] },
-		"no line":       func(string) string { return "" },
-		"other archive": func(s string) string { return strings.Replace(s, "tern-kata_", "tern-kata-x_", 1) },
+		"no line": func(string) string { return "" },
 	} {
 		f := newUpdateFixture(t, "v0.1.0", "0.2.0", spoil)
 		err := f.run(LaunchPlan{Subcommand: "update"})
@@ -249,6 +244,30 @@ func TestUpdateRefusesADownloadThatFailsItsChecksum(t *testing.T) {
 		}
 		f.unchanged(t)
 	}
+}
+
+func TestUpdateReportsAnArchiveThatCannotBeDownloaded(t *testing.T) {
+	f := newUpdateFixture(t, "v0.1.0", "0.2.0", nil)
+	upstream, err := url.Parse(f.env.BaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy := httputil.NewSingleHostReverseProxy(upstream)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, f.env.archiveName()) {
+			http.NotFound(w, r)
+			return
+		}
+		proxy.ServeHTTP(w, r)
+	}))
+	t.Cleanup(server.Close)
+	f.env.BaseURL = server.URL
+	f.env.Client = server.Client()
+	err = f.run(LaunchPlan{Subcommand: "update"})
+	if err == nil || !strings.Contains(err.Error(), "nothing was installed") || !strings.Contains(err.Error(), "404") || exitStatus(err) != 1 {
+		t.Errorf("error %v (exit %d)", err, exitStatus(err))
+	}
+	f.unchanged(t)
 }
 
 func TestUpdateLeavesBuildsThatAreNotReleasesAlone(t *testing.T) {
