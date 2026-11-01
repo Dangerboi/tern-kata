@@ -151,6 +151,12 @@ Run `tern-kata update` on the session host to bring it to the latest release. It
 
 Only a release build updates itself. A binary built with `go install` gets the command to run again (`go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest`), and one built from source says to rebuild. To bring the agent skills along, run `npx skills update -g` (or `bunx skills update -g`). Setting `TERN_KATA_BASE_URL` points update, and the install scripts, at another folder holding a release's files (for a rollback, a mirror or a test).
 
+### Release check
+
+The window plugin looks for a new release once a day. At window start, and every 24 hours while the window stays open, it reads `version.txt` from the latest GitHub release, but only when the last check is over 24 hours old (the time is kept in the plugin's store, so a second window or a restart doesn't ask again). When that release is newer than the plugin, a toast says "tern-kata vX is out (this window's plugin is vY). Run Update tern-kata from the palette." once per version on this machine. A failed request is silent and counts as a check. Nothing but that one small file is fetched, and nothing is installed by the check.
+
+Turn it off with the **Turn tern-kata update checks off/on** palette command, which toasts the new state, or by setting `TERN_KATA_NO_UPDATE_CHECK` to any non-empty value in the window's environment: the variable keeps checks off on that machine whatever the toggle says. A plugin linked with `tern plugin link` never checks, since that is a development machine; the toggle command says so. `TERN_KATA_BASE_URL` points the check at another folder holding `version.txt`, such as a local `dist/`.
+
 ## Troubleshooting
 
 If the Pane cannot find a local kata daemon whose storage is PostgreSQL, check the storage DSN: when it uses routing options (the `host`, `port`, `dbname`, `service` or `servicefile` query options, or `PG*` environment variables filling in missing parts), discovery fails because the lean kata client cannot resolve them. Set `KATA_SERVER` to the address `kata daemon locate` prints.
