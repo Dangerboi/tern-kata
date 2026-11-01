@@ -92,8 +92,11 @@ func TestDoctorWarnsOfKataPluginOnlyForAnAmbientProfile(t *testing.T) {
 			writeFile(filepath.Join(home, ".omp", "plugins", "installed_plugins.json"),
 				`{"version":2,"plugins":{"other@x":[{}],"kata@kata-plugin":[{"scope":"user"}]}}`)
 		},
-		"the plugins' package.json": func() {
-			writeFile(filepath.Join(home, ".omp", "plugins", "package.json"), `{"dependencies":{"kata-omp":"^1.0.0"}}`)
+		"the runtime registration": func() {
+			writeFile(filepath.Join(home, ".omp", "plugins", "node_modules", "kata-omp", "package.json"), `{"name":"kata-omp"}`)
+		},
+		"the lock file": func() {
+			writeFile(filepath.Join(home, ".omp", "plugins", "omp-plugins.lock.json"), `{"plugins":{"kata-omp":{"version":"1","enabled":true}}}`)
 		},
 		"the ambient extensions folder": func() { writeFile(filepath.Join(agent, "extensions", "kata.ts"), "export default {}") },
 		"a moved agent folder": func() {
@@ -143,5 +146,31 @@ func TestDoctorFindsKataPluginInACheckoutsRegistry(t *testing.T) {
 	out := Doctor(context.Background(), DoctorOptions{Dirs: dirs, Omp: OmpEnv{Home: t.TempDir()}}).String()
 	if !strings.Contains(out, "todo takeover") {
 		t.Fatalf("no warning for a checkout's registry:\n%s", out)
+	}
+}
+
+func TestDoctorIgnoresADisabledKataPlugin(t *testing.T) {
+	home := t.TempDir()
+	plugins := filepath.Join(home, ".omp", "plugins")
+	files := map[string]string{
+		filepath.Join(plugins, "installed_plugins.json"):                   `{"version":2,"plugins":{"kata@kata-plugin":[{"enabled":false}]}}`,
+		filepath.Join(plugins, "omp-plugins.lock.json"):                    `{"plugins":{"kata-omp":{"enabled":false}}}`,
+		filepath.Join(plugins, "node_modules", "kata-omp", "package.json"): `{"name":"kata-omp"}`,
+	}
+	for path, body := range files {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dirs := Dirs{Config: t.TempDir(), State: t.TempDir()}
+	if err := os.WriteFile(dirs.ConfigPath(), []byte("executor = \"laptop\"\n[profiles.default]\ncommand = \"go\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out := Doctor(context.Background(), DoctorOptions{Dirs: dirs, Omp: OmpEnv{Home: home, AgentDir: filepath.Join(home, ".omp", "agent")}}).String()
+	if strings.Contains(out, "todo takeover") {
+		t.Fatalf("a disabled plugin was warned of:\n%s", out)
 	}
 }
