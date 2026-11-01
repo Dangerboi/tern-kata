@@ -15,18 +15,21 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
 // The test binary is also the release binary a served archive holds. Started with TERN_KATA_TEST_BINARY set it is a helper
 // process instead of the tests: with a version it answers --version like the binary of that release; with "hold" it prints
-// "ready" and runs until its stdin closes, which keeps its file in use. A later check of the new binary (a pre-flight answer)
-// is added here, in the same way.
+// "ready" and runs until its stdin closes, which keeps its file in use. Asked `update --preflight` it answers with what
+// TERN_KATA_TEST_PREFLIGHT holds on stdout, TERN_KATA_TEST_PREFLIGHT_ERR on stderr and TERN_KATA_TEST_PREFLIGHT_EXIT as its
+// exit status; TERN_KATA_TEST_PREFLIGHT_HANG makes it run until it is killed.
 func init() {
 	mode := os.Getenv("TERN_KATA_TEST_BINARY")
 	if mode == "" {
@@ -36,6 +39,15 @@ func init() {
 		fmt.Println("ready")
 		_, _ = os.Stdin.Read(make([]byte, 1))
 		os.Exit(0)
+	}
+	if len(os.Args) == 3 && os.Args[1] == "update" && os.Args[2] == "--preflight" {
+		if os.Getenv("TERN_KATA_TEST_PREFLIGHT_HANG") != "" {
+			time.Sleep(time.Minute)
+		}
+		fmt.Print(os.Getenv("TERN_KATA_TEST_PREFLIGHT"))
+		fmt.Fprint(os.Stderr, os.Getenv("TERN_KATA_TEST_PREFLIGHT_ERR"))
+		status, _ := strconv.Atoi(os.Getenv("TERN_KATA_TEST_PREFLIGHT_EXIT"))
+		os.Exit(status)
 	}
 	if len(os.Args) == 2 && os.Args[1] == "--version" {
 		fmt.Println("tern-kata", mode)
@@ -142,7 +154,18 @@ func newUpdateFixture(t *testing.T, current, latest string, spoil func(string) s
 	f.env.Executable = func() (string, error) { return f.target, nil }
 	f.env.Client = server.Client()
 	f.env.Stdin = strings.NewReader("")
+	t.Setenv("TERN_KATA_TEST_BINARY", latest) // the swapped-in binary is a helper process, which answers a pre-flight healthy unless a test says otherwise
+	f.preflight(t, `{"refusals":[],"warnings":[]}`, 0, "")
 	return f
+}
+
+// preflight sets what the downloaded binary answers to `update --preflight`.
+func (f *updateFixture) preflight(t *testing.T, stdout string, status int, stderr string) {
+	t.Helper()
+	t.Setenv("TERN_KATA_TEST_PREFLIGHT", stdout)
+	t.Setenv("TERN_KATA_TEST_PREFLIGHT_EXIT", strconv.Itoa(status))
+	t.Setenv("TERN_KATA_TEST_PREFLIGHT_ERR", stderr)
+	t.Setenv("TERN_KATA_TEST_PREFLIGHT_HANG", "")
 }
 
 func (f *updateFixture) run(plan LaunchPlan) error {
