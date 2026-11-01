@@ -64,35 +64,66 @@ func helpGroups(page model.Page) []model.SheetGroup {
 	return groups
 }
 
-// help is the keybinding sheet that fills the Pane while help is open: kata's groups side by side in a
-// wrapping row, each a title over `key  action` lines with keys padded to the group's longest key.
+// helpColumnCols is the narrowest the help sheet lets a column of cards be, in the Pane's columns: wide enough for most lines
+// on one row; a longer action wraps under itself inside its card.
+const helpColumnCols = 64
+
+// help is the keybinding sheet that fills the Pane while help is open: a Card per group, set in as many equal-width columns as
+// the Pane fits (one to three). Groups go in order to the shortest column so far, so the columns end close together and every
+// card in a column has its width. A card lists each binding as its keys in the mono face and the action beside them; the keys
+// of every card in a column are padded to that column's longest, so the actions line up down the column.
 func help(m model.Model) tern.Nodes {
-	groups := helpGroups(m.Page)
-	columns := make([]tern.Element, 0, len(groups))
+	var groups []model.SheetGroup
+	for _, group := range helpGroups(m.Page) {
+		if len(group.Lines) > 0 {
+			groups = append(groups, group)
+		}
+	}
+	count := min(max(m.Cols/helpColumnCols, 1), 3, max(len(groups), 1))
+	stacks := make([][]int, count)
+	heights := make([]int, count)
+	widths := make([]int, count)
 	for gi, group := range groups {
-		if len(group.Lines) == 0 {
-			continue
+		shortest := 0
+		for i := range heights {
+			if heights[i] < heights[shortest] {
+				shortest = i
+			}
 		}
-		keys := make([]string, len(group.Lines))
-		width := 0
-		for i, l := range group.Lines {
-			keys[i] = strings.Join(l.Keys, "/")
-			width = max(width, utf8.RuneCountInString(keys[i]))
+		stacks[shortest] = append(stacks[shortest], gi)
+		heights[shortest] += len(group.Lines) + 2 // the head and the gap below the card
+		for _, l := range group.Lines {
+			widths[shortest] = max(widths[shortest], utf8.RuneCountInString(strings.Join(l.Keys, "/")))
 		}
-		lines := ui.Nodes(ui.Text{Common: ui.Common{Key: "title", Tone: ui.ToneAccent}, Text: group.Title})
-		for i, l := range group.Lines {
-			line := keys[i] + strings.Repeat(" ", width-utf8.RuneCountInString(keys[i])) + "  " + l.Text
-			lines = append(lines, ui.Text{Common: ui.Common{Key: "row-" + strconv.Itoa(i)}, Text: line, Wrap: ui.WrapNone})
+	}
+	columns := make([]tern.Element, count)
+	for i, stack := range stacks {
+		cards := make([]tern.Element, len(stack))
+		for j, gi := range stack {
+			cards[j] = helpCard("group-"+strconv.Itoa(gi), groups[gi], widths[i])
 		}
-		columns = append(columns, ui.Col{Common: ui.Common{Key: "group-" + strconv.Itoa(gi)}, Children: lines})
+		columns[i] = ui.Col{Common: ui.Common{Key: "col-" + strconv.Itoa(i), Grow: 1, Basis: ui.BasisFrac(0), Min: &ui.Bounds{W: ui.Ch(0)}}, Gap: ui.GapMD, Align: ui.AlignStretch, Children: cards}
 	}
 	return ui.Nodes(ui.List{CommonWithoutMax: scrollerCommon("help"), Max: ui.MaxFrac(1), Children: ui.Nodes(ui.Col{
 		Common: ui.Common{Key: "sheet"},
 		Gap:    ui.GapMD,
 		Children: ui.Nodes(
 			ui.Text{Common: ui.Common{Key: "title"}, Text: "tern-kata — keybindings"},
-			ui.Row{Common: ui.Common{Key: "groups"}, Gap: ui.GapLG, Align: ui.AlignStart, Wrap: true, Children: columns},
-			ui.Text{Common: ui.Common{Key: "return", Tone: ui.ToneMuted}, Text: "press ? to return"},
+			ui.Row{Common: ui.Common{Key: "groups"}, Gap: ui.GapMD, Align: ui.AlignStart, Children: columns},
+			ui.Text{Common: ui.Common{Key: "return"}, Spans: []ui.Span{{T: "press ? or esc to return", S: "muted"}}},
 		),
 	})})
+}
+
+// helpCard is one group of the help sheet: its title as the head, then a row per binding with the keys in an accent mono
+// column keyCols wide and the action beside them, wrapping under itself.
+func helpCard(key string, group model.SheetGroup, keyCols int) tern.Element {
+	rows := make([]tern.Element, len(group.Lines))
+	for i, l := range group.Lines {
+		rows[i] = ui.Row{Common: ui.Common{Key: "row-" + strconv.Itoa(i)}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(
+			ui.Text{Common: ui.Common{Key: "keys", Shrink: new(float64), Min: &ui.Bounds{W: ui.Ch(float64(keyCols))}}, Spans: []ui.Span{{T: strings.Join(l.Keys, "/"), S: mono("accent")}}, Wrap: ui.WrapNone},
+			ui.Text{Common: ui.Common{Key: "action", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}, Text: l.Text},
+		)}
+	}
+	return ui.Card{Common: ui.Common{Key: key}, Head: ui.T(group.Title), Children: rows}
 }

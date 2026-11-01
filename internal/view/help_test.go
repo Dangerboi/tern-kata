@@ -2,6 +2,7 @@ package view_test
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -9,27 +10,45 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
-// sheetLines is the text of every node under id, in drawing order.
-func (s shown) sheetLines(id string) []string {
-	var lines []string
-	var walk func(n tern.WireNode)
-	walk = func(n tern.WireNode) {
-		if v := text(n); v != "" {
-			lines = append(lines, v)
+// helpCards is the help sheet's cards by group index, whichever column each is in.
+func (s shown) helpCards() map[int]tern.WireNode {
+	cards := map[int]tern.WireNode{}
+	for id, n := range s {
+		if !strings.HasPrefix(id, "main.help.sheet.groups.col-") || n.K != "card" {
+			continue
 		}
-		for _, c := range n.C {
-			walk(s[c.ID])
+		gi, err := strconv.Atoi(id[strings.LastIndex(id, ".group-")+len(".group-"):])
+		if err == nil {
+			cards[gi] = n
 		}
 	}
-	walk(s[id])
-	return lines
+	return cards
+}
+
+// sheetLines is the help sheet read in group order: its title, each card's head then a "keys  action" line per binding, and
+// the closing line.
+func (s shown) sheetLines() []string {
+	lines := []string{text(s["main.help.sheet.title"])}
+	cards := s.helpCards()
+	for gi := range len(s) {
+		card, ok := cards[gi]
+		if !ok {
+			continue
+		}
+		lines = append(lines, card.P["head"].(string))
+		for _, row := range card.C {
+			parts := s[row.ID].C
+			lines = append(lines, text(s[parts[0].ID])+"  "+text(s[parts[1].ID]))
+		}
+	}
+	return append(lines, text(s["main.help.sheet.return"]))
 }
 
 func TestHelpIsAFullPaneSheetOfTheIssuesPage(t *testing.T) {
 	m, _ := model.Update(pickerLoaded(true), model.KeyMsg{Chord: "?"})
 	nodes := render(t, m)
-	lines := nodes.sheetLines("main.help")
-	if len(lines) < 4 || lines[0] != "tern-kata — keybindings" || lines[len(lines)-1] != "press ? to return" {
+	lines := nodes.sheetLines()
+	if len(lines) < 4 || lines[0] != "tern-kata — keybindings" || lines[len(lines)-1] != "press ? or esc to return" {
 		t.Fatalf("sheet = %q", lines)
 	}
 	at := 0
@@ -41,7 +60,7 @@ func TestHelpIsAFullPaneSheetOfTheIssuesPage(t *testing.T) {
 		at += i + 1
 	}
 	joined := strings.Join(lines, "\n")
-	for _, want := range []string{"?                    help", "q/ctrl+c             quit (q asks y/n first, ctrl+c quits at once)", "j/↓/C-n       down", "pgup/M-v      page up", "I                    inbox", "1/2/3/4/5/6/T/C/F/D  switch Page", "g/home/C-M-<  first", "G/end/C-M->   last", "↹/C-j", "shift+tab/C-k", "set priority (! then 0-4 or - sets or clears it at once)", "⌫", "expand/collapse all", "toggle flat/nested view", "jump to referenced issue", "new child", "reset filter form", "reply to comment", "cycle reply kind", "make or change recurrence", "set parent", "projects", "menu"} {
+	for _, want := range []string{"?  help", "q/ctrl+c  quit (q asks y/n first, ctrl+c quits at once)", "j/↓/C-n  down", "pgup/M-v  page up", "I  inbox", "1/2/3/4/5/6/T/C/F/D  switch Page", "g/home/C-M-<  first", "G/end/C-M->  last", "↹/C-j", "shift+tab/C-k", "set priority (! then 0-4 or - sets or clears it at once)", "⌫", "expand/collapse all", "toggle flat/nested view", "jump to referenced issue", "new child", "reset filter form", "reply to comment", "cycle reply kind", "make or change recurrence", "set parent", "projects", "menu"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("row %q missing in %q", want, lines)
 		}
@@ -88,7 +107,7 @@ func helpOn(t *testing.T, pageKey string) string {
 		m.Page = page
 	}
 	m = apply(m, model.KeyMsg{Chord: "?"})
-	return strings.Join(render(t, m).sheetLines("main.help"), "\n")
+	return strings.Join(render(t, m).sheetLines(), "\n")
 }
 
 func TestHelpSheetListsTheGlobalKeysAndTheCurrentPagesKeys(t *testing.T) {
@@ -122,18 +141,8 @@ func TestHelpSheetListsTheGlobalKeysAndTheCurrentPagesKeys(t *testing.T) {
 
 func TestHelpSheetListsTheAgentKeyOnTheIssuesPageAndTheBoard(t *testing.T) {
 	for _, key := range []string{"", "2"} {
-		var found string
-		for _, line := range strings.Split(helpOn(t, key), "\n") {
-			if strings.HasPrefix(line, "w ") {
-				found = line
-			}
-		}
-		if found == "" {
+		if !slices.ContainsFunc(strings.Split(helpOn(t, key), "\n"), func(line string) bool { return strings.HasPrefix(line, "w ") }) {
 			t.Errorf("page key %q: no w line", key)
-		}
-		// The sheet draws its lines unwrapped: a line longer than the Pane's column clips.
-		if n := len([]rune(found)); n > 60 {
-			t.Errorf("page key %q: agent line is %d columns: %q", key, n, found)
 		}
 	}
 	for _, line := range strings.Split(helpOn(t, "3"), "\n") {
@@ -148,6 +157,43 @@ func TestHelpSheetDropsGroupsWithNoLinesOnThePage(t *testing.T) {
 	for _, gone := range []string{"Graph", "Detail", "Children", "Forms", "Filters", "Board", "Runs", "Lettered Pages"} {
 		if slices.Contains(strings.Split(jobs, "\n"), gone) {
 			t.Errorf("Jobs Page sheet draws the empty group %q", gone)
+		}
+	}
+}
+
+// The sheet sets its cards in as many equal columns as the Pane fits, at most three, each group in exactly one column, the
+// columns' line counts within one card of each other.
+func TestHelpSheetSetsItsCardsInBalancedColumnsByPaneWidth(t *testing.T) {
+	for _, tt := range []struct{ cols, columns int }{{80, 1}, {127, 1}, {128, 2}, {191, 2}, {192, 3}, {400, 3}} {
+		m := pickerLoaded(true)
+		m.Cols = tt.cols
+		nodes := render(t, apply(m, model.KeyMsg{Chord: "?"}))
+		columns := nodes["main.help.sheet.groups"].C
+		if len(columns) != tt.columns {
+			t.Errorf("%d columns: %d columns of cards, want %d", tt.cols, len(columns), tt.columns)
+			continue
+		}
+		seen := map[string]bool{}
+		var heights []int
+		biggest := 0
+		for _, column := range columns {
+			height := 0
+			for _, card := range nodes[column.ID].C {
+				head := nodes[card.ID].P["head"].(string)
+				if seen[head] {
+					t.Errorf("%d columns: %s is in two columns", tt.cols, head)
+				}
+				seen[head] = true
+				height += len(nodes[card.ID].C) + 2
+				biggest = max(biggest, len(nodes[card.ID].C)+2)
+			}
+			heights = append(heights, height)
+		}
+		if len(seen) != len(nodes.helpCards()) {
+			t.Errorf("%d columns: the columns hold %d groups of %d", tt.cols, len(seen), len(nodes.helpCards()))
+		}
+		if spread := slices.Max(heights) - slices.Min(heights); spread > biggest {
+			t.Errorf("%d columns: column heights %v differ by more than a card", tt.cols, heights)
 		}
 	}
 }
