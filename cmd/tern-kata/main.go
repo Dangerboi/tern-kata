@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -78,7 +79,11 @@ func run() error {
 		return err
 	}
 	if plan.Subcommand == "agent" {
-		return execAgent(plan.Actor, plan.AgentRef, plan.Operands, os.Environ())
+		environ, err := routedEnv(os.Environ(), plan.AgentRoute, runtime.GOOS == "windows")
+		if err != nil {
+			return err
+		}
+		return execAgent(plan.Actor, plan.AgentRef, plan.Operands, environ)
 	}
 	if plan.Subcommand != "" {
 		ctx, received, stop := withSignals(context.Background(), stopSignals...)

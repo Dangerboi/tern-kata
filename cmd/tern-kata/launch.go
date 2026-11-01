@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
@@ -57,6 +58,9 @@ type LaunchPlan struct {
 	Force, Pause, Preflight bool
 	// AgentRef is `agent --ref`: the qualified Issue ref the agent's KATA_REF is set to; empty leaves the agent without one.
 	AgentRef string
+	// AgentRoute is `agent`'s --home, --daemon, --server, --token-file, --auth-file, --allow-insecure and --trust-private-network: the Pane's daemon, which the wrapper turns into
+	// the agent's kata environment; zero leaves it as inherited.
+	AgentRoute data.AgentRoute
 	// fallbackAuthor is the --as actor exported to `kata tui`; empty leaves the environment untouched.
 	fallbackAuthor string
 }
@@ -504,7 +508,7 @@ Usage:
   tern-kata worker resume <run-uid> [--as <actor>]
   tern-kata worker abandon <run-uid> [--as <actor>]
   tern-kata update [--force] [--pause]
-  tern-kata agent [--as <actor>] [--ref <ref>] -- <command> [args...]
+  tern-kata agent [--as <actor>] [--ref <ref>] [--home <dir>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
   tern-kata completion bash|zsh|fish
   tern-kata --version
   tern-kata --help
@@ -613,12 +617,21 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 worker.toml it rejects); --pause waits for Enter after a success,
                                 so a Pane shows the result before it closes.
                                 Exit 0 when the binary is at the latest version, else 1
-  agent [--as <actor>] [--ref <ref>] -- <command> [args...]
+  agent [--as <actor>] [--ref <ref>] [--home <dir>] [--daemon <name> | --server <url> ...] -- <command> [args...]
                                 run the command with KATA_AUTHOR set to the actor (replacing
                                 any value; without --as it is left as inherited) and KATA_REF
                                 to the qualified Issue ref, with no KATA_INBOX_USER, its
                                 arguments passed on as typed and its exit status as ours;
-                                -- is required
+                                -- is required. --home sets KATA_HOME; --daemon names a catalog entry
+                                (its url and allow_insecure become KATA_SERVER and KATA_ALLOW_INSECURE,
+                                a local one its home or the current one); --server and --allow-insecure
+                                set KATA_SERVER and KATA_ALLOW_INSECURE; --trust-private-network sets
+                                KATA_TRUST_PRIVATE_NETWORK; --token-file names a private file whose
+                                token becomes KATA_AUTH_TOKEN and which is deleted once read;
+                                --auth-file sets KATA_AUTH_TOKEN_FILE. Any of them first drops the
+                                inherited KATA_SERVER, KATA_AUTH_TOKEN, KATA_AUTH_TOKEN_FILE,
+                                KATA_ALLOW_INSECURE and KATA_TRUST_PRIVATE_NETWORK. The Pane passes them so the agent's kata reaches
+                                the Pane's daemon; a token is never an argument
   completion <shell>            print the completion script for bash, zsh or fish; load it with
                                 source <(tern-kata completion bash) (or zsh), or
                                 tern-kata completion fish | source

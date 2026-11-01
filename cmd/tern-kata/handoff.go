@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
@@ -36,6 +37,23 @@ func childEnv(environ []string, actor string, caseInsensitive bool) []string {
 		return environ
 	}
 	return append(envWithout(environ, caseInsensitive, "KATA_AUTHOR"), "KATA_AUTHOR="+actor)
+}
+
+// routedEnv returns environ with the agent's kata daemon set from route: the names route.Env drops are removed (names compare
+// case-insensitively on Windows), then its entries are added. A zero route returns environ unchanged.
+func routedEnv(environ []string, route data.AgentRoute, caseInsensitive bool) ([]string, error) {
+	set, unset, err := route.Env("")
+	if err != nil {
+		return nil, fmt.Errorf("agent: %w", err)
+	}
+	for _, kv := range set {
+		name, _, _ := strings.Cut(kv, "=")
+		unset = append(unset, name)
+	}
+	if len(unset) == 0 {
+		return environ, nil
+	}
+	return append(envWithout(environ, caseInsensitive, unset...), set...), nil
 }
 
 // agentEnv returns environ for an agent: KATA_AUTHOR set to actor as childEnv does (left as inherited when actor is empty), no
