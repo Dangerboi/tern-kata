@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -159,6 +160,7 @@ func agentStarted(m Model, msg AgentStarted) Model {
 		return m
 	}
 	m.AgentMapping = append(m.AgentMapping, msg.Entry)
+	m.agentFresh = append(slices.Clone(m.agentFresh), msg.Entry.Block)
 	_, where := msg.Placement.words()
 	m.Notice = fmt.Sprintf("Started an agent on %s in %s.", msg.IssueRef, where)
 	if msg.Note != "" {
@@ -169,7 +171,8 @@ func agentStarted(m Model, msg AgentStarted) Model {
 
 // agentsPruned takes in the entries even when tern could not be asked: they are the file as read, as a later refresh keeps them.
 func agentsPruned(m Model, msg AgentsPruned) (Model, []Cmd) {
-	m.AgentMapping = msg.Agents
+	next, m := m.keepFresh(msg.Agents)
+	m.AgentMapping = next
 	m.Agents = m.Agents.trimmed(m.agentMapped)
 	return raiseAgentAttention(m, false)
 }

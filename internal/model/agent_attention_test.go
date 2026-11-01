@@ -1,6 +1,7 @@
 package model_test
 
 import (
+	"errors"
 	"reflect"
 	"slices"
 	"strings"
@@ -465,5 +466,56 @@ func TestQuitClearsAnExitRequestWhoseEntryIsPruned(t *testing.T) {
 	m, _ = pruned(m, "11")
 	if want := []model.Cmd{clearOf("u1", 3, "agent exited without closing kata-u1")}; !reflect.DeepEqual(m.QuitAgentAttention(), want) {
 		t.Fatalf("quit cmds %v, want %v", m.QuitAgentAttention(), want)
+	}
+}
+
+func TestAFailedStatusReadOfAGoneAgentsIssueRaisesNothingAndIsNotRepeated(t *testing.T) {
+	m, _ := relay(t, exitedPane("open"), st("11", "working", ""))
+	m.Issues = nil
+	m, cmds := pruned(m, "11")
+	if got := reads(cmds); len(got) != 1 {
+		t.Fatalf("cmds %v", cmds)
+	}
+	m, cmds = model.Update(m, model.AgentIssueRead{UID: "u1", Err: errors.New("daemon down")})
+	if len(cmds) != 0 || len(m.AgentGone) != 0 || len(m.AgentAttention) != 0 {
+		t.Fatalf("cmds %v, gone %v, raised %v", cmds, m.AgentGone, m.AgentAttention)
+	}
+	for _, msg := range []model.Msg{model.StreamEvent{}, model.SnapshotLoaded{}} {
+		if m, cmds = model.Update(m, msg); len(reads(cmds)) != 0 {
+			t.Fatalf("%T read again: %v", msg, cmds)
+		}
+	}
+}
+
+func TestAFailedStatusReadOfAnExitRequestsIssueIsNotRepeated(t *testing.T) {
+	m, _ := relay(t, exitedPane("open"), st("11", "exited", ""))
+	m, _ = pruned(m, "11")
+	m.Issues = nil
+	m, cmds := model.Update(m, model.StreamEvent{})
+	if len(reads(cmds)) != 1 {
+		t.Fatalf("cmds %v", cmds)
+	}
+	m, _ = model.Update(m, model.AgentIssueRead{UID: "u1", Err: errors.New("daemon down")})
+	for _, msg := range []model.Msg{model.StreamEvent{}, model.SnapshotLoaded{}} {
+		if m, cmds = model.Update(m, msg); len(reads(cmds)) != 0 {
+			t.Fatalf("%T read again: %v", msg, cmds)
+		}
+	}
+	if len(m.AgentAttention) != 1 {
+		t.Fatalf("the request went: %v", m.AgentAttention)
+	}
+}
+
+func TestARefreshThatReadTheFileBeforeAnAgentStartedDoesNotMarkItGone(t *testing.T) {
+	m := exitedPane("open")
+	started := model.AgentEntry{Block: "14", IssueUID: "u1", IssueRef: "kata-u1", PaneBlock: m.PaneBlock, ProjectID: 3}
+	m, _ = model.Update(m, model.AgentStarted{Placement: model.AgentSplit, IssueRef: "kata-u1", Entry: started})
+	before := len(m.AgentMapping)
+	m, cmds := model.Update(m, model.AgentsRefreshed{Agents: m.AgentMapping[:before-1]})
+	if len(attentionWrites(cmds)) != 0 || len(m.AgentGone) != 0 || len(m.AgentAttention) != 0 {
+		t.Fatalf("cmds %v, gone %v, raised %v", cmds, m.AgentGone, m.AgentAttention)
+	}
+	if m.AgentMapping[len(m.AgentMapping)-1].Block != "14" {
+		t.Fatalf("mapping %v", m.AgentMapping)
 	}
 }

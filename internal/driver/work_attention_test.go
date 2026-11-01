@@ -31,13 +31,13 @@ func attentionSpan(t *testing.T, issue model.Issue, pane string) (text, style st
 	return "", ""
 }
 
-func TestTheWorkAttentionShowsWithItsMessageOnListAndLaneRows(t *testing.T) {
+func TestTheWorkAttentionShowsOnlyItsWordOnListAndLaneRows(t *testing.T) {
 	for _, pane := range []string{"list", "lane"} {
 		for _, c := range []struct {
 			value, text, style string
 		}{
-			{"needs-human", "needs human: the API key is missing", "warning"},
-			{"stuck", "stuck: the API key is missing", "error"},
+			{"needs-human", "needs human", "warning"},
+			{"stuck", "stuck", "error"},
 		} {
 			issue := attentionIssue("t1", map[string]any{"work.attention": c.value, "work.attention_msg": "the API key is missing"})
 			if text, style := attentionSpan(t, issue, pane); text != c.text || style != c.style {
@@ -70,7 +70,7 @@ func TestTheBoardCardShowsTheWorkAttention(t *testing.T) {
 	s := agentPanes(t, issue)["board"]
 	nodes := wireNodes(t, view.Render(s.Model, now))
 	badge := node(t, nodes, rowOf(t, s.Model, view.BoardID, "t1")+".attention")
-	if badge.P["text"] != "stuck: tests hang" || badge.P["tone"] != "error" {
+	if badge.P["text"] != "stuck" || badge.P["tone"] != "error" {
 		t.Errorf("badge %v", badge.P)
 	}
 	ok := agentPanes(t, attentionIssue("t1", map[string]any{"work.attention": "ok"}))["board"]
