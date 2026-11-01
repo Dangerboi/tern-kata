@@ -263,6 +263,9 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 	if badge, ok := agentBadge(m, issue.UID, "v"); ok {
 		add("Agent", badge)
 	}
+	if w, ok := model.IssueWorkAttention(*issue); ok {
+		add("Attention", ui.Badge{Common: ui.Common{Key: "v", Tone: attentionTone(w)}, Text: w.Text()})
+	}
 	if issue.RecurrenceID != nil {
 		recurring := "Yes" // kata did not say more: it withholds recurrences from a scoped access
 		if d := m.DetailAuthority(); d != nil && d.Recurrence != nil {

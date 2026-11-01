@@ -18,6 +18,6 @@ func AgentPrompt(ref, title string) string {
 	fmt.Fprintf(&b, "- Comment what you did and how you checked it: `kata comment %s -m \"<what you did and how you verified it>\"`.\n", ref)
 	fmt.Fprintf(&b, "- Only when the work is done and verified, close the Issue with evidence: `kata close %s --done -m \"<what was done and how it was verified>\"` plus `--commit <sha>`, `--pr <url>`, `--test \"<command>\"` or `--reviewed <path>`. Otherwise leave it open. Never pad or invent evidence.\n", ref)
 	b.WriteString("- When you need a decision, ask the user and wait for the answer.\n")
-	fmt.Fprintf(&b, "- If you stop without closing the Issue, comment why, then hand it to a human: `kata label rm %s ready-for-agent` (when it has that label) and `kata label add %s ready-for-human`.\n", ref, ref)
+	fmt.Fprintf(&b, "- If you stop without closing the Issue, hand it to a human in this order: comment why; `kata meta set %s work.attention needs-human`; `kata meta set %s work.attention_msg \"<why>\"`; then `kata label rm %s ready-for-agent` (when it has that label) and `kata label add %s ready-for-human`.\n", ref, ref, ref, ref)
 	return b.String()
 }

@@ -152,6 +152,9 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 	if badge, ok := badges.For(issue.UID); ok {
 		body = append(body, agentBadgeElement(badge, "agent"))
 	}
+	if w, ok := model.IssueWorkAttention(issue); ok {
+		body = append(body, ui.Badge{Common: ui.Common{Key: "attention", Tone: attentionTone(w)}, Text: attentionShort(w)})
+	}
 	if selected {
 		if line := relationshipsLine(m, card, now); line != nil {
 			body = append(body, line)

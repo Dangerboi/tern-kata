@@ -9,4 +9,4 @@ Run `kata show demo#ab12` for its body, comments and attachments before you star
 - Comment what you did and how you checked it: `kata comment demo#ab12 -m "<what you did and how you verified it>"`.
 - Only when the work is done and verified, close the Issue with evidence: `kata close demo#ab12 --done -m "<what was done and how it was verified>"` plus `--commit <sha>`, `--pr <url>`, `--test "<command>"` or `--reviewed <path>`. Otherwise leave it open. Never pad or invent evidence.
 - When you need a decision, ask the user and wait for the answer.
-- If you stop without closing the Issue, comment why, then hand it to a human: `kata label rm demo#ab12 ready-for-agent` (when it has that label) and `kata label add demo#ab12 ready-for-human`.
+- If you stop without closing the Issue, hand it to a human in this order: comment why; `kata meta set demo#ab12 work.attention needs-human`; `kata meta set demo#ab12 work.attention_msg "<why>"`; then `kata label rm demo#ab12 ready-for-agent` (when it has that label) and `kata label add demo#ab12 ready-for-human`.
