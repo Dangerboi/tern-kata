@@ -29,7 +29,7 @@ func swapBinary(target, fresh string) error {
 	}
 	if err := renameFile(fresh, target); err != nil {
 		if back := renameFile(old, target); back != nil {
-			return fmt.Errorf("%w; and %s could not be restored: %v", err, target, back)
+			return fmt.Errorf("%w; and %s could not be restored: %w", err, target, back)
 		}
 		return err
 	}

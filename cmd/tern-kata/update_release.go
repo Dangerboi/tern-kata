@@ -168,7 +168,7 @@ func unpack(archive, dir, binary string) error {
 			return fmt.Errorf("%q is outside the archive's folder", name)
 		}
 		path := filepath.Join(dir, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 			return err
 		}
 		mode := os.FileMode(0o644)

@@ -1,11 +1,11 @@
 package main
 
 import (
-	"context"
 	"archive/tar"
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -213,8 +213,8 @@ func TestUpdateSwapsTheBinaryForTheLatestRelease(t *testing.T) {
 
 func TestUpdateRefusesADownloadThatFailsItsChecksum(t *testing.T) {
 	for name, spoil := range map[string]func(string) string{
-		"wrong hash":   func(s string) string { return strings.Repeat("0", 64) + s[64:] },
-		"no line":      func(string) string { return "" },
+		"wrong hash":    func(s string) string { return strings.Repeat("0", 64) + s[64:] },
+		"no line":       func(string) string { return "" },
 		"other archive": func(s string) string { return strings.Replace(s, "tern-kata_", "tern-kata-x_", 1) },
 	} {
 		f := newUpdateFixture(t, "v0.1.0", "0.2.0", spoil)
