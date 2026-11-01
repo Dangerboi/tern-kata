@@ -27,9 +27,12 @@ function Install-TernKata {
     if ($PSVersionTable.PSEdition -eq 'Core' -and -not $IsWindows) {
         throw 'install.ps1: this script supports Windows (on Linux and macOS use install.sh)'
     }
-    $arch = switch ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()) {
-        'X64' { 'amd64' }
-        'Arm64' { 'arm64' }
+    # Windows PowerShell 5.1 has RuntimeInformation but its OSArchitecture is null there; the environment says it in both.
+    # PROCESSOR_ARCHITEW6432 is the machine's CPU when a 32-bit PowerShell runs on 64-bit Windows.
+    $cpu = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+    $arch = switch ($cpu) {
+        'AMD64' { 'amd64' }
+        'ARM64' { 'arm64' }
         default { throw "install.ps1: unsupported CPU ${_}: tern-kata is released for amd64 and arm64" }
     }
 

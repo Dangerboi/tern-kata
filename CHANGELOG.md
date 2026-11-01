@@ -54,6 +54,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Fixed
 
+- `install.ps1` works in Windows PowerShell 5.1, the `powershell` the README one-liner and the palette's Install and Update commands run: it no longer stops with "You cannot call a method on a null-valued expression" before downloading anything.
 - `install.ps1` no longer fails with "Cannot create a file when that file already exists" when the previous install's `tern-kata.exe.old` is still held by a running tern-kata: reinstalling on Windows works while an older tern-kata still runs, and the next run removes the leftover `tern-kata.exe.old-*` files once those processes have exited.
 - A notify job with a zero lead, the current-owner-or-author recipient and an Issue-date trigger is skipped by the worker only when it notifies the trigger's own Issue; one that names another Issue to notify is now sent by the worker to that Issue's owner or author.
 - An `execute` job on an existing Issue no longer starts while the Issue is `someday` or scheduled for later: the scheduled occurrence waits without taking a slot until the Issue is ready, past its catchup grace and across worker restarts (the 7-day catchup window still applies), `worker status` says why, and a manual run is refused with the reason; `deadline_on` never defers it.
