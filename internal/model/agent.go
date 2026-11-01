@@ -45,6 +45,8 @@ type AgentEntry struct {
 	StartedAt time.Time `json:"started_at"`
 	// PromptFile is the file the agent was started with; it goes when the entry does.
 	PromptFile string `json:"prompt_file"`
+	// Teammate is the agent's name from agent.toml when it started, which its Attention requests carry; "" in an entry written before it was kept.
+	Teammate string `json:"teammate,omitempty"`
 	// PaneBlock is the block id of the kata Pane that started the agent; "" when that Pane could not name itself.
 	PaneBlock string `json:"pane_block"`
 	// Background says the agent belongs in the hidden session; Open says it is out of it right now.

@@ -21,6 +21,10 @@ const recipientMaxBytes = 128
 
 var teammateHandle = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
+// ValidTeammate reports whether name is a teammate handle kata takes: 1 to 64 characters of letters, digits, dot, underscore and
+// hyphen, starting with a letter or digit.
+func ValidTeammate(name string) bool { return teammateHandle.MatchString(name) }
+
 // NotificationSlot is one notification slot read the way kata reads it. Kind is empty for a request and the reply kind (reply,
 // confirm, refute, supersede) for the notice a Reply left.
 type NotificationSlot struct {

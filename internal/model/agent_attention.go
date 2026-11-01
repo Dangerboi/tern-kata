@@ -41,8 +41,10 @@ type RaiseAgentAttention struct {
 	ProjectID int64
 	UID       string
 	Actor     string
-	Address   string
-	Message   string
+	// Teammate is the waiting agent's name, written as the request's teammate; "" writes none.
+	Teammate string
+	Address  string
+	Message  string
 }
 
 func (RaiseAgentAttention) cmd() {}
@@ -161,7 +163,7 @@ func attentionPass(m Model, relayed, reread bool) (Model, []Cmd) {
 				last = s.LastMessage
 			}
 		}
-		m, cmds = putRaise(m, cmds, e.IssueUID, project, address, agentAttentionMessage(last))
+		m, cmds = putRaise(m, cmds, e.IssueUID, project, e.Teammate, address, agentAttentionMessage(last))
 	}
 	m, cmds = raiseExitedAttention(m, cmds, address, reread)
 	kept := m.AgentAttention[:0:0]
@@ -179,7 +181,7 @@ func attentionPass(m Model, relayed, reread bool) (Model, []Cmd) {
 
 // putRaise records the request this Pane writes for an Issue, replacing its record, and queues the write; an Issue gets at most one
 // write per pass, the last.
-func putRaise(m Model, cmds []Cmd, uid string, project int64, address, message string) (Model, []Cmd) {
+func putRaise(m Model, cmds []Cmd, uid string, project int64, teammate, address, message string) (Model, []Cmd) {
 	raised := RaisedAttention{UID: uid, ProjectID: project, Message: message}
 	if i := slices.IndexFunc(m.AgentAttention, func(r RaisedAttention) bool { return r.UID == uid }); i >= 0 {
 		raised.Seen = m.AgentAttention[i].Seen
@@ -188,7 +190,7 @@ func putRaise(m Model, cmds []Cmd, uid string, project int64, address, message s
 	} else {
 		m.AgentAttention = append(slices.Clone(m.AgentAttention), raised)
 	}
-	raise := RaiseAgentAttention{Workspace: m.Workspace, ProjectID: project, UID: uid, Actor: m.Actor, Address: address, Message: message}
+	raise := RaiseAgentAttention{Workspace: m.Workspace, ProjectID: project, UID: uid, Actor: m.Actor, Teammate: teammate, Address: address, Message: message}
 	if i := slices.IndexFunc(cmds, func(c Cmd) bool { r, ok := c.(RaiseAgentAttention); return ok && r.UID == uid }); i >= 0 {
 		cmds[i] = raise
 	} else {
@@ -253,7 +255,7 @@ func raiseExitedAttention(m Model, cmds []Cmd, address string, reread bool) (Mod
 		if status == "closed" || slices.ContainsFunc(m.AgentAttention, func(r RaisedAttention) bool { return r.UID == e.IssueUID && r.Message == message }) {
 			continue
 		}
-		m, cmds = putRaise(m, cmds, e.IssueUID, project, address, message)
+		m, cmds = putRaise(m, cmds, e.IssueUID, project, e.Teammate, address, message)
 	}
 	return m, cmds
 }

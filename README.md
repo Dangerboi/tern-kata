@@ -62,9 +62,11 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 ```toml
 actor = "me-agent"        # optional; without one the agent writes to kata as whoever kata resolves in its shell
+name = "builder"          # optional; the teammate its Attention requests carry, default the command's program name
 command = ["omp"]         # optional argv; the Pane appends @<prompt file>, so it must accept omp's @file message
 [projects.tern-kata]      # optional, by Project name; overrides the values above
 actor = "..."
+name = "..."
 command = ["omp", "--model", "opus"]
 checkout = "/home/me/Code/tern-kata"   # an absolute directory
 ```

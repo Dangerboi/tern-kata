@@ -364,3 +364,26 @@ func attentionWrites(cmds []model.Cmd) []model.Cmd {
 		return true
 	})
 }
+
+func TestRaisedRequestNamesTheWaitingAgentAndItsClearIsUnchanged(t *testing.T) {
+	m := attentionPane()
+	m.AgentMapping[0].Teammate = "builder"
+	m.AgentMapping[1].Teammate = "reviewer"
+	m, cmds := relay(t, m, st("11", "waiting_input", "which table?"))
+	want := raise("u1", 3, "which table?")
+	want.Teammate = "builder"
+	if !reflect.DeepEqual(cmds, []model.Cmd{want}) {
+		t.Fatalf("cmds %v, want %v", cmds, want)
+	}
+	// The other agent on the Issue waits next: its request names it, so the two read as two senders.
+	m, cmds = relay(t, m, st("11", "waiting_input", "which table?"), st("12", "waiting_input", "which column?"))
+	want = raise("u1", 3, "which column?")
+	want.Teammate = "reviewer"
+	if !reflect.DeepEqual(cmds, []model.Cmd{want}) {
+		t.Fatalf("cmds %v, want %v", cmds, want)
+	}
+	_, cmds = relay(t, m, st("11", "working", ""), st("12", "working", ""))
+	if want := []model.Cmd{clearOf("u1", 3, "which column?", "which table?")}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("cmds %v, want %v", cmds, want)
+	}
+}
