@@ -6,6 +6,8 @@
 -- This file does not decide the rule or find the config folder: it asks `tern-kata worker supervised`, whose answer is
 -- worker.SupervisionOn in internal/worker/supervision.go (the one place the rule is held; the Go tests pin it).
 
+local panecommands = require("./panecommands")
+
 local os_name = tern.runtime.os
 local windows = os_name == "windows"
 local sep = windows and "\\" or "/"
@@ -210,3 +212,12 @@ end
 -- The first look waits a moment so loading stays well inside the 2 s budget; a daemon restart reloads this file and
 -- so starts the worker again.
 arm(500)
+
+-- Windows: Tern runs a Pane's command as `pwsh -c <command>`, which loads the user's PowerShell profile first. The Pane
+-- commands this plugin starts (panecommands.luau) get `-NoProfile`; every other Pane, the user's shells included, starts as
+-- it was. A synchronous filter under a 50 ms budget: pure table work, and any error leaves the spawn as it is.
+if windows then
+    tern.on("spawn", function(spec: any): any?
+        return panecommands.withoutProfile(spec)
+    end)
+end

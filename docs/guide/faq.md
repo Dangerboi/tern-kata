@@ -1,8 +1,4 @@
-# FAQ and known issues
-
-## Known issues
-
-**Windows: each new kata Pane takes a moment to open.** Tern starts a Pane's command through PowerShell and can't yet pass `-NoProfile`, so every new kata Pane loads your PowerShell profile before tern-kata starts; a large profile makes the wait longer. Once open, the Pane runs at full speed. A fix has been requested from the Tern developers.
+# FAQ
 
 ## Questions
 
