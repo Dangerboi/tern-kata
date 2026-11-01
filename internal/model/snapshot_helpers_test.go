@@ -13,7 +13,8 @@ type snap struct{ model.SnapshotLoaded }
 // step is model.Update, except that a snap answers the snapshot read in flight.
 func step(m model.Model, msg model.Msg) (model.Model, []model.Cmd) {
 	if s, ok := msg.(snap); ok {
-		s.Request, s.Query = m.RefreshRequest, m.SnapshotQuery()
+		m = model.WithSnapshotRead(m)
+		s.Request, s.Query = m.RefreshRequest(), m.SnapshotQuery()
 		msg = s.SnapshotLoaded
 	}
 	return model.Update(m, msg)
@@ -44,5 +45,5 @@ func readsCollection(cmds []model.Cmd, m model.Model, etag string) bool {
 	}
 	query := read.Query
 	query.SelectedIssueUID, query.IncludeHistory = nil, nil
-	return read.Workspace == m.Workspace && read.ETag == etag && read.Request == m.RefreshRequest && reflect.DeepEqual(query, m.SnapshotQuery())
+	return read.Workspace == m.Workspace && read.ETag == etag && read.Request == m.RefreshRequest() && reflect.DeepEqual(query, m.SnapshotQuery())
 }

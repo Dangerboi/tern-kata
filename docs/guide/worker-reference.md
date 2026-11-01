@@ -100,7 +100,7 @@ github-review = { file = "~/.config/tern-kata/github-review" }   # a private (06
 
 `tern-kata worker stop [--now]` and the Worker card's restart choice send one `stop` request over the worker's control socket.
 
-- **When idle (default).** The worker stops admitting: scheduled occurrences, `run` requests and resumes are refused with "the worker is stopping". It lets the runs in flight finish and report to kata, then exits with status 0. Held runs do not count as in flight. `worker status` shows the stopping state and how many runs it waits for.
+- **When idle (default).** The worker stops admitting: scheduled occurrences, `run` requests and resumes are refused with "the worker is stopping". It lets the runs in flight finish and report to kata, then exits with status 0. Held runs do not count as in flight, and `worker abandon` is still accepted, since it ends a run instead of starting one. `worker status` shows the stopping state and how many runs it waits for.
 - **`--now`.** It ends at once. A run whose agent was running is held `interrupted` and is resumable, exactly as after a terminate signal. Sent during a drain, it upgrades the drain.
 - **Leases.** A stopped worker does not release its Projects' leases; its next start renews them.
 - **A fresh worker.** The command prints the mode, the runs in flight and whether one follows: only the plugin's supervision starts it, so a worker started by hand, or one with `worker.manual` beside `worker.toml`, stays stopped. With no worker running the command says so and exits 1.
@@ -191,7 +191,7 @@ A run that is not uncertain is never held: a nonzero exit, a timeout and a spawn
 
 - The held attempt's own prompt is never sent again.
 - The run goes back to `running` in kata with its original start time, gets a fresh timeout and ends recorded `succeeded` or `failed` by the new attempt. The held attempt's output stays in the run folder as `output.attempt1.jsonl`.
-- A resume is refused when the run is not held with `unknown`, when no omp session was saved (`launch_unproven`, and the nothing-started reasons: only abandon remains), when its recorded process group is still present, when the Project's lease is not held here, when the Issue is closed or when the Project is at capacity.
+- A resume is refused when the run is not held with `unknown`, when no omp session was saved (`launch_unproven`, and the nothing-started reasons: only abandon remains), when its recorded process group is still present, when the Project's lease is not held here, when the Issue is closed, when the Project is at capacity or when the held attempt's output cannot be set aside (the run stays held with its output untouched).
 
 ### Abandon
 

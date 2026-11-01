@@ -286,13 +286,15 @@ func moved(e model.UndoEntry, shown *g.ShowIssueResponseBody) string {
 			return "issue priority changed since the action"
 		}
 	case model.UndoBody:
-		if i.Body != e.After.Body || !atRevision {
+		// The body text is what the undo overwrites; a write to another field moves the revision without touching it.
+		// shortcut: check-then-write, so a body edit landing between this check and the write is overwritten (kata v0.20's
+		// edit-issue honours no If-Match); upgrade when it does.
+		if i.Body != e.After.Body {
 			return "issue body changed since the action"
 		}
 	case model.UndoLabelAdd, model.UndoLabelRemove:
-		if !atRevision {
-			return "issue changed since the label edit"
-		}
+		// Label edits do not move the revision, and the undo touches only its own label: restored has already answered when
+		// that label was changed by someone else, so any state left here is as the change left it.
 	case model.UndoLaneMove:
 		// Label edits do not move the revision, so any other write does. An undo whose second label write was refused leaves the
 		// card with its old Lane labels back and the new ones still on (the inverse adds before it removes), so a retry is accepted

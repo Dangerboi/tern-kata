@@ -38,7 +38,6 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 		nextLease time.Time
 		nextDefs  time.Time
 		dirtyAt   time.Time
-		refreshed time.Time
 		dirty     bool
 		recovered bool
 		// recoveredRuns outlives a pass that could not read every journal, so the next one only picks up what is left.
@@ -46,6 +45,8 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 		started       bool
 		takeover      = w.opt.Takeover
 		nextRoute     time.Time
+		// issueEvent is set when the loop woke for an Issue event: only that tick may reuse a young job listing.
+		issueEvent bool
 	)
 	starting, ok := w.beginStarting(ctx)
 	if !ok {
@@ -142,12 +143,11 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 			default:
 			}
 			due := nextDefs.IsZero() || !now.Before(nextDefs)
-			if dirty && !now.Before(maxTime(dirtyAt.Add(250*time.Millisecond), refreshed.Add(2*time.Second))) {
+			if dirty && !now.Before(maxTime(dirtyAt.Add(250*time.Millisecond), w.jobsListedAt(ps).Add(jobRefreshDebounce))) {
 				due = true
 			}
 			if due {
 				dirty = false
-				refreshed = now
 				if err := w.refreshJobs(ctx, ps); err != nil {
 					w.opt.Log("Project %s: %v", ps.cfg.Name, err)
 					dirty = true // dirty flags survive failed refreshes
@@ -163,15 +163,16 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 			wake = minTime(wake, now.Add(10*time.Second))
 		}
 		if w.leaseHeld(ps) {
-			if next := w.tick(ctx, ps); !next.IsZero() {
+			if next := w.tick(ctx, ps, issueEvent && !dirty); !next.IsZero() {
 				wake = minTime(wake, next)
 			}
 		}
+		issueEvent = false
 		if !nextDefs.IsZero() && w.leaseHeld(ps) {
 			wake = minTime(wake, nextDefs)
 		}
 		if dirty {
-			wake = minTime(wake, maxTime(dirtyAt.Add(250*time.Millisecond), refreshed.Add(2*time.Second)))
+			wake = minTime(wake, maxTime(dirtyAt.Add(250*time.Millisecond), w.jobsListedAt(ps).Add(jobRefreshDebounce)))
 		}
 		if ps.resolved {
 			wake = minTime(wake, nextRoute)
@@ -182,9 +183,22 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 		case <-ps.wake:
 			dirty, dirtyAt = true, w.clock.Now()
 		case <-ps.kick:
+		case <-ps.issueKick:
+			issueEvent = true
 		case <-w.clock.After(max(wake.Sub(w.clock.Now()), time.Millisecond)):
 		}
 	}
+}
+
+// jobRefreshDebounce is the least time between two reads of a Project's job list that events caused. Only a tick that
+// answers an Issue event may reuse a listing this young; due-time and freed-slot admission always lists again.
+const jobRefreshDebounce = 2 * time.Second
+
+// jobsListedAt is when the Project's job list was last read, the zero time before the first read.
+func (w *Worker) jobsListedAt(ps *projectState) time.Time {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return ps.jobsAt
 }
 
 func minTime(a, b time.Time) time.Time {
@@ -223,6 +237,7 @@ func (w *Worker) refreshJobs(ctx context.Context, ps *projectState) error {
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	ps.jobsAt = w.clock.Now()
 	if err != nil {
 		ps.jobsErr = err.Error()
 		return fmt.Errorf("listing jobs: %w", err)
@@ -232,7 +247,7 @@ func (w *Worker) refreshJobs(ctx context.Context, ps *projectState) error {
 		ps.jobs[j.UID] = j
 	}
 	ps.aside, ps.warnings = aside, warnings
-	ps.jobsErr, ps.jobsAt = "", w.clock.Now()
+	ps.jobsErr = ""
 	return nil
 }
 
@@ -261,7 +276,10 @@ func (w *Worker) follow(ctx context.Context, ps *projectState) {
 			cursor = max(cursor, e.ID)
 			if strings.HasPrefix(e.Type, "issue.") {
 				ps.datesDirty.Store(true)
-				w.kick(ps)
+				select {
+				case ps.issueKick <- struct{}{}:
+				default:
+				}
 			}
 			if strings.HasPrefix(e.Type, "cron.job.") || strings.HasPrefix(e.Type, "cron.workflow.") {
 				w.writeCursor(ps.project.UID, cursor)
@@ -366,17 +384,14 @@ func (w *Worker) holdsSlotOf(ps *projectState, uid string) bool {
 	return ok
 }
 
-// gateClosed reports whether a job's overlap gate is closed, and by which run (ADR-0007). When a journal cannot be
-// read an unsettled run of this job may be among them and there is no way to tell which job it belongs to, so the
-// gate reads closed and err says why; a closing run among the readable ones is still named.
+// gateClosed reports whether a job's overlap gate is closed, and by which run (ADR-0007), from the store's index of
+// runs that close their gate; no journal is read. When the runs folder cannot be read an unsettled run of this job may
+// be hidden in it, so the gate reads closed and err says why.
 func (w *Worker) gateClosed(jobUID, projectUID string) (runUID string, err error) {
-	journals, _, err := w.store.Scan()
-	for _, j := range journals {
-		if j.JobUID == jobUID && j.ProjectUID == projectUID && j.closesGate() {
-			return j.RunUID, nil
-		}
+	if err := w.store.RunsReadable(); err != nil {
+		return "", err
 	}
-	return "", err
+	return w.store.ClosingRun(projectUID, jobUID), nil
 }
 
 // recoverProject continues the Project's journals after the lease decision (ADR-0006 "Recovery order"): rebuild the
@@ -395,6 +410,7 @@ func (w *Worker) recoverProject(ctx context.Context, ps *projectState, done map[
 	for _, uid := range quarantined {
 		w.opt.Log("run %s: its journal could not be read and was moved to quarantine", uid)
 	}
+	w.store.SeedGates(journals)
 	var mine []*Journal
 	for _, j := range journals {
 		if j.ProjectUID == ps.project.UID && j.Executor == w.opt.Config.Executor && !done[j.RunUID] {

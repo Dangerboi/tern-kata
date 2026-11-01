@@ -1,9 +1,11 @@
 package data
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -129,5 +131,63 @@ func TestNoFiltersFileMeansNoDefault(t *testing.T) {
 	f := newConfigFixture(t)
 	if loaded := f.loadDefault(t, f.gateway); loaded.Default != (model.Filters{}) || loaded.DefaultErr != nil {
 		t.Errorf("loaded %#v, %v", loaded.Default, loaded.DefaultErr)
+	}
+}
+
+func TestConcurrentDefaultFilterSavesOfDifferentProjectsKeepEach(t *testing.T) {
+	f := newConfigFixture(t)
+	const panes = 24
+	var wg sync.WaitGroup
+	for i := range panes {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if saved := f.saveFilters(t, fmt.Sprintf("p%02d", i), "work", model.Filters{Status: "open", Label: fmt.Sprintf("l%02d", i)}); saved.Err != nil {
+				t.Error(saved.Err)
+			}
+		}()
+	}
+	wg.Wait()
+	for i := range panes {
+		uid := fmt.Sprintf("p%02d", i)
+		got, err := f.gateway.loadFilters(uid)
+		if err != nil || got.Label != fmt.Sprintf("l%02d", i) {
+			t.Errorf("%s: loaded %#v, %v", uid, got, err)
+		}
+	}
+}
+
+func TestUpdateTablesAppliesOnTopOfAnotherPanesSaveOfTheFile(t *testing.T) {
+	f := newConfigFixture(t)
+	path := f.write(t, "filters.toml", "[\"a\"]\nname = \"a\"\nstatus = \"open\"\n")
+	var changed bool
+	err := updateTables(path, func(file map[string]any) {
+		if !changed {
+			changed = true
+			f.write(t, "filters.toml", "[\"a\"]\nname = \"a\"\nstatus = \"open\"\n\n[\"b\"]\nname = \"b\"\nstatus = \"closed\"\n")
+		}
+		file["c"] = map[string]any{"name": "c"}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(path)
+	for _, want := range []string{"[a]", "[b]", "[c]"} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("file lacks %q:\n%s", want, raw)
+		}
+	}
+}
+
+func TestUpdateTablesOfAFileThatKeepsChangingIsRefusedWithAReason(t *testing.T) {
+	f := newConfigFixture(t)
+	path := f.write(t, "filters.toml", "[\"a\"]\nname = \"a\"\n")
+	n := 0
+	err := updateTables(path, func(map[string]any) {
+		n++
+		f.write(t, "filters.toml", fmt.Sprintf("[\"a\"]\nname = \"a%d\"\n", n))
+	})
+	if err == nil || !strings.Contains(err.Error(), "kept changing") {
+		t.Fatalf("err = %v", err)
 	}
 }

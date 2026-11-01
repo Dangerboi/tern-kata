@@ -3,6 +3,7 @@ package worker
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -46,11 +47,9 @@ type ompMessage struct {
 	StopReason   string `json:"stopReason"`
 	ErrorMessage string `json:"errorMessage"`
 	ErrorStatus  int    `json:"errorStatus"`
-	Content      []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	} `json:"content"`
-	Usage *struct {
+	// Content stays undecoded: only the message that decides the result has its text read.
+	Content contentView `json:"content"`
+	Usage   *struct {
 		Input      int64 `json:"input"`
 		Output     int64 `json:"output"`
 		CacheRead  int64 `json:"cacheRead"`
@@ -58,14 +57,35 @@ type ompMessage struct {
 	} `json:"usage"`
 }
 
-func (m ompMessage) text() string {
+// contentView is a message's content as it lies in the line being parsed, not copied, so it is valid only until
+// the parser's Line returns.
+type contentView []byte
+
+func (c *contentView) UnmarshalJSON(b []byte) error {
+	*c = b
+	return nil
+}
+
+// text is the message's text parts joined; ok is false when the content is not an array of parts (an assistant
+// message that does not decode).
+func (m ompMessage) text() (text string, ok bool) {
+	if len(m.Content) == 0 {
+		return "", true
+	}
+	var parts []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(m.Content, &parts) != nil {
+		return "", false
+	}
 	var b strings.Builder
-	for _, c := range m.Content {
+	for _, c := range parts {
 		if c.Type == "text" {
 			b.WriteString(c.Text)
 		}
 	}
-	return b.String()
+	return b.String(), true
 }
 
 func (p *agentParser) Line(line []byte) {
@@ -73,8 +93,101 @@ func (p *agentParser) Line(line []byte) {
 	if len(line) == 0 || line[0] != '{' {
 		return
 	}
-	// Messages stay raw until the role is known: omp's other roles (a `custom` message's content is a string) need
-	// not fit ompMessage, and one of them must not cost the whole agent_end.
+	// One decode of the whole line. A line whose messages do not all fit the typed shape (omp's other roles, a
+	// message with a field of the wrong type) goes through lineLenient, which decides per message.
+	var event struct {
+		Type       string       `json:"type"`
+		ID         string       `json:"id"`
+		Message    *ompMessage  `json:"message"`
+		Messages   []ompMessage `json:"messages"`
+		IsTerminal *bool        `json:"isTerminal"`
+	}
+	if err := json.Unmarshal(line, &event); err != nil {
+		var typeErr *json.UnmarshalTypeError
+		if errors.As(err, &typeErr) {
+			p.lineLenient(line)
+		}
+		return
+	}
+	p.event(event.Type, event.ID, event.IsTerminal,
+		func() (ompMessage, bool) { return derefMessage(event.Message) },
+		func() (ompMessage, bool) {
+			for i := len(event.Messages) - 1; i >= 0; i-- {
+				if event.Messages[i].Role == "assistant" {
+					return event.Messages[i], true
+				}
+			}
+			return ompMessage{}, false
+		})
+}
+
+func derefMessage(m *ompMessage) (ompMessage, bool) {
+	if m == nil {
+		return ompMessage{}, false
+	}
+	return *m, true
+}
+
+// event applies one decoded event. message is the event's message and lastTurn the last assistant turn of an
+// agent_end; the bool says one was found, and a found turn that does not decode is the zero message.
+func (p *agentParser) event(typ, id string, isTerminal *bool, message, lastTurn func() (ompMessage, bool)) {
+	switch typ {
+	case "session":
+		p.session(id)
+	case "message_end":
+		if m, ok := message(); ok {
+			p.messageEnd(m)
+		}
+	case "agent_end":
+		if isTerminal != nil && !*isTerminal {
+			return
+		}
+		p.res.Terminal = true
+		if m, ok := lastTurn(); ok {
+			p.agentEnd(m)
+		}
+	}
+}
+
+func (p *agentParser) session(id string) {
+	if p.res.SessionID == "" && id != "" {
+		p.res.SessionID = id
+		if p.onSession != nil {
+			p.onSession(id)
+		}
+	}
+}
+
+func (p *agentParser) messageEnd(m ompMessage) {
+	if m.Role != "assistant" {
+		return
+	}
+	text, ok := m.text()
+	if !ok {
+		return
+	}
+	if u := m.Usage; u != nil {
+		p.sawUsage = true
+		p.in += u.Input + u.CacheRead + u.CacheWrite // omp's `input` leaves cached prompt tokens out
+		p.out += u.Output
+	}
+	p.final(m, text)
+}
+
+// agentEnd takes the last assistant turn of an agent_end as the run's result. That turn decides the run even when
+// its content does not decode: falling back to an earlier turn's stop would pass a failed run, so the zero message
+// clears what message_end recorded.
+func (p *agentParser) agentEnd(m ompMessage) {
+	text, ok := m.text()
+	if !ok {
+		m, text = ompMessage{}, ""
+	}
+	p.final(m, text)
+}
+
+// lineLenient reads an event whose messages are kept raw until the role is known: omp's other roles (a `custom`
+// message's content is a string) need not fit ompMessage, and one of them must not cost the whole agent_end.
+func (p *agentParser) lineLenient(line []byte) {
 	var event struct {
 		Type       string            `json:"type"`
 		ID         string            `json:"id"`
@@ -85,44 +198,21 @@ func (p *agentParser) Line(line []byte) {
 	if json.Unmarshal(line, &event) != nil {
 		return
 	}
-	switch event.Type {
-	case "session":
-		if p.res.SessionID == "" && event.ID != "" {
-			p.res.SessionID = event.ID
-			if p.onSession != nil {
-				p.onSession(event.ID)
+	p.event(event.Type, event.ID, event.IsTerminal,
+		func() (ompMessage, bool) { return assistantMessage(event.Message) },
+		func() (ompMessage, bool) {
+			for i := len(event.Messages) - 1; i >= 0; i-- {
+				var head struct {
+					Role string `json:"role"`
+				}
+				if json.Unmarshal(event.Messages[i], &head) != nil || head.Role != "assistant" {
+					continue
+				}
+				m, _ := assistantMessage(event.Messages[i])
+				return m, true
 			}
-		}
-	case "message_end":
-		m, ok := assistantMessage(event.Message)
-		if !ok {
-			return
-		}
-		if u := m.Usage; u != nil {
-			p.sawUsage = true
-			p.in += u.Input + u.CacheRead + u.CacheWrite // omp's `input` leaves cached prompt tokens out
-			p.out += u.Output
-		}
-		p.final(m)
-	case "agent_end":
-		if event.IsTerminal != nil && !*event.IsTerminal {
-			return
-		}
-		p.res.Terminal = true
-		for i := len(event.Messages) - 1; i >= 0; i-- {
-			var head struct {
-				Role string `json:"role"`
-			}
-			if json.Unmarshal(event.Messages[i], &head) != nil || head.Role != "assistant" {
-				continue
-			}
-			// The last assistant turn decides the run even when it does not decode: falling back to an earlier
-			// turn's stop would pass a failed run, so the zero message clears what message_end recorded.
-			m, _ := assistantMessage(event.Messages[i])
-			p.final(m)
-			break
-		}
-	}
+			return ompMessage{}, false
+		})
 }
 
 // assistantMessage decodes raw as an assistant message; any other role, or a shape that does not decode, is not one
@@ -135,9 +225,9 @@ func assistantMessage(raw json.RawMessage) (ompMessage, bool) {
 	return m, true
 }
 
-func (p *agentParser) final(m ompMessage) {
+func (p *agentParser) final(m ompMessage, text string) {
 	// The run folder's output file keeps the whole message; the result is journalled, so it stays under the summary bound.
-	p.res.FinalText = truncate(m.text(), maxSummaryBytes)
+	p.res.FinalText = truncate(text, maxSummaryBytes)
 	p.res.StopReason = m.StopReason
 	p.res.ErrorText = truncate(m.ErrorMessage, maxSummaryBytes)
 	p.res.ErrorStatus = m.ErrorStatus

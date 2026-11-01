@@ -26,7 +26,7 @@ func TestTopBarDaemonAndCounts(t *testing.T) {
 	if got := m.CountsLine(); got != "open: 5 · closed: 7 · all: 12" {
 		t.Fatalf("catalog counts %q", got)
 	}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: model.Snapshot{
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest(), Query: m.SnapshotQuery(), Snapshot: model.Snapshot{
 		Catalog: []model.CatalogProject{{Project: project, Stats: &model.ProjectStats{Open: 6, Closed: 7}}},
 		Issues:  issues,
 	}})
@@ -53,7 +53,7 @@ func TestCountsLineForAnUnboundProjectCollection(t *testing.T) {
 	}
 	picked := model.Collection{View: "project", ProjectUID: "p", Title: "work"}
 	m, _ = model.Update(m, model.CollectionSelected{Collection: picked})
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: snapshot})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest(), Query: m.SnapshotQuery(), Snapshot: snapshot})
 	if got := m.CountsLine(); got != "open: 5 · closed: 7 · all: 12" {
 		t.Fatalf("picked Project Collection counts %q", got)
 	}

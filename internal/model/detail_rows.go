@@ -110,7 +110,7 @@ func (m Model) DetailChildCounts() ChildCounts {
 // withRows brings the rows up to date with the authority, the loaded Issues and the active tab.
 func (m Model) withRows() Model {
 	in := rowInputs{authority: m.authority, issueN: len(m.Issues), tab: m.tab, calendar: m.Calendar, host: m.Host,
-		jobsProject: m.Jobs.ProjectID, jobsRequest: m.Jobs.request, jobsRev: m.Jobs.rev, jobsLoading: m.Jobs.Loading}
+		jobsProject: m.Jobs.ProjectID, jobsRequest: m.Jobs.reads.Newest(), jobsRev: m.Jobs.rev, jobsLoading: m.Jobs.Loading}
 	if len(m.Issues) > 0 {
 		in.firstIssue = &m.Issues[0]
 	}

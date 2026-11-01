@@ -26,7 +26,7 @@ func TestCollectionSwitching(t *testing.T) {
 			if !m.Loading || m.Collection != today || !readsCollection(cmds, m, "") {
 				t.Fatalf("switch: %+v %#v", m, cmds)
 			}
-			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a", Status: "open", Title: "Today", ScheduledOnDate: new("2026-05-15")}}}, ETag: "today", LocalDate: "2026-05-15", TimeZone: "America/Los_Angeles"})
+			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest(), Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a", Status: "open", Title: "Today", ScheduledOnDate: new("2026-05-15")}}}, ETag: "today", LocalDate: "2026-05-15", TimeZone: "America/Los_Angeles"})
 			if m.Loading || m.SelectedUID != "a" || len(m.Groups) != 1 || m.Groups[0].Title != "Today" {
 				t.Fatalf("loaded: %+v", m)
 			}
@@ -34,7 +34,7 @@ func TestCollectionSwitching(t *testing.T) {
 			if !readsCollection(cmds, m, "today") {
 				t.Fatalf("validator: %#v", cmds)
 			}
-			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), NotModified: true})
+			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest(), Query: m.SnapshotQuery(), NotModified: true})
 			if m.Loading || m.SelectedUID != "a" {
 				t.Fatalf("304 loses state: %+v", m)
 			}

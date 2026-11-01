@@ -24,8 +24,24 @@ const (
 	LanesShare Field = "share"
 )
 
+// lanesTable declares the Lanes card's fields, in tab order, and its busy condition. Save to is a choice: 0 is this
+// machine, 1 the Project.
+var lanesTable = fieldTable[LanesFormState]{
+	form:  func(m *Model) *LanesFormState { return &m.LanesForm },
+	busy:  func(f LanesFormState) bool { return f.Saving },
+	focus: func(f *LanesFormState) *Field { return &f.Field },
+	caret: func(f *LanesFormState) *Caret { return &f.Caret },
+	err:   func(f *LanesFormState) *error { return &f.Err },
+	fields: []formField[LanesFormState]{
+		textField(LanesNames, func(f *LanesFormState) *string { return &f.Text }),
+		textField(LanesDays, func(f *LanesFormState) *string { return &f.Days }),
+		textField(LanesCards, func(f *LanesFormState) *string { return &f.Cards }),
+		yesNoField(LanesShare, func(f *LanesFormState) *bool { return &f.Share }),
+	},
+}
+
 // LanesFields is the Lanes card's field list, in tab order.
-var LanesFields = []FieldSpec{{LanesNames, true}, {LanesDays, true}, {LanesCards, true}, {LanesShare, false}}
+var LanesFields = lanesTable.specs()
 
 // LanesFormState is the Lanes card: the Lane list typed as comma-separated names, then Done's days and card count, then where
 // a save writes. Saving to this machine writes the Lane list file; sharing writes the Project's tern.lanes metadata.
@@ -46,33 +62,8 @@ type LanesFormState struct {
 	SentShare ShareLanes
 }
 
-// at is the text of the field called name, nil for a name that is not a Lanes text field.
-func (f *LanesFormState) at(name Field) *string {
-	switch name {
-	case LanesNames:
-		return &f.Text
-	case LanesDays:
-		return &f.Days
-	case LanesCards:
-		return &f.Cards
-	}
-	return nil
-}
-
 // Value is the text the field called name holds.
-func (f LanesFormState) Value(name Field) string {
-	if text := f.at(name); text != nil {
-		return *text
-	}
-	return ""
-}
-
-// choose gives the Save to field its choice at index i: 0 is this machine, 1 the Project.
-func (f *LanesFormState) choose(i int) {
-	if i == 0 || i == 1 {
-		f.Share, f.Err = i == 1, nil
-	}
-}
+func (f LanesFormState) Value(name Field) string { return lanesTable.value(f, name) }
 
 // openLanesForm is `B`. It waits for the saved Lane list to load: a card prefilled with the default would overwrite it on save.
 // An unreadable Lane list file keeps it closed unless the Project shares its list, which the card then edits.
@@ -209,10 +200,10 @@ func updateLanesFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case bound && binding.Action == LanesCancel:
 		m.LanesForm = LanesFormState{}
 	default:
-		text := form.at(form.Field)
+		text := lanesTable.textAt(form, form.Field)
 		if text == nil { // the Save to field takes no text; space steps its choice
 			if bound && binding.Action == InputSpace {
-				form.Share, form.Err = !form.Share, nil
+				lanesTable.stepFocused(&m, false)
 			}
 			break
 		}

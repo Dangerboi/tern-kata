@@ -11,7 +11,7 @@ import (
 	"slices"
 
 	"github.com/BurntSushi/toml"
-	"github.com/Dangerboi/tern-kata/internal/atomicfile"
+	"github.com/Dangerboi/tern-kata/internal/guardedfile"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
@@ -55,13 +55,21 @@ func readLanes(path string) (lanesFile, error) {
 	return file, nil
 }
 
-// readRawTables reads the file as untyped tables so a save can write back keys tern-kata doesn't know; a missing file is an empty one.
-func readRawTables(path string) (map[string]any, error) {
-	file := map[string]any{}
-	if _, err := toml.DecodeFile(path, &file); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	return file, nil
+// updateTables applies change to the file's untyped tables, so a save can write back keys tern-kata doesn't know, and writes
+// the result only while the file is still the text that was read. A file another Pane changed meanwhile is read again and
+// change applied on top of it, so no save loses another's; a file that keeps changing is refused, saying so. A missing file
+// is an empty one and a file that cannot be read or parsed is never written.
+func updateTables(path string, change func(file map[string]any)) error {
+	return guardedfile.Update(path, 0o755, func(token guardedfile.Token) ([]byte, error) {
+		file := map[string]any{}
+		if _, err := toml.Decode(token.Text(), &file); err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+		change(file)
+		var buf bytes.Buffer
+		err := toml.NewEncoder(&buf).Encode(file)
+		return buf.Bytes(), err
+	})
 }
 
 // loadLanes is the Project's Lane list in its read order: the Project's shared list (tern.lanes) when it holds a valid one, else
@@ -72,7 +80,7 @@ func (g *Gateway) loadLanes(ctx context.Context, cmd model.LoadLanes) model.Lane
 		return ok(c.SharedLanes(ctx, cmd.ProjectUID))
 	})
 	loaded, _ := msg.(model.LanesLoaded)
-	loaded.ProjectUID = cmd.ProjectUID
+	loaded.ProjectUID, loaded.Request = cmd.ProjectUID, cmd.Request
 	if err != nil {
 		loaded.SharedErr = fmt.Errorf("the Project could not be read: %w", err)
 	}
@@ -160,8 +168,8 @@ func cleanLanes(labels []string) []string {
 }
 
 // saveLanes writes the Project's list into the file, keeping every other table and every key it doesn't know. It refuses a file
-// it cannot read, and renames a temporary file into place so a failed write leaves the old file. shortcut: comments in a
-// hand-edited file are lost on save, and two Panes saving at once race; upgrade if either bites.
+// it cannot read, and renames a temporary file into place so a failed write leaves the old file. A save from another Pane in
+// between is read again and this one applied on top. shortcut: comments in a hand-edited file are lost on save.
 func (g *Gateway) saveLanes(cmd model.SaveLanes) model.LanesSaved {
 	return model.LanesSaved{ProjectUID: cmd.ProjectUID, Lanes: cmd.Lanes, DoneDays: cmd.DoneDays, DoneCards: cmd.DoneCards, Err: g.writeLanes(cmd)}
 }
@@ -171,22 +179,19 @@ func (g *Gateway) writeLanes(cmd model.SaveLanes) error {
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(folder, "lanes.toml")
-	file, err := readRawTables(path)
-	if err != nil {
-		return err
-	}
-	table, _ := file[cmd.ProjectUID].(map[string]any)
-	if table == nil {
-		table = map[string]any{}
-	}
-	for _, key := range []string{"name", "labels", "done_days", "done_cards"} {
-		delete(table, key)
-	}
-	if len(cmd.Lanes) == 0 && cmd.DoneDays == 0 && cmd.DoneCards == 0 && len(table) == 0 {
-		// All default and nothing else in it: the Project's table goes, so a later change of the default reaches it.
-		delete(file, cmd.ProjectUID)
-	} else {
+	return updateTables(filepath.Join(folder, "lanes.toml"), func(file map[string]any) {
+		table, _ := file[cmd.ProjectUID].(map[string]any)
+		if table == nil {
+			table = map[string]any{}
+		}
+		for _, key := range []string{"name", "labels", "done_days", "done_cards"} {
+			delete(table, key)
+		}
+		if len(cmd.Lanes) == 0 && cmd.DoneDays == 0 && cmd.DoneCards == 0 && len(table) == 0 {
+			// All default and nothing else in it: the Project's table goes, so a later change of the default reaches it.
+			delete(file, cmd.ProjectUID)
+			return
+		}
 		if len(cmd.Lanes) > 0 || cmd.DoneDays != 0 || cmd.DoneCards != 0 {
 			table["name"] = cmd.ProjectName
 		}
@@ -200,15 +205,5 @@ func (g *Gateway) writeLanes(cmd model.SaveLanes) error {
 			table["done_cards"] = cmd.DoneCards
 		}
 		file[cmd.ProjectUID] = table
-	}
-	return writeTables(path, file)
-}
-
-// writeTables encodes file and replaces path with it, so a failed write leaves the old file.
-func writeTables(path string, file map[string]any) error {
-	var buf bytes.Buffer
-	if err := toml.NewEncoder(&buf).Encode(file); err != nil {
-		return err
-	}
-	return atomicfile.Write(path, buf.Bytes(), atomicfile.Options{Mode: 0o600, DirMode: 0o755})
+	})
 }

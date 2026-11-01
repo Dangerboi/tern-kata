@@ -31,7 +31,7 @@ const (
 )
 
 // trigger yields the occurrences of one job definition. It is the extension point for a new trigger kind: build it in
-// newTrigger and the rest of the scheduler (checkpoints, catchup, overlap, capacity, admission) applies unchanged.
+// newTrigger and the rest of the schedule (checkpoints, catchup, overlap, capacity, admission) applies unchanged.
 type trigger interface {
 	// next is the first occurrence strictly after t, the zero time when there is none.
 	next(t time.Time) time.Time
@@ -85,6 +85,12 @@ func newTrigger(job cronjob.Job, date time.Time) (trigger, error) {
 	return nil, nil
 }
 
+// adapterJob reports whether the job is one the worker may schedule at all: kata's daemon owns native jobs and archived
+// jobs are gone. disabledAdapterJob is such a job that is switched off.
+func adapterJob(job cronjob.Job) bool { return !job.Archived() && !job.Native() }
+
+func disabledAdapterJob(job cronjob.Job) bool { return adapterJob(job) && !job.Definition.Enabled }
+
 // schedulable reports whether the worker plans occurrences for the job. Native jobs belong to kata's daemon, disabled
 // and archived jobs schedule nothing, and so does the one notify job kata's own date sweeper already delivers: a
 // zero-lead `current-owner-or-author` notification of the trigger's own Issue on its date (ADR-0011). A job that notifies
@@ -92,7 +98,7 @@ func newTrigger(job cronjob.Job, date time.Time) (trigger, error) {
 // names another adapter is that adapter's.
 func schedulable(job cronjob.Job) bool {
 	d := job.Definition
-	if job.Archived() || job.Native() || !d.Enabled {
+	if !adapterJob(job) || !d.Enabled {
 		return false
 	}
 	if job.OtherAdapter() != "" {
@@ -189,33 +195,88 @@ type checkpoint struct {
 	DateSeen           bool        `json:"date_seen,omitempty"`
 	Pending            []time.Time `json:"pending,omitempty"`
 	Parked             []time.Time `json:"parked,omitempty"` // the pending occurrences that waited for the job's Issue
+	Paused             bool        `json:"paused,omitempty"` // the job was disabled: its time off is never caught up
 }
 
-func (w *Worker) checkpointPath(ps *projectState, jobUID string) string {
-	return filepath.Join(w.opt.Dirs.ProjectDir(ps.project.UID), "schedule", jobUID+".json")
+// checkpointStore keeps one checkpoint per job. A save that fails is the store's to report: the schedule goes on with
+// its in-memory state and the next change saves again.
+type checkpointStore interface {
+	Load(jobUID string) (checkpoint, bool)
+	Save(jobUID string, c checkpoint)
 }
 
-func (w *Worker) loadCheckpoint(ps *projectState, jobUID string) (checkpoint, bool) {
-	raw, err := readFile(w.checkpointPath(ps, jobUID))
+// fileCheckpoints is the checkpointStore of one Project's schedule folder; log is the Project's prefixed logger.
+type fileCheckpoints struct {
+	dir string
+	log func(format string, args ...any)
+}
+
+func (f fileCheckpoints) path(jobUID string) string { return filepath.Join(f.dir, jobUID+".json") }
+
+func (f fileCheckpoints) Load(jobUID string) (checkpoint, bool) {
+	raw, err := readFile(f.path(jobUID))
 	if err != nil {
 		return checkpoint{}, false
 	}
 	var c checkpoint
 	if json.Unmarshal(raw, &c) != nil || c.Version != 1 || c.Through.IsZero() {
-		w.opt.Log("Project %s: the schedule checkpoint of job %s is unreadable and was ignored", ps.cfg.Name, jobUID)
+		f.log("the schedule checkpoint of job %s is unreadable and was ignored", jobUID)
 		return checkpoint{}, false
 	}
 	return c, true
 }
 
-func (w *Worker) saveCheckpoint(ps *projectState, jobUID string, st *jobSchedule) {
-	raw, _ := json.Marshal(checkpoint{Version: 1, DefinitionEventUID: st.defEvent, Through: st.through, Date: st.date, DateSeen: st.dateSeen, Pending: st.pending, Parked: st.parked})
-	path := w.checkpointPath(ps, jobUID)
+func (f fileCheckpoints) Save(jobUID string, c checkpoint) {
+	c.Version = 1
+	raw, _ := json.Marshal(c)
+	path := f.path(jobUID)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err == nil {
 		err = replaceFile(path, raw)
 		if err != nil {
-			w.opt.Log("Project %s: saving the schedule of job %s: %v", ps.cfg.Name, jobUID, err)
+			f.log("saving the schedule of job %s: %v", jobUID, err)
 		}
+	}
+}
+
+// projectSchedule is one Project's schedule: it owns the checkpoints, plans what became due and admits waiting
+// occurrences. It reaches the rest of the worker through four seams: the checkpoint store, admit (run preparation: one
+// occurrence is always one run, and a journal that already covers it is returned with created false), issueDate and
+// stopped. log is the Project's own logger, prefixed with its name. It belongs to the Project loop.
+type projectSchedule struct {
+	store     checkpointStore
+	admit     func(ctx context.Context, jobUID string, occurrence time.Time) (runUID string, created bool, err error)
+	issueDate func(job cronjob.Job) (at time.Time, known bool)
+	stopped   func() bool
+	log       func(format string, args ...any)
+	jobs      map[string]*jobSchedule
+	// paused holds the disabled jobs whose checkpoint already carries the pause mark.
+	paused map[string]bool
+	// resumeChecked holds the enabled jobs whose checkpoint markResumed already looked at, so a refusal that lasts reads
+	// (and reports) it once; a job that is disabled is taken out again.
+	resumeChecked map[string]bool
+}
+
+// save writes the job's state as its checkpoint, which never carries the pause mark: a saved job is scheduled.
+func (s *projectSchedule) save(jobUID string, st *jobSchedule) {
+	s.store.Save(jobUID, checkpoint{DefinitionEventUID: st.defEvent, Through: st.through, Date: st.date, DateSeen: st.dateSeen, Pending: st.pending, Parked: st.parked})
+}
+
+// newProjectSchedule builds the schedule of a served Project over the worker's files, run preparation and clock.
+func (w *Worker) newProjectSchedule(ps *projectState) *projectSchedule {
+	name := ps.cfg.Name
+	log := func(format string, args ...any) {
+		w.opt.Log("Project %s: "+format, append([]any{name}, args...)...)
+	}
+	return &projectSchedule{
+		store: fileCheckpoints{dir: filepath.Join(w.opt.Dirs.ProjectDir(ps.project.UID), "schedule"), log: log},
+		admit: func(ctx context.Context, jobUID string, at time.Time) (string, bool, error) {
+			return w.RunOccurrence(ctx, name, jobUID, at)
+		},
+		issueDate: func(job cronjob.Job) (time.Time, bool) { return w.issueDate(ps, job) },
+		stopped:   w.halted.Load,
+		log:       log,
+		jobs:      map[string]*jobSchedule{},
+		paused:    map[string]bool{},
 	}
 }
 
@@ -286,25 +347,31 @@ func selectOccurrences(cands []time.Time, now time.Time, catchup string, grace t
 
 // plan brings one job's state up to now: rebuild it when the definition changed, collect the occurrences that became
 // due, and apply the catchup policy to them and to those still waiting.
-func (w *Worker) plan(ps *projectState, job cronjob.Job, now time.Time) {
-	st := ps.sched[job.UID]
+func (s *projectSchedule) plan(job cronjob.Job, now time.Time) {
+	st := s.jobs[job.UID]
+	resumed := false
 	if st == nil {
 		st = &jobSchedule{}
-		ps.sched[job.UID] = st
-		if c, ok := w.loadCheckpoint(ps, job.UID); ok {
+		s.jobs[job.UID] = st
+		if c, ok := s.store.Load(job.UID); ok {
 			st.defEvent, st.through, st.date, st.pending = c.DefinitionEventUID, c.Through, c.Date, c.Pending
 			st.parked = c.Parked
 			st.dateSeen = c.DateSeen || !c.Date.IsZero()
+			if c.Paused { // it was disabled: scheduling starts again now, and the first date read after it is the baseline
+				st.through = maxTime(now, job.CreatedAt)
+				st.date, st.dateSeen = time.Time{}, false
+				resumed = true
+			}
 		}
 	}
-	changed := false
+	changed := resumed
 	firstSight := st.through.IsZero()
 	if firstSight { // first sight: work starts at the later of now and the job's creation
 		st.through, changed = maxTime(now, job.CreatedAt), true
 	}
 	dateChanged := false
 	if isIssueDate(job.Definition.Trigger) {
-		at, known := w.issueDate(ps, job)
+		at, known := s.issueDate(job)
 		if known && !st.dateSeen {
 			// The first successful read is the baseline, never a change: a read that failed before it must not make a
 			// date that was already there look like one that just moved.
@@ -316,7 +383,7 @@ func (w *Worker) plan(ps *projectState, job cronjob.Job, now time.Time) {
 			// The Issue's date moved: work waiting for the old value is stale, and an earlier date that is already
 			// behind the checkpoint is evaluated again under the catchup policy.
 			if len(st.pending) > 0 {
-				w.opt.Log("Project %s: the date of job %s changed; %d waiting occurrence(s) dropped", ps.cfg.Name, job.Name, len(st.pending))
+				s.log("the date of job %s changed; %d waiting occurrence(s) dropped", job.Name, len(st.pending))
 			}
 			if !at.IsZero() && at.Before(st.through) {
 				st.through = at.Add(-time.Nanosecond)
@@ -326,7 +393,7 @@ func (w *Worker) plan(ps *projectState, job cronjob.Job, now time.Time) {
 	}
 	if st.defEvent != job.DefinitionEventUID || st.trig == nil && st.why == "" || dateChanged {
 		if st.defEvent != job.DefinitionEventUID && len(st.pending) > 0 { // a changed definition supersedes unadmitted work
-			w.opt.Log("Project %s: job %s changed; %d waiting occurrence(s) dropped", ps.cfg.Name, job.Name, len(st.pending))
+			s.log("job %s changed; %d waiting occurrence(s) dropped", job.Name, len(st.pending))
 		}
 		if st.defEvent != job.DefinitionEventUID {
 			st.pending, st.defEvent, changed = nil, job.DefinitionEventUID, true
@@ -336,13 +403,13 @@ func (w *Worker) plan(ps *projectState, job cronjob.Job, now time.Time) {
 		st.why = ""
 		if err != nil {
 			st.why = err.Error()
-			w.opt.Log("Project %s: job %s is not scheduled: %s", ps.cfg.Name, job.Name, st.why)
+			s.log("job %s is not scheduled: %s", job.Name, st.why)
 		}
 	}
 	st.next = time.Time{}
 	if st.trig == nil {
 		if changed {
-			w.saveCheckpoint(ps, job.UID, st)
+			s.save(job.UID, st)
 		}
 		return
 	}
@@ -371,70 +438,104 @@ func (w *Worker) plan(ps *projectState, job cronjob.Job, now time.Time) {
 		st.parked, changed = parked, true
 	}
 	if dropped > 0 {
-		w.opt.Log("Project %s: job %s (catchup %s): %d missed occurrence(s) not run", ps.cfg.Name, job.Name, cmp.Or(d.Catchup, "skip"), dropped)
+		s.log("job %s (catchup %s): %d missed occurrence(s) not run", job.Name, cmp.Or(d.Catchup, "skip"), dropped)
 	}
 	if !slices.Equal(keep, st.pending) {
 		st.pending, changed = keep, true
 	}
 	st.next = st.trig.next(now)
 	if changed {
-		w.saveCheckpoint(ps, job.UID, st)
+		s.save(job.UID, st)
 	}
 }
 
 // tick evaluates one Project's schedule and returns when the next occurrence of any of its jobs is due, the zero time
-// when none is. It runs on the Project loop while the Project's lease is held.
-func (w *Worker) tick(ctx context.Context, ps *projectState) time.Time {
-	if w.halted.Load() || ctx.Err() != nil || w.admitsNothing(ps) != "" {
+// when none is. issueEvent says an Issue event woke the loop. It runs on the Project loop while the Project's lease is
+// held.
+func (w *Worker) tick(ctx context.Context, ps *projectState, issueEvent bool) time.Time {
+	if w.halted.Load() || ctx.Err() != nil {
 		return time.Time{}
 	}
 	if ps.sched == nil {
-		ps.sched = map[string]*jobSchedule{}
+		ps.sched = w.newProjectSchedule(ps)
+	}
+	if w.admitsNothing(ps) != "" {
+		// Nothing is planned or admitted, but a job disabled meanwhile is still noted, so that enabling it again never
+		// runs the time it was off.
+		w.markDisabled(ps)
+		return time.Time{}
 	}
 	now := w.clock.Now()
 	w.refreshDates(ctx, ps)
 	if !w.planAll(ps, now) {
 		return time.Time{}
 	}
-	if w.anyPending(ps) {
+	if ps.sched.anyPending() {
 		// Scheduled work never starts from a cached definition (ADR-0011): read the jobs again, replan, then admit.
-		if err := w.refreshJobs(ctx, ps); err != nil {
-			w.opt.Log("Project %s: %v", ps.cfg.Name, err)
-			return time.Time{}
+		// Only a tick caused by an Issue event reuses a listing younger than the refresh debounce, so a burst of
+		// Issue events lists the jobs once.
+		if w.jobsStale(ps, issueEvent) {
+			if err := w.refreshJobs(ctx, ps); err != nil {
+				w.opt.Log("Project %s: %v", ps.cfg.Name, err)
+				return time.Time{}
+			}
+			w.planAll(ps, now)
 		}
-		w.planAll(ps, now)
-		w.admitDue(ctx, ps)
+		ps.sched.admitDue(ctx)
 	}
-	var next, wake time.Time
-	queued, scheduled := 0, 0
-	var waiting []JobNote
-	for uid, st := range ps.sched {
-		queued += len(st.pending)
+	sum := ps.sched.summary(now)
+	w.mu.Lock()
+	for i := range sum.waiting {
+		sum.waiting[i].Name = ps.jobs[sum.waiting[i].UID].Name
+	}
+	slices.SortFunc(sum.waiting, func(a, b JobNote) int { return strings.Compare(a.Name, b.Name) })
+	ps.scheduled, ps.queued, ps.nextRun, ps.waiting = sum.scheduled, sum.queued, sum.next, sum.waiting
+	w.mu.Unlock()
+	if !sum.wake.IsZero() && (sum.next.IsZero() || sum.wake.Before(sum.next)) {
+		return sum.wake
+	}
+	return sum.next
+}
+
+// jobsStale reports whether the Project's job list must be read again before admission. A listing that failed or was
+// never made always is. Otherwise only a tick that answers an Issue event may reuse a listing younger than the
+// refresh debounce: due-time and freed-slot admission never starts from a cached copy.
+func (w *Worker) jobsStale(ps *projectState, issueEvent bool) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if ps.jobsAt.IsZero() || ps.jobsErr != "" || !issueEvent {
+		return true
+	}
+	return w.clock.Now().Sub(ps.jobsAt) >= jobRefreshDebounce
+}
+
+// summary is what a tick reports after planning and admission: the queued and scheduled counts, the next occurrence
+// of any job, the earliest instant a waiting Issue becomes ready, and the jobs whose occurrences wait for their Issue.
+type summary struct {
+	queued, scheduled int
+	next, wake        time.Time
+	waiting           []JobNote
+}
+
+func (s *projectSchedule) summary(now time.Time) summary {
+	var sum summary
+	for uid, st := range s.jobs {
+		sum.queued += len(st.pending)
 		if len(st.pending) == 0 {
 			st.waiting, st.wakeAt = "", time.Time{}
 		}
 		if st.waiting != "" {
-			waiting = append(waiting, JobNote{UID: uid, Text: st.waiting})
-			wake = sooner(wake, st.wakeAt, now)
+			sum.waiting = append(sum.waiting, JobNote{UID: uid, Text: st.waiting})
+			sum.wake = sooner(sum.wake, st.wakeAt, now)
 		}
 		if st.trig != nil {
-			scheduled++
+			sum.scheduled++
 		}
-		if !st.next.IsZero() && (next.IsZero() || st.next.Before(next)) {
-			next = st.next
+		if !st.next.IsZero() && (sum.next.IsZero() || st.next.Before(sum.next)) {
+			sum.next = st.next
 		}
 	}
-	w.mu.Lock()
-	for i := range waiting {
-		waiting[i].Name = ps.jobs[waiting[i].UID].Name
-	}
-	slices.SortFunc(waiting, func(a, b JobNote) int { return strings.Compare(a.Name, b.Name) })
-	ps.scheduled, ps.queued, ps.nextRun, ps.waiting = scheduled, queued, next, waiting
-	w.mu.Unlock()
-	if !wake.IsZero() && (next.IsZero() || wake.Before(next)) {
-		return wake
-	}
-	return next
+	return sum
 }
 
 // sooner is the earlier of wake and the Issue's scheduled instant at, look again then rather than at the next fallback
@@ -447,36 +548,108 @@ func sooner(wake, at, now time.Time) time.Time {
 	return wake
 }
 
-// planAll plans every schedulable job in the cache and forgets the state of jobs that went away. False means the
+// markDisabled records the Project's disabled jobs in its schedule without planning anything, and the start of the jobs
+// that were enabled again meanwhile: their time off is not caught up, but the time since they were enabled is.
+func (w *Worker) markDisabled(ps *projectState) {
+	w.mu.Lock()
+	disabled := map[string]bool{}
+	var enabled []cronjob.Job
+	for _, j := range ps.jobs {
+		if disabledAdapterJob(j) {
+			disabled[j.UID] = true
+		} else if schedulable(j) {
+			enabled = append(enabled, j)
+		}
+	}
+	w.mu.Unlock()
+	ps.sched.markPaused(disabled)
+	now := w.clock.Now()
+	for _, j := range enabled {
+		ps.sched.markResumed(j, now)
+	}
+}
+
+// planAll is the worker's side of planning: it hands the Project's schedulable jobs to the Project schedule. False means the
 // Project has no definitions yet.
 func (w *Worker) planAll(ps *projectState, now time.Time) bool {
 	w.mu.Lock()
-	loaded := !ps.jobsAt.IsZero()
+	loaded := ps.jobs != nil
 	var jobs []cronjob.Job
+	disabled := map[string]bool{}
 	for _, j := range ps.jobs {
 		if schedulable(j) {
 			jobs = append(jobs, j)
+		} else if disabledAdapterJob(j) {
+			disabled[j.UID] = true
 		}
 	}
 	w.mu.Unlock()
 	if !loaded {
 		return false
 	}
-	live := map[string]bool{}
-	for _, j := range jobs {
-		live[j.UID] = true
-		w.plan(ps, j, now)
-	}
-	for uid := range ps.sched {
-		if !live[uid] { // disabled or gone: nothing runs, and the checkpoint keeps the pause for its return
-			delete(ps.sched, uid)
-		}
-	}
+	ps.sched.planAll(jobs, disabled, now)
 	return true
 }
 
-func (w *Worker) anyPending(ps *projectState) bool {
-	for _, st := range ps.sched {
+// planAll plans every given job and forgets the state of jobs that went away.
+func (s *projectSchedule) planAll(jobs []cronjob.Job, disabled map[string]bool, now time.Time) {
+	live := map[string]bool{}
+	for _, j := range jobs {
+		live[j.UID] = true
+		s.plan(j, now)
+	}
+	for uid := range s.jobs {
+		if !live[uid] { // disabled or gone: nothing runs
+			delete(s.jobs, uid)
+		}
+	}
+	s.markPaused(disabled)
+}
+
+// markPaused forgets the state of the disabled jobs and marks their checkpoints, so that their return starts from the
+// moment they are enabled, with or without a restart in between.
+func (s *projectSchedule) markPaused(disabled map[string]bool) {
+	// Work waiting from before is superseded by the enabling write's new definition event.
+	for uid := range disabled {
+		delete(s.jobs, uid)
+		delete(s.resumeChecked, uid)
+	}
+	for uid := range s.paused {
+		if !disabled[uid] {
+			delete(s.paused, uid)
+		}
+	}
+	for uid := range disabled {
+		if s.paused[uid] {
+			continue
+		}
+		s.paused[uid] = true
+		if c, ok := s.store.Load(uid); ok && !c.Paused {
+			c.Paused = true
+			s.store.Save(uid, c)
+		}
+	}
+}
+
+// markResumed saves the checkpoint of a job that is enabled again but not planned yet as resumed: scheduling starts at
+// now and the first date read is the baseline, exactly as plan would do.
+func (s *projectSchedule) markResumed(job cronjob.Job, now time.Time) {
+	if s.jobs[job.UID] != nil || s.resumeChecked[job.UID] {
+		return
+	}
+	if s.resumeChecked == nil {
+		s.resumeChecked = map[string]bool{}
+	}
+	s.resumeChecked[job.UID] = true
+	if c, ok := s.store.Load(job.UID); ok && c.Paused {
+		c.Paused, c.Through = false, maxTime(now, job.CreatedAt)
+		c.Date, c.DateSeen = time.Time{}, false
+		s.store.Save(job.UID, c)
+	}
+}
+
+func (s *projectSchedule) anyPending() bool {
+	for _, st := range s.jobs {
 		if len(st.pending) > 0 {
 			return true
 		}
@@ -484,15 +657,17 @@ func (w *Worker) anyPending(ps *projectState) bool {
 	return false
 }
 
-// admitDue admits the Project's waiting occurrences, oldest first. A full Project stops admission; a closed overlap
-// gate holds only its own job. Whatever stays waiting is looked at again when a run ends and at least every minute.
-func (w *Worker) admitDue(ctx context.Context, ps *projectState) {
+// admitDue admits the waiting occurrences, oldest first. A full Project stops admission; a closed overlap gate holds
+// only its own job. Whatever stays waiting is looked at again when a run ends and at least every minute. An occurrence
+// leaves the checkpoint only after the journal is admitted, so a crash in between admits it again and the journal that
+// already covers it answers (the same occurrence is always the same run).
+func (s *projectSchedule) admitDue(ctx context.Context) {
 	type due struct {
 		job string
 		at  time.Time
 	}
 	var queue []due
-	for uid, st := range ps.sched {
+	for uid, st := range s.jobs {
 		for _, at := range st.pending {
 			queue = append(queue, due{uid, at})
 		}
@@ -505,15 +680,15 @@ func (w *Worker) admitDue(ctx context.Context, ps *projectState) {
 	})
 	blocked := map[string]bool{}
 	for _, d := range queue {
-		st := ps.sched[d.job]
-		if blocked[d.job] || ctx.Err() != nil || w.halted.Load() {
+		st := s.jobs[d.job]
+		if blocked[d.job] || ctx.Err() != nil || s.stopped() {
 			continue
 		}
-		_, _, err := w.RunOccurrence(ctx, ps.cfg.Name, d.job, d.at)
+		_, _, err := s.admit(ctx, d.job, d.at)
 		if err == nil {
 			st.pending = slices.DeleteFunc(st.pending, func(t time.Time) bool { return t.Equal(d.at) })
 			st.lastErr, st.waiting, st.wakeAt, st.parked = "", "", time.Time{}, nil
-			w.saveCheckpoint(ps, d.job, st)
+			s.save(d.job, st)
 			continue
 		}
 		var parked *parkedError
@@ -526,7 +701,7 @@ func (w *Worker) admitDue(ctx context.Context, ps *projectState) {
 			}
 			if !slices.EqualFunc(st.parked, mark, time.Time.Equal) {
 				st.parked = slices.Clone(mark)
-				w.saveCheckpoint(ps, d.job, st)
+				s.save(d.job, st)
 			}
 			continue
 		}
@@ -538,7 +713,7 @@ func (w *Worker) admitDue(ctx context.Context, ps *projectState) {
 		var transient *transientError
 		if len(st.parked) > 0 && !errors.As(err, &transient) { // a refusal that ends the wait is subject to the grace again
 			st.parked = nil
-			w.saveCheckpoint(ps, d.job, st)
+			s.save(d.job, st)
 		}
 		if busy != nil {
 			blocked[d.job] = true
@@ -547,7 +722,7 @@ func (w *Worker) admitDue(ctx context.Context, ps *projectState) {
 		blocked[d.job] = true // the occurrences of a job that cannot start keep their order
 		if msg := err.Error(); msg != st.lastErr {
 			st.lastErr = msg
-			w.opt.Log("Project %s: %s", ps.cfg.Name, msg)
+			s.log("%s", msg)
 		}
 	}
 }

@@ -12,13 +12,27 @@ const (
 	ViewBase Field = "base"
 )
 
-// ViewFields is the View card's field list, in tab order: the name, the base Collection, then the Filter card's fields and
-// the search text.
-var ViewFields = []FieldSpec{
-	{ViewName, true}, {ViewBase, false},
-	{FilterProject, false}, {FilterStatus, false}, {FilterOwner, true}, {FilterLabel, true}, {FilterRelationship, false},
-	{FilterSearch, true},
+// viewTable declares the View card's fields, in tab order: the name, the base Collection, then the Filter card's fields and
+// the search text. Every key of the card dismisses its error.
+var viewTable = fieldTable[ViewFormState]{
+	form:       func(m *Model) *ViewFormState { return &m.ViewForm },
+	busy:       func(f ViewFormState) bool { return f.Saving },
+	focus:      func(f *ViewFormState) *Field { return &f.Field },
+	caret:      func(f *ViewFormState) *Caret { return &f.Caret },
+	err:        func(f *ViewFormState) *error { return &f.Err },
+	dismissErr: true,
+	fields: slices.Concat(
+		[]formField[ViewFormState]{
+			textField(ViewName, func(f *ViewFormState) *string { return &f.Name }),
+			modelChoiceField[ViewFormState](ViewBase, stepViewBase, chooseViewBase),
+		},
+		filterFieldList(func(f *ViewFormState) *Filters { return &f.Values }, Model.ViewChoices),
+		[]formField[ViewFormState]{textField(FilterSearch, func(f *ViewFormState) *string { return &f.Values.Search })},
+	),
 }
+
+// ViewFields is the View card's field list, in tab order.
+var ViewFields = viewTable.specs()
 
 const (
 	ModeViewForm            Mode   = "view-form"
@@ -50,17 +64,6 @@ type ViewFormState struct {
 func openViewForm(m Model, self string, v SavedView) Model {
 	m.ViewForm = ViewFormState{Open: true, Field: ViewName, Name: v.Name, Base: v.Base, Values: v.Filters, Self: self}
 	return m
-}
-
-// viewTextField is the text of the focused field, nil when it is a choice field.
-func viewTextField(f *ViewFormState) *string {
-	if !takesText(ViewFields, f.Field) {
-		return nil
-	}
-	if f.Field == ViewName {
-		return &f.Name
-	}
-	return f.Values.value(f.Field)
 }
 
 // ViewBases are the Collections the Base choice cycles through: the fixed Collections, every Project the catalog lists, and the
@@ -102,48 +105,30 @@ func (f ViewFormState) choiceValue(name Field) string {
 	if name == ViewBase {
 		return f.Base.Key()
 	}
-	return f.Values.Value(name)
+	return viewTable.value(f, name)
 }
 
-func (m Model) setViewChoice(name Field, value string) Model {
-	if name == ViewBase {
-		if i := slices.IndexFunc(m.ViewBases(), func(c Collection) bool { return c.Key() == value }); i >= 0 {
-			m.ViewForm.Base = m.ViewBases()[i]
-		}
-		return m
+// chooseViewBase gives the Base field the Collection at index i in ViewBases; an index out of range changes nothing.
+func chooseViewBase(m *Model, i int) bool {
+	bases := m.ViewBases()
+	if i < 0 || i >= len(bases) {
+		return false
 	}
-	if p := m.ViewForm.Values.value(name); p != nil {
-		*p = value
-	}
-	return m
+	m.ViewForm.Base = bases[i]
+	return true
 }
 
-// chooseView gives the focused choice field its value at index i in ViewChoices; an index out of range changes nothing.
-func chooseView(m Model, i int) Model {
-	if choices := m.ViewChoices(m.ViewForm.Field); i >= 0 && i < len(choices) {
-		return m.setViewChoice(m.ViewForm.Field, choices[i])
-	}
-	return m
-}
-
-// viewStep moves the focused choice field to its next choice, or the previous one when back, wrapping around.
-func viewStep(m Model, back bool) Model {
-	choices := m.ViewChoices(m.ViewForm.Field)
-	if choices == nil {
-		return m
-	}
-	index := max(slices.Index(choices, m.ViewForm.choiceValue(m.ViewForm.Field)), 0)
-	step := 1
-	if back {
-		step = len(choices) - 1
-	}
-	return m.setViewChoice(m.ViewForm.Field, choices[(index+step)%len(choices)])
+// stepViewBase moves the Base field to its next Collection, or the previous one when back, wrapping around.
+func stepViewBase(m *Model, back bool) {
+	bases := m.ViewBases()
+	at := slices.IndexFunc(bases, func(c Collection) bool { return c.Key() == m.ViewForm.Base.Key() })
+	m.ViewForm.Base = bases[cycleIndex(max(at, 0), len(bases), back)]
 }
 
 // viewFormKey is one key for the View card on top: a bound chord acts, any other types.
 func viewFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	binding, bound := LookupBindingForMode(msg.Chord, ModeViewForm)
-	bound = bound && !(isCaretChord(msg.Chord) && viewTextField(&m.ViewForm) != nil)
+	bound = bound && !(isCaretChord(msg.Chord) && viewTable.textAt(&m.ViewForm, m.ViewForm.Field) != nil)
 	if m.ViewForm.Saving && !(bound && binding.Action == CancelViewForm) {
 		return m, nil // the save has not answered: the input stays as sent
 	}
@@ -151,7 +136,7 @@ func viewFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	if bound {
 		return updateViewForm(m, binding.Action)
 	}
-	if field := viewTextField(&m.ViewForm); field != nil {
+	if field := viewTable.textAt(&m.ViewForm, m.ViewForm.Field); field != nil {
 		*field, _ = editText(*field, &m.ViewForm.Caret, m.ViewForm.Field, false, msg)
 	}
 	return m, nil
@@ -160,19 +145,18 @@ func viewFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 func updateViewForm(m Model, action Action) (Model, []Cmd) {
 	switch action {
 	case InputSpace:
-		if field := viewTextField(&m.ViewForm); field != nil {
+		if field := viewTable.textAt(&m.ViewForm, m.ViewForm.Field); field != nil {
 			*field, _ = editText(*field, &m.ViewForm.Caret, m.ViewForm.Field, false, KeyMsg{Text: " "})
 			return m, nil
 		}
-		return viewStep(m, false), nil
+		viewTable.stepFocused(&m, false)
+		return m, nil
 	case SaveViewForm:
 		return saveViewForm(m)
 	case CancelViewForm:
 		m.ViewForm = ViewFormState{}
 	case DeleteInput, ClearInput: // the shared step took them in a text field
-		if viewTextField(&m.ViewForm) == nil && m.ViewForm.Field != ViewBase {
-			m = m.setViewChoice(m.ViewForm.Field, "")
-		}
+		viewTable.resetFocused(&m)
 	}
 	return m, nil
 }

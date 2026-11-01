@@ -608,8 +608,8 @@ func startFederationEnroll(m Model) (Model, []Cmd) {
 	if f.Screen != FederationList {
 		return m, nil
 	}
-	f.attempt++
-	f.hubRequest++
+	f.attempts.Discard()
+	f.hubReads.Discard()
 	f.Draft = newFederationEnrollDraft(m.Actor)
 	f.EnrollErr, f.Enrolling = nil, false
 	f.LocalCursor, f.HubCursor, f.HubProjectCursor = 0, 0, 0
@@ -633,13 +633,12 @@ func startFederationBrowse(m Model) (Model, []Cmd) {
 	if f.Screen != FederationList {
 		return m, nil
 	}
-	f.attempt++
-	f.hubRequest++
+	f.attempts.Discard()
 	f.Draft, f.Recovery = FederationEnrollDraft{}, FederationEnrollRecovery{}
 	f.Enrolling = false
 	f.Browsed, f.BrowseCursor, f.EnrollErr, f.Browsing = nil, 0, nil, true
 	f.Screen = FederationBrowse
-	return m, []Cmd{BrowseFederationHubs{Workspace: m.Workspace, Request: f.hubRequest}}
+	return m, []Cmd{BrowseFederationHubs{Workspace: m.Workspace, Request: f.hubReads.Ask()}}
 }
 
 // chooseFederation is Enter on a choice screen.
@@ -667,8 +666,7 @@ func chooseFederationLocal(m Model) (Model, []Cmd) {
 	f.Screen = FederationPickHub
 	f.HubCursor, f.EnrollErr = 0, nil
 	f.Hubs, f.HubsLoading = nil, true
-	f.hubRequest++
-	return m, []Cmd{LoadFederationHubs{Workspace: m.Workspace, Request: f.hubRequest}}
+	return m, []Cmd{LoadFederationHubs{Workspace: m.Workspace, Request: f.hubReads.Ask()}}
 }
 
 func chooseFederationHub(m Model) (Model, []Cmd) {
@@ -689,13 +687,12 @@ func chooseFederationHub(m Model) (Model, []Cmd) {
 	f.Draft.Hub, f.Draft.HubAuth, f.Draft.AllowInsecure = hub, "", hub.AllowInsecure
 	f.Screen = FederationPickHubProject
 	f.HubProjects, f.HubProjectsLoading, f.HubProjectCursor = nil, true, 0
-	f.hubRequest++
-	return m, []Cmd{LoadFederationHubProjects{Workspace: m.Workspace, Request: f.hubRequest, Hub: hub.Name}}
+	return m, []Cmd{LoadFederationHubProjects{Workspace: m.Workspace, Request: f.hubReads.Ask(), Hub: hub.Name}}
 }
 
 func federationHubsLoaded(m Model, msg FederationHubsLoaded) Model {
 	f := &m.Federation
-	if msg.Request != f.hubRequest || f.Screen != FederationPickHub {
+	if !f.hubReads.IsCurrent(msg.Request) || f.Screen != FederationPickHub {
 		return m
 	}
 	f.HubsLoading, f.EnrollErr = false, msg.Err
@@ -708,7 +705,7 @@ func federationHubsLoaded(m Model, msg FederationHubsLoaded) Model {
 
 func federationHubProjectsLoaded(m Model, msg FederationHubProjectsLoaded) Model {
 	f := &m.Federation
-	if msg.Request != f.hubRequest || f.Screen != FederationPickHubProject {
+	if !f.hubReads.IsCurrent(msg.Request) || f.Screen != FederationPickHubProject {
 		return m
 	}
 	f.HubProjectsLoading = false
@@ -733,7 +730,7 @@ func federationHubProjectsLoaded(m Model, msg FederationHubProjectsLoaded) Model
 
 func federationBrowsed(m Model, msg FederationBrowsed) Model {
 	f := &m.Federation
-	if msg.Request != f.hubRequest || f.Screen != FederationBrowse {
+	if !f.hubReads.IsCurrent(msg.Request) || f.Screen != FederationBrowse {
 		return m
 	}
 	f.Browsing = false
@@ -751,11 +748,11 @@ func federationBrowsed(m Model, msg FederationBrowsed) Model {
 // federationChoiceBack is esc and backspace on a choice screen: one step back, the list from the first.
 func federationChoiceBack(m Model) (Model, []Cmd) {
 	f := &m.Federation
-	f.hubRequest++
+	f.hubReads.Discard()
 	f.EnrollErr = nil
 	switch f.Screen {
 	case FederationPickLocal:
-		f.attempt++
+		f.attempts.Discard()
 		f.Screen = FederationList
 	case FederationPickHub:
 		f.HubsLoading = false
@@ -770,7 +767,7 @@ func federationChoiceBack(m Model) (Model, []Cmd) {
 // federationBrowseBack is esc and backspace in the browse: back to the list.
 func federationBrowseBack(m Model) (Model, []Cmd) {
 	f := &m.Federation
-	f.hubRequest++
+	f.hubReads.Discard()
 	f.Browsing, f.EnrollErr = false, nil
 	f.Screen = FederationList
 	return m, nil
@@ -886,9 +883,8 @@ func confirmFederationPreview(m Model) (Model, []Cmd) {
 
 func runFederationEnroll(m Model) (Model, []Cmd) {
 	f := &m.Federation
-	f.attempt++
 	f.Enrolling, f.EnrollErr = true, nil
-	return m, []Cmd{EnrollFederation{Workspace: m.Workspace, Attempt: f.attempt, InstanceUID: strings.TrimSpace(f.InstanceUID), Draft: f.Draft}}
+	return m, []Cmd{EnrollFederation{Workspace: m.Workspace, Attempt: f.attempts.Ask(), InstanceUID: strings.TrimSpace(f.InstanceUID), Draft: f.Draft}}
 }
 
 // federationAdoptKey is one key for the card asking to type the local Project's name: Enter runs the adoption when the name is
@@ -919,7 +915,7 @@ func federationAdoptKey(m Model, msg KeyMsg) (Model, []Cmd) {
 // preview with the failure under it. A success shows the result and reads the status again, which now lists the Project.
 func federationEnrolled(m Model, msg FederationEnrolled) (Model, []Cmd) {
 	f := &m.Federation
-	if msg.Attempt != f.attempt || !f.Enrolling {
+	if !f.attempts.IsCurrent(msg.Attempt) || !f.Enrolling {
 		return m, nil
 	}
 	f.Enrolling = false

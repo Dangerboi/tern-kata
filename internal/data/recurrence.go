@@ -31,6 +31,13 @@ func (c *Client) CreateRecurrence(ctx context.Context, cmd model.CreateRecurrenc
 	return daemonError(err)
 }
 
+const (
+	changeExhausted = "The Recurrence kept changing while saving; nothing was written. Try again."
+	stopExhausted   = "The Recurrence kept changing; nothing was stopped. Try again."
+)
+
+var errStopUnknown = errors.New("The stop got no answer, so the Recurrence may have been stopped. Check it before trying again.")
+
 var errRecurrenceStopped = errors.New("The recurrence was stopped; nothing was written.")
 
 // currentRecurrence reads the recurrence as it stands now, with kata's raw error. A stopped (deleted) one is an error, not a result: kata answers 404 for it.
@@ -53,7 +60,7 @@ func (c *Client) currentRecurrence(ctx context.Context, projectID int64, uid str
 // card opened with, nothing is written and the current recurrence comes back.
 func (c *Client) ChangeRecurrence(ctx context.Context, cmd model.ChangeRecurrenceCmd) (*model.Recurrence, error) {
 	var changed *model.Recurrence
-	err := recurrenceWrite(func() error {
+	err := recurrenceWrite(changeExhausted, func() error {
 		current, err := c.currentRecurrence(ctx, cmd.ProjectID, cmd.RecurrenceUID)
 		if err != nil {
 			return err
@@ -73,20 +80,32 @@ func (c *Client) ChangeRecurrence(ctx context.Context, cmd model.ChangeRecurrenc
 	return changed, err
 }
 
-// StopRecurrence deletes the recurrence at the revision it has now. One already stopped is an error and nothing is written.
-func (c *Client) StopRecurrence(ctx context.Context, cmd model.StopRecurrenceCmd) error {
-	return recurrenceWrite(func() error {
+// StopRecurrence is a Guarded write: it deletes the recurrence at the revision it has now, so a revision that moved only because
+// an Occurrence was created does not matter. When the recurrence's terms differ from what the card opened with, nothing is
+// written and the current recurrence comes back. One already stopped is an error and nothing is written. A delete whose outcome
+// is unknown, such as a timeout, says the stop may have happened.
+func (c *Client) StopRecurrence(ctx context.Context, cmd model.StopRecurrenceCmd) (*model.Recurrence, error) {
+	var changed *model.Recurrence
+	err := recurrenceWrite(stopExhausted, func() error {
 		current, err := c.currentRecurrence(ctx, cmd.ProjectID, cmd.RecurrenceUID)
 		if err != nil {
 			return err
+		}
+		if current.RecurrenceTerms != cmd.Opened {
+			changed = &current
+			return nil
 		}
 		_, err = c.DeleteRecurrenceWithResponse(ctx, &g.DeleteRecurrenceRequestOptions{
 			PathParams: &g.DeleteRecurrencePath{ProjectID: cmd.ProjectID, RecurrenceUID: cmd.RecurrenceUID},
 			Query:      &g.DeleteRecurrenceQuery{Actor: &cmd.Actor},
 			Header:     &g.DeleteRecurrenceHeaders{IfMatch: etag(current.Revision)},
 		})
+		if ambiguousWrite(err) {
+			return errStopUnknown
+		}
 		return err
 	})
+	return changed, err
 }
 
 // ReadRecurTarget reads the Issue a ref names, refused outside the workspace's Binding, with its Recurrence as it stands now.

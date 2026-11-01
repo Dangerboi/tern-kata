@@ -156,7 +156,7 @@ const (
 // with an inverse enter it when they complete; every other Cmd clears it, so a write added later does so by default.
 func undoBoundary(cmd Cmd) (string, bool) {
 	switch cmd := cmd.(type) {
-	case Scroll, RevealActivityTab, OpenDraftEditor, LoadDetail, LoadLanes, SaveLanes, SaveFilters, LoadViews, SaveView, DeleteView, LoadWorkerPickers,
+	case Scroll, RevealActivityTab, OpenDraftEditor, LoadDetail, LoadLanes, SaveLanes, ShareLanes, SaveFilters, LoadViews, SaveView, DeleteView, LoadWorkerPickers,
 		LoadJobWorkflows, LoadJobs, LoadRuns, ShowRun, LoadRecurTarget, LoadFieldLabels, LoadProject, ReadSnapshot, Subscribe,
 		WakeAt, OpenIssue, LookupSearchID, LoadWorkflows, ReadWorkflowText, LoadWorker, LoadWorkerSetup, SaveWorkerSetup,
 		SaveWorkerEdit, StopWorker, SetWorkerSupervision, LoadLocalRun, RunJobNow, ResumeLocalRun, AbandonLocalRun,

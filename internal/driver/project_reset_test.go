@@ -86,7 +86,7 @@ func TestEnteringEveryPageAfterAProjectChangeShowsNothingOfTheOldProject(t *test
 	s = step(t, s, key("1")).State
 	s = answerRuns(t, step(t, s, key("4")), "c", finishedRun("R1"))
 	s = step(t, s, key("1")).State
-	s = feed(t, s, key("b"), model.LanesLoaded{ProjectUID: "p", Lanes: []string{"todo", "done"}, DoneDays: 3}).State
+	s = feed(t, s, key("b"), newestLanes{ProjectUID: "p", Lanes: []string{"todo", "done"}, DoneDays: 3}).State
 	s = step(t, s, key("1")).State
 	s = chooseInfra(t, s).State
 
@@ -132,7 +132,7 @@ func TestSwitchingPagesWithinOneProjectKeepsEachPagesStateAndWorkflowsReadAgain(
 	if !again.State.Model.Workflows.Loading {
 		t.Fatalf("Workflows did not read again on re-entry")
 	}
-	lanes := feed(t, again.State, key("1"), key("b"), model.LanesLoaded{ProjectUID: "p", Lanes: []string{"todo", "done"}}).State
+	lanes := feed(t, again.State, key("1"), key("b"), newestLanes{ProjectUID: "p", Lanes: []string{"todo", "done"}}).State
 	lanes = step(t, step(t, lanes, key("1")).State, key("b")).State
 	if got := lanes.Model.Board.Lanes; len(got) != 2 {
 		t.Fatalf("Lanes %v, want them kept", got)

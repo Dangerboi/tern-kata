@@ -18,13 +18,13 @@ func TestPageBarShowsIssuesAndBoardAndKeysAndClicksSwitchPages(t *testing.T) {
 	}
 	for name, to := range map[string]func(driver.State) driver.State{
 		"key": func(s driver.State) driver.State {
-			return feed(t, s, key("2"), model.LanesLoaded{ProjectUID: "p"}).State
+			return feed(t, s, key("2"), newestLanes{ProjectUID: "p"}).State
 		},
 		"click": func(s driver.State) driver.State {
-			return feed(t, s, click(pageBarEntry(t, s.Model, "2"), view.KeyClick("2")), model.LanesLoaded{ProjectUID: "p"}).State
+			return feed(t, s, click(pageBarEntry(t, s.Model, "2"), view.KeyClick("2")), newestLanes{ProjectUID: "p"}).State
 		},
 		"b": func(s driver.State) driver.State {
-			return feed(t, s, key("b"), model.LanesLoaded{ProjectUID: "p"}).State
+			return feed(t, s, key("b"), newestLanes{ProjectUID: "p"}).State
 		},
 	} {
 		board := to(s)
@@ -49,7 +49,7 @@ func TestEachPageKeepsItsSelectionWhileAnotherIsShown(t *testing.T) {
 	if s.Model.SelectedUID != "c" {
 		t.Fatalf("fixture: selected %q", s.Model.SelectedUID)
 	}
-	board := feed(t, s, key("2"), model.LanesLoaded{ProjectUID: "p"}).State
+	board := feed(t, s, key("2"), newestLanes{ProjectUID: "p"}).State
 	if board.Model.SelectedUID != "c" {
 		t.Errorf("the Board Page selects %q, want c", board.Model.SelectedUID)
 	}

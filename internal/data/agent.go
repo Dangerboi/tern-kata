@@ -7,14 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
-	"github.com/Dangerboi/tern-kata/internal/atomicfile"
+	"github.com/Dangerboi/tern-kata/internal/guardedfile"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
@@ -162,34 +161,41 @@ type agentsDoc struct {
 
 // ReadAgents reads agents.json at path; a missing file is no agents.
 func ReadAgents(path string) ([]model.AgentEntry, error) {
-	raw, err := os.ReadFile(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
+	token, err := guardedfile.Read(path)
 	if err != nil {
 		return nil, err
 	}
+	return parseAgents(path, token)
+}
+
+// parseAgents decodes what a read of agents.json saw; an empty file is no agents.
+func parseAgents(path string, token guardedfile.Token) ([]model.AgentEntry, error) {
+	if token.Text() == "" {
+		return nil, nil
+	}
 	var doc agentsDoc
-	if err := json.Unmarshal(raw, &doc); err != nil {
+	if err := json.Unmarshal([]byte(token.Text()), &doc); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	return doc.Agents, nil
 }
 
-// UpdateAgents reads agents.json again, lets change return the new list, and writes it with atomicfile. Every change goes
-// through it, so a write never starts from a list read earlier. Panes of the host share the file without a lock: two changes in
-// the same instant can lose one, and the pruning and adoption of a Pane remove entries or take them over, never add them back.
+// UpdateAgents reads agents.json again, lets change return the new list, and writes it only while the file is still what was
+// read. When another Pane changed the file in between, the whole change runs again on the new list, so change must tolerate
+// being called more than once and must start its own results afresh. A file that keeps changing is an error wrapping
+// guardedfile.ErrChanged, with the other writer's file left as it is.
 func UpdateAgents(path string, change func([]model.AgentEntry) []model.AgentEntry) ([]model.AgentEntry, error) {
-	current, err := ReadAgents(path)
+	var next []model.AgentEntry
+	err := guardedfile.Update(path, 0o700, func(token guardedfile.Token) ([]byte, error) {
+		current, err := parseAgents(path, token)
+		if err != nil {
+			return nil, err
+		}
+		next = change(slices.Clone(current))
+		raw, err := json.MarshalIndent(agentsDoc{Agents: next}, "", "  ")
+		return append(raw, '\n'), err
+	})
 	if err != nil {
-		return nil, err
-	}
-	next := change(slices.Clone(current))
-	raw, err := json.MarshalIndent(agentsDoc{Agents: next}, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-	if err := atomicfile.Write(path, append(raw, '\n'), atomicfile.Options{Mode: 0o600, DirMode: 0o700}); err != nil {
 		return nil, err
 	}
 	return next, nil
@@ -210,30 +216,78 @@ func (g *Gateway) agentStatePaths() (file, prompts string, err error) {
 // liveBlocksMaxAge is how long a refresh trusts the block set of an earlier `tern ls --json`.
 const liveBlocksMaxAge = 10 * time.Second
 
+// liveBlocksTimeout bounds one shared `tern ls --json`, which runs apart from any single caller's deadline.
+const liveBlocksTimeout = 30 * time.Second
+
+// lsFlight is one running `tern ls --json` that callers wait on; live and err are set before done closes. begun is when it
+// started, the age of its answer.
+type lsFlight struct {
+	done  chan struct{}
+	begun time.Time
+	live  map[string]bool
+	err   error
+}
+
 // liveBlocks is the set of blocks `tern ls --json` lists. It is cached for liveBlocksMaxAge, read by g.now; fresh asks tern
-// again and replaces the cache. cached says the answer is an earlier one.
+// again and replaces the cache. cached says the answer may be older than the call: it came from the cache, or from a `tern ls`
+// another caller started before this one asked. Callers that need an answer while one `tern ls` runs share it, each waiting
+// only until its own ctx ends; a fresh caller never joins a run that began before it asked.
 func (g *Gateway) liveBlocks(ctx context.Context, fresh bool) (live map[string]bool, cached bool, err error) {
 	g.lsMu.Lock()
-	defer g.lsMu.Unlock()
 	if !fresh && g.lsLive != nil && g.now().Sub(g.lsAt) < liveBlocksMaxAge {
-		return g.lsLive, true, nil
+		live = g.lsLive
+		g.lsMu.Unlock()
+		return live, true, nil
 	}
+	f := g.lsFlight
+	joined := f != nil && !fresh
+	if !joined {
+		f = &lsFlight{done: make(chan struct{}), begun: g.now()}
+		g.lsFlight = f
+		go g.runLiveBlocks(context.WithoutCancel(ctx), f)
+	}
+	g.lsMu.Unlock()
+	select {
+	case <-f.done:
+		return f.live, joined, f.err
+	case <-ctx.Done():
+		return nil, false, ctx.Err()
+	}
+}
+
+// runLiveBlocks asks tern for the blocks, caches a good answer, stamped with when the run began, unless a later run's answer
+// is cached already, and wakes the callers waiting on f.
+func (g *Gateway) runLiveBlocks(ctx context.Context, f *lsFlight) {
+	ctx, cancel := context.WithTimeout(ctx, liveBlocksTimeout)
+	defer cancel()
+	f.live, f.err = g.askLiveBlocks(ctx)
+	g.lsMu.Lock()
+	if f.err == nil && !f.begun.Before(g.lsAt) {
+		g.lsLive, g.lsAt = f.live, f.begun
+	}
+	if g.lsFlight == f {
+		g.lsFlight = nil
+	}
+	g.lsMu.Unlock()
+	close(f.done)
+}
+
+func (g *Gateway) askLiveBlocks(ctx context.Context) (map[string]bool, error) {
 	out, err := g.runTern(ctx, []string{"ls", "--json"})
 	if err != nil {
-		return nil, false, ternFailure(err, out)
+		return nil, ternFailure(err, out)
 	}
 	listing, err := parseTernLs(out)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	live = map[string]bool{}
+	live := map[string]bool{}
 	for _, s := range listing {
 		for _, b := range s.blocks {
 			live[b] = true
 		}
 	}
-	g.lsLive, g.lsAt = live, g.now()
-	return live, false, nil
+	return live, nil
 }
 
 // reconcileAgents is what the Pane does to agents.json once Tern has said which blocks are alive. An entry goes, with its prompt
@@ -480,12 +534,21 @@ func (g *Gateway) sendAgentBack(ctx context.Context, cmd model.SendAgentBack) mo
 		out, err := g.runTern(ctx, args)
 		return ternFailure(err, out)
 	}
+	// hidden answers for a block that has left the view and sits in the hidden session, whatever step failed after: the entry is
+	// written with the move, so agents.json, the badge and the card say where the block is, and err still reaches the Pane.
+	hidden := func(stepErr error) model.AgentPlaced {
+		placed := model.AgentPlaced{Block: cmd.Block, Back: true, Moved: true, Err: stepErr}
+		if err := g.setAgentOpen(cmd.Block, false, true); err != nil {
+			placed.Err = errors.Join(stepErr, fmt.Errorf("the agent moved but agents.json could not be written: %w", err))
+		}
+		return placed
+	}
 	if len(blocks) > 0 {
 		if err := step(MoveRightOfArgs(cmd.Block, blocks[0])); err != nil {
 			return failed(err)
 		}
 		if err := step(MoveNewTabArgs(cmd.Block)); err != nil {
-			return failed(err)
+			return hidden(err)
 		}
 	} else {
 		out, err := g.runTern(ctx, AgentShellTabArgs(exists))
@@ -501,12 +564,11 @@ func (g *Gateway) sendAgentBack(ctx context.Context, cmd model.SendAgentBack) mo
 			return failed(err)
 		}
 		if err := step(CloseBlockArgs(shell)); err != nil {
-			return failed(err)
+			return hidden(err)
 		}
 	}
-	placed := model.AgentPlaced{Block: cmd.Block, Back: true, Moved: true}
-	if err := g.setAgentOpen(cmd.Block, false, true); err != nil {
-		placed.Err = fmt.Errorf("the agent moved but agents.json could not be written: %w", err)
+	placed := hidden(nil)
+	if placed.Err != nil {
 		return placed
 	}
 	if err := step(RenameAgentArgs(cmd.Block, cmd.IssueRef)); err != nil {
@@ -535,6 +597,7 @@ func (g *Gateway) closeAgent(ctx context.Context, cmd model.CloseAgent) model.Ag
 	}
 	var gone []model.AgentEntry
 	kept, err := UpdateAgents(file, func(list []model.AgentEntry) []model.AgentEntry {
+		gone = gone[:0]
 		return slices.DeleteFunc(list, func(e model.AgentEntry) bool {
 			if e.Block != cmd.Block {
 				return false

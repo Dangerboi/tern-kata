@@ -1389,7 +1389,7 @@ func TestGatewayTranslatesTheRecurrenceFromTheSnapshotIncludingAStoppedOne(t *te
 	workspace, demo := project(t, gateway, "demo")
 	live, liveRec := recurringIssue(t, gateway, workspace, demo, "Live", "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,TH")
 	stopped, stoppedRec := recurringIssue(t, gateway, workspace, demo, "Stopped", "FREQ=DAILY;INTERVAL=1")
-	if got := as[model.RecurrenceResultMsg](t, run(t, gateway, model.StopRecurrenceCmd{Workspace: workspace, UID: stopped, ProjectID: demo.ID, Actor: "tester", RecurrenceUID: stoppedRec.UID})); got.Err != nil {
+	if got := as[model.RecurrenceResultMsg](t, run(t, gateway, model.StopRecurrenceCmd{Workspace: workspace, UID: stopped, ProjectID: demo.ID, Actor: "tester", RecurrenceUID: stoppedRec.UID, Opened: stoppedRec.RecurrenceTerms})); got.Err != nil {
 		t.Fatal(got.Err)
 	}
 	plain := createIssue(t, gateway, workspace, demo, "Plain")
@@ -1535,7 +1535,7 @@ func TestGatewayStopsTheRecurrenceAndReportsOneAlreadyStopped(t *testing.T) {
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
 	uid, opened := recurringIssue(t, gateway, workspace, demo, "Water plants", "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO")
-	stop := model.StopRecurrenceCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", RecurrenceUID: opened.UID}
+	stop := model.StopRecurrenceCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", RecurrenceUID: opened.UID, Opened: opened.RecurrenceTerms}
 
 	if got := as[model.RecurrenceResultMsg](t, run(t, gateway, stop)); got.UID != uid || got.Err != nil {
 		t.Fatalf("stop: %+v", got)
@@ -1551,6 +1551,67 @@ func TestGatewayStopsTheRecurrenceAndReportsOneAlreadyStopped(t *testing.T) {
 	change := as[model.RecurrenceResultMsg](t, run(t, gateway, changeTo(demo, uid, opened, workspace, "FREQ=DAILY;INTERVAL=1")))
 	if change.Err == nil || change.Changed != nil {
 		t.Fatalf("changing a stopped recurrence: %+v, want an error", change)
+	}
+}
+
+func TestGatewayStopAfterTheRuleMovedWritesNothingAndReturnsTheCurrentSchedule(t *testing.T) {
+	kata := startKata(t, "0.20.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	uid, opened := recurringIssue(t, gateway, workspace, demo, "Water plants", "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO")
+	if moved := as[model.RecurrenceResultMsg](t, run(t, gateway, changeTo(demo, uid, opened, workspace, "FREQ=MONTHLY;INTERVAL=1"))); moved.Err != nil || moved.Changed != nil {
+		t.Fatal(moved)
+	}
+	now := recurrenceOf(t, gateway, workspace, uid)
+
+	stop := model.StopRecurrenceCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", RecurrenceUID: opened.UID, Opened: opened.RecurrenceTerms}
+	got := as[model.RecurrenceResultMsg](t, run(t, gateway, stop))
+	if got.Err != nil || got.Changed == nil || *got.Changed != now {
+		t.Fatalf("stop after the rule moved: %+v, want the current recurrence %+v", got, now)
+	}
+	if after := recurrenceOf(t, gateway, workspace, uid); after.Stopped || after != now {
+		t.Fatalf("the guarded stop wrote: %+v, was %+v", after, now)
+	}
+}
+
+func TestGatewayStopSucceedsAfterOnlyBookkeepingMoved(t *testing.T) {
+	kata := startKata(t, "0.20.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace, demo := project(t, gateway, "demo")
+	uid, opened := recurringIssue(t, gateway, workspace, demo, "Water plants", "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO")
+	if closed := as[model.CloseResultMsg](t, run(t, gateway, model.CloseIssueCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", Quick: true, Key: "k-occurrence"})); closed.Err != nil {
+		t.Fatal(closed.Err)
+	}
+	stop := model.StopRecurrenceCmd{Workspace: workspace, UID: uid, ProjectID: demo.ID, Actor: "tester", RecurrenceUID: opened.UID, Opened: opened.RecurrenceTerms}
+	if got := as[model.RecurrenceResultMsg](t, run(t, gateway, stop)); got.Err != nil || got.Changed != nil {
+		t.Fatalf("stop at a moved revision: %+v", got)
+	}
+	if now := recurrenceOf(t, gateway, workspace, uid); !now.Stopped {
+		t.Fatalf("recurrence reads %+v, want stopped", now)
+	}
+}
+
+func TestRecurrenceStopThatTimedOutIsReportedAsPossiblyDone(t *testing.T) {
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodGet {
+			_, _ = w.Write([]byte(`{"recurrence":{"uid":"r","revision":3,"rrule":"FREQ=DAILY","dtstart":"2026-10-19","timezone":"UTC"}}`))
+			return
+		}
+		<-release
+	}))
+	t.Cleanup(server.Close)
+	t.Cleanup(func() { close(release) })
+	raw, err := client.NewWithHTTPClient(server.URL, &http.Client{Timeout: 100 * time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &Client{Client: raw}
+	terms := model.RecurrenceTerms{Rule: "FREQ=DAILY", Start: "2026-10-19", TimeZone: "UTC"}
+	_, err = c.StopRecurrence(context.Background(), model.StopRecurrenceCmd{RecurrenceUID: "r", Opened: terms})
+	if err == nil || !strings.Contains(err.Error(), "may have been stopped") {
+		t.Fatalf("timed-out stop: %v, want it reported as possibly done", err)
 	}
 }
 
@@ -1803,7 +1864,7 @@ func TestRecurrenceConflictingThroughAllAttemptsSaysSoPlainly(t *testing.T) {
 	if _, err := c.ChangeRecurrence(context.Background(), model.ChangeRecurrenceCmd{RecurrenceUID: "r", RecurrenceTerms: terms, Opened: terms}); err == nil || err.Error() != want {
 		t.Fatalf("change: %v", err)
 	}
-	if err := c.StopRecurrence(context.Background(), model.StopRecurrenceCmd{RecurrenceUID: "r"}); err == nil || err.Error() != want {
+	if _, err := c.StopRecurrence(context.Background(), model.StopRecurrenceCmd{RecurrenceUID: "r", Opened: terms}); err == nil || err.Error() != "The Recurrence kept changing; nothing was stopped. Try again." {
 		t.Fatalf("stop: %v", err)
 	}
 }

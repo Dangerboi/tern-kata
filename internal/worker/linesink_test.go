@@ -60,3 +60,78 @@ func TestACappedOutputFileKeepsItsAgentEnd(t *testing.T) {
 		})
 	}
 }
+
+func TestAnAgentEndLongerThanTheLineLimitStillFinishesTheTurn(t *testing.T) {
+	const limit, cap = 64, 128
+	endWith := func(terminal string) string {
+		return `{"type":"agent_end","messages":[{"role":"assistant","content":[{"type":"text","text":"` +
+			strings.Repeat("a", 4*limit) + `"}]}],"isTerminal":` + terminal + "}\n"
+	}
+	long, retry := endWith("true"), endWith("false")
+	noise := `{"type":"x","p":"` + strings.Repeat("b", 200) + `"}` + "\n"
+	cases := []struct {
+		name     string
+		out      string
+		chunk    int // zero writes the whole output at once
+		fileCap  int
+		terminal bool
+	}{
+		{"pipe-sized chunks", noise + long, 7, cap, true},
+		{"one write with its newline", noise + long, 0, cap, true},
+		{"within the file cap", long, 7, 1 << 20, true},
+		{"a retry end stays unfinished", noise + retry, 7, cap, false},
+		{"a retry end in one write", noise + retry, 0, cap, false},
+		{"a retry end within the file cap", retry, 7, 1 << 20, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "output.jsonl")
+			sink := &lineSink{parser: &agentParser{}, file: openCapped(Hooks{}, path, tc.fileCap), limit: limit}
+			rest := tc.out
+			for rest != "" {
+				n := len(rest)
+				if tc.chunk > 0 {
+					n = min(tc.chunk, n)
+				}
+				_, _ = sink.Write([]byte(rest[:n]))
+				rest = rest[n:]
+			}
+			sink.close()
+			if got := sink.parser.Result().Terminal; got != tc.terminal {
+				t.Fatalf("the live parser read Terminal=%v of the long agent_end, want %v", got, tc.terminal)
+			}
+			if got := readOutput(path).Terminal; got != tc.terminal {
+				saved, _ := os.ReadFile(path)
+				t.Fatalf("saved output read Terminal=%v of the long agent_end, want %v: %q", got, tc.terminal, saved)
+			}
+		})
+	}
+}
+
+func TestAnOverlongLineInOneWriteWithANewlineIsNotParsed(t *testing.T) {
+	const limit = 64
+	sink := &lineSink{parser: &agentParser{}, file: openCapped(Hooks{}, filepath.Join(t.TempDir(), "o"), 1<<20), limit: limit}
+	line := `{"type":"session","id":"` + strings.Repeat("s", 4*limit) + `"}` + "\n"
+	_, _ = sink.Write([]byte(line))
+	sink.close()
+	if id := sink.parser.Result().SessionID; id != "" {
+		t.Fatalf("an over-limit line was parsed (session %d bytes)", len(id))
+	}
+}
+
+func TestRecoveryOfARunWithALongAgentEndHoldsNoReceipt(t *testing.T) {
+	const limit = 64
+	dir := t.TempDir()
+	path := filepath.Join(dir, "output.jsonl")
+	long := `{"type":"agent_end","messages":[],"pad":"` + strings.Repeat("a", 8*limit) + `"}` + "\n"
+	sink := &lineSink{parser: &agentParser{}, file: openCapped(Hooks{}, path, 32), limit: limit}
+	for rest := long; rest != ""; {
+		n := min(7, len(rest))
+		_, _ = sink.Write([]byte(rest[:n]))
+		rest = rest[n:]
+	}
+	sink.close()
+	if !readOutput(path).Terminal {
+		t.Fatal("recovery would read the finished run as interrupted")
+	}
+}

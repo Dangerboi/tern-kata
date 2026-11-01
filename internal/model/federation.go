@@ -134,9 +134,9 @@ type FederationState struct {
 	AdoptInput string
 	AdoptCaret Caret
 	AdoptErr   error
-	// request counts the asks, attempt the leaves and enrollments, and hubRequest the reads of the catalog and the hubs; an
+	// reads numbers the asks, attempts the leaves and enrollments, and hubReads the reads of the catalog and the hubs; an
 	// answer to another is dropped.
-	request, attempt, hubRequest int64
+	reads, attempts, hubReads Latest
 }
 
 // OnFederation says the Federation Page is current.
@@ -166,21 +166,22 @@ func federationMode(m Model) Mode {
 
 // enterFederation starts a fresh reading.
 func enterFederation(m Model) (Model, []Cmd) {
-	m.Federation = FederationState{request: m.Federation.request, attempt: m.Federation.attempt + 1, hubRequest: m.Federation.hubRequest + 1}
+	f := m.Federation
+	m.Federation = FederationState{reads: f.reads, attempts: f.attempts.Discarded(), hubReads: f.hubReads.Discarded()}
 	return askFederation(m)
 }
 
 // clearFederation drops what the Page held and every ask still out.
 func clearFederation(m Model) Model {
-	m.Federation = FederationState{request: m.Federation.request + 1, attempt: m.Federation.attempt + 1, hubRequest: m.Federation.hubRequest + 1}
+	f := m.Federation
+	m.Federation = FederationState{reads: f.reads.Discarded(), attempts: f.attempts.Discarded(), hubReads: f.hubReads.Discarded()}
 	return m
 }
 
 func askFederation(m Model) (Model, []Cmd) {
 	f := &m.Federation
-	f.request++
 	f.Loading, f.Err = true, nil
-	return m, []Cmd{LoadFederation{Workspace: m.Workspace, Request: f.request}}
+	return m, []Cmd{LoadFederation{Workspace: m.Workspace, Request: f.reads.Ask()}}
 }
 
 // refreshFederation is r on either screen.
@@ -219,7 +220,7 @@ func updateFederation(m Model, msg Msg) (Model, []Cmd, bool) {
 		return m, cmds, true
 	case FederationLoaded:
 		f := &m.Federation
-		if msg.Request != f.request {
+		if !f.reads.IsCurrent(msg.Request) {
 			return m, nil, true
 		}
 		f.Loading, f.Err = false, msg.Err

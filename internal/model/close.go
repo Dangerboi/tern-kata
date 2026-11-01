@@ -30,43 +30,35 @@ const (
 	CloseExternal  Field = "external"
 )
 
+// closeTable declares the Close card's fields, in tab order, and its busy condition.
+var closeTable = fieldTable[CloseFormState]{
+	form:  func(m *Model) *CloseFormState { return &m.CloseForm },
+	busy:  func(f CloseFormState) bool { return f.Saving },
+	focus: func(f *CloseFormState) *Field { return &f.Field },
+	caret: func(f *CloseFormState) *Caret { return &f.Caret },
+	err:   func(f *CloseFormState) *error { return &f.Err },
+	fields: []formField[CloseFormState]{
+		textField(CloseReason, func(f *CloseFormState) *string { return &f.Values.Reason }),
+		textField(CloseMessage, func(f *CloseFormState) *string { return &f.Values.Message }),
+		textField(CloseCommit, func(f *CloseFormState) *string { return &f.Values.Commit }),
+		textField(ClosePR, func(f *CloseFormState) *string { return &f.Values.PR }),
+		textField(CloseTest, func(f *CloseFormState) *string { return &f.Values.Test }),
+		textField(CloseReviewed, func(f *CloseFormState) *string { return &f.Values.Reviewed }),
+		textField(CloseExternal, func(f *CloseFormState) *string { return &f.Values.External }),
+		textField(CloseReference, func(f *CloseFormState) *string { return &f.Values.Reference }),
+		textField(CloseRationale, func(f *CloseFormState) *string { return &f.Values.Rationale }),
+	},
+}
+
 // CloseFields is the Close card's field list, in tab order.
-var CloseFields = []FieldSpec{{CloseReason, true}, {CloseMessage, true}, {CloseCommit, true}, {ClosePR, true}, {CloseTest, true}, {CloseReviewed, true}, {CloseExternal, true}, {CloseReference, true}, {CloseRationale, true}}
+var CloseFields = closeTable.specs()
 
 // CloseValues holds what each Close field has been typed.
 type CloseValues struct{ Reason, Message, Commit, PR, Test, Reviewed, External, Reference, Rationale string }
 
-// at is the value the field called name holds, nil for a name that is not a Close field.
-func (v *CloseValues) at(name Field) *string {
-	switch name {
-	case CloseReason:
-		return &v.Reason
-	case CloseMessage:
-		return &v.Message
-	case CloseCommit:
-		return &v.Commit
-	case ClosePR:
-		return &v.PR
-	case CloseTest:
-		return &v.Test
-	case CloseReviewed:
-		return &v.Reviewed
-	case CloseExternal:
-		return &v.External
-	case CloseReference:
-		return &v.Reference
-	case CloseRationale:
-		return &v.Rationale
-	}
-	return nil
-}
-
 // Value is what the field called name holds, "" for a name that is not a Close field.
 func (v CloseValues) Value(name Field) string {
-	if value := v.at(name); value != nil {
-		return *value
-	}
-	return ""
+	return closeTable.value(CloseFormState{Values: v}, name)
 }
 
 type CloseFormState struct {
@@ -312,7 +304,7 @@ func ReviewedPaths(value string) []string {
 func updateClose(m Model, msg Msg) (Model, []Cmd) {
 	switch msg := msg.(type) {
 	case CloseFieldMsg:
-		if value := m.CloseForm.Values.at(msg.Field); value != nil && m.CloseForm.Open && !m.CloseForm.Saving {
+		if value := closeTable.textAt(&m.CloseForm, msg.Field); value != nil && m.CloseForm.Open && !m.CloseForm.Saving {
 			*value = msg.Value
 			m.CloseForm.Caret = Caret{}
 			m.CloseForm.Err = nil
@@ -346,7 +338,7 @@ func closeKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case bound && binding.Action == CloseQuick:
 		return submitClose(m, true)
 	case !f.Saving:
-		if value := f.Values.at(f.Field); value != nil {
+		if value := closeTable.textAt(f, f.Field); value != nil {
 			var edited bool
 			if *value, edited = editText(*value, &f.Caret, f.Field, bound, msg); edited {
 				f.Err = nil

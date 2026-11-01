@@ -1,8 +1,6 @@
 package view
 
 import (
-	"fmt"
-
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
@@ -41,7 +39,11 @@ func laneTone(lanes []string, lane string) ui.Tone {
 
 // issueLaneTone is the tone of the Lane issue stands in under the Pane's Lane list: Done's for a closed Issue.
 func issueLaneTone(m model.Model, issue model.Issue) ui.Tone {
-	lanes := m.LaneList()
+	return issueLaneToneIn(m.LaneList(), issue)
+}
+
+// issueLaneToneIn is issueLaneTone under the Lane list lanes, for a frame that read the list once.
+func issueLaneToneIn(lanes []string, issue model.Issue) ui.Tone {
 	return laneTone(lanes, model.LaneOf(issue, lanes))
 }
 
@@ -56,15 +58,16 @@ func priorityText(p *int64) (string, ui.Tone) {
 	if p == nil {
 		return "", ui.ToneMuted
 	}
+	text := model.PriorityText(p)
 	switch *p {
 	case 0:
-		return "P0", ui.ToneError
+		return text, ui.ToneError
 	case 1:
-		return "P1", ui.ToneWarning
+		return text, ui.ToneWarning
 	case 2:
-		return "P2", ui.ToneInfo
+		return text, ui.ToneInfo
 	}
-	return fmt.Sprintf("P%d", *p), ui.ToneMuted
+	return text, ui.ToneMuted
 }
 
 // toneStyle is the text span style closest to tone. Spans have no user style, so it takes the accent; pending is Tern's own

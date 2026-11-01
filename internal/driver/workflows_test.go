@@ -391,3 +391,44 @@ func TestWorkflowsPageSideBySideCardsAreColumnCardsWhoseListsFillTheColumn(t *te
 		}
 	}
 }
+
+func TestWorkflowsPageDropsAnAnswerToAnOlderRead(t *testing.T) {
+	use := func(uid string) model.CronJob {
+		return model.CronJob{UID: uid, Name: uid, Definition: cronjob.Definition{Enabled: true, Action: cronjob.Action{Kind: "execute", WorkflowUID: "W1"}}}
+	}
+	asked := func(out driver.Output) (model.LoadJobs, model.LoadRuns) {
+		var jobs model.LoadJobs
+		var runs model.LoadRuns
+		for _, cmd := range out.Cmds {
+			switch c := cmd.(type) {
+			case model.LoadJobs:
+				jobs = c
+			case model.LoadRuns:
+				runs = c
+			}
+		}
+		return jobs, runs
+	}
+	first := feed(t, projectPane(t, 160, boardCard("a")), key("5"))
+	olderJobs, olderRuns := asked(first)
+	second := feed(t, step(t, first.State, key("1")).State, key("5"))
+	newerJobs, newerRuns := asked(second)
+	if newerJobs.Request == olderJobs.Request || newerRuns.Request == olderRuns.Request || newerJobs.Request >= 0 || newerRuns.Request >= 0 {
+		t.Fatalf("reads numbered jobs %d, %d and runs %d, %d, want fresh numbers below zero", olderJobs.Request, newerJobs.Request, olderRuns.Request, newerRuns.Request)
+	}
+	s := step(t, second.State, model.WorkflowsLoaded{ProjectUID: "p", Workflows: []model.Workflow{reviewFlow()}}).State
+	s = step(t, s, model.JobsLoaded{Request: olderJobs.Request, Jobs: []model.CronJob{use("Stale")}}).State
+	s = step(t, s, model.RunsLoaded{Request: olderRuns.Request, Runs: []model.Run{workflowRun("RS")}}).State
+	if strings.Contains(screen(t, s), "Stale") {
+		t.Error("an answer to an older jobs read was applied")
+	}
+	if runs := s.Model.WorkflowRuns("W1"); len(runs) != 0 {
+		t.Errorf("an answer to an older runs read was applied: %+v", runs)
+	}
+	s = step(t, s, model.JobsLoaded{Request: newerJobs.Request, Jobs: []model.CronJob{use("Fresh")}}).State
+	mustShow(t, s, "the newest jobs answer", "Fresh")
+	s = step(t, s, model.RunsLoaded{Request: newerRuns.Request, Runs: []model.Run{workflowRun("RN")}}).State
+	if runs := s.Model.WorkflowRuns("W1"); len(runs) != 1 || runs[0].UID != "RN" {
+		t.Errorf("the newest runs answer gave %+v, want only RN", runs)
+	}
+}

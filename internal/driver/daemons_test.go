@@ -121,6 +121,26 @@ func TestEnterSwitchesToTheSelectedDaemonAndTheOldAnswersOfTheOldDaemonAreIgnore
 	}
 }
 
+// switchOut is the Daemons Page's state with a switch to home out, and the switch it asked for. A test that holds another Pane in
+// the middle of something puts it in that Pane to say the switch was asked for there.
+func switchOut(t *testing.T) (model.DaemonsState, model.SwitchDaemon) {
+	t.Helper()
+	out := step(t, step(t, daemonsListed(t), key("k")).State, key("enter"))
+	asked, ok := askedSwitch(out.Cmds)
+	if !ok {
+		t.Fatalf("Enter sent %#v, want a switch", out.Cmds)
+	}
+	return out.State.Model.Daemons, asked
+}
+
+// switchedAnswer is the answer of a successful switch to home, given to s with its switch out.
+func switchedAnswer(t *testing.T, s driver.State) driver.Output {
+	t.Helper()
+	daemons, asked := switchOut(t)
+	s.Model.Daemons = daemons
+	return step(t, s, model.DaemonSwitched{Request: asked.Request, Name: "home", Daemon: model.Daemon{Name: "home"}})
+}
+
 // switchedTo is the Pane after the answer of a successful switch to daemon.
 func switchedTo(t *testing.T, s driver.State, daemon model.Daemon) driver.Output {
 	t.Helper()
@@ -236,7 +256,7 @@ func TestASuccessfulSwitchClosesEveryCardOfTheOldConnection(t *testing.T) {
 			continue // the machine's worker is not part of the daemon connection
 		}
 		s := open(t)
-		out := step(t, s, model.DaemonSwitched{Name: "home", Daemon: model.Daemon{Name: "home"}})
+		out := switchedAnswer(t, s)
 		if got := out.State.Model.TopCard(); got != model.NoCard {
 			t.Errorf("a switch left the %q card open", got.Name())
 		}
@@ -245,7 +265,7 @@ func TestASuccessfulSwitchClosesEveryCardOfTheOldConnection(t *testing.T) {
 
 func TestARevokeConfirmedAfterASwitchRevokesNothing(t *testing.T) {
 	s := step(t, tokenList(t), key("x")).State
-	s = step(t, s, model.DaemonSwitched{Name: "home", Daemon: model.Daemon{Name: "home"}}).State
+	s = switchedAnswer(t, s).State
 	for _, chord := range []string{"y", "enter"} {
 		for _, cmd := range step(t, s, key(chord)).Cmds {
 			if revoke, ok := cmd.(model.RevokeTokenCmd); ok {
@@ -260,7 +280,7 @@ func TestASuccessfulSwitchDropsTheDraftsAndSaysSo(t *testing.T) {
 	if len(s.Model.Drafts) != 1 {
 		t.Fatalf("fixture: %d drafts held", len(s.Model.Drafts))
 	}
-	m := step(t, s, model.DaemonSwitched{Name: "home", Daemon: model.Daemon{Name: "home"}}).State.Model
+	m := switchedAnswer(t, s).State.Model
 	if len(m.Drafts) != 0 {
 		t.Errorf("%d drafts survived the switch", len(m.Drafts))
 	}

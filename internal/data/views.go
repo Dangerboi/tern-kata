@@ -3,14 +3,12 @@ package data
 import (
 	"errors"
 	"fmt"
-	"io/fs"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/Dangerboi/tern-kata/internal/atomicfile"
+	"github.com/Dangerboi/tern-kata/internal/guardedfile"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
@@ -22,7 +20,7 @@ var ErrViewNotFound = errors.New("no such saved view")
 
 // ViewsToken is what a read of views.toml saw: the file's text, empty for a missing file. A write takes it back and refuses
 // with ErrViewsChanged when the file on disk is no longer that text. Callers treat it as opaque.
-type ViewsToken struct{ text string }
+type ViewsToken struct{ read guardedfile.Token }
 
 // ViewsRead is one read of views.toml.
 type ViewsRead struct {
@@ -94,15 +92,15 @@ func filterPairs(f model.Filters) [][2]string {
 // Read reads the file. A missing file is no views. An unreadable one is an error saying why, and no token, so nothing can
 // write to it.
 func (s ViewsStore) Read() (ViewsRead, error) {
-	text, err := os.ReadFile(s.Path)
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return ViewsRead{}, fmt.Errorf("%s: %w", s.Path, err)
-	}
-	p, err := parseViewsText(string(text))
+	tok, err := guardedfile.Read(s.Path)
 	if err != nil {
 		return ViewsRead{}, fmt.Errorf("%s: %w", s.Path, err)
 	}
-	out := ViewsRead{Token: ViewsToken{string(text)}}
+	p, err := parseViewsText(tok.Text())
+	if err != nil {
+		return ViewsRead{}, fmt.Errorf("%s: %w", s.Path, err)
+	}
+	out := ViewsRead{Token: ViewsToken{tok}}
 	// Each name is checked against every earlier entry, left-out ones included, as the writes do, so find and the list agree
 	// on the first entry of a name.
 	var earlier []model.SavedView
@@ -157,9 +155,9 @@ func (s ViewsStore) Delete(token ViewsToken, name string) error {
 }
 
 // edit applies change to the text the token holds and writes the result, refusing if the file is not that text any more.
-// The compare and the rename are not one step: a writer between them is not caught.
+// The guard is guardedfile's.
 func (s ViewsStore) edit(token ViewsToken, change func(*viewsText) (string, error)) error {
-	p, err := parseViewsText(token.text)
+	p, err := parseViewsText(token.read.Text())
 	if err != nil {
 		return fmt.Errorf("%s: %w", s.Path, err)
 	}
@@ -170,19 +168,11 @@ func (s ViewsStore) edit(token ViewsToken, change func(*viewsText) (string, erro
 	if _, err := parseViewsText(next); err != nil {
 		return fmt.Errorf("%s: the new file would not read back, so nothing was written: %w", s.Path, err)
 	}
-	return atomicfile.Write(s.Path, []byte(next), atomicfile.Options{Mode: 0o600, DirMode: 0o755, Check: func(string) error {
-		disk, err := os.ReadFile(s.Path)
-		switch {
-		case errors.Is(err, fs.ErrNotExist):
-			disk = nil
-		case err != nil:
-			return err
-		}
-		if string(disk) != token.text {
-			return ErrViewsChanged
-		}
-		return nil
-	}})
+	err = guardedfile.Write(s.Path, 0o755, token.read, []byte(next))
+	if errors.Is(err, guardedfile.ErrChanged) {
+		return ErrViewsChanged
+	}
+	return err
 }
 
 // viewsText is the file's text split into lines, with where each [[view]] table starts and ends.

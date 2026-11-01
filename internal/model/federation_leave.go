@@ -73,7 +73,7 @@ func startFederationLeave(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	f := &m.Federation
-	f.attempt++
+	f.attempts.Discard()
 	f.Leaving, f.LeaveErr = false, nil
 	f.Leave = FederationLeaveDraft{ProjectID: spoke.ProjectID, ProjectName: spoke.ProjectName, HubURL: spoke.HubURL, HubProjectID: spoke.HubProjectID,
 		InstanceUID: strings.TrimSpace(f.InstanceUID), AllowInsecure: spoke.AllowInsecure, Actor: m.Actor}
@@ -99,15 +99,14 @@ func runFederationLeave(m Model) (Model, []Cmd) {
 	if f.Leaving {
 		return m, nil
 	}
-	f.attempt++
 	f.Leaving, f.LeaveErr = true, nil
-	return m, []Cmd{LeaveFederation{Workspace: m.Workspace, Attempt: f.attempt, Draft: f.Leave}}
+	return m, []Cmd{LeaveFederation{Workspace: m.Workspace, Attempt: f.attempts.Ask(), Draft: f.Leave}}
 }
 
 // cancelFederationLeave is esc and backspace in the preview: back to the list, dropping a run still out.
 func cancelFederationLeave(m Model) (Model, []Cmd) {
 	f := &m.Federation
-	f.attempt++
+	f.attempts.Discard()
 	f.Leaving, f.LeaveErr = false, nil
 	f.Screen = FederationList
 	return m, nil
@@ -123,7 +122,7 @@ func dismissFederationLeave(m Model) (Model, []Cmd) {
 // status again, which no longer lists the Project.
 func federationLeft(m Model, msg FederationLeft) (Model, []Cmd) {
 	f := &m.Federation
-	if msg.Attempt != f.attempt || !f.Leaving {
+	if !f.attempts.IsCurrent(msg.Attempt) || !f.Leaving {
 		return m, nil
 	}
 	f.Leaving = false

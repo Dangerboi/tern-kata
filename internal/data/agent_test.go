@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -11,9 +12,12 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/guardedfile"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
@@ -834,6 +838,31 @@ func TestAFailedStepGoingBackShowsTernsWordsAndKeepsTheAgentOpen(t *testing.T) {
 	}
 }
 
+func TestAFailedLaterStepGoingBackRecordsWhereTheBlockIs(t *testing.T) {
+	fail := func() ([]byte, error) { return []byte("tern: refused\n"), errors.New("exit status 1") }
+	for name, c := range map[string]struct {
+		ls      string
+		replies map[string]func() ([]byte, error)
+	}{
+		"the move into its own tab fails": {lsWithAgents, map[string]func() ([]byte, error){
+			"move 31 right-of": ternOut(`{"block":31}`), "move 31 new-tab": fail}},
+		"the shell close fails": {lsWithoutAgents, map[string]func() ([]byte, error){
+			"new session": ternOut(`{"session":3,"tab":9,"block":40}`), "move 31 right-of": ternOut(`{"block":31}`), "close": fail}},
+	} {
+		g, dirs := agentGateway(t)
+		file := seedAgent(t, dirs, model.AgentEntry{Block: "31", Open: true, Placement: model.AgentSplit})
+		c.replies["ls"] = ternOut(c.ls)
+		ternScript(g, c.replies)
+		got := as[model.AgentPlaced](t, run(t, g, model.SendAgentBack{Block: "31", IssueRef: "demo#ab12"}))
+		if got.Err == nil || got.Err.Error() != "exit status 1: tern: refused" || !got.Moved || got.Open || !got.Back {
+			t.Errorf("%s: %+v", name, got)
+		}
+		if stored, _ := ReadAgents(file); stored[0].Open || !stored[0].Background {
+			t.Errorf("%s: agents.json %+v", name, stored)
+		}
+	}
+}
+
 func TestPruningKeepsABlockOfTheHiddenSession(t *testing.T) {
 	g, dirs := agentGateway(t)
 	file := seedAgent(t, dirs, model.AgentEntry{Block: "18494129176578", Background: true})
@@ -955,5 +984,262 @@ func TestRecordingAnAgentInTheHiddenSessionCanMarkItBackground(t *testing.T) {
 	}
 	if stored, _ := ReadAgents(file); !stored[0].Background || stored[0].Open {
 		t.Errorf("agents.json %+v", stored)
+	}
+}
+
+func TestAChangeRunsAgainWhenAnotherPaneChangedTheFileUnderIt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agents.json")
+	writeAgents(t, path, model.AgentEntry{Block: "1"})
+	var calls int
+	other := model.AgentEntry{Block: "2", Open: true}
+	got, err := UpdateAgents(path, func(l []model.AgentEntry) []model.AgentEntry {
+		calls++
+		if calls == 1 {
+			// The Pane starting an agent reads; another Pane flags an open agent and appends its own before the write.
+			writeAgents(t, path, other)
+		}
+		return append(l, model.AgentEntry{Block: "3"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 {
+		t.Errorf("change ran %d times, want 2", calls)
+	}
+	var blocks []string
+	for _, e := range got {
+		blocks = append(blocks, e.Block)
+	}
+	if !slices.Equal(blocks, []string{"1", "2", "3"}) {
+		t.Errorf("blocks %v: a change was lost", blocks)
+	}
+	if stored, _ := ReadAgents(path); !slices.Equal(stored, got) {
+		t.Errorf("stored %+v, want %+v", stored, got)
+	}
+}
+
+func TestAChangeThatKeepsFindingTheFileChangedReportsAnError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agents.json")
+	writeAgents(t, path, model.AgentEntry{Block: "1"})
+	var calls int
+	_, err := UpdateAgents(path, func(l []model.AgentEntry) []model.AgentEntry {
+		calls++
+		writeAgents(t, path, model.AgentEntry{Block: "other"})
+		return nil
+	})
+	if !errors.Is(err, guardedfile.ErrChanged) {
+		t.Fatalf("err = %v, want ErrChanged", err)
+	}
+	if calls < 2 {
+		t.Errorf("change ran %d times", calls)
+	}
+	stored, _ := ReadAgents(path)
+	if len(stored) != calls+1 {
+		t.Errorf("stored %+v: the other writer's entries should stand", stored)
+	}
+}
+
+func writeAgents(t *testing.T, path string, entries ...model.AgentEntry) {
+	t.Helper()
+	list, err := ReadAgents(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(agentsDoc{Agents: append(list, entries...)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// watchClock makes g's clock tick 11 s on every read, past what a listing is trusted for, so no caller finds the cache fresh,
+// and sends on the returned channel at each read. liveBlocks reads the clock while it holds its lock, so a caller that has sent
+// is about to join or start the running ask before anything else can finish it. The channel holds every read a test makes.
+func watchClock(g *Gateway) <-chan struct{} {
+	reads := make(chan struct{}, 64)
+	var n atomic.Int64
+	base := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+	g.lsLive = map[string]bool{"stale": true}
+	g.now = func() time.Time {
+		reads <- struct{}{}
+		return base.Add(time.Duration(n.Add(1)) * 11 * time.Second)
+	}
+	return reads
+}
+
+// waitReads waits for n more clock reads. Failing takes its time, so it only counts when a caller never got that far.
+func waitReads(t *testing.T, reads <-chan struct{}, n int) {
+	t.Helper()
+	for range n {
+		select {
+		case <-reads:
+		case <-time.After(10 * time.Second):
+			t.Fatal("a caller never reached the listing")
+		}
+	}
+}
+
+func TestLiveBlocksCallerReturnsAtItsOwnDeadlineWhileAnotherAskRuns(t *testing.T) {
+	g, _ := agentGateway(t)
+	release := make(chan struct{})
+	started := make(chan struct{}, 1)
+	g.runTern = func(ctx context.Context, _ []string) ([]byte, error) {
+		started <- struct{}{}
+		select {
+		case <-release:
+		case <-ctx.Done():
+		}
+		return lsOf("1"), nil
+	}
+	slow := make(chan error, 1)
+	go func() { _, _, err := g.liveBlocks(context.Background(), false); slow <- err }()
+	<-started
+	past, cancel := context.WithDeadline(context.Background(), time.Unix(0, 0))
+	defer cancel()
+	short := make(chan error, 1)
+	go func() { _, _, err := g.liveBlocks(past, false); short <- err }()
+	select {
+	case err := <-short:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Errorf("the short caller got %v, want its deadline error", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Error("the short caller never returned at its own deadline")
+	}
+	close(release)
+	if err := <-slow; err != nil {
+		t.Errorf("the slow caller: %v", err)
+	}
+}
+
+func TestLiveBlocksConcurrentCallersShareOneAsk(t *testing.T) {
+	g, _ := agentGateway(t)
+	reads := watchClock(g)
+	release := make(chan struct{})
+	var once sync.Once
+	t.Cleanup(func() { once.Do(func() { close(release) }) })
+	var asked atomic.Int32
+	g.runTern = func(context.Context, []string) ([]byte, error) {
+		asked.Add(1)
+		<-release
+		return lsOf("1"), nil
+	}
+	const callers = 5
+	var wg sync.WaitGroup
+	for range callers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if live, _, err := g.liveBlocks(context.Background(), false); err != nil || !live["1"] {
+				t.Errorf("got %v, %v", live, err)
+			}
+		}()
+	}
+	// Each caller reads the clock once to look at the cache; the one that starts the ask reads it once more. All of them
+	// get there while the ask is still held, or one of them is waiting on a lock the running ask holds.
+	waitReads(t, reads, callers+1)
+	once.Do(func() { close(release) })
+	wg.Wait()
+	if n := asked.Load(); n != 1 {
+		t.Errorf("tern ls ran %d times, want 1", n)
+	}
+}
+
+func TestACallerJoiningARunningAskIsToldItsAnswerMayBeOlderThanItsCall(t *testing.T) {
+	g, _ := agentGateway(t)
+	reads := watchClock(g)
+	release := make(chan struct{})
+	started := make(chan struct{}, 1)
+	g.runTern = func(context.Context, []string) ([]byte, error) {
+		started <- struct{}{}
+		<-release
+		return lsOf("1"), nil
+	}
+	type answer struct {
+		cached bool
+		err    error
+	}
+	first, joiner := make(chan answer, 1), make(chan answer, 1)
+	go func() { _, cached, err := g.liveBlocks(context.Background(), false); first <- answer{cached, err} }()
+	<-started
+	waitReads(t, reads, 2)
+	go func() { _, cached, err := g.liveBlocks(context.Background(), false); joiner <- answer{cached, err} }()
+	waitReads(t, reads, 1)
+	close(release)
+	if got := <-first; got.err != nil || got.cached {
+		t.Errorf("the caller that started the ask: %+v, want its own fresh answer", got)
+	}
+	if got := <-joiner; got.err != nil || !got.cached {
+		t.Errorf("the caller that joined the ask: %+v, want an answer that may be older than its call", got)
+	}
+}
+
+func TestAnAskThatBeganBeforeAnotherAndEndsAfterItDoesNotReplaceItsListing(t *testing.T) {
+	g, _ := agentGateway(t)
+	watchClock(g)
+	release := make(chan struct{})
+	started := make(chan struct{}, 1)
+	var asks atomic.Int32
+	g.runTern = func(context.Context, []string) ([]byte, error) {
+		if asks.Add(1) == 1 {
+			started <- struct{}{}
+			<-release
+			return lsOf("1"), nil
+		}
+		return lsOf("2"), nil
+	}
+	older := make(chan struct{})
+	go func() { _, _, _ = g.liveBlocks(context.Background(), false); close(older) }()
+	<-started
+	if live, _, err := g.liveBlocks(context.Background(), true); err != nil || !live["2"] {
+		t.Fatalf("the fresh ask: %v, %v", live, err)
+	}
+	close(release)
+	<-older
+	g.lsMu.Lock()
+	defer g.lsMu.Unlock()
+	if !g.lsLive["2"] || g.lsLive["1"] {
+		t.Errorf("the cached listing is %v, want the one from the ask that began later", g.lsLive)
+	}
+}
+
+func TestRefreshingDoesNotAdoptAnAgentFromAListingThatBeganBeforeItsPaneOpened(t *testing.T) {
+	g, dirs := agentGateway(t)
+	file := filepath.Join(dirs.State, AgentsFile)
+	putAgents(t, file, model.AgentEntry{Block: "1", PaneBlock: "7"})
+	reads := watchClock(g)
+	release := make(chan struct{})
+	started := make(chan struct{}, 1)
+	var asks atomic.Int32
+	g.runTern = func(context.Context, []string) ([]byte, error) {
+		if asks.Add(1) == 1 {
+			started <- struct{}{}
+			<-release
+			return lsOf("1", "7", "9"), nil // listed before Pane 8 opened
+		}
+		return lsOf("1", "2", "7", "8", "9"), nil
+	}
+	first := make(chan struct{})
+	go func() { run(t, g, model.RefreshAgents{PaneBlock: "9"}); close(first) }()
+	<-started
+	waitReads(t, reads, 2)
+	// Pane 8 opens and starts an agent while that listing is still being taken.
+	putAgents(t, file, model.AgentEntry{Block: "2", PaneBlock: "8"})
+	second := make(chan struct{})
+	go func() { run(t, g, model.RefreshAgents{PaneBlock: "9"}); close(second) }()
+	waitReads(t, reads, 1)
+	close(release)
+	<-first
+	<-second
+	stored, err := ReadAgents(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range stored {
+		if e.Block == "2" && e.PaneBlock != "8" {
+			t.Fatalf("Pane 8's agent was adopted by Pane 9: %+v", stored)
+		}
 	}
 }

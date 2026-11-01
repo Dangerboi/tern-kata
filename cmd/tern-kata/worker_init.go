@@ -54,11 +54,14 @@ func setupWorkerConfig(add bool, plan LaunchPlan, env workerEnv, out io.Writer) 
 	if add {
 		verb = "Updated"
 	}
-	fmt.Fprintf(out, "%s %s: serving Project %s from %s (checkout %s).\n%s\n", verb, path, project, checkout, key, worker.TrustNote)
-	if add {
-		fmt.Fprintln(out, "A running worker reads worker.toml only at start: end it (`tern-kata worker status` prints its process id) and the plugin starts a fresh one.")
-	} else {
-		fmt.Fprintln(out, "The plugin's host half starts the worker within 10 seconds (else run `tern-kata worker`); `tern-kata worker doctor` checks the setup.")
+	_, err = fmt.Fprintf(out, "%s %s: serving Project %s from %s (checkout %s).\n%s\n", verb, path, project, checkout, key, worker.TrustNote)
+	if err != nil {
+		return err
 	}
-	return nil
+	if add {
+		_, err = fmt.Fprintln(out, "A running worker reads worker.toml only at start: end it (`tern-kata worker status` prints its process id) and the plugin starts a fresh one.")
+	} else {
+		_, err = fmt.Fprintln(out, "The plugin's host half starts the worker within 10 seconds (else run `tern-kata worker`); `tern-kata worker doctor` checks the setup.")
+	}
+	return err
 }

@@ -455,9 +455,6 @@ func (w *Worker) runCommand(ctx context.Context, j *Journal, sp attemptSpec) err
 	if err != nil {
 		return w.failAttempt(j, "cannot start the command: "+err.Error())
 	}
-	if attempt := j.attempt(); attempt > 1 && j.Resume != nil {
-		keepAttemptOutput(sp.dir, attempt-1)
-	}
 	out := openHeadTail(w.store.hooks, filepath.Join(sp.dir, "output.log"), commandHead, commandTail)
 	cmd := exec.Command(program, "-c", sp.task)
 	cmd.Dir = cwd
@@ -511,70 +508,6 @@ func classifyCommand(j *Journal, tail string) *Outcome {
 	}
 	o.Summary = truncate(o.Summary, maxSummaryBytes)
 	return o
-}
-
-// Output limits of a command step: the first 1 MiB and the last 256 KiB are kept, with a marker between (ADR-0008).
-const (
-	commandHead = 1 << 20
-	commandTail = 256 << 10
-)
-
-// headTail drains a command's output to a capture: the first head bytes as they come, then only the last tail bytes,
-// written with a marker when it is closed.
-type headTail struct {
-	*capture
-	head     int
-	tailMax  int
-	written  int
-	tail     []byte
-	overflow int64
-	closed   bool
-}
-
-func openHeadTail(hooks Hooks, path string, head, tail int) *headTail {
-	return &headTail{capture: openCapture(hooks, path), head: head, tailMax: tail}
-}
-
-func (h *headTail) Write(p []byte) (int, error) {
-	n := len(p)
-	if room := h.head - h.written; room > 0 {
-		k := min(room, len(p))
-		_, _ = h.capture.Write(p[:k])
-		h.written += k
-		p = p[k:]
-	}
-	if len(p) > 0 {
-		h.overflow += int64(len(p))
-		h.tail = append(h.tail, p...)
-		if len(h.tail) > 2*h.tailMax {
-			h.tail = append(h.tail[:0], h.tail[len(h.tail)-h.tailMax:]...)
-		}
-	}
-	return n, nil
-}
-
-// Close writes the marker and the kept tail when output went past the head, then closes the file.
-func (h *headTail) Close() error {
-	if h.closed {
-		return nil
-	}
-	h.closed = true
-	if h.overflow > 0 {
-		tail := h.tail
-		if len(tail) > h.tailMax {
-			tail = tail[len(tail)-h.tailMax:]
-		}
-		if omitted := h.overflow - int64(len(tail)); omitted > 0 {
-			_, _ = fmt.Fprintf(h.capture, "\n[... %d bytes omitted ...]\n", omitted)
-		}
-		_, _ = h.capture.Write(tail)
-	}
-	return h.capture.Close()
-}
-
-// commandTail1K is the end of a command step's output, kept in the step's result.
-func commandTail1K(dir string) string {
-	return fileTail(filepath.Join(dir, "output.log"), 1024)
 }
 
 // workflowExpiry is when a workflow run prepared at now expires: its frozen timeout from preparation. A prompt job has none here.

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -295,6 +296,42 @@ func TestResumeContinuesTheOmpSessionAndRecordsTheOutcome(t *testing.T) {
 	}
 }
 
+// A resume whose earlier output cannot be set aside is refused with the reason, keeps the hold and its reason, and
+// leaves that output as it was, instead of letting the next attempt truncate it.
+func TestAResumeThatCannotSetTheHeldOutputAsideIsRefusedAndKeepsTheHold(t *testing.T) {
+	h := newHarness(t, "--stub-hang-first", "--stub-text", "All checked.")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Review the open pull requests.", Checkout: "repo"})
+	uid, _ := h.killedAt("session", job)
+
+	hooks := worker.Hooks{FailAsideRename: func(string) error { return errors.New("the file is in use") }}
+	restarted := h.start(hooks)
+	h.admitting(restarted)
+	h.settled(uid)
+	h.eventually("the hold to be resumable", func() bool { s, ok := h.runStatus(restarted, uid); return ok && s.Resumable })
+	held, _ := h.runStatus(restarted, uid)
+	outputPath := filepath.Join(h.dirs.Runs(), uid, "output.jsonl")
+	before, err := os.ReadFile(outputPath)
+	if err != nil || len(before) == 0 {
+		t.Fatalf("the held attempt left no output to protect: %q, %v", before, err)
+	}
+
+	resp := h.ask(worker.Request{Op: "resume", Run: uid, Actor: "ann"})
+	if resp.OK || !strings.Contains(resp.Error, "could not be set aside") || !strings.Contains(resp.Error, "the file is in use") {
+		t.Fatalf("resume: %+v", resp)
+	}
+	s, _ := h.runStatus(restarted, uid)
+	if !s.Held || !s.Resumable || s.Hold != held.Hold || s.Detail != held.Detail || s.Attempt != held.Attempt {
+		t.Fatalf("the hold changed: %+v (was %+v)", s, held)
+	}
+	after, err := os.ReadFile(outputPath)
+	if err != nil || string(after) != string(before) {
+		t.Fatalf("the held attempt's output changed: %q, %v (was %q)", after, err, before)
+	}
+	if n := len(h.launches()); n != 1 {
+		t.Fatalf("agent launched %d times, want only the original", n)
+	}
+}
+
 // A resume killed after it was accepted, before the agent starts, neither loses the acceptance nor starts twice.
 func TestAResumeKilledAfterAcceptanceIsContinuedByTheNextStart(t *testing.T) {
 	h := newHarness(t, "--stub-hang-first")
@@ -451,5 +488,117 @@ func TestProviderFailuresHoldForLoginAndQuotaAndResumeHoldsAgainAfterTheSameFail
 				t.Fatalf("agent launched %d times, want 2", n)
 			}
 		})
+	}
+}
+
+// A resume refused because the held output cannot be set aside changes nothing, so the resume after it counts the held
+// attempt's tokens once, keeps its output under the right name and leaves the hold reason alone. The two attempts used
+// 10 in and 2 out each.
+func TestAResumeRefusedOverTheHeldOutputCountsTheHeldTokensOnce(t *testing.T) {
+	h := newHarness(t, "--stub-linger-first")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
+	c := newCrash("session")
+	r := h.start(c.hooks())
+	h.admitting(r)
+	_ = h.ask(worker.Request{Op: "run", Job: job.UID})
+	uid := c.wait(t)
+	h.eventually("the agent to finish its turn", func() bool {
+		raw, _ := os.ReadFile(filepath.Join(h.dirs.Runs(), uid, "output.jsonl"))
+		return strings.Contains(string(raw), `"agent_end"`)
+	})
+	r.stop()
+
+	var failed atomic.Bool
+	hooks := worker.Hooks{FailAsideRename: func(string) error {
+		if failed.CompareAndSwap(false, true) {
+			return errors.New("the file is in use")
+		}
+		return nil
+	}}
+	restarted := h.start(hooks)
+	h.admitting(restarted)
+	h.eventually("the hold to be resumable", func() bool { s, ok := h.runStatus(restarted, uid); return ok && s.Resumable })
+	held, _ := h.runStatus(restarted, uid)
+	if resp := h.ask(worker.Request{Op: "resume", Run: uid}); resp.OK || !strings.Contains(resp.Error, "the file is in use") {
+		t.Fatalf("the first resume: %+v", resp)
+	}
+	if s, _ := h.runStatus(restarted, uid); !s.Held || s.Hold != held.Hold || s.Attempt != held.Attempt {
+		t.Fatalf("the refused resume changed the hold: %+v (was %+v)", s, held)
+	}
+	if resp := h.ask(worker.Request{Op: "resume", Run: uid}); !resp.OK {
+		t.Fatalf("second resume: %q", resp.Error)
+	}
+	h.eventually("the resumed run to succeed", func() bool { return h.kataRun(uid).Status == "succeeded" })
+	run := h.kataRun(uid)
+	if n := len(h.launches()); n != 2 {
+		t.Fatalf("launched %d times", n)
+	}
+	if _, err := os.Stat(filepath.Join(h.dirs.Runs(), uid, "output.attempt2.jsonl")); err == nil {
+		t.Error("an attempt that never ran has saved output")
+	}
+	if run.InputTokens == nil || run.OutputTokens == nil || *run.InputTokens != 20 || *run.OutputTokens != 4 {
+		t.Fatalf("tokens %v in, %v out; two launched attempts used 10 and 2 each", deref(run.InputTokens), deref(run.OutputTokens))
+	}
+}
+
+// A held run of a forbid job whose journal is damaged while the worker runs is quarantined; abandoning it opens the
+// job's gate at once, as a restarted worker would.
+func TestAQuarantinedAndAbandonedRunOpensTheJobsGateWithoutARestart(t *testing.T) {
+	h := newHarness(t, "--stub-hang-first")
+	h.capacity("2")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo", Overlap: "forbid"})
+	uid, _ := h.killedAt("session", job)
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	h.settledInKata(r, uid) // nothing of the run is still being saved when the journal is damaged
+	h.eventually("the hold to be resumable", func() bool { s, ok := h.runStatus(r, uid); return ok && s.Resumable })
+
+	// A save of the run still in flight may replace the damaged file, so the damage is repeated until it sticks.
+	h.eventually("the damaged journal to be quarantined", func() bool {
+		_ = os.WriteFile(filepath.Join(h.dirs.Runs(), uid, "run.json"), []byte("{damaged"), 0o600)
+		return len(r.w.Status().Quarantined) == 1
+	})
+	if resp := h.ask(worker.Request{Op: "abandon", Run: uid, Actor: "ann"}); !resp.OK {
+		t.Fatalf("abandon: %q", resp.Error)
+	}
+	if resp := h.ask(worker.Request{Op: "run", Job: job.UID}); !resp.OK {
+		t.Fatalf("the running worker refuses the job after the abandon: %q", resp.Error)
+	}
+}
+
+// A resume refused because stderr.log cannot be set aside, after output.jsonl already moved, leaves the held run's detail as it was.
+func TestAResumeRefusedOverLaterHeldFileKeepsTheHeldRunsOutputTail(t *testing.T) {
+	h := newHarness(t, "--stub-linger-first", "--stub-text", "All checked.")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
+	c := newCrash("session")
+	r := h.start(c.hooks())
+	h.admitting(r)
+	_ = h.ask(worker.Request{Op: "run", Job: job.UID})
+	uid := c.wait(t)
+	h.eventually("the agent to finish its turn", func() bool {
+		raw, _ := os.ReadFile(filepath.Join(h.dirs.Runs(), uid, "output.jsonl"))
+		return strings.Contains(string(raw), `"agent_end"`)
+	})
+	r.stop()
+
+	hooks := worker.Hooks{FailAsideRename: func(p string) error {
+		if filepath.Base(p) == "stderr.log" {
+			return errors.New("the file is in use")
+		}
+		return nil
+	}}
+	restarted := h.start(hooks)
+	h.admitting(restarted)
+	h.eventually("the hold to be resumable", func() bool { s, ok := h.runStatus(restarted, uid); return ok && s.Resumable })
+	before, err := restarted.w.RunDetail(uid)
+	if err != nil || !strings.Contains(before.OutputTail, "All checked.") {
+		t.Fatalf("detail before: %q, %v", before.OutputTail, err)
+	}
+	if resp := h.ask(worker.Request{Op: "resume", Run: uid}); resp.OK {
+		t.Fatalf("resume accepted")
+	}
+	after, err := restarted.w.RunDetail(uid)
+	if err != nil || after.OutputTail != before.OutputTail {
+		t.Fatalf("held run's output tail after the refused resume: %q (was %q), %v", after.OutputTail, before.OutputTail, err)
 	}
 }

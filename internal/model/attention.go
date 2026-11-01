@@ -152,10 +152,8 @@ type AttentionState struct {
 	Loading  bool
 	// Clearing holds the Issue uids of the requests whose clear is out; keys on those rows wait.
 	Clearing []string
-	// request counts the reads asked for.
-	request int64
-	// queued says events arrived while a read was out, so one more read follows its answer.
-	queued bool
+	// reads numbers the reads asked for; one more follows an answer when events arrived while a read was out.
+	reads Latest
 }
 
 // OnAttention says the Attention Page is current.
@@ -205,17 +203,16 @@ func (m Model) attentionIndex() int {
 // askAttention reads the requests again, whatever asked (entering the Page, ctrl+r, a clear's answer, a daemon change, the stream
 // opening): at most one read is out, and a request meanwhile costs one more read after its answer. A refused address reads nothing.
 func askAttention(m Model) (Model, []Cmd) {
-	if m.Attention.Loading {
-		m.Attention.queued = true
-		return m, nil
-	}
 	address, err := m.InboxAddress()
 	if err != nil {
 		return m, nil
 	}
-	m.Attention.request++
-	m.Attention.Loading, m.Attention.queued = true, false
-	return m, []Cmd{LoadAttention{Workspace: m.Workspace, Address: address, Request: m.Attention.request}}
+	request, ok := m.Attention.reads.Queue()
+	if !ok {
+		return m, nil
+	}
+	m.Attention.Loading = true
+	return m, []Cmd{LoadAttention{Workspace: m.Workspace, Address: address, Request: request}}
 }
 
 // attentionChangesTheCount says a stream event of this type can add, change or clear a request: any Issue or Project event, and
@@ -230,7 +227,11 @@ func enterAttention(m Model) (Model, []Cmd) { return askAttention(m) }
 // attentionLoaded applies the answer to the latest read. A failed read keeps the requests held; a good one replaces them and
 // keeps the selection on the same Issue, else on the row now at its place.
 func attentionLoaded(m Model, msg AttentionLoaded) (Model, []Cmd) {
-	if msg.Request != m.Attention.request {
+	current, again := m.Attention.reads.Answer(msg.Request)
+	if !current {
+		if again {
+			return askAttention(m)
+		}
 		return m, nil
 	}
 	m.Attention.Loading = false
@@ -240,7 +241,7 @@ func attentionLoaded(m Model, msg AttentionLoaded) (Model, []Cmd) {
 		m.Attention.Requests, m.Attention.Skipped, m.Attention.Loaded = msg.Requests, msg.Skipped, true
 		m = m.settleAttentionSelection(row)
 	}
-	if m.Attention.queued {
+	if again {
 		return askAttention(m)
 	}
 	return m, nil

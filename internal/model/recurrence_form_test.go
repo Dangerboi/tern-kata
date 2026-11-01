@@ -459,7 +459,8 @@ func TestRecurrenceCardStopAsksYesOrNoThenStops(t *testing.T) {
 		t.Fatal("another key left the question")
 	}
 	stopping, cmds := model.Update(asked, model.KeyMsg{Chord: "y"})
-	want := model.StopRecurrenceCmd{Workspace: "/repo", UID: "parent", RecurrenceUID: "rec-uid"}
+	want := model.StopRecurrenceCmd{Workspace: "/repo", UID: "parent", RecurrenceUID: "rec-uid",
+		Opened: model.RecurrenceTerms{Rule: "FREQ=DAILY;INTERVAL=1", Start: "2026-10-19", TimeZone: "Europe/Zurich"}}
 	if len(cmds) != 1 || cmds[0] != want || !stopping.RecurrenceForm.Saving {
 		t.Fatalf("y sent %#v (saving %v), want %#v", cmds, stopping.RecurrenceForm.Saving, want)
 	}
@@ -491,5 +492,37 @@ func TestRecurrenceCardFillsAnEmptyDayWithTheStartDatesDay(t *testing.T) {
 	m = fillField(choose(m, model.RecurrenceFrequency, frequency(model.Monthly)), model.RecurrenceDay, "")
 	if m = choose(m, model.RecurrenceFrequency, frequency(model.Yearly)); m.RecurrenceForm.Day != "21" {
 		t.Fatalf("Day %q after changing the frequency, want 21", m.RecurrenceForm.Day)
+	}
+}
+
+func TestClearingAnEmptyFieldKeepsTheCardError(t *testing.T) {
+	recurrence := func() (model.Model, func(model.Model) error) {
+		m := fillField(openRecurrenceCard(recurrenceBase()), model.RecurrenceZone, "")
+		m.RecurrenceForm.Err = errBoom
+		return m, func(m model.Model) error { return m.RecurrenceForm.Err }
+	}
+	job := func() (model.Model, func(model.Model) error) {
+		m := clickBase()
+		m, _ = model.Update(m, model.KeyMsg{Chord: "shift+j"})
+		m, _ = model.Update(m, model.FocusFieldMsg{Field: model.JobFieldName})
+		m, _ = model.Update(m, model.KeyMsg{Chord: "ctrl+u"})
+		m.JobForm.Err = errBoom
+		return m, func(m model.Model) error { return m.JobForm.Err }
+	}
+	for name, open := range map[string]func() (model.Model, func(model.Model) error){"recurrence": recurrence, "job": job} {
+		t.Run(name, func(t *testing.T) {
+			m, errOf := open()
+			if errOf(m) == nil {
+				t.Fatalf("setup: the card did not keep an error; mode %v", m.CurrentMode())
+			}
+			if got, _ := model.Update(m, model.KeyMsg{Chord: "ctrl+u"}); !errors.Is(errOf(got), errBoom) {
+				t.Fatalf("ctrl+u on an empty field left error %v", errOf(got))
+			}
+			m, _ = model.Update(m, model.KeyMsg{Text: "x"})
+			m.RecurrenceForm.Err, m.JobForm.Err = errBoom, errBoom
+			if got, _ := model.Update(m, model.KeyMsg{Chord: "ctrl+u"}); errOf(got) != nil {
+				t.Fatalf("ctrl+u on a typed field left error %v", errOf(got))
+			}
+		})
 	}
 }

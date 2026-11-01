@@ -122,3 +122,30 @@ func TestAnAgentOfAnUnknownSplitPromptFileReReadsAgentsJSONOnceAndEveryNameShape
 		}
 	}
 }
+
+func TestTheBadgeIndexAnswersAsTheBadgePerIssue(t *testing.T) {
+	m := model.Model{
+		AgentMapping: []model.AgentEntry{entry("a", "1", 5), entry("b", "2", 1), entry("a", "3", 1), entry("a", "4", 9), entry("c", "5", 2), entry("b", "6", 3)},
+		Agents: model.AgentStatesRelay{Received: true, States: []model.AgentState{{Block: "1", State: "working"}, {Block: "3", State: "waiting_input"},
+			{Block: "4", State: "working"}, {Block: "2", State: "idle"}, {Block: "6", State: "idle"}}},
+	}
+	index := m.AgentBadges()
+	for _, tt := range []struct {
+		uid  string
+		want model.AgentBadge
+		ok   bool
+	}{
+		{"a", model.AgentBadge{Text: "agent waiting for you · 3", Tone: model.AgentToneWarning, Block: "3"}, true},
+		{"b", model.AgentBadge{Text: "agent idle · 2", Tone: model.AgentToneMuted, Block: "6"}, true},
+		{"c", model.AgentBadge{Text: "agent", Tone: model.AgentToneMuted, Block: "5"}, true},
+		{"none", model.AgentBadge{}, false},
+	} {
+		got, ok := index.For(tt.uid)
+		if ok != tt.ok || got != tt.want {
+			t.Errorf("%s: badge %+v (%v), want %+v (%v)", tt.uid, got, ok, tt.want, tt.ok)
+		}
+	}
+	if _, ok := (model.Model{}).AgentBadges().For("a"); ok {
+		t.Error("a badge without a mapping")
+	}
+}

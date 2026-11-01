@@ -69,8 +69,8 @@ type CredentialsState struct {
 	ObservedAt time.Time
 	// Cursor indexes Tokens.
 	Cursor int
-	// request counts the asks; an answer to another is dropped.
-	request int64
+	// reads numbers the asks; an answer to another is dropped.
+	reads Latest
 }
 
 // OnCredentials says the Credentials Page is current.
@@ -86,28 +86,28 @@ func credentialsMode(m Model) Mode {
 
 // enterCredentials starts a fresh reading: the capability check first.
 func enterCredentials(m Model) (Model, []Cmd) {
-	m.Credentials = CredentialsState{request: m.Credentials.request}
+	m.Credentials = CredentialsState{reads: m.Credentials.reads}
 	return askCapabilities(m)
 }
 
 // clearCredentials drops what the Page held and every ask still out.
 func clearCredentials(m Model) Model {
-	m.Credentials = CredentialsState{request: m.Credentials.request + 1}
+	m.Credentials = CredentialsState{reads: m.Credentials.reads.Discarded()}
 	return m
 }
 
 func askCapabilities(m Model) (Model, []Cmd) {
 	c := &m.Credentials
-	c.request++
+	request := c.reads.Ask()
 	c.Checking, c.Loading, c.Err = true, false, nil
-	return m, []Cmd{LoadAuthCapabilities{Workspace: m.Workspace, Request: c.request}}
+	return m, []Cmd{LoadAuthCapabilities{Workspace: m.Workspace, Request: request}}
 }
 
 func askCredentials(m Model, after time.Duration) (Model, []Cmd) {
 	c := &m.Credentials
-	c.request++
+	request := c.reads.Ask()
 	c.Loading = after == 0
-	return m, []Cmd{LoadCredentials{Workspace: m.Workspace, Request: c.request, After: after}}
+	return m, []Cmd{LoadCredentials{Workspace: m.Workspace, Request: request, After: after}}
 }
 
 // refreshCredentials is r: it reads the list again, or after a failed check asks for the capabilities again.
@@ -130,7 +130,7 @@ func updateCredentials(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
 	case AuthCapabilitiesLoaded:
 		c := &m.Credentials
-		if msg.Request != c.request {
+		if !c.reads.IsCurrent(msg.Request) {
 			return m, nil, true
 		}
 		c.Checking, c.Err, c.Available = false, msg.Err, msg.Err == nil && msg.TokenAuditRead
@@ -141,7 +141,7 @@ func updateCredentials(m Model, msg Msg) (Model, []Cmd, bool) {
 		return next, cmds, true
 	case CredentialsLoaded:
 		c := &m.Credentials
-		if msg.Request != c.request {
+		if !c.reads.IsCurrent(msg.Request) {
 			return m, nil, true
 		}
 		c.Loading, c.Err = false, msg.Err

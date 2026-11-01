@@ -204,6 +204,14 @@ func sendTimedAssignment(m Model) (Model, []Cmd) {
 // trimHash drops the "#" of a reference typed as #id.
 func trimHash(v string) string { return strings.TrimPrefix(v, "#") }
 
+// PriorityText is "P1" for a priority, empty for none.
+func PriorityText(p *int64) string {
+	if p == nil {
+		return ""
+	}
+	return fmt.Sprintf("P%d", *p)
+}
+
 func checkPriority(v string) error {
 	if n, err := strconv.Atoi(v); v != "-" && (err != nil || n < 0 || n > 4) {
 		return errors.New("Priority must be 0-4, or - to clear.")

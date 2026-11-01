@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
+
+	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
 func TestExitStatusFollowsTheCommandLineContract(t *testing.T) {
@@ -83,5 +87,37 @@ func TestBashCompletionOffersSubcommandsWorkerFormsAndFlags(t *testing.T) {
 		if got := strings.Join(complete(t, tc.words...), " "); got != tc.want {
 			t.Errorf("tern-kata %s<tab> = %q, want %q", strings.Join(tc.words, " "), got, tc.want)
 		}
+	}
+}
+
+// fullDisk is stdout redirected to /dev/full: every write fails.
+type fullDisk struct{}
+
+func (fullDisk) Write([]byte) (int, error) { return 0, syscall.ENOSPC }
+
+func TestSubcommandOutputFailuresExitOne(t *testing.T) {
+	for name, plan := range map[string]LaunchPlan{
+		"version":    {Version: "1.2.3"},
+		"help":       {Help: true},
+		"completion": {Subcommand: "completion", Operands: []string{"bash"}},
+	} {
+		handled, err := printInfo(plan, printableWriter{fullDisk{}})
+		if !handled {
+			t.Fatalf("%s: not handled", name)
+		}
+		if got := exitStatus(err); got != 1 {
+			t.Errorf("%s: exit %d for %v, want 1", name, got, err)
+		}
+	}
+	dirs := worker.Dirs{Config: filepath.Join(t.TempDir(), "tern-kata")}
+	if err := os.MkdirAll(dirs.Config, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dirs.ConfigPath(), []byte("actor = \"robot\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := runWorkerCommand(t.Context(), LaunchPlan{Subcommand: "worker", Operands: []string{"supervised"}}, workerEnv{Dirs: dirs}, printableWriter{fullDisk{}})
+	if got := exitStatus(err); got != 1 {
+		t.Errorf("worker output: exit %d for %v, want 1", got, err)
 	}
 }

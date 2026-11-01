@@ -2,6 +2,7 @@ package worker_test
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -359,4 +360,85 @@ func TestASkipJobWhoseOccurrenceFallsOnTheIssuesInstantRunsOnlyThatOccurrence(t 
 	if want := worker.OccurrenceKey(instant); runs[0].OccurrenceKey != want {
 		t.Fatalf("the run is for %s, want the occurrence on the instant %s", runs[0].OccurrenceKey, want)
 	}
+}
+
+func TestABurstOfIssueEventsListsTheCronJobsOncePerDebounceWhileAnOccurrenceWaits(t *testing.T) {
+	h := newHarness(t)
+	issue := h.kata.Issue(t, h.proj, "Parked")
+	h.kata.SetSomeday(t, h.proj, issue.UID, true)
+	job, r, _ := h.hourlyOn(issue.UID)
+	h.waitsFor(r, "Issue is someday")
+	time.Sleep(200 * time.Millisecond)
+
+	listings := func() int {
+		return h.kata.Requests("GET /api/v1/projects/" + strconv.FormatInt(h.proj.ID, 10) + "/cron/jobs")
+	}
+	before := listings()
+	for i := range 40 {
+		h.kata.EditIssue(t, h.proj, issue.UID, "Parked "+strconv.Itoa(i), "")
+	}
+	time.Sleep(500 * time.Millisecond)
+	if n := listings() - before; n > 1 {
+		t.Fatalf("a burst of 40 Issue events listed the Cron jobs %d times inside one debounce interval, want at most 1", n)
+	}
+	h.quiet(job, 0)
+
+	h.kata.SetSomeday(t, h.proj, issue.UID, false) // the Issue is ready: the wait ends without waiting for a listing interval
+	h.settled(h.waitRuns(job, 1)[0].UID)
+}
+
+// A job disabled less than the refresh debounce after the last listing must not be admitted by the next Issue event.
+func TestAnIssueEventDoesNotAdmitADisabledJobFromAListingTakenBeforeItWasDisabled(t *testing.T) {
+	h := newHarness(t)
+	issue := h.kata.Issue(t, h.proj, "Late date")
+	def := workertest.Job{Name: "on date", Prompt: "Do it.", ExistingUID: issue.UID,
+		Trigger: cronjob.Trigger{Kind: cronjob.TriggerIssueScheduled, IssueUID: issue.UID}, Catchup: "all", GraceSeconds: workertest.Seconds(600)}
+	job := h.kata.CreateJob(t, h.proj, def)
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	h.eventually("the event stream to open", func() bool { return h.status(r).Following })
+	h.quiet(job, 0)
+
+	listings := func() int {
+		return h.kata.Requests("GET /api/v1/projects/" + strconv.FormatInt(h.proj.ID, 10) + "/cron/jobs")
+	}
+	before := listings()
+	edit := def
+	edit.Prompt = "Do it now."
+	job = h.kata.ReplaceJob(t, h.proj, job, edit)
+	h.within("a fresh listing", func() bool {
+		h.clock.Advance(100 * time.Millisecond)
+		return listings() > before
+	})
+
+	off := edit
+	off.Disabled = true
+	job = h.kata.ReplaceJob(t, h.proj, job, off)
+	time.Sleep(400 * time.Millisecond) // the job event reaches the worker; the clock does not move
+
+	h.kata.SetIssueDate(t, h.proj, issue.UID, "scheduled_on", h.minuteIn(-5*time.Minute))
+	time.Sleep(800 * time.Millisecond)
+	if runs := h.jobRuns(job); len(runs) != 0 {
+		t.Fatalf("a disabled job ran %d time(s) from a listing taken before it was disabled: %v", len(runs), occurrenceKeys(runs))
+	}
+}
+
+// Enabling a job again supersedes the occurrence that was parked before it was disabled, as any edit does.
+func TestAParkedOccurrenceIsDroppedWhenTheJobIsDisabledAndEnabledAgain(t *testing.T) {
+	h := newHarness(t)
+	issue := h.kata.Issue(t, h.proj, "Parked")
+	h.kata.SetSomeday(t, h.proj, issue.UID, true)
+	job, r, _ := h.hourlyOn(issue.UID)
+	h.waitsFor(r, "Issue is someday")
+
+	def := workertest.Job{Name: "on issue", Prompt: "Do it.", ExistingUID: issue.UID, Trigger: interval(3600)}
+	off := def
+	off.Disabled = true
+	job = h.kata.ReplaceJob(t, h.proj, job, off)
+	h.eventually("the disabled job to leave the schedule", func() bool { return h.status(r).Scheduled == 0 })
+	job = h.kata.ReplaceJob(t, h.proj, job, def)
+	h.eventually("the re-enabled job to be scheduled", func() bool { return h.status(r).Scheduled == 1 })
+
+	h.kata.SetSomeday(t, h.proj, issue.UID, false)
+	h.quiet(job, 0)
 }

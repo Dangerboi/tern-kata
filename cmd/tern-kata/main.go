@@ -53,21 +53,29 @@ func stoppedBy(s os.Signal, err error) error {
 	return err
 }
 
+// printInfo prints what --version, --help and `completion` answer to out, and reports whether plan was one of them. A failed
+// write is a subcommandError (exit 1) like every subcommand's, not the Pane's start failure.
+func printInfo(plan LaunchPlan, out io.Writer) (bool, error) {
+	switch {
+	case plan.Version != "":
+		_, err := fmt.Fprintln(out, "tern-kata", plan.Version)
+		return true, err
+	case plan.Help:
+		_, err := fmt.Fprint(out, usage)
+		return true, err
+	case plan.Subcommand == "completion":
+		return true, writeCompletion(plan.Operands[0], out)
+	}
+	return false, nil
+}
+
 func run() error {
 	plan, err := PlanLaunch(os.Args[1:], lookupEnv, buildVersion())
 	if err != nil {
 		return err
 	}
-	if plan.Version != "" {
-		_, err := fmt.Fprintln(os.Stdout, "tern-kata", plan.Version)
+	if handled, err := printInfo(plan, printableWriter{os.Stdout}); handled {
 		return err
-	}
-	if plan.Help {
-		_, err := fmt.Fprint(os.Stdout, usage)
-		return err
-	}
-	if plan.Subcommand == "completion" {
-		return writeCompletion(plan.Operands[0], os.Stdout)
 	}
 	if plan.Subcommand == "agent" {
 		return execAgent(plan.Actor, plan.Operands, os.Environ())

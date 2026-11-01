@@ -33,7 +33,7 @@ func TestOpenAtIssueAndSelectAction(t *testing.T) {
 			if m.SelectedUID != "target" || m.DetailAuthority() != selected || m.Focus != model.ColumnDetail || m.DetailHidden() || m.DetailLoading() {
 				t.Fatalf("Issue not selected in detail: %+v", m)
 			}
-			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: snapshot, ETag: "next"})
+			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest(), Query: m.SnapshotQuery(), Snapshot: snapshot, ETag: "next"})
 			if m.SelectedUID != "target" {
 				t.Fatalf("refresh lost external Issue: %q", m.SelectedUID)
 			}

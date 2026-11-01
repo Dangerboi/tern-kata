@@ -98,9 +98,9 @@ type JobsState struct {
 	Err      error
 	// Writing is the uid of the job a pause, resume, archive or restore is writing; the keys wait for its answer.
 	Writing string
-	// request counts the reads asked for; stale asks for another.
-	request int64
-	stale   bool
+	// reads numbers the reads asked for; stale asks for another.
+	reads Latest
+	stale bool
 	// pick is the job the next read selects: the one an Issue detail's Cron job property opened.
 	pick string
 	// cronRead is what the Issue detail last read the list for; rev counts the answers, for the detail's rows.
@@ -460,14 +460,13 @@ func (m Model) settleJobs() (Model, []Cmd) {
 		return m, nil
 	}
 	m.Jobs.stale, m.Jobs.Loading = false, true
-	m.Jobs.request++
-	return m, []Cmd{LoadJobs{Workspace: m.Workspace, ProjectID: id, Archived: m.Jobs.ShowArchived, Request: m.Jobs.request, Activity: true}}
+	return m, []Cmd{LoadJobs{Workspace: m.Workspace, ProjectID: id, Archived: m.Jobs.ShowArchived, Request: m.Jobs.reads.Ask(), Activity: true}}
 }
 
 // jobsLoaded applies the answer to the latest read. A Project that is archived keeps the jobs already held: they are what is
 // paused.
 func jobsLoaded(m Model, msg JobsLoaded) Model {
-	if msg.Request != m.Jobs.request {
+	if !m.Jobs.reads.IsCurrent(msg.Request) {
 		return m
 	}
 	m.Jobs.Loading = false

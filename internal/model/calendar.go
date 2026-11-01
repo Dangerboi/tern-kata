@@ -142,7 +142,7 @@ func pickDay(m Model, day string) Model {
 			*text = day
 			_, caret := entry.text(&m)
 			*caret = Caret{}
-			m = entry.erased(m, true)
+			m = entry.erased(m, ClearInput, true)
 		}
 	}
 	return m

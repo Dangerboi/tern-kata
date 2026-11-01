@@ -1,6 +1,7 @@
 package driver_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -140,5 +141,35 @@ func TestEnterOnACommentWithoutLinksDoesNothing(t *testing.T) {
 	s := feed(t, withLinks(t), key("j"), key("j"), key("enter")).State
 	if m := s.Model; m.SelectedUID != "alpha" || m.DetailIndex() != 2 {
 		t.Fatalf("selected %q row %d, want alpha row 2", m.SelectedUID, m.DetailIndex())
+	}
+}
+
+// BenchmarkDetailCommentLinks is one frame of the Comments tab at 200 comments that each answer the one before, the cursor on
+// the middle one.
+func BenchmarkDetailCommentLinks(b *testing.B) {
+	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
+	var comments []model.Comment
+	for i := range 200 {
+		c := model.Comment{UID: fmt.Sprintf("c%03d", i), Author: "dana", CreatedAt: at.Add(time.Duration(i) * time.Minute), Body: "a comment"}
+		if i > 0 {
+			c.ReplyKind = ptr("confirm")
+			c.Reply = &model.CommentLink{UID: ptr(fmt.Sprintf("c%03d", i-1)), Kind: "confirm", Author: ptr("dana"), IssueUID: ptr("alpha"), IssueShortID: ptr("aaaa")}
+		}
+		if i < 199 {
+			c.Backlinks = []model.CommentLink{{UID: ptr(fmt.Sprintf("c%03d", i+1)), Kind: "confirm", Author: ptr("dana"), IssueUID: ptr("alpha"), IssueShortID: ptr("aaaa")}}
+		}
+		comments = append(comments, c)
+	}
+	selected := &model.IssueDetailData{Issue: &alpha, Comments: comments}
+	project := model.Project{ID: 7, UID: "p", Name: "work"}
+	s := benchFeed(b, driver.State{}, model.Start{Workspace: "/repo"}, resize(160))
+	s.Model = loadFirst(s.Model, model.ProjectLoaded{Project: project}, model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{alpha, beta}, Catalog: []model.CatalogProject{{Project: project}}}})
+	s = benchFeed(b, s, model.DetailLoaded{UID: "alpha", Selected: selected}, key("enter"))
+	for range 100 {
+		s = benchFeed(b, s, key("j"))
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		view.Render(s.Model, now)
 	}
 }

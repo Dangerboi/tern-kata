@@ -482,7 +482,7 @@ func TestAnAdoptionAsksToTypeTheLocalProjectsExactNameBeforeItRuns(t *testing.T)
 
 	exact := step(t, typeText(t, s, "acme"), key("enter"))
 	run, ok := asked[model.EnrollFederation](exact.Cmds)
-	if !ok || run.Workspace != "/repo" || run.InstanceUID != "INSTANCE-1" || run.Attempt == 0 {
+	if !ok || run.Workspace != "/repo" || run.InstanceUID != "INSTANCE-1" {
 		t.Fatalf("the exact name asked %#v, want the enrollment", exact.Cmds)
 	}
 	d := run.Draft

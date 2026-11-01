@@ -49,12 +49,26 @@ func drawnIDs(t *testing.T, v tern.View) map[string]bool {
 	return ids
 }
 
+// newestLanes is a Lane list answer that names no read: step sends it as the answer to the newest read, as the daemon does. A test of
+// a late answer sends a model.LanesLoaded that names the read it answers.
+type newestLanes model.LanesLoaded
+
+func answersNewestLanesRead(s driver.State, in any) any {
+	if loaded, ok := in.(newestLanes); ok {
+		answer := model.LanesLoaded(loaded)
+		answer.Request = s.Model.LanesRequest()
+		return answer
+	}
+	return in
+}
+
 // step runs one input and checks what holds for every step: no error, and no
 // reveal or scroll names a node the rendered view lacks (Tern ends the program
 // on those). A focus op may name a node a hidden layer or a narrow Pane does not
 // draw: Tern's "unknown id" answer to it is ignored.
 func step(t *testing.T, s driver.State, in any) driver.Output {
 	t.Helper()
+	in = answersNewestLanesRead(s, in)
 	out := driver.Step(s, in, now)
 	if out.Err != nil {
 		t.Fatalf("%T: fatal error %v", in, out.Err)

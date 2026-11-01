@@ -353,3 +353,61 @@ func TestAStopWithAnUnknownModeIsRefused(t *testing.T) {
 		t.Fatalf("stop soon: %+v", resp)
 	}
 }
+
+// An idle drain refuses a resume but accepts an abandon of a held run, which ends a run instead of starting one; both
+// refuse in the same words when refused for stopping.
+func TestAnIdleStopAcceptsAnAbandonOfAHeldRunAndRefusesItsResume(t *testing.T) {
+	h := newHarness(t, "--stub-hang")
+	held := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "stuck", Prompt: "Do it."})
+	busy := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "busy", Prompt: "Do it."})
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	uid := h.startedRun(r, held)
+	if resp := h.ask(worker.Request{Op: "stop", Mode: "now"}); !resp.OK {
+		t.Fatalf("stop now: %+v", resp)
+	}
+	h.exits(r)
+
+	restarted := h.start(worker.Hooks{})
+	h.admitting(restarted)
+	h.eventually("the interrupted run to be held and abandonable", func() bool {
+		s, ok := h.runStatus(restarted, uid)
+		return ok && s.Held && s.Pending == "" && s.Abandonable
+	})
+	h.startedRun(restarted, busy) // keeps the drain waiting
+	if resp := h.ask(worker.Request{Op: "stop"}); !resp.OK || resp.Stop.Mode != "idle" {
+		t.Fatalf("stop: %+v", resp)
+	}
+	if refused := h.ask(worker.Request{Op: "resume", Run: uid}); refused.OK || refused.Error != "the worker is stopping" {
+		t.Fatalf("a resume during the drain: %+v", refused)
+	}
+	resp := h.ask(worker.Request{Op: "abandon", Run: uid, Actor: "ann"})
+	if !resp.OK || resp.Transition == nil || resp.Transition.State != "cancelled" {
+		t.Fatalf("an abandon during the drain: %+v", resp)
+	}
+	h.eventually("the abandoned run to settle cancelled", func() bool {
+		s, ok := h.runStatus(restarted, uid)
+		return ok && !s.Held && s.State == "cancelled" && s.Pending == ""
+	})
+}
+
+// An idle stop still lets the operator settle a run whose state this worker lost (ADR-0012).
+func TestAnIdleStopAcceptsAnAbandonOfARunWhoseJournalIsLost(t *testing.T) {
+	h := newHarness(t, "--stub-hang")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
+	busy := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "busy", Prompt: "Do it."})
+	uid, _ := h.killedAt("session", job)
+	if err := os.RemoveAll(filepath.Join(h.dirs.Runs(), uid)); err != nil {
+		t.Fatal(err)
+	}
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	h.startedRun(r, busy)
+	if resp := h.ask(worker.Request{Op: "stop"}); !resp.OK || resp.Stop.Mode != "idle" {
+		t.Fatalf("stop: %+v", resp)
+	}
+	resp := h.ask(worker.Request{Op: "abandon", Run: uid, Actor: "ann"})
+	if !resp.OK {
+		t.Fatalf("abandon of a lost run during an idle stop: %+v", resp)
+	}
+}

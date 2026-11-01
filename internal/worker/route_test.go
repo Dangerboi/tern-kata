@@ -163,6 +163,9 @@ func TestAtMostFourKataCallsRunAtOnceAndEachHasItsOwnDeadlineFromItsSlot(t *test
 	if peak := d.PeakInFlight(); peak > 4 {
 		t.Fatalf("%d kata calls were in flight at once, want at most four", peak)
 	}
+	if n := d.Requests("GET /api/v1/projects"); n != 8 {
+		t.Fatalf("kata was asked %d times for eight calls: a call ran out of time and was retried; is its deadline counted from its slot?", n)
+	}
 }
 
 func TestAReadThatRunsOutOfTimeIsTriedAgainButAWriteNever(t *testing.T) {

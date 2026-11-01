@@ -150,12 +150,14 @@ func detailRows(m model.Model, now time.Time) (children []detailChild, activity 
 		if row.Creation != "" {
 			parts = append(parts, ui.Text{Common: ui.Common{Key: "creation", Tone: ui.ToneMuted}, Text: row.Creation})
 		}
-		if choice, ok := m.DetailCommentLink(); ok && mark == ui.MarkPick && item.Kind == model.RowComment {
-			link := ui.Text{Common: ui.Common{Key: "link", Tone: ui.ToneAccent}, Text: fmt.Sprintf("link %d/%d: %s", choice.Index, choice.Count, choice.Label)}
-			if choice.IssueUID != "" {
-				link.Hovercard = refCard(m, refFacts{UID: choice.IssueUID, Qualified: choice.Qualified}, now)
+		if mark == ui.MarkPick && item.Kind == model.RowComment {
+			if choice, ok := m.DetailCommentLink(); ok {
+				link := ui.Text{Common: ui.Common{Key: "link", Tone: ui.ToneAccent}, Text: fmt.Sprintf("link %d/%d: %s", choice.Index, choice.Count, choice.Label)}
+				if choice.IssueUID != "" {
+					link.Hovercard = refCard(m, refFacts{UID: choice.IssueUID, Qualified: choice.Qualified}, now)
+				}
+				parts = append(parts, link)
 			}
-			parts = append(parts, link)
 		}
 		if row.Body != "" {
 			parts = append(parts, ui.Md{Common: ui.Common{Key: "body"}, Text: row.Body})

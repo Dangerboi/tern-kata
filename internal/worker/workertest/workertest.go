@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -38,7 +39,7 @@ type Daemon struct {
 	rules    []*rule
 	requests []string
 	inflight int
-	peak     int
+	peak     int // the most calls the client had out at once, see countingTransport
 	gate     *Gate
 	failing  func(*http.Request) bool
 }
@@ -157,7 +158,6 @@ func StartKata(t *testing.T) *Daemon {
 		handler.ServeHTTP(w, r)
 	})
 	d.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		stream := strings.Contains(r.URL.Path, "/events")
 		d.mu.Lock()
 		d.requests = append(d.requests, r.Method+" "+r.URL.Path)
 		var intercepted func(http.ResponseWriter, *http.Request, http.Handler)
@@ -167,18 +167,7 @@ func StartKata(t *testing.T) *Daemon {
 				break
 			}
 		}
-		if !stream {
-			d.inflight++
-			d.peak = max(d.peak, d.inflight)
-		}
 		d.mu.Unlock()
-		if !stream {
-			defer func() {
-				d.mu.Lock()
-				d.inflight--
-				d.mu.Unlock()
-			}()
-		}
 		if intercepted != nil {
 			intercepted(w, r, next)
 			return
@@ -186,7 +175,7 @@ func StartKata(t *testing.T) *Daemon {
 		next.ServeHTTP(w, r)
 	}))
 	t.Cleanup(d.Server.Close)
-	c, err := client.New(d.Server.URL)
+	c, err := client.New(d.Server.URL, client.WithHTTPClient(&http.Client{Transport: &countingTransport{d: d, next: http.DefaultTransport}}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +211,10 @@ func (d *Daemon) Requests(text string) int {
 	return n
 }
 
-// PeakInFlight is the most requests (event streams aside) that were being answered at once.
+// PeakInFlight is the most requests (event streams aside) the Client had out at once: from the moment it handed one
+// to the transport until its answer was read to its end or closed, whichever came first, or it failed. That is what
+// the worker's limit on kata calls bounds. It is counted on the client because the test server also answers requests
+// that other clients send to its port, and a count taken in the server would include them.
 func (d *Daemon) PeakInFlight() int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -645,4 +637,54 @@ func (d *Daemon) EditIssue(t *testing.T, p worker.Project, issueUID, title, owne
 	if err != nil || r.JSON200 == nil {
 		t.Fatalf("editing Issue %s: %v", issueUID, err)
 	}
+}
+
+// countingTransport counts the requests its client has out: one starts when RoundTrip is called and ends when RoundTrip
+// fails or the response body is read to its end or closed, whichever comes first. Event streams are left out.
+type countingTransport struct {
+	d    *Daemon
+	next http.RoundTripper
+}
+
+func (t *countingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	if strings.Contains(r.URL.Path, "/events") {
+		return t.next.RoundTrip(r)
+	}
+	t.d.mu.Lock()
+	t.d.inflight++
+	t.d.peak = max(t.d.peak, t.d.inflight)
+	t.d.mu.Unlock()
+	var once sync.Once
+	done := func() {
+		once.Do(func() {
+			t.d.mu.Lock()
+			t.d.inflight--
+			t.d.mu.Unlock()
+		})
+	}
+	resp, err := t.next.RoundTrip(r)
+	if err != nil {
+		done()
+		return nil, err
+	}
+	resp.Body = &countedBody{ReadCloser: resp.Body, done: done}
+	return resp, nil
+}
+
+type countedBody struct {
+	io.ReadCloser
+	done func()
+}
+
+func (b *countedBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	if err != nil {
+		b.done()
+	}
+	return n, err
+}
+
+func (b *countedBody) Close() error {
+	b.done()
+	return b.ReadCloser.Close()
 }

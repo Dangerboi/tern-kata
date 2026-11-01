@@ -260,6 +260,20 @@ func setMenuLevel(m Model, popup bool, level MenuLevel) Model {
 	return m
 }
 
+// menuUp is every way of leaving a Views or Projects level (esc, Backspace, Back, a click on Back):
+// the popup (when popup) or the sidebar returns to the top level with the cursor on the row that led
+// there. It reports false, changing nothing, at the top level.
+func menuUp(m Model, popup bool) (Model, bool) {
+	level := m.SidebarLevel
+	if popup {
+		level = m.Picker.Level
+	}
+	if level == MenuTop {
+		return m, false
+	}
+	return setMenuLevel(m, popup, MenuTop), true
+}
+
 // leaveSidebarLevel returns the sidebar to the Views level, where it rests, once an entry was opened.
 func leaveSidebarLevel(m Model) Model {
 	if m.SidebarLevel != MenuViews {
@@ -296,7 +310,8 @@ func openEntry(m Model, entry PickerEntry, popup bool) (Model, []Cmd) {
 	case EntryProjects:
 		return setMenuLevel(m, popup, MenuProjects), nil
 	case EntryBack:
-		return setMenuLevel(m, popup, MenuTop), nil
+		m, _ = menuUp(m, popup)
+		return m, nil
 	}
 	m.Picker, m.Focus = PickerState{}, ColumnList
 	m = leaveSidebarLevel(m)
@@ -345,8 +360,8 @@ func updatePicker(m Model, msg KeyMsg) (Model, []Cmd) {
 	last := len(m.PickerEntries()) - 1
 	switch binding.Action {
 	case ClosePicker:
-		if m.Picker.Level != MenuTop && m.Picker.Filter == "" {
-			return setMenuLevel(m, true, MenuTop), nil
+		if up, ok := menuUp(m, true); ok && m.Picker.Filter == "" {
+			return up, nil
 		}
 		m.Picker = PickerState{}
 	case PickCollection:

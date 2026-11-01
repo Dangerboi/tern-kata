@@ -11,8 +11,8 @@ import (
 )
 
 // loadedAt is the Lane list load answering with the Project read at revision 4.
-func loadedAt(lanes []string, shared bool) model.LanesLoaded {
-	return model.LanesLoaded{ProjectUID: "p", Lanes: lanes, Shared: shared, ProjectID: 7, Revision: 4}
+func loadedAt(lanes []string, shared bool) newestLanes {
+	return newestLanes{ProjectUID: "p", Lanes: lanes, Shared: shared, ProjectID: 7, Revision: 4}
 }
 
 // sharedCard is the Lanes card open on a Board whose Project shares triage, review.
@@ -36,10 +36,10 @@ func sentShare(t *testing.T, out driver.Output) model.ShareLanes {
 
 func TestTheBoardAndTheLanesCardNameTheListsSource(t *testing.T) {
 	for _, tt := range []struct {
-		loaded model.LanesLoaded
+		loaded newestLanes
 		want   string
 	}{
-		{model.LanesLoaded{ProjectUID: "p"}, "default"},
+		{newestLanes{ProjectUID: "p"}, "default"},
 		{loadedAt([]string{"mine"}, false), "this machine"},
 		{loadedAt([]string{"ours"}, true), "shared with the Project"},
 	} {
@@ -161,7 +161,7 @@ func TestAProjectMetadataEventReadsTheLaneListAgain(t *testing.T) {
 	event := func(kind string) model.StreamEvent {
 		return model.StreamEvent{Generation: s.Model.StreamGeneration, ID: 1, Type: kind}
 	}
-	if got := loadCmds(step(t, s, event("project.metadata_updated")).Cmds); len(got) != 1 || got[0] != (model.LoadLanes{Workspace: "/repo", ProjectUID: "p"}) {
+	if got := loadCmds(step(t, s, event("project.metadata_updated")).Cmds); len(got) != 1 || (got[0].Workspace != "/repo" || got[0].ProjectUID != "p" || got[0].Request == s.Model.LanesRequest()) {
 		t.Errorf("a Project metadata event asked %v, want one load", got)
 	}
 	if got := loadCmds(step(t, s, event("issue.updated")).Cmds); len(got) != 0 {
@@ -173,7 +173,7 @@ func TestAProjectMetadataEventTheSnapshotAlreadyCoversStillReadsTheLaneListAgain
 	s := boardPane(t)
 	s.Model.Cursor = 5
 	covered := model.StreamEvent{Generation: s.Model.StreamGeneration, ID: 3, Type: "project.metadata_updated"}
-	if got := loadCmds(step(t, s, covered).Cmds); len(got) != 1 || got[0] != (model.LoadLanes{Workspace: "/repo", ProjectUID: "p"}) {
+	if got := loadCmds(step(t, s, covered).Cmds); len(got) != 1 || (got[0].Workspace != "/repo" || got[0].ProjectUID != "p" || got[0].Request == s.Model.LanesRequest()) {
 		t.Errorf("a covered Project metadata event asked %v, want one load", got)
 	}
 	covered.Type = "issue.updated"

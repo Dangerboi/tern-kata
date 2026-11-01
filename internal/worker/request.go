@@ -59,7 +59,7 @@ func (w *Worker) overlapGate(projectUID, jobUID string) *sync.Mutex {
 
 // RunOccurrence prepares the run of one scheduled occurrence of a job in a served Project and starts it. The same
 // occurrence always maps to the same run uid; when that run already has a journal, it is returned and created is false.
-// The scheduler uses this entry point.
+// The Project schedule uses this entry point.
 func (w *Worker) RunOccurrence(ctx context.Context, project, jobUID string, occurrence time.Time) (runUID string, created bool, err error) {
 	ps := w.projectNamed(project)
 	if ps == nil {
@@ -150,9 +150,22 @@ func (w *Worker) admitsNothing(ps *projectState) string {
 
 // admitsNothingLocked is admitsNothing with w.mu held.
 func (w *Worker) admitsNothingLocked(ps *projectState) string {
-	switch {
-	case w.stopping != "":
+	if w.stopping != "" {
 		return errStopping.Error()
+	}
+	return blockedReasonLocked(ps)
+}
+
+// blockedReason is admitsNothing without the stop: why the Project cannot act for a reason of its own, empty when it can.
+func (w *Worker) blockedReason(ps *projectState) string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return blockedReasonLocked(ps)
+}
+
+// blockedReasonLocked reads the Project's own state; w.mu is held.
+func blockedReasonLocked(ps *projectState) string {
+	switch {
 	case ps.blocked != "":
 		return ps.blocked
 	case !ps.resolved:
@@ -169,6 +182,22 @@ func (w *Worker) admitsNothingLocked(ps *projectState) string {
 		return "the kata route is not confirmed: " + ps.route.err
 	}
 	return ""
+}
+
+// overlapRefusal is why a job that forbids overlap cannot start a run now, nil when the gate is open or the job allows
+// overlap.
+func (w *Worker) overlapRefusal(ps *projectState, job cronjob.Job) error {
+	if job.Definition.Overlap != "forbid" {
+		return nil
+	}
+	earlier, err := w.gateClosed(job.UID, ps.project.UID)
+	if err != nil {
+		return &transientError{fmt.Errorf("job %q forbids overlap and its runs cannot be read: %w", job.Name, err)}
+	}
+	if earlier != "" {
+		return &busyError{fmt.Sprintf("job %q forbids overlap and run %s is not settled", job.Name, earlier), false}
+	}
+	return nil
 }
 
 func newJournalID() string {
@@ -254,18 +283,10 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 			}
 		}
 	}
-	if d.Overlap == "forbid" {
-		// Another request for this job must not pass the check before this one's journal closes the gate.
-		gate := w.overlapGate(ps.project.UID, job.UID)
-		gate.Lock()
-		defer gate.Unlock()
-		earlier, err := w.gateClosed(job.UID, ps.project.UID)
-		if err != nil {
-			return nil, false, &transientError{fmt.Errorf("job %q forbids overlap and its runs cannot be read: %w", job.Name, err)}
-		}
-		if earlier != "" {
-			return nil, false, &busyError{fmt.Sprintf("job %q forbids overlap and run %s is not settled", job.Name, earlier), false}
-		}
+	// The gate is checked here without waiting on anything slow, so a refused occurrence costs no kata call, and checked
+	// again under the job's lock just before the journal that closes it is saved.
+	if err := w.overlapRefusal(ps, job); err != nil {
+		return nil, false, err
 	}
 	if !w.reserve(ps) {
 		if w.isStopping() {
@@ -301,6 +322,15 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 		return nil, false, fmt.Errorf("kata already holds run %s (%s); it is not prepared again", uid, run.Status)
 	} else if !errors.Is(err, ErrNotFound) {
 		return nil, false, &transientError{fmt.Errorf("cannot tell whether kata holds run %s yet: %w", uid, err)}
+	}
+	if d.Overlap == "forbid" {
+		// The check and the journal that closes the gate are one step; only this section holds the lock.
+		gate := w.overlapGate(ps.project.UID, job.UID)
+		gate.Lock()
+		defer gate.Unlock()
+		if err := w.overlapRefusal(ps, job); err != nil {
+			return nil, false, err
+		}
 	}
 	w.mu.Lock()
 	generation := ps.lease.Generation

@@ -33,7 +33,7 @@ func TestListIdAndOwnerTakeTheBoardsColours(t *testing.T) {
 	closed := closedAt("done", time.October, 7, "needs-info")
 	issues := []model.Issue{ownedBy(boardCard("triage", "needs-triage"), "ada"), ownedBy(custom, "bo"), ownedBy(closed, "cy"), ownedBy(boardCard("none"), "di")}
 	s := step(t, projectPane(t, 160, issues...), key("shift+l")).State
-	s = step(t, s, model.LanesLoaded{ProjectUID: "p", Lanes: []string{"needs-triage", "in-review"}}).State
+	s = step(t, s, newestLanes{ProjectUID: "p", Lanes: []string{"needs-triage", "in-review"}}).State
 	for _, c := range []struct{ uid, owner, id, want string }{
 		{"triage", "ada", "triage", "warning mono"},
 		{"cust", "bo", "cust", "accent mono"},
@@ -54,7 +54,7 @@ func TestListIdAndOwnerTakeTheBoardsColours(t *testing.T) {
 
 func TestOtherCollectionsAskForNoLanes(t *testing.T) {
 	s := projectPane(t, 160, boardCard("a"))
-	s = step(t, s, model.LanesLoaded{ProjectUID: "p", Lanes: []string{"in-review"}}).State
+	s = step(t, s, newestLanes{ProjectUID: "p", Lanes: []string{"in-review"}}).State
 	for _, c := range model.FixedCollections() {
 		if c.IsProject() {
 			continue

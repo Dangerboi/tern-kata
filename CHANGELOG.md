@@ -42,6 +42,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The Issue detail's Children is a table that sizes its columns and drops the least important ones when narrow; a click on a row still goes to that child.
 - Empty Pages and lists (Attention, Runs, Jobs, Workflows, an Issue list with no Issues and the detail with nothing selected) say what is missing and what to do, with a button when one key fills them, and a Lane with no cards says so. Words that wait on someone use Tern's pending colour.
 - Tern closes a kata Pane without asking only when kata's `[tui] confirm_quit = false`, as it stands when the Pane starts; with the default it still asks.
+- Supervision is decided by tern-kata itself: the window plugin's host half asks `tern-kata worker supervised` whether to start the worker, so update tern-kata and the window plugin together. A tern-kata too old to answer leaves the worker unstarted, and the plugin logs this once per daemon with the advice to update.
+- `tern-kata views` words dates (`scheduled X · due Y`) and the filter summary (`status=open · owner=dana · search=x`) the way the Pane does.
+- The Issue detail with many comments, the Issue list and the Board draw faster, a run's detail reads its output tail in bounded memory, and the worker no longer lists every Cron job on each Issue event while an occurrence waits nor reads every run journal to admit a job that forbids overlap.
 
 ### Fixed
 
@@ -50,6 +53,20 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `e` on the Worker card and `ctrl+e` no longer only blink when neither `$VISUAL` nor `$EDITOR` is set, as in a Pane started by **Open kata**: they open `vi`, and with no `vi` either the card says to set one without leaving the Pane.
 - Popup cards draw their error, pending, warning and success lines in the theme's colours instead of the plain text colour, as do the worker notes of a Workflow's inspector.
 - With Tern 0.9.8 on a high-density display, the Issue list, the detail and the other column lists no longer run past the bottom of the Pane and scroll the top bar away: each list now fills its column and scrolls inside it at any display scale or Pane height.
+- Re-enabling a disabled Cron job runs nothing for the time it was off, whatever its `catchup`, with or without a worker restart in between.
+- A succeeded run whose per-run Issue can't be read when the worker reports it sends its final observation and waits to comment and label until the Issue can be read, so a closed Issue no longer gets the final message comment and `needs-review`.
+- During an idle stop, `worker abandon` of a Held run is accepted; `run` and `resume` are still refused while the worker stops.
+- `worker resume` of a Held run whose output can't be set aside, for example because another program has it open on Windows, is refused with the reason and the run stays held as it was, instead of the new attempt overwriting that output.
+- A finished turn whose `agent_end` line passes 64 MiB is recognised, live and on recovery (`no_receipt`, not `interrupted`), while a non-terminal one still is not; a single write over the line limit that contains a newline is checked too.
+- Stopping a Recurrence from its card or with `tern-kata recur --stop` writes nothing when its rule, start date or time zone changed since you read it and shows the schedule as it stands; a stop that got no answer says the Recurrence may have been stopped.
+- Agent mapping (`agents.json`) changes from two Panes at once no longer lose one, and neither do Lane list (`lanes.toml`) and Default filter (`filters.toml`) saves: a save applies on top of another Pane's save, or is refused with the reason shown on the card.
+- Sending an agent back records it as a background agent even when a later move step fails, and the Notice still shows Tern's error.
+- A Lane list answer sent before a save no longer replaces the saved Lanes, and saving the Lane list to the Project keeps the Undo history.
+- Undoing a body edit after someone else changed the body writes nothing and says why, and undoing a label add or remove that someone else already changed says so; a change to another field no longer blocks either.
+- A Pane reading live agent blocks waits only until its own deadline instead of behind another read's `tern ls`.
+- `ctrl+u` on an empty Popup card field keeps the card's error.
+- The Job card lists no next runs, and says why, for an existing interval job whose start point is unknown, instead of runs counted from now.
+- A failed write of tern-kata's output (`--version`, help, completion or a subcommand's output, for example to a full disk) exits 1, not 3.
 
 ### Removed
 

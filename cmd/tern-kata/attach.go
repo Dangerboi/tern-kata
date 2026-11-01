@@ -38,7 +38,7 @@ func runSubcommand(ctx context.Context, plan LaunchPlan, gateway *data.Gateway, 
 		detached := send(model.DetachFile{Workspace: workspace, Ref: plan.TargetRef, Actor: plan.Actor, Name: plan.Operands[0]}).(model.FileDetached)
 		if detached.Cleared {
 			if _, err := fmt.Fprintln(out, detached.Report()); err != nil {
-				return subcommandError{err}
+				return err
 			}
 		}
 		if detached.Err != nil {
@@ -52,7 +52,7 @@ func runSubcommand(ctx context.Context, plan LaunchPlan, gateway *data.Gateway, 
 			return subcommandError{attached.Err}
 		}
 		if _, err := fmt.Fprintln(out, attached.Path); err != nil {
-			return subcommandError{err}
+			return err
 		}
 	}
 	return nil
@@ -69,6 +69,13 @@ func runRecur(plan LaunchPlan, workspace string, send func(model.Cmd) model.Msg,
 		_, err := fmt.Fprintln(out, line)
 		return err
 	}
+	// movedMeanwhile prints the schedule another writer left and refuses: the write did not land.
+	movedMeanwhile := func(target model.RecurTarget, changed model.Recurrence) error {
+		if err := say(target.WithRecurrence(changed).Report()); err != nil {
+			return err
+		}
+		return subcommandError{model.ErrRecurrenceMovedMeanwhile}
+	}
 	target, err := load()
 	if err != nil {
 		return subcommandError{err}
@@ -81,9 +88,12 @@ func runRecur(plan LaunchPlan, workspace string, send func(model.Cmd) model.Msg,
 		case target.Recurring() == nil:
 			return subcommandError{model.RecurStoppedError(target.ShortID)}
 		}
-		stopped := send(model.StopRecurrenceCmd{Workspace: workspace, UID: target.UID, ProjectID: target.ProjectID, Actor: plan.Actor, RecurrenceUID: target.Recurrence.UID}).(model.RecurrenceResultMsg)
+		stopped := send(model.StopRecurrenceCmd{Workspace: workspace, UID: target.UID, ProjectID: target.ProjectID, Actor: plan.Actor, RecurrenceUID: target.Recurrence.UID, Opened: target.Recurrence.RecurrenceTerms}).(model.RecurrenceResultMsg)
 		if stopped.Err != nil {
 			return subcommandError{stopped.Err}
+		}
+		if stopped.Changed != nil {
+			return movedMeanwhile(target, *stopped.Changed)
 		}
 		return say(target.StopReport())
 	case len(plan.RecurFlags) == 0:
@@ -107,15 +117,12 @@ func runRecur(plan LaunchPlan, workspace string, send func(model.Cmd) model.Msg,
 		return subcommandError{written.Err}
 	}
 	if written.Changed != nil {
-		if err := say(target.WithRecurrence(*written.Changed).Report()); err != nil {
-			return subcommandError{err}
-		}
-		return subcommandError{model.ErrRecurrenceMovedMeanwhile}
+		return movedMeanwhile(target, *written.Changed)
 	}
 	// Said once the write landed: a refused save must not read as if the stored Local zone was replaced.
 	if note := target.ZoneNote(plan.RecurFlags); note != "" {
 		if err := say(note); err != nil {
-			return subcommandError{err}
+			return err
 		}
 	}
 	target, err = load()

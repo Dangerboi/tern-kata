@@ -53,12 +53,14 @@ func board(m model.Model, now time.Time) tern.Element {
 	if m.SelectedUID != "" {
 		selected = m.Relationships.Of(m.SelectedUID)
 	}
+	today := model.NewCalendarDay(m.Calendar.Date)
+	badges := m.AgentBadges()
 	lanes := make([]tern.Element, len(columns))
 	menu := newContextMenuKeys(model.ModeBoard, model.OpenLane)
 	for i, column := range columns {
 		cards := make([]tern.Element, len(column.Cards))
 		for j, card := range column.Cards {
-			cards[j] = boardCard(m, card, tones[i], column.Lane == model.LaneDone, selected, menu, now)
+			cards[j] = boardCard(m, card, tones[i], column.Lane == model.LaneDone, selected, menu, today, badges, now)
 		}
 		count := strconv.Itoa(len(column.Cards))
 		if column.Total > len(column.Cards) {
@@ -97,7 +99,7 @@ var dateTones = map[model.DateTone]ui.Tone{
 // boardCard is one Issue: its short id over its title clamped to two lines and its labels that are not Lane labels. The selected card
 // is unclamped and adds the owner and every label. The id is a badge in its Lane's tone; the title is the normal text colour, a Done
 // card's muted. The id row ends with the Date badge of an open card; the selected card adds the Dates line. Labels are info badges, the owner a user badge, "also" warning and the reopen hint muted.
-func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, selectedRels model.Relationships, menu contextMenuKeys, now time.Time) tern.Element {
+func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, selectedRels model.Relationships, menu contextMenuKeys, today model.CalendarDay, badges model.AgentBadgeIndex, now time.Time) tern.Element {
 	issue := card.Issue
 	selected := issue.UID == m.SelectedUID
 	titleStyle := ""
@@ -115,7 +117,7 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 		ids = append(ids, ui.Badge{Common: ui.Common{Key: "prio", Tone: prioTone, Role: MonoRole}, Text: text})
 	}
 	if !done {
-		if badge, ok := model.ChooseDateBadge(issue, m.Calendar.Date); ok {
+		if badge, ok := today.ChooseDateBadge(issue); ok {
 			ids = append(ids, ui.Badge{Common: ui.Common{Key: "date", Tone: dateTones[badge.Tone], Role: MonoRole}, Text: badge.Text})
 		}
 	}
@@ -147,8 +149,8 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 			body = append(body, ui.Text{Common: ui.Common{Key: "blocked", Hovercard: blockedCard(m, card, now)}, Spans: spans})
 		}
 	}
-	if badge, ok := agentBadge(m, issue.UID, "agent"); ok {
-		body = append(body, badge)
+	if badge, ok := badges.For(issue.UID); ok {
+		body = append(body, agentBadgeElement(badge, "agent"))
 	}
 	if selected {
 		if line := relationshipsLine(m, card, now); line != nil {

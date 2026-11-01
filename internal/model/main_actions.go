@@ -119,8 +119,8 @@ func sidebarOpen(m Model) (Model, []Cmd) {
 
 // menuBack is esc in the Menu sidebar: it leaves the Views or Projects level, and does nothing at the top.
 func menuBack(m Model) Model {
-	if m.SidebarLevel != MenuTop && len(m.SidebarEntries()) > 0 {
-		return setMenuLevel(m, false, MenuTop)
+	if len(m.SidebarEntries()) > 0 {
+		m, _ = menuUp(m, false)
 	}
 	return m
 }

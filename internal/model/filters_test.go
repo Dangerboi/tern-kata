@@ -24,8 +24,8 @@ func TestLiveSearch(t *testing.T) {
 		{"query escape cancels and restores selection", []string{"/", "q", "down", "escape", "escape"}, model.ModeList, "", "b"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			m := model.Model{Collection: model.Collection{View: "project", ProjectUID: "p", Title: "Work"}, SelectedUID: "b"}
-			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a", Title: "Alpha", Status: "open"}, {UID: "b", Title: "Beta", Status: "open"}}}, ETag: "original"})
+			m := model.WithSnapshotRead(model.Model{Collection: model.Collection{View: "project", ProjectUID: "p", Title: "Work"}, SelectedUID: "b"})
+			m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest(), Query: m.SnapshotQuery(), Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a", Title: "Alpha", Status: "open"}, {UID: "b", Title: "Beta", Status: "open"}}}, ETag: "original"})
 			for _, chord := range tt.keys {
 				var cmds []model.Cmd
 				m, cmds = model.Update(m, model.KeyMsg{Chord: chord})
@@ -173,11 +173,11 @@ func TestCollectionSwitchKeepsFilterIntent(t *testing.T) {
 	if !readsCollection(cmds, m, "") || cmds[0].(model.ReadSnapshot).Query.Text == nil || *cmds[0].(model.ReadSnapshot).Query.Text != "fix" {
 		t.Fatalf("Collection query loses filters: %#v", cmds)
 	}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: m.SnapshotQuery(), LocalDate: "2026-10-08", TimeZone: "UTC", Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a", Status: "open", ScheduledOnDate: new("2026-10-08")}}}})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest(), Query: m.SnapshotQuery(), LocalDate: "2026-10-08", TimeZone: "UTC", Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "a", Status: "open", ScheduledOnDate: new("2026-10-08")}}}})
 	if m.Filters != filters || m.SelectedUID != "a" || m.Loading {
 		t.Fatalf("Collection load loses filters: %+v", m)
 	}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest, Query: model.CollectionQuery(collection, model.Filters{}), Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "stale"}}}})
+	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest(), Query: model.CollectionQuery(collection, model.Filters{}), Snapshot: model.Snapshot{Issues: []model.Issue{{UID: "stale"}}}})
 	if m.SelectedUID != "a" {
 		t.Fatal("unfiltered Collection snapshot applied")
 	}
@@ -236,5 +236,27 @@ func TestStatusDefaultsToAll(t *testing.T) {
 		if m.Filters.Status != "open" || len(cmds) != 1 {
 			t.Fatalf("%s: form did not start on all: %+v", c.View, m.Filters)
 		}
+	}
+}
+
+func TestDescribeFiltersSharedWithTheFilterLine(t *testing.T) {
+	f := model.Filters{ProjectUID: "u1", Status: "open", Owner: "ann", Label: "bug", Relationship: "parent", Search: "crash"}
+	name := func(uid string) string { return "Work" }
+	want := "project=Work · status=open · owner=ann · label=bug · relationship=parent · search=crash"
+	if got := model.DescribeFilters(f, name); got != want {
+		t.Errorf("DescribeFilters = %q, want %q", got, want)
+	}
+	if got := model.DescribeFilters(model.Filters{}, name); got != "" {
+		t.Errorf("no filters = %q", got)
+	}
+}
+
+func TestPriorityText(t *testing.T) {
+	two := int64(2)
+	if got := model.PriorityText(&two); got != "P2" {
+		t.Errorf("PriorityText(2) = %q", got)
+	}
+	if got := model.PriorityText(nil); got != "" {
+		t.Errorf("PriorityText(nil) = %q", got)
 	}
 }

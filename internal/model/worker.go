@@ -184,9 +184,9 @@ type WorkerState struct {
 	SetupErr  error
 	// Detail is the detail of the run last asked for; it is shown only while that run is selected.
 	Detail *LocalRunDetail
-	// request counts the status asks; asked is the run whose detail was asked for last and detailStale says a fresh status wants
+	// reads numbers the status asks; asked is the run whose detail was asked for last and detailStale says a fresh status wants
 	// it read again.
-	request     int64
+	reads       Latest
 	inflight    bool
 	polling     bool
 	asked       string
@@ -195,15 +195,14 @@ type WorkerState struct {
 
 // askWorker numbers a new status ask and drops the older ones.
 func (m Model) askWorker(after time.Duration) (Model, Cmd) {
-	m.Worker.request++
 	m.Worker.inflight, m.Worker.polling = true, after > 0
-	return m, LoadWorker{Request: m.Worker.request, After: after}
+	return m, LoadWorker{Request: m.Worker.reads.Ask(), After: after}
 }
 
 // workerLoaded applies the answer to the latest ask. On the Runs Page it asks again while a run is running, and when a pause
 // ended it has the newest Runs read so the Run's own record follows what the worker reports.
 func workerLoaded(m Model, msg WorkerLoaded) (Model, []Cmd) {
-	if msg.Request != m.Worker.request {
+	if !m.Worker.reads.IsCurrent(msg.Request) {
 		return m, nil
 	}
 	w := &m.Worker

@@ -3,40 +3,14 @@
 package worker_test
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/worker"
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
 )
-
-// logLines collects the Worker's log.
-type logLines struct {
-	mu    sync.Mutex
-	lines []string
-}
-
-func (l *logLines) add(format string, args ...any) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.lines = append(l.lines, strings.TrimSpace(fmt.Sprintf(format, args...)))
-}
-
-func (l *logLines) count(sub string) int {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	n := 0
-	for _, s := range l.lines {
-		if strings.Contains(s, sub) {
-			n++
-		}
-	}
-	return n
-}
 
 // spoil makes the capture file of a run (relative to its folder) impossible to create: a directory in its place.
 func spoil(t *testing.T, path string) {

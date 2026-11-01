@@ -416,3 +416,22 @@ func TestJobsPageWarnsOfAnAdapterJobMakingMoreThanADayOfIssuesPerDay(t *testing.
 	}
 	wantText(t, "inspector", inspectorText(t, s), "creates about 1440 Issues a day")
 }
+
+func TestJobsPageDropsAnAnswerToAnOlderRead(t *testing.T) {
+	s := jobsPane(t, 160, promptJob("J1", "Triage"))
+	first := step(t, s, key("ctrl+r"))
+	older, _ := askedJobs(first.Cmds)
+	second := step(t, first.State, key("ctrl+r"))
+	newer, _ := askedJobs(second.Cmds)
+	if newer.Request == older.Request {
+		t.Fatal("two reads share a request number")
+	}
+	late := step(t, second.State, model.JobsLoaded{Request: older.Request, Jobs: []model.CronJob{promptJob("J9", "Stale")}})
+	if jobs := late.State.Model.Jobs.Jobs; len(jobs) != 1 || jobs[0].UID != "J1" || !late.State.Model.Jobs.Loading {
+		t.Fatalf("an answer to an older read was applied: %+v, loading %v", jobs, late.State.Model.Jobs.Loading)
+	}
+	fresh := step(t, late.State, model.JobsLoaded{Request: newer.Request, Jobs: []model.CronJob{promptJob("J2", "Fresh")}}).State
+	if jobs := fresh.Model.Jobs.Jobs; len(jobs) != 1 || jobs[0].UID != "J2" || fresh.Model.Jobs.Loading {
+		t.Errorf("the newest answer gave %+v, loading %v", jobs, fresh.Model.Jobs.Loading)
+	}
+}

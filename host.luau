@@ -1,11 +1,10 @@
 --!strict
 
 -- The host half runs in Tern's session daemon, with or without a window. It keeps `tern-kata worker` running: it starts
--- the worker when worker.toml exists, and starts it again, backing off, whenever it exits. With no worker.toml it does nothing.
+-- the worker when the Supervision rule holds, and starts it again, backing off, whenever it exits.
 -- Turning it off: create worker.manual beside worker.toml (see docs/guide/worker.md).
--- The rule (worker.toml exists and worker.manual does not) and the config folder (os.UserConfigDir plus tern-kata) are
--- the Go worker package's: worker.SupervisionOn in internal/worker/supervision.go and worker.ConfigDir in
--- internal/worker/config.go. This file holds the one other copy, and smoke/supervision.sh pins the two to the same files.
+-- This file does not decide the rule or find the config folder: it asks `tern-kata worker supervised`, whose answer is
+-- worker.SupervisionOn in internal/worker/supervision.go (the one place the rule is held; the Go tests pin it).
 
 local os_name = tern.runtime.os
 local windows = os_name == "windows"
@@ -25,8 +24,18 @@ local delay = MIN_DELAY
 local next_start = 0
 -- worker.toml's text when the worker was last started: a different text on disk means the wait no longer applies.
 local started_text: string? = nil
-local CONFIG_MAX_BYTES = 1024 * 1024
+-- A `worker supervised` question is out; its answer arms the next look.
+local asking = false
+local warned_missing = false
+local warned_status = false
+local ASK_LIMIT_MS = 10000
 local handle: TimerHandle? = nil
+
+-- The next start comes at once and at the shortest delay, as after a healthy run.
+local function reset_backoff()
+    delay = MIN_DELAY
+    next_start = 0
+end
 
 local function join(...: string): string
     return table.concat({...}, sep)
@@ -36,21 +45,6 @@ local function env(name: string): string?
     local value = tern.getenv(name)
     if value == nil or value == "" then return nil end
     return value
-end
-
--- The folder os.UserConfigDir gives the binary, plus tern-kata: worker.ConfigDir's rule, pinned by smoke/supervision.sh.
-local function config_dir(): string?
-    local base: string?
-    if windows then
-        base = env("APPDATA")
-    elseif os_name == "macos" then
-        local home = env("HOME")
-        base = home and join(home, "Library", "Application Support")
-    else
-        local home = env("HOME")
-        base = env("XDG_CONFIG_HOME") or (home and join(home, ".config"))
-    end
-    return base and join(base, "tern-kata")
 end
 
 local function split_path(): { string }
@@ -113,17 +107,6 @@ local function worker_path(): string
     return table.concat(dirs, path_sep)
 end
 
--- The text of worker.toml when the host half should keep a worker running, nil when supervision is off: worker.SupervisionOn's
--- rule, pinned by smoke/supervision.sh.
-local function enabled_config(): string?
-    local dir = config_dir()
-    if dir == nil then return nil end
-    local path = join(dir, "worker.toml")
-    if not tern.fs.exists(path) or tern.fs.exists(join(dir, "worker.manual")) then return nil end
-    local ok, text = pcall(tern.fs.read, path, CONFIG_MAX_BYTES)
-    return ok and text or ""
-end
-
 local start
 
 local function arm(ms: number)
@@ -140,26 +123,11 @@ local function last_line(text: string): string
     return line
 end
 
--- Called by the timer: starts the worker when it is wanted and not running, else looks again later.
-function start()
-    if running then return arm(POLL_MS) end
-    local config = enabled_config()
-    if config == nil or (started_text ~= nil and config ~= started_text) then
-        delay = MIN_DELAY
-        next_start = 0
-        started_text = nil
-    end
-    if config == nil then return arm(POLL_MS) end
+-- Starts the worker if the backoff allows. config is worker.toml's text, which `worker supervised` printed.
+local function launch(binary: string, config: string)
     local wait = next_start - tern.now()
     if wait > 0 then return arm(math.min(wait, POLL_MS)) end
     started_text = config
-    local binary = find_binary()
-    if binary == nil then
-        tern.log.warn("tern-kata: the worker is configured but tern-kata is not installed on the daemon's PATH or in a known folder; trying again in " .. delay // 1000 .. " s")
-        next_start = tern.now() + delay
-        delay = math.min(delay * 2, MAX_DELAY)
-        return arm(math.min(next_start - tern.now(), POLL_MS))
-    end
     local started = tern.now()
     local function exited(result: ProcessResult)
         running = false
@@ -185,6 +153,57 @@ function start()
         next_start = tern.now() + delay
         delay = math.min(delay * 2, MAX_DELAY)
         arm(math.min(next_start - tern.now(), POLL_MS))
+    end
+end
+
+-- The answer of `tern-kata worker supervised`: status 0 and worker.toml's text when the supervision rule holds, status 1
+-- when it does not. Any other status (a timeout, a binary that cannot run) says nothing about the rule, so the state stays;
+-- a status that is neither a timeout nor -1 (killed by a signal) is logged once per daemon: an older tern-kata binary exits
+-- 2 on `worker supervised`, and then the worker never starts until the binary is updated.
+local function answered(binary: string, result: ProcessResult)
+    asking = false
+    if result.status ~= 0 then
+        if result.status == 1 and not result.timed_out then
+            reset_backoff()
+            started_text = nil
+        elseif not result.timed_out and result.status ~= -1 and not warned_status then
+            warned_status = true
+            tern.log.warn("tern-kata: `worker supervised` exited with status " .. result.status .. " (" .. last_line(result.stderr) .. "), so the worker is not started; the tern-kata binary is probably older than this plugin: update it (install.sh or install.ps1)")
+        end
+        return arm(POLL_MS)
+    end
+    local config = result.stdout
+    if started_text ~= nil and config ~= started_text then
+        reset_backoff()
+        started_text = nil
+    end
+    launch(binary, config)
+end
+
+-- Called by the timer: asks the Go worker whether the supervision rule holds, and starts the worker when it does and none runs.
+function start()
+    if running then return arm(POLL_MS) end
+    if asking then return end
+    local binary = find_binary()
+    if binary == nil then
+        if not warned_missing then
+            warned_missing = true
+            tern.log.warn("tern-kata: not installed on the daemon's PATH or in a known folder, so a configured worker cannot be started; looking again every " .. POLL_MS // 1000 .. " s")
+        end
+        return arm(POLL_MS)
+    end
+    warned_missing = false
+    asking = true
+    local ok, err = pcall(function()
+        tern.process.run({binary, "worker", "supervised"}, {
+            env = { PATH = worker_path() },
+            timeout_ms = ASK_LIMIT_MS,
+        }, function(result: ProcessResult) answered(binary, result) end)
+    end)
+    if not ok then
+        asking = false
+        tern.log.warn("tern-kata: could not ask whether the worker is supervised: " .. tostring(err))
+        arm(POLL_MS)
     end
 end
 

@@ -108,3 +108,31 @@ func golden(t *testing.T, path, got string) {
 		t.Fatalf("prompt differs from %s (run with -update to rewrite):\n%s", path, got)
 	}
 }
+
+// longOutput is a run's output: many turns, each a message_end, then the agent_end carrying them all.
+func longOutput(turns int) [][]byte {
+	msg := `{"role":"assistant","content":[{"type":"thinking","text":"` + strings.Repeat("t", 400) + `"},{"type":"text","text":"` + strings.Repeat("w", 400) + `"}],"stopReason":"stop","usage":{"input":10,"output":2,"cacheRead":5,"cacheWrite":1}}`
+	user := `{"role":"user","content":[{"type":"text","text":"` + strings.Repeat("u", 400) + `"}]}`
+	var lines [][]byte
+	var all []string
+	lines = append(lines, []byte(`{"type":"session","id":"s1"}`))
+	for range turns {
+		lines = append(lines, []byte(`{"type":"message_end","message":`+msg+`}`))
+		all = append(all, user, msg)
+	}
+	return append(lines, []byte(`{"type":"agent_end","messages":[`+strings.Join(all, ",")+`],"isTerminal":true}`))
+}
+
+func BenchmarkAgentParserLongOutput(b *testing.B) {
+	lines := longOutput(200)
+	b.ReportAllocs()
+	for b.Loop() {
+		p := &agentParser{}
+		for _, l := range lines {
+			p.Line(l)
+		}
+		if r := p.Result(); !r.Terminal || r.StopReason != "stop" || r.InputTokens == nil || *r.InputTokens != 16*200 {
+			b.Fatalf("got %+v", r)
+		}
+	}
+}

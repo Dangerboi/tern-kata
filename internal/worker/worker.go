@@ -97,7 +97,7 @@ type projectState struct {
 
 	jobs       map[string]cronjob.Job
 	jobsErr    string
-	jobsAt     time.Time
+	jobsAt     time.Time // when the job list was last read, successfully or not
 	streamOpen bool
 
 	// pending counts slots reserved before a uid exists; held maps each slot-holding run uid to its job uid.
@@ -105,9 +105,11 @@ type projectState struct {
 	held    map[string]string
 
 	wake chan struct{}
-	// kick asks the Project loop to look at its queued occurrences again; sched is that loop's own schedule state.
+	// kick asks the Project loop to look at its queued occurrences again; sched is that loop's own schedule.
 	kick  chan struct{}
-	sched map[string]*jobSchedule
+	sched *projectSchedule
+	// issueKick wakes the Project loop for an Issue event: the one cause whose tick may reuse a fresh job listing.
+	issueKick chan struct{}
 	// dates caches the planning dates of the Issues Issue-date jobs watch (the Project loop's own); datesDirty is set
 	// by the event stream when an Issue changed.
 	dates      map[string]issueDates
@@ -140,7 +142,7 @@ func New(opts Options) (*Worker, error) {
 	for _, p := range opts.Config.Projects {
 		cfg, _ := opts.Config.project(p.Name)
 		actor := cmp.Or(cfg.Actor, opts.Config.Actor, opts.Actor)
-		w.projects = append(w.projects, &projectState{cfg: cfg, actor: actor, held: map[string]string{}, wake: make(chan struct{}, 1), kick: make(chan struct{}, 1)})
+		w.projects = append(w.projects, &projectState{cfg: cfg, actor: actor, held: map[string]string{}, wake: make(chan struct{}, 1), kick: make(chan struct{}, 1), issueKick: make(chan struct{}, 1)})
 	}
 	return w, nil
 }

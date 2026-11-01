@@ -36,11 +36,8 @@ const (
 	RecurrenceZone      Field = "zone"
 )
 
-// RecurrenceFields is the Recurrence card's field list in tab order. Which of them apply depends on the frequency and the end.
-var RecurrenceFields = []FieldSpec{
-	{RecurrenceFrequency, false}, {RecurrenceEvery, true}, {RecurrenceWeekdays, false}, {RecurrenceDay, true},
-	{RecurrenceMonth, false}, {RecurrenceStart, true}, {RecurrenceEnds, false}, {RecurrenceEnd, true}, {RecurrenceZone, true},
-}
+// RecurrenceFields is the Recurrence card's field list in tab order.
+var RecurrenceFields = recurrenceTable.specs()
 
 // RecurrenceEndKinds are the choices of the Ends field, in cycling order; the Frequency field cycles Frequencies.
 var RecurrenceEndKinds = []EndKind{EndNever, EndUntil, EndCount}
@@ -108,26 +105,6 @@ func (f RecurrenceFormState) EndText() string {
 		return f.Count
 	}
 	return f.Until
-}
-
-// text is the single-line field called name, nil for a choice field.
-func (f *RecurrenceFormState) text(name Field) *string {
-	switch name {
-	case RecurrenceEvery:
-		return &f.Every
-	case RecurrenceDay:
-		return &f.Day
-	case RecurrenceEnd:
-		if f.Ends == EndCount {
-			return &f.Count
-		}
-		return &f.Until
-	case RecurrenceStart:
-		return &f.Start
-	case RecurrenceZone:
-		return &f.Zone
-	}
-	return nil
 }
 
 // newRecurrenceForm is the card for an Issue that does not recur: weekly on the start date's weekday, every 1, never ending.
@@ -401,48 +378,85 @@ func updateRecurrence(m Model, msg Msg) (Model, []Cmd) {
 	return m, nil
 }
 
-// step moves a choice field one choice on, or the weekday cursor; back goes the other way.
-func (f *RecurrenceFormState) step(back bool) {
-	d := 1
-	if back {
-		d = -1
+// chooseFrequency gives the Frequency field its choice at i, in the order of Frequencies. An index out of range changes nothing.
+func chooseFrequency(f *RecurrenceFormState, i int) bool {
+	if i < 0 || i >= len(Frequencies) {
+		return false
 	}
-	cycle := func(i, n int) int { return ((i+d)%n + n) % n }
-	switch f.Field {
-	case RecurrenceFrequency:
-		f.choose(cycle(slices.Index(Frequencies, f.Frequency), len(Frequencies)))
-	case RecurrenceEnds:
-		f.choose(cycle(slices.Index(RecurrenceEndKinds, f.Ends), len(RecurrenceEndKinds)))
-	case RecurrenceMonth:
-		f.choose(cycle(f.Month-1, 12))
-	case RecurrenceWeekdays:
-		f.WeekdayAt = cycle(f.WeekdayAt, 7)
+	f.Frequency = Frequencies[i]
+	if f.Day == "" {
+		f.Day = f.startDay()
 	}
+	return true
 }
 
-// choose gives the focused choice field its choice at index i, in the order the card shows them (Frequencies, MondayFirst,
-// January first, RecurrenceEndKinds). In the Weekdays field it puts the cursor on that day and toggles it. An index out of
-// range changes nothing.
-func (f *RecurrenceFormState) choose(i int) {
-	switch {
-	case i < 0:
-		return
-	case f.Field == RecurrenceFrequency && i < len(Frequencies):
-		f.Frequency = Frequencies[i]
-		if f.Day == "" {
-			f.Day = f.startDay()
-		}
-	case f.Field == RecurrenceEnds && i < len(RecurrenceEndKinds):
-		f.Ends = RecurrenceEndKinds[i]
-	case f.Field == RecurrenceMonth && i < 12:
-		f.Month = i + 1
-	case f.Field == RecurrenceWeekdays && i < len(MondayFirst):
-		f.WeekdayAt = i
-		f.Weekdays[MondayFirst[i]] = !f.Weekdays[MondayFirst[i]]
-	default:
-		return
+// chooseEnds gives the Ends field its choice at i, in the order of RecurrenceEndKinds. An index out of range changes nothing.
+func chooseEnds(f *RecurrenceFormState, i int) bool {
+	if i < 0 || i >= len(RecurrenceEndKinds) {
+		return false
 	}
-	f.Err = nil
+	f.Ends = RecurrenceEndKinds[i]
+	return true
+}
+
+// chooseMonth gives the Month field its choice at i, January first. An index out of range changes nothing.
+func chooseMonth(f *RecurrenceFormState, i int) bool {
+	if i < 0 || i >= 12 {
+		return false
+	}
+	f.Month = i + 1
+	return true
+}
+
+// toggleWeekday puts the weekday cursor on the day at i, in the order the card shows them (MondayFirst), and toggles that
+// day. An index out of range changes nothing.
+func toggleWeekday(f *RecurrenceFormState, i int) bool {
+	if i < 0 || i >= len(MondayFirst) {
+		return false
+	}
+	f.WeekdayAt = i
+	f.Weekdays[MondayFirst[i]] = !f.Weekdays[MondayFirst[i]]
+	return true
+}
+
+// recurrenceTable declares the Recurrence card's fields, in tab order, and its busy condition. Which of them apply depends on
+// the frequency and the end: tab skips the ones Shows says do not. Left and right move the weekday cursor in the Weekdays
+// field, which picks the day under the cursor by index.
+var recurrenceTable = fieldTable[RecurrenceFormState]{
+	form:   func(m *Model) *RecurrenceFormState { return &m.RecurrenceForm },
+	busy:   func(f RecurrenceFormState) bool { return f.Saving || f.StopConfirm || f.Refused },
+	focus:  func(f *RecurrenceFormState) *Field { return &f.Field },
+	caret:  func(f *RecurrenceFormState) *Caret { return &f.Caret },
+	err:    func(f *RecurrenceFormState) *error { return &f.Err },
+	hidden: func(m Model, name Field) bool { return !m.RecurrenceForm.Shows(name) },
+	fields: []formField[RecurrenceFormState]{
+		choiceField(RecurrenceFrequency,
+			func(f *RecurrenceFormState, back bool) {
+				chooseFrequency(f, cycleIndex(slices.Index(Frequencies, f.Frequency), len(Frequencies), back))
+			},
+			chooseFrequency),
+		textField(RecurrenceEvery, func(f *RecurrenceFormState) *string { return &f.Every }),
+		choiceField(RecurrenceWeekdays,
+			func(f *RecurrenceFormState, back bool) { f.WeekdayAt = cycleIndex(f.WeekdayAt, 7, back) },
+			toggleWeekday),
+		textField(RecurrenceDay, func(f *RecurrenceFormState) *string { return &f.Day }),
+		choiceField(RecurrenceMonth,
+			func(f *RecurrenceFormState, back bool) { chooseMonth(f, cycleIndex(f.Month-1, 12, back)) },
+			chooseMonth),
+		textField(RecurrenceStart, func(f *RecurrenceFormState) *string { return &f.Start }),
+		choiceField(RecurrenceEnds,
+			func(f *RecurrenceFormState, back bool) {
+				chooseEnds(f, cycleIndex(slices.Index(RecurrenceEndKinds, f.Ends), len(RecurrenceEndKinds), back))
+			},
+			chooseEnds),
+		textField(RecurrenceEnd, func(f *RecurrenceFormState) *string {
+			if f.Ends == EndCount {
+				return &f.Count
+			}
+			return &f.Until
+		}),
+		textField(RecurrenceZone, func(f *RecurrenceFormState) *string { return &f.Zone }),
+	},
 }
 
 // recurrenceKey is one key for the Recurrence card on top. Left, right and space move through a choice field's choices; in the
@@ -456,7 +470,7 @@ func recurrenceKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		return answerStop(m, msg)
 	}
 	binding, bound := LookupBindingForMode(msg.Chord, ModeRecurrenceForm)
-	field := f.text(f.Field)
+	field := recurrenceTable.textAt(f, f.Field)
 	switch {
 	case f.Refused && !(bound && binding.Action == RecurrenceCancel):
 	case bound && binding.Action == RecurrenceCancel:
@@ -466,10 +480,11 @@ func recurrenceKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case bound && binding.Action == RecurrenceStop && f.Change:
 		f.StopConfirm, f.Err = true, nil
 	case bound && binding.Action == InputSpace && field == nil && f.Field == RecurrenceWeekdays:
-		f.choose(f.WeekdayAt)
+		if toggleWeekday(f, f.WeekdayAt) {
+			f.Err = nil
+		}
 	case bound && binding.Action == InputSpace && field == nil:
-		f.step(false)
-		f.Err = nil
+		recurrenceTable.stepFocused(&m, false)
 	case field != nil:
 		var edited bool
 		if bound && binding.Action == InputSpace {
@@ -497,7 +512,7 @@ func answerStop(m Model, msg KeyMsg) (Model, []Cmd) {
 			return m, nil
 		}
 		f.Saving, f.Stopping, f.Err = true, true, nil
-		return m, []Cmd{StopRecurrenceCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, RecurrenceUID: f.Opened.UID}}
+		return m, []Cmd{StopRecurrenceCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, RecurrenceUID: f.Opened.UID, Opened: f.Opened.RecurrenceTerms}}
 	}
 	return m, nil
 }

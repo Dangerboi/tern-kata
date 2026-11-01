@@ -18,5 +18,10 @@ func agentBadge(m model.Model, uid, key string) (ui.Badge, bool) {
 	if !ok {
 		return ui.Badge{}, false
 	}
-	return ui.Badge{Common: ui.Common{Key: key, Tone: agentTones[badge.Tone], Actions: &ui.Actions{Click: AgentClick(badge.Block)}}, Text: badge.Text}, true
+	return agentBadgeElement(badge, key), true
+}
+
+// agentBadgeElement is badge as the element agentBadge draws.
+func agentBadgeElement(badge model.AgentBadge, key string) ui.Badge {
+	return ui.Badge{Common: ui.Common{Key: key, Tone: agentTones[badge.Tone], Actions: &ui.Actions{Click: AgentClick(badge.Block)}}, Text: badge.Text}
 }

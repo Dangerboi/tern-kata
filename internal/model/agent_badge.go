@@ -97,7 +97,10 @@ func ChooseAgent(agents []IssueAgent) (IssueAgent, bool) {
 // AgentBadgeFor is the Agent badge of an Issue: the chosen agent's state, plus " · N" for N > 1 mapped agents. ok is false
 // when no agent is mapped to the Issue; a closed Issue keeps its badge.
 func (m Model) AgentBadgeFor(issueUID string) (AgentBadge, bool) {
-	agents := m.IssueAgents(issueUID)
+	return badgeOf(m.IssueAgents(issueUID))
+}
+
+func badgeOf(agents []IssueAgent) (AgentBadge, bool) {
 	best, ok := ChooseAgent(agents)
 	if !ok {
 		return AgentBadge{}, false
@@ -108,6 +111,35 @@ func (m Model) AgentBadgeFor(issueUID string) (AgentBadge, bool) {
 		badge.Text += fmt.Sprintf(" · %d", len(agents))
 	}
 	return badge, true
+}
+
+// AgentBadgeIndex answers AgentBadgeFor for many Issues: each Issue's agents, with their relayed states, gathered in one pass,
+// so a row costs a lookup rather than a scan of the Agent mapping and the relayed states.
+type AgentBadgeIndex struct {
+	agents map[string][]IssueAgent
+}
+
+// AgentBadges indexes the agents of every Issue that has one, for a frame that asks the badge of every row.
+func (m Model) AgentBadges() AgentBadgeIndex {
+	if len(m.AgentMapping) == 0 {
+		return AgentBadgeIndex{}
+	}
+	states := make(map[string]AgentStateWord, len(m.Agents.States))
+	for _, s := range m.Agents.States {
+		if _, seen := states[s.Block]; !seen {
+			states[s.Block] = s.State
+		}
+	}
+	agents := make(map[string][]IssueAgent)
+	for _, entry := range m.AgentMapping {
+		agents[entry.IssueUID] = append(agents[entry.IssueUID], IssueAgent{AgentEntry: entry, State: states[entry.Block]})
+	}
+	return AgentBadgeIndex{agents: agents}
+}
+
+// For is the Agent badge of the Issue, as AgentBadgeFor.
+func (x AgentBadgeIndex) For(issueUID string) (AgentBadge, bool) {
+	return badgeOf(x.agents[issueUID])
 }
 
 // AgentJumpMsg is a click on an Agent badge: Block is the agent it names, as decimal text.

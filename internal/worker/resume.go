@@ -6,8 +6,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
@@ -31,8 +33,8 @@ type RunTransition struct {
 // expiry before anything starts; the held attempt's prompt is never sent again. by is the actor recorded for the
 // resume. One request owns a run at a time, so two resumes of one hold accept one and the other never touches its slot.
 func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, error) {
-	if w.halted.Load() || w.isStopping() {
-		return RunTransition{}, errStopping
+	if err := w.stopRefusal(cmdResume); err != nil {
+		return RunTransition{}, err
 	}
 	op := w.runOps.get(uid)
 	op.Lock()
@@ -79,6 +81,11 @@ func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, err
 	}
 	generation := state.Generation
 	by = cmp.Or(by, ps.actor)
+	// The held attempt's output is set aside before the resume is accepted: a refusal keeps the hold and its reason, and
+	// the new attempt never opens the held output for writing.
+	if err := keepAttemptOutput(w.store.hooks, w.attemptDir(j), j.attempt()); err != nil {
+		return RunTransition{}, fmt.Errorf("run %s cannot be resumed: %w", uid, err)
+	}
 	updated, err := w.store.Update(uid, "resume-accepted", func(j *Journal) error {
 		// Checked again under the journal's lock: a request that is not this worker's own cannot slip in between.
 		return w.life(j).acceptResume(j, resumeTerms{By: by, Generation: generation, At: w.clock.Now().UTC(), Tokens: w.heldTokens, SessionID: w.sessionID})
@@ -99,7 +106,7 @@ func (w *Worker) heldTokens(j *Journal) (in, out *int64) {
 	if r := j.Result; r != nil && (r.InputTokens != nil || r.OutputTokens != nil) {
 		return r.InputTokens, r.OutputTokens
 	}
-	r := readOutput(filepath.Join(w.attemptDir(j), "output.jsonl"))
+	r := readOutput(w.heldFile(j, "output.jsonl"))
 	return r.InputTokens, r.OutputTokens
 }
 
@@ -109,10 +116,10 @@ func (w *Worker) heldTokens(j *Journal) (in, out *int64) {
 // SIGTERM, then SIGKILL after 10 s, and the run is recorded cancelled once the group is gone (ADR-0008). A run this
 // machine lost (no journal, or one in quarantine) is recorded `unknown` "local state lost" in kata. It refuses a run
 // that is settled, still being reported, or whose recorded process group is still present, and every Project that
-// admits nothing, as run and resume do.
+// admits nothing apart from stopping, as run and resume do; an idle stop still accepts it.
 func (w *Worker) Abandon(ctx context.Context, uid, by string) (RunTransition, error) {
-	if w.halted.Load() {
-		return RunTransition{}, errors.New("the worker is stopping")
+	if err := w.stopRefusal(cmdAbandon); err != nil {
+		return RunTransition{}, err
 	}
 	op := w.runOps.get(uid)
 	op.Lock()
@@ -124,7 +131,7 @@ func (w *Worker) Abandon(ctx context.Context, uid, by string) (RunTransition, er
 	if err != nil {
 		return RunTransition{}, err
 	}
-	if why := w.admitsNothing(ps); why != "" {
+	if why := w.blockedReason(ps); why != "" {
 		return RunTransition{}, fmt.Errorf("run %s cannot be abandoned: Project %s admits nothing: %s", uid, ps.cfg.Name, why)
 	}
 	by = cmp.Or(by, ps.actor)
@@ -295,15 +302,58 @@ func sessionIn(dir, launched string) string {
 	return name[strings.LastIndexByte(name, '_')+1:]
 }
 
+// asideName is the name a finished attempt's file keeps beside the next attempt's: output.jsonl becomes
+// output.attempt2.jsonl.
+func asideName(name string, attempt int) string {
+	ext := filepath.Ext(name)
+	return fmt.Sprintf("%s.attempt%d%s", strings.TrimSuffix(name, ext), attempt, ext)
+}
+
+// heldFile is the path of the held attempt's file name in its folder: the live file, or, when a resume set it aside
+// and the run is still held, the aside copy.
+func (w *Worker) heldFile(j *Journal, name string) string {
+	dir := w.attemptDir(j)
+	live := filepath.Join(dir, name)
+	if _, err := os.Stat(live); err == nil || !j.held() {
+		return live
+	}
+	aside := filepath.Join(dir, asideName(name, j.attempt()))
+	if _, err := os.Stat(aside); err == nil {
+		return aside
+	}
+	return live
+}
+
 // keepAttemptOutput moves the finished attempt's output and stderr aside so the next attempt writes fresh files and
-// the held attempt's remain readable. An existing aside copy is never replaced.
-func keepAttemptOutput(runDir string, attempt int) {
+// the held attempt's remain readable. An existing aside copy is never replaced. A file that cannot be moved is an
+// error: the next attempt would open it truncating, and the held attempt's evidence would be lost. The files already
+// moved go back, so a refused move leaves the folder as it was.
+func keepAttemptOutput(hooks Hooks, runDir string, attempt int) error {
+	type move struct{ from, aside string }
+	var done []move
 	for _, name := range []string{"output.jsonl", "stderr.log", "output.log"} {
-		ext := filepath.Ext(name)
-		aside := filepath.Join(runDir, fmt.Sprintf("%s.attempt%d%s", strings.TrimSuffix(name, ext), attempt, ext))
+		from := filepath.Join(runDir, name)
+		aside := filepath.Join(runDir, asideName(name, attempt))
 		if _, err := os.Stat(aside); err == nil {
 			continue
 		}
-		_ = os.Rename(filepath.Join(runDir, name), aside)
+		var err error
+		if hooks.FailAsideRename != nil {
+			err = hooks.FailAsideRename(from)
+		}
+		if err == nil {
+			err = os.Rename(from, aside)
+		}
+		if err == nil {
+			done = append(done, move{from, aside})
+			continue
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			for _, m := range slices.Backward(done) {
+				_ = os.Rename(m.aside, m.from)
+			}
+			return fmt.Errorf("the held attempt's %s could not be set aside, so it was left untouched: %w", name, err)
+		}
 	}
+	return nil
 }

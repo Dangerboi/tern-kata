@@ -64,7 +64,7 @@ func TestLeavingAPageWithItsOwnInspectorReturnsFocusToTheListAndTheDetailAsItWas
 
 func TestLeavingAPageWhoseSecondColumnIsTheIssueDetailKeepsItFocusedAndOtherwiseGivesItBack(t *testing.T) {
 	boardInLane := func(t *testing.T, s driver.State) driver.State {
-		s = feed(t, s, key("2"), model.LanesLoaded{ProjectUID: "p"}).State
+		s = feed(t, s, key("2"), newestLanes{ProjectUID: "p"}).State
 		return step(t, s, key("enter")).State // the Lane view, with the detail beside it
 	}
 	workflows := func(t *testing.T, s driver.State) driver.State {
@@ -72,7 +72,7 @@ func TestLeavingAPageWhoseSecondColumnIsTheIssueDetailKeepsItFocusedAndOtherwise
 		return step(t, out.State, model.WorkflowsLoaded{ProjectUID: "p", Workflows: []model.Workflow{nightlyFlow()}}).State
 	}
 	boardColumns := func(t *testing.T, s driver.State) driver.State {
-		return feed(t, s, key("2"), model.LanesLoaded{ProjectUID: "p"}).State
+		return feed(t, s, key("2"), newestLanes{ProjectUID: "p"}).State
 	}
 	for _, hidden := range []bool{false, true} {
 		for _, how := range toIssuesHows {

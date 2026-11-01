@@ -46,7 +46,7 @@ func TestTheProjectOfADaemonSwitchedAwayFromIsDropped(t *testing.T) {
 func TestAClearStartedOnADaemonSwitchedAwayFromTouchesNothing(t *testing.T) {
 	s := attentionPageWith(t, attentionRequests(t), 0)
 	clear := askedClear(step(t, s, key("c")).Cmds)[0]
-	out := step(t, step(t, s, key("c")).State, model.DaemonSwitched{Name: "home", Daemon: model.Daemon{Name: "home"}})
+	out := switchedAnswer(t, step(t, s, key("c")).State)
 	reloaded := step(t, out.State, model.ProjectLoaded{Project: model.Project{ID: 7, UID: "p", Name: "work"}, Connection: out.State.Model.Connection})
 	late := step(t, reloaded.State, model.AttentionCleared{Connection: clear.Connection, UID: clear.UID})
 	if len(late.Cmds) != 0 || late.State.Model.Notice != reloaded.State.Model.Notice {
@@ -57,7 +57,7 @@ func TestAClearStartedOnADaemonSwitchedAwayFromTouchesNothing(t *testing.T) {
 func TestATokenCreatedOnADaemonSwitchedAwayFromDoesNotMarkTheNewCardCreated(t *testing.T) {
 	out := step(t, validToken(t), key("enter"))
 	create, _ := askedCreateToken(out.Cmds)
-	switched := step(t, out.State, model.DaemonSwitched{Name: "home", Daemon: model.Daemon{Name: "home"}}).State
+	switched := switchedAnswer(t, out.State).State
 	s := step(t, switched, model.ProjectLoaded{Project: model.Project{ID: 7, UID: "p", Name: "work"}, Connection: switched.Model.Connection}).State
 	s.Model.TokenForm.Open, s.Model.TokenForm.Saving = true, true
 	late := step(t, s, model.TokenCreated{Connection: create.Connection, ID: 11, File: "/secrets/ci.token"})
