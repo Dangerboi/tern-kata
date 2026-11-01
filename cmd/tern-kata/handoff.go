@@ -42,7 +42,7 @@ func childEnv(environ []string, actor string, caseInsensitive bool) []string {
 // routedEnv returns environ with the agent's kata daemon set from route: the names route.Env drops are removed (names compare
 // case-insensitively on Windows), then its entries are added. A zero route returns environ unchanged.
 func routedEnv(environ []string, route data.AgentRoute, caseInsensitive bool) ([]string, error) {
-	set, unset, err := route.Env()
+	set, unset, err := route.Env("")
 	if err != nil {
 		return nil, fmt.Errorf("agent: %w", err)
 	}

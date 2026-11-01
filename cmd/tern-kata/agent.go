@@ -9,7 +9,7 @@ import (
 )
 
 // agentUsage is what `tern-kata agent` refuses a command line with.
-const agentUsage = "usage: tern-kata agent [--as <actor>] [--ref <qualified ref>] [--home <dir>] [--daemon <name> [--token-file <file>] | --server <url> [--token-file <file>] [--allow-insecure]] -- <command> [args...]"
+const agentUsage = "usage: tern-kata agent [--as <actor>] [--ref <qualified ref>] [--home <dir>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]"
 
 // planAgent parses `tern-kata agent [--as <actor>] [--ref <qualified ref>] -- <command> [args...]` (args[0] is "agent"). --as and --ref
 // come before the lone --, and everything after it is the command and its arguments, verbatim: Operands holds them.
@@ -50,8 +50,8 @@ func planAgent(args []string) (LaunchPlan, error) {
 	if len(plan.Operands) == 0 {
 		return LaunchPlan{}, fmt.Errorf("agent: no command after --; %s", agentUsage)
 	}
-	if route := plan.AgentRoute; route.Daemon != "" && (route.Server != "" || route.AllowInsecure) {
-		return LaunchPlan{}, fmt.Errorf("agent: --daemon takes its server and credential from the catalog entry, so it excludes --server and --allow-insecure; %s", agentUsage)
+	if route := plan.AgentRoute; route.Daemon != "" && (route.Server != "" || route.AllowInsecure || route.TrustPrivate) {
+		return LaunchPlan{}, fmt.Errorf("agent: --daemon takes its server and credential from the catalog entry, so it excludes --server, --allow-insecure and --trust-private-network; %s", agentUsage)
 	}
 	plan.Actor = plan.fallbackAuthor
 	return plan, nil
@@ -71,12 +71,18 @@ func parseAgentRoute(args []string, i *int, route *data.AgentRoute) (matched boo
 	case "--server":
 		field, what = &route.Server, "a kata server URL"
 	case "--token-file":
-		field, what = &route.TokenFile, "a credential file path"
-	case "--allow-insecure":
+		field, what = &route.TokenFile, "the private token file the Pane wrote"
+	case "--auth-file":
+		field, what = &route.AuthFile, "the Pane's KATA_AUTH_TOKEN_FILE path"
+	case "--allow-insecure", "--trust-private-network":
 		if hasValue {
-			return true, fmt.Errorf("--allow-insecure takes no value (got %q)", value)
+			return true, fmt.Errorf("%s takes no value (got %q)", name, value)
 		}
-		route.AllowInsecure = true
+		if name == "--allow-insecure" {
+			route.AllowInsecure = true
+		} else {
+			route.TrustPrivate = true
+		}
 		return true, nil
 	default:
 		return false, nil

@@ -418,6 +418,9 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 	if err != nil {
 		return failed(err)
 	}
+	if err := route.Preflight(dir); err != nil {
+		return failed(err)
+	}
 	// A background agent names its starter too: the window half finds the kata Pane to open it beside from the prompt file's name.
 	var starter string
 	if cmd.Placement == model.AgentTab || cmd.Placement == model.AgentBackground {

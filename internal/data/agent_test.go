@@ -1294,7 +1294,7 @@ command = ["/opt/my agent"]
 // routeEnv sets the Pane's environment for a route test: the kata variables not named in env are empty.
 func routeEnv(t *testing.T, env map[string]string) {
 	t.Helper()
-	for _, name := range []string{"KATA_HOME", "KATA_SERVER", "KATA_AUTH_TOKEN", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE", "WORK_TOKEN"} {
+	for _, name := range []string{"KATA_HOME", "KATA_SERVER", "KATA_AUTH_TOKEN", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE", "KATA_TRUST_PRIVATE_NETWORK", "WORK_TOKEN"} {
 		t.Setenv(name, env[name])
 	}
 }
@@ -1317,13 +1317,17 @@ func TestAgentStartedFromAPaneOnAnotherDaemonCarriesThePanesRoute(t *testing.T) 
 		want      []string // the route flags, with TOKEN standing for the token file the Pane writes
 		wantToken string
 	}{
-		"KATA_HOME":               {env: map[string]string{"KATA_HOME": "/tmp/h"}, want: []string{"--home", "/tmp/h"}},
-		"KATA_SERVER":             {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_ALLOW_INSECURE": "true"}, want: []string{"--server", "https://kata.example", "--allow-insecure"}},
-		"KATA_SERVER token":       {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_AUTH_TOKEN": "pane-token"}, want: []string{"--server", "https://kata.example", "--token-file", "TOKEN"}, wantToken: "pane-token"},
-		"KATA_SERVER file":        {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_AUTH_TOKEN_FILE": "/run/t"}, want: []string{"--server", "https://kata.example", "--token-file", "/run/t"}},
-		"insecure is only 1/true": {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_ALLOW_INSECURE": "yes"}, want: []string{"--server", "https://kata.example"}},
-		"a switch, token_env":     {env: map[string]string{"KATA_HOME": home, "WORK_TOKEN": "work-token", "KATA_SERVER": "https://ignored.example"}, current: "work", want: []string{"--home", home, "--daemon", "work", "--token-file", "TOKEN"}, wantToken: "work-token"},
-		"a switch to a local":     {env: map[string]string{"KATA_HOME": home}, current: "mine", want: []string{"--home", home, "--daemon", "mine"}},
+		"KATA_HOME":                 {env: map[string]string{"KATA_HOME": "/tmp/h"}, want: []string{"--home", "/tmp/h"}},
+		"KATA_SERVER":               {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_ALLOW_INSECURE": "true"}, want: []string{"--server", "https://kata.example", "--allow-insecure"}},
+		"KATA_SERVER token":         {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_AUTH_TOKEN": "pane-token"}, want: []string{"--server", "https://kata.example", "--token-file", "TOKEN"}, wantToken: "pane-token"},
+		"KATA_SERVER file":          {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_AUTH_TOKEN_FILE": "/run/t"}, want: []string{"--server", "https://kata.example", "--auth-file", "/run/t"}},
+		"private network":           {env: map[string]string{"KATA_SERVER": "http://100.64.0.5:7777", "KATA_AUTH_TOKEN": "pane-token", "KATA_TRUST_PRIVATE_NETWORK": "1"}, want: []string{"--server", "http://100.64.0.5:7777", "--token-file", "TOKEN", "--trust-private-network"}, wantToken: "pane-token"},
+		"trust alone is no route":   {env: map[string]string{"KATA_TRUST_PRIVATE_NETWORK": "1", "KATA_AUTH_TOKEN": "pane-token"}},
+		"insecure is only 1/true":   {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_ALLOW_INSECURE": "yes"}, want: []string{"--server", "https://kata.example"}},
+		"a switch, token_env":       {env: map[string]string{"KATA_HOME": home, "WORK_TOKEN": "work-token", "KATA_SERVER": "https://ignored.example"}, current: "work", want: []string{"--home", home, "--daemon", "work", "--token-file", "TOKEN"}, wantToken: "work-token"},
+		"a switch to a local":       {env: map[string]string{"KATA_HOME": home}, current: "mine", want: []string{"--home", home, "--daemon", "mine"}},
+		"a local, the Pane's token": {env: map[string]string{"KATA_HOME": home, "KATA_AUTH_TOKEN": "pane-token"}, current: "mine", want: []string{"--home", home, "--daemon", "mine", "--token-file", "TOKEN"}, wantToken: "pane-token"},
+		"a local, the Pane's file":  {env: map[string]string{"KATA_HOME": home, "KATA_AUTH_TOKEN_FILE": "/run/t"}, current: "mine", want: []string{"--home", home, "--daemon", "mine", "--auth-file", "/run/t"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			routeEnv(t, tc.env)
@@ -1434,41 +1438,50 @@ func TestAgentRouteEnvironment(t *testing.T) {
 			"[[daemon]]\nname = \"profile\"\nlocal = true\nhome = \"/profiles/p\"\ninstance_uid = \"01HZZZZZZZZZZZZZZZZZZZZZZZ\"\n")
 	}
 	local, remote, authed := catalog("mine", ""), catalog("work", ""), catalog("mine", "[auth]\ntoken_file = \"/etc/kata-token\"\n")
-	pane := tokenFile(t, "pane-token\n")
+	const pane = "PANE" // replaced by a new token file per case: the wrapper deletes the one it reads
 	// Whatever the block inherited is dropped first, so none of it reaches the Pane's daemon.
-	allCreds := []string{"KATA_SERVER", "KATA_AUTH_TOKEN", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE"}
+	allCreds := []string{"KATA_SERVER", "KATA_AUTH_TOKEN", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE", "KATA_TRUST_PRIVATE_NETWORK"}
 	for name, tc := range map[string]struct {
 		route   AgentRoute
 		pin     string
 		set     []string
 		wantErr string
 	}{
-		"zero":                       {route: AgentRoute{}},
-		"home":                       {route: AgentRoute{Home: "/h"}, set: []string{"KATA_HOME=/h"}},
-		"home with the Pane's token": {route: AgentRoute{Home: "/h", TokenFile: pane}, set: []string{"KATA_HOME=/h", "KATA_AUTH_TOKEN=pane-token"}},
-		"server":                     {route: AgentRoute{Server: "https://s"}, set: []string{"KATA_SERVER=https://s"}},
-		"server with a file":         {route: AgentRoute{Server: "https://s", TokenFile: pane, AllowInsecure: true}, set: []string{"KATA_SERVER=https://s", "KATA_AUTH_TOKEN=pane-token", "KATA_ALLOW_INSECURE=1"}},
-		"a file kata would refuse":   {route: AgentRoute{Server: "https://s", TokenFile: "relative"}, wantErr: "absolute"},
-		"remote entry":               {route: AgentRoute{Home: local, Daemon: "work", TokenFile: pane}, set: []string{"KATA_HOME=" + local, "KATA_SERVER=https://kata.example", "KATA_AUTH_TOKEN=pane-token", "KATA_ALLOW_INSECURE=1"}},
-		"remote entry, no file":      {route: AgentRoute{Home: local, Daemon: "work"}, set: []string{"KATA_HOME=" + local, "KATA_SERVER=https://kata.example", "KATA_AUTH_TOKEN=from-env", "KATA_ALLOW_INSECURE=1"}},
-		"inline token":               {route: AgentRoute{Home: local, Daemon: "inline"}, set: []string{"KATA_HOME=" + local, "KATA_SERVER=https://i.example", "KATA_AUTH_TOKEN=inline-token"}},
-		"entry with no token":        {route: AgentRoute{Home: local, Daemon: "bare"}, set: []string{"KATA_HOME=" + local, "KATA_SERVER=https://b.example"}},
-		"no token but [auth]":        {route: AgentRoute{Home: authed, Daemon: "bare"}, wantErr: "[auth] token_file that kata would send"},
-		"[auth] but a token":         {route: AgentRoute{Home: authed, Daemon: "inline"}, set: []string{"KATA_HOME=" + authed, "KATA_SERVER=https://i.example", "KATA_AUTH_TOKEN=inline-token"}},
-		"token_env unset":            {route: AgentRoute{Home: local, Daemon: "unset"}, wantErr: `token_env "MISSING_TOKEN" is unset`},
-		"local profile":              {route: AgentRoute{Home: local, Daemon: "profile"}, set: []string{"KATA_HOME=/profiles/p"}},
-		"the current local":          {route: AgentRoute{Home: local, Daemon: "other"}, set: []string{"KATA_HOME=" + local}},
-		"unreachable local":          {route: AgentRoute{Home: remote, Daemon: "mine"}, wantErr: "no variable that names a local daemon"},
-		"local, pin to a url":        {route: AgentRoute{Home: local, Daemon: "mine"}, pin: "version = 1\n[server]\nurl = \"https://pinned.example\"\n", wantErr: "pins https://pinned.example"},
-		"local, pin to another":      {route: AgentRoute{Home: local, Daemon: "mine"}, pin: "version = 1\n[server]\ndaemon = \"other\"\n", wantErr: "pins daemon other"},
-		"local, pin to itself":       {route: AgentRoute{Home: local, Daemon: "mine"}, pin: "version = 1\n[server]\ndaemon = \"mine\"\n", set: []string{"KATA_HOME=" + local}},
-		"profile, any pin":           {route: AgentRoute{Home: local, Daemon: "profile"}, pin: "version = 1\n[server]\ndaemon = \"profile\"\n", wantErr: "pins daemon profile"},
-		"remote beats a pin":         {route: AgentRoute{Home: local, Daemon: "bare"}, pin: "version = 1\n[server]\nurl = \"https://pinned.example\"\n", set: []string{"KATA_HOME=" + local, "KATA_SERVER=https://b.example"}},
-		"an entry not listed":        {route: AgentRoute{Home: local, Daemon: "nope"}, wantErr: `daemon "nope" is not in the catalog`},
+		"zero":                                         {route: AgentRoute{}},
+		"home":                                         {route: AgentRoute{Home: "/h"}, set: []string{"KATA_HOME=/h"}},
+		"home with the Pane's token":                   {route: AgentRoute{Home: "/h", TokenFile: pane}, set: []string{"KATA_HOME=/h", "KATA_AUTH_TOKEN=pane-token"}},
+		"server":                                       {route: AgentRoute{Server: "https://s"}, set: []string{"KATA_SERVER=https://s"}},
+		"server with a file":                           {route: AgentRoute{Server: "https://s", TokenFile: pane, AllowInsecure: true}, set: []string{"KATA_SERVER=https://s", "KATA_AUTH_TOKEN=pane-token", "KATA_ALLOW_INSECURE=1"}},
+		"server, private network":                      {route: AgentRoute{Server: "http://100.64.0.5:7777", TokenFile: tokenFile(t, "t2\n"), TrustPrivate: true}, set: []string{"KATA_SERVER=http://100.64.0.5:7777", "KATA_AUTH_TOKEN=t2", "KATA_TRUST_PRIVATE_NETWORK=1"}},
+		"the Pane's own token file is passed on":       {route: AgentRoute{Server: "https://s", AuthFile: "/run/t"}, set: []string{"KATA_SERVER=https://s", "KATA_AUTH_TOKEN_FILE=/run/t"}},
+		"local entry, the Pane's token":                {route: AgentRoute{Home: local, Daemon: "mine", TokenFile: tokenFile(t, "t3\n")}, set: []string{"KATA_HOME=" + local, "KATA_AUTH_TOKEN=t3"}},
+		"local entry, the Pane's file":                 {route: AgentRoute{Home: local, Daemon: "mine", AuthFile: "/run/t"}, set: []string{"KATA_HOME=" + local, "KATA_AUTH_TOKEN_FILE=/run/t"}},
+		"a file kata would refuse":                     {route: AgentRoute{Server: "https://s", TokenFile: "relative"}, wantErr: "absolute"},
+		"remote entry":                                 {route: AgentRoute{Home: local, Daemon: "work", TokenFile: pane}, set: []string{"KATA_HOME=" + local, "KATA_SERVER=https://kata.example", "KATA_AUTH_TOKEN=pane-token", "KATA_ALLOW_INSECURE=1"}},
+		"remote entry, no file":                        {route: AgentRoute{Home: local, Daemon: "work"}, set: []string{"KATA_HOME=" + local, "KATA_SERVER=https://kata.example", "KATA_AUTH_TOKEN=from-env", "KATA_ALLOW_INSECURE=1"}},
+		"inline token":                                 {route: AgentRoute{Home: local, Daemon: "inline"}, set: []string{"KATA_HOME=" + local, "KATA_SERVER=https://i.example", "KATA_AUTH_TOKEN=inline-token"}},
+		"entry with no token":                          {route: AgentRoute{Home: local, Daemon: "bare"}, set: []string{"KATA_HOME=" + local, "KATA_SERVER=https://b.example"}},
+		"no token but [auth]":                          {route: AgentRoute{Home: authed, Daemon: "bare"}, wantErr: "[auth] token_file that kata would send"},
+		"[auth] but a token":                           {route: AgentRoute{Home: authed, Daemon: "inline"}, set: []string{"KATA_HOME=" + authed, "KATA_SERVER=https://i.example", "KATA_AUTH_TOKEN=inline-token"}},
+		"token_env unset":                              {route: AgentRoute{Home: local, Daemon: "unset"}, wantErr: `token_env "MISSING_TOKEN" is unset`},
+		"local profile":                                {route: AgentRoute{Home: local, Daemon: "profile"}, set: []string{"KATA_HOME=/profiles/p"}},
+		"profile, the Pane's token":                    {route: AgentRoute{Home: local, Daemon: "profile", TokenFile: tokenFile(t, "t4\n")}, set: []string{"KATA_HOME=/profiles/p", "KATA_AUTH_TOKEN=t4"}},
+		"the current local":                            {route: AgentRoute{Home: local, Daemon: "other"}, set: []string{"KATA_HOME=" + local}},
+		"unreachable local":                            {route: AgentRoute{Home: remote, Daemon: "mine"}, wantErr: "no variable that names a local daemon"},
+		"local, pin to a url":                          {route: AgentRoute{Home: local, Daemon: "mine"}, pin: "version = 1\n[server]\nurl = \"https://pinned.example\"\n", wantErr: "pins https://pinned.example"},
+		"local, pin to another":                        {route: AgentRoute{Home: local, Daemon: "mine"}, pin: "version = 1\n[server]\ndaemon = \"other\"\n", wantErr: "pins daemon other"},
+		"local without a home, pin to itself":          {route: AgentRoute{Home: local, Daemon: "mine"}, pin: "version = 1\n[server]\ndaemon = \"mine\"\n", wantErr: "pins daemon mine"},
+		"profile, pin to itself keeps the Pane's home": {route: AgentRoute{Home: local, Daemon: "profile"}, pin: "version = 1\n[server]\ndaemon = \"profile\"\n", set: []string{"KATA_HOME=" + local}},
+		"profile, pin to another":                      {route: AgentRoute{Home: local, Daemon: "profile"}, pin: "version = 1\n[server]\ndaemon = \"other\"\n", wantErr: "pins daemon other"},
+		"remote beats a pin":                           {route: AgentRoute{Home: local, Daemon: "bare"}, pin: "version = 1\n[server]\nurl = \"https://pinned.example\"\n", set: []string{"KATA_HOME=" + local, "KATA_SERVER=https://b.example"}},
+		"an entry not listed":                          {route: AgentRoute{Home: local, Daemon: "nope"}, wantErr: `daemon "nope" is not in the catalog`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			checkout(t, tc.pin)
-			set, unset, err := tc.route.Env()
+			if tc.route.TokenFile == pane {
+				tc.route.TokenFile = tokenFile(t, "pane-token\n")
+			}
+			set, unset, err := tc.route.Env("")
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("err = %v, want one containing %q", err, tc.wantErr)
@@ -1483,5 +1496,42 @@ func TestAgentRouteEnvironment(t *testing.T) {
 				t.Errorf("set %q, unset %q, err %v; want %q, %q", set, unset, err, tc.set, wantUnset)
 			}
 		})
+	}
+}
+
+func TestAgentRouteEnvDeletesThePaneWrittenTokenFileButNotThePanesOwn(t *testing.T) {
+	written, own := tokenFile(t, "pane-token\n"), tokenFile(t, "own-token\n")
+	if _, _, err := (AgentRoute{Server: "https://s", TokenFile: written, AuthFile: own}).Env(""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(written); err == nil {
+		t.Error("the Pane-written token file outlived the wrapper's read")
+	}
+	if _, err := os.Stat(own); err != nil {
+		t.Errorf("the Pane's own KATA_AUTH_TOKEN_FILE was touched: %v", err)
+	}
+	// The Pane's preflight reads nothing and deletes nothing.
+	kept := tokenFile(t, "pane-token\n")
+	if err := (AgentRoute{Server: "https://s", TokenFile: kept}).Preflight(""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(kept); err != nil {
+		t.Errorf("Preflight removed the token file: %v", err)
+	}
+}
+
+func TestAgentStartIsRefusedBeforeAnythingIsWrittenWhenTheRouteCannotWork(t *testing.T) {
+	home := catalogHome(t, "active_daemon = \"work\"\n[[daemon]]\nname = \"mine\"\nlocal = true\n[[daemon]]\nname = \"work\"\nurl = \"https://kata.example\"\n")
+	routeEnv(t, map[string]string{"KATA_HOME": home})
+	g, dirs := agentGateway(t)
+	g.current = "mine"
+	g.runTern = func(context.Context, []string) ([]byte, error) { t.Error("tern was asked"); return nil, nil }
+	writeAgentFile(t, filepath.Join(dirs.Config, "agent.toml"), "")
+	got := as[model.AgentStarted](t, run(t, g, model.StartAgent{Placement: model.AgentBackground, IssueRef: "demo#cd34", ProjectName: "demo", Workspace: t.TempDir()}))
+	if got.Err == nil || !strings.Contains(got.Err.Error(), "active_daemon") {
+		t.Errorf("err = %v", got.Err)
+	}
+	if left, _ := filepath.Glob(filepath.Join(dirs.State, AgentPromptsFolder, "*")); len(left) != 0 {
+		t.Errorf("a refused start left %q", left)
 	}
 }
