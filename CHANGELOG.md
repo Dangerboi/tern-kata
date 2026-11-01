@@ -61,6 +61,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Fixed
 
+- The **Attention request** of an omp agent waiting for you says what it waits on: the question of its pending ask call, else its last message, no longer the cut-off start of a thinking block ("Thinking…\nI'm checking who owns the claim on"); an omp agent with no text to show gets "agent waiting for you", and an agent that is not omp keeps its last message.
 - `worker doctor` no longer tells you to create `worker.toml` when the file exists but does not load, and after a warning it says nothing is missing and how many warnings it printed.
 - `install.ps1` works in Windows PowerShell 5.1, the `powershell` the README one-liner and the palette's Install and Update commands run: it no longer stops with "You cannot call a method on a null-valued expression" before downloading anything.
 - `install.ps1` no longer fails with "Cannot create a file when that file already exists" when the previous install's `tern-kata.exe.old` is still held by a running tern-kata: reinstalling on Windows works while an older tern-kata still runs, and the next run removes the leftover `tern-kata.exe.old-*` files once those processes have exited.
