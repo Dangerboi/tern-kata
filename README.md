@@ -151,6 +151,10 @@ Run `tern-kata update` on the session host to bring it to the latest release. It
 
 Only a release build updates itself. A binary built with `go install` gets the command to run again (`go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest`), and one built from source says to rebuild. To bring the agent skills along, run `npx skills update -g` (or `bunx skills update -g`). Setting `TERN_KATA_BASE_URL` points update, and the install scripts, at another folder holding a release's files (for a rollback, a mirror or a test).
 
+### Update tern-kata
+
+The **Update tern-kata** palette command runs `tern-kata update --pause` in a new Pane on the focused Pane's machine, so the session host is updated first. Press Enter in the Pane to close it after a success; a failure leaves the Pane open so you can read why, and nothing more happens. When that machine is not the one showing the Tern window and the update succeeded, the command then reinstalls the window plugin on the window's machine without a terminal, from the same release's tag, and toasts "tern-kata plugin updated to vX" once the new plugin has loaded (or the install script's last error line if it failed). When the session host is the window's own machine, `tern-kata update` already updated the plugin. On a device that can't run programs (iOS), the toast says the session host was updated but this device's plugin wasn't. `TERN_KATA_BASE_URL`, when set in the window's environment, is used for the plugin's files and for reading `version.txt`.
+
 ### Release check
 
 The window plugin looks for a new release once a day. At window start, and every 24 hours while the window stays open, it reads `version.txt` from the latest GitHub release, but only when the last check is over 24 hours old (the time is kept in the plugin's store, so a second window or a restart doesn't ask again). When that release is newer than the plugin, a toast says "tern-kata vX is out (this window's plugin is vY). Run Update tern-kata from the palette." once per version on this machine. A failed request is silent and counts as a check. Nothing but that one small file is fetched, and nothing is installed by the check.
