@@ -1294,7 +1294,7 @@ command = ["/opt/my agent"]
 // routeEnv sets the Pane's environment for a route test: the kata variables not named in env are empty.
 func routeEnv(t *testing.T, env map[string]string) {
 	t.Helper()
-	for _, name := range []string{"KATA_HOME", "KATA_SERVER", "KATA_AUTH_TOKEN", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE", "KATA_TRUST_PRIVATE_NETWORK", "WORK_TOKEN", "LOCAL_TOKEN"} {
+	for _, name := range []string{"KATA_HOME", "KATA_SERVER", "KATA_AUTH_TOKEN", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE", "KATA_TRUST_PRIVATE_NETWORK", "KATA_DB", "KATA_DSN", "KATA_POSTGRES_SCHEMA", "WORK_TOKEN", "LOCAL_TOKEN"} {
 		t.Setenv(name, env[name])
 	}
 	t.Setenv("HOME", t.TempDir()) // the default kata home is <HOME>/.kata
@@ -1327,7 +1327,7 @@ func TestAgentStartedFromAPaneOnAnotherDaemonCarriesThePanesRoute(t *testing.T) 
 		"trust alone is no route":                    {env: map[string]string{"KATA_TRUST_PRIVATE_NETWORK": "1", "KATA_AUTH_TOKEN": "pane-token"}},
 		"insecure is only 1/true":                    {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_ALLOW_INSECURE": "yes"}, want: []string{"--home", "DEFAULT", "--server", "https://kata.example"}},
 		"a switch, token_env":                        {env: map[string]string{"KATA_HOME": home, "WORK_TOKEN": "work-token", "KATA_SERVER": "https://ignored.example"}, current: "work", want: []string{"--home", home, "--daemon", "work", "--token-file", "TOKEN"}, wantToken: "work-token"},
-		"a local entry's own token beats the Pane's": {env: map[string]string{"KATA_HOME": home, "KATA_AUTH_TOKEN": "pane-token", "LOCAL_TOKEN": "entry-token"}, current: "owned", want: []string{"--home", home, "--daemon", "owned", "--token-file", "TOKEN"}, wantToken: "entry-token"},
+		"a local entry's own token beats the Pane's": {env: map[string]string{"KATA_HOME": home, "KATA_AUTH_TOKEN": "pane-token", "LOCAL_TOKEN": "entry-token"}, current: "owned", want: []string{"--home", home, "--daemon", "owned", "--token-file", "TOKEN", "--env-file", "ENV"}, wantToken: "entry-token"},
 		"a switch to a local":                        {env: map[string]string{"KATA_HOME": home}, current: "mine", want: []string{"--home", home, "--daemon", "mine"}},
 		"a local, the Pane's token":                  {env: map[string]string{"KATA_HOME": home, "KATA_AUTH_TOKEN": "pane-token"}, current: "mine", want: []string{"--home", home, "--daemon", "mine", "--token-file", "TOKEN"}, wantToken: "pane-token"},
 		"a local, the Pane's file":                   {env: map[string]string{"KATA_HOME": home, "KATA_AUTH_TOKEN_FILE": "/run/t"}, current: "mine", want: []string{"--home", home, "--daemon", "mine", "--auth-file", "/run/t"}},
@@ -1346,6 +1346,8 @@ func TestAgentStartedFromAPaneOnAnotherDaemonCarriesThePanesRoute(t *testing.T) 
 				switch want[i] {
 				case "TOKEN":
 					want[i] = tokenFile
+				case "ENV":
+					want[i] = got.Entry.PromptFile + ".env"
 				case "DEFAULT":
 					want[i] = filepath.Join(os.Getenv("HOME"), ".kata")
 				}
@@ -1446,7 +1448,7 @@ func TestAgentRouteEnvironment(t *testing.T) {
 	local, remote, authed := catalog("mine", ""), catalog("work", ""), catalog("mine", "[auth]\ntoken_file = \"/etc/kata-token\"\n")
 	const pane = "PANE" // replaced by a new token file per case: the wrapper deletes the one it reads
 	// Whatever the block inherited is dropped first, so none of it reaches the Pane's daemon.
-	allCreds := []string{"KATA_SERVER", "KATA_AUTH_TOKEN", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE", "KATA_TRUST_PRIVATE_NETWORK"}
+	allCreds := []string{"KATA_SERVER", "KATA_AUTH_TOKEN", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE", "KATA_TRUST_PRIVATE_NETWORK", "KATA_DSN", "KATA_DB", "KATA_POSTGRES_SCHEMA"}
 	for name, tc := range map[string]struct {
 		route   AgentRoute
 		pin     string
@@ -1562,5 +1564,183 @@ func TestTokenFileSurvivesAFailedRead(t *testing.T) {
 	}
 	if _, err := os.Stat(file); err != nil {
 		t.Errorf("a file that could not be read was removed: %v", err)
+	}
+}
+
+func TestRoutedAgentCarriesThePanesStorageButNeverADSNOnTheCommandLine(t *testing.T) {
+	routeEnv(t, map[string]string{"KATA_HOME": "rel-home", "KATA_DB": "rel.db", "KATA_POSTGRES_SCHEMA": "kata_s", "KATA_DSN": "postgres://u:pw-secret@h/db"})
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+	g, dirs := agentGateway(t)
+	ran, got := startRoutedAgent(t, g, dirs, nil)
+	if got.Err != nil {
+		t.Fatal(got.Err)
+	}
+	dsnFile := got.Entry.PromptFile + ".dsn"
+	want := []string{"tern-kata", "agent", "--home", filepath.Join(cwd, "rel-home"), "--db", filepath.Join(cwd, "rel.db"), "--schema", "kata_s", "--dsn-file", dsnFile, "--ref", "demo#cd34", "--", "omp"}
+	if i := slices.Index(ran, "tern-kata"); i < 0 || !slices.Equal(ran[i:i+len(want)], want) {
+		t.Fatalf("ran %q, want ... %q", ran, want)
+	}
+	if strings.Contains(strings.Join(ran, " "), "pw-secret") {
+		t.Errorf("the command line carries the DSN password: %q", ran)
+	}
+	if dsn, err := readTokenFile(dsnFile, false); err != nil || dsn != "postgres://u:pw-secret@h/db" {
+		t.Errorf("DSN file holds %q, %v", dsn, err)
+	}
+	removePrompt(got.Entry.PromptFile)
+	if _, err := os.Stat(dsnFile); err == nil {
+		t.Error("the DSN file outlived its prompt file")
+	}
+}
+
+func TestRoutedAgentDoesNotCarryStorageToARemoteRoute(t *testing.T) {
+	routeEnv(t, map[string]string{"KATA_SERVER": "https://kata.example", "KATA_DB": "/x.db", "KATA_DSN": "postgres://u:pw@h/db"})
+	g, dirs := agentGateway(t)
+	ran, got := startRoutedAgent(t, g, dirs, nil)
+	if got.Err != nil {
+		t.Fatal(got.Err)
+	}
+	if joined := strings.Join(ran, " "); strings.Contains(joined, "--db") || strings.Contains(joined, "--dsn-file") {
+		t.Errorf("a server route carries storage: %q", ran)
+	}
+}
+
+func TestRoutedAgentCarriesTheCredentialVariablesTheHomeNamesNotAGlobalToken(t *testing.T) {
+	config := "active_daemon = \"work\"\n[auth]\ntoken_env = \"PANE_AUTH\"\n" +
+		"[[daemon]]\nname = \"work\"\nurl = \"https://kata.example\"\ntoken_env = \"WORK_TOKEN\"\n" +
+		"[[daemon]]\nname = \"p\"\nlocal = true\nhome = \"/profiles/p\"\ninstance_uid = \"01HZZZZZZZZZZZZZZZZZZZZZZZ\"\ntoken_env = \"PROFILE_TOKEN\"\n" +
+		"[[daemon]]\nname = \"unused\"\nurl = \"https://u.example\"\ntoken_env = \"UNSET_TOKEN\"\n"
+	home := catalogHome(t, config)
+	routeEnv(t, map[string]string{"KATA_HOME": home})
+	t.Setenv("PANE_AUTH", "auth-value")
+	t.Setenv("PROFILE_TOKEN", "profile-value")
+	t.Setenv("WORK_TOKEN", "work-value")
+	t.Setenv("UNSET_TOKEN", "")
+	g, dirs := agentGateway(t)
+	ran, got := startRoutedAgent(t, g, dirs, nil)
+	if got.Err != nil {
+		t.Fatal(got.Err)
+	}
+	if strings.Contains(strings.Join(ran, " "), "--token-file") {
+		t.Errorf("a global token is carried for a connection kata scopes by entry: %q", ran)
+	}
+	text, err := readTokenFile(got.Entry.PromptFile+".env", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range []string{"WORK_TOKEN=work-value", "PROFILE_TOKEN=profile-value", "PANE_AUTH=auth-value"} {
+		if !strings.Contains(text, line+"\n") && !strings.HasSuffix(text, line) {
+			t.Errorf("env file %q lacks %s", text, line)
+		}
+	}
+	if strings.Contains(text, "UNSET_TOKEN") {
+		t.Errorf("an unset variable was written: %q", text)
+	}
+	removePrompt(got.Entry.PromptFile)
+	if _, err := os.Stat(got.Entry.PromptFile + ".env"); err == nil {
+		t.Error("the env file outlived its prompt file")
+	}
+	// The route's own environment carries no KATA_AUTH_TOKEN, so a checkout pinned to another url receives none.
+	checkout(t, "version = 1\n[server]\nurl = \"http://127.0.0.1:18777\"\n")
+	envFile := tokenFile(t, "WORK_TOKEN=work-value\nKATA_SERVER=evil\nPATH=/x\n")
+	set, _, err := (AgentRoute{Home: home, EnvFile: envFile}).Env("")
+	if err != nil || slices.Contains(set, "KATA_AUTH_TOKEN=work-value") || !slices.Contains(set, "WORK_TOKEN=work-value") || slices.Contains(set, "KATA_SERVER=evil") {
+		t.Errorf("set %q, err %v", set, err)
+	}
+	if _, err := os.Stat(envFile); err == nil {
+		t.Error("the env file outlived the wrapper's read")
+	}
+}
+
+func TestAgentRouteEnvFileFollowsTheRoute(t *testing.T) {
+	home := catalogHome(t, "[auth]\ntoken_env = \"PANE_AUTH\"\n[[daemon]]\nname = \"mine\"\nlocal = true\n[[daemon]]\nname = \"work\"\nurl = \"https://w.example\"\ntoken_env = \"WORK_TOKEN\"\n")
+	for name, tc := range map[string]struct {
+		env     map[string]string
+		current string
+		want    string
+	}{
+		"a server route sends only [auth]":                {env: map[string]string{"KATA_SERVER": "https://s", "KATA_HOME": home}, want: "PANE_AUTH=a\n"},
+		"a plain local entry (own [auth] token_env)":      {env: map[string]string{"KATA_HOME": home}, current: "mine", want: "WORK_TOKEN=w\nPANE_AUTH=a\n"},
+		"a switched remote entry uses its explicit token": {env: map[string]string{"KATA_HOME": home}, current: "work", want: ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			routeEnv(t, tc.env)
+			t.Setenv("PANE_AUTH", "a")
+			t.Setenv("WORK_TOKEN", "w")
+			g, _ := agentGateway(t)
+			g.current = tc.current
+			route, err := g.CurrentAgentRoute()
+			if err != nil || route.Creds != tc.want {
+				t.Errorf("Creds %q, %v; want %q", route.Creds, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestAgentRouteStorageEnvironment(t *testing.T) {
+	local := catalogHome(t, "[[daemon]]\nname = \"mine\"\nlocal = true\n[[daemon]]\nname = \"profile\"\nlocal = true\nhome = \"/profiles/p\"\ninstance_uid = \"01HZZZZZZZZZZZZZZZZZZZZZZZ\"\n")
+	for name, tc := range map[string]struct {
+		route AgentRoute
+		set   []string
+	}{
+		"home only":    {AgentRoute{Home: local, DB: "/p.db", Schema: "s", DSNFile: "replaced"}, []string{"KATA_HOME=" + local, "KATA_DB=/p.db", "KATA_POSTGRES_SCHEMA=s", "KATA_DSN=postgres://u:pw@h/db"}},
+		"plain local":  {AgentRoute{Home: local, Daemon: "mine", DB: "/p.db"}, []string{"KATA_HOME=" + local, "KATA_DB=/p.db"}},
+		"profile home": {AgentRoute{Home: local, Daemon: "profile", DB: "/p.db", Schema: "s"}, []string{"KATA_HOME=/profiles/p"}},
+		"server route": {AgentRoute{Home: local, Server: "https://s", DB: "/p.db", Schema: "s"}, []string{"KATA_HOME=" + local, "KATA_SERVER=https://s"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			checkout(t, "")
+			if tc.route.DSNFile != "" {
+				tc.route.DSNFile = tokenFile(t, "postgres://u:pw@h/db\n")
+			}
+			set, unset, err := tc.route.Env("")
+			if err != nil || !slices.Equal(set, tc.set) || !slices.Contains(unset, "KATA_DSN") || !slices.Contains(unset, "KATA_DB") || !slices.Contains(unset, "KATA_POSTGRES_SCHEMA") {
+				t.Errorf("set %q, unset %q, err %v; want %q and the storage variables unset", set, unset, err, tc.set)
+			}
+			if tc.route.DSNFile != "" {
+				if _, err := os.Stat(tc.route.DSNFile); err == nil {
+					t.Error("the DSN file outlived the wrapper's read")
+				}
+			}
+		})
+	}
+}
+
+func TestCredentialNamesAcceptKataTokenVariablesButNotTheOnesTheRouteOwns(t *testing.T) {
+	for name, want := range map[string]bool{
+		"KATA_WORK_TOKEN": true, "KATA_SPOKE_TOKEN": true, "WORK_TOKEN": true,
+		"KATA_SERVER": false, "kata_home": false, "KATA_AUTH_TOKEN": false, "KATA_REF": false, "KATA_DSN": false, "": false, "A-B": false, "1X": false,
+	} {
+		if got := credentialName(name); got != want {
+			t.Errorf("credentialName(%q) = %v, want %v", name, got, want)
+		}
+	}
+	home := catalogHome(t, "[[daemon]]\nname = \"w\"\nurl = \"https://w.example\"\ntoken_env = \"KATA_WORK_TOKEN\"\n[[daemon]]\nname = \"mine\"\nlocal = true\n")
+	t.Setenv("KATA_WORK_TOKEN", "kw")
+	if got := paneCredentialEnv(home, true); got != "KATA_WORK_TOKEN=kw\n" {
+		t.Errorf("env = %q", got)
+	}
+	set, _, err := (AgentRoute{Home: home, EnvFile: tokenFile(t, "KATA_WORK_TOKEN=kw\n")}).Env("")
+	if err != nil || !slices.Contains(set, "KATA_WORK_TOKEN=kw") {
+		t.Errorf("set %q, err %v", set, err)
+	}
+}
+
+func TestSwitchedProfileWithItsOwnHomeGetsNoneOfThePanesCredentialVariables(t *testing.T) {
+	home := catalogHome(t, "[[daemon]]\nname = \"p\"\nlocal = true\nhome = \"/profiles/p\"\ninstance_uid = \"01HZZZZZZZZZZZZZZZZZZZZZZZ\"\n")
+	checkout(t, "")
+	envFile := tokenFile(t, "HUB_ADMIN_TOKEN=admin\n")
+	set, _, err := (AgentRoute{Home: home, Daemon: "p", EnvFile: envFile}).Env("")
+	if err != nil || !slices.Equal(set, []string{"KATA_HOME=/profiles/p"}) {
+		t.Errorf("set %q, err %v", set, err)
+	}
+	if _, err := os.Stat(envFile); err == nil {
+		t.Error("the env file was not deleted")
+	}
+	// A pin naming the profile keeps the Pane's home, and with it the Pane's variables.
+	checkout(t, "version = 1\n[server]\ndaemon = \"p\"\n")
+	set, _, err = (AgentRoute{Home: home, Daemon: "p", EnvFile: tokenFile(t, "HUB_ADMIN_TOKEN=admin\n")}).Env("")
+	if err != nil || !slices.Contains(set, "HUB_ADMIN_TOKEN=admin") {
+		t.Errorf("pinned: set %q, err %v", set, err)
 	}
 }
