@@ -120,7 +120,7 @@ func TestAgentEnvironmentHasTheIssueRefAndNoInbox(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses sh")
 	}
-	args := append([]string{"agent", "--as", "claude", "--ref", "demo#ab12", "--", "sh", "-c", `printf '%s|%s|%s|%s' "$KATA_REF" "${KATA_INBOX_USER-unset}" "$KATA_AUTHOR" "$KATA_SESSION_ID"`})
+	args := []string{"agent", "--as", "claude", "--ref", "demo#ab12", "--", "sh", "-c", `printf '%s|%s|%s|%s' "$KATA_REF" "${KATA_INBOX_USER-unset}" "$KATA_AUTHOR" "$KATA_SESSION_ID"`}
 	out, status, _ := runAgent(t, []string{"KATA_REF=other#zz99", "KATA_INBOX_USER=person", "KATA_SESSION_ID=s1"}, args...)
 	if status != 0 || out != "demo#ab12|unset|claude|s1" {
 		t.Errorf("status %d, output %q", status, out)
