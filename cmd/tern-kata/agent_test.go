@@ -4,19 +4,27 @@ import (
 	"errors"
 	"os"
 	"os/exec"
-	"regexp"
 	"runtime"
 	"slices"
 	"strings"
 	"testing"
 )
 
-const agentHelperEnv = "TERN_KATA_AGENT_HELPER"
+const (
+	agentHelperEnv = "TERN_KATA_AGENT_HELPER"
+	agentBlockEnv  = "TERN_KATA_AGENT_BLOCK_ENV"
+)
 
 // TestAgentHelper is the child process of runAgent: it runs tern-kata's main with the arguments after the -- of its own.
 func TestAgentHelper(t *testing.T) {
 	if os.Getenv(agentHelperEnv) == "" {
 		t.Skip("child of the agent tests")
+	}
+	// The test binary's init resets some kata variables, so the block's own environment is applied here, last.
+	for _, kv := range strings.Split(os.Getenv(agentBlockEnv), "\n") {
+		if name, value, ok := strings.Cut(kv, "="); ok {
+			os.Setenv(name, value)
+		}
 	}
 	os.Args = append([]string{"tern-kata"}, os.Args[slices.Index(os.Args, "--")+1:]...)
 	main()
@@ -163,20 +171,15 @@ func TestAgentWrapperRoutesKataToThePanesDaemon(t *testing.T) {
 		t.Skip("uses sh")
 	}
 	home := t.TempDir()
-	if err := os.WriteFile(home+"/config.toml", []byte("[[daemon]]\nname = \"work\"\nurl = \"https://kata.example\"\ntoken_env = \"WORK_TOKEN\"\nallow_insecure = true\n[[daemon]]\nname = \"mine\"\nlocal = true\n"), 0o600); err != nil {
+	if err := os.WriteFile(home+"/config.toml", []byte("[[daemon]]\nname = \"work\"\nurl = \"https://kata.example\"\ntoken_env = \"WORK_TOKEN\"\nallow_insecure = true\n[[daemon]]\nname = \"bare\"\nurl = \"https://bare.example\"\n[[daemon]]\nname = \"mine\"\nlocal = true\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	// The environment the agent's block inherits (the test child sets its own KATA_HOME, KATA_SERVER and KATA_AUTH_TOKEN): a route
-	// changes only what it names and leaves the rest as it was.
-	block := []string{"WORK_TOKEN=work-token"}
-	base, status, stderr := agentEnvOutput(t, block)
-	childHome := regexp.MustCompile(`/tmp/workertest\d+`) // each test child gets its own throwaway KATA_HOME
-	norm := func(out string) string { return childHome.ReplaceAllString(out, "/tmp/workertest") }
-	m := regexp.MustCompile(`^HOME=(\S*) SERVER=(\S*) TOKEN=(\S*) `).FindStringSubmatch(norm(base))
-	if status != 0 || m == nil {
-		t.Fatalf("baseline %q: status %d, stderr %q", base, status, stderr)
+	paneToken := home + "/pane-token"
+	if err := os.WriteFile(paneToken, []byte("pane-token\n"), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	baseHome, baseServer, baseToken := m[1], m[2], m[3]
+	// The block's own environment, as Tern's daemon gave it: the default remote, its token (also as a file) and a plaintext opt-in.
+	block := []string{agentBlockEnv + "=KATA_HOME=/default\nKATA_SERVER=https://default.example\nKATA_AUTH_TOKEN=default-token\nKATA_AUTH_TOKEN_FILE=/default/token\nKATA_ALLOW_INSECURE=1", "WORK_TOKEN=block-work-token"}
 	want := func(home, server, token, file, insecure string) string {
 		return "HOME=" + home + " SERVER=" + server + " TOKEN=" + token + " FILE=" + file + " INSECURE=" + insecure + " REF=demo#ab12"
 	}
@@ -184,22 +187,24 @@ func TestAgentWrapperRoutesKataToThePanesDaemon(t *testing.T) {
 		flags []string
 		want  string
 	}{
-		"no route leaves the block as it is":  {nil, want(baseHome, baseServer, baseToken, "unset", "unset")},
-		"by KATA_HOME":                        {[]string{"--home", home}, want(home, baseServer, baseToken, "unset", "unset")},
-		"by KATA_SERVER":                      {[]string{"--server", "https://pane.example", "--token-file", "/run/pane-token", "--allow-insecure"}, want(baseHome, "https://pane.example", "unset", "/run/pane-token", "1")},
-		"after a switch to a remote entry":    {[]string{"--home", home, "--daemon", "work"}, want(home, "https://kata.example", "work-token", "unset", "1")},
-		"after a switch to the local default": {[]string{"--home", home, "--daemon", "mine"}, want(home, "unset", "unset", "unset", "unset")},
+		"no route leaves the block as it is":   {nil, want("/default", "https://default.example", "default-token", "/default/token", "1")},
+		"by KATA_HOME alone":                   {[]string{"--home", home}, want(home, "unset", "unset", "unset", "unset")},
+		"by KATA_SERVER without a token":       {[]string{"--server", "https://pane.example"}, want("/default", "https://pane.example", "unset", "unset", "unset")},
+		"by KATA_SERVER with the Pane's token": {[]string{"--server", "https://pane.example", "--token-file", paneToken, "--allow-insecure"}, want("/default", "https://pane.example", "pane-token", "unset", "1")},
+		"a remote entry, the Pane's token":     {[]string{"--home", home, "--daemon", "work", "--token-file", paneToken}, want(home, "https://kata.example", "pane-token", "unset", "1")},
+		"a remote entry without a token":       {[]string{"--home", home, "--daemon", "bare"}, want(home, "https://bare.example", "unset", "unset", "unset")},
+		"the local default":                    {[]string{"--home", home, "--daemon", "mine"}, want(home, "unset", "unset", "unset", "unset")},
 	} {
 		t.Run(name, func(t *testing.T) {
 			out, status, stderr := agentEnvOutput(t, block, tc.flags...)
-			if status != 0 || norm(out) != tc.want {
+			if status != 0 || out != tc.want {
 				t.Errorf("status %d, output %q, stderr %q; want %q", status, out, stderr, tc.want)
 			}
 		})
 	}
-	t.Run("a token the block lacks refuses the start", func(t *testing.T) {
-		_, status, stderr := agentEnvOutput(t, []string{"WORK_TOKEN="}, "--home", home, "--daemon", "work")
-		if status == 0 || !strings.Contains(stderr, "WORK_TOKEN") {
+	t.Run("a token file kata would refuse stops the start", func(t *testing.T) {
+		_, status, stderr := agentEnvOutput(t, block, "--server", "https://pane.example", "--token-file", "relative")
+		if status == 0 || !strings.Contains(stderr, "absolute") {
 			t.Errorf("status %d, stderr %q", status, stderr)
 		}
 	})
@@ -215,6 +220,7 @@ func TestPlanAgentRouteFlags(t *testing.T) {
 		{"agent", "--daemon", "work", "--server", "https://s", "--", "omp"},
 		{"agent", "--daemon", "--", "omp"},
 		{"agent", "--home=", "--", "omp"},
+		{"agent", "--server", "https://s", "--allow-insecure=false", "--", "omp"},
 	} {
 		if _, err := PlanLaunch(args, lookup, "v"); err == nil {
 			t.Errorf("%q was accepted", args)

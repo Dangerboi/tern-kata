@@ -377,9 +377,11 @@ func (g *Gateway) pruneAgents(ctx context.Context, cmd model.PruneAgents) model.
 	return model.AgentsPruned{Seq: cmd.Seq, Agents: agents, Err: cmp.Or(askErr, err)}
 }
 
+// removePrompt removes a prompt file and the token file beside it, if the agent was started with one.
 func removePrompt(path string) {
 	if path != "" {
 		_ = os.Remove(path)
+		_ = os.Remove(path + agentTokenSuffix)
 	}
 }
 
@@ -412,6 +414,10 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 	if err != nil {
 		return failed(err)
 	}
+	route, err := g.CurrentAgentRoute()
+	if err != nil {
+		return failed(err)
+	}
 	// A background agent names its starter too: the window half finds the kata Pane to open it beside from the prompt file's name.
 	var starter string
 	if cmd.Placement == model.AgentTab || cmd.Placement == model.AgentBackground {
@@ -421,7 +427,11 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 	if err != nil {
 		return failed(err)
 	}
-	line := AgentCommandLine(settings.Actor, cmd.IssueRef, g.CurrentAgentRoute(), settings.Command, promptFile)
+	if route, err = route.withTokenFile(promptFile); err != nil {
+		removePrompt(promptFile)
+		return failed(err)
+	}
+	line := AgentCommandLine(settings.Actor, cmd.IssueRef, route, settings.Command, promptFile)
 	var out []byte
 	switch cmd.Placement {
 	case model.AgentTab:

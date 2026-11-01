@@ -508,7 +508,7 @@ Usage:
   tern-kata worker resume <run-uid> [--as <actor>]
   tern-kata worker abandon <run-uid> [--as <actor>]
   tern-kata update [--force] [--pause]
-  tern-kata agent [--as <actor>] [--ref <ref>] [--home <dir>] [--daemon <name> | --server <url> [--token-file <file>] [--allow-insecure]] -- <command> [args...]
+  tern-kata agent [--as <actor>] [--ref <ref>] [--home <dir>] [--daemon <name> [--token-file <file>] | --server <url> [--token-file <file>] [--allow-insecure]] -- <command> [args...]
   tern-kata completion bash|zsh|fish
   tern-kata --version
   tern-kata --help
@@ -623,11 +623,13 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 to the qualified Issue ref, with no KATA_INBOX_USER, its
                                 arguments passed on as typed and its exit status as ours;
                                 -- is required. --home sets KATA_HOME; --daemon names a catalog entry
-                                (its url, allow_insecure and token become KATA_SERVER, KATA_ALLOW_INSECURE
-                                and KATA_AUTH_TOKEN, a local one its home or the current one); --server,
-                                --token-file and --allow-insecure set KATA_SERVER, KATA_AUTH_TOKEN_FILE
-                                and KATA_ALLOW_INSECURE. The Pane passes them so the agent's kata
-                                reaches the Pane's daemon; no token is ever an argument
+                                (its url and allow_insecure become KATA_SERVER and KATA_ALLOW_INSECURE,
+                                a local one its home or the current one); --server and --allow-insecure
+                                set KATA_SERVER and KATA_ALLOW_INSECURE; --token-file names a private
+                                file whose token becomes KATA_AUTH_TOKEN. Any of them first drops the
+                                inherited KATA_SERVER, KATA_AUTH_TOKEN, KATA_AUTH_TOKEN_FILE and
+                                KATA_ALLOW_INSECURE. The Pane passes them so the agent's kata reaches
+                                the Pane's daemon; a token is never an argument
   completion <shell>            print the completion script for bash, zsh or fish; load it with
                                 source <(tern-kata completion bash) (or zsh), or
                                 tern-kata completion fish | source
