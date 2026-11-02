@@ -2,7 +2,7 @@
 
 `d` on the selected Issue (in the list, on the Board, in the Lane view and in the Issue detail) opens the **Dates card**: a Scheduled field and a Deadline field holding the Issue's current dates.
 
-![The Dates card over the Board, with "+1w" resolving to 2026-11-01](../images/dates-card.png)
+![The Dates card over the Board, with "+1w" typed in Scheduled and the date it resolves to below it](../images/dates-card.png)
 
 `tab` moves between the fields, `enter` saves and `esc` cancels. `ctrl+d` in a field opens a calendar beside it: the arrow keys move by a day or a week, `enter` or a click picks the date and `esc` closes the calendar. Typing a date works as before. A field takes:
 

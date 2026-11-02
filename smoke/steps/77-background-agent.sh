@@ -69,10 +69,11 @@ ba_block=$(ba_tabs | jq -r --arg n "smoke#$ba_short" '.[] | select(.name == $n) 
 # Hidden: the session is not shown, so the block is not beside the Pane.
 ba_tern ls --json | jq -e '[.sessions[] | select(.name == "kata agents")][0].shown == false' >/dev/null
 # With no actor in agent.toml the block's command still runs through `tern-kata agent` with the Issue's ref (and no --as), then the
-# stand-in with the Issue's prompt file as omp's first message. The command is as the daemon lists it; the block's login shell
-# resets PATH, so the wrapper is not run to the stand-in here.
+# stand-in with the Issue's prompt file as omp's first message. The Pane runs with KATA_HOME set, so the wrapper also gets --home to
+# reach the Pane's daemon. The command is as the daemon lists it; the block's login shell resets PATH, so the wrapper is not run to
+# the stand-in here.
 ba_command=$(ba_tern ls --json | jq -r --arg b "$ba_block" '[.sessions[].tabs[].blocks[] | select(.id == ($b | tonumber)) | .command][0]')
-[[ $ba_command == "tern-kata agent --ref 'smoke#$ba_short' -- $ba_standin @"*"/agent-prompts/prompt-"*".md" ]]
+[[ $ba_command == "tern-kata agent --home $KATA_HOME --ref 'smoke#$ba_short' -- $ba_standin @"*"/agent-prompts/prompt-"*".md" ]]
 # agents.json (the Agent mapping) holds the block as a background agent that is not open.
 jq -e --arg block "$ba_block" --arg uid "$ba_uid" '.agents | length == 1 and .[0].block == $block and .[0].issue_uid == $uid and .[0].background == true and .[0].open == false' \
   "$ba_state/tern-kata/agents.json" >/dev/null

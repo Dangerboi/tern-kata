@@ -23,7 +23,7 @@ func TestAgentHelper(t *testing.T) {
 	// The test binary's init resets some kata variables, so the block's own environment is applied here, last.
 	for _, kv := range strings.Split(os.Getenv(agentBlockEnv), "\n") {
 		if name, value, ok := strings.Cut(kv, "="); ok {
-			os.Setenv(name, value)
+			t.Setenv(name, value)
 		}
 	}
 	os.Args = append([]string{"tern-kata"}, os.Args[slices.Index(os.Args, "--")+1:]...)
