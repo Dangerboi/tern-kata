@@ -4,6 +4,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-11-02
+
 ### Fixed
 
 - **Update tern-kata** no longer reinstalls a window plugin that is already at the latest release, and no longer toasts that it was updated: it toasts "tern-kata plugin vX is up to date".
@@ -306,7 +308,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `install.ps1` parses, keeps `%VAR%` entries in `PATH` and says when it changes `PATH`, so programs started from Explorer, such as Tern, see it.
 - **Open kata**, `F9` and kata links open tern-kata in a new tab, in the focused Pane's directory, when Tern can't split the focused Pane, instead of doing nothing.
 
-[Unreleased]: https://github.com/Dangerboi/tern-kata/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/Dangerboi/tern-kata/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/Dangerboi/tern-kata/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/Dangerboi/tern-kata/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/Dangerboi/tern-kata/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Dangerboi/tern-kata/compare/v0.5.0...v0.6.0
