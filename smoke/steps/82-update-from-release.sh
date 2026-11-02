@@ -10,6 +10,9 @@ else
   "$repo/scripts/release.sh" "v$up_version" "$up_dist"
 fi
 
+# The log exists before the server starts: its redirection runs in the background child, and a sed on a missing file
+# would end the step under set -e.
+: >"$tmp/update-server.log"
 python3 -m http.server 0 --bind 127.0.0.1 --directory "$up_dist" >"$tmp/update-server.log" 2>&1 &
 up_server=$!
 http_pids+=("$up_server")

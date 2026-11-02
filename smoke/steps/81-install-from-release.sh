@@ -25,6 +25,8 @@ done
 
 # in_serve DIR NAME: serves DIR on a free local port; sets in_url and in_server.
 in_serve() {
+  # The log exists before the server starts: a sed on a missing file would end the step under set -e.
+  : >"$tmp/install-server-$2.log"
   python3 -m http.server 0 --bind 127.0.0.1 --directory "$1" >"$tmp/install-server-$2.log" 2>&1 &
   in_server=$!
   http_pids+=("$in_server")
