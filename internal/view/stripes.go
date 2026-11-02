@@ -17,8 +17,8 @@ const (
 )
 
 // CSS is the plugin's whole style sheet: StripeCSS, SelectedCSS, ModeChipCSS, OrderedListCSS, ColumnFillCSS, PropertyKeyCSS,
-// MonoCSS, then cellBoxCSS.
-var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ColumnFillCSS + "\n" + PropertyKeyCSS + "\n" + MonoCSS + "\n" + cellBoxCSS
+// PropertiesCSS, MonoCSS, then cellBoxCSS.
+var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ColumnFillCSS + "\n" + PropertyKeyCSS + "\n" + PropertiesCSS + "\n" + MonoCSS + "\n" + cellBoxCSS
 
 // PropertyKeyRole marks the key cell of a row of the Issue detail's properties; PropertyKeyCSS reads it.
 const PropertyKeyRole = "tern-kata.propkey"
@@ -26,6 +26,13 @@ const PropertyKeyRole = "tern-kata.propkey"
 // PropertyKeyCSS gives every property key one box, wide enough for the longest label ("Scheduled:", "Recurring:", "Cron jobs:")
 // in either face, so every value starts at the same x. The box is in em because the label's own width depends on the face.
 const PropertyKeyCSS = `.sf-text[data-role~='` + PropertyKeyRole + `'] { display: inline-block; white-space: pre; min-width: 6.4em; }`
+
+// PropertiesRole marks the Issue detail's properties grid; PropertiesCSS reads it.
+const PropertiesRole = "tern-kata.props"
+
+// PropertiesCSS draws the grid's badges 2px shorter than Tern's 18px, the height of a text row, centred in the row by a 1px
+// margin, so the badges of rows one under another (Owner, Priority, Labels) keep a gap instead of touching.
+const PropertiesCSS = `[data-role~='` + PropertiesRole + `'] .sf-badge { height: 16px; margin: 1px 0; }`
 
 // ColumnRole marks a column's card and FillRole the list that scrolls inside it; ColumnFillCSS reads them.
 const (

@@ -7,6 +7,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 ### Fixed
 
 - **Update tern-kata** no longer reinstalls a window plugin that is already at the latest release, and no longer toasts that it was updated: it toasts "tern-kata plugin vX is up to date".
+- The Issue detail's Owner, Priority, Labels and date badges no longer touch the badges in the rows above and below them, and a mono badge (a priority, a date, an Issue ref, also on Board cards) no longer has larger text than the badges beside it.
 
 ## [0.7.1] - 2026-11-02
 

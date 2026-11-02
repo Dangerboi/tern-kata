@@ -302,7 +302,7 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 	if line := issue.Attribution.Line(issue.Author); line != "" {
 		children = append(children, ui.Text{Common: ui.Common{Key: "creation", Tone: ui.ToneMuted}, Text: line})
 	}
-	return ui.Col{Common: ui.Common{Key: "properties"}, Gap: ui.GapNone, Children: children}
+	return ui.Col{Common: ui.Common{Key: "properties", Role: PropertiesRole}, Gap: ui.GapNone, Children: children}
 }
 
 // workAttention is the Work attention value: the word a badge in its tone, then the whole message as wrapping text, so a long
