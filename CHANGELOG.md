@@ -6,7 +6,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Fixed
 
-- **Update tern-kata** updates the plugin on a Windows window machine after updating a session host on another machine. Before, starting the PowerShell that downloads and runs `install.ps1` could take Windows over half a second when the script was on its command line. That ran the plugin step past Tern's time limit, so it showed an error toast and left the plugin as it was. The script now goes to PowerShell on its standard input, which starts in a few milliseconds.
+- **Update tern-kata** updates the plugin on a Windows window machine after updating a session host on another machine. It used to fail in two ways. First, Windows could take over half a second to start the PowerShell when the script was on its command line, which ran the plugin step past Tern's time limit; the script now goes to PowerShell on its standard input, which starts in a few milliseconds. Second, the step ran inside the plugin's own folder, which Windows won't let the install replace ("tern-kata plugin was not updated"); it now runs in your home folder.
+- On a Windows session host, a supervised Worker no longer stops `tern-kata update` and the install scripts from reinstalling the plugin while it runs: the plugin starts it in your home folder, not in the plugin's folder.
 
 ## [0.7.0] - 2026-11-02
 

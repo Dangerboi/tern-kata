@@ -109,6 +109,13 @@ local function worker_path(): string
     return table.concat(dirs, path_sep)
 end
 
+-- Tern starts a plugin's processes in the plugin's folder, and on Windows a folder some process works in can't be
+-- replaced: a worker started there would make every reinstall of the plugin fail ("os error 32") while it runs. The
+-- worker and its question start in the home folder instead (Tern's default when there is none).
+local function home_dir(): string?
+    return env(if windows then "USERPROFILE" else "HOME")
+end
+
 local start
 
 local function arm(ms: number)
@@ -142,6 +149,7 @@ local function launch(binary: string, config: string)
     end
     local ok, err = pcall(function()
         tern.process.run({binary, "worker"}, {
+            cwd = home_dir(),
             env = { PATH = worker_path(), TERN_KATA_SUPERVISOR = "tern" },
             timeout_ms = RUN_LIMIT_MS,
         }, exited)
@@ -198,6 +206,7 @@ function start()
     asking = true
     local ok, err = pcall(function()
         tern.process.run({binary, "worker", "supervised"}, {
+            cwd = home_dir(),
             env = { PATH = worker_path() },
             timeout_ms = ASK_LIMIT_MS,
         }, function(result: ProcessResult) answered(binary, result) end)
