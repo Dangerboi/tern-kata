@@ -120,18 +120,22 @@ end
 local RAW = "https://raw.githubusercontent.com/Dangerboi/tern-kata/v"
 local DOWNLOADS = "https://github.com/Dangerboi/tern-kata/releases/download/v"
 
--- The plugin-only install of `version`, run without a terminal: the command and its added environment. The script comes
--- from the version's tag; the files it installs come from that version's download folder unless the user set their own.
-function M.pluginStep(version: string, os: string, configuredBase: string?): ({ string }, { [string]: string })
+-- The plugin-only install of `version`, run without a terminal: the command, its added environment and the text for its
+-- stdin (nil when it needs none). The script comes from the version's tag; the files it installs come from that version's
+-- download folder unless the user set their own.
+-- On Windows the script is not on the command line (`powershell -Command "irm … | iex"`): starting a PowerShell whose
+-- command line downloads and runs a script takes Windows 0.2 s to over 0.5 s to allow on the thread that starts it, which
+-- in the window half is the UI thread, and a hook may take 0.5 s at most. Read from stdin it starts in a few ms.
+function M.pluginStep(version: string, os: string, configuredBase: string?): ({ string }, { [string]: string }, string?)
     local env = {
         TERN_KATA_PLUGIN_ONLY = "1",
         TERN_KATA_BASE_URL = if configuredBase ~= nil and configuredBase ~= "" then configuredBase else DOWNLOADS .. version,
     }
     if os == "windows" then
-        return {"powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-            "irm " .. RAW .. version .. "/install.ps1 | iex"}, env
+        return {"powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "-"}, env,
+            "irm " .. RAW .. version .. "/install.ps1 | iex\r\n"
     end
-    return {"sh", "-c", "script=$(curl -fsSL " .. RAW .. version .. "/install.sh) && printf '%s\\n' \"$script\" | sh"}, env
+    return {"sh", "-c", "script=$(curl -fsSL " .. RAW .. version .. "/install.sh) && printf '%s\\n' \"$script\" | sh"}, env, nil
 end
 
 return M

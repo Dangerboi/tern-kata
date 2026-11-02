@@ -699,9 +699,9 @@ end
 
 local function updatePlugin(cx: WindowCx, version: string)
     tern.kv.set(KV_PENDING, {version = version, at = os.time()})
-    local argv, env = releases.pluginStep(version, tern.runtime.os, tern.getenv("TERN_KATA_BASE_URL"))
+    local argv, env, stdin = releases.pluginStep(version, tern.runtime.os, tern.getenv("TERN_KATA_BASE_URL"))
     local ok = pcall(function()
-        tern.process.run(argv, {env = env, timeout_ms = 5 * 60 * 1000}, function(result, cx2)
+        tern.process.run(argv, {env = env, stdin = stdin, timeout_ms = 5 * 60 * 1000}, function(result, cx2)
             -- Success reloads the plugin, so this callback usually never runs; the new one reports it.
             if result.status == 0 then return end
             tern.kv.set(KV_PENDING, nil)

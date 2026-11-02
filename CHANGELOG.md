@@ -4,6 +4,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Fixed
+
+- **Update tern-kata** updates the plugin on a Windows window machine after updating a session host on another machine. Before, starting the PowerShell that downloads and runs `install.ps1` could take Windows over half a second when the script was on its command line. That ran the plugin step past Tern's time limit, so it showed an error toast and left the plugin as it was. The script now goes to PowerShell on its standard input, which starts in a few milliseconds.
+
 ## [0.7.0] - 2026-11-02
 
 ### Added
