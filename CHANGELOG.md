@@ -4,6 +4,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-02
+
 ### Added
 
 - `tern-kata update` brings the session host to the latest release: it reads `version.txt`, downloads the OS archive and checks its SHA-256 against `checksums.txt`, then swaps the running binary (on Windows the old file is renamed to `.old`, and one still held by a running Pane or Worker is renamed aside, so nothing has to be closed first). It says when the binary is already up to date, never downgrades, refuses a build that is not a release with the command for its kind of install, refuses to run twice at once, and prints the new version, a reminder to reopen Panes and the skills update command; `--pause` waits for Enter after a success.
@@ -292,7 +294,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `install.ps1` parses, keeps `%VAR%` entries in `PATH` and says when it changes `PATH`, so programs started from Explorer, such as Tern, see it.
 - **Open kata**, `F9` and kata links open tern-kata in a new tab, in the focused Pane's directory, when Tern can't split the focused Pane, instead of doing nothing.
 
-[Unreleased]: https://github.com/Dangerboi/tern-kata/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Dangerboi/tern-kata/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/Dangerboi/tern-kata/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Dangerboi/tern-kata/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Dangerboi/tern-kata/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Dangerboi/tern-kata/compare/v0.3.0...v0.4.0
