@@ -4,6 +4,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-02
+
 ### Fixed
 
 - **Update tern-kata** updates the plugin on a Windows window machine after updating a session host on another machine. It used to fail in two ways. First, Windows could take over half a second to start the PowerShell when the script was on its command line, which ran the plugin step past Tern's time limit; the script now goes to PowerShell on its standard input, which starts in a few milliseconds. Second, the step ran inside the plugin's own folder, which Windows won't let the install replace ("tern-kata plugin was not updated"); it now runs in your home folder.
@@ -299,7 +301,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `install.ps1` parses, keeps `%VAR%` entries in `PATH` and says when it changes `PATH`, so programs started from Explorer, such as Tern, see it.
 - **Open kata**, `F9` and kata links open tern-kata in a new tab, in the focused Pane's directory, when Tern can't split the focused Pane, instead of doing nothing.
 
-[Unreleased]: https://github.com/Dangerboi/tern-kata/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/Dangerboi/tern-kata/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/Dangerboi/tern-kata/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/Dangerboi/tern-kata/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Dangerboi/tern-kata/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Dangerboi/tern-kata/compare/v0.4.0...v0.5.0
