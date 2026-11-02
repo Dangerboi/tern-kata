@@ -721,14 +721,20 @@ local function updatePlugin(cx: WindowCx, version: string)
 end
 
 -- Polls once a second until the update's Pane ends: a non-zero exit marks it exited and the Pane stays to be read (a
--- failure); a Pane that is gone, or marked exited with status 0, is success.
+-- failure); a Pane that is gone, or marked exited with status 0, is success. A window plugin already at the release's
+-- version is not installed again, as `tern-kata update` leaves a plugin copy of the same version alone.
 local function watchUpdate(pane: number, version: string, remote: boolean)
     tern.timer(1000, function(cx)
         if not cx then return end
         local info = cx.session:pane(pane)
         if info and info.exited ~= nil and info.exited ~= 0 then return end
         if info and info.exited == nil then return watchUpdate(pane, version, remote) end
-        if remote then updatePlugin(cx, version) end
+        if not remote then return end
+        if ownVersion() == version then
+            cx:toast("info", "tern-kata plugin v" .. version .. " is up to date")
+            return
+        end
+        updatePlugin(cx, version)
     end)
 end
 

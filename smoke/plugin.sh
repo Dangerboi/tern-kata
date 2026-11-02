@@ -513,6 +513,21 @@ expect_toast 'curl: smoke stand-in refuses'
 [[ -s "$tmp/plugin-step.log" ]]
 ! grep -q 'update.pending' "$TERN_CONFIG_DIR/plugin-data/tern-kata/kv.json" || { echo "update.pending left behind" >&2; exit 1; }
 for ((attempt=0; attempt<100; attempt++)); do [[ $(ctl state | jq '.tabs[1].panes') == 1 ]] && break; sleep 0.1; done
+# A window plugin already at the release's version is left alone: no plugin step, and the toast says it is up to date.
+own_version=$(sed -n 's/^version *= *"\(.*\)"/\1/p' "$repo/plugin.toml")
+printf '%s\n' "$own_version" >"$tmp/dist/version.txt"
+rm -f "$tmp/plugin-step.log" "$tmp/update-args.txt"
+ctl --file "$tmp/update.ctl"
+for ((attempt=0; attempt<100; attempt++)); do
+  [[ -s "$tmp/update-args.txt" ]] && break
+  ctl --file "$tmp/pump.ctl"
+  sleep 0.1
+done
+ctl expect Press
+ctl key Enter
+expect_toast "tern-kata plugin v$own_version is up to date"
+[[ ! -e "$tmp/plugin-step.log" ]]
+for ((attempt=0; attempt<100; attempt++)); do [[ $(ctl state | jq '.tabs[1].panes') == 1 ]] && break; sleep 0.1; done
 ctl remote disconnect loop
 jq -Rse 'contains("plugin window halves loaded count=2") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
-printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, links reuse only the current tab'"'"'s kata Pane, shell-syntax Project link, links on a remote host'"'"'s Pane, quick quit without toast, links into Panes started by full path, backslash path and title alone, a longer name not matched, an agent tab opened right of the Pane'"'"'s tab and no other tab moved, startup-failure and not-installed toasts by exit status, Update tern-kata on a local session host running update --pause and no plugin step, the update Pane not a kata Pane after a plugin reload, a failed plugin step after Update tern-kata on a remote host toasting its last stderr line\n'
+printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, links reuse only the current tab'"'"'s kata Pane, shell-syntax Project link, links on a remote host'"'"'s Pane, quick quit without toast, links into Panes started by full path, backslash path and title alone, a longer name not matched, an agent tab opened right of the Pane'"'"'s tab and no other tab moved, startup-failure and not-installed toasts by exit status, Update tern-kata on a local session host running update --pause and no plugin step, the update Pane not a kata Pane after a plugin reload, a failed plugin step after Update tern-kata on a remote host toasting its last stderr line, no plugin step and an up-to-date toast when the window plugin is already at the release\n'
