@@ -16,7 +16,7 @@ func TestAProfilesExtensionsBecomeOmpArguments(t *testing.T) {
 		name, key string
 		want      []string
 	}{
-		{"a missing key is ambient", "", nil},
+		{"a missing key disables discovery", "", []string{"--no-extensions"}},
 		{"ambient passes no flag", "extensions = \"ambient\"\n", nil},
 		{"none disables discovery", "extensions = \"none\"\n", []string{"--no-extensions"}},
 		{"a list trusts each path", "extensions = ['" + a + "', '" + b + "']\n", []string{"--trusted-extension", a, "--trusted-extension", b}},
@@ -81,10 +81,11 @@ func TestDoctorWarnsOfKataPluginOnlyForAnAmbientProfile(t *testing.T) {
 	}
 	omp := OmpEnv{Home: home, AgentDir: agent}
 
-	if out := doctor("", omp); strings.Contains(out, "todo takeover") {
+	ambient := "extensions = \"ambient\"\n"
+	if out := doctor(ambient, omp); strings.Contains(out, "todo takeover") {
 		t.Fatalf("no plugin installed, yet a warning:\n%s", out)
 	}
-	if out := doctor("", OmpEnv{}); strings.Contains(out, "todo takeover") {
+	if out := doctor(ambient, OmpEnv{}); strings.Contains(out, "todo takeover") {
 		t.Fatalf("the zero OmpEnv looked somewhere:\n%s", out)
 	}
 
@@ -110,8 +111,11 @@ func TestDoctorWarnsOfKataPluginOnlyForAnAmbientProfile(t *testing.T) {
 			agent = filepath.Join(home, ".omp", "agent")
 			omp = OmpEnv{Home: home, AgentDir: agent}
 			install()
-			out := doctor("", omp)
-			for _, want := range []string{"warn", "profile default", "todo takeover", "3 extra turns", `extensions = "none"`} {
+			out := doctor(ambient, omp)
+			if bare := doctor("", omp); strings.Contains(bare, "todo takeover") {
+				t.Fatalf("a profile with no key was warned:\n%s", bare)
+			}
+			for _, want := range []string{"warn", "profile default", "todo takeover", "3 extra turns", `extensions = "ambient"`} {
 				if !strings.Contains(out, want) {
 					t.Fatalf("no %q in:\n%s", want, out)
 				}
@@ -136,7 +140,7 @@ func TestDoctorFindsKataPluginInACheckoutsPlugins(t *testing.T) {
 		t.Fatal(err)
 	}
 	dirs := Dirs{Config: t.TempDir(), State: t.TempDir()}
-	body := "executor = \"laptop\"\n[checkouts]\nrepo = '" + checkout + "'\n[profiles.default]\ncommand = \"go\"\n"
+	body := "executor = \"laptop\"\n[checkouts]\nrepo = '" + checkout + "'\n[profiles.default]\ncommand = \"go\"\nextensions = \"ambient\"\n"
 	if err := os.WriteFile(dirs.ConfigPath(), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +166,7 @@ func TestDoctorIgnoresADisabledKataPlugin(t *testing.T) {
 		}
 	}
 	dirs := Dirs{Config: t.TempDir(), State: t.TempDir()}
-	if err := os.WriteFile(dirs.ConfigPath(), []byte("executor = \"laptop\"\n[profiles.default]\ncommand = \"go\"\n"), 0o600); err != nil {
+	if err := os.WriteFile(dirs.ConfigPath(), []byte("executor = \"laptop\"\n[profiles.default]\ncommand = \"go\"\nextensions = \"ambient\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	out := Doctor(context.Background(), DoctorOptions{Dirs: dirs, Omp: OmpEnv{Home: home, AgentDir: filepath.Join(home, ".omp", "agent")}}).String()
@@ -175,7 +179,7 @@ func TestDoctorIgnoresADisabledKataPlugin(t *testing.T) {
 func doctorFor(t *testing.T, profiles string, omp OmpEnv) string {
 	t.Helper()
 	dirs := Dirs{Config: t.TempDir(), State: t.TempDir()}
-	writeTestFile(t, dirs.ConfigPath(), "executor = \"laptop\"\n[profiles.default]\ncommand = \"go\"\n"+profiles)
+	writeTestFile(t, dirs.ConfigPath(), "executor = \"laptop\"\n[profiles.default]\ncommand = \"go\"\nextensions = \"ambient\"\n"+profiles)
 	return Doctor(context.Background(), DoctorOptions{Dirs: dirs, Omp: omp}).String()
 }
 
@@ -225,7 +229,7 @@ func TestDoctorFollowsOmpsPluginsFolder(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			home := t.TempDir()
 			install(c.where(home))
-			out := doctorFor(t, "[profiles.work]\ncommand = \"go\"\n"+c.args, OmpEnv{Home: home, Lookup: envOf(c.vars)})
+			out := doctorFor(t, "[profiles.work]\ncommand = \"go\"\nextensions = \"ambient\"\n"+c.args, OmpEnv{Home: home, Lookup: envOf(c.vars)})
 			if got := strings.Contains(out, "profile work: kata-plugin") || strings.Contains(out, "profile default: kata-plugin") && c.args == ""; got != c.want {
 				t.Fatalf("warned %v, want %v:\n%s", got, c.want, out)
 			}
@@ -258,7 +262,7 @@ func TestDoctorDoesNotWarnForAProfileWhoseArgsDisableDiscovery(t *testing.T) {
 	home := t.TempDir()
 	writeTestFile(t, filepath.Join(home, ".omp", "plugins", "node_modules", "kata-omp", "package.json"), `{}`)
 	for _, args := range []string{"['--no-extensions']", "['--trusted-extension', '/x/k.ts']", "['--trusted-extension=/x/k.ts']"} {
-		out := doctorFor(t, "[profiles.quiet]\ncommand = \"go\"\nargs = "+args+"\n", OmpEnv{Home: home})
+		out := doctorFor(t, "[profiles.quiet]\ncommand = \"go\"\nextensions = \"ambient\"\nargs = "+args+"\n", OmpEnv{Home: home})
 		if strings.Contains(out, "profile quiet: kata-plugin") {
 			t.Fatalf("args %s were warned of:\n%s", args, out)
 		}

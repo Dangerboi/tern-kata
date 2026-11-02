@@ -112,8 +112,8 @@ type Profile struct {
 	Model    string   `toml:"model"`
 	Thinking string   `toml:"thinking"`
 	Args     []string `toml:"args"`
-	// Extensions picks which omp extensions the profile's runs load: "ambient" (the default: omp's own discovery),
-	// "none" or a list of absolute paths (ADR-0010).
+	// Extensions picks which omp extensions the profile's runs load: "none" (the default when the key is missing),
+	// "ambient" (omp's own discovery) or a list of absolute paths (ADR-0010).
 	Extensions Extensions `toml:"extensions"`
 }
 
@@ -124,10 +124,10 @@ const (
 )
 
 // Extensions is a profile's `extensions` key: the string "ambient" or "none", or a list of absolute extension paths.
-// The zero value is ambient. A form that does not fit is kept in bad and refused when the config is validated, where
-// the profile's name is known.
+// The zero value is none: a missing key runs omp with --no-extensions. A form that does not fit is kept in bad and
+// refused when the config is validated, where the profile's name is known.
 type Extensions struct {
-	// Mode is "" or ExtensionsAmbient, ExtensionsNone, or "list" when Paths is set.
+	// Mode is "" (a missing key, which means none) or ExtensionsAmbient, ExtensionsNone, or "list" when Paths is set.
 	Mode  string
 	Paths []string
 	bad   string
@@ -180,13 +180,14 @@ func (e Extensions) validate() string {
 	return ""
 }
 
-// Ambient is true when the profile leaves omp to discover its extensions, so kata-plugin's takeover may load.
-func (e Extensions) Ambient() bool { return e.Mode == "" || e.Mode == ExtensionsAmbient }
+// Ambient is true only when the profile opts in to omp's own discovery, so kata-plugin's takeover may load.
+func (e Extensions) Ambient() bool { return e.Mode == ExtensionsAmbient }
 
-// args are the omp flags the key stands for.
+// args are the omp flags the key stands for. A missing key is "none"; omp keeps explicit -e, --hook and
+// --trusted-extension paths under --no-extensions, so a profile's args can still name what it loads.
 func (e Extensions) args() []string {
 	switch e.Mode {
-	case ExtensionsNone:
+	case "", ExtensionsNone:
 		return []string{"--no-extensions"}
 	case extensionsList:
 		var out []string
