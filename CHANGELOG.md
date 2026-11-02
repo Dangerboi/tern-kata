@@ -6,7 +6,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Changed
 
-- A worker profile with no `extensions` key now runs omp with `--no-extensions`, where it used to load whatever omp discovers. A run no longer loads omp's native extension modules, ambient hook files or installed plugins (so none of kata-plugin's todo takeover); explicit `-e`, `--hook` and `--trusted-extension` paths in the profile's `args`, skills, rules and MCP servers still apply. Set `extensions = "ambient"` under the profile to get the old behaviour back. `worker doctor` now warns of kata-plugin's takeover only for a profile that sets `"ambient"`.
+- **Breaking:** an Agent profile with no `extensions` key now runs omp with `--no-extensions`, where it used to load whatever omp discovers, so a worker run no longer loads omp's native extension modules, ambient hook files or installed plugins such as kata-plugin. Explicit `-e`, `--hook` and `--trusted-extension` paths in its `args`, skills, rules and MCP servers still apply. Add `extensions = "ambient"` under the profile to get the old behaviour back. A run already in progress when you upgrade uses the new default from its next attempt or step.
+- `worker doctor` warns of kata-plugin's todo takeover only for an Agent profile that sets `extensions = "ambient"`.
 
 ## [0.7.2] - 2026-11-02
 

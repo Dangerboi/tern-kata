@@ -127,7 +127,7 @@ const (
 // The zero value is none: a missing key runs omp with --no-extensions. A form that does not fit is kept in bad and
 // refused when the config is validated, where the profile's name is known.
 type Extensions struct {
-	// Mode is "" or ExtensionsAmbient, ExtensionsNone, or "list" when Paths is set.
+	// Mode is "" (a missing key, which means none) or ExtensionsAmbient, ExtensionsNone, or "list" when Paths is set.
 	Mode  string
 	Paths []string
 	bad   string

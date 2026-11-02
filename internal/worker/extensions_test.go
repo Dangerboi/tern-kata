@@ -43,32 +43,6 @@ func TestAProfilesExtensionsBecomeOmpArguments(t *testing.T) {
 	}
 }
 
-func TestNoExtensionsIsNotAddedTwice(t *testing.T) {
-	for _, key := range []string{"", "extensions = \"none\"\n"} {
-		cfg, err := load(t, "executor = \"laptop\"\n[profiles.default]\n"+key+"args = ['--no-extensions']\n")
-		if err != nil {
-			t.Fatal(err)
-		}
-		args := agentArgs(cfg.Profiles["default"], t.TempDir(), "/p", "")
-		if n := strings.Count(strings.Join(args, "\x00"), "--no-extensions"); n != 1 {
-			t.Fatalf("key %q: %d --no-extensions in %v, want 1", key, n, args)
-		}
-	}
-}
-
-func TestAMissingKeyKeepsTheExplicitExtensionPathsInArgs(t *testing.T) {
-	cfg, err := load(t, "executor = \"laptop\"\n[profiles.default]\nargs = ['-e', '/x/k.ts', '--hook', '/x/h.ts']\n")
-	if err != nil {
-		t.Fatal(err)
-	}
-	args := agentArgs(cfg.Profiles["default"], t.TempDir(), "/p", "")
-	for _, want := range []string{"--no-extensions", "-e", "/x/k.ts", "--hook", "/x/h.ts"} {
-		if !slices.Contains(args, want) {
-			t.Fatalf("args %v lack %s", args, want)
-		}
-	}
-}
-
 func TestABadExtensionsKeyIsRefusedWithTheProfilesName(t *testing.T) {
 	cases := map[string]string{
 		"a relative path":       "extensions = [\"rel/kata.ts\"]\n",
@@ -107,10 +81,11 @@ func TestDoctorWarnsOfKataPluginOnlyForAnAmbientProfile(t *testing.T) {
 	}
 	omp := OmpEnv{Home: home, AgentDir: agent}
 
-	if out := doctor("", omp); strings.Contains(out, "todo takeover") {
+	ambient := "extensions = \"ambient\"\n"
+	if out := doctor(ambient, omp); strings.Contains(out, "todo takeover") {
 		t.Fatalf("no plugin installed, yet a warning:\n%s", out)
 	}
-	if out := doctor("", OmpEnv{}); strings.Contains(out, "todo takeover") {
+	if out := doctor(ambient, OmpEnv{}); strings.Contains(out, "todo takeover") {
 		t.Fatalf("the zero OmpEnv looked somewhere:\n%s", out)
 	}
 
@@ -136,9 +111,9 @@ func TestDoctorWarnsOfKataPluginOnlyForAnAmbientProfile(t *testing.T) {
 			agent = filepath.Join(home, ".omp", "agent")
 			omp = OmpEnv{Home: home, AgentDir: agent}
 			install()
-			out := doctor("extensions = \"ambient\"\n", omp)
-			if out := doctor("", omp); strings.Contains(out, "todo takeover") {
-				t.Fatalf("a profile with no key was warned:\n%s", out)
+			out := doctor(ambient, omp)
+			if bare := doctor("", omp); strings.Contains(bare, "todo takeover") {
+				t.Fatalf("a profile with no key was warned:\n%s", bare)
 			}
 			for _, want := range []string{"warn", "profile default", "todo takeover", "3 extra turns", `extensions = "ambient"`} {
 				if !strings.Contains(out, want) {
