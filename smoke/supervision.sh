@@ -79,8 +79,13 @@ wait_new_worker() { # $1 the old pid, $2 seconds
   return 1
 }
 
+# The daemon reloads a linked plugin whenever a file in its folder changes, and a reloaded host half starts the worker at
+# once, with no wait. Link a private copy, so other work in the repository (a parallel check step) cannot reload it
+# in the middle of the backoff measurement.
+mkdir -p "$tmp/plugin"
+cp "$repo/plugin.toml" "$repo"/*.luau "$tmp/plugin/"
+(cd "$tmp/plugin" && tern plugin link . --json >/dev/null)
 # No worker.toml: the host half does nothing, quietly.
-(cd "$repo" && tern plugin link . --json >/dev/null)
 start_daemon
 sleep 3
 [[ -z "$(worker_pid)" ]] || { echo "a worker started without worker.toml" >&2; exit 1; }
