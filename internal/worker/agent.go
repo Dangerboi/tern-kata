@@ -267,7 +267,11 @@ func agentArgs(p Profile, runDir, promptFile string, resume string) []string {
 	}) {
 		args = append(args, "--approval-mode", "yolo")
 	}
-	args = append(args, p.Extensions.args()...)
+	for _, a := range p.Extensions.args() {
+		if a != "--no-extensions" || !p.hasArg("--no-extensions") {
+			args = append(args, a)
+		}
+	}
 	args = append(args, p.Args...)
 	return append(args, "@"+promptFile)
 }

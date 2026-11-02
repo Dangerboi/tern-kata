@@ -127,7 +127,7 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 		argProfile, hasArg := profile.ompProfile()
 		if kata := scan.kataPlugin(argProfile, hasArg); kata != "" {
 			add("warn", "profile "+name, "kata-plugin's omp extension is installed ("+kata+") and this profile loads omp's extensions, so each headless run gets its todo takeover: an issue for each task and up to 3 extra turns from its stop reminder",
-				"Set extensions = \"none\" under [profiles."+name+"] in worker.toml.")
+				"Remove extensions = \"ambient\" from [profiles."+name+"] in worker.toml, or set extensions = \"none\".")
 		}
 	}
 	for _, name := range slices.Sorted(maps.Keys(cfg.Secrets)) {
