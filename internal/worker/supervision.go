@@ -1,11 +1,15 @@
 package worker
 
 import (
+	"context"
 	"errors"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 )
 
 // ConfigFileName is the worker's config file, beside the supervision marker.
@@ -59,6 +63,28 @@ func (d Dirs) SupervisedConfig() (text string, on bool) {
 	defer f.Close()
 	b, _ := io.ReadAll(io.LimitReader(f, supervisedConfigMaxBytes))
 	return string(b), true
+}
+
+// identityWait bounds RunningWorker's question, well inside the 10 s the host half gives `worker supervised`.
+const identityWait = 2 * time.Second
+
+// RunningWorker is the worker that answers the control socket, and whether one does. The host half asks it with the
+// Supervision rule: after a plugin reload or a Tern update's handoff, a worker its earlier load started holds worker.lock,
+// and a second one would only be refused. A worker that answers but not the identity request (one from an older release,
+// or one too busy to answer in time) still runs: worker.lock names its process.
+func RunningWorker(ctx context.Context, d Dirs) (Identity, bool) {
+	ctx, cancel := context.WithTimeout(ctx, identityWait)
+	defer cancel()
+	resp, err := Ask(ctx, d, Request{Op: cmdIdentity})
+	if errors.Is(err, ErrNoWorker) {
+		return Identity{}, false
+	}
+	if err == nil && resp.OK && resp.Identity != nil {
+		return *resp.Identity, true
+	}
+	holder, _ := os.ReadFile(d.Lock())
+	pid, _ := strconv.Atoi(strings.TrimSpace(string(holder)))
+	return Identity{PID: pid}, true
 }
 
 // SetSupervision turns the plugin's supervision off by creating the marker (and the config folder when it is missing) or

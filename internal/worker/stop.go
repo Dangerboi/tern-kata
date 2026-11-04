@@ -51,6 +51,7 @@ const (
 	cmdRun       = "run"
 	cmdResume    = "resume"
 	cmdAbandon   = "abandon"
+	cmdIdentity  = "identity"
 )
 
 // whileStopping is the one rule for what each command may do once a stop was asked (ADR-0012), by stop mode: idle
@@ -63,6 +64,7 @@ var whileStopping = map[string]struct{ idle, now bool }{
 	cmdRun:       {},
 	cmdResume:    {},
 	cmdAbandon:   {idle: true},
+	cmdIdentity:  {idle: true, now: true},
 }
 
 // refusedWhileStopping is errStopping when command may not run in stop mode ("" while serving), nil otherwise.

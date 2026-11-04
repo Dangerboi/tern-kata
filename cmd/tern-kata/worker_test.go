@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -558,6 +559,46 @@ func TestWorkerSupervisedAnswersTheSupervisionRule(t *testing.T) {
 	}
 	if out, err := ask(); !errors.As(err, new(subcommandError)) || out != "" {
 		t.Fatalf("config and %s: %q, %v; want a failure and no output", worker.ManualFileName, out, err)
+	}
+}
+
+// A plugin reload or a Tern update gives the host half fresh state while the worker it started runs on. `worker supervised`
+// names that worker, so the host half starts none, and answers with the config again once it has gone; `worker status`
+// says when that worker runs another version than the installed binary.
+func TestWorkerSupervisedNamesTheRunningWorkerUntilItHasGone(t *testing.T) {
+	f := newWorkerFixture(t, "")
+	f.env.Version, f.env.Supervisor = "v0.7.1", worker.SupervisorTern
+	stop := f.serveUntilStopped(t)
+	installed := f.env
+	installed.Version, installed.Supervisor = "v0.7.2", ""
+	ask := func(operand string) (string, error) {
+		var out strings.Builder
+		err := runWorkerCommand(t.Context(), LaunchPlan{Subcommand: "worker", Operands: []string{operand}}, installed, &out)
+		return out.String(), err
+	}
+	out, err := ask("supervised")
+	if got := exitStatus(err); got != 4 {
+		t.Fatalf("with a worker running: exit %d (%v), want 4", got, err)
+	}
+	for _, want := range []string{fmt.Sprintf("worker %d ", os.Getpid()), "v0.7.1", "started by Tern", "v0.7.2", "`tern-kata worker stop`"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("worker supervised printed %q, which does not name %q", out, want)
+		}
+	}
+	if strings.Count(out, "\n") != 1 || !strings.HasSuffix(out, "\n") {
+		t.Errorf("worker supervised printed %q, want one line: the host half logs it", out)
+	}
+	status, err := ask("status")
+	if err != nil || !strings.Contains(status, "v0.7.2") || !strings.Contains(status, "`tern-kata worker stop`") {
+		t.Errorf("worker status printed %q, %v; want the installed version and the stop that moves the worker to it", status, err)
+	}
+	stop()
+	config, err := os.ReadFile(f.env.Dirs.ConfigPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, err := ask("supervised"); err != nil || out != string(config) {
+		t.Fatalf("once the worker has gone: %q, %v; want worker.toml's text", out, err)
 	}
 }
 

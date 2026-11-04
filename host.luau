@@ -1,10 +1,14 @@
 --!strict
 
 -- The host half runs in Tern's session daemon, with or without a window. It keeps `tern-kata worker` running: it starts
--- the worker when the Supervision rule holds, and starts it again, backing off, whenever it exits.
+-- the worker when the Supervision rule holds, and starts it again, backing off, whenever it exits. A worker it did not
+-- start is left running: one its earlier load started (a plugin reload or a Tern update's handoff loads this file again
+-- while the worker runs on, and Tern never calls the old exit callback) or one started by hand. It starts one within a
+-- poll of that worker's end.
 -- Turning it off: create worker.manual beside worker.toml (see docs/guide/worker.md).
--- This file does not decide the rule or find the config folder: it asks `tern-kata worker supervised`, whose answer is
--- worker.SupervisionOn in internal/worker/supervision.go (the one place the rule is held; the Go tests pin it).
+-- This file does not decide the rule, find the config folder or see which worker runs: it asks `tern-kata worker
+-- supervised`, whose answer is worker.SupervisionOn and worker.RunningWorker in internal/worker/supervision.go (the one
+-- place each is held; the Go tests pin them).
 
 local panecommands = require("./panecommands")
 
@@ -31,6 +35,10 @@ local asking = false
 local warned_missing = false
 local warned_status = false
 local ASK_LIMIT_MS = 10000
+-- `worker supervised` exits with HELD, printing one line that names the worker, when the rule holds and a worker this
+-- load did not start already runs. The line is logged when it differs from the last one.
+local HELD = 4
+local held_line: string? = nil
 local handle: TimerHandle? = nil
 
 -- The next start comes at once and at the shortest delay, as after a healthy run.
@@ -166,22 +174,35 @@ local function launch(binary: string, config: string)
     end
 end
 
--- The answer of `tern-kata worker supervised`: status 0 and worker.toml's text when the supervision rule holds, status 1
--- when it does not. Any other status (a timeout, a binary that cannot run) says nothing about the rule, so the state stays;
--- a status that is neither a timeout nor -1 (killed by a signal) is logged once per daemon: an older tern-kata binary exits
--- 2 on `worker supervised`, and then the worker never starts until the binary is updated.
+-- The answer of `tern-kata worker supervised`: status 0 and worker.toml's text when the supervision rule holds and no
+-- worker runs, HELD and a line naming the worker when one does, status 1 when the rule does not hold. Any other status (a
+-- timeout, a binary that cannot run) says nothing about the rule, so the state stays; a status that is neither a timeout
+-- nor -1 (killed by a signal) is logged once per daemon: an older tern-kata binary exits 2 on `worker supervised`, and
+-- then the worker never starts until the binary is updated.
 local function answered(binary: string, result: ProcessResult)
     asking = false
+    if result.status == HELD and not result.timed_out then
+        -- worker.lock would refuse a second worker: start none, and look again next poll.
+        local line = last_line(result.stdout)
+        if line ~= held_line then
+            held_line = line
+            tern.log.warn("tern-kata: " .. line)
+        end
+        reset_backoff()
+        return arm(POLL_MS)
+    end
     if result.status ~= 0 then
         if result.status == 1 and not result.timed_out then
             reset_backoff()
             started_text = nil
+            held_line = nil
         elseif not result.timed_out and result.status ~= -1 and not warned_status then
             warned_status = true
             tern.log.warn("tern-kata: `worker supervised` exited with status " .. result.status .. " (" .. last_line(result.stderr) .. "), so the worker is not started; the tern-kata binary is probably older than this plugin: run `tern-kata update`")
         end
         return arm(POLL_MS)
     end
+    held_line = nil
     local config = result.stdout
     if started_text ~= nil and config ~= started_text then
         reset_backoff()
@@ -218,8 +239,8 @@ function start()
     end
 end
 
--- The first look waits a moment so loading stays well inside the 2 s budget; a daemon restart reloads this file and
--- so starts the worker again.
+-- The first look waits a moment so loading stays well inside the 2 s budget. A daemon restart or a plugin reload loads this
+-- file again: it starts the worker, or leaves the one still running and starts one when that ends.
 arm(500)
 
 -- Windows: Tern runs a Pane's command as `pwsh -c <command>`, which loads the user's PowerShell profile first. The Pane

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/worker"
@@ -71,12 +72,15 @@ func runWorkerCommand(ctx context.Context, plan LaunchPlan, env workerEnv, out i
 		if plan.JSON {
 			return writeJSON(out, resp.Status)
 		}
-		_, err = fmt.Fprint(out, resp.Status.String())
+		if _, err = fmt.Fprint(out, resp.Status.String()); err != nil {
+			return err
+		}
+		_, err = io.WriteString(out, installedNote(resp.Status.Version, env))
 		return err
 	case len(plan.Operands) == 1 && plan.Operands[0] == "stop":
 		return stopWorker(ctx, plan, env, out)
 	case len(plan.Operands) == 1 && plan.Operands[0] == "supervised":
-		return printSupervised(env, out)
+		return printSupervised(ctx, env, out)
 	case len(plan.Operands) == 2:
 		return settleHeldRun(ctx, plan, env, out)
 	case len(plan.Operands) == 1:
@@ -87,15 +91,67 @@ func runWorkerCommand(ctx context.Context, plan LaunchPlan, env workerEnv, out i
 
 var errSupervisionOff = errors.New("the plugin does not supervise the worker: " + worker.ConfigFileName + " is missing or " + worker.ManualFileName + " is beside it")
 
-// printSupervised is `worker supervised`, the plugin host half's one question: when the Supervision rule holds it prints
-// worker.toml's text and succeeds; otherwise it prints nothing on stdout and exits 1 with errSupervisionOff.
-func printSupervised(env workerEnv, out io.Writer) error {
+// supervisedHeld is the answer of `worker supervised` when the Supervision rule holds but a worker already runs: main
+// exits 4, and the host half starts none and logs the line printed on stdout.
+type supervisedHeld struct{ error }
+
+// printSupervised is `worker supervised`, the plugin host half's one question. When the Supervision rule holds and no worker
+// answers the control socket it prints worker.toml's text and succeeds; when one does (a worker the host half's earlier
+// load started, or one started by hand) it prints one line naming it and fails with supervisedHeld; otherwise it prints
+// nothing on stdout and exits 1 with errSupervisionOff.
+func printSupervised(ctx context.Context, env workerEnv, out io.Writer) error {
 	text, on := env.Dirs.SupervisedConfig()
 	if !on {
 		return subcommandError{errSupervisionOff}
 	}
+	if id, running := worker.RunningWorker(ctx, env.Dirs); running {
+		line := heldLine(id, env.Version)
+		if _, err := fmt.Fprintln(out, line); err != nil {
+			return err
+		}
+		return supervisedHeld{errors.New(line)}
+	}
 	_, err := io.WriteString(out, text)
 	return err
+}
+
+// heldLine names the worker that already runs and, when it runs another version than this binary (the installed one),
+// the stop that moves it there: the host half logs it whenever it changes.
+func heldLine(id worker.Identity, installed string) string {
+	var b strings.Builder
+	if id.PID > 0 {
+		fmt.Fprintf(&b, "worker %d", id.PID)
+	} else {
+		b.WriteString("a worker")
+	}
+	switch {
+	case id.Version == "":
+		b.WriteString(" (it did not say its version)")
+	case id.Supervisor == worker.SupervisorTern:
+		fmt.Fprintf(&b, " (tern-kata %s, started by Tern)", id.Version)
+	case id.Supervisor == "":
+		fmt.Fprintf(&b, " (tern-kata %s, started by hand)", id.Version)
+	default:
+		fmt.Fprintf(&b, " (tern-kata %s, started by %s)", id.Version, id.Supervisor)
+	}
+	b.WriteString(" is already running, so the plugin starts none until it exits")
+	if installed != "" && id.Version != installed {
+		fmt.Fprintf(&b, "; the installed binary is %s, and `tern-kata worker stop` moves the worker to it", installed)
+	}
+	return b.String()
+}
+
+// installedNote is the line `worker status` ends with when the running worker is another version than this binary, the
+// installed one: how the worker gets to it.
+func installedNote(running string, env workerEnv) string {
+	if running == "" || env.Version == "" || running == env.Version {
+		return ""
+	}
+	next := "`tern-kata worker stop` moves it there: the plugin then starts the installed one."
+	if !env.Dirs.SupervisionOn() {
+		next = "Stop it with `tern-kata worker stop` and start `tern-kata worker` again to run the installed one."
+	}
+	return fmt.Sprintf("It runs tern-kata %s; the installed binary is %s. %s\n", running, env.Version, next)
 }
 
 // stopWorker is `worker stop [--now]`: it asks the running worker to drain (or, with --now, to end at once) and says what

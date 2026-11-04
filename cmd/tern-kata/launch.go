@@ -594,8 +594,9 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 interrupts are held interrupted and resumable. Says whether the plugin
                                 starts a fresh worker. Config changes take effect by restarting it
   worker supervised             exit 0 and print worker.toml's text when the plugin supervises the worker
-                                (worker.toml exists and worker.manual does not), else exit 1 with
-                                nothing on stdout: the plugin's host half asks it
+                                (worker.toml exists and worker.manual does not) and none runs; exit 4
+                                and print one line naming the worker when one already runs; else exit 1
+                                with nothing on stdout: the plugin's host half asks it
   worker doctor                 check worker.toml, the checkouts, agent commands, secrets, the kata
                                 daemon and each Project's lease, and say how to fix what is missing
   worker resume <run-uid>       continue a held run: the worker starts a new headless omp attempt on

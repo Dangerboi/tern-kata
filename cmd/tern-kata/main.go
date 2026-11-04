@@ -28,7 +28,8 @@ func main() {
 }
 
 // exitStatus is the status main exits with after err: 2 for a command line refused before anything ran, 128 plus the signal
-// for a command a signal stopped, 1 for any other failure of a subcommand (which never opens a Pane), else 3.
+// for a command a signal stopped, 4 for `worker supervised` naming a worker that already runs, 1 for any other failure of
+// a subcommand (which never opens a Pane), else 3.
 // Pane contract with window.luau: the Pane title is `tern-kata` (set in run), the Pane's own failures exit 3 and a refused
 // command line 2, as a Go panic does. The plugin reads 2 and 3 as "failed to start", 1 as either (Windows reports every
 // failing launch as 1), and any other early failing status as "not installed", so a Pane failure must never exit 1.
@@ -38,6 +39,9 @@ func exitStatus(err error) int {
 	}
 	if _, ok := errors.AsType[usageError](err); ok {
 		return 2
+	}
+	if _, ok := errors.AsType[supervisedHeld](err); ok {
+		return 4
 	}
 	if _, ok := errors.AsType[subcommandError](err); ok {
 		return 1

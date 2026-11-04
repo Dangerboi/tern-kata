@@ -23,6 +23,7 @@ import (
 //	"resume"     Run: a held run's uid, Actor: who asks (optional); answers Transition.
 //	"stop"       Mode: "idle" (the default) or "now"; answers Stop. Idle refuses new work and exits once no run is in flight; now exits at once.
 //	"abandon"    Run: a held or running run's uid (or one this machine lost the state of), Actor: who asks (optional); answers Transition.
+//	"identity"   answers Identity: the worker's process, version and supervisor, without reading a journal (the host half asks it every poll).
 type Request struct {
 	Op    string `json:"op"`
 	Job   string `json:"job,omitempty"`
@@ -40,6 +41,14 @@ type Response struct {
 	Detail     *RunDetail     `json:"detail,omitempty"`
 	Transition *RunTransition `json:"transition,omitempty"`
 	Stop       *StopAnswer    `json:"stop,omitempty"`
+	Identity   *Identity      `json:"identity,omitempty"`
+}
+
+// Identity is which worker answers: its process, its version and who started it (SupervisorTern, or empty when started by hand).
+type Identity struct {
+	PID        int    `json:"pid"`
+	Version    string `json:"version,omitempty"`
+	Supervisor string `json:"supervisor,omitempty"`
 }
 
 // ErrNoWorker means nothing answers on the control socket.
@@ -119,6 +128,8 @@ func (w *Worker) handle(ctx context.Context, req Request) Response {
 	case cmdStatus:
 		s := w.Status()
 		return Response{OK: true, Status: &s}
+	case cmdIdentity:
+		return Response{OK: true, Identity: &Identity{PID: w.pid, Version: w.opt.Version, Supervisor: w.opt.Supervisor}}
 	case cmdRun:
 		accepted, err := w.RequestRun(ctx, req.Job)
 		if err != nil {

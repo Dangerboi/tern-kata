@@ -7,11 +7,16 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 ### Added
 
 - `m` on the Attention Page sends a message to the omp agent that raised the selected request. It reaches the agent at once, through an omp extension tern-kata loads into every omp agent it starts: a waiting or idle agent starts a turn on it, a working one gets it at its next step without its work being stopped, and a pending `ask` or tool approval stays until you answer it. Each omp agent has its own Agent address, `<actor>/<name>-<block id>`, set as its `KATA_INBOX_USER`, so no other agent reads its messages; only messages from you are delivered, and the agent's first message tells it to act only on those. The card asks before replacing a message the agent has not cleared, and says why when the agent cannot receive one (exited, not omp, or `--trusted-extension` in its agent.toml args). When an agent exits, the Pane clears what is left at its address. Agents that load the extension run with `KATA_OMP_LIVE_INBOX=0`, so kata-omp leaves live delivery to it.
+- `tern-kata worker status` names the installed binary's version when the running worker runs another one, and says how `tern-kata worker stop` moves it there.
 
 ### Changed
 
 - **Breaking:** an Agent profile with no `extensions` key now runs omp with `--no-extensions`, where it used to load whatever omp discovers, so a worker run no longer loads omp's native extension modules, ambient hook files or installed plugins such as kata-plugin. Explicit `-e`, `--hook` and `--trusted-extension` paths in its `args`, skills, rules and MCP servers still apply. Add `extensions = "ambient"` under the profile to get the old behaviour back. A run already in progress when you upgrade uses the new default from its next attempt or step.
 - `worker doctor` warns of kata-plugin's todo takeover only for an Agent profile that sets `extensions = "ambient"`.
+
+### Fixed
+
+- Supervision no longer starts a second worker for `worker.lock` to refuse, all day long, after a plugin reload or a Tern update: the host half leaves the worker that is still running alone, logs one line naming it, and starts a worker within 10 seconds of its end.
 
 ## [0.7.2] - 2026-11-02
 

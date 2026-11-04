@@ -148,8 +148,8 @@ wait_worker 40
 fourth=$(worker_pid)
 alive "$fourth"
 run_job 3
-# The worker the old daemon left running keeps its lock, so the new host half's attempts are refused; when it ends, the
-# next attempt starts a worker.
+# The worker the old daemon left running keeps its lock, so the new host half starts none while it runs; when it ends, the
+# next look starts a worker.
 alive "$third" && kill -9 "$third"
 wait_new_worker "$third" 100
 run_job 4
@@ -217,6 +217,20 @@ stop_expecting none
 no_worker_within 13 "worker.toml is absent"
 printf '%s\n' "$good_config" >"$config/worker.toml"
 wait_started "" 13 || { echo "restoring worker.toml did not start a worker within one poll" >&2; exit 1; }
+# A plugin reload gives the host half fresh state while its worker runs on, as a Tern update's handoff does. The new host
+# half starts no second worker for worker.lock to refuse, names the running one once over two looks, and starts a worker
+# within a poll of its end. The reload is a client, so the daemon is kept busy from here on (see wait_started).
+adopted=$(worker_pid)
+log_from=$(( $(wc -l <"$STENCIL_LOG_DIR/tern-daemon.log") + 1 ))
+tern plugin reload tern-kata >/dev/null
+for ((k = 0; k < 12; k++)); do sleep 1; tern plugin list >/dev/null 2>&1; done # the host half looks after 0.5 s and 10.5 s
+since_reload=$(tail -n +"$log_from" "$STENCIL_LOG_DIR/tern-daemon.log")
+[[ "$(worker_pid)" == "$adopted" ]] && alive "$adopted" || { echo "the reload replaced the running worker" >&2; exit 1; }
+if grep -q 'already running on this machine' <<<"$since_reload"; then echo "the reloaded host half started a second worker" >&2; exit 1; fi
+[[ $(grep -c "worker $adopted .*is already running" <<<"$since_reload") -eq 1 ]] || { echo "the reloaded host half did not name the running worker once" >&2; exit 1; }
+kill -9 "$adopted"
+wait_started "$adopted" 13 || { echo "the reloaded host half did not start a worker within a poll of the running one's end" >&2; exit 1; }
+run_job 5
 # `update` moves a supervised worker to the new binary: a release build older than the dist/ is what the host half starts,
 # `update` against the local dist/ swaps it and stops the worker when idle, and the fresh worker the host half starts
 # reports the new version. The plugin is linked here, so the update leaves it and says so.
@@ -253,4 +267,4 @@ grep -q 'tern-kata plugin is linked' "$tmp/update.out"
 wait_gone "$old_worker"
 wait_started "$old_worker" 40 || { echo "the host half did not start a worker after update" >&2; exit 1; }
 "$tmp/bin/tern-kata" worker status | grep -q "tern-kata v$up_version" || { echo "the new worker does not run v$up_version" >&2; exit 1; }
-printf 'Supervision smoke passed: no config = nothing, worker started and run with no window, quick crashes back off, worker back after a daemon restart and when the worker it left behind ends, update moves the supervised worker to the new release, host half and `worker stop` agree on worker.manual and worker.toml (marker, no marker, no config) over the same config folder, fixing a broken worker.toml drops the wait\n'
+printf 'Supervision smoke passed: no config = nothing, worker started and run with no window, quick crashes back off, worker back after a daemon restart and when the worker it left behind ends, a reloaded host half leaves the running worker alone and starts one when it ends, update moves the supervised worker to the new release, host half and `worker stop` agree on worker.manual and worker.toml (marker, no marker, no config) over the same config folder, fixing a broken worker.toml drops the wait\n'

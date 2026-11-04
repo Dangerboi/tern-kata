@@ -1,6 +1,8 @@
 package worker
 
 import (
+	"encoding/json"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -42,5 +44,52 @@ func TestSupervisedConfigIsOnlyAConfigWithoutTheMarker(t *testing.T) {
 				t.Fatalf("text %q, want %q", text, want)
 			}
 		})
+	}
+}
+
+// The host half starts a worker only when none answers the control socket. A worker from a release before the identity
+// request still answers, refusing the request: it runs, and worker.lock names its process.
+func TestRunningWorkerIsWhoeverAnswersTheControlSocket(t *testing.T) {
+	root, err := os.MkdirTemp("", "tk") //nolint:usetesting // t.TempDir's path is too long for a unix socket
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(root) })
+	d := Dirs{Config: root, State: root}
+	if _, running := RunningWorker(t.Context(), d); running {
+		t.Fatal("no socket: a worker runs")
+	}
+	if err := os.WriteFile(d.Socket(), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, running := RunningWorker(t.Context(), d); running {
+		t.Fatal("a socket file nobody listens on: a worker runs")
+	}
+	if err := os.Remove(d.Socket()); err != nil {
+		t.Fatal(err)
+	}
+	ln, err := new(net.ListenConfig).Listen(t.Context(), "unix", d.Socket())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			var req Request
+			_ = json.NewDecoder(conn).Decode(&req)
+			_ = json.NewEncoder(conn).Encode(Response{Error: "unknown request " + req.Op})
+			conn.Close()
+		}
+	}()
+	if err := os.WriteFile(d.Lock(), []byte("4242"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	id, running := RunningWorker(t.Context(), d)
+	if !running || id != (Identity{PID: 4242}) {
+		t.Fatalf("an older worker: %+v, running %v; want process 4242 with no version", id, running)
 	}
 }
