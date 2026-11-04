@@ -145,11 +145,14 @@ func attentionOnIssues(m Model) (Model, []Cmd) {
 }
 
 func attentionPass(m Model, relayed, reread bool) (Model, []Cmd) {
-	address, err := m.InboxAddress()
-	if err != nil || m.PaneBlock == "" {
+	if m.PaneBlock == "" {
 		return m, nil
 	}
-	var cmds []Cmd
+	m, cmds := clearGoneInboxes(m)
+	address, err := m.InboxAddress()
+	if err != nil {
+		return m, cmds
+	}
 	for _, e := range m.AgentMapping {
 		if e.PaneBlock != m.PaneBlock || !agentWaiting(m.Agents.States, e.Block) {
 			continue

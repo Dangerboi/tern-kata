@@ -24,6 +24,7 @@ func cardOpeners() map[model.Card]func(*testing.T) driver.State {
 		model.CardRevoke:          func(t *testing.T) driver.State { return step(t, tokenList(t), key("x")).State },
 		model.CardMove:            popupOpener("Move"),
 		model.CardAgent:           popupOpener("Agent"),
+		model.CardAgentMessage:    popupOpener("Message"),
 		model.CardDelete:          popupOpener("Delete"),
 		model.CardFederationAdopt: popupOpener("Federation adoption"),
 		model.CardRecurrence:      popupOpener("Recurrence"),

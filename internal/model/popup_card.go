@@ -58,6 +58,7 @@ const (
 	CardAgent
 	CardFederationAdopt
 	CardView
+	CardAgentMessage
 )
 
 // cardEntry is everything the model knows about one popup card. Each card fills in one.
@@ -333,6 +334,22 @@ func buildCards() []cardEntry {
 			modes: []Mode{ModeAgentCard}, mode: func(Model) Mode { return ModeAgentCard },
 			key:  updateAgentCardKey,
 			busy: func(Model) bool { return false }, fields: []FieldSpec{},
+		},
+		{
+			card: CardAgentMessage, name: "agent-message", open: func(m Model) bool { return m.AgentMessage.Open },
+			modes: []Mode{ModeAgentMessage, ModeAgentMessageReplace}, mode: Model.AgentMessageMode,
+			key: agentMessageKey,
+			// The message holds no caret while it is sent or while the card asks before a replace.
+			busy:   func(m Model) bool { return m.AgentMessage.Sending || m.AgentMessage.Held != "" },
+			fields: []FieldSpec{}, input: true,
+			editing: []fieldEditing{{mode: ModeAgentMessage, actions: []Action{DeleteInput, ClearInput}, clear: "clear message"}},
+			text:    func(m *Model) (*string, *Caret) { return &m.AgentMessage.Text, &m.AgentMessage.Caret },
+			erased: func(m Model, _ Action, changed bool) Model {
+				if changed {
+					m.AgentMessage.Err = nil
+				}
+				return m
+			},
 		},
 		{
 			card: CardDelete, name: "delete", open: func(m Model) bool { return m.DeleteForm.Open },

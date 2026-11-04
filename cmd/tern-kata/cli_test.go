@@ -82,12 +82,13 @@ func TestBashCompletionOffersSubcommandsWorkerFormsAndFlags(t *testing.T) {
 		{[]string{"views", "show", "x", "--"}, "--json --as"},
 		{[]string{"views", "add", "x", "--re"}, "--relationship --replace"},
 		{[]string{"completion", "z"}, "zsh"},
-		{[]string{"agent", "--"}, "--as --ref --home --db --schema --dsn-file --env-file --daemon --server --token-file --auth-file --allow-insecure --trust-private-network"},
+		{[]string{"agent", "--"}, "--as --ref --inbox --home --db --schema --dsn-file --env-file --daemon --server --token-file --auth-file --allow-insecure --trust-private-network"},
 		{[]string{"agent", "--as", "bot", "--re"}, "--ref"},
-		{[]string{"agent", "--as", "bot", "--ref", "demo#ab12", "--"}, "--as --ref --home --db --schema --dsn-file --env-file --daemon --server --token-file --auth-file --allow-insecure --trust-private-network"},
+		{[]string{"agent", "--as", "bot", "--ref", "demo#ab12", "--"}, "--as --ref --inbox --home --db --schema --dsn-file --env-file --daemon --server --token-file --auth-file --allow-insecure --trust-private-network"},
+		{[]string{"agent", "--as", "bot", "--i"}, "--inbox"},
 		{[]string{"agent", "--ref", "demo#ab12", "--as", "bot", "--a"}, "--as --auth-file --allow-insecure"},
 		{[]string{"agent", "--as", "bot", "--ref", "demo#ab12", "--", "omp", "--"}, ""}, // after the lone -- the words are the command's
-		{[]string{"attach", "ab12", "a"}, ""}, // files are the shell's own completion
+		{[]string{"attach", "ab12", "a"}, ""},                                           // files are the shell's own completion
 	} {
 		if got := strings.Join(complete(t, tc.words...), " "); got != tc.want {
 			t.Errorf("tern-kata %s<tab> = %q, want %q", strings.Join(tc.words, " "), got, tc.want)

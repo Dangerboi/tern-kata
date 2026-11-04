@@ -1,0 +1,416 @@
+// tern-kata's omp extension: delivers kata notification slots written for this
+// agent (from tern-kata's Attention Page) to the running omp session as user messages.
+
+/** One running `kata` child whose stdout is read line by line. */
+export interface Spawned {
+  lines: AsyncIterable<string>;
+  exited: Promise<number>;
+  kill(): void;
+}
+
+/** Effects the follower needs; tests replace them with fakes. */
+export interface InboxDeps {
+  address: string;
+  project: string;
+  /** Starts a long-running kata command; args exclude "kata". */
+  spawn(args: string[]): Spawned;
+  /** Runs a one-shot kata command; args exclude "kata". */
+  run(args: string[]): Promise<{ code: number; stdout: string }>;
+  deliver(text: string): void;
+  setTimer(fn: () => void, ms: number): unknown;
+  clearTimer(handle: unknown): void;
+}
+
+/** The follower's lifecycle. */
+export interface Inbox {
+  start(): void;
+  stop(): void;
+}
+
+/** The value of a notification slot. */
+export interface Slot {
+  from: string;
+  message: string;
+  re?: string;
+  kind?: string;
+}
+
+/** What a stream line means to the follower. */
+export type StreamEvent =
+  | { type: "reset"; after: number }
+  | { type: "slot"; ref: string; eventId: number; to: Slot | null };
+
+/** The agent's Issue and address read from the environment. */
+export interface Config {
+  address: string;
+  project: string;
+}
+
+/** Delivery state kept for one Issue ref. */
+interface RefState {
+  eventId?: number;
+  value: string | null;
+}
+
+const MIN_BACKOFF_MS = 1000;
+const MAX_BACKOFF_MS = 30000;
+
+/** Returns the notification slot metadata key for an address. */
+export function slotKey(address: string): string {
+  return "notify." + Buffer.from(address, "utf8").toString("base64url");
+}
+
+/** Returns the actor part of an address (up to its last "/"), or undefined when it has none. */
+export function trustedSender(address: string): string | undefined {
+  const i = address.lastIndexOf("/");
+  return i > 0 ? address.slice(0, i) : undefined;
+}
+
+/** Reads KATA_INBOX_USER and KATA_REF; undefined means the extension must do nothing. */
+export function readConfig(env: Record<string, string | undefined>): Config | undefined {
+  const address = (env.KATA_INBOX_USER ?? "").trim();
+  const ref = (env.KATA_REF ?? "").trim();
+  const hash = ref.indexOf("#");
+  const project = hash > 0 ? ref.slice(0, hash).trim() : "";
+  if (address === "" || project === "" || trustedSender(address) === undefined) return undefined;
+  return { address, project };
+}
+
+function asRecord(v: unknown): Record<string, unknown> | undefined {
+  return typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
+}
+
+function optionalText(v: unknown): string | undefined {
+  if (typeof v === "string" && v !== "") return v;
+  if (typeof v === "number") return String(v);
+  return undefined;
+}
+
+/** Narrows a parsed JSON value to a Slot, or undefined when it is not one. */
+export function toSlot(v: unknown): Slot | undefined {
+  const r = asRecord(v);
+  if (!r || typeof r.from !== "string" || typeof r.message !== "string") return undefined;
+  return { from: r.from, message: r.message, re: optionalText(r.re), kind: optionalText(r.kind) };
+}
+
+/** Returns the leading `"event_id":<n>` of a stream line, or undefined. */
+export function eventIdOf(line: string): number | undefined {
+  const m = /^\{"event_id":(\d+),/.exec(line);
+  return m ? Number(m[1]) : undefined;
+}
+
+/** Interprets one stream line; undefined when it is not for this key. */
+export function parseStreamLine(line: string, key: string): StreamEvent | undefined {
+  const isReset = line.includes('"reset_required"');
+  if (!isReset && !line.includes(key)) return undefined;
+  let parsed: Record<string, unknown> | undefined;
+  try {
+    parsed = asRecord(JSON.parse(line));
+  } catch {
+    return undefined;
+  }
+  if (!parsed) return undefined;
+  if (parsed.reset_required === true && typeof parsed.reset_after_id === "number") {
+    return { type: "reset", after: parsed.reset_after_id };
+  }
+  if (parsed.type !== "issue.metadata_updated") return undefined;
+  const diff = asRecord(asRecord(parsed.payload)?.diff);
+  const change = diff ? asRecord(diff[key]) : undefined;
+  if (!change || typeof parsed.event_id !== "number") return undefined;
+  if (typeof parsed.project_name !== "string" || typeof parsed.issue_short_id !== "string") return undefined;
+  const ref = `${parsed.project_name}#${parsed.issue_short_id}`;
+  if (change.to === null) return { type: "slot", ref, eventId: parsed.event_id, to: null };
+  const to = toSlot(change.to);
+  return to ? { type: "slot", ref, eventId: parsed.event_id, to } : undefined;
+}
+
+/** Builds the user message the agent receives for a slot value. */
+export function deliveryText(ref: string, address: string, slot: Slot): string {
+  const notes: string[] = [];
+  if (slot.re) notes.push(`It is about comment ${slot.re}.`);
+  if (slot.kind) notes.push(`This is a ${slot.kind} notice.`);
+  notes.push(`When you have handled it, clear it: \`kata notify ${ref} --to ${address} --clear\``);
+  return [`Message from ${slot.from} on ${ref}, sent to you through kata:`, slot.message, notes.join("\n")].join("\n\n");
+}
+
+function identityOf(slot: Slot): string {
+  return JSON.stringify([slot.from, slot.message, slot.re ?? "", slot.kind ?? ""]);
+}
+
+function qualify(project: string, ref: string): string {
+  return ref.includes("#") ? ref : `${project}#${ref}`;
+}
+
+/** Parses `kata inbox --json` output into qualified refs and slots; undefined on bad JSON. */
+export function parseInbox(stdout: string, project: string): Array<{ ref: string; slot: Slot }> | undefined {
+  let requests: unknown;
+  try {
+    requests = asRecord(JSON.parse(stdout))?.requests;
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(requests)) return undefined;
+  const out: Array<{ ref: string; slot: Slot }> = [];
+  for (const item of requests) {
+    const slot = toSlot(item);
+    const ref = asRecord(item)?.ref;
+    if (slot && typeof ref === "string" && ref !== "") out.push({ ref: qualify(project, ref), slot });
+  }
+  return out;
+}
+
+/**
+ * Creates the follower: it tails kata's event stream, re-reads the inbox when the
+ * stream restarts or resets, and delivers each new trusted slot value once.
+ */
+export function createInbox(deps: InboxDeps): Inbox {
+  const key = slotKey(deps.address);
+  const trusted = trustedSender(deps.address);
+  const states = new Map<string, RefState>();
+  let running = false;
+  let generation = 0;
+  let child: Spawned | undefined;
+  let timer: unknown;
+  let cursor = 0;
+  let backoff = MIN_BACKOFF_MS;
+  let reading = false;
+  let readAgain = false;
+
+  function handle(ref: string, eventId: number | undefined, slot: Slot | null): void {
+    const stored = states.get(ref);
+    if (eventId !== undefined && stored?.eventId !== undefined && eventId <= stored.eventId) return;
+    const identity = slot === null ? null : identityOf(slot);
+    if (stored && stored.value === identity) {
+      if (eventId !== undefined) stored.eventId = eventId;
+      return;
+    }
+    states.set(ref, { eventId: eventId ?? stored?.eventId, value: identity });
+    if (slot === null || slot.from !== trusted || slot.message.trim() === "") return;
+    deps.deliver(deliveryText(ref, deps.address, slot));
+  }
+
+  function applyInbox(entries: Array<{ ref: string; slot: Slot }>): void {
+    const listed = new Set<string>();
+    for (const { ref, slot } of entries) {
+      listed.add(ref);
+      handle(ref, undefined, slot);
+    }
+    for (const [ref, state] of states) {
+      if (state.value !== null && !listed.has(ref)) state.value = null;
+    }
+  }
+
+  async function readInboxOnce(gen: number): Promise<void> {
+    let result: { code: number; stdout: string };
+    try {
+      result = await deps.run(["inbox", "--for", deps.address, "--json", "--project", deps.project]);
+    } catch {
+      return;
+    }
+    if (gen !== generation || result.code !== 0) return;
+    const entries = parseInbox(result.stdout, deps.project);
+    if (entries) applyInbox(entries);
+  }
+
+  async function readInbox(): Promise<void> {
+    if (reading) {
+      readAgain = true;
+      return;
+    }
+    reading = true;
+    try {
+      do {
+        readAgain = false;
+        await readInboxOnce(generation);
+      } while (readAgain && running);
+    } finally {
+      reading = false;
+    }
+  }
+
+  function onLine(line: string): void {
+    const id = eventIdOf(line);
+    if (id !== undefined && id > cursor) cursor = id;
+    const event = parseStreamLine(line, key);
+    if (!event) return;
+    if (event.type === "reset") {
+      cursor = event.after;
+      void readInbox();
+      return;
+    }
+    handle(event.ref, event.eventId, event.to);
+  }
+
+  function spawnStream(): Spawned | undefined {
+    const args = ["events", "--tail", "--json", "--project", deps.project];
+    if (cursor > 0) args.push("--last-event-id", String(cursor));
+    try {
+      return deps.spawn(args);
+    } catch {
+      return undefined;
+    }
+  }
+
+  async function follow(gen: number, stream: Spawned): Promise<void> {
+    let sawLine = false;
+    try {
+      for await (const line of stream.lines) {
+        if (gen !== generation) return;
+        sawLine = true;
+        onLine(line);
+      }
+      await stream.exited;
+    } catch {
+      // a broken stream is handled like an exit
+    }
+    if (gen !== generation) return;
+    scheduleRestart(gen, sawLine);
+  }
+
+  function scheduleRestart(gen: number, sawLine: boolean): void {
+    if (sawLine) backoff = MIN_BACKOFF_MS;
+    const delay = backoff;
+    backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
+    timer = deps.setTimer(() => {
+      if (gen !== generation) return;
+      timer = undefined;
+      launch(gen);
+      void readInbox();
+    }, delay);
+  }
+
+  function launch(gen: number): void {
+    child = spawnStream();
+    if (child) void follow(gen, child);
+    else scheduleRestart(gen, false);
+  }
+
+  return {
+    start() {
+      if (running) return;
+      running = true;
+      generation++;
+      backoff = MIN_BACKOFF_MS;
+      launch(generation);
+      void readInbox();
+    },
+    stop() {
+      if (!running) return;
+      running = false;
+      generation++;
+      if (timer !== undefined) deps.clearTimer(timer);
+      timer = undefined;
+      try {
+        child?.kill();
+      } catch {
+        // already gone
+      }
+      child = undefined;
+    },
+  };
+}
+
+/** The slice of omp's extension context this file uses. */
+interface ExtensionContext {
+  cwd?: string;
+  agent?: { kind?: string };
+  setTimeout?(fn: () => void, ms: number): unknown;
+  clearTimer?(handle: unknown): void;
+}
+
+/** The slice of omp's extension API this file uses. */
+export interface ExtensionApi {
+  on(event: "session_start", handler: (event: unknown, ctx: ExtensionContext) => void): void;
+  on(event: "session_shutdown", handler: (event: unknown, ctx: ExtensionContext) => void): void;
+  sendUserMessage(text: string, options: { deliverAs: "aside" }): Promise<unknown> | void;
+}
+
+/** How kata commands are executed; replaced in tests. */
+export interface KataIo {
+  spawn(args: string[], cwd: string | undefined): Spawned;
+  run(args: string[], cwd: string | undefined): Promise<{ code: number; stdout: string }>;
+}
+
+async function* readLines(stream: ReadableStream<Uint8Array>): AsyncGenerator<string> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffered = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffered += decoder.decode(value, { stream: true });
+    let nl = buffered.indexOf("\n");
+    while (nl >= 0) {
+      const line = buffered.slice(0, nl);
+      buffered = buffered.slice(nl + 1);
+      if (line !== "") yield line;
+      nl = buffered.indexOf("\n");
+    }
+  }
+  if (buffered !== "") yield buffered;
+}
+
+/** Runs kata through Bun with the process environment unchanged. */
+export const bunKataIo: KataIo = {
+  spawn(args, cwd) {
+    const proc = Bun.spawn(["kata", ...args], { cwd, stdout: "pipe", stderr: "ignore", env: process.env });
+    return { lines: readLines(proc.stdout), exited: proc.exited, kill: () => proc.kill() };
+  },
+  async run(args, cwd) {
+    const proc = Bun.spawn(["kata", ...args], { cwd, stdout: "pipe", stderr: "ignore", env: process.env });
+    const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    return { code, stdout };
+  },
+};
+
+/** Builds the omp extension factory for an environment and kata runner. */
+export function createExtension(env: Record<string, string | undefined>, io: KataIo): (pi: ExtensionApi) => void {
+  return (pi) => {
+    const config = readConfig(env);
+    let ctx: ExtensionContext = {};
+    let inbox: Inbox | undefined;
+
+    function build(c: Config): Inbox {
+      return createInbox({
+        ...c,
+        spawn: (args) => io.spawn(args, ctx.cwd),
+        run: (args) => io.run(args, ctx.cwd),
+        deliver: (text) => {
+          try {
+            Promise.resolve(pi.sendUserMessage(text, { deliverAs: "aside" })).catch(() => {});
+          } catch {
+            // delivery is best effort
+          }
+        },
+        setTimer: (fn, ms) => {
+          const guarded = () => {
+            try {
+              fn();
+            } catch {
+              // a timer must never throw into omp
+            }
+          };
+          return ctx.setTimeout ? ctx.setTimeout(guarded, ms) : setTimeout(guarded, ms);
+        },
+        clearTimer: (handle) => {
+          if (ctx.clearTimer) ctx.clearTimer(handle);
+          else clearTimeout(handle as never);
+        },
+      });
+    }
+
+    pi.on("session_start", (_event, c) => {
+      if (!config || c.agent?.kind === "sub") return;
+      ctx = c;
+      inbox ??= build(config);
+      inbox.start();
+    });
+    pi.on("session_shutdown", () => {
+      inbox?.stop();
+    });
+  };
+}
+
+export default function ternKata(pi: ExtensionApi): void {
+  createExtension(process.env, bunKataIo)(pi);
+}

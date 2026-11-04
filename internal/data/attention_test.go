@@ -351,3 +351,80 @@ func TestAgentAttentionRaisedWithATeammateNamesItAndIsClearedWithoutOne(t *testi
 		t.Fatalf("requests after the clear: %+v, want the request with a teammate cleared", left)
 	}
 }
+
+func TestAMessageToAnAgentIsWrittenOnlyOverWhatThePersonAgreedToReplace(t *testing.T) {
+	f := newAttentionFixture(t)
+	uid := createIssue(t, f.gateway, f.work, f.workP, "Agent at work")
+	const agent = "dana/omp-31"
+	send := func(message, replacing string) model.AgentMessageSent {
+		t.Helper()
+		return as[model.AgentMessageSent](t, run(t, f.gateway, model.SendAgentMessage{
+			Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana", Address: agent, Message: message, Replacing: replacing,
+		}))
+	}
+	slot := func() model.AttentionRequest {
+		t.Helper()
+		got := f.read(t, agent).Requests
+		if len(got) != 1 {
+			t.Fatalf("requests for the agent: %+v, want one", got)
+		}
+		return got[0]
+	}
+	if got := send("use the second table", ""); got.Err != nil || got.UID != uid || got.Held != "" {
+		t.Fatalf("first message: %+v", got)
+	}
+	first := slot()
+	if first.Slot.From != "dana" || first.Slot.Message != "use the second table" || first.Slot.Teammate != "" {
+		t.Fatalf("slot after the first message: %+v", first.Slot)
+	}
+	// The agent has not cleared it: a second message writes nothing and says what is held.
+	held := send("no, the third", "")
+	if held.Err != nil || held.Held != first.Slot.Raw || held.Unread != "use the second table" {
+		t.Fatalf("second message over an unread one: %+v", held)
+	}
+	if got := slot(); got.Slot.Message != "use the second table" {
+		t.Fatalf("the unread message was replaced without asking: %+v", got.Slot)
+	}
+	// Someone rewrites the slot after the person agreed to replace the first message: the new value is held instead.
+	f.put(t, f.workP, uid, agent, map[string]any{"from": "bob", "message": "from bob"})
+	again := send("no, the third", held.Held)
+	if again.Err != nil || again.Held == "" || again.Held == held.Held || again.Unread != "from bob" {
+		t.Fatalf("replacing a value that changed meanwhile: %+v", again)
+	}
+	if got := send("no, the third", again.Held); got.Err != nil || got.Held != "" {
+		t.Fatalf("replacing the value held: %+v", got)
+	}
+	if got := slot(); got.Slot.From != "dana" || got.Slot.Message != "no, the third" {
+		t.Fatalf("slot after the agreed replacement: %+v", got.Slot)
+	}
+	// The agent cleared the slot after the person agreed to replace it: the message is written all the same.
+	replaced := slot().Slot.Raw
+	f.put(t, f.workP, uid, agent, nil)
+	if got := send("one more thing", replaced); got.Err != nil || got.Held != "" {
+		t.Fatalf("replacing a slot the agent cleared meanwhile: %+v", got)
+	}
+	if got := slot(); got.Slot.Message != "one more thing" {
+		t.Fatalf("slot after the agent cleared it: %+v", got.Slot)
+	}
+}
+
+func TestAnExitedAgentsInboxIsClearedWhoeverWroteToIt(t *testing.T) {
+	f := newAttentionFixture(t)
+	uid := createIssue(t, f.gateway, f.work, f.workP, "Agent gone")
+	const agent = "dana/omp-31"
+	clear := func() model.AgentInboxCleared {
+		return as[model.AgentInboxCleared](t, run(t, f.gateway, model.ClearAgentInbox{Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana", Address: agent}))
+	}
+	for _, from := range []string{"dana", "bob"} {
+		f.put(t, f.workP, uid, agent, map[string]any{"from": from, "message": "unread"})
+		if got := clear(); got.Err != nil || got.UID != uid {
+			t.Fatalf("clear of %s's message: %+v", from, got)
+		}
+		if left := f.read(t, agent).Requests; len(left) != 0 {
+			t.Fatalf("after the clear of %s's message: %+v", from, left)
+		}
+	}
+	if got := clear(); got.Err != nil {
+		t.Fatalf("clear of an empty inbox: %+v", got)
+	}
+}

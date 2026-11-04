@@ -1,0 +1,25 @@
+# Messages reach a running agent through tern-kata's own omp extension
+
+A person can message an omp agent the Pane started from the Attention Page. The message is a kata Attention request written to the agent's own Agent address on its Issue, and tern-kata delivers it into the agent through a small omp extension of its own, which it embeds in its binary, writes to its state folder and loads into every omp agent it starts with `-e`.
+
+## Decisions
+
+- **One address per agent block:** `<actor>/<agent.toml name>-<block id>`, the actor being the Pane's (the one the agent's Attention requests come from). `kata inbox --for` reads exactly one address across the bound Project, so `<actor>/<name>` alone would let every omp agent read every other's messages; the block id alone would tell nobody in `kata inbox` output which agent it is; an Issue part adds nothing, since kata treats the address as an opaque string. The block id is only known once Tern made the block, so the Pane passes `--inbox <actor>/<name>` to `tern-kata agent`, which appends `-` and the block id from `TERN_PANE` and sets `KATA_INBOX_USER`. A run with no block keeps no address.
+- **Delivery is the extension's.** It follows `kata events --tail --json --project <project>`; a slot write for its key (`notify.<base64url(address)>`) carries the new value in the event's diff, so no read follows an event. It reads the address's open slots once at start, after a reset and after restarting the stream, so a write in a gap is not lost, and keeps per Issue the event id and value it delivered, so a replay or an unchanged value is not delivered twice. It delivers with `pi.sendUserMessage(text, { deliverAs: "aside" })`: an idle or waiting agent starts a turn, a working one gets the message at its next step boundary without its tool batch being stopped. The text names the sender and the Issue and ends with the command that clears the slot; the slot stays until the agent clears it.
+- **Questions to the person survive a delivery.** Checked on omp 18.16.0: an aside sent while a tool approval waits neither approves nor denies it (omp denies approvals on a message that joins its steering queue; an extension's aside goes to the aside queue), and lands after the person answers; an `ask` stays open and the message lands after its answer; a half-typed draft stays in the composer. So the extension holds nothing back.
+- **Trust is the sender.** `from` is a plain field anyone with write access can set, so the extension delivers only values whose `from` is the actor that started the agent (the address up to its last `/`), and the agent prompt tells the agent to act only on those. On a single-user local daemon this changes nothing.
+- **What the Pane does:** `m` on an Attention request opens the Message card for the agent behind it, the newest of this host's mapped agents on the request's Issue whose name the request carries that waits, else the newest. The card writes the slot guarded on the address holding nothing, and asks before replacing a message the agent has not cleared, since kata keeps one request per Issue and address. The action is off, with the reason, for an exited agent, an agent that is not omp, one whose agent.toml args hold `--trusted-extension` (omp refuses it with `-e`) and a request no agent raised. When an agent exits, or its block goes, the Pane that started it clears what is left at its address, guarded on the value read.
+- **kata-omp beside it:** the wrapper sets `KATA_OMP_LIVE_INBOX=0` for an agent that loads the extension, so a kata-omp that delivers live itself leaves delivery to the extension. kata-omp's `<kata_inbox>` section still lists the message until the agent clears it; that second sight of it is harmless.
+
+## Considered and rejected
+
+- **Requiring kata-omp and refusing without it:** installing kata-omp takes over omp's `todo` in every omp session on the machine, and delivery would ride on another repo's releases.
+- **Pasting into the block with `tern send`:** it mixes into a half-typed draft, and an Enter can approve a pending tool call or answer an `ask`.
+- **Polling `kata inbox`:** one `kata` process per agent per tick, and seconds of delay.
+- **A slot alone:** kata-omp puts the inbox into the system prompt only when omp dequeues a user prompt, steering or follow-up, never on tool-only iterations, so a waiting or idle agent never sees it until someone types into its block.
+
+## Consequences
+
+- Only omp agents the Pane starts receive messages; agents of other programs, `--trusted-extension` agents and worker runs (`omp -p`, one prompt) do not.
+- An omp agent pays one `kata events` child for its life. Without a cursor, kata replays the Project's events before going live (at most 10 000, beyond which it resets to the newest), which the extension skims without parsing lines that do not name its key.
+- The extension is versioned with tern-kata: each agent start rewrites the file when its content differs, and a running agent keeps the one it loaded.

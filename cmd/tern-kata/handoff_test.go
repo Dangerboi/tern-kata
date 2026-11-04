@@ -167,17 +167,22 @@ func TestChildEnv(t *testing.T) {
 
 func TestAgentEnv(t *testing.T) {
 	environ := []string{"PATH=/bin", "KATA_REF=old#1", "KATA_INBOX_USER=me", "KATA_AUTHOR=old", "Kata_Ref=x", "KATA_SESSION_ID=s"}
-	if got, want := agentEnv(environ, "ann", "demo#ab12", false), []string{"PATH=/bin", "Kata_Ref=x", "KATA_SESSION_ID=s", "KATA_AUTHOR=ann", "KATA_REF=demo#ab12"}; !reflect.DeepEqual(got, want) {
+	if got, want := agentEnv(environ, "ann", "demo#ab12", "", false), []string{"PATH=/bin", "Kata_Ref=x", "KATA_SESSION_ID=s", "KATA_AUTHOR=ann", "KATA_REF=demo#ab12"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("sensitive: %q, want %q", got, want)
 	}
-	if got, want := agentEnv(environ, "ann", "demo#ab12", true), []string{"PATH=/bin", "KATA_SESSION_ID=s", "KATA_AUTHOR=ann", "KATA_REF=demo#ab12"}; !reflect.DeepEqual(got, want) {
+	if got, want := agentEnv(environ, "ann", "demo#ab12", "", true), []string{"PATH=/bin", "KATA_SESSION_ID=s", "KATA_AUTHOR=ann", "KATA_REF=demo#ab12"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("insensitive: %q, want %q", got, want)
 	}
-	if got, want := agentEnv(environ, "ann", "", false), []string{"PATH=/bin", "Kata_Ref=x", "KATA_SESSION_ID=s", "KATA_AUTHOR=ann"}; !reflect.DeepEqual(got, want) {
+	if got, want := agentEnv(environ, "ann", "", "", false), []string{"PATH=/bin", "Kata_Ref=x", "KATA_SESSION_ID=s", "KATA_AUTHOR=ann"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("no ref: %q, want %q", got, want)
 	}
-	if got, want := agentEnv(environ, "", "demo#ab12", false), []string{"PATH=/bin", "KATA_AUTHOR=old", "Kata_Ref=x", "KATA_SESSION_ID=s", "KATA_REF=demo#ab12"}; !reflect.DeepEqual(got, want) {
+	if got, want := agentEnv(environ, "", "demo#ab12", "", false), []string{"PATH=/bin", "KATA_AUTHOR=old", "Kata_Ref=x", "KATA_SESSION_ID=s", "KATA_REF=demo#ab12"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("no actor: %q, want %q", got, want)
+	}
+	// Windows spells the block's variables as it likes: the block id is found and the inherited opt-in replaced whatever the case.
+	windows := []string{"Tern_Pane=42", "kata_omp_live_inbox=1", "Kata_Inbox_User=me"}
+	if got, want := agentEnv(windows, "", "demo#ab12", "ann/omp", true), []string{"Tern_Pane=42", "KATA_REF=demo#ab12", "KATA_OMP_LIVE_INBOX=0", "KATA_INBOX_USER=ann/omp-42"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("inbox on Windows: %q, want %q", got, want)
 	}
 }
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Runs the project's checks: static (gofmt, go vet and golangci-lint for Linux and Windows, the placement tests with the
-# luau command line, the build and the release cross-builds), test (go test) or smoke (smoke/run.sh); no argument runs all three.
+# luau command line, the build and the release cross-builds), test (go test, and bun test for the omp extension) or smoke
+# (smoke/run.sh); no argument runs all three.
 # The static checks run side by side; each prints "CHECK <name> ok" or "CHECK <name> FAIL" (after its output) when it ends.
 # CHECK_OUT (default: a temporary folder, deleted on exit) receives the go test -json stream as gotest.jsonl, the built
 # binaries under bin/ and each static check's output under log/.
@@ -75,6 +76,7 @@ failures='
 '
 tests() {
   go test -json ./... >"$out/gotest.jsonl" || { jq -js "$failures" "$out/gotest.jsonl"; return 1; }
+  bun test internal/data/ompext
 }
 
 smoke() { ./smoke/run.sh; }

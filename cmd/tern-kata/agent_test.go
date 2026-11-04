@@ -98,6 +98,8 @@ func TestPlanAgent(t *testing.T) {
 		"missing command":    {[]string{"agent", "--as", "bot", "--"}, "no command", "", nil},
 		"stray operand":      {[]string{"agent", "--as", "bot", "omp", "--", "omp"}, "unexpected argument omp", "", nil},
 		"unknown flag":       {[]string{"agent", "--as", "bot", "--json", "--", "omp"}, "unknown flag --json", "", nil},
+		"empty inbox":        {[]string{"agent", "--inbox=", "--", "omp"}, "--inbox must be non-empty", "", nil},
+		"missing inbox":      {[]string{"agent", "--inbox", "--", "omp"}, "--inbox requires", "", nil},
 	} {
 		t.Run(name, func(t *testing.T) {
 			plan, err := PlanLaunch(tc.args, func(string) (string, bool) { return "", false }, "v")
@@ -125,6 +127,13 @@ func TestPlanAgentCarriesTheRef(t *testing.T) {
 	}
 }
 
+func TestPlanAgentCarriesTheInboxPrefix(t *testing.T) {
+	plan, err := PlanLaunch([]string{"agent", "--inbox", "dangerboi/omp", "--ref", "demo#ab12", "--", "omp"}, func(string) (string, bool) { return "", false }, "v")
+	if err != nil || plan.AgentInbox != "dangerboi/omp" {
+		t.Errorf("AgentInbox = %q, err %v", plan.AgentInbox, err)
+	}
+}
+
 func TestAgentEnvironmentHasTheIssueRefAndNoInbox(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses sh")
@@ -148,6 +157,31 @@ func TestAgentWithoutAnActorLeavesTheAuthorAsInherited(t *testing.T) {
 	out, status, _ := runAgent(t, []string{"KATA_AUTHOR=person", "KATA_INBOX_USER=person"}, args...)
 	if status != 0 || out != "demo#ab12|unset|person" {
 		t.Errorf("status %d, output %q", status, out)
+	}
+}
+
+func TestAnAgentInABlockGetsItsOwnInboxAddressAndKataOmpLeavesLiveDeliveryToTheExtension(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sh")
+	}
+	script := `printf '%s|%s' "${KATA_INBOX_USER-unset}" "${KATA_OMP_LIVE_INBOX-unset}"`
+	inherited := []string{"KATA_INBOX_USER=person", "KATA_OMP_LIVE_INBOX=1"}
+	for name, tc := range map[string]struct {
+		block string
+		flags []string
+		want  string
+	}{
+		"in a block": {"18494129176579", []string{"--inbox", "dangerboi/omp"}, "dangerboi/omp-18494129176579|0"},
+		"with no block the address stays dropped":      {"", []string{"--inbox=dangerboi/omp"}, "unset|0"},
+		"without --inbox nothing changes but the drop": {"18494129176579", nil, "unset|1"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			args := append(append([]string{"agent", "--as", "claude"}, tc.flags...), "--ref", "demo#ab12", "--", "sh", "-c", script)
+			out, status, stderr := runAgent(t, append(slices.Clone(inherited), "TERN_PANE="+tc.block), args...)
+			if status != 0 || out != tc.want {
+				t.Errorf("status %d, output %q, stderr %q; want %q", status, out, stderr, tc.want)
+			}
+		})
 	}
 }
 

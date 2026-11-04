@@ -58,6 +58,9 @@ type LaunchPlan struct {
 	Force, Pause, Preflight bool
 	// AgentRef is `agent --ref`: the qualified Issue ref the agent's KATA_REF is set to; empty leaves the agent without one.
 	AgentRef string
+	// AgentInbox is `agent --inbox`: the agent's inbox address up to its block id, <actor>/<name>. The wrapper sets KATA_INBOX_USER
+	// to it with "-" and the block id from TERN_PANE added, and KATA_OMP_LIVE_INBOX=0; empty leaves both out.
+	AgentInbox string
 	// AgentRoute is `agent`'s --home, --db, --schema, --dsn-file, --env-file, --daemon, --server, --token-file, --auth-file, --allow-insecure and --trust-private-network: the Pane's daemon, which the wrapper turns into
 	// the agent's kata environment; zero leaves it as inherited.
 	AgentRoute data.AgentRoute

@@ -55,15 +55,32 @@ type AgentEntry struct {
 	Open       bool `json:"open"`
 	// Placement is where the agent was started, split or tab; "" in an entry written before it was kept, which reads as a split.
 	Placement AgentPlacement `json:"placement,omitempty"`
+	// Inbox is the agent's own Agent address, <actor>/<name>-<block>, when it loads tern-kata's omp extension, which delivers what
+	// is written to it; "" when it does not.
+	Inbox string `json:"inbox,omitempty"`
+	// NoInbox says why an agent has no Inbox; "" in an entry that has one or was written before it was kept.
+	NoInbox AgentNoInbox `json:"no_inbox,omitempty"`
 }
 
+// AgentNoInbox is why an agent started without tern-kata's omp extension, so no message reaches it.
+type AgentNoInbox string
+
+const (
+	// AgentNotOmp is an agent whose agent.toml command is not omp: the extension is omp's.
+	AgentNotOmp AgentNoInbox = "not-omp"
+	// AgentTrustedExtension is an omp agent whose agent.toml args hold --trusted-extension, which omp refuses with -e.
+	AgentTrustedExtension AgentNoInbox = "trusted-extension"
+)
+
 // StartAgent asks the gateway to start an interactive agent on an Issue. Workspace is the Pane's workspace when the Issue's
-// Project is the Binding and "" otherwise; the gateway picks the directory from it, agent.toml and worker.toml.
+// Project is the Binding and "" otherwise; the gateway picks the directory from it, agent.toml and worker.toml. Actor is the
+// Pane's actor, the one the agent's Attention requests come from and the only sender whose messages it acts on.
 type StartAgent struct {
 	Placement                         AgentPlacement
 	IssueUID, IssueRef, IssueTitle    string
 	ProjectID                         int64
 	ProjectName, Workspace, PaneBlock string
+	Actor                             string
 }
 
 func (StartAgent) cmd() {}
@@ -152,7 +169,7 @@ func startAgent(m Model, action Action, placement AgentPlacement) (Model, []Cmd)
 		return m, nil
 	}
 	cmd := StartAgent{Placement: placement, IssueUID: issue.UID, IssueRef: issue.QualifiedID, IssueTitle: issue.Title, ProjectID: issue.ProjectID,
-		ProjectName: issue.ProjectName, PaneBlock: m.PaneBlock}
+		ProjectName: issue.ProjectName, PaneBlock: m.PaneBlock, Actor: m.Actor}
 	if m.Bound && issue.ProjectID == m.Project.ID {
 		cmd.Workspace = m.Workspace
 	}

@@ -38,9 +38,10 @@ An unknown key, a relative `checkout` or an empty `command` refuses the start an
 The agent always runs through `tern-kata agent [--as <actor>] --ref <qualified ref> --`. The wrapper:
 
 - sets `KATA_REF` to the Issue, so kata-plugin's todo plan hangs under it, and drops an inherited `KATA_REF` and `KATA_INBOX_USER` (your own inbox is not the agent's);
-- sets `KATA_AUTHOR` when there is an `actor`, and otherwise leaves `KATA_AUTHOR` as inherited.
+- sets `KATA_AUTHOR` when there is an `actor`, and otherwise leaves `KATA_AUTHOR` as inherited;
+- for an omp agent, sets `KATA_INBOX_USER` to the agent's own address, `<your actor>/<agent.toml name>-<block id>` (the block id from `TERN_PANE`), and `KATA_OMP_LIVE_INBOX=0`, and omp loads tern-kata's extension with `-e` (see [Messages to an agent](#messages-to-an-agent)).
 
-`tern-kata` must be on the `PATH` of Tern's shell on that machine, and must be this version: an older one refuses `--ref` and the agent exits at once.
+`tern-kata` must be on the `PATH` of Tern's shell on that machine, and must be this version: an older one refuses `--ref` or `--inbox` and the agent exits at once.
 
 **The Pane's daemon.** A Pane on the default daemon starts agents as before. When the Pane's daemon is not what Tern's shell would pick (the Pane has `KATA_HOME` or `KATA_SERVER`, or you switched on the Daemons Page), the wrapper first drops the block's own `KATA_SERVER`, `KATA_AUTH_TOKEN`, `KATA_AUTH_TOKEN_FILE`, `KATA_ALLOW_INSECURE`, `KATA_TRUST_PRIVATE_NETWORK`, `KATA_DSN`, `KATA_DB` and `KATA_POSTGRES_SCHEMA`. It then sets `KATA_HOME` (made absolute), `KATA_SERVER`, `KATA_ALLOW_INSECURE`, `KATA_TRUST_PRIVATE_NETWORK`, `KATA_AUTH_TOKEN` and `KATA_AUTH_TOKEN_FILE` as the Pane has them. That is how the agent's `kata` commands reach the daemon `KATA_REF` names: its Issue is claimed, commented on and closed there, and kata-plugin registers nothing on Tern's default daemon.
 
@@ -73,6 +74,19 @@ While an agent you started waits for you, the Issue holds an Attention request f
 - An agent that exits while its Issue is still open, also when you quit it with `/exit`, leaves the request "agent exited without closing <ref>" until the Issue closes, another agent on it waits or the Pane quits.
 
 Work attention is the Issue's own `work.attention`. An open Issue whose `work.attention` is `needs-human` or `stuck`, written by an agent, kata-plugin or anyone else, shows `needs human` or `stuck` beside the Agent badge on list and Lane rows and as a badge on the Board card, and the word with its whole message as the Work attention property of the Issue detail. `ok`, no value and an unknown value show nothing.
+
+### Messages to an agent
+
+`m` on the [Attention Page](pages-and-board.md#attention-page) opens the Message card for the agent behind the selected request: the agent on that Issue this host's Panes started whose name the request carries, the newest that waits for you, else the newest. Type the message (at most 1024 bytes) and press `enter`; `esc` cancels.
+
+- **Where it goes**: the message is a kata Attention request from you on the agent's Issue, addressed to the agent's own address, `<actor>/<name>-<block id>` (for example `dana/omp-18494129176579`). No other agent reads that address, on the same Issue or another, and `kata inbox` output names the agent.
+- **How it arrives**: tern-kata's omp extension, which every omp agent tern-kata starts loads, follows kata's event stream and hands the message to the agent at once: an agent waiting for you or idle starts a turn on it, a working one gets it at its next step between tool calls without its work being stopped. Text half typed in its prompt stays as it was. A question it waits on stays: a pending `ask` is neither answered nor lost, and a pending tool approval is neither approved nor denied; the message lands after you answer. Your own Attention request ("agent waiting for you") stays until you answer, as before.
+- **What the agent sees**: who sent it, the Issue, the message, and the command that clears it, `kata notify <ref> --to <address> --clear`. The request stays until the agent clears it. The extension delivers only requests from the actor that started the agent, and the agent's first message tells it to act only on those; a request someone else writes to the address is never delivered.
+- **An unread message**: kata keeps one request per Issue and address. When the agent has not cleared the last one, the card shows it and asks before replacing it (`enter` replaces it, `esc` goes back to your message).
+- **When it is off**: `m` opens no card and says why for an agent that has exited, an agent whose command is not omp (only omp loads the extension), an omp agent whose agent.toml args hold `--trusted-extension` (omp refuses `-e` beside it), an agent started by an older tern-kata, and a request no agent raised.
+- **After the agent**: when an agent exits or its block closes, the Pane that started it clears whatever is left at its address.
+- **The extension**: it ships in the binary and is written to `omp/tern-kata.ts` in tern-kata's state folder on each start, replaced when its content changes; a running agent keeps the one it loaded. It needs `kata` on the agent's `PATH`, as the agent does. It loads even under `--no-extensions`.
+- **With kata-omp installed**: kata-omp lists the message in its inbox section of the agent's system prompt too, until the agent clears it, so the agent sees it twice; that does no harm. The wrapper's `KATA_OMP_LIVE_INBOX=0` tells a kata-omp that delivers messages live itself to leave that to tern-kata's extension.
 
 ## Clickable ticket links from agents
 

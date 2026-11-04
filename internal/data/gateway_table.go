@@ -695,6 +695,26 @@ func init() {
 		nil, nil)
 
 	daemonCall(
+		func(cmd model.SendAgentMessage) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.SendAgentMessage) (model.Msg, error) {
+			return ok(c.SendAgentMessage(ctx, cmd))
+		},
+		func(cmd model.SendAgentMessage, err error) model.Msg {
+			return model.AgentMessageSent{UID: cmd.UID, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
+		func(cmd model.ClearAgentInbox) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.ClearAgentInbox) (model.Msg, error) {
+			return ok(model.AgentInboxCleared{UID: cmd.UID}, c.ClearAgentInbox(ctx, cmd))
+		},
+		func(cmd model.ClearAgentInbox, err error) model.Msg {
+			return model.AgentInboxCleared{UID: cmd.UID, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
 		func(cmd model.SaveWorkflow) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.SaveWorkflow) (model.Msg, error) {
 			return ok(c.SaveWorkflow(ctx, cmd))

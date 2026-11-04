@@ -37,3 +37,8 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go test ./...
+      # tern-kata's omp extension (internal/data/ompext) is TypeScript; its tests run under Bun.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun test internal/data/ompext

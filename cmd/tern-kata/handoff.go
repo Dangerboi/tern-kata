@@ -58,10 +58,17 @@ func routedEnv(environ []string, route data.AgentRoute, caseInsensitive bool) ([
 
 // agentEnv returns environ for an agent: KATA_AUTHOR set to actor as childEnv does (left as inherited when actor is empty), no
 // inherited KATA_REF or KATA_INBOX_USER (the person's own inbox is not the agent's), and KATA_REF set to ref when it is not empty.
-func agentEnv(environ []string, actor, ref string, caseInsensitive bool) []string {
+// An inbox (<actor>/<name>, the agent loads tern-kata's omp extension) sets KATA_OMP_LIVE_INBOX=0, so kata-omp leaves live delivery
+// to the extension, and in a block KATA_INBOX_USER to the agent's own address: the inbox, "-" and the block id from TERN_PANE.
+func agentEnv(environ []string, actor, ref, inbox string, caseInsensitive bool) []string {
 	dropped := []string{"KATA_REF", "KATA_INBOX_USER"}
 	if actor != "" {
 		dropped = append(dropped, "KATA_AUTHOR")
+	}
+	block := ""
+	if inbox != "" {
+		dropped = append(dropped, "KATA_OMP_LIVE_INBOX")
+		block = strings.TrimSpace(envValue(environ, "TERN_PANE", caseInsensitive))
 	}
 	env := envWithout(environ, caseInsensitive, dropped...)
 	if actor != "" {
@@ -70,7 +77,25 @@ func agentEnv(environ []string, actor, ref string, caseInsensitive bool) []strin
 	if ref != "" {
 		env = append(env, "KATA_REF="+ref)
 	}
+	if inbox != "" {
+		env = append(env, "KATA_OMP_LIVE_INBOX=0")
+		if block != "" {
+			env = append(env, "KATA_INBOX_USER="+inbox+"-"+block)
+		}
+	}
 	return env
+}
+
+// envValue is the value of the last entry named name in environ, "" when there is none; names compare case-insensitively when
+// caseInsensitive (Windows).
+func envValue(environ []string, name string, caseInsensitive bool) string {
+	value := ""
+	for _, entry := range environ {
+		if key, v, ok := strings.Cut(entry, "="); ok && (key == name || caseInsensitive && strings.EqualFold(key, name)) {
+			value = v
+		}
+	}
+	return value
 }
 
 func editorOptions() tern.Options {

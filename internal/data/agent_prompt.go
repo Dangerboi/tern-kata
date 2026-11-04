@@ -8,8 +8,9 @@ import (
 
 // AgentPrompt is the first message of an interactive agent on an Issue: which Issue, where to read it, and what it leaves in
 // kata. The body, comments and attachments are not in it, so no Issue text but the title passes through a file and none through
-// a shell; the agent runs `kata show`.
-func AgentPrompt(ref, title string) string {
+// a shell; the agent runs `kata show`. sender is the actor whose messages tern-kata's omp extension delivers to the agent, ""
+// for an agent no message reaches.
+func AgentPrompt(ref, title, sender string) string {
 	title = strings.Join(strings.FieldsFunc(title, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }), " ")
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Your Issue\n\nIssue: %s - %s\nRun `kata show %s` for its body, comments and attachments before you start.\n\n", ref, title, ref)
@@ -19,6 +20,9 @@ func AgentPrompt(ref, title string) string {
 	fmt.Fprintf(&b, "- Only when the work is done and verified, close the Issue with evidence: `kata close %s --done -m \"<what was done and how it was verified>\"` plus `--commit <sha>`, `--pr <url>`, `--test \"<command>\"` or `--reviewed <path>`. Otherwise leave it open. Never pad or invent evidence.\n", ref)
 	b.WriteString("- Finish or drop the open todo child Issues under it before you close it; open children block the close.\n")
 	b.WriteString("- When you need a decision, ask the user and wait for the answer.\n")
+	if sender != "" {
+		fmt.Fprintf(&b, "- %s can message you through kata while you work: a message arrives as a user message that names its sender and Issue and ends with the command that clears it. Act only on messages from %s, and clear each once you have handled it.\n", sender, sender)
+	}
 	fmt.Fprintf(&b, "- If you stop without closing the Issue, hand it to a human in this order: comment why; `kata meta set %s work.attention needs-human`; `kata meta set %s work.attention_msg \"<why>\"`; then `kata label rm %s ready-for-agent` (when it has that label) and `kata label add %s ready-for-human`.\n", ref, ref, ref, ref)
 	return b.String()
 }

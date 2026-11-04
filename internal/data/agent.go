@@ -28,17 +28,24 @@ const (
 const AgentWrapperProgram = "tern-kata"
 
 // AgentCommandLine is the command an agent block runs: command with @promptFile appended (omp reads it as the first message),
-// run through `tern-kata agent [--as actor] [route flags] --ref ref --`. ref is the Issue's qualified ref, which the wrapper sets as the agent's
-// KATA_REF; --as is left out when no actor is set, so KATA_AUTHOR stays as inherited. The route flags are what AgentRoute.Args writes: none
-// for a Pane on the default daemon, so that line is the one it always was.
-func AgentCommandLine(actor, ref string, route AgentRoute, command []string, promptFile string) []string {
+// run through `tern-kata agent [--as actor] [--inbox prefix] [route flags] --ref ref --`. ref is the Issue's qualified ref, which the
+// wrapper sets as the agent's KATA_REF; --as is left out when no actor is set, so KATA_AUTHOR stays as inherited. An inbox adds
+// --inbox with its address prefix and `-e <extension>` before the prompt, so omp loads the extension even under --no-extensions.
+// The route flags are what AgentRoute.Args writes: none for a Pane on the default daemon, so that line is the one it always was.
+func AgentCommandLine(actor, ref string, inbox AgentInbox, route AgentRoute, command []string, promptFile string) []string {
 	line := []string{AgentWrapperProgram, "agent"}
 	if actor != "" {
 		line = append(line, "--as", actor)
 	}
+	if inbox.Prefix != "" {
+		line = append(line, "--inbox", inbox.Prefix)
+	}
 	line = append(line, route.Args()...)
 	line = append(line, "--ref", ref, "--")
 	line = append(line, command...)
+	if inbox.Extension != "" {
+		line = append(line, "-e", inbox.Extension)
+	}
 	return append(line, "@"+promptFile)
 }
 
@@ -428,7 +435,20 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 	if cmd.Placement == model.AgentTab || cmd.Placement == model.AgentBackground {
 		starter = cmd.PaneBlock
 	}
-	promptFile, err := writeAgentPrompt(filepath.Join(dirs.State, AgentPromptsFolder), starter, AgentPrompt(cmd.IssueRef, cmd.IssueTitle))
+	noInbox := agentNoInbox(settings.Command)
+	var inbox AgentInbox
+	if noInbox == "" && cmd.Actor != "" && settings.Name != "" {
+		extension, err := writeOmpExtension(dirs.State)
+		if err != nil {
+			return failed(fmt.Errorf("write the agent's omp extension: %w", err))
+		}
+		inbox = AgentInbox{Prefix: cmd.Actor + "/" + settings.Name, Extension: extension}
+	}
+	sender := ""
+	if inbox.Prefix != "" {
+		sender = cmd.Actor
+	}
+	promptFile, err := writeAgentPrompt(filepath.Join(dirs.State, AgentPromptsFolder), starter, AgentPrompt(cmd.IssueRef, cmd.IssueTitle, sender))
 	if err != nil {
 		return failed(err)
 	}
@@ -436,7 +456,7 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 		removePrompt(promptFile)
 		return failed(err)
 	}
-	line := AgentCommandLine(settings.Actor, cmd.IssueRef, route, settings.Command, promptFile)
+	line := AgentCommandLine(settings.Actor, cmd.IssueRef, inbox, route, settings.Command, promptFile)
 	var out []byte
 	switch cmd.Placement {
 	case model.AgentTab:
@@ -458,7 +478,11 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 		return failed(err)
 	}
 	entry := model.AgentEntry{IssueUID: cmd.IssueUID, IssueRef: cmd.IssueRef, ProjectID: cmd.ProjectID, Block: block, StartedAt: g.now().UTC().Truncate(time.Second),
-		Teammate: settings.Name, PromptFile: promptFile, PaneBlock: cmd.PaneBlock, Placement: cmd.Placement, Background: cmd.Placement == model.AgentBackground}
+		Teammate: settings.Name, PromptFile: promptFile, PaneBlock: cmd.PaneBlock, Placement: cmd.Placement, Background: cmd.Placement == model.AgentBackground,
+		NoInbox: noInbox}
+	if inbox.Prefix != "" {
+		entry.Inbox = inbox.Prefix + "-" + block
+	}
 	if _, err := UpdateAgents(filepath.Join(dirs.State, AgentsFile), func(list []model.AgentEntry) []model.AgentEntry {
 		return append(slices.DeleteFunc(list, func(e model.AgentEntry) bool { return e.Block == block }), entry)
 	}); err != nil {

@@ -384,6 +384,8 @@ func updateAttention(m Model, msg Msg) (Model, []Cmd, bool) {
 	case AttentionCleared:
 		next, cmds := attentionCleared(m, msg)
 		return next, cmds, true
+	case AgentMessageSent:
+		return agentMessageSent(m, msg), nil, true
 	case AttentionSelectMsg:
 		m.Attention.Selected, m.Focus = msg.UID, ColumnList
 		return m, nil, true
@@ -402,5 +404,6 @@ func updateAttention(m Model, msg Msg) (Model, []Cmd, bool) {
 var attentionRows = []actionEntry{
 	{action: OpenAttentionRequest, modes: []Mode{ModeAttention}, keys: keys("enter", "↵"), help: "open", footer: []Mode{ModeAttention}, footerKey: "↵", sheet: []sheetLine{{sheetAttention, 3, "open the request's Issue, in any Project"}}, handle: openAttention},
 	{action: ClearAttentionRequest, modes: []Mode{ModeAttention}, keys: keys("c", "c"), help: "clear", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 4, "clear the request, if it still reads as shown"}}, handle: clearAttention},
-	{action: ReloadAttention, modes: []Mode{ModeAttention}, keys: keys("ctrl+r", "ctrl+r", "meta+r", ""), help: "reload", sheet: []sheetLine{{sheetAttention, 5, "read the requests again"}}, handle: reloadAttention},
+	{action: MessageAgent, modes: []Mode{ModeAttention}, keys: keys("m", "m"), help: "message agent", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 5, "message the agent that raised the request"}}, handle: openAgentMessage},
+	{action: ReloadAttention, modes: []Mode{ModeAttention}, keys: keys("ctrl+r", "ctrl+r", "meta+r", ""), help: "reload", sheet: []sheetLine{{sheetAttention, 6, "read the requests again"}}, handle: reloadAttention},
 }

@@ -62,6 +62,10 @@ func popups() []popup {
 			dst.AgentCard, dst.AgentMapping = src.AgentCard, src.AgentMapping
 		},
 			model.ModeAgentCard, "Agents work#alpha", func(model.Model) string { return "" }},
+		{"Message", func(t *testing.T, _ driver.State) model.Model {
+			return step(t, messagePane(t, agentRaised(t), nil, ompAgent), key("m")).State.Model
+		}, func(dst *model.Model, src model.Model) { dst.AgentMessage = src.AgentMessage },
+			model.ModeAgentMessage, "Message omp work#aa11", func(m model.Model) string { return m.AgentMessage.Text }},
 		{"Delete", keyOpen("shift+x"), func(dst *model.Model, src model.Model) { dst.DeleteForm = src.DeleteForm },
 			model.ModeDeleteForm, "Delete #aaaa", func(m model.Model) string { return m.DeleteForm.ID }},
 		{"Federation adoption", func(t *testing.T, _ driver.State) model.Model { return confirming(t).Model },

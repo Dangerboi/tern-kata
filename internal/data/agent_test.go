@@ -1,6 +1,7 @@
 package data
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -124,13 +125,18 @@ name = "open"
 }
 
 func TestAgentArgvBuilders(t *testing.T) {
-	line := AgentCommandLine("", "demo#ab12", AgentRoute{}, []string{"omp", "--fast"}, "/state/p.md")
+	line := AgentCommandLine("", "demo#ab12", AgentInbox{}, AgentRoute{}, []string{"omp", "--fast"}, "/state/p.md")
 	if want := []string{"tern-kata", "agent", "--ref", "demo#ab12", "--", "omp", "--fast", "@/state/p.md"}; !slices.Equal(line, want) {
 		t.Errorf("without an actor %q, want %q", line, want)
 	}
-	wrapped := AgentCommandLine("me-agent", "demo#ab12", AgentRoute{}, []string{"omp"}, "/state/p.md")
+	wrapped := AgentCommandLine("me-agent", "demo#ab12", AgentInbox{}, AgentRoute{}, []string{"omp"}, "/state/p.md")
 	if want := []string{"tern-kata", "agent", "--as", "me-agent", "--ref", "demo#ab12", "--", "omp", "@/state/p.md"}; !slices.Equal(wrapped, want) {
 		t.Errorf("with an actor %q, want %q", wrapped, want)
+	}
+	// An agent with an inbox: the wrapper gets its address up to the block id, omp loads the extension before the prompt.
+	inbox := AgentCommandLine("me-agent", "demo#ab12", AgentInbox{Prefix: "dana/omp", Extension: "/state/omp/tern-kata.ts"}, AgentRoute{}, []string{"omp", "--fast"}, "/state/p.md")
+	if want := []string{"tern-kata", "agent", "--as", "me-agent", "--inbox", "dana/omp", "--ref", "demo#ab12", "--", "omp", "--fast", "-e", "/state/omp/tern-kata.ts", "@/state/p.md"}; !slices.Equal(inbox, want) {
+		t.Errorf("with an inbox %q, want %q", inbox, want)
 	}
 	split := AgentSplitArgs("24489903521795", "/work/my repo", line)
 	if want := []string{"split", "24489903521795", "right", "--cwd", "/work/my repo", "--json", "--", "tern-kata", "agent", "--ref", "demo#ab12", "--", "omp", "--fast", "@/state/p.md"}; !slices.Equal(split, want) {
@@ -208,21 +214,26 @@ func TestStartingAnAgentWritesThePromptRunsTernAndRecordsTheBlock(t *testing.T) 
 		return []byte(`{"session": 1, "tab": 2, "block": 31}`), nil
 	}
 	got := as[model.AgentStarted](t, run(t, g, model.StartAgent{Placement: model.AgentSplit, IssueUID: "U1", IssueRef: "demo#ab12", IssueTitle: "Fix it",
-		ProjectName: "demo", PaneBlock: "7"}))
+		ProjectName: "demo", PaneBlock: "7", Actor: "dana"}))
 	if got.Err != nil {
 		t.Fatal(got.Err)
 	}
 	e := got.Entry
 	if e.Block != "31" || e.IssueUID != "U1" || e.IssueRef != "demo#ab12" || e.PaneBlock != "7" || e.Teammate != "omp" || e.Background || e.Open ||
+		e.Inbox != "dana/omp-31" || e.NoInbox != "" ||
 		!e.StartedAt.Equal(time.Date(2026, 10, 29, 12, 0, 7, 0, time.UTC)) || filepath.Dir(e.PromptFile) != filepath.Join(dirs.State, AgentPromptsFolder) {
 		t.Fatalf("entry %+v", e)
 	}
-	want := []string{"split", "7", "right", "--cwd", "/work/demo", "--json", "--", "tern-kata", "agent", "--as", "me-agent", "--ref", "demo#ab12", "--", "omp", "@" + e.PromptFile}
+	extension := filepath.Join(dirs.State, OmpExtensionFolder, "tern-kata.ts")
+	want := []string{"split", "7", "right", "--cwd", "/work/demo", "--json", "--", "tern-kata", "agent", "--as", "me-agent", "--inbox", "dana/omp", "--ref", "demo#ab12", "--", "omp", "-e", extension, "@" + e.PromptFile}
 	if !slices.Equal(ran, want) {
 		t.Fatalf("ran %q, want %q", ran, want)
 	}
+	if text, err := os.ReadFile(extension); err != nil || !bytes.Equal(text, ompExtension) {
+		t.Fatalf("the extension file holds %d bytes, %v; want the embedded %d", len(text), err, len(ompExtension))
+	}
 	text, err := os.ReadFile(e.PromptFile)
-	if err != nil || string(text) != AgentPrompt("demo#ab12", "Fix it") {
+	if err != nil || string(text) != AgentPrompt("demo#ab12", "Fix it", "dana") {
 		t.Fatalf("prompt %q, %v", text, err)
 	}
 	if stored, err := ReadAgents(filepath.Join(dirs.State, AgentsFile)); err != nil || len(stored) != 1 || stored[0] != e {
@@ -233,6 +244,57 @@ func TestStartingAnAgentWritesThePromptRunsTernAndRecordsTheBlock(t *testing.T) 
 	as[model.AgentStarted](t, run(t, g, model.StartAgent{Placement: model.AgentTab, IssueRef: "demo#cd34", ProjectName: "demo", Workspace: "/bound"}))
 	if len(ran) < 12 || !slices.Equal(ran[:11], []string{"new", "tab", "--cwd", "/bound", "--json", "--", "tern-kata", "agent", "--ref", "demo#cd34", "--"}) || ran[11] != "omp" {
 		t.Fatalf("W ran %q", ran)
+	}
+}
+
+func TestAnAgentThatCannotLoadTheExtensionStartsWithoutAnInboxAndSaysWhy(t *testing.T) {
+	for _, name := range []string{"KATA_HOME", "KATA_SERVER", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE"} {
+		t.Setenv(name, "")
+	}
+	g, dirs := agentGateway(t)
+	var ran []string
+	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		ran = args
+		return []byte(`{"session": 1, "tab": 2, "block": 31}`), nil
+	}
+	for _, c := range []struct {
+		command string
+		want    model.AgentNoInbox
+	}{
+		{`["claude", "--continue"]`, model.AgentNotOmp},
+		{`["/opt/omp/omp", "--trusted-extension", "/abs/guard.ts"]`, model.AgentTrustedExtension},
+		{`["omp", "--trusted-extension=/abs/guard.ts"]`, model.AgentTrustedExtension},
+	} {
+		writeAgentFile(t, filepath.Join(dirs.Config, "agent.toml"), "command = "+c.command+"\n[projects.demo]\ncheckout = \"/work/demo\"\n")
+		got := as[model.AgentStarted](t, run(t, g, model.StartAgent{Placement: model.AgentSplit, IssueUID: "U1", IssueRef: "demo#ab12", ProjectName: "demo", PaneBlock: "7", Actor: "dana"}))
+		if got.Err != nil || got.Entry.Inbox != "" || got.Entry.NoInbox != c.want {
+			t.Errorf("%s: entry %+v, err %v; want no inbox because %s", c.command, got.Entry, got.Err, c.want)
+		}
+		if slices.Contains(ran, "--inbox") || slices.Contains(ran, "-e") {
+			t.Errorf("%s: ran %q, want no inbox and no extension", c.command, ran)
+		}
+		text, err := os.ReadFile(got.Entry.PromptFile)
+		if err != nil || string(text) != AgentPrompt("demo#ab12", "", "") {
+			t.Errorf("%s: prompt %q, %v; want the prompt without messages", c.command, text, err)
+		}
+	}
+}
+
+func TestTheOmpExtensionIsWrittenFromTheBinaryAndReplacedWhenItChanges(t *testing.T) {
+	state := t.TempDir()
+	path, err := writeOmpExtension(state)
+	if err != nil || path != filepath.Join(state, OmpExtensionFolder, "tern-kata.ts") {
+		t.Fatalf("path %q, %v", path, err)
+	}
+	// An older tern-kata's extension is replaced by this one's.
+	if err := os.WriteFile(path, []byte("export default function () {}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if again, err := writeOmpExtension(state); err != nil || again != path {
+		t.Fatalf("again %q, %v", again, err)
+	}
+	if text, err := os.ReadFile(path); err != nil || !bytes.Equal(text, ompExtension) {
+		t.Fatalf("after a second write the file holds %q, %v", text, err)
 	}
 }
 
@@ -375,7 +437,10 @@ func TestPruningKeepsAnEntryAddedAfterTheEntriesItChecked(t *testing.T) {
 }
 
 func TestTheAgentPromptIsStable(t *testing.T) {
-	got := AgentPrompt("demo#ab12", "  Fix the\n# crash\tnow ")
+	if without := AgentPrompt("demo#ab12", "Fix it", ""); strings.Contains(without, "message") {
+		t.Errorf("an agent no message reaches is told about messages:\n%s", without)
+	}
+	got := AgentPrompt("demo#ab12", "  Fix the\n# crash\tnow ", "dana")
 	path := "testdata/agent_prompt.golden"
 	if *update {
 		if err := os.MkdirAll("testdata", 0o755); err != nil {

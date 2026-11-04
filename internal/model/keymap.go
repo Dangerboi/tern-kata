@@ -291,6 +291,12 @@ var cardBindings = []Binding{
 	{Chord: "g", Key: "g", Action: AgentCardNewBackground, Help: "new agent in the background", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "b", Key: "b", Action: AgentCardBackground, Help: "send to background", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: AgentCardCancel, Help: "cancel", Mode: ModeAgentCard, ShowInFooter: true},
+	// Message card: one message field, so every other key is typed; once kata holds an unread message, it asks before replacing it.
+	{Chord: "enter", Key: "enter", Action: AgentMessageSend, Help: "send", Mode: ModeAgentMessage, ShowInFooter: true},
+	{Chord: "ctrl+s", Key: "ctrl+s", Action: AgentMessageSend, Help: "send", Mode: ModeAgentMessage},
+	{Chord: "escape", Key: "esc", Action: AgentMessageCancel, Help: "cancel", Mode: ModeAgentMessage, ShowInFooter: true},
+	{Chord: "enter", Key: "enter", Action: AgentMessageReplace, Help: "replace it", Mode: ModeAgentMessageReplace, ShowInFooter: true},
+	{Chord: "escape", Key: "esc", Action: AgentMessageKeep, Help: "keep editing", Mode: ModeAgentMessageReplace, ShowInFooter: true},
 	// Adoption confirmation of the Federation Page's enrollment: one name field, so every other key is typed.
 	{Chord: "enter", Key: "enter", Action: FederationAdoptConfirm, Help: "adopt", Mode: ModeFederationAdopt, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: FederationAdoptCancel, Help: "back", Mode: ModeFederationAdopt, ShowInFooter: true},
