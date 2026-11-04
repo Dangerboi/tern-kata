@@ -217,16 +217,21 @@ stop_expecting none
 no_worker_within 13 "worker.toml is absent"
 printf '%s\n' "$good_config" >"$config/worker.toml"
 wait_started "" 13 || { echo "restoring worker.toml did not start a worker within one poll" >&2; exit 1; }
-# A plugin reload gives the host half fresh state while its worker runs on, as a Tern update's handoff does. The new host
-# half starts no second worker for worker.lock to refuse, names the running one once over two looks, and starts a worker
-# within a poll of its end. The reload is a client, so the daemon is kept busy from here on (see wait_started).
+# A plugin reload gives the host half fresh state while its worker runs on, as a Tern update's handoff does. The reloaded
+# host half starts no second worker for worker.lock to refuse and knows the held answer (an older host.luau would log it
+# as an unknown status); it names the running worker once, over two reloads and three looks, and starts a worker within a
+# poll of its end. The reloads are clients, so the daemon is kept busy from here on (see wait_started).
 adopted=$(worker_pid)
 log_from=$(( $(wc -l <"$STENCIL_LOG_DIR/tern-daemon.log") + 1 ))
 tern plugin reload tern-kata >/dev/null
-for ((k = 0; k < 12; k++)); do sleep 1; tern plugin list >/dev/null 2>&1; done # the host half looks after 0.5 s and 10.5 s
+for ((k = 0; k < 15; k++)); do # looks at 0.5 s (first load), then 3.5 s and 13.5 s (the load after the second reload)
+  sleep 1
+  if ((k == 2)); then tern plugin reload tern-kata >/dev/null; else tern plugin list >/dev/null 2>&1; fi
+done
 since_reload=$(tail -n +"$log_from" "$STENCIL_LOG_DIR/tern-daemon.log")
 [[ "$(worker_pid)" == "$adopted" ]] && alive "$adopted" || { echo "the reload replaced the running worker" >&2; exit 1; }
 if grep -q 'already running on this machine' <<<"$since_reload"; then echo "the reloaded host half started a second worker" >&2; exit 1; fi
+if grep -q '`worker supervised` exited with status' <<<"$since_reload"; then echo "the reloaded host half does not know the held answer" >&2; exit 1; fi
 [[ $(grep -c "worker $adopted .*is already running" <<<"$since_reload") -eq 1 ]] || { echo "the reloaded host half did not name the running worker once" >&2; exit 1; }
 kill -9 "$adopted"
 wait_started "$adopted" 13 || { echo "the reloaded host half did not start a worker within a poll of the running one's end" >&2; exit 1; }

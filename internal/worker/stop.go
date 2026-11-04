@@ -38,7 +38,7 @@ func (w *Worker) Stop(mode string) (StopAnswer, error) {
 	if w.stopping != StopNow {
 		w.stopping = mode
 	}
-	answer := StopAnswer{Mode: w.stopping, InFlight: w.inFlightLocked(), Restarts: w.restartsAfterStop()}
+	answer := StopAnswer{Mode: w.stopping, InFlight: w.inFlightLocked(), Restarts: w.opt.Dirs.RestartsAfterStop(w.opt.Supervisor)}
 	w.mu.Unlock()
 	return answer, nil
 }
@@ -176,10 +176,4 @@ func (w *Worker) finishDrain() {
 	if done && w.cancel != nil {
 		w.cancel()
 	}
-}
-
-// restartsAfterStop is whether the plugin's host half starts a fresh worker once this one exits: it supervises this
-// worker and the supervision rule holds for the config folder.
-func (w *Worker) restartsAfterStop() bool {
-	return w.opt.Supervisor != "" && w.opt.Dirs.SupervisionOn()
 }

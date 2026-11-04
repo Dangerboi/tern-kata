@@ -75,7 +75,7 @@ func runWorkerCommand(ctx context.Context, plan LaunchPlan, env workerEnv, out i
 		if _, err = fmt.Fprint(out, resp.Status.String()); err != nil {
 			return err
 		}
-		_, err = io.WriteString(out, installedNote(resp.Status.Version, env))
+		_, err = io.WriteString(out, installedNote(*resp.Status, env))
 		return err
 	case len(plan.Operands) == 1 && plan.Operands[0] == "stop":
 		return stopWorker(ctx, plan, env, out)
@@ -142,16 +142,20 @@ func heldLine(id worker.Identity, installed string) string {
 }
 
 // installedNote is the line `worker status` ends with when the running worker is another version than this binary, the
-// installed one: how the worker gets to it.
-func installedNote(running string, env workerEnv) string {
-	if running == "" || env.Version == "" || running == env.Version {
+// installed one: how the worker gets to it, unless it is already stopping.
+func installedNote(s worker.Status, env workerEnv) string {
+	if s.Version == "" || env.Version == "" || s.Version == env.Version {
 		return ""
 	}
-	next := "`tern-kata worker stop` moves it there: the plugin then starts the installed one."
-	if !env.Dirs.SupervisionOn() {
-		next = "Stop it with `tern-kata worker stop` and start `tern-kata worker` again to run the installed one."
+	line := fmt.Sprintf("It runs tern-kata %s; the installed binary is %s.", s.Version, env.Version)
+	switch {
+	case s.Stopping != "": // the stop that moves it was already asked
+	case env.Dirs.RestartsAfterStop(s.Supervisor):
+		line += " `tern-kata worker stop` moves it there: the plugin then starts the installed one."
+	default:
+		line += " Stop it with `tern-kata worker stop` and start `tern-kata worker` again to run the installed one."
 	}
-	return fmt.Sprintf("It runs tern-kata %s; the installed binary is %s. %s\n", running, env.Version, next)
+	return line + "\n"
 }
 
 // stopWorker is `worker stop [--now]`: it asks the running worker to drain (or, with --now, to end at once) and says what

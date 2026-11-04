@@ -36,8 +36,10 @@ local warned_missing = false
 local warned_status = false
 local ASK_LIMIT_MS = 10000
 -- `worker supervised` exits with HELD, printing one line that names the worker, when the rule holds and a worker this
--- load did not start already runs. The line is logged when it differs from the last one.
+-- load did not start already runs. The line is logged once per worker: a reload (each `git status` in a checkout linked
+-- with `tern plugin link`) runs this file again, so the last line logged is kept in tern.kv, which outlives the load.
 local HELD = 4
+local KV_HELD = "supervision.held"
 local held_line: string? = nil
 local handle: TimerHandle? = nil
 
@@ -174,6 +176,13 @@ local function launch(binary: string, config: string)
     end
 end
 
+-- The worker named last has gone (or the rule no longer holds): a worker named next is logged again.
+local function forget_held()
+    if held_line == nil then return end
+    held_line = nil
+    pcall(tern.kv.set, KV_HELD, nil)
+end
+
 -- The answer of `tern-kata worker supervised`: status 0 and worker.toml's text when the supervision rule holds and no
 -- worker runs, HELD and a line naming the worker when one does, status 1 when the rule does not hold. Any other status (a
 -- timeout, a binary that cannot run) says nothing about the rule, so the state stays; a status that is neither a timeout
@@ -186,7 +195,11 @@ local function answered(binary: string, result: ProcessResult)
         local line = last_line(result.stdout)
         if line ~= held_line then
             held_line = line
-            tern.log.warn("tern-kata: " .. line)
+            local ok, logged = pcall(tern.kv.get, KV_HELD)
+            if not ok or logged ~= line then
+                pcall(tern.kv.set, KV_HELD, line)
+                tern.log.warn("tern-kata: " .. line)
+            end
         end
         reset_backoff()
         return arm(POLL_MS)
@@ -195,14 +208,14 @@ local function answered(binary: string, result: ProcessResult)
         if result.status == 1 and not result.timed_out then
             reset_backoff()
             started_text = nil
-            held_line = nil
+            forget_held()
         elseif not result.timed_out and result.status ~= -1 and not warned_status then
             warned_status = true
             tern.log.warn("tern-kata: `worker supervised` exited with status " .. result.status .. " (" .. last_line(result.stderr) .. "), so the worker is not started; the tern-kata binary is probably older than this plugin: run `tern-kata update`")
         end
         return arm(POLL_MS)
     end
-    held_line = nil
+    forget_held()
     local config = result.stdout
     if started_text ~= nil and config ~= started_text then
         reset_backoff()

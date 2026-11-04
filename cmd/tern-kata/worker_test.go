@@ -602,6 +602,32 @@ func TestWorkerSupervisedNamesTheRunningWorkerUntilItHasGone(t *testing.T) {
 	}
 }
 
+// `worker status`'s version note promises the plugin starts the installed binary only where a stop's answer does (a worker
+// Tern started, the rule holding), and advises no stop for a worker already stopping.
+func TestWorkerStatusSaysHowTheWorkerReachesTheInstalledVersion(t *testing.T) {
+	dirs := worker.Dirs{Config: t.TempDir()}
+	if err := os.WriteFile(dirs.ConfigPath(), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := workerEnv{Dirs: dirs, Version: "v0.7.2"}
+	const restarts = "the plugin then starts the installed one"
+	for _, c := range []struct {
+		name      string
+		status    worker.Status
+		want, not string
+	}{
+		{"same version", worker.Status{Version: "v0.7.2", Supervisor: worker.SupervisorTern}, "", "v0.7.2"},
+		{"started by Tern", worker.Status{Version: "v0.7.1", Supervisor: worker.SupervisorTern}, restarts, "start `tern-kata worker` again"},
+		{"started by hand", worker.Status{Version: "v0.7.1"}, "start `tern-kata worker` again", restarts},
+		{"stopping", worker.Status{Version: "v0.7.1", Supervisor: worker.SupervisorTern, Stopping: worker.StopIdle}, "the installed binary is v0.7.2.", "worker stop"},
+	} {
+		got := installedNote(c.status, env)
+		if !strings.Contains(got, c.want) || strings.Contains(got, c.not) {
+			t.Errorf("%s: %q, want %q and not %q", c.name, got, c.want, c.not)
+		}
+	}
+}
+
 func TestWorkerStopWithNoWorkerSaysSo(t *testing.T) {
 	f := newWorkerFixture(t, "")
 	_, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"stop"}})

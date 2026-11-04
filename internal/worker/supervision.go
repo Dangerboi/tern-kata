@@ -68,10 +68,17 @@ func (d Dirs) SupervisedConfig() (text string, on bool) {
 // identityWait bounds RunningWorker's question, well inside the 10 s the host half gives `worker supervised`.
 const identityWait = 2 * time.Second
 
+// RestartsAfterStop is whether the plugin starts a fresh worker once a worker started by supervisor exits: Tern's host half
+// started it (SupervisorTern; empty is a worker started by hand) and the rule holds. A worker's answer to a stop, `update`
+// and `worker status` say it.
+func (d Dirs) RestartsAfterStop(supervisor string) bool { return supervisor != "" && d.SupervisionOn() }
+
 // RunningWorker is the worker that answers the control socket, and whether one does. The host half asks it with the
 // Supervision rule: after a plugin reload or a Tern update's handoff, a worker its earlier load started holds worker.lock,
 // and a second one would only be refused. A worker that answers but not the identity request (one from an older release,
-// or one too busy to answer in time) still runs: worker.lock names its process.
+// or one too busy to answer in time) still runs: worker.lock names its process, except on Windows, which locks the byte
+// the process id is in. A worker holds worker.lock a moment before its socket listens and after it closes it (while a
+// stop waits for its agents to end), so a start in that moment is refused once and backs off.
 func RunningWorker(ctx context.Context, d Dirs) (Identity, bool) {
 	ctx, cancel := context.WithTimeout(ctx, identityWait)
 	defer cancel()

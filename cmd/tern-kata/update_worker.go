@@ -39,7 +39,7 @@ func updateWorker(ctx context.Context, env updateEnv, version string, hold worke
 		fmt.Fprintln(out, "The worker was not stopped: the new release could not check worker.toml. Check it with `tern-kata worker edit`, then run `tern-kata worker stop`.")
 	case hold == holdConfig:
 		fmt.Fprintln(out, "The worker was not stopped: worker.toml does not load under "+version+". Run `tern-kata worker upgrade` (or `worker edit`), then `tern-kata worker stop`.")
-	case resp.Status.Supervisor != "" && env.Dirs.SupervisionOn():
+	case env.Dirs.RestartsAfterStop(resp.Status.Supervisor):
 		stop, err := worker.Ask(ctx, env.Dirs, worker.Request{Op: "stop", Mode: worker.StopIdle})
 		if err == nil && !stop.OK {
 			err = errors.New(stop.Error)
