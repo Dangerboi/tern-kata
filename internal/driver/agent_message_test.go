@@ -13,7 +13,7 @@ import (
 )
 
 // ompAgent is the omp agent dana's Pane started on work#aa11, which loads tern-kata's extension.
-var ompAgent = model.AgentEntry{IssueUID: "work-aa11", IssueRef: "work#aa11", ProjectID: 7, Block: "31", Teammate: "omp", Inbox: "dana/omp-31",
+var ompAgent = model.AgentEntry{IssueUID: "work-aa11", IssueRef: "work#aa11", ProjectID: 7, Block: "31", Teammate: "omp", Address: "dana/omp-31",
 	StartedAt: now.Add(-time.Hour)}
 
 // agentRaised is the Attention request dana's Pane raised for an agent named omp waiting on work#aa11.
@@ -116,24 +116,26 @@ func TestTheMessageCardRefusesABlankOrTooLongMessage(t *testing.T) {
 
 func TestMessagingIsOffWithAReasonWhenNoAgentCanReceiveIt(t *testing.T) {
 	notOmp, trusted, older := ompAgent, ompAgent, ompAgent
-	notOmp.Inbox, notOmp.NoInbox = "", model.AgentNotOmp
-	trusted.Inbox, trusted.NoInbox = "", model.AgentTrustedExtension
-	older.Inbox = ""
+	notOmp.Address, notOmp.NoAddress = "", model.AgentNotOmp
+	trusted.Address, trusted.NoAddress = "", model.AgentTrustedExtension
+	older.Address = ""
+	exitedRequest := attentionRequest(t, 7, "work", "aa11", "Deploy the fix", `{"from":"dana","teammate":"omp","message":"agent exited without closing work#aa11"}`, 5)
 	for name, tc := range map[string]struct {
 		request model.AttentionRequest
 		states  []model.AgentState
-		agent   model.AgentEntry
+		agents  []model.AgentEntry
 		want    string
 	}{
-		"a request a person wrote": {attentionRequest(t, 7, "work", "aa11", "Deploy the fix", `{"from":"bob","message":"please deploy"}`, 5), nil, ompAgent, model.NoAgentRaisedRefusal},
-		"another agent's name":     {attentionRequest(t, 7, "work", "aa11", "Deploy the fix", `{"from":"dana","teammate":"claude","message":"which table?"}`, 5), nil, ompAgent, model.NoAgentRaisedRefusal},
-		"an exited agent":          {agentRaised(t), []model.AgentState{{Block: "31", State: model.AgentExited}}, ompAgent, model.AgentExitedRefusal},
-		"an agent that is not omp": {agentRaised(t), nil, notOmp, model.AgentNotOmpRefusal},
-		"--trusted-extension":      {agentRaised(t), nil, trusted, model.AgentTrustedExtensionRefusal},
-		"an agent started before":  {agentRaised(t), nil, older, model.AgentWithoutInboxRefusal},
+		"a request a person wrote":     {attentionRequest(t, 7, "work", "aa11", "Deploy the fix", `{"from":"bob","message":"please deploy"}`, 5), nil, []model.AgentEntry{ompAgent}, model.NoAgentRaisedRefusal},
+		"another agent's name":         {attentionRequest(t, 7, "work", "aa11", "Deploy the fix", `{"from":"dana","teammate":"claude","message":"which table?"}`, 5), nil, []model.AgentEntry{ompAgent}, model.NoAgentRaisedRefusal},
+		"an exited agent":              {agentRaised(t), []model.AgentState{{Block: "31", State: model.AgentExited}}, []model.AgentEntry{ompAgent}, model.AgentExitedRefusal},
+		"an agent gone with its block": {exitedRequest, nil, nil, model.AgentExitedRefusal},
+		"an agent that is not omp":     {agentRaised(t), nil, []model.AgentEntry{notOmp}, model.AgentNotOmpRefusal},
+		"--trusted-extension":          {agentRaised(t), nil, []model.AgentEntry{trusted}, model.AgentTrustedExtensionRefusal},
+		"an agent started before":      {agentRaised(t), nil, []model.AgentEntry{older}, model.AgentWithoutAddressRefusal},
 	} {
 		t.Run(name, func(t *testing.T) {
-			out := step(t, messagePane(t, tc.request, tc.states, tc.agent), key("m"))
+			out := step(t, messagePane(t, tc.request, tc.states, tc.agents...), key("m"))
 			if out.State.Model.TopCard() != model.NoCard || out.State.Model.Notice != tc.want || len(out.Cmds) != 0 {
 				t.Errorf("card %v notice %q cmds %v, want no card and %q", out.State.Model.TopCard(), out.State.Model.Notice, out.Cmds, tc.want)
 			}
@@ -143,7 +145,7 @@ func TestMessagingIsOffWithAReasonWhenNoAgentCanReceiveIt(t *testing.T) {
 
 func TestAMessageGoesToTheNewestWaitingAgentElseTheNewest(t *testing.T) {
 	older, newer := ompAgent, ompAgent
-	newer.Block, newer.Inbox, newer.StartedAt = "32", "dana/omp-32", ompAgent.StartedAt.Add(time.Minute)
+	newer.Block, newer.Address, newer.StartedAt = "32", "dana/omp-32", ompAgent.StartedAt.Add(time.Minute)
 	address := func(states []model.AgentState) string {
 		t.Helper()
 		s := step(t, messagePane(t, agentRaised(t), states, older, newer), key("m")).State

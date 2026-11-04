@@ -31,7 +31,7 @@ const (
 	AgentExitedRefusal           = "The agent has exited; no message would reach it."
 	AgentNotOmpRefusal           = "The agent is not omp; messages reach only omp agents, through tern-kata's extension."
 	AgentTrustedExtensionRefusal = "The agent runs with --trusted-extension, which keeps tern-kata's extension from loading."
-	AgentWithoutInboxRefusal     = "The agent was started before messages could reach it; start a new one."
+	AgentWithoutAddressRefusal   = "The agent was started before messages could reach it; start a new one."
 )
 
 // AgentMessageState is the Message card: the agent it writes to and the text typed. Held is the value kata holds at the agent's
@@ -73,9 +73,9 @@ type AgentMessageSent struct {
 
 func (AgentMessageSent) msg() {}
 
-// ClearAgentInbox clears whatever is left at an exited agent's Address on its Issue, guarded on the value read, so a write that
+// ClearAgentAddress clears whatever is left at an exited agent's Address on its Issue, guarded on the value read, so a write that
 // lands in between is not lost unseen.
-type ClearAgentInbox struct {
+type ClearAgentAddress struct {
 	Workspace string
 	ProjectID int64
 	UID       string
@@ -83,23 +83,25 @@ type ClearAgentInbox struct {
 	Address   string
 }
 
-func (ClearAgentInbox) cmd() {}
+func (ClearAgentAddress) cmd() {}
 
-// AgentInboxCleared answers ClearAgentInbox for the Issue with UID.
-type AgentInboxCleared struct {
+// AgentAddressCleared answers ClearAgentAddress for the Issue with UID.
+type AgentAddressCleared struct {
 	UID string
 	Err error
 }
 
-func (AgentInboxCleared) msg() {}
+func (AgentAddressCleared) msg() {}
 
-// MessageTarget is the agent a message on request goes to, and why `m` is off ("" when it is on). The agent is one this host's
+// messageTarget is the agent a message on request goes to, and why `m` is off ("" when it is on). The agent is one this host's
 // Panes started on the request's Issue whose name the request carries, in a request this Pane's actor wrote, as an agent's
-// Attention request is: the newest that waits, else the newest.
-func (m Model) MessageTarget(request AttentionRequest) (AgentEntry, string) {
+// Attention request is: the newest that waits, else the newest. A request that reads as the one this Pane writes for an agent that
+// exited, whose entry went with its block, is the exited agent's.
+func (m Model) messageTarget(request AttentionRequest) (AgentEntry, string) {
 	var target AgentEntry
 	found, waiting := false, false
-	if request.Slot.Kind == "" && !request.Slot.Broadcast && request.Slot.From == m.Actor {
+	ours := request.Slot.Kind == "" && !request.Slot.Broadcast && request.Slot.From == m.Actor
+	if ours {
 		for _, e := range m.AgentMapping {
 			if e.IssueUID != request.IssueUID || e.Teammate != request.Slot.Teammate {
 				continue
@@ -111,16 +113,18 @@ func (m Model) MessageTarget(request AttentionRequest) (AgentEntry, string) {
 		}
 	}
 	switch {
+	case !found && ours && request.Slot.Message == agentExitedMessage(request.QualifiedID()):
+		return AgentEntry{}, AgentExitedRefusal
 	case !found:
 		return AgentEntry{}, NoAgentRaisedRefusal
 	case agentExited(m.Agents.States, target.Block):
 		return target, AgentExitedRefusal
-	case target.NoInbox == AgentNotOmp:
+	case target.NoAddress == AgentNotOmp:
 		return target, AgentNotOmpRefusal
-	case target.NoInbox == AgentTrustedExtension:
+	case target.NoAddress == AgentTrustedExtension:
 		return target, AgentTrustedExtensionRefusal
-	case target.Inbox == "":
-		return target, AgentWithoutInboxRefusal
+	case target.Address == "":
+		return target, AgentWithoutAddressRefusal
 	}
 	return target, ""
 }
@@ -131,13 +135,13 @@ func openAgentMessage(m Model) (Model, []Cmd) {
 	if !ok || m.attentionClearing(request.IssueUID) {
 		return m, nil
 	}
-	target, reason := m.MessageTarget(request)
+	target, reason := m.messageTarget(request)
 	if reason != "" {
 		m.Notice = reason
 		return m, nil
 	}
 	m.AgentMessage = AgentMessageState{Open: true, IssueUID: request.IssueUID, IssueRef: request.QualifiedID(), ProjectID: request.ProjectID,
-		Agent: target.Teammate, Address: target.Inbox}
+		Agent: target.Teammate, Address: target.Address}
 	return m, nil
 }
 
@@ -213,17 +217,17 @@ func agentMessageSent(m Model, msg AgentMessageSent) Model {
 	return m
 }
 
-// clearGoneInboxes clears what is left at the address of each agent this Pane started that has exited or whose block went, once
+// clearGoneAddresses clears what is left at the address of each agent this Pane started that has exited or whose block went, once
 // per agent: nobody reads that address again. The record of the agents cleared keeps only those still mapped or gone.
-func clearGoneInboxes(m Model) (Model, []Cmd) {
+func clearGoneAddresses(m Model) (Model, []Cmd) {
 	var cmds []Cmd
 	clearOnce := func(e AgentEntry) {
 		project := m.projectOf(e)
-		if e.Inbox == "" || project == 0 || slices.Contains(m.inboxCleared, e.Block) {
+		if e.Address == "" || project == 0 || slices.Contains(m.addressesCleared, e.Block) {
 			return
 		}
-		m.inboxCleared = append(slices.Clip(m.inboxCleared), e.Block)
-		cmds = append(cmds, ClearAgentInbox{Workspace: m.Workspace, ProjectID: project, UID: e.IssueUID, Actor: m.Actor, Address: e.Inbox})
+		m.addressesCleared = append(slices.Clip(m.addressesCleared), e.Block)
+		cmds = append(cmds, ClearAgentAddress{Workspace: m.Workspace, ProjectID: project, UID: e.IssueUID, Actor: m.Actor, Address: e.Address})
 	}
 	for _, e := range m.AgentGone {
 		clearOnce(e)
@@ -233,18 +237,18 @@ func clearGoneInboxes(m Model) (Model, []Cmd) {
 			clearOnce(e)
 		}
 	}
-	if forgotten := m.inboxForgotten; slices.ContainsFunc(m.inboxCleared, forgotten) {
-		m.inboxCleared = slices.DeleteFunc(slices.Clone(m.inboxCleared), forgotten)
+	if forgotten := m.addressForgotten; slices.ContainsFunc(m.addressesCleared, forgotten) {
+		m.addressesCleared = slices.DeleteFunc(slices.Clone(m.addressesCleared), forgotten)
 	}
 	return m, cmds
 }
 
-// inboxForgotten says the agent with block is neither mapped nor gone, so its cleared inbox needs no record.
-func (m Model) inboxForgotten(block string) bool {
+// addressForgotten says the agent with block is neither mapped nor gone, so its cleared address needs no record.
+func (m Model) addressForgotten(block string) bool {
 	return !m.agentMapped(block) && !slices.ContainsFunc(m.AgentGone, func(g AgentEntry) bool { return g.Block == block })
 }
 
-func agentInboxCleared(m Model, msg AgentInboxCleared) Model {
+func agentAddressCleared(m Model, msg AgentAddressCleared) Model {
 	if msg.Err != nil {
 		m.Notice = fmt.Sprintf("Cannot clear the message left for an agent that exited: %s", msg.Err)
 	}

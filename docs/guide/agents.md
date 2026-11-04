@@ -41,7 +41,7 @@ The agent always runs through `tern-kata agent [--as <actor>] --ref <qualified r
 - sets `KATA_AUTHOR` when there is an `actor`, and otherwise leaves `KATA_AUTHOR` as inherited;
 - for an omp agent, sets `KATA_INBOX_USER` to the agent's own address, `<your actor>/<agent.toml name>-<block id>` (the block id from `TERN_PANE`), and `KATA_OMP_LIVE_INBOX=0`, and omp loads tern-kata's extension with `-e` (see [Messages to an agent](#messages-to-an-agent)).
 
-`tern-kata` must be on the `PATH` of Tern's shell on that machine, and must be this version: an older one refuses `--ref` or `--inbox` and the agent exits at once.
+`tern-kata` must be on the `PATH` of Tern's shell on that machine, and must be this version: an older one refuses `--ref` or `--address-prefix` and the agent exits at once.
 
 **The Pane's daemon.** A Pane on the default daemon starts agents as before. When the Pane's daemon is not what Tern's shell would pick (the Pane has `KATA_HOME` or `KATA_SERVER`, or you switched on the Daemons Page), the wrapper first drops the block's own `KATA_SERVER`, `KATA_AUTH_TOKEN`, `KATA_AUTH_TOKEN_FILE`, `KATA_ALLOW_INSECURE`, `KATA_TRUST_PRIVATE_NETWORK`, `KATA_DSN`, `KATA_DB` and `KATA_POSTGRES_SCHEMA`. It then sets `KATA_HOME` (made absolute), `KATA_SERVER`, `KATA_ALLOW_INSECURE`, `KATA_TRUST_PRIVATE_NETWORK`, `KATA_AUTH_TOKEN` and `KATA_AUTH_TOKEN_FILE` as the Pane has them. That is how the agent's `kata` commands reach the daemon `KATA_REF` names: its Issue is claimed, commented on and closed there, and kata-plugin registers nothing on Tern's default daemon.
 

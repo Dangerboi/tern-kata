@@ -22,14 +22,18 @@ var ompExtension []byte
 // OmpExtensionFolder is the folder of tern-kata's state folder that holds the omp extension the agents load.
 const OmpExtensionFolder = "omp"
 
-// AgentInbox is how an agent hears the messages written to it: Prefix is its Agent address up to the block id (<actor>/<name>),
-// which the wrapper completes from the block it runs in, and Extension the omp extension that delivers them. The zero value is an
-// agent no message reaches.
-type AgentInbox struct{ Prefix, Extension string }
+// AgentMessaging is how an agent hears the messages written to it: AddressPrefix is its Agent address up to the block id
+// (<actor>/<name>), which the wrapper completes from the block it runs in, and Extension the omp extension that delivers them. The
+// zero value is an agent no message reaches.
+type AgentMessaging struct{ AddressPrefix, Extension string }
 
-// agentNoInbox says why an agent started with command cannot load tern-kata's omp extension, "" when it can: the program must be
-// omp, and omp refuses -e beside --trusted-extension.
-func agentNoInbox(command []string) model.AgentNoInbox {
+// AgentAddress is the Agent address of the agent in block whose address prefix is prefix: the one spelling the Pane records and
+// the wrapper sets as KATA_INBOX_USER.
+func AgentAddress(prefix, block string) string { return prefix + "-" + block }
+
+// agentNoAddress says why an agent started with command cannot load tern-kata's omp extension, so has no Agent address, "" when
+// it can: the program must be omp, and omp refuses -e beside --trusted-extension.
+func agentNoAddress(command []string) model.AgentNoAddress {
 	program := filepath.Base(command[0])
 	if strings.TrimSuffix(program, filepath.Ext(program)) != worker.DefaultCommand {
 		return model.AgentNotOmp

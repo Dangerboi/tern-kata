@@ -117,8 +117,8 @@ type Model struct {
 	AgentGone []AgentEntry
 	// AgentMessage is the Message card, which writes a message to an agent from the Attention Page.
 	AgentMessage AgentMessageState
-	// inboxCleared are the blocks of this Pane's exited agents whose inbox the Pane has cleared, while they are mapped or gone.
-	inboxCleared []string
+	// addressesCleared are the blocks of this Pane's exited agents whose Agent address the Pane has cleared, while they are mapped or gone.
+	addressesCleared []string
 	// agentFresh are the agents started since a request was asked, by block, with the number of the last request asked before the
 	// start: an answer that read the file before the start wrote the entry does not hold it, and that is no sign the agent is gone.
 	// Only an answer to a later request settles it.
@@ -429,8 +429,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m = agentClosed(m, msg)
 	case AgentAttentionWritten:
 		return agentAttentionWritten(m, msg), nil
-	case AgentInboxCleared:
-		return agentInboxCleared(m, msg), nil
+	case AgentAddressCleared:
+		return agentAddressCleared(m, msg), nil
 	case AgentJumpMsg:
 		return jumpToAgent(m, msg.Block)
 	case AgentPlaced:

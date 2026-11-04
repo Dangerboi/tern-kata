@@ -9,7 +9,7 @@ export interface Spawned {
 }
 
 /** Effects the follower needs; tests replace them with fakes. */
-export interface InboxDeps {
+export interface FollowerDeps {
   address: string;
   project: string;
   /** Starts a long-running kata command; args exclude "kata". */
@@ -22,7 +22,7 @@ export interface InboxDeps {
 }
 
 /** The follower's lifecycle. */
-export interface Inbox {
+export interface Follower {
   start(): void;
   stop(): void;
 }
@@ -46,10 +46,11 @@ export interface Config {
   project: string;
 }
 
-/** Delivery state kept for one Issue ref. */
+/** Delivery state kept for one Issue ref: the last event id and value seen, and the stream count when the stream last set it. */
 interface RefState {
   eventId?: number;
   value: string | null;
+  streamed: number;
 }
 
 const MIN_BACKOFF_MS = 1000;
@@ -163,7 +164,7 @@ export function parseInbox(stdout: string, project: string): Array<{ ref: string
  * Creates the follower: it tails kata's event stream, re-reads the inbox when the
  * stream restarts or resets, and delivers each new trusted slot value once.
  */
-export function createInbox(deps: InboxDeps): Inbox {
+export function createFollower(deps: FollowerDeps): Follower {
   const key = slotKey(deps.address);
   const trusted = trustedSender(deps.address);
   const states = new Map<string, RefState>();
@@ -175,32 +176,39 @@ export function createInbox(deps: InboxDeps): Inbox {
   let backoff = MIN_BACKOFF_MS;
   let reading = false;
   let readAgain = false;
+  // streamed counts the stream's slot events, so a read can leave alone the refs the stream changed while it ran.
+  let streamed = 0;
 
   function handle(ref: string, eventId: number | undefined, slot: Slot | null): void {
     const stored = states.get(ref);
     if (eventId !== undefined && stored?.eventId !== undefined && eventId <= stored.eventId) return;
+    const seen = eventId === undefined ? (stored?.streamed ?? 0) : ++streamed;
     const identity = slot === null ? null : identityOf(slot);
     if (stored && stored.value === identity) {
       if (eventId !== undefined) stored.eventId = eventId;
+      stored.streamed = seen;
       return;
     }
-    states.set(ref, { eventId: eventId ?? stored?.eventId, value: identity });
+    states.set(ref, { eventId: eventId ?? stored?.eventId, value: identity, streamed: seen });
     if (slot === null || slot.from !== trusted || slot.message.trim() === "") return;
     deps.deliver(deliveryText(ref, deps.address, slot));
   }
 
-  function applyInbox(entries: Array<{ ref: string; slot: Slot }>): void {
+  // applyInbox takes a read that began when streamed was since: a ref the stream changed after that holds newer news than the read.
+  function applyInbox(entries: Array<{ ref: string; slot: Slot }>, since: number): void {
+    const newer = (ref: string) => (states.get(ref)?.streamed ?? 0) > since;
     const listed = new Set<string>();
     for (const { ref, slot } of entries) {
       listed.add(ref);
-      handle(ref, undefined, slot);
+      if (!newer(ref)) handle(ref, undefined, slot);
     }
     for (const [ref, state] of states) {
-      if (state.value !== null && !listed.has(ref)) state.value = null;
+      if (state.value !== null && !listed.has(ref) && !newer(ref)) state.value = null;
     }
   }
 
   async function readInboxOnce(gen: number): Promise<void> {
+    const since = streamed;
     let result: { code: number; stdout: string };
     try {
       result = await deps.run(["inbox", "--for", deps.address, "--json", "--project", deps.project]);
@@ -209,7 +217,7 @@ export function createInbox(deps: InboxDeps): Inbox {
     }
     if (gen !== generation || result.code !== 0) return;
     const entries = parseInbox(result.stdout, deps.project);
-    if (entries) applyInbox(entries);
+    if (entries) applyInbox(entries, since);
   }
 
   async function readInbox(): Promise<void> {
@@ -368,10 +376,10 @@ export function createExtension(env: Record<string, string | undefined>, io: Kat
   return (pi) => {
     const config = readConfig(env);
     let ctx: ExtensionContext = {};
-    let inbox: Inbox | undefined;
+    let follower: Follower | undefined;
 
-    function build(c: Config): Inbox {
-      return createInbox({
+    function build(c: Config): Follower {
+      return createFollower({
         ...c,
         spawn: (args) => io.spawn(args, ctx.cwd),
         run: (args) => io.run(args, ctx.cwd),
@@ -402,11 +410,11 @@ export function createExtension(env: Record<string, string | undefined>, io: Kat
     pi.on("session_start", (_event, c) => {
       if (!config || c.agent?.kind === "sub") return;
       ctx = c;
-      inbox ??= build(config);
-      inbox.start();
+      follower ??= build(config);
+      follower.start();
     });
     pi.on("session_shutdown", () => {
-      inbox?.stop();
+      follower?.stop();
     });
   };
 }

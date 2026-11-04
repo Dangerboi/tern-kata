@@ -705,12 +705,12 @@ func init() {
 		nil, nil)
 
 	daemonCall(
-		func(cmd model.ClearAgentInbox) string { return cmd.Workspace },
-		func(ctx context.Context, c *Client, cmd model.ClearAgentInbox) (model.Msg, error) {
-			return ok(model.AgentInboxCleared{UID: cmd.UID}, c.ClearAgentInbox(ctx, cmd))
+		func(cmd model.ClearAgentAddress) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.ClearAgentAddress) (model.Msg, error) {
+			return ok(model.AgentAddressCleared{UID: cmd.UID}, c.ClearAgentAddress(ctx, cmd))
 		},
-		func(cmd model.ClearAgentInbox, err error) model.Msg {
-			return model.AgentInboxCleared{UID: cmd.UID, Err: err}
+		func(cmd model.ClearAgentAddress, err error) model.Msg {
+			return model.AgentAddressCleared{UID: cmd.UID, Err: err}
 		},
 		nil, nil)
 

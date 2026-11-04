@@ -102,9 +102,9 @@ func (c *Client) ClearAgentAttention(ctx context.Context, cmd model.ClearAgentAt
 	return nil
 }
 
-// SendAgentMessage writes a person's message to an agent's address on an Issue as `kata notify` does, as the Pane's actor, guarded
-// on the address holding nothing or, when the person agreed to replace it, the value they saw. A guard that fails reads the slot
-// again: a value there is held and nothing is written; a slot gone since is written as an empty one.
+// SendAgentMessage writes a person's message to an agent's Agent address on an Issue as `kata notify` does, as the Pane's actor,
+// guarded on the address holding nothing or, when the person agreed to replace it, the value they saw. A guard that fails reads
+// the slot again: a value there is held and nothing is written; a slot gone since is written as an empty one.
 func (c *Client) SendAgentMessage(ctx context.Context, cmd model.SendAgentMessage) (model.AgentMessageSent, error) {
 	key := model.NotificationKey(cmd.Address)
 	value := map[string]any{"from": cmd.Actor, "message": cmd.Message}
@@ -133,12 +133,12 @@ func (c *Client) SendAgentMessage(ctx context.Context, cmd model.SendAgentMessag
 			expect = &raw
 		}
 	}
-	return model.AgentMessageSent{UID: cmd.UID}, errors.New("the agent's inbox kept changing; send the message again")
+	return model.AgentMessageSent{UID: cmd.UID}, errors.New("what kata holds for the agent kept changing; send the message again")
 }
 
-// ClearAgentInbox removes whatever is left at an exited agent's address on an Issue, whoever wrote it: nobody reads that address
-// again. The clear is guarded on the value read, so a write that lands in between stays.
-func (c *Client) ClearAgentInbox(ctx context.Context, cmd model.ClearAgentInbox) error {
+// ClearAgentAddress removes whatever is left at an exited agent's Agent address on an Issue, whoever wrote it: nobody reads that
+// address again. The clear is guarded on the value read, so a write that lands in between stays.
+func (c *Client) ClearAgentAddress(ctx context.Context, cmd model.ClearAgentAddress) error {
 	key := model.NotificationKey(cmd.Address)
 	raw, held, err := c.readSlot(ctx, cmd.ProjectID, cmd.UID, key)
 	if err != nil || !held {

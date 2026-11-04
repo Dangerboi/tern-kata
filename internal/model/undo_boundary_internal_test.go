@@ -30,7 +30,7 @@ func TestUndoBoundaryListsEveryCmd(t *testing.T) {
 		{BrowseFederationHubs{}, false},
 		{ChangeRecurrenceCmd{}, true},
 		{ClearAgentAttention{}, false},
-		{ClearAgentInbox{}, false},
+		{ClearAgentAddress{}, false},
 		{ClearAttention{}, true},
 		{CloseAgent{}, false},
 		{CloseIssueCmd{}, false},

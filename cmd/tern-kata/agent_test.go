@@ -84,22 +84,22 @@ func TestPlanAgent(t *testing.T) {
 		actor   string
 		command []string
 	}{
-		"ok":                 {[]string{"agent", "--as", "bot", "--", "omp", "--model", "x"}, "", "bot", []string{"omp", "--model", "x"}},
-		"ok with ref":        {[]string{"agent", "--as", "bot", "--ref", "demo#ab12", "--", "omp"}, "", "bot", []string{"omp"}},
-		"ok with equals":     {[]string{"agent", "--as=bot", "--ref=demo#ab12", "--", "omp"}, "", "bot", []string{"omp"}},
-		"missing ref value":  {[]string{"agent", "--as", "bot", "--ref", "--", "omp"}, "--ref requires", "", nil},
-		"empty ref":          {[]string{"agent", "--as", "bot", "--ref=", "--", "omp"}, "--ref must be non-empty", "", nil},
-		"ok with equals as":  {[]string{"agent", "--as=bot", "--", "omp"}, "", "bot", []string{"omp"}},
-		"command takes --as": {[]string{"agent", "--as", "bot", "--", "omp", "--as", "other"}, "", "bot", []string{"omp", "--as", "other"}},
-		"without --as":       {[]string{"agent", "--ref", "demo#ab12", "--", "omp"}, "", "", []string{"omp"}},
-		"empty actor":        {[]string{"agent", "--as=", "--", "omp"}, "non-empty", "", nil},
-		"missing actor":      {[]string{"agent", "--as", "--", "omp"}, "--as requires an actor", "", nil},
-		"missing --":         {[]string{"agent", "--as", "bot", "omp"}, "must follow --", "", nil},
-		"missing command":    {[]string{"agent", "--as", "bot", "--"}, "no command", "", nil},
-		"stray operand":      {[]string{"agent", "--as", "bot", "omp", "--", "omp"}, "unexpected argument omp", "", nil},
-		"unknown flag":       {[]string{"agent", "--as", "bot", "--json", "--", "omp"}, "unknown flag --json", "", nil},
-		"empty inbox":        {[]string{"agent", "--inbox=", "--", "omp"}, "--inbox must be non-empty", "", nil},
-		"missing inbox":      {[]string{"agent", "--inbox", "--", "omp"}, "--inbox requires", "", nil},
+		"ok":                     {[]string{"agent", "--as", "bot", "--", "omp", "--model", "x"}, "", "bot", []string{"omp", "--model", "x"}},
+		"ok with ref":            {[]string{"agent", "--as", "bot", "--ref", "demo#ab12", "--", "omp"}, "", "bot", []string{"omp"}},
+		"ok with equals":         {[]string{"agent", "--as=bot", "--ref=demo#ab12", "--", "omp"}, "", "bot", []string{"omp"}},
+		"missing ref value":      {[]string{"agent", "--as", "bot", "--ref", "--", "omp"}, "--ref requires", "", nil},
+		"empty ref":              {[]string{"agent", "--as", "bot", "--ref=", "--", "omp"}, "--ref must be non-empty", "", nil},
+		"ok with equals as":      {[]string{"agent", "--as=bot", "--", "omp"}, "", "bot", []string{"omp"}},
+		"command takes --as":     {[]string{"agent", "--as", "bot", "--", "omp", "--as", "other"}, "", "bot", []string{"omp", "--as", "other"}},
+		"without --as":           {[]string{"agent", "--ref", "demo#ab12", "--", "omp"}, "", "", []string{"omp"}},
+		"empty actor":            {[]string{"agent", "--as=", "--", "omp"}, "non-empty", "", nil},
+		"missing actor":          {[]string{"agent", "--as", "--", "omp"}, "--as requires an actor", "", nil},
+		"missing --":             {[]string{"agent", "--as", "bot", "omp"}, "must follow --", "", nil},
+		"missing command":        {[]string{"agent", "--as", "bot", "--"}, "no command", "", nil},
+		"stray operand":          {[]string{"agent", "--as", "bot", "omp", "--", "omp"}, "unexpected argument omp", "", nil},
+		"unknown flag":           {[]string{"agent", "--as", "bot", "--json", "--", "omp"}, "unknown flag --json", "", nil},
+		"empty address prefix":   {[]string{"agent", "--address-prefix=", "--", "omp"}, "--address-prefix must be non-empty", "", nil},
+		"missing address prefix": {[]string{"agent", "--address-prefix", "--", "omp"}, "--address-prefix requires", "", nil},
 	} {
 		t.Run(name, func(t *testing.T) {
 			plan, err := PlanLaunch(tc.args, func(string) (string, bool) { return "", false }, "v")
@@ -127,10 +127,10 @@ func TestPlanAgentCarriesTheRef(t *testing.T) {
 	}
 }
 
-func TestPlanAgentCarriesTheInboxPrefix(t *testing.T) {
-	plan, err := PlanLaunch([]string{"agent", "--inbox", "dangerboi/omp", "--ref", "demo#ab12", "--", "omp"}, func(string) (string, bool) { return "", false }, "v")
-	if err != nil || plan.AgentInbox != "dangerboi/omp" {
-		t.Errorf("AgentInbox = %q, err %v", plan.AgentInbox, err)
+func TestPlanAgentCarriesTheAgentAddressPrefix(t *testing.T) {
+	plan, err := PlanLaunch([]string{"agent", "--address-prefix", "dangerboi/omp", "--ref", "demo#ab12", "--", "omp"}, func(string) (string, bool) { return "", false }, "v")
+	if err != nil || plan.AgentAddressPrefix != "dangerboi/omp" {
+		t.Errorf("AgentAddressPrefix = %q, err %v", plan.AgentAddressPrefix, err)
 	}
 }
 
@@ -160,7 +160,7 @@ func TestAgentWithoutAnActorLeavesTheAuthorAsInherited(t *testing.T) {
 	}
 }
 
-func TestAnAgentInABlockGetsItsOwnInboxAddressAndKataOmpLeavesLiveDeliveryToTheExtension(t *testing.T) {
+func TestAnAgentInABlockGetsItsAgentAddressAndKataOmpLeavesLiveDeliveryToTheExtension(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses sh")
 	}
@@ -171,9 +171,9 @@ func TestAnAgentInABlockGetsItsOwnInboxAddressAndKataOmpLeavesLiveDeliveryToTheE
 		flags []string
 		want  string
 	}{
-		"in a block": {"18494129176579", []string{"--inbox", "dangerboi/omp"}, "dangerboi/omp-18494129176579|0"},
-		"with no block the address stays dropped":      {"", []string{"--inbox=dangerboi/omp"}, "unset|0"},
-		"without --inbox nothing changes but the drop": {"18494129176579", nil, "unset|1"},
+		"in a block": {"18494129176579", []string{"--address-prefix", "dangerboi/omp"}, "dangerboi/omp-18494129176579|0"},
+		"with no block the address stays dropped":               {"", []string{"--address-prefix=dangerboi/omp"}, "unset|0"},
+		"without --address-prefix nothing changes but the drop": {"18494129176579", nil, "unset|1"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			args := append(append([]string{"agent", "--as", "claude"}, tc.flags...), "--ref", "demo#ab12", "--", "sh", "-c", script)

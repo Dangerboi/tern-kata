@@ -148,7 +148,7 @@ func attentionPass(m Model, relayed, reread bool) (Model, []Cmd) {
 	if m.PaneBlock == "" {
 		return m, nil
 	}
-	m, cmds := clearGoneInboxes(m)
+	m, cmds := clearGoneAddresses(m)
 	address, err := m.InboxAddress()
 	if err != nil {
 		return m, cmds

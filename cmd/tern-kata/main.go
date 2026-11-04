@@ -83,7 +83,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		return execAgent(plan.Actor, plan.AgentRef, plan.AgentInbox, plan.Operands, environ)
+		return execAgent(plan, environ)
 	}
 	if plan.Subcommand != "" {
 		ctx, received, stop := withSignals(context.Background(), stopSignals...)

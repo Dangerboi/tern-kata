@@ -125,18 +125,18 @@ name = "open"
 }
 
 func TestAgentArgvBuilders(t *testing.T) {
-	line := AgentCommandLine("", "demo#ab12", AgentInbox{}, AgentRoute{}, []string{"omp", "--fast"}, "/state/p.md")
+	line := AgentCommandLine("", "demo#ab12", AgentMessaging{}, AgentRoute{}, []string{"omp", "--fast"}, "/state/p.md")
 	if want := []string{"tern-kata", "agent", "--ref", "demo#ab12", "--", "omp", "--fast", "@/state/p.md"}; !slices.Equal(line, want) {
 		t.Errorf("without an actor %q, want %q", line, want)
 	}
-	wrapped := AgentCommandLine("me-agent", "demo#ab12", AgentInbox{}, AgentRoute{}, []string{"omp"}, "/state/p.md")
+	wrapped := AgentCommandLine("me-agent", "demo#ab12", AgentMessaging{}, AgentRoute{}, []string{"omp"}, "/state/p.md")
 	if want := []string{"tern-kata", "agent", "--as", "me-agent", "--ref", "demo#ab12", "--", "omp", "@/state/p.md"}; !slices.Equal(wrapped, want) {
 		t.Errorf("with an actor %q, want %q", wrapped, want)
 	}
-	// An agent with an inbox: the wrapper gets its address up to the block id, omp loads the extension before the prompt.
-	inbox := AgentCommandLine("me-agent", "demo#ab12", AgentInbox{Prefix: "dana/omp", Extension: "/state/omp/tern-kata.ts"}, AgentRoute{}, []string{"omp", "--fast"}, "/state/p.md")
-	if want := []string{"tern-kata", "agent", "--as", "me-agent", "--inbox", "dana/omp", "--ref", "demo#ab12", "--", "omp", "--fast", "-e", "/state/omp/tern-kata.ts", "@/state/p.md"}; !slices.Equal(inbox, want) {
-		t.Errorf("with an inbox %q, want %q", inbox, want)
+	// An agent messages reach: the wrapper gets its Agent address up to the block id, omp loads the extension before the prompt.
+	messaging := AgentCommandLine("me-agent", "demo#ab12", AgentMessaging{AddressPrefix: "dana/omp", Extension: "/state/omp/tern-kata.ts"}, AgentRoute{}, []string{"omp", "--fast"}, "/state/p.md")
+	if want := []string{"tern-kata", "agent", "--as", "me-agent", "--address-prefix", "dana/omp", "--ref", "demo#ab12", "--", "omp", "--fast", "-e", "/state/omp/tern-kata.ts", "@/state/p.md"}; !slices.Equal(messaging, want) {
+		t.Errorf("with messaging %q, want %q", messaging, want)
 	}
 	split := AgentSplitArgs("24489903521795", "/work/my repo", line)
 	if want := []string{"split", "24489903521795", "right", "--cwd", "/work/my repo", "--json", "--", "tern-kata", "agent", "--ref", "demo#ab12", "--", "omp", "--fast", "@/state/p.md"}; !slices.Equal(split, want) {
@@ -220,12 +220,12 @@ func TestStartingAnAgentWritesThePromptRunsTernAndRecordsTheBlock(t *testing.T) 
 	}
 	e := got.Entry
 	if e.Block != "31" || e.IssueUID != "U1" || e.IssueRef != "demo#ab12" || e.PaneBlock != "7" || e.Teammate != "omp" || e.Background || e.Open ||
-		e.Inbox != "dana/omp-31" || e.NoInbox != "" ||
+		e.Address != "dana/omp-31" || e.NoAddress != "" ||
 		!e.StartedAt.Equal(time.Date(2026, 10, 29, 12, 0, 7, 0, time.UTC)) || filepath.Dir(e.PromptFile) != filepath.Join(dirs.State, AgentPromptsFolder) {
 		t.Fatalf("entry %+v", e)
 	}
 	extension := filepath.Join(dirs.State, OmpExtensionFolder, "tern-kata.ts")
-	want := []string{"split", "7", "right", "--cwd", "/work/demo", "--json", "--", "tern-kata", "agent", "--as", "me-agent", "--inbox", "dana/omp", "--ref", "demo#ab12", "--", "omp", "-e", extension, "@" + e.PromptFile}
+	want := []string{"split", "7", "right", "--cwd", "/work/demo", "--json", "--", "tern-kata", "agent", "--as", "me-agent", "--address-prefix", "dana/omp", "--ref", "demo#ab12", "--", "omp", "-e", extension, "@" + e.PromptFile}
 	if !slices.Equal(ran, want) {
 		t.Fatalf("ran %q, want %q", ran, want)
 	}
@@ -247,7 +247,7 @@ func TestStartingAnAgentWritesThePromptRunsTernAndRecordsTheBlock(t *testing.T) 
 	}
 }
 
-func TestAnAgentThatCannotLoadTheExtensionStartsWithoutAnInboxAndSaysWhy(t *testing.T) {
+func TestAnAgentThatCannotLoadTheExtensionStartsWithoutAnAgentAddressAndSaysWhy(t *testing.T) {
 	for _, name := range []string{"KATA_HOME", "KATA_SERVER", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE"} {
 		t.Setenv(name, "")
 	}
@@ -259,7 +259,7 @@ func TestAnAgentThatCannotLoadTheExtensionStartsWithoutAnInboxAndSaysWhy(t *test
 	}
 	for _, c := range []struct {
 		command string
-		want    model.AgentNoInbox
+		want    model.AgentNoAddress
 	}{
 		{`["claude", "--continue"]`, model.AgentNotOmp},
 		{`["/opt/omp/omp", "--trusted-extension", "/abs/guard.ts"]`, model.AgentTrustedExtension},
@@ -267,11 +267,11 @@ func TestAnAgentThatCannotLoadTheExtensionStartsWithoutAnInboxAndSaysWhy(t *test
 	} {
 		writeAgentFile(t, filepath.Join(dirs.Config, "agent.toml"), "command = "+c.command+"\n[projects.demo]\ncheckout = \"/work/demo\"\n")
 		got := as[model.AgentStarted](t, run(t, g, model.StartAgent{Placement: model.AgentSplit, IssueUID: "U1", IssueRef: "demo#ab12", ProjectName: "demo", PaneBlock: "7", Actor: "dana"}))
-		if got.Err != nil || got.Entry.Inbox != "" || got.Entry.NoInbox != c.want {
-			t.Errorf("%s: entry %+v, err %v; want no inbox because %s", c.command, got.Entry, got.Err, c.want)
+		if got.Err != nil || got.Entry.Address != "" || got.Entry.NoAddress != c.want {
+			t.Errorf("%s: entry %+v, err %v; want no Agent address because %s", c.command, got.Entry, got.Err, c.want)
 		}
-		if slices.Contains(ran, "--inbox") || slices.Contains(ran, "-e") {
-			t.Errorf("%s: ran %q, want no inbox and no extension", c.command, ran)
+		if slices.Contains(ran, "--address-prefix") || slices.Contains(ran, "-e") {
+			t.Errorf("%s: ran %q, want no Agent address and no extension", c.command, ran)
 		}
 		text, err := os.ReadFile(got.Entry.PromptFile)
 		if err != nil || string(text) != AgentPrompt("demo#ab12", "", "") {

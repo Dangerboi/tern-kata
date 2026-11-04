@@ -9,10 +9,11 @@ import (
 )
 
 // agentUsage is what `tern-kata agent` refuses a command line with.
-const agentUsage = "usage: tern-kata agent [--as <actor>] [--ref <qualified ref>] [--inbox <actor>/<name>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]"
+const agentUsage = "usage: tern-kata agent [--as <actor>] [--ref <qualified ref>] [--address-prefix <actor>/<name>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]"
 
-// planAgent parses `tern-kata agent [--as <actor>] [--ref <qualified ref>] -- <command> [args...]` (args[0] is "agent"). --as and --ref
-// come before the lone --, and everything after it is the command and its arguments, verbatim: Operands holds them.
+// planAgent parses `tern-kata agent [--as <actor>] [--ref <qualified ref>] [--address-prefix <actor>/<name>] [route flags] -- <command>
+// [args...]` (args[0] is "agent"). The flags come before the lone --, and everything after it is the command and its arguments,
+// verbatim: Operands holds them.
 func planAgent(args []string) (LaunchPlan, error) {
 	end := slices.Index(args, "--")
 	if end < 0 {
@@ -32,12 +33,12 @@ func planAgent(args []string) (LaunchPlan, error) {
 			plan.AgentRef = ref
 			continue
 		}
-		if arg == "--inbox" || strings.HasPrefix(arg, "--inbox=") {
-			inbox, err := parseFlagValue(args[:end], &i, "--inbox", "an inbox address up to its block id")
+		if arg == "--address-prefix" || strings.HasPrefix(arg, "--address-prefix=") {
+			prefix, err := parseFlagValue(args[:end], &i, "--address-prefix", "an Agent address up to its block id")
 			if err != nil {
 				return LaunchPlan{}, fmt.Errorf("agent: %w; %s", err, agentUsage)
 			}
-			plan.AgentInbox = inbox
+			plan.AgentAddressPrefix = prefix
 			continue
 		}
 		if matched, err := parseAgentRoute(args[:end], &i, &plan.AgentRoute); matched {

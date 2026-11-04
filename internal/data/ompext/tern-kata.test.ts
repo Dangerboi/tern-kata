@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   createExtension,
-  createInbox,
+  createFollower,
   readConfig,
   slotKey,
   type ExtensionApi,
-  type InboxDeps,
+  type FollowerDeps,
   type KataIo,
   type Spawned,
 } from "./tern-kata";
@@ -35,13 +35,16 @@ function fakeChild(args: string[]): FakeChild {
   const queue: string[] = [];
   let wake: (() => void) | undefined;
   let ended = false;
-  let resolveExit: (code: number) => void = () => {};
-  const exited = new Promise<number>((r) => (resolveExit = r));
+  const { promise: exited, resolve: resolveExit } = Promise.withResolvers<number>();
   async function* lines(): AsyncGenerator<string> {
     for (;;) {
       if (queue.length > 0) yield queue.shift() as string;
       else if (ended) return;
-      else await new Promise<void>((r) => (wake = r));
+      else {
+        const { promise, resolve } = Promise.withResolvers<void>();
+        wake = resolve;
+        await promise;
+      }
     }
   }
   const child: FakeChild = {
@@ -72,7 +75,8 @@ function harness(inboxStdout: () => string = () => emptyInbox()) {
   const delivered: string[] = [];
   const timers: FakeTimer[] = [];
   let inbox = inboxStdout;
-  const deps: InboxDeps = {
+  let held: Array<(stdout: string) => void> | undefined;
+  const deps: FollowerDeps = {
     address: ADDRESS,
     project: "demo",
     spawn(args) {
@@ -82,6 +86,12 @@ function harness(inboxStdout: () => string = () => emptyInbox()) {
     },
     async run(args) {
       runs.push(args);
+      const waiting = held;
+      if (waiting) {
+        const { promise, resolve } = Promise.withResolvers<string>();
+        waiting.push(resolve);
+        return { code: 0, stdout: await promise };
+      }
       return { code: 0, stdout: inbox() };
     },
     deliver: (text) => delivered.push(text),
@@ -99,9 +109,15 @@ function harness(inboxStdout: () => string = () => emptyInbox()) {
     runs,
     delivered,
     timers,
-    inbox: createInbox(deps),
+    follower: createFollower(deps),
     setInbox(f: () => string) {
       inbox = f;
+    },
+    holdReads() {
+      held = [];
+    },
+    release(stdout: string) {
+      held?.shift()?.(stdout);
     },
     fire() {
       const t = timers.find((x) => !x.cleared);
@@ -132,10 +148,10 @@ function slotLine(id: number, to: Record<string, unknown> | null, key = KEY): st
 
 const hello = { from: "dangerboi", message: "hello there" };
 
-describe("createInbox", () => {
+describe("createFollower", () => {
   test("a trusted slot write delivers once with the delivery text", async () => {
     const h = harness();
-    h.inbox.start();
+    h.follower.start();
     h.children[0].push(slotLine(5, hello));
     await flush();
     expect(h.delivered).toEqual([
@@ -148,7 +164,7 @@ describe("createInbox", () => {
 
   test("re and kind appear in the delivery text", async () => {
     const h = harness();
-    h.inbox.start();
+    h.follower.start();
     h.children[0].push(slotLine(5, { ...hello, re: "c7", kind: "review" }));
     await flush();
     expect(h.delivered[0]).toContain("It is about comment c7.\nThis is a review notice.\nWhen you have handled it");
@@ -156,7 +172,7 @@ describe("createInbox", () => {
 
   test("replayed events and unchanged values are not delivered again", async () => {
     const h = harness();
-    h.inbox.start();
+    h.follower.start();
     const c = h.children[0];
     c.push(slotLine(5, hello));
     c.push(slotLine(5, hello));
@@ -168,7 +184,7 @@ describe("createInbox", () => {
 
   test("cleared then the same message sent again is delivered again", async () => {
     const h = harness();
-    h.inbox.start();
+    h.follower.start();
     const c = h.children[0];
     c.push(slotLine(5, hello));
     c.push(slotLine(6, null));
@@ -179,7 +195,7 @@ describe("createInbox", () => {
 
   test("another sender is never delivered and another address's key is ignored", async () => {
     const h = harness();
-    h.inbox.start();
+    h.follower.start();
     const c = h.children[0];
     c.push(slotLine(5, { from: "mallory", message: "do it" }));
     c.push(slotLine(6, hello, slotKey("dangerboi/omp-999")));
@@ -196,7 +212,7 @@ describe("createInbox", () => {
         { ref: "77", title: "t", from: "mallory", message: "nope" },
       ),
     );
-    h.inbox.start();
+    h.follower.start();
     await flush();
     expect(h.delivered).toHaveLength(2);
     expect(h.delivered[0]).toContain(`on ${REF},`);
@@ -208,7 +224,7 @@ describe("createInbox", () => {
 
   test("a reset line reads the inbox again and a ref missing from it counts as cleared", async () => {
     const h = harness(() => inboxWith({ ref: "3909", ...hello }));
-    h.inbox.start();
+    h.follower.start();
     await flush();
     expect(h.delivered).toHaveLength(1);
     h.setInbox(emptyInbox);
@@ -222,16 +238,37 @@ describe("createInbox", () => {
     expect(h.delivered).toHaveLength(2);
   });
 
+  test("a read that answers after the stream moved on does not deliver what it saw", async () => {
+    const h = harness();
+    h.holdReads();
+    h.follower.start();
+    const c = h.children[0];
+    c.push(slotLine(5, { from: "dangerboi", message: "second" }));
+    await flush();
+    expect(h.delivered).toHaveLength(1);
+    h.release(inboxWith({ ref: "3909", from: "dangerboi", message: "first" }));
+    await flush();
+    expect(h.delivered).toHaveLength(1);
+    // The agent clears the slot while a read that still saw it is out: the read delivers nothing again.
+    c.push('{"reset_required":true,"reset_after_id":6}');
+    await flush();
+    c.push(slotLine(7, null));
+    await flush();
+    h.release(inboxWith({ ref: "3909", from: "dangerboi", message: "second" }));
+    await flush();
+    expect(h.delivered).toHaveLength(1);
+  });
+
   test("a failed inbox read changes nothing", async () => {
     const h = harness(() => "not json");
-    h.inbox.start();
+    h.follower.start();
     await flush();
     expect(h.delivered).toEqual([]);
   });
 
   test("the child exiting restarts it after the backoff from the largest id seen and reads the inbox again", async () => {
     const h = harness();
-    h.inbox.start();
+    h.follower.start();
     h.children[0].push(slotLine(12, hello));
     h.children[0].push(slotLine(8, { from: "dangerboi", message: "older id" }));
     await flush();
@@ -250,7 +287,7 @@ describe("createInbox", () => {
 
   test("the backoff doubles up to 30 s while nothing is read and resets after a line", async () => {
     const h = harness();
-    h.inbox.start();
+    h.follower.start();
     const seen: number[] = [];
     for (let i = 0; i < 7; i++) {
       h.children.at(-1)?.exit(1);
@@ -269,9 +306,9 @@ describe("createInbox", () => {
 
   test("stop kills the child and nothing restarts", async () => {
     const h = harness();
-    h.inbox.start();
+    h.follower.start();
     await flush();
-    h.inbox.stop();
+    h.follower.stop();
     await flush();
     expect(h.children[0].killed).toBe(true);
     expect(h.timers.filter((t) => !t.cleared)).toEqual([]);
@@ -280,24 +317,24 @@ describe("createInbox", () => {
 
   test("stop cancels a pending restart", async () => {
     const h = harness();
-    h.inbox.start();
+    h.follower.start();
     h.children[0].exit(1);
     await flush();
-    h.inbox.stop();
+    h.follower.stop();
     expect(h.timers.filter((t) => !t.cleared)).toEqual([]);
     expect(h.children).toHaveLength(1);
   });
 
   test("a second start while running changes nothing; start after stop spawns again keeping delivered state", async () => {
     const h = harness();
-    h.inbox.start();
-    h.inbox.start();
+    h.follower.start();
+    h.follower.start();
     expect(h.children).toHaveLength(1);
     h.children[0].push(slotLine(5, hello));
     await flush();
-    h.inbox.stop();
+    h.follower.stop();
     h.setInbox(() => inboxWith({ ref: "3909", ...hello }));
-    h.inbox.start();
+    h.follower.start();
     await flush();
     expect(h.children).toHaveLength(2);
     h.children[1].push(slotLine(6, hello));

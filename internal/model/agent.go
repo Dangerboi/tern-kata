@@ -55,21 +55,21 @@ type AgentEntry struct {
 	Open       bool `json:"open"`
 	// Placement is where the agent was started, split or tab; "" in an entry written before it was kept, which reads as a split.
 	Placement AgentPlacement `json:"placement,omitempty"`
-	// Inbox is the agent's own Agent address, <actor>/<name>-<block>, when it loads tern-kata's omp extension, which delivers what
+	// Address is the agent's own Agent address, <actor>/<name>-<block>, when it loads tern-kata's omp extension, which delivers what
 	// is written to it; "" when it does not.
-	Inbox string `json:"inbox,omitempty"`
-	// NoInbox says why an agent has no Inbox; "" in an entry that has one or was written before it was kept.
-	NoInbox AgentNoInbox `json:"no_inbox,omitempty"`
+	Address string `json:"address,omitempty"`
+	// NoAddress says why an agent has no Address; "" in an entry that has one or was written before it was kept.
+	NoAddress AgentNoAddress `json:"no_address,omitempty"`
 }
 
-// AgentNoInbox is why an agent started without tern-kata's omp extension, so no message reaches it.
-type AgentNoInbox string
+// AgentNoAddress is why an agent started without tern-kata's omp extension, so has no Agent address and no message reaches it.
+type AgentNoAddress string
 
 const (
 	// AgentNotOmp is an agent whose agent.toml command is not omp: the extension is omp's.
-	AgentNotOmp AgentNoInbox = "not-omp"
+	AgentNotOmp AgentNoAddress = "not-omp"
 	// AgentTrustedExtension is an omp agent whose agent.toml args hold --trusted-extension, which omp refuses with -e.
-	AgentTrustedExtension AgentNoInbox = "trusted-extension"
+	AgentTrustedExtension AgentNoAddress = "trusted-extension"
 )
 
 // StartAgent asks the gateway to start an interactive agent on an Issue. Workspace is the Pane's workspace when the Issue's

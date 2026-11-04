@@ -408,12 +408,12 @@ func TestAMessageToAnAgentIsWrittenOnlyOverWhatThePersonAgreedToReplace(t *testi
 	}
 }
 
-func TestAnExitedAgentsInboxIsClearedWhoeverWroteToIt(t *testing.T) {
+func TestAnExitedAgentsAddressIsClearedWhoeverWroteToIt(t *testing.T) {
 	f := newAttentionFixture(t)
 	uid := createIssue(t, f.gateway, f.work, f.workP, "Agent gone")
 	const agent = "dana/omp-31"
-	clear := func() model.AgentInboxCleared {
-		return as[model.AgentInboxCleared](t, run(t, f.gateway, model.ClearAgentInbox{Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana", Address: agent}))
+	clear := func() model.AgentAddressCleared {
+		return as[model.AgentAddressCleared](t, run(t, f.gateway, model.ClearAgentAddress{Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana", Address: agent}))
 	}
 	for _, from := range []string{"dana", "bob"} {
 		f.put(t, f.workP, uid, agent, map[string]any{"from": from, "message": "unread"})
@@ -425,6 +425,6 @@ func TestAnExitedAgentsInboxIsClearedWhoeverWroteToIt(t *testing.T) {
 		}
 	}
 	if got := clear(); got.Err != nil {
-		t.Fatalf("clear of an empty inbox: %+v", got)
+		t.Fatalf("clear of an empty Agent address: %+v", got)
 	}
 }

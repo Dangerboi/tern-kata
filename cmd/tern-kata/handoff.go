@@ -56,31 +56,31 @@ func routedEnv(environ []string, route data.AgentRoute, caseInsensitive bool) ([
 	return append(envWithout(environ, caseInsensitive, unset...), set...), nil
 }
 
-// agentEnv returns environ for an agent: KATA_AUTHOR set to actor as childEnv does (left as inherited when actor is empty), no
-// inherited KATA_REF or KATA_INBOX_USER (the person's own inbox is not the agent's), and KATA_REF set to ref when it is not empty.
-// An inbox (<actor>/<name>, the agent loads tern-kata's omp extension) sets KATA_OMP_LIVE_INBOX=0, so kata-omp leaves live delivery
-// to the extension, and in a block KATA_INBOX_USER to the agent's own address: the inbox, "-" and the block id from TERN_PANE.
-func agentEnv(environ []string, actor, ref, inbox string, caseInsensitive bool) []string {
+// agentEnv returns environ for the agent plan runs: KATA_AUTHOR set to plan.Actor as childEnv does (left as inherited when it is
+// empty), no inherited KATA_REF or KATA_INBOX_USER (the person's own inbox is not the agent's), and KATA_REF set to plan.AgentRef
+// when it is not empty. An Agent address prefix (the agent loads tern-kata's omp extension) sets KATA_OMP_LIVE_INBOX=0, so kata-omp
+// leaves live delivery to the extension, and in a block KATA_INBOX_USER to the agent's Agent address, from the block id in TERN_PANE.
+func agentEnv(environ []string, plan LaunchPlan, caseInsensitive bool) []string {
 	dropped := []string{"KATA_REF", "KATA_INBOX_USER"}
-	if actor != "" {
+	if plan.Actor != "" {
 		dropped = append(dropped, "KATA_AUTHOR")
 	}
 	block := ""
-	if inbox != "" {
+	if plan.AgentAddressPrefix != "" {
 		dropped = append(dropped, "KATA_OMP_LIVE_INBOX")
 		block = strings.TrimSpace(envValue(environ, "TERN_PANE", caseInsensitive))
 	}
 	env := envWithout(environ, caseInsensitive, dropped...)
-	if actor != "" {
-		env = append(env, "KATA_AUTHOR="+actor)
+	if plan.Actor != "" {
+		env = append(env, "KATA_AUTHOR="+plan.Actor)
 	}
-	if ref != "" {
-		env = append(env, "KATA_REF="+ref)
+	if plan.AgentRef != "" {
+		env = append(env, "KATA_REF="+plan.AgentRef)
 	}
-	if inbox != "" {
+	if plan.AgentAddressPrefix != "" {
 		env = append(env, "KATA_OMP_LIVE_INBOX=0")
 		if block != "" {
-			env = append(env, "KATA_INBOX_USER="+inbox+"-"+block)
+			env = append(env, "KATA_INBOX_USER="+data.AgentAddress(plan.AgentAddressPrefix, block))
 		}
 	}
 	return env
