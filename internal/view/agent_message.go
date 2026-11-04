@@ -28,7 +28,7 @@ func agentMessageLayer(m model.Model) tern.Element {
 	} else {
 		children = []tern.Element{
 			ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Message"}, Field: ui.Field{Text: f.Text, Cursor: caretAt(f.Caret, "", f.Text), Mode: "insert", Placeholder: ui.T("Message to " + f.Agent), Readonly: f.Sending}},
-			toneText("note", ui.ToneMuted, "It reaches the agent at once as a message from you, and stays on "+f.IssueRef+" until the agent clears it."),
+			toneText("note", ui.ToneMuted, "The agent gets it as a message from you at its next step, after you answer anything it asks you, and it stays on "+f.IssueRef+" until the agent clears it."),
 		}
 		buttons = []tern.Element{cardButton("send", model.ModeAgentMessage, model.AgentMessageSend, "Send", true), cardButton("cancel", model.ModeAgentMessage, model.AgentMessageCancel, "Cancel", false)}
 	}

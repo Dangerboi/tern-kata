@@ -437,15 +437,13 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 	}
 	noAddress := agentNoAddress(settings.Command)
 	var messaging AgentMessaging
+	sender := ""
 	if noAddress == "" && cmd.Actor != "" && settings.Name != "" {
 		extension, err := writeOmpExtension(dirs.State)
 		if err != nil {
 			return failed(fmt.Errorf("write the agent's omp extension: %w", err))
 		}
 		messaging = AgentMessaging{AddressPrefix: cmd.Actor + "/" + settings.Name, Extension: extension}
-	}
-	sender := ""
-	if messaging.AddressPrefix != "" {
 		sender = cmd.Actor
 	}
 	promptFile, err := writeAgentPrompt(filepath.Join(dirs.State, AgentPromptsFolder), starter, AgentPrompt(cmd.IssueRef, cmd.IssueTitle, sender))

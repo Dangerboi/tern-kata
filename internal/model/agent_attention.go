@@ -148,6 +148,8 @@ func attentionPass(m Model, relayed, reread bool) (Model, []Cmd) {
 	if m.PaneBlock == "" {
 		return m, nil
 	}
+	// The exits this pass reads (AgentGone, the relay's exited agents) are also when an agent's address is left unread for good; it
+	// is cleared first, while raiseExitedAttention has not yet trimmed AgentGone.
 	m, cmds := clearGoneAddresses(m)
 	address, err := m.InboxAddress()
 	if err != nil {

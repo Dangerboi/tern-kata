@@ -21,13 +21,17 @@ func envWithout(environ []string, caseInsensitive bool, names ...string) []strin
 	env := make([]string, 0, len(environ)+2)
 	for _, entry := range environ {
 		name, _, _ := strings.Cut(entry, "=")
-		if !slices.ContainsFunc(names, func(dropped string) bool {
-			return name == dropped || caseInsensitive && strings.EqualFold(name, dropped)
-		}) {
+		if !slices.ContainsFunc(names, func(dropped string) bool { return envNamed(name, dropped, caseInsensitive) }) {
 			env = append(env, entry)
 		}
 	}
 	return env
+}
+
+// envNamed says an environment entry called name is the variable called want; names compare case-insensitively when
+// caseInsensitive (Windows).
+func envNamed(name, want string, caseInsensitive bool) bool {
+	return name == want || caseInsensitive && strings.EqualFold(name, want)
 }
 
 // childEnv returns environ for a child with KATA_AUTHOR set to actor, dropping every existing spelling first;
@@ -91,7 +95,7 @@ func agentEnv(environ []string, plan LaunchPlan, caseInsensitive bool) []string 
 func envValue(environ []string, name string, caseInsensitive bool) string {
 	value := ""
 	for _, entry := range environ {
-		if key, v, ok := strings.Cut(entry, "="); ok && (key == name || caseInsensitive && strings.EqualFold(key, name)) {
+		if key, v, ok := strings.Cut(entry, "="); ok && envNamed(key, name, caseInsensitive) {
 			value = v
 		}
 	}
