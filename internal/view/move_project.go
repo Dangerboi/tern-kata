@@ -70,7 +70,7 @@ func moveConfirming(m model.Model) []tern.Element {
 		return children
 	}
 	children = append(children, ui.FormField{Common: ui.Common{Key: "single", Aria: "Only this Issue"}, Label: ui.T("Only this Issue"),
-		Hint: ui.T("Leave its descendants where they are. Key: o"),
+		Hint:     ui.T("Leave its descendants where they are. Key: o"),
 		Children: ui.Nodes(ui.Switch{Common: ui.Common{Key: choiceControlKey, Aria: "Only this Issue"}, On: f.Single, Variant: ui.SwitchSegment, Labels: [2]string{"No", "Yes"}})})
 	words := "Move"
 	if f.Conflict || !f.Previewed {
