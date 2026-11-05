@@ -1689,7 +1689,7 @@ func TestRoutedAgentCarriesTheCredentialVariablesTheHomeNamesNotAGlobalToken(t *
 	if strings.Contains(strings.Join(ran, " "), "--token-file") {
 		t.Errorf("a global token is carried for a connection kata scopes by entry: %q", ran)
 	}
-	text, err := readTokenFile(got.Entry.PromptFile+".env")
+	text, err := readTokenFile(got.Entry.PromptFile + ".env")
 	if err != nil {
 		t.Fatal(err)
 	}
