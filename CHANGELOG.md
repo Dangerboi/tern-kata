@@ -41,6 +41,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - When an agent's block starts but the Pane cannot record it, the Pane closes the block and says the agent was stopped, where it used to leave the agent running with no Agent badge and invite a retry that started a second one. If the block cannot be closed, the error names it.
 - `tern-kata migrate-attachments` no longer uploads the target of a symlink in the old attachment folder: a file, an Issue folder or the store that is a symlink is left and listed with its reason.
 - `u` shows the outcome of an undo, and takes the undone change out of the Undo history, when another change landed or the history was cleared while the undo was out; before, the answer was dropped without a word and the change stayed in the history.
+- Fish completion offers all of `tern-kata agent`'s flags, as bash and zsh do, not only `--ref`.
+- `tern-kata worker init`, `views add` and `recur` refuse a flag-like word as a flag's value (`--search --all`), as `agent` already did; `--search=--all` still passes it.
 - A cron expression whose `CRON_TZ=` or `TZ=` zone is quoted, such as `CRON_TZ="Europe/Berlin"`, is read with that zone: the worker no longer sets the job aside as naming another zone than its trigger's, and the Jobs Page shows its runs.
 - Supervision no longer starts a second worker for `worker.lock` to refuse, all day long, after a plugin reload or a Tern update: the host half leaves the worker that is still running alone, logs one line naming it, and starts a worker within 10 seconds of its end.
 
