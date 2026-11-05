@@ -238,7 +238,7 @@ Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relat
   | deadline after tomorrow | "due 10-24" | muted |
   | scheduled date after today | "scheduled tomorrow" or "scheduled 10-28" | muted |
 
-  A date in another year than today reads YYYY-MM-DD. Done cards and cards without dates have no badge. Before the Pane knows today's date the badge shows the earlier date plainly, muted ("due 2026-10-24"). The wording moves on at local midnight without a key. An open Issue row in the list shows the same badge, in the same tone, before its title; a list too narrow to keep the title drops it (beside the detail only the shorter badges fit), and closed and undated rows have none.
+  A date in another year than today reads YYYY-MM-DD. Done cards and cards without dates have no badge. Before the Pane knows today's date the badge shows the earlier date plainly, muted ("due 2026-10-24"). The wording moves on at local midnight without a key. An open Issue row in the list shows the same badge, in the same tone, after its title; a list too narrow to keep the title drops it (beside the detail only the shorter badges fit), and closed and undated rows have none.
 - The selected card also shows a **Dates line**, "scheduled 2026-10-28 · due 2026-11-02", with an absent date left out and no line without dates. See [Dates](dates.md) for setting them.
 
 ### Lane view
