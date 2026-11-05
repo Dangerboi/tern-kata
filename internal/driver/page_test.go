@@ -124,15 +124,39 @@ func TestPageBarCompactsThenMovesToItsOwnLineBeforeAnythingLeavesTheTopBar(t *te
 		if len(texts) != len(s.Model.PageBar()) {
 			t.Fatalf("%d columns: %d Page bar entries drawn, want %d", tt.cols, len(texts), len(s.Model.PageBar()))
 		}
-		if got := strings.Contains(texts["workflows"], `"t":"Workflows"`); got == tt.compact {
+		if got := strings.Contains(texts["workflows"], `"t":" Workflows"`); got == tt.compact {
 			t.Errorf("%d columns: Workflows entry %s, compact %v", tt.cols, texts["workflows"], tt.compact)
 		}
-		if !strings.Contains(texts["issues"], `"t":"Issues"`) {
+		if !strings.Contains(texts["issues"], `"t":" Issues"`) {
 			t.Errorf("%d columns: the current Page lost its label: %s", tt.cols, texts["issues"])
 		}
 		_, own := drawnIDs(t, view.Render(s.Model, now))["main.pagebar"]
 		if own != tt.ownLine {
 			t.Errorf("%d columns: Page bar on its own line = %v, want %v", tt.cols, own, tt.ownLine)
+		}
+	}
+}
+
+// Every Page bar entry is one node: the Page's key as a keycap span in the footer's key style, then its name.
+func TestPageBarEntriesDrawTheirKeyAsAKeycapSpan(t *testing.T) {
+	s := loadedWith(t, 200, model.Project{ID: 7, UID: "p", Name: "p"}, model.Snapshot{Issues: []model.Issue{alpha}})
+	for _, entry := range s.Model.PageBar() {
+		id := pageBarEntry(t, s.Model, entry.Chord)
+		for _, n := range wireNodes(t, view.Render(s.Model, now)) {
+			if n.ID != id {
+				continue
+			}
+			spans, _ := n.P["spans"].([]any)
+			if len(spans) != 2 {
+				t.Fatalf("%s has %d spans, want keycap and name", id, len(spans))
+			}
+			key, name := spans[0].(map[string]any), spans[1].(map[string]any)
+			if key["s"] != "key" || key["t"] != entry.Chord || name["t"] != " "+entry.Name() {
+				t.Errorf("%s spans = %v", id, spans)
+			}
+			if wantMuted := !entry.Current; wantMuted != (name["s"] == "muted") {
+				t.Errorf("%s name style %v, current %v", id, name["s"], entry.Current)
+			}
 		}
 	}
 }

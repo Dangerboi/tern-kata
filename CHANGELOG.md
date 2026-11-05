@@ -4,6 +4,13 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Changed
+
+#### Issues and Pages
+
+- The Page bar draws each Page's key as a keycap, like the footer's key hints: `[1] Issues  [2] Jobs  …  [6] Attention`.
+  - A Lettered Page shown in the bar draws its letter (`[C] Credentials`). The current Page keeps its accent name, the compact bar still shows the keycap alone for the other Pages, and a click on an entry still presses its key.
+
 ## [0.8.0] - 2026-11-05
 
 ### Added
