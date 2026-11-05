@@ -115,3 +115,63 @@ func TestGatewayMoveToTheIssuesOwnProjectShowsKatasRefusal(t *testing.T) {
 		t.Fatalf("answer %+v, want kata's same-project refusal", answer)
 	}
 }
+
+// child is an Issue created under the fixture's Issue.
+func (f moveFixture) child(t *testing.T) string {
+	t.Helper()
+	created := as[model.IssueCreated](t, run(t, f.gateway, model.CreateIssueCmd{Workspace: f.workspace, Actor: f.actor, ProjectID: f.from.ID, Title: "Child", Body: "body", ParentUID: f.uid}))
+	if created.Err != nil || created.UID == "" {
+		t.Fatalf("created %+v", created)
+	}
+	return created.UID
+}
+
+func (f moveFixture) projectOf(t *testing.T, uid string) string {
+	t.Helper()
+	issue := as[model.DetailLoaded](t, run(t, f.gateway, model.LoadDetail{Workspace: f.workspace, UID: uid})).Selected.Issue
+	if issue == nil {
+		t.Fatalf("Issue %s is gone", uid)
+	}
+	return issue.ProjectName
+}
+
+func (f moveFixture) moveWith(t *testing.T, dryRun, single bool) model.ProjectMoveAnswer {
+	t.Helper()
+	return as[model.ProjectMoveAnswer](t, run(t, f.gateway, model.MoveToProjectCmd{Workspace: f.workspace, UID: f.uid, Actor: f.actor, ProjectID: f.from.ID, ToProjectUID: f.to.UID, DryRun: dryRun, Single: single}))
+}
+
+func TestGatewayMoveTakesTheDescendantsUnlessOnlyThisIssue(t *testing.T) {
+	for _, single := range []bool{false, true} {
+		t.Run(map[bool]string{false: "subtree", true: "only this Issue"}[single], func(t *testing.T) {
+			f := newMoveFixture(t)
+			child := f.child(t)
+
+			preview := f.moveWith(t, true, single)
+			wantDescendants := 1
+			if single {
+				wantDescendants = 0
+			}
+			if preview.Err != nil || preview.Count != wantDescendants+1 || len(preview.Descendants) != wantDescendants {
+				t.Fatalf("preview %+v, want %d descendants", preview, wantDescendants)
+			}
+			if got := f.projectOf(t, child); got != "demo" {
+				t.Fatalf("the dry run moved the child to %s", got)
+			}
+
+			moved := f.moveWith(t, false, single)
+			if moved.Err != nil || moved.Count != wantDescendants+1 || moved.NewShortID == "" {
+				t.Fatalf("moved %+v, want %d Issues", moved, wantDescendants+1)
+			}
+			if got := f.projectOf(t, f.uid); got != "extra" {
+				t.Errorf("parent is in %s, want extra", got)
+			}
+			wantChild := "extra"
+			if single {
+				wantChild = "demo"
+			}
+			if got := f.projectOf(t, child); got != wantChild {
+				t.Errorf("child is in %s, want %s", got, wantChild)
+			}
+		})
+	}
+}

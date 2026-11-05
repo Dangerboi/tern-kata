@@ -43,7 +43,7 @@ In the Issue detail, `b` adds a Blocking link and `l` a related link to the Issu
 
 ## Moving an Issue
 
-kata tui has no key for moving an Issue to another Project; kata web and the CLI do. `M` in tern-kata opens the Move card, which sends kata's move (see [Moving an Issue](pages-and-board.md#moving-an-issue)).
+kata tui has no key for moving an Issue to another Project; kata web and the CLI do. `M` in tern-kata opens the Move card, which sends kata's move; like the CLI and web it moves the Issue with its descendants unless the card's "Only this Issue" switch is on (see [Moving an Issue](pages-and-board.md#moving-an-issue)).
 
 ## Deleting and restoring an Issue
 

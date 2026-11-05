@@ -12,6 +12,9 @@ var MoveListID = LayerID(model.CardMove) + ".list"
 // MoveItemID is the id of the Move card's row for the Project with uid.
 func MoveItemID(uid string) string { return itemID(MoveListID, uid) }
 
+// MoveSingleID is the id of the Move card's "Only this Issue" switch.
+var MoveSingleID = LayerID(model.CardMove) + ".single." + choiceControlKey
+
 func moveLayer(m model.Model) tern.Element {
 	f := m.MoveProject
 	if !f.Open {
@@ -66,8 +69,11 @@ func moveConfirming(m model.Model) []tern.Element {
 	if f.Sending {
 		return children
 	}
+	children = append(children, ui.FormField{Common: ui.Common{Key: "single", Aria: "Only this Issue"}, Label: ui.T("Only this Issue"),
+		Hint: ui.T("Leave its descendants where they are. Key: o"),
+		Children: ui.Nodes(ui.Switch{Common: ui.Common{Key: choiceControlKey, Aria: "Only this Issue"}, On: f.Single, Variant: ui.SwitchSegment, Labels: [2]string{"No", "Yes"}})})
 	words := "Move"
-	if f.Conflict {
+	if f.Conflict || !f.Previewed {
 		words = "Preview again"
 	}
 	return append(children, buttonRow(

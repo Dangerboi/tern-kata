@@ -10,7 +10,8 @@ import (
 // The Move card moves the selected Issue to another Project, through kata's move action. Its list is the Collection snapshot's
 // Projects without the Issue's own and the archived ones; Enter on one asks kata for a dry run, which kata checks and answers
 // without changing anything, and Enter again moves. kata assigns the new short id only when it really moves, so the preview
-// names the Project and not the id. (The Lane Move of a card is a different thing: see Move in the glossary.)
+// names the Project and not the id. kata moves an Issue with its descendants unless the card's "Only this Issue" switch is on,
+// and the preview names the descendants that move. (The Lane Move of a card is a different thing: see Move in the glossary.)
 
 const (
 	ModeMoveProject Mode = "move-project"
@@ -22,28 +23,43 @@ const (
 	MoveProjectSend   Action = "move-project-send"
 	MoveProjectBack   Action = "move-project-back"
 	MoveProjectClose  Action = "move-project-close"
+	// MoveProjectSingle toggles "Only this Issue" on the card that previews a move.
+	MoveProjectSingle Action = "move-project-single"
 )
 
+// moveListLimit is how many descendants the preview names before it counts the rest.
+const moveListLimit = 8
+
 // MoveToProjectCmd is one request to kata's move action. A DryRun changes nothing; Revision is the revision the card opened
-// with, sent as If-Match, and zero for the fresh preview that follows a conflict.
+// with, sent as If-Match, and zero for the fresh preview that follows a conflict. Single moves the Issue alone; without it kata
+// moves the Issue with its descendants.
 type MoveToProjectCmd struct {
 	Workspace, UID, Actor string
 	ProjectID             int64
 	ToProjectUID          string
 	DryRun                bool
+	Single                bool
 	Revision              int64
 }
+
+// MovedIssue is a descendant that moves with the Issue: its short id and the uid of the Project it lives in now.
+type MovedIssue struct{ ShortID, ProjectUID string }
 
 func (MoveToProjectCmd) cmd() {}
 
 // ProjectMoveAnswer is the one answer to a MoveToProjectCmd. Revision is the Issue's revision kata reported; NewShortID is set
-// only by a move that happened; Conflict says kata refused the revision as stale, with Err nil.
+// only by a move that happened; Conflict says kata refused the revision as stale, with Err nil. Count is how many Issues move or
+// moved, the Issue included, and Descendants are the others of them. Subtree says Err is a refusal that comes from the
+// descendants, which "Only this Issue" or a new preview may get past, so the card keeps its Project.
 type ProjectMoveAnswer struct {
 	UID, ToProjectUID string
 	DryRun            bool
 	Revision          int64
 	NewShortID        string
+	Count             int
+	Descendants       []MovedIssue
 	Conflict          bool
+	Subtree           bool
 	Err               error
 }
 
@@ -66,8 +82,12 @@ type MoveProjectState struct {
 	Cursor   int
 	// Target is the Project chosen, zero while the card still lists Projects.
 	Target Project
+	// Single is the "Only this Issue" switch: move the Issue without its descendants.
+	Single bool
 	// Previewed says kata accepted the dry run for Target, so Enter moves.
 	Previewed bool
+	// Descendants are the Issues below this one that the accepted preview says move with it.
+	Descendants []MovedIssue
 	// Conflict says kata refused the revision: Enter asks for a fresh preview.
 	Conflict bool
 	Err      error
@@ -112,10 +132,46 @@ func (m Model) MovePreview() string {
 	switch {
 	case f.Conflict:
 		return fmt.Sprintf("#%s changed since this card opened; nothing was moved.", f.ShortID)
-	case f.Previewed:
+	case f.Previewed && len(f.Descendants) == 0:
 		return fmt.Sprintf("#%s moves to %s and gets its new id there.", f.ShortID, f.Target.Name)
+	case f.Previewed:
+		return fmt.Sprintf("#%s and %s move to %s and get new ids there: %s.", f.ShortID, descendantCount(len(f.Descendants)), f.Target.Name, m.descendantRefs())
 	}
 	return ""
+}
+
+// descendantCount is "1 descendant" or "N descendants".
+func descendantCount(n int) string {
+	if n == 1 {
+		return "1 descendant"
+	}
+	return fmt.Sprintf("%d descendants", n)
+}
+
+// descendantRefs names the previewed descendants by short id, qualified by Project name when one lives in another Project than
+// the Issue, and counts the ones past moveListLimit.
+func (m Model) descendantRefs() string {
+	f := m.MoveProject
+	var source string
+	names := map[string]string{}
+	for _, entry := range m.Snapshot.Catalog {
+		names[entry.Project.UID] = entry.Project.Name
+		if entry.Project.ID == f.ProjectID {
+			source = entry.Project.UID
+		}
+	}
+	var refs []string
+	for _, d := range f.Descendants[:min(len(f.Descendants), moveListLimit)] {
+		ref := "#" + d.ShortID
+		if name := names[d.ProjectUID]; d.ProjectUID != "" && d.ProjectUID != source && name != "" {
+			ref = name + ref
+		}
+		refs = append(refs, ref)
+	}
+	if more := len(f.Descendants) - len(refs); more > 0 {
+		refs = append(refs, fmt.Sprintf("and %d more", more))
+	}
+	return strings.Join(refs, ", ")
 }
 
 // openMoveProject is `M`.
@@ -138,7 +194,7 @@ func sendMoveProject(m Model, dryRun bool) (Model, []Cmd) {
 		f.Err = errors.New("Daemon disconnected; reconnect before moving.")
 		return m, nil
 	}
-	cmd := MoveToProjectCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, ToProjectUID: f.Target.UID, DryRun: dryRun, Revision: f.Revision}
+	cmd := MoveToProjectCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, ToProjectUID: f.Target.UID, DryRun: dryRun, Single: f.Single, Revision: f.Revision}
 	if f.Conflict {
 		cmd.Revision = 0 // the fresh preview reads the revision as it stands now
 	}
@@ -157,16 +213,29 @@ func chooseMoveTarget(m Model) (Model, []Cmd) {
 	return sendMoveProject(m, true)
 }
 
-// confirmMove is Enter after a Project is chosen: move when previewed, preview again after a conflict.
+// confirmMove is Enter after a Project is chosen: move when previewed, preview again after a conflict or a refusal that
+// comes from the subtree.
 func confirmMove(m Model) (Model, []Cmd) {
-	f := &m.MoveProject
-	switch {
-	case f.Conflict:
-		return sendMoveProject(m, true)
-	case f.Previewed:
+	if m.MoveProject.Previewed {
 		return sendMoveProject(m, false)
 	}
-	return m, nil
+	return sendMoveProject(m, true)
+}
+
+// MoveSingleMsg is the pointer flipping the card's "Only this Issue" switch to On.
+type MoveSingleMsg struct{ On bool }
+
+func (MoveSingleMsg) msg() {}
+
+// setMoveSingle sets "Only this Issue" on the card that has a Project chosen and asks kata for a new preview, since the
+// Issues that move change with it. It does nothing while a request is out.
+func setMoveSingle(m Model, on bool) (Model, []Cmd) {
+	f := &m.MoveProject
+	if !f.Open || f.Sending || f.Target.UID == "" || f.Single == on {
+		return m, nil
+	}
+	f.Single, f.Previewed, f.Descendants = on, false, nil
+	return sendMoveProject(m, true)
 }
 
 // updateMoveProject applies kata's answer to the card: a stale one is dropped.
@@ -180,6 +249,9 @@ func updateMoveProject(m Model, msg ProjectMoveAnswer) (Model, []Cmd) {
 	case msg.Conflict:
 		f.Previewed, f.Conflict, f.Err = false, true, nil
 		return m, nil
+	case msg.Err != nil && msg.Subtree:
+		f.Previewed, f.Descendants, f.Conflict, f.Err = false, nil, false, msg.Err
+		return m, nil
 	case msg.Err != nil && msg.DryRun:
 		f.Target, f.Previewed, f.Conflict, f.Err = Project{}, false, false, msg.Err
 		return m, nil
@@ -190,7 +262,7 @@ func updateMoveProject(m Model, msg ProjectMoveAnswer) (Model, []Cmd) {
 		if f.Conflict {
 			f.Revision = msg.Revision
 		}
-		f.Previewed, f.Conflict, f.Err = true, false, nil
+		f.Previewed, f.Descendants, f.Conflict, f.Err = true, msg.Descendants, false, nil
 		return m, nil
 	}
 	return movedToProject(m, msg)
@@ -202,7 +274,11 @@ func movedToProject(m Model, msg ProjectMoveAnswer) (Model, []Cmd) {
 	f := m.MoveProject
 	m.MoveProject = MoveProjectState{}
 	link := NoticeLink{Text: f.Target.Name + "#" + msg.NewShortID, Ref: f.Target.Name + "/" + msg.NewShortID}
-	m.Notice, m.NoticeLink = fmt.Sprintf("Moved #%s to %s.", f.ShortID, link.Text), &link
+	moved := "#" + f.ShortID
+	if msg.Count > 1 {
+		moved = fmt.Sprintf("#%s and %s", f.ShortID, descendantCount(msg.Count-1))
+	}
+	m.Notice, m.NoticeLink = fmt.Sprintf("Moved %s to %s.", moved, link.Text), &link
 	m = issueGone(m, f.UID)
 	return snapshotChanged(m.issueWritten(f.UID))
 }
@@ -294,6 +370,8 @@ func moveProjectKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		f.Open = false
 	case MoveProjectBack:
 		f.Target, f.Previewed, f.Conflict, f.Err = Project{}, false, false, nil
+	case MoveProjectSingle:
+		return setMoveSingle(m, !f.Single)
 	case MoveProjectChoose:
 		return chooseMoveTarget(m)
 	case MoveProjectSend:

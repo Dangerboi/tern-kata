@@ -278,6 +278,7 @@ var cardBindings = []Binding{
 	{Chord: "enter", Key: "enter", Action: MoveProjectChoose, Help: "preview the move", Mode: ModeMoveProject, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: MoveProjectClose, Help: "cancel", Mode: ModeMoveProject, ShowInFooter: true},
 	{Chord: "enter", Key: "enter", Action: MoveProjectSend, Help: "move", Mode: ModeMoveConfirm, ShowInFooter: true},
+	{Chord: "o", Key: "o", Action: MoveProjectSingle, Help: "only this Issue", Mode: ModeMoveConfirm, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: MoveProjectBack, Help: "other Project", Mode: ModeMoveConfirm, ShowInFooter: true},
 	{Chord: "down", Key: "↓", Action: MoveDown, Help: "next agent", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "up", Key: "↑", Action: MoveUp, Help: "previous agent", Mode: ModeAgentCard, ShowInFooter: true},
