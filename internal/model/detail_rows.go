@@ -34,7 +34,7 @@ type DetailItem struct {
 	// Issues drawn under it.
 	Depth  int
 	Leaves []CommentLeaf
-	Child        ChildRow
+	Child  ChildRow
 	// JobUID and Cron are a RowCron row's job and what the property says of it; enter opens the job on the Jobs Page.
 	JobUID   string
 	Cron     CronRow

@@ -164,4 +164,3 @@ func commentTags(links []CommentLink) []RowSpan {
 	}
 	return tags
 }
-
