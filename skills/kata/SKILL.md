@@ -3,7 +3,7 @@ name: kata
 description: "Kata issue tracker CLI. Use when a repo has `.kata.toml` or names Kata as its tracker: finding, creating, claiming, commenting, replying, labelling or closing issues (tickets), making work recur, scheduling agent jobs, being run by a tern-kata worker, or coordinating subagents through issues."
 ---
 
-Kata is a daemon-backed issue ledger shared by humans and agents. Written against kata v0.20; `kata <cmd> --help` is the source of truth for flags, `kata quickstart --format contract` for upstream agent policy. Repo specifics (project name, extra labels, human gates) live in that repo's `AGENTS.md`.
+Kata is a daemon-backed issue ledger shared by humans and agents. Written against kata v0.21; `kata <cmd> --help` is the source of truth for flags, `kata quickstart --format contract` for upstream agent policy. Repo specifics (project name, extra labels, human gates) live in that repo's `AGENTS.md`.
 
 ## Output mode
 
@@ -121,10 +121,11 @@ kata close <ref> --duplicate-of <ref> --message "<why>" --agent
 kata close <ref> --superseded-by <ref> --message "<why>" --agent
 kata close <ref> --audit-no-change --evidence "no-change-audit:<what was checked>" --message "<…>"
 kata close <ref> --done ... --dry                    # validate without mutating
+kata close <ref> --done --docbank <node-id|/abs/path> --message "<…>"   # link a Docbank node as evidence
 ```
 
 - A close is a completion claim. `--message` must be issue-specific prose: what changed, how it was verified. Minimum length: 40 characters for `--done` and `--audit-no-change`, 20 for `--duplicate-of` and `--superseded-by`, 60 for `--wontfix`.
-- Evidence is typed: `--commit <sha>`, `--pr <url>`, `--test <cmd>`, `--reviewed <path>`, or raw `--evidence commit:|pr:|test:|reviewed-paths:|external:|no-change-audit:|duplicate-of:|superseded-by:<value>`. `--commit`, `--pr`, `--test`, `--reviewed` and `--evidence` each repeat and every value is recorded (`--test "<cmd>"` once per test); an empty value is refused. `external:<account>` covers done work with no repo artifact. Non-wontfix closes without evidence show up in `kata audit closes --no-evidence`.
+- Evidence is typed: `--commit <sha>`, `--pr <url>`, `--test <cmd>`, `--reviewed <path>`, `--docbank <node-id|/abs/path>`, or raw `--evidence commit:|pr:|test:|reviewed-paths:|external:|no-change-audit:|duplicate-of:|superseded-by:|attachment:<value>`. `--commit`, `--pr`, `--test`, `--reviewed`, `--docbank` and `--evidence` each repeat and every value is recorded (`--test "<cmd>"` once per test); an empty value is refused. `--docbank` and `--evidence attachment:<full-id>` are done-reason evidence only. `external:<account>` covers done work with no repo artifact. Non-wontfix closes without evidence show up in `kata audit closes --no-evidence`.
 - Close each issue as soon as it is verified, not batched at the end.
 - A parent cannot close while it has open children.
 - Only `--done` makes a recurring issue's next occurrence (see Recurring work).
@@ -145,6 +146,17 @@ An Issue's `tern-kata.attachment.<name>` meta keys are files attached through te
 
 Add blocking links only for genuine prerequisites; every one hides work from `ready`.
 
+## Move to another project
+
+```bash
+kata move <ref> <project> --dry --agent     # preview: lists every issue that would move
+kata move <ref> <project> --agent           # the Issue and its open descendants
+kata move <ref> <project> --single --agent  # only this Issue
+```
+
+- The Issue keeps its UID, comments, history and links (parent, blocks, related; they may span projects afterwards) but gets a new short id in the target project. The output lists each moved descendant's new ref. Old project-qualified refs keep resolving while the move history is retained; use the new ref from then on.
+- `--comment "<text>"` attaches a comment in the same call. Recurrence-pinned Issues (occurrences) are refused.
+
 ## Park and schedule
 
 ```bash
@@ -154,6 +166,7 @@ kata deadline <ref> 2026-11-15        # sets deadline_on; never gates ready/next
 ```
 
 - Dates take `YYYY-MM-DD`, local `YYYY-MM-DDTHH:MM`, or RFC 3339 ending in `Z`; relative words like `monday` are rejected. When the date arrives, the owner (or the author, if unowned) gets an inbox request.
+- Rows in `--json` output (`list`, `show`, …) carry `scheduled_on_date` and `deadline_on_date`: the calendar dates in the issue's timezone. Read those instead of converting `scheduled_on` yourself.
 
 ## Recurring work
 
@@ -161,13 +174,16 @@ Two mechanisms; pick by what should happen:
 
 | Want | Use |
 |---|---|
-| The same issue comes back after it is done, on a calendar rule | A **recurrence**. kata has no recurrence CLI: agents use `tern-kata recur` (below); people use `kata ui <ref>` (web UI) or tern-kata's `O` card. |
+| The same issue comes back after it is done, on a calendar rule | A **recurrence**: `kata schedule <ref> <date> --repeat '<RRULE>'`, or `tern-kata recur` (below). |
 | A new child issue plus an inbox request every period, done or not | A **native cron job** bound to a parent (below). |
 
 Recurrences:
-- Make, change, stop or print one with `tern-kata recur`, which needs the `tern-kata` binary on `PATH`: check with `command -v tern-kata` (PowerShell: `Get-Command tern-kata`), and when it is missing tell the user and point them to https://github.com/Dangerboi/tern-kata#install instead of handing the job back. See the `tern-kata` skill for its flags. Leave `O` and `kata ui` to people.
-- Each occurrence is an ordinary issue with `.issue.recurrence_id` and `.issue.occurrence_key` in `kata show --json`. Closing it `--done` creates the next one; `--wontfix`, `--duplicate-of` and `--superseded-by` create none, so the series stalls.
-- Stopping a recurrence keeps existing occurrences. Occurrences can't be `kata move`d.
+- Start or change one: `kata schedule <ref> 2026-11-02 --repeat 'FREQ=WEEKLY;BYDAY=MO' --timezone Europe/Paris --agent`. The issue becomes the first occurrence and `scheduled_on` is rewritten to it, so a future date hides it from `ready` until then. `--timezone` takes an IANA zone (default: the recurrence's own zone, the issue's `timezone` metadata, then your own zone); `Local` is refused. The daemon validates the rule.
+- Stop: `kata schedule <ref> --repeat - --agent`. Existing occurrences stay, and that issue can never start a new recurrence; start it from a new issue. An issue that parents a cron job is refused.
+- `kata show <ref>` prints the rule, zone and next occurrence. `kata show --json` carries `.issue.recurrence_id` and `.issue.occurrence_key` on each occurrence.
+- `tern-kata recur` makes, changes, stops or prints one too, with frequency flags so you need not write an RRULE; it needs the `tern-kata` binary on `PATH` (`command -v tern-kata`; PowerShell: `Get-Command tern-kata`). If it is missing, use `kata schedule --repeat` or point the user to https://github.com/Dangerboi/tern-kata#install. See the `tern-kata` skill for its flags. Leave tern-kata's `O` card and `kata ui` to people.
+- Closing an occurrence `--done` creates the next one; `--wontfix`, `--duplicate-of` and `--superseded-by` create none, so the series stalls.
+- Occurrences can't be `kata move`d.
 
 Native cron job:
 ```bash
@@ -282,6 +298,5 @@ kata events --tail --agent                        # stream live; --last-event-id
 ## Setup (rare)
 
 - `kata init --project <name>` writes committed `.kata.toml` and gitignores `.kata.local.toml` (per-machine overrides). `--with-agents` injects generic guidance into `AGENTS.md`/`CLAUDE.md`; prefer this skill plus a short repo-specific section instead.
-- `kata move <ref> <project> --dry` previews moving an issue; links survive, the short id changes.
 - `kata agent-hook install [--local]` installs the contract and attention hooks for detected coding agents (the plural `agent-hooks` is gone).
 - `kata doctor` (read-only; never starts or repairs a daemon), then `kata health` / `kata daemon`, when commands fail to reach the daemon.
