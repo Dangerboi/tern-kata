@@ -258,8 +258,8 @@ func TestGatewayResolvesTheBindingTheSameForBothDaemonKinds(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, err := load(workspace)
-			if err == nil || !strings.Contains(err.Error(), "kata init") {
-				t.Fatalf("got %v, want kata's message and its kata init hint", err)
+			if err == nil || !strings.HasPrefix(err.Error(), `Project "ghost" is not set up on this daemon.`) || !strings.Contains(err.Error(), "kata init") {
+				t.Fatalf("got %v, want the Project named from kata's error data and its kata init hint", err)
 			}
 		})
 		t.Run(kind+" named workspace whose git remotes cannot be read", func(t *testing.T) {
@@ -2053,5 +2053,26 @@ func TestGatewayDialNamesTheEntryWhenTheFirstCallersContextEndsDuringThePinRead(
 	c, err := gateway.dial(ctx, context.Background(), newLocator(beta.target()).locate, "", workspace)
 	if err != nil || c.name != "beta" {
 		t.Fatalf("dial = %+v, %v; want the connection named beta though the first caller's context ended during the pin read", c, err)
+	}
+}
+
+func TestNotInitializedErrorNamesTheAliasOrProjectAndFallsBack(t *testing.T) {
+	envelope := func(data map[string]any) error {
+		hint := `run "kata init" in this workspace`
+		return g.ErrorEnvelope{Status: 404, ErrorData: g.ErrorBody{Code: "project_not_initialized", Message: "kata's own words", Hint: &hint, Data: data}}
+	}
+	for _, tt := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"project", envelope(map[string]any{"project": "ghost"}), "Project \"ghost\" is not set up on this daemon.\nrun \"kata init\" in this workspace"},
+		{"alias", envelope(map[string]any{"alias": "github.com/acme/x"}), "Alias \"github.com/acme/x\" is not set up on this daemon.\nrun \"kata init\" in this workspace"},
+		{"no data", envelope(nil), "kata's own words\nrun \"kata init\" in this workspace"},
+		{"other code", g.ErrorEnvelope{ErrorData: g.ErrorBody{Code: "validation", Message: "bad", Data: map[string]any{"project": "ghost"}}}, "bad"},
+	} {
+		if got := notInitializedError(tt.err).Error(); got != tt.want {
+			t.Errorf("%s: got %q, want %q", tt.name, got, tt.want)
+		}
 	}
 }
