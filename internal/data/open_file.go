@@ -47,7 +47,7 @@ func isOpenable(name string) bool {
 	return slices.Contains(openableExtensions, strings.ToLower(filepath.Ext(name)))
 }
 
-// openAttachment downloads the Attachment into the cache folder and opens it.
+// openAttachment downloads the Attachment into the cache folder and opens it when isOpenable allows its name.
 func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) model.Msg {
 	failed := func(err error) model.Msg {
 		return model.AttachmentOpened{UID: cmd.UID, Name: cmd.Attachment.Name, Err: err}

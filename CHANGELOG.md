@@ -14,7 +14,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The Dates card and the Create card take kata's date-time forms, `YYYY-MM-DDTHH:MM[:SS]` and `YYYY-MM-DDTHH:MM:SSZ`; the preview shows the time.
 - `N` on the Federation Page names a spoke: on the enrollment preview it sets the name the hub records with the enrollment, and on a spoke, in the list or its detail, it renames it on the hub, where an empty name clears it. The name shows on the spoke's card and detail. The card refuses a name that breaks kata's rule in kata's words before anything reaches the hub, and shows the hub's reason when it refuses a name another spoke holds.
 - The Close card for a `done` close can cite one or more of the Issue's Attachments as evidence; the Events tab names a cited Attachment, and marks it `[removed]` once it is unlinked.
-- `tern-kata migrate-attachments` moves the old Attachments stored on this machine to Docbank, deletes the local copies, and lists the ones held on other machines.
+- `tern-kata migrate-attachments` moves the old attachments stored on this machine to Docbank, deletes the local copies, and lists the ones held on other machines.
 
 ### Changed
 

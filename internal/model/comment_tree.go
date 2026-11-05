@@ -35,8 +35,7 @@ func deref(s *string) string {
 }
 
 // threadOrder lays the comments out as kata's TUI does: each reply under the comment it answers, replies from other Issues as
-// leaves first and then the local replies, each group by creation time then UID. Roots keep their input order and a cycle is
-// visited once.
+// leaves, and siblings by creation time then UID. Roots keep their input order and a cycle is visited once.
 func threadOrder(cs []Comment) []threadedComment {
 	byUID := make(map[string]int, len(cs))
 	children := make(map[string][]CommentLink, len(cs))
