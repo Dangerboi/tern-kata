@@ -44,7 +44,7 @@ func (c *Client) readProject(ctx context.Context, workspace string, missingOK bo
 		response, err := c.ResolveProjectWithResponse(ctx, &g.ResolveProjectRequestOptions{Body: request})
 		if err != nil {
 			if daemonCode(err) != "project_not_initialized" || (request.Name != nil && !missingOK) {
-				return model.ProjectLoaded{}, daemonError(err)
+				return model.ProjectLoaded{}, notInitializedError(err)
 			}
 		} else {
 			if response.JSON200 == nil {
@@ -54,6 +54,29 @@ func (c *Client) readProject(ctx context.Context, workspace string, missingOK bo
 		}
 	}
 	return model.ProjectLoaded{Project: project, Daemon: model.Daemon{Name: c.name, Kind: c.kind, Version: c.version}}, nil
+}
+
+// notInitializedError is daemonError, except that a project_not_initialized failure names the Project or the alias kata gives
+// in error.data ("project" or "alias"). Without either, kata's own message stands.
+func notInitializedError(err error) error {
+	shown := daemonError(err)
+	if daemonCode(err) != "project_not_initialized" {
+		return shown
+	}
+	envelope, _ := errors.AsType[g.ErrorEnvelope](err)
+	var subject string
+	if name, ok := envelope.ErrorData.Data["project"].(string); ok && name != "" {
+		subject = fmt.Sprintf("Project %q", name)
+	} else if alias, ok := envelope.ErrorData.Data["alias"].(string); ok && alias != "" {
+		subject = fmt.Sprintf("Alias %q", alias)
+	} else {
+		return shown
+	}
+	message := subject + " is not set up on this daemon."
+	if hint := envelope.ErrorData.Hint; hint != nil && *hint != "" {
+		message += "\n" + *hint
+	}
+	return errors.New(message)
 }
 
 func projectRequest(ctx context.Context, workspace string) (*g.ResolveProjectBody, error) {
