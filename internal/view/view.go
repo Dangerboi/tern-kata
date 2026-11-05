@@ -114,7 +114,7 @@ func issues(m model.Model, now time.Time) tern.Element {
 		owners[i] = listOwner(m, row, now)
 		cols.fit(utf8.RuneCountInString(idCell(row)), displayWidth(owners[i]))
 	}
-	lookups := rowLookups{lanes: m.LaneList(), badges: m.AgentBadges()}
+	lookups := rowLookups{lanes: m.LaneList(), badges: m.AgentBadges(), today: model.NewCalendarDay(m.Calendar.Date), dateRoom: dateRoom(m, cols)}
 	items := make([]tern.Element, 0, len(rows)+len(m.Groups))
 	groups := make(map[string]model.IssueGroup, len(m.Issues))
 	for _, group := range m.Groups {
@@ -322,9 +322,31 @@ func (c *listColumns) fit(id, owner int) {
 
 // rowLookups are what every row of a frame draws from alike, read once: the Lane list and each Issue's Agent badge.
 type rowLookups struct {
-	lanes  []string
-	badges model.AgentBadgeIndex
+	lanes    []string
+	badges   model.AgentBadgeIndex
+	today    model.CalendarDay
+	dateRoom int // cells a row can give its Date badge without squeezing the title below minTitleWidth
 }
+
+// minTitleWidth is the cells of title a row keeps before it drops its Date badge.
+const minTitleWidth = 12
+
+// dateRoom estimates the cells left on a row for the Date badge: the list's width (all of the Pane when it is the one column,
+// its 0.4 basis beside the detail) less the other cells, the row's selection mark and the least title.
+func dateRoom(m model.Model, cols listColumns) int {
+	width := m.Cols
+	if slices.Contains(m.VisibleColumns(), model.ColumnDetail) && slices.Contains(m.VisibleColumns(), model.ColumnList) {
+		width = width * 2 / 5
+	}
+	fixed := cols.id + len(cellGap)*3 + prioWidth + statusWidth + kidsWidth + len(cellGap) + updatedWidth + rowPadding
+	if cols.ownerShown {
+		fixed += len(cellGap) + cols.owner
+	}
+	return width - fixed - minTitleWidth - len(cellGap)
+}
+
+// rowPadding is the cells a row spends on its selection mark and edges, beside its cells.
+const rowPadding = 4
 
 // issueRow is one Issue: the id, prio, status and title on the left, the
 // title being the cell that gives way, and kids, owner and updated pinned to
@@ -361,6 +383,13 @@ func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected boo
 	if w, ok := model.IssueWorkAttention(row.Issue); ok {
 		left = append(left, ui.Span{T: gap + w.Word(), S: string(attentionTone(w))})
 		gap = " "
+	}
+	// An open Issue's Date badge reads before the title, and goes when the list is too narrow to keep the title.
+	if !model.IsClosed(row.Issue) {
+		if date, ok := lookups.today.ChooseDateBadge(row.Issue); ok && displayWidth(date.Text) <= lookups.dateRoom {
+			left = append(left, ui.Span{T: gap + date.Text, S: mono(toneStyle(dateTones[date.Tone]))})
+			gap = " "
+		}
 	}
 	left = append(left, ui.Span{T: gap + title})
 	// A parent's click folds it; a double click on any row opens it. Tern sends the two clicks first, so a parent's fold ends where it began.
