@@ -295,8 +295,16 @@ func (m Model) JobFacts(now time.Time) []JobFact {
 	add("Set aside", m.workerUnsupported(job.UID))
 	add("Kind", job.Kind())
 	add("Schedule", triggerWords(t))
-	if next, ok := job.NextRun(now, m.Jobs.ProjectArchived); ok {
-		add("Next run", m.Calendar.Stamp(next))
+	if runs, reason := m.NextRuns(*job, now); reason != "" {
+		add("Next runs", reason)
+	} else {
+		for i, r := range runs {
+			label := ""
+			if i == 0 {
+				label = "Next runs"
+			}
+			facts = append(facts, JobFact{Label: label, Value: r})
+		}
 	}
 	if !job.Archived() {
 		add("Warning", m.highRateWarning(*job, now))

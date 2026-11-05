@@ -764,33 +764,70 @@ func (f JobFormState) Preview(cal PaneCalendar, now time.Time) JobPreview {
 	if f.Change {
 		anchor, anchorKnown = f.Opened.intervalAnchor()
 	}
-	const layout = "Mon 2006-01-02 15:04 MST"
 	preview := JobPreview{Words: triggerWords(t)}
+	preview.Runs, preview.Note = triggerRuns(t, anchor, anchorKnown, cal, now)
+	return preview
+}
+
+// triggerRuns lists the next previewRuns instants of a trigger after now, formatted with the zone abbreviation: a cron trigger
+// in its own zone, an interval or once trigger in the Pane calendar's zone. Note says why an interval trigger lists none; a
+// manual or Issue-date trigger, and a once trigger in the past, list none without one.
+func triggerRuns(t cronjob.Trigger, anchor time.Time, anchorKnown bool, cal PaneCalendar, now time.Time) (runs []string, note string) {
+	const layout = "Mon 2006-01-02 15:04 MST"
 	switch t.Kind {
 	case cronjob.TriggerCron:
 		schedule, _ := cronjob.Cron(t.Cron, t.Timezone, time.Time{})
 		zone, _ := zoneAndExpression(t)
 		loc, _ := time.LoadLocation(zone)
-		for next := schedule.Next(now); len(preview.Runs) < previewRuns && !next.IsZero(); next = schedule.Next(next) {
-			preview.Runs = append(preview.Runs, next.In(loc).Format(layout))
+		for next := schedule.Next(now); len(runs) < previewRuns && !next.IsZero(); next = schedule.Next(next) {
+			runs = append(runs, next.In(loc).Format(layout))
 		}
 	case cronjob.TriggerInterval:
 		if !anchorKnown {
-			preview.Note = "Next runs unknown: this job's start point is not known yet."
-			break
+			return nil, "Next runs unknown: this job's start point is not known yet."
 		}
 		schedule, _ := cronjob.Interval(t.IntervalSeconds, anchor) // buildTrigger refused any other
 		next := schedule.Next(now)
 		for range previewRuns {
-			preview.Runs = append(preview.Runs, cal.in(next).Format(layout))
+			runs = append(runs, cal.in(next).Format(layout))
 			next = schedule.Next(next)
 		}
 	case cronjob.TriggerOnce:
 		if at, err := time.Parse(time.RFC3339, t.At); err == nil && at.After(now) {
-			preview.Runs = append(preview.Runs, cal.in(at).Format(layout))
+			runs = append(runs, cal.in(at).Format(layout))
 		}
 	}
-	return preview
+	return runs, ""
+}
+
+// NextRuns is the inspector's answer to when the job runs next: the next runs, or the reason there are none. A job that is not
+// running, a manual trigger and a trigger whose runs can't be told each say so.
+func (m Model) NextRuns(job CronJob, now time.Time) (runs []string, reason string) {
+	switch pause := job.Pause(m.Jobs.ProjectArchived); pause {
+	case NotPaused:
+	case PauseParentClosed:
+		return nil, "none while the parent is closed"
+	case PauseDisabled:
+		return nil, "none while paused"
+	default:
+		return nil, "none while " + string(pause)
+	}
+	t := job.Definition.Trigger
+	switch t.Kind {
+	case cronjob.TriggerManual:
+		return nil, "none: runs only when started"
+	case cronjob.TriggerIssueScheduled, cronjob.TriggerIssueDeadline:
+		return nil, "unavailable: follows the Issue's date"
+	}
+	anchor, known := job.intervalAnchor()
+	runs, note := triggerRuns(t, anchor, known, m.Calendar, now)
+	switch {
+	case note != "":
+		return nil, "unavailable"
+	case len(runs) == 0:
+		return nil, "none"
+	}
+	return runs, ""
 }
 
 var errJobDaemonGone = errors.New("Daemon disconnected; reconnect before saving this job.")
