@@ -183,10 +183,6 @@ func planLaunch(args []string, lookup func(string) (string, bool), version strin
 	if scanFlags(flags, "--help") || scanFlags(flags, "-h") {
 		return LaunchPlan{Help: true}, nil
 	}
-	if len(args) > 0 && (args[0] == "attach" || args[0] == "detach") {
-		verb := map[string]string{"attach": "add", "detach": "rm"}[args[0]]
-		return LaunchPlan{}, fmt.Errorf("tern-kata %s is gone: kata stores attachments itself now. Use `kata docbank attachments %s <ref> ...`; the Attachments guide says how to set Docbank up", args[0], verb)
-	}
 	if len(args) > 0 && slices.Contains(subcommands, args[0]) {
 		return planSubcommand(args, lookup)
 	}
