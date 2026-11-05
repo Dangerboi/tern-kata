@@ -39,8 +39,8 @@ const KeyFileName = "docbank.key"
 type Runner interface {
 	// LookPath finds name on PATH.
 	LookPath(name string) (string, error)
-	// Run runs name with args and returns its combined output.
-	Run(ctx context.Context, name string, args ...string) ([]byte, error)
+	// Run runs name with args, with env (NAME=value) added to the process's environment, and returns its combined output.
+	Run(ctx context.Context, env []string, name string, args ...string) ([]byte, error)
 }
 
 // ExecRunner runs the real programs, in the process's environment.
@@ -48,8 +48,12 @@ type ExecRunner struct{}
 
 func (ExecRunner) LookPath(name string) (string, error) { return exec.LookPath(name) }
 
-func (ExecRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, name, args...).CombinedOutput()
+func (ExecRunner) Run(ctx context.Context, env []string, name string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
+	return cmd.CombinedOutput()
 }
 
 // Env is everything the setup touches outside its own logic, so tests give it their own folders, programs and HTTP client.
@@ -60,10 +64,11 @@ type Env struct {
 	DocbankHome string
 	// ConfigDir is tern-kata's config folder, where the local form keeps its supervision marker.
 	ConfigDir string
-	// Daemon is the kata catalog name of a local profile; empty for the default daemon. It decides the restart command.
+	// Daemon is the kata catalog name of a local profile; empty for the default daemon. kata's daemon commands take no --daemon, so a
+	// profile is restarted with KATA_HOME set to its home.
 	Daemon string
 	// CommandPrefix is put before the restart command printed when kata is not restarted, for the environment the route set
-	// (for instance "KATA_HOME=/x "); it is never used to run anything.
+	// (for instance "KATA_HOME=/x "); it is never used to run anything. A profile's own KATA_HOME replaces it.
 	CommandPrefix string
 	Runner        Runner
 	HTTP          *http.Client
@@ -175,8 +180,10 @@ func (e Env) SetupRemote(ctx context.Context, r Remote) error {
 // (asking first unless yes; never when noRestart or when there is no terminal to ask on) and, once restarted, check that it has
 // attachments on.
 func (e Env) applyKata(ctx context.Context, base string, yes, noRestart bool) error {
-	args := e.restartArgs()
-	command := "kata " + strings.Join(args, " ")
+	command, prefix, env := "kata daemon restart", e.CommandPrefix, []string(nil)
+	if e.Daemon != "" {
+		prefix, env = "KATA_HOME="+e.KataHome+" ", []string{"KATA_HOME=" + e.KataHome}
+	}
 	restart := yes
 	if !yes && !noRestart && e.Confirm != nil {
 		var err error
@@ -185,12 +192,12 @@ func (e Env) applyKata(ctx context.Context, base string, yes, noRestart bool) er
 		}
 	}
 	if noRestart || !restart {
-		_, err := fmt.Fprintf(e.Out, "The kata daemon was not restarted, and it reads config.toml only at start, so attachments stay off until you run:\n  %s%s\n", e.CommandPrefix, command)
+		_, err := fmt.Fprintf(e.Out, "The kata daemon was not restarted, and it reads config.toml only at start, so attachments stay off until you run:\n  %s%s\n", prefix, command)
 		return err
 	}
 	ctx, cancel := context.WithTimeout(ctx, checkDeadline)
 	defer cancel()
-	if out, err := e.Runner.Run(ctx, "kata", args...); err != nil {
+	if out, err := e.Runner.Run(ctx, env, "kata", "daemon", "restart"); err != nil {
 		return fmt.Errorf("`%s` failed: %w\n%s", command, err, strings.TrimSpace(string(out)))
 	}
 	if _, err := fmt.Fprintf(e.Out, "Restarted the kata daemon (`%s`).\n", command); err != nil {
@@ -201,14 +208,6 @@ func (e Env) applyKata(ctx context.Context, base string, yes, noRestart bool) er
 	}
 	_, err := fmt.Fprintf(e.Out, "Checked: the kata daemon has attachments on, with Docbank at %s.\n", base)
 	return err
-}
-
-// restartArgs are the arguments of the kata command that restarts the daemon being set up.
-func (e Env) restartArgs() []string {
-	if e.Daemon != "" {
-		return []string{"--daemon", e.Daemon, "daemon", "restart"}
-	}
-	return []string{"daemon", "restart"}
 }
 
 // CanonicalURL is kata's reading of a Docbank url: http or https with a host, no credentials, query or fragment, no trailing slash.
@@ -307,13 +306,15 @@ func (e Env) probe(ctx context.Context, base, key string) error {
 
 // writeKeyFile stores key at path, mode 0600, written atomically; a file that already holds it is left alone.
 func (e Env) writeKeyFile(path, key string) error {
+	shown := path
+	path = resolveLink(path)
 	if have, err := os.ReadFile(path); err == nil && strings.TrimSpace(string(have)) == key {
 		return nil
 	}
 	if err := atomicfile.Write(path, []byte(key+"\n"), atomicfile.Options{Mode: 0o600, DirMode: 0o700}); err != nil {
 		return fmt.Errorf("write the key file: %w", err)
 	}
-	_, err := fmt.Fprintf(e.Out, "Wrote the API key to %s (mode 0600).\n", path)
+	_, err := fmt.Fprintf(e.Out, "Wrote the API key to %s (mode 0600).\n", shown)
 	return err
 }
 
@@ -399,6 +400,7 @@ func (s kataSection) text() string {
 // writeSection appends the section to existing and writes the result over path atomically. The new file is parsed before it replaces
 // the old one and must hold exactly the section; the text before it is the old file, byte for byte.
 func writeSection(path, existing string, want kataSection) error {
+	path = resolveLink(path)
 	next := existing
 	if next != "" {
 		if !strings.HasSuffix(next, "\n") {
@@ -425,6 +427,15 @@ func writeSection(path, existing string, want kataSection) error {
 		}
 		return nil
 	}})
+}
+
+// resolveLink is the file path names when path is a symlink that resolves, so an edit replaces the file the link points at and the
+// link stays; path itself otherwise.
+func resolveLink(path string) string {
+	if target, err := filepath.EvalSymlinks(path); err == nil {
+		return target
+	}
+	return path
 }
 
 // tomlString is s as a TOML basic string.

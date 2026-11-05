@@ -645,7 +645,9 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 only. The rest of config.toml stays byte for byte; a [docbank] section
                                 that is the same is "already set up", a different one is refused and shown.
                                 --yes restarts without asking; --no-restart, or no terminal without
-                                --yes, prints the restart command instead. A remote kata daemon is
+                                --yes, prints the restart command instead (for a --daemon profile it
+                                runs and prints kata daemon restart with KATA_HOME set to the
+                                profile's home). --key-file - needs a pipe, not a terminal. A remote kata daemon is
                                 refused: its config is not on this machine. Never prints the key
   agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
                                 run the command with KATA_AUTHOR set to the actor (replacing

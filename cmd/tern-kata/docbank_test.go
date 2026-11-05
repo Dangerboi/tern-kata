@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,7 +44,7 @@ func newDocbankSetupFixtureOn(t *testing.T, locate data.Locator) *docbankSetupFi
 	t.Setenv("KATA_POSTGRES_SCHEMA", "")
 	bin := t.TempDir()
 	f.kataLog = filepath.Join(t.TempDir(), "kata.log")
-	script := "#!/bin/sh\necho \"$@\" >> '" + f.kataLog + "'\n"
+	script := "#!/bin/sh\necho \"$@\" >> '" + f.kataLog + "'\necho \"$KATA_HOME\" >> '" + f.kataLog + ".home'\n"
 	if err := os.WriteFile(filepath.Join(bin, "kata"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -83,6 +84,16 @@ func (f *docbankSetupFixture) restarts(t *testing.T) []string {
 	}
 	if err != nil {
 		t.Fatal(err)
+	}
+	return strings.Split(strings.TrimSpace(string(raw)), "\n")
+}
+
+// kataHomes are the KATA_HOME values the fake kata ran with.
+func (f *docbankSetupFixture) kataHomes(t *testing.T) []string {
+	t.Helper()
+	raw, err := os.ReadFile(f.kataLog + ".home")
+	if err != nil {
+		return nil
 	}
 	return strings.Split(strings.TrimSpace(string(raw)), "\n")
 }
@@ -338,9 +349,13 @@ func TestDocbankSetupWritesTheChosenLocalProfilesConfigAndRestartsThatProfile(t 
 	if f.config(t) != catalog {
 		t.Errorf("the default home's config changed:\n%s", f.config(t))
 	}
-	if got := f.restarts(t); len(got) != 1 || got[0] != "--daemon side daemon restart" {
-		t.Errorf("kata ran %q, want the profile's restart", got)
+	if got := f.restarts(t); len(got) != 1 || got[0] != "daemon restart" {
+		t.Errorf("kata ran %q, want `daemon restart` (kata's daemon commands take no --daemon)", got)
 	}
+	if got := f.kataHomes(t); len(got) != 1 || got[0] != profileHome {
+		t.Errorf("kata ran with KATA_HOME %q, want the profile's home %q", got, profileHome)
+	}
+
 }
 
 func TestDocbankSetupRefusesARemoteKataDaemon(t *testing.T) {
@@ -383,5 +398,53 @@ func TestDocbankSetupUsageErrorsExitTwo(t *testing.T) {
 	plan, err := PlanLaunch([]string{"docbank", "setup", "--url=--x", "--key-env", "K"}, func(string) (string, bool) { return "robot", true }, "test")
 	if err != nil || plan.DocbankFlags["url"] != "--x" {
 		t.Errorf("--url=--x: %v, %v", plan.DocbankFlags, err)
+	}
+}
+
+func TestDocbankSetupEditsTheFileASymlinkedConfigPointsAt(t *testing.T) {
+	f := newDocbankSetupFixture(t)
+	target := filepath.Join(t.TempDir(), "dotfiles", "kata.toml")
+	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("[tui]\nconfirm_quit = false\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(f.home, "config.toml")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.run(t, "", "--url", f.fake.URL, "--key-file", f.keyFile(t), "--no-restart"); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Lstat(link); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("config.toml is no longer a symlink: %v, %v", info, err)
+	}
+	raw, err := os.ReadFile(target)
+	if err != nil || !strings.HasPrefix(string(raw), "[tui]\nconfirm_quit = false\n\n[docbank]\n") {
+		t.Errorf("target = %q, %v", raw, err)
+	}
+}
+
+func TestDocbankSetupRefusesAKeyFromAStandardInputThatIsATerminal(t *testing.T) {
+	f := newDocbankSetupFixture(t)
+	old := stdinIsTerminal
+	stdinIsTerminal = func(io.Reader) bool { return true }
+	t.Cleanup(func() { stdinIsTerminal = old })
+	_, err := f.run(t, "", "--url", f.fake.URL, "--key-file", "-", "--yes")
+	if err == nil || exitStatus(err) != 2 || !strings.Contains(err.Error(), "pipe the key in") {
+		t.Fatalf("err = %v, exit %d; want a usage error saying to pipe the key in", err, exitStatus(err))
+	}
+	if entries, _ := os.ReadDir(f.home); len(entries) != 0 {
+		t.Errorf("wrote %v", entries)
+	}
+}
+
+func TestDocbankSetupPrintsAProfilesRestartWithItsKataHome(t *testing.T) {
+	f := newDocbankSetupFixture(t)
+	profileHome := f.profileCatalog(t)
+	out, err := f.run(t, "", "--url", f.fake.URL, "--key-file", f.keyFile(t), "--daemon", "side", "--no-restart")
+	if err != nil || !strings.Contains(out, "KATA_HOME="+profileHome+" kata daemon restart") {
+		t.Errorf("--no-restart: %q, %v; want the command with the profile's KATA_HOME", out, err)
 	}
 }

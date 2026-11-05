@@ -32,8 +32,8 @@ type hookRunner struct {
 	after func()
 }
 
-func (r hookRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
-	out, err := r.ExecRunner.Run(ctx, name, args...)
+func (r hookRunner) Run(ctx context.Context, env []string, name string, args ...string) ([]byte, error) {
+	out, err := r.ExecRunner.Run(ctx, env, name, args...)
 	if err == nil && name == "docbank" && len(args) == 2 && args[1] == "restart" {
 		r.after()
 	}
@@ -340,5 +340,39 @@ func TestDocbankSetupLocalFlagRules(t *testing.T) {
 	plan, err := PlanLaunch([]string{"docbank", "setup", "--port", "9000"}, func(string) (string, bool) { return "robot", true }, "test")
 	if err != nil || plan.DocbankFlags["port"] != "9000" || plan.DocbankFlags["url"] != "" {
 		t.Errorf("local form: %v, %v", plan.DocbankFlags, err)
+	}
+}
+
+func TestDocbankSetupLocalEditsTheFilesSymlinksPointAt(t *testing.T) {
+	f := newLocalFixture(t)
+	dir := t.TempDir()
+	target := filepath.Join(dir, "docbank.toml")
+	keyTarget := filepath.Join(dir, "key")
+	for _, p := range []string{target, keyTarget} {
+		if err := os.WriteFile(p, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.writeDocbankConfig(t, "")
+	_ = os.Remove(filepath.Join(f.dbHome, "config.toml"))
+	if err := os.Symlink(target, filepath.Join(f.dbHome, "config.toml")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(keyTarget, f.keyPath()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.run(t, "", "--port", strconv.Itoa(freePort(t)), "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	for _, link := range []string{filepath.Join(f.dbHome, "config.toml"), f.keyPath()} {
+		if info, err := os.Lstat(link); err != nil || info.Mode()&os.ModeSymlink == 0 {
+			t.Errorf("%s is no longer a symlink: %v, %v", link, info, err)
+		}
+	}
+	if raw, _ := os.ReadFile(target); !strings.Contains(string(raw), "[server]") {
+		t.Errorf("Docbank's config target = %q", raw)
+	}
+	if raw, _ := os.ReadFile(keyTarget); len(strings.TrimSpace(string(raw))) != 64 {
+		t.Errorf("key target = %q", raw)
 	}
 }

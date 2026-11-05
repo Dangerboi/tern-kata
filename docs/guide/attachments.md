@@ -110,7 +110,7 @@ tern-kata docbank setup --url https://docbank.example --key-file ~/docbank.key
 - It first checks that the URL answers with the key and writes nothing otherwise: a refused key and an unreachable Docbank are reported in the words the Pane uses. The `url` must be HTTPS: kata accepts plain HTTP only for Docbank on this machine, and the command refuses it before writing anything.
 - It then appends a `[docbank]` section (`url`, the key's source, `folder`) to `<KATA_HOME>/config.toml`, leaving every other byte of the file as it is, and creates the file when it is missing. Running it again says "already set up"; a different `[docbank]` section is refused and shown, never overwritten.
 - `--folder` picks the vault folder (default `/kata`). The route flags `tern-kata agent` takes choose another kata daemon, a local profile for instance (`--daemon <name>`); a remote kata daemon is refused, because its config is not on this machine.
-- It asks before it restarts the kata daemon (`kata daemon restart`, or `kata --daemon <name> daemon restart` for a profile), then checks that the daemon has attachments on. `--yes` skips the question; `--no-restart`, or no terminal without `--yes`, prints the command to run instead.
+- It asks before it restarts the kata daemon (`kata daemon restart`, run with `KATA_HOME` set to the profile's home for a profile, since kata's daemon commands take no `--daemon`), then checks that the daemon has attachments on. `--yes` skips the question; `--no-restart`, or no terminal without `--yes`, prints the command to run instead.
 - It prints the paths it wrote and the URL, never the key.
 
 To do the same by hand:

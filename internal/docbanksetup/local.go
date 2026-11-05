@@ -173,7 +173,7 @@ func (e Env) SetupLocal(ctx context.Context, l Local) error {
 func (e Env) docbankStatus(ctx context.Context) string {
 	ctx, cancel := contextWithCheckDeadline(ctx)
 	defer cancel()
-	out, _ := e.Runner.Run(ctx, "docbank", "daemon", "status")
+	out, _ := e.Runner.Run(ctx, nil, "docbank", "daemon", "status")
 	return string(out)
 }
 
@@ -181,10 +181,10 @@ func (e Env) docbankStatus(ctx context.Context) string {
 func (e Env) restartDocbank(ctx context.Context, addr string) error {
 	ctx, cancel := contextWithCheckDeadline(ctx)
 	defer cancel()
-	if out, err := e.Runner.Run(ctx, "docbank", "daemon", "restart"); err != nil {
+	if out, err := e.Runner.Run(ctx, nil, "docbank", "daemon", "restart"); err != nil {
 		return fmt.Errorf("`docbank daemon restart` failed: %w\n%s\nkata's config was not touched", err, strings.TrimSpace(string(out)))
 	}
-	out, _ := e.Runner.Run(ctx, "docbank", "daemon", "status")
+	out, _ := e.Runner.Run(ctx, nil, "docbank", "daemon", "status")
 	if !statusNames(string(out), addr) {
 		return fmt.Errorf("Docbank did not come up at %s, so kata's config was not touched; `docbank daemon status` says:\n%s", addr, strings.TrimSpace(string(out)))
 	}
@@ -236,6 +236,7 @@ func serverText(s docbankServer) string {
 // writeServer appends the section to existing and writes the result over path atomically, creating the folder. The new file is parsed
 // before it replaces the old one and must hold exactly the section after the old file's bytes.
 func writeServer(path, existing string, want docbankServer) error {
+	path = resolveLink(path)
 	next := existing
 	if next != "" {
 		if !strings.HasSuffix(next, "\n") {

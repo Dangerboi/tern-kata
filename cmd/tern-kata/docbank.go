@@ -160,16 +160,25 @@ func newDocbankEnv(plan LaunchPlan, stdin io.Reader, out io.Writer) (docbanksetu
 		Out:           out,
 	}
 	// A terminal on standard input can be asked; with --key-file - the input is the key, which leaves nothing to ask on.
-	if f, ok := stdin.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+	if f, ok := stdin.(*os.File); ok && stdinIsTerminal(stdin) {
 		reader := bufio.NewReader(f)
 		env.Confirm = func(question string) (bool, error) { return docbanksetup.AskYesNo(reader, out, question) }
 	}
 	return env, nil
 }
 
+// stdinIsTerminal is whether r is a terminal; tests replace it.
+var stdinIsTerminal = func(r io.Reader) bool {
+	f, ok := r.(*os.File)
+	return ok && term.IsTerminal(int(f.Fd()))
+}
+
 // runDocbank is `docbank setup`: it points the chosen kata daemon at the Docbank --url names, or at one it sets up on this machine.
 func runDocbank(ctx context.Context, plan LaunchPlan, env docbanksetup.Env) error {
 	if plan.DocbankFlags["key-file"] == "-" {
+		if stdinIsTerminal(env.Stdin) {
+			return usageError{fmt.Errorf("docbank setup: --key-file - reads the key from standard input, which is a terminal here; pipe the key in (for instance `... | tern-kata docbank setup --key-file - ...`) or use --key-file <file> or --key-env")}
+		}
 		env.Confirm = nil
 	}
 	var err error
