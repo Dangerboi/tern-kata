@@ -121,9 +121,19 @@ type DatesResultMsg struct {
 
 func (DatesResultMsg) msg() {}
 
-// DatesChangedError is the refusal for a key whose value moved since the card opened.
-func DatesChangedError(label string) error {
-	return fmt.Errorf("%s changed elsewhere since the card opened; it was not overwritten. Close the card and open it again to see the new date.", label)
+// DatesConflict is the refusal for a key whose value moved since the card opened. Held is what kata holds under the key now ("" for
+// none) and Shown what the card shows for it (Held, or the date kata projects when it holds none). Read is false when kata could
+// not be read for the current value, and the card then keeps its own.
+type DatesConflict struct {
+	Label, Key, Held, Shown string
+	Read                    bool
+}
+
+func (e DatesConflict) Error() string {
+	if !e.Read {
+		return fmt.Sprintf("%s changed since the card opened; nothing was written for it. kata could not be read for the current date.", e.Label)
+	}
+	return fmt.Sprintf("The Issue changed since the card opened; nothing was written for %s. The %s field now shows the current date.", e.Label, e.Label)
 }
 
 // datePreview is the muted line under a date field: the day text resolves to with its weekday, "no date" for blank, and nothing
@@ -148,15 +158,16 @@ func dateDay(label, text, today string) (string, error) {
 	return day, nil
 }
 
-// DatesPreview is the muted line under a field: the day its text resolves to with its weekday, "no date" for blank, and nothing
-// for text that is not a date (saving refuses it). A prefilled value kata holds with a time shows its day.
+// DatesPreview is the muted line under a field: the date its text resolves to with its weekday (and the time of a timed value),
+// "no date" for blank, and nothing for text that is not a date (saving refuses it). A prefilled value kata holds in a form this
+// card does not read shows its day.
 func (m Model) DatesPreview(name Field) string {
 	f := m.DatesForm
 	text := f.Text.Of(name)
-	if text == f.Prefill.Of(name) && text != "" {
-		return DateWithWeekday(text[:min(len(text), len(dayLayout))])
+	if preview := datePreview(text, m.Calendar.Date); preview != "" || text != f.Prefill.Of(name) || text == "" {
+		return preview
 	}
-	return datePreview(text, m.Calendar.Date)
+	return DateWithWeekday(text[:min(len(text), len(dayLayout))])
 }
 
 // openDates is `d`: the card prefilled with the Issue's two dates as kata holds them.
@@ -250,6 +261,14 @@ func updateDates(m Model, msg DatesResultMsg) (Model, []Cmd) {
 	}
 	if msg.Err != nil {
 		f.Err = msg.Err
+		var conflict DatesConflict
+		if errors.As(msg.Err, &conflict) && conflict.Read {
+			for _, spec := range DatesFields {
+				if datesKey(spec.Name) == conflict.Key {
+					*f.Held.at(spec.Name), *f.Prefill.at(spec.Name), *f.Text.at(spec.Name) = conflict.Held, conflict.Shown, conflict.Shown
+				}
+			}
+		}
 		if len(msg.Applied) == 0 {
 			return m, nil
 		}

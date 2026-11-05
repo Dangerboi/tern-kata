@@ -19,17 +19,35 @@ func TestParseDateInput(t *testing.T) {
 		{"+2W", today, "2026-10-22"},
 		{"+30d", "2026-12-20", "2027-01-19"},
 		{" 2024-02-29 ", today, "2024-02-29"},
+		{"2026-10-24T09:00", "", "2026-10-24T09:00"},
+		{" 2026-10-24T09:00:30 ", today, "2026-10-24T09:00:30"},
+		{"2026-10-24T09:00:30Z", "", "2026-10-24T09:00:30Z"},
 	} {
 		if got, err := model.ParseDateInput(tt.in, tt.today); err != nil || got != tt.want {
 			t.Errorf("%q = %q, %v; want %q", tt.in, got, err, tt.want)
 		}
 	}
-	for _, in := range []string{"2026-02-30", "2026-1-5", "26-10-12", "+d", "+3", "-1d", "+1m", "next week", "2026-10-24T09:00"} {
+	for _, in := range []string{"2026-02-30", "2026-1-5", "26-10-12", "+d", "+3", "-1d", "+1m", "next week", "2026-10-24T25:00", "2026-10-24T09:00Z", "2026-10-24T09:00:30z", "2026-10-24t09:00", "2026-10-24T09:00:30+02:00", "2026-10-24 09:00", "2026-02-30T09:00", "2026-10-24T"} {
 		if got, err := model.ParseDateInput(in, today); err == nil {
 			t.Errorf("%q read as %q, want an error", in, got)
 		}
 	}
 	if _, err := model.ParseDateInput("today", ""); err == nil {
 		t.Error("today with no Pane date was read")
+	}
+}
+
+func TestDateWithWeekdayShowsTheTimeOfATimedValue(t *testing.T) {
+	for in, want := range map[string]string{
+		"2026-10-24":           "2026-10-24 Sat",
+		"2026-10-24T09:00":     "2026-10-24 Sat 09:00",
+		"2026-10-24T09:00:30":  "2026-10-24 Sat 09:00:30",
+		"2026-10-24T09:00:30Z": "2026-10-24T09:00:30Z",
+		"soon":                 "",
+		"":                     "",
+	} {
+		if got := model.DateWithWeekday(in); got != want {
+			t.Errorf("%q = %q, want %q", in, got, want)
+		}
 	}
 }
