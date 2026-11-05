@@ -92,6 +92,10 @@ func TestBashCompletionOffersSubcommandsWorkerFormsAndFlags(t *testing.T) {
 		{[]string{"agent", "--ref", "demo#ab12", "--as", "bot", "--a"}, "--as --address-prefix --auth-file --allow-insecure"},
 		{[]string{"agent", "--as", "bot", "--ref", "demo#ab12", "--", "omp", "--"}, ""}, // after the lone -- the words are the command's
 		{[]string{"migrate-attachments", "--"}, "--as"},
+		{[]string{"doc"}, "docbank"},
+		{[]string{"docbank", "s"}, "setup"},
+		{[]string{"docbank", "setup", "--"}, dashed(docbankFlagNames())},
+		{[]string{"docbank", "setup", "--url", "https://d.example", "--key-"}, "--key-file --key-env"},
 	} {
 		if got := strings.Join(complete(t, tc.words...), " "); got != tc.want {
 			t.Errorf("tern-kata %s<tab> = %q, want %q", strings.Join(tc.words, " "), got, tc.want)
@@ -175,6 +179,32 @@ func TestAgentFlagsAreInUsageHelpAndBothCompletions(t *testing.T) {
 	}
 }
 
+func TestDocbankFlagsAreInUsageHelpAndBothCompletions(t *testing.T) {
+	helpEntry := usage[strings.Index(usage, "\n  docbank setup"):strings.Index(usage, "\n  agent [")]
+	var usageLine string
+	for _, l := range strings.Split(usage, "\n") {
+		if strings.HasPrefix(l, "  tern-kata docbank ") {
+			usageLine = l
+		}
+	}
+	bash := complete(t, "docbank", "setup", "--")
+	fish := fishFlags(t, "docbank", "setup")
+	for _, f := range docbankFlags {
+		flag := "--" + f.name
+		for place, text := range map[string]string{"docbankUsage": docbankUsage, "the usage line": usageLine, "the help entry": helpEntry} {
+			if !regexp.MustCompile(regexp.QuoteMeta(flag) + `[^-\w]`).MatchString(text) {
+				t.Errorf("%s does not name %s", place, flag)
+			}
+		}
+		if !slices.Contains(bash, flag) {
+			t.Errorf("bash completion of docbank does not offer %s", flag)
+		}
+		if !fish[flag] {
+			t.Errorf("fish completion of docbank does not offer %s", flag)
+		}
+	}
+}
+
 func TestFishCompletionOffersNoAgentFlagsAfterTheLoneDoubleDash(t *testing.T) {
 	var script bytes.Buffer
 	if err := writeCompletion("fish", &script); err != nil {
@@ -208,6 +238,7 @@ func TestFishCompletionOffersNoAgentFlagsAfterTheLoneDoubleDash(t *testing.T) {
 func TestBashAndFishCompletionOfferTheSameFlagsForEverySubcommand(t *testing.T) {
 	for name, contexts := range map[string][][]string{
 		"agent":               {{"agent"}},
+		"docbank":             {{"docbank"}, {"docbank", "setup"}},
 		"recur":               {{"recur", "ab12"}},
 		"worker":              {{"worker"}, {"worker", "init"}, {"worker", "status"}, {"worker", "stop"}, {"worker", "resume", "x"}},
 		"views":               {{"views"}, {"views", "show", "x"}, {"views", "add", "x"}, {"views", "rm", "x"}},

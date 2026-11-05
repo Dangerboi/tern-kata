@@ -41,7 +41,7 @@ An Attachment is one meta key on the Issue, `attachment.<id>`, holding `{"name",
 
 ## Setting Docbank up
 
-You do this once, for the kata daemon. tern-kata cannot do it for you yet. kata only talks to Docbank over HTTP: it never starts Docbank, so Docbank needs a fixed address, a fixed API key and a process that keeps running.
+You do this once, for the kata daemon. For a Docbank on another machine `tern-kata docbank setup` does it (below); for one on this machine you do it by hand for now. kata only talks to Docbank over HTTP: it never starts Docbank, so Docbank needs a fixed address, a fixed API key and a process that keeps running.
 
 Choose a vault that every reader of your Issues may open. kata puts files in a folder of that vault; the folder only organises them and is no access control, so whoever can read an Issue can download its attachments.
 
@@ -85,7 +85,20 @@ Choose a vault that every reader of your Issues may open. kata puts files in a f
 
 ### Docbank on another machine
 
-Whoever runs that Docbank gives you its URL and an API key; keeping it running is theirs.
+Whoever runs that Docbank gives you its URL and an API key; keeping it running is theirs. One command points kata at it:
+
+```sh
+tern-kata docbank setup --url https://docbank.example --key-file ~/docbank.key
+```
+
+- `--key-file -` reads the key from standard input and stores it in `<KATA_HOME>/docbank.key` (mode 0600); `--key-env <NAME>` names a variable the kata daemon's own environment holds instead. No flag takes the key itself, so it never lands in your shell history or a process list.
+- It first checks that the URL answers with the key and writes nothing otherwise: a refused key and an unreachable Docbank are reported in the words the Pane uses. The `url` must be HTTPS: kata accepts plain HTTP only for Docbank on this machine, and the command refuses it before writing anything.
+- It then appends a `[docbank]` section (`url`, the key's source, `folder`) to `<KATA_HOME>/config.toml`, leaving every other byte of the file as it is, and creates the file when it is missing. Running it again says "already set up"; a different `[docbank]` section is refused and shown, never overwritten.
+- `--folder` picks the vault folder (default `/kata`). The route flags `tern-kata agent` takes choose another kata daemon, a local profile for instance (`--daemon <name>`); a remote kata daemon is refused, because its config is not on this machine.
+- It asks before it restarts the kata daemon (`kata daemon restart`, or `kata --daemon <name> daemon restart` for a profile), then checks that the daemon has attachments on. `--yes` skips the question; `--no-restart`, or no terminal without `--yes`, prints the command to run instead.
+- It prints the paths it wrote and the URL, never the key.
+
+To do the same by hand:
 
 1. Save the key in a file only you can read (`chmod 600`).
 2. Add the `[docbank]` section from step 5 above with that `url` and `api_key_file`. The `url` must be HTTPS: kata accepts plain HTTP only for Docbank on this machine.

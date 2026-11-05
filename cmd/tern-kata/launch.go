@@ -30,7 +30,7 @@ type LaunchPlan struct {
 	// TUIArgs are the arguments only `kata tui` takes (FallbackArgs without the --issue translation); inside Tern nothing reads
 	// them, so main refuses them there instead of dropping them unseen.
 	TUIArgs []string
-	// Subcommand is "migrate-attachments", "recur", "run", "views", "worker", "update", "agent" or "completion" when it was the first argument; main runs it
+	// Subcommand is "migrate-attachments", "recur", "run", "views", "worker", "update", "docbank", "agent" or "completion" when it was the first argument; main runs it
 	// without Tern.
 	Subcommand string
 	// TargetRef is the Issue as recur and run take it (what `kata show` takes: a short id, <project>#<short id> or a ULID),
@@ -64,6 +64,10 @@ type LaunchPlan struct {
 	// AgentRoute is `agent`'s --home, --db, --schema, --dsn-file, --env-file, --daemon, --server, --token-file, --auth-file, --allow-insecure and --trust-private-network: the Pane's daemon, which the wrapper turns into
 	// the agent's kata environment; zero leaves it as inherited.
 	AgentRoute data.AgentRoute
+	// DocbankFlags are `docbank setup`'s --url, --key-file, --key-env and --folder by name without dashes, as typed; unset ones are absent.
+	// DocbankYes and DocbankNoRestart are its --yes and --no-restart. The route flags it takes record into AgentRoute.
+	DocbankFlags                 map[string]string
+	DocbankYes, DocbankNoRestart bool
 	// fallbackAuthor is the --as actor exported to `kata tui`; empty leaves the environment untouched.
 	fallbackAuthor string
 }
@@ -94,7 +98,7 @@ type usageError struct{ error }
 func (e usageError) Unwrap() error { return e.error }
 
 // subcommands are the first arguments that name a command run without Tern.
-var subcommands = []string{"migrate-attachments", "recur", "run", "views", "worker", "update", "agent", "completion"}
+var subcommands = []string{"migrate-attachments", "recur", "run", "views", "worker", "update", "docbank", "agent", "completion"}
 
 // completionShells are the shells `tern-kata completion` writes a script for.
 var completionShells = []string{"bash", "zsh", "fish"}
@@ -150,6 +154,11 @@ func scanFlags(flags []string, flag string) bool {
 				continue
 			}
 		}
+		if subcommand == "docbank" {
+			if matched, _ := parseTableFlag(docbankFlags, "docbank", docbankUsage, flags, &i, &scratch); matched {
+				continue
+			}
+		}
 		if subcommand == "views" {
 			if arg == "--json" || arg == "--replace" {
 				continue
@@ -158,7 +167,7 @@ func scanFlags(flags []string, flag string) bool {
 				continue
 			}
 		}
-		if subcommand != "completion" && subcommand != "update" {
+		if subcommand != "completion" && subcommand != "update" && subcommand != "docbank" {
 			if _, matched, _ := parseAs(flags, &i); matched {
 				continue
 			}
@@ -290,6 +299,9 @@ func resolveActor(flag string, lookup func(string) (string, bool)) string {
 func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPlan, error) {
 	if args[0] == "agent" {
 		return planAgent(args)
+	}
+	if args[0] == "docbank" {
+		return planDocbank(args)
 	}
 	plan := LaunchPlan{Subcommand: args[0]}
 	var operands []string
@@ -499,6 +511,7 @@ Usage:
   tern-kata worker resume <run-uid> [--as <actor>]
   tern-kata worker abandon <run-uid> [--as <actor>]
   tern-kata update [--force] [--pause]
+  tern-kata docbank setup --url <url> (--key-file <file>|- | --key-env <NAME>) [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
   tern-kata agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
   tern-kata completion bash|zsh|fish
   tern-kata --version
@@ -609,6 +622,22 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 worker.toml it rejects); --pause waits for Enter after a success,
                                 so a Pane shows the result before it closes.
                                 Exit 0 when the binary is at the latest version, else 1
+  docbank setup --url <url> (--key-file <file>|- | --key-env <NAME>) [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
+                                point kata at a Docbank someone else runs, so attachments work: it
+                                checks that the --url answers with the API key (read-only), then adds a
+                                [docbank] section (url, the key's source, --folder, default /kata) to the
+                                config.toml of the kata daemon the Pane would use (KATA_HOME or ~/.kata,
+                                or a local profile chosen with --daemon; --home, --db and --schema
+                                work as for agent), and asks before it restarts that daemon, then checks
+                                that it has attachments on. --key-file names a file that holds the
+                                key, or - reads it from standard input and stores it in <KATA_HOME>/docbank.key
+                                (mode 0600); --key-env names a variable the kata daemon's own environment
+                                holds. No flag takes the key itself. Plain http is for this machine
+                                only. The rest of config.toml stays byte for byte; a [docbank] section
+                                that is the same is "already set up", a different one is refused and shown.
+                                --yes restarts without asking; --no-restart, or no terminal without
+                                --yes, prints the restart command instead. A remote kata daemon is
+                                refused: its config is not on this machine. Never prints the key
   agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
                                 run the command with KATA_AUTHOR set to the actor (replacing
                                 any value; without --as it is left as inherited) and KATA_REF

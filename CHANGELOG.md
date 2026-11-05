@@ -4,6 +4,15 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+#### Attachments
+
+- `tern-kata docbank setup --url <url> --key-file <file>` (or `--key-env <NAME>`) points kata at a Docbank someone else runs.
+  - It checks that the URL answers with the key before writing anything, appends a `[docbank]` section to the kata daemon's `config.toml` without touching the rest of the file, asks before restarting the kata daemon, and checks that kata has attachments on. `--yes` skips the question and `--no-restart` prints the command instead.
+  - `--key-file -` stores a key read from standard input in `<KATA_HOME>/docbank.key`. No flag takes the key, and the command never prints it.
+  - `--folder` and the route flags `tern-kata agent` takes choose the vault folder and the kata daemon; plain `http://` to another machine and a remote kata daemon are refused.
+
 ## [0.8.0] - 2026-11-05
 
 ### Added

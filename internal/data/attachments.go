@@ -18,6 +18,12 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
+// Docbank's refusals as the Pane words them; `tern-kata docbank setup` reports the same two.
+const (
+	DocbankUnauthorizedMessage = "Docbank refused the API key kata sends it. Check the API key in the [docbank] section of kata's config.toml."
+	DocbankUnreachableMessage  = "kata could not reach Docbank, or Docbank refused the request. Check that Docbank is running and that url in the [docbank] section of kata's config.toml is right."
+)
+
 // attachmentError is the plain-words text of a failed attachment call: what kata's attachment error codes mean for the person at the
 // Pane. Any other failure reads as every daemon failure does.
 func attachmentError(err error) error {
@@ -25,9 +31,9 @@ func attachmentError(err error) error {
 	case "docbank_not_configured":
 		return errors.New(model.DocbankOffMessage)
 	case "docbank_unauthorized":
-		return errors.New("Docbank refused the API key kata sends it. Check the API key in the [docbank] section of kata's config.toml.")
+		return errors.New(DocbankUnauthorizedMessage)
 	case "docbank_unreachable":
-		return errors.New("kata could not reach Docbank, or Docbank refused the request. Check that Docbank is running and that url in the [docbank] section of kata's config.toml is right.")
+		return errors.New(DocbankUnreachableMessage)
 	case "attachment_too_large":
 		return errors.New("That file is over the 256 MiB limit for an attachment.")
 	case "attachment_content_missing":

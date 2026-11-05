@@ -9,19 +9,17 @@ import (
 // agentUsage is what `tern-kata agent` refuses a command line with.
 const agentUsage = "usage: tern-kata agent [--as <actor>] [--ref <qualified ref>] [--address-prefix <actor>/<name>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]"
 
-// agentFlag is one flag of `tern-kata agent`, its route flags included. The parser and both completion scripts read agentFlags,
-// so a flag is one row there; agentUsage and the help text are prose and name it by hand.
-type agentFlag struct {
+// tableFlag is one flag of a subcommand with a flag table (`agent`, `docbank`): its parser and the completion scripts read the
+// table, so a flag is one row there; the usage constant and the help text are prose and name it by hand.
+type tableFlag struct {
 	name       string // without its dashes
 	takesValue bool
 	what       string // the value a flag takes, or what a flag without one does
 	set        func(plan *LaunchPlan, value string)
 }
 
-var agentFlags = []agentFlag{
-	{"as", true, "an actor", func(p *LaunchPlan, v string) { p.fallbackAuthor = v }},
-	{"ref", true, "a qualified Issue ref", func(p *LaunchPlan, v string) { p.AgentRef = v }},
-	{"address-prefix", true, "an Agent address up to its block id", func(p *LaunchPlan, v string) { p.AgentAddressPrefix = v }},
+// routeFlags choose the kata daemon; `agent` takes them all and `docbank setup` those that pick the daemon (docbankRouteFlags).
+var routeFlags = []tableFlag{
 	{"home", true, "a kata home folder", func(p *LaunchPlan, v string) { p.AgentRoute.Home = v }},
 	{"db", true, "the Pane's KATA_DB path", func(p *LaunchPlan, v string) { p.AgentRoute.DB = v }},
 	{"schema", true, "the Pane's KATA_POSTGRES_SCHEMA", func(p *LaunchPlan, v string) { p.AgentRoute.Schema = v }},
@@ -35,12 +33,48 @@ var agentFlags = []agentFlag{
 	{"trust-private-network", false, "trust a server on a private network", func(p *LaunchPlan, _ string) { p.AgentRoute.TrustPrivate = true }},
 }
 
-func agentFlagNames() []string {
-	names := make([]string, len(agentFlags))
-	for i, f := range agentFlags {
+var agentFlags = slices.Concat([]tableFlag{
+	{"as", true, "an actor", func(p *LaunchPlan, v string) { p.fallbackAuthor = v }},
+	{"ref", true, "a qualified Issue ref", func(p *LaunchPlan, v string) { p.AgentRef = v }},
+	{"address-prefix", true, "an Agent address up to its block id", func(p *LaunchPlan, v string) { p.AgentAddressPrefix = v }},
+}, routeFlags)
+
+func flagNames(table []tableFlag) []string {
+	names := make([]string, len(table))
+	for i, f := range table {
 		names[i] = f.name
 	}
 	return names
+}
+
+func agentFlagNames() []string { return flagNames(agentFlags) }
+
+// parseTableFlag reads the flag of table at args[*i] ("--name value", "--name=value" or a bare switch), moving *i past a separate
+// value and recording it in plan; matched is false when the argument is no flag of table. command and usage head its refusals.
+func parseTableFlag(table []tableFlag, command, usage string, args []string, i *int, plan *LaunchPlan) (matched bool, err error) {
+	arg := args[*i]
+	if !strings.HasPrefix(arg, "--") {
+		return false, nil
+	}
+	name, value, hasValue := strings.Cut(strings.TrimPrefix(arg, "--"), "=")
+	fi := slices.IndexFunc(table, func(f tableFlag) bool { return f.name == name })
+	if fi < 0 {
+		return false, nil
+	}
+	flag := table[fi]
+	if !flag.takesValue {
+		if hasValue {
+			return true, fmt.Errorf("%s: --%s takes no value (got %q); %s", command, name, value, usage)
+		}
+		flag.set(plan, "")
+		return true, nil
+	}
+	value, err = parseFlagValue(args, i, "--"+name, flag.what, false)
+	if err != nil {
+		return true, fmt.Errorf("%s: %w; %s", command, err, usage)
+	}
+	flag.set(plan, value)
+	return true, nil
 }
 
 // planAgent parses `tern-kata agent [flags] -- <command> [args...]` (args[0] is "agent"). The flags come before the lone --, and
@@ -56,24 +90,13 @@ func planAgent(args []string) (LaunchPlan, error) {
 		if !strings.HasPrefix(arg, "--") {
 			return LaunchPlan{}, fmt.Errorf("agent: unexpected argument %s; %s", arg, agentUsage)
 		}
-		name, value, hasValue := strings.Cut(strings.TrimPrefix(arg, "--"), "=")
-		fi := slices.IndexFunc(agentFlags, func(f agentFlag) bool { return f.name == name })
-		if fi < 0 {
+		matched, err := parseTableFlag(agentFlags, "agent", agentUsage, args[:end], &i, &plan)
+		if err != nil {
+			return LaunchPlan{}, err
+		}
+		if !matched {
 			return LaunchPlan{}, fmt.Errorf("agent: unknown flag %s", arg)
 		}
-		flag := agentFlags[fi]
-		if !flag.takesValue {
-			if hasValue {
-				return LaunchPlan{}, fmt.Errorf("agent: --%s takes no value (got %q); %s", name, value, agentUsage)
-			}
-			flag.set(&plan, "")
-			continue
-		}
-		value, err := parseFlagValue(args[:end], &i, "--"+name, flag.what, false)
-		if err != nil {
-			return LaunchPlan{}, fmt.Errorf("agent: %w; %s", err, agentUsage)
-		}
-		flag.set(&plan, value)
 	}
 	if len(plan.Operands) == 0 {
 		return LaunchPlan{}, fmt.Errorf("agent: no command after --; %s", agentUsage)

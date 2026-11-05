@@ -242,6 +242,13 @@ func runCommand(ctx context.Context, plan LaunchPlan) error {
 		}
 		return runUpdate(ctx, plan, env, out)
 	}
+	if plan.Subcommand == "docbank" {
+		env, err := newDocbankEnv(plan, os.Stdin, out)
+		if err != nil {
+			return subcommandError{err}
+		}
+		return runDocbank(ctx, plan, env)
+	}
 	if isWorkerCommand(plan) {
 		env, err := newWorkerEnv(plan)
 		if err != nil {

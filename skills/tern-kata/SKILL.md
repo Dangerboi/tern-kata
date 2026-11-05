@@ -1,11 +1,15 @@
 ---
 name: tern-kata
-description: Recurring Issues, saved views and the tern-kata worker, through tern-kata. Use to make an Issue recur, change or stop its schedule, or print it (`tern-kata recur`), to list or show the views (Today, All Open, a saved view) or save one (`tern-kata views`), to run a scheduled agent job now (`tern-kata run`), to check what the worker serves and runs (`tern-kata worker status`, `worker doctor`), to set the worker up when the user asks (`tern-kata worker init`, `worker add`, `worker edit`), or to resume or abandon a held worker run (`tern-kata worker resume`, `worker abandon`). Never stop, edit or reconfigure the user's worker unasked.
+description: Recurring Issues, saved views and the tern-kata worker, through tern-kata. Use to make an Issue recur, change or stop its schedule, or print it (`tern-kata recur`), to list or show the views (Today, All Open, a saved view) or save one (`tern-kata views`), to run a scheduled agent job now (`tern-kata run`), to check what the worker serves and runs (`tern-kata worker status`, `worker doctor`), to set the worker up when the user asks (`tern-kata worker init`, `worker add`, `worker edit`), to point kata at a Docbank someone else runs when the user asks (`tern-kata docbank setup`), or to resume or abandon a held worker run (`tern-kata worker resume`, `worker abandon`). Never stop, edit or reconfigure the user's worker unasked.
 ---
 
 Attachments are kata's own now: bytes in Docbank, referenced by `attachment.<id>` meta keys. Read, add and unlink them with `kata docbank attachments` (see the `kata` skill), not with `tern-kata`. `tern-kata attach` and `detach` no longer exist.
 
 An Issue may still carry old keys, `tern-kata.attachment.<name>` or, from 0.3, `attachment.<name>`, holding a `{"host", "path"}` pointer to a file that tern-kata kept under `.kata-attachments/` on one machine. Do not write them. To read one, take the file at `path` when `host` matches `hostname` (any case); for another host, tell the user the file is there. Never run `tern-kata migrate-attachments` unasked: it uploads files, clears keys and deletes local copies, and the user runs it once per machine.
+
+## Docbank setup
+
+When the user asks to set Attachments up against a Docbank on another machine, run `tern-kata docbank setup --url <https url> (--key-file <file> | --key-env <NAME>)`, with `--key-file -` to pass a key on standard input. It checks the URL and key first, appends a `[docbank]` section to the kata daemon's `config.toml` and asks before restarting the kata daemon (`--yes` skips the question, `--no-restart` prints the command instead). Never put the key in a command line: no flag takes it. Do not use `--yes` unless the user agreed to a kata daemon restart, which interrupts their open Panes.
 
 ## Recur
 

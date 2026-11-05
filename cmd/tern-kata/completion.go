@@ -64,6 +64,13 @@ _tern_kata() {
 				done
 			fi
 			;;
+		docbank)
+			if [[ $cur == -* ]]; then
+				words="%[9]s"
+			elif [[ $COMP_CWORD -eq 2 ]]; then
+				words="setup"
+			fi
+			;;
 		completion) [[ $COMP_CWORD -eq 2 ]] && words="%[3]s" ;;
 		worker)
 			if [[ $COMP_CWORD -eq 2 ]]; then
@@ -85,7 +92,7 @@ _tern_kata() {
 	fi
 }
 complete -o default -F _tern_kata tern-kata
-`, strings.Join(subcommands, " "), dashed(model.RecurFlagNames), strings.Join(completionShells, " "), strings.Join(workerForms, " "), dashed(initFlagNames), strings.Join(viewsForms, " "), dashed(viewFlagNames), dashed(agentFlagNames()))
+`, strings.Join(subcommands, " "), dashed(model.RecurFlagNames), strings.Join(completionShells, " "), strings.Join(workerForms, " "), dashed(initFlagNames), strings.Join(viewsForms, " "), dashed(viewFlagNames), dashed(agentFlagNames()), dashed(docbankFlagNames()))
 }
 
 // zshCompletion is the bash script run through zsh's bash completion layer, so the two shells offer the same words.
@@ -116,6 +123,14 @@ func fishCompletion() string {
 		}
 		// after the lone -- the words are the command's, which bash completion leaves alone too
 		line("-n '__fish_seen_subcommand_from agent; and not contains -- -- (commandline -opc)' -l %s%s -d '%s'", f.name, value, strings.ReplaceAll(f.what, "'", `\'`))
+	}
+	line("-n '__fish_seen_subcommand_from docbank; and not __fish_seen_subcommand_from setup' -f -a setup")
+	for _, f := range docbankFlags {
+		value := ""
+		if f.takesValue {
+			value = " -r"
+		}
+		line("-n '__fish_seen_subcommand_from docbank' -l %s%s -d '%s'", f.name, value, strings.ReplaceAll(f.what, "'", `\'`))
 	}
 	line("-n '__fish_seen_subcommand_from update' -l force -d 'install even when a check refuses'")
 	line("-n '__fish_seen_subcommand_from update' -l pause -d 'wait for Enter after a success'")
