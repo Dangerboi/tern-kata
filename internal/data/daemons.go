@@ -1,21 +1,20 @@
 package data
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"go.kenn.io/kata/pkg/client"
+
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-// startDeadline is how long starting a stopped local daemon may take; kata itself waits up to five seconds for the daemon to answer.
+// startDeadline is how long connecting to a named daemon may take when kata starts a stopped local one first; kata itself waits up to five seconds for the daemon to answer.
 const startDeadline = 30 * time.Second
 
 // currentDaemon is the catalog name of the daemon workspace talks to: the entry the Gateway last switched to, else the name its live
@@ -34,78 +33,61 @@ func (g *Gateway) currentDaemon(ctx context.Context, catalog Catalog, workspace 
 	return name
 }
 
-// loadDaemons reads the catalog for the Daemons Page.
+// loadDaemons lists kata's daemon catalog for the Daemons Page. The names, endpoints and token flags are kata's own; allow_insecure
+// is not in kata's client, so it comes from the file tern-kata reads for the agent route, and is left out when that read fails.
 func (g *Gateway) loadDaemons(ctx context.Context, cmd model.LoadDaemons) model.Msg {
 	home, err := kataHome()
 	if err != nil {
 		return model.DaemonsLoaded{Request: cmd.Request, Err: err}
 	}
-	catalog, err := ReadCatalog()
+	listed, err := client.DaemonCatalog()
 	if err != nil {
 		return model.DaemonsLoaded{Request: cmd.Request, Err: err}
 	}
+	catalog, _ := ReadCatalog()
 	current := g.currentDaemon(ctx, catalog, cmd.Workspace)
 	loaded := model.DaemonsLoaded{Request: cmd.Request, ConfigPath: filepath.Join(home, "config.toml")}
-	for _, e := range catalog.Daemons {
+	for _, d := range listed {
+		entry, _ := catalog.Entry(d.Name)
 		loaded.Entries = append(loaded.Entries, model.DaemonEntry{
-			Name: e.Name, Endpoint: e.endpoint(), Token: e.InlineToken != "" || e.TokenEnv != "",
-			AllowInsecure: e.AllowInsecure, Current: e.Name == current,
+			Name: d.Name, Endpoint: d.Endpoint, Token: d.HasToken, AllowInsecure: entry.AllowInsecure, Current: d.Name == current,
 		})
 	}
 	return loaded
 }
 
-// endpoint is "local" for a local entry, else the host of its url, as kata tui shows it.
-func (e CatalogEntry) endpoint() string {
-	if e.Local {
-		return "local"
-	}
-	if u, err := url.Parse(e.URL); err == nil && u.Host != "" {
-		return u.Host
-	}
-	return e.URL
-}
-
-// switchDaemon connects to the catalog entry cmd names and, only once that works, makes it the connection of every workspace and
-// ends the event stream of the old one. A stopped local entry is started first: locating it fails while it is stopped. Nothing
-// is written to disk. A failure changes nothing, so the old connection stays.
+// switchDaemon connects to the catalog entry cmd names through kata's client and, only once that works, makes it the connection of
+// every workspace and ends the event stream of the old one. kata starts a stopped local entry first. Nothing is written to disk.
+// A failure changes nothing, so the old connection stays.
 func (g *Gateway) switchDaemon(ctx context.Context, cmd model.SwitchDaemon) model.Msg {
 	fail := func(err error) model.Msg {
+		if errors.Is(err, client.ErrDaemonNotInCatalog) {
+			err = errors.New("not in kata's daemon catalog")
+		}
 		prefix := fmt.Sprintf("daemon %q: ", cmd.Name)
 		return model.DaemonSwitched{Request: cmd.Request, Name: cmd.Name, Err: errors.New(strings.TrimPrefix(err.Error(), prefix))}
 	}
+	discoverCtx, cancel := context.WithTimeout(ctx, startDeadline)
+	defer cancel()
+	target, err := LocateNamed(cmd.Name, kataExecutable())(discoverCtx, cmd.Workspace)
+	if err != nil {
+		return fail(err)
+	}
+	// The entry is for the connection's credentials-by-name display and the agent route; kata's client does not expose it.
 	catalog, err := ReadCatalog()
 	if err != nil {
 		return fail(err)
 	}
-	entry, found := catalog.Entry(cmd.Name)
-	if !found {
-		return fail(errors.New("not in kata's daemon catalog"))
-	}
-	locate := LocateEntry(entry)
-	located := func() (Target, error) {
-		locateCtx, cancel := context.WithTimeout(ctx, g.deadline)
-		defer cancel()
-		return locate(locateCtx, cmd.Workspace)
-	}
-	target, err := located()
-	if err != nil && entry.Local {
-		if err = startLocalDaemon(ctx, entry); err == nil {
-			target, err = located()
-		}
-	}
-	if err != nil {
-		return fail(err)
-	}
-	connectCtx, cancel := context.WithTimeout(ctx, g.deadline)
-	defer cancel()
+	entry, _ := catalog.Entry(cmd.Name)
+	connectCtx, cancelConnect := context.WithTimeout(ctx, g.deadline)
+	defer cancelConnect()
 	c, err := connect(connectCtx, target)
 	if err != nil {
 		return fail(err)
 	}
-	c.name, c.entry, c.deadline = entry.Name, entry, g.deadline
-	g.install(entry.Name, locate, cmd.Workspace, c)
-	return model.DaemonSwitched{Request: cmd.Request, Name: entry.Name, Daemon: c.describe(ctx)}
+	c.name, c.entry, c.deadline = cmd.Name, entry, g.deadline
+	g.install(cmd.Name, LocateNamed(cmd.Name, ""), cmd.Workspace, c)
+	return model.DaemonSwitched{Request: cmd.Request, Name: cmd.Name, Daemon: c.describe(ctx)}
 }
 
 // install makes c, the connection to the catalog entry called name, the one every workspace uses from now on: the old daemon's
@@ -129,49 +111,6 @@ func (g *Gateway) install(name string, locate Locator, workspace string, c *Clie
 		g.streamCancel()
 	}
 	g.streamMu.Unlock()
-}
-
-// startLocalDaemon starts the local daemon entry names, as kata tui does for a deliberate switch to a stopped one. A pinned profile
-// (an entry with a home) goes through `kata --daemon <name> daemon recover`, which builds the profile's own environment and refuses,
-// with its reason, a profile whose storage is gone or whose instance is not the one the catalog pins, rather than starting an empty
-// database. An entry without a home is the current home: `kata daemon start` with no KATA_DSN, KATA_DB or KATA_SERVER, which would
-// point the command at another database or daemon than the one the entry names.
-//
-// Shortcut: when kata's client library can start a named daemon itself, this helper goes and the switch connects through it.
-func startLocalDaemon(ctx context.Context, entry CatalogEntry) error {
-	ctx, cancel := context.WithTimeout(ctx, startDeadline)
-	defer cancel()
-	args, label := []string{"daemon", "start"}, "kata daemon start"
-	env := startEnvironment(os.Environ())
-	if entry.Home != "" {
-		args, label, env = []string{"--daemon", entry.Name, "daemon", "recover"}, "kata daemon recover", os.Environ()
-	}
-	cmd := exec.CommandContext(ctx, "kata", args...)
-	cmd.Env = env
-	// The daemon is detached, but a pipe it inherited would hold the output open: give up on it shortly after kata exits.
-	cmd.WaitDelay = 2 * time.Second
-	var output bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &output, &output
-	if err := cmd.Run(); err != nil {
-		if text := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(output.String()), "kata: ")); text != "" {
-			return fmt.Errorf("%s: %s", label, text)
-		}
-		return fmt.Errorf("%s: %w", label, err)
-	}
-	return nil
-}
-
-// startEnvironment is env without the variables that point kata at another database or daemon.
-func startEnvironment(env []string) []string {
-	out := make([]string, 0, len(env))
-	for _, kv := range env {
-		switch name, _, _ := strings.Cut(kv, "="); name {
-		case "KATA_DSN", "KATA_DB", "KATA_SERVER":
-			continue
-		}
-		out = append(out, kv)
-	}
-	return out
 }
 
 // describe is the connection as the top bar names it: its catalog name, where it runs, its version, and the account the daemon says
