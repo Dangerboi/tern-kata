@@ -511,6 +511,8 @@ Usage:
   tern-kata worker resume <run-uid> [--as <actor>]
   tern-kata worker abandon <run-uid> [--as <actor>]
   tern-kata update [--force] [--pause]
+  tern-kata docbank supervised [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
+  tern-kata docbank supervise on|off
   tern-kata docbank setup [--url <url> (--key-file <file>|- | --key-env <NAME>) | --port <port>] [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
   tern-kata agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
   tern-kata completion bash|zsh|fish
@@ -649,6 +651,16 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 runs and prints kata daemon restart with KATA_HOME set to the
                                 profile's home). --key-file - needs a pipe, not a terminal. A remote kata daemon is
                                 refused: its config is not on this machine. Never prints the key
+                                A local setup leaves the plugin keeping Docbank running (docbank supervise)
+  docbank supervised [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
+                                the plugin host half's question: does the plugin keep a local Docbank
+                                running? Exit 0 and the line "on" when kata's [docbank] url is on this
+                                machine, Docbank's [server] api_port in <DOCBANK_HOME>/config.toml is
+                                that url's port and docbank.manual is not in tern-kata's config folder;
+                                otherwise exit 1, nothing on stdout and the reason on stderr
+  docbank supervise on|off      off creates docbank.manual in tern-kata's config folder (mode 0600), so
+                                the plugin stops starting Docbank (a running one keeps running); on
+                                removes it. Says what it did
   agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
                                 run the command with KATA_AUTHOR set to the actor (replacing
                                 any value; without --as it is left as inherited) and KATA_REF

@@ -50,6 +50,13 @@ type docbankConfig struct {
 // as SetupRemote does. Nothing is written until docbank and kata are on PATH, kata's [docbank] section is compatible, and the port is
 // free (or already this Docbank's).
 func (e Env) SetupLocal(ctx context.Context, l Local) error {
+	if err := e.setupLocal(ctx, l); err != nil {
+		return err
+	}
+	return e.reportSupervision()
+}
+
+func (e Env) setupLocal(ctx context.Context, l Local) error {
 	if e.DocbankHome == "" {
 		return errors.New("cannot tell where Docbank's home is; set DOCBANK_HOME")
 	}

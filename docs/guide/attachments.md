@@ -41,7 +41,7 @@ An Attachment is one meta key on the Issue, `attachment.<id>`, holding `{"name",
 
 ## Setting Docbank up
 
-You do this once, for the kata daemon. `tern-kata docbank setup` does it, for Docbank on this machine and for one on another machine (below). kata only talks to Docbank over HTTP: it never starts Docbank, so Docbank needs a fixed address, a fixed API key and a process that keeps running.
+You do this once, for the kata daemon. `tern-kata docbank setup` does it, for Docbank on this machine and for one on another machine (below). kata only talks to Docbank over HTTP: it never starts Docbank, so Docbank needs a fixed address, a fixed API key and a process that keeps running. For Docbank on this machine the tern-kata plugin keeps it running (below).
 
 Choose a vault that every reader of your Issues may open. kata puts files in a folder of that vault; the folder only organises them and is no access control, so whoever can read an Issue can download its attachments.
 
@@ -59,6 +59,20 @@ tern-kata docbank setup
 - It runs `docbank daemon restart` and requires `docbank daemon status` to name `127.0.0.1:<port>`; otherwise it stops, shows Docbank's output and leaves kata's config alone.
 - Then it does what the remote form does with `url = "http://127.0.0.1:<port>"` and `api_key_file = <KATA_HOME>/docbank.key`: check Docbank with the key, append the `[docbank]` section, ask before restarting the kata daemon (`--yes`, `--no-restart`), and check that attachments are on. Running it again says "already set up" and restarts nothing.
 - `--folder` and the route flags work as in the remote form below. `--key-file` and `--key-env` are for the remote form only, and `--port` for this one.
+- It ends by saying that the plugin keeps Docbank running.
+
+#### The plugin keeps Docbank running
+
+While Tern runs, the plugin's host half checks every 10 seconds whether Docbank runs and, when none does, runs `docbank daemon start` (Docbank's own detached start, from your home folder). A failed start is retried after 1 s, then 2 s, doubling to 60 s, and the backoff starts over once Docbank has stayed up for a minute. The Tern log gets one line when it starts Docbank and one when a start fails, not one per check. A Docbank that is already running, however it was started, is left alone.
+
+The plugin does this exactly when kata's `[docbank]` `url` is on this machine (`127.0.0.1`, `localhost` or `::1`), Docbank's `[server]` `api_port` in `<DOCBANK_HOME>/config.toml` is that url's port, and the file `docbank.manual` is not in tern-kata's config folder (`~/.config/tern-kata` on Linux). `tern-kata docbank supervised` prints `on` and exits 0 when that holds, and exits 1 with the reason on standard error when not. A Docbank on another machine is never started.
+
+To run Docbank your own way, turn this off:
+
+```sh
+tern-kata docbank supervise off   # creates docbank.manual; a running Docbank keeps running
+tern-kata docbank supervise on    # removes it
+```
 
 The same by hand, for reference:
 

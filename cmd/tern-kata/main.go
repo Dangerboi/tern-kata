@@ -243,6 +243,16 @@ func runCommand(ctx context.Context, plan LaunchPlan) error {
 		return runUpdate(ctx, plan, env, out)
 	}
 	if plan.Subcommand == "docbank" {
+		if plan.Operands[0] != "setup" {
+			env, err := docbankSupervisionEnv(plan, out)
+			if err != nil {
+				return subcommandError{err}
+			}
+			if plan.Operands[0] == "supervise" {
+				return runDocbankSupervise(plan, env)
+			}
+			return runDocbank(ctx, plan, env)
+		}
 		env, err := newDocbankEnv(plan, os.Stdin, out)
 		if err != nil {
 			return subcommandError{err}
