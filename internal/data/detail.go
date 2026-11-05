@@ -92,9 +92,15 @@ func translateCommentLink(l *g.CommentLink) *model.CommentLink {
 	if l == nil {
 		return nil
 	}
-	return &model.CommentLink{
+	out := &model.CommentLink{
 		UID: l.UID, Kind: l.Kind, Author: l.Author, IssueUID: l.IssueUID, IssueShortID: l.IssueShortID, ProjectUID: l.ProjectUID,
+		Handle: l.Handle, Teammate: l.Teammate, Status: l.Status, EditedAt: l.EditedAt,
 	}
+	if l.CreatedAt != nil {
+		out.CreatedAt = *l.CreatedAt
+	}
+	out.TargetEdited = l.TargetEdited != nil && *l.TargetEdited
+	return out
 }
 
 // translateAttribution carries kata's creation attribution fields; a missing verification state stays empty.
