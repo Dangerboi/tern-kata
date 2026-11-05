@@ -43,7 +43,7 @@ func TestKataExecutableIgnoresAKataFoundThroughARelativePathEntry(t *testing.T) 
 		t.Skip("the stub kata is a shell script")
 	}
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "kata"), []byte("#!/bin/sh\n"), 0o755); err != nil { //nolint:gosec // G306: a stub program must be executable
+	if err := os.WriteFile(filepath.Join(dir, "kata"), []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Chdir(dir)
