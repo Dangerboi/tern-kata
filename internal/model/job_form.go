@@ -767,8 +767,6 @@ func (f JobFormState) Preview(cal PaneCalendar, now time.Time) JobPreview {
 		switch {
 		case ok:
 			preview.Runs = listRuns(schedule, now, cal)
-		case t.Kind == cronjob.TriggerCron:
-			preview.Note = "Next runs unknown: the time zone does not read."
 		default:
 			preview.Note = "Next runs unknown: this job's start point is not known yet."
 		}

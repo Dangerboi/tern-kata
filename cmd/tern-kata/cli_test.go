@@ -123,6 +123,13 @@ func fishFlags(t *testing.T, words ...string) map[string]bool {
 		}
 		applies := true
 		for _, clause := range strings.Split(condition, "; and ") {
+			if clause == "not contains -- -- (commandline -opc)" { // the lone -- that ends the table flags
+				if slices.Contains(words, "--") {
+					applies = false
+					break
+				}
+				continue
+			}
 			list, ok := strings.CutPrefix(clause, "not ")
 			list, found := strings.CutPrefix(list, "__fish_seen_subcommand_from ")
 			if !found {
@@ -165,6 +172,36 @@ func TestAgentFlagsAreInUsageHelpAndBothCompletions(t *testing.T) {
 		if !fish[flag] {
 			t.Errorf("fish completion of agent does not offer %s", flag)
 		}
+	}
+}
+
+func TestFishCompletionOffersNoAgentFlagsAfterTheLoneDoubleDash(t *testing.T) {
+	var script bytes.Buffer
+	if err := writeCompletion("fish", &script); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range agentFlags {
+		if f.name == "as" { // the global --as has no condition
+			continue
+		}
+		var found bool
+		for _, l := range strings.Split(script.String(), "\n") {
+			if strings.Contains(l, "__fish_seen_subcommand_from agent'") || !strings.Contains(l, "-l "+f.name+" ") && !strings.HasSuffix(l, "-l "+f.name) {
+				continue
+			}
+			if strings.Contains(l, "__fish_seen_subcommand_from agent;") {
+				found = true
+				if !strings.Contains(l, "not contains -- -- (commandline -opc)") {
+					t.Errorf("fish agent flag --%s has no after-- guard: %s", f.name, l)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("fish completion has no line for agent flag --%s", f.name)
+		}
+	}
+	if got := fishFlags(t, "agent", "--"); len(got) != 0 {
+		t.Errorf("fish offers %v after the lone --, want none", slices.Sorted(maps.Keys(got)))
 	}
 }
 

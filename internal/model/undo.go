@@ -91,6 +91,18 @@ type UndoHistory struct {
 	nextID uint64
 }
 
+// entry finds the entry with id: in the history wherever it sits, else the one the undo in flight takes back, which a cleared
+// history no longer holds.
+func (h UndoHistory) entry(id uint64) (UndoEntry, bool) {
+	if id == 0 {
+		return UndoEntry{}, false
+	}
+	if i := slices.IndexFunc(h.Entries, func(e UndoEntry) bool { return e.ID == id }); i >= 0 {
+		return h.Entries[i], true
+	}
+	return h.out, h.out.ID == id
+}
+
 func (h UndoHistory) cleared(reason string) UndoHistory {
 	h.Entries = nil
 	h.Boundary = reason
@@ -304,14 +316,8 @@ func undoDone(m Model, msg ChangeUndone) (Model, []Cmd) {
 	h := m.Undo
 	// Other changes may have landed while the undo was out, so the entry is not necessarily the newest; a boundary write may
 	// even have cleared it, and the answer is still shown and the Issue read again.
-	i := slices.IndexFunc(h.Entries, func(e UndoEntry) bool { return e.ID == msg.EntryID })
-	var entry UndoEntry
-	switch {
-	case i >= 0:
-		entry = h.Entries[i]
-	case msg.EntryID != 0 && h.out.ID == msg.EntryID:
-		entry = h.out
-	default:
+	entry, found := h.entry(msg.EntryID)
+	if !found {
 		if card {
 			m.CloseForm.Saving = false
 		}

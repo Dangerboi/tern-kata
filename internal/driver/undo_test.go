@@ -216,6 +216,39 @@ func TestUndoingAReopenThatNeedsEvidenceOpensTheCloseCard(t *testing.T) {
 	}
 }
 
+func TestTheCloseCardOfAnUndoSubmitsAfterAnotherWriteOrAClearedHistory(t *testing.T) {
+	for name, between := range map[string]model.Msg{
+		"another write": done(4),
+		"cleared":       model.FieldWritten{UID: "alpha", Record: model.WriteRecord{Boundary: "closing a recurring issue cannot be undone"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := undoable(t, 1)
+			entry := undoEntry(2)
+			entry.Kind = model.UndoReopen
+			s = feed(t, s, model.FieldWritten{UID: "alpha", Record: model.WriteRecord{Entry: &entry}}).State
+			out := pressU(t, s)
+			cmd := undoCmd(t, out)
+			s = feed(t, out.State, between).State
+			s = feed(t, s, model.ChangeUndone{EntryID: cmd.Entry.ID, Result: model.UndoNeedsEvidence, Ref: "aaaa"}).State
+			if !s.Model.CloseForm.Open || s.Model.CloseForm.UndoEntry != cmd.Entry.ID {
+				t.Fatalf("close card %+v", s.Model.CloseForm)
+			}
+			s = feed(t, s,
+				model.CloseFieldMsg{Field: model.CloseMessage, Value: "Finished again after the reopen, so closing it as done once more."},
+				model.CloseFieldMsg{Field: model.CloseCommit, Value: "0123456789abcdef"},
+			).State
+			out = feed(t, s, key("ctrl+o"))
+			if err := out.State.Model.CloseForm.Err; err != nil {
+				t.Fatalf("submit refused: %v", err)
+			}
+			sent := undoCmd(t, out)
+			if sent.Close == nil || sent.Entry.ID != cmd.Entry.ID || len(sent.Close.Evidence) != 1 {
+				t.Fatalf("the card sent %+v", sent)
+			}
+		})
+	}
+}
+
 func TestTheCloseCardOfAnUndoRefusesQuickDoneAndAnotherReason(t *testing.T) {
 	s := undoable(t, 1)
 	out := pressU(t, s)

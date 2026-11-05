@@ -275,16 +275,16 @@ func submitClose(m Model, quick bool) (Model, []Cmd) {
 // submitUndoClose sends the close the Close card collected as the inverse of a reopen.
 func submitUndoClose(m Model, cmd CloseIssueCmd, quick bool) (Model, []Cmd) {
 	f := &m.CloseForm
-	entries := m.Undo.Entries
+	entry, found := m.Undo.entry(f.UndoEntry)
 	switch {
 	case quick || cmd.Reason != ReasonDone:
 		f.Saving, f.Err = false, errors.New("Undo completes the Issue as done, with evidence.")
-	case len(entries) == 0 || entries[len(entries)-1].ID != f.UndoEntry:
+	case !found:
 		f.Saving, f.Err = false, errors.New("undo action is no longer available")
 	default:
 		m.Undo.InFlight = true
-		m.Undo.out = entries[len(entries)-1]
-		return m, []Cmd{UndoChange{Workspace: m.Workspace, Entry: m.Undo.out, Close: &cmd}}
+		m.Undo.out = entry
+		return m, []Cmd{UndoChange{Workspace: m.Workspace, Entry: entry, Close: &cmd}}
 	}
 	return m, nil
 }

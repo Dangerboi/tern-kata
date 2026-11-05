@@ -114,7 +114,8 @@ func fishCompletion() string {
 		if f.takesValue {
 			value = " -r"
 		}
-		line("-n '__fish_seen_subcommand_from agent' -l %s%s -d '%s'", f.name, value, strings.ReplaceAll(f.what, "'", `\'`))
+		// after the lone -- the words are the command's, which bash completion leaves alone too
+		line("-n '__fish_seen_subcommand_from agent; and not contains -- -- (commandline -opc)' -l %s%s -d '%s'", f.name, value, strings.ReplaceAll(f.what, "'", `\'`))
 	}
 	line("-n '__fish_seen_subcommand_from update' -l force -d 'install even when a check refuses'")
 	line("-n '__fish_seen_subcommand_from update' -l pause -d 'wait for Enter after a success'")
