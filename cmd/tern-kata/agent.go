@@ -4,16 +4,47 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-
-	"github.com/Dangerboi/tern-kata/internal/data"
 )
 
 // agentUsage is what `tern-kata agent` refuses a command line with.
 const agentUsage = "usage: tern-kata agent [--as <actor>] [--ref <qualified ref>] [--address-prefix <actor>/<name>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]"
 
-// planAgent parses `tern-kata agent [--as <actor>] [--ref <qualified ref>] [--address-prefix <actor>/<name>] [route flags] -- <command>
-// [args...]` (args[0] is "agent"). The flags come before the lone --, and everything after it is the command and its arguments,
-// verbatim: Operands holds them.
+// agentFlag is one flag of `tern-kata agent`, its route flags included. The parser and both completion scripts read agentFlags,
+// so a flag is one row there; agentUsage and the help text are prose and name it by hand.
+type agentFlag struct {
+	name       string // without its dashes
+	takesValue bool
+	what       string // the value a flag takes, or what a flag without one does
+	set        func(plan *LaunchPlan, value string)
+}
+
+var agentFlags = []agentFlag{
+	{"as", true, "an actor", func(p *LaunchPlan, v string) { p.fallbackAuthor = v }},
+	{"ref", true, "a qualified Issue ref", func(p *LaunchPlan, v string) { p.AgentRef = v }},
+	{"address-prefix", true, "an Agent address up to its block id", func(p *LaunchPlan, v string) { p.AgentAddressPrefix = v }},
+	{"home", true, "a kata home folder", func(p *LaunchPlan, v string) { p.AgentRoute.Home = v }},
+	{"db", true, "the Pane's KATA_DB path", func(p *LaunchPlan, v string) { p.AgentRoute.DB = v }},
+	{"schema", true, "the Pane's KATA_POSTGRES_SCHEMA", func(p *LaunchPlan, v string) { p.AgentRoute.Schema = v }},
+	{"dsn-file", true, "the private DSN file the Pane wrote", func(p *LaunchPlan, v string) { p.AgentRoute.DSNFile = v }},
+	{"env-file", true, "the private credential env file the Pane wrote", func(p *LaunchPlan, v string) { p.AgentRoute.EnvFile = v }},
+	{"daemon", true, "a daemon catalog name", func(p *LaunchPlan, v string) { p.AgentRoute.Daemon = v }},
+	{"server", true, "a kata server URL", func(p *LaunchPlan, v string) { p.AgentRoute.Server = v }},
+	{"token-file", true, "the private token file the Pane wrote", func(p *LaunchPlan, v string) { p.AgentRoute.TokenFile = v }},
+	{"auth-file", true, "the Pane's KATA_AUTH_TOKEN_FILE path", func(p *LaunchPlan, v string) { p.AgentRoute.AuthFile = v }},
+	{"allow-insecure", false, "reach a server over plain http", func(p *LaunchPlan, _ string) { p.AgentRoute.AllowInsecure = true }},
+	{"trust-private-network", false, "trust a server on a private network", func(p *LaunchPlan, _ string) { p.AgentRoute.TrustPrivate = true }},
+}
+
+func agentFlagNames() []string {
+	names := make([]string, len(agentFlags))
+	for i, f := range agentFlags {
+		names[i] = f.name
+	}
+	return names
+}
+
+// planAgent parses `tern-kata agent [flags] -- <command> [args...]` (args[0] is "agent"). The flags come before the lone --, and
+// everything after it is the command and its arguments, verbatim: Operands holds them.
 func planAgent(args []string) (LaunchPlan, error) {
 	end := slices.Index(args, "--")
 	if end < 0 {
@@ -25,36 +56,24 @@ func planAgent(args []string) (LaunchPlan, error) {
 		if !strings.HasPrefix(arg, "--") {
 			return LaunchPlan{}, fmt.Errorf("agent: unexpected argument %s; %s", arg, agentUsage)
 		}
-		if arg == "--ref" || strings.HasPrefix(arg, "--ref=") {
-			ref, err := parseAgentRef(args[:end], &i)
-			if err != nil {
-				return LaunchPlan{}, err
-			}
-			plan.AgentRef = ref
-			continue
-		}
-		if arg == "--address-prefix" || strings.HasPrefix(arg, "--address-prefix=") {
-			prefix, err := parseFlagValue(args[:end], &i, "--address-prefix", "an Agent address up to its block id")
-			if err != nil {
-				return LaunchPlan{}, fmt.Errorf("agent: %w; %s", err, agentUsage)
-			}
-			plan.AgentAddressPrefix = prefix
-			continue
-		}
-		if matched, err := parseAgentRoute(args[:end], &i, &plan.AgentRoute); matched {
-			if err != nil {
-				return LaunchPlan{}, fmt.Errorf("agent: %w; %s", err, agentUsage)
-			}
-			continue
-		}
-		actor, matched, err := parseAs(args[:end], &i)
-		if err != nil {
-			return LaunchPlan{}, err
-		}
-		if !matched {
+		name, value, hasValue := strings.Cut(strings.TrimPrefix(arg, "--"), "=")
+		fi := slices.IndexFunc(agentFlags, func(f agentFlag) bool { return f.name == name })
+		if fi < 0 {
 			return LaunchPlan{}, fmt.Errorf("agent: unknown flag %s", arg)
 		}
-		plan.fallbackAuthor = actor
+		flag := agentFlags[fi]
+		if !flag.takesValue {
+			if hasValue {
+				return LaunchPlan{}, fmt.Errorf("agent: --%s takes no value (got %q); %s", name, value, agentUsage)
+			}
+			flag.set(&plan, "")
+			continue
+		}
+		value, err := parseFlagValue(args[:end], &i, "--"+name, flag.what, false)
+		if err != nil {
+			return LaunchPlan{}, fmt.Errorf("agent: %w; %s", err, agentUsage)
+		}
+		flag.set(&plan, value)
 	}
 	if len(plan.Operands) == 0 {
 		return LaunchPlan{}, fmt.Errorf("agent: no command after --; %s", agentUsage)
@@ -64,55 +83,4 @@ func planAgent(args []string) (LaunchPlan, error) {
 	}
 	plan.Actor = plan.fallbackAuthor
 	return plan, nil
-}
-
-// parseAgentRoute reads one of the route flags (--home, --db, --schema, --dsn-file, --env-file, --daemon, --server, --token-file, --auth-file, --allow-insecure, --trust-private-network) from args[*i] into route and advances *i
-// past its value; matched is false for any other flag.
-func parseAgentRoute(args []string, i *int, route *data.AgentRoute) (matched bool, err error) {
-	name, value, hasValue := strings.Cut(args[*i], "=")
-	var field *string
-	var what string
-	switch name {
-	case "--home":
-		field, what = &route.Home, "a kata home folder"
-	case "--daemon":
-		field, what = &route.Daemon, "a daemon catalog name"
-	case "--server":
-		field, what = &route.Server, "a kata server URL"
-	case "--token-file":
-		field, what = &route.TokenFile, "the private token file the Pane wrote"
-	case "--auth-file":
-		field, what = &route.AuthFile, "the Pane's KATA_AUTH_TOKEN_FILE path"
-	case "--db":
-		field, what = &route.DB, "the Pane's KATA_DB path"
-	case "--schema":
-		field, what = &route.Schema, "the Pane's KATA_POSTGRES_SCHEMA"
-	case "--env-file":
-		field, what = &route.EnvFile, "the private credential env file the Pane wrote"
-	case "--dsn-file":
-		field, what = &route.DSNFile, "the private DSN file the Pane wrote"
-	case "--allow-insecure", "--trust-private-network":
-		if hasValue {
-			return true, fmt.Errorf("%s takes no value (got %q)", name, value)
-		}
-		if name == "--allow-insecure" {
-			route.AllowInsecure = true
-		} else {
-			route.TrustPrivate = true
-		}
-		return true, nil
-	default:
-		return false, nil
-	}
-	*field, err = parseFlagValue(args, i, name, what)
-	return true, err
-}
-
-// parseAgentRef reads --ref's value, as `--ref <ref>` or `--ref=<ref>`, from args[*i] and advances *i past it.
-func parseAgentRef(args []string, i *int) (string, error) {
-	value, err := parseFlagValue(args, i, "--ref", "a qualified Issue ref")
-	if err != nil {
-		return "", fmt.Errorf("agent: %w; %s", err, agentUsage)
-	}
-	return value, nil
 }

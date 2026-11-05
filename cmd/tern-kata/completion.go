@@ -55,7 +55,7 @@ _tern_kata() {
 		update) [[ $cur == -* ]] && words="--force --pause" ;;
 		agent)
 			if [[ $cur == -* ]]; then
-				words="--as --ref --address-prefix --home --db --schema --dsn-file --env-file --daemon --server --token-file --auth-file --allow-insecure --trust-private-network"
+				words="%[8]s"
 				local i=0 w
 				for w in "${COMP_WORDS[@]}"; do # after the lone -- the words are the command's
 					[[ $i -ge $COMP_CWORD ]] && break
@@ -85,7 +85,7 @@ _tern_kata() {
 	fi
 }
 complete -o default -F _tern_kata tern-kata
-`, strings.Join(subcommands, " "), dashed(model.RecurFlagNames), strings.Join(completionShells, " "), strings.Join(workerForms, " "), dashed(initFlagNames), strings.Join(viewsForms, " "), dashed(viewFlagNames))
+`, strings.Join(subcommands, " "), dashed(model.RecurFlagNames), strings.Join(completionShells, " "), strings.Join(workerForms, " "), dashed(initFlagNames), strings.Join(viewsForms, " "), dashed(viewFlagNames), dashed(agentFlagNames()))
 }
 
 // zshCompletion is the bash script run through zsh's bash completion layer, so the two shells offer the same words.
@@ -106,7 +106,16 @@ func fishCompletion() string {
 	line("-l version -d 'print the version and exit'")
 	line("-s h -l help -d 'print the help and exit'")
 	line("-n '__fish_seen_subcommand_from migrate-attachments recur run views completion worker update agent' -f")
-	line("-n '__fish_seen_subcommand_from agent' -l ref -r -d 'the Issue the agent works on'")
+	for _, f := range agentFlags {
+		if f.name == "as" { // the global --as above already offers it
+			continue
+		}
+		value := ""
+		if f.takesValue {
+			value = " -r"
+		}
+		line("-n '__fish_seen_subcommand_from agent' -l %s%s -d '%s'", f.name, value, strings.ReplaceAll(f.what, "'", `\'`))
+	}
 	line("-n '__fish_seen_subcommand_from update' -l force -d 'install even when a check refuses'")
 	line("-n '__fish_seen_subcommand_from update' -l pause -d 'wait for Enter after a success'")
 	line("-n '__fish_seen_subcommand_from completion' -a '%s'", strings.Join(completionShells, " "))

@@ -301,10 +301,15 @@ func TestPlanLaunchRefusesEmptyAsForEverySubcommand(t *testing.T) {
 }
 
 func TestPlanLaunchHelpIsJudgedByTheSubcommandParsers(t *testing.T) {
-	for _, args := range [][]string{{"worker", "init", "--command", "-h"}, {"recur", "ab12", "--rule", "--help"}, {"views", "add", "x", "--search", "-h"}, {"views", "add", "x", "--search", "--help"}} {
+	for _, args := range [][]string{{"worker", "init", "--command", "-h"}, {"recur", "ab12", "--rule", "-h"}, {"views", "add", "x", "--search", "-h"}} {
 		plan, err := PlanLaunch(args, lookupFrom(nil), "v")
 		if err != nil || plan.Help {
 			t.Errorf("PlanLaunch(%q) = %+v, %v; want the word taken as the flag's value", args, plan, err)
+		}
+	}
+	for _, args := range [][]string{{"worker", "init", "--command", "--help"}, {"recur", "ab12", "--rule", "--help"}, {"views", "add", "x", "--search", "--help"}} {
+		if plan, err := PlanLaunch(args, lookupFrom(nil), "v"); err != nil || !plan.Help {
+			t.Errorf("PlanLaunch(%q) = %+v, %v; want help, as for --as --help", args, plan, err)
 		}
 	}
 	_, err := PlanLaunch([]string{"migrate-attachments", "--issue", "-h"}, lookupFrom(nil), "v")
@@ -324,5 +329,28 @@ func TestSubcommandsAreOnlyTakenOverAsTheFirstArgument(t *testing.T) {
 	}
 	if !strings.Contains(usage, "tern-kata migrate-attachments") {
 		t.Fatal("--help does not document migrate-attachments")
+	}
+}
+
+func TestSubcommandFlagsRefuseAFlagLikeWordAsTheirValue(t *testing.T) {
+	for name, tc := range map[string]struct {
+		args []string
+		err  string
+	}{
+		"worker init":      {[]string{"worker", "init", "--command", "--x"}, "--command requires a value"},
+		"views add":        {[]string{"views", "add", "v", "--search", "--x"}, "--search requires a value"},
+		"recur":            {[]string{"recur", "ab12", "--rule", "--stop"}, "--rule requires a value"},
+		"agent route flag": {[]string{"agent", "--home", "--x", "--", "omp"}, "--home requires"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := planSubcommand(tc.args, lookupFrom(nil))
+			if err == nil || !strings.Contains(err.Error(), tc.err) {
+				t.Fatalf("error = %v, want one containing %q", err, tc.err)
+			}
+		})
+	}
+	plan, err := planSubcommand([]string{"views", "add", "v", "--search=--x"}, lookupFrom(nil))
+	if err != nil || plan.ViewFlags["search"] != "--x" {
+		t.Errorf("--search=--x: plan %+v, err %v; want the value passed", plan.ViewFlags, err)
 	}
 }

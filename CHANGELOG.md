@@ -38,6 +38,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Fixed
 
+- Fish completion offers all of `tern-kata agent`'s flags, as bash and zsh do, not only `--ref`.
+- `tern-kata worker init`, `views add` and `recur` refuse a flag-like word such as `--help` as a flag's value (`--command --help`), as `agent` already did; `--command=--help` still passes it.
 - A cron expression whose `CRON_TZ=` or `TZ=` zone is quoted, such as `CRON_TZ="Europe/Berlin"`, is read with that zone: the worker no longer sets the job aside as naming another zone than its trigger's, and the Jobs Page shows its runs.
 - Supervision no longer starts a second worker for `worker.lock` to refuse, all day long, after a plugin reload or a Tern update: the host half leaves the worker that is still running alone, logs one line naming it, and starts a worker within 10 seconds of its end.
 

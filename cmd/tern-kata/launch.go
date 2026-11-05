@@ -159,11 +159,7 @@ func scanFlags(flags []string, flag string) bool {
 			}
 		}
 		if subcommand != "completion" && subcommand != "update" {
-			start := i
-			if _, matched, err := parseAs(flags, &i); matched {
-				if err != nil && i == start+1 && i < len(flags) && strings.HasPrefix(flags[i], "--") {
-					i-- // parseAs refused a value starting with --: that word is judged on its own
-				}
+			if _, matched, _ := parseAs(flags, &i); matched {
 				continue
 			}
 		}
@@ -250,22 +246,24 @@ func parseAs(args []string, i *int) (actor string, matched bool, err error) {
 	if name, _, _ := strings.Cut(args[*i], "="); name != "--as" {
 		return "", false, nil
 	}
-	actor, err = parseFlagValue(args, i, "--as", "an actor")
+	actor, err = parseFlagValue(args, i, "--as", "an actor", false)
 	return actor, true, err
 }
 
-// parseFlagValue reads the value of flag, as `flag value` or `flag=value`, from args[*i], moving *i past a separate value. A missing
-// value, or one that starts with "--", and an explicitly empty one are refused; what names the value in the first refusal.
-func parseFlagValue(args []string, i *int, flag, what string) (string, error) {
+// parseFlagValue reads the value of flag, as `flag value` or `flag=value`, from args[*i], moving *i past a separate value; every
+// flag of every subcommand goes through it. A missing value, or a separate one that starts with "--" (--flag=--x passes it), is
+// refused as missing, leaving *i on flag so the caller judges that word on its own; what names the value in that refusal. An
+// explicitly empty value is refused unless allowEmpty.
+func parseFlagValue(args []string, i *int, flag, what string, allowEmpty bool) (string, error) {
 	value, ok := strings.CutPrefix(args[*i], flag+"=")
 	if !ok {
-		*i++
-		if *i == len(args) || strings.HasPrefix(args[*i], "--") {
+		if *i+1 == len(args) || strings.HasPrefix(args[*i+1], "--") {
 			return "", fmt.Errorf("%s requires %s", flag, what)
 		}
+		*i++
 		value = args[*i]
 	}
-	if value == "" {
+	if value == "" && !allowEmpty {
 		return "", fmt.Errorf("%s must be non-empty", flag)
 	}
 	return value, nil
@@ -422,25 +420,19 @@ var viewFlagNames = []string{"base", "project", "status", "owner", "label", "rel
 // parseViewFlag reads one of viewFlagNames as --name value or --name=value at args[*i], moving *i past a separate value;
 // matched is false for any other argument. A value may be empty and is then judged by the view's checks.
 func parseViewFlag(args []string, i *int, plan *LaunchPlan) (matched bool, err error) {
-	return parseValueFlag(args, i, viewFlagNames, &plan.ViewFlags, false)
+	return parseNamedFlag(args, i, viewFlagNames, &plan.ViewFlags, true)
 }
 
-// parseValueFlag reads one of names as --name value or --name=value at args[*i], moving *i past a separate value, and records
-// it in *given; matched is false for any other argument. A flag may be given once. An empty value is refused when nonEmpty.
-func parseValueFlag(args []string, i *int, names []string, given *map[string]string, nonEmpty bool) (matched bool, err error) {
-	name, value, hasValue := strings.Cut(strings.TrimPrefix(args[*i], "--"), "=")
-	if !slices.Contains(names, name) {
+// parseNamedFlag reads one of names as --name value or --name=value at args[*i], moving *i past a separate value, and records
+// it in *given; matched is false for any other argument. A flag may be given once. An empty value is refused unless allowEmpty.
+func parseNamedFlag(args []string, i *int, names []string, given *map[string]string, allowEmpty bool) (matched bool, err error) {
+	name, _, _ := strings.Cut(strings.TrimPrefix(args[*i], "--"), "=")
+	if !strings.HasPrefix(args[*i], "--") || !slices.Contains(names, name) {
 		return false, nil
 	}
-	if !hasValue {
-		if *i+1 == len(args) {
-			return true, fmt.Errorf("--%s requires a value", name)
-		}
-		*i++
-		value = args[*i]
-	}
-	if nonEmpty && value == "" {
-		return true, fmt.Errorf("--%s requires a value", name)
+	value, err := parseFlagValue(args, i, "--"+name, "a value", allowEmpty)
+	if err != nil {
+		return true, err
 	}
 	if _, twice := (*given)[name]; twice {
 		return true, fmt.Errorf("--%s given twice", name)
@@ -466,7 +458,7 @@ var initFlagNames = []string{"executor", "actor", "command", "model", "thinking"
 // parseInitFlag reads one of initFlagNames as --name value or --name=value at args[*i], moving *i past a separate value;
 // matched is false for any other argument. The value must not be empty.
 func parseInitFlag(args []string, i *int, plan *LaunchPlan) (matched bool, err error) {
-	return parseValueFlag(args, i, initFlagNames, &plan.InitFlags, true)
+	return parseNamedFlag(args, i, initFlagNames, &plan.InitFlags, false)
 }
 
 // parseRecurFlag reads --stop, or one of recur's schedule flags as --name value or --name=value, at args[*i], moving *i past a
@@ -476,7 +468,7 @@ func parseRecurFlag(args []string, i *int, plan *LaunchPlan) (matched bool, err 
 		plan.Stop = true
 		return true, nil
 	}
-	return parseValueFlag(args, i, model.RecurFlagNames, &plan.RecurFlags, false)
+	return parseNamedFlag(args, i, model.RecurFlagNames, &plan.RecurFlags, true)
 }
 
 // usage is the --help text.
@@ -508,7 +500,7 @@ Usage:
   tern-kata worker resume <run-uid> [--as <actor>]
   tern-kata worker abandon <run-uid> [--as <actor>]
   tern-kata update [--force] [--pause]
-  tern-kata agent [--as <actor>] [--ref <ref>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
+  tern-kata agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
   tern-kata completion bash|zsh|fish
   tern-kata --version
   tern-kata --help
@@ -618,10 +610,12 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 worker.toml it rejects); --pause waits for Enter after a success,
                                 so a Pane shows the result before it closes.
                                 Exit 0 when the binary is at the latest version, else 1
-  agent [--as <actor>] [--ref <ref>] [--home <dir>] [--daemon <name> | --server <url> ...] -- <command> [args...]
+  agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
                                 run the command with KATA_AUTHOR set to the actor (replacing
                                 any value; without --as it is left as inherited) and KATA_REF
-                                to the qualified Issue ref, with no KATA_INBOX_USER, its
+                                to the qualified Issue ref, with no KATA_INBOX_USER unless
+                                --address-prefix gives <actor>/<name>: then KATA_INBOX_USER is
+                                <actor>/<name>-<block id>, the block id from TERN_PANE; its
                                 arguments passed on as typed and its exit status as ours;
                                 -- is required. --home sets KATA_HOME; --daemon names a catalog entry
                                 (its url and allow_insecure become KATA_SERVER and KATA_ALLOW_INSECURE,

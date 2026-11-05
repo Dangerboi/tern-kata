@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -82,9 +85,9 @@ func TestBashCompletionOffersSubcommandsWorkerFormsAndFlags(t *testing.T) {
 		{[]string{"views", "show", "x", "--"}, "--json --as"},
 		{[]string{"views", "add", "x", "--re"}, "--relationship --replace"},
 		{[]string{"completion", "z"}, "zsh"},
-		{[]string{"agent", "--"}, "--as --ref --address-prefix --home --db --schema --dsn-file --env-file --daemon --server --token-file --auth-file --allow-insecure --trust-private-network"},
+		{[]string{"agent", "--"}, dashed(agentFlagNames())},
 		{[]string{"agent", "--as", "bot", "--re"}, "--ref"},
-		{[]string{"agent", "--as", "bot", "--ref", "demo#ab12", "--"}, "--as --ref --address-prefix --home --db --schema --dsn-file --env-file --daemon --server --token-file --auth-file --allow-insecure --trust-private-network"},
+		{[]string{"agent", "--as", "bot", "--ref", "demo#ab12", "--"}, dashed(agentFlagNames())},
 		{[]string{"agent", "--as", "bot", "--add"}, "--address-prefix"},
 		{[]string{"agent", "--ref", "demo#ab12", "--as", "bot", "--a"}, "--as --address-prefix --auth-file --allow-insecure"},
 		{[]string{"agent", "--as", "bot", "--ref", "demo#ab12", "--", "omp", "--"}, ""}, // after the lone -- the words are the command's
@@ -96,13 +99,97 @@ func TestBashCompletionOffersSubcommandsWorkerFormsAndFlags(t *testing.T) {
 	}
 }
 
-func TestFishCompletionOffersTheAgentRef(t *testing.T) {
+// fishFlags are the long flags fish offers for a command line that has these words, as fish's conditions read them; flags with
+// no condition (--as, --help, --version) are left out.
+func fishFlags(t *testing.T, words ...string) map[string]bool {
+	t.Helper()
 	var script bytes.Buffer
 	if err := writeCompletion("fish", &script); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(script.String(), "__fish_seen_subcommand_from agent' -l ref") {
-		t.Errorf("fish completion has no --ref for agent:\n%s", script.String())
+	seen := func(list string) bool {
+		return slices.ContainsFunc(strings.Fields(list), func(w string) bool { return slices.Contains(words, w) })
+	}
+	flags := map[string]bool{}
+	line := regexp.MustCompile(`^complete -c tern-kata (?:-n (?:'([^']*)'|(\S+)) )?.*-l (\S+)`)
+	for _, l := range strings.Split(script.String(), "\n") {
+		m := line.FindStringSubmatch(l)
+		if m == nil {
+			continue
+		}
+		condition := m[1] + m[2]
+		if condition == "" {
+			continue
+		}
+		applies := true
+		for _, clause := range strings.Split(condition, "; and ") {
+			list, ok := strings.CutPrefix(clause, "not ")
+			list, found := strings.CutPrefix(list, "__fish_seen_subcommand_from ")
+			if !found {
+				applies = false // __fish_use_subcommand: no subcommand typed yet
+				break
+			}
+			if seen(list) == ok {
+				applies = false
+				break
+			}
+		}
+		if applies {
+			flags["--"+m[3]] = true
+		}
+	}
+	return flags
+}
+
+func TestAgentFlagsAreInUsageHelpAndBothCompletions(t *testing.T) {
+	helpEntry := usage[strings.Index(usage, "\n  agent ["):strings.Index(usage, "\n  completion <shell>")]
+	var usageLine string
+	for _, l := range strings.Split(usage, "\n") {
+		if strings.HasPrefix(l, "  tern-kata agent ") {
+			usageLine = l
+		}
+	}
+	bash := complete(t, "agent", "--")
+	fish := fishFlags(t, "agent")
+	fish["--as"] = true // the global --as, which fishFlags leaves out
+	for _, f := range agentFlags {
+		flag := "--" + f.name
+		for place, text := range map[string]string{"agentUsage": agentUsage, "the usage line": usageLine, "the help entry": helpEntry} {
+			if !regexp.MustCompile(regexp.QuoteMeta(flag) + `[^-\w]`).MatchString(text) {
+				t.Errorf("%s does not name %s", place, flag)
+			}
+		}
+		if !slices.Contains(bash, flag) {
+			t.Errorf("bash completion of agent does not offer %s", flag)
+		}
+		if !fish[flag] {
+			t.Errorf("fish completion of agent does not offer %s", flag)
+		}
+	}
+}
+
+func TestBashAndFishCompletionOfferTheSameFlagsForEverySubcommand(t *testing.T) {
+	for name, contexts := range map[string][][]string{
+		"agent":               {{"agent"}},
+		"recur":               {{"recur", "ab12"}},
+		"worker":              {{"worker"}, {"worker", "init"}, {"worker", "status"}, {"worker", "stop"}, {"worker", "resume", "x"}},
+		"views":               {{"views"}, {"views", "show", "x"}, {"views", "add", "x"}, {"views", "rm", "x"}},
+		"update":              {{"update"}},
+		"run":                 {{"run", "x"}},
+		"migrate-attachments": {{"migrate-attachments"}},
+		"completion":          {{"completion", "bash"}},
+	} {
+		bash, fish := map[string]bool{}, map[string]bool{}
+		for _, words := range contexts {
+			for _, flag := range complete(t, append(slices.Clone(words), "--")...) {
+				bash[flag] = true
+			}
+			maps.Copy(fish, fishFlags(t, words...))
+		}
+		delete(bash, "--as") // fish offers --as once, for every subcommand
+		if !maps.Equal(bash, fish) {
+			t.Errorf("%s: bash offers %v, fish offers %v", name, slices.Sorted(maps.Keys(bash)), slices.Sorted(maps.Keys(fish)))
+		}
 	}
 }
 
