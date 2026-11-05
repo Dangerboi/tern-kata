@@ -171,9 +171,9 @@ type Model struct {
 	Search         SearchState
 	// PageSearch is the search of the Jobs, Runs or Workflows Page that is current.
 	PageSearch PageSearchState
-	IDSearch       IDSearch
-	FilterForm     FilterFormState
-	Page           Page
+	IDSearch   IDSearch
+	FilterForm FilterFormState
+	Page       Page
 	// pageDetailHidden is the detail column's hidden flag from before the current Page took its place; leavePage restores it.
 	pageDetailHidden bool
 	Board            BoardState
