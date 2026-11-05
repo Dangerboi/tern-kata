@@ -95,7 +95,7 @@ expect_tree "$np_heading" '.ok and .nodes[0].text == "Project: np-unbound"'
 expect_tree "[data-id='main.columns.collections']" '.ok and .count == 0'
 expect_tree "$np_issue_rows" '.ok and .count == 1'
 
-# A .kata.toml naming a Project this kata has never seen is an error, not an Inbox: the Pane shows the Project named in a not-set-up message with kata's the `kata init` hint, and registers nothing.
+# A .kata.toml naming a Project this kata has never seen is an error, not an Inbox: the Pane shows the Project named in a not-set-up message with kata's `kata init` hint, and registers nothing.
 quit_app
 mkdir -p "$tmp/np-stale"
 printf 'version = 1\n\n[project]\nname = "np-stale-bound"\n' >"$tmp/np-stale/.kata.toml"
