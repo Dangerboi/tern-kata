@@ -82,7 +82,7 @@ func TestListRowDateBadgeCountsAgentBadge(t *testing.T) {
 		return m
 	}
 	onlyPlain := 0
-	for cols := 60; cols <= 140; cols++ {
+	for cols := model.MinCols; cols <= 140; cols++ {
 		plain := text(render(t, load(cols, false))[view.IssueID("dated")])
 		badged := text(render(t, load(cols, true))[view.IssueID("dated")])
 		if !strings.Contains(badged, "agent") || !strings.Contains(badged, title) || !strings.Contains(plain, title) {
