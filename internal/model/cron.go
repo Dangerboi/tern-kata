@@ -135,9 +135,6 @@ func (j CronJob) NextRun(now time.Time, projectArchived bool) (time.Time, bool) 
 // Pane read from the parent.
 func (j CronJob) schedule() (cronjob.Schedule, bool) { return j.Job.Schedule(j.deliveryAnchor()) }
 
-// intervalAnchor is the instant an interval trigger of the job counts from.
-func (j CronJob) intervalAnchor() (time.Time, bool) { return j.Job.IntervalAnchor(j.deliveryAnchor()) }
-
 // deliveryAnchor is the delivery anchor on a native job's parent, the zero time when the Pane has none.
 func (j CronJob) deliveryAnchor() time.Time {
 	if j.Parent == nil || j.Parent.Progress == nil {

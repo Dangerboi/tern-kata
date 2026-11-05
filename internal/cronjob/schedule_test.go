@@ -382,3 +382,20 @@ func TestCronReadsExpressionsAsKataDoes(t *testing.T) {
 		})
 	}
 }
+
+func TestCronKeepsTheZoneItReadsAndAnIntervalHasNone(t *testing.T) {
+	s, err := cronjob.Cron(`CRON_TZ="America/New_York" 0 9 * * *`, "", time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loc, ok := s.Zone(); !ok || loc.String() != "America/New_York" {
+		t.Errorf("zone = %v, %v; want America/New_York", loc, ok)
+	}
+	every, err := cronjob.Cron("@every 1h", "UTC", at(t, "2026-10-08T00:00:00Z"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := every.Zone(); ok {
+		t.Error("an anchored @every reports a zone")
+	}
+}
