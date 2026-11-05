@@ -37,6 +37,12 @@ type CommentLink struct {
 	IssueShortID *string
 	// ProjectUID is the Project of the comment's Issue, when kata names it.
 	ProjectUID *string
+	// Handle, Teammate and Status describe the linked comment as kata gives it; CreatedAt orders replies and EditedAt is set once
+	// it was edited. TargetEdited says the comment this link answers (or is answered by) changed after the reply.
+	Handle, Teammate, Status *string
+	CreatedAt                time.Time
+	EditedAt                 *time.Time
+	TargetEdited             bool
 }
 
 // Event is one history event; Payload is kata's JSON text of it, which historyRow turns into a sentence.

@@ -150,6 +150,9 @@ func detailRows(m model.Model, now time.Time) (children []detailChild, activity 
 		if row.Creation != "" {
 			parts = append(parts, ui.Text{Common: ui.Common{Key: "creation", Tone: ui.ToneMuted}, Text: row.Creation})
 		}
+		if len(row.Tags) > 0 {
+			parts = append(parts, commentTagLine(row.Tags))
+		}
 		if mark == ui.MarkPick && item.Kind == model.RowComment {
 			if choice, ok := m.DetailCommentLink(); ok {
 				link := ui.Text{Common: ui.Common{Key: "link", Tone: ui.ToneAccent}, Text: fmt.Sprintf("link %d/%d: %s", choice.Index, choice.Count, choice.Label)}
@@ -162,9 +165,51 @@ func detailRows(m model.Model, now time.Time) (children []detailChild, activity 
 		if row.Body != "" {
 			parts = append(parts, ui.Md{Common: ui.Common{Key: "body"}, Text: row.Body})
 		}
-		activity = append(activity, ui.Card{Common: ui.Common{Key: row.Key, Mark: mark, Actions: &ui.Actions{Click: action}}, Variant: ui.CardBare, Head: head, HeadNode: headNode, Children: parts})
+		card := ui.Card{Common: ui.Common{Key: row.Key, Mark: mark, Actions: &ui.Actions{Click: action}}, Variant: ui.CardBare, Head: head, HeadNode: headNode, Children: parts}
+		if item.Depth == 0 && len(item.Leaves) == 0 {
+			activity = append(activity, card)
+			continue
+		}
+		activity = append(activity, commentThread(item, card))
 	}
 	return children, activity
+}
+
+// commentTagLine is a comment's confirm and refute tags on one line, joined by a middle dot.
+func commentTagLine(tags []model.RowSpan) ui.Text {
+	var spans []ui.Span
+	for i, tag := range tags {
+		if i > 0 {
+			spans = append(spans, ui.Span{T: " · ", S: "muted"})
+		}
+		spans = append(spans, ui.Span{T: tag.Text, S: string(tag.Style)})
+	}
+	return ui.Text{Common: ui.Common{Key: "tags"}, Spans: spans}
+}
+
+// indented draws node after two columns of space per level of depth, so a reply sits under the comment it answers.
+func indented(key string, depth int, node tern.Element) tern.Element {
+	if depth == 0 {
+		return node
+	}
+	pad := ui.Text{Common: ui.Common{Key: "indent", Shrink: new(float64), Min: &ui.Bounds{W: ui.Ch(float64(2 * depth))}}}
+	return ui.Row{Common: ui.Common{Key: key}, Children: ui.Nodes(pad, node)}
+}
+
+// commentThread is a comment's card indented to its depth in the reply tree, with the replies from other Issues as muted leaf
+// lines under it. It keeps the comment's key, so the row is found by it as an unwrapped card is.
+func commentThread(item model.DetailItem, card ui.Card) tern.Element {
+	card.Grow = 1
+	card.Min = &ui.Bounds{W: ui.Ch(0)}
+	kids := ui.Nodes(indented("thread", item.Depth, card))
+	for i, leaf := range item.Leaves {
+		lines := ui.Nodes(ui.Text{Common: ui.Common{Key: "leaf", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}, Spans: []ui.Span{{T: leaf.Text, S: "muted"}}})
+		if leaf.Edited {
+			lines = append(lines, ui.Text{Common: ui.Common{Key: "edited", Grow: 1}, Spans: []ui.Span{{T: "Target edited after this reply", S: "muted"}}})
+		}
+		kids = append(kids, indented("leaf"+strconv.Itoa(i), leaf.Depth, ui.Col{Common: ui.Common{Key: "lines", Grow: 1}, Children: lines}))
+	}
+	return ui.Col{Common: ui.Common{Key: item.Key}, Children: kids}
 }
 
 // detailChild is a child row with its cursor mark.

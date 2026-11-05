@@ -96,6 +96,8 @@ type DetailRow struct {
 	Reply, Replies string
 	// Head is a comment row's heading as styled parts: its Author, Time and the reply notes.
 	Head []RowSpan
+	// Tags are a comment row's confirm and refute tags, drawn on a line of their own.
+	Tags []RowSpan
 }
 
 // RowSpan is a part of a row's heading with its style.

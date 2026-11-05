@@ -30,6 +30,10 @@ type DetailItem struct {
 	ReplyKey     string
 	// ReferenceKey is the comment in the ReferenceUID Issue that a cross-Issue reply answers: the row a jump lands on.
 	ReferenceKey string
+	// Depth is how far a comment row nests under the comment it answers (0 for a root), and Leaves are the replies from other
+	// Issues drawn under it.
+	Depth  int
+	Leaves []CommentLeaf
 	Child        ChildRow
 	// JobUID and Cron are a RowCron row's job and what the property says of it; enter opens the job on the Jobs Page.
 	JobUID   string
@@ -148,8 +152,12 @@ func (m Model) withRows() Model {
 			}
 		}
 	case TabComments:
-		for _, comment := range m.authority.Comments {
-			item := m.commentItem(comment)
+		for _, comment := range threadOrder(m.authority.Comments) {
+			item := m.commentItem(comment.Comment)
+			item.Depth = comment.depth
+			for _, leaf := range comment.leaves {
+				item.Leaves = append(item.Leaves, m.commentLeafRow(leaf))
+			}
 			m.rows.items = append(m.rows.items, item)
 		}
 	case TabEvents:
@@ -195,7 +203,11 @@ func (m Model) commentItem(comment Comment) DetailItem {
 		case target.UID != nil && slices.ContainsFunc(m.authority.Comments, func(c Comment) bool { return c.UID == *target.UID }):
 			item.ReplyKey = *target.UID
 		}
+		if target.TargetEdited {
+			row.Reply += " — Target edited after this reply"
+		}
 	}
+	row.Tags = commentTags(comment.Backlinks)
 	row.Head = []RowSpan{{row.Author, SpanStrong}, {"  ", ""}, {row.Time, SpanTime}}
 	for _, note := range []string{row.Reply, row.Replies} {
 		if note != "" {
