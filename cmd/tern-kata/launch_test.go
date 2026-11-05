@@ -251,8 +251,6 @@ func TestPlanLaunchSubcommands(t *testing.T) {
 		{name: "completion for an unknown shell", args: []string{"completion", "tcsh"}, err: "usage: tern-kata completion bash|zsh|fish"},
 		{name: "completion takes no flags", args: []string{"completion", "bash", "--as", "bob"}, err: "completion: unknown flag --as"},
 		{name: "migrate takes no operands", args: []string{"migrate-attachments", "ab12"}, err: "usage: tern-kata migrate-attachments [--as <actor>]"},
-		{name: "attach is gone", args: []string{"attach", "ab12", "a.png"}, err: "tern-kata attach is gone: kata stores attachments itself now. Use `kata docbank attachments add <ref> ...`; the Attachments guide says how to set Docbank up"},
-		{name: "detach is gone", args: []string{"detach", "ab12", "a.png"}, err: "tern-kata detach is gone: kata stores attachments itself now. Use `kata docbank attachments rm <ref> ...`; the Attachments guide says how to set Docbank up"},
 		{name: "as without an actor", args: []string{"migrate-attachments", "--as"}, err: "--as requires an actor"},
 		{name: "unknown flag", args: []string{"migrate-attachments", "--issue", "x"}, err: "migrate-attachments: unknown flag --issue"},
 	}

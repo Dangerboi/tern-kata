@@ -160,7 +160,7 @@ func undoBoundary(cmd Cmd) (string, bool) {
 		LoadJobWorkflows, LoadJobs, LoadRuns, ShowRun, LoadRecurTarget, LoadFieldLabels, LoadProject, ReadSnapshot, Subscribe,
 		WakeAt, OpenIssue, LookupSearchID, LoadWorkflows, ReadWorkflowText, LoadWorker, LoadWorkerSetup, SaveWorkerSetup,
 		SaveWorkerEdit, StopWorker, SetWorkerSupervision, LoadLocalRun, RunJobNow, ResumeLocalRun, AbandonLocalRun,
-		OpenRunSession, StartAgent, PruneAgents, RefreshAgents, FocusAgent, OpenAgent, SendAgentBack, SetAgentOpen, CloseAgent, ReadAgentIssue, RaiseAgentAttention, ClearAgentAttention, ClearAgentAddress, CreateProject, BindProject, LookupDeleted, LoadDaemons, SwitchDaemon, LoadAttention, LoadAuthCapabilities,
+		OpenRunSession, StartAgent, PruneAgents, RefreshAgents, FocusAgent, OpenAgent, SendAgentBack, SetAgentOpen, CloseAgent, ReadAgentIssue, RaiseAgentAttention, ClearAgentAttention, ClearAgentAddress, CreateProject, BindProject, LookupDeleted, LoadDaemons, SwitchDaemon, LoadAttention, LoadAuthCapabilities, OpenAttachment,
 		LoadCredentials, LoadFederation, LoadFederationHubs, LoadFederationHubProjects, BrowseFederationHubs:
 		return "", false
 	case CloseIssueCmd, ReopenIssueCmd, MoveIssueCmd, SetDatesCmd, DeleteIssueCmd, UndoChange:
@@ -186,6 +186,8 @@ func undoBoundary(cmd Cmd) (string, bool) {
 		return "issue creation cannot be undone", true
 	case AttachFile:
 		return "attaching a file cannot be undone", true
+	case MigrateAttachments:
+		return "moving old attachments cannot be undone", true
 	case DetachFile:
 		return "unlinking an attachment cannot be undone", true
 	case CreateRecurrenceCmd:

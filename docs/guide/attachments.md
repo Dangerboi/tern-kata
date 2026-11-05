@@ -18,7 +18,7 @@ A daemon without Docbank is said so in the Attachments tab and as the error of `
 
 ## From a shell or for an agent
 
-kata has its own commands, and `tern-kata attach` and `detach` are gone:
+kata has its own commands; tern-kata has none for attachments (`tern-kata attach` and `detach` no longer exist):
 
 ```sh
 kata docbank attachments add <ref> <file>...   # upload; prints each attachment id

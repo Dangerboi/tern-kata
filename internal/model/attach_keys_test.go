@@ -17,11 +17,14 @@ func attachPane(focus model.Column, metadata map[string]any) model.Model {
 	}
 }
 
-// refs is Issue metadata holding one native Attachment reference per name, with ids ID-<name>.
+// refID is the id refs gives the Attachment called name.
+func refID(name string) string { return "ID-" + strings.ReplaceAll(name, ".", "_") }
+
+// refs is Issue metadata holding one native Attachment reference per name, with ids from refID.
 func refs(names ...string) map[string]any {
 	meta := map[string]any{"unrelated": "x"}
 	for _, n := range names {
-		meta[model.AttachmentKey("ID-"+n)] = map[string]any{"name": n, "media_type": "text/plain", "size": float64(3), "docbank_version": "6f1c2e8a-2222-4222-8222-000000000001"}
+		meta[model.AttachmentKey(refID(n))] = map[string]any{"name": n, "media_type": "text/plain", "size": float64(3), "docbank_version": "6f1c2e8a-2222-4222-8222-000000000001"}
 	}
 	return meta
 }
@@ -42,7 +45,7 @@ func TestAtAttachesTheTypedPathToTheIssueInItsOwnProject(t *testing.T) {
 		if !m.FieldForm.Open || m.FieldForm.Err == nil || m.FieldForm.Err.Error() != "/x does not exist." || m.Notice != "" {
 			t.Fatalf("failure not shown in the form: %+v, notice %q", m.FieldForm, m.Notice)
 		}
-		m, _ = model.Update(m, model.FileAttached{UID: "issue", ID: "ID-shot", Name: "shot.png"})
+		m, _ = model.Update(m, model.FileAttached{UID: "issue", ID: refID("shot.png"), Name: "shot.png"})
 		if m.FieldForm.Open || m.Notice != "Attached shot.png to abcd" {
 			t.Fatalf("form %+v, notice %q", m.FieldForm, m.Notice)
 		}
@@ -76,7 +79,7 @@ func TestShiftUListsAttachmentNamesAndUnlinksTheChosenOne(t *testing.T) {
 	// Choosing the second row sends it without a confirmation step.
 	m, _ = model.Update(m, model.KeyMsg{Chord: "down"})
 	m, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
-	want := model.DetachFile{Workspace: "/ws", UID: "issue", ProjectID: 7, Actor: "reviewer", ID: "ID-b.log", Name: "b.log"}
+	want := model.DetachFile{Workspace: "/ws", UID: "issue", ProjectID: 7, Actor: "reviewer", ID: refID("b.log"), Name: "b.log"}
 	if len(cmds) != 1 || cmds[0] != model.Cmd(want) {
 		t.Fatalf("cmds %#v, want %#v", cmds, want)
 	}
