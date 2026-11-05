@@ -331,18 +331,49 @@ type rowLookups struct {
 // minTitleWidth is the cells of title a row keeps before it drops its Date badge.
 const minTitleWidth = 12
 
-// dateRoom estimates the cells left on a row for the Date badge: the list's width (all of the Pane when it is the one column,
-// its 0.4 basis beside the detail) less the other cells, the row's selection mark and the least title.
+// dateRoom is the cells left on a row for the Date badge: the list column's width less the other cells, the row's
+// padding and the least title.
 func dateRoom(m model.Model, cols listColumns) int {
-	width := m.Cols
-	if slices.Contains(m.VisibleColumns(), model.ColumnDetail) && slices.Contains(m.VisibleColumns(), model.ColumnList) {
-		width = width * 2 / 5
-	}
 	fixed := cols.id + len(cellGap)*3 + prioWidth + statusWidth + kidsWidth + len(cellGap) + updatedWidth + rowPadding
 	if cols.ownerShown {
 		fixed += len(cellGap) + cols.owner
 	}
-	return width - fixed - minTitleWidth - len(cellGap)
+	return listWidth(m) - fixed - minTitleWidth - len(cellGap)
+}
+
+// Flex rules of the columns Row (see issues and detail), which Tern lays out and the plugin never sees: the list and detail
+// grow equally from bases of 0.4 and 0.5 of the Row, the Collections column (when shown) is as wide as its longest entry
+// and does not grow, and a gap of columnGap cells sits between columns.
+const (
+	listBasis     = 0.4
+	detailBasis   = 0.5
+	columnGap     = 2
+	sidebarChrome = 4 // the Collections column's border and padding
+)
+
+// listWidth is the list column's width in cells: all of the Pane when it is the only column, otherwise its basis plus its
+// share of what the other columns leave, as Tern's flex layout gives it.
+func listWidth(m model.Model) int {
+	columns := m.VisibleColumns()
+	if len(columns) < 2 {
+		return m.Cols
+	}
+	fixed := columnGap * (len(columns) - 1)
+	if slices.Contains(columns, model.ColumnCollections) {
+		widest := 0
+		for _, entry := range m.SidebarEntries() {
+			widest = max(widest, displayWidth(m.EntryTitle(entry)))
+		}
+		fixed += widest + sidebarChrome
+	}
+	free := float64(m.Cols-fixed) - float64(m.Cols)*(listBasis+detailBasis)
+	if slices.Contains(columns, model.ColumnDetail) {
+		if free >= 0 {
+			return int(float64(m.Cols)*listBasis + free/2)
+		}
+		return int(float64(m.Cols) * listBasis * float64(m.Cols-fixed) / (float64(m.Cols) * (listBasis + detailBasis)))
+	}
+	return m.Cols - fixed
 }
 
 // rowPadding is the cells a row spends on its selection mark and edges, beside its cells.
