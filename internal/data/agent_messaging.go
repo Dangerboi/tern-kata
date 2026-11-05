@@ -2,22 +2,16 @@ package data
 
 import (
 	"bytes"
-	_ "embed"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/Dangerboi/tern-kata/internal/atomicfile"
+	"github.com/Dangerboi/tern-kata/internal/data/ompext"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
-
-// ompExtension is tern-kata's omp extension: in an omp agent it follows kata's event stream and delivers the messages written to
-// the agent's own Agent address as user messages. Its source and Bun tests live in ompext/.
-//
-//go:embed ompext/tern-kata.ts
-var ompExtension []byte
 
 // OmpExtensionFolder is the folder of tern-kata's state folder that holds the omp extension the agents load.
 const OmpExtensionFolder = "omp"
@@ -34,8 +28,7 @@ func AgentAddress(prefix, block string) string { return prefix + "-" + block }
 // agentNoAddress says why an agent started with command cannot load tern-kata's omp extension, so has no Agent address, "" when
 // it can: the program must be omp, and omp refuses -e beside --trusted-extension.
 func agentNoAddress(command []string) model.AgentNoAddress {
-	program := filepath.Base(command[0])
-	if strings.TrimSuffix(program, filepath.Ext(program)) != worker.DefaultCommand {
+	if !worker.IsOmp(command[0]) {
 		return model.AgentNotOmp
 	}
 	if slices.ContainsFunc(command[1:], func(arg string) bool {
@@ -49,11 +42,11 @@ func agentNoAddress(command []string) model.AgentNoAddress {
 // writeOmpExtension puts the omp extension in the state folder, replacing a file of other content (an older tern-kata's), and
 // returns its path. An agent already running keeps the extension it loaded.
 func writeOmpExtension(state string) (string, error) {
-	path := filepath.Join(state, OmpExtensionFolder, "tern-kata.ts")
-	if held, err := os.ReadFile(path); err == nil && bytes.Equal(held, ompExtension) {
+	path := filepath.Join(state, OmpExtensionFolder, ompext.FileName)
+	if held, err := os.ReadFile(path); err == nil && bytes.Equal(held, ompext.Source) {
 		return path, nil
 	}
-	if err := atomicfile.Write(path, ompExtension, atomicfile.Options{Mode: 0o600, DirMode: 0o700}); err != nil {
+	if err := atomicfile.Write(path, ompext.Source, atomicfile.Options{Mode: 0o600, DirMode: 0o700}); err != nil {
 		return "", err
 	}
 	return path, nil

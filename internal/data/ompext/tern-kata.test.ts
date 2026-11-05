@@ -362,7 +362,10 @@ describe("readConfig", () => {
 });
 
 describe("extension factory", () => {
-  type Handler = (event: unknown, ctx: { agent?: { kind?: string } }) => void;
+  type Handler = (
+    event: unknown,
+    ctx: { agent?: { kind?: string }; sessionManager?: { getSessionId?(): string } },
+  ) => void;
 
   function wire(env: Record<string, string | undefined>, stdout = emptyInbox()) {
     const handlers = new Map<string, Handler>();
@@ -424,5 +427,37 @@ describe("extension factory", () => {
     expect(w.sent).toHaveLength(1);
     expect(w.sent[0].options).toEqual({ deliverAs: "aside" });
     expect(w.sent[0].text).toContain("on demo#abcd,");
+  });
+
+  const session = (id: string, kind?: string) => ({ agent: kind ? { kind } : undefined, sessionManager: { getSessionId: () => id } });
+
+  test("each session event names the main session to kata close, without an inbox address too", () => {
+    for (const env of [{} as Record<string, string | undefined>, { KATA_INBOX_USER: ADDRESS, KATA_REF: "demo#abcd" }]) {
+      const w = wire(env);
+      w.handlers.get("session_start")?.({}, session("01a1aade-a1ad-7230-ae16-042ff12a5d53"));
+      expect(env.KATA_TRANSCRIPT_AGENT).toBe("omp");
+      expect(env.KATA_TRANSCRIPT_SESSION_ID).toBe("01a1aade-a1ad-7230-ae16-042ff12a5d53");
+      w.handlers.get("session_switch")?.({}, session("second"));
+      expect(env.KATA_TRANSCRIPT_SESSION_ID).toBe("second");
+      w.handlers.get("session_branch")?.({}, session("third"));
+      expect(env.KATA_TRANSCRIPT_SESSION_ID).toBe("third");
+    }
+  });
+
+  test("a subagent's session leaves the parent's named", () => {
+    const env: Record<string, string | undefined> = {};
+    const w = wire(env);
+    w.handlers.get("session_start")?.({}, session("parent"));
+    w.handlers.get("session_start")?.({}, session("child", "sub"));
+    expect(env.KATA_TRANSCRIPT_SESSION_ID).toBe("parent");
+  });
+
+  test("a session id kata would refuse, or none, unsets the names so no close cites the session before", () => {
+    for (const ctx of [session("has space"), session("-lead"), session("x".repeat(129)), {}]) {
+      const env: Record<string, string | undefined> = { KATA_TRANSCRIPT_AGENT: "omp", KATA_TRANSCRIPT_SESSION_ID: "old" };
+      wire(env).handlers.get("session_switch")?.({}, ctx);
+      expect(env.KATA_TRANSCRIPT_AGENT).toBeUndefined();
+      expect(env.KATA_TRANSCRIPT_SESSION_ID).toBeUndefined();
+    }
   });
 });

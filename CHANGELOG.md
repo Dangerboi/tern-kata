@@ -15,6 +15,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `N` on the Federation Page names a spoke: on the enrollment preview it sets the name the hub records with the enrollment, and on a spoke, in the list or its detail, it renames it on the hub, where an empty name clears it. The name shows on the spoke's card and detail. The card refuses a name that breaks kata's rule in kata's words before anything reaches the hub, and shows the hub's reason when it refuses a name another spoke holds.
 - The Close card for a `done` close can cite one or more of the Issue's Attachments as evidence; the Events tab names a cited Attachment, and marks it `[removed]` once it is unlinked.
 - `tern-kata migrate-attachments` moves the old attachments stored on this machine to Docbank, deletes the local copies, and lists the ones held on other machines.
+- A `kata close` run by an omp agent the Pane started, or by a worker run whose profile `command` is omp, names that agent's omp session, so with `[close.transcript]` enabled in kata's config the close records the session and, with `agentsview_url`, a link to it in AgentsView. Worker runs now load tern-kata's omp extension for this, also under `--no-extensions`.
 
 ### Changed
 

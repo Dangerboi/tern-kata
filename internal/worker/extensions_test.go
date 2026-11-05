@@ -27,7 +27,7 @@ func TestAProfilesExtensionsBecomeOmpArguments(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			args := agentArgs(cfg.Profiles["default"], t.TempDir(), "/p", "")
+			args := agentArgs(cfg.Profiles["default"], t.TempDir(), "/p", "", "")
 			for _, flag := range []string{"--no-extensions", "--trusted-extension"} {
 				if got, want := slices.Contains(args, flag), slices.Contains(c.want, flag); got != want {
 					t.Fatalf("args %v: %s present = %v, want %v", args, flag, got, want)
@@ -315,5 +315,36 @@ func TestDoctorLeavesTheCallersCheckoutSliceAlone(t *testing.T) {
 	Doctor(context.Background(), DoctorOptions{Dirs: dirs, Omp: omp})
 	if extra := backing[:cap(backing)][1]; extra != "" {
 		t.Fatalf("the doctor wrote %q into the caller's slice", extra)
+	}
+}
+
+func TestARunLoadsTernKatasExtensionWithTheFlagItsProfileAllows(t *testing.T) {
+	trusted := filepath.Join(t.TempDir(), "a.ts")
+	const ext = "/runs/r/tern-kata.ts"
+	cases := []struct{ name, profile, flag string }{
+		{"a missing key loads it under --no-extensions", "", "-e"},
+		{"ambient loads it beside what omp finds", "extensions = \"ambient\"\n", "-e"},
+		{"a list trusts it too, as omp refuses -e beside --trusted-extension", "extensions = ['" + trusted + "']\n", "--trusted-extension"},
+		{"a --trusted-extension in args does the same", "args = ['--trusted-extension', '" + trusted + "']\n", "--trusted-extension"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cfg, err := load(t, "executor = \"laptop\"\n[profiles.default]\n"+c.profile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			args := agentArgs(cfg.Profiles["default"], t.TempDir(), "/p", "", ext)
+			if n := len(args); n < 3 || args[n-3] != c.flag || args[n-2] != ext || args[n-1] != "@/p" {
+				t.Fatalf("args %v: want %s %s just before the prompt", args, c.flag, ext)
+			}
+		})
+	}
+}
+
+func TestOnlyOmpIsOmp(t *testing.T) {
+	for program, want := range map[string]bool{"omp": true, "/usr/local/bin/omp": true, `C:\bin\omp.exe`: runtime.GOOS == "windows", "claude": false, "omp-wrapper": false} {
+		if got := IsOmp(program); got != want {
+			t.Errorf("IsOmp(%q) = %v, want %v", program, got, want)
+		}
 	}
 }

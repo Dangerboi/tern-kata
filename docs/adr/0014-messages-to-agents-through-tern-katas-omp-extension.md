@@ -23,5 +23,6 @@ This departs, for the extension only, from [ADR-0001](0001-daemon-client-not-emb
 ## Consequences
 
 - Only omp agents the Pane starts receive messages; agents of other programs, `--trusted-extension` agents and worker runs (`omp -p`, one prompt) do not.
+- The extension later took a second job, naming the omp session to `kata close` for kata's transcript references, so worker runs whose command is omp load it too. The worker strips `KATA_INBOX_USER` from a run's environment, so the extension follows no events there and worker runs still receive no messages.
 - An omp agent pays one `kata events` child for its life. Without a cursor, kata replays the Project's events before going live (at most 10 000, beyond which it resets to the newest), which the extension skims without parsing lines that do not name its key.
 - The extension is versioned with tern-kata: each agent start rewrites the file when its content differs, and a running agent keeps the one it loaded.

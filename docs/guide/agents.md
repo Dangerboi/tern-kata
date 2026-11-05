@@ -88,6 +88,21 @@ Work attention is the Issue's own `work.attention`. An open Issue whose `work.at
 - **The extension**: it ships in the binary and is written to `omp/tern-kata.ts` in tern-kata's state folder on each start, replaced when its content changes; a running agent keeps the one it loaded. It needs `kata` on the agent's `PATH`, as the agent does. It loads even under `--no-extensions`.
 - **With kata-omp installed**: kata-omp lists the message in its inbox section of the agent's system prompt too, until the agent clears it, so the agent sees it twice; that does no harm. The wrapper's `KATA_OMP_LIVE_INBOX=0` tells a kata-omp that delivers messages live itself to leave that to tern-kata's extension.
 
+### Transcript links on closes
+
+kata can record which agent session closed an Issue, and link it to [AgentsView](https://agentsview.io), when `kata close` runs with `[close.transcript]` turned on in kata's `config.toml` (in `KATA_HOME`, `~/.kata` by default):
+
+```toml
+[close.transcript]
+enabled = true
+agentsview_url = "http://127.0.0.1:8080" # optional: also store a link to the session
+```
+
+- **What tern-kata does**: its omp extension sets `KATA_TRANSCRIPT_AGENT=omp` and `KATA_TRANSCRIPT_SESSION_ID` to the omp session's id when the session starts, and again when it switches or branches, so every `kata close` the agent runs names the session it ran in. kata stores the agent, the id and, with `agentsview_url`, the link `<agentsview_url>/sessions/omp/<id>` with the close. Without `[close.transcript]` kata ignores both variables. A subagent inside the agent leaves the agent's session named.
+- **Which agents**: every omp agent the Pane starts that loads the extension (the same agents [messages](#messages-to-an-agent) reach), and every worker run whose profile `command` is omp. A worker run writes the extension into its run folder as `tern-kata.ts` and loads it with `-e`, or with `--trusted-extension` when the profile's `extensions` is a list or its `args` trust a path, as omp refuses the two together. It loads under `--no-extensions` as well.
+- **Worker runs in AgentsView**: a run keeps its omp session in its run folder (`--session-dir`), not in `~/.omp/agent/sessions`, where AgentsView looks for omp sessions, so the stored link may not open until AgentsView reads that folder too. The agent and session id are recorded either way.
+- **Checked with**: omp 18.16, which reads the environment an extension sets at session start into the shell its agent's commands run in.
+
 ## Clickable ticket links from agents
 
 Tern draws `kata://` links in chat as plain text, so agents should write ticket references as `https://kata.invalid/...` links, which the plugin intercepts. Clicking one focuses the kata Pane in the current tab (or opens one there) and selects that Issue; a kata Pane in another tab is left alone. When the Issue belongs to another Project than the one the Pane shows (a Project Collection), the Pane switches to that Project, on the same Page, and Esc goes back to where it was; in Inbox, All Open and the other Collections that span Projects it stays where it is.

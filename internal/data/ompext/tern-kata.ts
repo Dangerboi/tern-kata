@@ -1,5 +1,6 @@
 // tern-kata's omp extension: delivers kata notification slots written for this
-// agent (from tern-kata's Attention Page) to the running omp session as user messages.
+// agent (from tern-kata's Attention Page) to the running omp session as user messages,
+// and names the session to `kata close` so a close carries a transcript reference.
 
 /** One running `kata` child whose stdout is read line by line. */
 export interface Spawned {
@@ -322,15 +323,42 @@ export function createFollower(deps: FollowerDeps): Follower {
 interface ExtensionContext {
   cwd?: string;
   agent?: { kind?: string };
+  sessionManager?: { getSessionId?(): string };
   setTimeout?(fn: () => void, ms: number): unknown;
   clearTimer?(handle: unknown): void;
 }
 
+/** The omp events after which the session's id may be another one; omp re-reads process.env for its shells after them. */
+const SESSION_EVENTS = ["session_start", "session_switch", "session_branch"] as const;
+
 /** The slice of omp's extension API this file uses. */
 export interface ExtensionApi {
-  on(event: "session_start", handler: (event: unknown, ctx: ExtensionContext) => void): void;
-  on(event: "session_shutdown", handler: (event: unknown, ctx: ExtensionContext) => void): void;
+  on(event: (typeof SESSION_EVENTS)[number] | "session_shutdown", handler: (event: unknown, ctx: ExtensionContext) => void): void;
   sendUserMessage(text: string, options: { deliverAs: "aside" }): Promise<unknown> | void;
+}
+
+/** kata's rule for the session id of an agent other than claude and codex (its internal/transcript). */
+const TRANSCRIPT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+
+/**
+ * Names the main session to `kata close`, which reads KATA_TRANSCRIPT_AGENT and KATA_TRANSCRIPT_SESSION_ID when
+ * [close.transcript] is enabled in kata's config. A session id kata would refuse unsets both, so a close never cites
+ * the session before a switch.
+ */
+export function exportTranscriptSession(env: Record<string, string | undefined>, ctx: ExtensionContext): void {
+  let id = "";
+  try {
+    id = ctx.sessionManager?.getSessionId?.() ?? "";
+  } catch {
+    // no session id to name
+  }
+  if (TRANSCRIPT_ID.test(id)) {
+    env.KATA_TRANSCRIPT_AGENT = "omp";
+    env.KATA_TRANSCRIPT_SESSION_ID = id;
+  } else {
+    delete env.KATA_TRANSCRIPT_AGENT;
+    delete env.KATA_TRANSCRIPT_SESSION_ID;
+  }
 }
 
 /** How kata commands are executed; replaced in tests. */
@@ -407,12 +435,17 @@ export function createExtension(env: Record<string, string | undefined>, io: Kat
       });
     }
 
-    pi.on("session_start", (_event, c) => {
-      if (!config || c.agent?.kind === "sub") return;
-      ctx = c;
-      follower ??= build(config);
-      follower.start();
-    });
+    for (const name of SESSION_EVENTS) {
+      pi.on(name, (_event, c) => {
+        // An in-process subagent shares process.env with its parent, whose commands must keep naming the parent.
+        if (c.agent?.kind === "sub") return;
+        exportTranscriptSession(env, c);
+        if (name !== "session_start" || !config) return;
+        ctx = c;
+        follower ??= build(config);
+        follower.start();
+      });
+    }
     pi.on("session_shutdown", () => {
       follower?.stop();
     });

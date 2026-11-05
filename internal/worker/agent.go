@@ -247,11 +247,12 @@ func (p *agentParser) Result() AgentResult {
 func sessionFolder(runDir string) string { return filepath.Join(runDir, "session") }
 
 // args is the omp command line for a run (ADR-0009): headless JSON, the run's session folder, the profile's model
-// and thinking level, its extensions flags, an unattended approval mode unless the profile sets its own, the profile's extra arguments, and
-// the prompt as an @file (one positional is one turn; the file keeps the prompt out of argv's size limit).
+// and thinking level, its extensions flags, an unattended approval mode unless the profile sets its own, the profile's extra arguments,
+// tern-kata's omp extension when extension names it, and the prompt as an @file (one positional is one turn; the file keeps the
+// prompt out of argv's size limit).
 // Checked against omp 18.12: -p --mode json need no TTY, stdin must be /dev/null, and without an approval mode a
 // headless run that needs approval has no one to ask, so the default is `--approval-mode yolo`.
-func agentArgs(p Profile, runDir, promptFile string, resume string) []string {
+func agentArgs(p Profile, runDir, promptFile, resume, extension string) []string {
 	args := []string{"-p", "--mode", "json", "--session-dir", sessionFolder(runDir)}
 	if resume != "" {
 		args = append(args, "--resume", resume)
@@ -269,7 +270,26 @@ func agentArgs(p Profile, runDir, promptFile string, resume string) []string {
 	}
 	args = append(args, p.Extensions.args()...)
 	args = append(args, p.Args...)
+	if extension != "" {
+		args = append(args, p.extensionFlag(), extension)
+	}
 	return append(args, "@"+promptFile)
+}
+
+// extensionFlag is the flag that loads one more extension on the profile's command line: omp refuses -e beside
+// --trusted-extension, so a profile that trusts paths (its `extensions` list or its args) gets one more of those; omp keeps
+// either under --no-extensions.
+func (p Profile) extensionFlag() string {
+	if p.Extensions.Mode == extensionsList || p.hasArg("--trusted-extension") {
+		return "--trusted-extension"
+	}
+	return "-e"
+}
+
+// IsOmp is true when program (a name or a path, with or without .exe) is omp, the only program tern-kata's extension is for.
+func IsOmp(program string) bool {
+	base := filepath.Base(program)
+	return strings.TrimSuffix(base, filepath.Ext(base)) == DefaultCommand
 }
 
 // MaxPromptBytes bounds the expanded prompt (ADR-0009).

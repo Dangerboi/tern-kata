@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/data/ompext"
 	"github.com/Dangerboi/tern-kata/internal/guardedfile"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/worker"
@@ -229,8 +230,8 @@ func TestStartingAnAgentWritesThePromptRunsTernAndRecordsTheBlock(t *testing.T) 
 	if !slices.Equal(ran, want) {
 		t.Fatalf("ran %q, want %q", ran, want)
 	}
-	if text, err := os.ReadFile(extension); err != nil || !bytes.Equal(text, ompExtension) {
-		t.Fatalf("the extension file holds %d bytes, %v; want the embedded %d", len(text), err, len(ompExtension))
+	if text, err := os.ReadFile(extension); err != nil || !bytes.Equal(text, ompext.Source) {
+		t.Fatalf("the extension file holds %d bytes, %v; want the embedded %d", len(text), err, len(ompext.Source))
 	}
 	text, err := os.ReadFile(e.PromptFile)
 	if err != nil || string(text) != AgentPrompt("demo#ab12", "Fix it", "dana") {
@@ -293,7 +294,7 @@ func TestTheOmpExtensionIsWrittenFromTheBinaryAndReplacedWhenItChanges(t *testin
 	if again, err := writeOmpExtension(state); err != nil || again != path {
 		t.Fatalf("again %q, %v", again, err)
 	}
-	if text, err := os.ReadFile(path); err != nil || !bytes.Equal(text, ompExtension) {
+	if text, err := os.ReadFile(path); err != nil || !bytes.Equal(text, ompext.Source) {
 		t.Fatalf("after a second write the file holds %q, %v", text, err)
 	}
 }

@@ -16,6 +16,7 @@ import (
 	"unicode"
 
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
+	"github.com/Dangerboi/tern-kata/internal/data/ompext"
 )
 
 // noteHook halts the worker's run machinery when a test's save hook "killed" it, as a crash would: nothing after the
@@ -417,7 +418,17 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 	if err := os.MkdirAll(sessionFolder(sp.dir), 0o700); err != nil {
 		return w.hold(j, HoldExecutionError, err.Error())
 	}
-	cmd := exec.Command(program, agentArgs(sp.profile, sp.dir, promptFile, resumeID)...)
+	// tern-kata's omp extension names the run's session to the agent's `kata close`; omp refuses a relative trusted path.
+	var extension string
+	if IsOmp(program) {
+		if extension, err = filepath.Abs(filepath.Join(sp.dir, ompext.FileName)); err == nil {
+			err = replaceFile(extension, ompext.Source)
+		}
+		if err != nil {
+			return w.hold(j, HoldExecutionError, "the omp extension could not be written: "+err.Error())
+		}
+	}
+	cmd := exec.Command(program, agentArgs(sp.profile, sp.dir, promptFile, resumeID, extension)...)
 	cmd.Dir = cwd
 	cmd.Env = childEnv(j.Actor, secrets)
 	cmd.Stdin = nil // /dev/null: omp reads an open stdin to EOF as prompt text
