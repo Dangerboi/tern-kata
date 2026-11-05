@@ -732,12 +732,21 @@ func TestARefusedSpokeNameFailsTheEnrollmentBeforeAnythingIsGrantedInKatasWords(
 	draft := replicaDraft(acme)
 	draft.SpokeName = "Bad Name"
 
+	hubLog := watch(rig.hub, nil)
+
 	got := rig.enroll(t, draft)
 	if got.Err == nil || got.Recovery != nil || !strings.Contains(got.Err.Error(), "must match [a-z][a-z0-9-]{0,31}") {
 		t.Fatalf("enrollment %+v, want kata's reason and no recovery", got)
 	}
 	if enrollments := rig.hubEnrollments(t); len(enrollments) != 0 {
 		t.Errorf("the hub holds %+v", enrollments)
+	}
+	hubLog.mu.Lock()
+	defer hubLog.mu.Unlock()
+	for _, c := range hubLog.calls {
+		if c.method != http.MethodGet {
+			t.Errorf("the hub was written to before the name was refused: %s %s", c.method, c.path)
+		}
 	}
 }
 

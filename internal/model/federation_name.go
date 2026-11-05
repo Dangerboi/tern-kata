@@ -1,6 +1,10 @@
 package model
 
-import "strings"
+import (
+	"fmt"
+	"regexp"
+	"strings"
+)
 
 // A spoke's name is a label the hub keeps for an enrolled instance, so hub event history and its enrollment list can say which spoke
 // is meant. It is set while enrolling (`N` on the preview) or afterwards (`N` on a spoke, in the list or its detail), where an empty
@@ -66,6 +70,18 @@ func openFederationNameForEnroll(m Model) (Model, []Cmd) {
 	return m, nil
 }
 
+// spokeNamePattern is kata's rule for a spoke name (kata's own check runs before it writes, and so does ours).
+var spokeNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
+
+// ValidateSpokeName reports whether the hub will take name for a spoke, in kata's words. An empty name is fine: it names nothing, or
+// clears the name.
+func ValidateSpokeName(name string) error {
+	if name == "" || spokeNamePattern.MatchString(name) {
+		return nil
+	}
+	return fmt.Errorf("invalid federation spoke name: %q must match [a-z][a-z0-9-]{0,31}", name)
+}
+
 // federationNameKey is one key for the name card: Enter saves, esc closes, every other key is typed. Nothing but typing and moving
 // the caret is taken while a rename runs.
 func federationNameKey(m Model, msg KeyMsg) (Model, []Cmd) {
@@ -78,6 +94,10 @@ func federationNameKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	switch {
 	case bound && binding.Action == FederationNameSave:
 		name := strings.TrimSpace(n.Input)
+		if err := ValidateSpokeName(name); err != nil {
+			n.Err = err
+			return m, nil
+		}
 		if !n.Rename {
 			f.Draft.SpokeName = name
 			*n = FederationName{}

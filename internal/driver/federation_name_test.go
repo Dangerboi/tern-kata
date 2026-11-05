@@ -110,18 +110,33 @@ func TestNOnASpokeRenamesItOnItsHubAndAnEmptyNameClearsIt(t *testing.T) {
 	}
 }
 
-func TestAHubsRefusalOfANameShowsItsReasonAndKeepsTheCard(t *testing.T) {
+func TestTheCardRefusesABadNameItselfAndSendsNothing(t *testing.T) {
 	s := federationListed(t, healthySpoke("acme"))
 	saved := step(t, typeText(t, step(t, s, key("shift+n")).State, "Bad Name"), key("enter"))
+	if len(saved.Cmds) != 0 || saved.State.Model.Federation.Name.Saving || saved.State.Model.TopCard() != model.CardFederationName || saved.State.Model.Federation.Name.Input != "Bad Name" {
+		t.Fatalf("a bad name left card %v, saving %v, input %q and asked %#v", saved.State.Model.TopCard(), saved.State.Model.Federation.Name.Saving, saved.State.Model.Federation.Name.Input, saved.Cmds)
+	}
+	wantShown(t, "the card", saved.State, `invalid federation spoke name: "Bad Name" must match [a-z][a-z0-9-]{0,31}`)
+
+	preview := previewed(t, atHubProjectStep(t, enrollPane(t), rowReplica, hubBeta))
+	named := step(t, typeText(t, step(t, preview, key("shift+n")).State, "Phone"), key("enter")).State
+	if named.Model.TopCard() != model.CardFederationName || named.Model.Federation.Draft.SpokeName != "" {
+		t.Errorf("the preview took a bad name: card %v, name %q", named.Model.TopCard(), named.Model.Federation.Draft.SpokeName)
+	}
+}
+
+func TestAHubsRefusalOfANameShowsItsReasonAndKeepsTheCard(t *testing.T) {
+	s := federationListed(t, healthySpoke("acme"))
+	saved := step(t, typeText(t, step(t, s, key("shift+n")).State, "taken"), key("enter"))
 	cmd, ok := asked[model.SetFederationSpokeName](saved.Cmds)
 	if !ok {
 		t.Fatalf("Enter asked %#v", saved.Cmds)
 	}
-	refused := step(t, saved.State, model.FederationSpokeNamed{Attempt: cmd.Attempt, Hub: cmd.HubURL, Err: errors.New("spoke name must start with a letter")}).State
-	if refused.Model.TopCard() != model.CardFederationName || refused.Model.Federation.Name.Saving || refused.Model.Federation.Name.Input != "Bad Name" {
+	refused := step(t, saved.State, model.FederationSpokeNamed{Attempt: cmd.Attempt, Hub: cmd.HubURL, Err: errors.New("federation spoke name already held")}).State
+	if refused.Model.TopCard() != model.CardFederationName || refused.Model.Federation.Name.Saving || refused.Model.Federation.Name.Input != "taken" {
 		t.Fatalf("a refusal left card %v, saving %v, input %q", refused.Model.TopCard(), refused.Model.Federation.Name.Saving, refused.Model.Federation.Name.Input)
 	}
-	wantShown(t, "the card", refused, "spoke name must start with a letter")
+	wantShown(t, "the card", refused, "federation spoke name already held")
 	if refused.Model.SelectedSpoke().SpokeName != "" {
 		t.Error("a refused name was kept")
 	}

@@ -167,6 +167,9 @@ func (c *Client) EnrollFederation(ctx context.Context, cmd model.EnrollFederatio
 	if strings.TrimSpace(cmd.InstanceUID) == "" {
 		return failed(errors.New("spoke instance UID is not loaded; refresh federation status before enrollment"))
 	}
+	if err := model.ValidateSpokeName(d.SpokeName); err != nil {
+		return failed(err)
+	}
 	entry, err := c.hubEntry(d.Hub.Name)
 	if err != nil {
 		return failed(err)

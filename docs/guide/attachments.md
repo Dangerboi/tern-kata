@@ -10,7 +10,7 @@ This needs kata v0.21 and a daemon with Docbank configured (see [Setting Docbank
 
 - `@` on the selected Issue (in the list, on the Board, in the Lane view or in the Issue detail) asks for a path, quoted, starting with `~` or relative to the directory, and uploads the file under its own name. A refusal or a failure shows in the form. A file may be up to 256 MiB.
 - `U` lists the Issue's Attachments by name: `down` and `up` move and `enter` unlinks the one chosen, with no further confirmation. Unlinking removes the Issue's reference only; the bytes stay in Docbank, because kata has no call that deletes them. Two Attachments with one name show with the last characters of their ids to tell them apart. `U` on an Issue with none says so.
-- The Attachments tab of the Issue detail lists the Issue's Attachments with their name, media type and size. `enter` on one downloads it into a cache folder and opens it with the program your OS has for its type; the next `enter` reuses the download.
+- The Attachments tab of the Issue detail lists the Issue's Attachments with their name, media type and size. `enter` on one downloads it into a cache folder and opens it with the program your OS has for its type; the next `enter` reuses the download. A program or script is only saved, never opened, because opening it would run it and anyone who can write the Project can name an Attachment `report.bat`: the Pane says "Cannot open report.bat: saved at <path> and not opened because it is a program". These are `.exe`, `.bat`, `.cmd`, `.com`, `.js`, `.vbs`, `.ps1`, `.msi`, `.lnk` and the other Windows script and installer types (plus anything in `PATHEXT`), `.app`, `.command`, `.tool`, `.terminal`, `.pkg` and `.workflow` on macOS, and `.desktop` on Linux, in any letter case. The download never gets an execute permission.
 
 ## Citing an attachment when closing
 
@@ -76,7 +76,7 @@ Run it from a directory bound to the Project. For every Issue of the Project, op
 2. clears the old key, and only then
 3. deletes the local copy.
 
-A failure at any step keeps the file and the key, so a run can be repeated. If the upload worked but the old key could not be cleared, the next run uploads the file again, so the Issue gets a second copy of it. When the `.kata-attachments` folder ends up empty (or holding only its own `.gitignore`), the command removes it.
+A failure at any step keeps the file and the key, so a run can be repeated. If the upload worked but the old key could not be cleared, the command unlinks the copy it just uploaded, so a repeat does not leave two. If that unlink fails too, the output says so and names the new attachment, because a duplicate may exist; remove it with `kata docbank attachments rm`. When the `.kata-attachments` folder ends up empty (or holding only its own `.gitignore`), the command removes it.
 
 The command prints what moved, and lists what it left with the reason:
 
