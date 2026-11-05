@@ -22,7 +22,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The Pages are numbered as in kata tui: `1` Issues, `2` Jobs, `3` Runs, `4` Workflows, `5` Board and `6` Attention. `b` still toggles the Board and `T` still opens Attention.
 - The Move card moves an Issue with its open descendants, as kata does. The preview names the Issues that move, the **Only this Issue** switch (`o`, or a click) moves the Issue alone, and the Notice says how many Issues moved. When kata refuses because of a descendant (archived, or held back for another reason), the card names it and keeps **Only this Issue** within reach; a subtree that changed during the move shows in words too.
 - The Comments tab shows a discussion as a reply tree: replies nest under the comment they answer, four levels deep at most, a reply from another Issue is a line under its target, and confirm and refute show as tags, reading "(before edit)" when the evidence predates an edit of the comment.
-- When an Issue's date changed elsewhere since the Dates card opened, the card writes none of your changes, refills that field with the current value and keeps your other edits, where it used to ask you to close and reopen it.
+- When an Issue's date changed elsewhere since the Dates card opened, the card writes none of your changes, refills that field with the current value and keeps your other edits, where it used to ask you to close and reopen it. A date that changes elsewhere during the save itself stops it there, and the card names the fields already saved.
 - When the daemon doesn't know the Project a folder is bound to, the message names that Project, or the alias kata matched.
 - The kata skill is written for kata v0.21: it starts, changes and stops a recurrence with `kata schedule --repeat`, moves an Issue with its open descendants, and closes with Docbank or attachment evidence.
 - Switching to a stopped local daemon on the Daemons Page starts it through kata's client, with the Pane's own environment: `KATA_DSN`, `KATA_DB` and `KATA_SERVER` are no longer removed first. A switch to a remote entry still sends only that entry's own token.
@@ -33,10 +33,11 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 ### Removed
 
 - `tern-kata attach` and `tern-kata detach`: use `kata docbank attachments add`, `ls`, `get` and `rm`.
-- The `.kata-attachments` folder store and its pointer keys (`tern-kata.attachment.*`, and `attachment.*` from 0.3); `tern-kata migrate-attachments` moves what they hold.
+- The `.kata-attachments` folder store and its pointer keys (`tern-kata.attachment.<name>`, and from 0.3 `attachment.<name>` holding `{host, path}`); `tern-kata migrate-attachments` moves what they hold.
 
 ### Fixed
 
+- A cron expression whose `CRON_TZ=` or `TZ=` zone is quoted, such as `CRON_TZ="Europe/Berlin"`, is read with that zone: the worker no longer sets the job aside as naming another zone than its trigger's, and the Jobs Page shows its runs.
 - Supervision no longer starts a second worker for `worker.lock` to refuse, all day long, after a plugin reload or a Tern update: the host half leaves the worker that is still running alone, logs one line naming it, and starts a worker within 10 seconds of its end.
 
 ## [0.7.2] - 2026-11-02
