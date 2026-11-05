@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/mattn/go-runewidth"
@@ -112,9 +111,9 @@ func issues(m model.Model, now time.Time) tern.Element {
 	owners := make([]string, len(rows))
 	for i, row := range rows {
 		owners[i] = listOwner(m, row, now)
-		cols.fit(utf8.RuneCountInString(idCell(row)), displayWidth(owners[i]))
+		cols.fit(displayWidth(idCell(row)), displayWidth(owners[i]))
 	}
-	lookups := rowLookups{lanes: m.LaneList(), badges: m.AgentBadges(), today: model.NewCalendarDay(m.Calendar.Date), dateRoom: dateRoom(m, cols)}
+	lookups := rowLookups{lanes: m.LaneList(), badges: m.AgentBadges(), today: model.NewCalendarDay(m.Calendar.Date), width: listWidth(m)}
 	items := make([]tern.Element, 0, len(rows)+len(m.Groups))
 	groups := make(map[string]model.IssueGroup, len(m.Issues))
 	for _, group := range m.Groups {
@@ -320,35 +319,12 @@ func stripeRole(i int) string {
 	return ""
 }
 
-// listColumns are the list's cell widths, and whether the owner column is drawn.
-type listColumns struct {
-	ownerShown bool
-	id, owner  int
-}
-
-// fit widens the columns to a row's id and owner widths, up to maxBoxWidth: a wider column would have no box rule, so its
-// cells are cut to the cap instead (rightCells and issueRow cut to the column's width).
-func (c *listColumns) fit(id, owner int) {
-	c.id = min(max(c.id, id), maxBoxWidth)
-	c.owner = min(max(c.owner, owner), maxBoxWidth)
-}
-
 // rowLookups are what every row of a frame draws from alike, read once: the Lane list and each Issue's Agent badge.
 type rowLookups struct {
-	lanes    []string
-	badges   model.AgentBadgeIndex
-	today    model.CalendarDay
-	dateRoom int // cells a row with no Agent badge or hand-off word has for its whole title and its Date badge together
-}
-
-// dateRoom is the cells left on a row for its title and Date badge with its gap: the list column's width less the other cells
-// (which hold the gap before the title), the row's padding and the one cell of the Detail between the label and the value.
-func dateRoom(m model.Model, cols listColumns) int {
-	fixed := cols.id + len(cellGap)*3 + prioWidth + statusWidth + kidsWidth + len(cellGap) + updatedWidth + rowPadding
-	if cols.ownerShown {
-		fixed += len(cellGap) + cols.owner
-	}
-	return listWidth(m) - fixed - itemDetailWidth
+	lanes  []string
+	badges model.AgentBadgeIndex
+	today  model.CalendarDay
+	width  int // the list column's width in cells
 }
 
 // Flex rules of the columns Row (see issues and detail), which Tern lays out and the plugin never sees: the list and detail
@@ -412,61 +388,41 @@ func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected boo
 		kids = fmt.Sprintf("%d/%d", row.OpenKids, row.TotalKids)
 	}
 	title := issueTitle(row.Issue)
-	left := []ui.Span{
-		{T: cell(idCell(row), cols.id), S: mono(toneStyle(issueLaneToneIn(lookups.lanes, row.Issue)))},
-		{T: cellGap + cell(prio, prioWidth), S: mono(prioStyle)},
-		{T: cellGap + cell(row.Status, statusWidth), S: statusStyle},
-	}
 	// The Agent badge is a span: an Item has one click, and Spans have none, so the badge on a row is not clickable.
-	gap, beforeTitle := cellGap, 0 // beforeTitle is the cells ahead of the title beyond the one cellGap dateRoom counts
+	var badges []ui.Span
 	if badge, ok := lookups.badges.For(row.UID); ok {
-		left = append(left, ui.Span{T: gap + badge.Text, S: string(badge.Tone)})
-		beforeTitle += displayWidth(gap + badge.Text)
-		gap = " "
+		badges = append(badges, ui.Span{T: badge.Text, S: string(badge.Tone)})
 	}
 	// An agent's hand-off (work.attention) reads beside the badge, whoever wrote it.
 	if w, ok := model.IssueWorkAttention(row.Issue); ok {
-		left = append(left, ui.Span{T: gap + w.Word(), S: string(attentionTone(w))})
-		beforeTitle += displayWidth(gap + w.Word())
-		gap = " "
+		badges = append(badges, ui.Span{T: w.Word(), S: string(attentionTone(w))})
 	}
-	beforeTitle += len(gap) - len(cellGap) // dateRoom already holds the title's own gap of cellGap
-	left = append(left, ui.Span{T: gap + title})
-	// An open Issue's Date badge reads after the title, as in kata tui. The title has priority: the badge goes when the whole
-	// title and the badge do not fit the row.
+	// An open Issue's Date badge reads after the title, as in kata tui.
+	var dateBadge ui.Span
 	if !model.IsClosed(row.Issue) {
 		if date, ok := lookups.today.ChooseDateBadge(row.Issue); ok {
-			badge := cellGap + date.Text
-			if displayWidth(title)+displayWidth(badge) <= lookups.dateRoom-beforeTitle {
-				left = append(left, ui.Span{T: badge, S: mono(toneStyle(dateTones[date.Tone]))})
-			}
+			dateBadge = ui.Span{T: date.Text, S: mono(toneStyle(dateTones[date.Tone]))}
 		}
 	}
+	laid := layoutRow(cols, lookups.width, rowParts{
+		id:         ui.Span{T: idCell(row), S: mono(toneStyle(issueLaneToneIn(lookups.lanes, row.Issue)))},
+		prio:       ui.Span{T: prio, S: mono(prioStyle)},
+		status:     ui.Span{T: row.Status, S: statusStyle},
+		badges:     badges,
+		title:      title,
+		date:       dateBadge,
+		kids:       kids,
+		owner:      owner,
+		updated:    model.RelativeTime(row.UpdatedAt, now),
+		cellStyle:  mono("muted"),
+		ownerStyle: toneStyle(ownerTone),
+	})
 	// A parent's click folds it; a double click on any row opens it. Tern sends the two clicks first, so a parent's fold ends where it began.
 	actions := &ui.Actions{DblClick: OpenRowClick(row.UID), Menu: menu.of(row.Issue)}
 	if row.HasChildren {
 		actions.Click = ToggleClick(row.UID)
 	}
-	return ui.Item{Common: ui.Common{Key: row.UID, Role: strings.TrimSpace(role + " " + cols.role()), Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(strings.Repeat(" ", itemDetailWidth)), Value: ui.Spans(rightCells(kids, owner, model.RelativeTime(row.UpdatedAt, now), cols, mono("muted"), toneStyle(ownerTone))...)}
-}
-
-// role is the row's boxes in role tokens, which the style sheet turns into the columns' widths (see cellBoxCSS): the row
-// kind, the id width and, when the owner shows, the owner width. Their widths are the Issues' own, so they cannot be static.
-func (c listColumns) role() string {
-	role := ListRowRole + " " + ListIDRole + strconv.Itoa(c.id)
-	if c.ownerShown {
-		role += " " + ListOwnerRole + strconv.Itoa(c.owner)
-	}
-	return role
-}
-
-// rightCells are the kids, owner and updated cells, the owner only when shown.
-func rightCells(kids, owner, updated string, cols listColumns, style, ownerStyle string) []ui.Span {
-	spans := []ui.Span{{T: cell(kids, kidsWidth), S: style}}
-	if cols.ownerShown {
-		spans = append(spans, ui.Span{T: cellGap + cut(owner, cols.owner), S: ownerStyle})
-	}
-	return append(spans, ui.Span{T: cellGap + cell(updated, updatedWidth), S: style})
+	return ui.Item{Common: ui.Common{Key: row.UID, Role: strings.TrimSpace(role + " " + cols.role()), Tone: tone, Actions: actions}, Label: ui.Spans(laid.label...), Detail: ui.T(strings.Repeat(" ", itemDetailWidth)), Value: ui.Spans(laid.value...)}
 }
 
 // footerHint is one key of the current mode's legend: the chord a click presses, the key as drawn and what it does.
@@ -521,13 +477,8 @@ func footer(m model.Model) tern.Element {
 // where theirs do, and a node of its own, outside the scrolling list. The labels over the mono cells (id, prio, kids,
 // updated) take the mono token too: the boxes are in em, so a label in another face would start its column at another x.
 func headerRow(cols listColumns) tern.Element {
-	left := []ui.Span{
-		{T: cell("#", cols.id), S: "muted mono"},
-		{T: cellGap + cell("prio", prioWidth), S: "muted mono"},
-		{T: cellGap + cell("status", statusWidth), S: "muted"},
-		{T: cellGap + "title", S: "muted"},
-	}
-	return ui.Item{Common: ui.Common{Key: "header", Role: cols.role(), Tone: ui.ToneMuted}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells("kids", "owner", "updated", cols, "muted mono", "muted")...)}
+	header := layoutHeader(cols)
+	return ui.Item{Common: ui.Common{Key: "header", Role: cols.role(), Tone: ui.ToneMuted}, Label: ui.Spans(header.label...), Detail: ui.T(" "), Value: ui.Spans(header.value...)}
 }
 
 // listOwner is the owner cell text: the name cut to ownerWidth as before, then " until …" whole when the claim expires.
