@@ -4,6 +4,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-05
+
 ### Added
 
 - `m` on the Attention Page sends a message to the omp agent that raised the selected request. It reaches the agent at once, through an omp extension tern-kata loads into every omp agent it starts: a waiting or idle agent starts a turn on it, a working one gets it at its next step without its work being stopped, and a pending `ask` or tool approval stays until you answer it. Each omp agent has its own Agent address, `<actor>/<name>-<block id>`, set as its `KATA_INBOX_USER`, so no other agent reads its messages; only messages from you are delivered, and the agent's first message tells it to act only on those. The card asks before replacing a message the agent has not cleared, and says why when the agent cannot receive one (exited, not omp, or started by an older tern-kata before messages could reach it). When an agent exits, the Pane clears what is left at its address. Agents that load the extension run with `KATA_OMP_LIVE_INBOX=0`, so kata-omp leaves live delivery to it.
@@ -349,7 +351,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `install.ps1` parses, keeps `%VAR%` entries in `PATH` and says when it changes `PATH`, so programs started from Explorer, such as Tern, see it.
 - **Open kata**, `F9` and kata links open tern-kata in a new tab, in the focused Pane's directory, when Tern can't split the focused Pane, instead of doing nothing.
 
-[Unreleased]: https://github.com/Dangerboi/tern-kata/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/Dangerboi/tern-kata/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/Dangerboi/tern-kata/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/Dangerboi/tern-kata/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/Dangerboi/tern-kata/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/Dangerboi/tern-kata/compare/v0.6.0...v0.7.0
