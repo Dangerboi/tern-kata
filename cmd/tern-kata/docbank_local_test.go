@@ -179,13 +179,25 @@ func TestDocbankSetupLocalSetsDocbankUpAndPointsKataAtIt(t *testing.T) {
 	if got := f.restarts(t); len(got) != 1 || got[0] != "daemon restart" {
 		t.Errorf("kata ran %q, want one `daemon restart`", got)
 	}
-	for _, line := range []string{"DOCBANK_TELEMETRY_ENABLED=0", "127.0.0.1:" + strconv.Itoa(port), "Restarted the kata daemon", "Checked"} {
+	for _, line := range []string{"DOCBANK_TELEMETRY_ENABLED=0", "127.0.0.1:" + strconv.Itoa(port), "Restarted the kata daemon", "Checked", "The plugin keeps Docbank running"} {
 		if !strings.Contains(out, line) {
 			t.Errorf("output lacks %q:\n%s", line, out)
 		}
 	}
 	if strings.Contains(out, key) {
 		t.Errorf("output shows the key:\n%s", out)
+	}
+	plan, err := PlanLaunch([]string{"docbank", "supervised"}, func(string) (string, bool) { return "robot", true }, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var answer strings.Builder
+	env, err := newDocbankEnv(plan, strings.NewReader(""), &answer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runDocbank(context.Background(), plan, env); err != nil || answer.String() != "on\n" {
+		t.Errorf("docbank supervised after setup = %q, %v; want on", answer.String(), err)
 	}
 }
 

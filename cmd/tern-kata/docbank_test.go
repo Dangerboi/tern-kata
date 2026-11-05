@@ -41,6 +41,7 @@ func newDocbankSetupFixtureOn(t *testing.T, locate data.Locator) *docbankSetupFi
 	f := &docbankSetupFixture{home: t.TempDir(), fake: docbanktest.New(t), locate: locate}
 	t.Setenv("KATA_HOME", f.home)
 	t.Setenv("KATA_DB", "")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // tern-kata's config folder, where the supervision marker would be
 	t.Setenv("KATA_POSTGRES_SCHEMA", "")
 	bin := t.TempDir()
 	f.kataLog = filepath.Join(t.TempDir(), "kata.log")
@@ -446,5 +447,59 @@ func TestDocbankSetupPrintsAProfilesRestartWithItsKataHome(t *testing.T) {
 	out, err := f.run(t, "", "--url", f.fake.URL, "--key-file", f.keyFile(t), "--daemon", "side", "--no-restart")
 	if err != nil || !strings.Contains(out, "KATA_HOME="+profileHome+" kata daemon restart") {
 		t.Errorf("--no-restart: %q, %v; want the command with the profile's KATA_HOME", out, err)
+	}
+}
+
+func TestDocbankSupervisionFormsParseAndRefuseSetupFlags(t *testing.T) {
+	lookup := func(string) (string, bool) { return "robot", true }
+	for _, args := range [][]string{{"docbank", "supervised"}, {"docbank", "supervise", "on"}, {"docbank", "supervise", "off"}, {"docbank", "supervised", "--home", "/x"}} {
+		if _, err := PlanLaunch(args, lookup, "test"); err != nil {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+	for _, args := range [][]string{{"docbank", "supervise"}, {"docbank", "supervise", "maybe"}, {"docbank", "supervised", "--yes"}, {"docbank", "supervise", "on", "--home", "/x"}, {"docbank", "supervised", "--port", "9"}} {
+		if _, err := PlanLaunch(args, lookup, "test"); err == nil {
+			t.Errorf("%v: no error", args)
+		} else if got := exitStatus(err); got != 2 {
+			t.Errorf("%v: exit %d, want 2", args, got)
+		}
+	}
+}
+
+func TestDocbankSupervisedAnswersOnAndOffAndSuperviseWritesTheMarker(t *testing.T) {
+	kata, dbHome, config := t.TempDir(), t.TempDir(), filepath.Join(t.TempDir(), "tern-kata")
+	for path, text := range map[string]string{
+		filepath.Join(kata, "config.toml"):   "[docbank]\nurl = \"http://127.0.0.1:8080\"\napi_key = \"k\"\n",
+		filepath.Join(dbHome, "config.toml"): "[server]\napi_port = 8080\napi_key = \"k\"\n",
+	} {
+		if err := os.WriteFile(path, []byte(text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	env := func(out *strings.Builder) docbanksetup.Env {
+		return docbanksetup.Env{KataHome: kata, DocbankHome: dbHome, ConfigDir: config, Out: out}
+	}
+	var out strings.Builder
+	if err := printDocbankSupervised(env(&out)); err != nil || out.String() != "on\n" {
+		t.Fatalf("supervised = %q, %v; want on", out.String(), err)
+	}
+	out.Reset()
+	plan := LaunchPlan{Subcommand: "docbank", Operands: []string{"supervise", "off"}}
+	if err := runDocbankSupervise(plan, env(&out)); err != nil || !strings.Contains(out.String(), "Created ") {
+		t.Fatalf("supervise off = %q, %v", out.String(), err)
+	}
+	out.Reset()
+	err := printDocbankSupervised(env(&out))
+	if exitStatus(err) != 1 || out.String() != "" {
+		t.Fatalf("supervised with the marker = %q, %v; want exit 1 and no stdout", out.String(), err)
+	}
+	plan.Operands[1] = "on"
+	out.Reset()
+	if err := runDocbankSupervise(plan, env(&out)); err != nil || !strings.Contains(out.String(), "Removed ") {
+		t.Fatalf("supervise on = %q, %v", out.String(), err)
+	}
+	out.Reset()
+	if err := printDocbankSupervised(env(&out)); err != nil || out.String() != "on\n" {
+		t.Fatalf("supervised after on = %q, %v", out.String(), err)
 	}
 }

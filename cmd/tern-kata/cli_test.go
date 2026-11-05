@@ -93,7 +93,8 @@ func TestBashCompletionOffersSubcommandsWorkerFormsAndFlags(t *testing.T) {
 		{[]string{"agent", "--as", "bot", "--ref", "demo#ab12", "--", "omp", "--"}, ""}, // after the lone -- the words are the command's
 		{[]string{"migrate-attachments", "--"}, "--as"},
 		{[]string{"doc"}, "docbank"},
-		{[]string{"docbank", "s"}, "setup"},
+		{[]string{"docbank", "s"}, "setup supervised supervise"},
+		{[]string{"docbank", "supervise", ""}, "on off"},
 		{[]string{"docbank", "setup", "--"}, dashed(docbankFlagNames())},
 		{[]string{"docbank", "setup", "--url", "https://d.example", "--key-"}, "--key-file --key-env"},
 	} {

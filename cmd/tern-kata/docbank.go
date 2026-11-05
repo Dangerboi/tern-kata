@@ -3,11 +3,13 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -17,10 +19,11 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/docbanksetup"
+	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
 // docbankUsage is what `tern-kata docbank` refuses a command line with.
-const docbankUsage = "usage: tern-kata docbank setup [--url <url> (--key-file <file>|- | --key-env <NAME>) | --port <port>] [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]"
+const docbankUsage = "usage: tern-kata docbank supervised | docbank supervise on|off | docbank setup [--url <url> (--key-file <file>|- | --key-env <NAME>) | --port <port>] [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]"
 
 // docbankFlag sets one of the flags of `docbank setup` that the plan records by name.
 func docbankFlag(name string) func(*LaunchPlan, string) {
@@ -78,8 +81,17 @@ func planDocbank(args []string) (LaunchPlan, error) {
 	flags := plan.DocbankFlags
 	remote := flags["url"] != ""
 	switch {
+	case slices.Equal(operands, []string{"supervised"}) || (len(operands) == 2 && operands[0] == "supervise" && (operands[1] == "on" || operands[1] == "off")):
+		if len(flags) > 0 || plan.DocbankYes || plan.DocbankNoRestart {
+			return LaunchPlan{}, fmt.Errorf("docbank %s takes no setup flag; %s", operands[0], docbankUsage)
+		}
+		if operands[0] == "supervise" && !reflect.ValueOf(plan.AgentRoute).IsZero() {
+			return LaunchPlan{}, fmt.Errorf("docbank supervise takes no flag: the marker is in tern-kata's config folder; %s", docbankUsage)
+		}
+		plan.Operands = operands
+		return plan, nil
 	case !slices.Equal(operands, []string{"setup"}):
-		return LaunchPlan{}, fmt.Errorf("docbank: expected `setup`; %s", docbankUsage)
+		return LaunchPlan{}, fmt.Errorf("docbank: expected `setup`, `supervised` or `supervise on|off`; %s", docbankUsage)
 	case plan.DocbankYes && plan.DocbankNoRestart:
 		return LaunchPlan{}, fmt.Errorf("docbank setup: --yes and --no-restart exclude each other; %s", docbankUsage)
 	case remote && flags["port"] != "":
@@ -142,7 +154,8 @@ func newDocbankEnv(plan LaunchPlan, stdin io.Reader, out io.Writer) (docbanksetu
 			fmt.Fprintf(&prefix, "%s=%s ", v.name, v.value)
 		}
 	}
-	dbHome, _ := docbankHome() // only the local form needs it, and it says so when it is empty
+	configDir, _ := worker.ConfigDir() // only the supervision forms and local setup's last line need it; they say so when it is empty
+	dbHome, _ := docbankHome()         // only the local form needs it, and it says so when it is empty
 	locate := data.Locator(data.LocateWithKata)
 	if daemon.Name != "" {
 		locate = data.LocateNamed(daemon.Name, "")
@@ -150,6 +163,7 @@ func newDocbankEnv(plan LaunchPlan, stdin io.Reader, out io.Writer) (docbanksetu
 	env := docbanksetup.Env{
 		KataHome:      daemon.Home,
 		DocbankHome:   dbHome,
+		ConfigDir:     configDir,
 		Daemon:        daemon.Name,
 		CommandPrefix: prefix.String(),
 		Runner:        docbanksetup.ExecRunner{},
@@ -175,6 +189,9 @@ var stdinIsTerminal = func(r io.Reader) bool {
 
 // runDocbank is `docbank setup`: it points the chosen kata daemon at the Docbank --url names, or at one it sets up on this machine.
 func runDocbank(ctx context.Context, plan LaunchPlan, env docbanksetup.Env) error {
+	if plan.Operands[0] == "supervised" {
+		return printDocbankSupervised(env)
+	}
 	if plan.DocbankFlags["key-file"] == "-" {
 		if stdinIsTerminal(env.Stdin) {
 			return usageError{fmt.Errorf("docbank setup: --key-file - reads the key from standard input, which is a terminal here; pipe the key in (for instance `... | tern-kata docbank setup --key-file - ...`) or use --key-file <file> or --key-env")}
@@ -204,4 +221,42 @@ func runDocbank(ctx context.Context, plan LaunchPlan, env docbanksetup.Env) erro
 		return subcommandError{err}
 	}
 	return nil
+}
+
+// printDocbankSupervised is `docbank supervised`, the plugin host half's one question about Docbank: the rule is
+// docbanksetup.Env.Supervised. It prints `on` and exits 0 when the plugin keeps Docbank running; otherwise it prints nothing on
+// stdout and exits 1 with the reason on stderr.
+func printDocbankSupervised(env docbanksetup.Env) error {
+	on, why := env.Supervised()
+	if !on {
+		return subcommandError{errors.New("the plugin does not keep Docbank running: " + why)}
+	}
+	_, err := fmt.Fprintln(env.Out, "on")
+	return err
+}
+
+// docbankSupervisionEnv is the environment of `docbank supervised` and `docbank supervise`, which need no kata daemon to be resolved.
+func docbankSupervisionEnv(plan LaunchPlan, out io.Writer) (docbanksetup.Env, error) {
+	if plan.Operands[0] == "supervised" {
+		return newDocbankEnv(plan, os.Stdin, out)
+	}
+	dir, err := worker.ConfigDir()
+	if err != nil {
+		return docbanksetup.Env{}, err
+	}
+	return docbanksetup.Env{ConfigDir: dir, Out: out}, nil
+}
+
+// runDocbankSupervise is `docbank supervise on|off`: it removes or creates the marker and says what it did.
+func runDocbankSupervise(plan LaunchPlan, env docbanksetup.Env) error {
+	on := plan.Operands[1] == "on"
+	if err := env.SetSupervision(on); err != nil {
+		return subcommandError{err}
+	}
+	if on {
+		_, err := fmt.Fprintf(env.Out, "Removed %s: the plugin keeps a local Docbank running again (within 10 seconds), when kata's [docbank] url and Docbank's [server] api_port are this machine's.\n", env.ManualPath())
+		return err
+	}
+	_, err := fmt.Fprintf(env.Out, "Created %s: the plugin no longer starts Docbank. A Docbank that is running keeps running.\n", env.ManualPath())
+	return err
 }
