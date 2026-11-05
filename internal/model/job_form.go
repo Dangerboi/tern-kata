@@ -759,42 +759,52 @@ func (f JobFormState) Preview(cal PaneCalendar, now time.Time) JobPreview {
 	if err != nil {
 		return JobPreview{Err: err}
 	}
-	anchor := now
-	anchorKnown := true
-	if f.Change {
-		anchor, anchorKnown = f.Opened.intervalAnchor()
-	}
 	preview := JobPreview{Words: triggerWords(t)}
 	switch t.Kind {
-	case cronjob.TriggerCron:
-		// buildTrigger refused any expression or zone that does not read.
-		schedule, _ := cronjob.Cron(t.Cron, t.Timezone, time.Time{})
-		loc, _ := cronLocation(t)
-		preview.Runs = listRuns(schedule, now, func(at time.Time) time.Time { return at.In(loc) })
-	case cronjob.TriggerInterval:
-		if !anchorKnown {
+	case cronjob.TriggerCron, cronjob.TriggerInterval:
+		job, anchor := f.previewJob(t, now)
+		schedule, ok := job.Schedule(anchor)
+		switch {
+		case ok:
+			preview.Runs = listRuns(schedule, now, cal)
+		case t.Kind == cronjob.TriggerCron:
+			preview.Note = "Next runs unknown: the time zone does not read."
+		default:
 			preview.Note = "Next runs unknown: this job's start point is not known yet."
-			break
 		}
-		schedule, _ := cronjob.Interval(t.IntervalSeconds, anchor) // buildTrigger refused any other
-		preview.Runs = listRuns(schedule, now, cal.in)
 	case cronjob.TriggerOnce:
 		preview.Runs = onceRuns(t, now, cal)
 	}
 	return preview
 }
 
+// previewJob is the job the card describes, for its schedule: an existing job as it was read, with the trigger as typed, and a
+// new one created now, of the native kind when the card says so, with its delivery anchor now. It returns the delivery anchor
+// Job.Schedule is given.
+func (f JobFormState) previewJob(t cronjob.Trigger, now time.Time) (cronjob.Job, time.Time) {
+	if f.Change {
+		job := f.Opened.Job
+		job.Definition.Trigger = t
+		return job, f.Opened.deliveryAnchor()
+	}
+	job := cronjob.Job{CreatedAt: now, Definition: cronjob.Definition{Trigger: t}}
+	if f.kind().id == nativeJobKind.id {
+		job.Definition.Action.Kind = cronjob.ActionNotify
+		job.Definition.Issue = &cronjob.IssuePolicy{Kind: cronjob.IssuePerRun}
+	}
+	return job, now
+}
+
 // runLayout formats a listed run with the zone abbreviation.
 const runLayout = "Mon 2006-01-02 15:04 MST"
 
-// cronLocation is the zone a cron trigger is read in.
-func cronLocation(t cronjob.Trigger) (*time.Location, error) {
-	zone, _ := zoneAndExpression(t)
-	return time.LoadLocation(zone)
-}
-
-// listRuns steps a schedule from now for the next previewRuns instants, each shown in the zone in gives it.
-func listRuns(schedule cronjob.Schedule, now time.Time, in func(time.Time) time.Time) []string {
+// listRuns steps a schedule from now for the next previewRuns instants, each shown in the schedule's own zone, or in the Pane
+// calendar's when it has none.
+func listRuns(schedule cronjob.Schedule, now time.Time, cal PaneCalendar) []string {
+	in := cal.in
+	if loc, ok := schedule.Zone(); ok {
+		in = func(at time.Time) time.Time { return at.In(loc) }
+	}
 	var runs []string
 	for next := schedule.Next(now); len(runs) < previewRuns && !next.IsZero(); next = schedule.Next(next) {
 		runs = append(runs, in(next).Format(runLayout))
@@ -837,15 +847,7 @@ func (m Model) NextRuns(job CronJob, now time.Time) (runs []string, reason strin
 		if !ok {
 			return nil, "unavailable"
 		}
-		in := m.Calendar.in
-		if t.Kind == cronjob.TriggerCron {
-			loc, err := cronLocation(t)
-			if err != nil {
-				return nil, "unavailable"
-			}
-			in = func(at time.Time) time.Time { return at.In(loc) }
-		}
-		runs = listRuns(schedule, now, in)
+		runs = listRuns(schedule, now, m.Calendar)
 	}
 	if len(runs) == 0 {
 		return nil, "none"

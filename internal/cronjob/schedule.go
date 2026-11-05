@@ -66,9 +66,14 @@ func (e *ZoneConflictError) Error() string {
 // Schedule yields the occurrences of one trigger: a cron expression in its zone, or an interval counting from an anchor.
 type Schedule struct {
 	cron   cron.Schedule
+	loc    *time.Location
 	step   time.Duration
 	anchor time.Time
 }
+
+// Zone is the zone a cron expression is read in, for showing its occurrences as the expression means them. False for an
+// interval, which has no zone of its own.
+func (s Schedule) Zone() (zone *time.Location, ok bool) { return s.loc, s.loc != nil }
 
 // Interval counts from anchor in steps of seconds: the first occurrence is anchor + one step.
 func Interval(seconds int64, anchor time.Time) (Schedule, error) {
@@ -96,7 +101,11 @@ func Cron(expression, timezone string, createdAt time.Time) (Schedule, error) {
 	if every, ok := schedule.(cron.ConstantDelaySchedule); ok && every.Delay > 0 && !createdAt.IsZero() {
 		return Schedule{step: every.Delay, anchor: createdAt.UTC()}, nil
 	}
-	return Schedule{cron: schedule}, nil
+	loc, err := time.LoadLocation(zone)
+	if err != nil {
+		return Schedule{}, fmt.Errorf("invalid cron expression: %w", err)
+	}
+	return Schedule{cron: schedule, loc: loc}, nil
 }
 
 // Next is the first occurrence strictly after t, in UTC; the zero time when there is none.
