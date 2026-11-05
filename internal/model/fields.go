@@ -38,8 +38,8 @@ type FieldFormState struct {
 	Labels       []string
 	// Attachments are the Attachments Labels name, in the same order, as they were when the form opened.
 	Attachments []Attachment
-	Suggestion   int
-	Caret        Caret
+	Suggestion  int
+	Caret       Caret
 	// Found is the Issue a restore read, shown until the reference is edited.
 	Found *DeletedIssue
 	Err   error

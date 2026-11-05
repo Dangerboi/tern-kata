@@ -128,7 +128,7 @@ func TestAttachmentRowKeysAreUniqueAndDotFree(t *testing.T) {
 func TestEnterOnAnAttachmentRowDownloadsAndOpensIt(t *testing.T) {
 	m := attached(map[string]any{"attachment.A": reference("a.png", "image/png", 5)})
 	next, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
-	want := model.OpenAttachment{Workspace: "/repo", UID: "a", ProjectID: 3, Attachment: model.Attachment{ID: "A", Name: "a.png", MediaType: "image/png", Size: 5}}
+	want := model.OpenAttachment{Workspace: "/repo", UID: "a", ProjectID: 3, Attachment: model.Attachment{ID: "A", Name: "a.png", MediaType: "image/png", Version: "6f1c2e8a-2222-4222-8222-000000000001", Size: 5}}
 	if len(cmds) != 1 || cmds[0] != model.Cmd(want) || next.SelectedUID != "a" || next.ActiveTab() != model.TabAttachments || next.Focus != model.ColumnDetail {
 		t.Fatalf("enter: cmds %#v, want %#v; selected %q tab %v", cmds, want, next.SelectedUID, next.ActiveTab())
 	}
