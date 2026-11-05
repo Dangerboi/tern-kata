@@ -60,3 +60,19 @@ func TestTheJobInspectorSaysWhyAJobHasNoNextRuns(t *testing.T) {
 		}
 	}
 }
+
+func TestTheJobInspectorDoesNotListRunsOfATriggerThatCannotBeRead(t *testing.T) {
+	for name, trigger := range map[string]cronjob.Trigger{
+		"cron with no expression": {Kind: cronjob.TriggerCron},
+		"cron that does not parse": {Kind: cronjob.TriggerCron, Cron: "not a schedule"},
+		"cron in an unknown zone":  {Kind: cronjob.TriggerCron, Cron: "0 9 * * *", Timezone: "Nowhere/Land"},
+		"interval of no seconds":   {Kind: cronjob.TriggerInterval},
+	} {
+		job := cronJob(true, trigger, nil)
+		job.CreatedAt = time.Date(2026, 10, 8, 11, 0, 0, 0, time.UTC)
+		facts := nextRunsFacts(job)
+		if len(facts) != 1 || facts[0].Value != "unavailable" {
+			t.Errorf("%s: facts %+v, want one Next runs fact \"unavailable\"", name, facts)
+		}
+	}
+}
