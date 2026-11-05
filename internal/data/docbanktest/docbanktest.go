@@ -93,6 +93,7 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 		f.dirs[in.Path] = int64(len(f.dirs) + 1)
 		send(map[string]any{"id": f.dirs[in.Path], "kind": "dir"})
 	case r.Method == http.MethodPost && r.URL.Path == "/api/v1/uploads":
+		r.Body = http.MaxBytesReader(w, r.Body, 32<<20)
 		if r.ParseMultipartForm(1<<20) != nil {
 			http.Error(w, "multipart", http.StatusBadRequest)
 			return
