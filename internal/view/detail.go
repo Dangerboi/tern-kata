@@ -31,7 +31,11 @@ const DetailActivityID = DetailContentID + ".activity"
 func ActivityRevealIDs(m model.Model) []string {
 	last := DetailActivityID + ".empty"
 	if rows := m.DetailRows(); len(rows) > 0 && rows[len(rows)-1].Kind.InActivity() {
-		last = DetailActivityID + "." + rows[len(rows)-1].Key
+		row := rows[len(rows)-1]
+		last = DetailActivityID + "." + row.Key
+		if len(row.Leaves) > 0 { // the comment's replies from other Issues are drawn after it
+			last = DetailActivityID + "." + leafKey(row.Key, len(row.Leaves)-1)
+		}
 	}
 	return []string{last, DetailActivityID + ".tabs"}
 }
@@ -174,11 +178,14 @@ func detailRows(m model.Model, now time.Time) (children []detailChild, activity 
 		}
 		activity = append(activity, ui.Card{Common: ui.Common{Key: row.Key, Mark: mark, Actions: &ui.Actions{Click: action}}, Variant: ui.CardBare, Head: head, HeadNode: headNode, Children: parts})
 		for n, leaf := range item.Leaves {
-			activity = append(activity, commentLeaf(row.Key+"-leaf"+strconv.Itoa(n), leaf))
+			activity = append(activity, commentLeaf(leafKey(row.Key, n), leaf))
 		}
 	}
 	return children, activity
 }
+
+// leafKey is the key of the nth reply from another Issue drawn after the comment with this key.
+func leafKey(commentKey string, n int) string { return commentKey + "-leaf" + strconv.Itoa(n) }
 
 // commentTagLine is a comment's confirm and refute tags on one line, joined by a middle dot.
 func commentTagLine(tags []model.RowSpan) ui.Text {

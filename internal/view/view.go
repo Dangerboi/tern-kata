@@ -338,20 +338,17 @@ type rowLookups struct {
 	lanes    []string
 	badges   model.AgentBadgeIndex
 	today    model.CalendarDay
-	dateRoom int // cells a row can give its Date badge, after its gap, without squeezing the title below minTitleWidth
+	dateRoom int // cells a row with no Agent badge or hand-off word has for its whole title and its Date badge together
 }
 
-// minTitleWidth is the cells of title a row keeps before it drops its Date badge.
-const minTitleWidth = 12
-
-// dateRoom is the cells left on a row for the Date badge: the list column's width less the other cells, the row's
-// padding and the least title.
+// dateRoom is the cells left on a row for its title and Date badge: the list column's width less the other cells, the row's
+// padding and the gaps before the title and before the badge.
 func dateRoom(m model.Model, cols listColumns) int {
 	fixed := cols.id + len(cellGap)*3 + prioWidth + statusWidth + kidsWidth + len(cellGap) + updatedWidth + rowPadding
 	if cols.ownerShown {
 		fixed += len(cellGap) + cols.owner
 	}
-	return listWidth(m) - fixed - minTitleWidth - len(cellGap)
+	return listWidth(m) - fixed - 2*len(cellGap)
 }
 
 // Flex rules of the columns Row (see issues and detail), which Tern lays out and the plugin never sees: the list and detail
@@ -418,22 +415,24 @@ func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected boo
 		{T: cellGap + cell(row.Status, statusWidth), S: statusStyle},
 	}
 	// The Agent badge is a span: an Item has one click, and Spans have none, so the badge on a row is not clickable.
-	gap := cellGap
+	gap, beforeTitle := cellGap, 0 // beforeTitle is the cells ahead of the title beyond the one cellGap dateRoom counts
 	if badge, ok := lookups.badges.For(row.UID); ok {
 		left = append(left, ui.Span{T: gap + badge.Text, S: string(badge.Tone)})
+		beforeTitle += displayWidth(gap + badge.Text)
 		gap = " "
 	}
 	// An agent's hand-off (work.attention) reads beside the badge, whoever wrote it.
 	if w, ok := model.IssueWorkAttention(row.Issue); ok {
 		left = append(left, ui.Span{T: gap + w.Word(), S: string(attentionTone(w))})
+		beforeTitle += displayWidth(gap + w.Word())
 		gap = " "
 	}
+	beforeTitle += len(gap) - len(cellGap) // dateRoom already holds the title's own gap of cellGap
 	left = append(left, ui.Span{T: gap + title})
-	// An open Issue's Date badge reads after the title, as in kata tui, and goes when the list is too narrow to keep the
-	// title. A title that would push it out is cut so the badge stays whole.
+	// An open Issue's Date badge reads after the title, as in kata tui. The title has priority: the badge goes when the whole
+	// title and the badge do not fit the row.
 	if !model.IsClosed(row.Issue) {
-		if date, ok := lookups.today.ChooseDateBadge(row.Issue); ok && displayWidth(date.Text) <= lookups.dateRoom {
-			left[len(left)-1].T = gap + cut(title, lookups.dateRoom+minTitleWidth-displayWidth(date.Text))
+		if date, ok := lookups.today.ChooseDateBadge(row.Issue); ok && displayWidth(title)+displayWidth(date.Text) <= lookups.dateRoom-beforeTitle {
 			left = append(left, ui.Span{T: "  " + date.Text, S: mono(toneStyle(dateTones[date.Tone]))})
 		}
 	}
@@ -485,6 +484,9 @@ func footerHints(m model.Model) (hints []footerHint, position string) {
 		}
 		if (binding.Action == model.DrillOut || binding.Action == model.ShowMenu) && m.EscGoesBack() {
 			help = "back"
+		}
+		if binding.Action == model.ShowMenu && m.PageSearching() {
+			help = "end search"
 		}
 		if job := m.SelectedJob(); binding.Action == model.ArchiveJobAction && job != nil && job.Archived() {
 			help = "restore"

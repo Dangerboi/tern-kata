@@ -54,7 +54,7 @@ func TestSetDatesSetsChangesAndClearsEachKey(t *testing.T) {
 	}
 }
 
-func TestSetDatesReportsAKeyChangedMeanwhileAndStopsThere(t *testing.T) {
+func TestSetDatesWritesNothingWhenAnyKeyChangedMeanwhile(t *testing.T) {
 	f := newIssueFixture(t)
 	f.patchKey(t, "scheduled_on", "2026-10-20")
 	first := model.DateChange{Key: "scheduled_on", Label: "Scheduled", Value: "2026-10-15", Was: "2026-10-12"}
@@ -75,14 +75,14 @@ func TestSetDatesReportsAKeyChangedMeanwhileAndStopsThere(t *testing.T) {
 		t.Fatal("a write went on after the failure")
 	}
 
-	// A key absent when the card opened but set meanwhile is refused too, and an earlier write stays reported.
+	// A key absent when the card opened but set meanwhile is refused too, and the key before it is not written either.
 	f.patchKey(t, "deadline_on", "2026-11-01")
 	first.Was = "2026-10-20"
 	got = f.setDates(t, first, second)
-	if got.Err == nil || !strings.Contains(got.Err.Error(), "nothing was written for Deadline") || len(got.Applied) != 1 || got.Applied[0].Key != "scheduled_on" {
+	if got.Err == nil || !strings.Contains(got.Err.Error(), "nothing was written for Deadline") || len(got.Applied) != 0 {
 		t.Fatalf("got %+v", got)
 	}
-	if meta := f.issue(t, f.uid).Metadata; meta["deadline_on"] != "2026-11-01" || meta["scheduled_on"] != "2026-10-15" {
+	if meta := f.issue(t, f.uid).Metadata; meta["deadline_on"] != "2026-11-01" || meta["scheduled_on"] != "2026-10-20" {
 		t.Fatalf("metadata %v", meta)
 	}
 }

@@ -199,7 +199,7 @@ type RunRow struct {
 // Run's duration is counted to.
 func (m Model) RunRows(now time.Time) []RunRow {
 	rows := m.allRunRows(now)
-	if m.Page != PageRuns || m.PageSearch.Text == "" {
+	if !m.searchingPage(PageRuns) {
 		return rows
 	}
 	return slices.DeleteFunc(rows, func(row RunRow) bool { return !m.matchesSearch(runSearchWords(row)...) })
@@ -413,7 +413,7 @@ func runShown(m Model, msg RunShown) Model {
 		runs[i] = msg.Run
 		m.Runs.Runs = runs
 	}
-	return m
+	return m.settleRunSelection() // the Run may no longer match the search
 }
 
 // settleRunSelection keeps the selection on a listed Run, the first when it is gone.

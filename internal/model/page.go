@@ -8,7 +8,7 @@ import (
 // Page is one of the Pane's top-level views, chosen from the Page bar. Model.Page is the current one.
 //
 // Adding a Page is one entry in pageDefs (its label, key, what its second column is, entry, clear and reset, its mode, the messages
-// it owns, its list's movement keys and inspector's scroll keys, and its list node), a Page constant, an Action constant, and a
+// it owns, its list's movement keys and inspector's scroll keys, and its list node), a Page constant, an Action constant, settleSearch when "/" searches its rows, and a
 // state struct on Model for what the Page keeps while another is shown (selection, scroll, filters). The Page bar, the keys,
 // the click targets, the help sheet line, the mode, the message routing, the Project reset and the scroll target all read the table.
 type Page uint8
@@ -113,6 +113,9 @@ type pageDef struct {
 	scroll pageScroll
 	// list is the node the scroll keys of the Page's list go to.
 	list ListNode
+	// settleSearch is what a search changing the Page's rows does to its selection, given the row the selection stood on (see
+	// settlePageSelection); non-nil marks a Page whose rows "/" searches, and id is what its search input calls them.
+	settleSearch func(m Model, row int) Model
 }
 
 // pageMoves declares a list's movement keys: down, up, first, last, page up and page down, bound in mode and moving the selection
@@ -170,18 +173,18 @@ func init() {
 		{page: PageIssues, id: "issues", label: "Issues", chord: "1", action: ShowIssuesPage, moves: issueMoves(ModeList),
 			keymap: []keySegment{movementKeys}},
 		{page: PageJobs, id: "jobs", label: "Jobs", chord: "2", action: ShowJobsPage, needs: "Jobs Page", second: SecondInspector, enter: enterJobs, clear: clearJobs,
-			filledFor: jobsFilledFor, reset: resetJobs, mode: inspectorMode(ModeJobs, ModeJobInspector), update: updateJobs, list: ListNodeJobs,
+			filledFor: jobsFilledFor, reset: resetJobs, mode: inspectorMode(ModeJobs, ModeJobInspector), update: updateJobs, list: ListNodeJobs, settleSearch: func(m Model, _ int) Model { return m.settleJobSelection() },
 			moves:  pageMoves{mode: ModeJobs, noun: "job", move: moveJob, sheet: [6]sheetLine{{sheetJobs, 1, "next job"}, {sheetJobs, 2, "previous job"}, {sheetJobs, 3, "first job"}, {sheetJobs, 4, "last job"}}},
 			scroll: pageScroll{mode: ModeJobInspector, sheet: sheetLine{sheetJobs, 9, "scroll the inspector"}},
 			keymap: []keySegment{movementKeys, rowsOf(jobsRows), scrollKeys, rowsOf(jobsRowsAfterScroll)}},
 		{page: PageRuns, id: "runs", label: "Runs", chord: "3", action: ShowRunsPage, needs: "Runs Page", second: SecondInspector, enter: enterRuns, clear: clearRuns,
-			filledFor: runsFilledFor, reset: resetRuns, mode: inspectorMode(ModeRuns, ModeRunInspector), update: updateRuns, list: ListNodeRuns,
+			filledFor: runsFilledFor, reset: resetRuns, mode: inspectorMode(ModeRuns, ModeRunInspector), update: updateRuns, list: ListNodeRuns, settleSearch: func(m Model, _ int) Model { return m.settleRunSelection() },
 			moves:  pageMoves{mode: ModeRuns, noun: "run", move: moveRun, sheet: [6]sheetLine{{sheetRuns, 1, "next run"}, {sheetRuns, 2, "previous run"}, {sheetRuns, 3, "first run"}, {sheetRuns, 4, "last run"}}},
 			scroll: pageScroll{mode: ModeRunInspector, sheet: sheetLine{sheetRuns, 10, "scroll the detail"}},
 			// mainRows are the Runs inspector's back key and every row after it, which no Page owns (layout, back, Menu, help, quit).
 			keymap: []keySegment{rowsOf(runsRowsBeforeMovement), movementKeys, rowsOf(runsRows), scrollKeys, rowsOf(mainRows)}},
 		{page: PageWorkflows, id: "workflows", label: "Workflows", chord: "4", action: ShowWorkflowsPage, needs: "Workflows Page", second: SecondIssueDetail, enter: enterWorkflows, clear: clearWorkflows,
-			filledFor: workflowsFilledFor, reset: resetWorkflows, mode: workflowsMode, update: updateWorkflows, list: ListNodeWorkflows,
+			filledFor: workflowsFilledFor, reset: resetWorkflows, mode: workflowsMode, update: updateWorkflows, list: ListNodeWorkflows, settleSearch: Model.selectWorkflow,
 			moves:  pageMoves{mode: ModeWorkflows, noun: "workflow", move: moveWorkflow, sheet: [6]sheetLine{{sheetWorkflows, 1, "next workflow"}, {sheetWorkflows, 2, "previous workflow"}}},
 			keymap: []keySegment{movementKeys, rowsOf(workflowActions())}},
 		{page: PageBoard, id: "board", label: "Board", chord: "5", action: ShowBoardPage, needs: "Board", second: SecondIssueDetail, enter: enterBoard, clear: clearBoard,

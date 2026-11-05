@@ -26,6 +26,7 @@ func compareCommentLinks(a, b CommentLink) int {
 	return cmp.Or(a.CreatedAt.Compare(b.CreatedAt), strings.Compare(deref(a.UID), deref(b.UID)))
 }
 
+// deref reads a value kata leaves out as empty. It is cronjobclient.Str for the model, which stays clear of the client layer.
 func deref(s *string) string {
 	if s == nil {
 		return ""

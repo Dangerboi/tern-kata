@@ -409,7 +409,7 @@ func jobRunRequested(m Model, msg JobRunRequested) (Model, []Cmd) {
 		m.Notice = fmt.Sprintf("Cannot run %q now: %s", msg.JobName, msg.Err)
 		return m, nil
 	}
-	m.Notice = fmt.Sprintf("Running %q now as %s; it is on the Runs Page (4).", msg.JobName, msg.RunUID)
+	m.Notice = fmt.Sprintf("Running %q now as %s; it is on the Runs Page (3).", msg.JobName, msg.RunUID)
 	m, cmd := m.askWorker(0)
 	return m, []Cmd{cmd}
 }

@@ -424,6 +424,21 @@ func TestActivityRevealTargetsAreTheLastRowAndTheTabNames(t *testing.T) {
 	}
 }
 
+// A last comment with replies from other Issues is drawn before its leaves, so the reveal names the last leaf.
+func TestActivityRevealTargetsTheLastLeafOfTheLastComment(t *testing.T) {
+	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
+	foreign := func(uid string) model.CommentLink {
+		return model.CommentLink{UID: &uid, Kind: "confirm", IssueUID: new("beta"), IssueShortID: new("bbbb"), CreatedAt: at}
+	}
+	selected := &model.IssueDetailData{Issue: &alpha, Comments: []model.Comment{{UID: "c1", Author: "dana", CreatedAt: at, Body: "only", Backlinks: []model.CommentLink{foreign("x1"), foreign("x2")}}}}
+	m := apply(withZone(browsing()), model.DetailLoaded{UID: "alpha", Selected: selected}, model.ActivityTabMsg{Tab: model.TabComments})
+	rows := render(t, m)[view.DetailActivityID].C
+	want := []string{rows[len(rows)-1].ID, view.DetailActivityID + ".tabs"}
+	if got := view.ActivityRevealIDs(m); !slices.Equal(got, want) {
+		t.Errorf("reveal %v, want %v", got, want)
+	}
+}
+
 var tokyo = time.FixedZone("JST", 9*3600)
 
 // processZoneIsUTC sets the process zone to UTC for the test, so a model zone that leaks shows.

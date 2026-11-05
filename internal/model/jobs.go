@@ -169,7 +169,7 @@ func (m Model) visibleJobs() []CronJob {
 	if !m.Jobs.ShowArchived {
 		jobs = slices.DeleteFunc(slices.Clone(jobs), CronJob.Archived)
 	}
-	if m.Page != PageJobs || m.PageSearch.Text == "" {
+	if !m.searchingPage(PageJobs) {
 		return jobs
 	}
 	return slices.DeleteFunc(slices.Clone(jobs), func(job CronJob) bool { return !m.matchesSearch(m.jobSearchWords(job)...) })

@@ -10,6 +10,7 @@ import (
 	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjobclient"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
@@ -72,13 +73,6 @@ func stateOfIssue(i g.Issue) model.IssueState {
 	return model.IssueState{Status: i.Status, ClosedReason: i.ClosedReason, Owner: i.Owner, Priority: i.Priority, Body: i.Body, Revision: i.Revision}
 }
 
-func derefString(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
-}
-
 // recorder reads the account and the Issue before a write and returns the function that, given the write's answer and whether its
 // failure left the outcome unknown, says what the write did to the Undo history: an entry that takes it back, the reason it
 // cannot be taken back, or that its outcome is unknown. fill adds what is particular to the kind of change.
@@ -102,7 +96,7 @@ func (c *Client) recorder(ctx context.Context, kind model.UndoKind, projectID in
 			return model.WriteRecord{Boundary: reason}
 		}
 		entry := model.UndoEntry{
-			Kind: kind, UID: before.Issue.UID, ProjectID: projectID, ProjectUID: derefString(before.Issue.ProjectUID),
+			Kind: kind, UID: before.Issue.UID, ProjectID: projectID, ProjectUID: cronjobclient.Str(before.Issue.ProjectUID),
 			ShortID: before.Issue.ShortID, Actor: actor, InstanceUID: account.instanceUID, Principal: account.principal,
 			Before: stateOfShown(before.Issue), After: stateOfIssue(*res.Issue), Revision: res.Issue.Revision,
 		}
@@ -372,7 +366,7 @@ func (c *Client) Undo(ctx context.Context, cmd model.UndoChange) model.ChangeUnd
 	}
 	i := shown.Issue
 	out.Ref, out.FromRevision = i.ShortID, i.Revision
-	if i.UID != e.UID || i.ProjectID != e.ProjectID || (e.ProjectUID != "" && derefString(i.ProjectUID) != e.ProjectUID) {
+	if i.UID != e.UID || i.ProjectID != e.ProjectID || (e.ProjectUID != "" && cronjobclient.Str(i.ProjectUID) != e.ProjectUID) {
 		return conflict("issue identity changed")
 	}
 	if restored(e, shown) {

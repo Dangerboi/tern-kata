@@ -152,3 +152,29 @@ func TestSwitchingPageEndsTheSearch(t *testing.T) {
 		t.Errorf("switching Page keeps the search %+v", out.State.Model.PageSearch)
 	}
 }
+
+func TestARunReadThatLeavesTheSearchMovesTheSelectionToAListedRun(t *testing.T) {
+	s := runsPane(t, 160, finishedRun("R1"), finishedRun("R3"))
+	s = typed(t, step(t, s, key("/")).State, "triage")
+	s = step(t, s, key("enter")).State
+	if got := s.Model.Runs.Selected; got != "R1" {
+		t.Fatalf("selected %q before the read, want R1", got)
+	}
+	changed := finishedRun("R1")
+	changed.JobName, changed.Summary = "Other", "none"
+	s = step(t, s, model.RunShown{UID: "R1", Run: changed}).State
+	if got := s.Model.Runs.Selected; got != "R3" {
+		t.Errorf("selected %q after R1 left the search, want the listed R3", got)
+	}
+}
+
+func TestFooterOffersEndSearchWhileAKeptSearchIsActive(t *testing.T) {
+	s := runsPane(t, 160, finishedRun("R1"), workflowRun("R2"))
+	if strings.Contains(screen(t, s), "end search") {
+		t.Fatal("the footer offers end search before any search")
+	}
+	s = step(t, typed(t, step(t, s, key("/")).State, "nightly"), key("enter")).State
+	if !strings.Contains(screen(t, s), "end search") {
+		t.Errorf("the footer does not offer esc as end search while the search is kept:\n%s", screen(t, s))
+	}
+}
