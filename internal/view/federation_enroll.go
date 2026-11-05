@@ -181,7 +181,7 @@ func federationNameLayer(m model.Model) tern.Element {
 	}
 	children := []tern.Element{
 		ui.Text{Common: ui.Common{Key: "prompt"}, Text: prompt},
-		toneText("rules", ui.ToneMuted, "a letter, then up to 31 lowercase letters, digits or hyphens; the hub refuses any other"),
+		toneText("rules", ui.ToneMuted, "a letter, then up to 31 lowercase letters, digits or hyphens; the card refuses any other"),
 		ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Spoke name"}, Field: ui.Field{Text: n.Input, Cursor: caretAt(n.Caret, "", n.Input), Mode: "insert", Placeholder: ui.T("spoke name")}},
 	}
 	if n.Saving {
