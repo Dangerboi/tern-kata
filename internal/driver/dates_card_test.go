@@ -188,8 +188,8 @@ func TestDatesCardReportsAChangedKeyAndKeepsTheCardOpen(t *testing.T) {
 	if got := datesField(t, failed.State, "Deadline"); got != "2026-11-09" {
 		t.Errorf("Deadline shows %q, want the current value", got)
 	}
-	if got := datesField(t, failed.State, "Scheduled"); got != "2026-10-09" {
-		t.Errorf("Scheduled shows %q, want the written date", got)
+	if got := datesField(t, failed.State, "Scheduled"); got != "+1d" {
+		t.Errorf("Scheduled shows %q, want the text typed there kept", got)
 	}
 	// Saving again writes nothing: the refilled field matches what kata holds.
 	if again := step(t, failed.State, key("enter")); len(again.Cmds) != 0 {
