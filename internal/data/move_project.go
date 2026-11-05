@@ -38,6 +38,9 @@ func (c *Client) MoveToProject(ctx context.Context, cmd model.MoveToProjectCmd) 
 		answer.Conflict = true
 		return answer, nil
 	}
+	if err != nil && unreachable(err) {
+		return answer, err // the gateway locates the daemon again and retries; if that fails too, it builds the answer
+	}
 	if err != nil {
 		answer.Subtree, answer.Err = moveRefusal(err)
 		return answer, nil

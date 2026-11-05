@@ -1,7 +1,6 @@
 package data
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,14 +12,8 @@ import (
 )
 
 // readTokenFile is the token in a credential file, checked as kata checks one: an absolute (or ~/) path, owned by the current user,
-// a regular file closed to group and others, at most 64 KiB, not empty. A failure is worded as kata words it. With optional set, a
-// file that does not exist holds no token.
-func readTokenFile(path string, optional bool) (string, error) {
-	if optional {
-		if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
-			return "", nil
-		}
-	}
+// a regular file closed to group and others, at most 64 KiB, not empty. A failure is worded as kata words it.
+func readTokenFile(path string) (string, error) {
 	fail := func(why string) (string, error) {
 		return "", fmt.Errorf("selected credential is unavailable: file:%s: %s", path, why)
 	}

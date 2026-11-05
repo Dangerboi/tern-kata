@@ -201,3 +201,21 @@ func TestMoveRefusalNamingADescendantIsASubtreeRefusal(t *testing.T) {
 		t.Errorf("err = %v, want kata's words naming the descendant", err)
 	}
 }
+
+func TestGatewayMoveFindsARestartedDaemonAgain(t *testing.T) {
+	first := startKata(t, "0.21.0")
+	l := newLocator(first.target())
+	gateway := newGateway(t, l)
+	workspace, from := project(t, gateway, "demo")
+	created := as[model.ProjectSaved](t, run(t, gateway, model.CreateProject{Workspace: t.TempDir(), Actor: "tester", Name: "extra"}))
+	uid := createIssue(t, gateway, workspace, from, "Move me")
+
+	second := serve(t, first.handler, "0.21.0")
+	l.target.Store(new(second.target()))
+	first.Close()
+
+	answer := as[model.ProjectMoveAnswer](t, run(t, gateway, model.MoveToProjectCmd{Workspace: workspace, UID: uid, Actor: "tester", ProjectID: from.ID, ToProjectUID: created.Project.UID, DryRun: true}))
+	if answer.Err != nil || answer.Conflict {
+		t.Fatalf("answer %+v, want the preview from the restarted daemon", answer)
+	}
+}

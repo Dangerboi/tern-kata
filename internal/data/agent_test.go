@@ -1436,7 +1436,7 @@ func TestAgentStartedFromAPaneOnAnotherDaemonCarriesThePanesRoute(t *testing.T) 
 			if err != nil || info.Mode().Perm() != 0o600 {
 				t.Fatalf("token file: %v, %v", info, err)
 			}
-			if tok, err := readTokenFile(tokenFile, false); err != nil || tok != tc.wantToken {
+			if tok, err := readTokenFile(tokenFile); err != nil || tok != tc.wantToken {
 				t.Errorf("token file holds %q, %v; kata's checks must pass and it must hold %q", tok, err, tc.wantToken)
 			}
 			removePrompt(got.Entry.PromptFile)
@@ -1649,7 +1649,7 @@ func TestRoutedAgentCarriesThePanesStorageButNeverADSNOnTheCommandLine(t *testin
 	if strings.Contains(strings.Join(ran, " "), "pw-secret") {
 		t.Errorf("the command line carries the DSN password: %q", ran)
 	}
-	if dsn, err := readTokenFile(dsnFile, false); err != nil || dsn != "postgres://u:pw-secret@h/db" {
+	if dsn, err := readTokenFile(dsnFile); err != nil || dsn != "postgres://u:pw-secret@h/db" {
 		t.Errorf("DSN file holds %q, %v", dsn, err)
 	}
 	removePrompt(got.Entry.PromptFile)
@@ -1689,7 +1689,7 @@ func TestRoutedAgentCarriesTheCredentialVariablesTheHomeNamesNotAGlobalToken(t *
 	if strings.Contains(strings.Join(ran, " "), "--token-file") {
 		t.Errorf("a global token is carried for a connection kata scopes by entry: %q", ran)
 	}
-	text, err := readTokenFile(got.Entry.PromptFile+".env", false)
+	text, err := readTokenFile(got.Entry.PromptFile+".env")
 	if err != nil {
 		t.Fatal(err)
 	}
