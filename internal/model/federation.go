@@ -23,11 +23,11 @@ type FederationQuarantine struct {
 
 // FederationSpoke is one spoke Project's federation status. A time the daemon did not report is the zero time.
 type FederationSpoke struct {
-	ProjectID                            int64
-	ProjectName                          string
-	HubURL, HubProjectUID                string
+	ProjectID             int64
+	ProjectName           string
+	HubURL, HubProjectUID string
 	// SpokeName is the name the hub gives this instance, "" when it gives none or could not be read.
-	SpokeName string
+	SpokeName                            string
 	HubProjectID                         int64
 	BoundActor, Capabilities             string
 	PushEnabled, AllowInsecure           bool
