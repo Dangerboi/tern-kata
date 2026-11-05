@@ -23,7 +23,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - The Close card for a `done` close can cite one or more of the Issue's Attachments as evidence.
   - The Events tab names a cited Attachment, marks it `[removed]` once it is unlinked and `[changed]` when the Issue now holds another version of it.
-- `tern-kata migrate-attachments` moves the old attachments stored on this machine to Docbank, deletes the local copies, and lists the ones held on other machines.
+- `tern-kata migrate-attachments` moves the old attachments stored on this machine to [Docbank](https://github.com/kenn-io/docbank), deletes the local copies, and lists the ones held on other machines.
   - It leaves a file, an Issue folder or the store that is a symlink, and lists it with its reason, so it never uploads what a link points to.
 
 #### Issues and Pages
@@ -61,7 +61,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Attachments
 
-- **Breaking:** Attachments are kata's own, with their bytes in Docbank.
+- **Breaking:** Attachments are kata's own, with their bytes in [Docbank](https://github.com/kenn-io/docbank).
   - `@` uploads a file, the Attachments tab lists each with its media type and size, and `U` unlinks one (its bytes stay in Docbank).
   - `enter` downloads one to a cache folder and opens it when it is an image, video, audio, PDF or text file; anything else is only saved, and the Pane says where.
   - The daemon needs a `[docbank]` section in kata's `config.toml`; a daemon without one says so plainly in the Pane.
