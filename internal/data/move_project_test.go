@@ -135,9 +135,9 @@ func (f moveFixture) projectOf(t *testing.T, uid string) string {
 	return issue.ProjectName
 }
 
-func (f moveFixture) moveWith(t *testing.T, dryRun, single bool) model.ProjectMoveAnswer {
+func (f moveFixture) moveWith(t *testing.T, dryRun, single bool, revision int64) model.ProjectMoveAnswer {
 	t.Helper()
-	return as[model.ProjectMoveAnswer](t, run(t, f.gateway, model.MoveToProjectCmd{Workspace: f.workspace, UID: f.uid, Actor: f.actor, ProjectID: f.from.ID, ToProjectUID: f.to.UID, DryRun: dryRun, Single: single}))
+	return as[model.ProjectMoveAnswer](t, run(t, f.gateway, model.MoveToProjectCmd{Workspace: f.workspace, UID: f.uid, Actor: f.actor, ProjectID: f.from.ID, ToProjectUID: f.to.UID, DryRun: dryRun, Single: single, Revision: revision}))
 }
 
 func TestGatewayMoveTakesTheDescendantsUnlessOnlyThisIssue(t *testing.T) {
@@ -146,7 +146,7 @@ func TestGatewayMoveTakesTheDescendantsUnlessOnlyThisIssue(t *testing.T) {
 			f := newMoveFixture(t)
 			child := f.child(t)
 
-			preview := f.moveWith(t, true, single)
+			preview := f.moveWith(t, true, single, 0)
 			wantDescendants := 1
 			if single {
 				wantDescendants = 0
@@ -158,7 +158,7 @@ func TestGatewayMoveTakesTheDescendantsUnlessOnlyThisIssue(t *testing.T) {
 				t.Fatalf("the dry run moved the child to %s", got)
 			}
 
-			moved := f.moveWith(t, false, single)
+			moved := f.moveWith(t, false, single, preview.Revision)
 			if moved.Err != nil || moved.Count != wantDescendants+1 || moved.NewShortID == "" {
 				t.Fatalf("moved %+v, want %d Issues", moved, wantDescendants+1)
 			}
