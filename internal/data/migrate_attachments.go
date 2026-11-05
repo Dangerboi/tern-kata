@@ -36,12 +36,37 @@ func oldPointer(value any) (host, path string, ok bool) {
 }
 
 // inOldStore is whether path is a file inside the Issue's own folder of the old store at root. A pointer is data any writer can
-// set, so only such a file is ever deleted.
+// set, so only such a file is ever uploaded or deleted: a symlink may not stand in for the file, the Issue's folder or the store,
+// or the link's target would be read instead. A file that is gone passes when its path is inside the folder, so the caller can say it is gone.
 func inOldStore(root, uid, path string) bool {
 	if !ulid.MatchString(uid) || !filepath.IsAbs(path) {
 		return false
 	}
-	rel, err := filepath.Rel(filepath.Join(root, oldStoreName, uid), path)
+	folder := filepath.Join(root, oldStoreName, uid)
+	rel, err := filepath.Rel(folder, path)
+	if err != nil || rel == "." || !filepath.IsLocal(rel) {
+		return false
+	}
+	info, err := os.Lstat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return true
+	}
+	if err != nil || info.Mode()&fs.ModeSymlink != 0 {
+		return false
+	}
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return false
+	}
+	realFolder, err := filepath.EvalSymlinks(folder)
+	if err != nil || realFolder != filepath.Join(realRoot, oldStoreName, uid) {
+		return false
+	}
+	realPath, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return false
+	}
+	rel, err = filepath.Rel(realFolder, realPath)
 	return err == nil && rel != "." && filepath.IsLocal(rel)
 }
 

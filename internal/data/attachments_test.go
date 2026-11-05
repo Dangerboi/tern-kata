@@ -487,6 +487,48 @@ func TestMigrateDoesNotDeleteAFileOutsideTheIssuesFolder(t *testing.T) {
 	}
 }
 
+func TestMigrateLeavesASymlinkInTheOldStoreWithoutReadingItsTarget(t *testing.T) {
+	f := newDocbankFixture(t)
+	secret := writeFile(t, t.TempDir(), "id_rsa", "private")
+	dir := filepath.Join(f.repo, ".kata-attachments", f.uid)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "x")
+	if err := os.Symlink(secret, link); err != nil {
+		t.Skip("no symlinks here:", err)
+	}
+	f.patchKey(t, "tern-kata.attachment.x", map[string]any{"host": f.host, "path": link})
+	got := as[model.AttachmentsMigrated](t, run(t, f.gateway, model.MigrateAttachments{Workspace: f.repo, Actor: "tester"}))
+	if len(got.Moved) != 0 || len(got.Left) != 1 || !strings.Contains(got.Left[0].Reason, "outside") || f.docbank.Uploads() != 0 {
+		t.Fatalf("migrated %+v (uploads %d)", got, f.docbank.Uploads())
+	}
+	if data, err := os.ReadFile(secret); err != nil || string(data) != "private" {
+		t.Fatalf("target %q, %v", data, err)
+	}
+}
+
+func TestMigrateLeavesAnIssueFolderThatIsASymlink(t *testing.T) {
+	f := newDocbankFixture(t)
+	elsewhere := t.TempDir()
+	secret := writeFile(t, elsewhere, "x", "private")
+	store := filepath.Join(f.repo, ".kata-attachments")
+	if err := os.MkdirAll(store, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(elsewhere, filepath.Join(store, f.uid)); err != nil {
+		t.Skip("no symlinks here:", err)
+	}
+	f.patchKey(t, "tern-kata.attachment.x", map[string]any{"host": f.host, "path": filepath.Join(store, f.uid, "x")})
+	got := as[model.AttachmentsMigrated](t, run(t, f.gateway, model.MigrateAttachments{Workspace: f.repo, Actor: "tester"}))
+	if len(got.Moved) != 0 || len(got.Left) != 1 || !strings.Contains(got.Left[0].Reason, "outside") || f.docbank.Uploads() != 0 {
+		t.Fatalf("migrated %+v (uploads %d)", got, f.docbank.Uploads())
+	}
+	if data, err := os.ReadFile(secret); err != nil || string(data) != "private" {
+		t.Fatalf("target %q, %v", data, err)
+	}
+}
+
 // closeEvents is the Body of every Events row of the Issue, as the detail shows them after loading it from the daemon.
 func (f docbankFixture) closeEvents(t *testing.T) []string {
 	t.Helper()
