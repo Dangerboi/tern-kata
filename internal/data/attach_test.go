@@ -42,7 +42,7 @@ type attachFixture struct {
 
 func newAttachFixture(t *testing.T) attachFixture {
 	t.Helper()
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	const host = "TestBox"
 	gateway := newGateway(t, newLocator(kata.target())).WithHost(host)
 	repo := t.TempDir()
@@ -335,7 +335,7 @@ func TestAFailedPointerWriteLeavesNoCopy(t *testing.T) {
 			return
 		}
 		f.kata.handler.ServeHTTP(w, r)
-	}), "0.20.0")
+	}), "0.21.0")
 	gateway := newGateway(t, newLocator(broken.target())).WithHost("TestBox")
 	got := as[model.FileAttached](t, run(t, gateway, model.AttachFile{Workspace: f.repo, Ref: f.uid, Actor: "tester", Path: writeFile(t, t.TempDir(), "shot.png", "x")}))
 	if got.Err == nil {
@@ -356,7 +356,7 @@ func TestALostPointerAnswerKeepsTheCopy(t *testing.T) {
 			return
 		}
 		f.kata.handler.ServeHTTP(w, r)
-	}), "0.20.0")
+	}), "0.21.0")
 	gateway := newGateway(t, newLocator(lossy.target())).WithHost("TestBox")
 	got := as[model.FileAttached](t, run(t, gateway, model.AttachFile{Workspace: f.repo, Ref: f.uid, Actor: "tester", Path: writeFile(t, t.TempDir(), "shot.png", "x")}))
 	if got.Err == nil {
@@ -598,7 +598,7 @@ func (f attachFixture) racingGateway(t *testing.T, name string, before func()) *
 			}
 		}
 		f.kata.handler.ServeHTTP(w, r)
-	}), "0.20.0")
+	}), "0.21.0")
 	return newGateway(t, newLocator(racing.target())).WithHost(f.host)
 }
 
