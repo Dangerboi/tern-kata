@@ -14,7 +14,7 @@ Back to the [overview](../../README.md).
 | [Recurring Issues](recur.md) | The Recurrence card and `tern-kata recur` |
 | [Views from a shell](views.md) | `tern-kata views`: list, show, add and remove saved views |
 | [Dates](dates.md) | The Dates card |
-| [Agents](agents.md) | The Agent card, `agent.toml`, Background agents, Attention requests, messages to an agent, clickable ticket links and the agent skills |
+| [Agents](agents.md) | The Agent card, `agent.toml`, Background agents, Attention requests, messages to an agent, transcript links on closes, clickable ticket links and the agent skills |
 | [Compared with `kata tui`](kata-tui.md) | Shared keys, undo, quit, aliases and the keys kata tui lacks |
 | [FAQ](faq.md) | Common questions |
 | [Development](development.md) | Building, testing, releasing, type-checking |

@@ -25,6 +25,8 @@ tern-kata recur <ref> --stop                                  # existing Occurre
 | `--rule 'RRULE'` | A raw RRULE instead of the frequency flags |
 | `--stop` | Stop the recurrence; existing Occurrences stay |
 
+A value that starts with `--` must be written `--flag=value`; written apart, it reads as the next flag and the command says the flag requires a value.
+
 ## Behaviour
 
 - `<ref>` is anything `kata show` takes: a short id in this directory's Project, `<project>#<short id>` or a ULID. `--as <actor>` names the actor; without it the actor is `$KATA_AUTHOR`, `$USER`, then `git config user.name`. An explicitly empty value (`--as=` or `--as ""`) is refused with "--as must be non-empty" and nothing is written, so a script that expands an unset variable into `--as` never acts as someone else. The Issue's Project must be the one this directory is bound to.

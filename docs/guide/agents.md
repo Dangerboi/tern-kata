@@ -35,7 +35,7 @@ An unknown key, a relative `checkout` or an empty `command` refuses the start an
 
 ### How the agent runs
 
-The agent always runs through `tern-kata agent [--as <actor>] [--address-prefix <actor>/<name>] --ref <qualified ref> --`. The wrapper:
+The agent always runs through `tern-kata agent [--as <actor>] [--address-prefix <actor>/<name>] --ref <qualified ref> --`. For a daemon other than the default one, the Pane also passes the route flags it needs to reach that daemon: `--home`, `--db`, `--schema`, `--dsn-file`, `--env-file`, `--daemon`, `--server`, `--token-file`, `--auth-file`, `--allow-insecure` and `--trust-private-network`, each only when it has a value. No flag holds a secret: a token or DSN goes through a private file the wrapper reads and deletes. The wrapper:
 
 - sets `KATA_REF` to the Issue, so kata-plugin's todo plan hangs under it, and drops an inherited `KATA_REF` and `KATA_INBOX_USER` (your own inbox is not the agent's);
 - sets `KATA_AUTHOR` when there is an `actor`, and otherwise leaves `KATA_AUTHOR` as inherited;

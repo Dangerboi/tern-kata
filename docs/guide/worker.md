@@ -104,7 +104,7 @@ capacity  = 3
 checkouts = ["acme-infra"]
 ```
 
-Each `[[projects]]` block lists its own checkout only, so a job in `acme-shop` cannot name the `acme-infra` directory. Every key is described in the [worker reference](worker-reference.md#workertoml).
+Each `[[projects]]` block lists its own checkout only, so a job in `acme-shop` cannot name the `acme-infra` directory. A profile without an `extensions` key runs omp with `--no-extensions`; see the [`extensions` row of the worker reference](worker-reference.md#workertoml). Every key is described there too.
 
 ## Restarting and stopping
 
@@ -124,7 +124,7 @@ The host half doesn't read the config folder itself: while no worker of its own 
 - **Restarts.** It starts the worker again whenever it exits, after 1 second, then 2, 4 and so on up to a minute between tries. A worker that stayed up for a minute starts the count over.
 - **When it starts.** When Tern's daemon starts, which a window does on demand and Tern's "Start at login" setting does at login. Nothing starts the daemon at boot or after a quit by itself: with Tern not running, no worker runs.
 - **Finding the program.** The host half finds `tern-kata` on the daemon's `PATH` or in the folder the install scripts use (`~/.local/bin`, `%LOCALAPPDATA%\Programs\tern-kata`, `$TERN_KATA_INSTALL_DIR`). It gives the worker the daemon's `PATH` plus those folders, Tern's bundled omp, `~/go/bin` and Homebrew's, so `omp` resolves even when Tern was started from a launcher with a short `PATH`.
-- **Logs.** Its log lines (`tern-kata: worker started`, `the worker exited with status ...`) are in Tern's daemon log. `tern-kata worker status` says whether Tern supervises the worker or you started it by hand, and names the installed binary's version when the worker runs another one.
+- **Logs.** Its log lines (`tern-kata: worker started`, `the worker exited with status ...`) are in Tern's daemon log. `tern-kata worker status` says whether Tern supervises the worker or you started it by hand, and names the installed binary's version when the worker runs another one; for a supervised worker it adds that `tern-kata worker stop` moves it to the installed version.
 
 A worker the host half did not start is left running, and the host half starts one within 10 seconds of its end. This happens after a plugin reload (`tern plugin reload`, an install or update of the plugin, any change in a checkout linked with `tern plugin link`) or a Tern update loads the host half again while the worker runs on, after a daemon restart (Tern does not stop its children), and with a worker you started by hand. The host half logs one line naming that worker (`tern-kata: worker 1234 (tern-kata v0.7.2, started by Tern) is already running, so the plugin starts none until it exits`) and starts none of its own while it runs.
 

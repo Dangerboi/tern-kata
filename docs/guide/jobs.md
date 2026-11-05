@@ -4,7 +4,7 @@
 
 ## Jobs Page
 
-![The Jobs Page with a job selected and its inspector open](../images/jobs.png)
+![The Jobs Page with a job selected and its inspector open, listing its next runs](../images/jobs.png)
 
 One card per job. A card shows:
 
@@ -15,7 +15,7 @@ One card per job. A card shows:
 - the agent profile;
 - the next run in the Pane calendar's zone.
 
-A schedule that can't be read, or a next run that can't be worked out (a job that isn't running, a manual or Issue-date trigger, an interval of a job a worker runs), is left off the card.
+A schedule that can't be read, or a next run that can't be worked out, is left off the card: a job that isn't running, a manual or Issue-date trigger, a once trigger in the past, or an interval of a recurring-child job whose parent has no delivery anchor yet. An interval of a job a worker runs does show, counted from the job's creation.
 
 ### Keys
 

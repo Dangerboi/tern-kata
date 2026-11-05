@@ -18,6 +18,10 @@ Inbox beside the Menu sidebar. A directory is bound to a Project when it, or a p
 
 Those Pages act on the Pane's Project: the current Project Collection, else the workspace's Binding. With neither, the Page says so and opens the Menu's Projects list. See [The Page bar](pages-and-board.md#the-page-bar).
 
+### The Pane says a Project "is not set up on this daemon". What now?
+
+The folder is bound by its `.kata.toml` to a Project the daemon doesn't know. The message names that Project, or the alias kata matched (`Alias "…"`), and adds kata's hint. Follow the hint, or switch to the daemon that holds the Project on the Daemons Page (`D`).
+
 ### Why did moving a card change a label in kata?
 
 A Lane is one kata label, so `<` and `>` swap labels. Moving into No lane removes the Lane labels and keeps every other label, and a Move never enters or leaves Done. See [Moving around and moving cards](pages-and-board.md#moving-around-and-moving-cards).

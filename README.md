@@ -20,7 +20,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 **Daemons.** `D` opens the Daemons Page, a Lettered Page (also in the Menu) that lists the daemons kata's `config.toml` names with kata tui's columns; Enter switches this Pane to one, starting a stopped local daemon first as kata tui does, and nothing is written to disk. The top bar names the current daemon and the account the daemon says you are; see [Pages and the Board](docs/guide/pages-and-board.md#lettered-pages).
 
-**Federation.** `F` opens the Federation Page, a Lettered Page (also in the Menu) that lists this daemon's spoke federations with hub, actor, push, pending, sync and badges, shows a Project's detail on Enter, reads again with `r` and leaves a federation with `x` (preview, hub revoke, result). `b` browses the Projects of the daemon catalog's hubs, and `n` enrolls a Project in a hub's federation (choose a local Project, a hub and a hub Project, preview, a typed confirmation for adopting, result; a failure after the hub granted it keeps a recovery whose `R` shows the `kata federation join …` command); see [Pages and the Board](docs/guide/pages-and-board.md#lettered-pages).
+**Federation.** `F` opens the Federation Page, a Lettered Page (also in the Menu) that lists this daemon's spoke federations with hub, actor, push, pending, sync and badges, shows a Project's detail on Enter, reads again with `r` leaves a federation with `x` (preview, hub revoke, result), and names a spoke with `N`. `b` browses the Projects of the daemon catalog's hubs, and `n` enrolls a Project in a hub's federation (choose a local Project, a hub and a hub Project, preview, a typed confirmation for adopting, result; a failure after the hub granted it keeps a recovery whose `R` shows the `kata federation join …` command); see [Pages and the Board](docs/guide/pages-and-board.md#lettered-pages).
 
 **Board.** `5` or `b` shows a Project's Issues as cards in Lanes, one per triage label. `<` and `>` move a card by swapping its label in kata, and a selected card tags its related cards; following one of another Project switches the Pane to that Project and Esc comes back. See [Pages and the Board](docs/guide/pages-and-board.md).
 
@@ -28,7 +28,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 **Jobs and the Job card.** `2` lists a Project's Cron jobs with their state, schedule in words and next run. The Job card makes and edits every kind of job. See [Jobs](docs/guide/jobs.md).
 
-![The Jobs Page with a job selected and its inspector open](docs/images/jobs.png)
+![The Jobs Page with a job selected and its inspector open, listing its next runs](docs/images/jobs.png)
 
 ![The Job card editing an agent prompt job, with the schedule preview](docs/images/job-card.png)
 
@@ -46,15 +46,15 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 **Attachments.** `@` uploads a screenshot, log or any other file to an Issue through kata, which keeps the bytes in Docbank; `enter` on one in the Attachments tab downloads it and opens it when it is an image, video, audio, PDF or text file, and agents use `kata docbank attachments`. It needs a `[docbank]` section in kata's config. See [Attachments](docs/guide/attachments.md).
 
-![The Attachments tab of "Add Apple Pay to checkout" listing a screenshot and a log](docs/images/attachments.png)
+![The Attachments tab of "Add Apple Pay to checkout" listing a screenshot and a log, each with its media type and size](docs/images/attachments.png)
 
 **Recurring Issues.** `O` opens the Recurrence card and `tern-kata recur` does the same from a shell. See [Recurring Issues](docs/guide/recur.md).
 
-**Dates card.** `d` sets an Issue's scheduled date and deadline, typed as a date, `today`, `tomorrow`, `+3d` or `+1w`. See [Dates](docs/guide/dates.md).
+**Dates card.** `d` sets an Issue's scheduled date and deadline, typed as a date, `today`, `tomorrow`, `+3d` or `+1w`, or with a time in kata's date-time forms. See [Dates](docs/guide/dates.md).
 
 ![The Dates card over the Board, with "+1w" typed in Scheduled and the date it resolves to below it](docs/images/dates-card.png)
 
-**Moving an Issue.** `M` opens the Move card on the selected Issue: pick a Project from a filtered list, preview the move (kata checks it and changes nothing), then move it, guarded on the revision the card opened with. A Notice links to the Issue in its new Project. See [Moving an Issue](docs/guide/pages-and-board.md#moving-an-issue).
+**Moving an Issue.** `M` opens the Move card on the selected Issue: pick a Project from a filtered list, preview the move (kata checks it and changes nothing), then move it, guarded on the revision the card opened with. The Issue moves with its open descendants; `o` (Only this Issue) moves it alone. A Notice links to the Issue in its new Project. See [Moving an Issue](docs/guide/pages-and-board.md#moving-an-issue).
 
 **Deleting and restoring an Issue.** `X` opens the Delete card on the selected Issue: type its `project#id` to confirm, add a reason if you like, and kata deletes it (soft: it keeps the Issue and its history). `u` right after restores it, and the Menu's "Restore a deleted Issue" brings back an earlier one by short id, `project#id` or ULID. See [Deleting and restoring an Issue](docs/guide/pages-and-board.md#deleting-and-restoring-an-issue).
 
@@ -90,7 +90,7 @@ Agents: follow these steps only when the user has asked you to install tern-kata
    In a repo with a `.kata.toml`, write kata ticket references in chat replies as `[<id>](https://kata.invalid/<project>/<id>)`, with `<project>` the name in `.kata.toml`. The tern-kata window plugin opens them in tern-kata; Tern draws `kata://` links in chat as plain text. Everywhere else (files, commit messages, kata Issue text) write the bare id; those links only work inside Tern.
    ```
 
-6. Ask the user whether to install the agent skills (`kata`, and `tern-kata` for attachments, recurrence and the worker). Run `npx skills add Dangerboi/tern-kata -g` only if they agree; it needs Node.js, and with only Bun installed `bunx` replaces `npx`.
+6. Ask the user whether to install the agent skills (`kata`, and `tern-kata` for recurring Issues, saved views and the worker). Run `npx skills add Dangerboi/tern-kata -g` only if they agree; it needs Node.js, and with only Bun installed `bunx` replaces `npx`.
 
 ## Install
 
