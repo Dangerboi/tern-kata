@@ -33,7 +33,7 @@ quit_app
 printf 'version = 1\n[project]\nname = "remote-missing"\n' >"$tmp/remote-missing/.kata.toml"
 printf 'ready\nrun "(cd %s && env -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s KATA_SERVER=%s %s/tern-kata)"\n' "$tmp/remote-missing" "$KATA_HOME" "$remote_proxy" "$tmp" >"$tmp/remote-missing.ctl"
 ctl --file "$tmp/remote-missing.ctl"
-expect_tree "[data-id='main.error']" '([.nodes[] | .. | objects | .text? // empty] | join(" ")) | contains("project remote-missing is not registered") and contains("run \"kata init\" in this workspace") and (contains("unexpected status code") | not)'
+expect_tree "[data-id='main.error']" '([.nodes[] | .. | objects | .text? // empty] | join(" ")) | contains("Project \"remote-missing\" is not set up on this daemon.") and contains("run \"kata init\" in this workspace") and (contains("unexpected status code") | not)'
 quit_app
 
 printf 'version = 1\n[project\n' >"$tmp/remote-missing/.kata.toml"
