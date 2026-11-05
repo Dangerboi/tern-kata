@@ -64,7 +64,7 @@ func (m Model) paneToday() string {
 // as its day.
 func dayOf(text, today string) string {
 	if day, err := ParseDateInput(text, today); err == nil {
-		return day
+		return day[:min(len(day), len(dayLayout))]
 	}
 	if len(text) >= len(dayLayout) {
 		if _, err := time.Parse(dayLayout, text[:len(dayLayout)]); err == nil {

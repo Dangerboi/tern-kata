@@ -29,7 +29,7 @@ func (c *Client) setDates(ctx context.Context, cmd model.SetDatesCmd) (applied, 
 		res, e := c.patchMetadataKey(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, change.Key, value, ifValue)
 		if e != nil {
 			if daemonCode(e) == "metadata_guard_failed" {
-				return applied, changed, last, false, model.DatesChangedError(change.Label)
+				return applied, changed, last, false, c.datesConflict(ctx, cmd, change)
 			}
 			return applied, changed, last, ambiguousWrite(e), daemonError(e)
 		}
@@ -53,4 +53,27 @@ func (c *Client) SetDatesRecorded(ctx context.Context, cmd model.SetDatesCmd) ([
 	applied, changed, last, ambiguous, err := c.setDates(ctx, cmd)
 	last.Changed = len(changed) > 0
 	return applied, done(last, ambiguous, func(e *model.UndoEntry) { e.Dates = changed }), err
+}
+
+// datesConflict is the refusal for a date key that moved since the Dates card opened, carrying the value kata holds now so the
+// card can show it. A failed read leaves the value out, and the refusal says so.
+func (c *Client) datesConflict(ctx context.Context, cmd model.SetDatesCmd, change model.DateChange) model.DatesConflict {
+	conflict := model.DatesConflict{Label: change.Label, Key: change.Key}
+	shown, err := c.showIssue(ctx, cmd.ProjectID, cmd.UID)
+	if err != nil {
+		return conflict
+	}
+	conflict.Held, _ = shown.Issue.Metadata[change.Key].(string)
+	conflict.Shown = conflict.Held
+	if conflict.Shown == "" {
+		projected := shown.Issue.ScheduledOnDate
+		if change.Key == model.DeadlineKey {
+			projected = shown.Issue.DeadlineOnDate
+		}
+		if projected != nil {
+			conflict.Shown = *projected
+		}
+	}
+	conflict.Read = true
+	return conflict
 }

@@ -62,6 +62,8 @@ func TestCreateCardPreviewsEachDateAgainstThePaneCalendar(t *testing.T) {
 		{"today", "2026-10-08 Thu"},
 		{"tomorrow", "2026-10-09 Fri"},
 		{"+2w", "2026-10-22 Thu"},
+		{"2026-10-24T09:00", "2026-10-24 Sat 09:00"},
+		{"2026-10-24T09:00:30Z", "2026-10-24T09:00:30Z"},
 		{"", "no date"},
 		{"someday", ""},
 	} {
@@ -69,7 +71,7 @@ func TestCreateCardPreviewsEachDateAgainstThePaneCalendar(t *testing.T) {
 		if got, _ := nodeText(t, s, "layer.create.scheduled-preview"); got != tt.want {
 			t.Errorf("Scheduled %q previews %q, want %q", tt.input, got, tt.want)
 		}
-		if got := createField(t, s, "Scheduled (optional, YYYY-MM-DD, today, tomorrow, +Nd or +Nw)"); got != tt.input {
+		if got := createField(t, s, "Scheduled (optional, "+model.DateInputHint+")"); got != tt.input {
 			t.Errorf("Scheduled field holds %q, want %q", got, tt.input)
 		}
 	}

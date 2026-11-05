@@ -81,6 +81,9 @@ func TestDatesCardResolvesEachFormAgainstThePaneCalendarAndPreviewsIt(t *testing
 		{"+3d", "2026-10-11 Sun"},
 		{"+2w", "2026-10-22 Thu"},
 		{"+30d", "2026-11-07 Sat"},
+		{"2026-10-24T09:00", "2026-10-24 Sat 09:00"},
+		{"2026-10-24T09:00:30", "2026-10-24 Sat 09:00:30"},
+		{"2026-10-24T09:00:30Z", "2026-10-24T09:00:30Z"},
 		{"", "no date"},
 	} {
 		s := emptied(t, step(t, projectPane(t, 160, withDates("a", "2026-10-12", "")), key("d")).State)
@@ -174,20 +177,22 @@ func TestDatesCardReportsAChangedKeyAndKeepsTheCardOpen(t *testing.T) {
 	out := step(t, s, key("enter"))
 	first := model.DateChange{Key: "scheduled_on", Label: "Scheduled", Value: "2026-10-09", Was: "2026-10-12"}
 	// The Scheduled write landed; the Deadline moved meanwhile.
-	failed := step(t, out.State, model.DatesResultMsg{UID: "a", Applied: []model.DateChange{first}, Err: model.DatesChangedError("Deadline")})
+	failed := step(t, out.State, model.DatesResultMsg{UID: "a", Applied: []model.DateChange{first}, Err: model.DatesConflict{Label: "Deadline", Key: "deadline_on", Held: "2026-11-09", Shown: "2026-11-09", Read: true}})
 	f := failed.State.Model.DatesForm
-	if !f.Open || f.Saving || f.Err == nil || !strings.Contains(f.Err.Error(), "Deadline changed elsewhere") {
+	if !f.Open || f.Saving || f.Err == nil || !strings.Contains(f.Err.Error(), "The Issue changed since the card opened; nothing was written for Deadline") {
 		t.Fatalf("open %v saving %v err %v", f.Open, f.Saving, f.Err)
 	}
 	if _, ok := snapshotFor(failed.Cmds); !ok {
 		t.Errorf("the written Scheduled was not read back: %v", failed.Cmds)
 	}
-	if got := datesField(t, failed.State, "Deadline"); got != "+2d" {
-		t.Errorf("Deadline text %q lost", got)
+	if got := datesField(t, failed.State, "Deadline"); got != "2026-11-09" {
+		t.Errorf("Deadline shows %q, want the current value", got)
 	}
-	// Saving again writes only what is still unwritten, guarded on what is held now.
-	again := step(t, failed.State, key("enter"))
-	if len(again.Cmds) != 1 || len(again.Cmds[0].(model.SetDatesCmd).Changes) != 1 || again.Cmds[0].(model.SetDatesCmd).Changes[0].Key != "deadline_on" {
+	if got := datesField(t, failed.State, "Scheduled"); got != "2026-10-09" {
+		t.Errorf("Scheduled shows %q, want the written date", got)
+	}
+	// Saving again writes nothing: the refilled field matches what kata holds.
+	if again := step(t, failed.State, key("enter")); len(again.Cmds) != 0 {
 		t.Fatalf("second save: %+v", again.Cmds)
 	}
 
@@ -211,5 +216,17 @@ func TestDatesCardIsRefusedWhileTheDaemonIsDisconnected(t *testing.T) {
 	out := step(t, s, key("enter"))
 	if f := out.State.Model.DatesForm; len(out.Cmds) != 0 || !f.Open || f.Err == nil || !strings.Contains(f.Err.Error(), "disconnected") {
 		t.Fatalf("cmds %v open %v err %v", out.Cmds, f.Open, f.Err)
+	}
+}
+
+func TestDatesCardSavesATimedValueAsTyped(t *testing.T) {
+	s := typed(t, emptied(t, step(t, projectPane(t, 160, withDates("a", "2026-10-12", "")), key("d")).State), "2026-10-24T09:00")
+	out := step(t, s, key("enter"))
+	if len(out.Cmds) != 1 {
+		t.Fatalf("cmds %+v", out.Cmds)
+	}
+	changes := out.Cmds[0].(model.SetDatesCmd).Changes
+	if len(changes) != 1 || changes[0].Value != "2026-10-24T09:00" || changes[0].Was != "2026-10-12" {
+		t.Fatalf("changes %+v", changes)
 	}
 }

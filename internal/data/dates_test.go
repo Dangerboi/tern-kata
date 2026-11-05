@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -53,8 +54,12 @@ func TestSetDatesReportsAKeyChangedMeanwhileAndStopsThere(t *testing.T) {
 	first := model.DateChange{Key: "scheduled_on", Label: "Scheduled", Value: "2026-10-15", Was: "2026-10-12"}
 	second := model.DateChange{Key: "deadline_on", Label: "Deadline", Value: "2026-10-30"}
 	got := f.setDates(t, first, second)
-	if got.Err == nil || !strings.Contains(got.Err.Error(), "Scheduled changed elsewhere") || len(got.Applied) != 0 {
+	if got.Err == nil || !strings.Contains(got.Err.Error(), "nothing was written for Scheduled") || len(got.Applied) != 0 {
 		t.Fatalf("got %+v", got)
+	}
+	var conflict model.DatesConflict
+	if !errors.As(got.Err, &conflict) || !conflict.Read || conflict.Key != "scheduled_on" || conflict.Held != "2026-10-20" || conflict.Shown != "2026-10-20" {
+		t.Fatalf("the refusal does not carry the current value: %+v", got.Err)
 	}
 	meta := f.issue(t, f.uid).Metadata
 	if meta["scheduled_on"] != "2026-10-20" {
@@ -68,7 +73,7 @@ func TestSetDatesReportsAKeyChangedMeanwhileAndStopsThere(t *testing.T) {
 	f.patchKey(t, "deadline_on", "2026-11-01")
 	first.Was = "2026-10-20"
 	got = f.setDates(t, first, second)
-	if got.Err == nil || !strings.Contains(got.Err.Error(), "Deadline changed elsewhere") || len(got.Applied) != 1 || got.Applied[0].Key != "scheduled_on" {
+	if got.Err == nil || !strings.Contains(got.Err.Error(), "nothing was written for Deadline") || len(got.Applied) != 1 || got.Applied[0].Key != "scheduled_on" {
 		t.Fatalf("got %+v", got)
 	}
 	if meta := f.issue(t, f.uid).Metadata; meta["deadline_on"] != "2026-11-01" || meta["scheduled_on"] != "2026-10-15" {
