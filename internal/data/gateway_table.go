@@ -567,6 +567,16 @@ func init() {
 		nil, nil)
 
 	daemonCall(
+		func(cmd model.SetFederationSpokeName) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.SetFederationSpokeName) (model.Msg, error) {
+			return ok(c.SetFederationSpokeName(ctx, cmd))
+		},
+		func(cmd model.SetFederationSpokeName, err error) model.Msg {
+			return model.FederationSpokeNamed{Attempt: cmd.Attempt, Hub: cmd.HubURL, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
 		func(cmd model.ShowRun) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.ShowRun) (model.Msg, error) {
 			return ok(c.ShowRun(ctx, cmd))

@@ -26,6 +26,8 @@ type FederationSpoke struct {
 	ProjectID                            int64
 	ProjectName                          string
 	HubURL, HubProjectUID                string
+	// SpokeName is the name the hub gives this instance, "" when it gives none or could not be read.
+	SpokeName string
 	HubProjectID                         int64
 	BoundActor, Capabilities             string
 	PushEnabled, AllowInsecure           bool
@@ -134,6 +136,8 @@ type FederationState struct {
 	AdoptInput string
 	AdoptCaret Caret
 	AdoptErr   error
+	// Name is the card asking for a spoke's name, for an enrollment or an enrolled spoke.
+	Name FederationName
 	// reads numbers the asks, attempts the leaves and enrollments, and hubReads the reads of the catalog and the hubs; an
 	// answer to another is dropped.
 	reads, attempts, hubReads Latest
@@ -218,6 +222,8 @@ func updateFederation(m Model, msg Msg) (Model, []Cmd, bool) {
 	case FederationEnrolled:
 		m, cmds := federationEnrolled(m, msg)
 		return m, cmds, true
+	case FederationSpokeNamed:
+		return federationSpokeNamed(m, msg), nil, true
 	case FederationLoaded:
 		f := &m.Federation
 		if !f.reads.IsCurrent(msg.Request) {
@@ -349,9 +355,17 @@ func (s FederationSpoke) Badges() string {
 // Lines are a spoke's two lines in the list: the Project and its hub and actor, then push, pending, sync and badges.
 func (s FederationSpoke) Lines(now time.Time) [2]string {
 	return [2]string{
-		oneLine(s.ProjectName) + "  Hub " + s.HubHost() + "  Actor " + federationDash(oneLine(s.BoundActor)),
+		oneLine(s.ProjectName) + s.nameWord() + "  Hub " + s.HubHost() + "  Actor " + federationDash(oneLine(s.BoundActor)),
 		"Push " + s.Push() + "  Pending " + strconv.FormatInt(s.PendingPushCount, 10) + "  Sync " + s.Sync(now) + "  Badges " + s.Badges(),
 	}
+}
+
+// nameWord is the spoke's name in the list's first line, "" when it has none.
+func (s FederationSpoke) nameWord() string {
+	if s.SpokeName == "" {
+		return ""
+	}
+	return "  Name " + oneLine(s.SpokeName)
 }
 
 // Footer is the line under the list about the selected spoke: its hub URL and Project id, actor and credential.
@@ -364,6 +378,7 @@ func (s FederationSpoke) Footer() string {
 func (s FederationSpoke) DetailLines() []string {
 	lines := []string{
 		oneLine(s.ProjectName),
+		"spoke name: " + s.SpokeLabel(),
 		"hub URL: " + oneLine(s.HubURL),
 		"hub project ID: " + strconv.FormatInt(s.HubProjectID, 10),
 		"hub project UID: " + federationDash(oneLine(s.HubProjectUID)),
@@ -407,6 +422,7 @@ var federationRows = []actionEntry{
 	{action: OpenFederationDetail, modes: []Mode{ModeFederation}, keys: keys("enter", "↵"), help: "detail", footer: []Mode{ModeFederation}, footerKey: "↵", sheet: []sheetLine{{sheetLettered, 4, "show the spoke's detail"}}, handle: openFederationDetail},
 	{action: StartFederationLeave, modes: []Mode{ModeFederation}, keys: keys("x", "x"), help: "leave", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 6, "leave the selected spoke's federation (preview first)"}}, handle: startFederationLeave},
 	{action: RefreshFederation, modes: []Mode{ModeFederation}, keys: keys("r", "r"), help: "refresh", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 5, "read the federation status again"}}, handle: refreshFederation},
+	{action: NameFederationSpoke, modes: []Mode{ModeFederation}, keys: keys("shift+n", "N"), help: "name spoke", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 32, "name the selected spoke, or clear its name with an empty one (kept by the hub)"}}, handle: openFederationNameForSpoke},
 	{action: StartFederationEnroll, modes: []Mode{ModeFederation}, keys: keys("n", "n"), help: "enroll", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 30, "enroll a Project in a hub's federation (choose, preview, confirm)"}}, handle: startFederationEnroll},
 	{action: StartFederationBrowse, modes: []Mode{ModeFederation}, keys: keys("b", "b"), help: "browse hubs", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 31, "browse the Projects of the catalog's hubs (read only)"}}, handle: startFederationBrowse},
 	{action: LetteredBack, modes: []Mode{ModeFederation}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 1, "back to the Page shown before"}}, handle: federationBack},

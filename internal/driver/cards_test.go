@@ -71,6 +71,10 @@ func popups() []popup {
 		{"Federation adoption", func(t *testing.T, _ driver.State) model.Model { return confirming(t).Model },
 			func(dst *model.Model, src model.Model) { dst.Federation = src.Federation },
 			model.ModeFederationAdopt, "Confirm Adoption", func(m model.Model) string { return m.Federation.AdoptInput }},
+		{"Federation spoke name", func(t *testing.T, _ driver.State) model.Model {
+			return step(t, previewed(t, atHubProjectStep(t, enrollPane(t), rowAcme, hubBeta)), key("shift+n")).State.Model
+		}, func(dst *model.Model, src model.Model) { dst.Federation.Name = src.Federation.Name },
+			model.ModeFederationName, "Name Spoke", func(m model.Model) string { return m.Federation.Name.Input }},
 		{"Recurrence", func(t *testing.T, s driver.State) model.Model {
 			m := keyOpen("shift+o")(t, s)
 			m.RecurrenceForm.Field = model.RecurrenceZone // a text field

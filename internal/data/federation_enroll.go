@@ -188,6 +188,9 @@ func (c *Client) EnrollFederation(ctx context.Context, cmd model.EnrollFederatio
 	if d.AdoptExisting {
 		enrollment.AllowAdoptionSnapshotAuthors = new(true)
 	}
+	if d.SpokeName != "" {
+		enrollment.SpokeName = &d.SpokeName
+	}
 	granted, err := hub.CreateFederationEnrollmentWithResponse(ctx, &g.CreateFederationEnrollmentRequestOptions{Body: &enrollment})
 	if err != nil {
 		return failed(daemonError(err))

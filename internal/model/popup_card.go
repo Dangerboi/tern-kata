@@ -57,6 +57,7 @@ const (
 	CardDelete
 	CardAgent
 	CardFederationAdopt
+	CardFederationName
 	CardView
 	CardAgentMessage
 )
@@ -367,6 +368,16 @@ func buildCards() []cardEntry {
 			editing: []fieldEditing{{mode: ModeFederationAdopt, actions: []Action{DeleteInput, ClearInput}, clear: "clear name"}},
 			text:    func(m *Model) (*string, *Caret) { return &m.Federation.AdoptInput, &m.Federation.AdoptCaret },
 			erased:  func(m Model, _ Action, _ bool) Model { m.Federation.AdoptErr = nil; return m },
+		},
+		{
+			card: CardFederationName, name: "federation-name", open: func(m Model) bool { return m.Federation.Name.Open },
+			modes: []Mode{ModeFederationName}, mode: func(Model) Mode { return ModeFederationName },
+			key:    federationNameKey,
+			busy:   func(m Model) bool { return m.Federation.Name.Saving },
+			fields: []FieldSpec{}, input: true,
+			editing: []fieldEditing{{mode: ModeFederationName, actions: []Action{DeleteInput, ClearInput}, clear: "clear name"}},
+			text:    func(m *Model) (*string, *Caret) { return &m.Federation.Name.Input, &m.Federation.Name.Caret },
+			erased:  func(m Model, _ Action, _ bool) Model { m.Federation.Name.Err = nil; return m },
 		},
 		{
 			card: CardRecurrence, name: "recurrence", open: func(m Model) bool { return m.RecurrenceForm.Open },
