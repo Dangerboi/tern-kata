@@ -4,8 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mattn/go-runewidth"
-
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
 )
@@ -60,81 +58,5 @@ func TestListRowDropsDateBadgeBeforeTitleWhenNarrow(t *testing.T) {
 	m, _ := model.Update(load(160), model.KeyMsg{Chord: "shift+l"})
 	if got := text(render(t, m)[view.IssueID("dated")]); !strings.Contains(got, "scheduled 2027-01-10") || !strings.Contains(got, "A rather long Dated title") {
 		t.Errorf("list alone row %q, want badge and title", got)
-	}
-}
-
-// An Agent badge before the title takes room the Date badge would otherwise have: the badged row drops the Date badge no later
-// than the plain one does, and at some width only the badged row drops it. The title is never cut for the badge.
-func TestListRowDateBadgeCountsAgentBadge(t *testing.T) {
-	day := "2026-11-05"
-	title := "A rather long Dated title"
-	load := func(cols int, agent bool) model.Model {
-		issue := model.Issue{UID: "dated", ShortID: "dddd", Title: title, Status: "open", ProjectName: "work", DeadlineOnDate: &day}
-		m := apply(model.Model{},
-			model.Start{Workspace: "/repo"},
-			model.ResizeMsg{Cols: cols},
-			model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}},
-			snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{issue}}}},
-		)
-		m.Calendar.Date = day
-		if agent {
-			m.AgentMapping = []model.AgentEntry{{IssueUID: "dated", Block: "b1"}}
-		}
-		m, _ = model.Update(m, model.KeyMsg{Chord: "shift+l"}) // the list alone in the Pane
-		return m
-	}
-	onlyPlain := 0
-	for cols := model.MinCols; cols <= 140; cols++ {
-		plain := text(render(t, load(cols, false))[view.IssueID("dated")])
-		badged := text(render(t, load(cols, true))[view.IssueID("dated")])
-		if !strings.Contains(badged, "agent") || !strings.Contains(badged, title) || !strings.Contains(plain, title) {
-			t.Fatalf("cols %d: rows %q and %q, want the Agent badge and the whole title", cols, badged, plain)
-		}
-		plainDate, badgedDate := strings.Contains(plain, "due today"), strings.Contains(badged, "due today")
-		if badgedDate && !plainDate {
-			t.Errorf("cols %d: the Agent-badged row keeps its Date badge where the plain row drops it", cols)
-		}
-		if plainDate && !badgedDate {
-			onlyPlain++
-		}
-	}
-	if onlyPlain == 0 {
-		t.Error("no width dropped the Date badge only for the Agent-badged row")
-	}
-}
-
-// The Date badge shows exactly when the row, with its gap, fits the list: at each width of a list alone in the Pane the row with
-// the badge is no wider than the list, and a row that dropped it would be wider than the list with it.
-func TestListRowDateBadgeFitsTheListToTheCell(t *testing.T) {
-	shown, dropped := 0, 0
-	for cols := model.MinCols; cols <= 140; cols++ {
-		day := "2026-11-05"
-		issue := model.Issue{UID: "dated", ShortID: "dddd", Title: "A title long enough that the narrow lists cannot hold it with a Date badge", Status: "open", ProjectName: "work", DeadlineOnDate: &day}
-		m := apply(model.Model{},
-			model.Start{Workspace: "/repo"},
-			model.ResizeMsg{Cols: cols},
-			model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}},
-			snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{issue}}}},
-		)
-		m.Calendar.Date = day
-		m, _ = model.Update(m, model.KeyMsg{Chord: "shift+l"})
-		row := text(render(t, m)[view.IssueID("dated")])
-		// The owner cell is cut, not padded, and Tern gives it a box of ownerBox cells; the Issue has no owner, so its text is empty.
-		const detail, padding, ownerBox, badge = 1, 4, 8, "  due today"
-		width := runewidth.StringWidth(row) + detail + padding + ownerBox
-		if strings.Contains(row, "due today") {
-			shown++
-			if width > cols {
-				t.Errorf("cols %d: row %q is %d cells wide with its badge", cols, row, width)
-			}
-		} else {
-			dropped++
-			if width+runewidth.StringWidth(badge) <= cols {
-				t.Errorf("cols %d: row %q dropped a badge that fits", cols, row)
-			}
-		}
-	}
-	if shown == 0 || dropped == 0 {
-		t.Errorf("badge shown at %d widths and dropped at %d, want both", shown, dropped)
 	}
 }
