@@ -254,6 +254,7 @@ var cardBindings = []Binding{
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: CloseSave, Help: "close", Mode: ModeCloseForm, ShowInFooter: true},
 	{Chord: "ctrl+d", Key: "ctrl+d", Action: CloseQuick, Help: "quick done", Mode: ModeCloseForm, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: CloseCancel, Help: "cancel", Mode: ModeCloseForm, ShowInFooter: true},
+	{Chord: "space", Key: "space", Action: InputSpace, Help: "toggle attachment / space", Mode: ModeCloseForm},
 	{Chord: "enter", Key: "enter", Action: DatesSubmit, Help: "save dates", Mode: ModeDatesForm, ShowInFooter: true},
 	{Chord: "ctrl+s", Key: "ctrl+s", Action: DatesSubmit, Help: "save dates", Mode: ModeDatesForm},
 	{Chord: "escape", Key: "esc", Action: DatesCancel, Help: "cancel", Mode: ModeDatesForm, ShowInFooter: true},

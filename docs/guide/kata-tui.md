@@ -68,6 +68,10 @@ kata tui has no key for moving an Issue to another Project; kata web and the CLI
 
 kata tui has no key for deleting an Issue; the CLI does. `X` in tern-kata opens the Delete card, which sends kata's delete with the confirmation `kata delete` asks for: the typed qualified id, as `DELETE <project>#<id>` in the confirmation header. The Menu's **Restore a deleted Issue** brings one back. See [Deleting and restoring an Issue](pages-and-board.md#deleting-and-restoring-an-issue). Purge stays in the CLI.
 
+## Closing with an attachment
+
+The Close card for a `done` close can cite one or more of the Issue's Attachments as evidence, and the Events tab names a cited one; kata tui has no such choice. See [Attachments](attachments.md#citing-an-attachment-when-closing).
+
 ## Undo
 
 `u` in the list, on the Board, in the Lane view and in the Issue detail takes back the newest change this Pane made, as in kata tui. The Pane remembers the last 20 completed changes, across Issues, and undoes the newest first. It undoes a close (reopens), a reopen (closes as done, opening the Close card first when kata requires evidence), an owner or priority change, a label added or removed, a body edit, a link added (the link is removed, found by type and its two ends), a Lane Move (its label changes reversed), a Dates card change (both dates put back, each guarded on the value the change wrote) and a delete (the Issue is restored; "already restored" when kata no longer holds it as deleted).

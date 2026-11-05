@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"slices"
@@ -40,22 +41,44 @@ func validAttachmentName(name string) bool {
 		!strings.ContainsAny(name, `/\`) && !strings.ContainsFunc(name, unicode.IsControl)
 }
 
+// attachmentRef reads one reference object, a meta value or the copy a close froze into its evidence: the Attachment it names
+// as id, and its Docbank version. ok is false for a value kata would not accept as a reference (no valid name, media type, size
+// or Docbank version). A size is a float64 or, in a decoded event payload, a json.Number.
+func attachmentRef(id string, value any) (a Attachment, version string, ok bool) {
+	ref, isObject := value.(map[string]any)
+	if !isObject {
+		return Attachment{}, "", false
+	}
+	name, nameOK := ref["name"].(string)
+	mediaType, typeOK := ref["media_type"].(string)
+	version, versionOK := ref["docbank_version"].(string)
+	var size float64
+	var sizeOK bool
+	switch n := ref["size"].(type) {
+	case float64:
+		size, sizeOK = n, true
+	case json.Number:
+		var err error
+		size, err = n.Float64()
+		sizeOK = err == nil
+	}
+	if nameOK && typeOK && sizeOK && versionOK && validAttachmentName(name) && mediaType != "" && version != "" && size >= 0 && size == float64(int64(size)) {
+		return Attachment{ID: id, Name: name, MediaType: mediaType, Size: int64(size)}, version, true
+	}
+	return Attachment{}, "", false
+}
+
 // Attachments are the Issue's Attachments read from its attachment.* meta keys, sorted by name, then id. A key whose value kata
 // would not accept as a reference (no valid name, media type, size or Docbank version) is not an Attachment.
 func Attachments(metadata map[string]any) []Attachment {
 	var list []Attachment
 	for key, value := range metadata {
 		id, ok := strings.CutPrefix(key, attachmentKeyPrefix)
-		ref, isObject := value.(map[string]any)
-		if !ok || !attachmentID.MatchString(id) || !isObject {
+		if !ok || !attachmentID.MatchString(id) {
 			continue
 		}
-		name, nameOK := ref["name"].(string)
-		mediaType, typeOK := ref["media_type"].(string)
-		size, sizeOK := ref["size"].(float64)
-		version, versionOK := ref["docbank_version"].(string)
-		if nameOK && typeOK && sizeOK && versionOK && validAttachmentName(name) && mediaType != "" && version != "" && size >= 0 && size == float64(int64(size)) {
-			list = append(list, Attachment{ID: id, Name: name, MediaType: mediaType, Size: int64(size)})
+		if a, _, ok := attachmentRef(id, value); ok {
+			list = append(list, a)
 		}
 	}
 	slices.SortFunc(list, func(a, b Attachment) int {

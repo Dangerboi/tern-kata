@@ -25,6 +25,13 @@ ctl key U
 expect_tree "[data-id='main.notice']" '.ok and .count == 1 and (.nodes[0].text | contains("no attachments"))'
 expect_tree "[data-id='layer.fields']" '.ok and .count == 0'
 
+# The Close card of an Issue with no attachments has no attachment picker (the Message field is there, so the card is drawn).
+ctl key x
+expect_tree "[data-id='layer.close.message']" '.ok and .count == 1'
+expect_tree "[data-id='layer.close.attachments']" '.ok and .count == 0'
+ctl key Escape
+expect_tree "[data-id='layer.close']" '.ok and .count == 0'
+
 # From the shell: the migration refuses plainly, and the removed commands say what replaced them.
 if (cd "$at_dir" && "$tmp/tern-kata" migrate-attachments --as smoke-shell) >"$tmp/migrate.out" 2>"$tmp/migrate.err"; then
   echo "migrate-attachments succeeded against a daemon without Docbank" >&2

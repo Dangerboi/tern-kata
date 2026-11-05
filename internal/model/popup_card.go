@@ -292,7 +292,7 @@ func buildCards() []cardEntry {
 			modes: []Mode{ModeCloseForm}, mode: func(Model) Mode { return ModeCloseForm },
 			key:     closeKey,
 			table:   &closeTable,
-			editing: []fieldEditing{{mode: ModeCloseForm, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}, delete: "erase"}},
+			editing: []fieldEditing{{mode: ModeCloseForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, delete: "erase"}},
 		},
 		{
 			card: CardDates, name: "dates", open: func(m Model) bool { return m.DatesForm.Open },

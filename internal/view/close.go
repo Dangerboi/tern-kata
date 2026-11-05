@@ -7,15 +7,30 @@ import (
 )
 
 var closeLabels = map[model.Field]string{
-	model.CloseReason:    "Reason (done / wontfix / duplicate / superseded / audit-no-change)",
-	model.CloseMessage:   "Message",
-	model.CloseCommit:    "Commit SHA (optional)",
-	model.ClosePR:        "PR URL (optional)",
-	model.CloseTest:      "Test command (optional)",
-	model.CloseReviewed:  "Reviewed paths, comma-separated (optional)",
-	model.CloseExternal:  "External account (optional)",
-	model.CloseReference: "Issue reference (duplicate / superseded)",
-	model.CloseRationale: "Rationale (audit-no-change)",
+	model.CloseReason:      "Reason (done / wontfix / duplicate / superseded / audit-no-change)",
+	model.CloseMessage:     "Message",
+	model.CloseCommit:      "Commit SHA (optional)",
+	model.ClosePR:          "PR URL (optional)",
+	model.CloseTest:        "Test command (optional)",
+	model.CloseReviewed:    "Reviewed paths, comma-separated (optional)",
+	model.CloseExternal:    "External account (optional)",
+	model.CloseAttachments: "Attachments to cite (optional, done only)",
+	model.CloseReference:   "Issue reference (duplicate / superseded)",
+	model.CloseRationale:   "Rationale (audit-no-change)",
+}
+
+// attachmentPicker is the Attachments field: the Issue's attachments as a row of toggles, the cited ones bracketed. Like the
+// Weekdays of the Recurrence card it takes several values at once, so it stays a row; a click on a name toggles it.
+func attachmentPicker(f model.CloseFormState, tone ui.Tone, title string) tern.Element {
+	cursor := -1
+	if f.Field == model.CloseAttachments {
+		cursor = f.AttachmentAt
+	}
+	prompt := title + ": "
+	if cursor >= 0 {
+		prompt = "> " + prompt
+	}
+	return choiceField(model.CloseAttachments, tone, title, prompt, model.AttachmentLabels(f.Attachments), func(i int) bool { return f.Cites(f.Attachments[i].ID) }, cursor)
 }
 
 func closeLayer(m model.Model) tern.Element {
@@ -28,6 +43,12 @@ func closeLayer(m model.Model) tern.Element {
 		tone := ui.ToneNeutral
 		if m.CloseForm.Field == field.Name {
 			tone = ui.ToneAccent
+		}
+		if field.Name == model.CloseAttachments {
+			if m.CloseForm.ShowsAttachments() {
+				children = append(children, attachmentPicker(m.CloseForm, tone, label))
+			}
+			continue
 		}
 		children = append(children,
 			toneText(string(field.Name)+"-label", tone, label),
