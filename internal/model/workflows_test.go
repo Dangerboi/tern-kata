@@ -19,7 +19,7 @@ func reviewFlow() model.Workflow {
 // workflowsPage is a bound Project's Workflows Page with the given workflows loaded, and the commands entering it sent.
 func workflowsPage(flows ...model.Workflow) (model.Model, []model.Cmd) {
 	m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{Project: model.Project{ID: 7, UID: "p", Name: "work"}}, model.SnapshotLoaded{})
-	m, cmds := model.Update(m, model.KeyMsg{Chord: "5"})
+	m, cmds := model.Update(m, model.KeyMsg{Chord: "4"})
 	m, _ = model.Update(m, model.WorkflowsLoaded{ProjectUID: "p", Workflows: flows})
 	return m, cmds
 }
@@ -44,7 +44,7 @@ func hasCmd(cmds []model.Cmd, want model.Cmd) bool {
 
 func TestWorkflowsPageNeedsAProject(t *testing.T) {
 	m, _ := loadFirst(model.Model{Cols: 160}, model.ProjectLoaded{}, model.SnapshotLoaded{})
-	m, _ = model.Update(m, model.KeyMsg{Chord: "5"})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "4"})
 	if m.Page != model.PageIssues || !strings.Contains(m.Notice, "Project") || m.SidebarLevel != model.MenuProjects {
 		t.Errorf("page %v, notice %q, Projects level %v; want the Issues Page, a notice and the Menu's Projects", m.Page, m.Notice, m.SidebarLevel == model.MenuProjects)
 	}

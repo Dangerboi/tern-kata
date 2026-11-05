@@ -16,7 +16,7 @@ quit_app
 printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$fp_a" "$KATA_HOME" "$tmp" >"$tmp/fp-launch.ctl"
 ctl --file "$tmp/fp-launch.ctl"
 expect_tree "[data-id\$='.$fp_here']" '.ok and .count == 1'
-ctl key 2
+ctl key 5
 expect_tree "[data-id='main.columns.list.board']" '.count == 1'
 expect_tree "[data-id='main.topbar.left.heading']" '.ok and (.nodes[0].text | contains("Project: follow-a"))'
 ctl click "[data-id\$='.cards.$fp_here']"

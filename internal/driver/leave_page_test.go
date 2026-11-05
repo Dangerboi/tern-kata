@@ -35,11 +35,11 @@ func hiddenBefore(t *testing.T, hidden bool) driver.State {
 func TestLeavingAPageWithItsOwnInspectorReturnsFocusToTheListAndTheDetailAsItWas(t *testing.T) {
 	pages := map[string]func(*testing.T, driver.State) driver.State{
 		"Jobs": func(t *testing.T, s driver.State) driver.State {
-			s = answerJobs(t, step(t, s, key("3")), promptJob("J1", "Triage"))
+			s = answerJobs(t, step(t, s, key("2")), promptJob("J1", "Triage"))
 			return step(t, s, key("enter")).State
 		},
 		"Runs": func(t *testing.T, s driver.State) driver.State {
-			out := step(t, s, key("4"))
+			out := step(t, s, key("3"))
 			s = answerRuns(t, out, "", finishedRun("R1"))
 			return step(t, s, key("enter")).State
 		},
@@ -64,15 +64,15 @@ func TestLeavingAPageWithItsOwnInspectorReturnsFocusToTheListAndTheDetailAsItWas
 
 func TestLeavingAPageWhoseSecondColumnIsTheIssueDetailKeepsItFocusedAndOtherwiseGivesItBack(t *testing.T) {
 	boardInLane := func(t *testing.T, s driver.State) driver.State {
-		s = feed(t, s, key("2"), newestLanes{ProjectUID: "p"}).State
+		s = feed(t, s, key("5"), newestLanes{ProjectUID: "p"}).State
 		return step(t, s, key("enter")).State // the Lane view, with the detail beside it
 	}
 	workflows := func(t *testing.T, s driver.State) driver.State {
-		out := feed(t, s, key("5"))
+		out := feed(t, s, key("4"))
 		return step(t, out.State, model.WorkflowsLoaded{ProjectUID: "p", Workflows: []model.Workflow{nightlyFlow()}}).State
 	}
 	boardColumns := func(t *testing.T, s driver.State) driver.State {
-		return feed(t, s, key("2"), newestLanes{ProjectUID: "p"}).State
+		return feed(t, s, key("5"), newestLanes{ProjectUID: "p"}).State
 	}
 	for _, hidden := range []bool{false, true} {
 		for _, how := range toIssuesHows {

@@ -51,7 +51,7 @@ func promptJob(uid, name string) model.CronJob {
 func jobsPane(t *testing.T, cols int, jobs ...model.CronJob) driver.State {
 	t.Helper()
 	s := projectPane(t, cols, boardCard("parent-a"))
-	out := step(t, s, key("3"))
+	out := step(t, s, key("2"))
 	return answerJobs(t, out, jobs...)
 }
 
@@ -112,7 +112,7 @@ func wantText(t *testing.T, what, text string, want ...string) {
 
 func TestJobsPageKeyAsksForTheProjectsJobsAndThePageBarShowsTheCurrentPage(t *testing.T) {
 	s := projectPane(t, 160, boardCard("a"))
-	out := step(t, s, key("3"))
+	out := step(t, s, key("2"))
 	load, ok := askedJobs(out.Cmds)
 	if !ok || load.ProjectID != 7 || load.Archived || load.Workspace != "/repo" {
 		t.Fatalf("cmds %#v, want a read of the Project's jobs without the archived", out.Cmds)
@@ -120,11 +120,11 @@ func TestJobsPageKeyAsksForTheProjectsJobsAndThePageBarShowsTheCurrentPage(t *te
 	if out.State.Model.Page != model.PageJobs {
 		t.Fatalf("page %v", out.State.Model.Page)
 	}
-	jobsEntry, drawn := pageBarEntryAt(t, out.State.Model, "3")
+	jobsEntry, drawn := pageBarEntryAt(t, out.State.Model, "2")
 	if !drawn {
 		t.Error("the Page bar draws no Jobs Page bar entry")
 	}
-	clicked := step(t, s, click(jobsEntry, view.KeyClick("3")))
+	clicked := step(t, s, click(jobsEntry, view.KeyClick("2")))
 	if _, ok := askedJobs(clicked.Cmds); !ok {
 		t.Error("clicking the Jobs Page bar entry asks for no jobs")
 	}
@@ -336,7 +336,7 @@ func TestJobsPageFollowsTheMenuToAnotherCollection(t *testing.T) {
 func TestJobsPageNeedsAProject(t *testing.T) {
 	s := feed(t, driver.State{}, model.Start{Workspace: "/repo"}, resize(160)).State
 	s.Model = loadFirst(s.Model, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{alpha}}})
-	out := step(t, s, key("3"))
+	out := step(t, s, key("2"))
 	if out.State.Model.Page != model.PageIssues || !strings.Contains(out.State.Model.Notice, "Jobs Page needs a Project") {
 		t.Fatalf("page %v notice %q", out.State.Model.Page, out.State.Model.Notice)
 	}
@@ -367,7 +367,7 @@ func TestJobsPageDoesNotRevealACardAReadJustAdded(t *testing.T) {
 }
 
 func TestJobsPageRowsShowTheLatestRunOrChildAndTheInspectorTheRecentOnes(t *testing.T) {
-	out := step(t, projectPane(t, 160, boardCard("parent-a")), key("3"))
+	out := step(t, projectPane(t, 160, boardCard("parent-a")), key("2"))
 	if load, ok := askedJobs(out.Cmds); !ok || !load.Activity {
 		t.Fatalf("the Jobs Page asked %#v, want the jobs read with what each has done lately", out.Cmds)
 	}

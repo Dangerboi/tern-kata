@@ -5,7 +5,7 @@
 wc_file="$XDG_CONFIG_HOME/tern-kata/worker.toml"
 [[ ! -e "$wc_file" ]]
 
-ctl key 3
+ctl key 2
 expect_tree "[data-id='main.columns.list.jobs']" '.ok and .count == 1'
 expect_tree "[data-id='main.columns.list.worker']" '.ok and .count == 1 and (.nodes[0].text | contains("press W to set one up"))'
 ctl key W

@@ -51,7 +51,7 @@ jc_job=$(kata --workspace "$jc_dir" cron job list --json | jq -r '.jobs[0].uid')
 kata --workspace "$jc_dir" cron job list --json | jq -e '.jobs | length == 1 and .[0].name == "Smoke every minute" and .[0].definition.enabled == true and .[0].definition.trigger.interval_seconds == 60 and .[0].definition.issue.parent_uid == "'"$jc_uid"'"' >/dev/null
 
 # The Jobs Page lists it; a child appears under the parent.
-ctl key 3
+ctl key 2
 expect_tree "[data-id='main.columns.list.jobs.$jc_job']" '.ok and .count == 1 and (.nodes[0].text | contains("active") and contains("Smoke every minute") and contains("every minute"))'
 jc_wait_children '. >= 1'
 

@@ -209,7 +209,7 @@ Any other job (`action.kind` `execute`, or `notify` on an existing Issue or an I
 - Triggers of an adapter job: `cron`, `interval` (no 60 s floor), `once` (`"at"` a full RFC 3339 instant, with `Z` or an offset), `manual`, and `issue-scheduled` / `issue-deadline` (`"issue_uid"`; a deadline takes `lead_seconds` and fires a `notify` only, never an `execute`). Give `once`, `manual` and Issue-date jobs `catchup` `latest` unless a backlog is wanted.
 - A per-run `issue` may set dates on each run's Issue: `"scheduled_offset_seconds"` and `"deadline_offset_seconds"`, signed seconds from the run (`86400` is a day later, `-3600` an hour earlier).
 - `action` is `{"kind": "execute", "prompt": "..."}` or `{"kind": "execute", "workflow_uid": "<ULID>"}` (exactly one; the workflow must be live in the Project), or `{"kind": "notify", "recipient": "current-owner-or-author", "message": "..."}` with `issue` `{"kind": "existing", "uid": "<ULID>"}`, or no `issue` under an Issue-date trigger. A named recipient needs a `message`. `checkout_key`, `secret_refs`, `options.profile` and `timeout_seconds` belong to `execute` only.
-- The user can make the same jobs in tern-kata's Job card (`3` for the Jobs Page, `n`) without writing JSON; its profile and checkout pickers read their `worker.toml`.
+- The user can make the same jobs in tern-kata's Job card (`2` for the Jobs Page, `n`) without writing JSON; its profile and checkout pickers read their `worker.toml`.
 - The worker runs a job whoever wrote it, so write only what the user asked for. Native jobs (`notify` with a per-run Issue and a parent) stay with kata's daemon.
 - The user can run one now with `tern-kata run <job-uid>` (see the `tern-kata` skill).
 

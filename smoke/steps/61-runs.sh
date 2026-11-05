@@ -42,7 +42,7 @@ JSON
 rn_held "$rn_reason" 11 'reason: agent_quota\nthe provider answered 429'
 rn_held "$rn_legacy" 12 'interrupted: the worker stopped while the agent ran'
 
-ctl key 4
+ctl key 3
 expect_tree "[data-id='main.columns.list.runs.$rn_reason']" '.ok and .count == 1 and (.nodes[0].text | contains("unknown") and contains("reason: agent_quota") and contains("the provider answered 429"))'
 expect_tree "[data-id='main.columns.list.runs.$rn_legacy']" '.ok and .count == 1 and (.nodes[0].text | contains("reason: interrupted") and contains("the worker stopped while the agent ran") and (contains("interrupted: ") | not))'
 expect_tree "[data-id='main.columns.list.runs.$rn_run']" '.ok and .count == 1 and (.nodes[0].text | contains("succeeded") and contains("Smoke triage job") and contains("Smoke run Issue") and contains("smoke-laptop") and contains("1m 35s") and contains("triaged four items"))'
@@ -67,7 +67,7 @@ expect_tree "[data-id='main.columns.list.issues']" '.count == 1'
 expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Smoke run Issue")))'
 
 # The Jobs Page's r opens the runs of the selected job.
-ctl key 3
+ctl key 2
 expect_tree "[data-id='main.columns.list.jobs.$rn_job']" '.count == 1'
 # Earlier steps leave their own jobs in the Project: select this one.
 ctl click "[data-id='main.columns.list.jobs.$rn_job']"

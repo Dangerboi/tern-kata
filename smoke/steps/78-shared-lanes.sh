@@ -6,7 +6,7 @@ sl_lane() { printf "[data-id='main.columns.list.board.lane%s.head.title']" "$1";
 sl_project() { kata projects show smoke --json | jq "$1"; }
 quit_app
 ctl --file "$tmp/launch.ctl"
-ctl key 2
+ctl key 5
 expect_tree "$sl_source" '.count == 1 and (.nodes[0].text | contains("default"))'
 
 ctl key B
@@ -25,7 +25,7 @@ quit_app
 
 sed "s|KATA_HOME=|XDG_CONFIG_HOME=$tmp/other-config KATA_HOME=|" "$tmp/launch.ctl" >"$tmp/other-config.ctl"
 ctl --file "$tmp/other-config.ctl"
-ctl key 2
+ctl key 5
 expect_tree "$sl_source" '.count == 1 and (.nodes[0].text | contains("shared with the Project"))'
 expect_tree "$(sl_lane 5)" '.ok and .nodes[0].text == "Shared lane"'
 sl_socket=$(kata daemon status --json | jq -r '.selected.endpoint | sub("^unix://"; "")')

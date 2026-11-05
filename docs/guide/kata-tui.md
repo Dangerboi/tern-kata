@@ -33,6 +33,23 @@ The Issue detail's Activity tabs are Comments, Events, Links and Attachments, cy
 
 `D` opens kata tui's daemons view as a Lettered Page, and the Menu lists it: the daemons kata's `config.toml` names, with kata tui's columns and `Enter` to switch this Pane to one. The switch lives in this Pane only and writes nothing to disk, as in kata tui; the top bar names the daemon by its catalog name and, when the daemon says who you are, the account ("Daemon: work · remote · kata v0.20.0 · as alice"). See [Pages and the Board](pages-and-board.md#lettered-pages).
 
+## Jobs, Runs and Workflows
+
+kata tui switches tabs with `1` to `4`: kata (the Issues), Jobs, Runs and Workflows. tern-kata numbers its Pages the same way for those four: `1` Issues, `2` Jobs, `3` Runs, `4` Workflows. The Board and Attention Pages come after them, as `5` and `6`.
+
+kata tui's three tabs read the Project's Cron jobs, Runs and workflows, and open a record to follow its links (a run to its job and workflow, a workflow to the jobs that use it). Its only writes are `n` and `e` on a job. tern-kata's Pages show the same records and go further:
+
+| | kata tui | tern-kata |
+|---|---|---|
+| Job card | New and edit for four kinds: recurring child issue, agent prompt, workflow and notify | The same four kinds, with the profile and checkout as pickers read from `worker.toml`, and a Backfill card before a catch-up of every missed run |
+| Pausing and archiving | None; editing an archived job stops with "use the CLI to restore it before editing" | `p` pauses or resumes, `x` archives or restores, `a` shows archived jobs |
+| Run now | None | `R` asks the worker to run the selected adapter job |
+| Worker | None | `W` opens the Worker card for this machine's worker |
+| Runs | The newest 100, read-only | `m` reads older runs, `f` narrows to a job, `i` opens the run's Issue, and `o`, `u` and `A` open the session of, resume or abandon a run of this machine's worker, held runs included |
+| Workflows | Read-only | The Workflow card makes and edits workflows as JSON, `x` archives, `r` restores and `a` shows archived ones |
+
+kata tui's `r` refreshes the tab; tern-kata reads again with `ctrl+r`, and `r` on the Jobs Page opens the Runs Page filtered to the selected job.
+
 ## Links
 
 In the Issue detail, `b` adds a Blocking link and `l` a related link to the Issue you name: a short id, `#id` or `project#id`. The field is kata tui's add-link request. kata records a Blocking link from the Issue you add it on, so the field reads "This Issue blocks (Issue id)"; kata tui words the same key "add blocker". When kata refuses the link (an Issue to itself, an archived Project, a Project outside your scope) its reason shows under the field. On the Board and in the Lane view `b` still toggles the Board.

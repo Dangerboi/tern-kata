@@ -103,7 +103,7 @@ func TestHelpClosesWithQuestionMarkAndEscape(t *testing.T) {
 func helpOn(t *testing.T, pageKey string) string {
 	t.Helper()
 	m := pickerLoaded(true)
-	if page, ok := map[string]model.Page{"2": model.PageBoard, "3": model.PageJobs, "4": model.PageRuns, "6": model.PageAttention, "C": model.PageCredentials, "D": model.PageDaemons}[pageKey]; ok {
+	if page, ok := map[string]model.Page{"5": model.PageBoard, "2": model.PageJobs, "3": model.PageRuns, "4": model.PageWorkflows, "6": model.PageAttention, "C": model.PageCredentials, "D": model.PageDaemons}[pageKey]; ok {
 		m.Page = page
 	}
 	m = apply(m, model.KeyMsg{Chord: "?"})
@@ -117,9 +117,9 @@ func TestHelpSheetListsTheGlobalKeysAndTheCurrentPagesKeys(t *testing.T) {
 		others         []string
 	}{
 		{"Issues", "", "toggle flat/nested view", []string{"next job", "next run", "next request", "show the spoke's detail", "move lanes", "read the credentials again"}},
-		{"Board", "2", "toggle Issues and Board Pages", []string{"toggle flat/nested view", "next job", "next run", "next request", "show the spoke's detail"}},
-		{"Jobs", "3", "next job", []string{"toggle flat/nested view", "next run", "next request", "toggle Issues and Board Pages"}},
-		{"Runs", "4", "next run", []string{"toggle flat/nested view", "next job", "next request", "toggle Issues and Board Pages"}},
+		{"Board", "5", "toggle Issues and Board Pages", []string{"toggle flat/nested view", "next job", "next run", "next request", "show the spoke's detail"}},
+		{"Jobs", "2", "next job", []string{"toggle flat/nested view", "next run", "next request", "toggle Issues and Board Pages"}},
+		{"Runs", "3", "next run", []string{"toggle flat/nested view", "next job", "next request", "toggle Issues and Board Pages"}},
 		{"Attention", "6", "next request", []string{"toggle flat/nested view", "next job", "next run", "toggle Issues and Board Pages"}},
 		{"Credentials", "C", "read the credentials again", []string{"toggle flat/nested view", "next job", "next run", "show the spoke's detail"}},
 		{"Daemons", "D", "switch this Pane to the selected daemon", []string{"toggle flat/nested view", "next job", "read the credentials again"}},
@@ -140,12 +140,12 @@ func TestHelpSheetListsTheGlobalKeysAndTheCurrentPagesKeys(t *testing.T) {
 }
 
 func TestHelpSheetListsTheAgentKeyOnTheIssuesPageAndTheBoard(t *testing.T) {
-	for _, key := range []string{"", "2"} {
+	for _, key := range []string{"", "5"} {
 		if !slices.ContainsFunc(strings.Split(helpOn(t, key), "\n"), func(line string) bool { return strings.HasPrefix(line, "w ") }) {
 			t.Errorf("page key %q: no w line", key)
 		}
 	}
-	for _, line := range strings.Split(helpOn(t, "3"), "\n") {
+	for _, line := range strings.Split(helpOn(t, "2"), "\n") {
 		if strings.HasPrefix(line, "w ") && strings.Contains(line, "agents") {
 			t.Errorf("the agent key is listed on the Jobs Page: %q", line)
 		}
@@ -153,7 +153,7 @@ func TestHelpSheetListsTheAgentKeyOnTheIssuesPageAndTheBoard(t *testing.T) {
 }
 
 func TestHelpSheetDropsGroupsWithNoLinesOnThePage(t *testing.T) {
-	jobs := helpOn(t, "3")
+	jobs := helpOn(t, "2")
 	for _, gone := range []string{"Graph", "Detail", "Children", "Forms", "Filters", "Board", "Runs", "Lettered Pages"} {
 		if slices.Contains(strings.Split(jobs, "\n"), gone) {
 			t.Errorf("Jobs Page sheet draws the empty group %q", gone)

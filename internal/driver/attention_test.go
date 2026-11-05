@@ -595,7 +595,7 @@ func TestEventsThatCannotTouchARequestAskForNoRead(t *testing.T) {
 }
 
 func TestAnIssueEventAsksForAReadWhileAnotherPageIsShown(t *testing.T) {
-	s := step(t, attentionPane(t), key("4")).State // the Runs Page
+	s := step(t, attentionPane(t), key("3")).State // the Runs Page
 	if out := step(t, s, attentionEvent(s, "issue.closed")); countedReads(out.Cmds) != 1 {
 		t.Errorf("an event on the Runs Page asked for %d Attention reads, want 1", countedReads(out.Cmds))
 	}

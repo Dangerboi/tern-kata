@@ -27,7 +27,7 @@ func nightlyFlow() model.Workflow {
 // workflowsPane is projectPane at the given width, on the Workflows Page with the workflows loaded.
 func workflowsPane(t *testing.T, cols int, flows ...model.Workflow) driver.State {
 	t.Helper()
-	out := feed(t, projectPane(t, cols, boardCard("a")), key("5"))
+	out := feed(t, projectPane(t, cols, boardCard("a")), key("4"))
 	if !hasLoad(out) {
 		t.Fatalf("the Page asked for no workflows: %#v", out.Cmds)
 	}
@@ -66,7 +66,7 @@ func mustShow(t *testing.T, s driver.State, what string, texts ...string) {
 
 func TestWorkflowsPageListsTheProjectsWorkflowsAndOpensTheirStepsWithDependenciesAndRetries(t *testing.T) {
 	s := workflowsPane(t, 160, reviewFlow(), nightlyFlow())
-	pageBarEntry(t, s.Model, "5") // fails the test when the Page bar draws none
+	pageBarEntry(t, s.Model, "4") // fails the test when the Page bar draws none
 	if !workflowRowDrawn(t, s.Model, "W1") || !workflowRowDrawn(t, s.Model, "W2") {
 		t.Fatalf("the Workflows Page draws a row per workflow, got %v", drawnIDs(t, view.Render(s.Model, now)))
 	}
@@ -100,7 +100,7 @@ func TestClickingARowSelectsItsWorkflow(t *testing.T) {
 
 func TestWorkflowsPageWithoutAProjectSaysSoAndOpensTheMenusProjects(t *testing.T) {
 	s := loadedWith(t, 160, model.Project{}, model.Snapshot{Issues: []model.Issue{alpha}})
-	m := step(t, s, key("5")).State.Model
+	m := step(t, s, key("4")).State.Model
 	if m.Page != model.PageIssues || !strings.Contains(m.Notice, "Project") || m.Focus != model.ColumnCollections || m.SidebarLevel != model.MenuProjects {
 		t.Errorf("page %v, notice %q, focus %v, Projects level %v", m.Page, m.Notice, m.Focus, m.SidebarLevel == model.MenuProjects)
 	}
@@ -111,7 +111,7 @@ func TestWorkflowsPageSaysWhyItIsEmpty(t *testing.T) {
 	archived := nightlyFlow()
 	archived.Archived = true
 	mustShow(t, workflowsPane(t, 160, archived), "only archived", "Every workflow is archived", "Show archived")
-	failed := step(t, feed(t, projectPane(t, 160, boardCard("a")), key("5")).State, model.WorkflowsLoaded{ProjectUID: "p", Err: errText("kata server not responding")}).State
+	failed := step(t, feed(t, projectPane(t, 160, boardCard("a")), key("4")).State, model.WorkflowsLoaded{ProjectUID: "p", Err: errText("kata server not responding")}).State
 	mustShow(t, failed, "load failure", "kata server not responding")
 }
 
@@ -322,7 +322,7 @@ func TestWorkflowCardButtonsAreDrawnForEveryState(t *testing.T) {
 }
 
 func TestWorkflowRowAndInspectorNameTheLiveJobsThatUseIt(t *testing.T) {
-	out := feed(t, projectPane(t, 160, boardCard("a")), key("5"))
+	out := feed(t, projectPane(t, 160, boardCard("a")), key("4"))
 	var load model.LoadJobs
 	for _, cmd := range out.Cmds {
 		if c, ok := cmd.(model.LoadJobs); ok {
@@ -351,7 +351,7 @@ func TestWorkflowRowAndInspectorNameTheLiveJobsThatUseIt(t *testing.T) {
 func TestAFailedReadOfTheWorkflowsShowsAsItsOwnLineAboveTheHeldRows(t *testing.T) {
 	s := workflowsPane(t, 160, reviewFlow(), nightlyFlow())
 	s = feed(t, s, key("1")).State
-	out := feed(t, s, key("5"))
+	out := feed(t, s, key("4"))
 	if !hasLoad(out) {
 		t.Fatalf("reopening the Page asked for no workflows: %#v", out.Cmds)
 	}
@@ -409,9 +409,9 @@ func TestWorkflowsPageDropsAnAnswerToAnOlderRead(t *testing.T) {
 		}
 		return jobs, runs
 	}
-	first := feed(t, projectPane(t, 160, boardCard("a")), key("5"))
+	first := feed(t, projectPane(t, 160, boardCard("a")), key("4"))
 	olderJobs, olderRuns := asked(first)
-	second := feed(t, step(t, first.State, key("1")).State, key("5"))
+	second := feed(t, step(t, first.State, key("1")).State, key("4"))
 	newerJobs, newerRuns := asked(second)
 	if newerJobs.Request == olderJobs.Request || newerRuns.Request == olderRuns.Request || newerJobs.Request >= 0 || newerRuns.Request >= 0 {
 		t.Fatalf("reads numbered jobs %d, %d and runs %d, %d, want fresh numbers below zero", olderJobs.Request, newerJobs.Request, olderRuns.Request, newerRuns.Request)

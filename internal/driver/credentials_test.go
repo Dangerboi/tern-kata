@@ -141,7 +141,7 @@ func TestEscAndBackspaceReturnToThePageShownBefore(t *testing.T) {
 
 func TestANumberedPageKeyLeavesTheCredentialsPage(t *testing.T) {
 	opened := credentialsOpened(t, projectPane(t, 160, boardCard("a"))).State
-	if got := step(t, opened, key("2")).State.Model.Page; got != model.PageBoard {
+	if got := step(t, opened, key("5")).State.Model.Page; got != model.PageBoard {
 		t.Errorf("2 gave page %v, want the Board", got)
 	}
 }

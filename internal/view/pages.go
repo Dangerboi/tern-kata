@@ -66,7 +66,7 @@ func pageBarFit(m model.Model, headingCols int) barFit {
 	return barOwnLine
 }
 
-// pageBar is the Page bar: one entry per Page, "1 Issues  2 Board", the current one accented, each its own click target that
+// pageBar is the Page bar: one entry per Page, "1 Issues  2 Jobs", the current one accented, each its own click target that
 // presses its key.
 func pageBar(m model.Model, flexCell func(string, ui.Tone, float64) ui.Common, compact bool) tern.Element {
 	entries := m.PageBar()

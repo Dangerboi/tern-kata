@@ -47,7 +47,7 @@ func heldRun(uid string) model.LocalRun {
 // jobsPaneWithWorker is a Jobs Page whose job and worker status reads are answered.
 func jobsPaneWithWorker(t *testing.T, status *model.WorkerStatus, jobs ...model.CronJob) driver.State {
 	t.Helper()
-	out := step(t, projectPane(t, 160, boardCard("parent-a")), key("3"))
+	out := step(t, projectPane(t, 160, boardCard("parent-a")), key("2"))
 	s := answerJobs(t, out, jobs...)
 	return answerWorker(t, driver.Output{State: s, Cmds: out.Cmds}, status).State
 }
@@ -125,7 +125,7 @@ func TestRRefusesANativeJobAndAMissingOrNonServingWorker(t *testing.T) {
 // localRunsPane is a Runs Page whose runs and worker status reads are answered. Runs of executor "laptop" are this machine's.
 func localRunsPane(t *testing.T, status *model.WorkerStatus, runs ...model.Run) driver.Output {
 	t.Helper()
-	out := step(t, projectPane(t, 160, boardCard("parent-a")), key("4"))
+	out := step(t, projectPane(t, 160, boardCard("parent-a")), key("3"))
 	out.State = answerRuns(t, out, "", runs...)
 	return answerWorker(t, out, status)
 }
