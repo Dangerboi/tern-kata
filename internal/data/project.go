@@ -57,13 +57,17 @@ func (c *Client) readProject(ctx context.Context, workspace string, missingOK bo
 }
 
 // notInitializedError is daemonError, except that a project_not_initialized failure names the Project or the alias kata gives
-// in error.data ("project" or "alias"). Without either, kata's own message stands.
+// in error.data ("project" or "alias"). Without either, kata's own message stands, and so does it for an alias that points at an
+// archived Project: kata sends the same code and alias data there, but the alias is registered, so "not set up" would be wrong.
 func notInitializedError(err error) error {
 	shown := daemonError(err)
 	if daemonCode(err) != "project_not_initialized" {
 		return shown
 	}
 	envelope, _ := errors.AsType[g.ErrorEnvelope](err)
+	if strings.Contains(envelope.ErrorData.Message, "archived") {
+		return shown
+	}
 	var subject string
 	if name, ok := envelope.ErrorData.Data["project"].(string); ok && name != "" {
 		subject = fmt.Sprintf("Project %q", name)

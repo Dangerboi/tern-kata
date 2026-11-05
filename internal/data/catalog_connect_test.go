@@ -60,3 +60,30 @@ func TestLocateNamedRefusesANameTheCatalogLacks(t *testing.T) {
 		t.Fatalf("err = %v, want kata's not-in-catalog error", err)
 	}
 }
+
+func TestSwitchingToARemoteEntrySendsItsOwnTokenAndNeverTheGlobalOne(t *testing.T) {
+	t.Setenv("KATA_HOME", t.TempDir())
+	t.Setenv("KATA_SERVER", "")
+	t.Setenv("KATA_AUTH_TOKEN", "global-secret")
+	t.Setenv("WORK_TOKEN", "work-secret")
+	server := startKata(t, "0.21.0")
+	log := watch(server, nil)
+	writeCatalog(t, "[[daemon]]\nname = \"work\"\nurl = \""+server.URL+"\"\ntoken_env = \"WORK_TOKEN\"\nallow_insecure = true\n")
+
+	gateway := newGateway(t, newLocator(server.target()))
+	if got := switched(t, gateway, t.TempDir(), "work"); got.Err != nil {
+		t.Fatalf("switch: %v", got.Err)
+	}
+	var reads []call
+	for _, suffix := range []string{"/api/v1/instance", "/api/v1/projects"} {
+		reads = append(reads, log.seen(suffix)...)
+	}
+	if len(reads) == 0 {
+		t.Fatal("the daemon saw no read")
+	}
+	for _, c := range reads {
+		if c.auth != "Bearer work-secret" {
+			t.Errorf("%s %s carried %q, want the entry's own token", c.method, c.path, c.auth)
+		}
+	}
+}
