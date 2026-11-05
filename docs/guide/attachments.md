@@ -41,11 +41,31 @@ An Attachment is one meta key on the Issue, `attachment.<id>`, holding `{"name",
 
 ## Setting Docbank up
 
-You do this once, for the kata daemon. tern-kata cannot do it for you.
+You do this once, for the kata daemon. tern-kata cannot do it for you yet. kata only talks to Docbank over HTTP: it never starts Docbank, so Docbank needs a fixed address, a fixed API key and a process that keeps running.
 
-1. Install [Docbank](https://github.com/kenn-io/docbank) and create a vault that every reader of your Issues may open. kata puts files in a folder of that vault; the folder only organises them and is no access control, so whoever can read an Issue can download its attachments.
-2. Create an API key for it and save it in a file only you can read (`chmod 600`).
-3. Add a `[docbank]` section to `<KATA_HOME>/config.toml` (`~/.kata/config.toml` unless you moved it):
+Choose a vault that every reader of your Issues may open. kata puts files in a folder of that vault; the folder only organises them and is no access control, so whoever can read an Issue can download its attachments.
+
+### Docbank on this machine
+
+1. Install [Docbank](https://github.com/kenn-io/docbank). Its vault is `~/.docbank` unless `DOCBANK_HOME` names another folder; the first `docbank` command creates it.
+2. Make an API key and keep it in a file only you can read:
+
+   ```sh
+   openssl rand -hex 32 > ~/.kata/docbank.key && chmod 600 ~/.kata/docbank.key
+   ```
+
+3. Give Docbank a fixed port and that key in `<DOCBANK_HOME>/config.toml` (`~/.docbank/config.toml`). Without this section its daemon picks a new port and a new key each time it starts, and kata loses it after the next restart:
+
+   ```toml
+   [server]
+   bind_addr = "127.0.0.1"
+   api_port = 8080
+   api_key = "<the key from ~/.kata/docbank.key>"
+   ```
+
+   Docbank does not document these keys in its help; they are checked against Docbank 0.17. Pick any free port; it must match the `url` in step 5.
+4. Restart Docbank so it reads them: `docbank daemon restart`. `docbank daemon status` then shows `127.0.0.1:8080`.
+5. Add a `[docbank]` section to `<KATA_HOME>/config.toml` (`~/.kata/config.toml` unless you moved it):
 
    ```toml
    [docbank]
@@ -54,13 +74,22 @@ You do this once, for the kata daemon. tern-kata cannot do it for you.
    folder = "/kata"
    ```
 
-   - `url` must be HTTPS unless it points to this machine.
-   - Give the key as one of `api_key_file`, `api_key_env` (the name of an environment variable) or `api_key`; a file is the safest. The key is read again for each request, so you can rotate it without a restart.
+   - Give the key as one of `api_key_file`, `api_key_env` (the name of an environment variable) or `api_key`; a file is the safest. The key is read again for each request, so you can rotate it without restarting kata (Docbank needs `docbank daemon restart` after its `api_key` changes).
    - `folder` is an absolute path in the vault and defaults to `/kata`. kata adds one folder per Project below it.
    - `KATA_DOCBANK_URL`, `KATA_DOCBANK_API_KEY_FILE` and `KATA_DOCBANK_FOLDER` set the same three in the daemon's environment.
-4. Restart the kata daemon. The Pane, `@` and the Attachments tab work from the next read.
+6. Restart the kata daemon: `kata daemon restart`. The Pane, `@` and the Attachments tab work from the next read.
 
-Docbank has telemetry settings of its own; check [Docbank's documentation](https://github.com/kenn-io/docbank) for turning them off.
+**Keep Docbank running.** A `docbank` command starts Docbank's daemon when it is not running, but kata's requests do not. After a reboot, or once Docbank has stopped, the Pane says kata could not reach Docbank until something starts it again: `docbank daemon start`, or `docbank daemon run` as a service your OS starts at login (a systemd user unit, a launchd agent, a Windows scheduled task).
+
+**Telemetry.** Docbank reports usage unless its daemon's environment sets `DOCBANK_TELEMETRY_ENABLED=0`.
+
+### Docbank on another machine
+
+Whoever runs that Docbank gives you its URL and an API key; keeping it running is theirs.
+
+1. Save the key in a file only you can read (`chmod 600`).
+2. Add the `[docbank]` section from step 5 above with that `url` and `api_key_file`. The `url` must be HTTPS: kata accepts plain HTTP only for Docbank on this machine.
+3. Restart the kata daemon.
 
 ## Moving old attachments
 
