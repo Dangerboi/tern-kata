@@ -310,7 +310,7 @@ func popupCards() []popupCard {
 			tabOrder: []model.Field{model.WorkerFieldExecutor, model.WorkerFieldActor, model.WorkerFieldCommand, model.WorkerFieldModel, model.WorkerFieldThinking, model.WorkerFieldTrust},
 			states: []cardState{{"", func() model.Model {
 				m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo", Host: "laptop", Actor: "dana"}, model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, model.SnapshotLoaded{})
-				m, _ = clickPress(m, "3", "shift+w")
+				m, _ = clickPress(m, "2", "shift+w")
 				m, _ = model.Update(m, model.WorkerSetupLoaded{Setup: model.WorkerSetup{Project: "work", Checkout: "/repo", Path: "/cfg/worker.toml"}})
 				m, _ = clickPress(m, "ctrl+u")
 				return m

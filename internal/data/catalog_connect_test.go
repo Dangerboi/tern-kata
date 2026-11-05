@@ -37,6 +37,7 @@ func loadsProject(t *testing.T, loc Locator) model.Daemon {
 }
 
 func TestLocateNamedConnectsToARemoteCatalogEntryWithItsToken(t *testing.T) {
+	t.Setenv("KATA_HOME", t.TempDir()) // startTokenKata sets none, and the catalog is written into it
 	t.Setenv("KATA_SERVER", "")
 	t.Setenv("KATA_AUTH_TOKEN", "")
 	t.Setenv("WORK_TOKEN", "s3cret")
