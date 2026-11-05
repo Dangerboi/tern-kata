@@ -102,7 +102,8 @@ func (m Model) Position() (selected, total int) {
 		return min(m.Credentials.Cursor+1, len(m.Credentials.Tokens)), len(m.Credentials.Tokens)
 	}
 	if m.OnRuns() {
-		return slices.IndexFunc(m.Runs.Runs, func(r Run) bool { return r.UID == m.Runs.Selected }) + 1, len(m.Runs.Runs)
+		runs := m.searchedRuns()
+		return slices.IndexFunc(runs, func(r Run) bool { return r.UID == m.Runs.Selected }) + 1, len(runs)
 	}
 	if m.OnJobs() {
 		jobs := m.visibleJobs()

@@ -169,6 +169,8 @@ type Model struct {
 	// DefaultFilters is the bound Project's saved default filter, empty when it has none.
 	DefaultFilters Filters
 	Search         SearchState
+	// PageSearch is the search of the Jobs, Runs or Workflows Page that is current.
+	PageSearch PageSearchState
 	IDSearch       IDSearch
 	FilterForm     FilterFormState
 	Page           Page

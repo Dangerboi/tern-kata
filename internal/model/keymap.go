@@ -37,6 +37,9 @@ const (
 	SelectIssueAction       Action = "select-issue"
 	AgentStatesAction       Action = "agent-states"
 	SearchIssues            Action = "search"
+	SearchPage              Action = "search-page"
+	PageSearchKeep          Action = "page-search-keep"
+	PageSearchClear         Action = "page-search-clear"
 	SearchEnter             Action = "search-enter"
 	SearchBack              Action = "search-back"
 	SearchQuery             Action = "search-query"
@@ -159,6 +162,8 @@ const (
 	ModeCollections   Mode = "collections"
 	ModeSearch        Mode = "search"
 	ModeSearchResults Mode = "search-results"
+	// ModePageSearch is the Jobs, Runs and Workflows Pages' search input.
+	ModePageSearch Mode = "page-search"
 	ModeFilterForm    Mode = "filter-form"
 	ModeBoard         Mode = "board"
 	ModeLane          Mode = "lane"

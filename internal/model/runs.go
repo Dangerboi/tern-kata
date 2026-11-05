@@ -198,6 +198,15 @@ type RunRow struct {
 // RunRows are the Runs Page's rows, newest first as kata lists them. now is when the start times are worded from and a running
 // Run's duration is counted to.
 func (m Model) RunRows(now time.Time) []RunRow {
+	rows := m.allRunRows(now)
+	if m.Page != PageRuns || m.PageSearch.Text == "" {
+		return rows
+	}
+	return slices.DeleteFunc(rows, func(row RunRow) bool { return !m.matchesSearch(runSearchWords(row)...) })
+}
+
+// allRunRows are the rows of every Run held, whatever the search is.
+func (m Model) allRunRows(now time.Time) []RunRow {
 	rows := make([]RunRow, len(m.Runs.Runs))
 	for i, run := range m.Runs.Runs {
 		row := RunRow{Run: run, Name: run.Name(), Issue: run.IssueRef(), Executor: run.Executor(), Start: m.Calendar.Read(run.Started(), now), State: string(run.Status)}
@@ -239,7 +248,7 @@ func twoDigits(n int64) string {
 
 // SelectedRun is the Run the inspector shows: the selected one if the list holds it, else nil.
 func (m Model) SelectedRun() *Run {
-	for _, run := range m.Runs.Runs {
+	for _, run := range m.searchedRuns() {
 		if run.UID == m.Runs.Selected {
 			return &run
 		}
@@ -409,19 +418,20 @@ func runShown(m Model, msg RunShown) Model {
 
 // settleRunSelection keeps the selection on a listed Run, the first when it is gone.
 func (m Model) settleRunSelection() Model {
-	if slices.ContainsFunc(m.Runs.Runs, func(r Run) bool { return r.UID == m.Runs.Selected }) {
+	runs := m.searchedRuns()
+	if slices.ContainsFunc(runs, func(r Run) bool { return r.UID == m.Runs.Selected }) {
 		return m
 	}
 	m.Runs.Selected = ""
-	if len(m.Runs.Runs) > 0 {
-		m.Runs.Selected = m.Runs.Runs[0].UID
+	if len(runs) > 0 {
+		m.Runs.Selected = runs[0].UID
 	}
 	return m
 }
 
 // moveRun moves the selection by action: one row, to either end, or a page.
 func moveRun(m Model, action Action) Model {
-	runs := m.Runs.Runs
+	runs := m.searchedRuns()
 	if len(runs) == 0 {
 		return m
 	}

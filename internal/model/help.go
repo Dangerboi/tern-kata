@@ -20,6 +20,9 @@ func (m Model) CurrentMode() Mode {
 	if m.HelpOpen {
 		return ModeHelp
 	}
+	if m.PageSearch.Open {
+		return ModePageSearch
+	}
 	if m.Search.Open {
 		if m.Search.Results {
 			return ModeSearchResults
@@ -126,9 +129,9 @@ type SheetGroup struct {
 var pageHelpModes = map[Page][]Mode{
 	PageIssues:      {ModeList, ModeDetail, ModeCollections, ModeSearch, ModeSearchResults},
 	PageBoard:       {ModeBoard, ModeLane, ModeDetail},
-	PageJobs:        {ModeJobs, ModeJobInspector},
-	PageRuns:        {ModeRuns, ModeRunInspector},
-	PageWorkflows:   {ModeWorkflows, ModeDetail},
+	PageJobs:        {ModeJobs, ModeJobInspector, ModePageSearch},
+	PageRuns:        {ModeRuns, ModeRunInspector, ModePageSearch},
+	PageWorkflows:   {ModeWorkflows, ModeDetail, ModePageSearch},
 	PageAttention:   {ModeAttention},
 	PageCredentials: {ModeCredentials},
 	PageFederation: {ModeFederation, ModeFederationLeave, ModeFederationResult, ModeFederationPick, ModeFederationBrowse,
