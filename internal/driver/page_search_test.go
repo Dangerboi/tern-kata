@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
@@ -191,5 +192,26 @@ func TestWorkflowsFooterOffersEndSearchOnlyWhileEscEndsIt(t *testing.T) {
 	}
 	if strings.Contains(screen(t, s), "end search") {
 		t.Errorf("the footer offers end search while esc closes the steps first:\n%s", screen(t, s))
+	}
+}
+
+func TestAJobsReadThatLeavesTheWorkflowSearchMovesTheSelectionToAListedWorkflow(t *testing.T) {
+	out := feed(t, projectPane(t, 160, boardCard("a")), key("4"))
+	var load model.LoadJobs
+	for _, cmd := range out.Cmds {
+		if c, ok := cmd.(model.LoadJobs); ok {
+			load = c
+		}
+	}
+	use := model.CronJob{UID: "J1", Name: "Nightly review", Definition: cronjob.Definition{Enabled: true, Action: cronjob.Action{Kind: "execute", WorkflowUID: "W1"}}}
+	s := step(t, out.State, model.WorkflowsLoaded{ProjectUID: "p", Workflows: []model.Workflow{reviewFlow(), nightlyFlow()}}).State
+	s = step(t, s, model.JobsLoaded{Request: load.Request, Jobs: []model.CronJob{use}}).State
+	s = step(t, typed(t, step(t, s, key("/")).State, "nightly"), key("enter")).State
+	if got := s.Model.Workflows.Selected; got != "W1" {
+		t.Fatalf("selected %q with both workflows listed, want W1", got)
+	}
+	s = step(t, s, model.JobsLoaded{Request: load.Request}).State
+	if got := s.Model.Workflows.Selected; got != "W2" {
+		t.Errorf("selected %q after W1 left the search, want the listed W2", got)
 	}
 }

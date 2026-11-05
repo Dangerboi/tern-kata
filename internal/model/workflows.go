@@ -313,7 +313,7 @@ func inspectWorkflow(m Model) Model {
 
 // workflowsBack is esc on the Page: it closes the inspector, and with none open ends the search, else goes to the Menu.
 func workflowsBack(m Model) (Model, []Cmd) {
-	if m.Workflows.Inspecting {
+	if m.innerEscOpen() {
 		m.Workflows.Inspecting = false
 		return m, nil
 	}
@@ -452,7 +452,9 @@ func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 			return m, nil, false
 		}
 		if msg.Err == nil && !msg.ProjectArchived {
+			row := m.selectedRow()
 			m.Workflows.jobs = msg.Jobs
+			m = m.selectWorkflow(row)
 		}
 		return m, nil, true
 	case RunsLoaded:
@@ -461,6 +463,7 @@ func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 		}
 		m.Workflows.runsAsked = false
 		if msg.Err == nil && !msg.ProjectArchived {
+			row := m.selectedRow()
 			if msg.Before == "" {
 				m.Workflows.runs, m.Workflows.runsPages = msg.Runs, 1
 			} else {
@@ -468,6 +471,7 @@ func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 				m.Workflows.runsPages++
 			}
 			m.Workflows.runsMore = msg.NextBefore
+			m = m.selectWorkflow(row)
 		} else {
 			m.Workflows.runsMore = ""
 		}

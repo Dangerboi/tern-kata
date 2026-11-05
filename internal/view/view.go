@@ -348,7 +348,7 @@ func dateRoom(m model.Model, cols listColumns) int {
 	if cols.ownerShown {
 		fixed += len(cellGap) + cols.owner
 	}
-	return listWidth(m) - fixed - detailWidth
+	return listWidth(m) - fixed - itemDetailWidth
 }
 
 // Flex rules of the columns Row (see issues and detail), which Tern lays out and the plugin never sees: the list and detail
@@ -386,8 +386,8 @@ func listWidth(m model.Model) int {
 	return m.Cols - fixed
 }
 
-// detailWidth is the cells of the Detail text between a row's label and its value.
-const detailWidth = 1
+// itemDetailWidth is the cells of the Item's Detail spacer between a row's label and its value (not the Issue detail column).
+const itemDetailWidth = 1
 
 // rowPadding is the cells a row spends on its selection mark and edges, beside its cells.
 const rowPadding = 4
@@ -435,8 +435,11 @@ func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected boo
 	// An open Issue's Date badge reads after the title, as in kata tui. The title has priority: the badge goes when the whole
 	// title and the badge do not fit the row.
 	if !model.IsClosed(row.Issue) {
-		if date, ok := lookups.today.ChooseDateBadge(row.Issue); ok && displayWidth(title)+displayWidth(cellGap+date.Text) <= lookups.dateRoom-beforeTitle {
-			left = append(left, ui.Span{T: cellGap + date.Text, S: mono(toneStyle(dateTones[date.Tone]))})
+		if date, ok := lookups.today.ChooseDateBadge(row.Issue); ok {
+			badge := cellGap + date.Text
+			if displayWidth(title)+displayWidth(badge) <= lookups.dateRoom-beforeTitle {
+				left = append(left, ui.Span{T: badge, S: mono(toneStyle(dateTones[date.Tone]))})
+			}
 		}
 	}
 	// A parent's click folds it; a double click on any row opens it. Tern sends the two clicks first, so a parent's fold ends where it began.
@@ -444,7 +447,7 @@ func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected boo
 	if row.HasChildren {
 		actions.Click = ToggleClick(row.UID)
 	}
-	return ui.Item{Common: ui.Common{Key: row.UID, Role: strings.TrimSpace(role + " " + cols.role()), Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(strings.Repeat(" ", detailWidth)), Value: ui.Spans(rightCells(kids, owner, model.RelativeTime(row.UpdatedAt, now), cols, mono("muted"), toneStyle(ownerTone))...)}
+	return ui.Item{Common: ui.Common{Key: row.UID, Role: strings.TrimSpace(role + " " + cols.role()), Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(strings.Repeat(" ", itemDetailWidth)), Value: ui.Spans(rightCells(kids, owner, model.RelativeTime(row.UpdatedAt, now), cols, mono("muted"), toneStyle(ownerTone))...)}
 }
 
 // role is the row's boxes in role tokens, which the style sheet turns into the columns' widths (see cellBoxCSS): the row
