@@ -16,10 +16,11 @@ import (
 )
 
 // The attachments tern-kata kept itself before kata stored them in Docbank: a file under the primary checkout's .kata-attachments
-// folder, pointed to by a tern-kata.attachment.<name> meta key of {"host", "path"}. Only the migration still reads them.
+// folder, pointed to by a tern-kata.attachment.<name> meta key (or, from 0.3, an attachment.<name> key) of {"host", "path"}. Only
+// the migration still reads them.
 const (
 	oldAttachmentKeyPrefix  = "tern-kata.attachment."
-	bareAttachmentKeyPrefix = "attachment." // the 0.3.x key; kata's native references use it too, so only a {host, path} value counts
+	bareAttachmentKeyPrefix = "attachment." // the 0.3 key; kata's native references use it too, so only a {host, path} value counts
 	oldStoreName            = ".kata-attachments"
 )
 
@@ -130,20 +131,26 @@ func countFailed(left []model.MigratedAttachment) int {
 	return n
 }
 
-// oldKey is one metadata key that may hold an old pointer: the Attachment name and the full key it came from.
-type oldKey struct{ name, key string }
+// oldKey is one metadata key that may hold an old pointer: the Attachment name, the full key it came from, and the parsed
+// pointer when the value has the {"host", "path"} shape (shaped false otherwise).
+type oldKey struct {
+	name, key  string
+	host, path string
+	shaped     bool
+}
 
 // oldKeys lists the keys of metadata that hold old attachments, sorted by key: every tern-kata.attachment.<name> key, and every
-// attachment.<name> key (the 0.3.x name) whose value is exactly a {"host", "path"} object, which kata's native references never are.
+// attachment.<name> key (the 0.3 name) whose value is exactly a {"host", "path"} object, which kata's native references never are.
 func oldKeys(metadata map[string]any) []oldKey {
 	var keys []oldKey
 	for key, value := range metadata {
 		if name, ok := strings.CutPrefix(key, oldAttachmentKeyPrefix); ok && name != "" {
-			keys = append(keys, oldKey{name, key})
+			host, path, shaped := oldPointer(value)
+			keys = append(keys, oldKey{name, key, host, path, shaped})
 		} else if name, ok := strings.CutPrefix(key, bareAttachmentKeyPrefix); ok && name != "" {
 			if object, isObject := value.(map[string]any); isObject && len(object) == 2 {
-				if _, _, shaped := oldPointer(value); shaped {
-					keys = append(keys, oldKey{name, key})
+				if host, path, shaped := oldPointer(value); shaped {
+					keys = append(keys, oldKey{name, key, host, path, true})
 				}
 			}
 		}
@@ -157,13 +164,12 @@ func (c *Client) migrateIssue(ctx context.Context, host, root, actor string, iss
 	deleted := false
 	for _, old := range oldKeys(issue.Metadata) {
 		name, key := old.name, old.key
-		item := model.MigratedAttachment{ShortID: issue.ShortID, Name: name}
+		pointerHost, path, shaped := old.host, old.path, old.shaped
+		item := model.MigratedAttachment{ShortID: issue.ShortID, Name: name, Host: pointerHost, Path: path}
 		left := func(reason string, failed bool) {
 			item.Reason, item.Failed = reason, failed
 			out.Left = append(out.Left, item)
 		}
-		pointerHost, path, shaped := oldPointer(issue.Metadata[key])
-		item.Host, item.Path = pointerHost, path
 		switch {
 		case !shaped:
 			left("the key does not hold a {host, path} pointer, so it is not an old attachment", false)

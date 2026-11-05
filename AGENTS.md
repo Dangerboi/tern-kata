@@ -14,7 +14,7 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 
 ### Attachments
 
-Files on Issues are kata's native Docbank attachments: reading them and attaching evidence is `kata docbank attachments`, in `skills/kata/SKILL.md`. `skills/tern-kata/SKILL.md` covers the old `tern-kata.attachment.*` keys and their migration.
+Files on Issues are kata's native Docbank attachments: reading them and attaching evidence is `kata docbank attachments`, in `skills/kata/SKILL.md`. `skills/tern-kata/SKILL.md` covers the old forms, the `tern-kata.attachment.<name>` keys and, from 0.3, the `attachment.<name>` keys holding `{host, path}`, and their migration.
 
 ## Changelog
 
