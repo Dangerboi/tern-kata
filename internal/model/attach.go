@@ -57,9 +57,9 @@ type AttachmentOpened struct {
 
 func (AttachmentOpened) msg() {}
 
-// MigrateAttachments uploads every file that an old attachment key (tern-kata.attachment.<name>, or from 0.3 attachment.<name>, holding {host, path}) of the workspace's Project points to on this
-// machine, replaces the key with a native Attachment and deletes the local copy. Keys that point to another machine, or to a
-// file that is not there, are left and listed.
+// MigrateAttachments uploads every file that an old attachment key (tern-kata.attachment.<name>, or from 0.3 attachment.<name>,
+// holding {host, path}) of the workspace's Project points to on this machine, replaces the key with a native Attachment and
+// deletes the local copy. Keys that point to another machine, or to a file that is not there, are left and listed.
 type MigrateAttachments struct{ Workspace, Actor string }
 
 func (MigrateAttachments) cmd() {}
