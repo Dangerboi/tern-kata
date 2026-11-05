@@ -12,6 +12,7 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/data/docbanktest"
+	"github.com/Dangerboi/tern-kata/internal/docbanksetup"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
@@ -22,6 +23,8 @@ type docbankSetupFixture struct {
 	fake    *docbanktest.Fake
 	locate  data.Locator
 	confirm func(string) (bool, error)
+	// runner replaces the real program runner when set.
+	runner docbanksetup.Runner
 }
 
 // newDocbankSetupFixture makes the fixture on a kata daemon that already stores attachments, so the final check passes; use
@@ -64,6 +67,9 @@ func (f *docbankSetupFixture) run(t *testing.T, stdin string, args ...string) (s
 	env.Locate = f.locate
 	if f.confirm != nil {
 		env.Confirm = f.confirm
+	}
+	if f.runner != nil {
+		env.Runner = f.runner
 	}
 	err = runDocbank(context.Background(), plan, env)
 	return out.String(), err
@@ -354,16 +360,20 @@ func TestDocbankSetupRefusesARemoteKataDaemon(t *testing.T) {
 
 func TestDocbankSetupUsageErrorsExitTwo(t *testing.T) {
 	for name, args := range map[string][]string{
-		"no form":                 {"docbank"},
-		"another form":            {"docbank", "start"},
-		"no --url":                {"docbank", "setup"},
-		"no key":                  {"docbank", "setup", "--url", "https://d.example"},
-		"both keys":               {"docbank", "setup", "--url", "https://d.example", "--key-file", "k", "--key-env", "K"},
-		"a key as a flag":         {"docbank", "setup", "--url", "https://d.example", "--key", "secret"},
-		"--yes with --no-restart": {"docbank", "setup", "--url", "https://d.example", "--key-env", "K", "--yes", "--no-restart"},
-		"a value that is a flag":  {"docbank", "setup", "--url", "--key-env", "K"},
-		"--yes with a value":      {"docbank", "setup", "--url", "https://d.example", "--key-env", "K", "--yes=1"},
-		"unknown flag":            {"docbank", "setup", "--url", "https://d.example", "--key-env", "K", "--port", "1"},
+		"no form":                  {"docbank"},
+		"another form":             {"docbank", "start"},
+		"no key with --url":        {"docbank", "setup", "--url", "https://d.example"},
+		"--key-env without --url":  {"docbank", "setup", "--key-env", "K"},
+		"--key-file without --url": {"docbank", "setup", "--key-file", "k"},
+		"--port with --url":        {"docbank", "setup", "--url", "https://d.example", "--key-env", "K", "--port", "8080"},
+		"a port that is no number": {"docbank", "setup", "--port", "http"},
+		"a port out of range":      {"docbank", "setup", "--port", "70000"},
+		"both keys":                {"docbank", "setup", "--url", "https://d.example", "--key-file", "k", "--key-env", "K"},
+		"a key as a flag":          {"docbank", "setup", "--url", "https://d.example", "--key", "secret"},
+		"--yes with --no-restart":  {"docbank", "setup", "--url", "https://d.example", "--key-env", "K", "--yes", "--no-restart"},
+		"a value that is a flag":   {"docbank", "setup", "--url", "--key-env", "K"},
+		"--yes with a value":       {"docbank", "setup", "--url", "https://d.example", "--key-env", "K", "--yes=1"},
+		"unknown flag":             {"docbank", "setup", "--url", "https://d.example", "--key-env", "K", "--bogus", "1"},
 	} {
 		_, err := PlanLaunch(args, func(string) (string, bool) { return "robot", true }, "test")
 		if err == nil || exitStatus(err) != 2 {

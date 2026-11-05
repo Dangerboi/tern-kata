@@ -8,8 +8,11 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Attachments
 
-- `tern-kata docbank setup --url <url> --key-file <file>` (or `--key-env <NAME>`) points kata at a Docbank someone else runs.
-  - It checks that the URL answers with the key before writing anything, appends a `[docbank]` section to the kata daemon's `config.toml` without touching the rest of the file, asks before restarting the kata daemon, and checks that kata has attachments on. `--yes` skips the question and `--no-restart` prints the command instead.
+- `tern-kata docbank setup` makes attachments work, either on this machine or against a Docbank someone else runs.
+  - Without `--url` it sets Docbank up on this machine: it appends a `[server]` section (`bind_addr` 127.0.0.1, a fixed `api_port` from `--port`, default 8080, and a new random `api_key`) to `<DOCBANK_HOME>/config.toml`, stores the key in `<KATA_HOME>/docbank.key`, restarts Docbank with `docbank daemon restart`, and requires `docbank daemon status` to name the address before it touches kata's config. It prints that Docbank reports usage unless `DOCBANK_TELEMETRY_ENABLED=0` is set in its daemon's environment.
+  - An existing `[server]` with `api_port` and `api_key` is reused, a different `--port` or a `[server]` missing one of them is refused, and a port another process listens on, a missing `docbank` or a different `[docbank]` section is refused before anything is written. Every other byte of Docbank's `config.toml` stays as it is, and the key is never printed.
+  - With `--url <url> --key-file <file>` (or `--key-env <NAME>`) it points kata at a Docbank someone else runs; `--key-file`/`--key-env` are for this form only and `--port` for the local one.
+  - Either way it checks that Docbank answers with the key before writing anything, appends a `[docbank]` section to the kata daemon's `config.toml` without touching the rest of the file, asks before restarting the kata daemon, and checks that kata has attachments on. `--yes` skips the question and `--no-restart` prints the command instead; a rerun on a finished setup says "already set up" and restarts nothing.
   - `--key-file -` stores a key read from standard input in `<KATA_HOME>/docbank.key`. No flag takes the key, and the command never prints it.
   - `--folder` and the route flags `tern-kata agent` takes choose the vault folder and the kata daemon; plain `http://` to another machine and a remote kata daemon are refused.
 

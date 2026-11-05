@@ -64,7 +64,7 @@ type LaunchPlan struct {
 	// AgentRoute is `agent`'s --home, --db, --schema, --dsn-file, --env-file, --daemon, --server, --token-file, --auth-file, --allow-insecure and --trust-private-network: the Pane's daemon, which the wrapper turns into
 	// the agent's kata environment; zero leaves it as inherited.
 	AgentRoute data.AgentRoute
-	// DocbankFlags are `docbank setup`'s --url, --key-file, --key-env and --folder by name without dashes, as typed; unset ones are absent.
+	// DocbankFlags are `docbank setup`'s --url, --port, --key-file, --key-env and --folder by name without dashes, as typed; unset ones are absent.
 	// DocbankYes and DocbankNoRestart are its --yes and --no-restart. The route flags it takes record into AgentRoute.
 	DocbankFlags                 map[string]string
 	DocbankYes, DocbankNoRestart bool
@@ -511,7 +511,7 @@ Usage:
   tern-kata worker resume <run-uid> [--as <actor>]
   tern-kata worker abandon <run-uid> [--as <actor>]
   tern-kata update [--force] [--pause]
-  tern-kata docbank setup --url <url> (--key-file <file>|- | --key-env <NAME>) [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
+  tern-kata docbank setup [--url <url> (--key-file <file>|- | --key-env <NAME>) | --port <port>] [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
   tern-kata agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
   tern-kata completion bash|zsh|fish
   tern-kata --version
@@ -622,9 +622,18 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 worker.toml it rejects); --pause waits for Enter after a success,
                                 so a Pane shows the result before it closes.
                                 Exit 0 when the binary is at the latest version, else 1
-  docbank setup --url <url> (--key-file <file>|- | --key-env <NAME>) [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
-                                point kata at a Docbank someone else runs, so attachments work: it
-                                checks that the --url answers with the API key (read-only), then adds a
+  docbank setup [--url <url> (--key-file <file>|- | --key-env <NAME>) | --port <port>] [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
+                                make attachments work. Without --url it sets Docbank up on this
+                                machine: it gives Docbank a fixed port (--port, default 8080) and an
+                                API key (kept in <KATA_HOME>/docbank.key, mode 0600, never printed) in
+                                [server] of <DOCBANK_HOME>/config.toml (default ~/.docbank), restarts
+                                Docbank with docbank daemon restart and checks it listens there; an
+                                existing [server] with api_port and api_key is reused, a port in use
+                                by another process is refused before anything is written, and it
+                                prints that Docbank reports usage unless DOCBANK_TELEMETRY_ENABLED=0
+                                is set in its daemon's environment. With --url it points kata at a
+                                Docbank someone else runs: it checks that the --url answers with the
+                                API key (read-only). Either way it then adds a
                                 [docbank] section (url, the key's source, --folder, default /kata) to the
                                 config.toml of the kata daemon the Pane would use (KATA_HOME or ~/.kata,
                                 or a local profile chosen with --daemon; --home, --db and --schema

@@ -1,6 +1,6 @@
 // Package docbanksetup is `tern-kata docbank setup`: it points a kata daemon at a Docbank and checks that kata can use it. It is the one
-// place that knows kata's [docbank] config section. The remote form (a Docbank someone else runs) lives here; the local form, which
-// also writes Docbank's own config, joins it through the same Env and the same applyKata step.
+// place that knows kata's [docbank] config section. The remote form (a Docbank someone else runs) and the local form (which also writes Docbank's own
+// config) share the same Env and the same applyKata step.
 package docbanksetup
 
 import (

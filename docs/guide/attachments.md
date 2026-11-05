@@ -41,11 +41,26 @@ An Attachment is one meta key on the Issue, `attachment.<id>`, holding `{"name",
 
 ## Setting Docbank up
 
-You do this once, for the kata daemon. For a Docbank on another machine `tern-kata docbank setup` does it (below); for one on this machine you do it by hand for now. kata only talks to Docbank over HTTP: it never starts Docbank, so Docbank needs a fixed address, a fixed API key and a process that keeps running.
+You do this once, for the kata daemon. `tern-kata docbank setup` does it, for Docbank on this machine and for one on another machine (below). kata only talks to Docbank over HTTP: it never starts Docbank, so Docbank needs a fixed address, a fixed API key and a process that keeps running.
 
 Choose a vault that every reader of your Issues may open. kata puts files in a folder of that vault; the folder only organises them and is no access control, so whoever can read an Issue can download its attachments.
 
 ### Docbank on this machine
+
+Install [Docbank](https://github.com/kenn-io/docbank), then run:
+
+```sh
+tern-kata docbank setup
+```
+
+- It gives Docbank a `[server]` section in `<DOCBANK_HOME>/config.toml` (`~/.docbank/config.toml` unless `DOCBANK_HOME` names another folder) with `bind_addr = "127.0.0.1"`, a fixed `api_port` (`--port`, default 8080) and an `api_key` of 32 random bytes as hex, and stores the same key in `<KATA_HOME>/docbank.key` (mode 0600). The key is never printed.
+- It appends the section as text, keeping every other byte of the file, and creates the file and `DOCBANK_HOME` when they are missing. An existing `[server]` with `api_port` and `api_key` is reused (the key is copied to the key file when that is missing) and a different `--port` is refused; a `[server]` missing one of them is refused, naming what to add.
+- It refuses before writing anything when `docbank` is not on `PATH`, when another process listens on the port, or when kata's `config.toml` already has a different `[docbank]` section.
+- It runs `docbank daemon restart` and requires `docbank daemon status` to name `127.0.0.1:<port>`; otherwise it stops, shows Docbank's output and leaves kata's config alone.
+- Then it does what the remote form does with `url = "http://127.0.0.1:<port>"` and `api_key_file = <KATA_HOME>/docbank.key`: check Docbank with the key, append the `[docbank]` section, ask before restarting the kata daemon (`--yes`, `--no-restart`), and check that attachments are on. Running it again says "already set up" and restarts nothing.
+- `--folder` and the route flags work as in the remote form below. `--key-file` and `--key-env` are for the remote form only, and `--port` for this one.
+
+The same by hand, for reference:
 
 1. Install [Docbank](https://github.com/kenn-io/docbank). Its vault is `~/.docbank` unless `DOCBANK_HOME` names another folder; the first `docbank` command creates it.
 2. Make an API key and keep it in a file only you can read:
@@ -85,7 +100,7 @@ Choose a vault that every reader of your Issues may open. kata puts files in a f
 
 ### Docbank on another machine
 
-Whoever runs that Docbank gives you its URL and an API key; keeping it running is theirs. One command points kata at it:
+Whoever runs that Docbank gives you its URL and an API key; keeping it running is theirs. With `--url` the command points kata at it:
 
 ```sh
 tern-kata docbank setup --url https://docbank.example --key-file ~/docbank.key
