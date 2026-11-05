@@ -94,22 +94,31 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 		send(map[string]any{"id": f.dirs[in.Path], "kind": "dir"})
 	case r.Method == http.MethodPost && r.URL.Path == "/api/v1/uploads":
 		r.Body = http.MaxBytesReader(w, r.Body, 32<<20)
-		if r.ParseMultipartForm(1<<20) != nil {
+		parts, err := r.MultipartReader()
+		if err != nil {
 			http.Error(w, "multipart", http.StatusBadRequest)
 			return
 		}
-		files := r.MultipartForm.File["file"]
-		if len(files) != 1 {
+		var body []byte
+		files := 0
+		for {
+			part, err := parts.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				http.Error(w, "multipart", http.StatusBadRequest)
+				return
+			}
+			if part.FormName() == "file" {
+				files++
+				body, _ = io.ReadAll(part)
+			}
+		}
+		if files != 1 {
 			http.Error(w, "file count", http.StatusBadRequest)
 			return
 		}
-		file, err := files[0].Open()
-		if err != nil {
-			http.Error(w, "file", http.StatusBadRequest)
-			return
-		}
-		defer func() { _ = file.Close() }()
-		body, _ := io.ReadAll(file)
 		sum := sha256.Sum256(body)
 		if hex.EncodeToString(sum[:]) != r.Header.Get("X-Docbank-Blob-Hash") || strconv.Itoa(len(body)) != r.Header.Get("X-Docbank-Blob-Size") {
 			http.Error(w, "identity", http.StatusUnprocessableEntity)
