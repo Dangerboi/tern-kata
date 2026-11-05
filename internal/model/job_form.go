@@ -776,9 +776,12 @@ func triggerRuns(t cronjob.Trigger, anchor time.Time, anchorKnown bool, cal Pane
 	const layout = "Mon 2006-01-02 15:04 MST"
 	switch t.Kind {
 	case cronjob.TriggerCron:
-		schedule, _ := cronjob.Cron(t.Cron, t.Timezone, time.Time{})
+		schedule, err := cronjob.Cron(t.Cron, t.Timezone, time.Time{})
 		zone, _ := zoneAndExpression(t)
-		loc, _ := time.LoadLocation(zone)
+		loc, zoneErr := time.LoadLocation(zone)
+		if err != nil || zoneErr != nil {
+			return nil, "Next runs unknown: this trigger can't be read."
+		}
 		for next := schedule.Next(now); len(runs) < previewRuns && !next.IsZero(); next = schedule.Next(next) {
 			runs = append(runs, next.In(loc).Format(layout))
 		}
@@ -786,7 +789,10 @@ func triggerRuns(t cronjob.Trigger, anchor time.Time, anchorKnown bool, cal Pane
 		if !anchorKnown {
 			return nil, "Next runs unknown: this job's start point is not known yet."
 		}
-		schedule, _ := cronjob.Interval(t.IntervalSeconds, anchor) // buildTrigger refused any other
+		schedule, err := cronjob.Interval(t.IntervalSeconds, anchor)
+		if err != nil {
+			return nil, "Next runs unknown: this trigger can't be read."
+		}
 		next := schedule.Next(now)
 		for range previewRuns {
 			runs = append(runs, cal.in(next).Format(layout))
