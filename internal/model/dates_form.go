@@ -131,9 +131,9 @@ type DatesConflict struct {
 
 func (e DatesConflict) Error() string {
 	if !e.Read {
-		return fmt.Sprintf("%s changed since the card opened; nothing was written for it. kata could not be read for the current date.", e.Label)
+		return fmt.Sprintf("%s changed since the card opened; nothing was written. kata could not be read for the current date.", e.Label)
 	}
-	return fmt.Sprintf("The Issue changed since the card opened; nothing was written for %s. The %s field now shows the current date.", e.Label, e.Label)
+	return fmt.Sprintf("The Issue changed since the card opened; nothing was written. The %s field now shows the current date.", e.Label)
 }
 
 // datePreview is the muted line under a date field: the day text resolves to with its weekday, "no date" for blank, and nothing

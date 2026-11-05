@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mattn/go-runewidth"
+
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
 )
@@ -98,5 +100,31 @@ func TestListRowDateBadgeCountsAgentBadge(t *testing.T) {
 	}
 	if onlyPlain == 0 {
 		t.Error("no width dropped the Date badge only for the Agent-badged row")
+	}
+}
+
+// The Date badge shows exactly when the row, with its gap, fits the list: at each width of a list alone in the Pane the row with
+// the badge is no wider than the list, and a row that dropped it would be wider than the list with it.
+func TestListRowDateBadgeFitsTheListToTheCell(t *testing.T) {
+	shown, dropped := 0, 0
+	for cols := model.MinCols; cols <= 140; cols++ {
+		m, _ := model.Update(datedList(cols), model.KeyMsg{Chord: "shift+l"})
+		row := text(render(t, m)[view.IssueID("dated")])
+		const detail, padding, badge = 1, 4, "  due today"
+		width := runewidth.StringWidth(row) + detail + padding
+		if strings.Contains(row, "due today") {
+			shown++
+			if width > cols {
+				t.Errorf("cols %d: row %q is %d cells wide with its badge", cols, row, width)
+			}
+		} else {
+			dropped++
+			if width+runewidth.StringWidth(badge) <= cols {
+				t.Errorf("cols %d: row %q dropped a badge that fits", cols, row)
+			}
+		}
+	}
+	if shown == 0 || dropped == 0 {
+		t.Errorf("badge shown at %d widths and dropped at %d, want both", shown, dropped)
 	}
 }
