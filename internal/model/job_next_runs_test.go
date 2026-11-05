@@ -63,7 +63,7 @@ func TestTheJobInspectorSaysWhyAJobHasNoNextRuns(t *testing.T) {
 
 func TestTheJobInspectorDoesNotListRunsOfATriggerThatCannotBeRead(t *testing.T) {
 	for name, trigger := range map[string]cronjob.Trigger{
-		"cron with no expression": {Kind: cronjob.TriggerCron},
+		"cron with no expression":  {Kind: cronjob.TriggerCron},
 		"cron that does not parse": {Kind: cronjob.TriggerCron, Cron: "not a schedule"},
 		"cron in an unknown zone":  {Kind: cronjob.TriggerCron, Cron: "0 9 * * *", Timezone: "Nowhere/Land"},
 		"interval of no seconds":   {Kind: cronjob.TriggerInterval},
