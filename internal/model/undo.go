@@ -286,6 +286,9 @@ func (m Model) undoTarget(e UndoEntry, ref string) string {
 func openUndoClose(m Model, e UndoEntry) Model {
 	m.CloseForm = CloseFormState{Open: true, Field: CloseFields[1].Name, UID: e.UID, ProjectID: e.ProjectID, UndoEntry: e.ID}
 	m.CloseForm.Values.Reason = string(ReasonDone)
+	if issue := m.issueByUID(e.UID); issue != nil {
+		m.CloseForm.Attachments = Attachments(issue.Metadata)
+	}
 	return m
 }
 

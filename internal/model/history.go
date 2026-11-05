@@ -42,7 +42,7 @@ func (m Model) historyRow(event Event) DetailRow {
 	case "issue.unassigned":
 		verb = "unassigned"
 	case "issue.closed":
-		verb, object, detail, tone = "closed:", payload.text("reason"), closeDetail(payload), VerbSuccess
+		verb, object, detail, tone = "closed:", payload.text("reason"), closeDetail(payload, m.currentMetadata()), VerbSuccess
 	case "issue.reopened":
 		verb, tone = "reopened", VerbWarning
 	case "issue.labeled":
@@ -146,11 +146,23 @@ func plain(v any) string {
 // oneLine collapses s to a single line.
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
-func closeDetail(p payloadMap) string {
+// currentMetadata is the shown Issue's meta, which says which Attachments it still has.
+func (m Model) currentMetadata() map[string]any {
+	if m.authority == nil || m.authority.Issue == nil {
+		return nil
+	}
+	return m.authority.Issue.Metadata
+}
+
+func closeDetail(p payloadMap, current map[string]any) string {
 	var evidence []string
 	items, _ := p["evidence"].([]any)
 	for _, item := range items {
 		fields, _ := item.(map[string]any)
+		if plain(fields["type"]) == "attachment" {
+			evidence = append(evidence, attachmentEvidence(fields, current))
+			continue
+		}
 		parts := []string{plain(fields["type"])}
 		for _, key := range []string{"sha", "url", "command", "paths", "account", "rationale", "issue_ref"} {
 			if value, ok := fields[key]; ok {
@@ -171,6 +183,32 @@ func closeDetail(p payloadMap) string {
 		return message
 	}
 	return message + " (" + list + ")"
+}
+
+// attachmentEvidence is how an attachment evidence entry reads in a close: "attachment <name>", with [changed] when the Issue
+// has another version of the file now and [removed] when it no longer has the Attachment. The name comes from the copy kata froze
+// into the evidence, so it survives the Attachment's removal. An entry with no copy reads from the Issue's current Attachment,
+// like kata's web UI; one that has neither reads "Attachment removed", and one whose copy is no reference "Invalid attachment".
+func attachmentEvidence(fields map[string]any, metadata map[string]any) string {
+	id := plain(fields["attachment_id"])
+	nowRef := metadata[attachmentKeyPrefix+id]
+	_, nowVersion, nowOK := attachmentRef(id, nowRef)
+	frozen, frozenVersion, frozenOK := attachmentRef(id, fields["attachment"])
+	if _, hasCopy := fields["attachment"]; !hasCopy {
+		frozen, frozenVersion, frozenOK = attachmentRef(id, nowRef)
+		if !frozenOK {
+			return "Attachment removed"
+		}
+	} else if !frozenOK {
+		return "Invalid attachment"
+	}
+	switch {
+	case !nowOK:
+		return "attachment " + frozen.Name + " [removed]"
+	case !strings.EqualFold(nowVersion, frozenVersion):
+		return "attachment " + frozen.Name + " [changed]"
+	}
+	return "attachment " + frozen.Name
 }
 
 func truncate(s string, n int) string {

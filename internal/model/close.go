@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -19,15 +20,16 @@ const (
 
 // The Close card's fields.
 const (
-	CloseReason    Field = "reason"
-	CloseMessage   Field = "message"
-	CloseCommit    Field = "commit"
-	ClosePR        Field = "pr"
-	CloseTest      Field = "test"
-	CloseReference Field = "reference"
-	CloseRationale Field = "rationale"
-	CloseReviewed  Field = "reviewed"
-	CloseExternal  Field = "external"
+	CloseReason      Field = "reason"
+	CloseMessage     Field = "message"
+	CloseCommit      Field = "commit"
+	ClosePR          Field = "pr"
+	CloseTest        Field = "test"
+	CloseReference   Field = "reference"
+	CloseRationale   Field = "rationale"
+	CloseReviewed    Field = "reviewed"
+	CloseExternal    Field = "external"
+	CloseAttachments Field = "attachments" // the picker of the Issue's Attachments to cite as evidence of a done close
 )
 
 // closeTable declares the Close card's fields, in tab order, and its busy condition.
@@ -45,9 +47,56 @@ var closeTable = fieldTable[CloseFormState]{
 		textField(CloseTest, func(f *CloseFormState) *string { return &f.Values.Test }),
 		textField(CloseReviewed, func(f *CloseFormState) *string { return &f.Values.Reviewed }),
 		textField(CloseExternal, func(f *CloseFormState) *string { return &f.Values.External }),
+		closeAttachmentsField(),
 		textField(CloseReference, func(f *CloseFormState) *string { return &f.Values.Reference }),
 		textField(CloseRationale, func(f *CloseFormState) *string { return &f.Values.Rationale }),
 	},
+	hidden: func(m Model, name Field) bool { return name == CloseAttachments && !m.CloseForm.ShowsAttachments() },
+}
+
+// closeAttachmentsField is the picker of the Issue's Attachments. It takes several values at once: left and right (or the
+// click on a name) move the cursor and space toggles the Attachment under it.
+func closeAttachmentsField() formField[CloseFormState] {
+	field := choiceField(CloseAttachments,
+		func(f *CloseFormState, back bool) { f.AttachmentAt = cycleIndex(f.AttachmentAt, len(f.Attachments), back) },
+		toggleCited)
+	field.empty = func(f *CloseFormState) bool { return len(f.Attachments) == 0 }
+	return field
+}
+
+// toggleCited puts the picker's cursor on the Attachment at i and toggles whether the close cites it.
+func toggleCited(f *CloseFormState, i int) bool {
+	if i < 0 || i >= len(f.Attachments) {
+		return false
+	}
+	f.AttachmentAt = i
+	id := f.Attachments[i].ID
+	if f.Cites(id) {
+		f.Cited = slices.DeleteFunc(slices.Clone(f.Cited), func(c string) bool { return c == id })
+	} else {
+		f.Cited = append(slices.Clone(f.Cited), id)
+	}
+	return true
+}
+
+// Cites says whether the close cites the Attachment with id.
+func (f CloseFormState) Cites(id string) bool { return slices.Contains(f.Cited, id) }
+
+// ShowsAttachments says whether the card offers the Attachment picker: only a done close takes an Attachment as evidence, and
+// an Issue with none has nothing to pick.
+func (f CloseFormState) ShowsAttachments() bool {
+	return len(f.Attachments) > 0 && strings.TrimSpace(f.Values.Reason) == string(ReasonDone)
+}
+
+// citedEvidence is the close's Attachment evidence, in the order the picker lists them.
+func (f CloseFormState) citedEvidence() []CloseEvidence {
+	var out []CloseEvidence
+	for _, a := range f.Attachments {
+		if f.Cites(a.ID) {
+			out = append(out, CloseEvidence{EvidenceAttachment, a.ID})
+		}
+	}
+	return out
 }
 
 // CloseFields is the Close card's field list, in tab order.
@@ -72,6 +121,11 @@ type CloseFormState struct {
 	Keyed
 	// UndoEntry is the Undo history entry whose inverse this card completes, 0 for a plain close.
 	UndoEntry uint64
+	// Attachments are the Issue's Attachments when the card opened, the ones the picker offers. Cited holds the ids of those
+	// picked; AttachmentAt is the picker's cursor, an index into Attachments.
+	Attachments  []Attachment
+	Cited        []string
+	AttachmentAt int
 }
 type CloseFieldMsg struct {
 	Field Field
@@ -111,9 +165,10 @@ const (
 	EvidenceAudit        CloseEvidenceKind = "no-change-audit"
 	EvidenceReviewed     CloseEvidenceKind = "reviewed-paths"
 	EvidenceExternal     CloseEvidenceKind = "external"
+	EvidenceAttachment   CloseEvidenceKind = "attachment"
 )
 
-// CloseEvidence is one trimmed evidence entry: a SHA, URL, test command, comma-separated reviewed paths, external account, Issue reference or audit rationale.
+// CloseEvidence is one trimmed evidence entry: a SHA, URL, test command, comma-separated reviewed paths, external account, Issue reference, audit rationale or the id of an Attachment of the Issue.
 type CloseEvidence struct {
 	Kind  CloseEvidenceKind
 	Value string
@@ -165,7 +220,7 @@ func openClose(m Model) Model {
 		m.Notice = reason
 		return m
 	}
-	m.CloseForm = CloseFormState{Open: true, Field: CloseFields[0].Name, UID: issue.UID, ProjectID: issue.ProjectID}
+	m.CloseForm = CloseFormState{Open: true, Field: CloseFields[0].Name, UID: issue.UID, ProjectID: issue.ProjectID, Attachments: Attachments(issue.Metadata)}
 	m.CloseForm.Values.Reason = string(ReasonDone)
 	return m
 }
@@ -196,6 +251,9 @@ func submitClose(m Model, quick bool) (Model, []Cmd) {
 			if e.Value = strings.TrimSpace(e.Value); e.Value != "" {
 				cmd.Evidence = append(cmd.Evidence, e)
 			}
+		}
+		if cmd.Reason == ReasonDone {
+			cmd.Evidence = append(cmd.Evidence, f.citedEvidence()...)
 		}
 		if err := validateClose(cmd); err != nil {
 			f.Err = err
@@ -261,17 +319,20 @@ func validateClose(cmd CloseIssueCmd) error {
 			return errors.New("Reviewed paths need at least one path.")
 		}
 	}
+	if reason != ReasonDone && slices.ContainsFunc(cmd.Evidence, func(e CloseEvidence) bool { return e.Kind == EvidenceAttachment }) {
+		return errors.New("Only a done close takes an attachment as evidence.")
+	}
 	kinds := map[CloseEvidenceKind]int{}
 	for _, e := range cmd.Evidence {
 		kinds[e.Kind]++
 	}
 	switch reason {
 	case ReasonDone:
-		if kinds[EvidenceCommit]+kinds[EvidencePR]+kinds[EvidenceTest]+kinds[EvidenceReviewed]+kinds[EvidenceExternal] == 0 {
-			return errors.New("Done requires commit, PR, test, reviewed paths, or external evidence; use Quick done for owner-local interactive closing.")
+		if kinds[EvidenceCommit]+kinds[EvidencePR]+kinds[EvidenceTest]+kinds[EvidenceReviewed]+kinds[EvidenceExternal]+kinds[EvidenceAttachment] == 0 {
+			return errors.New("Done requires commit, PR, test, reviewed paths, external or attachment evidence; use Quick done for owner-local interactive closing.")
 		}
 		if kinds[EvidenceDuplicateOf]+kinds[EvidenceAudit] > 0 {
-			return errors.New("Done accepts commit, PR, test, reviewed paths, or external evidence, not reference or audit evidence.")
+			return errors.New("Done accepts commit, PR, test, reviewed paths, external or attachment evidence, not reference or audit evidence.")
 		}
 	case ReasonDuplicate, ReasonSuperseded:
 		kind := referenceKind(reason)
@@ -337,9 +398,16 @@ func closeKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		return submitClose(m, false)
 	case bound && binding.Action == CloseQuick:
 		return submitClose(m, true)
+	case bound && binding.Action == InputSpace && f.Field == CloseAttachments && !f.Saving:
+		if toggleCited(f, f.AttachmentAt) {
+			f.Err = nil
+		}
 	case !f.Saving:
 		if value := closeTable.textAt(f, f.Field); value != nil {
 			var edited bool
+			if bound && binding.Action == InputSpace {
+				bound = false // a space in a text field is typed
+			}
 			if *value, edited = editText(*value, &f.Caret, f.Field, bound, msg); edited {
 				f.Err = nil
 			}

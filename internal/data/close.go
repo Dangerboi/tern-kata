@@ -92,6 +92,8 @@ func closeBody(cmd model.CloseIssueCmd) g.CloseIssueBody {
 			evidence.Paths = model.ReviewedPaths(value)
 		case model.EvidenceExternal:
 			evidence.Account = &value
+		case model.EvidenceAttachment:
+			evidence.AttachmentID = &value
 		default:
 			evidence.IssueRef = &value
 		}

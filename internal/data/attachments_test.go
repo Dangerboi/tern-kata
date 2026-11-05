@@ -323,3 +323,68 @@ func TestMigrateDoesNotDeleteAFileOutsideTheIssuesFolder(t *testing.T) {
 		t.Fatal("the key was cleared")
 	}
 }
+
+// closeEvents is the Body of every Events row of the Issue, as the detail shows them after loading it from the daemon.
+func (f docbankFixture) closeEvents(t *testing.T) []string {
+	t.Helper()
+	loaded := as[model.DetailLoaded](t, run(t, f.gateway, model.LoadDetail{Workspace: f.repo, UID: f.uid}))
+	m := model.Model{SelectedUID: f.uid}
+	m, _ = model.Update(m, model.ResizeMsg{Cols: 120})
+	m, _ = model.Update(m, loaded)
+	m, _ = model.Update(m, model.ActivityTabMsg{Tab: model.TabEvents})
+	var bodies []string
+	for _, item := range m.DetailRows() {
+		if item.Kind == model.RowEvent {
+			bodies = append(bodies, item.Activity.Body)
+		}
+	}
+	return bodies
+}
+
+func TestCloseCitingAnAttachmentRecordsItAndTheHistoryNamesItEvenAfterUnlinking(t *testing.T) {
+	f := newDocbankFixture(t)
+	dir := t.TempDir()
+	cited := f.attach(t, writeFile(t, dir, "report.pdf", "pdf bytes"))
+	f.attach(t, writeFile(t, dir, "other.txt", "other"))
+
+	closed := as[model.CloseResultMsg](t, run(t, f.gateway, model.CloseIssueCmd{
+		Workspace: f.repo, UID: f.uid, ProjectID: f.project.ID, Actor: "tester", Key: "k-attachment", Reason: model.ReasonDone,
+		Message:  "Implemented the requested change and verified the result.",
+		Evidence: []model.CloseEvidence{{Kind: model.EvidenceAttachment, Value: cited.ID}},
+	}))
+	if closed.Err != nil {
+		t.Fatalf("close %+v", closed)
+	}
+	stored, _ := closePayload(t, f.gateway, f.repo, f.uid)["evidence"].([]any)
+	entry, _ := stored[0].(map[string]any)
+	frozen, _ := entry["attachment"].(map[string]any)
+	if len(stored) != 1 || entry["type"] != "attachment" || entry["attachment_id"] != cited.ID || frozen["name"] != "report.pdf" {
+		t.Fatalf("stored evidence %v", stored)
+	}
+	has := func(bodies []string, want string) bool {
+		return slices.ContainsFunc(bodies, func(b string) bool { return strings.Contains(b, "(attachment "+want+")") })
+	}
+	if bodies := f.closeEvents(t); !has(bodies, "report.pdf") {
+		t.Fatalf("Events rows %q do not name the attachment", bodies)
+	}
+
+	detached := as[model.FileDetached](t, run(t, f.gateway, model.DetachFile{Workspace: f.repo, UID: f.uid, ProjectID: f.project.ID, Actor: "tester", ID: cited.ID, Name: "report.pdf"}))
+	if detached.Err != nil {
+		t.Fatalf("detach %+v", detached)
+	}
+	if bodies := f.closeEvents(t); !has(bodies, "report.pdf [removed]") {
+		t.Fatalf("after unlinking, Events rows %q do not name the removed attachment", bodies)
+	}
+}
+
+func TestCloseCitingAnAttachmentTheIssueDoesNotHaveIsRefused(t *testing.T) {
+	f := newDocbankFixture(t)
+	closed := as[model.CloseResultMsg](t, run(t, f.gateway, model.CloseIssueCmd{
+		Workspace: f.repo, UID: f.uid, ProjectID: f.project.ID, Actor: "tester", Key: "k-missing", Reason: model.ReasonDone,
+		Message:  "Implemented the requested change and verified the result.",
+		Evidence: []model.CloseEvidence{{Kind: model.EvidenceAttachment, Value: "nope"}},
+	}))
+	if closed.Err == nil || f.issue(t, f.uid).Status == "closed" {
+		t.Fatalf("close %+v, status %q", closed, f.issue(t, f.uid).Status)
+	}
+}
