@@ -29,14 +29,14 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - **Breaking:** an Agent profile with no `extensions` key now runs omp with `--no-extensions`, where it used to load whatever omp discovers, so a worker run no longer loads omp's native extension modules, ambient hook files or installed plugins such as kata-plugin. Explicit `-e`, `--hook` and `--trusted-extension` paths in its `args`, skills, rules and MCP servers still apply. Add `extensions = "ambient"` under the profile to get the old behaviour back. A run already in progress when you upgrade uses the new default from its next attempt or step.
 - `worker doctor` warns of kata-plugin's todo takeover only for an Agent profile that sets `extensions = "ambient"`.
 
-### Fixed
-
-- Supervision no longer starts a second worker for `worker.lock` to refuse, all day long, after a plugin reload or a Tern update: the host half leaves the worker that is still running alone, logs one line naming it, and starts a worker within 10 seconds of its end.
-
 ### Removed
 
 - `tern-kata attach` and `tern-kata detach`: use `kata docbank attachments add`, `ls`, `get` and `rm`.
 - The `.kata-attachments` folder store and its `tern-kata.attachment.*` keys; `tern-kata migrate-attachments` moves what they hold.
+
+### Fixed
+
+- Supervision no longer starts a second worker for `worker.lock` to refuse, all day long, after a plugin reload or a Tern update: the host half leaves the worker that is still running alone, logs one line naming it, and starts a worker within 10 seconds of its end.
 
 ## [0.7.2] - 2026-11-02
 
