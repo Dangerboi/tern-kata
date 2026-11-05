@@ -522,8 +522,8 @@ Flags:
   --                            end the flags: a ref after it may be named like one, even --help
 
 Subcommands (only as the first argument; they never open a Pane or need Tern):
-  migrate-attachments           one-off: upload the files that old tern-kata.attachment.<name>
-                                keys of the workspace's Project point to on this machine to
+  migrate-attachments           one-off: upload the files that the workspace's Project's
+                                old keys point to on this machine to
                                 kata's Docbank attachments, clear the keys and delete the
                                 local copies; files on other machines are listed. Run it
                                 from a workspace bound to the Project.

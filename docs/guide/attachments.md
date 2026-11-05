@@ -64,7 +64,7 @@ Docbank has telemetry settings of its own; check Docbank's documentation for tur
 
 ## Moving old attachments
 
-Before kata stored attachments, tern-kata copied each file to `.kata-attachments/<Issue ULID>/<name>` at the root of the Project's primary checkout (the main worktree; outside git, the directory holding `.kata.toml`) and kept a pointer on the Issue: one `tern-kata.attachment.<name>` meta key holding `{"host", "path"}`, the host name of the machine with the copy and its absolute path. The Pane no longer lists these. Move them once per machine:
+Before kata stored attachments, tern-kata copied each file to `.kata-attachments/<Issue ULID>/<name>` at the root of the Project's primary checkout (the main worktree; outside git, the directory holding `.kata.toml`) and kept a pointer on the Issue: one `tern-kata.attachment.<name>` meta key holding `{"host", "path"}`, the host name of the machine with the copy and its absolute path. Version 0.3.x wrote the same pointer under `attachment.<name>`; the migration reads those too. The Pane no longer lists these. Move them once per machine:
 
 ```sh
 tern-kata migrate-attachments [--as <actor>]
@@ -82,7 +82,7 @@ The command prints what moved, and lists what it left with the reason:
 
 - a key whose `host` is another machine: run the command there;
 - a file that is gone from this machine;
-- a file outside the Issue's folder in `.kata-attachments`, which is never deleted: add it with `kata docbank attachments add` and clear the key yourself (`kata meta unset <ref> tern-kata.attachment.<name>`);
+- a file outside the Issue's folder in `.kata-attachments`, which is never deleted: add it with `kata docbank attachments add` and clear the key yourself (`kata meta unset <ref> <key>`, with `<key>` the key the list names);
 - an upload or key change that failed, with kata's reason. The command then exits non-zero.
 
 A daemon without Docbank refuses before touching anything. The command is not needed on a machine with no old attachments, and tern-kata itself no longer reads or writes the old keys.
