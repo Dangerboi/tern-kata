@@ -146,13 +146,18 @@ func (WorkflowWritten) msg() {}
 // OnWorkflows says the Workflows Page is current.
 func (m Model) OnWorkflows() bool { return m.Page == PageWorkflows }
 
-// VisibleWorkflows is the list the Page draws: the live workflows, and the archived ones too once they are asked for.
+// VisibleWorkflows is the list the Page draws: the live workflows, and the archived ones too once they are asked for, those the
+// search leaves.
 func (m Model) VisibleWorkflows() []Workflow {
 	w := m.Workflows
-	if w.ShowArchived {
-		return w.List
+	list := w.List
+	if !w.ShowArchived {
+		list = slices.DeleteFunc(slices.Clone(list), func(x Workflow) bool { return x.Archived })
 	}
-	return slices.DeleteFunc(slices.Clone(w.List), func(x Workflow) bool { return x.Archived })
+	if m.Page != PageWorkflows || m.PageSearch.Text == "" {
+		return list
+	}
+	return slices.DeleteFunc(slices.Clone(list), func(x Workflow) bool { return !m.matchesSearch(m.workflowSearchWords(x)...) })
 }
 
 // WorkflowJobs are the live Cron jobs that run the workflow with uid: those whose action names it. They are what keeps kata from
@@ -306,13 +311,13 @@ func inspectWorkflow(m Model) Model {
 	return m
 }
 
-// workflowsBack is esc on the Page: it closes the inspector, and with none open goes to the Menu.
+// workflowsBack is esc on the Page: it closes the inspector, and with none open ends the search, else goes to the Menu.
 func workflowsBack(m Model) (Model, []Cmd) {
 	if m.Workflows.Inspecting {
 		m.Workflows.Inspecting = false
 		return m, nil
 	}
-	return drillOut(m)
+	return pageSearchEscape(m)
 }
 
 // backWithoutMenu is backspace on a surface where esc opens the Menu: it goes back across Projects when esc would, and otherwise
@@ -632,7 +637,7 @@ func workflowActions() []actionEntry {
 		{action: ArchiveWorkflowAction, modes: workflowModes, keys: keys("x", "x"), help: "archive", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 6, "archive"}}, handle: changeWorkflowState(false)},
 		{action: RestoreWorkflowAction, modes: workflowModes, keys: keys("r", "r"), help: "restore", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 7, "restore"}}, handle: changeWorkflowState(true)},
 		{action: ToggleArchivedWorkflows, modes: workflowModes, keys: keys("a", "a"), help: "archived", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 8, "show or hide archived workflows"}}, handle: pure(toggleArchivedWorkflows)},
-		{action: DrillOut, modes: workflowModes, keys: keys("escape", "esc"), help: "back", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 9, "close the steps, or go to the Menu"}}, handle: workflowsBack},
+		{action: DrillOut, modes: workflowModes, keys: keys("escape", "esc"), help: "back", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 9, "close the steps, end the search, or go to the Menu"}}, handle: workflowsBack},
 		{action: DrillOut, modes: workflowModes, keys: keys("backspace", "⌫"), help: "back", handle: workflowsBackspace},
 	}
 }

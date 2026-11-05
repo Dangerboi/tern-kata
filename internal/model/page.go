@@ -415,6 +415,7 @@ func switchPage(m Model, target Page) (Model, []Cmd) {
 // keeps focus when it has it and then stays shown. The list scrolls to the selection and the selected Issue's detail loads again,
 // as it was not kept fresh while the Page hid it.
 func (m Model) leavePage() Model {
+	m.PageSearch = PageSearchState{}
 	if m.Page == PageIssues {
 		return m
 	}

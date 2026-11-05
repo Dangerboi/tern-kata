@@ -23,13 +23,14 @@ A schedule that can't be read, or a next run that can't be worked out (a job tha
 |---|---|
 | `↑`/`↓` or `j`/`k`, `g`, `G`, Page Up/Down | Move the selection |
 | Enter or Tab | Show the inspector (narrow Panes) |
-| Esc or Tab | Back to the list |
+| Esc or Tab | Back to the list (on the list, Esc first ends a search) |
 | `n` | New job (opens the [Job card](#job-card)) |
 | `e` | Edit the selected job |
 | `J` | On an Issue (list, Board, Lane view, Issue detail): new recurring-child job with that Issue as parent |
 | `p` | Pause (writes the job disabled) or resume |
 | `x` | Archive, or restore an archived job; the footer reads "archive" or "restore" |
 | `a` | Show or hide archived jobs (hidden until then) |
+| `/` | Search the jobs: type to keep the jobs whose name, state, kind, schedule, profile or last run holds the text (case-insensitive); Enter keeps the search and returns to the list, Esc ends it and brings every job back. An empty result says so under the search |
 | `ctrl+r` | Read the jobs again; they also reload when the daemon reports a change |
 | `r` | Open the Runs Page filtered to the selected job (see [Runs](runs.md)) |
 | `R` | Ask the worker to run the selected adapter job now |

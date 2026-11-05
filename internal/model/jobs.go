@@ -163,12 +163,16 @@ type JobRow struct {
 	Warning string
 }
 
-// visibleJobs are the jobs the list shows.
+// visibleJobs are the jobs the list shows: the archived ones only when asked for, and those the search leaves.
 func (m Model) visibleJobs() []CronJob {
-	if m.Jobs.ShowArchived {
-		return m.Jobs.Jobs
+	jobs := m.Jobs.Jobs
+	if !m.Jobs.ShowArchived {
+		jobs = slices.DeleteFunc(slices.Clone(jobs), CronJob.Archived)
 	}
-	return slices.DeleteFunc(slices.Clone(m.Jobs.Jobs), CronJob.Archived)
+	if m.Page != PageJobs || m.PageSearch.Text == "" {
+		return jobs
+	}
+	return slices.DeleteFunc(slices.Clone(jobs), func(job CronJob) bool { return !m.matchesSearch(m.jobSearchWords(job)...) })
 }
 
 // JobRows are the Jobs Page's rows in kata's order, name then uid. now is when the next runs are counted from.

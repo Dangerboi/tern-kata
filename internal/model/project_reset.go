@@ -13,7 +13,7 @@ func (m Model) resetPagesForProject() Model {
 	uid := m.Collection.ProjectUID
 	for _, def := range pageDefs {
 		if def.reset != nil && def.filledFor(m) != uid {
-			m = def.reset(m, uid)
+			m, m.PageSearch = def.reset(m, uid), PageSearchState{}
 		}
 	}
 	return m

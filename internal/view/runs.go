@@ -64,6 +64,12 @@ func runs(m model.Model, now time.Time) tern.Element {
 	if m.Runs.JobUID != "" {
 		empty = emptyState("No runs for this job", "It has not run yet.", emptyButton(m, "all-runs", model.FilterRunsByJob, "Every run", false)...)
 	}
+	if m.PageSearchShown() {
+		children = append(children, pageSearchInput(m))
+	}
+	if m.PageSearching() {
+		empty = searchEmpty(m)
+	}
 	list := ui.List{CommonWithoutMax: scrollerCommon("runs"), Max: fillMax, Empty: ui.T("Loading runs…"), Children: cards}
 	children = append(children, listAndEmpty(list, m.Runs.Loading, empty)...)
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapSM, children)

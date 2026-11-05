@@ -2,7 +2,7 @@
 
 `4` in a Project opens the Workflows Page. It shows the Project's kata **Workflows**, one row each with its name and step count. Archived ones stay hidden until `a` shows them.
 
-The Project is found as the [Board Page](pages-and-board.md#board-page) finds it, and the Page ends when you leave the Project Collection. Esc closes the steps first, then goes to the Menu.
+The Project is found as the [Board Page](pages-and-board.md#board-page) finds it, and the Page ends when you leave the Project Collection. Esc closes the steps first, then ends a search, then goes to the Menu.
 
 ![The Workflows Page with a workflow selected and its steps shown](../images/workflows.png)
 
@@ -20,6 +20,7 @@ Each row names the live Cron jobs that run the workflow and shows the workflow's
 | `x` | Archive the selected workflow |
 | `r` | Restore an archived workflow |
 | `a` | Show or hide archived workflows |
+| `/` | Search the workflows: type to keep the workflows whose name, step count, using jobs or latest run holds the text (case-insensitive); Enter keeps the search and returns to the list, Esc ends it and brings every workflow back. An empty result says so under the search |
 
 ## Inspector
 

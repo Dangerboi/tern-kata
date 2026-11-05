@@ -55,8 +55,15 @@ func jobs(m model.Model, now time.Time) tern.Element {
 	if m.Jobs.Err != nil {
 		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.Jobs.Err.Error()})
 	}
+	if m.PageSearchShown() {
+		children = append(children, pageSearchInput(m))
+	}
+	empty := emptyState("No Cron jobs", "This Project has none.", emptyButton(m, "new", model.NewJobAction, "New job", true)...)
+	if m.PageSearching() {
+		empty = searchEmpty(m)
+	}
 	list := ui.List{CommonWithoutMax: scrollerCommon("jobs"), Max: fillMax, Empty: ui.T("Loading jobs…"), Children: cards}
-	children = append(children, listAndEmpty(list, m.Jobs.Loading, emptyState("No Cron jobs", "This Project has none.", emptyButton(m, "new", model.NewJobAction, "New job", true)...))...)
+	children = append(children, listAndEmpty(list, m.Jobs.Loading, empty)...)
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapSM, children)
 }
 

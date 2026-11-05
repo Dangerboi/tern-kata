@@ -22,10 +22,11 @@ Each card has:
 | Key | Action |
 |---|---|
 | Enter or Tab | Open the detail; Enter reads the run from kata again |
-| Esc or Tab | Back to the list |
+| Esc or Tab | Back to the list (on the list, Esc first ends a search) |
 | `i` | Open the run's Issue on the Issues Page, from the list or the detail (a run with no Issue leaves a Notice) |
 | `f` | Narrow the list to the selected run's job, or show every run again |
 | `m` | Read the next older 100 runs |
+| `/` | Search the loaded runs: type to keep the runs whose status, name, Issue, executor, start, reason or summary holds the text (case-insensitive); Enter keeps the search and returns to the list, Esc ends it and brings every run back. An empty result says so under the search |
 | `ctrl+r` | Read the newest page again |
 | `o` | Open the omp session of a finished or held run of this machine in a new Tern tab |
 | `u` | Resume the selected held run through the worker |

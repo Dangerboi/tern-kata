@@ -46,8 +46,11 @@ func workflows(m model.Model, now time.Time) tern.Element {
 	if !m.Workflows.ShowArchived {
 		heading.Spans = append(heading.Spans, ui.Span{T: "  archived hidden", S: "muted"})
 	}
-	return ui.Col{Common: ui.Common{Key: "list", Grow: 1, Max: &ui.Bounds{H: ui.Frac(1)}}, Gap: ui.GapSM, Children: ui.Nodes(
-		heading,
+	top := ui.Nodes(heading)
+	if m.PageSearchShown() {
+		top = append(top, pageSearchInput(m))
+	}
+	return ui.Col{Common: ui.Common{Key: "list", Grow: 1, Max: &ui.Bounds{H: ui.Frac(1)}}, Gap: ui.GapSM, Children: append(top,
 		ui.Row{Common: ui.Common{Key: "page", Grow: 1, Basis: ui.BasisFrac(0), Min: &ui.Bounds{H: ui.Lines(0)}}, Gap: ui.GapMD, Align: ui.AlignStretch, Children: panels},
 	)}
 }
@@ -80,6 +83,9 @@ func workflowList(m model.Model, paired bool) tern.Element {
 	empty := emptyState("No workflows", "None in "+m.Collection.Title+" yet.", emptyButton(m, "new", model.NewWorkflow, "New workflow", true)...)
 	if len(m.Workflows.List) > 0 {
 		empty = emptyState("Every workflow is archived", "Archived workflows are hidden.", emptyButton(m, "show-archived", model.ToggleArchivedWorkflows, "Show archived", true)...)
+	}
+	if m.PageSearching() {
+		empty = searchEmpty(m)
 	}
 	selected := ""
 	if m.Workflows.Selected != "" {

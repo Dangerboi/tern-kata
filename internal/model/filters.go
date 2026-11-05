@@ -16,12 +16,12 @@ type SearchState struct {
 
 // SearchInputFocused reports whether the Search input, not a popup card, holds the text caret.
 func (m Model) SearchInputFocused() bool {
-	return m.Search.Open && !m.Search.Results && m.Err == nil && !m.FirstLoad() && m.Focus == ColumnList
+	return (m.Search.Open && !m.Search.Results || m.PageSearch.Open) && m.Err == nil && !m.FirstLoad() && m.Focus == ColumnList
 }
 
 // inputMode is a mode whose keys type into Search. The popup cards own theirs: see cardEntry.
 func inputMode(mode Mode) bool {
-	return mode == ModeSearch || mode == ModeSearchResults
+	return mode == ModeSearch || mode == ModeSearchResults || mode == ModePageSearch
 }
 
 func clearFilters(m Model) (Model, []Cmd) {
@@ -104,6 +104,9 @@ func searchEdit(m Model, text string) (Model, []Cmd) {
 }
 
 func updateFilterText(m Model, msg KeyMsg) (Model, []Cmd) {
+	if m.CurrentMode() == ModePageSearch {
+		return updatePageSearchText(m, msg)
+	}
 	if m.CurrentMode() != ModeSearch && m.CurrentMode() != ModeFilterForm {
 		return m, nil
 	}

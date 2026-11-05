@@ -270,6 +270,18 @@ var mainRows = []actionEntry{
 	{action: SearchEnter, modes: []Mode{ModeSearchResults}, keys: keys("enter", "enter"), help: "commit search", footer: []Mode{ModeSearchResults}, handle: pure(searchEnter)},
 	{action: SearchBack, modes: []Mode{ModeSearchResults}, keys: keys("escape", "esc"), help: "edit query", footer: []Mode{ModeSearchResults}, handle: searchBack},
 	{action: SearchQuery, modes: []Mode{ModeSearchResults}, keys: keys("/", "/"), help: "edit query", handle: pure(func(m Model) Model { m.Search.Results = false; return m })},
+	// Searching the rows of the Jobs, Runs and Workflows Pages.
+	{action: SearchPage, modes: []Mode{ModeJobs}, keys: keys("/", "/"), help: "search", sheet: []sheetLine{{sheetJobs, 19, "search the jobs (esc ends the search)"}}, handle: pure(openPageSearch)},
+	{action: SearchPage, modes: []Mode{ModeRuns}, keys: keys("/", "/"), help: "search", sheet: []sheetLine{{sheetRuns, 16, "search the runs (esc ends the search)"}}, handle: pure(openPageSearch)},
+	{action: SearchPage, modes: []Mode{ModeWorkflows}, keys: keys("/", "/"), help: "search", sheet: []sheetLine{{sheetWorkflows, 10, "search the workflows (esc ends the search)"}}, handle: pure(openPageSearch)},
+	{action: PageSearchKeep, modes: []Mode{ModePageSearch}, keys: keys("enter", "enter"), help: "keep search", footer: []Mode{ModePageSearch}, handle: pure(pageSearchKeep)},
+	{action: PageSearchClear, modes: []Mode{ModePageSearch}, keys: keys("escape", "esc"), help: "end search", footer: []Mode{ModePageSearch}, handle: pure(clearPageSearch)},
+	{action: MoveUp, modes: []Mode{ModePageSearch}, keys: slices.Concat(keys("up", "up"), emacsUp), help: "previous row", handle: pageSearchMoving(MoveUp)},
+	{action: MoveDown, modes: []Mode{ModePageSearch}, keys: slices.Concat(keys("down", "down"), emacsDown), help: "next row", handle: pageSearchMoving(MoveDown)},
+	{action: PageUp, modes: []Mode{ModePageSearch}, keys: pageUpKeys, help: "page up", handle: pageSearchMoving(PageUp)},
+	{action: PageDown, modes: []Mode{ModePageSearch}, keys: pageDownKeys, help: "page down", handle: pageSearchMoving(PageDown)},
+	{action: DeleteInput, modes: []Mode{ModePageSearch}, keys: keys("backspace", "backspace"), help: "delete", handle: pageSearchErasing(DeleteInput)},
+	{action: ClearInput, modes: []Mode{ModePageSearch}, keys: keys("ctrl+u", "ctrl+u"), help: "clear search", handle: pageSearchErasing(ClearInput)},
 	// Acting on the Issues.
 	{action: NewIssue, modes: issueModes, keys: keys("n", "n"), help: "new", footer: listAndBoard, sheet: []sheetLine{{sheetGraph, 12, "new issue (form)"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, false) }},
 	{action: SearchIssues, modes: listAndBoard, keys: keys("/", "/"), help: "search", footer: listAndBoard, sheet: []sheetLine{{sheetFilters, 1, "search"}}, handle: pure(openSearch)},
@@ -305,7 +317,7 @@ var mainRows = []actionEntry{
 	{action: NewChild, modes: issueModes, keys: keys("shift+n", "N"), help: "child", footer: issueModes, sheet: []sheetLine{{sheetChildren, 1, "new child"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, true) }},
 	// Layout, back, help and quit.
 	{action: ToggleDetail, modes: []Mode{ModeList, ModeLane, ModeDetail}, keys: keys("shift+l", "L"), help: "layout", footer: []Mode{ModeList, ModeLane, ModeDetail}, sheet: []sheetLine{{sheetGlobal, 6, "toggle layout"}}, handle: pure(Model.toggleDetail)},
-	{action: ShowMenu, modes: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}, keys: keys("escape", "esc"), help: "Menu", footer: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}, sheet: []sheetLine{{sheetGlobal, 5, "menu"}}, handle: drillOut},
+	{action: ShowMenu, modes: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}, keys: keys("escape", "esc"), help: "Menu", footer: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}, sheet: []sheetLine{{sheetGlobal, 5, "menu, or end the search of the Jobs and Runs Pages"}}, handle: pageSearchEscape},
 	{action: DrillOut, modes: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}, keys: keys("backspace", "⌫"), help: "back", handle: backWithoutMenu},
 	{action: DrillOut, modes: []Mode{ModeLane}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeLane}, sheet: []sheetLine{{sheetBoard, 10, "back to the Board, or the Menu in a narrow Pane"}}, handle: laneBack},
 	{action: DrillOut, modes: []Mode{ModeDetail}, keys: keys("escape", "esc", "left", "←", "backspace", "⌫"), help: "back", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 4, "back"}}, handle: drillOut},

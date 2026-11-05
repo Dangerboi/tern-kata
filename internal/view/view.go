@@ -172,6 +172,19 @@ func searchInput(m model.Model) tern.Element {
 	return ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Cursor: caretAt(m.Search.Caret, "", m.Filters.Search), Mode: "insert", Placeholder: ui.T(placeholder), Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}}
 }
 
+// pageSearchInput is the search field above the Jobs, Runs or Workflows list, drawn like the Issues' while it is being typed into
+// and read-only while the keys are back on the list.
+func pageSearchInput(m model.Model) tern.Element {
+	noun := m.PageSearchNoun()
+	text := m.PageSearch.Text
+	return ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search " + noun}, Field: ui.Field{Text: text, Cursor: caretAt(m.PageSearch.Caret, "", text), Mode: "insert", Placeholder: ui.T("Search " + noun), Readonly: !m.PageSearch.Open, Prompt: []ui.Span{{T: "/ "}}}}
+}
+
+// searchEmpty is the empty state of a Page whose search leaves no row; it stays under the search input.
+func searchEmpty(m model.Model) ui.Empty {
+	return emptyState("No "+m.PageSearchNoun()+" match", "Nothing matches "+strconv.Quote(m.PageSearch.Text)+". Press esc to end the search.")
+}
+
 // scrollerCommon is a list that scrolls its own content inside its column, so
 // the Pane has nothing to scroll and the top bar stays still.
 func scrollerCommon(key string) ui.CommonWithoutMax {
