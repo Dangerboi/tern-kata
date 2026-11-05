@@ -39,7 +39,7 @@ The agent always runs through `tern-kata agent [--as <actor>] [--address-prefix 
 
 - sets `KATA_REF` to the Issue, so kata-plugin's todo plan hangs under it, and drops an inherited `KATA_REF` and `KATA_INBOX_USER` (your own inbox is not the agent's);
 - sets `KATA_AUTHOR` when there is an `actor`, and otherwise leaves `KATA_AUTHOR` as inherited;
-- for an omp agent (the Pane passes `--address-prefix`), sets `KATA_INBOX_USER` to the agent's own address, `<your actor>/<agent.toml name>-<block id>` (the block id from `TERN_PANE`), and `KATA_OMP_LIVE_INBOX=0`, and omp loads tern-kata's extension with `-e` (see [Messages to an agent](#messages-to-an-agent)).
+- for an omp agent (the Pane passes `--address-prefix`), sets `KATA_INBOX_USER` to the agent's own address, `<your actor>/<agent.toml name>-<block id>` (the block id from `TERN_PANE`), and `KATA_OMP_LIVE_INBOX=0`, and omp loads tern-kata's extension with `-e`, or with `--trusted-extension` when the agent's args hold one (see [Messages to an agent](#messages-to-an-agent)).
 
 `tern-kata` must be on the `PATH` of Tern's shell on that machine, and must be this version: an older one refuses `--ref` or `--address-prefix` and the agent exits at once.
 
