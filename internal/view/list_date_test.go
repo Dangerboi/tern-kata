@@ -119,8 +119,9 @@ func TestListRowDateBadgeFitsTheListToTheCell(t *testing.T) {
 		m.Calendar.Date = day
 		m, _ = model.Update(m, model.KeyMsg{Chord: "shift+l"})
 		row := text(render(t, m)[view.IssueID("dated")])
-		const detail, padding, badge = 1, 4, "  due today"
-		width := runewidth.StringWidth(row) + detail + padding
+		// The owner cell is cut, not padded, and Tern gives it a box of ownerBox cells; the Issue has no owner, so its text is empty.
+		const detail, padding, ownerBox, badge = 1, 4, 8, "  due today"
+		width := runewidth.StringWidth(row) + detail + padding + ownerBox
 		if strings.Contains(row, "due today") {
 			shown++
 			if width > cols {
