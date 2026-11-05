@@ -1,6 +1,10 @@
 package data
 
 import (
+	"bytes"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -310,6 +314,104 @@ func TestMigrateKeepsTheCopyWhenTheUploadFails(t *testing.T) {
 	}
 	if _, ok := f.issue(t, f.uid).Metadata["tern-kata.attachment.shot.png"]; !ok {
 		t.Fatal("the key was cleared")
+	}
+}
+
+// failOnMetadataWrites makes every Issue metadata write whose body matches fail with a server error.
+func failOnMetadataWrites(server *kataServer, match func(body string) bool) {
+	hook := func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/metadata") {
+			return false
+		}
+		body, _ := io.ReadAll(r.Body)
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		if !match(string(body)) {
+			return false
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"status":500,"error":{"code":"internal","message":"disk full"}}`))
+		return true
+	}
+	server.intercept.Store(&hook)
+}
+
+// failAfterCommittingMetadataWrites applies every Issue metadata write whose body matches, then answers it with a server error, as a
+// lost response would look to the client.
+func failAfterCommittingMetadataWrites(server *kataServer, match func(body string) bool) {
+	hook := func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/metadata") {
+			return false
+		}
+		body, _ := io.ReadAll(r.Body)
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		if !match(string(body)) {
+			return false
+		}
+		server.handler.ServeHTTP(httptest.NewRecorder(), r)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"status":500,"error":{"code":"internal","message":"response lost"}}`))
+		return true
+	}
+	server.intercept.Store(&hook)
+}
+
+func TestMigrateUnlinksTheNewAttachmentWhenTheOldKeyCannotBeCleared(t *testing.T) {
+	f := newDocbankFixture(t)
+	path := f.oldFile(t, f.uid, "shot.png", f.host, "pixels")
+	failOnMetadataWrites(f.kata, func(body string) bool { return strings.Contains(body, "tern-kata.attachment.shot.png") })
+
+	got := as[model.AttachmentsMigrated](t, run(t, f.gateway, model.MigrateAttachments{Workspace: f.repo, Actor: "tester"}))
+	if got.Err == nil || len(got.Moved) != 0 || len(got.Left) != 1 || !got.Left[0].Failed || got.Left[0].ID != "" {
+		t.Fatalf("migrated %+v", got)
+	}
+	if list := f.attachments(t); len(list) != 0 {
+		t.Fatalf("the failed move left %+v on the Issue, so the next run would upload again", list)
+	}
+	if _, ok := f.issue(t, f.uid).Metadata["tern-kata.attachment.shot.png"]; !ok {
+		t.Fatal("the old key was cleared")
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("the local copy is gone: %v", err)
+	}
+
+	f.kata.intercept.Store(nil)
+	again := as[model.AttachmentsMigrated](t, run(t, f.gateway, model.MigrateAttachments{Workspace: f.repo, Actor: "tester"}))
+	if again.Err != nil || len(again.Moved) != 1 || len(f.attachments(t)) != 1 {
+		t.Fatalf("second run %+v, attachments %+v", again, f.attachments(t))
+	}
+}
+
+func TestMigrateKeepsTheNewAttachmentWhenTheClearCommittedButTheAnswerWasLost(t *testing.T) {
+	f := newDocbankFixture(t)
+	path := f.oldFile(t, f.uid, "shot.png", f.host, "pixels")
+	failAfterCommittingMetadataWrites(f.kata, func(body string) bool { return strings.Contains(body, "tern-kata.attachment.shot.png") })
+
+	got := as[model.AttachmentsMigrated](t, run(t, f.gateway, model.MigrateAttachments{Workspace: f.repo, Actor: "tester"}))
+	if got.Err != nil || len(got.Moved) != 1 || len(got.Left) != 0 || got.Moved[0].ID == "" {
+		t.Fatalf("migrated %+v", got)
+	}
+	if list := f.attachments(t); len(list) != 1 || list[0].Name != "shot.png" {
+		t.Fatalf("the Issue lists %+v, want the new attachment kept", list)
+	}
+	if _, ok := f.issue(t, f.uid).Metadata["tern-kata.attachment.shot.png"]; ok {
+		t.Fatal("the old key survived")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("the local copy is still there: %v", err)
+	}
+}
+
+func TestMigrateListsTheNewAttachmentWhenItCannotBeUnlinkedEither(t *testing.T) {
+	docbank := docbanktest.New(t)
+	f := fixtureOn(t, startKataWithDocbank(t, "0.21.0", kata.DocbankConfig{URL: docbank.URL, APIKey: docbanktest.Key}))
+	f.oldFile(t, f.uid, "shot.png", f.host, "pixels")
+	failOnMetadataWrites(f.kata, func(string) bool { return true })
+
+	got := as[model.AttachmentsMigrated](t, run(t, f.gateway, model.MigrateAttachments{Workspace: f.repo, Actor: "tester"}))
+	if got.Err == nil || len(got.Left) != 1 || !strings.Contains(got.Left[0].Reason, "a duplicate may exist") || !strings.Contains(got.Left[0].Reason, "could not be unlinked") || got.Left[0].ID == "" {
+		t.Fatalf("migrated %+v", got)
 	}
 }
 

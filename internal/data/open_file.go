@@ -3,7 +3,6 @@ package data
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -31,29 +30,21 @@ func openFile(path string) error {
 	return nil
 }
 
-// programExtensions are the file extensions the OS runs rather than shows, per GOOS; anything else is opened. Linux's .desktop is
-// here too, since xdg-open launches it; our downloads never carry an exec bit.
-var programExtensions = map[string][]string{
-	"windows": {".exe", ".bat", ".cmd", ".com", ".hta", ".js", ".jse", ".vbs", ".vbe", ".wsf", ".wsh", ".ps1", ".msi", ".msp", ".scr", ".lnk", ".cpl", ".reg", ".pif", ".msc", ".vbscript"},
-	"darwin":  {".app", ".command", ".tool", ".terminal", ".pkg", ".workflow"},
-	"linux":   {".desktop"},
+// openableExtensions are the only extensions tern-kata hands to the OS: images, video, audio, PDFs and plain text. Everything else is
+// saved and left for the user, because what the OS does with a file it knows (run it, follow a link inside it, launch a handler
+// registered for it) cannot be told from the name alone, and anyone who can write the Project can name an Attachment.
+var openableExtensions = []string{
+	".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".heic", ".tif", ".tiff",
+	".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v",
+	".mp3", ".wav", ".ogg", ".flac", ".m4a",
+	".pdf",
+	".txt", ".md", ".log", ".csv", ".json",
 }
 
-// isProgram reports whether path names a program or script that opening would run, judged by its extension on goos (case-insensitive).
-// On Windows the PATHEXT list counts too.
-func isProgram(goos, path string) bool {
-	ext := strings.ToLower(filepath.Ext(path))
-	if ext == "" {
-		return false
-	}
-	list := programExtensions[goos]
-	if goos == "windows" {
-		list = append(append([]string(nil), list...), strings.Split(strings.ToLower(os.Getenv("PATHEXT")), ";")...)
-	}
-	if goos != "windows" && goos != "darwin" {
-		list = programExtensions["linux"]
-	}
-	return slices.Contains(list, ext)
+// isOpenable reports whether name ends in one of openableExtensions, lower-cased and otherwise exactly as stored: no trimming, so
+// "x.png." and "x.png " (which Windows would read as other names) are not openable.
+func isOpenable(name string) bool {
+	return slices.Contains(openableExtensions, strings.ToLower(filepath.Ext(name)))
 }
 
 // openAttachment downloads the Attachment into the cache folder and opens it.
@@ -73,8 +64,8 @@ func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) 
 		return failed(err)
 	}
 	opened := msg.(model.AttachmentOpened)
-	if isProgram(runtime.GOOS, opened.Path) {
-		opened.Err = fmt.Errorf("saved at %s and not opened because it is a program", opened.Path)
+	if !isOpenable(cmd.Attachment.Name) {
+		opened.Err = fmt.Errorf("saved at %s and not opened: tern-kata opens only images, video, audio, PDFs and text", opened.Path)
 		return opened
 	}
 	if err := g.openFile(opened.Path); err != nil {

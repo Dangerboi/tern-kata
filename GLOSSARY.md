@@ -52,7 +52,7 @@
 
 **Occurrence**: An Issue a Recurrence created, or the Issue that was made the first one.
 
-**Attachment**: A file on an Issue, stored by kata: its bytes are in Docbank and the Issue holds one `attachment.<id>` meta key with `{name, media_type, size, docbank_version}`. The Pane uploads with `@`, lists them on the Attachments tab, opens one with `enter` (downloaded to a cache folder first) and unlinks one with `U`; unlinking clears the key and leaves the bytes in Docbank. Needs a `[docbank]` section in the kata daemon's config. _Avoid_: image, pointer.
+**Attachment**: A file on an Issue, stored by kata: its bytes are in Docbank and the Issue holds one `attachment.<id>` meta key with `{name, media_type, size, docbank_version}`. The Pane uploads with `@`, lists them on the Attachments tab, downloads one to a cache folder with `enter` and opens it with the OS only when its name ends in an image, video, audio, PDF or plain-text extension (any other file is saved and not opened), and unlinks one with `U`; unlinking clears the key and leaves the bytes in Docbank. Needs a `[docbank]` section in the kata daemon's config. _Avoid_: image, pointer.
 
 **Old attachment**: A file tern-kata kept itself before kata stored them: a copy in `.kata-attachments/<Issue ULID>/` at the root of the Project's primary checkout, pointed to by one `tern-kata.attachment.<name>` meta key holding `{"host", "path"}`, the OS host name of the machine with the copy and its absolute native path. `tern-kata migrate-attachments` moves the old attachments whose host is this machine (compared without regard to case) to Attachments.
 
