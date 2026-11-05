@@ -341,14 +341,14 @@ type rowLookups struct {
 	dateRoom int // cells a row with no Agent badge or hand-off word has for its whole title and its Date badge together
 }
 
-// dateRoom is the cells left on a row for its title and Date badge: the list column's width less the other cells, the row's
-// padding and the gaps before the title and before the badge.
+// dateRoom is the cells left on a row for its title and Date badge with its gap: the list column's width less the other cells
+// (which hold the gap before the title), the row's padding and the one cell of the Detail between the label and the value.
 func dateRoom(m model.Model, cols listColumns) int {
 	fixed := cols.id + len(cellGap)*3 + prioWidth + statusWidth + kidsWidth + len(cellGap) + updatedWidth + rowPadding
 	if cols.ownerShown {
 		fixed += len(cellGap) + cols.owner
 	}
-	return listWidth(m) - fixed - 2*len(cellGap)
+	return listWidth(m) - fixed - detailWidth
 }
 
 // Flex rules of the columns Row (see issues and detail), which Tern lays out and the plugin never sees: the list and detail
@@ -385,6 +385,9 @@ func listWidth(m model.Model) int {
 	}
 	return m.Cols - fixed
 }
+
+// detailWidth is the cells of the Detail text between a row's label and its value.
+const detailWidth = 1
 
 // rowPadding is the cells a row spends on its selection mark and edges, beside its cells.
 const rowPadding = 4
@@ -432,8 +435,8 @@ func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected boo
 	// An open Issue's Date badge reads after the title, as in kata tui. The title has priority: the badge goes when the whole
 	// title and the badge do not fit the row.
 	if !model.IsClosed(row.Issue) {
-		if date, ok := lookups.today.ChooseDateBadge(row.Issue); ok && displayWidth(title)+displayWidth(date.Text) <= lookups.dateRoom-beforeTitle {
-			left = append(left, ui.Span{T: "  " + date.Text, S: mono(toneStyle(dateTones[date.Tone]))})
+		if date, ok := lookups.today.ChooseDateBadge(row.Issue); ok && displayWidth(title)+displayWidth(cellGap+date.Text) <= lookups.dateRoom-beforeTitle {
+			left = append(left, ui.Span{T: cellGap + date.Text, S: mono(toneStyle(dateTones[date.Tone]))})
 		}
 	}
 	// A parent's click folds it; a double click on any row opens it. Tern sends the two clicks first, so a parent's fold ends where it began.
@@ -441,7 +444,7 @@ func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected boo
 	if row.HasChildren {
 		actions.Click = ToggleClick(row.UID)
 	}
-	return ui.Item{Common: ui.Common{Key: row.UID, Role: strings.TrimSpace(role + " " + cols.role()), Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(" "), Value: ui.Spans(rightCells(kids, owner, model.RelativeTime(row.UpdatedAt, now), cols, mono("muted"), toneStyle(ownerTone))...)}
+	return ui.Item{Common: ui.Common{Key: row.UID, Role: strings.TrimSpace(role + " " + cols.role()), Tone: tone, Actions: actions}, Label: ui.Spans(left...), Detail: ui.T(strings.Repeat(" ", detailWidth)), Value: ui.Spans(rightCells(kids, owner, model.RelativeTime(row.UpdatedAt, now), cols, mono("muted"), toneStyle(ownerTone))...)}
 }
 
 // role is the row's boxes in role tokens, which the style sheet turns into the columns' widths (see cellBoxCSS): the row
@@ -485,7 +488,7 @@ func footerHints(m model.Model) (hints []footerHint, position string) {
 		if (binding.Action == model.DrillOut || binding.Action == model.ShowMenu) && m.EscGoesBack() {
 			help = "back"
 		}
-		if binding.Action == model.ShowMenu && m.PageSearching() {
+		if (binding.Action == model.DrillOut || binding.Action == model.ShowMenu) && m.EscEndsSearch() {
 			help = "end search"
 		}
 		if job := m.SelectedJob(); binding.Action == model.ArchiveJobAction && job != nil && job.Archived() {

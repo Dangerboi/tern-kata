@@ -178,3 +178,18 @@ func TestFooterOffersEndSearchWhileAKeptSearchIsActive(t *testing.T) {
 		t.Errorf("the footer does not offer esc as end search while the search is kept:\n%s", screen(t, s))
 	}
 }
+
+func TestWorkflowsFooterOffersEndSearchOnlyWhileEscEndsIt(t *testing.T) {
+	s := workflowsPane(t, 160, reviewFlow(), nightlyFlow())
+	s = step(t, typed(t, step(t, s, key("/")).State, "nightly"), key("enter")).State
+	if !strings.Contains(screen(t, s), "end search") {
+		t.Fatalf("the footer does not offer esc as end search with a kept search:\n%s", screen(t, s))
+	}
+	s = step(t, s, key("enter")).State
+	if !s.Model.Workflows.Inspecting {
+		t.Fatal("enter did not open the steps")
+	}
+	if strings.Contains(screen(t, s), "end search") {
+		t.Errorf("the footer offers end search while esc closes the steps first:\n%s", screen(t, s))
+	}
+}

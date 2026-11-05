@@ -22,6 +22,12 @@ func (m Model) PageSearchShown() bool { return m.PageSearch.Open || m.PageSearch
 // PageSearching says the rows of the current Page are narrowed by a search text.
 func (m Model) PageSearching() bool { return m.searchingPage(m.Page) }
 
+// EscEndsSearch says esc on the current Page ends its search now: the rows are narrowed, and on the Workflows Page no inspector is
+// open for esc to close first.
+func (m Model) EscEndsSearch() bool {
+	return m.PageSearching() && !(m.Page == PageWorkflows && m.Workflows.Inspecting)
+}
+
 // searchingPage says page is the current Page and its rows are narrowed by a search text.
 func (m Model) searchingPage(page Page) bool {
 	return m.Page == page && m.PageSearch.Text != "" && pageDefs[page].settleSearch != nil

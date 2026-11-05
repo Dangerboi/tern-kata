@@ -60,7 +60,7 @@ func TestSetDatesWritesNothingWhenAnyKeyChangedMeanwhile(t *testing.T) {
 	first := model.DateChange{Key: "scheduled_on", Label: "Scheduled", Value: "2026-10-15", Was: "2026-10-12"}
 	second := model.DateChange{Key: "deadline_on", Label: "Deadline", Value: "2026-10-30"}
 	got := f.setDates(t, first, second)
-	if got.Err == nil || !strings.Contains(got.Err.Error(), "nothing was written for Scheduled") || len(got.Applied) != 0 {
+	if got.Err == nil || !strings.Contains(got.Err.Error(), "nothing was written. The Scheduled field now shows") || len(got.Applied) != 0 {
 		t.Fatalf("got %+v", got)
 	}
 	var conflict model.DatesConflict
@@ -79,7 +79,7 @@ func TestSetDatesWritesNothingWhenAnyKeyChangedMeanwhile(t *testing.T) {
 	f.patchKey(t, "deadline_on", "2026-11-01")
 	first.Was = "2026-10-20"
 	got = f.setDates(t, first, second)
-	if got.Err == nil || !strings.Contains(got.Err.Error(), "nothing was written for Deadline") || len(got.Applied) != 0 {
+	if got.Err == nil || !strings.Contains(got.Err.Error(), "nothing was written. The Deadline field now shows") || len(got.Applied) != 0 {
 		t.Fatalf("got %+v", got)
 	}
 	if meta := f.issue(t, f.uid).Metadata; meta["deadline_on"] != "2026-11-01" || meta["scheduled_on"] != "2026-10-20" {
