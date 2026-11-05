@@ -53,7 +53,7 @@ func start(t testing.TB, addr, key string) *Fake {
 	if addr == "" {
 		f.server = httptest.NewServer(http.HandlerFunc(f.serve))
 	} else {
-		ln, err := net.Listen("tcp", addr)
+		ln, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", addr)
 		if err != nil {
 			t.Fatal(err)
 		}

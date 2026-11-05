@@ -138,7 +138,7 @@ func (e Env) SetupLocal(ctx context.Context, l Local) error {
 
 	running := statusNames(e.docbankStatus(ctx), addr)
 	if !running {
-		ln, err := net.Listen("tcp", addr)
+		ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", addr)
 		if err != nil {
 			return fmt.Errorf("port %d on 127.0.0.1 is in use by something other than this Docbank, so nothing was written; free it or pick another with --port", port)
 		}
