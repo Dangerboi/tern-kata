@@ -60,4 +60,4 @@ Run **Update tern-kata** from the palette, or `tern-kata update` on the session 
 
 ### Can an agent see an Attachment I added on another machine?
 
-Yes. Attachments are stored by kata in Docbank, not on your machine, so any agent that can reach the daemon can download one with `kata docbank attachments get`. Only an old `tern-kata.attachment.*` key still names a host and path; `tern-kata migrate-attachments` moves those. See [Attachments](attachments.md).
+Yes. Attachments are stored by kata in Docbank, not on your machine, so any agent that can reach the daemon can download one with `kata docbank attachments get`. Only an old key (`tern-kata.attachment.<name>`, or from 0.3 `attachment.<name>`, holding `{host, path}`) still names a host and path; `tern-kata migrate-attachments` moves those. See [Attachments](attachments.md).

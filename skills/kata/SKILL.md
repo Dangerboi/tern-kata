@@ -145,7 +145,7 @@ kata docbank attachments rm <ref> <id>             # unlink: the bytes stay in D
 
 - Attach the evidence behind a bug report, a finding or a close, then cite the attachment's name and id in the comment or close message. `get` into a temporary file outside the repo to read one.
 - Files up to 256 MiB. A name the Issue already has is a second attachment, not a replacement.
-- Older Issues may also carry `tern-kata.attachment.<name>` keys (`{"host", "path"}`): files tern-kata kept on one machine. Read the file at `path` when `host` matches `hostname`; do not write those keys.
+- Older Issues may also carry old keys `tern-kata.attachment.<name>` or, from 0.3, `attachment.<name>`, holding `{"host", "path"}`: files tern-kata kept on one machine. Read the file at `path` when `host` matches `hostname`; do not write those keys.
 
 ## Relationships
 

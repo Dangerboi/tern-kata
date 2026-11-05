@@ -5,7 +5,7 @@ description: Recurring Issues, saved views and the tern-kata worker, through ter
 
 Attachments are kata's own now: bytes in Docbank, referenced by `attachment.<id>` meta keys. Read, add and unlink them with `kata docbank attachments` (see the `kata` skill), not with `tern-kata`. `tern-kata attach` and `detach` no longer exist.
 
-An Issue may still carry `tern-kata.attachment.<name>` keys, `{"host", "path"}` pointers to files that tern-kata kept under `.kata-attachments/` on one machine. Do not write them. To read one, take the file at `path` when `host` matches `hostname` (any case); for another host, tell the user the file is there. Never run `tern-kata migrate-attachments` unasked: it uploads files, clears keys and deletes local copies, and the user runs it once per machine.
+An Issue may still carry old keys, `tern-kata.attachment.<name>` or, from 0.3, `attachment.<name>`, holding a `{"host", "path"}` pointer to a file that tern-kata kept under `.kata-attachments/` on one machine. Do not write them. To read one, take the file at `path` when `host` matches `hostname` (any case); for another host, tell the user the file is there. Never run `tern-kata migrate-attachments` unasked: it uploads files, clears keys and deletes local copies, and the user runs it once per machine.
 
 ## Recur
 
