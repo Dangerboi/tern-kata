@@ -108,7 +108,16 @@ func TestListRowDateBadgeCountsAgentBadge(t *testing.T) {
 func TestListRowDateBadgeFitsTheListToTheCell(t *testing.T) {
 	shown, dropped := 0, 0
 	for cols := model.MinCols; cols <= 140; cols++ {
-		m, _ := model.Update(datedList(cols), model.KeyMsg{Chord: "shift+l"})
+		day := "2026-11-05"
+		issue := model.Issue{UID: "dated", ShortID: "dddd", Title: "A title long enough that the narrow lists cannot hold it with a Date badge", Status: "open", ProjectName: "work", DeadlineOnDate: &day}
+		m := apply(model.Model{},
+			model.Start{Workspace: "/repo"},
+			model.ResizeMsg{Cols: cols},
+			model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}},
+			snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{issue}}}},
+		)
+		m.Calendar.Date = day
+		m, _ = model.Update(m, model.KeyMsg{Chord: "shift+l"})
 		row := text(render(t, m)[view.IssueID("dated")])
 		const detail, padding, badge = 1, 4, "  due today"
 		width := runewidth.StringWidth(row) + detail + padding
