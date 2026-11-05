@@ -274,12 +274,16 @@ func startUndo(m Model) (Model, []Cmd) {
 	case m.Stale:
 		m.Notice = "Daemon disconnected; reconnect before undoing."
 	default:
-		m.Undo.InFlight = true
-		entry := h.Entries[len(h.Entries)-1]
-		m.Undo.out = entry
-		return m, []Cmd{UndoChange{Workspace: m.Workspace, Entry: entry}}
+		return m.sendUndo(h.Entries[len(h.Entries)-1], nil)
 	}
 	return m, nil
+}
+
+// sendUndo marks the undo in flight for entry and sends it, with the close the Close card collected when the inverse is a close.
+func (m Model) sendUndo(entry UndoEntry, closeCmd *CloseIssueCmd) (Model, []Cmd) {
+	m.Undo.InFlight = true
+	m.Undo.out = entry
+	return m, []Cmd{UndoChange{Workspace: m.Workspace, Entry: entry, Close: closeCmd}}
 }
 
 // undoTarget names the Issue of an entry the way the Pane shows it: project#id when the Pane lists it, else #id.

@@ -135,7 +135,7 @@ func TestAgentArgvBuilders(t *testing.T) {
 		t.Errorf("with an actor %q, want %q", wrapped, want)
 	}
 	// An agent messages reach: the wrapper gets its Agent address up to the block id, omp loads the extension before the prompt.
-	messaging := AgentCommandLine("me-agent", "demo#ab12", AgentMessaging{AddressPrefix: "dana/omp", Extension: []string{"-e", "/state/omp/tern-kata.ts"}}, AgentRoute{}, []string{"omp", "--fast"}, "/state/p.md")
+	messaging := AgentCommandLine("me-agent", "demo#ab12", AgentMessaging{AddressPrefix: "dana/omp", ExtensionArgs: []string{"-e", "/state/omp/tern-kata.ts"}}, AgentRoute{}, []string{"omp", "--fast"}, "/state/p.md")
 	if want := []string{"tern-kata", "agent", "--as", "me-agent", "--address-prefix", "dana/omp", "--ref", "demo#ab12", "--", "omp", "--fast", "-e", "/state/omp/tern-kata.ts", "@/state/p.md"}; !slices.Equal(messaging, want) {
 		t.Errorf("with messaging %q, want %q", messaging, want)
 	}

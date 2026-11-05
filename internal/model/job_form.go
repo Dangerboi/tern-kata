@@ -764,10 +764,9 @@ func (f JobFormState) Preview(cal PaneCalendar, now time.Time) JobPreview {
 	case cronjob.TriggerCron, cronjob.TriggerInterval:
 		job, anchor := f.previewJob(t, now)
 		schedule, ok := job.Schedule(anchor)
-		switch {
-		case ok:
+		if ok {
 			preview.Runs = listRuns(schedule, now, cal)
-		default:
+		} else {
 			preview.Note = "Next runs unknown: this job's start point is not known yet."
 		}
 	case cronjob.TriggerOnce:
@@ -785,12 +784,10 @@ func (f JobFormState) previewJob(t cronjob.Trigger, now time.Time) (cronjob.Job,
 		job.Definition.Trigger = t
 		return job, f.Opened.deliveryAnchor()
 	}
-	job := cronjob.Job{CreatedAt: now, Definition: cronjob.Definition{Trigger: t}}
 	if f.kind().id == nativeJobKind.id {
-		job.Definition.Action.Kind = cronjob.ActionNotify
-		job.Definition.Issue = &cronjob.IssuePolicy{Kind: cronjob.IssuePerRun}
+		return cronjob.NewNative(now, t), now
 	}
-	return job, now
+	return cronjob.Job{CreatedAt: now, Definition: cronjob.Definition{Trigger: t}}, now
 }
 
 // runLayout formats a listed run with the zone abbreviation.

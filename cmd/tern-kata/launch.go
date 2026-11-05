@@ -185,7 +185,7 @@ func planLaunch(args []string, lookup func(string) (string, bool), version strin
 	var plan LaunchPlan
 	plan.FallbackArgs = make([]string, 0, len(args))
 	issueSet := false
-	for i := 0; i < len(args); i++ {
+	for i := 0; i < len(args); i++ { //nolint:intrange // parseAs and parseFlagValue move i past a flag's value through &i
 		arg := args[i]
 		if arg == "--" { // flags end here: the rest is kata tui's, or a name
 			plan.TUIArgs = append(plan.TUIArgs, args[i:]...)
@@ -195,13 +195,12 @@ func planLaunch(args []string, lookup func(string) (string, bool), version strin
 			return LaunchPlan{}, err
 		} else if matched {
 			plan.fallbackAuthor = actor
-		} else if arg == "--issue" {
-			i++
-			if i == len(args) || strings.HasPrefix(args[i], "--") {
-				return LaunchPlan{}, fmt.Errorf("--issue requires <project>/<short_id>")
+		} else if arg == "--issue" || strings.HasPrefix(arg, "--issue=") {
+			// An empty value is allowed through so ParseIssueRef names it in its own error.
+			value, err := parseFlagValue(args, &i, "--issue", "<project>/<short_id>", true)
+			if err != nil {
+				return LaunchPlan{}, err
 			}
-			issueSet, plan.IssueRef = true, args[i]
-		} else if value, ok := strings.CutPrefix(arg, "--issue="); ok {
 			issueSet, plan.IssueRef = true, value
 		} else {
 			plan.TUIArgs = append(plan.TUIArgs, arg)

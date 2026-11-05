@@ -14,7 +14,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The Dates card and the Create card take kata's date-time forms, `YYYY-MM-DDTHH:MM[:SS]` and `YYYY-MM-DDTHH:MM:SSZ`; the preview shows the time.
 - `N` on the Federation Page names a spoke: on the enrollment preview it sets the name the hub records with the enrollment, and on a spoke, in the list or its detail, it renames it on the hub, where an empty name clears it. The name shows on the spoke's card and detail. The card refuses a name that breaks kata's rule in kata's words before anything reaches the hub, and shows the hub's reason when it refuses a name another spoke holds.
 - The Close card for a `done` close can cite one or more of the Issue's Attachments as evidence; the Events tab names a cited Attachment, and marks it `[removed]` once it is unlinked.
-- `tern-kata migrate-attachments` moves the old attachments stored on this machine to Docbank, deletes the local copies, and lists the ones held on other machines.
+- `tern-kata migrate-attachments` moves the old attachments stored on this machine to Docbank, deletes the local copies, and lists the ones held on other machines. It leaves a file, an Issue folder or the store that is a symlink, and lists it with its reason, so it never uploads what a link points to.
 - A `kata close` run by an omp agent the Pane started, or by a worker run whose profile `command` is omp, names that agent's omp session, so with `[close.transcript]` enabled in kata's config the close records the session and, with `agentsview_url`, a link to it in AgentsView. Worker runs now load tern-kata's omp extension for this, also under `--no-extensions`.
 
 ### Changed
@@ -39,7 +39,6 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 ### Fixed
 
 - When an agent's block starts but the Pane cannot record it, the Pane closes the block and says the agent was stopped, where it used to leave the agent running with no Agent badge and invite a retry that started a second one. If the block cannot be closed, the error names it.
-- `tern-kata migrate-attachments` no longer uploads the target of a symlink in the old attachment folder: a file, an Issue folder or the store that is a symlink is left and listed with its reason.
 - `u` shows the outcome of an undo, and takes the undone change out of the Undo history, when another change landed or the history was cleared while the undo was out; before, the answer was dropped without a word and the change stayed in the history.
 - Fish completion offers all of `tern-kata agent`'s flags, as bash and zsh do, not only `--ref`.
 - `tern-kata worker init`, `views add` and `recur` refuse a flag-like word as a flag's value (`--search --all`), as `agent` already did; `--search=--all` still passes it.

@@ -45,7 +45,7 @@ func AgentCommandLine(actor, ref string, messaging AgentMessaging, route AgentRo
 	line = append(line, route.Args()...)
 	line = append(line, "--ref", ref, "--")
 	line = append(line, command...)
-	line = append(line, messaging.Extension...)
+	line = append(line, messaging.ExtensionArgs...)
 	return append(line, "@"+promptFile)
 }
 
@@ -443,7 +443,7 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 		if err != nil {
 			return failed(fmt.Errorf("write the agent's omp extension: %w", err))
 		}
-		messaging = AgentMessaging{AddressPrefix: cmd.Actor + "/" + settings.Name, Extension: ompext.Argv(extension, settings.Command[1:], false)}
+		messaging = AgentMessaging{AddressPrefix: cmd.Actor + "/" + settings.Name, ExtensionArgs: ompext.Argv(extension, settings.Command[1:], false)}
 		sender = cmd.Actor
 	}
 	promptFile, err := writeAgentPrompt(filepath.Join(dirs.State, AgentPromptsFolder), starter, AgentPrompt(cmd.IssueRef, cmd.IssueTitle, sender))

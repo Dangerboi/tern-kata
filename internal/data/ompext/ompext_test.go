@@ -8,37 +8,39 @@ import (
 	"testing"
 )
 
-func TestTheExtensionFlagFollowsWhatTheAgentTrusts(t *testing.T) {
+// A caller asks IsOmp first, then Argv: the table runs that composition on the program and args an agent starts with.
+func TestTheExtensionArgsFollowTheProgramAndWhatTheAgentTrusts(t *testing.T) {
 	const path = "/abs/tern-kata.ts"
 	trusted := []string{"--trusted-extension", path}
+	load := []string{"-e", path}
 	for _, c := range []struct {
 		name        string
+		program     string
 		args        []string
 		trustsPaths bool
 		want        []string
 	}{
-		{"plain omp", []string{"--fast"}, false, []string{"-e", path}},
-		{"no args", nil, false, []string{"-e", path}},
-		{"--trusted-extension in args", []string{"--trusted-extension", "/abs/guard.ts"}, false, trusted},
-		{"--trusted-extension=path in args", []string{"--trusted-extension=/abs/guard.ts"}, false, trusted},
-		{"an extensions list", []string{"--fast"}, true, trusted},
-		{"--no-extensions keeps -e", []string{"--no-extensions"}, false, []string{"-e", path}},
-		{"--no-extensions beside --trusted-extension", []string{"--no-extensions", "--trusted-extension", "/abs/guard.ts"}, false, trusted},
-		{"--no-extensions beside an extensions list", []string{"--no-extensions"}, true, trusted},
+		{"plain omp", "omp", []string{"--fast"}, false, load},
+		{"omp with no args", "omp", nil, false, load},
+		{"omp by path", "/usr/local/bin/omp", nil, false, load},
+		{"omp.exe", "omp.exe", nil, false, load},
+		{"claude", "claude", []string{"--fast"}, false, nil},
+		{"codex by path", "/usr/bin/codex", nil, false, nil},
+		{"a wrapper named for omp", "omp-wrapper", nil, false, nil},
+		{"no program", "", nil, false, nil},
+		{"--trusted-extension in args", "omp", []string{"--trusted-extension", "/abs/guard.ts"}, false, trusted},
+		{"--trusted-extension=path in args", "omp", []string{"--trusted-extension=/abs/guard.ts"}, false, trusted},
+		{"an extensions list", "omp", []string{"--fast"}, true, trusted},
+		{"--no-extensions keeps -e", "omp", []string{"--no-extensions"}, false, load},
+		{"--no-extensions beside --trusted-extension", "omp", []string{"--no-extensions", "--trusted-extension", "/abs/guard.ts"}, false, trusted},
+		{"--no-extensions beside an extensions list", "omp", []string{"--no-extensions"}, true, trusted},
 	} {
-		if got := Argv(path, c.args, c.trustsPaths); !slices.Equal(got, c.want) {
-			t.Errorf("%s: Argv = %q, want %q", c.name, got, c.want)
+		var got []string
+		if IsOmp(c.program) {
+			got = Argv(path, c.args, c.trustsPaths)
 		}
-	}
-}
-
-func TestOnlyOmpIsOmp(t *testing.T) {
-	for program, want := range map[string]bool{
-		"omp": true, "/opt/omp/omp": true, "omp.exe": true,
-		"claude": false, "omp-wrapper": false, "": false,
-	} {
-		if got := IsOmp(program); got != want {
-			t.Errorf("IsOmp(%q) = %v, want %v", program, got, want)
+		if !slices.Equal(got, c.want) {
+			t.Errorf("%s: extension args = %q, want %q", c.name, got, c.want)
 		}
 	}
 }

@@ -80,6 +80,16 @@ func (j Job) Native() bool {
 	return d.Action.Kind == ActionNotify && d.Issue != nil && d.Issue.Kind == IssuePerRun
 }
 
+// NewNative is a Job created at createdAt with the shape Native recognises: a notification that opens a new Issue per run. The
+// caller sets the rest of the Definition.
+func NewNative(createdAt time.Time, trigger Trigger) Job {
+	return Job{CreatedAt: createdAt, Definition: Definition{
+		Trigger: trigger,
+		Action:  Action{Kind: ActionNotify},
+		Issue:   &IssuePolicy{Kind: IssuePerRun},
+	}}
+}
+
 // Notifies says the job's action is a notification.
 func (j Job) Notifies() bool { return j.Definition.Action.Kind == ActionNotify }
 
