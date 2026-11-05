@@ -20,18 +20,19 @@ func (c *Client) ReadDetail(ctx context.Context, uid string) (model.DetailLoaded
 	if response.JSON200 == nil || response.JSON200.Selected == nil {
 		return model.DetailLoaded{}, fmt.Errorf("kata daemon returned no detail for Issue %s", uid)
 	}
-	return model.DetailLoaded{UID: uid, Selected: translateDetail(response.JSON200.Selected, response.JSON200.Capabilities.Scope != nil)}, nil
+	return model.DetailLoaded{UID: uid, Selected: translateDetail(response.JSON200.Selected, response.JSON200.Capabilities)}, nil
 }
 
 // translateDetail is the one place kata's selected authority becomes the model's Issue detail; nil stays nil.
 //
-// A scoped access gets no recurrences at all while the Issue stays visible, so for it the Recurrence stays nil ("not provided"),
+// Capabilities say what the access may do: a scoped access gets no recurrences at all while the Issue stays visible, so for it the Recurrence stays nil ("not provided"),
 // not stopped.
-func translateDetail(s *g.UISelectedAuthority, scoped bool) *model.IssueDetailData {
+func translateDetail(s *g.UISelectedAuthority, capabilities g.UICapabilities) *model.IssueDetailData {
+	scoped := capabilities.Scope != nil
 	if s == nil {
 		return nil
 	}
-	d := &model.IssueDetailData{}
+	d := &model.IssueDetailData{AttachmentsOff: !docbankConfigured(capabilities)}
 	if s.Issue != nil {
 		issue := translateIssue(s.Issue)
 		d.Issue = &issue

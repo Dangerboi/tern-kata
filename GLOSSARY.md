@@ -52,11 +52,9 @@
 
 **Occurrence**: An Issue a Recurrence created, or the Issue that was made the first one.
 
-**Attachment**: A file copied into a Project's Attachment store and pointed to by one `tern-kata.attachment.<name>` meta key on one Issue. The key holds `{"host", "path"}`: the OS host name of the machine with the copy and its absolute native path. Attachments are context for agents; tern-kata lists them and never previews them. _Avoid_: upload, image.
+**Attachment**: A file on an Issue, stored by kata: its bytes are in Docbank and the Issue holds one `attachment.<id>` meta key with `{name, media_type, size, docbank_version}`. The Pane uploads with `@`, lists them on the Attachments tab, opens one with `enter` (downloaded to a cache folder first) and unlinks one with `U`; unlinking clears the key and leaves the bytes in Docbank. Needs a `[docbank]` section in the kata daemon's config. _Avoid_: image, pointer.
 
-**Attachment pointer**: The `{"host", "path"}` value a `tern-kata.attachment.<name>` meta key holds, naming the machine with the copy and the copy's absolute native path. A pointer is on this machine when its host equals this machine's host name without regard to case; an empty host is never this machine.
-
-**Attachment store**: The `.kata-attachments` folder at the root of a Project's primary checkout, holding `<Issue ULID>/<name>` copies and a `.gitignore` of `*`. Outside git the root is the directory holding the workspace's `.kata.toml`.
+**Old attachment**: A file tern-kata kept itself before kata stored them: a copy in `.kata-attachments/<Issue ULID>/` at the root of the Project's primary checkout, pointed to by one `tern-kata.attachment.<name>` meta key holding `{"host", "path"}`, the OS host name of the machine with the copy and its absolute native path. `tern-kata migrate-attachments` moves the old attachments whose host is this machine (compared without regard to case) to Attachments.
 
 **Primary checkout**: The main worktree of a git repository, the parent of git's common directory; every linked worktree shares it.
 

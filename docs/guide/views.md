@@ -57,4 +57,4 @@ Priority, owner and the three dates are `null` when unset; labels is `[]` when t
 - The write is guarded like the card's: a `views.toml` changed since it was read is refused and nothing is written.
 - `rm` refuses a fixed Collection and an unknown name.
 
-Exit status is `recur`'s: 0 on success, 1 on a refusal or a daemon failure (reason on stderr), 2 on a bad command line. `--as` and the refusal of an empty one are those of `attach` (see [Attachments](attachments.md#from-a-shell-or-for-an-agent)).
+Exit status is `recur`'s: 0 on success, 1 on a refusal or a daemon failure (reason on stderr), 2 on a bad command line. `--as` and the refusal of an empty one are those of `recur` (see [Recurring Issues](recur.md)).

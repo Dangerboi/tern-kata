@@ -39,12 +39,19 @@ type kataServer struct {
 
 func startKata(t testing.TB, version string) *kataServer {
 	t.Helper()
+	return startKataWithDocbank(t, version, kata.DocbankConfig{})
+}
+
+// startKataWithDocbank is startKata for a daemon that stores attachments in the Docbank docbank names; an empty config has none.
+func startKataWithDocbank(t testing.TB, version string, docbank kata.DocbankConfig) *kataServer {
+	t.Helper()
 	t.Setenv("KATA_HOME", t.TempDir())
 	t.Setenv("KATA_SERVER", "")
 	t.Setenv("KATA_AUTH_TOKEN", "")
 	service, err := kata.New(context.Background(), kata.Config{
-		DSN:  filepath.Join(t.TempDir(), "kata.db"),
-		Auth: kata.AuthConfig{TrustCallerAuthentication: true},
+		DSN:     filepath.Join(t.TempDir(), "kata.db"),
+		Auth:    kata.AuthConfig{TrustCallerAuthentication: true},
+		Docbank: docbank,
 	})
 	if err != nil {
 		t.Fatal(err)

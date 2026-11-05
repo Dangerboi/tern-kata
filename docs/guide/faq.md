@@ -60,4 +60,4 @@ Run **Update tern-kata** from the palette, or `tern-kata update` on the session 
 
 ### Can an agent see an Attachment I added on another machine?
 
-Only through the pointer in the Issue's kata metadata, which names the host and path. A teammate's agent can open it only if it can SSH to that host. See [Hosts and remote daemons](attachments.md#hosts-and-remote-daemons).
+Yes. Attachments are stored by kata in Docbank, not on your machine, so any agent that can reach the daemon can download one with `kata docbank attachments get`. Only an old `tern-kata.attachment.*` key still names a host and path; `tern-kata migrate-attachments` moves those. See [Attachments](attachments.md).

@@ -38,7 +38,7 @@ func (c *Client) ReadSnapshot(ctx context.Context, cmd model.ReadSnapshot) (mode
 		return result, fmt.Errorf("kata daemon returned no Issue collection")
 	}
 	result.Snapshot = def.Keep(translateSnapshot(response.JSON200), date)
-	result.Selected = translateDetail(response.JSON200.Selected, response.JSON200.Capabilities.Scope != nil)
+	result.Selected = translateDetail(response.JSON200.Selected, response.JSON200.Capabilities)
 	if response.Headers200 != nil {
 		result.ETag = response.Headers200.ETag
 	}

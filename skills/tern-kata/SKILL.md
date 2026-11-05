@@ -1,33 +1,11 @@
 ---
 name: tern-kata
-description: Files attached to kata Issues, recurring Issues, and the tern-kata worker, through tern-kata. Use when an Issue's metadata has `tern-kata.attachment.*` keys, to attach a screenshot, log or other file to an Issue, to make an Issue recur, change or stop its schedule, or print it (`tern-kata recur`), to list or show the views (Today, All Open, a saved view) or save one (`tern-kata views`), to run a scheduled agent job now (`tern-kata run`), to check what the worker serves and runs (`tern-kata worker status`, `worker doctor`), to set the worker up when the user asks (`tern-kata worker init`, `worker add`, `worker edit`), or to resume or abandon a held worker run (`tern-kata worker resume`, `worker abandon`). Never stop, edit or reconfigure the user's worker unasked.
+description: Recurring Issues, saved views and the tern-kata worker, through tern-kata. Use to make an Issue recur, change or stop its schedule, or print it (`tern-kata recur`), to list or show the views (Today, All Open, a saved view) or save one (`tern-kata views`), to run a scheduled agent job now (`tern-kata run`), to check what the worker serves and runs (`tern-kata worker status`, `worker doctor`), to set the worker up when the user asks (`tern-kata worker init`, `worker add`, `worker edit`), or to resume or abandon a held worker run (`tern-kata worker resume`, `worker abandon`). Never stop, edit or reconfigure the user's worker unasked.
 ---
 
-An Attachment is a file copied into the Project's Attachment store, `<primary checkout>/.kata-attachments/<Issue ULID>/<name>`, and pointed to by one `tern-kata.attachment.<name>` meta key on the Issue. The store is gitignored and never committed. Older Issues may still show `attachment.<name>` with `host` and `path` until a Pane or `tern-kata attach`/`detach` has run once on that machine; those still point at the file, so read them the same way. Never read or write `attachment.<ULID>` keys with other fields: those are kata's own attachments.
+Attachments are kata's own now: bytes in Docbank, referenced by `attachment.<id>` meta keys. Read, add and unlink them with `kata docbank attachments` (see the `kata` skill), not with `tern-kata`. `tern-kata attach` and `detach` no longer exist.
 
-## Read
-
-Reading needs kata and your own file tools, plus SSH for a file on another host.
-
-- `kata show <ref> --json` holds each Attachment at `.issue.metadata["tern-kata.attachment.<name>"]` as a `{"host", "path"}` object; `kata show --agent` and kata's MCP show tool carry the same key. `<name>` is the stored file name.
-- When `host` matches `hostname` (any case), read `path` directly with your file or image tools. File searches skip the gitignored store: take the path from the pointer.
-- Another host means the file is on that machine, and `host` is its OS host name. A `Host <host>` entry in `~/.ssh/config` can supply the `HostName` and `User` it needs. When `ssh -o BatchMode=yes -o ConnectTimeout=5 <host> exit` succeeds (`exit`, since a Windows host runs PowerShell or cmd, where `true` fails), copy the file to a temporary file outside the repo with `scp -o BatchMode=yes '<host>:<path>' <temp file>` and read the copy. Write a Windows `path` with `/` for each `\` (`C:/Users/...`); scp refuses the backslashes. Only read on that host; the file there stays as it is. When SSH fails (no key, no user, or a host key not yet trusted), tell the user the file is on `host` and that a `Host <host>` entry with its `User`, plus one connection to trust its key, would let you read it; then work without it.
-
-## Attach and detach
-
-These need the `tern-kata` binary installed and on `PATH`: check with `command -v tern-kata` (PowerShell: `Get-Command tern-kata`). When it is missing, tell the user the Attachment was left out and point them to https://github.com/Dangerboi/tern-kata#install.
-
-```bash
-tern-kata attach <ref> <file>... [--as <actor>]   # copies each file, prints its stored absolute path, one per line
-tern-kata detach <ref> <name> [--as <actor>]      # clears the pointer, deletes the copy when it is on this machine, says what became of the file
-```
-
-- Attach the evidence behind a bug report, a finding or a close, then cite the printed path in the comment or close message.
-- Run from a checkout of the Issue's own Project; linked worktrees share the primary checkout's store. Anywhere else is refused, and the message names the Project to work from. Closed Issues take attachments.
-- `<ref>` is a short id in this checkout's Project, `<project>#<short id>`, or a ULID. `--as` defaults to `$KATA_AUTHOR`, `$USER`, then `git config user.name`; an empty `--as` (`--as=` or `--as ""`) is refused with "--as must be non-empty", so never pass `--as "$VAR"` with a variable that may be unset.
-- A name the Issue already uses is stored as `<stem>-2<ext>`, then `-3`: cite the printed path, not the original name. `attach` stops at the first failing file and keeps those already attached; any failure exits non-zero with the reason on stderr.
-- The file must be on this machine. With a Windows Tern window and a Linux session host, a file on the Windows side has to be copied over first.
-- Change attachments only through these two commands, which keep the copy and its pointer together (`kata meta unset` would strand the copy).
+An Issue may still carry `tern-kata.attachment.<name>` keys, `{"host", "path"}` pointers to files that tern-kata kept under `.kata-attachments/` on one machine. Do not write them. To read one, take the file at `path` when `host` matches `hostname` (any case); for another host, tell the user the file is there. Never run `tern-kata migrate-attachments` unasked: it uploads files, clears keys and deletes local copies, and the user runs it once per machine.
 
 ## Recur
 
@@ -42,7 +20,7 @@ tern-kata recur <ref> --stop                            # stops the Recurrence; 
 
 - Schedule flags: `--frequency daily|weekly|monthly|yearly`, `--every N`, `--on mon,thu` (weekly), `--day 15|last|"2nd tue"` (monthly, yearly; `last` monthly only), `--month 1-12` (yearly), `--until YYYY-MM-DD` or `--count N`, `--start YYYY-MM-DD`, `--zone <IANA zone>`. Start defaults to the Issue's scheduled date, else today (a recurring Issue keeps its start); the zone to this machine's IANA zone, else UTC; weekly with no `--on` falls on the start date's weekday.
 - Closing an Occurrence `--done` creates the next one; `--wontfix` and the other closes do not, so the series stalls.
-- Same refs, `--as`, Binding rule and exit codes as `attach`: run from a checkout of the Issue's own Project; one result line on success, the reason on stderr and exit 1 on failure. Invalid input is refused and nothing is sent.
+- `<ref>` is a short id in this checkout's Project, `<project>#<short id>` or a ULID. `--as` defaults to `$KATA_AUTHOR`, `$USER`, then `git config user.name`; an empty `--as` (`--as=` or `--as ""`) is refused with "--as must be non-empty", so never pass `--as "$VAR"` with a variable that may be unset. Run from a checkout of the Issue's own Project; one result line on success, the reason on stderr and exit 1 on failure. Invalid input is refused and nothing is sent.
 - Changing a schedule someone else changed meanwhile writes nothing: it prints the current schedule and exits 1. Changing or stopping an Issue that never recurred or whose Recurrence was stopped is refused; kata won't make a stopped Issue recur again.
 - Leave the `O` card and `kata ui` to people.
 

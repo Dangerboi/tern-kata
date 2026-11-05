@@ -9,61 +9,64 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-func attachPane(focus model.Column, metadata map[string]any, projectID int64) model.Model {
+func attachPane(focus model.Column, metadata map[string]any) model.Model {
 	return model.Model{
 		Actor: "reviewer", Workspace: "/ws", Focus: focus, SelectedUID: "issue", Bound: true,
 		Project: model.Project{ID: 2, UID: "p", Name: "work"},
-		Issues:  []model.Issue{{UID: "issue", ShortID: "abcd", ProjectID: projectID, ProjectName: "other", Metadata: metadata}},
+		Issues:  []model.Issue{{UID: "issue", ShortID: "abcd", ProjectID: 7, ProjectName: "other", Metadata: metadata}},
 	}
 }
 
-func pointers(names ...string) map[string]any {
+// refs is Issue metadata holding one native Attachment reference per name, with ids ID-<name>.
+func refs(names ...string) map[string]any {
 	meta := map[string]any{"unrelated": "x"}
 	for _, n := range names {
-		meta[model.AttachmentKey(n)] = map[string]any{"host": "box", "path": "/store/issue/" + n}
+		meta[model.AttachmentKey("ID-"+n)] = map[string]any{"name": n, "media_type": "text/plain", "size": float64(3), "docbank_version": "6f1c2e8a-2222-4222-8222-000000000001"}
 	}
 	return meta
 }
 
-func TestUAttachesTheTypedPath(t *testing.T) {
+func TestAtAttachesTheTypedPathToTheIssueInItsOwnProject(t *testing.T) {
 	for _, focus := range []model.Column{model.ColumnList, model.ColumnDetail} {
-		m, _ := model.Update(attachPane(focus, nil, 2), model.KeyMsg{Chord: "@"})
+		m, _ := model.Update(attachPane(focus, nil), model.KeyMsg{Chord: "@"})
 		if !m.FieldForm.Open || m.FieldForm.Action != model.AttachFileAction || m.FieldForm.Err != nil {
-			t.Fatalf("focus %v: u opened %+v", focus, m.FieldForm)
+			t.Fatalf("focus %v: @ opened %+v", focus, m.FieldForm)
 		}
 		m, _ = model.Update(m, model.FieldValueMsg{Value: ` "~/My shot.png" `})
 		m, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
-		want := model.AttachFile{Workspace: "/ws", Ref: "issue", Actor: "reviewer", Path: `"~/My shot.png"`}
+		want := model.AttachFile{Workspace: "/ws", UID: "issue", ProjectID: 7, Actor: "reviewer", Path: `"~/My shot.png"`}
 		if len(cmds) != 1 || cmds[0] != model.Cmd(want) {
 			t.Fatalf("focus %v: cmds %#v, want %#v", focus, cmds, want)
 		}
-		m, _ = model.Update(m, model.FileAttached{Ref: "issue", Err: errors.New("/x does not exist.")})
-		if !m.FieldForm.Open || m.FieldForm.Err == nil || m.FieldForm.Err.Error() != "/x does not exist." {
-			t.Fatalf("failure not shown in the form: %+v", m.FieldForm)
+		m, _ = model.Update(m, model.FileAttached{UID: "issue", Err: errors.New("/x does not exist.")})
+		if !m.FieldForm.Open || m.FieldForm.Err == nil || m.FieldForm.Err.Error() != "/x does not exist." || m.Notice != "" {
+			t.Fatalf("failure not shown in the form: %+v, notice %q", m.FieldForm, m.Notice)
 		}
-		if m.Notice != "" {
-			t.Fatalf("failed attach set notice %q", m.Notice)
-		}
-		m, _ = model.Update(m, model.FileAttached{Ref: "issue", Name: "shot-2.png", Path: "/store/issue/shot-2.png"})
-		if m.FieldForm.Open {
-			t.Fatal("form still open after attaching")
-		}
-		if m.Notice != "Attached shot-2.png to abcd" {
-			t.Fatalf("notice %q", m.Notice)
+		m, _ = model.Update(m, model.FileAttached{UID: "issue", ID: "ID-shot", Name: "shot.png"})
+		if m.FieldForm.Open || m.Notice != "Attached shot.png to abcd" {
+			t.Fatalf("form %+v, notice %q", m.FieldForm, m.Notice)
 		}
 	}
 }
 
-func TestUOnAnEmptyPathAsksForOne(t *testing.T) {
-	m, _ := model.Update(attachPane(model.ColumnList, nil, 2), model.KeyMsg{Chord: "@"})
+func TestAtOnAnEmptyPathAsksForOne(t *testing.T) {
+	m, _ := model.Update(attachPane(model.ColumnList, nil), model.KeyMsg{Chord: "@"})
 	m, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
 	if len(cmds) != 0 || m.FieldForm.Err == nil {
 		t.Fatalf("empty path sent %#v, err %v", cmds, m.FieldForm.Err)
 	}
 }
 
-func TestShiftUListsAttachmentNamesAndDetachesTheChosenOne(t *testing.T) {
-	m, _ := model.Update(attachPane(model.ColumnDetail, pointers("b.log", "a.png"), 2), model.KeyMsg{Chord: "shift+u"})
+func TestAtSaysPlainlyWhenTheDaemonHasNoDocbank(t *testing.T) {
+	m := withDetail(attachPane(model.ColumnDetail, nil), &model.IssueDetailData{Issue: &model.Issue{UID: "issue"}, AttachmentsOff: true})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "@"})
+	if !m.FieldForm.Open || m.FieldForm.Err == nil || m.FieldForm.Err.Error() != model.DocbankOffMessage {
+		t.Fatalf("@ opened %+v", m.FieldForm)
+	}
+}
+
+func TestShiftUListsAttachmentNamesAndUnlinksTheChosenOne(t *testing.T) {
+	m, _ := model.Update(attachPane(model.ColumnDetail, refs("b.log", "a.png")), model.KeyMsg{Chord: "shift+u"})
 	if !m.FieldForm.Open || m.FieldForm.Action != model.DetachFileAction {
 		t.Fatalf("U opened %+v", m.FieldForm)
 	}
@@ -73,14 +76,29 @@ func TestShiftUListsAttachmentNamesAndDetachesTheChosenOne(t *testing.T) {
 	// Choosing the second row sends it without a confirmation step.
 	m, _ = model.Update(m, model.KeyMsg{Chord: "down"})
 	m, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
-	want := model.DetachFile{Workspace: "/ws", Ref: "issue", Actor: "reviewer", Name: "b.log"}
+	want := model.DetachFile{Workspace: "/ws", UID: "issue", ProjectID: 7, Actor: "reviewer", ID: "ID-b.log", Name: "b.log"}
 	if len(cmds) != 1 || cmds[0] != model.Cmd(want) {
 		t.Fatalf("cmds %#v, want %#v", cmds, want)
 	}
 }
 
+func TestShiftUTellsTwoAttachmentsOfOneNameApart(t *testing.T) {
+	meta := refs("a.png")
+	meta[model.AttachmentKey("OTHER-ID-123456")] = map[string]any{"name": "a.png", "media_type": "image/png", "size": float64(1), "docbank_version": "v"}
+	m, _ := model.Update(attachPane(model.ColumnList, meta), model.KeyMsg{Chord: "shift+u"})
+	got := m.FieldSuggestions()
+	if len(got) != 2 || got[0] == got[1] || !strings.HasPrefix(got[0], "a.png [") || !strings.HasSuffix(got[1], "]") {
+		t.Fatalf("labels %q", got)
+	}
+	m, _ = model.Update(m, model.KeyMsg{Chord: "down"})
+	_, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
+	if len(cmds) != 1 || cmds[0].(model.DetachFile).ID != "OTHER-ID-123456" {
+		t.Fatalf("cmds %#v", cmds)
+	}
+}
+
 func TestShiftUNamesAnAttachmentTypedInFull(t *testing.T) {
-	m, _ := model.Update(attachPane(model.ColumnList, pointers("a.png", "a.png.bak"), 2), model.KeyMsg{Chord: "shift+u"})
+	m, _ := model.Update(attachPane(model.ColumnList, refs("a.png", "a.png.bak")), model.KeyMsg{Chord: "shift+u"})
 	m, _ = model.Update(m, model.FieldValueMsg{Value: "a.png"})
 	_, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
 	if len(cmds) != 1 || cmds[0].(model.DetachFile).Name != "a.png" {
@@ -89,28 +107,28 @@ func TestShiftUNamesAnAttachmentTypedInFull(t *testing.T) {
 }
 
 func TestShiftUWithNoAttachmentsSaysSoWithoutOpeningAForm(t *testing.T) {
-	m, cmds := model.Update(attachPane(model.ColumnList, map[string]any{"other": 1}, 2), model.KeyMsg{Chord: "shift+u"})
+	m, cmds := model.Update(attachPane(model.ColumnList, map[string]any{"other": 1, "tern-kata.attachment.old": map[string]any{"host": "h", "path": "/p"}}), model.KeyMsg{Chord: "shift+u"})
 	if m.FieldForm.Open || slices.ContainsFunc(cmds, func(c model.Cmd) bool { _, ok := c.(model.DetachFile); return ok }) || m.Notice != "abcd has no attachments." {
 		t.Fatalf("U with none: form %+v notice %q", m.FieldForm, m.Notice)
 	}
 }
 
 func TestSubmitTargetsTheFormsIssueWhenTheCursorMoves(t *testing.T) {
-	m := attachPane(model.ColumnList, pointers("a.png"), 2)
+	m := attachPane(model.ColumnList, refs("a.png"))
 	m.Issues = append([]model.Issue{{UID: "newer", ShortID: "zzzz", ProjectID: 2}}, m.Issues...)
 	m, _ = model.Update(m, model.KeyMsg{Chord: "@"})
 	m, _ = model.Update(m, model.FieldValueMsg{Value: "/x"})
 	// A live refresh moves the cursor to another Issue while the form is open.
 	m.SelectedUID = "newer"
 	_, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
-	want := model.AttachFile{Workspace: "/ws", Ref: "issue", Actor: "reviewer", Path: "/x"}
+	want := model.AttachFile{Workspace: "/ws", UID: "issue", ProjectID: 7, Actor: "reviewer", Path: "/x"}
 	if !slices.Contains(cmds, model.Cmd(want)) {
 		t.Fatalf("cmds %#v, want %#v", cmds, want)
 	}
 }
 
 func TestSubmitWhenTheFormsIssueIsGoneShowsAnError(t *testing.T) {
-	m, _ := model.Update(attachPane(model.ColumnList, nil, 2), model.KeyMsg{Chord: "@"})
+	m, _ := model.Update(attachPane(model.ColumnList, nil), model.KeyMsg{Chord: "@"})
 	m, _ = model.Update(m, model.FieldValueMsg{Value: "/x"})
 	m.Issues = nil
 	m, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
@@ -119,12 +137,11 @@ func TestSubmitWhenTheFormsIssueIsGoneShowsAnError(t *testing.T) {
 	}
 }
 
-func TestDetachReportShowsAsANoticeUntilTheNextKey(t *testing.T) {
-	m, _ := model.Update(attachPane(model.ColumnList, pointers("a.png"), 2), model.KeyMsg{Chord: "shift+u"})
+func TestUnlinkSaysTheBytesStayAndShowsAsANoticeUntilTheNextKey(t *testing.T) {
+	m, _ := model.Update(attachPane(model.ColumnList, refs("a.png")), model.KeyMsg{Chord: "shift+u"})
 	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
-	done := model.FileDetached{Ref: "issue", Name: "a.png", Host: "other-box", Path: "/s/a.png", Fate: model.FileLeft, Cleared: true}
-	m, _ = model.Update(m, done)
-	if m.FieldForm.Open || m.Notice != done.Report() || !strings.Contains(m.Notice, "other-box") {
+	m, _ = model.Update(m, model.FileDetached{UID: "issue", Name: "a.png"})
+	if m.FieldForm.Open || m.Notice != "Unlinked a.png from abcd; its bytes stay in Docbank" {
 		t.Fatalf("form %+v notice %q", m.FieldForm, m.Notice)
 	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "down"})
@@ -133,50 +150,12 @@ func TestDetachReportShowsAsANoticeUntilTheNextKey(t *testing.T) {
 	}
 }
 
-func TestAClearedDetachWithAnErrorClosesTheFormWithItsReport(t *testing.T) {
-	m, _ := model.Update(attachPane(model.ColumnList, pointers("a.png"), 2), model.KeyMsg{Chord: "shift+u"})
+func TestAFailedUnlinkKeepsItsErrorInTheForm(t *testing.T) {
+	m, _ := model.Update(attachPane(model.ColumnList, refs("a.png")), model.KeyMsg{Chord: "shift+u"})
 	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
-	done := model.FileDetached{Ref: "issue", Name: "a.png", Host: "box", Path: "/s/a.png", Fate: model.FileLeft, Cleared: true, Err: errors.New("permission denied")}
-	m, _ = model.Update(m, done)
-	if m.FieldForm.Open || m.Notice != "Removed a.png; could not delete /s/a.png: permission denied" {
-		t.Fatalf("form %+v notice %q", m.FieldForm, m.Notice)
-	}
-}
-
-func TestADetachThatClearedNothingKeepsItsErrorInTheForm(t *testing.T) {
-	m, _ := model.Update(attachPane(model.ColumnList, pointers("a.png"), 2), model.KeyMsg{Chord: "shift+u"})
-	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
-	m, _ = model.Update(m, model.FileDetached{Ref: "issue", Name: "a.png", Err: errors.New("changed")})
+	m, _ = model.Update(m, model.FileDetached{UID: "issue", Name: "a.png", Err: errors.New("daemon down")})
 	if !m.FieldForm.Open || m.FieldForm.Err == nil || m.Notice != "" {
 		t.Fatalf("form %+v notice %q", m.FieldForm, m.Notice)
-	}
-}
-
-func TestAttachKeysExplainARefusal(t *testing.T) {
-	unbound := attachPane(model.ColumnList, pointers("a.png"), 2)
-	unbound.Bound, unbound.Project = false, model.Project{}
-	for name, tc := range map[string]struct {
-		pane model.Model
-		want string
-	}{
-		"unbound": {unbound, `This workspace is not bound to a kata Project, so it cannot hold attachments. To change the attachments of abcd, work from a workspace bound to Project "other".`},
-		"other Project": {attachPane(model.ColumnList, pointers("a.png"), 3),
-			`abcd belongs to Project "other", but this workspace is bound to "work". To change its attachments, work from a workspace bound to "other".`},
-	} {
-		pane := tc.pane
-		for _, chord := range []string{"@", "shift+u"} {
-			m, _ := model.Update(pane, model.KeyMsg{Chord: chord})
-			if !m.FieldForm.Open || m.FieldForm.Err == nil {
-				t.Fatalf("%s %s: no reason shown: %+v", name, chord, m.FieldForm)
-			}
-			if m.FieldForm.Err.Error() != tc.want {
-				t.Fatalf("%s %s: reason %q", name, chord, m.FieldForm.Err)
-			}
-			m, _ = model.Update(m, model.FieldValueMsg{Value: "a.png"})
-			if _, cmds := model.Update(m, model.KeyMsg{Chord: "enter"}); len(cmds) != 0 {
-				t.Fatalf("%s %s: refused key still sent %#v", name, chord, cmds)
-			}
-		}
 	}
 }
 
@@ -194,7 +173,7 @@ func TestAttachKeysAreInTheFooterAndHelpSheet(t *testing.T) {
 		}
 	}
 	all := strings.Join(lines, "\n")
-	for _, want := range []string{"attach file|@", "remove attachment|U"} {
+	for _, want := range []string{"attach file (upload to Docbank)|@", "unlink attachment|U"} {
 		if !strings.Contains(all, want) {
 			t.Fatalf("help sheet lacks %q:\n%s", want, all)
 		}

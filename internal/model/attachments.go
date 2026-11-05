@@ -2,52 +2,107 @@ package model
 
 import (
 	"encoding/hex"
+	"fmt"
+	"regexp"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
-// attachmentKeyPrefix starts the kata meta key of every Attachment: "tern-kata.attachment." + its stored name. kata's own
-// native attachments claim "attachment.", so tern-kata's pointers live under a prefix of their own.
-const attachmentKeyPrefix = "tern-kata.attachment."
+// attachmentKeyPrefix starts the kata meta key of every Attachment: "attachment." + its id. The value is kata's reference to the
+// file's bytes in Docbank.
+const attachmentKeyPrefix = "attachment."
 
-// Attachment is one file attached to an Issue: its stored name and the Attachment pointer its meta key holds, the host that
-// holds the copy and the copy's absolute native path there.
+// DocbankOffMessage is what the Pane and the commands say when the kata daemon has no Docbank configured.
+const DocbankOffMessage = "This kata daemon has no Docbank configured, so it cannot store attachments. Add a [docbank] section to kata's config.toml and restart the daemon; the Attachments guide says how."
+
+// MaxAttachmentBytes is the largest file kata accepts as an Attachment.
+const MaxAttachmentBytes = 256 << 20
+
+// Attachment is one file attached to an Issue, as kata's native reference to it: the id in its meta key, the file's name and media
+// type, and its size in bytes.
 type Attachment struct {
-	Name, Host, Path string
+	ID, Name, MediaType string
+	Size                int64
 }
 
-// AttachmentKey is the kata meta key of the Attachment stored under name.
-func AttachmentKey(name string) string { return attachmentKeyPrefix + name }
+// attachmentID is the shape of an id this program reads: it ends up in a cache path and a request path.
+var attachmentID = regexp.MustCompile(`^[0-9A-Za-z_-]{1,64}$`)
 
-// Pointer is the meta value of the Attachment: exactly {"host", "path"}.
-func (a Attachment) Pointer() map[string]any { return map[string]any{"host": a.Host, "path": a.Path} }
+// AttachmentKey is the kata meta key of the Attachment with id.
+func AttachmentKey(id string) string { return attachmentKeyPrefix + id }
 
-// OnHost is whether the copy is on the machine named host. Host names compare without regard to case, and an empty host on
-// either side is never this machine.
-func (a Attachment) OnHost(host string) bool {
-	return host != "" && a.Host != "" && strings.EqualFold(a.Host, host)
+// validAttachmentName is kata's rule for the name of an Attachment: 1 to 255 bytes of UTF-8 with no slash, backslash or control
+// character, and neither "." nor "..".
+func validAttachmentName(name string) bool {
+	return utf8.ValidString(name) && name != "" && len(name) <= 255 && name != "." && name != ".." &&
+		!strings.ContainsAny(name, `/\`) && !strings.ContainsFunc(name, unicode.IsControl)
 }
 
-// Attachments are the Issue's Attachments read from its tern-kata.attachment.* meta keys, sorted by name. A value that is not a
-// {"host", "path"} object of strings is not an Attachment.
+// Attachments are the Issue's Attachments read from its attachment.* meta keys, sorted by name, then id. A key whose value kata
+// would not accept as a reference (no valid name, media type, size or Docbank version) is not an Attachment.
 func Attachments(metadata map[string]any) []Attachment {
 	var list []Attachment
 	for key, value := range metadata {
-		name, ok := strings.CutPrefix(key, attachmentKeyPrefix)
-		pointer, isObject := value.(map[string]any)
-		if !ok || name == "" || !isObject {
+		id, ok := strings.CutPrefix(key, attachmentKeyPrefix)
+		ref, isObject := value.(map[string]any)
+		if !ok || !attachmentID.MatchString(id) || !isObject {
 			continue
 		}
-		host, hostOK := pointer["host"].(string)
-		path, pathOK := pointer["path"].(string)
-		if hostOK && pathOK {
-			list = append(list, Attachment{Name: name, Host: host, Path: path})
+		name, nameOK := ref["name"].(string)
+		mediaType, typeOK := ref["media_type"].(string)
+		size, sizeOK := ref["size"].(float64)
+		version, versionOK := ref["docbank_version"].(string)
+		if nameOK && typeOK && sizeOK && versionOK && validAttachmentName(name) && mediaType != "" && version != "" && size >= 0 && size == float64(int64(size)) {
+			list = append(list, Attachment{ID: id, Name: name, MediaType: mediaType, Size: int64(size)})
 		}
 	}
-	slices.SortFunc(list, func(a, b Attachment) int { return strings.Compare(a.Name, b.Name) })
+	slices.SortFunc(list, func(a, b Attachment) int {
+		if c := strings.Compare(a.Name, b.Name); c != 0 {
+			return c
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
 	return list
 }
 
-// AttachmentRowKey is the Issue detail row key of an Attachment: hex of its name, which has no ".", is unique per name and
-// sits under a prefix no fixed Issue detail key uses.
-func AttachmentRowKey(name string) string { return "attachment-" + hex.EncodeToString([]byte(name)) }
+// AttachmentLabels are the names the remove picker lists, in the order of list: a name that more than one Attachment has is
+// followed by the last six characters of its id in brackets, so each label names one Attachment.
+func AttachmentLabels(list []Attachment) []string {
+	count := map[string]int{}
+	for _, a := range list {
+		count[a.Name]++
+	}
+	labels := make([]string, len(list))
+	for i, a := range list {
+		labels[i] = a.Name
+		if count[a.Name] > 1 {
+			labels[i] += " [" + a.ID[max(len(a.ID)-6, 0):] + "]"
+		}
+	}
+	return labels
+}
+
+// AttachmentRowKey is the Issue detail row key of an Attachment: hex of its id, which has no ".", is unique per id and sits under
+// a prefix no fixed Issue detail key uses.
+func AttachmentRowKey(id string) string { return "attachment-" + hex.EncodeToString([]byte(id)) }
+
+// FormatSize is a byte count as people read it: 512 B, 1.5 KB, 12.0 MB.
+func FormatSize(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	size, suffix := float64(n)/unit, "KB"
+	for _, next := range []string{"MB", "GB"} {
+		if size < unit {
+			break
+		}
+		size, suffix = size/unit, next
+	}
+	return fmt.Sprintf("%.1f %s", size, suffix)
+}
+
+// Description is the Attachment as its row shows it after the name: media type and size.
+func (a Attachment) Description() string { return a.MediaType + ", " + FormatSize(a.Size) }

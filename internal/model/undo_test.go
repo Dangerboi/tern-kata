@@ -44,16 +44,16 @@ func TestEveryWriteWithoutAnInverseClearsTheHistory(t *testing.T) {
 			m, _ = model.Update(m, model.KeyMsg{Chord: "paste", Text: "local"})
 			return press(m, "meta+o")
 		}, model.DraftSaved{UID: "a"}, "comment addition cannot be undone"},
-		{"attach", func() model.Model { return attachPane(model.ColumnList, nil, 2) }, func(m model.Model) model.Model {
+		{"attach", func() model.Model { return attachPane(model.ColumnList, nil) }, func(m model.Model) model.Model {
 			m = press(m, "@")
 			m, _ = model.Update(m, model.FieldValueMsg{Value: "/x"})
 			return press(m, "enter")
-		}, model.FileAttached{Ref: "issue", Name: "x"}, "attaching a file cannot be undone"},
-		{"detach", func() model.Model { return attachPane(model.ColumnList, pointers("a.png"), 2) }, func(m model.Model) model.Model {
+		}, model.FileAttached{UID: "issue", Name: "x"}, "attaching a file cannot be undone"},
+		{"detach", func() model.Model { return attachPane(model.ColumnList, refs("a.png")) }, func(m model.Model) model.Model {
 			m = press(m, "shift+u")
 			m, _ = model.Update(m, model.FieldValueMsg{Value: "a.png"})
 			return press(m, "enter")
-		}, model.FileDetached{Ref: "issue", Name: "a.png", Cleared: true}, "removing an attachment cannot be undone"},
+		}, model.FileDetached{UID: "issue", Name: "a.png"}, "unlinking an attachment cannot be undone"},
 		{"recurrence made", recurrenceBase, func(m model.Model) model.Model {
 			m, _ = saveRecurrence(openRecurrenceCard(m))
 			return m

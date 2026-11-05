@@ -14,7 +14,7 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 
 ### Attachments
 
-Files on Issues: reading them and attaching evidence. See `skills/tern-kata/SKILL.md`; `skills/kata/SKILL.md` covers the kata CLI.
+Files on Issues are kata's native Docbank attachments: reading them and attaching evidence is `kata docbank attachments`, in `skills/kata/SKILL.md`. `skills/tern-kata/SKILL.md` covers the old `tern-kata.attachment.*` keys and their migration.
 
 ## Changelog
 

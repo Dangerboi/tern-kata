@@ -15,7 +15,7 @@ var workerForms = []string{"init", "add", "edit", "upgrade", "status", "stop", "
 var viewsForms = []string{"show", "add", "rm"}
 
 // writeCompletion is `tern-kata completion <shell>`: the script that completes tern-kata's subcommands, worker forms and
-// flags in that shell. Where nothing fits (attach's files) the shell completes file names.
+// flags in that shell. Where nothing fits (a file name) the shell completes file names.
 func writeCompletion(shell string, out io.Writer) error {
 	script := map[string]func() string{"bash": bashCompletion, "zsh": zshCompletion, "fish": fishCompletion}[shell]
 	_, err := io.WriteString(out, script())
@@ -39,7 +39,7 @@ _tern_kata() {
 		words="%[1]s --issue --as --version --help"
 	else
 		case ${COMP_WORDS[1]} in
-		attach | detach | run) [[ $cur == -* ]] && words="--as" ;;
+		migrate-attachments | run) [[ $cur == -* ]] && words="--as" ;;
 		recur) [[ $cur == -* ]] && words="%[2]s --stop --as" ;;
 		views)
 			if [[ $COMP_CWORD -eq 2 ]]; then
@@ -105,7 +105,7 @@ func fishCompletion() string {
 	line("-l as -r -d 'author for edits'")
 	line("-l version -d 'print the version and exit'")
 	line("-s h -l help -d 'print the help and exit'")
-	line("-n '__fish_seen_subcommand_from detach recur run views completion worker update agent' -f")
+	line("-n '__fish_seen_subcommand_from migrate-attachments recur run views completion worker update agent' -f")
 	line("-n '__fish_seen_subcommand_from agent' -l ref -r -d 'the Issue the agent works on'")
 	line("-n '__fish_seen_subcommand_from update' -l force -d 'install even when a check refuses'")
 	line("-n '__fish_seen_subcommand_from update' -l pause -d 'wait for Enter after a success'")

@@ -9,10 +9,16 @@ import (
 	g "go.kenn.io/kata/pkg/client/generated"
 )
 
-func (f attachFixture) patchKey(t *testing.T, key string, value any) {
+func (f issueFixture) patchKey(t *testing.T, key string, value any) {
+	t.Helper()
+	f.patchKeyOf(t, f.uid, key, value)
+}
+
+// patchKeyOf writes a meta key of the Issue uid straight to kata, bypassing every guard.
+func (f issueFixture) patchKeyOf(t *testing.T, uid, key string, value any) {
 	t.Helper()
 	_, err := f.kata.target().Client.PatchIssueMetadataWithResponse(context.Background(), &g.PatchIssueMetadataRequestOptions{
-		PathParams: &g.PatchIssueMetadataPath{ProjectID: f.project.ID, Ref: f.uid},
+		PathParams: &g.PatchIssueMetadataPath{ProjectID: f.project.ID, Ref: uid},
 		Body:       &g.PatchIssueMetadataBody{Actor: new("rival"), Patch: map[string]any{key: value}},
 	})
 	if err != nil {
@@ -20,13 +26,13 @@ func (f attachFixture) patchKey(t *testing.T, key string, value any) {
 	}
 }
 
-func (f attachFixture) setDates(t *testing.T, changes ...model.DateChange) model.DatesResultMsg {
+func (f issueFixture) setDates(t *testing.T, changes ...model.DateChange) model.DatesResultMsg {
 	t.Helper()
 	return as[model.DatesResultMsg](t, run(t, f.gateway, model.SetDatesCmd{Workspace: f.repo, UID: f.uid, ProjectID: f.project.ID, Actor: "tester", Changes: changes}))
 }
 
 func TestSetDatesSetsChangesAndClearsEachKey(t *testing.T) {
-	f := newAttachFixture(t)
+	f := newIssueFixture(t)
 	scheduled := model.DateChange{Key: "scheduled_on", Label: "Scheduled", Value: "2026-10-12"}
 	deadline := model.DateChange{Key: "deadline_on", Label: "Deadline", Value: "2026-10-30"}
 	if got := f.setDates(t, scheduled, deadline); got.Err != nil || len(got.Applied) != 2 {
@@ -48,7 +54,7 @@ func TestSetDatesSetsChangesAndClearsEachKey(t *testing.T) {
 }
 
 func TestSetDatesReportsAKeyChangedMeanwhileAndStopsThere(t *testing.T) {
-	f := newAttachFixture(t)
+	f := newIssueFixture(t)
 	f.patchKey(t, "scheduled_on", "2026-10-20")
 	first := model.DateChange{Key: "scheduled_on", Label: "Scheduled", Value: "2026-10-15", Was: "2026-10-12"}
 	second := model.DateChange{Key: "deadline_on", Label: "Deadline", Value: "2026-10-30"}
@@ -77,7 +83,7 @@ func TestSetDatesReportsAKeyChangedMeanwhileAndStopsThere(t *testing.T) {
 }
 
 func TestSetDatesLeavesAHeldTimeAloneWhenGuardedOnIt(t *testing.T) {
-	f := newAttachFixture(t)
+	f := newIssueFixture(t)
 	f.patchKey(t, "deadline_on", "2026-11-02T17:30:00")
 	change := model.DateChange{Key: "deadline_on", Label: "Deadline", Value: "2026-11-05", Was: "2026-11-02T17:30:00"}
 	if got := f.setDates(t, change); got.Err != nil {

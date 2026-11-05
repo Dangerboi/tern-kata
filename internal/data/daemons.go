@@ -108,22 +108,15 @@ func (g *Gateway) switchDaemon(ctx context.Context, cmd model.SwitchDaemon) mode
 	return model.DaemonSwitched{Request: cmd.Request, Name: entry.Name, Daemon: c.describe(ctx)}
 }
 
-// install makes c, the connection to the catalog entry called name, the one every workspace uses from now on: the old daemon's
-// pointer passes are ended and awaited first, so none can still write to it through the connection they hold; then the cached
+// install makes c, the connection to the catalog entry called name, the one every workspace uses from now on: the cached
 // clients of the old daemon go, a reconnect locates the new one, and the old daemon's event stream ends.
 func (g *Gateway) install(name string, locate Locator, workspace string, c *Client) {
-	g.startMu.Lock()
-	g.connCancel()
-	g.background.Wait()
 	g.mu.Lock()
 	g.locate, g.current = locate, name
 	g.epoch++
 	clear(g.clients)
 	g.clients[workspace] = c
 	g.mu.Unlock()
-	g.connCtx, g.connCancel = context.WithCancel(g.backgroundCtx)
-	clear(g.convertStarted)
-	g.startMu.Unlock()
 	g.streamMu.Lock()
 	if g.streamCancel != nil {
 		g.streamCancel()

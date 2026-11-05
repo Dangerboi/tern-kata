@@ -76,6 +76,15 @@ func (s ActivityTab) String() string { return tabTable[s].label }
 // EmptyText is what the tab says when it has no rows.
 func (s ActivityTab) EmptyText() string { return tabTable[s].empty }
 
+// EmptyDetailText is what the active tab says when it has no rows: the Attachments tab of an Issue on a daemon without Docbank
+// says why nothing can be attached.
+func (m Model) EmptyDetailText() string {
+	if m.tab == TabAttachments && m.authority != nil && m.authority.AttachmentsOff {
+		return DocbankOffMessage
+	}
+	return m.tab.EmptyText()
+}
+
 // DetailRow is one row of an Activity tab (Type is a history event's kata type). A Comment or Event row has its Author and Time (Model.DetailTime); a Link row has Relation and Ref
 // instead; a history row also carries its sentence in parts.
 type DetailRow struct {
@@ -87,9 +96,8 @@ type DetailRow struct {
 	Relation, Ref, RefTitle string
 	// Qualified and Status are the referenced Issue's qualified id and status as its Link carries them (empty for an event row).
 	Qualified, Status string
-	// File is an Attachment row's Attachment, and URL the file URL of its path, empty when its Host is not this machine.
+	// File is an Attachment row's Attachment.
 	File    Attachment
-	URL     string
 	History *HistorySentence
 	// Reply says what a comment answers ("confirms dana's comment in #bbbb") and Replies how many comments answer it; both
 	// are empty without reply information.

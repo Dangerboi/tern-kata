@@ -30,11 +30,11 @@ type LaunchPlan struct {
 	// TUIArgs are the arguments only `kata tui` takes (FallbackArgs without the --issue translation); inside Tern nothing reads
 	// them, so main refuses them there instead of dropping them unseen.
 	TUIArgs []string
-	// Subcommand is "attach", "detach", "recur", "run", "views", "worker", "update", "agent" or "completion" when it was the first argument; main runs it
+	// Subcommand is "migrate-attachments", "recur", "run", "views", "worker", "update", "agent" or "completion" when it was the first argument; main runs it
 	// without Tern.
 	Subcommand string
-	// TargetRef is the Issue as attach, detach and recur take it (what `kata show` takes: a short id, <project>#<short id> or a ULID),
-	// unlike IssueRef; Operands are the files to attach, or the Attachment name to detach.
+	// TargetRef is the Issue as recur and run take it (what `kata show` takes: a short id, <project>#<short id> or a ULID),
+	// unlike IssueRef; Operands are the arguments after it.
 	TargetRef string
 	Operands  []string
 	// RecurFlags are recur's schedule flags by name without dashes (model.RecurFlagNames), as typed; Stop is --stop.
@@ -94,7 +94,7 @@ type usageError struct{ error }
 func (e usageError) Unwrap() error { return e.error }
 
 // subcommands are the first arguments that name a command run without Tern.
-var subcommands = []string{"attach", "detach", "recur", "run", "views", "worker", "update", "agent", "completion"}
+var subcommands = []string{"migrate-attachments", "recur", "run", "views", "worker", "update", "agent", "completion"}
 
 // completionShells are the shells `tern-kata completion` writes a script for.
 var completionShells = []string{"bash", "zsh", "fish"}
@@ -175,13 +175,17 @@ func scanFlags(flags []string, flag string) bool {
 func planLaunch(args []string, lookup func(string) (string, bool), version string) (LaunchPlan, error) {
 	flags := args
 	if end := slices.Index(args, "--"); end >= 0 {
-		flags = args[:end] // after a lone --, --help and --version are names, such as a file to attach
+		flags = args[:end] // after a lone --, --help and --version are names, such as a name
 	}
 	if scanFlags(flags, "--version") {
 		return LaunchPlan{Version: version}, nil
 	}
 	if scanFlags(flags, "--help") || scanFlags(flags, "-h") {
 		return LaunchPlan{Help: true}, nil
+	}
+	if len(args) > 0 && (args[0] == "attach" || args[0] == "detach") {
+		verb := map[string]string{"attach": "add", "detach": "rm"}[args[0]]
+		return LaunchPlan{}, fmt.Errorf("tern-kata %s is gone: kata stores attachments itself now. Use `kata docbank attachments %s <ref> ...`; the Attachments guide says how to set Docbank up", args[0], verb)
 	}
 	if len(args) > 0 && slices.Contains(subcommands, args[0]) {
 		return planSubcommand(args, lookup)
@@ -373,10 +377,8 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 		plan.fallbackAuthor = actor
 	}
 	switch {
-	case plan.Subcommand == "attach" && len(operands) < 2:
-		return LaunchPlan{}, fmt.Errorf("usage: tern-kata attach <ref> <file>...")
-	case plan.Subcommand == "detach" && len(operands) != 2:
-		return LaunchPlan{}, fmt.Errorf("usage: tern-kata detach <ref> <name>")
+	case plan.Subcommand == "migrate-attachments" && len(operands) != 0:
+		return LaunchPlan{}, fmt.Errorf("usage: tern-kata migrate-attachments [--as <actor>]")
 	case plan.Subcommand == "recur" && len(operands) != 1:
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata recur <ref> [--frequency daily|weekly|monthly|yearly ... | --rule <rrule> | --stop]")
 	case plan.Stop && len(plan.RecurFlags) > 0:
@@ -405,7 +407,7 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata completion bash|zsh|fish")
 	}
 	plan.Actor = resolveActor(plan.fallbackAuthor, lookup)
-	if plan.Subcommand == "worker" || plan.Subcommand == "completion" || plan.Subcommand == "views" || plan.Subcommand == "update" {
+	if plan.Subcommand == "worker" || plan.Subcommand == "completion" || plan.Subcommand == "views" || plan.Subcommand == "update" || plan.Subcommand == "migrate-attachments" {
 		plan.Operands = operands
 		return plan, nil
 	}
@@ -486,8 +488,7 @@ const usage = `tern-kata: browse and edit kata Issues in a native Tern Pane.
 
 Usage:
   tern-kata [--issue <project>/<short_id>] [--as <actor>] [kata tui args...]
-  tern-kata attach <ref> <file>... [--as <actor>]
-  tern-kata detach <ref> <name> [--as <actor>]
+  tern-kata migrate-attachments [--as <actor>]
   tern-kata recur <ref> [--frequency daily|weekly|monthly|yearly [--every N] [--on mon,thu]
                    [--day 15|last|"2nd tue"] [--month 1-12] [--until DATE | --count N]
                    | --rule <rrule>] [--start DATE] [--zone <iana>] [--stop] [--as <actor>]
@@ -525,11 +526,11 @@ Flags:
   --                            end the flags: a file after it may be named like one, even --help
 
 Subcommands (only as the first argument; they never open a Pane or need Tern):
-  attach <ref> <file>...        copy each file into the Project's Attachment store
-                                (.kata-attachments in the primary checkout) and point
-                                a tern-kata.attachment.<name> meta key of the Issue at it;
-                                prints each stored absolute path, stops at the first failure
-  detach <ref> <name>           clear that key and delete the copy if it is on this machine
+  migrate-attachments           one-off: upload the files that old tern-kata.attachment.<name>
+                                keys of the workspace's Project point to on this machine to
+                                kata's Docbank attachments, clear the keys and delete the
+                                local copies; files on other machines are listed. Run it
+                                from a workspace bound to the Project.
   recur <ref>                   print the Issue's schedule in words and the next Occurrence's
                                 date, or say it doesn't recur
   recur <ref> --frequency ...   make the Issue recur, or change its schedule when it already
