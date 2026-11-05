@@ -86,7 +86,9 @@ type UndoHistory struct {
 	Boundary string
 	// InFlight says an undo is out; another waits for it.
 	InFlight bool
-	nextID   uint64
+	// out is the entry the undo in flight takes back, kept for when the history no longer holds it at the answer.
+	out    UndoEntry
+	nextID uint64
 }
 
 func (h UndoHistory) cleared(reason string) UndoHistory {
@@ -106,8 +108,9 @@ func (h UndoHistory) pushed(e UndoEntry) UndoHistory {
 	return h
 }
 
-func (h UndoHistory) popped() UndoHistory {
-	h.Entries = slices.Clone(h.Entries[:len(h.Entries)-1])
+// without drops the entry with id, wherever it sits: another change may have landed on top of it while its undo was out.
+func (h UndoHistory) without(id uint64) UndoHistory {
+	h.Entries = slices.DeleteFunc(slices.Clone(h.Entries), func(e UndoEntry) bool { return e.ID == id })
 	return h
 }
 
@@ -260,7 +263,9 @@ func startUndo(m Model) (Model, []Cmd) {
 		m.Notice = "Daemon disconnected; reconnect before undoing."
 	default:
 		m.Undo.InFlight = true
-		return m, []Cmd{UndoChange{Workspace: m.Workspace, Entry: h.Entries[len(h.Entries)-1]}}
+		entry := h.Entries[len(h.Entries)-1]
+		m.Undo.out = entry
+		return m, []Cmd{UndoChange{Workspace: m.Workspace, Entry: entry}}
 	}
 	return m, nil
 }
@@ -297,13 +302,21 @@ func undoDone(m Model, msg ChangeUndone) (Model, []Cmd) {
 	m.Undo.InFlight = false
 	card := msg.EntryID != 0 && m.CloseForm.Open && m.CloseForm.UndoEntry == msg.EntryID
 	h := m.Undo
-	if len(h.Entries) == 0 || h.Entries[len(h.Entries)-1].ID != msg.EntryID {
+	// Other changes may have landed while the undo was out, so the entry is not necessarily the newest; a boundary write may
+	// even have cleared it, and the answer is still shown and the Issue read again.
+	i := slices.IndexFunc(h.Entries, func(e UndoEntry) bool { return e.ID == msg.EntryID })
+	var entry UndoEntry
+	switch {
+	case i >= 0:
+		entry = h.Entries[i]
+	case msg.EntryID != 0 && h.out.ID == msg.EntryID:
+		entry = h.out
+	default:
 		if card {
 			m.CloseForm.Saving = false
 		}
 		return m, nil
 	}
-	entry := h.Entries[len(h.Entries)-1]
 	target := m.undoTarget(entry, msg.Ref)
 	if card {
 		m.CloseForm.Saving = false
@@ -324,7 +337,7 @@ func undoDone(m Model, msg ChangeUndone) (Model, []Cmd) {
 	case UndoNeedsEvidence:
 		return openUndoClose(m, entry), nil
 	case UndoConflict:
-		m.Undo = h.popped()
+		m.Undo = h.without(entry.ID)
 		m.Notice = "skipped undo for " + target + ": " + msg.Conflict
 		return m, nil
 	case UndoUnknown:
@@ -335,11 +348,11 @@ func undoDone(m Model, msg ChangeUndone) (Model, []Cmd) {
 		m.Notice = "undo failed for " + target + ": " + msg.Err.Error()
 		return m, nil
 	case UndoAlready:
-		m.Undo = h.popped()
+		m.Undo = h.without(entry.ID)
 		m.Notice = target + " already restored; no change made"
 		return refreshAfterUndo(m, entry)
 	}
-	m.Undo = h.popped()
+	m.Undo = h.without(entry.ID)
 	if msg.FromRevision == entry.Revision {
 		entries := slices.Clone(m.Undo.Entries)
 		for i := range entries {

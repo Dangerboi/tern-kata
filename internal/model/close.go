@@ -283,7 +283,8 @@ func submitUndoClose(m Model, cmd CloseIssueCmd, quick bool) (Model, []Cmd) {
 		f.Saving, f.Err = false, errors.New("undo action is no longer available")
 	default:
 		m.Undo.InFlight = true
-		return m, []Cmd{UndoChange{Workspace: m.Workspace, Entry: entries[len(entries)-1], Close: &cmd}}
+		m.Undo.out = entries[len(entries)-1]
+		return m, []Cmd{UndoChange{Workspace: m.Workspace, Entry: m.Undo.out, Close: &cmd}}
 	}
 	return m, nil
 }

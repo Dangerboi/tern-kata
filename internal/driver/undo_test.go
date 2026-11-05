@@ -226,3 +226,35 @@ func TestTheCloseCardOfAnUndoRefusesQuickDoneAndAnotherReason(t *testing.T) {
 		t.Fatalf("quick done sent %#v, form %+v", out.Cmds, out.State.Model.CloseForm)
 	}
 }
+
+func TestAnUndoAnsweredAfterAnotherChangeLandedRemovesItsOwnEntry(t *testing.T) {
+	out := pressU(t, undoable(t, 2))
+	first := undoCmd(t, out).Entry
+	s := feed(t, out.State, done(3)).State
+	got := feed(t, s, model.ChangeUndone{EntryID: first.ID, Result: model.UndoChanged, Ref: "aaaa"}).State.Model
+	if want := "undid priority.set on #aaaa"; got.Notice != want {
+		t.Fatalf("notice %q, want %q", got.Notice, want)
+	}
+	if n := len(got.Undo.Entries); n != 2 || got.Undo.Entries[0].Revision != 1 || got.Undo.Entries[1].Revision != 3 {
+		t.Fatalf("history %+v, want the undone change gone and the newer one on top", got.Undo.Entries)
+	}
+}
+
+func TestAnUndoAnsweredAfterTheHistoryWasClearedStillShowsAndReadsAgain(t *testing.T) {
+	out := pressU(t, undoable(t, 2))
+	first := undoCmd(t, out).Entry
+	s := feed(t, out.State, model.FieldWritten{UID: "alpha", Record: model.WriteRecord{Boundary: "closing a recurring issue cannot be undone"}}).State
+	answered := feed(t, s, model.ChangeUndone{EntryID: first.ID, Result: model.UndoChanged, Ref: "aaaa"})
+	if want := "undid priority.set on #aaaa"; answered.State.Model.Notice != want {
+		t.Fatalf("notice %q, want %q", answered.State.Model.Notice, want)
+	}
+	if answered.State.Model.Undo.InFlight {
+		t.Fatal("the undo is still in flight")
+	}
+	for _, cmd := range answered.Cmds {
+		if _, ok := cmd.(model.ReadSnapshot); ok {
+			return
+		}
+	}
+	t.Fatalf("cmds %#v, want the Issues read again", answered.Cmds)
+}
