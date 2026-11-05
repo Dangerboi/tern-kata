@@ -42,14 +42,10 @@ func (m Model) searchingPage(page Page) bool {
 // PageSearchNoun is what the current Page lists, for the search input's placeholder and the empty result.
 func (m Model) PageSearchNoun() string { return pageDefs[m.Page].id }
 
-// pageSearchMatches is kata's match: the query is a case-insensitive substring of the row's words.
-func pageSearchMatches(words, query string) bool {
-	return strings.Contains(strings.ToLower(words), strings.ToLower(query))
-}
-
-// matchesSearch says a row with these words is listed under the current search.
+// matchesSearch says a row with these words is listed under the current search: kata's match, the query is a case-insensitive
+// substring of the row's words.
 func (m Model) matchesSearch(words ...string) bool {
-	return pageSearchMatches(strings.Join(words, " "), m.PageSearch.Text)
+	return strings.Contains(strings.ToLower(strings.Join(words, " ")), strings.ToLower(m.PageSearch.Text))
 }
 
 func openPageSearch(m Model) Model {

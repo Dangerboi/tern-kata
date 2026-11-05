@@ -82,8 +82,8 @@ func ValidateSpokeName(name string) error {
 	return fmt.Errorf("invalid federation spoke name: %q must match [a-z][a-z0-9-]{0,31}", name)
 }
 
-// federationNameKey is one key for the name card: Enter saves, esc closes, every other key is typed. Nothing but typing and moving
-// the caret is taken while a rename runs.
+// federationNameKey is one key for the name card: Enter saves, esc closes, every other key is typed. No key is taken while a
+// rename runs.
 func federationNameKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	f := &m.Federation
 	n := &f.Name

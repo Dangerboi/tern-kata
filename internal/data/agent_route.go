@@ -354,14 +354,14 @@ func (r AgentRoute) resolve(dir string, wrapper bool) (set, unset []string, err 
 	}
 	token := r.Token
 	if r.TokenFile != "" && wrapper {
-		if token, err = readTokenFile(r.TokenFile, false); err != nil {
+		if token, err = readTokenFile(r.TokenFile); err != nil {
 			return nil, nil, err
 		}
 		_ = os.Remove(r.TokenFile) // the file's job is done: it must not outlive the agent's start
 	}
 	dsn := r.DSN
 	if r.DSNFile != "" && wrapper {
-		if dsn, err = readTokenFile(r.DSNFile, false); err != nil {
+		if dsn, err = readTokenFile(r.DSNFile); err != nil {
 			return nil, nil, err
 		}
 		_ = os.Remove(r.DSNFile)
@@ -379,7 +379,7 @@ func (r AgentRoute) resolve(dir string, wrapper bool) (set, unset []string, err 
 	}
 	var creds []string
 	if r.EnvFile != "" && wrapper {
-		text, err := readTokenFile(r.EnvFile, false)
+		text, err := readTokenFile(r.EnvFile)
 		if err != nil {
 			return nil, nil, err
 		}
