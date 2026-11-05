@@ -2076,6 +2076,7 @@ func TestNotInitializedErrorNamesTheAliasOrProjectAndFallsBack(t *testing.T) {
 		{"project", envelope(map[string]any{"project": "ghost"}), "Project \"ghost\" is not set up on this daemon.\nrun \"kata init\" in this workspace"},
 		{"alias", envelope(map[string]any{"alias": "github.com/acme/x"}), "Alias \"github.com/acme/x\" is not set up on this daemon.\nrun \"kata init\" in this workspace"},
 		{"archived alias", g.ErrorEnvelope{Status: 404, ErrorData: g.ErrorBody{Code: "project_not_initialized", Message: "alias github.com/acme/x points at an archived project", Data: map[string]any{"alias": "github.com/acme/x"}}}, "alias github.com/acme/x points at an archived project"},
+		{"project named archived", g.ErrorEnvelope{Status: 404, ErrorData: g.ErrorBody{Code: "project_not_initialized", Message: "project archived-notes is not initialized", Data: map[string]any{"project": "archived-notes"}}}, "Project \"archived-notes\" is not set up on this daemon."},
 		{"no data", envelope(nil), "kata's own words\nrun \"kata init\" in this workspace"},
 		{"other code", g.ErrorEnvelope{ErrorData: g.ErrorBody{Code: "validation", Message: "bad", Data: map[string]any{"project": "ghost"}}}, "bad"},
 	} {

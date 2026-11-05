@@ -10,7 +10,6 @@ import (
 
 	g "go.kenn.io/kata/pkg/client/generated"
 
-	"github.com/Dangerboi/tern-kata/internal/cronjobclient"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
@@ -186,12 +185,12 @@ func translateSpoke(wire g.FederationProjectStatus) model.FederationSpoke {
 	spoke := model.FederationSpoke{
 		ProjectID:                   wire.ProjectID,
 		ProjectName:                 wire.ProjectName,
-		HubURL:                      cronjobclient.Str(wire.HubURL),
-		HubProjectUID:               cronjobclient.Str(wire.HubProjectUID),
-		BoundActor:                  cronjobclient.Str(wire.BoundActor),
-		Capabilities:                displayCapabilities(cronjobclient.Str(wire.Capabilities)),
+		HubURL:                      derefString(wire.HubURL),
+		HubProjectUID:               derefString(wire.HubProjectUID),
+		BoundActor:                  derefString(wire.BoundActor),
+		Capabilities:                displayCapabilities(derefString(wire.Capabilities)),
 		PushEnabled:                 wire.PushEnabled,
-		CredentialStatus:            cronjobclient.Str(wire.CredentialStatus),
+		CredentialStatus:            derefString(wire.CredentialStatus),
 		PendingPushCount:            wire.PendingPushCount,
 		PendingPushHighWaterEventID: wire.PendingPushHighWaterEventID,
 		PullCursorEventID:           wire.PullCursorEventID,
@@ -199,7 +198,7 @@ func translateSpoke(wire g.FederationProjectStatus) model.FederationSpoke {
 		PendingClaimCount:           wire.PendingClaimCount,
 		LiveClaimCount:              wire.LiveClaimCount,
 		ActiveQuarantineCount:       wire.ActiveQuarantineCount,
-		ResetBlocker:                cronjobclient.Str(wire.ResetBlocker),
+		ResetBlocker:                derefString(wire.ResetBlocker),
 		UnresolvedViolationCount:    wire.UnresolvedViolationCount,
 		RecentViolationCount:        wire.RecentViolationCount,
 		LastPullSuccessAt:           timeOrZero(wire.LastPullSuccessAt),
@@ -207,7 +206,7 @@ func translateSpoke(wire g.FederationProjectStatus) model.FederationSpoke {
 		LastSuccessfulSyncAt:        timeOrZero(wire.LastSuccessfulSyncAt),
 		LastErrorAt:                 timeOrZero(wire.LastErrorAt),
 		HasLastError:                wire.LastError != nil,
-		LastError:                   cronjobclient.Str(wire.LastError),
+		LastError:                   derefString(wire.LastError),
 	}
 	if wire.AllowInsecure != nil {
 		spoke.AllowInsecure = *wire.AllowInsecure

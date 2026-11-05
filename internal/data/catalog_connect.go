@@ -10,9 +10,13 @@ import (
 )
 
 // kataExecutable is the kata program that starts a stopped local daemon on a deliberate switch to it, empty when there is none on
-// PATH (a stopped daemon is then reported, not started). Tests replace it.
+// PATH (a stopped daemon is then reported, not started). A relative PATH hit counts as none: exec.LookPath reports it with
+// exec.ErrDot, and kata runs StartWith without looking it up again. Tests replace it.
 var kataExecutable = func() string {
-	path, _ := exec.LookPath("kata")
+	path, err := exec.LookPath("kata")
+	if err != nil {
+		return ""
+	}
 	return path
 }
 

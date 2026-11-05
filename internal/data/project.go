@@ -65,7 +65,7 @@ func notInitializedError(err error) error {
 		return shown
 	}
 	envelope, _ := errors.AsType[g.ErrorEnvelope](err)
-	if strings.Contains(envelope.ErrorData.Message, "archived") {
+	if strings.HasSuffix(envelope.ErrorData.Message, "points at an archived project") {
 		return shown
 	}
 	var subject string

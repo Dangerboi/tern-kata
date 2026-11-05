@@ -3,7 +3,9 @@ package data
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -34,6 +36,21 @@ func loadsProject(t *testing.T, loc Locator) model.Daemon {
 	t.Cleanup(gateway.Close)
 	workspace, _ := project(t, gateway, "demo")
 	return as[model.ProjectLoaded](t, run(t, gateway, model.LoadProject{Workspace: workspace})).Daemon
+}
+
+func TestKataExecutableIgnoresAKataFoundThroughARelativePathEntry(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stub kata is a shell script")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "kata"), []byte("#!/bin/sh\n"), 0o755); err != nil { //nolint:gosec // G306: a stub program must be executable
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	t.Setenv("PATH", ".")
+	if got := kataExecutable(); got != "" {
+		t.Fatalf("kataExecutable = %q, want none: kata would run a relative path without looking it up again", got)
+	}
 }
 
 func TestLocateNamedConnectsToARemoteCatalogEntryWithItsToken(t *testing.T) {
