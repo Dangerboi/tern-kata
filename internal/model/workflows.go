@@ -154,7 +154,7 @@ func (m Model) VisibleWorkflows() []Workflow {
 	if !w.ShowArchived {
 		list = slices.DeleteFunc(slices.Clone(list), func(x Workflow) bool { return x.Archived })
 	}
-	if m.Page != PageWorkflows || m.PageSearch.Text == "" {
+	if !m.searchingPage(PageWorkflows) {
 		return list
 	}
 	return slices.DeleteFunc(slices.Clone(list), func(x Workflow) bool { return !m.matchesSearch(m.workflowSearchWords(x)...) })

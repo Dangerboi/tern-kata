@@ -175,15 +175,14 @@ func TestDatesCardReportsAChangedKeyAndKeepsTheCardOpen(t *testing.T) {
 	s = step(t, s, key("tab")).State
 	s = typed(t, emptied(t, s), "+2d")
 	out := step(t, s, key("enter"))
-	first := model.DateChange{Key: "scheduled_on", Label: "Scheduled", Value: "2026-10-09", Was: "2026-10-12"}
-	// The Scheduled write landed; the Deadline moved meanwhile.
-	failed := step(t, out.State, model.DatesResultMsg{UID: "a", Applied: []model.DateChange{first}, Err: model.DatesConflict{Label: "Deadline", Key: "deadline_on", Held: "2026-11-09", Shown: "2026-11-09", Read: true}})
+	// The Deadline moved meanwhile: the save wrote nothing, not even the Scheduled change.
+	failed := step(t, out.State, model.DatesResultMsg{UID: "a", Err: model.DatesConflict{Label: "Deadline", Key: "deadline_on", Held: "2026-11-09", Shown: "2026-11-09", Read: true}})
 	f := failed.State.Model.DatesForm
 	if !f.Open || f.Saving || f.Err == nil || !strings.Contains(f.Err.Error(), "The Issue changed since the card opened; nothing was written for Deadline") {
 		t.Fatalf("open %v saving %v err %v", f.Open, f.Saving, f.Err)
 	}
-	if _, ok := snapshotFor(failed.Cmds); !ok {
-		t.Errorf("the written Scheduled was not read back: %v", failed.Cmds)
+	if _, ok := snapshotFor(failed.Cmds); ok {
+		t.Errorf("a refusal that wrote nothing read the Issue back: %v", failed.Cmds)
 	}
 	if got := datesField(t, failed.State, "Deadline"); got != "2026-11-09" {
 		t.Errorf("Deadline shows %q, want the current value", got)
@@ -191,9 +190,14 @@ func TestDatesCardReportsAChangedKeyAndKeepsTheCardOpen(t *testing.T) {
 	if got := datesField(t, failed.State, "Scheduled"); got != "+1d" {
 		t.Errorf("Scheduled shows %q, want the text typed there kept", got)
 	}
-	// Saving again writes nothing: the refilled field matches what kata holds.
-	if again := step(t, failed.State, key("enter")); len(again.Cmds) != 0 {
+	// Saving again writes only the Scheduled change: the Deadline field was refilled with what kata holds, so it has none.
+	again := step(t, failed.State, key("enter"))
+	if len(again.Cmds) != 1 {
 		t.Fatalf("second save: %+v", again.Cmds)
+	}
+	want := []model.DateChange{{Key: "scheduled_on", Label: "Scheduled", Value: "2026-10-09", Was: "2026-10-12"}}
+	if got := again.Cmds[0].(model.SetDatesCmd).Changes; !reflect.DeepEqual(got, want) {
+		t.Fatalf("second save changes %+v, want %+v", got, want)
 	}
 
 	// A failure with nothing written keeps the card open with the reason and asks for nothing.

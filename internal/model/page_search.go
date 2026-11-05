@@ -20,20 +20,15 @@ type PageSearchState struct {
 func (m Model) PageSearchShown() bool { return m.PageSearch.Open || m.PageSearch.Text != "" }
 
 // PageSearching says the rows of the current Page are narrowed by a search text.
-func (m Model) PageSearching() bool {
-	return m.PageSearch.Text != "" && (m.Page == PageJobs || m.Page == PageRuns || m.Page == PageWorkflows)
+func (m Model) PageSearching() bool { return m.searchingPage(m.Page) }
+
+// searchingPage says page is the current Page and its rows are narrowed by a search text.
+func (m Model) searchingPage(page Page) bool {
+	return m.Page == page && m.PageSearch.Text != "" && pageDefs[page].settleSearch != nil
 }
 
 // PageSearchNoun is what the current Page lists, for the search input's placeholder and the empty result.
-func (m Model) PageSearchNoun() string {
-	switch m.Page {
-	case PageRuns:
-		return "runs"
-	case PageWorkflows:
-		return "workflows"
-	}
-	return "jobs"
-}
+func (m Model) PageSearchNoun() string { return pageDefs[m.Page].id }
 
 // pageSearchMatches is kata's match: the query is a case-insensitive substring of the row's words.
 func pageSearchMatches(words, query string) bool {
@@ -76,13 +71,8 @@ func (m Model) pageSearchEdit(text string) Model {
 // settlePageSelection keeps the current Page's selection on a row it lists after the search changed them. row is where the
 // selected workflow stood, which a workflow takes its replacement from; a job or a Run falls back to the first row.
 func (m Model) settlePageSelection(row int) Model {
-	switch m.Page {
-	case PageJobs:
-		return m.settleJobSelection()
-	case PageRuns:
-		return m.settleRunSelection()
-	case PageWorkflows:
-		return m.selectWorkflow(row)
+	if settle := pageDefs[m.Page].settleSearch; settle != nil {
+		return settle(m, row)
 	}
 	return m
 }
@@ -147,7 +137,7 @@ func (m Model) workflowSearchWords(w Workflow) []string {
 
 // searchedRuns are the Runs the list shows: those the search leaves, every one without it.
 func (m Model) searchedRuns() []Run {
-	if m.Page != PageRuns || m.PageSearch.Text == "" {
+	if !m.searchingPage(PageRuns) {
 		return m.Runs.Runs
 	}
 	rows := m.RunRows(m.Now)

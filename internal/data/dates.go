@@ -4,14 +4,24 @@ import (
 	"context"
 	"encoding/json"
 
+	g "go.kenn.io/kata/pkg/client/generated"
+
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
 // setDates patches each changed date key in order, through the Issue metadata patch, guarded on the value the Dates card opened
-// with (absent when it held none). A key changed meanwhile is not overwritten: it stops the run with the refusal naming it. It
+// with (absent when it held none). The values kata holds are read first: a key changed since the card opened writes nothing, for
+// any key, and the refusal names it. A key that changes after that read still fails its own guard and stops the run there. It
 // returns the changes written, also when a later one failed, those that changed the Issue, and the Issue after the last of them.
 // ambiguous says the failure leaves the outcome of the write unknown.
 func (c *Client) setDates(ctx context.Context, cmd model.SetDatesCmd) (applied, changed []model.DateChange, last issueWrite, ambiguous bool, err error) {
+	if shown, e := c.showIssue(ctx, cmd.ProjectID, cmd.UID); e == nil {
+		for _, change := range cmd.Changes {
+			if held, present := shown.Issue.Metadata[change.Key]; present != (change.Was != "") || (present && held != change.Was) {
+				return nil, nil, last, false, datesConflict(shown.Issue, change)
+			}
+		}
+	}
 	for _, change := range cmd.Changes {
 		var value any
 		if change.Value != "" {
@@ -29,7 +39,7 @@ func (c *Client) setDates(ctx context.Context, cmd model.SetDatesCmd) (applied, 
 		res, e := c.patchMetadataKey(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, change.Key, value, ifValue)
 		if e != nil {
 			if daemonCode(e) == "metadata_guard_failed" {
-				return applied, changed, last, false, c.datesConflict(ctx, cmd, change)
+				return applied, changed, last, false, c.datesConflictRead(ctx, cmd, change)
 			}
 			return applied, changed, last, ambiguousWrite(e), daemonError(e)
 		}
@@ -55,20 +65,26 @@ func (c *Client) SetDatesRecorded(ctx context.Context, cmd model.SetDatesCmd) ([
 	return applied, done(last, ambiguous, func(e *model.UndoEntry) { e.Dates = changed }), err
 }
 
-// datesConflict is the refusal for a date key that moved since the Dates card opened, carrying the value kata holds now so the
-// card can show it. A failed read leaves the value out, and the refusal says so.
-func (c *Client) datesConflict(ctx context.Context, cmd model.SetDatesCmd, change model.DateChange) model.DatesConflict {
-	conflict := model.DatesConflict{Label: change.Label, Key: change.Key}
+// datesConflictRead is datesConflict for a guard kata refused: the value kata holds now is read for it. A failed read leaves the
+// value out, and the refusal says so.
+func (c *Client) datesConflictRead(ctx context.Context, cmd model.SetDatesCmd, change model.DateChange) model.DatesConflict {
 	shown, err := c.showIssue(ctx, cmd.ProjectID, cmd.UID)
 	if err != nil {
-		return conflict
+		return model.DatesConflict{Label: change.Label, Key: change.Key}
 	}
-	conflict.Held, _ = shown.Issue.Metadata[change.Key].(string)
+	return datesConflict(shown.Issue, change)
+}
+
+// datesConflict is the refusal for a date key that moved since the Dates card opened, carrying the value the Issue holds now so
+// the card can show it.
+func datesConflict(issue g.ShowIssueOut, change model.DateChange) model.DatesConflict {
+	conflict := model.DatesConflict{Label: change.Label, Key: change.Key}
+	conflict.Held, _ = issue.Metadata[change.Key].(string)
 	conflict.Shown = conflict.Held
 	if conflict.Shown == "" {
-		projected := shown.Issue.ScheduledOnDate
+		projected := issue.ScheduledOnDate
 		if change.Key == model.DeadlineKey {
-			projected = shown.Issue.DeadlineOnDate
+			projected = issue.DeadlineOnDate
 		}
 		if projected != nil {
 			conflict.Shown = *projected

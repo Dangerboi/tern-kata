@@ -66,7 +66,7 @@
 
 **Blocked marker**: The "blocked by 8gm4" line, in the warning tone, on an open Board card that at least one open Issue blocks. It names the open blockers, qualified (`project#id`) outside the Project, cut to three and "+N". Done cards never show it.
 
-**Date badge**: The one badge on an open Board card, in the id row after the priority badge, for the most pressing of its deadline and scheduled date, worded in the Pane calendar's terms: "overdue 2d" (error), "due today" (warning), "scheduled 3d ago" (warning), "scheduled today" (accent), "due tomorrow" (warning), "due 10-24" (muted), "scheduled tomorrow" and "scheduled 10-28" (muted); another year reads YYYY-MM-DD. Done cards and undated cards have none.
+**Date badge**: The one date badge of an open Issue: on a Board card, in the id row after the priority badge, and on an Issue list row, after the title (dropped there when the whole title and the badge do not fit), for the most pressing of its deadline and scheduled date, worded in the Pane calendar's terms: "overdue 2d" (error), "due today" (warning), "scheduled 3d ago" (warning), "scheduled today" (accent), "due tomorrow" (warning), "due 10-24" (muted), "scheduled tomorrow" and "scheduled 10-28" (muted); another year reads YYYY-MM-DD. Done cards and undated cards have none.
 
 **Dates line**: The line on the selected Board card giving both dates in full, "scheduled 2026-10-28 · due 2026-11-02", absent parts left out and no line without dates.
 
