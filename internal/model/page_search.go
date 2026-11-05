@@ -22,10 +22,16 @@ func (m Model) PageSearchShown() bool { return m.PageSearch.Open || m.PageSearch
 // PageSearching says the rows of the current Page are narrowed by a search text.
 func (m Model) PageSearching() bool { return m.searchingPage(m.Page) }
 
-// EscEndsSearch says esc on the current Page ends its search now: the rows are narrowed, and on the Workflows Page no inspector is
-// open for esc to close first.
+// EscEndsSearch says esc on the current Page ends its search now: the rows are narrowed and no inner layer is open for esc to
+// close first.
 func (m Model) EscEndsSearch() bool {
-	return m.PageSearching() && !(m.Page == PageWorkflows && m.Workflows.Inspecting)
+	return m.PageSearching() && !m.innerEscOpen()
+}
+
+// innerEscOpen says the current Page has a layer open that esc closes before it ends a search or goes back: the Workflows
+// inspector. A Page gaining such a layer is one case here and one close in its own esc handler.
+func (m Model) innerEscOpen() bool {
+	return m.Page == PageWorkflows && m.Workflows.Inspecting
 }
 
 // searchingPage says page is the current Page and its rows are narrowed by a search text.
