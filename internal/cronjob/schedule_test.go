@@ -76,6 +76,20 @@ func TestZoneIsTheTimezoneThenTheDirectiveThenUTC(t *testing.T) {
 	}
 }
 
+func TestAQuotedDirectiveZoneIsTheZoneAndNoConflict(t *testing.T) {
+	for _, expression := range []string{`CRON_TZ="UTC" 0 9 * * *`, `TZ='UTC' 0 9 * * *`} {
+		if zone, bare := cronjob.Zone(expression, "UTC"); zone != "UTC" || bare != "0 9 * * *" {
+			t.Errorf("Zone(%q) = %q, %q", expression, zone, bare)
+		}
+		if zone, _ := cronjob.Zone(expression, ""); zone != "UTC" {
+			t.Errorf("Zone(%q, \"\") = %q, want UTC", expression, zone)
+		}
+		if _, err := cronjob.Cron(expression, "UTC", time.Time{}); err != nil {
+			t.Errorf("Cron(%q, UTC) = %v, want no conflict", expression, err)
+		}
+	}
+}
+
 func TestCronReadsTheZoneTheDirectiveOrTheTimezoneNames(t *testing.T) {
 	cases := []struct {
 		name, expression, timezone string

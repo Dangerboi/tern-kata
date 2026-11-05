@@ -44,6 +44,18 @@ func TestTheJobInspectorListsTheNextThreeRunsOfACronJob(t *testing.T) {
 	}
 }
 
+func TestTheJobInspectorListsRunsOfAQuotedZoneDirectiveInThatZone(t *testing.T) {
+	facts := nextRunsFacts(cronJob(true, cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: `CRON_TZ="America/New_York" 0 9 * * *`}, nil))
+	var got []string
+	for _, f := range facts {
+		got = append(got, f.Value)
+	}
+	want := []string{"Thu 2026-10-08 09:00 EDT", "Fri 2026-10-09 09:00 EDT", "Sat 2026-10-10 09:00 EDT"}
+	if !slices.Equal(got, want) {
+		t.Errorf("runs %v, want %v", got, want)
+	}
+}
+
 func TestTheJobInspectorCountsAnAdapterEveryJobFromItsCreation(t *testing.T) {
 	job := cronJob(true, cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "@every 1h", Timezone: "UTC"}, nil)
 	job.CreatedAt = time.Date(2026, 10, 8, 11, 20, 0, 0, time.UTC)

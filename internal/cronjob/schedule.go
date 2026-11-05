@@ -47,6 +47,9 @@ func directiveOf(expression string) (zone, bare string) {
 	for _, prefix := range []string{"CRON_TZ=", "TZ="} {
 		if rest, ok := strings.CutPrefix(expression, prefix); ok {
 			zone, bare, _ = strings.Cut(rest, " ")
+			if n := len(zone); n >= 2 && (zone[0] == '"' || zone[0] == '\'') && zone[n-1] == zone[0] {
+				zone = zone[1 : n-1]
+			}
 			return zone, strings.TrimSpace(bare)
 		}
 	}

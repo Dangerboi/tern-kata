@@ -834,14 +834,16 @@ func (m Model) NextRuns(job CronJob, now time.Time) (runs []string, reason strin
 	} else {
 		// The job's own schedule: an adapter job's @every and interval count from its creation, as the list row's do.
 		schedule, ok := job.schedule()
-		in := m.Calendar.in
-		if t.Kind == cronjob.TriggerCron && ok {
-			// The parser already loaded this zone.
-			loc, _ := cronLocation(t)
-			in = func(at time.Time) time.Time { return at.In(loc) }
-		}
 		if !ok {
 			return nil, "unavailable"
+		}
+		in := m.Calendar.in
+		if t.Kind == cronjob.TriggerCron {
+			loc, err := cronLocation(t)
+			if err != nil {
+				return nil, "unavailable"
+			}
+			in = func(at time.Time) time.Time { return at.In(loc) }
 		}
 		runs = listRuns(schedule, now, in)
 	}
