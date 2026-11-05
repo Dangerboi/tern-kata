@@ -172,7 +172,7 @@ func (c *Client) migrateIssue(ctx context.Context, host, root, actor string, iss
 			left(fmt.Sprintf("the file is on %s at %s; run this command there", pointerHost, path), false)
 			continue
 		case !inOldStore(root, issue.UID, path):
-			left(fmt.Sprintf("the file %s is outside this Project's old attachment folder; add it with `kata docbank attachments add` and unset the key by hand", path), false)
+			left(fmt.Sprintf("the file %s is outside this Project's old attachment folder; add it with `kata docbank attachments add` and unset the key `%s` by hand", path, key), false)
 			continue
 		}
 		if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {

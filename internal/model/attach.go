@@ -57,7 +57,7 @@ type AttachmentOpened struct {
 
 func (AttachmentOpened) msg() {}
 
-// MigrateAttachments uploads every file that a tern-kata.attachment.<name> meta key of the workspace's Project points to on this
+// MigrateAttachments uploads every file that an old attachment key (tern-kata.attachment.<name>, or from 0.3 attachment.<name>, holding {host, path}) of the workspace's Project points to on this
 // machine, replaces the key with a native Attachment and deletes the local copy. Keys that point to another machine, or to a
 // file that is not there, are left and listed.
 type MigrateAttachments struct{ Workspace, Actor string }
@@ -83,7 +83,7 @@ func (AttachmentsMigrated) msg() {}
 func (a AttachmentsMigrated) Report() string {
 	var b strings.Builder
 	if len(a.Moved) == 0 && len(a.Left) == 0 {
-		return "No tern-kata.attachment.* keys to move."
+		return "No old attachment keys to move."
 	}
 	fmt.Fprintf(&b, "Moved %d attachment(s) to Docbank.", len(a.Moved))
 	for _, m := range a.Moved {

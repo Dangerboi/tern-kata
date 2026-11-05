@@ -767,23 +767,16 @@ func (f JobFormState) Preview(cal PaneCalendar, now time.Time) JobPreview {
 	preview := JobPreview{Words: triggerWords(t)}
 	switch t.Kind {
 	case cronjob.TriggerCron:
-		schedule, err := cronjob.Cron(t.Cron, t.Timezone, time.Time{})
-		loc, zoneErr := cronLocation(t)
-		if err != nil || zoneErr != nil {
-			preview.Note = "Next runs unknown: this trigger can't be read."
-			break
-		}
+		// buildTrigger refused any expression or zone that does not read.
+		schedule, _ := cronjob.Cron(t.Cron, t.Timezone, time.Time{})
+		loc, _ := cronLocation(t)
 		preview.Runs = listRuns(schedule, now, func(at time.Time) time.Time { return at.In(loc) })
 	case cronjob.TriggerInterval:
 		if !anchorKnown {
 			preview.Note = "Next runs unknown: this job's start point is not known yet."
 			break
 		}
-		schedule, err := cronjob.Interval(t.IntervalSeconds, anchor)
-		if err != nil {
-			preview.Note = "Next runs unknown: this trigger can't be read."
-			break
-		}
+		schedule, _ := cronjob.Interval(t.IntervalSeconds, anchor) // buildTrigger refused any other
 		preview.Runs = listRuns(schedule, now, cal.in)
 	case cronjob.TriggerOnce:
 		preview.Runs = onceRuns(t, now, cal)
@@ -843,12 +836,9 @@ func (m Model) NextRuns(job CronJob, now time.Time) (runs []string, reason strin
 		schedule, ok := job.schedule()
 		in := m.Calendar.in
 		if t.Kind == cronjob.TriggerCron && ok {
-			loc, err := cronLocation(t)
-			if err != nil {
-				ok = false
-			} else {
-				in = func(at time.Time) time.Time { return at.In(loc) }
-			}
+			// The parser already loaded this zone.
+			loc, _ := cronLocation(t)
+			in = func(at time.Time) time.Time { return at.In(loc) }
 		}
 		if !ok {
 			return nil, "unavailable"
