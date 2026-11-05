@@ -25,13 +25,16 @@ pc_start() {
   printf 'tern-kata did not start in the new tab\n' >&2
   return 1
 }
+# Tern's close prompt: since Tern 0.9.12 its own dialog in the window, no longer a native one in `ctl system`.
+pc_dialog=".mdl-alert[role='dialog']"
+pc_dialogs() { ctl tree "$pc_dialog" | jq '.count'; }
 # Presses Tern's close chord and prints the milliseconds until its prompt is up; the prompt stays open.
 pc_prompt_ms() {
   local known start
-  known=$(ctl system | jq '.dialogs | length')
+  known=$(pc_dialogs)
   start=$(pc_now)
   ctl key "$pc_chord" >/dev/null
-  until (( $(ctl system | jq '.dialogs | length') > known )); do
+  until (( $(pc_dialogs) > known )); do
     if (( $(pc_now) - start > 5000000000 )); then printf 'No close prompt within 5 s of %s\n' "$pc_chord" >&2; return 1; fi
   done
   echo $(( ($(pc_now) - start) / 1000000 ))
@@ -48,7 +51,7 @@ pc_gone_ms() {
 pc_confirm() {
   local start gone
   start=$(pc_now)
-  ctl dialog button 0 >/dev/null
+  ctl click "$pc_dialog .mdl-go" >/dev/null
   gone=$(pc_gone_ms "$1" "$start")
   (( gone < 2000 )) || { printf 'tern-kata took %s ms to end after confirming\n' "$gone" >&2; return 1; }
   [[ $(pc_pids) == "$pc_main_pids" ]] || { printf 'tern-kata processes left: %s, want %s\n' "$(pc_pids)" "$pc_main_pids" >&2; return 1; }
@@ -71,7 +74,7 @@ for ((attempt = 0; attempt < 100; attempt++)); do
 done
 sleep 1
 pc_reference=$(pc_prompt_ms) || { pc_chord=ctrl+shift+w; pc_reference=$(pc_prompt_ms); }
-ctl dialog button 0 >/dev/null
+ctl click "$pc_dialog .mdl-go" >/dev/null
 expect_tree "[data-id='main.columns.list']" '.ok and .count == 1'
 [[ $(ctl state | jq '.tabs | length') == "$pc_tabs" ]]
 
@@ -89,8 +92,8 @@ printf 'Close prompt: kata tui %s ms, tern-kata with its stream open %s ms\n' "$
 (( pc_ms - pc_reference <= 1000 )) || { printf 'The close prompt took %s ms longer than kata tui\n' "$((pc_ms - pc_reference))" >&2; return 1; }
 
 # Cancelling keeps tern-kata working: its keys and its live stream.
-ctl dialog cancel >/dev/null
-[[ $(ctl system | jq '.dialogs | length') == 0 ]]
+ctl click "$pc_dialog .mdl-cancel" >/dev/null
+expect_tree "$pc_dialog" '.ok and .count == 0'
 ctl key '?'
 expect_tree '[data-id="main.help"]' '.ok and .count == 1'
 ctl key Escape
@@ -121,7 +124,7 @@ expect_tree "[data-id^='main.columns.list.issues.']" '.ok and .count > 0'
 pc_closed_start=$(pc_now)
 ctl key "$pc_chord" >/dev/null
 printf 'tern-kata gone %s ms after the close chord\n' "$(pc_gone_ms "$pc_pid" "$pc_closed_start")"
-[[ $(ctl system | jq '.dialogs | length') == 0 ]]
+expect_tree "$pc_dialog" '.ok and .count == 0'
 [[ $(pc_pids) == "$pc_main_pids" ]]
 expect_tree "[data-id='main.columns.list']" '.ok and .count == 1'
 [[ $(ctl state | jq '.tabs | length') == "$pc_tabs" ]]
