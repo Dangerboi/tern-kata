@@ -11,7 +11,10 @@ import (
 	oklogulid "github.com/oklog/ulid/v2"
 )
 
-// shortcut: kata's client does not expose its daemon catalog or [tui] preferences, so this reads <KATA_HOME>/config.toml itself; delete this file once pkg/client does.
+// shortcut: kata's client lists the catalog (client.DaemonCatalog) and connects by name (client.Discover) but exposes no entry's url, token_env,
+// inline token, allow_insecure, home or instance_uid, and no [tui] preferences. tern-kata needs those to set a started agent's environment
+// (agent_route.go), to reach a federation hub with only its own token and name it in a join (federation*.go; kata's Discover would let KATA_AUTH_TOKEN replace a remote entry's token), to tell which entry a connection is (gateway.go) and for
+// [tui].confirm_quit (cmd/tern-kata/main.go), so this reads <KATA_HOME>/config.toml itself for them; delete this file once pkg/client does.
 
 // CatalogEntry is one [[daemon]] entry of kata's config.toml.
 type CatalogEntry struct {
