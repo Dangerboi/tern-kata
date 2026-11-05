@@ -10,7 +10,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `tern-kata worker status` names the installed binary's version when the running worker runs another one, and says how `tern-kata worker stop` moves it there.
 - `/` on the Jobs, Runs and Workflows Pages searches their rows by a case-insensitive part of the row's text, as kata tui does. The search shows above the list, `esc` ends it, and an empty result says so.
 - The Jobs Page inspector lists a job's next three runs with their time zone abbreviations, and says why there are none when the job is paused, its parent is closed, it only runs when started, or its runs can't be worked out.
-- Issue list rows show the Date badge of an open Issue with a scheduled date or deadline, before the title; a list too narrow to keep the title drops it.
+- Issue list rows show the Date badge of an open Issue with a scheduled date or deadline, after the title, as kata tui does; a list too narrow to keep the title drops it.
 - The Dates card and the Create card take kata's date-time forms, `YYYY-MM-DDTHH:MM[:SS]` and `YYYY-MM-DDTHH:MM:SSZ`; the preview shows the time.
 - `N` on the Federation Page names a spoke: on the enrollment preview it sets the name the hub records with the enrollment, and on a spoke, in the list or its detail, it renames it on the hub, where an empty name clears it. The name shows on the spoke's card and detail, and the hub's refusal of a bad name shows its reason.
 - The Close card for a `done` close can cite one or more of the Issue's Attachments as evidence; the Events tab names a cited Attachment, and marks it `[removed]` once it is unlinked.
