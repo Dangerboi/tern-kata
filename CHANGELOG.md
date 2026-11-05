@@ -33,7 +33,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 ### Removed
 
 - `tern-kata attach` and `tern-kata detach`: use `kata docbank attachments add`, `ls`, `get` and `rm`.
-- The `.kata-attachments` folder store and its `tern-kata.attachment.*` keys; `tern-kata migrate-attachments` moves what they hold.
+- The `.kata-attachments` folder store and its pointer keys (`tern-kata.attachment.*`, and `attachment.*` from 0.3); `tern-kata migrate-attachments` moves what they hold.
 
 ### Fixed
 
