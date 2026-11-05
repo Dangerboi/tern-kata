@@ -156,7 +156,7 @@ func TestASuccessfulSwitchResetsThePaneAndFollowsTheNewDaemonsEvents(t *testing.
 	pane.Model.StreamGeneration, pane.Model.StreamConnected = 1, true
 	pane.Model.Filters.Search = "alpha"
 
-	out := switchedTo(t, pane, model.Daemon{Name: "home", Kind: model.DaemonLocal, Version: "0.20.0"})
+	out := switchedTo(t, pane, model.Daemon{Name: "home", Kind: model.DaemonLocal, Version: "0.21.0"})
 	m := out.State.Model
 	project, ok := askedProject(out.Cmds)
 	if !ok || !project.Switched || project.Workspace != "/repo" {
@@ -179,7 +179,7 @@ func TestASuccessfulSwitchResetsThePaneAndFollowsTheNewDaemonsEvents(t *testing.
 	}
 
 	// The new daemon's Project and first snapshot arrive: the Pane follows its events from the snapshot's cursor.
-	loaded := step(t, out.State, model.ProjectLoaded{Connection: out.State.Model.Connection, Daemon: model.Daemon{Name: "home", Kind: model.DaemonLocal, Version: "0.20.0", Account: "alice"}})
+	loaded := step(t, out.State, model.ProjectLoaded{Connection: out.State.Model.Connection, Daemon: model.Daemon{Name: "home", Kind: model.DaemonLocal, Version: "0.21.0", Account: "alice"}})
 	read, found := snapshotFor(loaded.Cmds, boardCard("z"))
 	if !found {
 		t.Fatalf("the new Project asked for no snapshot: %#v", loaded.Cmds)
@@ -198,7 +198,7 @@ func TestASuccessfulSwitchResetsThePaneAndFollowsTheNewDaemonsEvents(t *testing.
 	if got := first.State.Model.Issues; len(got) != 1 || got[0].UID != "z" {
 		t.Errorf("Issues %+v, want the new daemon's", got)
 	}
-	wantText(t, "the top bar", wireTextOf(t, first.State), "Daemon: home · local · kata 0.20.0 · as alice")
+	wantText(t, "the top bar", wireTextOf(t, first.State), "Daemon: home · local · kata 0.21.0 · as alice")
 }
 
 func TestAFailedSwitchSaysWhyAndKeepsTheConnection(t *testing.T) {

@@ -21,7 +21,7 @@ func TestInboxUpcomingAndDeadlinesKeepTheirIssuesFromAllOpen(t *testing.T) {
 	systemCalendar.Now = func() time.Time { return time.Date(2026, 7, 31, 20, 0, 0, 0, time.UTC) } // 13:00 on the 31st in LA
 	t.Cleanup(func() { systemCalendar.Now = now })
 
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	var mu sync.Mutex
 	var views []string
 	hook := func(_ http.ResponseWriter, r *http.Request) bool {

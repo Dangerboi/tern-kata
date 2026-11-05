@@ -51,7 +51,7 @@ func createToken(t *testing.T, kata *kataServer, actor, name string) {
 }
 
 func TestGatewayListsTheTokensOfAnAccountWithTokenAuditRead(t *testing.T) {
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	createToken(t, kata, "alice", "laptop")
 	createToken(t, kata, "build-bot", "")
 	gateway := newGateway(t, newLocator(kata.target()))
@@ -79,7 +79,7 @@ func TestGatewayListsTheTokensOfAnAccountWithTokenAuditRead(t *testing.T) {
 }
 
 func TestGatewayAnswersNoTokenAuditReadToAnAccountWithoutIt(t *testing.T) {
-	kata := startKataAsHost(t, "0.20.0")
+	kata := startKataAsHost(t, "0.21.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace := t.TempDir()
 
@@ -107,7 +107,7 @@ func TestGatewayReportsAFailedCapabilityCheckAndTokenReadInTheAskingMessage(t *t
 }
 
 func TestGatewayHoldsARefreshUntilItsPauseHasPassedOnTheWallClock(t *testing.T) {
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	createToken(t, kata, "alice", "")
 	gateway := newGateway(t, newLocator(kata.target()))
 	gateway.wakePoll = 5 * time.Millisecond

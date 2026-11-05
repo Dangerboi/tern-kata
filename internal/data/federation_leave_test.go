@@ -29,7 +29,7 @@ type federatedPair struct {
 func startPair(t *testing.T) federatedPair {
 	t.Helper()
 	ctx := context.Background()
-	pair := federatedPair{hub: startKata(t, "0.20.0"), spoke: startKata(t, "0.20.0")}
+	pair := federatedPair{hub: startKata(t, "0.21.0"), spoke: startKata(t, "0.21.0")}
 	hub, spoke := pair.hub.target().Client, pair.spoke.target().Client
 
 	instance, err := spoke.InstanceWithResponse(ctx)

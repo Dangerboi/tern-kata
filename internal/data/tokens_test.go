@@ -61,7 +61,7 @@ func listed(t *testing.T, gateway *Gateway, workspace string) map[int64]model.Cr
 }
 
 func TestGatewayCreatesAnAccountTokenIntoANewOwnerOnlyFileAndRevokesIt(t *testing.T) {
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace := t.TempDir()
 	file := filepath.Join(t.TempDir(), "ci.token")
@@ -91,7 +91,7 @@ func TestGatewayCreatesAnAccountTokenIntoANewOwnerOnlyFileAndRevokesIt(t *testin
 }
 
 func TestGatewayRefusesAnExistingTokenFileBeforeSendingAnything(t *testing.T) {
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	var sent atomic.Int32
 	count := func(http.ResponseWriter, *http.Request) bool { sent.Add(1); return false }
 	kata.intercept.Store(&count)
@@ -117,7 +117,7 @@ func TestGatewayRefusesALinkAtTheTokenFilePath(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("creating a symlink needs a privilege on Windows")
 	}
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	dir := t.TempDir()
 	target, link := filepath.Join(dir, "elsewhere"), filepath.Join(dir, "link.token")
@@ -134,7 +134,7 @@ func TestGatewayRefusesALinkAtTheTokenFilePath(t *testing.T) {
 }
 
 func TestGatewayShowsKatasRefusalOfAnIssueSubtreeTokenWithoutIdentityMode(t *testing.T) {
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, bound := project(t, gateway, "demo")
 	issue := createIssue(t, gateway, workspace, bound, "subtree root")
@@ -154,7 +154,7 @@ func TestGatewayShowsKatasRefusalOfAnIssueSubtreeTokenWithoutIdentityMode(t *tes
 }
 
 func TestGatewayRefusesATeamKataDoesNotKnowAndLeavesNoFile(t *testing.T) {
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	file := filepath.Join(t.TempDir(), "team.token")
 	created := as[model.TokenCreated](t, run(t, gateway, model.CreateTokenCmd{Workspace: t.TempDir(), Actor: "ci-bot", Teams: []string{"core"}, File: file}))
@@ -170,7 +170,7 @@ func TestGatewayRefusesATeamKataDoesNotKnowAndLeavesNoFile(t *testing.T) {
 // Issue-subtree token cannot be driven here. What is checked is the request kata receives at the HTTP boundary, kata's documented
 // contract for the scope: the Issue's Project uid and root Issue uid, the expiry in seconds, the actor and the name.
 func TestGatewaySendsKataTheIssueSubtreeScopeAndExpiry(t *testing.T) {
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, bound := project(t, gateway, "demo")
 	issue := createIssue(t, gateway, workspace, bound, "subtree root")
@@ -197,7 +197,7 @@ func TestGatewaySendsKataTheIssueSubtreeScopeAndExpiry(t *testing.T) {
 }
 
 func TestGatewayRevokesATokenWhoseSecretCouldNotBeKept(t *testing.T) {
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace := t.TempDir()
 	// An answer with an empty secret cannot be delivered: the token it names must not stay live.

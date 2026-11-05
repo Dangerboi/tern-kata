@@ -24,7 +24,7 @@ type attentionFixture struct {
 
 func newAttentionFixture(t *testing.T) attentionFixture {
 	t.Helper()
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	work, workP := project(t, gateway, "work")
 	other, otherP := project(t, gateway, "other")
@@ -126,7 +126,7 @@ func TestLoadAttentionFailureCarriesTheRequestNumberAndTheDaemonsMessage(t *test
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(`{"status":500,"error":{"code":"internal","message":"the daemon hiccuped"}}`))
-	}), "0.20.0")
+	}), "0.21.0")
 	gateway := newGateway(t, newLocator(failing.target()))
 	got := as[model.AttentionLoaded](t, run(t, gateway, model.LoadAttention{Workspace: t.TempDir(), Address: "dana", Request: 9}))
 	if got.Request != 9 || got.Err == nil || got.Err.Error() != "the daemon hiccuped" || len(got.Requests) != 0 {

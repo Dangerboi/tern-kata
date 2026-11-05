@@ -13,7 +13,7 @@ What it never does:
 - run native jobs (a recurring child kata's daemon delivers);
 - send a prompt twice: a run whose outcome is uncertain after a crash is held.
 
-It needs kata v0.20.0 or newer and `omp` on `PATH`. On Windows, workflow command steps also need `sh`, which [Git for Windows](https://gitforwindows.org/) provides.
+It needs kata v0.21.0 or newer (kata v0.21 upgrades its database to schema 43 on first start, and older kata binaries cannot open it afterwards; kata keeps a backup from before the upgrade, and PostgreSQL stores need `kata storage postgres migrate` with the daemon stopped) and `omp` on `PATH`. On Windows, workflow command steps also need `sh`, which [Git for Windows](https://gitforwindows.org/) provides.
 
 ## Trust
 

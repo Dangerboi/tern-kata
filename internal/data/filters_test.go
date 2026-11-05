@@ -24,7 +24,7 @@ type configFixture struct {
 
 func newConfigFixture(t *testing.T) configFixture {
 	t.Helper()
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	loc := newLocator(kata.target())
 	gateway := newGateway(t, loc)
 	dirs, err := gateway.workerDirs()

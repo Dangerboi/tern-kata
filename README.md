@@ -66,7 +66,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 ## Requirements
 
-- kata v0.20.0 or newer.
+- kata v0.21.0 or newer. kata v0.21 upgrades its database to schema 43 on first start, and older kata binaries cannot open it afterwards; kata keeps a backup from before the upgrade, and PostgreSQL stores need `kata storage postgres migrate` with the daemon stopped.
 - Tern 0.9.9 or newer.
 - For the worker: [omp](https://github.com/can1357/oh-my-pi) on `PATH`. On Windows also [Git for Windows](https://gitforwindows.org/), whose `sh` runs workflow command steps. The Pane itself needs no Git Bash.
 

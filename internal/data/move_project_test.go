@@ -17,7 +17,7 @@ type moveFixture struct {
 
 func newMoveFixture(t *testing.T) moveFixture {
 	t.Helper()
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, from := project(t, gateway, "demo")
 	created := as[model.ProjectSaved](t, run(t, gateway, model.CreateProject{Workspace: t.TempDir(), Actor: "tester", Name: "extra"}))

@@ -27,7 +27,7 @@ func joinReplica(t *testing.T, kata *kataServer, name string) {
 }
 
 func TestGatewayReadsAnUnfederatedDaemonsFederationAsNoSpokes(t *testing.T) {
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 
 	loaded := as[model.FederationLoaded](t, run(t, gateway, model.LoadFederation{Workspace: t.TempDir(), Request: 8}))
@@ -40,7 +40,7 @@ func TestGatewayReadsAnUnfederatedDaemonsFederationAsNoSpokes(t *testing.T) {
 }
 
 func TestGatewayReadsAReplicaAsASpokeRow(t *testing.T) {
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	joinReplica(t, kata, "acme")
 	gateway := newGateway(t, newLocator(kata.target()))
 
@@ -61,7 +61,7 @@ func TestGatewayReadsAReplicaAsASpokeRow(t *testing.T) {
 }
 
 func TestGatewayLeavesHubRowsOutOfTheSpokeList(t *testing.T) {
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	joinReplica(t, kata, "acme")
 	roles := map[string]bool{}
 	status, err := kata.target().Client.GetFederationStatusWithResponse(context.Background(), nil)
@@ -84,7 +84,7 @@ func TestGatewayLeavesHubRowsOutOfTheSpokeList(t *testing.T) {
 }
 
 func TestGatewayNamesTheActiveDaemonFromKatasCatalog(t *testing.T) {
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	config := "active_daemon = \"team\"\n\n[[daemon]]\nname = \"team\"\nurl = \"https://kata.team.example:7474\"\ntoken_env = \"TEAM_KATA_TOKEN\"\n"
 	if err := os.WriteFile(filepath.Join(os.Getenv("KATA_HOME"), "config.toml"), []byte(config), 0o600); err != nil {
 		t.Fatal(err)
@@ -141,7 +141,7 @@ func TestGatewayReportsAFederationReadFailureInTheAskingMessage(t *testing.T) {
 		t.Errorf("failure %#v, want request 5 and the daemon's error", got)
 	}
 
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	hook := func(w http.ResponseWriter, r *http.Request) bool {
 		if r.URL.Path != "/api/v1/federation/status" {
 			return false

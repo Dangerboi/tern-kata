@@ -60,7 +60,7 @@ func preflightOf(t *testing.T, locate data.Locator, config string) (preflightAns
 func TestPreflightOfAHealthyMachineRefusesNothing(t *testing.T) {
 	var out bytes.Buffer
 	dirs := worker.Dirs{Config: t.TempDir(), State: t.TempDir()}
-	err := runPreflight(context.Background(), preflightEnv{Locate: daemonAt(t, "0.20.0"), Dirs: dirs, Version: "v0.9.0"}, &out)
+	err := runPreflight(context.Background(), preflightEnv{Locate: daemonAt(t, "0.21.0"), Dirs: dirs, Version: "v0.9.0"}, &out)
 	if err != nil || strings.TrimSpace(out.String()) != `{"refusals":[],"warnings":[]}` {
 		t.Errorf("got %q, %v", out.String(), err)
 	}
@@ -95,7 +95,7 @@ func TestPreflightWarnsOfAnUnreachableDaemonAndStillExitsZero(t *testing.T) {
 }
 
 func TestPreflightRefusesAWorkerConfigTheNewBinaryCannotLoad(t *testing.T) {
-	answer, status := preflightOf(t, daemonAt(t, "0.20.0"), "no_such_key = 1\n")
+	answer, status := preflightOf(t, daemonAt(t, "0.21.0"), "no_such_key = 1\n")
 	if status != 1 || len(answer.Refusals) != 1 || answer.Refusals[0].Kind != "config" {
 		t.Fatalf("status %d, answer %+v", status, answer)
 	}
@@ -106,7 +106,7 @@ func TestPreflightRefusesAWorkerConfigTheNewBinaryCannotLoad(t *testing.T) {
 }
 
 func TestPreflightAcceptsAWorkerConfigTheNewBinaryCanLoad(t *testing.T) {
-	if answer, status := preflightOf(t, daemonAt(t, "0.20.0"), "executor = \"laptop\"\n[profiles.default]\n"); status != 0 || len(answer.Refusals) != 0 {
+	if answer, status := preflightOf(t, daemonAt(t, "0.21.0"), "executor = \"laptop\"\n[profiles.default]\n"); status != 0 || len(answer.Refusals) != 0 {
 		t.Errorf("status %d, answer %+v", status, answer)
 	}
 }
@@ -118,7 +118,7 @@ func TestPreflightCommandLine(t *testing.T) {
 	}
 }
 
-const refusingKata = `{"refusals":[{"kind":"kata","message":"tern-kata v0.2.0 needs kata v0.20.0 or newer; this machine's daemon is v0.19.0: upgrade kata, then run tern-kata update again"}],"warnings":["a warning"]}`
+const refusingKata = `{"refusals":[{"kind":"kata","message":"tern-kata v0.2.0 needs kata v0.21.0 or newer; this machine's daemon is v0.19.0: upgrade kata, then run tern-kata update again"}],"warnings":["a warning"]}`
 const refusingConfig = `{"refusals":[{"kind":"config","message":"worker.toml: unknown key x; after updating, fix it with ` + "`tern-kata worker upgrade`" + ` or ` + "`tern-kata worker edit`" + `"}],"warnings":[]}`
 
 func TestUpdateStopsOnAPreflightRefusalWithTheBinaryUntouched(t *testing.T) {
@@ -140,7 +140,7 @@ func TestUpdateForceSwapsPastARefusalAndPrintsItAsAWarning(t *testing.T) {
 	if err := f.run(LaunchPlan{Subcommand: "update", Force: true}); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"warning: a warning\n", "warning: tern-kata v0.2.0 needs kata v0.20.0 or newer", "Updated tern-kata from v0.1.0 to v0.2.0"} {
+	for _, want := range []string{"warning: a warning\n", "warning: tern-kata v0.2.0 needs kata v0.21.0 or newer", "Updated tern-kata from v0.1.0 to v0.2.0"} {
 		if !strings.Contains(f.out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, f.out.String())
 		}

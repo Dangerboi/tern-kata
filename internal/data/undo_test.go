@@ -25,7 +25,7 @@ type undoFixture struct {
 }
 
 func newUndoFixture(t *testing.T) *undoFixture {
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, demo := project(t, gateway, "demo")
 	return &undoFixture{t: t, kata: kata, gateway: gateway, workspace: workspace, project: demo}

@@ -19,7 +19,7 @@ const onFailFlow = `{
 }`
 
 func TestTheWorkersReadingOfAWorkflowArrivesWithALoadAndWithASaveAndTheSaveIsStillWritten(t *testing.T) {
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	gateway := newGateway(t, newLocator(kata.target()))
 	workspace, bound := project(t, gateway, "demo")
 

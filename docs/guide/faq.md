@@ -4,7 +4,7 @@
 
 ### What do I need installed?
 
-kata v0.20.0 or newer and Tern 0.9.9 or newer. For the worker, also omp, and on Windows Git for Windows. See [Install](../../README.md#install).
+kata v0.21.0 or newer and Tern 0.9.9 or newer. For the worker, also omp, and on Windows Git for Windows. kata v0.21 upgrades its database to schema 43 on first start, and older kata binaries cannot open it afterwards; kata keeps a backup from before the upgrade, and PostgreSQL stores need `kata storage postgres migrate` with the daemon stopped. See [Install](../../README.md#install).
 
 ### Which machine gets which part?
 

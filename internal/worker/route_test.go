@@ -355,7 +355,7 @@ func TestTheWorkerRefusesAKataV019DaemonAndNamesTheMinimum(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "service": "kata", "version": "0.19.0"})
 		})
 	_, err := d.Kata.Ping(context.Background())
-	want := "kata daemon 0.19.0 is too old; the worker requires v0.20.0 or newer; upgrade kata"
+	want := "kata daemon 0.19.0 is too old; the worker requires v0.21.0 or newer; upgrade kata"
 	if err == nil || err.Error() != want {
 		t.Fatalf("got %v, want %q", err, want)
 	}

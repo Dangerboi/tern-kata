@@ -38,8 +38,8 @@ func switched(t *testing.T, gateway *Gateway, workspace, name string) model.Daem
 }
 
 func TestGatewaySwitchesBetweenTwoInProcessDaemons(t *testing.T) {
-	alpha := startKata(t, "0.20.0")
-	beta := startKata(t, "0.20.0")
+	alpha := startKata(t, "0.21.0")
+	beta := startKata(t, "0.21.0")
 	writeCatalog(t, "active_daemon = \"alpha\"\n\n"+remoteEntry("alpha", alpha)+remoteEntry("beta", beta))
 	gateway := newGateway(t, newLocator(alpha.target()))
 	betaGateway := newGateway(t, newLocator(beta.target()))
@@ -67,7 +67,7 @@ func TestGatewaySwitchesBetweenTwoInProcessDaemons(t *testing.T) {
 	as[model.StreamOpened](t, receive(t, opened))
 
 	answer := switched(t, gateway, workspace, "beta")
-	if answer.Err != nil || answer.Name != "beta" || answer.Request != 1 || answer.Daemon.Name != "beta" || answer.Daemon.Kind != model.DaemonRemote || answer.Daemon.Version != "v0.20.0" {
+	if answer.Err != nil || answer.Name != "beta" || answer.Request != 1 || answer.Daemon.Name != "beta" || answer.Daemon.Kind != model.DaemonRemote || answer.Daemon.Version != "v0.21.0" {
 		t.Fatalf("switch answered %+v", answer)
 	}
 	<-done // the old daemon's event stream ended
@@ -104,8 +104,8 @@ func TestGatewaySwitchesBetweenTwoInProcessDaemons(t *testing.T) {
 }
 
 func TestGatewaySwitchToAProjectTheNewDaemonLacksStartsOnTheInbox(t *testing.T) {
-	alpha := startKata(t, "0.20.0")
-	beta := startKata(t, "0.20.0")
+	alpha := startKata(t, "0.21.0")
+	beta := startKata(t, "0.21.0")
 	writeCatalog(t, remoteEntry("alpha", alpha)+remoteEntry("beta", beta))
 	gateway := newGateway(t, newLocator(alpha.target()))
 	workspace, _ := project(t, gateway, "only-on-alpha")
@@ -125,8 +125,8 @@ func TestGatewaySwitchToAProjectTheNewDaemonLacksStartsOnTheInbox(t *testing.T) 
 }
 
 func TestGatewayFailedSwitchKeepsTheCurrentConnection(t *testing.T) {
-	alpha := startKata(t, "0.20.0")
-	beta := startKata(t, "0.20.0")
+	alpha := startKata(t, "0.21.0")
+	beta := startKata(t, "0.21.0")
 	t.Setenv("MISSING_TOKEN", "")
 	writeCatalog(t, remoteEntry("alpha", alpha)+
 		"[[daemon]]\nname = \"gated\"\nurl = \""+beta.URL+"\"\ntoken_env = \"MISSING_TOKEN\"\nallow_insecure = true\n\n"+
@@ -213,8 +213,8 @@ func (s stubKata) environment(t *testing.T) map[string]string {
 }
 
 func TestGatewaySwitchesToARunningLocalEntryWithoutStartingIt(t *testing.T) {
-	alpha := startKata(t, "0.20.0")
-	beta := startKata(t, "0.20.0")
+	alpha := startKata(t, "0.21.0")
+	beta := startKata(t, "0.21.0")
 	writeCatalog(t, remoteEntry("alpha", alpha)+"[[daemon]]\nname = \"mine\"\nlocal = true\n")
 	stub := installStubKata(t, beta.URL, false, "")
 	gateway := newGateway(t, newLocator(alpha.target()))
@@ -230,8 +230,8 @@ func TestGatewaySwitchesToARunningLocalEntryWithoutStartingIt(t *testing.T) {
 
 func TestGatewayRecoversAStoppedProfileThroughKatasRecoverThenConnects(t *testing.T) {
 	profileHome := t.TempDir()
-	alpha := startKata(t, "0.20.0")
-	beta := startKata(t, "0.20.0")
+	alpha := startKata(t, "0.21.0")
+	beta := startKata(t, "0.21.0")
 	current := os.Getenv("KATA_HOME")
 	writeCatalog(t, remoteEntry("alpha", alpha)+"[[daemon]]\nname = \"mine\"\nlocal = true\nhome = \""+profileHome+"\"\ninstance_uid = \""+profileInstanceUID+"\"\n")
 	stub := installStubKata(t, beta.URL, true, "")
@@ -251,8 +251,8 @@ func TestGatewayRecoversAStoppedProfileThroughKatasRecoverThenConnects(t *testin
 }
 
 func TestGatewayStartsTheCurrentHomeEntryWithAScrubbedEnvironmentThenConnects(t *testing.T) {
-	alpha := startKata(t, "0.20.0")
-	beta := startKata(t, "0.20.0")
+	alpha := startKata(t, "0.21.0")
+	beta := startKata(t, "0.21.0")
 	current := os.Getenv("KATA_HOME")
 	writeCatalog(t, remoteEntry("alpha", alpha)+"[[daemon]]\nname = \"mine\"\nlocal = true\n")
 	t.Setenv("KATA_DSN", "postgres://elsewhere")
@@ -281,8 +281,8 @@ func TestGatewayStartsTheCurrentHomeEntryWithAScrubbedEnvironmentThenConnects(t 
 }
 
 func TestGatewayRefusedRecoverKeepsTheCurrentConnectionAndShowsKatasMessage(t *testing.T) {
-	alpha := startKata(t, "0.20.0")
-	beta := startKata(t, "0.20.0")
+	alpha := startKata(t, "0.21.0")
+	beta := startKata(t, "0.21.0")
 	writeCatalog(t, remoteEntry("alpha", alpha)+"[[daemon]]\nname = \"mine\"\nlocal = true\nhome = \""+t.TempDir()+"\"\ninstance_uid = \""+profileInstanceUID+"\"\n")
 	installStubKata(t, beta.URL, true, "kata: missing_profile_storage: restore the profile database")
 	gateway := newGateway(t, newLocator(alpha.target()))
@@ -299,8 +299,8 @@ func TestGatewayRefusedRecoverKeepsTheCurrentConnectionAndShowsKatasMessage(t *t
 }
 
 func TestGatewayFailedStartKeepsTheCurrentConnectionAndShowsKatasReason(t *testing.T) {
-	alpha := startKata(t, "0.20.0")
-	beta := startKata(t, "0.20.0")
+	alpha := startKata(t, "0.21.0")
+	beta := startKata(t, "0.21.0")
 	writeCatalog(t, remoteEntry("alpha", alpha)+"[[daemon]]\nname = \"mine\"\nlocal = true\n")
 	installStubKata(t, beta.URL, true, "port in use")
 	gateway := newGateway(t, newLocator(alpha.target()))
@@ -317,7 +317,7 @@ func TestGatewayFailedStartKeepsTheCurrentConnectionAndShowsKatasReason(t *testi
 }
 
 func TestGatewayDaemonsListsTheCatalogInKataTuisColumns(t *testing.T) {
-	alpha := startKata(t, "0.20.0")
+	alpha := startKata(t, "0.21.0")
 	t.Setenv("BETA_TOKEN", "x")
 	home := os.Getenv("KATA_HOME")
 	writeCatalog(t, "active_daemon = \"beta\"\n\n"+
@@ -347,7 +347,7 @@ func TestGatewayDaemonsListsTheCatalogInKataTuisColumns(t *testing.T) {
 }
 
 func TestGatewayNamesTheDaemonAWorkspacePinSelectsNotTheActiveOne(t *testing.T) {
-	beta := startKata(t, "0.20.0")
+	beta := startKata(t, "0.21.0")
 	t.Setenv("ALPHA_TOKEN", "alpha-secret")
 	writeCatalog(t, "active_daemon = \"alpha\"\n\n"+
 		"[[daemon]]\nname = \"alpha\"\nurl = \"https://alpha.example.com\"\ntoken_env = \"ALPHA_TOKEN\"\n\n"+
@@ -385,7 +385,7 @@ func TestGatewayNamesTheDaemonAWorkspacePinSelectsNotTheActiveOne(t *testing.T) 
 }
 
 func TestGatewayDaemonsWithoutACatalogIsEmptyAndNamesTheFile(t *testing.T) {
-	alpha := startKata(t, "0.20.0")
+	alpha := startKata(t, "0.21.0")
 	gateway := newGateway(t, newLocator(alpha.target()))
 	got := as[model.DaemonsLoaded](t, run(t, gateway, model.LoadDaemons{Request: 1}))
 	if got.Err != nil || len(got.Entries) != 0 || got.ConfigPath != filepath.Join(os.Getenv("KATA_HOME"), "config.toml") {
@@ -400,7 +400,7 @@ func TestGatewayDaemonsWithoutACatalogIsEmptyAndNamesTheFile(t *testing.T) {
 
 func TestGatewaySwitchEndsAndAwaitsTheOldDaemonsPointerPass(t *testing.T) {
 	f := newAttachFixture(t)
-	beta := startKata(t, "0.20.0")
+	beta := startKata(t, "0.21.0")
 	writeCatalog(t, remoteEntry("alpha", f.kata)+remoteEntry("beta", beta))
 	f.setMeta(t, f.uid, map[string]any{"attachment.a.png": map[string]any{"host": f.host, "path": "/a.png"}})
 
@@ -556,7 +556,7 @@ func TestWorkspacePinFollowsKatasRules(t *testing.T) {
 }
 
 func TestGatewayDaemonsPageMarksTheDaemonTheWorkspaceConnectionNames(t *testing.T) {
-	beta := startKata(t, "0.20.0")
+	beta := startKata(t, "0.21.0")
 	writeCatalog(t, "active_daemon = \"alpha\"\n\n"+
 		"[[daemon]]\nname = \"alpha\"\nurl = \"https://alpha.example.com\"\n\n"+
 		"[[daemon]]\nname = \"beta\"\nurl = \""+beta.URL+"\"\nallow_insecure = true\n")
@@ -624,7 +624,7 @@ func TestResolvedEntryReadsTheGitCheckedPinOnItsOwnDeadline(t *testing.T) {
 
 func TestCurrentDaemonBeforeAnyConnectionFollowsThePinAndThePlainLocalRule(t *testing.T) {
 	t.Setenv("KATA_SERVER", "")
-	beta := startKata(t, "0.20.0")
+	beta := startKata(t, "0.21.0")
 	workspace := t.TempDir()
 	if err := os.WriteFile(filepath.Join(workspace, ".kata.toml"), []byte("version = 1\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -651,7 +651,7 @@ func TestCurrentDaemonBeforeAnyConnectionFollowsThePinAndThePlainLocalRule(t *te
 }
 
 func TestClientConnectsWithoutHoldingTheGatewayLockAndSharesOneClientPerWorkspace(t *testing.T) {
-	kata := startKata(t, "0.20.0")
+	kata := startKata(t, "0.21.0")
 	var gateway *Gateway
 	var locked, arrived atomic.Int32
 	gateway = NewGateway(func(ctx context.Context, _ string) (Target, error) {

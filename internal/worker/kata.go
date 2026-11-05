@@ -160,8 +160,8 @@ func refused(err error) bool {
 	return ok && e.Refused()
 }
 
-// MinKataVersion is the oldest kata daemon the Pane and the Worker accept: kata v0.20 requires cron peers to upgrade together and does not support v0.19 beside it.
-const MinKataVersion = "v0.20.0"
+// MinKataVersion is the oldest kata daemon the Pane and the Worker accept: kata v0.21 upgrades its database to schema 43, which older kata binaries cannot open.
+const MinKataVersion = "v0.21.0"
 
 // KataTooOldError is Ping's refusal of a daemon older than MinKataVersion; Version is what the daemon reported.
 type KataTooOldError struct{ Version string }

@@ -132,7 +132,7 @@ func Main(m *testing.M) int {
 	return m.Run()
 }
 
-// StartKata starts kata in process. Its ping reports 0.20.0, as the in-process service reports no version. The test
+// StartKata starts kata in process. Its ping reports 0.21.0, as the in-process service reports no version. The test
 // binary's TestMain must call Main, which keeps kata's discovery variables away from the real daemon.
 func StartKata(t *testing.T) *Daemon {
 	t.Helper()
@@ -149,7 +149,7 @@ func StartKata(t *testing.T) *Daemon {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/ping" {
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "service": "kata", "version": "0.20.0"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "service": "kata", "version": "0.21.0"})
 			return
 		}
 		if d.intercept(w, r) {

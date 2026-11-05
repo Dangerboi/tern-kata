@@ -95,7 +95,7 @@ func TestAnUnreadableLanesFileIsRefusedAndNotOverwritten(t *testing.T) {
 
 func TestLanesSaveAndLoadWhenOnlyTheStateFolderCannotBeFound(t *testing.T) {
 	config := t.TempDir()
-	loc := newLocator(startKata(t, "0.20.0").target())
+	loc := newLocator(startKata(t, "0.21.0").target())
 	newOne := func() *Gateway {
 		g := NewGateway(loc.locate)
 		g.workerDirs = func() (worker.Dirs, error) {

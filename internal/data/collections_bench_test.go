@@ -93,7 +93,7 @@ func unixTarget(b *testing.B, kata *kataServer) Target {
 // trip, the client's decode and the translation to the model. body-B is the answer's size on the wire.
 func BenchmarkReadSnapshot(b *testing.B) {
 	for _, n := range []int{50, 500, 2000} {
-		kata := startKata(b, "0.20.0")
+		kata := startKata(b, "0.21.0")
 		_, read := seedSnapshot(b, newGateway(b, newLocator(kata.target())), n)
 		for _, transport := range []string{"unix", "tcp"} {
 			target := kata.target()

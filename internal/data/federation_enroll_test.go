@@ -26,7 +26,7 @@ type enrollRig struct {
 
 func startEnrollRig(t *testing.T) enrollRig {
 	t.Helper()
-	rig := enrollRig{hub: startKata(t, "0.20.0"), spoke: startKata(t, "0.20.0")}
+	rig := enrollRig{hub: startKata(t, "0.21.0"), spoke: startKata(t, "0.21.0")}
 	t.Setenv("HUB_TOKEN", "hub-secret")
 	rig.writeCatalog(t, fmt.Sprintf(`active_daemon = "spoke"
 
@@ -252,7 +252,7 @@ func TestAHubThatIsDownIsAFailedReadNotARefusal(t *testing.T) {
 
 func TestBrowsingReadsEveryHubThatIsNeitherActiveNorLocalAndKeepsAFailureInItsOwnRow(t *testing.T) {
 	rig := startEnrollRig(t)
-	second := startKata(t, "0.20.0")
+	second := startKata(t, "0.21.0")
 	down := httptest.NewServer(http.NotFoundHandler())
 	down.Close()
 	t.Setenv("HUB_TOKEN", "hub-secret")

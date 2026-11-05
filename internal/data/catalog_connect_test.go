@@ -24,7 +24,7 @@ func startTokenKata(t *testing.T, token string) *kataServer {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = service.Close() })
-	return serve(t, service.Handler(), "0.20.0")
+	return serve(t, service.Handler(), "0.21.0")
 }
 
 // loadsProject binds a Project through a Gateway that finds its daemon with loc, and returns the daemon the Project loads from.
@@ -61,7 +61,7 @@ func TestGatewayConnectsToALocalCatalogEntryThroughKataLocate(t *testing.T) {
 	t.Setenv("KATA_HOME", t.TempDir())
 	t.Setenv("KATA_SERVER", "")
 	t.Setenv("KATA_AUTH_TOKEN", "")
-	kataD := startKata(t, "0.20.0")
+	kataD := startKata(t, "0.21.0")
 	bin := t.TempDir()
 	args := filepath.Join(bin, "args")
 	stub := "#!/bin/sh\necho \"$@\" > '" + args + "'\n" +
