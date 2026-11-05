@@ -303,7 +303,7 @@ func TestFederationPageKeepsThePageKeysAndTheMenu(t *testing.T) {
 	if got := step(t, s, key("?")).State.Model; !got.HelpOpen {
 		t.Error("? opens no help")
 	}
-	if got := step(t, s, key("2")).State.Model.Page; got != model.PageBoard {
+	if got := step(t, s, key("5")).State.Model.Page; got != model.PageBoard {
 		t.Errorf("2 gave page %v, want the Board", got)
 	}
 	if got := step(t, s, click(pageBarEntry(t, s.Model, "F"), view.KeyClick("shift+f"))); got.State.Model.Page != model.PageFederation {

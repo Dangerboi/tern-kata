@@ -17,14 +17,14 @@ const (
 	// PageIssues is the Issue list with the Issue detail, the Pane's main surface. Its state is the list's: the Collection,
 	// the Issues, the selection and the filters, which the Board Page shares because it draws the same Issues.
 	PageIssues Page = iota
-	// PageBoard is the Project's Issues in Lanes; its state is Model.Board.
-	PageBoard
 	// PageJobs is the Project's Cron jobs; its state is Model.Jobs.
 	PageJobs
 	// PageRuns is the Project's Runs, newest first; its state is Model.Runs.
 	PageRuns
 	// PageWorkflows is the Project's kata workflows beside an inspector; its state is Model.Workflows.
 	PageWorkflows
+	// PageBoard is the Project's Issues in Lanes; its state is Model.Board.
+	PageBoard
 	// PageAttention is the Attention requests addressed to the Pane's Inbox address, across every Project; its state is Model.Attention.
 	PageAttention
 	// PageCredentials is the Lettered Page of the daemon's API tokens; its state is Model.Credentials.
@@ -169,25 +169,25 @@ func init() {
 	pageDefs = []pageDef{
 		{page: PageIssues, id: "issues", label: "Issues", chord: "1", action: ShowIssuesPage, moves: issueMoves(ModeList),
 			keymap: []keySegment{movementKeys}},
-		{page: PageBoard, id: "board", label: "Board", chord: "2", action: ShowBoardPage, needs: "Board", second: SecondIssueDetail, enter: enterBoard, clear: clearBoard,
-			mode: boardMode, update: updateBoard, moves: issueMoves(ModeLane),
-			// listRows are the Issue list's and the Lane view's rows, which follow the Board's movement keys.
-			keymap: []keySegment{movementKeys, rowsOf(listRows)}},
-		{page: PageJobs, id: "jobs", label: "Jobs", chord: "3", action: ShowJobsPage, needs: "Jobs Page", second: SecondInspector, enter: enterJobs, clear: clearJobs,
+		{page: PageJobs, id: "jobs", label: "Jobs", chord: "2", action: ShowJobsPage, needs: "Jobs Page", second: SecondInspector, enter: enterJobs, clear: clearJobs,
 			filledFor: jobsFilledFor, reset: resetJobs, mode: inspectorMode(ModeJobs, ModeJobInspector), update: updateJobs, list: ListNodeJobs,
 			moves:  pageMoves{mode: ModeJobs, noun: "job", move: moveJob, sheet: [6]sheetLine{{sheetJobs, 1, "next job"}, {sheetJobs, 2, "previous job"}, {sheetJobs, 3, "first job"}, {sheetJobs, 4, "last job"}}},
 			scroll: pageScroll{mode: ModeJobInspector, sheet: sheetLine{sheetJobs, 9, "scroll the inspector"}},
 			keymap: []keySegment{movementKeys, rowsOf(jobsRows), scrollKeys, rowsOf(jobsRowsAfterScroll)}},
-		{page: PageRuns, id: "runs", label: "Runs", chord: "4", action: ShowRunsPage, needs: "Runs Page", second: SecondInspector, enter: enterRuns, clear: clearRuns,
+		{page: PageRuns, id: "runs", label: "Runs", chord: "3", action: ShowRunsPage, needs: "Runs Page", second: SecondInspector, enter: enterRuns, clear: clearRuns,
 			filledFor: runsFilledFor, reset: resetRuns, mode: inspectorMode(ModeRuns, ModeRunInspector), update: updateRuns, list: ListNodeRuns,
 			moves:  pageMoves{mode: ModeRuns, noun: "run", move: moveRun, sheet: [6]sheetLine{{sheetRuns, 1, "next run"}, {sheetRuns, 2, "previous run"}, {sheetRuns, 3, "first run"}, {sheetRuns, 4, "last run"}}},
 			scroll: pageScroll{mode: ModeRunInspector, sheet: sheetLine{sheetRuns, 10, "scroll the detail"}},
 			// mainRows are the Runs inspector's back key and every row after it, which no Page owns (layout, back, Menu, help, quit).
 			keymap: []keySegment{rowsOf(runsRowsBeforeMovement), movementKeys, rowsOf(runsRows), scrollKeys, rowsOf(mainRows)}},
-		{page: PageWorkflows, id: "workflows", label: "Workflows", chord: "5", action: ShowWorkflowsPage, needs: "Workflows Page", second: SecondIssueDetail, enter: enterWorkflows, clear: clearWorkflows,
+		{page: PageWorkflows, id: "workflows", label: "Workflows", chord: "4", action: ShowWorkflowsPage, needs: "Workflows Page", second: SecondIssueDetail, enter: enterWorkflows, clear: clearWorkflows,
 			filledFor: workflowsFilledFor, reset: resetWorkflows, mode: workflowsMode, update: updateWorkflows, list: ListNodeWorkflows,
 			moves:  pageMoves{mode: ModeWorkflows, noun: "workflow", move: moveWorkflow, sheet: [6]sheetLine{{sheetWorkflows, 1, "next workflow"}, {sheetWorkflows, 2, "previous workflow"}}},
 			keymap: []keySegment{movementKeys, rowsOf(workflowActions())}},
+		{page: PageBoard, id: "board", label: "Board", chord: "5", action: ShowBoardPage, needs: "Board", second: SecondIssueDetail, enter: enterBoard, clear: clearBoard,
+			mode: boardMode, update: updateBoard, moves: issueMoves(ModeLane),
+			// listRows are the Issue list's and the Lane view's rows, which follow the Board's movement keys.
+			keymap: []keySegment{movementKeys, rowsOf(listRows)}},
 		{page: PageAttention, id: "attention", label: "Attention", chord: "6", action: ShowAttentionPage, also: keys("shift+t", "T"), second: SecondInspector, enter: enterAttention,
 			mode: func(Model) Mode { return ModeAttention }, update: updateAttention, list: ListNodeAttention,
 			moves:  pageMoves{mode: ModeAttention, noun: "request", move: moveAttention, sheet: [6]sheetLine{{sheetAttention, 1, "next request"}, {sheetAttention, 2, "previous request"}}},

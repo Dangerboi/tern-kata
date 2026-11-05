@@ -1,6 +1,6 @@
 # Workflows
 
-`5` in a Project opens the Workflows Page. It shows the Project's kata **Workflows**, one row each with its name and step count. Archived ones stay hidden until `a` shows them.
+`4` in a Project opens the Workflows Page. It shows the Project's kata **Workflows**, one row each with its name and step count. Archived ones stay hidden until `a` shows them.
 
 The Project is found as the [Board Page](pages-and-board.md#board-page) finds it, and the Page ends when you leave the Project Collection. Esc closes the steps first, then goes to the Menu.
 

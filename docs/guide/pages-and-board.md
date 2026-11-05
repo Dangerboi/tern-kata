@@ -14,7 +14,7 @@ In a directory bound to a kata Project, `tern-kata` opens that Project's Issues.
 
 ## The Page bar
 
-The top bar holds the **Page bar**, "1 Issues  2 Board  3 Jobs  4 Runs  5 Workflows  6 Attention". `1` to `6`, or a click on a Page, switch Pages; `b` toggles between Issues and Board. Each Page keeps its selection while another is shown. The top bar's Project heading is only a heading: the Menu button, or `esc` from the list, opens the Menu.
+The top bar holds the **Page bar**, "1 Issues  2 Jobs  3 Runs  4 Workflows  5 Board  6 Attention". `1` to `6`, or a click on a Page, switch Pages; `b` toggles between Issues and Board. Each Page keeps its selection while another is shown. The top bar's Project heading is only a heading: the Menu button, or `esc` from the list, opens the Menu.
 
 The Board, Jobs, Runs and Workflows Pages act on the Pane's Project: the current Project Collection, else the workspace's Binding (from Inbox or another fixed Collection in a bound workspace it switches to the Binding's Project). With neither it says so and opens the Menu's Projects list. The Attention Page acts on no Project: it reads every Project on the daemon, and neither a Project nor a Collection change touches it.
 
@@ -168,7 +168,7 @@ After the move a Notice names the new `project#id` as a link: click it to open t
 
 ## Board Page
 
-`b` in a Project Collection shows the Project's Issues as a **Board**; `b` or `1` again returns to the list with the same Issue selected. `2` also opens it.
+`b` in a Project Collection shows the Project's Issues as a **Board**; `b` or `1` again returns to the list with the same Issue selected. `5` also opens it.
 
 ![The acme-shop Board with "Add Apple Pay to checkout" selected, its parent and blocker tagged](../images/board.png)
 

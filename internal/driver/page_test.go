@@ -11,17 +11,17 @@ import (
 
 func TestPageBarShowsIssuesAndBoardAndKeysAndClicksSwitchPages(t *testing.T) {
 	s := projectPane(t, 160, boardCard("a"), boardCard("b"))
-	for _, entry := range []struct{ name, chord string }{{"issues", "1"}, {"board", "2"}} {
+	for _, entry := range []struct{ name, chord string }{{"issues", "1"}, {"board", "5"}} {
 		if _, ok := pageBarEntryAt(t, s.Model, entry.chord); !ok {
 			t.Errorf("the Page bar draws no %s entry", entry.name)
 		}
 	}
 	for name, to := range map[string]func(driver.State) driver.State{
 		"key": func(s driver.State) driver.State {
-			return feed(t, s, key("2"), newestLanes{ProjectUID: "p"}).State
+			return feed(t, s, key("5"), newestLanes{ProjectUID: "p"}).State
 		},
 		"click": func(s driver.State) driver.State {
-			return feed(t, s, click(pageBarEntry(t, s.Model, "2"), view.KeyClick("2")), newestLanes{ProjectUID: "p"}).State
+			return feed(t, s, click(pageBarEntry(t, s.Model, "5"), view.KeyClick("5")), newestLanes{ProjectUID: "p"}).State
 		},
 		"b": func(s driver.State) driver.State {
 			return feed(t, s, key("b"), newestLanes{ProjectUID: "p"}).State
@@ -49,7 +49,7 @@ func TestEachPageKeepsItsSelectionWhileAnotherIsShown(t *testing.T) {
 	if s.Model.SelectedUID != "c" {
 		t.Fatalf("fixture: selected %q", s.Model.SelectedUID)
 	}
-	board := feed(t, s, key("2"), newestLanes{ProjectUID: "p"}).State
+	board := feed(t, s, key("5"), newestLanes{ProjectUID: "p"}).State
 	if board.Model.SelectedUID != "c" {
 		t.Errorf("the Board Page selects %q, want c", board.Model.SelectedUID)
 	}
@@ -65,7 +65,7 @@ func TestBoardPageShowsTheBindingsProjectFromAFixedCollection(t *testing.T) {
 	if s.Model.Collection.IsProject() {
 		t.Fatal("fixture: still in the Project Collection")
 	}
-	out := step(t, s, key("2"))
+	out := step(t, s, key("5"))
 	m := out.State.Model
 	if m.Page != model.PageBoard || m.Collection.ProjectUID != "p" || len(out.Cmds) == 0 {
 		t.Errorf("page %v, Collection %+v, commands %v; want the Board Page of the Binding's Project with its Issues loading", m.Page, m.Collection, out.Cmds)
@@ -74,7 +74,7 @@ func TestBoardPageShowsTheBindingsProjectFromAFixedCollection(t *testing.T) {
 
 func TestBoardPageWithoutAProjectSaysSoAndOpensTheMenusProjects(t *testing.T) {
 	s := loadedWith(t, 160, model.Project{}, model.Snapshot{Issues: []model.Issue{alpha}})
-	for _, press := range []string{"2", "b"} {
+	for _, press := range []string{"5", "b"} {
 		m := step(t, s, key(press)).State.Model
 		if m.Page != model.PageIssues || !strings.Contains(m.Notice, "Project") || m.Focus != model.ColumnCollections || m.SidebarLevel != model.MenuProjects {
 			t.Errorf("%s: page %v, notice %q, focus %v, Projects level %v", press, m.Page, m.Notice, m.Focus, m.SidebarLevel == model.MenuProjects)

@@ -22,21 +22,21 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 **Federation.** `F` opens the Federation Page, a Lettered Page (also in the Menu) that lists this daemon's spoke federations with hub, actor, push, pending, sync and badges, shows a Project's detail on Enter, reads again with `r` and leaves a federation with `x` (preview, hub revoke, result). `b` browses the Projects of the daemon catalog's hubs, and `n` enrolls a Project in a hub's federation (choose a local Project, a hub and a hub Project, preview, a typed confirmation for adopting, result; a failure after the hub granted it keeps a recovery whose `R` shows the `kata federation join …` command); see [Pages and the Board](docs/guide/pages-and-board.md#lettered-pages).
 
-**Board.** `2` or `b` shows a Project's Issues as cards in Lanes, one per triage label. `<` and `>` move a card by swapping its label in kata, and a selected card tags its related cards; following one of another Project switches the Pane to that Project and Esc comes back. See [Pages and the Board](docs/guide/pages-and-board.md).
+**Board.** `5` or `b` shows a Project's Issues as cards in Lanes, one per triage label. `<` and `>` move a card by swapping its label in kata, and a selected card tags its related cards; following one of another Project switches the Pane to that Project and Esc comes back. See [Pages and the Board](docs/guide/pages-and-board.md).
 
 ![The acme-shop Board with "Add Apple Pay to checkout" selected, its parent and blocker tagged](docs/images/board.png)
 
-**Jobs and the Job card.** `3` lists a Project's Cron jobs with their state, schedule in words and next run. The Job card makes and edits every kind of job. See [Jobs](docs/guide/jobs.md).
+**Jobs and the Job card.** `2` lists a Project's Cron jobs with their state, schedule in words and next run. The Job card makes and edits every kind of job. See [Jobs](docs/guide/jobs.md).
 
 ![The Jobs Page with a job selected and its inspector open](docs/images/jobs.png)
 
 ![The Job card editing an agent prompt job, with the schedule preview](docs/images/job-card.png)
 
-**Runs.** `4` lists a Project's runs newest first, with held runs, steps and output from this machine's worker. See [Runs](docs/guide/runs.md).
+**Runs.** `3` lists a Project's runs newest first, with held runs, steps and output from this machine's worker. See [Runs](docs/guide/runs.md).
 
 ![The Runs Page with an unknown run selected and its detail open](docs/images/runs.png)
 
-**Workflows.** `5` lists a Project's kata workflows, their steps and the jobs that run them, and edits them as JSON. See [Workflows](docs/guide/workflows.md).
+**Workflows.** `4` lists a Project's kata workflows, their steps and the jobs that run them, and edits them as JSON. See [Workflows](docs/guide/workflows.md).
 
 ![The Workflows Page with a workflow selected and its steps shown](docs/images/workflows.png)
 

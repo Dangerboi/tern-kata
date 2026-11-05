@@ -231,7 +231,7 @@ func BenchmarkStep(b *testing.B) {
 		}
 	}
 	b.Run("page=jobs/jobs=20/input=move", func(b *testing.B) {
-		out := driver.Step(benchPane(b, 50, "list"), key("3"), now)
+		out := driver.Step(benchPane(b, 50, "list"), key("2"), now)
 		load, ok := askedJobs(out.Cmds)
 		if !ok {
 			b.Fatal("the Jobs Page asked for no jobs")

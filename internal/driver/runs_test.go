@@ -36,7 +36,7 @@ func workflowRun(uid string) model.Run {
 // runsPane is a Pane on the Runs Page, the runs read answered with runs.
 func runsPane(t *testing.T, cols int, runs ...model.Run) driver.State {
 	t.Helper()
-	out := step(t, projectPane(t, cols, boardCard("parent-a")), key("4"))
+	out := step(t, projectPane(t, cols, boardCard("parent-a")), key("3"))
 	return answerRuns(t, out, "", runs...)
 }
 
@@ -75,15 +75,15 @@ func runCardText(t *testing.T, s driver.State, uid string) string {
 
 func TestRunsPageKeyAsksForTheProjectsRunsAndThePageBarShowsThePage(t *testing.T) {
 	s := projectPane(t, 160, boardCard("a"))
-	out := step(t, s, key("4"))
+	out := step(t, s, key("3"))
 	load, ok := askedRuns(out.Cmds)
 	if !ok || load.ProjectID != 7 || load.JobUID != "" || load.Before != "" || load.Workspace != "/repo" {
 		t.Fatalf("cmds %#v, want a read of the Project's newest runs", out.Cmds)
 	}
-	if out.State.Model.Page != model.PageRuns || !pageBarDrawn(t, out.State.Model, "4") {
+	if out.State.Model.Page != model.PageRuns || !pageBarDrawn(t, out.State.Model, "3") {
 		t.Fatalf("page %v, want the Runs Page with its Page bar entry", out.State.Model.Page)
 	}
-	if _, ok := askedRuns(step(t, s, click(pageBarEntry(t, out.State.Model, "4"), view.KeyClick("4"))).Cmds); !ok {
+	if _, ok := askedRuns(step(t, s, click(pageBarEntry(t, out.State.Model, "3"), view.KeyClick("3"))).Cmds); !ok {
 		t.Error("clicking the Runs entry asks for no runs")
 	}
 	if back := step(t, out.State, key("1")); back.State.Model.Page != model.PageIssues {
@@ -243,7 +243,7 @@ func TestSwitchingPagesKeepsEachPagesSelectionLoadedRunsAndFilter(t *testing.T) 
 	s := answerRuns(t, out, "cursor-1", finishedRun("R2"))
 	s = answerRuns(t, step(t, s, key("m")), "", finishedRun("R2"), finishedRun("R1"))
 	s = feed(t, s, key("j")).State
-	back := step(t, step(t, s, key("1")).State, key("4"))
+	back := step(t, step(t, s, key("1")).State, key("3"))
 	if got := back.State.Model.Runs; got.JobUID != "J1" || got.Selected != "R1" || len(got.Runs) != 2 {
 		t.Fatalf("after a visit elsewhere: filter %q selected %q runs %d, want J1, R1 and both pages", got.JobUID, got.Selected, len(got.Runs))
 	}
@@ -254,7 +254,7 @@ func TestSwitchingPagesKeepsEachPagesSelectionLoadedRunsAndFilter(t *testing.T) 
 
 	// Jobs: the selected job survives too.
 	j := feed(t, jobsPane(t, 160, promptJob("J1", "Triage"), promptJob("J2", "Other")), key("j")).State
-	again := step(t, step(t, j, key("1")).State, key("3"))
+	again := step(t, step(t, j, key("1")).State, key("2"))
 	if got := again.State.Model.Jobs.Selected; got != "J2" {
 		t.Fatalf("selected %q after a visit elsewhere, want J2", got)
 	}
@@ -267,7 +267,7 @@ func TestAPolledRefreshKeepsTheOlderRunsLoadedAndTheSelectedOne(t *testing.T) {
 	running := model.LocalRun{UID: "R3", Project: "work", Job: "Triage", State: "running", Attempt: 1}
 	live := finishedRun("R3")
 	live.Status = cronjob.RunRunning
-	out := step(t, projectPane(t, 160, boardCard("parent-a")), key("4"))
+	out := step(t, projectPane(t, 160, boardCard("parent-a")), key("3"))
 	out.State = answerRuns(t, out, "cursor-1", live, finishedRun("R2"))
 	out = answerWorker(t, out, servingWorker(running))
 	s := answerRuns(t, step(t, out.State, key("m")), "", live, finishedRun("R2"), finishedRun("R1"))
@@ -337,7 +337,7 @@ func TestRunsPageSelectionClickAndMoveAreFollowed(t *testing.T) {
 func TestRunsPageNeedsAProject(t *testing.T) {
 	s := feed(t, driver.State{}, model.Start{Workspace: "/repo"}, resize(160)).State
 	s.Model = loadFirst(s.Model, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{alpha}}})
-	out := step(t, s, key("4"))
+	out := step(t, s, key("3"))
 	if out.State.Model.Page != model.PageIssues || !strings.Contains(out.State.Model.Notice, "Runs Page needs a Project") {
 		t.Fatalf("page %v notice %q", out.State.Model.Page, out.State.Model.Notice)
 	}
@@ -353,7 +353,7 @@ func TestFooterAndHelpSheetListTheRunsPageKeys(t *testing.T) {
 }
 
 func TestWorkflowRowAndInspectorShowTheWorkflowsLatestRuns(t *testing.T) {
-	out := feed(t, projectPane(t, 160, boardCard("a")), key("5"))
+	out := feed(t, projectPane(t, 160, boardCard("a")), key("4"))
 	load, ok := askedRuns(out.Cmds)
 	if !ok || load.ProjectID != 7 || load.JobUID != "" {
 		t.Fatalf("the Page asked for runs with %#v, want the Project's newest runs", out.Cmds)
@@ -382,7 +382,7 @@ func TestWorkflowRowAndInspectorShowTheWorkflowsLatestRuns(t *testing.T) {
 }
 
 func TestAnAnswerToTheRunsPagesReadDoesNotLandOnTheWorkflowsPage(t *testing.T) {
-	out := feed(t, projectPane(t, 160, boardCard("a")), key("5"))
+	out := feed(t, projectPane(t, 160, boardCard("a")), key("4"))
 	load, _ := askedRuns(out.Cmds)
 	s := step(t, out.State, model.WorkflowsLoaded{ProjectUID: "p", Workflows: []model.Workflow{reviewFlow()}}).State
 	running := workflowRun("R2")
@@ -402,7 +402,7 @@ func TestAnAnswerToTheRunsPagesReadDoesNotLandOnTheWorkflowsPage(t *testing.T) {
 }
 
 func TestWorkflowsPageFollowsRunPagesToFindEachWorkflowsLatestRunAndOlderRuns(t *testing.T) {
-	out := feed(t, projectPane(t, 160, boardCard("a")), key("5"))
+	out := feed(t, projectPane(t, 160, boardCard("a")), key("4"))
 	first, ok := askedRuns(out.Cmds)
 	if !ok {
 		t.Fatalf("no runs read asked for: %#v", out.Cmds)

@@ -14,7 +14,7 @@ kata --workspace "$jb_dir" cron job create --parent "$jb_short" --file "$tmp/job
 jb_job=$(jq -r '.job.uid' "$tmp/jobs-created.json")
 jb_event=$(jq -r '.job.definition_event_uid' "$tmp/jobs-created.json")
 
-ctl key 3
+ctl key 2
 expect_tree "[data-id='main.columns.list.jobs.$jb_job']" '.ok and .count == 1 and (.nodes[0].text | contains("active") and contains("Smoke hourly report") and contains("recurring child") and contains("every hour") and contains("next "))'
 expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Smoke jobs parent")))'
 ctl key enter
@@ -28,7 +28,7 @@ jq '.name = "Smoke second report"' "$tmp/jobs-job.json" >"$tmp/jobs-second.json"
 kata --workspace "$jb_dir" cron job create --parent "$jb_short" --file "$tmp/jobs-second.json" --json >"$tmp/jobs-second-created.json"
 jb_second=$(jq -r '.job.uid' "$tmp/jobs-second-created.json")
 jb_second_event=$(jq -r '.job.definition_event_uid' "$tmp/jobs-second-created.json")
-ctl key 3
+ctl key 2
 expect_tree "[data-id='main.columns.list.jobs.$jb_second']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.list.jobs.$jb_job']"
 expect_tree "[data-id='main.columns.list.jobs.$jb_job']" '.ok and (.nodes[0].class | contains("selected"))'
@@ -47,7 +47,7 @@ expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("open p
 ctl click "[data-id='main.columns.list.jobs.$jb_job']"
 
 # Archived jobs stay out of the list until `a`.
-ctl key 3
+ctl key 2
 kata --workspace "$jb_dir" cron job delete "$jb_job" --expected-event-uid "$jb_event" --json >/dev/null
 kata --workspace "$jb_dir" cron job delete "$jb_second" --expected-event-uid "$jb_second_event" --json >/dev/null
 expect_tree "[data-id='main.columns.list.jobs.$jb_job']" '.count == 0'

@@ -37,7 +37,7 @@ func answeredReadMsg(t *testing.T, cmds []model.Cmd) model.SnapshotLoaded {
 
 func TestChangingTheProjectOnTheRunsPageClearsItsFilterRunsSelectionAndCursor(t *testing.T) {
 	s := twoProjectPane(t)
-	s = answerJobs(t, step(t, s, key("3")), promptJob("J1", "Triage"))
+	s = answerJobs(t, step(t, s, key("2")), promptJob("J1", "Triage"))
 	out := step(t, s, key("r"))
 	s = answerRuns(t, out, "cursor-1", finishedRun("R1"))
 	if got := s.Model.Runs; got.JobUID != "J1" || got.More == "" {
@@ -61,7 +61,7 @@ func TestChangingTheProjectOnTheRunsPageClearsItsFilterRunsSelectionAndCursor(t 
 
 func TestChangingTheProjectWhileAnotherPageIsShownClearsTheFilterBeforeTheRunsPageIsEntered(t *testing.T) {
 	s := twoProjectPane(t)
-	s = answerJobs(t, step(t, s, key("3")), promptJob("J1", "Triage"))
+	s = answerJobs(t, step(t, s, key("2")), promptJob("J1", "Triage"))
 	s = answerRuns(t, step(t, s, key("r")), "", finishedRun("R1"))
 	s = step(t, s, key("1")).State
 	if s.Model.Page != model.PageIssues {
@@ -69,7 +69,7 @@ func TestChangingTheProjectWhileAnotherPageIsShownClearsTheFilterBeforeTheRunsPa
 	}
 	s = chooseInfra(t, s).State
 
-	out := step(t, s, key("4"))
+	out := step(t, s, key("3"))
 	load, ok := askedRuns(out.Cmds)
 	if !ok || load.JobUID != "" || load.ProjectID != 8 || load.Refresh {
 		t.Fatalf("cmds %#v, want infra's newest Runs read with no job", out.Cmds)
@@ -81,27 +81,27 @@ func TestChangingTheProjectWhileAnotherPageIsShownClearsTheFilterBeforeTheRunsPa
 
 func TestEnteringEveryPageAfterAProjectChangeShowsNothingOfTheOldProject(t *testing.T) {
 	s := twoProjectPane(t)
-	s = answerJobs(t, step(t, s, key("3")), promptJob("J1", "Triage"), promptJob("J2", "Other"))
+	s = answerJobs(t, step(t, s, key("2")), promptJob("J1", "Triage"), promptJob("J2", "Other"))
 	s = feed(t, s, key("j"), key("A")).State
 	s = step(t, s, key("1")).State
-	s = answerRuns(t, step(t, s, key("4")), "c", finishedRun("R1"))
+	s = answerRuns(t, step(t, s, key("3")), "c", finishedRun("R1"))
 	s = step(t, s, key("1")).State
 	s = feed(t, s, key("b"), newestLanes{ProjectUID: "p", Lanes: []string{"todo", "done"}, DoneDays: 3}).State
 	s = step(t, s, key("1")).State
 	s = chooseInfra(t, s).State
 
-	jobs := step(t, s, key("3"))
+	jobs := step(t, s, key("2"))
 	if j := jobs.State.Model.Jobs; len(j.Jobs) != 0 || j.Selected != "" || j.ShowArchived {
 		t.Errorf("Jobs %+v, want empty", j)
 	}
 	if load, ok := askedJobs(jobs.Cmds); !ok || load.Archived {
 		t.Errorf("jobs read %#v, want one that leaves archived jobs out", jobs.Cmds)
 	}
-	runs := step(t, step(t, jobs.State, key("1")).State, key("4"))
+	runs := step(t, step(t, jobs.State, key("1")).State, key("3"))
 	if r := runs.State.Model.Runs; len(r.Runs) != 0 || r.Selected != "" || r.JobUID != "" || r.More != "" {
 		t.Errorf("Runs %+v, want empty", r)
 	}
-	flows := step(t, step(t, runs.State, key("1")).State, key("5"))
+	flows := step(t, step(t, runs.State, key("1")).State, key("4"))
 	if w := flows.State.Model.Workflows; len(w.List) != 0 || w.Selected != "" || w.ShowArchived {
 		t.Errorf("Workflows %+v, want empty", w)
 	}
@@ -113,22 +113,22 @@ func TestEnteringEveryPageAfterAProjectChangeShowsNothingOfTheOldProject(t *test
 
 func TestSwitchingPagesWithinOneProjectKeepsEachPagesStateAndWorkflowsReadAgain(t *testing.T) {
 	s := twoProjectPane(t)
-	s = answerJobs(t, step(t, s, key("3")), promptJob("J1", "Triage"), promptJob("J2", "Other"))
+	s = answerJobs(t, step(t, s, key("2")), promptJob("J1", "Triage"), promptJob("J2", "Other"))
 	s = feed(t, s, key("j")).State
 	s = answerRuns(t, step(t, s, key("r")), "", finishedRun("R1"))
-	back := step(t, step(t, s, key("1")).State, key("4"))
+	back := step(t, step(t, s, key("1")).State, key("3"))
 	if got := back.State.Model.Runs; got.JobUID != "J2" || len(got.Runs) != 1 {
 		t.Fatalf("Runs %+v, want the filter and Run kept", got)
 	}
-	jobs := step(t, step(t, back.State, key("1")).State, key("3"))
+	jobs := step(t, step(t, back.State, key("1")).State, key("2"))
 	if got := jobs.State.Model.Jobs; got.Selected != "J2" || len(got.Jobs) != 2 {
 		t.Fatalf("Jobs %+v, want selection and jobs kept", got)
 	}
-	flows := step(t, step(t, jobs.State, key("1")).State, key("5"))
+	flows := step(t, step(t, jobs.State, key("1")).State, key("4"))
 	if !flows.State.Model.Workflows.Loading {
 		t.Fatalf("Workflows %+v, want a read on entry", flows.State.Model.Workflows)
 	}
-	again := step(t, step(t, flows.State, key("1")).State, key("5"))
+	again := step(t, step(t, flows.State, key("1")).State, key("4"))
 	if !again.State.Model.Workflows.Loading {
 		t.Fatalf("Workflows did not read again on re-entry")
 	}
@@ -141,7 +141,7 @@ func TestSwitchingPagesWithinOneProjectKeepsEachPagesStateAndWorkflowsReadAgain(
 
 func TestAReadAskedBeforeAProjectChangeDoesNotAppear(t *testing.T) {
 	s := twoProjectPane(t)
-	jobsOut := step(t, s, key("3"))
+	jobsOut := step(t, s, key("2"))
 	oldJobs, _ := askedJobs(jobsOut.Cmds)
 	s = chooseInfra(t, jobsOut.State).State
 	s = step(t, s, model.JobsLoaded{Request: oldJobs.Request, Jobs: []model.CronJob{promptJob("J1", "Triage")}}).State
@@ -150,7 +150,7 @@ func TestAReadAskedBeforeAProjectChangeDoesNotAppear(t *testing.T) {
 	}
 
 	s = twoProjectPane(t)
-	runsOut := step(t, s, key("4"))
+	runsOut := step(t, s, key("3"))
 	oldRuns, _ := askedRuns(runsOut.Cmds)
 	s = chooseInfra(t, runsOut.State).State
 	s = step(t, s, model.RunsLoaded{Request: oldRuns.Request, Runs: []model.Run{finishedRun("R1")}}).State
@@ -161,7 +161,7 @@ func TestAReadAskedBeforeAProjectChangeDoesNotAppear(t *testing.T) {
 
 func TestAProjectInboxProjectRoundTripKeepsEachPagesState(t *testing.T) {
 	s := twoProjectPane(t)
-	s = answerJobs(t, step(t, s, key("3")), promptJob("J1", "Triage"), promptJob("J2", "Other"))
+	s = answerJobs(t, step(t, s, key("2")), promptJob("J1", "Triage"), promptJob("J2", "Other"))
 	s = feed(t, s, key("j")).State
 	s = answerRuns(t, step(t, s, key("r")), "", finishedRun("R1"))
 	s = step(t, s, key("1")).State
@@ -169,11 +169,11 @@ func TestAProjectInboxProjectRoundTripKeepsEachPagesState(t *testing.T) {
 	s = step(t, s, model.CollectionSelected{Collection: model.InboxCollection()}).State
 	s = step(t, s, model.CollectionSelected{Collection: model.ProjectCollection("p", "work")}).State
 
-	jobs := step(t, s, key("3"))
+	jobs := step(t, s, key("2"))
 	if got := jobs.State.Model.Jobs; got.Selected != "J2" || len(got.Jobs) != 2 {
 		t.Fatalf("Jobs %+v, want selection and jobs kept across the Inbox", got)
 	}
-	runs := step(t, step(t, jobs.State, key("1")).State, key("4"))
+	runs := step(t, step(t, jobs.State, key("1")).State, key("3"))
 	if got := runs.State.Model.Runs; got.JobUID != "J2" || len(got.Runs) != 1 {
 		t.Fatalf("Runs %+v, want the filter and Run kept across the Inbox", got)
 	}
@@ -182,7 +182,7 @@ func TestAProjectInboxProjectRoundTripKeepsEachPagesState(t *testing.T) {
 func TestAReadingAskedBeforeAProjectChangeIsNotTakenForTheNewCardsAsk(t *testing.T) {
 	five := 5
 	text := workflowText(`{"key":"a","kind":"prompt","prompt":"p","options":{"on_fail":{}}}`)
-	s := step(t, step(t, twoProjectPane(t), key("5")).State, key("n")).State
+	s := step(t, step(t, twoProjectPane(t), key("4")).State, key("n")).State
 	typed := typeWorkflow(t, s, text)
 	older, ok := readingAsk(t, typed)
 	if !ok {
@@ -190,7 +190,7 @@ func TestAReadingAskedBeforeAProjectChangeIsNotTakenForTheNewCardsAsk(t *testing
 	}
 
 	s = chooseInfra(t, typed.State).State
-	s = step(t, step(t, s, key("5")).State, key("n")).State
+	s = step(t, step(t, s, key("4")).State, key("n")).State
 	typed = typeWorkflow(t, s, text)
 	newer, ok := readingAsk(t, typed)
 	if !ok || newer.Request == older.Request {

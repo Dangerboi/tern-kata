@@ -29,7 +29,7 @@ cm_pick "$(cm_row "$cm_second")"
 cm_selected "$(cm_row "$cm_second")"
 
 # The Board card.
-ctl key 2
+ctl key 5
 expect_tree "$(cm_card "$cm_first")" '.ok and .count == 1'
 ctl click "$(cm_card "$cm_first")"
 cm_selected "$(cm_card "$cm_first")"

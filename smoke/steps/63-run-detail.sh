@@ -63,14 +63,14 @@ printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u S
 ctl --file "$tmp/rd-launch.ctl"
 
 # The Jobs Page says the worker runs and serves the Project.
-ctl key 3
+ctl key 2
 expect_tree "[data-id='main.columns.list.jobs.$rd_slow']" '.ok and .count == 1'
 expect_tree "[data-id='main.columns.list.worker']" '.ok and .count == 1 and (.nodes[0].text | contains("smoke-box running and serving smoke"))'
 
 # R runs the selected job now; the Runs Page shows it running with the agent's words so far, then succeeded.
 ctl click "[data-id='main.columns.list.jobs.$rd_slow']"
 ctl key R
-ctl key 4
+ctl key 3
 expect_tree "[data-id^='main.columns.list.runs.']" '.ok and .count >= 1 and (.nodes[0].text | contains("running") and contains("Smoke slow run") and contains("on smoke-box"))'
 # The Runs Page keeps its selection across Pages, which earlier steps left on their own run: g selects the newest.
 ctl key g

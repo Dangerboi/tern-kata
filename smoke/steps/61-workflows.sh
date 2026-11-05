@@ -1,4 +1,4 @@
-# The Workflows Page (5) lists the Project's workflows. Enter on a selected one shows its steps beside the list, and a double
+# The Workflows Page (4) lists the Project's workflows. Enter on a selected one shows its steps beside the list, and a double
 # click on a workflow that is not selected does the same for that workflow. A workflow with more steps than the Pane shows
 # scrolls inside its card: the top bar stays put and the card ends above the footer. Own workflows; it cleans up.
 wf_dir="$tmp/workspace"
@@ -11,7 +11,7 @@ wf_second=01H5MK0000000000000000W002
 wf_make "$wf_first" "Smoke first workflow" "echo first-step"
 wf_make "$wf_second" "Smoke second workflow" "echo second-step"
 
-ctl key 5
+ctl key 4
 expect_tree "[data-id='main.columns.list.page.names.rows.$wf_first']" '.ok and .count == 1'
 expect_tree "[data-id='main.columns.list.page.names.rows.$wf_second']" '.ok and .count == 1'
 # A single click only selects: no steps are shown.
@@ -37,7 +37,7 @@ ctl key 1
 wf_long=01H5MK0000000000000000W003
 jq -n '{name: "Smoke long workflow", definition: {version: 1, steps: [range(60) | {key: "step\(.)", kind: "command", command: "echo long-step-\(.)"}]}}' >"$tmp/workflows-long.json"
 kata --workspace "$wf_dir" cron workflow create --uid "$wf_long" --file "$tmp/workflows-long.json" --json >/dev/null
-ctl key 5
+ctl key 4
 expect_tree "[data-id='main.columns.list.page.names.rows.$wf_long']" '.ok and .count == 1'
 wf_bar=$(ctl tree "[data-id='main.topbar']" | jq -c '.nodes[0].rect')
 ctl dblclick "[data-id='main.columns.list.page.names.rows.$wf_long']"
