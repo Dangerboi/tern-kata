@@ -182,14 +182,25 @@ func (c *Client) migrateIssue(ctx context.Context, host, root, actor string, iss
 		}
 		item.ID = added.AttachmentID
 		if err := c.clearMetadataKey(ctx, issue.ProjectID, issue.UID, actor, oldAttachmentKeyPrefix+name); err != nil {
-			reason := fmt.Sprintf("the old key could not be cleared, so the file was kept: %v", err)
-			if unlinkErr := c.UnlinkAttachment(ctx, model.UnlinkAttachment{ProjectID: issue.ProjectID, UID: issue.UID, Actor: actor, ID: added.AttachmentID}); unlinkErr != nil {
-				reason = fmt.Sprintf("uploaded as %s, but the old key could not be cleared (%v) and the new attachment could not be unlinked (%v), so a duplicate may exist; the file was kept", added.AttachmentID, err, unlinkErr)
-			} else {
-				item.ID = ""
+			// The clear may have committed though the client saw an error; unlinking then would drop the only reference left.
+			shown, readErr := c.showIssue(ctx, issue.ProjectID, issue.UID)
+			if readErr == nil {
+				if _, held := shown.Issue.Metadata[oldAttachmentKeyPrefix+name]; !held {
+					err = nil
+				}
 			}
-			left(reason, true)
-			continue
+			if err != nil {
+				reason := fmt.Sprintf("the old key could not be cleared, so the file was kept: %v", err)
+				if readErr != nil {
+					reason = fmt.Sprintf("uploaded as %s, but the old key could not be cleared (%v) and the Issue could not be read to check it (%v), so the new attachment was kept and a duplicate may exist; the file was kept", added.AttachmentID, err, readErr)
+				} else if unlinkErr := c.UnlinkAttachment(ctx, model.UnlinkAttachment{ProjectID: issue.ProjectID, UID: issue.UID, Actor: actor, ID: added.AttachmentID}); unlinkErr != nil {
+					reason = fmt.Sprintf("uploaded as %s, but the old key could not be cleared (%v) and the new attachment could not be unlinked (%v), so a duplicate may exist; the file was kept", added.AttachmentID, err, unlinkErr)
+				} else {
+					item.ID = ""
+				}
+				left(reason, true)
+				continue
+			}
 		}
 		out.Moved = append(out.Moved, item)
 		if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {

@@ -8,7 +8,7 @@ import (
 
 // A spoke's name is a label the hub keeps for an enrolled instance, so hub event history and its enrollment list can say which spoke
 // is meant. It is set while enrolling (`N` on the preview) or afterwards (`N` on a spoke, in the list or its detail), where an empty
-// name clears it. kata's rules for a name are its own: the hub refuses a bad one and the card shows why.
+// name clears it. The card checks kata's rule for a name itself before sending it; the hub refuses only a name another spoke holds.
 
 // SetFederationSpokeName sets, or with an empty Name clears, the name the hub at HubURL gives the instance InstanceUID. Attempt
 // numbers the runs: an answer to an older one is dropped.

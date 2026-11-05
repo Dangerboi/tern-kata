@@ -333,7 +333,7 @@ func backWithoutMenu(m Model) (Model, []Cmd) {
 
 // workflowsBackspace is backspace on the Page: it closes the inspector, and with none open goes back across Projects when esc would.
 func workflowsBackspace(m Model) (Model, []Cmd) {
-	if m.Workflows.Inspecting {
+	if m.innerEscOpen() {
 		m.Workflows.Inspecting = false
 		return m, nil
 	}
@@ -341,9 +341,16 @@ func workflowsBackspace(m Model) (Model, []Cmd) {
 }
 
 func toggleArchivedWorkflows(m Model) Model {
+	return m.keepingWorkflowSelection(func(m Model) Model {
+		m.Workflows.ShowArchived = !m.Workflows.ShowArchived
+		return m
+	})
+}
+
+// keepingWorkflowSelection applies a change to the workflow lists and then keeps the selection on a workflow the list shows.
+func (m Model) keepingWorkflowSelection(change func(Model) Model) Model {
 	row := m.selectedRow()
-	m.Workflows.ShowArchived = !m.Workflows.ShowArchived
-	return m.selectWorkflow(row)
+	return change(m).selectWorkflow(row)
 }
 
 func newWorkflow(m Model) Model {
@@ -437,10 +444,11 @@ func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 		}
 		m.Workflows.Loading, m.Workflows.Err = false, msg.Err
 		if msg.Err == nil {
-			row := m.selectedRow()
-			m.Workflows.List = msg.Workflows
-			m.Workflows.readings = msg.Readings
-			m = m.selectWorkflow(row)
+			m = m.keepingWorkflowSelection(func(m Model) Model {
+				m.Workflows.List = msg.Workflows
+				m.Workflows.readings = msg.Readings
+				return m
+			})
 		}
 		return m, nil, true
 	case WorkflowWritten:
@@ -452,9 +460,10 @@ func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 			return m, nil, false
 		}
 		if msg.Err == nil && !msg.ProjectArchived {
-			row := m.selectedRow()
-			m.Workflows.jobs = msg.Jobs
-			m = m.selectWorkflow(row)
+			m = m.keepingWorkflowSelection(func(m Model) Model {
+				m.Workflows.jobs = msg.Jobs
+				return m
+			})
 		}
 		return m, nil, true
 	case RunsLoaded:
@@ -463,15 +472,16 @@ func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 		}
 		m.Workflows.runsAsked = false
 		if msg.Err == nil && !msg.ProjectArchived {
-			row := m.selectedRow()
-			if msg.Before == "" {
-				m.Workflows.runs, m.Workflows.runsPages = msg.Runs, 1
-			} else {
-				m.Workflows.runs = append(slices.Clone(m.Workflows.runs), msg.Runs...)
-				m.Workflows.runsPages++
-			}
-			m.Workflows.runsMore = msg.NextBefore
-			m = m.selectWorkflow(row)
+			m = m.keepingWorkflowSelection(func(m Model) Model {
+				if msg.Before == "" {
+					m.Workflows.runs, m.Workflows.runsPages = msg.Runs, 1
+				} else {
+					m.Workflows.runs = append(slices.Clone(m.Workflows.runs), msg.Runs...)
+					m.Workflows.runsPages++
+				}
+				m.Workflows.runsMore = msg.NextBefore
+				return m
+			})
 		} else {
 			m.Workflows.runsMore = ""
 		}
