@@ -338,7 +338,7 @@ type rowLookups struct {
 	lanes    []string
 	badges   model.AgentBadgeIndex
 	today    model.CalendarDay
-	dateRoom int // cells a row can give its Date badge without squeezing the title below minTitleWidth
+	dateRoom int // cells a row can give its Date badge, after its gap, without squeezing the title below minTitleWidth
 }
 
 // minTitleWidth is the cells of title a row keeps before it drops its Date badge.
@@ -428,14 +428,15 @@ func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected boo
 		left = append(left, ui.Span{T: gap + w.Word(), S: string(attentionTone(w))})
 		gap = " "
 	}
-	// An open Issue's Date badge reads before the title, and goes when the list is too narrow to keep the title.
+	left = append(left, ui.Span{T: gap + title})
+	// An open Issue's Date badge reads after the title, as in kata tui, and goes when the list is too narrow to keep the
+	// title. A title that would push it out is cut so the badge stays whole.
 	if !model.IsClosed(row.Issue) {
 		if date, ok := lookups.today.ChooseDateBadge(row.Issue); ok && displayWidth(date.Text) <= lookups.dateRoom {
-			left = append(left, ui.Span{T: gap + date.Text, S: mono(toneStyle(dateTones[date.Tone]))})
-			gap = " "
+			left[len(left)-1].T = gap + cut(title, lookups.dateRoom+minTitleWidth-displayWidth(date.Text))
+			left = append(left, ui.Span{T: "  " + date.Text, S: mono(toneStyle(dateTones[date.Tone]))})
 		}
 	}
-	left = append(left, ui.Span{T: gap + title})
 	// A parent's click folds it; a double click on any row opens it. Tern sends the two clicks first, so a parent's fold ends where it began.
 	actions := &ui.Actions{DblClick: OpenRowClick(row.UID), Menu: menu.of(row.Issue)}
 	if row.HasChildren {
