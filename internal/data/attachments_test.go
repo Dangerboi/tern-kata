@@ -286,6 +286,54 @@ func TestMigrateMovesLocalCopiesAndListsTheRest(t *testing.T) {
 	}
 }
 
+func TestMigrateMovesAnOldPointerUnderTheBareKeyAndLeavesNativeReferences(t *testing.T) {
+	f := newDocbankFixture(t)
+	dir := filepath.Join(f.repo, ".kata-attachments", f.uid)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := writeFile(t, dir, "old.txt", "old")
+	f.patchKey(t, "attachment.old.txt", map[string]any{"host": f.host, "path": path})
+	native := map[string]any{"name": "n.png", "media_type": "image/png", "size": float64(1), "docbank_version": float64(1)}
+	f.patchKey(t, "attachment.01JSMOKE0000000000000000", native)
+
+	got := as[model.AttachmentsMigrated](t, run(t, f.gateway, model.MigrateAttachments{Workspace: f.repo, Actor: "tester"}))
+	if got.Err != nil || len(got.Moved) != 1 || got.Moved[0].Name != "old.txt" || len(got.Left) != 0 {
+		t.Fatalf("migrated %+v", got)
+	}
+	meta := f.issue(t, f.uid).Metadata
+	if _, still := meta["attachment.old.txt"]; still {
+		t.Fatal("the 0.3 key of the moved file survived")
+	}
+	if _, ok := meta["attachment.01JSMOKE0000000000000000"]; !ok {
+		t.Fatal("the native-shaped reference was cleared")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("the local copy is still there: %v", err)
+	}
+}
+
+func TestMigrateTellsTheUserToDeleteACopyItCouldNotDelete(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root deletes from a read-only folder")
+	}
+	f := newDocbankFixture(t)
+	path := f.oldFile(t, f.uid, "shot.png", f.host, "pixels")
+	dir := filepath.Dir(path)
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+
+	got := as[model.AttachmentsMigrated](t, run(t, f.gateway, model.MigrateAttachments{Workspace: f.repo, Actor: "tester"}))
+	if len(got.Moved) != 1 || len(got.Left) != 1 || !got.Left[0].Failed || !strings.Contains(got.Left[0].Reason, "delete the file by hand") || !strings.Contains(got.Left[0].Reason, path) {
+		t.Fatalf("migrated %+v", got)
+	}
+	if got.Err == nil || got.Err.Error() != "1 attachment(s) need attention; see the list." {
+		t.Fatalf("summary %v", got.Err)
+	}
+}
+
 func TestMigrateIsRefusedByADaemonWithoutDocbank(t *testing.T) {
 	f := newIssueFixture(t)
 	path := f.oldFile(t, f.uid, "shot.png", f.host, "pixels")

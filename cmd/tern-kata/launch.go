@@ -175,7 +175,7 @@ func scanFlags(flags []string, flag string) bool {
 func planLaunch(args []string, lookup func(string) (string, bool), version string) (LaunchPlan, error) {
 	flags := args
 	if end := slices.Index(args, "--"); end >= 0 {
-		flags = args[:end] // after a lone --, --help and --version are names, such as a name
+		flags = args[:end] // after a lone --, --help and --version are refs, not flags
 	}
 	if scanFlags(flags, "--version") {
 		return LaunchPlan{Version: version}, nil
@@ -289,7 +289,7 @@ func resolveActor(flag string, lookup func(string) (string, bool)) string {
 }
 
 // planSubcommand parses the subcommands (args[0] is the subcommand). --as may stand anywhere; a lone -- ends the flags, so a
-// file may be named like one, even --help.
+// ref may be named like one, even --help.
 func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPlan, error) {
 	if args[0] == "agent" {
 		return planAgent(args)
@@ -519,7 +519,7 @@ Flags:
                                 $KATA_AUTHOR, $USER, git config user.name, then "anonymous")
   --version                     print the version and exit
   -h, --help                    print this help and exit
-  --                            end the flags: a file after it may be named like one, even --help
+  --                            end the flags: a ref after it may be named like one, even --help
 
 Subcommands (only as the first argument; they never open a Pane or need Tern):
   migrate-attachments           one-off: upload the files that old tern-kata.attachment.<name>

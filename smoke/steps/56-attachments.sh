@@ -4,6 +4,7 @@
 at_dir="$tmp/workspace"
 kata --workspace "$at_dir" create "Smoke attachments Issue" --json >"$tmp/attachments.json"
 at_uid=$(jq -r '.issue.uid' "$tmp/attachments.json")
+at_short=$(jq -r '.issue.short_id' "$tmp/attachments.json")
 at_tab="[data-id='main.columns.detail.viewport.content.activity.tabs.tab3']"
 expect_tree "[data-id='main.columns.list.issues.$at_uid']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.list.issues.$at_uid']"
@@ -37,3 +38,7 @@ if (cd "$at_dir" && "$tmp/tern-kata" migrate-attachments --as smoke-shell) >"$tm
   exit 1
 fi
 grep -q "no Docbank configured" "$tmp/migrate.err"
+
+kata --workspace "$at_dir" delete "$at_uid" --force --confirm "DELETE smoke#$at_short" --json >/dev/null
+expect_tree "[data-id='main.columns.list.issues.$at_uid']" '.ok and .count == 0'
+ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab0']"

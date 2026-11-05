@@ -158,13 +158,18 @@ func (c *Client) patchMetadataKey(ctx context.Context, projectID int64, uid, act
 	return written(r.JSON200.Changed, r.JSON200.Issue, nil), nil
 }
 
+// writeMetadataKey patches one metadata key of an Issue with no guard, a nil value clearing it, and returns the client's raw error.
+func (c *Client) writeMetadataKey(ctx context.Context, projectID int64, uid, actor, key string, value any) error {
+	_, err := c.PatchIssueMetadataWithResponse(ctx, &g.PatchIssueMetadataRequestOptions{
+		PathParams: &g.PatchIssueMetadataPath{ProjectID: projectID, Ref: uid},
+		Body:       &g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{key: value}},
+	})
+	return err
+}
+
 // clearMetadataKey clears one metadata key of an Issue with no guard, as `kata docbank attachments rm` does.
 func (c *Client) clearMetadataKey(ctx context.Context, projectID int64, uid, actor, key string) error {
-	body := g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{key: nil}}
-	_, err := c.PatchIssueMetadataWithResponse(ctx, &g.PatchIssueMetadataRequestOptions{
-		PathParams: &g.PatchIssueMetadataPath{ProjectID: projectID, Ref: uid}, Body: &body,
-	})
-	if err != nil {
+	if err := c.writeMetadataKey(ctx, projectID, uid, actor, key, nil); err != nil {
 		return attachmentError(err)
 	}
 	return nil

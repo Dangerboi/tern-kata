@@ -176,11 +176,7 @@ func (c *Client) clearSlot(ctx context.Context, projectID int64, uid, actor, key
 
 // writeAttentionSlot patches one notify slot, a nil value clearing it, with no guard.
 func (c *Client) writeAttentionSlot(ctx context.Context, projectID int64, uid, actor, key string, value any) error {
-	_, err := c.PatchIssueMetadataWithResponse(ctx, &g.PatchIssueMetadataRequestOptions{
-		PathParams: &g.PatchIssueMetadataPath{ProjectID: projectID, Ref: uid},
-		Body:       &g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{key: value}},
-	})
-	return daemonError(err)
+	return daemonError(c.writeMetadataKey(ctx, projectID, uid, actor, key, value))
 }
 
 // ReadAgentIssue reads the status of the Issue with uid in a Project.
