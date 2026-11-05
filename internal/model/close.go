@@ -58,7 +58,9 @@ var closeTable = fieldTable[CloseFormState]{
 // click on a name) move the cursor and space toggles the Attachment under it.
 func closeAttachmentsField() formField[CloseFormState] {
 	field := choiceField(CloseAttachments,
-		func(f *CloseFormState, back bool) { f.AttachmentAt = cycleIndex(f.AttachmentAt, len(f.Attachments), back) },
+		func(f *CloseFormState, back bool) {
+			f.AttachmentAt = cycleIndex(f.AttachmentAt, len(f.Attachments), back)
+		},
 		toggleCited)
 	field.empty = func(f *CloseFormState) bool { return len(f.Attachments) == 0 }
 	return field
