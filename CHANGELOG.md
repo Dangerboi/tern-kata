@@ -8,44 +8,121 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Added
 
-- `m` on the Attention Page sends a message to the omp agent that raised the selected request. It reaches the agent at once, through an omp extension tern-kata loads into every omp agent it starts: a waiting or idle agent starts a turn on it, a working one gets it at its next step without its work being stopped, and a pending `ask` or tool approval stays until you answer it. Each omp agent has its own Agent address, `<actor>/<name>-<block id>`, set as its `KATA_INBOX_USER`, so no other agent reads its messages; only messages from you are delivered, and the agent's first message tells it to act only on those. The card asks before replacing a message the agent has not cleared, and says why when the agent cannot receive one (exited, not omp, or started by an older tern-kata before messages could reach it). When an agent exits, the Pane clears what is left at its address. Agents that load the extension run with `KATA_OMP_LIVE_INBOX=0`, so kata-omp leaves live delivery to it.
-- `tern-kata worker status` names the installed binary's version when the running worker runs another one, and says how `tern-kata worker stop` moves it there.
-- `/` on the Jobs, Runs and Workflows Pages searches their rows by a case-insensitive part of the row's text, as kata tui does. The search shows above the list, `esc` ends it, and an empty result says so.
-- The Jobs Page inspector lists a job's next three runs with their time zone abbreviations, and says why there are none when the job is paused, its parent is closed, it only runs when started, or its runs can't be worked out.
-- Issue list rows show the Date badge of an open Issue with a scheduled date or deadline, after the title, as kata tui does; a row that can't fit its whole title and the badge drops the badge.
+#### Agents
+
+- `m` on the Attention Page sends a message to the omp agent that raised the selected request.
+  - It reaches the agent at once, through an omp extension tern-kata loads into every omp agent it starts. A waiting or idle agent starts a turn on it, a working one gets it at its next step without being stopped, and a pending `ask` or tool approval stays until you answer it.
+  - Each omp agent has its own Agent address, `<actor>/<name>-<block id>`, set as its `KATA_INBOX_USER`. Only messages from you are delivered, and the agent's first message tells it to act only on those.
+  - The Message card asks before replacing a message the agent has not cleared, and says why when the agent cannot receive one (exited, not omp, or started by an older tern-kata).
+  - When an agent exits, the Pane clears what is left at its Agent address. Agents that load the extension run with `KATA_OMP_LIVE_INBOX=0`, so kata-omp leaves live delivery to it.
+- A `kata close` run by an omp agent the Pane started, or by a worker run whose profile `command` is omp, names that agent's omp session.
+  - With `[close.transcript]` enabled in kata's config the close records the session; with `agentsview_url` it also records a link to it in AgentsView.
+  - Worker runs now load tern-kata's omp extension for this, also under `--no-extensions`.
+
+#### Attachments
+
+- The Close card for a `done` close can cite one or more of the Issue's Attachments as evidence.
+  - The Events tab names a cited Attachment, marks it `[removed]` once it is unlinked and `[changed]` when the Issue now holds another version of it.
+- `tern-kata migrate-attachments` moves the old attachments stored on this machine to Docbank, deletes the local copies, and lists the ones held on other machines.
+  - It leaves a file, an Issue folder or the store that is a symlink, and lists it with its reason, so it never uploads what a link points to.
+
+#### Issues and Pages
+
+- `/` on the Jobs, Runs and Workflows Pages searches their rows by a case-insensitive part of the row's text, as kata tui does.
+  - The search shows above the list, `esc` ends it, and an empty result says so.
+- Issue list rows show the Date badge of an open Issue with a scheduled date or deadline, after the title, as kata tui does.
+  - A row that can't fit its whole title and the badge drops the badge.
 - The Dates card and the Create card take kata's date-time forms, `YYYY-MM-DDTHH:MM[:SS]` and `YYYY-MM-DDTHH:MM:SSZ`; the preview shows the time.
-- `N` on the Federation Page names a spoke: on the enrollment preview it sets the name the hub records with the enrollment, and on a spoke, in the list or its detail, it renames it on the hub, where an empty name clears it. The name shows on the spoke's card and detail. The card refuses a name that breaks kata's rule in kata's words before anything reaches the hub, and shows the hub's reason when it refuses a name another spoke holds.
-- The Close card for a `done` close can cite one or more of the Issue's Attachments as evidence; the Events tab names a cited Attachment, and marks it `[removed]` once it is unlinked and `[changed]` when the Issue now holds another version of it.
-- `tern-kata migrate-attachments` moves the old attachments stored on this machine to Docbank, deletes the local copies, and lists the ones held on other machines. It leaves a file, an Issue folder or the store that is a symlink, and lists it with its reason, so it never uploads what a link points to.
-- A `kata close` run by an omp agent the Pane started, or by a worker run whose profile `command` is omp, names that agent's omp session, so with `[close.transcript]` enabled in kata's config the close records the session and, with `agentsview_url`, a link to it in AgentsView. Worker runs now load tern-kata's omp extension for this, also under `--no-extensions`.
+
+#### Jobs and worker
+
+- The Jobs Page inspector lists a job's next three runs with their time zone abbreviations.
+  - It says why there are none when the job is paused, its parent is closed, it only runs when started, or its runs can't be worked out.
+- `tern-kata worker status` names the installed binary's version when the running worker runs another one, and says how `tern-kata worker stop` moves it there.
+
+#### Daemons and Federation
+
+- `N` on the Federation Page names a spoke.
+  - On the enrollment preview it sets the name the hub records with the enrollment; on a spoke, in the list or its detail, it renames it on the hub, and an empty name clears it. The name shows on the spoke's card and detail.
+  - The card refuses a name that breaks kata's rule, in kata's words, before anything reaches the hub, and shows the hub's reason when it refuses a name another spoke holds.
 
 ### Changed
 
-- **Breaking:** tern-kata requires kata v0.21.0 or newer. kata v0.21 upgrades its database to schema 43 on first start, which older kata binaries cannot open; kata keeps a backup of the database from before the upgrade. A PostgreSQL store needs `kata storage postgres migrate` with the daemon stopped.
-- The Pages are numbered as in kata tui: `1` Issues, `2` Jobs, `3` Runs, `4` Workflows, `5` Board and `6` Attention. `b` still toggles the Board and `T` still opens Attention.
-- The Move card moves an Issue with its open descendants, as kata does. The preview names the Issues that move, the **Only this Issue** switch (`o`, or a click) moves the Issue alone, and the Notice says how many Issues moved. When kata refuses because of a descendant (archived, or held back for another reason), the card names it and keeps **Only this Issue** within reach; a subtree that changed during the move shows in words too.
-- The Comments tab shows a discussion as a reply tree: replies nest under the comment they answer, four levels deep at most, a reply from another Issue is a line under its target, and confirm and refute show as tags, reading "(before edit)" when the evidence predates an edit of the comment.
-- When an Issue's date changed elsewhere since the Dates card opened, the card writes none of your changes, refills that field with the current value and keeps your other edits, where it used to ask you to close and reopen it. A date that changes elsewhere during the save itself stops it there, and the card names the fields already saved.
-- When the daemon doesn't know the Project a folder is bound to, the message names that Project, or the alias kata matched.
-- The kata skill is written for kata v0.21: it starts, changes and stops a recurrence with `kata schedule --repeat`, moves an Issue with its open descendants, and closes with Docbank or attachment evidence.
-- Switching to a stopped local daemon on the Daemons Page starts it through kata's client, with the Pane's own environment: `KATA_DSN`, `KATA_DB` and `KATA_SERVER` are no longer removed first. A switch to a remote entry still sends only that entry's own token.
-- **Breaking:** Attachments are kata's own, with their bytes in Docbank: `@` uploads a file, the Attachments tab lists each with its media type and size, `enter` downloads it to a cache folder and opens it when it is an image, video, audio, PDF or text file (anything else is only saved, and the Pane says where), and `U` unlinks one (its bytes stay in Docbank). The daemon needs a `[docbank]` section in kata's `config.toml`; a daemon without one says so plainly in the Pane.
-- **Breaking:** an Agent profile with no `extensions` key now runs omp with `--no-extensions`, where it used to load whatever omp discovers, so a worker run no longer loads omp's native extension modules, ambient hook files or installed plugins such as kata-plugin. Explicit `-e`, `--hook` and `--trusted-extension` paths in its `args`, skills, rules and MCP servers still apply. Add `extensions = "ambient"` under the profile to get the old behaviour back. A run already in progress when you upgrade uses the new default from its next attempt or step.
+#### Requirements
+
+- **Breaking:** tern-kata requires kata v0.21.0 or newer.
+  - kata v0.21 upgrades its database to schema 43 on first start, which older kata binaries cannot open; kata keeps a backup from before the upgrade.
+  - A PostgreSQL store needs `kata storage postgres migrate` with the daemon stopped.
+
+#### Agents
+
+- The kata skill is written for kata v0.21.
+  - It starts, changes and stops a recurrence with `kata schedule --repeat`, moves an Issue with its open descendants, and closes with Docbank or attachment evidence.
+
+#### Attachments
+
+- **Breaking:** Attachments are kata's own, with their bytes in Docbank.
+  - `@` uploads a file, the Attachments tab lists each with its media type and size, and `U` unlinks one (its bytes stay in Docbank).
+  - `enter` downloads one to a cache folder and opens it when it is an image, video, audio, PDF or text file; anything else is only saved, and the Pane says where.
+  - The daemon needs a `[docbank]` section in kata's `config.toml`; a daemon without one says so plainly in the Pane.
+
+#### Issues and Pages
+
+- The Pages are numbered as in kata tui: `1` Issues, `2` Jobs, `3` Runs, `4` Workflows, `5` Board and `6` Attention.
+  - `b` still toggles the Board and `T` still opens Attention.
+- The Move card moves an Issue with its open descendants, as kata does.
+  - The preview names the Issues that move, the **Only this Issue** switch (`o`, or a click) moves the Issue alone, and the Notice says how many Issues moved.
+  - When kata refuses because of a descendant (archived, or held back for another reason), the card names it and keeps **Only this Issue** within reach; a subtree that changed during the move shows in words too.
+- The Comments tab shows a discussion as a reply tree.
+  - Replies nest under the comment they answer, four levels deep at most, and a reply from another Issue is a line under its target.
+  - Confirm and refute show as tags, reading "(before edit)" when the evidence predates an edit of the comment.
+- When an Issue's date changed elsewhere since the Dates card opened, the card writes none of your changes, refills that field with the current value and keeps your other edits; it used to ask you to close and reopen it.
+  - A date that changes elsewhere during the save itself stops it there, and the card names the fields already saved.
+
+#### Jobs and worker
+
+- **Breaking:** an Agent profile with no `extensions` key now runs omp with `--no-extensions`, where it used to load whatever omp discovers.
+  - A worker run no longer loads omp's native extension modules, ambient hook files or installed plugins such as kata-plugin. Explicit `-e`, `--hook` and `--trusted-extension` paths in its `args`, skills, rules and MCP servers still apply.
+  - Add `extensions = "ambient"` under the profile to get the old behaviour back. A run already in progress when you upgrade uses the new default from its next attempt or step.
 - `worker doctor` warns of kata-plugin's todo takeover only for an Agent profile that sets `extensions = "ambient"`.
+
+#### Daemons and Federation
+
+- Switching to a stopped local daemon on the Daemons Page starts it through kata's client, with the Pane's own environment: `KATA_DSN`, `KATA_DB` and `KATA_SERVER` are no longer removed first.
+  - A switch to a remote entry still sends only that entry's own token.
+- When the daemon doesn't know the Project a folder is bound to, the message names that Project, or the alias kata matched.
 
 ### Removed
 
+#### Attachments
+
 - `tern-kata attach` and `tern-kata detach`: use `kata docbank attachments add`, `ls`, `get` and `rm`.
-- The `.kata-attachments` folder store and its pointer keys (`tern-kata.attachment.<name>`, and from 0.3 `attachment.<name>` holding `{host, path}`); `tern-kata migrate-attachments` moves what they hold.
+- The `.kata-attachments` folder store and its pointer keys (`tern-kata.attachment.<name>`, and from 0.3 `attachment.<name>` holding `{host, path}`).
+  - `tern-kata migrate-attachments` moves what they hold.
 
 ### Fixed
 
-- When an agent's block starts but the Pane cannot record it, the Pane closes the block and says the agent was stopped, where it used to leave the agent running with no Agent badge and invite a retry that started a second one. If the block cannot be closed, the error names it.
-- `u` shows the outcome of an undo, and takes the undone change out of the Undo history, when another change landed or the history was cleared while the undo was out; before, the answer was dropped without a word and the change stayed in the history.
+#### Agents
+
+- When an agent's block starts but the Pane cannot record it, the Pane closes the block and says the agent was stopped.
+  - It used to leave the agent running with no Agent badge and invite a retry that started a second one. If the block cannot be closed, the error names it.
+
+#### Issues and Pages
+
+- `u` shows the outcome of an undo, and takes the undone change out of the Undo history, when another change landed or the history was cleared while the undo was out.
+  - Before, the answer was dropped without a word and the change stayed in the history.
+
+#### Jobs and worker
+
+- A cron expression whose `CRON_TZ=` or `TZ=` zone is quoted, such as `CRON_TZ="Europe/Berlin"`, is read with that zone.
+  - The worker no longer sets the job aside as naming another zone than its trigger's, and the Jobs Page shows its runs.
+- Supervision no longer starts a second worker for `worker.lock` to refuse, all day long, after a plugin reload or a Tern update.
+  - The host half leaves the worker that is still running alone, logs one line naming it, and starts a worker within 10 seconds of its end.
+
+#### Command line
+
 - Fish completion offers all of `tern-kata agent`'s flags, as bash and zsh do, not only `--ref`.
 - `tern-kata worker init`, `views add` and `recur` refuse a flag-like word as a flag's value (`--search --all`), as `agent` already did; `--search=--all` still passes it.
-- A cron expression whose `CRON_TZ=` or `TZ=` zone is quoted, such as `CRON_TZ="Europe/Berlin"`, is read with that zone: the worker no longer sets the job aside as naming another zone than its trigger's, and the Jobs Page shows its runs.
-- Supervision no longer starts a second worker for `worker.lock` to refuse, all day long, after a plugin reload or a Tern update: the host half leaves the worker that is still running alone, logs one line naming it, and starts a worker within 10 seconds of its end.
 
 ## [0.7.2] - 2026-11-02
 
