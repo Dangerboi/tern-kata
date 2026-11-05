@@ -144,3 +144,32 @@ func TestNOnAnEmptyListOrADetailLessScreenOpensNoNameCard(t *testing.T) {
 		t.Errorf("N with no spoke opened card %v and asked %#v", out.State.Model.TopCard(), out.Cmds)
 	}
 }
+
+func TestARefreshStartedBeforeARenameCannotRestoreTheOldName(t *testing.T) {
+	s := federationListed(t, namedSpoke("acme", "laptop"))
+	// A refresh goes out, then a rename starts; the refresh's status read happens before the hub has the new name.
+	refresh := step(t, s, key("r"))
+	old, ok := askedFederation(refresh.Cmds)
+	if !ok {
+		t.Fatalf("r asked %#v, want a status read", refresh.Cmds)
+	}
+	card := step(t, refresh.State, key("shift+n")).State
+	saved := step(t, typeText(t, card, "2"), key("enter"))
+	cmd, ok := asked[model.SetFederationSpokeName](saved.Cmds)
+	if !ok {
+		t.Fatalf("Enter asked %#v", saved.Cmds)
+	}
+	done := step(t, saved.State, model.FederationSpokeNamed{Attempt: cmd.Attempt, Hub: cmd.HubURL, Name: cmd.Name})
+	fresh, ok := askedFederation(done.Cmds)
+	if !ok || fresh.Request == old.Request {
+		t.Fatalf("the rename's answer asked %#v, want a new status read", done.Cmds)
+	}
+	late := step(t, done.State, federationAnswer(old, namedSpoke("acme", "laptop"))).State
+	if got := late.Model.SelectedSpoke().SpokeName; got != "laptop2" {
+		t.Errorf("the spoke is named %q after the older read landed, want laptop2", got)
+	}
+	current := step(t, late, federationAnswer(fresh, namedSpoke("acme", "laptop2"))).State
+	if got := current.Model.SelectedSpoke().SpokeName; got != "laptop2" {
+		t.Errorf("the spoke is named %q after the new read landed, want laptop2", got)
+	}
+}

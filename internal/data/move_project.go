@@ -63,7 +63,7 @@ func (c *Client) MoveToProject(ctx context.Context, cmd model.MoveToProjectCmd) 
 }
 
 // moveRefusal words kata's refusal of a move. The two refusals that come from the subtree are reworded and reported as such, so
-// the card stays on the chosen Project and offers "Only this Issue" or a new preview; any other refusal keeps kata's words.
+// the card stays on the chosen Project and offers "Only this Issue" or a new preview; a refusal that names a descendant in its error data is reported as a subtree refusal too, in kata's words; any other refusal keeps kata's words.
 func moveRefusal(err error) (subtree bool, refusal error) {
 	switch daemonCode(err) {
 	case "issue_move_descendant_archived":
@@ -76,6 +76,12 @@ func moveRefusal(err error) (subtree bool, refusal error) {
 		return true, fmt.Errorf("%s is in an archived Project, so the subtree cannot move. Restore that Project, remove its parent link, or switch on \"Only this Issue\".", who)
 	case "issue_move_tree_changed":
 		return true, errors.New("The Issue's descendants changed while kata checked the move. Nothing was moved; try again.")
+	}
+	// Any other refusal that names a descendant (a pinned recurrence, an import-mapping collision) also comes from the subtree.
+	if envelope, ok := errors.AsType[g.ErrorEnvelope](err); ok {
+		if _, named := envelope.ErrorData.Data["descendant"]; named {
+			return true, daemonError(err)
+		}
 	}
 	return false, daemonError(err)
 }

@@ -98,15 +98,16 @@ func federationNameKey(m Model, msg KeyMsg) (Model, []Cmd) {
 }
 
 // federationSpokeNamed lands a rename's answer: the card closes and every spoke of that hub shows the name, since the hub keeps one
-// per instance; a refusal keeps the card with kata's reason under it.
-func federationSpokeNamed(m Model, msg FederationSpokeNamed) Model {
+// per instance; a refusal keeps the card with kata's reason under it. A status read still out was asked before the rename took
+// effect, so its answer would bring the old name back: it is dropped and read again.
+func federationSpokeNamed(m Model, msg FederationSpokeNamed) (Model, []Cmd) {
 	f := &m.Federation
 	if !f.attempts.IsCurrent(msg.Attempt) || !f.Name.Saving {
-		return m
+		return m, nil
 	}
 	if msg.Err != nil {
 		f.Name.Saving, f.Name.Err = false, msg.Err
-		return m
+		return m, nil
 	}
 	for i := range f.Spokes {
 		if f.Spokes[i].HubURL == msg.Hub {
@@ -114,5 +115,8 @@ func federationSpokeNamed(m Model, msg FederationSpokeNamed) Model {
 		}
 	}
 	f.Name = FederationName{}
-	return m
+	if f.Loading {
+		return askFederation(m)
+	}
+	return m, nil
 }

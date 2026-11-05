@@ -223,7 +223,8 @@ func updateFederation(m Model, msg Msg) (Model, []Cmd, bool) {
 		m, cmds := federationEnrolled(m, msg)
 		return m, cmds, true
 	case FederationSpokeNamed:
-		return federationSpokeNamed(m, msg), nil, true
+		m, cmds := federationSpokeNamed(m, msg)
+		return m, cmds, true
 	case FederationLoaded:
 		f := &m.Federation
 		if !f.reads.IsCurrent(msg.Request) {

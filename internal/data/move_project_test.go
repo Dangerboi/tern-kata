@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	g "go.kenn.io/kata/pkg/client/generated"
+
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
@@ -173,5 +175,29 @@ func TestGatewayMoveTakesTheDescendantsUnlessOnlyThisIssue(t *testing.T) {
 				t.Errorf("child is in %s, want %s", got, wantChild)
 			}
 		})
+	}
+}
+
+func TestMoveRefusalNamingADescendantIsASubtreeRefusal(t *testing.T) {
+	refused := func(code, message string, data map[string]any) error {
+		return g.ErrorEnvelope{Status: 409, ErrorData: g.ErrorBody{Code: code, Message: message, Data: data}}
+	}
+	named := map[string]any{"descendant": map[string]any{"short_id": "7"}}
+	for _, tt := range []struct {
+		name    string
+		err     error
+		subtree bool
+	}{
+		{"recurrence pin", refused("recurrence_pinned", "descendant demo#7: issue is pinned", named), true},
+		{"import mapping collision", refused("import_mapping_collision", "descendant demo#7: collides", named), true},
+		{"the Issue itself", refused("recurrence_pinned", "issue is pinned", nil), false},
+	} {
+		subtree, err := moveRefusal(tt.err)
+		if subtree != tt.subtree || err == nil {
+			t.Errorf("%s: subtree = %v, err = %v; want subtree %v", tt.name, subtree, err, tt.subtree)
+		}
+	}
+	if _, err := moveRefusal(refused("recurrence_pinned", "descendant demo#7: issue is pinned", named)); !strings.Contains(err.Error(), "descendant demo#7") {
+		t.Errorf("err = %v, want kata's words naming the descendant", err)
 	}
 }
