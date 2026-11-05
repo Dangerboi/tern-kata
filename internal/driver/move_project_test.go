@@ -327,3 +327,64 @@ func TestMoveClearsTheUndoHistoryOnlyWhenTheIssueMoves(t *testing.T) {
 		t.Errorf("u says %q", got)
 	}
 }
+
+func TestMoveCardPreviewNamesTheDescendantsAndTheSwitchSendsSingle(t *testing.T) {
+	preview := moving(t, movePane(t, movable("a")), "shop")
+	answer := model.ProjectMoveAnswer{UID: "a", ToProjectUID: "s", DryRun: true, Revision: 3, Count: 3,
+		Descendants: []model.MovedIssue{{ShortID: "b"}, {ShortID: "c", ProjectUID: "h"}}}
+	previewed := step(t, preview.State, answer).State
+	want := "#a and 2 descendants move to shop and get new ids there: #b, home#c."
+	if text := moveText(t, previewed, "preview"); text != want {
+		t.Fatalf("preview %q, want %q", text, want)
+	}
+	if _, drawn := nodeText(t, previewed, view.MoveSingleID); !drawn {
+		t.Error("the card draws no Only this Issue switch")
+	}
+
+	for name, in := range map[string]any{"key": key("o"), "pointer": model.MoveSingleMsg{On: true}} {
+		t.Run(name, func(t *testing.T) {
+			out := step(t, previewed, in)
+			cmd := theMove(t, out.Cmds)
+			if !cmd.Single || !cmd.DryRun {
+				t.Fatalf("request %+v, want a new dry run for Only this Issue", cmd)
+			}
+			if !out.State.Model.MoveProject.Sending || out.State.Model.MoveProject.Previewed {
+				t.Fatalf("card %+v does not wait for the new preview", out.State.Model.MoveProject)
+			}
+			single := step(t, out.State, model.ProjectMoveAnswer{UID: "a", ToProjectUID: "s", DryRun: true, Revision: 3, Count: 1}).State
+			if text := moveText(t, single, "preview"); !strings.Contains(text, "#a moves to shop") {
+				t.Errorf("preview %q, want the one Issue", text)
+			}
+			move := theMove(t, step(t, single, key("enter")).Cmds)
+			if !move.Single || move.DryRun {
+				t.Errorf("move %+v, want a real move with Single", move)
+			}
+		})
+	}
+}
+
+func TestMoveCardKeepsTheProjectWhenTheSubtreeIsRefused(t *testing.T) {
+	preview := moving(t, movePane(t, movable("a")), "shop")
+	refused := step(t, preview.State, model.ProjectMoveAnswer{UID: "a", ToProjectUID: "s", DryRun: true, Subtree: true, Err: errors.New("descendant work#b is in an archived Project")}).State
+	if refused.Model.CurrentMode() != model.ModeMoveConfirm {
+		t.Fatalf("mode %s, want the card to stay on the chosen Project", refused.Model.CurrentMode())
+	}
+	if got := moveText(t, refused, "error"); !strings.Contains(got, "archived") {
+		t.Errorf("error %q lacks the refusal", got)
+	}
+	if cmd := theMove(t, step(t, refused, key("enter")).Cmds); !cmd.DryRun {
+		t.Errorf("enter sent %+v, want a new preview", cmd)
+	}
+	if cmd := theMove(t, step(t, refused, key("o")).Cmds); !cmd.Single || !cmd.DryRun {
+		t.Errorf("o sent %+v, want a preview for Only this Issue", cmd)
+	}
+}
+
+func TestMoveCardNoticeCountsTheIssuesMoved(t *testing.T) {
+	preview := moving(t, movePane(t, movable("a")), "shop")
+	previewed := step(t, preview.State, model.ProjectMoveAnswer{UID: "a", ToProjectUID: "s", DryRun: true, Revision: 3, Count: 2, Descendants: []model.MovedIssue{{ShortID: "b"}}}).State
+	moved := step(t, step(t, previewed, key("enter")).State, model.ProjectMoveAnswer{UID: "a", ToProjectUID: "s", NewShortID: "9", Count: 2}).State
+	if got := moved.Model.Notice; got != "Moved #a and 1 descendant to shop#9." {
+		t.Errorf("notice %q", got)
+	}
+}

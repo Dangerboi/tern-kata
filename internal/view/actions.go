@@ -258,6 +258,9 @@ func DecodeChange(id string, value any) model.Msg {
 			}
 		}
 	}
+	if on, ok := value.(bool); ok && id == MoveSingleID {
+		return model.MoveSingleMsg{On: on}
+	}
 	field, ok := controlField(id)
 	if !ok {
 		return nil

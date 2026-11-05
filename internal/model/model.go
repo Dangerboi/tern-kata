@@ -245,6 +245,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return m, nil
 	case ChooseMsg:
 		return chooseField(m, msg.Field, msg.Index), nil
+	case MoveSingleMsg:
+		return setMoveSingle(m, msg.On)
 	case SwitchMsg:
 		return switchField(m, msg.Field, msg.On), nil
 	case DropdownToggleMsg:
