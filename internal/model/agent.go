@@ -68,8 +68,6 @@ type AgentNoAddress string
 const (
 	// AgentNotOmp is an agent whose agent.toml command is not omp: the extension is omp's.
 	AgentNotOmp AgentNoAddress = "not-omp"
-	// AgentTrustedExtension is an omp agent whose agent.toml args hold --trusted-extension, which omp refuses with -e.
-	AgentTrustedExtension AgentNoAddress = "trusted-extension"
 )
 
 // StartAgent asks the gateway to start an interactive agent on an Issue. Workspace is the Pane's workspace when the Issue's

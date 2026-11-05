@@ -340,11 +340,3 @@ func TestARunLoadsTernKatasExtensionWithTheFlagItsProfileAllows(t *testing.T) {
 		})
 	}
 }
-
-func TestOnlyOmpIsOmp(t *testing.T) {
-	for program, want := range map[string]bool{"omp": true, "/usr/local/bin/omp": true, `C:\bin\omp.exe`: runtime.GOOS == "windows", "claude": false, "omp-wrapper": false} {
-		if got := IsOmp(program); got != want {
-			t.Errorf("IsOmp(%q) = %v, want %v", program, got, want)
-		}
-	}
-}

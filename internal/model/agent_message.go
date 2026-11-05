@@ -27,11 +27,10 @@ const (
 
 // Why `m` writes to no agent: the selected request's agent cannot receive a message, or no agent raised the request.
 const (
-	NoAgentRaisedRefusal         = "No agent this host started raised this request."
-	AgentExitedRefusal           = "The agent has exited; no message would reach it."
-	AgentNotOmpRefusal           = "The agent is not omp; messages reach only omp agents, through tern-kata's extension."
-	AgentTrustedExtensionRefusal = "The agent runs with --trusted-extension, which keeps tern-kata's extension from loading."
-	AgentWithoutAddressRefusal   = "The agent was started before messages could reach it; start a new one."
+	NoAgentRaisedRefusal       = "No agent this host started raised this request."
+	AgentExitedRefusal         = "The agent has exited; no message would reach it."
+	AgentNotOmpRefusal         = "The agent is not omp; messages reach only omp agents, through tern-kata's extension."
+	AgentWithoutAddressRefusal = "The agent was started before messages could reach it; start a new one."
 )
 
 // AgentMessageState is the Message card: the agent it writes to and the text typed. Held is the value kata holds at the agent's
@@ -121,8 +120,6 @@ func (m Model) messageTarget(request AttentionRequest) (AgentEntry, string) {
 		return target, AgentExitedRefusal
 	case target.NoAddress == AgentNotOmp:
 		return target, AgentNotOmpRefusal
-	case target.NoAddress == AgentTrustedExtension:
-		return target, AgentTrustedExtensionRefusal
 	case target.Address == "":
 		return target, AgentWithoutAddressRefusal
 	}

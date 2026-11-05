@@ -115,9 +115,8 @@ func TestTheMessageCardRefusesABlankOrTooLongMessage(t *testing.T) {
 }
 
 func TestMessagingIsOffWithAReasonWhenNoAgentCanReceiveIt(t *testing.T) {
-	notOmp, trusted, older := ompAgent, ompAgent, ompAgent
+	notOmp, older := ompAgent, ompAgent
 	notOmp.Address, notOmp.NoAddress = "", model.AgentNotOmp
-	trusted.Address, trusted.NoAddress = "", model.AgentTrustedExtension
 	older.Address = ""
 	exitedRequest := attentionRequest(t, 7, "work", "aa11", "Deploy the fix", `{"from":"dana","teammate":"omp","message":"agent exited without closing work#aa11"}`, 5)
 	for name, tc := range map[string]struct {
@@ -131,7 +130,6 @@ func TestMessagingIsOffWithAReasonWhenNoAgentCanReceiveIt(t *testing.T) {
 		"an exited agent":              {agentRaised(t), []model.AgentState{{Block: "31", State: model.AgentExited}}, []model.AgentEntry{ompAgent}, model.AgentExitedRefusal},
 		"an agent gone with its block": {exitedRequest, nil, nil, model.AgentExitedRefusal},
 		"an agent that is not omp":     {agentRaised(t), nil, []model.AgentEntry{notOmp}, model.AgentNotOmpRefusal},
-		"--trusted-extension":          {agentRaised(t), nil, []model.AgentEntry{trusted}, model.AgentTrustedExtensionRefusal},
 		"an agent started before":      {agentRaised(t), nil, []model.AgentEntry{older}, model.AgentWithoutAddressRefusal},
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/Dangerboi/tern-kata/internal/data/ompext"
 )
 
 // Dirs are the two folders the worker uses: Config holds worker.toml beside lanes.toml, State holds the lock, the
@@ -104,7 +105,7 @@ type ProjectConfig struct {
 }
 
 // DefaultCommand is the agent program a Profile runs when its Command is blank, and the one `worker init` writes.
-const DefaultCommand = "omp"
+const DefaultCommand = ompext.Program
 
 // Profile is a named agent command line. Command defaults to DefaultCommand.
 type Profile struct {

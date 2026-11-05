@@ -418,13 +418,10 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 	if err := os.MkdirAll(sessionFolder(sp.dir), 0o700); err != nil {
 		return w.hold(j, HoldExecutionError, err.Error())
 	}
-	// tern-kata's omp extension names the run's session to the agent's `kata close`; omp refuses a relative trusted path.
+	// tern-kata's omp extension names the run's session to the agent's `kata close`.
 	var extension string
-	if IsOmp(program) {
-		if extension, err = filepath.Abs(filepath.Join(sp.dir, ompext.FileName)); err == nil {
-			err = replaceFile(extension, ompext.Source)
-		}
-		if err != nil {
+	if ompext.IsOmp(program) {
+		if extension, err = ompext.Install(sp.dir); err != nil {
 			return w.hold(j, HoldExecutionError, "the omp extension could not be written: "+err.Error())
 		}
 	}

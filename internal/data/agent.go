@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/data/ompext"
 	"github.com/Dangerboi/tern-kata/internal/guardedfile"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
@@ -30,7 +31,8 @@ const AgentWrapperProgram = "tern-kata"
 // AgentCommandLine is the command an agent block runs: command with @promptFile appended (omp reads it as the first message),
 // run through `tern-kata agent [--as actor] [--address-prefix prefix] [route flags] --ref ref --`. ref is the Issue's qualified
 // ref, which the wrapper sets as the agent's KATA_REF; --as is left out when no actor is set, so KATA_AUTHOR stays as inherited.
-// Messaging adds --address-prefix and `-e <extension>` before the prompt, so omp loads the extension even under --no-extensions.
+// Messaging adds --address-prefix and the flag that loads the extension (ompext.Argv) before the prompt, so omp loads it even under
+// --no-extensions.
 // The route flags are what AgentRoute.Args writes: none for a Pane on the default daemon, so that line is the one it always was.
 func AgentCommandLine(actor, ref string, messaging AgentMessaging, route AgentRoute, command []string, promptFile string) []string {
 	line := []string{AgentWrapperProgram, "agent"}
@@ -43,9 +45,7 @@ func AgentCommandLine(actor, ref string, messaging AgentMessaging, route AgentRo
 	line = append(line, route.Args()...)
 	line = append(line, "--ref", ref, "--")
 	line = append(line, command...)
-	if messaging.Extension != "" {
-		line = append(line, "-e", messaging.Extension)
-	}
+	line = append(line, messaging.Extension...)
 	return append(line, "@"+promptFile)
 }
 
@@ -439,11 +439,11 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 	var messaging AgentMessaging
 	sender := ""
 	if noAddress == "" && cmd.Actor != "" && settings.Name != "" {
-		extension, err := writeOmpExtension(dirs.State)
+		extension, err := ompext.Install(filepath.Join(dirs.State, OmpExtensionFolder))
 		if err != nil {
 			return failed(fmt.Errorf("write the agent's omp extension: %w", err))
 		}
-		messaging = AgentMessaging{AddressPrefix: cmd.Actor + "/" + settings.Name, Extension: extension}
+		messaging = AgentMessaging{AddressPrefix: cmd.Actor + "/" + settings.Name, Extension: ompext.Argv(extension, settings.Command[1:], false)}
 		sender = cmd.Actor
 	}
 	promptFile, err := writeAgentPrompt(filepath.Join(dirs.State, AgentPromptsFolder), starter, AgentPrompt(cmd.IssueRef, cmd.IssueTitle, sender))

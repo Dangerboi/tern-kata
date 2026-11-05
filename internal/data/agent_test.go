@@ -135,7 +135,7 @@ func TestAgentArgvBuilders(t *testing.T) {
 		t.Errorf("with an actor %q, want %q", wrapped, want)
 	}
 	// An agent messages reach: the wrapper gets its Agent address up to the block id, omp loads the extension before the prompt.
-	messaging := AgentCommandLine("me-agent", "demo#ab12", AgentMessaging{AddressPrefix: "dana/omp", Extension: "/state/omp/tern-kata.ts"}, AgentRoute{}, []string{"omp", "--fast"}, "/state/p.md")
+	messaging := AgentCommandLine("me-agent", "demo#ab12", AgentMessaging{AddressPrefix: "dana/omp", Extension: []string{"-e", "/state/omp/tern-kata.ts"}}, AgentRoute{}, []string{"omp", "--fast"}, "/state/p.md")
 	if want := []string{"tern-kata", "agent", "--as", "me-agent", "--address-prefix", "dana/omp", "--ref", "demo#ab12", "--", "omp", "--fast", "-e", "/state/omp/tern-kata.ts", "@/state/p.md"}; !slices.Equal(messaging, want) {
 		t.Errorf("with messaging %q, want %q", messaging, want)
 	}
@@ -263,8 +263,6 @@ func TestAnAgentThatCannotLoadTheExtensionStartsWithoutAnAgentAddressAndSaysWhy(
 		want    model.AgentNoAddress
 	}{
 		{`["claude", "--continue"]`, model.AgentNotOmp},
-		{`["/opt/omp/omp", "--trusted-extension", "/abs/guard.ts"]`, model.AgentTrustedExtension},
-		{`["omp", "--trusted-extension=/abs/guard.ts"]`, model.AgentTrustedExtension},
 	} {
 		writeAgentFile(t, filepath.Join(dirs.Config, "agent.toml"), "command = "+c.command+"\n[projects.demo]\ncheckout = \"/work/demo\"\n")
 		got := as[model.AgentStarted](t, run(t, g, model.StartAgent{Placement: model.AgentSplit, IssueUID: "U1", IssueRef: "demo#ab12", ProjectName: "demo", PaneBlock: "7", Actor: "dana"}))
@@ -281,21 +279,33 @@ func TestAnAgentThatCannotLoadTheExtensionStartsWithoutAnAgentAddressAndSaysWhy(
 	}
 }
 
-func TestTheOmpExtensionIsWrittenFromTheBinaryAndReplacedWhenItChanges(t *testing.T) {
-	state := t.TempDir()
-	path, err := writeOmpExtension(state)
-	if err != nil || path != filepath.Join(state, OmpExtensionFolder, "tern-kata.ts") {
-		t.Fatalf("path %q, %v", path, err)
+func TestAnOmpAgentWithTrustedExtensionInItsArgsLoadsTheExtensionThroughThatFlagAndGetsAnAgentAddress(t *testing.T) {
+	for _, name := range []string{"KATA_HOME", "KATA_SERVER", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE"} {
+		t.Setenv(name, "")
 	}
-	// An older tern-kata's extension is replaced by this one's.
-	if err := os.WriteFile(path, []byte("export default function () {}\n"), 0o600); err != nil {
-		t.Fatal(err)
+	g, dirs := agentGateway(t)
+	var ran []string
+	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		ran = args
+		return []byte(`{"session": 1, "tab": 2, "block": 31}`), nil
 	}
-	if again, err := writeOmpExtension(state); err != nil || again != path {
-		t.Fatalf("again %q, %v", again, err)
+	extension := filepath.Join(dirs.State, OmpExtensionFolder, "tern-kata.ts")
+	for _, command := range []string{`["omp", "--trusted-extension", "/abs/guard.ts"]`, `["/opt/omp/omp", "--trusted-extension=/abs/guard.ts"]`} {
+		writeAgentFile(t, filepath.Join(dirs.Config, "agent.toml"), "command = "+command+"\n[projects.demo]\ncheckout = \"/work/demo\"\n")
+		got := as[model.AgentStarted](t, run(t, g, model.StartAgent{Placement: model.AgentSplit, IssueUID: "U1", IssueRef: "demo#ab12", ProjectName: "demo", PaneBlock: "7", Actor: "dana"}))
+		if got.Err != nil || got.Entry.Address != "dana/omp-31" || got.Entry.NoAddress != "" {
+			t.Fatalf("%s: entry %+v, err %v; want an Agent address", command, got.Entry, got.Err)
+		}
+		n := len(ran)
+		if n < 3 || ran[n-3] != "--trusted-extension" || ran[n-2] != extension || ran[n-1] != "@"+got.Entry.PromptFile || slices.Contains(ran, "-e") {
+			t.Errorf("%s: ran %q, want --trusted-extension %s before the prompt and no -e", command, ran, extension)
+		}
+		if !slices.Contains(ran, "--address-prefix") {
+			t.Errorf("%s: ran %q, want an address prefix", command, ran)
+		}
 	}
-	if text, err := os.ReadFile(path); err != nil || !bytes.Equal(text, ompext.Source) {
-		t.Fatalf("after a second write the file holds %q, %v", text, err)
+	if text, err := os.ReadFile(extension); err != nil || !bytes.Equal(text, ompext.Source) {
+		t.Fatalf("the extension file holds %d bytes, %v; want the embedded %d", len(text), err, len(ompext.Source))
 	}
 }
 
