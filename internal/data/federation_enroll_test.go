@@ -674,3 +674,139 @@ func TestTheRecoveryCommandOfALocalSpokeNamesTheCatalogEntryItWasReachedThrough(
 		}
 	}
 }
+
+// hubSpokeNames are the names the hub keeps for its enrollments, by spoke instance.
+func (r enrollRig) hubSpokeNames(t *testing.T) map[string]string {
+	t.Helper()
+	names := map[string]string{}
+	for _, e := range r.hubEnrollments(t) {
+		if e.SpokeName != nil {
+			names[e.SpokeInstanceUID] = *e.SpokeName
+		}
+	}
+	return names
+}
+
+func (r enrollRig) rename(t *testing.T, name string) model.FederationSpokeNamed {
+	t.Helper()
+	return as[model.FederationSpokeNamed](t, run(t, r.spokeGateway(t), model.SetFederationSpokeName{Workspace: t.TempDir(), Attempt: 8, HubURL: r.hub.URL, AllowInsecure: true,
+		InstanceUID: r.spokeInstanceUID(t), Name: name}))
+}
+
+func TestEnrollingWithASpokeNameRecordsItOnTheHubAndTheStatusReadsItBack(t *testing.T) {
+	rig := startEnrollRig(t)
+	_, acme := project(t, rig.hubGateway(t), "acme")
+	draft := replicaDraft(acme)
+	draft.SpokeName = "phone"
+
+	if got := rig.enroll(t, draft); got.Err != nil || got.Recovery != nil {
+		t.Fatalf("enrollment %+v", got)
+	}
+	uid := rig.spokeInstanceUID(t)
+	if names := rig.hubSpokeNames(t); names[uid] != "phone" {
+		t.Errorf("the hub names %v, want the spoke called phone", names)
+	}
+	spokes := rig.spokeProjects(t)
+	if len(spokes) != 1 || spokes[0].SpokeName != "phone" {
+		t.Errorf("the spoke lists %+v, want its name read from the hub", spokes)
+	}
+}
+
+func TestEnrollingWithoutASpokeNameLeavesTheSpokeUnnamed(t *testing.T) {
+	rig := startEnrollRig(t)
+	_, acme := project(t, rig.hubGateway(t), "acme")
+	if got := rig.enroll(t, replicaDraft(acme)); got.Err != nil {
+		t.Fatalf("enrollment %+v", got)
+	}
+	if names := rig.hubSpokeNames(t); len(names) != 0 {
+		t.Errorf("the hub names %v, want none", names)
+	}
+	if spokes := rig.spokeProjects(t); len(spokes) != 1 || spokes[0].SpokeName != "" {
+		t.Errorf("the spoke lists %+v, want it unnamed", spokes)
+	}
+}
+
+func TestARefusedSpokeNameFailsTheEnrollmentBeforeAnythingIsGrantedInKatasWords(t *testing.T) {
+	rig := startEnrollRig(t)
+	_, acme := project(t, rig.hubGateway(t), "acme")
+	draft := replicaDraft(acme)
+	draft.SpokeName = "Bad Name"
+
+	got := rig.enroll(t, draft)
+	if got.Err == nil || got.Recovery != nil || !strings.Contains(got.Err.Error(), "must match [a-z][a-z0-9-]{0,31}") {
+		t.Fatalf("enrollment %+v, want kata's reason and no recovery", got)
+	}
+	if enrollments := rig.hubEnrollments(t); len(enrollments) != 0 {
+		t.Errorf("the hub holds %+v", enrollments)
+	}
+}
+
+func TestRenamingAndClearingASpokeGoToItsHubWithTheHubsOwnToken(t *testing.T) {
+	rig := startEnrollRig(t)
+	_, acme := project(t, rig.hubGateway(t), "acme")
+	draft := replicaDraft(acme)
+	draft.SpokeName = "phone"
+	if got := rig.enroll(t, draft); got.Err != nil {
+		t.Fatalf("enrollment %+v", got)
+	}
+	uid := rig.spokeInstanceUID(t)
+	hubLog := watch(rig.hub, nil)
+
+	renamed := rig.rename(t, "tablet")
+	if renamed.Err != nil || renamed.Attempt != 8 || renamed.Hub != rig.hub.URL || renamed.Name != "tablet" {
+		t.Fatalf("rename %+v", renamed)
+	}
+	if names := rig.hubSpokeNames(t); names[uid] != "tablet" {
+		t.Errorf("the hub names %v, want tablet", names)
+	}
+	if spokes := rig.spokeProjects(t); len(spokes) != 1 || spokes[0].SpokeName != "tablet" {
+		t.Errorf("the spoke lists %+v, want the new name", spokes)
+	}
+	puts := hubLog.seen("/name")
+	if len(puts) != 1 || puts[0].method != http.MethodPut || puts[0].auth != "Bearer hub-secret" {
+		t.Errorf("the hub saw %+v, want one PUT with its own token", puts)
+	}
+
+	cleared := rig.rename(t, "")
+	if cleared.Err != nil || cleared.Name != "" {
+		t.Fatalf("clear %+v", cleared)
+	}
+	if names := rig.hubSpokeNames(t); names[uid] != "" {
+		t.Errorf("the hub names %v, want none after a clear", names)
+	}
+	if spokes := rig.spokeProjects(t); len(spokes) != 1 || spokes[0].SpokeName != "" {
+		t.Errorf("the spoke lists %+v, want it unnamed", spokes)
+	}
+	if deletes := hubLog.seen("/name"); len(deletes) != 2 || deletes[1].method != http.MethodDelete {
+		t.Errorf("the hub saw %+v, want the clear as a DELETE", deletes)
+	}
+}
+
+func TestARefusedRenameShowsKatasReasonAndChangesNothing(t *testing.T) {
+	rig := startEnrollRig(t)
+	_, acme := project(t, rig.hubGateway(t), "acme")
+	draft := replicaDraft(acme)
+	draft.SpokeName = "phone"
+	if got := rig.enroll(t, draft); got.Err != nil {
+		t.Fatalf("enrollment %+v", got)
+	}
+
+	bad := rig.rename(t, "Bad Name")
+	if bad.Err == nil || !strings.Contains(bad.Err.Error(), "must match [a-z][a-z0-9-]{0,31}") || bad.Attempt != 8 {
+		t.Fatalf("rename %+v, want kata's reason", bad)
+	}
+	if names := rig.hubSpokeNames(t); names[rig.spokeInstanceUID(t)] != "phone" {
+		t.Errorf("the hub names %v, want phone kept", names)
+	}
+
+	unknown := as[model.FederationSpokeNamed](t, run(t, rig.spokeGateway(t), model.SetFederationSpokeName{Workspace: t.TempDir(), Attempt: 9, HubURL: rig.hub.URL, AllowInsecure: true,
+		InstanceUID: "01ARZ3NDEKTSV4RRFFQ69G5FAV", Name: "ghost"}))
+	if unknown.Err == nil || !strings.Contains(unknown.Err.Error(), "no enrollment") {
+		t.Errorf("naming an instance the hub does not know gave %+v, want its refusal", unknown)
+	}
+
+	noUID := as[model.FederationSpokeNamed](t, run(t, rig.spokeGateway(t), model.SetFederationSpokeName{Workspace: t.TempDir(), Attempt: 10, HubURL: rig.hub.URL, Name: "x"}))
+	if noUID.Err == nil {
+		t.Error("a rename without the instance uid was sent")
+	}
+}

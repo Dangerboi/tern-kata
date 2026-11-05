@@ -27,6 +27,7 @@ func cardOpeners() map[model.Card]func(*testing.T) driver.State {
 		model.CardAgentMessage:    popupOpener("Message"),
 		model.CardDelete:          popupOpener("Delete"),
 		model.CardFederationAdopt: popupOpener("Federation adoption"),
+		model.CardFederationName:  popupOpener("Federation spoke name"),
 		model.CardRecurrence:      popupOpener("Recurrence"),
 		model.CardJob:             popupOpener("Job"),
 		model.CardProject:         popupOpener("New Project"),

@@ -97,6 +97,8 @@ type FederationEnrollDraft struct {
 	APICapabilities            string
 	DisplayCapabilities        string
 	PushEnabled, AllowInsecure bool
+	// SpokeName is the name the hub is asked to give the spoke, "" for none.
+	SpokeName string
 	// BlockedReason is why the enrollment cannot run; the preview names it.
 	BlockedReason string
 }
@@ -138,6 +140,7 @@ func (d FederationEnrollDraft) PreviewLines() []string {
 		"capabilities: " + oneLine(d.DisplayCapabilities),
 		"push enabled: " + strconv.FormatBool(d.PushEnabled),
 		"allow_insecure: " + strconv.FormatBool(d.AllowInsecure),
+		"spoke name: " + federationDash(oneLine(d.SpokeName)),
 	}
 	if d.AdoptExisting {
 		lines = append(lines, "",
@@ -176,6 +179,7 @@ func (o FederationEnrollOutcome) ResultLines() []string {
 	return []string{
 		"status: " + status,
 		"actor: " + federationDash(oneLine(o.Actor)),
+		"spoke name: " + federationDash(oneLine(o.Draft.SpokeName)),
 		"snapshot count: " + strconv.FormatInt(o.SnapshotCount, 10),
 		"hub URL: " + oneLine(o.HubURL),
 		"hub project ID: " + strconv.FormatInt(o.HubProjectID, 10),
@@ -954,6 +958,7 @@ var federationEnrollRows = []actionEntry{
 	{action: FederationChoiceBack, modes: []Mode{ModeFederationPick}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeFederationPick}, handle: federationChoiceBack},
 	{action: FederationBrowseBack, modes: []Mode{ModeFederationBrowse}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeFederationBrowse}, handle: federationBrowseBack},
 	{action: RunFederationEnroll, modes: []Mode{ModeFederationPreview}, keys: keys("enter", "↵"), help: "confirm", footer: []Mode{ModeFederationPreview}, footerKey: "↵", handle: confirmFederationPreview},
+	{action: NameFederationEnroll, modes: []Mode{ModeFederationPreview}, keys: keys("shift+n", "N"), help: "name spoke", footer: []Mode{ModeFederationPreview}, handle: openFederationNameForEnroll},
 	{action: FederationPreviewBack, modes: []Mode{ModeFederationPreview}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeFederationPreview}, handle: federationPreviewBack},
 	{action: RevealFederationJoin, modes: []Mode{ModeFederationRecovery}, keys: keys("shift+r", "R"), help: "reveal recovery command", footer: []Mode{ModeFederationRecovery}, handle: revealFederationJoin},
 	{action: FederationRecoveryBack, modes: []Mode{ModeFederationRecovery}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeFederationRecovery}, handle: federationRecoveryBack},

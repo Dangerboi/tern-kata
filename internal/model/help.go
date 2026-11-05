@@ -132,7 +132,7 @@ var pageHelpModes = map[Page][]Mode{
 	PageAttention:   {ModeAttention},
 	PageCredentials: {ModeCredentials},
 	PageFederation: {ModeFederation, ModeFederationLeave, ModeFederationResult, ModeFederationPick, ModeFederationBrowse,
-		ModeFederationPreview, ModeFederationAdopt, ModeFederationRecovery},
+		ModeFederationPreview, ModeFederationAdopt, ModeFederationName, ModeFederationRecovery},
 	PageDaemons: {ModeDaemons},
 }
 

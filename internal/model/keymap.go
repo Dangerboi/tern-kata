@@ -116,6 +116,10 @@ const (
 	FederationPreviewBack   Action = "federation-preview-back"
 	FederationAdoptConfirm  Action = "federation-adopt-confirm"
 	FederationAdoptCancel   Action = "federation-adopt-cancel"
+	NameFederationSpoke     Action = "name-federation-spoke"
+	NameFederationEnroll    Action = "name-federation-enroll"
+	FederationNameSave      Action = "federation-name-save"
+	FederationNameCancel    Action = "federation-name-cancel"
 	RevealFederationJoin    Action = "reveal-federation-join"
 	FederationRecoveryBack  Action = "federation-recovery-back"
 )
@@ -178,11 +182,13 @@ const (
 	ModeFederationResult Mode = "federation-result"
 	// ModeFederationPick is the enrollment's three choices (local Project, hub, hub Project), ModeFederationBrowse the read-only
 	// browse of the hubs' Projects, ModeFederationPreview the enrollment preview, ModeFederationAdopt the typed confirmation of an
-	// adoption and ModeFederationRecovery the recovery after the hub granted the enrollment.
+	// adoption, ModeFederationName the card asking for a spoke's name and ModeFederationRecovery the
+	// recovery after the hub granted the enrollment.
 	ModeFederationPick     Mode = "federation-pick"
 	ModeFederationBrowse   Mode = "federation-browse"
 	ModeFederationPreview  Mode = "federation-preview"
 	ModeFederationAdopt    Mode = "federation-adopt"
+	ModeFederationName     Mode = "federation-name"
 	ModeFederationRecovery Mode = "federation-recovery"
 )
 
@@ -299,6 +305,9 @@ var cardBindings = []Binding{
 	{Chord: "enter", Key: "enter", Action: AgentMessageReplace, Help: "replace it", Mode: ModeAgentMessageReplace, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: AgentMessageKeep, Help: "keep editing", Mode: ModeAgentMessageReplace, ShowInFooter: true},
 	// Adoption confirmation of the Federation Page's enrollment: one name field, so every other key is typed.
+	// Spoke name card: one name field, so every other key is typed; an empty name clears it.
+	{Chord: "enter", Key: "enter", Action: FederationNameSave, Help: "save name", Mode: ModeFederationName, ShowInFooter: true},
+	{Chord: "escape", Key: "esc", Action: FederationNameCancel, Help: "cancel", Mode: ModeFederationName, ShowInFooter: true},
 	{Chord: "enter", Key: "enter", Action: FederationAdoptConfirm, Help: "adopt", Mode: ModeFederationAdopt, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: FederationAdoptCancel, Help: "back", Mode: ModeFederationAdopt, ShowInFooter: true},
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: RecurrenceSave, Help: "save recurrence", Mode: ModeRecurrenceForm, ShowInFooter: true},

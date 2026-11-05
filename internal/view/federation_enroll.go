@@ -167,3 +167,31 @@ func federationAdoptLayer(m model.Model) tern.Element {
 		cardButton("back", model.ModeFederationAdopt, model.FederationAdoptCancel, "Back", false)))
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardFederationAdopt)}, Head: ui.T("Confirm Adoption"), Modal: true, Size: ui.SizeMD}, children))
 }
+
+// federationNameLayer is the card asking for a spoke's name: for the enrollment being previewed, or for an enrolled spoke, where
+// it runs on the hub and an empty name clears the spoke's.
+func federationNameLayer(m model.Model) tern.Element {
+	n := m.Federation.Name
+	if !n.Open {
+		return nil
+	}
+	prompt, head, save := "name for the spoke (empty for none):", "Name Spoke", "Save"
+	if n.Rename {
+		prompt, head = "name for this spoke on its hub (empty clears it):", "Rename Spoke"
+	}
+	children := []tern.Element{
+		ui.Text{Common: ui.Common{Key: "prompt"}, Text: prompt},
+		toneText("rules", ui.ToneMuted, "a letter, then up to 31 lowercase letters, digits or hyphens; the hub refuses any other"),
+		ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Spoke name"}, Field: ui.Field{Text: n.Input, Cursor: caretAt(n.Caret, "", n.Input), Mode: "insert", Placeholder: ui.T("spoke name")}},
+	}
+	if n.Saving {
+		children = append(children, toneText("running", ui.TonePending, "saving..."))
+	}
+	if n.Err != nil {
+		children = append(children, toneText("error", ui.ToneError, n.Err.Error()))
+	}
+	children = append(children, buttonRow(
+		cardButton("save", model.ModeFederationName, model.FederationNameSave, save, true),
+		cardButton("cancel", model.ModeFederationName, model.FederationNameCancel, "Cancel", false)))
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardFederationName)}, Head: ui.T(head), Modal: true, Size: ui.SizeMD}, children))
+}

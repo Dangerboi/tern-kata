@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 
 	g "go.kenn.io/kata/pkg/client/generated"
 
@@ -39,7 +40,85 @@ func (c *Client) ReadFederation(ctx context.Context, cmd model.LoadFederation) (
 			loaded.Spokes = append(loaded.Spokes, translateSpoke(wire))
 		}
 	}
+	nameSpokes(ctx, loaded.Spokes, loaded.InstanceUID)
 	return loaded, nil
+}
+
+// nameSpokes fills in the name each spoke's hub gives this instance. The name lives on the hub, per instance, so each hub is read once,
+// with its catalog entry's token as a leave does; a hub that cannot be read leaves its spokes unnamed rather than failing the status.
+func nameSpokes(ctx context.Context, spokes []model.FederationSpoke, instanceUID string) {
+	if instanceUID == "" {
+		return
+	}
+	seen, names := map[string]bool{}, map[string]string{}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, s := range spokes {
+		if seen[s.HubURL] || s.HubURL == "" {
+			continue
+		}
+		seen[s.HubURL] = true
+		wg.Go(func() {
+			name := hubSpokeName(ctx, s.HubURL, s.AllowInsecure, instanceUID)
+			mu.Lock()
+			names[s.HubURL] = name
+			mu.Unlock()
+		})
+	}
+	wg.Wait()
+	for i := range spokes {
+		spokes[i].SpokeName = names[spokes[i].HubURL]
+	}
+}
+
+// hubSpokeName is the name the hub at hubURL gives the instance, "" when it gives none or cannot be read.
+func hubSpokeName(ctx context.Context, hubURL string, allowInsecure bool, instanceUID string) string {
+	ctx, cancel := context.WithTimeout(ctx, hubReadBudget)
+	defer cancel()
+	hub, err := hubAdminClient(ctx, hubURL, allowInsecure)
+	if err != nil {
+		return ""
+	}
+	listed, err := hub.ListFederationEnrollmentsWithResponse(ctx)
+	if err != nil || listed.JSON200 == nil {
+		return ""
+	}
+	for _, e := range listed.JSON200.Enrollments {
+		if e.SpokeInstanceUID == instanceUID && e.SpokeName != nil && *e.SpokeName != "" {
+			return *e.SpokeName
+		}
+	}
+	return ""
+}
+
+// SetFederationSpokeName names or, with an empty name, unnames this instance on its hub, which keeps the label. kata's refusal of
+// a name is the answer's Err, in kata's words.
+func (c *Client) SetFederationSpokeName(ctx context.Context, cmd model.SetFederationSpokeName) (model.FederationSpokeNamed, error) {
+	ctx, cancel := context.WithTimeout(ctx, hubReadBudget)
+	defer cancel()
+	named := model.FederationSpokeNamed{Attempt: cmd.Attempt, Hub: cmd.HubURL}
+	fail := func(err error) (model.FederationSpokeNamed, error) {
+		named.Err = err
+		return named, nil
+	}
+	if strings.TrimSpace(cmd.InstanceUID) == "" {
+		return fail(errors.New("spoke instance UID is not loaded; refresh federation status before naming"))
+	}
+	hub, err := hubAdminClient(ctx, cmd.HubURL, cmd.AllowInsecure)
+	if err != nil {
+		return fail(err)
+	}
+	if cmd.Name == "" {
+		_, err = hub.ClearFederationSpokeNameWithResponse(ctx, &g.ClearFederationSpokeNameRequestOptions{PathParams: &g.ClearFederationSpokeNamePath{SpokeInstanceUID: cmd.InstanceUID}})
+	} else {
+		_, err = hub.SetFederationSpokeNameWithResponse(ctx, &g.SetFederationSpokeNameRequestOptions{
+			PathParams: &g.SetFederationSpokeNamePath{SpokeInstanceUID: cmd.InstanceUID}, Body: &g.SetFederationSpokeNameBody{Name: cmd.Name}})
+	}
+	if err != nil {
+		return fail(daemonError(err))
+	}
+	named.Name = cmd.Name
+	return named, nil
 }
 
 // activeDaemon is the name, endpoint and auth of the daemon this client talks to, worded as kata tui words them: the catalog entry
