@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 const (
@@ -123,17 +124,23 @@ func (DatesResultMsg) msg() {}
 
 // DatesConflict is the refusal for a key whose value moved since the card opened. Held is what kata holds under the key now ("" for
 // none) and Shown what the card shows for it (Held, or the date kata projects when it holds none). Read is false when kata could
-// not be read for the current value, and the card then keeps its own.
+// not be read for the current value, and the card then keeps its own. Saved names the fields already written when the key moved
+// after the save began; it is empty when nothing was written.
 type DatesConflict struct {
 	Label, Key, Held, Shown string
 	Read                    bool
+	Saved                   []string
 }
 
 func (e DatesConflict) Error() string {
-	if !e.Read {
-		return fmt.Sprintf("%s changed since the card opened; nothing was written. kata could not be read for the current date.", e.Label)
+	written := "nothing was written"
+	if len(e.Saved) > 0 {
+		written = "already saved: " + strings.Join(e.Saved, ", ")
 	}
-	return fmt.Sprintf("The Issue changed since the card opened; nothing was written. The %s field now shows the current date.", e.Label)
+	if !e.Read {
+		return fmt.Sprintf("%s changed since the card opened; %s. kata could not be read for the current date.", e.Label, written)
+	}
+	return fmt.Sprintf("The Issue changed since the card opened; %s. The %s field now shows the current date.", written, e.Label)
 }
 
 // datePreview is the muted line under a date field: the day text resolves to with its weekday, "no date" for blank, and nothing

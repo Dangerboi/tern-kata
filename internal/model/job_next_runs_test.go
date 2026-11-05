@@ -44,6 +44,15 @@ func TestTheJobInspectorListsTheNextThreeRunsOfACronJob(t *testing.T) {
 	}
 }
 
+func TestTheJobInspectorCountsAnAdapterEveryJobFromItsCreation(t *testing.T) {
+	job := cronJob(true, cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "@every 1h", Timezone: "UTC"}, nil)
+	job.CreatedAt = time.Date(2026, 10, 8, 11, 20, 0, 0, time.UTC)
+	facts := nextRunsFacts(job)
+	if len(facts) == 0 || facts[0].Value != "Thu 2026-10-08 12:20 UTC" {
+		t.Errorf("facts %+v, want the first run at 12:20, as the list row has it", facts)
+	}
+}
+
 func TestTheJobInspectorSaysWhyAJobHasNoNextRuns(t *testing.T) {
 	cron := cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 9 * * *", Timezone: "UTC"}
 	for name, c := range map[string]struct {

@@ -765,45 +765,56 @@ func (f JobFormState) Preview(cal PaneCalendar, now time.Time) JobPreview {
 		anchor, anchorKnown = f.Opened.intervalAnchor()
 	}
 	preview := JobPreview{Words: triggerWords(t)}
-	preview.Runs, preview.Note = triggerRuns(t, anchor, anchorKnown, cal, now)
-	return preview
-}
-
-// triggerRuns lists the next previewRuns instants of a trigger after now, formatted with the zone abbreviation: a cron trigger
-// in its own zone, an interval or once trigger in the Pane calendar's zone. Note says why an interval trigger lists none; a
-// manual or Issue-date trigger, and a once trigger in the past, list none without one.
-func triggerRuns(t cronjob.Trigger, anchor time.Time, anchorKnown bool, cal PaneCalendar, now time.Time) (runs []string, note string) {
-	const layout = "Mon 2006-01-02 15:04 MST"
 	switch t.Kind {
 	case cronjob.TriggerCron:
 		schedule, err := cronjob.Cron(t.Cron, t.Timezone, time.Time{})
-		zone, _ := zoneAndExpression(t)
-		loc, zoneErr := time.LoadLocation(zone)
+		loc, zoneErr := cronLocation(t)
 		if err != nil || zoneErr != nil {
-			return nil, "Next runs unknown: this trigger can't be read."
+			preview.Note = "Next runs unknown: this trigger can't be read."
+			break
 		}
-		for next := schedule.Next(now); len(runs) < previewRuns && !next.IsZero(); next = schedule.Next(next) {
-			runs = append(runs, next.In(loc).Format(layout))
-		}
+		preview.Runs = listRuns(schedule, now, func(at time.Time) time.Time { return at.In(loc) })
 	case cronjob.TriggerInterval:
 		if !anchorKnown {
-			return nil, "Next runs unknown: this job's start point is not known yet."
+			preview.Note = "Next runs unknown: this job's start point is not known yet."
+			break
 		}
 		schedule, err := cronjob.Interval(t.IntervalSeconds, anchor)
 		if err != nil {
-			return nil, "Next runs unknown: this trigger can't be read."
+			preview.Note = "Next runs unknown: this trigger can't be read."
+			break
 		}
-		next := schedule.Next(now)
-		for range previewRuns {
-			runs = append(runs, cal.in(next).Format(layout))
-			next = schedule.Next(next)
-		}
+		preview.Runs = listRuns(schedule, now, cal.in)
 	case cronjob.TriggerOnce:
-		if at, err := time.Parse(time.RFC3339, t.At); err == nil && at.After(now) {
-			runs = append(runs, cal.in(at).Format(layout))
-		}
+		preview.Runs = onceRuns(t, now, cal)
 	}
-	return runs, ""
+	return preview
+}
+
+// runLayout formats a listed run with the zone abbreviation.
+const runLayout = "Mon 2006-01-02 15:04 MST"
+
+// cronLocation is the zone a cron trigger is read in.
+func cronLocation(t cronjob.Trigger) (*time.Location, error) {
+	zone, _ := zoneAndExpression(t)
+	return time.LoadLocation(zone)
+}
+
+// listRuns steps a schedule from now for the next previewRuns instants, each shown in the zone in gives it.
+func listRuns(schedule cronjob.Schedule, now time.Time, in func(time.Time) time.Time) []string {
+	var runs []string
+	for next := schedule.Next(now); len(runs) < previewRuns && !next.IsZero(); next = schedule.Next(next) {
+		runs = append(runs, in(next).Format(runLayout))
+	}
+	return runs
+}
+
+// onceRuns is the single run of a once trigger still ahead, in the Pane calendar's zone.
+func onceRuns(t cronjob.Trigger, now time.Time, cal PaneCalendar) []string {
+	if at, err := time.Parse(time.RFC3339, t.At); err == nil && at.After(now) {
+		return []string{cal.in(at).Format(runLayout)}
+	}
+	return nil
 }
 
 // NextRuns is the inspector's answer to when the job runs next: the next runs, or the reason there are none. A job that is not
@@ -825,12 +836,26 @@ func (m Model) NextRuns(job CronJob, now time.Time) (runs []string, reason strin
 	case cronjob.TriggerIssueScheduled, cronjob.TriggerIssueDeadline:
 		return nil, "unavailable: follows the Issue's date"
 	}
-	anchor, known := job.intervalAnchor()
-	runs, note := triggerRuns(t, anchor, known, m.Calendar, now)
-	switch {
-	case note != "":
-		return nil, "unavailable"
-	case len(runs) == 0:
+	if t.Kind == cronjob.TriggerOnce {
+		runs = onceRuns(t, now, m.Calendar)
+	} else {
+		// The job's own schedule: an adapter job's @every and interval count from its creation, as the list row's do.
+		schedule, ok := job.schedule()
+		in := m.Calendar.in
+		if t.Kind == cronjob.TriggerCron && ok {
+			loc, err := cronLocation(t)
+			if err != nil {
+				ok = false
+			} else {
+				in = func(at time.Time) time.Time { return at.In(loc) }
+			}
+		}
+		if !ok {
+			return nil, "unavailable"
+		}
+		runs = listRuns(schedule, now, in)
+	}
+	if len(runs) == 0 {
 		return nil, "none"
 	}
 	return runs, ""

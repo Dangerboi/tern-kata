@@ -39,7 +39,11 @@ func (c *Client) setDates(ctx context.Context, cmd model.SetDatesCmd) (applied, 
 		res, e := c.patchMetadataKey(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, change.Key, value, ifValue)
 		if e != nil {
 			if daemonCode(e) == "metadata_guard_failed" {
-				return applied, changed, last, false, c.datesConflictRead(ctx, cmd, change)
+				conflict := c.datesConflictRead(ctx, cmd, change)
+				for _, done := range applied {
+					conflict.Saved = append(conflict.Saved, done.Label)
+				}
+				return applied, changed, last, false, conflict
 			}
 			return applied, changed, last, ambiguousWrite(e), daemonError(e)
 		}
