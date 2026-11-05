@@ -14,7 +14,7 @@ In a directory bound to a kata Project, `tern-kata` opens that Project's Issues.
 
 ## The Page bar
 
-The top bar holds the **Page bar**, "1 Issues  2 Jobs  3 Runs  4 Workflows  5 Board  6 Attention". `1` to `6`, or a click on a Page, switch Pages; `b` toggles between Issues and Board. Each Page keeps its selection while another is shown. The top bar's Project heading is only a heading: the Menu button, or `esc` from the list, opens the Menu.
+The top bar holds the **Page bar**, "[1] Issues  [2] Jobs  [3] Runs  [4] Workflows  [5] Board  [6] Attention", each Page's key drawn as a keycap like the footer's key hints. `1` to `6`, or a click on a Page, switch Pages; `b` toggles between Issues and Board. Each Page keeps its selection while another is shown. The top bar's Project heading is only a heading: the Menu button, or `esc` from the list, opens the Menu.
 
 The Board, Jobs, Runs and Workflows Pages act on the Pane's Project: the current Project Collection, else the workspace's Binding (from Inbox or another fixed Collection in a bound workspace it switches to the Binding's Project). With neither it says so and opens the Menu's Projects list. The Attention Page acts on no Project: it reads every Project on the daemon, and neither a Project nor a Collection change touches it.
 
@@ -39,7 +39,7 @@ Pages and lists with nothing to show draw an empty state saying so.
 
 ## Lettered Pages
 
-A **Lettered Page** has a letter for its key instead of a number. It opens from any Page and from the Menu, where it is listed, and the Page bar draws it only while it is shown ("1 Issues ... 6 Attention  C Credentials"). Esc or backspace returns to the Page shown before. A Lettered Page does not act on the Pane's Project, and choosing a Collection from the Menu leaves it.
+A **Lettered Page** has a letter for its key instead of a number. It opens from any Page and from the Menu, where it is listed, and the Page bar draws it only while it is shown ("[1] Issues ... [6] Attention  [C] Credentials"). Esc or backspace returns to the Page shown before. A Lettered Page does not act on the Pane's Project, and choosing a Collection from the Menu leaves it.
 
 `C` opens the **Credentials Page**: the daemon's API tokens, newest first, one card each with kata tui's fields (state, id, name or "—", actor, scope or "global" with the Project and root Issue uid, created, expires, last observed use, revoked; times in UTC as `2006-01-02 15:04:05Z`) under "N credentials · observed at <time>". It reads the connection's auth capabilities first; an account without token audit read sees "credential audit unavailable for this connection" and why. It refreshes every 30 seconds, `r` refreshes at once (or retries a failed check), and `j`/`k` move the cursor. It shows "loading credential inventory...", "no credentials" and kata's errors in kata tui's words.
 

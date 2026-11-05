@@ -31,12 +31,16 @@ const (
 	entryGap  = 2
 )
 
-// entryText is a entry's text: the key and the label, or the key alone in a compact Page bar for a Page that is not current.
-func entryText(entry model.PageBarEntry, compact bool) string {
+// keycapPadCols is the room a keycap span's pill takes beyond its text; the compact bar must still fit at the widths the tests walk.
+const keycapPadCols = 1
+
+// entryCols is the width an entry draws: its keycap, then its name unless the Page bar is compact and the Page not current.
+func entryCols(entry model.PageBarEntry, compact bool) int {
+	cols := utf8.RuneCountInString(entry.Chord) + keycapPadCols
 	if compact && !entry.Current {
-		return entry.Chord
+		return cols
 	}
-	return entry.Chord + " " + entry.Name()
+	return cols + 1 + utf8.RuneCountInString(entry.Name())
 }
 
 func entriesWidth(entries []model.PageBarEntry, compact bool) int {
@@ -45,7 +49,7 @@ func entriesWidth(entries []model.PageBarEntry, compact bool) int {
 		if i > 0 {
 			width += entryGap
 		}
-		width += utf8.RuneCountInString(entryText(entry, compact))
+		width += entryCols(entry, compact)
 	}
 	return width
 }
@@ -66,7 +70,7 @@ func pageBarFit(m model.Model, headingCols int) barFit {
 	return barOwnLine
 }
 
-// pageBar is the Page bar: one entry per Page, "1 Issues  2 Jobs", the current one accented, each its own click target that
+// pageBar is the Page bar: one entry per Page, a keycap and the name, "[1] Issues  [2] Jobs", the current name accented, each its own click target that
 // presses its key.
 func pageBar(m model.Model, flexCell func(string, ui.Tone, float64) ui.Common, compact bool) tern.Element {
 	entries := m.PageBar()
@@ -78,11 +82,9 @@ func pageBar(m model.Model, flexCell func(string, ui.Tone, float64) ui.Common, c
 		}
 		cell := flexCell(entry.ID, tone, 0)
 		cell.Title, cell.Actions = entry.Label+" page", &ui.Actions{Click: KeyClick(entry.Press)}
-		spans := []ui.Span{{T: entry.Chord, S: "muted"}}
+		spans := []ui.Span{{T: keycap(entry.Chord, entry.Chord), S: "key"}}
 		if !compact || entry.Current {
-			spans = []ui.Span{{T: entry.Chord + " ", S: "muted"}, {T: entry.Name(), S: style}}
-		} else {
-			spans[0].S = style
+			spans = append(spans, ui.Span{T: " " + entry.Name(), S: style})
 		}
 		cells = append(cells, ui.Text{Common: cell, Spans: spans, Wrap: ui.WrapNone})
 	}

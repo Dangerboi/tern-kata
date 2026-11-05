@@ -13,6 +13,13 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - `--key-file -` stores a key read from standard input in `<KATA_HOME>/docbank.key`. No flag takes the key, and the command never prints it.
   - `--folder` and the route flags `tern-kata agent` takes choose the vault folder and the kata daemon; plain `http://` to another machine and a remote kata daemon are refused.
 
+### Changed
+
+#### Issues and Pages
+
+- The Page bar draws each Page's key as a keycap, like the footer's key hints: `[1] Issues  [2] Jobs  …  [6] Attention`.
+  - A Lettered Page shown in the bar draws its letter (`[C] Credentials`). The current Page keeps its accent name, the compact bar still shows the keycap alone for the other Pages, and a click on an entry still presses its key.
+
 ## [0.8.0] - 2026-11-05
 
 ### Added
