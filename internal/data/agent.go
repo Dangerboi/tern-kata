@@ -484,7 +484,13 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 	if _, err := UpdateAgents(filepath.Join(dirs.State, AgentsFile), func(list []model.AgentEntry) []model.AgentEntry {
 		return append(slices.DeleteFunc(list, func(e model.AgentEntry) bool { return e.Block == block }), entry)
 	}); err != nil {
-		return failed(fmt.Errorf("the agent started in block %s but agents.json could not be written: %w", block, err))
+		// An agent without a mapping entry cannot be messaged, focused or closed from the Pane, and a retry would start a second one.
+		removePrompt(promptFile)
+		if out, closeErr := g.runTern(ctx, CloseBlockArgs(block)); closeErr != nil {
+			return failed(fmt.Errorf("the agent started in block %s but agents.json could not be written (%w), and the block could not be closed (%w): close block %s by hand",
+				block, err, ternFailure(closeErr, out), block))
+		}
+		return failed(fmt.Errorf("the agent was stopped because agents.json could not be written: %w", err))
 	}
 	started := model.AgentStarted{Placement: cmd.Placement, IssueRef: cmd.IssueRef, Entry: entry}
 	if entry.Background {

@@ -309,6 +309,47 @@ func TestAnOmpAgentWithTrustedExtensionInItsArgsLoadsTheExtensionThroughThatFlag
 	}
 }
 
+func TestAnAgentWhoseMappingCannotBeWrittenIsStoppedAndLeavesNoFiles(t *testing.T) {
+	for _, name := range []string{"KATA_HOME", "KATA_SERVER", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE"} {
+		t.Setenv(name, "")
+	}
+	for _, closeFails := range []bool{false, true} {
+		g, dirs := agentGateway(t)
+		writeAgentFile(t, filepath.Join(dirs.Config, "agent.toml"), "[projects.demo]\ncheckout = \"/work/demo\"\n")
+		// A folder where agents.json belongs makes every write of it fail.
+		if err := os.MkdirAll(filepath.Join(dirs.State, AgentsFile), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		var closed []string
+		g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+			if args[0] == "close" {
+				closed = args
+				if closeFails {
+					return []byte("no such block"), errors.New("exit status 1")
+				}
+				return nil, nil
+			}
+			return []byte(`{"session": 1, "tab": 2, "block": 31}`), nil
+		}
+		got := as[model.AgentStarted](t, run(t, g, model.StartAgent{Placement: model.AgentSplit, IssueUID: "U1", IssueRef: "demo#ab12", ProjectName: "demo", PaneBlock: "7", Actor: "dana"}))
+		if !slices.Equal(closed, CloseBlockArgs("31")) {
+			t.Errorf("closeFails=%v: tern closed %q, want block 31", closeFails, closed)
+		}
+		prompts, _ := os.ReadDir(filepath.Join(dirs.State, AgentPromptsFolder))
+		if len(prompts) != 0 {
+			t.Errorf("closeFails=%v: prompt files left: %v", closeFails, prompts)
+		}
+		switch {
+		case got.Err == nil:
+			t.Errorf("closeFails=%v: no error", closeFails)
+		case closeFails && !strings.Contains(got.Err.Error(), "block 31"):
+			t.Errorf("closeFails=%v: error %q does not name the block", closeFails, got.Err)
+		case !closeFails && !strings.Contains(got.Err.Error(), "stopped"):
+			t.Errorf("closeFails=%v: error %q does not say the agent was stopped", closeFails, got.Err)
+		}
+	}
+}
+
 func TestAgentPromptNameCarriesTheStartingPaneOfATab(t *testing.T) {
 	for _, c := range []struct{ starter, want string }{
 		{"24489903521795", "prompt-24489903521795-*.md"},

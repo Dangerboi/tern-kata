@@ -38,6 +38,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Fixed
 
+- When an agent's block starts but the Pane cannot record it, the Pane closes the block and says the agent was stopped, where it used to leave the agent running with no Agent badge and invite a retry that started a second one. If the block cannot be closed, the error names it.
 - A cron expression whose `CRON_TZ=` or `TZ=` zone is quoted, such as `CRON_TZ="Europe/Berlin"`, is read with that zone: the worker no longer sets the job aside as naming another zone than its trigger's, and the Jobs Page shows its runs.
 - Supervision no longer starts a second worker for `worker.lock` to refuse, all day long, after a plugin reload or a Tern update: the host half leaves the worker that is still running alone, logs one line naming it, and starts a worker within 10 seconds of its end.
 
