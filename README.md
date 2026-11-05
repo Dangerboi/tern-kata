@@ -44,7 +44,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 **The worker.** `tern-kata worker` runs kata's agent prompt jobs and workflows through omp and your shell on your machine and records every run in kata. The plugin starts and supervises it once a `worker.toml` exists. Set it up from the Pane with `W` on the Jobs Page, which opens the Worker card (set up, serve the Project, edit `worker.toml`, restart or stop the worker, turn supervision off and on; the trust choice comes first), or from a shell with `tern-kata worker init` (optional `--executor`, `--actor`, `--command`, `--model`, `--thinking`), `worker add`, `worker edit`, `worker upgrade` (lists the secrets and command steps an older `worker.toml`'s jobs use) and `worker stop [--now]`. Read the trust note first. See [The worker](docs/guide/worker.md).
 
-**Attachments.** `@` uploads a screenshot, log or any other file to an Issue through kata, which keeps the bytes in Docbank; `enter` on one in the Attachments tab downloads it and opens it when it is an image, video, audio, PDF or text file, and agents use `kata docbank attachments`. It needs a `[docbank]` section in kata's config. See [Attachments](docs/guide/attachments.md).
+**Attachments.** `@` uploads a screenshot, log or any other file to an Issue through kata, which keeps the bytes in [Docbank](https://github.com/kenn-io/docbank); `enter` on one in the Attachments tab downloads it and opens it when it is an image, video, audio, PDF or text file, and agents use `kata docbank attachments`. It needs a `[docbank]` section in kata's config. See [Attachments](docs/guide/attachments.md).
 
 ![The Attachments tab of "Add Apple Pay to checkout" listing a screenshot and a log, each with its media type and size](docs/images/attachments.png)
 
@@ -168,7 +168,7 @@ The [guide index](docs/guide/README.md) lists every page:
 ## Credits
 
 - [herdr-kata](https://github.com/salmonumbrella/herdr-kata) inspired the worker. [ADRs 0002 to 0012](docs/adr) record which of its adapter decisions tern-kata adopted, adapted or rejected.
-- [kata](https://github.com/kenn-io/kata) is the issue tracker, [Tern](https://docs.stencil.so/tern/) hosts the Pane, and [omp](https://github.com/can1357/oh-my-pi) runs the agents.
+- [kata](https://github.com/kenn-io/kata) is the issue tracker, [Docbank](https://github.com/kenn-io/docbank) keeps its attachments, [Tern](https://docs.stencil.so/tern/) hosts the Pane, and [omp](https://github.com/can1357/oh-my-pi) runs the agents.
 
 ## License
 

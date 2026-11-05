@@ -1,6 +1,6 @@
 # Attachments
 
-Attach a screenshot, log or any other file to an Issue so whoever picks it up sees what you saw. kata stores the file: its bytes go to Docbank and the Issue keeps a reference to them, so every agent and person who can read the Issue can download the file, from any machine.
+Attach a screenshot, log or any other file to an Issue so whoever picks it up sees what you saw. kata stores the file: its bytes go to [Docbank](https://github.com/kenn-io/docbank) and the Issue keeps a reference to them, so every agent and person who can read the Issue can download the file, from any machine.
 
 ![The Attachments tab of "Add Apple Pay to checkout" listing a screenshot and a log, each with its media type and size](../images/attachments.png)
 
@@ -43,7 +43,7 @@ An Attachment is one meta key on the Issue, `attachment.<id>`, holding `{"name",
 
 You do this once, for the kata daemon. tern-kata cannot do it for you.
 
-1. Install Docbank and create a vault that every reader of your Issues may open. kata puts files in a folder of that vault; the folder only organises them and is no access control, so whoever can read an Issue can download its attachments.
+1. Install [Docbank](https://github.com/kenn-io/docbank) and create a vault that every reader of your Issues may open. kata puts files in a folder of that vault; the folder only organises them and is no access control, so whoever can read an Issue can download its attachments.
 2. Create an API key for it and save it in a file only you can read (`chmod 600`).
 3. Add a `[docbank]` section to `<KATA_HOME>/config.toml` (`~/.kata/config.toml` unless you moved it):
 
@@ -60,7 +60,7 @@ You do this once, for the kata daemon. tern-kata cannot do it for you.
    - `KATA_DOCBANK_URL`, `KATA_DOCBANK_API_KEY_FILE` and `KATA_DOCBANK_FOLDER` set the same three in the daemon's environment.
 4. Restart the kata daemon. The Pane, `@` and the Attachments tab work from the next read.
 
-Docbank has telemetry settings of its own; check Docbank's documentation for turning them off.
+Docbank has telemetry settings of its own; check [Docbank's documentation](https://github.com/kenn-io/docbank) for turning them off.
 
 ## Moving old attachments
 
