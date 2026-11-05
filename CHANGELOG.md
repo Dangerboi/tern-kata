@@ -12,6 +12,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The Jobs Page inspector lists a job's next three runs with their time zone abbreviations, and says why there are none when the job is paused, its parent is closed, it only runs when started, or its runs can't be worked out.
 - Issue list rows show the Date badge of an open Issue with a scheduled date or deadline, before the title; a list too narrow to keep the title drops it.
 - The Dates card and the Create card take kata's date-time forms, `YYYY-MM-DDTHH:MM[:SS]` and `YYYY-MM-DDTHH:MM:SSZ`; the preview shows the time.
+- `N` on the Federation Page names a spoke: on the enrollment preview it sets the name the hub records with the enrollment, and on a spoke, in the list or its detail, it renames it on the hub, where an empty name clears it. The name shows on the spoke's card and detail, and the hub's refusal of a bad name shows its reason.
+- The Close card for a `done` close can cite one or more of the Issue's Attachments as evidence; the Events tab names a cited Attachment, and marks it `[removed]` once it is unlinked.
+- `tern-kata migrate-attachments` moves the old Attachments stored on this machine to Docbank, deletes the local copies, and lists the ones held on other machines.
 
 ### Changed
 
@@ -22,12 +25,18 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - When an Issue's date changed elsewhere since the Dates card opened, the card refills that field with the current value, keeps your other edits and writes nothing, where it used to ask you to close and reopen it.
 - When the daemon doesn't know the Project a folder is bound to, the message names that Project, or the alias kata matched.
 - The kata skill is written for kata v0.21: it starts, changes and stops a recurrence with `kata schedule --repeat`, moves an Issue with its open descendants, and closes with Docbank or attachment evidence.
+- **Breaking:** Attachments are kata's own, with their bytes in Docbank: `@` uploads a file, the Attachments tab lists each with its media type and size, `enter` downloads it to a cache folder and opens it, and `U` unlinks one (its bytes stay in Docbank). The daemon needs a `[docbank]` section in kata's `config.toml`; a daemon without one says so plainly in the Pane.
 - **Breaking:** an Agent profile with no `extensions` key now runs omp with `--no-extensions`, where it used to load whatever omp discovers, so a worker run no longer loads omp's native extension modules, ambient hook files or installed plugins such as kata-plugin. Explicit `-e`, `--hook` and `--trusted-extension` paths in its `args`, skills, rules and MCP servers still apply. Add `extensions = "ambient"` under the profile to get the old behaviour back. A run already in progress when you upgrade uses the new default from its next attempt or step.
 - `worker doctor` warns of kata-plugin's todo takeover only for an Agent profile that sets `extensions = "ambient"`.
 
 ### Fixed
 
 - Supervision no longer starts a second worker for `worker.lock` to refuse, all day long, after a plugin reload or a Tern update: the host half leaves the worker that is still running alone, logs one line naming it, and starts a worker within 10 seconds of its end.
+
+### Removed
+
+- `tern-kata attach` and `tern-kata detach`: use `kata docbank attachments add`, `ls`, `get` and `rm`.
+- The `.kata-attachments` folder store and its `tern-kata.attachment.*` keys; `tern-kata migrate-attachments` moves what they hold.
 
 ## [0.7.2] - 2026-11-02
 
