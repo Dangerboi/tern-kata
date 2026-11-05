@@ -134,7 +134,18 @@ kata close <ref> --done --docbank <node-id|/abs/path> --message "<…>"   # link
 
 ## Attachments
 
-An Issue's `tern-kata.attachment.<name>` meta keys are files attached through tern-kata: to read one, or to attach a screenshot, log or other file, use the `tern-kata` skill.
+An Issue's files are native attachments: the bytes live in Docbank and the Issue holds one `attachment.<id>` meta key per file with `{name, media_type, size, docbank_version}`. They need the daemon to have a `[docbank]` section; without it every call below fails with `docbank_not_configured`, and you should tell the user that is what is missing (the Attachments guide of tern-kata says how to set it up) rather than work around it.
+
+```bash
+kata docbank attachments ls <ref> --agent          # id, name, media type and size of each attachment
+kata docbank attachments get <ref> <id> -o <path>  # download; <id> may be a unique suffix; --force replaces an existing file
+kata docbank attachments add <ref> <file>...       # upload under each file's own name; prints each attachment id
+kata docbank attachments rm <ref> <id>             # unlink: the bytes stay in Docbank
+```
+
+- Attach the evidence behind a bug report, a finding or a close, then cite the attachment's name and id in the comment or close message. `get` into a temporary file outside the repo to read one.
+- Files up to 256 MiB. A name the Issue already has is a second attachment, not a replacement.
+- Older Issues may also carry `tern-kata.attachment.<name>` keys (`{"host", "path"}`): files tern-kata kept on one machine. Read the file at `path` when `host` matches `hostname`; do not write those keys.
 
 ## Relationships
 

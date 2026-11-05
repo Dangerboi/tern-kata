@@ -191,7 +191,7 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	default:
 		m.Notice += "; " + strconv.Itoa(dropped) + " unsent drafts dropped"
 	}
-	return m, []Cmd{LoadProject{Workspace: m.Workspace, Actor: m.Actor, Switched: true, Connection: m.Connection}}
+	return m, []Cmd{LoadProject{Workspace: m.Workspace, Switched: true, Connection: m.Connection}}
 }
 
 // moveDaemon moves the cursor by action: one row, to either end, or a page.

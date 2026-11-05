@@ -27,7 +27,7 @@ tern-kata recur <ref> --stop                                  # existing Occurre
 
 ## Behaviour
 
-- Refs, `--as` and the Binding rule are those of `attach`, including the refusal of an empty `--as` (see [Attachments](attachments.md#from-a-shell-or-for-an-agent)).
+- `<ref>` is anything `kata show` takes: a short id in this directory's Project, `<project>#<short id>` or a ULID. `--as <actor>` names the actor; without it the actor is `$KATA_AUTHOR`, `$USER`, then `git config user.name`. An explicitly empty value (`--as=` or `--as ""`) is refused with "--as must be non-empty" and nothing is written, so a script that expands an unset variable into `--as` never acts as someone else. The Issue's Project must be the one this directory is bound to.
 - Success prints one line and a failure prints the reason on stderr and exits 1; a command line it refuses (a missing ref, an unknown flag) exits 2.
 - Invalid input is refused with the card's message and nothing is sent.
 - A schedule changed by someone else while the command ran is not overwritten but printed, and the command exits 1.

@@ -10,13 +10,12 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-// subcommandError is any failure of attach or detach, from its usage to its output: main exits 1 with the message, not the Pane's start-failure status.
+// subcommandError is any failure of a subcommand, from its usage to its output: main exits 1 with the message, not the Pane's start-failure status.
 type subcommandError struct{ error }
 
 func (e subcommandError) Unwrap() error { return e.error }
 
-// runSubcommand runs plan's attach or detach through the same gateway commands the Pane sends, printing results to out.
-// Files are attached in order, and the first failure stops the rest.
+// runSubcommand runs plan's migrate-attachments, recur or views through the same gateway commands the Pane sends, printing results to out.
 func runSubcommand(ctx context.Context, plan LaunchPlan, gateway *data.Gateway, out io.Writer) error {
 	defer gateway.Close()
 	workspace, err := os.Getwd()
@@ -34,28 +33,20 @@ func runSubcommand(ctx context.Context, plan LaunchPlan, gateway *data.Gateway, 
 	if plan.Subcommand == "recur" {
 		return runRecur(plan, workspace, send, out)
 	}
-	if plan.Subcommand == "detach" {
-		detached := send(model.DetachFile{Workspace: workspace, Ref: plan.TargetRef, Actor: plan.Actor, Name: plan.Operands[0]}).(model.FileDetached)
-		if detached.Cleared {
-			if _, err := fmt.Fprintln(out, detached.Report()); err != nil {
-				return err
-			}
+	if plan.Subcommand == "migrate-attachments" {
+		migrated := send(model.MigrateAttachments{Workspace: workspace, Actor: plan.Actor}).(model.AttachmentsMigrated)
+		if migrated.Err != nil && len(migrated.Moved) == 0 && len(migrated.Left) == 0 {
+			return subcommandError{migrated.Err}
 		}
-		if detached.Err != nil {
-			return subcommandError{detached.Err}
+		if _, err := fmt.Fprintln(out, migrated.Report()); err != nil {
+			return err
+		}
+		if migrated.Err != nil {
+			return subcommandError{migrated.Err}
 		}
 		return nil
 	}
-	for _, file := range plan.Operands {
-		attached := send(model.AttachFile{Workspace: workspace, Ref: plan.TargetRef, Actor: plan.Actor, Path: file}).(model.FileAttached)
-		if attached.Err != nil {
-			return subcommandError{attached.Err}
-		}
-		if _, err := fmt.Fprintln(out, attached.Path); err != nil {
-			return err
-		}
-	}
-	return nil
+	return subcommandError{fmt.Errorf("unknown subcommand %q", plan.Subcommand)}
 }
 
 // runRecur is `recur`: print the schedule, make or change it from the flags, or stop it, through the commands the Recurrence

@@ -140,7 +140,6 @@ type fieldSpec struct {
 	clean      func(string) string
 	check      func(string) error
 	open       fieldOpen
-	refuse     bool // the Binding's refusal shows as the form's error
 	send       func(m Model) (Model, []Cmd)
 }
 
@@ -154,8 +153,8 @@ var fieldSpecs = map[Action]fieldSpec{
 	TimedAssignAction:    {title: "Assignment duration (1m..24h, e.g. 1h)", needsValue: true, check: checkAssignmentDuration, send: sendTimedAssignment},
 	AddBlockerAction:     {title: "This Issue blocks (Issue id)", needsValue: true, clean: trimHash, send: sendFieldWrite},
 	AddRelatedAction:     {title: "Related to (Issue id)", needsValue: true, clean: trimHash, send: sendFieldWrite},
-	AttachFileAction:     {title: "Attach a file (path)", needsValue: true, refuse: true, send: sendAttach},
-	DetachFileAction:     {title: "Remove attachment", open: openAttachments, refuse: true, send: sendDetach},
+	AttachFileAction:     {title: "Attach a file (path)", needsValue: true, send: sendAttach},
+	DetachFileAction:     {title: "Unlink attachment", open: openAttachments, send: sendDetach},
 	RestoreDeletedAction: {title: RestoreTitle + " (short id, project#id or ULID)", needsValue: true, send: sendRestore},
 }
 
@@ -230,8 +229,8 @@ func openField(m Model, action Action) (Model, []Cmd) {
 	spec := fieldSpecs[action]
 	m.FieldForm = FieldFormState{Open: true, Action: action, UID: issue.UID, ProjectID: issue.ProjectID}
 	f := &m.FieldForm
-	if spec.refuse {
-		f.Err = AttachRefusal(m.Project, issue.ProjectID, issue.ShortID, issue.ProjectName)
+	if action == AttachFileAction && m.authority != nil && m.authority.Issue != nil && m.authority.Issue.UID == issue.UID && m.authority.AttachmentsOff {
+		f.Err = errors.New(DocbankOffMessage)
 	}
 	switch spec.open {
 	case openImmediate:
@@ -241,10 +240,8 @@ func openField(m Model, action Action) (Model, []Cmd) {
 	case openIssueLabels:
 		f.Labels = issue.Labels
 	case openAttachments:
-		for _, a := range Attachments(issue.Metadata) {
-			f.Labels = append(f.Labels, a.Name)
-		}
-		if f.Err == nil && len(f.Labels) == 0 {
+		f.Labels = AttachmentLabels(Attachments(issue.Metadata))
+		if len(f.Labels) == 0 {
 			m.FieldForm = FieldFormState{}
 			m.Notice = fmt.Sprintf("%s has no attachments.", issue.ShortID)
 		}
@@ -281,47 +278,41 @@ func sendFieldWrite(m Model) (Model, []Cmd) {
 	return m, []Cmd{WriteField{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Action: f.Action, Value: f.Value, Actor: m.Actor}}
 }
 
-// attachIssue is the Issue of an attachment form, or the form's error when it is gone or the Binding refuses it.
-func attachIssue(m *Model) *Issue {
+// sendAttach uploads the file the form holds the path of to the Issue it was opened on.
+func sendAttach(m Model) (Model, []Cmd) {
+	f := &m.FieldForm
+	if m.issueByUID(f.UID) == nil {
+		f.Err = errors.New("That Issue is no longer listed.")
+		return m, nil
+	}
+	f.Saving = true
+	return m, []Cmd{AttachFile{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, Path: f.Value}}
+}
+
+// sendDetach unlinks the Attachment typed in full, else the highlighted one.
+func sendDetach(m Model) (Model, []Cmd) {
 	f := &m.FieldForm
 	issue := m.issueByUID(f.UID)
 	if issue == nil {
 		f.Err = errors.New("That Issue is no longer listed.")
-		return nil
-	}
-	if f.Err = AttachRefusal(m.Project, issue.ProjectID, issue.ShortID, issue.ProjectName); f.Err != nil {
-		return nil
-	}
-	return issue
-}
-
-func sendAttach(m Model) (Model, []Cmd) {
-	if attachIssue(&m) == nil {
 		return m, nil
 	}
-	f := &m.FieldForm
-	f.Saving = true
-	return m, []Cmd{AttachFile{Workspace: m.Workspace, Ref: f.UID, Actor: m.Actor, Path: f.Value}}
-}
-
-// sendDetach removes the Attachment typed in full, else the highlighted one.
-func sendDetach(m Model) (Model, []Cmd) {
-	issue := attachIssue(&m)
-	if issue == nil {
-		return m, nil
-	}
-	f := &m.FieldForm
-	name := f.Value
-	if !slices.Contains(f.Labels, name) {
+	list := Attachments(issue.Metadata)
+	i := slices.Index(f.Labels, f.Value)
+	if i < 0 {
 		suggestions := m.FieldSuggestions()
 		if len(suggestions) == 0 {
-			f.Err = NoAttachmentError(issue.ShortID, name)
+			f.Err = fmt.Errorf("%s has no attachment named %q.", issue.ShortID, f.Value)
 			return m, nil
 		}
-		name = suggestions[f.Suggestion%len(suggestions)]
+		i = slices.Index(f.Labels, suggestions[f.Suggestion%len(suggestions)])
+	}
+	if i < 0 || i >= len(list) {
+		f.Err = fmt.Errorf("%s no longer has that attachment.", issue.ShortID)
+		return m, nil
 	}
 	f.Saving = true
-	return m, []Cmd{DetachFile{Workspace: m.Workspace, Ref: f.UID, Actor: m.Actor, Name: name}}
+	return m, []Cmd{DetachFile{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, ID: list[i].ID, Name: list[i].Name}}
 }
 
 func updateFieldKey(m Model, msg KeyMsg) (Model, []Cmd) {

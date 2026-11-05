@@ -389,6 +389,12 @@ func (m Model) openCursorRow() (Model, []Cmd) {
 		if row.Kind == RowCron {
 			return openJob(m, row.JobUID)
 		}
+		if row.Kind == RowAttachment {
+			if issue := m.authority.Issue; issue != nil {
+				return m, []Cmd{OpenAttachment{Workspace: m.Workspace, UID: issue.UID, ProjectID: issue.ProjectID, Attachment: row.Activity.File}}
+			}
+			return m, nil
+		}
 		if row.Kind == RowComment {
 			if moved, cmds, ok := m.openCommentLink(row); ok {
 				return moved, cmds

@@ -232,12 +232,9 @@ func TestPlanLaunchSubcommands(t *testing.T) {
 		actor    string
 		err      string
 	}{
-		{name: "attach several files", args: []string{"attach", "ab12", "a.png", "b.png"}, sub: "attach", ref: "ab12", operands: []string{"a.png", "b.png"}, actor: "anonymous"},
-		{name: "detach", args: []string{"detach", "proj#ab12", "a.png"}, sub: "detach", ref: "proj#ab12", operands: []string{"a.png"}, actor: "anonymous"},
-		{name: "as before and after", args: []string{"attach", "--as", "bob", "ab12", "a.png", "--as=amy"}, sub: "attach", ref: "ab12", operands: []string{"a.png"}, actor: "amy"},
-		{name: "actor falls back like the Pane", args: []string{"detach", "ab12", "a.png"}, env: map[string]string{"KATA_AUTHOR": "env-actor", "USER": "u"}, sub: "detach", ref: "ab12", operands: []string{"a.png"}, actor: "env-actor"},
-		{name: "double dash ends flags", args: []string{"attach", "ab12", "--", "--odd.png"}, sub: "attach", ref: "ab12", operands: []string{"--odd.png"}, actor: "anonymous"},
-		{name: "help after a double dash is a file", args: []string{"attach", "ab12", "--", "--help", "--version"}, sub: "attach", ref: "ab12", operands: []string{"--help", "--version"}, actor: "anonymous"},
+		{name: "migrate", args: []string{"migrate-attachments"}, sub: "migrate-attachments", actor: "anonymous"},
+		{name: "as before and after", args: []string{"migrate-attachments", "--as", "bob", "--as=amy"}, sub: "migrate-attachments", actor: "amy"},
+		{name: "actor falls back like the Pane", args: []string{"migrate-attachments"}, env: map[string]string{"KATA_AUTHOR": "env-actor", "USER": "u"}, sub: "migrate-attachments", actor: "env-actor"},
 		{name: "status as JSON", args: []string{"worker", "status", "--json"}, sub: "worker", operands: []string{"status"}, actor: "anonymous"},
 		{name: "json elsewhere", args: []string{"worker", "doctor", "--json"}, err: "worker: --json applies to `tern-kata worker status` only"},
 		{name: "views lists", args: []string{"views"}, sub: "views", actor: "anonymous"},
@@ -253,12 +250,11 @@ func TestPlanLaunchSubcommands(t *testing.T) {
 		{name: "completion", args: []string{"completion", "fish"}, sub: "completion", operands: []string{"fish"}, actor: "anonymous"},
 		{name: "completion for an unknown shell", args: []string{"completion", "tcsh"}, err: "usage: tern-kata completion bash|zsh|fish"},
 		{name: "completion takes no flags", args: []string{"completion", "bash", "--as", "bob"}, err: "completion: unknown flag --as"},
-		{name: "attach without a file", args: []string{"attach", "ab12"}, err: "usage: tern-kata attach <ref> <file>..."},
-		{name: "attach without anything", args: []string{"attach"}, err: "usage: tern-kata attach <ref> <file>..."},
-		{name: "detach without a name", args: []string{"detach", "ab12"}, err: "usage: tern-kata detach <ref> <name>"},
-		{name: "detach with two names", args: []string{"detach", "ab12", "a", "b"}, err: "usage: tern-kata detach <ref> <name>"},
-		{name: "as without an actor", args: []string{"attach", "ab12", "a", "--as"}, err: "--as requires an actor"},
-		{name: "unknown flag", args: []string{"attach", "--issue", "x", "ab12", "a"}, err: "attach: unknown flag --issue"},
+		{name: "migrate takes no operands", args: []string{"migrate-attachments", "ab12"}, err: "usage: tern-kata migrate-attachments [--as <actor>]"},
+		{name: "attach is gone", args: []string{"attach", "ab12", "a.png"}, err: "tern-kata attach is gone: kata stores attachments itself now. Use `kata docbank attachments add <ref> ...`; the Attachments guide says how to set Docbank up"},
+		{name: "detach is gone", args: []string{"detach", "ab12", "a.png"}, err: "tern-kata detach is gone: kata stores attachments itself now. Use `kata docbank attachments rm <ref> ...`; the Attachments guide says how to set Docbank up"},
+		{name: "as without an actor", args: []string{"migrate-attachments", "--as"}, err: "--as requires an actor"},
+		{name: "unknown flag", args: []string{"migrate-attachments", "--issue", "x"}, err: "migrate-attachments: unknown flag --issue"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -284,8 +280,7 @@ func TestPlanLaunchSubcommands(t *testing.T) {
 
 func TestPlanLaunchRefusesEmptyAsForEverySubcommand(t *testing.T) {
 	commands := [][]string{
-		{"attach", "ab12", "a.png"},
-		{"detach", "ab12", "a.png"},
+		{"migrate-attachments"},
 		{"recur", "ab12"},
 		{"views", "show", "x"},
 		{"run", "01M5J9AAAAAAAAAAAAAAAAAAAA"},
@@ -314,22 +309,22 @@ func TestPlanLaunchHelpIsJudgedByTheSubcommandParsers(t *testing.T) {
 			t.Errorf("PlanLaunch(%q) = %+v, %v; want the word taken as the flag's value", args, plan, err)
 		}
 	}
-	_, err := PlanLaunch([]string{"attach", "ab12", "a.png", "--issue", "-h"}, lookupFrom(nil), "v")
-	if err == nil || !strings.Contains(err.Error(), "attach: unknown flag --issue") {
+	_, err := PlanLaunch([]string{"migrate-attachments", "--issue", "-h"}, lookupFrom(nil), "v")
+	if err == nil || !strings.Contains(err.Error(), "migrate-attachments: unknown flag --issue") {
 		t.Errorf("err = %v, want the unknown-flag error before help", err)
 	}
 }
 
 func TestSubcommandsAreOnlyTakenOverAsTheFirstArgument(t *testing.T) {
-	plan, err := PlanLaunch([]string{"--as", "ann", "attach", "x"}, lookupFrom(nil), "v")
-	if err != nil || plan.Subcommand != "" || !slices.Equal(plan.FallbackArgs, []string{"attach", "x"}) {
-		t.Fatalf("got %+v, %v, want attach passed through to kata tui", plan, err)
+	plan, err := PlanLaunch([]string{"--as", "ann", "migrate-attachments"}, lookupFrom(nil), "v")
+	if err != nil || plan.Subcommand != "" || !slices.Equal(plan.FallbackArgs, []string{"migrate-attachments"}) {
+		t.Fatalf("got %+v, %v, want migrate-attachments passed through to kata tui", plan, err)
 	}
-	plan, err = PlanLaunch([]string{"detach", "--help"}, lookupFrom(nil), "v")
+	plan, err = PlanLaunch([]string{"migrate-attachments", "--help"}, lookupFrom(nil), "v")
 	if err != nil || !plan.Help {
 		t.Fatalf("got %+v, %v, want --help to win", plan, err)
 	}
-	if !strings.Contains(usage, "tern-kata attach <ref> <file>...") || !strings.Contains(usage, "tern-kata detach <ref> <name>") {
-		t.Fatal("--help does not document attach and detach")
+	if !strings.Contains(usage, "tern-kata migrate-attachments") {
+		t.Fatal("--help does not document migrate-attachments")
 	}
 }

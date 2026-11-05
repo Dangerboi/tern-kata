@@ -78,7 +78,6 @@ type rowInputs struct {
 	issueN     int
 	tab        ActivityTab
 	calendar   PaneCalendar
-	host       string
 	// jobs are the Cron jobs the Cron rows name: where they were read, which read, and its answer.
 	jobsProject, jobsRequest, jobsRev int64
 	jobsLoading                       bool
@@ -113,7 +112,7 @@ func (m Model) DetailChildCounts() ChildCounts {
 
 // withRows brings the rows up to date with the authority, the loaded Issues and the active tab.
 func (m Model) withRows() Model {
-	in := rowInputs{authority: m.authority, issueN: len(m.Issues), tab: m.tab, calendar: m.Calendar, host: m.Host,
+	in := rowInputs{authority: m.authority, issueN: len(m.Issues), tab: m.tab, calendar: m.Calendar,
 		jobsProject: m.Jobs.ProjectID, jobsRequest: m.Jobs.reads.Newest(), jobsRev: m.Jobs.rev, jobsLoading: m.Jobs.Loading}
 	if len(m.Issues) > 0 {
 		in.firstIssue = &m.Issues[0]
@@ -144,10 +143,7 @@ func (m Model) withRows() Model {
 	case TabAttachments:
 		if m.authority.Issue != nil {
 			for _, a := range Attachments(m.authority.Issue.Metadata) {
-				row := DetailRow{Key: AttachmentRowKey(a.Name), File: a}
-				if a.OnHost(m.Host) {
-					row.URL = fileURL(a.Path)
-				}
+				row := DetailRow{Key: AttachmentRowKey(a.ID), File: a}
 				m.rows.items = append(m.rows.items, DetailItem{Kind: RowAttachment, Key: row.Key, Activity: row})
 			}
 		}

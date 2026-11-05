@@ -12,6 +12,8 @@ type IssueDetailData struct {
 	// Recurrence is the Issue's recurrence, Stopped once kata no longer lists it; nil when the Issue does not recur or the daemon
 	// withholds recurrences from this access.
 	Recurrence *Recurrence
+	// AttachmentsOff says the daemon has no Docbank configured, so no Attachment can be added or opened.
+	AttachmentsOff bool
 }
 
 // Comment is one comment; ReplyKind is set when it replies to another, Reply is the answered comment and

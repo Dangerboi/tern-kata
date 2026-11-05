@@ -104,8 +104,8 @@ The links only work when your chat is shown in Tern with the window plugin insta
 
 The repo ships two skills for coding agents:
 
-- `kata`: the kata CLI, for finding, creating, claiming, commenting on, linking and closing Issues, and coordinating subagents through them.
-- `tern-kata`: reading an Issue's [Attachments](attachments.md), attaching and detaching files with `tern-kata attach` and `detach`, making Issues recur with [`tern-kata recur`](recur.md), running an agent job now with `tern-kata run`, checking the [worker](worker.md) (`worker status`, `worker doctor`), and resuming or abandoning its held runs. Setting the worker up (`worker init`, `add`, `edit`) is left to when you ask; agents never stop or reconfigure it unasked.
+- `kata`: the kata CLI, for finding, creating, claiming, commenting on, linking and closing Issues, reading and adding [Attachments](attachments.md) with `kata docbank attachments`, and coordinating subagents through them.
+- `tern-kata`: making Issues recur with [`tern-kata recur`](recur.md), running an agent job now with `tern-kata run`, checking the [worker](worker.md) (`worker status`, `worker doctor`), and resuming or abandoning its held runs. Setting the worker up (`worker init`, `add`, `edit`) is left to when you ask; agents never stop or reconfigure it unasked.
 
 Install them for the agents on this machine with the [skills](https://github.com/vercel-labs/skills) CLI, which asks which skills and which agents. It needs Node.js; with only Bun installed, use `bunx` in place of `npx`:
 

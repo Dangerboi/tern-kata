@@ -24,7 +24,7 @@ import (
 // again when the daemon cannot be reached.
 type Gateway struct {
 	locate Locator
-	// host is this machine's host name for Attachment pointers; empty when unreadable.
+	// host is this machine's host name, which the Attachment migration compares old pointers against; empty when unreadable.
 	host string
 	// deadline bounds discovery, the version Ping and the kind check of one connection attempt.
 	deadline time.Duration
@@ -60,43 +60,30 @@ type Gateway struct {
 	lsAt     time.Time
 	lsFlight *lsFlight
 
-	// convertMu serializes the passes that move old Attachment pointers; converted holds the instance/Project pairs this process
-	// has finished. startMu guards convertStarted, the workspaces whose Pane start has begun a pass, and connCtx, the context of the
-	// passes of the connection in use: a daemon switch ends it and waits for the passes before it installs the new connection.
-	// background counts the passes. connCtx descends from backgroundCtx, which Close ends.
-	convertMu        sync.Mutex
-	converted        map[string]bool
-	startMu          sync.Mutex
-	convertStarted   map[string]bool
-	connCtx          context.Context
-	connCancel       context.CancelFunc
-	background       sync.WaitGroup
-	backgroundCtx    context.Context
-	backgroundCancel context.CancelFunc
+	// openFile opens a downloaded Attachment with the program the OS chooses for it, and cacheDir says where downloads go; both are the real ones unless a test replaces them.
+	openFile func(path string) error
+	cacheDir func() (string, error)
 }
 
 func NewGateway(locate Locator) *Gateway {
-	backgroundCtx, backgroundCancel := context.WithCancel(context.Background())
-	connCtx, connCancel := context.WithCancel(backgroundCtx)
 	return &Gateway{locate: locate, deadline: connectDeadline, clients: map[string]*Client{}, connecting: map[string]chan struct{}{}, now: time.Now, wakePoll: time.Minute, workerDirs: worker.DefaultDirs, runTern: execTern,
-		converted: map[string]bool{}, convertStarted: map[string]bool{}, connCtx: connCtx, connCancel: connCancel, backgroundCtx: backgroundCtx, backgroundCancel: backgroundCancel}
+		openFile: openFile, cacheDir: attachmentCacheDir}
 }
 
-// WithHost sets this machine's host name, the one every Attachment pointer is written with and compared against.
+// HostName is this machine's host name, or empty when the OS can't say; the program reads it once and hands it to the model and the Gateway.
+func HostName() string {
+	host, _ := os.Hostname()
+	return host
+}
+
+// WithHost sets this machine's host name, which tells the local copies of old Attachments from those on other machines.
 func (g *Gateway) WithHost(host string) *Gateway {
 	g.host = host
 	return g
 }
 
-// Close ends the running stream and any pointer pass still running, and drops the cached clients.
+// Close ends the running stream and drops the cached clients.
 func (g *Gateway) Close() {
-	// Under startMu so a pass start either counts before Wait or sees the cancel and starts nothing.
-	g.startMu.Lock()
-	if g.backgroundCancel != nil {
-		g.backgroundCancel()
-	}
-	g.startMu.Unlock()
-	g.background.Wait()
 	g.streamMu.Lock()
 	if g.streamCancel != nil {
 		g.streamCancel()

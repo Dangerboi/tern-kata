@@ -15,7 +15,7 @@ tern-kata takes kata tui's movement keys:
 
 ## Activity tabs
 
-The Issue detail's Activity tabs are Comments, Events, Links and Attachments, cycled with `tab` and `shift+tab`. Attachments lists the Issue's `tern-kata.attachment.*` meta keys by name: a file held on this machine is a link to it, and one held on another machine reads `<name> on <host>` (see [Attachments](attachments.md)).
+The Issue detail's Activity tabs are Comments, Events, Links and Attachments, cycled with `tab` and `shift+tab`. Attachments lists the Issue's native attachments with their media type and size, and `enter` downloads and opens the one under the cursor (see [Attachments](attachments.md)).
 
 The Comments tab shows a discussion as a reply tree, as kata's TUI does: a reply is indented under the comment it answers, down to four levels, after which deeper replies stay at the fourth. Replies to one comment are ordered by creation time, then UID, and a cycle of replies shows each comment once. A reply from another Issue has no row of its own: it is a muted "↳ <kind> <handle> in #<id> by <author> …" line under the comment it answers. A comment that confirms or refutes another carries a `confirm` or `refute` tag on the answered comment, reading "(before edit)" when all that evidence predates an edit of it, and a reply whose target changed after it reads "Target edited after this reply".
 
@@ -74,7 +74,7 @@ kata tui has no key for deleting an Issue; the CLI does. `X` in tern-kata opens 
 
 Before it writes, `u` checks, with kata tui's words, that it is still the same daemon and account ("daemon instance changed", "daemon principal changed"), the same Issue ("issue identity changed") and that nobody changed the Issue since: the revision the change produced for owner, priority and link ("issue owner changed since the action" and the like), the body text the change wrote for a body edit ("issue body changed since the action"; kata v0.20 takes no revision precondition on an edit, so a body edit landing in the instant between this check and the write is overwritten), the label state for a label added or removed (a label someone else changed reads "already restored"), the dates the change wrote for a Dates card change ("issue dates changed since the action"). A refusal drops that change and says so; the one after it can still be undone. An Issue already as the undo would leave it reads "already restored". A second `u` while one is out says "undo already in progress".
 
-Every other change to an Issue clears the history, and the next `u` says "nothing to undo: <reason>": creating an Issue, a comment or Reply, a timed assignment, a Recurrence change or stop, attaching or detaching a file, and every Cron job or Workflow change. A change whose outcome is unknown (a timeout) clears it too. `u` never undoes an older change across one of these.
+Every other change to an Issue clears the history, and the next `u` says "nothing to undo: <reason>": creating an Issue, a comment or Reply, a timed assignment, a Recurrence change or stop, attaching or unlinking a file, and every Cron job or Workflow change. A change whose outcome is unknown (a timeout) clears it too. `u` never undoes an older change across one of these.
 
 ## Quitting
 

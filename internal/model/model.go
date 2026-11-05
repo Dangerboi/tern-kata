@@ -329,15 +329,23 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return fieldWritten(m, msg.UID, "", msg.Err)
 	case FileAttached:
 		report := ""
-		if issue := m.issueByUID(msg.Ref); issue != nil {
+		if issue := m.issueByUID(msg.UID); issue != nil {
 			report = fmt.Sprintf("Attached %s to %s", msg.Name, issue.ShortID)
 		}
-		return fieldWritten(m, msg.Ref, report, msg.Err)
+		return fieldWritten(m, msg.UID, report, msg.Err)
 	case FileDetached:
-		if msg.Cleared {
-			return fieldWritten(m, msg.Ref, msg.Report(), nil)
+		report := ""
+		if issue := m.issueByUID(msg.UID); issue != nil {
+			report = fmt.Sprintf("Unlinked %s from %s; its bytes stay in Docbank", msg.Name, issue.ShortID)
 		}
-		return fieldWritten(m, msg.Ref, "", msg.Err)
+		return fieldWritten(m, msg.UID, report, msg.Err)
+	case AttachmentOpened:
+		if msg.Err != nil {
+			m.Notice = fmt.Sprintf("Cannot open %s: %v", msg.Name, msg.Err)
+		} else {
+			m.Notice = fmt.Sprintf("Opened %s (%s)", msg.Name, msg.Path)
+		}
+		return m, nil
 	case Start:
 		m.Workspace = msg.Workspace
 		m.nonce = msg.Nonce
@@ -345,7 +353,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m.Loading = true
 		m.Err = nil
 		m.agentAsks++
-		return m, []Cmd{LoadProject{Workspace: msg.Workspace, Actor: m.Actor}, LoadViews{}, PruneAgents{PaneBlock: m.PaneBlock, Seq: m.agentAsks}}
+		return m, []Cmd{LoadProject{Workspace: msg.Workspace}, LoadViews{}, PruneAgents{PaneBlock: m.PaneBlock, Seq: m.agentAsks}}
 	case ProjectLoaded:
 		return updateProject(m, msg)
 	case AgentStarted:

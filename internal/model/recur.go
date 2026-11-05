@@ -76,10 +76,16 @@ func RecurStoppedError(shortID string) error {
 	return fmt.Errorf("The recurrence of %s was stopped; nothing was written. kata can't make it recur again.", shortID)
 }
 
+// CanRecur is whether a workspace bound to binding may change the schedule of an Issue of issueProject: only the Binding's own
+// Project's Issues.
+func CanRecur(binding Project, issueProject int64) bool {
+	return binding.UID != "" && binding.ID == issueProject
+}
+
 // RecurRefusal is why a workspace bound to binding cannot make the Issue shortID of Project issueProject recur, owner being
-// that Project's name, or nil when it can: like an attachment, a schedule is written from the Project's own Binding.
+// that Project's name, or nil when it can: a schedule is written from the Project's own Binding.
 func RecurRefusal(binding Project, issueProject int64, shortID, owner string) error {
-	if CanAttach(binding, issueProject) {
+	if CanRecur(binding, issueProject) {
 		return nil
 	}
 	if binding.UID == "" {

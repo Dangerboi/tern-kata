@@ -10,7 +10,7 @@ Back to the [overview](../../README.md).
 | [Workflows](workflows.md) | The Workflows Page and the Workflow card |
 | [The worker](worker.md) | What it does, trust, `worker init` and `worker add`, a two-Project `worker.toml`, commands, supervision |
 | [Worker reference](worker-reference.md) | Every `worker.toml` key, route checks, state, recovery, resume and abandon, workflow runs, Windows |
-| [Attachments](attachments.md) | Attaching files from a Pane or a shell |
+| [Attachments](attachments.md) | Attaching files through kata's Docbank, setting Docbank up, moving old attachments |
 | [Recurring Issues](recur.md) | The Recurrence card and `tern-kata recur` |
 | [Views from a shell](views.md) | `tern-kata views`: list, show, add and remove saved views |
 | [Dates](dates.md) | The Dates card |

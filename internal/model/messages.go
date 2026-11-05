@@ -61,15 +61,14 @@ type PaneRowsMsg struct{ Rows int }
 
 func (PaneRowsMsg) msg() {}
 
-// LoadProject reads the Project the workspace is bound to. Actor is who the Pane acts as, for the one-time move of old
-// Attachment pointers that a Pane start triggers.
+// LoadProject reads the Project the workspace is bound to.
 //
 // Switched says the Pane just switched to another daemon: a Project the workspace is bound to but that daemon does not know is then
 // not a failure, and the Pane starts on its Inbox.
 type LoadProject struct {
-	Workspace, Actor string
-	Connection       int
-	Switched         bool
+	Workspace  string
+	Connection int
+	Switched   bool
 }
 
 func (LoadProject) cmd() {}

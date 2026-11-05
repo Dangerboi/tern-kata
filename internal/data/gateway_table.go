@@ -48,25 +48,6 @@ type declaration struct {
 
 // The named steps.
 var (
-	// convertPointersBefore converts old Attachment pointers of the command's workspace ahead of the daemon call.
-	convertPointersBefore = beforeStep{"convert old pointers", func(g *Gateway, ctx context.Context, cmd model.Cmd) {
-		switch cmd := cmd.(type) {
-		case model.AttachFile:
-			g.convertPointers(ctx, cmd.Workspace, cmd.Actor)
-		case model.DetachFile:
-			g.convertPointers(ctx, cmd.Workspace, cmd.Actor)
-		}
-	}}
-
-	// startPointerMoveAfter starts the Attachment pointer move once a Project loaded.
-	startPointerMoveAfter = afterStep{"start the pointer move", func(g *Gateway, _ context.Context, cmd model.Cmd, result model.Msg) model.Msg {
-		if loaded, ok := result.(model.ProjectLoaded); ok && loaded.Project.UID != "" {
-			load := cmd.(model.LoadProject)
-			g.startPointerMove(load.Workspace, load.Actor)
-		}
-		return result
-	}}
-
 	// readDefaultFilterAfter reads the Project's Default filter into the load once a Project loaded.
 	readDefaultFilterAfter = afterStep{"read the Default filter", func(g *Gateway, _ context.Context, _ model.Cmd, result model.Msg) model.Msg {
 		if loaded, ok := result.(model.ProjectLoaded); ok && loaded.Project.UID != "" {
@@ -389,29 +370,33 @@ func init() {
 		},
 		nil, nil)
 
-	daemonCallAt(
+	daemonCall(
 		func(cmd model.AttachFile) string { return cmd.Workspace },
-		func(ctx context.Context, host string, c *Client, cmd model.AttachFile) (model.Msg, error) {
-			return ok(c.AttachFile(ctx, host, cmd))
+		func(ctx context.Context, c *Client, cmd model.AttachFile) (model.Msg, error) {
+			return ok(c.AttachFile(ctx, cmd))
 		},
-		func(cmd model.AttachFile, err error) model.Msg { return model.FileAttached{Ref: cmd.Ref, Err: err} },
-		[]beforeStep{convertPointersBefore}, nil)
+		func(cmd model.AttachFile, err error) model.Msg { return model.FileAttached{UID: cmd.UID, Err: err} },
+		nil, nil)
 
-	// Cleared is final: the result and its error travel together, and nothing is retried.
-	daemonCallAt(
+	daemonCall(
 		func(cmd model.DetachFile) string { return cmd.Workspace },
-		func(ctx context.Context, host string, c *Client, cmd model.DetachFile) (model.Msg, error) {
-			detached, err := c.DetachFile(ctx, host, cmd)
-			if detached.Cleared {
-				detached.Err = err
-				return detached, nil
-			}
-			return ok(detached, err)
+		func(ctx context.Context, c *Client, cmd model.DetachFile) (model.Msg, error) {
+			return ok(model.FileDetached{UID: cmd.UID, Name: cmd.Name}, c.DetachFile(ctx, cmd))
 		},
 		func(cmd model.DetachFile, err error) model.Msg {
-			return model.FileDetached{Ref: cmd.Ref, Name: cmd.Name, Err: err}
+			return model.FileDetached{UID: cmd.UID, Name: cmd.Name, Err: err}
 		},
-		[]beforeStep{convertPointersBefore}, nil)
+		nil, nil)
+
+	local((*Gateway).openAttachment, nil, nil)
+
+	daemonCallAt(
+		func(cmd model.MigrateAttachments) string { return cmd.Workspace },
+		func(ctx context.Context, host string, c *Client, cmd model.MigrateAttachments) (model.Msg, error) {
+			return c.MigrateAttachments(ctx, host, cmd), nil
+		},
+		func(cmd model.MigrateAttachments, err error) model.Msg { return model.AttachmentsMigrated{Err: err} },
+		nil, nil)
 
 	daemonCall(
 		func(cmd model.LoadFieldLabels) string { return cmd.Workspace },
@@ -449,7 +434,7 @@ func init() {
 			return ok(loaded, err)
 		},
 		func(cmd model.LoadProject, err error) model.Msg { return model.Failed{Err: err} },
-		nil, []afterStep{startPointerMoveAfter, readDefaultFilterAfter})
+		nil, []afterStep{readDefaultFilterAfter})
 
 	local((*Gateway).loadDaemons, nil, nil)
 	local((*Gateway).switchDaemon, nil, nil)
