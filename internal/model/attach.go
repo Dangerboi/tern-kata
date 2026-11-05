@@ -22,22 +22,22 @@ type FileAttached struct {
 
 func (FileAttached) msg() {}
 
-// DetachFile unlinks the Attachment ID from the Issue UID of ProjectID by clearing its meta key. The file's bytes stay in Docbank:
+// UnlinkAttachment unlinks the Attachment ID from the Issue UID of ProjectID by clearing its meta key. The file's bytes stay in Docbank:
 // kata has no call that deletes them. Name is for the report.
-type DetachFile struct {
+type UnlinkAttachment struct {
 	Workspace, UID, Actor, ID, Name string
 	ProjectID                       int64
 }
 
-func (DetachFile) cmd() {}
+func (UnlinkAttachment) cmd() {}
 
-// FileDetached answers DetachFile.
-type FileDetached struct {
+// AttachmentUnlinked answers UnlinkAttachment.
+type AttachmentUnlinked struct {
 	UID, Name string
 	Err       error
 }
 
-func (FileDetached) msg() {}
+func (AttachmentUnlinked) msg() {}
 
 // OpenAttachment downloads the Attachment to the cache folder, unless the folder already holds it, and opens it with the program
 // the OS chooses for its type.

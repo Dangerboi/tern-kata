@@ -188,7 +188,7 @@ func undoBoundary(cmd Cmd) (string, bool) {
 		return "attaching a file cannot be undone", true
 	case MigrateAttachments:
 		return "moving old attachments cannot be undone", true
-	case DetachFile:
+	case UnlinkAttachment:
 		return "unlinking an attachment cannot be undone", true
 	case CreateRecurrenceCmd:
 		return "making a recurrence cannot be undone", true

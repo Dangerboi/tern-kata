@@ -333,7 +333,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			report = fmt.Sprintf("Attached %s to %s", msg.Name, issue.ShortID)
 		}
 		return fieldWritten(m, msg.UID, report, msg.Err)
-	case FileDetached:
+	case AttachmentUnlinked:
 		report := ""
 		if issue := m.issueByUID(msg.UID); issue != nil {
 			report = fmt.Sprintf("Unlinked %s from %s; its bytes stay in Docbank", msg.Name, issue.ShortID)

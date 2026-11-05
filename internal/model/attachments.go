@@ -22,10 +22,11 @@ const DocbankOffMessage = "This kata daemon has no Docbank configured, so it can
 const MaxAttachmentBytes = 256 << 20
 
 // Attachment is one file attached to an Issue, as kata's native reference to it: the id in its meta key, the file's name and media
-// type, and its size in bytes.
+// type, its size in bytes and its Docbank version. kata can point the same id at another version, so the id alone does not name
+// one set of bytes.
 type Attachment struct {
-	ID, Name, MediaType string
-	Size                int64
+	ID, Name, MediaType, Version string
+	Size                         int64
 }
 
 // attachmentID is the shape of an id this program reads: it ends up in a cache path and a request path.
@@ -42,12 +43,12 @@ func validAttachmentName(name string) bool {
 }
 
 // attachmentRef reads one reference object, a meta value or the copy a close froze into its evidence: the Attachment it names
-// as id, and its Docbank version. ok is false for a value kata would not accept as a reference (no valid name, media type, size
+// as id. ok is false for a value kata would not accept as a reference (no valid name, media type, size
 // or Docbank version). A size is a float64 or, in a decoded event payload, a json.Number.
-func attachmentRef(id string, value any) (a Attachment, version string, ok bool) {
+func attachmentRef(id string, value any) (Attachment, bool) {
 	ref, isObject := value.(map[string]any)
 	if !isObject {
-		return Attachment{}, "", false
+		return Attachment{}, false
 	}
 	name, nameOK := ref["name"].(string)
 	mediaType, typeOK := ref["media_type"].(string)
@@ -63,9 +64,9 @@ func attachmentRef(id string, value any) (a Attachment, version string, ok bool)
 		sizeOK = err == nil
 	}
 	if nameOK && typeOK && sizeOK && versionOK && validAttachmentName(name) && mediaType != "" && version != "" && size >= 0 && size == float64(int64(size)) {
-		return Attachment{ID: id, Name: name, MediaType: mediaType, Size: int64(size)}, version, true
+		return Attachment{ID: id, Name: name, MediaType: mediaType, Version: version, Size: int64(size)}, true
 	}
-	return Attachment{}, "", false
+	return Attachment{}, false
 }
 
 // Attachments are the Issue's Attachments read from its attachment.* meta keys, sorted by name, then id. A key whose value kata
@@ -77,7 +78,7 @@ func Attachments(metadata map[string]any) []Attachment {
 		if !ok || !attachmentID.MatchString(id) {
 			continue
 		}
-		if a, _, ok := attachmentRef(id, value); ok {
+		if a, ok := attachmentRef(id, value); ok {
 			list = append(list, a)
 		}
 	}

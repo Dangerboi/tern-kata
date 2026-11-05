@@ -79,9 +79,20 @@ func TestShiftUListsAttachmentNamesAndUnlinksTheChosenOne(t *testing.T) {
 	// Choosing the second row sends it without a confirmation step.
 	m, _ = model.Update(m, model.KeyMsg{Chord: "down"})
 	m, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
-	want := model.DetachFile{Workspace: "/ws", UID: "issue", ProjectID: 7, Actor: "reviewer", ID: refID("b.log"), Name: "b.log"}
+	want := model.UnlinkAttachment{Workspace: "/ws", UID: "issue", ProjectID: 7, Actor: "reviewer", ID: refID("b.log"), Name: "b.log"}
 	if len(cmds) != 1 || cmds[0] != model.Cmd(want) {
 		t.Fatalf("cmds %#v, want %#v", cmds, want)
+	}
+}
+
+func TestUnlinkSendsTheAttachmentPickedWhenTheFormOpenedEvenIfTheListChangesMeanwhile(t *testing.T) {
+	m, _ := model.Update(attachPane(model.ColumnDetail, refs("b.log", "c.log")), model.KeyMsg{Chord: "shift+u"})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "down"}) // c.log
+	// A reload adds an Attachment that sorts before it, which would shift an index into the new list.
+	m.Issues[0].Metadata = refs("a.log", "b.log", "c.log")
+	_, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
+	if len(cmds) != 1 || cmds[0].(model.UnlinkAttachment).ID != refID("c.log") {
+		t.Fatalf("cmds %#v", cmds)
 	}
 }
 
@@ -95,7 +106,7 @@ func TestShiftUTellsTwoAttachmentsOfOneNameApart(t *testing.T) {
 	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "down"})
 	_, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
-	if len(cmds) != 1 || cmds[0].(model.DetachFile).ID != "OTHER-ID-123456" {
+	if len(cmds) != 1 || cmds[0].(model.UnlinkAttachment).ID != "OTHER-ID-123456" {
 		t.Fatalf("cmds %#v", cmds)
 	}
 }
@@ -104,14 +115,14 @@ func TestShiftUNamesAnAttachmentTypedInFull(t *testing.T) {
 	m, _ := model.Update(attachPane(model.ColumnList, refs("a.png", "a.png.bak")), model.KeyMsg{Chord: "shift+u"})
 	m, _ = model.Update(m, model.FieldValueMsg{Value: "a.png"})
 	_, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
-	if len(cmds) != 1 || cmds[0].(model.DetachFile).Name != "a.png" {
+	if len(cmds) != 1 || cmds[0].(model.UnlinkAttachment).Name != "a.png" {
 		t.Fatalf("cmds %#v", cmds)
 	}
 }
 
 func TestShiftUWithNoAttachmentsSaysSoWithoutOpeningAForm(t *testing.T) {
 	m, cmds := model.Update(attachPane(model.ColumnList, map[string]any{"other": 1, "tern-kata.attachment.old": map[string]any{"host": "h", "path": "/p"}}), model.KeyMsg{Chord: "shift+u"})
-	if m.FieldForm.Open || slices.ContainsFunc(cmds, func(c model.Cmd) bool { _, ok := c.(model.DetachFile); return ok }) || m.Notice != "abcd has no attachments." {
+	if m.FieldForm.Open || slices.ContainsFunc(cmds, func(c model.Cmd) bool { _, ok := c.(model.UnlinkAttachment); return ok }) || m.Notice != "abcd has no attachments." {
 		t.Fatalf("U with none: form %+v notice %q", m.FieldForm, m.Notice)
 	}
 }
@@ -143,7 +154,7 @@ func TestSubmitWhenTheFormsIssueIsGoneShowsAnError(t *testing.T) {
 func TestUnlinkSaysTheBytesStayAndShowsAsANoticeUntilTheNextKey(t *testing.T) {
 	m, _ := model.Update(attachPane(model.ColumnList, refs("a.png")), model.KeyMsg{Chord: "shift+u"})
 	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
-	m, _ = model.Update(m, model.FileDetached{UID: "issue", Name: "a.png"})
+	m, _ = model.Update(m, model.AttachmentUnlinked{UID: "issue", Name: "a.png"})
 	if m.FieldForm.Open || m.Notice != "Unlinked a.png from abcd; its bytes stay in Docbank" {
 		t.Fatalf("form %+v notice %q", m.FieldForm, m.Notice)
 	}
@@ -156,7 +167,7 @@ func TestUnlinkSaysTheBytesStayAndShowsAsANoticeUntilTheNextKey(t *testing.T) {
 func TestAFailedUnlinkKeepsItsErrorInTheForm(t *testing.T) {
 	m, _ := model.Update(attachPane(model.ColumnList, refs("a.png")), model.KeyMsg{Chord: "shift+u"})
 	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
-	m, _ = model.Update(m, model.FileDetached{UID: "issue", Name: "a.png", Err: errors.New("daemon down")})
+	m, _ = model.Update(m, model.AttachmentUnlinked{UID: "issue", Name: "a.png", Err: errors.New("daemon down")})
 	if !m.FieldForm.Open || m.FieldForm.Err == nil || m.Notice != "" {
 		t.Fatalf("form %+v notice %q", m.FieldForm, m.Notice)
 	}

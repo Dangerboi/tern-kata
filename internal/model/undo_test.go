@@ -53,7 +53,7 @@ func TestEveryWriteWithoutAnInverseClearsTheHistory(t *testing.T) {
 			m = press(m, "shift+u")
 			m, _ = model.Update(m, model.FieldValueMsg{Value: "a.png"})
 			return press(m, "enter")
-		}, model.FileDetached{UID: "issue", Name: "a.png"}, "unlinking an attachment cannot be undone"},
+		}, model.AttachmentUnlinked{UID: "issue", Name: "a.png"}, "unlinking an attachment cannot be undone"},
 		{"recurrence made", recurrenceBase, func(m model.Model) model.Model {
 			m, _ = saveRecurrence(openRecurrenceCard(m))
 			return m

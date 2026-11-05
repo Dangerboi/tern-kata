@@ -36,6 +36,8 @@ type FieldFormState struct {
 	UID, Value   string
 	ProjectID    int64
 	Labels       []string
+	// Attachments are the Attachments Labels name, in the same order, as they were when the form opened.
+	Attachments []Attachment
 	Suggestion   int
 	Caret        Caret
 	// Found is the Issue a restore read, shown until the reference is edited.
@@ -240,7 +242,8 @@ func openField(m Model, action Action) (Model, []Cmd) {
 	case openIssueLabels:
 		f.Labels = issue.Labels
 	case openAttachments:
-		f.Labels = AttachmentLabels(Attachments(issue.Metadata))
+		f.Attachments = Attachments(issue.Metadata)
+		f.Labels = AttachmentLabels(f.Attachments)
 		if len(f.Labels) == 0 {
 			m.FieldForm = FieldFormState{}
 			m.Notice = fmt.Sprintf("%s has no attachments.", issue.ShortID)
@@ -297,7 +300,6 @@ func sendDetach(m Model) (Model, []Cmd) {
 		f.Err = errors.New("That Issue is no longer listed.")
 		return m, nil
 	}
-	list := Attachments(issue.Metadata)
 	i := slices.Index(f.Labels, f.Value)
 	if i < 0 {
 		suggestions := m.FieldSuggestions()
@@ -307,12 +309,12 @@ func sendDetach(m Model) (Model, []Cmd) {
 		}
 		i = slices.Index(f.Labels, suggestions[f.Suggestion%len(suggestions)])
 	}
-	if i < 0 || i >= len(list) {
+	if i < 0 || i >= len(f.Attachments) {
 		f.Err = fmt.Errorf("%s no longer has that attachment.", issue.ShortID)
 		return m, nil
 	}
 	f.Saving = true
-	return m, []Cmd{DetachFile{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, ID: list[i].ID, Name: list[i].Name}}
+	return m, []Cmd{UnlinkAttachment{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, ID: f.Attachments[i].ID, Name: f.Attachments[i].Name}}
 }
 
 func updateFieldKey(m Model, msg KeyMsg) (Model, []Cmd) {

@@ -192,10 +192,10 @@ func closeDetail(p payloadMap, current map[string]any) string {
 func attachmentEvidence(fields map[string]any, metadata map[string]any) string {
 	id := plain(fields["attachment_id"])
 	nowRef := metadata[attachmentKeyPrefix+id]
-	_, nowVersion, nowOK := attachmentRef(id, nowRef)
-	frozen, frozenVersion, frozenOK := attachmentRef(id, fields["attachment"])
+	now, nowOK := attachmentRef(id, nowRef)
+	frozen, frozenOK := attachmentRef(id, fields["attachment"])
 	if _, hasCopy := fields["attachment"]; !hasCopy {
-		frozen, frozenVersion, frozenOK = attachmentRef(id, nowRef)
+		frozen, frozenOK = attachmentRef(id, nowRef)
 		if !frozenOK {
 			return "Attachment removed"
 		}
@@ -205,7 +205,7 @@ func attachmentEvidence(fields map[string]any, metadata map[string]any) string {
 	switch {
 	case !nowOK:
 		return "attachment " + frozen.Name + " [removed]"
-	case !strings.EqualFold(nowVersion, frozenVersion):
+	case !strings.EqualFold(now.Version, frozen.Version):
 		return "attachment " + frozen.Name + " [changed]"
 	}
 	return "attachment " + frozen.Name

@@ -64,7 +64,7 @@ func TestAttachmentsReadOnlyKatasNativeReferences(t *testing.T) {
 		"scheduled_on":                 "2026-10-20",
 		"tern-kata.attachment.old.png": map[string]any{"host": "box", "path": "/b.png"},
 	})
-	want := []model.Attachment{{ID: "A1", Name: "a.log", MediaType: "text/plain", Size: 2048}, {ID: "B1", Name: "b.png", MediaType: "image/png", Size: 10}}
+	want := []model.Attachment{{ID: "A1", Name: "a.log", MediaType: "text/plain", Version: "6f1c2e8a-2222-4222-8222-000000000001", Size: 2048}, {ID: "B1", Name: "b.png", MediaType: "image/png", Version: "6f1c2e8a-2222-4222-8222-000000000001", Size: 10}}
 	if !slices.Equal(list, want) {
 		t.Fatalf("got %+v, want %+v", list, want)
 	}

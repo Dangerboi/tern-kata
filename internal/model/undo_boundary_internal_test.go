@@ -40,7 +40,7 @@ func TestUndoBoundaryListsEveryCmd(t *testing.T) {
 		{CreateTokenCmd{}, true},
 		{DeleteIssueCmd{}, false},
 		{DeleteView{}, false},
-		{DetachFile{}, true},
+		{UnlinkAttachment{}, true},
 		{EnrollFederation{}, true},
 		{FocusAgent{}, false},
 		{LeaveFederation{}, true},

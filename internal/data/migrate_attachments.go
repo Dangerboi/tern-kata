@@ -171,6 +171,10 @@ func (c *Client) migrateIssue(ctx context.Context, host, root, actor string, iss
 			left(fmt.Sprintf("the file %s is gone from this machine", path), false)
 			continue
 		}
+		if err := attachableFile(path); err != nil {
+			left(err.Error(), true)
+			continue
+		}
 		added, err := c.upload(ctx, issue.ProjectID, issue.UID, actor, name, path)
 		if err != nil {
 			left(err.Error(), true)

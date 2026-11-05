@@ -379,12 +379,12 @@ func init() {
 		nil, nil)
 
 	daemonCall(
-		func(cmd model.DetachFile) string { return cmd.Workspace },
-		func(ctx context.Context, c *Client, cmd model.DetachFile) (model.Msg, error) {
-			return ok(model.FileDetached{UID: cmd.UID, Name: cmd.Name}, c.DetachFile(ctx, cmd))
+		func(cmd model.UnlinkAttachment) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.UnlinkAttachment) (model.Msg, error) {
+			return ok(model.AttachmentUnlinked{UID: cmd.UID, Name: cmd.Name}, c.UnlinkAttachment(ctx, cmd))
 		},
-		func(cmd model.DetachFile, err error) model.Msg {
-			return model.FileDetached{UID: cmd.UID, Name: cmd.Name, Err: err}
+		func(cmd model.UnlinkAttachment, err error) model.Msg {
+			return model.AttachmentUnlinked{UID: cmd.UID, Name: cmd.Name, Err: err}
 		},
 		nil, nil)
 

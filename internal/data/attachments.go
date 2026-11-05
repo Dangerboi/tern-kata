@@ -2,6 +2,8 @@ package data
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -38,20 +40,6 @@ func attachmentError(err error) error {
 		return errors.New("This Issue is a read-only copy from another kata instance, and this one cannot push changes to it, so its attachments cannot change here.")
 	}
 	return daemonError(err)
-}
-
-// IssueAttachments are the native Attachments of the Issue ref names in project, as the Issue's metadata lists them, sorted by name.
-// ref is anything kata takes for an Issue in that Project, such as a short id or a UID. A Close card that asks for evidence can list
-// them through this.
-func (c *Client) IssueAttachments(ctx context.Context, projectID int64, ref string) ([]model.Attachment, error) {
-	response, err := c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: projectID, Ref: ref}})
-	if err != nil {
-		return nil, daemonError(err)
-	}
-	if response.JSON200 == nil {
-		return nil, errors.New("kata daemon returned no Issue")
-	}
-	return model.Attachments(response.JSON200.Issue.Metadata), nil
 }
 
 // attachmentsConfigured is whether the daemon has a Docbank to store attachments in, as its UI snapshot says.
@@ -91,20 +79,29 @@ func attachSource(workspace, input string) (string, error) {
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(workspace, path)
 	}
+	if err := attachableFile(path); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// attachableFile refuses what kata takes no Attachment from, before anything is read: a missing file, a directory or other
+// file that is not regular, and one over the size limit. Symlinks are followed.
+func attachableFile(path string) error {
 	info, err := os.Stat(path)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		return "", fmt.Errorf("%s does not exist.", path)
+		return fmt.Errorf("%s does not exist.", path)
 	case err != nil:
-		return "", err
+		return err
 	case info.IsDir():
-		return "", fmt.Errorf("%s is a directory; attach a file.", path)
+		return fmt.Errorf("%s is a directory; attach a file.", path)
 	case !info.Mode().IsRegular():
-		return "", fmt.Errorf("%s is not a regular file.", path)
+		return fmt.Errorf("%s is not a regular file.", path)
 	case info.Size() > model.MaxAttachmentBytes:
-		return "", fmt.Errorf("%s is over the 256 MiB limit for an attachment.", path)
+		return fmt.Errorf("%s is over the 256 MiB limit for an attachment.", path)
 	}
-	return path, nil
+	return nil
 }
 
 // upload sends the file at source to kata as an Attachment called name of the Issue uid of projectID. kata stores the bytes in
@@ -173,8 +170,8 @@ func (c *Client) clearMetadataKey(ctx context.Context, projectID int64, uid, act
 	return nil
 }
 
-// DetachFile unlinks an Attachment: its meta key is cleared, as `kata docbank attachments rm` does. The bytes stay in Docbank.
-func (c *Client) DetachFile(ctx context.Context, cmd model.DetachFile) error {
+// UnlinkAttachment unlinks an Attachment: its meta key is cleared, as `kata docbank attachments rm` does. The bytes stay in Docbank.
+func (c *Client) UnlinkAttachment(ctx context.Context, cmd model.UnlinkAttachment) error {
 	return c.clearMetadataKey(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, model.AttachmentKey(cmd.ID))
 }
 
@@ -187,15 +184,17 @@ func attachmentCacheDir() (string, error) {
 	return filepath.Join(base, "tern-kata", "attachments"), nil
 }
 
-// DownloadAttachment makes sure the Attachment's bytes are at <dir>/<Issue UID>/<id>/<name> and returns that path. A reference is
-// immutable, so a file of the right size already there is used as it is. A download of another size than the reference says is
+// DownloadAttachment makes sure the Attachment's bytes are at <dir>/<Issue UID>/<id>/<hash of the Docbank version>/<name> and returns that
+// path. kata can point an id at another version, so the version is part of the path, and a file of the right size already there
+// is used as it is. A download of another size than the reference says is
 // refused and leaves nothing.
 func (c *Client) DownloadAttachment(ctx context.Context, dir string, cmd model.OpenAttachment) (string, error) {
 	a := cmd.Attachment
 	if !ulid.MatchString(cmd.UID) {
 		return "", fmt.Errorf("%q is not an Issue UID", cmd.UID)
 	}
-	path := filepath.Join(dir, cmd.UID, a.ID, a.Name)
+	version := sha256.Sum256([]byte(a.Version))
+	path := filepath.Join(dir, cmd.UID, a.ID, hex.EncodeToString(version[:8]), a.Name)
 	if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() && info.Size() == a.Size {
 		return path, nil
 	}

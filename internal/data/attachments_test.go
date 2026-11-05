@@ -52,7 +52,7 @@ func TestAttachUploadsThroughKataAndListsTheReference(t *testing.T) {
 		t.Fatalf("attached %+v", got)
 	}
 	list := f.attachments(t)
-	if len(list) != 1 || list[0] != (model.Attachment{ID: got.ID, Name: "shot.png", MediaType: "image/png", Size: 6}) {
+	if len(list) != 1 || list[0] != (model.Attachment{ID: got.ID, Name: "shot.png", MediaType: "image/png", Version: list[0].Version, Size: 6}) || list[0].Version == "" {
 		t.Fatalf("the Issue lists %+v", list)
 	}
 	if f.docbank.Uploads() != 1 {
@@ -76,30 +76,6 @@ func TestAttachRefusesWhatIsNotAFile(t *testing.T) {
 	}
 }
 
-func TestIssueAttachmentsListsTheNativeReferencesByName(t *testing.T) {
-	f := newDocbankFixture(t)
-	dir := t.TempDir()
-	f.attach(t, writeFile(t, dir, "b.log", "b"))
-	f.attach(t, writeFile(t, dir, "a.txt", "a"))
-	f.patchKey(t, "tern-kata.attachment.old.png", map[string]any{"host": "x", "path": "/x"})
-
-	c, err := f.gateway.client(context.Background(), f.repo)
-	if err != nil {
-		t.Fatal(err)
-	}
-	list, err := c.IssueAttachments(context.Background(), f.project.ID, f.issue(t, f.uid).ShortID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var names []string
-	for _, a := range list {
-		names = append(names, a.Name)
-	}
-	if !slices.Equal(names, []string{"a.txt", "b.log"}) || list[0].ID == "" {
-		t.Fatalf("listed %+v", list)
-	}
-}
-
 func TestOpenAttachmentDownloadsToTheCacheOnceAndOpensIt(t *testing.T) {
 	f := newDocbankFixture(t)
 	added := f.attach(t, writeFile(t, t.TempDir(), "notes.txt", "hello"))
@@ -108,8 +84,9 @@ func TestOpenAttachmentDownloadsToTheCacheOnceAndOpensIt(t *testing.T) {
 	}
 
 	got := open()
-	want := filepath.Join(f.cache, f.uid, added.ID, "notes.txt")
-	if got.Err != nil || got.Path != want {
+	a := f.attachments(t)[0]
+	want := filepath.Join(filepath.Dir(got.Path), "notes.txt")
+	if !strings.HasPrefix(got.Path, filepath.Join(f.cache, f.uid, added.ID)+string(filepath.Separator)) || got.Err != nil || got.Path != want || a.Version == "" {
 		t.Fatalf("opened %+v, want %s", got, want)
 	}
 	if content, err := os.ReadFile(want); err != nil || string(content) != "hello" {
@@ -122,6 +99,43 @@ func TestOpenAttachmentDownloadsToTheCacheOnceAndOpensIt(t *testing.T) {
 	}
 	if !slices.Equal(*f.opened, []string{want, want}) {
 		t.Fatalf("opened %v", *f.opened)
+	}
+}
+
+func TestOpenAttachmentDownloadsAgainWhenTheIdPointsAtAnotherVersion(t *testing.T) {
+	f := newDocbankFixture(t)
+	f.attach(t, writeFile(t, t.TempDir(), "notes.txt", "hello"))
+	a := f.attachments(t)[0]
+	open := func(a model.Attachment) model.AttachmentOpened {
+		return as[model.AttachmentOpened](t, run(t, f.gateway, model.OpenAttachment{Workspace: f.repo, UID: f.uid, ProjectID: f.project.ID, Attachment: a}))
+	}
+	if first := open(a); first.Err != nil {
+		t.Fatal(first.Err)
+	}
+	f.docbank.Forget()
+	// The same version is served from the cache; another version of the same id and size is not, so it asks Docbank, which has lost the bytes.
+	if same := open(a); same.Err != nil {
+		t.Fatalf("same version: %v", same.Err)
+	}
+	a.Version = "another-version"
+	if changed := open(a); changed.Err == nil {
+		t.Fatalf("a changed version was served from the cache: %+v", changed)
+	}
+}
+
+func TestMigrateListsAFileThatIsNotRegularInsteadOfReadingIt(t *testing.T) {
+	f := newDocbankFixture(t)
+	dir := filepath.Join(f.repo, ".kata-attachments", f.uid, "folder.bin")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	f.patchKey(t, "tern-kata.attachment.folder.bin", map[string]any{"host": f.host, "path": dir})
+	got := as[model.AttachmentsMigrated](t, run(t, f.gateway, model.MigrateAttachments{Workspace: f.repo, Actor: "tester"}))
+	if len(got.Moved) != 0 || len(got.Left) != 1 || !got.Left[0].Failed || !strings.Contains(got.Left[0].Reason, "directory") || f.docbank.Uploads() != 0 {
+		t.Fatalf("migrated %+v (uploads %d)", got, f.docbank.Uploads())
+	}
+	if _, ok := f.issue(t, f.uid).Metadata["tern-kata.attachment.folder.bin"]; !ok {
+		t.Fatal("the key was cleared")
 	}
 }
 
@@ -141,7 +155,7 @@ func TestDetachUnlinksTheReferenceAndKeepsTheOthers(t *testing.T) {
 	one := f.attach(t, writeFile(t, dir, "a.txt", "a"))
 	two := f.attach(t, writeFile(t, dir, "b.txt", "b"))
 
-	got := as[model.FileDetached](t, run(t, f.gateway, model.DetachFile{Workspace: f.repo, UID: f.uid, ProjectID: f.project.ID, Actor: "tester", ID: one.ID, Name: "a.txt"}))
+	got := as[model.AttachmentUnlinked](t, run(t, f.gateway, model.UnlinkAttachment{Workspace: f.repo, UID: f.uid, ProjectID: f.project.ID, Actor: "tester", ID: one.ID, Name: "a.txt"}))
 	if got.Err != nil || got.Name != "a.txt" {
 		t.Fatalf("detached %+v", got)
 	}
@@ -368,7 +382,7 @@ func TestCloseCitingAnAttachmentRecordsItAndTheHistoryNamesItEvenAfterUnlinking(
 		t.Fatalf("Events rows %q do not name the attachment", bodies)
 	}
 
-	detached := as[model.FileDetached](t, run(t, f.gateway, model.DetachFile{Workspace: f.repo, UID: f.uid, ProjectID: f.project.ID, Actor: "tester", ID: cited.ID, Name: "report.pdf"}))
+	detached := as[model.AttachmentUnlinked](t, run(t, f.gateway, model.UnlinkAttachment{Workspace: f.repo, UID: f.uid, ProjectID: f.project.ID, Actor: "tester", ID: cited.ID, Name: "report.pdf"}))
 	if detached.Err != nil {
 		t.Fatalf("detach %+v", detached)
 	}
