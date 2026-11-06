@@ -1,6 +1,10 @@
 package model_test
 
 import (
+	"errors"
+	"reflect"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -231,5 +235,123 @@ func TestAgentCardRefusalNoticeIsTheButtonsReason(t *testing.T) {
 	after, cmds := model.Update(m, model.KeyMsg{Chord: "t"})
 	if _, started := agentCmd[model.StartAgent](cmds); started || after.Notice != reason || after.TopCard() == model.CardAgent {
 		t.Errorf("notice %q, started %v, card %v; want the button's reason %q and the card closed", after.Notice, started, after.TopCard(), reason)
+	}
+}
+
+// openCard is the Agent card open on Issue u1 over the mapping of exitedPane, whose agent 11 is this Pane's.
+func openCard(status string, states ...model.AgentState) model.Model {
+	m := exitedPane(status)
+	m.Agents.States = states
+	m.AgentCard = model.AgentCardState{Open: true, IssueUID: "u1", IssueRef: "kata-u1"}
+	return m
+}
+
+func TestIInterruptsTheSelectedAgentAndClosesTheCard(t *testing.T) {
+	for _, state := range []model.AgentStateWord{model.AgentWorking, model.AgentIdle, model.AgentWaitingInput} {
+		m := openCard("open", st("11", state, ""), st("12", state, ""))
+		m.AgentCard.Cursor = 1
+		after, cmds := press(m, "i")
+		if want := []model.Cmd{model.InterruptAgent{Block: "12"}}; !reflect.DeepEqual(cmds, want) || after.AgentCard.Open {
+			t.Errorf("%s: cmds %#v, card open %v; want %v and the card closed", state, cmds, after.AgentCard.Open, want)
+		}
+	}
+}
+
+func TestInterruptIsRefusedWithAReasonWhereItCannotWork(t *testing.T) {
+	notOmp := openCard("open", st("11", model.AgentWorking, ""))
+	notOmp.AgentMapping[0].NoAddress = model.AgentNotOmp
+	for name, tt := range map[string]struct {
+		m      model.Model
+		reason string
+	}{
+		"exited":       {openCard("open", st("11", model.AgentExited, "")), model.AgentCardExitedReason},
+		"not omp":      {notOmp, model.AgentCardNotOmpReason},
+		"not listed":   {openCard("open"), model.AgentCardNotListedReason},
+		"no agent yet": {func() model.Model { m := openCard("open"); m.AgentCard.IssueUID = "none"; return m }(), "No agent on this Issue yet."},
+	} {
+		if got := tt.m.AgentCardUnavailable(model.AgentCardInterrupt); got != tt.reason {
+			t.Errorf("%s: unavailable says %q, want %q", name, got, tt.reason)
+		}
+		after, cmds := press(tt.m, "i")
+		if len(cmds) != 0 {
+			t.Errorf("%s: cmds %#v", name, cmds)
+		}
+		if name != "no agent yet" && (after.Notice != tt.reason || after.AgentCard.Open) {
+			t.Errorf("%s: notice %q, card open %v", name, after.Notice, after.AgentCard.Open)
+		}
+	}
+}
+
+func TestXAsksBeforeStoppingAndOnlyYStops(t *testing.T) {
+	m := openCard("open", st("11", model.AgentWorking, ""))
+	asked, cmds := press(m, "x")
+	if len(cmds) != 0 || asked.AgentCard.Stopping != "11" || asked.CurrentMode() != model.ModeAgentCardStop {
+		t.Fatalf("x: cmds %#v, stopping %q, mode %s; want the question and no command", cmds, asked.AgentCard.Stopping, asked.CurrentMode())
+	}
+	for _, chord := range []string{"n", "escape"} {
+		kept, cmds := press(asked, chord)
+		if len(cmds) != 0 || !kept.AgentCard.Open || kept.AgentCard.Stopping != "" || kept.CurrentMode() != model.ModeAgentCard {
+			t.Errorf("%s: cmds %#v, card %+v", chord, cmds, kept.AgentCard)
+		}
+	}
+	if other, cmds := press(asked, "z"); len(cmds) != 0 || other.AgentCard.Stopping != "11" {
+		t.Errorf("another key left the question: cmds %#v, stopping %q", cmds, other.AgentCard.Stopping)
+	}
+	stopped, cmds := press(asked, "y")
+	if want := []model.Cmd{model.StopAgent{Block: "11"}}; !reflect.DeepEqual(cmds, want) || stopped.AgentCard.Open {
+		t.Errorf("y: cmds %#v, card open %v; want %v and the card closed", cmds, stopped.AgentCard.Open, want)
+	}
+}
+
+func TestStopIsOfferedForAnyPlacementAndRefusedForAnExitedAgent(t *testing.T) {
+	m := openCard("open", st("11", model.AgentWorking, ""), st("12", model.AgentIdle, ""), st("21", model.AgentIdle, ""))
+	m.AgentMapping[1].Placement = model.AgentTab
+	m.AgentMapping[2] = model.AgentEntry{IssueUID: "u1", Block: "21", PaneBlock: "20", Background: true}
+	for cursor, want := range []string{"11", "12", "21"} {
+		m.AgentCard.Cursor = cursor
+		asked, _ := press(m, "x")
+		if asked.AgentCard.Stopping != want {
+			t.Errorf("row %d: asked about %q, want %q (another Pane's Background agent included)", cursor, asked.AgentCard.Stopping, want)
+		}
+	}
+	exited := openCard("open", st("11", model.AgentExited, ""))
+	after, cmds := press(exited, "x")
+	if len(cmds) != 0 || after.AgentCard.Open || after.Notice != model.AgentCardExitedReason {
+		t.Errorf("exited: cmds %#v, card open %v, notice %q", cmds, after.AgentCard.Open, after.Notice)
+	}
+}
+
+func TestStoppingAnAgentOfThisPaneGivesItsIssueTheExitHandOff(t *testing.T) {
+	m := openCard("open", st("11", model.AgentWorking, ""))
+	rest := slices.Delete(slices.Clone(m.AgentMapping), 0, 1)
+	m, cmds := model.Update(m, model.AgentStopped{Block: "11", Agents: rest})
+	if want := []model.Cmd{raise("u1", 3, "agent exited without closing kata-u1")}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("cmds %#v, want %v", cmds, want)
+	}
+	if slices.ContainsFunc(m.AgentMapping, func(e model.AgentEntry) bool { return e.Block == "11" }) || !strings.HasPrefix(m.Notice, "Stopped ") {
+		t.Errorf("mapping %+v, notice %q", m.AgentMapping, m.Notice)
+	}
+}
+
+func TestStoppingAgentOfAClosedIssueRaisesNothing(t *testing.T) {
+	m := openCard("closed", st("11", model.AgentWorking, ""))
+	rest := slices.Delete(slices.Clone(m.AgentMapping), 0, 1)
+	if _, cmds := model.Update(m, model.AgentStopped{Block: "11", Agents: rest}); len(cmds) != 0 {
+		t.Errorf("cmds %#v", cmds)
+	}
+}
+
+func TestAFailedStopKeepsTheMappingAndSaysWhy(t *testing.T) {
+	m := openCard("open", st("11", model.AgentWorking, ""))
+	after, cmds := model.Update(m, model.AgentStopped{Block: "11", Err: errors.New("tern: no such block")})
+	if len(cmds) != 0 || !reflect.DeepEqual(after.AgentMapping, m.AgentMapping) || after.Notice != "Cannot stop the agent: tern: no such block" {
+		t.Errorf("cmds %#v, mapping %+v, notice %q", cmds, after.AgentMapping, after.Notice)
+	}
+}
+
+func TestAFailedInterruptSaysWhy(t *testing.T) {
+	after, _ := model.Update(model.Model{}, model.AgentInterrupted{Block: "11", Err: errors.New("no title")})
+	if after.Notice != "Cannot interrupt the agent: no title" {
+		t.Errorf("notice %q", after.Notice)
 	}
 }

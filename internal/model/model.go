@@ -439,6 +439,10 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return agentIssueRead(m, msg)
 	case AgentClosed:
 		m = agentClosed(m, msg)
+	case AgentStopped:
+		return agentStopped(m, msg)
+	case AgentInterrupted:
+		m = agentInterrupted(m, msg)
 	case AgentAttentionWritten:
 		return agentAttentionWritten(m, msg), nil
 	case AgentAddressCleared:

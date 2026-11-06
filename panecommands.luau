@@ -1,8 +1,8 @@
 --!strict
 
--- The Pane commands the window half starts on Windows, and the host half's rule for dropping the PowerShell profile from
--- them. Both halves read the command strings from here, so a changed command cannot fall out of the match. No Tern call is
--- made here: the rule is tested by `luau test/panecommands_test.luau`.
+-- The Pane commands the window half starts on Windows, the host half's rule for dropping the PowerShell profile from them, and
+-- the title with which a Pane asks the window half to interrupt an agent. Both halves read the command strings from here, so a
+-- changed command cannot fall out of the match. No Tern call is made here: the rules are tested by `luau test/panecommands_test.luau`.
 
 local M = {}
 
@@ -14,6 +14,16 @@ M.UPDATE = "tern-kata update --pause"
 -- Wrapped in powershell so it also works when the Pane's default shell is cmd, where `;` is no separator.
 M.INSTALL_WINDOWS = "powershell -NoProfile -ExecutionPolicy Bypass -Command \"irm " .. SCRIPTS
     .. "install.ps1 | iex; Read-Host 'Press Enter to close'\""
+
+-- The request the Pane makes of the window half to interrupt an agent: the Pane sets its own title to INTERRUPT_PREFIX and the
+-- agent's block id as decimal text (internal/data InterruptTitlePrefix), the one thing a Pane can say to the window half, and then
+-- sets "tern-kata" again. Returns the block id when the title is such a request, else nil.
+M.INTERRUPT_PREFIX = "tern-kata interrupt "
+
+function M.interruptBlock(title: any): string?
+    if type(title) ~= "string" or title:sub(1, #M.INTERRUPT_PREFIX) ~= M.INTERRUPT_PREFIX then return nil end
+    return title:sub(#M.INTERRUPT_PREFIX + 1):match("^(%d+)$")
+end
 
 local COMMANDS: { [string]: boolean } = {
     [M.KATA] = true,

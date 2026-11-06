@@ -14,7 +14,25 @@ const (
 	AgentCardTab           Action = "agent-card-tab"
 	AgentCardNewBackground Action = "agent-card-new-background"
 	AgentCardBackground    Action = "agent-card-background"
+	AgentCardInterrupt     Action = "agent-card-interrupt"
+	AgentCardStop          Action = "agent-card-stop"
 	AgentCardCancel        Action = "agent-card-cancel"
+)
+
+// ModeAgentCardStop is the Agent card asking whether to stop the selected agent; AgentCardStopConfirm stops it and
+// AgentCardStopKeep goes back to the list.
+const (
+	ModeAgentCardStop    Mode   = "agent-card-stop"
+	AgentCardStopConfirm Action = "agent-card-stop-confirm"
+	AgentCardStopKeep    Action = "agent-card-stop-keep"
+)
+
+// Why the Agent card's Interrupt and Stop are off for the selected agent.
+const (
+	AgentCardExitedReason    = "That agent has exited."
+	AgentCardNotOmpReason    = "Interrupt reaches only omp agents; that agent is not omp."
+	AgentCardNotListedReason = "Tern does not list that agent, so it cannot be interrupted."
+	agentCardInterruptSent   = "Interrupt sent."
 )
 
 // AgentCardState is the Agent card.
@@ -23,6 +41,8 @@ type AgentCardState struct {
 	IssueUID string
 	IssueRef string
 	Cursor   int
+	// Stopping is the block the card asks about stopping; "" while it shows the list.
+	Stopping string
 }
 
 // AgentCardRows are the agents the card lists: the Issue's mapped agents, in the mapping's order.
@@ -58,9 +78,44 @@ func openAgentCard(m Model, issue Issue) Model {
 	return m
 }
 
+// AgentCardMode is the keymap mode of the Agent card: asking before a stop, or showing the list.
+func (m Model) AgentCardMode() Mode {
+	if m.AgentCard.Stopping != "" {
+		return ModeAgentCardStop
+	}
+	return ModeAgentCard
+}
+
+// AgentCardStopTarget is the agent the card asks about stopping.
+func (m Model) AgentCardStopTarget() (AgentEntry, bool) {
+	for _, e := range m.AgentMapping {
+		if e.Block == m.AgentCard.Stopping {
+			return e, true
+		}
+	}
+	return AgentEntry{}, false
+}
+
+// AgentLabel names an agent in a sentence: its teammate name and block, or the block alone for an agent started before names were kept.
+func AgentLabel(e AgentEntry) string {
+	if e.Teammate != "" {
+		return e.Teammate + " (block " + e.Block + ")"
+	}
+	return "the agent in block " + e.Block
+}
+
 func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
-	binding, bound := LookupBindingForMode(msg.Chord, ModeAgentCard)
+	binding, bound := LookupBindingForMode(msg.Chord, m.AgentCardMode())
 	if !bound {
+		return m, nil
+	}
+	if m.AgentCard.Stopping != "" {
+		block := m.AgentCard.Stopping
+		m.AgentCard.Stopping = ""
+		if binding.Action == AgentCardStopConfirm {
+			m.AgentCard = AgentCardState{}
+			return m, []Cmd{StopAgent{Block: block}}
+		}
 		return m, nil
 	}
 	rows := m.AgentCardRows()
@@ -80,6 +135,22 @@ func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 			return m, nil
 		}
 		return sendToBackground(m, rows[cursor].AgentEntry)
+	case AgentCardInterrupt:
+		if len(rows) == 0 {
+			return m, nil
+		}
+		return interruptAgent(m, rows[cursor].AgentEntry)
+	case AgentCardStop:
+		if len(rows) == 0 {
+			return m, nil
+		}
+		if reason := m.AgentCardUnavailable(AgentCardStop); reason != "" {
+			m.AgentCard = AgentCardState{}
+			m.Notice = reason
+			return m, nil
+		}
+		m.AgentCard.Stopping = rows[cursor].Block
+		return m, nil
 	case AgentCardSplit:
 		return startAgent(m, AgentCardSplit, AgentSplit)
 	case AgentCardTab:
@@ -108,6 +179,19 @@ func sendToBackground(m Model, e AgentEntry) (Model, []Cmd) {
 		return m, nil
 	}
 	return placeAgent(m, e.Block), []Cmd{SendAgentBack{Block: e.Block, IssueRef: e.IssueRef}}
+}
+
+// interruptAgent is `i`: the window half interrupts the agent's current turn, and the card closes with the card's reason as a Notice
+// when it cannot.
+func interruptAgent(m Model, e AgentEntry) (Model, []Cmd) {
+	reason := m.AgentCardUnavailable(AgentCardInterrupt)
+	m.AgentCard = AgentCardState{}
+	if reason != "" {
+		m.Notice = reason
+		return m, nil
+	}
+	m.Notice = agentCardInterruptSent
+	return m, []Cmd{InterruptAgent{Block: e.Block}}
 }
 
 // AgentCardSelected is a click on an agent of the card's list; Block is its block id.
@@ -140,6 +224,20 @@ func (m Model) AgentCardUnavailable(action Action) string {
 		}
 		if e := rows[m.AgentCardCursor()]; e.Background && !e.Open {
 			return "That agent is already in the background."
+		}
+	case AgentCardInterrupt, AgentCardStop:
+		if len(rows) == 0 {
+			return noAgentReason
+		}
+		e := rows[m.AgentCardCursor()]
+		switch {
+		case e.State == AgentExited:
+			return AgentCardExitedReason
+		case action == AgentCardStop:
+		case e.NoAddress == AgentNotOmp:
+			return AgentCardNotOmpReason
+		case e.State == "":
+			return AgentCardNotListedReason
 		}
 	case AgentCardSplit, AgentCardTab, AgentCardNewBackground:
 		issue := m.issueByUID(m.AgentCard.IssueUID)

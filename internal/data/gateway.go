@@ -53,6 +53,9 @@ type Gateway struct {
 	// workerDirs locates this machine's worker; runTern runs the tern program. Both are the real ones unless a test replaces them.
 	workerDirs func() (worker.Dirs, error)
 	runTern    func(context.Context, []string) ([]byte, error)
+	// paneTitle sets this Pane's title and interruptGap is how long a request title stays; the real ones unless a test replaces them.
+	paneTitle    func(string) error
+	interruptGap time.Duration
 
 	// lsMu guards lsLive, the blocks the last `tern ls --json` listed, lsAt, when it was asked, and lsFlight, the ask now running.
 	lsMu     sync.Mutex
@@ -66,7 +69,7 @@ type Gateway struct {
 }
 
 func NewGateway(locate Locator) *Gateway {
-	return &Gateway{locate: locate, deadline: connectDeadline, clients: map[string]*Client{}, connecting: map[string]chan struct{}{}, now: time.Now, wakePoll: time.Minute, workerDirs: worker.DefaultDirs, runTern: execTern,
+	return &Gateway{locate: locate, deadline: connectDeadline, clients: map[string]*Client{}, connecting: map[string]chan struct{}{}, now: time.Now, wakePoll: time.Minute, workerDirs: worker.DefaultDirs, runTern: execTern, paneTitle: writePaneTitle, interruptGap: defaultInterruptGap,
 		openFile: openFile, cacheDir: attachmentCacheDir}
 }
 

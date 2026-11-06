@@ -4,6 +4,12 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+#### Agents
+
+- The Agent card interrupts or stops the selected agent: `i` ends its current turn and keeps its block, and `x` asks before closing its block and removing its entry and prompt file, giving the Issue the hand-off an exiting agent gets.
+
 ### Changed
 
 #### Issues and Pages

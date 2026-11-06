@@ -511,7 +511,26 @@ local function relayWhenLive(pane: number, tries: number)
     end)
 end
 
+-- A kata Pane asks for an agent's current turn to be interrupted by naming the agent's block in its title (panecommands.luau);
+-- only a window half can interrupt. The block must be an agent this window lists, whatever session it is in; its block and
+-- conversation stay, and the state relay that follows shows it idle.
+local function interruptAgent(cx: WindowCx, block: string)
+    for _, agent in cx.agents:list() do
+        if string.format("%.0f", agent.pane) == block then
+            local ok, err = pcall(function() cx.agents:interrupt(agent.pane) end)
+            if not ok then cx:toast("error", "Could not interrupt the agent", tostring(err)) end
+            return
+        end
+    end
+    cx:toast("error", "Could not interrupt the agent", "Tern lists no agent in block " .. block)
+end
+
 tern.on("title", function(ev, cx)
+    local requested = panecommands.interruptBlock(ev.title)
+    if requested then
+        if marked[ev.pane] then interruptAgent(cx, requested) end
+        return
+    end
     if ev.title == "tern-kata" or marked[ev.pane] then
         markIf(cx, ev.pane)
         if not marked[ev.pane] then return end

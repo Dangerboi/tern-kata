@@ -6,13 +6,19 @@ Three things help coding agents work with tern-kata: the Agent card, which start
 
 ### The Agent card and starting agents
 
-`w` on the selected Issue (list, Board, Lane view or Issue detail) opens the Agent card, with or without agents. It lists the Issue's agents with state, start time and where each is (split, tab, background or open). `enter` goes to the selected one, `b` sends it to the background, `esc` cancels.
+`w` on the selected Issue (list, Board, Lane view or Issue detail) opens the Agent card, with or without agents. It lists the Issue's agents with state, start time and where each is (split, tab, background or open). `enter` goes to the selected one, `b` sends it to the background, `i` interrupts it, `x` stops it, `esc` cancels.
 
 ![The Agent card for "Add Apple Pay to checkout" with no agents yet and its buttons: New in a split (S), New in a tab (T), New in the background (G), plus Go to agent, Send to background and Cancel](../images/agent-card.png)
 
 `s` starts a new interactive `omp` in a split right of the kata Pane, `t` in a new tab right of the kata Pane's tab (in that Pane's Tern session, with the plugin's window half loaded; otherwise the tab opens last), `g` in the background. Each starts in the Issue's checkout: the Binding's workspace, else the Project's `checkout` in `agent.toml`, else the first checkout `worker.toml` lists for it, else a Notice says to add one.
 
 A closed Issue says "This Issue is closed; reopen it first (r)." and opens no card.
+
+### Interrupting and stopping an agent
+
+`i` interrupts the selected agent's current turn, as ctrl+c does in its block: the block and the conversation stay, and the badge reads idle once the turn ends. Use it when an agent is on the wrong path, then message the correction. Interrupt goes through the plugin's window half, since only it can interrupt a Tern agent, so it needs the plugin loaded in the window that shows the Pane. It is off, with the reason in a tooltip and a Notice, for an agent that is not omp or that Tern does not list.
+
+`x` asks "Stop <agent> on <ref>? Its block closes and any unsaved work in it is dropped." and `y` stops it: `tern close` on its block, then its entry and prompt file go. It works on an agent in a split, a tab or the background, and on one another kata Pane on this host started; the Pane reads `agents.json` again just before it closes. The Issue gets what an agent that exits gets: while it is open and the Pane started the agent, it holds the request "agent exited without closing <ref>". A close that fails shows Tern's words in a Notice and leaves the entry. Both actions are off for an agent that has exited.
 
 The agent is told which Issue to work on and how to leave a record: claim it for 24 hours (renewing the claim when it already owns the Issue), comment what it did and how it checked, finish or drop its todo children before closing, close it with evidence only when done and verified, and ask you when it needs a decision. If it stops without closing, it comments why, sets `work.attention` to `needs-human` with the reason in `work.attention_msg`, and labels the Issue ready-for-human in place of ready-for-agent.
 

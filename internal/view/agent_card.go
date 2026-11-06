@@ -36,6 +36,12 @@ func agentLayer(m model.Model) tern.Element {
 	if len(rows) == 0 {
 		list = ui.Text{Common: ui.Common{Key: "none", Tone: ui.ToneMuted}, Text: "No agents on this Issue yet."}
 	}
+	if m.AgentCardMode() == model.ModeAgentCardStop {
+		return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgent)}, Head: ui.T("Stop agent"), Meta: refMeta(card.IssueRef), Icon: ui.IconUsers, Modal: true, Size: ui.SizeMD}, []tern.Element{
+			ui.Text{Common: ui.Common{Key: "stop-ask"}, Text: agentStopQuestion(m)},
+			buttonRow(destructive(cardButton("stop-yes", model.ModeAgentCardStop, model.AgentCardStopConfirm, "Stop agent", false)), cardButton("stop-keep", model.ModeAgentCardStop, model.AgentCardStopKeep, "Keep it", true)),
+		}))
+	}
 	children := []tern.Element{
 		list,
 		buttonRow(
@@ -44,7 +50,18 @@ func agentLayer(m model.Model) tern.Element {
 			unavailable(cardButton("tab", model.ModeAgentCard, model.AgentCardTab, "New in a tab", false), m.AgentCardUnavailable(model.AgentCardTab)),
 			unavailable(cardButton("new-background", model.ModeAgentCard, model.AgentCardNewBackground, "New in the background", false), m.AgentCardUnavailable(model.AgentCardNewBackground)),
 			unavailable(cardButton("background", model.ModeAgentCard, model.AgentCardBackground, "Send to background", false), m.AgentCardUnavailable(model.AgentCardBackground)),
+			unavailable(cardButton("interrupt", model.ModeAgentCard, model.AgentCardInterrupt, "Interrupt", false), m.AgentCardUnavailable(model.AgentCardInterrupt)),
+			unavailable(cardButton("stop", model.ModeAgentCard, model.AgentCardStop, "Stop", false), m.AgentCardUnavailable(model.AgentCardStop)),
 			cardButton("cancel", model.ModeAgentCard, model.AgentCardCancel, "Cancel", false)),
 	}
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgent)}, Head: ui.T("Agents"), Meta: refMeta(card.IssueRef), Icon: ui.IconUsers, Modal: true, Size: ui.SizeLG}, children))
+}
+
+// agentStopQuestion is the stop prompt: it names the agent and says what stopping drops.
+func agentStopQuestion(m model.Model) string {
+	name := "this agent"
+	if e, ok := m.AgentCardStopTarget(); ok {
+		name = model.AgentLabel(e)
+	}
+	return "Stop " + name + " on " + m.AgentCard.IssueRef + "? Its block closes and any unsaved work in it is dropped."
 }
