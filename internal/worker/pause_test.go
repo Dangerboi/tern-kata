@@ -244,6 +244,39 @@ func TestAReportReplayedAfterACrashCountsItsFailedRunOnce(t *testing.T) {
 	}
 }
 
+func TestASucceededRunRecordedWhileAJobIsPausedDoesNotLiftThePause(t *testing.T) {
+	h := newHarness(t, "--stub-exit", "3")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "flaky", Prompt: "Do it.", Checkout: "repo"})
+	h.agentArgs() // the agent works: the run in flight succeeds
+	uid, _ := h.killedAt("intent-comment", job)
+
+	// The job paused while that run was still in flight.
+	paused, _ := json.Marshal(map[string]any{"version": 1, "failed": 3, "paused": true, "since": time.Now().UTC(), "name": "flaky"})
+	dir := h.dirs.ProjectDir(h.proj.UID) + "/failures"
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dir+"/"+job.UID+".json", paused, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	restarted := h.start(worker.Hooks{})
+	h.admitting(restarted)
+	h.settledInKata(restarted, uid)
+	if p := restarted.w.Status().Paused; len(p) != 1 || p[0].JobUID != job.UID || p[0].Failed != 3 {
+		t.Fatalf("a succeeded run lifted the pause: %+v", p)
+	}
+	if resp := h.ask(worker.Request{Op: "run", Job: job.UID}); !strings.Contains(resp.Error, "paused after 3 failed runs in a row") {
+		t.Fatalf("a run of the still paused job answered %+v", resp)
+	}
+	if resp := h.ask(worker.Request{Op: "resume-job", Job: job.UID}); !resp.OK {
+		t.Fatalf("resume answered %+v", resp)
+	}
+	if p := restarted.w.Status().Paused; len(p) != 0 {
+		t.Fatalf("still paused after a resume: %+v", p)
+	}
+}
+
 func TestAnUnreadableFailureCountDoesNotRefuseTheJobsRuns(t *testing.T) {
 	h := newHarness(t, "--stub-exit", "3")
 	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "flaky", Prompt: "Do it.", Checkout: "repo"})

@@ -85,7 +85,7 @@ func (w *Worker) saveStreak(projectUID, jobUID string, s streakFile) error {
 }
 
 // noteOutcome counts a run whose outcome is recorded: a run recorded failed (a timeout included) adds one, a succeeded run
-// resets the count, and every other run (a hold, a cancel) leaves it as it is. The count pauses the job once it reaches
+// resets the count unless the job is paused (only a resume lifts a pause), and every other run (a hold, a cancel) leaves it as it is. The count pauses the job once it reaches
 // pause_after_failures. It is idempotent per run, so the report that replays after a crash counts nothing twice.
 func (w *Worker) noteOutcome(j *Journal) {
 	if j.Outcome == nil || j.held() {
@@ -111,7 +111,9 @@ func (w *Worker) noteOutcome(j *Journal) {
 		s.Seen = s.Seen[len(s.Seen)-maxSeenRuns:]
 	}
 	if status == cronjob.RunSucceeded {
-		s.Failed, s.Paused, s.Since, s.Name = 0, false, time.Time{}, ""
+		if !s.Paused { // a run in flight when the job paused, or held and resumed, finishes without lifting the pause
+			s.Failed = 0
+		}
 	} else {
 		s.Failed++
 		if limit := w.opt.Config.PauseAfterFailures(); limit > 0 && s.Failed >= limit && !s.Paused {
