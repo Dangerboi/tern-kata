@@ -22,9 +22,9 @@ const agentSessionTail = 1 << 20
 
 // The reasons the Agent card gives for an agent whose session it cannot show.
 const (
-	agentSessionNotOmp   = model.AgentSessionNotOmpReason
-	agentSessionNoPath   = "no session yet: omp has not named its session file"
-	agentSessionNoFile   = "no session file yet"
+	agentSessionNotOmp = model.AgentSessionNotOmpReason
+	agentSessionNoPath = "no session yet: omp has not named its session file"
+	agentSessionNoFile = "no session file yet"
 	agentSessionUnread = "session file unreadable"
 )
 

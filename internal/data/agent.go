@@ -641,14 +641,24 @@ func (g *Gateway) closeAgent(ctx context.Context, cmd model.CloseAgent) model.Ag
 	if slices.ContainsFunc(list, func(e model.AgentEntry) bool { return e.Block == cmd.Block && (e.Open || !e.Background) }) {
 		return model.AgentClosed{Block: cmd.Block, Agents: list, Kept: true}
 	}
-	if out, err := g.runTern(ctx, CloseBlockArgs(cmd.Block)); err != nil {
-		return model.AgentClosed{Block: cmd.Block, Err: ternFailure(err, out)}
+	agents, err := g.closeAndForget(ctx, file, cmd.Block)
+	if err != nil {
+		return model.AgentClosed{Block: cmd.Block, Err: err}
+	}
+	return model.AgentClosed{Block: cmd.Block, Agents: agents}
+}
+
+// closeAndForget closes the block with `tern close`, then drops its entry and prompt file from agents.json as it stands now, and
+// returns the file after. When tern fails the entry stays.
+func (g *Gateway) closeAndForget(ctx context.Context, file, block string) ([]model.AgentEntry, error) {
+	if out, err := g.runTern(ctx, CloseBlockArgs(block)); err != nil {
+		return nil, ternFailure(err, out)
 	}
 	var gone []model.AgentEntry
 	kept, err := UpdateAgents(file, func(list []model.AgentEntry) []model.AgentEntry {
 		gone = gone[:0]
 		return slices.DeleteFunc(list, func(e model.AgentEntry) bool {
-			if e.Block != cmd.Block {
+			if e.Block != block {
 				return false
 			}
 			gone = append(gone, e)
@@ -656,12 +666,59 @@ func (g *Gateway) closeAgent(ctx context.Context, cmd model.CloseAgent) model.Ag
 		})
 	})
 	if err != nil {
-		return model.AgentClosed{Block: cmd.Block, Err: fmt.Errorf("the block closed but agents.json could not be written: %w", err)}
+		return nil, fmt.Errorf("the block closed but agents.json could not be written: %w", err)
 	}
 	for _, e := range gone {
 		removePrompt(e.PromptFile)
 	}
-	return model.AgentClosed{Block: cmd.Block, Agents: kept}
+	return kept, nil
+}
+
+// stopAgent is the Agent card's Stop: it reads agents.json again, so an agent another Pane started or moved is stopped as it now
+// stands, then closes the block and forgets the entry. Any Pane may stop any mapped agent; the rule that only the starting Pane
+// closes a finished Background agent by itself is closeAgent's.
+func (g *Gateway) stopAgent(ctx context.Context, cmd model.StopAgent) model.AgentStopped {
+	file, _, err := g.agentStatePaths()
+	if err != nil {
+		return model.AgentStopped{Block: cmd.Block, Err: err}
+	}
+	if _, err := ReadAgents(file); err != nil {
+		return model.AgentStopped{Block: cmd.Block, Err: err}
+	}
+	agents, err := g.closeAndForget(ctx, file, cmd.Block)
+	if err != nil {
+		return model.AgentStopped{Block: cmd.Block, Err: err}
+	}
+	return model.AgentStopped{Block: cmd.Block, Agents: agents}
+}
+
+// InterruptTitlePrefix starts the Pane title with which the Pane asks the window half to interrupt an agent: the prefix and the
+// agent's block id as decimal text. The window half (panecommands.luau) reads it and calls `cx.agents:interrupt`, which only it has.
+const InterruptTitlePrefix = "tern-kata interrupt "
+
+// defaultInterruptGap is how long the request title stays before the Pane's own title comes back, so each is a title change of its own.
+const defaultInterruptGap = 150 * time.Millisecond
+
+// writePaneTitle sets this Pane's title, which the window half sees as a title event.
+func writePaneTitle(title string) error {
+	_, err := fmt.Fprint(os.Stdout, "\x1b]0;"+title+"\x07")
+	return err
+}
+
+// interruptAgent asks the window half to interrupt the agent's current turn. The only way from the Pane to the window half is the
+// Pane's title, so the request is a title that names the block, followed by the Pane's own title again.
+func (g *Gateway) interruptAgent(ctx context.Context, cmd model.InterruptAgent) model.AgentInterrupted {
+	if cmd.Block == "" || strings.Trim(cmd.Block, "0123456789") != "" {
+		return model.AgentInterrupted{Block: cmd.Block, Err: fmt.Errorf("block %q is not a pane id the window half can interrupt", cmd.Block)}
+	}
+	if err := g.paneTitle(InterruptTitlePrefix + cmd.Block); err != nil {
+		return model.AgentInterrupted{Block: cmd.Block, Err: err}
+	}
+	select {
+	case <-time.After(g.interruptGap):
+	case <-ctx.Done():
+	}
+	return model.AgentInterrupted{Block: cmd.Block, Err: g.paneTitle("tern-kata")}
 }
 
 // AgentPromptName is the pattern of a prompt file's name for os.CreateTemp. A tab's or background agent carries the block id of the kata Pane

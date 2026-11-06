@@ -105,10 +105,10 @@ func TestReadAgentSessionExplainsWhatIsMissing(t *testing.T) {
 		path string
 		want string
 	}{
-		"not omp":             {ask: model.AgentSessionAsk{PromptFile: prompt}, want: agentSessionNotOmp},
-		"no path file":        {ask: model.AgentSessionAsk{PromptFile: prompt, Omp: true}, want: agentSessionNoPath},
-		"no prompt file":      {ask: model.AgentSessionAsk{Omp: true}, want: agentSessionNoPath},
-		"a missing session":   {ask: model.AgentSessionAsk{PromptFile: prompt, Omp: true}, path: filepath.Join(dir, "gone.jsonl"), want: agentSessionNoFile},
+		"not omp":           {ask: model.AgentSessionAsk{PromptFile: prompt}, want: agentSessionNotOmp},
+		"no path file":      {ask: model.AgentSessionAsk{PromptFile: prompt, Omp: true}, want: agentSessionNoPath},
+		"no prompt file":    {ask: model.AgentSessionAsk{Omp: true}, want: agentSessionNoPath},
+		"a missing session": {ask: model.AgentSessionAsk{PromptFile: prompt, Omp: true}, path: filepath.Join(dir, "gone.jsonl"), want: agentSessionNoFile},
 	} {
 		_ = os.Remove(prompt + AgentSessionSuffix)
 		if tt.path != "" {

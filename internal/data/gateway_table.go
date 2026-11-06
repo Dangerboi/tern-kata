@@ -175,6 +175,10 @@ func init() {
 		return g.sendAgentBack(ctx, cmd)
 	}, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.CloseAgent) model.Msg { return g.closeAgent(ctx, cmd) }, nil, nil)
+	local(func(g *Gateway, ctx context.Context, cmd model.StopAgent) model.Msg { return g.stopAgent(ctx, cmd) }, nil, nil)
+	local(func(g *Gateway, ctx context.Context, cmd model.InterruptAgent) model.Msg {
+		return g.interruptAgent(ctx, cmd)
+	}, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.FocusAgent) model.Msg { return g.focusAgent(ctx, cmd) }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.PruneAgents) model.Msg { return g.pruneAgents(ctx, cmd) }, nil, nil)
 

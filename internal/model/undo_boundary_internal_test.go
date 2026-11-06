@@ -33,6 +33,8 @@ func TestUndoBoundaryListsEveryCmd(t *testing.T) {
 		{ClearAgentAddress{}, false},
 		{ClearAttention{}, true},
 		{CloseAgent{}, false},
+		{StopAgent{}, false},
+		{InterruptAgent{}, false},
 		{CloseIssueCmd{}, false},
 		{CreateIssueCmd{}, true},
 		{CreateProject{}, false},

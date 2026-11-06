@@ -1861,3 +1861,79 @@ func TestSwitchedProfileWithItsOwnHomeGetsNoneOfThePanesCredentialVariables(t *t
 		t.Errorf("pinned: set %q, err %v", set, err)
 	}
 }
+
+func TestStoppingClosesASplitATabAndAnOpenBackgroundAgentWhicheverPaneStartedIt(t *testing.T) {
+	for name, entry := range map[string]model.AgentEntry{
+		"split":                 {Block: "31", PaneBlock: "9"},
+		"tab":                   {Block: "31", PaneBlock: "9", Placement: model.AgentTab},
+		"open background":       {Block: "31", PaneBlock: "9", Background: true, Open: true},
+		"hidden, other starter": {Block: "31", PaneBlock: "77", Background: true},
+	} {
+		g, dirs := agentGateway(t)
+		prompt := writeAgentFile(t, filepath.Join(t.TempDir(), "p.md"), "go")
+		entry.PromptFile = prompt
+		file := seedAgent(t, dirs, entry)
+		seedAgent(t, dirs, model.AgentEntry{Block: "32"})
+		calls := ternScript(g, map[string]func() ([]byte, error){"close": ternOut(`{"block":31}`)})
+		got := as[model.AgentStopped](t, run(t, g, model.StopAgent{Block: "31"}))
+		if got.Err != nil || len(got.Agents) != 1 || got.Agents[0].Block != "32" || !reflect.DeepEqual(*calls, [][]string{{"close", "31", "--json"}}) {
+			t.Errorf("%s: %+v, ran %q", name, got, *calls)
+		}
+		if stored, _ := ReadAgents(file); len(stored) != 1 || stored[0].Block != "32" {
+			t.Errorf("%s: agents.json %+v", name, stored)
+		}
+		if _, err := os.Stat(prompt); !os.IsNotExist(err) {
+			t.Errorf("%s: prompt file stays: %v", name, err)
+		}
+	}
+}
+
+func TestAFailedStopKeepsTheEntryAndThePrompt(t *testing.T) {
+	g, dirs := agentGateway(t)
+	prompt := writeAgentFile(t, filepath.Join(t.TempDir(), "p.md"), "go")
+	file := seedAgent(t, dirs, model.AgentEntry{Block: "31", PromptFile: prompt})
+	ternScript(g, map[string]func() ([]byte, error){"close": func() ([]byte, error) { return []byte("no block\n"), errors.New("exit status 1") }})
+	got := as[model.AgentStopped](t, run(t, g, model.StopAgent{Block: "31"}))
+	if got.Err == nil || got.Err.Error() != "exit status 1: no block" {
+		t.Fatalf("%+v", got)
+	}
+	if stored, _ := ReadAgents(file); len(stored) != 1 {
+		t.Errorf("agents.json %+v", stored)
+	}
+	if _, err := os.Stat(prompt); err != nil {
+		t.Errorf("prompt file: %v", err)
+	}
+}
+
+func TestStoppingWhenAgentsJSONCannotBeReadRunsNothing(t *testing.T) {
+	g, dirs := agentGateway(t)
+	file := seedAgent(t, dirs, model.AgentEntry{Block: "31"})
+	if err := os.WriteFile(file, []byte("not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	calls := ternScript(g, map[string]func() ([]byte, error){"close": ternOut(`{"block":31}`)})
+	if got := as[model.AgentStopped](t, run(t, g, model.StopAgent{Block: "31"})); got.Err == nil || len(*calls) != 0 {
+		t.Fatalf("%+v, ran %q", got, *calls)
+	}
+}
+
+func TestInterruptingSetsTheRequestTitleThenTheOwnTitleBack(t *testing.T) {
+	g, _ := agentGateway(t)
+	var titles []string
+	g.paneTitle = func(title string) error { titles = append(titles, title); return nil }
+	g.interruptGap = 0
+	if got := as[model.AgentInterrupted](t, run(t, g, model.InterruptAgent{Block: "144115188075855871"})); got.Err != nil ||
+		!reflect.DeepEqual(titles, []string{"tern-kata interrupt 144115188075855871", "tern-kata"}) {
+		t.Fatalf("%+v, titles %q", got, titles)
+	}
+}
+
+func TestInterruptingNamesNoBlockThatIsNotAPaneID(t *testing.T) {
+	g, _ := agentGateway(t)
+	g.paneTitle = func(title string) error { t.Errorf("set the title %q", title); return nil }
+	for _, block := range []string{"", "3@host", "1 2"} {
+		if got := as[model.AgentInterrupted](t, run(t, g, model.InterruptAgent{Block: block})); got.Err == nil {
+			t.Errorf("block %q: no error", block)
+		}
+	}
+}

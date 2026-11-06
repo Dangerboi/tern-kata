@@ -155,7 +155,7 @@ func TestAgentCardEndsInButtonsAndSaysWhenThereAreNoAgents(t *testing.T) {
 	m := model.Model{Cols: 160, Project: model.Project{ID: 7}, Issues: []model.Issue{{UID: "a", QualifiedID: "work#a", Status: "open"}}, SelectedUID: "a"}
 	m = press(m, "w")
 	cardButtons(t, m, "layer.agent.foot", []button{{"go", "Go to agent"}, {"split", "New in a split"}, {"tab", "New in a tab"},
-		{"new-background", "New in the background"}, {"background", "Send to background"}, {"message", "Message"}, {"cancel", "Cancel"}}, "")
+		{"new-background", "New in the background"}, {"background", "Send to background"}, {"message", "Message"}, {"interrupt", "Interrupt"}, {"stop", "Stop"}, {"cancel", "Cancel"}}, "")
 	if got := text(pickerNodes(t, m)["layer.agent.none"]); got != "No agents on this Issue yet." {
 		t.Errorf("empty card says %q", got)
 	}
@@ -207,7 +207,7 @@ func TestMenuButtonShowsNoKeycapWhereEscDoesNotOpenTheMenu(t *testing.T) {
 func TestAgentCardDisablesWhatCannotRunWithAReason(t *testing.T) {
 	m := model.Model{Cols: 160, Project: model.Project{ID: 7}, Issues: []model.Issue{{UID: "a", QualifiedID: "work#a", Status: "open"}}, SelectedUID: "a"}
 	nodes := pickerNodes(t, press(m, "w"))
-	for _, id := range []string{"go", "background"} {
+	for _, id := range []string{"go", "background", "interrupt", "stop"} {
 		node := nodes["layer.agent.foot."+id]
 		if node.P["disabled"] != "No agent on this Issue yet." || node.P["variant"] == "primary" {
 			t.Errorf("%s: disabled %v, variant %v", id, node.P["disabled"], node.P["variant"])
@@ -226,5 +226,17 @@ func TestAgentCardHeadNamesTheCardAndItsMetaTheIssue(t *testing.T) {
 	}
 	if meta, _ := node.P["meta"].([]any); len(meta) != 1 || meta[0].(map[string]any)["t"] != "work#a" {
 		t.Errorf("meta = %v, want the Issue's reference", node.P["meta"])
+	}
+}
+
+func TestAgentCardAsksBeforeStoppingNamingTheAgentAndWhatIsDropped(t *testing.T) {
+	m := model.Model{Cols: 160, Project: model.Project{ID: 7}, Issues: []model.Issue{{UID: "a", QualifiedID: "work#a", Status: "open"}}, SelectedUID: "a",
+		AgentMapping: []model.AgentEntry{{IssueUID: "a", Block: "31", Teammate: "builder"}},
+		Agents:       model.AgentStatesRelay{States: []model.AgentState{{Block: "31", State: model.AgentWorking}}}}
+	m = press(press(m, "w"), "x")
+	cardButtons(t, m, "layer.agent.foot", []button{{"stop-yes", "Stop agent"}, {"stop-keep", "Keep it"}}, "stop-keep")
+	got := text(pickerNodes(t, m)["layer.agent.stop-ask"])
+	if !strings.Contains(got, "builder") || !strings.Contains(got, "work#a") || !strings.Contains(got, "unsaved work") {
+		t.Errorf("the question says %q", got)
 	}
 }

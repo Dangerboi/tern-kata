@@ -96,6 +96,22 @@ test("a malformed spec returns nil and does not raise", function()
     assert(panecommands.withoutProfile({program = "pwsh", args = {"-c", 3}}) == nil)
 end)
 
+test("a title naming a block is an interrupt request for it", function()
+    assert(panecommands.interruptBlock("tern-kata interrupt 144115188075855871") == "144115188075855871")
+    assert(panecommands.interruptBlock(panecommands.INTERRUPT_PREFIX .. "12") == "12")
+end)
+
+test("every other title is no interrupt request", function()
+    assert(panecommands.interruptBlock("tern-kata") == nil)
+    assert(panecommands.interruptBlock("tern-kata interrupt ") == nil)
+    assert(panecommands.interruptBlock("tern-kata interrupt 12 13") == nil)
+    assert(panecommands.interruptBlock("tern-kata interrupt x1") == nil)
+    assert(panecommands.interruptBlock("tern-kata interrupt 1\n2") == nil)
+    assert(panecommands.interruptBlock("zsh interrupt 12") == nil)
+    assert(panecommands.interruptBlock(nil) == nil)
+    assert(panecommands.interruptBlock(12) == nil)
+end)
+
 if failures > 0 then
     print(failures .. " failed")
     error("failures")

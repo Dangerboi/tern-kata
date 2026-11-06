@@ -160,3 +160,59 @@ func agentClosed(m Model, msg AgentClosed) Model {
 	m.AgentMapping = msg.Agents
 	return m
 }
+
+// StopAgent is the Agent card's Stop: it closes the agent's block with `tern close` and removes its entry and prompt file, whatever
+// the agent's placement and whichever Pane started it. The entry is read from agents.json again just before the close.
+type StopAgent struct{ Block string }
+
+func (StopAgent) cmd() {}
+
+// AgentStopped answers StopAgent. Agents is agents.json after the entry went; Err carries Tern's words for a close that failed, and
+// then the entry stays.
+type AgentStopped struct {
+	Block  string
+	Agents []AgentEntry
+	Err    error
+}
+
+func (AgentStopped) msg() {}
+
+// InterruptAgent is the Agent card's Interrupt: the window half interrupts the agent's current turn and keeps its block.
+type InterruptAgent struct{ Block string }
+
+func (InterruptAgent) cmd() {}
+
+// AgentInterrupted answers InterruptAgent; Err says the request could not be sent to the window half.
+type AgentInterrupted struct {
+	Block string
+	Err   error
+}
+
+func (AgentInterrupted) msg() {}
+
+// agentStopped takes in the mapping after a stop. A stopped agent this Pane started counts as one whose block is gone, so its Issue
+// gets what an exit gets: the request "agent exited without closing <ref>" while the Issue is open.
+func agentStopped(m Model, msg AgentStopped) (Model, []Cmd) {
+	if msg.Err != nil {
+		m.Notice = fmt.Sprintf("Cannot stop the agent: %s", msg.Err)
+		return m, nil
+	}
+	stopped := AgentLabel(AgentEntry{Block: msg.Block})
+	for _, e := range m.AgentMapping {
+		if e.Block == msg.Block {
+			stopped = AgentLabel(e)
+		}
+	}
+	m = m.noteGoneAgents(msg.Agents)
+	m.AgentMapping = msg.Agents
+	m.Agents = m.Agents.trimmed(m.agentMapped)
+	m.Notice = "Stopped " + stopped + "."
+	return raiseAgentAttention(m, false)
+}
+
+func agentInterrupted(m Model, msg AgentInterrupted) Model {
+	if msg.Err != nil {
+		m.Notice = fmt.Sprintf("Cannot interrupt the agent: %s", msg.Err)
+	}
+	return m
+}
