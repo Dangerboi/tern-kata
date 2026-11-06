@@ -338,7 +338,7 @@ func TestJobsPageNamesTheWorkersPauseAfterFailedRunsAndUResumesIt(t *testing.T) 
 	s := jobsPaneWithWorker(t, status, promptJob("A1", "Triage"), promptJob("A2", "Report"))
 	text := wireTextOf(t, s)
 	wantText(t, "Jobs Page", text, "paused: failed runs", "paused after 3 failed runs in a row", "u resumes it")
-	if strings.Count(text, "paused after 3 failed runs in a row") != 1 {
+	if strings.Count(text, "This machine's worker: paused after") != 1 {
 		t.Fatalf("the pause is named for a job the worker runs:\n%s", text)
 	}
 

@@ -211,7 +211,7 @@ var jobsRowsAfterScroll = []actionEntry{
 	{action: RunsOfJob, modes: []Mode{ModeJobs, ModeJobInspector}, keys: keys("r", "r"), help: "runs", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 11, "open the Runs Page on the job's runs"}}, handle: runsOfJob},
 	{action: OpenWorkerCard, modes: jobsModes, keys: keys("shift+w", "W"), help: "worker", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 18, "this machine's worker: set it up or serve the Project (Worker card)"}}, handle: openWorkerCard},
 	{action: RunJobNowAction, modes: jobsModes, keys: keys("shift+r", "R"), help: "run now", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 17, "run the selected adapter job now on this machine's worker"}}, handle: runJobNow},
-	{action: ResumeJobAction, modes: jobsModes, keys: keys("u", "u"), help: "resume failed", sheet: []sheetLine{{sheetJobs, 19, "resume the selected job the worker paused after repeated failed runs (this machine's worker)"}}, handle: resumeFailingJob},
+	{action: ResumeJobAction, modes: jobsModes, keys: keys("u", "u"), help: "resume failed", sheet: []sheetLine{{sheetJobs, 20, "resume the selected job the worker paused after repeated failed runs (this machine's worker)"}}, handle: resumeFailingJob},
 }
 
 // runsRowsBeforeMovement are the Runs Page's session, resume and abandon rows, which read ahead of its movement keys.
