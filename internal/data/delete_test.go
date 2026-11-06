@@ -3,6 +3,7 @@ package data
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"slices"
@@ -50,7 +51,100 @@ func (f *undoFixture) restore(uid string) model.IssueRestored {
 	return as[model.IssueRestored](f.t, run(f.t, f.gateway, model.RestoreIssueCmd{Workspace: f.workspace, UID: uid, ProjectID: f.project.ID, Actor: "tester"}))
 }
 
-func TestDeleteSendsKatasConfirmationHeaderAndTheReason(t *testing.T) {
+// commentBodies are the bodies of the comments the Issue holds, read with deleted Issues included.
+func (f *undoFixture) commentBodies(uid string) []string {
+	f.t.Helper()
+	client, err := f.gateway.client(context.Background(), f.workspace)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	shown, err := client.showIssueIncludingDeleted(context.Background(), f.project.ID, uid)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	var bodies []string
+	for _, c := range shown.Comments {
+		bodies = append(bodies, c.Body)
+	}
+	return bodies
+}
+
+func TestDeleteKeepsTheReasonAsACommentAndLookupDeletedReadsItBack(t *testing.T) {
+	f := newUndoFixture(t)
+	for reason, want := range map[string]string{"dup": "dup", "": ""} {
+		uid := f.issue("Gone " + reason)
+		if got := f.deleteIssue(uid, reason); got.Err != nil {
+			t.Fatal(got.Err)
+		}
+		bodies := f.commentBodies(uid)
+		if want == "" && len(bodies) != 0 {
+			t.Errorf("no reason: comments %q, want none", bodies)
+		}
+		if want != "" && (len(bodies) != 1 || bodies[0] != "Deleted: dup") {
+			t.Errorf("comments %q, want the reason as a comment", bodies)
+		}
+		got := f.lookup(uid, 0, true)
+		if got.Err != nil || !got.Issue.Deleted {
+			t.Fatalf("lookup %+v", got)
+		}
+		if got.Issue.DeletedBy != "tester" || got.Issue.DeletedAt.IsZero() || got.Issue.Reason != want {
+			t.Errorf("reason %q: deleted by %q at %v with reason %q", reason, got.Issue.DeletedBy, got.Issue.DeletedAt, got.Issue.Reason)
+		}
+	}
+}
+
+func TestLookupDeletedReadsTheNewestDeletesReasonOnly(t *testing.T) {
+	f := newUndoFixture(t)
+	uid := f.issue("Twice")
+	if got := f.deleteIssue(uid, "first"); got.Err != nil {
+		t.Fatal(got.Err)
+	}
+	if got := f.restore(uid); got.Err != nil {
+		t.Fatal(got.Err)
+	}
+	// A comment by the same actor without the prefix is not a reason.
+	client, err := f.gateway.client(context.Background(), f.workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := "tester"
+	if _, err := client.CreateCommentWithResponse(context.Background(), &g.CreateCommentRequestOptions{
+		PathParams: &g.CreateCommentPath{ProjectID: fmt.Sprint(f.project.ID), Ref: uid},
+		Body:       &g.CreateCommentBody{Body: "plain remark", Actor: &actor},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.deleteIssue(uid, ""); got.Err != nil {
+		t.Fatal(got.Err)
+	}
+	if got := f.lookup(uid, 0, true); got.Err != nil || got.Issue.Reason != "" {
+		t.Errorf("lookup %+v, want the second delete's empty reason", got)
+	}
+}
+
+func TestAFailingReasonCommentSendsNoDelete(t *testing.T) {
+	f := newUndoFixture(t)
+	uid := f.issue("Keep me")
+	hook := func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/comments") {
+			return false
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"status":500,"error":{"code":"internal","message":"disk full"}}`))
+		return true
+	}
+	f.kata.intercept.Store(&hook)
+	got := f.deleteIssue(uid, "dup")
+	if got.Err == nil || got.Record.Entry != nil {
+		t.Fatalf("delete %+v, want the comment's error and no undo entry", got)
+	}
+	if !f.listed(uid) {
+		t.Error("the Issue was deleted although its reason could not be written")
+	}
+}
+
+func TestDeleteSendsKatasConfirmationHeaderAndTheActor(t *testing.T) {
 	f := newUndoFixture(t)
 	uid := f.issue("Delete me")
 	qualified := f.qualified(uid)
@@ -78,8 +172,8 @@ func TestDeleteSendsKatasConfirmationHeaderAndTheReason(t *testing.T) {
 	if confirm != "DELETE "+qualified {
 		t.Errorf("X-Kata-Confirm %q, want %q", confirm, "DELETE "+qualified)
 	}
-	if !strings.Contains(body, `"reason":"duplicate of another"`) || !strings.Contains(body, `"actor":"tester"`) {
-		t.Errorf("delete body %s, want the actor and the reason", body)
+	if strings.Contains(body, "reason") || !strings.Contains(body, `"actor":"tester"`) {
+		t.Errorf("delete body %s, want the actor and no reason", body)
 	}
 	if deleted.Record.Entry == nil || deleted.Record.Entry.Kind != model.UndoDelete {
 		t.Errorf("record %+v, want an undoable delete", deleted.Record)

@@ -29,6 +29,9 @@ func fieldLayer(m model.Model) tern.Nodes {
 		children = append(children,
 			toneText("found", ui.ToneAccent, found.QualifiedID+" "+found.Title),
 			toneText("found-state", tone, status))
+		if line := found.DeletionLine(m.Calendar.Stamp); line != "" {
+			children = append(children, toneText("found-deletion", ui.ToneMuted, line))
+		}
 	}
 	if m.FieldForm.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, m.FieldForm.Err.Error()))

@@ -25,6 +25,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Issues and Pages
 
 - `u` on the Attention Page restores the Issue the Pane just deleted, as `u` does on the other Pages, and the Page reads its requests again; it is offered there only while a delete is the newest change in the undo history.
+- The Menu's "Restore a deleted Issue" card shows who deleted the Issue, when, and the reason (or "no reason given"), read from the Project's event log.
 
 #### Jobs and worker
 
@@ -47,6 +48,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - An account whose credential is limited to one Issue is no longer offered `X` (the Delete card) or the Menu's "Restore a deleted Issue", both of which kata refuses to it; the Pane asks the daemon's auth capabilities when it connects and after a daemon switch, and offers both until the answer is in.
 
 ### Fixed
+
+#### Issues and Pages
+
+- The Delete card's reason is no longer lost: kata's delete records none, so the Pane adds it to the Issue as a `Deleted: <reason>` comment just before the delete, and deletes nothing when that comment fails.
 
 #### Tern window
 

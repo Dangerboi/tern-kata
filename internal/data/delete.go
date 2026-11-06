@@ -2,7 +2,9 @@ package data
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -13,12 +15,29 @@ import (
 // `kata delete --confirm` takes. kata refuses a delete without it (confirm_required) or with another (confirm_mismatch).
 func deleteConfirmation(qualifiedID string) string { return "DELETE " + qualifiedID }
 
-// deleteRaw soft-deletes the Issue with kata's own error and answer.
+// deleteReasonPrefix starts the comment that keeps a delete's reason on the Issue: kata's soft delete records no reason, so
+// the Pane writes it as a comment just before the delete and reads it back from the event log on a restore.
+const deleteReasonPrefix = "Deleted: "
+
+// commentDeleteReason adds the reason as a comment by the actor, before the delete. A failure stops the delete.
+func (c *Client) commentDeleteReason(ctx context.Context, cmd model.DeleteIssueCmd, reason string) error {
+	actor := cmd.Actor
+	_, err := c.CreateCommentWithResponse(ctx, &g.CreateCommentRequestOptions{
+		PathParams: &g.CreateCommentPath{ProjectID: fmt.Sprint(cmd.ProjectID), Ref: cmd.UID},
+		Body:       &g.CreateCommentBody{Body: deleteReasonPrefix + reason, Actor: &actor},
+	})
+	return err
+}
+
+// deleteRaw soft-deletes the Issue with kata's own error and answer. A non-empty reason is first written as a comment on the
+// Issue; if that fails nothing is deleted, and if the delete then fails the comment stays.
 func (c *Client) deleteRaw(ctx context.Context, cmd model.DeleteIssueCmd) (issueWrite, error) {
 	confirm := deleteConfirmation(cmd.QualifiedID)
 	body := g.DeleteIssueBody{Actor: cmd.Actor}
 	if reason := strings.TrimSpace(cmd.Reason); reason != "" {
-		body.Reason = &reason
+		if err := c.commentDeleteReason(ctx, cmd, reason); err != nil {
+			return issueWrite{}, err
+		}
 	}
 	r, err := c.DeleteIssueWithResponse(ctx, &g.DeleteIssueRequestOptions{
 		PathParams: &g.DeleteIssuePath{ProjectID: cmd.ProjectID, Ref: cmd.UID},
@@ -107,5 +126,73 @@ func (c *Client) LookupDeleted(ctx context.Context, cmd model.LookupDeleted) (mo
 		}
 	}
 	i := shown.Issue
-	return model.DeletedLooked{Ref: cmd.Typed, Issue: model.DeletedIssue{UID: i.UID, ProjectID: i.ProjectID, ShortID: i.ShortID, Title: i.Title, Deleted: i.DeletedAt != nil}}, nil
+	found := model.DeletedIssue{UID: i.UID, ProjectID: i.ProjectID, ShortID: i.ShortID, Title: i.Title, Deleted: i.DeletedAt != nil}
+	if i.DeletedAt != nil {
+		found.DeletedAt = *i.DeletedAt
+		c.describeDelete(ctx, &found)
+	}
+	return model.DeletedLooked{Ref: cmd.Typed, Issue: found}, nil
+}
+
+// deleteEventType and commentEventType are the types of the events kata records when it soft-deletes an Issue and when a
+// comment is added.
+const (
+	deleteEventType  = "issue.soft_deleted"
+	commentEventType = "issue.commented"
+)
+
+// describeDelete fills in who deleted the Issue, when and why from its newest delete event. kata's Issue history refuses a
+// deleted Issue (the events endpoint's issue filter answers a deleted Issue's UID with 404 issue_not_found, checked against kata 0.22),
+// so the whole Project event log is paged and filtered here. The reason is the "Deleted: " comment the same actor added most
+// recently before that delete (the comment event's payload carries its body). The restore does not depend on this: a failed
+// read leaves the Issue as the lookup found it, with the deleted time kata keeps on the Issue itself.
+func (c *Client) describeDelete(ctx context.Context, found *model.DeletedIssue) {
+	var after int64
+	limit := int64(1000)
+	var pending struct{ actor, reason string }
+	for {
+		r, err := c.PollProjectEventsWithResponse(ctx, &g.PollProjectEventsRequestOptions{
+			PathParams: &g.PollProjectEventsPath{ProjectID: found.ProjectID},
+			Query:      &g.PollProjectEventsQuery{AfterID: &after, Limit: &limit},
+		})
+		if err != nil || r.JSON200 == nil || r.JSON200.ResetRequired {
+			return
+		}
+		for _, e := range r.JSON200.Events {
+			if e.IssueUID == nil || *e.IssueUID != found.UID {
+				continue
+			}
+			switch e.Type {
+			case commentEventType:
+				if reason, ok := deleteReasonOf(e.Payload); ok {
+					pending.actor, pending.reason = e.Actor, reason
+				}
+			case deleteEventType:
+				found.DeletedBy, found.DeletedAt, found.Reason = e.Actor, e.CreatedAt, ""
+				if pending.actor == e.Actor {
+					found.Reason = pending.reason
+				}
+				pending.actor, pending.reason = "", ""
+			}
+		}
+		if int64(len(r.JSON200.Events)) < limit || r.JSON200.NextAfterID <= after {
+			return
+		}
+		after = r.JSON200.NextAfterID
+	}
+}
+
+// deleteReasonOf is the reason a comment event's payload holds when its body is a delete's "Deleted: " comment.
+func deleteReasonOf(payload json.RawMessage) (string, bool) {
+	var p struct {
+		Body string `json:"body"`
+	}
+	if json.Unmarshal(payload, &p) != nil {
+		return "", false
+	}
+	reason, ok := strings.CutPrefix(p.Body, deleteReasonPrefix)
+	if !ok {
+		return "", false
+	}
+	return strings.TrimSpace(reason), true
 }
