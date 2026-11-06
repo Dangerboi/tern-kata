@@ -84,6 +84,14 @@ func TestAnOmpAgentAppearingOnAnOpenCardStartsTheSessionReads(t *testing.T) {
 	}
 }
 
+func TestAnAgentStartedWhileTheCardIsOpenStartsTheSessionReads(t *testing.T) {
+	m, _ := press(cardModel(), "w")
+	_, cmds := model.Update(m, model.AgentStarted{Placement: model.AgentSplit, IssueRef: "work#a", Entry: entry("a", "1", 1)})
+	if read := sessionRead(t, cmds); read.After != 0 || len(read.Agents) != 1 || read.Agents[0].Block != "1" {
+		t.Errorf("read %+v, want one now for the started agent", read)
+	}
+}
+
 func TestARefreshWhileAReadIsOutAsksNoSecondRead(t *testing.T) {
 	m, cmds := press(cardModel(entry("a", "1", 1)), "w")
 	open := sessionRead(t, cmds)

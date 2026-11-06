@@ -695,6 +695,10 @@ func TestWorkerResumeByNameRefusesWhenTwoProjectsPauseTheSameName(t *testing.T) 
 	mine := f.kata.CreateJob(t, f.proj, workertest.Job{Name: "flaky", Prompt: "Review it.", Checkout: "repo"})
 	theirs := f.kata.CreateJob(t, other, workertest.Job{Name: "flaky", Prompt: "Review it.", Checkout: "repo"})
 	f.serve(t)
+	eventually(t, "the worker to admit for other", func() bool {
+		status, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}})
+		return err == nil && strings.Contains(status, "Project other: admitting")
+	})
 	for _, job := range []string{mine.UID, theirs.UID} {
 		if _, err := f.run(t, LaunchPlan{Subcommand: "run", TargetRef: job}); err != nil {
 			t.Fatal(err)

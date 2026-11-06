@@ -359,7 +359,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case ProjectLoaded:
 		return updateProject(m, msg)
 	case AgentStarted:
-		return agentStarted(m, msg), nil
+		return restartAgentSessions(agentStarted(m, msg), nil)
 	case AgentsPruned:
 		return agentsPruned(m, msg)
 	case FiltersSaved:
