@@ -22,6 +22,9 @@ const (
 type IssueAgent struct {
 	AgentEntry
 	State AgentStateWord
+	// Unread is the first line of the message the Issue's metadata holds at the agent's address, which the agent has not cleared;
+	// "" when the slot is empty, does not read as a request, or the agent has exited.
+	Unread string
 }
 
 // pressing ranks a state word: lower is more pressing. A word nobody knows ranks with "no state".
@@ -42,16 +45,26 @@ func pressing(state AgentStateWord) int {
 // IssueAgents lists the agents mapped to the Issue, in the mapping's order, each with its relayed state.
 func (m Model) IssueAgents(issueUID string) []IssueAgent {
 	var agents []IssueAgent
+	var issue *Issue
 	for _, entry := range m.AgentMapping {
 		if entry.IssueUID != issueUID {
 			continue
 		}
 		agent := IssueAgent{AgentEntry: entry}
+		if issue == nil {
+			issue = m.issueByUID(issueUID)
+		}
+		if issue != nil {
+			agent.Unread = unreadMessage(issue.Metadata, entry.Address)
+		}
 		for _, s := range m.Agents.States {
 			if s.Block == entry.Block {
 				agent.State = s.State
 				break
 			}
+		}
+		if agent.State == AgentExited {
+			agent.Unread = ""
 		}
 		agents = append(agents, agent)
 	}
@@ -71,6 +84,26 @@ func AgentStateWords(state AgentStateWord) (string, AgentTone) {
 		return "agent exited", AgentToneMuted
 	}
 	return "agent", AgentToneMuted
+}
+
+// UnreadMessageWords is what the Agent badge appends, after the state word, while an agent of the Issue has an unread message.
+const UnreadMessageWords = "message unread"
+
+// unreadMessage is the first line of the message the metadata holds at address as a request, "" when the address is empty, holds
+// nothing, or holds something that does not read as one (kata reads a slot without a sender or message as no request, and a reply
+// notice is not a message to act on). The metadata is what the Pane already loaded, so no read is made.
+func unreadMessage(metadata map[string]any, address string) string {
+	if address == "" {
+		return ""
+	}
+	slot, _ := metadata[NotificationKey(address)].(map[string]any)
+	from, _ := slot["from"].(string)
+	message, _ := slot["message"].(string)
+	if kind, _ := slot["kind"].(string); kind != "" || strings.TrimSpace(from) == "" {
+		return ""
+	}
+	first, _, _ := strings.Cut(strings.TrimSpace(message), "\n")
+	return strings.TrimSpace(first)
 }
 
 // AgentBadge is what the Agent badge says about an Issue's agents and the one agent a click on it focuses.
@@ -111,6 +144,10 @@ func badgeOf(agents []IssueAgent) (AgentBadge, bool) {
 	if len(agents) > 1 {
 		badge.Text += fmt.Sprintf(" · %d", len(agents))
 	}
+	if slices.ContainsFunc(agents, func(a IssueAgent) bool { return a.Unread != "" }) {
+		badge.Text += " · " + UnreadMessageWords
+		badge.Tone = AgentToneWarning
+	}
 	return badge, true
 }
 
@@ -131,9 +168,23 @@ func (m Model) AgentBadges() AgentBadgeIndex {
 			states[s.Block] = s.State
 		}
 	}
+	var metadata map[string]map[string]any
 	agents := make(map[string][]IssueAgent)
 	for _, entry := range m.AgentMapping {
-		agents[entry.IssueUID] = append(agents[entry.IssueUID], IssueAgent{AgentEntry: entry, State: states[entry.Block]})
+		agent := IssueAgent{AgentEntry: entry, State: states[entry.Block]}
+		if entry.Address != "" && agent.State != AgentExited {
+			if metadata == nil {
+				metadata = make(map[string]map[string]any, len(m.Issues)+1)
+				for _, issue := range m.Issues {
+					metadata[issue.UID] = issue.Metadata
+				}
+				if shown := m.shownIssue(); shown != nil {
+					metadata[shown.UID] = shown.Metadata
+				}
+			}
+			agent.Unread = unreadMessage(metadata[entry.IssueUID], entry.Address)
+		}
+		agents[entry.IssueUID] = append(agents[entry.IssueUID], agent)
 	}
 	return AgentBadgeIndex{agents: agents}
 }

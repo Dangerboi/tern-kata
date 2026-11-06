@@ -1,6 +1,7 @@
 package driver_test
 
 import (
+	"strings"
 	"reflect"
 	"testing"
 	"time"
@@ -108,5 +109,22 @@ func TestTheAgentCardWhereColumnNamesBackgroundAndOpenAgents(t *testing.T) {
 		if rows := rowsNamed(t, s.Model, view.AgentListID, want); len(rows) != 1 || rows[0] != view.AgentItemID(block) {
 			t.Errorf("rows reading %q: %v", want, rows)
 		}
+	}
+}
+
+func TestTheAgentRowShowsTheFirstLineOfAnUnclearedMessageAndLosesItWhenTheSlotClears(t *testing.T) {
+	entries := agentCardEntries("t1")
+	entries[0].Address = "me/omp-31"
+	m := model.Model{AgentMapping: entries, Issues: []model.Issue{{UID: "t1", Metadata: map[string]any{
+		model.NotificationKey("me/omp-31"): map[string]any{"from": "me", "message": "rebase first\nthen test"},
+	}}}}
+	m.Agents = model.AgentStatesRelay{Received: true, States: []model.AgentState{{Block: "31", State: "working"}}}
+	row := view.AgentRowText(m, m.IssueAgents("t1")[0])
+	if !strings.HasSuffix(row, " · message unread: rebase first") || !strings.HasPrefix(row, "agent working · started ") {
+		t.Errorf("row %q", row)
+	}
+	m.Issues[0].Metadata = map[string]any{}
+	if row := view.AgentRowText(m, m.IssueAgents("t1")[0]); strings.Contains(row, "unread") {
+		t.Errorf("cleared row %q", row)
 	}
 }
