@@ -53,7 +53,7 @@ The agent always runs through `tern-kata agent [--as <actor>] [--address-prefix 
 
 ### Agent badge
 
-The Agent badge on an Issue's list row, Lane row, Board card and detail shows "agent working", "agent waiting for you", "agent idle" or "agent exited", with " · N" when the Issue has several agents. On the Board card and in the detail, a click focuses the agent.
+The Agent badge on an Issue's list row, Lane row, Board card and detail shows "agent working", "agent waiting for you", "agent idle" or "agent exited", with " · N" when the Issue has several agents. While an agent of the Issue has a message at its address that it has not cleared, the badge appends " · message unread" in the warning tone ("agent working · message unread") and the Agent card row ends with "message unread: " and the first line of the message. It goes on the next read after the slot clears (the agent, or `kata notify --clear`) and when the agent exits. On the Board card and in the detail, a click focuses the agent.
 
 ### Background agents
 

@@ -1,6 +1,7 @@
 package model_test
 
 import (
+	"strings"
 	"reflect"
 	"testing"
 	"time"
@@ -149,3 +150,60 @@ func TestTheBadgeIndexAnswersAsTheBadgePerIssue(t *testing.T) {
 		t.Error("a badge without a mapping")
 	}
 }
+
+func unreadModel(address string, state string, slot any) model.Model {
+	e := entry("a", "1", 1)
+	e.Address = address
+	issue := model.Issue{UID: "a", Metadata: map[string]any{}}
+	if slot != nil {
+		issue.Metadata[model.NotificationKey(address)] = slot
+	}
+	m := model.Model{AgentMapping: []model.AgentEntry{e}, Issues: []model.Issue{issue}}
+	m.Agents = model.AgentStatesRelay{Received: true, States: []model.AgentState{{Block: "1", State: model.AgentStateWord(state)}}}
+	return m
+}
+
+func TestAnUnclearedMessageAtTheAgentAddressShowsOnTheBadgeAndTheRowAndClearingRemovesIt(t *testing.T) {
+	slot := map[string]any{"from": "me", "message": "  look at this\nand that"}
+	m := unreadModel("me/omp-1", "working", slot)
+	want := model.AgentBadge{Text: "agent working · message unread", Tone: model.AgentToneWarning, Block: "1"}
+	if got, _ := m.AgentBadgeFor("a"); got != want {
+		t.Errorf("badge %+v, want %+v", got, want)
+	}
+	if got, _ := m.AgentBadges().For("a"); got != want {
+		t.Errorf("indexed badge %+v, want %+v", got, want)
+	}
+	if agents := m.IssueAgents("a"); len(agents) != 1 || agents[0].Unread != "look at this" {
+		t.Errorf("agents %+v", agents)
+	}
+
+	cleared := unreadModel("me/omp-1", "working", nil)
+	plain := model.AgentBadge{Text: "agent working", Tone: model.AgentToneAccent, Block: "1"}
+	if got, _ := cleared.AgentBadgeFor("a"); got != plain {
+		t.Errorf("cleared badge %+v, want %+v", got, plain)
+	}
+	if got, _ := cleared.AgentBadges().For("a"); got != plain {
+		t.Errorf("cleared indexed badge %+v, want %+v", got, plain)
+	}
+	if agents := cleared.IssueAgents("a"); agents[0].Unread != "" {
+		t.Errorf("cleared agents %+v", agents)
+	}
+}
+
+func TestAMessageForAnotherAddressOrAnExitedAgentOrNotARequestShowsNothing(t *testing.T) {
+	for name, m := range map[string]model.Model{
+		"exited":        unreadModel("me/omp-1", "exited", map[string]any{"from": "me", "message": "hi"}),
+		"no sender":     unreadModel("me/omp-1", "working", map[string]any{"message": "hi"}),
+		"reply notice":  unreadModel("me/omp-1", "working", map[string]any{"from": "me", "message": "hi", "kind": "reply"}),
+		"no address":    unreadModel("", "working", map[string]any{"from": "me", "message": "hi"}),
+		"not an object": unreadModel("me/omp-1", "working", "hi"),
+	} {
+		for _, got := range []model.AgentBadge{first(m.AgentBadgeFor("a")), first(m.AgentBadges().For("a"))} {
+			if strings.Contains(got.Text, "unread") {
+				t.Errorf("%s: badge %q", name, got.Text)
+			}
+		}
+	}
+}
+
+func first(b model.AgentBadge, _ bool) model.AgentBadge { return b }

@@ -12,10 +12,14 @@ var AgentListID = LayerID(model.CardAgent) + ".list"
 // AgentItemID is the id of the Agent card's row for the agent block.
 func AgentItemID(block string) string { return itemID(AgentListID, block) }
 
-// AgentRowText is one agent's row: its state in the badge's words, when it started and where it is.
+// AgentRowText is one agent's row: its state in the badge's words, when it started, where it is and, while its address holds an uncleared message, that message's first line.
 func AgentRowText(m model.Model, a model.IssueAgent) string {
 	state, _ := model.AgentStateWords(a.State)
-	return state + " · started " + m.DetailTime(a.StartedAt) + " · " + model.AgentWhere(a.AgentEntry)
+	text := state + " · started " + m.DetailTime(a.StartedAt) + " · " + model.AgentWhere(a.AgentEntry)
+	if a.Unread != "" {
+		text += " · " + model.UnreadMessageWords + ": " + a.Unread
+	}
+	return text
 }
 
 func agentLayer(m model.Model) tern.Element {
