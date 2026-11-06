@@ -156,3 +156,13 @@ func TestAMessageGoesToTheNewestWaitingAgentElseTheNewest(t *testing.T) {
 		t.Errorf("with no agent waiting the message goes to %q, want the newest", got)
 	}
 }
+
+func TestAMessagePassesOverAnotherActorsNewerAgentOnTheSameIssue(t *testing.T) {
+	own, theirs := ompAgent, ompAgent
+	theirs.Block, theirs.Address, theirs.StartedAt = "40", "sam/omp-40", ompAgent.StartedAt.Add(time.Minute)
+	states := []model.AgentState{{Block: "31", State: model.AgentWaitingInput}, {Block: "40", State: model.AgentWaitingInput}}
+	out := step(t, messagePane(t, agentRaised(t), states, own, theirs), key("m"))
+	if m := out.State.Model; m.TopCard() != model.CardAgentMessage || m.AgentMessage.Address != "dana/omp-31" {
+		t.Errorf("card %v address %q notice %q, want the Message card for dana/omp-31", m.TopCard(), m.AgentMessage.Address, m.Notice)
+	}
+}

@@ -172,7 +172,7 @@ func (w *Worker) PausedJobs() []PausedJob {
 	var out []PausedJob
 	for _, ps := range w.projects {
 		w.mu.Lock()
-		resolved, uid, name := ps.resolved, ps.project.UID, ps.cfg.Name
+		resolved, uid, name, loaded := ps.resolved, ps.project.UID, ps.cfg.Name, ps.jobs != nil
 		names := map[string]string{}
 		for id, job := range ps.jobs {
 			names[id] = job.Name
@@ -194,7 +194,7 @@ func (w *Worker) PausedJobs() []PausedJob {
 			if err != nil || !s.Paused {
 				continue
 			}
-			if _, live := names[jobUID]; !live && len(names) > 0 {
+			if _, live := names[jobUID]; !live && loaded {
 				continue // the job is gone or archived: nothing to resume
 			}
 			out = append(out, PausedJob{Project: name, JobUID: jobUID, Name: cmp.Or(names[jobUID], s.Name), Failed: s.Failed, Since: s.Since})

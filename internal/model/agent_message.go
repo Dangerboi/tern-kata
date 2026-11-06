@@ -109,6 +109,9 @@ func (m Model) messageTarget(request AttentionRequest) (AgentEntry, string) {
 			if e.IssueUID != request.IssueUID || e.Teammate != request.Slot.Teammate {
 				continue
 			}
+			if e.Address != "" && addressActor(e.Address) != m.Actor {
+				continue
+			}
 			waits := agentWaiting(m.Agents.States, e.Block)
 			if !found || waits && !waiting || waits == waiting && e.StartedAt.After(target.StartedAt) {
 				target, found, waiting = e, true, waits
@@ -134,10 +137,19 @@ func (m Model) agentMessageRefusal(e AgentEntry) string {
 		return AgentNotOmpRefusal
 	case e.Address == "":
 		return AgentWithoutAddressRefusal
-	case !strings.HasPrefix(e.Address, m.Actor+"/"):
+	case addressActor(e.Address) != m.Actor:
 		return AgentOtherActorRefusal
 	}
 	return ""
+}
+
+// addressActor is the actor an Agent address names: everything before its last "/", "" when it has none.
+func addressActor(address string) string {
+	i := strings.LastIndex(address, "/")
+	if i < 0 {
+		return ""
+	}
+	return address[:i]
 }
 
 // openAgentCardMessage is `m` (or `r`, when picking) on the Agent card: the Message card for the selected row's agent, wherever
