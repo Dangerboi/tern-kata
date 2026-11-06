@@ -66,7 +66,7 @@ kata tui has no key for moving an Issue to another Project; kata web and the CLI
 
 ## Deleting and restoring an Issue
 
-kata tui has no key for deleting an Issue; the CLI does. `X` in tern-kata opens the Delete card, which sends kata's delete with the confirmation `kata delete` asks for: the typed qualified id, as `DELETE <project>#<id>` in the confirmation header. The Menu's **Restore a deleted Issue** brings one back. See [Deleting and restoring an Issue](pages-and-board.md#deleting-and-restoring-an-issue). Purge stays in the CLI.
+kata tui's `X` (in the list, the detail, the Inbox and a detail opened from Attention) asks you to type `DELETE <project>#<id>`, and its `u` restores the Issue. tern-kata's `X` opens the Delete card, which accepts either `<project>#<id>` or `DELETE <project>#<id>`, has an optional reason field, and also works on the Board and in the Lane view. It sends kata's delete with `DELETE <project>#<id>` in the confirmation header. The Menu's **Restore a deleted Issue** brings back an Issue deleted earlier or elsewhere. See [Deleting and restoring an Issue](pages-and-board.md#deleting-and-restoring-an-issue). Purge stays in the CLI.
 
 ## Closing with an attachment
 

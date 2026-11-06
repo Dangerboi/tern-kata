@@ -23,7 +23,7 @@ func deleteLayer(m model.Model) tern.Element {
 		}
 		label, placeholder, text := "Reason (optional)", "none", form.Reason
 		if name == model.DeleteID {
-			label, placeholder, text = "Type "+form.QualifiedID+" to confirm", form.QualifiedID, form.ID
+			label, placeholder, text = "Type "+form.QualifiedID+" or DELETE "+form.QualifiedID+" to confirm", form.QualifiedID, form.ID
 		}
 		children = append(children,
 			toneText(string(name)+"-label", tone, label),

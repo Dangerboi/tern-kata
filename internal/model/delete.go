@@ -86,7 +86,7 @@ func openDelete(m Model) Model {
 	return m
 }
 
-// submitDelete sends the delete once the typed id matches the Issue's qualified id.
+// submitDelete sends the delete once the typed text is the Issue's qualified id or kata tui's `DELETE <qualified id>`.
 func submitDelete(m Model) (Model, []Cmd) {
 	f := &m.DeleteForm
 	if f.Saving {
@@ -96,8 +96,8 @@ func submitDelete(m Model) (Model, []Cmd) {
 		f.Err = errors.New("Daemon disconnected; reconnect before deleting.")
 		return m, nil
 	}
-	if strings.TrimSpace(f.ID) != f.QualifiedID {
-		f.Err = fmt.Errorf("Type %s to confirm the delete.", f.QualifiedID)
+	if typed := strings.TrimSpace(f.ID); typed != f.QualifiedID && typed != "DELETE "+f.QualifiedID {
+		f.Err = fmt.Errorf("Type %s or DELETE %s to confirm the delete.", f.QualifiedID, f.QualifiedID)
 		return m, nil
 	}
 	f.Saving, f.Err = true, nil

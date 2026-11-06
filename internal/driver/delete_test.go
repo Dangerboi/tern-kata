@@ -82,24 +82,26 @@ func TestXOpensTheDeleteCardInEveryModeNamingTheIssueAndSayingItCanBeRestored(t 
 
 func TestTheDeleteCardRefusesUntilTheTypedIdMatches(t *testing.T) {
 	s := deleting(t)
-	for _, wrong := range []string{"", "work#", "work#b", "a", "WORK#A"} {
+	for _, wrong := range []string{"", "work#", "work#b", "a", "WORK#A", "delete work#a", "DELETE work#b", "DELETEwork#a", "DELETE"} {
 		typedWrong := typed(t, s, wrong)
 		out := step(t, typedWrong, key("enter"))
 		if len(theDeletes(out.Cmds)) != 0 {
 			t.Fatalf("typed %q and Enter sent %#v", wrong, out.Cmds)
 		}
-		if got := deleteText(t, out.State, "error"); got != "Type work#a to confirm the delete." {
+		if got := deleteText(t, out.State, "error"); got != "Type work#a or DELETE work#a to confirm the delete." {
 			t.Errorf("typed %q: the card says %q", wrong, got)
 		}
 		if out.State.Model.TopCard() != model.CardDelete {
 			t.Fatalf("typed %q: the card closed", wrong)
 		}
 	}
-	out := step(t, typed(t, s, "work#a"), key("enter"))
 	want := model.DeleteIssueCmd{Workspace: "/repo", UID: "a", ProjectID: 7, QualifiedID: "work#a"}
-	if got := oneDelete(t, out.Cmds); got != want {
-		t.Fatalf("delete %+v, want %+v", got, want)
+	for _, right := range []string{"work#a", " work#a ", "DELETE work#a", "  DELETE work#a  "} {
+		if got := oneDelete(t, step(t, typed(t, s, right), key("enter")).Cmds); got != want {
+			t.Fatalf("typed %q: delete %+v, want %+v", right, got, want)
+		}
 	}
+	out := step(t, typed(t, s, "work#a"), key("enter"))
 	if !out.State.Model.DeleteForm.Saving {
 		t.Fatal("the card does not wait for kata")
 	}
