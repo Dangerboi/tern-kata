@@ -9,6 +9,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Agents
 
 - The Agent badge appends " · message unread" in the warning tone, and the Agent card row shows "message unread: " and the message's first line, while an agent has a message at its address that it has not cleared.
+- `m` on the Agent card messages the selected agent, whether it is working, idle or waiting and wherever its block is, including a Background agent, which stays in the hidden session. It is off, with the reason, for an exited agent and one that is not omp.
 
 ### Changed
 

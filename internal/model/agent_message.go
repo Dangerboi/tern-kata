@@ -116,14 +116,40 @@ func (m Model) messageTarget(request AttentionRequest) (AgentEntry, string) {
 		return AgentEntry{}, AgentExitedRefusal
 	case !found:
 		return AgentEntry{}, NoAgentRaisedRefusal
-	case agentExited(m.Agents.States, target.Block):
-		return target, AgentExitedRefusal
-	case target.NoAddress == AgentNotOmp:
-		return target, AgentNotOmpRefusal
-	case target.Address == "":
-		return target, AgentWithoutAddressRefusal
 	}
-	return target, ""
+	return target, m.agentMessageRefusal(target)
+}
+
+// agentMessageRefusal is why a message reaches no omp agent e, "" when it can: the agent exited, it is not omp, or it was started
+// before it had an Agent address.
+func (m Model) agentMessageRefusal(e AgentEntry) string {
+	switch {
+	case agentExited(m.Agents.States, e.Block):
+		return AgentExitedRefusal
+	case e.NoAddress == AgentNotOmp:
+		return AgentNotOmpRefusal
+	case e.Address == "":
+		return AgentWithoutAddressRefusal
+	}
+	return ""
+}
+
+// openAgentCardMessage is `m` on the Agent card: the Message card for the selected row's agent, wherever its block is, or the
+// reason there is none in a Notice. The Agent card closes as it does when going to an agent.
+func openAgentCardMessage(m Model) (Model, []Cmd) {
+	if reason := m.AgentCardUnavailable(AgentCardMessage); reason != "" {
+		m.Notice = reason
+		return m, nil
+	}
+	e := m.AgentCardRows()[m.AgentCardCursor()].AgentEntry
+	card := m.AgentCard
+	projectID := e.ProjectID
+	if issue := m.issueByUID(card.IssueUID); issue != nil && projectID == 0 {
+		projectID = issue.ProjectID
+	}
+	m.AgentCard = AgentCardState{}
+	m.AgentMessage = AgentMessageState{Open: true, IssueUID: card.IssueUID, IssueRef: card.IssueRef, ProjectID: projectID, Agent: e.Teammate, Address: e.Address}
+	return m, nil
 }
 
 // openAgentMessage is `m`: the Message card for the agent behind the selected request, or the reason there is none in a Notice.
