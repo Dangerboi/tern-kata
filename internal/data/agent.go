@@ -384,13 +384,14 @@ func (g *Gateway) pruneAgents(ctx context.Context, cmd model.PruneAgents) model.
 	return model.AgentsPruned{Seq: cmd.Seq, Agents: agents, Err: cmp.Or(askErr, err)}
 }
 
-// removePrompt removes a prompt file and the token, DSN and env files beside it, if the agent was started with them.
+// removePrompt removes a prompt file and the token, DSN, env and session path files beside it, if the agent was started with them.
 func removePrompt(path string) {
 	if path != "" {
 		_ = os.Remove(path)
 		_ = os.Remove(path + agentTokenSuffix)
 		_ = os.Remove(path + agentDSNSuffix)
 		_ = os.Remove(path + agentEnvSuffix)
+		_ = os.Remove(path + AgentSessionSuffix)
 	}
 }
 

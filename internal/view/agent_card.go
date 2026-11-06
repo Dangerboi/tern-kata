@@ -1,6 +1,8 @@
 package view
 
 import (
+	"strconv"
+
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
@@ -36,15 +38,23 @@ func agentLayer(m model.Model) tern.Element {
 	if len(rows) == 0 {
 		list = ui.Text{Common: ui.Common{Key: "none", Tone: ui.ToneMuted}, Text: "No agents on this Issue yet."}
 	}
-	children := []tern.Element{
-		list,
+	children := []tern.Element{list}
+	if len(rows) > 0 {
+		for i, fact := range m.AgentFacts(rows[m.AgentCardCursor()].Block) {
+			tone := ui.ToneNeutral
+			if fact.Muted {
+				tone = ui.ToneMuted
+			}
+			children = append(children, toneText("fact-"+strconv.Itoa(i), tone, fact.Text))
+		}
+	}
+	children = append(children,
 		buttonRow(
 			unavailable(cardButton("go", model.ModeAgentCard, model.AgentCardGo, "Go to agent", true), m.AgentCardUnavailable(model.AgentCardGo)),
 			unavailable(cardButton("split", model.ModeAgentCard, model.AgentCardSplit, "New in a split", false), m.AgentCardUnavailable(model.AgentCardSplit)),
 			unavailable(cardButton("tab", model.ModeAgentCard, model.AgentCardTab, "New in a tab", false), m.AgentCardUnavailable(model.AgentCardTab)),
 			unavailable(cardButton("new-background", model.ModeAgentCard, model.AgentCardNewBackground, "New in the background", false), m.AgentCardUnavailable(model.AgentCardNewBackground)),
 			unavailable(cardButton("background", model.ModeAgentCard, model.AgentCardBackground, "Send to background", false), m.AgentCardUnavailable(model.AgentCardBackground)),
-			cardButton("cancel", model.ModeAgentCard, model.AgentCardCancel, "Cancel", false)),
-	}
+			cardButton("cancel", model.ModeAgentCard, model.AgentCardCancel, "Cancel", false)))
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgent)}, Head: ui.T("Agents"), Meta: refMeta(card.IssueRef), Icon: ui.IconUsers, Modal: true, Size: ui.SizeLG}, children))
 }

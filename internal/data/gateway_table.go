@@ -164,6 +164,9 @@ func init() {
 	local(func(g *Gateway, ctx context.Context, cmd model.RefreshAgents) model.Msg {
 		return g.refreshAgents(ctx, cmd)
 	}, nil, nil)
+	local(func(g *Gateway, ctx context.Context, cmd model.ReadAgentSessions) model.Msg {
+		return g.readAgentSessions(ctx, cmd)
+	}, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.OpenAgent) model.Msg { return g.openAgent(ctx, cmd) }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.SetAgentOpen) model.Msg {
 		return g.setAgentOpenFlag(cmd)

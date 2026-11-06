@@ -6,7 +6,7 @@ Three things help coding agents work with tern-kata: the Agent card, which start
 
 ### The Agent card and starting agents
 
-`w` on the selected Issue (list, Board, Lane view or Issue detail) opens the Agent card, with or without agents. It lists the Issue's agents with state, start time and where each is (split, tab, background or open). `enter` goes to the selected one, `b` sends it to the background, `esc` cancels.
+`w` on the selected Issue (list, Board, Lane view or Issue detail) opens the Agent card, with or without agents. It lists the Issue's agents with state, start time and where each is (split, tab, background or open). Under the list it shows what the selected omp agent is doing: its model, the number of tool calls so far, the tool it is running now, its cost so far and the first line of its last message. The model, calls, tool and cost come from the end of the agent's omp session file (the last 1 MiB; on a longer session the count reads "at least" and the cost starts with `~`), read when the card opens and every 2 seconds while it stays open. An agent that is not omp, or whose session file is not there yet, shows the reason in muted words. `enter` goes to the selected one, `b` sends it to the background, `esc` cancels.
 
 ![The Agent card for "Add Apple Pay to checkout" with no agents yet and its buttons: New in a split (S), New in a tab (T), New in the background (G), plus Go to agent, Send to background and Cancel](../images/agent-card.png)
 

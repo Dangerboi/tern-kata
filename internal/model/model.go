@@ -84,6 +84,8 @@ type Model struct {
 	RevokeCard   RevokeState
 	// AgentCard is the Agent card, which lists an Issue's agents.
 	AgentCard      AgentCardState
+	// AgentSessions is what the Agent card read of the agents' session files.
+	AgentSessions agentSessionState
 	RecurrenceForm RecurrenceFormState
 	JobForm        JobFormState
 	// Backfill is the card that asks whether the runs a native job missed are created before the job runs again.
@@ -435,6 +437,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m, raised := raiseAgentAttention(m, true)
 		m, ended := closeFinishedAgents(m, closeOnRelay)
 		return m, append(append(append(append(cmds, back...), flagged...), raised...), ended...)
+	case AgentSessionsRead:
+		return agentSessionsRead(m, msg)
 	case AgentIssueRead:
 		return agentIssueRead(m, msg)
 	case AgentClosed:
