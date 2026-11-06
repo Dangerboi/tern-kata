@@ -11,11 +11,15 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The Agent badge appends " · message unread" in the warning tone, and the Agent card row shows "message unread: " and the message's first line, while an agent has a message at its address that it has not cleared.
 - `m` on the Agent card messages the selected agent, whether it is working, idle or waiting and wherever its block is, including a Background agent, which stays in the hidden session.
   - It is off, with the reason, for an exited agent, one that is not omp, one started before agents had an address, and one another actor started.
-- The Agent card shows, for the selected omp agent, its model, tool calls so far, the tool it is running now, its cost so far and the first line of its last message, read while the card is open (every 2 seconds) from the end of the agent's session file; a non-omp agent or a session with no file says why in a muted line.
+- The Agent card shows, for the selected omp agent, its model, tool calls so far, the tool it is running now, its cost so far and the first line of its last message.
+  - It reads them from the end of the agent's session file while the card is open, every 2 seconds.
+  - A non-omp agent or a session with no file says why in a muted line.
   - A session file longer than the part read (1 MiB) marks the count "at least" and the cost approximate (`~$`).
 - `i` on the Agent card interrupts the selected agent's current turn and keeps its block.
 - `x` on the Agent card stops the selected agent after asking: it closes the block, removes its entry and prompt file, and gives the Issue the hand-off an exiting agent gets.
-- `r` on the Attention Page and on the Agent card opens a picker of three quick replies to the agent, sent with `1`, `2` or `3` as a typed message would be, with the same refusals and the same question before replacing an unread message.
+  - While the Issue is open, the Pane that stopped the agent also sets `work.attention` to `needs-human` with a reason in `work.attention_msg` and swaps `ready-for-agent` for `ready-for-human` when the Issue has it, since a stopped agent cannot write them itself.
+- `r` on the Attention Page and on the Agent card opens a picker of three quick replies to the agent, sent with `1`, `2` or `3` as a typed message would be.
+  - It has the same refusals as `m` and asks the same question before replacing an unread message.
   - The replies are "continue", "wrap up: commit what you have and comment your status" and "commit and close if the acceptance criteria hold".
 
 #### Jobs and worker
@@ -25,6 +29,11 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - The pause lives in the worker's own state, so kata's job is not changed and other machines keep their own counts. `tern-kata worker status` and the Jobs Page name it ("paused: failed runs"); `u` on the Jobs Page, or `tern-kata worker resume <job>` on a host with no Pane, resumes the job.
 
 ### Changed
+
+#### Agents
+
+- `m` on the Attention Page messages the agent this actor started and passes over another actor's agent with the same name on the Issue.
+  - Released 0.9.0 sent the message to the newest agent of that name, whose extension dropped it when another actor had started it.
 
 #### Issues and Pages
 

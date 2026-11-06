@@ -168,6 +168,9 @@ func init() {
 	local(func(g *Gateway, ctx context.Context, cmd model.ReadAgentSessions) model.Msg {
 		return g.readAgentSessions(ctx, cmd)
 	}, nil, nil)
+	local(func(g *Gateway, ctx context.Context, cmd model.WaitAgentSessions) model.Msg {
+		return g.waitAgentSessions(ctx, cmd)
+	}, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.OpenAgent) model.Msg { return g.openAgent(ctx, cmd) }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.SetAgentOpen) model.Msg {
 		return g.setAgentOpenFlag(cmd)
@@ -175,6 +178,13 @@ func init() {
 	local(func(g *Gateway, ctx context.Context, cmd model.SendAgentBack) model.Msg {
 		return g.sendAgentBack(ctx, cmd)
 	}, nil, nil)
+	daemonCall(
+		func(cmd model.HandOffAgent) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.HandOffAgent) (model.Msg, error) {
+			return ok(model.AgentHandedOff{UID: cmd.UID}, c.HandOffAgent(ctx, cmd))
+		},
+		func(cmd model.HandOffAgent, err error) model.Msg { return model.AgentHandedOff{UID: cmd.UID, Err: err} },
+		nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.CloseAgent) model.Msg { return g.closeAgent(ctx, cmd) }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.StopAgent) model.Msg { return g.stopAgent(ctx, cmd) }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.InterruptAgent) model.Msg {

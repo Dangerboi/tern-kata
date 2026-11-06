@@ -117,7 +117,7 @@ func run() error {
 		return usageError{fmt.Errorf("%s: only kata tui takes these, and inside Tern tern-kata opens a Pane instead", strings.Join(plan.TUIArgs, " "))}
 	}
 	// Pane contract with window.luau: this title identifies a kata Pane.
-	if _, err := fmt.Fprint(os.Stdout, "\x1b]0;tern-kata\x07"); err != nil {
+	if _, err := fmt.Fprint(os.Stdout, "\x1b]0;"+data.PaneTitle+"\x07"); err != nil {
 		session.Close()
 		return err
 	}

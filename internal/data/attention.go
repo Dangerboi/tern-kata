@@ -86,6 +86,29 @@ func (c *Client) RaiseAgentAttention(ctx context.Context, cmd model.RaiseAgentAt
 	return c.writeAttentionSlot(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, model.NotificationKey(cmd.Address), value)
 }
 
+// HandOffAgent writes what an agent that stops without closing its Issue writes: work.attention = needs-human and work.attention_msg
+// = the reason, then, when asked, the label ready-for-agent removed and ready-for-human added, as the Pane's actor. It stops at the
+// first write that fails.
+func (c *Client) HandOffAgent(ctx context.Context, cmd model.HandOffAgent) error {
+	for _, kv := range [][2]string{{"work.attention", "needs-human"}, {"work.attention_msg", cmd.Message}} {
+		if err := c.writeMetadataKey(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, kv[0], kv[1]); err != nil {
+			return daemonError(err)
+		}
+	}
+	if !cmd.SwapLabels {
+		return nil
+	}
+	for _, step := range []struct {
+		action model.Action
+		label  string
+	}{{model.RemoveLabelAction, "ready-for-agent"}, {model.AddLabelAction, "ready-for-human"}} {
+		if _, err := c.writeField(ctx, model.WriteField{ProjectID: cmd.ProjectID, UID: cmd.UID, Actor: cmd.Actor, Action: step.action, Value: step.label}); err != nil {
+			return daemonError(err)
+		}
+	}
+	return nil
+}
+
 // ClearAgentAttention removes the request for cmd.Address on an Issue as `kata notify --clear` does, but only while it still
 // reads as cmd.Actor wrote it (whatever its teammate) with one of cmd.Messages, and guarded on the value read, so a request someone else wrote since survives. A
 // slot that is gone, someone else's, or rewritten between the read and the write counts as cleared.

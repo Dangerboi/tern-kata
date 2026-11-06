@@ -1,6 +1,6 @@
 --!strict
 
--- Tests of the host half's rule for dropping the PowerShell profile, on plain data, outside Tern: `luau test/panecommands_test.luau`.
+-- Tests of the host half's rule for dropping the PowerShell profile and of the interrupt-request title protocol, on plain data, outside Tern: `luau test/panecommands_test.luau`.
 
 local panecommands = require("../panecommands")
 

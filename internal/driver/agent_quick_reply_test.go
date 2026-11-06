@@ -10,7 +10,7 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
-// quickReplyTexts are the three replies in key order, as the ticket words them.
+// quickReplyTexts are the three replies in key order.
 var quickReplyTexts = map[string]string{
 	"1": "continue",
 	"2": "wrap up: commit what you have and comment your status",

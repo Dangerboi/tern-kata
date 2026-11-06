@@ -24,32 +24,61 @@ func TestTheAgentCardReadsSessionsWhenItOpensAndEveryTwoSecondsWhileOpen(t *test
 	m, cmds := press(cardModel(first, notOmp, entry("other", "3", 3)), "w")
 
 	open := sessionRead(t, cmds)
-	if open.After != 0 {
-		t.Errorf("the read at opening waits %v; want none", open.After)
-	}
 	wantAsks := []model.AgentSessionAsk{{Block: "1", PromptFile: "/state/agent-prompts/prompt-1.md"}}
 	if !reflect.DeepEqual(open.Agents, wantAsks) {
 		t.Errorf("asked %#v, want the card's omp agents %#v", open.Agents, wantAsks)
 	}
 
 	m, cmds = model.Update(m, model.AgentSessionsRead{Request: open.Request, Sessions: []model.AgentSessionFacts{{Block: "1", Model: "m"}}})
+	if want := []model.Cmd{model.WaitAgentSessions{Request: open.Request}}; !reflect.DeepEqual(cmds, want) {
+		t.Errorf("cmds %#v, want the pause %v", cmds, want)
+	}
+	m, cmds = model.Update(m, model.AgentSessionTick{Request: open.Request})
 	tick := sessionRead(t, cmds)
-	if tick.After != model.AgentSessionEvery || tick.Request == open.Request {
-		t.Errorf("tick %+v, want a new read after %v", tick, model.AgentSessionEvery)
+	if tick.Request == open.Request {
+		t.Errorf("tick %+v, want a new read", tick)
 	}
 	if got, ok := m.AgentSessionFor("1"); !ok || got.Model != "m" {
 		t.Errorf("session %+v, %v; want the answer kept", got, ok)
 	}
 
 	m, cmds = model.Update(m, model.AgentSessionsRead{Request: tick.Request})
-	if _, again := agentCmd[model.ReadAgentSessions](cmds); !again {
-		t.Errorf("an open card stopped reading: %#v", cmds)
+	if _, again := agentCmd[model.WaitAgentSessions](cmds); !again {
+		t.Errorf("an open card stopped waiting for the next read: %#v", cmds)
 	}
 
 	closed, _ := press(m, "escape")
-	_, cmds = model.Update(closed, model.AgentSessionsRead{Request: sessionRead(t, cmds).Request})
+	_, cmds = model.Update(closed, model.AgentSessionsRead{Request: tick.Request})
 	if len(cmds) != 0 {
-		t.Errorf("a closed card read again: %#v", cmds)
+		t.Errorf("a closed card waited for another read: %#v", cmds)
+	}
+}
+
+func TestACardClosedDuringThePauseReadsNothingWhenItEnds(t *testing.T) {
+	m, cmds := press(cardModel(entry("a", "1", 1)), "w")
+	open := sessionRead(t, cmds)
+	m, cmds = model.Update(m, model.AgentSessionsRead{Request: open.Request})
+	if _, ok := agentCmd[model.WaitAgentSessions](cmds); !ok {
+		t.Fatalf("no pause in %#v", cmds)
+	}
+	closed, _ := press(m, "escape")
+	closed, cmds = model.Update(closed, model.AgentSessionTick{Request: open.Request})
+	if len(cmds) != 0 {
+		t.Errorf("a closed card read after the pause: %#v", cmds)
+	}
+	// The loop ended, so reopening starts a fresh one.
+	_, cmds = press(closed, "w")
+	sessionRead(t, cmds)
+}
+
+func TestATickOfASupersededLoopReadsNothing(t *testing.T) {
+	m, cmds := press(cardModel(entry("a", "1", 1)), "w")
+	stale := sessionRead(t, cmds)
+	m, _ = press(m, "escape")
+	m, cmds = press(m, "w")
+	sessionRead(t, cmds)
+	if _, cmds = model.Update(m, model.AgentSessionTick{Request: stale.Request}); len(cmds) != 0 {
+		t.Errorf("a stale tick asked: %#v", cmds)
 	}
 }
 
@@ -64,7 +93,11 @@ func TestAnAnswerToAReadBeforeTheCardWasReopenedStartsNoSecondChain(t *testing.T
 	if len(cmds) != 0 {
 		t.Errorf("the superseded read's answer asked for more: %#v", cmds)
 	}
-	_, cmds = model.Update(m, model.AgentSessionsRead{Request: fresh.Request})
+	m, cmds = model.Update(m, model.AgentSessionsRead{Request: fresh.Request})
+	if want := []model.Cmd{model.WaitAgentSessions{Request: fresh.Request}}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("the fresh read's answer gave %#v, want %v", cmds, want)
+	}
+	_, cmds = model.Update(m, model.AgentSessionTick{Request: fresh.Request})
 	sessionRead(t, cmds)
 }
 
@@ -75,19 +108,21 @@ func TestAnOmpAgentAppearingOnAnOpenCardStartsTheSessionReads(t *testing.T) {
 	}
 	m, cmds = model.Update(m, model.AgentsRefreshed{Agents: []model.AgentEntry{entry("a", "1", 1)}})
 	read := sessionRead(t, cmds)
-	if read.After != 0 || len(read.Agents) != 1 || read.Agents[0].Block != "1" {
+	if len(read.Agents) != 1 || read.Agents[0].Block != "1" {
 		t.Errorf("read %+v, want one now for block 1", read)
 	}
-	_, cmds = model.Update(m, model.AgentSessionsRead{Request: read.Request})
-	if tick := sessionRead(t, cmds); tick.After != model.AgentSessionEvery {
-		t.Errorf("the loop did not go on: %+v", tick)
+	m, cmds = model.Update(m, model.AgentSessionsRead{Request: read.Request})
+	if _, ok := agentCmd[model.WaitAgentSessions](cmds); !ok {
+		t.Fatalf("the loop did not go on: %#v", cmds)
 	}
+	_, cmds = model.Update(m, model.AgentSessionTick{Request: read.Request})
+	sessionRead(t, cmds)
 }
 
 func TestAnAgentStartedWhileTheCardIsOpenStartsTheSessionReads(t *testing.T) {
 	m, _ := press(cardModel(), "w")
 	_, cmds := model.Update(m, model.AgentStarted{Placement: model.AgentSplit, IssueRef: "work#a", Entry: entry("a", "1", 1)})
-	if read := sessionRead(t, cmds); read.After != 0 || len(read.Agents) != 1 || read.Agents[0].Block != "1" {
+	if read := sessionRead(t, cmds); len(read.Agents) != 1 || read.Agents[0].Block != "1" {
 		t.Errorf("read %+v, want one now for the started agent", read)
 	}
 }
@@ -99,7 +134,8 @@ func TestARefreshWhileAReadIsOutAsksNoSecondRead(t *testing.T) {
 	if _, ok := agentCmd[model.ReadAgentSessions](cmds); ok {
 		t.Fatalf("a refresh asked a second read: %#v", cmds)
 	}
-	_, cmds = model.Update(m, model.AgentSessionsRead{Request: open.Request})
+	m, _ = model.Update(m, model.AgentSessionsRead{Request: open.Request})
+	_, cmds = model.Update(m, model.AgentSessionTick{Request: open.Request})
 	if tick := sessionRead(t, cmds); len(tick.Agents) != 2 {
 		t.Errorf("the next read %+v, want both agents", tick)
 	}

@@ -304,28 +304,32 @@ func (m Model) workerProjectName() string {
 	return m.Project.Name
 }
 
+// workerProject is this Pane's Project in this machine's worker status, nil when the worker does not run or does not serve it.
+func (m Model) workerProject() *WorkerProject {
+	if !m.Worker.Running {
+		return nil
+	}
+	name := m.workerProjectName()
+	for i := range m.Worker.Projects {
+		if m.Worker.Projects[i].Name == name {
+			return &m.Worker.Projects[i]
+		}
+	}
+	return nil
+}
+
 // workerUnsupported is why this machine's worker sets the job aside, empty when it runs it or does not serve the Project.
 func (m Model) workerUnsupported(uid string) string {
-	if !m.Worker.Running {
-		return ""
-	}
-	for _, p := range m.Worker.Projects {
-		if p.Name == m.workerProjectName() {
-			return p.Unsupported[uid]
-		}
+	if p := m.workerProject(); p != nil {
+		return p.Unsupported[uid]
 	}
 	return ""
 }
 
-// workerPaused is how many failed runs in a row made this machine's worker pause the job, 0 when it did not or does not serve the Project.
-func (m Model) workerPaused(uid string) int {
-	if !m.Worker.Running {
-		return 0
-	}
-	for _, p := range m.Worker.Projects {
-		if p.Name == m.workerProjectName() {
-			return p.Paused[uid]
-		}
+// workerPausedJobs is how many failed runs in a row made this machine's worker pause the job, 0 when it did not or does not serve the Project.
+func (m Model) workerPausedJobs(uid string) int {
+	if p := m.workerProject(); p != nil {
+		return p.Paused[uid]
 	}
 	return 0
 }
@@ -333,7 +337,7 @@ func (m Model) workerPaused(uid string) int {
 // JobPause is why the job is not running as the Jobs Page words it: kata's own pause reason, else this machine's worker pausing
 // it after repeated failed runs.
 func (m Model) JobPause(job CronJob) PauseReason {
-	if pause := job.Pause(m.Jobs.ProjectArchived); pause != NotPaused || m.workerPaused(job.UID) == 0 {
+	if pause := job.Pause(m.Jobs.ProjectArchived); pause != NotPaused || m.workerPausedJobs(job.UID) == 0 {
 		return pause
 	}
 	return PauseFailedRuns
@@ -341,7 +345,7 @@ func (m Model) JobPause(job CronJob) PauseReason {
 
 // workerPauseWords is the worker's pause of the job in a sentence, empty when it holds none.
 func (m Model) workerPauseWords(uid string) string {
-	n := m.workerPaused(uid)
+	n := m.workerPausedJobs(uid)
 	if n == 0 {
 		return ""
 	}
@@ -450,13 +454,13 @@ type JobResumed struct {
 
 func (JobResumed) msg() {}
 
-// resumeFailingJob is u on the Jobs Page: the worker admits the selected job's runs again and counts failures from none.
-func resumeFailingJob(m Model) (Model, []Cmd) {
+// resumePausedJob is u on the Jobs Page: the worker admits the selected job's runs again and counts failures from none.
+func resumePausedJob(m Model) (Model, []Cmd) {
 	job := m.SelectedJob()
 	if job == nil {
 		return m, nil
 	}
-	if m.workerPaused(job.UID) == 0 {
+	if m.workerPausedJobs(job.UID) == 0 {
 		m.Notice = fmt.Sprintf("%q is not paused by this machine's worker; p pauses or resumes it at kata.", job.Name)
 		return m, nil
 	}

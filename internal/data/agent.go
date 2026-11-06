@@ -687,7 +687,7 @@ func (g *Gateway) stopAgent(ctx context.Context, cmd model.StopAgent) model.Agen
 		return model.AgentStopped{Block: cmd.Block, Err: err}
 	}
 	if !slices.ContainsFunc(list, func(e model.AgentEntry) bool { return e.Block == cmd.Block }) {
-		return model.AgentStopped{Block: cmd.Block, Agents: list}
+		return model.AgentStopped{Block: cmd.Block, Agents: list, Gone: true}
 	}
 	agents, err := g.closeAndForget(ctx, file, cmd.Block)
 	if err != nil {
@@ -701,6 +701,10 @@ func (g *Gateway) stopAgent(ctx context.Context, cmd model.StopAgent) model.Agen
 // machine numbers panes differently, so the window half finds the agent by the prompt file in its command line first and by the
 // block second. The window half (panecommands.luau) reads it and calls `cx.agents:interrupt`, which only it has.
 const InterruptTitlePrefix = "tern-kata interrupt "
+
+// PaneTitle is the title that identifies a kata Pane to the window half (window.luau). The Pane writes it at startup and again
+// after an interrupt request, so both use this one value.
+const PaneTitle = "tern-kata"
 
 // defaultInterruptGap is how long the request title stays before the Pane's own title comes back, so each is a title change of its own.
 const defaultInterruptGap = 150 * time.Millisecond
@@ -728,7 +732,7 @@ func (g *Gateway) interruptAgent(ctx context.Context, cmd model.InterruptAgent) 
 	case <-time.After(g.interruptGap):
 	case <-ctx.Done():
 	}
-	return model.AgentInterrupted{Block: cmd.Block, Err: g.paneTitle("tern-kata")}
+	return model.AgentInterrupted{Block: cmd.Block, Err: g.paneTitle(PaneTitle)}
 }
 
 // AgentPromptName is the pattern of a prompt file's name for os.CreateTemp. A tab's or background agent carries the block id of the kata Pane

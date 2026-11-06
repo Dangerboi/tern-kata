@@ -428,3 +428,34 @@ func TestAnExitedAgentsAddressIsClearedWhoeverWroteToIt(t *testing.T) {
 		t.Fatalf("clear of an empty Agent address: %+v", got)
 	}
 }
+
+func TestHandOffAgentWritesTheAttentionMetadataAndSwapsTheReadyLabel(t *testing.T) {
+	f := newAttentionFixture(t)
+	uid := createIssue(t, f.gateway, f.work, f.workP, "Stopped")
+	if w := as[model.FieldWritten](t, run(t, f.gateway, model.WriteField{Workspace: f.work, UID: uid, ProjectID: f.workP.ID, Actor: "tester", Action: model.AddLabelAction, Value: "ready-for-agent"})); w.Err != nil {
+		t.Fatal(w.Err)
+	}
+	got := as[model.AgentHandedOff](t, run(t, f.gateway, model.HandOffAgent{
+		Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana", Message: model.AgentStopHandOffMessage, SwapLabels: true,
+	}))
+	if got.Err != nil || got.UID != uid {
+		t.Fatalf("hand-off: %+v", got)
+	}
+	shown := issueFixture{kata: f.kata}.issue(t, uid)
+	for key, want := range map[string]string{"work.attention": "needs-human", "work.attention_msg": model.AgentStopHandOffMessage} {
+		if got := shown.Metadata[key]; got != want {
+			t.Errorf("%s = %v, want %s", key, got, want)
+		}
+	}
+	if labels := shown.Labels; !reflect.DeepEqual(labels, []string{"ready-for-human"}) {
+		t.Errorf("labels %v, want ready-for-human only", labels)
+	}
+
+	plain := createIssue(t, f.gateway, f.work, f.workP, "No ready label")
+	if got := as[model.AgentHandedOff](t, run(t, f.gateway, model.HandOffAgent{Workspace: f.work, ProjectID: f.workP.ID, UID: plain, Actor: "dana", Message: "m"})); got.Err != nil {
+		t.Fatal(got.Err)
+	}
+	if labels := (issueFixture{kata: f.kata}).issue(t, plain).Labels; len(labels) != 0 {
+		t.Errorf("labels %v, want none touched", labels)
+	}
+}

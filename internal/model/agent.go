@@ -147,7 +147,7 @@ func openAgent(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	m = openAgentCard(m, *issue)
-	m, sessions := askAgentSessions(m, 0)
+	m, sessions := askAgentSessions(m)
 	if m.Agents.inFlight {
 		m.Agents.again = true
 		return m, sessions

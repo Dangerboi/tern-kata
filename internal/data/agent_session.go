@@ -27,11 +27,14 @@ const (
 	agentSessionUnread = "session file unreadable"
 )
 
-// readAgentSessions reads the session facts of each asked agent, after the pause the command asks for.
+// waitAgentSessions is the pause between two reads of an open Agent card.
+func (g *Gateway) waitAgentSessions(ctx context.Context, cmd model.WaitAgentSessions) model.AgentSessionTick {
+	g.pause(ctx, model.AgentSessionEvery)
+	return model.AgentSessionTick(cmd)
+}
+
+// readAgentSessions reads the session facts of each asked agent.
 func (g *Gateway) readAgentSessions(ctx context.Context, cmd model.ReadAgentSessions) model.AgentSessionsRead {
-	if cmd.After > 0 {
-		g.pause(ctx, cmd.After)
-	}
 	out := model.AgentSessionsRead{Request: cmd.Request, Sessions: make([]model.AgentSessionFacts, 0, len(cmd.Agents))}
 	for _, a := range cmd.Agents {
 		if ctx.Err() != nil {

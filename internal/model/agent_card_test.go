@@ -324,15 +324,29 @@ func TestStopIsOfferedForAnyPlacementAndRefusedForAnExitedAgent(t *testing.T) {
 	}
 }
 
+func handOff(label bool) model.HandOffAgent {
+	return model.HandOffAgent{Workspace: "/w", ProjectID: 3, UID: "u1", Actor: "dana", Message: model.AgentStopHandOffMessage, SwapLabels: label}
+}
+
 func TestStoppingAnAgentOfThisPaneGivesItsIssueTheExitHandOff(t *testing.T) {
 	m := openCard("open", st("11", model.AgentWorking, ""))
+	m.Issues[0].Labels = []string{"ready-for-agent"}
 	rest := slices.Delete(slices.Clone(m.AgentMapping), 0, 1)
 	m, cmds := model.Update(m, model.AgentStopped{Block: "11", Agents: rest})
-	if want := []model.Cmd{raise("u1", 3, "agent exited without closing kata-u1")}; !reflect.DeepEqual(cmds, want) {
+	if want := []model.Cmd{raise("u1", 3, "agent exited without closing kata-u1"), handOff(true)}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("cmds %#v, want %v", cmds, want)
 	}
 	if slices.ContainsFunc(m.AgentMapping, func(e model.AgentEntry) bool { return e.Block == "11" }) || !strings.HasPrefix(m.Notice, "Stopped ") {
 		t.Errorf("mapping %+v, notice %q", m.AgentMapping, m.Notice)
+	}
+}
+
+func TestStoppingAnAgentOfAnIssueWithoutReadyForAgentSwapsNoLabels(t *testing.T) {
+	m := openCard("open", st("11", model.AgentWorking, ""))
+	rest := slices.Delete(slices.Clone(m.AgentMapping), 0, 1)
+	_, cmds := model.Update(m, model.AgentStopped{Block: "11", Agents: rest})
+	if !slices.Contains(cmds, model.Cmd(handOff(false))) {
+		t.Errorf("cmds %#v, want the hand-off without the label swap", cmds)
 	}
 }
 
@@ -341,6 +355,24 @@ func TestStoppingAgentOfAClosedIssueRaisesNothing(t *testing.T) {
 	rest := slices.Delete(slices.Clone(m.AgentMapping), 0, 1)
 	if _, cmds := model.Update(m, model.AgentStopped{Block: "11", Agents: rest}); len(cmds) != 0 {
 		t.Errorf("cmds %#v", cmds)
+	}
+}
+
+func TestStopAnsweredForAnAgentAlreadyGoneWritesNoHandOff(t *testing.T) {
+	m := openCard("open", st("11", model.AgentWorking, ""))
+	rest := slices.Delete(slices.Clone(m.AgentMapping), 0, 1)
+	_, cmds := model.Update(m, model.AgentStopped{Block: "11", Agents: rest, Gone: true})
+	for _, c := range cmds {
+		if _, is := c.(model.HandOffAgent); is {
+			t.Errorf("cmds %#v hold a hand-off for an agent already gone", cmds)
+		}
+	}
+}
+
+func TestAFailedHandOffIsANoticeNotACrash(t *testing.T) {
+	after, cmds := model.Update(model.Model{}, model.AgentHandedOff{UID: "u1", Err: errors.New("kata is down")})
+	if len(cmds) != 0 || after.Notice != "Cannot hand the Issue to a human after the stop: kata is down" {
+		t.Errorf("cmds %#v, notice %q", cmds, after.Notice)
 	}
 }
 

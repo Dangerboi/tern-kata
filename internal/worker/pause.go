@@ -36,6 +36,9 @@ type streakFile struct {
 
 const maxSeenRuns = 32
 
+// streakDir is the folder under a Project's folder that holds its jobs' streak files.
+const streakDir = "failures"
+
 // PausedJob is an adapter job this worker stopped admitting after repeated failed runs.
 type PausedJob struct {
 	Project string
@@ -52,7 +55,7 @@ func (p PausedJob) Reason() string {
 }
 
 func (w *Worker) streakPath(projectUID, jobUID string) string {
-	return filepath.Join(w.opt.Dirs.ProjectDir(projectUID), "failures", jobUID+".json")
+	return filepath.Join(w.opt.Dirs.ProjectDir(projectUID), streakDir, jobUID+".json")
 }
 
 func (w *Worker) streakLock(projectUID, jobUID string) *sync.Mutex {
@@ -183,7 +186,7 @@ func (w *Worker) PausedJobs() []PausedJob {
 		if !resolved {
 			continue
 		}
-		entries, err := os.ReadDir(filepath.Join(w.opt.Dirs.ProjectDir(uid), "failures"))
+		entries, err := os.ReadDir(filepath.Join(w.opt.Dirs.ProjectDir(uid), streakDir))
 		if err != nil {
 			continue
 		}

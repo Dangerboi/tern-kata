@@ -22,15 +22,24 @@ type AgentSessionAsk struct {
 	PromptFile string
 }
 
-// ReadAgentSessions asks for the sessions of Agents, After a pause when After is set (the refresh while the card stays open).
-// Request numbers the asks.
+// ReadAgentSessions asks for the sessions of Agents now. Request numbers the asks.
 type ReadAgentSessions struct {
 	Request int64
-	After   time.Duration
 	Agents  []AgentSessionAsk
 }
 
 func (ReadAgentSessions) cmd() {}
+
+// WaitAgentSessions is the pause of AgentSessionEvery between two reads of an open Agent card. It reads nothing; its answer
+// AgentSessionTick lets the model decide whether the card still wants a read. Request is the number of the loop it belongs to.
+type WaitAgentSessions struct{ Request int64 }
+
+func (WaitAgentSessions) cmd() {}
+
+// AgentSessionTick answers WaitAgentSessions.
+type AgentSessionTick struct{ Request int64 }
+
+func (AgentSessionTick) msg() {}
 
 // AgentSessionFacts is what one agent's session file says. Reason is why it says nothing ("" when it does); a muted line the card
 // shows in place of the facts.
@@ -76,9 +85,9 @@ func (m Model) AgentSessionFor(block string) (AgentSessionFacts, bool) {
 	return m.AgentSessions.Sessions[i], true
 }
 
-// askAgentSessions reads the sessions of the Agent card's omp agents after a pause; it supersedes any read out, and asks for
+// askAgentSessions reads the sessions of the Agent card's omp agents now; it supersedes any read or pause out, and asks for
 // nothing when no agent is omp.
-func askAgentSessions(m Model, after time.Duration) (Model, []Cmd) {
+func askAgentSessions(m Model) (Model, []Cmd) {
 	var asks []AgentSessionAsk
 	for _, a := range m.AgentCardRows() {
 		if a.NoAddress != AgentNotOmp {
@@ -90,7 +99,7 @@ func askAgentSessions(m Model, after time.Duration) (Model, []Cmd) {
 		return m, nil
 	}
 	m.AgentSessions.looping = true
-	return m, []Cmd{ReadAgentSessions{Request: m.AgentSessions.reads.Ask(), After: after, Agents: asks}}
+	return m, []Cmd{ReadAgentSessions{Request: m.AgentSessions.reads.Ask(), Agents: asks}}
 }
 
 // restartAgentSessions starts the read loop of an open Agent card when the mapping brought it an omp agent and no read is out
@@ -99,12 +108,12 @@ func restartAgentSessions(m Model, cmds []Cmd) (Model, []Cmd) {
 	if !m.AgentCard.Open || m.AgentSessions.looping {
 		return m, cmds
 	}
-	m, reads := askAgentSessions(m, 0)
+	m, reads := askAgentSessions(m)
 	return m, append(cmds, reads...)
 }
 
-// agentSessionsRead keeps the newest answer and, while the card is open, asks for the next read. A card closed meanwhile asks for
-// nothing: the reads stop with it.
+// agentSessionsRead keeps the newest answer and, while the card is open, waits for the next read. A card closed meanwhile waits
+// for nothing: the reads stop with it.
 func agentSessionsRead(m Model, msg AgentSessionsRead) (Model, []Cmd) {
 	if !m.AgentSessions.reads.IsCurrent(msg.Request) {
 		return m, nil
@@ -114,7 +123,20 @@ func agentSessionsRead(m Model, msg AgentSessionsRead) (Model, []Cmd) {
 		return m, nil
 	}
 	m.AgentSessions.Sessions = slices.Clone(msg.Sessions)
-	return askAgentSessions(m, AgentSessionEvery)
+	return m, []Cmd{WaitAgentSessions{Request: msg.Request}}
+}
+
+// agentSessionTick asks the next read when the pause ended while the card is open and the pause belongs to the current loop; a
+// card closed meanwhile ends the loop and reads nothing. The answer of a superseded pause is dropped.
+func agentSessionTick(m Model, msg AgentSessionTick) (Model, []Cmd) {
+	if !m.AgentSessions.reads.IsCurrent(msg.Request) {
+		return m, nil
+	}
+	if !m.AgentCard.Open {
+		m.AgentSessions.looping = false
+		return m, nil
+	}
+	return askAgentSessions(m)
 }
 
 // AgentFact is one line of the Agent card's detail for the selected agent; Muted lines are the reasons a fact is missing.

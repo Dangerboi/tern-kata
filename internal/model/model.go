@@ -441,6 +441,10 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return m, append(append(append(append(cmds, back...), flagged...), raised...), ended...)
 	case AgentSessionsRead:
 		return agentSessionsRead(m, msg)
+	case AgentSessionTick:
+		return agentSessionTick(m, msg)
+	case AgentHandedOff:
+		m = agentHandedOff(m, msg)
 	case AgentIssueRead:
 		return agentIssueRead(m, msg)
 	case AgentClosed:

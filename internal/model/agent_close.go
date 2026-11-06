@@ -168,10 +168,11 @@ type StopAgent struct{ Block string }
 func (StopAgent) cmd() {}
 
 // AgentStopped answers StopAgent. Agents is agents.json after the entry went; Err carries Tern's words for a close that failed, and
-// then the entry stays.
+// then the entry stays. Gone says the entry was already gone from agents.json, so nothing was stopped.
 type AgentStopped struct {
 	Block  string
 	Agents []AgentEntry
+	Gone   bool
 	Err    error
 }
 
@@ -194,24 +195,77 @@ type AgentInterrupted struct {
 
 func (AgentInterrupted) msg() {}
 
+// AgentStopHandOffMessage is the reason written to an open Issue whose agent was stopped from the Agent card.
+const AgentStopHandOffMessage = "Stopped from the Agent card; unsaved work in its block was dropped."
+
+// HandOffAgent writes what an agent that stops without closing its Issue writes, for an agent that was stopped and cannot: the
+// work.attention and work.attention_msg metadata, and, when SwapLabels is set, ready-for-agent replaced by ready-for-human. Message is the reason.
+type HandOffAgent struct {
+	Workspace  string
+	ProjectID  int64
+	UID        string
+	Actor      string
+	Message    string
+	SwapLabels bool
+}
+
+func (HandOffAgent) cmd() {}
+
+// AgentHandedOff answers HandOffAgent for the Issue with UID.
+type AgentHandedOff struct {
+	UID string
+	Err error
+}
+
+func (AgentHandedOff) msg() {}
+
+func agentHandedOff(m Model, msg AgentHandedOff) Model {
+	if msg.Err != nil {
+		m.Notice = fmt.Sprintf("Cannot hand the Issue to a human after the stop: %s", msg.Err)
+	}
+	return m
+}
+
 // agentStopped takes in the mapping after a stop. A stopped agent this Pane started counts as one whose block is gone, so its Issue
-// gets what an exit gets: the request "agent exited without closing <ref>" while the Issue is open.
+// gets what an exit gets: the request "agent exited without closing <ref>" while the Issue is open. The Pane that stopped it also
+// writes what the agent would have written itself on stopping, since a stopped agent cannot: the hand-off to a human.
 func agentStopped(m Model, msg AgentStopped) (Model, []Cmd) {
 	if msg.Err != nil {
 		m.Notice = fmt.Sprintf("Cannot stop the agent: %s", msg.Err)
 		return m, nil
 	}
 	stopped := AgentLabel(AgentEntry{Block: msg.Block})
-	for _, e := range m.AgentMapping {
+	var entry *AgentEntry
+	for i, e := range m.AgentMapping {
 		if e.Block == msg.Block {
 			stopped = AgentLabel(e)
+			entry = &m.AgentMapping[i]
 		}
+	}
+	var handOff []Cmd
+	if entry != nil && !msg.Gone {
+		handOff = m.stopHandOff(*entry)
 	}
 	m = m.noteGoneAgents(msg.Agents)
 	m.AgentMapping = msg.Agents
 	m.Agents = m.Agents.trimmed(m.agentMapped)
 	m.Notice = "Stopped " + stopped + "."
-	return raiseAgentAttention(m, false)
+	m, raised := raiseAgentAttention(m, false)
+	return m, append(raised, handOff...)
+}
+
+// stopHandOff is the hand-off write for a stopped agent whose Issue is open, none otherwise; the labels are swapped only when the
+// Issue holds ready-for-agent.
+func (m Model) stopHandOff(e AgentEntry) []Cmd {
+	project := m.projectOf(e)
+	if project == 0 || m.issueStatus(e.IssueUID) != "open" {
+		return nil
+	}
+	cmd := HandOffAgent{Workspace: m.Workspace, ProjectID: project, UID: e.IssueUID, Actor: m.Actor, Message: AgentStopHandOffMessage}
+	if issue := m.issueByUID(e.IssueUID); issue != nil {
+		cmd.SwapLabels = slices.Contains(issue.Labels, "ready-for-agent")
+	}
+	return []Cmd{cmd}
 }
 
 func agentInterrupted(m Model, msg AgentInterrupted) Model {

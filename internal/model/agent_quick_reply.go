@@ -16,7 +16,7 @@ const (
 	AgentQuickReplyThree Action = "agent-quick-reply-3"
 )
 
-// The texts of the quick replies. QuickReplyWrapUp is also what an end-of-day sweep tells the agents.
+// The texts of the quick replies.
 const (
 	QuickReplyContinue    = "continue"
 	QuickReplyWrapUp      = "wrap up: commit what you have and comment your status"

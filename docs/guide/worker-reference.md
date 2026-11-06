@@ -222,6 +222,7 @@ A job that fails every time keeps costing a failed Run, maybe a per-run Issue, a
 
 - **What counts.** A run recorded `failed` adds one, a timeout included. A succeeded run resets the count. Held runs (interrupted, quota, login and the other holds) and runs a person cancelled or abandoned neither count nor reset it.
 - **Where it lives.** In the worker's own state, under the Project's folder (`projects/<project uid>/failures/<job uid>.json`). kata's job definition is never rewritten, so every other executor and Pane still sees an enabled job and workers on other machines keep their own counts. The pause survives a restart and holds even if `pause_after_failures` is raised later; only a resume lifts it. Occurrences that came due meanwhile wait and are handled by the job's catch-up rule once it is resumed.
+- **Turning it off.** Setting `pause_after_failures` to `0` stops new pauses, but a job that is already paused stays paused until you resume it.
 - **Seeing it.** `tern-kata worker status` lists each paused job with its failure count and the resume command; the Jobs Page shows it as the pause reason "paused: failed runs".
 - **Resuming.** `u` on the Jobs Page, or `tern-kata worker resume <job>` (the job's uid, or its name when one paused job has it) sends a `resume-job` request over the control socket. A job that is not paused is refused. The count starts from none; `worker resume <run-uid>` still continues a held run.
 
