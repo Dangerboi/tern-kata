@@ -3,22 +3,29 @@ package docbanksetup
 import (
 	"errors"
 	"fmt"
-	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
+
+	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
-// ManualFileName is the supervision marker's name in tern-kata's config folder, the one place it is spelled.
+// ManualFileName is the supervision marker's name in tern-kata's config folder, the one place it is spelled. The Luau host half
+// (host.luau) holds no copy of the rule: it asks `tern-kata docbank supervised`, which answers from Env.Supervised.
 const ManualFileName = "docbank.manual"
-
-// SupervisionRule is the rule in one sentence, for texts that explain it. The Luau host half (host.luau) holds no copy: it
-// asks `tern-kata docbank supervised`, which answers from Env.Supervised.
-const SupervisionRule = "the plugin keeps Docbank running exactly when kata's [docbank] url is on this machine, Docbank's [server] api_port is that url's port and " + ManualFileName + " does not exist"
 
 // ManualPath is the supervision marker.
 func (e Env) ManualPath() string { return filepath.Join(e.ConfigDir, ManualFileName) }
+
+// supervisedKataHome is the kata home the rule reads: the default daemon's, which the host half asks about. Empty DefaultKataHome
+// means KataHome is that home.
+func (e Env) supervisedKataHome() string {
+	if e.DefaultKataHome != "" {
+		return e.DefaultKataHome
+	}
+	return e.KataHome
+}
 
 // Supervised is whether the plugin keeps Docbank running, and when it does not, why (one sentence naming what is missing).
 // It is the one place the rule is decided; the host half asks `tern-kata docbank supervised`.
@@ -29,7 +36,7 @@ func (e Env) Supervised() (on bool, why string) {
 	if _, err := os.Stat(e.ManualPath()); err == nil {
 		return false, ManualFileName + " exists in " + e.ConfigDir
 	}
-	kataPath := filepath.Join(e.KataHome, "config.toml")
+	kataPath := filepath.Join(e.supervisedKataHome(), "config.toml")
 	kataText, err := readConfig(kataPath)
 	if err != nil {
 		return false, err.Error()
@@ -87,25 +94,26 @@ func (e Env) SetSupervision(on bool) error {
 	if e.ConfigDir == "" {
 		return errors.New("cannot tell where tern-kata's config folder is")
 	}
-	if on {
-		if err := os.Remove(e.ManualPath()); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return err
-		}
-		return nil
-	}
-	if err := os.MkdirAll(e.ConfigDir, 0o700); err != nil {
-		return err
-	}
-	return os.WriteFile(e.ManualPath(), nil, 0o600)
+	return worker.SetMarker(e.ConfigDir, e.ManualPath(), on)
 }
 
-// reportSupervision is the line local setup ends with, saying whether the plugin keeps this Docbank running.
+// reportSupervision is the line local setup ends with, saying whether the plugin keeps this Docbank running. The rule covers only
+// the default kata daemon, which is the one the host half asks about, so a setup for a profile or a --home daemon says that
+// instead of claiming the plugin keeps its Docbank running.
 func (e Env) reportSupervision() error {
 	if e.ConfigDir == "" {
 		return nil
 	}
+	if e.DefaultKataHome != "" && filepath.Clean(e.DefaultKataHome) != filepath.Clean(e.KataHome) {
+		_, err := fmt.Fprintf(e.Out, "The plugin keeps Docbank running only for the default kata daemon (%s), not for this one. To keep this Docbank running, start it with `docbank daemon start` when it is down, or run it as a service.\n", e.DefaultKataHome)
+		return err
+	}
 	if _, err := os.Stat(e.ManualPath()); err == nil {
 		_, err = fmt.Fprintf(e.Out, "The plugin does not keep Docbank running: %s exists. `tern-kata docbank supervise on` lets it.\n", e.ManualPath())
+		return err
+	}
+	if on, why := e.Supervised(); !on {
+		_, err := fmt.Fprintf(e.Out, "The plugin does not keep Docbank running: %s.\n", why)
 		return err
 	}
 	_, err := fmt.Fprintf(e.Out, "The plugin keeps Docbank running: its host half starts it with `docbank daemon start` when it is not running. `tern-kata docbank supervise off` stops that (creates %s).\n", e.ManualPath())

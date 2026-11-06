@@ -64,10 +64,10 @@ type LaunchPlan struct {
 	// AgentRoute is `agent`'s --home, --db, --schema, --dsn-file, --env-file, --daemon, --server, --token-file, --auth-file, --allow-insecure and --trust-private-network: the Pane's daemon, which the wrapper turns into
 	// the agent's kata environment; zero leaves it as inherited.
 	AgentRoute data.AgentRoute
-	// DocbankFlags are `docbank setup`'s --url, --port, --key-file, --key-env and --folder by name without dashes, as typed; unset ones are absent.
-	// DocbankYes and DocbankNoRestart are its --yes and --no-restart. The route flags it takes record into AgentRoute.
-	DocbankFlags                 map[string]string
-	DocbankYes, DocbankNoRestart bool
+	// Docbank is `docbank setup`'s own flags. The route flags it takes record into AgentRoute.
+	Docbank DocbankSetup
+	// docbankErr is the first refusal a `docbank setup` flag setter met (a setter cannot return one); planDocbank reports it.
+	docbankErr error
 	// fallbackAuthor is the --as actor exported to `kata tui`; empty leaves the environment untouched.
 	fallbackAuthor string
 }
@@ -304,82 +304,66 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 		return planDocbank(args)
 	}
 	plan := LaunchPlan{Subcommand: args[0]}
-	var operands []string
-	flagsEnded := false
-	for i := 1; i < len(args); i++ {
-		arg := args[i]
-		if flagsEnded || !strings.HasPrefix(arg, "--") {
-			operands = append(operands, arg)
-			continue
-		}
-		if arg == "--" {
-			flagsEnded = true
-			continue
-		}
-		if plan.Subcommand == "update" && arg == "--force" {
+	operands, err := scanOperands(args, func(i *int) error {
+		arg := args[*i]
+		switch {
+		case plan.Subcommand == "update" && arg == "--force":
 			plan.Force = true
-			continue
-		}
-		if plan.Subcommand == "update" && arg == "--pause" {
+			return nil
+		case plan.Subcommand == "update" && arg == "--pause":
 			plan.Pause = true
-			continue
-		}
-		if plan.Subcommand == "update" && arg == "--preflight" {
+			return nil
+		case plan.Subcommand == "update" && arg == "--preflight":
 			plan.Preflight = true
-			continue
-		}
-		if plan.Subcommand == "worker" && arg == "--takeover" {
+			return nil
+		case plan.Subcommand == "worker" && arg == "--takeover":
 			plan.Takeover = true
-			continue
-		}
-		if plan.Subcommand == "worker" && arg == "--now" {
+			return nil
+		case plan.Subcommand == "worker" && arg == "--now":
 			plan.Now = true
-			continue
-		}
-		if plan.Subcommand == "worker" && arg == "--json" {
+			return nil
+		case plan.Subcommand == "worker" && arg == "--json":
 			plan.JSON = true
-			continue
+			return nil
 		}
 		if plan.Subcommand == "worker" {
-			if matched, err := parseInitFlag(args, &i, &plan); err != nil {
-				return LaunchPlan{}, err
-			} else if matched {
-				continue
+			if matched, err := parseInitFlag(args, i, &plan); err != nil || matched {
+				return err
 			}
 		}
 		if plan.Subcommand == "recur" {
-			if matched, err := parseRecurFlag(args, &i, &plan); err != nil {
-				return LaunchPlan{}, err
-			} else if matched {
-				continue
+			if matched, err := parseRecurFlag(args, i, &plan); err != nil || matched {
+				return err
 			}
 		}
 		if plan.Subcommand == "views" {
 			if arg == "--json" {
 				plan.JSON = true
-				continue
+				return nil
 			}
 			if arg == "--replace" {
 				plan.Replace = true
-				continue
+				return nil
 			}
-			if matched, err := parseViewFlag(args, &i, &plan); err != nil {
-				return LaunchPlan{}, err
-			} else if matched {
-				continue
+			if matched, err := parseViewFlag(args, i, &plan); err != nil || matched {
+				return err
 			}
 		}
 		if plan.Subcommand == "completion" || plan.Subcommand == "update" {
-			return LaunchPlan{}, fmt.Errorf("%s: unknown flag %s", plan.Subcommand, arg) // neither writes as an actor
+			return fmt.Errorf("%s: unknown flag %s", plan.Subcommand, arg) // neither writes as an actor
 		}
-		actor, matched, err := parseAs(args, &i)
+		actor, matched, err := parseAs(args, i)
 		if err != nil {
-			return LaunchPlan{}, err
+			return err
 		}
 		if !matched {
-			return LaunchPlan{}, fmt.Errorf("%s: unknown flag %s", plan.Subcommand, arg)
+			return fmt.Errorf("%s: unknown flag %s", plan.Subcommand, arg)
 		}
 		plan.fallbackAuthor = actor
+		return nil
+	})
+	if err != nil {
+		return LaunchPlan{}, err
 	}
 	switch {
 	case plan.Subcommand == "migrate-attachments" && len(operands) != 0:
@@ -418,6 +402,28 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 	}
 	plan.TargetRef, plan.Operands = operands[0], operands[1:]
 	return plan, nil
+}
+
+// scanOperands splits args[1:] (args[0] is the subcommand) into operands and flags: a word not starting with "--", or any word
+// after a lone --, is an operand; every other word goes to onFlag, which reads it at args[*i] and moves *i past a separate value.
+func scanOperands(args []string, onFlag func(i *int) error) ([]string, error) {
+	var operands []string
+	flagsEnded := false
+	for i := 1; i < len(args); i++ {
+		arg := args[i]
+		if flagsEnded || !strings.HasPrefix(arg, "--") {
+			operands = append(operands, arg)
+			continue
+		}
+		if arg == "--" {
+			flagsEnded = true
+			continue
+		}
+		if err := onFlag(&i); err != nil {
+			return nil, err
+		}
+	}
+	return operands, nil
 }
 
 // validViewsForm reports whether operands are one of the forms of `tern-kata views`: none, or show, add or rm with one name.
@@ -650,8 +656,10 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 --yes, prints the restart command instead (for a --daemon profile it
                                 runs and prints kata daemon restart with KATA_HOME set to the
                                 profile's home). --key-file - needs a pipe, not a terminal. A remote kata daemon is
-                                refused: its config is not on this machine. Never prints the key
-                                A local setup leaves the plugin keeping Docbank running (docbank supervise)
+                                refused: its config is not on this machine. Never prints the key.
+                                The plugin supervises only the default kata daemon's Docbank: a local
+                                setup for it leaves the plugin keeping Docbank running (docbank
+                                supervise); for a --home or --daemon profile it says how to keep Docbank running
   docbank supervised [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
                                 the plugin host half's question: does the plugin keep a local Docbank
                                 running? Exit 0 and the line "on" when kata's [docbank] url is on this

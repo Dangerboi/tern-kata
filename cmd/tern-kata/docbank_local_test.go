@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -323,15 +324,18 @@ func TestDocbankSetupLocalRefusesBeforeWritingWithoutDocbankOnPath(t *testing.T)
 	f.assertNothingWritten(t)
 }
 
-func TestDocbankSetupLocalRefusesAKeyFileHoldingAnotherKey(t *testing.T) {
+func TestDocbankSetupLocalRefusesAKeyFileHoldingAnotherKeyThanDocbanksServerSection(t *testing.T) {
 	f := newLocalFixture(t)
+	port := freePort(t)
+	existing := "[server]\napi_port = " + strconv.Itoa(port) + "\napi_key = \"docbanks-own-key\"\n"
+	f.writeDocbankConfig(t, existing)
 	if err := os.WriteFile(f.keyPath(), []byte("someone-elses-key\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.run(t, "", "--port", strconv.Itoa(freePort(t)), "--yes"); err == nil || !strings.Contains(err.Error(), "different key") {
+	if _, err := f.run(t, "", "--yes"); err == nil || !strings.Contains(err.Error(), "different key") {
 		t.Fatalf("err = %v", err)
 	}
-	if _, err := os.Stat(f.dbHome); err == nil || f.restarts(t) != nil {
+	if f.docbankConfig(t) != existing || f.restarts(t) != nil || len(f.docbankRuns(t)) != 0 {
 		t.Errorf("a refusal changed something")
 	}
 }
@@ -350,9 +354,57 @@ func TestDocbankSetupLocalRefusesADifferentKataDocbankSectionBeforeTouchingDocba
 
 func TestDocbankSetupLocalFlagRules(t *testing.T) {
 	plan, err := PlanLaunch([]string{"docbank", "setup", "--port", "9000"}, func(string) (string, bool) { return "robot", true }, "test")
-	if err != nil || plan.DocbankFlags["port"] != "9000" || plan.DocbankFlags["url"] != "" {
-		t.Errorf("local form: %v, %v", plan.DocbankFlags, err)
+	if err != nil || plan.Docbank.Port != 9000 || plan.Docbank.URL != "" {
+		t.Errorf("local form: %+v, %v", plan.Docbank, err)
 	}
+}
+
+func TestDocbankSetupLocalReusesAKeyFileKataAlreadyHolds(t *testing.T) {
+	f := newLocalFixture(t)
+	const stored = "a-key-already-stored-for-kata"
+	if err := os.WriteFile(f.keyPath(), []byte(stored+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	port := freePort(t)
+	out, err := f.run(t, "", "--port", strconv.Itoa(port), "--yes")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	want := "[server]\nbind_addr = \"127.0.0.1\"\napi_port = " + strconv.Itoa(port) + "\napi_key = \"" + stored + "\"\n"
+	if got := f.docbankConfig(t); got != want {
+		t.Errorf("Docbank config.toml = %q, want %q", got, want)
+	}
+	if raw, err := os.ReadFile(f.keyPath()); err != nil || strings.TrimSpace(string(raw)) != stored {
+		t.Errorf("key file = %q, %v; want it left as it was", raw, err)
+	}
+	if strings.Contains(out, stored) {
+		t.Errorf("output shows the key:\n%s", out)
+	}
+}
+
+func TestDocbankSetupLocalForAProfileDoesNotClaimThePluginKeepsDocbankRunning(t *testing.T) {
+	f := newLocalFixture(t)
+	profileHome := f.profileCatalog(t)
+	out, err := f.run(t, "", "--daemon", "side", "--port", strconv.Itoa(freePort(t)), "--yes")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if !strings.Contains(out, "only for the default kata daemon") || !strings.Contains(out, "docbank daemon start") || strings.Contains(out, "its host half starts it") {
+		t.Errorf("a profile's setup should say the plugin supervises only the default daemon's Docbank:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(profileHome, "config.toml")); err != nil {
+		t.Errorf("the profile's config was not written: %v", err)
+	}
+}
+
+func TestDocbankSetupLocalCancelledContextWritesNothing(t *testing.T) {
+	f := newLocalFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := f.runWith(ctx, t, "", "--port", strconv.Itoa(freePort(t)), "--yes"); err == nil || !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want the cancellation, not a reading of Docbank as not running", err)
+	}
+	f.assertNothingWritten(t)
 }
 
 func TestDocbankSetupLocalEditsTheFilesSymlinksPointAt(t *testing.T) {

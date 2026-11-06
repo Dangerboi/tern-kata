@@ -5,7 +5,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,6 +60,11 @@ func newDocbankSetupFixtureOn(t *testing.T, locate data.Locator) *docbankSetupFi
 // production one except for the daemon the check reaches.
 func (f *docbankSetupFixture) run(t *testing.T, stdin string, args ...string) (string, error) {
 	t.Helper()
+	return f.runWith(context.Background(), t, stdin, args...)
+}
+
+func (f *docbankSetupFixture) runWith(ctx context.Context, t *testing.T, stdin string, args ...string) (string, error) {
+	t.Helper()
 	plan, err := PlanLaunch(append([]string{"docbank", "setup"}, args...), func(string) (string, bool) { return "robot", true }, "test")
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +81,7 @@ func (f *docbankSetupFixture) run(t *testing.T, stdin string, args ...string) (s
 	if f.runner != nil {
 		env.Runner = f.runner
 	}
-	err = runDocbank(context.Background(), plan, env)
+	err = runDocbank(ctx, plan, env)
 	return out.String(), err
 }
 
@@ -397,8 +405,8 @@ func TestDocbankSetupUsageErrorsExitTwo(t *testing.T) {
 		}
 	}
 	plan, err := PlanLaunch([]string{"docbank", "setup", "--url=--x", "--key-env", "K"}, func(string) (string, bool) { return "robot", true }, "test")
-	if err != nil || plan.DocbankFlags["url"] != "--x" {
-		t.Errorf("--url=--x: %v, %v", plan.DocbankFlags, err)
+	if err != nil || plan.Docbank.URL != "--x" {
+		t.Errorf("--url=--x: %+v, %v", plan.Docbank, err)
 	}
 }
 
@@ -501,5 +509,83 @@ func TestDocbankSupervisedAnswersOnAndOffAndSuperviseWritesTheMarker(t *testing.
 	out.Reset()
 	if err := printDocbankSupervised(env(&out)); err != nil || out.String() != "on\n" {
 		t.Fatalf("supervised after on = %q, %v", out.String(), err)
+	}
+}
+
+// answeringServer serves answer for every request.
+func answeringServer(t *testing.T, answer http.HandlerFunc) string {
+	t.Helper()
+	server := httptest.NewServer(answer)
+	t.Cleanup(server.Close)
+	return server.URL
+}
+
+func TestDocbankSetupRefusesARedirectAndNeverSendsTheKeyOn(t *testing.T) {
+	f := newDocbankSetupFixture(t)
+	url := answeringServer(t, func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, f.fake.URL+r.URL.RequestURI(), http.StatusFound) // the target accepts the key, so following would succeed
+	})
+	_, err := f.run(t, "", "--url", url, "--key-file", f.keyFile(t), "--yes")
+	if err == nil || err.Error() != data.DocbankUnreachableMessage {
+		t.Fatalf("err = %v, want the Pane's %q", err, data.DocbankUnreachableMessage)
+	}
+	if entries, _ := os.ReadDir(f.home); len(entries) != 0 || f.restarts(t) != nil {
+		t.Errorf("a refused setup wrote %v and ran kata %q", entries, f.restarts(t))
+	}
+}
+
+func TestDocbankSetupRefusesAnAnswerThatIsNotADocbank(t *testing.T) {
+	for name, body := range map[string]string{
+		"html":              "<html>welcome</html>",
+		"json without kind": `{"ok":true}`,
+		"a file node":       `{"id":1,"kind":"file"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newDocbankSetupFixture(t)
+			url := answeringServer(t, func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, body) })
+			_, err := f.run(t, "", "--url", url, "--key-file", f.keyFile(t), "--yes")
+			if err == nil || !strings.Contains(err.Error(), "not as a Docbank does") {
+				t.Fatalf("err = %v, want the not-a-Docbank refusal", err)
+			}
+			if entries, _ := os.ReadDir(f.home); len(entries) != 0 || f.restarts(t) != nil {
+				t.Errorf("a refused setup wrote %v and ran kata %q", entries, f.restarts(t))
+			}
+		})
+	}
+}
+
+func TestDocbankSetupRerunWithAttachmentsOffOffersTheRestart(t *testing.T) {
+	f := newDocbankSetupFixtureOn(t, newSubcommandFixture(t).locate) // a kata daemon that has no Docbank loaded
+	args := []string{"--url", f.fake.URL, "--key-file", f.keyFile(t)}
+	if _, err := f.run(t, "", append(args, "--no-restart")...); err != nil {
+		t.Fatal(err)
+	}
+	before := f.config(t)
+	out, err := f.run(t, "", append(args, "--no-restart")...)
+	if err != nil || strings.Contains(out, "nothing changed") || !strings.Contains(out, "kata daemon restart") || f.restarts(t) != nil {
+		t.Fatalf("rerun with --no-restart: %q, %v, kata ran %q; want the command to run and no restart", out, err, f.restarts(t))
+	}
+	out, err = f.run(t, "", append(args, "--yes")...)
+	if got := f.restarts(t); len(got) != 1 || got[0] != "daemon restart" {
+		t.Errorf("rerun with --yes: kata ran %q, want one `daemon restart`", got)
+	}
+	if err == nil || !strings.Contains(err.Error(), model.DocbankOffMessage) || strings.Contains(out, "nothing changed") {
+		t.Errorf("rerun with --yes: %q, %v; want the check after the restart to report attachments off", out, err)
+	}
+	if f.config(t) != before {
+		t.Errorf("a rerun changed config.toml:\n%s", f.config(t))
+	}
+}
+
+func TestDocbankSetupCancelledContextWritesNothing(t *testing.T) {
+	f := newDocbankSetupFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := f.runWith(ctx, t, "", "--url", f.fake.URL, "--key-file", f.keyFile(t), "--yes")
+	if err == nil || !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want the cancellation", err)
+	}
+	if entries, _ := os.ReadDir(f.home); len(entries) != 0 || f.restarts(t) != nil {
+		t.Errorf("a cancelled setup wrote %v and ran kata %q", entries, f.restarts(t))
 	}
 }

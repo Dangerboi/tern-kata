@@ -9,13 +9,18 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Attachments
 
 - `tern-kata docbank setup` makes attachments work, either on this machine or against a Docbank someone else runs.
-  - Without `--url` it sets Docbank up on this machine: it appends a `[server]` section (`bind_addr` 127.0.0.1, a fixed `api_port` from `--port`, default 8080, and a new random `api_key`) to `<DOCBANK_HOME>/config.toml`, stores the key in `<KATA_HOME>/docbank.key`, restarts Docbank with `docbank daemon restart`, and requires `docbank daemon status` to name the address before it touches kata's config. It prints that Docbank reports usage unless `DOCBANK_TELEMETRY_ENABLED=0` is set in its daemon's environment.
-  - An existing `[server]` with `api_port` and `api_key` is reused, a different `--port` or a `[server]` missing one of them is refused, and a port another process listens on, a missing `docbank` or a different `[docbank]` section is refused before anything is written. Every other byte of Docbank's `config.toml` stays as it is, and the key is never printed.
-  - With `--url <url> --key-file <file>` (or `--key-env <NAME>`) it points kata at a Docbank someone else runs; `--key-file`/`--key-env` are for this form only and `--port` for the local one.
-  - Either way it checks that Docbank answers with the key before writing anything, appends a `[docbank]` section to the kata daemon's `config.toml` without touching the rest of the file, asks before restarting the kata daemon, and checks that kata has attachments on. `--yes` skips the question and `--no-restart` prints the command instead; a rerun on a finished setup says "already set up" and restarts nothing.
-  - Local setup ends by saying that the plugin keeps Docbank running: its host half runs `docbank daemon start` when no Docbank runs, on the worker's 10-second poll and backoff, with one log line per start or failed start. `tern-kata docbank supervised` answers whether it does (kata's `[docbank]` url on this machine, Docbank's `[server]` `api_port` the same port, no `docbank.manual` in tern-kata's config folder), and `tern-kata docbank supervise off` creates that file, `on` removes it.
-  - `--key-file -` stores a key read from standard input in `<KATA_HOME>/docbank.key`. No flag takes the key, and the command never prints it.
+  - Without `--url` it sets Docbank up on this machine: it appends a `[server]` section (`bind_addr` 127.0.0.1, a fixed `api_port` from `--port`, default 8080, a new random `api_key`) to `<DOCBANK_HOME>/config.toml`, stores the key in `<KATA_HOME>/docbank.key` and restarts Docbank.
+  - It requires `docbank daemon status` to name the address before touching kata's config, and prints that Docbank reports usage unless `DOCBANK_TELEMETRY_ENABLED=0` is set in its daemon's environment.
+  - An existing `[server]` with `api_port` and `api_key` is reused. A different `--port`, a `[server]` missing one of them, a busy port, a missing `docbank` or a different `[docbank]` section is refused before anything is written.
+  - With `--url <url> --key-file <file>` (or `--key-env <NAME>`) it points kata at a Docbank someone else runs; `--key-file -` reads the key from standard input. No flag takes the key and the command never prints it.
+  - Either way it checks that Docbank answers with the key, appends a `[docbank]` section to the kata daemon's `config.toml`, and asks before restarting the kata daemon (`--yes` skips the question, `--no-restart` prints the command).
+  - It finishes by checking that the kata daemon has attachments on; with `--key-env` it says that daemon reads the variable from its own environment.
+  - A rerun on a finished setup says "already set up" and changes nothing; if the earlier restart was skipped, it offers the restart again.
   - `--folder` and the route flags `tern-kata agent` takes choose the vault folder and the kata daemon; plain `http://` to another machine and a remote kata daemon are refused.
+- The plugin keeps a local Docbank running while Tern runs, and `tern-kata docbank supervise on|off` turns that on or off.
+  - Its host half runs `docbank daemon start` when no Docbank runs, checking every 10 seconds. After a failed start it waits 1 s, then 2 s, doubling to 60 s, and logs one line per start or failed start.
+  - It does so when kata's `[docbank]` url is on this machine, Docbank's `[server]` `api_port` is that port and tern-kata's config folder has no `docbank.manual`; `tern-kata docbank supervised` answers whether that holds.
+  - `supervise off` creates `docbank.manual` and `on` removes it. Only the default kata daemon's Docbank is kept running; for a profile, local setup says how to keep it running.
 
 ### Changed
 

@@ -27,6 +27,7 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/atomicfile"
 	"github.com/Dangerboi/tern-kata/internal/data"
+	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
 // DefaultFolder is the vault folder kata uses when [docbank] names none.
@@ -74,6 +75,9 @@ type Env struct {
 	HTTP          *http.Client
 	// Locate finds the kata daemon for the final check, called with KataHome as the workspace so a checkout's pin cannot redirect it.
 	Locate data.Locator
+	// DefaultKataHome is the home of the default kata daemon (KATA_HOME or ~/.kata), the only daemon whose Docbank the plugin keeps
+	// running; empty means KataHome is that home.
+	DefaultKataHome string
 	// LookupEnv reads --key-env's variable.
 	LookupEnv func(string) (string, bool)
 	// Stdin is read for `--key-file -`.
@@ -83,14 +87,19 @@ type Env struct {
 	Out     io.Writer
 }
 
+// Common is what both forms take besides where Docbank is.
+type Common struct {
+	Folder string // empty means DefaultFolder
+	// Yes restarts the kata daemon without asking; NoRestart leaves it alone.
+	Yes, NoRestart bool
+}
+
 // Remote is `docbank setup --url ...`: the flags that point kata at a Docbank someone else runs.
 type Remote struct {
+	Common
 	URL string
 	// KeyFile is a path, or "-" for standard input; KeyEnv is the name of a variable. Exactly one is set.
 	KeyFile, KeyEnv string
-	Folder          string // empty means DefaultFolder
-	// Yes restarts the kata daemon without asking; NoRestart leaves it alone.
-	Yes, NoRestart bool
 }
 
 // kataSection is kata's [docbank] section as setup writes and compares it.
@@ -102,14 +111,13 @@ type kataSection struct {
 	Folder     string `toml:"folder"`
 }
 
-type kataConfig struct {
-	Docbank *kataSection `toml:"docbank"`
-}
-
 // probeDeadline bounds the authenticated read of Docbank; checkDeadline bounds the restart and kata's check.
 const (
 	probeDeadline = 15 * time.Second
 	checkDeadline = 60 * time.Second
+	// probeMaxBody bounds the vault-root answer read; a node is a few hundred bytes.
+	probeMaxBody = 1 << 20
+	kataMissing  = "kata is not on PATH; install kata first (https://github.com/kenn-io/kata), nothing was written"
 )
 
 // SetupRemote points the kata daemon at the Docbank r names. Nothing is written until the URL passes kata's scheme rule, kata is on
@@ -124,7 +132,7 @@ func (e Env) SetupRemote(ctx context.Context, r Remote) error {
 		return err
 	}
 	if _, err := e.Runner.LookPath("kata"); err != nil {
-		return errors.New("kata is not on PATH; install kata first (https://github.com/kenn-io/kata), nothing was written")
+		return errors.New(kataMissing)
 	}
 	want := kataSection{URL: base, Folder: folder, APIKeyEnv: r.KeyEnv}
 	switch {
@@ -146,8 +154,7 @@ func (e Env) SetupRemote(ctx context.Context, r Remote) error {
 		if !have.matches(want) {
 			return fmt.Errorf("%s already has a [docbank] section that differs from what was asked, so nothing was changed:\n%s", configPath, have.describe())
 		}
-		_, err := fmt.Fprintf(e.Out, "Docbank at %s is already set up in %s; nothing changed.\n", base, configPath)
-		return err
+		return e.alreadySetUp(ctx, r, base, configPath)
 	}
 
 	key, err := e.readKey(r)
@@ -157,10 +164,16 @@ func (e Env) SetupRemote(ctx context.Context, r Remote) error {
 	if err := e.probe(ctx, base, key); err != nil {
 		return err
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if r.KeyFile == "-" {
 		if err := e.writeKeyFile(want.APIKeyFile, key); err != nil {
 			return err
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if err := writeSection(configPath, existing, want); err != nil {
 		return err
@@ -173,26 +186,29 @@ func (e Env) SetupRemote(ctx context.Context, r Remote) error {
 			return err
 		}
 	}
-	return e.applyKata(ctx, base, r.Yes, r.NoRestart)
+	return e.applyKata(ctx, r.Common, r.KeyEnv)
 }
 
 // applyKata is the step after kata's config.toml says where Docbank is, shared by the remote and local forms: restart the kata daemon
-// (asking first unless yes; never when noRestart or when there is no terminal to ask on) and, once restarted, check that it has
-// attachments on.
-func (e Env) applyKata(ctx context.Context, base string, yes, noRestart bool) error {
+// (asking first unless c.Yes; never when c.NoRestart or when there is no terminal to ask on) and, once restarted, check that it has
+// attachments on. keyEnv is --key-env's variable, when there is one.
+func (e Env) applyKata(ctx context.Context, c Common, keyEnv string) error {
 	command, prefix, env := "kata daemon restart", e.CommandPrefix, []string(nil)
 	if e.Daemon != "" {
 		prefix, env = "KATA_HOME="+e.KataHome+" ", []string{"KATA_HOME=" + e.KataHome}
 	}
-	restart := yes
-	if !yes && !noRestart && e.Confirm != nil {
+	restart := c.Yes
+	if !c.Yes && !c.NoRestart && e.Confirm != nil {
 		var err error
 		if restart, err = e.Confirm("Restart the kata daemon now? Open Panes and agents reconnect. [y/N] "); err != nil {
 			return err
 		}
 	}
-	if noRestart || !restart {
+	if c.NoRestart || !restart {
 		_, err := fmt.Fprintf(e.Out, "The kata daemon was not restarted, and it reads config.toml only at start, so attachments stay off until you run:\n  %s%s\n", prefix, command)
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(ctx, checkDeadline)
@@ -203,11 +219,43 @@ func (e Env) applyKata(ctx context.Context, base string, yes, noRestart bool) er
 	if _, err := fmt.Fprintf(e.Out, "Restarted the kata daemon (`%s`).\n", command); err != nil {
 		return err
 	}
-	if err := data.CheckAttachments(ctx, e.Locate, e.KataHome); err != nil {
+	// kata has no read-only call that reaches Docbank (every call that does reads or writes an Attachment), so what is checked is
+	// that the daemon loaded the [docbank] section: it has attachments on.
+	on, err := data.AttachmentsConfigured(ctx, e.Locate, e.KataHome)
+	if err == nil && !on {
+		err = errors.New(model.DocbankOffMessage)
+	}
+	if err != nil {
 		return fmt.Errorf("the config is written and the kata daemon restarted, but attachments do not work yet: %w", err)
 	}
-	_, err := fmt.Fprintf(e.Out, "Checked: the kata daemon has attachments on, with Docbank at %s.\n", base)
-	return err
+	if _, err := fmt.Fprintln(e.Out, "Checked: the kata daemon has attachments on."); err != nil {
+		return err
+	}
+	if keyEnv != "" {
+		_, err := fmt.Fprintf(e.Out, "The kata daemon reads $%s from its own environment, so the key is not checked here: it must be set wherever the kata daemon starts.\n", keyEnv)
+		return err
+	}
+	return nil
+}
+
+// alreadySetUp is a rerun whose [docbank] section already says what was asked. The running kata daemon is still asked, since a restart
+// that was skipped or failed leaves attachments off: it is only "already set up" when attachments are on, and otherwise the restart is
+// offered as after a write.
+func (e Env) alreadySetUp(ctx context.Context, r Remote, base, configPath string) error {
+	check, cancel := context.WithTimeout(ctx, checkDeadline)
+	on, err := data.AttachmentsConfigured(check, e.Locate, e.KataHome)
+	cancel()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err == nil && on {
+		_, err := fmt.Fprintf(e.Out, "Docbank at %s is already set up in %s, and the kata daemon has attachments on; nothing changed.\n", base, configPath)
+		return err
+	}
+	if _, err := fmt.Fprintf(e.Out, "%s already has this [docbank] section, but the running kata daemon does not have attachments on, so the config is not in use yet.\n", configPath); err != nil {
+		return err
+	}
+	return e.applyKata(ctx, r.Common, r.KeyEnv)
 }
 
 // CanonicalURL is kata's reading of a Docbank url: http or https with a host, no credentials, query or fragment, no trailing slash.
@@ -280,8 +328,9 @@ func (e Env) readKey(r Remote) (string, error) {
 	return key, nil
 }
 
-// probe is the authenticated read of Docbank's API that must succeed before anything is written: it resolves the vault root. A refused
-// key and an unanswered request are reported as the Pane reports them.
+// probe is the authenticated read of Docbank's API that must succeed before anything is written: it resolves the vault root, which
+// Docbank answers with a folder node. A refused key, an unanswered request and a redirect are reported as the Pane reports them;
+// an answer that is not Docbank's is reported as such. Redirects are never followed, so the key goes only to the url asked.
 func (e Env) probe(ctx context.Context, base, key string) error {
 	ctx, cancel := context.WithTimeout(ctx, probeDeadline)
 	defer cancel()
@@ -290,8 +339,13 @@ func (e Env) probe(ctx context.Context, base, key string) error {
 		return err
 	}
 	req.Header.Set("X-Api-Key", key)
-	resp, err := e.HTTP.Do(req)
+	client := *e.HTTP
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := client.Do(req)
 	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		return errors.New(data.DocbankUnreachableMessage)
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -300,6 +354,12 @@ func (e Env) probe(ctx context.Context, base, key string) error {
 		return errors.New(data.DocbankUnauthorizedMessage)
 	case resp.StatusCode != http.StatusOK:
 		return errors.New(data.DocbankUnreachableMessage)
+	}
+	var root struct {
+		Kind string `json:"kind"`
+	}
+	if json.NewDecoder(io.LimitReader(resp.Body, probeMaxBody)).Decode(&root) != nil || root.Kind != "dir" {
+		return fmt.Errorf("%s answered, but not as a Docbank does (its vault root is not a folder), so the url is probably not a Docbank's; nothing was written", base)
 	}
 	return nil
 }
@@ -318,7 +378,7 @@ func (e Env) writeKeyFile(path, key string) error {
 	return err
 }
 
-// readConfig is kata's config.toml as text; a missing file is empty text.
+// readConfig is a config.toml as text (kata's, or Docbank's); a missing file is empty text.
 func readConfig(path string) (string, error) {
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -332,16 +392,25 @@ func readConfig(path string) (string, error) {
 
 // existingSection is the [docbank] section text holds, found false when there is none. A file that does not parse is refused, so
 // setup never edits a config kata itself could not read.
-func existingSection(path, text string) (section kataSection, found bool, err error) {
-	var cfg kataConfig
-	meta, err := toml.Decode(text, &cfg)
+func existingSection(path, text string) (kataSection, bool, error) {
+	return decodeSection[kataSection](path, text, "docbank")
+}
+
+// decodeSection is the [name] section text holds, found false when there is none. A file that does not parse is refused.
+func decodeSection[T any](path, text, name string) (section T, found bool, err error) {
+	var tables map[string]toml.Primitive
+	meta, err := toml.Decode(text, &tables)
 	if err != nil {
-		return kataSection{}, false, fmt.Errorf("%s does not parse, so nothing was changed: %w", path, err)
+		return section, false, fmt.Errorf("%s does not parse, so nothing was changed: %w", path, err)
 	}
-	if !meta.IsDefined("docbank") || cfg.Docbank == nil {
-		return kataSection{}, false, nil
+	raw, ok := tables[name]
+	if !ok {
+		return section, false, nil
 	}
-	return *cfg.Docbank, true, nil
+	if err := meta.PrimitiveDecode(raw, &section); err != nil {
+		return section, false, fmt.Errorf("%s does not parse, so nothing was changed: %w", path, err)
+	}
+	return section, true, nil
 }
 
 // matches reports whether the section found in the file sets what want sets (the folder defaulting as kata defaults it).
@@ -400,6 +469,12 @@ func (s kataSection) text() string {
 // writeSection appends the section to existing and writes the result over path atomically. The new file is parsed before it replaces
 // the old one and must hold exactly the section; the text before it is the old file, byte for byte.
 func writeSection(path, existing string, want kataSection) error {
+	return appendSection(path, existing, "docbank", want.text(), func(got kataSection) bool { return got.matches(want) })
+}
+
+// appendSection appends text, the [name] section, to existing and writes the result over path atomically (creating the folder). The
+// new file is parsed before it replaces the old one: it must hold a [name] section that ok accepts after the old file's bytes.
+func appendSection[T any](path, existing, name, text string, ok func(T) bool) error {
 	path = resolveLink(path)
 	next := existing
 	if next != "" {
@@ -408,7 +483,7 @@ func writeSection(path, existing string, want kataSection) error {
 		}
 		next += "\n"
 	}
-	next += want.text()
+	next += text
 	mode := fs.FileMode(0o600)
 	if info, err := os.Stat(path); err == nil {
 		mode = info.Mode().Perm() // an edit keeps the file's own mode
@@ -418,11 +493,11 @@ func writeSection(path, existing string, want kataSection) error {
 		if err != nil {
 			return err
 		}
-		got, found, err := existingSection(path, string(raw))
+		got, found, err := decodeSection[T](path, string(raw), name)
 		if err != nil {
 			return fmt.Errorf("the new %s would not read back, so nothing was written: %w", path, err)
 		}
-		if !found || !got.matches(want) || !bytes.HasPrefix(raw, []byte(existing)) {
+		if !found || !ok(got) || !bytes.HasPrefix(raw, []byte(existing)) {
 			return fmt.Errorf("the new %s would not read back as asked, so nothing was written", path)
 		}
 		return nil

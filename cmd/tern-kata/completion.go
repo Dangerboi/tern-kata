@@ -3,14 +3,16 @@ package main
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-// workerForms are the operands `tern-kata worker` takes first.
+// docbankForms are the operands `tern-kata docbank` takes first.
 var docbankForms = []string{"setup", "supervised", "supervise"}
 
+// workerForms are the operands `tern-kata worker` takes first.
 var workerForms = []string{"init", "add", "edit", "upgrade", "status", "stop", "supervised", "doctor", "resume", "abandon"}
 
 // viewsForms are the operands `tern-kata views` takes first.
@@ -117,26 +119,10 @@ func fishCompletion() string {
 	line("-l version -d 'print the version and exit'")
 	line("-s h -l help -d 'print the help and exit'")
 	line("-n '__fish_seen_subcommand_from migrate-attachments recur run views completion worker update agent' -f")
-	for _, f := range agentFlags {
-		if f.name == "as" { // the global --as above already offers it
-			continue
-		}
-		value := ""
-		if f.takesValue {
-			value = " -r"
-		}
-		// after the lone -- the words are the command's, which bash completion leaves alone too
-		line("-n '__fish_seen_subcommand_from agent; and not contains -- -- (commandline -opc)' -l %s%s -d '%s'", f.name, value, strings.ReplaceAll(f.what, "'", `\'`))
-	}
+	fishTableFlags(line, agentFlags, "agent; and not contains -- -- (commandline -opc)", "as") // after the lone -- the words are the command's, which bash completion leaves alone too
 	line("-n '__fish_seen_subcommand_from docbank; and not __fish_seen_subcommand_from %[1]s' -f -a '%[1]s'", strings.Join(docbankForms, " "))
 	line("-n '__fish_seen_subcommand_from supervise; and not __fish_seen_subcommand_from on off' -f -a 'on off'")
-	for _, f := range docbankFlags {
-		value := ""
-		if f.takesValue {
-			value = " -r"
-		}
-		line("-n '__fish_seen_subcommand_from docbank' -l %s%s -d '%s'", f.name, value, strings.ReplaceAll(f.what, "'", `\'`))
-	}
+	fishTableFlags(line, docbankFlags, "docbank")
 	line("-n '__fish_seen_subcommand_from update' -l force -d 'install even when a check refuses'")
 	line("-n '__fish_seen_subcommand_from update' -l pause -d 'wait for Enter after a success'")
 	line("-n '__fish_seen_subcommand_from completion' -a '%s'", strings.Join(completionShells, " "))
@@ -157,4 +143,19 @@ func fishCompletion() string {
 	line("-n '__fish_seen_subcommand_from status show' -l json -d 'the status or the Issues as JSON'")
 	line("-n '__fish_seen_subcommand_from stop' -l now -d 'end the worker at once'")
 	return b.String()
+}
+
+// fishTableFlags writes one fish completion per flag of table, offered where the subcommand condition holds. skip names a flag
+// another line already offers (the global --as).
+func fishTableFlags(line func(string, ...any), table []tableFlag, condition string, skip ...string) {
+	for _, f := range table {
+		if slices.Contains(skip, f.name) {
+			continue
+		}
+		value := ""
+		if f.takesValue {
+			value = " -r"
+		}
+		line("-n '__fish_seen_subcommand_from %s' -l %s%s -d '%s'", condition, f.name, value, strings.ReplaceAll(f.what, "'", `\'`))
+	}
 }

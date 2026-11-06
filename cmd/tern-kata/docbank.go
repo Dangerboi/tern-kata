@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -23,16 +24,23 @@ import (
 )
 
 // docbankUsage is what `tern-kata docbank` refuses a command line with.
-const docbankUsage = "usage: tern-kata docbank supervised | docbank supervise on|off | docbank setup [--url <url> (--key-file <file>|- | --key-env <NAME>) | --port <port>] [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]"
+const docbankUsage = "usage: tern-kata docbank supervised [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>] | docbank supervise on|off | docbank setup [--url <url> (--key-file <file>|- | --key-env <NAME>) | --port <port>] [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]"
 
-// docbankFlag sets one of the flags of `docbank setup` that the plan records by name.
-func docbankFlag(name string) func(*LaunchPlan, string) {
-	return func(p *LaunchPlan, v string) {
-		if p.DocbankFlags == nil {
-			p.DocbankFlags = map[string]string{}
-		}
-		p.DocbankFlags[name] = v
+// DocbankSetup is what `docbank setup`'s own flags record; unset ones are zero. The route flags it takes record into AgentRoute.
+type DocbankSetup struct {
+	URL, KeyFile, KeyEnv, Folder string
+	Port                         int
+	Yes, NoRestart               bool
+}
+
+// setPort records --port. A setter cannot return the refusal, so it waits in plan.docbankErr for planDocbank; Port stays 0 then.
+func setPort(p *LaunchPlan, v string) {
+	n, err := parsePort(v)
+	if err != nil {
+		p.docbankErr = cmp.Or(p.docbankErr, err)
+		return
 	}
+	p.Docbank.Port = n
 }
 
 // docbankRouteFlags are the route flags that pick which kata daemon's config is written; the others only carry the Pane's credentials
@@ -41,15 +49,16 @@ var docbankRouteFlags = slices.DeleteFunc(slices.Clone(routeFlags), func(f table
 	return !slices.Contains([]string{"home", "db", "schema", "daemon", "server"}, f.name)
 })
 
-// docbankFlags is the flag table of `docbank setup`: its parser, usage, help and every completion script read it.
+// docbankFlags is the flag table of `docbank setup`: its parser and every completion script read it; docbankUsage and the help are
+// prose that names each flag by hand (a test holds them to the table).
 var docbankFlags = slices.Concat([]tableFlag{
-	{"url", true, "the address of a Docbank someone else runs; without it Docbank is set up on this machine", docbankFlag("url")},
-	{"port", true, "the port Docbank on this machine listens on (default 8080); without --url only", docbankFlag("port")},
-	{"key-file", true, "a file holding the Docbank API key, or - for standard input", docbankFlag("key-file")},
-	{"key-env", true, "the name of a variable holding the Docbank API key", docbankFlag("key-env")},
-	{"folder", true, "the vault folder kata uses (default /kata)", docbankFlag("folder")},
-	{"yes", false, "restart the kata daemon without asking", func(p *LaunchPlan, _ string) { p.DocbankYes = true }},
-	{"no-restart", false, "leave the kata daemon alone and print the restart command", func(p *LaunchPlan, _ string) { p.DocbankNoRestart = true }},
+	{"url", true, "the address of a Docbank someone else runs; without it Docbank is set up on this machine", func(p *LaunchPlan, v string) { p.Docbank.URL = v }},
+	{"port", true, "the port Docbank on this machine listens on (default 8080); without --url only", setPort},
+	{"key-file", true, "a file holding the Docbank API key, or - for standard input", func(p *LaunchPlan, v string) { p.Docbank.KeyFile = v }},
+	{"key-env", true, "the name of a variable holding the Docbank API key", func(p *LaunchPlan, v string) { p.Docbank.KeyEnv = v }},
+	{"folder", true, "the vault folder kata uses (default /kata)", func(p *LaunchPlan, v string) { p.Docbank.Folder = v }},
+	{"yes", false, "restart the kata daemon without asking", func(p *LaunchPlan, _ string) { p.Docbank.Yes = true }},
+	{"no-restart", false, "leave the kata daemon alone and print the restart command", func(p *LaunchPlan, _ string) { p.Docbank.NoRestart = true }},
 }, docbankRouteFlags)
 
 func docbankFlagNames() []string { return flagNames(docbankFlags) }
@@ -58,31 +67,22 @@ func docbankFlagNames() []string { return flagNames(docbankFlags) }
 // runs (--key-file or --key-env); without it, it sets Docbank up on this machine (--port).
 func planDocbank(args []string) (LaunchPlan, error) {
 	plan := LaunchPlan{Subcommand: "docbank"}
-	var operands []string
-	flagsEnded := false
-	for i := 1; i < len(args); i++ {
-		arg := args[i]
-		if flagsEnded || !strings.HasPrefix(arg, "--") {
-			operands = append(operands, arg)
-			continue
+	operands, err := scanOperands(args, func(i *int) error {
+		matched, err := parseTableFlag(docbankFlags, "docbank", docbankUsage, args, i, &plan)
+		if err == nil && !matched {
+			err = fmt.Errorf("docbank: unknown flag %s", args[*i])
 		}
-		if arg == "--" {
-			flagsEnded = true
-			continue
-		}
-		matched, err := parseTableFlag(docbankFlags, "docbank", docbankUsage, args, &i, &plan)
-		if err != nil {
-			return LaunchPlan{}, err
-		}
-		if !matched {
-			return LaunchPlan{}, fmt.Errorf("docbank: unknown flag %s", arg)
-		}
+		return err
+	})
+	if err != nil {
+		return LaunchPlan{}, err
 	}
-	flags := plan.DocbankFlags
-	remote := flags["url"] != ""
+	d := plan.Docbank
+	remote := d.URL != ""
+	portGiven := d.Port != 0 || plan.docbankErr != nil
 	switch {
 	case slices.Equal(operands, []string{"supervised"}) || (len(operands) == 2 && operands[0] == "supervise" && (operands[1] == "on" || operands[1] == "off")):
-		if len(flags) > 0 || plan.DocbankYes || plan.DocbankNoRestart {
+		if d != (DocbankSetup{}) || portGiven {
 			return LaunchPlan{}, fmt.Errorf("docbank %s takes no setup flag; %s", operands[0], docbankUsage)
 		}
 		if operands[0] == "supervise" && !reflect.ValueOf(plan.AgentRoute).IsZero() {
@@ -92,21 +92,18 @@ func planDocbank(args []string) (LaunchPlan, error) {
 		return plan, nil
 	case !slices.Equal(operands, []string{"setup"}):
 		return LaunchPlan{}, fmt.Errorf("docbank: expected `setup`, `supervised` or `supervise on|off`; %s", docbankUsage)
-	case plan.DocbankYes && plan.DocbankNoRestart:
+	case d.Yes && d.NoRestart:
 		return LaunchPlan{}, fmt.Errorf("docbank setup: --yes and --no-restart exclude each other; %s", docbankUsage)
-	case remote && flags["port"] != "":
+	case remote && portGiven:
 		return LaunchPlan{}, fmt.Errorf("docbank setup: --port is for Docbank on this machine and excludes --url; %s", docbankUsage)
-	case !remote && (flags["key-file"] != "" || flags["key-env"] != ""):
+	case !remote && (d.KeyFile != "" || d.KeyEnv != ""):
 		return LaunchPlan{}, fmt.Errorf("docbank setup: --key-file and --key-env need --url: setting Docbank up on this machine makes its own key; %s", docbankUsage)
-	case remote && flags["key-file"] == "" && flags["key-env"] == "":
+	case remote && d.KeyFile == "" && d.KeyEnv == "":
 		return LaunchPlan{}, fmt.Errorf("docbank setup: --key-file or --key-env is required with --url; %s", docbankUsage)
-	case remote && flags["key-file"] != "" && flags["key-env"] != "":
+	case remote && d.KeyFile != "" && d.KeyEnv != "":
 		return LaunchPlan{}, fmt.Errorf("docbank setup: --key-file and --key-env exclude each other; %s", docbankUsage)
-	}
-	if v, ok := flags["port"]; ok {
-		if _, err := parsePort(v); err != nil {
-			return LaunchPlan{}, fmt.Errorf("docbank setup: %w; %s", err, docbankUsage)
-		}
+	case plan.docbankErr != nil:
+		return LaunchPlan{}, fmt.Errorf("docbank setup: %w; %s", plan.docbankErr, docbankUsage)
 	}
 	plan.Operands = operands
 	return plan, nil
@@ -141,6 +138,12 @@ func newDocbankEnv(plan LaunchPlan, stdin io.Reader, out io.Writer) (docbanksetu
 	if err != nil {
 		return docbanksetup.Env{}, err
 	}
+	// The default daemon is the one `docbank supervised` asks about; resolved before the route's KATA_HOME is set below. Left empty
+	// when it cannot be resolved (KATA_SERVER set), which no daemon then matches.
+	var defaultHome string
+	if def, err := data.ResolveLocalDaemon(data.AgentRoute{}); err == nil {
+		defaultHome = def.Home
+	}
 	// prefix is the part of the route a person must retype to run the restart command themselves.
 	var prefix strings.Builder
 	for _, v := range []struct{ name, value string }{{"KATA_HOME", daemon.Base}, {"KATA_DB", daemon.DB}, {"KATA_POSTGRES_SCHEMA", daemon.Schema}} {
@@ -161,17 +164,22 @@ func newDocbankEnv(plan LaunchPlan, stdin io.Reader, out io.Writer) (docbanksetu
 		locate = data.LocateNamed(daemon.Name, "")
 	}
 	env := docbanksetup.Env{
-		KataHome:      daemon.Home,
-		DocbankHome:   dbHome,
-		ConfigDir:     configDir,
-		Daemon:        daemon.Name,
-		CommandPrefix: prefix.String(),
-		Runner:        docbanksetup.ExecRunner{},
-		HTTP:          &http.Client{Timeout: 30 * time.Second},
-		Locate:        locate,
-		LookupEnv:     os.LookupEnv,
-		Stdin:         stdin,
-		Out:           out,
+		KataHome:        daemon.Home,
+		DefaultKataHome: defaultHome,
+		DocbankHome:     dbHome,
+		ConfigDir:       configDir,
+		Daemon:          daemon.Name,
+		CommandPrefix:   prefix.String(),
+		Runner:          docbanksetup.ExecRunner{},
+		// X-Api-Key must never follow a redirect: Go would copy it to the new host.
+		HTTP: &http.Client{
+			Timeout:       30 * time.Second,
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		},
+		Locate:    locate,
+		LookupEnv: os.LookupEnv,
+		Stdin:     stdin,
+		Out:       out,
 	}
 	// A terminal on standard input can be asked; with --key-file - the input is the key, which leaves nothing to ask on.
 	if f, ok := stdin.(*os.File); ok && stdinIsTerminal(stdin) {
@@ -187,40 +195,47 @@ var stdinIsTerminal = func(r io.Reader) bool {
 	return ok && term.IsTerminal(int(f.Fd()))
 }
 
-// runDocbank is `docbank setup`: it points the chosen kata daemon at the Docbank --url names, or at one it sets up on this machine.
+// runDocbank runs the docbank form plan.Operands[0] names against env: setup points the chosen kata daemon at the Docbank --url
+// names, or at one it sets up on this machine; supervised answers the plugin host half's question; supervise on|off writes or
+// removes the marker. docbankEnvFor builds the env each form needs.
 func runDocbank(ctx context.Context, plan LaunchPlan, env docbanksetup.Env) error {
-	if plan.Operands[0] == "supervised" {
+	switch plan.Operands[0] {
+	case "supervised":
 		return printDocbankSupervised(env)
+	case "supervise":
+		return runDocbankSupervise(plan, env)
 	}
-	if plan.DocbankFlags["key-file"] == "-" {
+	d := plan.Docbank
+	if d.KeyFile == "-" {
 		if stdinIsTerminal(env.Stdin) {
 			return usageError{fmt.Errorf("docbank setup: --key-file - reads the key from standard input, which is a terminal here; pipe the key in (for instance `... | tern-kata docbank setup --key-file - ...`) or use --key-file <file> or --key-env")}
 		}
 		env.Confirm = nil
 	}
+	common := docbanksetup.Common{Folder: d.Folder, Yes: d.Yes, NoRestart: d.NoRestart}
 	var err error
-	if plan.DocbankFlags["url"] == "" {
-		port, _ := strconv.Atoi(plan.DocbankFlags["port"]) // checked when the plan was made; absent is 0
-		err = env.SetupLocal(ctx, docbanksetup.Local{
-			Port:      port,
-			Folder:    plan.DocbankFlags["folder"],
-			Yes:       plan.DocbankYes,
-			NoRestart: plan.DocbankNoRestart,
-		})
+	if d.URL == "" {
+		err = env.SetupLocal(ctx, docbanksetup.Local{Common: common, Port: d.Port})
 	} else {
-		err = env.SetupRemote(ctx, docbanksetup.Remote{
-			URL:       plan.DocbankFlags["url"],
-			KeyFile:   plan.DocbankFlags["key-file"],
-			KeyEnv:    plan.DocbankFlags["key-env"],
-			Folder:    plan.DocbankFlags["folder"],
-			Yes:       plan.DocbankYes,
-			NoRestart: plan.DocbankNoRestart,
-		})
+		err = env.SetupRemote(ctx, docbanksetup.Remote{Common: common, URL: d.URL, KeyFile: d.KeyFile, KeyEnv: d.KeyEnv})
 	}
 	if err != nil {
 		return subcommandError{err}
 	}
 	return nil
+}
+
+// docbankEnvFor is the environment of the docbank form plan names: `supervise` needs no kata daemon to be resolved, the others
+// resolve the one the route chooses.
+func docbankEnvFor(plan LaunchPlan, out io.Writer) (docbanksetup.Env, error) {
+	if plan.Operands[0] != "supervise" {
+		return newDocbankEnv(plan, os.Stdin, out)
+	}
+	dir, err := worker.ConfigDir()
+	if err != nil {
+		return docbanksetup.Env{}, err
+	}
+	return docbanksetup.Env{ConfigDir: dir, Out: out}, nil
 }
 
 // printDocbankSupervised is `docbank supervised`, the plugin host half's one question about Docbank: the rule is
@@ -233,18 +248,6 @@ func printDocbankSupervised(env docbanksetup.Env) error {
 	}
 	_, err := fmt.Fprintln(env.Out, "on")
 	return err
-}
-
-// docbankSupervisionEnv is the environment of `docbank supervised` and `docbank supervise`, which need no kata daemon to be resolved.
-func docbankSupervisionEnv(plan LaunchPlan, out io.Writer) (docbanksetup.Env, error) {
-	if plan.Operands[0] == "supervised" {
-		return newDocbankEnv(plan, os.Stdin, out)
-	}
-	dir, err := worker.ConfigDir()
-	if err != nil {
-		return docbanksetup.Env{}, err
-	}
-	return docbanksetup.Env{ConfigDir: dir, Out: out}, nil
 }
 
 // runDocbankSupervise is `docbank supervise on|off`: it removes or creates the marker and says what it did.

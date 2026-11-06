@@ -153,56 +153,47 @@ func fishFlags(t *testing.T, words ...string) map[string]bool {
 	return flags
 }
 
-func TestAgentFlagsAreInUsageHelpAndBothCompletions(t *testing.T) {
-	helpEntry := usage[strings.Index(usage, "\n  agent ["):strings.Index(usage, "\n  completion <shell>")]
-	var usageLine string
-	for _, l := range strings.Split(usage, "\n") {
-		if strings.HasPrefix(l, "  tern-kata agent ") {
-			usageLine = l
-		}
-	}
-	bash := complete(t, "agent", "--")
-	fish := fishFlags(t, "agent")
-	fish["--as"] = true // the global --as, which fishFlags leaves out
-	for _, f := range agentFlags {
-		flag := "--" + f.name
-		for place, text := range map[string]string{"agentUsage": agentUsage, "the usage line": usageLine, "the help entry": helpEntry} {
-			if !regexp.MustCompile(regexp.QuoteMeta(flag) + `[^-\w]`).MatchString(text) {
-				t.Errorf("%s does not name %s", place, flag)
+func TestTableFlagsAreInUsageHelpAndBothCompletions(t *testing.T) {
+	for _, tc := range []struct {
+		command      string
+		table        []tableFlag
+		usage        string
+		helpFrom     string // the help entry runs from here to helpTo
+		helpTo       string
+		completeWord []string // the words before the flags
+		globalAs     bool     // fish leaves the global --as out
+	}{
+		{"agent", agentFlags, agentUsage, "\n  agent [", "\n  completion <shell>", []string{"agent"}, true},
+		{"docbank", docbankFlags, docbankUsage, "\n  docbank setup", "\n  agent [", []string{"docbank", "setup"}, false},
+	} {
+		t.Run(tc.command, func(t *testing.T) {
+			helpEntry := usage[strings.Index(usage, tc.helpFrom):strings.Index(usage, tc.helpTo)]
+			var usageLine string
+			for _, l := range strings.Split(usage, "\n") {
+				if strings.HasPrefix(l, "  tern-kata "+tc.command+" ") {
+					usageLine = l
+				}
 			}
-		}
-		if !slices.Contains(bash, flag) {
-			t.Errorf("bash completion of agent does not offer %s", flag)
-		}
-		if !fish[flag] {
-			t.Errorf("fish completion of agent does not offer %s", flag)
-		}
-	}
-}
-
-func TestDocbankFlagsAreInUsageHelpAndBothCompletions(t *testing.T) {
-	helpEntry := usage[strings.Index(usage, "\n  docbank setup"):strings.Index(usage, "\n  agent [")]
-	var usageLine string
-	for _, l := range strings.Split(usage, "\n") {
-		if strings.HasPrefix(l, "  tern-kata docbank ") {
-			usageLine = l
-		}
-	}
-	bash := complete(t, "docbank", "setup", "--")
-	fish := fishFlags(t, "docbank", "setup")
-	for _, f := range docbankFlags {
-		flag := "--" + f.name
-		for place, text := range map[string]string{"docbankUsage": docbankUsage, "the usage line": usageLine, "the help entry": helpEntry} {
-			if !regexp.MustCompile(regexp.QuoteMeta(flag) + `[^-\w]`).MatchString(text) {
-				t.Errorf("%s does not name %s", place, flag)
+			bash := complete(t, append(slices.Clone(tc.completeWord), "--")...)
+			fish := fishFlags(t, tc.completeWord...)
+			if tc.globalAs {
+				fish["--as"] = true
 			}
-		}
-		if !slices.Contains(bash, flag) {
-			t.Errorf("bash completion of docbank does not offer %s", flag)
-		}
-		if !fish[flag] {
-			t.Errorf("fish completion of docbank does not offer %s", flag)
-		}
+			for _, f := range tc.table {
+				flag := "--" + f.name
+				for place, text := range map[string]string{tc.command + "Usage": tc.usage, "the usage line": usageLine, "the help entry": helpEntry} {
+					if !regexp.MustCompile(regexp.QuoteMeta(flag) + `[^-\w]`).MatchString(text) {
+						t.Errorf("%s does not name %s", place, flag)
+					}
+				}
+				if !slices.Contains(bash, flag) {
+					t.Errorf("bash completion of %s does not offer %s", tc.command, flag)
+				}
+				if !fish[flag] {
+					t.Errorf("fish completion of %s does not offer %s", tc.command, flag)
+				}
+			}
+		})
 	}
 }
 

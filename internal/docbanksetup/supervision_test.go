@@ -73,3 +73,32 @@ func TestSetSupervisionCreatesAndRemovesThePrivateMarker(t *testing.T) {
 		t.Errorf("a second on: %v", err)
 	}
 }
+
+func TestSupervisionRuleAndReportFollowTheDefaultDaemon(t *testing.T) {
+	const local = "[docbank]\nurl = \"http://127.0.0.1:8080\"\napi_key = \"k\"\n"
+	const server = "[server]\nbind_addr = \"127.0.0.1\"\napi_port = 8080\napi_key = \"k\"\n"
+	e := supervisionEnv(t, "", server) // the daemon being set up has no [docbank] section yet
+	e.DefaultKataHome = t.TempDir()
+	if err := os.WriteFile(filepath.Join(e.DefaultKataHome, "config.toml"), []byte(local), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if on, why := e.Supervised(); !on {
+		t.Errorf("the rule must read the default daemon's config: %q", why)
+	}
+	var out strings.Builder
+	e.Out = &out
+	if err := e.reportSupervision(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "only for the default kata daemon") || strings.Contains(out.String(), "its host half starts it") {
+		t.Errorf("a daemon that is not the default one was told the plugin keeps its Docbank running:\n%s", out.String())
+	}
+	out.Reset()
+	e.DefaultKataHome = e.KataHome
+	if err := os.WriteFile(filepath.Join(e.KataHome, "config.toml"), []byte(local), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.reportSupervision(); err != nil || !strings.Contains(out.String(), "its host half starts it") {
+		t.Errorf("the default daemon: %q, %v", out.String(), err)
+	}
+}

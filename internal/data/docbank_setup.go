@@ -3,12 +3,9 @@ package data
 import (
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
 // LocalDaemon is the kata daemon whose config `tern-kata docbank setup` writes: one whose config.toml is on this machine.
@@ -67,23 +64,16 @@ func ResolveLocalDaemon(route AgentRoute) (LocalDaemon, error) {
 	return LocalDaemon{Base: base, Home: home, Name: entry.Name}, nil
 }
 
-// CheckAttachments connects to the daemon locate finds and asks whether it has a Docbank to store attachments in, which kata reads
-// from its config.toml only at start. A daemon with none is reported in the Pane's words, as every other failure is.
-func CheckAttachments(ctx context.Context, locate Locator, workspace string) error {
+// AttachmentsConfigured connects to the daemon locate finds and asks whether it has a Docbank to store attachments in, which kata
+// reads from its config.toml only at start. A daemon that cannot be reached or asked is an error, as every other failure is.
+func AttachmentsConfigured(ctx context.Context, locate Locator, workspace string) (bool, error) {
 	target, err := locate(ctx, workspace)
 	if err != nil {
-		return err
+		return false, err
 	}
 	c, err := connect(ctx, target)
 	if err != nil {
-		return err
+		return false, err
 	}
-	configured, err := c.attachmentsConfigured(ctx)
-	if err != nil {
-		return err
-	}
-	if !configured {
-		return errors.New(model.DocbankOffMessage)
-	}
-	return nil
+	return c.attachmentsConfigured(ctx)
 }

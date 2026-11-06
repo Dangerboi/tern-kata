@@ -30,8 +30,6 @@ local POLL_MS = 10000
 local RUN_LIMIT_MS = 7 * 24 * 3600 * 1000
 
 local running = false
-local delay = MIN_DELAY
-local next_start = 0
 -- worker.toml's text when the worker was last started: a different text on disk means the wait no longer applies.
 local started_text: string? = nil
 -- A `worker supervised` question is out; its answer arms the next look.
@@ -45,12 +43,28 @@ local ASK_LIMIT_MS = 10000
 local HELD = 4
 local KV_HELD = "supervision.held"
 local held_line: string? = nil
-local handle: TimerHandle? = nil
+
+-- Restart timing of one supervised program: the delay the next restart waits and the time before which none starts.
+type Backoff = { delay: number, next: number }
+
+local function new_backoff(): Backoff
+    return { delay = MIN_DELAY, next = 0 }
+end
+
+local worker_backoff = new_backoff()
 
 -- The next start comes at once and at the shortest delay, as after a healthy run.
-local function reset_backoff()
-    delay = MIN_DELAY
-    next_start = 0
+local function reset_backoff(backoff: Backoff)
+    backoff.delay = MIN_DELAY
+    backoff.next = 0
+end
+
+-- Books the next start after the current delay and doubles the delay for the one after. Returns the delay waited.
+local function schedule_restart(backoff: Backoff): number
+    local waited = backoff.delay
+    backoff.next = tern.now() + waited
+    backoff.delay = math.min(waited * 2, MAX_DELAY)
+    return waited
 end
 
 local function join(...: string): string
@@ -110,8 +124,8 @@ local function find_binary(base: string?): string?
     return nil
 end
 
--- The daemon's PATH, then the known folders that exist, so the worker finds omp however Tern was started.
-local function worker_path(): string
+-- The daemon's PATH, then the known folders that exist, so a started program finds omp however Tern was started.
+local function tool_path(): string
     local dirs = split_path()
     local seen: { [string]: boolean } = {}
     for _, dir in dirs do seen[dir] = true end
@@ -131,15 +145,30 @@ local function home_dir(): string?
     return env(if windows then "USERPROFILE" else "HOME")
 end
 
+-- What every process the host half starts gets: the home folder, the plugin's PATH, a time limit, extra variables.
+local function process_options(timeout_ms: number, extra_env: { [string]: string }?)
+    local vars = { PATH = tool_path() }
+    if extra_env then
+        for name, value in extra_env do vars[name] = value end
+    end
+    return { cwd = home_dir(), env = vars, timeout_ms = timeout_ms }
+end
+
 local start
 
-local function arm(ms: number)
-    if handle then handle:cancel() end
-    handle = tern.timer(ms, function()
-        handle = nil
-        start()
-    end)
+-- A timer slot: arming it cancels the one pending, and when it fires it calls fire().
+local function scheduler(fire: () -> ()): (number) -> ()
+    local pending: TimerHandle? = nil
+    return function(ms: number)
+        if pending then pending:cancel() end
+        pending = tern.timer(ms, function()
+            pending = nil
+            fire()
+        end)
+    end
 end
+
+local arm = scheduler(function() start() end)
 
 local function last_line(text: string): string
     local line = ""
@@ -149,25 +178,20 @@ end
 
 -- Starts the worker if the backoff allows. config is worker.toml's text, which `worker supervised` printed.
 local function launch(binary: string, config: string)
-    local wait = next_start - tern.now()
+    local wait = worker_backoff.next - tern.now()
     if wait > 0 then return arm(math.min(wait, POLL_MS)) end
     started_text = config
     local started = tern.now()
     local function exited(result: ProcessResult)
         running = false
         local ran = tern.now() - started
-        if ran >= HEALTHY_MS or result.timed_out then delay = MIN_DELAY end
-        tern.log.warn("tern-kata: the worker exited with status " .. result.status .. " after " .. ran // 1000 .. " s (" .. last_line(result.stderr) .. "); restarting in " .. delay // 1000 .. " s")
-        next_start = tern.now() + delay
-        delay = math.min(delay * 2, MAX_DELAY)
-        arm(math.min(next_start - tern.now(), POLL_MS))
+        if ran >= HEALTHY_MS or result.timed_out then worker_backoff.delay = MIN_DELAY end
+        local waited = schedule_restart(worker_backoff)
+        tern.log.warn("tern-kata: the worker exited with status " .. result.status .. " after " .. ran // 1000 .. " s (" .. last_line(result.stderr) .. "); restarting in " .. waited // 1000 .. " s")
+        arm(math.min(worker_backoff.next - tern.now(), POLL_MS))
     end
     local ok, err = pcall(function()
-        tern.process.run({binary, "worker"}, {
-            cwd = home_dir(),
-            env = { PATH = worker_path(), TERN_KATA_SUPERVISOR = "tern" },
-            timeout_ms = RUN_LIMIT_MS,
-        }, exited)
+        tern.process.run({binary, "worker"}, process_options(RUN_LIMIT_MS, { TERN_KATA_SUPERVISOR = "tern" }), exited)
     end)
     if ok then
         running = true
@@ -175,9 +199,8 @@ local function launch(binary: string, config: string)
         arm(POLL_MS)
     else
         tern.log.warn("tern-kata: could not start the worker: " .. tostring(err))
-        next_start = tern.now() + delay
-        delay = math.min(delay * 2, MAX_DELAY)
-        arm(math.min(next_start - tern.now(), POLL_MS))
+        schedule_restart(worker_backoff)
+        arm(math.min(worker_backoff.next - tern.now(), POLL_MS))
     end
 end
 
@@ -206,12 +229,12 @@ local function answered(binary: string, result: ProcessResult)
                 tern.log.warn("tern-kata: " .. line)
             end
         end
-        reset_backoff()
+        reset_backoff(worker_backoff)
         return arm(POLL_MS)
     end
     if result.status ~= 0 then
         if result.status == 1 and not result.timed_out then
-            reset_backoff()
+            reset_backoff(worker_backoff)
             started_text = nil
             forget_held()
         elseif not result.timed_out and result.status ~= -1 and not warned_status then
@@ -223,7 +246,7 @@ local function answered(binary: string, result: ProcessResult)
     forget_held()
     local config = result.stdout
     if started_text ~= nil and config ~= started_text then
-        reset_backoff()
+        reset_backoff(worker_backoff)
         started_text = nil
     end
     launch(binary, config)
@@ -244,11 +267,9 @@ function start()
     warned_missing = false
     asking = true
     local ok, err = pcall(function()
-        tern.process.run({binary, "worker", "supervised"}, {
-            cwd = home_dir(),
-            env = { PATH = worker_path() },
-            timeout_ms = ASK_LIMIT_MS,
-        }, function(result: ProcessResult) answered(binary, result) end)
+        tern.process.run({binary, "worker", "supervised"}, process_options(ASK_LIMIT_MS), function(result: ProcessResult)
+            answered(binary, result)
+        end)
     end)
     if not ok then
         asking = false
@@ -262,51 +283,38 @@ end
 -- schedule only: the worker's poll and backoff, one log line per change (a start, a failed start), never one per poll.
 
 local DOCBANK_START_LIMIT_MS = 30000
-local docbank_delay = MIN_DELAY
-local docbank_next = 0
+local docbank_backoff = new_backoff()
 local docbank_started_at = 0
 local docbank_failing = false
 local docbank_asking = false
 local docbank_warned_missing = false
 local docbank_warned_status = false
-local docbank_handle: TimerHandle? = nil
 
 local docbank_check
-
-local function docbank_arm(ms: number)
-    if docbank_handle then docbank_handle:cancel() end
-    docbank_handle = tern.timer(ms, function()
-        docbank_handle = nil
-        docbank_check()
-    end)
-end
+local docbank_arm = scheduler(function() docbank_check() end)
 
 local function docbank_reset()
-    docbank_delay = MIN_DELAY
-    docbank_next = 0
+    reset_backoff(docbank_backoff)
     docbank_failing = false
 end
 
 -- Docbank is not running and the backoff allows: its own detached start, from the home folder with the plugin's PATH.
 local function docbank_start(docbank: string)
-    local wait = docbank_next - tern.now()
+    local wait = docbank_backoff.next - tern.now()
     if wait > 0 then return docbank_arm(math.min(wait, POLL_MS)) end
-    docbank_next = tern.now() + docbank_delay
-    docbank_delay = math.min(docbank_delay * 2, MAX_DELAY)
+    schedule_restart(docbank_backoff)
     docbank_started_at = tern.now()
     local function failed(why: string)
+        -- What is left of the backoff is the real wait before the retry; the timer only looks at least every poll.
+        local left = math.max(docbank_backoff.next - tern.now(), 0)
         if not docbank_failing then
             docbank_failing = true
-            tern.log.warn("tern-kata: could not start Docbank (" .. why .. "); trying again in " .. math.max(docbank_next - tern.now(), 0) // 1000 .. " s")
+            tern.log.warn("tern-kata: could not start Docbank (" .. why .. "); trying again in " .. left // 1000 .. " s")
         end
-        docbank_arm(POLL_MS)
+        docbank_arm(math.min(left, POLL_MS))
     end
     local ok, err = pcall(function()
-        tern.process.run({docbank, "daemon", "start"}, {
-            cwd = home_dir(),
-            env = { PATH = worker_path() },
-            timeout_ms = DOCBANK_START_LIMIT_MS,
-        }, function(result: ProcessResult)
+        tern.process.run({docbank, "daemon", "start"}, process_options(DOCBANK_START_LIMIT_MS), function(result: ProcessResult)
             if result.status == 0 and not result.timed_out then
                 docbank_failing = false
                 tern.log.warn("tern-kata: Docbank was not running; started it (" .. docbank .. " daemon start)")
@@ -351,11 +359,9 @@ local function docbank_answered(result: ProcessResult)
     end
     docbank_warned_missing = false
     local ok, err = pcall(function()
-        tern.process.run({docbank, "daemon", "status"}, {
-            cwd = home_dir(),
-            env = { PATH = worker_path() },
-            timeout_ms = ASK_LIMIT_MS,
-        }, function(status: ProcessResult) docbank_looked(docbank, status) end)
+        tern.process.run({docbank, "daemon", "status"}, process_options(ASK_LIMIT_MS), function(status: ProcessResult)
+            docbank_looked(docbank, status)
+        end)
     end)
     if not ok then
         tern.log.warn("tern-kata: could not ask Docbank whether it runs: " .. tostring(err))
@@ -370,11 +376,7 @@ function docbank_check()
     if binary == nil then return docbank_arm(POLL_MS) end -- the worker loop says so
     docbank_asking = true
     local ok, err = pcall(function()
-        tern.process.run({binary, "docbank", "supervised"}, {
-            cwd = home_dir(),
-            env = { PATH = worker_path() },
-            timeout_ms = ASK_LIMIT_MS,
-        }, docbank_answered)
+        tern.process.run({binary, "docbank", "supervised"}, process_options(ASK_LIMIT_MS), docbank_answered)
     end)
     if not ok then
         docbank_asking = false
