@@ -304,6 +304,7 @@ var cardBindings = []Binding{
 	{Chord: "g", Key: "g", Action: AgentCardNewBackground, Help: "new agent in the background", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "b", Key: "b", Action: AgentCardBackground, Help: "send to background", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "m", Key: "m", Action: AgentCardMessage, Help: "message agent", Mode: ModeAgentCard, ShowInFooter: true},
+	{Chord: "r", Key: "r", Action: AgentCardQuickReply, Help: "quick reply", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: AgentCardCancel, Help: "cancel", Mode: ModeAgentCard, ShowInFooter: true},
 	// Message card: one message field, so every other key is typed; once kata holds an unread message, it asks before replacing it.
 	{Chord: "enter", Key: "enter", Action: AgentMessageSend, Help: "send", Mode: ModeAgentMessage, ShowInFooter: true},
@@ -311,6 +312,11 @@ var cardBindings = []Binding{
 	{Chord: "escape", Key: "esc", Action: AgentMessageCancel, Help: "cancel", Mode: ModeAgentMessage, ShowInFooter: true},
 	{Chord: "enter", Key: "enter", Action: AgentMessageReplace, Help: "replace it", Mode: ModeAgentMessageReplace, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: AgentMessageKeep, Help: "keep editing", Mode: ModeAgentMessageReplace, ShowInFooter: true},
+	// Quick-reply picker: 1, 2 or 3 sends that canned message through the Message card's send.
+	{Chord: "1", Key: "1", Action: AgentQuickReplyOne, Help: "continue", Mode: ModeAgentQuickReply, ShowInFooter: true},
+	{Chord: "2", Key: "2", Action: AgentQuickReplyTwo, Help: "wrap up", Mode: ModeAgentQuickReply, ShowInFooter: true},
+	{Chord: "3", Key: "3", Action: AgentQuickReplyThree, Help: "commit and close", Mode: ModeAgentQuickReply, ShowInFooter: true},
+	{Chord: "escape", Key: "esc", Action: AgentMessageCancel, Help: "cancel", Mode: ModeAgentQuickReply, ShowInFooter: true},
 	// Adoption confirmation of the Federation Page's enrollment: one name field, so every other key is typed.
 	// Spoke name card: one name field, so every other key is typed; an empty name clears it.
 	{Chord: "enter", Key: "enter", Action: FederationNameSave, Help: "save name", Mode: ModeFederationName, ShowInFooter: true},

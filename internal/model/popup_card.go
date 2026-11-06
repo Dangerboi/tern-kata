@@ -338,10 +338,10 @@ func buildCards() []cardEntry {
 		},
 		{
 			card: CardAgentMessage, name: "agent-message", open: func(m Model) bool { return m.AgentMessage.Open },
-			modes: []Mode{ModeAgentMessage, ModeAgentMessageReplace}, mode: Model.AgentMessageMode,
+			modes: []Mode{ModeAgentMessage, ModeAgentMessageReplace, ModeAgentQuickReply}, mode: Model.AgentMessageMode,
 			key: agentMessageKey,
-			// The message holds no caret while it is sent or while the card asks before a replace.
-			busy:   func(m Model) bool { return m.AgentMessage.Sending || m.AgentMessage.Held != "" },
+			// The message holds no caret while it is sent, while the card asks before a replace or while it offers the quick replies.
+			busy:   func(m Model) bool { return m.AgentMessage.Sending || m.AgentMessage.Held != "" || m.AgentMessage.Picking },
 			fields: []FieldSpec{}, input: true,
 			editing: []fieldEditing{{mode: ModeAgentMessage, actions: []Action{DeleteInput, ClearInput}, clear: "clear message"}},
 			text:    func(m *Model) (*string, *Caret) { return &m.AgentMessage.Text, &m.AgentMessage.Caret },

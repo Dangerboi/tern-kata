@@ -45,6 +45,9 @@ type AgentMessageState struct {
 	Caret          Caret
 	Held, Unread   string
 	Err            error
+
+	// Picking is the card as the picker of quick replies, until one is chosen.
+	Picking bool
 }
 
 // SendAgentMessage writes Message to an agent's Address on an Issue as `kata notify` does, as Actor. Replacing is the slot value the
@@ -134,9 +137,9 @@ func (m Model) agentMessageRefusal(e AgentEntry) string {
 	return ""
 }
 
-// openAgentCardMessage is `m` on the Agent card: the Message card for the selected row's agent, wherever its block is, or the
-// reason there is none in a Notice. The Agent card closes as it does when going to an agent.
-func openAgentCardMessage(m Model) (Model, []Cmd) {
+// openAgentCardMessage is `m` (or `r`, when picking) on the Agent card: the Message card for the selected row's agent, wherever
+// its block is, or the reason there is none in a Notice. The Agent card closes as it does when going to an agent.
+func openAgentCardMessage(m Model, picking bool) (Model, []Cmd) {
 	if reason := m.AgentCardUnavailable(AgentCardMessage); reason != "" {
 		m.Notice = reason
 		return m, nil
@@ -148,12 +151,18 @@ func openAgentCardMessage(m Model) (Model, []Cmd) {
 		projectID = issue.ProjectID
 	}
 	m.AgentCard = AgentCardState{}
-	m.AgentMessage = AgentMessageState{Open: true, IssueUID: card.IssueUID, IssueRef: card.IssueRef, ProjectID: projectID, Agent: e.Teammate, Address: e.Address}
+	m.AgentMessage = AgentMessageState{Open: true, Picking: picking, IssueUID: card.IssueUID, IssueRef: card.IssueRef, ProjectID: projectID, Agent: e.Teammate, Address: e.Address}
 	return m, nil
 }
 
 // openAgentMessage is `m`: the Message card for the agent behind the selected request, or the reason there is none in a Notice.
 func openAgentMessage(m Model) (Model, []Cmd) {
+	return openAgentMessageFor(m, false)
+}
+
+// openAgentMessageFor opens the Message card for the agent behind the selected request, as the picker of quick replies when
+// picking.
+func openAgentMessageFor(m Model, picking bool) (Model, []Cmd) {
 	request, ok := m.SelectedAttention()
 	if !ok || m.attentionClearing(request.IssueUID) {
 		return m, nil
@@ -163,15 +172,19 @@ func openAgentMessage(m Model) (Model, []Cmd) {
 		m.Notice = reason
 		return m, nil
 	}
-	m.AgentMessage = AgentMessageState{Open: true, IssueUID: request.IssueUID, IssueRef: request.QualifiedID(), ProjectID: request.ProjectID,
+	m.AgentMessage = AgentMessageState{Open: true, Picking: picking, IssueUID: request.IssueUID, IssueRef: request.QualifiedID(), ProjectID: request.ProjectID,
 		Agent: target.Teammate, Address: target.Address}
 	return m, nil
 }
 
-// AgentMessageMode is the keymap mode of the Message card: asking before a replace while kata holds an unread message.
+// AgentMessageMode is the keymap mode of the Message card: asking before a replace while kata holds an unread message, or picking
+// a quick reply.
 func (m Model) AgentMessageMode() Mode {
-	if m.AgentMessage.Held != "" {
+	switch {
+	case m.AgentMessage.Held != "":
 		return ModeAgentMessageReplace
+	case m.AgentMessage.Picking:
+		return ModeAgentQuickReply
 	}
 	return ModeAgentMessage
 }
@@ -192,6 +205,11 @@ func agentMessageKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		f.Held, f.Unread = "", ""
 	case bound && binding.Action == AgentMessageCancel:
 		m.AgentMessage = AgentMessageState{}
+	case mode == ModeAgentQuickReply:
+		if q, ok := quickReplyOf(binding.Action); ok && bound {
+			f.Picking, f.Text = false, q.Text
+			return sendAgentMessage(m, "")
+		}
 	case mode == ModeAgentMessage:
 		var edited bool
 		if f.Text, edited = editText(f.Text, &f.Caret, "", bound, msg); edited {

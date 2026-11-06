@@ -9,6 +9,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Agents
 
 - `m` on the Agent card messages the selected agent, whether it is working, idle or waiting and wherever its block is, including a Background agent, which stays in the hidden session. It is off, with the reason, for an exited agent and one that is not omp.
+- `r` on the Attention Page and on the Agent card opens a picker of three quick replies to the agent, "continue", "wrap up: commit what you have and comment your status" and "commit and close if the acceptance criteria hold", sent with `1`, `2` or `3` as a typed message would be, with the same refusals and the same question before replacing an unread message.
 
 ### Changed
 

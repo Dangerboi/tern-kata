@@ -81,11 +81,11 @@ func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 			return m, nil
 		}
 		return sendToBackground(m, rows[cursor].AgentEntry)
-	case AgentCardMessage:
+	case AgentCardMessage, AgentCardQuickReply:
 		if len(rows) == 0 {
 			return m, nil
 		}
-		return openAgentCardMessage(m)
+		return openAgentCardMessage(m, binding.Action == AgentCardQuickReply)
 	case AgentCardSplit:
 		return startAgent(m, AgentCardSplit, AgentSplit)
 	case AgentCardTab:
@@ -147,7 +147,7 @@ func (m Model) AgentCardUnavailable(action Action) string {
 		if e := rows[m.AgentCardCursor()]; e.Background && !e.Open {
 			return "That agent is already in the background."
 		}
-	case AgentCardMessage:
+	case AgentCardMessage, AgentCardQuickReply:
 		if len(rows) == 0 {
 			return noAgentReason
 		}

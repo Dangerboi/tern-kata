@@ -6,7 +6,7 @@ Three things help coding agents work with tern-kata: the Agent card, which start
 
 ### The Agent card and starting agents
 
-`w` on the selected Issue (list, Board, Lane view or Issue detail) opens the Agent card, with or without agents. It lists the Issue's agents with state, start time and where each is (split, tab, background or open). `enter` goes to the selected one, `b` sends it to the background, `m` [messages](#messages-to-an-agent) it, `esc` cancels.
+`w` on the selected Issue (list, Board, Lane view or Issue detail) opens the Agent card, with or without agents. It lists the Issue's agents with state, start time and where each is (split, tab, background or open). `enter` goes to the selected one, `b` sends it to the background, `m` [messages](#messages-to-an-agent) it, `r` sends it a [quick reply](#quick-replies), `esc` cancels.
 
 ![The Agent card for "Add Apple Pay to checkout" with no agents yet and its buttons: New in a split (S), New in a tab (T), New in the background (G), plus Go to agent, Send to background and Cancel](../images/agent-card.png)
 
@@ -89,6 +89,10 @@ Work attention is the Issue's own `work.attention`. An open Issue whose `work.at
 - **After the agent**: when an agent exits or its block closes, the Pane that started it clears whatever is left at its address.
 - **The extension**: it ships in the binary and is written to `omp/tern-kata.ts` in tern-kata's state folder on each start, replaced when its content changes; a running agent keeps the one it loaded. It needs `kata` on the agent's `PATH`, as the agent does. It loads even under `--no-extensions`.
 - **With kata-omp installed**: kata-omp lists the message in its inbox section of the agent's system prompt too, until the agent clears it, so the agent sees it twice; that does no harm. The wrapper's `KATA_OMP_LIVE_INBOX=0` tells a kata-omp that delivers messages live itself to leave that to tern-kata's extension.
+
+#### Quick replies
+
+`r` on the Attention Page (on a request an agent raised) and on the Agent card (on the selected agent) opens a picker with three canned replies: `1` "continue", `2` "wrap up: commit what you have and comment your status", `3` "commit and close if the acceptance criteria hold". The key sends at once; `esc` cancels. A quick reply is the typed message with that text: the same address, the same delivery, the same question before replacing an unread message, and `r` is off, with the same reason, wherever `m` is.
 
 ### Transcript links on closes
 

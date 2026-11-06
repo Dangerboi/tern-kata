@@ -13,6 +13,9 @@ func agentMessageLayer(m model.Model) tern.Element {
 	if !f.Open {
 		return nil
 	}
+	if m.AgentMessageMode() == model.ModeAgentQuickReply {
+		return quickReplyLayer(m)
+	}
 	var children []tern.Element
 	var buttons []tern.Element
 	if m.AgentMessageMode() == model.ModeAgentMessageReplace {
@@ -41,4 +44,18 @@ func agentMessageLayer(m model.Model) tern.Element {
 		children = append(children, buttonRow(buttons...))
 	}
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgentMessage)}, Head: ui.T("Message " + f.Agent), Meta: refMeta(f.IssueRef), Icon: ui.IconSend, Modal: true, Size: ui.SizeMD}, children))
+}
+
+// quickReplyLayer is the picker of the three quick replies: each reply's text, a button to send it and a Cancel.
+func quickReplyLayer(m model.Model) tern.Element {
+	f := m.AgentMessage
+	children := make([]tern.Element, 0, len(model.QuickReplies)+1)
+	buttons := make([]tern.Element, 0, len(model.QuickReplies)+1)
+	for _, q := range model.QuickReplies {
+		children = append(children, toneText("reply-"+q.Key, ui.ToneMuted, q.Key+"  "+q.Text))
+		buttons = append(buttons, cardButton("reply-"+q.Key, model.ModeAgentQuickReply, q.Action, q.Name, q.Key == "1"))
+	}
+	buttons = append(buttons, cardButton("cancel", model.ModeAgentQuickReply, model.AgentMessageCancel, "Cancel", false))
+	children = append(children, buttonRow(buttons...))
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgentMessage)}, Head: ui.T("Quick reply to " + f.Agent), Meta: refMeta(f.IssueRef), Icon: ui.IconSend, Modal: true, Size: ui.SizeMD}, children))
 }
