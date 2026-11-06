@@ -155,7 +155,7 @@ func TestAgentCardEndsInButtonsAndSaysWhenThereAreNoAgents(t *testing.T) {
 	m := model.Model{Cols: 160, Project: model.Project{ID: 7}, Issues: []model.Issue{{UID: "a", QualifiedID: "work#a", Status: "open"}}, SelectedUID: "a"}
 	m = press(m, "w")
 	cardButtons(t, m, "layer.agent.foot", []button{{"go", "Go to agent"}, {"split", "New in a split"}, {"tab", "New in a tab"},
-		{"new-background", "New in the background"}, {"background", "Send to background"}, {"message", "Message"}, {"interrupt", "Interrupt"}, {"stop", "Stop"}, {"cancel", "Cancel"}}, "")
+		{"new-background", "New in the background"}, {"background", "Send to background"}, {"message", "Message"}, {"interrupt", "Interrupt"}, {"stop", "Stop"}, {"quick-reply", "Quick reply"}, {"cancel", "Cancel"}}, "")
 	if got := text(pickerNodes(t, m)["layer.agent.none"]); got != "No agents on this Issue yet." {
 		t.Errorf("empty card says %q", got)
 	}

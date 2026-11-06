@@ -68,6 +68,7 @@ func agentLayer(m model.Model) tern.Element {
 			unavailable(cardButton("message", model.ModeAgentCard, model.AgentCardMessage, "Message", false), m.AgentCardUnavailable(model.AgentCardMessage)),
 			unavailable(cardButton("interrupt", model.ModeAgentCard, model.AgentCardInterrupt, "Interrupt", false), m.AgentCardUnavailable(model.AgentCardInterrupt)),
 			unavailable(cardButton("stop", model.ModeAgentCard, model.AgentCardStop, "Stop", false), m.AgentCardUnavailable(model.AgentCardStop)),
+			unavailable(cardButton("quick-reply", model.ModeAgentCard, model.AgentCardQuickReply, "Quick reply", false), m.AgentCardUnavailable(model.AgentCardQuickReply)),
 			cardButton("cancel", model.ModeAgentCard, model.AgentCardCancel, "Cancel", false)))
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgent)}, Head: ui.T("Agents"), Meta: refMeta(card.IssueRef), Icon: ui.IconUsers, Modal: true, Size: ui.SizeLG}, children))
 }

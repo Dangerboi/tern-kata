@@ -13,6 +13,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The Agent card shows, for the selected omp agent, its model, tool calls so far, the tool it is running now, its cost so far and the first line of its last message, read while the card is open (every 2 seconds) from the end of the agent's session file; a non-omp agent or a session with no file says why in a muted line.
   - A session file longer than the part read (1 MiB) marks the count "at least" and the cost approximate (`~$`).
 - The Agent card interrupts or stops the selected agent: `i` ends its current turn and keeps its block, and `x` asks before closing its block and removing its entry and prompt file, giving the Issue the hand-off an exiting agent gets.
+- `r` on the Attention Page and on the Agent card opens a picker of three quick replies to the agent, "continue", "wrap up: commit what you have and comment your status" and "commit and close if the acceptance criteria hold", sent with `1`, `2` or `3` as a typed message would be, with the same refusals and the same question before replacing an unread message.
 
 ### Changed
 
