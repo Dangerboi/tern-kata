@@ -244,7 +244,7 @@ func settleHeldRun(ctx context.Context, plan LaunchPlan, env workerEnv, out io.W
 func resumePausedJob(ctx context.Context, env workerEnv, ref string, out io.Writer) (done bool, err error) {
 	resp, err := worker.Ask(ctx, env.Dirs, worker.Request{Op: "status"})
 	if err != nil || !resp.OK || resp.Status == nil {
-		return false, nil // the held-run path asks again and reports what is wrong
+		return false, nil //nolint:nilerr // the held-run path asks again and reports what is wrong
 	}
 	var match []worker.PausedJob
 	for _, p := range resp.Status.Paused {

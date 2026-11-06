@@ -19,9 +19,6 @@ import (
 // files beside them). kata's job definition is never written, so other machines' workers keep their own counts and the Jobs
 // Page reads the pause from this worker's status.
 
-// pauseReasonFailures is the pause reason `worker status` and the Jobs Page name.
-const pauseReasonFailures = "failed runs"
-
 // streakFile is one job's run of failures in a row, saved under its Project's folder.
 type streakFile struct {
 	Version int `json:"version"`
