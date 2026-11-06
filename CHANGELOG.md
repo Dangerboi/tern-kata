@@ -4,11 +4,13 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-06
+
 ### Added
 
 #### Attachments
 
-- `tern-kata docbank setup` makes attachments work, either on this machine or against a Docbank someone else runs.
+- `tern-kata docbank setup` makes attachments work, either on this machine or against a [Docbank](https://github.com/kenn-io/docbank) someone else runs.
   - Without `--url` it sets Docbank up on this machine: it appends a `[server]` section (`bind_addr` 127.0.0.1, a fixed `api_port` from `--port`, default 8080, a new random `api_key`) to `<DOCBANK_HOME>/config.toml`, stores the key in `<KATA_HOME>/docbank.key` and restarts Docbank.
   - It requires `docbank daemon status` to name the address before touching kata's config, and prints that Docbank reports usage unless `DOCBANK_TELEMETRY_ENABLED=0` is set in its daemon's environment.
   - An existing `[server]` with `api_port` and `api_key` is reused, and so is an existing key file, tightened to mode 0600 when others could read it. A different `--port`, a `[server]` missing one of them, a busy port, a missing `docbank`, a different `[docbank]` section or a `config.toml` symlink whose target is missing is refused before anything is written.
@@ -1062,7 +1064,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - Text written in `$EDITOR` is kept in a file, and its path is printed, when Tern cannot be reached after the editor closes.
 - `--as` and `--issue` refuse a value that is another flag, so `--as --issue x` no longer starts tern-kata as the actor `--issue`.
-[Unreleased]: https://github.com/Dangerboi/tern-kata/compare/v0.8.0...HEAD
+
+[Unreleased]: https://github.com/Dangerboi/tern-kata/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/Dangerboi/tern-kata/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/Dangerboi/tern-kata/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/Dangerboi/tern-kata/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/Dangerboi/tern-kata/compare/v0.7.0...v0.7.1
