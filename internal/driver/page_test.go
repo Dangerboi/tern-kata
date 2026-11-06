@@ -137,26 +137,32 @@ func TestPageBarCompactsThenMovesToItsOwnLineBeforeAnythingLeavesTheTopBar(t *te
 	}
 }
 
-// Every Page bar entry is one node: the Page's key as a keycap span in the footer's key style, then its name.
+// Every Page bar entry is a row of one text, the Page's key as a keycap span in the footer's key style then its label, and a count badge
+// while the Page has a count.
 func TestPageBarEntriesDrawTheirKeyAsAKeycapSpan(t *testing.T) {
 	s := loadedWith(t, 200, model.Project{ID: 7, UID: "p", Name: "p"}, model.Snapshot{Issues: []model.Issue{alpha}})
 	for _, entry := range s.Model.PageBar() {
-		id := pageBarEntry(t, s.Model, entry.Chord)
+		id := pageBarEntry(t, s.Model, entry.Chord) + ".label"
+		found := false
 		for _, n := range wireNodes(t, view.Render(s.Model, now)) {
 			if n.ID != id {
 				continue
 			}
+			found = true
 			spans, _ := n.P["spans"].([]any)
 			if len(spans) != 2 {
-				t.Fatalf("%s has %d spans, want keycap and name", id, len(spans))
+				t.Fatalf("%s has %d spans, want keycap and label", id, len(spans))
 			}
 			key, name := spans[0].(map[string]any), spans[1].(map[string]any)
-			if key["s"] != "key" || key["t"] != entry.Chord || name["t"] != " "+entry.Name() {
+			if key["s"] != "key" || key["t"] != entry.Chord || name["t"] != " "+entry.Label {
 				t.Errorf("%s spans = %v", id, spans)
 			}
 			if wantMuted := !entry.Current; wantMuted != (name["s"] == "muted") {
 				t.Errorf("%s name style %v, current %v", id, name["s"], entry.Current)
 			}
+		}
+		if !found {
+			t.Errorf("%s is not drawn", id)
 		}
 	}
 }

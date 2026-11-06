@@ -500,8 +500,8 @@ func countedReads(cmds []model.Cmd) int {
 
 func TestTheAttentionReadIsAskedWhenTheStreamOpensAndTheCountShowsOnAnyPage(t *testing.T) {
 	s := attentionPane(t)
-	if text := attentionEntryText(t, s); !strings.Contains(text, `"t":" Attention"`) || strings.Contains(text, "Attention 0") {
-		t.Fatalf("Page bar entry %s before any read, want plain Attention", text)
+	if text := attentionEntryText(t, s); !strings.Contains(text, `"t":" Attention"`) || strings.Contains(text, `"text":`) {
+		t.Fatalf("Page bar entry %s before any read, want plain Attention and no badge", text)
 	}
 	out := step(t, s, model.StreamOpened{Generation: s.Model.StreamGeneration})
 	if countedReads(out.Cmds) != 1 {
@@ -511,8 +511,8 @@ func TestTheAttentionReadIsAskedWhenTheStreamOpensAndTheCountShowsOnAnyPage(t *t
 		t.Fatalf("page %v, want the Issues Page", out.State.Model.Page)
 	}
 	done := answerAttention(t, out, attentionRequests(t), 0)
-	if text := attentionEntryText(t, done); !strings.Contains(text, `"t":" Attention 3"`) {
-		t.Errorf("Page bar entry %s, want Attention 3 from the Issues Page", text)
+	if text := attentionEntryText(t, done); !strings.Contains(text, `"t":" Attention"`) || !strings.Contains(text, `"text":"3"`) {
+		t.Errorf("Page bar entry %s, want Attention with a 3 badge from the Issues Page", text)
 	}
 	if text := attentionEntryText(t, done); strings.Contains(text, "request") {
 		t.Errorf("Page bar entry %s", text)
@@ -528,12 +528,12 @@ func TestThePageBarEntryIsPlainAtZeroAndFollowsEachGoodRead(t *testing.T) {
 	s := answerAttention(t, step(t, attentionPane(t), model.StreamOpened{Generation: attentionPane(t).Model.StreamGeneration}), attentionRequests(t), 0)
 	out := step(t, s, attentionEvent(s, "issue.metadata_updated"))
 	s = answerAttention(t, out, attentionRequests(t)[:1], 0)
-	if text := attentionEntryText(t, s); !strings.Contains(text, `"t":" Attention 1"`) {
-		t.Fatalf("Page bar entry %s, want Attention 1", text)
+	if text := attentionEntryText(t, s); !strings.Contains(text, `"t":" Attention"`) || !strings.Contains(text, `"text":"1"`) {
+		t.Fatalf("Page bar entry %s, want Attention with a 1 badge", text)
 	}
 	s = answerAttention(t, step(t, s, attentionEvent(s, "issue.updated")), nil, 0)
-	if text := attentionEntryText(t, s); !strings.Contains(text, `"t":" Attention"`) || strings.Contains(text, "Attention 0") {
-		t.Fatalf("Page bar entry %s, want plain Attention at zero", text)
+	if text := attentionEntryText(t, s); !strings.Contains(text, `"t":" Attention"`) || strings.Contains(text, `"text":`) {
+		t.Fatalf("Page bar entry %s, want plain Attention and no badge at zero", text)
 	}
 }
 
@@ -545,8 +545,8 @@ func TestAFailedReadKeepsThePageBarCount(t *testing.T) {
 		t.Fatal("a project event asked for no read")
 	}
 	failed := step(t, out.State, model.AttentionLoaded{Request: load.Request, Err: errors.New("the daemon hiccuped")}).State
-	if text := attentionEntryText(t, failed); !strings.Contains(text, `"t":" Attention 3"`) {
-		t.Errorf("Page bar entry %s after a failed read, want Attention 3", text)
+	if text := attentionEntryText(t, failed); !strings.Contains(text, `"text":"3"`) {
+		t.Errorf("Page bar entry %s after a failed read, want the 3 badge", text)
 	}
 }
 
@@ -615,8 +615,11 @@ func TestThePageBarWithACountStillFitsTheWidthRules(t *testing.T) {
 		s := loadedWith(t, tt.cols, long, model.Snapshot{Issues: []model.Issue{alpha}})
 		s.Model.Attention.Requests = attentionRequests(t)
 		texts := pageBarTexts(t, s)
-		if got := strings.Contains(texts["attention"], `"t":" Attention 3"`); got == tt.compact {
+		if got := strings.Contains(texts["attention"], `"t":" Attention"`); got == tt.compact {
 			t.Errorf("%d columns: Attention entry %s, compact %v", tt.cols, texts["attention"], tt.compact)
+		}
+		if !strings.Contains(texts["attention"], `"text":"3"`) {
+			t.Errorf("%d columns: Attention entry %s lost its count badge", tt.cols, texts["attention"])
 		}
 		_, own := drawnIDs(t, view.Render(s.Model, now))["main.pagebar"]
 		if own != tt.ownLine {

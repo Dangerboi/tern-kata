@@ -4,6 +4,12 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Changed
+
+#### Issues and Pages
+
+- The Page bar draws the Attention count as a badge after the name, not as text in it, and the compact Page bar keeps the badge.
+
 ## [0.9.0] - 2026-11-06
 
 ### Added
