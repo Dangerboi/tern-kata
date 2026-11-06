@@ -43,7 +43,7 @@ func projectNeeds(ctx context.Context, k *Kata, p Project) (jobNeeds, error) {
 		}
 		d := job.Definition
 		for env, name := range d.SecretRefs {
-			if !strings.HasPrefix(env, "KATA_") && !strings.HasPrefix(env, "TERN_KATA_") {
+			if !reservedEnvName(env, envCaseInsensitive) {
 				needs.secrets[name] = true
 			}
 		}

@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
@@ -32,6 +33,23 @@ func TestExitStatusFollowsTheCommandLineContract(t *testing.T) {
 		if got := exitStatus(tc.err); got != tc.want {
 			t.Errorf("%s: exit %d, want %d", name, got, tc.want)
 		}
+	}
+}
+
+func TestAgentRouteRefusalExitsOne(t *testing.T) {
+	route := data.AgentRoute{TokenFile: filepath.Join(t.TempDir(), "missing")}
+	_, err := routedEnv(nil, route, false)
+	if err == nil {
+		t.Fatal("a route with an unreadable token file was accepted")
+	}
+	if got := exitStatus(err); got != 1 {
+		t.Errorf("exit %d for %v, want 1", got, err)
+	}
+}
+
+func TestInvalidUTF8ReachesTheTerminalAsReplacement(t *testing.T) {
+	if got := printable("a\x9b31mb"); got != "a\uFFFD31mb" {
+		t.Errorf("printable = %q", got)
 	}
 }
 

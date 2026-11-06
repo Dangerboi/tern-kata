@@ -262,7 +262,7 @@ func (w *Worker) secrets(j *Journal) (map[string]string, error) {
 	out := map[string]string{}
 	pc, served := w.opt.Config.project(j.ProjectName)
 	for env, name := range j.SecretRefs {
-		if strings.HasPrefix(env, "KATA_") || strings.HasPrefix(env, "TERN_KATA_") {
+		if reservedEnvName(env, envCaseInsensitive) {
 			return nil, fmt.Errorf("secret %q would set %s, a reserved name", name, env)
 		}
 		if !served || !pc.allowsSecret(name) {
@@ -328,7 +328,19 @@ var promptKeptKata = map[string]bool{
 // childEnv is the worker's environment for a prompt step (ADR-0009): without TERN_KATA_ internals and every KATA_*
 // except the routing and credential names, plus the actor and the step's secrets.
 func childEnv(actor string, secrets map[string]string) []string {
-	return promptEnv(os.Environ(), actor, secrets, runtime.GOOS == "windows")
+	return promptEnv(os.Environ(), actor, secrets, envCaseInsensitive)
+}
+
+// envCaseInsensitive is whether the platform compares environment variable names without regard to case.
+const envCaseInsensitive = runtime.GOOS == "windows"
+
+// reservedEnvName reports whether name is one the worker keeps for itself: TERN_KATA_* and KATA_*. Names compare
+// case-insensitively when caseInsensitive (Windows).
+func reservedEnvName(name string, caseInsensitive bool) bool {
+	if caseInsensitive {
+		name = strings.ToUpper(name)
+	}
+	return strings.HasPrefix(name, "TERN_KATA_") || strings.HasPrefix(name, "KATA_")
 }
 
 // promptEnv filters environ as childEnv does; names compare case-insensitively when caseInsensitive (Windows).
@@ -339,7 +351,7 @@ func promptEnv(environ []string, actor string, secrets map[string]string, caseIn
 		if caseInsensitive {
 			name = strings.ToUpper(name)
 		}
-		if strings.HasPrefix(name, "TERN_KATA_") || strings.HasPrefix(name, "KATA_") && !promptKeptKata[name] {
+		if reservedEnvName(name, caseInsensitive) && !promptKeptKata[name] {
 			continue
 		}
 		env = append(env, kv)
@@ -813,10 +825,14 @@ func (w *Worker) resolveRecipient(ctx context.Context, j *Journal, i int) (*Jour
 		return j, err
 	}
 	recipient := cmp.Or(issue.Owner, issue.Author)
-	return w.store.Update(j.RunUID, "intent-notify-resolved", func(j *Journal) error {
+	updated, err := w.store.Update(j.RunUID, "intent-notify-resolved", func(j *Journal) error {
 		j.Intents[i].Recipient, j.Intents[i].Done = recipient, recipient == ""
 		return nil
 	})
+	if err != nil {
+		return j, err // the caller keeps the journal it had
+	}
+	return updated, nil
 }
 
 // send delivers one intent and returns the Run revision kata stored when it was a final observation. A final

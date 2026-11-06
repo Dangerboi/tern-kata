@@ -11,7 +11,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `tern-kata docbank setup` makes attachments work, either on this machine or against a Docbank someone else runs.
   - Without `--url` it sets Docbank up on this machine: it appends a `[server]` section (`bind_addr` 127.0.0.1, a fixed `api_port` from `--port`, default 8080, a new random `api_key`) to `<DOCBANK_HOME>/config.toml`, stores the key in `<KATA_HOME>/docbank.key` and restarts Docbank.
   - It requires `docbank daemon status` to name the address before touching kata's config, and prints that Docbank reports usage unless `DOCBANK_TELEMETRY_ENABLED=0` is set in its daemon's environment.
-  - An existing `[server]` with `api_port` and `api_key` is reused. A different `--port`, a `[server]` missing one of them, a busy port, a missing `docbank` or a different `[docbank]` section is refused before anything is written.
+  - An existing `[server]` with `api_port` and `api_key` is reused, and so is an existing key file, tightened to mode 0600 when others could read it. A different `--port`, a `[server]` missing one of them, a busy port, a missing `docbank`, a different `[docbank]` section or a `config.toml` symlink whose target is missing is refused before anything is written.
+  - A `config.toml` that changes while setup runs is not overwritten: setup stops and asks to be run again.
   - With `--url <url> --key-file <file>` (or `--key-env <NAME>`) it points kata at a Docbank someone else runs; `--key-file -` reads the key from standard input. No flag takes the key and the command never prints it.
   - Either way it checks that Docbank answers with the key, appends a `[docbank]` section to the kata daemon's `config.toml`, and asks before restarting the kata daemon (`--yes` skips the question, `--no-restart` prints the command).
   - It finishes by checking that the kata daemon has attachments on; with `--key-env` it says that daemon reads the variable from its own environment.
@@ -28,6 +29,43 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - The Page bar draws each Page's key as a keycap, like the footer's key hints: `[1] Issues  [2] Jobs  …  [6] Attention`.
   - A Lettered Page shown in the bar draws its letter (`[C] Credentials`). The current Page keeps its accent name, the compact bar still shows the keycap alone for the other Pages, and a click on an entry still presses its key.
+
+### Fixed
+
+#### Install and update
+
+- `tern-kata update` no longer replaces a plugin that is newer than the binary with the binary's older release.
+- On Windows, `tern-kata update` removes the old binaries it set aside also when the install folder's path holds `[`.
+
+#### Issues and Pages
+
+- The help sheet lists the `/` search lines of the Issues, Board, Jobs, Runs and Workflows Pages again.
+- A Project title of wide characters (Chinese, Japanese, emoji) no longer pushes the Menu button off the top bar.
+- A view saved and then cancelled on the View card says whether the save went through, instead of nothing.
+- On Windows, saving views, Lanes, agents, `worker.toml` and other tern-kata files retries for up to a second while another program has the file open, instead of failing.
+
+#### Jobs and worker
+
+- The Workflows Page shows a refused workflow save or archive also when the Project changed before the answer came.
+- A job whose `adapter` option has spaces around `tern-kata` runs, and one whose option is blank runs on any adapter, instead of never.
+- The worker no longer crashes when a notify run's journal cannot be read while it looks up whom to tell.
+- Run details of a damaged journal that lists more steps than its workflow no longer crash the worker.
+- On Windows, command steps get no `KATA_` or `TERN_KATA_` variable in any letter case, and a secret can't be mapped to one.
+- On Windows, `tern-kata worker edit` opens `worker.toml` in your editor also when the temporary folder's path holds `%`.
+- On macOS, the worker checks a recorded agent's start time as it does on Linux, so after a crash or reboot it no longer signals another process that reused the agent's process id.
+
+#### Daemons and Federation
+
+- Switching to a remote daemon while kata's `config.toml` can't be read reports that error, instead of connecting through kata's own lookup with `KATA_AUTH_TOKEN`.
+- A wrong value under `[tui]` in kata's `config.toml` no longer hides the daemon list: the Pane ignores it and keeps the default, as kata does.
+- Pressing esc while a spoke leaves no longer hides a leave that went through: the list refreshes when it ends.
+- Choosing another hub while enrolling a Project no longer keeps the actor the previous hub reported.
+
+#### Command line
+
+- `tern-kata agent` exits 1, not 3, when it refuses the daemon or route.
+- `tern-kata recur --start` with spaces around the date picks the date's weekday or day as the default, as without spaces.
+- Text printed to the terminal shows invalid UTF-8 bytes as `�`, so a stray byte can't start an escape sequence.
 
 ## [0.8.0] - 2026-11-05
 

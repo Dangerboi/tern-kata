@@ -96,7 +96,7 @@ func jobProblem(cfg Config, pc ProjectConfig, job cronjob.Job, wf *Workflow, wfE
 	}
 	for env, name := range d.SecretRefs {
 		switch _, ok := cfg.Secrets[name]; {
-		case strings.HasPrefix(env, "KATA_") || strings.HasPrefix(env, "TERN_KATA_"):
+		case reservedEnvName(env, envCaseInsensitive):
 			return fmt.Sprintf("secret %q would set %s, a reserved name", name, env), false
 		case !ok:
 			return fmt.Sprintf("it names secret %q, which is not defined in worker.toml", name), false

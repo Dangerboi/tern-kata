@@ -3,6 +3,7 @@ package model
 import (
 	"cmp"
 	"errors"
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -114,16 +115,16 @@ func (SaveWorkflow) cmd() {}
 
 // ArchiveWorkflow archives the workflow, guarded on Expected. Kata refuses while a live job uses it.
 type ArchiveWorkflow struct {
-	Workspace, Actor, ProjectUID, UID, Expected string
-	ProjectID                                   int64
+	Workspace, Actor, ProjectUID, UID, Name, Expected string
+	ProjectID                                         int64
 }
 
 func (ArchiveWorkflow) cmd() {}
 
 // RestoreWorkflow brings an archived workflow back, guarded on Expected.
 type RestoreWorkflow struct {
-	Workspace, Actor, ProjectUID, UID, Expected string
-	ProjectID                                   int64
+	Workspace, Actor, ProjectUID, UID, Name, Expected string
+	ProjectID                                         int64
 }
 
 func (RestoreWorkflow) cmd() {}
@@ -134,6 +135,7 @@ type WorkflowWritten struct {
 	ProjectUID string
 	Op         WorkflowOp
 	UID        string
+	Name       string // the workflow's name as the command knew it, for saying which one a failed write was for
 	Workflow   *Workflow
 	Current    *Workflow
 	// Reading is the Worker's reading of the Workflow a write stored, or of Current when the guard refused.
@@ -393,9 +395,9 @@ func changeWorkflowState(restore bool) func(Model) (Model, []Cmd) {
 		}
 		s := m.Workflows
 		if restore {
-			return m, []Cmd{RestoreWorkflow{Workspace: m.Workspace, Actor: m.Actor, ProjectID: s.ProjectID, ProjectUID: s.ProjectUID, UID: w.UID, Expected: w.EventUID}}
+			return m, []Cmd{RestoreWorkflow{Workspace: m.Workspace, Actor: m.Actor, ProjectID: s.ProjectID, ProjectUID: s.ProjectUID, UID: w.UID, Name: w.Name, Expected: w.EventUID}}
 		}
-		return m, []Cmd{ArchiveWorkflow{Workspace: m.Workspace, Actor: m.Actor, ProjectID: s.ProjectID, ProjectUID: s.ProjectUID, UID: w.UID, Expected: w.EventUID}}
+		return m, []Cmd{ArchiveWorkflow{Workspace: m.Workspace, Actor: m.Actor, ProjectID: s.ProjectID, ProjectUID: s.ProjectUID, UID: w.UID, Name: w.Name, Expected: w.EventUID}}
 	}
 }
 
@@ -523,6 +525,10 @@ func workflowWritten(m Model, msg WorkflowWritten) Model {
 	if msg.ProjectUID != m.Workflows.ProjectUID {
 		if saving && msg.Err == nil {
 			*card = WorkflowCard{}
+		}
+		if msg.Err != nil {
+			name := cmp.Or(msg.Name, msg.UID)
+			m.Notice = fmt.Sprintf("Workflow %s not written: %v", name, msg.Err)
 		}
 		return m
 	}

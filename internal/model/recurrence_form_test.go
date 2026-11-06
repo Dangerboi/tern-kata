@@ -125,6 +125,14 @@ func TestRecurTermsOfAStoredLocalRecurrenceUseThePaneZone(t *testing.T) {
 	}
 }
 
+func TestRecurTermsTrimTheStartDate(t *testing.T) {
+	target := model.RecurTarget{UID: "parent", Today: "2026-10-21", Zone: "Europe/Zurich"}
+	terms, err := target.Terms(map[string]string{"frequency": "weekly", "start": " 2026-11-04 "})
+	if err != nil || terms.Start != "2026-11-04" || terms.Rule != "FREQ=WEEKLY;INTERVAL=1;BYDAY=WE" {
+		t.Fatalf("Terms gave %+v, %v", terms, err)
+	}
+}
+
 func TestStoredLocalZoneIsNotedAndOtherZonesAreNot(t *testing.T) {
 	recurrence := int64(4)
 	open := func(zone string) model.Model {

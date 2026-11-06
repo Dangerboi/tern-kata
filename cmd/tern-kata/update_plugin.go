@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"golang.org/x/mod/semver"
 )
 
 // ternTimeout bounds each `tern` command the plugin step runs.
@@ -18,7 +20,7 @@ const ternTimeout = time.Minute
 var pluginTOMLVersion = regexp.MustCompile(`(?m)^version\s*=\s*"([^"\n]+)"`)
 
 // updatePlugin is the plugin step of `update`: it brings this machine's copy of the window plugin to version, the binary's
-// release (with its leading "v"). It acts only on a copy installed from a release whose plugin.toml names another version;
+// release (with its leading "v"). It acts only on a copy installed from a release whose plugin.toml names an older version, or one that cannot be compared and differs;
 // no tern, a linked copy and an absent copy are left as they are (the first two with a note). fetch supplies the unpacked
 // archive of version (downloading it, or handing over the one the update already holds) and is called only when the step
 // needs it. A failure is a warning on out: the binary is current whatever happens here.
@@ -55,7 +57,12 @@ func updatePlugin(ctx context.Context, version string, fetch func() (unpackedRel
 		warn("the installed copy's plugin.toml names no version")
 		return
 	}
-	if have := string(match[1]); have == want {
+	have := string(match[1])
+	if semver.IsValid("v"+have) && semver.IsValid("v"+want) {
+		if semver.Compare("v"+have, "v"+want) >= 0 {
+			return // current or newer: never a downgrade
+		}
+	} else if have == want {
 		return
 	}
 	release, cleanup, err := fetch()
@@ -68,7 +75,7 @@ func updatePlugin(ctx context.Context, version string, fetch func() (unpackedRel
 		warn("%v", err)
 		return
 	}
-	fmt.Fprintf(out, "Updated this machine's tern-kata plugin from %s to %s\n", match[1], want)
+	fmt.Fprintf(out, "Updated this machine's tern-kata plugin from %s to %s\n", have, want)
 }
 
 // runTern runs tern with args and returns its stdout; a failure carries tern's own words.

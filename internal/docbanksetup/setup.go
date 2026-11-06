@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 	"unicode"
@@ -154,6 +155,14 @@ func (e Env) SetupRemote(ctx context.Context, r Remote) error {
 		}
 	}
 	configPath := filepath.Join(e.KataHome, "config.toml")
+	for _, p := range []string{configPath, want.APIKeyFile} {
+		if p == "" {
+			continue
+		}
+		if _, err := resolveLink(p); err != nil {
+			return err
+		}
+	}
 	existing, err := readConfig(configPath)
 	if err != nil {
 		return err
@@ -379,17 +388,32 @@ func (e Env) probe(ctx context.Context, base, key string) error {
 	return nil
 }
 
-// writeKeyFile stores key at path, mode 0600, written atomically; a file that already holds it is left alone.
+// writeKeyFile stores key at path, mode 0600, written atomically; a file that already holds it is left alone, except that group and
+// other permission bits on it are removed (on Unix) and said so.
 func (e Env) writeKeyFile(path, key string) error {
 	shown := path
-	path = resolveLink(path)
+	path, err := resolveLink(path)
+	if err != nil {
+		return err
+	}
 	if have, err := os.ReadFile(path); err == nil && strings.TrimSpace(string(have)) == key {
-		return nil
+		if runtime.GOOS == "windows" {
+			return nil
+		}
+		info, err := os.Stat(path)
+		if err != nil || info.Mode().Perm()&0o077 == 0 {
+			return err
+		}
+		if err := os.Chmod(path, 0o600); err != nil {
+			return fmt.Errorf("tighten the key file: %w", err)
+		}
+		_, err = fmt.Fprintf(e.Out, "The API key in %s was readable by others (mode %04o); now mode 0600.\n", shown, info.Mode().Perm())
+		return err
 	}
 	if err := atomicfile.Write(path, []byte(key+"\n"), atomicfile.Options{Mode: 0o600, DirMode: 0o700}); err != nil {
 		return fmt.Errorf("write the key file: %w", err)
 	}
-	_, err := fmt.Fprintf(e.Out, "Wrote the API key to %s (mode 0600).\n", shown)
+	_, err = fmt.Fprintf(e.Out, "Wrote the API key to %s (mode 0600).\n", shown)
 	return err
 }
 
@@ -490,7 +514,10 @@ func writeSection(path, existing string, want kataSection) error {
 // appendSection appends text, the [name] section, to existing and writes the result over path atomically (creating the folder). The
 // new file is parsed before it replaces the old one: it must hold a [name] section that ok accepts after the old file's bytes.
 func appendSection[T any](path, existing, name, text string, ok func(T) bool) error {
-	path = resolveLink(path)
+	path, err := resolveLink(path)
+	if err != nil {
+		return err
+	}
 	next := existing
 	if next != "" {
 		if !strings.HasSuffix(next, "\n") {
@@ -504,6 +531,13 @@ func appendSection[T any](path, existing, name, text string, ok func(T) bool) er
 		mode = info.Mode().Perm() // an edit keeps the file's own mode
 	}
 	return atomicfile.Write(path, []byte(next), atomicfile.Options{Mode: mode, DirMode: 0o700, Check: func(tmp string) error {
+		now, err := readConfig(path)
+		if err != nil {
+			return err
+		}
+		if now != existing {
+			return fmt.Errorf("%s changed while setup ran, so nothing was written; run setup again", path)
+		}
 		raw, err := os.ReadFile(tmp)
 		if err != nil {
 			return err
@@ -520,12 +554,27 @@ func appendSection[T any](path, existing, name, text string, ok func(T) bool) er
 }
 
 // resolveLink is the file path names when path is a symlink that resolves, so an edit replaces the file the link points at and the
-// link stays; path itself otherwise.
-func resolveLink(path string) string {
-	if target, err := filepath.EvalSymlinks(path); err == nil {
-		return target
+// link stays; path itself when it is not a symlink. A symlink whose target is missing is refused, so the link is never replaced.
+func resolveLink(path string) (string, error) {
+	info, err := os.Lstat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return path, nil
 	}
-	return path
+	if err != nil {
+		return "", fmt.Errorf("look at %s: %w", path, err)
+	}
+	if info.Mode()&fs.ModeSymlink == 0 {
+		return path, nil
+	}
+	target, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		to, _ := os.Readlink(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			return "", fmt.Errorf("%s is a symlink to %s, which does not exist, so nothing was written", path, to)
+		}
+		return "", fmt.Errorf("%s is a symlink to %s that cannot be resolved, so nothing was written: %w", path, to, err)
+	}
+	return target, nil
 }
 
 // tomlString is s as a TOML basic string.

@@ -1,6 +1,7 @@
 package model_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -83,5 +84,27 @@ func TestFormsOnlyAdvertiseHandledBindings(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestHelpSheetListsSlashSearch(t *testing.T) {
+	for _, tt := range []struct {
+		page model.Page
+		text string
+	}{
+		{model.PageIssues, "search"},
+		{model.PageJobs, "search the jobs (esc ends the search)"},
+	} {
+		found := false
+		for _, group := range model.HelpSheetOn(tt.page) {
+			for _, line := range group.Lines {
+				if line.Text == tt.text && slices.Contains(line.Keys, "/") {
+					found = true
+				}
+			}
+		}
+		if !found {
+			t.Errorf("HelpSheetOn(%v) has no %q line with key /", tt.page, tt.text)
+		}
 	}
 }

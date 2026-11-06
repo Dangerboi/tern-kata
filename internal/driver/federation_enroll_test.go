@@ -365,6 +365,26 @@ func TestTheRequestedActorIsThePanesUnlessTheHubSaysWhoItActedAs(t *testing.T) {
 	wantShown(t, "the preview", s, "requested actor: dana")
 }
 
+func TestAHubThatReportsNoActorDoesNotInheritThePreviousHubs(t *testing.T) {
+	hubs := atHubStep(t, enrollPane(t), rowAcme)
+	chosen := step(t, cursorOn(t, hubs, 2), key("enter"))
+	read, _ := asked[model.LoadFederationHubProjects](chosen.Cmds)
+	s := step(t, chosen.State, hubProjectsAnswer(read, hubBeta)).State
+	if got := s.Model.Federation.Draft.RequestedActor; got != "erin" {
+		t.Fatalf("the first hub's actor is %q, want erin", got)
+	}
+	back := step(t, s, key("escape")).State
+	if back.Model.Federation.Screen != model.FederationPickHub {
+		t.Fatalf("esc went to screen %v, want the hub step", back.Model.Federation.Screen)
+	}
+	chosen = step(t, cursorOn(t, back, 2), key("enter"))
+	read, _ = asked[model.LoadFederationHubProjects](chosen.Cmds)
+	answer := hubProjectsAnswer(read, hubBeta)
+	answer.Actor = ""
+	s = previewed(t, step(t, chosen.State, answer).State)
+	wantShown(t, "the preview", s, "requested actor: dana")
+}
+
 func TestTheNewReplicaPreviewBlocksWhenAProjectOfThatNameOrABindingIsThere(t *testing.T) {
 	for name, c := range map[string]struct {
 		hub     model.Project

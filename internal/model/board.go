@@ -121,7 +121,7 @@ type BoardColumn struct {
 }
 
 // BoardColumns are the Board's columns, left to right: No lane, one per Lane, Done. Cards follow the list's order, Done's
-// newest closed first. Done holds only Issues closed in the last DoneLimits days of the Pane calendar, at most DoneLimits cards.
+// newest closed first. Done holds only Issues closed today or in the DoneLimits days before it, by the Pane calendar, at most DoneLimits cards.
 // On the Board Page the slice is shared with the kept columns; see collectionRows.
 func (m Model) BoardColumns() []BoardColumn {
 	if m.OnBoard() && m.collection.answers(m) {

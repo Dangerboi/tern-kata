@@ -40,7 +40,7 @@ func lanesLayer(m model.Model) tern.Element {
 	children = append(children,
 		gap("gap-done"),
 		ui.Rule{Common: ui.Common{Key: "done-rule"}, Label: ui.T("Done")},
-		muted("done-note", "Done shows Issues closed in the last N days, at most M cards. Leave a field blank for the default."))
+		muted("done-note", "Done shows Issues closed today or in the N days before, at most M cards. Leave a field blank for the default."))
 	for _, name := range []model.Field{model.LanesDays, model.LanesCards} {
 		text := form.Value(name)
 		children = append(children,

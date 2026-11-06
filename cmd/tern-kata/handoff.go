@@ -44,11 +44,12 @@ func childEnv(environ []string, actor string, caseInsensitive bool) []string {
 }
 
 // routedEnv returns environ with the agent's kata daemon set from route: the names route.Env drops are removed (names compare
-// case-insensitively on Windows), then its entries are added. A zero route returns environ unchanged.
+// case-insensitively on Windows), then its entries are added. A zero route returns environ unchanged. A refused route is a
+// subcommandError (exit 1): the command line was understood and the agent never started, which is not the Pane's start failure.
 func routedEnv(environ []string, route data.AgentRoute, caseInsensitive bool) ([]string, error) {
 	set, unset, err := route.Env("")
 	if err != nil {
-		return nil, fmt.Errorf("agent: %w", err)
+		return nil, subcommandError{fmt.Errorf("agent: %w", err)}
 	}
 	for _, kv := range set {
 		name, _, _ := strings.Cut(kv, "=")

@@ -143,9 +143,13 @@ func TestASecondEnterWhileTheLeaveRunsAsksNothingAndEscDropsItsAnswer(t *testing
 
 	cancelled := step(t, out.State, key("escape")).State
 	late := step(t, cancelled, model.FederationLeft{Attempt: leave.Attempt, Outcome: model.FederationLeaveOutcome{Draft: leave.Draft}})
-	if late.State.Model.Federation.Screen != model.FederationList || len(late.Cmds) != 0 {
-		t.Errorf("an answer after esc gave screen %v and %#v, want the list and no read", late.State.Model.Federation.Screen, late.Cmds)
+	read, asked := askedFederation(late.Cmds)
+	if late.State.Model.Federation.Screen != model.FederationList || !asked {
+		t.Fatalf("an answer after esc gave screen %v and %#v, want the list and a federation read", late.State.Model.Federation.Screen, late.Cmds)
 	}
+	acme, zeta := healthySpoke("acme"), troubledSpoke("zeta")
+	acme.ProjectID, zeta.ProjectID = 5, 6
+	late = step(t, late.State, federationAnswer(read, acme, zeta))
 
 	// The next run is a new attempt, and the earlier answer is still dropped.
 	next := step(t, leavePreviewed(t, late.State), key("enter"))

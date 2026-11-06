@@ -63,6 +63,15 @@ func (e Env) setupLocal(ctx context.Context, l Local) error {
 		return errors.New(kataMissing)
 	}
 
+	for _, p := range []string{
+		filepath.Join(e.DocbankHome, "config.toml"),
+		filepath.Join(e.KataHome, "config.toml"),
+		filepath.Join(e.KataHome, KeyFileName),
+	} {
+		if _, err := resolveLink(p); err != nil {
+			return err
+		}
+	}
 	docPath := filepath.Join(e.DocbankHome, "config.toml")
 	docText, err := readConfig(docPath)
 	if err != nil {
@@ -129,6 +138,11 @@ func (e Env) setupLocal(ctx context.Context, l Local) error {
 		return fmt.Errorf("%s already has a [docbank] section that differs from what was asked, so nothing was changed:\n%s", kataPath, have.describe())
 	}
 	remote := Remote{Common: l.Common, URL: base, KeyFile: keyPath}
+	if keyOnDisk {
+		if err := e.writeKeyFile(keyPath, key); err != nil { // tightens a key file others can read
+			return err
+		}
+	}
 	if found && keyOnDisk && haveKata {
 		return e.SetupRemote(ctx, remote) // finished: says so
 	}

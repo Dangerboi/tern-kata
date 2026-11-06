@@ -21,7 +21,8 @@ func adopt(cmd *exec.Cmd) (*LaunchRecord, error) {
 	return &LaunchRecord{PID: pid, PGID: pid, StartTicks: startTicks(pid)}, nil
 }
 
-// signalGroup is the termination policy's only way to signal a group: it sends SIGTERM, or SIGKILL with kill, to every process of the group.
+// signalGroup is the termination policy's only way to signal a group: it sends SIGTERM, or SIGKILL with kill, to every
+// process of the group.
 func signalGroup(l *LaunchRecord, kill bool) {
 	sig := syscall.SIGTERM
 	if kill {

@@ -190,6 +190,14 @@ func TestAFailedSaveKeepsTheTextAndSaysWhy(t *testing.T) {
 	}
 }
 
+func TestARefusedWriteAfterAProjectSwitchSaysWhy(t *testing.T) {
+	m := onWorkflows(t, reviewFlow())
+	m, _ = model.Update(m, model.WorkflowWritten{ProjectUID: "other", Op: model.WorkflowOpSave, UID: "W1", Name: "Review then test", Err: errString("daemon gone")})
+	if !strings.Contains(m.Notice, "Review then test") || !strings.Contains(m.Notice, "daemon gone") {
+		t.Errorf("notice = %q", m.Notice)
+	}
+}
+
 type errString string
 
 func (e errString) Error() string { return string(e) }
@@ -213,7 +221,7 @@ func TestArchivingAndRestoringAreGuardedOnTheVersionOnScreen(t *testing.T) {
 	archived.UID, archived.Name, archived.Archived, archived.EventUID = "W2", "Zed", true, "E7"
 	m := onWorkflows(t, reviewFlow(), archived)
 	m, cmds := model.Update(m, model.KeyMsg{Chord: "x"})
-	if want := (model.ArchiveWorkflow{Workspace: "/repo", ProjectID: 7, ProjectUID: "p", UID: "W1", Expected: "E1"}); !hasCmd(cmds, want) {
+	if want := (model.ArchiveWorkflow{Workspace: "/repo", ProjectID: 7, ProjectUID: "p", UID: "W1", Name: "Review then test", Expected: "E1"}); !hasCmd(cmds, want) {
 		t.Fatalf("x sent %#v, want %#v", cmds, want)
 	}
 	if len(m.VisibleWorkflows()) != 1 {
@@ -222,7 +230,7 @@ func TestArchivingAndRestoringAreGuardedOnTheVersionOnScreen(t *testing.T) {
 	m, _ = model.Update(m, model.KeyMsg{Chord: "a"})
 	m, _ = model.Update(m, model.KeyMsg{Chord: "j"})
 	m, cmds = model.Update(m, model.KeyMsg{Chord: "r"})
-	if want := (model.RestoreWorkflow{Workspace: "/repo", ProjectID: 7, ProjectUID: "p", UID: "W2", Expected: "E7"}); !hasCmd(cmds, want) {
+	if want := (model.RestoreWorkflow{Workspace: "/repo", ProjectID: 7, ProjectUID: "p", UID: "W2", Name: "Zed", Expected: "E7"}); !hasCmd(cmds, want) {
 		t.Fatalf("r sent %#v, want %#v", cmds, want)
 	}
 	m, cmds = model.Update(m, model.KeyMsg{Chord: "e"})

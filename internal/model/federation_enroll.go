@@ -689,6 +689,7 @@ func chooseFederationHub(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	f.Draft.Hub, f.Draft.HubAuth, f.Draft.AllowInsecure = hub, "", hub.AllowInsecure
+	f.Draft.RequestedActor = newFederationEnrollDraft(m.Actor).RequestedActor
 	f.Screen = FederationPickHubProject
 	f.HubProjects, f.HubProjectsLoading, f.HubProjectCursor = nil, true, 0
 	return m, []Cmd{LoadFederationHubProjects{Workspace: m.Workspace, Request: f.hubReads.Ask(), Hub: hub.Name}}

@@ -12,7 +12,24 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 )
+
+// renameAttempts and renameDelay bound the Windows rename retry to about one second.
+const (
+	renameAttempts = 20
+	renameDelay    = 50 * time.Millisecond
+)
+
+// retryRename calls rename until it succeeds, fails with an error retryable rejects, or renameAttempts calls were made.
+func retryRename(rename func() error, retryable func(error) bool) error {
+	err := rename()
+	for i := 1; err != nil && i < renameAttempts && retryable(err); i++ {
+		time.Sleep(renameDelay)
+		err = rename()
+	}
+	return err
+}
 
 // Options are the caller's choices for Write.
 type Options struct {
@@ -56,7 +73,7 @@ func Write(path string, data []byte, opts Options) error {
 			return err
 		}
 	}
-	if err := os.Rename(name, path); err != nil {
+	if err := rename(name, path); err != nil {
 		_ = os.Remove(name)
 		return &RenameError{Err: err}
 	}

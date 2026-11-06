@@ -2,6 +2,7 @@ package cronjob
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -108,16 +109,16 @@ func (j Job) OtherAdapter() string {
 	return ""
 }
 
-// Adapter is the text of the job's options.adapter key, "" when it is absent.
+// Adapter is the text of the job's options.adapter key without surrounding spaces, "" when it is absent.
 func (j Job) Adapter() string {
 	v, ok := j.Definition.Options["adapter"]
 	if !ok || v == nil {
 		return ""
 	}
 	if s, isString := v.(string); isString {
-		return s
+		return strings.TrimSpace(s)
 	}
-	return fmt.Sprint(v)
+	return strings.TrimSpace(fmt.Sprint(v))
 }
 
 // Archived says the job is archived, which stops it until restored.

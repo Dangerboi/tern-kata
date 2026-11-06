@@ -74,6 +74,20 @@ func TestUpdateInstallsTheReleasePluginOverAnOlderInstalledCopy(t *testing.T) {
 	f.noLeftovers(t)
 }
 
+func TestUpdateInstallsOverAnInstalledVersionThatCannotBeCompared(t *testing.T) {
+	skipOnWindows(t)
+	f := newUpdateFixture(t, "v0.1.0", "0.2.0", nil)
+	pluginDir := t.TempDir()
+	installPlugin(t, pluginDir, "dev")
+	f.fakeTern(t, pluginDir, 0)
+	if err := f.run(LaunchPlan{Subcommand: "update"}); err != nil {
+		t.Fatal(err)
+	}
+	if calls := f.ternCalls(); len(calls) != 2 || !strings.HasPrefix(calls[1], "plugin install ") {
+		t.Errorf("tern was called with %q", calls)
+	}
+}
+
 func TestUpdateLeavesALinkedPluginAndSaysSo(t *testing.T) {
 	skipOnWindows(t)
 	f := newUpdateFixture(t, "v0.1.0", "0.2.0", nil)
@@ -98,6 +112,7 @@ func TestUpdateDoesNothingToThePluginWhenItIsCurrentOrAbsent(t *testing.T) {
 	skipOnWindows(t)
 	for name, setup := range map[string]func(*testing.T, string){
 		"same version": func(t *testing.T, dir string) { installPlugin(t, dir, "0.2.0") },
+		"newer plugin": func(t *testing.T, dir string) { installPlugin(t, dir, "0.3.0") },
 		"no copy":      func(*testing.T, string) {},
 	} {
 		f := newUpdateFixture(t, "v0.1.0", "0.2.0", nil)

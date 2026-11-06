@@ -104,3 +104,57 @@ func TestSwitchingToARemoteEntrySendsItsOwnTokenAndNeverTheGlobalOne(t *testing.
 		}
 	}
 }
+
+func TestLocateNamedReportsAnUnreadableConfigInsteadOfDiscovering(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("KATA_HOME", home)
+	t.Setenv("KATA_AUTH_TOKEN", "local-secret")
+	config := "[[daemon]]\nname = \"far\"\nurl = \"https://far.example\"\ntoken = \"remote\"\n\n[[daemon]]\nname = \"far\"\nurl = \"https://other.example\"\n"
+	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LocateNamed("far", "")(context.Background(), "")
+	if err == nil || !strings.Contains(err.Error(), "config.toml") {
+		t.Fatalf("LocateNamed error = %v, want one naming config.toml", err)
+	}
+}
+
+func TestReadCatalogKeepsDaemonsWhenTUIIsMalformed(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("KATA_HOME", home)
+	config := "[tui]\nconfirm_quit = \"yes\"\n\n[[daemon]]\nname = \"far\"\nurl = \"https://far.example\"\n"
+	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := ReadCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := catalog.Entry("far"); !ok || !catalog.ConfirmQuit {
+		t.Fatalf("catalog = %+v, want the far entry and the default confirm_quit", catalog)
+	}
+}
+
+func TestDialReportsAnUnreadableConfigOnlyWhereItIsUsed(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("KATA_HOME", home)
+	t.Setenv("KATA_SERVER", "")
+	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("active_daemon = \n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	located := false
+	gateway := NewGateway(func(context.Context, string) (Target, error) {
+		located = true
+		return Target{}, errors.New("located")
+	})
+	t.Cleanup(gateway.Close)
+	ctx := context.Background()
+	_, err := gateway.dial(ctx, ctx, gateway.locate, "", t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "config.toml") || located {
+		t.Fatalf("dial error = %v, located = %v, want a config.toml error without locating", err, located)
+	}
+	t.Setenv("KATA_SERVER", "http://127.0.0.1:1")
+	if _, err := gateway.dial(ctx, ctx, gateway.locate, "", t.TempDir()); err == nil || strings.Contains(err.Error(), "config.toml") || !located {
+		t.Fatalf("with KATA_SERVER set, dial error = %v, located = %v, want the locator's error", err, located)
+	}
+}

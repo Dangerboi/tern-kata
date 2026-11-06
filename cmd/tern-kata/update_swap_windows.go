@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"time"
 )
 
@@ -33,8 +32,7 @@ func swapBinary(target, fresh string) error {
 		}
 		return err
 	}
-	stale, _ := filepath.Glob(old + "-*")
-	for _, path := range stale {
+	for _, path := range staleOldFiles(old) {
 		_ = os.Remove(path)
 	}
 	return nil

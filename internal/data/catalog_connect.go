@@ -27,10 +27,14 @@ var kataExecutable = func() string {
 // entry (`daemon recover` for a profile, `daemon start` otherwise) before connecting; empty never starts one, and a remote is never started.
 func LocateNamed(name, startWith string) Locator {
 	return func(ctx context.Context, _ string) (Target, error) {
-		if catalog, err := ReadCatalog(); err == nil {
-			if entry, ok := catalog.Entry(name); ok && !entry.Local {
-				return locateRemoteEntry(ctx, entry)
-			}
+		// An unreadable config.toml is an error, not a reason to hand the name to kata's discovery: kata may parse the file
+		// and treat the name as a remote entry, then send KATA_AUTH_TOKEN to it.
+		catalog, err := ReadCatalog()
+		if err != nil {
+			return Target{}, fmt.Errorf("daemon %q: %w", name, err)
+		}
+		if entry, ok := catalog.Entry(name); ok && !entry.Local {
+			return locateRemoteEntry(ctx, entry)
 		}
 		c, err := client.Discover(ctx, client.DiscoverOptions{Daemon: name, StartWith: startWith})
 		if err != nil {

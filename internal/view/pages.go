@@ -40,7 +40,7 @@ func entryCols(entry model.PageBarEntry, compact bool) int {
 	if compact && !entry.Current {
 		return cols
 	}
-	return cols + 1 + utf8.RuneCountInString(entry.Name())
+	return cols + 1 + displayWidth(entry.Name())
 }
 
 func entriesWidth(entries []model.PageBarEntry, compact bool) int {
@@ -101,9 +101,9 @@ func barTitle(m model.Model) string {
 
 // topBarFit is how the Page bar fits the top bar beside the title as drawn now.
 func topBarFit(m model.Model) barFit {
-	cols := utf8.RuneCountInString(barTitle(m))
+	cols := displayWidth(barTitle(m))
 	if m.Loading {
-		cols += utf8.RuneCountInString(loadingMarker.T)
+		cols += displayWidth(loadingMarker.T)
 	}
 	return pageBarFit(m, cols)
 }

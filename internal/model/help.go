@@ -151,7 +151,11 @@ func helpListings() []helpListing {
 	for _, entry := range mainActions {
 		var keys []string
 		for _, key := range entry.keys {
-			for _, label := range strings.Split(key.Label, "/") {
+			parts := strings.Split(key.Label, "/")
+			if !slices.ContainsFunc(parts, func(p string) bool { return p != "" }) {
+				parts = []string{key.Label}
+			}
+			for _, label := range parts {
 				if label != "" && !slices.Contains(keys, label) {
 					keys = append(keys, label)
 				}

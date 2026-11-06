@@ -123,6 +123,11 @@ func dismissFederationLeave(m Model) (Model, []Cmd) {
 func federationLeft(m Model, msg FederationLeft) (Model, []Cmd) {
 	f := &m.Federation
 	if !f.attempts.IsCurrent(msg.Attempt) || !f.Leaving {
+		// A leave dropped by esc still ran on the daemon: a success changes no screen but reads the status, so the left spoke is not listed.
+		// A newer run in progress reads when it answers.
+		if msg.Err == nil && m.OnFederation() && !f.Leaving {
+			return askFederation(m)
+		}
 		return m, nil
 	}
 	f.Leaving = false

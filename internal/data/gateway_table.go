@@ -715,7 +715,7 @@ func init() {
 			return ok(c.SaveWorkflow(ctx, cmd))
 		},
 		func(cmd model.SaveWorkflow, err error) model.Msg {
-			return model.WorkflowWritten{ProjectUID: cmd.ProjectUID, Op: model.WorkflowOpSave, UID: cmd.UID, Err: err}
+			return model.WorkflowWritten{ProjectUID: cmd.ProjectUID, Op: model.WorkflowOpSave, UID: cmd.UID, Name: cmd.Name, Err: err}
 		},
 		nil, []afterStep{readWrittenWorkflowAfter})
 
@@ -725,7 +725,7 @@ func init() {
 			return ok(c.ArchiveWorkflow(ctx, cmd))
 		},
 		func(cmd model.ArchiveWorkflow, err error) model.Msg {
-			return model.WorkflowWritten{ProjectUID: cmd.ProjectUID, Op: model.WorkflowOpArchive, UID: cmd.UID, Err: err}
+			return model.WorkflowWritten{ProjectUID: cmd.ProjectUID, Op: model.WorkflowOpArchive, UID: cmd.UID, Name: cmd.Name, Err: err}
 		},
 		nil, []afterStep{readWrittenWorkflowAfter})
 
@@ -735,7 +735,7 @@ func init() {
 			return ok(c.RestoreWorkflow(ctx, cmd))
 		},
 		func(cmd model.RestoreWorkflow, err error) model.Msg {
-			return model.WorkflowWritten{ProjectUID: cmd.ProjectUID, Op: model.WorkflowOpRestore, UID: cmd.UID, Err: err}
+			return model.WorkflowWritten{ProjectUID: cmd.ProjectUID, Op: model.WorkflowOpRestore, UID: cmd.UID, Name: cmd.Name, Err: err}
 		},
 		nil, []afterStep{readWrittenWorkflowAfter})
 

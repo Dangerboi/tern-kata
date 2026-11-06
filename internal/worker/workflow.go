@@ -84,7 +84,7 @@ func (j *Journal) activeStep() int {
 // activeIsCommand reports whether the run's current attempt is a command step's, which has no session to continue.
 func (j *Journal) activeIsCommand() bool {
 	i := j.activeStep()
-	return i >= 0 && j.Workflow.Steps[i].Kind == cronjob.StepCommand
+	return i >= 0 && stepKind(j, i) == cronjob.StepCommand
 }
 
 // attemptDir is the folder of the run's current (or last) attempt: the run's own for a prompt job, the step's for a workflow.
@@ -382,7 +382,7 @@ func workflowSummary(j *Journal, status cronjob.RunStatus) string {
 	fmt.Fprintf(&b, " (%d of %d steps succeeded)\n", done, len(j.Steps))
 	for i, r := range j.Steps {
 		state := cmp.Or(r.State, StepPending)
-		fmt.Fprintf(&b, "\n%d. %s [%s]: %s", i+1, r.Key, j.Workflow.Steps[i].Kind, state)
+		fmt.Fprintf(&b, "\n%d. %s [%s]: %s", i+1, r.Key, stepKind(j, i), state)
 		if r.Tries > 1 {
 			fmt.Fprintf(&b, " after %d attempts", r.Tries)
 		}
@@ -423,10 +423,12 @@ func stepStateText(j *Journal, i int) string {
 
 // commandEnv is the environment of a command step (ADR-0008): the worker's, without its kata credentials and routing
 // selectors or the worker's own internals, plus the job's secrets and the run's identity.
-func commandEnv(j *Journal, runDir string, secrets map[string]string) []string {
+// Names compare case-insensitively when caseInsensitive (Windows).
+func commandEnv(environ []string, j *Journal, runDir string, secrets map[string]string, caseInsensitive bool) []string {
 	var env []string
-	for _, kv := range os.Environ() {
-		if strings.HasPrefix(kv, "TERN_KATA_") || strings.HasPrefix(kv, "KATA_") {
+	for _, kv := range environ {
+		name, _, _ := strings.Cut(kv, "=")
+		if reservedEnvName(name, caseInsensitive) {
 			continue
 		}
 		env = append(env, kv)
@@ -458,7 +460,7 @@ func (w *Worker) runCommand(ctx context.Context, j *Journal, sp attemptSpec) err
 	out := openHeadTail(w.store.hooks, filepath.Join(sp.dir, "output.log"), commandHead, commandTail)
 	cmd := exec.Command(program, "-c", sp.task)
 	cmd.Dir = cwd
-	cmd.Env = commandEnv(j, runDir, secrets)
+	cmd.Env = commandEnv(os.Environ(), j, runDir, secrets, envCaseInsensitive)
 	cmd.Stdin = nil
 	cmd.WaitDelay = 5 * time.Second
 	isolate(cmd)

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -81,6 +82,29 @@ func TestANotifyRunSendsTheRequestItJournaledNotOneRecomputedAfterARestart(t *te
 	if _, _, ok := h.kata.InboxRequest(t, h.proj, issue.UID, "carol"); ok {
 		t.Fatal("the request was recomputed for the new owner")
 	}
+}
+
+func TestANotifyRunWhoseJournalCannotBeReReadWhileResolvingItsRecipientDoesNotCrashTheWorker(t *testing.T) {
+	h := newHarness(t)
+	h.config = strings.Replace(h.config, "name = \"demo\"\n", "name = \"demo\"\nsecrets = [\"token\"]\n", 1) + "[secrets]\ntoken = { env = \"TK_NEVER_SET\" }\n"
+	if err := writeConfig(h); err != nil {
+		t.Fatal(err)
+	}
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "needs secret", Prompt: "Do it.", Secrets: map[string]string{"STUB_SECRET": "token"}})
+	var once sync.Once
+	r := h.start(worker.Hooks{AfterSave: func(point string, j *worker.Journal) error {
+		if point == "intent-comment" {
+			once.Do(func() { // the journal goes bad after the comment is sent, just before the notify intent resolves its recipient
+				if err := os.WriteFile(filepath.Join(h.dirs.Runs(), j.RunUID, "run.json"), []byte("{damaged"), 0o600); err != nil {
+					t.Error(err)
+				}
+			})
+		}
+		return nil
+	}})
+	h.admitting(r)
+	h.ask(worker.Request{Op: "run", Job: job.UID})
+	h.eventually("the damaged journal to be quarantined", func() bool { return len(r.w.Status().Quarantined) == 1 })
 }
 
 func TestAHeldRunTellsTheIssuesOwnerAndTheRequestSurvivesACrash(t *testing.T) {

@@ -249,6 +249,27 @@ func TestAChangedFileRefusesAndKeepsTheInput(t *testing.T) {
 	}
 }
 
+func TestASaveAnsweredAfterTheCardClosedSaysSoInANotice(t *testing.T) {
+	m := newViewCard(t, viewsPane())
+	m = typeText(m, "Fresh")
+	saved, cmds := model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
+	sent := cmds[0].(model.SaveView)
+	saved.ViewForm = model.ViewFormState{}
+	loaded := model.ViewsLoaded{Views: savedViews(), Token: testToken{7}}
+	failed, _ := model.Update(saved, model.ViewSaved{Sent: sent, Err: errors.New("disk full"), Loaded: loaded})
+	if !strings.Contains(failed.Notice, "Fresh") || !strings.Contains(failed.Notice, "disk full") {
+		t.Errorf("failed save notice = %q", failed.Notice)
+	}
+	changed, _ := model.Update(saved, model.ViewSaved{Sent: sent, Changed: true, Loaded: loaded})
+	if !strings.Contains(changed.Notice, "Fresh") || !strings.Contains(changed.Notice, "changed") {
+		t.Errorf("changed save notice = %q", changed.Notice)
+	}
+	done, _ := model.Update(saved, model.ViewSaved{Sent: sent, Loaded: loaded})
+	if !strings.Contains(done.Notice, "Saved view Fresh") {
+		t.Errorf("saved notice = %q", done.Notice)
+	}
+}
+
 func TestEditOpensThePrefilledCardAndARenameNamesTheOldView(t *testing.T) {
 	m := viewsPane()
 	m, _ = menuKeys(m, "down", "enter")

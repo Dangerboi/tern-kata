@@ -51,6 +51,14 @@ type StepDetail struct {
 // OutputTailBytes bounds RunDetail.OutputTail.
 const OutputTailBytes = 4 << 10
 
+// stepKind is the kind of the plan's step i, empty when the plan has no such step (a damaged journal).
+func stepKind(j *Journal, i int) cronjob.StepKind {
+	if j.Workflow == nil || i < 0 || i >= len(j.Workflow.Steps) {
+		return ""
+	}
+	return j.Workflow.Steps[i].Kind
+}
+
 // stepsOf is the journal's steps: one for a prompt job, one per step of a workflow's plan in order, a step not yet
 // reached showing as pending.
 func stepsOf(j *Journal) []StepDetail {
@@ -68,7 +76,7 @@ func stepsOf(j *Journal) []StepDetail {
 	steps := make([]StepDetail, len(j.Steps))
 	active := j.activeStep()
 	for i, r := range j.Steps {
-		st := StepDetail{Index: i + 1, Kind: j.Workflow.Steps[i].Kind, Key: r.Key, Attempt: r.Tries, State: stepStateText(j, i), Summary: r.Summary, StartedAt: r.StartedAt, EndedAt: r.EndedAt}
+		st := StepDetail{Index: i + 1, Kind: stepKind(j, i), Key: r.Key, Attempt: r.Tries, State: stepStateText(j, i), Summary: r.Summary, StartedAt: r.StartedAt, EndedAt: r.EndedAt}
 		launch, exit := r.Launch, r.Exit
 		if i == active { // the attempt in flight keeps its records on the run until it concludes
 			launch, exit = j.Launch, j.Exit
@@ -149,7 +157,7 @@ func (w *Worker) sessionOf(j *Journal) (folder, id string) {
 	active := j.activeStep()
 	for i := len(j.Steps) - 1; i >= 0; i-- {
 		r := j.Steps[i]
-		if j.Workflow.Steps[i].Kind != cronjob.StepPrompt || r.Dir == "" {
+		if stepKind(j, i) != cronjob.StepPrompt || r.Dir == "" {
 			continue
 		}
 		launch := r.Launch

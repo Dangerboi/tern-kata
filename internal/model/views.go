@@ -311,16 +311,22 @@ func viewSaved(m Model, msg ViewSaved) (Model, []Cmd) {
 	form := m.ViewForm
 	ours := form.Open && form.Saving && form.Sent.Self == msg.Sent.Self && form.Sent.View == msg.Sent.View
 	if msg.Err != nil || msg.Changed {
-		if ours {
+		switch {
+		case ours:
 			m.ViewForm.Saving = false
 			m.ViewForm.Err = msg.Err
 			if msg.Changed {
 				m.ViewForm.Err = errors.New("views.toml changed since it was read; the view was not saved. Check the name and save again")
 			}
+		case msg.Changed:
+			m.Notice = fmt.Sprintf("views.toml changed since it was read; view %s was not saved", msg.Sent.View.Name)
+		default:
+			m.Notice = fmt.Sprintf("View %s not saved: %v", msg.Sent.View.Name, msg.Err)
 		}
 		return m, nil
 	}
 	if !ours {
+		m.Notice = "Saved view " + msg.Sent.View.Name
 		return m, nil
 	}
 	m.ViewForm = ViewFormState{}

@@ -51,7 +51,7 @@ type Catalog struct {
 	Active string
 	// Daemons are the entries in file order.
 	Daemons []CatalogEntry
-	// ConfirmQuit is [tui].confirm_quit; true unless the file sets it false.
+	// ConfirmQuit is [tui].confirm_quit; true unless the file sets it false, and true when [tui] does not decode.
 	ConfirmQuit bool
 }
 
@@ -77,6 +77,10 @@ type catalogFile struct {
 		TokenEnv      string `toml:"token_env"`
 		AllowInsecure bool   `toml:"allow_insecure"`
 	} `toml:"daemon"`
+}
+
+// tuiFile is the [tui] table, decoded apart from the daemon catalog: kata ignores it, so a bad value there must not fail the catalog.
+type tuiFile struct {
 	TUI struct {
 		ConfirmQuit *bool `toml:"confirm_quit"`
 	} `toml:"tui"`
@@ -117,7 +121,12 @@ func ReadCatalogAt(home string) (Catalog, error) {
 	if _, err := toml.Decode(string(raw), &f); err != nil {
 		return Catalog{}, fmt.Errorf("parse %s: %w", path, err)
 	}
-	cat := Catalog{Active: strings.TrimSpace(f.ActiveDaemon), ConfirmQuit: f.TUI.ConfirmQuit == nil || *f.TUI.ConfirmQuit}
+	// A [tui] that does not decode leaves the default: confirm before quitting.
+	var tui tuiFile
+	if _, err := toml.Decode(string(raw), &tui); err != nil {
+		tui = tuiFile{}
+	}
+	cat := Catalog{Active: strings.TrimSpace(f.ActiveDaemon), ConfirmQuit: tui.TUI.ConfirmQuit == nil || *tui.TUI.ConfirmQuit}
 	seen := map[string]bool{}
 	for _, d := range f.Daemons {
 		e := CatalogEntry{
