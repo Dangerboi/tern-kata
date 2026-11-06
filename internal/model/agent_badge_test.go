@@ -1,8 +1,8 @@
 package model_test
 
 import (
-	"strings"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 

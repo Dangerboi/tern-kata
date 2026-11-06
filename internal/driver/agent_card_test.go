@@ -1,8 +1,8 @@
 package driver_test
 
 import (
-	"strings"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
