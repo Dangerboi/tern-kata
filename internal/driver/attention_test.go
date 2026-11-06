@@ -776,7 +776,7 @@ func TestUOnTheAttentionPageRestoresTheDeletedIssueAndReadsTheRequestsAgain(t *t
 	if _, asked := askedAttention(back.Cmds); !asked {
 		t.Errorf("the Attention Page did not read its requests again: %#v", back.Cmds)
 	}
-	if got := pressU(t, back.State); len(got.Cmds) != 0 || got.State.Model.Notice != back.State.Model.Notice {
+	if got := pressU(t, back.State); len(got.Cmds) != 0 || got.State.Model.Notice != "" {
 		t.Errorf("a second u sent %#v with notice %q", got.Cmds, got.State.Model.Notice)
 	}
 }
@@ -806,7 +806,7 @@ func TestUOnTheAttentionPageIsNotOfferedAndDoesNothingUnlessTheNewestChangeIsADe
 			}
 		}
 		out := pressU(t, s)
-		if len(out.Cmds) != 0 || out.State.Model.Notice != s.Model.Notice {
+		if len(out.Cmds) != 0 || out.State.Model.Notice != "" {
 			t.Errorf("%s: u sent %#v with notice %q", name, out.Cmds, out.State.Model.Notice)
 		}
 	}
