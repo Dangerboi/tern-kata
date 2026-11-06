@@ -692,8 +692,10 @@ func (g *Gateway) stopAgent(ctx context.Context, cmd model.StopAgent) model.Agen
 	return model.AgentStopped{Block: cmd.Block, Agents: agents}
 }
 
-// InterruptTitlePrefix starts the Pane title with which the Pane asks the window half to interrupt an agent: the prefix and the
-// agent's block id as decimal text. The window half (panecommands.luau) reads it and calls `cx.agents:interrupt`, which only it has.
+// InterruptTitlePrefix starts the Pane title with which the Pane asks the window half to interrupt an agent: the prefix, the
+// agent's block id as decimal text and, when the agent has one, the base name of its prompt file after a space. A window on another
+// machine numbers panes differently, so the window half finds the agent by the prompt file in its command line first and by the
+// block second. The window half (panecommands.luau) reads it and calls `cx.agents:interrupt`, which only it has.
 const InterruptTitlePrefix = "tern-kata interrupt "
 
 // defaultInterruptGap is how long the request title stays before the Pane's own title comes back, so each is a title change of its own.
@@ -706,12 +708,16 @@ func writePaneTitle(title string) error {
 }
 
 // interruptAgent asks the window half to interrupt the agent's current turn. The only way from the Pane to the window half is the
-// Pane's title, so the request is a title that names the block, followed by the Pane's own title again.
+// Pane's title, so the request is a title that names the block and the prompt file, followed by the Pane's own title again.
 func (g *Gateway) interruptAgent(ctx context.Context, cmd model.InterruptAgent) model.AgentInterrupted {
 	if cmd.Block == "" || strings.Trim(cmd.Block, "0123456789") != "" {
 		return model.AgentInterrupted{Block: cmd.Block, Err: fmt.Errorf("block %q is not a pane id the window half can interrupt", cmd.Block)}
 	}
-	if err := g.paneTitle(InterruptTitlePrefix + cmd.Block); err != nil {
+	title := InterruptTitlePrefix + cmd.Block
+	if cmd.PromptFile != "" {
+		title += " " + filepath.Base(cmd.PromptFile)
+	}
+	if err := g.paneTitle(title); err != nil {
 		return model.AgentInterrupted{Block: cmd.Block, Err: err}
 	}
 	select {

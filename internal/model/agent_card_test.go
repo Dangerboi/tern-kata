@@ -250,8 +250,11 @@ func TestIInterruptsTheSelectedAgentAndClosesTheCard(t *testing.T) {
 	for _, state := range []model.AgentStateWord{model.AgentWorking, model.AgentIdle, model.AgentWaitingInput} {
 		m := openCard("open", st("11", state, ""), st("12", state, ""))
 		m.AgentCard.Cursor = 1
+		for i := range m.AgentMapping {
+			m.AgentMapping[i].PromptFile = "/tmp/agent-prompts/prompt-" + m.AgentMapping[i].Block + ".md"
+		}
 		after, cmds := press(m, "i")
-		if want := []model.Cmd{model.InterruptAgent{Block: "12"}}; !reflect.DeepEqual(cmds, want) || after.AgentCard.Open {
+		if want := []model.Cmd{model.InterruptAgent{Block: "12", PromptFile: "/tmp/agent-prompts/prompt-12.md"}}; !reflect.DeepEqual(cmds, want) || after.AgentCard.Open {
 			t.Errorf("%s: cmds %#v, card open %v; want %v and the card closed", state, cmds, after.AgentCard.Open, want)
 		}
 	}

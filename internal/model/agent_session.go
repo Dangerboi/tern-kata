@@ -16,11 +16,10 @@ import (
 const AgentSessionEvery = 2 * time.Second
 
 // AgentSessionAsk names one agent whose session is to be read: its block and the prompt file the session path file sits beside.
-// Omp is false for an agent the Pane did not start as omp, which has no session to read.
+// Only omp agents are asked about; an agent the Pane did not start as omp has no session to read.
 type AgentSessionAsk struct {
 	Block      string
 	PromptFile string
-	Omp        bool
 }
 
 // ReadAgentSessions asks for the sessions of Agents, After a pause when After is set (the refresh while the card stays open).
@@ -74,17 +73,16 @@ func (m Model) AgentSessionFor(block string) (AgentSessionFacts, bool) {
 	return m.AgentSessions.Sessions[i], true
 }
 
-// askAgentSessions reads the sessions of the Agent card's agents after a pause; it supersedes any read out.
+// askAgentSessions reads the sessions of the Agent card's omp agents after a pause; it supersedes any read out, and asks for
+// nothing when no agent is omp.
 func askAgentSessions(m Model, after time.Duration) (Model, []Cmd) {
-	rows := m.AgentCardRows()
-	asks := make([]AgentSessionAsk, 0, len(rows))
-	anyOmp := false
-	for _, a := range rows {
-		omp := a.NoAddress != AgentNotOmp
-		anyOmp = anyOmp || omp
-		asks = append(asks, AgentSessionAsk{Block: a.Block, PromptFile: a.PromptFile, Omp: omp})
+	var asks []AgentSessionAsk
+	for _, a := range m.AgentCardRows() {
+		if a.NoAddress != AgentNotOmp {
+			asks = append(asks, AgentSessionAsk{Block: a.Block, PromptFile: a.PromptFile})
+		}
 	}
-	if !anyOmp {
+	if len(asks) == 0 {
 		return m, nil
 	}
 	return m, []Cmd{ReadAgentSessions{Request: m.AgentSessions.reads.Ask(), After: after, Agents: asks}}

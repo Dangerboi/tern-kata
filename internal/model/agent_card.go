@@ -197,7 +197,7 @@ func interruptAgent(m Model, e AgentEntry) (Model, []Cmd) {
 		return m, nil
 	}
 	m.Notice = agentCardInterruptSent
-	return m, []Cmd{InterruptAgent{Block: e.Block}}
+	return m, []Cmd{InterruptAgent{Block: e.Block, PromptFile: e.PromptFile}}
 }
 
 // AgentCardSelected is a click on an agent of the card's list; Block is its block id.

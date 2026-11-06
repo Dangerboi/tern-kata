@@ -27,9 +27,9 @@ func TestTheAgentCardReadsSessionsWhenItOpensAndEveryTwoSecondsWhileOpen(t *test
 	if open.After != 0 {
 		t.Errorf("the read at opening waits %v; want none", open.After)
 	}
-	wantAsks := []model.AgentSessionAsk{{Block: "1", PromptFile: "/state/agent-prompts/prompt-1.md", Omp: true}, {Block: "2", Omp: false}}
+	wantAsks := []model.AgentSessionAsk{{Block: "1", PromptFile: "/state/agent-prompts/prompt-1.md"}}
 	if !reflect.DeepEqual(open.Agents, wantAsks) {
-		t.Errorf("asked %#v, want the card's agents %#v", open.Agents, wantAsks)
+		t.Errorf("asked %#v, want the card's omp agents %#v", open.Agents, wantAsks)
 	}
 
 	m, cmds = model.Update(m, model.AgentSessionsRead{Request: open.Request, Sessions: []model.AgentSessionFacts{{Block: "1", Model: "m"}}})

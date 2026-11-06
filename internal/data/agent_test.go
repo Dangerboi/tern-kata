@@ -1928,6 +1928,18 @@ func TestInterruptingSetsTheRequestTitleThenTheOwnTitleBack(t *testing.T) {
 	}
 }
 
+func TestInterruptingNamesThePromptFileByItsBaseName(t *testing.T) {
+	g, _ := agentGateway(t)
+	var titles []string
+	g.paneTitle = func(title string) error { titles = append(titles, title); return nil }
+	g.interruptGap = 0
+	cmd := model.InterruptAgent{Block: "5", PromptFile: "/home/me/.local/state/agent-prompts/prompt-3-123.md"}
+	if got := as[model.AgentInterrupted](t, run(t, g, cmd)); got.Err != nil ||
+		!reflect.DeepEqual(titles, []string{"tern-kata interrupt 5 prompt-3-123.md", "tern-kata"}) {
+		t.Fatalf("%+v, titles %q", got, titles)
+	}
+}
+
 func TestInterruptingNamesNoBlockThatIsNotAPaneID(t *testing.T) {
 	g, _ := agentGateway(t)
 	g.paneTitle = func(title string) error { t.Errorf("set the title %q", title); return nil }

@@ -105,10 +105,9 @@ func TestReadAgentSessionExplainsWhatIsMissing(t *testing.T) {
 		path string
 		want string
 	}{
-		"not omp":           {ask: model.AgentSessionAsk{PromptFile: prompt}, want: agentSessionNotOmp},
-		"no path file":      {ask: model.AgentSessionAsk{PromptFile: prompt, Omp: true}, want: agentSessionNoPath},
-		"no prompt file":    {ask: model.AgentSessionAsk{Omp: true}, want: agentSessionNoPath},
-		"a missing session": {ask: model.AgentSessionAsk{PromptFile: prompt, Omp: true}, path: filepath.Join(dir, "gone.jsonl"), want: agentSessionNoFile},
+		"no path file":      {ask: model.AgentSessionAsk{PromptFile: prompt}, want: agentSessionNoPath},
+		"no prompt file":    {ask: model.AgentSessionAsk{}, want: agentSessionNoPath},
+		"a missing session": {ask: model.AgentSessionAsk{PromptFile: prompt}, path: filepath.Join(dir, "gone.jsonl"), want: agentSessionNoFile},
 	} {
 		_ = os.Remove(prompt + AgentSessionSuffix)
 		if tt.path != "" {
@@ -132,7 +131,7 @@ func TestReadAgentSessionReadsTheFileThePathFileNames(t *testing.T) {
 	if err := os.WriteFile(prompt+AgentSessionSuffix, []byte(session+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got := readAgentSession(model.AgentSessionAsk{PromptFile: prompt, Omp: true})
+	got := readAgentSession(model.AgentSessionAsk{PromptFile: prompt})
 	if got.Reason != "" || got.Model != "m" || got.CurrentTool != "bash" || got.ToolCalls != 1 {
 		t.Errorf("got %+v", got)
 	}

@@ -335,7 +335,7 @@ const SESSION_EVENTS = ["session_start", "session_switch", "session_branch"] as 
 
 /** The slice of omp's extension API this file uses. */
 export interface ExtensionApi {
-  on(event: (typeof SESSION_EVENTS)[number] | "session_shutdown", handler: (event: unknown, ctx: ExtensionContext) => void): void;
+  on(event: (typeof SESSION_EVENTS)[number] | "agent_start" | "session_shutdown", handler: (event: unknown, ctx: ExtensionContext) => void): void;
   sendUserMessage(text: string, options: { deliverAs: "aside" }): Promise<unknown> | void;
 }
 
@@ -378,28 +378,31 @@ export function promptFileFromArgv(argv: readonly string[]): string | undefined 
 /**
  * Writes the main session's file path beside the agent's prompt file, so the Pane can read the session without
  * knowing omp's session folder. The write is atomic (a temporary file renamed over the old one); a session with no
- * file yet, or a write that fails, leaves the previous file alone.
+ * file yet, a path equal to `written` (the one the last call wrote), or a write that fails, leaves the previous file
+ * alone. Returns the path the file holds after a write, else undefined.
  */
-export function writeSessionPath(promptFile: string | undefined, ctx: ExtensionContext): void {
-  if (!promptFile) return;
+export function writeSessionPath(promptFile: string | undefined, ctx: ExtensionContext, written?: string): string | undefined {
+  if (!promptFile) return undefined;
   let session: string | undefined;
   try {
     session = ctx.sessionManager?.getSessionFile?.();
   } catch {
-    return;
+    return undefined;
   }
-  if (!session) return;
+  if (!session || session === written) return undefined;
   const target = promptFile + SESSION_PATH_SUFFIX;
   const temp = `${target}.${process.pid}.tmp`;
   try {
     writeFileSync(temp, session + "\n");
     renameSync(temp, target);
+    return session;
   } catch {
     try {
       rmSync(temp, { force: true });
     } catch {
       // the Pane shows the agent without session facts
     }
+    return undefined;
   }
 }
 
@@ -482,18 +485,27 @@ export function createExtension(
       });
     }
 
+    // omp's `/move` renames the session file without a session event, so each turn's start re-reads the path too.
+    let writtenSession: string | undefined;
+    const writeSession = (c: ExtensionContext) => {
+      writtenSession = writeSessionPath(promptFile, c, writtenSession) ?? writtenSession;
+    };
     for (const name of SESSION_EVENTS) {
       pi.on(name, (_event, c) => {
         // An in-process subagent shares process.env with its parent, whose commands must keep naming the parent.
         if (c.agent?.kind === "sub") return;
         exportTranscriptSession(env, c);
-        writeSessionPath(promptFile, c);
+        writeSession(c);
         if (name !== "session_start" || !config) return;
         ctx = c;
         follower ??= build(config);
         follower.start();
       });
     }
+    pi.on("agent_start", (_event, c) => {
+      if (c.agent?.kind === "sub") return;
+      writeSession(c);
+    });
     pi.on("session_shutdown", () => {
       follower?.stop();
     });

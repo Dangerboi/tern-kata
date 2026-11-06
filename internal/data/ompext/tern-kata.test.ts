@@ -510,6 +510,21 @@ describe("session path file", () => {
     });
   });
 
+  test("an agent start writes the session file's path only when it changed, as after omp's /move", () => {
+    withFolder((dir) => {
+      const prompt = join(dir, "prompt-abc.md");
+      const handlers = wired([`@${prompt}`]);
+      handlers.get("session_start")?.({}, session("/s/one.jsonl"));
+      rmSync(`${prompt}.session`);
+      handlers.get("agent_start")?.({}, session("/s/one.jsonl"));
+      expect(existsSync(`${prompt}.session`)).toBe(false);
+      handlers.get("agent_start")?.({}, session("/s/moved.jsonl"));
+      expect(readFileSync(`${prompt}.session`, "utf8").trim()).toBe("/s/moved.jsonl");
+      handlers.get("agent_start")?.({}, { agent: { kind: "sub" }, ...session("/s/sub.jsonl") });
+      expect(readFileSync(`${prompt}.session`, "utf8").trim()).toBe("/s/moved.jsonl");
+    });
+  });
+
   test("a subagent's session writes nothing", () => {
     withFolder((dir) => {
       const prompt = join(dir, "prompt-abc.md");

@@ -15,14 +15,21 @@ M.UPDATE = "tern-kata update --pause"
 M.INSTALL_WINDOWS = "powershell -NoProfile -ExecutionPolicy Bypass -Command \"irm " .. SCRIPTS
     .. "install.ps1 | iex; Read-Host 'Press Enter to close'\""
 
--- The request the Pane makes of the window half to interrupt an agent: the Pane sets its own title to INTERRUPT_PREFIX and the
--- agent's block id as decimal text (internal/data InterruptTitlePrefix), the one thing a Pane can say to the window half, and then
--- sets "tern-kata" again. Returns the block id when the title is such a request, else nil.
+-- The request the Pane makes of the window half to interrupt an agent: the Pane sets its own title to INTERRUPT_PREFIX, the
+-- agent's block id as decimal text and, after a space, the base name of the agent's prompt file (internal/data
+-- InterruptTitlePrefix), the one thing a Pane can say to the window half, and then sets "tern-kata" again. A window on another
+-- machine numbers panes differently, so the prompt file is what finds the agent there; a request from an older Pane has no
+-- prompt file. Returns the block id and the prompt file name (nil when absent) when the title is such a request, else nil.
 M.INTERRUPT_PREFIX = "tern-kata interrupt "
 
-function M.interruptBlock(title: any): string?
-    if type(title) ~= "string" or title:sub(1, #M.INTERRUPT_PREFIX) ~= M.INTERRUPT_PREFIX then return nil end
-    return title:sub(#M.INTERRUPT_PREFIX + 1):match("^(%d+)$")
+function M.interruptBlock(title: any): (string?, string?)
+    if type(title) ~= "string" or title:sub(1, #M.INTERRUPT_PREFIX) ~= M.INTERRUPT_PREFIX then return nil, nil end
+    local rest = title:sub(#M.INTERRUPT_PREFIX + 1)
+    local block = rest:match("^(%d+)$")
+    if block then return block, nil end
+    local named, prompt = rest:match("^(%d+) ([%w%._%-]+%.md)$")
+    if named then return named, prompt end
+    return nil, nil
 end
 
 local COMMANDS: { [string]: boolean } = {

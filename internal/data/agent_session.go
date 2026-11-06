@@ -14,7 +14,7 @@ import (
 )
 
 // AgentSessionSuffix names the file beside an agent's prompt file that holds the path of its omp session file; tern-kata's omp
-// extension writes it on session start and on every session switch or branch (its SESSION_PATH_SUFFIX), and removePrompt removes it.
+// extension writes it on session start, on every session switch or branch and on every agent start (its SESSION_PATH_SUFFIX), and removePrompt removes it.
 const AgentSessionSuffix = ".session"
 
 // agentSessionTail is how much of the end of a session file the Pane reads: a session of any size costs this much.
@@ -22,7 +22,6 @@ const agentSessionTail = 1 << 20
 
 // The reasons the Agent card gives for an agent whose session it cannot show.
 const (
-	agentSessionNotOmp = model.AgentSessionNotOmpReason
 	agentSessionNoPath = "no session yet: omp has not named its session file"
 	agentSessionNoFile = "no session file yet"
 	agentSessionUnread = "session file unreadable"
@@ -47,9 +46,6 @@ func (g *Gateway) readAgentSessions(ctx context.Context, cmd model.ReadAgentSess
 
 // readAgentSession is one agent's session: the path file beside its prompt file names the session file, whose tail is parsed.
 func readAgentSession(a model.AgentSessionAsk) model.AgentSessionFacts {
-	if !a.Omp {
-		return model.AgentSessionFacts{Reason: agentSessionNotOmp}
-	}
 	if a.PromptFile == "" {
 		return model.AgentSessionFacts{Reason: agentSessionNoPath}
 	}

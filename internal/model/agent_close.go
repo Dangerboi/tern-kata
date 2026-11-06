@@ -178,7 +178,11 @@ type AgentStopped struct {
 func (AgentStopped) msg() {}
 
 // InterruptAgent is the Agent card's Interrupt: the window half interrupts the agent's current turn and keeps its block.
-type InterruptAgent struct{ Block string }
+type InterruptAgent struct {
+	Block string
+	// PromptFile is the agent's prompt file, which names the agent in a window that numbers panes differently from this host; "" when the entry has none.
+	PromptFile string
+}
 
 func (InterruptAgent) cmd() {}
 
