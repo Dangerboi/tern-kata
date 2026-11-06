@@ -162,7 +162,7 @@ After the move a Notice names the new `project#id` as a link: click it to open t
 
 ## Deleting and restoring an Issue
 
-`X` on the selected Issue (in the list, on the Board, in the Lane view and in the Issue detail) opens the **Delete card**, which soft-deletes the Issue through kata's delete action, as the CLI's `kata delete` does. kata keeps a deleted Issue and its history, so it can be restored.
+`X` on the selected Issue (in the list, on the Board, in the Lane view and in the Issue detail) opens the **Delete card**, which soft-deletes the Issue through kata's delete action, as the CLI's `kata delete` does. kata keeps a deleted Issue and its history, so it can be restored. An account whose credential is limited to one Issue is offered neither `X` nor **Restore a deleted Issue**, because kata refuses both to it: the Pane reads the daemon's auth capabilities when it connects and again after a daemon switch, and until the answer arrives (or when it fails) both are offered as for any account.
 
 1. The card names the Issue's qualified id (`project#id`) and title, says a deleted Issue can be restored, and asks you to type the qualified id, or `DELETE` and the qualified id as kata tui asks. An optional reason goes in the second field (`tab` moves between the two).
 2. `enter` with `<project>#<id>` or `DELETE <project>#<id>` typed (surrounding spaces ignored) sends the delete with kata's confirmation, `DELETE <project>#<id>`, and the reason. With anything else typed, the card refuses, names both forms and sends nothing. kata's own refusals (a federated replica, a changed Issue) show on the card, which stays open. `esc` closes it.

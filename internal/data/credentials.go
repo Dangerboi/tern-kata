@@ -10,8 +10,9 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-// ReadAuthCapabilities asks what the connection's account may do. Only the token audit right matters to the Pane: without it
-// kata refuses the token list, and an empty list must never be mistaken for no tokens.
+// ReadAuthCapabilities asks what the connection's account may do. The token audit right matters to the Credentials Page: without
+// it kata refuses the token list, and an empty list must never be mistaken for no tokens. A credential limited to one Issue
+// (a scope) matters to the Pane, which does not offer what kata refuses to it.
 func (c *Client) ReadAuthCapabilities(ctx context.Context, cmd model.LoadAuthCapabilities) (model.AuthCapabilitiesLoaded, error) {
 	response, err := c.InstanceWithResponse(ctx)
 	if err != nil {
@@ -20,8 +21,8 @@ func (c *Client) ReadAuthCapabilities(ctx context.Context, cmd model.LoadAuthCap
 	if response.JSON200 == nil {
 		return model.AuthCapabilitiesLoaded{}, errors.New("kata daemon returned no instance")
 	}
-	audit := response.JSON200.Auth.TokenAuditRead
-	return model.AuthCapabilitiesLoaded{Request: cmd.Request, TokenAuditRead: audit != nil && *audit}, nil
+	auth := response.JSON200.Auth
+	return model.AuthCapabilitiesLoaded{Request: cmd.Request, Account: cmd.Account, TokenAuditRead: auth.TokenAuditRead != nil && *auth.TokenAuditRead, IssueScoped: auth.Scope != nil}, nil
 }
 
 // ListCredentials reads the daemon's redacted token inventory and the instant it classified each token's state.

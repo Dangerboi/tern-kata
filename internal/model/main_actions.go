@@ -25,7 +25,7 @@ type actionEntry struct {
 	sheet  []sheetLine
 	handle func(Model) (Model, []Cmd)
 	// when, if set, says whether the entry is on offer for a model: an entry that is not on offer is left out of the footer and the
-	// help sheet and its handler does nothing.
+	// help sheet, and key dispatch does not call its handler (no Cmd, no Notice), so a handler needs no guard of its own.
 	when func(Model) bool
 }
 
@@ -316,7 +316,7 @@ var mainRows = []actionEntry{
 	{action: PriorityAction, modes: issueModes, keys: keys("!", "!"), help: "priority", footer: issueModes, sheet: []sheetLine{{sheetDetail, 14, "set priority (! then 0-4 or - sets or clears it at once)"}}, handle: fieldFor(PriorityAction)},
 	{action: OpenDates, modes: issueModes, keys: keys("d", "d"), help: "dates", footer: issueModes, sheet: []sheetLine{{sheetDetail, 17, "set scheduled date and deadline (Dates card)"}}, handle: pure(openDates)},
 	{action: OpenMoveProject, modes: issueModes, keys: keys("shift+m", "M"), help: "to Project", footer: issueModes, sheet: []sheetLine{{sheetDetail, 30, "move the Issue to another Project (Move card)"}}, handle: pure(openMoveProject)},
-	{action: OpenDelete, modes: issueModes, keys: keys("shift+x", "X"), help: "delete", sheet: []sheetLine{{sheetDetail, 31, "delete the Issue after typing its id (Delete card; u restores it)"}}, handle: pure(openDelete)},
+	{action: OpenDelete, modes: issueModes, keys: keys("shift+x", "X"), help: "delete", sheet: []sheetLine{{sheetDetail, 31, "delete the Issue after typing its id (Delete card; u restores it)"}}, handle: pure(openDelete), when: notIssueScoped},
 	{action: OpenRecurrenceAction, modes: issueModes, keys: keys("shift+o", "O"), help: "make or change recurrence", sheet: []sheetLine{{sheetDetail, 16, "make or change recurrence"}}, handle: pure(openRecurrence)},
 	{action: NewChild, modes: issueModes, keys: keys("shift+n", "N"), help: "child", footer: issueModes, sheet: []sheetLine{{sheetChildren, 1, "new child"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, true) }},
 	// Layout, back, help and quit.

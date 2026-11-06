@@ -2,6 +2,7 @@ package driver_test
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -373,5 +374,111 @@ func TestCtrlUClearsTheDeleteCardsConfirmation(t *testing.T) {
 	s = step(t, s, key("ctrl+u")).State
 	if got := s.Model.DeleteForm.ID; got != "" {
 		t.Fatalf("ctrl+u left %q in the confirmation", got)
+	}
+}
+
+// issueScopedAnswer is the daemon's answer to the Pane's own capability ask, which Start made first.
+func issueScopedAnswer(scoped bool) model.AuthCapabilitiesLoaded {
+	return model.AuthCapabilitiesLoaded{Request: 0, Account: true, IssueScoped: scoped}
+}
+
+func offersDelete(m model.Model) bool {
+	for _, group := range model.HelpSheetOn(m.Page, m) {
+		for _, line := range group.Lines {
+			if slices.Contains(line.Keys, "X") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func TestAnIssueScopedAccountIsOfferedNeitherDeleteNorRestore(t *testing.T) {
+	list := movePane(t, movable("a"), movable("b"))
+	if !offersDelete(list.Model) {
+		t.Fatal("before the answer the help sheet does not list X")
+	}
+	s := step(t, list, issueScopedAnswer(true)).State
+	if !s.Model.IssueScoped {
+		t.Fatal("the answer did not mark the connection Issue-scoped")
+	}
+	if offersDelete(s.Model) {
+		t.Error("the help sheet lists X for an Issue-scoped account")
+	}
+	if binding, ok := model.LookupBindingForMode("shift+x", s.Model.CurrentMode()); !ok || binding.Offered(s.Model) {
+		t.Errorf("the X binding is %v (found %v), want it found and not offered to an Issue-scoped account", binding.Offered(s.Model), ok)
+	}
+	for name, at := range map[string]driver.State{
+		"list":   s,
+		"detail": step(t, s, key("enter")).State,
+	} {
+		out := step(t, at, key("shift+x"))
+		if out.State.Model.TopCard() == model.CardDelete || out.State.Model.DeleteForm.Open || len(out.Cmds) != 0 {
+			t.Errorf("%s: X opened the card or sent %#v for an Issue-scoped account", name, out.Cmds)
+		}
+	}
+	menu := step(t, s, openMenu).State
+	if slices.Contains(menuTitles(menu), model.RestoreTitle) {
+		t.Errorf("the Menu lists %q for an Issue-scoped account: %q", model.RestoreTitle, menuTitles(menu))
+	}
+}
+
+func TestAnAccountNotLimitedToOneIssueKeepsDeleteAndRestore(t *testing.T) {
+	s := step(t, movePane(t, movable("a"), movable("b")), issueScopedAnswer(false)).State
+	if s.Model.IssueScoped || !offersDelete(s.Model) {
+		t.Fatalf("IssueScoped %v, X on the sheet %v", s.Model.IssueScoped, offersDelete(s.Model))
+	}
+	if open := step(t, s, key("shift+x")); open.State.Model.TopCard() != model.CardDelete {
+		t.Errorf("X opened card %v", open.State.Model.TopCard())
+	}
+	if !slices.Contains(menuTitles(step(t, s, openMenu).State), model.RestoreTitle) {
+		t.Error("the Menu lacks the restore entry")
+	}
+}
+
+func TestAFailedCapabilityReadKeepsDeleteAndRestoreOffered(t *testing.T) {
+	failed := model.AuthCapabilitiesLoaded{Request: 0, Account: true, IssueScoped: true, Err: errors.New("boom")}
+	s := step(t, movePane(t, movable("a"), movable("b")), failed).State
+	if s.Model.IssueScoped || step(t, s, key("shift+x")).State.Model.TopCard() != model.CardDelete {
+		t.Error("a failed read hid delete")
+	}
+}
+
+func TestThePanesCapabilityAskAndTheCredentialsPagesDoNotDropEachOther(t *testing.T) {
+	started := step(t, driver.State{}, model.Start{Workspace: "/repo"})
+	own, ok := askedCapabilities(started.Cmds)
+	if !ok || !own.Account {
+		t.Fatalf("Start asked %#v, want the Pane's own capability read", started.Cmds)
+	}
+	s := feed(t, started.State, resize(160)).State
+	s.Model = loadFirst(s.Model, model.ProjectLoaded{Project: model.Project{ID: 7, UID: "p", Name: "work"}}, model.SnapshotLoaded{Snapshot: model.Snapshot{Catalog: moveCatalog}})
+	page := step(t, s, key("shift+c"))
+	check, _ := askedCapabilities(page.Cmds)
+	if check.Account {
+		t.Fatalf("the Credentials Page asked %#v, want its own ask, not the Pane's", check)
+	}
+	answered := step(t, step(t, page.State, model.AuthCapabilitiesLoaded{Request: own.Request, Account: true, IssueScoped: true}).State,
+		model.AuthCapabilitiesLoaded{Request: check.Request, TokenAuditRead: true})
+	if _, ok := askedCredentials(answered.Cmds); !ok || !answered.State.Model.IssueScoped {
+		t.Fatalf("the Pane's answer dropped the page's, or was dropped: scoped %v, cmds %#v", answered.State.Model.IssueScoped, answered.Cmds)
+	}
+}
+
+func TestADaemonSwitchClearsTheIssueScopedFlagAndAsksAgain(t *testing.T) {
+	pane := daemonsListed(t)
+	pane = step(t, pane, issueScopedAnswer(true)).State
+	if !pane.Model.IssueScoped {
+		t.Fatal("not marked Issue-scoped before the switch")
+	}
+	out := switchedTo(t, pane, model.Daemon{Name: "home", Kind: model.DaemonLocal})
+	asked, ok := askedCapabilities(out.Cmds)
+	if out.State.Model.IssueScoped || !ok || !asked.Account {
+		t.Fatalf("scoped %v, cmds %#v: a switch must clear the flag and ask again", out.State.Model.IssueScoped, out.Cmds)
+	}
+	if stale := step(t, out.State, model.AuthCapabilitiesLoaded{Request: 0, Account: true, IssueScoped: true}).State; stale.Model.IssueScoped {
+		t.Error("the old daemon's answer marked the new connection Issue-scoped")
+	}
+	if fresh := step(t, out.State, model.AuthCapabilitiesLoaded{Request: asked.Request, Account: true, IssueScoped: true}).State; !fresh.Model.IssueScoped {
+		t.Error("the new daemon's answer was dropped")
 	}
 }

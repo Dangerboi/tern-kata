@@ -156,7 +156,7 @@ func (m Model) menuEntries(level MenuLevel, filter string) []PickerEntry {
 			entries = append(entries, PickerEntry{Collection: Collection{Title: def.label}, Kind: EntryLettered, Page: def.page})
 		}
 	}
-	if match(RestoreTitle) {
+	if match(RestoreTitle) && !m.IssueScoped {
 		entries = append(entries, PickerEntry{Collection: Collection{Title: RestoreTitle}, Kind: EntryRestore})
 	}
 	if match(NewProjectTitle) {
@@ -342,7 +342,7 @@ func pickCollectionKey(m Model, key string) (Model, []Cmd) {
 func updatePicker(m Model, msg KeyMsg) (Model, []Cmd) {
 	if m.Views.Deleting != "" { // the question takes only its answers
 		if binding, ok := LookupBindingForMode(msg.Chord, ModeDeleteView); ok && binding.entry != nil {
-			return binding.entry.handle(m)
+			return binding.run(m)
 		}
 		return m, nil
 	}

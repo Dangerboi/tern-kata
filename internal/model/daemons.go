@@ -178,6 +178,7 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	m.Attention = AttentionState{reads: m.Attention.reads.Discarded()}
 	m.AgentClose = m.AgentClose.forDaemon()
 	m = clearCredentials(clearFederation(m))
+	m.IssueScoped, m.accountReads = false, m.accountReads.Discarded()
 	m.Undo = UndoHistory{nextID: m.Undo.nextID}.cleared("connected to a different daemon")
 	m.LiveState = LiveState{
 		StreamGeneration: m.StreamGeneration + 1, snapshotReads: m.snapshotReads.Discarded(),
@@ -191,7 +192,8 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	default:
 		m.Notice += "; " + strconv.Itoa(dropped) + " unsent drafts dropped"
 	}
-	return m, []Cmd{LoadProject{Workspace: m.Workspace, Switched: true, Connection: m.Connection}}
+	account := askAccount(&m)
+	return m, []Cmd{LoadProject{Workspace: m.Workspace, Switched: true, Connection: m.Connection}, account}
 }
 
 // moveDaemon moves the cursor by action: one row, to either end, or a page.

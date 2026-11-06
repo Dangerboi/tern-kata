@@ -185,7 +185,7 @@ func TestAnAdoptedAgentGetsAttentionGoingBackAndAutoCloseFromThisPane(t *testing
 
 func TestThePruneAtStartCarriesThePanesBlock(t *testing.T) {
 	_, cmds := model.Update(model.Model{PaneBlock: "9"}, model.Start{Workspace: "/repo"})
-	if want := []model.Cmd{model.LoadProject{Workspace: "/repo"}, model.LoadViews{}, model.PruneAgents{PaneBlock: "9", Seq: 1}}; !reflect.DeepEqual(cmds, want) {
+	if want := []model.Cmd{model.LoadProject{Workspace: "/repo"}, model.LoadViews{}, model.PruneAgents{PaneBlock: "9", Seq: 1}, model.LoadAuthCapabilities{Workspace: "/repo", Account: true}}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("cmds %#v", cmds)
 	}
 }

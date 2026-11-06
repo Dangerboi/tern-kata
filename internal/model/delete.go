@@ -73,6 +73,10 @@ type IssueDeleted struct {
 
 func (IssueDeleted) msg() {}
 
+// notIssueScoped is the condition of what kata refuses to a credential limited to one Issue (delete): the Pane offers it only
+// while the connection is not known to be Issue-scoped.
+func notIssueScoped(m Model) bool { return !m.IssueScoped }
+
 // openDelete is `X`: the card for the selected Issue, with the cursor in the confirmation.
 func openDelete(m Model) Model {
 	if m.Stale || m.DeleteForm.Saving {

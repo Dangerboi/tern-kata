@@ -489,7 +489,7 @@ func init() {
 			return ok(c.ReadAuthCapabilities(ctx, cmd))
 		},
 		func(cmd model.LoadAuthCapabilities, err error) model.Msg {
-			return model.AuthCapabilitiesLoaded{Request: cmd.Request, Err: err}
+			return model.AuthCapabilitiesLoaded{Request: cmd.Request, Account: cmd.Account, Err: err}
 		},
 		nil, nil)
 

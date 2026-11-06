@@ -64,6 +64,11 @@ type Project struct {
 type Model struct {
 	// Connection is the number of the daemon connection the Pane holds, stepped by each successful switch. Answers to ProjectLoaded, ClearAttention and token creation echo the number they were asked on, and an older one is dropped.
 	Connection int
+	// IssueScoped says the connection's credential is limited to one Issue, as the daemon's auth capabilities report. kata refuses
+	// delete and restore to such an account, so the Pane does not offer them. It stays false until the answer arrives, and when the read fails.
+	IssueScoped bool
+	// accountReads numbers the asks for the connection's own capabilities; the Credentials Page numbers its own.
+	accountReads Latest
 	LiveState
 	IssueDetail
 	Create CreateState
@@ -355,7 +360,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m.Loading = true
 		m.Err = nil
 		m.agentAsks++
-		return m, []Cmd{LoadProject{Workspace: msg.Workspace}, LoadViews{}, PruneAgents{PaneBlock: m.PaneBlock, Seq: m.agentAsks}}
+		account := askAccount(&m)
+		return m, []Cmd{LoadProject{Workspace: msg.Workspace}, LoadViews{}, PruneAgents{PaneBlock: m.PaneBlock, Seq: m.agentAsks}, account}
 	case ProjectLoaded:
 		return updateProject(m, msg)
 	case AgentStarted:
@@ -489,7 +495,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case KeyMsg:
 		mode := m.CurrentMode()
 		if binding, ok := LookupBindingForMode(msg.Chord, mode); ok && binding.entry != nil {
-			return binding.entry.handle(m)
+			return binding.run(m)
 		}
 		if inputMode(mode) {
 			return updateFilterText(m, msg)
@@ -503,7 +509,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		}
 		selected.Notice, selected.NoticeLink = "", nil
 		if binding, ok := LookupBindingForMode(msg.Chord, msg.Mode); ok && binding.entry != nil {
-			return binding.entry.handle(selected)
+			return binding.run(selected)
 		}
 		return selected, nil
 	case ResizeMsg:

@@ -44,6 +44,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - The Page bar draws the Attention count as a badge after the name, not as text in it, and the compact Page bar keeps the badge.
 - The Delete card also takes kata tui's confirmation, `DELETE <project>#<id>`, besides `<project>#<id>`; anything else is refused with both forms named.
+- An account whose credential is limited to one Issue is no longer offered `X` (the Delete card) or the Menu's "Restore a deleted Issue", both of which kata refuses to it; the Pane asks the daemon's auth capabilities when it connects and after a daemon switch, and offers both until the answer is in.
 
 ### Fixed
 

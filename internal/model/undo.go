@@ -285,15 +285,6 @@ func newestUndoIsDelete(m Model) bool {
 	return n > 0 && m.Undo.Entries[n-1].Kind == UndoDelete
 }
 
-// undoAttentionDelete is `u` on the Attention Page: it takes the delete back as `u` does elsewhere, and does nothing, not even
-// a Notice, when the newest entry is not a delete.
-func undoAttentionDelete(m Model) (Model, []Cmd) {
-	if !newestUndoIsDelete(m) {
-		return m, nil
-	}
-	return startUndo(m)
-}
-
 // sendUndo marks the undo in flight for entry and sends it, with the close the Close card collected when the inverse is a close.
 func (m Model) sendUndo(entry UndoEntry, closeCmd *CloseIssueCmd) (Model, []Cmd) {
 	m.Undo.InFlight = true

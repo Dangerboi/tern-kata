@@ -2,8 +2,10 @@ package data
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -137,5 +139,59 @@ func TestGatewayHoldsARefreshUntilItsPauseHasPassedOnTheWallClock(t *testing.T) 
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("no refresh after the pause")
+	}
+}
+
+// scopeTheInstanceAnswer makes the daemon's instance answer report an account whose credential is limited to one Issue, as kata
+// does for such a token: the real answer with a scope in its auth block. (The in-process service authenticates callers itself and
+// has no token to hold, so the scope is added on the wire.)
+func scopeTheInstanceAnswer(server *kataServer) {
+	hook := func(w http.ResponseWriter, r *http.Request) bool {
+		if r.URL.Path != "/api/v1/instance" {
+			return false
+		}
+		recorded := httptest.NewRecorder()
+		server.handler.ServeHTTP(recorded, r)
+		var body map[string]any
+		if err := json.Unmarshal(recorded.Body.Bytes(), &body); err != nil {
+			panic(err)
+		}
+		auth, _ := body["auth"].(map[string]any)
+		auth["scope"] = map[string]any{"kind": "issue_subtree", "project_uid": "p", "root_issue_uid": "i"}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(body)
+		return true
+	}
+	server.intercept.Store(&hook)
+}
+
+func TestGatewayReportsAnIssueScopedAccountAndEchoesWhoAsked(t *testing.T) {
+	kata := startKata(t, "0.22.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	workspace := t.TempDir()
+
+	global := as[model.AuthCapabilitiesLoaded](t, run(t, gateway, model.LoadAuthCapabilities{Workspace: workspace, Request: 1, Account: true}))
+	if global.Err != nil || global.IssueScoped || !global.Account || global.Request != 1 {
+		t.Fatalf("global account %+v, want not Issue-scoped, answering the Pane's ask", global)
+	}
+
+	scopeTheInstanceAnswer(kata)
+	scoped := as[model.AuthCapabilitiesLoaded](t, run(t, gateway, model.LoadAuthCapabilities{Workspace: workspace, Request: 2, Account: true}))
+	if scoped.Err != nil || !scoped.IssueScoped || !scoped.Account || scoped.Request != 2 {
+		t.Fatalf("scoped account %+v, want Issue-scoped", scoped)
+	}
+	page := as[model.AuthCapabilitiesLoaded](t, run(t, gateway, model.LoadAuthCapabilities{Workspace: workspace, Request: 3}))
+	if page.Account || !page.IssueScoped {
+		t.Fatalf("the Credentials Page's ask came back %+v, want Account false", page)
+	}
+}
+
+func TestGatewayEchoesWhoAskedWhenTheCapabilityReadFails(t *testing.T) {
+	l := newLocator(Target{})
+	boom := context.DeadlineExceeded
+	l.err.Store(&boom)
+	gateway := newGateway(t, l)
+	if got := run(t, gateway, model.LoadAuthCapabilities{Request: 5, Account: true}); got != (model.AuthCapabilitiesLoaded{Request: 5, Account: true, Err: boom}) {
+		t.Errorf("failure %#v", got)
 	}
 }

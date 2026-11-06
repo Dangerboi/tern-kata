@@ -13,7 +13,7 @@ func TestOpeningBoundProject(t *testing.T) {
 	if !m.Loading || m.Workspace != "/repo" {
 		t.Fatalf("opening Project: %+v", m)
 	}
-	if !reflect.DeepEqual(cmds, []model.Cmd{model.LoadProject{Workspace: "/repo"}, model.LoadViews{}, model.PruneAgents{Seq: 1}}) {
+	if !reflect.DeepEqual(cmds, []model.Cmd{model.LoadProject{Workspace: "/repo"}, model.LoadViews{}, model.PruneAgents{Seq: 1}, model.LoadAuthCapabilities{Workspace: "/repo", Account: true}}) {
 		t.Fatalf("requested commands: %#v", cmds)
 	}
 }

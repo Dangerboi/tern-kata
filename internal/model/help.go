@@ -69,6 +69,14 @@ func (b Binding) Offered(m Model) bool {
 	return b.entry == nil || b.entry.when == nil || b.entry.when(m)
 }
 
+// run calls the binding's handler unless the binding is not on offer for m, which does nothing: no Cmd and no Notice.
+func (b Binding) run(m Model) (Model, []Cmd) {
+	if !b.Offered(m) {
+		return m, nil
+	}
+	return b.entry.handle(m)
+}
+
 func BindingsForMode(mode Mode, footerOnly bool) iter.Seq[Binding] {
 	return func(yield func(Binding) bool) {
 		for _, binding := range Keymap {

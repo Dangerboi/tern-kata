@@ -27,14 +27,19 @@ type Credential struct {
 type LoadAuthCapabilities struct {
 	Workspace string
 	Request   int64
+	// Account says the ask is the Pane's own, for whether its connection is Issue-scoped, not the Credentials Page's.
+	Account bool
 }
 
 func (LoadAuthCapabilities) cmd() {}
 
-// AuthCapabilitiesLoaded answers LoadAuthCapabilities. TokenAuditRead says the account may list tokens.
+// AuthCapabilitiesLoaded answers LoadAuthCapabilities and echoes its Account. TokenAuditRead says the account may list tokens;
+// IssueScoped that its credential is limited to one Issue.
 type AuthCapabilitiesLoaded struct {
 	Request        int64
+	Account        bool
 	TokenAuditRead bool
+	IssueScoped    bool
 	Err            error
 }
 
@@ -96,6 +101,20 @@ func clearCredentials(m Model) Model {
 	return m
 }
 
+// askAccount asks whether the connection's credential is limited to one Issue.
+func askAccount(m *Model) Cmd {
+	return LoadAuthCapabilities{Workspace: m.Workspace, Request: m.accountReads.Ask(), Account: true}
+}
+
+// accountCapabilities applies the answer to the Pane's own ask: an older one is dropped, and a failure leaves the Pane offering
+// everything, as before the answer.
+func accountCapabilities(m Model, msg AuthCapabilitiesLoaded) Model {
+	if m.accountReads.IsCurrent(msg.Request) {
+		m.IssueScoped = msg.Err == nil && msg.IssueScoped
+	}
+	return m
+}
+
 func askCapabilities(m Model) (Model, []Cmd) {
 	c := &m.Credentials
 	request := c.reads.Ask()
@@ -129,6 +148,9 @@ func credentialsBack(m Model) (Model, []Cmd) { return showPage(m.letteredFrom)(m
 func updateCredentials(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
 	case AuthCapabilitiesLoaded:
+		if msg.Account {
+			return accountCapabilities(m, msg), nil, true
+		}
 		c := &m.Credentials
 		if !c.reads.IsCurrent(msg.Request) {
 			return m, nil, true
