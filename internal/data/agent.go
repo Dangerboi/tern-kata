@@ -682,8 +682,12 @@ func (g *Gateway) stopAgent(ctx context.Context, cmd model.StopAgent) model.Agen
 	if err != nil {
 		return model.AgentStopped{Block: cmd.Block, Err: err}
 	}
-	if _, err := ReadAgents(file); err != nil {
+	list, err := ReadAgents(file)
+	if err != nil {
 		return model.AgentStopped{Block: cmd.Block, Err: err}
+	}
+	if !slices.ContainsFunc(list, func(e model.AgentEntry) bool { return e.Block == cmd.Block }) {
+		return model.AgentStopped{Block: cmd.Block, Agents: list}
 	}
 	agents, err := g.closeAndForget(ctx, file, cmd.Block)
 	if err != nil {

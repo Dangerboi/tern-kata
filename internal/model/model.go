@@ -462,7 +462,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case AgentFocused:
 		m = agentFocused(m, msg)
 	case AgentsRefreshed:
-		return agentsRefreshed(m, msg)
+		m, cmds := agentsRefreshed(m, msg)
+		return restartAgentSessions(m, cmds)
 	case ActionMsg:
 		switch msg.Action {
 		case SelectIssueAction:

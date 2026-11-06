@@ -1905,6 +1905,16 @@ func TestAFailedStopKeepsTheEntryAndThePrompt(t *testing.T) {
 	}
 }
 
+func TestStoppingAnAgentAnotherPaneAlreadyStoppedRunsNothingAndReturnsTheFreshList(t *testing.T) {
+	g, dirs := agentGateway(t)
+	seedAgent(t, dirs, model.AgentEntry{Block: "32"})
+	calls := ternScript(g, map[string]func() ([]byte, error){"close": ternOut(`{"block":31}`)})
+	got := as[model.AgentStopped](t, run(t, g, model.StopAgent{Block: "31"}))
+	if got.Err != nil || got.Block != "31" || len(got.Agents) != 1 || got.Agents[0].Block != "32" || len(*calls) != 0 {
+		t.Fatalf("%+v, ran %q", got, *calls)
+	}
+}
+
 func TestStoppingWhenAgentsJSONCannotBeReadRunsNothing(t *testing.T) {
 	g, dirs := agentGateway(t)
 	file := seedAgent(t, dirs, model.AgentEntry{Block: "31"})

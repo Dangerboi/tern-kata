@@ -688,3 +688,54 @@ func TestWorkerResumeLiftsThePauseOfAJobByNameOrUid(t *testing.T) {
 		t.Fatalf("the resumed job refused a run: %v", err)
 	}
 }
+
+func TestWorkerResumeByNameRefusesWhenTwoProjectsPauseTheSameName(t *testing.T) {
+	f := newWorkerFixture(t, "args = [\"--stub-exit\", \"3\"]\n[limits]\npause_after_failures = 1\n[[projects]]\nname = \"other\"\n")
+	other := f.kata.Project(t, "other")
+	mine := f.kata.CreateJob(t, f.proj, workertest.Job{Name: "flaky", Prompt: "Review it.", Checkout: "repo"})
+	theirs := f.kata.CreateJob(t, other, workertest.Job{Name: "flaky", Prompt: "Review it.", Checkout: "repo"})
+	f.serve(t)
+	for _, job := range []string{mine.UID, theirs.UID} {
+		if _, err := f.run(t, LaunchPlan{Subcommand: "run", TargetRef: job}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pauses := func() int {
+		status, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}})
+		if err != nil {
+			return -1
+		}
+		return strings.Count(status, "paused after 1 failed run in a row")
+	}
+	eventually(t, "status to name both pauses", func() bool { return pauses() == 2 })
+
+	_, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"resume", "flaky"}})
+	if !errors.As(err, new(subcommandError)) || !strings.Contains(err.Error(), `2 paused jobs are named "flaky" (in Projects `) ||
+		!strings.Contains(err.Error(), "demo") || !strings.Contains(err.Error(), "other") || !strings.HasSuffix(err.Error(), "resume one by its uid") {
+		t.Fatalf("resume of an ambiguous name answered %v", err)
+	}
+	if n := pauses(); n != 2 {
+		t.Fatalf("the refused resume left %d pauses, want 2", n)
+	}
+
+	out, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"resume", mine.UID}})
+	if want := `Job "flaky" in Project demo resumed: the worker admits its runs again and counts failed runs from none.` + "\n"; err != nil || out != want {
+		t.Fatalf("resume by uid printed %q, %v", out, err)
+	}
+	if n := pauses(); n != 1 {
+		t.Fatalf("resuming one job left %d pauses, want 1", n)
+	}
+
+	out, err = f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"resume", "flaky"}})
+	if want := `Job "flaky" in Project other resumed: the worker admits its runs again and counts failed runs from none.` + "\n"; err != nil || out != want {
+		t.Fatalf("resume by name of the remaining job printed %q, %v", out, err)
+	}
+	if n := pauses(); n != 0 {
+		t.Fatalf("status still names %d pauses", n)
+	}
+
+	_, err = f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"resume", "flaky"}})
+	if !errors.As(err, new(subcommandError)) || !strings.HasSuffix(err.Error(), `no job this worker paused is "flaky"`) {
+		t.Fatalf("resume with nothing paused answered %v", err)
+	}
+}

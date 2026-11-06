@@ -161,12 +161,8 @@ func openAgentCardMessage(m Model, picking bool) (Model, []Cmd) {
 	}
 	e := m.AgentCardRows()[m.AgentCardCursor()].AgentEntry
 	card := m.AgentCard
-	projectID := e.ProjectID
-	if issue := m.issueByUID(card.IssueUID); issue != nil && projectID == 0 {
-		projectID = issue.ProjectID
-	}
 	m.AgentCard = AgentCardState{}
-	m.AgentMessage = AgentMessageState{Open: true, Picking: picking, IssueUID: card.IssueUID, IssueRef: card.IssueRef, ProjectID: projectID, Agent: e.Teammate, Address: e.Address}
+	m.AgentMessage = AgentMessageState{Open: true, Picking: picking, IssueUID: card.IssueUID, IssueRef: card.IssueRef, ProjectID: m.projectOf(e), Agent: e.Teammate, Address: e.Address}
 	return m, nil
 }
 

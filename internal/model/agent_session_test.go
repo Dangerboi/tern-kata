@@ -68,6 +68,35 @@ func TestAnAnswerToAReadBeforeTheCardWasReopenedStartsNoSecondChain(t *testing.T
 	sessionRead(t, cmds)
 }
 
+func TestAnOmpAgentAppearingOnAnOpenCardStartsTheSessionReads(t *testing.T) {
+	m, cmds := press(cardModel(), "w")
+	if _, ok := agentCmd[model.ReadAgentSessions](cmds); ok {
+		t.Fatalf("a card with no agents read: %#v", cmds)
+	}
+	m, cmds = model.Update(m, model.AgentsRefreshed{Agents: []model.AgentEntry{entry("a", "1", 1)}})
+	read := sessionRead(t, cmds)
+	if read.After != 0 || len(read.Agents) != 1 || read.Agents[0].Block != "1" {
+		t.Errorf("read %+v, want one now for block 1", read)
+	}
+	_, cmds = model.Update(m, model.AgentSessionsRead{Request: read.Request})
+	if tick := sessionRead(t, cmds); tick.After != model.AgentSessionEvery {
+		t.Errorf("the loop did not go on: %+v", tick)
+	}
+}
+
+func TestARefreshWhileAReadIsOutAsksNoSecondRead(t *testing.T) {
+	m, cmds := press(cardModel(entry("a", "1", 1)), "w")
+	open := sessionRead(t, cmds)
+	m, cmds = model.Update(m, model.AgentsRefreshed{Agents: []model.AgentEntry{entry("a", "1", 1), entry("a", "2", 2)}})
+	if _, ok := agentCmd[model.ReadAgentSessions](cmds); ok {
+		t.Fatalf("a refresh asked a second read: %#v", cmds)
+	}
+	_, cmds = model.Update(m, model.AgentSessionsRead{Request: open.Request})
+	if tick := sessionRead(t, cmds); len(tick.Agents) != 2 {
+		t.Errorf("the next read %+v, want both agents", tick)
+	}
+}
+
 func TestAgentFactsSayWhatTheSessionAndTheRelayHold(t *testing.T) {
 	base := cardModel(entry("a", "1", 1))
 	withRelay := func(m model.Model, last string) model.Model {

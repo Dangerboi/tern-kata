@@ -60,7 +60,10 @@ func (AgentSessionsRead) msg() {}
 // agentSessionState is what the Agent card knows of the agents' sessions. It outlives the card so that an answer to a read the
 // card asked for before it closed is told from the current one.
 type agentSessionState struct {
-	reads    Latest
+	reads Latest
+	// looping says a read is out or scheduled, so its answer will ask the next; a refresh of the mapping starts the loop only
+	// when it is false.
+	looping  bool
 	Sessions []AgentSessionFacts
 }
 
@@ -83,15 +86,31 @@ func askAgentSessions(m Model, after time.Duration) (Model, []Cmd) {
 		}
 	}
 	if len(asks) == 0 {
+		m.AgentSessions.looping = false
 		return m, nil
 	}
+	m.AgentSessions.looping = true
 	return m, []Cmd{ReadAgentSessions{Request: m.AgentSessions.reads.Ask(), After: after, Agents: asks}}
+}
+
+// restartAgentSessions starts the read loop of an open Agent card when the mapping brought it an omp agent and no read is out
+// or scheduled; with a loop running, or no omp agent listed, it changes nothing.
+func restartAgentSessions(m Model, cmds []Cmd) (Model, []Cmd) {
+	if !m.AgentCard.Open || m.AgentSessions.looping {
+		return m, cmds
+	}
+	m, reads := askAgentSessions(m, 0)
+	return m, append(cmds, reads...)
 }
 
 // agentSessionsRead keeps the newest answer and, while the card is open, asks for the next read. A card closed meanwhile asks for
 // nothing: the reads stop with it.
 func agentSessionsRead(m Model, msg AgentSessionsRead) (Model, []Cmd) {
-	if !m.AgentSessions.reads.IsCurrent(msg.Request) || !m.AgentCard.Open {
+	if !m.AgentSessions.reads.IsCurrent(msg.Request) {
+		return m, nil
+	}
+	if !m.AgentCard.Open {
+		m.AgentSessions.looping = false
 		return m, nil
 	}
 	m.AgentSessions.Sessions = slices.Clone(msg.Sessions)
