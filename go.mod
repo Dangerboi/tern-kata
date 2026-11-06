@@ -9,8 +9,8 @@ require (
 	github.com/netresearch/go-cron v0.16.1
 	github.com/oklog/ulid/v2 v2.1.2
 	github.com/stencil-hq/tern-sdk/go/tern v0.2.0
-	go.kenn.io/kata v0.21.0
-	go.kenn.io/kit v0.47.2
+	go.kenn.io/kata v0.22.0
+	go.kenn.io/kit v0.48.1
 	golang.org/x/mod v0.42.0
 	golang.org/x/sys v0.49.0
 	golang.org/x/term v0.47.0
@@ -23,7 +23,7 @@ require (
 	github.com/asg017/sqlite-vec-go-bindings v0.1.6 // indirect
 	github.com/bradleyfalzon/ghinstallation/v2 v2.19.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
-	github.com/cenkalti/backoff/v7 v7.0.1 // indirect
+	github.com/cenkalti/backoff/v7 v7.0.2 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/danielgtaylor/huma/v2 v2.40.0 // indirect
 	github.com/dunglas/httpsfv v1.1.2 // indirect
@@ -54,7 +54,7 @@ require (
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mattn/go-sqlite3 v1.14.52 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
-	github.com/posthog/posthog-go v1.38.0 // indirect
+	github.com/posthog/posthog-go v1.39.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20260805114148-88456608a4f6 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/shirou/gopsutil/v4 v4.26.9 // indirect

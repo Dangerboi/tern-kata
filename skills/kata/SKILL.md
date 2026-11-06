@@ -3,7 +3,7 @@ name: kata
 description: "Kata issue tracker CLI. Use when a repo has `.kata.toml` or names Kata as its tracker: finding, creating, claiming, commenting, replying, labelling or closing issues (tickets), making work recur, scheduling agent jobs, being run by a tern-kata worker, or coordinating subagents through issues."
 ---
 
-Kata is a daemon-backed issue ledger shared by humans and agents. Written against kata v0.21; `kata <cmd> --help` is the source of truth for flags, `kata quickstart --format contract` for upstream agent policy. Repo specifics (project name, extra labels, human gates) live in that repo's `AGENTS.md`.
+Kata is a daemon-backed issue ledger shared by humans and agents. Written against kata v0.22; `kata <cmd> --help` is the source of truth for flags, `kata quickstart --format contract` for upstream agent policy. Repo specifics (project name, extra labels, human gates) live in that repo's `AGENTS.md`.
 
 ## Output mode
 
@@ -215,6 +215,7 @@ kata cron job update <job-uid> --parent <ref> --expected-event-uid <uid> --file 
 - A child a job made is recognised by `.issue.metadata."cron.occurrence"` in `kata show --json` (`job_uid`, `definition_event_uid`, `scheduled_at`); its title ends in ` — <UTC timestamp>`. The parent carries `cron.progress.<job uid>` metadata. Don't treat these Issues as one-off work, and don't write either key (kata refuses).
 - Closing the parent pauses all its jobs (kata says nothing), and so does deleting it, disabling the job or archiving the Project. A parent with open children can't be closed. Reopening the parent resumes the jobs: with `catchup: "all"` kata then creates every run missed meanwhile at once (about 30 for a daily job paused a month, at most 1000 per job per sweep), so before reopening a parent or re-enabling such a job, switch the job to `latest` or `skip` unless the backlog is wanted.
 - The daemon delivers, so it must be running. Pause by setting `enabled` to false or closing the parent. `update`, `delete` and `restore` need the current `.job.definition_event_uid` from `kata cron job show <job-uid> --json`. Full format: https://www.katatracker.com/docs/reference/cron/#recurring-child-issues
+- `kata cron job edit` and `kata cron workflow edit` open an editor and need a terminal: they are for people. Change a definition with `update --file`.
 
 ### Jobs the tern-kata worker runs
 
