@@ -764,6 +764,17 @@ func TestUOnTheAttentionPageRestoresTheDeletedIssueAndReadsTheRequestsAgain(t *t
 	if !strings.Contains(footerText(t, s), "undo") {
 		t.Errorf("the footer lacks u after a delete: %q", footerText(t, s))
 	}
+	offered := false
+	for _, group := range model.HelpSheetOn(model.PageAttention, s.Model) {
+		for _, line := range group.Lines {
+			if line.Text == "undo the delete the Pane just made" && slices.Contains(line.Keys, "u") {
+				offered = true
+			}
+		}
+	}
+	if !offered {
+		t.Error("the Attention help sheet lacks the undo line with key u after a delete")
+	}
 	out := pressU(t, s)
 	cmd := undoCmd(t, out)
 	if cmd.Entry.Kind != model.UndoDelete || cmd.Entry.UID != "a" || len(out.Cmds) != 1 {
@@ -809,5 +820,19 @@ func TestUOnTheAttentionPageIsNotOfferedAndDoesNothingUnlessTheNewestChangeIsADe
 		if len(out.Cmds) != 0 || out.State.Model.Notice != "" {
 			t.Errorf("%s: u sent %#v with notice %q", name, out.Cmds, out.State.Model.Notice)
 		}
+	}
+}
+
+func TestTheAttentionPageReadsAgainWhenTheRestoreLandsUnderAnOpenCard(t *testing.T) {
+	s := feed(t, messagePane(t, agentRaised(t), nil, ompAgent), deleted("a")).State
+	out := pressU(t, s)
+	cmd := undoCmd(t, out)
+	carded := step(t, out.State, key("m"))
+	if carded.State.Model.TopCard() == model.NoCard {
+		t.Fatal("the Message card did not open")
+	}
+	back := step(t, carded.State, model.ChangeUndone{EntryID: cmd.Entry.ID, Result: model.UndoChanged, Ref: "a"})
+	if _, asked := askedAttention(back.Cmds); !asked {
+		t.Errorf("the Attention Page did not read again under the open card: %#v", back.Cmds)
 	}
 }

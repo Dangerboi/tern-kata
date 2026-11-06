@@ -390,7 +390,7 @@ func refreshAfterUndo(m Model, e UndoEntry) (Model, []Cmd) {
 		m = m.issueWritten(e.Link.FromUID).issueWritten(e.Link.ToUID)
 	}
 	m, cmds := snapshotChanged(m)
-	if m.CurrentMode() == ModeAttention {
+	if m.Page == PageAttention {
 		// A restored Issue can bring its requests back; the stream says so only while it is connected.
 		var asked []Cmd
 		m, asked = askAttention(m)
