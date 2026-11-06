@@ -4,6 +4,12 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+#### Agents
+
+- `m` on the Agent card messages the selected agent, whether it is working, idle or waiting and wherever its block is, including a Background agent, which stays in the hidden session. It is off, with the reason, for an exited agent and one that is not omp.
+
 ### Changed
 
 #### Issues and Pages

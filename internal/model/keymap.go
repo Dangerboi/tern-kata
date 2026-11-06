@@ -303,6 +303,7 @@ var cardBindings = []Binding{
 	{Chord: "t", Key: "t", Action: AgentCardTab, Help: "new agent in a tab", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "g", Key: "g", Action: AgentCardNewBackground, Help: "new agent in the background", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "b", Key: "b", Action: AgentCardBackground, Help: "send to background", Mode: ModeAgentCard, ShowInFooter: true},
+	{Chord: "m", Key: "m", Action: AgentCardMessage, Help: "message agent", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: AgentCardCancel, Help: "cancel", Mode: ModeAgentCard, ShowInFooter: true},
 	// Message card: one message field, so every other key is typed; once kata holds an unread message, it asks before replacing it.
 	{Chord: "enter", Key: "enter", Action: AgentMessageSend, Help: "send", Mode: ModeAgentMessage, ShowInFooter: true},

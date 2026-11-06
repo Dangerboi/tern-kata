@@ -6,7 +6,7 @@ Three things help coding agents work with tern-kata: the Agent card, which start
 
 ### The Agent card and starting agents
 
-`w` on the selected Issue (list, Board, Lane view or Issue detail) opens the Agent card, with or without agents. It lists the Issue's agents with state, start time and where each is (split, tab, background or open). `enter` goes to the selected one, `b` sends it to the background, `esc` cancels.
+`w` on the selected Issue (list, Board, Lane view or Issue detail) opens the Agent card, with or without agents. It lists the Issue's agents with state, start time and where each is (split, tab, background or open). `enter` goes to the selected one, `b` sends it to the background, `m` [messages](#messages-to-an-agent) it, `esc` cancels.
 
 ![The Agent card for "Add Apple Pay to checkout" with no agents yet and its buttons: New in a split (S), New in a tab (T), New in the background (G), plus Go to agent, Send to background and Cancel](../images/agent-card.png)
 
@@ -78,6 +78,8 @@ Work attention is the Issue's own `work.attention`. An open Issue whose `work.at
 ### Messages to an agent
 
 `m` on the [Attention Page](pages-and-board.md#attention-page) opens the Message card for the agent behind the selected request: the agent on that Issue this host's Panes started whose name the request carries, the newest that waits for you, else the newest. Type the message (at most 1024 bytes) and press `enter`; `esc` cancels.
+
+`m` on the Agent card does the same for the selected agent, from any Pane on this host: a working, idle or waiting agent, wherever its block is. A Background agent gets the message in place; its block stays in the hidden session. The card closes and the Message card opens, with the same 1024-byte limit and the same question before replacing an unread message. The button and key are off, with the reason, for an exited agent and for an agent that is not omp.
 
 - **Where it goes**: the message is a kata Attention request from you on the agent's Issue, addressed to the agent's own address, `<actor>/<name>-<block id>` (for example `dana/omp-18494129176579`). No other agent reads that address, on the same Issue or another, and `kata inbox` output names the agent.
 - **How it arrives**: tern-kata's omp extension, which every omp agent tern-kata starts loads, follows kata's event stream and hands the message to the agent at once: an agent waiting for you or idle starts a turn on it, a working one gets it at its next step between tool calls without its work being stopped. Text half typed in its prompt stays as it was. A question it waits on stays: a pending `ask` is neither answered nor lost, and a pending tool approval is neither approved nor denied; the message lands after you answer. Your own Attention request ("agent waiting for you") stays until you answer, as before.

@@ -14,6 +14,7 @@ const (
 	AgentCardTab           Action = "agent-card-tab"
 	AgentCardNewBackground Action = "agent-card-new-background"
 	AgentCardBackground    Action = "agent-card-background"
+	AgentCardMessage       Action = "agent-card-message"
 	AgentCardCancel        Action = "agent-card-cancel"
 )
 
@@ -80,6 +81,11 @@ func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 			return m, nil
 		}
 		return sendToBackground(m, rows[cursor].AgentEntry)
+	case AgentCardMessage:
+		if len(rows) == 0 {
+			return m, nil
+		}
+		return openAgentCardMessage(m)
 	case AgentCardSplit:
 		return startAgent(m, AgentCardSplit, AgentSplit)
 	case AgentCardTab:
@@ -141,6 +147,11 @@ func (m Model) AgentCardUnavailable(action Action) string {
 		if e := rows[m.AgentCardCursor()]; e.Background && !e.Open {
 			return "That agent is already in the background."
 		}
+	case AgentCardMessage:
+		if len(rows) == 0 {
+			return noAgentReason
+		}
+		return m.agentMessageRefusal(rows[m.AgentCardCursor()].AgentEntry)
 	case AgentCardSplit, AgentCardTab, AgentCardNewBackground:
 		issue := m.issueByUID(m.AgentCard.IssueUID)
 		if issue == nil {

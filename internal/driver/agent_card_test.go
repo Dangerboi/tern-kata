@@ -110,3 +110,51 @@ func TestTheAgentCardWhereColumnNamesBackgroundAndOpenAgents(t *testing.T) {
 		}
 	}
 }
+
+func TestMOnTheAgentCardMessagesTheSelectedRunningAgentWhereverItIs(t *testing.T) {
+	at := time.Date(2026, 10, 30, 9, 5, 0, 0, time.UTC)
+	entries := []model.AgentEntry{
+		{IssueUID: "t1", IssueRef: "work#t1", ProjectID: 7, Block: "31", Teammate: "omp", Address: "dana/omp-31", StartedAt: at, Placement: model.AgentSplit},
+		{IssueUID: "t1", IssueRef: "work#t1", ProjectID: 7, Block: "32", Teammate: "omp", Address: "dana/omp-32", StartedAt: at.Add(time.Hour), Placement: model.AgentTab},
+		{IssueUID: "t1", IssueRef: "work#t1", ProjectID: 7, Block: "33", Teammate: "omp", Address: "dana/omp-33", StartedAt: at.Add(2 * time.Hour), Placement: model.AgentBackground, Background: true},
+		{IssueUID: "t1", IssueRef: "work#t1", ProjectID: 7, Block: "34", Teammate: "omp", Address: "dana/omp-34", StartedAt: at.Add(3 * time.Hour)},
+		{IssueUID: "t1", IssueRef: "work#t1", ProjectID: 7, Block: "35", Teammate: "claude", NoAddress: model.AgentNotOmp, StartedAt: at.Add(4 * time.Hour)},
+	}
+	pane := withAgentRows(agentPanes(t, agentIssue("t1"))["list"])
+	pane.Model.AgentMapping, pane.Model.Actor = entries, "dana"
+	pane.Model.Agents = model.AgentStatesRelay{Received: true, States: []model.AgentState{
+		{Block: "31", State: model.AgentWorking}, {Block: "32", State: model.AgentIdle}, {Block: "33", State: model.AgentWaitingInput},
+		{Block: "34", State: model.AgentExited}, {Block: "35", State: model.AgentWorking}}}
+	open := step(t, pane, key("w")).State
+
+	for i, address := range []string{"dana/omp-31", "dana/omp-32", "dana/omp-33"} {
+		s := open
+		for range i {
+			s = step(t, s, key("down")).State
+		}
+		asked := step(t, s, key("m"))
+		if m := asked.State.Model; m.TopCard() != model.CardAgentMessage || m.AgentMessage.Address != address || m.AgentMessage.IssueUID != "t1" ||
+			m.AgentMessage.ProjectID != 7 || len(asked.Cmds) != 0 {
+			t.Fatalf("row %d: card %v message %+v cmds %v, want the Message card for %s", i, m.TopCard(), m.AgentMessage, asked.Cmds, address)
+		}
+		typed := feed(t, asked.State, key("h"), key("i"))
+		sent := sentMessage(t, step(t, typed.State, key("enter")).Cmds)
+		if sent.Address != address || sent.UID != "t1" || sent.ProjectID != 7 || sent.Actor != "dana" || sent.Message != "hi" || sent.Replacing != "" {
+			t.Errorf("row %d: sent %+v, want a message to %s on t1", i, sent, address)
+		}
+	}
+
+	for row, reason := range map[int]string{3: model.AgentExitedRefusal, 4: model.AgentNotOmpRefusal} {
+		s := open
+		for range row {
+			s = step(t, s, key("down")).State
+		}
+		got := step(t, s, key("m"))
+		if m := got.State.Model; m.TopCard() != model.CardAgent || m.Notice != reason || len(got.Cmds) != 0 {
+			t.Errorf("row %d: card %v notice %q cmds %v, want a Notice %q", row, m.TopCard(), m.Notice, got.Cmds, reason)
+		}
+		if why := got.State.Model.AgentCardUnavailable(model.AgentCardMessage); why != reason {
+			t.Errorf("row %d: the button is off with %q, want %q", row, why, reason)
+		}
+	}
+}
