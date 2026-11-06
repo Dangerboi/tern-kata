@@ -86,10 +86,11 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 		m.AgentClose = m.AgentClose.forgetUnreadable()
 		m, cmds := askAttention(m)
 		if m.Stale {
-			m, more := snapshotChanged(m)
-			return m, append(cmds, more...)
+			var more []Cmd
+			m, more = snapshotChanged(m)
+			cmds = append(cmds, more...)
 		}
-		return m, cmds
+		return m, append(cmds, reaskAccount(&m)...)
 	case StreamEvent:
 		if msg.Generation != m.StreamGeneration {
 			return m, nil

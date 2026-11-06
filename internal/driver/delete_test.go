@@ -519,3 +519,34 @@ func TestADaemonSwitchClearsTheIssueScopedFlagAndAsksAgain(t *testing.T) {
 		t.Error("the new daemon's answer was dropped")
 	}
 }
+
+func accountAsks(cmds []model.Cmd) int {
+	n := 0
+	for _, cmd := range cmds {
+		if c, ok := cmd.(model.LoadAuthCapabilities); ok && c.Account {
+			n++
+		}
+	}
+	return n
+}
+
+func TestTheStreamOpeningAgainAsksTheCapabilitiesOnlyUntilOneReadSucceeds(t *testing.T) {
+	s := movePane(t, movable("a"))
+	generation := s.Model.StreamGeneration
+	failed := step(t, s, model.AuthCapabilitiesLoaded{Request: 0, Account: true, Err: errors.New("down")}).State
+	reopened := step(t, failed, model.StreamOpened{Generation: generation})
+	if accountAsks(reopened.Cmds) != 1 {
+		t.Fatalf("after a failed read the stream opening sent %#v, want one capability ask", reopened.Cmds)
+	}
+	ask, _ := askedCapabilities(reopened.Cmds)
+	answered := step(t, reopened.State, model.AuthCapabilitiesLoaded{Request: ask.Request, Account: true, IssueScoped: true}).State
+	if !answered.Model.IssueScoped {
+		t.Fatal("the second read's answer was dropped")
+	}
+	if again := step(t, answered, model.StreamOpened{Generation: generation}); accountAsks(again.Cmds) != 0 {
+		t.Errorf("after a successful read the stream opening sent %#v, want no capability ask", again.Cmds)
+	}
+	if out := step(t, s, model.StreamOpened{Generation: generation}); accountAsks(out.Cmds) != 0 {
+		t.Errorf("with the first read still out the stream opening sent %#v, want no second ask", out.Cmds)
+	}
+}

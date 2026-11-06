@@ -106,11 +106,21 @@ func askAccount(m *Model) Cmd {
 	return LoadAuthCapabilities{Workspace: m.Workspace, Request: m.accountReads.Ask(), Account: true}
 }
 
+// reaskAccount asks again when the stream opens and no read of the connection's capabilities has succeeded or is out: the daemon
+// was unreachable when the Pane connected, and delete and restore stay offered until an answer says otherwise.
+func reaskAccount(m *Model) []Cmd {
+	if m.accountAnswered || m.accountReads.out {
+		return nil
+	}
+	return []Cmd{askAccount(m)}
+}
+
 // accountCapabilities applies the answer to the Pane's own ask: an older one is dropped, and a failure leaves the Pane offering
 // everything, as before the answer.
 func accountCapabilities(m Model, msg AuthCapabilitiesLoaded) Model {
 	if m.accountReads.IsCurrent(msg.Request) {
 		m.IssueScoped = msg.Err == nil && msg.IssueScoped
+		m.accountAnswered = msg.Err == nil
 	}
 	return m
 }

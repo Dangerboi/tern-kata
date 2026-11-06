@@ -69,6 +69,8 @@ type Model struct {
 	IssueScoped bool
 	// accountReads numbers the asks for the connection's own capabilities; the Credentials Page numbers its own.
 	accountReads Latest
+	// accountAnswered says a read of them succeeded on this connection, so the stream opening again asks no more.
+	accountAnswered bool
 	LiveState
 	IssueDetail
 	Create CreateState
