@@ -33,25 +33,31 @@ type DeletedIssue struct {
 	DeletedBy   string
 	DeletedAt   time.Time
 	Reason      string
+	// Described says a delete event of the Issue was read, so DeletedBy and Reason are what kata kept; without it only
+	// DeletedAt, from the Issue itself, is known.
+	Described bool
 }
 
 // DeletionLine is what the restore card says about the delete: who, when and why, as far as kata recorded it. stamp prints
 // the time in the Pane's zone. It is "" when kata gave no delete information at all.
 func (d DeletedIssue) DeletionLine(stamp func(time.Time) string) string {
-	if !d.Deleted || (d.DeletedBy == "" && d.DeletedAt.IsZero()) {
+	if !d.Deleted || (!d.Described && d.DeletedAt.IsZero()) {
 		return ""
 	}
-	parts := []string{"deleted"}
+	line := "deleted"
 	if d.DeletedBy != "" {
-		parts[0] += " by " + d.DeletedBy
+		line += " by " + d.DeletedBy
 	}
 	if !d.DeletedAt.IsZero() {
-		parts[0] += " " + stamp(d.DeletedAt)
+		line += " " + stamp(d.DeletedAt)
 	}
-	if d.Reason != "" {
-		return parts[0] + " · reason: " + d.Reason
+	switch {
+	case !d.Described:
+		return line
+	case d.Reason != "":
+		return line + " · reason: " + d.Reason
 	}
-	return parts[0] + " · no reason given"
+	return line + " · no reason given"
 }
 
 // LookupDeleted reads an Issue with deleted Issues included. Typed is the reference as the user typed it and Ref the part kata

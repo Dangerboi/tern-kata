@@ -122,6 +122,115 @@ func TestLookupDeletedReadsTheNewestDeletesReasonOnly(t *testing.T) {
 	}
 }
 
+func TestLookupDeletedStillFindsTheDeleteAfterAnotherIssueWasPurged(t *testing.T) {
+	f := newUndoFixture(t)
+	other := f.issue("Purge me")
+	client, err := f.gateway.client(context.Background(), f.workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	confirm := "PURGE " + f.qualified(other)
+	purged, err := client.PurgeIssueWithResponse(context.Background(), &g.PurgeIssueRequestOptions{
+		PathParams: &g.PurgeIssuePath{ProjectID: f.project.ID, Ref: other},
+		Header:     &g.PurgeIssueHeaders{XKataConfirm: &confirm},
+		Body:       &g.PurgeIssueBody{Actor: "tester"},
+	})
+	if err != nil || purged.StatusCode >= 300 {
+		t.Fatalf("purge: %v %d", err, purged.StatusCode)
+	}
+	uid := f.issue("Gone after a purge")
+	if got := f.deleteIssue(uid, "dup"); got.Err != nil {
+		t.Fatal(got.Err)
+	}
+	got := f.lookup(uid, 0, true)
+	if got.Err != nil || !got.Issue.Described || got.Issue.DeletedBy != "tester" || got.Issue.Reason != "dup" {
+		t.Errorf("lookup %+v, want the actor and reason although the log asked for a reset", got)
+	}
+}
+
+func TestLookupDeletedReadsOnlyTheReasonAfterTheLastRestore(t *testing.T) {
+	f := newUndoFixture(t)
+	uid := f.issue("Round trip")
+	for _, step := range []func() error{
+		func() error { return f.deleteIssue(uid, "first").Err },
+		func() error { return f.restore(uid).Err },
+		func() error { return f.deleteIssue(uid, "").Err },
+	} {
+		if err := step(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The first delete's comment sits before the restore, so it cannot be the second delete's reason.
+	got := f.lookup(uid, 0, true)
+	if !got.Issue.Described || got.Issue.Reason != "" {
+		t.Errorf("lookup %+v, want a described delete with no reason", got)
+	}
+}
+
+func TestOneActorsReasonIsNotAnotherActorsDelete(t *testing.T) {
+	f := newUndoFixture(t)
+	uid := f.issue("Two hands")
+	client, err := f.gateway.client(context.Background(), f.workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := "someone-else"
+	if _, err := client.CreateCommentWithResponse(context.Background(), &g.CreateCommentRequestOptions{
+		PathParams: &g.CreateCommentPath{ProjectID: fmt.Sprint(f.project.ID), Ref: uid},
+		Body:       &g.CreateCommentBody{Body: "Deleted: not mine", Actor: &other},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.deleteIssue(uid, "mine"); got.Err != nil {
+		t.Fatal(got.Err)
+	}
+	if got := f.lookup(uid, 0, true); got.Issue.Reason != "mine" {
+		t.Errorf("reason %q, want the deleting actor's own comment", got.Issue.Reason)
+	}
+}
+
+func TestARetriedDeleteAfterARefusalPostsTheReasonOnce(t *testing.T) {
+	f := newUndoFixture(t)
+	uid := f.issue("Retry me")
+	refuse := true
+	hook := func(w http.ResponseWriter, r *http.Request) bool {
+		if !refuse || r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/actions/delete") {
+			return false
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"status":500,"error":{"code":"internal","message":"try again"}}`))
+		return true
+	}
+	f.kata.intercept.Store(&hook)
+	if got := f.deleteIssue(uid, "dup"); got.Err == nil {
+		t.Fatal("the first delete was not refused")
+	}
+	refuse = false
+	if got := f.deleteIssue(uid, "dup"); got.Err != nil {
+		t.Fatal(got.Err)
+	}
+	if bodies := f.commentBodies(uid); len(bodies) != 1 || bodies[0] != "Deleted: dup" {
+		t.Errorf("comments %q, want the reason once", bodies)
+	}
+}
+
+func TestADeleteAfterARestoreWithTheSameReasonPostsItAgain(t *testing.T) {
+	f := newUndoFixture(t)
+	uid := f.issue("Again")
+	for i := 0; i < 2; i++ {
+		if got := f.deleteIssue(uid, "dup"); got.Err != nil {
+			t.Fatal(got.Err)
+		}
+		if got := f.restore(uid); got.Err != nil {
+			t.Fatal(got.Err)
+		}
+	}
+	if bodies := f.commentBodies(uid); len(bodies) != 2 {
+		t.Errorf("comments %q, want one per delete", bodies)
+	}
+}
+
 func TestAFailingReasonCommentSendsNoDelete(t *testing.T) {
 	f := newUndoFixture(t)
 	uid := f.issue("Keep me")

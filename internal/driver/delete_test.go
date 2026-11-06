@@ -384,9 +384,9 @@ func TestTheRestoreCardSaysWhoDeletedTheIssueWhenAndWhy(t *testing.T) {
 		issue model.DeletedIssue
 		want  string
 	}{
-		"with a reason":    {model.DeletedIssue{DeletedBy: "alice", DeletedAt: at, Reason: "duplicate of work#b"}, "deleted by alice 2026-11-06 14:02 · reason: duplicate of work#b"},
-		"without a reason": {model.DeletedIssue{DeletedBy: "alice", DeletedAt: at}, "deleted by alice 2026-11-06 14:02 · no reason given"},
-		"time only":        {model.DeletedIssue{DeletedAt: at}, "deleted 2026-11-06 14:02 · no reason given"},
+		"with a reason":           {model.DeletedIssue{DeletedBy: "alice", DeletedAt: at, Reason: "duplicate of work#b", Described: true}, "deleted by alice 2026-11-06 14:02 · reason: duplicate of work#b"},
+		"without a reason":        {model.DeletedIssue{DeletedBy: "alice", DeletedAt: at, Described: true}, "deleted by alice 2026-11-06 14:02 · no reason given"},
+		"time only, nothing read": {model.DeletedIssue{DeletedAt: at}, "deleted 2026-11-06 14:02"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := step(t, typed(t, menuRestore(t, movePane(t, movable("a"))), "a"), key("enter")).State
