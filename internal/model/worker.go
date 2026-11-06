@@ -37,6 +37,8 @@ type WorkerProject struct {
 	// Unsupported is why the worker sets each job aside, by job uid: a profile, checkout or secret worker.toml does not map, a
 	// workflow it does not run, and so on.
 	Unsupported map[string]string
+	// Paused is how many failed runs in a row made the worker stop admitting each job, by job uid, until it is resumed.
+	Paused map[string]int
 }
 
 // LocalRun is a run of this machine's worker as the worker reports it.
@@ -315,6 +317,37 @@ func (m Model) workerUnsupported(uid string) string {
 	return ""
 }
 
+// workerPaused is how many failed runs in a row made this machine's worker pause the job, 0 when it did not or does not serve the Project.
+func (m Model) workerPaused(uid string) int {
+	if !m.Worker.Running {
+		return 0
+	}
+	for _, p := range m.Worker.Projects {
+		if p.Name == m.workerProjectName() {
+			return p.Paused[uid]
+		}
+	}
+	return 0
+}
+
+// JobPause is why the job is not running as the Jobs Page words it: kata's own pause reason, else this machine's worker pausing
+// it after repeated failed runs.
+func (m Model) JobPause(job CronJob) PauseReason {
+	if pause := job.Pause(m.Jobs.ProjectArchived); pause != NotPaused || m.workerPaused(job.UID) == 0 {
+		return pause
+	}
+	return PauseFailedRuns
+}
+
+// workerPauseWords is the worker's pause of the job in a sentence, empty when it holds none.
+func (m Model) workerPauseWords(uid string) string {
+	n := m.workerPaused(uid)
+	if n == 0 {
+		return ""
+	}
+	return fmt.Sprintf("paused after %d failed run%s in a row", n, plural(n))
+}
+
 // WorkerLine is the Jobs Page's line about this machine's worker, and whether it is good news: whether the worker is running and
 // serves this Pane's Project. Where worker.toml was read for this Project, each state points at W. It is empty until the first
 // answer arrives.
@@ -402,6 +435,43 @@ func runJobNow(m Model) (Model, []Cmd) {
 	}
 	m.Notice = fmt.Sprintf("Asking the worker to run %q…", job.Name)
 	return m, []Cmd{RunJobNow{JobUID: job.UID, JobName: job.Name}}
+}
+
+// ResumeJob asks the worker to lift its pause on an adapter job.
+type ResumeJob struct{ JobUID, JobName string }
+
+func (ResumeJob) cmd() {}
+
+// JobResumed answers ResumeJob. Err is the worker's refusal, in words for the user.
+type JobResumed struct {
+	JobUID, JobName string
+	Err             error
+}
+
+func (JobResumed) msg() {}
+
+// resumeFailingJob is u on the Jobs Page: the worker admits the selected job's runs again and counts failures from none.
+func resumeFailingJob(m Model) (Model, []Cmd) {
+	job := m.SelectedJob()
+	if job == nil {
+		return m, nil
+	}
+	if m.workerPaused(job.UID) == 0 {
+		m.Notice = fmt.Sprintf("%q is not paused by this machine's worker; p pauses or resumes it at kata.", job.Name)
+		return m, nil
+	}
+	m.Notice = fmt.Sprintf("Asking the worker to resume %q…", job.Name)
+	return m, []Cmd{ResumeJob{JobUID: job.UID, JobName: job.Name}}
+}
+
+func jobResumed(m Model, msg JobResumed) (Model, []Cmd) {
+	if msg.Err != nil {
+		m.Notice = fmt.Sprintf("Cannot resume %q: %s", msg.JobName, msg.Err)
+		return m, nil
+	}
+	m.Notice = fmt.Sprintf("Resumed %q: the worker admits its runs again and counts failed runs from none.", msg.JobName)
+	m, cmd := m.askWorker(0)
+	return m, []Cmd{cmd}
 }
 
 func jobRunRequested(m Model, msg JobRunRequested) (Model, []Cmd) {

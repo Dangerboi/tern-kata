@@ -88,6 +88,8 @@ type Limits struct {
 	DefaultTimeout string `toml:"default_timeout"`
 	MaxTimeout     string `toml:"max_timeout"`
 	MaxRunPrompts  int    `toml:"max_run_prompts"`
+	// PauseAfterFailures is how many runs of one job recorded failed in a row pause it; nil means the default, 0 turns pausing off.
+	PauseAfterFailures *int `toml:"pause_after_failures"`
 }
 
 // ProjectConfig lists one served Project; it is trusted, including its job and workflow authors.
@@ -292,6 +294,9 @@ func (c *Config) validate() error {
 	if c.Limits.MaxActiveRuns < 0 || c.Limits.MaxRunPrompts < 0 || c.Limits.MaxRunPrompts > 100 {
 		return errors.New("limits: max_active_runs must be positive and max_run_prompts 1 to 100")
 	}
+	if n := c.Limits.PauseAfterFailures; n != nil && *n < 0 {
+		return errors.New("limits: pause_after_failures must be 0 (never pause) or more")
+	}
 	def, err := c.Limits.parse(c.Limits.DefaultTimeout, DefaultTimeout, "default_timeout")
 	if err != nil {
 		return err
@@ -387,6 +392,18 @@ func (c Config) defaultTimeout() time.Duration {
 func (c Config) maxTimeout() time.Duration {
 	d, _ := c.Limits.parse(c.Limits.MaxTimeout, MaxTimeout, "")
 	return d
+}
+
+// DefaultPauseAfterFailures is how many failed runs in a row pause a job when worker.toml says nothing.
+const DefaultPauseAfterFailures = 3
+
+// PauseAfterFailures is how many runs of one job recorded failed in a row pause it: the configured pause_after_failures,
+// or the default; 0 turns pausing off.
+func (c Config) PauseAfterFailures() int {
+	if c.Limits.PauseAfterFailures == nil {
+		return DefaultPauseAfterFailures
+	}
+	return *c.Limits.PauseAfterFailures
 }
 
 // MaxRunPrompts is how many prompts one run may send: the configured max_run_prompts, or the default.

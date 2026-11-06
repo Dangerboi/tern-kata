@@ -384,6 +384,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m = localRunLoaded(m, msg)
 	case JobRunRequested:
 		return jobRunRequested(m, msg)
+	case JobResumed:
+		return jobResumed(m, msg)
 	case LocalRunMoved:
 		return localRunMoved(m, msg)
 	case DetailLoaded:

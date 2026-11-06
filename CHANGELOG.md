@@ -4,6 +4,14 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+#### Jobs and worker
+
+- The worker pauses an adapter job after repeated failed runs.
+  - After `pause_after_failures` runs of one job in a row recorded `failed` (default 3, set under `[limits]` in `worker.toml`, 0 turns pausing off) the worker admits no more of its runs until you resume it; timeouts count, held runs and cancelled runs don't, and a succeeded run starts the count again.
+  - The pause lives in the worker's own state, so kata's job is not changed and other machines keep their own counts. `tern-kata worker status` and the Jobs Page name it ("paused: failed runs"); `u` on the Jobs Page, or `tern-kata worker resume <job>` on a host with no Pane, resumes the job.
+
 ### Changed
 
 #### Issues and Pages

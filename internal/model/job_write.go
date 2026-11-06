@@ -212,7 +212,7 @@ func jobWritten(m Model, msg JobWritten) Model {
 
 // jobState is the state of a job as the list words it.
 func jobState(m Model, job CronJob) string {
-	return job.Pause(m.Jobs.ProjectArchived).StateText()
+	return m.JobPause(job).StateText()
 }
 
 // jobWrittenNotice words what a landed write did.

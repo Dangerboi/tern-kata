@@ -208,6 +208,11 @@ func writeStopAnswer(out io.Writer, a *worker.StopAnswer) error {
 // the worker saved.
 func settleHeldRun(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Writer) error {
 	verb, uid := plan.Operands[0], plan.Operands[1]
+	if verb == "resume" {
+		if done, err := resumePausedJob(ctx, env, uid, out); done {
+			return err
+		}
+	}
 	resp, err := worker.Ask(ctx, env.Dirs, worker.Request{Op: verb, Run: uid, Actor: plan.Actor})
 	if err != nil {
 		return subcommandError{err}
@@ -231,6 +236,46 @@ func settleHeldRun(ctx context.Context, plan LaunchPlan, env workerEnv, out io.W
 		_, err = fmt.Fprintf(out, "Run %s of job %q in Project %s abandoned: kata will record it cancelled and its slot is free.\n", t.RunUID, t.Job, t.Project)
 	}
 	return err
+}
+
+// resumePausedJob is `worker resume <job>`: when ref names a job the worker paused after repeated failed runs (its uid, or
+// its name when one paused job has it), it lifts the pause and says so; done is false when ref names no paused job, and
+// the caller treats it as a held run's uid.
+func resumePausedJob(ctx context.Context, env workerEnv, ref string, out io.Writer) (done bool, err error) {
+	resp, err := worker.Ask(ctx, env.Dirs, worker.Request{Op: "status"})
+	if err != nil || !resp.OK || resp.Status == nil {
+		return false, nil // the held-run path asks again and reports what is wrong
+	}
+	var match []worker.PausedJob
+	for _, p := range resp.Status.Paused {
+		if p.JobUID == ref || p.Name == ref {
+			match = append(match, p)
+		}
+	}
+	switch len(match) {
+	case 0:
+		return false, nil
+	case 1:
+	default:
+		return true, subcommandError{fmt.Errorf("%d paused jobs are named %q (in Projects %s); resume one by its uid", len(match), ref, projectNames(match))}
+	}
+	resp, err = worker.Ask(ctx, env.Dirs, worker.Request{Op: "resume-job", Job: match[0].JobUID})
+	if err != nil {
+		return true, subcommandError{err}
+	}
+	if !resp.OK {
+		return true, subcommandError{errors.New(resp.Error)}
+	}
+	_, err = fmt.Fprintf(out, "Job %q in Project %s resumed: the worker admits its runs again and counts failed runs from none.\n", match[0].Name, match[0].Project)
+	return true, err
+}
+
+func projectNames(jobs []worker.PausedJob) string {
+	names := make([]string, len(jobs))
+	for i, p := range jobs {
+		names[i] = p.Project
+	}
+	return strings.Join(names, ", ")
 }
 
 // runJobNow asks the running worker for a manual occurrence and prints the run's uid once the worker has saved it.

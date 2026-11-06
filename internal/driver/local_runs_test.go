@@ -331,3 +331,33 @@ func TestALateAnswerForAnotherRunDoesNotReplaceTheSelectedRunsDetail(t *testing.
 	s = step(t, s, key("enter")).State
 	wantText(t, "run detail", inspectorText(t, s), "Held because", "Step 1", "sess-1")
 }
+
+func TestJobsPageNamesTheWorkersPauseAfterFailedRunsAndUResumesIt(t *testing.T) {
+	status := servingWorker()
+	status.Projects[0].Paused = map[string]int{"A1": 3}
+	s := jobsPaneWithWorker(t, status, promptJob("A1", "Triage"), promptJob("A2", "Report"))
+	text := wireTextOf(t, s)
+	wantText(t, "Jobs Page", text, "paused: failed runs", "paused after 3 failed runs in a row", "u resumes it")
+	if strings.Count(text, "paused after 3 failed runs in a row") != 1 {
+		t.Fatalf("the pause is named for a job the worker runs:\n%s", text)
+	}
+
+	out := step(t, s, key("u"))
+	if len(out.Cmds) != 1 || out.Cmds[0] != (model.ResumeJob{JobUID: "A1", JobName: "Triage"}) {
+		t.Fatalf("cmds %#v, want a resume ask for the paused job", out.Cmds)
+	}
+	done := step(t, out.State, model.JobResumed{JobUID: "A1", JobName: "Triage"})
+	wantText(t, "notice", done.State.Model.Notice, "Resumed")
+	if _, asked := askedWorker(done.Cmds); !asked {
+		t.Error("a resume did not ask the worker for its status again")
+	}
+	refused := step(t, out.State, model.JobResumed{JobUID: "A1", JobName: "Triage", Err: errors.New("job A1 is not paused by this worker")})
+	wantText(t, "notice", refused.State.Model.Notice, "not paused by this worker")
+
+	healthy := step(t, s, key("down"))
+	none := step(t, healthy.State, key("u"))
+	if len(none.Cmds) != 0 {
+		t.Errorf("u on a job the worker runs asked the worker: %#v", none.Cmds)
+	}
+	wantText(t, "notice", none.State.Model.Notice, "not paused by this machine's worker")
+}

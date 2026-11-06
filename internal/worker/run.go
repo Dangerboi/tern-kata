@@ -679,6 +679,7 @@ func classify(j *Journal) *Outcome {
 // author (ADR-0005). Every write is an intent saved before it is sent, and nothing is sent while the Project's route is
 // unconfirmed (ADR-0004).
 func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error {
+	w.noteOutcome(j)
 	if err := w.checkRoute(ctx, ps, false); err != nil {
 		return fmt.Errorf("cannot confirm the kata route: %w", err)
 	}

@@ -51,6 +51,7 @@ const (
 	cmdRun       = "run"
 	cmdResume    = "resume"
 	cmdAbandon   = "abandon"
+	cmdResumeJob = "resume-job"
 	cmdIdentity  = "identity"
 )
 
@@ -64,6 +65,7 @@ var whileStopping = map[string]struct{ idle, now bool }{
 	cmdRun:       {},
 	cmdResume:    {},
 	cmdAbandon:   {idle: true},
+	cmdResumeJob: {},
 	cmdIdentity:  {idle: true, now: true},
 }
 

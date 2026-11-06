@@ -662,3 +662,29 @@ func TestNewWorkerEnvReadsTheWorkingDirectoryOnlyForInitAndAdd(t *testing.T) {
 		}
 	}
 }
+
+func TestWorkerResumeLiftsThePauseOfAJobByNameOrUid(t *testing.T) {
+	f := newWorkerFixture(t, "args = [\"--stub-exit\", \"3\"]\n[limits]\npause_after_failures = 1\n")
+	job := f.kata.CreateJob(t, f.proj, workertest.Job{Name: "flaky", Prompt: "Review it.", Checkout: "repo"})
+	f.serve(t)
+	if _, err := f.run(t, LaunchPlan{Subcommand: "run", TargetRef: job.UID}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "status to name the pause", func() bool {
+		status, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}})
+		return err == nil && strings.Contains(status, "paused after 1 failed run in a row; resume it with `tern-kata worker resume "+job.UID+"`")
+	})
+	if _, err := f.run(t, LaunchPlan{Subcommand: "run", TargetRef: job.UID}); err == nil || !strings.Contains(err.Error(), "paused") {
+		t.Fatalf("a run of the paused job was answered %v", err)
+	}
+	out, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"resume", "flaky"}})
+	if want := `Job "flaky" in Project demo resumed: the worker admits its runs again and counts failed runs from none.` + "\n"; err != nil || out != want {
+		t.Fatalf("resume printed %q, %v", out, err)
+	}
+	if status, _ := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}}); strings.Contains(status, "paused after") {
+		t.Fatalf("status still names a pause:\n%s", status)
+	}
+	if _, err := f.run(t, LaunchPlan{Subcommand: "run", TargetRef: job.UID}); err != nil {
+		t.Fatalf("the resumed job refused a run: %v", err)
+	}
+}

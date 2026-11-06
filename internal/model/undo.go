@@ -174,7 +174,7 @@ func undoBoundary(cmd Cmd) (string, bool) {
 	case Scroll, RevealActivityTab, OpenDraftEditor, LoadDetail, LoadLanes, SaveLanes, ShareLanes, SaveFilters, LoadViews, SaveView, DeleteView, LoadWorkerPickers,
 		LoadJobWorkflows, LoadJobs, LoadRuns, ShowRun, LoadRecurTarget, LoadFieldLabels, LoadProject, ReadSnapshot, Subscribe,
 		WakeAt, OpenIssue, LookupSearchID, LoadWorkflows, ReadWorkflowText, LoadWorker, LoadWorkerSetup, SaveWorkerSetup,
-		SaveWorkerEdit, StopWorker, SetWorkerSupervision, LoadLocalRun, RunJobNow, ResumeLocalRun, AbandonLocalRun,
+		SaveWorkerEdit, StopWorker, SetWorkerSupervision, LoadLocalRun, RunJobNow, ResumeJob, ResumeLocalRun, AbandonLocalRun,
 		OpenRunSession, StartAgent, PruneAgents, RefreshAgents, FocusAgent, OpenAgent, SendAgentBack, SetAgentOpen, CloseAgent, ReadAgentIssue, RaiseAgentAttention, ClearAgentAttention, ClearAgentAddress, CreateProject, BindProject, LookupDeleted, LoadDaemons, SwitchDaemon, LoadAttention, LoadAuthCapabilities, OpenAttachment,
 		LoadCredentials, LoadFederation, LoadFederationHubs, LoadFederationHubProjects, BrowseFederationHubs:
 		return "", false

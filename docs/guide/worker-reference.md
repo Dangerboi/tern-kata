@@ -13,6 +13,7 @@ The file is decoded strictly (an unknown key is an error) and read once at start
 | `[limits]` `max_active_runs` | Optional. Runs at once across all Projects; unset means each Project's capacity only. |
 | `[limits]` `default_timeout` | Optional. Timeout when a job sets none; a job's `timeout_seconds` overrides it, up to `max_timeout`. |
 | `[limits]` `max_run_prompts` | Optional. The most prompts one run may send, 1 to 100; default 12. It is frozen into a run when the run is prepared. A workflow that could send more (prompt steps plus their retries) is refused. The cap is global: a profile has none of its own. |
+| `[limits]` `pause_after_failures` | Optional. How many runs of one job recorded `failed` in a row pause it; default 3, `0` turns pausing off. See [Paused jobs](#paused-jobs). |
 | `[limits]` `max_timeout` | Optional. The longest timeout a job may ask for; a job over it is set aside. |
 | `[[projects]]` `name` | A kata Project; listing it trusts it. |
 | `[[projects]]` `capacity` | Runs at once for the Project; default 3. |
@@ -37,6 +38,7 @@ max_active_runs = 4            # across all Projects; unset = each Project's cap
 default_timeout = "2h"         # a job's timeout_seconds overrides it, up to max_timeout
 max_timeout     = "8h"
 max_run_prompts = 12           # most prompts one run may send; 1 to 100, default 12
+pause_after_failures = 3       # failed runs in a row that pause a job; default 3, 0 = never pause
 
 [[projects]]
 name      = "tern-kata"        # a kata Project; it is trusted
@@ -213,6 +215,15 @@ A journal the worker cannot read is moved whole to `quarantine/runs/<run uid>`, 
 ### Limits and cleanup
 
 A workflow run's time limit starts when its run is prepared, and a resume gets one fresh limit from the moment it is accepted, not from when a step starts. A step is never started once the limit has passed: the run is recorded failed "timed out" and its unstarted steps are skipped. Tokens are summed over every attempt of a run: retried steps and resumed attempts all count. A daily pass removes the folders of runs that were settled and fully reported more than 14 days ago; held runs, runs with a write still owed and runs in flight stay.
+
+## Paused jobs
+
+A job that fails every time keeps costing a failed Run, maybe a per-run Issue, and the tokens it spent. The worker therefore counts, per adapter job, the runs in a row recorded `failed`, and after `pause_after_failures` of them (default 3; `0` turns pausing off) admits none of the job's runs, scheduled or requested, until you resume it.
+
+- **What counts.** A run recorded `failed` adds one, a timeout included. A succeeded run resets the count. Held runs (interrupted, quota, login and the other holds) and runs a person cancelled or abandoned neither count nor reset it.
+- **Where it lives.** In the worker's own state, under the Project's folder (`projects/<project uid>/failures/<job uid>.json`). kata's job definition is never rewritten, so every other executor and Pane still sees an enabled job and workers on other machines keep their own counts. The pause survives a restart and holds even if `pause_after_failures` is raised later; only a resume lifts it. Occurrences that came due meanwhile wait and are handled by the job's catch-up rule once it is resumed.
+- **Seeing it.** `tern-kata worker status` lists each paused job with its failure count and the resume command; the Jobs Page shows it as the pause reason "paused: failed runs".
+- **Resuming.** `u` on the Jobs Page, or `tern-kata worker resume <job>` (the job's uid, or its name when one paused job has it) sends a `resume-job` request over the control socket. A job that is not paused is refused. The count starts from none; `worker resume <run-uid>` still continues a held run.
 
 ## Workflow runs
 

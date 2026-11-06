@@ -54,7 +54,7 @@ func (j CronJob) Kind() string {
 
 // PauseReason is why a job that is not archived is not running; the zero value is none. It is derived on the client: kata
 // stores no pause, a native job just stops being delivered while its parent is closed or gone, its Project archived or the
-// job disabled.
+// job disabled, and an adapter job stops being admitted by a worker that paused it after repeated failed runs.
 type PauseReason string
 
 const (
@@ -64,6 +64,9 @@ const (
 	PauseProjectArchived PauseReason = "Project archived"
 	PauseDisabled        PauseReason = "disabled"
 	PauseArchived        PauseReason = "archived"
+	// PauseFailedRuns is the worker's own pause: its runs on this machine failed in a row. kata stores none of it, so it is read
+	// from the worker's status, never from the job (see Model.JobPause).
+	PauseFailedRuns PauseReason = "failed runs"
 )
 
 // Pause is why j is not running, with the Project archived taken from the Project's own state: kata answers no job of an

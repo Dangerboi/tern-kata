@@ -85,6 +85,7 @@ func TestUndoBoundaryListsEveryCmd(t *testing.T) {
 		{RestoreIssueCmd{}, true},
 		{RestoreJobCmd{}, true},
 		{RestoreWorkflow{}, true},
+		{ResumeJob{}, false},
 		{ResumeLocalRun{}, false},
 		{RevealActivityTab{}, false},
 		{RevokeTokenCmd{}, true},

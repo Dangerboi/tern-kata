@@ -34,6 +34,7 @@ A schedule that can't be read, or a next run that can't be worked out, is left o
 | `ctrl+r` | Read the jobs again; they also reload when the daemon reports a change |
 | `r` | Open the Runs Page filtered to the selected job (see [Runs](runs.md)) |
 | `R` | Ask the worker to run the selected adapter job now |
+| `u` | Resume the selected job this machine's worker paused after repeated failed runs |
 | `W` | Open the [Worker card](worker.md#from-the-pane-the-worker-card): this machine's worker; set it up, serve the Project, edit, restart or stop it |
 
 ### What a card tells you
@@ -75,6 +76,10 @@ The Pane asks the worker over its control socket when the page opens, on `ctrl+r
 `R` asks the worker to run the selected **adapter** job now, under the same lease, overlap and capacity rules as a scheduled run. It is refused with the reason on a recurring-child job (kata runs those, not the worker), on an archived job, when no worker runs on this machine, when the worker does not serve the Project, and with the worker's own words when it declines (a full Project, a closed overlap gate). On success the Notice names the new run, which shows on the [Runs Page](runs.md).
 
 The Jobs Page needs a Project like the Board Page and ends when you switch to a Collection that is not a Project.
+
+### Paused after failed runs
+
+After `pause_after_failures` runs of one adapter job in a row end `failed` (default 3; see the [worker reference](worker-reference.md#paused-jobs)) the worker stops admitting that job's runs. Its card reads "paused: failed runs" and says "This machine's worker: paused after 3 failed runs in a row", and the inspector adds a Worker line. This is the worker's own state, not kata's: the job stays enabled for every other executor and Pane, `p` neither shows nor lifts it, and `R` is refused with the same words. `u` asks the worker to resume the job; its failure count starts from none. It is refused with a Notice for a job the worker has not paused.
 
 ### Pause, archive and guarded writes
 

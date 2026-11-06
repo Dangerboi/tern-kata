@@ -78,6 +78,11 @@ func (g *Gateway) runJobNow(ctx context.Context, cmd model.RunJobNow) model.JobR
 	return model.JobRunRequested{JobUID: cmd.JobUID, JobName: cmd.JobName, RunUID: resp.Run.RunUID}
 }
 
+func (g *Gateway) resumeJob(ctx context.Context, cmd model.ResumeJob) model.JobResumed {
+	_, err := g.ask(ctx, worker.Request{Op: "resume-job", Job: cmd.JobUID})
+	return model.JobResumed{JobUID: cmd.JobUID, JobName: cmd.JobName, Err: err}
+}
+
 func (g *Gateway) moveRun(ctx context.Context, op, uid string) model.LocalRunMoved {
 	resp, err := g.ask(ctx, worker.Request{Op: op, Run: uid, Actor: "tern-kata pane"})
 	moved := model.LocalRunMoved{UID: uid, Resumed: op == "resume", Err: err}
@@ -118,6 +123,14 @@ func translateWorkerStatus(s worker.Status) model.WorkerStatus {
 			project.Unsupported = make(map[string]string, len(p.Aside))
 			for _, n := range p.Aside {
 				project.Unsupported[n.UID] = n.Text
+			}
+		}
+		for _, j := range s.Paused {
+			if j.Project == p.Name {
+				if project.Paused == nil {
+					project.Paused = map[string]int{}
+				}
+				project.Paused[j.JobUID] = j.Failed
 			}
 		}
 		out.Projects = append(out.Projects, project)
