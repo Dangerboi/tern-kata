@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"go.kenn.io/kit/consolewindow"
 )
 
 // openFile opens path with the program the OS has for its type, without waiting for that program to end.
@@ -23,6 +24,7 @@ func openFile(path string) error {
 	default:
 		cmd = exec.Command("xdg-open", path)
 	}
+	consolewindow.Hide(cmd)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("could not start %s: %w", cmd.Args[0], err)
 	}

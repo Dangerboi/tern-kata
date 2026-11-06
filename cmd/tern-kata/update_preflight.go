@@ -14,6 +14,7 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/worker"
+	"go.kenn.io/kit/consolewindow"
 )
 
 // Pre-flight is the check one release makes of another: `tern-kata update --preflight`, run by the old binary on the unpacked
@@ -158,6 +159,7 @@ func askPreflight(ctx context.Context, binary string, timeout time.Duration) pre
 	defer cancel()
 	var stdout, stderr bytes.Buffer
 	cmd := exec.CommandContext(runCtx, binary, "update", "--preflight")
+	consolewindow.Hide(cmd)
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	cmd.WaitDelay = time.Second
 	runErr := cmd.Run()

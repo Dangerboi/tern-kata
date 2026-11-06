@@ -10,6 +10,7 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/worker"
+	"go.kenn.io/kit/consolewindow"
 )
 
 // The worker is reached over its control socket, not through kata: one Cmd in, one Msg out, like every gateway command. Nothing
@@ -112,7 +113,9 @@ func SessionTabArgs(cmd model.OpenRunSession) []string {
 
 // execTern runs the tern program with args, returning its combined output.
 func execTern(ctx context.Context, args []string) ([]byte, error) {
-	return exec.CommandContext(ctx, "tern", args...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, "tern", args...)
+	consolewindow.Hide(cmd)
+	return cmd.CombinedOutput()
 }
 
 func translateWorkerStatus(s worker.Status) model.WorkerStatus {

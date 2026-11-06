@@ -29,6 +29,7 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/atomicfile"
 	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"go.kenn.io/kit/consolewindow"
 )
 
 // DefaultFolder is the vault folder kata uses when [docbank] names none.
@@ -52,6 +53,7 @@ func (ExecRunner) LookPath(name string) (string, error) { return exec.LookPath(n
 
 func (ExecRunner) Run(ctx context.Context, env []string, name string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
+	consolewindow.Hide(cmd)
 	if len(env) > 0 {
 		cmd.Env = append(os.Environ(), env...)
 	}

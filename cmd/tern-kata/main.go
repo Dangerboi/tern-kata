@@ -18,6 +18,7 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
+	"go.kenn.io/kit/consolewindow"
 )
 
 func main() {
@@ -217,7 +218,9 @@ func lookupEnv(key string) (string, bool) {
 	if key != gitUserNameKey {
 		return os.LookupEnv(key)
 	}
-	out, err := exec.Command("git", "config", "user.name").Output()
+	cmd := exec.Command("git", "config", "user.name")
+	consolewindow.Hide(cmd)
+	out, err := cmd.Output()
 	if err != nil {
 		return "", false
 	}

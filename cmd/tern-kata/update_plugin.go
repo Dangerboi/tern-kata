@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"go.kenn.io/kit/consolewindow"
 	"golang.org/x/mod/semver"
 )
 
@@ -84,6 +85,7 @@ func runTern(ctx context.Context, ternPath string, args ...string) (string, erro
 	defer cancel()
 	var stdout, stderr strings.Builder
 	cmd := exec.CommandContext(ctx, ternPath, args...)
+	consolewindow.Hide(cmd)
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
 		detail := strings.TrimSpace(stderr.String() + " " + stdout.String())

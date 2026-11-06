@@ -40,6 +40,12 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - The Page bar draws the Attention count as a badge after the name, not as text in it, and the compact Page bar keeps the badge.
 
+### Fixed
+
+#### Tern window
+
+- On Windows, the programs tern-kata runs in the background (`tern` opening a run's session tab, `git config user.name`, docbank setup, the update steps and the file opener) start without a console window, so none flashes up.
+
 ## [0.9.0] - 2026-11-06
 
 ### Added
