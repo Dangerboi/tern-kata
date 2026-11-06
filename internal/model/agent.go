@@ -147,13 +147,14 @@ func openAgent(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	m = openAgentCard(m, *issue)
+	m, sessions := askAgentSessions(m, 0)
 	if m.Agents.inFlight {
 		m.Agents.again = true
-		return m, nil
+		return m, sessions
 	}
 	m.Agents.inFlight = true
 	m, ask := m.askRefresh(nil)
-	return m, []Cmd{ask}
+	return m, append([]Cmd{ask}, sessions...)
 }
 
 // startAgent starts an agent on the Agent card's Issue where the card's key (action) says; the card closes first, and a refusal

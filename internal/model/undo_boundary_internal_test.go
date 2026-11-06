@@ -78,6 +78,7 @@ func TestUndoBoundaryListsEveryCmd(t *testing.T) {
 		{PruneAgents{}, false},
 		{RaiseAgentAttention{}, false},
 		{ReadAgentIssue{}, false},
+		{ReadAgentSessions{}, false},
 		{ReadSnapshot{}, false},
 		{ReadWorkflowText{}, false},
 		{RefreshAgents{}, false},

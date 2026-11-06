@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   createExtension,
   createFollower,
+  promptFileFromArgv,
   readConfig,
   slotKey,
   type ExtensionApi,
@@ -459,5 +463,74 @@ describe("extension factory", () => {
       expect(env.KATA_TRANSCRIPT_AGENT).toBeUndefined();
       expect(env.KATA_TRANSCRIPT_SESSION_ID).toBeUndefined();
     }
+  });
+});
+
+describe("session path file", () => {
+  type Handler = (event: unknown, ctx: { agent?: { kind?: string }; sessionManager?: { getSessionFile?(): string | undefined } }) => void;
+
+  function wired(argv: string[]) {
+    const handlers = new Map<string, Handler>();
+    const io: KataIo = {
+      spawn: (args) => fakeChild(args),
+      async run() {
+        return { code: 0, stdout: "" };
+      },
+    };
+    const pi: ExtensionApi = {
+      on: (event: string, handler: Handler) => void handlers.set(event, handler),
+      sendUserMessage: () => {},
+    };
+    createExtension({}, io, argv)(pi);
+    return handlers;
+  }
+
+  function withFolder(body: (dir: string) => void) {
+    const dir = mkdtempSync(join(tmpdir(), "tern-kata-session-"));
+    try {
+      body(dir);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  const session = (file: string | undefined) => ({ sessionManager: { getSessionFile: () => file } });
+
+  test("session start and every switch or branch write the session file's path beside the prompt file", () => {
+    withFolder((dir) => {
+      const prompt = join(dir, "prompt-abc.md");
+      const handlers = wired(["omp", "-e", "x.ts", `@${prompt}`]);
+      handlers.get("session_start")?.({}, session("/s/one.jsonl"));
+      expect(readFileSync(`${prompt}.session`, "utf8").trim()).toBe("/s/one.jsonl");
+      handlers.get("session_switch")?.({}, session("/s/two.jsonl"));
+      expect(readFileSync(`${prompt}.session`, "utf8").trim()).toBe("/s/two.jsonl");
+      handlers.get("session_branch")?.({}, session("/s/three.jsonl"));
+      expect(readFileSync(`${prompt}.session`, "utf8").trim()).toBe("/s/three.jsonl");
+      expect(readdirSync(dir).sort()).toEqual(["prompt-abc.md.session"]);
+    });
+  });
+
+  test("a subagent's session writes nothing", () => {
+    withFolder((dir) => {
+      const prompt = join(dir, "prompt-abc.md");
+      const handlers = wired([`@${prompt}`]);
+      handlers.get("session_start")?.({}, { agent: { kind: "sub" }, ...session("/s/sub.jsonl") });
+      expect(existsSync(`${prompt}.session`)).toBe(false);
+    });
+  });
+
+  test("no prompt file on the command line, or a session without a file, writes nothing", () => {
+    withFolder((dir) => {
+      const prompt = join(dir, "prompt-abc.md");
+      wired(["omp"]).get("session_start")?.({}, session("/s/one.jsonl"));
+      wired([`@${prompt}`]).get("session_start")?.({}, session(undefined));
+      expect(readdirSync(dir)).toEqual([]);
+    });
+  });
+
+  test("the prompt file is the last @file named prompt-*.md", () => {
+    expect(promptFileFromArgv(["omp", "@notes.txt", "@/state/agent-prompts/prompt-12-ab.md"])).toBe("/state/agent-prompts/prompt-12-ab.md");
+    expect(promptFileFromArgv(["omp", "@C:\\state\\prompt-ab.md"])).toBe("C:\\state\\prompt-ab.md");
+    expect(promptFileFromArgv(["omp", "@notes.md"])).toBeUndefined();
   });
 });

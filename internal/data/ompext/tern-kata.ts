@@ -2,6 +2,8 @@
 // agent (from tern-kata's Attention Page) to the running omp session as user messages,
 // and names the session to `kata close` so a close carries a transcript reference.
 
+import { renameSync, rmSync, writeFileSync } from "node:fs";
+
 /** One running `kata` child whose stdout is read line by line. */
 export interface Spawned {
   lines: AsyncIterable<string>;
@@ -323,7 +325,7 @@ export function createFollower(deps: FollowerDeps): Follower {
 interface ExtensionContext {
   cwd?: string;
   agent?: { kind?: string };
-  sessionManager?: { getSessionId?(): string };
+  sessionManager?: { getSessionId?(): string; getSessionFile?(): string | undefined };
   setTimeout?(fn: () => void, ms: number): unknown;
   clearTimer?(handle: unknown): void;
 }
@@ -358,6 +360,46 @@ export function exportTranscriptSession(env: Record<string, string | undefined>,
   } else {
     delete env.KATA_TRANSCRIPT_AGENT;
     delete env.KATA_TRANSCRIPT_SESSION_ID;
+  }
+}
+
+/** The suffix of the file beside an agent's prompt file that holds its session file's path; the Pane reads it (data.AgentSessionSuffix). */
+export const SESSION_PATH_SUFFIX = ".session";
+
+/** The prompt file omp was started with: the last `@file` argument whose name is tern-kata's (`prompt-*.md`), or undefined. */
+export function promptFileFromArgv(argv: readonly string[]): string | undefined {
+  for (let i = argv.length - 1; i >= 0; i--) {
+    const arg = argv[i];
+    if (arg.startsWith("@") && /(^|[\\/])prompt-[^\\/]*\.md$/.test(arg)) return arg.slice(1);
+  }
+  return undefined;
+}
+
+/**
+ * Writes the main session's file path beside the agent's prompt file, so the Pane can read the session without
+ * knowing omp's session folder. The write is atomic (a temporary file renamed over the old one); a session with no
+ * file yet, or a write that fails, leaves the previous file alone.
+ */
+export function writeSessionPath(promptFile: string | undefined, ctx: ExtensionContext): void {
+  if (!promptFile) return;
+  let session: string | undefined;
+  try {
+    session = ctx.sessionManager?.getSessionFile?.();
+  } catch {
+    return;
+  }
+  if (!session) return;
+  const target = promptFile + SESSION_PATH_SUFFIX;
+  const temp = `${target}.${process.pid}.tmp`;
+  try {
+    writeFileSync(temp, session + "\n");
+    renameSync(temp, target);
+  } catch {
+    try {
+      rmSync(temp, { force: true });
+    } catch {
+      // the Pane shows the agent without session facts
+    }
   }
 }
 
@@ -400,9 +442,14 @@ export const bunKataIo: KataIo = {
 };
 
 /** Builds the omp extension factory for an environment and kata runner. */
-export function createExtension(env: Record<string, string | undefined>, io: KataIo): (pi: ExtensionApi) => void {
+export function createExtension(
+  env: Record<string, string | undefined>,
+  io: KataIo,
+  argv: readonly string[] = process.argv,
+): (pi: ExtensionApi) => void {
   return (pi) => {
     const config = readConfig(env);
+    const promptFile = promptFileFromArgv(argv);
     let ctx: ExtensionContext = {};
     let follower: Follower | undefined;
 
@@ -440,6 +487,7 @@ export function createExtension(env: Record<string, string | undefined>, io: Kat
         // An in-process subagent shares process.env with its parent, whose commands must keep naming the parent.
         if (c.agent?.kind === "sub") return;
         exportTranscriptSession(env, c);
+        writeSessionPath(promptFile, c);
         if (name !== "session_start" || !config) return;
         ctx = c;
         follower ??= build(config);
