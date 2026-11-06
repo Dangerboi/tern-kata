@@ -338,9 +338,7 @@ func TestJobsPageNamesTheWorkersPauseAfterFailedRunsAndUResumesIt(t *testing.T) 
 	s := jobsPaneWithWorker(t, status, promptJob("A1", "Triage"), promptJob("A2", "Report"))
 	text := wireTextOf(t, s)
 	wantText(t, "Jobs Page", text, "paused: failed runs", "paused after 3 failed runs in a row", "u resumes it")
-	if strings.Count(text, "This machine's worker: paused after") != 1 {
-		t.Fatalf("the pause is named for a job the worker runs:\n%s", text)
-	}
+	wantText(t, "inspector of the paused job", inspectorText(t, s), "paused after 3 failed runs in a row")
 
 	out := step(t, s, key("u"))
 	if len(out.Cmds) != 1 || out.Cmds[0] != (model.ResumeJob{JobUID: "A1", JobName: "Triage"}) {
@@ -360,4 +358,7 @@ func TestJobsPageNamesTheWorkersPauseAfterFailedRunsAndUResumesIt(t *testing.T) 
 		t.Errorf("u on a job the worker runs asked the worker: %#v", none.Cmds)
 	}
 	wantText(t, "notice", none.State.Model.Notice, "not paused by this machine's worker")
+	if strings.Contains(inspectorText(t, healthy.State), "paused after") {
+		t.Fatalf("the inspector of a job the worker runs names a pause:\n%s", inspectorText(t, healthy.State))
+	}
 }
