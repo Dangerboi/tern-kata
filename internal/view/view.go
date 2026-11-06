@@ -431,6 +431,9 @@ type footerHint struct{ chord, key, description string }
 // footerHints are the current mode's hints in reading order, and position is the selected row's place in the list.
 func footerHints(m model.Model) (hints []footerHint, position string) {
 	for binding := range model.BindingsForMode(m.CurrentMode(), true) {
+		if !binding.Offered(m) {
+			continue
+		}
 		if binding.Action == model.FocusDetail && !m.CanFocusDetail() {
 			continue
 		}

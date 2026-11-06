@@ -24,6 +24,9 @@ type actionEntry struct {
 	// sheet are the help sheet lines the entry's keys appear on; none means the sheet does not list it.
 	sheet  []sheetLine
 	handle func(Model) (Model, []Cmd)
+	// when, if set, says whether the entry is on offer for a model: an entry that is not on offer is left out of the footer and the
+	// help sheet and its handler does nothing.
+	when func(Model) bool
 }
 
 func keys(chordAndLabel ...string) []Key {

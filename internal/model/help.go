@@ -64,6 +64,11 @@ func LookupBindingForMode(chord string, mode Mode) (Binding, bool) {
 	return Binding{}, false
 }
 
+// Offered says whether the binding is on offer for m: an entry with a condition is offered only while it holds.
+func (b Binding) Offered(m Model) bool {
+	return b.entry == nil || b.entry.when == nil || b.entry.when(m)
+}
+
 func BindingsForMode(mode Mode, footerOnly bool) iter.Seq[Binding] {
 	return func(yield func(Binding) bool) {
 		for _, binding := range Keymap {
@@ -144,6 +149,7 @@ type helpListing struct {
 	sheetLine
 	keys  []string
 	modes []Mode
+	when  func(Model) bool
 }
 
 func helpListings() []helpListing {
@@ -162,7 +168,7 @@ func helpListings() []helpListing {
 			}
 		}
 		for _, line := range entry.sheet {
-			listings = append(listings, helpListing{line, keys, entry.modes})
+			listings = append(listings, helpListing{line, keys, entry.modes, entry.when})
 		}
 	}
 	return listings
@@ -174,9 +180,12 @@ func HelpSheet() []SheetGroup { return sheetOf(helpListings()) }
 
 // HelpSheetOn is the help sheet opened over a Page: the lines whose entry is global or bound in one of the Page's modes. The
 // groups keep their places (and so their positions in the full sheet), those left empty come back empty.
-func HelpSheetOn(page Page) []SheetGroup {
+func HelpSheetOn(page Page, m Model) []SheetGroup {
 	modes := pageHelpModes[page]
 	listings := slices.DeleteFunc(helpListings(), func(l helpListing) bool {
+		if l.when != nil && !l.when(m) {
+			return true
+		}
 		return len(l.modes) > 0 && !slices.ContainsFunc(l.modes, func(mode Mode) bool { return slices.Contains(modes, mode) })
 	})
 	return sheetOf(listings)

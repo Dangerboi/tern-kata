@@ -36,8 +36,9 @@ var cardHelp = map[string][]struct {
 
 // helpGroups is the sheet opened over a Page: the main-surface groups from the action entries, each followed by the card lines of
 // the cards that open from the Page.
-func helpGroups(page model.Page) []model.SheetGroup {
-	groups := model.HelpSheetOn(page)
+func helpGroups(m model.Model) []model.SheetGroup {
+	page := m.Page
+	groups := model.HelpSheetOn(page, m)
 	for i := range groups {
 		for _, card := range cardHelp[groups[i].Title] {
 			if !slices.Contains(card.from, page) {
@@ -74,7 +75,7 @@ const helpColumnCols = 64
 // of every card in a column are padded to that column's longest, so the actions line up down the column.
 func help(m model.Model) tern.Nodes {
 	var groups []model.SheetGroup
-	for _, group := range helpGroups(m.Page) {
+	for _, group := range helpGroups(m) {
 		if len(group.Lines) > 0 {
 			groups = append(groups, group)
 		}

@@ -22,6 +22,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - It has the same refusals as `m` and asks the same question before replacing an unread message.
   - The replies are "continue", "wrap up: commit what you have and comment your status" and "commit and close if the acceptance criteria hold".
 
+#### Issues and Pages
+
+- `u` on the Attention Page restores the Issue the Pane just deleted, as `u` does on the other Pages, and the Page reads its requests again; it is offered there only while a delete is the newest change in the undo history.
+
 #### Jobs and worker
 
 - The worker pauses an adapter job after repeated failed runs.

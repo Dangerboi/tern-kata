@@ -751,3 +751,63 @@ func TestAttentionPageDropsTheAnswerOfAReadOutWhenTheDaemonChanged(t *testing.T)
 		t.Errorf("a dropped answer asked for a read: %#v", late.Cmds)
 	}
 }
+
+// attentionAfter is the Attention Page, read and answered, after the Pane took in msg.
+func attentionAfter(t *testing.T, msg model.Msg) driver.State {
+	t.Helper()
+	s := feed(t, attentionPane(t), msg).State
+	return answerAttention(t, step(t, s, key("6")), attentionRequests(t), 0)
+}
+
+func TestUOnTheAttentionPageRestoresTheDeletedIssueAndReadsTheRequestsAgain(t *testing.T) {
+	s := attentionAfter(t, deleted("a"))
+	if !strings.Contains(footerText(t, s), "undo") {
+		t.Errorf("the footer lacks u after a delete: %q", footerText(t, s))
+	}
+	out := pressU(t, s)
+	cmd := undoCmd(t, out)
+	if cmd.Entry.Kind != model.UndoDelete || cmd.Entry.UID != "a" || len(out.Cmds) != 1 {
+		t.Fatalf("u sent %#v, want one restore of a", out.Cmds)
+	}
+	back := step(t, out.State, model.ChangeUndone{EntryID: cmd.Entry.ID, Result: model.UndoChanged, Ref: "a"})
+	if got := back.State.Model.Notice; got != "undid delete on #a" {
+		t.Errorf("notice %q", got)
+	}
+	if _, asked := askedAttention(back.Cmds); !asked {
+		t.Errorf("the Attention Page did not read its requests again: %#v", back.Cmds)
+	}
+	if got := pressU(t, back.State); len(got.Cmds) != 0 || got.State.Model.Notice != back.State.Model.Notice {
+		t.Errorf("a second u sent %#v with notice %q", got.Cmds, got.State.Model.Notice)
+	}
+}
+
+func TestUOnTheAttentionPageAfterAnAlreadyRestoredDeleteSaysSo(t *testing.T) {
+	out := pressU(t, attentionAfter(t, deleted("a")))
+	cmd := undoCmd(t, out)
+	back := step(t, out.State, model.ChangeUndone{EntryID: cmd.Entry.ID, Result: model.UndoAlready, Ref: "a"})
+	if got := back.State.Model.Notice; got != "#a already restored; no change made" {
+		t.Fatalf("notice %q", got)
+	}
+}
+
+func TestUOnTheAttentionPageIsNotOfferedAndDoesNothingUnlessTheNewestChangeIsADelete(t *testing.T) {
+	for name, s := range map[string]driver.State{
+		"empty history": attentionPageWith(t, attentionRequests(t), 0),
+		"a close":       attentionAfter(t, done(1)),
+	} {
+		if strings.Contains(footerText(t, s), "undo") {
+			t.Errorf("%s: the footer offers u: %q", name, footerText(t, s))
+		}
+		for _, group := range model.HelpSheetOn(model.PageAttention, s.Model) {
+			for _, line := range group.Lines {
+				if group.Title == "Attention" && strings.Contains(line.Text, "undo") {
+					t.Errorf("%s: the help sheet offers %q", name, line.Text)
+				}
+			}
+		}
+		out := pressU(t, s)
+		if len(out.Cmds) != 0 || out.State.Model.Notice != s.Model.Notice {
+			t.Errorf("%s: u sent %#v with notice %q", name, out.Cmds, out.State.Model.Notice)
+		}
+	}
+}

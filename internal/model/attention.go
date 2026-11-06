@@ -406,5 +406,6 @@ var attentionRows = []actionEntry{
 	{action: ClearAttentionRequest, modes: []Mode{ModeAttention}, keys: keys("c", "c"), help: "clear", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 4, "clear the request, if it still reads as shown"}}, handle: clearAttention},
 	{action: MessageAgent, modes: []Mode{ModeAttention}, keys: keys("m", "m"), help: "message agent", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 5, "message the agent that raised the request"}}, handle: openAgentMessage},
 	{action: QuickReplyAgent, modes: []Mode{ModeAttention}, keys: keys("r", "r"), help: "quick reply", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 6, "send the agent a canned reply: continue, wrap up, or commit and close"}}, handle: openAgentQuickReply},
+	{action: UndoAction, modes: []Mode{ModeAttention}, keys: keys("u", "u"), help: "undo", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 8, "undo the delete the Pane just made"}}, handle: undoAttentionDelete, when: newestUndoIsDelete},
 	{action: ReloadAttention, modes: []Mode{ModeAttention}, keys: keys("ctrl+r", "ctrl+r", "meta+r", ""), help: "reload", sheet: []sheetLine{{sheetAttention, 7, "read the requests again"}}, handle: reloadAttention},
 }

@@ -96,7 +96,7 @@ func TestHelpSheetListsSlashSearch(t *testing.T) {
 		{model.PageJobs, "search the jobs (esc ends the search)"},
 	} {
 		found := false
-		for _, group := range model.HelpSheetOn(tt.page) {
+		for _, group := range model.HelpSheetOn(tt.page, model.Model{}) {
 			for _, line := range group.Lines {
 				if line.Text == tt.text && slices.Contains(line.Keys, "/") {
 					found = true
