@@ -143,12 +143,13 @@ func TestMOnTheAgentCardMessagesTheSelectedRunningAgentWhereverItIs(t *testing.T
 		{IssueUID: "t1", IssueRef: "work#t1", ProjectID: 7, Block: "33", Teammate: "omp", Address: "dana/omp-33", StartedAt: at.Add(2 * time.Hour), Placement: model.AgentBackground, Background: true},
 		{IssueUID: "t1", IssueRef: "work#t1", ProjectID: 7, Block: "34", Teammate: "omp", Address: "dana/omp-34", StartedAt: at.Add(3 * time.Hour)},
 		{IssueUID: "t1", IssueRef: "work#t1", ProjectID: 7, Block: "35", Teammate: "claude", NoAddress: model.AgentNotOmp, StartedAt: at.Add(4 * time.Hour)},
+		{IssueUID: "t1", IssueRef: "work#t1", ProjectID: 7, Block: "36", Teammate: "omp", Address: "sam/omp-36", StartedAt: at.Add(5 * time.Hour)},
 	}
 	pane := withAgentRows(agentPanes(t, agentIssue("t1"))["list"])
 	pane.Model.AgentMapping, pane.Model.Actor = entries, "dana"
 	pane.Model.Agents = model.AgentStatesRelay{Received: true, States: []model.AgentState{
 		{Block: "31", State: model.AgentWorking}, {Block: "32", State: model.AgentIdle}, {Block: "33", State: model.AgentWaitingInput},
-		{Block: "34", State: model.AgentExited}, {Block: "35", State: model.AgentWorking}}}
+		{Block: "34", State: model.AgentExited}, {Block: "35", State: model.AgentWorking}, {Block: "36", State: model.AgentWorking}}}
 	open := step(t, pane, key("w")).State
 
 	for i, address := range []string{"dana/omp-31", "dana/omp-32", "dana/omp-33"} {
@@ -168,7 +169,7 @@ func TestMOnTheAgentCardMessagesTheSelectedRunningAgentWhereverItIs(t *testing.T
 		}
 	}
 
-	for row, reason := range map[int]string{3: model.AgentExitedRefusal, 4: model.AgentNotOmpRefusal} {
+	for row, reason := range map[int]string{3: model.AgentExitedRefusal, 4: model.AgentNotOmpRefusal, 5: model.AgentOtherActorRefusal} {
 		s := open
 		for range row {
 			s = step(t, s, key("down")).State

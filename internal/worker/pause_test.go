@@ -219,3 +219,44 @@ func TestAHeldRunDoesNotCountAsFailed(t *testing.T) {
 		t.Fatalf("a held run paused the job: %+v", p)
 	}
 }
+
+func TestAReportReplayedAfterACrashCountsItsFailedRunOnce(t *testing.T) {
+	h := newHarness(t, "--stub-exit", "3")
+	h.limitsOf("pause_after_failures = 2")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "flaky", Prompt: "Do it.", Checkout: "repo"})
+	uid, _ := h.killedAt("intent-comment", job)
+
+	restarted := h.start(worker.Hooks{})
+	h.admitting(restarted)
+	h.settledInKata(restarted, uid)
+	if p := restarted.w.Status().Paused; len(p) != 0 {
+		t.Fatalf("one failed run replayed twice paused the job: %+v", p)
+	}
+	raw, err := os.ReadFile(h.dirs.ProjectDir(h.proj.UID) + "/failures/" + job.UID + ".json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved struct {
+		Failed int `json:"failed"`
+	}
+	if err := json.Unmarshal(raw, &saved); err != nil || saved.Failed != 1 {
+		t.Fatalf("failure count file %s (err %v), want a count of 1", raw, err)
+	}
+}
+
+func TestAnUnreadableFailureCountDoesNotRefuseTheJobsRuns(t *testing.T) {
+	h := newHarness(t, "--stub-exit", "3")
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "flaky", Prompt: "Do it.", Checkout: "repo"})
+	dir := h.dirs.ProjectDir(h.proj.UID) + "/failures"
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dir+"/"+job.UID+".json", []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	if resp := h.ask(worker.Request{Op: "run", Job: job.UID}); resp.Error != "" {
+		t.Fatalf("a run was refused over an unreadable failure count: %s", resp.Error)
+	}
+}

@@ -214,11 +214,14 @@ func settleHeldRun(ctx context.Context, plan LaunchPlan, env workerEnv, out io.W
 		}
 	}
 	resp, err := worker.Ask(ctx, env.Dirs, worker.Request{Op: verb, Run: uid, Actor: plan.Actor})
-	if err != nil {
-		return subcommandError{err}
+	if err == nil && !resp.OK {
+		err = errors.New(resp.Error)
 	}
-	if !resp.OK {
-		return subcommandError{errors.New(resp.Error)}
+	if err != nil {
+		if verb == "resume" {
+			err = fmt.Errorf("%w; no job this worker paused is %q", err, uid)
+		}
+		return subcommandError{err}
 	}
 	t := resp.Transition
 	if verb == "resume" {

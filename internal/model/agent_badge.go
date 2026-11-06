@@ -51,20 +51,19 @@ func (m Model) IssueAgents(issueUID string) []IssueAgent {
 			continue
 		}
 		agent := IssueAgent{AgentEntry: entry}
-		if issue == nil {
-			issue = m.issueByUID(issueUID)
-		}
-		if issue != nil {
-			agent.Unread = unreadMessage(issue.Metadata, entry.Address)
-		}
 		for _, s := range m.Agents.States {
 			if s.Block == entry.Block {
 				agent.State = s.State
 				break
 			}
 		}
-		if agent.State == AgentExited {
-			agent.Unread = ""
+		if agent.State != AgentExited {
+			if issue == nil {
+				issue = m.issueByUID(issueUID)
+			}
+			if issue != nil {
+				agent.Unread = unreadMessage(issue.Metadata, entry.Address)
+			}
 		}
 		agents = append(agents, agent)
 	}
@@ -168,23 +167,22 @@ func (m Model) AgentBadges() AgentBadgeIndex {
 			states[s.Block] = s.State
 		}
 	}
-	var metadata map[string]map[string]any
 	agents := make(map[string][]IssueAgent)
 	for _, entry := range m.AgentMapping {
-		agent := IssueAgent{AgentEntry: entry, State: states[entry.Block]}
-		if entry.Address != "" && agent.State != AgentExited {
-			if metadata == nil {
-				metadata = make(map[string]map[string]any, len(m.Issues)+1)
-				for _, issue := range m.Issues {
-					metadata[issue.UID] = issue.Metadata
-				}
-				if shown := m.shownIssue(); shown != nil {
-					metadata[shown.UID] = shown.Metadata
-				}
+		agents[entry.IssueUID] = append(agents[entry.IssueUID], IssueAgent{AgentEntry: entry, State: states[entry.Block]})
+	}
+	unread := func(issue *Issue) {
+		for i := range agents[issue.UID] {
+			if a := &agents[issue.UID][i]; a.State != AgentExited {
+				a.Unread = unreadMessage(issue.Metadata, a.Address)
 			}
-			agent.Unread = unreadMessage(metadata[entry.IssueUID], entry.Address)
 		}
-		agents[entry.IssueUID] = append(agents[entry.IssueUID], agent)
+	}
+	for i := range m.Issues {
+		unread(&m.Issues[i])
+	}
+	if shown := m.shownIssue(); shown != nil {
+		unread(shown)
 	}
 	return AgentBadgeIndex{agents: agents}
 }

@@ -31,6 +31,7 @@ const (
 	AgentExitedRefusal         = "The agent has exited; no message would reach it."
 	AgentNotOmpRefusal         = "The agent is not omp; messages reach only omp agents, through tern-kata's extension."
 	AgentWithoutAddressRefusal = "The agent was started before messages could reach it; start a new one."
+	AgentOtherActorRefusal     = "The agent takes messages only from the actor that started it."
 )
 
 // AgentMessageState is the Message card: the agent it writes to and the text typed. Held is the value kata holds at the agent's
@@ -133,6 +134,8 @@ func (m Model) agentMessageRefusal(e AgentEntry) string {
 		return AgentNotOmpRefusal
 	case e.Address == "":
 		return AgentWithoutAddressRefusal
+	case !strings.HasPrefix(e.Address, m.Actor+"/"):
+		return AgentOtherActorRefusal
 	}
 	return ""
 }

@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -128,7 +129,8 @@ func (w *Worker) noteOutcome(j *Journal) {
 func (w *Worker) pauseRefusal(ps *projectState, job cronjob.Job) error {
 	s, err := w.loadStreak(ps.project.UID, job.UID)
 	if err != nil {
-		return &transientError{err}
+		w.opt.Log("%v; counting starts again", err)
+		return nil
 	}
 	if !s.Paused {
 		return nil
@@ -195,7 +197,7 @@ func (w *Worker) PausedJobs() []PausedJob {
 			if _, live := names[jobUID]; !live && len(names) > 0 {
 				continue // the job is gone or archived: nothing to resume
 			}
-			out = append(out, PausedJob{Project: name, JobUID: jobUID, Name: cmpOr(names[jobUID], s.Name), Failed: s.Failed, Since: s.Since})
+			out = append(out, PausedJob{Project: name, JobUID: jobUID, Name: cmp.Or(names[jobUID], s.Name), Failed: s.Failed, Since: s.Since})
 		}
 	}
 	slices.SortFunc(out, func(a, b PausedJob) int {
@@ -205,11 +207,4 @@ func (w *Worker) PausedJobs() []PausedJob {
 		return strings.Compare(a.Name+a.JobUID, b.Name+b.JobUID)
 	})
 	return out
-}
-
-func cmpOr(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }
