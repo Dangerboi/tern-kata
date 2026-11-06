@@ -110,7 +110,9 @@ func TestQuickReplyIsRefusedWhereMessageIs(t *testing.T) {
 			}
 		})
 		t.Run(name+" on the Agent card", func(t *testing.T) {
-			s := cardPane(t, tc.agent)
+			onCard := tc.agent
+			onCard.IssueUID, onCard.IssueRef = "t1", "work#t1"
+			s := cardPane(t, onCard)
 			s.Model.Agents = model.AgentStatesRelay{Received: true, States: tc.states}
 			quick, typed := step(t, s, key("r")), step(t, s, key("m"))
 			if m := quick.State.Model; m.TopCard() != model.CardAgent || m.Notice != tc.want || m.Notice != typed.State.Model.Notice || len(quick.Cmds) != 0 {
