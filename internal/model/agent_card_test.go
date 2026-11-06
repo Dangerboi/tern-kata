@@ -247,15 +247,12 @@ func openCard(status string, states ...model.AgentState) model.Model {
 }
 
 func TestIInterruptsTheSelectedAgentAndClosesTheCard(t *testing.T) {
-	for _, state := range []model.AgentStateWord{model.AgentWorking, model.AgentIdle, model.AgentWaitingInput} {
+	for _, state := range []model.AgentStateWord{model.AgentWorking, model.AgentIdle, model.AgentWaitingInput, ""} {
 		m := openCard("open", st("11", state, ""), st("12", state, ""))
 		m.AgentCard.Cursor = 1
-		for i := range m.AgentMapping {
-			m.AgentMapping[i].PromptFile = "/tmp/agent-prompts/prompt-" + m.AgentMapping[i].Block + ".md"
-		}
 		after, cmds := press(m, "i")
-		if want := []model.Cmd{model.InterruptAgent{Block: "12", PromptFile: "/tmp/agent-prompts/prompt-12.md"}}; !reflect.DeepEqual(cmds, want) || after.AgentCard.Open {
-			t.Errorf("%s: cmds %#v, card open %v; want %v and the card closed", state, cmds, after.AgentCard.Open, want)
+		if want := []model.Cmd{model.InterruptAgent{Block: "12"}}; !reflect.DeepEqual(cmds, want) || after.AgentCard.Open {
+			t.Errorf("%q: cmds %#v, card open %v; want %v and the card closed", state, cmds, after.AgentCard.Open, want)
 		}
 	}
 }
@@ -269,7 +266,6 @@ func TestInterruptIsRefusedWithAReasonWhereItCannotWork(t *testing.T) {
 	}{
 		"exited":       {openCard("open", st("11", model.AgentExited, "")), model.AgentCardExitedReason},
 		"not omp":      {notOmp, model.AgentCardNotOmpReason},
-		"not listed":   {openCard("open"), model.AgentCardNotListedReason},
 		"no agent yet": {func() model.Model { m := openCard("open"); m.AgentCard.IssueUID = "none"; return m }(), "No agent on this Issue yet."},
 	} {
 		if got := tt.m.AgentCardUnavailable(model.AgentCardInterrupt); got != tt.reason {

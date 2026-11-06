@@ -98,6 +98,12 @@ func AgentShellTabArgs(sessionExists bool) []string {
 // CloseBlockArgs closes a block.
 func CloseBlockArgs(block string) []string { return []string{"close", block, "--json"} }
 
+// InterruptBlockArgs is the Agent card's Interrupt: Escape typed into the agent's block, which ends a working omp turn and keeps
+// the block and its conversation. Ctrl-C, which Tern's own agent interrupt sends, leaves an omp turn running.
+func InterruptBlockArgs(block string) []string {
+	return []string{"send", block, "keys", "escape", "--json"}
+}
+
 // ternSession is a session of `tern ls --json`: its name and the ids of its blocks in every tab.
 type ternSession struct {
 	name   string
@@ -696,43 +702,15 @@ func (g *Gateway) stopAgent(ctx context.Context, cmd model.StopAgent) model.Agen
 	return model.AgentStopped{Block: cmd.Block, Agents: agents}
 }
 
-// InterruptTitlePrefix starts the Pane title with which the Pane asks the window half to interrupt an agent: the prefix, the
-// agent's block id as decimal text and, when the agent has one, the base name of its prompt file after a space. A window on another
-// machine numbers panes differently, so the window half finds the agent by the prompt file in its command line first and by the
-// block second. The window half (panecommands.luau) reads it and calls `cx.agents:interrupt`, which only it has.
-const InterruptTitlePrefix = "tern-kata interrupt "
-
-// PaneTitle is the title that identifies a kata Pane to the window half (window.luau). The Pane writes it at startup and again
-// after an interrupt request, so both use this one value.
+// PaneTitle is the title that identifies a kata Pane to the window half (window.luau); the Pane writes it at startup.
 const PaneTitle = "tern-kata"
 
-// defaultInterruptGap is how long the request title stays before the Pane's own title comes back, so each is a title change of its own.
-const defaultInterruptGap = 150 * time.Millisecond
-
-// writePaneTitle sets this Pane's title, which the window half sees as a title event.
-func writePaneTitle(title string) error {
-	_, err := fmt.Fprint(os.Stdout, "\x1b]0;"+title+"\x07")
-	return err
-}
-
-// interruptAgent asks the window half to interrupt the agent's current turn. The only way from the Pane to the window half is the
-// Pane's title, so the request is a title that names the block and the prompt file, followed by the Pane's own title again.
+// interruptAgent types Escape into the agent's block, through the same tern the Pane closes blocks with.
 func (g *Gateway) interruptAgent(ctx context.Context, cmd model.InterruptAgent) model.AgentInterrupted {
-	if cmd.Block == "" || strings.Trim(cmd.Block, "0123456789") != "" {
-		return model.AgentInterrupted{Block: cmd.Block, Err: fmt.Errorf("block %q is not a pane id the window half can interrupt", cmd.Block)}
+	if out, err := g.runTern(ctx, InterruptBlockArgs(cmd.Block)); err != nil {
+		return model.AgentInterrupted{Block: cmd.Block, Err: ternFailure(err, out)}
 	}
-	title := InterruptTitlePrefix + cmd.Block
-	if cmd.PromptFile != "" {
-		title += " " + filepath.Base(cmd.PromptFile)
-	}
-	if err := g.paneTitle(title); err != nil {
-		return model.AgentInterrupted{Block: cmd.Block, Err: err}
-	}
-	select {
-	case <-time.After(g.interruptGap):
-	case <-ctx.Done():
-	}
-	return model.AgentInterrupted{Block: cmd.Block, Err: g.paneTitle(PaneTitle)}
+	return model.AgentInterrupted{Block: cmd.Block}
 }
 
 // AgentPromptName is the pattern of a prompt file's name for os.CreateTemp. A tab's or background agent carries the block id of the kata Pane

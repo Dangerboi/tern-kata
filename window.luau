@@ -511,36 +511,7 @@ local function relayWhenLive(pane: number, tries: number)
     end)
 end
 
--- A kata Pane asks for an agent's current turn to be interrupted by naming the agent in its title (panecommands.luau): the
--- prompt file its command line carries, which every window agrees on, else its block id, which only a window on the Pane's own
--- machine numbers the same. The agent must be one this window lists, whatever session it is in; its block and conversation stay,
--- and the state relay that follows shows it idle.
-local function interruptAgent(cx: WindowCx, block: string, prompt: string?)
-    local target = nil
-    if prompt then
-        for _, agent in cx.agents:list() do
-            if agent.command and agent.command:find(prompt, 1, true) then target = agent; break end
-        end
-    end
-    if not target then
-        for _, agent in cx.agents:list() do
-            if string.format("%.0f", agent.pane) == block then target = agent; break end
-        end
-    end
-    if not target then
-        cx:toast("error", "Could not interrupt the agent", "Tern lists no agent in block " .. block)
-        return
-    end
-    local ok, err = pcall(function() cx.agents:interrupt(target.pane) end)
-    if not ok then cx:toast("error", "Could not interrupt the agent", tostring(err)) end
-end
-
 tern.on("title", function(ev, cx)
-    local requested, prompt = panecommands.interruptBlock(ev.title)
-    if requested then
-        if marked[ev.pane] then interruptAgent(cx, requested, prompt) end
-        return
-    end
     if ev.title == "tern-kata" or marked[ev.pane] then
         markIf(cx, ev.pane)
         if not marked[ev.pane] then return end

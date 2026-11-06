@@ -1927,35 +1927,19 @@ func TestStoppingWhenAgentsJSONCannotBeReadRunsNothing(t *testing.T) {
 	}
 }
 
-func TestInterruptingSetsTheRequestTitleThenTheOwnTitleBack(t *testing.T) {
+// Escape, not ctrl+c, ends a working omp turn: omp keeps a turn running on ctrl+c.
+func TestInterruptingTypesEscapeIntoTheAgentsBlock(t *testing.T) {
 	g, _ := agentGateway(t)
-	var titles []string
-	g.paneTitle = func(title string) error { titles = append(titles, title); return nil }
-	g.interruptGap = 0
+	var ran []string
+	g.runTern = func(_ context.Context, args []string) ([]byte, error) { ran = args; return nil, nil }
 	if got := as[model.AgentInterrupted](t, run(t, g, model.InterruptAgent{Block: "144115188075855871"})); got.Err != nil ||
-		!reflect.DeepEqual(titles, []string{"tern-kata interrupt 144115188075855871", "tern-kata"}) {
-		t.Fatalf("%+v, titles %q", got, titles)
+		!slices.Equal(ran, []string{"send", "144115188075855871", "keys", "escape", "--json"}) {
+		t.Fatalf("ran %q: %+v", ran, got)
 	}
-}
-
-func TestInterruptingNamesThePromptFileByItsBaseName(t *testing.T) {
-	g, _ := agentGateway(t)
-	var titles []string
-	g.paneTitle = func(title string) error { titles = append(titles, title); return nil }
-	g.interruptGap = 0
-	cmd := model.InterruptAgent{Block: "5", PromptFile: "/home/me/.local/state/agent-prompts/prompt-3-123.md"}
-	if got := as[model.AgentInterrupted](t, run(t, g, cmd)); got.Err != nil ||
-		!reflect.DeepEqual(titles, []string{"tern-kata interrupt 5 prompt-3-123.md", "tern-kata"}) {
-		t.Fatalf("%+v, titles %q", got, titles)
+	g.runTern = func(context.Context, []string) ([]byte, error) {
+		return []byte("tern: no such block\n"), errors.New("exit status 1")
 	}
-}
-
-func TestInterruptingNamesNoBlockThatIsNotAPaneID(t *testing.T) {
-	g, _ := agentGateway(t)
-	g.paneTitle = func(title string) error { t.Errorf("set the title %q", title); return nil }
-	for _, block := range []string{"", "3@host", "1 2"} {
-		if got := as[model.AgentInterrupted](t, run(t, g, model.InterruptAgent{Block: block})); got.Err == nil {
-			t.Errorf("block %q: no error", block)
-		}
+	if got := as[model.AgentInterrupted](t, run(t, g, model.InterruptAgent{Block: "1"})); got.Err == nil || got.Err.Error() != "exit status 1: tern: no such block" {
+		t.Fatalf("a failed send: %+v", got)
 	}
 }

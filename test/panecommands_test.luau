@@ -1,6 +1,6 @@
 --!strict
 
--- Tests of the host half's rule for dropping the PowerShell profile and of the interrupt-request title protocol, on plain data, outside Tern: `luau test/panecommands_test.luau`.
+-- Tests of the host half's rule for dropping the PowerShell profile, on plain data, outside Tern: `luau test/panecommands_test.luau`.
 
 local panecommands = require("../panecommands")
 
@@ -94,35 +94,6 @@ test("a malformed spec returns nil and does not raise", function()
     assert(panecommands.withoutProfile({program = 5, args = {}}) == nil)
     assert(panecommands.withoutProfile({program = "pwsh", args = "-c"}) == nil)
     assert(panecommands.withoutProfile({program = "pwsh", args = {"-c", 3}}) == nil)
-end)
-
-test("a title naming a block is an interrupt request for it", function()
-    assert(panecommands.interruptBlock("tern-kata interrupt 144115188075855871") == "144115188075855871")
-    assert(panecommands.interruptBlock(panecommands.INTERRUPT_PREFIX .. "12") == "12")
-end)
-
-test("a title naming a block and a prompt file is an interrupt request for both", function()
-    local block, prompt = panecommands.interruptBlock("tern-kata interrupt 5 prompt-3-123.md")
-    assert(block == "5" and prompt == "prompt-3-123.md")
-    local plain, none = panecommands.interruptBlock("tern-kata interrupt 5")
-    assert(plain == "5" and none == nil)
-end)
-
-test("a prompt file name with other characters is no interrupt request", function()
-    assert(panecommands.interruptBlock("tern-kata interrupt 5 a b") == nil)
-    assert(panecommands.interruptBlock("tern-kata interrupt 5 ../x.md") == nil)
-    assert(panecommands.interruptBlock("tern-kata interrupt 5 ") == nil)
-end)
-
-test("every other title is no interrupt request", function()
-    assert(panecommands.interruptBlock("tern-kata") == nil)
-    assert(panecommands.interruptBlock("tern-kata interrupt ") == nil)
-    assert(panecommands.interruptBlock("tern-kata interrupt 12 13") == nil)
-    assert(panecommands.interruptBlock("tern-kata interrupt x1") == nil)
-    assert(panecommands.interruptBlock("tern-kata interrupt 1\n2") == nil)
-    assert(panecommands.interruptBlock("zsh interrupt 12") == nil)
-    assert(panecommands.interruptBlock(nil) == nil)
-    assert(panecommands.interruptBlock(12) == nil)
 end)
 
 if failures > 0 then

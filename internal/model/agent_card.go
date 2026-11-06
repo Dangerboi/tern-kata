@@ -30,10 +30,9 @@ const (
 
 // Why the Agent card's Interrupt and Stop are off for the selected agent.
 const (
-	AgentCardExitedReason    = "That agent has exited."
-	AgentCardNotOmpReason    = "Interrupt reaches only omp agents; that agent is not omp."
-	AgentCardNotListedReason = "Tern does not list that agent, so it cannot be interrupted."
-	agentCardInterruptSent   = "Interrupt sent."
+	AgentCardExitedReason  = "That agent has exited."
+	AgentCardNotOmpReason  = "Interrupt reaches only omp agents; that agent is not omp."
+	agentCardInterruptSent = "Interrupt sent."
 )
 
 // AgentCardState is the Agent card.
@@ -187,8 +186,8 @@ func sendToBackground(m Model, e AgentEntry) (Model, []Cmd) {
 	return placeAgent(m, e.Block), []Cmd{SendAgentBack{Block: e.Block, IssueRef: e.IssueRef}}
 }
 
-// interruptAgent is `i`: the window half interrupts the agent's current turn, and the card closes with the card's reason as a Notice
-// when it cannot.
+// interruptAgent is `i`: Escape ends the agent's current turn, and the card closes with the card's reason as a Notice when it
+// cannot.
 func interruptAgent(m Model, e AgentEntry) (Model, []Cmd) {
 	reason := m.AgentCardUnavailable(AgentCardInterrupt)
 	m.AgentCard = AgentCardState{}
@@ -197,7 +196,7 @@ func interruptAgent(m Model, e AgentEntry) (Model, []Cmd) {
 		return m, nil
 	}
 	m.Notice = agentCardInterruptSent
-	return m, []Cmd{InterruptAgent{Block: e.Block, PromptFile: e.PromptFile}}
+	return m, []Cmd{InterruptAgent{Block: e.Block}}
 }
 
 // AgentCardSelected is a click on an agent of the card's list; Block is its block id.
@@ -247,8 +246,6 @@ func (m Model) AgentCardUnavailable(action Action) string {
 		case action == AgentCardStop:
 		case e.NoAddress == AgentNotOmp:
 			return AgentCardNotOmpReason
-		case e.State == "":
-			return AgentCardNotListedReason
 		}
 	case AgentCardSplit, AgentCardTab, AgentCardNewBackground:
 		issue := m.issueByUID(m.AgentCard.IssueUID)
