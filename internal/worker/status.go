@@ -24,6 +24,8 @@ type Status struct {
 	Projects    []ProjectStatus
 	Runs        []RunStatus
 	Quarantined []string
+	// Paused lists the adapter jobs this worker stopped admitting after repeated failed runs, until they are resumed.
+	Paused []PausedJob
 	// JournalError names the runs whose journals could not be read this time; the others are listed in Runs.
 	JournalError string
 	// Stopping is "idle" while the worker drains toward an exit, "now" once it was told to end at once; InFlight is the runs a drain waits for.
@@ -102,6 +104,7 @@ func (w *Worker) Status() Status {
 		s.Projects = append(s.Projects, p)
 	}
 	w.mu.Unlock()
+	s.Paused = w.PausedJobs()
 	journals, quarantined, scanErr := w.store.Scan()
 	if scanErr != nil {
 		s.JournalError = scanErr.Error()
@@ -215,6 +218,9 @@ func (s Status) String() string {
 		for _, n := range p.Warnings {
 			fmt.Fprintf(&b, "  Job %q %s\n", n.Name, n.Text)
 		}
+	}
+	for _, p := range s.Paused {
+		fmt.Fprintf(&b, "Job %q of Project %s is %s\n", p.Name, p.Project, p.Reason())
 	}
 	if len(s.Runs) == 0 {
 		b.WriteString("No runs on this machine yet.\n")

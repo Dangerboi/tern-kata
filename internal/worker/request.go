@@ -288,6 +288,9 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 	if err := w.overlapRefusal(ps, job); err != nil {
 		return nil, false, err
 	}
+	if err := w.pauseRefusal(ps, job); err != nil {
+		return nil, false, err
+	}
 	if !w.reserve(ps) {
 		if w.isStopping() {
 			return nil, false, &transientError{errStopping}

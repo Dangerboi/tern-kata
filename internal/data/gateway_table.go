@@ -150,6 +150,7 @@ func init() {
 		return g.loadLocalRun(ctx, cmd)
 	}, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.RunJobNow) model.Msg { return g.runJobNow(ctx, cmd) }, nil, nil)
+	local(func(g *Gateway, ctx context.Context, cmd model.ResumeJob) model.Msg { return g.resumeJob(ctx, cmd) }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.ResumeLocalRun) model.Msg {
 		return g.moveRun(ctx, "resume", cmd.UID)
 	}, nil, nil)

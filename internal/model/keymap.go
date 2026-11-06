@@ -81,6 +81,7 @@ const (
 	OpenRunIssue            Action = "open-run-issue"
 	RunsOfJob               Action = "runs-of-job"
 	RunJobNowAction         Action = "run-job-now"
+	ResumeJobAction         Action = "resume-job"
 	OpenRunSessionAction    Action = "open-run-session"
 	ResumeRunAction         Action = "resume-run"
 	AbandonRunAction        Action = "abandon-run"

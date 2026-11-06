@@ -170,6 +170,7 @@ executor = ` + tomlString(s.Executor) + `
 # default_timeout = "2h"   # the default
 # max_timeout = "8h"       # the default
 # max_run_prompts = 12     # the default
+# pause_after_failures = 3 # the default; failed runs in a row that pause a job, 0 = never
 
 # A Project's jobs may use only the checkouts listed here.
 ` + projectBlock(s.Project, key) + `

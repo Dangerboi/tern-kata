@@ -157,6 +157,8 @@ type JobRow struct {
 	Next     string
 	// Unsupported is why this machine's worker sets the job aside, empty when it runs it or serves another Project.
 	Unsupported string
+	// WorkerPause is why this machine's worker admits none of the job's runs, empty when it does.
+	WorkerPause string
 	// Last is the job's latest run or child in words, empty when it has none on record.
 	Last string
 	// Warning is the high-rate warning of a job that makes more than 24 Issues a day, empty for any other.
@@ -180,9 +182,9 @@ func (m Model) JobRows(now time.Time) []JobRow {
 	jobs := m.visibleJobs()
 	rows := make([]JobRow, len(jobs))
 	for i, job := range jobs {
-		pause := job.Pause(m.Jobs.ProjectArchived)
-		row := JobRow{Job: job, Pause: pause, State: pause.StateText(), Kind: job.Kind(), Schedule: triggerWords(job.Definition.Trigger), Profile: job.Definition.Profile, Unsupported: m.workerUnsupported(job.UID)}
-		if next, ok := job.NextRun(now, m.Jobs.ProjectArchived); ok {
+		pause := m.JobPause(job)
+		row := JobRow{Job: job, Pause: pause, State: pause.StateText(), Kind: job.Kind(), Schedule: triggerWords(job.Definition.Trigger), Profile: job.Definition.Profile, Unsupported: m.workerUnsupported(job.UID), WorkerPause: m.workerPauseWords(job.UID)}
+		if next, ok := job.NextRun(now, m.Jobs.ProjectArchived); ok && pause != PauseFailedRuns {
 			row.Next = m.Calendar.Read(next, now)
 		}
 		row.Last = m.lastActivity(job, now)
@@ -293,9 +295,10 @@ func (m Model) JobFacts(now time.Time) []JobFact {
 			facts = append(facts, JobFact{Label: label, Value: value})
 		}
 	}
-	pause := job.Pause(m.Jobs.ProjectArchived)
+	pause := m.JobPause(*job)
 	add("Name", job.Name)
 	add("State", pause.StateText())
+	add("Worker", m.workerPauseWords(job.UID))
 	add("Set aside", m.workerUnsupported(job.UID))
 	add("Kind", job.Kind())
 	add("Schedule", triggerWords(t))

@@ -15,6 +15,12 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The Agent card interrupts or stops the selected agent: `i` ends its current turn and keeps its block, and `x` asks before closing its block and removing its entry and prompt file, giving the Issue the hand-off an exiting agent gets.
 - `r` on the Attention Page and on the Agent card opens a picker of three quick replies to the agent, "continue", "wrap up: commit what you have and comment your status" and "commit and close if the acceptance criteria hold", sent with `1`, `2` or `3` as a typed message would be, with the same refusals and the same question before replacing an unread message.
 
+#### Jobs and worker
+
+- The worker pauses an adapter job after repeated failed runs.
+  - After `pause_after_failures` runs of one job in a row recorded `failed` (default 3, set under `[limits]` in `worker.toml`, 0 turns pausing off) the worker admits no more of its runs until you resume it; timeouts count, held runs and cancelled runs don't, and a succeeded run starts the count again.
+  - The pause lives in the worker's own state, so kata's job is not changed and other machines keep their own counts. `tern-kata worker status` and the Jobs Page name it ("paused: failed runs"); `u` on the Jobs Page, or `tern-kata worker resume <job>` on a host with no Pane, resumes the job.
+
 ### Changed
 
 #### Issues and Pages

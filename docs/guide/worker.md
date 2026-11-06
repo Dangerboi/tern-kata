@@ -145,6 +145,7 @@ tern-kata worker             # runs in the foreground; ctrl+c stops it (a superv
 tern-kata worker stop [--now]
 tern-kata run <job-uid>      # run an adapter prompt job now
 tern-kata worker resume <run-uid>    # continue a held run in its omp session
+tern-kata worker resume <job>        # lift the pause after repeated failed runs (job uid or name; `worker status` names the paused jobs)
 tern-kata worker abandon <run-uid>   # give up a held run (kata records it cancelled), stop a running one, or settle one whose local state is lost
 ```
 

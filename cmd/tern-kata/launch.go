@@ -515,6 +515,7 @@ Usage:
   tern-kata worker supervised
   tern-kata worker doctor
   tern-kata worker resume <run-uid> [--as <actor>]
+  tern-kata worker resume <job-uid>
   tern-kata worker abandon <run-uid> [--as <actor>]
   tern-kata update [--force] [--pause]
   tern-kata docbank supervised [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
@@ -611,6 +612,8 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
   worker resume <run-uid>       continue a held run: the worker starts a new headless omp attempt on
                                 the run's saved session (--resume) with a prompt that warns the
                                 previous turn may have partly run; the run goes back to running
+  worker resume <job-uid>       lift the pause the worker put on a job after repeated failed runs
+                                (pause_after_failures in worker.toml); worker status names it
   worker abandon <run-uid>      give up a held run: kata records it cancelled ("abandoned by <actor>")
                                 and the run's slot and overlap gate are freed. A running run is stopped
                                 first (SIGTERM, SIGKILL after 10 s); a run this machine lost the state of

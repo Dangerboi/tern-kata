@@ -102,6 +102,9 @@ func jobCard(row model.JobRow, selected bool) tern.Element {
 	if row.Warning != "" {
 		body = append(body, ui.Text{Common: ui.Common{Key: "warning", Tone: ui.ToneWarning}, Text: row.Warning})
 	}
+	if row.WorkerPause != "" {
+		body = append(body, ui.Text{Common: ui.Common{Key: "worker-pause", Tone: ui.ToneWarning}, Text: "This machine's worker: " + row.WorkerPause + "; u resumes it"})
+	}
 	if row.Unsupported != "" {
 		body = append(body, ui.Text{Common: ui.Common{Key: "unsupported", Tone: ui.ToneWarning}, Text: "Set aside on this machine: " + row.Unsupported})
 	}

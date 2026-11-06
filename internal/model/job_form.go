@@ -818,12 +818,14 @@ func onceRuns(t cronjob.Trigger, now time.Time, cal PaneCalendar) []string {
 // NextRuns is the inspector's answer to when the job runs next: the next runs, or the reason there are none. A job that is not
 // running, a manual trigger and a trigger whose runs can't be told each say so.
 func (m Model) NextRuns(job CronJob, now time.Time) (runs []string, reason string) {
-	switch pause := job.Pause(m.Jobs.ProjectArchived); pause {
+	switch pause := m.JobPause(job); pause {
 	case NotPaused:
 	case PauseParentClosed:
 		return nil, "none while the parent is closed"
 	case PauseDisabled:
 		return nil, "none while paused"
+	case PauseFailedRuns:
+		return nil, "none until the worker's pause is resumed"
 	default:
 		return nil, "none while " + string(pause)
 	}

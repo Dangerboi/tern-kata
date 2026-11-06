@@ -21,6 +21,7 @@ import (
 //	"status"     answers Status, whose Runs carry each run's hold, reason and which verbs would be accepted.
 //	"run-detail" Run: a run uid; answers Detail (status line, hold reason, steps, output tail).
 //	"resume"     Run: a held run's uid, Actor: who asks (optional); answers Transition.
+//	"resume-job" Job: a paused job's uid; answers PausedJob. It lifts the pause the worker put on a job after repeated failed runs.
 //	"stop"       Mode: "idle" (the default) or "now"; answers Stop. Idle refuses new work and exits once no run is in flight; now exits at once.
 //	"abandon"    Run: a held or running run's uid (or one this machine lost the state of), Actor: who asks (optional); answers Transition.
 //	"identity"   answers Identity: the worker's process, version and supervisor, without reading a journal (the host half asks it every poll).
@@ -41,6 +42,7 @@ type Response struct {
 	Detail     *RunDetail     `json:"detail,omitempty"`
 	Transition *RunTransition `json:"transition,omitempty"`
 	Stop       *StopAnswer    `json:"stop,omitempty"`
+	Resumed    *PausedJob     `json:"resumed,omitempty"`
 	Identity   *Identity      `json:"identity,omitempty"`
 }
 
@@ -136,6 +138,12 @@ func (w *Worker) handle(ctx context.Context, req Request) Response {
 			return Response{Error: err.Error()}
 		}
 		return Response{OK: true, Run: &accepted}
+	case cmdResumeJob:
+		p, err := w.ResumeJob(req.Job)
+		if err != nil {
+			return Response{Error: err.Error()}
+		}
+		return Response{OK: true, Resumed: &p}
 	case cmdStop:
 		a, err := w.Stop(req.Mode)
 		if err != nil {

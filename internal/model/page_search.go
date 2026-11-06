@@ -119,7 +119,7 @@ func pageSearchEscape(m Model) (Model, []Cmd) {
 
 // jobSearchWords are the words of a job's row that the search reads: its name, state, kind, schedule, profile and last run.
 func (m Model) jobSearchWords(job CronJob) []string {
-	return []string{job.Name, job.Pause(m.Jobs.ProjectArchived).StateText(), job.Kind(), triggerWords(job.Definition.Trigger), job.Definition.Profile, m.lastActivity(job, m.Now)}
+	return []string{job.Name, m.JobPause(job).StateText(), job.Kind(), triggerWords(job.Definition.Trigger), job.Definition.Profile, m.lastActivity(job, m.Now)}
 }
 
 // runSearchWords are the words of a Run's row that the search reads.

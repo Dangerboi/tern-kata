@@ -96,3 +96,23 @@ func TestAProjectWithoutCapacityGetsThreeSlotsAndAnExplicitOneIsKept(t *testing.
 		})
 	}
 }
+
+func TestPauseAfterFailuresIsThreeUnlessSetAndZeroTurnsItOff(t *testing.T) {
+	const base = "executor = \"laptop\"\n[profiles.default]\n"
+	for _, tt := range []struct {
+		name, body string
+		want       int
+	}{
+		{"unset", base, DefaultPauseAfterFailures},
+		{"five", "executor = \"laptop\"\n[limits]\npause_after_failures = 5\n[profiles.default]\n", 5},
+		{"zero", "executor = \"laptop\"\n[limits]\npause_after_failures = 0\n[profiles.default]\n", 0},
+	} {
+		cfg, err := load(t, tt.body)
+		if err != nil || cfg.PauseAfterFailures() != tt.want {
+			t.Errorf("%s: pause_after_failures is %d, %v; want %d", tt.name, cfg.PauseAfterFailures(), err, tt.want)
+		}
+	}
+	if _, err := load(t, "executor = \"laptop\"\n[limits]\npause_after_failures = -1\n[profiles.default]\n"); err == nil || !strings.Contains(err.Error(), "pause_after_failures") {
+		t.Errorf("a negative pause_after_failures loaded: %v", err)
+	}
+}
