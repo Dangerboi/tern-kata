@@ -311,7 +311,8 @@ local function docbank_start(docbank: string)
             docbank_failing = true
             tern.log.warn("tern-kata: could not start Docbank (" .. why .. "); trying again in " .. left // 1000 .. " s")
         end
-        docbank_arm(math.min(left, POLL_MS))
+        -- Never 0 ms: the smallest delay armed elsewhere in the plugin is 1 ms, and 0 is not documented to fire.
+        docbank_arm(math.max(math.min(left, POLL_MS), 1))
     end
     local ok, err = pcall(function()
         tern.process.run({docbank, "daemon", "start"}, process_options(DOCBANK_START_LIMIT_MS), function(result: ProcessResult)

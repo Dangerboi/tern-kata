@@ -11,6 +11,7 @@ import (
 func supervisionEnv(t *testing.T, kataConfig, docbankConfig string) Env {
 	t.Helper()
 	e := Env{KataHome: t.TempDir(), DocbankHome: t.TempDir(), ConfigDir: filepath.Join(t.TempDir(), "tern-kata")}
+	e.DefaultKataHome = e.KataHome
 	for dir, text := range map[string]string{e.KataHome: kataConfig, e.DocbankHome: docbankConfig} {
 		if text == "" {
 			continue
@@ -100,5 +101,20 @@ func TestSupervisionRuleAndReportFollowTheDefaultDaemon(t *testing.T) {
 	}
 	if err := e.reportSupervision(); err != nil || !strings.Contains(out.String(), "its host half starts it") {
 		t.Errorf("the default daemon: %q, %v", out.String(), err)
+	}
+}
+
+func TestSupervisionIsOffWhenTheDefaultDaemonCannotBeResolved(t *testing.T) {
+	const local = "[docbank]\nurl = \"http://127.0.0.1:8080\"\napi_key = \"k\"\n"
+	const server = "[server]\nbind_addr = \"127.0.0.1\"\napi_port = 8080\napi_key = \"k\"\n"
+	e := supervisionEnv(t, local, server)
+	e.DefaultKataHome = ""
+	if on, why := e.Supervised(); on || why == "" {
+		t.Errorf("Supervised() = %v, %q; want off with a reason", on, why)
+	}
+	var out strings.Builder
+	e.Out = &out
+	if err := e.reportSupervision(); err != nil || !strings.Contains(out.String(), "cannot be resolved") || strings.Contains(out.String(), "its host half starts it") {
+		t.Errorf("report: %q, %v", out.String(), err)
 	}
 }

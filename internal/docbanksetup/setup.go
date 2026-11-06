@@ -76,8 +76,10 @@ type Env struct {
 	// Locate finds the kata daemon for the final check, called with KataHome as the workspace so a checkout's pin cannot redirect it.
 	Locate data.Locator
 	// DefaultKataHome is the home of the default kata daemon (KATA_HOME or ~/.kata), the only daemon whose Docbank the plugin keeps
-	// running; empty means KataHome is that home.
+	// running; empty when it cannot be resolved (then no daemon is supervised).
 	DefaultKataHome string
+	// ProbeTimeout bounds the authenticated read of Docbank; zero means the default.
+	ProbeTimeout time.Duration
 	// LookupEnv reads --key-env's variable.
 	LookupEnv func(string) (string, bool)
 	// Stdin is read for `--key-file -`.
@@ -119,6 +121,14 @@ const (
 	probeMaxBody = 1 << 20
 	kataMissing  = "kata is not on PATH; install kata first (https://github.com/kenn-io/kata), nothing was written"
 )
+
+// probeDeadline is Env.ProbeTimeout, or the default.
+func (e Env) probeDeadline() time.Duration {
+	if e.ProbeTimeout > 0 {
+		return e.ProbeTimeout
+	}
+	return probeDeadline
+}
 
 // SetupRemote points the kata daemon at the Docbank r names. Nothing is written until the URL passes kata's scheme rule, kata is on
 // PATH, the key reads, and an authenticated read of Docbank with it succeeds.
@@ -252,7 +262,12 @@ func (e Env) alreadySetUp(ctx context.Context, r Remote, base, configPath string
 		_, err := fmt.Fprintf(e.Out, "Docbank at %s is already set up in %s, and the kata daemon has attachments on; nothing changed.\n", base, configPath)
 		return err
 	}
-	if _, err := fmt.Fprintf(e.Out, "%s already has this [docbank] section, but the running kata daemon does not have attachments on, so the config is not in use yet.\n", configPath); err != nil {
+	if err != nil {
+		_, err = fmt.Fprintf(e.Out, "%s already has this [docbank] section, but the kata daemon could not be asked whether attachments are on: %v\n", configPath, err)
+	} else {
+		_, err = fmt.Fprintf(e.Out, "%s already has this [docbank] section, but the running kata daemon does not have attachments on, so the config is not in use yet.\n", configPath)
+	}
+	if err != nil {
 		return err
 	}
 	return e.applyKata(ctx, r.Common, r.KeyEnv)
@@ -332,9 +347,9 @@ func (e Env) readKey(r Remote) (string, error) {
 // Docbank answers with a folder node. A refused key, an unanswered request and a redirect are reported as the Pane reports them;
 // an answer that is not Docbank's is reported as such. Redirects are never followed, so the key goes only to the url asked.
 func (e Env) probe(ctx context.Context, base, key string) error {
-	ctx, cancel := context.WithTimeout(ctx, probeDeadline)
+	probeCtx, cancel := context.WithTimeout(ctx, e.probeDeadline())
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/path?path=%2F", nil)
+	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, base+"/api/v1/path?path=%2F", nil)
 	if err != nil {
 		return err
 	}
@@ -344,7 +359,7 @@ func (e Env) probe(ctx context.Context, base, key string) error {
 	resp, err := client.Do(req)
 	if err != nil {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return ctx.Err() // the caller gave up; a probe that merely timed out is Docbank not answering
 		}
 		return errors.New(data.DocbankUnreachableMessage)
 	}

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/data/docbanktest"
@@ -29,6 +30,8 @@ type docbankSetupFixture struct {
 	confirm func(string) (bool, error)
 	// runner replaces the real program runner when set.
 	runner docbanksetup.Runner
+	// probeTimeout replaces the probe's deadline when set.
+	probeTimeout time.Duration
 }
 
 // newDocbankSetupFixture makes the fixture on a kata daemon that already stores attachments, so the final check passes; use
@@ -75,6 +78,7 @@ func (f *docbankSetupFixture) runWith(ctx context.Context, t *testing.T, stdin s
 		return out.String(), err
 	}
 	env.Locate = f.locate
+	env.ProbeTimeout = f.probeTimeout
 	if f.confirm != nil {
 		env.Confirm = f.confirm
 	}
@@ -485,7 +489,7 @@ func TestDocbankSupervisedAnswersOnAndOffAndSuperviseWritesTheMarker(t *testing.
 		}
 	}
 	env := func(out *strings.Builder) docbanksetup.Env {
-		return docbanksetup.Env{KataHome: kata, DocbankHome: dbHome, ConfigDir: config, Out: out}
+		return docbanksetup.Env{KataHome: kata, DefaultKataHome: kata, DocbankHome: dbHome, ConfigDir: config, Out: out}
 	}
 	var out strings.Builder
 	if err := printDocbankSupervised(env(&out)); err != nil || out.String() != "on\n" {
@@ -587,5 +591,32 @@ func TestDocbankSetupCancelledContextWritesNothing(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(f.home); len(entries) != 0 || f.restarts(t) != nil {
 		t.Errorf("a cancelled setup wrote %v and ran kata %q", entries, f.restarts(t))
+	}
+}
+
+func TestDocbankSetupReportsADocbankThatNeverAnswersAsUnreachable(t *testing.T) {
+	f := newDocbankSetupFixture(t)
+	f.probeTimeout = 100 * time.Millisecond
+	url := answeringServer(t, func(_ http.ResponseWriter, r *http.Request) { <-r.Context().Done() })
+	_, err := f.run(t, "", "--url", url, "--key-file", f.keyFile(t), "--yes")
+	if err == nil || err.Error() != data.DocbankUnreachableMessage {
+		t.Fatalf("err = %v, want the Pane's %q", err, data.DocbankUnreachableMessage)
+	}
+	if entries, _ := os.ReadDir(f.home); len(entries) != 0 {
+		t.Errorf("a refused setup wrote %v", entries)
+	}
+}
+
+func TestDocbankSetupRerunSaysWhenTheKataDaemonCannotBeAsked(t *testing.T) {
+	f := newDocbankSetupFixtureOn(t, func(context.Context, string) (data.Target, error) {
+		return data.Target{}, errors.New("no daemon socket")
+	})
+	args := []string{"--url", f.fake.URL, "--key-file", f.keyFile(t), "--no-restart"}
+	if _, err := f.run(t, "", args...); err != nil {
+		t.Fatal(err)
+	}
+	out, err := f.run(t, "", args...)
+	if err != nil || !strings.Contains(out, "could not be asked") || !strings.Contains(out, "no daemon socket") || !strings.Contains(out, "kata daemon restart") || strings.Contains(out, "nothing changed") {
+		t.Fatalf("rerun: %q, %v", out, err)
 	}
 }

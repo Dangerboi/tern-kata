@@ -18,25 +18,19 @@ const ManualFileName = "docbank.manual"
 // ManualPath is the supervision marker.
 func (e Env) ManualPath() string { return filepath.Join(e.ConfigDir, ManualFileName) }
 
-// supervisedKataHome is the kata home the rule reads: the default daemon's, which the host half asks about. Empty DefaultKataHome
-// means KataHome is that home.
-func (e Env) supervisedKataHome() string {
-	if e.DefaultKataHome != "" {
-		return e.DefaultKataHome
-	}
-	return e.KataHome
-}
-
 // Supervised is whether the plugin keeps Docbank running, and when it does not, why (one sentence naming what is missing).
 // It is the one place the rule is decided; the host half asks `tern-kata docbank supervised`.
 func (e Env) Supervised() (on bool, why string) {
 	if e.ConfigDir == "" {
 		return false, "cannot tell where tern-kata's config folder is"
 	}
+	if e.DefaultKataHome == "" {
+		return false, "cannot tell where the default kata daemon's home is"
+	}
 	if _, err := os.Stat(e.ManualPath()); err == nil {
 		return false, ManualFileName + " exists in " + e.ConfigDir
 	}
-	kataPath := filepath.Join(e.supervisedKataHome(), "config.toml")
+	kataPath := filepath.Join(e.DefaultKataHome, "config.toml")
 	kataText, err := readConfig(kataPath)
 	if err != nil {
 		return false, err.Error()
@@ -104,7 +98,11 @@ func (e Env) reportSupervision() error {
 	if e.ConfigDir == "" {
 		return nil
 	}
-	if e.DefaultKataHome != "" && filepath.Clean(e.DefaultKataHome) != filepath.Clean(e.KataHome) {
+	if e.DefaultKataHome == "" {
+		_, err := fmt.Fprintln(e.Out, "The plugin keeps Docbank running only for the default kata daemon, and that daemon cannot be resolved here (is KATA_SERVER set?). To keep this Docbank running, start it with `docbank daemon start` when it is down, or run it as a service.")
+		return err
+	}
+	if filepath.Clean(e.DefaultKataHome) != filepath.Clean(e.KataHome) {
 		_, err := fmt.Fprintf(e.Out, "The plugin keeps Docbank running only for the default kata daemon (%s), not for this one. To keep this Docbank running, start it with `docbank daemon start` when it is down, or run it as a service.\n", e.DefaultKataHome)
 		return err
 	}
