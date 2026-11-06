@@ -246,13 +246,13 @@ func openCard(status string, states ...model.AgentState) model.Model {
 	return m
 }
 
-func TestIInterruptsTheSelectedAgentAndClosesTheCard(t *testing.T) {
+func TestIInterruptsTheSelectedAgentAndKeepsTheCardOpen(t *testing.T) {
 	for _, state := range []model.AgentStateWord{model.AgentWorking, model.AgentIdle, model.AgentWaitingInput, ""} {
 		m := openCard("open", st("11", state, ""), st("12", state, ""))
 		m.AgentCard.Cursor = 1
 		after, cmds := press(m, "i")
-		if want := []model.Cmd{model.InterruptAgent{Block: "12"}}; !reflect.DeepEqual(cmds, want) || after.AgentCard.Open {
-			t.Errorf("%q: cmds %#v, card open %v; want %v and the card closed", state, cmds, after.AgentCard.Open, want)
+		if want := []model.Cmd{model.InterruptAgent{Block: "12"}}; !reflect.DeepEqual(cmds, want) || !after.AgentCard.Open || after.AgentCardCursor() != 1 {
+			t.Errorf("%q: cmds %#v, card open %v, cursor %d; want %v with the card open on the same agent", state, cmds, after.AgentCard.Open, after.AgentCardCursor(), want)
 		}
 	}
 }

@@ -186,12 +186,11 @@ func sendToBackground(m Model, e AgentEntry) (Model, []Cmd) {
 	return placeAgent(m, e.Block), []Cmd{SendAgentBack{Block: e.Block, IssueRef: e.IssueRef}}
 }
 
-// interruptAgent is `i`: Escape ends the agent's current turn, and the card closes with the card's reason as a Notice when it
-// cannot.
+// interruptAgent is `i`: Escape ends the agent's current turn. The card stays open, since a correction (`m`) or a Stop (`x`) is
+// the usual next key; it closes with the card's reason as a Notice when the interrupt cannot run.
 func interruptAgent(m Model, e AgentEntry) (Model, []Cmd) {
-	reason := m.AgentCardUnavailable(AgentCardInterrupt)
-	m.AgentCard = AgentCardState{}
-	if reason != "" {
+	if reason := m.AgentCardUnavailable(AgentCardInterrupt); reason != "" {
+		m.AgentCard = AgentCardState{}
 		m.Notice = reason
 		return m, nil
 	}

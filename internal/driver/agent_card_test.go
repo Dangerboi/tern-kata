@@ -53,6 +53,22 @@ func TestWOpensTheAgentCardInEveryIssueModeWithOrWithoutAgents(t *testing.T) {
 	}
 }
 
+// Interrupt is the step before a correction or a Stop, so the card stays open for the next key: x after i asks to stop the
+// agent and does not reach the Issue (where x closes it).
+func TestInterruptKeepsTheAgentCardOpenSoXThenStopsTheAgent(t *testing.T) {
+	for name, s := range agentPanes(t, agentIssue("t1")) {
+		open := step(t, withAgentRows(s), key("w")).State
+		interrupted := step(t, open, key("i"))
+		if m := interrupted.State.Model; m.TopCard() != model.CardAgent || !strings.Contains(wireTextOf(t, interrupted.State), "Interrupt sent.") {
+			t.Errorf("%s: after i, card %v, notice %q; want the Agent card still open and the Notice on screen", name, m.TopCard(), m.Notice)
+		}
+		asked := step(t, interrupted.State, key("x")).State.Model
+		if asked.CurrentMode() != model.ModeAgentCardStop || asked.AgentCard.Stopping != "31" {
+			t.Errorf("%s: after i then x, mode %s, stopping %q; want the Stop question for block 31", name, asked.CurrentMode(), asked.AgentCard.Stopping)
+		}
+	}
+}
+
 func TestTheAgentCardWithNoAgentsStillStartsOneAndIgnoresEnterAndB(t *testing.T) {
 	for name, s := range agentPanes(t, agentIssue("t1")) {
 		open := step(t, s, key("w")).State
