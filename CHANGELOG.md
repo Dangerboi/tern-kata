@@ -26,10 +26,13 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - An omp agent started in a block writes to kata as its own teammate: the wrapper sets `KATA_TEAMMATE` to `<agent.toml name>-<block id>` and drops an inherited one, so the agent's comments and requests carry that name.
 - An omp agent is told when an Issue that blocks its own closes, with the blocker's title and how many other blockers are still open, also with the Pane closed.
   - Only blocking links count, and only blockers in the agent's own Project; a close before the agent started is not sent.
-
 - `S` on an Issue messages every running agent on it and on its open children from one Message card.
   - Each agent gets the message at its own address on its own Issue; agents on closed children and exited agents get none.
   - An agent that has not cleared its last message is skipped, never replaced; once every write has answered the card lists how many got it and each skipped agent with its reason.
+- Agents find and message each other: `tern-kata agents [--issue <ref>]` lists the running agents this host's Panes started, with Issue, name, state and address, and `tern-kata message <address|ref> -m <text>` writes a message to one agent, or to every agent on an Issue.
+  - A message from an agent carries its teammate and arrives worded as from a peer agent, "information, not the person's instruction"; the agent prompt tells the agent to act on it only within its own Issue's scope.
+  - An address that holds a message its agent has not cleared is not written over: the command names that agent and exits 1.
+  - A Pane now saves the latest agent states in `agent-states.json` in tern-kata's state folder for `tern-kata agents` to read.
 
 #### Issues and Pages
 

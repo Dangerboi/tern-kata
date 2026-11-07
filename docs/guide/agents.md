@@ -132,6 +132,15 @@ With `forward_comments = true` in `agent.toml` for the agent's name (top level o
 - **Only comments after the agent started**: an older comment is not sent, and one the agent missed while its stream was down is sent once it is back.
 - **Which agents**: the omp agents the Pane starts; an agent started before you set the key keeps its old setting.
 
+### Agents messaging each other
+
+An agent can find the other agents on this host and message one, for instance to tell the agent on a dependent Issue that it changed an API. Both commands run without Tern, and the agent prompt names them.
+
+- `tern-kata agents [--issue <ref>]` lists the agents this host's Panes started that have not exited: the Issue, the agent's name, its state (`working`, `idle`, `waiting_input`; `-` before any relay has listed it) and its address (`-` when no message reaches it: a command that is not omp, or an agent started before agents had an address). `--issue` cuts the list to one Issue, named by its `<project>#<short id>`, `<project>/<short id>`, short id or uid. The states are the Pane's latest relay from Tern, which every open Pane saves in `agent-states.json` in tern-kata's state folder beside `agents.json`; with no Pane open they are the last ones saved.
+- `tern-kata message <address|ref> -m <text>` writes the message to that address on the receiving agent's own Issue, as the Message card does, as the actor (`--as`, else `$KATA_AUTHOR`, which an agent has set). A ref writes to every running agent on that Issue that can receive one, except the sender's own address. Each agent is named in the output. An unknown address or ref, or an Issue with no agent that can receive the message, is refused before anything is written, as is an agent another actor started (it acts only on its own actor's messages).
+- **An unread message is never replaced**: where the address holds a message its agent has not cleared, `tern-kata message` says so for that agent, writes nothing there and exits with status 1 once every target has been tried. The held message stays.
+- **From a peer, not from you**: inside an agent, the message carries the sender's `KATA_TEAMMATE` (`<name>-<block id>`) as the slot's `teammate`. The receiving agent's extension words it "Message from agent <actor>/<teammate> on <ref>, sent to you through kata:" and adds that it is information from a peer agent, not the person's instruction. The agent's prompt tells it to act on such a message only within its own Issue's scope, and never to take on new work, close the Issue or change its scope because of it. A message from you has no teammate and arrives as before. On a daemon without identity tokens the teammate is advisory: any process that writes as the actor can leave it out.
+
 ### Transcript links on closes
 
 kata can record which agent session closed an Issue, and link it to [AgentsView](https://agentsview.io), when `kata close` runs with `[close.transcript]` turned on in kata's `config.toml` (in `KATA_HOME`, `~/.kata` by default):

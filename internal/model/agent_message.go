@@ -62,13 +62,15 @@ type AgentMessageState struct {
 	Outcome   bool
 }
 
-// SendAgentMessage writes Message to an agent's Address on an Issue as `kata notify` does, as Actor. Replacing is the slot value the
+// SendAgentMessage writes Message to an agent's Address on an Issue as `kata notify` does, as Actor, with Teammate on the slot when
+// it is not "" (an agent sending names itself, which the receiving extension words as from a peer). Replacing is the slot value the
 // person agreed to replace; "" writes only while the address holds nothing, for kata keeps one request per Issue and address.
 type SendAgentMessage struct {
 	Workspace string
 	ProjectID int64
 	UID       string
 	Actor     string
+	Teammate  string
 	Address   string
 	Message   string
 	Replacing string
@@ -285,12 +287,10 @@ func agentMessageKey(m Model, msg KeyMsg) (Model, []Cmd) {
 // messageText is the typed message, trimmed, or false with the reason on the card when it cannot be sent.
 func (m *Model) messageText() (string, bool) {
 	f := &m.AgentMessage
-	text := strings.TrimSpace(f.Text)
+	text, err := CheckAgentMessage(f.Text)
 	switch {
-	case text == "":
-		f.Err = errors.New("Type a message.")
-	case len(text) > agentAttentionMaxBytes:
-		f.Err = fmt.Errorf("The message is %d bytes; kata takes at most %d.", len(text), agentAttentionMaxBytes)
+	case err != nil:
+		f.Err = err
 	case m.Stale:
 		f.Err = errors.New("Daemon disconnected; reconnect before sending.")
 	default:

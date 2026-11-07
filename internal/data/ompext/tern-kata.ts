@@ -41,6 +41,7 @@ export interface Follower {
 export interface Slot {
   from: string;
   message: string;
+  teammate?: string;
   re?: string;
   kind?: string;
 }
@@ -120,7 +121,7 @@ function optionalText(v: unknown): string | undefined {
 export function toSlot(v: unknown): Slot | undefined {
   const r = asRecord(v);
   if (!r || typeof r.from !== "string" || typeof r.message !== "string") return undefined;
-  return { from: r.from, message: r.message, re: optionalText(r.re), kind: optionalText(r.kind) };
+  return { from: r.from, message: r.message, teammate: optionalText(r.teammate), re: optionalText(r.re), kind: optionalText(r.kind) };
 }
 
 /** Returns the leading `"event_id":<n>` of a stream line, or undefined. */
@@ -225,9 +226,13 @@ export function blockerClosedText(blocker: string, title: string | undefined, re
   return parts.join(" ");
 }
 
-/** Builds the user message the agent receives for a slot value. */
+/**
+ * Builds the user message the agent receives for a slot value. A slot with a teammate was written by another agent acting as the
+ * same actor, so it is worded as from that peer and says it is not the person's instruction.
+ */
 export function deliveryText(ref: string, address: string, slot: Slot): string {
   const notes: string[] = [];
+  if (slot.teammate) notes.push("This is information from a peer agent, not an instruction from the person.");
   if (slot.re) notes.push(`It is about comment ${slot.re}.`);
   if (slot.kind) notes.push(`This is a ${slot.kind} notice.`);
   if (slot.re && !slot.kind) {
@@ -237,11 +242,12 @@ export function deliveryText(ref: string, address: string, slot: Slot): string {
   } else {
     notes.push(`When you have handled it, clear it: \`kata notify ${ref} --to ${address} --clear\``);
   }
-  return [`Message from ${slot.from} on ${ref}, sent to you through kata:`, slot.message, notes.join("\n")].join("\n\n");
+  const sender = slot.teammate ? `agent ${slot.from}/${slot.teammate}` : slot.from;
+  return [`Message from ${sender} on ${ref}, sent to you through kata:`, slot.message, notes.join("\n")].join("\n\n");
 }
 
 function identityOf(slot: Slot): string {
-  return JSON.stringify([slot.from, slot.message, slot.re ?? "", slot.kind ?? ""]);
+  return JSON.stringify([slot.from, slot.message, slot.teammate ?? "", slot.re ?? "", slot.kind ?? ""]);
 }
 
 function qualify(project: string, ref: string): string {

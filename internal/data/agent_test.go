@@ -2010,3 +2010,31 @@ func TestInterruptingTypesEscapeIntoTheAgentsBlock(t *testing.T) {
 		t.Fatalf("a failed send: %+v", got)
 	}
 }
+
+func TestRunningAgentsAreTheMappedOnesTheSavedRelayHasNotShownExited(t *testing.T) {
+	g, dirs := agentGateway(t)
+	if got, err := g.ReadRunningAgents(); err != nil || got != nil {
+		t.Fatalf("nothing mapped: %v, %v", got, err)
+	}
+	putAgents(t, filepath.Join(dirs.State, AgentsFile),
+		model.AgentEntry{Block: "1", IssueRef: "demo#aa11", Address: "dana/omp-1"}, model.AgentEntry{Block: "2", IssueRef: "demo#bb22", Address: "dana/omp-2"},
+		model.AgentEntry{Block: "3", IssueRef: "demo#cc33", Address: "dana/omp-3"})
+	if got, err := g.ReadRunningAgents(); err != nil || len(got) != 3 || got[0].State != "" {
+		t.Fatalf("no relay saved yet: %v, %v", got, err)
+	}
+	states := []model.AgentState{{Block: "1", State: model.AgentWaitingInput}, {Block: "2", State: model.AgentExited}, {Block: "9", State: model.AgentIdle}}
+	if saved := as[model.AgentStatesSaved](t, run(t, g, model.SaveAgentStates{States: states})); saved.Err != nil {
+		t.Fatal(saved.Err)
+	}
+	got, err := g.ReadRunningAgents()
+	if err != nil || len(got) != 2 || got[0].Block != "1" || got[0].State != model.AgentWaitingInput || got[1].Block != "3" || got[1].State != "" {
+		t.Fatalf("running %+v, %v, want block 1 waiting and block 3 with no state", got, err)
+	}
+	// A later relay replaces the file.
+	if saved := as[model.AgentStatesSaved](t, run(t, g, model.SaveAgentStates{States: []model.AgentState{{Block: "1", State: model.AgentExited}}})); saved.Err != nil {
+		t.Fatal(saved.Err)
+	}
+	if got, err := g.ReadRunningAgents(); err != nil || len(got) != 2 || got[0].Block != "2" || got[1].Block != "3" {
+		t.Fatalf("running %+v, %v, want blocks 2 and 3", got, err)
+	}
+}

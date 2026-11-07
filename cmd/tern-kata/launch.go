@@ -30,7 +30,7 @@ type LaunchPlan struct {
 	// TUIArgs are the arguments only `kata tui` takes (FallbackArgs without the --issue translation); inside Tern nothing reads
 	// them, so main refuses them there instead of dropping them unseen.
 	TUIArgs []string
-	// Subcommand is "migrate-attachments", "recur", "run", "views", "worker", "update", "docbank", "agent" or "completion" when it was the first argument; main runs it
+	// Subcommand is "migrate-attachments", "recur", "run", "views", "worker", "update", "docbank", "agent", "agents", "message" or "completion" when it was the first argument; main runs it
 	// without Tern.
 	Subcommand string
 	// TargetRef is the Issue as recur and run take it (what `kata show` takes: a short id, <project>#<short id> or a ULID),
@@ -56,6 +56,10 @@ type LaunchPlan struct {
 	// Force and Pause are `update --force` and `update --pause`. Preflight is `update --preflight`, the check one release
 	// runs of another; it is not for people, so usage and completion leave it out.
 	Force, Pause, Preflight bool
+	// MessageText is `message -m`: the text to send. Teammate is the sender's KATA_TEAMMATE, which the slot carries so the receiving
+	// agent knows a peer wrote it; empty when a person sends. `agents --issue` and `message`'s address or ref are TargetRef.
+	MessageText string
+	Teammate    string
 	// AgentRef is `agent --ref`: the qualified Issue ref the agent's KATA_REF is set to; empty leaves the agent without one.
 	AgentRef string
 	// AgentAddressPrefix is `agent --address-prefix`: the agent's Agent address up to its block id, <actor>/<name>. The wrapper sets
@@ -101,7 +105,7 @@ type usageError struct{ error }
 func (e usageError) Unwrap() error { return e.error }
 
 // subcommands are the first arguments that name a command run without Tern.
-var subcommands = []string{"migrate-attachments", "recur", "run", "views", "worker", "update", "docbank", "agent", "completion"}
+var subcommands = []string{"migrate-attachments", "recur", "run", "views", "worker", "update", "docbank", "agent", "agents", "message", "completion"}
 
 // completionShells are the shells `tern-kata completion` writes a script for.
 var completionShells = []string{"bash", "zsh", "fish"}
@@ -129,6 +133,10 @@ func scanFlags(flags []string, flag string) bool {
 	var scratch LaunchPlan // the parsers record into it; only the position they stop at matters
 	for i := 0; i < len(flags); i++ {
 		arg := flags[i]
+		if subcommand == "message" && arg == "-m" { // the text after it is no flag, whatever it starts with
+			i++
+			continue
+		}
 		if arg == flag {
 			return true
 		}
@@ -156,6 +164,12 @@ func scanFlags(flags []string, flag string) bool {
 			if matched, _ := parseRecurFlag(flags, &i, &scratch); matched {
 				continue
 			}
+		}
+		if subcommand == "agents" && (arg == "--issue" || strings.HasPrefix(arg, "--issue=")) {
+			if arg == "--issue" && i+1 < len(flags) && !strings.HasPrefix(flags[i+1], "--") {
+				i++
+			}
+			continue
 		}
 		if subcommand == "docbank" {
 			if matched, _ := parseTableFlag(docbankFlags, "docbank", docbankUsage, flags, &i, &scratch); matched {
@@ -305,6 +319,12 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 	}
 	if args[0] == "docbank" {
 		return planDocbank(args)
+	}
+	if args[0] == "agents" {
+		return planAgents(args, lookup)
+	}
+	if args[0] == "message" {
+		return planMessage(args, lookup)
 	}
 	plan := LaunchPlan{Subcommand: args[0]}
 	operands, err := scanOperands(args, func(i *int) error {
@@ -521,6 +541,8 @@ Usage:
   tern-kata worker resume <job-uid>
   tern-kata worker abandon <run-uid> [--as <actor>]
   tern-kata update [--force] [--pause]
+  tern-kata agents [--issue <ref>] [--as <actor>]
+  tern-kata message <address|ref> -m <text> [--as <actor>]
   tern-kata docbank supervised [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
   tern-kata docbank supervise on|off
   tern-kata docbank setup [--url <url> (--key-file <file>|- | --key-env <NAME>) | --port <port>] [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
@@ -636,6 +658,19 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 worker.toml it rejects); --pause waits for Enter after a success,
                                 so a Pane shows the result before it closes.
                                 Exit 0 when the binary is at the latest version, else 1
+  agents [--issue <ref>]        list the agents this machine's Panes started that have not
+                                exited: Issue, agent name, state (from the Pane's latest relay)
+                                and Agent address (- when no message reaches it); --issue cuts
+                                the list to one Issue
+  message <address|ref> -m <text>
+                                write a message to the agent at that Agent address, or to every
+                                agent that can receive one on that Issue, as the --as actor
+                                (default KATA_AUTHOR) and, inside an agent, with its KATA_TEAMMATE
+                                on it: the receiving agent is told it is from a peer, not the
+                                person's instruction. An address that holds a message its agent
+                                has not cleared is not written over: that agent is named and
+                                exit status 1 says so. Unknown address or ref, or no agent that
+                                can receive it, is refused
   docbank setup [--url <url> (--key-file <file>|- | --key-env <NAME>) | --port <port>] [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
                                 make attachments work. Without --url it sets Docbank up on this
                                 machine: it gives Docbank a fixed port (--port, default 8080) and an

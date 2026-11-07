@@ -192,6 +192,9 @@ func init() {
 	}, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.FocusAgent) model.Msg { return g.focusAgent(ctx, cmd) }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.PruneAgents) model.Msg { return g.pruneAgents(ctx, cmd) }, nil, nil)
+	local(func(g *Gateway, ctx context.Context, cmd model.SaveAgentStates) model.Msg {
+		return g.saveAgentStates(cmd)
+	}, nil, nil)
 
 	// Daemon calls.
 	daemonCall(

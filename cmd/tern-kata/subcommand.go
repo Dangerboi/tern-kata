@@ -15,7 +15,7 @@ type subcommandError struct{ error }
 
 func (e subcommandError) Unwrap() error { return e.error }
 
-// runSubcommand runs plan's migrate-attachments, recur or views through the same gateway commands the Pane sends, printing results to out.
+// runSubcommand runs plan's migrate-attachments, recur, views, agents or message through the same gateway commands the Pane sends, printing results to out.
 func runSubcommand(ctx context.Context, plan LaunchPlan, gateway *data.Gateway, out io.Writer) error {
 	defer gateway.Close()
 	workspace, err := os.Getwd()
@@ -26,6 +26,16 @@ func runSubcommand(ctx context.Context, plan LaunchPlan, gateway *data.Gateway, 
 	send := func(cmd model.Cmd) model.Msg {
 		gateway.Run(ctx, cmd, results)
 		return <-results
+	}
+	if plan.Subcommand == "agents" || plan.Subcommand == "message" {
+		running, err := gateway.ReadRunningAgents()
+		if err != nil {
+			return subcommandError{err}
+		}
+		if plan.Subcommand == "agents" {
+			return runAgents(plan, running, out)
+		}
+		return runMessage(plan, workspace, running, send, out)
 	}
 	if plan.Subcommand == "views" {
 		return runViews(plan, workspace, gateway.ViewsStore, send, out)

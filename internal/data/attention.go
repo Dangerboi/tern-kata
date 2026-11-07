@@ -125,14 +125,18 @@ func (c *Client) ClearAgentAttention(ctx context.Context, cmd model.ClearAgentAt
 	return nil
 }
 
-// SendAgentMessage writes a person's message to an agent's Agent address on an Issue as `kata notify` does, as the Pane's actor,
-// guarded on the address holding nothing or, when the person agreed to replace it, the value they saw. A guard that fails reads
-// the slot again: a value there is held and nothing is written; a slot gone since is written as an empty one.
+// SendAgentMessage writes a message to an agent's Agent address on an Issue as `kata notify` does, as cmd.Actor (the Pane's actor,
+// or an agent's) with cmd.Teammate on the slot when set, guarded on the address holding nothing or, when the person agreed to
+// replace it, the value they saw. A guard that fails reads the slot again: a value there is held and nothing is written; a slot gone
+// since is written as an empty one.
 func (c *Client) SendAgentMessage(ctx context.Context, cmd model.SendAgentMessage) (model.AgentMessageSent, error) {
 	key := model.NotificationKey(cmd.Address)
 	value := map[string]any{"from": cmd.Actor, "message": cmd.Message}
 	if cmd.Re != "" {
 		value["re"] = cmd.Re
+	}
+	if cmd.Teammate != "" {
+		value["teammate"] = cmd.Teammate
 	}
 	var expect *string
 	if cmd.Replacing != "" {
