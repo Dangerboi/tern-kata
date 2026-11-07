@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -23,13 +24,33 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/guardedfile"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/worker"
+	"go.kenn.io/kit/safefileio"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden files")
 
+// fixturePath turns a Unix-looking absolute fixture path into one that is absolute on this OS too: C:/work/demo on Windows, unchanged elsewhere.
+func fixturePath(p string) string {
+	if runtime.GOOS == "windows" {
+		return "C:" + p
+	}
+	return p
+}
+
+// profileHome is where the catalogs' profile entry keeps its daemon, as the product cleans it.
+var profileHome = filepath.Clean(fixturePath("/profiles/p"))
+
+// tomlFixturePaths gives a TOML fixture's quoted Unix-absolute values (= "/work/demo") the same treatment as fixturePath.
+func tomlFixturePaths(text string) string {
+	if runtime.GOOS != "windows" {
+		return text
+	}
+	return strings.NewReplacer("= \"/", "= \"C:/", "= \\\"/", "= \\\"C:/").Replace(text)
+}
+
 func writeAgentFile(t *testing.T, path, text string) string {
 	t.Helper()
-	if err := os.WriteFile(path, []byte(text), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(tomlFixturePaths(text)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return path
@@ -61,10 +82,10 @@ checkout = "/work/plain"
 	if got := cfg.For("other"); got.Actor != "me-agent" || !slices.Equal(got.Command, []string{"omp", "--fast"}) || got.Checkout != "" {
 		t.Errorf("top level: %+v", got)
 	}
-	if got := cfg.For("demo"); got.Actor != "demo-agent" || !slices.Equal(got.Command, []string{"omp", "--model", "opus"}) || got.Checkout != "/work/demo" {
+	if got := cfg.For("demo"); got.Actor != "demo-agent" || !slices.Equal(got.Command, []string{"omp", "--model", "opus"}) || got.Checkout != fixturePath("/work/demo") {
 		t.Errorf("per project: %+v", got)
 	}
-	if got := cfg.For("plain"); got.Actor != "me-agent" || !slices.Equal(got.Command, []string{"omp", "--fast"}) || got.Checkout != "/work/plain" {
+	if got := cfg.For("plain"); got.Actor != "me-agent" || !slices.Equal(got.Command, []string{"omp", "--fast"}) || got.Checkout != fixturePath("/work/plain") {
 		t.Errorf("a table without values keeps the top level's: %+v", got)
 	}
 }
@@ -111,7 +132,7 @@ name = "open"
 	}{
 		{"binding first", "/bound", "demo", toml, "/bound"},
 		{"agent.toml before worker.toml", "", "demo", toml, "/agent/demo"},
-		{"first worker.toml checkout", "", "demo", AgentSettings{}, "/work/b"},
+		{"first worker.toml checkout", "", "demo", AgentSettings{}, fixturePath("/work/b")},
 	} {
 		got, err := AgentDir(c.binding, c.project, c.settings, workerPath)
 		if err != nil || got != c.want {
@@ -226,7 +247,7 @@ func TestStartingAnAgentWritesThePromptRunsTernAndRecordsTheBlock(t *testing.T) 
 		t.Fatalf("entry %+v", e)
 	}
 	extension := filepath.Join(dirs.State, OmpExtensionFolder, "tern-kata.ts")
-	want := []string{"split", "7", "right", "--cwd", "/work/demo", "--json", "--", "tern-kata", "agent", "--as", "me-agent", "--address-prefix", "dana/omp", "--ref", "demo#ab12", "--", "omp", "-e", extension, "@" + e.PromptFile}
+	want := []string{"split", "7", "right", "--cwd", fixturePath("/work/demo"), "--json", "--", "tern-kata", "agent", "--as", "me-agent", "--address-prefix", "dana/omp", "--ref", "demo#ab12", "--", "omp", "-e", extension, "@" + e.PromptFile}
 	if !slices.Equal(ran, want) {
 		t.Fatalf("ran %q, want %q", ran, want)
 	}
@@ -1436,7 +1457,7 @@ func TestAgentStartedFromAPaneOnAnotherDaemonCarriesThePanesRoute(t *testing.T) 
 		want      []string // the route flags, with TOKEN standing for the token file the Pane writes
 		wantToken string
 	}{
-		"KATA_HOME":                                  {env: map[string]string{"KATA_HOME": "/tmp/h"}, want: []string{"--home", "/tmp/h"}},
+		"KATA_HOME":                                  {env: map[string]string{"KATA_HOME": "/tmp/h"}, want: []string{"--home", filepath.Clean(fixturePath("/tmp/h"))}},
 		"KATA_SERVER":                                {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_ALLOW_INSECURE": "true"}, want: []string{"--home", "DEFAULT", "--server", "https://kata.example", "--allow-insecure"}},
 		"KATA_SERVER token":                          {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_AUTH_TOKEN": "pane-token"}, want: []string{"--home", "DEFAULT", "--server", "https://kata.example", "--token-file", "TOKEN"}, wantToken: "pane-token"},
 		"KATA_SERVER file":                           {env: map[string]string{"KATA_SERVER": "https://kata.example", "KATA_AUTH_TOKEN_FILE": "/run/t"}, want: []string{"--home", "DEFAULT", "--server", "https://kata.example", "--auth-file", "/run/t"}},
@@ -1485,7 +1506,7 @@ func TestAgentStartedFromAPaneOnAnotherDaemonCarriesThePanesRoute(t *testing.T) 
 				return
 			}
 			info, err := os.Stat(tokenFile)
-			if err != nil || info.Mode().Perm() != 0o600 {
+			if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) { // Windows has no mode bits; readTokenFile below checks the ACL
 				t.Fatalf("token file: %v, %v", info, err)
 			}
 			if tok, err := readTokenFile(tokenFile); err != nil || tok != tc.wantToken {
@@ -1533,7 +1554,18 @@ func catalogHome(t *testing.T, config string) string {
 
 func tokenFile(t *testing.T, text string) string {
 	t.Helper()
-	return writeAgentFile(t, filepath.Join(t.TempDir(), "token"), text)
+	path := filepath.Join(t.TempDir(), "token")
+	f, err := safefileio.CreatePrivateFile(path) // private as kata checks it on every OS: 0600 on Unix, a current-user-only ACL on Windows
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString(text); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 // checkout is a git work tree with the given .kata.local.toml (none when empty) that becomes the working directory.
@@ -1589,8 +1621,8 @@ func TestAgentRouteEnvironment(t *testing.T) {
 		"no token but [auth]":                          {route: AgentRoute{Home: authed, Daemon: "bare"}, wantErr: "[auth] token_file that kata would send"},
 		"[auth] but a token":                           {route: AgentRoute{Home: authed, Daemon: "inline"}, set: []string{"KATA_HOME=" + authed, "KATA_SERVER=https://i.example", "KATA_AUTH_TOKEN=inline-token"}},
 		"token_env unset":                              {route: AgentRoute{Home: local, Daemon: "unset"}, wantErr: `token_env "MISSING_TOKEN" is unset`},
-		"local profile":                                {route: AgentRoute{Home: local, Daemon: "profile"}, set: []string{"KATA_HOME=/profiles/p"}},
-		"profile, the Pane's token":                    {route: AgentRoute{Home: local, Daemon: "profile", TokenFile: tokenFile(t, "t4\n")}, set: []string{"KATA_HOME=/profiles/p", "KATA_AUTH_TOKEN=t4"}},
+		"local profile":                                {route: AgentRoute{Home: local, Daemon: "profile"}, set: []string{"KATA_HOME=" + profileHome}},
+		"profile, the Pane's token":                    {route: AgentRoute{Home: local, Daemon: "profile", TokenFile: tokenFile(t, "t4\n")}, set: []string{"KATA_HOME=" + profileHome, "KATA_AUTH_TOKEN=t4"}},
 		"the current local":                            {route: AgentRoute{Home: local, Daemon: "other"}, set: []string{"KATA_HOME=" + local}},
 		"unreachable local":                            {route: AgentRoute{Home: remote, Daemon: "mine"}, wantErr: "no variable that names a local daemon"},
 		"local, pin to a url":                          {route: AgentRoute{Home: local, Daemon: "mine"}, pin: "version = 1\n[server]\nurl = \"https://pinned.example\"\n", wantErr: "pins https://pinned.example"},
@@ -1802,7 +1834,7 @@ func TestAgentRouteStorageEnvironment(t *testing.T) {
 	}{
 		"home only":    {AgentRoute{Home: local, DB: "/p.db", Schema: "s", DSNFile: "replaced"}, []string{"KATA_HOME=" + local, "KATA_DB=/p.db", "KATA_POSTGRES_SCHEMA=s", "KATA_DSN=postgres://u:pw@h/db"}},
 		"plain local":  {AgentRoute{Home: local, Daemon: "mine", DB: "/p.db"}, []string{"KATA_HOME=" + local, "KATA_DB=/p.db"}},
-		"profile home": {AgentRoute{Home: local, Daemon: "profile", DB: "/p.db", Schema: "s"}, []string{"KATA_HOME=/profiles/p"}},
+		"profile home": {AgentRoute{Home: local, Daemon: "profile", DB: "/p.db", Schema: "s"}, []string{"KATA_HOME=" + profileHome}},
 		"server route": {AgentRoute{Home: local, Server: "https://s", DB: "/p.db", Schema: "s"}, []string{"KATA_HOME=" + local, "KATA_SERVER=https://s"}},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1848,7 +1880,7 @@ func TestSwitchedProfileWithItsOwnHomeGetsNoneOfThePanesCredentialVariables(t *t
 	checkout(t, "")
 	envFile := tokenFile(t, "HUB_ADMIN_TOKEN=admin\n")
 	set, _, err := (AgentRoute{Home: home, Daemon: "p", EnvFile: envFile}).Env("")
-	if err != nil || !slices.Equal(set, []string{"KATA_HOME=/profiles/p"}) {
+	if err != nil || !slices.Equal(set, []string{"KATA_HOME=" + profileHome}) {
 		t.Errorf("set %q, err %v", set, err)
 	}
 	if _, err := os.Stat(envFile); err == nil {

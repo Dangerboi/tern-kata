@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -313,17 +314,32 @@ func TestMigrateMovesAnOldPointerUnderTheBareKeyAndLeavesNativeReferences(t *tes
 	}
 }
 
+// makeUndeletable makes removing path fail until the test ends: a read-only folder on Unix; on Windows, where folder modes do not stop a delete,
+// a handle held open (Go opens files without delete sharing), which still lets the file be read.
+func makeUndeletable(t *testing.T, path string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		f, err := os.Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = f.Close() })
+		return
+	}
+	dir := filepath.Dir(path)
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+}
+
 func TestMigrateTellsTheUserToDeleteACopyItCouldNotDelete(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root deletes from a read-only folder")
 	}
 	f := newDocbankFixture(t)
 	path := f.oldFile(t, f.uid, "shot.png", f.host, "pixels")
-	dir := filepath.Dir(path)
-	if err := os.Chmod(dir, 0o555); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	makeUndeletable(t, path)
 
 	got := as[model.AttachmentsMigrated](t, run(t, f.gateway, model.MigrateAttachments{Workspace: f.repo, Actor: "tester"}))
 	if len(got.Moved) != 1 || len(got.Left) != 1 || !got.Left[0].Failed || !strings.Contains(got.Left[0].Reason, "delete the file by hand") || !strings.Contains(got.Left[0].Reason, path) {
