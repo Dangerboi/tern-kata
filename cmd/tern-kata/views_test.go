@@ -13,6 +13,7 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
 // views runs `tern-kata views args...` as main does, as actor amy.
@@ -29,7 +30,11 @@ func (f subcommandFixture) views(t *testing.T, args ...string) (string, error) {
 
 func viewsFile(t *testing.T) string {
 	t.Helper()
-	return filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "tern-kata", "views.toml")
+	dir, err := worker.ConfigDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Join(dir, "views.toml")
 }
 
 func writeViews(t *testing.T, text string) {

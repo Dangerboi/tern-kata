@@ -47,7 +47,7 @@ func newDocbankSetupFixtureOn(t *testing.T, locate data.Locator) *docbankSetupFi
 	f := &docbankSetupFixture{home: t.TempDir(), fake: docbanktest.New(t), locate: locate}
 	t.Setenv("KATA_HOME", f.home)
 	t.Setenv("KATA_DB", "")
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // tern-kata's config folder, where the supervision marker would be
+	isolateConfig(t) // tern-kata's config folder is where the supervision marker would be
 	t.Setenv("KATA_POSTGRES_SCHEMA", "")
 	bin := t.TempDir()
 	f.kataLog = filepath.Join(t.TempDir(), "kata.log")

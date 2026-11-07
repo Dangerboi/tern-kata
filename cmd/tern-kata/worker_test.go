@@ -646,8 +646,7 @@ func TestNewWorkerEnvReadsTheWorkingDirectoryOnlyForInitAndAdd(t *testing.T) {
 	if _, err := os.Getwd(); err == nil {
 		t.Skip("this system still reports a removed working directory")
 	}
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	isolateConfig(t)
 	for _, operands := range [][]string{nil, {"status"}, {"stop"}, {"edit"}, {"upgrade"}, {"doctor"}, {"abandon", "x"}} {
 		if _, err := newWorkerEnv(LaunchPlan{Subcommand: "worker", Operands: operands}); err != nil {
 			t.Errorf("worker %v from a removed folder: %v", operands, err)

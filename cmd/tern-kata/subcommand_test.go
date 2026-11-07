@@ -48,8 +48,7 @@ func newFixtureWithDocbank(t *testing.T, docbank kata.DocbankConfig) subcommandF
 	t.Setenv("KATA_HOME", t.TempDir())
 	t.Setenv("KATA_SERVER", "")
 	t.Setenv("KATA_AUTH_TOKEN", "")
-	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	isolateConfig(t)
 	service, err := kata.New(context.Background(), kata.Config{
 		DSN:     filepath.Join(t.TempDir(), "kata.db"),
 		Auth:    kata.AuthConfig{TrustCallerAuthentication: true},
