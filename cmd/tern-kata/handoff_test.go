@@ -184,7 +184,7 @@ func TestAgentEnv(t *testing.T) {
 	}
 	// Windows spells the block's variables as it likes: the block id is found and the inherited opt-in replaced whatever the case.
 	windows := []string{"Tern_Pane=42", "kata_omp_live_inbox=1", "Kata_Inbox_User=me"}
-	if got, want := agentEnv(windows, plan("", "demo#ab12", "ann/omp"), true), []string{"Tern_Pane=42", "KATA_REF=demo#ab12", "KATA_OMP_LIVE_INBOX=0", "KATA_INBOX_USER=ann/omp-42"}; !reflect.DeepEqual(got, want) {
+	if got, want := agentEnv(windows, plan("", "demo#ab12", "ann/omp"), true), []string{"Tern_Pane=42", "KATA_REF=demo#ab12", "KATA_OMP_LIVE_INBOX=0", "KATA_INBOX_USER=ann/omp-42", "KATA_TEAMMATE=omp-42"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("Agent address on Windows: %q, want %q", got, want)
 	}
 	teammates := []string{"PATH=/bin", "KATA_TEAMMATE=me", "Tern_Pane=42"}
