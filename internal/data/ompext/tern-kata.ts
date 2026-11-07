@@ -326,10 +326,12 @@ export function createFollower(deps: FollowerDeps): Follower {
     return list;
   }
 
+  const namesThis = (v: unknown): boolean => v === shortId || v === deps.ref;
+
   async function onLinksChanged(event: KataEvent, gen: number): Promise<void> {
     const names = (field: string): boolean => {
       const value = event.payload[field];
-      return Array.isArray(value) && value.some((v) => v === shortId || v === deps.ref);
+      return Array.isArray(value) && value.some(namesThis);
     };
     if (event.ref === deps.ref || names("blocks_added") || names("blocks_removed")) await readBlockers(gen);
   }
@@ -337,7 +339,7 @@ export function createFollower(deps: FollowerDeps): Follower {
   // kata's links endpoint reports one link as issue.linked or issue.unlinked, naming both ends in from_short_id and to_short_id.
   async function onLinkEdge(event: KataEvent, gen: number): Promise<void> {
     const ends = [event.payload.from_short_id, event.payload.to_short_id];
-    if (event.ref === deps.ref || ends.some((v) => v === shortId || v === deps.ref)) await readBlockers(gen);
+    if (event.ref === deps.ref || ends.some(namesThis)) await readBlockers(gen);
   }
 
   async function onClosed(event: KataEvent, gen: number): Promise<void> {
@@ -348,7 +350,7 @@ export function createFollower(deps: FollowerDeps): Follower {
     deps.deliver(blockerClosedText(event.ref, theirs === undefined ? undefined : parseTitle(theirs), deps.ref, remaining));
   }
 
-  // A comment with a teammate is an agent's (every Pane-started agent writes with KATA_TEAMMATE), so only a person's is delivered.
+  // Only a comment without a teammate is delivered. Agents that write no teammate (non-omp agents, worker runs) look like a person here.
   async function onCommented(event: KataEvent): Promise<void> {
     if (event.ref !== deps.ref || optionalText(event.payload.teammate) !== undefined) return;
     const uid = optionalText(event.payload.comment_uid);
@@ -434,6 +436,8 @@ export function createFollower(deps: FollowerDeps): Follower {
     if (event.type === "reset") {
       cursor = event.after;
       void readInbox();
+      const gen = generation;
+      enqueue(gen, async () => void (await readBlockers(gen)));
       return;
     }
     handle(event.ref, event.eventId, event.to);
@@ -474,6 +478,7 @@ export function createFollower(deps: FollowerDeps): Follower {
       timer = undefined;
       launch(gen);
       void readInbox();
+      enqueue(gen, async () => void (await readBlockers(gen)));
     }, delay);
   }
 

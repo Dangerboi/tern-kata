@@ -83,6 +83,7 @@ function harness(inboxStdout: () => string = () => emptyInbox(), options: Partia
   const shows = new Map<string, string>();
   let inbox = inboxStdout;
   let held: Array<(stdout: string) => void> | undefined;
+  let showFails = false;
   const deps: FollowerDeps = {
     address: ADDRESS,
     project: "demo",
@@ -95,7 +96,10 @@ function harness(inboxStdout: () => string = () => emptyInbox(), options: Partia
       return c;
     },
     async run(args) {
-      if (args[0] === "show") return { code: 0, stdout: shows.get(args[1]) ?? showJson(args[1], "", []) };
+      if (args[0] === "show") {
+        if (showFails && args[1] === REF) return { code: 1, stdout: "" };
+        return { code: 0, stdout: shows.get(args[1]) ?? showJson(args[1], "", []) };
+      }
       runs.push(args);
       const waiting = held;
       if (waiting) {
@@ -126,6 +130,9 @@ function harness(inboxStdout: () => string = () => emptyInbox(), options: Partia
     follower: createFollower(deps),
     setInbox(f: () => string) {
       inbox = f;
+    },
+    failShow(on: boolean) {
+      showFails = on;
     },
     holdReads() {
       held = [];
@@ -319,6 +326,35 @@ describe("blocker closes", () => {
     h.children[0].push(eventLine(32, "issue.closed", "demo#aaaa", true));
     await flush();
     expect(h.delivered).toHaveLength(2);
+  });
+
+  test("a failed read at start is retried when the stream restarts, so a later close delivers", async () => {
+    const h = harness();
+    h.setShow(REF, showJson(REF, "mine", [link("blocks", "demo#aaaa", REF)]));
+    h.failShow(true);
+    h.follower.start();
+    await flush();
+    h.failShow(false);
+    h.children[0].exit(1);
+    await flush();
+    h.fire();
+    await flush();
+    h.children[1].push(eventLine(30, "issue.closed", "demo#aaaa", true));
+    await flush();
+    expect(h.delivered).toHaveLength(1);
+    expect(h.delivered[0]).toContain("demo#aaaa closed");
+  });
+
+  test("a reset line reads the blockers again", async () => {
+    const h = harness();
+    h.follower.start();
+    await flush();
+    h.setShow(REF, showJson(REF, "mine", [link("blocks", "demo#aaaa", REF)]));
+    h.children[0].push('{"reset_required":true,"reset_after_id":40}');
+    h.children[0].push(eventLine(41, "issue.closed", "demo#aaaa", true));
+    await flush();
+    expect(h.delivered).toHaveLength(1);
+    expect(h.delivered[0]).toContain("demo#aaaa closed");
   });
 });
 
